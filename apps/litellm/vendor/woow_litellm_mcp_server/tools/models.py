@@ -194,6 +194,7 @@ def register(mcp: Any, gate: ToolGate) -> None:
             undone without re-adding the model.
             """
             gate.require_operation("litellm_delete_model", OP_DELETE)
-            return await litellm_client(ctx).post(
+            from output_policy import record
+            return record(await litellm_client(ctx).post(
                 "/model/delete", json_data={"id": model_id}
-            )
+            ), ('id', 'status'))

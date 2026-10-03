@@ -1,0 +1,14 @@
+# Hermes Changelog
+
+## 0.1.0 — 未發佈候選
+
+- 新增獨立 amd64 root-context 封裝、Supervisor 2026.09.3 安全子集 manifest。
+- runtime：vendored SDK MCP 1.28.1；11 個來源工具中支援 7，4 個明列 withheld，
+  [工具對照](../../docs/tool-surface.md) 尚未完成功能平齊。
+- 8099 Ingress-only／8081 可選 LAN／3000 loopback；保護模式、init true；不設
+  backend-dependent watchdog、不開 HA/Supervisor/Docker API 權限。
+- 共用 UI 已本地整合，exact grants/typed forms 已接 Core；本產品正式角色路徑仍封鎖；未建置 image、未做 HA E2E。
+- 資料 v3：完整 v1/v2 migration、新增空 exact grants；UI 保存完整 grants+global false，disabled 優先，其他產品不可匯入 n8n state。
+- 手動更新前做受控 cold backup（只中斷本 Add-on，含秘密）；rollback 必須使用相容
+  image+完整資料，不可盲目 downgrade。請見 [完整步驟](../../docs/operations/update-backup-rollback.md)。
+- 授權／公開去密／映像／實際 backend／Ingress/client／備份還原驗收仍待批准。

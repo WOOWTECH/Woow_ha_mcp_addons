@@ -15,10 +15,21 @@ class Denied(ValueError):
 class Tool:
     arguments: type[BaseModel]
     write: bool = False
+    # Only the two W2a writers retain the historical global-switch semantics.
+    legacy_write: bool = False
+    selector: str | None = None
+    write_operations: tuple[str, ...] = ()
+
+    def grants(self, name):
+        return ([name] if self.write else []) + [f'{name}:{op}' for op in self.write_operations]
+
+
+def has_grant(name, tool, state):
+    return name in getattr(state, 'enabled_write_tools', ()) or (tool.legacy_write and state.writes_enabled)
 
 
 def enabled(name: str, tools: Mapping[str, Tool], state: State) -> bool:
-    return name in tools and name not in state.disabled and (not tools[name].write or state.writes_enabled)
+    return name in tools and name not in state.disabled and (not tools[name].write or has_grant(name, tools[name], state))
 
 
 def authorize(message, tools: Mapping[str, Tool], state: State) -> str:
@@ -61,7 +72,12 @@ def authorize(message, tools: Mapping[str, Tool], state: State) -> str:
             arguments = tools[name].arguments.model_validate(params.get("arguments", {}))
         except ValidationError:
             raise Denied("invalid tool arguments") from None
-        params["arguments"] = arguments.model_dump(mode="json")
+        normalized = arguments.model_dump(mode="json")
+        tool = tools[name]
+        if tool.selector and normalized.get(tool.selector) in tool.write_operations:
+            if f'{name}:{normalized[tool.selector]}' not in getattr(state, 'enabled_write_tools', ()):
+                raise Denied('operation not permitted')
+        params["arguments"] = normalized
     else:
         raise Denied("method not permitted")
     return method

@@ -1,0 +1,218 @@
+"""Private native probes survive public disable; real children and policy API.
+
+Only owned loopback backends and dummy credentials. No background monitor races:
+explicit HealthMonitor.check() calls own every health read in the counters.
+"""
+import asyncio
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
+from pathlib import Path
+import socket
+import threading
+
+import httpx
+import pytest
+
+from mcp_admin_core.gateway import make_apps
+from mcp_admin_core.health import HealthMonitor
+from mcp_admin_core.lifecycle import Supervisor
+from mcp_admin_core.native_inventory import NAMES
+from mcp_admin_core.policy import enabled
+from mcp_admin_core.products import PROBES, ProductStore, TOOLS, child_spec
+from test_expansion_policy import call
+from test_expansion_runtime import WRITES, payload
+from test_real_products import connection, rpc
+
+
+@contextmanager
+def native_backend(product):
+    events, mutations = [], []
+    offline = threading.Event()
+    read_path = '/api/v5/nodes' if product == 'emqx' else '/v1/models'
+    write_route = ('DELETE', '/api/v5/clients/device') if product == 'emqx' else ('POST', '/team/new')
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args): pass
+
+        def handle_api(self):
+            event = (self.command, self.path)
+            events.append(event)
+            auth = 'Basic RFVNTVk6RFVNTVk=' if product == 'emqx' else 'Bearer DUMMY'
+            if self.headers.get('Authorization') != auth:
+                self.send_error(401); return
+            if offline.is_set():
+                self.send_error(503); return
+            if event == ('GET', read_path):
+                value = ([{'node': 'fake@local', 'version': '5.fake'}] if product == 'emqx'
+                         else {'data': [{'id': 'fake-model'}]})
+            elif event == write_route:
+                self.rfile.read(int(self.headers.get('Content-Length', 0)))
+                mutations.append(event)
+                value = {'team_id': 'one', 'team_alias': 'Owned', 'status': 'success'}
+            else:
+                self.send_error(404); return
+            data = json.dumps(value).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        do_GET = do_POST = do_DELETE = handle_api
+
+    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f'http://127.0.0.1:{server.server_port}', events, mutations, offline, read_path
+    finally:
+        server.shutdown(); server.server_close(); thread.join()
+
+
+@pytest.mark.parametrize('product', ['emqx', 'litellm'])
+@pytest.mark.parametrize('grant_writer', [False, True], ids=['default', 'write-grant'])
+@pytest.mark.parametrize('disable_all', [False, True], ids=['probe-disabled', 'all-disabled'])
+async def test_policy_disable_keeps_private_probe_and_public_denial(tmp_path, product, grant_writer, disable_all):
+    # Cooperative lock is automatic; never take over a foreign listener.
+    with socket.socket() as check:
+        check.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        check.bind(('127.0.0.1', 3000))
+    with native_backend(product) as (url, events, mutations, offline, read_path):
+        store = ProductStore(tmp_path, product)
+        writer, writer_args = WRITES[product][0]
+        grants = [writer] if grant_writer else []
+        store.update(connection=connection(product, url), enabled_write_tools=grants)
+        manager = Supervisor(child_spec(store.load(), store.directory), retries=0)
+        committed, finish_restart = asyncio.Event(), asyncio.Event()
+        pending = None
+        child_requests = []
+
+        async def record(request):
+            child_requests.append(request)
+
+        async def restart(state):
+            committed.set()
+            await finish_restart.wait()
+            await manager.stop()
+            manager.spec = child_spec(state, store.directory)
+            await manager.start()
+
+        async def role(_): return True  # Test-only role injection, not production HA approval.
+
+        try:
+            await manager.start()
+            async with httpx.AsyncClient(trust_env=False, event_hooks={'request': [record]}) as child:
+                health = HealthMonitor(store, manager, child)
+
+                async def transport_ready():
+                    async with asyncio.timeout(20):
+                        while True:
+                            await health.check()
+                            if manager.ready:
+                                return
+                            await asyncio.sleep(.1)
+
+                await transport_ready()
+                assert health.backend == 'reachable' and events == [('GET', read_path)]
+                admin, app = make_apps(store, TOOLS[product], child, verify_admin=role,
+                                       backend_changed=restart, health=health.snapshot)
+                async with (httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://boundary') as client,
+                            httpx.AsyncClient(transport=httpx.ASGITransport(admin, client=('172.30.32.2', 1)), base_url='http://admin') as a):
+                    async def initialize():
+                        headers = {'Authorization': 'Bearer '+store.load().token,
+                                   'Accept': 'application/json, text/event-stream'}
+                        result = await rpc(client, '/mcp', headers, {
+                            'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {
+                                'protocolVersion': '2025-03-26', 'capabilities': {},
+                                'clientInfo': {'name': 'private-probe-test', 'version': '0'}}})
+                        headers['MCP-Protocol-Version'] = result['protocolVersion']
+                        await rpc(client, '/mcp', headers, {'jsonrpc': '2.0', 'method': 'notifications/initialized'})
+                        return headers
+
+                    headers = await initialize()
+                    probe, args = PROBES[product]
+                    payload(await rpc(client, '/mcp', headers, call(probe, args)))
+                    assert events[-1] == ('GET', read_path)
+                    if grant_writer:
+                        payload(await rpc(client, '/mcp', headers, call(writer, writer_args)))
+                        assert len(mutations) == 1
+                    identity = {'x-remote-user-id': 'a'*32}
+                    bootstrap = (await a.get('/api/bootstrap', headers=identity)).json()
+                    identity['x-csrf-token'] = bootstrap['csrf']
+                    old_pid = manager.process.pid
+                    disabled = list(TOOLS[product]) if disable_all else [probe]
+                    pending = asyncio.create_task(a.put('/api/policy', headers=identity, json={
+                        'writes_enabled': False, 'disabled': disabled, 'enabled_write_tools': grants}))
+                    await asyncio.wait_for(committed.wait(), 3)
+                    assert store.load().disabled == disabled and not pending.done()
+                    assert manager.process.pid == old_pid
+
+                    async def denied(names):
+                        before = (len(child_requests), len(events), len(mutations))
+                        for name in names:
+                            arguments = dict(WRITES[product]).get(name, {})
+                            response = await client.post('/mcp', headers=headers, json=call(name, arguments))
+                            assert response.status_code == 403, (name, response.text)
+                        assert (len(child_requests), len(events), len(mutations)) == before
+
+                    # Same still-live session is denied before the owned restart.
+                    public_names = {n for n in TOOLS[product] if enabled(n, TOOLS[product], store.load())}
+                    await denied(set(NAMES[product]) - public_names)
+                    listed = await rpc(client, '/mcp', headers, {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'})
+                    assert {t['name'] for t in listed['tools']} == public_names
+                    finish_restart.set()
+                    assert (await pending).status_code == 200
+                    await transport_ready()
+                    assert manager.process.pid != old_pid and not Path(f'/proc/{old_pid}').exists()
+                    before = len(events)
+                    await health.check()
+                    assert events[before:] == [('GET', read_path)], 'disabled probe must make an actual backend read'
+                    assert health.backend == 'reachable' and manager.ready
+                    assert (await client.get('/health/ready')).status_code == 200
+                    await denied(set(NAMES[product]) - public_names)  # pre-restart session also denied
+                    headers = await initialize()
+                    listed = await rpc(client, '/mcp', headers, {'jsonrpc': '2.0', 'id': 3, 'method': 'tools/list'})
+                    assert {t['name'] for t in listed['tools']} == public_names
+                    raw = await rpc(child, 'http://127.0.0.1:3000/mcp', headers,
+                                    {'jsonrpc': '2.0', 'id': 4, 'method': 'tools/list'})
+                    assert {t['name'] for t in raw['tools']} == public_names | {probe}
+                    if disable_all:
+                        assert not public_names
+                    await denied(set(NAMES[product]) - public_names)
+                    # Native registration itself denies every other blocked tool.
+                    before = len(events)
+                    for name in set(NAMES[product]) - public_names - {probe}:
+                        result = await rpc(child, 'http://127.0.0.1:3000/mcp', headers,
+                                           call(name, dict(WRITES[product]).get(name, {})))
+                        assert result.get('isError'), name
+                    assert len(events) == before
+                    if grant_writer and not disable_all:
+                        payload(await rpc(client, '/mcp', headers, call(writer, writer_args)))
+                        assert len(mutations) == 2
+                    else:
+                        assert len(mutations) == int(grant_writer)
+                    prefix = 'EMQX_MCP_' if product == 'emqx' else 'LITELLM_MCP_'
+                    assert manager.spec.env[prefix+'READONLY'] == ('false' if grant_writer and not disable_all else 'true')
+                    pid, starts = manager.process.pid, manager.starts
+                    offline.set()
+                    for _ in range(3):
+                        before = len(events)
+                        await health.check()
+                        assert events[before:] == [('GET', read_path)]
+                        assert health.backend == 'unreachable' and manager.ready
+                        assert (await client.get('/health/ready')).status_code == 503
+                        assert manager.process.pid == pid and manager.starts == starts == 2
+                        await denied(set(NAMES[product]) - public_names)
+                    offline.clear()
+                    before = len(events)
+                    await health.check()
+                    assert events[before:] == [('GET', read_path)]
+                    assert health.backend == 'reachable' and (await client.get('/health/ready')).status_code == 200
+                    assert manager.process.pid == pid and manager.starts == starts
+        finally:
+            finish_restart.set()
+            if pending is not None:
+                await asyncio.gather(pending, return_exceptions=True)
+            await manager.stop()
+            store.close()

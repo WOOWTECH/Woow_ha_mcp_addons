@@ -1,0 +1,126 @@
+name: Manually approved GHCR publication
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: Independently cleared product (no arbitrary ref/version)
+        type: choice
+        required: true
+        options: [odoo, odoo-manage, n8n, hermes, opendesign, emqx, litellm]
+permissions:
+  contents: read
+concurrency:
+  group: public-release
+  cancel-in-progress: false
+jobs:
+  gate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.13.12'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.2'
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: '0.12.10'
+          enable-cache: false
+      - run: |
+          python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
+      - run: python packaging/validate.py
+      - run: |
+          uv sync --frozen --no-dev --python python3.13
+          uv pip install --python .venv/bin/python --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
+          .venv/bin/python -m unittest discover -s packaging -p 'test_*.py' -v
+      - name: Source and per-product release clearance (closed by default)
+        env:
+          APP: ${{ inputs.app }}
+        run: python packaging/check_release.py "$APP"
+      - name: Pin the existing fixed subprocess PATH on this disposable runner
+        run: |
+          test "$(node --version)" = v22.23.2
+          NODE_BIN="$(readlink -f "$(command -v node)")"
+          if [ "$NODE_BIN" != /usr/bin/node ]; then sudo ln -sfn "$NODE_BIN" /usr/bin/node; fi
+          test "$(/usr/bin/node --version)" = v22.23.2
+      - run: sh packaging/unit.sh
+  publish:
+    needs: gate
+    if: github.ref == 'refs/heads/main'
+    environment: public-release
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      APP: ${{ inputs.app }}
+      DOCKER_BUILD_SUMMARY: 'false'
+      DOCKER_BUILD_RECORD_UPLOAD: 'false'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.13.12'
+      - run: |
+          python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
+      - run: python packaging/validate.py && python packaging/check_release.py "$APP"
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: apps/${{ inputs.app }}/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: local/mcp-${{ inputs.app }}:0.1.0
+          build-args: BUILD_VERSION=0.1.0
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+      - name: Pinned scanners (public checksum-verified binaries)
+        run: python packaging/install_scanners.py "$RUNNER_TEMP/scanners"
+      - name: Test and scan this candidate exactly once; fail closed
+        run: python packaging/supply_chain.py candidate "$APP" "$RUNNER_TEMP/scanners" "$RUNNER_TEMP/candidate"
+      - name: Refuse overwriting an existing version (errors fail closed)
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python packaging/registry_gate.py unused "$APP"
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push the exact locally accepted image, not a rebuild
+        run: |
+          set -eu
+          python packaging/supply_chain.py verify "$APP" "$RUNNER_TEMP/candidate"
+          IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:0.1.0"
+          TESTED_ID="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate/subject.json")"
+          docker tag "$TESTED_ID" "$IMAGE"
+          test "$(docker image inspect "$IMAGE" --format '{{.Id}}')" = "$TESTED_ID"
+          docker push "$IMAGE"
+      - name: Verify anonymous public manifest (visibility is NOT automatic)
+        run: python packaging/registry_gate.py public "$APP" "$RUNNER_TEMP/candidate"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: published-evidence-${{ inputs.app }}-0.1.0-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/candidate/subject.json
+            ${{ runner.temp }}/candidate/sbom.syft.json
+            ${{ runner.temp }}/candidate/sbom.spdx.json
+            ${{ runner.temp }}/candidate/scan-summary.json
+            ${{ runner.temp }}/candidate/provenance.json
+            ${{ runner.temp }}/candidate/published-provenance.json
+            ${{ runner.temp }}/candidate/published-digest.json
+          if-no-files-found: error
+          retention-days: 90

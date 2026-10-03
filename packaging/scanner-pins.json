@@ -1,0 +1,20 @@
+{
+  "gitleaks": {
+    "version": "8.28.0",
+    "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz",
+    "checksums": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_checksums.txt",
+    "sha256": "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb"
+  },
+  "syft": {
+    "version": "1.20.0",
+    "url": "https://github.com/anchore/syft/releases/download/v1.20.0/syft_1.20.0_linux_amd64.tar.gz",
+    "checksums": "https://github.com/anchore/syft/releases/download/v1.20.0/syft_1.20.0_checksums.txt",
+    "sha256": "689e12c5cbf67521ce61b9c126068f9eaabe1223e77971b2fede50033ff6b5cc"
+  },
+  "grype": {
+    "version": "0.89.0",
+    "url": "https://github.com/anchore/grype/releases/download/v0.89.0/grype_0.89.0_linux_amd64.tar.gz",
+    "checksums": "https://github.com/anchore/grype/releases/download/v0.89.0/grype_0.89.0_checksums.txt",
+    "sha256": "3dbbf5c4f3c28dfc9f9e070a937dc680170ee83a873b946e59bb58c71b8a3ae5"
+  }
+}

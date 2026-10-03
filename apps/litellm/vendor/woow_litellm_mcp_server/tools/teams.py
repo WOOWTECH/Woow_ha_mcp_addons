@@ -5,6 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from fastmcp import Context
+from output_policy import rows, record
+
+TEAM_FIELDS = ('team_id', 'team_alias', 'max_budget', 'tpm_limit', 'rpm_limit', 'blocked')
 
 from ..deps import litellm_client
 from ..gating import ToolGate
@@ -42,7 +45,7 @@ def register(mcp: Any, gate: ToolGate) -> None:
                     "organization_id": organization_id,
                 }
             )
-            return await litellm_client(ctx).post("/team/new", json_data=body)
+            return record(await litellm_client(ctx).post("/team/new", json_data=body), TEAM_FIELDS)
 
     if gate.is_tool_enabled("litellm_list_teams"):
 
@@ -75,7 +78,7 @@ def register(mcp: Any, gate: ToolGate) -> None:
                     "organization_id": organization_id,
                 }
             )
-            return await litellm_client(ctx).get("/v2/team/list", params=params)
+            return rows(await litellm_client(ctx).get("/v2/team/list", params=params), 'teams', TEAM_FIELDS)
 
     if gate.is_tool_enabled("litellm_team_info"):
 
@@ -116,7 +119,7 @@ def register(mcp: Any, gate: ToolGate) -> None:
                     "rpm_limit": rpm_limit,
                 }
             )
-            return await litellm_client(ctx).post("/team/update", json_data=body)
+            return record(await litellm_client(ctx).post("/team/update", json_data=body), TEAM_FIELDS)
 
     if gate.is_tool_enabled("litellm_delete_team"):
 
@@ -130,9 +133,9 @@ def register(mcp: Any, gate: ToolGate) -> None:
             Removes the teams and their membership associations permanently.
             """
             gate.require_operation("litellm_delete_team", OP_DELETE)
-            return await litellm_client(ctx).post(
+            return record(await litellm_client(ctx).post(
                 "/team/delete", json_data={"team_ids": team_ids}
-            )
+            ), ('status', 'deleted_teams'))
 
     if gate.is_tool_enabled("litellm_team_member_add"):
 

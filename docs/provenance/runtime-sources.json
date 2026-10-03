@@ -4,8 +4,8 @@
     "source": "local:614ae663fadd91c76972f60017a76d2627bea87e",
     "path": "hermes_mcp_server/server.py",
     "upstream_sha256": "e1c3f7be4de0302fafb85848641d89a43e83565afa844da9f813f10a718c25a6",
-    "local_sha256": "dd20b326f33adb01025aad53e7f11ff0ba585bd6f3fe95f0a376fd6c7bcbef4d",
-    "modification": "Use scoped DNS-pinned HTTPX transport for gateway, dashboard login and cookie clients; deny redirects/proxies. Map inspect exception fields by type, never raw exception text; explicit safe error boundaries on other enabled handlers include late decoding/JSON failures, preserving successful values and signatures."
+    "local_sha256": "8248cd4b308e8159fc52d00532fdbdbd39fc03fb4513f6bc68183fd65dfdf1d0",
+    "modification": "Use scoped DNS-pinned HTTPX transport for gateway, dashboard login and cookie clients; deny redirects/proxies. Map inspect exception fields by type, never raw exception text; explicit safe error boundaries on other enabled handlers include late decoding/JSON failures, preserving signatures. W2b adds session/cron handler error boundaries and bounded positive metadata projections without private message/prompt contents."
   },
   {
     "product": "hermes",
@@ -18,8 +18,8 @@
     "source": "local:614ae663fadd91c76972f60017a76d2627bea87e",
     "path": "opendesign_mcp_server/od_mcp_server.py",
     "upstream_sha256": "89caa06f96a62a6df663609fa468f00b41180970c835ceb03f3a1cf196f2e717",
-    "local_sha256": "41a82e311e53edd78213a20d4e33e0551aa073f3256395b2df8fe72ad90e2e50",
-    "modification": "Require explicit OD_API_BASE and corrected provenance header; all HTTP clients use scoped DNS-pinned transport, redirect/proxy denial, safe errors and five-second ordinary I/O timeout. Explicit enabled-handler error boundaries cover late response decoding/JSON/processing failures without altering successful output or SDK signatures. Bounded SDK offload is in the separate launcher."
+    "local_sha256": "337e40c3e6e069568baad938c373e0492f37462abe10d3a7b422163a5d0ee0fc",
+    "modification": "Require explicit OD_API_BASE and corrected provenance header; all HTTP clients use scoped DNS-pinned transport, redirect/proxy denial, safe errors and five-second ordinary I/O timeout. Explicit enabled-handler error boundaries cover late response decoding/JSON/processing failures without altering successful output or SDK signatures. Bounded SDK offload is in the separate launcher. W2b adds list_runs safe error boundary and id/projectId/status-only bounded projection."
   },
   {
     "product": "opendesign",
@@ -215,7 +215,9 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/models.py",
-    "upstream_sha256": "8b3e9a184f6e12633ffb724aa69c55a09fae13df3d8f5112f3704d61aa6d94ec"
+    "upstream_sha256": "8b3e9a184f6e12633ffb724aa69c55a09fae13df3d8f5112f3704d61aa6d94ec",
+    "local_sha256": "e058ffd9b6557d3228f2318d30776e37cbd173a358aabfcf29f6c8f3fe723f47",
+    "modification": "W2b: delete_model response projected to id/status only; transport and native require_operation retained."
   },
   {
     "product": "litellm",
@@ -233,7 +235,9 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/teams.py",
-    "upstream_sha256": "15fe1783df2740477c0dd222f51c50c6043844fc3c0bf2361050d9c70904ea96"
+    "upstream_sha256": "15fe1783df2740477c0dd222f51c50c6043844fc3c0bf2361050d9c70904ea96",
+    "local_sha256": "6525b7e6d2224a28fed3a6f1809cfec9acabd6b15e030743f656ba84b420e619",
+    "modification": "W2b: list/create/update/delete team responses use bounded positive scalar metadata projection, excluding keys/members/private metadata. Native operation gates and fixed API calls retained."
   },
   {
     "product": "litellm",

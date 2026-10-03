@@ -108,7 +108,9 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
                 tools = await protocol_reply(response, 2)
             names = {tool["name"] for tool in tools["tools"]}
             assert {"tools_documentation", "search_nodes"} <= names
-            assert names <= {"tools_documentation", "search_nodes", "n8n_list_workflows"}
+            assert names <= {"tools_documentation", "search_nodes", "n8n_list_workflows",
+                             "get_node", "n8n_get_workflow", "n8n_manage_folders"}
+            assert 'get_node' in names
             from n8n_adapter import TOOLS
             for tool in tools["tools"]:
                 assert tool["inputSchema"] == TOOLS[tool["name"]].arguments.model_json_schema()

@@ -1,6 +1,23 @@
 {
-  "scope": "W2a local hardening; no dependency file edits, no feature expansion or approval",
+  "scope": "W2a hardening plus W2b bounded expansion; no dependency edits or independent approval",
   "patches": [
+    {
+      "path": "packages/mcp-admin-core/mcp_admin_core/products.py",
+      "sha256": "e7b3cd2cdab3caf8292461992c61e3ca2138875b7a77dce2328269547d57c0e5",
+      "change": "W2b v3 per-tool/operation grants, typed module mode, exact native disabled-tool universe and grant-controlled readonly. Reserve only the fixed read-only EMQX cluster-status / LiteLLM model-list probe in private loopback registration independently of public disables; parent authorization/list filtering remains authoritative, with real backend reads and unchanged readiness validation. Disable FastMCP banner/update checks to prevent unauthenticated PyPI lookup and version-cache pollution of the guarded clean restart directory; never delete or permit unknown CWD contents.",
+      "guarded_sources": {
+        "apps/emqx/.venv/lib/python3.13/site-packages/fastmcp/settings.py": "f96cd4e29b0d56e1f24c522ea977170f1b6efbdb88dc59023b1e9fa9afe3397c",
+        "apps/emqx/.venv/lib/python3.13/site-packages/fastmcp/utilities/version_check.py": "ce36361da496e1fd3d1a3ba7dd5e932f269e242fd93cf7f5e95bd001d0e280ef",
+        "apps/litellm/.venv/lib/python3.13/site-packages/fastmcp/settings.py": "f96cd4e29b0d56e1f24c522ea977170f1b6efbdb88dc59023b1e9fa9afe3397c",
+        "apps/litellm/.venv/lib/python3.13/site-packages/fastmcp/utilities/version_check.py": "ce36361da496e1fd3d1a3ba7dd5e932f269e242fd93cf7f5e95bd001d0e280ef"
+      }
+    },
+    {
+      "path": "apps/runtime/output_policy.py",
+      "sha256": "5cc75f5e87676786847132a5be4f342dd07e9ef9344c4d7b219219de2aef85a4",
+      "change": "W2b bounded positive output projection: at most 100 rows, 256 characters per scalar string, no nested/unknown fields; wrong envelope rejects. Not a sanitizer for arbitrary agent/file output.",
+      "guarded_sources": {}
+    },
     {
       "path": "apps/odoo/launch.py",
       "sha256": "6e68af96f17d02ead0bf5616ba1e9ddfa3cb9fb0ea2ceb391e89044df2038e61",
@@ -11,10 +28,12 @@
     },
     {
       "path": "apps/odoo-manage/launch.py",
-      "sha256": "8318b702cd4c3f5a24b24c24c5f7617250255ea2a65eabf270fcee439bef76c9",
-      "change": "Before stock CLI starts, replace both pooled XMLRPC transport classes with configured-origin DNS-pinned transport; keep database header and verified TLS, sanitize faults.",
+      "sha256": "ac3432f9f6a897f577bf523b93a98e66d59fdc0e35c9cf300bf624f88aed1f37",
+      "change": "Before stock CLI starts, replace both pooled XMLRPC transport classes with configured-origin DNS-pinned transport; keep database header and verified TLS, sanitize faults. W2b source-guarded module authentication/ACL REST helpers now use scoped sync HTTPX transport instead of urllib; fixed API-key-only paths and strict consumed auth/permission types. No full YOLO or backend module installation.",
       "guarded_sources": {
-        "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/performance.py": "34f476a3c41de0daa653c3bb35b6d95468c8ef7e4a12b4d912222e0987df7b19"
+        "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/performance.py": "34f476a3c41de0daa653c3bb35b6d95468c8ef7e4a12b4d912222e0987df7b19",
+        "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/access_control.py": "6001ec627491f1e1c6fa04e2eeddf126d92d4b811c8f9603676e021dbe92359a",
+        "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/odoo_connection.py": "ebf31be7f21390beff402f267a30110ec3af9071b0e41bb1c453620a399d7a75"
       }
     },
     {

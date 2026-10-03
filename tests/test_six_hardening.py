@@ -45,7 +45,7 @@ class Quiet(BaseHTTPRequestHandler):
 
 
 @asynccontextmanager
-async def runtime(tmp_path, product, url, *, canary=None, json_response=False):
+async def runtime(tmp_path, product, url, *, canary=None, json_response=False, write_grants=()):
     with socket.socket() as check:
         check.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         check.bind(('127.0.0.1', 3000))
@@ -55,7 +55,7 @@ async def runtime(tmp_path, product, url, *, canary=None, json_response=False):
         for key in ('password', 'api_key', 'api_secret', 'master_key', 'gateway_api_key', 'dashboard_password'):
             if key in configured:
                 configured[key] = canary
-    store.update(connection=configured)
+    store.update(connection=configured, enabled_write_tools=list(write_grants))
     spec = child_spec(store.load(), store.directory)
     if json_response:
         # Test-only stock FastMCP option. No executable/admin bypass added.

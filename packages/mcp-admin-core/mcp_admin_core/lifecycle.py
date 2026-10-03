@@ -7,6 +7,23 @@ from pathlib import Path
 import random
 import signal
 
+import anyio
+
+
+async def _join_transition(operation):
+    """Finish owned lifecycle work before propagating caller cancellation."""
+    with anyio.CancelScope(shield=True):
+        task = asyncio.create_task(operation)
+        cancelled = False
+        while not task.done():
+            try:
+                await asyncio.shield(task)
+            except asyncio.CancelledError:
+                cancelled = True
+        task.result()
+        if cancelled:
+            raise asyncio.CancelledError
+
 
 @dataclass(frozen=True)
 class ChildSpec:
@@ -33,15 +50,20 @@ class Supervisor:
         self._lock = asyncio.Lock()
         self._stop = asyncio.Event()
 
+    def _start_child(self):
+        if self.task is None and self.process is not None:
+            raise RuntimeError("child cleanup required before start")
+        if self.spec is None:
+            self.status = 'unconfigured'
+            return
+        if self.task is None:
+            self.status = "starting"
+            self._stop.clear()
+            self.task = asyncio.create_task(self._run())
+
     async def start(self):
         async with self._lock:
-            if self.spec is None:
-                self.status = 'unconfigured'
-                return
-            if self.task is None:
-                self.status = "starting"
-                self._stop.clear()
-                self.task = asyncio.create_task(self._run())
+            self._start_child()
 
     @staticmethod
     def _signal(pid, sig):
@@ -59,10 +81,10 @@ class Supervisor:
             pass
         # Remaining descendants may outlive an already reaped leader.
         self._signal(process.pid, signal.SIGKILL)
-        await process.wait()
-        # The direct child has been reaped by asyncio; only adopted descendants
-        # remain. Never use waitpid(-1), which could race unrelated subprocesses.
+        # Bound both the leader's post-KILL wait and group-scoped reaping.
+        # Never use waitpid(-1), which could race unrelated subprocesses.
         async with asyncio.timeout(self.grace + 1):
+            await process.wait()
             while True:
                 try:
                     pid, _ = os.waitpid(-process.pid, os.WNOHANG)
@@ -114,21 +136,41 @@ class Supervisor:
         except asyncio.CancelledError:
             raise
 
-    async def stop(self):
-        async with self._lock:
+    async def _stop_child(self):
+        try:
             if self.task is not None:
                 # Cooperative stop cannot interrupt natural-exit group cleanup.
-                # Retain ownership until SIGKILL and group-scoped reaping finish.
                 self._stop.set()
-                await self.task
-                self.task = None
+                try:
+                    await self.task
+                finally:
+                    self.task = None
+            if self.process is not None:
+                # A previous bounded cleanup failed. Retain the process handle
+                # and retry cleanup before any replacement is allowed to start.
+                await self._terminate(self.process)
+                self.process = None
+        except BaseException:
             self.ready = False
-            self.status = "stopped"
+            self.status = "failed"
+            raise
+        self.ready = False
+        self.status = "stopped"
+
+    async def stop(self):
+        async with self._lock:
+            # Keep the lock and join cleanup even on repeated caller cancellation.
+            await _join_transition(self._stop_child())
 
     async def restart(self, spec: ChildSpec | None):
-        await self.stop()
-        self.spec = spec
-        await self.start()
+        async def replace():
+            await self._stop_child()
+            self.spec = spec
+            self._start_child()
+
+        async with self._lock:
+            # Stop + spec replacement + supervised start are one owned transition.
+            await _join_transition(replace())
 
     def health(self):
         return {"state": self.status, "transport_ready": self.ready,

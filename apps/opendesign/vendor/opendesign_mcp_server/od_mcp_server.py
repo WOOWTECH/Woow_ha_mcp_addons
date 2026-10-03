@@ -322,9 +322,11 @@ def send_message(
 
 
 @mcp.tool()
+@backend_errors
 def list_runs() -> dict:
     """List all active and completed AI agent runs."""
-    return _api_get("/api/runs")
+    from output_policy import rows
+    return rows(_api_get("/api/runs"), 'runs', ('id', 'projectId', 'status'))
 
 
 # ═══════════════════════════════════════════════════════════════════

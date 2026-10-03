@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "approved_commit": null,
+  "source": {
+    "cleared": false,
+    "evidence": null
+  },
+  "license": {
+    "cleared": false,
+    "evidence": null
+  },
+  "secret": {
+    "cleared": false,
+    "evidence": null
+  },
+  "publisher": {
+    "cleared": false,
+    "evidence": null
+  },
+  "products": {
+    "odoo": {
+      "image": {
+        "cleared": false,
+        "evidence": null
+      },
+      "ha": {
+        "cleared": false,
+        "evidence": null
+      }
+    },
+    "odoo-manage": {
+      "image": {
+        "cleared": false,
+        "evidence": null
+      },
+      "ha": {
+        "cleared": false,
+        "evidence": null
+      }
+    },
+    "n8n": {
+      "image": {
+        "cleared": false,
+        "evidence": null
+      },
+      "ha": {
+        "cleared": false,
+        "evidence": null
+      }
+    },
+    "hermes": {
+      "image": {
+        "cleared": false,
+        "evidence": null
+      },
+      "ha": {
+        "cleared": false,
+        "evidence": null
+      }
+    },
+    "opendesign": {
+      "image": {
+        "cleared": false,
+        "evidence": null
+      },
+      "ha": {
+        "cleared": false,
+        "evidence": null
+      }
+    },
+    "emqx": {
+      "image": {
+        "cleared": false,
+        "evidence": null
+      },
+      "ha": {
+        "cleared": false,
+        "evidence": null
+      }
+    },
+    "litellm": {
+      "image": {
+        "cleared": false,
+        "evidence": null
+      },
+      "ha": {
+        "cleared": false,
+        "evidence": null
+      }
+    }
+  }
+}

@@ -1,0 +1,76 @@
+name: Local and container gates
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.13.12'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.2'
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: '0.12.10'
+          enable-cache: false
+      - run: |
+          python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
+      - run: python packaging/validate.py
+      - run: |
+          uv sync --frozen --no-dev --python python3.13
+          uv pip install --python .venv/bin/python --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
+          .venv/bin/python -m unittest discover -s packaging -p 'test_*.py' -v
+      - name: Pin the existing fixed subprocess PATH on this disposable runner
+        run: |
+          test "$(node --version)" = v22.23.2
+          NODE_BIN="$(readlink -f "$(command -v node)")"
+          if [ "$NODE_BIN" != /usr/bin/node ]; then sudo ln -sfn "$NODE_BIN" /usr/bin/node; fi
+          test "$(/usr/bin/node --version)" = v22.23.2
+      - run: sh packaging/unit.sh
+  images:
+    needs: unit
+    env:
+      DOCKER_BUILD_SUMMARY: 'false'
+      DOCKER_BUILD_RECORD_UPLOAD: 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [odoo, odoo-manage, n8n, hermes, opendesign, emqx, litellm]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: local/mcp-${{ matrix.app }}:0.1.0
+          build-args: BUILD_VERSION=0.1.0
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+      - name: Pinned scanners (public checksum-verified binaries)
+        run: python3 packaging/install_scanners.py "$RUNNER_TEMP/scanners"
+      - name: Real candidate tests plus exact-image supply-chain gate; never HA acceptance
+        env:
+          APP: ${{ matrix.app }}
+        run: python3 packaging/supply_chain.py candidate "$APP" "$RUNNER_TEMP/scanners" "$RUNNER_TEMP/candidate"

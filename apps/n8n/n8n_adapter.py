@@ -52,8 +52,10 @@ TOOLS = {
     "tools_documentation": Tool(Documentation),
     "search_nodes": Tool(Search),
     "n8n_list_workflows": Tool(ListWorkflows),
-    "n8n_delete_workflow": Tool(DeleteWorkflow, write=True),
+    "n8n_delete_workflow": Tool(DeleteWorkflow, write=True, legacy_write=True),
 }
+from mcp_admin_core.expansion import N8N_TOOLS
+TOOLS.update(N8N_TOOLS)
 CHILD_URL = "http://127.0.0.1:3000/mcp"
 
 

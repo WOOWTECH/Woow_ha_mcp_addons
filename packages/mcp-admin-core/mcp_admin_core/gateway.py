@@ -1,7 +1,7 @@
 """Independent Ingress-only admin and Bearer-only Streamable HTTP applications.
 
-Production has no role verifier: management FAILS CLOSED. Test injection is not HA
-role integration. No legacy SSE /sse or /messages endpoints are exposed.
+Management fails closed without an explicit role provider (installed only by n8n).
+No legacy SSE /sse or /messages endpoints are exposed.
 """
 from __future__ import annotations
 
@@ -16,12 +16,16 @@ from typing import Awaitable, Callable
 import anyio
 import httpx
 from starlette.applications import Starlette
-from starlette.requests import Request
+from starlette.requests import ClientDisconnect, Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
+from starlette.middleware import Middleware
+
+from . import ui
 
 from .config import ConfigError, State, Store, strict_json
 from .policy import Denied, authorize, filter_list
+from .ha_role import valid_user_id
 
 MAX_REQUEST = 262144
 MAX_RESPONSE = 8 * 1024 * 1024
@@ -97,6 +101,8 @@ async def body(request: Request):
                 content.extend(chunk)
                 if len(content) > MAX_REQUEST:
                     raise BadRequest(413)
+    except ClientDisconnect:
+        raise BadRequest(403) from None
     except TimeoutError:
         raise BadRequest(408) from None
     return bytes(content)
@@ -112,7 +118,10 @@ async def json_body(request):
 
 
 def prefix(request):
-    value = request.headers.get("x-ingress-path", "")
+    values = request.headers.getlist("x-ingress-path")
+    if len(values) > 1:
+        raise BadRequest()
+    value = values[0] if values else ""
     if value and (not re.fullmatch(r"(?:/[A-Za-z0-9_-]+)+", value) or len(value) > 512):
         raise BadRequest()
     return value
@@ -136,25 +145,19 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     csrf_key = secrets.token_bytes(32)
     mutation_lock = asyncio.Lock()
     slots = asyncio.Semaphore(32)
+    admin_slots = asyncio.Semaphore(16)
 
     def snapshot():
         return health() if health else {"management": "alive", "child": {"state": "not_started", "transport_ready": False}, "backend": "unconfigured"}
 
-    async def admin_identity(request):
+    def admin_identity(request):
         # Uvicorn MUST have proxy_headers=False; request.client is the socket peer.
         if not request.client or request.client.host != "172.30.32.2" or verify_admin is None:
             raise BadRequest(403)
         identities = request.headers.getlist("x-remote-user-id")
-        if len(identities) != 1 or not identities[0] or len(identities[0]) > 256:
+        if len(identities) != 1 or not valid_user_id(identities[0]):
             raise BadRequest(403)
         user = identities[0]
-        try:
-            async with asyncio.timeout(3):
-                allowed = await verify_admin(user)
-        except Exception:
-            allowed = False
-        if allowed is not True:
-            raise BadRequest(403)
         base = prefix(request)
         csrf = hmac.new(csrf_key, (user + "\0" + base).encode(), hashlib.sha256).hexdigest()
         if request.method not in ("GET", "HEAD"):
@@ -163,24 +166,75 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 raise BadRequest(403)
             if request.headers.get("sec-fetch-site") == "cross-site":
                 raise BadRequest(403)
-        return base, csrf
+        return user, base, csrf
 
-    async def admin_api(request):
-        base, csrf = await admin_identity(request)
-        state = store.load()
+    async def final_role(user):
+        try:
+            async with asyncio.timeout(3):
+                allowed = await verify_admin(user)
+        except Exception:
+            allowed = False
+        if allowed is not True:
+            raise BadRequest(403)
+
+    async def admin_action(request, user, base, csrf, value, peer_disconnected, committed):
         name = request.path_params["operation"]
         headers = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
-        if name == "bootstrap" and request.method == "GET":
-            return JSONResponse({"base_path": base, "api_base": base + "/api", "csrf": csrf,
-                "endpoint": state.endpoint, "backend_url": state.backend_url,
-                "backend_key_set": state.backend_key is not None, "token_active": state.token is not None,
-                "product": getattr(state, 'product', 'n8n'),
-                "connection_configured": getattr(state, 'configured', bool(state.backend_url and state.backend_key)),
-                "writes_enabled": state.writes_enabled, "disabled": state.disabled,
-                "tools": {k: {"write": v.write} for k, v in tools.items()}, "health": snapshot()}, headers=headers)
-        async with mutation_lock:
-            if name.startswith("token/") and request.method == "POST" and await body(request):
-                raise BadRequest()
+        # Bounded lock wait; the role check occurs AFTER waiting and validating.
+        try:
+            async with asyncio.timeout(2):
+                await mutation_lock.acquire()
+        except TimeoutError:
+            raise BadRequest(503) from None
+        try:
+            state = store.load()
+            changes = None
+            if name in ("backend", "policy", "endpoint") and request.method == "PUT":
+                try:
+                    if not isinstance(value, dict):
+                        raise ValueError()
+                    if name == "backend":
+                        if getattr(state, 'product', 'n8n') == 'n8n':
+                            if set(value) != {"url", "key"}:
+                                raise ValueError()
+                            changes = dict(backend_url=value["url"], backend_key=value["key"])
+                        else:
+                            if set(value) != {"connection"}:
+                                raise ValueError()
+                            changes = value
+                    elif name == "endpoint":
+                        if set(value) != {"endpoint"}:
+                            raise ValueError()
+                        changes = value
+                    else:
+                        if (set(value) not in ({"writes_enabled", "disabled"}, {"writes_enabled", "disabled", "enabled_write_tools"}) or not isinstance(value["disabled"], list)
+                                or any(not isinstance(t, str) or t not in tools for t in value["disabled"])):
+                            raise ValueError()
+                        changes = value
+                    # Validate without writing. Store.update revalidates on commit.
+                    type(state).model_validate({**state.model_dump(), **changes})
+                except ValueError:
+                    raise BadRequest() from None
+            if peer_disconnected.is_set():
+                raise BadRequest(403)
+            await final_role(user)
+            if peer_disconnected.is_set():
+                raise BadRequest(403)
+            # No awaited work between this final decision and disclosure/commit.
+            if name == "__ui__" and hasattr(request.state, "ui_path") and request.method in ("GET", "HEAD"):
+                return ui.response(request.state.ui_path, base)
+            if name == "bootstrap" and request.method == "GET":
+                return JSONResponse({"base_path": base, "api_base": base + "/api", "csrf": csrf,
+                    "endpoint": state.endpoint, "backend_url": state.backend_url,
+                    "backend_key_set": state.backend_key is not None, "token_active": state.token is not None,
+                    "product": getattr(state, 'product', 'n8n'),
+                    "connection_configured": getattr(state, 'configured', bool(state.backend_url and state.backend_key)),
+                    "writes_enabled": state.writes_enabled, "disabled": state.disabled,
+                    "policy_contract": "woow-v3-exact-grants",
+                    "enabled_write_tools": getattr(state, 'enabled_write_tools', []),
+                    "tools": {k: {"write": v.write, "write_grants": v.grants(k),
+                                  "operation_parameter": v.selector, "legacy_write": v.legacy_write,
+                                  "inputSchema": v.arguments.model_json_schema()} for k, v in tools.items()}, "health": snapshot()}, headers=headers)
             if name == "token/reveal" and request.method == "POST":
                 return JSONResponse({"token": store.load().token}, headers=headers)
             if name == "token/rotate" and request.method == "POST":
@@ -189,37 +243,92 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             if name == "token/revoke" and request.method == "POST":
                 store.update(token=None)
                 return Response(status_code=204, headers=headers)
+            if changes is not None:
+                updated = store.update(**changes)
+                # No yield between durable commit and lifecycle ownership transfer.
+                # An authorized mutation is not undone by losing its HTTP caller.
+                committed.set()
+                if (name == "backend" or (name == "policy" and getattr(state, 'product', 'n8n') in ('emqx', 'litellm'))) and backend_changed:
+                    await backend_changed(updated)
+                return JSONResponse({"saved": True}, headers=headers)
+            return Response(status_code=404)
+        finally:
+            mutation_lock.release()
+
+    async def admin_api(request):
+        user, base, csrf = admin_identity(request)
+        # Reject saturation rather than accumulating unbounded body/lock waiters.
+        if admin_slots.locked():
+            raise BadRequest(503)
+        await admin_slots.acquire()
+        tasks = []
+        action = None
+        committed = asyncio.Event()
+        try:
+            name = request.path_params["operation"]
             if name in ("backend", "policy", "endpoint") and request.method == "PUT":
                 value = await json_body(request)
-                if not isinstance(value, dict):
+            else:
+                if await body(request):
                     raise BadRequest()
-                try:
-                    if name == "backend":
-                        if getattr(state, 'product', 'n8n') == 'n8n':
-                            if set(value) != {"url", "key"}:
-                                raise ValueError()
-                            updated = store.update(backend_url=value["url"], backend_key=value["key"])
-                        else:
-                            if set(value) != {'connection'}:
-                                raise ValueError()
-                            updated = store.update(connection=value['connection'])
-                        if backend_changed:
-                            await backend_changed(updated)
-                    elif name == "endpoint":
-                        if set(value) != {"endpoint"}:
-                            raise ValueError()
-                        store.update(endpoint=value["endpoint"])
-                    else:
-                        if (set(value) != {"writes_enabled", "disabled"} or not isinstance(value["disabled"], list)
-                                or any(not isinstance(t, str) or t not in tools for t in value["disabled"])):
-                            raise ValueError()
-                        store.update(**value)
-                except (ValueError, ConfigError):
-                    # Validate state again to distinguish an invalid input from disk failure.
-                    store.load()
-                    raise BadRequest() from None
-                return JSONResponse({"saved": True}, headers=headers)
-        return Response(status_code=404)
+                value = None
+
+            peer_disconnected = asyncio.Event()
+
+            async def disconnected():
+                # Body is fully consumed: this task exclusively owns receive now.
+                while (await request.receive())["type"] != "http.disconnect":
+                    pass
+                # Deny even when role completion and disconnect wake together,
+                # before the outer waiter has had a chance to cancel the action.
+                peer_disconnected.set()
+
+            watcher = asyncio.create_task(disconnected())
+            action = asyncio.create_task(admin_action(request, user, base, csrf, value, peer_disconnected, committed))
+            tasks = [watcher, action]
+            done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            if watcher in done:
+                raise BadRequest(403)
+            return action.result()
+        finally:
+            for task in tasks:
+                if task is not action or not committed.is_set():
+                    task.cancel()
+            # Before commit: cancel/join role cleanup with zero effects. After
+            # commit: join the lifecycle callback without cancelling it; action
+            # retains mutation_lock until stop/reap/restart finishes. Neither
+            # ASGI nor repeated direct cancellation may detach that ownership.
+            cancelled = False
+            with anyio.CancelScope(shield=True):
+                if tasks:
+                    joined = asyncio.gather(*tasks, return_exceptions=True)
+                    while not joined.done():
+                        try:
+                            await asyncio.shield(joined)
+                        except asyncio.CancelledError:
+                            cancelled = True
+            admin_slots.release()
+            if cancelled:
+                raise asyncio.CancelledError
+
+    async def admin_page(request):
+        # The same admission, bounded body, lock, fresh role and disconnect
+        # ownership as the API apply to every asset; no unbounded WS fan-out.
+        _, base, _ = admin_identity(request)
+        raw = request.scope.get("raw_path", b"")
+        if b"%" in raw or b"\\\\" in raw or request.url.query:
+            raise BadRequest()
+        path = request.url.path
+        if base and (path == base or path.startswith(base + "/")):
+            path = path[len(base):] or "/"
+        if path.startswith("/api/"):
+            request.path_params["operation"] = path[5:]
+        else:
+            if request.method not in ("GET", "HEAD"):
+                raise BadRequest(404)
+            request.path_params["operation"] = "__ui__"
+            request.state.ui_path = path
+        return await admin_api(request)
 
     def still_authorized(token):
         try:
@@ -371,7 +480,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         return JSONResponse({"ready": ready}, status_code=200 if ready else 503)
 
     exceptions = {BadRequest: error_handler, ConfigError: error_handler}
-    admin = Starlette(routes=[Route("/api/{operation:path}", admin_api, methods=["GET", "PUT", "POST"])], exception_handlers=exceptions)
+    admin = Starlette(routes=[Route("/{path:path}", admin_page, methods=["GET", "HEAD", "PUT", "POST"])],
+                      middleware=[Middleware(ui.SecurityHeaders)], exception_handlers=exceptions)
     mcp_app = Starlette(routes=[Route("/mcp", mcp, methods=["GET", "POST", "DELETE"]), Route("/health/ready", readiness)], exception_handlers=exceptions)
     admin.router.redirect_slashes = False
     mcp_app.router.redirect_slashes = False

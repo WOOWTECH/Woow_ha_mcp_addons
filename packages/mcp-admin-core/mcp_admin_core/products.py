@@ -1,7 +1,7 @@
-"""Pinned W2a child contracts. No arbitrary commands/env or legacy admin imports.
+"""Pinned child contracts. No arbitrary commands/env or legacy admin imports.
 
-The tool allowlists are intentionally partial; docs/tool-surface.json enumerates
-all upstream tools, including those withheld pending W2b review.
+The W2b allowlists are deliberately bounded; docs/tool-surface.json enumerates
+all upstream tools and the individually deferred capabilities.
 """
 from pathlib import Path
 import re
@@ -46,8 +46,8 @@ class ManageConnection(Connection):
     database: Name
     username: Name
     api_key: Credential = Field(repr=False)
-    # Only the source-backed XML-RPC read mode; no backend module installation.
-    mode: Literal['read'] = 'read'
+    # module requires an ALREADY installed MCP backend module; no full YOLO.
+    mode: Literal['read', 'module'] = 'read'
 
 
 class HermesConnection(Connection):
@@ -92,14 +92,15 @@ CONNECTIONS = dict(zip(PRODUCTS, (OdooConnection, ManageConnection, HermesConnec
 
 
 class ProductState(State):
-    schema_version: int = 2
+    schema_version: int = 3
+    enabled_write_tools: list[str] = Field(default_factory=list)
     product: Product
     connection: OdooConnection | ManageConnection | HermesConnection | OpenDesignConnection | EmqxConnection | LiteLLMConnection | None = Field(default=None, repr=False)
 
     @field_validator('schema_version')
     @classmethod
     def version(cls, value):
-        if value != 2:
+        if value != 3:
             raise ValueError('unsupported schema')
         return value
 
@@ -120,17 +121,31 @@ class ProductState(State):
                 value = {**value, 'connection': CONNECTIONS[product].model_validate(connection)}
         return value
 
+    @model_validator(mode='after')
+    def reviewed_grants(self):
+        if self.product == 'n8n':
+            from .expansion import N8N_GRANTS
+            allowed = N8N_GRANTS
+        else:
+            allowed = {g for name, tool in TOOLS[self.product].items() for g in tool.grants(name)}
+        if self.product == 'odoo-manage' and self.enabled_write_tools and (self.connection is None or self.connection.mode != 'module'):
+            raise ValueError('Manage writers require existing MCP module mode; never full YOLO')
+        if len(set(self.enabled_write_tools)) != len(self.enabled_write_tools) or set(self.enabled_write_tools) - set(allowed):
+            raise ValueError('unknown or wrong-product write grant')
+        return self
+
     @property
     def configured(self):
         return bool(self.backend_url and self.backend_key) if self.product == 'n8n' else self.connection is not None
 
 
 class ProductStore(Store):
-    """Explicit v1 n8n -> v2 migration; old Store refuses v2 (no lossy rollback).
+    """Explicit v1 n8n / v2 product -> v3 grants migration; never downgrade.
 
-    Migration only at construction, under the existing exclusive writer lock.
-    Full v1 validation precedes durable replacement. Restore a protected v1 backup
-    to roll back the executable; never downgrade a v2 file in place.
+    Construction-only migration under the exclusive writer lock. All legacy
+    fields are validated and preserved; new grants are empty. The legacy global
+    switch still applies ONLY to n8n_delete_workflow and delete_project. Restore
+    a protected compatible backup to roll back, never rewrite version in place.
     """
     def __init__(self, directory, product):
         if product not in (*PRODUCTS, 'n8n'):
@@ -157,6 +172,12 @@ class ProductStore(Store):
                 raise ValueError('wrong product or unexpected downgrade')
             old = super()._decode(value)
             value = {**old.model_dump(), 'schema_version': 2, 'product': 'n8n', 'connection': None}
+            self._migrated = True
+        if isinstance(value, dict) and type(value.get('schema_version')) is int and value['schema_version'] == 2:
+            if not self._migrate or set(value) != set(ProductState.model_fields) - {'enabled_write_tools'}:
+                raise ValueError('incomplete legacy state or unexpected downgrade')
+            # Validate every legacy field before any durable replacement.
+            value = {**value, 'schema_version': 3, 'enabled_write_tools': []}
             self._migrated = True
         if not isinstance(value, dict) or set(value) != set(ProductState.model_fields) or value.get('product') != self.product:
             raise ValueError('wrong product or incomplete schema')
@@ -219,10 +240,13 @@ TOOLS = {
                'hermes_tools': Tool(Toolsets), 'hermes_gateway': Tool(Gateway), 'hermes_model': Tool(ModelInfo)},
     'opendesign': {**{name: Tool(Arguments) for name in ('health', 'version', 'list_agents', 'list_projects', 'list_plugins', 'list_skills')},
                    'get_project': Tool(Project), 'list_project_files': Tool(Project), 'get_file_info': Tool(FileInfo),
-                   'delete_project': Tool(Project, write=True)},
+                   'delete_project': Tool(Project, write=True, legacy_write=True)},
     'emqx': {name: Tool(Arguments) for name in ('emqx_cluster_status', 'emqx_broker_stats', 'emqx_metrics_current')},
     'litellm': {name: Tool(Arguments) for name in ('litellm_list_models', 'litellm_health_readiness')},
 }
+from .expansion import expand_tools
+expand_tools(TOOLS)
+
 PROBES = {'odoo': ('list_models', {'limit': 1}), 'odoo-manage': ('list_models', {}),
           'hermes': ('hermes_inspect', {'target': 'capabilities'}), 'opendesign': ('health', {}),
           'emqx': ('emqx_cluster_status', {}), 'litellm': ('litellm_list_models', {})}
@@ -235,7 +259,10 @@ def probe_success(product, payload):
     if product == 'odoo':
         return payload.get('success') is True and isinstance(payload.get('result'), list)
     if product == 'odoo-manage':
-        return isinstance(payload.get('models'), list) and payload.get('yolo_mode', {}).get('operations', {}).get('read') is True
+        return isinstance(payload.get('models'), list) and (
+            (payload.get('yolo_mode') or {}).get('operations', {}).get('read') is True
+            or any(isinstance(m, dict) and m.get('model') == 'res.partner'
+                   and m.get('operations', {}).get('read') is True for m in payload['models']))
     if product == 'hermes':
         return isinstance(payload.get('capabilities'), dict) and 'capabilities_error' not in payload
     if product == 'opendesign':
@@ -278,7 +305,7 @@ def child_spec(state: ProductState, directory: Path) -> ChildSpec | None:
         argv = (str(python), str(app / 'launch.py'), '--transport', 'streamable-http', '--host', '127.0.0.1', '--port', '3000', '--path', '/mcp')
     elif product == 'odoo-manage':
         env.update(ODOO_URL=c.url, ODOO_DB=c.database, ODOO_USER=c.username, ODOO_API_KEY=c.api_key,
-                   ODOO_YOLO='read', ODOO_MCP_ENABLE_METHOD_CALLS='false', ODOO_MCP_TRANSPORT='streamable-http')
+                   ODOO_YOLO='off' if c.mode == 'module' else 'read', ODOO_MCP_ENABLE_METHOD_CALLS='false', ODOO_MCP_TRANSPORT='streamable-http')
         argv = (str(python), str(app / 'launch.py'), '--transport', 'streamable-http', '--host', '127.0.0.1', '--port', '3000')
     elif product in ('hermes', 'opendesign'):
         if product == 'hermes':
@@ -296,5 +323,20 @@ def child_spec(state: ProductState, directory: Path) -> ChildSpec | None:
         else:
             env.update(LITELLM_MCP_BASE_URL=c.url, LITELLM_MCP_MASTER_KEY=c.master_key, LITELLM_MCP_READONLY='true')
             module = 'woow_litellm_mcp_server.server'
+        # FastMCP's banner otherwise performs a public PyPI lookup and writes
+        # HOME/version-cache state, breaking the intentionally clean restart CWD.
+        env.update(FASTMCP_CHECK_FOR_UPDATES='off', FASTMCP_SHOW_SERVER_BANNER='false')
+        from .native_inventory import NAMES
+        from .policy import enabled
+        public_allowed = {name for name in TOOLS[product] if enabled(name, TOOLS[product], state)}
+        # Private loopback registration also serves HealthMonitor, independently
+        # of public disables. Reserve ONLY the fixed, argument-free read probe:
+        # EMQX GET /nodes or LiteLLM GET /v1/models (never provider /health).
+        # Parent authorize/filter_list still enforce every public disable; raw
+        # child tools/list is intentionally not the public authorization surface.
+        native_allowed = public_allowed | {PROBES[product][0]}
+        prefix = 'EMQX_MCP_' if product == 'emqx' else 'LITELLM_MCP_'
+        env[prefix + 'READONLY'] = 'false' if any(TOOLS[product][name].write for name in public_allowed) else 'true'
+        env[prefix + 'DISABLED_TOOLS'] = ','.join(sorted(set(NAMES[product]) - native_allowed))
         argv = (str(python), '-m', module, '--transport', 'http', '--host', '127.0.0.1', '--port', '3000', '--path', '/mcp')
     return ChildSpec(argv, env, cwd)

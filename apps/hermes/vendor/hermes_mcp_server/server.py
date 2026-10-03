@@ -17,6 +17,7 @@ from typing import Any
 
 import httpx
 from backend_policy import async_client, backend_errors, public_backend_error
+from output_policy import rows
 from mcp.server.fastmcp import FastMCP
 
 # ---------------------------------------------------------------------------
@@ -480,6 +481,7 @@ async def hermes_chat(message: str, session_id: str | None = None) -> str:
 
 
 @mcp.tool()
+@backend_errors
 async def hermes_session(action: str = "list", session_id: str | None = None) -> str:
     """Manage Hermes sessions. Actions: list, get, delete"""
     conn = _get_connection()
@@ -490,10 +492,7 @@ async def hermes_session(action: str = "list", session_id: str | None = None) ->
             resp = await client.get("/api/sessions")
             resp.raise_for_status()
             data = resp.json()
-            if isinstance(data, dict):
-                sessions = data.get("sessions", [])
-                return json.dumps({"total": data.get("total", len(sessions)), "sessions": sessions[:20]}, indent=2, default=str)
-            return json.dumps(data, indent=2, default=str)
+            return json.dumps(rows(data, 'sessions', ('id', 'session_id', 'created_at', 'updated_at')), indent=2)
 
         if action == "get":
             if not session_id:
@@ -518,6 +517,7 @@ async def hermes_session(action: str = "list", session_id: str | None = None) ->
 
 
 @mcp.tool()
+@backend_errors
 async def hermes_cron(
     action: str = "list",
     name: str | None = None,
@@ -545,21 +545,7 @@ async def hermes_cron(
             resp = await client.get("/api/cron/jobs")
             resp.raise_for_status()
             jobs = resp.json()
-            if isinstance(jobs, list):
-                summary = []
-                for j in jobs:
-                    if isinstance(j, dict):
-                        summary.append({
-                            "id": j.get("id"),
-                            "name": j.get("name"),
-                            "schedule": j.get("schedule", {}).get("expr") if isinstance(j.get("schedule"), dict) else j.get("schedule"),
-                            "prompt": (j.get("prompt") or "")[:80],
-                            "enabled": j.get("enabled"),
-                            "state": j.get("state"),
-                            "next_run": j.get("next_run_at"),
-                        })
-                return json.dumps({"total": len(summary), "jobs": summary}, indent=2, default=str)
-            return json.dumps(jobs, indent=2, default=str)
+            return json.dumps(rows(jobs, 'jobs', ('id', 'name', 'enabled', 'state', 'next_run_at')), indent=2)
 
         if action == "create":
             if not name or not schedule or not prompt:

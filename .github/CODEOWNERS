@@ -1,0 +1,11 @@
+# Owner approval and branch/environment protections must be configured externally.
+# This file alone grants no access and does not prove required-review enforcement.
+/.github/ @WOOWTECH
+/packaging/ @WOOWTECH
+/addons/ @WOOWTECH
+/apps/*/Dockerfile @WOOWTECH
+/.dockerignore @WOOWTECH
+/repository.yaml @WOOWTECH
+/RELEASE-GATES.json @WOOWTECH
+/THIRD_PARTY_NOTICES.md @WOOWTECH
+/docs/operations/ @WOOWTECH

@@ -1,4 +1,4 @@
-"""Local executable tracer. No production administrator-role provider is installed.
+"""n8n executable with the approved fixed-query HA administrator-role provider.
 
 Run with PYTHONPATH=packages/mcp-admin-core:apps/n8n .venv/bin/python apps/n8n/run.py
 Deployment options are listener addresses/ports and the dedicated state directory,
@@ -16,6 +16,7 @@ import uvicorn
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.products import ProductStore
 from mcp_admin_core.gateway import make_apps
+from mcp_admin_core.ha_role import make_ha_admin_verifier
 from mcp_admin_core.health import HealthMonitor
 from mcp_admin_core.lifecycle import Supervisor
 from n8n_adapter import TOOLS, child_spec
@@ -44,7 +45,9 @@ async def run(args):
             async def backend_changed(state):
                 health.backend = "unknown"
                 await manager.restart(child_spec(state, store.directory))
-            admin, mcp = make_apps(store, TOOLS, child, health=health.snapshot, backend_changed=backend_changed)
+            admin, mcp = make_apps(store, TOOLS, child, health=health.snapshot,
+                                   backend_changed=backend_changed,
+                                   verify_admin=make_ha_admin_verifier())
             servers = [Listener(uvicorn.Config(app, host=args.host, port=port,
                 proxy_headers=False, access_log=False, log_level="warning", server_header=False,
                 lifespan="off",  # this function, not ASGI lifespan, owns runtime resources

@@ -8,6 +8,7 @@ import httpx
 import pytest
 
 from test_backend_policy_python import policy
+from test_expansion_runtime import WRITES
 
 from mcp_admin_core.lifecycle import ChildSpec
 from mcp_admin_core.products import PROBES, TOOLS
@@ -225,7 +226,10 @@ async def test_every_enabled_http_handler_has_safe_body_errors(tmp_path, product
 
     class Backend(Quiet):
         def do_POST(self):
-            body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            raw = self.rfile.read(int(self.headers.get('Content-Length', 0)))
+            if self.path != '/auth/password-login':
+                return self.do_GET()
+            body = json.loads(raw)
             assert body['password'] == CANARY
             self.send_response(200)
             self.send_header('Set-Cookie', f'hermes_session_at={CANARY}')
@@ -240,11 +244,14 @@ async def test_every_enabled_http_handler_has_safe_body_errors(tmp_path, product
             broken_response(self, mode['value'], CANARY)
 
         do_DELETE = do_GET
+        do_PUT = do_POST
+        do_PATCH = do_POST
 
     project = {'project_id': '12345678-1234-1234-1234-123456789abc'}
     with serve(Backend) as url:
         async with runtime(tmp_path, product, url, canary=CANARY,
-                           json_response=json_response) as (client, headers, store, *_):
+                           json_response=json_response,
+                           write_grants=[g for n,t in TOOLS[product].items() for g in t.grants(n)]) as (client, headers, store, *_):
             store.update(writes_enabled=True)  # Only owned fake OpenDesign DELETE.
             calls = []
             for name in TOOLS[product]:
@@ -256,10 +263,21 @@ async def test_every_enabled_http_handler_has_safe_body_errors(tmp_path, product
                              {'action': 'info'} if name == 'hermes_model' else
                              dict(project, file_path='test.txt') if name == 'get_file_info' else
                              project if name in ('get_project', 'list_project_files', 'delete_project') else {})
+                if TOOLS[product][name].write:
+                    arguments = next(args for n,args in WRITES[product] if n == name)
                 calls.append((name, arguments))
+            if product == 'hermes':
+                calls.extend(WRITES[product])
             for failure in ('chunk', 'gzip', 'encoding', 'json'):
                 mode['value'] = failure
                 for name, arguments in calls:
+                    # Status-only writers do not parse unused JSON/text bodies.
+                    # Chunk/decompression errors must still be safely redacted.
+                    if failure in ('encoding', 'json') and (
+                        product == 'emqx' and TOOLS[product][name].write
+                        or product == 'hermes' and arguments.get('action') in ('enable', 'disable', 'restart', 'pause', 'delete')
+                    ):
+                        continue
                     before = len(seen)
                     response = await client.post('/mcp', headers=headers, json=call(name, arguments))
                     assert len(seen) > before, (product, name, response.text)
