@@ -1,0 +1,42 @@
+{
+  "scope": "W2a local hardening; no dependency file edits, no feature expansion or approval",
+  "patches": [
+    {
+      "path": "apps/odoo/launch.py",
+      "sha256": "6e68af96f17d02ead0bf5616ba1e9ddfa3cb9fb0ea2ceb391e89044df2038e61",
+      "change": "Before stock CLI starts, replace RedirectTransport with configured-origin XMLRPC transport. Deny all redirects, pin validated DNS, retain verified hostname/SNI, sanitize faults; bound SDK sync dispatch to one worker.",
+      "guarded_sources": {
+        "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/odoo_client.py": "8bd06a523cb8049f14f54d06d9b73c3d7787108e7e78cf58bfb725ec9a97f74d"
+      }
+    },
+    {
+      "path": "apps/odoo-manage/launch.py",
+      "sha256": "8318b702cd4c3f5a24b24c24c5f7617250255ea2a65eabf270fcee439bef76c9",
+      "change": "Before stock CLI starts, replace both pooled XMLRPC transport classes with configured-origin DNS-pinned transport; keep database header and verified TLS, sanitize faults.",
+      "guarded_sources": {
+        "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/performance.py": "34f476a3c41de0daa653c3bb35b6d95468c8ef7e4a12b4d912222e0987df7b19"
+      }
+    },
+    {
+      "path": "apps/opendesign/launch.py",
+      "sha256": "a7b6adc27a6151914e685bda23180197fccca9a8243e9980c18fbbb0b48be313",
+      "change": "Run actual SDK handlers with four-worker bounded sync dispatch; initialize shared HTTP client before threads and close at launcher shutdown; no schema/permission changes.",
+      "guarded_sources": {}
+    },
+    {
+      "path": "apps/runtime/backend_policy.py",
+      "sha256": "0cfad784a7aac8bdefccaae93c2ea9663407c11081b6268af2fed7fcd0107fb1",
+      "change": "Local scoped HTTPX/httpcore and XMLRPC transports. Validate all DNS answers before numeric-address fallback under one DNS/TCP deadline; retain original Host/SNI/TLS. Process-wide four-worker DNS executor with immediate four-slot admission and execution-owned capacity through caller timeout/cancellation, shared by sync/async/XMLRPC and all Hermes clients. Supervisor owns hard process-group shutdown. Embedded _SOURCE_HASHES fail closed on seven locked HTTPX/httpcore implementation files before private pool adaptation. Lazy sync/async response wrappers normalize iteration and close failures, including unmapped httpcore cleanup errors, without buffering or taking over HTTPX/core close ownership. Non-2xx cleanup retains status precedence; cancellation is not caught. Shared type-based public error mapping and explicit enabled-handler decorators cover decoding/JSON failures after transport iteration; successful business values and signatures are unchanged. No global socket/resolver/SSRF modification.",
+      "guarded_sources": {}
+    },
+    {
+      "path": "apps/runtime/bounded_tools.py",
+      "sha256": "1bf8a05834fe50a002910da0c4d5831f361a13db0557ef43f536e547507750be",
+      "change": "Adapt SDK registered sync function dispatch, preserving validation/output metadata; reject overload, retain capacity through cancellation; child process-group supervisor owns hard shutdown deadline.",
+      "guarded_sources": {
+        "apps/odoo/.venv/lib/python3.13/site-packages/mcp/server/fastmcp/tools/base.py": "87626ba624d33218ffb7542140dc888453e33130fdefeadc8909d47bc600ca54",
+        "apps/odoo/.venv/lib/python3.13/site-packages/mcp/server/fastmcp/utilities/func_metadata.py": "72f72f1dc9195b91280b84c2ae8db466e8c289ca3069e18dfa8dfeb0df59deb2"
+      }
+    }
+  ]
+}

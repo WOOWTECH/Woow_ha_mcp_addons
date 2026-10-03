@@ -1,0 +1,5 @@
+[project]
+name = "woow-odoo-manage-child"
+version = "0.0.0"
+requires-python = ">=3.13,<3.14"
+dependencies = ["mcp-server-odoo==0.7.1", "httpx==0.28.1", "mcp==1.28.1"]

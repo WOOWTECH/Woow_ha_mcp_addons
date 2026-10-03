@@ -1,0 +1,20 @@
+[project]
+name = "woow-ha-mcp-tracer"
+version = "0.0.0"
+description = "Local n8n tracer; publication and HA acceptance pending"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  "anyio==4.15.1",
+  "httpx==0.28.1",
+  "pydantic==2.12.5",
+  "starlette==0.49.3",
+  "uvicorn==0.38.0",
+]
+
+[dependency-groups]
+dev = ["pytest==8.4.2", "pytest-asyncio==1.2.0"]
+
+[tool.pytest.ini_options]
+pythonpath = ["packages/mcp-admin-core", "apps/n8n"]
+asyncio_mode = "auto"
+testpaths = ["tests"]

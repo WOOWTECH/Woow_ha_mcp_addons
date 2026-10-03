@@ -1,0 +1,4416 @@
+{
+  "format": 1,
+  "scope": "W2a bounded local; not complete product/HA/release acceptance",
+  "source_digests": {
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/__init__.py": "7f0d150faa30f109b34382fc0f1ca778432a0ba6e000475eeb69ef114aa21a04",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/__main__.py": "078f0bab7f50b889b58b58962bbca16875e782370b5328618a5a842a83a1f1df",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/access_helpers.py": "cacf992499dcbf8ec6f9a08f4b52b2055d4a99575b42992a032bbc273d839a4e",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/accounting_tools.py": "7eb4c7f835a247d80ef2b8404ccb385fcf34dad91078ff59eb133056e7dbeba9",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/agent_tools.py": "5004b28b00e59efd903ae8d48240922a0bdb43fb9b0051e77dbcd919e3c434fd",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/audit.py": "a83cd8fcc2c998ae2b7c57686c257dbf662ac23fd03f825b7f3c68944747fbfb",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/auth.py": "90fc4a57275b723e37bee4455afc5c9564566addb2f2163e954913ceb5ed4d50",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/cross_instance.py": "053ed7d7bd66c4733dfd2f444ac9a517c5e2b0610e2ae7637e2ead9539e59821",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/data_quality.py": "c939be7370cd797abdb079513c1949339445c1e6aa3b9bb3d06a075924b1c3fe",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/diagnostics.py": "1fb1632cc711a7dfa4d5f6700472abeaffb897a094a4c399c21ce045aebb0dc7",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/field_policy.py": "f6763bd2d5eca68445cdc4302b68fcd38cf145f608de16a12b00e2ac1a7dd978",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/knowledge_index.py": "ec722a2d6d489d343e4e554915cdf45b16d19f1369bbfaf95adb35383ed0dfc2",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/odoo_client.py": "8bd06a523cb8049f14f54d06d9b73c3d7787108e7e78cf58bfb725ec9a97f74d",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/plugin_api.py": "51ca956175f69dd2b26e1e62bf913127e0012f2ac5f0d644f5b3b91e4a53f0fd",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/prompts.py": "945c1c8b201b7b63f9ab6d19cc6dea5297c85b53b87e3f9681d287af8c4c5346",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/prompts_workflows.py": "08424d456108f709c269d535cb98b2cf739290fc51d6d7a5788fbc5c9aab73a4",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/rate_limit.py": "f67ba63b68f6a4853e5f27caef28f8afe969ed409ac4f0397eda50efccc997e8",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/schema_cache.py": "8364474702eccc99e59c891e21359009f9951f07b12915b9be7daee13d55c423",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/schemas.py": "f403c1794c79aa5c8ec6c8321b7eb93965f83929170e15997ee9ed95aee52f4e",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/server.py": "5474438cf941678d7b80b12bc03ff32323f68c3b6dda90906a51ec530a7c2d48",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/server_core.py": "b6872eb7dd7e4b937ebb8dd0ae2b80e29a79a3e34f2beaeaf092f0d9b2b79c03",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/setup_wizard.py": "3896e54837a5083b86830cfb70268f6c35d33ddfbc67b696e4ee0d3055d78bb7",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/task_queue.py": "1e80ee0317d237e36cdaddf608059462c8e4adfe484cd336557976c9f29949a0",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tool_helpers.py": "51276e68897d45f812048400d79100ba1a6a589de05fc7c50dff96d4c9596e64",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_accounting.py": "875938eefb563923d4f9e6bbda97611329a455fd565f8e9063e521578422e93a",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_async.py": "0fb5f638a1fb60cacec1d5479f2b258a9115053bc7c6c8707577936a18f1e632",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_cross_instance.py": "09d269c9322bf934dc3e762c53c7d5dec305291c3f5bd893d4ade48ac38e2be0",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_data_quality.py": "5a0b35eb4d5196321dbba042d89afe2d62d1e8e4d51337b6a54999e108ecaa34",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py": "957f3affa479cb079350de8874064d89594ab0661cfbfd7675b7f26930d32772",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_knowledge.py": "fc2dba8682c5286dc4009d1f66deb16462fbadae2c97beb45e050dda9bd1f757",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py": "4c8bf33b35c54757b93f0cc367b4f5027488ca8fbf63f68c1241f1a4be784de0",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_write.py": "f16ca5a9c52f2ce8c2699d5231cc975dbabb67524edd2e424ba110a80c929d8f",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/write_policy.py": "d2fa967f7efc942abfb7792608c6323c77fcda81def86fd7c0b265102415b154",
+    "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/__init__.py": "ddc0cccc0c175133220e63b2ece3ce79ca44984fc53f1cadba1e0e73c41a1ba7",
+    "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/__main__.py": "3ca759a344d9cd08e672c8d237226a182e6c951106f6bc1265651a2392c3008f",
+    "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/access_control.py": "6001ec627491f1e1c6fa04e2eeddf126d92d4b811c8f9603676e021dbe92359a",
+    "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/config.py": "3a2e93c1879d17c373db9ee62afaa33bdc53d13909e90b97476a367a77339b36",
+    "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/error_handling.py": "07ff1b3e6ba673d2d43fb09bd3c452ce77ef37f656960c4fbd011ba725624ca6",
+    "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/error_sanitizer.py": "76ef5f2274a213af6f87f4e46811d313ae1662c575996123ee4d7f37d92cfd71",
+    "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/formatters.py": "94e03653bafc09b9912d98c33ef0e5841378b3baeafe4a24f52c3d14c50bfc93",
+    "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/logging_config.py": "160cc8cb9f8c54dd5c14b9cc451c0bdcb6df9ee7ccc51d618e6d54864bc0bfd5",
+    "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/odoo_connection.py": "ebf31be7f21390beff402f267a30110ec3af9071b0e41bb1c453620a399d7a75",
+    "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/performance.py": "34f476a3c41de0daa653c3bb35b6d95468c8ef7e4a12b4d912222e0987df7b19",
+    "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/resources.py": "5536e9d3137d105049bcaf9467624535d957d2dcbd075603d19834ae97477a33",
+    "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/schemas.py": "933304fea6c8279b51f9ab80a86e5b53c1cdd27f20a7bf2a4bfc183e2a4dcc6a",
+    "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/server.py": "4dec3375d722e2eb6af054949be31e66ca35f1713bbc1908398d46f35c09b4fe",
+    "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/tools.py": "5569568a6c86306d19bc4194ef7aeb504a238c4b8dba4d7fc809002104737249",
+    "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/uri_schema.py": "2771d8c05d3a93a7b2b0256faf7c63c655f5cd232d22edc462d77c7a171f4af2",
+    "apps/hermes/vendor/hermes_mcp_server/server.py": "dd20b326f33adb01025aad53e7f11ff0ba585bd6f3fe95f0a376fd6c7bcbef4d",
+    "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py": "41a82e311e53edd78213a20d4e33e0551aa073f3256395b2df8fe72ad90e2e50",
+    "apps/emqx/vendor/emqx_mcp_server/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "apps/emqx/vendor/emqx_mcp_server/deps.py": "fa949b1f1b3577be7c848af5bb74a5b9d068d39cba265b93cdd4dde4a41529e3",
+    "apps/emqx/vendor/emqx_mcp_server/errors.py": "d8264e158ade0102720f7d35762c9edadba6244dbbbf768a527bc2cc9ee0813b",
+    "apps/emqx/vendor/emqx_mcp_server/gating.py": "9168feae3231c16df2513f3668a7ad6dacc67072ef5d0cc919bb963e2b6de057",
+    "apps/emqx/vendor/emqx_mcp_server/lifespan.py": "e217a630de2a1d9061441a81dc463aaada787203e3c900890198a5789a0be811",
+    "apps/emqx/vendor/emqx_mcp_server/models.py": "0d247d845738f37d2673fd0e50203cc8c4f3c4cf6a2d3b10db7bd2a0b9740801",
+    "apps/emqx/vendor/emqx_mcp_server/registry.py": "c440d204de9091952ffbd6784d81cd7fd78184e266701f86cf051da332191652",
+    "apps/emqx/vendor/emqx_mcp_server/server.py": "e6ae5c32a62ae8942bdf2701f687dc7d840bc49745fd8b094e886f833c043c22",
+    "apps/emqx/vendor/emqx_mcp_server/settings.py": "7c4ad8c7d6c56c8a9d3ef62634a4a875bbb9ee25992e6ac0aaf972aaf32a3598",
+    "apps/emqx/vendor/emqx_mcp_server/tools/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "apps/emqx/vendor/emqx_mcp_server/tools/_common.py": "ecf9b4f3ec95b059dcda81d0c5e77c294c14e48cc4f8adc423d455bcf5400ae5",
+    "apps/emqx/vendor/emqx_mcp_server/tools/clients.py": "11b7029a4e57a78169fde8d006596513040c64cdcbb1b12b72f0e48eab0fc3af",
+    "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py": "2a5f1943551498556b3ef525c6742d17980c40022dd6da9349307428da7b0f52",
+    "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py": "f20e0868ebca0c2707d8f3b3fbe7a9e3651af9235d708abfced402ba3c6e26bf",
+    "apps/emqx/vendor/emqx_mcp_server/tools/integration.py": "05ac8a89c35389d6793bb2e2c579947ee3bbc42a55c5fd67d9978a162e1636de",
+    "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py": "afd34ac295d6fd12e6d9bc91718cfd7ae1e71606694d8b5a560962feea17b5c0",
+    "apps/emqx/vendor/emqx_mcp_server/tools/security.py": "f113e5c365b7d25bca426f3dd663570e9302777b27d67ff24c9ad4af1d299dcf",
+    "apps/emqx/vendor/emqx_mcp_server/tools/topics.py": "fb95c8cfcf2279e3b8b2545079bda8276a24210440123c5ac38624c372f1e353",
+    "apps/litellm/vendor/woow_litellm_mcp_server/__init__.py": "9567c42afe6f2928bb9d7b550c3266c70d8e6c47bd0ebbe0d6a2558a90726f4c",
+    "apps/litellm/vendor/woow_litellm_mcp_server/deps.py": "4a283943aeb3ab74a4d88721cecd577263a66e2a83c64509c90a4235eec636ce",
+    "apps/litellm/vendor/woow_litellm_mcp_server/errors.py": "3615e517ac06aef789b9dad2387bd6fe4238f49f493d3fe2e95a4965c10a034f",
+    "apps/litellm/vendor/woow_litellm_mcp_server/gating.py": "b53476befdf8ff25c6f5688a510c669c0cca6cc704f8b00f7b5dfd0265b79bcb",
+    "apps/litellm/vendor/woow_litellm_mcp_server/lifespan.py": "02f2d2998dd0ada21d8560203409184a359d35b18e546ee6c68a7b24f87c18da",
+    "apps/litellm/vendor/woow_litellm_mcp_server/middleware.py": "a019bb77516d924981301c06a933263fc6743380c32488efaba2748bd28a05c5",
+    "apps/litellm/vendor/woow_litellm_mcp_server/registry.py": "a074a48ceeef9393ab46500420156fc59c39471c1fa6739e9030c81e7c597cae",
+    "apps/litellm/vendor/woow_litellm_mcp_server/server.py": "85c3cb8f6d50bed817279754c16309919bdf419f8193b6291f47f08f80db89f7",
+    "apps/litellm/vendor/woow_litellm_mcp_server/settings.py": "0c89fa776b88ae00a52d4ed5bae67ba9e827f42e35ab74bf2c3fac81a465ded2",
+    "apps/litellm/vendor/woow_litellm_mcp_server/tools/__init__.py": "fd4881256f2c77ece6e01f98742355d6bab7fbb170079d0474c7c78cf2772742",
+    "apps/litellm/vendor/woow_litellm_mcp_server/tools/_common.py": "88ed7db06559d0ebaddf014831ad59e11ae3ca488c618cdc8994efb8185fe41e",
+    "apps/litellm/vendor/woow_litellm_mcp_server/tools/chat.py": "379330b6e1708fa1c454517fb3c162c11aea8d86bcc31fbc433e66ee42eaa276",
+    "apps/litellm/vendor/woow_litellm_mcp_server/tools/health.py": "6d61c3741510b1ebd3e8fb78ec7696fbc63761c7cd7f4558295089114819ead7",
+    "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py": "f53ffbcea4520fa4a95f2cb6722e6979d4515507076c5bcd1593ccf2ac9f63d8",
+    "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py": "8b3e9a184f6e12633ffb724aa69c55a09fae13df3d8f5112f3704d61aa6d94ec",
+    "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py": "f1a421b82ad96427d0d05d9f248d509f92a6cca320ee7f1217a6662eda85b054",
+    "apps/litellm/vendor/woow_litellm_mcp_server/tools/spend.py": "f90f29026fb32c96d0c8030338383426661c63c44ba5c1602c83824ddadf7a70",
+    "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py": "15fe1783df2740477c0dd222f51c50c6043844fc3c0bf2361050d9c70904ea96",
+    "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py": "19da4359727177e950b4a222633baa179d9a843fae50db6aece3d86ccee87517",
+    "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools.js": "acb4d2a3ec74b5f2b41d327a93340a0f9a799e99947656afd010a76390fb10cb",
+    "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js": "28d54ea6a3001678fd510542c82c04c26b2ff3b55b7db63b630800e82e02191f",
+    "apps/n8n/node_modules/n8n-mcp/dist/mcp/agents-action-map.js": "9282db04957b8a7931cd99ceddcbfd943419732930325256b03ecc443075c8e8",
+    "apps/n8n/node_modules/n8n-mcp/dist/mcp/handlers-agents.js": "80e65ea7c8db18638b9c831c2f5d74012412d57839a92ab18d7a9c735062f4ac",
+    "apps/n8n/node_modules/n8n-mcp/dist/mcp/handlers-n8n-manager.js": "0d99e10ec1eb9a6e4d78726636aa79f52eb4f3862be506785b794f1aeb9608cc",
+    "apps/n8n/node_modules/n8n-mcp/dist/mcp/handlers-official-tools.js": "e85937c58d5a8426d54b1b69598adc83a14648402fc58a8714ef5db8132977cd",
+    "apps/n8n/node_modules/n8n-mcp/dist/mcp/handlers-workflow-diff.js": "7d842e716e10223dc8e8c36bc8173e6adabb4e7145934734c9aa88f35d0ccde1",
+    "apps/n8n/node_modules/n8n-mcp/dist/mcp/index.js": "4476ee45971533c0b7e97cfec4f53466e88100af616fa3fd0a7df49e90128e15",
+    "apps/n8n/node_modules/n8n-mcp/dist/mcp/official-mcp-access.js": "113d3556e4b93a870b36986a0fce8de45391ce64d7ab4c9f50fd6715eee3c733",
+    "apps/n8n/node_modules/n8n-mcp/dist/mcp/param-aliases.js": "9e2ead691b7439c57b73fc4c80b76a4d86b914c2cf7b08e1f6cdd2f46edfa834",
+    "apps/n8n/node_modules/n8n-mcp/dist/mcp/server.js": "a4dfc41f48282423a610ee9ac45c0374357b7409cdaa4858e11ba58a32b2128c",
+    "apps/n8n/node_modules/n8n-mcp/dist/mcp/stdio-wrapper.js": "08c1cad54e21017f4b527bcd602f6dc8e50cd813babd33372bfbf429fcaf2291",
+    "apps/n8n/node_modules/n8n-mcp/dist/mcp/tool-policy.js": "e3ec9753d7b64320d83829015905c32a1b03620a4b82f0e39d5fcbb142a75ec5",
+    "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-documentation.js": "4e01752278c8dddea44a64aa1a26fb4f429823f42937c349aa1a2650abaeffc9",
+    "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-friendly.js": "e403c29a9000b6a5a8c1c4984ae1387ca36ec8675da726c0fc5bc1d799e58257",
+    "apps/n8n/node_modules/n8n-mcp/dist/mcp/workflow-examples.js": "b0fdd063164b2df040351e173d9f62e27e0e27be3acca5dd5ede87ce73ec87d4",
+    "apps/n8n/node_modules/n8n-mcp/dist/services/n8n-api-client.js": "e64be8d3def0623b6710c6e98f7a08ed14a49a1764a5f789def58ea1e900947c",
+    "apps/runtime/backend_policy.py": "0cfad784a7aac8bdefccaae93c2ea9663407c11081b6268af2fed7fcd0107fb1",
+    "apps/runtime/bounded_tools.py": "1bf8a05834fe50a002910da0c4d5831f361a13db0557ef43f536e547507750be",
+    "apps/hermes/launch.py": "5c9197f5898a7fbae317e824a4601f6d076996f229054cb2e664a5f5f785a0f3",
+    "apps/odoo/launch.py": "6e68af96f17d02ead0bf5616ba1e9ddfa3cb9fb0ea2ceb391e89044df2038e61",
+    "apps/odoo-manage/launch.py": "8318b702cd4c3f5a24b24c24c5f7617250255ea2a65eabf270fcee439bef76c9",
+    "apps/opendesign/launch.py": "a7b6adc27a6151914e685bda23180197fccca9a8243e9980c18fbbb0b48be313"
+  },
+  "products": {
+    "odoo": {
+      "upstream_count": 41,
+      "supported_count": 2,
+      "tools": [
+        {
+          "name": "accounting_health_across_instances",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_cross_instance.py",
+          "line": 306,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "accounting_health_summary",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_accounting.py",
+          "line": 91,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "aggregate_across_instances",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_cross_instance.py",
+          "line": 264,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "aggregate_records",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
+          "line": 592,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "analyze_upgrade_log",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
+          "line": 505,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "build_domain",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
+          "line": 605,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "business_pack_report",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
+          "line": 627,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "cancel_async_task",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_async.py",
+          "line": 214,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "chatter_post",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_write.py",
+          "line": 421,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "data_quality_report",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_data_quality.py",
+          "line": 37,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "diagnose_access",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
+          "line": 180,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "diagnose_odoo_call",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
+          "line": 65,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "execute_approved_write",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_write.py",
+          "line": 244,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "execute_method",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_write.py",
+          "line": 549,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "mixed",
+          "operation_effects": {
+            "arbitrary-method": {
+              "*": "unverified-side-effects"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "fit_gap_report",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
+          "line": 553,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "generate_json2_payload",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
+          "line": 108,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "get_async_task",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_async.py",
+          "line": 201,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "get_model_fields",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
+          "line": 303,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "get_odoo_profile",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
+          "line": 70,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "health_check",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
+          "line": 208,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "Arguments",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "index_knowledge",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_knowledge.py",
+          "line": 66,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "inspect_model_relationships",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
+          "line": 134,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "knowledge_stats",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_knowledge.py",
+          "line": 132,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "list_async_tasks",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_async.py",
+          "line": 227,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "list_instances",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
+          "line": 230,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "list_models",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
+          "line": 256,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "instance": {
+                "anyOf": [
+                  {
+                    "const": "default",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Instance"
+              },
+              "limit": {
+                "default": 20,
+                "maximum": 100,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              },
+              "query": {
+                "anyOf": [
+                  {
+                    "maxLength": 128,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Query"
+              }
+            },
+            "title": "Models",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "lookup_model_history",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
+          "line": 535,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "preview_write",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_write.py",
+          "line": 103,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "read_attachment",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
+          "line": 501,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "read_record",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
+          "line": 447,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "receivable_payable_aging",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_accounting.py",
+          "line": 51,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "scan_addons_source",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
+          "line": 581,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "schema_catalog",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
+          "line": 115,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "search_across_instances",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_cross_instance.py",
+          "line": 224,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "search_employee",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
+          "line": 719,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "search_holidays",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
+          "line": 757,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "search_knowledge",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_knowledge.py",
+          "line": 104,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "search_records",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
+          "line": 370,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "submit_async_task",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_async.py",
+          "line": 157,
+          "evidence": "python-decorator-AST",
+          "operations": {
+            "operation": [
+              "data_quality_report",
+              "index_knowledge",
+              "receivable_payable_aging",
+              "scan_addons_source"
+            ]
+          },
+          "effect": "write",
+          "operation_effects": {
+            "operation": {
+              "data_quality_report": "write",
+              "index_knowledge": "write",
+              "receivable_payable_aging": "write",
+              "scan_addons_source": "write"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "upgrade_risk_report",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
+          "line": 465,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "validate_write",
+          "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_write.py",
+          "line": 147,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 handler／模型／欄位輸出審查、參數界限及假 XML-RPC 正反測試；禁止任意方法、跨 instance 與本機檔案讀取。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        }
+      ]
+    },
+    "odoo-manage": {
+      "upstream_count": 10,
+      "supported_count": 1,
+      "tools": [
+        {
+          "name": "aggregate_records",
+          "source": "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/tools.py",
+          "line": 691,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需模型／欄位白名單及假後端測試；寫入需另外批准 backend mode，禁止 arbitrary call_model_method；resources 不開放。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "call_model_method",
+          "source": "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/tools.py",
+          "line": 766,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "mixed",
+          "operation_effects": {
+            "arbitrary-method": {
+              "*": "unverified-side-effects"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需模型／欄位白名單及假後端測試；寫入需另外批准 backend mode，禁止 arbitrary call_model_method；resources 不開放。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "create_record",
+          "source": "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/tools.py",
+          "line": 559,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需模型／欄位白名單及假後端測試；寫入需另外批准 backend mode，禁止 arbitrary call_model_method；resources 不開放。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "delete_record",
+          "source": "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/tools.py",
+          "line": 613,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需模型／欄位白名單及假後端測試；寫入需另外批准 backend mode，禁止 arbitrary call_model_method；resources 不開放。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "get_record",
+          "source": "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/tools.py",
+          "line": 467,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需模型／欄位白名單及假後端測試；寫入需另外批准 backend mode，禁止 arbitrary call_model_method；resources 不開放。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "list_models",
+          "source": "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/tools.py",
+          "line": 518,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "Arguments",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "list_resource_templates",
+          "source": "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/tools.py",
+          "line": 537,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需模型／欄位白名單及假後端測試；寫入需另外批准 backend mode，禁止 arbitrary call_model_method；resources 不開放。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "post_message",
+          "source": "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/tools.py",
+          "line": 639,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需模型／欄位白名單及假後端測試；寫入需另外批准 backend mode，禁止 arbitrary call_model_method；resources 不開放。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "search_records",
+          "source": "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/tools.py",
+          "line": 421,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需模型／欄位白名單及假後端測試；寫入需另外批准 backend mode，禁止 arbitrary call_model_method；resources 不開放。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "update_record",
+          "source": "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/tools.py",
+          "line": 585,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需模型／欄位白名單及假後端測試；寫入需另外批准 backend mode，禁止 arbitrary call_model_method；resources 不開放。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        }
+      ]
+    },
+    "hermes": {
+      "upstream_count": 11,
+      "supported_count": 5,
+      "tools": [
+        {
+          "name": "hermes_chat",
+          "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
+          "line": 454,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 action、路徑及內容遮罩審查；session/config/prompt/MCP URL 可能洩密，agent/chat/cron 有寫入或費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "hermes_config",
+          "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
+          "line": 350,
+          "evidence": "python-decorator-AST",
+          "operations": {
+            "action": [
+              "get",
+              "set"
+            ]
+          },
+          "effect": "mixed",
+          "operation_effects": {
+            "action": {
+              "get": "read",
+              "set": "write"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 action、路徑及內容遮罩審查；session/config/prompt/MCP URL 可能洩密，agent/chat/cron 有寫入或費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "hermes_cron",
+          "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
+          "line": 521,
+          "evidence": "python-decorator-AST",
+          "operations": {
+            "action": [
+              "create",
+              "delete",
+              "list",
+              "pause",
+              "resume",
+              "trigger",
+              "update"
+            ]
+          },
+          "effect": "mixed",
+          "operation_effects": {
+            "action": {
+              "create": "write",
+              "delete": "write",
+              "list": "read",
+              "pause": "write",
+              "resume": "write",
+              "trigger": "write",
+              "update": "write"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 action、路徑及內容遮罩審查；session/config/prompt/MCP URL 可能洩密，agent/chat/cron 有寫入或費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "hermes_gateway",
+          "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
+          "line": 424,
+          "evidence": "python-decorator-AST",
+          "operations": {
+            "action": [
+              "restart",
+              "status"
+            ]
+          },
+          "effect": "mixed",
+          "operation_effects": {
+            "action": {
+              "restart": "write",
+              "status": "read"
+            }
+          },
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "status",
+                "default": "status",
+                "title": "Action",
+                "type": "string"
+              }
+            },
+            "title": "Gateway",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "hermes_inspect",
+          "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
+          "line": 183,
+          "evidence": "python-decorator-AST",
+          "operations": {
+            "target": [
+              "all",
+              "capabilities",
+              "config",
+              "model",
+              "status"
+            ]
+          },
+          "effect": "read",
+          "operation_effects": {
+            "target": {
+              "all": "read",
+              "capabilities": "read",
+              "config": "read",
+              "model": "read",
+              "status": "read"
+            }
+          },
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "target": {
+                "enum": [
+                  "capabilities",
+                  "status"
+                ],
+                "title": "Target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "target"
+            ],
+            "title": "Inspect",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "hermes_mcp",
+          "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
+          "line": 276,
+          "evidence": "python-decorator-AST",
+          "operations": {
+            "action": [
+              "add",
+              "list",
+              "remove"
+            ]
+          },
+          "effect": "mixed",
+          "operation_effects": {
+            "action": {
+              "add": "write",
+              "list": "read",
+              "remove": "write"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 action、路徑及內容遮罩審查；session/config/prompt/MCP URL 可能洩密，agent/chat/cron 有寫入或費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "hermes_model",
+          "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
+          "line": 314,
+          "evidence": "python-decorator-AST",
+          "operations": {
+            "action": [
+              "info",
+              "list_providers",
+              "set"
+            ]
+          },
+          "effect": "mixed",
+          "operation_effects": {
+            "action": {
+              "info": "read",
+              "list_providers": "read",
+              "set": "write"
+            }
+          },
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "default": "info",
+                "enum": [
+                  "info",
+                  "list_providers"
+                ],
+                "title": "Action",
+                "type": "string"
+              },
+              "model": {
+                "default": null,
+                "title": "Model",
+                "type": "null"
+              },
+              "provider": {
+                "default": null,
+                "title": "Provider",
+                "type": "null"
+              }
+            },
+            "title": "ModelInfo",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "hermes_session",
+          "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
+          "line": 483,
+          "evidence": "python-decorator-AST",
+          "operations": {
+            "action": [
+              "delete",
+              "get",
+              "list"
+            ]
+          },
+          "effect": "mixed",
+          "operation_effects": {
+            "action": {
+              "delete": "write",
+              "get": "read",
+              "list": "read"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 action、路徑及內容遮罩審查；session/config/prompt/MCP URL 可能洩密，agent/chat/cron 有寫入或費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "hermes_skill",
+          "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
+          "line": 245,
+          "evidence": "python-decorator-AST",
+          "operations": {
+            "action": [
+              "disable",
+              "enable",
+              "list"
+            ]
+          },
+          "effect": "mixed",
+          "operation_effects": {
+            "action": {
+              "disable": "write",
+              "enable": "write",
+              "list": "read"
+            }
+          },
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "list",
+                "title": "Action",
+                "type": "string"
+              },
+              "name": {
+                "default": null,
+                "title": "Name",
+                "type": "null"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "title": "SkillList",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "hermes_tools",
+          "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
+          "line": 396,
+          "evidence": "python-decorator-AST",
+          "operations": {
+            "action": [
+              "disable",
+              "enable",
+              "list"
+            ]
+          },
+          "effect": "mixed",
+          "operation_effects": {
+            "action": {
+              "disable": "write",
+              "enable": "write",
+              "list": "read"
+            }
+          },
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "list",
+                "default": "list",
+                "title": "Action",
+                "type": "string"
+              },
+              "toolset": {
+                "default": null,
+                "title": "Toolset",
+                "type": "null"
+              }
+            },
+            "title": "Toolsets",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "hermes_webhook",
+          "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
+          "line": 631,
+          "evidence": "python-decorator-AST",
+          "operations": {
+            "action": [
+              "create",
+              "delete",
+              "enable_platform",
+              "list",
+              "toggle"
+            ]
+          },
+          "effect": "mixed",
+          "operation_effects": {
+            "action": {
+              "create": "write",
+              "delete": "write",
+              "enable_platform": "write",
+              "list": "read",
+              "toggle": "write"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐 action、路徑及內容遮罩審查；session/config/prompt/MCP URL 可能洩密，agent/chat/cron 有寫入或費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        }
+      ]
+    },
+    "opendesign": {
+      "upstream_count": 15,
+      "supported_count": 10,
+      "tools": [
+        {
+          "name": "create_project",
+          "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
+          "line": 204,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：檔案讀取需非秘密路徑及回應上限；廣泛結果需內容審查；AI 生成需費用／副作用測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "delete_project",
+          "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
+          "line": 238,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": false,
+          "enable": "PUT /api/policy (HA admin+CSRF): writes_enabled=true; remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "project_id": {
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "title": "Project Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project_id"
+            ],
+            "title": "Project",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "get_file_info",
+          "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
+          "line": 278,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "project_id": {
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "title": "Project Id",
+                "type": "string"
+              },
+              "file_path": {
+                "maxLength": 256,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_. /-]+$",
+                "title": "File Path",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project_id",
+              "file_path"
+            ],
+            "title": "FileInfo",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "get_project",
+          "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
+          "line": 194,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "project_id": {
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "title": "Project Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project_id"
+            ],
+            "title": "Project",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "health",
+          "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
+          "line": 145,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "Arguments",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "list_agents",
+          "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
+          "line": 159,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "Arguments",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "list_connectors",
+          "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
+          "line": 175,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：檔案讀取需非秘密路徑及回應上限；廣泛結果需內容審查；AI 生成需費用／副作用測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "list_plugins",
+          "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
+          "line": 337,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "Arguments",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "list_project_files",
+          "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
+          "line": 249,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "project_id": {
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "title": "Project Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project_id"
+            ],
+            "title": "Project",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "list_projects",
+          "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
+          "line": 187,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "Arguments",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "list_runs",
+          "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
+          "line": 325,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：檔案讀取需非秘密路徑及回應上限；廣泛結果需內容審查；AI 生成需費用／副作用測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "list_skills",
+          "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
+          "line": 358,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "Arguments",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "read_file",
+          "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
+          "line": 264,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：檔案讀取需非秘密路徑及回應上限；廣泛結果需內容審查；AI 生成需費用／副作用測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "send_message",
+          "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
+          "line": 298,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：檔案讀取需非秘密路徑及回應上限；廣泛結果需內容審查；AI 生成需費用／副作用測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "version",
+          "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
+          "line": 152,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "Arguments",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        }
+      ]
+    },
+    "emqx": {
+      "upstream_count": 39,
+      "supported_count": 3,
+      "tools": [
+        {
+          "name": "emqx_authz_settings",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py",
+          "line": 142,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_ban",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py",
+          "line": 240,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_broker_stats",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py",
+          "line": 79,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "Arguments",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_client_subscribe",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py",
+          "line": 147,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_client_subscriptions",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py",
+          "line": 107,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_client_unsubscribe",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py",
+          "line": 171,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_cluster_status",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py",
+          "line": 27,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "Arguments",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_create_trace",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py",
+          "line": 41,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_delete_retained",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py",
+          "line": 243,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_delete_trace",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py",
+          "line": 124,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_get_client",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py",
+          "line": 92,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_get_retained",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py",
+          "line": 216,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_get_rule_metrics",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py",
+          "line": 54,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_get_trace_log",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py",
+          "line": 82,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_kick_client",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py",
+          "line": 126,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_list_actions",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py",
+          "line": 134,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_list_alarms",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py",
+          "line": 167,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_list_authn",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py",
+          "line": 35,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_list_authz_sources",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py",
+          "line": 113,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_list_banned",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py",
+          "line": 228,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_list_clients",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py",
+          "line": 46,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_list_connectors",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py",
+          "line": 118,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_list_listeners",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py",
+          "line": 140,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_list_retained",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py",
+          "line": 192,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_list_rules",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py",
+          "line": 27,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_list_subscriptions",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/topics.py",
+          "line": 54,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_list_topics",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/topics.py",
+          "line": 26,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_list_traces",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py",
+          "line": 29,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_manage_authn_users",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py",
+          "line": 64,
+          "evidence": "python-decorator-AST",
+          "operations": {
+            "operation": [
+              "create",
+              "delete",
+              "read"
+            ]
+          },
+          "effect": "mixed",
+          "operation_effects": {
+            "operation": {
+              "create": "write",
+              "delete": "write",
+              "read": "read"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_manage_authz_rules",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py",
+          "line": 164,
+          "evidence": "python-decorator-AST",
+          "operations": {
+            "operation": [
+              "create",
+              "delete",
+              "read"
+            ]
+          },
+          "effect": "mixed",
+          "operation_effects": {
+            "operation": {
+              "create": "write",
+              "delete": "write",
+              "read": "read"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_metrics_current",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py",
+          "line": 102,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "Arguments",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_metrics_history",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py",
+          "line": 112,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_node_detail",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py",
+          "line": 66,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_prometheus_stats",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py",
+          "line": 186,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_publish",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py",
+          "line": 97,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_publish_bulk",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py",
+          "line": 150,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_test_rule_sql",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py",
+          "line": 92,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "unverified-side-effects",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_toggle_rule",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py",
+          "line": 72,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "emqx_unban",
+          "source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py",
+          "line": 270,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需逐工具參數及輸出審查／假 broker 測試；payload、認證、trace、integration 可能敏感；混合工具用 operation，不是 action。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        }
+      ]
+    },
+    "litellm": {
+      "upstream_count": 40,
+      "supported_count": 2,
+      "tools": [
+        {
+          "name": "litellm_add_model",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py",
+          "line": 105,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_block_key",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py",
+          "line": 214,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_chat_completion",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/chat.py",
+          "line": 98,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_create_team",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py",
+          "line": 22,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_create_user",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py",
+          "line": 22,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_delete_key",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py",
+          "line": 184,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_delete_model",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py",
+          "line": 190,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_delete_plugin",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py",
+          "line": 165,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_delete_team",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py",
+          "line": 127,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_delete_user",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py",
+          "line": 152,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_disable_plugin",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py",
+          "line": 148,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_enable_plugin",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py",
+          "line": 135,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_generate_key",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py",
+          "line": 41,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_global_spend_report",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/spend.py",
+          "line": 216,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_health",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/health.py",
+          "line": 21,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "unverified-side-effects",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_health_readiness",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/health.py",
+          "line": 60,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "Arguments",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_key_info",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py",
+          "line": 112,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_list_keys",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py",
+          "line": 84,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_list_models",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py",
+          "line": 60,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "Arguments",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_list_plugins",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py",
+          "line": 57,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_list_teams",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py",
+          "line": 53,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_list_users",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py",
+          "line": 63,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_model_group_info",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py",
+          "line": 90,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_model_info",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py",
+          "line": 73,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_plugin_info",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py",
+          "line": 77,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_regenerate_key",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py",
+          "line": 248,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_register_plugin",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py",
+          "line": 87,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_skill_hub",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py",
+          "line": 180,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_spend_calculate",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/spend.py",
+          "line": 315,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "unverified-side-effects",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_spend_logs",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/spend.py",
+          "line": 142,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_team_info",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py",
+          "line": 86,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_team_member_add",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py",
+          "line": 143,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_team_member_delete",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py",
+          "line": 181,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_token_counter",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/chat.py",
+          "line": 160,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "unverified-side-effects",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_unblock_key",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py",
+          "line": 230,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_update_key",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py",
+          "line": 124,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_update_model",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py",
+          "line": 139,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_update_team",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py",
+          "line": 98,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_update_user",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py",
+          "line": 113,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "litellm_user_info",
+          "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py",
+          "line": 101,
+          "evidence": "python-decorator-AST",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：需參數／pagination／輸出遮罩及版本相容測試；key/model/spend 可能敏感；推論及 health provider probe 可能產生費用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_product_adapters.py",
+            "tests/test_product_boundary.py",
+            "tests/test_real_products.py"
+          ]
+        }
+      ]
+    },
+    "n8n": {
+      "upstream_count": 28,
+      "supported_count": 4,
+      "tools": [
+        {
+          "name": "get_node",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {
+            "mode": [
+              "info",
+              "docs",
+              "search_properties",
+              "versions",
+              "compare",
+              "breaking",
+              "migrations"
+            ]
+          },
+          "effect": "read",
+          "operation_effects": {
+            "mode": {
+              "info": "read",
+              "docs": "read",
+              "search_properties": "read",
+              "versions": "read",
+              "compare": "read",
+              "breaking": "read",
+              "migrations": "read"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "get_template",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {
+            "mode": [
+              "nodes_only",
+              "structure",
+              "full"
+            ]
+          },
+          "effect": "read",
+          "operation_effects": {
+            "mode": {
+              "nodes_only": "read",
+              "structure": "read",
+              "full": "read"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_audit_instance",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {},
+          "effect": "unverified-side-effects",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_autofix_workflow",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_create_workflow",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_delete_workflow",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": false,
+          "enable": "PUT /api/policy (HA admin+CSRF): writes_enabled=true; remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9_-]+$",
+                "title": "Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "title": "DeleteWorkflow",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_deploy_template",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_evaluations",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {
+            "action": [
+              "list_runs",
+              "get_run",
+              "list_cases",
+              "run",
+              "cancel"
+            ]
+          },
+          "effect": "mixed",
+          "operation_effects": {
+            "action": {
+              "list_runs": "read",
+              "get_run": "read",
+              "list_cases": "read",
+              "run": "write",
+              "cancel": "write"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_executions",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {
+            "action": [
+              "get",
+              "list",
+              "delete"
+            ],
+            "mode": [
+              "preview",
+              "summary",
+              "filtered",
+              "full",
+              "error"
+            ]
+          },
+          "effect": "mixed",
+          "operation_effects": {
+            "action": {
+              "get": "read",
+              "list": "read",
+              "delete": "write"
+            },
+            "mode": {
+              "preview": "mixed",
+              "summary": "mixed",
+              "filtered": "mixed",
+              "full": "mixed",
+              "error": "mixed"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_explore_node_resources",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {
+            "methodType": [
+              "listSearch",
+              "loadOptions"
+            ]
+          },
+          "effect": "mixed",
+          "operation_effects": {
+            "methodType": {
+              "listSearch": "mixed",
+              "loadOptions": "mixed"
+            },
+            "arbitrary-method": {
+              "*": "unverified-side-effects"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_get_workflow",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {
+            "mode": [
+              "full",
+              "details",
+              "structure",
+              "minimal",
+              "active",
+              "filtered"
+            ]
+          },
+          "effect": "read",
+          "operation_effects": {
+            "mode": {
+              "full": "read",
+              "details": "read",
+              "structure": "read",
+              "minimal": "read",
+              "active": "read",
+              "filtered": "read"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_health_check",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {
+            "mode": [
+              "status",
+              "diagnostic"
+            ]
+          },
+          "effect": "read",
+          "operation_effects": {
+            "mode": {
+              "status": "read",
+              "diagnostic": "read"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_list_catalog",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {
+            "kind": [
+              "projects",
+              "tags"
+            ]
+          },
+          "effect": "read",
+          "operation_effects": {
+            "kind": {
+              "projects": "read",
+              "tags": "read"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_list_workflows",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "limit": {
+                "default": 20,
+                "maximum": 100,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              },
+              "active": {
+                "description": "Optional boolean filter; omit for all workflows. Null is invalid.",
+                "title": "Active",
+                "type": "boolean"
+              }
+            },
+            "title": "ListWorkflows",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_manage_agents",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {
+            "action": [
+              "reference",
+              "search",
+              "get",
+              "create",
+              "mutate",
+              "validate",
+              "call",
+              "publish",
+              "unpublish",
+              "revert",
+              "versions",
+              "delete",
+              "discover_assets",
+              "verify_mcp_server",
+              "update_integration"
+            ]
+          },
+          "effect": "mixed",
+          "operation_effects": {
+            "action": {
+              "reference": "read",
+              "search": "read",
+              "get": "read",
+              "create": "write",
+              "mutate": "write",
+              "validate": "read",
+              "call": "write",
+              "publish": "write",
+              "unpublish": "write",
+              "revert": "write",
+              "versions": "read",
+              "delete": "write",
+              "discover_assets": "read",
+              "verify_mcp_server": "unverified-side-effects",
+              "update_integration": "write"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_manage_credentials",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {
+            "action": [
+              "list",
+              "get",
+              "create",
+              "update",
+              "delete",
+              "getSchema"
+            ]
+          },
+          "effect": "mixed",
+          "operation_effects": {
+            "action": {
+              "list": "read",
+              "get": "read",
+              "create": "write",
+              "update": "write",
+              "delete": "write",
+              "getSchema": "read"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_manage_datatable",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {
+            "action": [
+              "createTable",
+              "listTables",
+              "getTable",
+              "updateTable",
+              "deleteTable",
+              "getRows",
+              "insertRows",
+              "updateRows",
+              "upsertRows",
+              "deleteRows",
+              "addColumn",
+              "deleteColumn",
+              "renameColumn"
+            ]
+          },
+          "effect": "mixed",
+          "operation_effects": {
+            "action": {
+              "createTable": "write",
+              "listTables": "read",
+              "getTable": "read",
+              "updateTable": "write",
+              "deleteTable": "write",
+              "getRows": "read",
+              "insertRows": "write",
+              "updateRows": "write",
+              "upsertRows": "write",
+              "deleteRows": "write",
+              "addColumn": "write",
+              "deleteColumn": "write",
+              "renameColumn": "write"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_manage_folders",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {
+            "action": [
+              "create",
+              "list",
+              "get",
+              "rename",
+              "move",
+              "delete"
+            ]
+          },
+          "effect": "mixed",
+          "operation_effects": {
+            "action": {
+              "create": "write",
+              "list": "read",
+              "get": "read",
+              "rename": "write",
+              "move": "write",
+              "delete": "write"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_test_workflow",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {
+            "method": [
+              "auto",
+              "trigger",
+              "prepare",
+              "pinned",
+              "direct"
+            ]
+          },
+          "effect": "write",
+          "operation_effects": {
+            "method": {
+              "auto": "write",
+              "trigger": "write",
+              "prepare": "write",
+              "pinned": "write",
+              "direct": "write"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_update_full_workflow",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_update_partial_workflow",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {},
+          "effect": "write",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_validate_workflow",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "n8n_workflow_versions",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {
+            "mode": [
+              "list",
+              "get",
+              "rollback",
+              "delete",
+              "prune",
+              "diff"
+            ]
+          },
+          "effect": "mixed",
+          "operation_effects": {
+            "mode": {
+              "list": "read",
+              "get": "read",
+              "rollback": "write",
+              "delete": "write",
+              "prune": "write",
+              "diff": "read"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "search_nodes",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {
+            "mode": [
+              "OR",
+              "AND",
+              "FUZZY"
+            ]
+          },
+          "effect": "read",
+          "operation_effects": {
+            "mode": {
+              "OR": "read",
+              "AND": "read",
+              "FUZZY": "read"
+            }
+          },
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "query": {
+                "maxLength": 256,
+                "minLength": 1,
+                "title": "Query",
+                "type": "string"
+              },
+              "limit": {
+                "default": 20,
+                "maximum": 100,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "title": "Search",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "search_templates",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {
+            "searchMode": [
+              "keyword",
+              "by_nodes",
+              "by_task",
+              "by_metadata",
+              "patterns"
+            ]
+          },
+          "effect": "read",
+          "operation_effects": {
+            "searchMode": {
+              "keyword": "read",
+              "by_nodes": "read",
+              "by_task": "read",
+              "by_metadata": "read",
+              "patterns": "read"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "tools_documentation",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "僅接受 adapter inputSchema；server-side unknown/disabled/write gate。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "topic": {
+                "default": "overview",
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[a-zA-Z0-9_]+$",
+                "title": "Topic",
+                "type": "string"
+              },
+              "depth": {
+                "default": "essentials",
+                "enum": [
+                  "essentials",
+                  "full"
+                ],
+                "title": "Depth",
+                "type": "string"
+              }
+            },
+            "title": "Documentation",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "validate_node",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {
+            "mode": [
+              "full",
+              "minimal"
+            ]
+          },
+          "effect": "read",
+          "operation_effects": {
+            "mode": {
+              "full": "read",
+              "minimal": "read"
+            }
+          },
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        },
+        {
+          "name": "validate_workflow",
+          "source": "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools.js",
+          "evidence": "installed-runtime-definition-export",
+          "operations": {},
+          "effect": "read",
+          "operation_effects": {},
+          "status": "temporarily-unsupported",
+          "default_enabled": false,
+          "enable": "不可由 GUI 啟用；需 W2b source/policy/test review",
+          "reason": "W2b：tracer 以外工具需逐 handler/action、輸出秘密與間接執行審查，並有 disposable fake backend 正反測試。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
+          ]
+        }
+      ]
+    }
+  }
+}

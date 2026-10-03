@@ -1,0 +1,36 @@
+"""Explicit runtime-only acquisition. No repository checkout or deployment/config reads."""
+import hashlib
+import json
+from pathlib import Path
+from urllib.request import urlopen
+
+ROOT = Path(__file__).resolve().parents[1]
+LEGACY = Path('/data/pi-agent/home/woow-repos/WOOW/woow-mcp-server')
+SOURCES = {
+    'hermes': ('local:614ae663fadd91c76972f60017a76d2627bea87e', ['hermes_mcp_server/server.py']),
+    'opendesign': ('local:614ae663fadd91c76972f60017a76d2627bea87e', ['opendesign_mcp_server/od_mcp_server.py']),
+    'emqx': ('WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e', [
+        'emqx_mcp_server/' + p + '.py' for p in ['__init__', 'server', 'settings', 'lifespan', 'gating', 'registry', 'errors', 'deps', 'models', 'tools/__init__', 'tools/_common', 'tools/cluster', 'tools/clients', 'tools/topics', 'tools/messaging', 'tools/security', 'tools/diagnostics', 'tools/integration']]),
+    'litellm': ('WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609', [
+        'woow_litellm_mcp_server/' + p + '.py' for p in ['__init__', 'server', 'settings', 'lifespan', 'gating', 'registry', 'errors', 'deps', 'middleware', 'tools/__init__', 'tools/_common', 'tools/models', 'tools/chat', 'tools/keys', 'tools/teams', 'tools/users', 'tools/spend', 'tools/health', 'tools/plugins']]),
+}
+
+if __name__ == '__main__':
+    # Never overwrite reviewed local hardening or provenance during re-acquisition.
+    if any((ROOT / 'apps' / product / 'vendor').exists() for product in SOURCES):
+        raise SystemExit('vendor directories already exist; review updates in a separate staging tree')
+    import subprocess
+    assert subprocess.check_output(['git', '-C', str(LEGACY), 'rev-parse', 'HEAD'], text=True).strip() == '614ae663fadd91c76972f60017a76d2627bea87e'
+    records = []
+    for product, (source, paths) in SOURCES.items():
+        for path in [*paths, 'LICENSE']:
+            if source.startswith('local:'):
+                data = (LEGACY / 'apps' / product / path).read_bytes()
+            else:
+                with urlopen('https://raw.githubusercontent.com/' + source + '/' + path, timeout=30) as response:
+                    data = response.read()
+            dest = ROOT / 'apps' / product / 'vendor' / path
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(data)
+            records.append({'product': product, 'source': source, 'path': path, 'upstream_sha256': hashlib.sha256(data).hexdigest()})
+    (ROOT / 'docs/provenance/runtime-sources.json').write_text(json.dumps(records, indent=2) + '\n')

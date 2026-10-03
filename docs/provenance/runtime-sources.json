@@ -1,0 +1,274 @@
+[
+  {
+    "product": "hermes",
+    "source": "local:614ae663fadd91c76972f60017a76d2627bea87e",
+    "path": "hermes_mcp_server/server.py",
+    "upstream_sha256": "e1c3f7be4de0302fafb85848641d89a43e83565afa844da9f813f10a718c25a6",
+    "local_sha256": "dd20b326f33adb01025aad53e7f11ff0ba585bd6f3fe95f0a376fd6c7bcbef4d",
+    "modification": "Use scoped DNS-pinned HTTPX transport for gateway, dashboard login and cookie clients; deny redirects/proxies. Map inspect exception fields by type, never raw exception text; explicit safe error boundaries on other enabled handlers include late decoding/JSON failures, preserving successful values and signatures."
+  },
+  {
+    "product": "hermes",
+    "source": "local:614ae663fadd91c76972f60017a76d2627bea87e",
+    "path": "LICENSE",
+    "upstream_sha256": "1b05bfafc14067beabe8885c164528c122ebf545eabe97984b222fe377143a69"
+  },
+  {
+    "product": "opendesign",
+    "source": "local:614ae663fadd91c76972f60017a76d2627bea87e",
+    "path": "opendesign_mcp_server/od_mcp_server.py",
+    "upstream_sha256": "89caa06f96a62a6df663609fa468f00b41180970c835ceb03f3a1cf196f2e717",
+    "local_sha256": "41a82e311e53edd78213a20d4e33e0551aa073f3256395b2df8fe72ad90e2e50",
+    "modification": "Require explicit OD_API_BASE and corrected provenance header; all HTTP clients use scoped DNS-pinned transport, redirect/proxy denial, safe errors and five-second ordinary I/O timeout. Explicit enabled-handler error boundaries cover late response decoding/JSON/processing failures without altering successful output or SDK signatures. Bounded SDK offload is in the separate launcher."
+  },
+  {
+    "product": "opendesign",
+    "source": "local:614ae663fadd91c76972f60017a76d2627bea87e",
+    "path": "LICENSE",
+    "upstream_sha256": "1b05bfafc14067beabe8885c164528c122ebf545eabe97984b222fe377143a69"
+  },
+  {
+    "product": "emqx",
+    "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
+    "path": "emqx_mcp_server/__init__.py",
+    "upstream_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "product": "emqx",
+    "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
+    "path": "emqx_mcp_server/server.py",
+    "upstream_sha256": "e6ae5c32a62ae8942bdf2701f687dc7d840bc49745fd8b094e886f833c043c22"
+  },
+  {
+    "product": "emqx",
+    "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
+    "path": "emqx_mcp_server/settings.py",
+    "upstream_sha256": "7c4ad8c7d6c56c8a9d3ef62634a4a875bbb9ee25992e6ac0aaf972aaf32a3598"
+  },
+  {
+    "product": "emqx",
+    "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
+    "path": "emqx_mcp_server/lifespan.py",
+    "upstream_sha256": "b2c934124e1162255146be319ee59daa79a068710f3ee4a7c8cf707de8e4ca63",
+    "local_sha256": "e217a630de2a1d9061441a81dc463aaada787203e3c900890198a5789a0be811",
+    "modification": "Use scoped DNS-pinned HTTPX transport; deny redirects/proxies and sanitize transport failures."
+  },
+  {
+    "product": "emqx",
+    "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
+    "path": "emqx_mcp_server/gating.py",
+    "upstream_sha256": "9168feae3231c16df2513f3668a7ad6dacc67072ef5d0cc919bb963e2b6de057"
+  },
+  {
+    "product": "emqx",
+    "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
+    "path": "emqx_mcp_server/registry.py",
+    "upstream_sha256": "c440d204de9091952ffbd6784d81cd7fd78184e266701f86cf051da332191652"
+  },
+  {
+    "product": "emqx",
+    "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
+    "path": "emqx_mcp_server/errors.py",
+    "upstream_sha256": "c7e0035e810600c10db1bd5ff21f511f3023c4b1c0c57931b3487ba6d4611795",
+    "local_sha256": "d8264e158ade0102720f7d35762c9edadba6244dbbbf768a527bc2cc9ee0813b",
+    "modification": "Map request exceptions by type into stable public ToolError codes, including lazy stream/close/decompression failures; reject invalid JSON/encoding instead of returning an empty success. No raw exception or response-body diagnostics."
+  },
+  {
+    "product": "emqx",
+    "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
+    "path": "emqx_mcp_server/deps.py",
+    "upstream_sha256": "fa949b1f1b3577be7c848af5bb74a5b9d068d39cba265b93cdd4dde4a41529e3"
+  },
+  {
+    "product": "emqx",
+    "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
+    "path": "emqx_mcp_server/tools/__init__.py",
+    "upstream_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "product": "emqx",
+    "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
+    "path": "emqx_mcp_server/tools/_common.py",
+    "upstream_sha256": "ecf9b4f3ec95b059dcda81d0c5e77c294c14e48cc4f8adc423d455bcf5400ae5"
+  },
+  {
+    "product": "emqx",
+    "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
+    "path": "emqx_mcp_server/tools/cluster.py",
+    "upstream_sha256": "6ff36613848cacae7e414a04e776c37a588a21cfc7ccacef606ab91c5dbe65c8",
+    "local_sha256": "2a5f1943551498556b3ef525c6742d17980c40022dd6da9349307428da7b0f52",
+    "modification": "Reject malformed/generic/empty/error/duplicate node payloads before projection; require nonempty name@host identifiers without whitespace and actual version evidence."
+  },
+  {
+    "product": "emqx",
+    "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
+    "path": "emqx_mcp_server/tools/clients.py",
+    "upstream_sha256": "11b7029a4e57a78169fde8d006596513040c64cdcbb1b12b72f0e48eab0fc3af"
+  },
+  {
+    "product": "emqx",
+    "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
+    "path": "emqx_mcp_server/tools/topics.py",
+    "upstream_sha256": "fb95c8cfcf2279e3b8b2545079bda8276a24210440123c5ac38624c372f1e353"
+  },
+  {
+    "product": "emqx",
+    "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
+    "path": "emqx_mcp_server/tools/messaging.py",
+    "upstream_sha256": "afd34ac295d6fd12e6d9bc91718cfd7ae1e71606694d8b5a560962feea17b5c0"
+  },
+  {
+    "product": "emqx",
+    "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
+    "path": "emqx_mcp_server/tools/security.py",
+    "upstream_sha256": "f113e5c365b7d25bca426f3dd663570e9302777b27d67ff24c9ad4af1d299dcf"
+  },
+  {
+    "product": "emqx",
+    "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
+    "path": "emqx_mcp_server/tools/diagnostics.py",
+    "upstream_sha256": "f20e0868ebca0c2707d8f3b3fbe7a9e3651af9235d708abfced402ba3c6e26bf"
+  },
+  {
+    "product": "emqx",
+    "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
+    "path": "emqx_mcp_server/tools/integration.py",
+    "upstream_sha256": "05ac8a89c35389d6793bb2e2c579947ee3bbc42a55c5fd67d9978a162e1636de"
+  },
+  {
+    "product": "emqx",
+    "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
+    "path": "LICENSE",
+    "upstream_sha256": "1b05bfafc14067beabe8885c164528c122ebf545eabe97984b222fe377143a69"
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "woow_litellm_mcp_server/__init__.py",
+    "upstream_sha256": "9567c42afe6f2928bb9d7b550c3266c70d8e6c47bd0ebbe0d6a2558a90726f4c"
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "woow_litellm_mcp_server/server.py",
+    "upstream_sha256": "85c3cb8f6d50bed817279754c16309919bdf419f8193b6291f47f08f80db89f7"
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "woow_litellm_mcp_server/settings.py",
+    "upstream_sha256": "0c89fa776b88ae00a52d4ed5bae67ba9e827f42e35ab74bf2c3fac81a465ded2"
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "woow_litellm_mcp_server/lifespan.py",
+    "upstream_sha256": "907c15314463424da9bed2c029d6405cce922828a8ef6adac69a236b61446f06",
+    "local_sha256": "02f2d2998dd0ada21d8560203409184a359d35b18e546ee6c68a7b24f87c18da",
+    "modification": "Use scoped DNS-pinned HTTPX transport; preserve redirect/proxy denial and sanitize transport failures."
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "woow_litellm_mcp_server/gating.py",
+    "upstream_sha256": "b53476befdf8ff25c6f5688a510c669c0cca6cc704f8b00f7b5dfd0265b79bcb"
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "woow_litellm_mcp_server/registry.py",
+    "upstream_sha256": "a074a48ceeef9393ab46500420156fc59c39471c1fa6739e9030c81e7c597cae"
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "woow_litellm_mcp_server/errors.py",
+    "upstream_sha256": "3bc39077a69c07b2b0ceeb306510dc2f71ccc3b604187a4cecedab784efc1768",
+    "local_sha256": "3615e517ac06aef789b9dad2387bd6fe4238f49f493d3fe2e95a4965c10a034f",
+    "modification": "Replace raw-body/exception public errors with bounded stable BACKEND codes/status; use shared type-based mapping for lazy stream/close/decompression failures and reject all JSON parsing exceptions without returning raw text."
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "woow_litellm_mcp_server/deps.py",
+    "upstream_sha256": "4a283943aeb3ab74a4d88721cecd577263a66e2a83c64509c90a4235eec636ce"
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "woow_litellm_mcp_server/middleware.py",
+    "upstream_sha256": "a019bb77516d924981301c06a933263fc6743380c32488efaba2748bd28a05c5"
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "woow_litellm_mcp_server/tools/__init__.py",
+    "upstream_sha256": "fd4881256f2c77ece6e01f98742355d6bab7fbb170079d0474c7c78cf2772742"
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "woow_litellm_mcp_server/tools/_common.py",
+    "upstream_sha256": "88ed7db06559d0ebaddf014831ad59e11ae3ca488c618cdc8994efb8185fe41e"
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "woow_litellm_mcp_server/tools/models.py",
+    "upstream_sha256": "8b3e9a184f6e12633ffb724aa69c55a09fae13df3d8f5112f3704d61aa6d94ec"
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "woow_litellm_mcp_server/tools/chat.py",
+    "upstream_sha256": "379330b6e1708fa1c454517fb3c162c11aea8d86bcc31fbc433e66ee42eaa276"
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "woow_litellm_mcp_server/tools/keys.py",
+    "upstream_sha256": "f53ffbcea4520fa4a95f2cb6722e6979d4515507076c5bcd1593ccf2ac9f63d8"
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "woow_litellm_mcp_server/tools/teams.py",
+    "upstream_sha256": "15fe1783df2740477c0dd222f51c50c6043844fc3c0bf2361050d9c70904ea96"
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "woow_litellm_mcp_server/tools/users.py",
+    "upstream_sha256": "19da4359727177e950b4a222633baa179d9a843fae50db6aece3d86ccee87517"
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "woow_litellm_mcp_server/tools/spend.py",
+    "upstream_sha256": "f90f29026fb32c96d0c8030338383426661c63c44ba5c1602c83824ddadf7a70"
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "woow_litellm_mcp_server/tools/health.py",
+    "upstream_sha256": "6d61c3741510b1ebd3e8fb78ec7696fbc63761c7cd7f4558295089114819ead7"
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "woow_litellm_mcp_server/tools/plugins.py",
+    "upstream_sha256": "f1a421b82ad96427d0d05d9f248d509f92a6cca320ee7f1217a6662eda85b054"
+  },
+  {
+    "product": "litellm",
+    "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
+    "path": "LICENSE",
+    "upstream_sha256": "1b05bfafc14067beabe8885c164528c122ebf545eabe97984b222fe377143a69"
+  },
+  {
+    "product": "emqx",
+    "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
+    "path": "emqx_mcp_server/models.py",
+    "upstream_sha256": "0d247d845738f37d2673fd0e50203cc8c4f3c4cf6a2d3b10db7bd2a0b9740801"
+  }
+]
