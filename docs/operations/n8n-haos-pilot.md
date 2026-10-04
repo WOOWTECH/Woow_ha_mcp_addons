@@ -54,15 +54,24 @@ python3 <tools>/source_bundle.py verify woow-mcp-<sha12>.bundle <候選 SHA> sou
 
 ## P2 — 靜態與單元關卡（VM，候選 checkout 根目錄）
 
+前提：CPython **3.13.12**、Linux x86_64（與 CI `setup-python` 相同；`requirements-ci.txt` 的 PyYAML 是固定
+cp313 wheel hash）。不要用系統 Python 3.12 或假設 PyYAML 已安裝。下文 `<py313>` 指這個 3.13.12 直譯器，
+可以是只為本步驟建的私人 venv（其中只裝 requirements-ci），不對系統 Python 安裝。
+
 ```sh
-python packaging/validate.py                    # 候選自帶
-python3 <tools>/context_closure.py .            # 外部工具，產品清單讀自候選 packaging/inputs.json
-uv sync --frozen --no-dev --python python3.13
+# 1. validator 用的直譯器：先裝 hash-pinned PyYAML（同 CI 第一個 pip 步驟）
+<py313> -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
+<py313> packaging/validate.py                   # 候選自帶
+python3 <tools>/context_closure.py .            # 外部工具（僅標準庫），產品清單讀自候選 packaging/inputs.json
+# 2. 候選 .venv：鎖定依賴後，再對同一 .venv 裝同一份 hash-pinned PyYAML（同 CI 第二段，install 不是 sync）
+uv sync --frozen --no-dev --python <py313>
+uv pip install --python .venv/bin/python --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
 .venv/bin/python -m unittest discover -s packaging -p 'test_*.py' -v
 sh packaging/unit.sh
 ```
 
-除 `context_closure.py` 外與 CI `unit` job 相同。`context_closure.py` 是**模型檢查**：以 moby 的
+順序與依賴準備和 CI `unit` job 相同（先 validator 直譯器裝 requirements-ci → validate → uv sync → 同一 .venv
+再裝 requirements-ci → packaging unittest → unit.sh），唯一差異是多了外部 `context_closure.py`。`context_closure.py` 是**模型檢查**：以 moby 的
 `.dockerignore` 父目錄比對規則，對 git 追蹤檔與其文件所列的 Dockerfile 子集，確認 COPY 來源在 context 內；
 超出子集的寫法直接報 unsupported。它不是完整 Docker 語義實作，也不能取代 P3 真實建置或證明 context 無秘密。
 
