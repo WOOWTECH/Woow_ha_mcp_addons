@@ -5,6 +5,17 @@ pattern matching a PARENT directory decides for everything below it), which is
 what Docker/BuildKit apply to .dockerignore. A tracked file that a production
 Dockerfile COPYs but the context drops fails only on a real builder; this
 catches it offline. Read-only: no Docker, no network.
+
+Supported subset only; anything else raises ValueError instead of being
+silently under-counted. This is a model of the rules, not builder evidence.
+- .dockerignore: comments, blank lines, `!` exceptions, `*`, `**`, `?`, `\\`
+  escapes. Character classes `[...]` are rejected.
+- Dockerfile: `\\` line continuations are joined into one instruction (comment
+  lines inside are dropped, as Docker does); upper-case `COPY` in shell form with
+  literal relative sources. `COPY --from=...` is skipped (stage copy). Other
+  `--flag=value` options are ignored except `--parents`/`--exclude`, which change
+  source selection and are rejected. Rejected: JSON-form COPY, heredocs (`<<`
+  anywhere, since a body changes how later lines parse), a dangling continuation, `ADD`, parser directives, and `$`, `*`, `?`, `[` in sources.
 """
 import os
 from pathlib import Path
@@ -46,6 +57,8 @@ def load_ignore(text):
         line = line.strip()
         if not line or line.startswith('#'):
             continue
+        if '[' in line:
+            raise ValueError('unsupported .dockerignore character class: ' + line)
         exclusion = line.startswith('!')
         line = line[1:].strip() if exclusion else line
         patterns.append((exclusion, compile_pattern(os.path.normpath(line.lstrip('/')))))
@@ -64,12 +77,50 @@ def excluded(patterns, path):
     return matched
 
 
+def instructions(dockerfile):
+    pending, start = [], 0
+    for number, line in enumerate(dockerfile.splitlines(), 1):
+        stripped = line.strip()
+        if number == 1 and re.match(r'#\s*(syntax|escape|check)\s*=', stripped, re.I):
+            raise ValueError('Dockerfile line 1: unsupported parser directive')
+        if stripped.startswith('#') or (not stripped and not pending):
+            continue
+        if '<<' in stripped:
+            raise ValueError('Dockerfile line %d: unsupported heredoc' % number)
+        start = start if pending else number
+        if stripped.endswith('\\'):
+            pending.append(stripped[:-1])
+            continue
+        yield start, ' '.join(pending + [stripped])
+        pending = []
+    if pending:
+        raise ValueError('Dockerfile line %d: dangling continuation' % start)
+
+
 def copy_sources(dockerfile):
     sources = []
-    for line in dockerfile.splitlines():
-        words = line.split()
-        if words[:1] == ['COPY'] and not any(w.startswith('--from') for w in words):
-            sources += [w for w in words[1:-1] if not w.startswith('--')]
+    for number, stripped in instructions(dockerfile):
+        where = 'Dockerfile line %d: ' % number
+        words = stripped.split()
+        instruction = words[0].upper()
+        if instruction == 'ADD':
+            raise ValueError(where + 'unsupported ADD')
+        if instruction != 'COPY':
+            continue
+        if words[0] != 'COPY' or (len(words) > 1 and words[1].startswith('[')):
+            raise ValueError(where + 'unsupported COPY form')
+        flags = [w for w in words[1:] if w.startswith('--')]
+        if any(f.startswith(('--parents', '--exclude')) for f in flags):
+            raise ValueError(where + 'unsupported COPY flag')
+        if any(f.startswith('--from') for f in flags):
+            continue
+        args = [w for w in words[1:] if not w.startswith('--')]
+        if len(args) < 2:
+            raise ValueError(where + 'COPY needs source and destination')
+        for source in args[:-1]:
+            if any(c in source for c in '$*?[') or source.startswith(('/', '..')):
+                raise ValueError(where + 'unsupported COPY source ' + source)
+        sources += args[:-1]
     return sources
 
 

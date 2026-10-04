@@ -22,15 +22,19 @@
 |---|---|---|
 | `name` | `WOOW n8n MCP (experimental)` | 加上 `(pilot <sha12>)` |
 | `slug` | `woow_mcp_n8n` | `woow_mcp_n8n_pilot`；安裝後 Supervisor 顯示為 `local_woow_mcp_n8n_pilot` |
-| `version` | `0.1.0` | `0.1.0-pilot.<sha12>` |
-| `image` | `ghcr.io/woowtech/{arch}-mcp-n8n` | `<私有 registry>/<namespace>/amd64-mcp-n8n` |
+| `version` | `0.1.0` | `0.1.0`（**不改**，與映像 label `io.hass.version` 一致） |
+| `image` | `ghcr.io/woowtech/{arch}-mcp-n8n` | `<私有 registry>/<namespace>/pilot-<sha12>/amd64-mcp-n8n`（每個候選 commit 一個路徑） |
 
 已知後果（需協調者接受）：
 
 - 本地 app 的 slug 與日後 store 版本不同，**試點資料不會自動延續**到正式安裝。試點結束後移除。
-- image 內 label `io.hass.version` 仍是 `0.1.0`。Supervisor 依 manifest `version` 拉 tag，重貼 tag 不改
-  image ID。這點在 P8 實際安裝時需確認 Supervisor 不拒絕；若拒絕，停止並回報，不重建映像來對齊 label。
-- 試點版本字串含 commit，所以**每個候選 commit 一個新 tag**，不覆寫舊 tag。
+- 版本不改的原因（已查 inputs.json 釘的 Supervisor `2026.09.3` commit `64ea3be`）：`DockerInterface.install`
+  只依 manifest `version` 拉 `image:version`，`check_image` 只比對架構，安裝不讀 label；但備份還原
+  `supervisor/apps/app.py:1696` 以 `self.instance.version`（即 image label `io.hass.version`）比對備份中的
+  `version`，不同就重新拉映像。若 manifest 改成 `0.1.0-pilot.*` 而 label 仍 `0.1.0`，每次還原都會走
+  這條重拉路徑，還原行為與正式版不同。所以維持 `0.1.0`，改用 **registry 路徑**區分候選，
+  同一 artifact 不必重建、label 與 version 一致。路徑一經推送不再覆寫；新 commit 用新路徑。
+- 試點內的升版測試（P9 #9）需要真正的新版本（例如 0.1.1 候選），不是改路徑。
 
 產生方式（之後實作，現在不寫程式）：`packaging/` 下的產生器只讀公開 manifest＋translations，
 套上上表四欄，輸出到 evidence 目錄（不在 repo 內），並以 `validate.py` 的同一套規則檢查，只有
@@ -44,15 +48,34 @@
 |---|---|
 | `commit`、`tree` | P0 `source-receipt.json` |
 | `image_id`、`diff_ids` | P5 `subject.json` |
-| `ref` | `<registry>/<namespace>/amd64-mcp-n8n:0.1.0-pilot.<sha12>` |
+| `ref` | `<registry>/<namespace>/pilot-<sha12>/amd64-mcp-n8n:0.1.0` |
 | `manifest_digest_after_push` | 推送後讀回的 manifest digest |
 | `manifest_digest_before_install`、`manifest_digest_after_install` | P8 安裝前後各讀一次 |
-| `manifest_config_digest` | 必須等於 `image_id` |
+| `config_digest` | manifest 的 config descriptor digest，必須等於 `image_id` |
+| `config_diff_ids` | 由已驗證 config blob 讀出的 `rootfs.diff_ids`，必須等於 `subject.json` 的 `diff_ids` |
+| `layer_digests` | manifest 的 `layers[].digest` 與 mediaType；**只**與 registry blob 核對，不與 diff_ids 比 |
 | `variant_config_sha256` | 產生的試點 `config.yaml` |
 | `haos`、`supervisor`、`core` 版本 | P7 唯讀查詢 |
 
-三次讀到的 manifest digest 必須一致，且 config digest 等於 `image_id`。任一不符：停止，不安裝或立即停用。
-限制：HA 端無法直接讀已安裝 container 的 image ID，所以身分是靠「唯一 tag＋三次 digest 一致」間接保證。
+兩種 hash 不可混用（[OCI Image Spec v1.1.0 config](https://github.com/opencontainers/image-spec/blob/v1.1.0/config.md#layer-diffid)、
+[manifest](https://github.com/opencontainers/image-spec/blob/v1.1.0/manifest.md)）：DiffID 是**未壓縮** layer tar 的 digest，
+manifest `layers[].digest` 是依其 mediaType 儲存的 blob（通常壓縮）的 digest。核對順序：
+
+1. 讀 manifest 原始 bytes，sha256 必須等於回應的 manifest digest；mediaType 必須是預期的單一平台 image manifest。
+2. 依 config descriptor 取 config blob，sha256 必須等於 descriptor digest，且等於 `image_id`。
+3. 從這份已驗證的 config 讀 `rootfs.diff_ids`，與 `subject.json` 的 `diff_ids` 逐項相等。
+4. 每個 layer descriptor：取（或 HEAD）對應 blob，digest 與 size 相符；這只證明 registry 內容自洽，
+   不拿來和 diff_ids 比。
+
+任一不符：停止，不安裝或立即停用。
+
+### 驗收缺口（必須明列）
+
+上述只證明「registry 上這個引用指向已測映像且推送後未變」。**HA 實際在跑的 image 身分沒有直接證據**：
+釘選 Supervisor 的 app API（`supervisor/api/apps.py`）回 `version` 等欄位，沒有 image ID 或 digest；
+目前也沒有批准的 Docker 層查詢（不連生產 Docker socket）。所以 P9 報告要分開寫：
+「registry 引用未變：已證明」、「安裝後 runtime image 身分：**未直接建立**」。若之後有平台提供且經批准的
+精確查詢，再補這一項；不得以三次 digest 一致宣稱整體身分驗收通過。
 
 ## 步驟分類
 
@@ -61,7 +84,7 @@
 | ID | 動作 |
 |---|---|
 | R1 | 產生試點變體與 `variant_config_sha256` |
-| R2 | VM 上把已測 image ID 打上唯一試點 tag 並推送；讀回 manifest，比對 config digest＝image_id、layers＝diff_ids |
+| R2 | VM 上把已測 image ID 打上該 commit 專屬路徑的 `0.1.0` tag 並推送；依上節 1–4 核對（config digest＝image_id；已驗證 config 的 diff_ids＝subject；layer blob 只核對 registry 自洽） |
 | R3 | 寫 `delivery-receipt.json` 的推送部分 |
 
 R2 需要 registry 推送權限（**未批准**）；推送用的憑證只在一次性 VM 內、用完即銷毀，不進 HA。
@@ -72,8 +95,11 @@ R2 需要 registry 推送權限（**未批准**）；推送用的憑證只在一
 |---|---|---|
 | H1 | Supervisor 新增一組**唯讀、短效**的 registry 拉取憑證 | 移除該 registry 項目，再確認清單中已無此項 |
 | H2 | 透過檔案分享把試點變體目錄複製到 HA 的 `/addons/woow_mcp_n8n_pilot/` | 刪除該目錄，重新載入本地 app 清單 |
-| H3 | 安裝並啟動 `local_woow_mcp_n8n_pilot` | 停止並解除安裝（會刪除它的 `/data`，先依 P9 #8 決定是否保留受控備份） |
-| H4 | 試點結束 | H3 → H2 → H1 的回復依序執行，撤銷該 registry 憑證本身，撤銷受限 n8n key 與 MCP token |
+| H3 | 安裝並啟動 `local_woow_mcp_n8n_pilot`（全新、隔離的資料目錄） | 停止。解除安裝會刪除它的 `/data`，**必須先取得明確確認**，並先做受控 export／cold backup（含秘密，限制保存） |
+| H4 | 試點結束 | 經逐步確認後依 H3 → H2 → H1 回復，撤銷該 registry 憑證本身、受限 n8n key 與 MCP token |
+
+H1–H4 **逐步**檢查與批准：每一步各自的前提、證據與回復，不是整組一次放行。「試點」不代表可以自動刪除
+資料；試點資料不會轉入日後正式 store 安裝，需要保留時用 export／backup 處理。
 
 H1–H4 都不重啟 Core／Supervisor，不改既有 app、不碰既有 n8n／Odoo／EMQX／Hermes／OpenDesign。
 H2 需要 HA 上已有的檔案分享管道；若只能透過 SSH add-on，只做檔案複製，不執行 docker 指令。
@@ -81,5 +107,5 @@ H2 需要 HA 上已有的檔案分享管道；若只能透過 SSH add-on，只�
 ## 待協調者決定
 
 1. registry 位置與 namespace（私有 GHCR package 或內部 registry），以及推送／唯讀拉取憑證的供應方式。
-2. 是否接受「本地 app＋不同 slug」的試點方式及資料不延續的後果。
-3. H1–H4 的批准方式（一次批准整組或逐步批准）與時段。
+2. 方向已定為「私有 registry＋新本地 pilot slug＋不在 HA 重建」；仍需 registry host／namespace、publisher 與 Supervisor 拉取憑證。
+3. H1–H4 逐步批准的時段與每步核准人。

@@ -2,7 +2,8 @@
 
 create: bundle the complete reachable history of ONE reviewed commit from a
 throwaway bare clone (the shared repository gets no new refs), plus a receipt.
-verify: on the VM, before any build, prove the bundle holds exactly that commit
+Relative paths are accepted and resolved against the caller's working
+directory before git runs. verify: on the VM, before any build, prove the bundle holds exactly that commit
 under one fixed ref, passes fsck, and matches the receipt hash.
 
 Git runs with no system/global config, no hooks and a fresh HOME so credential
@@ -47,14 +48,15 @@ def require_sha(sha):
 
 def create(repo, sha, output):
     require_sha(sha)
-    output = Path(output)
+    # Absolute before any git call: git runs with cwd set to temporary repositories.
+    repo, output = Path(repo).resolve(strict=True), Path(output).absolute()
     output.mkdir(mode=0o700)  # fresh directory only; never reuse earlier evidence
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         if git(['cat-file', '-t', sha], repo, tmp).strip() != 'commit':
             raise ValueError('not a commit')
         bare = tmp / 'clone.git'
-        git(['clone', '--quiet', '--bare', '--no-local', '--no-tags', str(Path(repo).resolve()), str(bare)], tmp, tmp)
+        git(['clone', '--quiet', '--bare', '--no-local', '--no-tags', str(repo), str(bare)], tmp, tmp)
         git(['update-ref', REF, sha], bare, tmp)
         name = 'woow-mcp-' + sha[:12] + '.bundle'
         bundle = output / name
@@ -74,7 +76,7 @@ def create(repo, sha, output):
 
 def verify(bundle, sha, receipt_path, checkout):
     require_sha(sha)
-    bundle, checkout = Path(bundle), Path(checkout)
+    bundle, checkout = Path(bundle).resolve(strict=True), Path(checkout).absolute()
     receipt = json.loads(Path(receipt_path).read_text())
     if receipt.get('commit') != sha or receipt.get('ref') != REF or receipt.get('bundle') != bundle.name:
         raise ValueError('receipt does not bind this commit/bundle')
@@ -82,12 +84,12 @@ def verify(bundle, sha, receipt_path, checkout):
         raise ValueError('bundle hash mismatch')
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
-        heads = git(['bundle', 'list-heads', str(bundle.resolve())], tmp, tmp).split('\n')
+        heads = git(['bundle', 'list-heads', str(bundle)], tmp, tmp).split('\n')
         if [line for line in heads if line] != [sha + ' ' + REF]:
             raise ValueError('bundle must contain exactly the reviewed commit under ' + REF)
         checkout.mkdir(mode=0o700)  # fresh checkout; the build context is this tree only
         git(['init', '--quiet', str(checkout)], tmp, tmp)
-        git(['fetch', '--quiet', '--no-tags', str(bundle.resolve()), REF + ':' + REF], checkout, tmp)
+        git(['fetch', '--quiet', '--no-tags', str(bundle), REF + ':' + REF], checkout, tmp)
         git(['fsck', '--full', '--strict', '--no-dangling'], checkout, tmp)
         git(['checkout', '--quiet', '--detach', sha], checkout, tmp)
         if git(['rev-parse', 'HEAD'], checkout, tmp).strip() != sha:

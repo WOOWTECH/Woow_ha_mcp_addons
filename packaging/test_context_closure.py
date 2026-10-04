@@ -27,6 +27,29 @@ class ContextClosureTests(unittest.TestCase):
         self.assertNotIn('COPY source excluded from context: apps/n8n/run.py', found)
         self.assertEqual(c.copy_sources(dockerfile), ['apps/n8n', 'missing.txt'])
 
+    def test_unsupported_syntax_is_rejected_not_undercounted(self):
+        bad = {
+            'dangling': 'COPY a \\\n',
+            'json': 'COPY ["a", "./"]\n',
+            'heredoc': 'COPY <<EOF /x\nhi\nEOF\n',
+            'add': 'ADD a ./\n',
+            'lowercase': 'copy a ./\n',
+            'directive': '# syntax=docker/dockerfile:1\nCOPY a ./\n',
+            'variable': 'COPY $SRC ./\n',
+            'glob': 'COPY apps/*.py ./\n',
+            'parents': 'COPY --parents a ./\n',
+            'exclude': 'COPY --exclude=x a ./\n',
+            'absolute': 'COPY /etc/passwd ./\n',
+        }
+        for name, dockerfile in bad.items():
+            with self.subTest(name), self.assertRaises(ValueError):
+                c.copy_sources(dockerfile)
+        with self.assertRaises(ValueError):
+            c.load_ignore('**\n![ab].py\n')
+        self.assertEqual(c.copy_sources('COPY --chown=1:1 --link a b ./\n'), ['a', 'b'])
+        joined = 'LABEL a=1 \\\n  b=2\nCOPY one \\\n# dropped comment\n  two ./dst\n'
+        self.assertEqual(c.copy_sources(joined), ['one', 'two'])
+
     def test_repository_dockerfiles_are_closed(self):
         c.main(ROOT)
 

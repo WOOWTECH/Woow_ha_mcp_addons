@@ -91,12 +91,14 @@ python3 packaging/supply_chain.py candidate n8n <scanners 目錄> <evidence 目�
 
 ## P6 — 送到 HAOS（依 Q2 決定，尚未決定）
 
-建議選項 B：把**已測 image ID**（不重建）以固定、不可覆寫的 tag 推到私有 registry；推送後讀回
-manifest，確認 config digest 等於 P3 的 image ID、layers diff_ids 等於 P5 `subject.json`。
+建議選項 B：把**已測 image ID**（不重建）推到私有 registry 的 commit 專屬路徑；推送後依
+[私有映像交付設計](n8n-pilot-image-delivery.md) 核對：config digest 等於 P3 的 image ID，由已驗證 config
+讀出的 `rootfs.diff_ids` 等於 P5 `subject.json`；manifest layer digest 是壓縮 blob 的 hash，只核對 registry 自洽，不與 diff_ids 比。
 試點 HA 的 Supervisor 加一組唯讀、短效拉取憑證。
 
-限制：Supervisor 依 `image:version` tag 拉取，不是 digest。所以 tag 推送後到安裝完成前不得再推同一 tag，
-並在安裝前後各讀一次 manifest digest 比對。
+限制：Supervisor 依 `image:version` tag 拉取，不是 digest；app API 也不回報 image ID／digest。所以路徑推送後
+不得覆寫，安裝前後各讀一次 manifest digest；這只證明 registry 引用未變，**HA 實際運行的 image 身分仍未直接建立**，
+報告須分開列出。
 
 明確不做：經 SSH add-on 在 HA 主機 `docker load`（等同使用生產 Docker socket）；在 HA 上重建（選項 C）
 只能當最後手段，且產物不是已測映像，要另外標記、不算 P3–P5 的證據。

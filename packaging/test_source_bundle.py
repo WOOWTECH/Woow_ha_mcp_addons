@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -81,6 +82,22 @@ class SourceBundleTests(unittest.TestCase):
             (out / 'r.json').write_text(json.dumps(receipt))
             with self.assertRaisesRegex(ValueError, 'exactly'):
                 s.verify(bundle, shas[2], out / 'r.json', root / 'co')
+
+    def test_cli_relative_paths(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            _, shas, _ = make_repo(root)
+            script = str(Path(s.__file__).resolve())
+            env = {'PATH': '/usr/bin:/bin', 'HOME': str(root)}
+            run = lambda *a: subprocess.run([sys.executable, script, *a], cwd=root, env=env,
+                                            capture_output=True, text=True, timeout=120)
+            created = run('create', 'repo', shas[1], 'out')
+            self.assertEqual(created.returncode, 0, created.stderr)
+            name = 'woow-mcp-' + shas[1][:12] + '.bundle'
+            self.assertTrue((root / 'out' / name).is_file())
+            verified = run('verify', 'out/' + name, shas[1], 'out/source-receipt.json', 'co')
+            self.assertEqual(verified.returncode, 0, verified.stderr)
+            self.assertEqual((root / 'co' / 'f.txt').read_text(), '1')
 
 
 if __name__ == '__main__':
