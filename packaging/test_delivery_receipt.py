@@ -49,6 +49,16 @@ class DeliveryReceiptTests(unittest.TestCase):
         # The two hash kinds really differ, and the tool never equates them.
         self.assertNotEqual([l['digest'] for l in r['layers']], subject['diff_ids'])
 
+    def test_identity_binding_is_explicit_for_both_image_stores(self):
+        manifest, config, subject, _ = fixture()
+        classic = d.check(sha(manifest), manifest, config, subject)
+        self.assertIn('classic', classic['tested_identity_binding'])
+        # Docker 29 containerd image store: inspect .Id is the manifest digest (observed on the builder VM).
+        containerd = d.check(sha(manifest), manifest, config, dict(subject, image_id=sha(manifest)))
+        self.assertIn('containerd', containerd['tested_identity_binding'])
+        explicit = d.check(sha(manifest), manifest, config, dict(subject, image_id=sha(manifest), config_digest=sha(config)))
+        self.assertEqual(explicit['tested_identity_binding'], 'config_digest')
+
     def test_mismatches_fail_closed(self):
         manifest, config, subject, blobs = fixture()
         good = sha(manifest)
@@ -63,6 +73,8 @@ class DeliveryReceiptTests(unittest.TestCase):
         for name, args in cases.items():
             with self.subTest(name), self.assertRaises(ValueError):
                 d.check(*args)
+        with self.assertRaises(ValueError):
+            d.check(good, manifest, config, dict(subject, config_digest=sha(b'other')))
         index = json.dumps({'schemaVersion': 2, 'mediaType': 'application/vnd.oci.image.index.v1+json',
                             'manifests': []}).encode()
         with self.assertRaisesRegex(ValueError, 'single-platform'):

@@ -38,7 +38,18 @@ def check(manifest_digest, manifest_bytes, config_bytes, subject, blob_dir=None)
     descriptor = manifest.get('config', {})
     require(sha(config_bytes) == descriptor.get('digest'), 'config blob does not hash to its descriptor')
     require(descriptor.get('size') == len(config_bytes), 'config size')
-    require(descriptor['digest'] == subject['image_id'], 'config digest is not the tested image ID')
+    # What `docker inspect .Id` means depends on the Engine image store: the classic store reports the
+    # CONFIG digest, the containerd image store (Docker 29 default here) reports the image MANIFEST
+    # digest. Bind explicitly and say which; never silently compare different digest kinds.
+    if subject.get('config_digest'):
+        require(descriptor['digest'] == subject['config_digest'], 'config digest differs from tested config digest')
+        binding = 'config_digest'
+    elif descriptor['digest'] == subject['image_id']:
+        binding = 'image_id==config_digest (classic image store)'
+    elif manifest_digest == subject['image_id']:
+        binding = 'image_id==manifest_digest (containerd image store)'
+    else:
+        raise ValueError('neither config nor manifest digest equals the tested image ID')
     # 3. diff_ids read from the VERIFIED config equal the tested subject's, in order.
     config = json.loads(config_bytes)
     diff_ids = config.get('rootfs', {}).get('diff_ids')
@@ -58,7 +69,7 @@ def check(manifest_digest, manifest_bytes, config_bytes, subject, blob_dir=None)
         else:
             graded.append({'digest': digest, 'size': layer.get('size'), 'evidence': 'metadata-only'})
     return {'schema': 1, 'manifest_digest': manifest_digest, 'config_digest': descriptor['digest'],
-            'image_id_matches_tested': True, 'config_diff_ids_match_subject': True,
+            'tested_identity_binding': binding, 'config_diff_ids_match_subject': True,
             'layers': graded, 'all_layers_bytes_verified': all(g['evidence'] == 'bytes-verified' for g in graded),
             'runtime_identity_in_ha': 'NOT ESTABLISHED (registry reference only)'}
 
