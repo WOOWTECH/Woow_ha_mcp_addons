@@ -33,7 +33,7 @@ def fixture(layer_count=2):
                                       'digest': sha(config), 'size': len(config)},
                            'layers': [{'mediaType': 'application/vnd.oci.image.layer.v1.tar+gzip',
                                        'digest': sha(b), 'size': len(b)} for b in blobs]}).encode()
-    subject = {'image_id': sha(config), 'diff_ids': [sha(r) for r in raws]}
+    subject = {'app': 'n8n', 'source': 'c' * 40, 'image_id': sha(config), 'diff_ids': [sha(r) for r in raws]}
     return manifest, config, subject, blobs
 
 
@@ -45,26 +45,37 @@ class DeliveryReceiptTests(unittest.TestCase):
             r = d.check(sha(manifest), manifest, config, subject, tmp)
         self.assertEqual([l['evidence'] for l in r['layers']], ['bytes-verified', 'metadata-only'])
         self.assertFalse(r['all_layers_bytes_verified'])
+        self.assertEqual((r['kind'], r['complete_delivery_receipt']), ('registry-digest-subevidence', False))
         self.assertIn('NOT ESTABLISHED', r['runtime_identity_in_ha'])
-        # The two hash kinds really differ, and the tool never equates them.
         self.assertNotEqual([l['digest'] for l in r['layers']], subject['diff_ids'])
 
-    def test_identity_binding_is_explicit_for_both_image_stores(self):
+    def test_identity_contract_per_image_store(self):
         manifest, config, subject, _ = fixture()
-        classic = d.check(sha(manifest), manifest, config, subject)
-        self.assertIn('classic', classic['tested_identity_binding'])
-        # Docker 29 containerd image store: inspect .Id is the manifest digest (observed on the builder VM).
-        containerd = d.check(sha(manifest), manifest, config, dict(subject, image_id=sha(manifest)))
-        self.assertIn('containerd', containerd['tested_identity_binding'])
-        explicit = d.check(sha(manifest), manifest, config, dict(subject, image_id=sha(manifest), config_digest=sha(config)))
-        self.assertEqual(explicit['tested_identity_binding'], 'config_digest')
+        m, c = sha(manifest), sha(config)
+        self.assertEqual(d.check(m, manifest, config, subject)['store_source'], 'inferred')
+        ok = [dict(subject, image_store='classic'), dict(subject, image_store='containerd', image_id=m),
+              dict(subject, image_store='containerd', image_id=m, config_digest=c),
+              dict(subject, image_store='classic', config_digest=c)]
+        for s in ok:
+            with self.subTest(ok=s.get('image_store')):
+                r = d.check(m, manifest, config, s)
+                self.assertEqual(r['store_source'], 'declared' if 'image_store' in s else 'inferred')
+        # Review F3: a correct config_digest must NOT short-circuit a contradicting image_id.
+        bad = [dict(subject, config_digest=c, image_id=sha(b'other round')),
+               dict(subject, image_store='classic', image_id=m),
+               dict(subject, image_store='containerd'),
+               dict(subject, image_store='containerd', image_id=m, config_digest=sha(b'x')),
+               dict(subject, image_store='podman'),
+               dict(subject, image_id='not-a-digest')]
+        for s in bad:
+            with self.subTest(bad=str(s)[:80]), self.assertRaises(ValueError):
+                d.check(m, manifest, config, s)
 
     def test_mismatches_fail_closed(self):
         manifest, config, subject, blobs = fixture()
         good = sha(manifest)
         cases = {
             'manifest digest': (sha(b'x'), manifest, config, subject),
-            'tested id': (good, manifest, config, dict(subject, image_id=sha(b'other'))),
             'diff ids': (good, manifest, config, dict(subject, diff_ids=subject['diff_ids'][::-1])),
             'diff ids vs layer digests': (good, manifest, config,
                                           dict(subject, diff_ids=[l['digest'] for l in json.loads(manifest)['layers']])),
@@ -73,16 +84,41 @@ class DeliveryReceiptTests(unittest.TestCase):
         for name, args in cases.items():
             with self.subTest(name), self.assertRaises(ValueError):
                 d.check(*args)
-        with self.assertRaises(ValueError):
-            d.check(good, manifest, config, dict(subject, config_digest=sha(b'other')))
         index = json.dumps({'schemaVersion': 2, 'mediaType': 'application/vnd.oci.image.index.v1+json',
                             'manifests': []}).encode()
         with self.assertRaisesRegex(ValueError, 'single-platform'):
             d.check(sha(index), index, config, subject)
         with tempfile.TemporaryDirectory() as tmp:
-            (Path(tmp) / sha(blobs[1]).split(':')[1]).write_bytes(blobs[0])  # wrong bytes under the name
+            (Path(tmp) / sha(blobs[1]).split(':')[1]).write_bytes(blobs[0])
             with self.assertRaisesRegex(ValueError, 'blob bytes'):
                 d.check(good, manifest, config, subject, tmp)
+
+    def test_assemble_binds_one_round_and_rejects_mixing(self):
+        # Review F4: the complete receipt binds source/variant/subject/ref/sub-evidence of ONE round.
+        manifest, config, subject, _ = fixture()
+        sub = d.check(sha(manifest), manifest, config, dict(subject, image_store='classic'))
+        source = {'commit': 'c' * 40, 'tree': 't' * 40, 'sha256': 'f' * 64}
+        variant = {'commit': 'c' * 40, 'tree': 't' * 40, 'product': 'n8n', 'image': 'r.example/w/pilot-cccccccccccc/amd64-mcp-n8n',
+                   'version': '0.1.0', 'installed_slug': 'local_woow_mcp_n8n_pilot',
+                   'files': {'woow_mcp_n8n_pilot/config.yaml': '1' * 64, 'woow_mcp_n8n_pilot/README.md': '2' * 64}}
+        ref = variant['image'] + ':0.1.0'
+        r = d.assemble(source, variant, subject, sub, ref)
+        self.assertTrue(r['complete_delivery_receipt'])
+        self.assertEqual((r['commit'], r['variant_config_sha256'], r['image_store']), ('c' * 40, '1' * 64, 'classic'))
+        other_manifest, other_config, other_subject, _ = fixture(3)
+        other_sub = d.check(sha(other_manifest), other_manifest, other_config, other_subject)
+        mixes = {
+            'variant from other commit': (source, dict(variant, commit='d' * 40), subject, sub, ref),
+            'variant from other tree': (source, dict(variant, tree='e' * 40), subject, sub, ref),
+            'subject from other commit': (source, variant, dict(subject, source='d' * 40), sub, ref),
+            'subject other product': (source, variant, dict(subject, app='odoo'), sub, ref),
+            'ref not variant image': (source, variant, subject, sub, 'r.example/w/other/amd64-mcp-n8n:0.1.0'),
+            'sub-evidence of other round': (source, variant, subject, other_sub, ref),
+            'not sub-evidence': (source, variant, subject, dict(sub, kind='pilot-delivery-receipt'), ref),
+        }
+        for name, args in mixes.items():
+            with self.subTest(name), self.assertRaises(ValueError):
+                d.assemble(*args)
 
 
 if __name__ == '__main__':
