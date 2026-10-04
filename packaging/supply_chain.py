@@ -203,9 +203,27 @@ def scanner_env(private):
             'SYFT_CHECK_FOR_APP_UPDATE': 'false'}
 
 
+def triaged_pins():
+    # Only exact public sha256 file pins already triaged as false positives (packaging/secret-triage.json).
+    triage = read_json(ROOT / 'packaging/secret-triage.json')
+    require(triage.get('schema') == 1 and triage.get('requires_security_review') is True)
+    values = [entry.get('sha256_pin') for entry in triage.get('values', [])]
+    require(bool(values) and all(isinstance(v, str) and re.fullmatch(r'[0-9a-f]{64}', v) for v in values))
+    require(len(set(values)) == len(values) and all(entry.get('seen_in') for entry in triage['values']))
+    return sorted(values)
+
+
+def gitleaks_config():
+    # Default rules unchanged. Allowlist matches the WHOLE secret against exact 64-hex values only,
+    # so any other finding (or any other value) still fails closed. Reports stay --redact=100.
+    return ('[extend]\nuseDefault = true\n\n[[allowlists]]\n'
+            'description = "triaged sha256 file pins (packaging/secret-triage.json)"\n'
+            "regexes = ['''^(?:" + '|'.join(triaged_pins()) + ")$''']\n")
+
+
 def secret_scan(tool, mode, target, private, label, env):
     config = private / 'gitleaks.toml'
-    config.write_text('[extend]\nuseDefault = true\n')
+    config.write_text(gitleaks_config())
     ignore = private / 'empty-ignore'
     ignore.write_text('')
     report = private / (label + '.json')
