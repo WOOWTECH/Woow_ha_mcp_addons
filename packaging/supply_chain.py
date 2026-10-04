@@ -221,20 +221,50 @@ def gitleaks_config():
             "regexes = ['''^(?:" + '|'.join(triaged_pins()) + ")$''']\n")
 
 
+def approved_image_findings():
+    # Third-party image-layer hits approved by owner/security review: (gitleaks rule, sha256 of value).
+    # Values are never stored; entries still PENDING approval do not count.
+    section = read_json(ROOT / 'packaging/secret-triage.json').get('image_findings', {})
+    approved = set()
+    for entry in section.get('entries', []):
+        rule, digest = entry.get('rule'), entry.get('secret_sha256')
+        require(isinstance(rule, str) and bool(rule) and isinstance(digest, str)
+                and bool(re.fullmatch(r'[0-9a-f]{64}', digest)) and bool(entry.get('seen')))
+        if entry.get('approved') is True:
+            approved.add((rule, digest))
+    return approved
+
+
 def secret_scan(tool, mode, target, private, label, env):
     config = private / 'gitleaks.toml'
     config.write_text(gitleaks_config())
     ignore = private / 'empty-ignore'
     ignore.write_text('')
     report = private / (label + '.json')
+    # Image layers hold third-party files whose hits are triaged by value hash, so only that scan reads
+    # unredacted values -- inside this private temporary directory, scrubbed right after hashing.
+    hashed = label == 'image'
     command = [str(tool), mode, str(target), '--config', str(config),
                '--gitleaks-ignore-path', str(ignore), '--ignore-gitleaks-allow',
                '--max-decode-depth', '5', '--max-archive-depth', '5', '--max-target-megabytes', '0',
-               '--log-level', 'warn', '--redact=100', '--no-banner', '--report-format', 'json', '--report-path', str(report)]
+               '--log-level', 'warn', '--redact=0' if hashed else '--redact=100', '--no-banner',
+               '--report-format', 'json', '--report-path', str(report)]
+    if hashed:
+        command += ['--exit-code', '0']
     if mode == 'git':
         command += ['--log-opts=--all --full-history -m']
-    run(command, cwd=private, env=env, reject_stderr=True)
-    require(read_json(report) == [])
+    run(command, cwd=private, env=env, reject_stderr=not hashed)
+    findings = read_json(report)
+    if not hashed:
+        require(findings == [])
+        return
+    try:
+        allowed = approved_image_findings()
+        keys = [(f.get('RuleID'), hashlib.sha256(str(f.get('Secret', '')).encode()).hexdigest()) for f in findings]
+    finally:
+        report.write_text('[]\n')  # never leave raw values behind, even on failure
+        findings = None
+    require(isinstance(keys, list) and all(key in allowed for key in keys))
 
 
 def source_scans(tool, private, env):
