@@ -24,6 +24,25 @@ client.RedirectTransport = BackendTransport
 if __name__ == '__main__':
     from odoo_mcp.server import mcp
     from bounded_tools import BoundedTools
+    from batch2_outputs import odoo_counts
+    import functools
+    from odoo_mcp import tools_read, tools_diagnostics, agent_tools, diagnostics
+    for module, digest in (
+        (tools_read, '4c8bf33b35c54757b93f0cc367b4f5027488ca8fbf63f68c1241f1a4be784de0'),
+        (tools_diagnostics, '957f3affa479cb079350de8874064d89594ab0661cfbfd7675b7f26930d32772'),
+        (agent_tools, '5004b28b00e59efd903ae8d48240922a0bdb43fb9b0051e77dbcd919e3c434fd'),
+        (diagnostics, '1fb1632cc711a7dfa4d5f6700472abeaffb897a094a4c399c21ce045aebb0dc7'),
+    ):
+        if hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest() != digest:
+            raise RuntimeError('Odoo B1 handlers require source review')
+    aggregate = mcp._tool_manager.get_tool('aggregate_records')
+    original_aggregate = aggregate.fn
+
+    @functools.wraps(original_aggregate)
+    def bounded_counts(**kwargs):
+        return odoo_counts(original_aggregate(**kwargs))
+
+    aggregate.fn = bounded_counts
     # The stock client caches an XMLRPC transport: serialize its sync calls.
     workers = BoundedTools(mcp, capacity=1)
     try:

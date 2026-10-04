@@ -1,6 +1,6 @@
 {
   "format": 2,
-  "scope": "W2b bounded expansion; not complete product/HA/release acceptance",
+  "scope": "W2b plus BATCH2 B1 bounded expansion; not complete product/HA/release acceptance",
   "source_digests": {
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/__init__.py": "7f0d150faa30f109b34382fc0f1ca778432a0ba6e000475eeb69ef114aa21a04",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/__main__.py": "078f0bab7f50b889b58b58962bbca16875e782370b5328618a5a842a83a1f1df",
@@ -106,18 +106,31 @@
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-friendly.js": "e403c29a9000b6a5a8c1c4984ae1387ca36ec8675da726c0fc5bc1d799e58257",
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/workflow-examples.js": "b0fdd063164b2df040351e173d9f62e27e0e27be3acca5dd5ede87ce73ec87d4",
     "apps/n8n/node_modules/n8n-mcp/dist/services/n8n-api-client.js": "e64be8d3def0623b6710c6e98f7a08ed14a49a1764a5f789def58ea1e900947c",
+    "apps/n8n/node_modules/n8n-mcp/dist/services/ai-node-validator.js": "57aa26c5a4157a4ca18e2411e13ed8ab637851ad85e28352b3b3a72716c4f108",
+    "apps/n8n/node_modules/n8n-mcp/dist/services/ai-tool-validators.js": "6532faccb883c84b82517e01759c15f53e0f6bdf2ca9fbc534bdcb661b121ec6",
+    "apps/n8n/node_modules/n8n-mcp/dist/services/config-validator.js": "14221eae947f330ab4e5729306b174d8e137c5c860656b69c91502f569d7c19c",
+    "apps/n8n/node_modules/n8n-mcp/dist/services/enhanced-config-validator.js": "98672564f2f18a554be3b1bc2c9e15d41827ed0819e67724294758715c77d0ad",
+    "apps/n8n/node_modules/n8n-mcp/dist/services/expression-format-validator.js": "573880151a3c3b5ee9e7d941edd8647dd68ffb8328e87d12a0bb56aa84de9915",
+    "apps/n8n/node_modules/n8n-mcp/dist/services/expression-validator.js": "b700b21c727f96f74e22e5a3a89882aac6bfd8ab289b161d0361b4d6d2dcebfa",
+    "apps/n8n/node_modules/n8n-mcp/dist/services/n8n-validation.js": "4943bc6565f628c65de376b6073e327ec86a7cf4e77251a1ea99744c3d587843",
+    "apps/n8n/node_modules/n8n-mcp/dist/services/node-specific-validators.js": "f6a3ef48442d38a04ca29ec2ebcbbe0ea27ccba1fe08a09055cff87432b751a1",
+    "apps/n8n/node_modules/n8n-mcp/dist/services/post-update-validator.js": "c8ad45a7e3a7bec8edc95ddf8d26a00b5a28dcce07af1db8e6ad928dc08235f5",
+    "apps/n8n/node_modules/n8n-mcp/dist/services/universal-expression-validator.js": "49f86c40a9f26286c363eee3ed1dc779fc517458ec2388aaf5ea8f2d421085cd",
+    "apps/n8n/node_modules/n8n-mcp/dist/services/workflow-validator.js": "c0072e5cdd9169a573aa86a659915f7877a71657f304538496f72d723c38a055",
+    "apps/n8n/backend_policy.cjs": "f786637170950be321f40598ef71a36826bafbaad135b646b39660d8e00edf28",
     "apps/runtime/backend_policy.py": "0cfad784a7aac8bdefccaae93c2ea9663407c11081b6268af2fed7fcd0107fb1",
+    "apps/runtime/batch2_outputs.py": "239add1fbbad29eecbfec82e33553b33b4ed7b0e5d3acdad01a33d83f2090352",
     "apps/runtime/bounded_tools.py": "1bf8a05834fe50a002910da0c4d5831f361a13db0557ef43f536e547507750be",
     "apps/runtime/output_policy.py": "5cc75f5e87676786847132a5be4f342dd07e9ef9344c4d7b219219de2aef85a4",
     "apps/hermes/launch.py": "5c9197f5898a7fbae317e824a4601f6d076996f229054cb2e664a5f5f785a0f3",
-    "apps/odoo/launch.py": "6e68af96f17d02ead0bf5616ba1e9ddfa3cb9fb0ea2ceb391e89044df2038e61",
-    "apps/odoo-manage/launch.py": "ac3432f9f6a897f577bf523b93a98e66d59fdc0e35c9cf300bf624f88aed1f37",
+    "apps/odoo/launch.py": "2cc240887550bcbddda873779fa43004eabc6d4cb0e367224eb6cd3577a9a093",
+    "apps/odoo-manage/launch.py": "442ee6b3ccdc6bf2a494e25475cde2f9f8f707d4f72e92991080e8086b50c22d",
     "apps/opendesign/launch.py": "a7b6adc27a6151914e685bda23180197fccca9a8243e9980c18fbbb0b48be313"
   },
   "products": {
     "odoo": {
       "upstream_count": 41,
-      "supported_count": 6,
+      "supported_count": 10,
       "tools": [
         {
           "name": "accounting_health_across_instances",
@@ -192,15 +205,171 @@
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
-          "status": "temporarily-unsupported",
-          "default_enabled": false,
+          "status": "supported-bounded",
+          "default_enabled": true,
           "write_grants": [],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "aggregate_records：read_group 的 fields/groupby/domain 尚無安全彙總欄位契約；需逐欄位聚合 operator 白名單與假 XML-RPC 測試。",
-          "accepted_schema": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "aggregate_records：B1 支援 res.partner 按 active 分組、id:count；domain 沿用四個 partner 欄位有限 conjunction、limit 1..100/default10、offset<=10000、default instance。真 handler 依版本 read_group/formatted_read_group；只回 active/id:count/__count，排除 domain/context/未知欄位。其他模型/聚合仍是內部 backlog。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "model": {
+                "const": "res.partner",
+                "title": "Model",
+                "type": "string"
+              },
+              "domain": {
+                "items": {
+                  "oneOf": [
+                    {
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "prefixItems": [
+                        {
+                          "enum": [
+                            "id"
+                          ]
+                        },
+                        {
+                          "enum": [
+                            "=",
+                            "!="
+                          ]
+                        },
+                        {
+                          "maximum": 2147483647,
+                          "minimum": 1,
+                          "type": "integer"
+                        }
+                      ],
+                      "type": "array"
+                    },
+                    {
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "prefixItems": [
+                        {
+                          "enum": [
+                            "active"
+                          ]
+                        },
+                        {
+                          "enum": [
+                            "=",
+                            "!="
+                          ]
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ],
+                      "type": "array"
+                    },
+                    {
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "prefixItems": [
+                        {
+                          "enum": [
+                            "name",
+                            "display_name"
+                          ]
+                        },
+                        {
+                          "enum": [
+                            "=",
+                            "!=",
+                            "ilike"
+                          ]
+                        },
+                        {
+                          "maxLength": 256,
+                          "type": "string"
+                        }
+                      ],
+                      "type": "array"
+                    }
+                  ]
+                },
+                "maxItems": 10,
+                "title": "Domain",
+                "type": "array"
+              },
+              "limit": {
+                "default": 10,
+                "maximum": 100,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              },
+              "offset": {
+                "default": 0,
+                "maximum": 10000,
+                "minimum": 0,
+                "title": "Offset",
+                "type": "integer"
+              },
+              "order": {
+                "default": null,
+                "title": "Order",
+                "type": "null"
+              },
+              "group_by": {
+                "items": {
+                  "const": "active",
+                  "type": "string"
+                },
+                "maxItems": 1,
+                "minItems": 1,
+                "title": "Group By",
+                "type": "array"
+              },
+              "measures": {
+                "items": {
+                  "const": "id:count",
+                  "type": "string"
+                },
+                "maxItems": 1,
+                "minItems": 1,
+                "title": "Measures",
+                "type": "array"
+              },
+              "lazy": {
+                "const": false,
+                "default": false,
+                "title": "Lazy",
+                "type": "boolean"
+              },
+              "instance": {
+                "anyOf": [
+                  {
+                    "const": "default",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Instance"
+              }
+            },
+            "required": [
+              "model",
+              "group_by"
+            ],
+            "title": "OdooCounts",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_batch2_policy.py",
+            "tests/test_batch2_bounds.py",
+            "tests/test_batch2_runtime.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
           ]
         },
         {
@@ -234,15 +403,158 @@
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
-          "status": "temporarily-unsupported",
-          "default_enabled": false,
+          "status": "supported-bounded",
+          "default_enabled": true,
           "write_grants": [],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "build_domain：本機建構器尚未定義巢狀條件／context／JSON2 method 的嚴格 schema；需純函式正反測試，不可將生成 payload 當可執行授權。",
-          "accepted_schema": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "build_domain：B1 純建構器，最多10個 id/name/display_name/active typed conditions、and/or；拒絕 metadata/context/額外參數。真 pinned handler 不建 client/不執行 payload；生成 OR domain 不代表 search_records 接受它。",
+          "accepted_schema": {
+            "$defs": {
+              "ActiveCondition": {
+                "additionalProperties": false,
+                "properties": {
+                  "field": {
+                    "const": "active",
+                    "title": "Field",
+                    "type": "string"
+                  },
+                  "operator": {
+                    "enum": [
+                      "=",
+                      "!="
+                    ],
+                    "title": "Operator",
+                    "type": "string"
+                  },
+                  "value": {
+                    "title": "Value",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "field",
+                  "operator",
+                  "value"
+                ],
+                "title": "ActiveCondition",
+                "type": "object"
+              },
+              "IdCondition": {
+                "additionalProperties": false,
+                "properties": {
+                  "field": {
+                    "const": "id",
+                    "title": "Field",
+                    "type": "string"
+                  },
+                  "operator": {
+                    "enum": [
+                      "=",
+                      "!="
+                    ],
+                    "title": "Operator",
+                    "type": "string"
+                  },
+                  "value": {
+                    "maximum": 2147483647,
+                    "minimum": 1,
+                    "title": "Value",
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "field",
+                  "operator",
+                  "value"
+                ],
+                "title": "IdCondition",
+                "type": "object"
+              },
+              "NameCondition": {
+                "additionalProperties": false,
+                "properties": {
+                  "field": {
+                    "enum": [
+                      "name",
+                      "display_name"
+                    ],
+                    "title": "Field",
+                    "type": "string"
+                  },
+                  "operator": {
+                    "enum": [
+                      "=",
+                      "!=",
+                      "ilike"
+                    ],
+                    "title": "Operator",
+                    "type": "string"
+                  },
+                  "value": {
+                    "maxLength": 256,
+                    "title": "Value",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "field",
+                  "operator",
+                  "value"
+                ],
+                "title": "NameCondition",
+                "type": "object"
+              }
+            },
+            "additionalProperties": false,
+            "properties": {
+              "conditions": {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/IdCondition"
+                    },
+                    {
+                      "$ref": "#/$defs/ActiveCondition"
+                    },
+                    {
+                      "$ref": "#/$defs/NameCondition"
+                    }
+                  ]
+                },
+                "maxItems": 10,
+                "title": "Conditions",
+                "type": "array"
+              },
+              "logical_operator": {
+                "default": "and",
+                "enum": [
+                  "and",
+                  "or"
+                ],
+                "title": "Logical Operator",
+                "type": "string"
+              },
+              "fields_metadata": {
+                "default": null,
+                "title": "Fields Metadata",
+                "type": "null"
+              }
+            },
+            "required": [
+              "conditions"
+            ],
+            "title": "BuildDomain",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_batch2_policy.py",
+            "tests/test_batch2_bounds.py",
+            "tests/test_batch2_runtime.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
           ]
         },
         {
@@ -460,15 +772,261 @@
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
-          "status": "temporarily-unsupported",
-          "default_enabled": false,
+          "status": "supported-bounded",
+          "default_enabled": true,
           "write_grants": [],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "diagnose_odoo_call：純 preview，不執行候選 method，也不取 live metadata；本批尚缺 args/kwargs/observed_error/metadata 的巢狀 schema、容量與純函式正反測試。",
-          "accepted_schema": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "diagnose_odoo_call：B1 純診斷，res.partner search_read/search_count 的有界 typed kwargs，transport auto/xmlrpc/jsonrpc/json2、target_version18/19/20；debug/live metadata=false、observed_error/metadata/args=null。真 handler 不執行 method、不讀 backend。其他錯誤/metadata view 與方法仍需個別 schema。",
+          "accepted_schema": {
+            "$defs": {
+              "PreviewKwargs": {
+                "additionalProperties": false,
+                "properties": {
+                  "domain": {
+                    "items": {
+                      "oneOf": [
+                        {
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "prefixItems": [
+                            {
+                              "enum": [
+                                "id"
+                              ]
+                            },
+                            {
+                              "enum": [
+                                "=",
+                                "!="
+                              ]
+                            },
+                            {
+                              "maximum": 2147483647,
+                              "minimum": 1,
+                              "type": "integer"
+                            }
+                          ],
+                          "type": "array"
+                        },
+                        {
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "prefixItems": [
+                            {
+                              "enum": [
+                                "active"
+                              ]
+                            },
+                            {
+                              "enum": [
+                                "=",
+                                "!="
+                              ]
+                            },
+                            {
+                              "type": "boolean"
+                            }
+                          ],
+                          "type": "array"
+                        },
+                        {
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "prefixItems": [
+                            {
+                              "enum": [
+                                "name",
+                                "display_name"
+                              ]
+                            },
+                            {
+                              "enum": [
+                                "=",
+                                "!=",
+                                "ilike"
+                              ]
+                            },
+                            {
+                              "maxLength": 256,
+                              "type": "string"
+                            }
+                          ],
+                          "type": "array"
+                        }
+                      ]
+                    },
+                    "maxItems": 10,
+                    "title": "Domain",
+                    "type": "array"
+                  },
+                  "fields": {
+                    "anyOf": [
+                      {
+                        "items": {
+                          "enum": [
+                            "id",
+                            "name",
+                            "display_name",
+                            "active"
+                          ],
+                          "type": "string"
+                        },
+                        "maxItems": 4,
+                        "minItems": 1,
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "title": "Fields"
+                  },
+                  "limit": {
+                    "anyOf": [
+                      {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "title": "Limit"
+                  },
+                  "offset": {
+                    "anyOf": [
+                      {
+                        "maximum": 10000,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "title": "Offset"
+                  }
+                },
+                "title": "PreviewKwargs",
+                "type": "object"
+              }
+            },
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "method": {
+                      "const": "search_count"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "kwargs": {
+                      "properties": {
+                        "fields": false,
+                        "limit": false,
+                        "offset": false
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "properties": {
+              "model": {
+                "const": "res.partner",
+                "title": "Model",
+                "type": "string"
+              },
+              "method": {
+                "enum": [
+                  "search_read",
+                  "search_count"
+                ],
+                "title": "Method",
+                "type": "string"
+              },
+              "args": {
+                "default": null,
+                "title": "Args",
+                "type": "null"
+              },
+              "kwargs": {
+                "$ref": "#/$defs/PreviewKwargs"
+              },
+              "transport": {
+                "default": "auto",
+                "enum": [
+                  "auto",
+                  "xmlrpc",
+                  "jsonrpc",
+                  "json2"
+                ],
+                "title": "Transport",
+                "type": "string"
+              },
+              "target_version": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "18",
+                      "19",
+                      "20"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Target Version"
+              },
+              "observed_error": {
+                "default": null,
+                "title": "Observed Error",
+                "type": "null"
+              },
+              "include_debug": {
+                "const": false,
+                "default": false,
+                "title": "Include Debug",
+                "type": "boolean"
+              },
+              "metadata": {
+                "default": null,
+                "title": "Metadata",
+                "type": "null"
+              },
+              "use_live_metadata": {
+                "const": false,
+                "default": false,
+                "title": "Use Live Metadata",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "model",
+              "method"
+            ],
+            "title": "DiagnosePreview",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_batch2_policy.py",
+            "tests/test_batch2_bounds.py",
+            "tests/test_batch2_runtime.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
           ]
         },
         {
@@ -548,15 +1106,226 @@
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
-          "status": "temporarily-unsupported",
-          "default_enabled": false,
+          "status": "supported-bounded",
+          "default_enabled": true,
           "write_grants": [],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "generate_json2_payload：本機建構器尚未定義巢狀條件／context／JSON2 method 的嚴格 schema；需純函式正反測試，不可將生成 payload 當可執行授權。",
-          "accepted_schema": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "generate_json2_payload：B1 純 JSON2 preview，res.partner search_read/search_count、有限 domain/fields/limit/offset；args/base_url/database 僅 null，無 context/metadata/credentials。Authorization 僅固定 api-key placeholder，永不執行生成內容；其他 method 須補 typed schemas。",
+          "accepted_schema": {
+            "$defs": {
+              "PreviewKwargs": {
+                "additionalProperties": false,
+                "properties": {
+                  "domain": {
+                    "items": {
+                      "oneOf": [
+                        {
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "prefixItems": [
+                            {
+                              "enum": [
+                                "id"
+                              ]
+                            },
+                            {
+                              "enum": [
+                                "=",
+                                "!="
+                              ]
+                            },
+                            {
+                              "maximum": 2147483647,
+                              "minimum": 1,
+                              "type": "integer"
+                            }
+                          ],
+                          "type": "array"
+                        },
+                        {
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "prefixItems": [
+                            {
+                              "enum": [
+                                "active"
+                              ]
+                            },
+                            {
+                              "enum": [
+                                "=",
+                                "!="
+                              ]
+                            },
+                            {
+                              "type": "boolean"
+                            }
+                          ],
+                          "type": "array"
+                        },
+                        {
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "prefixItems": [
+                            {
+                              "enum": [
+                                "name",
+                                "display_name"
+                              ]
+                            },
+                            {
+                              "enum": [
+                                "=",
+                                "!=",
+                                "ilike"
+                              ]
+                            },
+                            {
+                              "maxLength": 256,
+                              "type": "string"
+                            }
+                          ],
+                          "type": "array"
+                        }
+                      ]
+                    },
+                    "maxItems": 10,
+                    "title": "Domain",
+                    "type": "array"
+                  },
+                  "fields": {
+                    "anyOf": [
+                      {
+                        "items": {
+                          "enum": [
+                            "id",
+                            "name",
+                            "display_name",
+                            "active"
+                          ],
+                          "type": "string"
+                        },
+                        "maxItems": 4,
+                        "minItems": 1,
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "title": "Fields"
+                  },
+                  "limit": {
+                    "anyOf": [
+                      {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "title": "Limit"
+                  },
+                  "offset": {
+                    "anyOf": [
+                      {
+                        "maximum": 10000,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "title": "Offset"
+                  }
+                },
+                "title": "PreviewKwargs",
+                "type": "object"
+              }
+            },
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "method": {
+                      "const": "search_count"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "kwargs": {
+                      "properties": {
+                        "fields": false,
+                        "limit": false,
+                        "offset": false
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "properties": {
+              "model": {
+                "const": "res.partner",
+                "title": "Model",
+                "type": "string"
+              },
+              "method": {
+                "enum": [
+                  "search_read",
+                  "search_count"
+                ],
+                "title": "Method",
+                "type": "string"
+              },
+              "args": {
+                "default": null,
+                "title": "Args",
+                "type": "null"
+              },
+              "kwargs": {
+                "$ref": "#/$defs/PreviewKwargs"
+              },
+              "base_url": {
+                "default": null,
+                "title": "Base Url",
+                "type": "null"
+              },
+              "database": {
+                "default": null,
+                "title": "Database",
+                "type": "null"
+              },
+              "include_database_header": {
+                "default": true,
+                "title": "Include Database Header",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "model",
+              "method"
+            ],
+            "title": "Json2Preview",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_batch2_policy.py",
+            "tests/test_batch2_bounds.py",
+            "tests/test_batch2_runtime.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
           ]
         },
         {
@@ -1458,7 +2227,7 @@
     },
     "odoo-manage": {
       "upstream_count": 10,
-      "supported_count": 6,
+      "supported_count": 9,
       "tools": [
         {
           "name": "aggregate_records",
@@ -1470,15 +2239,152 @@
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
-          "status": "temporarily-unsupported",
-          "default_enabled": false,
+          "status": "supported-bounded",
+          "default_enabled": true,
           "write_grants": [],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "aggregate_records：read_group/groupby/aggregation 尚無欄位 operator 白名單；需有限聚合 schema 及不同 Odoo read_group 回應測試。",
-          "accepted_schema": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "aggregate_records：B1 res.partner 按 active 分組、id:count，limit1..100/default10；既有 module/read ACL 與 scoped XML-RPC，真18/19版 read_group/formatted_read_group fake 測試。回應只投影 active/id:count/__count，不返回 drilldown domain/context。其他聚合內部 backlog。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "model": {
+                "const": "res.partner",
+                "title": "Model",
+                "type": "string"
+              },
+              "domain": {
+                "items": {
+                  "oneOf": [
+                    {
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "prefixItems": [
+                        {
+                          "enum": [
+                            "id"
+                          ]
+                        },
+                        {
+                          "enum": [
+                            "=",
+                            "!="
+                          ]
+                        },
+                        {
+                          "maximum": 2147483647,
+                          "minimum": 1,
+                          "type": "integer"
+                        }
+                      ],
+                      "type": "array"
+                    },
+                    {
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "prefixItems": [
+                        {
+                          "enum": [
+                            "active"
+                          ]
+                        },
+                        {
+                          "enum": [
+                            "=",
+                            "!="
+                          ]
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ],
+                      "type": "array"
+                    },
+                    {
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "prefixItems": [
+                        {
+                          "enum": [
+                            "name",
+                            "display_name"
+                          ]
+                        },
+                        {
+                          "enum": [
+                            "=",
+                            "!=",
+                            "ilike"
+                          ]
+                        },
+                        {
+                          "maxLength": 256,
+                          "type": "string"
+                        }
+                      ],
+                      "type": "array"
+                    }
+                  ]
+                },
+                "maxItems": 10,
+                "title": "Domain",
+                "type": "array"
+              },
+              "limit": {
+                "default": 10,
+                "maximum": 100,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              },
+              "offset": {
+                "default": 0,
+                "maximum": 10000,
+                "minimum": 0,
+                "title": "Offset",
+                "type": "integer"
+              },
+              "order": {
+                "default": null,
+                "title": "Order",
+                "type": "null"
+              },
+              "groupby": {
+                "items": {
+                  "const": "active",
+                  "type": "string"
+                },
+                "maxItems": 1,
+                "minItems": 1,
+                "title": "Groupby",
+                "type": "array"
+              },
+              "aggregates": {
+                "items": {
+                  "const": "id:count",
+                  "type": "string"
+                },
+                "maxItems": 1,
+                "minItems": 1,
+                "title": "Aggregates",
+                "type": "array"
+              }
+            },
+            "required": [
+              "model",
+              "groupby"
+            ],
+            "title": "ManageCounts",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_batch2_policy.py",
+            "tests/test_batch2_bounds.py",
+            "tests/test_batch2_runtime.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
           ]
         },
         {
@@ -1715,15 +2621,26 @@
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
-          "status": "temporarily-unsupported",
-          "default_enabled": false,
+          "status": "supported-bounded",
+          "default_enabled": true,
           "write_grants": [],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "list_resource_templates：模板可能引導至未授權 resource URI；需有界模板投影且 resources/read 保持拒絕，尚無新增 handler 正向測試。",
-          "accepted_schema": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "list_resource_templates：B1 真 handler 的四個固定模板，有界 metadata projection；enabled_models 只包含 res.partner，note 明說 resources/read remains denied。列出 URI 不是授權，所有 resource reads 仍在 child 前拒絕。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "Args",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_batch2_policy.py",
+            "tests/test_batch2_bounds.py",
+            "tests/test_batch2_runtime.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
           ]
         },
         {
@@ -1736,15 +2653,79 @@
           "effect": "write",
           "operation_effects": {},
           "dispatch_operations": {},
-          "status": "temporarily-unsupported",
+          "status": "supported-bounded",
           "default_enabled": false,
-          "write_grants": [],
+          "write_grants": [
+            "post_message"
+          ],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "post_message：message_post 包含 partner/attachment/message subtype 等通知副作用；需逐參數 scope、module ACL 與通知 fake 測試；不套用普通 record 的寫入 grant。",
-          "accepted_schema": null,
+          "enable": "PUT /api/policy (HA admin+CSRF): enabled_write_tools 選取精確 grant；disabled 優先；舊全域開關僅保留兩個既有 writer",
+          "reason": "post_message：B1 exact post_message grant（legacy global=true 仍不授權）；只在既有 module mode、res.partner write ACL 下發 bounded plain internal note（mail.mt_note）。subtype=note/message_type=comment、無 partner_ids/attachment_ids/HTML；真 fake 驗證 XML-RPC kwargs 和 ACL deny。後端 override 可有副作用，不保證絕無通知，不開 comment/notification。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "model": {
+                "const": "res.partner",
+                "title": "Model",
+                "type": "string"
+              },
+              "record_id": {
+                "maximum": 2147483647,
+                "minimum": 1,
+                "title": "Record Id",
+                "type": "integer"
+              },
+              "body": {
+                "maxLength": 4000,
+                "minLength": 1,
+                "title": "Body",
+                "type": "string"
+              },
+              "subtype": {
+                "const": "note",
+                "default": "note",
+                "title": "Subtype",
+                "type": "string"
+              },
+              "message_type": {
+                "const": "comment",
+                "default": "comment",
+                "title": "Message Type",
+                "type": "string"
+              },
+              "partner_ids": {
+                "default": null,
+                "title": "Partner Ids",
+                "type": "null"
+              },
+              "attachment_ids": {
+                "default": null,
+                "title": "Attachment Ids",
+                "type": "null"
+              },
+              "body_is_html": {
+                "const": false,
+                "default": false,
+                "title": "Body Is Html",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "model",
+              "record_id",
+              "body"
+            ],
+            "title": "InternalNote",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_batch2_policy.py",
+            "tests/test_batch2_bounds.py",
+            "tests/test_batch2_runtime.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
           ]
         },
         {
@@ -5748,7 +6729,7 @@
     },
     "n8n": {
       "upstream_count": 28,
-      "supported_count": 7,
+      "supported_count": 10,
       "tools": [
         {
           "name": "get_node",
@@ -6317,15 +7298,238 @@
           "effect": "write",
           "operation_effects": {},
           "dispatch_operations": {},
-          "status": "temporarily-unsupported",
+          "status": "supported-bounded",
           "default_enabled": false,
-          "write_grants": [],
+          "write_grants": [
+            "n8n_create_workflow"
+          ],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "n8n_create_workflow：workflow 寫入可注入 credentials、code、URLs 或啟動 workflow；需逐 node/operation schema、activation 強授權、後端間接 egress 與 fake effect 測試。",
-          "accepted_schema": null,
+          "enable": "PUT /api/policy (HA admin+CSRF): enabled_write_tools 選取精確 grant；disabled 優先；舊全域開關僅保留兩個既有 writer",
+          "reason": "n8n_create_workflow：B1 exact grant default-off（舊全域開關不授權），僅2..20 manualTrigger/noOp 空參數圖與 typed main connections，無 credentials/code/URLs/settings/activation/project/folder override。pinned handler 經 guarded POST /workflows 建 inactive draft，回有界 id/name/active=false/nodeCount。回應異常拒絕不代表已提交寫入回滾；不提供 existing active workflow update 或 execute。",
+          "accepted_schema": {
+            "$defs": {
+              "Args": {
+                "additionalProperties": false,
+                "properties": {},
+                "title": "Args",
+                "type": "object"
+              },
+              "Edge": {
+                "additionalProperties": false,
+                "properties": {
+                  "node": {
+                    "allOf": [
+                      {
+                        "not": {
+                          "pattern": "[^A-Za-z0-9 _-]"
+                        }
+                      }
+                    ],
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "not": {
+                      "enum": [
+                        "__proto__",
+                        "prototype",
+                        "constructor"
+                      ]
+                    },
+                    "pattern": "^[A-Za-z][A-Za-z0-9 _-]*$",
+                    "title": "Node",
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "main",
+                    "title": "Type",
+                    "type": "string"
+                  },
+                  "index": {
+                    "maximum": 0,
+                    "minimum": 0,
+                    "title": "Index",
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "node",
+                  "type",
+                  "index"
+                ],
+                "title": "Edge",
+                "type": "object"
+              },
+              "Outputs": {
+                "additionalProperties": false,
+                "properties": {
+                  "main": {
+                    "items": {
+                      "items": {
+                        "$ref": "#/$defs/Edge"
+                      },
+                      "maxItems": 20,
+                      "type": "array"
+                    },
+                    "maxItems": 1,
+                    "minItems": 1,
+                    "title": "Main",
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "main"
+                ],
+                "title": "Outputs",
+                "type": "object"
+              },
+              "SafeNode": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "allOf": [
+                      {
+                        "not": {
+                          "pattern": "[^A-Za-z0-9 _-]"
+                        }
+                      }
+                    ],
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "not": {
+                      "enum": [
+                        "__proto__",
+                        "prototype",
+                        "constructor"
+                      ]
+                    },
+                    "pattern": "^[A-Za-z][A-Za-z0-9 _-]*$",
+                    "title": "Id",
+                    "type": "string"
+                  },
+                  "name": {
+                    "allOf": [
+                      {
+                        "not": {
+                          "pattern": "[^A-Za-z0-9 _-]"
+                        }
+                      }
+                    ],
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "not": {
+                      "enum": [
+                        "__proto__",
+                        "prototype",
+                        "constructor"
+                      ]
+                    },
+                    "pattern": "^[A-Za-z][A-Za-z0-9 _-]*$",
+                    "title": "Name",
+                    "type": "string"
+                  },
+                  "type": {
+                    "enum": [
+                      "n8n-nodes-base.manualTrigger",
+                      "n8n-nodes-base.noOp"
+                    ],
+                    "title": "Type",
+                    "type": "string"
+                  },
+                  "typeVersion": {
+                    "maximum": 1,
+                    "minimum": 1,
+                    "title": "Typeversion",
+                    "type": "integer"
+                  },
+                  "position": {
+                    "items": {
+                      "maximum": 10000,
+                      "minimum": -10000,
+                      "type": "number"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "title": "Position",
+                    "type": "array"
+                  },
+                  "parameters": {
+                    "$ref": "#/$defs/Args"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "type",
+                  "typeVersion",
+                  "position",
+                  "parameters"
+                ],
+                "title": "SafeNode",
+                "type": "object"
+              }
+            },
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "maxLength": 256,
+                "minLength": 1,
+                "title": "Name",
+                "type": "string"
+              },
+              "nodes": {
+                "items": {
+                  "$ref": "#/$defs/SafeNode"
+                },
+                "maxItems": 20,
+                "minItems": 2,
+                "title": "Nodes",
+                "type": "array"
+              },
+              "connections": {
+                "additionalProperties": false,
+                "maxProperties": 20,
+                "patternProperties": {
+                  "^[A-Za-z][A-Za-z0-9 _-]*$": {
+                    "$ref": "#/$defs/Outputs"
+                  }
+                },
+                "propertyNames": {
+                  "allOf": [
+                    {
+                      "not": {
+                        "pattern": "[^A-Za-z0-9 _-]"
+                      }
+                    }
+                  ],
+                  "maxLength": 64,
+                  "minLength": 1,
+                  "not": {
+                    "enum": [
+                      "__proto__",
+                      "prototype",
+                      "constructor"
+                    ]
+                  }
+                },
+                "title": "Connections",
+                "type": "object"
+              }
+            },
+            "required": [
+              "name",
+              "nodes",
+              "connections"
+            ],
+            "title": "DraftGraph",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_batch2_policy.py",
+            "tests/test_batch2_bounds.py",
+            "tests/test_batch2_runtime.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
           ]
         },
         {
@@ -7901,10 +9105,10 @@
                   "action": {
                     "const": "list"
                   },
-                  "name": {
+                  "folderId": {
                     "type": "null"
                   },
-                  "folderId": {
+                  "name": {
                     "type": "null"
                   }
                 },
@@ -7917,11 +9121,11 @@
                   "action": {
                     "const": "create"
                   },
-                  "name": {
-                    "type": "string"
-                  },
                   "folderId": {
                     "type": "null"
+                  },
+                  "name": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -7934,10 +9138,10 @@
                   "action": {
                     "const": "rename"
                   },
-                  "name": {
+                  "folderId": {
                     "type": "string"
                   },
-                  "folderId": {
+                  "name": {
                     "type": "string"
                   }
                 },
@@ -8939,28 +10143,83 @@
           "dispatch_operations": {
             "mode": {
               "full": {
-                "supported_explicit": false,
-                "default_readonly": false,
+                "supported_explicit": true,
+                "default_readonly": true,
                 "write_grant": null,
-                "deferred_reason": "validate_node：純驗證候選，但巢狀 config/nodes/connections 尚無本批嚴格深度／數量 schema 与真 source 正反測試；不能接受任意嵌套 dict 當全功能完成。"
+                "deferred_reason": null
               },
               "minimal": {
-                "supported_explicit": false,
-                "default_readonly": false,
+                "supported_explicit": true,
+                "default_readonly": true,
                 "write_grant": null,
-                "deferred_reason": "validate_node：純驗證候選，但巢狀 config/nodes/connections 尚無本批嚴格深度／數量 schema 与真 source 正反測試；不能接受任意嵌套 dict 當全功能完成。"
+                "deferred_reason": null
               }
             }
           },
-          "status": "temporarily-unsupported",
-          "default_enabled": false,
+          "status": "supported-bounded",
+          "default_enabled": true,
           "write_grants": [],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "validate_node：純驗證候選，但巢狀 config/nodes/connections 尚無本批嚴格深度／數量 schema 与真 source 正反測試；不能接受任意嵌套 dict 當全功能完成。",
-          "accepted_schema": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "validate_node：B1 pinned local DB 純驗證；manualTrigger/noOp 的空 config、full/minimal mode、四種 source profile。無 URL/credentials/code/遠端方法；其他 node config 是逐 schema 內部擴充，不是執行授權。",
+          "accepted_schema": {
+            "$defs": {
+              "Args": {
+                "additionalProperties": false,
+                "properties": {},
+                "title": "Args",
+                "type": "object"
+              }
+            },
+            "additionalProperties": false,
+            "properties": {
+              "nodeType": {
+                "enum": [
+                  "nodes-base.manualTrigger",
+                  "nodes-base.noOp"
+                ],
+                "title": "Nodetype",
+                "type": "string"
+              },
+              "config": {
+                "$ref": "#/$defs/Args"
+              },
+              "mode": {
+                "default": "full",
+                "enum": [
+                  "full",
+                  "minimal"
+                ],
+                "title": "Mode",
+                "type": "string"
+              },
+              "profile": {
+                "default": "ai-friendly",
+                "enum": [
+                  "strict",
+                  "runtime",
+                  "ai-friendly",
+                  "minimal"
+                ],
+                "title": "Profile",
+                "type": "string"
+              }
+            },
+            "required": [
+              "nodeType",
+              "config"
+            ],
+            "title": "ValidateNode",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_batch2_policy.py",
+            "tests/test_batch2_bounds.py",
+            "tests/test_batch2_runtime.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
           ]
         },
         {
@@ -9016,15 +10275,285 @@
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
-          "status": "temporarily-unsupported",
-          "default_enabled": false,
+          "status": "supported-bounded",
+          "default_enabled": true,
           "write_grants": [],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "validate_workflow：純驗證候選，但巢狀 config/nodes/connections 尚無本批嚴格深度／數量 schema 与真 source 正反測試；不能接受任意嵌套 dict 當全功能完成。",
-          "accepted_schema": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "validate_workflow：B1 local validator，2..20 manualTrigger/noOp nodes、typed main edges、空 parameters、唯一有界 id/name、拒絕 prototype keys/unknown properties。options 四個 source 參數及 defaults；不執行、不讀遠端 workflow。其他 node types 待逐 config 契約。",
+          "accepted_schema": {
+            "$defs": {
+              "Args": {
+                "additionalProperties": false,
+                "properties": {},
+                "title": "Args",
+                "type": "object"
+              },
+              "DraftGraph": {
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "title": "Name",
+                    "type": "string"
+                  },
+                  "nodes": {
+                    "items": {
+                      "$ref": "#/$defs/SafeNode"
+                    },
+                    "maxItems": 20,
+                    "minItems": 2,
+                    "title": "Nodes",
+                    "type": "array"
+                  },
+                  "connections": {
+                    "additionalProperties": false,
+                    "maxProperties": 20,
+                    "patternProperties": {
+                      "^[A-Za-z][A-Za-z0-9 _-]*$": {
+                        "$ref": "#/$defs/Outputs"
+                      }
+                    },
+                    "propertyNames": {
+                      "allOf": [
+                        {
+                          "not": {
+                            "pattern": "[^A-Za-z0-9 _-]"
+                          }
+                        }
+                      ],
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "not": {
+                        "enum": [
+                          "__proto__",
+                          "prototype",
+                          "constructor"
+                        ]
+                      }
+                    },
+                    "title": "Connections",
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "name",
+                  "nodes",
+                  "connections"
+                ],
+                "title": "DraftGraph",
+                "type": "object"
+              },
+              "Edge": {
+                "additionalProperties": false,
+                "properties": {
+                  "node": {
+                    "allOf": [
+                      {
+                        "not": {
+                          "pattern": "[^A-Za-z0-9 _-]"
+                        }
+                      }
+                    ],
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "not": {
+                      "enum": [
+                        "__proto__",
+                        "prototype",
+                        "constructor"
+                      ]
+                    },
+                    "pattern": "^[A-Za-z][A-Za-z0-9 _-]*$",
+                    "title": "Node",
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "main",
+                    "title": "Type",
+                    "type": "string"
+                  },
+                  "index": {
+                    "maximum": 0,
+                    "minimum": 0,
+                    "title": "Index",
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "node",
+                  "type",
+                  "index"
+                ],
+                "title": "Edge",
+                "type": "object"
+              },
+              "Outputs": {
+                "additionalProperties": false,
+                "properties": {
+                  "main": {
+                    "items": {
+                      "items": {
+                        "$ref": "#/$defs/Edge"
+                      },
+                      "maxItems": 20,
+                      "type": "array"
+                    },
+                    "maxItems": 1,
+                    "minItems": 1,
+                    "title": "Main",
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "main"
+                ],
+                "title": "Outputs",
+                "type": "object"
+              },
+              "SafeNode": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "allOf": [
+                      {
+                        "not": {
+                          "pattern": "[^A-Za-z0-9 _-]"
+                        }
+                      }
+                    ],
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "not": {
+                      "enum": [
+                        "__proto__",
+                        "prototype",
+                        "constructor"
+                      ]
+                    },
+                    "pattern": "^[A-Za-z][A-Za-z0-9 _-]*$",
+                    "title": "Id",
+                    "type": "string"
+                  },
+                  "name": {
+                    "allOf": [
+                      {
+                        "not": {
+                          "pattern": "[^A-Za-z0-9 _-]"
+                        }
+                      }
+                    ],
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "not": {
+                      "enum": [
+                        "__proto__",
+                        "prototype",
+                        "constructor"
+                      ]
+                    },
+                    "pattern": "^[A-Za-z][A-Za-z0-9 _-]*$",
+                    "title": "Name",
+                    "type": "string"
+                  },
+                  "type": {
+                    "enum": [
+                      "n8n-nodes-base.manualTrigger",
+                      "n8n-nodes-base.noOp"
+                    ],
+                    "title": "Type",
+                    "type": "string"
+                  },
+                  "typeVersion": {
+                    "maximum": 1,
+                    "minimum": 1,
+                    "title": "Typeversion",
+                    "type": "integer"
+                  },
+                  "position": {
+                    "items": {
+                      "maximum": 10000,
+                      "minimum": -10000,
+                      "type": "number"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "title": "Position",
+                    "type": "array"
+                  },
+                  "parameters": {
+                    "$ref": "#/$defs/Args"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "type",
+                  "typeVersion",
+                  "position",
+                  "parameters"
+                ],
+                "title": "SafeNode",
+                "type": "object"
+              },
+              "ValidationOptions": {
+                "additionalProperties": false,
+                "properties": {
+                  "validateNodes": {
+                    "default": true,
+                    "title": "Validatenodes",
+                    "type": "boolean"
+                  },
+                  "validateConnections": {
+                    "default": true,
+                    "title": "Validateconnections",
+                    "type": "boolean"
+                  },
+                  "validateExpressions": {
+                    "default": true,
+                    "title": "Validateexpressions",
+                    "type": "boolean"
+                  },
+                  "profile": {
+                    "default": "runtime",
+                    "enum": [
+                      "minimal",
+                      "runtime",
+                      "ai-friendly",
+                      "strict"
+                    ],
+                    "title": "Profile",
+                    "type": "string"
+                  }
+                },
+                "title": "ValidationOptions",
+                "type": "object"
+              }
+            },
+            "additionalProperties": false,
+            "properties": {
+              "workflow": {
+                "$ref": "#/$defs/DraftGraph"
+              },
+              "options": {
+                "$ref": "#/$defs/ValidationOptions"
+              }
+            },
+            "required": [
+              "workflow"
+            ],
+            "title": "ValidateWorkflow",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_batch2_policy.py",
+            "tests/test_batch2_bounds.py",
+            "tests/test_batch2_runtime.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
           ]
         }
       ]

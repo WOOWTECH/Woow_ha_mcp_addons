@@ -50,7 +50,7 @@ read。Bearer 要送在每個 POST/GET/DELETE、stream reconnect/session request
 transport session ID 不是額外認證。瀏覽器 Origin 在現有 tracer 拒絕；不承諾
 browser SDK 或 SaaS OAuth client 相容。
 
-工具預設唯讀，有些已支援 schema 比上游更窄，未支援 129 tools 一律 deny。
+工具預設唯讀，有些已支援 schema 比上游更窄，未支援 119 tools 一律 deny。
 寫入需有效 HA 管理員 UI 的逐工具／operation exact grant，且符合參數與 disabled gate；
 v3 保存取代全部 `enabled_write_tools` 並關閉 legacy global，不能僅用 global false 當撤銷；
 直接偽造 `tools/call` 不能繞過。[工具表](../tool-surface.md) 是唯一支援對照。

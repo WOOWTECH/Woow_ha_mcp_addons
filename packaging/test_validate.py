@@ -91,6 +91,98 @@ class PackagingTests(unittest.TestCase):
     def test_workflow_on_not_boolean(self):
         self.assertIn('on', v.load(v.ROOT / '.github/workflows/ci.yaml'))
 
+    def test_builder_workflow_contract(self):
+        for workflow in ('ci', 'release'):
+            original = v.load(v.ROOT / '.github/workflows' / (workflow + '.yaml'))
+            v.builder_workflow(original, workflow)
+            job_name = 'images' if workflow == 'ci' else 'publish'
+            job = original['jobs'][job_name]
+            setup = next(i for i, step in enumerate(job['steps'])
+                         if step.get('run') == 'python3 packaging/builder_contract.py setup --driver docker')
+            build = next(i for i, step in enumerate(job['steps'])
+                         if step.get('uses', '').startswith('docker/build-push-action@'))
+            for replacement in ('docker-container', 'remote', 'docker --version latest',
+                                'docker --driver-opts network=host',
+                                'docker --buildkitd-flags --oci-worker-no-process-sandbox'):
+                doc = copy.deepcopy(original)
+                doc['jobs'][job_name]['steps'][setup]['run'] = (
+                    'python3 packaging/builder_contract.py setup --driver ' + replacement)
+                with self.subTest(workflow=workflow, driver=replacement), self.assertRaises(v.Invalid):
+                    v.builder_workflow(doc, workflow)
+            mutations = [(build, 'allow', 'security.insecure'), (build, 'network', 'host'),
+                         (build, 'platforms', 'linux/arm64'), (build, 'builder', 'remote')]
+            for index, key, value in mutations:
+                doc = copy.deepcopy(original)
+                doc['jobs'][job_name]['steps'][index]['with'][key] = value
+                with self.subTest(workflow=workflow, key=key), self.assertRaises(v.Invalid):
+                    v.builder_workflow(doc, workflow)
+            for command in ('prepare', 'setup --driver docker', 'verify'):
+                for bypass in ('if', 'continue-on-error', 'remove'):
+                    doc = copy.deepcopy(original)
+                    steps = doc['jobs'][job_name]['steps']
+                    step = next(s for s in steps if s.get('run') == 'python3 packaging/builder_contract.py ' + command)
+                    if bypass == 'remove':
+                        steps.remove(step)
+                    else:
+                        step[bypass] = True
+                    with self.subTest(workflow=workflow, command=command, bypass=bypass), self.assertRaises(v.Invalid):
+                        v.builder_workflow(doc, workflow)
+
+    def test_no_later_proxy_home_helper_or_github_env_reintroduction(self):
+        for workflow in ('ci', 'release'):
+            original = v.load(v.ROOT / '.github/workflows' / (workflow + '.yaml'))
+            candidate = 'images' if workflow == 'ci' else 'publish'
+            for key in ('HTTPS_PROXY', 'no_proxy', 'PASSWORD_STORE_DIR', 'HOME', 'DOCKER_CONFIG'):
+                for scope in ('workflow', 'candidate-step'):
+                    doc = copy.deepcopy(original)
+                    target = doc if scope == 'workflow' else doc['jobs'][candidate]['steps'][-1]
+                    target.setdefault('env', {})[key] = 'INVENTED-ONLY'
+                    with self.subTest(workflow=workflow, key=key, scope=scope), self.assertRaises(v.Invalid):
+                        v.builder_workflow(doc, workflow)
+            for script in ('echo HOME=/invented >> "$GITHUB_ENV"',
+                           'export HTTPS_PROXY=http://invented.invalid',
+                           'echo /invented >> "$GITHUB_PATH"'):
+                doc = copy.deepcopy(original)
+                doc['jobs'][candidate]['steps'].insert(-1, {'run': script})
+                with self.subTest(workflow=workflow, script=script), self.assertRaises(v.Invalid):
+                    v.builder_workflow(doc, workflow)
+
+    def test_setup_cannot_download_or_overwrite_verified_buildx(self):
+        for workflow in ('ci', 'release'):
+            doc = v.load(v.ROOT / '.github/workflows' / (workflow + '.yaml'))
+            job = doc['jobs']['images' if workflow == 'ci' else 'publish']
+            self.assertFalse(any(s.get('uses', '').startswith('docker/setup-buildx-action@')
+                                 for s in job['steps']))
+            self.assertTrue(any(s.get('run') == 'python3 packaging/builder_contract.py setup --driver docker'
+                                for s in job['steps']))
+
+    def test_builder_admission_and_runner_mutations(self):
+        for workflow in ('ci', 'release'):
+            original = v.load(v.ROOT / '.github/workflows' / (workflow + '.yaml'))
+            candidate = 'images' if workflow == 'ci' else 'publish'
+            admission = 'builder-admission' if workflow == 'ci' else 'gate'
+            mutations = [(candidate, 'runs-on', 'ubuntu-24.04'),
+                         (candidate, 'container', {'image': 'docker:latest'}),
+                         (candidate, 'services', {'docker': {'image': 'docker:dind'}}),
+                         (candidate, 'continue-on-error', True),
+                         (candidate, 'needs', []), (admission, 'continue-on-error', True),
+                         (admission, 'env', {})]
+            if workflow == 'ci':
+                mutations += [(admission, 'if', 'false'), (candidate, 'if', 'false'),
+                              ('unit', 'needs', ['builder-admission'])]
+            for job, key, value in mutations:
+                doc = copy.deepcopy(original)
+                doc['jobs'][job][key] = value
+                with self.subTest(workflow=workflow, job=job, key=key), self.assertRaises(v.Invalid):
+                    v.builder_workflow(doc, workflow)
+            doc = copy.deepcopy(original)
+            steps = doc['jobs'][candidate]['steps']
+            guard = next(s for s in steps if s.get('run') == 'python3 packaging/builder_contract.py verify')
+            steps.remove(guard)
+            steps.append(guard)
+            with self.subTest(workflow=workflow, mutation='verify-after-build'), self.assertRaises(v.Invalid):
+                v.builder_workflow(doc, workflow)
+
     def test_release_defaults_closed(self):
         gates = v.load(v.ROOT / 'RELEASE-GATES.json')
         v.clearance_shape(gates)

@@ -78,5 +78,83 @@ class BackendTransport(XMLTransport):
 performance.OdooTransport = BackendTransport
 performance.OdooSafeTransport = BackendTransport
 
+# Narrow the real handler results before their declared output models serialize.
+import functools
+import mcp_server_odoo.tools as tools
+from batch2_outputs import manage_counts, resource_templates
+
+if hashlib.sha256(Path(tools.__file__).read_bytes()).hexdigest() != '5569568a6c86306d19bc4194ef7aeb504a238c4b8dba4d7fc809002104737249':
+    raise RuntimeError('Manage B1 handlers require source review')
+
+
+def projected_handler(original, projection):
+    @functools.wraps(original)
+    async def projected(self, *args, **kwargs):
+        return projection(await original(self, *args, **kwargs))
+    return projected
+
+
+for name, projection in (('_handle_aggregate_records_tool', manage_counts),
+                         ('_handle_list_resource_templates_tool', resource_templates)):
+    setattr(tools.OdooToolHandler, name, projected_handler(getattr(tools.OdooToolHandler, name), projection))
+
+class MessageResponseError(ValueError):
+    """Decoded message_post result cannot identify one genuine message."""
+
+
+def message_id(raw):
+    # Pinned handler accepts int or a list, but would silently use the first
+    # element (even bool). Validate BEFORE that coercion, never invent an ID.
+    value = raw[0] if type(raw) is list and len(raw) == 1 else raw
+    if type(value) is not int or not 1 <= value <= 2147483647:
+        raise MessageResponseError('BACKEND_INVALID_RESPONSE')
+    return value
+
+
+execute_kw = connection.OdooConnection.execute_kw
+
+
+@functools.wraps(execute_kw)
+def checked_execute_kw(self, model, method, args, kwargs):
+    raw = execute_kw(self, model, method, args, kwargs)
+    if model == 'res.partner' and method == 'message_post':
+        message_id(raw)
+    return raw
+
+
+connection.OdooConnection.execute_kw = checked_execute_kw
+post_message = tools.OdooToolHandler._handle_post_message_tool
+
+
+@functools.wraps(post_message)
+async def bounded_post_message(self, *args, **kwargs):
+    try:
+        result = await post_message(self, *args, **kwargs)
+        if type(result) is not dict or result.get('success') is not True:
+            raise MessageResponseError('BACKEND_INVALID_RESPONSE')
+        return {'success': True, 'message_id': message_id(result.get('message_id'))}
+    except Exception as exc:
+        # Pinned handler wraps typed ACL/connection errors with explicit causes.
+        # Walk only that bounded cause chain; no text matching or repr/str of it.
+        code = 'BACKEND_UNAVAILABLE'
+        cause = exc
+        for _ in range(4):
+            if isinstance(cause, MessageResponseError):
+                code = public_backend_error(cause)
+                break
+            if isinstance(cause, access.AccessControlUnavailableError):
+                break
+            if isinstance(cause, access.AccessControlError):
+                code = 'BACKEND_ACCESS_DENIED'
+                break
+            cause = cause.__cause__
+            if cause is None:
+                break
+        raise tools.ValidationError(code) from None
+    # CancelledError/GeneratorExit/process signals are BaseException, not caught.
+
+
+tools.OdooToolHandler._handle_post_message_tool = bounded_post_message
+
 if __name__ == '__main__':
     runpy.run_module('mcp_server_odoo', run_name='__main__')

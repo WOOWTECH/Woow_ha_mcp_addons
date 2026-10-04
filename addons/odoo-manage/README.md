@@ -3,8 +3,8 @@
 獨立 amd64 Add-on；固定候選版 **0.1.0**。此 manifest 可被 HA 探索，**不代表 GHCR
 映像已存在**。此批沒有映像建置或 HA／真實 backend E2E。
 
-來源工具 10 個，支援 6 個，暫不支援 4 個；不是完整功能遷移。
-管理 GUI 已本地 Core 整合（七類合計184/55/129），但本產品 production verifier fail closed，現在不能正常設定後端或取得 token。
+來源工具 10 個，支援 9 個，暫不支援 1 個；不是完整功能遷移。
+管理 GUI 已本地 Core 整合（七類合計184/65/119），但本產品 production verifier fail closed，現在不能正常設定後端或取得 token。
 連線 mode=read/module；module 必須已存在於後端，UI 不安裝模組。
 `homeassistant_api: false`，不可自行提高權限解鎖。
 

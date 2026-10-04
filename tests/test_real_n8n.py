@@ -19,12 +19,14 @@ import pytest
 from mcp_admin_core.config import Store
 from mcp_admin_core.health import protocol_reply
 
+from owned_executable import Executable
+from batch2_owned_port import reserve_port
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def free_port():
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
+    with reserve_port() as sock:
         return sock.getsockname()[1]
 
 
@@ -61,10 +63,6 @@ async def fake_backend():
 async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fake_backend, configured_backend, check_defaults):
     if not (ROOT / "apps/n8n/node_modules/n8n-mcp/dist/mcp/index.js").exists():
         pytest.skip("EXTERNAL GATE: run npm ci --ignore-scripts --prefix apps/n8n")
-    # Never touch or terminate a pre-existing service on the fixed private child port.
-    with socket.socket() as sock:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(("127.0.0.1", 3000))
     data = tmp_path / "state"
     store = Store(data)
     if configured_backend:
@@ -73,13 +71,17 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
     store.close()
     admin_port, mcp_port = free_port(), free_port()
     env = {"PATH": "/usr/bin:/bin", "PYTHONPATH": str(ROOT / "packages/mcp-admin-core") + ":" + str(ROOT / "apps/n8n")}
-    process = await asyncio.create_subprocess_exec(sys.executable, str(ROOT / "apps/n8n/run.py"),
+    runner = Executable(tmp_path, 'n8n', [admin_port, mcp_port])
+    code = 'import run; ' + runner.code('run') + 'run.main()'
+    runner.release()
+    process = await asyncio.create_subprocess_exec(sys.executable, '-c', code,
         "--data", str(data), "--host", "127.0.0.1", "--admin-port", str(admin_port), "--mcp-port", str(mcp_port),
         cwd=tmp_path, env=env, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
     children = []
     started = time.monotonic()
     try:
-        async with httpx.AsyncClient(trust_env=False, timeout=15) as client:
+        await runner.ready(process)
+        async with httpx.AsyncClient(trust_env=False, timeout=15, event_hooks={'request': [runner.guard]}) as client:
             url = f"http://127.0.0.1:{mcp_port}/mcp"
             headers = {"Authorization": "Bearer " + token, "Accept": "application/json, text/event-stream"}
             initialized = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
@@ -109,7 +111,7 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
             names = {tool["name"] for tool in tools["tools"]}
             assert {"tools_documentation", "search_nodes"} <= names
             assert names <= {"tools_documentation", "search_nodes", "n8n_list_workflows",
-                             "get_node", "n8n_get_workflow", "n8n_manage_folders"}
+                             "get_node", "n8n_get_workflow", "n8n_manage_folders", "validate_node", "validate_workflow"}
             assert 'get_node' in names
             from n8n_adapter import TOOLS
             for tool in tools["tools"]:

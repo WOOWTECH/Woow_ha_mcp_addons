@@ -3,10 +3,10 @@
 ## 目前狀態與安全邊界
 
 七份 manifest 為可探索的實驗封裝，不是七個可下載／可用產品。工具支援僅
-184/55/129（來源／支援／暫不支援），[完整逐名工具表](../tool-surface.md)
+184/65/119（來源／支援／暫不支援），[完整逐名工具表](../tool-surface.md)
 包含混合 operation、預設、啟用限制及未完成原因。唯讀分類不是由名字推測，
 unknown／未審工具即使開啟寫入仍拒絕。七類都有有界 writers／mixed operations，
-仍不是完整 writer parity；129 個延期是明列內部工作，不假稱全部完成。
+仍不是完整 writer parity；119 個延期是明列內部工作，不假稱全部完成。
 
 **本地程式整合，映像／HA NOT TESTED。** 僅新 n8n 試點批准
 `homeassistant_api: true`；正式 fixed-WS provider 已實作並經 component review。

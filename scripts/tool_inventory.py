@@ -114,6 +114,11 @@ def source_inventory():
     # Handler changes also require re-review, not only renamed advertisements.
     for file in sorted(base.glob('*.js')) + [base.parent / 'services/n8n-api-client.js']:
         digests[str(file.relative_to(ROOT))] = hashlib.sha256(file.read_bytes()).hexdigest()
+    # B1 local validators and workflow creation depend on these pinned helpers.
+    for file in sorted((base.parent / 'services').glob('*valid*.js')):
+        digests[str(file.relative_to(ROOT))] = hashlib.sha256(file.read_bytes()).hexdigest()
+    file = ROOT / 'apps/n8n/backend_policy.cjs'
+    digests[str(file.relative_to(ROOT))] = hashlib.sha256(file.read_bytes()).hexdigest()
     # New local transport/dispatch adapters are part of the reviewed runtime too.
     for file in sorted((ROOT / 'apps/runtime').glob('*.py')) + sorted((ROOT / 'apps').glob('*/launch.py')):
         digests[str(file.relative_to(ROOT))] = hashlib.sha256(file.read_bytes()).hexdigest()
@@ -182,9 +187,9 @@ def build():
                 'enable': ('PUT /api/policy (HA admin+CSRF): enabled_write_tools 選取精確 grant；disabled 優先；舊全域開關僅保留兩個既有 writer' if tool.grants(name) else 'authorized-admin-policy: remove from disabled') if supported else '不可由 GUI 啟用；需 source/policy/test review',
                 'reason': review[product][name],
                 'accepted_schema': tool.arguments.model_json_schema() if supported else None,
-                'tests': ['tests/test_tool_inventory.py'] + ((['tests/test_expansion_security.py', 'tests/test_expansion_runtime.py', 'tests/test_stream_error_redaction.py'] if product != 'n8n' else ['tests/test_expansion_runtime.py', 'tests/test_schema_defaults.py', 'tests/test_real_n8n.py']) if supported else [])})
+                'tests': ['tests/test_tool_inventory.py'] + (['tests/test_batch2_policy.py', 'tests/test_batch2_bounds.py', 'tests/test_batch2_runtime.py'] if supported and product in ('odoo', 'odoo-manage', 'n8n') and name in ('build_domain', 'generate_json2_payload', 'diagnose_odoo_call', 'aggregate_records', 'list_resource_templates', 'post_message', 'validate_node', 'validate_workflow', 'n8n_create_workflow') else []) + ((['tests/test_expansion_security.py', 'tests/test_expansion_runtime.py', 'tests/test_stream_error_redaction.py'] if product != 'n8n' else ['tests/test_expansion_runtime.py', 'tests/test_schema_defaults.py', 'tests/test_real_n8n.py']) if supported else [])})
         products[product] = {'upstream_count': len(entries), 'supported_count': len(POLICIES[product]), 'tools': entries}
-    return {'format': 2, 'scope': 'W2b bounded expansion; not complete product/HA/release acceptance',
+    return {'format': 2, 'scope': 'W2b plus BATCH2 B1 bounded expansion; not complete product/HA/release acceptance',
             'source_digests': digests, 'products': products}
 
 

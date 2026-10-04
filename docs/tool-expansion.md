@@ -1,16 +1,40 @@
 # W2b 工具功能擴展（有界，不是完整 migration）
 
-目前 source universe **184**；支援 **55**、逐名延期 **129**。完整來源 signature/schema、接受 schema、effects、operation、grants、測試和剩餘工作見 `tool-surface.json` / `tool-surface.md`；人工逐名理由另存 `tool-review.json`。Python 是 pinned decorator/handler AST；不假稱條件註冊工具全部出现在 tools/list。本地 fake API 測試不是 HA／真後端／發佈驗收。
+目前 source universe **184**；支援 **65**、逐名延期 **119**（BATCH2 B1 新增10；仍待獨立雙審）。完整來源 signature/schema、接受 schema、effects、operation、grants、測試和剩餘工作見 `tool-surface.json` / `tool-surface.md`；人工逐名理由另存 `tool-review.json`。Python 是 pinned decorator/handler AST；不假稱條件註冊工具全部出现在 tools/list。本地 fake API 測試不是 HA／真後端／發佈驗收。
 
 | 產品 | 原支援 → 現支援 | 新正常功能 | 尚未支援 |
 |---|---:|---|---:|
-| Odoo | 2 → 6 | res.partner 指定欄位 read/search/fields；token 預覽+confirm 的 chatter comment | 35 |
-| Odoo Manage | 1 → 6 | res.partner 指定欄位 read/search；name create/update、record delete | 4 |
+| Odoo | 6 → 10 | 既有 partner reads/chatter；B1 domain/JSON2/diagnosis 純 builders、active 分組 count | 31 |
+| Odoo Manage | 6 → 9 | 既有 partner CRUD；B1 active 分組 count、固定 template metadata、exact-grant internal note | 1 |
 | Hermes | 5 → 7 | skill/toolset enable/disable、gateway restart；session metadata/delete、cron metadata/pause/delete | 4 |
 | OpenDesign | 10 → 11 | 有界 run metadata；既有 project delete opt-in 保留 | 4 |
 | EMQX | 3 → 11 | clients/topics/subscriptions、history/alarms；kick/subscribe/unsubscribe | 28 |
 | LiteLLM | 2 → 7 | team metadata；有界 team create、alias update、team/model delete | 33 |
-| n8n | 4 → 7 | pinned local node info、workflow minimal、folder list/create/rename | 21 |
+| n8n | 7 → 10 | 既有 local node/workflow/folders；B1 local validators、安全 inactive draft create | 18 |
+
+## BATCH2 B1 有界正常功能
+
+- Odoo `build_domain`：最多10個 typed partner conditions（id/name/display_name/active）、and/or；無 metadata/context。`generate_json2_payload`／`diagnose_odoo_call` 僅 res.partner search_read/search_count、有限 kwargs；args/base_url/database/error/metadata 不開放，debug/live metadata=false。真 pinned handler 純計算，永不執行生成 JSON2；placeholder API key 不是秘密。生成 OR domain 也不使 search_records 的有限 conjunction 契約放寬。
+- 兩種 `aggregate_records`：僅 active 分組、id:count、limit1..100（default10）、offset<=10000，既有有限 domain、無 context。source handler 依版本使用 read_group/formatted_read_group；新增 source-guarded output adapter 只回 active/id:count/__count，去除 drilldown domain/context/任意欄位；不是原始財務／私人欄位彙總。
+- Manage `list_resource_templates` 回四個固定本機模板與有限 partner 可見性，**resources/read 仍禁止**。`post_message` 是 writer，獨立 exact grant；module 必須已存在、後端 write ACL 必須允許。只允許 plain internal note（mail.mt_note），message_type=comment、無 recipients/attachments/HTML。後端自訂 override 仍可能通知或有其他副作用；不宣稱絕無通知。
+- n8n `validate_node`／`validate_workflow` 是本機 pinned DB validator；僅 manualTrigger/noOp 空參數，圖2..20 nodes、有界 typed main connections，拒絕 prototype keys、重複/未知 node references、credentials/code/URL/settings。mode/profile/options 保持來源 defaults。
+- `n8n_create_workflow` 需要 exact grant（舊 global=true 不授權），只對相同安全圖呼叫既有 scoped POST /workflows，建立 inactive draft；沒有 activation、existing workflow update、project/folder override 或 execute。API 回應僅接受有界 id/name/active=false/nodeCount；異常回應拒絕**不代表已提交寫入回滾**。inactive 語義依 pinned create API 契約，真後端版本仍需驗收。
+- 本批無新 network client/任意filesystem path、依賴、UI 契約、六類 HA role 權限；使用既有 adapter、v3 exact grants 與真管理 metadata。counts 是工具名，不是全 operation parity。schema_catalog/data_quality、其他 node config/get_node modes/catalog/folders 等是可接續內部實作，不是缺 credential 的外部 blocker。
+
+### B1 writer error boundary（P1 修復，待獨立複審）
+
+- n8n create 在既有真 API client reject 後、真 handler 格式化之前，僅由 source-guarded `N8nApiError` 的 status/code 產生固定 public error；不回傳 backend message/details/exception 字串。400/401/403/404/429/5xx 分別保留 validation/auth/forbidden/not-found/rate-limit/server 類別，無回應為 `NO_RESPONSE`，未知失敗為 `BACKEND_UNAVAILABLE`；成功但 metadata 不合法為 `BACKEND_INVALID_RESPONSE`。不更換 cleaner、handler、DNS/TLS/redirect 規則。
+- Manage 保留真 post handler 與 module write ACL。對 `res.partner.message_post` 真 `execute_kw` 回傳先驗證 ID，再讓原 handler 處理，避免原 list→首元素 coercion 掩蓋 bool/多元素/無效 ID。只接受 int 1..2147483647 或單元素同型 list；成功僅輸出 success/message_id。外層依型別與有界 explicit cause chain 回固定 `BACKEND_INVALID_RESPONSE`／`BACKEND_ACCESS_DENIED`／`BACKEND_UNAVAILABLE`，不檢查錯誤文字，取消與 process signals 不攔截。既有 XML transport 將 RPC fault 轉固定錯誤後，原 connection wrapper 已無可安全區分的 fault code；此處誠實歸 unavailable，不從文字猜測。
+- **錯誤不是 rollback／exactly-once 保證。** malformed success、HTTP 5xx、斷線或 RPC fault 都可能在 backend commit 後發生。n8n 既有 client 仍會對特定 preconnection error 做最多3次 retry；POST 不重試 ECONNRESET/timeout，但 cleaner 自帶 settings 的特定 HTTP400 rejection 可觸發既有 settings fallback，再 POST。owned test 實證此路徑兩次 POST、一次 fake commit、最終固定 server error；本修復未新增 retry，也不宣稱所有失敗只有一次 POST。不要自動重送未知結果的 write。
+- `tests/test_batch2_writer_errors.py` 使用 OS ephemeral loopback ports 與每次 child HTTP 前 own-PID/fd/LISTEN proof；真 pinned handlers 收到 fake backend **實際收到的 dummy key** 反射錯誤／malformed return，raw MCP SSE/text/JSON 與 decoded structured content 不得洩漏。另有 genuine positive mutation、default-off/legacy-global/同 session revoke/disable、post-error committed counter 區分。`test_batch2_writer_boundaries.py` 補 source-drift、no-stringification、取消傳播契約。這些不是實際 HA、production 或 full-suite 驗收。
+
+### n8n enabled API public errors（相鄰既有 P1，待 SPEC → NEW SECURITY）
+
+- 獨立 review 證實：沒有 writer grants 的 `n8n_list_workflows` HTTP404 會把 backend 實際收到的 dummy key 反射到 public error。這是既有 read-path 問題，不是已核准 B1 writer 修復造成；現在以 test-first raw MCP SSE regression 修復。
+- `backend_policy.cjs` 在載入 runtime 前嚴格核對 API client、error mapper/formatter、manager handlers、server dispatch 四個 digests。只包住七個**真 handler**：workflow list／get minimal／delete／create，folder list／create／rename。shared formatter 僅依 typed status／known code 產生固定訊息；每個 invocation 的 AsyncLocalStorage 只記固定 public classification，不記 raw error。handler 完成後，失敗統一為 `{success:false,error,code}`，不读取原 error/message/details/stack 或 stringify；一般 raised error／非 typed failure 也不洩漏。403 不再帶 publish-shaped backend 訊息，folder hints 也不轉傳。
+- 400/401/403/404/429/500..599 → `VALIDATION_ERROR`／`AUTHENTICATION_ERROR`／`FORBIDDEN`／`NOT_FOUND`／`RATE_LIMIT_ERROR`／`SERVER_ERROR`；typed `NO_RESPONSE` 與既有 create `BACKEND_INVALID_RESPONSE` 保留，其餘 `BACKEND_UNAVAILABLE`。writer 固定提示結果可能未知，先確認再重試。API mapper 的 raw errors 保留到 public boundary；cleaner/settings fallback、preconnection retry、folder personal resolver 的 `/projects`→`/workflows` fallback 均不改。
+- **成功 business strings 不是 error diagnostics；這不是通用 DLP。** 原 success projection、folder name/ID 語義、delete 空回應成功語義、grants、65 tools、DNS/TLS/redirect policy 均未擴張或重新設計。尚未允許的 handlers 仍 withheld；不宣稱所有 upstream 日誌／任意成功內容都已清理。
+- `tests/test_batch2_n8n_public_errors.py` 以真 source handlers、owned fake backend 實際收到的 invented key、私有 OS-ephemeral runtime 驗證所有七分支及 personal resolver，raw MCP SSE/text/JSON（含任何 structuredContent）不得洩漏；default-deny／同 session revoke-disable 必須零 child/backend dispatch。另驗證讀取、folder、delete 成功輸出不變。`test_batch2_n8n_public_boundaries.py` 補四個 before-load drift negatives、formatter 不讀 private getters／不變更 raw errors、真 handler ordinary/AbortError failures 與並行分類隔離。既有 B1 writer commit/fallback/cancellation/positive cases 必須重跑；不是 full-suite／HA／release approval。
 
 ## v3 狀態／管理 API（已本地串接 UI，HA 未驗收）
 
@@ -51,9 +75,11 @@ PUT /api/policy
 
 Odoo 家族僅 `res.partner` 的 id/name/display_name/active，必須明確指定 fields；domain 僅有界 conjunction，沒有 dotted relation/context/free-text 搜尋。寫入 name 或經确认的 chatter；chatter comment 可能通知既有訂閱者，是明確 writer 而非 read preview 授權繞過。後端自訂 computed fields/overrides 仍需最小權限帳號與實際相容性驗收。
 
-任意 execute/method、agent/chat/code、成本/provider health 永遠不按名稱/hint 降為 read；本批未能安全限制者仍拒絕。`tool-review.json` 對每個延期工具列出確切技術阻礙和補強工作，包括更寬 Odoo 模型、完整 approval flow、私密檔案/trace/credentials、遠端 connector/agent egress 與 workflow 內容。不能把 55/184 宣稱七產品完整完成。
+任意 execute/method、agent/chat/code、成本/provider health 永遠不按名稱/hint 降為 read；本批未能安全限制者仍拒絕。`tool-review.json` 對每個延期工具列出確切技術阻礙和補強工作，包括更寬 Odoo 模型、完整 approval flow、私密檔案/trace/credentials、遠端 connector/agent egress 與 workflow 內容。不能把 65/184 宣稱七產品完整完成。
 
 ## 本地驗證契約
+
+B1 `tests/test_batch2_{policy,bounds,runtime}.py` 覆蓋10個真 handler、18/19版 owned XML-RPC、pure calls 零 backend events、nested/prototype/schema 拒絕、兩個新 writer 舊 global deny→exact grant→同 session disable/revoke，且拒絕時零 child dispatch/副作用；Manage write ACL deny、resources/read deny、count response canary projection。
 
 `tests/conftest.py` 自動持有 `/tmp/woow-ha-mcp-local-tests-<uid>.lock`；不要再外層 flock 或終止其他 listener。所有命令使用 `env -u SUPERVISOR_TOKEN PYTHONDONTWRITEBYTECODE=1`。writer 測試只能連 owned fake backend，明確允許才增加 mutation counter；unknown/extra/disabled/default deny 要保持 child/backend counter=0。
 

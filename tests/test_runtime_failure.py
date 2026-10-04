@@ -10,20 +10,19 @@ import pytest
 
 from mcp_admin_core.config import Store
 
+from owned_executable import Executable
+from batch2_owned_port import reserve_port
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def free_port():
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
+    with reserve_port() as sock:
         return sock.getsockname()[1]
 
 
 @pytest.mark.parametrize("fault", ["monitor", "monitor_return", "persisted_key"])
 async def test_runtime_failure_is_sanitized_and_nonzero(tmp_path, fault):
-    with socket.socket() as sock:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(("127.0.0.1", 3000))
     store = Store(tmp_path / "data")
     if fault == "persisted_key":
         value = store.load().model_dump()
@@ -47,8 +46,12 @@ async def finish(self):
 run.HealthMonitor.run = finish
 run.main()
 '''
+    admin_port, mcp_port = free_port(), free_port()
+    runner = Executable(tmp_path, 'n8n', [admin_port, mcp_port])
+    code = 'import run; ' + runner.code('run') + '\n' + code
+    runner.release()
     process = await asyncio.create_subprocess_exec(sys.executable, "-c", code,
-        "--data", str(store.directory), "--host", "127.0.0.1", "--admin-port", str(free_port()), "--mcp-port", str(free_port()),
+        "--data", str(store.directory), "--host", "127.0.0.1", "--admin-port", str(admin_port), "--mcp-port", str(mcp_port),
         cwd=tmp_path, env={"PATH": "/usr/bin:/bin", "PYTHONPATH": str(ROOT / "packages/mcp-admin-core") + os.pathsep + str(ROOT / "apps/n8n")},
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     try:

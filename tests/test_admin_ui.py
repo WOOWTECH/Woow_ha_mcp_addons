@@ -6,6 +6,7 @@ from mcp_admin_core import ui
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.products import ProductStore
 from n8n_adapter import TOOLS
+from owned_runtime import forbidden_transport
 
 IDENTITY = {'x-remote-user-id': 'a' * 32}
 
@@ -30,7 +31,7 @@ async def test_real_admin_pages_assets_and_security(tmp_path, build, base):
         queries.append(user)
         return allowed
     store = ProductStore(tmp_path / 'state', 'n8n')
-    async with httpx.AsyncClient() as child:
+    async with httpx.AsyncClient(transport=forbidden_transport()) as child:
         admin, public = make_apps(store, TOOLS, child, verify_admin=role)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(admin, client=('172.30.32.2', 1)), base_url='http://untrusted-host') as c:
             headers = {**IDENTITY, 'x-ingress-path':base}
@@ -69,7 +70,7 @@ async def test_real_admin_pages_assets_and_security(tmp_path, build, base):
 async def test_missing_build_and_unapproved_provider(tmp_path, build):
     store = ProductStore(tmp_path/'state', 'n8n')
     async def role(_): return True
-    async with httpx.AsyncClient() as child:
+    async with httpx.AsyncClient(transport=forbidden_transport()) as child:
         for verifier, expected in ((None,403),(role,503)):
             admin, _ = make_apps(store,TOOLS,child,verify_admin=verifier)
             (build/'index.html').unlink(missing_ok=True)
@@ -88,7 +89,7 @@ async def test_asset_fanout_is_bounded_and_cancelled(tmp_path, build):
         try: await asyncio.Event().wait()
         finally: active -= 1
     store=ProductStore(tmp_path/'state','n8n')
-    async with httpx.AsyncClient() as child:
+    async with httpx.AsyncClient(transport=forbidden_transport()) as child:
         admin,_=make_apps(store,TOOLS,child,verify_admin=role)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(admin,client=('172.30.32.2',1)),base_url='http://test') as c:
             tasks=[asyncio.create_task(c.get('/assets/app.js',headers=IDENTITY)) for _ in range(16)]

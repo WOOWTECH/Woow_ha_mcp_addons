@@ -22,9 +22,9 @@ protection mode 保持 on，無新增 host mounts、Docker socket 或 capabiliti
 快取，停權／降權／缺失／timeout／錯誤一律 fail closed。role query 不保證即時
 撤銷 browser Ingress session 或已在執行的跨系統操作。詳見共用驗收文件。
 
-本產品 runtime：**n8n-mcp 2.91.0 / Node 22.23.2**。完整來源 28 tools，局部支援 7，
-暫不支援 21；七類合計 184/55/129，**不是 full functional parity**。
-文件/search/get_node、workflow list/minimal read、folder list/create/rename；delete_workflow 与 folder writes 需明確 grants。
+本產品 runtime：**n8n-mcp 2.91.0 / Node 22.23.2**。完整來源 28 tools，局部支援 10，
+暫不支援 18；七類合計 184/65/119，**不是 full functional parity**。
+文件/search/get_node、workflow list/minimal read、folder list/create/rename，加上 local validate_node/validate_workflow（manualTrigger/noOp 空參數圖）。`n8n_create_workflow` 僅建立2..20節點 inactive draft，不允許 code/URL/credentials/settings/activation；必須 exact grant，legacy global 不授權。delete_workflow 与 folder writes 權限不變。
 逐名 schema／預設／operation／啟用限制／deferred reason 以
 [工具對照](../../docs/tool-surface.md) 與 [machine manifest](../../docs/tool-surface.json)
 為準。未知與 withheld tools 即使開啟 writes 也不放行。
@@ -39,7 +39,7 @@ protection mode 保持 on，無新增 host mounts、Docker socket 或 capabiliti
 工具頁依實際 v3 metadata 顯示 exact tool/operation grants；保存取代全部
 `enabled_write_tools` 並 `writes_enabled:false`，disabled 優先；失配／過期契約停止保存。
 舊 delete_workflow global true 會顯示有效授權；保存轉為 exact grants，不靜默留寫入。
-129 個延期工具是透明內部 backlog，並非完整遷移完成。
+119 個延期工具是透明內部 backlog，並非完整遷移完成。
 
 ## 網路與認證
 

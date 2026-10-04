@@ -11,6 +11,10 @@ import sys
 
 ROOT = Path(__file__).parent.parent
 CONFIG = json.loads((ROOT / 'local-test.json').read_text())
+sys.path.insert(0, CONFIG['source'] + '/tests')
+from owned_network import install, install_subprocess_guard
+install()
+install_subprocess_guard()
 spec = importlib.util.spec_from_file_location('real_management', CONFIG['source'] + '/packaging/management_launcher.py')
 management = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(management)
@@ -75,7 +79,16 @@ def actual_app(path, **kwargs):
         assert 'SUPERVISOR_TOKEN' not in value.env
         return ChildSpec((value.argv[0], '--require', str(ROOT/'child-check.cjs'), *value.argv[1:]), value.env, value.cwd)
     n8n_adapter.child_spec = checked_child
-    return original_run(path, **kwargs)
+    # Import the real executable after the real post-exec guard, then bind its
+    # module aliases before main. No runpy __main__ alias is patched too late.
+    from mcp_admin_core import ui
+    ui.UI_ROOT = Path(CONFIG['ui_dist'])
+    app_spec = importlib.util.spec_from_file_location('owned_real_n8n', path)
+    app = importlib.util.module_from_spec(app_spec)
+    app_spec.loader.exec_module(app)
+    from owned_executable import install_runner
+    install_runner(app, CONFIG['owned_runtime'])
+    return app.main()
 
 management.runpy.run_path = actual_app
 management.main()

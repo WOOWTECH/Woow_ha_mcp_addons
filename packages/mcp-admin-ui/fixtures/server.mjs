@@ -1,10 +1,14 @@
 // LOCAL MOCK ONLY. Not imported by src or build; never ship this as an HA verifier.
 import http from 'node:http';
+import '../../../tests/owned_network.cjs';
+if (process.env.UI_PORT !== undefined) throw Error('invalid private UI_PORT: owned ephemeral fixture required');
+const generation = process.env.OWNED_UI_FIXTURE;
+if (!process.send || !/^[a-f0-9]{64}$/.test(generation ?? '')) throw Error('owned fixture lifecycle required');
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { extname, resolve, sep } from 'node:path';
 import { mountPath, products, backendPayload } from '../src/contracts.js';
-const dist = fileURLToPath(new URL('../dist/', import.meta.url));
+const dist = process.env.OWNED_UI_ASSET_ROOT ?? fileURLToPath(new URL('../dist/', import.meta.url));
 const prefix = '/api/hassio_ingress/DUMMY';
 const mounts = [prefix, ''];
 let config, state, calls, nonce;
@@ -86,5 +90,11 @@ const server = http.createServer(async (request, response) => {
     response.end(html.replace('<body>', '<body><div role="note" class="notice">LOCAL MOCK · 瀏覽器測試資料，非 HA 授權或後端實測</div>'));
   } catch { if (!response.headersSent) json(response, 400, { error: 'MOCK invalid request' }); else response.end(); }
 });
-server.listen(Number(process.env.UI_PORT ?? 4178), '127.0.0.1', () => console.log('LOCAL MOCK fixture listening on owned loopback port'));
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.close(() => process.exit(0)));
+server.once('error', () => process.exit(1));
+server.listen(0, '127.0.0.1', () => {
+  const port = server.address().port;
+  if (port === 3000) return server.close(() => process.exit(1));
+  process.send({ generation, port }); // candidate only; parent proves live PID/fd/inode
+});
+const stop = () => { server.close(() => process.exit(0)); server.closeAllConnections(); };
+for (const signal of ['SIGINT', 'SIGTERM', 'disconnect']) process.on(signal, stop);

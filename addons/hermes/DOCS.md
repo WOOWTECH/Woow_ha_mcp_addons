@@ -9,7 +9,7 @@
 直接編輯 state 解鎖。`panel_admin` 不是角色授權；`homeassistant_api` 保持 false。
 
 本產品 runtime：**vendored SDK MCP 1.28.1**。完整來源 11 tools，局部支援 7，
-暫不支援 4；七類合計 184/55/129，**不是 full functional parity**。
+暫不支援 4；七類合計 184/65/119，**不是 full functional parity**。
 skill/toolset enable/disable、gateway restart 與 session/cron metadata 及有界 delete/pause；mixed action 寫入需 exact operation grants，不開 agent/chat/code。
 逐名 schema／預設／operation／啟用限制／deferred reason 以
 [工具對照](../../docs/tool-surface.md) 與 [machine manifest](../../docs/tool-surface.json)
@@ -24,7 +24,7 @@ skill/toolset enable/disable、gateway restart 與 session/cron metadata 及有�
 
 工具頁依實際 v3 metadata 顯示 exact tool/operation grants；保存取代全部
 `enabled_write_tools` 並 `writes_enabled:false`，disabled 優先；失配／過期契約停止保存。
-129 個延期工具是透明內部 backlog，並非完整遷移完成。
+119 個延期工具是透明內部 backlog，並非完整遷移完成。
 
 ## 網路與認證
 

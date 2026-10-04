@@ -293,7 +293,7 @@ class Folders(Args):
         return self
 
 
-N8N_GRANTS = frozenset(('n8n_delete_workflow', 'n8n_manage_folders:create', 'n8n_manage_folders:rename'))
+N8N_GRANTS = frozenset(('n8n_create_workflow', 'n8n_delete_workflow', 'n8n_manage_folders:create', 'n8n_manage_folders:rename'))
 N8N_TOOLS = {
     'get_node': Tool(Node),
     'n8n_get_workflow': Tool(Workflow),

@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from mcp_admin_core.gateway import make_apps
-from mcp_admin_core.lifecycle import Supervisor
+from owned_runtime import Endpoint
 from mcp_admin_core.products import ProductStore, TOOLS, child_spec
 from test_expansion_policy import call
 from test_expansion_runtime import WRITES, fake_api, payload
@@ -18,16 +18,17 @@ async def test_api_enabling_writer_rebuilds_actual_native_gate(tmp_path, product
     with fake_api() as (url, events, mutations, failures):
         store = ProductStore(tmp_path, product)
         store.update(connection=connection(product, url))
-        manager = Supervisor(child_spec(store.load(), store.directory), retries=0)
-        await manager.start()
+        endpoint = Endpoint(product)
+        manager = endpoint.supervisor(child_spec(store.load(), store.directory))
         async def restart(state):
             await manager.stop()
-            manager.spec = child_spec(state, store.directory)
+            manager.spec = endpoint.prepare(child_spec(state, store.directory))
             await manager.start()
         async def role(_): return True
         try:
-            async with httpx.AsyncClient(trust_env=False) as child:
-                admin, app = make_apps(store, TOOLS[product], child, verify_admin=role, backend_changed=restart)
+            await manager.start()
+            async with endpoint.client() as child:
+                admin, app = make_apps(store, TOOLS[product], child, verify_admin=role, backend_changed=restart, child_url=endpoint.url)
                 async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://boundary') as client:
                     async def initialize():
                         headers = {'Authorization': 'Bearer '+store.load().token, 'Accept': 'application/json, text/event-stream'}
@@ -66,4 +67,4 @@ async def test_api_enabling_writer_rebuilds_actual_native_gate(tmp_path, product
                         assert len(events) == before and len(mutations) == 1
                     assert not failures
         finally:
-            await manager.stop(); store.close()
+            await manager.stop(); endpoint.close(); store.close()

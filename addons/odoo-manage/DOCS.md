@@ -8,9 +8,9 @@
 目前無正常後端設定或 token reveal/rotate 路徑。不得改權限、注入 test verifier 或
 直接編輯 state 解鎖。`panel_admin` 不是角色授權；`homeassistant_api` 保持 false。
 
-本產品 runtime：**mcp-server-odoo 0.7.1**。完整來源 10 tools，局部支援 6，
-暫不支援 4；七類合計 184/55/129，**不是 full functional parity**。
-model list、res.partner read/search 與有界 name create/update、delete；不開 arbitrary method。
+本產品 runtime：**mcp-server-odoo 0.7.1**。完整來源 10 tools，局部支援 9，
+暫不支援 1；七類合計 184/65/119，**不是 full functional parity**。
+model list、res.partner read/search 與有界 name create/update、delete；新增 active 分組 id:count、固定 template metadata（resources/read 仍 deny）。`post_message` 須獨立 exact grant，只寫 plain internal note（mail.mt_note），無 recipients/attachments/HTML；不開 arbitrary method。後端 override 仍可有副作用，不宣稱絕無通知。
 `mode=read` 不允許 writer grants；`mode=module` 要求後端 MCP module **已存在**、由 ACL 授權，
 原生 YOLO=off，不安裝 Odoo-side module、不開 full YOLO。
 逐名 schema／預設／operation／啟用限制／deferred reason 以
@@ -26,7 +26,7 @@ model list、res.partner read/search 與有界 name create/update、delete；不
 
 工具頁依實際 v3 metadata 顯示 exact tool/operation grants；保存取代全部
 `enabled_write_tools` 並 `writes_enabled:false`，disabled 優先；失配／過期契約停止保存。
-129 個延期工具是透明內部 backlog，並非完整遷移完成。
+119 個延期工具是透明內部 backlog，並非完整遷移完成。
 
 ## 網路與認證
 

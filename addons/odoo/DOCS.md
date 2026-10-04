@@ -8,9 +8,9 @@
 目前無正常後端設定或 token reveal/rotate 路徑。不得改權限、注入 test verifier 或
 直接編輯 state 解鎖。`panel_admin` 不是角色授權；`homeassistant_api` 保持 false。
 
-本產品 runtime：**odoo-mcp 1.1.0**。完整來源 41 tools，局部支援 6，
-暫不支援 35；七類合計 184/55/129，**不是 full functional parity**。
-health/model list、res.partner 指定欄位 read/search/fields，及 exact-grant chatter preview+confirm；不開放任意 model/method。
+本產品 runtime：**odoo-mcp 1.1.0**。完整來源 41 tools，局部支援 10，
+暫不支援 31；七類合計 184/65/119，**不是 full functional parity**。
+health/model list、res.partner 指定欄位 read/search/fields，及 exact-grant chatter preview+confirm；B1 增加 build_domain、generate_json2_payload、diagnose_odoo_call 純 preview（不執行 payload），以及按 active 分組的 id:count aggregate_records。有界輸出不含 ORM domain/context；不開放任意 model/method。
 逐名 schema／預設／operation／啟用限制／deferred reason 以
 [工具對照](../../docs/tool-surface.md) 與 [machine manifest](../../docs/tool-surface.json)
 為準。未知與 withheld tools 即使開啟 writes 也不放行。
@@ -24,7 +24,7 @@ health/model list、res.partner 指定欄位 read/search/fields，及 exact-gran
 
 工具頁依實際 v3 metadata 顯示 exact tool/operation grants；保存取代全部
 `enabled_write_tools` 並 `writes_enabled:false`，disabled 優先；失配／過期契約停止保存。
-129 個延期工具是透明內部 backlog，並非完整遷移完成。
+119 個延期工具是透明內部 backlog，並非完整遷移完成。
 
 ## 網路與認證
 

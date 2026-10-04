@@ -6,6 +6,13 @@ import time
 
 import pytest
 
+from owned_network import install, install_subprocess_guard
+
+# Installed before collection: MockTransport/default-contract requests are
+# untouched; actual bind/connect and spawned interpreters fail before port3000.
+install()
+install_subprocess_guard()
+
 
 @pytest.fixture(scope="session", autouse=True)
 def local_test_lock():

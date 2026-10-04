@@ -184,7 +184,8 @@ async def test_admin_write_enable_disable_and_no_generic_secrets(harness, store)
 
 
 async def test_admin_fails_closed_and_socket_peer_not_forwarded_header(store):
-    async with httpx.AsyncClient() as child:
+    from owned_runtime import forbidden_transport
+    async with httpx.AsyncClient(transport=forbidden_transport()) as child:
         async def yes(_): return True
         for peer, verifier, user in [("127.0.0.1", yes, "admin"), ("172.30.32.2", None, "admin"), ("172.30.32.2", yes, "")]:
             admin, mcp = make_apps(store, TOOLS, child, verify_admin=verifier)

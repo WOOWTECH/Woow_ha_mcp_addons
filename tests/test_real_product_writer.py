@@ -5,23 +5,21 @@ import socket
 import httpx
 
 from mcp_admin_core.gateway import make_apps
-from mcp_admin_core.lifecycle import Supervisor
+from owned_runtime import Endpoint
 from mcp_admin_core.products import ProductStore, TOOLS, child_spec
 from test_real_products import backend, connection, rpc
 
 
 async def test_real_delete_requires_enable_and_disabled_direct_call_still_denied(tmp_path):
-    with socket.socket() as sock:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(('127.0.0.1', 3000))
     with backend('opendesign') as (url, calls, _):
         store = ProductStore(tmp_path / 'state', 'opendesign')
         store.update(connection=connection('opendesign', url))
-        process = Supervisor(child_spec(store.load(), store.directory), retries=0)
+        endpoint = Endpoint('opendesign')
+        process = endpoint.supervisor(child_spec(store.load(), store.directory))
         try:
             await process.start()
-            async with httpx.AsyncClient(trust_env=False) as child:
-                _, app = make_apps(store, TOOLS['opendesign'], child)
+            async with endpoint.client() as child:
+                _, app = make_apps(store, TOOLS['opendesign'], child, child_url=endpoint.url)
                 async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://boundary') as client:
                     headers = {'Authorization': 'Bearer ' + store.load().token, 'Accept': 'application/json, text/event-stream'}
                     init = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {
@@ -48,4 +46,4 @@ async def test_real_delete_requires_enable_and_disabled_direct_call_still_denied
                     assert len(calls) == 1
                     await client.delete('/mcp', headers=headers)
         finally:
-            await process.stop(); store.close()
+            await process.stop(); endpoint.close(); store.close()

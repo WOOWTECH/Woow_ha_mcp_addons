@@ -1,15 +1,16 @@
 # 本地里程碑以外的阻礙
 
-此清單不代表任何產品已通過驗收。
+第一批55工具里程碑已獲接受並解除停止點。本批B1＋BT1已雙審、整合及coordinator新回歸；**65/184支援、119內部backlog繼續**。這不是商用／HA／公開驗收完成。
 
-- **HA 管理員授權：n8n 權限已批准，MAIN程式雙審通過，封裝guard整合／HA未實測**：上游2026-10-03T06:42Z確認使用者已知 broad Core admin（含潛在間接 Supervisor/host 能力）後，批准只對新n8n試點 `homeassistant_api:true`。固定 `ws://supervisor/core/websocket` + `config/auth/list`，runtime SUPERVISOR_TOKEN僅管理端使用，敏感操作fresh active/human/owner/system-admin查核、no positive cache、錯誤failclosed。保持hassio_api/auth_api false、default role/protection；不外推六類或既有服務。主tree真實WS provider與fresh final-action/lifecycleownership修後已獲獨立spec+新security批准（436tests）；隔離packaging已修postexec/prechild dumpable/core-limit guard並獲bounded spec+security批准，86個newfiles已按reviewed fingerprint無覆寫複製MAIN；真實bootstrap→guard→新provider＋pinned n8n child／procfs隔離與Chromium→Core聯合本地測試（owned fake WS/Ingress simulation）已通過獨立整合spec＋全新security雙審，協調者最終重跑568Python＋1聯測＋39packaging＋13UIunit＋21browser全部exit0。envstrip不是OSsandbox；本地聯測不是image/HA驗收。權限與程式均已落實，真實HA admin/non-admin/撤權/timeout與client/Ingress驗收仍待執行。
-- **其他六類管理權限**：共用UI與runtime已有本地測試，但production role provider／broad Core API例外僅准n8n。六類維持fail-closed，需上游逐類批准擴用已審provider與homeassistant_api，不能假稱都可在HA管理。
-- **內部功能backlog（不是外部阻礙）**：184來源工具目前55項有界支援、129項逐名延期，部分mixed工具亦非所有operation皆支援。`docs/tool-review.json`/`docs/tool-surface.md` 列安全契約、projection與測試等後續工作；普通尚未實作功能不能全推給憑證/HA/授權。此本地里程碑不等於七類完整功能migration。
-- **映像建置**：本機無 Docker、Podman、Buildx。允許產出 Dockerfile/CI，但不得稱映像建置成功。
-- **敏感掃描gate仍未清除，metadata誤判已有去密證明**：歷史checkpoint313ab01的7筆與最終246檔source export的8筆Gitleaks findings均逐項重新SHA256程式bytes相符，屬content-digest metadata誤判，不是已洩漏的API keys。proof在repo外reports/SECRET-SCAN-TRIAGE.md及final-source-scan-hash-proof.json，無match/secret輸出。未改scanner規則/allowlist/history/gates，實際exit1仍DENY；最窄metadata處理策略仍需security review，不能以分類證明宣稱整體source/history/dependency/image清除。
-- **公開授權與來源**：W1 shared boundary 為新寫，未直接匯入 legacy shared core/UI；需逐檔 provenance/比對確認，未納入的 legacy shared license 不作新寫碼永久 blocker。若後續實際複製 shared 片段，僅對該片段追授權範圍。Odoo Manage 0.7.1 為 MPL-2.0，需對應源碼與通知義務審查；app notices、OpenDesign vendor provenance、所有依賴 SBOM/NOTICE 與 code/history/image/docs 敏感掃描仍待完成。新 repo 尚不公開。
-- **GitHub/GHCR 身分與名稱**：公開 lookup 404 不證明名稱可用；WOOWTECH 是 user account。需上游安全供應最小權限 publisher（repo 寫入、package publish；優先 ephemeral GITHUB_TOKEN）。不使用曾曝光 PAT、不讀 credential 檔、不在聊天貼秘密。
-- **受限測試後端**：每類需安全傳入只供非正式資料的 API key/DB 身分；n8n 首個試點不得操作正式 workflow。只給需要的 read API；write測試限 mock 或經批准測試環境。
-- **EMQX**：HA 既有 error 根因無足夠去密證據，不修復、不重啟。需另可用的測試 REST API v5 後端。
-- **LiteLLM/Hermes/OpenDesign**：LiteLLM 真實後端版本/部署/API權限，Hermes HA API port/version，OpenDesign daemon port/auth需確認；不從 UI Ingress port 猜 API。
-- **真實驗收**：HA 安裝/Ingress/同機及 LAN client/MCP E2E/備份還原/目標 CPU RSS 延遲均須上游批准並實測。本團隊停在本地里程碑。
+- **內部功能backlog**：B1新增10工具、schema／writer／n8n public-error修復已有bounded SPEC→NEW SECURITY。119延期及mixed operations仍需實作／安全契約／測試，不能全部推給外部權限。逐名ledger：`docs/tool-review.json`、`docs/tool-surface.md`。
+- **測試隔離已恢復安全回歸基線**：未知3000不接觸，production3000不改。BT1 privateports／fresh own-listener proof／Python-Node-browser guards及redirect／terminalIPC／standalone readiness修復已雙審批准。40test/config檔逐hash/base核對合MAIN，coordinator新跑792Python＋獨立joined1＋65packaging＋13unit＋21browser，零failure/error/skip；validator/actionlint/inventory/offline locks／assetclosure過。證據repo外`coordinator-bt1-main-verification.json`。這不是images／HA通過。
+- **歷史cleanup證據缺口**：原empty90s timeout、故意RED UID-helper child、失敗UI probe Node4153791的descendant cleanup仍unknown。已披露，不以finalgreen倒推、不掃殺foreign PID。測試proof/send仍非原子、不是通用browser/native sandbox；Playwright1.61.1 privateAPI升級須重審。
+- **n8n HA管理員授權**：上游2026-10-03T06:42Z批准只對新n8n試點`homeassistant_api:true`，已知broad Core admin潛在間接Supervisor/host能力。固定`ws://supervisor/core/websocket`／`config/auth/list`、fresh active/human/owner/system-admin、no positive cache、錯誤failclosed；hassio_api/auth_api false、保護不變。真bootstrap→UID10001/post-exec guard→provider＋n8n SDK與Chromium/Core本地joined通過；transport為owned fake，非HA驗收，envstrip不等於OSsandbox。
+- **其他六類管理權限**：production provider仍failclosed；需上游逐類批准既審provider及broad Core API，不用test role注入冒稱HA可管理。
+- **映像建置**：readonly preflight顯示builder/runtime binaries缺、UID0無subuid/helper、無FUSE、readonly cgroups／無獨立資源delegation；當時共享RAM約2.4–2.7GiB。Userns/overlay未實測，不稱kernel不支援。建議專用private disposable amd64 runner（估算4–8vCPU／16GiB／60GiB／2–4h），最小需求見repo外`UPSTREAM-BUILDER-REQUEST-BATCH2.md`。未安裝／升權／接socket／build。
+- **BLD2 hosting阻擋**：explicit docker driver、hash-before-exec與helper/proxy隔離proposal已雙審及65mock/package checks，按hash/base合MAIN；WOOWTECH為USER，所需runner-group／selected-workflow保護不可用，code hardBLOCKED。不能靠env/labels繞過或自行移namespace/public source。Operator-controlled privateVM替代需另批准審核，沒有真builder執行。
+- **Secret scanner gate仍DENY**：歷史313ab01七筆及最終246檔export八筆Gitleaks findings已逐項SHA256內容核對為code-digest metadata誤判；證據repo外`SECRET-SCAN-TRIAGE.md`／`final-source-scan-hash-proof.json`。無secret輸出；未改規則／allowlist／history。分類證明不等於整體source/history/dependency/image clearance。
+- **公開授權與來源**：共用boundary/UI為新寫，未複製的legacy shared license不作永久blocker；實際複製片段仍需逐檔provenance。Odoo Manage0.7.1 MPL-2.0對應源碼／NOTICE、OpenDesign原上游權利人、所有依賴SBOM/NOTICE及掃描待公開前審核。Repo不公開。
+- **GitHub/GHCR**：公開lookup404不證明名稱可用。需安全供應最小publisher（優先ephemeral GITHUB_TOKEN）；不使用曝光PAT、不讀credential stores。沒有public push／publish批准。
+- **真實測試後端**：需各類受限非正式key／DB身份；n8n不得操作正式workflow，write測試限owned fake或另准環境。EMQX既有HA error根因未明，不修／重啟；需可用REST API v5測試後端。LiteLLM版本／API權限、Hermes HA API、OpenDesign daemon port/auth待確認，不從Ingress猜API。
+- **真實驗收**：HA安裝／Ingress／admin/non-admin撤權／同機與LAN client MCP E2E／backup/rollback／目標CPU RSS延遲需批准並實測。外部gate不停止內部下一批工具實作與逐批雙審。

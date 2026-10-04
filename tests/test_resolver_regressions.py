@@ -15,7 +15,8 @@ import pytest
 
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.health import HealthMonitor
-from mcp_admin_core.lifecycle import ChildSpec, Supervisor
+from mcp_admin_core.lifecycle import ChildSpec
+from owned_runtime import Endpoint
 from mcp_admin_core.products import PROBES, ProductState, ProductStore, TOOLS, child_spec
 from test_backend_policy_python import policy
 from test_real_products import rpc
@@ -156,10 +157,10 @@ async def test_real_localhost_health_and_readiness(tmp_path, product):
             name, args = PROBES[product]
             result = await rpc(client, '/mcp', headers, call(name, args))
             assert not result.get('isError'), result
-            monitor = HealthMonitor(store, manager, child)
+            monitor = HealthMonitor(store, manager, child, child_url=manager.endpoint.url)
             await monitor.check()
             assert monitor.backend == 'reachable'
-            _, app = make_apps(store, TOOLS[product], child, health=monitor.snapshot)
+            _, app = make_apps(store, TOOLS[product], child, health=monitor.snapshot, child_url=manager.endpoint.url)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://boundary') as health:
                 assert (await health.get('/health/ready')).status_code == 200
             assert manager.ready and manager.starts == 1
@@ -195,20 +196,18 @@ async def test_gateway_cancellation_waves_bound_dns_and_reap(tmp_path):
                 release.wait(15)
                 with lock: active -= 1
             self.reply({'capabilities': ['owned-test']})
-    with socket.socket() as check:
-        check.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        check.bind(('127.0.0.1', 3000))
     with serve(Backend) as url:
         store = ProductStore(tmp_path / 'state', 'hermes')
         store.update(connection={'gateway_url': url.replace('127.0.0.1', 'configured.invalid'), 'gateway_api_key': 'DUMMY'})
         spec = child_spec(store.load(), store.directory)
         wrapped = ChildSpec((spec.argv[0], '-c', DNS_WRAPPER, url.rsplit(':', 1)[1], spec.argv[1]), spec.env, spec.cwd)
-        manager = Supervisor(wrapped)
-        await manager.start()
+        endpoint = Endpoint('hermes')
+        manager = endpoint.supervisor(wrapped)
         tasks = []
         try:
-            async with httpx.AsyncClient(trust_env=False, timeout=20) as child:
-                _, app = make_apps(store, TOOLS['hermes'], child)
+            await manager.start()
+            async with endpoint.client(timeout=20) as child:
+                _, app = make_apps(store, TOOLS['hermes'], child, child_url=endpoint.url)
                 async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://boundary', timeout=20) as client:
                     headers = {'Authorization': 'Bearer ' + store.load().token, 'Accept': 'application/json, text/event-stream'}
                     init = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {'protocolVersion': '2025-03-26', 'capabilities': {}, 'clientInfo': {'name': 'dns-test', 'version': '0'}}}
@@ -262,6 +261,7 @@ async def test_gateway_cancellation_waves_bound_dns_and_reap(tmp_path):
             for task in tasks: task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
             await manager.stop()
+            endpoint.close()
             store.close()
 
 

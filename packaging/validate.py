@@ -13,6 +13,8 @@ import subprocess
 
 import yaml
 
+from builder_contract import RUNNER
+
 ROOT = Path(__file__).resolve().parents[1]
 PRODUCTS = ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm')
 URL = 'https://github.com/WOOWTECH/Woow_ha_mcp_addons'
@@ -133,6 +135,106 @@ def source_paths(root):
     return subprocess.check_output(['git', '-C', str(root), 'ls-files', '--cached', '--others', '--exclude-standard', '-z']).decode().split('\0')[:-1]
 
 
+def builder_workflow(value, workflow):
+    """Strict builder recipe; runner labels/approval markers are not a sandbox."""
+    require('env' not in value and 'defaults' not in value, 'no workflow environment/default injection')
+    candidate = value['jobs']['images' if workflow == 'ci' else 'publish']
+    exact(candidate['runs-on'], RUNNER, 'dedicated externally approved VM runner')
+    require(not any(k in candidate for k in ('container', 'services', 'continue-on-error', 'defaults')),
+            'nested runner or bypass denied')
+    wanted_env = {'BLD2_APPROVAL': '${{ vars.BLD2_APPROVAL }}',
+                  'DOCKER_BUILD_SUMMARY': 'false', 'DOCKER_BUILD_RECORD_UPLOAD': 'false'}
+    if workflow == 'release':
+        wanted_env['APP'] = '${{ inputs.app }}'
+    exact(candidate['env'], wanted_env, 'no ambient builder overrides')
+    steps = candidate['steps']
+
+    def action(prefix):
+        found = [i for i, step in enumerate(steps) if step.get('uses', '').startswith(prefix + '@')]
+        require(len(found) == 1, 'one ' + prefix + ' required')
+        index = found[0]
+        require(set(steps[index]) <= {'name', 'uses', 'with'}, 'conditional/permissive builder action')
+        return index
+
+    def guard(job, phase):
+        command = 'python3 packaging/builder_contract.py ' + phase
+        found = [i for i, step in enumerate(job['steps']) if step.get('run') == command]
+        require(len(found) == 1, 'mandatory builder ' + phase + ' gate')
+        require(set(job['steps'][found[0]]) <= {'name', 'run'}, 'builder gate bypass')
+        return found[0]
+
+    prepare, verify = guard(candidate, 'prepare'), guard(candidate, 'verify')
+    setup = guard(candidate, 'setup --driver docker')
+    build = action('docker/build-push-action')
+    require(prepare < setup < verify < build, 'builder gates must precede setup/build')
+    # Reject later run/action/env injection, not just overrides at setup/build.
+    # This list deliberately covers the WHOLE candidate path and late login.
+    runs = ['python3 packaging/builder_contract.py prepare',
+            'python3 packaging/builder_contract.py setup --driver docker',
+            'python3 packaging/builder_contract.py verify']
+    python = 'python3' if workflow == 'ci' else 'python'
+    runs += [python + ' packaging/install_scanners.py "$RUNNER_TEMP/scanners"',
+             python + ' packaging/supply_chain.py candidate "$APP" "$RUNNER_TEMP/scanners" "$RUNNER_TEMP/candidate"']
+    uses = ['actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
+            'docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8']
+    if workflow == 'release':
+        runs = ['python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt',
+                'python packaging/validate.py && python packaging/check_release.py "$APP"', *runs,
+                'python packaging/registry_gate.py unused "$APP"',
+                '\n'.join(['set -eu',
+                    'python packaging/supply_chain.py verify "$APP" "$RUNNER_TEMP/candidate"',
+                    'IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:0.1.0"',
+                    'TESTED_ID="$(python -c \'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])\' "$RUNNER_TEMP/candidate/subject.json")"',
+                    'docker tag "$TESTED_ID" "$IMAGE"',
+                    'test "$(docker image inspect "$IMAGE" --format \'{{.Id}}\')" = "$TESTED_ID"',
+                    'docker push "$IMAGE"']),
+                'python packaging/registry_gate.py public "$APP" "$RUNNER_TEMP/candidate"']
+        uses.insert(1, 'actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1')
+        uses += ['docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9',
+                 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02']
+    exact([s['run'].strip() for s in steps if 'run' in s], runs,
+          'reviewed run sequence only; no GITHUB_ENV/PATH or shell overrides')
+    exact([s['uses'] for s in steps if 'uses' in s], uses,
+          'reviewed actions only; no Buildx downloader/overwrite')
+    for step in steps:
+        require(set(step) <= ({'name', 'run', 'env'} if 'run' in step else {'name', 'uses', 'with'}),
+                'step environment/default/bypass injection')
+        wanted = {}
+        if workflow == 'ci' and 'supply_chain.py candidate' in step.get('run', ''):
+            wanted = {'APP': '${{ matrix.app }}'}
+        if workflow == 'release' and 'registry_gate.py unused' in step.get('run', ''):
+            wanted = {'GHCR_TOKEN': '${{ secrets.GITHUB_TOKEN }}'}
+        exact(step.get('env', {}), wanted, 'step environment cannot override isolation')
+    if workflow == 'release':
+        login = action('docker/login-action')
+        candidate_scan = next(i for i, s in enumerate(steps) if 'supply_chain.py candidate' in s.get('run', ''))
+        unused = next(i for i, s in enumerate(steps) if 'registry_gate.py unused' in s.get('run', ''))
+        push = next(i for i, s in enumerate(steps) if 'docker push' in s.get('run', ''))
+        require(build < candidate_scan < unused < login < push, 'credentials only after candidate acceptance')
+        exact(steps[login]['with'], {'registry': 'ghcr.io', 'username': '${{ github.actor }}',
+              'password': '${{ secrets.GITHUB_TOKEN }}'}, 'late GHCR login only')
+    app = '${{ matrix.app }}' if workflow == 'ci' else '${{ inputs.app }}'
+    exact(steps[build]['with'], {'builder': 'default', 'provenance': False, 'sbom': False,
+          'context': '.', 'file': 'apps/' + app + '/Dockerfile', 'platforms': 'linux/amd64',
+          'push': False, 'load': True, 'tags': 'local/mcp-' + app + ':' + VERSION,
+          'build-args': 'BUILD_VERSION=' + VERSION,
+          'labels': 'org.opencontainers.image.revision=${{ github.sha }}'}, 'fixed local candidate build')
+    admission = value['jobs']['builder-admission' if workflow == 'ci' else 'gate']
+    guard(admission, 'admit')
+    exact(admission['runs-on'], 'ubuntu-24.04', 'admit before external scheduling')
+    exact(admission['env'], {'BLD2_APPROVAL': '${{ vars.BLD2_APPROVAL }}'}, 'operator approval input')
+    require('continue-on-error' not in admission and 'container' not in admission
+            and 'services' not in admission, 'admission bypass/nesting')
+    if workflow == 'ci':
+        require('if' not in admission and 'if' not in candidate, 'CI denial must not be a skipped PASS')
+        exact(candidate['needs'], ['unit', 'builder-admission'], 'mandatory admission dependency')
+        exact(candidate['environment'], 'builder-candidate', 'protected candidate environment')
+        exact(candidate['strategy']['max-parallel'], 1, 'bounded runner allocation')
+        require('needs' not in value['jobs']['unit'], 'local unit job independent of builder approval')
+    else:
+        exact(candidate['needs'], 'gate', 'release admission dependency')
+
+
 def validate(root=ROOT):
     exact(load(root / 'repository.yaml'), {'name': 'WOOW MCP Add-ons (experimental / blocked)', 'url': URL, 'maintainer': 'WOOWTECH'}, 'repository')
     paths = source_paths(root)
@@ -197,8 +299,10 @@ def validate(root=ROOT):
     clearance_shape(gates)
     for workflow in ('ci', 'release'):
         value = load(root / '.github/workflows' / (workflow + '.yaml'))
-        for job in value['jobs'].values():
-            exact(job['runs-on'], 'ubuntu-24.04', 'isolated hosted runner')
+        builder_workflow(value, workflow)
+        for name, job in value['jobs'].items():
+            if name not in ('images', 'publish'):
+                exact(job['runs-on'], 'ubuntu-24.04', 'isolated hosted unit/admission runner')
             require(type(job['timeout-minutes']) is int and 1 <= job['timeout-minutes'] <= 40, 'bounded job')
             for step in job['steps']:
                 if step.get('uses', '').startswith('actions/checkout@'):

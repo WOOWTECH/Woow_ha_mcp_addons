@@ -13,10 +13,14 @@ concurrency:
   group: public-release
   cancel-in-progress: false
 jobs:
+  # BLOCKED: WOOWTECH is USER-owned; no runner-group/selected-workflow controls.
+  # No label/variable substitutes for those controls or private environment review.
   gate:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      BLD2_APPROVAL: ${{ vars.BLD2_APPROVAL }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -44,6 +48,8 @@ jobs:
         env:
           APP: ${{ inputs.app }}
         run: python packaging/check_release.py "$APP"
+      - name: Deny unapproved builder dispatch independently of publication clearance
+        run: python3 packaging/builder_contract.py admit
       - name: Pin the existing fixed subprocess PATH on this disposable runner
         run: |
           test "$(node --version)" = v22.23.2
@@ -58,9 +64,12 @@ jobs:
     permissions:
       contents: read
       packages: write
-    runs-on: ubuntu-24.04
+    runs-on:
+      group: woow-disposable-builder
+      labels: [self-hosted, linux, x64]
     timeout-minutes: 40
     env:
+      BLD2_APPROVAL: ${{ vars.BLD2_APPROVAL }}
       APP: ${{ inputs.app }}
       DOCKER_BUILD_SUMMARY: 'false'
       DOCKER_BUILD_RECORD_UPLOAD: 'false'
@@ -76,9 +85,17 @@ jobs:
       - run: |
           python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
       - run: python packaging/validate.py && python packaging/check_release.py "$APP"
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - name: Verify runner authority before any setup or daemon use
+        run: python3 packaging/builder_contract.py prepare
+      - name: Use only checksum-verified Buildx and the embedded docker driver (no downloader)
+        run: python3 packaging/builder_contract.py setup --driver docker
+      - name: Verify embedded BuildKit identity before build
+        run: python3 packaging/builder_contract.py verify
       - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
+          builder: default
+          provenance: false
+          sbom: false
           context: .
           file: apps/${{ inputs.app }}/Dockerfile
           platforms: linux/amd64

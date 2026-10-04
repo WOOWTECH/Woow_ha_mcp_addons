@@ -2,8 +2,10 @@
 
 ## 0.1.0 — 未發佈候選
 
+- B1 新增 local node/workflow validation、安全 manualTrigger/noOp inactive draft create；新 create writer 僅 exact grant，沒有 activation/code/URL/credential references。
+
 - 新增獨立 amd64 root-context 封裝、Supervisor 2026.09.3 安全子集 manifest。
-- runtime：n8n-mcp 2.91.0 / Node 22.23.2；28 個來源工具中支援 7，21 個明列 withheld，
+- runtime：n8n-mcp 2.91.0 / Node 22.23.2；28 個來源工具中支援 10，18 個明列 withheld，
   [工具對照](../../docs/tool-surface.md) 尚未完成功能平齊。
 - 8099 Ingress-only／8081 可選 LAN／3000 loopback；保護模式、init true；不設
   backend-dependent watchdog。上游已批准路徑 A，僅新 n8n 的 homeassistant_api:true；

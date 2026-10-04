@@ -13,7 +13,7 @@ import httpx
 import pytest
 
 from mcp_admin_core.gateway import make_apps
-from mcp_admin_core.lifecycle import Supervisor
+from owned_runtime import Endpoint
 from mcp_admin_core.products import PRODUCTS, PROBES, ProductStore, TOOLS, child_spec
 from test_real_products import connection, rpc
 
@@ -46,9 +46,6 @@ class Quiet(BaseHTTPRequestHandler):
 
 @asynccontextmanager
 async def runtime(tmp_path, product, url, *, canary=None, json_response=False, write_grants=()):
-    with socket.socket() as check:
-        check.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        check.bind(('127.0.0.1', 3000))
     store = ProductStore(tmp_path / 'state', product)
     configured = connection(product, url)
     if canary:
@@ -60,11 +57,12 @@ async def runtime(tmp_path, product, url, *, canary=None, json_response=False, w
     if json_response:
         # Test-only stock FastMCP option. No executable/admin bypass added.
         spec.env['FASTMCP_JSON_RESPONSE'] = 'true'
-    manager = Supervisor(spec)
-    await manager.start()
+    endpoint = Endpoint(product)
+    manager = endpoint.supervisor(spec)
     try:
-        async with httpx.AsyncClient(trust_env=False, timeout=15) as child:
-            _, app = make_apps(store, TOOLS[product], child)
+        await manager.start()
+        async with endpoint.client(timeout=15) as child:
+            _, app = make_apps(store, TOOLS[product], child, child_url=endpoint.url)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://boundary', timeout=15) as client:
                 headers = {'Authorization': 'Bearer ' + store.load().token,
                            'Accept': 'application/json, text/event-stream'}
@@ -84,6 +82,7 @@ async def runtime(tmp_path, product, url, *, canary=None, json_response=False, w
     finally:
         pid = manager.process.pid if manager.process else None
         await manager.stop()
+        endpoint.close()
         store.close()
         if pid:
             assert not Path(f'/proc/{pid}').exists()
@@ -124,7 +123,7 @@ async def test_odoo_never_replays_redirect(tmp_path, status, location):
                 assert not captured, 'password-bearing XMLRPC body replayed'
                 assert 'res.partner' not in json.dumps(result)
                 from mcp_admin_core.health import HealthMonitor
-                monitor = HealthMonitor(store, manager, child)
+                monitor = HealthMonitor(store, manager, child, child_url=manager.endpoint.url)
                 await monitor.check()
                 assert monitor.backend == 'unreachable'
                 assert not captured, 'health probe replayed redirect'
@@ -219,7 +218,7 @@ async def test_slow_backend_does_not_starve_protocol(tmp_path, product, capacity
                     assert len(completed) >= 10-capacity
                     assert all('BACKEND_BUSY' in json.dumps(item) for item in completed)
                     from mcp_admin_core.health import HealthMonitor
-                    monitor = HealthMonitor(store, manager, child)
+                    monitor = HealthMonitor(store, manager, child, child_url=manager.endpoint.url)
                     await monitor.check()
                     assert monitor.backend == 'unreachable'
                     assert manager.starts == 1
@@ -253,8 +252,8 @@ async def test_emqx_real_health_requires_node_evidence(tmp_path):
             self.reply(response['value'])
     with serve(Nodes) as url:
         async with runtime(tmp_path, 'emqx', url) as (_, _, store, manager, child):
-            monitor = HealthMonitor(store, manager, child)
-            _, app = make_apps(store, TOOLS['emqx'], child, health=monitor.snapshot)
+            monitor = HealthMonitor(store, manager, child, child_url=manager.endpoint.url)
+            _, app = make_apps(store, TOOLS['emqx'], child, health=monitor.snapshot, child_url=manager.endpoint.url)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://boundary') as client:
                 good = {'node': 'emqx@local', 'version': '5.fake'}
                 for value in ({'success': True}, {}, {'error': 'offline'}, [], [None], [{}],

@@ -7,6 +7,7 @@ from mcp_admin_core.native_inventory import NAMES
 from mcp_admin_core.products import TOOLS
 from n8n_adapter import TOOLS as N8N_TOOLS
 from test_expansion_runtime import READS, WRITES
+from test_batch2_policy import CASES as B1_CASES
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -77,11 +78,12 @@ def test_every_added_tool_has_real_handler_positive_case():
         'n8n': {'tools_documentation','search_nodes','n8n_list_workflows','n8n_delete_workflow'},
     }
     for product, tools in {**TOOLS, 'n8n': N8N_TOOLS}.items():
-        actual_cases = {name for name, _ in READS[product]+WRITES[product]}
+        b1_cases = [(name, args) for p, name, args in B1_CASES if p == product]
+        actual_cases = {name for name, _ in READS[product]+WRITES[product]+b1_cases}
         assert set(tools)-old[product] <= actual_cases
         # Every new operation grant has a real writer case, not just tools/list.
         covered = {name if tools[name].write else f'{name}:{args[tools[name].selector]}'
-                   for name,args in WRITES[product]}
+                   for name,args in WRITES[product]+[(n,a) for n,a in b1_cases if tools[n].write]}
         for name,tool in tools.items():
             if not tool.legacy_write:
                 assert set(tool.grants(name)) <= covered

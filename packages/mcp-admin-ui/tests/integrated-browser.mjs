@@ -3,21 +3,61 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from '@playwright/test';
-const admin = process.env.LOCAL_ADMIN;
-const control = process.env.LOCAL_CONTROL;
+import { origin, proofGuard, routeForwarder } from '../../../tests/owned_browser.mjs';
+const admin = origin(process.env.LOCAL_ADMIN);
+const control = origin(process.env.LOCAL_CONTROL);
+const backend = origin(process.env.LOCAL_BACKEND);
+const proof = proofGuard([admin, control]);
+const realFetch = globalThis.fetch;
+const fetch = async (url, options={}) => {
+  await proof.guard(url);
+  return realFetch(url, {...options, redirect:'error'});
+};
 const prefix = '/api/hassio_ingress/DUMMY';
-const evidence = '/data/pi-agent/home/work/mcp-haos-team-runtime/reports/integration-browser-evidence/core';
+const evidence = '/data/pi-agent/home/work/mcp-haos-team-runtime/reports/bt1-joined-fix-evidence/core';
 const browser = await chromium.launch({headless:true});
-const context = await browser.newContext();
-const page = await context.newPage();
+const context = await browser.newContext({serviceWorkers:'block'});
 const errors=[], requests=[];
+const forward = routeForwarder(proof);
+await context.route('**/*', async route => {
+  const started = performance.now();
+  const pathname = new URL(route.request().url()).pathname;
+  const operation = pathname.split('/api/').at(-1);
+  const product = pathname.startsWith('/local-product/') ? pathname.split('/')[2] : 'n8n';
+  try {
+    await forward(route, async response => {
+      if (route.request().method() !== 'GET' || response.status() >= 400) {
+        let reason;
+        if (response.status() >= 400) {
+          const error = await response.json().catch(() => ({}));
+          reason = ['state unavailable','request denied'].includes(error.error) ? error.error : 'other';
+        }
+        console.log('BT1_HTTP', JSON.stringify({product, operation, status:response.status(), reason, milliseconds:Math.round(performance.now()-started)}));
+      }
+      await route.fulfill({response});
+    });
+  } catch (error) {
+    console.log('BT1_ROUTE', JSON.stringify({operation, reason:error.name, milliseconds:Math.round(performance.now()-started)}));
+    errors.push(error.name); await route.abort();
+  }
+});
+await context.routeWebSocket('**/*', socket => { errors.push('unexpected browser WebSocket'); socket.close(); });
+const page = await context.newPage();
 page.on('pageerror', e=>errors.push(e.message));
 page.on('request', r=>requests.push(r.url()));
 const visible = async locator => { await locator.waitFor({state:'visible'}); };
 const confirm = async (label='確認儲存') => page.getByRole('dialog').getByRole('button',{name:label,exact:true}).click();
 async function saved(text) {
   await page.waitForFunction(()=>!document.querySelector('#app').hasAttribute('aria-busy'));
-  await visible(page.getByRole('status').filter({hasText:text}));
+  try { await visible(page.getByRole('status').filter({hasText:text})); }
+  catch (error) {
+    console.log('BT1_STATUS', JSON.stringify(await page.evaluate(() => ({
+      busy:document.querySelector('#app').hasAttribute('aria-busy'),
+      noticeVisible:!document.querySelector('#notice')?.hidden,
+      genericFailure:document.querySelector('#notice')?.textContent === '操作未完成。請重新整理狀態後再試。',
+    }))));
+    throw error;
+  }
 }
 async function open(origin,path) {
   const result=await page.goto(origin+path);
@@ -57,11 +97,11 @@ try {
   const first=await bootstrap();
   assert.equal(first.policy_contract,'woow-v3-exact-grants');
   assert.equal(first.endpoint,null);
-  assert.equal(Object.keys(first.tools).length,7);
+  assert.equal(Object.keys(first.tools).length,10);
   assert.deepEqual(first.enabled_write_tools,[]);
   assert.equal((await fetch(admin+prefix+'/api/endpoint',{method:'PUT',headers:{'content-type':'application/json'},body:'{"endpoint":null}'})).status,403);
   const connections={
-    n8n:{url:process.env.LOCAL_BACKEND,key:'DUMMY-LOCAL-ONLY'},
+    n8n:{url:backend,key:'DUMMY-LOCAL-ONLY'},
     odoo:{url:'https://odoo.example.test',database:'fixture',username:'tester',password:'DUMMY-LOCAL-ONLY'},
     'odoo-manage':{url:'https://odoo.example.test',database:'fixture',username:'tester',api_key:'DUMMY-LOCAL-ONLY'},
     hermes:{gateway_url:'https://hermes.example.test',gateway_api_key:'DUMMY-LOCAL-ONLY'},
@@ -92,14 +132,23 @@ try {
   // effective checked authorization; a save converts them to exact grants.
   await policy({writes_enabled:true,disabled:[],enabled_write_tools:['n8n_manage_folders:create']});
   await open(admin,prefix+'/tools');
-  const writer=page.getByLabel('明確允許此工具寫入');
+  const toolRow=name=>page.locator('.tool-row').filter({has:page.getByRole('heading',{name,exact:true})});
+  const writer=toolRow('n8n_delete_workflow').getByLabel('明確允許此工具寫入');
+  const createWriter=toolRow('n8n_create_workflow').getByLabel('明確允許此工具寫入');
   assert.equal(await writer.isChecked(),true);
+  assert.equal(await createWriter.isChecked(),false); // B1 never inherits legacy global
   assert.equal(await page.getByLabel('允許寫入操作：create',{exact:true}).isChecked(),true);
   await writer.uncheck();
   await page.getByLabel('允許寫入操作：create',{exact:true}).uncheck();
   await page.getByRole('button',{name:'儲存工具權限'}).click(); await confirm('確認套用'); await saved('伺服器已確認儲存工具權限');
   assert.deepEqual((await bootstrap()).enabled_write_tools,[]);
   assert.equal((await bootstrap()).writes_enabled,false);
+  await createWriter.check();
+  await page.getByRole('button',{name:'儲存工具權限'}).click(); await confirm('確認套用'); await saved('伺服器已確認儲存工具權限');
+  assert.deepEqual((await bootstrap()).enabled_write_tools,['n8n_create_workflow']);
+  await createWriter.uncheck();
+  await page.getByRole('button',{name:'儲存工具權限'}).click(); await confirm('確認套用'); await saved('伺服器已確認儲存工具權限');
+  assert.deepEqual((await bootstrap()).enabled_write_tools,[]);
   await writer.check();
   await policy({writes_enabled:false,disabled:[],enabled_write_tools:['n8n_manage_folders:rename']});
   await page.getByRole('button',{name:'儲存工具權限'}).click(); await confirm('確認套用'); await saved('工具授權版本已變更');
@@ -143,4 +192,4 @@ try {
   assert.deepEqual(errors,[]);
   assert(requests.every(url=>url.startsWith(admin)||url.startsWith(control)));
   console.log('PASS LOCAL CORE: root/prefix refresh/fonts; 7 typed forms; v3 exact/legacy/stale/disabled; endpoint; CSRF; token blur/TTL/rotate/revoke; real WS demotion/error. No HA claim.');
-} finally { await context.close(); await browser.close(); }
+} finally { await context.close(); await browser.close(); proof.close(); }

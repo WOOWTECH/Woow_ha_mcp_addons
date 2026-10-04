@@ -2,8 +2,10 @@
 
 ## 0.1.0 — 未發佈候選
 
+- B1 新增 build_domain／JSON2 preview／call diagnosis 純 builders（不執行 payload）與按 active 分組的 partner id:count；有界投影排除 domain/context/private fields。
+
 - 新增獨立 amd64 root-context 封裝、Supervisor 2026.09.3 安全子集 manifest。
-- runtime：odoo-mcp 1.1.0；41 個來源工具中支援 6，35 個明列 withheld，
+- runtime：odoo-mcp 1.1.0；41 個來源工具中支援 10，31 個明列 withheld，
   [工具對照](../../docs/tool-surface.md) 尚未完成功能平齊。
 - 8099 Ingress-only／8081 可選 LAN／3000 loopback；保護模式、init true；不設
   backend-dependent watchdog、不開 HA/Supervisor/Docker API 權限。

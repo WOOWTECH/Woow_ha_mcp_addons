@@ -1,9 +1,32 @@
 {
-  "scope": "W2a hardening plus W2b bounded expansion; no dependency edits or independent approval",
+  "scope": "W2a/W2b plus BATCH2 B1 bounded expansion; no dependency edits or independent approval",
   "patches": [
     {
+      "path": "packages/mcp-admin-core/mcp_admin_core/batch2.py",
+      "sha256": "ba472dcd66a850b9d6b8d2f86682ec5d68b7d7872d0f9be875a230d535ce20fd",
+      "change": "B1 ten source-backed tools: strict nested pure preview/partner count/internal-note/safe graph schemas; exact default-off writer grants, no arbitrary executor or activation. P2 schema repair closes unmatched connection keys alongside patternProperties for create and nested workflow validation. Portable GraphName schema metadata additionally forbids disallowed characters anywhere, including trailing line terminators, across node ids/names, edge targets and connection keys; strict runtime regex and reserved-name validators unchanged.",
+      "guarded_sources": {}
+    },
+    {
+      "path": "apps/runtime/batch2_outputs.py",
+      "sha256": "239add1fbbad29eecbfec82e33553b33b4ed7b0e5d3acdad01a33d83f2090352",
+      "change": "B1 positive bounded partner count and static template metadata projection; drop ORM domains/context/private fields, resources/read never authorized.",
+      "guarded_sources": {}
+    },
+    {
+      "path": "apps/n8n/backend_policy.cjs",
+      "sha256": "f786637170950be321f40598ef71a36826bafbaad135b646b39660d8e00edf28",
+      "change": "Existing fixed-origin DNS/TLS/redirect policy and B1 create catch/metadata validation retained. Adjacent read-error P1: final public formatter uses only guarded N8nApiError type/status/known code; AsyncLocalStorage retains fixed classification per invocation, never raw errors. Wrap the seven genuine enabled API handler branches (workflow list/minimal/delete/create, folder list/create/rename), project failures to success=false/error/code, and normalize ordinary rejections without reading returned diagnostics. Successful business output is unchanged, not universal DLP. Strict API/error/handler/server-dispatch digests checked before runtime loading. Raw handleN8nApiError, settings fallback and preconnection retries remain internal and unchanged. Folder personal-project resolution keeps its native projects-to-workflows fallback. Errors/cancellation do not imply rollback, no commit or exactly-once; write errors explicitly warn outcome may be unknown. No new tools, grants, clients or endpoints; independent SPEC then NEW SECURITY review required.",
+      "guarded_sources": {
+        "apps/n8n/node_modules/n8n-mcp/dist/services/n8n-api-client.js": "e64be8d3def0623b6710c6e98f7a08ed14a49a1764a5f789def58ea1e900947c",
+        "apps/n8n/node_modules/n8n-mcp/dist/utils/n8n-errors.js": "efd5783846cf1eb61dbf9387de260e5a1d336ec609bc4c4d5601c369b5d2f20a",
+        "apps/n8n/node_modules/n8n-mcp/dist/mcp/handlers-n8n-manager.js": "0d99e10ec1eb9a6e4d78726636aa79f52eb4f3862be506785b794f1aeb9608cc",
+        "apps/n8n/node_modules/n8n-mcp/dist/mcp/server.js": "a4dfc41f48282423a610ee9ac45c0374357b7409cdaa4858e11ba58a32b2128c"
+      }
+    },
+    {
       "path": "packages/mcp-admin-core/mcp_admin_core/products.py",
-      "sha256": "e7b3cd2cdab3caf8292461992c61e3ca2138875b7a77dce2328269547d57c0e5",
+      "sha256": "9849528e0ce9abea6180cd850d9ac0f701a0378f83e51f4ac18c88f14f4f68c5",
       "change": "W2b v3 per-tool/operation grants, typed module mode, exact native disabled-tool universe and grant-controlled readonly. Reserve only the fixed read-only EMQX cluster-status / LiteLLM model-list probe in private loopback registration independently of public disables; parent authorization/list filtering remains authoritative, with real backend reads and unchanged readiness validation. Disable FastMCP banner/update checks to prevent unauthenticated PyPI lookup and version-cache pollution of the guarded clean restart directory; never delete or permit unknown CWD contents.",
       "guarded_sources": {
         "apps/emqx/.venv/lib/python3.13/site-packages/fastmcp/settings.py": "f96cd4e29b0d56e1f24c522ea977170f1b6efbdb88dc59023b1e9fa9afe3397c",
@@ -20,17 +43,22 @@
     },
     {
       "path": "apps/odoo/launch.py",
-      "sha256": "6e68af96f17d02ead0bf5616ba1e9ddfa3cb9fb0ea2ceb391e89044df2038e61",
-      "change": "Before stock CLI starts, replace RedirectTransport with configured-origin XMLRPC transport. Deny all redirects, pin validated DNS, retain verified hostname/SNI, sanitize faults; bound SDK sync dispatch to one worker.",
+      "sha256": "2cc240887550bcbddda873779fa43004eabc6d4cb0e367224eb6cd3577a9a093",
+      "change": "Before stock CLI starts, replace RedirectTransport with configured-origin XMLRPC transport. Deny all redirects, pin validated DNS, retain verified hostname/SNI, sanitize faults; bound SDK sync dispatch to one worker. B1 source-guard pure builder/diagnostic and aggregate handlers; project actual aggregate results to bounded partner counts.",
       "guarded_sources": {
+        "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py": "4c8bf33b35c54757b93f0cc367b4f5027488ca8fbf63f68c1241f1a4be784de0",
+        "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py": "957f3affa479cb079350de8874064d89594ab0661cfbfd7675b7f26930d32772",
+        "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/agent_tools.py": "5004b28b00e59efd903ae8d48240922a0bdb43fb9b0051e77dbcd919e3c434fd",
+        "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/diagnostics.py": "1fb1632cc711a7dfa4d5f6700472abeaffb897a094a4c399c21ce045aebb0dc7",
         "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/odoo_client.py": "8bd06a523cb8049f14f54d06d9b73c3d7787108e7e78cf58bfb725ec9a97f74d"
       }
     },
     {
       "path": "apps/odoo-manage/launch.py",
-      "sha256": "ac3432f9f6a897f577bf523b93a98e66d59fdc0e35c9cf300bf624f88aed1f37",
-      "change": "Before stock CLI starts, replace both pooled XMLRPC transport classes with configured-origin DNS-pinned transport; keep database header and verified TLS, sanitize faults. W2b source-guarded module authentication/ACL REST helpers now use scoped sync HTTPX transport instead of urllib; fixed API-key-only paths and strict consumed auth/permission types. No full YOLO or backend module installation.",
+      "sha256": "442ee6b3ccdc6bf2a494e25475cde2f9f8f707d4f72e92991080e8086b50c22d",
+      "change": "Before stock CLI starts, replace both pooled XMLRPC transport classes with configured-origin DNS-pinned transport; keep database header and verified TLS, sanitize faults. W2b source-guarded module authentication/ACL REST helpers now use scoped sync HTTPX transport instead of urllib; fixed API-key-only paths and strict consumed auth/permission types. No full YOLO or backend module installation. B1 source-guard actual tools; positive aggregate/template output projections, internal-note writer still requires existing module write ACL. P1 fixed-message boundary surrounds the real post handler; typed bounded cause classification, no exception text inspection, BaseException cancellation preserved. Validate real res.partner.message_post return before native list/int coercion (one genuine non-bool positive int32 ID only), then project success/message_id. No fake success, RPC retry, rollback or no-effect-after-error claim.",
       "guarded_sources": {
+        "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/tools.py": "5569568a6c86306d19bc4194ef7aeb504a238c4b8dba4d7fc809002104737249",
         "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/performance.py": "34f476a3c41de0daa653c3bb35b6d95468c8ef7e4a12b4d912222e0987df7b19",
         "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/access_control.py": "6001ec627491f1e1c6fa04e2eeddf126d92d4b811c8f9603676e021dbe92359a",
         "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/odoo_connection.py": "ebf31be7f21390beff402f267a30110ec3af9071b0e41bb1c453620a399d7a75"

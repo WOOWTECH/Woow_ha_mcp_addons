@@ -7,7 +7,7 @@
 僅 n8n 有已批准並經 component review 的正式 HA provider；六類 production 管理仍 403。
 本地 Chromium 已連真正 Core，n8n 經實際 bootstrap→post-exec guard→run.py→固定
 WS provider（僅 owned fake transport）；六類表單使用 test-only 注入 role，不是 HA 證據。
-整合仍須獨立規格及新安全審查，不清除任何 release gate。
+本地整合與測試 ownership 修復已通過獨立規格及全新安全審查；不清除任何 release gate。
 
 ## 建置與測試
 
@@ -24,9 +24,13 @@ npm run test:browser --prefix packages/mcp-admin-ui # dynamic loopback port，LO
 env -u SUPERVISOR_TOKEN PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -s -p no:cacheprovider tests/integration_local_runtime.py
 ```
 
-獨立 fixture `npm run fixture --prefix packages/mcp-admin-ui` 預設 loopback4178，
-可指定 `UI_PORT`。它不連後端、不是正式 verifier，也不進 image/dist。
-瀏覽器 evidence 寫在 repository 外 `mcp-haos-team-runtime/reports/integration-browser-evidence`；
+Standalone 測試由擴充 fixture 管理自有 child，child 綁定 ephemeral port0；
+每次 readiness／API／browser 送出前驗證 retained PID/starttime/fd/inode ownership。
+所有 `UI_PORT` 覆寫都拒絕；不再支援手動 `npm run fixture`／固定4178啟動。
+Fixture 不連後端、不是正式 verifier，也不進 image/dist。Guard 依賴固定 Playwright1.61.1
+私有 request seam，升版須重審／回歸；不是任意 browser/native code sandbox。
+需要使用既有建置時可設 `OWNED_UI_DIST` 指向已建置 assets，測試只複製到自有暫存目錄。
+瀏覽器 evidence 以 `UI_EVIDENCE_DIR` 指向 repository 外的專屬目錄；
 只截總覽／空白表單，禁止 secret screenshot、trace、video。不要輸入真實憑證。
 
 ## 實際 typed backend API

@@ -29,6 +29,10 @@
 - 新 adapter hashes、guarded wheel/SDK sources、修改理由見 `runtime-patches.json`；inventory 包含 launcher/helper digests，升級需重新審查。
 - 共用 `products.py`、`run_product.py`、tests/scripts、既有 boundary 擴展是本次新寫／修改，不直接複製 legacy shared 授權不明程式。未納入的 legacy shared 授權疑義不作此新寫程式永久 blocker。
 
+## BATCH2 B1（待獨立審查）
+
+來源版本與 wheel/vendor bytes 不變。新增 core `batch2.py` 嚴格10工具 schema，`apps/runtime/batch2_outputs.py` 正向 partner-count/template metadata 投影；Odoo launcher 在原 sync handler 外投影後仍交原 bounded worker，Manage 在原 async handler 完成後投影，不新增 detached work 或 network client。Odoo pure helper/aggregate 與 Manage tools.py 加 source hash guard；新增 hash/reason 見 runtime-patches.json。n8n 仍使用原 scoped API client，只限制 create response 為 bounded inactive metadata；完整 pinned validator helpers 新增 inventory digests。原 complete EMQX/LiteLLM native name inventory 與 effect/operation baseline 不變；65/184不是全產品完成。
+
 ## 依賴隔離與可重現性
 
 每類 `apps/PRODUCT/{pyproject.toml,uv.lock}` 是獨立 project，`.venv` 不入 Git。六類 SDK 固定 `mcp==1.28.1`、HTTPX `0.28.1`；EMQX/LiteLLM 固定 `fastmcp==3.4.5`（含同版本 slim client/server extras），lock 的 Starlette `1.7.0` 與 core `0.49.3` **隔離**。完整依賴 URL/hash 由各自 uv.lock 保存，不能只把 direct pin 當完整 graph。

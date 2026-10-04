@@ -6,7 +6,7 @@ Kubernetes MCP 與 Vibe Kanban 不在範圍。
 
 **現在不可當作可用商店產品安裝：**
 
-- 七個 runtime 已存在，但只有 **184 個來源工具中 55 個有界支援、129 個明列暫不支援**；不是完整功能遷移。逐名對照見 [工具表](docs/tool-surface.md)。
+- 七個 runtime 已存在，但只有 **184 個來源工具中 65 個有界支援、119 個明列暫不支援**；不是完整功能遷移。逐名對照見 [工具表](docs/tool-surface.md)。
 - 七份 `addons/*/config.yaml` 可被 Supervisor 探索，不代表 GHCR 名稱已取得、映像已存在或可匿名拉取。此批 **未建置映像、未做 HA／真實後端 E2E**。
 - **本地整合 ≠ HA／映像驗收**：僅新 n8n 試點獲准 `homeassistant_api: true`，正式 fixed-WS provider 已實作並經 component review；共用管理 HTML/static/API 與 v3 UI 已本地串接。其餘六類仍 false，正式管理 fail closed。`panel_admin` 不是授權。
 - 此例外授予**廣泛 Core 管理能力**（含使用者管理及可能間接 Supervisor／host 影響），不是可強制的唯讀角色權限；不代表批准所有 HA 變更。`hassio_api/auth_api` 仍 false、Supervisor role 預設、protection mode 不變，無新增 host 權限。
@@ -33,7 +33,8 @@ Kubernetes MCP 與 Vibe Kanban 不在範圍。
 module 必須已在後端安裝，UI 不安裝 Odoo 模組。工具頁對齊實際 v3 exact grants，
 保存取代全部 `enabled_write_tools` 並 `writes_enabled:false`，disabled 優先；未知或過期契約拒絕保存。
 原兩個 legacy writers 的有效 global 授權如實顯示，不讓 global false 靜默保留隱藏 writes。
-129 個延期工具是透明的內部功能／安全設計 backlog，不是已完成完整產品遷移。
+B1 新增 Odoo 三個純 preview builders 與 partner counts、Manage counts/template metadata/internal note、n8n local validators 與安全 inactive draft create。新 writer `post_message`／`n8n_create_workflow` 必須 exact grant，舊全域開關不授權；詳見 [B1 範圍](docs/tool-expansion.md)。
+119 個延期工具是透明的內部功能／安全設計 backlog，不是已完成完整產品遷移。
 
 ## 本地封裝驗證
 

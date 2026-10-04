@@ -1,6 +1,6 @@
 """Real six child environments + real boundary + disposable fake HTTP/XML-RPC.
 
-The session conftest holds the documented port-3000 lock. No live credentials.
+The session conftest serializes owned ephemeral runtimes. No live credentials.
 """
 import asyncio
 from contextlib import contextmanager
@@ -20,6 +20,9 @@ import pytest
 
 from mcp_admin_core.health import protocol_reply
 from mcp_admin_core.products import PRODUCTS, PROBES, ProductStore, TOOLS, child_spec
+
+from owned_executable import Executable
+from batch2_owned_port import reserve_port
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -106,8 +109,7 @@ def backend(product):
 
 
 def free_port():
-    with socket.socket() as sock:
-        sock.bind(('127.0.0.1', 0))
+    with reserve_port() as sock:
         return sock.getsockname()[1]
 
 
@@ -123,12 +125,6 @@ async def rpc(client, url, headers, message):
 
 @pytest.mark.parametrize('product', PRODUCTS)
 async def test_real_child_fake_backend_and_boundary(tmp_path, product):
-    # Refuse to take over an unrelated listener, even with cooperative lock.
-    with socket.socket() as check:
-        # Match Uvicorn's reuse setting: TIME_WAIT isn't a live listener.
-        # SO_REUSEADDR still refuses a bound/listening foreign TCP server.
-        check.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        check.bind(('127.0.0.1', 3000))
     with backend(product) as (url, calls, offline):
         store = ProductStore(tmp_path / 'state', product)
         store.update(connection=connection(product, url))
@@ -140,14 +136,18 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
         port, admin_port = free_port(), free_port()
         endpoint = f'http://127.0.0.1:{port}/mcp'
         log_path = tmp_path / 'owned-runtime.log'
+        runner = Executable(tmp_path, product, [port, admin_port])
+        code = 'from mcp_admin_core import run_product; ' + runner.code('run_product') + 'run_product.main()'
+        runner.release()
         with log_path.open('wb') as log:
-            process = subprocess.Popen([str(ROOT / '.venv/bin/python'), '-m', 'mcp_admin_core.run_product', product,
+            process = subprocess.Popen([str(ROOT / '.venv/bin/python'), '-c', code, product,
                 '--data', str(tmp_path / 'state'), '--host', '127.0.0.1', '--mcp-port', str(port), '--admin-port', str(admin_port)],
                 cwd=ROOT, env={'PATH': '/usr/bin:/bin', 'PYTHONPATH': str(ROOT / 'packages/mcp-admin-core'),
                 'PYTHONDONTWRITEBYTECODE': '1', 'SUPERVISOR_TOKEN': 'DUMMY-parent-must-not-inherit'},
                 stdout=log, stderr=log)
             try:
-                async with httpx.AsyncClient(trust_env=False, timeout=10) as client:
+                await runner.ready(process)
+                async with httpx.AsyncClient(trust_env=False, timeout=10, event_hooks={'request': [runner.guard]}) as client:
                     headers = {'Authorization': 'Bearer ' + state.token, 'Accept': 'application/json, text/event-stream'}
                     init = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {
                         'protocolVersion': '2025-03-26', 'capabilities': {}, 'clientInfo': {'name': 'local-test', 'version': '0'}}}
@@ -171,7 +171,7 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     assert {t['name'] for t in listed['tools']} == expected
                     # Same real child session, bypass ONLY for observing upstream inventory.
                     # Public requests still go through the authenticated boundary above.
-                    raw_list = await rpc(client, 'http://127.0.0.1:3000/mcp', headers,
+                    raw_list = await rpc(client, runner.child_url, headers,
                         {'jsonrpc': '2.0', 'id': 20, 'method': 'tools/list'})
                     upstream_names = {t['name'] for t in raw_list['tools']}
                     manifest = json.loads((ROOT / 'docs/tool-surface.json').read_text())

@@ -109,7 +109,7 @@ async def test_fragmented_sse_filter_preserves_event_and_session_semantics(store
     data = next(line[6:] for line in response.text.splitlines() if line.startswith("data: "))
     tools = json.loads(data)["result"]["tools"]
     assert {t["name"] for t in tools} == {"tools_documentation", "search_nodes", "n8n_list_workflows",
-                                         "get_node", "n8n_get_workflow", "n8n_manage_folders"}
+                                         "get_node", "n8n_get_workflow", "n8n_manage_folders", "validate_node", "validate_workflow"}
     assert stream.closed
 
 

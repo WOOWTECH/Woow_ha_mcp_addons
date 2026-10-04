@@ -41,14 +41,33 @@ jobs:
           if [ "$NODE_BIN" != /usr/bin/node ]; then sudo ln -sfn "$NODE_BIN" /usr/bin/node; fi
           test "$(/usr/bin/node --version)" = v22.23.2
       - run: sh packaging/unit.sh
-  images:
-    needs: unit
+  # BLOCKED: WOOWTECH is USER-owned; no runner-group/selected-workflow controls.
+  # A variable/label cannot enable this future organization-controlled proposal.
+  builder-admission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     env:
+      BLD2_APPROVAL: ${{ vars.BLD2_APPROVAL }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Deny unapproved builders and PR image execution (not a skipped PASS)
+        run: python3 packaging/builder_contract.py admit
+  images:
+    needs: [unit, builder-admission]
+    environment: builder-candidate
+    env:
+      BLD2_APPROVAL: ${{ vars.BLD2_APPROVAL }}
       DOCKER_BUILD_SUMMARY: 'false'
       DOCKER_BUILD_RECORD_UPLOAD: 'false'
-    runs-on: ubuntu-24.04
+    runs-on:
+      group: woow-disposable-builder
+      labels: [self-hosted, linux, x64]
     timeout-minutes: 30
     strategy:
+      max-parallel: 1
       fail-fast: false
       matrix:
         app: [odoo, odoo-manage, n8n, hermes, opendesign, emqx, litellm]
@@ -57,9 +76,17 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - name: Verify runner authority before any setup or daemon use
+        run: python3 packaging/builder_contract.py prepare
+      - name: Use only checksum-verified Buildx and the embedded docker driver (no downloader)
+        run: python3 packaging/builder_contract.py setup --driver docker
+      - name: Verify embedded BuildKit identity before build
+        run: python3 packaging/builder_contract.py verify
       - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
+          builder: default
+          provenance: false
+          sbom: false
           context: .
           file: apps/${{ matrix.app }}/Dockerfile
           platforms: linux/amd64

@@ -16,7 +16,7 @@ import pytest
 
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.health import HealthMonitor
-from mcp_admin_core.lifecycle import Supervisor
+from owned_runtime import Endpoint
 from mcp_admin_core.native_inventory import NAMES
 from mcp_admin_core.policy import enabled
 from mcp_admin_core.products import PROBES, ProductStore, TOOLS, child_spec
@@ -74,16 +74,13 @@ def native_backend(product):
 @pytest.mark.parametrize('grant_writer', [False, True], ids=['default', 'write-grant'])
 @pytest.mark.parametrize('disable_all', [False, True], ids=['probe-disabled', 'all-disabled'])
 async def test_policy_disable_keeps_private_probe_and_public_denial(tmp_path, product, grant_writer, disable_all):
-    # Cooperative lock is automatic; never take over a foreign listener.
-    with socket.socket() as check:
-        check.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        check.bind(('127.0.0.1', 3000))
     with native_backend(product) as (url, events, mutations, offline, read_path):
         store = ProductStore(tmp_path, product)
         writer, writer_args = WRITES[product][0]
         grants = [writer] if grant_writer else []
         store.update(connection=connection(product, url), enabled_write_tools=grants)
-        manager = Supervisor(child_spec(store.load(), store.directory), retries=0)
+        endpoint = Endpoint(product)
+        manager = endpoint.supervisor(child_spec(store.load(), store.directory))
         committed, finish_restart = asyncio.Event(), asyncio.Event()
         pending = None
         child_requests = []
@@ -95,15 +92,16 @@ async def test_policy_disable_keeps_private_probe_and_public_denial(tmp_path, pr
             committed.set()
             await finish_restart.wait()
             await manager.stop()
-            manager.spec = child_spec(state, store.directory)
+            manager.spec = endpoint.prepare(child_spec(state, store.directory))
             await manager.start()
 
         async def role(_): return True  # Test-only role injection, not production HA approval.
 
         try:
             await manager.start()
-            async with httpx.AsyncClient(trust_env=False, event_hooks={'request': [record]}) as child:
-                health = HealthMonitor(store, manager, child)
+            async with endpoint.client() as child:
+                child.event_hooks['request'].append(record)
+                health = HealthMonitor(store, manager, child, child_url=endpoint.url)
 
                 async def transport_ready():
                     async with asyncio.timeout(20):
@@ -116,7 +114,7 @@ async def test_policy_disable_keeps_private_probe_and_public_denial(tmp_path, pr
                 await transport_ready()
                 assert health.backend == 'reachable' and events == [('GET', read_path)]
                 admin, app = make_apps(store, TOOLS[product], child, verify_admin=role,
-                                       backend_changed=restart, health=health.snapshot)
+                                       backend_changed=restart, health=health.snapshot, child_url=endpoint.url)
                 async with (httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://boundary') as client,
                             httpx.AsyncClient(transport=httpx.ASGITransport(admin, client=('172.30.32.2', 1)), base_url='http://admin') as a):
                     async def initialize():
@@ -174,7 +172,7 @@ async def test_policy_disable_keeps_private_probe_and_public_denial(tmp_path, pr
                     headers = await initialize()
                     listed = await rpc(client, '/mcp', headers, {'jsonrpc': '2.0', 'id': 3, 'method': 'tools/list'})
                     assert {t['name'] for t in listed['tools']} == public_names
-                    raw = await rpc(child, 'http://127.0.0.1:3000/mcp', headers,
+                    raw = await rpc(child, endpoint.url, headers,
                                     {'jsonrpc': '2.0', 'id': 4, 'method': 'tools/list'})
                     assert {t['name'] for t in raw['tools']} == public_names | {probe}
                     if disable_all:
@@ -183,7 +181,7 @@ async def test_policy_disable_keeps_private_probe_and_public_denial(tmp_path, pr
                     # Native registration itself denies every other blocked tool.
                     before = len(events)
                     for name in set(NAMES[product]) - public_names - {probe}:
-                        result = await rpc(child, 'http://127.0.0.1:3000/mcp', headers,
+                        result = await rpc(child, endpoint.url, headers,
                                            call(name, dict(WRITES[product]).get(name, {})))
                         assert result.get('isError'), name
                     assert len(events) == before
@@ -215,4 +213,5 @@ async def test_policy_disable_keeps_private_probe_and_public_denial(tmp_path, pr
             if pending is not None:
                 await asyncio.gather(pending, return_exceptions=True)
             await manager.stop()
+            endpoint.close()
             store.close()

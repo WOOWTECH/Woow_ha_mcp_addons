@@ -220,7 +220,8 @@ async def test_direct_cancellation_during_cleanup_is_joined_and_slot_released():
 async def test_invalid_header_secret_rejected_before_persistence(store, key):
     before = store.path.read_bytes()
     async def role(_): return True
-    async with httpx.AsyncClient() as child:
+    from owned_runtime import forbidden_transport
+    async with httpx.AsyncClient(transport=forbidden_transport()) as child:
         admin, _ = make_apps(store, TOOLS, child, verify_admin=role)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(admin, client=("172.30.32.2", 1)), base_url="http://admin") as client:
             headers = {"X-Remote-User-Id": "test"}

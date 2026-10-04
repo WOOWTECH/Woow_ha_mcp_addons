@@ -56,7 +56,7 @@ including user management and possible indirect Supervisor/host service effects,
 not an enforceable role-only scope or permission to perform unrelated HA changes.
 The fixed-endpoint, fresh-query, fail-closed verifier and child-token stripping are
 implemented and component-reviewed; UI/guard/provider local integration uses owned fake HA transport only.
-**HA NOT TESTED; images not built; tool coverage remains partial (184/55/129).**
+**HA NOT TESTED; images not built; tool coverage remains partial (184/65/119).**
 This permission decision clears no source/license/secret/image/HA/publication gate.
 The verifier adds locked websockets15.0.1 (BSD-3-Clause). Updated dependencies still require
 whole-image review; local integration is not redistribution/CVE clearance.

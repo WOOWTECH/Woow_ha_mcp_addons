@@ -327,13 +327,8 @@ def test_n8n_factory_wired_and_other_six_unchanged():
 
 async def test_real_n8n_executable_tcp_uses_production_factory(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[1]
-    with socket.socket() as sock:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(("127.0.0.1", 3000))  # Refuse to disturb an existing process.
-    def free_port():
-        with socket.socket() as sock:
-            sock.bind(("127.0.0.1", 0))
-            return sock.getsockname()[1]
+    from owned_executable import Executable
+    from test_real_n8n import free_port
     admin_port, mcp_port = free_port(), free_port()
     async with owned_provider(monkeypatch) as (_, seen, __):
         # Test-only transport and ingress socket simulation. The real executable,
@@ -356,13 +351,17 @@ def ingress_simulation(*args, **kwargs):
 run.make_apps = ingress_simulation
 run.main()
 '''
+        runner = Executable(tmp_path, 'n8n', [admin_port, mcp_port])
+        code = 'import run; ' + runner.code('run') + '\n' + code
+        runner.release()
         process = await asyncio.create_subprocess_exec(sys.executable, "-c", code,
             "--data", str(tmp_path / "runtime"), "--host", "127.0.0.1",
             "--admin-port", str(admin_port), "--mcp-port", str(mcp_port), cwd=tmp_path,
             env={"PATH": "/usr/bin:/bin", "PYTHONPATH": str(root / "packages/mcp-admin-core") + ":" + str(root / "apps/n8n"), "SUPERVISOR_TOKEN": DUMMY},
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         try:
-            async with httpx.AsyncClient(trust_env=False, base_url=f"http://127.0.0.1:{admin_port}") as client:
+            await runner.ready(process)
+            async with httpx.AsyncClient(trust_env=False, base_url=f"http://127.0.0.1:{admin_port}", event_hooks={'request': [runner.guard]}) as client:
                 async with asyncio.timeout(20):
                     while True:
                         assert process.returncode is None
@@ -378,6 +377,16 @@ run.main()
                 denied = await client.post("/api/token/reveal", headers=headers)
                 assert denied.status_code == 403 and denied.json() == {"error": "request denied"}
                 assert seen["connections"] == 2
+                # Same actual factory/runner: the real backend callback must
+                # rebuild Node and refresh its proof, not reuse the old inode.
+                previous = await runner.guard_url(runner.child_url)
+                seen['response'] = result()
+                changed = await client.put('/api/backend', headers=headers, json={'url':None, 'key':None})
+                assert changed.status_code == 200
+                current = await runner.guard_url(runner.child_url)
+                assert current['generation'] == previous['generation'] + 1
+                assert current['proof'] != previous['proof']
+                assert not Path(f"/proc/{previous['proof'][0]}").exists()
         finally:
             if process.returncode is None:
                 process.send_signal(signal.SIGTERM)

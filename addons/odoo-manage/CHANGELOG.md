@@ -2,8 +2,10 @@
 
 ## 0.1.0 — 未發佈候選
 
+- B1 新增 partner active 分組 counts、固定 template metadata（resources/read 仍 deny）、exact-grant internal note；需既有 module/write ACL，無附件/指定收件人/HTML/full YOLO。
+
 - 新增獨立 amd64 root-context 封裝、Supervisor 2026.09.3 安全子集 manifest。
-- runtime：mcp-server-odoo 0.7.1；10 個來源工具中支援 6，4 個明列 withheld，
+- runtime：mcp-server-odoo 0.7.1；10 個來源工具中支援 9，1 個明列 withheld，
   [工具對照](../../docs/tool-surface.md) 尚未完成功能平齊。
 - 8099 Ingress-only／8081 可選 LAN／3000 loopback；保護模式、init true；不設
   backend-dependent watchdog、不開 HA/Supervisor/Docker API 權限。

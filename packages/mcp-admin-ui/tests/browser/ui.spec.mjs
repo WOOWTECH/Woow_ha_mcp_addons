@@ -1,7 +1,6 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../owned-fixture.mjs';
 import { mkdir, writeFile } from 'node:fs/promises';
 const prefix = '/api/hassio_ingress/DUMMY';
-const origin = `http://127.0.0.1:${process.env.UI_PORT}`;
 const evidence = process.env.UI_EVIDENCE_DIR ?? '/data/pi-agent/home/work/mcp-haos-team-runtime/reports/ui-evidence';
 const measurements = [];
 async function reset(request, options = {}) { await request.post('/__fixture/reset', { data: options }); }
@@ -50,7 +49,7 @@ test('MOCK Yellowtail loads for exactly one warm accent word on every route and 
 });
 
 for (const width of [1440, 320, 360]) {
-  test(`MOCK ${width}px prefix, all views, local fonts/MDI, targets, refresh and screenshots`, async ({ page, request }) => {
+  test(`MOCK ${width}px prefix, all views, local fonts/MDI, targets, refresh and screenshots`, async ({ page, request, baseURL: origin }) => {
     await reset(request, { product: 'n8n', granular: true, endpoint: 'https://mcp.example.test:8081/mcp' });
     await page.setViewportSize({ width, height: width > 400 ? 1000 : 860 });
     const failures = [];
@@ -226,7 +225,7 @@ test('MOCK token expires, and a reveal completing after focus loss stays hidden'
   await expect(page.locator('#token-secret')).toBeHidden();
   await page.route('**/api/token/reveal', async route => {
     await page.evaluate(() => window.dispatchEvent(new Event('blur')));
-    await route.continue();
+    await route.fallback(); // preserve blur-before-response, then the context ownership guard
   });
   await page.getByRole('button', { name: '顯示權杖', exact: true }).click();
   await confirm(page, '確認繼續');
@@ -266,7 +265,7 @@ test('MOCK network failure does not claim save success', async ({ page }) => {
   await expect(page.getByRole('status')).toContainText('無法確認操作結果');
   await expect(page.getByRole('status')).not.toContainText('端點已儲存');
 });
-test('MOCK health dimensions and root mount refresh remain distinct', async ({ page, request }) => {
+test('MOCK health dimensions and root mount refresh remain distinct', async ({ page, request, baseURL: origin }) => {
   await reset(request, { offline: true });
   await page.goto('/overview');
   await expect(page.getByRole('heading', { name: '管理服務可用' })).toBeVisible();

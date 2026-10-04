@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from mcp_admin_core.gateway import make_apps
-from mcp_admin_core.lifecycle import Supervisor
+from owned_runtime import Endpoint
 from mcp_admin_core.products import ProductStore, TOOLS, child_spec
 from test_real_products import connection, rpc
 from test_expansion_policy import call
@@ -59,7 +59,7 @@ WRITES = {
 
 
 @contextmanager
-def fake_api():
+def fake_api(*, major=18, allow_write=True):
     events, mutations, failures = [], [], []
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args): pass
@@ -77,7 +77,7 @@ def fake_api():
                 if 'xmlrpc' in path:
                     params, method = xmlrpc.client.loads(raw)
                     if method == 'version':
-                        value = {'server_version': '18.0', 'server_version_info': [18, 0, 0, 'final', 0]}
+                        value = {'server_version': f'{major}.0', 'server_version_info': [major, 0, 0, 'final', 0]}
                     elif method == 'authenticate': value = 7
                     else:
                         assert method == 'execute_kw'
@@ -85,8 +85,16 @@ def fake_api():
                         assert model in ('ir.model', 'res.partner')
                         args, kwargs = params[5], params[6] if len(params) > 6 else {}
                         if op in ('create', 'write', 'unlink', 'message_post'):
-                            mutations.append((model, op, args))
+                            mutations.append((model, op, args, kwargs))
                             value = 2 if op in ('create', 'message_post') else True
+                        elif op in ('read_group', 'formatted_read_group'):
+                            assert model == 'res.partner'
+                            assert kwargs['groupby'] == ['active']
+                            assert kwargs['limit'] == 10
+                            assert kwargs.get('fields', kwargs.get('aggregates')) == ['id:count']
+                            value = [{'active': True, 'id' if op == 'read_group' else 'id:count': 2, '__count': 2,
+                                      '__domain': [['secret', '=', 'MUST_NOT_ESCAPE']], '__context': {'key': 'MUST_NOT_ESCAPE'},
+                                      'private_key': 'MUST_NOT_ESCAPE'}]
                         elif op == 'fields_get':
                             value = {'id': {'type': 'integer', 'string': 'ID'}, 'name': {'type': 'char', 'string': 'Name'}, 'display_name': {'type': 'char'}, 'active': {'type': 'boolean'}}
                         elif op == 'search_count': value = 1
@@ -103,14 +111,14 @@ def fake_api():
                     if path == '/auth/password-login': value = {}
                     elif path == '/mcp/auth/validate': value = {'success': True, 'data': {'valid': True, 'user_id': 7}}
                     elif path == '/mcp/models': value = {'success': True, 'data': {'models': [{'model': 'res.partner', 'name': 'Contacts'}]}}
-                    elif path == '/mcp/models/res.partner/access': value = {'success': True, 'data': {'model': 'res.partner', 'enabled': True, 'operations': {op: True for op in ('read', 'create', 'write', 'unlink')}}}
+                    elif path == '/mcp/models/res.partner/access': value = {'success': True, 'data': {'model': 'res.partner', 'enabled': True, 'operations': {op: (True if op == 'read' else allow_write) for op in ('read', 'create', 'write', 'unlink')}}}
                     elif self.command != 'GET':
                         assert path in ('/api/skills/toggle', '/api/tools/toolsets/example', '/api/cron/jobs/example', '/api/cron/jobs/example/pause', '/api/gateway/restart', '/api/sessions/example', '/api/projects/'+PID,
                                         '/api/v5/clients/device', '/api/v5/clients/device/subscribe', '/api/v5/clients/device/unsubscribe',
                                         '/team/new', '/team/update', '/team/delete', '/model/delete',
-                                        '/api/v1/projects/project/folders', '/api/v1/projects/project/folders/one'), path
+                                        '/api/v1/projects/project/folders', '/api/v1/projects/project/folders/one', '/api/v1/workflows'), path
                         mutations.append((self.command, path, body))
-                        value = {'id': 'one', 'name': body.get('name', 'Owned'), 'team_id': 'one', 'team_alias': body.get('team_alias', 'Owned'), 'status': 'success', 'private_key': 'MUST_NOT_ESCAPE'}
+                        value = {'id': 'one', 'active': False, 'nodes': body.get('nodes', []), 'name': body.get('name', 'Owned'), 'team_id': 'one', 'team_alias': body.get('team_alias', 'Owned'), 'status': 'success', 'private_key': 'MUST_NOT_ESCAPE'}
                     else:
                         value = {
                             '/api/skills': [{'name': 'example', 'enabled': True}],
@@ -164,11 +172,12 @@ async def test_real_expanded_reads_and_explicit_writes(tmp_path, product):
             conn = connection(product, url)
             if product == 'odoo-manage': conn['mode'] = 'module'
             store.update(connection=conn, enabled_write_tools=grants)
-        process = Supervisor((n8n_spec if product == 'n8n' else child_spec)(store.load(), store.directory), retries=0)
+        endpoint = Endpoint(product)
+        process = endpoint.supervisor((n8n_spec if product == 'n8n' else child_spec)(store.load(), store.directory))
         try:
             await process.start()
-            async with httpx.AsyncClient(trust_env=False) as child:
-                _, app = make_apps(store, tools, child)
+            async with endpoint.client() as child:
+                _, app = make_apps(store, tools, child, child_url=endpoint.url)
                 async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://boundary') as client:
                     headers = {'Authorization': 'Bearer '+store.load().token, 'Accept': 'application/json, text/event-stream'}
                     init = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {'protocolVersion': '2025-03-26', 'capabilities': {}, 'clientInfo': {'name': 'owned-test', 'version': '0'}}}
@@ -215,4 +224,4 @@ async def test_real_expanded_reads_and_explicit_writes(tmp_path, product):
                     assert not failures, failures
                     await client.delete('/mcp', headers=headers)
         finally:
-            await process.stop(); store.close()
+            await process.stop(); endpoint.close(); store.close()
