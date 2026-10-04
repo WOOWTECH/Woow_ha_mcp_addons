@@ -1,0 +1,35 @@
+"""Offline .dockerignore semantics and real-repository closure. No Docker."""
+from pathlib import Path
+import unittest
+
+import context_closure as c
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+class ContextClosureTests(unittest.TestCase):
+    def test_moby_semantics(self):
+        p = c.load_ignore('**\n!apps/\n**/node_modules\n!keep/*.py\n**/data\n')
+        self.assertTrue(c.excluded(p, 'README.md'))
+        # A re-included parent directory decides for its whole subtree.
+        self.assertFalse(c.excluded(p, 'apps/n8n/metadata_reads.cjs'))
+        self.assertTrue(c.excluded(p, 'apps/n8n/node_modules/x/index.js'))
+        self.assertFalse(c.excluded(p, 'keep/a.py'))
+        self.assertTrue(c.excluded(p, 'keep/sub/a.py'))  # single * never crosses '/'
+        self.assertTrue(c.excluded(p, 'apps/x/data/state.json'))
+
+    def test_dropped_or_untracked_copy_source_fails(self):
+        dockerfile = 'FROM x AS a\nCOPY --from=a /x /y\nCOPY apps/n8n ./apps/n8n\nCOPY missing.txt ./\n'
+        files = ['apps/n8n/run.py', 'apps/n8n/helper.cjs']
+        found = c.problems(files, '**\n!apps/**/*.py\n', dockerfile)
+        self.assertIn('COPY source excluded from context: apps/n8n/helper.cjs', found)
+        self.assertIn('COPY source not tracked: missing.txt', found)
+        self.assertNotIn('COPY source excluded from context: apps/n8n/run.py', found)
+        self.assertEqual(c.copy_sources(dockerfile), ['apps/n8n', 'missing.txt'])
+
+    def test_repository_dockerfiles_are_closed(self):
+        c.main(ROOT)
+
+
+if __name__ == '__main__':
+    unittest.main()
