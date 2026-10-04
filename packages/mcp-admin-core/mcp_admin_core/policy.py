@@ -1,6 +1,6 @@
 """Audited dispatch allowlist. Tool advertisements are not authorization."""
 from dataclasses import dataclass
-from typing import Mapping
+from typing import Literal, Mapping, get_args, get_origin
 
 from pydantic import BaseModel, ValidationError
 
@@ -19,6 +19,16 @@ class Tool:
     legacy_write: bool = False
     selector: str | None = None
     write_operations: tuple[str, ...] = ()
+    # Opt-in only: local tools and previously reviewed API behavior stay intact.
+    requires_backend: bool = False
+    backend_required_operations: tuple[str, ...] = ()
+
+    def __post_init__(self):
+        if self.backend_required_operations:
+            field = self.arguments.model_fields.get(self.selector)
+            if (field is None or get_origin(field.annotation) is not Literal
+                    or not set(self.backend_required_operations) <= set(get_args(field.annotation))):
+                raise ValueError('backend operations require a matching Literal selector')
 
     def grants(self, name):
         return ([name] if self.write else []) + [f'{name}:{op}' for op in self.write_operations]
@@ -77,6 +87,10 @@ def authorize(message, tools: Mapping[str, Tool], state: State) -> str:
         if tool.selector and normalized.get(tool.selector) in tool.write_operations:
             if f'{name}:{normalized[tool.selector]}' not in getattr(state, 'enabled_write_tools', ()):
                 raise Denied('operation not permitted')
+        if tool.requires_backend or (tool.selector and normalized.get(tool.selector) in tool.backend_required_operations):
+            configured = getattr(state, 'configured', bool(state.backend_url and state.backend_key))
+            if not configured:
+                raise Denied('configured backend required')
         params["arguments"] = normalized
     else:
         raise Denied("method not permitted")

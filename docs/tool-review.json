@@ -181,9 +181,9 @@
     "n8n_manage_agents": "n8n_manage_agents：執行 workflow/agent/credential-backed dynamic method 為特權寫入；可能跨 network、shell 或成本，需執行 scope/費用/approval 政策，不靠 action 名稱降為讀取。",
     "n8n_explore_node_resources": "n8n_explore_node_resources：執行 workflow/agent/credential-backed dynamic method 為特權寫入；可能跨 network、shell 或成本，需執行 scope/費用/approval 政策，不靠 action 名稱降為讀取。",
     "n8n_evaluations": "n8n_evaluations：list/get 含測試 case/結果私人資料，run/cancel 改執行狀態；需逐 action、evaluation 輸出投影及 runner/cancel 界限。",
-    "n8n_executions": "n8n_executions：get/list 可回 execution 私人 payload，delete 寫入；需 metadata-only view、嚴格 action/ID 與 delete 真 fake 效果測試。",
-    "n8n_health_check": "n8n_health_check：diagnostic 會揭露設定／API URL/環境資訊；需僅 status 的精確投影，不能將診斷回應當公開 health。",
-    "n8n_list_catalog": "n8n_list_catalog：projects fallback 可走 instance MCP（不同 credential/transport）；需只保留 public API tags/projects 的固定路徑與 fallback deny 測試。",
+    "n8n_executions": "B3 genuine handleListExecutions/listExecutions：只開 action=list，API includeData=false，limit1..100/default20、單頁 cursor<=512、可選明確 workflow/project ID/status。只回 id/workflowId/status/ISO timestamps/cursor；不先讀私人 payload。get/delete/run/retry 拒絕；無新 grants。",
+    "n8n_health_check": "B3 genuine handleHealthCheck/healthCheck：mode=status only，真 scoped /healthz，必要時 /workflows?limit=1 fallback，最多兩 GET；僅 service-availability、authentication=not-verified。source-guarded npm/version/settings/official-MCP auxiliary paths 在 DNS/connect 前停用；不回 URL/config/env/metrics/version，diagnostic 拒絕。既有 credential health monitor 不變。",
+    "n8n_list_catalog": "B3 genuine handleListCatalog/listTags：kind=tags only，一次 public GET /tags?limit=250；query<=256、本地 limit1..250/default20。id/name 有界正向投影，明示 first-page/scanLimit250/hasMore，沒有自動 pagination。projects/official-MCP/personalfallback 拒絕。",
     "n8n_manage_credentials": "n8n_manage_credentials：credential read/write 與 includeUsage 全量掃描；需 secret-free 投影與獨立 credential-admin grants，禁止普通唯讀取得 key material。",
     "n8n_manage_datatable": "n8n_manage_datatable：rows 任意私人內容與多種列/表/欄位 mutation；需 table scope、巢狀值容量、逐 action schema 與輸出政策。",
     "n8n_validate_workflow": "n8n_validate_workflow：從後端讀完整 node/credential parameters 再驗證；需清除錯誤/建議中的私密值，並以 fake workflow 證明只讀。",
@@ -193,7 +193,7 @@
     "n8n_delete_workflow": "n8n_delete_workflow：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 既有 writer 例外：writes_enabled=true 或 exact grant 任一即可授權；disabled 永遠優先。撤銷須同時關閉舊開關與移除 grant，或停用工具。",
     "n8n_get_workflow": "n8n_get_workflow：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。",
     "n8n_list_workflows": "n8n_list_workflows：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。",
-    "n8n_manage_folders": "n8n_manage_folders：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。 僅 list/create/rename；get/move/delete 不開放。",
+    "n8n_manage_folders": "B3 新增 readonly get：genuine handleGetFolder/getFolder、明確非personal projectId/folderId，單次 GET /projects/{project}/folders/{folder}；只回 bounded id/name/parentFolderId/ISO timestamps/projectId，無 workflow content。既有 list/create/rename 與 exact writer grants 不變；move/delete 拒絕。get 是操作擴充，不算新增工具名。",
     "search_nodes": "search_nodes：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。",
     "tools_documentation": "tools_documentation：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。"
   }

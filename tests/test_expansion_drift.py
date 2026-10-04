@@ -9,6 +9,7 @@ from n8n_adapter import TOOLS as N8N_TOOLS
 from test_expansion_runtime import READS, WRITES
 from test_batch2_policy import CASES as B1_CASES
 from test_b2_odoo_policy import CASES as B2_CASES
+from test_b3_n8n_policy import CASES as B3_CASES
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -81,7 +82,8 @@ def test_every_added_tool_has_real_handler_positive_case():
     for product, tools in {**TOOLS, 'n8n': N8N_TOOLS}.items():
         b1_cases = [(name, args) for p, name, args in B1_CASES if p == product]
         b2_cases = B2_CASES if product == 'odoo' else []
-        actual_cases = {name for name, _ in READS[product]+WRITES[product]+b1_cases+b2_cases}
+        b3_cases = B3_CASES if product == 'n8n' else []
+        actual_cases = {name for name, _ in READS[product]+WRITES[product]+b1_cases+b2_cases+b3_cases}
         assert set(tools)-old[product] <= actual_cases
         # Every new operation grant has a real writer case, not just tools/list.
         covered = {name if tools[name].write else f'{name}:{args[tools[name].selector]}'

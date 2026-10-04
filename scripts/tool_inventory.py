@@ -117,8 +117,10 @@ def source_inventory():
     # B1 local validators and workflow creation depend on these pinned helpers.
     for file in sorted((base.parent / 'services').glob('*valid*.js')):
         digests[str(file.relative_to(ROOT))] = hashlib.sha256(file.read_bytes()).hexdigest()
-    file = ROOT / 'apps/n8n/backend_policy.cjs'
-    digests[str(file.relative_to(ROOT))] = hashlib.sha256(file.read_bytes()).hexdigest()
+    for relative in ('apps/n8n/backend_policy.cjs', 'apps/n8n/metadata_reads.cjs',
+                     'apps/n8n/node_modules/n8n-mcp/dist/utils/npm-version-checker.js'):
+        file = ROOT / relative
+        digests[relative] = hashlib.sha256(file.read_bytes()).hexdigest()
     # New local transport/dispatch adapters are part of the reviewed runtime too.
     for file in sorted((ROOT / 'apps/runtime').glob('*.py')) + sorted((ROOT / 'apps').glob('*/launch.py')):
         digests[str(file.relative_to(ROOT))] = hashlib.sha256(file.read_bytes()).hexdigest()
@@ -132,7 +134,10 @@ DEFERRED_BRANCHES = {
     'hermes_session': 'get 回私人 session/messages；需獨立內容權限，不使用 metadata list grant。',
     'hermes_cron': 'create/update/resume/trigger 可配置或啟動 agent prompt；需獨立 agent execution 與 schedule/schema/費用範圍。',
     'n8n_get_workflow': 'minimal 以外可能回 node parameters/credentials/execution 或完整 graph；需內容投影。',
-    'n8n_manage_folders': 'get 尚無完整欄位投影；move/delete 有 reparent/搬移/封存 workflows 的副作用，需獨立 operation 測試。',
+    'n8n_manage_folders': 'move/delete 有 reparent/搬移/封存 workflows 的副作用，仍拒絕；get 僅有界 metadata、明確 project/folder IDs。',
+    'n8n_executions': 'get 含私人 payload；delete/run/retry 未授權；僅 list includeData=false 有界 metadata。',
+    'n8n_health_check': 'diagnostic 含設定、URL、env、metrics；只開 status，無 npm/official-MCP/version 查詢。',
+    'n8n_list_catalog': 'projects/personal/official-MCP fallback 仍拒絕；只開 public API tags 第一頁最多250。',
     'get_node': '其他 mode 尚無 bounded schema 與 sourcehandler 正反測試；本批只測 local info minimal/standard。',
     'search_nodes': '舊 bounded schema 未開放顯式 mode；保留 pinned handler 的省略預設，不推測其他查詢模式。',
 }
@@ -187,9 +192,9 @@ def build():
                 'enable': ('PUT /api/policy (HA admin+CSRF): enabled_write_tools 選取精確 grant；disabled 優先；舊全域開關僅保留兩個既有 writer' if tool.grants(name) else 'authorized-admin-policy: remove from disabled') if supported else '不可由 GUI 啟用；需 source/policy/test review',
                 'reason': review[product][name],
                 'accepted_schema': tool.arguments.model_json_schema() if supported else None,
-                'tests': ['tests/test_tool_inventory.py'] + (['tests/test_b2_odoo_policy.py', 'tests/test_b2_odoo_runtime.py', 'tests/test_b2_odoo_scope.py'] if supported and product == 'odoo' and name in ('schema_catalog', 'inspect_model_relationships', 'data_quality_report') else []) + (['tests/test_batch2_policy.py', 'tests/test_batch2_bounds.py', 'tests/test_batch2_runtime.py'] if supported and product in ('odoo', 'odoo-manage', 'n8n') and name in ('build_domain', 'generate_json2_payload', 'diagnose_odoo_call', 'aggregate_records', 'list_resource_templates', 'post_message', 'validate_node', 'validate_workflow', 'n8n_create_workflow') else []) + ((['tests/test_expansion_security.py', 'tests/test_expansion_runtime.py', 'tests/test_stream_error_redaction.py'] if product != 'n8n' else ['tests/test_expansion_runtime.py', 'tests/test_schema_defaults.py', 'tests/test_real_n8n.py']) if supported else [])})
+                'tests': ['tests/test_tool_inventory.py'] + (['tests/test_b3_n8n_policy.py', 'tests/test_b3_n8n_runtime.py', 'tests/test_b3_n8n_boundaries.py'] if supported and product == 'n8n' and name in ('n8n_list_catalog', 'n8n_executions', 'n8n_health_check', 'n8n_manage_folders') else []) + (['tests/test_b2_odoo_policy.py', 'tests/test_b2_odoo_runtime.py', 'tests/test_b2_odoo_scope.py'] if supported and product == 'odoo' and name in ('schema_catalog', 'inspect_model_relationships', 'data_quality_report') else []) + (['tests/test_batch2_policy.py', 'tests/test_batch2_bounds.py', 'tests/test_batch2_runtime.py'] if supported and product in ('odoo', 'odoo-manage', 'n8n') and name in ('build_domain', 'generate_json2_payload', 'diagnose_odoo_call', 'aggregate_records', 'list_resource_templates', 'post_message', 'validate_node', 'validate_workflow', 'n8n_create_workflow') else []) + ((['tests/test_expansion_security.py', 'tests/test_expansion_runtime.py', 'tests/test_stream_error_redaction.py'] if product != 'n8n' else ['tests/test_expansion_runtime.py', 'tests/test_schema_defaults.py', 'tests/test_real_n8n.py']) if supported else [])})
         products[product] = {'upstream_count': len(entries), 'supported_count': len(POLICIES[product]), 'tools': entries}
-    return {'format': 2, 'scope': 'W2b plus BATCH2 B1/B2 bounded expansion; not complete product/HA/release acceptance',
+    return {'format': 2, 'scope': 'W2b plus BATCH2 B1/B2/B3 bounded expansion; B3 pending SPEC then NEW SECURITY; not complete product/HA/release acceptance',
             'source_digests': digests, 'products': products}
 
 

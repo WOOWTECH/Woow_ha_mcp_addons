@@ -36,6 +36,7 @@ ported or modified.
 | Shared `__init__.py`, `config.py`, `policy.py`, `gateway.py`, `lifecycle.py`, `health.py` | Newly authored Python boundary; `config.py` uses the conceptual atomic-write pattern noted above, not an imported legacy file. Review repairs are newly written here |
 | `apps/n8n/n8n_adapter.py`, `run.py` | New launcher/policy/runtime; conceptual launcher reference above |
 | `apps/n8n/backend_policy.cjs` | New scoped preload adapter written in the repair pass; calls installed upstream `N8nApiClient` / `SSRFProtection.createPinnedAgents`, does not copy their implementation or edit node_modules |
+| `apps/n8n/metadata_reads.cjs`, core `n8n_b3.py` | New B3 narrow adapters/schemas around genuine pinned handlers/client methods; no dependency source copied or modified. Default-off shared Tool backend preconditions are the explicit policy scope exception; no lifecycle/state migration |
 | `tests/*.py` | New disposable local regression harnesses; no legacy test/config data imported |
 | `licenses/n8n-mcp-MIT.txt` | Actual copied upstream notice; retain attribution, not an umbrella license |
 | npm/Python lockfiles | Generated dependency metadata; actual npm application/third-party source is installed via locks, not authored here or copied from the old repo |
@@ -84,12 +85,12 @@ Supervisor, proxy or Node injection variables. Child output is discarded, not
 forwarded into potentially credential-bearing logs. Its working directory is the
 new restricted state directory; no old `.env` is used.
 
-The preload overrides only the backend API client's agent factory, scoped to the
+The preload's network adaptation overrides the backend API client's agent factory, scoped to the
 one configured origin/base path. Global webhook SSRF stays strict. It checks every
 DNS answer and pins connections, admits reviewed LAN/ULA/loopback backends, rejects
 metadata/reserved/transition destinations and retains redirects-disabled behavior.
 The exact API-client SHA-256 below is enforced before loading this adapter. Health
-now uses an internal bounded workflow-list call through this same network policy.
+monitor uses an internal bounded workflow-list call through this same network policy; B3 public status is distinct and does not establish credential permissions.
 See `../n8n-tracer-contract.md` for the complete policy and local-only evidence.
 
 The upstream accepts `x-n8n-*` request headers as instance overrides even outside
@@ -126,6 +127,35 @@ Write authorization is off on bootstrap and requires a verified administrator's
 CSRF-protected policy update. No real workflow deletion is used in tests. Enabling
 writes does not enable unreviewed tools. Every direct `tools/call` is checked before
 forwarding, even in an existing session; list filtering is secondary.
+
+## B3 narrow metadata reads (pending independent SPEC then NEW SECURITY)
+
+The installed 2.91.0 dispatch calls genuine `handleListCatalog` → `listTags`
+(single `/tags?limit=250`, then original filter/slice); `handleListExecutions` →
+`listExecutions` (single `/executions`, includeData=false); `handleGetFolder` →
+`getFolder` (explicit non-personal project/folder, no discovery); and
+`handleHealthCheck` → `healthCheck` (derived `/healthz`, then at most one
+`/workflows?limit=1` fallback). New successful projections contain bounded
+metadata only. No get-execution payload, run/retry/delete, project catalog,
+folder move/delete or new grants. Full schema/effect/budget contracts are in
+`../tool-expansion.md` and `../tool-surface.json`.
+
+Health's genuine handler also normally invokes `checkNpmVersion` (global fetch
+to npm registry), `buildOfficialMcpHealth(context,false)` (configuration/possible
+client construction), and client `getVersion` (`/settings`). B3 invocation-local
+auxiliary denial prevents those calls before DNS/connect; only an actual backend
+health/fallback success can become public status=ok. Output explicitly says
+service-availability and authentication=not-verified. The older credential
+monitor, API successes, retry/settings fallback, local unconfigured startup,
+DNS pinning and Webhook SSRF policy are unchanged.
+
+Before requiring runtime/helper code, the preload additionally guards:
+
+| Distributed file | SHA-256 |
+|---|---|
+| `dist/mcp/handlers-official-tools.js` | `e85937c58d5a8426d54b1b69598adc83a14648402fc58a8714ef5db8132977cd` |
+| `dist/mcp/official-mcp-access.js` | `113d3556e4b93a870b36986a0fce8de45391ce64d7ab4c9f50fd6715eee3c733` |
+| `dist/utils/npm-version-checker.js` | `35eb4789eef7766e4516f78caf125542778cf7de33e1fff4bc670c1f1029057a` |
 
 ## Python and local runtime
 

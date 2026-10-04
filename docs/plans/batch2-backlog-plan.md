@@ -32,11 +32,17 @@ Coordinator於MAIN串行新跑：**792Python＋獨立joined1＋65packaging＋13U
 - `inspect_model_relationships`：live-only六個欄位metadata，parent_id/child_ids僅self res.partner、depth1；保留真algorithm counts／readonly filtering，不開放相關records values或compute expressions。
 - `data_quality_report`：僅missing_required、name/active的type/required/store metadata與最多兩次精確search_count。保留真field-occurrence sum，不是unique-records／sample scan／DB工作上限；無私人sample，duplicates/formats/orphans仍deny。
 
-## B3：下一組 n8n 有界讀取（候選，尚未交付）
+## B3：n8n有界讀取已完成雙審與新回歸
 
-先依固定source完成contract再test-first：`n8n_list_catalog`限tags／public API，不准projects instance-MCP fallback；`n8n_executions`限list metadata、禁止payload與delete；`n8n_health_check`限status-only，必須處理其npm-version／official-MCP間接路徑而不放寬egress；既有`n8n_manage_folders`可增get readonly操作但不自動增move/delete grants。工具名coverage與操作擴充分開計數。
+`n8n_list_catalog`僅tags public API first-page250；`n8n_executions`僅API includeData=false的list metadata；`n8n_health_check`真healthz／workflows fallback，最多2GET、scope僅service-availability/authentication-not-verified，npm/version/settings/official輔助路徑invocation-only拒絕；既有folder增加get readonly、explicitnonpersonal IDs，不增move/delete grants。三新名字＋一operation，現**71/184、113延期**。
 
-不得先標supported、fake handler／合成成功或新開公共模板站／registry／instance-MCP權限。若某來源路徑不能安全保留，逐項說明並保持deny，完成其他可實作項；不重新整庫scout或整批停在報告。
+明准shared `policy.py`例外：Tool backend requirement defaultoff，只新三API及folderget opt-in；strictnormalize/grants後、兩次authorize均檢查configured，旧n8n unconfigured native/local tools保留。Unicode P2已改early-exit codepoint計長，public256不縮小，24新regressions及原重現過；SPEC→不同NEW SECURITY批准整份295state。Coordinator新**891Python＋獨立joined1＋65packaging＋13unit＋21browser**／static全過、零failure/error/skip；證據`coordinator-b3-main-verification.json`。
+
+## B4：下一組EMQX營運metadata（候選，尚未交付）
+
+八個source-backed候選：`emqx_get_client`、`emqx_client_subscriptions`、`emqx_node_detail`、`emqx_get_rule_metrics`、`emqx_list_rules`、`emqx_list_connectors`、`emqx_list_actions`、`emqx_list_listeners`。保留真pinned handlers及GET路徑，先精確identifier／欄位／numeric-status／page-call／stream-body契約，再test-first；正向metadata投影，不回私人session／IP/username／SQL／credential／URL／TLS config／payload。新工具使用已審default-off backend requirement opt-in，不改generic policy。缺pagination的來源不得暗示完整掃描，超budget拒絕或明確bounded view，不任意while-loop。
+
+候選不得先標supported或fake handler／合成成功。B4不開authn/authz、ban/unban、publish、rule toggle/test SQL、trace、retained payload或外部連線能力。若某來源路徑不能安全保留，逐項說明並保持deny，完成其他可實作項；不重新整庫scout或整批停在報告。
 
 本批不開任意method/code/agent、cross-instance、HR/財務資料、attachment、local index或async job權限。後續n8n metadata/folder等常用工具繼續依逐名source/effect契約排批。
 
@@ -54,4 +60,4 @@ BLD2九檔pipeline契約proposal雙審／65mock-package通過，已合MAIN；emb
 - 每交付獨立SPEC，之後全新SECURITY；fix後重驗，不自行approve。
 - 每bash／診斷／test command explicit timeout；長job own PID/PGID與boundedcleanup；不輪詢agent，不猜pending結果。
 - 最多3active、共用production一writer；並行只在隔離worktree且檔案scope明確不交集。
-- 公開push／source-license／secret／image／HA／真backend gates closed；僅n8n HA API例外，六類仍failclosed。External gate不停止內部backlog，68工具不是整體done。
+- 公開push／source-license／secret／image／HA／真backend gates closed；僅n8n HA API例外，六類仍failclosed。External gate不停止內部backlog，71工具不是整體done。

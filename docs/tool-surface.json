@@ -1,6 +1,6 @@
 {
   "format": 2,
-  "scope": "W2b plus BATCH2 B1/B2 bounded expansion; not complete product/HA/release acceptance",
+  "scope": "W2b plus BATCH2 B1/B2/B3 bounded expansion; B3 pending SPEC then NEW SECURITY; not complete product/HA/release acceptance",
   "source_digests": {
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/__init__.py": "7f0d150faa30f109b34382fc0f1ca778432a0ba6e000475eeb69ef114aa21a04",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/__main__.py": "078f0bab7f50b889b58b58962bbca16875e782370b5328618a5a842a83a1f1df",
@@ -117,7 +117,9 @@
     "apps/n8n/node_modules/n8n-mcp/dist/services/post-update-validator.js": "c8ad45a7e3a7bec8edc95ddf8d26a00b5a28dcce07af1db8e6ad928dc08235f5",
     "apps/n8n/node_modules/n8n-mcp/dist/services/universal-expression-validator.js": "49f86c40a9f26286c363eee3ed1dc779fc517458ec2388aaf5ea8f2d421085cd",
     "apps/n8n/node_modules/n8n-mcp/dist/services/workflow-validator.js": "c0072e5cdd9169a573aa86a659915f7877a71657f304538496f72d723c38a055",
-    "apps/n8n/backend_policy.cjs": "f786637170950be321f40598ef71a36826bafbaad135b646b39660d8e00edf28",
+    "apps/n8n/backend_policy.cjs": "e1a77844b6b14ec0e6359ee2a53c8e8a10cc521a5849f5ff9c800e4cb930069b",
+    "apps/n8n/metadata_reads.cjs": "daf3db5b5cb0de33e5ceb98493547602877c398690c1a621c6f6d942ae5302d5",
+    "apps/n8n/node_modules/n8n-mcp/dist/utils/npm-version-checker.js": "35eb4789eef7766e4516f78caf125542778cf7de33e1fff4bc670c1f1029057a",
     "apps/runtime/backend_policy.py": "0cfad784a7aac8bdefccaae93c2ea9663407c11081b6268af2fed7fcd0107fb1",
     "apps/runtime/batch2_outputs.py": "239add1fbbad29eecbfec82e33553b33b4ed7b0e5d3acdad01a33d83f2090352",
     "apps/runtime/bounded_tools.py": "1bf8a05834fe50a002910da0c4d5831f361a13db0557ef43f536e547507750be",
@@ -6902,7 +6904,7 @@
     },
     "n8n": {
       "upstream_count": 28,
-      "supported_count": 10,
+      "supported_count": 13,
       "tools": [
         {
           "name": "get_node",
@@ -8051,19 +8053,19 @@
                 "supported_explicit": false,
                 "default_readonly": false,
                 "write_grant": null,
-                "deferred_reason": "n8n_executions：get/list 可回 execution 私人 payload，delete 寫入；需 metadata-only view、嚴格 action/ID 與 delete 真 fake 效果測試。"
+                "deferred_reason": "get 含私人 payload；delete/run/retry 未授權；僅 list includeData=false 有界 metadata。"
               },
               "list": {
-                "supported_explicit": false,
-                "default_readonly": false,
+                "supported_explicit": true,
+                "default_readonly": true,
                 "write_grant": null,
-                "deferred_reason": "n8n_executions：get/list 可回 execution 私人 payload，delete 寫入；需 metadata-only view、嚴格 action/ID 與 delete 真 fake 效果測試。"
+                "deferred_reason": null
               },
               "delete": {
                 "supported_explicit": false,
                 "default_readonly": false,
                 "write_grant": null,
-                "deferred_reason": "n8n_executions：get/list 可回 execution 私人 payload，delete 寫入；需 metadata-only view、嚴格 action/ID 與 delete 真 fake 效果測試。"
+                "deferred_reason": "get 含私人 payload；delete/run/retry 未授權；僅 list includeData=false 有界 metadata。"
               }
             },
             "mode": {
@@ -8071,43 +8073,122 @@
                 "supported_explicit": false,
                 "default_readonly": false,
                 "write_grant": null,
-                "deferred_reason": "n8n_executions：get/list 可回 execution 私人 payload，delete 寫入；需 metadata-only view、嚴格 action/ID 與 delete 真 fake 效果測試。"
+                "deferred_reason": "get 含私人 payload；delete/run/retry 未授權；僅 list includeData=false 有界 metadata。"
               },
               "summary": {
                 "supported_explicit": false,
                 "default_readonly": false,
                 "write_grant": null,
-                "deferred_reason": "n8n_executions：get/list 可回 execution 私人 payload，delete 寫入；需 metadata-only view、嚴格 action/ID 與 delete 真 fake 效果測試。"
+                "deferred_reason": "get 含私人 payload；delete/run/retry 未授權；僅 list includeData=false 有界 metadata。"
               },
               "filtered": {
                 "supported_explicit": false,
                 "default_readonly": false,
                 "write_grant": null,
-                "deferred_reason": "n8n_executions：get/list 可回 execution 私人 payload，delete 寫入；需 metadata-only view、嚴格 action/ID 與 delete 真 fake 效果測試。"
+                "deferred_reason": "get 含私人 payload；delete/run/retry 未授權；僅 list includeData=false 有界 metadata。"
               },
               "full": {
                 "supported_explicit": false,
                 "default_readonly": false,
                 "write_grant": null,
-                "deferred_reason": "n8n_executions：get/list 可回 execution 私人 payload，delete 寫入；需 metadata-only view、嚴格 action/ID 與 delete 真 fake 效果測試。"
+                "deferred_reason": "get 含私人 payload；delete/run/retry 未授權；僅 list includeData=false 有界 metadata。"
               },
               "error": {
                 "supported_explicit": false,
                 "default_readonly": false,
                 "write_grant": null,
-                "deferred_reason": "n8n_executions：get/list 可回 execution 私人 payload，delete 寫入；需 metadata-only view、嚴格 action/ID 與 delete 真 fake 效果測試。"
+                "deferred_reason": "get 含私人 payload；delete/run/retry 未授權；僅 list includeData=false 有界 metadata。"
               }
             }
           },
-          "status": "temporarily-unsupported",
-          "default_enabled": false,
+          "status": "supported-bounded",
+          "default_enabled": true,
           "write_grants": [],
-          "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "n8n_executions：get/list 可回 execution 私人 payload，delete 寫入；需 metadata-only view、嚴格 action/ID 與 delete 真 fake 效果測試。",
-          "accepted_schema": null,
+          "operation_parameter": "action",
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "B3 genuine handleListExecutions/listExecutions：只開 action=list，API includeData=false，limit1..100/default20、單頁 cursor<=512、可選明確 workflow/project ID/status。只回 id/workflowId/status/ISO timestamps/cursor；不先讀私人 payload。get/delete/run/retry 拒絕；無新 grants。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "list",
+                "title": "Action",
+                "type": "string"
+              },
+              "limit": {
+                "default": 20,
+                "maximum": 100,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              },
+              "includeData": {
+                "const": false,
+                "default": false,
+                "title": "Includedata",
+                "type": "boolean"
+              },
+              "cursor": {
+                "maxLength": 512,
+                "minLength": 1,
+                "not": {
+                  "pattern": "[^A-Za-z0-9_+=-]"
+                },
+                "pattern": "^[A-Za-z0-9_+=-]+$",
+                "title": "Cursor",
+                "type": "string"
+              },
+              "workflowId": {
+                "maxLength": 128,
+                "minLength": 1,
+                "not": {
+                  "pattern": "[^A-Za-z0-9_-]"
+                },
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "title": "Workflowid",
+                "type": "string"
+              },
+              "projectId": {
+                "allOf": [
+                  {
+                    "not": {
+                      "const": "personal"
+                    }
+                  }
+                ],
+                "maxLength": 128,
+                "minLength": 1,
+                "not": {
+                  "pattern": "[^A-Za-z0-9_-]"
+                },
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "title": "Projectid",
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "success",
+                  "error",
+                  "waiting"
+                ],
+                "title": "Status",
+                "type": "string"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "title": "Executions",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_b3_n8n_policy.py",
+            "tests/test_b3_n8n_runtime.py",
+            "tests/test_b3_n8n_boundaries.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
           ]
         },
         {
@@ -8387,28 +8468,46 @@
           "dispatch_operations": {
             "mode": {
               "status": {
-                "supported_explicit": false,
-                "default_readonly": false,
+                "supported_explicit": true,
+                "default_readonly": true,
                 "write_grant": null,
-                "deferred_reason": "n8n_health_check：diagnostic 會揭露設定／API URL/環境資訊；需僅 status 的精確投影，不能將診斷回應當公開 health。"
+                "deferred_reason": null
               },
               "diagnostic": {
                 "supported_explicit": false,
                 "default_readonly": false,
                 "write_grant": null,
-                "deferred_reason": "n8n_health_check：diagnostic 會揭露設定／API URL/環境資訊；需僅 status 的精確投影，不能將診斷回應當公開 health。"
+                "deferred_reason": "diagnostic 含設定、URL、env、metrics；只開 status，無 npm/official-MCP/version 查詢。"
               }
             }
           },
-          "status": "temporarily-unsupported",
-          "default_enabled": false,
+          "status": "supported-bounded",
+          "default_enabled": true,
           "write_grants": [],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "n8n_health_check：diagnostic 會揭露設定／API URL/環境資訊；需僅 status 的精確投影，不能將診斷回應當公開 health。",
-          "accepted_schema": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "B3 genuine handleHealthCheck/healthCheck：mode=status only，真 scoped /healthz，必要時 /workflows?limit=1 fallback，最多兩 GET；僅 service-availability、authentication=not-verified。source-guarded npm/version/settings/official-MCP auxiliary paths 在 DNS/connect 前停用；不回 URL/config/env/metrics/version，diagnostic 拒絕。既有 credential health monitor 不變。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "mode": {
+                "const": "status",
+                "default": "status",
+                "title": "Mode",
+                "type": "string"
+              }
+            },
+            "title": "Health",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_b3_n8n_policy.py",
+            "tests/test_b3_n8n_runtime.py",
+            "tests/test_b3_n8n_boundaries.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
           ]
         },
         {
@@ -8458,25 +8557,57 @@
                 "supported_explicit": false,
                 "default_readonly": false,
                 "write_grant": null,
-                "deferred_reason": "n8n_list_catalog：projects fallback 可走 instance MCP（不同 credential/transport）；需只保留 public API tags/projects 的固定路徑與 fallback deny 測試。"
+                "deferred_reason": "projects/personal/official-MCP fallback 仍拒絕；只開 public API tags 第一頁最多250。"
               },
               "tags": {
-                "supported_explicit": false,
-                "default_readonly": false,
+                "supported_explicit": true,
+                "default_readonly": true,
                 "write_grant": null,
-                "deferred_reason": "n8n_list_catalog：projects fallback 可走 instance MCP（不同 credential/transport）；需只保留 public API tags/projects 的固定路徑與 fallback deny 測試。"
+                "deferred_reason": null
               }
             }
           },
-          "status": "temporarily-unsupported",
-          "default_enabled": false,
+          "status": "supported-bounded",
+          "default_enabled": true,
           "write_grants": [],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "n8n_list_catalog：projects fallback 可走 instance MCP（不同 credential/transport）；需只保留 public API tags/projects 的固定路徑與 fallback deny 測試。",
-          "accepted_schema": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "B3 genuine handleListCatalog/listTags：kind=tags only，一次 public GET /tags?limit=250；query<=256、本地 limit1..250/default20。id/name 有界正向投影，明示 first-page/scanLimit250/hasMore，沒有自動 pagination。projects/official-MCP/personalfallback 拒絕。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "tags",
+                "title": "Kind",
+                "type": "string"
+              },
+              "query": {
+                "maxLength": 256,
+                "title": "Query",
+                "type": "string"
+              },
+              "limit": {
+                "default": 20,
+                "maximum": 250,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "Catalog",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_b3_n8n_policy.py",
+            "tests/test_b3_n8n_runtime.py",
+            "tests/test_b3_n8n_boundaries.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_schema_defaults.py",
+            "tests/test_real_n8n.py"
           ]
         },
         {
@@ -9236,10 +9367,10 @@
                 "deferred_reason": null
               },
               "get": {
-                "supported_explicit": false,
-                "default_readonly": false,
+                "supported_explicit": true,
+                "default_readonly": true,
                 "write_grant": null,
-                "deferred_reason": "get 尚無完整欄位投影；move/delete 有 reparent/搬移/封存 workflows 的副作用，需獨立 operation 測試。"
+                "deferred_reason": null
               },
               "rename": {
                 "supported_explicit": true,
@@ -9251,13 +9382,13 @@
                 "supported_explicit": false,
                 "default_readonly": false,
                 "write_grant": null,
-                "deferred_reason": "get 尚無完整欄位投影；move/delete 有 reparent/搬移/封存 workflows 的副作用，需獨立 operation 測試。"
+                "deferred_reason": "move/delete 有 reparent/搬移/封存 workflows 的副作用，仍拒絕；get 僅有界 metadata、明確 project/folder IDs。"
               },
               "delete": {
                 "supported_explicit": false,
                 "default_readonly": false,
                 "write_grant": null,
-                "deferred_reason": "get 尚無完整欄位投影；move/delete 有 reparent/搬移/封存 workflows 的副作用，需獨立 operation 測試。"
+                "deferred_reason": "move/delete 有 reparent/搬移/封存 workflows 的副作用，仍拒絕；get 僅有界 metadata、明確 project/folder IDs。"
               }
             }
           },
@@ -9269,7 +9400,7 @@
           ],
           "operation_parameter": "action",
           "enable": "PUT /api/policy (HA admin+CSRF): enabled_write_tools 選取精確 grant；disabled 優先；舊全域開關僅保留兩個既有 writer",
-          "reason": "n8n_manage_folders：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。 僅 list/create/rename；get/move/delete 不開放。",
+          "reason": "B3 新增 readonly get：genuine handleGetFolder/getFolder、明確非personal projectId/folderId，單次 GET /projects/{project}/folders/{folder}；只回 bounded id/name/parentFolderId/ISO timestamps/projectId，無 workflow content。既有 list/create/rename 與 exact writer grants 不變；move/delete 拒絕。get 是操作擴充，不算新增工具名。",
           "accepted_schema": {
             "additionalProperties": false,
             "oneOf": [
@@ -9278,10 +9409,10 @@
                   "action": {
                     "const": "list"
                   },
-                  "name": {
+                  "folderId": {
                     "type": "null"
                   },
-                  "folderId": {
+                  "name": {
                     "type": "null"
                   }
                 },
@@ -9294,16 +9425,16 @@
                   "action": {
                     "const": "create"
                   },
-                  "name": {
-                    "type": "string"
-                  },
                   "folderId": {
                     "type": "null"
+                  },
+                  "name": {
+                    "type": "string"
                   }
                 },
                 "required": [
-                  "name",
-                  "action"
+                  "action",
+                  "name"
                 ]
               },
               {
@@ -9311,17 +9442,50 @@
                   "action": {
                     "const": "rename"
                   },
-                  "name": {
+                  "folderId": {
                     "type": "string"
                   },
-                  "folderId": {
+                  "name": {
                     "type": "string"
                   }
                 },
                 "required": [
+                  "action",
                   "folderId",
-                  "name",
-                  "action"
+                  "name"
+                ]
+              },
+              {
+                "properties": {
+                  "action": {
+                    "const": "get"
+                  },
+                  "folderId": {
+                    "not": {
+                      "pattern": "[^A-Za-z0-9_-]"
+                    },
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "null"
+                  },
+                  "projectId": {
+                    "not": {
+                      "anyOf": [
+                        {
+                          "const": "personal"
+                        },
+                        {
+                          "pattern": "[^A-Za-z0-9_-]"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "action",
+                  "folderId",
+                  "projectId"
                 ]
               }
             ],
@@ -9330,7 +9494,8 @@
                 "enum": [
                   "list",
                   "create",
-                  "rename"
+                  "rename",
+                  "get"
                 ],
                 "title": "Action",
                 "type": "string"
@@ -9381,6 +9546,9 @@
           },
           "tests": [
             "tests/test_tool_inventory.py",
+            "tests/test_b3_n8n_policy.py",
+            "tests/test_b3_n8n_runtime.py",
+            "tests/test_b3_n8n_boundaries.py",
             "tests/test_expansion_runtime.py",
             "tests/test_schema_defaults.py",
             "tests/test_real_n8n.py"

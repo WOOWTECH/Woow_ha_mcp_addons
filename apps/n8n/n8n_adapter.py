@@ -58,6 +58,8 @@ from mcp_admin_core.expansion import N8N_TOOLS
 TOOLS.update(N8N_TOOLS)
 from mcp_admin_core.batch2 import N8N_TOOLS as BATCH2_TOOLS
 TOOLS.update(BATCH2_TOOLS)
+from mcp_admin_core.n8n_b3 import N8N_TOOLS as B3_TOOLS
+TOOLS.update(B3_TOOLS)
 CHILD_URL = "http://127.0.0.1:3000/mcp"
 
 

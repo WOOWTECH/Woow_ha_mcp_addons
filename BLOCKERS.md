@@ -1,8 +1,8 @@
 # 本地里程碑以外的阻礙
 
-第一批55工具里程碑已獲接受並解除停止點。B1＋BT1及B2均已双審、coordinator新回歸；**68/184支援、116內部backlog繼續**。這不是商用／HA／公開驗收完成。
+第一批55工具里程碑已獲接受並解除停止點。B1＋BT1、B2、B3均已雙審、coordinator新回歸；**71/184支援、113內部backlog繼續**。這不是商用／HA／公開驗收完成。
 
-- **內部功能backlog**：B1新增10工具、schema／writer／n8n public-error修復已有bounded SPEC→NEW SECURITY。B2另新增三個真Odoo metadata／missing-required count工具並修source-drift cache生命週期；SPEC及全新SECURITY批准，coordinator新804Python＋joined1＋65packaging＋13unit＋21browser／靜態檢查過。116延期及mixed operations仍需實作／安全契約／測試，不能全部推給外部權限。逐名ledger：`docs/tool-review.json`、`docs/tool-surface.md`。
+- **內部功能backlog**：B1新增10工具、schema／writer／n8n public-error修復已有bounded SPEC→NEW SECURITY。B2另新增三個真Odoo metadata／missing-required count工具並修source-drift cache生命週期；SPEC及全新SECURITY批准，coordinator新804Python＋joined1＋65packaging＋13unit＋21browser／靜態檢查過。B3另新增n8n三個metadata讀取與folder get，shared-policy opt-in及Unicode修復也已雙審；coordinator新891Python＋joined1＋65packaging＋13unit＋21browser／靜態檢查過。113延期及mixed operations仍需實作／安全契約／測試，不能全部推給外部權限。逐名ledger：`docs/tool-review.json`、`docs/tool-surface.md`。
 - **測試隔離已恢復安全回歸基線**：未知3000不接觸，production3000不改。BT1 privateports／fresh own-listener proof／Python-Node-browser guards及redirect／terminalIPC／standalone readiness修復已雙審批准。40test/config檔逐hash/base核對合MAIN，coordinator新跑792Python＋獨立joined1＋65packaging＋13unit＋21browser，零failure/error/skip；validator/actionlint/inventory/offline locks／assetclosure過。證據repo外`coordinator-bt1-main-verification.json`。這不是images／HA通過。
 - **歷史cleanup證據缺口**：原empty90s timeout、故意RED UID-helper child、失敗UI probe Node4153791的descendant cleanup仍unknown。已披露，不以finalgreen倒推、不掃殺foreign PID。測試proof/send仍非原子、不是通用browser/native sandbox；Playwright1.61.1 privateAPI升級須重審。
 - **n8n HA管理員授權**：上游2026-10-03T06:42Z批准只對新n8n試點`homeassistant_api:true`，已知broad Core admin潛在間接Supervisor/host能力。固定`ws://supervisor/core/websocket`／`config/auth/list`、fresh active/human/owner/system-admin、no positive cache、錯誤failclosed；hassio_api/auth_api false、保護不變。真bootstrap→UID10001/post-exec guard→provider＋n8n SDK與Chromium/Core本地joined通過；transport為owned fake，非HA驗收，envstrip不等於OSsandbox。

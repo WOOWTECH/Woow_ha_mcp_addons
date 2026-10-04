@@ -1,6 +1,6 @@
 # W2b 工具功能擴展（有界，不是完整 migration）
 
-目前 source universe **184**；支援 **68**、逐名延期 **116**（BATCH2 B1 新增10；B2 新增3，B2 仍待獨立 SPEC → NEW SECURITY）。完整來源 signature/schema、接受 schema、effects、operation、grants、測試和剩餘工作見 `tool-surface.json` / `tool-surface.md`；人工逐名理由另存 `tool-review.json`。Python 是 pinned decorator/handler AST；不假稱條件註冊工具全部出现在 tools/list。本地 fake API 測試不是 HA／真後端／發佈驗收。
+目前 source universe **184**；支援 **71**、逐名延期 **113**（BATCH2 B1 新增10；B2 新增3；B3 新增3與folder get操作，B3 待獨立 SPEC → NEW SECURITY）。完整來源 signature/schema、接受 schema、effects、operation、grants、測試和剩餘工作見 `tool-surface.json` / `tool-surface.md`；人工逐名理由另存 `tool-review.json`。Python 是 pinned decorator/handler AST；不假稱條件註冊工具全部出现在 tools/list。本地 fake API 測試不是 HA／真後端／發佈驗收。
 
 | 產品 | 原支援 → 現支援 | 新正常功能 | 尚未支援 |
 |---|---:|---|---:|
@@ -10,7 +10,17 @@
 | OpenDesign | 10 → 11 | 有界 run metadata；既有 project delete opt-in 保留 | 4 |
 | EMQX | 3 → 11 | clients/topics/subscriptions、history/alarms；kick/subscribe/unsubscribe | 28 |
 | LiteLLM | 2 → 7 | team metadata；有界 team create、alias update、team/model delete | 33 |
-| n8n | 7 → 10 | 既有 local node/workflow/folders；B1 local validators、安全 inactive draft create | 18 |
+| n8n | 10 → 13 | B3 tags、execution metadata、service status、folder get；既有 B1/older 契約保留 | 15 |
+
+## BATCH2 B3 n8n metadata reads（待獨立 SPEC → NEW SECURITY）
+
+- 三個新工具名：`n8n_list_catalog` 僅 `kind=tags`、query<=256、limit1..250/default20。真 handler 固定一次 `/api/v1/tags?limit=250`，先驗最多250筆 id/name，再用原 filter/slice；回 scanLimit250、scope=first-page、hasMore。不是全catalog搜尋；不循環追cursor，不走projects／personal／official MCP。
+- `n8n_executions` 僅 `action=list`、limit1..100/default20、includeData固定false（真API參數，不是取payload後才過濾）。cursor1..512、workflowId/projectId1..128 ASCII segment、明確非personal project、status僅success/error/waiting；optional欄位需省略而不是null。單次 `/api/v1/executions`，只回 id/workflowId/status、有限ISO timestamps與cursor；get/run/retry/delete不授權。
+- `n8n_health_check` 僅 `mode=status`（default）。真 handleHealthCheck/client.healthCheck，先同backend derived `/healthz`，失敗才真 `/api/v1/workflows?limit=1`，最多兩GET。只回 status=ok、scope=service-availability、authentication=not-verified；服務可達不是key權限證明。source-guarded版本/settings、npm registry global fetch、official-MCP建構/transport在發生DNS/connect前停用；沒有假造backend成功。diagnostic、URL/config/env/metrics/versionwarnings不開放。既有 credential HealthMonitor probe 不改。
+- 既有 `n8n_manage_folders` 只新增 `get` readonly operation：明確非personal projectId和folderId；一次 `/api/v1/projects/{project}/folders/{folder}`，正向bounded id/name/parentFolderId/ISO timestamps/projectId，不帶workflows。舊list/create/rename、預設personal、writer grants不改，move/delete仍deny。此操作不增加工具名count。
+- 新路徑每HTTP最多64KiB解壓body、5秒socket/total transport deadline、零redirect與零新增retry；health最多兩次5秒HTTP（既有DNS policy不变），非整個工具5秒保證。原client auth、DNS全答案驗證、pin/TLS/origin不變；舊七API成功identity、retry/settingsfallback不改。新bounded投影拒絕key/URL反射與非法metadata；不是任意business content的通用DLP。
+- **明准shared policy例外**：Tool新增default-OFF `requires_backend`／`backend_required_operations`，僅三新API及folder:get opt-in。驗參數後、修改wire前檢查現有ProductState.configured；legacy State需URL+key兩者。gateway早期與fresh presend共用authorize，缺任一配置均零child send/RPC，拒絕不更改caller args。沒有gateway名稱特例或state migration。**不是零child startup**：n8n原有unconfigured本機docs/search/validators啟動照常，tools/list/initialize/ping/filter_list語義不變。
+- `tests/test_b3_n8n_{policy,runtime,boundaries}.py`：schema/runtime/private parity、真owned ChildSpec與API paths/params/call budgets、genuine handler/client identity、auxiliary fetch/DNS/connect spies、partial configs、fresh presend clear、收到dummykey之error/body/metadata canaries。B3 source guard在載入前驗server/manager/API/error及catalog/official/npm helper。無依賴/UI/HA/lifecycle或其他adapter變更；須獨立SPEC後不同NEW SECURITY，不自我approve。
 
 ## BATCH2 B2 Odoo 有界 metadata／品質統計
 
@@ -84,7 +94,7 @@ PUT /api/policy
 
 Odoo 家族僅 `res.partner` 的 id/name/display_name/active，必須明確指定 fields；domain 僅有界 conjunction，沒有 dotted relation/context/free-text 搜尋。寫入 name 或經确认的 chatter；chatter comment 可能通知既有訂閱者，是明確 writer 而非 read preview 授權繞過。後端自訂 computed fields/overrides 仍需最小權限帳號與實際相容性驗收。
 
-任意 execute/method、agent/chat/code、成本/provider health 永遠不按名稱/hint 降為 read；本批未能安全限制者仍拒絕。`tool-review.json` 對每個延期工具列出確切技術阻礙和補強工作，包括更寬 Odoo 模型、完整 approval flow、私密檔案/trace/credentials、遠端 connector/agent egress 與 workflow 內容。不能把 68/184 宣稱七產品完整完成。
+任意 execute/method、agent/chat/code、成本/provider health 永遠不按名稱/hint 降為 read；本批未能安全限制者仍拒絕。`tool-review.json` 對每個延期工具列出確切技術阻礙和補強工作，包括更寬 Odoo 模型、完整 approval flow、私密檔案/trace/credentials、遠端 connector/agent egress 與 workflow 內容。不能把 71/184 宣稱七產品完整完成。
 
 ## 本地驗證契約
 

@@ -111,7 +111,8 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
             names = {tool["name"] for tool in tools["tools"]}
             assert {"tools_documentation", "search_nodes"} <= names
             assert names <= {"tools_documentation", "search_nodes", "n8n_list_workflows",
-                             "get_node", "n8n_get_workflow", "n8n_manage_folders", "validate_node", "validate_workflow"}
+                             "get_node", "n8n_get_workflow", "n8n_manage_folders", "validate_node", "validate_workflow",
+                             "n8n_list_catalog", "n8n_executions", "n8n_health_check"}
             assert 'get_node' in names
             from n8n_adapter import TOOLS
             for tool in tools["tools"]:

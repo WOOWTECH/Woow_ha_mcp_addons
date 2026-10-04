@@ -97,7 +97,7 @@ try {
   const first=await bootstrap();
   assert.equal(first.policy_contract,'woow-v3-exact-grants');
   assert.equal(first.endpoint,null);
-  assert.equal(Object.keys(first.tools).length,10);
+  assert.equal(Object.keys(first.tools).length,13);
   assert.deepEqual(first.enabled_write_tools,[]);
   assert.equal((await fetch(admin+prefix+'/api/endpoint',{method:'PUT',headers:{'content-type':'application/json'},body:'{"endpoint":null}'})).status,403);
   const connections={

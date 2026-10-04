@@ -1,6 +1,30 @@
 {
-  "scope": "W2a/W2b plus BATCH2 B1/B2 bounded expansion; no dependency edits; B2 pending independent SPEC then NEW SECURITY",
+  "scope": "W2a/W2b plus BATCH2 B1/B2/B3 bounded expansion; no dependency edits; B3 pending independent SPEC then NEW SECURITY",
   "patches": [
+    {
+      "path": "packages/mcp-admin-core/mcp_admin_core/policy.py",
+      "sha256": "c55433a2b2dee6ab2d9bbd170747779ed56e96d02e9d59cb3e0a4d725ccdeaa0",
+      "change": "Explicit B3 scope exception: default-OFF Tool requires_backend and selector-bound backend_required_operations, validate opt-in operation metadata. authorize validates/normalizes before backend precondition and before mutating caller arguments, using existing configured property or legacy URL+key. Both existing gateway authorization passes inherit it. No gateway-name guard, persisted schema/migration/lifecycle or general grants change; local unconfigured startup/list semantics retained. SPEC then different NEW SECURITY required.",
+      "guarded_sources": {}
+    },
+    {
+      "path": "packages/mcp-admin-core/mcp_admin_core/n8n_b3.py",
+      "sha256": "d02c83060aa2389368f68f50da9724c414b43db3e9c90d027e737cfed88615ba",
+      "change": "B3 strict tags-only catalog, list-only executions with includeData=false, status-only health, existing folders get-only addition. Portable cursor/segment schemas, omitted-not-null optional filters, exact backend preconditions only for three new names and folder get. Old folder operations/grants unchanged.",
+      "guarded_sources": {}
+    },
+    {
+      "path": "apps/n8n/n8n_adapter.py",
+      "sha256": "9e3e9d2894120f0792e903197c16e7a92f2a5b825c9707a7b393d51589f041b3",
+      "change": "Register B3 schemas without changing ChildSpec, production port, minimal environment, startup or old tools.",
+      "guarded_sources": {}
+    },
+    {
+      "path": "apps/n8n/metadata_reads.cjs",
+      "sha256": "daf3db5b5cb0de33e5ceb98493547602877c398690c1a621c6f6d942ae5302d5",
+      "change": "New local narrow adapters preserve actual pinned handlers/client methods. Single-page tags (250 scan then original filter), executions includeData=false (<=100), explicit folder get; positive bounded metadata. Health actual healthz/workflows fallback only, suppress version/settings/npm/official-MCP auxiliaries before DNS/connect, service availability not key-permission proof. New requests capped 64KiB decompressed/5s per HTTP/zero redirects and retries; original auth/pinning retained, old retry/settings fallback untouched. Invocation-local public fixed failure classification; no raw-error retention or diagnostic projection. Private new-action validation before dispatch; no dependency edits or new transport origin.",
+      "guarded_sources": {}
+    },
     {
       "path": "packages/mcp-admin-core/mcp_admin_core/odoo_b2.py",
       "sha256": "2f0712377804864add7a4fe622586ede1280a323cd612eb53dc4b6b30f1a70fb",
@@ -33,13 +57,16 @@
     },
     {
       "path": "apps/n8n/backend_policy.cjs",
-      "sha256": "f786637170950be321f40598ef71a36826bafbaad135b646b39660d8e00edf28",
-      "change": "Existing fixed-origin DNS/TLS/redirect policy and B1 create catch/metadata validation retained. Adjacent read-error P1: final public formatter uses only guarded N8nApiError type/status/known code; AsyncLocalStorage retains fixed classification per invocation, never raw errors. Wrap the seven genuine enabled API handler branches (workflow list/minimal/delete/create, folder list/create/rename), project failures to success=false/error/code, and normalize ordinary rejections without reading returned diagnostics. Successful business output is unchanged, not universal DLP. Strict API/error/handler/server-dispatch digests checked before runtime loading. Raw handleN8nApiError, settings fallback and preconnection retries remain internal and unchanged. Folder personal-project resolution keeps its native projects-to-workflows fallback. Errors/cancellation do not imply rollback, no commit or exactly-once; write errors explicitly warn outcome may be unknown. No new tools, grants, clients or endpoints; independent SPEC then NEW SECURITY review required.",
+      "sha256": "e1a77844b6b14ec0e6359ee2a53c8e8a10cc521a5849f5ff9c800e4cb930069b",
+      "change": "B3 adds pre-load catalog/official-MCP/npm helper guards and installs metadata_reads.cjs. Existing fixed-origin DNS/TLS/redirect policy and B1 create catch/metadata validation retained. Adjacent read-error P1: final public formatter uses only guarded N8nApiError type/status/known code; AsyncLocalStorage retains fixed classification per invocation, never raw errors. Wrap the seven genuine enabled API handler branches (workflow list/minimal/delete/create, folder list/create/rename), project failures to success=false/error/code, and normalize ordinary rejections without reading returned diagnostics. Successful business output is unchanged, not universal DLP. Strict API/error/handler/server-dispatch digests checked before runtime loading. Raw handleN8nApiError, settings fallback and preconnection retries remain internal and unchanged. Folder personal-project resolution keeps its native projects-to-workflows fallback. Errors/cancellation do not imply rollback, no commit or exactly-once; write errors explicitly warn outcome may be unknown. No new tools, grants, clients or endpoints; independent SPEC then NEW SECURITY review required.",
       "guarded_sources": {
         "apps/n8n/node_modules/n8n-mcp/dist/services/n8n-api-client.js": "e64be8d3def0623b6710c6e98f7a08ed14a49a1764a5f789def58ea1e900947c",
         "apps/n8n/node_modules/n8n-mcp/dist/utils/n8n-errors.js": "efd5783846cf1eb61dbf9387de260e5a1d336ec609bc4c4d5601c369b5d2f20a",
         "apps/n8n/node_modules/n8n-mcp/dist/mcp/handlers-n8n-manager.js": "0d99e10ec1eb9a6e4d78726636aa79f52eb4f3862be506785b794f1aeb9608cc",
-        "apps/n8n/node_modules/n8n-mcp/dist/mcp/server.js": "a4dfc41f48282423a610ee9ac45c0374357b7409cdaa4858e11ba58a32b2128c"
+        "apps/n8n/node_modules/n8n-mcp/dist/mcp/server.js": "a4dfc41f48282423a610ee9ac45c0374357b7409cdaa4858e11ba58a32b2128c",
+        "apps/n8n/node_modules/n8n-mcp/dist/mcp/handlers-official-tools.js": "e85937c58d5a8426d54b1b69598adc83a14648402fc58a8714ef5db8132977cd",
+        "apps/n8n/node_modules/n8n-mcp/dist/mcp/official-mcp-access.js": "113d3556e4b93a870b36986a0fce8de45391ce64d7ab4c9f50fd6715eee3c733",
+        "apps/n8n/node_modules/n8n-mcp/dist/utils/npm-version-checker.js": "35eb4789eef7766e4516f78caf125542778cf7de33e1fff4bc670c1f1029057a"
       }
     },
     {

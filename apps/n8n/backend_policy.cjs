@@ -21,6 +21,9 @@ for (const [relative, digest] of [
     ["utils/n8n-errors.js", "efd5783846cf1eb61dbf9387de260e5a1d336ec609bc4c4d5601c369b5d2f20a"],
     ["mcp/handlers-n8n-manager.js", "0d99e10ec1eb9a6e4d78726636aa79f52eb4f3862be506785b794f1aeb9608cc"],
     ["mcp/server.js", "a4dfc41f48282423a610ee9ac45c0374357b7409cdaa4858e11ba58a32b2128c"],
+    ["mcp/handlers-official-tools.js", "e85937c58d5a8426d54b1b69598adc83a14648402fc58a8714ef5db8132977cd"],
+    ["mcp/official-mcp-access.js", "113d3556e4b93a870b36986a0fce8de45391ce64d7ab4c9f50fd6715eee3c733"],
+    ["utils/npm-version-checker.js", "35eb4789eef7766e4516f78caf125542778cf7de33e1fff4bc670c1f1029057a"],
 ]) {
     if (crypto.createHash("sha256").update(fs.readFileSync(path.join(runtime, relative))).digest("hex") !== digest) {
         throw new Error("public API error boundary requires source review");
@@ -184,3 +187,5 @@ N8nApiClient.prototype.getPinnedAgents = async function () {
     }
     return agents;
 };
+
+require('./metadata_reads.cjs')({runtime, N8nApiClient, publicErrors, publicFailure});
