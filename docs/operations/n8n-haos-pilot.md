@@ -1,6 +1,9 @@
 # n8n 試點：從已審 commit 到 HAOS 的逐步程序
 
-**狀態：程序提案。截至 2026-10-04 沒有任何映像建置、container 執行、registry 推送或 HA 安裝。**
+**狀態：程序提案＋部分實跑。** 2026-10-04 在 woow k3s 一次性 KubeVirt VM（Docker 29.8.2／buildx 0.37.1）實跑：
+已審 `34f06d8` 的 P3 失敗（runtime 固定 PATH 找不到 `ldconfig`）；含修正的**實驗、未核准**候選 `6bd0a90`
+P1–P4 通過、P5 supply-chain gate CLOSED（secret findings 待正式 triage；SBOM/CVE/license 未執行）；
+另六支 build＋container/mock 通過（未跑 P5）。**沒有 registry 推送或 HA 安裝。**
 P0 已在本機執行；P1 起每一步都要對應批准（見各步「前提」）。真實建置、模擬測試、HAOS 實測分開記錄，
 不互相替代。驗收項目定義以 [acceptance](acceptance.md) 為準，本文只排定順序、命令與停止點。
 
@@ -77,7 +80,10 @@ docker buildx build --builder default --platform linux/amd64 --load \
 docker image inspect local/mcp-n8n:0.1.0 --format '{{.Id}}'
 ```
 
-記錄 image ID、建置時間、Engine/Buildx/BuildKit 版本、實際 CPU/RAM/磁碟峰值。build 失敗：
+記錄 image ID、建置時間、Engine/Buildx/BuildKit 版本、實際 CPU/RAM/磁碟峰值。**同時記錄 Engine 的 image store**：
+classic store 的 `docker image inspect .Id` 是 config digest；containerd image store（Docker 29 預設，實測如此）的 `.Id`
+是 image **manifest** digest，config digest 要另外取（OCI descriptor 的 `config.digest`）。兩者都記，不可混用；
+`supply_chain.py`／`registry_gate.py` 目前假設 `.Id`＝config digest，用 containerd store 前須先經協調決定。build 失敗：
 保留完整錯誤，修正走 review，不改 base digest／lock 來「讓它過」。
 
 ## P4 — 真 container 驗收（VM）
