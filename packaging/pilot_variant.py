@@ -1,12 +1,14 @@
 """Generate a HA *local app* pilot variant of one product (design: docs/operations/n8n-pilot-image-delivery.md).
 
-Offline only: reads the public manifest + translations, writes a NEW directory outside the store
-tree, and a receipt. Derives only from a manifest that passes validate.manifest(); exactly three
-fields differ from it (name, slug, image). version stays equal to the image label io.hass.version
-(pinned Supervisor restore compares them), so candidates are told apart by a per-commit registry path.
-No network, registry, credential or HA access.
+Offline only. Reads the public manifest + translations FROM AN EXPLICIT CANDIDATE CHECKOUT whose HEAD
+must equal the given commit and whose tracked tree is clean (optionally also bound to a verified
+source-receipt.json), writes a NEW directory that must lie outside both the candidate checkout and this
+tool's repository (parent symlinks resolved first), and a receipt. Derives only from a manifest that
+passes validate.manifest(); exactly three fields differ (name, slug, image). version stays equal to the
+image label io.hass.version (pinned Supervisor restore compares them), so candidates are told apart by a
+per-commit registry path. No network, registry, credential or HA access.
 
-usage: pilot_variant.py PRODUCT COMMIT REGISTRY_PREFIX OUTDIR
+usage: pilot_variant.py CANDIDATE_ROOT PRODUCT COMMIT REGISTRY_PREFIX OUTDIR [SOURCE_RECEIPT]
   REGISTRY_PREFIX: host[:port]/namespace, lowercase, no scheme/tag/digest
   writes OUTDIR/<pilot slug>/{config.yaml,translations/*,README.md} and OUTDIR/variant-receipt.json
 """
@@ -16,6 +18,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 
 import yaml
@@ -54,14 +57,51 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def git(root, *args):
+    env = {'PATH': '/usr/bin:/bin', 'HOME': '/nonexistent', 'GIT_CONFIG_NOSYSTEM': '1',
+           'GIT_CONFIG_GLOBAL': os.devnull, 'LC_ALL': 'C'}
+    result = subprocess.run(['git', '-c', 'core.hooksPath=' + os.devnull, *args], cwd=root, env=env,
+                            capture_output=True, text=True, timeout=60)
+    if result.returncode:
+        raise ValueError('candidate root is not a usable git checkout')
+    return result.stdout
+
+
+def verify_candidate(root, commit, source_receipt=None):
+    """The checkout we read from IS the named commit, clean; optionally bound to a verified bundle receipt."""
+    if git(root, 'rev-parse', 'HEAD').strip() != commit:
+        raise ValueError('candidate checkout HEAD differs from the given commit')
+    if git(root, 'status', '--porcelain', '--untracked-files=all').strip():
+        raise ValueError('candidate checkout is not clean')
+    tree = git(root, 'rev-parse', 'HEAD^{tree}').strip()
+    if source_receipt is not None:
+        receipt = json.loads(Path(source_receipt).read_text())
+        if receipt.get('commit') != commit or receipt.get('tree') != tree:
+            raise ValueError('source receipt does not bind this commit/tree')
+    return tree
+
+
+def outside(path, *roots):
+    """Resolve the parent (symlinks included) and refuse any location inside the given roots."""
+    target = Path(path).absolute()
+    resolved = target.parent.resolve(strict=True) / target.name
+    for root in roots:
+        real = Path(root).resolve(strict=True)
+        if resolved == real or real in resolved.parents:
+            raise ValueError('output must be outside the candidate checkout and the tool repository')
+    return resolved
+
+
 def write_new(path, data, mode=0o644):
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
     with os.fdopen(fd, 'wb') as stream:
         stream.write(data)
 
 
-def generate(product, commit, registry, output, root=ROOT):
-    root, output = Path(root), Path(output).absolute()
+def generate(root, product, commit, registry, output, source_receipt=None):
+    root = Path(root).resolve(strict=True)
+    tree = verify_candidate(root, commit, source_receipt)
+    output = outside(output, root, ROOT)
     source = root / 'addons' / product
     public = load(source / 'config.yaml')
     result = variant(public, product, commit, registry)
@@ -72,24 +112,27 @@ def generate(product, commit, registry, output, root=ROOT):
     write_new(app / 'config.yaml', text)
     if load(app / 'config.yaml') != result:  # strict loader round trip
         raise ValueError('generated config.yaml does not round-trip')
+    sources = {'addons/%s/config.yaml' % product: digest(source / 'config.yaml')}
     for item in sorted((source / 'translations').iterdir()):
         translation(load(item))
         write_new(app / 'translations' / item.name, item.read_bytes())
+        sources['addons/%s/translations/%s' % (product, item.name)] = digest(item)
     write_new(app / 'README.md', (
-        f'# {result["name"]}\n\nLocal pilot variant generated from commit `{commit}`. '
-        f'Not a store release. Image `{result["image"]}:{result["version"]}`. '
+        f'# {result["name"]}\n\nLocal pilot variant generated from verified clean checkout of commit `{commit}` '
+        f'(tree `{tree}`). Not a store release. Image `{result["image"]}:{result["version"]}`. '
         'Data in this app does not migrate to the store version.\n').encode())
     files = sorted(p for p in app.rglob('*') if p.is_file())
-    receipt = {'schema': 1, 'product': product, 'commit': commit, 'slug': result['slug'],
-               'installed_slug': 'local_' + result['slug'], 'image': result['image'], 'version': result['version'],
-               'changed_fields': list(CHANGED), 'public_config_sha256': digest(source / 'config.yaml'),
+    receipt = {'schema': 2, 'product': product, 'commit': commit, 'tree': tree,
+               'source_receipt_bound': source_receipt is not None, 'source_files': sources,
+               'slug': result['slug'], 'installed_slug': 'local_' + result['slug'], 'image': result['image'],
+               'version': result['version'], 'changed_fields': list(CHANGED),
                'files': {str(p.relative_to(output)): digest(p) for p in files}}
     write_new(output / 'variant-receipt.json', (json.dumps(receipt, indent=2, sort_keys=True) + '\n').encode(), 0o600)
     return receipt
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 5:
+    if len(sys.argv) not in (6, 7):
         raise SystemExit(__doc__)
     r = generate(*sys.argv[1:])
-    print('PASS: pilot variant', r['installed_slug'], r['image'] + ':' + r['version'])
+    print('PASS: pilot variant', r['installed_slug'], r['image'] + ':' + r['version'], 'from', r['commit'])
