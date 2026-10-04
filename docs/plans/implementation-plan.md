@@ -25,10 +25,11 @@
 | BLD2 | 明確driver/version/runner與hash-before-exec/helper/proxy契約 | 9檔proposal雙審後合MAIN；USER-owned hosting路線hardBLOCKED；沒有builder實際執行批准 |
 | BT1 | private-port／own-listener proof／Python-Node-browser guards | 全284-file state經SPEC及全新SECURITY批准；redirect／terminalIPC／standalone readiness P1各關閉。40test/config檔逐hash/base核對合MAIN，無production覆蓋 |
 | V2 | MAIN整合後coordinator新回歸 | **792Python＋獨立joined1＋65packaging＋13UIunit＋21browser**，零failure/error/skip；validator/actionlint/assetclosure/inventory/offline locks／syntax全exit0。Own jobs無deadline signal |
-| B2 | 下一組常用工具 | 排定Odoo有界schema／relationships／data-quality讀取；依真source契約test-first，不把候選當交付，之後SPEC→NEW SECURITY |
+| B2/V3 | Odoo schema／relationships／required-value counts | 三個真handler與cache修復獨立SPEC→NEW SECURITY批准；現68/184、116延期。Coordinator新跑804Python＋joined1＋65packaging＋13unit＋21browser及靜態檢查全過 |
+| B3 | 下一組n8n常用讀取 | 候選catalog tags／execution metadata／status-only health及既有folder get；先審source與間接egress，不新增執行／credentials／instance-MCP或公共站權限，再test-first與雙審 |
 | G1 | 映像／授權／publisher／HA安裝與實測 | 未通過；external gate不停止不相依本地backlog |
 
-本批證據在repo外：`bt1-approved-integration-files.json`、`coordinator-bt1-main-verification.json`、`review-bt1-ui-fixture-{spec,security}.md`、`team-evidence.json.current`。Historical `MILESTONE.md`／`.final`仍屬第一批。
+B2新證據在repo外：`coordinator-b2-main-verification.json`、`review-b2-cache-lifecycle-spec.md`、`review-b2-odoo-metadata-quality-security.md`。B1/BT1證據：`bt1-approved-integration-files.json`、`coordinator-bt1-main-verification.json`、`review-bt1-ui-fixture-{spec,security}.md`、`team-evidence.json.current`。Historical `MILESTONE.md`／`.final`仍屬第一批。
 
 ## 四層證據，不得混淆
 
@@ -39,7 +40,7 @@
 
 ## 尚未完成與保留限制
 
-- 剩119工具及mixed operations的功能／schema／projection／測試是內部backlog；逐名ledger在`docs/tool-review.json`與`docs/tool-surface.md`，unknown/deferred仍failclosed。
+- 剩116工具及mixed operations的功能／schema／projection／測試是內部backlog；逐名ledger在`docs/tool-review.json`與`docs/tool-surface.md`，unknown/deferred仍failclosed。
 - 六類production role provider／broad Core API需逐類批准，測試role注入不是授權。
 - OpenDesign權利人、MPL對應源碼、依賴NOTICE、source/history/dependency/image掃描與安全publisher gates仍closed。Checksum metadata誤判證明不是scanner clearance，不改allowlist／history／規則假通過。
 - Historical empty90s timeout、RED UID-helper child、失敗UI probe Node4153791的descendant cleanup證據缺口仍unknown；本批clean回歸不能倒推。禁止foreign PID掃殺。
@@ -49,4 +50,4 @@
 
 GUI設定不被deployment options覆寫；0600/0700 durable原子state、未知／未來schema拒絕；fixed child argv/env；新writer逐項exact grant，僅兩個既有legacy例外，disabled優先；admin/MCP/Bearer隔離；machine token不進child/UI/state/log；post-exec guard限制同UID parent procfs/memory；backend outage不無限重啟，internal probe與publicdisable分離。
 
-接續下一工具批次，不停在65工具或報告。只有需要新決策／資源的個別項提出精確需求；無自行部署、公開push、擴權或要求未知服務讓埠的許可。
+接續下一工具批次，不停在68工具或報告。只有需要新決策／資源的個別項提出精確需求；無自行部署、公開push、擴權或要求未知服務讓埠的許可。

@@ -1,16 +1,25 @@
 # W2b 工具功能擴展（有界，不是完整 migration）
 
-目前 source universe **184**；支援 **65**、逐名延期 **119**（BATCH2 B1 新增10；仍待獨立雙審）。完整來源 signature/schema、接受 schema、effects、operation、grants、測試和剩餘工作見 `tool-surface.json` / `tool-surface.md`；人工逐名理由另存 `tool-review.json`。Python 是 pinned decorator/handler AST；不假稱條件註冊工具全部出现在 tools/list。本地 fake API 測試不是 HA／真後端／發佈驗收。
+目前 source universe **184**；支援 **68**、逐名延期 **116**（BATCH2 B1 新增10；B2 新增3，B2 仍待獨立 SPEC → NEW SECURITY）。完整來源 signature/schema、接受 schema、effects、operation、grants、測試和剩餘工作見 `tool-surface.json` / `tool-surface.md`；人工逐名理由另存 `tool-review.json`。Python 是 pinned decorator/handler AST；不假稱條件註冊工具全部出现在 tools/list。本地 fake API 測試不是 HA／真後端／發佈驗收。
 
 | 產品 | 原支援 → 現支援 | 新正常功能 | 尚未支援 |
 |---|---:|---|---:|
-| Odoo | 6 → 10 | 既有 partner reads/chatter；B1 domain/JSON2/diagnosis 純 builders、active 分組 count | 31 |
+| Odoo | 10 → 13 | B2 partner schema catalog、自關係 metadata、required name/active 缺值統計；保留 B1 | 28 |
 | Odoo Manage | 6 → 9 | 既有 partner CRUD；B1 active 分組 count、固定 template metadata、exact-grant internal note | 1 |
 | Hermes | 5 → 7 | skill/toolset enable/disable、gateway restart；session metadata/delete、cron metadata/pause/delete | 4 |
 | OpenDesign | 10 → 11 | 有界 run metadata；既有 project delete opt-in 保留 | 4 |
 | EMQX | 3 → 11 | clients/topics/subscriptions、history/alarms；kick/subscribe/unsubscribe | 28 |
 | LiteLLM | 2 → 7 | team metadata；有界 team create、alias update、team/model delete | 33 |
 | n8n | 7 → 10 | 既有 local node/workflow/folders；B1 local validators、安全 inactive draft create | 18 |
+
+## BATCH2 B2 Odoo 有界 metadata／品質統計
+
+- `schema_catalog` 固定 `models=["res.partner"]`、query=null、limit=1，include_fields/refresh 為 boolean。真 handler 的 client facade **先限制實際 RPC**：`ir.model.search_read([["model","=","res.partner"]], fields=["model"], limit=1)`；不使用上游全模型 search/read，不取名稱。fields_get 明確指定 id/name/display_name/active/parent_id/child_ids 與 type/required/readonly/store/relation，正向驗證後才交給 handler/cache。SDK model label 僅空預設值，非後端 label。Cache 至多兩個 key（include_fields），依 lifespan/真 client identity 隔離；憑證改動由既有 lifecycle 更換 process。命中仍核對 source；refresh=true 重新查詢，無 TTL／自動新鮮度承諾。
+- `inspect_model_relationships` 必須 live metadata、res.partner、fields_metadata=null、use_live_metadata/include_computed=true；include_readonly 可選。只回上述六個欄位與 parent_id/child_ids 的 res.partner 自關係 metadata，深度1；不取 compute expression、label/help/context/default/selection，移除 create/write hints。這不是 record 值或 relation 展開授權；既有 read/search fields 不擴張。
+- `data_quality_report` 只開 `checks=["missing_required"]`、`key_fields=["name"]`、sample_limit1..100（default100）。真來源演算法取得 **name/active 的 type/required/store metadata**，最多兩次 `res.partner.search_count([[field,"=",false]])`。只回 counts/固定 field identifiers，無 record samples、IDs、values；sample_limit 保留上游 envelope，但這個 check 不抽樣。統計按後端 ACL／預設 active context，是各 required stored 欄位缺值次數之和，不是唯一 records；若無可見 required fields，真結果明示 fields_checked=[]。任一 nested error 全體回固定失敗，不偽稱 clean。
+- duplicates 的來源 read_group 無 limit；任意加 limit 會扭曲全量統計，因此該 check 仍拒絕。format_anomalies 需 email/phone/vat，orphaned_references 需 relation values/IDs，同樣不開放。不承諾完整品質工具。
+- 每次先驗參數/source、XMLRPC scope/DNS/TLS/redirect 與既有 single-worker/cancellation 保持；成功只取正向 metadata/statistics，source 捕捉的 outer/nested error 與 malformed metadata/count 都轉固定 `BACKEND_RESPONSE_INVALID`，不回 raw backend context/key。這是 fail-closed 錯誤，不是細分後端診斷。三工具 default readonly，disabled/unknown/extra/跨 instance 仍拒絕；六類 production HA 管理仍 fail closed，無新 permissions/UI。
+- `tests/test_b2_odoo_{policy,runtime,scope}.py`：公開 JSONSchema/runtime/private validator parity、真 owned child 的精確 XMLRPC、genuine source invocation、正結果與 error canary、有限 cache/generation/source-drift、逐工具 cancellation/BACKEND_BUSY、disabled 零 RPC、未設定不 spawn/probe、動態 UI advertisement。僅本地 fake backend 證據；獨立雙審／image／HA／真後端 gate 不因此解除。
 
 ## BATCH2 B1 有界正常功能
 
@@ -19,7 +28,7 @@
 - Manage `list_resource_templates` 回四個固定本機模板與有限 partner 可見性，**resources/read 仍禁止**。`post_message` 是 writer，獨立 exact grant；module 必須已存在、後端 write ACL 必須允許。只允許 plain internal note（mail.mt_note），message_type=comment、無 recipients/attachments/HTML。後端自訂 override 仍可能通知或有其他副作用；不宣稱絕無通知。
 - n8n `validate_node`／`validate_workflow` 是本機 pinned DB validator；僅 manualTrigger/noOp 空參數，圖2..20 nodes、有界 typed main connections，拒絕 prototype keys、重複/未知 node references、credentials/code/URL/settings。mode/profile/options 保持來源 defaults。
 - `n8n_create_workflow` 需要 exact grant（舊 global=true 不授權），只對相同安全圖呼叫既有 scoped POST /workflows，建立 inactive draft；沒有 activation、existing workflow update、project/folder override 或 execute。API 回應僅接受有界 id/name/active=false/nodeCount；異常回應拒絕**不代表已提交寫入回滾**。inactive 語義依 pinned create API 契約，真後端版本仍需驗收。
-- 本批無新 network client/任意filesystem path、依賴、UI 契約、六類 HA role 權限；使用既有 adapter、v3 exact grants 與真管理 metadata。counts 是工具名，不是全 operation parity。schema_catalog/data_quality、其他 node config/get_node modes/catalog/folders 等是可接續內部實作，不是缺 credential 的外部 blocker。
+- 本批無新 network client/任意filesystem path、依賴、UI 契約、六類 HA role 權限；使用既有 adapter、v3 exact grants 與真管理 metadata。counts 是工具名，不是全 operation parity。更寬 Odoo metadata/quality、其他 node config/get_node modes/catalog/folders 等是可接續內部實作，不是缺 credential 的外部 blocker。
 
 ### B1 writer error boundary（P1 修復，待獨立複審）
 
@@ -75,7 +84,7 @@ PUT /api/policy
 
 Odoo 家族僅 `res.partner` 的 id/name/display_name/active，必須明確指定 fields；domain 僅有界 conjunction，沒有 dotted relation/context/free-text 搜尋。寫入 name 或經确认的 chatter；chatter comment 可能通知既有訂閱者，是明確 writer 而非 read preview 授權繞過。後端自訂 computed fields/overrides 仍需最小權限帳號與實際相容性驗收。
 
-任意 execute/method、agent/chat/code、成本/provider health 永遠不按名稱/hint 降為 read；本批未能安全限制者仍拒絕。`tool-review.json` 對每個延期工具列出確切技術阻礙和補強工作，包括更寬 Odoo 模型、完整 approval flow、私密檔案/trace/credentials、遠端 connector/agent egress 與 workflow 內容。不能把 65/184 宣稱七產品完整完成。
+任意 execute/method、agent/chat/code、成本/provider health 永遠不按名稱/hint 降為 read；本批未能安全限制者仍拒絕。`tool-review.json` 對每個延期工具列出確切技術阻礙和補強工作，包括更寬 Odoo 模型、完整 approval flow、私密檔案/trace/credentials、遠端 connector/agent egress 與 workflow 內容。不能把 68/184 宣稱七產品完整完成。
 
 ## 本地驗證契約
 

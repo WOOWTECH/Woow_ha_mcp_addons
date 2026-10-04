@@ -35,7 +35,7 @@ def test_all_withheld_tools_deny_even_when_writes_enabled():
                                'params': {'name': tool['name'], 'arguments': {}}}, inventory.POLICIES[product], state)
                 assert tool['reason'] and tool['enable'] and tool['source']
                 count += 1
-    assert count == 119  # 184 exact pinned tools, 65 bounded supported (B1 +10).
+    assert count == 116  # 184 exact pinned tools, 68 bounded supported (B1 +10, B2 +3).
 
 
 def test_vendored_content_hashes_and_license_notices():

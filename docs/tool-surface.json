@@ -1,6 +1,6 @@
 {
   "format": 2,
-  "scope": "W2b plus BATCH2 B1 bounded expansion; not complete product/HA/release acceptance",
+  "scope": "W2b plus BATCH2 B1/B2 bounded expansion; not complete product/HA/release acceptance",
   "source_digests": {
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/__init__.py": "7f0d150faa30f109b34382fc0f1ca778432a0ba6e000475eeb69ef114aa21a04",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/__main__.py": "078f0bab7f50b889b58b58962bbca16875e782370b5328618a5a842a83a1f1df",
@@ -121,16 +121,17 @@
     "apps/runtime/backend_policy.py": "0cfad784a7aac8bdefccaae93c2ea9663407c11081b6268af2fed7fcd0107fb1",
     "apps/runtime/batch2_outputs.py": "239add1fbbad29eecbfec82e33553b33b4ed7b0e5d3acdad01a33d83f2090352",
     "apps/runtime/bounded_tools.py": "1bf8a05834fe50a002910da0c4d5831f361a13db0557ef43f536e547507750be",
+    "apps/runtime/odoo_b2_scope.py": "0374d3a39a1e7623c2e798dd41d6656fc3f5cf1efd9e54f1ef97fa89550d07bd",
     "apps/runtime/output_policy.py": "5cc75f5e87676786847132a5be4f342dd07e9ef9344c4d7b219219de2aef85a4",
     "apps/hermes/launch.py": "5c9197f5898a7fbae317e824a4601f6d076996f229054cb2e664a5f5f785a0f3",
-    "apps/odoo/launch.py": "2cc240887550bcbddda873779fa43004eabc6d4cb0e367224eb6cd3577a9a093",
+    "apps/odoo/launch.py": "3160784ac9b7027f5ec6f1f77d3857f652b8c00a1cc54265c336fcaa8048c5d9",
     "apps/odoo-manage/launch.py": "442ee6b3ccdc6bf2a494e25475cde2f9f8f707d4f72e92991080e8086b50c22d",
     "apps/opendesign/launch.py": "a7b6adc27a6151914e685bda23180197fccca9a8243e9980c18fbbb0b48be313"
   },
   "products": {
     "odoo": {
       "upstream_count": 41,
-      "supported_count": 10,
+      "supported_count": 13,
       "tools": [
         {
           "name": "accounting_health_across_instances",
@@ -730,15 +731,75 @@
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
-          "status": "temporarily-unsupported",
-          "default_enabled": false,
+          "status": "supported-bounded",
+          "default_enabled": true,
           "write_grants": [],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "data_quality_report：任意模型欄位的品質掃描可能讀取私人值；需限定模型、欄位、掃描上限和結果投影。",
-          "accepted_schema": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "B2 真 handler 的 missing_required 子集：僅 res.partner name/active metadata 與最多兩次 search_count；checks=[missing_required]、key_fields=[name]、sample_limit1..100（此 check 不讀樣本）。正向統計、不含 record/ID/value；總數是缺值欄位次數，不是唯一 records。duplicates 無界 read_group、format/orphan 私密欄位/關係仍拒絕。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "model": {
+                "const": "res.partner",
+                "title": "Model",
+                "type": "string"
+              },
+              "checks": {
+                "items": {
+                  "const": "missing_required",
+                  "type": "string"
+                },
+                "maxItems": 1,
+                "minItems": 1,
+                "title": "Checks",
+                "type": "array"
+              },
+              "key_fields": {
+                "items": {
+                  "const": "name",
+                  "type": "string"
+                },
+                "maxItems": 1,
+                "minItems": 1,
+                "title": "Key Fields",
+                "type": "array"
+              },
+              "sample_limit": {
+                "default": 100,
+                "maximum": 100,
+                "minimum": 1,
+                "title": "Sample Limit",
+                "type": "integer"
+              },
+              "instance": {
+                "anyOf": [
+                  {
+                    "const": "default",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Instance"
+              }
+            },
+            "required": [
+              "model"
+            ],
+            "title": "Quality",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_b2_odoo_policy.py",
+            "tests/test_b2_odoo_runtime.py",
+            "tests/test_b2_odoo_scope.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
           ]
         },
         {
@@ -1517,15 +1578,70 @@
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
-          "status": "temporarily-unsupported",
-          "default_enabled": false,
+          "status": "supported-bounded",
+          "default_enabled": true,
           "write_grants": [],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "inspect_model_relationships：可展開關聯／全 model 欄位中繼資料；需限制關聯深度及模型/欄位集合，不能以 discovery 權限授權所有 records。",
-          "accepted_schema": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "B2 真 handler/live fields_get，僅 res.partner id/name/display_name/active 與 parent_id/child_ids 自關係 metadata，深度1；正向 type/flags/relation，無 labels/context/help/compute/values 或 write hints。禁止 caller metadata、跨 instance、relation record expansion；舊 record fields 不擴張。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "model": {
+                "const": "res.partner",
+                "title": "Model",
+                "type": "string"
+              },
+              "fields_metadata": {
+                "default": null,
+                "title": "Fields Metadata",
+                "type": "null"
+              },
+              "include_readonly": {
+                "default": true,
+                "title": "Include Readonly",
+                "type": "boolean"
+              },
+              "include_computed": {
+                "const": true,
+                "default": true,
+                "title": "Include Computed",
+                "type": "boolean"
+              },
+              "use_live_metadata": {
+                "const": true,
+                "default": true,
+                "title": "Use Live Metadata",
+                "type": "boolean"
+              },
+              "instance": {
+                "anyOf": [
+                  {
+                    "const": "default",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Instance"
+              }
+            },
+            "required": [
+              "model"
+            ],
+            "title": "Relationships",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_b2_odoo_policy.py",
+            "tests/test_b2_odoo_runtime.py",
+            "tests/test_b2_odoo_scope.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
           ]
         },
         {
@@ -1843,15 +1959,72 @@
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
-          "status": "temporarily-unsupported",
-          "default_enabled": false,
+          "status": "supported-bounded",
+          "default_enabled": true,
           "write_grants": [],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "schema_catalog：可展開關聯／全 model 欄位中繼資料；需限制關聯深度及模型/欄位集合，不能以 discovery 權限授權所有 records。",
-          "accepted_schema": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "B2 真 handler；固定 models=[res.partner]、query=null、limit=1；source-guard facade 將實際 ir.model search_read 與 fields_get 限定模型、欄位/attributes，無全模型 enumeration。最多兩個 projected metadata cache keys，client/lifespan 隔離、refresh 明示；無新鮮度保證。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "query": {
+                "default": null,
+                "title": "Query",
+                "type": "null"
+              },
+              "models": {
+                "items": {
+                  "const": "res.partner",
+                  "type": "string"
+                },
+                "maxItems": 1,
+                "minItems": 1,
+                "title": "Models",
+                "type": "array"
+              },
+              "include_fields": {
+                "default": false,
+                "title": "Include Fields",
+                "type": "boolean"
+              },
+              "refresh": {
+                "default": false,
+                "title": "Refresh",
+                "type": "boolean"
+              },
+              "limit": {
+                "default": 1,
+                "maximum": 1,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              },
+              "instance": {
+                "anyOf": [
+                  {
+                    "const": "default",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Instance"
+              }
+            },
+            "title": "Catalog",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_b2_odoo_policy.py",
+            "tests/test_b2_odoo_runtime.py",
+            "tests/test_b2_odoo_scope.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
           ]
         },
         {
@@ -9105,10 +9278,10 @@
                   "action": {
                     "const": "list"
                   },
-                  "folderId": {
+                  "name": {
                     "type": "null"
                   },
-                  "name": {
+                  "folderId": {
                     "type": "null"
                   }
                 },
@@ -9121,11 +9294,11 @@
                   "action": {
                     "const": "create"
                   },
-                  "folderId": {
-                    "type": "null"
-                  },
                   "name": {
                     "type": "string"
+                  },
+                  "folderId": {
+                    "type": "null"
                   }
                 },
                 "required": [
@@ -9138,10 +9311,10 @@
                   "action": {
                     "const": "rename"
                   },
-                  "folderId": {
+                  "name": {
                     "type": "string"
                   },
-                  "name": {
+                  "folderId": {
                     "type": "string"
                   }
                 },

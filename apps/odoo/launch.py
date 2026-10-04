@@ -43,6 +43,8 @@ if __name__ == '__main__':
         return odoo_counts(original_aggregate(**kwargs))
 
     aggregate.fn = bounded_counts
+    from odoo_b2_scope import install as install_b2
+    install_b2(mcp)
     # The stock client caches an XMLRPC transport: serialize its sync calls.
     workers = BoundedTools(mcp, capacity=1)
     try:

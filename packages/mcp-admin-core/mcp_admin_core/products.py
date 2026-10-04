@@ -248,6 +248,8 @@ from .expansion import expand_tools
 expand_tools(TOOLS)
 from .batch2 import expand_tools as expand_batch2
 expand_batch2(TOOLS)
+from .odoo_b2 import TOOLS as ODOO_B2_TOOLS
+TOOLS['odoo'].update(ODOO_B2_TOOLS)
 
 PROBES = {'odoo': ('list_models', {'limit': 1}), 'odoo-manage': ('list_models', {}),
           'hermes': ('hermes_inspect', {'target': 'capabilities'}), 'opendesign': ('health', {}),

@@ -19,18 +19,24 @@
 
 最終284-file snapshot全新security批准後，重建`bt1-approved-integration-files.json`，MAIN20既有baseline與20新目的檔均精確核對，**40個test/config檔已整合**，production／既有治理更新未覆蓋。舊pendingmanifest已淘汰，不作整合依據。
 
-Coordinater於MAIN串行新跑：**792Python＋獨立joined1＋65packaging＋13UIunit＋21browser**，零failure/error/skip；validator/actionlint/inventory/offline locks／syntax／既有assetclosure全exit0。Own PID/PGID/deadline/cleanup有record，沒有deadline signal。`coordinator-bt1-main-verification.json`為新證據；之前636/731/739/756/774 worker／reviewer數字仍只作歷史。
+Coordinator於MAIN串行新跑：**792Python＋獨立joined1＋65packaging＋13UIunit＋21browser**，零failure/error/skip；validator/actionlint/inventory/offline locks／syntax／既有assetclosure全exit0。Own PID/PGID/deadline/cleanup有record，沒有deadline signal。`coordinator-bt1-main-verification.json`為新證據；之前636/731/739/756/774 worker／reviewer數字仍只作歷史。
 
 歷史empty90s timeout、REDUID-child及失敗UI probe Node4153791 descendant cleanup缺口仍unknown；不倒推、不掃殺外部PID。Current freshcleanup與reviewer adversarial cancellation證據分開保存。Test proof/send仍非原子、Playwright1.61.1 seam非通用sandbox。
 
-## B2：下一組 Odoo 有界讀取（接續實作）
+## B2：Odoo 有界讀取已完成雙審與新回歸
 
-先針對已固定來源的三個候選完成逐參數／actual RPC／結果契約，再test-first實作：
-- `schema_catalog`：單一已准backend、res.partner metadata；模型／欄位正向集合、有界cache／輸出，不透出URL/database/context或全模型內容。
-- `inspect_model_relationships`：限定模型／欄位／關係深度；只允許可證明安全metadata，不據此開放相關records讀取。
-- `data_quality_report`：有限checks／key_fields／sample上限；限制真client實際讀取欄位，輸出有界統計投影，不回傳私人樣本／任意模型資料。
+新增三個真pinned handlers，**68/184支援、116延期**。P2 source-drift cache清除修復後SPEC重審及全新SECURITY批准；coordinator新跑804Python＋独立joined1＋65packaging＋13unit＋21browser，零failure/error/skip，source/provenance/inventory/locks／其他靜態檢查過。17delivery hashes保持已審值，證據repo外`coordinator-b2-main-verification.json`。
 
-候選不是已交付：不得改ledger為supported直到真handler、positive/negative/fake-RPC、錯誤不洩密及完整回歸證據具備。不得用fake handler／合成成功冒充來源功能。若來源限制，逐項說明並保持deny，不重新整庫scout或停止其他可實作項。
+已落實契約：
+- `schema_catalog`：res.partner固定model/query/limit，實際ir.model.search_read精確domain／fields／limit1；六欄位正向fields_get。每client/lifespan兩cache variants；source-drift／failed refresh清空，恢復freshRPC；無URL/database/context／backend labels。
+- `inspect_model_relationships`：live-only六個欄位metadata，parent_id/child_ids僅self res.partner、depth1；保留真algorithm counts／readonly filtering，不開放相關records values或compute expressions。
+- `data_quality_report`：僅missing_required、name/active的type/required/store metadata與最多兩次精確search_count。保留真field-occurrence sum，不是unique-records／sample scan／DB工作上限；無私人sample，duplicates/formats/orphans仍deny。
+
+## B3：下一組 n8n 有界讀取（候選，尚未交付）
+
+先依固定source完成contract再test-first：`n8n_list_catalog`限tags／public API，不准projects instance-MCP fallback；`n8n_executions`限list metadata、禁止payload與delete；`n8n_health_check`限status-only，必須處理其npm-version／official-MCP間接路徑而不放寬egress；既有`n8n_manage_folders`可增get readonly操作但不自動增move/delete grants。工具名coverage與操作擴充分開計數。
+
+不得先標supported、fake handler／合成成功或新開公共模板站／registry／instance-MCP權限。若某來源路徑不能安全保留，逐項說明並保持deny，完成其他可實作項；不重新整庫scout或整批停在報告。
 
 本批不開任意method/code/agent、cross-instance、HR/財務資料、attachment、local index或async job權限。後續n8n metadata/folder等常用工具繼續依逐名source/effect契約排批。
 
@@ -48,4 +54,4 @@ BLD2九檔pipeline契約proposal雙審／65mock-package通過，已合MAIN；emb
 - 每交付獨立SPEC，之後全新SECURITY；fix後重驗，不自行approve。
 - 每bash／診斷／test command explicit timeout；長job own PID/PGID與boundedcleanup；不輪詢agent，不猜pending結果。
 - 最多3active、共用production一writer；並行只在隔離worktree且檔案scope明確不交集。
-- 公開push／source-license／secret／image／HA／真backend gates closed；僅n8n HA API例外，六類仍failclosed。External gate不停止內部backlog，65工具不是整體done。
+- 公開push／source-license／secret／image／HA／真backend gates closed；僅n8n HA API例外，六類仍failclosed。External gate不停止內部backlog，68工具不是整體done。

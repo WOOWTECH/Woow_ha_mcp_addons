@@ -1,6 +1,24 @@
 {
-  "scope": "W2a/W2b plus BATCH2 B1 bounded expansion; no dependency edits or independent approval",
+  "scope": "W2a/W2b plus BATCH2 B1/B2 bounded expansion; no dependency edits; B2 pending independent SPEC then NEW SECURITY",
   "patches": [
+    {
+      "path": "packages/mcp-admin-core/mcp_admin_core/odoo_b2.py",
+      "sha256": "2f0712377804864add7a4fe622586ede1280a323cd612eb53dc4b6b30f1a70fb",
+      "change": "B2 three default-readonly bounded Odoo tools: fixed partner catalog, live self-relation metadata depth1, missing-required name/active counts only. No new grants or record fields. Strict schemas reject unknown/extra/cross-instance and broad upstream defaults.",
+      "guarded_sources": {}
+    },
+    {
+      "path": "apps/runtime/odoo_b2_scope.py",
+      "sha256": "0374d3a39a1e7623c2e798dd41d6656fc3f5cf1efd9e54f1ef97fa89550d07bd",
+      "change": "B2 genuine pinned handlers run with invocation-local context/client facade, not replaced algorithms. Fixed ir.model search_read model/limit/fields, explicit partner fields_get names/attributes and positive metadata projection BEFORE handler/cache; quality permits at most two required stored name/active search_count calls, no samples/group/private fields/related records. Two projected catalog cache keys per client identity/lifespan, immutable ChildSpec credential generation, source guard even on hits, explicit refresh with no freshness promise. Generic failure for outer/nested/backend/malformed errors; Exception only, execution-owned single worker unchanged. Catalog SDK adds empty name default, quality SDK adds null optional fields; neither contains backend labels/instance. No dependency/source wheel edits.",
+      "guarded_sources": {
+        "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_data_quality.py": "5a0b35eb4d5196321dbba042d89afe2d62d1e8e4d51337b6a54999e108ecaa34",
+        "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/data_quality.py": "c939be7370cd797abdb079513c1949339445c1e6aa3b9bb3d06a075924b1c3fe",
+        "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/server_core.py": "b6872eb7dd7e4b937ebb8dd0ae2b80e29a79a3e34f2beaeaf092f0d9b2b79c03",
+        "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/field_policy.py": "f6763bd2d5eca68445cdc4302b68fcd38cf145f608de16a12b00e2ac1a7dd978",
+        "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tool_helpers.py": "51276e68897d45f812048400d79100ba1a6a589de05fc7c50dff96d4c9596e64"
+      }
+    },
     {
       "path": "packages/mcp-admin-core/mcp_admin_core/batch2.py",
       "sha256": "ba472dcd66a850b9d6b8d2f86682ec5d68b7d7872d0f9be875a230d535ce20fd",
@@ -26,8 +44,8 @@
     },
     {
       "path": "packages/mcp-admin-core/mcp_admin_core/products.py",
-      "sha256": "9849528e0ce9abea6180cd850d9ac0f701a0378f83e51f4ac18c88f14f4f68c5",
-      "change": "W2b v3 per-tool/operation grants, typed module mode, exact native disabled-tool universe and grant-controlled readonly. Reserve only the fixed read-only EMQX cluster-status / LiteLLM model-list probe in private loopback registration independently of public disables; parent authorization/list filtering remains authoritative, with real backend reads and unchanged readiness validation. Disable FastMCP banner/update checks to prevent unauthenticated PyPI lookup and version-cache pollution of the guarded clean restart directory; never delete or permit unknown CWD contents.",
+      "sha256": "fc3ee3a12ec432e1d8fbdc3eaa37313a1bcd1aa76d61cd96b3733ca2731e607c",
+      "change": "B2 registers three narrow Odoo read schemas. W2b v3 per-tool/operation grants, typed module mode, exact native disabled-tool universe and grant-controlled readonly. Reserve only the fixed read-only EMQX cluster-status / LiteLLM model-list probe in private loopback registration independently of public disables; parent authorization/list filtering remains authoritative, with real backend reads and unchanged readiness validation. Disable FastMCP banner/update checks to prevent unauthenticated PyPI lookup and version-cache pollution of the guarded clean restart directory; never delete or permit unknown CWD contents.",
       "guarded_sources": {
         "apps/emqx/.venv/lib/python3.13/site-packages/fastmcp/settings.py": "f96cd4e29b0d56e1f24c522ea977170f1b6efbdb88dc59023b1e9fa9afe3397c",
         "apps/emqx/.venv/lib/python3.13/site-packages/fastmcp/utilities/version_check.py": "ce36361da496e1fd3d1a3ba7dd5e932f269e242fd93cf7f5e95bd001d0e280ef",
@@ -43,8 +61,8 @@
     },
     {
       "path": "apps/odoo/launch.py",
-      "sha256": "2cc240887550bcbddda873779fa43004eabc6d4cb0e367224eb6cd3577a9a093",
-      "change": "Before stock CLI starts, replace RedirectTransport with configured-origin XMLRPC transport. Deny all redirects, pin validated DNS, retain verified hostname/SNI, sanitize faults; bound SDK sync dispatch to one worker. B1 source-guard pure builder/diagnostic and aggregate handlers; project actual aggregate results to bounded partner counts.",
+      "sha256": "3160784ac9b7027f5ec6f1f77d3857f652b8c00a1cc54265c336fcaa8048c5d9",
+      "change": "Before stock CLI starts, replace RedirectTransport with configured-origin XMLRPC transport. Deny all redirects, pin validated DNS, retain verified hostname/SNI, sanitize faults; bound SDK sync dispatch to one worker. B1 source-guard pure builder/diagnostic and aggregate handlers; project actual aggregate results to bounded partner counts. B2 installs isolated source-guarded narrow client/context facade before existing one-worker dispatch, preserving genuine metadata/quality handlers and all previous handlers.",
       "guarded_sources": {
         "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py": "4c8bf33b35c54757b93f0cc367b4f5027488ca8fbf63f68c1241f1a4be784de0",
         "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py": "957f3affa479cb079350de8874064d89594ab0661cfbfd7675b7f26930d32772",
