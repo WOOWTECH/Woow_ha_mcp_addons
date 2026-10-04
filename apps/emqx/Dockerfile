@@ -36,7 +36,7 @@ COPY --from=dependencies /opt/woow/apps/emqx/.venv ./apps/emqx/.venv
 COPY packaging/entrypoint.py packaging/management_launcher.py ./packaging/
 COPY THIRD_PARTY_NOTICES.md ./THIRD_PARTY_NOTICES.md
 COPY docs/provenance ./docs/provenance
-RUN groupadd --gid 10001 mcp && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /data/mcp --shell /usr/sbin/nologin mcp
+RUN /usr/sbin/groupadd --gid 10001 mcp && /usr/sbin/useradd --uid 10001 --gid 10001 --no-create-home --home-dir /data/mcp --shell /usr/sbin/nologin mcp
 # Root ONLY for no-follow creation/ownership of a NEW /data/mcp, then irreversible uid/gid drop.
 # No Supervisor-owned options file or existing tree is chowned. No backend-dependent watchdog.
 EXPOSE 8081

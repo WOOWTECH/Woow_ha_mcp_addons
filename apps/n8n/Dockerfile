@@ -38,11 +38,11 @@ COPY --from=npm /usr/local/bin/node /usr/local/bin/node
 COPY --from=npm /usr/lib/x86_64-linux-gnu/libstdc++.so.6 /usr/local/lib/libstdc++.so.6
 COPY --from=npm /lib/x86_64-linux-gnu/libgcc_s.so.1 /usr/local/lib/libgcc_s.so.1
 COPY --from=npm /npm/node_modules ./apps/n8n/node_modules
-RUN ldconfig && node --version
+RUN /usr/sbin/ldconfig && node --version
 COPY packaging/entrypoint.py packaging/management_launcher.py ./packaging/
 COPY THIRD_PARTY_NOTICES.md ./THIRD_PARTY_NOTICES.md
 COPY docs/provenance ./docs/provenance
-RUN groupadd --gid 10001 mcp && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /data/mcp --shell /usr/sbin/nologin mcp
+RUN /usr/sbin/groupadd --gid 10001 mcp && /usr/sbin/useradd --uid 10001 --gid 10001 --no-create-home --home-dir /data/mcp --shell /usr/sbin/nologin mcp
 # Root ONLY for no-follow creation/ownership of a NEW /data/mcp, then irreversible uid/gid drop.
 # No Supervisor-owned options file or existing tree is chowned. No backend-dependent watchdog.
 EXPOSE 8081
