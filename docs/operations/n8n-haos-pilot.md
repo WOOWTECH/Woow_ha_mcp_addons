@@ -8,8 +8,9 @@ P0 已在本機執行；P1 起每一步都要對應批准（見各步「前提�
 
 | 項目 | 值 |
 |---|---|
-| 已審 commit | `34f06d838c5a1a18dbf623a071fbede0644ef5c0`（B3 checkpoint，71/184 工具） |
-| 產品 | n8n，slug `woow_mcp_n8n`，version `0.1.0`，amd64 only |
+| 候選 source commit | `34f06d838c5a1a18dbf623a071fbede0644ef5c0`（B3 checkpoint，71/184 工具）——要建置的程式 |
+| 交付工具 commit | `local/claude-delivery` 上審查通過的 commit——只提供 `source_bundle.py`、`context_closure.py` 兩支工具，**不進入**候選 checkout |
+| 產品 | n8n，version `0.1.0`，amd64 only；公開 slug `woow_mcp_n8n`；**試點**是本地 app `woow_mcp_n8n_pilot`，安裝後顯示為 `local_woow_mcp_n8n_pilot` |
 | 映像 | 本地 tag `local/mcp-n8n:0.1.0`；`config.yaml` 公開名 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.0`（**未發佈**） |
 | Ports | Ingress `8099`（容器內、無 host mapping）；MCP `8081/tcp: null`（預設不對 LAN 開） |
 | 資料 | `/data/mcp`，uid/gid 10001，0700／0600；`backup: cold` |
@@ -17,10 +18,18 @@ P0 已在本機執行；P1 起每一步都要對應批准（見各步「前提�
 
 commit 換了就從 P0 重來，舊 commit 的證據不能批准新映像。
 
+**兩種 SHA 不可混用。** 候選 source commit 決定 checkout 與建置內容；交付工具是另外核對過 sha256 的獨立副本，
+放在 checkout 之外（下稱 `<tools>`），只讀候選 checkout、不寫入、不改 build context。候選 `34f06d8` 本身沒有這兩支
+工具，不要把它們複製進 checkout，也不要為了有工具而改用別的 commit。若日後交付工具已合入新的候選並經審查，
+就以那個新 commit 為基準重做 P0，舊證據不沿用。
+
+`<tools>` 的準備：從交付工具 commit 取出兩檔（純 Python 標準庫，無其他依賴），記錄每檔 sha256，與協調者
+公布的值比對一致後才使用。
+
 ## P0 — 私有 source bundle（本機，已執行）
 
 ```sh
-python packaging/source_bundle.py create . <SHA> <新的空目錄>
+python3 <tools>/source_bundle.py create <repo> <候選 SHA> <新的空目錄>
 ```
 
 只把該 commit 的完整可達歷史打包在單一 ref `refs/heads/candidate` 下；在一次性 bare clone 中建立，
@@ -33,25 +42,26 @@ hooks、remote 或憑證。傳送僅限批准的私有管道，**不公開 push*
 前提：Q1 批准的私有、可銷毀 amd64 VM（自有 Docker Engine＋Buildx docker driver、無生產憑證／路由）。
 
 ```sh
-python3 packaging/source_bundle.py verify woow-mcp-<sha12>.bundle <SHA> source-receipt.json <新的空 checkout 目錄>
+python3 <tools>/source_bundle.py verify woow-mcp-<sha12>.bundle <候選 SHA> source-receipt.json <新的空 checkout 目錄>
 ```
 
 驗 sha256、bundle 只有那一個 ref 且指向該 SHA、`fsck --strict`、HEAD 與 tree 一致、工作樹乾淨。
-任何一項失敗：停止，不改用其他來源。執行 `verify` 的 `source_bundle.py` 不可取自 bundle 本身
-（不能用待驗內容驗證自己），要用協調者另行核對過 sha256 的副本。
+任何一項失敗：停止，不改用其他來源。`verify` 一律用 `<tools>` 的副本，不取自 bundle 本身
+（不能用待驗內容驗證自己）。
 
-## P2 — 靜態與單元關卡（VM，checkout 根目錄）
+## P2 — 靜態與單元關卡（VM，候選 checkout 根目錄）
 
 ```sh
-python packaging/validate.py
-python packaging/context_closure.py
+python packaging/validate.py                    # 候選自帶
+python3 <tools>/context_closure.py .            # 外部工具，產品清單讀自候選 packaging/inputs.json
 uv sync --frozen --no-dev --python python3.13
 .venv/bin/python -m unittest discover -s packaging -p 'test_*.py' -v
 sh packaging/unit.sh
 ```
 
-與 CI `unit` job 相同。`context_closure.py` 依 Docker 實際 `.dockerignore` 語義（含父目錄比對）
-確認七支 Dockerfile 的每個 COPY 來源都在 context 內，避免到 builder 才發現缺檔。
+除 `context_closure.py` 外與 CI `unit` job 相同。`context_closure.py` 是**模型檢查**：以 moby 的
+`.dockerignore` 父目錄比對規則，對 git 追蹤檔與其文件所列的 Dockerfile 子集，確認 COPY 來源在 context 內；
+超出子集的寫法直接報 unsupported。它不是完整 Docker 語義實作，也不能取代 P3 真實建置或證明 context 無秘密。
 
 ## P3 — 建置（VM）
 
@@ -89,12 +99,15 @@ python3 packaging/supply_chain.py candidate n8n <scanners 目錄> <evidence 目�
 同一已測 image ID 的 source/history/all-layer secret、SBOM、CVE、license。finding 如實保留，
 不改 allowlist 或規則。之後 VM 上不得再 build 同一 tag。
 
-## P6 — 送到 HAOS（依 Q2 決定，尚未決定）
+## P6 — 送到 HAOS（方向已定；registry／權限仍待批准）
 
-建議選項 B：把**已測 image ID**（不重建）推到私有 registry 的 commit 專屬路徑；推送後依
+方向已定（協調者 Q2 決定）：私有 registry＋本地 pilot app＋不在 HA 重建。仍待批准：registry host／namespace、
+推送權限、Supervisor 拉取憑證，以及 H1–H4 每一步。細節與每步回復以 [私有映像交付設計](n8n-pilot-image-delivery.md) 為準。
+
+把**已測 image ID**（不重建）推到私有 registry 的 commit 專屬路徑；推送後依
 [私有映像交付設計](n8n-pilot-image-delivery.md) 核對：config digest 等於 P3 的 image ID，由已驗證 config
 讀出的 `rootfs.diff_ids` 等於 P5 `subject.json`；manifest layer digest 是壓縮 blob 的 hash，只核對 registry 自洽，不與 diff_ids 比。
-試點 HA 的 Supervisor 加一組唯讀、短效拉取憑證。
+試點 HA 的 Supervisor 加一組唯讀、短效拉取憑證（=H1，需單獨批准）。
 
 限制：Supervisor 依 `image:version` tag 拉取，不是 digest；app API 也不回報 image ID／digest。所以路徑推送後
 不得覆寫，安裝前後各讀一次 manifest digest；這只證明 registry 引用未變，**HA 實際運行的 image 身分仍未直接建立**，
@@ -107,14 +120,16 @@ python3 packaging/supply_chain.py candidate n8n <scanners 目錄> <evidence 目�
 
 前提：Q3 確認目標機、時段、受限非正式 n8n API key 的供應管道。
 
-- 記錄 HAOS／Supervisor／Core 版本；已安裝 app 清單中沒有 `woow_mcp_n8n`。
+- 記錄 HAOS／Supervisor／Core 版本；已安裝 app 清單中沒有 `local_woow_mcp_n8n_pilot`，`/addons/woow_mcp_n8n_pilot/`
+  目錄不存在（若已存在，停止並確認來源，不覆蓋）。
 - 確認 8081 若要對 LAN 開放，選定的 host port 沒被占用（既有 n8n 用 5678）。
 - 確認有可用的近期完整備份（不是由本程序建立整機備份）。
 - 只讀 Supervisor/Core API；不重啟 Core／Supervisor、不動既有 n8n/Odoo/EMQX/Hermes/OpenDesign。
 
 ## P8 — 安裝新 Add-on（只此一個）
 
-加入試點 repository（或依 Q2 的 manifest 變體）→ 安裝 `woow_mcp_n8n` → 啟動。檢查：
+依設計逐步、各自批准：H1 加唯讀拉取憑證 → H2 把產生的試點變體目錄複製到 `/addons/woow_mcp_n8n_pilot/`
+→ H3 安裝並啟動 `local_woow_mcp_n8n_pilot`（全新、隔離的資料）。不新增 store repository。每步之前確認前一步的證據。檢查：
 
 - 日誌沒有 token／Authorization／backend body。
 - 三種健康分開：管理、MCP child、backend（未設定 backend 時 readiness 503 屬預期，不設 watchdog）。
@@ -137,9 +152,17 @@ python3 packaging/supply_chain.py candidate n8n <scanners 目錄> <evidence 目�
 
 ## 回復
 
-只回復本次新增的部分，順序：停止 `woow_mcp_n8n` → 視需要保留失敗狀態（含秘密，受控保存）→
-解除安裝 → 移除試點 repository → 移除 Supervisor 的試點 registry 憑證 → 撤銷該受限 n8n API key 與
-發出的 MCP token。既有服務、Core、Supervisor、k3s 均未被修改，不需回復。
+只回復本次新增的部分（設計 H4），每步各自確認：
+
+1. 停止 `local_woow_mcp_n8n_pilot`。
+2. **解除安裝會刪除它的 `/data`。** 解除安裝前必須：(a) 取得負責人明確的書面確認；(b) 先完成受控 export 或該 app
+   的 cold backup（含秘密，限制保存位置與人員），並記錄 opaque backup ID；(c) 記下資料保留或銷毀的決定。
+   三項缺一就不解除安裝，維持停止狀態。這不是可選步驟。
+3. 解除安裝 → 刪除 `/addons/woow_mcp_n8n_pilot/` 並重新載入本地 app 清單（H2 回復）。
+4. 移除 Supervisor 的試點 registry 憑證並確認清單中已無此項（H1 回復），撤銷該 registry 憑證本身。
+5. 撤銷受限 n8n API key 與發出的 MCP token。
+
+既有服務、Core、Supervisor、k3s 均未被修改，不需回復。
 
 ## 證據紀錄格式
 

@@ -12,18 +12,32 @@ silently under-counted. This is a model of the rules, not builder evidence.
   escapes. Character classes `[...]` are rejected.
 - Dockerfile: `\\` line continuations are joined into one instruction (comment
   lines inside are dropped, as Docker does); upper-case `COPY` in shell form with
-  literal relative sources. `COPY --from=...` is skipped (stage copy). Other
-  `--flag=value` options are ignored except `--parents`/`--exclude`, which change
-  source selection and are rejected. Rejected: JSON-form COPY, heredocs (`<<`
-  anywhere, since a body changes how later lines parse), a dangling continuation, `ADD`, parser directives, and `$`, `*`, `?`, `[` in sources.
+  literal relative sources. Options are parsed ONLY before the first source:
+  exact `--from=<stage>` skips the instruction (stage copy); `--chown=`,
+  `--chmod=`, `--link`/`--link=true|false` are accepted and ignored; any other
+  option (including `--parents`, `--exclude`, bare `--from`) is rejected. After
+  the first source every token is an operand, and an operand starting with `-`
+  is rejected rather than dropped. Also rejected: JSON-form COPY, heredocs (`<<`
+  anywhere, since a body changes how later lines parse), a dangling
+  continuation, `ADD`, parser directives, and `$`, `*`, `?`, `[`, absolute or
+  `..` sources.
+- Product names come from the checked root's `packaging/inputs.json`, and the
+  module is stdlib only, so a separately verified copy can check a candidate
+  checkout that predates this tool: `python3 <tools>/context_closure.py <root>`.
 """
+import json
 import os
 from pathlib import Path
 import re
 import subprocess
 import sys
 
-from validate import PRODUCTS
+IGNORED_OPTIONS = re.compile(r'--(chown=\S+|chmod=\S+|link|link=(true|false))')
+STAGE_OPTION = re.compile(r'--from=\S+')
+
+
+def products(root):
+    return json.loads((Path(root) / 'packaging' / 'inputs.json').read_text())['products']
 
 
 def compile_pattern(pattern):
@@ -109,18 +123,24 @@ def copy_sources(dockerfile):
             continue
         if words[0] != 'COPY' or (len(words) > 1 and words[1].startswith('[')):
             raise ValueError(where + 'unsupported COPY form')
-        flags = [w for w in words[1:] if w.startswith('--')]
-        if any(f.startswith(('--parents', '--exclude')) for f in flags):
-            raise ValueError(where + 'unsupported COPY flag')
-        if any(f.startswith('--from') for f in flags):
-            continue
-        args = [w for w in words[1:] if not w.startswith('--')]
-        if len(args) < 2:
+        rest, stage = words[1:], False
+        while rest and rest[0].startswith('--'):
+            option = rest.pop(0)
+            if STAGE_OPTION.fullmatch(option):
+                stage = True
+            elif not IGNORED_OPTIONS.fullmatch(option):
+                raise ValueError(where + 'unsupported COPY option ' + option)
+        if len(rest) < 2:
             raise ValueError(where + 'COPY needs source and destination')
-        for source in args[:-1]:
+        for operand in rest:
+            if operand.startswith('-'):
+                raise ValueError(where + 'unsupported dash operand ' + operand)
+        if stage:
+            continue
+        for source in rest[:-1]:
             if any(c in source for c in '$*?[') or source.startswith(('/', '..')):
                 raise ValueError(where + 'unsupported COPY source ' + source)
-        sources += args[:-1]
+        sources += rest[:-1]
     return sources
 
 
@@ -141,7 +161,7 @@ def main(root='.'):
                            text=True, timeout=60).stdout.split('\0')
     files = [f for f in files if f]
     ignore = (root / '.dockerignore').read_text()
-    failures = {app: problems(files, ignore, (root / 'apps' / app / 'Dockerfile').read_text()) for app in PRODUCTS}
+    failures = {app: problems(files, ignore, (root / 'apps' / app / 'Dockerfile').read_text()) for app in products(root)}
     failures = {app: p for app, p in failures.items() if p}
     if failures:
         raise SystemExit('FAIL: ' + repr(failures))

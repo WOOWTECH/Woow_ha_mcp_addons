@@ -64,8 +64,9 @@ manifest `layers[].digest` 是依其 mediaType 儲存的 blob（通常壓縮）�
 1. 讀 manifest 原始 bytes，sha256 必須等於回應的 manifest digest；mediaType 必須是預期的單一平台 image manifest。
 2. 依 config descriptor 取 config blob，sha256 必須等於 descriptor digest，且等於 `image_id`。
 3. 從這份已驗證的 config 讀 `rootfs.diff_ids`，與 `subject.json` 的 `diff_ids` 逐項相等。
-4. 每個 layer descriptor：取（或 HEAD）對應 blob，digest 與 size 相符；這只證明 registry 內容自洽，
-   不拿來和 diff_ids 比。
+4. 每個 layer descriptor：GET 取回 blob bytes，自行重算 sha256 與 size，與 descriptor 相符；這只證明 registry
+   內容自洽，不拿來和 diff_ids 比。只做 HEAD 時，只能記為「registry 宣告的 digest／size metadata 相符」，
+   **不是** blob bytes 已獨立驗證；receipt 對每個 layer 標明 `bytes-verified` 或 `metadata-only`。
 
 任一不符：停止，不安裝或立即停用。
 

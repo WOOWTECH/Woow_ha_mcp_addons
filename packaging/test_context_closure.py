@@ -1,4 +1,5 @@
 """Offline .dockerignore semantics and real-repository closure. No Docker."""
+import json
 from pathlib import Path
 import unittest
 
@@ -49,6 +50,22 @@ class ContextClosureTests(unittest.TestCase):
         self.assertEqual(c.copy_sources('COPY --chown=1:1 --link a b ./\n'), ['a', 'b'])
         joined = 'LABEL a=1 \\\n  b=2\nCOPY one \\\n# dropped comment\n  two ./dst\n'
         self.assertEqual(c.copy_sources(joined), ['one', 'two'])
+
+    def test_options_only_lead_and_operands_are_never_swallowed(self):
+        # Review R3: after the first source operand nothing is an option; a dash
+        # operand is outside the subset and must be reported, not dropped.
+        for dockerfile in ('COPY a --note /dst/\n', 'COPY a --from-note /dst/\n',
+                           'COPY a --from=x /dst/\n', 'COPY --from-note a ./\n',
+                           'COPY --unknown a ./\n', 'COPY --from a ./\n'):
+            with self.subTest(dockerfile=dockerfile), self.assertRaises(ValueError):
+                c.copy_sources(dockerfile)
+        self.assertEqual(c.copy_sources('COPY --from=ui /ui/dist ./x\n'), [])
+        self.assertEqual(c.copy_sources('COPY --link --chmod=0644 a b ./\n'), ['a', 'b'])
+
+    def test_products_come_from_the_checked_root(self):
+        # Review R2: the checker can run from an external tools directory against
+        # a candidate checkout; product names are read from that checkout.
+        self.assertEqual(c.products(ROOT), json.loads((ROOT / 'packaging/inputs.json').read_text())['products'])
 
     def test_repository_dockerfiles_are_closed(self):
         c.main(ROOT)
