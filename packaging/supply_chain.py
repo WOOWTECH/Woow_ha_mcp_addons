@@ -66,6 +66,20 @@ def write_json(path, value):
     path.write_text(json.dumps(value, sort_keys=True, indent=2) + '\n')
 
 
+def grype_db(report):
+    # Normalise the DB descriptor: grype <=0.89 reports db.{schemaVersion,checksum,built};
+    # grype 0.120 reports db.status.{schemaVersion 'v6.x', built, valid, from=...?checksum=sha256:...}.
+    db = report.get('descriptor', {}).get('db', {})
+    if isinstance(db.get('status'), dict):
+        status = db['status']
+        require(status.get('valid') is True and not status.get('error'))
+        match = re.search(r'[?&]checksum=sha256(?::|%3A)([0-9a-f]{64})(?:&|$)', str(status.get('from', '')))
+        return {'schemaVersion': str(status.get('schemaVersion', '')).removeprefix('v'), 'built': status.get('built'),
+                'checksum': match.group(1) if match else ''}
+    require(not db.get('error'))
+    return {'schemaVersion': str(db.get('schemaVersion', '')), 'built': db.get('built'), 'checksum': db.get('checksum', '')}
+
+
 def enforce_policy(sbom, vulnerabilities):
     policy = read_json(ROOT / 'packaging/supply-chain-policy.json')
     require(policy['schema'] == 1 and policy['id'] == 'woow-conservative-v1'
@@ -80,8 +94,8 @@ def enforce_policy(sbom, vulnerabilities):
             require(license_.get('value') in policy['allowed_licenses'])
     descriptor = vulnerabilities.get('descriptor', {})
     require(descriptor.get('name') == 'grype' and descriptor.get('version') == pins()['grype']['version'])
-    db = descriptor.get('db', {})
-    require(not db.get('error') and str(db.get('schemaVersion', '')).startswith('6.'))
+    db = grype_db(vulnerabilities)
+    require(db['schemaVersion'].startswith('6.'))
     require(bool(re.fullmatch(r'[0-9a-f]{64}', db.get('checksum', '').removeprefix('sha256:'))))
     try:
         age = (datetime.now(timezone.utc) - datetime.fromisoformat(db['built'].replace('Z', '+00:00'))).total_seconds()
@@ -316,6 +330,8 @@ def candidate(app, tools, output):
         grype_config = private / 'grype.yaml'
         grype_config.write_text('check-for-app-update: false\ndb:\n  validate-age: true\n  max-allowed-built-age: 120h\n')
         vulnerabilities = private / 'vulnerabilities.json'
+        # Fetch and validate the DB first, alone; then scan the SBOM against it.
+        run([str(tools / 'grype'), 'db', 'update', '--config', str(grype_config)], cwd=private, env=env)
         raw = run([str(tools / 'grype'), 'sbom:' + str(syft), '--config', str(grype_config),
                    '-o', 'json'], cwd=private, env=env)
         vulnerabilities.write_bytes(raw)
@@ -329,8 +345,7 @@ def candidate(app, tools, output):
         write_json(evidence / 'subject.json', subject)
         write_json(evidence / 'scan-summary.json', {'subject': subject, 'policy_sha256': policy_hash(),
                    'tools': pins(), 'checks': dict.fromkeys(CHECKS, 'pass'),
-                   'vulnerability_database': {key: vulnerability_report['descriptor']['db'][key]
-                                              for key in ('schemaVersion', 'built', 'checksum')},
+                   'vulnerability_database': grype_db(vulnerability_report),
                    'package_count': len(sbom['artifacts']),
                    'vulnerability_count': len(vulnerability_report['matches'])})
         write_json(evidence / 'provenance.json', provenance(subject, evidence))

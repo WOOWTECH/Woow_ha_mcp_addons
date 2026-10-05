@@ -16,7 +16,7 @@ import supply_chain as s
 class SupplyChainTests(unittest.TestCase):
     def test_policy_unknown_missing_and_high_vulnerabilities_deny(self):
         sbom = {'artifacts': [{'name': 'fixture', 'licenses': [{'value': 'MIT'}]}]}
-        report = {'matches': [], 'descriptor': {'name': 'grype', 'version': '0.89.0',
+        report = {'matches': [], 'descriptor': {'name': 'grype', 'version': s.pins()['grype']['version'],
                   'db': {'schemaVersion': '6.0.2', 'checksum': 'a' * 64, 'error': '',
                          'built': datetime.now(timezone.utc).isoformat()}}}
         s.enforce_policy(sbom, report)
@@ -33,6 +33,23 @@ class SupplyChainTests(unittest.TestCase):
                 s.enforce_policy(bad, report)
         for bad in ({}, {'matches': []}, {**report, 'descriptor': {'db': {'error': 'invalid'}}}):
             with self.assertRaises(s.Closed):
+                s.enforce_policy(sbom, bad)
+
+    def test_grype_0120_status_descriptor_is_normalised(self):
+        sbom = {'artifacts': [{'name': 'fixture', 'licenses': [{'value': 'MIT'}]}]}
+        built = datetime.now(timezone.utc).isoformat()
+        status = {'schemaVersion': 'v6.1.10', 'built': built, 'valid': True,
+                  'from': 'https://grype.anchore.io/databases/v6/db.tar.zst?checksum=sha256%3A' + 'b' * 64}
+        report = {'matches': [], 'descriptor': {'name': 'grype', 'version': s.pins()['grype']['version'],
+                  'db': {'status': status, 'providers': {}}}}
+        s.enforce_policy(sbom, report)
+        self.assertEqual(s.grype_db(report), {'schemaVersion': '6.1.10', 'built': built, 'checksum': 'b' * 64})
+        for bad_status in (dict(status, valid=False), dict(status, schemaVersion='v5.0.0'),
+                           dict(status, built='2000-01-01T00:00:00Z'), dict(status, error='x'),
+                           dict(status, **{'from': 'https://x/db?checksum=sha256%3Azz'})):
+            bad = copy.deepcopy(report)
+            bad['descriptor']['db']['status'] = bad_status
+            with self.subTest(status=str(bad_status)[:50]), self.assertRaises(s.Closed):
                 s.enforce_policy(sbom, bad)
 
     def test_scanner_nonzero_and_missing_executable_deny_without_output(self):
