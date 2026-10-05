@@ -286,18 +286,25 @@ def mode_plan(opts, client, out, plan):
 
     With --expect-backend-down, every read must still be answered (HTTP 200: local tools keep working,
     backend tools report the failure) and at least one read must fail in a structured way (isError or an
-    in-band failure), proving the server answers instead of hanging or crashing during an outage.
+    in-band failure), proving the server answers instead of hanging or crashing during an outage. A child
+    that cannot open a session without its backend makes the gateway refuse initialize with HTTP 503 and
+    BACKEND_UNAVAILABLE (0.1.2); that refusal is the structured failure, and denials must still be 403.
     """
     status, message, sid = client.open()
-    if status != 200:
+    refused = (opts.expect_backend_down and status == 503
+               and describe(message) == 'error -32000: BACKEND_UNAVAILABLE')
+    if status != 200 and not refused:
         raise SystemExit('initialize returned %s' % status)
     out.write('initialize http=%s %s\n' % (status, describe(message)))
     rows = []
     try:
-        list_status, names = client.tools(sid)
-        listed = set(names)
-        out.write('tools/list http=%s tools=%d\n' % (list_status, len(listed)))
-        for kind in ('reads', 'denials'):
+        if refused:
+            listed, kinds = set(), ('denials',)  # no session for reads; the gateway refuses denials first
+        else:
+            list_status, names = client.tools(sid)
+            listed, kinds = set(names), ('reads', 'denials')
+            out.write('tools/list http=%s tools=%d\n' % (list_status, len(listed)))
+        for kind in kinds:
             for i, (name, arguments) in enumerate(plan.get(kind, [])):
                 call_status, is_error, text = client.call_text(sid, name, arguments, ident=300 + len(rows))
                 structured = bool(is_error or backend_failed(text))
@@ -314,7 +321,11 @@ def mode_plan(opts, client, out, plan):
                     text.replace('\n', ' ')[:opts.width]))
     finally:
         client.close(sid)
-    if opts.expect_backend_down:
+    if refused:
+        rows.append({'kind': 'outage', 'tool': '(initialize)', 'listed': None, 'http': 503, 'isError': None,
+                     'structured_failure': True, 'pass': True})
+        out.write('outage: initialize refused with BACKEND_UNAVAILABLE\n')
+    elif opts.expect_backend_down:
         failed_reads = sum(r['structured_failure'] for r in rows if r['kind'] == 'reads')
         rows.append({'kind': 'outage', 'tool': '(any backend read)', 'listed': None, 'http': None, 'isError': None,
                      'structured_failure': failed_reads, 'pass': failed_reads > 0})

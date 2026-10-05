@@ -362,6 +362,43 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         except (httpx.HTTPError, TimeoutError):
             return
 
+    async def initialize_reply(owner, token, is_sse, ident):
+        """Read the child's reply to initialize: (outcome, message, SSE frame lines other than data).
+
+        outcome is "ok", "missing" or "invalid". Stops at the JSON-RPC response with the request's id
+        (an SSE stream may stay open after it). "missing": the child answered 200 and ended without a
+        reply, e.g. its per-session lifespan could not reach the backend (Odoo Manage, 0.1.1 HA test),
+        so the session id it sent is dead.
+        """
+        pending = b""
+        reader = chunks(owner, token)
+        try:
+            async for chunk in reader:
+                pending += chunk
+                if len(pending) > MAX_RESPONSE:
+                    return "invalid", None, None
+                while is_sse and (match := re.search(rb"\r?\n\r?\n", pending)):
+                    frame, pending = pending[:match.start()], pending[match.end():]
+                    lines = frame.splitlines()
+                    data = b"\n".join(line[5:].lstrip(b" ") for line in lines if line.startswith(b"data:"))
+                    if not data:
+                        continue
+                    try:
+                        value = strict_json(data)
+                    except (ValueError, RecursionError):
+                        return "invalid", None, None
+                    if isinstance(value, dict) and value.get("id") == ident and ("result" in value or "error" in value):
+                        return "ok", value, [line for line in lines if not line.startswith(b"data:")]
+        finally:
+            await reader.aclose()
+        if is_sse or not pending.strip():
+            return "missing", None, None  # a truncated SSE event is not dispatched
+        try:
+            value = strict_json(pending)
+        except (ValueError, RecursionError):
+            return "invalid", None, None
+        return ("ok", value, None) if isinstance(value, dict) else ("invalid", None, None)
+
     async def stream(owner, token, is_sse):
         if not is_sse:
             async for chunk in chunks(owner, token):
@@ -447,7 +484,27 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             if not still_authorized(state.token):
                 raise BadRequest(401)
             is_sse = upstream.headers.get("content-type", "").split(";")[0] == "text/event-stream"
-            if method in ("tools/list", "initialize") and not is_sse and upstream.status_code == 200:
+            if method == "initialize" and upstream.status_code == 200:
+                outcome, value, frame = await initialize_reply(owner, state.token, is_sse, message.get("id"))
+                if not still_authorized(state.token):
+                    raise BadRequest(401)
+                if outcome == "missing":
+                    # No dead session id; clients may retry once the backend answers again.
+                    return JSONResponse({"jsonrpc": "2.0", "id": message.get("id"),
+                                         "error": {"code": -32000, "message": "BACKEND_UNAVAILABLE"}},
+                                        status_code=503, headers={"Retry-After": "5", "Cache-Control": "no-store"})
+                try:
+                    if outcome != "ok":
+                        raise ValueError("invalid initialize response")
+                    value = filter_list(value, tools, store.load())
+                except ValueError:
+                    raise BadRequest(502) from None
+                if frame is None:
+                    return JSONResponse(value, status_code=200, headers=response_headers)
+                # The child's event framing (id/event/retry lines) with the filtered data.
+                frame.append(b"data: " + json.dumps(value, separators=(",", ":")).encode())
+                return Response(b"\n".join(frame) + b"\n\n", status_code=200, headers=response_headers)
+            if method == "tools/list" and not is_sse and upstream.status_code == 200:
                 result = bytearray()
                 async for chunk in chunks(owner, state.token):
                     result.extend(chunk)

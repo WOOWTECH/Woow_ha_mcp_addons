@@ -28,6 +28,7 @@ class FakeMCP(ThreadingHTTPServer):
         super().__init__(('127.0.0.1', 0), Handler)
         self.cap, self.sessions, self.lock = cap, set(), threading.Lock()
         self.outage = False
+        self.refuse_initialize = False  # 0.1.2 gateway: a child that cannot open a session without its backend
         self.calls = []
         threading.Thread(target=self.serve_forever, daemon=True).start()
 
@@ -70,6 +71,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return self.reply(401)
         method, sid = body.get('method'), self.headers.get('Mcp-Session-Id')
+        if method == 'initialize' and self.server.refuse_initialize:
+            return self.reply(503, {'jsonrpc': '2.0', 'id': body['id'],
+                                    'error': {'code': -32000, 'message': 'BACKEND_UNAVAILABLE'}})
         if method == 'initialize':
             with self.server.lock:
                 if len(self.server.sessions) >= self.server.cap:
@@ -78,6 +82,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.server.sessions.add(sid)
             return self.reply(200, {'jsonrpc': '2.0', 'id': body['id'], 'result': {'serverInfo': {'name': 'fake'}}},
                               {'Mcp-Session-Id': sid})
+        if method == 'tools/call' and body['params']['name'] in DENIED:  # like the gateway: policy before session
+            return self.reply(403, {'jsonrpc': '2.0', 'id': body['id'],
+                                    'error': {'code': -32001, 'message': 'request denied'}})
         if sid not in self.server.sessions:
             return self.reply(404)
         if method == 'notifications/initialized':
@@ -165,6 +172,16 @@ class ProbeTests(unittest.TestCase):
         self.server.outage = False
         with self.assertRaises(SystemExit):  # a healthy backend is not a structured outage failure
             self.main('plan', '--expect-backend-down', stdin=TOKEN + '\n' + json.dumps({'reads': [['n8n_list_workflows', {}]]}))
+
+    def test_plan_outage_accepts_a_refused_initialize_and_still_checks_denials(self):
+        self.server.refuse_initialize = True
+        plan = {'reads': [['n8n_list_workflows', {}]], 'denials': [['n8n_delete_workflow', {}]]}
+        summary, text = self.main('plan', '--expect-backend-down', stdin=TOKEN + '\n' + json.dumps(plan))
+        self.assertEqual([(r['kind'], r['pass']) for r in summary['plan']['rows']], [('denials', True), ('outage', True)])
+        self.assertIn('initialize http=503 error -32000: BACKEND_UNAVAILABLE', text)
+        with self.assertRaises(SystemExit):  # outside an outage run a refused initialize is a failure
+            self.main('plan', stdin=TOKEN + '\n' + json.dumps(plan))
+        self.assertEqual(self.server.sessions, set())
 
     def test_plan_reports_short_error_bodies(self):
         out = io.StringIO()
