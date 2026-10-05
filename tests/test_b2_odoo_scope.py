@@ -183,3 +183,41 @@ for name in b.DEFAULTS:
     except asyncio.CancelledError: pass
     else: raise AssertionError(name)
 ''')
+
+
+def test_b2_fixed_transport_failures_pass_through_and_other_text_stays_hidden():
+    # 0.1.1 HA: an account without ir.model read access made schema_catalog say BACKEND_RESPONSE_INVALID.
+    print(probe('''
+from types import SimpleNamespace as NS
+from odoo_mcp import tools_read, tools_diagnostics, tools_data_quality
+import odoo_b2_scope as b
+b.guard_sources()
+class Client:
+    def __init__(self, error): self.error = error
+    def execute_method(self, model, method, *args, **kwargs):
+        if self.error is None:
+            if method == 'search_read': return [{'model': 'res.partner'}]
+            return {name: {'type': kind, 'relation': 'res.partner'} for name, kind in b.FIELD_TYPES.items()}
+        raise ValueError(self.error)
+cases = [('BACKEND_RPC_FAULT', 'BACKEND_RPC_FAULT'), ('BACKEND_TIMEOUT', 'BACKEND_TIMEOUT'),
+         ('BACKEND_UNAVAILABLE', 'BACKEND_UNAVAILABLE'), ('BACKEND_HTTP_ERROR status=403', 'BACKEND_HTTP_ERROR status=403'),
+         ('PRIVATE partner Alice', 'BACKEND_RESPONSE_INVALID'), ('BACKEND_RPC_FAULT PRIVATE', 'BACKEND_RESPONSE_INVALID'),
+         ('BACKEND_HTTP_ERROR status=4031', 'BACKEND_RESPONSE_INVALID')]
+for error, expected in cases:
+    client = Client(None)
+    app = NS(odoo=client, _default_instance_name='default')
+    ctx = NS(request_context=NS(lifespan_context=app))
+    catalog = b.wrap('schema_catalog', tools_read.schema_catalog)
+    assert catalog(ctx=ctx)['success'] is True and len(app._b2_catalog[1]) == 1
+    client.error = error
+    result = catalog(ctx=ctx, refresh=True)
+    assert result == {'success': False, 'tool': 'schema_catalog', 'error': expected}, (error, result)
+    assert app._b2_catalog[1] == {}, 'a failure must not keep catalog variants'
+    for name, handler in (('inspect_model_relationships', tools_diagnostics.inspect_model_relationships),
+                          ('data_quality_report', tools_data_quality.data_quality_report)):
+        result = b.wrap(name, handler)(ctx=ctx, model='res.partner')
+        assert result['success'] is False and result['tool'] == name, result
+        assert result['error'] in (expected, 'BACKEND_RESPONSE_INVALID'), (name, error, result)
+        assert 'PRIVATE' not in repr(result)
+print('B2_PUBLIC_FAILURES_OK cases=%d' % len(cases))
+'''))

@@ -123,12 +123,12 @@
     "apps/runtime/backend_policy.py": "0cfad784a7aac8bdefccaae93c2ea9663407c11081b6268af2fed7fcd0107fb1",
     "apps/runtime/batch2_outputs.py": "239add1fbbad29eecbfec82e33553b33b4ed7b0e5d3acdad01a33d83f2090352",
     "apps/runtime/bounded_tools.py": "1bf8a05834fe50a002910da0c4d5831f361a13db0557ef43f536e547507750be",
-    "apps/runtime/odoo_b2_scope.py": "0374d3a39a1e7623c2e798dd41d6656fc3f5cf1efd9e54f1ef97fa89550d07bd",
+    "apps/runtime/odoo_b2_scope.py": "f6097bb7f3bdf9eff0711739e0295977cafbaca681a75d161c5cbf5d9e5e8c0e",
     "apps/runtime/output_policy.py": "5cc75f5e87676786847132a5be4f342dd07e9ef9344c4d7b219219de2aef85a4",
     "apps/hermes/launch.py": "5c9197f5898a7fbae317e824a4601f6d076996f229054cb2e664a5f5f785a0f3",
     "apps/odoo/launch.py": "3160784ac9b7027f5ec6f1f77d3857f652b8c00a1cc54265c336fcaa8048c5d9",
     "apps/odoo-manage/launch.py": "442ee6b3ccdc6bf2a494e25475cde2f9f8f707d4f72e92991080e8086b50c22d",
-    "apps/opendesign/launch.py": "a7b6adc27a6151914e685bda23180197fccca9a8243e9980c18fbbb0b48be313",
+    "apps/opendesign/launch.py": "91af4ced8bc48e1eb6eec0612b1578105af2a7da594a617346bd3a4dcf4fe9e8",
     "apps/litellm/vendor/woow_litellm_mcp_server/metadata.py": "e606ccda155cbcf20d058fa609617b247506ef7b64efdb93c812b0c153e0d90b"
   },
   "products": {

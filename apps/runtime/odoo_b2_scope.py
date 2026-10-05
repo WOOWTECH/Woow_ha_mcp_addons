@@ -7,6 +7,7 @@ Counts use Odoo's credential/record-rule/default active context, not sudo.
 import functools
 import hashlib
 from pathlib import Path
+import re
 from types import SimpleNamespace
 
 MODEL = 'res.partner'
@@ -30,6 +31,24 @@ DEFAULTS = {
                                         use_live_metadata=True, instance=None),
     'data_quality_report': dict(checks=['missing_required'], key_fields=['name'], sample_limit=100, instance=None),
 }
+
+
+# Fixed codes the pinned transport raises (backend_policy); native handlers report them as str(exc).
+PUBLIC_FAILURES = frozenset({'BACKEND_RPC_FAULT', 'BACKEND_TIMEOUT', 'BACKEND_UNAVAILABLE', 'BACKEND_BUSY',
+                             'BACKEND_DESTINATION_DENIED', 'BACKEND_STREAM_ERROR', 'BACKEND_INVALID_RESPONSE'})
+
+
+def public_failure(report):
+    """The error of a native failure report when it is exactly one fixed transport code, else None.
+
+    Anything else (exception text, partial data) stays hidden behind BACKEND_RESPONSE_INVALID.
+    """
+    if type(report) is dict and report.get('success') is False:
+        error = report.get('error')
+        if type(error) is str and (error in PUBLIC_FAILURES
+                                   or re.fullmatch(r'BACKEND_HTTP_ERROR status=[1-5][0-9]{2}', error)):
+            return error
+    return None
 
 
 def require(condition):
@@ -186,6 +205,11 @@ def wrap(name, original):
                                      _default_instance_name='default', schema_cache=cache)
             context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=scoped))
             report = original(ctx=context, **args)
+            code = public_failure(report)
+            if code is not None:  # e.g. an account without ir.model read access: BACKEND_RPC_FAULT
+                if name == 'schema_catalog':
+                    cache.clear()
+                return {'success': False, 'tool': name, 'error': code}
             result = project(name, report)
             # Catalog stores only already-projected metadata; remove the native
             # empty label/field_error keys from the cached report too.

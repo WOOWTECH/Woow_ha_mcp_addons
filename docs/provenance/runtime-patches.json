@@ -45,8 +45,8 @@
     },
     {
       "path": "apps/runtime/odoo_b2_scope.py",
-      "sha256": "0374d3a39a1e7623c2e798dd41d6656fc3f5cf1efd9e54f1ef97fa89550d07bd",
-      "change": "B2 genuine pinned handlers run with invocation-local context/client facade, not replaced algorithms. Fixed ir.model search_read model/limit/fields, explicit partner fields_get names/attributes and positive metadata projection BEFORE handler/cache; quality permits at most two required stored name/active search_count calls, no samples/group/private fields/related records. Two projected catalog cache keys per client identity/lifespan, immutable ChildSpec credential generation, source guard even on hits, explicit refresh with no freshness promise. Generic failure for outer/nested/backend/malformed errors; Exception only, execution-owned single worker unchanged. Catalog SDK adds empty name default, quality SDK adds null optional fields; neither contains backend labels/instance. No dependency/source wheel edits.",
+      "sha256": "f6097bb7f3bdf9eff0711739e0295977cafbaca681a75d161c5cbf5d9e5e8c0e",
+      "change": "B2 genuine pinned handlers run with invocation-local context/client facade, not replaced algorithms. Fixed ir.model search_read model/limit/fields, explicit partner fields_get names/attributes and positive metadata projection BEFORE handler/cache; quality permits at most two required stored name/active search_count calls, no samples/group/private fields/related records. Two projected catalog cache keys per client identity/lifespan, immutable ChildSpec credential generation, source guard even on hits, explicit refresh with no freshness promise. Generic failure for outer/nested/backend/malformed errors; Exception only, execution-owned single worker unchanged. Catalog SDK adds empty name default, quality SDK adds null optional fields; neither contains backend labels/instance. No dependency/source wheel edits. 0.1.2: a native failure report whose error is exactly one fixed transport code (PUBLIC_FAILURES, or BACKEND_HTTP_ERROR status=NNN) is returned as that code, e.g. BACKEND_RPC_FAULT for an account without ir.model read access; any other failure text stays BACKEND_RESPONSE_INVALID, and a failed schema_catalog clears its cache.",
       "guarded_sources": {
         "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_data_quality.py": "5a0b35eb4d5196321dbba042d89afe2d62d1e8e4d51337b6a54999e108ecaa34",
         "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/data_quality.py": "c939be7370cd797abdb079513c1949339445c1e6aa3b9bb3d06a075924b1c3fe",
@@ -123,8 +123,8 @@
     },
     {
       "path": "apps/opendesign/launch.py",
-      "sha256": "a7b6adc27a6151914e685bda23180197fccca9a8243e9980c18fbbb0b48be313",
-      "change": "Run actual SDK handlers with four-worker bounded sync dispatch; initialize shared HTTP client before threads and close at launcher shutdown; no schema/permission changes.",
+      "sha256": "91af4ced8bc48e1eb6eec0612b1578105af2a7da594a617346bd3a4dcf4fe9e8",
+      "change": "Run actual SDK handlers with four-worker bounded sync dispatch; initialize shared HTTP client before threads and close at launcher shutdown; no schema/permission changes. 0.1.2: GET /api/agents (OpenDesign probes every agent CLI, about 8 s on a small HA host) gets a 20 s read timeout with 5 s connect; every other request keeps the upstream 5 s client; the server starts only under __main__.",
       "guarded_sources": {}
     },
     {
