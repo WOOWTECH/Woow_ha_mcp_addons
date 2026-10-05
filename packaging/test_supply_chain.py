@@ -133,10 +133,18 @@ class SupplyChainTests(unittest.TestCase):
         # debian_main_licenses=accept relies on this: no Dockerfile installs OS packages or adds package
         # sources, so every deb in an image is from the pinned official python slim image (Debian main
         # plus security). Adding apt/dpkg/apk or a sources list here must force a policy re-review.
-        forbidden = re.compile(r'\b(apt-get|apt|aptitude|dpkg|apk|add-apt-repository)\b|sources\.list|/etc/apt/', re.I)
+        # The ONLY allowed OS package step is the exact block rendered from inputs.json
+        # os_security_upgrades (fixed debian-security snapshot, exact versions), at most once.
+        import os_upgrades
+        inputs = json.loads((s.ROOT / 'packaging/inputs.json').read_text())
+        allowed = os_upgrades.render(inputs) if 'os_security_upgrades' in inputs else None
+        forbidden = re.compile(r'\b(apt-get|apt|aptitude|dpkg|dpkg-query|apk|add-apt-repository)\b|sources\.list|/etc/apt/', re.I)
         for dockerfile in sorted((s.ROOT / 'apps').glob('*/Dockerfile')):
             with self.subTest(dockerfile=dockerfile.parent.name):
                 text = dockerfile.read_text()
+                if allowed is not None:
+                    self.assertEqual(text.count(allowed), 1)
+                    text = text.replace(allowed, '')
                 self.assertIsNone(forbidden.search(text))
                 bases = re.findall(r'^FROM\s+(\S+)', text, re.M)
                 runtime = [b for b in re.findall(r'^FROM\s+(\S+)\s+AS\s+runtime', text, re.M)]
@@ -167,6 +175,21 @@ class SupplyChainTests(unittest.TestCase):
                 else:
                     with self.assertRaises(s.Closed):
                         s.enforce_policy({'artifacts': [sbom_pkg]}, report)
+
+    def test_os_upgrade_block_is_exact_and_pinned(self):
+        import os_upgrades
+        inputs = json.loads((s.ROOT / 'packaging/inputs.json').read_text())
+        spec = inputs['os_security_upgrades']
+        self.assertRegex(spec['snapshot'], r'^\d{8}T\d{6}Z$')
+        self.assertEqual(spec['suite'], 'bookworm-security')
+        for name, version in spec['packages'].items():
+            self.assertRegex(name, r'^[a-z0-9][a-z0-9+.-]+$')
+            self.assertRegex(version, r'^[0-9A-Za-z.+~:-]+$')
+        block = os_upgrades.render(inputs)
+        self.assertIn('/archive/debian-security/%s ' % spec['snapshot'], block)
+        self.assertIn('--only-upgrade', block)
+        self.assertIn('rm -rf /var/lib/apt/lists/*', block)
+        self.assertNotIn('deb.debian.org', block)
 
     def test_grype_0120_status_descriptor_is_normalised(self):
         sbom = {'artifacts': [{'name': 'fixture', 'licenses': [{'value': 'MIT'}]}]}

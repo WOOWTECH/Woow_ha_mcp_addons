@@ -18,5 +18,14 @@
     "node": "node:22.23.2-bookworm-slim@sha256:43aeff40f4afc22e83f7589a2f37e111cff5ca84529571f1c8415bcc5fcc21b2",
     "uv": "astral/uv:0.12.10@sha256:34c0f9a55abeb840c34391bb7b63a1a06f8cb9281e028f27757a01a1a8a2d461"
   },
-  "evidence": "Anonymous Docker Hub manifest metadata GET 2026-10-03; linux/amd64 child manifests. Hash integrity pins, NOT CVE/license or image-build clearance. Python base bumped 2026-10-05 to 3.13.16-slim-bookworm linux/amd64 child manifest (anonymous Docker Hub GET); measured on the builder: blocked High/Critical/Unknown 155 -> 88, fix-available High/Critical 68 -> 1."
+  "evidence": "Anonymous Docker Hub manifest metadata GET 2026-10-03; linux/amd64 child manifests. Hash integrity pins, NOT CVE/license or image-build clearance. Python base bumped 2026-10-05 to 3.13.16-slim-bookworm linux/amd64 child manifest (anonymous Docker Hub GET); measured on the builder: blocked High/Critical/Unknown 155 -> 88, fix-available High/Critical 68 -> 1.",
+  "os_security_upgrades": {
+    "snapshot": "20261003T211304Z",
+    "suite": "bookworm-security",
+    "packages": {
+      "libpcre2-8-0": "10.42-1+deb12u2"
+    },
+    "reason": "Debian security fix (CVE-2026-103111) not yet in the official python:3.13.16-slim-bookworm base; remove when the base carries it",
+    "evidence": "snapshot.debian.org first_seen 20261003T211304Z /pool/updates/main/p/pcre2/libpcre2-8-0_10.42-1+deb12u2_amd64.deb (sha1 af87568214042f8871982dcab9a3c5c32f789e60)"
+  }
 }
