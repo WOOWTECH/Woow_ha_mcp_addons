@@ -4,8 +4,9 @@ No command override, recursive chown, runtime install or bootstrap HA API call.
 Each product's management process receives the runtime Supervisor token for the approved HA admin
 verifier (n8n 2026-10-04; the other six 2026-10-05, 0.1.1); children are started with allowlisted env.
 Existing state must belong to uid/gid 10001. State that Home Assistant restored root-owned (observed in
-the 2026-10-05 HA pilot) is re-owned once: plain directories and single-link files only, never following
-a link; anything else keeps the fail-closed refusal.
+the 2026-10-05 HA pilot) is re-owned once: pass 1 approves a bounded tree of plain directories and
+single-link files by identity, pass 2 changes exactly those inodes after re-verifying each one; any
+addition, removal, replacement, link or foreign owner keeps the fail-closed refusal.
 """
 import ctypes
 import os
@@ -21,43 +22,81 @@ MAX_RESTORED_ENTRIES = 4096
 MAX_RESTORED_DEPTH = 8
 
 
-def _check_restored(dir_fd, depth, budget):
-    """Pass 1, no changes: only plain dirs and single-link files owned by the restore owner or runtime user."""
+def _owner(info):
+    return (info.st_uid, info.st_gid)
+
+
+def _identity(info):
+    # dev+inode alone is not enough: a replaced file may reuse the freed inode number. ctime_ns is set
+    # when an inode is created or changed, and nothing changes the restored tree before the app starts.
+    return (info.st_dev, info.st_ino, info.st_ctime_ns)
+
+
+def _approve_restored(dir_fd, depth, budget):
+    """Pass 1, no changes: return the approved tree {name: (identity, children or None)}.
+
+    Only plain directories and single-link regular files owned by the restore owner or the runtime user,
+    within the entry and depth limits. A directory is opened without following links and must be the
+    same inode and owner that was just checked.
+    """
     if depth > MAX_RESTORED_DEPTH:
         raise RuntimeError('restored state too deep')
+    approved = {}
     for name in os.listdir(dir_fd):
         budget[0] -= 1
         if budget[0] < 0:
             raise RuntimeError('restored state too large')
         info = os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
-        if (info.st_uid, info.st_gid) not in (RESTORE_OWNER, (UID, GID)):
+        if _owner(info) not in (RESTORE_OWNER, (UID, GID)):
             raise RuntimeError('foreign restored owner')
         if stat.S_ISDIR(info.st_mode):
             child = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=dir_fd)
             try:
-                _check_restored(child, depth + 1, budget)
+                opened = os.fstat(child)
+                if _identity(opened) != _identity(info) or _owner(opened) != _owner(info):
+                    raise RuntimeError('restored state changed during bootstrap')
+                approved[name] = (_identity(info), _approve_restored(child, depth + 1, budget))
             finally:
                 os.close(child)
-        elif not (stat.S_ISREG(info.st_mode) and info.st_nlink == 1):
+        elif stat.S_ISREG(info.st_mode) and info.st_nlink == 1:
+            approved[name] = (_identity(info), None)
+        else:
             raise RuntimeError('unsupported restored entry')
+    return approved
 
 
-def _reown_restored(dir_fd):
-    """Pass 2: re-own through descriptors opened without following links, checked against pass-1 types."""
-    for name in os.listdir(dir_fd):
-        info = os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
-        directory = stat.S_ISDIR(info.st_mode)
-        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | (os.O_DIRECTORY if directory else os.O_NONBLOCK),
-                     dir_fd=dir_fd)
+def _reown_restored(dir_fd, approved):
+    """Pass 2: change only the approved entries, each re-verified by identity on its own descriptor.
+
+    The directory must hold exactly the approved names (no additions, removals or renames). Each entry is
+    opened without following links (regular files with O_PATH, so nothing is read or triggered) and must
+    still be the approved identity (dev, inode, ctime) and type, owned by the restore owner or runtime user,
+    with one link; only
+    then is that descriptor's inode re-owned. Bootstrap runs before the app as root on a tree only the
+    Supervisor wrote, so nothing should change between the passes; if anything does, bootstrap stops.
+    Approved entries handled before a change is found keep their new owner: they were approved.
+    """
+    if sorted(os.listdir(dir_fd)) != sorted(approved):
+        raise RuntimeError('restored state changed during bootstrap')
+    for name, (identity, children) in approved.items():
+        directory = children is not None
+        flags = os.O_NOFOLLOW | (os.O_RDONLY | os.O_DIRECTORY if directory else os.O_PATH)
+        fd = os.open(name, flags, dir_fd=dir_fd)
         try:
             opened = os.fstat(fd)
             plain = stat.S_ISDIR(opened.st_mode) if directory else (stat.S_ISREG(opened.st_mode) and opened.st_nlink == 1)
-            if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino) or not plain:
+            if (_identity(opened) != identity or not plain
+                    or _owner(opened) not in (RESTORE_OWNER, (UID, GID))):
                 raise RuntimeError('restored state changed during bootstrap')
             if directory:
-                _reown_restored(fd)
-            os.fchown(fd, UID, GID)
-            os.fchmod(fd, 0o700 if directory else 0o600)
+                _reown_restored(fd, children)
+                os.fchown(fd, UID, GID)
+                os.fchmod(fd, 0o700)
+            else:
+                # O_PATH descriptors cannot fchown/fchmod; the magic link names exactly this inode.
+                target = '/proc/self/fd/%d' % fd
+                os.chown(target, UID, GID)
+                os.chmod(target, 0o600)
         finally:
             os.close(fd)
 
@@ -78,8 +117,7 @@ def prepare_data(parent=Path('/data')):
             info = os.fstat(child)
             if (not created and os.geteuid() == 0 and (info.st_uid, info.st_gid) == RESTORE_OWNER
                     and RESTORE_OWNER != (UID, GID)):
-                _check_restored(child, 0, [MAX_RESTORED_ENTRIES])
-                _reown_restored(child)
+                _reown_restored(child, _approve_restored(child, 0, [MAX_RESTORED_ENTRIES]))
                 os.fchown(child, UID, GID)
                 os.fchmod(child, 0o700)
                 info = os.fstat(child)
