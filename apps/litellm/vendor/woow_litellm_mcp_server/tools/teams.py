@@ -10,6 +10,7 @@ from output_policy import rows, record
 TEAM_FIELDS = ('team_id', 'team_alias', 'max_budget', 'tpm_limit', 'rpm_limit', 'blocked')
 
 from ..deps import litellm_client
+from ..metadata import identifier, read_metadata
 from ..gating import ToolGate
 from ..registry import OP_CREATE, OP_DELETE, OP_UPDATE
 from ._common import destructive, prune_none, read_only, writing
@@ -87,10 +88,9 @@ def register(mcp: Any, gate: ToolGate) -> None:
             annotations=read_only("Team info"),
         )
         async def litellm_team_info(ctx: Context, team_id: str) -> dict:
-            """Get one team's members, budget and spend by team_id."""
-            return await litellm_client(ctx).get(
-                "/team/info", params={"team_id": team_id}
-            )
+            """Bounded team identity/alias/limits only; no members, keys or spend."""
+            params = {"team_id": identifier(team_id)}
+            return await read_metadata(litellm_client(ctx), "/team/info", params)
 
     if gate.is_tool_enabled("litellm_update_team"):
 

@@ -84,11 +84,11 @@
     "apps/litellm/vendor/woow_litellm_mcp_server/tools/chat.py": "379330b6e1708fa1c454517fb3c162c11aea8d86bcc31fbc433e66ee42eaa276",
     "apps/litellm/vendor/woow_litellm_mcp_server/tools/health.py": "6d61c3741510b1ebd3e8fb78ec7696fbc63761c7cd7f4558295089114819ead7",
     "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py": "f53ffbcea4520fa4a95f2cb6722e6979d4515507076c5bcd1593ccf2ac9f63d8",
-    "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py": "e058ffd9b6557d3228f2318d30776e37cbd173a358aabfcf29f6c8f3fe723f47",
+    "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py": "8d20e7f46ec9cc5af8de8edd66a2a92444c2383eb23ee5108cfe6bd41982ccba",
     "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py": "f1a421b82ad96427d0d05d9f248d509f92a6cca320ee7f1217a6662eda85b054",
     "apps/litellm/vendor/woow_litellm_mcp_server/tools/spend.py": "f90f29026fb32c96d0c8030338383426661c63c44ba5c1602c83824ddadf7a70",
-    "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py": "6525b7e6d2224a28fed3a6f1809cfec9acabd6b15e030743f656ba84b420e619",
-    "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py": "19da4359727177e950b4a222633baa179d9a843fae50db6aece3d86ccee87517",
+    "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py": "dec04344367fbdf95ff8146448f0dd083934a5f636cb528551eebf5aaa52a082",
+    "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py": "6a27ed1b1f466a32e9d255ecfdad319854b42027d5547ceb53337d95d55ae620",
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools.js": "acb4d2a3ec74b5f2b41d327a93340a0f9a799e99947656afd010a76390fb10cb",
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js": "28d54ea6a3001678fd510542c82c04c26b2ff3b55b7db63b630800e82e02191f",
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/agents-action-map.js": "9282db04957b8a7931cd99ceddcbfd943419732930325256b03ecc443075c8e8",
@@ -128,7 +128,8 @@
     "apps/hermes/launch.py": "5c9197f5898a7fbae317e824a4601f6d076996f229054cb2e664a5f5f785a0f3",
     "apps/odoo/launch.py": "3160784ac9b7027f5ec6f1f77d3857f652b8c00a1cc54265c336fcaa8048c5d9",
     "apps/odoo-manage/launch.py": "442ee6b3ccdc6bf2a494e25475cde2f9f8f707d4f72e92991080e8086b50c22d",
-    "apps/opendesign/launch.py": "a7b6adc27a6151914e685bda23180197fccca9a8243e9980c18fbbb0b48be313"
+    "apps/opendesign/launch.py": "a7b6adc27a6151914e685bda23180197fccca9a8243e9980c18fbbb0b48be313",
+    "apps/litellm/vendor/woow_litellm_mcp_server/metadata.py": "e606ccda155cbcf20d058fa609617b247506ef7b64efdb93c812b0c153e0d90b"
   },
   "products": {
     "odoo": {
@@ -5815,12 +5816,12 @@
     },
     "litellm": {
       "upstream_count": 40,
-      "supported_count": 7,
+      "supported_count": 12,
       "tools": [
         {
           "name": "litellm_add_model",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py",
-          "line": 105,
+          "line": 104,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, model_name: str, litellm_params: dict[str, Any], model_info: dict[str, Any] | None=None",
@@ -5883,7 +5884,7 @@
         {
           "name": "litellm_create_team",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py",
-          "line": 25,
+          "line": 26,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, team_alias: str, models: list[str] | None=None, max_budget: float | None=None, tpm_limit: int | None=None, rpm_limit: int | None=None, members_with_roles: list[dict[str, Any]] | None=None, organization_id: str | None=None",
@@ -5979,7 +5980,7 @@
         {
           "name": "litellm_create_user",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py",
-          "line": 22,
+          "line": 23,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, user_email: str | None=None, user_id: str | None=None, user_alias: str | None=None, user_role: str | None=None, teams: list[str] | None=None, models: list[str] | None=None, max_budget: float | None=None, auto_create_key: bool=True",
@@ -6021,7 +6022,7 @@
         {
           "name": "litellm_delete_model",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py",
-          "line": 190,
+          "line": 189,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, model_id: str",
@@ -6131,7 +6132,7 @@
         {
           "name": "litellm_delete_user",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py",
-          "line": 152,
+          "line": 140,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, user_ids: list[str]",
@@ -6328,7 +6329,7 @@
         {
           "name": "litellm_list_models",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py",
-          "line": 60,
+          "line": 61,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context",
@@ -6378,7 +6379,7 @@
         {
           "name": "litellm_list_teams",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py",
-          "line": 56,
+          "line": 57,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, page: int=1, page_size: int=50, team_alias: str | None=None, user_id: str | None=None, organization_id: str | None=None",
@@ -6456,64 +6457,205 @@
         {
           "name": "litellm_list_users",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py",
-          "line": 63,
+          "line": 64,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, page: int=1, page_size: int=50, role: str | None=None, user_ids: list[str] | None=None, user_email: str | None=None, team: str | None=None, sort_by: str | None=None, sort_order: str | None=None",
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
-          "status": "temporarily-unsupported",
-          "default_enabled": false,
+          "status": "supported-bounded",
+          "default_enabled": true,
           "write_grants": [],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "litellm_list_users：user/admin 角色、email、key 及私人資訊尚無範圍／輸出政策；需逐角色欄位 schema 與非升權的使用者管理測試。",
-          "accepted_schema": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "LiteLLM metadata batch：真 GET /user/list 單頁 page1..10000/page_size1..100（default1/50）；四種明確role、最多20 user_ids、team；email/sort只接受null。只回 bounded user ID/alias/role/limits與typed一致pagination；不回email/keys/teams/spend。256KiB/5秒、depth8/list100，無auto paging，超界/缺頁資訊不假空成功；user_ids保留上游單ID substring語義。見 docs/litellm-metadata-delivery.md 與 tests/test_litellm_metadata*.py；candidate非完整directory。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "page": {
+                "default": 1,
+                "maximum": 10000,
+                "minimum": 1,
+                "title": "Page",
+                "type": "integer"
+              },
+              "page_size": {
+                "default": 50,
+                "maximum": 100,
+                "minimum": 1,
+                "title": "Page Size",
+                "type": "integer"
+              },
+              "role": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "proxy_admin",
+                      "proxy_admin_viewer",
+                      "internal_user",
+                      "internal_user_viewer"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Role"
+              },
+              "user_ids": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "maxLength": 128,
+                      "minLength": 1,
+                      "not": {
+                        "pattern": "[^A-Za-z0-9_-]"
+                      },
+                      "pattern": "^[A-Za-z0-9_-]+$",
+                      "type": "string"
+                    },
+                    "maxItems": 20,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "User Ids"
+              },
+              "team": {
+                "anyOf": [
+                  {
+                    "maxLength": 128,
+                    "minLength": 1,
+                    "not": {
+                      "pattern": "[^A-Za-z0-9_-]"
+                    },
+                    "pattern": "^[A-Za-z0-9_-]+$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Team"
+              },
+              "user_email": {
+                "default": null,
+                "title": "User Email",
+                "type": "null"
+              },
+              "sort_by": {
+                "default": null,
+                "title": "Sort By",
+                "type": "null"
+              },
+              "sort_order": {
+                "default": null,
+                "title": "Sort Order",
+                "type": "null"
+              }
+            },
+            "title": "LiteLLMUsers",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
           ]
         },
         {
           "name": "litellm_model_group_info",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py",
-          "line": 90,
+          "line": 91,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, model_group: str | None=None",
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
-          "status": "temporarily-unsupported",
-          "default_enabled": false,
+          "status": "supported-bounded",
+          "default_enabled": true,
           "write_grants": [],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "litellm_model_group_info：deployment/provider 原始參數可能含 secrets；需排除 api_key/api_base 等且驗證嵌套回應形狀，不開任意 config view。",
-          "accepted_schema": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "LiteLLM metadata batch：真 GET /model_group/info，必填有界model_group；只接受data一筆一致group，正向model_group/mode/max_input_tokens/max_output_tokens/tpm/rpm。排除providers/原始params/config；無health probe/inference、無全量enumeration。256KiB/5秒、depth8/list100，missing/錯shape/HTTP錯誤拒絕。見 docs/litellm-metadata-delivery.md 與 tests/test_litellm_metadata*.py；candidate待獨立審查。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "model_group": {
+                "maxLength": 256,
+                "minLength": 1,
+                "not": {
+                  "pattern": "[^A-Za-z0-9_./:-]"
+                },
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_./:-]*$",
+                "title": "Model Group",
+                "type": "string"
+              }
+            },
+            "required": [
+              "model_group"
+            ],
+            "title": "LiteLLMModelGroupInfo",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
           ]
         },
         {
           "name": "litellm_model_info",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py",
-          "line": 73,
+          "line": 74,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, litellm_model_id: str | None=None",
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
-          "status": "temporarily-unsupported",
-          "default_enabled": false,
+          "status": "supported-bounded",
+          "default_enabled": true,
           "write_grants": [],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "litellm_model_info：deployment/provider 原始參數可能含 secrets；需排除 api_key/api_base 等且驗證嵌套回應形狀，不開任意 config view。",
-          "accepted_schema": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "LiteLLM metadata batch：真 GET /model/info，必填litellm_model_id（上游省略全量view不開）；只接受data中一筆一致ID，只回model_name及model_info.id/mode/max_input_tokens/max_output_tokens。litellm_params/provider/api_base/credentials/config全不回。256KiB/5秒、depth8/list100；missing/錯shape/HTTP錯誤拒絕。見 docs/litellm-metadata-delivery.md 與 tests/test_litellm_metadata*.py；candidate非完整model管理。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "litellm_model_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "not": {
+                  "pattern": "[^A-Za-z0-9_-]"
+                },
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "title": "Litellm Model Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "litellm_model_id"
+            ],
+            "title": "LiteLLMModelInfo",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
           ]
         },
         {
@@ -6645,22 +6787,44 @@
         {
           "name": "litellm_team_info",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py",
-          "line": 89,
+          "line": 90,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, team_id: str",
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
-          "status": "temporarily-unsupported",
-          "default_enabled": false,
+          "status": "supported-bounded",
+          "default_enabled": true,
           "write_grants": [],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "litellm_team_info：team info 包含成員/keys/spend，membership 會改角色權限；需逐 member role grant 與安全成員投影，不含於本批 alias/budget 管理。",
-          "accepted_schema": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "LiteLLM metadata batch：真 GET /team/info，必填有界team_id；要求team_id/team_info一致，只投影team_id/team_alias/max_budget/tpm_limit/rpm_limit/blocked。members/keys/spend/metadata全排除；非membership或key-admin授權。256KiB/5秒、depth8/list100，錯shape/HTTP錯誤拒絕；不聲稱限制後端內部keys查詢成本。見 docs/litellm-metadata-delivery.md 與 tests/test_litellm_metadata*.py。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "team_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "not": {
+                  "pattern": "[^A-Za-z0-9_-]"
+                },
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "title": "Team Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "team_id"
+            ],
+            "title": "LiteLLMTeamInfo",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
           ]
         },
         {
@@ -6771,7 +6935,7 @@
         {
           "name": "litellm_update_model",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py",
-          "line": 139,
+          "line": 138,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, model_id: str, litellm_params: dict[str, Any] | None=None, model_info: dict[str, Any] | None=None, model_name: str | None=None",
@@ -6861,7 +7025,7 @@
         {
           "name": "litellm_update_user",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py",
-          "line": 113,
+          "line": 101,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, user_id: str, user_role: str | None=None, user_alias: str | None=None, user_email: str | None=None, max_budget: float | None=None, models: list[str] | None=None, team_id: str | None=None",
@@ -6882,22 +7046,44 @@
         {
           "name": "litellm_user_info",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py",
-          "line": 101,
+          "line": 90,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, user_id: str",
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
-          "status": "temporarily-unsupported",
-          "default_enabled": false,
+          "status": "supported-bounded",
+          "default_enabled": true,
           "write_grants": [],
           "operation_parameter": null,
-          "enable": "不可由 GUI 啟用；需 source/policy/test review",
-          "reason": "litellm_user_info：user/admin 角色、email、key 及私人資訊尚無範圍／輸出政策；需逐角色欄位 schema 與非升權的使用者管理測試。",
-          "accepted_schema": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "LiteLLM metadata batch：真 GET /user/info，必填有界 user_id；嚴格 user_id/user_info envelope 與回應身分一致，只投影 user_id/user_alias/user_role/max_budget/tpm_limit/rpm_limit。無 email/keys/teams/spend/config。單次256KiB/5秒、depth8/list100；missing/錯shape/非2xx拒絕。見 docs/litellm-metadata-delivery.md 與 tests/test_litellm_metadata*.py；candidate，待独立審查與實機驗收。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "user_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "not": {
+                  "pattern": "[^A-Za-z0-9_-]"
+                },
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "title": "User Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "user_id"
+            ],
+            "title": "LiteLLMUserInfo",
+            "type": "object"
+          },
           "tests": [
-            "tests/test_tool_inventory.py"
+            "tests/test_tool_inventory.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
           ]
         }
       ]

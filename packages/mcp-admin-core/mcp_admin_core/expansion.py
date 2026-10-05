@@ -231,6 +231,39 @@ class Teams(Args):
     organization_id: None = None
 
 
+# JSON Schema engines can treat `$` as before a final newline, unlike the
+# strict validator. Explicit character exclusion keeps the public schema equal.
+MetadataSegment = Annotated[Segment, Field(json_schema_extra={'not': {'pattern': r'[^A-Za-z0-9_-]'}})]
+
+
+class LiteLLMModelInfo(Args):
+    litellm_model_id: MetadataSegment
+
+
+class LiteLLMModelGroupInfo(Args):
+    model_group: str = Field(min_length=1, max_length=256, pattern=r'^[A-Za-z0-9][A-Za-z0-9_./:-]*$',
+                             json_schema_extra={'not': {'pattern': r'[^A-Za-z0-9_./:-]'}})
+
+
+class LiteLLMTeamInfo(Args):
+    team_id: MetadataSegment
+
+
+class LiteLLMUserInfo(Args):
+    user_id: MetadataSegment
+
+
+class LiteLLMUsers(Args):
+    page: int = Field(default=1, ge=1, le=10000)
+    page_size: int = Field(default=50, ge=1, le=100)
+    role: Literal['proxy_admin', 'proxy_admin_viewer', 'internal_user', 'internal_user_viewer'] | None = None
+    user_ids: list[MetadataSegment] | None = Field(default=None, min_length=1, max_length=20)
+    team: MetadataSegment | None = None
+    user_email: None = None
+    sort_by: None = None
+    sort_order: None = None
+
+
 class CreateTeam(Args):
     team_alias: Text
     # No arbitrary metadata, membership/role escalation or provider URLs.
@@ -330,4 +363,9 @@ def expand_tools(tools):
         'litellm_list_teams': Tool(Teams), 'litellm_create_team': Tool(CreateTeam, write=True),
         'litellm_update_team': Tool(UpdateTeam, write=True), 'litellm_delete_team': Tool(DeleteTeam, write=True),
         'litellm_delete_model': Tool(ModelId, write=True),
+        'litellm_model_info': Tool(LiteLLMModelInfo, requires_backend=True),
+        'litellm_model_group_info': Tool(LiteLLMModelGroupInfo, requires_backend=True),
+        'litellm_team_info': Tool(LiteLLMTeamInfo, requires_backend=True),
+        'litellm_list_users': Tool(LiteLLMUsers, requires_backend=True),
+        'litellm_user_info': Tool(LiteLLMUserInfo, requires_backend=True),
     })

@@ -1,0 +1,26 @@
+"""Synthetic metadata envelopes; API references are in the batch delivery document."""
+SECRET = 'PRIVATE-SENTINEL'
+FIXTURES = {
+ 'litellm_model_info': ({'litellm_model_id': 'model-1'}, '/model/info',
+   {'data': [{'model_name': 'example', 'litellm_params': {'api_key': SECRET, 'api_base': SECRET},
+              'model_info': {'id': 'model-1', 'mode': 'chat', 'max_input_tokens': 8192, 'config': SECRET}}]},
+   {'data': [{'model_name': 'example', 'model_info': {'id': 'model-1', 'mode': 'chat', 'max_input_tokens': 8192}}]}),
+ 'litellm_model_group_info': ({'model_group': 'openai/gpt-4.1'}, '/model_group/info',
+   {'data': [{'model_group': 'openai/gpt-4.1', 'mode': 'chat', 'max_input_tokens': 8192.0, 'rpm': 20,
+              'providers': [SECRET], 'supported_openai_params': [SECRET], 'config': SECRET}]},
+   {'data': [{'model_group': 'openai/gpt-4.1', 'mode': 'chat', 'max_input_tokens': 8192.0, 'rpm': 20}]}),
+ 'litellm_team_info': ({'team_id': 'team-1'}, '/team/info',
+   {'team_id': 'team-1', 'team_info': {'team_id': 'team-1', 'team_alias': 'example', 'max_budget': 20,
+      'blocked': False, 'members_with_roles': [{'user_email': SECRET}], 'metadata': {'name': SECRET}}, 'keys': [SECRET]},
+   {'team_id': 'team-1', 'team_info': {'team_id': 'team-1', 'team_alias': 'example', 'max_budget': 20, 'blocked': False}}),
+ 'litellm_list_users': ({'page': 1, 'page_size': 50}, '/user/list',
+   {'users': [{'user_id': 'user-1', 'user_alias': 'example', 'user_role': 'internal_user',
+     'max_budget': None, 'user_email': SECRET, 'metadata': {'safe': SECRET}, 'teams': [SECRET]}],
+    'total': 1, 'page': 1, 'page_size': 50, 'total_pages': 1},
+   {'users': [{'user_id': 'user-1', 'user_alias': 'example', 'user_role': 'internal_user', 'max_budget': None}],
+    'total': 1, 'page': 1, 'page_size': 50, 'total_pages': 1}),
+ 'litellm_user_info': ({'user_id': 'user-1'}, '/user/info',
+   {'user_id': 'user-1', 'user_info': {'user_id': 'user-1', 'user_role': 'proxy_admin', 'rpm_limit': 10,
+       'user_email': SECRET, 'metadata': SECRET, 'password': SECRET}, 'keys': [SECRET], 'teams': [SECRET]},
+   {'user_id': 'user-1', 'user_info': {'user_id': 'user-1', 'user_role': 'proxy_admin', 'rpm_limit': 10}}),
+}

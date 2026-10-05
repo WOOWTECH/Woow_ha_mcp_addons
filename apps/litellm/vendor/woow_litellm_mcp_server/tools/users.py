@@ -7,6 +7,7 @@ from typing import Any
 from fastmcp import Context
 
 from ..deps import litellm_client
+from ..metadata import identifier, read_metadata, user_params
 from ..gating import ToolGate
 from ..registry import OP_CREATE, OP_DELETE, OP_UPDATE
 from ._common import destructive, prune_none, read_only, writing
@@ -71,26 +72,14 @@ def register(mcp: Any, gate: ToolGate) -> None:
             sort_by: str | None = None,
             sort_order: str | None = None,
         ) -> dict:
-            """List/paginate users.
+            """One bounded user metadata page; IDs/alias/role/limits only.
 
-            Push filtering down to the gateway rather than paging the whole
-            directory: ``user_email`` finds one user, ``team`` lists a team's
-            members. ``sort_by`` names a column (e.g. ``spend``) and
-            ``sort_order`` is ``asc``/``desc``.
+            page 1..10000, page_size 1..100; optional role, <=20 user_ids and
+            team filter. Email and custom sort are withheld (null only).
+            No auto paging; missing/invalid pagination metadata is an error.
             """
-            params = prune_none(
-                {
-                    "page": page,
-                    "page_size": page_size,
-                    "role": role,
-                    "user_ids": ",".join(user_ids) if user_ids else None,
-                    "user_email": user_email,
-                    "team": team,
-                    "sort_by": sort_by,
-                    "sort_order": sort_order,
-                }
-            )
-            return await litellm_client(ctx).get("/user/list", params=params)
+            params = user_params(page, page_size, role, user_ids, user_email, team, sort_by, sort_order)
+            return await read_metadata(litellm_client(ctx), "/user/list", params)
 
     if gate.is_tool_enabled("litellm_user_info"):
 
@@ -99,10 +88,9 @@ def register(mcp: Any, gate: ToolGate) -> None:
             annotations=read_only("User info"),
         )
         async def litellm_user_info(ctx: Context, user_id: str) -> dict:
-            """Get one user's teams, keys, budget and spend by user_id."""
-            return await litellm_client(ctx).get(
-                "/user/info", params={"user_id": user_id}
-            )
+            """Bounded user identity/alias/role/limits; no email, teams, keys or spend."""
+            params = {"user_id": identifier(user_id)}
+            return await read_metadata(litellm_client(ctx), "/user/info", params)
 
     if gate.is_tool_enabled("litellm_update_user"):
 

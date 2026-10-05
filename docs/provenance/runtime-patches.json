@@ -2,6 +2,18 @@
   "scope": "W2a/W2b plus BATCH2 B1/B2/B3 bounded expansion; no dependency edits; B3 pending independent SPEC then NEW SECURITY",
   "patches": [
     {
+      "path": "apps/litellm/vendor/woow_litellm_mcp_server/metadata.py",
+      "sha256": "e606ccda155cbcf20d058fa609617b247506ef7b64efdb93c812b0c153e0d90b",
+      "change": "New local LiteLLM-only metadata helper, not upstream vendor code: borrow original scoped DNS-pinned client for one GET on five fixed existing routes; 256KiB identity response/5s total, depth8/list100/object128/node10000 bounds. Explicit single model/group selectors and bounded user pagination; validate typed required envelopes/identity then reuse positive output_policy.record. No keys/provider params/api_base/config/email/teams/membership/spend, retries, new grants or shared transport edits. See docs/litellm-metadata-delivery.md; candidate pending independent review, not HA/backend acceptance.",
+      "guarded_sources": {}
+    },
+    {
+      "path": "packages/mcp-admin-core/mcp_admin_core/expansion.py",
+      "sha256": "a871cf21fb40bfde3471ec917ab8707affbd978b5e75cc90c3b8de542d4e8012",
+      "change": "LiteLLM metadata batch adds five strict bounded read schemas and existing requires_backend opt-in. Explicit single selectors; user page1..10000/page_size1..100, four roles, up to20 IDs, team; no email/custom sort. JSON Schema character exclusions match strict runtime validation for final line terminators. Existing products, schemas, operations, grants and readonly defaults unchanged.",
+      "guarded_sources": {}
+    },
+    {
       "path": "packages/mcp-admin-core/mcp_admin_core/policy.py",
       "sha256": "c55433a2b2dee6ab2d9bbd170747779ed56e96d02e9d59cb3e0a4d725ccdeaa0",
       "change": "Explicit B3 scope exception: default-OFF Tool requires_backend and selector-bound backend_required_operations, validate opt-in operation metadata. authorize validates/normalizes before backend precondition and before mutating caller arguments, using existing configured property or legacy URL+key. Both existing gateway authorization passes inherit it. No gateway-name guard, persisted schema/migration/lifecycle or general grants change; local unconfigured startup/list semantics retained. SPEC then different NEW SECURITY required.",
