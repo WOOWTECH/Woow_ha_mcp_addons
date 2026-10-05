@@ -44,12 +44,17 @@ async def test_config_api_typed_secret_safe_and_restart_on_rotation(tmp_path, pr
 async def test_unconfigured_does_not_spawn_or_probe(tmp_path, product):
     store = ProductStore(tmp_path / product, product)
     process = Supervisor(child_spec(store.load(), store.directory))
-    async def forbidden(_): raise AssertionError('unconfigured must not contact child/backend')
+    contacted = []
+
+    async def forbidden(request):
+        contacted.append(request)  # recorded: the monitor contains exceptions raised here (0.1.2)
+        raise AssertionError('unconfigured must not contact child/backend')
     try:
         await process.start()
         async with httpx.AsyncClient(transport=httpx.MockTransport(forbidden)) as client:
             monitor = HealthMonitor(store, process, client)
             await monitor.check()
+            assert contacted == [], 'unconfigured must not contact child/backend'
             assert monitor.backend == 'unconfigured'
             assert process.status == 'unconfigured' and process.starts == 0
     finally:

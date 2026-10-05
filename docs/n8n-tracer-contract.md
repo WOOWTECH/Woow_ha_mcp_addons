@@ -108,7 +108,8 @@ body); an initialize declared empty is 503 `BACKEND_UNAVAILABLE`. Replies to
 notifications and to DELETE carry only the status, the forwarded session/protocol/
 Retry-After headers (no Content-Type) and `Cache-Control: no-store`, never the child's
 body. HEAD, PUT, PATCH and OPTIONS are 405 after the Bearer check (`Allow: GET, POST,
-DELETE`) and never reach the child. The child always receives `Accept: application/json,
+DELETE`) and never reach the child; other methods (e.g. TRACE) get the framework's 405
+before the Bearer check (known, 0.1.3). The child always receives `Accept: application/json,
 text/event-stream`; statuses outside 100-599 are 502; an initialize reply whose session
 id cannot be forwarded is 502. Media types compare case-insensitively without
 parameters; a 2xx reply always reaches the client as plain `text/event-stream` or
@@ -126,8 +127,8 @@ a server-to-client request (an event with `method` and `id`: elicitation, sampli
 roots, ping) is dropped, since the client could not answer it through the gateway and it
 would carry child text to the user; notifications (no id) still pass.
 Request bodies with lone surrogates anywhere are 400; numbers that overflow to infinity
-(e.g. `1e400`) are refused like NaN/Infinity (a request 400, a JSON reply 502, an SSE
-event stops the stream), so nothing is re-serialized as `Infinity`. The child receives initialize with
+(e.g. `1e400`) are refused like NaN/Infinity (a request 400; a reply 502 for initialize
+or JSON, other SSE streams stop), so nothing is re-serialized as `Infinity`. The child receives initialize with
 `capabilities: {}`, since the gateway answers no server-to-client request (sampling,
 elicitation, roots). Initialize is further special-cased: the gateway reads a 200 reply
 up to the JSON-RPC response for the request and answers with that one response (SSE
@@ -228,8 +229,11 @@ its success payload. Thus health uses the same Node backend network policy as th
 tool, not an unrestricted Python HTTP path. This automatic read-only health probe
 runs independently of client tool visibility (as the previous direct health GET
 did); it never enables a client call or performs writes. Checks repeat every 15
-seconds. An unexpected monitor exit/exception stops the runtime with a sanitized
-recovery message and nonzero exit, not a discarded exception/clean exit.
+seconds. Errors while probing the child or the backend (0.1.2: any exception, e.g. an
+odd session id or reply shape from a misbehaving child) only leave readiness false and
+the backend unreachable for that round; the child's session id is validated
+(`[\x21-\x7e]{1,256}`) before it is reused. Only the monitor task itself ending stops the
+runtime, with a sanitized recovery message and nonzero exit, never a clean exit.
 
 ## Single configured backend network policy
 
