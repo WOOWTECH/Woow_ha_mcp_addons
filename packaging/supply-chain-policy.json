@@ -1,10 +1,46 @@
 {
   "schema": 1,
   "id": "woow-conservative-v1",
-  "blocked_severities": ["High", "Critical", "Unknown"],
-  "known_severities": ["Negligible", "Low", "Medium", "High", "Critical", "Unknown"],
-  "allowed_licenses": ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Python-2.0", "PSF-2.0", "MPL-2.0", "0BSD", "CC0-1.0", "Unlicense", "Zlib"],
+  "blocked_severities": [
+    "High",
+    "Critical",
+    "Unknown"
+  ],
+  "known_severities": [
+    "Negligible",
+    "Low",
+    "Medium",
+    "High",
+    "Critical",
+    "Unknown"
+  ],
+  "allowed_licenses": [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Python-2.0",
+    "PSF-2.0",
+    "MPL-2.0",
+    "0BSD",
+    "CC0-1.0",
+    "Unlicense",
+    "Zlib",
+    "BlueOak-1.0.0"
+  ],
   "unknown_or_missing_license": "deny",
-  "unfixed_vulnerabilities": "include",
-  "grype_database_max_age_hours": 120
+  "unfixed_vulnerabilities": "exclude",
+  "grype_database_max_age_hours": 120,
+  "debian_main_licenses": "accept",
+  "or_expressions": "accept-if-any-allowed",
+  "known_binary_licenses": {
+    "python": "PSF-2.0",
+    "node": "MIT",
+    "Simple Launcher": "PSF-2.0"
+  },
+  "non_package_fixtures": [
+    "/opt/woow/apps/n8n/node_modules/github-from-package/example/package.json"
+  ],
+  "decision": "project owner, 2026-10-05: unfixed High/Critical/Unknown reported not blocking (fixable still blocks); Debian main deb licenses accepted; pure OR expressions with an allowed option accepted; BlueOak-1.0.0 allowed; binary license map (python/distlib launchers PSF-2.0, node MIT); one example manifest excluded by exact path."
 }

@@ -98,6 +98,31 @@ class SupplyChainTests(unittest.TestCase):
                     with self.assertRaises(s.Closed):
                         s.enforce_policy(sbom, report)
 
+    def test_non_package_fixtures_are_exact_paths_only(self):
+        fx = ['/opt/x/node_modules/a/example/package.json']
+        self.assertTrue(s.is_listed_fixture(fx, {'locations': [{'path': fx[0]}]}))
+        self.assertFalse(s.is_listed_fixture(fx, {'locations': [{'path': fx[0]}, {'path': '/opt/x/other/package.json'}]}))
+        self.assertFalse(s.is_listed_fixture(fx, {'locations': []}))
+        self.assertFalse(s.is_listed_fixture(fx, {}))
+        self.assertFalse(s.is_listed_fixture([], {'locations': [{'path': fx[0]}]}))
+        policy = json.loads((s.ROOT / 'packaging/supply-chain-policy.json').read_text())
+        real = s.read_json
+        sbom = {'artifacts': [{'type': 'npm', 'name': 'beep-boop', 'licenses': [], 'locations': [{'path': fx[0]}]},
+                              {'type': 'npm', 'name': 'ok', 'licenses': [{'value': 'MIT'}]}]}
+        report = {'matches': [], 'descriptor': {'name': 'grype', 'version': s.pins()['grype']['version'],
+                  'db': {'schemaVersion': '6.0.2', 'checksum': 'a' * 64, 'error': '',
+                         'built': datetime.now(timezone.utc).isoformat()}}}
+        for doc, ok in ((dict(policy, non_package_fixtures=[]), False), (dict(policy, non_package_fixtures=fx), True),
+                        (dict(policy, non_package_fixtures=['/opt/x/*']), False),
+                        (dict(policy, non_package_fixtures=['relative/package.json']), False)):
+            with self.subTest(fixtures=doc['non_package_fixtures']), patch.object(
+                    s, 'read_json', side_effect=lambda path: doc if path.name == 'supply-chain-policy.json' else real(path)):
+                if ok:
+                    s.enforce_policy(sbom, report)
+                else:
+                    with self.assertRaises(s.Closed):
+                        s.enforce_policy(sbom, report)
+
     def test_grype_0120_status_descriptor_is_normalised(self):
         sbom = {'artifacts': [{'name': 'fixture', 'licenses': [{'value': 'MIT'}]}]}
         built = datetime.now(timezone.utc).isoformat()

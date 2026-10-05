@@ -100,6 +100,12 @@ def license_allowed(policy, package, value):
     return False
 
 
+def is_listed_fixture(fixtures, package):
+    # Owner-approved exact SBOM locations that are example/test manifests, not installed packages.
+    paths = [location.get('path') for location in package.get('locations') or []]
+    return bool(paths) and all(path in fixtures for path in paths)
+
+
 def known_binary_license(policy, package):
     # Owner-approved map for binary artifacts syft cannot license (e.g. the python/node executables).
     known = policy.get('known_binary_licenses', {})
@@ -113,12 +119,17 @@ def enforce_policy(sbom, vulnerabilities):
     require(policy.get('debian_main_licenses', 'deny') in ('deny', 'accept')
             and policy.get('or_expressions', 'deny') in ('deny', 'accept-if-any-allowed')
             and isinstance(policy.get('known_binary_licenses', {}), dict)
+            and isinstance(policy.get('non_package_fixtures', []), list)
+            and all(isinstance(p, str) and p.startswith('/') and '*' not in p for p in policy.get('non_package_fixtures', []))
             and all(v in policy['allowed_licenses'] for v in policy.get('known_binary_licenses', {}).values()))
     require(policy['schema'] == 1 and policy['id'] == 'woow-conservative-v1'
             and policy['unknown_or_missing_license'] == 'deny'
             and policy['unfixed_vulnerabilities'] in ('include', 'exclude'))
     require(isinstance(sbom.get('artifacts'), list) and bool(sbom['artifacts']))
+    fixtures = policy.get('non_package_fixtures', [])
     for package in sbom['artifacts']:
+        if is_listed_fixture(fixtures, package):
+            continue
         licenses = package.get('licenses')
         if not licenses:
             licenses = known_binary_license(policy, package)

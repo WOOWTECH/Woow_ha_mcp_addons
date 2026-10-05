@@ -1,6 +1,7 @@
 {
   "name": "woow-ha-n8n-runtime",
   "private": true,
+  "license": "Apache-2.0",
   "version": "0.0.0",
   "description": "Pinned local HTTP child; not a published npm package",
   "dependencies": { "ipaddr.js": "1.9.1", "n8n-mcp": "2.91.0" }
