@@ -1,9 +1,9 @@
 # n8n Changelog
 
-## 0.1.1 — 準備中（未發佈）
+## 0.1.1 — 2026-10-05 公開（experimental）
 
-- 修正 HA 還原本 Add-on 後資料變成 root 擁有、無法啟動的問題：bootstrap 只在資料剛好屬 root 時，檢查後一次改回 10001 與 0700／0600（待 SPEC＋安全審）。
-- 映像 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.1` 尚未建置；0.1.0 tag 不覆寫。
+- 修正 HA 還原本 Add-on 後資料變成 root 擁有、無法啟動的問題：bootstrap 只在資料剛好屬 root 時，第一遍核准並握住每個 inode、第二遍只改這些重驗過的 inode（R1 修正 d687cad、19892a3，獨立 SPEC＋安全審）。
+- 映像 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.1`（候選 d2e1e3b，build／container／supply-chain gate 全過）；0.1.0 tag 不覆寫。
 
 ## 0.1.0 — 2026-10-05 公開（experimental）
 

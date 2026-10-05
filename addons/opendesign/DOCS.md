@@ -2,11 +2,11 @@
 
 ## 現況與範圍
 
-**0.1.0 已公開（experimental）／未做 HA E2E**：映像 `ghcr.io/woowtech/amd64-mcp-opendesign:0.1.0` 由候選 f75fe32 建置，通過 container/mock 與 supply-chain gate（2026-10-05）。本版管理面板 fail closed（見下），裝上 HA 也無法設定後端，請先不要安裝。
-只有新 n8n 已獲路徑 A 批准，正式 provider 已實作並經 component review；
-共用 UI 已本地 Core 整合，但此批准不適用本產品，無正式角色 verifier，管理 fail closed；
-目前無正常後端設定或 token reveal/rotate 路徑。不得改權限、注入 test verifier 或
-直接編輯 state 解鎖。`panel_admin` 不是角色授權；`homeassistant_api` 保持 false。
+**0.1.1（experimental）**：映像 `ghcr.io/woowtech/amd64-mcp-opendesign:0.1.1` 由候選 d2e1e3b 建置，通過 container/mock 與 supply-chain gate（2026-10-05）。管理面板經 HA 管理角色驗證後可設定後端；真 HA 與真後端實測進行中。0.1.0 的面板 fail closed，請使用 0.1.1。
+0.1.1 起與 n8n 相同（負責人 2026-10-05 核准 `homeassistant_api`）：管理程序以 runtime `SUPERVISOR_TOKEN`
+連固定 `ws://supervisor/core/websocket`，只查 `config/auth/list`，確認 Ingress 使用者是 active 的 owner 或
+system-admin 才放行；token 只給管理程序，child 不繼承。此 token 具**廣泛 Core 管理能力**，負責人已知情核准。
+不得注入 test verifier 或直接編輯 state 解鎖；`panel_admin` 不是角色授權。
 
 本產品 runtime：**vendored SDK MCP 1.28.1**。完整來源 15 tools，局部支援 11，
 暫不支援 4；七類合計 184/65/119，**不是 full functional parity**。
@@ -39,7 +39,7 @@
 
 Stock image `init: true`；保護模式維持 on。bootstrap 只建立新 `/data/mcp`，之後
 runtime/child uid/gid10001；0700 directory、0600 state。其他錯 owner、連結或特殊檔
-停止不接管。**已知問題（0.1.0）**：HA 還原本 Add-on 後資料變成 root 擁有、檔案 0644，啟動被拒（log：`bootstrap unavailable`，2026-10-05 實測）；修正預定隨 0.1.1：只在資料剛好屬 root 時，先檢查只有一般資料夾與單一連結檔，再一次改回 10001 與 0700／0600。0.1.0 請勿依賴 HA 還原。管理／child／backend 三種 health 不同；backend outage readiness503
+停止不接管。**HA 還原**：0.1.0 還原後資料屬 root、啟動被拒（2026-10-05 實測）。0.1.1 起 bootstrap 只在資料剛好屬 root 時，第一遍核准有界的一般資料夾與單一連結檔（身分＝dev／inode／ctime），第二遍只把這些重驗身分後的項目改回 10001 與 0700／0600；任何新增、移除、替換、連結或外來擁有者仍拒絕。0.1.1 的 HA 還原仍待實機驗證。管理／child／backend 三種 health 不同；backend outage readiness503
 不重啟 Add-on，故意不設 watchdog。詳見 [操作指南](../../docs/operations/guide.md)。
 
 更新須手動、固定版本且先讀 [CHANGELOG](CHANGELOG.md)；只有本 Add-on cold backup

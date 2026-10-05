@@ -1,7 +1,7 @@
-# Licenses and notices for the published 0.1.0 images
+# Licenses and notices for the published images
 
-Applies to the seven images `ghcr.io/woowtech/amd64-mcp-<product>:0.1.0` built from source
-`f75fe32b2f79b4cf9f99563667439a94db8b1d82`. The project's own code is Apache-2.0 (see `LICENSE`).
+0.1.1 (current): images `ghcr.io/woowtech/amd64-mcp-<product>:0.1.1` built from source
+`d2e1e3b65b89f42445fbb9b87eb447018044a5db`. 0.1.0: images `:0.1.0` from `f75fe32b2f79b4cf9f99563667439a94db8b1d82`. The project's own code is Apache-2.0 (see `LICENSE`).
 
 ## Bundled third-party packages
 
@@ -10,13 +10,13 @@ from the supply-chain gate's SBOM of the exact published image:
 
 | Product | Inventory |
 |---|---|
-| n8n | [n8n-0.1.0.md](n8n-0.1.0.md) |
-| Odoo | [odoo-0.1.0.md](odoo-0.1.0.md) |
-| Odoo Manage | [odoo-manage-0.1.0.md](odoo-manage-0.1.0.md) |
-| Hermes | [hermes-0.1.0.md](hermes-0.1.0.md) |
-| OpenDesign | [opendesign-0.1.0.md](opendesign-0.1.0.md) |
-| EMQX | [emqx-0.1.0.md](emqx-0.1.0.md) |
-| LiteLLM | [litellm-0.1.0.md](litellm-0.1.0.md) |
+| n8n | [n8n-0.1.1.md](n8n-0.1.1.md)（0.1.0：[n8n-0.1.0.md](n8n-0.1.0.md)） |
+| Odoo | [odoo-0.1.1.md](odoo-0.1.1.md)（0.1.0：[odoo-0.1.0.md](odoo-0.1.0.md)） |
+| Odoo Manage | [odoo-manage-0.1.1.md](odoo-manage-0.1.1.md)（0.1.0：[odoo-manage-0.1.0.md](odoo-manage-0.1.0.md)） |
+| Hermes | [hermes-0.1.1.md](hermes-0.1.1.md)（0.1.0：[hermes-0.1.0.md](hermes-0.1.0.md)） |
+| OpenDesign | [opendesign-0.1.1.md](opendesign-0.1.1.md)（0.1.0：[opendesign-0.1.0.md](opendesign-0.1.0.md)） |
+| EMQX | [emqx-0.1.1.md](emqx-0.1.1.md)（0.1.0：[emqx-0.1.0.md](emqx-0.1.0.md)） |
+| LiteLLM | [litellm-0.1.1.md](litellm-0.1.1.md)（0.1.0：[litellm-0.1.0.md](litellm-0.1.0.md)） |
 
 License texts ship inside every image: Python `*.dist-info/licenses/`, Node `node_modules/*/LICENSE*`,
 Debian `/usr/share/doc/*/copyright`, and the repository files `THIRD_PARTY_NOTICES.md` and
@@ -31,7 +31,7 @@ markdown-it-py 4.2.0 MIT, pyperclip 1.11.0 BSD-3-Clause).
 ## MPL-2.0 source (Odoo Manage)
 
 The Odoo Manage image bundles `mcp-server-odoo` 0.7.1 (MPL-2.0). Its exact Source Code Form is attached
-to the GitHub release `v0.1.0` of this repository as `mcp_server_odoo-0.7.1.tar.gz`
+to the GitHub releases `v0.1.0` and `v0.1.1` of this repository as `mcp_server_odoo-0.7.1.tar.gz`
 (SHA256 `4d3c2a71db22adb9c7e59fe5696600c4c42e0a3414880c5d00ec345c4963c67b`, identical to the PyPI sdist).
 The upstream files are not edited; this project's launcher and helpers that change its runtime behaviour are
 in this repository under Apache-2.0 and are described in `THIRD_PARTY_NOTICES.md`.
