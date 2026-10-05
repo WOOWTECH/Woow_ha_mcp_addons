@@ -398,7 +398,7 @@ async def test_initialize_with_an_unusable_session_id_is_bad_gateway(store, sess
     assert response.status_code == 502
 
 
-@pytest.mark.parametrize("verb", ["PUT", "PATCH", "OPTIONS"])
+@pytest.mark.parametrize("verb", ["PUT", "PATCH", "OPTIONS", "TRACE", "PROPFIND", "QUERY"])
 async def test_other_methods_authenticate_then_405(store, verb):
     seen = []
     async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: seen.append(r) or httpx.Response(200))) as child:

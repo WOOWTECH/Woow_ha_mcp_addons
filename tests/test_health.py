@@ -128,3 +128,24 @@ async def test_a_misbehaving_child_never_stops_the_monitor(tmp_path, variant):
     else:
         assert process.ready is True and len(deletes) == 1
     store.close()
+
+
+async def test_an_unusable_protocol_version_closes_the_session(tmp_path):
+    # 0.1.3: the child's protocolVersion is reused as a header only when it is a valid header value.
+    store = Store(tmp_path / "state")
+    process = Process()
+    seen = []
+
+    async def handler(request):
+        seen.append(request)
+        if request.method == "DELETE":
+            return httpx.Response(204)
+        return httpx.Response(200, headers={"mcp-session-id": "ok-session", "content-type": "application/json"},
+                              json={"jsonrpc": "2.0", "id": 1, "result": {
+                                  "protocolVersion": "2025 03 26", "serverInfo": {"name": "x", "version": "0"}}})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        await HealthMonitor(store, process, client).check()
+    assert process.ready is False
+    assert [r.method for r in seen] == ["POST", "DELETE"]  # no further request; the session is closed
+    assert "mcp-protocol-version" not in seen[1].headers
+    store.close()

@@ -18,7 +18,7 @@ import httpx
 from starlette.applications import Starlette
 from starlette.requests import ClientDisconnect, Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
-from starlette.routing import Route
+from starlette.routing import Route, request_response
 from starlette.middleware import Middleware
 
 from . import ui
@@ -136,6 +136,15 @@ class OwnedStreamingResponse(StreamingResponse):
         finally:
             # Includes headers/send failures where a generator may never start.
             await self.owner.close()
+
+
+class AnyMethod:
+    """An ASGI endpoint, so Starlette hands every method to the handler: the Bearer check comes first, then 405."""
+    def __init__(self, handler):
+        self.app = request_response(handler)
+
+    async def __call__(self, scope, receive, send):
+        await self.app(scope, receive, send)
 
 
 class BadRequest(Exception):
@@ -510,7 +519,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         state = store.load()
         if not token_valid(request, state):
             return Response(status_code=401, headers={"WWW-Authenticate": "Bearer"})
-        if request.method not in ("GET", "POST", "DELETE"):  # HEAD, PUT, PATCH, OPTIONS: after the Bearer check
+        if request.method not in ("GET", "POST", "DELETE"):  # any other method, only after the Bearer check
             return Response(status_code=405, headers={"Allow": "GET, POST, DELETE"})
         if request.headers.get("origin") is not None:
             raise BadRequest(403)  # Browser clients not in this tracer contract.
@@ -654,8 +663,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     exceptions = {BadRequest: error_handler, ConfigError: error_handler}
     admin = Starlette(routes=[Route("/{path:path}", admin_page, methods=["GET", "HEAD", "PUT", "POST"])],
                       middleware=[Middleware(ui.SecurityHeaders)], exception_handlers=exceptions)
-    mcp_app = Starlette(routes=[Route("/mcp", mcp, methods=["GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS"]),
-                                Route("/health/ready", readiness)], exception_handlers=exceptions)
+    mcp_app = Starlette(routes=[Route("/mcp", AnyMethod(mcp)), Route("/health/ready", readiness)],
+                        exception_handlers=exceptions)
     admin.router.redirect_slashes = False
     mcp_app.router.redirect_slashes = False
     return admin, mcp_app

@@ -85,6 +85,8 @@ class HealthMonitor:
                     result = await protocol_reply(response, 1)
                     if not isinstance(result, dict) or not isinstance(result.get("serverInfo"), dict) or not isinstance(result.get("protocolVersion"), str):
                         raise ValueError("invalid initialization")
+                    if not SESSION_ID.fullmatch(result["protocolVersion"]):
+                        raise ValueError("invalid protocol version")  # never sent as a header; the session is closed
                     headers["MCP-Protocol-Version"] = result["protocolVersion"]
                 if session:
                     headers["Mcp-Session-Id"] = session
