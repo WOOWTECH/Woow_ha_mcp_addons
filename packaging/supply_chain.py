@@ -329,9 +329,12 @@ def secret_scan(tool, mode, target, private, label, env):
     ignore = private / 'empty-ignore'
     ignore.write_text('')
     report = private / (label + '.json')
-    # Image layers hold third-party files whose hits are triaged by value hash, so only that scan reads
-    # unredacted values -- inside this private temporary directory, scrubbed right after hashing.
-    hashed = label == 'image'
+    # Image layers hold third-party files whose hits are triaged by value hash; the retained evidence
+    # (SBOMs) is derived from that same image and repeats its metadata (e.g. the base image GPG_KEY),
+    # so both use the SAME approved (rule, value-hash) list. Only these scans read unredacted values,
+    # inside this private temporary directory, scrubbed right after hashing. Source/history stay
+    # redacted and zero-tolerance.
+    hashed = label in ('image', 'evidence')
     command = [str(tool), mode, str(target), '--config', str(config),
                '--gitleaks-ignore-path', str(ignore), '--ignore-gitleaks-allow',
                '--max-decode-depth', '5', '--max-archive-depth', '5', '--max-target-megabytes', '0',

@@ -79,12 +79,32 @@ class SecretTriageTests(unittest.TestCase):
                             s.secret_scan(tool, 'dir', private, private, 'image', {'PATH': '/usr/bin:/bin'})
                 self.assertEqual((private / 'image.json').read_text(), '[]\n')  # raw values scrubbed
 
+    def test_evidence_scan_uses_the_same_approved_hashes(self):
+        doc = json.loads((s.ROOT / 'packaging/secret-triage.json').read_text())
+        approved_value = 'example-approved-value'
+        doc['image_findings'] = {'entries': [
+            {'rule': 'r1', 'secret_sha256': hashlib.sha256(approved_value.encode()).hexdigest(), 'seen': ['x'], 'approved': True}]}
+        real_read = s.read_json
+        for findings, passes in (([{'RuleID': 'r1', 'Secret': approved_value}], True),
+                                 ([{'RuleID': 'r1', 'Secret': 'unapproved'}], False)):
+            with self.subTest(passes=passes), tempfile.TemporaryDirectory() as tmp:
+                private = Path(tmp)
+                tool = self._fake_gitleaks(tmp, findings)
+                with patch.object(s, 'read_json', side_effect=lambda path: doc if path.name == 'secret-triage.json' else real_read(path)):
+                    if passes:
+                        s.secret_scan(tool, 'dir', private, private, 'evidence', {'PATH': '/usr/bin:/bin'})
+                    else:
+                        with self.assertRaises(s.Closed):
+                            s.secret_scan(tool, 'dir', private, private, 'evidence', {'PATH': '/usr/bin:/bin'})
+                self.assertEqual((private / 'evidence.json').read_text(), '[]\n')  # raw values scrubbed
+
     def test_source_scan_stays_redacted_and_zero_tolerance(self):
         with tempfile.TemporaryDirectory() as tmp:
             # No stderr, so the only reason to close is the non-empty redacted report.
             tool = self._fake_gitleaks(tmp, [{'RuleID': 'r1', 'Secret': 'REDACTED'}], stderr=False)
-            with self.assertRaises(s.Closed):
-                s.secret_scan(tool, 'dir', Path(tmp), Path(tmp), 'source', {'PATH': '/usr/bin:/bin'})
+            for label in ('source', 'history'):
+                with self.subTest(label=label), self.assertRaises(s.Closed):
+                    s.secret_scan(tool, 'dir', Path(tmp), Path(tmp), label, {'PATH': '/usr/bin:/bin'})
             clean = self._fake_gitleaks(tmp, [], stderr=False)
             s.secret_scan(clean, 'dir', Path(tmp), Path(tmp), 'source', {'PATH': '/usr/bin:/bin'})
 
