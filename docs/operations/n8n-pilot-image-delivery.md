@@ -1,7 +1,8 @@
 # n8n 試點：私有映像交付設計（Q2 選項 B）
 
-**狀態：設計＋離線工具。** registry 位置已決定（Gitea，見下節）；尚未推送、未變更 Supervisor 或 HA 檔案。
-專用推送／拉取 token 與 H1–H4 每一步仍待批准。本文接在 [n8n-haos-pilot](n8n-haos-pilot.md) 的 P6–P8。
+**狀態：已停用（2026-10-05）。** 專案負責人改為公開 repo＋公開 GHCR 映像，試點改走 HA 商店安裝，
+見 [逐步指令](n8n-pilot-commands.md)。本文的私有 registry 路線保留作為參考（例如日後需要私有部署），
+其中的 digest／DiffID 核對方法與 `registry_fetch.py`、`delivery_receipt.py` 仍適用於公開映像的讀回驗證。本文接在 [n8n-haos-pilot](n8n-haos-pilot.md) 的 P6–P8。
 
 ## 目標與不變條件
 
@@ -107,9 +108,9 @@ H2 需要 HA 上已有的檔案分享管道；若只能透過 SSH add-on，只�
 
 ## 私有 registry（專案負責人 2026-10-05 決定：Gitea）
 
-- Registry：`git-prod.woowtech.io`（Gitea 內建 container registry，`/v2/` 回 registry/2.0）。
-  Namespace：`ha-components`（與私有原始碼 repo 同 org）。試點 ref：
-  `git-prod.woowtech.io/ha-components/pilot-<sha12>/amd64-mcp-n8n:0.1.0`。若首次推送時 Gitea 不接受
+- Registry：`<private-registry-host>`（Gitea 內建 container registry，`/v2/` 回 registry/2.0）。
+  Namespace：`<namespace>`（與私有原始碼 repo 同 org）。試點 ref：
+  `<private-registry-host>/<namespace>/pilot-<sha12>/amd64-mcp-n8n:0.1.0`。若首次推送時 Gitea 不接受
   巢狀名稱，改用扁平名稱 `amd64-mcp-n8n-pilot-<sha12>`，並同步改 `pilot_variant.py` 的 image 規則後重新審查。
 - 推送憑證（R2）：專用 Gitea access token，權限只有 `write:package`，只在一次性 builder VM 內
   `docker login --password-stdin` 使用，推送後 `docker logout` 並撤銷該 token。不使用個人全權限 token，
