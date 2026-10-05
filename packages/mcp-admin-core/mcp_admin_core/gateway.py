@@ -31,6 +31,32 @@ MAX_REQUEST = 262144
 MAX_RESPONSE = 8 * 1024 * 1024
 STREAM_SECONDS = 120
 EVENT_BOUNDARY = re.compile(rb"\r?\n\r?\n")
+LONE_CR = re.compile(rb"\r(?!\n)")
+SSE_FIELD = re.compile(rb"(?:id|event|retry):[ ]?[\x20-\x7e]{0,256}")
+SSE_COMMENT = re.compile(rb":[\x20-\x7e]{0,1024}")
+
+
+def sse_frame(frame: bytes):
+    """Split one SSE event (boundary removed) into (kept field lines, data lines), or None if unsafe.
+
+    Only printable-ASCII id/event/retry fields and comments are kept besides data lines; anything else
+    (a BOM, unknown fields, blank lines, non-ASCII) is dropped, so no client can read it as data that the
+    gateway did not see. A lone CR ends a line for some SSE parsers but not for this scan: refused.
+    """
+    if LONE_CR.search(frame):
+        return None
+    kept, data = [], []
+    for line in frame.split(b"\n"):
+        line = line[:-1] if line.endswith(b"\r") else line
+        if line.startswith(b"data:"):
+            data.append(line)
+        elif SSE_FIELD.fullmatch(line) or SSE_COMMENT.fullmatch(line):
+            kept.append(line)
+    return kept, data
+
+
+def sse_data(data_lines):
+    return b"\n".join(line[5:].lstrip(b" ") for line in data_lines)
 RoleVerifier = Callable[[str], Awaitable[bool]]
 
 
@@ -114,8 +140,11 @@ async def json_body(request):
     if request.headers.get("content-type", "").split(";")[0] != "application/json":
         raise BadRequest(415)
     try:
-        return strict_json(await body(request))
-    except (ValueError, RecursionError):
+        value = strict_json(await body(request))
+        # A lone surrogate (e.g. an id "\ud800") parses but cannot be encoded back into a reply.
+        json.dumps(value, ensure_ascii=False).encode("utf-8")
+        return value
+    except (ValueError, RecursionError):  # UnicodeEncodeError is a ValueError
         raise BadRequest() from None
 
 
@@ -384,19 +413,20 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 start = max(0, len(pending) - 3)  # only new bytes, plus a boundary split across chunks
                 pending.extend(chunk)
                 while is_sse and (match := EVENT_BOUNDARY.search(pending, start)):
-                    frame = bytes(pending[:match.start()])
+                    parsed = sse_frame(bytes(pending[:match.start()]))
                     del pending[:match.end()]
                     start = 0
-                    lines = frame.splitlines()
-                    data = b"\n".join(line[5:].lstrip(b" ") for line in lines if line.startswith(b"data:"))
-                    if not data:
+                    if parsed is None:
+                        return "invalid", None, None
+                    kept, data_lines = parsed
+                    if not data_lines:
                         continue
                     try:
-                        value = strict_json(data)
+                        value = strict_json(sse_data(data_lines))
                     except (ValueError, RecursionError):
                         return "invalid", None, None
                     if reply(value):
-                        return "ok", value, [line for line in lines if not line.startswith(b"data:")]
+                        return "ok", value, [line for line in kept if not line.startswith(b":")]
         finally:
             await reader.aclose()
         if owner.overflowed:
@@ -416,28 +446,31 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             async for chunk in chunks(owner, token):
                 yield chunk
             return
-        # Restrict advertisements also on resumed GET streams, preserving framing.
-        pending = b""
+        # Restrict advertisements also on resumed GET streams. Every event is rebuilt from the lines the
+        # gateway understood (sse_frame), so nothing it did not filter can reach a client as data.
+        pending = bytearray()
         async for chunk in chunks(owner, token):
-            pending += chunk
-            if len(pending) > MAX_RESPONSE:
-                return
-            while match := re.search(rb"\r?\n\r?\n", pending):
-                frame, pending = pending[:match.start()], pending[match.end():]
-                lines = frame.splitlines()
-                data = b"\n".join(line[5:].lstrip(b" ") for line in lines if line.startswith(b"data:"))
-                if data:
+            start = max(0, len(pending) - 3)  # only new bytes, plus a boundary split across chunks
+            pending.extend(chunk)
+            while match := EVENT_BOUNDARY.search(pending, start):
+                parsed = sse_frame(bytes(pending[:match.start()]))
+                del pending[:match.end()]
+                start = 0
+                if parsed is None:
+                    return
+                kept, data_lines = parsed
+                if data_lines:
                     try:
-                        value = strict_json(data)
+                        value = strict_json(sse_data(data_lines))
                         if (isinstance(value, dict) and isinstance(value.get("result"), dict)
                                 and {"tools", "capabilities"} & value["result"].keys()):
                             value = filter_list(value, tools, store.load())
-                            lines = [line for line in lines if not line.startswith(b"data:")]
-                            lines.append(b"data: " + json.dumps(value, separators=(",", ":")).encode())
-                            frame = b"\n".join(lines)
+                            data_lines = [b"data: " + json.dumps(value, separators=(",", ":")).encode()]
                     except (ValueError, ConfigError, RecursionError):
                         return
-                yield frame + b"\n\n"
+                lines = kept + data_lines
+                if lines:
+                    yield b"\n".join(lines) + b"\n\n"
         # A truncated SSE event is intentionally not dispatched.
 
     async def mcp(request):
@@ -496,6 +529,10 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             if not still_authorized(state.token):
                 raise BadRequest(401)
             is_sse = upstream.headers.get("content-type", "").split(";")[0] == "text/event-stream"
+            if is_sse:  # the gateway re-frames events itself: never forward the child's parameters (charset)
+                response_headers["content-type"] = "text/event-stream"
+            if method in ("initialize", "tools/list") and 200 < upstream.status_code < 300:
+                raise BadRequest(502)  # these replies are filtered: only a plain 200 may carry them
             if method == "initialize" and upstream.status_code == 200:
                 outcome, value, frame = await initialize_reply(owner, state.token, is_sse, message.get("id"))
                 if not still_authorized(state.token):
@@ -512,6 +549,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 except ValueError:
                     raise BadRequest(502) from None
                 if frame is None:
+                    response_headers.pop("content-type", None)  # re-serialized: application/json
                     return JSONResponse(value, status_code=200, headers=response_headers)
                 # The child's event framing (id/event/retry lines) with the filtered data.
                 frame.append(b"data: " + json.dumps(value, separators=(",", ":")).encode())
@@ -526,6 +564,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     raise BadRequest(502) from None
                 if not still_authorized(state.token):
                     raise BadRequest(401)
+                response_headers.pop("content-type", None)  # re-serialized: application/json
                 return JSONResponse(value, status_code=upstream.status_code, headers=response_headers)
             handed_off = True
             return OwnedStreamingResponse(stream(owner, state.token, is_sse), owner=owner,

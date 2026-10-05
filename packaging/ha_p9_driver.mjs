@@ -122,7 +122,7 @@ try {
     if (OUTAGE) {
       console.log('--- outage');
       await putBackend(withUrl(BACKEND, OUTAGE), 'unreachable URL');
-      await plan(['--expect-backend-down']);
+      await plan(['--expect-backend-down', ...(argv.includes('--outage-refusal') ? ['--allow-initialize-refusal'] : [])]);
       await putBackend(BACKEND, 'restored');
       await plan();
     }

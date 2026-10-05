@@ -96,8 +96,13 @@ unknown methods, invalid IDs/params/arguments and unknown/disabled/write-disallo
 tools fail before the upstream request. Notifications/initialized is the only
 accepted notification. See provenance for the narrow source-backed tool subset.
 
-The gateway preserves upstream status, empty 202/204 responses, session/protocol
-headers and SSE event IDs/data/comments/retry, except for initialize (0.1.2): the
+The gateway preserves upstream status, empty 202/204 responses and session/protocol
+headers. SSE events are rebuilt from the lines the gateway understood (0.1.2): data,
+printable-ASCII id/event/retry fields and comments; other lines (a BOM, unknown fields,
+non-ASCII comments) are dropped, a lone CR ends the stream, and the SSE Content-Type is
+always plain `text/event-stream` (no child parameters). initialize and tools/list
+replies must be a plain 200 (other 2xx: 502). Request bodies with lone surrogates are
+400. Initialize is further special-cased (0.1.2): the
 gateway reads a 200 initialize reply up to the JSON-RPC response with the request id
 and answers with that one response (SSE keeps only its id/event/retry lines; other
 events are dropped). A 200 without that response (empty body, stream ended or broken,

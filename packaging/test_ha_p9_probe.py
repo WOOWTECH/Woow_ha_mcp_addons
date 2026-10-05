@@ -29,6 +29,7 @@ class FakeMCP(ThreadingHTTPServer):
         self.cap, self.sessions, self.lock = cap, set(), threading.Lock()
         self.outage = False
         self.refuse_initialize = False  # 0.1.2 gateway: a child that cannot open a session without its backend
+        self.refusal_session = None
         self.calls = []
         threading.Thread(target=self.serve_forever, daemon=True).start()
 
@@ -72,8 +73,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(401)
         method, sid = body.get('method'), self.headers.get('Mcp-Session-Id')
         if method == 'initialize' and self.server.refuse_initialize:
+            headers = {'Mcp-Session-Id': self.server.refusal_session} if self.server.refusal_session else None
             return self.reply(503, {'jsonrpc': '2.0', 'id': body['id'],
-                                    'error': {'code': -32000, 'message': 'BACKEND_UNAVAILABLE'}})
+                                    'error': {'code': -32000, 'message': 'BACKEND_UNAVAILABLE'}}, headers)
         if method == 'initialize':
             with self.server.lock:
                 if len(self.server.sessions) >= self.server.cap:
@@ -173,14 +175,20 @@ class ProbeTests(unittest.TestCase):
         with self.assertRaises(SystemExit):  # a healthy backend is not a structured outage failure
             self.main('plan', '--expect-backend-down', stdin=TOKEN + '\n' + json.dumps({'reads': [['n8n_list_workflows', {}]]}))
 
-    def test_plan_outage_accepts_a_refused_initialize_and_still_checks_denials(self):
+    def test_plan_outage_accepts_a_refused_initialize_only_when_allowed(self):
         self.server.refuse_initialize = True
         plan = {'reads': [['n8n_list_workflows', {}]], 'denials': [['n8n_delete_workflow', {}]]}
-        summary, text = self.main('plan', '--expect-backend-down', stdin=TOKEN + '\n' + json.dumps(plan))
+        stdin = TOKEN + '\n' + json.dumps(plan)
+        summary, text = self.main('plan', '--expect-backend-down', '--allow-initialize-refusal', stdin=stdin)
         self.assertEqual([(r['kind'], r['pass']) for r in summary['plan']['rows']], [('denials', True), ('outage', True)])
         self.assertIn('initialize http=503 error -32000: BACKEND_UNAVAILABLE', text)
-        with self.assertRaises(SystemExit):  # outside an outage run a refused initialize is a failure
-            self.main('plan', stdin=TOKEN + '\n' + json.dumps(plan))
+        self.assertIn('session id absent', text)
+        for argv in (('plan', '--expect-backend-down'), ('plan',)):  # not opted in, or not an outage run
+            with self.subTest(argv=argv), self.assertRaises(SystemExit):
+                self.main(*argv, stdin=stdin)
+        self.server.refusal_session = 'leaked'  # a refusal must not hand out a session id
+        with self.assertRaises(SystemExit):
+            self.main('plan', '--expect-backend-down', '--allow-initialize-refusal', stdin=stdin)
         self.assertEqual(self.server.sessions, set())
 
     def test_plan_reports_short_error_bodies(self):

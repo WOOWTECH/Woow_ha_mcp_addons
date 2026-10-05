@@ -74,7 +74,7 @@ class Client:
                 body = None
             if raw and not isinstance(body, dict):
                 body = {'error': {'message': raw[:300]}}
-            return error.code, body, sid
+            return error.code, body, error.headers.get('Mcp-Session-Id')  # an error must not open a session
         except (urllib.error.URLError, OSError):
             return 0, None, sid
         with response:
@@ -291,7 +291,7 @@ def mode_plan(opts, client, out, plan):
     BACKEND_UNAVAILABLE (0.1.2); that refusal is the structured failure, and denials must still be 403.
     """
     status, message, sid = client.open()
-    refused = (opts.expect_backend_down and status == 503
+    refused = (opts.expect_backend_down and opts.allow_initialize_refusal and status == 503
                and describe(message) == 'error -32000: BACKEND_UNAVAILABLE')
     if status != 200 and not refused:
         raise SystemExit('initialize returned %s' % status)
@@ -323,8 +323,9 @@ def mode_plan(opts, client, out, plan):
         client.close(sid)
     if refused:
         rows.append({'kind': 'outage', 'tool': '(initialize)', 'listed': None, 'http': 503, 'isError': None,
-                     'structured_failure': True, 'pass': True})
-        out.write('outage: initialize refused with BACKEND_UNAVAILABLE\n')
+                     'structured_failure': True, 'pass': sid is None})
+        out.write('outage: initialize refused with BACKEND_UNAVAILABLE, session id %s\n'
+                  % ('absent' if sid is None else 'PRESENT'))
     elif opts.expect_backend_down:
         failed_reads = sum(r['structured_failure'] for r in rows if r['kind'] == 'reads')
         rows.append({'kind': 'outage', 'tool': '(any backend read)', 'listed': None, 'http': None, 'isError': None,
@@ -347,6 +348,9 @@ def main(argv=None, stdin=sys.stdin, out=sys.stdout):
     parser.add_argument('--cycles', type=int, default=25)
     parser.add_argument('--width', type=int, default=120, help='characters of tool output shown per plan row')
     parser.add_argument('--expect-backend-down', action='store_true', help='plan: reads must fail in a structured way')
+    parser.add_argument('--allow-initialize-refusal', action='store_true',
+                        help='plan with --expect-backend-down: a 503 BACKEND_UNAVAILABLE initialize without a session id '
+                             'is the structured failure (only for a child that needs its backend per session)')
     opts = parser.parse_args(argv)
     json.loads(opts.args)
     if opts.mode in ('restart', 'childkill') and not opts.slug:
