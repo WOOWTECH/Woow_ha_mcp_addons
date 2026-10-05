@@ -54,8 +54,8 @@ python3 <tools>/source_bundle.py verify woow-mcp-<sha12>.bundle <候選 SHA> sou
 
 ## P2 — 靜態與單元關卡（VM，候選 checkout 根目錄）
 
-前提：CPython **3.13.12**、Linux x86_64（與 CI `setup-python` 相同；`requirements-ci.txt` 的 PyYAML 是固定
-cp313 wheel hash）。不要用系統 Python 3.12 或假設 PyYAML 已安裝。下文 `<py313>` 指這個 3.13.12 直譯器，
+前提：CPython **3.13.16**、Linux x86_64（與 CI `setup-python` 相同；`requirements-ci.txt` 的 PyYAML 是固定
+cp313 wheel hash）。不要用系統 Python 3.12 或假設 PyYAML 已安裝。下文 `<py313>` 指這個 3.13.16 直譯器，
 可以是只為本步驟建的私人 venv（其中只裝 requirements-ci），不對系統 Python 安裝。
 
 ```sh

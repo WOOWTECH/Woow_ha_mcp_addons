@@ -8,7 +8,7 @@ COPY packages/mcp-admin-ui/scripts/build.mjs ./scripts/build.mjs
 COPY packages/mcp-admin-ui/NOTICE.txt ./NOTICE.txt
 RUN npm run build
 FROM astral/uv:0.12.10@sha256:34c0f9a55abeb840c34391bb7b63a1a06f8cb9281e028f27757a01a1a8a2d461 AS uv
-FROM python:3.13.12-slim-bookworm@sha256:3121f8b0804aa3698ab750d9a39ea4a42657a385c9b133722b915e55c51551a6 AS dependencies
+FROM python:3.13.16-slim-bookworm@sha256:88310c082760d93ac7c74d579e95e53a4ab6ea52dd8901abc61a103daf488ac4 AS dependencies
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_PYTHON_DOWNLOADS=never UV_LINK_MODE=copy
 WORKDIR /opt/woow
@@ -16,7 +16,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --python /usr/local/bin/python
 COPY apps/hermes/pyproject.toml apps/hermes/uv.lock ./apps/hermes/
 RUN uv sync --project apps/hermes --frozen --no-dev --python /usr/local/bin/python
-FROM python:3.13.12-slim-bookworm@sha256:3121f8b0804aa3698ab750d9a39ea4a42657a385c9b133722b915e55c51551a6 AS runtime
+FROM python:3.13.16-slim-bookworm@sha256:88310c082760d93ac7c74d579e95e53a4ab6ea52dd8901abc61a103daf488ac4 AS runtime
 ARG BUILD_VERSION=0.1.0
 LABEL io.hass.type="app" io.hass.arch="amd64" io.hass.version="${BUILD_VERSION}" \
       io.hass.name="WOOW Hermes MCP" io.hass.description="Experimental partial MCP; management blocked" \

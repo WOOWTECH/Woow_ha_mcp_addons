@@ -56,7 +56,7 @@ Manage mode=read/module，module 要求後端已有 MCP module，不做模組安
 
 ## 映像／資料契約
 
-- 固定 Python **3.13.12** slim-bookworm，符合既有 `>=3.13,<3.14`；未宣稱
+- 固定 Python **3.13.16** slim-bookworm，符合既有 `>=3.13,<3.14`；未宣稱
   3.12 或 aarch64。核心 `.venv` 與六類 child `.venv` 分開，FastMCP 的
   Starlette 1.7.0 不覆蓋核心 0.49.3。n8n 使用 Node **22.23.2**、npm lock、
   `npm ci --ignore-scripts`，保留 sql.js fallback；不下載 native addon/script。

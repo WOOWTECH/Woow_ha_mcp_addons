@@ -146,7 +146,7 @@ No entry below is configured, selected or proved by this patch.
   finish/failure/cancel/expiry; in-job cleanup is insufficient. Record actual
   resource peaks after an approved run.
 - Complete externally reviewed VM/client/Engine/API/embedded BuildKit software
-  manifest and immutable delivery/provenance, plus Git/Python **3.13.12** and
+  manifest and immutable delivery/provenance, plus Git/Python **3.13.16** and
   Docker CLI plugin-discovery behavior. The private config plugin must take
   precedence with no extra search dirs. Engine and CLI versions are deliberately
   unselected; illustrative Docker CLI v28.3.3 source below is **not a version

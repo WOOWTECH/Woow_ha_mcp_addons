@@ -14,9 +14,9 @@
   ],
   "version": "0.1.0",
   "bases": {
-    "python": "python:3.13.12-slim-bookworm@sha256:3121f8b0804aa3698ab750d9a39ea4a42657a385c9b133722b915e55c51551a6",
+    "python": "python:3.13.16-slim-bookworm@sha256:88310c082760d93ac7c74d579e95e53a4ab6ea52dd8901abc61a103daf488ac4",
     "node": "node:22.23.2-bookworm-slim@sha256:43aeff40f4afc22e83f7589a2f37e111cff5ca84529571f1c8415bcc5fcc21b2",
     "uv": "astral/uv:0.12.10@sha256:34c0f9a55abeb840c34391bb7b63a1a06f8cb9281e028f27757a01a1a8a2d461"
   },
-  "evidence": "Anonymous Docker Hub manifest metadata GET 2026-10-03; linux/amd64 child manifests. Hash integrity pins, NOT CVE/license or image-build clearance."
+  "evidence": "Anonymous Docker Hub manifest metadata GET 2026-10-03; linux/amd64 child manifests. Hash integrity pins, NOT CVE/license or image-build clearance. Python base bumped 2026-10-05 to 3.13.16-slim-bookworm linux/amd64 child manifest (anonymous Docker Hub GET); measured on the builder: blocked High/Critical/Unknown 155 -> 88, fix-available High/Critical 68 -> 1."
 }

@@ -12,13 +12,13 @@ FROM node:22.23.2-bookworm-slim@sha256:43aeff40f4afc22e83f7589a2f37e111cff5ca845
 WORKDIR /npm
 COPY apps/n8n/package.json apps/n8n/package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund && npm cache clean --force
-FROM python:3.13.12-slim-bookworm@sha256:3121f8b0804aa3698ab750d9a39ea4a42657a385c9b133722b915e55c51551a6 AS dependencies
+FROM python:3.13.16-slim-bookworm@sha256:88310c082760d93ac7c74d579e95e53a4ab6ea52dd8901abc61a103daf488ac4 AS dependencies
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_PYTHON_DOWNLOADS=never UV_LINK_MODE=copy
 WORKDIR /opt/woow
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --python /usr/local/bin/python
-FROM python:3.13.12-slim-bookworm@sha256:3121f8b0804aa3698ab750d9a39ea4a42657a385c9b133722b915e55c51551a6 AS runtime
+FROM python:3.13.16-slim-bookworm@sha256:88310c082760d93ac7c74d579e95e53a4ab6ea52dd8901abc61a103daf488ac4 AS runtime
 ARG BUILD_VERSION=0.1.0
 LABEL io.hass.type="app" io.hass.arch="amd64" io.hass.version="${BUILD_VERSION}" \
       io.hass.name="WOOW n8n MCP" io.hass.description="Experimental bounded MCP; HA acceptance pending" \

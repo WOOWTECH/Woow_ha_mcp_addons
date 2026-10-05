@@ -8,12 +8,12 @@ schema 子集。參考 `supervisor/apps/validate.py` 454–557/589–606 與
 `supervisor/store/validate.py` 10–17。未知 key 不准被 Supervisor 靜默丟棄。
 
 Base image 精確 linux/amd64 manifest digest 記錄於 `packaging/inputs.json`：
-Python 3.13.12 slim-bookworm、Node 22.23.2 bookworm-slim、uv 0.12.10。
+Python 3.13.16 slim-bookworm、Node 22.23.2 bookworm-slim、uv 0.12.10。
 2026-10-03 以 Docker Hub 公開匿名 metadata 查得，不是編造 hash，也不是
 映像安全掃描／license approval／成功 build。匿名 registry 短效 pull challenge
 不涉及既有帳號憑證。未使用 curl|sh、NodeSource 或 runtime 未固定下載。
 
-原 core worker 本地使用 Python3.13.2，本封裝選支援範圍內固定 patch3.13.12；
+原 core worker 本地使用 Python3.13.2，本封裝選支援範圍內固定 patch3.13.16；
 不同 patch/base/native libraries 仍須真正 image build 和 container gate 才可接受。
 
 **此隔離工作環境無 Docker，未安裝系統容器工具，未建置／執行映像、未發 remote
@@ -56,7 +56,7 @@ aarch64 或偽造 OCI license umbrella。HA 子目錄 fallback build 不支援 r
 ubuntu-24.04、有 timeout/concurrency；不讀 secrets、不 login、不 push、不用
 pull_request_target、不使用 production self-hosted runner。
 
-1. Python3.13.12／Node22.23.2／uv0.12.10，hash-pinned PyYAML。
+1. Python3.13.16／Node22.23.2／uv0.12.10，hash-pinned PyYAML。
 2. strict packaging validator + packaging tests。
 3. 既有 TCP tests 固定 subprocess PATH=/usr/bin:/bin；只在 disposable hosted runner
    將 /usr/bin/node 指向 setup-node 已安裝的確切 binary，並檢查 v22.23.2，避免
