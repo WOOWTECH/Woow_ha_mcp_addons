@@ -29,6 +29,20 @@ manifest `backup: cold`：HA 會停止**這個新 Add-on**來取得一致狀態�
 0.1.0 啟動被拒（`bootstrap unavailable`）→ 0.1.0 的 HA 還原不可用（已知問題）。0.1.1 起 bootstrap 只在資料剛好
 屬 root 時，檢查後一次改回 10001／0700／0600。還原後一律輪替 MCP token（備份含舊 token）。
 
+0.1.1 修復的邊界與現象（`packaging/entrypoint.py`；獨立 SPEC 與安全審 2026-10-05）：
+
+| 項目 | 行為 |
+|---|---|
+| 觸發條件 | 既有 `/data/mcp` 本身屬 root（0:0），且 bootstrap 以 root 執行；其他擁有者照舊拒絕 |
+| 接受的內容 | 只有一般資料夾與單一連結的一般檔，擁有者為 root 或 10001，與 `/data/mcp` 在同一檔案系統 |
+| 上限 | 最多 512 個項目、8 層；列目錄時邊讀邊數，超過立即拒絕 |
+| 描述子 | 修復期間每個核准項目各占一個 descriptor；soft `RLIMIT_NOFILE` 低於 576 時拉到 576（只在修復那次開機，管理程序會沿用）；hard 低於 576 則拒絕 |
+| 依賴 | 需要容器內的 `/proc`（一般檔經 `/proc/self/fd` 改 owner／mode）；沒有 `/proc` 時拒絕 |
+| 不處理 | ACL、xattr 不檢查也不保留 |
+| 成功 | log 一行 `bootstrap: re-owned N restored entries in /data/mcp`，之後一般啟動 |
+| 中斷 | 每項先改 mode 再改 owner；修到一半中斷時，未完成的項目仍屬 root，下次啟動會再修 |
+| 拒絕 | log `bootstrap unavailable; ...`、app 停在 error。第一遍檢查拒絕時不改任何項目；第二遍途中發現變動時，之前已改的只會是核准過的項目。回報負責人，比對 `/data/mcp` 內容與上表後人工處理，不要放寬權限或手動 chmod 繞過 |
+
 **備份含 backend 密碼/API key、外部及 child token、endpoint／工具政策，視同秘密。**
 限制下載與儲存人員、使用受控加密儲存與保留政策；不可入 Git、Actions artifact、
 issue、聊天或公開 object storage。不要在終端傾倒 JSON。公開驗收只記錄 opaque
