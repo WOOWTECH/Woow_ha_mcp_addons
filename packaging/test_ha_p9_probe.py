@@ -147,8 +147,10 @@ class ProbeTests(unittest.TestCase):
     def test_plan_outage_requires_structured_failures(self):
         self.server.outage = True
         summary, _ = self.main('plan', '--expect-backend-down', stdin=TOKEN + '\n' + json.dumps(
-            {'reads': [['n8n_list_workflows', {}]], 'denials': [['n8n_delete_workflow', {}]]}))
-        self.assertEqual(summary['plan']['passed'], 2)
+            {'reads': [['n8n_list_workflows', {}], ['search_nodes', {'query': 'x'}]],
+             'denials': [['n8n_delete_workflow', {}]]}))
+        # The local tool still answers, the backend tool fails in a structured way, the denial stays 403.
+        self.assertEqual((summary['plan']['passed'], summary['plan']['total']), (4, 4))
         with self.assertRaises(SystemExit):  # the same outage without the flag is a failed read
             self.main('plan', stdin=TOKEN + '\n' + json.dumps({'reads': [['n8n_list_workflows', {}]]}))
         self.server.outage = False

@@ -260,8 +260,9 @@ def backend_failed(text):
 def mode_plan(opts, client, out, plan):
     """reads must succeed (HTTP 200, not isError, no in-band failure); denials must be refused (HTTP 403).
 
-    With --expect-backend-down, reads must instead fail in a structured way (HTTP 200 with isError or an
-    in-band failure), proving the MCP server answers instead of hanging or crashing during an outage.
+    With --expect-backend-down, every read must still be answered (HTTP 200: local tools keep working,
+    backend tools report the failure) and at least one read must fail in a structured way (isError or an
+    in-band failure), proving the server answers instead of hanging or crashing during an outage.
     """
     status, _, sid = client.open()
     if status != 200:
@@ -272,19 +273,25 @@ def mode_plan(opts, client, out, plan):
         for kind in ('reads', 'denials'):
             for i, (name, arguments) in enumerate(plan.get(kind, [])):
                 call_status, is_error, text = client.call_text(sid, name, arguments, ident=300 + len(rows))
+                structured = bool(is_error or backend_failed(text))
                 if kind == 'reads' and opts.expect_backend_down:
-                    ok = call_status == 200 and bool(is_error or backend_failed(text))
+                    ok = call_status == 200
                 elif kind == 'reads':
                     ok = call_status == 200 and not is_error and not backend_failed(text)
                 else:
                     ok = call_status == 403
                 rows.append({'kind': kind, 'tool': name, 'listed': name in listed, 'http': call_status,
-                             'isError': is_error, 'pass': ok})
+                             'isError': is_error, 'structured_failure': structured, 'pass': ok})
                 out.write('%-7s %-5s %-34s listed=%-5s http=%s isError=%s | %s\n' % (
                     kind[:-1], 'PASS' if ok else 'FAIL', name, name in listed, call_status, is_error,
                     text.replace('\n', ' ')[:opts.width]))
     finally:
         client.close(sid)
+    if opts.expect_backend_down:
+        failed_reads = sum(r['structured_failure'] for r in rows if r['kind'] == 'reads')
+        rows.append({'kind': 'outage', 'tool': '(any backend read)', 'listed': None, 'http': None, 'isError': None,
+                     'structured_failure': failed_reads, 'pass': failed_reads > 0})
+        out.write('outage: %d read(s) failed in a structured way\n' % failed_reads)
     passed = sum(r['pass'] for r in rows)
     out.write('plan: %d/%d pass\n' % (passed, len(rows)))
     return {'plan': {'passed': passed, 'total': len(rows), 'rows': rows}}
