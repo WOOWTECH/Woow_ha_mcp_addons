@@ -216,5 +216,102 @@ class RestoredStateTests(unittest.TestCase):
             self.assertEqual({p.lstat().st_uid for p in (child, child / 'state.json', child / 'sub')}, {0})
 
 
+
+class CrossPassTests(unittest.TestCase):
+    """R1: pass 2 may touch only what pass 1 approved, by identity. Runs unprivileged: the current user plays
+    the restore owner, ownership/mode changes are recorded by inode instead of applied."""
+
+    def run_restore(self, mutate=None, open_hook=None):
+        touched, mutated = set(), {}
+
+        def by_fd(fd, *args):
+            info = os.fstat(fd)
+            touched.add((info.st_dev, info.st_ino))
+
+        def by_path(path, *args, **kwargs):
+            info = os.stat(path)
+            touched.add((info.st_dev, info.st_ino))
+
+        real_reown, real_open = e._reown_restored, os.open
+        state = {'mutated': False}
+
+        def reown(*args, **kwargs):
+            if mutate and not state['mutated']:
+                state['mutated'] = True
+                mutated.update(mutate(child))
+            return real_reown(*args, **kwargs)
+
+        def opener(path, flags, *args, **kwargs):
+            if open_hook:
+                open_hook(path, flags, kwargs.get('dir_fd'), state)
+            return real_open(path, flags, *args, **kwargs)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            child = restored_tree(root)
+            with patch.object(e, 'RESTORE_OWNER', (os.getuid(), os.getgid())), \
+                 patch.object(e, 'UID', os.getuid() + 1), patch.object(e, 'GID', os.getgid() + 1), \
+                 patch.object(e.os, 'geteuid', return_value=0), \
+                 patch.object(e.os, 'fchown', side_effect=by_fd), patch.object(e.os, 'fchmod', side_effect=by_fd), \
+                 patch.object(e.os, 'chown', side_effect=by_path), patch.object(e.os, 'chmod', side_effect=by_path), \
+                 patch.object(e, '_reown_restored', side_effect=reown), patch.object(e.os, 'open', side_effect=opener):
+                with self.assertRaisesRegex(RuntimeError, 'changed'):
+                    e.prepare_data(root)
+            return touched, mutated
+
+    def test_file_replaced_between_passes_is_never_touched(self):
+        def mutate(child):
+            (child / 'state.json').unlink()
+            (child / 'state.json').write_bytes(b'{"swapped": true}')
+            info = (child / 'state.json').stat()
+            return {'new': (info.st_dev, info.st_ino)}
+        touched, mutated = self.run_restore(mutate)
+        self.assertNotIn(mutated['new'], touched)
+
+    def test_entry_added_between_passes_is_never_touched(self):
+        def mutate(child):
+            (child / 'sub' / 'added').write_bytes(b'a')
+            info = (child / 'sub' / 'added').stat()
+            return {'new': (info.st_dev, info.st_ino)}
+        touched, mutated = self.run_restore(mutate)
+        self.assertNotIn(mutated['new'], touched)
+
+    def test_entry_removed_between_passes_is_refused(self):
+        self.run_restore(lambda child: (child / 'sub' / 'nested').unlink() or {})
+
+    def test_directory_swapped_between_stat_and_open_is_refused(self):
+        swapped = {}
+
+        def hook(path, flags, dir_fd, state):
+            if path == 'sub' and flags & os.O_DIRECTORY and not state['mutated'] and not swapped:
+                parent = Path('/proc/self/fd/%d' % dir_fd).resolve()
+                (parent / 'sub').rename(parent / 'sub-approved')
+                (parent / 'sub').mkdir(mode=0o755)
+                (parent / 'sub' / 'planted').write_bytes(b'p')
+                swapped['dir'] = (parent / 'sub').stat()
+                swapped['file'] = (parent / 'sub' / 'planted').stat()
+        touched, _ = self.run_restore(open_hook=hook)
+        for info in swapped.values():
+            self.assertNotIn((info.st_dev, info.st_ino), touched)
+
+    @unittest.skipUnless(os.geteuid() == 0, 'creating a foreign-owned file needs root')
+    def test_foreign_file_planted_between_passes_keeps_its_owner(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            child = restored_tree(root)
+            real_reown = e._reown_restored
+            planted = child / 'sub' / 'planted'
+
+            def reown(*args, **kwargs):
+                if not planted.exists():
+                    (child / 'state.json').unlink()
+                    planted.write_bytes(b'x')
+                    os.chown(planted, 4242, 4242)
+                return real_reown(*args, **kwargs)
+            with patch.object(e, 'UID', 10001), patch.object(e, 'GID', 10001), \
+                 patch.object(e, '_reown_restored', side_effect=reown), self.assertRaises(RuntimeError):
+                e.prepare_data(root)
+            self.assertEqual((planted.stat().st_uid, planted.stat().st_mode & 0o777), (4242, 0o644))
+
 if __name__ == '__main__':
     unittest.main()
