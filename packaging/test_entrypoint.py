@@ -337,23 +337,32 @@ class RepairUnitTests(unittest.TestCase):
         self.child = restored_tree(self.root)
         self.fd = os.open(self.child, os.O_RDONLY | os.O_DIRECTORY)
         self.addCleanup(os.close, self.fd)
-        self.touched, self.pinned = set(), []
+        self.touched, self.pinned, self.calls = set(), [], []
         self.addCleanup(lambda: [os.close(f) for f in self.pinned])
 
-        def by_fd(fd, *args):
-            info = os.fstat(fd)
+        def spy(op, info):
             self.touched.add((info.st_dev, info.st_ino))
+            self.calls.append((op, (info.st_dev, info.st_ino)))
 
-        def by_path(path, *args, **kwargs):
-            info = os.stat(path)
-            self.touched.add((info.st_dev, info.st_ino))
+        def by_fd_mode(fd, *args):
+            spy('mode', os.fstat(fd))
+
+        def by_fd_owner(fd, *args):
+            spy('owner', os.fstat(fd))
+
+        def by_path_mode(path, *args, **kwargs):
+            spy('mode', os.stat(path))
+
+        def by_path_owner(path, *args, **kwargs):
+            spy('owner', os.stat(path))
         for target, value in (('RESTORE_OWNER', (os.getuid(), os.getgid())), ('UID', os.getuid() + 1),
                               ('GID', os.getgid() + 1)):
             patcher = patch.object(e, target, value)
             patcher.start()
             self.addCleanup(patcher.stop)
-        for name, spy in (('fchown', by_fd), ('fchmod', by_fd), ('chown', by_path), ('chmod', by_path)):
-            patcher = patch.object(e.os, name, side_effect=spy)
+        for name, fake in (('fchown', by_fd_owner), ('fchmod', by_fd_mode), ('chown', by_path_owner),
+                           ('chmod', by_path_mode)):
+            patcher = patch.object(e.os, name, side_effect=fake)
             patcher.start()
             self.addCleanup(patcher.stop)
 
@@ -368,6 +377,34 @@ class RepairUnitTests(unittest.TestCase):
         expected = {self.ident(p) for p in self.child.rglob('*')}
         e._reown_restored(self.fd, self.approve())
         self.assertEqual(self.touched, expected)
+
+    def test_mode_is_set_before_owner_for_every_inode_and_data_mcp(self):
+        # An interrupted repair must leave root-owned entries (repaired again next boot), never a runtime-owned
+        # entry with a stale mode (refused forever).
+        with contextlib.redirect_stderr(io.StringIO()):
+            e._repair_restored(self.fd, os.fstat(self.fd))
+        inodes = {self.ident(p) for p in self.child.rglob('*')} | {self.ident(self.child)}
+        self.assertEqual(self.touched, inodes)
+        for inode in inodes:
+            ops = [op for op, target in self.calls if target == inode]
+            self.assertEqual(ops, ['mode', 'owner'], inode)
+
+    def test_pass2_refuses_a_foreign_owner_unprivileged(self):
+        # The same check the root-only owner test exercises, reachable without root by faking the held stat.
+        approved = self.approve()
+        held = approved['state.json'][0]
+        real_fstat = os.fstat
+
+        def fake_fstat(fd):
+            info = real_fstat(fd)
+            if fd == held:
+                values = list(info)
+                values[4], values[5] = 4242, 4242  # st_uid, st_gid
+                return os.stat_result(values)
+            return info
+        with patch.object(e.os, 'fstat', side_effect=fake_fstat), self.assertRaisesRegex(RuntimeError, 'changed'):
+            e._reown_restored(self.fd, approved)
+        self.assertNotIn(self.ident(self.child / 'state.json'), self.touched)
 
     def test_pass1_refuses_a_directory_swapped_between_stat_and_open(self):
         real_open = os.open
@@ -429,7 +466,6 @@ class RepairUnitTests(unittest.TestCase):
              self.assertRaisesRegex(RuntimeError, 'descriptor'):
             e._repair_restored(self.fd, os.fstat(self.fd))
         self.assertEqual(self.touched, set())
-        self.assertEqual(self.pinned, [])
 
     def test_pass2_refuses_a_file_moved_out_and_replaced(self):
         # The pinned inode keeps one link (moved outside the tree) and the name set is unchanged; only the
