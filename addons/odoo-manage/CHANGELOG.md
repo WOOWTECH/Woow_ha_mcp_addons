@@ -1,6 +1,6 @@
 # Odoo Manage Changelog
 
-## 0.1.0 — 未發佈候選
+## 0.1.0 — 2026-10-05 公開（experimental）
 
 - B1 新增 partner active 分組 counts、固定 template metadata（resources/read 仍 deny）、exact-grant internal note；需既有 module/write ACL，無附件/指定收件人/HTML/full YOLO。
 

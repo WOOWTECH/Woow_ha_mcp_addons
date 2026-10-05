@@ -1,6 +1,6 @@
 # n8n Changelog
 
-## 0.1.0 — 未發佈候選
+## 0.1.0 — 2026-10-05 公開（experimental）
 
 - B1 新增 local node/workflow validation、安全 manualTrigger/noOp inactive draft create；新 create writer 僅 exact grant，沒有 activation/code/URL/credential references。
 

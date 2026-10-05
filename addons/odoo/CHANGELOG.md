@@ -1,6 +1,6 @@
 # Odoo Changelog
 
-## 0.1.0 — 未發佈候選
+## 0.1.0 — 2026-10-05 公開（experimental）
 
 - B1 新增 build_domain／JSON2 preview／call diagnosis 純 builders（不執行 payload）與按 active 分組的 partner id:count；有界投影排除 domain/context/private fields。
 

@@ -1,6 +1,6 @@
 # EMQX Changelog
 
-## 0.1.0 — 未發佈候選
+## 0.1.0 — 2026-10-05 公開（experimental）
 
 - 新增獨立 amd64 root-context 封裝、Supervisor 2026.09.3 安全子集 manifest。
 - runtime：FastMCP 3.4.5 / pinned public vendor；39 個來源工具中支援 11，28 個明列 withheld，
