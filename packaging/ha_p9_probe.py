@@ -1,0 +1,267 @@
+"""HA-host side of the P9 kit: MCP checks against one app's host-mapped MCP port.
+
+Runs on the Home Assistant host (SSH app shell) with the python3 standard library only. Tokens arrive on
+stdin and are never printed. Every MCP session the probe opens is closed with DELETE, so the shared session
+cap of the app is not consumed. Modes that change state touch only the named app: `restart` restarts it
+through the `ha` CLI, and `childkill` SIGKILLs the MCP child processes of its management launcher inside
+its container. See docs/operations/ha-p9-kit.md.
+"""
+import argparse
+import json
+import statistics
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+
+PROTOCOL = '2025-06-18'
+INITIALIZE = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {
+    'protocolVersion': PROTOCOL, 'capabilities': {}, 'clientInfo': {'name': 'woow-p9-probe', 'version': '1'}}}
+
+# Runs inside the app container: PIDs whose parent is the management launcher (the MCP child processes).
+CHILD_SCRIPT = r'''
+import os, sys
+root = sys.argv[1] if len(sys.argv) > 1 else "/proc"
+procs = {}
+for name in os.listdir(root):
+    if not name.isdigit():
+        continue
+    try:
+        with open(os.path.join(root, name, "cmdline"), "rb") as f:
+            cmd = f.read().split(b"\0")
+        with open(os.path.join(root, name, "stat")) as f:
+            ppid = int(f.read().rsplit(")", 1)[1].split()[1])
+    except (OSError, IndexError, ValueError):
+        continue
+    procs[int(name)] = (cmd, ppid)
+launchers = {pid for pid, (cmd, _) in procs.items() if any(arg.endswith(b"management_launcher.py") for arg in cmd)}
+print(" ".join(str(pid) for pid, (_, ppid) in sorted(procs.items()) if ppid in launchers))
+'''
+KILL_SCRIPT = 'import os, sys\nfor pid in sys.argv[1:]: os.kill(int(pid), 9)'
+
+
+def run(args, timeout=300):
+    return subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+
+
+class Client:
+    def __init__(self, port, token, host='127.0.0.1', timeout=30):
+        self.url = 'http://%s:%d/mcp' % (host, port)
+        self.token = token
+        self.timeout = timeout
+
+    def request(self, method, body=None, sid=None, timeout=None):
+        headers = {'Authorization': 'Bearer ' + self.token, 'MCP-Protocol-Version': PROTOCOL}
+        if body is not None:
+            headers.update({'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream'})
+        if sid:
+            headers['Mcp-Session-Id'] = sid
+        data = None if body is None else json.dumps(body).encode()
+        try:
+            response = urllib.request.urlopen(urllib.request.Request(self.url, data=data, headers=headers,
+                                                                     method=method), timeout=timeout or self.timeout)
+        except urllib.error.HTTPError as error:
+            error.close()
+            return error.code, None, sid
+        except (urllib.error.URLError, OSError):
+            return 0, None, sid
+        with response:
+            raw = response.read().decode()
+            sid = response.headers.get('Mcp-Session-Id') or sid
+            event_stream = 'event-stream' in response.headers.get('Content-Type', '')
+            status = response.status
+        if not raw.strip():
+            return status, None, sid
+        if event_stream:
+            data = [line[5:].strip() for line in raw.splitlines() if line.startswith('data:')]
+            return status, json.loads(data[-1]) if data else None, sid
+        return status, json.loads(raw), sid
+
+    def open(self):
+        status, message, sid = self.request('POST', INITIALIZE)
+        if status == 200:
+            self.request('POST', {'jsonrpc': '2.0', 'method': 'notifications/initialized'}, sid)
+        return status, message, sid
+
+    def close(self, sid):
+        return self.request('DELETE', sid=sid)[0] if sid else None
+
+    def tools(self, sid):
+        status, message, _ = self.request('POST', {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'}, sid)
+        return status, [t['name'] for t in ((message or {}).get('result') or {}).get('tools', [])]
+
+    def call(self, sid, name, arguments, ident=10):
+        status, message, _ = self.request('POST', {'jsonrpc': '2.0', 'id': ident, 'method': 'tools/call',
+                                                   'params': {'name': name, 'arguments': arguments}}, sid, timeout=60)
+        return status, ((message or {}).get('result') or {}).get('isError')
+
+
+def first_call(client, sid, opts):
+    """One representative request: the configured tool, else tools/list."""
+    if opts.tool:
+        return client.call(sid, opts.tool, json.loads(opts.args))
+    return client.tools(sid)[0], None
+
+
+def wait_ready(client, opts, limit=240.0, sleep=time.sleep):
+    start = time.monotonic()
+    while time.monotonic() - start < limit:
+        status, _, sid = client.open()
+        if status == 200:
+            ready = time.monotonic() - start
+            begin = time.monotonic()
+            call_status, is_error = first_call(client, sid, opts)
+            elapsed = time.monotonic() - begin
+            client.close(sid)
+            return {'ready_s': round(ready, 2), 'first_call_http': call_status, 'first_call_isError': is_error,
+                    'first_call_s': round(elapsed, 3)}
+        sleep(0.5)
+    return {'ready_s': None}
+
+
+def container_name(slug):
+    names = set(run(['docker', 'ps', '-a', '--format', '{{.Names}}']).stdout.split())
+    for name in ('app_' + slug, 'addon_' + slug):
+        if name in names:
+            return name
+    raise SystemExit('no container for app %s' % slug)
+
+
+def container_state(container):
+    out = run(['docker', 'inspect', container, '--format', '{{.RestartCount}} {{.State.StartedAt}}']).stdout.split()
+    return {'restart_count': int(out[0]), 'started_at': out[1]} if len(out) == 2 else {}
+
+
+def child_pids(container):
+    return run(['docker', 'exec', container, 'python', '-c', CHILD_SCRIPT]).stdout.split()
+
+
+def percentile(values, q):
+    ordered = sorted(values)
+    return ordered[min(len(ordered) - 1, int(round(q * (len(ordered) - 1))))]
+
+
+def timing(values):
+    return {'n': len(values), 'p50_ms': round(percentile(values, .5), 1), 'p95_ms': round(percentile(values, .95), 1),
+            'max_ms': round(max(values), 1), 'mean_ms': round(statistics.mean(values), 1)}
+
+
+def mode_check(opts, stdin, out):
+    rows = []
+    for line in stdin:
+        label, _, token = line.rstrip('\n').partition('\t')
+        client = Client(opts.port, token)
+        status, _, sid = client.open()
+        tools = client.tools(sid) if status == 200 else (None, [])
+        closed = client.close(sid) if status == 200 else None
+        rows.append({'label': label, 'initialize': status, 'tools_list': tools[0], 'tools': len(tools[1]),
+                     'delete': closed})
+        out.write('%-26s initialize=%s tools/list=%s tools=%s delete=%s\n' % (label, status, tools[0],
+                                                                             len(tools[1]), closed))
+    return {'check': rows}
+
+
+def mode_restart(opts, client, out):
+    container = container_name(opts.slug)
+    before = container_state(container)
+    begin = time.monotonic()
+    rc = run(['ha', 'apps', 'restart', opts.slug]).returncode
+    cli = round(time.monotonic() - begin, 2)
+    ready = wait_ready(client, opts)
+    result = {'restart_rc': rc, 'cli_s': cli, **ready, 'before': before, 'after': container_state(container)}
+    out.write('ha apps restart rc=%s cli=%ss; MCP ready %ss later; first call http=%s isError=%s %ss\n' % (
+        rc, cli, ready.get('ready_s'), ready.get('first_call_http'), ready.get('first_call_isError'),
+        ready.get('first_call_s')))
+    out.write('container before=%s after=%s\n' % (before, result['after']))
+    return {'restart': result}
+
+
+def mode_childkill(opts, client, out):
+    container = container_name(opts.slug)
+    pids, before = child_pids(container), container_state(container)
+    if not pids:
+        raise SystemExit('no MCP child found under the management launcher')
+    status, _, old = client.open()
+    kill = run(['docker', 'exec', container, 'python', '-c', KILL_SCRIPT] + pids)
+    old_status = client.tools(old)[0]
+    ready = wait_ready(client, opts)
+    result = {'initialize_before': status, 'child_pids_before': pids, 'kill_rc': kill.returncode,
+              'old_session_after_kill': old_status, **ready, 'child_pids_after': child_pids(container),
+              'before': before, 'after': container_state(container)}
+    out.write('child pids %s killed rc=%s; old session tools/list=%s; recovered in %ss (first call http=%s); '
+              'child pids now %s\n' % (pids, kill.returncode, old_status, ready.get('ready_s'),
+                                       ready.get('first_call_http'), result['child_pids_after']))
+    out.write('container before=%s after=%s\n' % (before, result['after']))
+    return {'childkill': result}
+
+
+def mode_bench(opts, client, out):
+    opens = []
+    for _ in range(opts.sessions):
+        begin = time.monotonic()
+        status, _, sid = client.open()
+        opens.append((time.monotonic() - begin) * 1000)
+        client.close(sid)
+        if status != 200:
+            raise SystemExit('initialize returned %s' % status)
+    status, _, sid = client.open()
+    lists, calls = [], []
+    try:
+        for _ in range(opts.requests):
+            begin = time.monotonic()
+            if client.tools(sid)[0] != 200:
+                raise SystemExit('tools/list failed')
+            lists.append((time.monotonic() - begin) * 1000)
+        if opts.tool:
+            for i in range(opts.requests):
+                begin = time.monotonic()
+                call_status, is_error = client.call(sid, opts.tool, json.loads(opts.args), ident=100 + i)
+                if call_status != 200 or is_error:
+                    raise SystemExit('tools/call %s failed: http %s isError %s' % (opts.tool, call_status, is_error))
+                calls.append((time.monotonic() - begin) * 1000)
+    finally:
+        client.close(sid)
+    result = {'initialize': timing(opens), 'tools_list': timing(lists)}
+    if calls:
+        result['tools_call'] = dict(timing(calls), tool=opts.tool)
+    for name, value in result.items():
+        out.write('%-12s %s\n' % (name, json.dumps(value)))
+    return {'bench': result}
+
+
+def mode_cycle(opts, client, out):
+    pairs = []
+    for _ in range(opts.cycles):
+        status, _, sid = client.open()
+        pairs.append('%s/%s' % (status, client.close(sid) if status == 200 else None))
+    out.write('%d x (initialize, DELETE): %s\n' % (opts.cycles, ' '.join(pairs)))
+    return {'cycle': pairs}
+
+
+def main(argv=None, stdin=sys.stdin, out=sys.stdout):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument('mode', choices=('check', 'restart', 'childkill', 'bench', 'cycle'))
+    parser.add_argument('--port', type=int, required=True, help='host port mapped to the app MCP port 8081')
+    parser.add_argument('--slug', help='installed app slug (restart/childkill)')
+    parser.add_argument('--tool', help='read-only tool for first-call and bench timing')
+    parser.add_argument('--args', default='{}', help='JSON arguments for --tool')
+    parser.add_argument('--sessions', type=int, default=5)
+    parser.add_argument('--requests', type=int, default=50)
+    parser.add_argument('--cycles', type=int, default=25)
+    opts = parser.parse_args(argv)
+    json.loads(opts.args)
+    if opts.mode in ('restart', 'childkill') and not opts.slug:
+        parser.error('--slug is required for %s' % opts.mode)
+    if opts.mode == 'check':
+        summary = mode_check(opts, stdin, out)
+    else:
+        client = Client(opts.port, stdin.readline().strip())
+        summary = {'restart': mode_restart, 'childkill': mode_childkill, 'bench': mode_bench,
+                   'cycle': mode_cycle}[opts.mode](opts, client, out)
+    out.write('SUMMARY ' + json.dumps(summary, sort_keys=True) + '\n')
+    return summary
+
+
+if __name__ == '__main__':
+    main()

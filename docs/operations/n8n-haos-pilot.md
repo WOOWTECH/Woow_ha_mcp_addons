@@ -7,6 +7,8 @@ P1–P4 通過、P5 supply-chain gate CLOSED（secret findings 待正式 triage�
 P0 已在本機執行；P1 起每一步都要對應批准（見各步「前提」）。真實建置、模擬測試、HAOS 實測分開記錄，
 不互相替代。驗收項目定義以 [acceptance](acceptance.md) 為準，本文只排定順序、命令與停止點。
 
+**2026-10-05 更新：** 負責人決定公開 repo 與映像後，實際試點改走 HA 商店安裝（[逐步指令](n8n-pilot-commands.md)）；下方 P6、P8 的私有 registry＋本地 app 設計已停用，P7 的檢查項目照用、改以商店 app 為對象。P0–P5 仍有效。P9 用 [P9 工具](ha-p9-kit.md) 執行；HA 上實際運行的 image 身分改以 HA 主機唯讀 `docker inspect` 確認。
+
 ## 基準
 
 | 項目 | 值 |
@@ -114,7 +116,7 @@ python3 packaging/supply_chain.py candidate n8n <scanners 目錄> <evidence 目�
 同一已測 image ID 的 source/history/all-layer secret、SBOM、CVE、license。finding 如實保留，
 不改 allowlist 或規則。之後 VM 上不得再 build 同一 tag。
 
-## P6 — 送到 HAOS（方向已定；registry／權限仍待批准）
+## P6 — 送到 HAOS（**已停用**：改走公開 GHCR＋HA 商店，見 [逐步指令](n8n-pilot-commands.md)）
 
 方向已定（協調者 Q2 決定）：私有 registry＋本地 pilot app＋不在 HA 重建。仍待批准：registry host／namespace、
 推送權限、Supervisor 拉取憑證，以及 H1–H4 每一步。細節與每步回復以 [私有映像交付設計](n8n-pilot-image-delivery.md) 為準。
@@ -141,7 +143,7 @@ python3 packaging/supply_chain.py candidate n8n <scanners 目錄> <evidence 目�
 - 確認有可用的近期完整備份（不是由本程序建立整機備份）。
 - 只讀 Supervisor/Core API；不重啟 Core／Supervisor、不動既有 n8n/Odoo/EMQX/Hermes/OpenDesign。
 
-## P8 — 安裝新 Add-on（只此一個）
+## P8 — 安裝新 Add-on（只此一個；**已停用**的本地 app 路徑，商店路徑見 [逐步指令](n8n-pilot-commands.md) H1–H2）
 
 依設計逐步、各自批准：H1 加唯讀拉取憑證 → H2 把產生的試點變體目錄複製到 `/addons/woow_mcp_n8n_pilot/`
 → H3 安裝並啟動 `local_woow_mcp_n8n_pilot`（全新、隔離的資料）。不新增 store repository。每步之前確認前一步的證據。檢查：
@@ -167,14 +169,14 @@ python3 packaging/supply_chain.py candidate n8n <scanners 目錄> <evidence 目�
 
 ## 回復
 
-只回復本次新增的部分（設計 H4），每步各自確認：
+商店路徑的步驟見 [逐步指令](n8n-pilot-commands.md) 第 5 節；每步各自確認：
 
-1. 停止 `local_woow_mcp_n8n_pilot`。
+1. 停止商店安裝的 app（`<repository slug>_woow_mcp_n8n`）。
 2. **解除安裝會刪除它的 `/data`。** 解除安裝前必須：(a) 取得負責人明確的書面確認；(b) 先完成受控 export 或該 app
    的 cold backup（含秘密，限制保存位置與人員），並記錄 opaque backup ID；(c) 記下資料保留或銷毀的決定。
    三項缺一就不解除安裝，維持停止狀態。這不是可選步驟。
-3. 解除安裝 → 刪除 `/addons/woow_mcp_n8n_pilot/` 並重新載入本地 app 清單（H2 回復）。
-4. 移除 Supervisor 的試點 registry 憑證並確認清單中已無此項（H1 回復），撤銷該 registry 憑證本身。
+3. 解除安裝 → `ha store delete <repository slug>`（不再需要時）。
+4. 若曾為 MCP 埠設定 host port 對應，確認對應已隨 app 移除。
 5. 撤銷受限 n8n API key 與發出的 MCP token。
 
 既有服務、Core、Supervisor、k3s 均未被修改，不需回復。
