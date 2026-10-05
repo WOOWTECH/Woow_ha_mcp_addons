@@ -1,8 +1,9 @@
 # 手動更新、備份與回復
 
-以下是批准後的受控程序，**尚無真實 HA backup/restore 或 image upgrade 成功證據**。
+以下是批准後的受控程序。HA 實證（2026-10-05，測試 HA，[紀錄](ha-test-0.1.1.md)）：n8n 0.1.0→0.1.1 升版、0.1.1 cold backup→partial
+restore 皆成功；其他六支未逐支驗證。
 只允許操作本次新增的 MCP Add-on，不重啟現有 backend、Core、Supervisor 或 k3s。
-映像已在私有 builder 建置並通過 supply-chain gate，但尚未發佈；HA 試點依 [逐步指令](n8n-pilot-commands.md) 逐步批准後才安裝。
+映像在私有 builder 建置並通過 supply-chain gate 後發佈到 GHCR（0.1.0、0.1.1）；HA 安裝依 [逐步指令](n8n-pilot-commands.md) 逐步批准。
 
 ## 更新前
 
@@ -28,6 +29,8 @@ manifest `backup: cold`：HA 會停止**這個新 Add-on**來取得一致狀態�
 實測（2026-10-05，HA partial restore 本 Add-on）：Supervisor 把 `/data/mcp` 還原成 root 擁有、檔案 0644，
 0.1.0 啟動被拒（`bootstrap unavailable`）→ 0.1.0 的 HA 還原不可用（已知問題）。0.1.1 起 bootstrap 只在資料剛好
 屬 root 時，檢查後一次改回 10001／0700／0600。還原後一律輪替 MCP token（備份含舊 token）。
+0.1.1 實測（n8n）：cold backup 3.1 s（app 隨即 started）→ 輪替 token → partial restore → 7 s 內 started，log `re-owned 2`，
+10001:10001、0700／0600，token 回到備份當時的值；之後輪替，工具清單與還原前相同。
 
 0.1.1 修復的邊界與現象（`packaging/entrypoint.py`；獨立 SPEC 與安全審 2026-10-05）：
 
@@ -56,9 +59,8 @@ backup ID、版本、時間、保管位置類型、權限檢查結論，不記�
 - backend unreachable 不重啟 backend，也不將 readiness 接 watchdog。遇 state_error、
   unknown schema、source guard drift、角色 verifier 缺失、資料 owner 不符立即停止，
   保留原狀以便回復，不重新 bootstrap 或開寬權限硬闖。
-- n8n 路徑 A 權限已批准，provider／OS guard／管理 UI 已本地整合（owned fake WS／Ingress）；
-  HA NOT TESTED，其餘六類沒有此權限。正式管理 smoke 尚未驗收，
-  不能因權限已批准宣稱升級可用，也不能擴及既有 HA 變更。
+- 七支的管理面板（`homeassistant_api`，0.1.1 起）已在測試 HA 以 owner 實測 Ingress、後端設定與 token；
+  non-admin 尚未測。升版只在 n8n 實測過，其他產品升版仍須逐支驗證，也不能擴及既有 HA 變更。
 
 ## Migration 與 rollback
 

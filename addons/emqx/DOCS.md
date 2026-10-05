@@ -2,7 +2,7 @@
 
 ## 現況與範圍
 
-**0.1.1（experimental）**：映像 `ghcr.io/woowtech/amd64-mcp-emqx:0.1.1` 由候選 d2e1e3b 建置，通過 container/mock 與 supply-chain gate（2026-10-05）。管理面板經 HA 管理角色驗證後可設定後端；真 HA 與真後端實測進行中。0.1.0 的面板 fail closed，請使用 0.1.1。
+**0.1.1（experimental）**：映像 `ghcr.io/woowtech/amd64-mcp-emqx:0.1.1` 由候選 d2e1e3b 建置，通過 container/mock 與 supply-chain gate（2026-10-05）。管理面板經 HA 管理角色驗證後可設定後端。2026-10-05 已在測試 HA 以真 Woow EMQX 5.8.9 實測（[HA 實測紀錄](../../docs/operations/ha-test-0.1.1.md)）：讀取 8 個、寫入與不支援工具 32 個全部拒絕、後端斷線回結構化錯誤，皆通過。0.1.0 的面板 fail closed，請使用 0.1.1。
 0.1.1 起與 n8n 相同（負責人 2026-10-05 核准 `homeassistant_api`）：管理程序以 runtime `SUPERVISOR_TOKEN`
 連固定 `ws://supervisor/core/websocket`，只查 `config/auth/list`，確認 Ingress 使用者是 active 的 owner 或
 system-admin 才放行；token 只給管理程序，child 不繼承。此 token 具**廣泛 Core 管理能力**，負責人已知情核准。
@@ -38,7 +38,7 @@ cluster/stats/metrics、clients/topics/subscriptions/history/alarms；kick/subsc
 
 Stock image `init: true`；保護模式維持 on。bootstrap 只建立新 `/data/mcp`，之後
 runtime/child uid/gid10001；0700 directory、0600 state。其他錯 owner、連結或特殊檔
-停止不接管。**HA 還原**：0.1.0 還原後資料屬 root、啟動被拒（2026-10-05 實測）。0.1.1 起 bootstrap 只在資料剛好屬 root 時，第一遍核准有界的一般資料夾與單一連結檔（身分＝dev／inode／ctime），第二遍只把這些重驗身分後的項目改回 10001 與 0700／0600；任何新增、移除、替換、連結或外來擁有者仍拒絕。0.1.1 的 HA 還原仍待實機驗證。管理／child／backend 三種 health 不同；backend outage readiness503
+停止不接管。**HA 還原**：0.1.0 還原後資料屬 root、啟動被拒（2026-10-05 實測）。0.1.1 起 bootstrap 只在資料剛好屬 root 時，第一遍核准有界的一般資料夾與單一連結檔（身分＝dev／inode／ctime），第二遍只把這些重驗身分後的項目改回 10001 與 0700／0600；任何新增、移除、替換、連結或外來擁有者仍拒絕。0.1.1 已在 HA 實測（n8n，2026-10-05）：cold backup→還原後 7 秒內啟動，log `bootstrap: re-owned 2 restored entries in /data/mcp`，權杖回到備份當時的值（還原後請輪替）；其他產品用同一份 bootstrap，未逐支做還原。管理／child／backend 三種 health 不同；backend outage readiness503
 不重啟 Add-on，故意不設 watchdog。詳見 [操作指南](../../docs/operations/guide.md)。
 
 更新須手動、固定版本且先讀 [CHANGELOG](CHANGELOG.md)；只有本 Add-on cold backup

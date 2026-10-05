@@ -27,5 +27,7 @@
 
 ## 未通過／未驗
 
-- 真 HA：0.1.1 尚未在 HA 實機驗收（含 HA 還原與 non-admin）；aarch64 未建。
+- 真 HA（2026-10-05，測試 HA，[紀錄](ha-test-0.1.1.md)）：七支映像身分與上表一致；n8n 升版與 HA 還原 PASS；六支有真後端、
+  LiteLLM 沒有後端（工具未測）。已知問題：Odoo Manage 後端斷線時 session 失效、OpenDesign `list_agents` 逾時、
+  Odoo 兩個 metadata 工具需「存取權限」群組。未測：non-admin、LAN client；aarch64 未建。
 - 文件（DOCS／CHANGELOG／授權清單）在映像建置後更新，不在映像內，不影響已測映像。

@@ -2,7 +2,7 @@
 
 ## 現況與範圍
 
-**0.1.1（experimental）**：映像 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.1` 由候選 d2e1e3b 建置，通過 container/mock 與 supply-chain gate（2026-10-05），可從本 repository 的 HA 商店安裝；以下試點結果測的是 0.1.0。**HA 試點**（2026-10-05，一台 HA 實機、真 n8n 2.12.3 後端）通過：管理員 Ingress 面板、後端設定與重啟後保留、Bearer 拒絕與 token 輪替／撤銷、MCP E2E（11 個可見工具讀到真 n8n 資料；未授權的讀取模式與 6 種寫入直接呼叫皆 403，n8n 端前後一致）、後端斷線（結構化錯誤、readiness 503、恢復後可用）、Add-on 重啟與 MCP child 異常重啟、資源量測。**未通過**：HA 還原（見下方已知問題）。**未測**：non-admin、LAN client、升版。
+**0.1.1（experimental）**：映像 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.1` 由候選 d2e1e3b 建置，通過 container/mock 與 supply-chain gate（2026-10-05），可從本 repository 的 HA 商店安裝。2026-10-05 已在測試 HA 實測 0.1.1（[HA 實測紀錄](../../docs/operations/ha-test-0.1.1.md)）：0.1.0 升版、HA 備份還原、真 n8n 讀取 11 個中 10 個通過（資料夾工具在 n8n 2.12 回 NOT_FOUND，該版沒有資料夾 API）、寫入與不支援工具 24 個全部拒絕、後端斷線。以下試點段落是 0.1.0 的結果。**HA 試點**（2026-10-05，一台 HA 實機、真 n8n 2.12.3 後端）通過：管理員 Ingress 面板、後端設定與重啟後保留、Bearer 拒絕與 token 輪替／撤銷、MCP E2E（11 個可見工具讀到真 n8n 資料；未授權的讀取模式與 6 種寫入直接呼叫皆 403，n8n 端前後一致）、後端斷線（結構化錯誤、readiness 503、恢復後可用）、Add-on 重啟與 MCP child 異常重啟、資源量測。**未通過**：HA 還原（見下方已知問題）。**未測**：non-admin、LAN client、升版。
 **路徑 A 權限已批准**：僅此新 n8n 試點 `homeassistant_api: true`，其他六類 false。
 正式 fixed-WS verifier 已實作並經 component review；管理 HTML/assets/API 與 UI 已本地整合。
 本地真 bootstrap→guard→n8n→provider fake WS／Chromium 已覆蓋設定與 token 操作；
@@ -55,7 +55,7 @@ B3 新增 tags catalog（只掃第一頁最多250、本地query/limit）、execu
 
 Stock image `init: true`；保護模式維持 on。bootstrap 只建立新 `/data/mcp`，之後
 runtime/child uid/gid10001；0700 directory、0600 state。其他錯 owner、連結或特殊檔
-停止不接管。**HA 還原**：0.1.0 還原後資料屬 root、啟動被拒（2026-10-05 實測）。0.1.1 起 bootstrap 只在資料剛好屬 root 時，第一遍核准有界的一般資料夾與單一連結檔（身分＝dev／inode／ctime），第二遍只把這些重驗身分後的項目改回 10001 與 0700／0600；任何新增、移除、替換、連結或外來擁有者仍拒絕。0.1.1 的 HA 還原仍待實機驗證。管理／child／backend 三種 health 不同；backend outage readiness503
+停止不接管。**HA 還原**：0.1.0 還原後資料屬 root、啟動被拒（2026-10-05 實測）。0.1.1 起 bootstrap 只在資料剛好屬 root 時，第一遍核准有界的一般資料夾與單一連結檔（身分＝dev／inode／ctime），第二遍只把這些重驗身分後的項目改回 10001 與 0700／0600；任何新增、移除、替換、連結或外來擁有者仍拒絕。0.1.1 已在 HA 實測（n8n，2026-10-05）：cold backup→還原後 7 秒內啟動，log `bootstrap: re-owned 2 restored entries in /data/mcp`，權杖回到備份當時的值（還原後請輪替）；其他產品用同一份 bootstrap，未逐支做還原。管理／child／backend 三種 health 不同；backend outage readiness503
 不重啟 Add-on，故意不設 watchdog。詳見 [操作指南](../../docs/operations/guide.md)。
 
 更新須手動、固定版本且先讀 [CHANGELOG](CHANGELOG.md)；只有本 Add-on cold backup
