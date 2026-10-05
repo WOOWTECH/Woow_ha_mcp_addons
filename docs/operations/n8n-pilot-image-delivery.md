@@ -1,7 +1,7 @@
 # n8n 試點：私有映像交付設計（Q2 選項 B）
 
-**狀態：只有設計。** 沒有建立 registry、沒有推送、沒有變更 Supervisor 或 HA 檔案。registry 位置、
-推送權限和 Supervisor 設定變更都還沒批准。本文接在 [n8n-haos-pilot](n8n-haos-pilot.md) 的 P6–P8。
+**狀態：設計＋離線工具。** registry 位置已決定（Gitea，見下節）；尚未推送、未變更 Supervisor 或 HA 檔案。
+專用推送／拉取 token 與 H1–H4 每一步仍待批准。本文接在 [n8n-haos-pilot](n8n-haos-pilot.md) 的 P6–P8。
 
 ## 目標與不變條件
 
@@ -105,8 +105,21 @@ H1–H4 **逐步**檢查與批准：每一步各自的前提、證據與回復�
 H1–H4 都不重啟 Core／Supervisor，不改既有 app、不碰既有 n8n／Odoo／EMQX／Hermes／OpenDesign。
 H2 需要 HA 上已有的檔案分享管道；若只能透過 SSH add-on，只做檔案複製，不執行 docker 指令。
 
+## 私有 registry（專案負責人 2026-10-05 決定：Gitea）
+
+- Registry：`git-prod.woowtech.io`（Gitea 內建 container registry，`/v2/` 回 registry/2.0）。
+  Namespace：`ha-components`（與私有原始碼 repo 同 org）。試點 ref：
+  `git-prod.woowtech.io/ha-components/pilot-<sha12>/amd64-mcp-n8n:0.1.0`。若首次推送時 Gitea 不接受
+  巢狀名稱，改用扁平名稱 `amd64-mcp-n8n-pilot-<sha12>`，並同步改 `pilot_variant.py` 的 image 規則後重新審查。
+- 推送憑證（R2）：專用 Gitea access token，權限只有 `write:package`，只在一次性 builder VM 內
+  `docker login --password-stdin` 使用，推送後 `docker logout` 並撤銷該 token。不使用個人全權限 token，
+  不寫入 repo、訊息或證據。
+- 拉取憑證（H1）：另一個只有 `read:package` 的 token，設進試點 HA 的 Supervisor registry；
+  試點結束時移除並撤銷。
+- 套件預設私有（跟隨 org），推送後確認匿名 `/v2/` 讀取仍為 401。
+- 公開 GHCR 仍要等原有的 release gates；GitHub 與 Gitea 原始碼鏡像不等於映像也互為鏡像。
+
 ## 待協調者決定
 
-1. registry 位置與 namespace（私有 GHCR package 或內部 registry），以及推送／唯讀拉取憑證的供應方式。
-2. 方向已定為「私有 registry＋新本地 pilot slug＋不在 HA 重建」；仍需 registry host／namespace、publisher 與 Supervisor 拉取憑證。
-3. H1–H4 逐步批准的時段與每步核准人。
+1. 上述兩個專用 token 的建立與交付方式（由專案負責人在 Gitea UI 建立，以 `!` 直接寫入 VM，不經對話）。
+2. H1–H4 逐步批准的時段與每步核准人；試點目標 woowtech-ha 需先恢復連線（10-05 起 Cloudflare tunnel 1033）。
