@@ -99,8 +99,12 @@ accepted notification. See provenance for the narrow source-backed tool subset.
 The gateway preserves upstream status for non-2xx replies and empty 202/204 responses,
 and the session/protocol headers. A 2xx body must be one the gateway parses and filters
 itself (0.1.2): for GET an SSE stream, for a request (POST with an id) an SSE stream or
-a plain 200 JSON reply; other 2xx codes, other or duplicate media types and untyped
-bodies of unknown length are 502 (`Content-Length: 0` passes). Media types compare
+a plain 200 JSON reply; other 2xx codes and other, duplicate or missing media types
+are 502 and not one byte of such a body is relayed, even when it is declared empty
+(framing headers can lie: `Content-Length: 0` with chunked encoding still carries a
+body); an initialize declared empty is 503 `BACKEND_UNAVAILABLE`. Replies to
+notifications carry only status and session headers, never the child's body. HEAD is
+405 and never reaches the child. Media types compare
 case-insensitively without parameters; the client always gets plain
 `text/event-stream` or `application/json`. Every JSON reply to a request is parsed, must
 be one object answering that request (same id and JSON type, `result` or `error`, no
@@ -110,7 +114,10 @@ characters without spaces (as `Last-Event-ID` allows), numeric `retry` and print
 comments up to 1024 characters; other lines (a BOM, unknown fields, non-ASCII comments)
 are dropped. A lone CR (a line end for SSE parsers, not for the gateway's scan) refuses
 the event: initialize is 502, other streams stop. An event whose data is empty (an MCP
-2025-11-25 priming event) passes as an empty event; a batch in an event stops the stream.
+2025-11-25 priming event) passes as an empty event; a batch in an event stops the stream;
+a server-to-client request (an event with `method` and `id`: elicitation, sampling,
+roots, ping) is dropped, since the client could not answer it through the gateway and it
+would carry child text to the user; notifications (no id) still pass.
 Request bodies with lone surrogates anywhere are 400. The child receives initialize with
 `capabilities: {}`, since the gateway answers no server-to-client request (sampling,
 elicitation, roots). Initialize is further special-cased: the gateway reads a 200 reply

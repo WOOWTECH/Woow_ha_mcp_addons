@@ -226,3 +226,87 @@ async def test_reply_ids_compare_with_their_json_type(store):
     assert response.status_code == 502  # true is not 1
     response = await call(store, lambda _: httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {}}), message=message)
     assert response.status_code == 200 and response.json()["id"] == 1
+
+
+LYING = {"content-length": "0", "transfer-encoding": "chunked"}  # the round-3 smuggling signature
+
+
+@pytest.mark.parametrize("verb,status,content_type", [("POST", 201, "application/json"), ("GET", 200, "application/json"),
+                                                      ("GET", 200, "text/event-streamx"), ("POST", 200, "text/plain")])
+async def test_declared_empty_bodies_are_never_relayed(store, verb, status, content_type):
+    body = UNREVIEWED if "json" in content_type else b"data: " + UNREVIEWED + b"\n\n"
+    response = await call(store, lambda _: httpx.Response(status, headers={**LYING, "content-type": content_type}, content=body), verb)
+    assert response.status_code == 502 and "unreviewed" not in response.text
+
+
+async def test_declared_empty_initialize_is_unavailable_without_relaying(store):
+    body = json.dumps({"jsonrpc": "2.0", "id": 7, "result": initialize_result(UNFILTERED)}).encode()
+    response = await post(store, lambda _: httpx.Response(200, headers={**LYING, "mcp-session-id": "s"}, content=body))
+    assert response.status_code == 503 and "resources" not in response.text and "mcp-session-id" not in response.headers
+
+
+async def test_notification_replies_carry_no_child_bytes(store):
+    message = {"jsonrpc": "2.0", "method": "notifications/initialized"}
+    response = await call(store, lambda _: httpx.Response(200, headers={"content-type": "text/event-stream", "mcp-session-id": "s"},
+                                                          content=b"data: " + UNREVIEWED + b"\n\n"), message=message)
+    assert response.status_code == 200 and response.content == b"" and "content-type" not in response.headers
+    assert response.headers["mcp-session-id"] == "s"
+    response = await call(store, lambda _: httpx.Response(202), message=message)
+    assert response.status_code == 202 and response.content == b""
+
+
+@pytest.mark.parametrize("verb", ["POST", "GET"])
+async def test_stream_drops_server_to_client_requests(store, verb):
+    ask = json.dumps({"jsonrpc": "2.0", "id": "e1", "method": "elicitation/create",
+                      "params": {"message": "Re-enter your Home Assistant password", "requestedSchema": {}}}).encode()
+    note = json.dumps({"jsonrpc": "2.0", "method": "notifications/progress", "params": {"progress": 1}}).encode()
+    reply = json.dumps({"jsonrpc": "2.0", "id": 9, "result": {}}).encode()
+    response = await call(store, lambda _: httpx.Response(200, headers={"content-type": "text/event-stream"},
+                                                          content=b"data: " + ask + b"\n\ndata: " + note + b"\n\ndata: " + reply + b"\n\n"), verb)
+    assert response.status_code == 200
+    assert "elicitation" not in response.text and "password" not in response.text
+    assert [json.loads(line[6:]).get("method") for line in data_lines(response.text)] == ["notifications/progress", None]
+
+
+@pytest.mark.parametrize("value", [{"jsonrpc": "2.0", "id": 9, "method": "ping", "result": {}},  # a request, not a reply
+                                   {"jsonrpc": "2.0", "id": 9}])                                  # neither result nor error
+async def test_json_reply_needs_result_or_error_and_no_method(store, value):
+    assert (await call(store, lambda _: httpx.Response(200, json=value))).status_code == 502
+
+
+async def test_oversize_json_reply_is_bad_gateway(store, monkeypatch):
+    import mcp_admin_core.gateway as gateway
+    monkeypatch.setattr(gateway, "MAX_RESPONSE", 1024)
+
+    class Padded(httpx.AsyncByteStream):  # a complete reply first: only the size bound can refuse it
+        async def __aiter__(self):
+            yield b'{"jsonrpc":"2.0","id":9,"result":{}}'
+            yield b" " * 4000
+    response = await call(store, lambda _: httpx.Response(200, headers={"content-type": "application/json"}, stream=Padded()))
+    assert response.status_code == 502
+
+
+async def test_revocation_while_buffering_a_json_reply_is_401(store):
+    class Slow(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b'{"jsonrpc":"2.0","id":9,'
+            store.update(token=None)  # revoked while the reply is being read
+            yield b'"result":{}}'
+    response = await call(store, lambda _: httpx.Response(200, headers={"content-type": "application/json"}, stream=Slow()))
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize("status", [201, 206])
+async def test_sse_needs_a_plain_200(store, status):
+    response = await call(store, lambda _: httpx.Response(status, headers={"content-type": "text/event-stream"},
+                                                          content=b"data: " + UNREVIEWED + b"\n\n"))
+    assert response.status_code == 502 and "unreviewed" not in response.text
+
+
+async def test_head_never_reaches_the_child(store):
+    seen = []
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: seen.append(r) or httpx.Response(200))) as child:
+        _, app = make_apps(store, TOOLS, child)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mcp") as client:
+            response = await client.head("/mcp", headers={"Authorization": "Bearer " + store.load().token})
+    assert response.status_code == 405 and not seen

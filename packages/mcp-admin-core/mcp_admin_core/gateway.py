@@ -64,6 +64,12 @@ def same_id(value, ident):
     return type(value) is type(ident) and value == ident
 
 
+def backend_unavailable(ident):
+    """initialize without a reply from the child: no dead session id; clients may retry later."""
+    return json_reply({"jsonrpc": "2.0", "id": ident, "error": {"code": -32000, "message": "BACKEND_UNAVAILABLE"}},
+                      503, {"Retry-After": "5", "Cache-Control": "no-store"})
+
+
 def json_reply(value, status, headers):
     """Re-serialized JSON with ASCII escapes, so a lone surrogate from a child cannot make the reply unencodable."""
     headers = {k: v for k, v in headers.items() if k != "content-type"}
@@ -482,6 +488,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         value = strict_json(payload)
                         if not isinstance(value, dict):
                             return  # a batch: never sent by the gateway, never filtered element by element
+                        if "method" in value and "id" in value:
+                            continue  # a server-to-client request (elicitation, sampling, roots): the client
+                            # could not answer it through the gateway, and it would carry child text to the user
                         if (isinstance(value.get("result"), dict)
                                 and {"tools", "capabilities"} & value["result"].keys()):
                             value = filter_list(value, tools, store.load())
@@ -497,6 +506,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         state = store.load()
         if not token_valid(request, state):
             return Response(status_code=401, headers={"WWW-Authenticate": "Bearer"})
+        if request.method == "HEAD":
+            raise BadRequest(405)  # Starlette adds HEAD to the GET route; it is not part of the protocol
         if request.headers.get("origin") is not None:
             raise BadRequest(403)  # Browser clients not in this tracer contract.
         if request.url.query:
@@ -558,23 +569,26 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             if is_sse:  # the gateway re-frames events itself: never forward the child's parameters (charset)
                 response_headers["content-type"] = "text/event-stream"
             request_id = request.method == "POST" and isinstance(message, dict) and "id" in message
+            if request.method == "POST" and not request_id:
+                # A notification's reply carries nothing a client needs: status and session headers only,
+                # never the child's bytes.
+                return Response(status_code=upstream.status_code,
+                                headers={k: v for k, v in response_headers.items() if k != "content-type"})
             if 200 <= upstream.status_code < 300 and (request.method == "GET" or request_id):
                 # A success body must be one the gateway parses and filters itself: an SSE stream, or (for a
-                # request) a plain 200 JSON reply. Anything else (other 2xx, other or duplicate media types)
-                # could still be read as SSE or JSON by some client without passing the filter.
-                empty = upstream.headers.get("content-length") == "0"  # nothing a client could misread
-                if not (empty or is_sse and upstream.status_code == 200 or
+                # request) a plain 200 JSON reply. Nothing else is relayed, not even a body declared empty:
+                # framing headers can lie (Content-Length: 0 with chunked encoding still carries a body).
+                if not (is_sse and upstream.status_code == 200 or
                         request_id and media == "application/json" and upstream.status_code == 200):
+                    if method == "initialize" and upstream.headers.get("content-length") == "0":
+                        return backend_unavailable(message.get("id"))  # the child sent no reply
                     raise BadRequest(502)
             if method == "initialize" and upstream.status_code == 200:
                 outcome, value, frame = await initialize_reply(owner, state.token, is_sse, message.get("id"))
                 if not still_authorized(state.token):
                     raise BadRequest(401)
                 if outcome == "missing":
-                    # No dead session id; clients may retry once the backend answers again.
-                    return JSONResponse({"jsonrpc": "2.0", "id": message.get("id"),
-                                         "error": {"code": -32000, "message": "BACKEND_UNAVAILABLE"}},
-                                        status_code=503, headers={"Retry-After": "5", "Cache-Control": "no-store"})
+                    return backend_unavailable(message.get("id"))
                 try:
                     if outcome != "ok":
                         raise ValueError("invalid initialize response")
