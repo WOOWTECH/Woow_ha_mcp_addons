@@ -1,16 +1,20 @@
 """Stock-image bootstrap: own only a new dedicated directory, then drop privilege.
 
-No command override, recursive chown, runtime install or bootstrap HA API call.
+No command override, runtime install or bootstrap HA API call. No recursive chown, except the bounded,
+verified repair of state that Home Assistant restored root-owned (observed in the 2026-10-05 HA pilot).
 Each product's management process receives the runtime Supervisor token for the approved HA admin
 verifier (n8n 2026-10-04; the other six 2026-10-05, 0.1.1); children are started with allowlisted env.
-Existing state must belong to uid/gid 10001. State that Home Assistant restored root-owned (observed in
-the 2026-10-05 HA pilot) is re-owned once: pass 1 approves a bounded tree of plain directories and
-single-link files by identity, pass 2 changes exactly those inodes after re-verifying each one; any
-addition, removal, replacement, link or foreign owner keeps the fail-closed refusal.
+Existing state must belong to uid/gid 10001. The restore repair: pass 1 approves a bounded tree of plain
+directories and single-link regular files on one filesystem and keeps a descriptor on every approved
+inode; pass 2 requires the same names to still name those pinned inodes and changes only the pinned
+inodes after re-checking type, owner and link count. Changes made before an entry's re-check stop
+bootstrap; anything changed after it cannot redirect the repair, which only ever touches pinned,
+approved inodes.
 """
 import ctypes
 import os
 from pathlib import Path
+import resource
 import stat
 import sys
 
@@ -18,8 +22,9 @@ PRODUCTS = ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litel
 UID = GID = 10001
 ROOT = Path('/opt/woow')
 RESTORE_OWNER = (0, 0)  # Supervisor extracts a restored app backup as root
-MAX_RESTORED_ENTRIES = 4096
+MAX_RESTORED_ENTRIES = 512  # every approved entry holds a descriptor until the repair ends
 MAX_RESTORED_DEPTH = 8
+CHANGED = 'restored state changed during bootstrap'
 
 
 def _owner(info):
@@ -27,78 +32,109 @@ def _owner(info):
 
 
 def _identity(info):
-    # dev+inode alone is not enough: a replaced file may reuse the freed inode number. ctime_ns is set
-    # when an inode is created or changed, and nothing changes the restored tree before the app starts.
-    return (info.st_dev, info.st_ino, info.st_ctime_ns)
+    # Exact while the approved inode is pinned by an open descriptor: it cannot be freed, so its inode
+    # number cannot be reused by a replacement file.
+    return (info.st_dev, info.st_ino)
 
 
-def _approve_restored(dir_fd, depth, budget):
-    """Pass 1, no changes: return the approved tree {name: (identity, children or None)}.
+def _plain(info, directory):
+    return stat.S_ISDIR(info.st_mode) if directory else (stat.S_ISREG(info.st_mode) and info.st_nlink == 1)
 
-    Only plain directories and single-link regular files owned by the restore owner or the runtime user,
-    within the entry and depth limits. A directory is opened without following links and must be the
-    same inode and owner that was just checked.
+
+def _names(dir_fd, limit, error):
+    """Directory entry names, streamed, refusing as soon as there are more than `limit` (no full listing)."""
+    names = []
+    with os.scandir(dir_fd) as entries:
+        for entry in entries:
+            if len(names) >= limit:
+                raise RuntimeError(error)
+            names.append(entry.name)
+    return names
+
+
+def _descriptor_budget():
+    need = MAX_RESTORED_ENTRIES + 64
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    if soft == resource.RLIM_INFINITY or soft >= need:
+        return
+    if hard != resource.RLIM_INFINITY and hard < need:
+        raise RuntimeError('descriptor limit too low for restored state')
+    resource.setrlimit(resource.RLIMIT_NOFILE, (need, hard))
+
+
+def _approve_restored(dir_fd, dev, depth, budget, pinned):
+    """Pass 1, no changes: return {name: (descriptor, identity, children or None)}.
+
+    Only plain directories and single-link regular files, owned by the restore owner or the runtime user,
+    on the same filesystem as /data/mcp, within the entry and depth limits. Each entry is opened without
+    following links (regular files with O_PATH: nothing is read or triggered), must be the inode that was
+    just checked, and stays open in `pinned` until the repair ends.
     """
     if depth > MAX_RESTORED_DEPTH:
         raise RuntimeError('restored state too deep')
     approved = {}
-    for name in os.listdir(dir_fd):
-        budget[0] -= 1
-        if budget[0] < 0:
-            raise RuntimeError('restored state too large')
+    names = _names(dir_fd, budget[0], 'restored state too large')
+    budget[0] -= len(names)  # reserve the whole level first: the total can never exceed the limit
+    for name in names:
         info = os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
         if _owner(info) not in (RESTORE_OWNER, (UID, GID)):
             raise RuntimeError('foreign restored owner')
-        if stat.S_ISDIR(info.st_mode):
-            child = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=dir_fd)
-            try:
-                opened = os.fstat(child)
-                if _identity(opened) != _identity(info) or _owner(opened) != _owner(info):
-                    raise RuntimeError('restored state changed during bootstrap')
-                approved[name] = (_identity(info), _approve_restored(child, depth + 1, budget))
-            finally:
-                os.close(child)
-        elif stat.S_ISREG(info.st_mode) and info.st_nlink == 1:
-            approved[name] = (_identity(info), None)
-        else:
+        if info.st_dev != dev:
+            raise RuntimeError('restored state crosses a filesystem boundary')
+        directory = stat.S_ISDIR(info.st_mode)
+        if not _plain(info, directory):
             raise RuntimeError('unsupported restored entry')
+        fd = os.open(name, os.O_NOFOLLOW | (os.O_RDONLY | os.O_DIRECTORY if directory else os.O_PATH), dir_fd=dir_fd)
+        pinned.append(fd)
+        opened = os.fstat(fd)
+        if _identity(opened) != _identity(info) or _owner(opened) != _owner(info) or not _plain(opened, directory):
+            raise RuntimeError(CHANGED)
+        children = _approve_restored(fd, dev, depth + 1, budget, pinned) if directory else None
+        approved[name] = (fd, _identity(info), children)
     return approved
 
 
 def _reown_restored(dir_fd, approved):
-    """Pass 2: change only the approved entries, each re-verified by identity on its own descriptor.
+    """Pass 2: change only the pinned, approved inodes, each re-checked first.
 
-    The directory must hold exactly the approved names (no additions, removals or renames). Each entry is
-    opened without following links (regular files with O_PATH, so nothing is read or triggered) and must
-    still be the approved identity (dev, inode, ctime) and type, owned by the restore owner or runtime user,
-    with one link; only
-    then is that descriptor's inode re-owned. Bootstrap runs before the app as root on a tree only the
-    Supervisor wrote, so nothing should change between the passes; if anything does, bootstrap stops.
-    Approved entries handled before a change is found keep their new owner: they were approved.
+    The directory must hold exactly the approved names, each still naming its pinned inode (no additions,
+    removals, renames or replacements); the pinned inode must still be the approved type, owned by the
+    restore owner or the runtime user, with one link. Then that inode's mode and owner are set through its
+    own descriptor (regular files via the /proc/self/fd magic link of the O_PATH descriptor). Mode first,
+    owner last, so an interrupted repair leaves root-owned entries that the next boot repairs again.
+    Approved entries repaired before a change is found keep the change: they were approved.
     """
-    if sorted(os.listdir(dir_fd)) != sorted(approved):
-        raise RuntimeError('restored state changed during bootstrap')
-    for name, (identity, children) in approved.items():
+    if sorted(_names(dir_fd, len(approved), CHANGED)) != sorted(approved):
+        raise RuntimeError(CHANGED)
+    for name, (fd, identity, children) in approved.items():
+        current = os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
+        held = os.fstat(fd)
         directory = children is not None
-        flags = os.O_NOFOLLOW | (os.O_RDONLY | os.O_DIRECTORY if directory else os.O_PATH)
-        fd = os.open(name, flags, dir_fd=dir_fd)
-        try:
-            opened = os.fstat(fd)
-            plain = stat.S_ISDIR(opened.st_mode) if directory else (stat.S_ISREG(opened.st_mode) and opened.st_nlink == 1)
-            if (_identity(opened) != identity or not plain
-                    or _owner(opened) not in (RESTORE_OWNER, (UID, GID))):
-                raise RuntimeError('restored state changed during bootstrap')
-            if directory:
-                _reown_restored(fd, children)
-                os.fchown(fd, UID, GID)
-                os.fchmod(fd, 0o700)
-            else:
-                # O_PATH descriptors cannot fchown/fchmod; the magic link names exactly this inode.
-                target = '/proc/self/fd/%d' % fd
-                os.chown(target, UID, GID)
-                os.chmod(target, 0o600)
-        finally:
+        if (_identity(current) != identity or _identity(held) != identity or not _plain(held, directory)
+                or _owner(held) not in (RESTORE_OWNER, (UID, GID))):
+            raise RuntimeError(CHANGED)
+        if directory:
+            _reown_restored(fd, children)
+            os.fchmod(fd, 0o700)
+            os.fchown(fd, UID, GID)
+        else:
+            # O_PATH descriptors cannot fchown/fchmod; the magic link names exactly this pinned inode.
+            target = '/proc/self/fd/%d' % fd
+            os.chmod(target, 0o600)
+            os.chown(target, UID, GID)
+
+
+def _repair_restored(child, top):
+    _descriptor_budget()
+    pinned = []
+    try:
+        _reown_restored(child, _approve_restored(child, top.st_dev, 0, [MAX_RESTORED_ENTRIES], pinned))
+    finally:
+        for fd in pinned:
             os.close(fd)
+    os.fchmod(child, 0o700)
+    os.fchown(child, UID, GID)
+    print('bootstrap: re-owned %d restored entries in /data/mcp' % len(pinned), file=sys.stderr, flush=True)
 
 
 def prepare_data(parent=Path('/data')):
@@ -117,9 +153,7 @@ def prepare_data(parent=Path('/data')):
             info = os.fstat(child)
             if (not created and os.geteuid() == 0 and (info.st_uid, info.st_gid) == RESTORE_OWNER
                     and RESTORE_OWNER != (UID, GID)):
-                _reown_restored(child, _approve_restored(child, 0, [MAX_RESTORED_ENTRIES]))
-                os.fchown(child, UID, GID)
-                os.fchmod(child, 0o700)
+                _repair_restored(child, info)
                 info = os.fstat(child)
             if (info.st_uid, info.st_gid) != (UID, GID) or stat.S_IMODE(info.st_mode) != 0o700:
                 raise RuntimeError('incompatible data ownership')

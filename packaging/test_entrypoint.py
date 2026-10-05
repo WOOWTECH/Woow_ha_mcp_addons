@@ -1,4 +1,6 @@
 """Bootstrap tests use owned temporary directories only, never real /data."""
+import contextlib
+import io
 import os
 from pathlib import Path
 import tempfile
@@ -6,6 +8,8 @@ import unittest
 from unittest.mock import patch
 
 import entrypoint as e
+
+REAL_CHOWN = os.chown  # tests that plant foreign owners must bypass the recording spies
 
 
 class BootstrapTests(unittest.TestCase):
@@ -149,7 +153,7 @@ def restored_tree(root):
 class RestoredStateTests(unittest.TestCase):
     """The current user plays the restore owner; the runtime user is someone else; fchown is recorded."""
 
-    def refused(self, build, **limits):
+    def refused(self, build, expected='', **limits):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             child = restored_tree(root)
@@ -159,8 +163,11 @@ class RestoredStateTests(unittest.TestCase):
                  patch.object(e, 'UID', os.getuid() + 1), patch.object(e, 'GID', os.getgid() + 1), \
                  patch.object(e.os, 'geteuid', return_value=0), \
                  patch.object(e.os, 'fchown', side_effect=lambda *a: calls.append(a)), \
+                 patch.object(e.os, 'fchmod', side_effect=lambda *a: calls.append(a)), \
+                 patch.object(e.os, 'chown', side_effect=lambda *a: calls.append(a)), \
+                 patch.object(e.os, 'chmod', side_effect=lambda *a: calls.append(a)), \
                  patch.multiple(e, **(limits or {'MAX_RESTORED_ENTRIES': e.MAX_RESTORED_ENTRIES})), \
-                 self.assertRaises(RuntimeError):
+                 self.assertRaisesRegex(RuntimeError, expected):
                 e.prepare_data(root)
             self.assertEqual(calls, [])  # pass 1 refuses before any change
             self.assertEqual((child / 'state.json').stat().st_mode & 0o777, 0o644)
@@ -169,12 +176,12 @@ class RestoredStateTests(unittest.TestCase):
         outside = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: [p.unlink() for p in outside.iterdir()] and None or outside.rmdir())
         (outside / 'secret').write_bytes(b's')
-        self.refused(lambda root, child: (child / 'link').symlink_to(outside / 'secret'))
-        self.refused(lambda root, child: (child / 'dirlink').symlink_to(outside, target_is_directory=True))
-        self.refused(lambda root, child: os.link(child / 'state.json', child / 'second-name'))
-        self.refused(lambda root, child: os.mkfifo(child / 'fifo'))
-        self.refused(lambda root, child: None, MAX_RESTORED_ENTRIES=3)
-        self.refused(lambda root, child: None, MAX_RESTORED_DEPTH=0)
+        self.refused(lambda root, child: (child / 'link').symlink_to(outside / 'secret'), 'unsupported')
+        self.refused(lambda root, child: (child / 'dirlink').symlink_to(outside, target_is_directory=True), 'unsupported')
+        self.refused(lambda root, child: os.link(child / 'state.json', child / 'second-name'), 'unsupported')
+        self.refused(lambda root, child: os.mkfifo(child / 'fifo'), 'unsupported')
+        self.refused(lambda root, child: None, 'too large', MAX_RESTORED_ENTRIES=3)
+        self.refused(lambda root, child: None, 'too deep', MAX_RESTORED_DEPTH=0)
         self.assertEqual((outside / 'secret').read_bytes(), b's')
 
     def test_runtime_owned_state_is_not_rewritten(self):
@@ -185,7 +192,10 @@ class RestoredStateTests(unittest.TestCase):
             with patch.object(e, 'RESTORE_OWNER', (os.getuid() + 5, os.getgid() + 5)), \
                  patch.object(e, 'UID', os.getuid()), patch.object(e, 'GID', os.getgid()), \
                  patch.object(e.os, 'geteuid', return_value=0), \
-                 patch.object(e.os, 'fchown', side_effect=lambda *a: calls.append(a)):
+                 patch.object(e.os, 'fchown', side_effect=lambda *a: calls.append(a)), \
+                 patch.object(e.os, 'fchmod', side_effect=lambda *a: calls.append(a)), \
+                 patch.object(e.os, 'chown', side_effect=lambda *a: calls.append(a)), \
+                 patch.object(e.os, 'chmod', side_effect=lambda *a: calls.append(a)):
                 e.prepare_data(root)
             self.assertEqual(calls, [])
             self.assertEqual((root / 'mcp' / 'state.json').stat().st_mode & 0o777, 0o644)
@@ -195,8 +205,11 @@ class RestoredStateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             child = restored_tree(root)
+            log = io.StringIO()
             with patch.object(e, 'UID', 10001), patch.object(e, 'GID', 10001):
-                e.prepare_data(root)
+                with contextlib.redirect_stderr(log):
+                    e.prepare_data(root)
+                self.assertEqual(log.getvalue(), 'bootstrap: re-owned 4 restored entries in /data/mcp\n')
                 for path in [child, *child.rglob('*')]:
                     info = path.lstat()
                     self.assertEqual((info.st_uid, info.st_gid), (10001, 10001), path)
@@ -311,6 +324,169 @@ class CrossPassTests(unittest.TestCase):
                  patch.object(e, '_reown_restored', side_effect=reown), self.assertRaises(RuntimeError):
                 e.prepare_data(root)
             self.assertEqual((planted.stat().st_uid, planted.stat().st_mode & 0o777), (4242, 0o644))
+
+
+class RepairUnitTests(unittest.TestCase):
+    """Each pass-1/pass-2 check pinned on its own (unprivileged unless marked); changes are recorded by inode."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.child = restored_tree(self.root)
+        self.fd = os.open(self.child, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, self.fd)
+        self.touched, self.pinned = set(), []
+        self.addCleanup(lambda: [os.close(f) for f in self.pinned])
+
+        def by_fd(fd, *args):
+            info = os.fstat(fd)
+            self.touched.add((info.st_dev, info.st_ino))
+
+        def by_path(path, *args, **kwargs):
+            info = os.stat(path)
+            self.touched.add((info.st_dev, info.st_ino))
+        for target, value in (('RESTORE_OWNER', (os.getuid(), os.getgid())), ('UID', os.getuid() + 1),
+                              ('GID', os.getgid() + 1)):
+            patcher = patch.object(e, target, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        for name, spy in (('fchown', by_fd), ('fchmod', by_fd), ('chown', by_path), ('chmod', by_path)):
+            patcher = patch.object(e.os, name, side_effect=spy)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def approve(self, budget=None):
+        return e._approve_restored(self.fd, os.fstat(self.fd).st_dev, 0, [budget or e.MAX_RESTORED_ENTRIES], self.pinned)
+
+    def ident(self, path):
+        info = path.stat()
+        return (info.st_dev, info.st_ino)
+
+    def test_clean_tree_repairs_exactly_the_approved_inodes(self):
+        expected = {self.ident(p) for p in self.child.rglob('*')}
+        e._reown_restored(self.fd, self.approve())
+        self.assertEqual(self.touched, expected)
+
+    def test_pass1_refuses_a_directory_swapped_between_stat_and_open(self):
+        real_open = os.open
+
+        def opener(path, flags, *args, **kwargs):
+            if path == 'sub' and flags & os.O_DIRECTORY:
+                (self.child / 'sub').rename(self.child / 'sub-approved')
+                (self.child / 'sub').mkdir(mode=0o755)
+            return real_open(path, flags, *args, **kwargs)
+        with patch.object(e.os, 'open', side_effect=opener), self.assertRaisesRegex(RuntimeError, 'changed'):
+            self.approve()
+
+    def test_pass1_refuses_a_filesystem_boundary(self):
+        real_stat = os.stat
+
+        def fake_stat(path, *args, **kwargs):
+            info = real_stat(path, *args, **kwargs)
+            if path == 'sub':
+                values = list(info)
+                values[2] = info.st_dev + 1  # st_dev of a mount point
+                return os.stat_result(values)
+            return info
+        with patch.object(e.os, 'stat', side_effect=fake_stat), self.assertRaisesRegex(RuntimeError, 'boundary'):
+            self.approve()
+
+    def test_pass1_listing_stops_at_the_limit(self):
+        produced = []
+
+        class Entries:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def __iter__(self):
+                for i in range(100000):
+                    produced.append(i)
+                    yield type('Entry', (), {'name': 'f%d' % i})()
+        with patch.object(e.os, 'scandir', return_value=Entries()), self.assertRaisesRegex(RuntimeError, 'too large'):
+            self.approve(budget=10)
+        self.assertEqual(len(produced), 11)
+
+    def test_pass1_budget_covers_nested_levels(self):
+        for i in range(4):
+            (self.child / 'sub' / ('n%d' % i)).write_bytes(b'n')
+        with self.assertRaisesRegex(RuntimeError, 'too large'):
+            self.approve(budget=5)  # 3 top-level names + 5 nested would pass a per-level check
+
+    def test_pass2_refuses_a_rename_between_passes(self):
+        approved = self.approve()
+        (self.child / 'state.json').rename(self.child / 'renamed.json')
+        with self.assertRaisesRegex(RuntimeError, 'changed'):
+            e._reown_restored(self.fd, approved)
+        self.assertNotIn(self.ident(self.child / 'renamed.json'), self.touched)
+
+    def test_repair_checks_the_descriptor_budget_before_any_change(self):
+        with patch.object(e, '_descriptor_budget', side_effect=RuntimeError('descriptor limit too low')), \
+             self.assertRaisesRegex(RuntimeError, 'descriptor'):
+            e._repair_restored(self.fd, os.fstat(self.fd))
+        self.assertEqual(self.touched, set())
+        self.assertEqual(self.pinned, [])
+
+    def test_pass2_refuses_a_file_moved_out_and_replaced(self):
+        # The pinned inode keeps one link (moved outside the tree) and the name set is unchanged; only the
+        # name-to-pinned-inode check notices.
+        approved = self.approve()
+        (self.child / 'state.json').rename(self.root / 'moved-out.json')
+        (self.child / 'state.json').write_bytes(b'{"swapped": true}')
+        with self.assertRaisesRegex(RuntimeError, 'changed'):
+            e._reown_restored(self.fd, approved)
+        self.assertNotIn(self.ident(self.root / 'moved-out.json'), self.touched)
+        self.assertNotIn(self.ident(self.child / 'state.json'), self.touched)
+
+    def test_pass2_refuses_a_hardlink_made_outside_between_passes(self):
+        approved = self.approve()
+        os.link(self.child / 'state.json', self.root / 'outside-link')
+        with self.assertRaisesRegex(RuntimeError, 'changed'):
+            e._reown_restored(self.fd, approved)
+        self.assertNotIn(self.ident(self.root / 'outside-link'), self.touched)
+
+    def test_same_tick_replacement_is_refused_every_time(self):
+        # The approved inode stays pinned, so a replacement can never reuse its inode number.
+        for _ in range(50):
+            approved = self.approve()
+            (self.child / 'state.json').unlink()
+            (self.child / 'state.json').write_bytes(b'{"swapped": true}')
+            with self.assertRaisesRegex(RuntimeError, 'changed'):
+                e._reown_restored(self.fd, approved)
+            self.assertNotIn(self.ident(self.child / 'state.json'), self.touched)
+            for fd in self.pinned:
+                os.close(fd)
+            self.pinned.clear()
+
+    @unittest.skipUnless(os.geteuid() == 0, 'a foreign owner needs root')
+    def test_pass1_refuses_a_foreign_owner(self):
+        REAL_CHOWN(self.child / 'sub' / 'nested', 4242, 4242)
+        with self.assertRaisesRegex(RuntimeError, 'foreign'):
+            self.approve()
+
+    @unittest.skipUnless(os.geteuid() == 0, 'a foreign owner needs root')
+    def test_pass2_refuses_an_owner_changed_between_passes(self):
+        approved = self.approve()
+        REAL_CHOWN(self.child / 'state.json', 4242, 4242)
+        with self.assertRaisesRegex(RuntimeError, 'changed'):
+            e._reown_restored(self.fd, approved)
+        self.assertNotIn(self.ident(self.child / 'state.json'), self.touched)
+
+
+class DescriptorBudgetTests(unittest.TestCase):
+    def test_soft_limit_is_raised_and_a_low_hard_limit_refused(self):
+        need = e.MAX_RESTORED_ENTRIES + 64
+        with patch.object(e.resource, 'getrlimit', return_value=(100, 10000)), \
+             patch.object(e.resource, 'setrlimit') as setrlimit:
+            e._descriptor_budget()
+        setrlimit.assert_called_once_with(e.resource.RLIMIT_NOFILE, (need, 10000))
+        with patch.object(e.resource, 'getrlimit', return_value=(100, 200)), \
+             patch.object(e.resource, 'setrlimit') as setrlimit, self.assertRaises(RuntimeError):
+            e._descriptor_budget()
+        setrlimit.assert_not_called()
 
 if __name__ == '__main__':
     unittest.main()
