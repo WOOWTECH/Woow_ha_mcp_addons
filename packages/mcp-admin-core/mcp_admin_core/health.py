@@ -66,8 +66,8 @@ class HealthMonitor:
         if product == 'n8n':
             probe_name, probe_args = 'n8n_list_workflows', {'limit': 1}
         else:
-            from .products import PROBES
-            probe_name, probe_args = PROBES[product]
+            from .products import health_probe
+            probe_name, probe_args = health_probe(product)
         headers = {"Authorization": "Bearer " + state.child_token, "Accept": "application/json, text/event-stream"}
         session = None
         try:
@@ -114,8 +114,8 @@ class HealthMonitor:
                                     if product == 'n8n':
                                         valid = isinstance(payload, dict) and payload.get('success') is True
                                     else:
-                                        from .products import probe_success
-                                        valid = probe_success(product, payload)
+                                        from .products import health_probe_success
+                                        valid = health_probe_success(product, payload)
                                     if valid:
                                         self.backend = "reachable"
         except Exception:

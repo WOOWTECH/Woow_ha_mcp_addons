@@ -45,9 +45,26 @@ if __name__ == '__main__':
     aggregate.fn = bounded_counts
     from odoo_b2_scope import install as install_b2
     install_b2(mcp)
+    from bounded_tools import OwnedWorkers
+    from odoo_mcp.odoo_client import get_odoo_client
+    # HealthMonitor's private probe: not in TOOLS, so the gateway neither lists nor authorizes it. It only
+    # authenticates a fresh client (as every session does on its first live call), on its own owned thread:
+    # it never takes the single tool worker below (0.1.2 HA: a probe held it while Odoo was slow and user
+    # calls got BACKEND_BUSY), and an account without ir.model access still reads as reachable.
+    probe_worker = OwnedWorkers(1, 'backend-probe')
+
+    async def woow_backend_probe():
+        try:
+            odoo = await probe_worker.run(get_odoo_client)
+        except Exception:
+            raise ValueError('BACKEND_UNAVAILABLE') from None
+        return {'uid': odoo.uid}
+
+    mcp.add_tool(woow_backend_probe, name='woow_backend_probe', description='Add-on readiness probe (private).')
     # The stock client caches an XMLRPC transport: serialize its sync calls.
     workers = BoundedTools(mcp, capacity=1)
     try:
         runpy.run_module('odoo_mcp', run_name='__main__')
     finally:
         workers.close()
+        probe_worker.close()

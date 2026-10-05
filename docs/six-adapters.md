@@ -64,7 +64,7 @@ HTTPX headers 後的 lazy sync/async body iteration／close 亦經固定 `BACKEN
 
 `test_stream_error_redaction.py` 重現真正 child/gateway 的 Authorization malformed-chunk 洩漏，涵蓋 dashboard login/cookie、sync OpenDesign、所有已啟用 HTTP tool 的 gzip／encoding／JSON 錯誤、JSON/SSE 全文 canaries；另在真正 HTTPX/core pool 注入 late read/timeout/close errors、檢查重複失敗／取消的 pool reuse 與 cleanup。獨立 spec verification 及 NEW security review 仍必須重新進行。
 
-SDK 1.28.1 同步工具原本直接阻塞 event loop。OpenDesign 改 4-worker、Odoo 改 1-worker offload，無等待工作 queue；超載立即 `BACKEND_BUSY`，caller cancellation 不提前釋放執行中 slot。普通 I/O timeout 5 秒；slow-trickle/hung DNS 無法靠 thread cancellation 強制停止，既有 Supervisor 持有 child group 的 3 秒 SIGTERM grace / SIGKILL / reap 硬關機邊界，不將後端失效當 restart 理由。
+SDK 1.28.1 同步工具原本直接阻塞 event loop。OpenDesign 改 4-worker、Odoo 改 1-worker offload，無等待工作 queue；超載立即 `BACKEND_BUSY`，caller cancellation 不提前釋放執行中 slot。普通 I/O timeout 5 秒；slow-trickle/hung DNS 無法靠 thread cancellation 強制停止，既有 Supervisor 持有 child group 的 3 秒 SIGTERM grace / SIGKILL / reap 硬關機邊界，不將後端失效當 restart 理由。0.1.3 起 Odoo 的健康探測是子程序私有的 `woow_backend_probe`（不在 TOOLS，gateway 不列出也不授權）：只以新 client 驗證登入（authenticate），在自己的 1-thread owned executor 執行（同樣無等待、取消不提前釋放），從不佔使用者的 1-worker；0.1.2 HA 回歸時探測（`list_models`）在 Odoo 剛重啟、回應慢時佔住該 worker，使用者讀取全回 `BACKEND_BUSY`。
 
 `test_resolver_regressions.py` 補 stock/pinned localhost 對照、IPv4/IPv6 fallback、DNS+TCP budget、真實 OpenDesign/Hermes health/readiness、Hermes gateway 三波 24-call cancellation/DNS capacity/reuse/ping/group reap 及實際 gateway/login/cookie/sync/XMLRPC 共用 admission。
 

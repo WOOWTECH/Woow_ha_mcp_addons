@@ -7,7 +7,8 @@ import pytest
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.health import HealthMonitor
 from mcp_admin_core.lifecycle import Supervisor
-from mcp_admin_core.products import PRODUCTS, PROBES, ProductStore, TOOLS, child_spec, probe_success
+from mcp_admin_core.products import (PRODUCTS, PROBES, ProductStore, TOOLS, child_spec, health_probe_success,
+                                    probe_success)
 from test_real_products import connection
 
 
@@ -108,3 +109,10 @@ async def test_writer_is_denied_before_dispatch_then_explicitly_enabled(tmp_path
 def test_health_rejects_generic_success_and_error_payloads(product):
     for payload in ({'success': True}, {}, {'error': 'DUMMY'}, [], None):
         assert not probe_success(product, payload)
+        assert not health_probe_success(product, payload)
+    if product == 'odoo':
+        # Only Odoo's authenticate answer, exactly: a positive int user id (False for rejected credentials).
+        assert health_probe_success(product, {'uid': 7})
+        for payload in ({'uid': False}, {'uid': 0}, {'uid': -1}, {'uid': True}, {'uid': '7'}, {'uid': 7.0},
+                        {'uid': 7, 'error': None}, {'uid': 7, 'success': True}):
+            assert not health_probe_success(product, payload)

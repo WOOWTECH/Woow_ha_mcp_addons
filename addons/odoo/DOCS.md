@@ -41,7 +41,7 @@ B2 增加 schema_catalog（固定 res.partner、limit1、兩個 metadata cache k
 Stock image `init: true`；保護模式維持 on。bootstrap 只建立新 `/data/mcp`，之後
 runtime/child uid/gid10001；0700 directory、0600 state。其他錯 owner、連結或特殊檔
 停止不接管。**HA 還原**：0.1.0 還原後資料屬 root、啟動被拒（2026-10-05 實測）。0.1.1 起 bootstrap 只在資料剛好屬 root 時，第一遍核准有界的一般資料夾與單一連結檔（身分＝dev／inode／ctime），第二遍只把這些重驗身分後的項目改回 10001 與 0700／0600；任何新增、移除、替換、連結或外來擁有者仍拒絕。0.1.1 已在 HA 實測（n8n，2026-10-05）：cold backup→還原後 7 秒內啟動，log `bootstrap: re-owned 2 restored entries in /data/mcp`，權杖回到備份當時的值（還原後請輪替）；其他產品用同一份 bootstrap，未逐支做還原。管理／child／backend 三種 health 不同；backend outage readiness503
-不重啟 Add-on，故意不設 watchdog。詳見 [操作指南](../../docs/operations/guide.md)。
+不重啟 Add-on，故意不設 watchdog。0.1.3 起後端狀態只驗證能否登入 Odoo（沒有 `ir.model` 讀取權的最小權限帳號也算可連線），健康檢查在自己的執行緒執行，不佔工具的工作槽、不會讓工具呼叫回 `BACKEND_BUSY`。詳見 [操作指南](../../docs/operations/guide.md)。
 
 更新須手動、固定版本且先讀 [CHANGELOG](CHANGELOG.md)；只有本 Add-on cold backup
 會短暫停止 MCP，**不停止既有 backend／Core／Supervisor**。完整 `/data/mcp` backup

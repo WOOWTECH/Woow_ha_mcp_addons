@@ -1,5 +1,12 @@
 # Odoo Changelog
 
+## 0.1.3 — 準備中（未發佈）
+
+- gateway：`/mcp` 的所有 HTTP 方法都先驗 Bearer 再回 405（`Allow: GET, POST, DELETE`）；TRACE、PROPFIND 等以前由框架在驗證前就回 405，Allow 清單還列了 gateway 實際拒絕的方法（0.1.2 審查的 NIT）。
+- 健康檢查：子程序回的 `protocolVersion` 須是合規的標頭值才沿用；否則該輪判定失敗並照常關閉 session（以前會在清理前出錯，留下子程序 session）。
+- 健康檢查改用子程序私有的探測 `woow_backend_probe`（不在工具清單，gateway 不列出也不授權）：只驗證能否登入 Odoo，並在自己的執行緒執行，不再佔用工具唯一的工作槽。0.1.2 HA 回歸時 Odoo 剛重啟、回應慢，健康檢查佔住工作槽，使用者的 12 個讀取全回 `BACKEND_BUSY`（Odoo nginx log 對得上時間）。沒有 `ir.model` 讀取權的最小權限帳號，後端狀態也會正確顯示可連線；以前探測用 `list_models`，這種帳號一律顯示無法連線。
+- 映像 `ghcr.io/woowtech/amd64-mcp-odoo:0.1.3` 尚未建置；0.1.0、0.1.1、0.1.2 tag 不覆寫。
+
 ## 0.1.2 — 2026-10-06 公開（experimental）
 
 - 初始化時子程序沒有回覆（例如後端連不上、子程序無法建立連線階段），gateway 改回 HTTP 503＋JSON-RPC 錯誤 `BACKEND_UNAVAILABLE`（附 Retry-After），不再給出 200 空回應與失效的 session id；串流回應只保留回覆那個事件的 id／event／retry 行，其餘事件（heartbeat、通知）不轉送；過大或格式錯誤的回覆回 502。

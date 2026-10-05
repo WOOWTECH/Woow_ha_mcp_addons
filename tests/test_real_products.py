@@ -19,7 +19,7 @@ import httpx
 import pytest
 
 from mcp_admin_core.health import protocol_reply
-from mcp_admin_core.products import PRODUCTS, PROBES, ProductStore, TOOLS, child_spec
+from mcp_admin_core.products import ODOO_HEALTH_PROBE, PRODUCTS, PROBES, ProductStore, TOOLS, child_spec
 
 from owned_executable import Executable
 from batch2_owned_port import reserve_port
@@ -174,6 +174,10 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     raw_list = await rpc(client, runner.child_url, headers,
                         {'jsonrpc': '2.0', 'id': 20, 'method': 'tools/list'})
                     upstream_names = {t['name'] for t in raw_list['tools']}
+                    if product == 'odoo':
+                        # The add-on's own private readiness probe (apps/odoo/launch.py), not an upstream tool.
+                        assert ODOO_HEALTH_PROBE in upstream_names and ODOO_HEALTH_PROBE not in TOOLS[product]
+                        upstream_names.remove(ODOO_HEALTH_PROBE)
                     manifest = json.loads((ROOT / 'docs/tool-surface.json').read_text())
                     inventoried = {t['name'] for t in manifest['products'][product]['tools']}
                     assert expected <= upstream_names <= inventoried
