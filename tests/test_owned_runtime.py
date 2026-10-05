@@ -173,10 +173,25 @@ async def test_omitted_gateway_and_monitor_urls_fail_before_dispatch(tmp_path):
         await manager.start()
         async with httpx.AsyncClient(transport=httpx.MockTransport(downstream)) as child:
             endpoint.attach(child)
+            rejected = []
+            hooks = child.event_hooks['request']
+            guard = hooks[hooks.index(endpoint.guard)]
+
+            async def recording_guard(request):
+                try:
+                    await guard(request)
+                except OwnershipError as exc:
+                    rejected.append(str(exc))
+                    raise
+            hooks[hooks.index(endpoint.guard)] = recording_guard
             # Deliberately OMIT both existing URL seams. These default Requests
             # stay in memory; the endpoint guard rejects before the mock spy.
-            with pytest.raises(OwnershipError, match='destination'):
-                await HealthMonitor(store, manager, child).check()
+            # Since 0.1.2 the monitor contains every error a child path raises (a misbehaving child must not
+            # stop the add-on), so the rejection is observed at the guard and readiness stays false.
+            monitor = HealthMonitor(store, manager, child)
+            await monitor.check()
+            assert rejected and 'destination' in rejected[0]
+            assert manager.ready is False and monitor.snapshot()['backend'] in ('unconfigured', 'unreachable')
             _, app = make_apps(store, TOOLS, child)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://test') as client:
                 with pytest.raises(OwnershipError, match='destination'):
