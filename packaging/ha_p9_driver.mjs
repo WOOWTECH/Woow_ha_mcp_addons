@@ -38,7 +38,7 @@ const OUTAGE = opt('--outage-url');
 if (OUTAGE && !(BACKEND && PLAN)) throw new Error('--outage-url needs --backend-file and --plan');
 const withUrl = (body, url) => {
   const copy = structuredClone(body);
-  if (copy.connection) { for (const key of ['url', 'gateway_url']) if (key in copy.connection) copy.connection[key] = url; }
+  if (copy.connection) { for (const key of Object.keys(copy.connection)) if (/(^|_)url$/.test(key)) copy.connection[key] = url; }
   else copy.url = url;
   return copy;
 };

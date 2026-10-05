@@ -53,6 +53,41 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(result['needs_args'], [])
         self.assertIn(['executions', {'action': 'delete', 'id': 'none'}], result['denials'])
 
+    def test_operations_follow_the_schema_branch_that_admits_them(self):
+        surface = {'products': {'demo': {'tools': [
+            {'name': 'runs', 'status': 'supported-bounded', 'effect': 'mixed', 'operation_parameter': 'action',
+             'operation_effects': {'action': {'get': 'read', 'list': 'read', 'delete': 'write'}},
+             'accepted_schema': {'properties': {'action': {'const': 'list'}, 'limit': {'type': 'integer', 'default': 20}},
+                                 'required': ['action']}},
+            {'name': 'folders', 'status': 'supported-bounded', 'effect': 'mixed', 'operation_parameter': 'action',
+             'operation_effects': {'action': {'list': 'read', 'get': 'read', 'create': 'write', 'move': 'write'}},
+             'accepted_schema': {
+                 'properties': {'action': {'enum': ['list', 'get', 'create']}, 'projectId': {'type': 'string', 'default': 'personal'}},
+                 'required': ['action'],
+                 'oneOf': [
+                     {'properties': {'action': {'const': 'list'}, 'folderId': {'type': 'null'}}, 'required': ['action']},
+                     {'properties': {'action': {'const': 'get'}, 'folderId': {'type': 'string', 'pattern': '^[a-z]+$'},
+                                     'projectId': {'not': {'const': 'personal'}}}, 'required': ['action', 'folderId', 'projectId']},
+                     {'properties': {'action': {'const': 'create'}, 'name': {'type': 'string'}}, 'required': ['action', 'name']}]}},
+        ]}}}
+        result = p.plan('demo', surface)
+        self.assertEqual(result['reads'], [['runs', {'action': 'list'}], ['folders', {'action': 'list'}]])
+        self.assertEqual(result['needs_args'], ['folders:get'])
+        self.assertEqual(result['denials'], [
+            ['runs', {'action': 'get'}], ['runs', {'action': 'delete'}],
+            ['folders', {'action': 'create', 'name': 'p9-denied'}], ['folders', {'action': 'move'}],
+            ['definitely_not_a_tool', {}]])
+        surface['products']['demo']['tools'].append(
+            {'name': 'model', 'status': 'supported-bounded', 'effect': 'mixed', 'operation_parameter': None,
+             'operation_effects': {'action': {'info': 'read', 'list_providers': 'read', 'set': 'write'}},
+             'accepted_schema': {'properties': {'action': {'default': 'info', 'enum': ['info', 'list_providers']},
+                                                'model': {'type': 'null', 'default': None}}}})
+        result = p.plan('demo', surface)
+        self.assertEqual(result['reads'][-2:], [['model', {'action': 'info'}], ['model', {'action': 'list_providers'}]])
+        self.assertEqual(result['denials'][-2:], [['model', {'action': 'set'}], ['definitely_not_a_tool', {}]])
+        filled = p.plan('demo', surface, {'folders:get': {'action': 'get', 'folderId': 'abc', 'projectId': 'p1'}})
+        self.assertIn(['folders', {'action': 'get', 'folderId': 'abc', 'projectId': 'p1'}], filled['reads'])
+
     def test_every_product_in_the_repository_surface_produces_a_plan(self):
         surface = json.loads((ROOT / 'docs/tool-surface.json').read_text())
         for product, value in surface['products'].items():

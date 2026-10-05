@@ -62,8 +62,19 @@ class Client:
             response = urllib.request.urlopen(urllib.request.Request(self.url, data=data, headers=headers,
                                                                      method=method), timeout=timeout or self.timeout)
         except urllib.error.HTTPError as error:
-            error.close()
-            return error.code, None, sid
+            try:  # keep a short error body for the report (a JSON-RPC error or plain text)
+                raw = error.read(2048).decode('utf-8', 'replace').strip()
+            except OSError:
+                raw = ''
+            finally:
+                error.close()
+            try:
+                body = json.loads(raw) if raw else None
+            except ValueError:
+                body = None
+            if raw and not isinstance(body, dict):
+                body = {'error': {'message': raw[:300]}}
+            return error.code, body, sid
         except (urllib.error.URLError, OSError):
             return 0, None, sid
         with response:
@@ -103,6 +114,9 @@ class Client:
         result = (message or {}).get('result') if isinstance(message, dict) else None
         result = result if isinstance(result, dict) else {}
         text = ' '.join(c.get('text', '') for c in result.get('content', []) if isinstance(c, dict))
+        error = message.get('error') if isinstance(message, dict) else None
+        if not text and isinstance(error, dict):
+            text = 'error %s: %s' % (error.get('code', ''), str(error.get('message', ''))[:200])
         return status, result.get('isError'), text
 
 

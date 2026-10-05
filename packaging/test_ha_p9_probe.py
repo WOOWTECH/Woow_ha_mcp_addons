@@ -87,7 +87,15 @@ class Handler(BaseHTTPRequestHandler):
         if method == 'tools/call':
             name = body['params']['name']
             if name in DENIED:
-                return self.reply(403, {'error': 'request denied'})
+                return self.reply(403, {'jsonrpc': '2.0', 'id': body['id'],
+                                        'error': {'code': -32001, 'message': 'request denied'}})
+            if name == 'not_ready_tool':  # a plain-text error body, like a proxy in front of the gateway
+                raw = b'child transport not ready'
+                self.send_response(503)
+                self.send_header('Content-Type', 'text/plain')
+                self.send_header('Content-Length', str(len(raw)))
+                self.end_headers()
+                return self.wfile.write(raw)
             known = name in {t['name'] for t in TOOLS}
             text = '{"success": false, "code": "NO_RESPONSE"}' if self.server.outage and name in BACKEND_TOOLS else 'ok'
             return self.reply(200, {'jsonrpc': '2.0', 'id': body['id'], 'result': {
@@ -156,6 +164,14 @@ class ProbeTests(unittest.TestCase):
         self.server.outage = False
         with self.assertRaises(SystemExit):  # a healthy backend is not a structured outage failure
             self.main('plan', '--expect-backend-down', stdin=TOKEN + '\n' + json.dumps({'reads': [['n8n_list_workflows', {}]]}))
+
+    def test_plan_reports_short_error_bodies(self):
+        out = io.StringIO()
+        plan = {'denials': [['n8n_delete_workflow', {}], ['not_ready_tool', {}]]}
+        with self.assertRaises(SystemExit):  # the 503 is not a refusal
+            probe.main(['--port', str(self.server.port), 'plan'], io.StringIO(TOKEN + '\n' + json.dumps(plan)), out)
+        self.assertIn('http=403 isError=None | error -32001: request denied', out.getvalue())
+        self.assertIn('http=503 isError=None | error : child transport not ready', out.getvalue())
 
     def test_plan_fails_when_a_read_is_denied_or_a_denial_succeeds(self):
         for plan in ({'reads': [['n8n_delete_workflow', {}]]}, {'denials': [['search_nodes', {'query': 'x'}]]}):

@@ -3,11 +3,13 @@
     python packaging/p9_plan.py <product> [--overrides args.json] > plan.json
 
 reads   supported-bounded tools (or operations) whose effect is read, with minimal arguments built from
-        the accepted schema; a read whose required arguments cannot be built safely (free-form or
-        patterned strings) is listed under needs_args unless --overrides supplies its arguments
-denials supported write tools/operations (writes are off by default), withheld tools and one unknown tool;
-        the gateway must refuse each with HTTP 403. Their arguments are schema-valid but aim at records
-        that cannot exist (largest allowed integer ids, placeholder names) so a broken guard harms nothing
+        the accepted schema (for an operation: the oneOf/anyOf branch that admits it); a read whose required
+        arguments cannot be built safely (free-form or patterned strings) is listed under needs_args unless
+        --overrides supplies its arguments
+denials supported write tools/operations (writes are off by default), read operations the accepted schema
+        does not admit, withheld tools and one unknown tool; the gateway must refuse each with HTTP 403.
+        Their arguments are schema-valid where possible but aim at records that cannot exist (largest
+        allowed integer ids, placeholder names) so a broken guard harms nothing
 
 Overrides map a tool name (or 'tool:operation') to an arguments object. The plan records the sha256 of
 the tool-surface file it came from. Output is consumed by ha_p9_probe.py plan mode (ha_p9_driver.mjs --plan).
@@ -77,6 +79,37 @@ def arguments(schema, strict, fixed=None, root=None):
     return result
 
 
+def admitted(values, operation):
+    """None when the property schema says nothing about the operation, else whether it admits it."""
+    if 'const' in values:
+        return values['const'] == operation
+    if values.get('enum'):
+        return operation in values['enum']
+    return None
+
+
+def operation_schema(schema, selector, operation):
+    """The accepted schema as it applies to one operation, or None if it does not admit the operation.
+
+    A oneOf/anyOf branch that names the operation replaces the shared property schemas it redefines (a
+    branch may forbid a shared default) and adds its required names.
+    """
+    shared = schema.get('properties') or {}
+    if admitted(shared.get(selector, {}), operation) is False:
+        return None
+    options = schema.get('oneOf') or schema.get('anyOf')
+    if not options:
+        return schema
+    for option in options:
+        if admitted((option.get('properties') or {}).get(selector, {}), operation):
+            merged = {k: v for k, v in schema.items() if k not in ('oneOf', 'anyOf')}
+            merged['properties'] = {**shared, **(option.get('properties') or {})}
+            required = list(schema.get('required', []))
+            merged['required'] = required + [n for n in option.get('required', []) if n not in required]
+            return merged
+    return None
+
+
 def denial_arguments(schema, fixed=None):
     """Writes must be refused whatever the arguments; fall back to the bare operation if none can be built."""
     try:
@@ -105,14 +138,19 @@ def plan(product, surface, overrides=None):
             denials.append([name, {}])  # withheld: refused whatever the arguments
             continue
         selector = tool.get('operation_parameter')
+        if not selector and tool['effect'] == 'mixed' and len(tool.get('operation_effects') or {}) == 1:
+            selector = next(iter(tool['operation_effects']))  # mixed tool whose selector is not declared
         effects = (tool.get('operation_effects') or {}).get(selector) if selector else None
         if effects:
             for operation, effect in effects.items():
                 key = '%s:%s' % (name, operation)
-                if effect == 'read':
-                    read(key, name, schema, {selector: operation})
+                scoped = operation_schema(schema, selector, operation)
+                if scoped is None:  # outside the accepted surface: refused whatever its effect
+                    denials.append([name, overrides.get(key, {selector: operation})])
+                elif effect == 'read':
+                    read(key, name, scoped, {selector: operation})
                 else:
-                    denials.append([name, overrides.get(key, denial_arguments(schema, {selector: operation}))])
+                    denials.append([name, overrides.get(key, denial_arguments(scoped, {selector: operation}))])
         elif tool['effect'] == 'read':
             read(name, name, schema)
         else:
