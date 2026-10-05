@@ -1,7 +1,8 @@
 """Stock-image bootstrap: own only a new dedicated directory, then drop privilege.
 
 No command override, recursive chown, runtime install or bootstrap HA API call.
-Only n8n management receives the runtime Supervisor token (approved pilot).
+Each product's management process receives the runtime Supervisor token for the approved HA admin
+verifier (n8n 2026-10-04; the other six 2026-10-05, 0.1.1); children are started with allowlisted env.
 Existing state must belong to uid/gid 10001. State that Home Assistant restored root-owned (observed in
 the 2026-10-05 HA pilot) is re-owned once: plain directories and single-link files only, never following
 a link; anything else keeps the fail-closed refusal.
@@ -109,15 +110,14 @@ def main():
     # The final interpreter exec MUST enter the trusted post-exec guard.
     args = [str(ROOT / 'packaging/management_launcher.py'), product]
     # Fixed environment; no proxy/Python/provider URL or command injection.
-    # The approved n8n management verifier alone needs the runtime token.
+    # The approved management verifier needs the runtime token; it is the only inherited variable.
     # Child env stripping AND post-exec procfs/memory denial are both required.
     env = {'PATH': '/usr/local/bin:/usr/bin:/bin', 'HOME': '/data/mcp',
            'PYTHONPATH': str(ROOT / 'packages/mcp-admin-core') + ':' + str(ROOT / 'apps/n8n'),
            'PYTHONDONTWRITEBYTECODE': '1', 'PYTHONUNBUFFERED': '1'}
-    if product == 'n8n':
-        token = os.environ.get('SUPERVISOR_TOKEN')
-        if token:
-            env['SUPERVISOR_TOKEN'] = token
+    token = os.environ.get('SUPERVISOR_TOKEN')
+    if token:
+        env['SUPERVISOR_TOKEN'] = token
     os.chdir(ROOT)
     os.execve(python, [python, *args], env)
 

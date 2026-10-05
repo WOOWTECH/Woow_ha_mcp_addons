@@ -92,47 +92,46 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(set(env), {'PATH', 'HOME', 'PYTHONPATH', 'PYTHONDONTWRITEBYTECODE', 'PYTHONUNBUFFERED'})
         self.assertNotIn('SUPERVISOR_TOKEN', env)
 
-    def test_n8n_runtime_token_passthrough_only(self):
+    def test_runtime_token_passthrough_only(self):
         # Replace environ itself: never inspect/copy the test runner environment.
-        # This verifies the future real run.py exec contract, not provider wiring.
+        # All seven management verifiers are approved (n8n 2026-10-04, the other six 2026-10-05).
         dummy = 'INVENTED-PACKAGING-ONLY-NOT-A-CREDENTIAL'
-        source = {'SUPERVISOR_TOKEN': dummy, 'HASSIO_TOKEN': 'invented-legacy',
-                  'HTTP_PROXY': 'http://example.invalid', 'PYTHONPATH': '/untrusted',
-                  'HA_ROLE_URL': 'ws://example.invalid', 'HA_ROLE_METHOD': 'auth/list'}
-        path, argv, env = self.bootstrap_exec('n8n', source)
-        self.assertEqual(path, '/opt/woow/.venv/bin/python')
-        self.assertEqual(argv, [path, '/opt/woow/packaging/management_launcher.py', 'n8n'])
-        self.assertEqual(env, {
-            'PATH': '/usr/local/bin:/usr/bin:/bin', 'HOME': '/data/mcp',
-            'PYTHONPATH': '/opt/woow/packages/mcp-admin-core:/opt/woow/apps/n8n',
-            'PYTHONDONTWRITEBYTECODE': '1', 'PYTHONUNBUFFERED': '1',
-            'SUPERVISOR_TOKEN': dummy})
-        self.assertNotIn(dummy, argv)
-        self.assertEqual(source['SUPERVISOR_TOKEN'], dummy)
+        for product in e.PRODUCTS:
+            with self.subTest(product=product):
+                source = {'SUPERVISOR_TOKEN': dummy, 'HASSIO_TOKEN': 'invented-legacy',
+                          'HTTP_PROXY': 'http://example.invalid', 'PYTHONPATH': '/untrusted',
+                          'HA_ROLE_URL': 'ws://example.invalid', 'HA_ROLE_METHOD': 'auth/list'}
+                path, argv, env = self.bootstrap_exec(product, source)
+                self.assertEqual(path, '/opt/woow/.venv/bin/python')
+                self.assertEqual(argv, [path, '/opt/woow/packaging/management_launcher.py', product])
+                self.assertEqual(env, {
+                    'PATH': '/usr/local/bin:/usr/bin:/bin', 'HOME': '/data/mcp',
+                    'PYTHONPATH': '/opt/woow/packages/mcp-admin-core:/opt/woow/apps/n8n',
+                    'PYTHONDONTWRITEBYTECODE': '1', 'PYTHONUNBUFFERED': '1',
+                    'SUPERVISOR_TOKEN': dummy})
+                self.assertNotIn(dummy, argv)
+                self.assertEqual(source['SUPERVISOR_TOKEN'], dummy)
 
-    def test_n8n_missing_or_empty_token_is_not_synthesized(self):
-        for source in ({}, {'SUPERVISOR_TOKEN': ''}):
-            with self.subTest(source=source):
-                _, _, env = self.bootstrap_exec('n8n', source)
-                self.assertNotIn('SUPERVISOR_TOKEN', env)
+    def test_missing_or_empty_token_is_not_synthesized(self):
+        for product in e.PRODUCTS:
+            for source in ({}, {'SUPERVISOR_TOKEN': ''}):
+                with self.subTest(product=product, source=source):
+                    _, _, env = self.bootstrap_exec(product, source)
+                    self.assertNotIn('SUPERVISOR_TOKEN', env)
 
-    def test_other_six_never_read_or_inherit_supervisor_token(self):
-        class NoEnvironmentAccess(dict):
-            def get(self, *args):
-                raise AssertionError('other products must not read environment')
+    def test_only_the_token_is_read_from_the_environment(self):
+        class OnlyToken(dict):
+            def get(self, key, *default):
+                assert key == 'SUPERVISOR_TOKEN', key
+                return dict.get(self, key, *default)
 
             def __getitem__(self, key):
-                raise AssertionError('other products must not read environment')
+                raise AssertionError('bootstrap must not index the environment')
 
         for product in e.PRODUCTS:
-            if product == 'n8n':
-                continue
             with self.subTest(product=product):
-                source = NoEnvironmentAccess(SUPERVISOR_TOKEN='INVENTED-ONLY')
-                path, argv, env = self.bootstrap_exec(product, source)
-                self.assertEqual(argv, [path, '/opt/woow/packaging/management_launcher.py', product])
-                self.assertEqual(set(env), {'PATH', 'HOME', 'PYTHONPATH',
-                                           'PYTHONDONTWRITEBYTECODE', 'PYTHONUNBUFFERED'})
+                _, _, env = self.bootstrap_exec(product, OnlyToken(SUPERVISOR_TOKEN='INVENTED-ONLY', HASSIO_TOKEN='x'))
+                self.assertEqual(env['SUPERVISOR_TOKEN'], 'INVENTED-ONLY')
 
 
 def restored_tree(root):

@@ -74,8 +74,8 @@ Manage mode=read/module，module 要求後端已有 MCP module，不做模組安
   其他不符合即停止並由核准維護流程恢復，不自動寬鬆 chmod。
 - Bootstrap 產生獨立強 token，沒有共用密碼。缺 backend 的六類不 spawn child
   或探測外部服務；n8n 可啟動內建文件 runtime，但 backend readiness 仍 503。
-- child command/env 固定；bootstrap 只把 runtime `SUPERVISOR_TOKEN` 傳給 n8n
-  管理程序，不寫 config/options/argv/log；其他六類不讀取也不繼承。proxy、Python
+- child command/env 固定；bootstrap 只把 runtime `SUPERVISOR_TOKEN` 傳給管理程序（0.1.0 只有 n8n；
+  0.1.1 起七支皆是，負責人 2026-10-05 核准），不寫 config/options/argv/log；child 以白名單 env 啟動、不繼承。proxy、Python
   注入及 provider URL／command 覆寫均不傳遞。n8n child 已使用不含 machine token 的 allowlist；
   本地實際 packaging→guard→run→provider fake-WS 與真正同 UID Node child 的 parent procfs/mem 拒絕已覆蓋。
   這不是 HA AppArmor／image 驗收。
