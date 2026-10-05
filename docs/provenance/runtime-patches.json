@@ -123,8 +123,8 @@
     },
     {
       "path": "apps/opendesign/launch.py",
-      "sha256": "20a45043c60cb4dd1526d473adcef0a15c2161a64568ea55500f53c096436121",
-      "change": "Run actual SDK handlers with four-worker bounded sync dispatch; initialize shared HTTP client before threads and close at launcher shutdown; no schema/permission changes. 0.1.2: GET /api/agents (OpenDesign probes every agent CLI, about 8 s on a small HA host) may take 20 s to read; connect, write and pool keep 5 s; every other request keeps the upstream 5 s client; the server starts only under __main__.",
+      "sha256": "b08e650f3309555db5f5291e948e1831c30da6ea41be7121579494729ce117dc",
+      "change": "Run actual SDK handlers with four-worker bounded sync dispatch; initialize shared HTTP client before threads and close at launcher shutdown; no schema/permission changes. 0.1.2: GET /api/agents (OpenDesign probes every agent CLI, about 8 s on a small HA host) may wait up to 20 s between reads (within the gateway's 120 s stream lifetime); connect, write and pool keep 5 s; every other request keeps the upstream 5 s client; the server starts only under __main__.",
       "guarded_sources": {}
     },
     {

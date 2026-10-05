@@ -63,9 +63,16 @@ async def test_sse_without_the_reply_is_backend_unavailable_without_a_session(st
     assert stream.closed
 
 
-async def test_empty_json_reply_is_backend_unavailable(store):
-    response = await initialize(store, lambda _: httpx.Response(200, headers={"mcp-session-id": "dead"}, content=b""))
+@pytest.mark.parametrize("headers", [{"content-type": "application/json"}, {"content-length": "0"}])
+async def test_empty_json_reply_is_backend_unavailable(store, headers):
+    response = await initialize(store, lambda _: httpx.Response(200, headers={"mcp-session-id": "dead", **headers}, content=b""))
     assert response.status_code == 503 and "mcp-session-id" not in response.headers
+
+
+async def test_untyped_body_of_unknown_length_is_bad_gateway(store):
+    # Without a media type the gateway cannot know how a client would read it.
+    response = await initialize(store, lambda _: httpx.Response(200, headers={"mcp-session-id": "dead"}, content=b""))
+    assert response.status_code == 502
 
 
 @pytest.mark.parametrize("upstream", [

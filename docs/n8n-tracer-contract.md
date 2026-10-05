@@ -96,20 +96,30 @@ unknown methods, invalid IDs/params/arguments and unknown/disabled/write-disallo
 tools fail before the upstream request. Notifications/initialized is the only
 accepted notification. See provenance for the narrow source-backed tool subset.
 
-The gateway preserves upstream status, empty 202/204 responses and session/protocol
-headers. SSE events are rebuilt from the lines the gateway understood (0.1.2): data,
-printable-ASCII id/event/retry fields and comments; other lines (a BOM, unknown fields,
-non-ASCII comments) are dropped, a lone CR ends the stream, and the SSE Content-Type is
-always plain `text/event-stream` (no child parameters). initialize and tools/list
-replies must be a plain 200 (other 2xx: 502). Request bodies with lone surrogates are
-400. Initialize is further special-cased (0.1.2): the
-gateway reads a 200 initialize reply up to the JSON-RPC response with the request id
-and answers with that one response (SSE keeps only its id/event/retry lines; other
-events are dropped). A 200 without that response (empty body, stream ended or broken,
-only notifications/other ids) becomes HTTP 503 with JSON-RPC error -32000
-`BACKEND_UNAVAILABLE`, Retry-After 5 and no session id: the child gave no reply,
-e.g. its per-session lifespan could not reach the backend. Malformed or oversize
-replies are 502; non-200 replies pass through. JSON/SSE tool lists use the exact
+The gateway preserves upstream status for non-2xx replies and empty 202/204 responses,
+and the session/protocol headers. A 2xx body must be one the gateway parses and filters
+itself (0.1.2): for GET an SSE stream, for a request (POST with an id) an SSE stream or
+a plain 200 JSON reply; other 2xx codes, other or duplicate media types and untyped
+bodies of unknown length are 502 (`Content-Length: 0` passes). Media types compare
+case-insensitively without parameters; the client always gets plain
+`text/event-stream` or `application/json`. Every JSON reply to a request is parsed, must
+be one object answering that request (same id and JSON type, `result` or `error`, no
+`method`), is filtered and re-serialized with ASCII escapes; batches are 502. SSE events
+are rebuilt from the lines the gateway understood: data, `id`/`event` values of up to 256
+characters without spaces (as `Last-Event-ID` allows), numeric `retry` and printable-ASCII
+comments up to 1024 characters; other lines (a BOM, unknown fields, non-ASCII comments)
+are dropped. A lone CR (a line end for SSE parsers, not for the gateway's scan) refuses
+the event: initialize is 502, other streams stop. An event whose data is empty (an MCP
+2025-11-25 priming event) passes as an empty event; a batch in an event stops the stream.
+Request bodies with lone surrogates anywhere are 400. The child receives initialize with
+`capabilities: {}`, since the gateway answers no server-to-client request (sampling,
+elicitation, roots). Initialize is further special-cased: the gateway reads a 200 reply
+up to the JSON-RPC response for the request and answers with that one response (SSE
+keeps only its id/event/retry lines; other events are dropped). A 200 without that
+response (empty body, stream ended or broken, only notifications/other ids) becomes HTTP
+503 with JSON-RPC error -32000 `BACKEND_UNAVAILABLE`, Retry-After 5 and no session id:
+the child gave no reply, e.g. its per-session lifespan could not reach the backend.
+Malformed or oversize replies are 502; non-2xx replies pass through. JSON/SSE tool lists use the exact
 local argument model's inputSchema, not the broader upstream schema. On a permitted
 call, the gateway forwards the **validated model's serialized arguments**, including
 reviewed defaults and field-specific omission rules, not the raw client object.
@@ -136,8 +146,8 @@ These **four tools remain a partial W1 tracer**. W2a now inventories all 28 pinn
 upstream tools in `tool-surface.json` / `tool-surface.md`; expansion remains W2b.
 
 Initialize
-advertises only `tools: {}` (no resources/prompts/logging/listChanged). Resumed SSE
-advertisements receive the same restrictions. Every call is authorized independently. Compression is disabled on the internal hop;
+advertises only `tools: {}` (no resources/prompts/logging/listChanged). Resumed GET SSE
+streams are rebuilt and filtered the same way (a non-SSE 2xx GET reply is 502). Every call is authorized independently. Compression is disabled on the internal hop;
 redirects, response cookies and hop-by-hop headers are not forwarded.
 
 Limits: 256 KiB request body, 10-second request-body timeout; 32 concurrent upstream

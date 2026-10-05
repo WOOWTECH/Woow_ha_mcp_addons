@@ -3,7 +3,7 @@
 ## 0.1.2 — 準備中（未發佈）
 
 - 初始化時子程序沒有回覆（例如後端連不上、子程序無法建立連線階段），gateway 改回 HTTP 503＋JSON-RPC 錯誤 `BACKEND_UNAVAILABLE`（附 Retry-After），不再給出 200 空回應與失效的 session id；串流回應只保留回覆那個事件的 id／event／retry 行，其餘事件（heartbeat、通知）不轉送；過大或格式錯誤的回覆回 502。
-- 所有 SSE 事件改由 gateway 依看得懂的行重組（data，以及純 ASCII 的 id／event／retry 與註解）：BOM、未知欄位等其他行不轉送，單獨的 CR 視為格式錯誤，Content-Type 固定為 `text/event-stream`；initialize／tools/list 只接受 HTTP 200（其他 2xx 回 502）；request id 含孤立 surrogate 回 400（0.1.2 獨立資安審查的建議，舊版即有）。
+- 成功回應只接受 gateway 能解析、過濾的格式（0.1.2 獨立資安審查與複審的建議，舊版即有的缺口）：GET 必須是 SSE；請求的回覆必須是 SSE 或 HTTP 200 的 JSON，其他 2xx、其他或重複的媒體型別回 502；媒體型別不分大小寫、不帶參數比對，送給 client 的固定是 `text/event-stream` 或 `application/json`。JSON 回覆一律解析、須回應同一個請求（id 與型別相同），過濾後重新序列化；批次回 502。SSE 事件依看得懂的行重組（data、合規的 id／event／retry 與純 ASCII 註解），BOM、未知欄位等不轉送，單獨的 CR 視為格式錯誤；空 data 的 priming 事件照常通過。請求內容任何位置含孤立 surrogate 回 400。轉給子程序的 initialize 一律帶 `capabilities: {}`（gateway 不轉 sampling／elicitation 等反向請求）。
 - bootstrap 在 HA 還原修復後，等 `/data/mcp` 通過最後檢查才印 `re-owned` 訊息；修復時暫時調高的 soft `RLIMIT_NOFILE` 修完即還原，不再沿用到管理程序。
 - 後端連不上時，客戶端在初始化就收到 503 `BACKEND_UNAVAILABLE`（0.1.1 實測：200 空回應後 404 `Session not found`）。
 - 映像 `ghcr.io/woowtech/amd64-mcp-odoo-manage:0.1.2` 尚未建置；0.1.0、0.1.1 tag 不覆寫。

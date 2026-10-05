@@ -32,7 +32,7 @@ MAX_RESPONSE = 8 * 1024 * 1024
 STREAM_SECONDS = 120
 EVENT_BOUNDARY = re.compile(rb"\r?\n\r?\n")
 LONE_CR = re.compile(rb"\r(?!\n)")
-SSE_FIELD = re.compile(rb"(?:id|event|retry):[ ]?[\x20-\x7e]{0,256}")
+SSE_FIELD = re.compile(rb"(?:id|event):[ ]?[\x21-\x7e]{0,256}|retry:[ ]?[0-9]{1,10}")  # id as Last-Event-ID allows
 SSE_COMMENT = re.compile(rb":[\x20-\x7e]{0,1024}")
 
 
@@ -57,6 +57,18 @@ def sse_frame(frame: bytes):
 
 def sse_data(data_lines):
     return b"\n".join(line[5:].lstrip(b" ") for line in data_lines)
+
+
+def same_id(value, ident):
+    """JSON-RPC ids match only with the same JSON type: true is not 1."""
+    return type(value) is type(ident) and value == ident
+
+
+def json_reply(value, status, headers):
+    """Re-serialized JSON with ASCII escapes, so a lone surrogate from a child cannot make the reply unencodable."""
+    headers = {k: v for k, v in headers.items() if k != "content-type"}
+    return Response(json.dumps(value, separators=(",", ":")).encode(), status_code=status,
+                    media_type="application/json", headers=headers)
 RoleVerifier = Callable[[str], Awaitable[bool]]
 
 
@@ -403,7 +415,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         so the session id it sent is dead.
         """
         def reply(value):
-            return (isinstance(value, dict) and value.get("id") == ident and "method" not in value
+            return (isinstance(value, dict) and same_id(value.get("id"), ident) and "method" not in value
                     and ("result" in value or "error" in value))
 
         pending = bytearray()
@@ -419,12 +431,15 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     if parsed is None:
                         return "invalid", None, None
                     kept, data_lines = parsed
-                    if not data_lines:
-                        continue
+                    payload = sse_data(data_lines)
+                    if not payload.strip():
+                        continue  # no data, or an empty priming event (MCP 2025-11-25 resumability)
                     try:
-                        value = strict_json(sse_data(data_lines))
+                        value = strict_json(payload)
                     except (ValueError, RecursionError):
                         return "invalid", None, None
+                    if not isinstance(value, dict):
+                        return "invalid", None, None  # a batch: the gateway never sends one
                     if reply(value):
                         return "ok", value, [line for line in kept if not line.startswith(b":")]
         finally:
@@ -459,10 +474,15 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 if parsed is None:
                     return
                 kept, data_lines = parsed
-                if data_lines:
+                payload = sse_data(data_lines)
+                if data_lines and not payload.strip():
+                    data_lines = [b"data:"]  # an empty (priming) event stays empty
+                elif data_lines:
                     try:
-                        value = strict_json(sse_data(data_lines))
-                        if (isinstance(value, dict) and isinstance(value.get("result"), dict)
+                        value = strict_json(payload)
+                        if not isinstance(value, dict):
+                            return  # a batch: never sent by the gateway, never filtered element by element
+                        if (isinstance(value.get("result"), dict)
                                 and {"tools", "capabilities"} & value["result"].keys()):
                             value = filter_list(value, tools, store.load())
                             data_lines = [b"data: " + json.dumps(value, separators=(",", ":")).encode()]
@@ -481,7 +501,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             raise BadRequest(403)  # Browser clients not in this tracer contract.
         if request.url.query:
             raise BadRequest()
-        method = None
+        method = message = None
         content = b""
         if request.method == "POST":
             message = await json_body(request)
@@ -518,7 +538,12 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     authorize(message, tools, state)
                 except Denied:
                     raise BadRequest(403) from None
-                content = json.dumps(message, separators=(",", ":")).encode()
+                forwarded = message
+                if method == "initialize" and isinstance(message.get("params"), dict):
+                    # The gateway answers no server-to-client requests (sampling, elicitation, roots): the
+                    # child must not expect any, whatever the real client declared.
+                    forwarded = {**message, "params": {**message["params"], "capabilities": {}}}
+                content = json.dumps(forwarded, separators=(",", ":")).encode()
             outgoing = child.build_request(request.method, child_url, headers=headers, content=content,
                                            timeout=httpx.Timeout(30, connect=3, pool=3))
             async with asyncio.timeout(35):
@@ -528,11 +553,19 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             response_headers["Cache-Control"] = "no-store"
             if not still_authorized(state.token):
                 raise BadRequest(401)
-            is_sse = upstream.headers.get("content-type", "").split(";")[0] == "text/event-stream"
+            media = upstream.headers.get("content-type", "").split(";")[0].strip().lower()
+            is_sse = media == "text/event-stream"
             if is_sse:  # the gateway re-frames events itself: never forward the child's parameters (charset)
                 response_headers["content-type"] = "text/event-stream"
-            if method in ("initialize", "tools/list") and 200 < upstream.status_code < 300:
-                raise BadRequest(502)  # these replies are filtered: only a plain 200 may carry them
+            request_id = request.method == "POST" and isinstance(message, dict) and "id" in message
+            if 200 <= upstream.status_code < 300 and (request.method == "GET" or request_id):
+                # A success body must be one the gateway parses and filters itself: an SSE stream, or (for a
+                # request) a plain 200 JSON reply. Anything else (other 2xx, other or duplicate media types)
+                # could still be read as SSE or JSON by some client without passing the filter.
+                empty = upstream.headers.get("content-length") == "0"  # nothing a client could misread
+                if not (empty or is_sse and upstream.status_code == 200 or
+                        request_id and media == "application/json" and upstream.status_code == 200):
+                    raise BadRequest(502)
             if method == "initialize" and upstream.status_code == 200:
                 outcome, value, frame = await initialize_reply(owner, state.token, is_sse, message.get("id"))
                 if not still_authorized(state.token):
@@ -549,23 +582,29 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 except ValueError:
                     raise BadRequest(502) from None
                 if frame is None:
-                    response_headers.pop("content-type", None)  # re-serialized: application/json
-                    return JSONResponse(value, status_code=200, headers=response_headers)
+                    return json_reply(value, 200, response_headers)
                 # The child's event framing (id/event/retry lines) with the filtered data.
                 frame.append(b"data: " + json.dumps(value, separators=(",", ":")).encode())
                 return Response(b"\n".join(frame) + b"\n\n", status_code=200, headers=response_headers)
-            if method == "tools/list" and not is_sse and upstream.status_code == 200:
+            if request_id and not is_sse and upstream.status_code == 200:
+                # Every JSON reply is parsed, must answer this request, is filtered and re-serialized: a child
+                # cannot hand a client an unfiltered list under another request's id or in a batch.
                 result = bytearray()
                 async for chunk in chunks(owner, state.token):
                     result.extend(chunk)
-                try:
-                    value = filter_list(strict_json(result), tools, store.load())
-                except (ValueError, RecursionError):
-                    raise BadRequest(502) from None
                 if not still_authorized(state.token):
                     raise BadRequest(401)
-                response_headers.pop("content-type", None)  # re-serialized: application/json
-                return JSONResponse(value, status_code=upstream.status_code, headers=response_headers)
+                try:
+                    if owner.overflowed:
+                        raise ValueError("oversize reply")
+                    value = strict_json(bytes(result))
+                    if not (isinstance(value, dict) and "method" not in value
+                            and same_id(value.get("id"), message.get("id")) and ("result" in value or "error" in value)):
+                        raise ValueError("not this request's reply")
+                    value = filter_list(value, tools, store.load())
+                except (ValueError, RecursionError):
+                    raise BadRequest(502) from None
+                return json_reply(value, 200, response_headers)
             handed_off = True
             return OwnedStreamingResponse(stream(owner, state.token, is_sse), owner=owner,
                                           status_code=upstream.status_code, headers=response_headers)

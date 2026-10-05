@@ -5,8 +5,8 @@ from opendesign_mcp_server.od_mcp_server import mcp, _get_client
 from bounded_tools import BoundedTools
 
 # GET /api/agents makes OpenDesign probe every agent CLI it knows: about 8 s on a small HA box (0.1.1 HA test),
-# past the upstream client's fixed 5 s timeout. Only that response may take up to 20 s to read; connect, write
-# and pool keep 5 s. The 20 s bounds this call (the gateway only limits idle time and a 120 s stream).
+# past the upstream client's fixed 5 s timeout. Only that response may wait up to 20 s between reads; connect,
+# write and pool keep 5 s. The whole call stays within the gateway's 120 s stream lifetime.
 # Every other request keeps the upstream client as is.
 SLOW_READS = {'/api/agents': httpx.Timeout(5.0, read=20.0)}
 upstream_api_get = od._api_get
