@@ -148,16 +148,17 @@ def enforce_policy(sbom, vulnerabilities):
     require(0 <= age <= policy['grype_database_max_age_hours'] * 3600)
     require(isinstance(vulnerabilities.get('matches'), list))
     require(not vulnerabilities.get('ignoredMatches'))
-    # 'include' (default): every blocked-severity match fails. 'exclude' (owner decision): matches whose
-    # fix.state is not 'fixed' (upstream not-fixed/wont-fix/unknown) are still reported in the scan
-    # evidence but do not block; any blocked-severity match WITH an available fix still fails.
+    # 'include': every blocked-severity match fails. 'exclude' (owner decision 2026-10-05): matches whose
+    # grype fix.state is exactly 'not-fixed' or 'wont-fix' are still reported in the scan evidence but do
+    # not block; 'fixed', missing, 'unknown' or any other state still fails.
     for match in vulnerabilities['matches']:
         vulnerability = match.get('vulnerability', {})
         severity = vulnerability.get('severity')
         require(severity in policy['known_severities'])
         if severity in policy['blocked_severities']:
-            fixable = vulnerability.get('fix', {}).get('state') == 'fixed'
-            require(policy['unfixed_vulnerabilities'] == 'exclude' and not fixable)
+            # Only an explicit upstream verdict may exempt a match; missing/unknown/other states block.
+            state = vulnerability.get('fix', {}).get('state')
+            require(policy['unfixed_vulnerabilities'] == 'exclude' and state in ('not-fixed', 'wont-fix'))
 
 
 def validate_sbom(sbom, spdx, subject):

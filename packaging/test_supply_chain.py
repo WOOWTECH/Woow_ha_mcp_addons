@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import hashlib
 import io
 import json
+import re
 from pathlib import Path
 import shutil
 import tarfile
@@ -47,7 +48,10 @@ class SupplyChainTests(unittest.TestCase):
         real = s.read_json
         for mode, matches, ok in (
                 ('include', [match('High', 'not-fixed')], False),
-                ('exclude', [match('High', 'not-fixed'), match('Critical', 'wont-fix'), match('Unknown', 'unknown')], True),
+                ('exclude', [match('High', 'not-fixed'), match('Critical', 'wont-fix')], True),
+                ('exclude', [match('Unknown', 'unknown')], False),
+                ('exclude', [{'vulnerability': {'severity': 'High'}}], False),
+                ('exclude', [match('High', '')], False),
                 ('exclude', [match('Critical', 'fixed')], False),
                 ('exclude', [match('High', 'fixed'), match('High', 'not-fixed')], False),
                 ('exclude', [match('Medium', 'fixed')], True),
@@ -124,6 +128,20 @@ class SupplyChainTests(unittest.TestCase):
                 else:
                     with self.assertRaises(s.Closed):
                         s.enforce_policy(sbom, report)
+
+    def test_deb_packages_only_come_from_the_pinned_official_base(self):
+        # debian_main_licenses=accept relies on this: no Dockerfile installs OS packages or adds package
+        # sources, so every deb in an image is from the pinned official python slim image (Debian main
+        # plus security). Adding apt/dpkg/apk or a sources list here must force a policy re-review.
+        forbidden = re.compile(r'\b(apt-get|apt|aptitude|dpkg|apk|add-apt-repository)\b|sources\.list|/etc/apt/', re.I)
+        for dockerfile in sorted((s.ROOT / 'apps').glob('*/Dockerfile')):
+            with self.subTest(dockerfile=dockerfile.parent.name):
+                text = dockerfile.read_text()
+                self.assertIsNone(forbidden.search(text))
+                bases = re.findall(r'^FROM\s+(\S+)', text, re.M)
+                runtime = [b for b in re.findall(r'^FROM\s+(\S+)\s+AS\s+runtime', text, re.M)]
+                self.assertEqual(runtime, [json.loads((s.ROOT / 'packaging/inputs.json').read_text())['bases']['python']])
+                self.assertTrue(bases)
 
     def test_grype_0120_status_descriptor_is_normalised(self):
         sbom = {'artifacts': [{'name': 'fixture', 'licenses': [{'value': 'MIT'}]}]}

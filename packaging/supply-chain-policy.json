@@ -42,5 +42,5 @@
   "non_package_fixtures": [
     "/opt/woow/apps/n8n/node_modules/github-from-package/example/package.json"
   ],
-  "decision": "project owner, 2026-10-05: unfixed High/Critical/Unknown reported not blocking (fixable still blocks); Debian main deb licenses accepted; pure OR expressions with an allowed option accepted; BlueOak-1.0.0 allowed; binary license map (python/distlib launchers PSF-2.0, node MIT); one example manifest excluded by exact path."
+  "decision": "project owner, 2026-10-05: blocked-severity matches with fix.state exactly not-fixed/wont-fix reported not blocking (fixed, missing or unknown state still blocks); Debian main deb licenses accepted (deb set is exactly the pinned official python slim base: no Dockerfile installs OS packages, enforced by test_deb_packages_only_come_from_the_pinned_official_base); pure OR expressions with an allowed option accepted; BlueOak-1.0.0 allowed; binary license map (python/distlib launchers PSF-2.0, node MIT); one example manifest excluded by exact path."
 }
