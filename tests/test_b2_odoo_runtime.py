@@ -150,7 +150,13 @@ async def test_b2_genuine_handlers_rpc_cache_errors_and_denials(tmp_path):
                             reply=await rpc(client,'/mcp',headers,call(name,args))
                             text=json.dumps(reply)
                             assert CANARY not in text and 'backend raw context' not in text
-                            assert 'BACKEND_RESPONSE_INVALID' in text or reply.get('isError') is True, reply
+                            if mode=='fault':
+                                # 0.1.2: the fixed transport code is reported (0.1.1 HA: an account without ir.model
+                                # access read as BACKEND_RESPONSE_INVALID); the raw fault text still never leaves.
+                                assert json.loads(reply['content'][0]['text'])['error']=='BACKEND_RPC_FAULT', reply
+                                assert 'BACKEND_RESPONSE_INVALID' not in text, reply
+                            else:
+                                assert 'BACKEND_RESPONSE_INVALID' in text or reply.get('isError') is True, reply
                     state['mode']='ok'
                     # Cancel each genuine sync handler while its own RPC is held.
                     # Capacity belongs to execution, not the disconnected caller.
