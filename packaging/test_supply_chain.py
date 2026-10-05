@@ -23,7 +23,7 @@ class SupplyChainTests(unittest.TestCase):
         s.enforce_policy(sbom, report)
         for severity in ('High', 'Critical', 'Unknown', '', 'invented'):
             bad = copy.deepcopy(report)
-            bad['matches'] = [{'vulnerability': {'severity': severity}}]
+            bad['matches'] = [{'vulnerability': {'severity': severity, 'fix': {'state': 'fixed'}}}]
             with self.subTest(severity=severity), self.assertRaises(s.Closed):
                 s.enforce_policy(sbom, bad)
         for value in ('NOASSERTION', 'UNKNOWN', 'invented', ''):
@@ -42,7 +42,7 @@ class SupplyChainTests(unittest.TestCase):
                   'db': {'schemaVersion': '6.0.2', 'checksum': 'a' * 64, 'error': '',
                          'built': datetime.now(timezone.utc).isoformat()}}}
         policy = json.loads((s.ROOT / 'packaging/supply-chain-policy.json').read_text())
-        self.assertEqual(policy['unfixed_vulnerabilities'], 'include')  # repository default unchanged
+        self.assertEqual(policy['unfixed_vulnerabilities'], 'exclude')  # owner decision 2026-10-05
         match = lambda sev, state: {'vulnerability': {'severity': sev, 'fix': {'state': state}}}
         real = s.read_json
         for mode, matches, ok in (
@@ -63,9 +63,11 @@ class SupplyChainTests(unittest.TestCase):
                         s.enforce_policy(sbom, dict(report, matches=matches))
 
     def test_optional_license_extensions_default_off(self):
-        policy = json.loads((s.ROOT / 'packaging/supply-chain-policy.json').read_text())
-        for key in ('debian_main_licenses', 'or_expressions', 'known_binary_licenses'):
-            self.assertNotIn(key, policy)  # repository default unchanged
+        repo = json.loads((s.ROOT / 'packaging/supply-chain-policy.json').read_text())
+        self.assertEqual((repo['debian_main_licenses'], repo['or_expressions']), ('accept', 'accept-if-any-allowed'))
+        self.assertEqual(repo['known_binary_licenses'], {'python': 'PSF-2.0', 'node': 'MIT', 'Simple Launcher': 'PSF-2.0'})
+        policy = {k: v for k, v in repo.items()
+                  if k not in ('debian_main_licenses', 'or_expressions', 'known_binary_licenses', 'non_package_fixtures')}
         deb = {'type': 'deb', 'name': 'libc6'}
         npm = {'type': 'npm', 'name': 'x'}
         self.assertFalse(s.license_allowed(policy, deb, 'BSD-3-clause'))
