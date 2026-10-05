@@ -25,7 +25,7 @@ RUN mkdir /tmp/woow-apt-parts \
  && apt-get -o Dir::Etc::SourceList=/tmp/woow-security.list -o Dir::Etc::SourceParts=/tmp/woow-apt-parts install -y --no-install-recommends --only-upgrade libpcre2-8-0=10.42-1+deb12u2 \
  && rm -rf /var/lib/apt/lists/* /tmp/woow-security.list /tmp/woow-apt-parts \
  && test "$(dpkg-query -W -f='${Version}' libpcre2-8-0)" = "10.42-1+deb12u2"
-ARG BUILD_VERSION=0.1.2
+ARG BUILD_VERSION=0.1.3
 LABEL io.hass.type="app" io.hass.arch="amd64" io.hass.version="${BUILD_VERSION}" \
       io.hass.name="WOOW Odoo MCP" io.hass.description="Experimental partial MCP; management blocked" \
       io.hass.url="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \
