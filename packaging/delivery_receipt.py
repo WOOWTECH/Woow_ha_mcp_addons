@@ -106,6 +106,10 @@ def assemble(source, variant, subject, sub, ref):
     require(sub.get('kind') == 'registry-digest-subevidence', 'sub-evidence kind')
     require(sub.get('subject_image_id') == subject.get('image_id') and sub.get('subject_diff_ids') == subject.get('diff_ids'),
             'sub-evidence was produced for a different tested subject')
+    # Re-apply the same identity contract to THIS subject against the sub-evidence digests, so a subject
+    # whose explicit image_store/config_digest contradicts the evidence cannot become a complete receipt.
+    binding = identity(subject, sub['manifest_digest'], sub['config_digest'])
+    require(binding['image_store'] == sub.get('image_store'), 'subject image store differs from the sub-evidence')
     config_files = [k for k in variant.get('files', {}) if k.endswith('/config.yaml')]
     require(len(config_files) == 1, 'variant receipt must list exactly one config.yaml')
     return {'schema': 1, 'kind': 'pilot-delivery-receipt', 'complete_delivery_receipt': True,
@@ -113,7 +117,7 @@ def assemble(source, variant, subject, sub, ref):
             'product': variant['product'], 'installed_slug': variant.get('installed_slug'),
             'variant_config_sha256': variant['files'][config_files[0]], 'ref': ref,
             'image_id': subject['image_id'], 'diff_ids': subject['diff_ids'],
-            'image_store': sub['image_store'], 'store_source': sub['store_source'],
+            'image_store': binding['image_store'], 'store_source': binding['store_source'],
             'manifest_digest': sub['manifest_digest'], 'config_digest': sub['config_digest'],
             'all_layers_bytes_verified': sub['all_layers_bytes_verified'],
             'not_included': ['HA/Supervisor/Core versions', 'manifest digests read before/after install',

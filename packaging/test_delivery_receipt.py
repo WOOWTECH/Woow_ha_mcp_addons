@@ -115,6 +115,9 @@ class DeliveryReceiptTests(unittest.TestCase):
             'ref not variant image': (source, variant, subject, sub, 'r.example/w/other/amd64-mcp-n8n:0.1.0'),
             'sub-evidence of other round': (source, variant, subject, other_sub, ref),
             'not sub-evidence': (source, variant, subject, dict(sub, kind='pilot-delivery-receipt'), ref),
+            # Review N3: same image_id/DiffIDs but contradicting explicit identity fields.
+            'subject config_digest conflicts': (source, variant, dict(subject, config_digest=sha(b'other')), sub, ref),
+            'subject declares containerd': (source, variant, dict(subject, image_store='containerd'), sub, ref),
         }
         for name, args in mixes.items():
             with self.subTest(name), self.assertRaises(ValueError):

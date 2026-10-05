@@ -1,7 +1,8 @@
 """Generate a HA *local app* pilot variant of one product (design: docs/operations/n8n-pilot-image-delivery.md).
 
-Offline only. Reads the public manifest + translations FROM AN EXPLICIT CANDIDATE CHECKOUT whose HEAD
-must equal the given commit and whose tracked tree is clean (optionally also bound to a verified
+Offline only. Reads the public manifest + translations AS BLOBS OF THE GIVEN COMMIT from an explicit
+candidate checkout that must be the git worktree top level, whose HEAD must equal the commit and whose
+tree is clean (optionally also bound to a verified
 source-receipt.json), writes a NEW directory that must lie outside both the candidate checkout and this
 tool's repository (parent symlinks resolved first), and a receipt. Derives only from a manifest that
 passes validate.manifest(); exactly three fields differ (name, slug, image). version stays equal to the
@@ -20,6 +21,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 
 import yaml
 
@@ -57,18 +59,20 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def git(root, *args):
+def git(root, *args, binary=False):
     env = {'PATH': '/usr/bin:/bin', 'HOME': '/nonexistent', 'GIT_CONFIG_NOSYSTEM': '1',
            'GIT_CONFIG_GLOBAL': os.devnull, 'LC_ALL': 'C'}
     result = subprocess.run(['git', '-c', 'core.hooksPath=' + os.devnull, *args], cwd=root, env=env,
-                            capture_output=True, text=True, timeout=60)
+                            capture_output=True, text=not binary, timeout=60)
     if result.returncode:
         raise ValueError('candidate root is not a usable git checkout')
     return result.stdout
 
 
 def verify_candidate(root, commit, source_receipt=None):
-    """The checkout we read from IS the named commit, clean; optionally bound to a verified bundle receipt."""
+    """root IS the worktree top level of the named, clean commit; optionally bound to a bundle receipt."""
+    if Path(git(root, 'rev-parse', '--show-toplevel').strip()).resolve() != Path(root).resolve():
+        raise ValueError('candidate root must be the git worktree top level')
     if git(root, 'rev-parse', 'HEAD').strip() != commit:
         raise ValueError('candidate checkout HEAD differs from the given commit')
     if git(root, 'status', '--porcelain', '--untracked-files=all').strip():
@@ -92,6 +96,25 @@ def outside(path, *roots):
     return resolved
 
 
+def commit_sources(root, commit, product):
+    """Read config.yaml and translations/*.yaml as blobs of the named commit (never the working tree),
+    so ignored or untracked files beside them cannot be consumed. Only regular files (mode 100644)."""
+    prefix = 'addons/%s/' % product
+    listing = git(root, 'ls-tree', '-r', '-z', commit, '--', prefix).split('\0')
+    blobs = {}
+    for entry in filter(None, listing):
+        meta, path = entry.split('\t', 1)
+        mode, kind, oid = meta.split()
+        rel = path[len(prefix):]
+        if rel == 'config.yaml' or (rel.startswith('translations/') and rel.count('/') == 1 and rel.endswith('.yaml')):
+            if kind != 'blob' or mode != '100644':
+                raise ValueError('source must be a regular committed file: ' + path)
+            blobs[rel] = git(root, 'cat-file', 'blob', oid, binary=True)
+    if 'config.yaml' not in blobs or not any(k.startswith('translations/') for k in blobs):
+        raise ValueError('commit lacks the product manifest or translations')
+    return blobs
+
+
 def write_new(path, data, mode=0o644):
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
     with os.fdopen(fd, 'wb') as stream:
@@ -99,11 +122,20 @@ def write_new(path, data, mode=0o644):
 
 
 def generate(root, product, commit, registry, output, source_receipt=None):
+    if product not in PRODUCTS:
+        raise ValueError('unsupported product')
     root = Path(root).resolve(strict=True)
     tree = verify_candidate(root, commit, source_receipt)
     output = outside(output, root, ROOT)
-    source = root / 'addons' / product
-    public = load(source / 'config.yaml')
+    blobs = commit_sources(root, commit, product)
+    with tempfile.TemporaryDirectory() as staging:  # parse committed bytes with the strict loader
+        staged = Path(staging) / 'config.yaml'
+        staged.write_bytes(blobs['config.yaml'])
+        public = load(staged)
+        for name, data in blobs.items():
+            if name.startswith('translations/'):
+                (Path(staging) / 'translation.yaml').write_bytes(data)
+                translation(load(Path(staging) / 'translation.yaml'))
     result = variant(public, product, commit, registry)
     output.mkdir(mode=0o700)  # fresh only
     app = output / result['slug']
@@ -112,11 +144,11 @@ def generate(root, product, commit, registry, output, source_receipt=None):
     write_new(app / 'config.yaml', text)
     if load(app / 'config.yaml') != result:  # strict loader round trip
         raise ValueError('generated config.yaml does not round-trip')
-    sources = {'addons/%s/config.yaml' % product: digest(source / 'config.yaml')}
-    for item in sorted((source / 'translations').iterdir()):
-        translation(load(item))
-        write_new(app / 'translations' / item.name, item.read_bytes())
-        sources['addons/%s/translations/%s' % (product, item.name)] = digest(item)
+    sources = {}
+    for name, data in sorted(blobs.items()):
+        sources['addons/%s/%s' % (product, name)] = hashlib.sha256(data).hexdigest()
+        if name.startswith('translations/'):
+            write_new(app / name, data)
     write_new(app / 'README.md', (
         f'# {result["name"]}\n\nLocal pilot variant generated from verified clean checkout of commit `{commit}` '
         f'(tree `{tree}`). Not a store release. Image `{result["image"]}:{result["version"]}`. '

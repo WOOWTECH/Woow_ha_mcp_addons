@@ -73,6 +73,38 @@ class PilotVariantTests(unittest.TestCase):
             for name in ('o1', 'o2', 'o3'):
                 self.assertFalse((Path(d) / name).exists())
 
+    def test_root_must_be_worktree_top_level(self):
+        # Review N1: a subdirectory holding another valid addons/ tree must not be accepted as the root.
+        with tempfile.TemporaryDirectory() as d:
+            base = Path(d) / 'base'
+            base.mkdir()
+            shutil.copytree(ROOT / 'addons', base / 'export' / 'addons')
+            root, head, _ = candidate(base)  # base/candidate is the repo; put export inside it and commit
+            shutil.copytree(base / 'export', root / 'export')
+            env = {'PATH': '/usr/bin:/bin', 'HOME': d, 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull,
+                   'GIT_AUTHOR_NAME': 't', 'GIT_AUTHOR_EMAIL': 't@x.invalid', 'GIT_COMMITTER_NAME': 't', 'GIT_COMMITTER_EMAIL': 't@x.invalid'}
+            subprocess.run(['git', 'add', '-A'], cwd=root, env=env, check=True)
+            subprocess.run(['git', 'commit', '-qm', 'export'], cwd=root, env=env, check=True)
+            head = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=root, env=env, check=True, capture_output=True, text=True).stdout.strip()
+            with self.assertRaisesRegex(ValueError, 'top level'):
+                p.generate(root / 'export', 'n8n', head, REG, Path(d) / 'out-sub')
+            with self.assertRaisesRegex(ValueError, 'outside'):
+                p.generate(root, 'n8n', head, REG, root / 'evidence')
+            self.assertFalse((Path(d) / 'out-sub').exists())
+
+    def test_ignored_files_are_never_consumed(self):
+        # Review N2: sources are the commit's blobs; an ignored extra translation beside them is not read.
+        with tempfile.TemporaryDirectory() as d:
+            root, head, _ = candidate(d)
+            (root / '.git' / 'info' / 'exclude').write_text('extra.yaml\n')
+            extra = root / 'addons/n8n/translations/extra.yaml'
+            extra.write_text((root / 'addons/n8n/translations/en.yaml').read_text())
+            receipt = p.generate(root, 'n8n', head, REG, Path(d) / 'out')
+            self.assertNotIn('addons/n8n/translations/extra.yaml', receipt['source_files'])
+            self.assertFalse((Path(d) / 'out/woow_mcp_n8n_pilot/translations/extra.yaml').exists())
+            self.assertEqual(sorted(receipt['source_files']),
+                             ['addons/n8n/config.yaml', 'addons/n8n/translations/en.yaml', 'addons/n8n/translations/zh-Hant.yaml'])
+
     def test_output_must_be_outside_candidate_and_tool_repo(self):
         # Review F1: including via a parent symlink that points back into the checkout.
         with tempfile.TemporaryDirectory() as d:
