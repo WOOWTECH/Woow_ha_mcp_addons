@@ -129,3 +129,70 @@ async def test_revocation_while_waiting_for_the_reply_is_401(store):
             store.update(token=None)
             response = await asyncio.wait_for(pending, 5)
     assert response.status_code == 401
+
+
+class Broken(httpx.AsyncByteStream):
+    """Headers already sent, then the child's connection breaks (uvicorn after a failed lifespan)."""
+    async def __aiter__(self):
+        yield b": opened\n\n"
+        raise httpx.RemoteProtocolError("peer closed connection without sending complete message body")
+
+    async def aclose(self):
+        pass
+
+
+async def test_transport_error_after_headers_is_backend_unavailable(store):
+    response = await initialize(store, lambda _: httpx.Response(
+        200, headers={"content-type": "text/event-stream", "mcp-session-id": "dead"}, stream=Broken()))
+    assert response.status_code == 503 and "mcp-session-id" not in response.headers
+
+
+@pytest.mark.parametrize("message", [{}, {"jsonrpc": "2.0", "method": "notifications/message"},
+                                     {"jsonrpc": "2.0", "id": 8, "result": {}}, {"jsonrpc": "2.0", "id": "7", "result": {}},
+                                     {"jsonrpc": "2.0", "id": 7}, {"jsonrpc": "2.0", "id": 7, "method": "ping"},
+                                     {"jsonrpc": "2.0", "id": 7, "method": "ping", "result": {}}])
+async def test_json_reply_must_answer_this_request(store, message):
+    response = await initialize(store, lambda _: httpx.Response(200, headers={"mcp-session-id": "dead"}, json=message))
+    assert response.status_code == 503 and "mcp-session-id" not in response.headers
+
+
+async def test_sse_skips_a_child_request_reusing_the_id_and_needs_a_result_or_error(store):
+    ping = b'data: {"jsonrpc":"2.0","id":7,"method":"ping"}\n\n'
+    reply = b"data: " + json.dumps({"jsonrpc": "2.0", "id": 7, "result": RESULT}).encode() + b"\n\n"
+    _, upstream = sse([ping, b'data: {"jsonrpc":"2.0","id":7}\n\n', reply])
+    response = await initialize(store, upstream)
+    assert response.status_code == 200 and '"serverInfo"' in response.text
+    for parts in ([ping], [b'data: {"jsonrpc":"2.0","id":7}\n\n']):
+        _, upstream = sse(parts)
+        assert (await initialize(store, upstream)).status_code == 503
+
+
+async def test_reply_split_at_every_byte(store):
+    raw = b"id: e\r\nevent: message\r\ndata: " + json.dumps({"jsonrpc": "2.0", "id": 7, "result": RESULT}).encode() + b"\r\n\r\n"
+    _, upstream = sse([b": hb\r\n\r\n"] + [raw[i:i + 1] for i in range(len(raw))], hold_open=True)
+    response = await initialize(store, upstream)
+    assert response.status_code == 200 and response.text.startswith("id: e\nevent: message\ndata: ")
+
+
+@pytest.mark.parametrize("sse_reply", [True, False])
+async def test_oversize_reply_is_bad_gateway(store, monkeypatch, sse_reply):
+    import mcp_admin_core.gateway as gateway
+    monkeypatch.setattr(gateway, "MAX_RESPONSE", 4096)
+    if sse_reply:  # no reply within the bound: only comments
+        _, upstream = sse([b": " + b"x" * 1000 + b"\n\n"] * 8)
+    else:  # one JSON reply larger than the bound
+        big = {"jsonrpc": "2.0", "id": 7, "result": {**RESULT, "instructions": "y" * 8000}}
+        upstream = lambda _: httpx.Response(200, json=big)  # noqa: E731
+    assert (await initialize(store, upstream)).status_code == 502
+
+
+async def test_state_corrupted_while_waiting_fails_closed(store):
+    reply = json.dumps({"jsonrpc": "2.0", "id": 7, "result": RESULT}).encode()
+
+    def upstream(_):
+        store.path.write_text("broken")  # e.g. a damaged state file mid-request
+        return httpx.Response(200, headers={"content-type": "text/event-stream", "mcp-session-id": "s"},
+                              content=b"data: " + reply + b"\n\n")
+    response = await initialize(store, upstream)
+    assert response.status_code in (401, 503) and "mcp-session-id" not in response.headers
+    assert "serverInfo" not in response.text

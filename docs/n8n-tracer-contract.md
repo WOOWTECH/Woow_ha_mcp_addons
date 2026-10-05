@@ -97,7 +97,14 @@ tools fail before the upstream request. Notifications/initialized is the only
 accepted notification. See provenance for the narrow source-backed tool subset.
 
 The gateway preserves upstream status, empty 202/204 responses, session/protocol
-headers and SSE event IDs/data/comments/retry. JSON/SSE tool lists use the exact
+headers and SSE event IDs/data/comments/retry, except for initialize (0.1.2): the
+gateway reads a 200 initialize reply up to the JSON-RPC response with the request id
+and answers with that one response (SSE keeps only its id/event/retry lines; other
+events are dropped). A 200 without that response (empty body, stream ended or broken,
+only notifications/other ids) becomes HTTP 503 with JSON-RPC error -32000
+`BACKEND_UNAVAILABLE`, Retry-After 5 and no session id: the child gave no reply,
+e.g. its per-session lifespan could not reach the backend. Malformed or oversize
+replies are 502; non-200 replies pass through. JSON/SSE tool lists use the exact
 local argument model's inputSchema, not the broader upstream schema. On a permitted
 call, the gateway forwards the **validated model's serialized arguments**, including
 reviewed defaults and field-specific omission rules, not the raw client object.
@@ -131,7 +138,7 @@ redirects, response cookies and hop-by-hop headers are not forwarded.
 Limits: 256 KiB request body, 10-second request-body timeout; 32 concurrent upstream
 streams; 3-second connect/pool and 30-second upstream inactivity timeout; 120-second
 stream lifetime and 8 MiB response budget. Oversize/truncated streams close rather
-than invent a successful protocol result. Clients may reconnect with a fresh
+than invent a successful protocol result (initialize: 502 oversize, 503 without a reply). Clients may reconnect with a fresh
 Bearer and session/event headers. A response owner joins its reader cancellation
 and upstream close under a 3-second cleanup budget, shields ASGI 2.3 AnyIO level
 cancellation and joins direct asyncio cancellation, then unconditionally releases

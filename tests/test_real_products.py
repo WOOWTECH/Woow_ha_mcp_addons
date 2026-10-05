@@ -224,3 +224,61 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     process.kill(); await asyncio.to_thread(process.wait)
             assert process.returncode == 0, log_path.read_text()
             assert all(not Path('/proc/' + pid).exists() for pid in child_pids), 'orphan child'
+
+
+async def test_odoo_manage_initialize_without_backend_is_unavailable_then_recovers(tmp_path):
+    # 0.1.1 HA: after a backend change the child restarts against an unreachable Odoo; its per-session lifespan
+    # fails, and clients got initialize 200 without a reply, then 404. 0.1.2: 503 BACKEND_UNAVAILABLE, no session.
+    product = 'odoo-manage'
+    with backend(product) as (url, calls, offline):
+        offline.set()  # unreachable from the first session on: no authenticated connection to reuse
+        store = ProductStore(tmp_path / 'state', product)
+        store.update(connection=connection(product, url))
+        state = store.load()
+        store.close()
+        port, admin_port = free_port(), free_port()
+        endpoint = f'http://127.0.0.1:{port}/mcp'
+        log_path = tmp_path / 'owned-runtime.log'
+        runner = Executable(tmp_path, product, [port, admin_port])
+        code = 'from mcp_admin_core import run_product; ' + runner.code('run_product') + 'run_product.main()'
+        runner.release()
+        init = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {
+            'protocolVersion': '2025-03-26', 'capabilities': {}, 'clientInfo': {'name': 'local-test', 'version': '0'}}}
+        headers = {'Authorization': 'Bearer ' + state.token, 'Accept': 'application/json, text/event-stream'}
+        with log_path.open('wb') as log:
+            process = subprocess.Popen([str(ROOT / '.venv/bin/python'), '-c', code, product,
+                '--data', str(tmp_path / 'state'), '--host', '127.0.0.1', '--mcp-port', str(port), '--admin-port', str(admin_port)],
+                cwd=ROOT, env={'PATH': '/usr/bin:/bin', 'PYTHONPATH': str(ROOT / 'packages/mcp-admin-core'),
+                'PYTHONDONTWRITEBYTECODE': '1'}, stdout=log, stderr=log)
+            try:
+                await runner.ready(process)
+                async with httpx.AsyncClient(trust_env=False, timeout=15, event_hooks={'request': [runner.guard]}) as client:
+                    seen = []
+                    async with asyncio.timeout(30):
+                        while True:  # until the child listens: then every attempt must be a clean 503
+                            assert process.poll() is None, log_path.read_text()
+                            try:
+                                response = await client.post(endpoint, headers=headers, json=init)
+                            except httpx.HTTPError:
+                                await asyncio.sleep(.25); continue
+                            seen.append(response.status_code)
+                            if response.status_code == 503:
+                                break
+                            assert response.status_code == 502, (response.status_code, response.text)  # child not up yet
+                            await asyncio.sleep(.25)
+                    assert response.json() == {'jsonrpc': '2.0', 'id': 1,
+                                               'error': {'code': -32000, 'message': 'BACKEND_UNAVAILABLE'}}
+                    assert response.headers['retry-after'] == '5' and 'mcp-session-id' not in response.headers
+                    assert (await client.post(endpoint, headers=headers, json=init)).status_code == 503
+                    offline.clear()
+                    result = await rpc(client, endpoint, dict(headers), init)
+                    assert result['capabilities'] == {'tools': {}}, result
+                    assert any(c[0] == 'XMLRPC' and c[1] == 'authenticate' for c in calls)
+                    print(f'LOCAL {product}: offline initialize -> 503 x2 ({seen}), recovered -> 200')
+            finally:
+                process.send_signal(signal.SIGTERM)
+                try:
+                    await asyncio.to_thread(process.wait, 10)
+                except subprocess.TimeoutExpired:
+                    process.kill(); await asyncio.to_thread(process.wait)
+            assert process.returncode == 0, log_path.read_text()

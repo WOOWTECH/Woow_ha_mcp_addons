@@ -193,11 +193,13 @@ from odoo_mcp import tools_read, tools_diagnostics, tools_data_quality
 import odoo_b2_scope as b
 b.guard_sources()
 class Client:
-    def __init__(self, error): self.error = error
+    def __init__(self, error, only=None): self.error = error; self.only = only
     def execute_method(self, model, method, *args, **kwargs):
-        if self.error is None:
+        if self.error is None or (self.only and method != self.only):
             if method == 'search_read': return [{'model': 'res.partner'}]
-            return {name: {'type': kind, 'relation': 'res.partner'} for name, kind in b.FIELD_TYPES.items()}
+            if method == 'search_count': return 3
+            return {name: {'type': kind, 'relation': 'res.partner', 'required': name == 'name', 'store': True}
+                    for name, kind in b.FIELD_TYPES.items()}
         raise ValueError(self.error)
 cases = [('BACKEND_RPC_FAULT', 'BACKEND_RPC_FAULT'), ('BACKEND_TIMEOUT', 'BACKEND_TIMEOUT'),
          ('BACKEND_UNAVAILABLE', 'BACKEND_UNAVAILABLE'), ('BACKEND_HTTP_ERROR status=403', 'BACKEND_HTTP_ERROR status=403'),
@@ -216,8 +218,11 @@ for error, expected in cases:
     for name, handler in (('inspect_model_relationships', tools_diagnostics.inspect_model_relationships),
                           ('data_quality_report', tools_data_quality.data_quality_report)):
         result = b.wrap(name, handler)(ctx=ctx, model='res.partner')
-        assert result['success'] is False and result['tool'] == name, result
-        assert result['error'] in (expected, 'BACKEND_RESPONSE_INVALID'), (name, error, result)
-        assert 'PRIVATE' not in repr(result)
+        assert result == {'success': False, 'tool': name, 'error': expected}, (name, error, result)
+# A fault inside one quality check is a per-check error of a successful native report: still hidden.
+app = NS(odoo=Client('BACKEND_RPC_FAULT', only='search_count'), _default_instance_name='default')
+ctx = NS(request_context=NS(lifespan_context=app))
+result = b.wrap('data_quality_report', tools_data_quality.data_quality_report)(ctx=ctx, model='res.partner')
+assert result == {'success': False, 'tool': 'data_quality_report', 'error': 'BACKEND_RESPONSE_INVALID'}, result
 print('B2_PUBLIC_FAILURES_OK cases=%d' % len(cases))
 '''))

@@ -8,7 +8,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / 'apps/opendesign'
-DELAY = 5.6  # past the upstream 5 s read timeout, well inside the 20 s granted to /api/agents
+DELAY = 6.8  # well past the upstream 5 s timeout, well inside the 20 s read granted to /api/agents
 
 PROGRAM = r'''
 import json, runpy, time
@@ -62,4 +62,4 @@ def test_only_agents_waits_past_the_upstream_timeout():
     assert value['agents'] == {'available_agents': [{'id': 'claude', 'available': True}],
                                'total_defined': 2, 'total_available': 1}
     assert DELAY <= value['agents_s'] < 20
-    assert value['projects'] == 'BACKEND_TIMEOUT' and 4.5 < value['projects_s'] < DELAY
+    assert value['projects'] == 'BACKEND_TIMEOUT' and 4.5 < value['projects_s'] < 6.5

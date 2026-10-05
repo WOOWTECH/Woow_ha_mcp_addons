@@ -63,6 +63,9 @@ v3 保存取代全部 `enabled_write_tools` 並關閉 legacy global，不能僅�
   已送到 backend 的工作不會交易式回滾；輪替不等於取消後端工作。
 - 備份還原會復活備份中的 token／policy，需核對舊 token 暴露風險，再經批准流程輪替。
 - 503 readiness 可能只是未設定／backend 離線；不要自動重啟 HA 或既有服務。
+- initialize 回 HTTP 503＋JSON-RPC 錯誤 `BACKEND_UNAVAILABLE`（Retry-After 5，0.1.2 起）：child 沒有回覆這次初始化，
+  通常是後端連不上（例如 Odoo Manage 每個連線階段都要先連 Odoo），但也可能是 child 本身異常；沒有 session id，
+  稍後重新 initialize 即可。502 是 child 回了格式錯誤或過大的回覆。
 
 記錄每個真實 client 版本、network mode、正確 DNS/port（公開證據需匿名化）、
 初始化/list/read/stream/reconnect／缺錯撤 token 結果；不保存秘密或 raw payload。

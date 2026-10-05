@@ -128,7 +128,7 @@
     "apps/hermes/launch.py": "5c9197f5898a7fbae317e824a4601f6d076996f229054cb2e664a5f5f785a0f3",
     "apps/odoo/launch.py": "3160784ac9b7027f5ec6f1f77d3857f652b8c00a1cc54265c336fcaa8048c5d9",
     "apps/odoo-manage/launch.py": "442ee6b3ccdc6bf2a494e25475cde2f9f8f707d4f72e92991080e8086b50c22d",
-    "apps/opendesign/launch.py": "91af4ced8bc48e1eb6eec0612b1578105af2a7da594a617346bd3a4dcf4fe9e8",
+    "apps/opendesign/launch.py": "20a45043c60cb4dd1526d473adcef0a15c2161a64568ea55500f53c096436121",
     "apps/litellm/vendor/woow_litellm_mcp_server/metadata.py": "e606ccda155cbcf20d058fa609617b247506ef7b64efdb93c812b0c153e0d90b"
   },
   "products": {

@@ -30,6 +30,7 @@ from .ha_role import valid_user_id
 MAX_REQUEST = 262144
 MAX_RESPONSE = 8 * 1024 * 1024
 STREAM_SECONDS = 120
+EVENT_BOUNDARY = re.compile(rb"\r?\n\r?\n")
 RoleVerifier = Callable[[str], Awaitable[bool]]
 
 
@@ -40,6 +41,7 @@ class UpstreamOwner:
         self.response = None
         self.reader = None
         self.closed = False
+        self.overflowed = False  # chunks() stopped at MAX_RESPONSE, not at the end of the reply
 
     async def close(self):
         if self.closed:
@@ -357,6 +359,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         return
                     total += len(chunk)
                     if total > MAX_RESPONSE:
+                        owner.overflowed = True
                         return
                     yield chunk
         except (httpx.HTTPError, TimeoutError):
@@ -370,15 +373,20 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         reply, e.g. its per-session lifespan could not reach the backend (Odoo Manage, 0.1.1 HA test),
         so the session id it sent is dead.
         """
-        pending = b""
+        def reply(value):
+            return (isinstance(value, dict) and value.get("id") == ident and "method" not in value
+                    and ("result" in value or "error" in value))
+
+        pending = bytearray()
         reader = chunks(owner, token)
         try:
             async for chunk in reader:
-                pending += chunk
-                if len(pending) > MAX_RESPONSE:
-                    return "invalid", None, None
-                while is_sse and (match := re.search(rb"\r?\n\r?\n", pending)):
-                    frame, pending = pending[:match.start()], pending[match.end():]
+                start = max(0, len(pending) - 3)  # only new bytes, plus a boundary split across chunks
+                pending.extend(chunk)
+                while is_sse and (match := EVENT_BOUNDARY.search(pending, start)):
+                    frame = bytes(pending[:match.start()])
+                    del pending[:match.end()]
+                    start = 0
                     lines = frame.splitlines()
                     data = b"\n".join(line[5:].lstrip(b" ") for line in lines if line.startswith(b"data:"))
                     if not data:
@@ -387,17 +395,21 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         value = strict_json(data)
                     except (ValueError, RecursionError):
                         return "invalid", None, None
-                    if isinstance(value, dict) and value.get("id") == ident and ("result" in value or "error" in value):
+                    if reply(value):
                         return "ok", value, [line for line in lines if not line.startswith(b"data:")]
         finally:
             await reader.aclose()
+        if owner.overflowed:
+            return "invalid", None, None
         if is_sse or not pending.strip():
             return "missing", None, None  # a truncated SSE event is not dispatched
         try:
-            value = strict_json(pending)
+            value = strict_json(bytes(pending))
         except (ValueError, RecursionError):
             return "invalid", None, None
-        return ("ok", value, None) if isinstance(value, dict) else ("invalid", None, None)
+        if not isinstance(value, dict):
+            return "invalid", None, None
+        return ("ok", value, None) if reply(value) else ("missing", None, None)
 
     async def stream(owner, token, is_sse):
         if not is_sse:

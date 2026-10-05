@@ -2,9 +2,9 @@
 
 ## 0.1.2 — 準備中（未發佈）
 
-- 初始化時子程序沒有回覆（例如後端連不上、子程序無法建立連線階段），gateway 改回 HTTP 503＋JSON-RPC 錯誤 `BACKEND_UNAVAILABLE`（附 Retry-After），不再給出 200 空回應與失效的 session id；串流回應保留原事件格式。
+- 初始化時子程序沒有回覆（例如後端連不上、子程序無法建立連線階段），gateway 改回 HTTP 503＋JSON-RPC 錯誤 `BACKEND_UNAVAILABLE`（附 Retry-After），不再給出 200 空回應與失效的 session id；串流回應只保留回覆那個事件的 id／event／retry 行，其餘事件（heartbeat、通知）不轉送；過大或格式錯誤的回覆回 502。
 - bootstrap 在 HA 還原修復後，等 `/data/mcp` 通過最後檢查才印 `re-owned` 訊息；修復時暫時調高的 soft `RLIMIT_NOFILE` 修完即還原，不再沿用到管理程序。
-- `schema_catalog`、`inspect_model_relationships`、`data_quality_report` 遇到固定的傳輸錯誤碼時照實回報（例如帳號沒有 `ir.model` 讀取權限時回 `BACKEND_RPC_FAULT`，原本是誤導的 `BACKEND_RESPONSE_INVALID`）；其他錯誤文字仍不外露。
+- `schema_catalog`、`inspect_model_relationships`、`data_quality_report` 整體失敗、且錯誤恰好是固定的傳輸錯誤碼時照實回報（例如帳號沒有 `ir.model` 讀取權限時回 `BACKEND_RPC_FAULT`，原本是誤導的 `BACKEND_RESPONSE_INVALID`）；單一品質檢查內的錯誤與其他錯誤文字仍回 `BACKEND_RESPONSE_INVALID`、不外露。
 - 映像 `ghcr.io/woowtech/amd64-mcp-odoo:0.1.2` 尚未建置；0.1.0、0.1.1 tag 不覆寫。
 
 ## 0.1.1 — 2026-10-05 公開（experimental）

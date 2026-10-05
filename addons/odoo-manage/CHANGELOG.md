@@ -2,7 +2,7 @@
 
 ## 0.1.2 — 準備中（未發佈）
 
-- 初始化時子程序沒有回覆（例如後端連不上、子程序無法建立連線階段），gateway 改回 HTTP 503＋JSON-RPC 錯誤 `BACKEND_UNAVAILABLE`（附 Retry-After），不再給出 200 空回應與失效的 session id；串流回應保留原事件格式。
+- 初始化時子程序沒有回覆（例如後端連不上、子程序無法建立連線階段），gateway 改回 HTTP 503＋JSON-RPC 錯誤 `BACKEND_UNAVAILABLE`（附 Retry-After），不再給出 200 空回應與失效的 session id；串流回應只保留回覆那個事件的 id／event／retry 行，其餘事件（heartbeat、通知）不轉送；過大或格式錯誤的回覆回 502。
 - bootstrap 在 HA 還原修復後，等 `/data/mcp` 通過最後檢查才印 `re-owned` 訊息；修復時暫時調高的 soft `RLIMIT_NOFILE` 修完即還原，不再沿用到管理程序。
 - 後端連不上時，客戶端在初始化就收到 503 `BACKEND_UNAVAILABLE`（0.1.1 實測：200 空回應後 404 `Session not found`）。
 - 映像 `ghcr.io/woowtech/amd64-mcp-odoo-manage:0.1.2` 尚未建置；0.1.0、0.1.1 tag 不覆寫。
