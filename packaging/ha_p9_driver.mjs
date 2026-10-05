@@ -46,10 +46,14 @@ const modes = argv.includes('--modes') ? argv[argv.indexOf('--modes') + 1].split
 for (const mode of modes) if (!['restart', 'childkill', 'bench', 'cycle'].includes(mode)) throw new Error('bad mode ' + mode);
 
 const ssh = (command, input) => spawnSync('ssh', [...SSH, command], { input, encoding: 'utf8', timeout: 900000 });
+const failed = [];  // the driver exits non-zero when any probe failed, so wrappers cannot report a pass
 const remote = (mode, input, extra = []) => {
   const r = ssh(`python3 ${REMOTE} ${mode} ${[...args, ...extra].map(quote).join(' ')}`, input);
   process.stdout.write(r.stdout || '');
-  if (r.status !== 0) console.log(`probe ${mode} exit ${r.status}: ${(r.stderr || '').slice(-400)}`);
+  if (r.status !== 0) {
+    failed.push(mode);
+    console.log(`probe ${mode} exit ${r.status}: ${(r.stderr || '').slice(-400)}`);
+  }
 };
 const upload = ssh(`cat > ${REMOTE}`, readFileSync(fileURLToPath(new URL('./ha_p9_probe.py', import.meta.url))));
 if (upload.status !== 0) throw new Error('probe upload failed');
@@ -136,4 +140,8 @@ try {
   ws?.close();
   const r = await post('/auth/token', new URLSearchParams({ action: 'revoke', token: tok.refresh_token }), 'application/x-www-form-urlencoded');
   console.log('revoke HA refresh token:', r.status);
+  if (failed.length) {
+    console.log(`probe failures: ${failed.join(', ')}`);
+    process.exitCode = 1;
+  }
 }

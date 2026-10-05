@@ -18,7 +18,7 @@ node packaging/ha_p9_driver.mjs --tokens --modes restart,childkill,bench,cycle
 ```
 
 driver 以 HA 登入流程取得管理員 token → WebSocket `supervisor/api` 讀 app 的 ingress URL、建立 Ingress session →
-呼叫 app 管理 API；每個 MCP token 只經 SSH stdin 傳給 probe。結束時撤銷本次的 HA refresh token。
+呼叫 app 管理 API；每個 MCP token 只經 SSH stdin 傳給 probe。結束時撤銷本次的 HA refresh token；任一 probe 失敗時列出失敗的模式並以 exit 1 結束（外層腳本不會再把內層失敗算成通過）。
 
 | 選項／模式 | 做什麼 | 會改變什麼 |
 |---|---|---|
