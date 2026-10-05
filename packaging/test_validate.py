@@ -36,14 +36,15 @@ class PackagingTests(unittest.TestCase):
                 with self.assertRaises(v.Invalid):
                     v.manifest(doc, 'n8n')
 
-    def test_n8n_only_approved_permission_exception(self):
+    def test_approved_permission_exception_is_homeassistant_api_only(self):
+        # n8n approved 2026-10-04; the other six by owner decision 2026-10-05 (0.1.1).
         for product in v.PRODUCTS:
             original = v.load(v.ROOT / 'addons' / product / 'config.yaml')
-            self.assertIs(original['homeassistant_api'], product == 'n8n')
+            self.assertIs(original['homeassistant_api'], True)
             v.manifest(original, product)
             # Exact booleans; no new API, Supervisor role or host privileges.
             mutations = [('homeassistant_api', value) for value in
-                         (product != 'n8n', 0, 1, 'true', 'false', None)]
+                         (False, 0, 1, 'true', 'false', None)]
             mutations += [(key, True) for key in ('hassio_api', 'auth_api',
                           'docker_api', 'full_access', 'host_network', 'host_pid',
                           'host_ipc', 'host_uts', 'host_dbus')]

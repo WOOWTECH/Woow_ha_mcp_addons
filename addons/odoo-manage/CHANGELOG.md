@@ -1,6 +1,12 @@
 # Odoo Manage Changelog
 
-## 0.1.0 — 未發佈候選
+## 0.1.1 — 準備中（未發佈）
+
+- HA 管理權限 `homeassistant_api: true`（負責人 2026-10-05 核准，與 n8n 相同的固定 WebSocket 角色驗證），讓 HA owner／system-admin 能在 Ingress 面板設定後端；須等核心 provider 交付並審查後才發佈。
+- 修正 HA 還原本 Add-on 後資料變成 root 擁有、無法啟動的問題：bootstrap 只在資料剛好屬 root 時，檢查後一次改回 10001 與 0700／0600（待 SPEC＋安全審）。
+- 映像 `ghcr.io/woowtech/amd64-mcp-odoo-manage:0.1.1` 尚未建置；0.1.0 tag 不覆寫。
+
+## 0.1.0 — 2026-10-05 公開（experimental）
 
 - B1 新增 partner active 分組 counts、固定 template metadata（resources/read 仍 deny）、exact-grant internal note；需既有 module/write ACL，無附件/指定收件人/HTML/full YOLO。
 

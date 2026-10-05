@@ -1,6 +1,11 @@
 # n8n Changelog
 
-## 0.1.0 — 未發佈候選
+## 0.1.1 — 準備中（未發佈）
+
+- 修正 HA 還原本 Add-on 後資料變成 root 擁有、無法啟動的問題：bootstrap 只在資料剛好屬 root 時，檢查後一次改回 10001 與 0700／0600（待 SPEC＋安全審）。
+- 映像 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.1` 尚未建置；0.1.0 tag 不覆寫。
+
+## 0.1.0 — 2026-10-05 公開（experimental）
 
 - B1 新增 local node/workflow validation、安全 manualTrigger/noOp inactive draft create；新 create writer 僅 exact grant，沒有 activation/code/URL/credential references。
 

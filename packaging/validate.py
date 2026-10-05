@@ -18,7 +18,7 @@ from builder_contract import RUNNER
 ROOT = Path(__file__).resolve().parents[1]
 PRODUCTS = ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm')
 URL = 'https://github.com/WOOWTECH/Woow_ha_mcp_addons'
-VERSION = '0.1.0'
+VERSION = '0.1.1'
 TITLES = dict(zip(PRODUCTS, ('Odoo', 'Odoo Manage', 'n8n', 'Hermes', 'OpenDesign', 'EMQX', 'LiteLLM')))
 
 
@@ -98,9 +98,9 @@ def manifest(value, product):
     for key in ('host_network', 'host_pid', 'host_ipc', 'host_uts', 'host_dbus',
                 'full_access', 'docker_api', 'hassio_api', 'auth_api'):
         expected[key] = False
-    # Approved broad-Core capability exception: new n8n pilot ONLY.
-    # hassio_role remains omitted/default; all other privileges stay closed.
-    expected['homeassistant_api'] = product == 'n8n'
+    # Approved broad-Core capability exception: n8n pilot (2026-10-04) and the other six (owner decision
+    # 2026-10-05, 0.1.1). hassio_role remains omitted/default; all other privileges stay closed.
+    expected['homeassistant_api'] = True
     for text in (expected['description'], expected['ports_description']['8081/tcp']):
         require(isinstance(text, str) and 1 <= len(text) <= 512, 'missing description')
     exact(value, expected, product)
@@ -183,7 +183,7 @@ def builder_workflow(value, workflow):
                 'python packaging/registry_gate.py unused "$APP"',
                 '\n'.join(['set -eu',
                     'python packaging/supply_chain.py verify "$APP" "$RUNNER_TEMP/candidate"',
-                    'IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:0.1.0"',
+                    f'IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:{VERSION}"',
                     'TESTED_ID="$(python -c \'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])\' "$RUNNER_TEMP/candidate/subject.json")"',
                     'docker tag "$TESTED_ID" "$IMAGE"',
                     'test "$(docker image inspect "$IMAGE" --format \'{{.Id}}\')" = "$TESTED_ID"',

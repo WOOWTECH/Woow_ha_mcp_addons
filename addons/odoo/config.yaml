@@ -1,5 +1,5 @@
 name: WOOW Odoo MCP (experimental)
-version: 0.1.0
+version: 0.1.1
 slug: woow_mcp_odoo
 description: Experimental; management unavailable pending HA role approval; partial
   tools only.
@@ -32,7 +32,7 @@ host_dbus: false
 full_access: false
 docker_api: false
 hassio_api: false
-homeassistant_api: false
+homeassistant_api: true
 auth_api: false
 options: {}
 schema: {}

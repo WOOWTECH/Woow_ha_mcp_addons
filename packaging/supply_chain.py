@@ -222,7 +222,7 @@ def verify_remote(raw_manifest, digest, pulled, subject):
 
 def fixed_image(app):
     require(app in PRODUCTS)
-    return f'local/mcp-{app}:0.1.0'
+    return 'local/mcp-%s:%s' % (app, json.loads((ROOT / 'packaging/inputs.json').read_text())['version'])
 
 
 def inspect_image(app):

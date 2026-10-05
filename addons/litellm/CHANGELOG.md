@@ -1,6 +1,13 @@
 # LiteLLM Changelog
 
-## 0.1.0 — 未發佈候選
+## 0.1.1 — 準備中（未發佈）
+
+- HA 管理權限 `homeassistant_api: true`（負責人 2026-10-05 核准，與 n8n 相同的固定 WebSocket 角色驗證），讓 HA owner／system-admin 能在 Ingress 面板設定後端；須等核心 provider 交付並審查後才發佈。
+- 修正 HA 還原本 Add-on 後資料變成 root 擁有、無法啟動的問題：bootstrap 只在資料剛好屬 root 時，檢查後一次改回 10001 與 0700／0600（待 SPEC＋安全審）。
+- 新增五個有界 metadata 讀取工具（Pi 候選 cf7fea1）；全套回歸尚有 3 項失敗待修。
+- 映像 `ghcr.io/woowtech/amd64-mcp-litellm:0.1.1` 尚未建置；0.1.0 tag 不覆寫。
+
+## 0.1.0 — 2026-10-05 公開（experimental）
 
 - 新增獨立 amd64 root-context 封裝、Supervisor 2026.09.3 安全子集 manifest。
 - runtime：FastMCP 3.4.5 / pinned public vendor；40 個來源工具中支援 7，33 個明列 withheld，
