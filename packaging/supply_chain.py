@@ -84,7 +84,7 @@ def enforce_policy(sbom, vulnerabilities):
     policy = read_json(ROOT / 'packaging/supply-chain-policy.json')
     require(policy['schema'] == 1 and policy['id'] == 'woow-conservative-v1'
             and policy['unknown_or_missing_license'] == 'deny'
-            and policy['unfixed_vulnerabilities'] == 'include')
+            and policy['unfixed_vulnerabilities'] in ('include', 'exclude'))
     require(isinstance(sbom.get('artifacts'), list) and bool(sbom['artifacts']))
     for package in sbom['artifacts']:
         licenses = package.get('licenses')
@@ -104,9 +104,16 @@ def enforce_policy(sbom, vulnerabilities):
     require(0 <= age <= policy['grype_database_max_age_hours'] * 3600)
     require(isinstance(vulnerabilities.get('matches'), list))
     require(not vulnerabilities.get('ignoredMatches'))
+    # 'include' (default): every blocked-severity match fails. 'exclude' (owner decision): matches whose
+    # fix.state is not 'fixed' (upstream not-fixed/wont-fix/unknown) are still reported in the scan
+    # evidence but do not block; any blocked-severity match WITH an available fix still fails.
     for match in vulnerabilities['matches']:
-        severity = match.get('vulnerability', {}).get('severity')
-        require(severity in policy['known_severities'] and severity not in policy['blocked_severities'])
+        vulnerability = match.get('vulnerability', {})
+        severity = vulnerability.get('severity')
+        require(severity in policy['known_severities'])
+        if severity in policy['blocked_severities']:
+            fixable = vulnerability.get('fix', {}).get('state') == 'fixed'
+            require(policy['unfixed_vulnerabilities'] == 'exclude' and not fixable)
 
 
 def validate_sbom(sbom, spdx, subject):

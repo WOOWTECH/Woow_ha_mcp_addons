@@ -9,6 +9,7 @@ import shutil
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import supply_chain as s
 
@@ -34,6 +35,32 @@ class SupplyChainTests(unittest.TestCase):
         for bad in ({}, {'matches': []}, {**report, 'descriptor': {'db': {'error': 'invalid'}}}):
             with self.assertRaises(s.Closed):
                 s.enforce_policy(sbom, bad)
+
+    def test_unfixed_vulnerability_policy_switch(self):
+        sbom = {'artifacts': [{'name': 'fixture', 'licenses': [{'value': 'MIT'}]}]}
+        report = {'matches': [], 'descriptor': {'name': 'grype', 'version': s.pins()['grype']['version'],
+                  'db': {'schemaVersion': '6.0.2', 'checksum': 'a' * 64, 'error': '',
+                         'built': datetime.now(timezone.utc).isoformat()}}}
+        policy = json.loads((s.ROOT / 'packaging/supply-chain-policy.json').read_text())
+        self.assertEqual(policy['unfixed_vulnerabilities'], 'include')  # repository default unchanged
+        match = lambda sev, state: {'vulnerability': {'severity': sev, 'fix': {'state': state}}}
+        real = s.read_json
+        for mode, matches, ok in (
+                ('include', [match('High', 'not-fixed')], False),
+                ('exclude', [match('High', 'not-fixed'), match('Critical', 'wont-fix'), match('Unknown', 'unknown')], True),
+                ('exclude', [match('Critical', 'fixed')], False),
+                ('exclude', [match('High', 'fixed'), match('High', 'not-fixed')], False),
+                ('exclude', [match('Medium', 'fixed')], True),
+                ('exclude', [match('invented', 'not-fixed')], False),
+                ('maybe', [], False)):
+            doc = dict(policy, unfixed_vulnerabilities=mode)
+            with self.subTest(mode=mode, matches=str(matches)[:60]), patch.object(
+                    s, 'read_json', side_effect=lambda path: doc if path.name == 'supply-chain-policy.json' else real(path)):
+                if ok:
+                    s.enforce_policy(sbom, dict(report, matches=matches))
+                else:
+                    with self.assertRaises(s.Closed):
+                        s.enforce_policy(sbom, dict(report, matches=matches))
 
     def test_grype_0120_status_descriptor_is_normalised(self):
         sbom = {'artifacts': [{'name': 'fixture', 'licenses': [{'value': 'MIT'}]}]}
