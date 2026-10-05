@@ -39,10 +39,10 @@ manifest `backup: cold`：HA 會停止**這個新 Add-on**來取得一致狀態�
 | 觸發條件 | 既有 `/data/mcp` 本身屬 root（0:0），且 bootstrap 以 root 執行；其他擁有者照舊拒絕 |
 | 接受的內容 | 只有一般資料夾與單一連結的一般檔，擁有者為 root 或 10001，與 `/data/mcp` 在同一檔案系統 |
 | 上限 | 最多 512 個項目、8 層；列目錄時邊讀邊數，超過立即拒絕 |
-| 描述子 | 修復期間每個核准項目各占一個 descriptor；soft `RLIMIT_NOFILE` 低於 576 時拉到 576（只在修復那次開機，管理程序會沿用）；hard 低於 576 則拒絕 |
+| 描述子 | 修復期間每個核准項目各占一個 descriptor；soft `RLIMIT_NOFILE` 低於 576 時拉到 576（只在修復那次開機；0.1.1 的管理程序會沿用，0.1.2 起修完即還原原值）；hard 低於 576 則拒絕 |
 | 依賴 | 需要容器內的 `/proc`（一般檔經 `/proc/self/fd` 改 owner／mode）；沒有 `/proc` 時拒絕 |
 | 不處理 | ACL、xattr 不檢查也不保留 |
-| 成功 | log 一行 `bootstrap: re-owned N restored entries in /data/mcp`，之後一般啟動 |
+| 成功 | log 一行 `bootstrap: re-owned N restored entries in /data/mcp`，之後一般啟動（0.1.2 起在 `/data/mcp` 通過最後檢查後才印） |
 | 中斷 | 每項先改 mode 再改 owner；修到一半中斷時，未完成的項目仍屬 root，下次啟動會再修 |
 | 拒絕 | log `bootstrap unavailable; ...`、app 停在 error。第一遍檢查拒絕時不改任何項目；第二遍途中發現變動時，之前已改的只會是核准過的項目。回報負責人，比對 `/data/mcp` 內容與上表後人工處理，不要放寬權限或手動 chmod 繞過 |
 

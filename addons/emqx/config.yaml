@@ -1,5 +1,5 @@
 name: WOOW EMQX MCP (experimental)
-version: 0.1.1
+version: 0.1.2
 slug: woow_mcp_emqx
 description: Experimental; management unavailable pending HA role approval; partial
   tools only.

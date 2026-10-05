@@ -18,7 +18,7 @@ from builder_contract import RUNNER
 ROOT = Path(__file__).resolve().parents[1]
 PRODUCTS = ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm')
 URL = 'https://github.com/WOOWTECH/Woow_ha_mcp_addons'
-VERSION = '0.1.1'
+VERSION = '0.1.2'
 TITLES = dict(zip(PRODUCTS, ('Odoo', 'Odoo Manage', 'n8n', 'Hermes', 'OpenDesign', 'EMQX', 'LiteLLM')))
 
 

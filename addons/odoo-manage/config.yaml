@@ -1,5 +1,5 @@
 name: WOOW Odoo Manage MCP (experimental)
-version: 0.1.1
+version: 0.1.2
 slug: woow_mcp_odoo_manage
 description: Experimental; management unavailable pending HA role approval; partial
   tools only.

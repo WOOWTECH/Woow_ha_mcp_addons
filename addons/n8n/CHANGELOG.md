@@ -1,5 +1,11 @@
 # n8n Changelog
 
+## 0.1.2 — 準備中（未發佈）
+
+- 初始化時子程序沒有回覆（例如後端連不上、子程序無法建立連線階段），gateway 改回 HTTP 503＋JSON-RPC 錯誤 `BACKEND_UNAVAILABLE`（附 Retry-After），不再給出 200 空回應與失效的 session id；串流回應保留原事件格式。
+- bootstrap 在 HA 還原修復後，等 `/data/mcp` 通過最後檢查才印 `re-owned` 訊息；修復時暫時調高的 soft `RLIMIT_NOFILE` 修完即還原，不再沿用到管理程序。
+- 映像 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.2` 尚未建置；0.1.0、0.1.1 tag 不覆寫。
+
 ## 0.1.1 — 2026-10-05 公開（experimental）
 
 - 修正 HA 還原本 Add-on 後資料變成 root 擁有、無法啟動的問題：bootstrap 只在資料剛好屬 root 時，第一遍核准並握住每個 inode、第二遍只改這些重驗過的 inode（R1 修正 d687cad、19892a3，獨立 SPEC＋安全審）。
