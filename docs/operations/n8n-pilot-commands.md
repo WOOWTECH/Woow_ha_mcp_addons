@@ -16,12 +16,12 @@
 token 只寫進 pod 上的 0600 檔案；不要貼進聊天或 `!` 指令（會留在對話紀錄）。在能 `kubectl` 的機器上：
 
 ```sh
-POD=$(kubectl -n pi-agent-woow get pod -l app=pi-agent -o name | head -1)
+POD=$(kubectl --context woow-k3s -n pi-agent-woow get pod -l app=pi-agent -o name | head -1)   # 容器名稱是 pi-web
 DIR=/data/pi-agent/home/work/mcp-haos-team-runtime/claude-delivery/vm-access
 # 依序貼上（兩行：username、token），Ctrl-D 結束；三個檔案各做一次
-kubectl -n pi-agent-woow exec -i "$POD" -c pi-agent -- sh -c "umask 077; cat > $DIR/gitea-push.cred"   # write:package
-kubectl -n pi-agent-woow exec -i "$POD" -c pi-agent -- sh -c "umask 077; cat > $DIR/gitea-pull.cred"   # read:package
-kubectl -n pi-agent-woow exec -i "$POD" -c pi-agent -- sh -c "umask 077; cat > $DIR/n8n-test.key"      # 一行：n8n API key
+kubectl --context woow-k3s -n pi-agent-woow exec -i "$POD" -c pi-web -- sh -c "umask 077; cat > $DIR/gitea-push.cred"   # write:package
+kubectl --context woow-k3s -n pi-agent-woow exec -i "$POD" -c pi-web -- sh -c "umask 077; cat > $DIR/gitea-pull.cred"   # read:package
+kubectl --context woow-k3s -n pi-agent-woow exec -i "$POD" -c pi-web -- sh -c "umask 077; cat > $DIR/n8n-test.key"      # 一行：n8n API key
 ```
 
 ## 2. R2 推送已測映像（VM，不重建）
