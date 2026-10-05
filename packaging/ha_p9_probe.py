@@ -94,7 +94,16 @@ class Client:
     def call(self, sid, name, arguments, ident=10):
         status, message, _ = self.request('POST', {'jsonrpc': '2.0', 'id': ident, 'method': 'tools/call',
                                                    'params': {'name': name, 'arguments': arguments}}, sid, timeout=60)
-        return status, ((message or {}).get('result') or {}).get('isError')
+        result = (message or {}).get('result') if isinstance(message, dict) else None
+        return status, (result or {}).get('isError') if isinstance(result, dict) else None
+
+    def call_text(self, sid, name, arguments, ident=10):
+        status, message, _ = self.request('POST', {'jsonrpc': '2.0', 'id': ident, 'method': 'tools/call',
+                                                   'params': {'name': name, 'arguments': arguments}}, sid, timeout=60)
+        result = (message or {}).get('result') if isinstance(message, dict) else None
+        result = result if isinstance(result, dict) else {}
+        text = ' '.join(c.get('text', '') for c in result.get('content', []) if isinstance(c, dict))
+        return status, result.get('isError'), text
 
 
 def first_call(client, sid, opts):
@@ -239,9 +248,51 @@ def mode_cycle(opts, client, out):
     return {'cycle': pairs}
 
 
+def backend_failed(text):
+    """Tool output that reports a backend failure in-band (n8n-mcp style {"success": false, ...})."""
+    try:
+        value = json.loads(text)
+    except ValueError:
+        return False
+    return isinstance(value, dict) and value.get('success') is False
+
+
+def mode_plan(opts, client, out, plan):
+    """reads must succeed (HTTP 200, not isError, no in-band failure); denials must be refused (HTTP 403).
+
+    With --expect-backend-down, reads must instead fail in a structured way (HTTP 200 with isError or an
+    in-band failure), proving the MCP server answers instead of hanging or crashing during an outage.
+    """
+    status, _, sid = client.open()
+    if status != 200:
+        raise SystemExit('initialize returned %s' % status)
+    rows = []
+    try:
+        listed = set(client.tools(sid)[1])
+        for kind in ('reads', 'denials'):
+            for i, (name, arguments) in enumerate(plan.get(kind, [])):
+                call_status, is_error, text = client.call_text(sid, name, arguments, ident=300 + len(rows))
+                if kind == 'reads' and opts.expect_backend_down:
+                    ok = call_status == 200 and bool(is_error or backend_failed(text))
+                elif kind == 'reads':
+                    ok = call_status == 200 and not is_error and not backend_failed(text)
+                else:
+                    ok = call_status == 403
+                rows.append({'kind': kind, 'tool': name, 'listed': name in listed, 'http': call_status,
+                             'isError': is_error, 'pass': ok})
+                out.write('%-7s %-5s %-34s listed=%-5s http=%s isError=%s | %s\n' % (
+                    kind[:-1], 'PASS' if ok else 'FAIL', name, name in listed, call_status, is_error,
+                    text.replace('\n', ' ')[:opts.width]))
+    finally:
+        client.close(sid)
+    passed = sum(r['pass'] for r in rows)
+    out.write('plan: %d/%d pass\n' % (passed, len(rows)))
+    return {'plan': {'passed': passed, 'total': len(rows), 'rows': rows}}
+
+
 def main(argv=None, stdin=sys.stdin, out=sys.stdout):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument('mode', choices=('check', 'restart', 'childkill', 'bench', 'cycle'))
+    parser.add_argument('mode', choices=('check', 'restart', 'childkill', 'bench', 'cycle', 'plan'))
     parser.add_argument('--port', type=int, required=True, help='host port mapped to the app MCP port 8081')
     parser.add_argument('--slug', help='installed app slug (restart/childkill)')
     parser.add_argument('--tool', help='read-only tool for first-call and bench timing')
@@ -249,17 +300,24 @@ def main(argv=None, stdin=sys.stdin, out=sys.stdout):
     parser.add_argument('--sessions', type=int, default=5)
     parser.add_argument('--requests', type=int, default=50)
     parser.add_argument('--cycles', type=int, default=25)
+    parser.add_argument('--width', type=int, default=120, help='characters of tool output shown per plan row')
+    parser.add_argument('--expect-backend-down', action='store_true', help='plan: reads must fail in a structured way')
     opts = parser.parse_args(argv)
     json.loads(opts.args)
     if opts.mode in ('restart', 'childkill') and not opts.slug:
         parser.error('--slug is required for %s' % opts.mode)
     if opts.mode == 'check':
         summary = mode_check(opts, stdin, out)
+    elif opts.mode == 'plan':
+        client = Client(opts.port, stdin.readline().strip())
+        summary = mode_plan(opts, client, out, json.loads(stdin.read()))
     else:
         client = Client(opts.port, stdin.readline().strip())
         summary = {'restart': mode_restart, 'childkill': mode_childkill, 'bench': mode_bench,
                    'cycle': mode_cycle}[opts.mode](opts, client, out)
     out.write('SUMMARY ' + json.dumps(summary, sort_keys=True) + '\n')
+    if opts.mode == 'plan' and summary['plan']['passed'] != summary['plan']['total']:
+        raise SystemExit(1)
     return summary
 
 
