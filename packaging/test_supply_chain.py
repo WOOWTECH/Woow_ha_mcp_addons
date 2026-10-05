@@ -153,7 +153,10 @@ class SupplyChainTests(unittest.TestCase):
 
     def test_known_package_licenses_are_version_pinned(self):
         policy = json.loads((s.ROOT / 'packaging/supply-chain-policy.json').read_text())
-        self.assertEqual(policy.get('known_package_licenses', {}), {})  # nothing approved yet
+        self.assertEqual(policy['known_package_licenses'], {  # owner decision 2026-10-05
+            'python:exceptiongroup:1.3.1': 'MIT', 'python:markdown-it-py:4.2.0': 'MIT',
+            'python:pyperclip:1.11.0': 'BSD-3-Clause'})
+        policy = dict(policy, known_package_licenses={})
         on = dict(policy, known_package_licenses={'python:pyperclip:1.11.0': 'BSD-3-Clause'})
         if 'BSD-3-Clause' not in on['allowed_licenses']:
             on['allowed_licenses'] = on['allowed_licenses'] + ['BSD-3-Clause']
