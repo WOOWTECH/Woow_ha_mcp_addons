@@ -37,8 +37,8 @@ skill/toolset enable/disable、gateway restart 與 session/cron metadata 及有�
 ## 操作、健康與更新
 
 Stock image `init: true`；保護模式維持 on。bootstrap 只建立新 `/data/mcp`，之後
-runtime/child uid/gid10001；0700 directory、0600 state。既有 wrong-owner restore
-停止不接管。管理／child／backend 三種 health 不同；backend outage readiness503
+runtime/child uid/gid10001；0700 directory、0600 state。其他錯 owner、連結或特殊檔
+停止不接管。**已知問題（0.1.0）**：HA 還原本 Add-on 後資料變成 root 擁有、檔案 0644，啟動被拒（log：`bootstrap unavailable`，2026-10-05 實測）；修正預定隨 0.1.1：只在資料剛好屬 root 時，先檢查只有一般資料夾與單一連結檔，再一次改回 10001 與 0700／0600。0.1.0 請勿依賴 HA 還原。管理／child／backend 三種 health 不同；backend outage readiness503
 不重啟 Add-on，故意不設 watchdog。詳見 [操作指南](../../docs/operations/guide.md)。
 
 更新須手動、固定版本且先讀 [CHANGELOG](CHANGELOG.md)；只有本 Add-on cold backup

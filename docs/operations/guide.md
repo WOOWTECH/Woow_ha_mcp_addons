@@ -62,13 +62,16 @@ Manage mode=read/module，module 要求後端已有 MCP module，不做模組安
   `npm ci --ignore-scripts`，保留 sql.js fallback；不下載 native addon/script。
 - Stock image 搭配 Supervisor `init: true`；不是 s6。映像啟動只有 bootstrap
   短暫 root，用 no-follow directory fd 建立**新的** `/data/mcp`，設定 10001:10001
-  與 0700；不遞迴 chown、不接管既有錯誤 owner、不碰 Supervisor options。
+  與 0700；不碰 Supervisor options。一般情況不遞迴 chown、不接管既有錯誤 owner；唯一例外（0.1.1 起）
+  是既有 `/data/mcp` 剛好屬 root（HA 還原的結果）：先完整檢查只有一般資料夾與單一連結檔、擁有者只能是
+  root 或 10001、數量與深度有上限，再以 no-follow fd 一次改回 10001:10001、0700／0600；其他情況照舊停止。
   隨後清空 supplementary groups、setgid/setuid 10001、no_new_privs，再 exec 固定
   management launcher。它在 final exec 後先驗證 dumpable=0／core limit=0，再以
   runpy 進入 runtime，不再 exec 重設 guard。正式程序與 child 非 root。
   [安全界線](hardening.md) 說明同 UID procfs/memory 測試與未測 HA 限制。
-- 既有 `/data/mcp` 必須已屬 10001:10001/0700；state 是 0600。還原時保留
-  owner／權限；不符合即停止並由核准維護流程恢復，不自動寬鬆 chmod。
+- 既有 `/data/mcp` 必須已屬 10001:10001/0700；state 是 0600。HA 還原**不保留** owner／權限
+  （2026-10-05 實測：root 擁有、檔案 0644）；0.1.0 因此停止（已知問題），0.1.1 起依上述例外改回。
+  其他不符合即停止並由核准維護流程恢復，不自動寬鬆 chmod。
 - Bootstrap 產生獨立強 token，沒有共用密碼。缺 backend 的六類不 spawn child
   或探測外部服務；n8n 可啟動內建文件 runtime，但 backend readiness 仍 503。
 - child command/env 固定；bootstrap 只把 runtime `SUPERVISOR_TOKEN` 傳給 n8n

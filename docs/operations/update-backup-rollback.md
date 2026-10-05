@@ -25,6 +25,10 @@ manifest `backup: cold`：HA 會停止**這個新 Add-on**來取得一致狀態�
 只抽一個 JSON 會破壞 missing-state fail-closed 判斷。保存 uid/gid **10001:10001**、
 目錄 **0700**、敏感檔 **0600**。不添加共用 HA config/share/backup mounts。
 
+實測（2026-10-05，HA partial restore 本 Add-on）：Supervisor 把 `/data/mcp` 還原成 root 擁有、檔案 0644，
+0.1.0 啟動被拒（`bootstrap unavailable`）→ 0.1.0 的 HA 還原不可用（已知問題）。0.1.1 起 bootstrap 只在資料剛好
+屬 root 時，檢查後一次改回 10001／0700／0600。還原後一律輪替 MCP token（備份含舊 token）。
+
 **備份含 backend 密碼/API key、外部及 child token、endpoint／工具政策，視同秘密。**
 限制下載與儲存人員、使用受控加密儲存與保留政策；不可入 Git、Actions artifact、
 issue、聊天或公開 object storage。不要在終端傾倒 JSON。公開驗收只記錄 opaque

@@ -12,7 +12,7 @@ session URL、備份或私人拓樸。LOCAL/MOCK、CONTAINER/MOCK、HA、PUBLIC 
 |---|---|
 | Source/license/secret | 逐檔來源、公開授權、OpenDesign 原來源缺 LICENSE 解決、Manage MPL covered-source 與 notices、整個新歷史與 tree／映像 layers/config／release/docs 去密掃描加人工審查。Regex PASS 不等於 clearance。 |
 | Package | root context 七個獨立 amd64 builds；固定 Python/Node/uv base digest、uv/npm lock；selected app 隔離、HA app labels/version；不得將無法 build 當 skip。 |
-| Bootstrap | 空且受控 `/data` 唯一 token、nonempty command；uid10001、0700/0600；第二次啟動不覆寫；六類未設定不 spawn/probe。錯 owner/symlink/future state 拒絕。 |
+| Bootstrap | 空且受控 `/data` 唯一 token、nonempty command；uid10001、0700/0600；第二次啟動不覆寫；六類未設定不 spawn/probe。錯 owner（0.1.1 起，HA 還原留下的 root 擁有狀態檢查後一次改回）/symlink/future state 拒絕。 |
 | Admin trust | 僅 n8n 路徑 A 權限已批准；provider 已實作／component review、GUI 已本地 Core 整合（fake HA transport）、HA NOT TESTED，此 gate 仍 BLOCKED。真實 HA admin 成功、non-admin 直接 Ingress URL/API 拒絕；缺少／重複 ID、偽造 peer/role headers 不得權。敏感操作前 fresh query，停權／降權／timeout／錯誤均拒絕且無副作用；role query 不等於立即撤銷 browser Ingress session。 |
 | Ingress UX | 有效 base path 的 assets/API/navigation/deep link/refresh，CSRF／origin 負面測試；MCP endpoint 不是 iframe origin。本地真 Core/browser 已覆蓋，尚非 HA iframe 驗收。 |
 | Protocol | 每類 initialize→initialized→tools/list→已審無副作用 call，檢查真實 payload，不只 HTTP200。對照完整工具表，184/65/119 不可說完整 parity。 |

@@ -52,9 +52,13 @@ class BootstrapTests(unittest.TestCase):
                     e.prepare_data(root)
             self.assertEqual(child.stat().st_mode & 0o777, 0o755)
             child.chmod(0o700)
+            foreign = os.getuid()
+            if os.geteuid() == 0:  # root-owned is the HA-restore case; use an owner that is neither
+                foreign = 4242
+                os.chown(child, foreign, foreign)
             with patch.object(e, 'UID', os.getuid() + 1), self.assertRaises(RuntimeError):
                 e.prepare_data(root)
-            self.assertEqual(child.stat().st_uid, os.getuid())
+            self.assertEqual(child.stat().st_uid, foreign)
 
     def test_command_override_refused_before_filesystem_access(self):
         with patch.object(e.sys, 'argv', ['entrypoint.py', 'n8n', '/bin/sh']), patch.object(e, 'prepare_data') as prepare:
@@ -129,6 +133,87 @@ class BootstrapTests(unittest.TestCase):
                 self.assertEqual(argv, [path, '/opt/woow/packaging/management_launcher.py', product])
                 self.assertEqual(set(env), {'PATH', 'HOME', 'PYTHONPATH',
                                            'PYTHONDONTWRITEBYTECODE', 'PYTHONUNBUFFERED'})
+
+
+def restored_tree(root):
+    """The shape Home Assistant left after a partial restore: dir 0700, files 0644, owner = extractor."""
+    child = root / 'mcp'
+    child.mkdir(mode=0o700)
+    for name in ('state.json', '.writer.lock'):
+        (child / name).write_bytes(b'{"restored": true}' if name == 'state.json' else b'')
+        (child / name).chmod(0o644)
+    (child / 'sub').mkdir(mode=0o755)
+    (child / 'sub' / 'nested').write_bytes(b'n')
+    return child
+
+
+class RestoredStateTests(unittest.TestCase):
+    """The current user plays the restore owner; the runtime user is someone else; fchown is recorded."""
+
+    def refused(self, build, **limits):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            child = restored_tree(root)
+            build(root, child)
+            calls = []
+            with patch.object(e, 'RESTORE_OWNER', (os.getuid(), os.getgid())), \
+                 patch.object(e, 'UID', os.getuid() + 1), patch.object(e, 'GID', os.getgid() + 1), \
+                 patch.object(e.os, 'geteuid', return_value=0), \
+                 patch.object(e.os, 'fchown', side_effect=lambda *a: calls.append(a)), \
+                 patch.multiple(e, **(limits or {'MAX_RESTORED_ENTRIES': e.MAX_RESTORED_ENTRIES})), \
+                 self.assertRaises(RuntimeError):
+                e.prepare_data(root)
+            self.assertEqual(calls, [])  # pass 1 refuses before any change
+            self.assertEqual((child / 'state.json').stat().st_mode & 0o777, 0o644)
+
+    def test_links_special_files_and_limits_refused_without_changes(self):
+        outside = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: [p.unlink() for p in outside.iterdir()] and None or outside.rmdir())
+        (outside / 'secret').write_bytes(b's')
+        self.refused(lambda root, child: (child / 'link').symlink_to(outside / 'secret'))
+        self.refused(lambda root, child: (child / 'dirlink').symlink_to(outside, target_is_directory=True))
+        self.refused(lambda root, child: os.link(child / 'state.json', child / 'second-name'))
+        self.refused(lambda root, child: os.mkfifo(child / 'fifo'))
+        self.refused(lambda root, child: None, MAX_RESTORED_ENTRIES=3)
+        self.refused(lambda root, child: None, MAX_RESTORED_DEPTH=0)
+        self.assertEqual((outside / 'secret').read_bytes(), b's')
+
+    def test_runtime_owned_state_is_not_rewritten(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            restored_tree(root)
+            calls = []
+            with patch.object(e, 'RESTORE_OWNER', (os.getuid() + 5, os.getgid() + 5)), \
+                 patch.object(e, 'UID', os.getuid()), patch.object(e, 'GID', os.getgid()), \
+                 patch.object(e.os, 'geteuid', return_value=0), \
+                 patch.object(e.os, 'fchown', side_effect=lambda *a: calls.append(a)):
+                e.prepare_data(root)
+            self.assertEqual(calls, [])
+            self.assertEqual((root / 'mcp' / 'state.json').stat().st_mode & 0o777, 0o644)
+
+    @unittest.skipUnless(os.geteuid() == 0, 'creating root-owned restored state needs root')
+    def test_root_owned_restore_is_reowned_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            child = restored_tree(root)
+            with patch.object(e, 'UID', 10001), patch.object(e, 'GID', 10001):
+                e.prepare_data(root)
+                for path in [child, *child.rglob('*')]:
+                    info = path.lstat()
+                    self.assertEqual((info.st_uid, info.st_gid), (10001, 10001), path)
+                    self.assertEqual(info.st_mode & 0o777, 0o700 if path.is_dir() else 0o600, path)
+                self.assertEqual((child / 'state.json').read_bytes(), b'{"restored": true}')
+                e.prepare_data(root)  # second boot: runtime-owned, unchanged
+
+    @unittest.skipUnless(os.geteuid() == 0, 'creating root-owned restored state needs root')
+    def test_foreign_owner_inside_restore_refused_without_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            child = restored_tree(root)
+            os.chown(child / 'sub' / 'nested', 4242, 4242)
+            with patch.object(e, 'UID', 10001), patch.object(e, 'GID', 10001), self.assertRaises(RuntimeError):
+                e.prepare_data(root)
+            self.assertEqual({p.lstat().st_uid for p in (child, child / 'state.json', child / 'sub')}, {0})
 
 
 if __name__ == '__main__':
