@@ -80,18 +80,51 @@ def grype_db(report):
     return {'schemaVersion': str(db.get('schemaVersion', '')), 'built': db.get('built'), 'checksum': db.get('checksum', '')}
 
 
+OR_EXPRESSION = re.compile(r'\(?\s*([A-Za-z0-9.+-]+)(?:\s+OR\s+([A-Za-z0-9.+-]+))+\s*\)?')
+
+
+def license_allowed(policy, package, value):
+    # Default policy: exact allowed SPDX ids only; expressions are NOT split. Optional owner-approved
+    # extensions, all off unless set in supply-chain-policy.json:
+    #   debian_main_licenses = 'accept'          -> deb packages' Debian copyright names are recorded, not blocking
+    #   or_expressions = 'accept-if-any-allowed' -> a pure 'A OR B' expression passes if one option is allowed
+    allowed = policy['allowed_licenses']
+    if value in allowed:
+        return True
+    if not isinstance(value, str) or not value:
+        return False
+    if policy.get('debian_main_licenses', 'deny') == 'accept' and package.get('type') == 'deb':
+        return True
+    if policy.get('or_expressions', 'deny') == 'accept-if-any-allowed' and OR_EXPRESSION.fullmatch(value.strip()):
+        return any(token in allowed for token in re.findall(r'[A-Za-z0-9.+-]+', value) if token != 'OR')
+    return False
+
+
+def known_binary_license(policy, package):
+    # Owner-approved map for binary artifacts syft cannot license (e.g. the python/node executables).
+    known = policy.get('known_binary_licenses', {})
+    if package.get('type') == 'binary' and package.get('name') in known:
+        return [{'value': known[package['name']]}]
+    return []
+
+
 def enforce_policy(sbom, vulnerabilities):
     policy = read_json(ROOT / 'packaging/supply-chain-policy.json')
+    require(policy.get('debian_main_licenses', 'deny') in ('deny', 'accept')
+            and policy.get('or_expressions', 'deny') in ('deny', 'accept-if-any-allowed')
+            and isinstance(policy.get('known_binary_licenses', {}), dict)
+            and all(v in policy['allowed_licenses'] for v in policy.get('known_binary_licenses', {}).values()))
     require(policy['schema'] == 1 and policy['id'] == 'woow-conservative-v1'
             and policy['unknown_or_missing_license'] == 'deny'
             and policy['unfixed_vulnerabilities'] in ('include', 'exclude'))
     require(isinstance(sbom.get('artifacts'), list) and bool(sbom['artifacts']))
     for package in sbom['artifacts']:
         licenses = package.get('licenses')
+        if not licenses:
+            licenses = known_binary_license(policy, package)
         require(isinstance(licenses, list) and bool(licenses))
         for license_ in licenses:
-            # Expressions are NOT guessed/split: unreviewed AND/OR/custom licenses deny.
-            require(license_.get('value') in policy['allowed_licenses'])
+            require(license_allowed(policy, package, license_.get('value')))
     descriptor = vulnerabilities.get('descriptor', {})
     require(descriptor.get('name') == 'grype' and descriptor.get('version') == pins()['grype']['version'])
     db = grype_db(vulnerabilities)

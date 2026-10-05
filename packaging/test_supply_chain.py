@@ -62,6 +62,42 @@ class SupplyChainTests(unittest.TestCase):
                     with self.assertRaises(s.Closed):
                         s.enforce_policy(sbom, dict(report, matches=matches))
 
+    def test_optional_license_extensions_default_off(self):
+        policy = json.loads((s.ROOT / 'packaging/supply-chain-policy.json').read_text())
+        for key in ('debian_main_licenses', 'or_expressions', 'known_binary_licenses'):
+            self.assertNotIn(key, policy)  # repository default unchanged
+        deb = {'type': 'deb', 'name': 'libc6'}
+        npm = {'type': 'npm', 'name': 'x'}
+        self.assertFalse(s.license_allowed(policy, deb, 'BSD-3-clause'))
+        self.assertFalse(s.license_allowed(policy, npm, '(MIT OR WTFPL)'))
+        self.assertEqual(s.known_binary_license(policy, {'type': 'binary', 'name': 'python'}), [])
+        on = dict(policy, debian_main_licenses='accept', or_expressions='accept-if-any-allowed',
+                  known_binary_licenses={'python': 'PSF-2.0'})
+        self.assertTrue(s.license_allowed(on, deb, 'BSD-3-clause'))
+        self.assertFalse(s.license_allowed(on, npm, 'BSD-3-clause'))  # deb rule never covers npm
+        self.assertFalse(s.license_allowed(on, deb, ''))
+        for value, ok in (('(MIT OR WTFPL)', True), ('(BSD-2-Clause OR MIT OR Apache-2.0)', True), ('MIT OR GPL-3.0', True),
+                          ('(GPL-3.0 OR WTFPL)', False), ('(MIT AND GPL-3.0)', False), ('MIT WITH x', False),
+                          ('(MIT OR (GPL-3.0 AND x))', False), ('OR', False)):
+            with self.subTest(value=value):
+                self.assertEqual(s.license_allowed(on, npm, value), ok)
+        self.assertEqual(s.known_binary_license(on, {'type': 'binary', 'name': 'python'}), [{'value': 'PSF-2.0'}])
+        self.assertEqual(s.known_binary_license(on, {'type': 'npm', 'name': 'python'}), [])
+        real = s.read_json
+        sbom = {'artifacts': [{'type': 'binary', 'name': 'python', 'licenses': []}]}
+        report = {'matches': [], 'descriptor': {'name': 'grype', 'version': s.pins()['grype']['version'],
+                  'db': {'schemaVersion': '6.0.2', 'checksum': 'a' * 64, 'error': '',
+                         'built': datetime.now(timezone.utc).isoformat()}}}
+        for doc, ok in ((policy, False), (on, True), (dict(on, known_binary_licenses={'python': 'GPL-3.0'}), False),
+                        (dict(on, debian_main_licenses='maybe'), False)):
+            with self.subTest(doc=str({k: doc.get(k) for k in ('debian_main_licenses', 'known_binary_licenses')})), patch.object(
+                    s, 'read_json', side_effect=lambda path: doc if path.name == 'supply-chain-policy.json' else real(path)):
+                if ok:
+                    s.enforce_policy(sbom, report)
+                else:
+                    with self.assertRaises(s.Closed):
+                        s.enforce_policy(sbom, report)
+
     def test_grype_0120_status_descriptor_is_normalised(self):
         sbom = {'artifacts': [{'name': 'fixture', 'licenses': [{'value': 'MIT'}]}]}
         built = datetime.now(timezone.utc).isoformat()
