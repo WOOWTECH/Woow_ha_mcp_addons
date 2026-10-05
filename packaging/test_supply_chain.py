@@ -143,6 +143,31 @@ class SupplyChainTests(unittest.TestCase):
                 self.assertEqual(runtime, [json.loads((s.ROOT / 'packaging/inputs.json').read_text())['bases']['python']])
                 self.assertTrue(bases)
 
+    def test_known_package_licenses_are_version_pinned(self):
+        policy = json.loads((s.ROOT / 'packaging/supply-chain-policy.json').read_text())
+        self.assertEqual(policy.get('known_package_licenses', {}), {})  # nothing approved yet
+        on = dict(policy, known_package_licenses={'python:pyperclip:1.11.0': 'BSD-3-Clause'})
+        if 'BSD-3-Clause' not in on['allowed_licenses']:
+            on['allowed_licenses'] = on['allowed_licenses'] + ['BSD-3-Clause']
+        pkg = {'type': 'python', 'name': 'pyperclip', 'version': '1.11.0', 'licenses': [{'value': 'BSD'}]}
+        self.assertEqual(s.known_package_license(on, pkg), [{'value': 'BSD-3-Clause'}])
+        self.assertEqual(s.known_package_license(on, dict(pkg, version='1.12.0')), [])
+        self.assertEqual(s.known_package_license(on, dict(pkg, type='npm')), [])
+        real = s.read_json
+        report = {'matches': [], 'descriptor': {'name': 'grype', 'version': s.pins()['grype']['version'],
+                  'db': {'schemaVersion': '6.0.2', 'checksum': 'a' * 64, 'error': '',
+                         'built': datetime.now(timezone.utc).isoformat()}}}
+        for doc, sbom_pkg, ok in ((on, pkg, True), (policy, pkg, False), (on, dict(pkg, version='1.12.0'), False),
+                                  (dict(on, known_package_licenses={'python:pyperclip:1.11.0': 'GPL-3.0'}), pkg, False),
+                                  (dict(on, known_package_licenses={'pyperclip': 'BSD-3-Clause'}), pkg, False)):
+            with self.subTest(doc=str(doc.get('known_package_licenses')), version=sbom_pkg['version']), patch.object(
+                    s, 'read_json', side_effect=lambda path: doc if path.name == 'supply-chain-policy.json' else real(path)):
+                if ok:
+                    s.enforce_policy({'artifacts': [sbom_pkg]}, report)
+                else:
+                    with self.assertRaises(s.Closed):
+                        s.enforce_policy({'artifacts': [sbom_pkg]}, report)
+
     def test_grype_0120_status_descriptor_is_normalised(self):
         sbom = {'artifacts': [{'name': 'fixture', 'licenses': [{'value': 'MIT'}]}]}
         built = datetime.now(timezone.utc).isoformat()

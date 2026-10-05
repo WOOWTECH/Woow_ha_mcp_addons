@@ -106,6 +106,15 @@ def is_listed_fixture(fixtures, package):
     return bool(paths) and all(path in fixtures for path in paths)
 
 
+def known_package_license(policy, package):
+    # Owner-approved, VERSION-PINNED map 'type:name:version' -> allowed SPDX id, for packages whose
+    # shipped license text was checked but whose metadata is missing or not an SPDX id (e.g. 'BSD').
+    # A version bump drops out of the map and must be re-reviewed.
+    known = policy.get('known_package_licenses', {})
+    key = '%s:%s:%s' % (package.get('type'), package.get('name'), package.get('version'))
+    return [{'value': known[key]}] if key in known else []
+
+
 def known_binary_license(policy, package):
     # Owner-approved map for binary artifacts syft cannot license (e.g. the python/node executables).
     known = policy.get('known_binary_licenses', {})
@@ -119,6 +128,9 @@ def enforce_policy(sbom, vulnerabilities):
     require(policy.get('debian_main_licenses', 'deny') in ('deny', 'accept')
             and policy.get('or_expressions', 'deny') in ('deny', 'accept-if-any-allowed')
             and isinstance(policy.get('known_binary_licenses', {}), dict)
+            and isinstance(policy.get('known_package_licenses', {}), dict)
+            and all(re.fullmatch(r'[a-z]+:[^:\s]+:[^:\s]+', k) and v in policy['allowed_licenses']
+                    for k, v in policy.get('known_package_licenses', {}).items())
             and isinstance(policy.get('non_package_fixtures', []), list)
             and all(isinstance(p, str) and p.startswith('/') and '*' not in p for p in policy.get('non_package_fixtures', []))
             and all(v in policy['allowed_licenses'] for v in policy.get('known_binary_licenses', {}).values()))
@@ -130,7 +142,7 @@ def enforce_policy(sbom, vulnerabilities):
     for package in sbom['artifacts']:
         if is_listed_fixture(fixtures, package):
             continue
-        licenses = package.get('licenses')
+        licenses = known_package_license(policy, package) or package.get('licenses')
         if not licenses:
             licenses = known_binary_license(policy, package)
         require(isinstance(licenses, list) and bool(licenses))
