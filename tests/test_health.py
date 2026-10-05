@@ -147,5 +147,6 @@ async def test_an_unusable_protocol_version_closes_the_session(tmp_path):
         await HealthMonitor(store, process, client).check()
     assert process.ready is False
     assert [r.method for r in seen] == ["POST", "DELETE"]  # no further request; the session is closed
+    assert seen[1].headers["mcp-session-id"] == "ok-session"  # closes THAT session (RC review #3)
     assert "mcp-protocol-version" not in seen[1].headers
     store.close()

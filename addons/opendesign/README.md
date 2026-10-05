@@ -1,11 +1,14 @@
-# WOOW OpenDesign MCP（實驗／未發佈）
+# WOOW OpenDesign MCP（experimental）
 
-獨立 amd64 Add-on；固定候選版 **0.1.0**。此 manifest 可被 HA 探索，**不代表 GHCR
-映像已存在**。此批沒有映像建置或 HA／真實 backend E2E。
+獨立 amd64 Home Assistant Add-on：把 OpenDesign 的部分工具以 MCP（Streamable HTTP）提供給 AI client。
+目前發佈的版本、映像與在 HA 上的實測結果見 [本產品操作](DOCS.md) 開頭。
 
-來源工具 15 個，支援 11 個，暫不支援 4 個；不是完整功能遷移。
-管理 GUI 已本地 Core 整合（七類合計184/65/119），但本產品 production verifier fail closed，現在不能正常設定後端或取得 token。
-`homeassistant_api: false`，不可自行提高權限解鎖。
+- 工具：上游 15 個中支援 11 個，預設只開讀取；寫入須由 HA 管理員逐項授權，其餘明列不支援
+  （[逐名工具對照](../../docs/tool-surface.md)）。
+- 連線：OpenDesign 的網址。
+- 管理面板在 HA 側邊欄（Ingress），只有 HA 的 owner 或系統管理員能設定後端與管理權杖；為了驗證這個身分，
+  Add-on 需要 `homeassistant_api: true`，這個 token 具廣泛的 Core 存取能力。`hassio_api: false`、保護模式開啟、無 host 網路。
+- MCP client 連 `8081/mcp` 並帶 Bearer 權杖；預設不對 LAN 開埠（`8081/tcp: null`）。
 
-請先看 [本產品操作](DOCS.md)、[變更紀錄](CHANGELOG.md)、
-[共用繁中指南](../../docs/operations/guide.md) 與 [逐名工具對照](../../docs/tool-surface.md)。
+請先看 [本產品操作](DOCS.md)、[變更紀錄](CHANGELOG.md)、[共用繁中指南](../../docs/operations/guide.md)
+與 [client 設定](../../docs/operations/clients.md)。

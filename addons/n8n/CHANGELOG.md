@@ -3,7 +3,7 @@
 ## 0.1.3 — 準備中（未發佈）
 
 - gateway：`/mcp` 的所有 HTTP 方法都先驗 Bearer 再回 405（`Allow: GET, POST, DELETE`）；TRACE、PROPFIND 等以前由框架在驗證前就回 405，Allow 清單還列了 gateway 實際拒絕的方法（0.1.2 審查的 NIT）。
-- 健康檢查：子程序回的 `protocolVersion` 須是合規的標頭值才沿用；否則該輪判定失敗並照常關閉 session（以前會在清理前出錯，留下子程序 session）。
+- 健康檢查：子程序回的 `protocolVersion` 須符合與 session id 相同的規則（可列印 ASCII、不含空白、1–256 字元）才沿用為標頭；否則該輪判定失敗，並照常帶 session id 關閉 session（以前遇到無法當標頭的值會在清理前出錯，留下子程序 session）。
 - 映像 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.3` 尚未建置；0.1.0、0.1.1、0.1.2 tag 不覆寫。
 
 ## 0.1.2 — 2026-10-06 公開（experimental）

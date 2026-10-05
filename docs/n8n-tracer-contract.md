@@ -107,9 +107,10 @@ are 502 and not one byte of such a body is relayed, even when it is declared emp
 body); an initialize declared empty is 503 `BACKEND_UNAVAILABLE`. Replies to
 notifications and to DELETE carry only the status, the forwarded session/protocol/
 Retry-After headers (no Content-Type) and `Cache-Control: no-store`, never the child's
-body. HEAD, PUT, PATCH and OPTIONS are 405 after the Bearer check (`Allow: GET, POST,
-DELETE`) and never reach the child; other methods (e.g. TRACE) get the framework's 405
-before the Bearer check (known, 0.1.3). The child always receives `Accept: application/json,
+body. Every method other than GET, POST and DELETE (HEAD, PUT, PATCH, OPTIONS, TRACE,
+CONNECT, unknown or lower-case tokens) is checked for the Bearer first (401) and then
+gets 405 (`Allow: GET, POST, DELETE`; 0.1.3 for the methods that used to get the
+framework's 405 before the check); none reaches the child. The child always receives `Accept: application/json,
 text/event-stream`; statuses outside 100-599 are 502; an initialize reply whose session
 id cannot be forwarded is 502. Media types compare case-insensitively without
 parameters; a 2xx reply always reaches the client as plain `text/event-stream` or
@@ -232,7 +233,9 @@ did); it never enables a client call or performs writes. Checks repeat every 15
 seconds. Errors while probing the child or the backend (0.1.2: any exception, e.g. an
 odd session id or reply shape from a misbehaving child) only leave readiness false and
 the backend unreachable for that round; the child's session id is validated
-(`[\x21-\x7e]{1,256}`) before it is reused. Only the monitor task itself ending stops the
+(`[\x21-\x7e]{1,256}`) before it is reused, and (0.1.3) so is the initialize
+`protocolVersion` before it is sent as `MCP-Protocol-Version`: an unusable value fails
+the round and the session is still closed with its id. Only the monitor task itself ending stops the
 runtime, with a sanitized recovery message and nonzero exit, never a clean exit.
 
 ## Single configured backend network policy

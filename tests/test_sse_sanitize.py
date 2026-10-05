@@ -409,6 +409,40 @@ async def test_other_methods_authenticate_then_405(store, verb):
     assert response.status_code == 405 and response.headers["allow"] == "GET, POST, DELETE" and not seen
 
 
+@pytest.mark.parametrize("verb", ["get", "post", "delete", "Get", "CONNECT", "XYZ", "M" * 4096])
+async def test_raw_method_tokens_authenticate_then_405(store, verb):
+    # httpx upper-cases methods; an ASGI scope carries any token (0.1.3 RC review #2: a case-folding gate would let a
+    # lowercase "get" past the exact GET/POST checks and relay an unfiltered child reply).
+    seen = []
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: seen.append(r) or httpx.Response(
+            200, headers={"content-type": "application/json"}, content=UNREVIEWED))) as child:
+        _, app = make_apps(store, TOOLS, child)
+        for authorization, status in ((None, 401), ("Bearer " + store.load().token, 405)):
+            sent, delivered = [], []
+
+            async def receive():
+                if delivered:
+                    return {"type": "http.disconnect"}
+                delivered.append(True)
+                return {"type": "http.request", "body": b"", "more_body": False}
+
+            async def send(message):
+                sent.append(message)
+            headers = [(b"authorization", authorization.encode())] if authorization else []
+            await app({"type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"}, "http_version": "1.1",
+                       "method": verb, "path": "/mcp", "raw_path": b"/mcp", "query_string": b"", "scheme": "http",
+                       "server": ("localhost", 8081), "client": ("127.0.0.1", 1), "headers": headers}, receive, send)
+            start = next(m for m in sent if m["type"] == "http.response.start")
+            replied = {k.decode().lower(): v.decode() for k, v in start["headers"]}
+            assert start["status"] == status, (verb[:8], start["status"])
+            if status == 401:
+                assert replied["www-authenticate"].startswith("Bearer")
+            else:
+                assert replied["allow"] == "GET, POST, DELETE"
+            assert b"unreviewed" not in b"".join(m.get("body", b"") for m in sent if m["type"] == "http.response.body")
+    assert not seen
+
+
 async def test_child_sees_a_fixed_accept_and_odd_statuses_are_bad_gateway(store):
     seen = []
     response = await call(store, lambda _: httpx.Response(200, json={"jsonrpc": "2.0", "id": 9, "result": {}}), capture=seen)
