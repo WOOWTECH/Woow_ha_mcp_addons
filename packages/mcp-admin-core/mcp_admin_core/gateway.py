@@ -31,6 +31,10 @@ MAX_REQUEST = 262144
 MAX_RESPONSE = 8 * 1024 * 1024
 STREAM_SECONDS = 120
 EVENT_BOUNDARY = re.compile(rb"\r?\n\r?\n")
+FORWARDED_HEADERS = {"mcp-session-id": re.compile(r"[\x21-\x7e]{1,256}"),
+                     "mcp-protocol-version": re.compile(r"[\x21-\x7e]{1,256}"),
+                     "retry-after": re.compile(r"[0-9]{1,10}"),
+                     "content-type": re.compile(r"[\x20-\x7e]{1,256}")}
 LONE_CR = re.compile(rb"\r(?!\n)")
 SSE_FIELD = re.compile(rb"(?:id|event):[ ]?[\x21-\x7e]{0,256}|retry:[ ]?[0-9]{1,10}")  # id as Last-Event-ID allows
 SSE_COMMENT = re.compile(rb":[\x20-\x7e]{0,1024}")
@@ -506,8 +510,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         state = store.load()
         if not token_valid(request, state):
             return Response(status_code=401, headers={"WWW-Authenticate": "Bearer"})
-        if request.method == "HEAD":
-            raise BadRequest(405)  # Starlette adds HEAD to the GET route; it is not part of the protocol
+        if request.method == "HEAD":  # Starlette adds HEAD to the GET route; it is not part of the protocol
+            return Response(status_code=405, headers={"Allow": "GET, POST, DELETE"})
         if request.headers.get("origin") is not None:
             raise BadRequest(403)  # Browser clients not in this tracer contract.
         if request.url.query:
@@ -559,8 +563,10 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                                            timeout=httpx.Timeout(30, connect=3, pool=3))
             async with asyncio.timeout(35):
                 upstream = owner.response = await child.send(outgoing, stream=True, follow_redirects=False)
-            response_headers = {k: v for k, v in upstream.headers.items() if k in
-                                ("content-type", "mcp-session-id", "mcp-protocol-version", "retry-after")}
+            # Only well-formed values of four headers are forwarded (a non-Latin-1 value from a child could
+            # not be encoded into the reply); session/protocol values follow the same rule as request headers.
+            response_headers = {k: v for k, v in upstream.headers.items()
+                                if k in FORWARDED_HEADERS and FORWARDED_HEADERS[k].fullmatch(v)}
             response_headers["Cache-Control"] = "no-store"
             if not still_authorized(state.token):
                 raise BadRequest(401)
@@ -569,9 +575,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             if is_sse:  # the gateway re-frames events itself: never forward the child's parameters (charset)
                 response_headers["content-type"] = "text/event-stream"
             request_id = request.method == "POST" and isinstance(message, dict) and "id" in message
-            if request.method == "POST" and not request_id:
-                # A notification's reply carries nothing a client needs: status and session headers only,
-                # never the child's bytes.
+            if request.method == "DELETE" or request.method == "POST" and not request_id:
+                # Replies to a notification or a session DELETE carry nothing a client needs: status and the
+                # forwarded headers only, never the child's bytes.
                 return Response(status_code=upstream.status_code,
                                 headers={k: v for k, v in response_headers.items() if k != "content-type"})
             if 200 <= upstream.status_code < 300 and (request.method == "GET" or request_id):
@@ -619,9 +625,10 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 except (ValueError, RecursionError):
                     raise BadRequest(502) from None
                 return json_reply(value, 200, response_headers)
-            handed_off = True
-            return OwnedStreamingResponse(stream(owner, state.token, is_sse), owner=owner,
-                                          status_code=upstream.status_code, headers=response_headers)
+            response = OwnedStreamingResponse(stream(owner, state.token, is_sse), owner=owner,
+                                              status_code=upstream.status_code, headers=response_headers)
+            handed_off = True  # only once the response owns the slot: a failed constructor must release it
+            return response
         except (httpx.HTTPError, TimeoutError):
             raise BadRequest(502) from None
         finally:

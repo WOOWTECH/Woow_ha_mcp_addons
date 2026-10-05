@@ -310,3 +310,81 @@ async def test_head_never_reaches_the_child(store):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mcp") as client:
             response = await client.head("/mcp", headers={"Authorization": "Bearer " + store.load().token})
     assert response.status_code == 405 and not seen
+
+
+async def test_bad_child_header_values_never_leak_slots(store):
+    # Round 4: a non-Latin-1 header value made the streaming reply's constructor fail after the hand-off flag
+    # was set, so its slot was never released; 32 such replies blocked the endpoint until a restart.
+    seen = []
+    reply = json.dumps({"jsonrpc": "2.0", "id": 9, "result": {}}).encode()
+
+    def upstream(request):
+        seen.append(request)
+        return httpx.Response(200, headers=[(b"content-type", b"text/event-stream"), (b"mcp-session-id", "中".encode()),
+                                            (b"retry-after", b"soon"), (b"mcp-protocol-version", b"2025-03-26")],
+                              content=b"data: " + reply + b"\n\n")
+    async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as child:
+        _, app = make_apps(store, TOOLS, child)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mcp") as client:
+            for _ in range(40):  # more than the 32 slots
+                response = await client.post("/mcp", headers={"Authorization": "Bearer " + store.load().token},
+                                             json={"jsonrpc": "2.0", "id": 9, "method": "ping"})
+                assert response.status_code == 200, response.status_code
+                assert "mcp-session-id" not in response.headers and "retry-after" not in response.headers
+                assert response.headers["mcp-protocol-version"] == "2025-03-26"
+    assert len(seen) == 40
+
+
+async def test_delete_replies_carry_no_child_bytes(store):
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(
+            200, headers={"content-type": "application/json; charset=utf-16"}, content=UNREVIEWED))) as child:
+        _, app = make_apps(store, TOOLS, child)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mcp") as client:
+            response = await client.delete("/mcp", headers={"Authorization": "Bearer " + store.load().token, "Mcp-Session-Id": "s"})
+    assert response.status_code == 200 and response.content == b"" and "content-type" not in response.headers
+
+
+async def test_head_405_names_the_allowed_methods(store):
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(200))) as child:
+        _, app = make_apps(store, TOOLS, child)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mcp") as client:
+            response = await client.head("/mcp", headers={"Authorization": "Bearer " + store.load().token})
+    assert response.status_code == 405 and response.headers["allow"] == "GET, POST, DELETE"
+
+
+async def test_overflowing_numbers_are_refused_both_ways(store):
+    seen = []
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: seen.append(r) or httpx.Response(
+            200, headers={"content-type": "application/json"}, content=b'{"jsonrpc":"2.0","id":9,"result":{"x":1e400}}'))) as child:
+        _, app = make_apps(store, TOOLS, child)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mcp") as client:
+            headers = {"Authorization": "Bearer " + store.load().token, "Content-Type": "application/json"}
+            request = await client.post("/mcp", headers=headers, content=b'{"jsonrpc":"2.0","id":1e400,"method":"ping"}')
+            assert request.status_code == 400 and not seen  # never forwarded as Infinity
+            reply = await client.post("/mcp", headers=headers, content=b'{"jsonrpc":"2.0","id":9,"method":"ping"}')
+            assert reply.status_code == 502 and "Infinity" not in reply.text
+
+
+async def test_a_failing_stream_response_constructor_releases_its_slot(store, monkeypatch):
+    import mcp_admin_core.gateway as gateway
+    failures = {"left": 32}  # as many as there are slots
+
+    class Fragile(gateway.OwnedStreamingResponse):
+        def __init__(self, *args, **kwargs):
+            if failures["left"]:
+                failures["left"] -= 1
+                raise RuntimeError("constructor failed")
+            super().__init__(*args, **kwargs)
+    monkeypatch.setattr(gateway, "OwnedStreamingResponse", Fragile)
+    reply = json.dumps({"jsonrpc": "2.0", "id": 9, "result": {}}).encode()
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(
+            200, headers={"content-type": "text/event-stream"}, content=b"data: " + reply + b"\n\n"))) as child:
+        _, app = make_apps(store, TOOLS, child)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+                                     base_url="http://mcp") as client:
+            statuses = []
+            for _ in range(34):
+                response = await client.post("/mcp", headers={"Authorization": "Bearer " + store.load().token},
+                                             json={"jsonrpc": "2.0", "id": 9, "method": "ping"})
+                statuses.append(response.status_code)
+    assert statuses == [500] * 32 + [200, 200]  # with a leaked slot per failure the last two would be 503

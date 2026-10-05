@@ -96,17 +96,21 @@ unknown methods, invalid IDs/params/arguments and unknown/disabled/write-disallo
 tools fail before the upstream request. Notifications/initialized is the only
 accepted notification. See provenance for the narrow source-backed tool subset.
 
-The gateway preserves upstream status for non-2xx replies and empty 202/204 responses,
-and the session/protocol headers. A 2xx body must be one the gateway parses and filters
+The gateway preserves the upstream status of non-2xx replies, notifications and DELETE.
+It forwards four headers only when well formed (session and protocol ids
+`[\x21-\x7e]{1,256}` as for requests, numeric Retry-After, printable Content-Type) and
+drops them otherwise. A 2xx body must be one the gateway parses and filters
 itself (0.1.2): for GET an SSE stream, for a request (POST with an id) an SSE stream or
 a plain 200 JSON reply; other 2xx codes and other, duplicate or missing media types
 are 502 and not one byte of such a body is relayed, even when it is declared empty
 (framing headers can lie: `Content-Length: 0` with chunked encoding still carries a
 body); an initialize declared empty is 503 `BACKEND_UNAVAILABLE`. Replies to
-notifications carry only status and session headers, never the child's body. HEAD is
-405 and never reaches the child. Media types compare
-case-insensitively without parameters; the client always gets plain
-`text/event-stream` or `application/json`. Every JSON reply to a request is parsed, must
+notifications and to DELETE carry only the status and the forwarded headers (plus
+`Cache-Control: no-store`), never the child's body. HEAD is 405 (`Allow: GET, POST,
+DELETE`) and never reaches the child. Media types compare case-insensitively without
+parameters; a 2xx reply always reaches the client as plain `text/event-stream` or
+`application/json` (non-2xx bodies pass through with the child's Content-Type, and the
+pinned clients read them only as error text). Every JSON reply to a request is parsed, must
 be one object answering that request (same id and JSON type, `result` or `error`, no
 `method`), is filtered and re-serialized with ASCII escapes; batches are 502. SSE events
 are rebuilt from the lines the gateway understood: data, `id`/`event` values of up to 256
@@ -118,7 +122,9 @@ the event: initialize is 502, other streams stop. An event whose data is empty (
 a server-to-client request (an event with `method` and `id`: elicitation, sampling,
 roots, ping) is dropped, since the client could not answer it through the gateway and it
 would carry child text to the user; notifications (no id) still pass.
-Request bodies with lone surrogates anywhere are 400. The child receives initialize with
+Request bodies with lone surrogates anywhere are 400; numbers that overflow to infinity
+(e.g. `1e400`) are refused like NaN/Infinity (request 400, reply 502), so nothing is
+re-serialized as `Infinity`. The child receives initialize with
 `capabilities: {}`, since the gateway answers no server-to-client request (sampling,
 elicitation, roots). Initialize is further special-cased: the gateway reads a 200 reply
 up to the JSON-RPC response for the request and answers with that one response (SSE

@@ -97,7 +97,13 @@ def strict_json(raw: bytes):
     def constant(_):
         raise ValueError("nonfinite number")
 
-    return json.loads(raw, object_pairs_hook=pairs, parse_constant=constant)
+    def number(text):
+        value = float(text)
+        if value in (float("inf"), float("-inf")):
+            raise ValueError("nonfinite number")  # e.g. 1e400 would re-serialize as Infinity
+        return value
+
+    return json.loads(raw, object_pairs_hook=pairs, parse_constant=constant, parse_float=number)
 
 
 class Store:
