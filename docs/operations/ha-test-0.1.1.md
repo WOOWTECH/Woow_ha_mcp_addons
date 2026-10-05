@@ -32,6 +32,9 @@
 | litellm | 無（HA 上沒有 LiteLLM） | PASS（僅驗證） | NOT RUN | NOT RUN | NOT RUN | 重啟正常、權杖保留；無 child | 502（無 child） |
 
 - **#1 管理面板／#3 設定**：真 HA owner 經 Ingress 進入七支面板（HA 管理角色驗證）；PUT 後端 200，重啟後設定與權杖保留。
+- **#2 non-admin PASS**：建立臨時一般使用者（system-users），HA 會發 Ingress session 給它（`supervisor/api` 對一般使用者開放
+  `/ingress/session`），所以擋人的是 add-on 自己的角色檢查：七支的面板、`api/bootstrap`、`api/token/reveal`、`PUT api/backend`
+  全部 403；同時間 owner 的 `api/bootstrap` 200；沒有 session cookie 時 HA 回 401。測完刪除該使用者並撤銷權杖。
 - **#4 權杖**：沒有 CSRF 標頭的輪替 403；輪替後舊權杖 401、新權杖 200；撤銷後 401；重新發行後只有新權杖可用。
   LiteLLM 沒有後端：錯誤權杖 401，正確權杖 502（沒有 child 可轉），屬預期。
 - **#5 未過的讀取**：n8n `n8n_manage_folders` list 回結構化 NOT_FOUND（n8n 2.12 沒有資料夾 API）；Odoo 與 OpenDesign 見已知問題。
@@ -71,7 +74,6 @@ MCP 又被擋。容器重新建立時 IP 可能改變，長期做法待負責人
 
 ## 未測
 
-- #2 non-admin（需 HA 一般使用者測試帳號，屬 Core 變更，待負責人）。
 - LAN client（另一台機器經主機埠 18081–18088 連入）。
 - LiteLLM 工具（沒有後端）；aarch64 映像未建。
 

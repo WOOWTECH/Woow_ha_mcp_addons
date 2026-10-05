@@ -60,7 +60,7 @@ backup ID、版本、時間、保管位置類型、權限檢查結論，不記�
   unknown schema、source guard drift、角色 verifier 缺失、資料 owner 不符立即停止，
   保留原狀以便回復，不重新 bootstrap 或開寬權限硬闖。
 - 七支的管理面板（`homeassistant_api`，0.1.1 起）已在測試 HA 以 owner 實測 Ingress、後端設定與 token；
-  non-admin 尚未測。升版只在 n8n 實測過，其他產品升版仍須逐支驗證，也不能擴及既有 HA 變更。
+  一般使用者一律 403（2026-10-05 實測）。升版只在 n8n 實測過，其他產品升版仍須逐支驗證，也不能擴及既有 HA 變更。
 
 ## Migration 與 rollback
 
