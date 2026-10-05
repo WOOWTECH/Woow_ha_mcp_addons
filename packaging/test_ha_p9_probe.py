@@ -149,6 +149,7 @@ class ProbeTests(unittest.TestCase):
     def test_plan_reads_succeed_and_denials_are_refused(self):
         summary, text = self.main('plan', stdin=TOKEN + '\n' + json.dumps(self.PLAN))
         self.assertEqual((summary['plan']['passed'], summary['plan']['total']), (4, 4))
+        self.assertIn('initialize http=200 serverInfo=fake\ntools/list http=200 tools=3\n', text)
         self.assertEqual([r['listed'] for r in summary['plan']['rows']], [True, True, False, False])
         self.assertEqual(self.server.sessions, set())
 

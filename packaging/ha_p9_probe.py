@@ -271,6 +271,16 @@ def backend_failed(text):
     return isinstance(value, dict) and value.get('success') is False
 
 
+def describe(message):
+    """serverInfo name or the JSON-RPC error of an initialize reply, for the report."""
+    if not isinstance(message, dict):
+        return 'no JSON body'
+    if isinstance(message.get('error'), dict):
+        return 'error %s: %s' % (message['error'].get('code', ''), str(message['error'].get('message', ''))[:200])
+    info = (message.get('result') or {}).get('serverInfo') if isinstance(message.get('result'), dict) else None
+    return 'serverInfo=%s' % (info.get('name') if isinstance(info, dict) else None)
+
+
 def mode_plan(opts, client, out, plan):
     """reads must succeed (HTTP 200, not isError, no in-band failure); denials must be refused (HTTP 403).
 
@@ -278,12 +288,15 @@ def mode_plan(opts, client, out, plan):
     backend tools report the failure) and at least one read must fail in a structured way (isError or an
     in-band failure), proving the server answers instead of hanging or crashing during an outage.
     """
-    status, _, sid = client.open()
+    status, message, sid = client.open()
     if status != 200:
         raise SystemExit('initialize returned %s' % status)
+    out.write('initialize http=%s %s\n' % (status, describe(message)))
     rows = []
     try:
-        listed = set(client.tools(sid)[1])
+        list_status, names = client.tools(sid)
+        listed = set(names)
+        out.write('tools/list http=%s tools=%d\n' % (list_status, len(listed)))
         for kind in ('reads', 'denials'):
             for i, (name, arguments) in enumerate(plan.get(kind, [])):
                 call_status, is_error, text = client.call_text(sid, name, arguments, ident=300 + len(rows))
