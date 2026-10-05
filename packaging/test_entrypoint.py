@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import entrypoint as e
 
@@ -517,12 +517,54 @@ class DescriptorBudgetTests(unittest.TestCase):
         need = e.MAX_RESTORED_ENTRIES + 64
         with patch.object(e.resource, 'getrlimit', return_value=(100, 10000)), \
              patch.object(e.resource, 'setrlimit') as setrlimit:
-            e._descriptor_budget()
+            self.assertEqual(e._descriptor_budget(), (100, 10000))
         setrlimit.assert_called_once_with(e.resource.RLIMIT_NOFILE, (need, 10000))
         with patch.object(e.resource, 'getrlimit', return_value=(100, 200)), \
              patch.object(e.resource, 'setrlimit') as setrlimit, self.assertRaises(RuntimeError):
             e._descriptor_budget()
         setrlimit.assert_not_called()
+        with patch.object(e.resource, 'getrlimit', return_value=(need, 10000)), \
+             patch.object(e.resource, 'setrlimit') as setrlimit:
+            self.assertIsNone(e._descriptor_budget())
+        setrlimit.assert_not_called()
+
+    def test_repair_restores_the_soft_limit_even_when_it_fails(self):
+        need = e.MAX_RESTORED_ENTRIES + 64
+        for failure in (None, RuntimeError(e.CHANGED)):
+            with self.subTest(failure=failure), \
+                 patch.object(e.resource, 'getrlimit', return_value=(100, 10000)), \
+                 patch.object(e.resource, 'setrlimit') as setrlimit, \
+                 patch.object(e, '_approve_restored', return_value={}), \
+                 patch.object(e, '_reown_restored', side_effect=failure), \
+                 patch.object(e.os, 'fchmod'), patch.object(e.os, 'fchown'):
+                if failure is None:
+                    log = io.StringIO()
+                    with contextlib.redirect_stderr(log):
+                        self.assertEqual(e._repair_restored(5, os.stat('/')), 0)
+                    self.assertEqual(log.getvalue(), '')  # prepare_data reports, after its final check
+                else:
+                    with self.assertRaises(RuntimeError):
+                        e._repair_restored(5, os.stat('/'))
+            self.assertEqual(setrlimit.call_args_list, [
+                call(e.resource.RLIMIT_NOFILE, (need, 10000)),
+                call(e.resource.RLIMIT_NOFILE, (100, 10000))])
+
+
+class RepairReportTests(unittest.TestCase):
+    def test_success_is_reported_only_after_the_final_ownership_check(self):
+        # A repair that leaves /data/mcp with the wrong owner must fail without claiming success.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            restored_tree(root)
+            log = io.StringIO()
+            with patch.object(e, 'RESTORE_OWNER', (os.getuid(), os.getgid())), \
+                 patch.object(e, 'UID', os.getuid() + 1), patch.object(e, 'GID', os.getgid() + 1), \
+                 patch.object(e.os, 'geteuid', return_value=0), \
+                 patch.object(e, '_repair_restored', return_value=4) as repair, \
+                 contextlib.redirect_stderr(log), self.assertRaisesRegex(RuntimeError, 'incompatible data ownership'):
+                e.prepare_data(root)
+            repair.assert_called_once()
+            self.assertEqual(log.getvalue(), '')
 
 if __name__ == '__main__':
     unittest.main()

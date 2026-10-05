@@ -53,13 +53,15 @@ def _names(dir_fd, limit, error):
 
 
 def _descriptor_budget():
+    """Raise the soft descriptor limit for the repair; return the limits to restore afterwards, or None."""
     need = MAX_RESTORED_ENTRIES + 64
     soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
     if soft == resource.RLIM_INFINITY or soft >= need:
-        return
+        return None
     if hard != resource.RLIM_INFINITY and hard < need:
         raise RuntimeError('descriptor limit too low for restored state')
     resource.setrlimit(resource.RLIMIT_NOFILE, (need, hard))
+    return soft, hard
 
 
 def _approve_restored(dir_fd, dev, depth, budget, pinned):
@@ -125,16 +127,20 @@ def _reown_restored(dir_fd, approved):
 
 
 def _repair_restored(child, top):
-    _descriptor_budget()
+    """Return the number of re-owned entries; the caller reports it once the final ownership check passed."""
+    original = _descriptor_budget()
     pinned = []
     try:
         _reown_restored(child, _approve_restored(child, top.st_dev, 0, [MAX_RESTORED_ENTRIES], pinned))
     finally:
         for fd in pinned:
             os.close(fd)
+        if original is not None:
+            # Lowering the soft limit back is always permitted; the management process keeps the image default.
+            resource.setrlimit(resource.RLIMIT_NOFILE, original)
     os.fchmod(child, 0o700)
     os.fchown(child, UID, GID)
-    print('bootstrap: re-owned %d restored entries in /data/mcp' % len(pinned), file=sys.stderr, flush=True)
+    return len(pinned)
 
 
 def prepare_data(parent=Path('/data')):
@@ -151,12 +157,15 @@ def prepare_data(parent=Path('/data')):
             if created and os.geteuid() == 0:
                 os.fchown(child, UID, GID)
             info = os.fstat(child)
+            repaired = None
             if (not created and os.geteuid() == 0 and (info.st_uid, info.st_gid) == RESTORE_OWNER
                     and RESTORE_OWNER != (UID, GID)):
-                _repair_restored(child, info)
+                repaired = _repair_restored(child, info)
                 info = os.fstat(child)
             if (info.st_uid, info.st_gid) != (UID, GID) or stat.S_IMODE(info.st_mode) != 0o700:
                 raise RuntimeError('incompatible data ownership')
+            if repaired is not None:
+                print('bootstrap: re-owned %d restored entries in /data/mcp' % repaired, file=sys.stderr, flush=True)
         finally:
             os.close(child)
     finally:
