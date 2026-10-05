@@ -36,7 +36,7 @@
 
 ## 未通過／未驗
 
-- 真 HA：0.1.2 尚未在 HA 回歸測試（待負責人執行更新指令）；aarch64 未建。
+- 真 HA（2026-10-05，[回歸紀錄](ha-test-0.1.2.md)）：七支映像身分與上表一致；Odoo Manage 斷線 503、OpenDesign `list_agents`、Odoo 固定錯誤碼、還原修復皆 PASS；一般使用者 403。Odoo 一次性 `BACKEND_BUSY` 未能重現，列 0.1.3。未測：LAN client、LiteLLM 工具；aarch64 未建。
 - 0.1.3 待辦（審查的 NIT／INFO）：其他 HTTP 方法在驗證前 405、健康檢查未驗證子程序的 protocolVersion、非 2xx 內容帶子程序文字、
-  `-32042` 錯誤碼、通知轉送範圍、JSON 回覆完整緩衝的記憶體。
+  `-32042` 錯誤碼、通知轉送範圍、JSON 回覆完整緩衝的記憶體、健康探測佔住單一工作槽（Odoo）。
 - 文件（DOCS／CHANGELOG／授權清單）在映像建置後更新，不在映像內，不影響已測映像。
