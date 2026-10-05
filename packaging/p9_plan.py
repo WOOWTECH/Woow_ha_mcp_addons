@@ -49,9 +49,17 @@ def value_for(schema, strict, root):
         # write guard still cannot touch real data.
         return max(1, schema.get('minimum', 1)) if strict else schema.get('maximum', 2147483647)
     if kind == 'array':
-        if schema.get('minItems', 0) and strict:
-            raise NeedsArgs()
-        return []
+        count = schema.get('minItems', 0)
+        if not count:
+            return []
+        items = schema.get('items') or {}
+        if strict and not any(k in items for k in ('const', 'enum', 'default')):
+            raise NeedsArgs()  # only fixed item values are safe guesses for a read
+        try:
+            options = items.get('enum') or [value_for(items, strict, root)]
+        except NeedsArgs:
+            return []  # denials only: refused regardless of item values
+        return [options[i % len(options)] for i in range(count)]
     if kind == 'object' or (kind is None and 'properties' in schema):
         return arguments(schema, strict, root=root)
     if kind == 'string' and not strict:

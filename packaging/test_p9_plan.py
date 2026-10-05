@@ -13,6 +13,11 @@ SURFACE = {'products': {'demo': {'tools': [
     {'name': 'list', 'status': 'supported-bounded', 'effect': 'read', 'accepted_schema': {
         'properties': {'limit': {'type': 'integer', 'minimum': 1, 'default': 10},
                        'kind': {'enum': ['tags', 'projects']}}, 'required': ['kind']}},
+    {'name': 'fields', 'status': 'supported-bounded', 'effect': 'read', 'accepted_schema': {
+        'properties': {'model': {'const': 'res.partner'},
+                       'fields': {'type': 'array', 'minItems': 1, 'items': {'enum': ['id', 'name']}},
+                       'tags': {'type': 'array', 'minItems': 1, 'items': {'type': 'string'}}},
+        'required': ['model', 'fields']}},
     {'name': 'get', 'status': 'supported-bounded', 'effect': 'read', 'accepted_schema': {
         'properties': {'id': {'type': 'string', 'pattern': '^[A-Za-z0-9]+$'}}, 'required': ['id']}},
     {'name': 'create', 'status': 'supported-bounded', 'effect': 'write', 'accepted_schema': {
@@ -34,7 +39,8 @@ SURFACE = {'products': {'demo': {'tools': [
 class PlanTests(unittest.TestCase):
     def test_reads_denials_and_needs_args(self):
         result = p.plan('demo', SURFACE)
-        self.assertEqual(result['reads'], [['health', {}], ['list', {'kind': 'tags'}], ['executions', {'action': 'list'}]])
+        self.assertEqual(result['reads'], [['health', {}], ['list', {'kind': 'tags'}],
+                                           ['fields', {'model': 'res.partner', 'fields': ['id']}], ['executions', {'action': 'list'}]])
         self.assertEqual(result['needs_args'], ['get'])
         self.assertEqual(result['denials'], [
             ['create', {'name': 'p9-denied', 'nodes': []}], ['executions', {'action': 'delete'}],
