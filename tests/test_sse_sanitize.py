@@ -388,3 +388,47 @@ async def test_a_failing_stream_response_constructor_releases_its_slot(store, mo
                                              json={"jsonrpc": "2.0", "id": 9, "method": "ping"})
                 statuses.append(response.status_code)
     assert statuses == [500] * 32 + [200, 200]  # with a leaked slot per failure the last two would be 503
+
+
+@pytest.mark.parametrize("session", ["中".encode(), b"x" * 300])
+async def test_initialize_with_an_unusable_session_id_is_bad_gateway(store, session):
+    reply = json.dumps({"jsonrpc": "2.0", "id": 7, "result": initialize_result({"tools": {}})}).encode()
+    response = await post(store, lambda _: httpx.Response(200, headers=[(b"content-type", b"application/json"),
+                                                                        (b"mcp-session-id", session)], content=reply))
+    assert response.status_code == 502
+
+
+@pytest.mark.parametrize("verb", ["PUT", "PATCH", "OPTIONS"])
+async def test_other_methods_authenticate_then_405(store, verb):
+    seen = []
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: seen.append(r) or httpx.Response(200))) as child:
+        _, app = make_apps(store, TOOLS, child)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mcp") as client:
+            assert (await client.request(verb, "/mcp")).status_code == 401
+            response = await client.request(verb, "/mcp", headers={"Authorization": "Bearer " + store.load().token})
+    assert response.status_code == 405 and response.headers["allow"] == "GET, POST, DELETE" and not seen
+
+
+async def test_child_sees_a_fixed_accept_and_odd_statuses_are_bad_gateway(store):
+    seen = []
+    response = await call(store, lambda _: httpx.Response(200, json={"jsonrpc": "2.0", "id": 9, "result": {}}), capture=seen)
+    assert response.status_code == 200 and seen[0].headers["accept"] == "application/json, text/event-stream"
+    assert (await call(store, lambda _: httpx.Response(600, json={}))).status_code == 502
+
+
+async def test_overflowing_numbers_inside_forwarded_values(store):
+    seen = []
+    message = {"jsonrpc": "2.0", "id": 7, "method": "initialize",
+               "params": {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "c", "version": "0"}}}
+    raw = json.dumps(message).replace('"version": "0"', '"version": "0", "build": 1e400').encode()
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: seen.append(r) or httpx.Response(200))) as child:
+        _, app = make_apps(store, TOOLS, child)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mcp") as client:
+            response = await client.post("/mcp", headers={"Authorization": "Bearer " + store.load().token,
+                                                          "Content-Type": "application/json"}, content=raw)
+    assert response.status_code == 400 and not seen  # never forwarded as Infinity
+    listed = b'{"jsonrpc":"2.0","id":9,"result":{"tools":[{"name":"search_nodes","annotations":{"x":1e400}}]}}'
+    response = await call(store, lambda _: httpx.Response(200, headers={"content-type": "text/event-stream"},
+                                                          content=b"data: " + listed + b"\n\n"),
+                          message={"jsonrpc": "2.0", "id": 9, "method": "tools/list"})
+    assert response.status_code == 200 and "Infinity" not in response.text and data_lines(response.text) == []

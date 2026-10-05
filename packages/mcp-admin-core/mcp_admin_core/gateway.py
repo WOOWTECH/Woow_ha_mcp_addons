@@ -510,7 +510,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         state = store.load()
         if not token_valid(request, state):
             return Response(status_code=401, headers={"WWW-Authenticate": "Bearer"})
-        if request.method == "HEAD":  # Starlette adds HEAD to the GET route; it is not part of the protocol
+        if request.method not in ("GET", "POST", "DELETE"):  # HEAD, PUT, PATCH, OPTIONS: after the Bearer check
             return Response(status_code=405, headers={"Allow": "GET, POST, DELETE"})
         if request.headers.get("origin") is not None:
             raise BadRequest(403)  # Browser clients not in this tracer contract.
@@ -527,7 +527,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         elif await body(request):
             raise BadRequest()
         headers = {"Authorization": "Bearer " + state.child_token, "Content-Type": "application/json",
-                   "Accept": request.headers.get("accept", "application/json, text/event-stream"),
+                   "Accept": "application/json, text/event-stream",  # fixed: the gateway reads both itself
                    "Accept-Encoding": "identity"}
         for name in ("mcp-session-id", "mcp-protocol-version", "last-event-id"):
             values = request.headers.getlist(name)
@@ -570,6 +570,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             response_headers["Cache-Control"] = "no-store"
             if not still_authorized(state.token):
                 raise BadRequest(401)
+            if not 100 <= upstream.status_code <= 599:
+                raise BadRequest(502)  # the ASGI server cannot send other codes
             media = upstream.headers.get("content-type", "").split(";")[0].strip().lower()
             is_sse = media == "text/event-stream"
             if is_sse:  # the gateway re-frames events itself: never forward the child's parameters (charset)
@@ -598,6 +600,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 try:
                     if outcome != "ok":
                         raise ValueError("invalid initialize response")
+                    if "mcp-session-id" in upstream.headers and "mcp-session-id" not in response_headers:
+                        raise ValueError("unusable session id")  # a client could not continue the session
                     value = filter_list(value, tools, store.load())
                 except ValueError:
                     raise BadRequest(502) from None
@@ -650,7 +654,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     exceptions = {BadRequest: error_handler, ConfigError: error_handler}
     admin = Starlette(routes=[Route("/{path:path}", admin_page, methods=["GET", "HEAD", "PUT", "POST"])],
                       middleware=[Middleware(ui.SecurityHeaders)], exception_handlers=exceptions)
-    mcp_app = Starlette(routes=[Route("/mcp", mcp, methods=["GET", "POST", "DELETE"]), Route("/health/ready", readiness)], exception_handlers=exceptions)
+    mcp_app = Starlette(routes=[Route("/mcp", mcp, methods=["GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS"]),
+                                Route("/health/ready", readiness)], exception_handlers=exceptions)
     admin.router.redirect_slashes = False
     mcp_app.router.redirect_slashes = False
     return admin, mcp_app

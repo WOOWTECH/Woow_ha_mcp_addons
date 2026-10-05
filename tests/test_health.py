@@ -86,3 +86,41 @@ async def test_tcp_or_unconditional_health_is_not_protocol_readiness(tmp_path):
         await monitor.check()
         assert not process.ready
     store.close()
+
+
+@pytest.mark.parametrize("variant", ["session", "text-type", "no-text", "delete-raises"])
+async def test_a_misbehaving_child_never_stops_the_monitor(tmp_path, variant):
+    # Round 5: a non-ASCII session id made the cleanup DELETE raise outside the handled errors, and odd probe
+    # payloads raised TypeError/KeyError; any of them ended HealthMonitor.run() and with it the add-on.
+    store = Store(tmp_path / "state")
+    store.update(backend_url="http://backend.test", backend_key="DUMMY")
+    process = Process()
+    deletes = []
+
+    async def handler(request):
+        if request.method == "DELETE":
+            deletes.append(request)
+            if variant == "delete-raises":
+                raise RuntimeError("cleanup failed in an unexpected way")
+            return httpx.Response(204)
+        message = json.loads(request.content)
+        session = "中".encode() if variant == "session" else b"ok-session"
+        if message["method"] == "initialize":
+            return httpx.Response(200, headers=[(b"mcp-session-id", session), (b"content-type", b"application/json")],
+                                  content=json.dumps({"jsonrpc": "2.0", "id": 1, "result": {
+                                      "protocolVersion": "2025-03-26", "serverInfo": {"name": "x", "version": "0"}}}).encode())
+        if message["method"] == "notifications/initialized":
+            return httpx.Response(202)
+        if message["method"] == "ping":
+            return httpx.Response(200, json={"jsonrpc": "2.0", "id": 2, "result": {}})
+        item = {"type": "text", "text": 42} if variant == "text-type" else {"type": "text"}
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": 3, "result": {"content": [item]}})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        monitor = HealthMonitor(store, process, client)
+        await monitor.check()  # must not raise
+    assert monitor.snapshot()["backend"] == "unreachable"
+    if variant == "session":
+        assert process.ready is False and deletes == []  # the bad session id is never reused
+    else:
+        assert process.ready is True and len(deletes) == 1
+    store.close()

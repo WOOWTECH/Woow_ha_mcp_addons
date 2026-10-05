@@ -105,9 +105,12 @@ a plain 200 JSON reply; other 2xx codes and other, duplicate or missing media ty
 are 502 and not one byte of such a body is relayed, even when it is declared empty
 (framing headers can lie: `Content-Length: 0` with chunked encoding still carries a
 body); an initialize declared empty is 503 `BACKEND_UNAVAILABLE`. Replies to
-notifications and to DELETE carry only the status and the forwarded headers (plus
-`Cache-Control: no-store`), never the child's body. HEAD is 405 (`Allow: GET, POST,
-DELETE`) and never reaches the child. Media types compare case-insensitively without
+notifications and to DELETE carry only the status, the forwarded session/protocol/
+Retry-After headers (no Content-Type) and `Cache-Control: no-store`, never the child's
+body. HEAD, PUT, PATCH and OPTIONS are 405 after the Bearer check (`Allow: GET, POST,
+DELETE`) and never reach the child. The child always receives `Accept: application/json,
+text/event-stream`; statuses outside 100-599 are 502; an initialize reply whose session
+id cannot be forwarded is 502. Media types compare case-insensitively without
 parameters; a 2xx reply always reaches the client as plain `text/event-stream` or
 `application/json` (non-2xx bodies pass through with the child's Content-Type, and the
 pinned clients read them only as error text). Every JSON reply to a request is parsed, must
@@ -123,8 +126,8 @@ a server-to-client request (an event with `method` and `id`: elicitation, sampli
 roots, ping) is dropped, since the client could not answer it through the gateway and it
 would carry child text to the user; notifications (no id) still pass.
 Request bodies with lone surrogates anywhere are 400; numbers that overflow to infinity
-(e.g. `1e400`) are refused like NaN/Infinity (request 400, reply 502), so nothing is
-re-serialized as `Infinity`. The child receives initialize with
+(e.g. `1e400`) are refused like NaN/Infinity (a request 400, a JSON reply 502, an SSE
+event stops the stream), so nothing is re-serialized as `Infinity`. The child receives initialize with
 `capabilities: {}`, since the gateway answers no server-to-client request (sampling,
 elicitation, roots). Initialize is further special-cased: the gateway reads a 200 reply
 up to the JSON-RPC response for the request and answers with that one response (SSE

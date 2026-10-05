@@ -1,9 +1,12 @@
 """Protocol readiness and separate read-only backend reachability (not E2E)."""
 import asyncio
+import re
 
 import httpx
 
 from .config import ConfigError, strict_json
+
+SESSION_ID = re.compile(r"[\x21-\x7e]{1,256}")  # as the gateway accepts from clients
 
 
 async def protocol_reply(response: httpx.Response, expected_id):
@@ -74,6 +77,9 @@ class HealthMonitor:
                         "protocolVersion": "2025-03-26", "capabilities": {},
                         "clientInfo": {"name": "local-readiness", "version": "0"}}}) as response:
                     session = response.headers.get("mcp-session-id")
+                    if session is not None and not SESSION_ID.fullmatch(session):
+                        session = None  # never reused, not even by the cleanup DELETE
+                        raise ValueError("invalid session id")
                     if session:
                         headers["Mcp-Session-Id"] = session
                     result = await protocol_reply(response, 1)
@@ -110,7 +116,9 @@ class HealthMonitor:
                                         valid = probe_success(product, payload)
                                     if valid:
                                         self.backend = "reachable"
-        except (httpx.HTTPError, ValueError, TimeoutError, AttributeError, RecursionError):
+        except Exception:
+            # Whatever a misbehaving child provokes (odd headers, text or shapes) leaves readiness false and
+            # the backend unreachable; it must never stop the monitor, which would stop the add-on.
             pass
         finally:
             if session:
@@ -118,7 +126,7 @@ class HealthMonitor:
                     async with asyncio.timeout(3):
                         async with self.client.stream("DELETE", self.child_url, headers=headers):
                             pass
-                except (httpx.HTTPError, TimeoutError):
+                except Exception:
                     pass
 
     async def run(self):
