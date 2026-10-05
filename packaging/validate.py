@@ -236,7 +236,7 @@ def builder_workflow(value, workflow):
 
 
 def validate(root=ROOT):
-    exact(load(root / 'repository.yaml'), {'name': 'WOOW MCP Add-ons (experimental / blocked)', 'url': URL, 'maintainer': 'WOOWTECH'}, 'repository')
+    exact(load(root / 'repository.yaml'), {'name': 'WOOW MCP Add-ons (experimental)', 'url': URL, 'maintainer': 'WOOWTECH'}, 'repository')
     paths = source_paths(root)
     app_scopes = {Path(p).parts[1] for p in paths if p.startswith('apps/') and len(Path(p).parts) > 1}
     require(app_scopes == set(PRODUCTS) | {'runtime'}, 'application source scope')
