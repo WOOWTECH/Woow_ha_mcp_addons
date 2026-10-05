@@ -278,12 +278,22 @@ def triaged_pins():
     return sorted(values)
 
 
+def recorded_digests():
+    # The triage file itself publishes sha256 digests of image-layer hits (never the values); gitleaks
+    # flags those digests next to the word 'secret', so they are allowed by exact value as well.
+    entries = read_json(ROOT / 'packaging/secret-triage.json').get('image_findings', {}).get('entries', [])
+    digests = [entry.get('secret_sha256') for entry in entries]
+    require(all(isinstance(d, str) and re.fullmatch(r'[0-9a-f]{64}', d) for d in digests))
+    return digests
+
+
 def gitleaks_config():
     # Default rules unchanged. Allowlist matches the WHOLE secret against exact 64-hex values only,
     # so any other finding (or any other value) still fails closed. Reports stay --redact=100.
+    values = sorted(set(triaged_pins()) | set(recorded_digests()))
     return ('[extend]\nuseDefault = true\n\n[[allowlists]]\n'
-            'description = "triaged sha256 file pins (packaging/secret-triage.json)"\n'
-            "regexes = ['''^(?:" + '|'.join(triaged_pins()) + ")$''']\n")
+            'description = "triaged sha256 file pins and recorded hit digests (packaging/secret-triage.json)"\n'
+            "regexes = ['''^(?:" + '|'.join(values) + ")$''']\n")
 
 
 def approved_image_findings():
