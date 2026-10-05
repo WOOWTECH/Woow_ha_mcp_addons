@@ -9,6 +9,7 @@ import pytest
 
 from test_backend_policy_python import policy
 from test_expansion_runtime import WRITES
+from litellm_metadata_fixtures import FIXTURES as LITELLM_METADATA_CASES
 
 from mcp_admin_core.lifecycle import ChildSpec
 from mcp_admin_core.products import PROBES, TOOLS
@@ -217,6 +218,13 @@ async def test_cancel_actual_lazy_stream_releases_pool_not_resolver_ownership():
             release.set()
 
 
+def http_read_arguments(product, name):
+    """Use the same valid inputs exercised by the real metadata child test."""
+    if product == 'litellm' and name in LITELLM_METADATA_CASES:
+        return dict(LITELLM_METADATA_CASES[name][0])
+    return {}
+
+
 @pytest.mark.parametrize('product,json_response', [
     ('hermes', False), ('opendesign', False), ('emqx', False),
     ('litellm', False), ('emqx', True), ('litellm', True)])
@@ -262,7 +270,8 @@ async def test_every_enabled_http_handler_has_safe_body_errors(tmp_path, product
                              {'action': 'status'} if name == 'hermes_gateway' else
                              {'action': 'info'} if name == 'hermes_model' else
                              dict(project, file_path='test.txt') if name == 'get_file_info' else
-                             project if name in ('get_project', 'list_project_files', 'delete_project') else {})
+                             project if name in ('get_project', 'list_project_files', 'delete_project') else
+                             http_read_arguments(product, name))
                 if TOOLS[product][name].write:
                     arguments = next(args for n,args in WRITES[product] if n == name)
                 calls.append((name, arguments))

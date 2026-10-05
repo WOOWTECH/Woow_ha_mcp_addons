@@ -10,6 +10,7 @@ from test_expansion_runtime import READS, WRITES
 from test_batch2_policy import CASES as B1_CASES
 from test_b2_odoo_policy import CASES as B2_CASES
 from test_b3_n8n_policy import CASES as B3_CASES
+from litellm_metadata_fixtures import FIXTURES as LITELLM_METADATA_CASES
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -83,7 +84,10 @@ def test_every_added_tool_has_real_handler_positive_case():
         b1_cases = [(name, args) for p, name, args in B1_CASES if p == product]
         b2_cases = B2_CASES if product == 'odoo' else []
         b3_cases = B3_CASES if product == 'n8n' else []
-        actual_cases = {name for name, _ in READS[product]+WRITES[product]+b1_cases+b2_cases+b3_cases}
+        # These exact cases are dispatched and projected by the genuine child in
+        # test_litellm_metadata_runtime, not merely advertised in tools/list.
+        litellm_cases = [(name, fixture[0]) for name, fixture in LITELLM_METADATA_CASES.items()] if product == 'litellm' else []
+        actual_cases = {name for name, _ in READS[product]+WRITES[product]+b1_cases+b2_cases+b3_cases+litellm_cases}
         assert set(tools)-old[product] <= actual_cases
         # Every new operation grant has a real writer case, not just tools/list.
         covered = {name if tools[name].write else f'{name}:{args[tools[name].selector]}'
