@@ -29,7 +29,7 @@ driver 以 HA 登入流程取得管理員 token → WebSocket `supervisor/api` �
 | `cycle` | 25 次 initialize＋DELETE，確認 session 名額有釋放 | 無 |
 | `--backend-file F` | 用 0600 JSON（n8n `{"url","key"}`；其他六支 `{"connection":{...}}`）填面板後端，內容不印 | 改這個 app 的後端設定、重啟它的 MCP child |
 | `--plan P` | 依清單呼叫工具：reads 必須成功（HTTP 200、非 isError、無 `success:false`）；denials 必須 HTTP 403 | 無（防護失效時見下方說明） |
-| `--outage-url U` | 搭配前兩者：後端所有網址欄位（`url`、`gateway_url`、`dashboard_url`…）換成不通的 U，每個 read 都須回 HTTP 200（本機工具照常、後端工具回結構化錯誤），且至少一個 read 回結構化錯誤；改回原設定後清單須再次全過 | 暫時改這個 app 的後端設定 |
+| `--outage-url U` | 搭配前兩者：後端所有網址欄位（`url`、`gateway_url`、`dashboard_url`…）換成不通的 U，每個 read 都須回 HTTP 200（本機工具照常、後端工具回結構化錯誤），且至少一個 read 回結構化錯誤（或 0.1.2 起 gateway 在初始化就回 503 `BACKEND_UNAVAILABLE`：子程序沒有後端無法建立連線階段時，此時只檢查拒絕）；改回原設定後清單須再次全過 | 暫時改這個 app 的後端設定 |
 
 probe 開的每個 session 都會 DELETE，不吃掉 app 的共用 session 名額（n8n 為 20 個、閒置 10 分鐘回收）。
 
