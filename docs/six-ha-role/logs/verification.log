@@ -1,0 +1,23 @@
+HEAD/base exact; branch exact; index empty: PASS
+Exact changed/new path allowlist: PASS
+docs/six-ha-role/logs/deps.log
+docs/six-ha-role/logs/green-checkpoint.exit
+docs/six-ha-role/logs/green-checkpoint.log
+docs/six-ha-role/logs/green-final.exit
+docs/six-ha-role/logs/green-final.log
+docs/six-ha-role/logs/green-focused.exit
+docs/six-ha-role/logs/green-focused.log
+docs/six-ha-role/logs/red.exit
+docs/six-ha-role/logs/red.log
+docs/six-ha-role/logs/verification.log
+docs/six-ha-role/scope.md
+docs/six-ha-role/source-hashes.json
+packages/mcp-admin-core/mcp_admin_core/ha_role.py
+packages/mcp-admin-core/mcp_admin_core/run_product.py
+tests/test_ha_role.py
+tests/test_product_ha_role.py
+All other tracked files equal base (including addon/config.yaml/version/CHANGELOG/packaging/validate.py/dependency pins/gateway/products): PASS
+git diff --check BASE plus untracked files: PASS (no-index new-file exit 1 accepted only with empty diagnostics)
+Current source/test SHA-256 ledger: PASS
+Earlier verification wrapper exit 1 was an overly strict check of no-index new-file exit status; fixed wrapper only, no source changes.
+No stage/commit/push/merge; no live/child/image acceptance claimed.

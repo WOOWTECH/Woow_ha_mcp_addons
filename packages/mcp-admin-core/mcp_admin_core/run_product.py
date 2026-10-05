@@ -1,4 +1,4 @@
-"""Executable six-product boundary. Management remains fail closed pending HA approval.
+"""Executable six-product boundary with approved, fail-closed HA admin verification.
 
 PYTHONPATH=packages/mcp-admin-core .venv/bin/python -m mcp_admin_core.run_product emqx
 GUI owns typed connection/token/policy. CLI owns deployment fields only.
@@ -14,6 +14,7 @@ import uvicorn
 
 from .config import ConfigError
 from .gateway import make_apps
+from .ha_role import make_ha_admin_verifier
 from .health import HealthMonitor
 from .lifecycle import Supervisor
 from .products import PRODUCTS, ProductStore, TOOLS, child_spec
@@ -49,6 +50,7 @@ async def run(args):
                 await manager.start()
 
             admin, mcp = make_apps(store, TOOLS[args.product], child,
+                                  verify_admin=make_ha_admin_verifier(),
                                   health=health.snapshot, backend_changed=backend_changed)
             servers = [Listener(uvicorn.Config(app, host=args.host, port=port,
                 proxy_headers=False, access_log=False, log_level='warning', server_header=False,

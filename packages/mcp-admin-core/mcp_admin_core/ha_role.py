@@ -1,7 +1,7 @@
-"""n8n's approved, query-only use of a BROAD Core administrator capability.
+"""Approved query-only use of a BROAD Core admin capability for n8n and six products.
 
 No URL/command/token configuration surface; no authenticated socket or allow cache.
-The private connector seam exists solely for owned-loopback protocol tests.
+The private connector seam exists solely for fake/owned-loopback protocol tests.
 """
 from __future__ import annotations
 

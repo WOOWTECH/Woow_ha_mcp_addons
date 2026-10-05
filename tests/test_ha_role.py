@@ -315,13 +315,14 @@ async def test_disconnect_cancels_role_query_without_disclosure(tmp_path, monkey
             assert b"csrf" not in b"".join(m.get("body", b"") for m in output)
 
 
-def test_n8n_factory_wired_and_other_six_unchanged():
+def test_n8n_and_six_products_share_factory():
     import inspect
     import run
     from mcp_admin_core import run_product
     assert run.make_ha_admin_verifier is ha_role.make_ha_admin_verifier
     assert "verify_admin=make_ha_admin_verifier()" in inspect.getsource(run.run)
-    assert "verify_admin=" not in inspect.getsource(run_product)
+    assert run_product.make_ha_admin_verifier is ha_role.make_ha_admin_verifier
+    assert "verify_admin=make_ha_admin_verifier()" in inspect.getsource(run_product.run)
     assert not isinstance(ha_role._NoRedirectConnect.process_redirect(None, RuntimeError()), str)
 
 
