@@ -23,7 +23,7 @@ child 一律 127.0.0.1:3000/mcp，不能對外映射。管理與 MCP 各自 list
 
 | Product | Transport / runtime | Typed connection（exact fields） | 自動 read probe |
 |---|---|---|---|
-| Odoo | wheel 1.1.0；source-guarded `apps/odoo/launch.py` → 原 CLI native HTTP | url, database, username, password | list_models(limit=1)；需 success=true + result array |
+| Odoo | wheel 1.1.0；source-guarded `apps/odoo/launch.py` → 原 CLI native HTTP | url, database, username, password | 0.1.3 起子程序私有 `woow_backend_probe`（不在 TOOLS；以新 client 只做 authenticate，自己的 owned thread）；需恰好 `{"uid": 正整數}`（0.1.2 以前為 list_models(limit=1)、需 success=true + result array） |
 | Odoo Manage | wheel 0.7.1；source-guarded `apps/odoo-manage/launch.py` → 原 CLI native HTTP | url, database, username, api_key, mode=read | list_models；models array + yolo_mode.operations.read=true，無 error |
 | Hermes | 新固定 SDK native HTTP launcher，原真實 handlers | gateway_url, gateway_api_key；可選 dashboard_url/username/password 必須整組提供 | hermes_inspect(target=capabilities)；capabilities object，不能有 capabilities_error |
 | OpenDesign | 新固定 SDK native HTTP launcher，原真實 handlers | url（無虛构 backend token） | health；保守只認 status=ok/healthy；其他 shape 顯示 unreachable 待版本確認 |
@@ -64,10 +64,10 @@ HTTPX headers 後的 lazy sync/async body iteration／close 亦經固定 `BACKEN
 
 `test_stream_error_redaction.py` 重現真正 child/gateway 的 Authorization malformed-chunk 洩漏，涵蓋 dashboard login/cookie、sync OpenDesign、所有已啟用 HTTP tool 的 gzip／encoding／JSON 錯誤、JSON/SSE 全文 canaries；另在真正 HTTPX/core pool 注入 late read/timeout/close errors、檢查重複失敗／取消的 pool reuse 與 cleanup。獨立 spec verification 及 NEW security review 仍必須重新進行。
 
-SDK 1.28.1 同步工具原本直接阻塞 event loop。OpenDesign 改 4-worker、Odoo 改 1-worker offload，無等待工作 queue；超載立即 `BACKEND_BUSY`，caller cancellation 不提前釋放執行中 slot。普通 I/O timeout 5 秒；slow-trickle/hung DNS 無法靠 thread cancellation 強制停止，既有 Supervisor 持有 child group 的 3 秒 SIGTERM grace / SIGKILL / reap 硬關機邊界，不將後端失效當 restart 理由。0.1.3 起 Odoo 的健康探測是子程序私有的 `woow_backend_probe`（不在 TOOLS，gateway 不列出也不授權）：只以新 client 驗證登入（authenticate），在自己的 1-thread owned executor 執行（同樣無等待、取消不提前釋放），從不佔使用者的 1-worker；0.1.2 HA 回歸時探測（`list_models`）在 Odoo 剛重啟、回應慢時佔住該 worker，使用者讀取全回 `BACKEND_BUSY`。
+SDK 1.28.1 同步工具原本直接阻塞 event loop。OpenDesign 改 4-worker、Odoo 改 1-worker offload，無等待工作 queue；超載立即 `BACKEND_BUSY`，caller cancellation 不提前釋放執行中 slot。普通 I/O timeout 5 秒；slow-trickle/hung DNS 無法靠 thread cancellation 強制停止，既有 Supervisor 持有 child group 的 3 秒 SIGTERM grace / SIGKILL / reap 硬關機邊界，不將後端失效當 restart 理由。0.1.3 起 Odoo 的健康探測是子程序私有的 `woow_backend_probe`（不在 TOOLS，gateway 不列出也不授權）：只以新 client 驗證登入（authenticate），在自己的 1-thread owned executor 執行（同樣無等待、取消不提前釋放），從不佔使用者的 1-worker（因此 Odoo child 對後端最多 2 個並行連線：工具 1＋探測 1；DNS resolver 的 4 個 admission 名額仍共用）；0.1.2 HA 回歸時探測（`list_models`）在 Odoo 剛重啟、回應慢時佔住該 worker，使用者讀取全回 `BACKEND_BUSY`。
 
 `test_resolver_regressions.py` 補 stock/pinned localhost 對照、IPv4/IPv6 fallback、DNS+TCP budget、真實 OpenDesign/Hermes health/readiness、Hermes gateway 三波 24-call cancellation/DNS capacity/reuse/ping/group reap 及實際 gateway/login/cookie/sync/XMLRPC 共用 admission。
 
 新增 tests：`test_six_hardening.py`（真實 handler/gateway redirect、JSON/SSE error canary、dashboard cookie、slow/hung/burst、EMQX health/readiness），`test_six_egress.py`（六類實際 backend client + synthetic DNS/intercepted sockets），`test_backend_policy_python.py`（address classes、pinning、origin/path、owned HTTPS certificate/SNI/redirect）。不向真實 metadata 位址送封包。
 
-三種 health 分開：management alive/state_error、child lifecycle/protocol ready、backend unconfigured/unreachable/reachable。健康 probe 是獨立 internal read，不受 client disabled 名單影響，不啟用 client call。backend outage 不 restart child/container，readiness 不可作 restarting watchdog。HA admin-role、六類 hardening 的新獨立安全審查、backend 實際版本／least-privilege、Docker/HA/client/backup/CPU-RSS 等仍待實測；詳見來源文件及 BLOCKERS。
+三種 health 分開：management alive/state_error、child lifecycle/protocol ready、backend unconfigured/unreachable/reachable。健康 probe 是獨立 internal 呼叫（Odoo 0.1.3 起只驗證登入，其餘產品是 read），不受 client disabled 名單影響，不啟用 client call。backend outage 不 restart child/container，readiness 不可作 restarting watchdog。HA admin-role、六類 hardening 的新獨立安全審查、backend 實際版本／least-privilege、Docker/HA/client/backup/CPU-RSS 等仍待實測；詳見來源文件及 BLOCKERS。

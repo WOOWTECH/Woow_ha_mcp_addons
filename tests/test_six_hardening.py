@@ -221,6 +221,12 @@ async def test_slow_backend_does_not_starve_protocol(tmp_path, product, capacity
                     monitor = HealthMonitor(store, manager, child, child_url=manager.endpoint.url)
                     await monitor.check()
                     assert monitor.backend == 'unreachable'
+                    if product == 'odoo':
+                        # 0.1.3: Odoo's probe has its own owned thread, never the full tool worker, so the hung
+                        # backend sees one more call and the probe fails by the monitor's timeout, not BACKEND_BUSY.
+                        assert peak == capacity + 1
+                    else:
+                        assert peak <= capacity
                     assert manager.starts == 1
                     pid = manager.process.pid
                     started = time.monotonic()

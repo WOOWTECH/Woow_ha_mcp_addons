@@ -155,7 +155,8 @@ async def test_odoo_probe_never_takes_the_tool_worker(tmp_path):
                         await held()
                         stuck.cancel()
                         await asyncio.gather(stuck, return_exceptions=True)
-                        await health.check()
+                        async with asyncio.timeout(2):  # refused at once, not queued until the 5 s probe timeout
+                            await health.check()
                         assert health.backend == 'unreachable'
                         assert payload(await rpc(client, '/mcp', headers, REPORT))['summary']['total_issues'] == 3
                     finally:

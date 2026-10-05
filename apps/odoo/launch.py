@@ -61,6 +61,8 @@ if __name__ == '__main__':
         return {'uid': odoo.uid}
 
     mcp.add_tool(woow_backend_probe, name='woow_backend_probe', description='Add-on readiness probe (private).')
+    if mcp._tool_manager.get_tool('woow_backend_probe').fn is not woow_backend_probe:
+        raise RuntimeError('readiness probe name taken')  # add_tool keeps an existing tool of the same name
     # The stock client caches an XMLRPC transport: serialize its sync calls.
     workers = BoundedTools(mcp, capacity=1)
     try:
