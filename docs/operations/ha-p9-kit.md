@@ -27,8 +27,19 @@ driver 以 HA 登入流程取得管理員 token → WebSocket `supervisor/api` �
 | `childkill` | 在 app 容器內 SIGKILL management launcher 的子程序，量恢復時間；容器不應重啟 | 中斷這個 app 的 MCP 連線數秒 |
 | `bench` | initialize×5、tools/list×50、`PROBE_TOOL`×50 的 p50／p95 | 無（只用唯讀工具） |
 | `cycle` | 25 次 initialize＋DELETE，確認 session 名額有釋放 | 無 |
+| `--backend-file F` | 用 0600 JSON（n8n `{"url","key"}`；其他六支 `{"connection":{...}}`）填面板後端，內容不印 | 改這個 app 的後端設定、重啟它的 MCP child |
+| `--plan P` | 依清單呼叫工具：reads 必須成功（HTTP 200、非 isError、無 `success:false`）；denials 必須 HTTP 403 | 無（防護失效時見下方說明） |
+| `--outage-url U` | 搭配前兩者：後端網址換成不通的 U，reads 必須回結構化錯誤；改回原設定後清單須再次全過 | 暫時改這個 app 的後端設定 |
 
 probe 開的每個 session 都會 DELETE，不吃掉 app 的共用 session 名額（n8n 為 20 個、閒置 10 分鐘回收）。
+
+### 清單（plan）
+
+`python packaging/p9_plan.py <product> [--overrides args.json] > plan.json` 從 `docs/tool-surface.json` 產生：
+已支援的讀取工具（或讀取操作）以 schema 推得的最小參數放進 reads，推不出安全參數的列在 `needs_args`，用 overrides
+（`{"tool" 或 "tool:operation": {參數}}`）補上實際後端的值；已支援的寫入、暫不支援的工具與一個不存在的工具放進
+denials。denials 的參數符合 schema 但指向**不可能存在**的資料（整數 id 取允許的最大值、名稱用 `p9-denied`），
+即使寫入防護失效也不會動到真資料；仍須照試點程序在後端核對前後無變化。清單記錄來源 tool-surface 的 sha256。
 `PROBE_TOOL` 只能填無副作用的工具；寫入防護、後端斷線、備份還原屬 P9 其他項目，不在本工具內。
 
 ## 證據

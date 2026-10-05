@@ -16,7 +16,9 @@ import uuid
 import ha_p9_probe as probe
 
 TOKEN = 'tok-' + 'x' * 40
-TOOLS = [{'name': 'search_nodes'}, {'name': 'tools_documentation'}]
+TOOLS = [{'name': 'search_nodes'}, {'name': 'tools_documentation'}, {'name': 'n8n_list_workflows'}]
+DENIED = {'n8n_delete_workflow', 'definitely_not_a_tool'}  # the gateway refuses these with HTTP 403
+BACKEND_TOOLS = {'n8n_list_workflows'}
 
 
 class FakeMCP(ThreadingHTTPServer):
@@ -25,6 +27,7 @@ class FakeMCP(ThreadingHTTPServer):
     def __init__(self, cap=20):
         super().__init__(('127.0.0.1', 0), Handler)
         self.cap, self.sessions, self.lock = cap, set(), threading.Lock()
+        self.outage = False
         self.calls = []
         threading.Thread(target=self.serve_forever, daemon=True).start()
 
@@ -82,9 +85,13 @@ class Handler(BaseHTTPRequestHandler):
         if method == 'tools/list':
             return self.reply(200, {'jsonrpc': '2.0', 'id': body['id'], 'result': {'tools': TOOLS}}, sse=True)
         if method == 'tools/call':
-            known = body['params']['name'] in {t['name'] for t in TOOLS}
+            name = body['params']['name']
+            if name in DENIED:
+                return self.reply(403, {'error': 'request denied'})
+            known = name in {t['name'] for t in TOOLS}
+            text = '{"success": false, "code": "NO_RESPONSE"}' if self.server.outage and name in BACKEND_TOOLS else 'ok'
             return self.reply(200, {'jsonrpc': '2.0', 'id': body['id'], 'result': {
-                'content': [{'type': 'text', 'text': 'ok'}], 'isError': not known}})
+                'content': [{'type': 'text', 'text': text}], 'isError': not known}})
         self.reply(400)
 
 
@@ -104,7 +111,7 @@ class ProbeTests(unittest.TestCase):
         summary, text = self.main('check', stdin='valid\t%s\nwrong\tnope\n' % TOKEN)
         rows = {row['label']: row for row in summary['check']}
         self.assertEqual((rows['valid']['initialize'], rows['valid']['tools_list'], rows['valid']['tools'],
-                          rows['valid']['delete']), (200, 200, 2, 204))
+                          rows['valid']['delete']), (200, 200, 3, 204))
         self.assertEqual((rows['wrong']['initialize'], rows['wrong']['tools']), (401, 0))
         self.assertEqual(self.server.sessions, set())
         self.assertIn('SUMMARY ', text)
@@ -126,6 +133,32 @@ class ProbeTests(unittest.TestCase):
     def test_bench_fails_closed_on_tool_error(self):
         with self.assertRaises(SystemExit):
             self.main('bench', '--sessions', '1', '--requests', '1', '--tool', 'not_a_tool', stdin=TOKEN + '\n')
+        self.assertEqual(self.server.sessions, set())
+
+    PLAN = {'reads': [['search_nodes', {'query': 'x'}], ['n8n_list_workflows', {'limit': 2}]],
+            'denials': [['n8n_delete_workflow', {'id': 'none'}], ['definitely_not_a_tool', {}]]}
+
+    def test_plan_reads_succeed_and_denials_are_refused(self):
+        summary, text = self.main('plan', stdin=TOKEN + '\n' + json.dumps(self.PLAN))
+        self.assertEqual((summary['plan']['passed'], summary['plan']['total']), (4, 4))
+        self.assertEqual([r['listed'] for r in summary['plan']['rows']], [True, True, False, False])
+        self.assertEqual(self.server.sessions, set())
+
+    def test_plan_outage_requires_structured_failures(self):
+        self.server.outage = True
+        summary, _ = self.main('plan', '--expect-backend-down', stdin=TOKEN + '\n' + json.dumps(
+            {'reads': [['n8n_list_workflows', {}]], 'denials': [['n8n_delete_workflow', {}]]}))
+        self.assertEqual(summary['plan']['passed'], 2)
+        with self.assertRaises(SystemExit):  # the same outage without the flag is a failed read
+            self.main('plan', stdin=TOKEN + '\n' + json.dumps({'reads': [['n8n_list_workflows', {}]]}))
+        self.server.outage = False
+        with self.assertRaises(SystemExit):  # a healthy backend is not a structured outage failure
+            self.main('plan', '--expect-backend-down', stdin=TOKEN + '\n' + json.dumps({'reads': [['n8n_list_workflows', {}]]}))
+
+    def test_plan_fails_when_a_read_is_denied_or_a_denial_succeeds(self):
+        for plan in ({'reads': [['n8n_delete_workflow', {}]]}, {'denials': [['search_nodes', {'query': 'x'}]]}):
+            with self.subTest(plan=plan), self.assertRaises(SystemExit):
+                self.main('plan', stdin=TOKEN + '\n' + json.dumps(plan))
         self.assertEqual(self.server.sessions, set())
 
     def test_restart_and_childkill_use_only_the_named_app(self):
