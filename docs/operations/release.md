@@ -16,8 +16,8 @@ Python 3.13.16 slim-bookworm、Node 22.23.2 bookworm-slim、uv 0.12.10。
 原 core worker 本地使用 Python3.13.2，本封裝選支援範圍內固定 patch3.13.16；
 不同 patch/base/native libraries 仍須真正 image build 和 container gate 才可接受。
 
-**此隔離工作環境無 Docker，未安裝系統容器工具，未建置／執行映像、未發 remote
-Actions、未發佈／安裝 HA。** 靜態與本地 packaging tests 不能升格成 image PASS。
+**開發容器本身仍無 Docker；映像改在專用一次性 builder 建置。** 2026-10-05 起：七類映像已在專用一次性 KubeVirt builder（Docker classic store）由候選 `f75fe32` 建置，container/mock 驗收與 supply-chain gate（source／history／image secrets、SBOM、CVE、license）全數通過；證據在協作區 `claude-delivery/evidence-real-f75fe32/`。未發 remote Actions、未發佈、
+未安裝 HA。靜態與本地 packaging tests 不能升格成 image PASS。
 
 n8n 路徑 A 的 `homeassistant_api:true` **權限已批准**，不是 publication clearance。
 其他六類仍 false；hassio/auth API、預設 role、host 邊界不變。真實 fixed-URL／
@@ -111,11 +111,12 @@ annotated tag，已解到 commit。固定來源不等於 action code 已完成�
 - 唯一 publisher／固定 tag 不覆寫政策；workflow concurrency 不能防另一個未受控 writer。
 
 供應鏈已改為**可執行的必要 gate**，不是外部手動 waiver：公開 checksum 固定的
-Gitleaks 8.28.0、Syft 1.20.0、Grype 0.89.0；完整 fetched refs 的 history、HEAD tree、
+Gitleaks 8.28.0、Syft 1.54.0、Grype 0.120.0（Grype 0.89.0 下載 v6 DB 會 panic，2026-10-05 升級；掃描前先單獨 `grype db update`）；完整 fetched refs 的 history、HEAD tree、
 Docker save 所有 layer/config 秘密掃描；整個 image 的 all-layers Syft/SPDX SBOM；
 CVE／license fail-closed policy。原始 scanner stdout/stderr/report 不印出、不上傳；
 Docker action 的自動 build record/summary 也停用。詳見 [精確映像與信任界線](hardening.md)。
-這些 commands 尚未在真實 image 執行，Docker/HA NOT TESTED；manual gates 仍全部 false。
+這些 commands 已於 2026-10-05 在私有 builder 對七類真實 image（候選 f75fe32）執行並通過；HA NOT TESTED；
+`RELEASE-GATES.json` 的 manual gates 仍全部 false（公開發佈另需 publisher／來源授權等關卡）。
 
 Push 前再核對 local ID、source、SBOM/scan/provenance hashes；push 後以匿名 manifest
 的 SHA256、config digest、空 Docker config 的 immutable pull、實際 pulled diffIDs

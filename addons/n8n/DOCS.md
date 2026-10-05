@@ -2,7 +2,7 @@
 
 ## 現況與範圍
 
-**未發佈／未建置 image／未做 HA E2E**。版本 0.1.0 為固定候選，不是已存在 tag。
+**未發佈／未做 HA E2E**；映像已在私有 builder 由候選 f75fe32 建置並通過 container/mock 與 supply-chain gate（2026-10-05）。版本 0.1.0 為固定候選，不是已存在 tag。
 **路徑 A 權限已批准**：僅此新 n8n 試點 `homeassistant_api: true`，其他六類 false。
 正式 fixed-WS verifier 已實作並經 component review；管理 HTML/assets/API 與 UI 已本地整合。
 本地真 bootstrap→guard→n8n→provider fake WS／Chromium 已覆蓋設定與 token 操作，

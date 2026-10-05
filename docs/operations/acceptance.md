@@ -1,7 +1,7 @@
 # 分層驗收與故障接受條件
 
-**狀態：此封裝批次沒有 Docker image build／container execution／HA／真實 backend
-E2E。已有 core 本地測試報告不能替代這些證據。七類不互相外推。**
+**狀態：2026-10-05 起：七類映像已在專用一次性 KubeVirt builder（Docker classic store）由候選 `f75fe32` 建置，container/mock 驗收與 supply-chain gate（source／history／image secrets、SBOM、CVE、license）全數通過；證據在協作區 `claude-delivery/evidence-real-f75fe32/`。映像尚未發佈、未安裝到 HA，也沒有真實 backend E2E。
+私有 builder 的 PASS 不等於 HA、真後端或公開發佈驗收；core 本地測試報告不能替代這些證據。七類不互相外推。**
 
 每項紀錄：UTC、批准範圍、source SHA、image tag+digest、依賴／client／Core／
 Supervisor／HAOS 版本、硬體、測試命令、exit code、預期／觀察、匿名化證據、reviewer、

@@ -2,7 +2,7 @@
 
 以下是批准後的受控程序，**尚無真實 HA backup/restore 或 image upgrade 成功證據**。
 只允許操作本次新增的 MCP Add-on，不重啟現有 backend、Core、Supervisor 或 k3s。
-映像尚未建置／發佈，現在不執行安裝或更新。
+映像已在私有 builder 建置並通過 supply-chain gate，但尚未發佈；HA 試點依 [逐步指令](n8n-pilot-commands.md) 逐步批准後才安裝。
 
 ## 更新前
 
