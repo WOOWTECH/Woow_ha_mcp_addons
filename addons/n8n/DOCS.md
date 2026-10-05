@@ -2,11 +2,11 @@
 
 ## 現況與範圍
 
-**未發佈／未做 HA E2E**；映像已在私有 builder 由候選 f75fe32 建置並通過 container/mock 與 supply-chain gate（2026-10-05）。版本 0.1.0 為固定候選，不是已存在 tag。
+**0.1.0 已公開（experimental）**：映像 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.0` 由候選 f75fe32 建置，通過 container/mock 與 supply-chain gate（2026-10-05），可從本 repository 的 HA 商店安裝。**HA 試點部分通過**（2026-10-05，一台 HA 實機）：管理員 Ingress 面板、Bearer 拒絕與 token 輪替／撤銷、未設定後端時的本機工具 MCP E2E、Add-on 重啟與 MCP child 異常重啟、資源量測；**尚未測**：真 n8n 後端工具、寫入防護、後端斷線、backup/restore、non-admin、升版。
 **路徑 A 權限已批准**：僅此新 n8n 試點 `homeassistant_api: true`，其他六類 false。
 正式 fixed-WS verifier 已實作並經 component review；管理 HTML/assets/API 與 UI 已本地整合。
-本地真 bootstrap→guard→n8n→provider fake WS／Chromium 已覆蓋設定與 token 操作，
-HA **NOT TESTED**；整合獨立規格及新安全審查仍待完成。
+本地真 bootstrap→guard→n8n→provider fake WS／Chromium 已覆蓋設定與 token 操作；
+真 HA 上管理員 Ingress 與 token 操作已通過（見上）；整合獨立規格及新安全審查仍待完成。
 不得注入 test verifier 或直接編輯 state 解鎖；`panel_admin` 不是角色授權。
 
 此 token 授予**廣泛 Core 管理能力**（使用者管理、可能透過服務間接影響
@@ -47,6 +47,7 @@ B3 新增 tags catalog（只掃第一頁最多250、本地query/limit）、execu
 - `8099`：Ingress-only，無主機 mapping；不是 MCP endpoint。
 - `8081/mcp`：Bearer Streamable HTTP；`8081/tcp: null` 預設不公開 LAN mapping。
 - `3000`：child loopback-only，永不暴露。七容器內部 ports 可相同，LAN host ports 必須各異。
+- Session：所有 client **共用 20 個**同時 session，閒置 10 分鐘回收。client 用完要送 `DELETE /mcp`（帶 `Mcp-Session-Id`），額滿時 initialize 回 429「Session limit reached」。MCP child 重啟（含 Add-on 重啟）後舊 session 失效，client 需重新 initialize；token 不變。
 - 使用實際安裝後 DNS placeholder，不能猜 repository hash 或從 iframe origin 推導。
   [client 範例](../../docs/operations/clients.md) 不含真實秘密。
 
@@ -65,7 +66,7 @@ backup，不能只降 image 或改 schema。依 [更新備份回復](../../docs/
 
 ## 發佈與尚未通過關卡
 
-本產品仍需 source/license/secret、image、HA／真實版本與受限 credentials、
-管理員及 non-admin、Ingress UX、同 HA／LAN clients、stream、backup/restore、
-CPU/RSS/latency 證據。第一個核准試點，僅受限非正式 workflow key；sql.js fallback，npm ci --ignore-scripts；沒有 runtime npm download。
+source/license/secret、image 已通過 gate；管理員 Ingress、同 HA client 本機工具、
+CPU/RSS/latency 已有 HA 證據。仍需真 n8n 後端與受限 credentials、non-admin、LAN client、
+stream、backup/restore、升版證據。第一個核准試點，僅受限非正式 workflow key；sql.js fallback，npm ci --ignore-scripts；沒有 runtime npm download。
 [發佈關卡](../../docs/operations/release.md) 預設關閉；其他產品通過不能替本產品背書。

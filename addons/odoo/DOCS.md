@@ -2,7 +2,7 @@
 
 ## 現況與範圍
 
-**未發佈／未做 HA E2E**；映像已在私有 builder 由候選 f75fe32 建置並通過 container/mock 與 supply-chain gate（2026-10-05）。版本 0.1.0 為固定候選，不是已存在 tag。
+**0.1.0 已公開（experimental）／未做 HA E2E**：映像 `ghcr.io/woowtech/amd64-mcp-odoo:0.1.0` 由候選 f75fe32 建置，通過 container/mock 與 supply-chain gate（2026-10-05）。本版管理面板 fail closed（見下），裝上 HA 也無法設定後端，請先不要安裝。
 只有新 n8n 已獲路徑 A 批准，正式 provider 已實作並經 component review；
 共用 UI 已本地 Core 整合，但此批准不適用本產品，無正式角色 verifier，管理 fail closed；
 目前無正常後端設定或 token reveal/rotate 路徑。不得改權限、注入 test verifier 或
@@ -32,6 +32,7 @@ B2 增加 schema_catalog（固定 res.partner、limit1、兩個 metadata cache k
 - `8099`：Ingress-only，無主機 mapping；不是 MCP endpoint。
 - `8081/mcp`：Bearer Streamable HTTP；`8081/tcp: null` 預設不公開 LAN mapping。
 - `3000`：child loopback-only，永不暴露。七容器內部 ports 可相同，LAN host ports 必須各異。
+- 同一台 HA 的 Woow Odoo 18 add-on：它的 8069 只放行 `lan_networks` 來源，HA add-on 網路（172.30.32.0/23）固定排除，所以從本 Add-on 用內部主機名或主機 LAN IP 連線都會被直接斷線；只有 Host 等於它 `public_url` 主機名的請求進入 public 層（只擋 db service）。本版連線固定目的主機、不能改 Host，可行做法是讓 `public_url` 網域可解析並經 tunnel 連入，backend url 填 `https://<public host>`。**不要**把 172.30.x 加進 Odoo 的 `lan_networks`：那會讓同網路的 tunnel 取得 LAN 層權限（含資料庫管理）。
 - 使用實際安裝後 DNS placeholder，不能猜 repository hash 或從 iframe origin 推導。
   [client 範例](../../docs/operations/clients.md) 不含真實秘密。
 

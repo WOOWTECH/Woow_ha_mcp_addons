@@ -2,7 +2,7 @@
 
 ## 現況與範圍
 
-**未發佈／未做 HA E2E**；映像已在私有 builder 由候選 f75fe32 建置並通過 container/mock 與 supply-chain gate（2026-10-05）。版本 0.1.0 為固定候選，不是已存在 tag。
+**0.1.0 已公開（experimental）／未做 HA E2E**：映像 `ghcr.io/woowtech/amd64-mcp-emqx:0.1.0` 由候選 f75fe32 建置，通過 container/mock 與 supply-chain gate（2026-10-05）。本版管理面板 fail closed（見下），裝上 HA 也無法設定後端，請先不要安裝。
 只有新 n8n 已獲路徑 A 批准，正式 provider 已實作並經 component review；
 共用 UI 已本地 Core 整合，但此批准不適用本產品，無正式角色 verifier，管理 fail closed；
 目前無正常後端設定或 token reveal/rotate 路徑。不得改權限、注入 test verifier 或
