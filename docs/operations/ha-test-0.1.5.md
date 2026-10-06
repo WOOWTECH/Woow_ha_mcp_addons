@@ -51,6 +51,13 @@ opendesign `94d6869f…`／`ab630fa6…`、emqx `537a3028…`／`08b36ab9…`、
 
 六支對 TRACE、PROPFIND、CONNECT、小寫 `get`、`XYZ` 與 POST 未帶權杖都回 401。
 
+## 之後：Woow Odoo 改走對外網址（負責人選 C，2026-10-06 11:0xZ）
+
+負責人決定一般都用外網連線。Claude 經負責人提供的 Cloudflare token，在這台 HA 的 tunnel 新增 `woowtech-odoo.woowtech.io`
+（指向 `http://homeassistant:8069`）與對應 DNS；Woow Odoo 的 `public_url` 原本是 `https://woowtech-odooo.woowtech.io`（多一個 o、
+沒有 DNS），改成同一個網址並重啟（11:09:15Z）；Odoo MCP 的後端網址改成這個對外網址。結果：讀取 10/12（同上）、拒絕全過、
+斷線 8 項結構化錯誤、8081 readiness 200，全程沒有改 `lan_networks`。之後的回歸不再需要決定 B。
+
 ## 未測
 
 - LAN client（需區網內機器）、LiteLLM 工具（沒有後端）、aarch64。
