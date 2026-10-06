@@ -97,22 +97,29 @@ def authorize(message, tools: Mapping[str, Tool], state: State) -> str:
     return method
 
 
-# MCP tool annotations (hints only) and their JSON types; nothing else from a child's annotations is listed.
-TOOL_ANNOTATIONS = {"title": str, "readOnlyHint": bool, "destructiveHint": bool, "idempotentHint": bool, "openWorldHint": bool}
+# The four MCP hint annotations and their cautious values. A client may relax its own checks on the other value (Claude
+# Code treats readOnlyHint as read-only and concurrency-safe), so that value is listed only for a tool with no local
+# write path: the reviewed local Tool decides, never the child (0.1.6 R1 #1).
+CAUTIOUS_HINTS = {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": True}
 
 
-def listed_tool(tool, schema):
-    """A listed tool is the gateway's own object (0.1.6, 0.1.5 RC review F3): its name, the locally pinned
-    inputSchema, title and description when they are strings, and only the five MCP hint annotations with their
-    types. outputSchema, execution, icons, _meta and unknown members are dropped: the pinned TS client compiles a
-    child's outputSchema (a $ref or pattern then becomes its error text) and refuses every call to a tool whose
-    execution.taskSupport is "required"; icons are child-chosen URLs."""
-    listed = {"name": tool["name"], "inputSchema": schema}
+def listed_tool(tool, local):
+    """A listed tool rebuilt from known members (0.1.6, 0.1.5 RC review F3). The name and inputSchema are the gateway's
+    own (the locally pinned argument model); title, description and annotations.title are the child's text, kept only
+    as strings; the four hint booleans are kept when cautious, or when the local tool has no write path. outputSchema,
+    execution, icons, _meta and unknown members are dropped: the pinned TS client compiles a child's outputSchema (a $ref
+    or pattern then becomes its error text, and the Python client fetched a child $ref URL) and refuses every call to a
+    tool whose execution.taskSupport is "required"; icons are child-chosen URLs."""
+    read_only = not (local.write or local.legacy_write or local.write_operations)
+    listed = {"name": tool["name"], "inputSchema": local.arguments.model_json_schema()}
     listed.update({key: tool[key] for key in ("title", "description") if isinstance(tool.get(key), str)})
     annotations = tool.get("annotations")
     if isinstance(annotations, dict):
-        kept = {key: value for key, value in annotations.items()
-                if key in TOOL_ANNOTATIONS and type(value) is TOOL_ANNOTATIONS[key]}
+        kept = {"title": annotations["title"]} if isinstance(annotations.get("title"), str) else {}
+        for key, cautious in CAUTIOUS_HINTS.items():
+            value = annotations.get(key)
+            if type(value) is bool and (value is cautious or read_only):
+                kept[key] = value
         if kept:
             listed["annotations"] = kept
     return listed
@@ -125,9 +132,16 @@ def filter_list(message, tools: Mapping[str, Tool], state: State):
     if isinstance(result, dict) and "tools" in result:
         if not isinstance(result["tools"], list):
             raise ValueError("invalid tools response")
-        result["tools"] = [listed_tool(tool, tools[tool["name"]].arguments.model_json_schema())
-                           for tool in result["tools"] if isinstance(tool, dict)
-                           and isinstance(tool.get("name"), str) and enabled(tool["name"], tools, state)]
+        listed, names = [], set()
+        for tool in result["tools"]:
+            # The first entry per name only (0.1.6 R1 #5): LLM providers refuse duplicate function names.
+            if (isinstance(tool, dict) and isinstance(tool.get("name"), str) and tool["name"] not in names
+                    and enabled(tool["name"], tools, state)):
+                names.add(tool["name"])
+                listed.append(listed_tool(tool, tools[tool["name"]]))
+        # The result is rebuilt as well (0.1.6 R1 #4): the tools and a string nextCursor, nothing else from the child.
+        message["result"] = result = {"tools": listed, **({"nextCursor": result["nextCursor"]}
+                                                          if isinstance(result.get("nextCursor"), str) else {})}
     # Also applies to resumed SSE replies: no unsupported capabilities or
     # listChanged promise may escape the method allowlist at the boundary.
     if isinstance(result, dict) and "capabilities" in result:

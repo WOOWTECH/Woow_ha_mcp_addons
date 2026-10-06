@@ -15,8 +15,8 @@
     },
     {
       "path": "packages/mcp-admin-core/mcp_admin_core/policy.py",
-      "sha256": "9e027edff5c9666d8691e40caca6a69b1e10e266423a170bdaef7088e3ec61e0",
-      "change": "Explicit B3 scope exception: default-OFF Tool requires_backend and selector-bound backend_required_operations, validate opt-in operation metadata. authorize validates/normalizes before backend precondition and before mutating caller arguments, using existing configured property or legacy URL+key. Both existing gateway authorization passes inherit it. No gateway-name guard, persisted schema/migration/lifecycle or general grants change; local unconfigured startup/list semantics retained. SPEC then different NEW SECURITY required. 0.1.6 (0.1.5 RC review F3): filter_list lists each tool as the gateway's own object: name, the pinned inputSchema, string title/description and only the five MCP hint annotations; outputSchema, execution, icons, _meta and unknown members are dropped.",
+      "sha256": "269e1a446b42ed24ef440919a616a98222e62038c18cb6fef7cbf34617b1e661",
+      "change": "Explicit B3 scope exception: default-OFF Tool requires_backend and selector-bound backend_required_operations, validate opt-in operation metadata. authorize validates/normalizes before backend precondition and before mutating caller arguments, using existing configured property or legacy URL+key. Both existing gateway authorization passes inherit it. No gateway-name guard, persisted schema/migration/lifecycle or general grants change; local unconfigured startup/list semantics retained. SPEC then different NEW SECURITY required. 0.1.6 (0.1.5 RC review F3, R1): filter_list rebuilds tools/list: the tools and a string nextCursor only, the first entry per name; each tool has the gateway's name and pinned inputSchema, the child's title/description/annotations.title as strings, and the four hint booleans when cautious or when the local tool has no write path; outputSchema, execution, icons, _meta and unknown members are dropped.",
       "guarded_sources": {}
     },
     {

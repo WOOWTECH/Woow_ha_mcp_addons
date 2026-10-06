@@ -149,11 +149,7 @@ them (tool lists and capabilities filtered). A POST SSE stream relays only the r
 ends right after it; a GET stream relays no reply (MCP allows one only when resuming a stream, and no pinned
 child keeps an event store). An error code outside the 32-bit range or a non-string message makes the error
 malformed. An initialize result must be an object whose `protocolVersion` is a date (`YYYY-MM-DD`), else 502:
-the pinned TS client puts an unsupported version into its error message. 0.1.6: a listed tool is rebuilt from known
-fields only (name, the pinned `inputSchema`, string `title`/`description` and the five MCP hint annotations);
-`outputSchema`, `execution`, `icons`, `_meta` and unknown members are dropped, since the pinned TS client compiles a
-child's `outputSchema` into its error text and refuses every call to a tool whose `execution.taskSupport` is
-`required`. An error whose code is not a JSON integer (integral floats
+the pinned TS client puts an unsupported version into its error message. An error whose code is not a JSON integer (integral floats
 count, as for clients; a string such as `"-32042"` does not, though a Python client would
 coerce it) becomes `{"code": -32000, "message": "Invalid error from the MCP server"}`, and a URL
 elicitation error (`-32042`) becomes `{"code": -32000, "message": "URL elicitation is not
@@ -175,6 +171,16 @@ reviewed defaults and field-specific omission rules, not the raw client object.
 Reauthorization immediately before dispatch uses the same normalized values.
 Strict types, bounds and unknown-field rejection remain unchanged; no extra upstream
 arguments are enabled.
+
+0.1.6: a tools/list result is rebuilt: the tools and a string `nextCursor` only, and the first entry per name. In
+each tool, `name` and `inputSchema` are the gateway's own; `title`, `description` and `annotations.title` are the child's
+text, kept only as strings; the four hint booleans (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`)
+are kept when they are the cautious value, or when the local tool has no write path (a client such as Claude Code treats
+`readOnlyHint` as read-only). `outputSchema`, `execution`, `icons`, `_meta` and unknown members are dropped: the pinned TS
+client compiled a child's `outputSchema` (a `$ref` or `pattern` became its error text; the Python client fetched a child
+`$ref` URL) and refuses every call to a tool whose `execution.taskSupport` is `required`. Clients therefore no longer
+validate `structuredContent` against a child schema, and child `_meta` hints such as `anthropic/maxResultSizeChars` are not
+passed on (Claude Code then applies its default MCP output budget).
 
 | Tracer tool | Executable default / omission contract |
 |---|---|

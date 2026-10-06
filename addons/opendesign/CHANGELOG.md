@@ -2,9 +2,13 @@
 
 ## 0.1.6 — 準備中（未發佈）
 
-- gateway（0.1.5 發佈候選審查 F3）：tools/list 的每個工具改由 gateway 重新組成，只留名稱、本地固定的 inputSchema、字串型的 title 與
-  description，以及 MCP 定義的五個提示 annotations；子程序給的 outputSchema、execution、icons、_meta 與其他欄位不再轉送（TS client
-  會把 outputSchema 裡的子程序文字放進錯誤訊息，execution.taskSupport 為 required 時會拒絕呼叫該工具）。
+- gateway（0.1.5 發佈候選審查 F3 與 0.1.6 審查）：tools/list 的結果由 gateway 重新組成，只留工具清單與字串型的 nextCursor，同名工具只留第一個。
+  每個工具的名稱與 inputSchema 用 gateway 自己的定義；title、description、annotations.title 是子程序文字，只在是字串時保留；
+  四個提示（readOnlyHint、destructiveHint、idempotentHint、openWorldHint）只保留保守的值，或本地定義沒有寫入路徑的工具才保留放寬的值
+  （Claude Code 會把 readOnlyHint 當作唯讀）。outputSchema、execution、icons、_meta 與其他欄位不再轉送：TS client 會把 outputSchema 裡的
+  子程序文字放進錯誤訊息、Python client 會去抓子程序指定的 $ref 網址，execution.taskSupport 為 required 時會拒絕呼叫該工具。
+  影響：client 不再依子程序的 outputSchema 檢查 structuredContent（n8n validate_* 截斷結果時原本會失敗，現在正常）；
+  n8n 給 Claude Code 的 `anthropic/maxResultSizeChars` 也不再轉送，Claude Code 會套用它預設的 MCP 輸出上限。
 - 映像 `ghcr.io/woowtech/amd64-mcp-opendesign:0.1.6` 尚未建置；0.1.0–0.1.5 tag 不覆寫。
 
 ## 0.1.5 — 2026-10-06 公開（experimental）

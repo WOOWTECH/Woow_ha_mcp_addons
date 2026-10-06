@@ -214,3 +214,37 @@ def test_guard_apps_follow_imports_in_any_form(tmp_path):
     split = tmp_path / 'split.py'
     split.write_text("CHECK = ('" + 'a' * 32 + "'\n         '" + 'a' * 32 + "')\n")
     assert digests(split) == {'a' * 64}  # adjacent literals, which a text search misses
+
+
+def schema_values(prop):
+    """The enum values a JSON-schema property allows (through anyOf/oneOf), or None."""
+    if not prop:
+        return None
+    if 'enum' in prop or 'const' in prop:
+        return set(prop.get('enum', [prop.get('const')]))
+    found = set()
+    for sub in prop.get('anyOf', []) + prop.get('oneOf', []):
+        found |= schema_values(sub) or set()
+    return found or None
+
+
+def test_reviewed_read_tools_have_no_local_write_path():
+    # 0.1.6 R1 #1: hint annotations that relax a client's caution are listed only for tools with no local write path, so
+    # that signal must match the reviewed effects of what the local schema can actually reach: a tool without operations
+    # is read-only exactly when reviewed as read; a tool with operations exactly when every operation value its local
+    # schema allows is reviewed as read (e.g. hermes_model is mixed upstream, but locally only info and list_providers).
+    data = json.loads((ROOT / 'docs/tool-surface.json').read_text())
+    for product, group in data['products'].items():
+        for tool in group['tools']:
+            if tool['status'] != 'supported-bounded':
+                continue
+            local = inventory.POLICIES[product][tool['name']]
+            no_write_path = not (local.write or local.legacy_write or local.write_operations)
+            props = local.arguments.model_json_schema().get('properties', {})
+            non_read = {(param, value) for param, effects in tool['operation_effects'].items()
+                        for value in schema_values(props.get(param)) or () if effects.get(value) != 'read'}
+            expected = not non_read if tool['operation_effects'] else tool['effect'] == 'read'
+            assert no_write_path == expected, (product, tool['name'], sorted(non_read))
+            if local.write_operations:
+                assert set(local.write_operations) == {value for param, value in non_read if param == local.selector}, (
+                    product, tool['name'])
