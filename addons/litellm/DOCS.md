@@ -2,7 +2,7 @@
 
 ## 現況與範圍
 
-**0.1.4（experimental）**：映像 `ghcr.io/woowtech/amd64-mcp-litellm:0.1.4` 由候選 73a40eb 建置，通過 container/mock 與 supply-chain gate（2026-10-06）；修正見 [CHANGELOG](CHANGELOG.md)，2026-10-06 已在測試 HA 回歸（[0.1.4 回歸紀錄](../../docs/operations/ha-test-0.1.4.md)；0.1.3 見 [0.1.3 回歸紀錄](../../docs/operations/ha-test-0.1.3.md)）。管理面板經 HA 管理角色驗證後可設定後端。0.1.1 於 2026-10-05 已在測試 HA 安裝（[HA 實測紀錄](../../docs/operations/ha-test-0.1.1.md)），但 HA 上沒有 LiteLLM 後端：只驗證權杖（錯誤權杖 401）與重啟後權杖保留，**工具未在 HA 實測**。0.1.0 的面板 fail closed，請使用 0.1.1。
+**0.1.5（experimental）**：映像 `ghcr.io/woowtech/amd64-mcp-litellm:0.1.5` 由候選 0c66bd0 建置，通過 container/mock 與 supply-chain gate（2026-10-06）；修正見 [CHANGELOG](CHANGELOG.md)，HA 回歸測試待做。0.1.4 已在測試 HA 回歸（[0.1.4 回歸紀錄](../../docs/operations/ha-test-0.1.4.md)）。管理面板經 HA 管理角色驗證後可設定後端。0.1.1 於 2026-10-05 已在測試 HA 安裝（[HA 實測紀錄](../../docs/operations/ha-test-0.1.1.md)），但 HA 上沒有 LiteLLM 後端：只驗證權杖（錯誤權杖 401）與重啟後權杖保留，**工具未在 HA 實測**。0.1.0 的面板 fail closed，請使用 0.1.1。
 0.1.1 起與 n8n 相同（負責人 2026-10-05 核准 `homeassistant_api`）：管理程序以 runtime `SUPERVISOR_TOKEN`
 連固定 `ws://supervisor/core/websocket`，只查 `config/auth/list`，確認 Ingress 使用者是 active 的 owner 或
 system-admin 才放行；token 只給管理程序，child 不繼承。此 token 具**廣泛 Core 管理能力**，負責人已知情核准。
