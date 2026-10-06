@@ -96,7 +96,10 @@ unknown methods, invalid IDs/params/arguments and unknown/disabled/write-disallo
 tools fail before the upstream request. Notifications/initialized is the only
 accepted notification. See provenance for the narrow source-backed tool subset.
 
-The gateway preserves the upstream status of non-2xx replies, notifications and DELETE.
+The gateway preserves the upstream status of 4xx/5xx replies, notifications and DELETE.
+0.1.4: a 4xx/5xx reply never carries the child's bytes: its body is the gateway's own JSON-RPC error
+(`-32000`, the HTTP reason phrase, the request's id or null) as `application/json`, since clients show
+error bodies to users; interim (1xx) and redirect (3xx) statuses from the child are 502.
 It forwards four headers only when well formed (session and protocol ids
 `[\x21-\x7e]{1,256}` as for requests, numeric Retry-After, printable Content-Type) and
 drops them otherwise. A 2xx body must be one the gateway parses and filters
@@ -114,8 +117,7 @@ framework's 405 before the check); none reaches the child. The child always rece
 text/event-stream`; statuses outside 100-599 are 502; an initialize reply whose session
 id cannot be forwarded is 502. Media types compare case-insensitively without
 parameters; a 2xx reply always reaches the client as plain `text/event-stream` or
-`application/json` (non-2xx bodies pass through with the child's Content-Type, and the
-pinned clients read them only as error text). Every JSON reply to a request is parsed, must
+`application/json` (0.1.4: so does every 4xx/5xx reply, with the gateway's own body). Every JSON reply to a request is parsed, must
 be one object answering that request (same id and JSON type, `result` or `error`, no
 `method`), is filtered and re-serialized with ASCII escapes; batches are 502. SSE events
 are rebuilt from the lines the gateway understood: data, `id`/`event` values of up to 256
@@ -126,7 +128,11 @@ the event: initialize is 502, other streams stop. An event whose data is empty (
 2025-11-25 priming event) passes as an empty event; a batch in an event stops the stream;
 a server-to-client request (an event with `method` and `id`: elicitation, sampling,
 roots, ping) is dropped, since the client could not answer it through the gateway and it
-would carry child text to the user; notifications (no id) still pass.
+would carry child text to the user. Notifications (no id) pass only when they are
+`notifications/progress` or `notifications/tools/list_changed` (0.1.4); child log messages
+and other notifications are dropped. A URL elicitation error (`-32042`, also as `-32042.0`,
+since JavaScript clients compare numbers) becomes `{"code": -32000, "message": "URL
+elicitation is not supported"}` without the child's data, in JSON and SSE replies (0.1.4).
 Request bodies with lone surrogates anywhere are 400; numbers that overflow to infinity
 (e.g. `1e400`) are refused like NaN/Infinity (a request 400; a reply 502 for initialize
 or JSON, other SSE streams stop), so nothing is re-serialized as `Infinity`. The child receives initialize with
@@ -137,7 +143,7 @@ keeps only its id/event/retry lines; other events are dropped). A 200 without th
 response (empty body, stream ended or broken, only notifications/other ids) becomes HTTP
 503 with JSON-RPC error -32000 `BACKEND_UNAVAILABLE`, Retry-After 5 and no session id:
 the child gave no reply, e.g. its per-session lifespan could not reach the backend.
-Malformed or oversize replies are 502; non-2xx replies pass through. JSON/SSE tool lists use the exact
+Malformed or oversize replies are 502; 4xx/5xx replies keep their status with the gateway's body. JSON/SSE tool lists use the exact
 local argument model's inputSchema, not the broader upstream schema. On a permitted
 call, the gateway forwards the **validated model's serialized arguments**, including
 reviewed defaults and field-specific omission rules, not the raw client object.
@@ -170,7 +176,8 @@ redirects, response cookies and hop-by-hop headers are not forwarded.
 
 Limits: 256 KiB request body, 10-second request-body timeout; 32 concurrent upstream
 streams; 3-second connect/pool and 30-second upstream inactivity timeout; 120-second
-stream lifetime and 8 MiB response budget. Oversize/truncated streams close rather
+stream lifetime and 8 MiB response budget (a JSON reply is read whole before it is filtered, so
+JSON replies in flight hold at most 32 x 8 MiB = 256 MiB). Oversize/truncated streams close rather
 than invent a successful protocol result (initialize: 502 oversize, 503 without a reply). Clients may reconnect with a fresh
 Bearer and session/event headers. A response owner joins its reader cancellation
 and upstream close under a 3-second cleanup budget, shields ASGI 2.3 AnyIO level

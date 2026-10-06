@@ -466,3 +466,62 @@ async def test_overflowing_numbers_inside_forwarded_values(store):
                                                           content=b"data: " + listed + b"\n\n"),
                           message={"jsonrpc": "2.0", "id": 9, "method": "tools/list"})
     assert response.status_code == 200 and "Infinity" not in response.text and data_lines(response.text) == []
+
+
+CHILD_TEXT = "CHILD-PRIVATE-TEXT"
+
+
+@pytest.mark.parametrize("verb", ["POST", "GET"])
+@pytest.mark.parametrize("status,content_type", [(404, "application/json"), (400, "application/json"), (500, "text/plain"),
+                                                 (503, "text/html"), (418, "text/event-stream"), (599, "application/json")])
+async def test_non_2xx_replies_keep_status_but_never_child_bytes(store, verb, status, content_type):
+    # 0.1.4 (0.1.2 review note): clients put error bodies into user-visible messages.
+    body = json.dumps({"jsonrpc": "2.0", "id": 9, "error": {"code": -32001, "message": CHILD_TEXT}}).encode()
+    response = await call(store, lambda _: httpx.Response(status, headers={"content-type": content_type,
+                                                                          "retry-after": "7"}, content=body), verb)
+    assert response.status_code == status
+    assert CHILD_TEXT not in response.text and response.headers["content-type"] == "application/json"
+    value = response.json()
+    assert value["jsonrpc"] == "2.0" and value["id"] == (9 if verb == "POST" else None)
+    assert value["error"]["code"] == -32000 and isinstance(value["error"]["message"], str) and value["error"]["message"]
+    assert response.headers["retry-after"] == "7"  # still tells the client when to retry
+
+
+@pytest.mark.parametrize("status", [301, 307, 308])
+async def test_a_child_redirect_is_bad_gateway(store, status):
+    response = await call(store, lambda _: httpx.Response(status, headers={"location": "http://elsewhere/"}, content=b"x"))
+    assert response.status_code == 502 and "location" not in response.headers
+
+
+@pytest.mark.parametrize("verb", ["POST", "GET"])
+async def test_only_progress_and_tool_list_notifications_reach_a_client(store, verb):
+    events = [{"jsonrpc": "2.0", "method": "notifications/message", "params": {"level": "info", "data": CHILD_TEXT}},
+              {"jsonrpc": "2.0", "method": "notifications/progress", "params": {"progressToken": 1, "progress": 1}},
+              {"jsonrpc": "2.0", "method": "notifications/resources/updated", "params": {"uri": CHILD_TEXT}},
+              {"jsonrpc": "2.0", "method": ["notifications/progress"]},  # malformed: dropped, not an error
+              {"jsonrpc": "2.0", "method": {"x": 1}},
+              {"jsonrpc": "2.0", "method": "notifications/tools/list_changed"},
+              {"jsonrpc": "2.0", "id": 9, "result": {}}]
+    stream = b"".join(b"data: " + json.dumps(e).encode() + b"\n\n" for e in events)
+    response = await call(store, sse(stream), verb)
+    assert response.status_code == 200 and CHILD_TEXT not in response.text
+    sent = [json.loads(line[5:]) for line in data_lines(response.text)]
+    assert [e.get("method") for e in sent] == ["notifications/progress", "notifications/tools/list_changed", None]
+
+
+async def test_url_elicitation_errors_become_plain_errors(store):
+    error = {"jsonrpc": "2.0", "id": 9, "error": {"code": -32042, "message": CHILD_TEXT,
+                                                 "data": {"elicitations": [{"url": "https://phish.invalid/" + CHILD_TEXT}]}}}
+    plain = {"jsonrpc": "2.0", "id": 9, "error": {"code": -32042.5, "message": "kept", "data": {"k": 1}}}
+    as_float = json.dumps(error).replace('"code": -32042', '"code": -32042.0').encode()
+    for upstream in (lambda _: httpx.Response(200, headers={"content-type": "application/json"}, content=json.dumps(error).encode()),
+                     lambda _: httpx.Response(200, headers={"content-type": "application/json"}, content=as_float),
+                     sse(b"data: " + json.dumps(error).encode() + b"\n\n"), sse(b"data: " + as_float + b"\n\n")):
+        response = await call(store, upstream)
+        assert response.status_code == 200 and CHILD_TEXT not in response.text and "phish" not in response.text
+        value = json.loads(data_lines(response.text)[0][5:]) if "event-stream" in response.headers["content-type"] else response.json()
+        assert value == {"jsonrpc": "2.0", "id": 9, "error": {"code": -32000, "message": "URL elicitation is not supported"}}
+    # Other errors, including look-alike codes, are relayed as before.
+    response = await call(store, lambda _: httpx.Response(200, headers={"content-type": "application/json"},
+                                                          content=json.dumps(plain).encode()))
+    assert response.json() == plain

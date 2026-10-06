@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+from http import HTTPStatus
 import json
 import re
 import secrets
@@ -38,6 +39,9 @@ FORWARDED_HEADERS = {"mcp-session-id": re.compile(r"[\x21-\x7e]{1,256}"),
 LONE_CR = re.compile(rb"\r(?!\n)")
 SSE_FIELD = re.compile(rb"(?:id|event):[ ]?[\x21-\x7e]{0,256}|retry:[ ]?[0-9]{1,10}")  # id as Last-Event-ID allows
 SSE_COMMENT = re.compile(rb":[\x20-\x7e]{0,1024}")
+# 0.1.4: the only child notifications a client gets; others (child log messages, resource updates) carry child
+# text or name surfaces the gateway never exposes.
+RELAYED_NOTIFICATIONS = frozenset({"notifications/progress", "notifications/tools/list_changed"})
 
 
 def sse_frame(frame: bytes):
@@ -72,6 +76,26 @@ def backend_unavailable(ident):
     """initialize without a reply from the child: no dead session id; clients may retry later."""
     return json_reply({"jsonrpc": "2.0", "id": ident, "error": {"code": -32000, "message": "BACKEND_UNAVAILABLE"}},
                       503, {"Retry-After": "5", "Cache-Control": "no-store"})
+
+
+def no_url_elicitation(value):
+    """0.1.4: a URL elicitation error (-32042) asks the user to open a child-chosen URL; the gateway declares no
+    elicitation capability, so a client gets a plain error without the child's data instead."""
+    error = value.get("error")
+    code = error.get("code") if isinstance(error, dict) else None
+    if type(code) in (int, float) and code == -32042:  # -32042.0 too: JavaScript clients compare numbers
+        value = {**value, "error": {"code": -32000, "message": "URL elicitation is not supported"}}
+    return value
+
+
+def child_status_reply(ident, status, headers):
+    """0.1.4: a non-2xx child reply keeps its status (404 ends a session, Retry-After still applies) but never the
+    child's bytes; MCP clients put error bodies into user-visible messages (0.1.2 review note)."""
+    try:
+        text = HTTPStatus(status).phrase
+    except ValueError:
+        text = "HTTP %d" % status
+    return json_reply({"jsonrpc": "2.0", "id": ident, "error": {"code": -32000, "message": text}}, status, headers)
 
 
 def json_reply(value, status, headers):
@@ -504,10 +528,17 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         if "method" in value and "id" in value:
                             continue  # a server-to-client request (elicitation, sampling, roots): the client
                             # could not answer it through the gateway, and it would carry child text to the user
+                        if "method" in value and not (isinstance(value["method"], str)
+                                                      and value["method"] in RELAYED_NOTIFICATIONS):
+                            continue  # 0.1.4: progress and tool-list changes only
                         if (isinstance(value.get("result"), dict)
                                 and {"tools", "capabilities"} & value["result"].keys()):
                             value = filter_list(value, tools, store.load())
                             data_lines = [b"data: " + json.dumps(value, separators=(",", ":")).encode()]
+                        else:
+                            rewritten = no_url_elicitation(value)
+                            if rewritten is not value:
+                                data_lines = [b"data: " + json.dumps(rewritten, separators=(",", ":")).encode()]
                     except (ValueError, ConfigError, RecursionError):
                         return
                 lines = kept + data_lines
@@ -591,6 +622,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 # forwarded headers only, never the child's bytes.
                 return Response(status_code=upstream.status_code,
                                 headers={k: v for k, v in response_headers.items() if k != "content-type"})
+            if upstream.status_code < 200 or 300 <= upstream.status_code < 400:
+                raise BadRequest(502)  # an interim status is never a reply; the gateway follows no child redirect
+            if upstream.status_code >= 400:
+                return child_status_reply(message.get("id") if request_id else None, upstream.status_code,
+                                          response_headers)
             if 200 <= upstream.status_code < 300 and (request.method == "GET" or request_id):
                 # A success body must be one the gateway parses and filters itself: an SSE stream, or (for a
                 # request) a plain 200 JSON reply. Nothing else is relayed, not even a body declared empty:
@@ -611,7 +647,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         raise ValueError("invalid initialize response")
                     if "mcp-session-id" in upstream.headers and "mcp-session-id" not in response_headers:
                         raise ValueError("unusable session id")  # a client could not continue the session
-                    value = filter_list(value, tools, store.load())
+                    value = filter_list(no_url_elicitation(value), tools, store.load())
                 except ValueError:
                     raise BadRequest(502) from None
                 if frame is None:
@@ -634,7 +670,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     if not (isinstance(value, dict) and "method" not in value
                             and same_id(value.get("id"), message.get("id")) and ("result" in value or "error" in value)):
                         raise ValueError("not this request's reply")
-                    value = filter_list(value, tools, store.load())
+                    value = filter_list(no_url_elicitation(value), tools, store.load())
                 except (ValueError, RecursionError):
                     raise BadRequest(502) from None
                 return json_reply(value, 200, response_headers)
