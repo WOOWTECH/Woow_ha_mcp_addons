@@ -70,7 +70,7 @@ jobs:
       max-parallel: 1
       fail-fast: false
       matrix:
-        app: [odoo, odoo-manage, n8n, hermes, opendesign, emqx, litellm]
+        app: [odoo, n8n, hermes, opendesign, emqx, litellm]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:

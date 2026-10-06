@@ -12,7 +12,7 @@ from the supply-chain gate's SBOM of the exact published image:
 |---|---|
 | n8n | [n8n-0.1.4.md](n8n-0.1.4.md)（0.1.3：[n8n-0.1.3.md](n8n-0.1.3.md)；0.1.2：[n8n-0.1.2.md](n8n-0.1.2.md)；0.1.1：[n8n-0.1.1.md](n8n-0.1.1.md)；0.1.0：[n8n-0.1.0.md](n8n-0.1.0.md)） |
 | Odoo | [odoo-0.1.4.md](odoo-0.1.4.md)（0.1.3：[odoo-0.1.3.md](odoo-0.1.3.md)；0.1.2：[odoo-0.1.2.md](odoo-0.1.2.md)；0.1.1：[odoo-0.1.1.md](odoo-0.1.1.md)；0.1.0：[odoo-0.1.0.md](odoo-0.1.0.md)） |
-| Odoo Manage | [odoo-manage-0.1.4.md](odoo-manage-0.1.4.md)（0.1.3：[odoo-manage-0.1.3.md](odoo-manage-0.1.3.md)；0.1.2：[odoo-manage-0.1.2.md](odoo-manage-0.1.2.md)；0.1.1：[odoo-manage-0.1.1.md](odoo-manage-0.1.1.md)；0.1.0：[odoo-manage-0.1.0.md](odoo-manage-0.1.0.md)） |
+| Odoo Manage（已封存，0.1.4 為最後一版） | [odoo-manage-0.1.4.md](odoo-manage-0.1.4.md)（0.1.3：[odoo-manage-0.1.3.md](odoo-manage-0.1.3.md)；0.1.2：[odoo-manage-0.1.2.md](odoo-manage-0.1.2.md)；0.1.1：[odoo-manage-0.1.1.md](odoo-manage-0.1.1.md)；0.1.0：[odoo-manage-0.1.0.md](odoo-manage-0.1.0.md)） |
 | Hermes | [hermes-0.1.4.md](hermes-0.1.4.md)（0.1.3：[hermes-0.1.3.md](hermes-0.1.3.md)；0.1.2：[hermes-0.1.2.md](hermes-0.1.2.md)；0.1.1：[hermes-0.1.1.md](hermes-0.1.1.md)；0.1.0：[hermes-0.1.0.md](hermes-0.1.0.md)） |
 | OpenDesign | [opendesign-0.1.4.md](opendesign-0.1.4.md)（0.1.3：[opendesign-0.1.3.md](opendesign-0.1.3.md)；0.1.2：[opendesign-0.1.2.md](opendesign-0.1.2.md)；0.1.1：[opendesign-0.1.1.md](opendesign-0.1.1.md)；0.1.0：[opendesign-0.1.0.md](opendesign-0.1.0.md)） |
 | EMQX | [emqx-0.1.4.md](emqx-0.1.4.md)（0.1.3：[emqx-0.1.3.md](emqx-0.1.3.md)；0.1.2：[emqx-0.1.2.md](emqx-0.1.2.md)；0.1.1：[emqx-0.1.1.md](emqx-0.1.1.md)；0.1.0：[emqx-0.1.0.md](emqx-0.1.0.md)） |

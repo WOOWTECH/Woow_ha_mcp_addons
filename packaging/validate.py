@@ -16,10 +16,13 @@ import yaml
 from builder_contract import RUNNER
 
 ROOT = Path(__file__).resolve().parents[1]
-PRODUCTS = ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm')
+PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm')  # in the store, built and released
+# Owner decision 2026-10-06: Odoo Manage is archived. It left the store and no image is built or released again
+# (0.1.4 was the last); its source stays in apps/odoo-manage and the shared core, and is still tested.
+RETIRED = ('odoo-manage',)
 URL = 'https://github.com/WOOWTECH/Woow_ha_mcp_addons'
 VERSION = '0.1.4'
-TITLES = dict(zip(PRODUCTS, ('Odoo', 'Odoo Manage', 'n8n', 'Hermes', 'OpenDesign', 'EMQX', 'LiteLLM')))
+TITLES = dict(zip(PRODUCTS, ('Odoo', 'n8n', 'Hermes', 'OpenDesign', 'EMQX', 'LiteLLM')))
 
 
 class Invalid(ValueError):
@@ -239,7 +242,7 @@ def validate(root=ROOT):
     exact(load(root / 'repository.yaml'), {'name': 'WOOW MCP Add-ons (experimental)', 'url': URL, 'maintainer': 'WOOWTECH'}, 'repository')
     paths = source_paths(root)
     app_scopes = {Path(p).parts[1] for p in paths if p.startswith('apps/') and len(Path(p).parts) > 1}
-    require(app_scopes == set(PRODUCTS) | {'runtime'}, 'application source scope')
+    require(app_scopes == set(PRODUCTS) | set(RETIRED) | {'runtime'}, 'application source scope')
     inputs = load(root / 'packaging/inputs.json')
     exact(inputs['products'], list(PRODUCTS), 'build allowlist')
     exact(inputs['version'], VERSION, 'build version')
@@ -342,7 +345,7 @@ def validate(root=ROOT):
                 for step in job['steps']:
                     if step.get('uses', '').startswith('actions/checkout@'):
                         exact(step['with']['ref'], '${{ github.sha }}', 'no arbitrary release checkout')
-    print('PASS: seven strict Supervisor-subset manifests, translations, pins, workflow policy and clearance shape')
+    print('PASS: six strict Supervisor-subset manifests, translations, pins, workflow policy and clearance shape')
 
 
 if __name__ == '__main__':

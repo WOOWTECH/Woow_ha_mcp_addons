@@ -184,6 +184,17 @@ class PackagingTests(unittest.TestCase):
             with self.subTest(workflow=workflow, mutation='verify-after-build'), self.assertRaises(v.Invalid):
                 v.builder_workflow(doc, workflow)
 
+    def test_odoo_manage_is_retired_from_store_build_and_release(self):
+        # Owner decision 2026-10-06: off the store, never built or released again; the source stays (archived).
+        self.assertEqual(v.RETIRED, ('odoo-manage',))
+        self.assertNotIn('odoo-manage', v.PRODUCTS)
+        self.assertFalse((v.ROOT / 'addons/odoo-manage').exists())
+        self.assertNotIn('odoo-manage', v.load(v.ROOT / 'packaging/inputs.json')['products'])
+        self.assertNotIn('odoo-manage', v.load(v.ROOT / 'RELEASE-GATES.json')['products'])
+        for workflow in ('ci.yaml', 'release.yaml'):
+            self.assertNotIn('odoo-manage', (v.ROOT / '.github/workflows' / workflow).read_text())
+        self.assertTrue((v.ROOT / 'apps/odoo-manage/launch.py').is_file())
+
     def test_release_defaults_closed(self):
         gates = v.load(v.ROOT / 'RELEASE-GATES.json')
         v.clearance_shape(gates)

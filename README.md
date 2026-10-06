@@ -1,13 +1,13 @@
 # WOOW HA MCP Add-ons（實驗封裝，尚未發佈）
 
-七個獨立產品：Odoo、Odoo Manage、n8n、Hermes、OpenDesign、EMQX、LiteLLM。
+六個獨立產品：Odoo、n8n、Hermes、OpenDesign、EMQX、LiteLLM。Odoo Manage 已於 2026-10-06 下架封存：0.1.4 是最後一版，不再建置或發佈，已安裝的不會再收到更新，請改用 WOOW Odoo MCP；原始碼保留在 `apps/odoo-manage`。
 僅以 **amd64 / Supervisor 2026.09.3** 為封裝目標；不是 Core 最低版本。
 Kubernetes MCP 與 Vibe Kanban 不在範圍。
 
 **現在不可當作可用商店產品安裝：**
 
 - 七個 runtime 已存在，但只有 **184 個來源工具中 71 個有界支援、113 個明列暫不支援**；不是完整功能遷移。逐名對照見 [工具表](docs/tool-surface.md)。
-- 七份 `addons/*/config.yaml` 可被 Supervisor 探索，不代表 GHCR 名稱已取得、映像已存在或可匿名拉取。此批 **未建置映像、未做 HA／真實後端 E2E**。
+- 六份 `addons/*/config.yaml` 可被 Supervisor 探索，不代表 GHCR 名稱已取得、映像已存在或可匿名拉取。此批 **未建置映像、未做 HA／真實後端 E2E**。
 - **本地整合 ≠ HA／映像驗收**：僅新 n8n 試點獲准 `homeassistant_api: true`，正式 fixed-WS provider 已實作並經 component review；共用管理 HTML/static/API 與 v3 UI 已本地串接。其餘六類仍 false，正式管理 fail closed。`panel_admin` 不是授權。
 - 此例外授予**廣泛 Core 管理能力**（含使用者管理及可能間接 Supervisor／host 影響），不是可強制的唯讀角色權限；不代表批准所有 HA 變更。`hassio_api/auth_api` 仍 false、Supervisor role 預設、protection mode 不變，無新增 host 權限。
 - 核准 verifier 契約：固定 `ws://supervisor/core/websocket`／`config/auth/list`，只用 n8n 管理程序 runtime token；敏感操作前 fresh role query、無正向快取，缺失／降權／停權／timeout／錯誤一律 fail closed。本地實際 bootstrap→OS guard→n8n→provider 與 Chromium 已用 owned fake WS／test-only Ingress 模擬驗證；整合獨立規格及新安全審查仍待完成，HA **NOT TESTED**；不可注入 trust bypass。

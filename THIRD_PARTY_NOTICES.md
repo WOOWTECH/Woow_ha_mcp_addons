@@ -11,7 +11,7 @@ new work. Owner authorization for publication still needs explicit confirmation.
 | Distribution scope | Source / version | Applicable notices |
 |---|---|---|
 | Odoo image | `odoo-mcp==1.1.0`, tuanle96/mcp-odoo | MIT, Copyright 2025 Lê Anh Tuấn; full text `docs/provenance/odoo-LICENSE` |
-| Odoo Manage image | `mcp-server-odoo==0.7.1`, ivnvxd/mcp-server-odoo | **MPL-2.0**, full text `docs/provenance/odoo-manage-LICENSE`; see source availability below |
+| Odoo Manage image (0.1.0–0.1.4; archived 2026-10-06, no later image) | `mcp-server-odoo==0.7.1`, ivnvxd/mcp-server-odoo | **MPL-2.0**, full text `docs/provenance/odoo-manage-LICENSE`; see source availability below |
 | Hermes vendored runtime | legacy app-only snapshot `614ae663fadd91c76972f60017a76d2627bea87e` | MIT, Copyright 2026 WOOWTECH; `apps/hermes/vendor/LICENSE` |
 | OpenDesign vendored runtime | same app-only snapshot; original `WOOWTECH/Woow_opendesign_mcp_server@d6d157ab9542cf18515d7168f5c8082c88b11331` | App MIT text preserved in `apps/opendesign/vendor/LICENSE`; original pinned repository has **no LICENSE/NOTICE/COPYING**. Owner must confirm rights covering the imported file before release. Public availability is not permission. |
 | EMQX vendored runtime | `WOOWTECH/Woow_emqx_mcp_server@1be17bad5aef6c7b7519686ccbfe1d80762bc10e` | MIT, Copyright 2026 WOOWTECH; `apps/emqx/vendor/LICENSE` |
