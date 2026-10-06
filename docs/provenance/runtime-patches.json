@@ -15,8 +15,8 @@
     },
     {
       "path": "packages/mcp-admin-core/mcp_admin_core/policy.py",
-      "sha256": "c55433a2b2dee6ab2d9bbd170747779ed56e96d02e9d59cb3e0a4d725ccdeaa0",
-      "change": "Explicit B3 scope exception: default-OFF Tool requires_backend and selector-bound backend_required_operations, validate opt-in operation metadata. authorize validates/normalizes before backend precondition and before mutating caller arguments, using existing configured property or legacy URL+key. Both existing gateway authorization passes inherit it. No gateway-name guard, persisted schema/migration/lifecycle or general grants change; local unconfigured startup/list semantics retained. SPEC then different NEW SECURITY required.",
+      "sha256": "9e027edff5c9666d8691e40caca6a69b1e10e266423a170bdaef7088e3ec61e0",
+      "change": "Explicit B3 scope exception: default-OFF Tool requires_backend and selector-bound backend_required_operations, validate opt-in operation metadata. authorize validates/normalizes before backend precondition and before mutating caller arguments, using existing configured property or legacy URL+key. Both existing gateway authorization passes inherit it. No gateway-name guard, persisted schema/migration/lifecycle or general grants change; local unconfigured startup/list semantics retained. SPEC then different NEW SECURITY required. 0.1.6 (0.1.5 RC review F3): filter_list lists each tool as the gateway's own object: name, the pinned inputSchema, string title/description and only the five MCP hint annotations; outputSchema, execution, icons, _meta and unknown members are dropped.",
       "guarded_sources": {}
     },
     {

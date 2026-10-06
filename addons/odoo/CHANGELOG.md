@@ -1,5 +1,12 @@
 # Odoo Changelog
 
+## 0.1.6 — 準備中（未發佈）
+
+- gateway（0.1.5 發佈候選審查 F3）：tools/list 的每個工具改由 gateway 重新組成，只留名稱、本地固定的 inputSchema、字串型的 title 與
+  description，以及 MCP 定義的五個提示 annotations；子程序給的 outputSchema、execution、icons、_meta 與其他欄位不再轉送（TS client
+  會把 outputSchema 裡的子程序文字放進錯誤訊息，execution.taskSupport 為 required 時會拒絕呼叫該工具）。
+- 映像 `ghcr.io/woowtech/amd64-mcp-odoo:0.1.6` 尚未建置；0.1.0–0.1.5 tag 不覆寫。
+
 ## 0.1.5 — 2026-10-06 公開（experimental）
 
 - gateway（0.1.4 複審與 0.1.5 審查的縱深防禦建議）：client 收到的每個回覆都由 gateway 重新組成，只含 jsonrpc、id 與 result 或 error 其中一個，error 只保留 code（一律整數）、message、data；子程序加在回覆最外層的其他欄位不再轉送（TS client 會把未知的最外層欄位名稱放進錯誤訊息），error 裡多出的欄位也一併去掉，ping 成功一律回 `{}`，其他 result 照子程序內容轉送（工具清單與 capabilities 照舊過濾）。POST 的 SSE 串流只轉送這個請求自己的回覆，送出後立即結束；GET 串流不轉送任何回覆（各子程序都沒有可續傳的事件紀錄）。錯誤碼超出 32 位元範圍或 message 不是字串時，改成 gateway 自己的錯誤。initialize 回覆的 protocolVersion 必須是日期格式（YYYY-MM-DD），否則回 502。

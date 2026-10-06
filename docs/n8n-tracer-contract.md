@@ -149,7 +149,11 @@ them (tool lists and capabilities filtered). A POST SSE stream relays only the r
 ends right after it; a GET stream relays no reply (MCP allows one only when resuming a stream, and no pinned
 child keeps an event store). An error code outside the 32-bit range or a non-string message makes the error
 malformed. An initialize result must be an object whose `protocolVersion` is a date (`YYYY-MM-DD`), else 502:
-the pinned TS client puts an unsupported version into its error message. An error whose code is not a JSON integer (integral floats
+the pinned TS client puts an unsupported version into its error message. 0.1.6: a listed tool is rebuilt from known
+fields only (name, the pinned `inputSchema`, string `title`/`description` and the five MCP hint annotations);
+`outputSchema`, `execution`, `icons`, `_meta` and unknown members are dropped, since the pinned TS client compiles a
+child's `outputSchema` into its error text and refuses every call to a tool whose `execution.taskSupport` is
+`required`. An error whose code is not a JSON integer (integral floats
 count, as for clients; a string such as `"-32042"` does not, though a Python client would
 coerce it) becomes `{"code": -32000, "message": "Invalid error from the MCP server"}`, and a URL
 elicitation error (`-32042`) becomes `{"code": -32000, "message": "URL elicitation is not

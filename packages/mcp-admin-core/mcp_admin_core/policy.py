@@ -97,6 +97,27 @@ def authorize(message, tools: Mapping[str, Tool], state: State) -> str:
     return method
 
 
+# MCP tool annotations (hints only) and their JSON types; nothing else from a child's annotations is listed.
+TOOL_ANNOTATIONS = {"title": str, "readOnlyHint": bool, "destructiveHint": bool, "idempotentHint": bool, "openWorldHint": bool}
+
+
+def listed_tool(tool, schema):
+    """A listed tool is the gateway's own object (0.1.6, 0.1.5 RC review F3): its name, the locally pinned
+    inputSchema, title and description when they are strings, and only the five MCP hint annotations with their
+    types. outputSchema, execution, icons, _meta and unknown members are dropped: the pinned TS client compiles a
+    child's outputSchema (a $ref or pattern then becomes its error text) and refuses every call to a tool whose
+    execution.taskSupport is "required"; icons are child-chosen URLs."""
+    listed = {"name": tool["name"], "inputSchema": schema}
+    listed.update({key: tool[key] for key in ("title", "description") if isinstance(tool.get(key), str)})
+    annotations = tool.get("annotations")
+    if isinstance(annotations, dict):
+        kept = {key: value for key, value in annotations.items()
+                if key in TOOL_ANNOTATIONS and type(value) is TOOL_ANNOTATIONS[key]}
+        if kept:
+            listed["annotations"] = kept
+    return listed
+
+
 def filter_list(message, tools: Mapping[str, Tool], state: State):
     if not isinstance(message, dict):
         raise ValueError("invalid list response")
@@ -104,7 +125,7 @@ def filter_list(message, tools: Mapping[str, Tool], state: State):
     if isinstance(result, dict) and "tools" in result:
         if not isinstance(result["tools"], list):
             raise ValueError("invalid tools response")
-        result["tools"] = [{**tool, "inputSchema": tools[tool["name"]].arguments.model_json_schema()}
+        result["tools"] = [listed_tool(tool, tools[tool["name"]].arguments.model_json_schema())
                            for tool in result["tools"] if isinstance(tool, dict)
                            and isinstance(tool.get("name"), str) and enabled(tool["name"], tools, state)]
     # Also applies to resumed SSE replies: no unsupported capabilities or
