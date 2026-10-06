@@ -3,7 +3,7 @@
 ## 0.1.4 — 準備中（未發佈）
 
 - 健康檢查改用子程序私有的探測 `woow_backend_probe`（不在工具清單，gateway 不列出也不授權）：每次以新的連線只做連線與登入，在自己的執行緒執行、不碰 session 共用的連線。0.1.3 HA 回歸時探測用 `list_models`，最小權限帳號讀不到 `ir.model`，後端狀態一律無法連線、8081 readiness 503（讀取其實正常）。
-- gateway：子程序的 4xx／5xx 回應保留狀態碼（404 讓 client 重開 session、Retry-After 照轉），內容改由 gateway 產生（JSON-RPC 錯誤 -32000 與 HTTP 狀態說明），不再轉送子程序的文字；子程序回 1xx 或 3xx 時回 502。SSE 只轉 `notifications/progress` 與 `notifications/tools/list_changed`，子程序的 log 通知等其他通知不轉送。URL elicitation 錯誤（-32042，含 -32042.0）改成一般錯誤、不帶子程序資料。三項都是 0.1.2 審查留下的建議。
+- gateway（0.1.2 審查留下的建議，經 0.1.4 發佈候選審查補強）：子程序對請求的 4xx／5xx 回應保留狀態碼（404 讓 client 重開 session、Retry-After 照轉），內容改由 gateway 產生（JSON-RPC 錯誤 -32000 與 HTTP 狀態說明），不再轉送子程序的文字；失敗的 initialize 不帶 session id；子程序回 401／403（拒絕的是 gateway 自己的權杖）以及任何請求、DELETE、通知收到 1xx／3xx 都回 502。子程序的通知只轉 `notifications/tools/list_changed`，而且是 gateway 固定的內容；progress、log 等其他通知不轉送。回覆必須正好帶 result 或 error 其中一個；錯誤碼不是 JSON 整數（例如字串 "-32042"）或為 URL elicitation（-32042）時，改成 gateway 自己的錯誤、不帶子程序資料（JSON、SSE、initialize 都適用）。
 - 共用核心：原生探測名稱改由健康檢查實際使用的探測取得（0.1.3 發佈候選審查 #6，行為不變）。
 - 映像 `ghcr.io/woowtech/amd64-mcp-odoo-manage:0.1.4` 尚未建置；0.1.0–0.1.3 tag 不覆寫。
 

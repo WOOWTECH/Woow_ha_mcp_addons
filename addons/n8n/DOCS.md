@@ -3,7 +3,7 @@
 ## 現況與範圍
 
 **0.1.3（experimental）**：映像 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.3` 由候選 a0db7d7 建置，通過 container/mock 與 supply-chain gate（2026-10-06），可從本 repository 的 HA 商店安裝；修正見 [CHANGELOG](CHANGELOG.md)，2026-10-06 已在測試 HA 回歸（[0.1.3 回歸紀錄](../../docs/operations/ha-test-0.1.3.md)；0.1.2 見 [0.1.2 回歸紀錄](../../docs/operations/ha-test-0.1.2.md)）。2026-10-05 已在測試 HA 實測 0.1.1（[HA 實測紀錄](../../docs/operations/ha-test-0.1.1.md)）：0.1.0 升版、HA 備份還原、真 n8n 讀取 11 個中 10 個通過（資料夾工具在 n8n 2.12 回 NOT_FOUND，該版沒有資料夾 API）、寫入與不支援工具 24 個全部拒絕、後端斷線。以下試點段落是 0.1.0 的結果。**HA 試點**（2026-10-05，一台 HA 實機、真 n8n 2.12.3 後端）通過：管理員 Ingress 面板、後端設定與重啟後保留、Bearer 拒絕與 token 輪替／撤銷、MCP E2E（11 個可見工具讀到真 n8n 資料；未授權的讀取模式與 6 種寫入直接呼叫皆 403，n8n 端前後一致）、後端斷線（結構化錯誤、readiness 503、恢復後可用）、Add-on 重啟與 MCP child 異常重啟、資源量測。**未通過**：HA 還原（見下方已知問題）。**未測**：non-admin、LAN client、升版。
-**路徑 A 權限已批准**：僅此新 n8n 試點 `homeassistant_api: true`，其他六類 false。
+**HA 管理權限**：七支都有 `homeassistant_api: true`（n8n 自 0.1.0、其他六支自 0.1.1 起），用來驗證管理面板的使用者是 HA owner 或系統管理員；這個 token 具廣泛的 Core 存取能力。
 正式 fixed-WS verifier 已實作並經 component review；管理 HTML/assets/API 與 UI 已本地整合。
 本地真 bootstrap→guard→n8n→provider fake WS／Chromium 已覆蓋設定與 token 操作；
 真 HA 上管理員 Ingress 與 token 操作已通過（見上）；整合獨立規格及新安全審查仍待完成。

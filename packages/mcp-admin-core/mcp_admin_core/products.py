@@ -251,6 +251,8 @@ expand_batch2(TOOLS)
 from .odoo_b2 import TOOLS as ODOO_B2_TOOLS
 TOOLS['odoo'].update(ODOO_B2_TOOLS)
 
+# Each product's representative public read (tests, container acceptance). HealthMonitor uses health_probe(): Odoo
+# and Odoo Manage have private authentication-only probes instead (RC review notes, 0.1.3 #6 and 0.1.4 #7).
 PROBES = {'odoo': ('list_models', {'limit': 1}), 'odoo-manage': ('list_models', {}),
           'hermes': ('hermes_inspect', {'target': 'capabilities'}), 'opendesign': ('health', {}),
           'emqx': ('emqx_cluster_status', {}), 'litellm': ('litellm_list_models', {})}
@@ -270,9 +272,15 @@ def probe_success(product, payload):
     if product == 'hermes':
         return isinstance(payload.get('capabilities'), dict) and 'capabilities_error' not in payload
     if product == 'opendesign':
-        # 0.1.4: OpenDesign 0.21.1 answers {"ok": true, "version": "0.21.1"} (0.1.3 HA regression); older builds used status.
-        return payload.get('status') in ('ok', 'healthy') or (
-            payload.get('ok') is True and isinstance(payload.get('version'), str) and bool(payload['version'].strip()))
+        # 0.1.4: OpenDesign 0.21.1 answers {"ok": true, "version": "0.21.1"} (0.1.3 HA regression); older builds used
+        # status. A present status or ok must agree (RC review #8: {"ok": true, "status": "unhealthy"} is not healthy).
+        if 'status' in payload and payload['status'] not in ('ok', 'healthy'):
+            return False
+        if 'ok' in payload:
+            version = payload.get('version')
+            return (payload['ok'] is True and isinstance(version, str)
+                    and re.fullmatch(r'[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}', version) is not None)
+        return 'status' in payload
     if product == 'emqx':
         nodes = payload.get('nodes')
         return (type(payload.get('node_count')) is int and isinstance(nodes, list) and bool(nodes)

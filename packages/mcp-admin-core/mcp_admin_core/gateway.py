@@ -39,9 +39,11 @@ FORWARDED_HEADERS = {"mcp-session-id": re.compile(r"[\x21-\x7e]{1,256}"),
 LONE_CR = re.compile(rb"\r(?!\n)")
 SSE_FIELD = re.compile(rb"(?:id|event):[ ]?[\x21-\x7e]{0,256}|retry:[ ]?[0-9]{1,10}")  # id as Last-Event-ID allows
 SSE_COMMENT = re.compile(rb":[\x20-\x7e]{0,1024}")
-# 0.1.4: the only child notifications a client gets; others (child log messages, resource updates) carry child
-# text or name surfaces the gateway never exposes.
-RELAYED_NOTIFICATIONS = frozenset({"notifications/progress", "notifications/tools/list_changed"})
+# 0.1.4: the only child notification a client gets, and only as these fixed bytes (no child params). Progress is
+# never relayed: authorize refuses _meta, so no client can ask for it and any progress event is unsolicited child
+# text (the pinned TS client puts unknown-token progress into an error message); log messages and resource updates
+# carry child text or name surfaces the gateway never exposes.
+LIST_CHANGED = b'data: {"jsonrpc":"2.0","method":"notifications/tools/list_changed"}'
 
 
 def sse_frame(frame: bytes):
@@ -78,13 +80,23 @@ def backend_unavailable(ident):
                       503, {"Retry-After": "5", "Cache-Control": "no-store"})
 
 
-def no_url_elicitation(value):
-    """0.1.4: a URL elicitation error (-32042) asks the user to open a child-chosen URL; the gateway declares no
-    elicitation capability, so a client gets a plain error without the child's data instead."""
-    error = value.get("error")
+def one_reply(value):
+    """A JSON-RPC response object: exactly one of result and error (a client may parse both as an error)."""
+    return isinstance(value, dict) and "method" not in value and (("result" in value) != ("error" in value))
+
+
+def checked_error(value):
+    """0.1.4: an error the gateway cannot vouch for becomes its own. A URL elicitation error (-32042) asks the user to
+    open a child-chosen URL (the gateway declares no elicitation capability); a code that is not a JSON integer
+    (e.g. "-32042", which a Python client coerces) is malformed. Integral floats count as integers, as for clients."""
+    if "error" not in value:
+        return value
+    error = value["error"]
     code = error.get("code") if isinstance(error, dict) else None
-    if type(code) in (int, float) and code == -32042:  # -32042.0 too: JavaScript clients compare numbers
-        value = {**value, "error": {"code": -32000, "message": "URL elicitation is not supported"}}
+    if not (type(code) is int or type(code) is float and code.is_integer()):
+        return {**value, "error": {"code": -32000, "message": "Invalid error from the MCP server"}}
+    if code == -32042:
+        return {**value, "error": {"code": -32000, "message": "URL elicitation is not supported"}}
     return value
 
 
@@ -458,8 +470,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         so the session id it sent is dead.
         """
         def reply(value):
-            return (isinstance(value, dict) and same_id(value.get("id"), ident) and "method" not in value
-                    and ("result" in value or "error" in value))
+            """"ok" for this request's reply, "invalid" when it has both result and error (0.1.4), None for another
+            message (a request, a notification, another id, or neither result nor error: skipped as in 0.1.2)."""
+            if "method" in value or not same_id(value.get("id"), ident) or not ("result" in value or "error" in value):
+                return None
+            return "ok" if one_reply(value) else "invalid"
 
         pending = bytearray()
         reader = chunks(owner, token)
@@ -483,8 +498,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         return "invalid", None, None
                     if not isinstance(value, dict):
                         return "invalid", None, None  # a batch: the gateway never sends one
-                    if reply(value):
+                    outcome = reply(value)
+                    if outcome == "ok":
                         return "ok", value, [line for line in kept if not line.startswith(b":")]
+                    if outcome == "invalid":
+                        return "invalid", None, None
         finally:
             await reader.aclose()
         if owner.overflowed:
@@ -497,7 +515,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             return "invalid", None, None
         if not isinstance(value, dict):
             return "invalid", None, None
-        return ("ok", value, None) if reply(value) else ("missing", None, None)
+        outcome = reply(value)
+        return ("ok", value, None) if outcome == "ok" else ("invalid" if outcome else "missing", None, None)
 
     async def stream(owner, token, is_sse):
         if not is_sse:
@@ -525,20 +544,24 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         value = strict_json(payload)
                         if not isinstance(value, dict):
                             return  # a batch: never sent by the gateway, never filtered element by element
-                        if "method" in value and "id" in value:
-                            continue  # a server-to-client request (elicitation, sampling, roots): the client
-                            # could not answer it through the gateway, and it would carry child text to the user
-                        if "method" in value and not (isinstance(value["method"], str)
-                                                      and value["method"] in RELAYED_NOTIFICATIONS):
-                            continue  # 0.1.4: progress and tool-list changes only
-                        if (isinstance(value.get("result"), dict)
-                                and {"tools", "capabilities"} & value["result"].keys()):
-                            value = filter_list(value, tools, store.load())
-                            data_lines = [b"data: " + json.dumps(value, separators=(",", ":")).encode()]
+                        if "method" in value:
+                            if "id" in value or value["method"] != "notifications/tools/list_changed":
+                                continue  # a server-to-client request (elicitation, sampling, roots: the client
+                                # could not answer it through the gateway) or a notification other than 0.1.4's one
+                            data_lines = [LIST_CHANGED]
+                        elif "result" not in value and "error" not in value:
+                            continue  # not a reply: never relayed as one
+                        elif not one_reply(value):
+                            return  # both result and error: malformed, never relayed, never guessed
                         else:
-                            rewritten = no_url_elicitation(value)
-                            if rewritten is not value:
-                                data_lines = [b"data: " + json.dumps(rewritten, separators=(",", ":")).encode()]
+                            checked = checked_error(value)
+                            rebuilt = checked is not value
+                            if (isinstance(checked.get("result"), dict)
+                                    and {"tools", "capabilities"} & checked["result"].keys()):
+                                checked = filter_list(checked, tools, store.load())  # may filter in place
+                                rebuilt = True
+                            if rebuilt:
+                                data_lines = [b"data: " + json.dumps(checked, separators=(",", ":")).encode()]
                     except (ValueError, ConfigError, RecursionError):
                         return
                 lines = kept + data_lines
@@ -610,8 +633,10 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             response_headers["Cache-Control"] = "no-store"
             if not still_authorized(state.token):
                 raise BadRequest(401)
-            if not 100 <= upstream.status_code <= 599:
-                raise BadRequest(502)  # the ASGI server cannot send other codes
+            if not 200 <= upstream.status_code <= 599 or 300 <= upstream.status_code < 400:
+                raise BadRequest(502)  # no interim reply (an ASGI server cannot send it), no child redirect
+            if upstream.status_code in (401, 403):
+                raise BadRequest(502)  # the child refused the gateway's own token or Host: not a client credential issue
             media = upstream.headers.get("content-type", "").split(";")[0].strip().lower()
             is_sse = media == "text/event-stream"
             if is_sse:  # the gateway re-frames events itself: never forward the child's parameters (charset)
@@ -622,9 +647,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 # forwarded headers only, never the child's bytes.
                 return Response(status_code=upstream.status_code,
                                 headers={k: v for k, v in response_headers.items() if k != "content-type"})
-            if upstream.status_code < 200 or 300 <= upstream.status_code < 400:
-                raise BadRequest(502)  # an interim status is never a reply; the gateway follows no child redirect
             if upstream.status_code >= 400:
+                if method == "initialize":
+                    response_headers.pop("mcp-session-id", None)  # no session for a failed initialize
                 return child_status_reply(message.get("id") if request_id else None, upstream.status_code,
                                           response_headers)
             if 200 <= upstream.status_code < 300 and (request.method == "GET" or request_id):
@@ -647,7 +672,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         raise ValueError("invalid initialize response")
                     if "mcp-session-id" in upstream.headers and "mcp-session-id" not in response_headers:
                         raise ValueError("unusable session id")  # a client could not continue the session
-                    value = filter_list(no_url_elicitation(value), tools, store.load())
+                    value = filter_list(checked_error(value), tools, store.load())
                 except ValueError:
                     raise BadRequest(502) from None
                 if frame is None:
@@ -667,10 +692,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     if owner.overflowed:
                         raise ValueError("oversize reply")
                     value = strict_json(bytes(result))
-                    if not (isinstance(value, dict) and "method" not in value
-                            and same_id(value.get("id"), message.get("id")) and ("result" in value or "error" in value)):
+                    if not (one_reply(value) and same_id(value.get("id"), message.get("id"))):
                         raise ValueError("not this request's reply")
-                    value = filter_list(no_url_elicitation(value), tools, store.load())
+                    value = filter_list(checked_error(value), tools, store.load())
                 except (ValueError, RecursionError):
                     raise BadRequest(502) from None
                 return json_reply(value, 200, response_headers)

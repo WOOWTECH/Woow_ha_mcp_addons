@@ -7,9 +7,12 @@ child, owned fake XMLRPC backend, real HealthMonitor and gateway.
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import threading
+import asyncio
+import json
 import xmlrpc.client
 
 import httpx
+import pytest
 
 from owned_runtime import Endpoint
 from mcp_admin_core.gateway import make_apps
@@ -21,21 +24,58 @@ from test_real_products import connection, rpc
 
 
 @contextmanager
-def fake_odoo():
-    """Like the HA test account: authenticates, but has no ir.model access."""
+def fake_odoo(module=False):
+    """Like the HA test account: authenticates, but has no ir.model access. module: the Odoo MCP module's endpoints
+    (standard mode, API key validated by GET /mcp/auth/validate) instead of plain XMLRPC (YOLO read mode)."""
     calls, failures = [], []
-    state = {'deny': False, 'offline': False}
+    state = {'deny': False, 'offline': False, 'hold': None, 'started': threading.Event(), 'release': threading.Event()}
+    lock = threading.Lock()
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args): pass
+
+        def held(self, name):
+            with lock:  # hold only the first matching request after arming (a slow Odoo)
+                hit = state['hold'] == name
+                if hit:
+                    state['hold'] = None
+            if hit:
+                state['started'].set()
+                assert state['release'].wait(20)
+
+        def reply_json(self, value):
+            data = json.dumps(value).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_GET(self):
+            if state['offline']:
+                self.send_error(503); return
+            try:
+                assert module and self.headers.get('X-API-Key') == 'DUMMY', self.path
+                assert self.headers.get('X-Odoo-Database') == 'test'
+                calls.append('GET ' + self.path)
+                if self.path == '/mcp/auth/validate':
+                    self.reply_json({'success': True, 'data': {'valid': not state['deny'], 'user_id': 7}})
+                elif self.path == '/mcp/models':
+                    self.reply_json({'success': True, 'data': {'models': []}})
+                else:
+                    self.send_error(404)
+            except Exception as exc:
+                failures.append(repr(exc))
+                self.send_error(400)
 
         def do_POST(self):
             body = self.rfile.read(int(self.headers['Content-Length']))
             if state['offline']:
                 self.send_error(503); return
             try:
-                assert self.path.startswith('/xmlrpc/2/'), self.path
+                assert self.path.startswith('/mcp/xmlrpc/' if module else '/xmlrpc/2/'), self.path
                 params, method = xmlrpc.client.loads(body)
+                self.held(method)
                 calls.append(method if method != 'execute_kw' else 'execute_kw ' + '.'.join(params[3:5]))
                 if method == 'version':
                     value = {'server_version': '18.0', 'server_version_info': [18, 0, 0, 'final', 0]}
@@ -69,10 +109,11 @@ def fake_odoo():
         assert not thread.is_alive()
 
 
-async def test_odoo_manage_probe_authenticates_on_a_fresh_connection(tmp_path):
-    with fake_odoo() as (url, calls, failures, state):
+@pytest.mark.parametrize('module', [False, True], ids=['yolo-read', 'module'])
+async def test_odoo_manage_probe_authenticates_on_a_fresh_connection(tmp_path, module):
+    with fake_odoo(module) as (url, calls, failures, state):
         store = ProductStore(tmp_path / 'state', 'odoo-manage')
-        store.update(connection=connection('odoo-manage', url))
+        store.update(connection={**connection('odoo-manage', url), **({'mode': 'module'} if module else {})})
         endpoint = Endpoint('odoo-manage')
         process = endpoint.supervisor(child_spec(store.load(), store.directory))
         try:
@@ -88,7 +129,21 @@ async def test_odoo_manage_probe_authenticates_on_a_fresh_connection(tmp_path):
                     # Reachable without ir.model access: the probe's own connection checks and authenticates, nothing else.
                     before = len(calls)
                     await health.check()
-                    assert health.backend == 'reachable' and calls[before:] == ['version', 'authenticate'], calls[before:]
+                    expected = ['version', 'GET /mcp/auth/validate'] if module else ['version', 'authenticate']
+                    assert health.backend == 'reachable' and calls[before:] == expected, calls[before:]
+
+                    # The probe runs off the child's event loop (RC review #4, mutant LM4): while a slow Odoo holds
+                    # it, the child still answers.
+                    state['started'].clear(); state['release'].clear(); state['hold'] = 'version'
+                    probe = asyncio.create_task(health.check())
+                    try:
+                        assert await asyncio.to_thread(state['started'].wait, 10)
+                        async with asyncio.timeout(2):
+                            assert await rpc(client, '/mcp', headers, {'jsonrpc': '2.0', 'id': 3, 'method': 'ping'}) == {}
+                    finally:
+                        state['release'].set()
+                    await probe
+                    assert health.backend == 'reachable'
 
                     # Private: never listed or dispatched through the gateway.
                     name, arguments = health_probe('odoo-manage')

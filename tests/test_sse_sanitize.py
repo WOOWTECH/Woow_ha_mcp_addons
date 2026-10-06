@@ -265,7 +265,8 @@ async def test_stream_drops_server_to_client_requests(store, verb):
                                                           content=b"data: " + ask + b"\n\ndata: " + note + b"\n\ndata: " + reply + b"\n\n"), verb)
     assert response.status_code == 200
     assert "elicitation" not in response.text and "password" not in response.text
-    assert [json.loads(line[6:]).get("method") for line in data_lines(response.text)] == ["notifications/progress", None]
+    # 0.1.4: progress is not relayed either (no client can ask for it through the gateway: authorize refuses _meta).
+    assert [json.loads(line[6:]).get("method") for line in data_lines(response.text)] == [None]
 
 
 @pytest.mark.parametrize("value", [{"jsonrpc": "2.0", "id": 9, "method": "ping", "result": {}},  # a request, not a reply
@@ -473,7 +474,8 @@ CHILD_TEXT = "CHILD-PRIVATE-TEXT"
 
 @pytest.mark.parametrize("verb", ["POST", "GET"])
 @pytest.mark.parametrize("status,content_type", [(404, "application/json"), (400, "application/json"), (500, "text/plain"),
-                                                 (503, "text/html"), (418, "text/event-stream"), (599, "application/json")])
+                                                 (503, "text/html"), (418, "text/event-stream"), (599, "application/json"),
+                                                 (429, "application/json")])
 async def test_non_2xx_replies_keep_status_but_never_child_bytes(store, verb, status, content_type):
     # 0.1.4 (0.1.2 review note): clients put error bodies into user-visible messages.
     body = json.dumps({"jsonrpc": "2.0", "id": 9, "error": {"code": -32001, "message": CHILD_TEXT}}).encode()
@@ -494,34 +496,107 @@ async def test_a_child_redirect_is_bad_gateway(store, status):
 
 
 @pytest.mark.parametrize("verb", ["POST", "GET"])
-async def test_only_progress_and_tool_list_notifications_reach_a_client(store, verb):
+async def test_only_a_fixed_tool_list_notification_reaches_a_client(store, verb):
+    # 0.1.4 (RC review #2): progress is unsolicited child text (the TS client puts unknown-token progress into an error);
+    # tools/list_changed is relayed as the gateway's own bytes, never with the child's params.
     events = [{"jsonrpc": "2.0", "method": "notifications/message", "params": {"level": "info", "data": CHILD_TEXT}},
-              {"jsonrpc": "2.0", "method": "notifications/progress", "params": {"progressToken": 1, "progress": 1}},
+              {"jsonrpc": "2.0", "method": "notifications/progress", "params": {"progressToken": 1, "progress": 1,
+                                                                                  "message": CHILD_TEXT}},
               {"jsonrpc": "2.0", "method": "notifications/resources/updated", "params": {"uri": CHILD_TEXT}},
-              {"jsonrpc": "2.0", "method": ["notifications/progress"]},  # malformed: dropped, not an error
+              {"jsonrpc": "2.0", "method": ["notifications/tools/list_changed"]},  # malformed: dropped, not an error
               {"jsonrpc": "2.0", "method": {"x": 1}},
-              {"jsonrpc": "2.0", "method": "notifications/tools/list_changed"},
+              {"jsonrpc": "2.0", "method": "notifications/tools/list_changed", "params": {"note": CHILD_TEXT},
+               "result": {"tools": [{"name": CHILD_TEXT}]}, "error": {"code": 1, "message": CHILD_TEXT}},
               {"jsonrpc": "2.0", "id": 9, "result": {}}]
     stream = b"".join(b"data: " + json.dumps(e).encode() + b"\n\n" for e in events)
     response = await call(store, sse(stream), verb)
     assert response.status_code == 200 and CHILD_TEXT not in response.text
-    sent = [json.loads(line[5:]) for line in data_lines(response.text)]
-    assert [e.get("method") for e in sent] == ["notifications/progress", "notifications/tools/list_changed", None]
+    assert data_lines(response.text) == ['data: {"jsonrpc":"2.0","method":"notifications/tools/list_changed"}',
+                                         'data: ' + json.dumps({"jsonrpc": "2.0", "id": 9, "result": {}})]
 
 
-async def test_url_elicitation_errors_become_plain_errors(store):
-    error = {"jsonrpc": "2.0", "id": 9, "error": {"code": -32042, "message": CHILD_TEXT,
+@pytest.mark.parametrize("code", [-32042, -32042.0, "-32042", " -32042 ", "-32_042", "-032042", "-32042.0", -32042.5,
+                                  True, None, [], {"x": 1}])
+async def test_url_elicitation_and_malformed_error_codes_become_gateway_errors(store, code):
+    # 0.1.4 (RC review #1): JSON, SSE and initialize replies; a Python client coerces "-32042" to -32042.
+    error = {"jsonrpc": "2.0", "id": 9, "error": {"code": code, "message": CHILD_TEXT,
                                                  "data": {"elicitations": [{"url": "https://phish.invalid/" + CHILD_TEXT}]}}}
-    plain = {"jsonrpc": "2.0", "id": 9, "error": {"code": -32042.5, "message": "kept", "data": {"k": 1}}}
-    as_float = json.dumps(error).replace('"code": -32042', '"code": -32042.0').encode()
-    for upstream in (lambda _: httpx.Response(200, headers={"content-type": "application/json"}, content=json.dumps(error).encode()),
-                     lambda _: httpx.Response(200, headers={"content-type": "application/json"}, content=as_float),
-                     sse(b"data: " + json.dumps(error).encode() + b"\n\n"), sse(b"data: " + as_float + b"\n\n")):
+    expected = {"code": -32000, "message": "URL elicitation is not supported" if code in (-32042, -32042.0) and
+                type(code) in (int, float) else "Invalid error from the MCP server"}
+    body = json.dumps(error).encode()
+    for upstream in (lambda _: httpx.Response(200, headers={"content-type": "application/json"}, content=body),
+                     sse(b"data: " + body + b"\n\n")):
         response = await call(store, upstream)
         assert response.status_code == 200 and CHILD_TEXT not in response.text and "phish" not in response.text
         value = json.loads(data_lines(response.text)[0][5:]) if "event-stream" in response.headers["content-type"] else response.json()
-        assert value == {"jsonrpc": "2.0", "id": 9, "error": {"code": -32000, "message": "URL elicitation is not supported"}}
-    # Other errors, including look-alike codes, are relayed as before.
+        assert value == {"jsonrpc": "2.0", "id": 9, "error": expected}
+    reply = json.dumps({**error, "id": 7}).encode()
+    for upstream in (lambda _: httpx.Response(200, headers={"content-type": "application/json"}, content=reply),
+                     sse(b"data: " + reply + b"\n\n")):
+        response = await post(store, upstream)  # initialize
+        assert response.status_code == 200 and CHILD_TEXT not in response.text and "phish" not in response.text
+        value = json.loads(data_lines(response.text)[0][5:]) if "event-stream" in response.headers["content-type"] else response.json()
+        assert value["error"] == expected
+
+
+async def test_other_errors_are_relayed_unchanged(store):
+    plain = {"jsonrpc": "2.0", "id": 9, "error": {"code": -32602, "message": "kept", "data": {"k": 1}}}
     response = await call(store, lambda _: httpx.Response(200, headers={"content-type": "application/json"},
                                                           content=json.dumps(plain).encode()))
     assert response.json() == plain
+    response = await call(store, sse(b"data: " + json.dumps(plain).encode() + b"\n\n"))
+    assert json.loads(data_lines(response.text)[0][5:]) == plain
+
+
+async def test_a_reply_with_both_result_and_error_is_never_relayed(store):
+    both = {"jsonrpc": "2.0", "id": 9, "result": {"tools": []},
+            "error": {"code": -32042, "data": {"elicitations": [{"url": "https://phish.invalid/x"}]}}}
+    body = json.dumps(both).encode()
+    response = await call(store, lambda _: httpx.Response(200, headers={"content-type": "application/json"}, content=body))
+    assert response.status_code == 502 and "phish" not in response.text
+    later = json.dumps({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"}).encode()
+    response = await call(store, sse(b"data: " + body + b"\n\ndata: " + later + b"\n\n"))
+    assert "phish" not in response.text and data_lines(response.text) == []  # the stream stops at that event
+    response = await post(store, lambda _: httpx.Response(200, headers={"content-type": "application/json"},
+                                                          content=json.dumps({**both, "id": 7}).encode()))
+    assert response.status_code == 502  # initialize
+
+
+async def test_repeated_child_errors_never_leak_a_slot(store):
+    # RC review #4 (mutant ML): with the slot kept on the early reply, the 33rd call would be 503.
+    statuses = []
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(404, content=b"gone"))) as child:
+        _, app = make_apps(store, TOOLS, child)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mcp") as client:
+            for _ in range(40):
+                response = await client.post("/mcp", headers={"Authorization": "Bearer " + store.load().token},
+                                             json={"jsonrpc": "2.0", "id": 9, "method": "ping"})
+                statuses.append(response.status_code)
+    assert statuses == [404] * 40
+
+
+@pytest.mark.parametrize("status", [401, 403])
+async def test_child_auth_refusals_are_bad_gateway(store, status):
+    # RC review #9: the child refusing the gateway's own token is not a client credential problem (no OAuth prompt).
+    response = await call(store, lambda _: httpx.Response(status, headers={"www-authenticate": "Bearer"}, content=b"x"))
+    assert response.status_code == 502 and "www-authenticate" not in response.headers
+
+
+@pytest.mark.parametrize("status", [101, 302, 304, 401])
+@pytest.mark.parametrize("verb", ["DELETE", "notification"])
+async def test_delete_and_notification_replies_follow_the_same_status_rules(store, verb, status):
+    # RC review #5: an interim or redirect status (or a child auth refusal) is 502 here too; 101 broke h11.
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(status, content=b""))) as child:
+        _, app = make_apps(store, TOOLS, child)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mcp") as client:
+            headers = {"Authorization": "Bearer " + store.load().token, "Mcp-Session-Id": "s"}
+            if verb == "DELETE":
+                response = await client.delete("/mcp", headers=headers)
+            else:
+                response = await client.post("/mcp", headers=headers, json={"jsonrpc": "2.0", "method": "notifications/initialized"})
+    assert response.status_code == 502
+
+
+async def test_a_failed_initialize_carries_no_session_id(store):
+    response = await post(store, lambda _: httpx.Response(500, headers={"mcp-session-id": "dead"}, content=b"x"))
+    assert response.status_code == 500 and "mcp-session-id" not in response.headers
