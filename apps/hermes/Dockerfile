@@ -17,7 +17,7 @@ RUN uv sync --frozen --no-dev --python /usr/local/bin/python
 COPY apps/hermes/pyproject.toml apps/hermes/uv.lock ./apps/hermes/
 RUN uv sync --project apps/hermes --frozen --no-dev --python /usr/local/bin/python
 FROM python:3.13.16-slim-bookworm@sha256:f040863673aea2570c3ff6a5c3fb4c673a016cbc5375005ad145915922b6b78a AS runtime
-ARG BUILD_VERSION=0.1.4
+ARG BUILD_VERSION=0.1.5
 LABEL io.hass.type="app" io.hass.arch="amd64" io.hass.version="${BUILD_VERSION}" \
       io.hass.name="WOOW Hermes MCP" io.hass.description="Experimental partial MCP; management blocked" \
       io.hass.url="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \

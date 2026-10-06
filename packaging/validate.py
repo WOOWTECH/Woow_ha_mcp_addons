@@ -21,7 +21,7 @@ PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm')  # in the 
 # (0.1.4 was the last); its source stays in apps/odoo-manage and the shared core, and is still tested.
 RETIRED = ('odoo-manage',)
 URL = 'https://github.com/WOOWTECH/Woow_ha_mcp_addons'
-VERSION = '0.1.4'
+VERSION = '0.1.5'
 TITLES = dict(zip(PRODUCTS, ('Odoo', 'n8n', 'Hermes', 'OpenDesign', 'EMQX', 'LiteLLM')))
 
 

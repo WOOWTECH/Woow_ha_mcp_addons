@@ -1,5 +1,5 @@
 name: WOOW Hermes MCP (experimental)
-version: 0.1.4
+version: 0.1.5
 slug: woow_mcp_hermes
 description: Experimental; HA admin-role management; partial tools, read-only by default.
 url: https://github.com/WOOWTECH/Woow_ha_mcp_addons
