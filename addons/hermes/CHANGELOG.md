@@ -1,5 +1,11 @@
 # Hermes Changelog
 
+## 0.1.5 — 準備中（未發佈）
+
+- gateway（0.1.4 複審留下的縱深防禦建議）：client 收到的每個回覆都由 gateway 重新組成，只含 jsonrpc、id 與 result 或 error 其中一個，error 只保留 code、message、data；子程序加在回覆上的其他欄位不再轉送（TS client 會把未知欄位名稱放進錯誤訊息）。POST 的 SSE 串流只轉送對應這個請求的回覆。錯誤碼超出 32 位元範圍或 message 不是字串時，改成 gateway 自己的錯誤。
+- 授權與來源紀錄：ledger 補列 backend_policy.py（六個 Python 服務的 venv）、odoo_b2_scope.py 與 bounded_tools.py（OpenDesign 的 venv）守住的上游原始碼。測試會從程式碼找出每個守門在哪些服務執行，逐一確認每個 venv 都有列，避免之後漏列。
+- 映像 `ghcr.io/woowtech/amd64-mcp-hermes:0.1.5` 尚未建置；0.1.0–0.1.4 tag 不覆寫。
+
 ## 0.1.4 — 2026-10-06 公開（experimental）
 
 - gateway（0.1.2 審查留下的建議，經 0.1.4 發佈候選審查補強）：子程序對請求的 4xx／5xx 回應保留狀態碼（404 讓 client 重開 session、Retry-After 照轉），內容改由 gateway 產生（JSON-RPC 錯誤 -32000 與 HTTP 狀態說明），不再轉送子程序的文字；失敗的 initialize 不帶 session id；子程序回 401／403（拒絕的是 gateway 自己的權杖）以及任何請求、DELETE、通知收到 1xx／3xx 都回 502。子程序的通知只轉 `notifications/tools/list_changed`，而且是 gateway 固定的內容；progress、log 等其他通知不轉送。回覆必須正好帶 result 或 error 其中一個；錯誤碼不是 JSON 整數（例如字串 "-32042"）或為 URL elicitation（-32042）時，改成 gateway 自己的錯誤、不帶子程序資料（JSON、SSE、initialize 都適用）。

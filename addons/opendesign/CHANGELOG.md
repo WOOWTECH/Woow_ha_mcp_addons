@@ -1,5 +1,11 @@
 # OpenDesign Changelog
 
+## 0.1.5 — 準備中（未發佈）
+
+- gateway（0.1.4 複審留下的縱深防禦建議）：client 收到的每個回覆都由 gateway 重新組成，只含 jsonrpc、id 與 result 或 error 其中一個，error 只保留 code、message、data；子程序加在回覆上的其他欄位不再轉送（TS client 會把未知欄位名稱放進錯誤訊息）。POST 的 SSE 串流只轉送對應這個請求的回覆。錯誤碼超出 32 位元範圍或 message 不是字串時，改成 gateway 自己的錯誤。
+- 授權與來源紀錄：ledger 補列 backend_policy.py（六個 Python 服務的 venv）、odoo_b2_scope.py 與 bounded_tools.py（OpenDesign 的 venv）守住的上游原始碼。測試會從程式碼找出每個守門在哪些服務執行，逐一確認每個 venv 都有列，避免之後漏列。
+- 映像 `ghcr.io/woowtech/amd64-mcp-opendesign:0.1.5` 尚未建置；0.1.0–0.1.4 tag 不覆寫。
+
 ## 0.1.4 — 2026-10-06 公開（experimental）
 
 - 健康檢查接受 OpenDesign 0.21.1 的 health 回應 `{"ok": true, "version": "…"}`（0.1.3 HA 回歸時這個版本的後端狀態一律無法連線、8081 readiness 503，讀取其實正常）；舊的 `status` 為 ok／healthy 仍接受。兩個欄位同時出現時必須一致，version 須是一般的版本字串。

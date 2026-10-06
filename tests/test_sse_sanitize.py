@@ -512,7 +512,7 @@ async def test_only_a_fixed_tool_list_notification_reaches_a_client(store, verb)
     response = await call(store, sse(stream), verb)
     assert response.status_code == 200 and CHILD_TEXT not in response.text
     assert data_lines(response.text) == ['data: {"jsonrpc":"2.0","method":"notifications/tools/list_changed"}',
-                                         'data: ' + json.dumps({"jsonrpc": "2.0", "id": 9, "result": {}})]
+                                         'data: {"jsonrpc":"2.0","id":9,"result":{}}']  # 0.1.5: replies are rebuilt
 
 
 @pytest.mark.parametrize("code", [-32042, -32042.0, "-32042", " -32042 ", "-32_042", "-032042", "-32042.0", -32042.5,
@@ -571,7 +571,7 @@ async def test_an_sse_event_with_neither_result_nor_error_is_dropped(store):
     neither = json.dumps({"jsonrpc": "2.0", "id": 9, "note": CHILD_TEXT}).encode()
     reply = json.dumps({"jsonrpc": "2.0", "id": 9, "result": {}}).encode()
     response = await call(store, sse(b"data: " + neither + b"\n\ndata: " + reply + b"\n\n"))
-    assert CHILD_TEXT not in response.text and data_lines(response.text) == ["data: " + reply.decode()]
+    assert CHILD_TEXT not in response.text and data_lines(response.text) == ['data: {"jsonrpc":"2.0","id":9,"result":{}}']
 
 
 async def test_repeated_child_errors_never_leak_a_slot(store):
@@ -612,3 +612,52 @@ async def test_delete_and_notification_replies_follow_the_same_status_rules(stor
 async def test_a_failed_initialize_carries_no_session_id(store):
     response = await post(store, lambda _: httpx.Response(500, headers={"mcp-session-id": "dead"}, content=b"x"))
     assert response.status_code == 500 and "mcp-session-id" not in response.headers
+
+
+@pytest.mark.parametrize("verb", ["POST", "GET"])
+async def test_replies_are_the_gateways_own_objects(store, verb):
+    # 0.1.5 (0.1.4 re-review #1b): no unknown top-level member and an error with only code, message and data; the
+    # pinned TS client's strict schemas would put an unknown key's name (child text) into an error.
+    odd = "Open https://phish.invalid to fix " + CHILD_TEXT
+    replies = [{"jsonrpc": "2.0", "id": 9, "result": {"content": []}, odd: 1},
+               {"jsonrpc": "2.0", "id": 9, "error": {"code": -32602, "message": "bad", "data": {"k": 1}, odd: 1}, odd: 2},
+               {"jsonrpc": "2.0", "id": 9, "error": {"code": -32042, "message": "x", odd: 1}, odd: 2}]
+    expected = [{"jsonrpc": "2.0", "id": 9, "result": {"content": []}},
+                {"jsonrpc": "2.0", "id": 9, "error": {"code": -32602, "message": "bad", "data": {"k": 1}}},
+                {"jsonrpc": "2.0", "id": 9, "error": {"code": -32000, "message": "URL elicitation is not supported"}}]
+    for reply, want in zip(replies, expected):
+        body = json.dumps(reply).encode()
+        upstreams = [sse(b"data: " + body + b"\n\n")]
+        if verb == "POST":
+            upstreams.append(lambda _: httpx.Response(200, headers={"content-type": "application/json"}, content=body))
+        for upstream in upstreams:
+            response = await call(store, upstream, verb)
+            assert response.status_code == 200 and "phish" not in response.text and CHILD_TEXT not in response.text
+            value = json.loads(data_lines(response.text)[0][5:]) if "event-stream" in response.headers["content-type"] else response.json()
+            assert value == want
+    initialize = {"jsonrpc": "2.0", "id": 7, "result": initialize_result({"tools": {}}), odd: 1}
+    response = await post(store, lambda _: httpx.Response(200, headers={"content-type": "application/json"},
+                                                          content=json.dumps(initialize).encode()))
+    assert response.status_code == 200 and "phish" not in response.text and set(response.json()) == {"jsonrpc", "id", "result"}
+
+
+@pytest.mark.parametrize("code,message", [(4294935254, "x"), (-2147483649, "x"), (2147483648, "x"), (-32602, 7), (-32602, None)])
+async def test_out_of_range_codes_and_non_string_messages_are_malformed(store, code, message):
+    # 0.1.5 (0.1.4 re-review INFO #7): 4294935254 is -32042 for a client that narrows codes to 32 bits.
+    body = json.dumps({"jsonrpc": "2.0", "id": 9, "error": {"code": code, "message": message}}).encode()
+    response = await call(store, lambda _: httpx.Response(200, headers={"content-type": "application/json"}, content=body))
+    assert response.json()["error"] == {"code": -32000, "message": "Invalid error from the MCP server"}
+
+
+async def test_a_post_stream_relays_only_the_reply_to_its_request(store):
+    # 0.1.5 (0.1.4 re-review #1a): the TS client reports a reply with an unknown id, child text included, as an error.
+    other = json.dumps({"jsonrpc": "2.0", "id": 8, "error": {"code": -32603, "message": CHILD_TEXT}}).encode()
+    null = json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": CHILD_TEXT}}).encode()
+    typed = json.dumps({"jsonrpc": "2.0", "id": "9", "result": {"x": CHILD_TEXT}}).encode()
+    mine = json.dumps({"jsonrpc": "2.0", "id": 9, "result": {}}).encode()
+    stream = b"".join(b"data: " + e + b"\n\n" for e in (other, null, typed, mine))
+    response = await call(store, sse(stream))
+    assert CHILD_TEXT not in response.text and data_lines(response.text) == ['data: {"jsonrpc":"2.0","id":9,"result":{}}']
+    # A GET stream has no request to compare with: its replies are still relayed (rebuilt).
+    response = await call(store, sse(other + b"\n\n" if False else b"data: " + mine + b"\n\n"), "GET")
+    assert data_lines(response.text) == ['data: {"jsonrpc":"2.0","id":9,"result":{}}']

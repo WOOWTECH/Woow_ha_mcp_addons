@@ -1,6 +1,7 @@
 """All seven source inventories must stay synchronized; unknown remains denied."""
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -50,6 +51,19 @@ def test_vendored_content_hashes_and_license_notices():
         assert 'MIT License' in (ROOT / 'apps' / product / 'vendor/LICENSE').read_text()
 
 
+DIGEST = re.compile(r"""['"]([0-9a-f]{64})['"]""")
+
+
+def guard_apps(patch):
+    """Apps whose own code runs a patch's source guard: shared runtime modules by import, BoundedTools by use."""
+    if not patch.startswith('apps/runtime/'):
+        return {patch.split('/')[1]}
+    name = Path(patch).stem
+    used = re.compile(r'\bBoundedTools\b' if name == 'bounded_tools' else rf'^\s*(?:from|import) {name}\b', re.M)
+    return {app.name for app in (ROOT / 'apps').iterdir() if app.name != 'runtime'
+            and any(used.search(f.read_text()) for f in [*app.glob('*.py'), *app.glob('vendor/**/*.py')])}
+
+
 def test_runtime_patch_ledger_and_guarded_wheel_sources():
     import hashlib
     ledger = json.loads((ROOT / 'docs/provenance/runtime-patches.json').read_text())
@@ -58,3 +72,12 @@ def test_runtime_patch_ledger_and_guarded_wheel_sources():
         assert patch['change']
         for path, expected in patch['guarded_sources'].items():
             assert hashlib.sha256((ROOT / path).read_bytes()).hexdigest() == expected
+        # 0.1.5 (0.1.4 re-review #5): every source-guard digest written in a patched file is listed for review,
+        # in every app where that guard runs (the same file has the same digest in each venv).
+        written = set(DIGEST.findall((ROOT / patch['path']).read_text()))
+        if written:
+            apps = guard_apps(patch['path'])
+            assert {path.split('/')[1] for path in patch['guarded_sources']} == apps, patch['path']
+            for app in apps:
+                listed = {digest for path, digest in patch['guarded_sources'].items() if path.startswith(f'apps/{app}/')}
+                assert written <= listed, (patch['path'], app, sorted(written - listed))

@@ -52,7 +52,11 @@
         "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/data_quality.py": "c939be7370cd797abdb079513c1949339445c1e6aa3b9bb3d06a075924b1c3fe",
         "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/server_core.py": "b6872eb7dd7e4b937ebb8dd0ae2b80e29a79a3e34f2beaeaf092f0d9b2b79c03",
         "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/field_policy.py": "f6763bd2d5eca68445cdc4302b68fcd38cf145f608de16a12b00e2ac1a7dd978",
-        "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tool_helpers.py": "51276e68897d45f812048400d79100ba1a6a589de05fc7c50dff96d4c9596e64"
+        "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tool_helpers.py": "51276e68897d45f812048400d79100ba1a6a589de05fc7c50dff96d4c9596e64",
+        "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py": "4c8bf33b35c54757b93f0cc367b4f5027488ca8fbf63f68c1241f1a4be784de0",
+        "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py": "957f3affa479cb079350de8874064d89594ab0661cfbfd7675b7f26930d32772",
+        "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/diagnostics.py": "1fb1632cc711a7dfa4d5f6700472abeaffb897a094a4c399c21ce045aebb0dc7",
+        "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/odoo_client.py": "8bd06a523cb8049f14f54d06d9b73c3d7787108e7e78cf58bfb725ec9a97f74d"
       }
     },
     {
@@ -132,15 +136,60 @@
       "path": "apps/runtime/backend_policy.py",
       "sha256": "0cfad784a7aac8bdefccaae93c2ea9663407c11081b6268af2fed7fcd0107fb1",
       "change": "Local scoped HTTPX/httpcore and XMLRPC transports. Validate all DNS answers before numeric-address fallback under one DNS/TCP deadline; retain original Host/SNI/TLS. Process-wide four-worker DNS executor with immediate four-slot admission and execution-owned capacity through caller timeout/cancellation, shared by sync/async/XMLRPC and all Hermes clients. Supervisor owns hard process-group shutdown. Embedded _SOURCE_HASHES fail closed on seven locked HTTPX/httpcore implementation files before private pool adaptation. Lazy sync/async response wrappers normalize iteration and close failures, including unmapped httpcore cleanup errors, without buffering or taking over HTTPX/core close ownership. Non-2xx cleanup retains status precedence; cancellation is not caught. Shared type-based public error mapping and explicit enabled-handler decorators cover decoding/JSON failures after transport iteration; successful business values and signatures are unchanged. No global socket/resolver/SSRF modification.",
-      "guarded_sources": {}
+      "guarded_sources": {
+        "apps/odoo/.venv/lib/python3.13/site-packages/httpx/_transports/default.py": "03379a454c95c0271c4f2c8d25ec437f49f57457f3cf2769748420bf0ecf2e79",
+        "apps/odoo/.venv/lib/python3.13/site-packages/httpcore/_async/connection_pool.py": "0ce210dacd9909ff6a7f0c61ccca6b4cf2ea08bf0ec465e2285eaa447c6f5726",
+        "apps/odoo/.venv/lib/python3.13/site-packages/httpcore/_async/connection.py": "e8e70f5ea3047dcd01537f3ffa21d4343775bca4937365154f4f57a8d6ff04e9",
+        "apps/odoo/.venv/lib/python3.13/site-packages/httpcore/_sync/connection_pool.py": "6be4fc2d3b14c5ceebd16c356ad7c7483a163e34347c0f1497b4b7f85d0c8fbd",
+        "apps/odoo/.venv/lib/python3.13/site-packages/httpcore/_sync/connection.py": "f5ec4639bdcf07e329d93d7eb1c91278bdadfad27ff7e357a2657c8a19960a05",
+        "apps/odoo/.venv/lib/python3.13/site-packages/httpcore/_backends/anyio.py": "c7c3e01215d10bc6d5aac77393f609c7c63a77d4ee6f4e82b944b09db9adaa86",
+        "apps/odoo/.venv/lib/python3.13/site-packages/httpcore/_backends/sync.py": "6e113877d88af549b176c76c826d847ca9d76819acd9682019853eee3994ba35",
+        "apps/odoo-manage/.venv/lib/python3.13/site-packages/httpx/_transports/default.py": "03379a454c95c0271c4f2c8d25ec437f49f57457f3cf2769748420bf0ecf2e79",
+        "apps/odoo-manage/.venv/lib/python3.13/site-packages/httpcore/_async/connection_pool.py": "0ce210dacd9909ff6a7f0c61ccca6b4cf2ea08bf0ec465e2285eaa447c6f5726",
+        "apps/odoo-manage/.venv/lib/python3.13/site-packages/httpcore/_async/connection.py": "e8e70f5ea3047dcd01537f3ffa21d4343775bca4937365154f4f57a8d6ff04e9",
+        "apps/odoo-manage/.venv/lib/python3.13/site-packages/httpcore/_sync/connection_pool.py": "6be4fc2d3b14c5ceebd16c356ad7c7483a163e34347c0f1497b4b7f85d0c8fbd",
+        "apps/odoo-manage/.venv/lib/python3.13/site-packages/httpcore/_sync/connection.py": "f5ec4639bdcf07e329d93d7eb1c91278bdadfad27ff7e357a2657c8a19960a05",
+        "apps/odoo-manage/.venv/lib/python3.13/site-packages/httpcore/_backends/anyio.py": "c7c3e01215d10bc6d5aac77393f609c7c63a77d4ee6f4e82b944b09db9adaa86",
+        "apps/odoo-manage/.venv/lib/python3.13/site-packages/httpcore/_backends/sync.py": "6e113877d88af549b176c76c826d847ca9d76819acd9682019853eee3994ba35",
+        "apps/hermes/.venv/lib/python3.13/site-packages/httpx/_transports/default.py": "03379a454c95c0271c4f2c8d25ec437f49f57457f3cf2769748420bf0ecf2e79",
+        "apps/hermes/.venv/lib/python3.13/site-packages/httpcore/_async/connection_pool.py": "0ce210dacd9909ff6a7f0c61ccca6b4cf2ea08bf0ec465e2285eaa447c6f5726",
+        "apps/hermes/.venv/lib/python3.13/site-packages/httpcore/_async/connection.py": "e8e70f5ea3047dcd01537f3ffa21d4343775bca4937365154f4f57a8d6ff04e9",
+        "apps/hermes/.venv/lib/python3.13/site-packages/httpcore/_sync/connection_pool.py": "6be4fc2d3b14c5ceebd16c356ad7c7483a163e34347c0f1497b4b7f85d0c8fbd",
+        "apps/hermes/.venv/lib/python3.13/site-packages/httpcore/_sync/connection.py": "f5ec4639bdcf07e329d93d7eb1c91278bdadfad27ff7e357a2657c8a19960a05",
+        "apps/hermes/.venv/lib/python3.13/site-packages/httpcore/_backends/anyio.py": "c7c3e01215d10bc6d5aac77393f609c7c63a77d4ee6f4e82b944b09db9adaa86",
+        "apps/hermes/.venv/lib/python3.13/site-packages/httpcore/_backends/sync.py": "6e113877d88af549b176c76c826d847ca9d76819acd9682019853eee3994ba35",
+        "apps/opendesign/.venv/lib/python3.13/site-packages/httpx/_transports/default.py": "03379a454c95c0271c4f2c8d25ec437f49f57457f3cf2769748420bf0ecf2e79",
+        "apps/opendesign/.venv/lib/python3.13/site-packages/httpcore/_async/connection_pool.py": "0ce210dacd9909ff6a7f0c61ccca6b4cf2ea08bf0ec465e2285eaa447c6f5726",
+        "apps/opendesign/.venv/lib/python3.13/site-packages/httpcore/_async/connection.py": "e8e70f5ea3047dcd01537f3ffa21d4343775bca4937365154f4f57a8d6ff04e9",
+        "apps/opendesign/.venv/lib/python3.13/site-packages/httpcore/_sync/connection_pool.py": "6be4fc2d3b14c5ceebd16c356ad7c7483a163e34347c0f1497b4b7f85d0c8fbd",
+        "apps/opendesign/.venv/lib/python3.13/site-packages/httpcore/_sync/connection.py": "f5ec4639bdcf07e329d93d7eb1c91278bdadfad27ff7e357a2657c8a19960a05",
+        "apps/opendesign/.venv/lib/python3.13/site-packages/httpcore/_backends/anyio.py": "c7c3e01215d10bc6d5aac77393f609c7c63a77d4ee6f4e82b944b09db9adaa86",
+        "apps/opendesign/.venv/lib/python3.13/site-packages/httpcore/_backends/sync.py": "6e113877d88af549b176c76c826d847ca9d76819acd9682019853eee3994ba35",
+        "apps/emqx/.venv/lib/python3.13/site-packages/httpx/_transports/default.py": "03379a454c95c0271c4f2c8d25ec437f49f57457f3cf2769748420bf0ecf2e79",
+        "apps/emqx/.venv/lib/python3.13/site-packages/httpcore/_async/connection_pool.py": "0ce210dacd9909ff6a7f0c61ccca6b4cf2ea08bf0ec465e2285eaa447c6f5726",
+        "apps/emqx/.venv/lib/python3.13/site-packages/httpcore/_async/connection.py": "e8e70f5ea3047dcd01537f3ffa21d4343775bca4937365154f4f57a8d6ff04e9",
+        "apps/emqx/.venv/lib/python3.13/site-packages/httpcore/_sync/connection_pool.py": "6be4fc2d3b14c5ceebd16c356ad7c7483a163e34347c0f1497b4b7f85d0c8fbd",
+        "apps/emqx/.venv/lib/python3.13/site-packages/httpcore/_sync/connection.py": "f5ec4639bdcf07e329d93d7eb1c91278bdadfad27ff7e357a2657c8a19960a05",
+        "apps/emqx/.venv/lib/python3.13/site-packages/httpcore/_backends/anyio.py": "c7c3e01215d10bc6d5aac77393f609c7c63a77d4ee6f4e82b944b09db9adaa86",
+        "apps/emqx/.venv/lib/python3.13/site-packages/httpcore/_backends/sync.py": "6e113877d88af549b176c76c826d847ca9d76819acd9682019853eee3994ba35",
+        "apps/litellm/.venv/lib/python3.13/site-packages/httpx/_transports/default.py": "03379a454c95c0271c4f2c8d25ec437f49f57457f3cf2769748420bf0ecf2e79",
+        "apps/litellm/.venv/lib/python3.13/site-packages/httpcore/_async/connection_pool.py": "0ce210dacd9909ff6a7f0c61ccca6b4cf2ea08bf0ec465e2285eaa447c6f5726",
+        "apps/litellm/.venv/lib/python3.13/site-packages/httpcore/_async/connection.py": "e8e70f5ea3047dcd01537f3ffa21d4343775bca4937365154f4f57a8d6ff04e9",
+        "apps/litellm/.venv/lib/python3.13/site-packages/httpcore/_sync/connection_pool.py": "6be4fc2d3b14c5ceebd16c356ad7c7483a163e34347c0f1497b4b7f85d0c8fbd",
+        "apps/litellm/.venv/lib/python3.13/site-packages/httpcore/_sync/connection.py": "f5ec4639bdcf07e329d93d7eb1c91278bdadfad27ff7e357a2657c8a19960a05",
+        "apps/litellm/.venv/lib/python3.13/site-packages/httpcore/_backends/anyio.py": "c7c3e01215d10bc6d5aac77393f609c7c63a77d4ee6f4e82b944b09db9adaa86",
+        "apps/litellm/.venv/lib/python3.13/site-packages/httpcore/_backends/sync.py": "6e113877d88af549b176c76c826d847ca9d76819acd9682019853eee3994ba35"
+      }
     },
     {
       "path": "apps/runtime/bounded_tools.py",
       "sha256": "5af6964fa060a7f82e8e9fd8c66e74805f9be225652756d7144d06d696490630",
-      "change": "Adapt SDK registered sync function dispatch, preserving validation/output metadata; reject overload, retain capacity through cancellation; child process-group supervisor owns hard shutdown deadline. 0.1.3: admission and execution ownership factored into OwnedWorkers (same semantics), which BoundedTools extends and the Odoo (0.1.3) and Odoo Manage (0.1.4) health probes use for their own thread.",
+      "change": "Adapt SDK registered sync function dispatch, preserving validation/output metadata; reject overload, retain capacity through cancellation; child process-group supervisor owns hard shutdown deadline. 0.1.3: admission and execution ownership factored into OwnedWorkers (same semantics), which BoundedTools extends and the Odoo (0.1.3) and Odoo Manage (0.1.4) health probes use for their own thread. 0.1.5: the SDK source guard runs wherever BoundedTools does (Odoo and OpenDesign), so both venvs are listed; OwnedWorkers alone (Odoo Manage) does not run it.",
       "guarded_sources": {
         "apps/odoo/.venv/lib/python3.13/site-packages/mcp/server/fastmcp/tools/base.py": "87626ba624d33218ffb7542140dc888453e33130fdefeadc8909d47bc600ca54",
-        "apps/odoo/.venv/lib/python3.13/site-packages/mcp/server/fastmcp/utilities/func_metadata.py": "72f72f1dc9195b91280b84c2ae8db466e8c289ca3069e18dfa8dfeb0df59deb2"
+        "apps/odoo/.venv/lib/python3.13/site-packages/mcp/server/fastmcp/utilities/func_metadata.py": "72f72f1dc9195b91280b84c2ae8db466e8c289ca3069e18dfa8dfeb0df59deb2",
+        "apps/opendesign/.venv/lib/python3.13/site-packages/mcp/server/fastmcp/tools/base.py": "87626ba624d33218ffb7542140dc888453e33130fdefeadc8909d47bc600ca54",
+        "apps/opendesign/.venv/lib/python3.13/site-packages/mcp/server/fastmcp/utilities/func_metadata.py": "72f72f1dc9195b91280b84c2ae8db466e8c289ca3069e18dfa8dfeb0df59deb2"
       }
     }
   ]

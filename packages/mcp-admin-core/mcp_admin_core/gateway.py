@@ -85,19 +85,25 @@ def one_reply(value):
     return isinstance(value, dict) and "method" not in value and (("result" in value) != ("error" in value))
 
 
-def checked_error(value):
-    """0.1.4: an error the gateway cannot vouch for becomes its own. A URL elicitation error (-32042) asks the user to
-    open a child-chosen URL (the gateway declares no elicitation capability); a code that is not a JSON integer
-    (e.g. "-32042", which a Python client coerces) is malformed. Integral floats count as integers, as for clients."""
-    if "error" not in value:
-        return value
+def gateway_reply(value):
+    """The reply a client gets is the gateway's own object (0.1.5): jsonrpc, id and exactly one of result or error,
+    no other top-level member, and an error with only code, message and data: the pinned TS client's strict schemas
+    put an unknown key's name (child text) into an error. An error the gateway cannot vouch for becomes its own
+    (0.1.4): a URL elicitation error (-32042) asks the user to open a child-chosen URL (the gateway declares no
+    elicitation capability); a code that is not a 32-bit JSON integer (e.g. "-32042", which a Python client coerces;
+    integral floats count, as for clients) or a message that is not a string is malformed."""
+    if "result" in value:
+        return {"jsonrpc": "2.0", "id": value.get("id"), "result": value["result"]}
     error = value["error"]
     code = error.get("code") if isinstance(error, dict) else None
-    if not (type(code) is int or type(code) is float and code.is_integer()):
-        return {**value, "error": {"code": -32000, "message": "Invalid error from the MCP server"}}
-    if code == -32042:
-        return {**value, "error": {"code": -32000, "message": "URL elicitation is not supported"}}
-    return value
+    if (not (type(code) is int or type(code) is float and code.is_integer()) or not -2 ** 31 <= code < 2 ** 31
+            or not isinstance(error.get("message"), str)):
+        error = {"code": -32000, "message": "Invalid error from the MCP server"}
+    elif code == -32042:
+        error = {"code": -32000, "message": "URL elicitation is not supported"}
+    else:
+        error = {key: error[key] for key in ("code", "message", "data") if key in error}
+    return {"jsonrpc": "2.0", "id": value.get("id"), "error": error}
 
 
 def child_status_reply(ident, status, headers):
@@ -518,7 +524,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         outcome = reply(value)
         return ("ok", value, None) if outcome == "ok" else ("invalid" if outcome else "missing", None, None)
 
-    async def stream(owner, token, is_sse):
+    async def stream(owner, token, is_sse, ident=None, check_id=False):
         if not is_sse:
             async for chunk in chunks(owner, token):
                 yield chunk
@@ -553,15 +559,14 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                             continue  # not a reply: never relayed as one
                         elif not one_reply(value):
                             return  # both result and error: malformed, never relayed, never guessed
+                        elif check_id and not same_id(value.get("id"), ident):
+                            continue  # 0.1.5: a reply to another request (the TS client reports it with its text)
                         else:
-                            checked = checked_error(value)
-                            rebuilt = checked is not value
+                            checked = gateway_reply(value)
                             if (isinstance(checked.get("result"), dict)
                                     and {"tools", "capabilities"} & checked["result"].keys()):
-                                checked = filter_list(checked, tools, store.load())  # may filter in place
-                                rebuilt = True
-                            if rebuilt:
-                                data_lines = [b"data: " + json.dumps(checked, separators=(",", ":")).encode()]
+                                checked = filter_list(checked, tools, store.load())
+                            data_lines = [b"data: " + json.dumps(checked, separators=(",", ":")).encode()]
                     except (ValueError, ConfigError, RecursionError):
                         return
                 lines = kept + data_lines
@@ -672,7 +677,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         raise ValueError("invalid initialize response")
                     if "mcp-session-id" in upstream.headers and "mcp-session-id" not in response_headers:
                         raise ValueError("unusable session id")  # a client could not continue the session
-                    value = filter_list(checked_error(value), tools, store.load())
+                    value = filter_list(gateway_reply(value), tools, store.load())
                 except ValueError:
                     raise BadRequest(502) from None
                 if frame is None:
@@ -694,11 +699,12 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     value = strict_json(bytes(result))
                     if not (one_reply(value) and same_id(value.get("id"), message.get("id"))):
                         raise ValueError("not this request's reply")
-                    value = filter_list(checked_error(value), tools, store.load())
+                    value = filter_list(gateway_reply(value), tools, store.load())
                 except (ValueError, RecursionError):
                     raise BadRequest(502) from None
                 return json_reply(value, 200, response_headers)
-            response = OwnedStreamingResponse(stream(owner, state.token, is_sse), owner=owner,
+            response = OwnedStreamingResponse(stream(owner, state.token, is_sse, message.get("id") if request_id else None,
+                                                     request_id), owner=owner,
                                               status_code=upstream.status_code, headers=response_headers)
             handed_off = True  # only once the response owns the slot: a failed constructor must release it
             return response

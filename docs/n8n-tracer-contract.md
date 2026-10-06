@@ -140,8 +140,11 @@ unknown-token progress into an error message); log messages and other notificati
 dropped. A reply must carry exactly one of `result` and `error`: with both, a JSON reply is 502,
 an SSE stream stops at that event and an initialize is 502; with neither, a JSON reply is 502 (as
 in 0.1.2), an SSE event is dropped (0.1.4; it was relayed before) and initialize skips it (as in 0.1.2).
-Still relayed (0.1.5 work, defense in depth since 0.1.2): a POST SSE reply whose id differs from the
-request's, and unknown top-level members of a reply; the pinned TS client may put either into an error. An error whose code is not a JSON integer (integral floats
+0.1.5: every reply a client gets is the gateway's own object (`jsonrpc`, `id` and exactly one of `result`
+or `error`; an error keeps only `code`, `message` and `data`), so unknown members, whose names the
+pinned TS client would put into an error, never reach a client; a POST SSE stream relays only the reply
+to its own request (a GET stream has no request to compare with); an error code outside the 32-bit range
+or a non-string message makes the error malformed. An error whose code is not a JSON integer (integral floats
 count, as for clients; a string such as `"-32042"` does not, though a Python client would
 coerce it) becomes `{"code": -32000, "message": "Invalid error from the MCP server"}`, and a URL
 elicitation error (`-32042`) becomes `{"code": -32000, "message": "URL elicitation is not
