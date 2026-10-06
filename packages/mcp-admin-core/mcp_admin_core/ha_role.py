@@ -16,11 +16,10 @@ from websockets.asyncio.client import connect
 from .config import strict_json
 
 _URL = "ws://supervisor/core/websocket"
-# Core releases whose consumed contract was source-reviewed (0.1.6): websocket_api/auth.py (auth_required and auth_ok
-# with ha_version), the result envelope in websocket_api/messages.py, config/auth.py (config/auth/list user fields) and
-# auth/const.py (group ids) are unchanged in what is consumed here from 2026.7.2 to 2026.9.4 (the two files that changed,
-# messages.py and auth/models.py, changed event caching and the auth-flow context only). Any other advertised version
-# denies until it is reviewed and added.
+# Core releases whose consumed contract was source-reviewed (0.1.6, docs/ha-role-core-contract.md). Supervisor's
+# WebSocket proxy sends the auth frames and advertises the Core version it has recorded; the Core side consumed here
+# (config/auth/list behind require_admin, its user fields, the result envelope and the system-admin group) is unchanged
+# from 2026.7.2 to 2026.9.4. Any other advertised version, including pre-releases, denies until reviewed and added.
 _HA_VERSIONS = frozenset({"2026.7.2", "2026.7.3", "2026.7.4", "2026.8.0", "2026.8.1", "2026.8.2", "2026.8.3",
                           "2026.9.0", "2026.9.1", "2026.9.2", "2026.9.3", "2026.9.4"})
 _QUERY_SECONDS = 2.25  # plus <= .2s cleanup, below the gateway's 3s guard

@@ -141,7 +141,7 @@ async def test_wrong_sequence_and_revoked_machine_capability(monkeypatch, phase,
 
 @pytest.mark.parametrize("version", sorted(ha_role._HA_VERSIONS))
 async def test_every_reviewed_core_version_is_accepted(monkeypatch, version):
-    # 0.1.6: the reviewed Core releases (claude-delivery/reviews-016/core-contract) keep the consumed contract.
+    # 0.1.6: the reviewed Core releases keep the consumed contract (docs/ha-role-core-contract.md).
     hello = {"type": "auth_required", "ha_version": version}
     async with owned_provider(monkeypatch, first=hello, auth={"type": "auth_ok", "ha_version": version}) as (verify, _, __):
         assert await verify("human") is True
@@ -152,6 +152,32 @@ def test_a_non_string_version_is_refused_explicitly(version):
     # The refusal is the check's own ValueError, not an accidental TypeError from hashing a list or dict.
     with pytest.raises(ValueError):
         ha_role._auth_message(json.dumps({"type": "auth_required", "ha_version": version}), "auth_required")
+
+
+NEAR_MISSES = ["2026.9.5", "2026.8.4", "2026.7.5", "2026.7.0", "2026.09.4", "2026.9.04", "02026.9.4", "2026.9.0b9",
+               "2026.10.0b2", "2026.9.4.dev0", "v2026.9.4", "", "2026.9", "2026.9.4.0"]
+
+
+@pytest.mark.parametrize("version", NEAR_MISSES)
+def test_near_miss_versions_are_refused(version):
+    # 0.1.6 review L3: later patches, other formats and pre-releases are not reviewed releases.
+    with pytest.raises(ValueError):
+        ha_role._auth_message(json.dumps({"type": "auth_required", "ha_version": version}), "auth_required")
+
+
+@pytest.mark.parametrize("version", NEAR_MISSES)
+async def test_near_miss_versions_deny_before_the_token_is_sent(monkeypatch, version):
+    hello, ok = {"type": "auth_required", "ha_version": version}, {"type": "auth_ok", "ha_version": version}
+    async with owned_provider(monkeypatch, first=hello, auth=ok) as (verify, seen, _):
+        assert await verify("human") is False
+        assert seen["frames"] == []
+
+
+@pytest.mark.parametrize("phase", ["first", "auth"])
+async def test_an_extra_key_in_an_auth_frame_denies(monkeypatch, phase):
+    message = {"type": "auth_required" if phase == "first" else "auth_ok", "ha_version": "2026.7.2", "x": 1}
+    async with owned_provider(monkeypatch, **{phase: message}) as (verify, _, __):
+        assert await verify("human") is False
 
 
 def test_the_reviewed_versions_are_exactly_these():
