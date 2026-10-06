@@ -123,6 +123,13 @@ async def test_failclosed_result_schema(monkeypatch, response):
     ("first", {"type": "auth_required"}),
     ("first", {"type": "auth_required", "ha_version": 2026}),
     ("first", {"type": "auth_required", "ha_version": "unreviewed-version"}),
+    ("first", {"type": "auth_required", "ha_version": "2026.7.1"}),
+    ("first", {"type": "auth_required", "ha_version": "2026.10.0"}),
+    ("first", {"type": "auth_required", "ha_version": "2026.9.4 "}),
+    ("first", {"type": "auth_required", "ha_version": ["2026.7.2"]}),
+    ("first", {"type": "auth_required", "ha_version": {"v": "2026.7.2"}}),
+    ("auth", {"type": "auth_ok", "ha_version": "2026.9.4"}),  # auth_required said 2026.7.2: versions must agree
+    ("auth", {"type": "auth_ok", "ha_version": "2026.10.0"}),
     ("auth", {"type": "auth_invalid", "message": "DUMMY-revoked-or-flag-disabled"}),
     ("auth", {"type": "result", "id": 1, "success": True, "result": [user()]}),
 ])
@@ -130,6 +137,27 @@ async def test_wrong_sequence_and_revoked_machine_capability(monkeypatch, phase,
     async with owned_provider(monkeypatch, **{phase: message}) as (verify, seen, _):
         assert await verify("human") is False
         assert len(seen["frames"]) == (0 if phase == "first" else 1)
+
+
+@pytest.mark.parametrize("version", sorted(ha_role._HA_VERSIONS))
+async def test_every_reviewed_core_version_is_accepted(monkeypatch, version):
+    # 0.1.6: the reviewed Core releases (claude-delivery/reviews-016/core-contract) keep the consumed contract.
+    hello = {"type": "auth_required", "ha_version": version}
+    async with owned_provider(monkeypatch, first=hello, auth={"type": "auth_ok", "ha_version": version}) as (verify, _, __):
+        assert await verify("human") is True
+
+
+@pytest.mark.parametrize("version", [["2026.7.2"], {"v": "2026.7.2"}, 2026, None])
+def test_a_non_string_version_is_refused_explicitly(version):
+    # The refusal is the check's own ValueError, not an accidental TypeError from hashing a list or dict.
+    with pytest.raises(ValueError):
+        ha_role._auth_message(json.dumps({"type": "auth_required", "ha_version": version}), "auth_required")
+
+
+def test_the_reviewed_versions_are_exactly_these():
+    # A new Core release is added only after its contract files are reviewed; this list changes with that review.
+    assert ha_role._HA_VERSIONS == {"2026.7.2", "2026.7.3", "2026.7.4", "2026.8.0", "2026.8.1", "2026.8.2", "2026.8.3",
+                                    "2026.9.0", "2026.9.1", "2026.9.2", "2026.9.3", "2026.9.4"}
 
 
 async def test_fresh_connection_no_positive_cache_token_reloaded(monkeypatch):

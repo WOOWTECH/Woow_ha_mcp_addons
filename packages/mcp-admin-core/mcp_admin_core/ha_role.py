@@ -16,7 +16,13 @@ from websockets.asyncio.client import connect
 from .config import strict_json
 
 _URL = "ws://supervisor/core/websocket"
-_HA_VERSION = "2026.7.2"  # Source-reviewed contract; upgrades require review/tests.
+# Core releases whose consumed contract was source-reviewed (0.1.6): websocket_api/auth.py (auth_required and auth_ok
+# with ha_version), the result envelope in websocket_api/messages.py, config/auth.py (config/auth/list user fields) and
+# auth/const.py (group ids) are unchanged in what is consumed here from 2026.7.2 to 2026.9.4 (the two files that changed,
+# messages.py and auth/models.py, changed event caching and the auth-flow context only). Any other advertised version
+# denies until it is reviewed and added.
+_HA_VERSIONS = frozenset({"2026.7.2", "2026.7.3", "2026.7.4", "2026.8.0", "2026.8.1", "2026.8.2", "2026.8.3",
+                          "2026.9.0", "2026.9.1", "2026.9.2", "2026.9.3", "2026.9.4"})
 _QUERY_SECONDS = 2.25  # plus <= .2s cleanup, below the gateway's 3s guard
 _MAX_RESPONSE = 1024 * 1024
 _MAX_CONCURRENT = 8
@@ -47,11 +53,14 @@ def _message(raw):
     return value
 
 
-def _auth_message(raw, expected):
+def _auth_message(raw, expected, version=None):
+    """The advertised Core version: a reviewed one, and the same in auth_required and auth_ok."""
     value = _message(raw)
     if (set(value) != {"type", "ha_version"} or value["type"] != expected
-            or value["ha_version"] != _HA_VERSION):
+            or not isinstance(value["ha_version"], str) or value["ha_version"] not in _HA_VERSIONS
+            or (version is not None and value["ha_version"] != version)):
         raise ValueError()
+    return value["ha_version"]
 
 
 def _allowed(raw, subject):
@@ -128,9 +137,9 @@ class _Verifier:
                     max_queue=1, open_timeout=2, close_timeout=.1,
                     ping_interval=None, logger=_LOGGER, user_agent_header=None,
                 )
-                _auth_message(await socket.recv(), "auth_required")
+                version = _auth_message(await socket.recv(), "auth_required")
                 await socket.send(json.dumps({"type": "auth", "access_token": token}))
-                _auth_message(await socket.recv(), "auth_ok")
+                _auth_message(await socket.recv(), "auth_ok", version)
                 await socket.send('{"id":1,"type":"config/auth/list"}')
                 return _allowed(await socket.recv(), subject)
         except Exception:

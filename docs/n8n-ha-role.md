@@ -25,7 +25,7 @@ S: {"id":1,"type":"result","success":true,"result":[<current users>]}
 
 The socket is then terminated and joined; it is never pooled or reused. This is **not** a generic WS proxy, `auth/current_user`, HTTP role lookup or a browser-token flow. There is no production URL, command, machine-token or transport override in CLI/GUI. The private Python connector seam is used only by owned-loopback tests; those tests preserve/assert the fixed URI, path and Host while replacing the network transport.
 
-Compatibility is deliberately restricted to the source-reviewed Core `2026.7.2` auth messages; a different advertised version denies until reviewed. Source research also targets Supervisor `2026.09.3`. There is no separate online Supervisor-version discovery request. Source bases:
+Compatibility is deliberately restricted to source-reviewed Core releases: `2026.7.2` until 0.1.5, and from 0.1.6 the list `2026.7.2`–`2026.9.4` in `ha_role._HA_VERSIONS` (the consumed auth, result-envelope, `config/auth/list` and group-id code is unchanged across them). `auth_required` and `auth_ok` must advertise the same listed version; any other version denies until reviewed. Source research also targets Supervisor `2026.09.3`. There is no separate online Supervisor-version discovery request. Source bases:
 
 - Core `f9122fb28dd30d3833b3b313924befbc82157f97`, `homeassistant/components/config/auth.py` (`config/auth/list`, role fields), `homeassistant/auth/models.py`, `homeassistant/auth/const.py`.
 - Supervisor `64ea3be4322537fd5dcfbf620c4dc25490c1f56d`, `supervisor/api/proxy.py` (machine-token/HA-API-flag authentication), `supervisor/api/ingress.py` (forwarded identity).
