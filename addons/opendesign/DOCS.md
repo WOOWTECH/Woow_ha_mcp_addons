@@ -2,7 +2,7 @@
 
 ## 現況與範圍
 
-**0.1.5（experimental）**：映像 `ghcr.io/woowtech/amd64-mcp-opendesign:0.1.5` 由候選 0c66bd0 建置，通過 container/mock 與 supply-chain gate（2026-10-06）；修正見 [CHANGELOG](CHANGELOG.md)，HA 回歸測試待做。0.1.4 已在測試 HA 回歸（[0.1.4 回歸紀錄](../../docs/operations/ha-test-0.1.4.md)）。管理面板經 HA 管理角色驗證後可設定後端。0.1.1 於 2026-10-05 已在測試 HA 以真 Woow OpenDesign 0.21.1 實測（[HA 實測紀錄](../../docs/operations/ha-test-0.1.1.md)）：讀取 10 個中 9 個通過、寫入 6 個全部拒絕、後端斷線回結構化錯誤。0.1.1 的 `list_agents` 在這台 HA 逾時（後端 `/api/agents` 偵測 agent CLI 約 8 秒，上游讀取逾時固定 5 秒）；0.1.2 起這個讀取可等 20 秒（連線仍 5 秒）。0.1.0 的面板 fail closed，請使用 0.1.1。
+**0.1.5（experimental）**：映像 `ghcr.io/woowtech/amd64-mcp-opendesign:0.1.5` 由候選 0c66bd0 建置，通過 container/mock 與 supply-chain gate（2026-10-06）；修正見 [CHANGELOG](CHANGELOG.md)，2026-10-06 已在測試 HA 回歸（[0.1.5 回歸紀錄](../../docs/operations/ha-test-0.1.5.md)；0.1.4 見 [0.1.4 回歸紀錄](../../docs/operations/ha-test-0.1.4.md)）。管理面板經 HA 管理角色驗證後可設定後端。0.1.1 於 2026-10-05 已在測試 HA 以真 Woow OpenDesign 0.21.1 實測（[HA 實測紀錄](../../docs/operations/ha-test-0.1.1.md)）：讀取 10 個中 9 個通過、寫入 6 個全部拒絕、後端斷線回結構化錯誤。0.1.1 的 `list_agents` 在這台 HA 逾時（後端 `/api/agents` 偵測 agent CLI 約 8 秒，上游讀取逾時固定 5 秒）；0.1.2 起這個讀取可等 20 秒（連線仍 5 秒）。0.1.0 的面板 fail closed，請使用 0.1.1。
 0.1.1 起與 n8n 相同（負責人 2026-10-05 核准 `homeassistant_api`）：管理程序以 runtime `SUPERVISOR_TOKEN`
 連固定 `ws://supervisor/core/websocket`，只查 `config/auth/list`，確認 Ingress 使用者是 active 的 owner 或
 system-admin 才放行；token 只給管理程序，child 不繼承。此 token 具**廣泛 Core 管理能力**，負責人已知情核准。
