@@ -4,6 +4,7 @@
 
 - gateway（0.1.4 複審與 0.1.5 審查的縱深防禦建議）：client 收到的每個回覆都由 gateway 重新組成，只含 jsonrpc、id 與 result 或 error 其中一個，error 只保留 code（一律整數）、message、data；子程序加在回覆最外層或 error 裡的其他欄位不再轉送（TS client 會把未知欄位名稱放進錯誤訊息），ping 成功一律回 `{}`，其他 result 照子程序內容轉送（工具清單與 capabilities 照舊過濾）。POST 的 SSE 串流只轉送這個請求自己的回覆，送出後立即結束；GET 串流不轉送任何回覆（各子程序都沒有可續傳的事件紀錄）。錯誤碼超出 32 位元範圍或 message 不是字串時，改成 gateway 自己的錯誤。initialize 回覆的 protocolVersion 必須是日期格式（YYYY-MM-DD），否則回 502。
 - 來源紀錄（ledger）：補列 backend_policy.py 在六個 Python 服務 venv 守住的 httpx／httpcore 原始碼、odoo_b2_scope.py 在 Odoo venv 漏列的 4 個原始碼，以及 bounded_tools.py 在 OpenDesign venv 守住的 MCP SDK 原始碼。測試以 Python 語法樹找出各服務載入哪些共用模組（含間接載入），逐一確認對應 venv 都有列；無法判定的動態載入會讓測試失敗。
+- 基底映像：`python:3.13.16-slim-bookworm` 改釘 Docker Hub 2026-10-06 重建版（amd64 `f0408636…`），已內含 libpcre2-8-0 10.42-1+deb12u2 與 perl-base 5.36.0-7+deb12u4 安全更新；原本從 Debian snapshot 升級 libpcre2 的步驟已移除。
 - 映像 `ghcr.io/woowtech/amd64-mcp-hermes:0.1.5` 尚未建置；0.1.0–0.1.4 tag 不覆寫。
 
 ## 0.1.4 — 2026-10-06 公開（experimental）

@@ -180,8 +180,12 @@ class SupplyChainTests(unittest.TestCase):
                         s.enforce_policy({'artifacts': [sbom_pkg]}, report)
 
     def test_os_upgrade_block_is_exact_and_pinned(self):
+        # 0.1.5: the 2026-10-06 base carries the last upgrade, so inputs.json has none now; the generator stays
+        # tested with that last spec, ready for the next Debian security fix that is not yet in the base.
         import os_upgrades
         inputs = json.loads((s.ROOT / 'packaging/inputs.json').read_text())
+        inputs.setdefault('os_security_upgrades', {'snapshot': '20261003T211304Z', 'suite': 'bookworm-security',
+                                                   'packages': {'libpcre2-8-0': '10.42-1+deb12u2'}})
         spec = inputs['os_security_upgrades']
         self.assertRegex(spec['snapshot'], r'^\d{8}T\d{6}Z$')
         self.assertEqual(spec['suite'], 'bookworm-security')
