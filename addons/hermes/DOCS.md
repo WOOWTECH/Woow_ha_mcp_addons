@@ -9,7 +9,7 @@ system-admin 才放行；token 只給管理程序，child 不繼承。此 token 
 不得注入 test verifier 或直接編輯 state 解鎖；`panel_admin` 不是角色授權。
 
 本產品 runtime：**vendored SDK MCP 1.28.1**。完整來源 11 tools，局部支援 7，
-暫不支援 4；七類合計 184/65/119，**不是 full functional parity**。
+暫不支援 4；全部產品合計見[工具表](../../docs/tool-surface.md)，**不是 full functional parity**。
 skill/toolset enable/disable、gateway restart 與 session/cron metadata 及有界 delete/pause；mixed action 寫入需 exact operation grants，不開 agent/chat/code。
 逐名 schema／預設／operation／啟用限制／deferred reason 以
 [工具對照](../../docs/tool-surface.md) 與 [machine manifest](../../docs/tool-surface.json)
@@ -30,7 +30,7 @@ skill/toolset enable/disable、gateway restart 與 session/cron metadata 及有�
 
 - `8099`：Ingress-only，無主機 mapping；不是 MCP endpoint。
 - `8081/mcp`：Bearer Streamable HTTP；`8081/tcp: null` 預設不公開 LAN mapping。
-- `3000`：child loopback-only，永不暴露。七容器內部 ports 可相同，LAN host ports 必須各異。
+- `3000`：child loopback-only，永不暴露。各容器內部 ports 可相同，LAN host ports 必須各異。
 - 使用實際安裝後 DNS placeholder，不能猜 repository hash 或從 iframe origin 推導。
   [client 範例](../../docs/operations/clients.md) 不含真實秘密。
 

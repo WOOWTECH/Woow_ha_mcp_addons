@@ -1,12 +1,14 @@
 # WOOW HA MCP Add-ons（實驗封裝，尚未發佈）
 
-六個獨立產品：Odoo、n8n、Hermes、OpenDesign、EMQX、LiteLLM。Odoo Manage 已於 2026-10-06 下架封存：0.1.4 是最後一版，不再建置或發佈，已安裝的不會再收到更新，請改用 WOOW Odoo MCP；原始碼保留在 `apps/odoo-manage`。
+六個獨立產品：Odoo、n8n、Hermes、OpenDesign、EMQX、LiteLLM。
+
+**Odoo Manage 已於 2026-10-06 下架封存**：0.1.4 是最後一版，0.1.5 起不在商店，也不再建置或發佈。已安裝的仍以 0.1.4 執行，但不會再有更新或安全修正；它的設定保有 Odoo API key，並有 `homeassistant_api` 權限，建議改用 WOOW Odoo MCP 後移除。WOOW Odoo MCP 是不同的 MCP server（工具與設定不同，要另設後端、endpoint 與 token）。已發佈的 0.1.0–0.1.4 映像保留，舊備份仍可還原。步驟見[更新、備份與回復](docs/operations/update-backup-rollback.md)；原始碼保留在 `apps/odoo-manage`。
 僅以 **amd64 / Supervisor 2026.09.3** 為封裝目標；不是 Core 最低版本。
 Kubernetes MCP 與 Vibe Kanban 不在範圍。
 
 **現在不可當作可用商店產品安裝：**
 
-- 七個 runtime 已存在，但只有 **184 個來源工具中 71 個有界支援、113 個明列暫不支援**；不是完整功能遷移。逐名對照見 [工具表](docs/tool-surface.md)。
+- 六個商店產品各有 runtime（封存的 Odoo Manage 原始碼也還在）；只開放部分有界支援的工具，不是完整功能遷移。逐名對照與數量見 [工具表](docs/tool-surface.md)。
 - 六份 `addons/*/config.yaml` 可被 Supervisor 探索，不代表 GHCR 名稱已取得、映像已存在或可匿名拉取。此批 **未建置映像、未做 HA／真實後端 E2E**。
 - **本地整合 ≠ HA／映像驗收**：僅新 n8n 試點獲准 `homeassistant_api: true`，正式 fixed-WS provider 已實作並經 component review；共用管理 HTML/static/API 與 v3 UI 已本地串接。其餘六類仍 false，正式管理 fail closed。`panel_admin` 不是授權。
 - 此例外授予**廣泛 Core 管理能力**（含使用者管理及可能間接 Supervisor／host 影響），不是可強制的唯讀角色權限；不代表批准所有 HA 變更。`hassio_api/auth_api` 仍 false、Supervisor role 預設、protection mode 不變，無新增 host 權限。
@@ -28,7 +30,7 @@ Kubernetes MCP 與 Vibe Kanban 不在範圍。
 
 ## 管理功能與範圍
 
-[共用 UI](packages/mcp-admin-ui/README.md) 提供七類 typed connection 的保留／完整替換／清除、
+[共用 UI](packages/mcp-admin-ui/README.md) 提供各產品 typed connection 的保留／完整替換／清除、
 三維健康、明確 client endpoint、確認式 token reveal/rotate/revoke。Manage 支援 read/module；
 module 必須已在後端安裝，UI 不安裝 Odoo 模組。工具頁對齊實際 v3 exact grants，
 保存取代全部 `enabled_write_tools` 並 `writes_enabled:false`，disabled 優先；未知或過期契約拒絕保存。
@@ -54,6 +56,6 @@ docker build --platform linux/amd64 -f apps/n8n/Dockerfile -t local/mcp-n8n:0.1.
 "$PACKAGING_ENV/bin/python" packaging/container_acceptance.py n8n local/mcp-n8n:0.1.0
 ```
 
-PR/main CI 沒有發佈權限；固定七產品 matrix `push: false`。HA 無法以 Add-on
+PR/main CI 沒有發佈權限；固定六產品 matrix `push: false`。HA 無法以 Add-on
 子目錄重建這些 root-context Dockerfile，必須等待已核准預建映像。預設手動啟動、
 手動更新、不使用 latest、不開公網，protection mode 保持開啟。

@@ -84,3 +84,16 @@ backup ID、版本、時間、保管位置類型、權限檢查結論，不記�
 6. 記錄回復結果與實際中斷時間；未驗證成功不可宣告已復原。
 
 移除也僅限新 Add-on；確認 HA 移除資料的行為與備份保管後再做，不刪既有服務。
+
+## Odoo Manage 下架（0.1.5 起）
+
+負責人 2026-10-06 決定 Odoo Manage MCP 整體下架封存，之後只用 WOOW Odoo MCP。0.1.5 起商店不再提供，也不再建置或發佈；
+0.1.4 是最後一版。已安裝的 Odoo Manage 仍以 0.1.4 執行，但不會再有更新或安全修正。它的設定保有 Odoo API key，並有
+`homeassistant_api` 權限（廣泛的 Core 存取能力），建議：
+
+1. 先改用 WOOW Odoo MCP。它是不同的 MCP server（上游 odoo-mcp；工具、設定與權限模型都不同），要另外設定後端、建立 MCP
+   endpoint 與 token，再更新 client。
+2. 要保留設定就先做這支 add-on 的部分備份，再移除（`ha apps uninstall <slug>`）；移除會刪掉它的 `/data`。
+3. 視需要在 Odoo 撤銷它用過的 API key；若其他服務共用同一把 key，先確認再撤銷。
+
+已發佈的 `ghcr.io/woowtech/amd64-mcp-odoo-manage:0.1.0`–`0.1.4` 映像保留公開，舊備份仍可還原；不會再有新 tag。

@@ -25,11 +25,11 @@ fresh-query fail-closed verifier、child token 隔離與 UI 已本地整合，co
 本地真 bootstrap/guard/n8n/fake WS/browser 不替代映像／HA。HA NOT TESTED；
 整合仍須獨立規格／新安全審查，不可用此批准清除下列任何 gate。
 
-## Root-context 七個獨立 builds
+## Root-context 獨立 builds（六產品）
 
 ```sh
 # 範例而非已執行紀錄；在有 Docker 的 disposable runner
-APP=n8n # 僅可選 checked-in 七產品 allowlist
+APP=n8n # 僅可選 checked-in 六產品 allowlist（packaging/inputs.json）
 VERSION=0.1.0
 docker build --platform linux/amd64 --file "apps/$APP/Dockerfile" \
   --build-arg "BUILD_VERSION=$VERSION" --tag "local/mcp-$APP:$VERSION" .
@@ -41,10 +41,10 @@ python packaging/container_acceptance.py "$APP" "local/mcp-$APP:$VERSION"
 不要把六類 FastMCP deps 安裝進 core venv。n8n Node builder 執行 pinned `npm ci
 --ignore-scripts`，runtime 只有 node binary/libs 與 locked node_modules（sql.js
 fallback），不包含 uv/npm installer 或 dependency cache。
-七個 Dockerfile 另有同一 pinned Node UI stage，使用 UI 自己的 lock；runtime 只 COPY
+每個 Dockerfile 另有同一 pinned Node UI stage，使用 UI 自己的 lock；runtime 只 COPY
 完整 `dist` 到 `/opt/woow/packages/mcp-admin-ui/dist`（Core 固定路徑），含 self-host fonts、
 MDI、全部 licenses/NOTICE。`.dockerignore` 僅開 build inputs，不開 fixture/tests/dist/node_modules。
-本地 npm build 可驗 closure，但七 image builds 尚未執行。
+本地 npm build 可驗 closure；image builds 只在 builder 執行。
 
 Manifest `image` 是**未帶 tag**的 lowercase ref，`version` 固定 0.1.0；不使用 latest、
 aarch64 或偽造 OCI license umbrella。HA 子目錄 fallback build 不支援 root context；
@@ -61,9 +61,9 @@ pull_request_target、不使用 production self-hosted runner。
 3. 既有 TCP tests 固定 subprocess PATH=/usr/bin:/bin；只在 disposable hosted runner
    將 /usr/bin/node 指向 setup-node 已安裝的確切 binary，並檢查 v22.23.2，避免
    意外測到 runner 系統舊 Node。不改 core/tests；此操作未在本地工作環境執行。
-   `sh packaging/unit.sh` 真正安裝原本七 runtime locks、inventory drift、全 core/
+   `sh packaging/unit.sh` 真正安裝七個 runtime locks（含封存的 Odoo Manage 原始碼）、inventory drift、全 core/
    adapter tests，Junit 明確拒絕 skipped/empty/failure。
-4. 固定七產品 matrix，root context amd64 `push:false load:true`。
+4. 固定六產品 matrix，root context amd64 `push:false load:true`。
 5. 每個 build 執行 `packaging/container_acceptance.py`，network-none owned mocks，
    不以 health smoke 取代 protocol/auth/policy/lifecycle/data 驗證。
 

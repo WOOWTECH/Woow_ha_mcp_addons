@@ -9,7 +9,7 @@ system-admin 才放行；token 只給管理程序，child 不繼承。此 token 
 不得注入 test verifier 或直接編輯 state 解鎖；`panel_admin` 不是角色授權。
 
 本產品 runtime：**odoo-mcp 1.1.0**。完整來源 41 tools，局部支援 13，
-暫不支援 28；七類合計 184/68/116，**不是 full functional parity**。
+暫不支援 28；全部產品合計見[工具表](../../docs/tool-surface.md)，**不是 full functional parity**。
 health/model list、res.partner 指定欄位 read/search/fields，及 exact-grant chatter preview+confirm；B1 增加 build_domain、generate_json2_payload、diagnose_odoo_call 純 preview（不執行 payload），以及按 active 分組的 id:count aggregate_records。有界輸出不含 ORM domain/context；不開放任意 model/method。
 B2 增加 schema_catalog（固定 res.partner、limit1、兩個 metadata cache keys）、inspect_model_relationships（僅 parent_id/child_ids 自關係 metadata 深度1，絕不讀 relation values）、data_quality_report（只 missing_required、name/active、最多兩次 search_count，無樣本或私密值）。舊 record fields 不擴張。Cache 非即時；refresh=true 才強制更新。品質總數是缺值欄位次數，不是唯一 records；duplicates/format/orphan checks 仍禁止。詳見 [有界功能](../../docs/tool-expansion.md)；B2 待獨立 SPEC → NEW SECURITY。
 逐名 schema／預設／operation／啟用限制／deferred reason 以
@@ -31,7 +31,7 @@ B2 增加 schema_catalog（固定 res.partner、limit1、兩個 metadata cache k
 
 - `8099`：Ingress-only，無主機 mapping；不是 MCP endpoint。
 - `8081/mcp`：Bearer Streamable HTTP；`8081/tcp: null` 預設不公開 LAN mapping。
-- `3000`：child loopback-only，永不暴露。七容器內部 ports 可相同，LAN host ports 必須各異。
+- `3000`：child loopback-only，永不暴露。各容器內部 ports 可相同，LAN host ports 必須各異。
 - 同一台 HA 的 Woow Odoo 18 add-on：它的 8069 只放行 `lan_networks` 來源，HA add-on 網路（172.30.32.0/23）固定排除，所以從本 Add-on 用內部主機名或主機 LAN IP 連線都會被直接斷線；只有 Host 等於它 `public_url` 主機名的請求進入 public 層（只擋 db service）。本版連線固定目的主機、不能改 Host，可行做法是讓 `public_url` 網域可解析並經 tunnel 連入，backend url 填 `https://<public host>`。**不要**把 172.30.x 加進 Odoo 的 `lan_networks`：那會讓同網路的 tunnel 取得 LAN 層權限（含資料庫管理）。
 - 使用實際安裝後 DNS placeholder，不能猜 repository hash 或從 iframe origin 推導。
   [client 範例](../../docs/operations/clients.md) 不含真實秘密。

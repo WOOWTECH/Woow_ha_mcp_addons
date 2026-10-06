@@ -141,8 +141,9 @@ dropped. A reply must carry exactly one of `result` and `error`: with both, a JS
 an SSE stream stops at that event and an initialize is 502; with neither, a JSON reply is 502 (as
 in 0.1.2), an SSE event is dropped (0.1.4; it was relayed before) and initialize skips it (as in 0.1.2).
 0.1.5: every reply a client gets is the gateway's own object (`jsonrpc`, `id` and exactly one of `result`
-or `error`; an error keeps only `code` as an integer, `message` and `data`), so unknown top-level and error
-members, whose names the pinned TS client would put into an error, never reach a client; a successful ping
+or `error`; an error keeps only `code` as an integer, `message` and `data`), so unknown top-level
+members, whose names the pinned TS client would put into an error, never reach a client (unknown error members,
+which that client strips anyway, are dropped as well); a successful ping
 is always `{}` (the client parses it with a strict empty schema); other results are relayed as the child sent
 them (tool lists and capabilities filtered). A POST SSE stream relays only the reply to its own request and
 ends right after it; a GET stream relays no reply (MCP allows one only when resuming a stream, and no pinned
@@ -190,8 +191,9 @@ These **four tools remain a partial W1 tracer**. W2a now inventories all 28 pinn
 upstream tools in `tool-surface.json` / `tool-surface.md`; expansion remains W2b.
 
 Initialize
-advertises only `tools: {}` (no resources/prompts/logging/listChanged). Resumed GET SSE
-streams are rebuilt and filtered the same way (a non-SSE 2xx GET reply is 502). Every call is authorized independently. Compression is disabled on the internal hop;
+advertises only `tools: {}` (no resources/prompts/logging/listChanged). GET SSE streams
+(resumed ones too) are rebuilt and filtered the same way and carry notifications only, never a reply (0.1.5);
+a non-SSE 2xx GET reply is 502. Every call is authorized independently. Compression is disabled on the internal hop;
 redirects, response cookies and hop-by-hop headers are not forwarded.
 
 Limits: 256 KiB request body, 10-second request-body timeout; 32 concurrent upstream
@@ -201,7 +203,8 @@ parsed and filtered; parsing and re-serializing can take up to about 25 times th
 about 200 MiB for an 8 MiB reply of small objects), so 32 large replies at once could need several GiB:
 keep client concurrency low on small hosts (0.1.4 RC review #3; unchanged since 0.1.2). Oversize/truncated streams close rather
 than invent a successful protocol result (initialize: 502 oversize, 503 without a reply). Clients may reconnect with a fresh
-Bearer and session/event headers. A response owner joins its reader cancellation
+Bearer and session/event headers, but a reconnected (GET) stream carries notifications only: a request whose POST
+stream was cut must be sent again (0.1.5; no pinned child keeps an event store, so no stream is resumed). A response owner joins its reader cancellation
 and upstream close under a 3-second cleanup budget, shields ASGI 2.3 AnyIO level
 cancellation and joins direct asyncio cancellation, then unconditionally releases
 its slot. Headers/body/send/idle disconnect paths share that owner; cleanup is not

@@ -3,7 +3,7 @@
 ## 現況與範圍
 
 **0.1.4（experimental）**：映像 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.4` 由候選 73a40eb 建置，通過 container/mock 與 supply-chain gate（2026-10-06），可從本 repository 的 HA 商店安裝；修正見 [CHANGELOG](CHANGELOG.md)，HA 回歸測試待做。0.1.3 已在測試 HA 回歸（[0.1.3 回歸紀錄](../../docs/operations/ha-test-0.1.3.md)）。2026-10-05 已在測試 HA 實測 0.1.1（[HA 實測紀錄](../../docs/operations/ha-test-0.1.1.md)）：0.1.0 升版、HA 備份還原、真 n8n 讀取 11 個中 10 個通過（資料夾工具在 n8n 2.12 回 NOT_FOUND，該版沒有資料夾 API）、寫入與不支援工具 24 個全部拒絕、後端斷線。以下試點段落是 0.1.0 的結果。**HA 試點**（2026-10-05，一台 HA 實機、真 n8n 2.12.3 後端）通過：管理員 Ingress 面板、後端設定與重啟後保留、Bearer 拒絕與 token 輪替／撤銷、MCP E2E（11 個可見工具讀到真 n8n 資料；未授權的讀取模式與 6 種寫入直接呼叫皆 403，n8n 端前後一致）、後端斷線（結構化錯誤、readiness 503、恢復後可用）、Add-on 重啟與 MCP child 異常重啟、資源量測。**未通過**：HA 還原（見下方已知問題）。**未測**：non-admin、LAN client、升版。
-**HA 管理權限**：七支都有 `homeassistant_api: true`（n8n 自 0.1.0、其他六支自 0.1.1 起），用來驗證管理面板的使用者是 HA owner 或系統管理員；這個 token 具廣泛的 Core 存取能力。
+**HA 管理權限**：商店各支都有 `homeassistant_api: true`（n8n 自 0.1.0、其他自 0.1.1 起），用來驗證管理面板的使用者是 HA owner 或系統管理員；這個 token 具廣泛的 Core 存取能力。
 正式 fixed-WS verifier 已實作並經 component review；管理 HTML/assets/API 與 UI 已本地整合。
 本地真 bootstrap→guard→n8n→provider fake WS／Chromium 已覆蓋設定與 token 操作；
 真 HA 上管理員 Ingress 與 token 操作已通過（見上）；整合獨立規格及新安全審查仍待完成。
@@ -23,7 +23,7 @@ protection mode 保持 on，無新增 host mounts、Docker socket 或 capabiliti
 撤銷 browser Ingress session 或已在執行的跨系統操作。詳見共用驗收文件。
 
 本產品 runtime：**n8n-mcp 2.91.0 / Node 22.23.2**。完整來源 28 tools，局部支援 13，
-暫不支援 15；七類合計 184/71/113，**不是 full functional parity**。
+暫不支援 15；全部產品合計見[工具表](../../docs/tool-surface.md)，**不是 full functional parity**。
 文件/search/get_node、workflow list/minimal read、folder list/create/rename，加上 local validate_node/validate_workflow（manualTrigger/noOp 空參數圖）。`n8n_create_workflow` 僅建立2..20節點 inactive draft，不允許 code/URL/credentials/settings/activation；必須 exact grant，legacy global 不授權。delete_workflow 与 folder writes 權限不變。
 B3 新增 tags catalog（只掃第一頁最多250、本地query/limit）、executions list metadata（API includeData=false、最多100）、health status（服務availability，不證明APIkey權限），以及 folder get（明確非personal project/folder IDs、無workflow內容）。新API及get缺URL或key均在child send前拒絕；unconfigured本機docs/search/validators仍啟動。health不讀npm/official-MCP/settings、不回URL/config/env/metrics/version；既有credential health monitor不變。B3待獨立SPEC→NEW SECURITY。
 逐名 schema／預設／operation／啟用限制／deferred reason 以
@@ -46,7 +46,7 @@ B3 新增 tags catalog（只掃第一頁最多250、本地query/limit）、execu
 
 - `8099`：Ingress-only，無主機 mapping；不是 MCP endpoint。
 - `8081/mcp`：Bearer Streamable HTTP；`8081/tcp: null` 預設不公開 LAN mapping。
-- `3000`：child loopback-only，永不暴露。七容器內部 ports 可相同，LAN host ports 必須各異。
+- `3000`：child loopback-only，永不暴露。各容器內部 ports 可相同，LAN host ports 必須各異。
 - Session：所有 client **共用 20 個**同時 session，閒置 10 分鐘回收。client 用完要送 `DELETE /mcp`（帶 `Mcp-Session-Id`），額滿時 initialize 回 429「Session limit reached」。MCP child 重啟（含 Add-on 重啟）後舊 session 失效，client 需重新 initialize；token 不變。
 - 使用實際安裝後 DNS placeholder，不能猜 repository hash 或從 iframe origin 推導。
   [client 範例](../../docs/operations/clients.md) 不含真實秘密。

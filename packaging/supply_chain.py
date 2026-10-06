@@ -18,7 +18,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 CHECKS = ('source-secrets', 'history-secrets', 'image-secrets', 'vulnerabilities', 'licenses', 'container')
 EVIDENCE = ('sbom.syft.json', 'sbom.spdx.json', 'scan-summary.json')
-PRODUCTS = ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm')
+PRODUCTS = tuple(json.loads((ROOT / 'packaging/inputs.json').read_text())['products'])  # 0.1.5: retired odoo-manage refused
 
 
 class Closed(ValueError):

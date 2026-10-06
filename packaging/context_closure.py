@@ -161,11 +161,12 @@ def main(root='.'):
                            text=True, timeout=60).stdout.split('\0')
     files = [f for f in files if f]
     ignore = (root / '.dockerignore').read_text()
-    failures = {app: problems(files, ignore, (root / 'apps' / app / 'Dockerfile').read_text()) for app in products(root)}
+    apps = products(root)
+    failures = {app: problems(files, ignore, (root / 'apps' / app / 'Dockerfile').read_text()) for app in apps}
     failures = {app: p for app, p in failures.items() if p}
     if failures:
         raise SystemExit('FAIL: ' + repr(failures))
-    print('PASS: every COPY source of seven Dockerfiles is tracked and inside the build context')
+    print('PASS: every COPY source of the %d product Dockerfiles is tracked and inside the build context' % len(apps))
 
 
 if __name__ == '__main__':

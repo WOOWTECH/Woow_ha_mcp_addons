@@ -194,6 +194,12 @@ class PackagingTests(unittest.TestCase):
         for workflow in ('ci.yaml', 'release.yaml'):
             self.assertNotIn('odoo-manage', (v.ROOT / '.github/workflows' / workflow).read_text())
         self.assertTrue((v.ROOT / 'apps/odoo-manage/launch.py').is_file())
+        # RC review F2: the builder-side gate tools refuse it too, so no odoo-manage 0.1.5 image can pass the gate.
+        import container_acceptance
+        import context_closure
+        import supply_chain
+        for products in (container_acceptance.PRODUCTS, supply_chain.PRODUCTS, tuple(context_closure.products(v.ROOT))):
+            self.assertEqual(tuple(products), v.PRODUCTS)
 
     def test_release_defaults_closed(self):
         gates = v.load(v.ROOT / 'RELEASE-GATES.json')

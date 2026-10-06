@@ -701,6 +701,11 @@ async def test_a_post_stream_relays_only_the_reply_to_its_request(store):
     later = json.dumps({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"}).encode()
     response = await call(store, sse(b"".join(b"data: " + e + b"\n\n" for e in (mine, again, later))))
     assert CHILD_TEXT not in response.text and data_lines(response.text) == ['data: {"jsonrpc":"2.0","id":9,"result":{}}']
+    # R2 #3: an error reply ends the stream as well.
+    failed = json.dumps({"jsonrpc": "2.0", "id": 9, "error": {"code": -32602, "message": "bad"}}).encode()
+    response = await call(store, sse(b"".join(b"data: " + e + b"\n\n" for e in (failed, mine, again, later))))
+    assert CHILD_TEXT not in response.text
+    assert data_lines(response.text) == ['data: {"jsonrpc":"2.0","id":9,"error":{"code":-32602,"message":"bad"}}']
     # R1 #2: a GET stream relays no reply at all, whatever its id; notifications still pass.
     response = await call(store, sse(b"".join(b"data: " + e + b"\n\n" for e in (other, mine, later))), "GET")
     assert CHILD_TEXT not in response.text and data_lines(response.text) == ['data: {"jsonrpc":"2.0","method":"notifications/tools/list_changed"}']

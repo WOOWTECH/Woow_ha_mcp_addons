@@ -9,7 +9,7 @@ system-admin 才放行；token 只給管理程序，child 不繼承。此 token 
 不得注入 test verifier 或直接編輯 state 解鎖；`panel_admin` 不是角色授權。
 
 本產品 runtime：**FastMCP 3.4.5 / pinned public vendor**。完整來源 40 tools，局部支援 7，
-暫不支援 33；七類合計 184/65/119，**不是 full functional parity**。
+暫不支援 33；全部產品合計見[工具表](../../docs/tool-surface.md)，**不是 full functional parity**。
 models/readiness、team metadata；有界 team create/alias update/team delete/model delete 需 exact grants。chat、key/user 任意 mutation、付費 provider health 不開放；private health 僅 GET /v1/models。
 逐名 schema／預設／operation／啟用限制／deferred reason 以
 [工具對照](../../docs/tool-surface.md) 與 [machine manifest](../../docs/tool-surface.json)
@@ -30,7 +30,7 @@ models/readiness、team metadata；有界 team create/alias update/team delete/m
 
 - `8099`：Ingress-only，無主機 mapping；不是 MCP endpoint。
 - `8081/mcp`：Bearer Streamable HTTP；`8081/tcp: null` 預設不公開 LAN mapping。
-- `3000`：child loopback-only，永不暴露。七容器內部 ports 可相同，LAN host ports 必須各異。
+- `3000`：child loopback-only，永不暴露。各容器內部 ports 可相同，LAN host ports 必須各異。
 - 使用實際安裝後 DNS placeholder，不能猜 repository hash 或從 iframe origin 推導。
   [client 範例](../../docs/operations/clients.md) 不含真實秘密。
 

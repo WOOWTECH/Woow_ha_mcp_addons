@@ -4,8 +4,9 @@ from pathlib import Path
 import subprocess
 import sys
 
-PRODUCTS = ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm')
-VERSION = json.loads((Path(__file__).resolve().parent / 'inputs.json').read_text())['version']
+INPUTS = json.loads((Path(__file__).resolve().parent / 'inputs.json').read_text())
+PRODUCTS = tuple(INPUTS['products'])  # 0.1.5: the store products; the retired odoo-manage is refused
+VERSION = INPUTS['version']
 
 
 def main(app, image, expected_id=None):
