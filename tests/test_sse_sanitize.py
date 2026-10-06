@@ -516,11 +516,13 @@ async def test_only_a_fixed_tool_list_notification_reaches_a_client(store, verb)
 
 
 @pytest.mark.parametrize("code", [-32042, -32042.0, "-32042", " -32042 ", "-32_042", "-032042", "-32042.0", -32042.5,
-                                  True, None, [], {"x": 1}])
+                                  True, None, [], {"x": 1}, "NOT-AN-OBJECT", "LIST-ERROR", "NULL-ERROR"])
 async def test_url_elicitation_and_malformed_error_codes_become_gateway_errors(store, code):
     # 0.1.4 (RC review #1): JSON, SSE and initialize replies; a Python client coerces "-32042" to -32042.
     error = {"jsonrpc": "2.0", "id": 9, "error": {"code": code, "message": CHILD_TEXT,
                                                  "data": {"elicitations": [{"url": "https://phish.invalid/" + CHILD_TEXT}]}}}
+    if code in ("NOT-AN-OBJECT", "LIST-ERROR", "NULL-ERROR"):  # re-review #4 (R14): an error that is not an object
+        error["error"] = {"NOT-AN-OBJECT": "phish " + CHILD_TEXT, "LIST-ERROR": [CHILD_TEXT], "NULL-ERROR": None}[code]
     expected = {"code": -32000, "message": "URL elicitation is not supported" if code in (-32042, -32042.0) and
                 type(code) in (int, float) else "Invalid error from the MCP server"}
     body = json.dumps(error).encode()
@@ -560,6 +562,16 @@ async def test_a_reply_with_both_result_and_error_is_never_relayed(store):
     response = await post(store, lambda _: httpx.Response(200, headers={"content-type": "application/json"},
                                                           content=json.dumps({**both, "id": 7}).encode()))
     assert response.status_code == 502  # initialize
+    response = await post(store, sse(b"data: " + json.dumps({**both, "id": 7}).encode() + b"\n\n"))
+    assert response.status_code == 502 and "phish" not in response.text  # initialize over SSE (re-review #4, R8)
+
+
+async def test_an_sse_event_with_neither_result_nor_error_is_dropped(store):
+    # 0.1.4 (re-review #3/#4, R2): not a reply, so never relayed as one; a later reply still arrives.
+    neither = json.dumps({"jsonrpc": "2.0", "id": 9, "note": CHILD_TEXT}).encode()
+    reply = json.dumps({"jsonrpc": "2.0", "id": 9, "result": {}}).encode()
+    response = await call(store, sse(b"data: " + neither + b"\n\ndata: " + reply + b"\n\n"))
+    assert CHILD_TEXT not in response.text and data_lines(response.text) == ["data: " + reply.decode()]
 
 
 async def test_repeated_child_errors_never_leak_a_slot(store):

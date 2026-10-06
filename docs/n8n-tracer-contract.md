@@ -117,10 +117,11 @@ body. Every method other than GET, POST and DELETE (HEAD, PUT, PATCH, OPTIONS, T
 CONNECT, unknown or lower-case tokens) is checked for the Bearer first (401) and then
 gets 405 (`Allow: GET, POST, DELETE`; 0.1.3 for the methods that used to get the
 framework's 405 before the check); none reaches the child. The child always receives `Accept: application/json,
-text/event-stream`; statuses outside 100-599 are 502; an initialize reply whose session
+text/event-stream`; statuses outside 200-599, and 3xx, are 502 (0.1.4: also for DELETE and notifications); an initialize reply whose session
 id cannot be forwarded is 502. Media types compare case-insensitively without
 parameters; a 2xx reply always reaches the client as plain `text/event-stream` or
-`application/json` (0.1.4: so does every 4xx/5xx reply, with the gateway's own body). Every JSON reply to a request is parsed, must
+`application/json` (0.1.4: so does every 4xx/5xx reply to a request or GET, with the gateway's own body;
+DELETE and notification replies carry no body). Every JSON reply to a request is parsed, must
 be one object answering that request (same id and JSON type, `result` or `error`, no
 `method`), is filtered and re-serialized with ASCII escapes; batches are 502. SSE events
 are rebuilt from the lines the gateway understood: data, `id`/`event` values of up to 256
@@ -136,9 +137,11 @@ would carry child text to the user. Of the child's notifications (no id) only
 the child's params (0.1.4). Progress is not relayed: authorize refuses `_meta`, so no client can
 ask for it and any progress event is unsolicited child text (the pinned TS client puts
 unknown-token progress into an error message); log messages and other notifications are
-dropped. A reply must carry exactly one of `result` and `error`: a JSON reply with both is 502,
-an SSE stream stops at such an event, an initialize with both is 502 (an event or object with
-neither is skipped, as in 0.1.2). An error whose code is not a JSON integer (integral floats
+dropped. A reply must carry exactly one of `result` and `error`: with both, a JSON reply is 502,
+an SSE stream stops at that event and an initialize is 502; with neither, a JSON reply is 502 (as
+in 0.1.2), an SSE event is dropped (0.1.4; it was relayed before) and initialize skips it (as in 0.1.2).
+Still relayed (0.1.5 work, defense in depth since 0.1.2): a POST SSE reply whose id differs from the
+request's, and unknown top-level members of a reply; the pinned TS client may put either into an error. An error whose code is not a JSON integer (integral floats
 count, as for clients; a string such as `"-32042"` does not, though a Python client would
 coerce it) becomes `{"code": -32000, "message": "Invalid error from the MCP server"}`, and a URL
 elicitation error (`-32042`) becomes `{"code": -32000, "message": "URL elicitation is not
@@ -153,7 +156,7 @@ keeps only its id/event/retry lines; other events are dropped). A 200 without th
 response (empty body, stream ended or broken, only notifications/other ids) becomes HTTP
 503 with JSON-RPC error -32000 `BACKEND_UNAVAILABLE`, Retry-After 5 and no session id:
 the child gave no reply, e.g. its per-session lifespan could not reach the backend.
-Malformed or oversize replies are 502; 4xx/5xx replies keep their status with the gateway's body. JSON/SSE tool lists use the exact
+Malformed or oversize replies are 502; 4xx/5xx replies keep their status (child 401/403: 502) with the gateway's body. JSON/SSE tool lists use the exact
 local argument model's inputSchema, not the broader upstream schema. On a permitted
 call, the gateway forwards the **validated model's serialized arguments**, including
 reviewed defaults and field-specific omission rules, not the raw client object.
