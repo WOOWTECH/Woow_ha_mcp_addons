@@ -270,7 +270,9 @@ def probe_success(product, payload):
     if product == 'hermes':
         return isinstance(payload.get('capabilities'), dict) and 'capabilities_error' not in payload
     if product == 'opendesign':
-        return payload.get('status') in ('ok', 'healthy')
+        # 0.1.4: OpenDesign 0.21.1 answers {"ok": true, "version": "0.21.1"} (0.1.3 HA regression); older builds used status.
+        return payload.get('status') in ('ok', 'healthy') or (
+            payload.get('ok') is True and isinstance(payload.get('version'), str) and bool(payload['version'].strip()))
     if product == 'emqx':
         nodes = payload.get('nodes')
         return (type(payload.get('node_count')) is int and isinstance(nodes, list) and bool(nodes)
@@ -354,7 +356,7 @@ def child_spec(state: ProductState, directory: Path) -> ChildSpec | None:
         # EMQX GET /nodes or LiteLLM GET /v1/models (never provider /health).
         # Parent authorize/filter_list still enforce every public disable; raw
         # child tools/list is intentionally not the public authorization surface.
-        native_allowed = public_allowed | {PROBES[product][0]}
+        native_allowed = public_allowed | {health_probe(product)[0]}  # the probe HealthMonitor actually calls
         prefix = 'EMQX_MCP_' if product == 'emqx' else 'LITELLM_MCP_'
         env[prefix + 'READONLY'] = 'false' if any(TOOLS[product][name].write for name in public_allowed) else 'true'
         env[prefix + 'DISABLED_TOOLS'] = ','.join(sorted(set(NAMES[product]) - native_allowed))

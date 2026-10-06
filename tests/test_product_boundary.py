@@ -110,6 +110,14 @@ def test_health_rejects_generic_success_and_error_payloads(product):
     for payload in ({'success': True}, {}, {'error': 'DUMMY'}, [], None):
         assert not probe_success(product, payload)
         assert not health_probe_success(product, payload)
+    if product == 'opendesign':
+        # 0.1.4: OpenDesign 0.21.1's {"ok": true, "version"} (seen on the test HA), besides the older status shape.
+        for payload in ({'ok': True, 'version': '0.21.1'}, {'status': 'ok'}, {'status': 'healthy'}):
+            assert probe_success(product, payload) and health_probe_success(product, payload)
+        for payload in ({'ok': True}, {'ok': True, 'version': ''}, {'ok': True, 'version': ' '}, {'ok': True, 'version': 21},
+                        {'ok': 'true', 'version': '0.21.1'}, {'ok': 1, 'version': '0.21.1'}, {'ok': False, 'version': '0.21.1'},
+                        {'ok': True, 'version': '0.21.1', 'error': 'DUMMY'}):
+            assert not probe_success(product, payload)
     if product == 'odoo':
         # Only Odoo's authenticate answer, exactly: a positive int user id (False for rejected credentials).
         assert health_probe_success(product, {'uid': 7})

@@ -148,10 +148,12 @@ async def test_dns_and_all_connect_attempts_share_deadline(monkeypatch, kind):
     if kind != 'async': assert len(closed) == 3
 
 
-@pytest.mark.parametrize('product', ['opendesign', 'hermes'])
-async def test_real_localhost_health_and_readiness(tmp_path, product):
+# 0.1.4: OpenDesign 0.21.1 answers {"ok": true, "version"} (0.1.3 HA regression: readiness was 503 with working reads).
+@pytest.mark.parametrize('product,answer', [('opendesign', {'status': 'ok'}), ('opendesign', {'ok': True, 'version': '0.21.1'}),
+                                            ('hermes', {'status': 'ok'})])
+async def test_real_localhost_health_and_readiness(tmp_path, product, answer):
     class Backend(Quiet):
-        def do_GET(self): self.reply({'status': 'ok'})
+        def do_GET(self): self.reply(answer)
     with serve(Backend) as url:
         async with runtime(tmp_path, product, url.replace('127.0.0.1', 'localhost')) as (client, headers, store, manager, child):
             name, args = PROBES[product]
