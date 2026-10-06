@@ -35,7 +35,7 @@ Odoo Manage 的探測需要 `ir.model` 讀取權），以及 0.1.2／0.1.3 審�
 
 ## 未通過／未驗
 
-- 真 HA：0.1.4 尚未在 HA 回歸測試（待負責人執行更新指令）；aarch64 未建；LAN client、LiteLLM 工具（無後端）。
+- 真 HA：2026-10-06 已在測試 HA 回歸（[ha-test-0.1.4](ha-test-0.1.4.md)）：執行中映像＝發佈、Odoo Manage 與 OpenDesign 的 8081 readiness 由 503 變 200、七支非常見方法先回 401、non-admin 403、讀取／拒絕／斷線／開關全過。aarch64 未建；LAN client、LiteLLM 工具（無後端）未測。
 - 已知且不變：admin app（Ingress）對 GET／HEAD／PUT／POST 以外的方法仍由框架在身分檢查前回 405（與 0.1.2、0.1.3 相同）。
 - 0.1.5 待辦（複審意見，0.1.2 起即有的縱深防禦）：POST SSE 串流中 id 與請求不同的回覆、回覆裡的未知頂層欄位仍照轉（釘住的 TS client 可能放進錯誤訊息）；ledger 未列 `backend_policy.py` 守的 httpx／httpcore 原始碼；超出 32 位元的錯誤碼照轉。
 - 文件（DOCS／CHANGELOG／授權清單）在映像建置後更新，不在映像內，不影響已測映像。
