@@ -141,10 +141,14 @@ dropped. A reply must carry exactly one of `result` and `error`: with both, a JS
 an SSE stream stops at that event and an initialize is 502; with neither, a JSON reply is 502 (as
 in 0.1.2), an SSE event is dropped (0.1.4; it was relayed before) and initialize skips it (as in 0.1.2).
 0.1.5: every reply a client gets is the gateway's own object (`jsonrpc`, `id` and exactly one of `result`
-or `error`; an error keeps only `code`, `message` and `data`), so unknown members, whose names the
-pinned TS client would put into an error, never reach a client; a POST SSE stream relays only the reply
-to its own request (a GET stream has no request to compare with); an error code outside the 32-bit range
-or a non-string message makes the error malformed. An error whose code is not a JSON integer (integral floats
+or `error`; an error keeps only `code` as an integer, `message` and `data`), so unknown top-level and error
+members, whose names the pinned TS client would put into an error, never reach a client; a successful ping
+is always `{}` (the client parses it with a strict empty schema); other results are relayed as the child sent
+them (tool lists and capabilities filtered). A POST SSE stream relays only the reply to its own request and
+ends right after it; a GET stream relays no reply (MCP allows one only when resuming a stream, and no pinned
+child keeps an event store). An error code outside the 32-bit range or a non-string message makes the error
+malformed. An initialize result must be an object whose `protocolVersion` is a date (`YYYY-MM-DD`), else 502:
+the pinned TS client puts an unsupported version into its error message. An error whose code is not a JSON integer (integral floats
 count, as for clients; a string such as `"-32042"` does not, though a Python client would
 coerce it) becomes `{"code": -32000, "message": "Invalid error from the MCP server"}`, and a URL
 elicitation error (`-32042`) becomes `{"code": -32000, "message": "URL elicitation is not
