@@ -34,7 +34,8 @@
 
 ## 未通過／未驗
 
-- 真 HA：0.1.3 尚未在 HA 回歸測試（待負責人執行更新指令）；aarch64 未建；LAN client、LiteLLM 工具（無後端）。
+- 真 HA：2026-10-06 已在測試 HA 回歸（[ha-test-0.1.3](ha-test-0.1.3.md)）：執行中映像＝發佈、Odoo 剛重啟時 `BACKEND_BUSY` 0 次、Odoo 最小權限帳號 readiness 200、七支非常見方法先回 401、non-admin 403。aarch64 未建；LAN client、LiteLLM 工具（無後端）未測。
+- 0.1.3 回歸新發現（舊探測，非 0.1.3 造成，列 0.1.4）：OpenDesign 0.21.1 的 health 形狀 `{"ok": true, "version": …}` 不被探測接受；Odoo Manage 的 `list_models` 探測需要 `ir.model` 讀取權。兩者讀取都正常，只影響後端狀態與 8081 readiness。
 - 0.1.4 待辦：0.1.2 審查留下的四項 NIT／INFO 仍開著（非 2xx 內容帶子程序文字、`-32042` 錯誤碼、通知轉送範圍、JSON 回覆完整緩衝的記憶體）；
   0.1.3 RC 審查 #6（`child_spec` 為 EMQX／LiteLLM 保留的原生探測名稱取自 `PROBES`，HealthMonitor 用 `health_probe()`，目前一致；
   改成同一來源要動映像內程式，延到 0.1.4）。
