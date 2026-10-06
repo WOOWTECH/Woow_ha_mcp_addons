@@ -1,5 +1,10 @@
 # Odoo Changelog
 
+## 0.1.4 — 準備中（未發佈）
+
+- 共用核心：原生探測名稱改由健康檢查實際使用的探測取得（0.1.3 發佈候選審查 #6，行為不變）。
+- 映像 `ghcr.io/woowtech/amd64-mcp-odoo:0.1.4` 尚未建置；0.1.0–0.1.3 tag 不覆寫。
+
 ## 0.1.3 — 2026-10-06 公開（experimental）
 
 - gateway：`/mcp` 的所有 HTTP 方法都先驗 Bearer 再回 405（`Allow: GET, POST, DELETE`）；TRACE、PROPFIND 等以前由框架在驗證前就回 405，Allow 清單還列了 gateway 實際拒絕的方法（0.1.2 審查的 NIT）。

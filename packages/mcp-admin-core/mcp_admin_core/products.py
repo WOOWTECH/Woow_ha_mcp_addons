@@ -286,17 +286,18 @@ def probe_success(product, payload):
     return False
 
 
-# HealthMonitor's backend probe. Odoo's is private to the child (apps/odoo/launch.py, not in TOOLS): it runs on
-# its own owned thread, never the single tool worker, and only authenticates (no ir.model access needed).
+# HealthMonitor's backend probe. Odoo's and (0.1.4) Odoo Manage's are private to the child (apps/odoo*/launch.py,
+# not in TOOLS): they run on their own owned thread, never the tool path, and only authenticate (no ir.model access).
 ODOO_HEALTH_PROBE = 'woow_backend_probe'
+PRIVATE_PROBES = ('odoo', 'odoo-manage')
 
 
 def health_probe(product):
-    return (ODOO_HEALTH_PROBE, {}) if product == 'odoo' else PROBES[product]
+    return (ODOO_HEALTH_PROBE, {}) if product in PRIVATE_PROBES else PROBES[product]
 
 
 def health_probe_success(product, payload):
-    if product == 'odoo':
+    if product in PRIVATE_PROBES:
         # Odoo's authenticate answer: a positive user id (it answers False for rejected credentials).
         return isinstance(payload, dict) and set(payload) == {'uid'} and type(payload['uid']) is int and payload['uid'] > 0
     return probe_success(product, payload)

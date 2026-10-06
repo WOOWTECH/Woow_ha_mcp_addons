@@ -127,7 +127,7 @@
     "apps/runtime/output_policy.py": "5cc75f5e87676786847132a5be4f342dd07e9ef9344c4d7b219219de2aef85a4",
     "apps/hermes/launch.py": "5c9197f5898a7fbae317e824a4601f6d076996f229054cb2e664a5f5f785a0f3",
     "apps/odoo/launch.py": "0d5b45e54909264c7fce027c0d271331b8b4e3dd46073b1ce3c0783008b5c06e",
-    "apps/odoo-manage/launch.py": "442ee6b3ccdc6bf2a494e25475cde2f9f8f707d4f72e92991080e8086b50c22d",
+    "apps/odoo-manage/launch.py": "7e2adc8ce3ece9240ce54d1c7429ceed3bd61d95e6a700ef00094816f9cca515",
     "apps/opendesign/launch.py": "b08e650f3309555db5f5291e948e1831c30da6ea41be7121579494729ce117dc",
     "apps/litellm/vendor/woow_litellm_mcp_server/metadata.py": "e606ccda155cbcf20d058fa609617b247506ef7b64efdb93c812b0c153e0d90b"
   },

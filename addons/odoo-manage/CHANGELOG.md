@@ -1,5 +1,11 @@
 # Odoo Manage Changelog
 
+## 0.1.4 — 準備中（未發佈）
+
+- 健康檢查改用子程序私有的探測 `woow_backend_probe`（不在工具清單，gateway 不列出也不授權）：每次以新的連線只做連線與登入，在自己的執行緒執行、不碰 session 共用的連線。0.1.3 HA 回歸時探測用 `list_models`，最小權限帳號讀不到 `ir.model`，後端狀態一律無法連線、8081 readiness 503（讀取其實正常）。
+- 共用核心：原生探測名稱改由健康檢查實際使用的探測取得（0.1.3 發佈候選審查 #6，行為不變）。
+- 映像 `ghcr.io/woowtech/amd64-mcp-odoo-manage:0.1.4` 尚未建置；0.1.0–0.1.3 tag 不覆寫。
+
 ## 0.1.3 — 2026-10-06 公開（experimental）
 
 - gateway：`/mcp` 的所有 HTTP 方法都先驗 Bearer 再回 405（`Allow: GET, POST, DELETE`）；TRACE、PROPFIND 等以前由框架在驗證前就回 405，Allow 清單還列了 gateway 實際拒絕的方法（0.1.2 審查的 NIT）。
