@@ -2,7 +2,7 @@
 
 ## 0.1.6 — 準備中（未發佈）
 
-- 管理面板（HA 角色驗證）：原本只認 Home Assistant Core 2026.7.2，Core 一升級，管理面板與管理 API 就全部回 403。改為經原始碼審查的版本清單 2026.7.2–2026.9.4（驗證器用到的 Core 使用者清單 API、欄位、回應格式與管理員群組在這些版本間沒有變動；auth 訊息由 Supervisor 產生，審查紀錄見 docs/ha-role-core-contract.md）；清單外的版本照樣拒絕，auth_required 與 auth_ok 回報的版本也必須相同。MCP 端點不受影響（它用 Bearer token）。
+- 管理面板（HA 角色驗證）：原本只認 Home Assistant Core 2026.7.2，Core 一升級，管理面板與管理 API 就全部回 403。改為經原始碼審查的版本清單 2026.7.2–2026.9.4 與 2026.10.0（驗證器用到的 Core 使用者清單 API、欄位、回應格式與管理員群組在這些版本間沒有變動；2026.10.0 改用 probatio，相關的 13 個檔案有改動，逐行審查後確認不影響；auth 訊息由 Supervisor 產生，審查紀錄見 docs/ha-role-core-contract.md）；清單外的版本照樣拒絕，auth_required 與 auth_ok 回報的版本也必須相同。MCP 端點不受影響（它用 Bearer token）。
 - gateway（0.1.5 發佈候選審查 F3 與 0.1.6 審查）：tools/list 的結果由 gateway 重新組成，只留工具清單與字串型的 nextCursor，同名工具只留第一個。
   每個工具的名稱與 inputSchema 用 gateway 自己的定義；title、description、annotations.title 是子程序文字，只在是字串時保留；
   四個提示（readOnlyHint、destructiveHint、idempotentHint、openWorldHint）只保留保守的值，或本地定義沒有寫入路徑的工具才保留放寬的值

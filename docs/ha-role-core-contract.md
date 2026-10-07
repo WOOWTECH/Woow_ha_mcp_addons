@@ -6,7 +6,8 @@ administrator. This page records why it accepts the Core releases listed in `_HA
 ## Who produces what
 
 - **Auth frames.** The add-on connects to `ws://supervisor/core/websocket`. Supervisor's WebSocket proxy
-  (`supervisor/api/proxy.py`, reviewed at Supervisor 2026.09.3, git blob `fc11251d`) terminates the add-on handshake:
+  (`supervisor/api/proxy.py`, reviewed at Supervisor 2026.09.3, git blob `fc11251d`; Supervisor 2026.10.0 ships the same
+  blob) terminates the add-on handshake:
   it sends `{"type": "auth_required", "ha_version": <version>}` and `{"type": "auth_ok", "ha_version": <version>}`,
   where the version is the Core version Supervisor has recorded (`sys_homeassistant.version`), and checks the add-on's
   `SUPERVISOR_TOKEN` itself. The verifier requires exactly these keys, a listed version, and the same version in both
@@ -17,19 +18,20 @@ administrator. This page records why it accepts the Core releases listed in `_HA
   `{id, type: "result", success, result}`, and the admin group id `system-admin`. The verifier allows only an active,
   non-system user who is the owner or in `system-admin`.
 
-## Review of 2026.7.2–2026.9.4 (0.1.6)
+## Review of 2026.7.2–2026.9.4 and 2026.10.0 (0.1.6)
 
 Git blob SHAs (first 8 characters) of the Core files that produce or can change that contract, from the GitHub tree of
-each tag; `=` means unchanged from the previous tag. `10.0b2` is shown for information only and is not accepted.
+each tag; `=` means unchanged from the previous tag. The `10.0` column is the 2026.10.0 tag (commit `6a811d33`), whose files
+are byte-identical to 2026.10.0b4, where the line-by-line review was done.
 
-| file (`homeassistant/`) | 7.2 | 7.3 | 7.4 | 8.0 | 8.1 | 8.2 | 8.3 | 9.0 | 9.1 | 9.2 | 9.3 | 9.4 | 10.0b2 |
+| file (`homeassistant/`) | 7.2 | 7.3 | 7.4 | 8.0 | 8.1 | 8.2 | 8.3 | 9.0 | 9.1 | 9.2 | 9.3 | 9.4 | 10.0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `components/websocket_api/auth.py` | f4660664 | = | = | = | = | = | = | = | = | = | = | = | a4b73688 |
 | `components/websocket_api/messages.py` | 13f856e6 | = | = | a6d3b54f | = | = | = | = | = | = | = | = | f1f543e2 |
 | `components/websocket_api/decorators.py` | 37ac60ba | = | = | = | = | = | = | = | = | = | = | = | d5df7f88 |
 | `components/websocket_api/connection.py` | 19d4782a | = | = | = | = | = | = | d4f824d2 | = | = | = | = | cd6e0426 |
 | `components/websocket_api/http.py` | 9cfca068 | = | = | = | = | = | = | = | = | = | = | = | = |
-| `components/websocket_api/commands.py` | 5bc65849 | = | = | fe87a4e9 | = | = | = | = | = | = | = | = | 3f2b8103 |
+| `components/websocket_api/commands.py` | 5bc65849 | = | = | fe87a4e9 | = | = | = | = | = | = | = | = | d769c753 |
 | `components/websocket_api/__init__.py` | 3a526e32 | = | = | = | = | = | = | = | = | = | = | = | = |
 | `components/websocket_api/const.py` | f1eb480d | = | = | = | = | = | = | = | = | = | = | = | = |
 | `components/config/auth.py` | 2479fe65 | = | = | = | = | = | = | = | = | = | = | = | 75b0c88b |
@@ -57,6 +59,28 @@ Changes inside 2026.7.2–2026.9.4 and why they do not touch the consumed contra
   `async_create_system_user` (system-generated, `system-admin`); from 9.0 Core removes that user's refresh tokens and
   Supervisor reaches Core over its Unix socket, authenticated as the same system user by `http/auth.py` (unchanged).
 - `onboarding/views.py` @9.0, @9.3: the owner is still created in `system-admin`.
+
+Changes in 2026.10.0 (13 files, every hunk read at 2026.10.0b4; the 2026.10.0 tag is identical to b4 for these 21 files
+and for the adjacent `http/const.py`, `http/__init__.py`, `hassio/const.py` and `hassio/auth.py`):
+- Most hunks move schemas from voluptuous to probatio (`config/auth.py`, `websocket_api/{decorators,messages,connection,
+  auth,commands}.py`, `auth/permissions/__init__.py`, `onboarding/views.py`). `config/auth/list` has a one-key schema,
+  so it still dispatches through `connection.async_handle`'s hand-written checks with `_ws_schema = False`; neither the
+  request nor the response passes through probatio. A probatio difference could only produce an error envelope, which the
+  verifier denies (`success is not True`).
+- `config/auth.py`: `websocket_list` (`@require_admin`, `async_get_users`, `result_message`) and `_user_info` (`id`,
+  `is_owner`, `is_active`, `local_only`, `system_generated`, `group_ids`, …) are unchanged; `config/auth/delete` now
+  refuses system-generated users and the owner.
+- `websocket_api/decorators.py`: `require_admin` is unchanged; `ws_require_user(only_supervisor=True)` now compares the
+  Supervisor user's id instead of its name.
+- `websocket_api/messages.py`, `helpers/json.py`: `result_message` and `json_bytes` are unchanged (new cached helpers only).
+- `auth/__init__.py`, `auth/models.py`: the owner cannot be removed; login-flow PKCE fields. `User.is_admin` (owner, or
+  active and in `system-admin`) and `async_create_system_user` are unchanged.
+- `hassio/__init__.py`, `http/auth.py`, `http/const.py`, `http/__init__.py`, `hassio/const.py`, `hassio/auth.py`: the
+  Supervisor user is kept under `DATA_SUPERVISOR_USER` (same `"hassio_supervisor_user"` key string) and looked up by id
+  on every Unix-socket request; it is still a system-generated, active `system-admin` user, so `require_admin` passes.
+- `onboarding/views.py`: the owner is still created in `system-admin`.
+- Unrelated to the contract but new in 2026.10: `subscribe_condition` no longer requires admin, and users may rename
+  themselves (`person/update_own_profile`); the verifier reads ids and roles, never names.
 
 ## Adding a release
 
