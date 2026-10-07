@@ -1,5 +1,6 @@
 """Late failures through real pinned children/gateway and owned HTTP backends."""
 import asyncio
+import base64
 import json
 import threading
 
@@ -9,6 +10,7 @@ import pytest
 
 from test_backend_policy_python import policy
 from test_expansion_runtime import WRITES
+from nextcloud_fixtures import READS
 from litellm_metadata_fixtures import FIXTURES as LITELLM_METADATA_CASES
 
 from mcp_admin_core.lifecycle import ChildSpec
@@ -42,7 +44,7 @@ def broken_response(handler, mode, credential):
 
 @pytest.mark.parametrize('product,json_response', [
     ('hermes', False), ('opendesign', False), ('emqx', False),
-    ('litellm', False), ('litellm', True)])
+    ('litellm', False), ('litellm', True), ('nextcloud', False)])
 async def test_actual_child_late_response_errors(tmp_path, product, json_response):
     mode = {'value': 'chunk'}
     seen = []
@@ -52,6 +54,9 @@ async def test_actual_child_late_response_errors(tmp_path, product, json_respons
             credential = self.headers.get('Authorization', CANARY)
             if product == 'hermes':
                 assert credential == 'Bearer ' + CANARY
+            if product == 'nextcloud':  # echo the decoded app password itself, not its base64 form
+                credential = base64.b64decode(credential.split()[1]).decode().split(':', 1)[1]
+                assert credential == CANARY
             seen.append(credential)
             broken_response(self, mode['value'], credential)
 
@@ -222,12 +227,14 @@ def http_read_arguments(product, name):
     """Use the same valid inputs exercised by the real metadata child test."""
     if product == 'litellm' and name in LITELLM_METADATA_CASES:
         return dict(LITELLM_METADATA_CASES[name][0])
+    if product == 'nextcloud':
+        return dict(next((args for n, args in READS if n == name), {}))
     return {}
 
 
 @pytest.mark.parametrize('product,json_response', [
     ('hermes', False), ('opendesign', False), ('emqx', False),
-    ('litellm', False), ('emqx', True), ('litellm', True)])
+    ('litellm', False), ('emqx', True), ('litellm', True), ('nextcloud', False), ('nextcloud', True)])
 async def test_every_enabled_http_handler_has_safe_body_errors(tmp_path, product, json_response):
     mode = {'value': 'chunk'}
     seen = []
@@ -251,7 +258,7 @@ async def test_every_enabled_http_handler_has_safe_body_errors(tmp_path, product
                 return self.reply({'note': CANARY, 'data': []})
             broken_response(self, mode['value'], CANARY)
 
-        do_DELETE = do_GET
+        do_DELETE = do_PROPFIND = do_REPORT = do_GET
         do_PUT = do_POST
         do_PATCH = do_POST
 

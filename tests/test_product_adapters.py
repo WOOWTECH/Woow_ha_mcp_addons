@@ -75,6 +75,9 @@ def test_invalid_migration_is_not_rewritten(tmp_path, bad):
     ('opendesign', 'get_project', {'project_id': '12345678-1234-1234-1234-123456789abc'}, {'project_id': '../secrets'}),
     ('emqx', 'emqx_cluster_status', {}, {'emqx': {}}),
     ('litellm', 'litellm_list_models', {}, {'ctx': {}}),
+    ('nextcloud', 'get_file_tree', {'path': 'Documents', 'depth': 3}, {'path': 'Documents', 'depth': 4}),
+    ('nextcloud', 'read_text_file', {'path': 'Documents/notes.md'}, {'path': '../other-user/notes.md'}),
+    ('nextcloud', 'list_tasks', {'calendar': 'personal', 'limit': 500}, {'limit': 501}),
 ])
 def test_exact_source_arguments_and_unknown_deny(tmp_path, product, name, good, bad):
     store = ProductStore(tmp_path / product, product)

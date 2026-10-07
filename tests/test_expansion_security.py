@@ -77,6 +77,22 @@ def test_legacy_switch_never_grants_expansion_writes(product, name, args):
     ('emqx', 'emqx_client_subscribe', {'clientid': 'x', 'topic': 't', 'qos': True}),
     ('litellm', 'litellm_create_team', {'team_alias': 'x', 'members_with_roles': [{'role': 'admin'}]}),
     ('litellm', 'litellm_list_teams', {'page_size': 101}),
+    # 0.1.7 Nextcloud: the child's own path rules, checked by the gateway before dispatch.
+    *[('nextcloud', 'read_text_file', {'path': bad}) for bad in (
+        '', '/', '../x', 'Documents/../../x', './x', 'a//b', '//a', 'a\\b', 'a\x00b', 'a\nb', 'a\x85b',
+        'a\u202eb', 'a\u2066b', 'x' * 1025)],
+    ('nextcloud', 'get_file_tree', {'path': 'Documents/..'}),
+    ('nextcloud', 'get_file_tree', {'depth': 0}),
+    ('nextcloud', 'get_file_tree', {'depth': '1'}),
+    ('nextcloud', 'list_tasks', {'calendar': ''}),
+    ('nextcloud', 'list_tasks', {'include_completed': 'true'}),
+    ('nextcloud', 'update_text_file', {'path': 'a.md', 'content': 'x'}),
+    ('nextcloud', 'update_text_file', {'path': 'a.md', 'content': 'x', 'expected_etag': 'has space'}),
+    ('nextcloud', 'update_text_file', {'path': 'a.md', 'content': 'x', 'expected_etag': 'e' * 259}),
+    ('nextcloud', 'create_text_file', {'path': 'a.md', 'content': 'x' * 262145}),
+    ('nextcloud', 'create_text_file', {'path': 'a.md', 'content': None}),
+    ('nextcloud', 'upload_file', {'path': 'a.bin', 'content_base64': ''}),
+    ('nextcloud', 'delete_file_checked', {'path': 'Documents', 'expected_etag': None}),
     ('n8n', 'get_node', {'nodeType': 'nodes-base.httpRequest', 'includeExamples': 0}),
     ('n8n', 'n8n_get_workflow', {'id': 'one', 'mode': 'full'}),
     ('n8n', 'n8n_manage_folders', {'action': 'delete', 'folderId': 'one'}),
@@ -88,12 +104,12 @@ def test_restricted_scopes_and_strict_types(product, name, args):
         authorize(call(name, args), tools, state_for(product, tools[name].grants(name)))
 
 
-@pytest.mark.parametrize('product', ['emqx', 'litellm'])
+@pytest.mark.parametrize('product', ['emqx', 'litellm', 'nextcloud'])
 def test_native_gates_allow_exact_writer_and_disable_all_others(tmp_path, product):
-    tool = 'emqx_kick_client' if product == 'emqx' else 'litellm_create_team'
+    tool = {'emqx': 'emqx_kick_client', 'litellm': 'litellm_create_team', 'nextcloud': 'create_text_file'}[product]
     state = state_for(product, [tool])
     spec = child_spec(state, tmp_path)
-    prefix = 'EMQX_MCP_' if product == 'emqx' else 'LITELLM_MCP_'
+    prefix = {'emqx': 'EMQX_MCP_', 'litellm': 'LITELLM_MCP_', 'nextcloud': 'NEXTCLOUD_MCP_'}[product]
     assert spec.env[prefix+'READONLY'] == 'false'
     assert spec.env['FASTMCP_CHECK_FOR_UPDATES'] == 'off'
     assert spec.env['FASTMCP_SHOW_SERVER_BANNER'] == 'false'
@@ -105,7 +121,7 @@ def test_native_gates_allow_exact_writer_and_disable_all_others(tmp_path, produc
     assert child_spec(state, tmp_path).env[prefix+'READONLY'] == 'true'
 
 
-@pytest.mark.parametrize('product', ['emqx', 'litellm'])
+@pytest.mark.parametrize('product', ['emqx', 'litellm', 'nextcloud'])
 async def test_policy_api_commits_live_denial_before_owned_restart(tmp_path, product):
     store = ProductStore(tmp_path, product)
     started, finish = asyncio.Event(), asyncio.Event()

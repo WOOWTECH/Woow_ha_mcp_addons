@@ -49,7 +49,7 @@ async def runtime(tmp_path, product, url, *, canary=None, json_response=False, w
     store = ProductStore(tmp_path / 'state', product)
     configured = connection(product, url)
     if canary:
-        for key in ('password', 'api_key', 'api_secret', 'master_key', 'gateway_api_key', 'dashboard_password'):
+        for key in ('password', 'api_key', 'api_secret', 'master_key', 'gateway_api_key', 'dashboard_password', 'app_password'):
             if key in configured:
                 configured[key] = canary
     store.update(connection=configured, enabled_write_tools=list(write_grants))

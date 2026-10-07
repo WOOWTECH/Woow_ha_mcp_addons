@@ -23,6 +23,7 @@ from mcp_admin_core.products import ODOO_HEALTH_PROBE, PRODUCTS, PROBES, Product
 
 from owned_executable import Executable
 from batch2_owned_port import reserve_port
+import nextcloud_fixtures
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -36,6 +37,7 @@ def connection(product, url):
         'opendesign': dict(url=url),
         'emqx': dict(url=url, api_key='DUMMY', api_secret='DUMMY'),
         'litellm': dict(url=url, master_key='DUMMY'),
+        'nextcloud': dict(url=url, username=nextcloud_fixtures.USER, app_password=nextcloud_fixtures.PASSWORD),
     }[product]
 
 
@@ -43,9 +45,20 @@ def connection(product, url):
 def backend(product):
     calls = []
     offline = threading.Event()
+    nextcloud = nextcloud_fixtures.NextcloudFake()
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args): pass
+
+        def nextcloud(self):
+            calls.append((self.command, self.path))
+            if offline.is_set():
+                self.send_error(503); return
+            assert product == 'nextcloud'
+            body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
+            nextcloud_fixtures.respond(self, *nextcloud.handle(self.command, self.path, self.headers, body))
+
+        do_PROPFIND = do_REPORT = nextcloud
 
         def respond(self, value, content_type='application/json'):
             data = value if isinstance(value, bytes) else json.dumps(value).encode()
@@ -56,6 +69,8 @@ def backend(product):
             self.wfile.write(data)
 
         def do_GET(self):
+            if nextcloud_fixtures.is_nextcloud(self.path):
+                return self.nextcloud()
             calls.append(('GET', self.path))
             if offline.is_set():
                 self.send_error(503); return
@@ -174,8 +189,9 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     raw_list = await rpc(client, runner.child_url, headers,
                         {'jsonrpc': '2.0', 'id': 20, 'method': 'tools/list'})
                     upstream_names = {t['name'] for t in raw_list['tools']}
-                    if product in ('odoo', 'odoo-manage'):
-                        # The add-on's own private readiness probe (apps/odoo*/launch.py), not an upstream tool.
+                    if product in ('odoo', 'odoo-manage', 'nextcloud'):
+                        # The add-on's own private readiness probe (apps/odoo*/launch.py; Nextcloud: the vendored
+                        # nextcloud_mcp_server/server.py), not an upstream tool.
                         assert ODOO_HEALTH_PROBE in upstream_names and ODOO_HEALTH_PROBE not in TOOLS[product]
                         upstream_names.remove(ODOO_HEALTH_PROBE)
                     manifest = json.loads((ROOT / 'docs/tool-surface.json').read_text())

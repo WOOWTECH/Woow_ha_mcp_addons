@@ -16,6 +16,7 @@ from mcp_admin_core.products import ProductStore, TOOLS, child_spec
 from test_real_products import connection, rpc
 from test_expansion_policy import call
 from n8n_adapter import TOOLS as N8N_TOOLS, child_spec as n8n_spec
+import nextcloud_fixtures
 
 PID = '12345678-1234-1234-1234-123456789abc'
 READS = {
@@ -30,6 +31,7 @@ READS = {
     'emqx': [('emqx_list_clients', {}), ('emqx_list_topics', {}), ('emqx_list_subscriptions', {}),
              ('emqx_metrics_history', {}), ('emqx_list_alarms', {})],
     'litellm': [('litellm_list_teams', {})],
+    'nextcloud': nextcloud_fixtures.READS,
     'n8n': [('get_node', {'nodeType': 'nodes-base.httpRequest'}), ('n8n_get_workflow', {'id': 'one'}), ('n8n_manage_folders', {'action': 'list', 'projectId': 'project'})],
 }
 WRITES = {
@@ -53,6 +55,7 @@ WRITES = {
                 ('litellm_update_team', {'team_id': 'one', 'team_alias': 'Changed'}),
                 ('litellm_delete_team', {'team_ids': ['one']}),
                 ('litellm_delete_model', {'model_id': 'one'})],
+    'nextcloud': nextcloud_fixtures.WRITES,
     'n8n': [('n8n_manage_folders', {'action': 'create', 'projectId': 'project', 'name': 'New'}),
             ('n8n_manage_folders', {'action': 'rename', 'projectId': 'project', 'folderId': 'one', 'name': 'Changed'})],
 }
@@ -61,6 +64,7 @@ WRITES = {
 @contextmanager
 def fake_api(*, major=18, allow_write=True):
     events, mutations, failures = [], [], []
+    nextcloud = nextcloud_fixtures.NextcloudFake()
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args): pass
         def do_GET(self): self.handle_api()
@@ -68,11 +72,22 @@ def fake_api(*, major=18, allow_write=True):
         def do_PUT(self): self.handle_api()
         def do_PATCH(self): self.handle_api()
         def do_DELETE(self): self.handle_api()
+        def do_PROPFIND(self): self.handle_api()
+        def do_REPORT(self): self.handle_api()
         def handle_api(self):
             path = urlsplit(self.path).path
             raw = self.rfile.read(int(self.headers.get('Content-Length', 0)))
             events.append((self.command, path))
             content_type = 'application/json'
+            if nextcloud_fixtures.is_nextcloud(self.path):
+                # Owned in-memory Nextcloud: only its successful PUT/DELETE count as mutations.
+                count = len(nextcloud.mutations)
+                try:
+                    answer = nextcloud.handle(self.command, self.path, self.headers, raw)
+                except Exception as exc:
+                    failures.append(repr(exc)); self.send_error(500); return
+                mutations.extend(nextcloud.mutations[count:])
+                return nextcloud_fixtures.respond(self, *answer)
             try:
                 if 'xmlrpc' in path:
                     params, method = xmlrpc.client.loads(raw)
@@ -149,8 +164,11 @@ def fake_api(*, major=18, allow_write=True):
     finally: server.shutdown(); server.server_close(); thread.join()
 
 
-def payload(reply):
+def payload(reply, plain=False):
     assert not reply.get('isError'), reply
+    if plain:  # a text-only tool (Nextcloud get_file_content): no structured content, the text is the file
+        assert reply.get('structuredContent') is None, reply
+        return {'text': next(c['text'] for c in reply['content'] if c['type'] == 'text')}
     value = reply.get('structuredContent')
     if value is None:
         value = json.loads(next(c['text'] for c in reply['content'] if c['type'] == 'text'))
@@ -192,7 +210,7 @@ async def test_real_expanded_reads_and_explicit_writes(tmp_path, product):
                     for name, args in READS[product]:
                         before = len(events)
                         reply = await rpc(client, '/mcp', headers, call(name, args))
-                        payload(reply)
+                        payload(reply, plain=(product, name) == ('nextcloud', 'get_file_content'))
                         assert 'MUST_NOT_ESCAPE' not in json.dumps(reply)
                         if name == 'get_node':
                             assert 'httpRequest' in json.dumps(reply)

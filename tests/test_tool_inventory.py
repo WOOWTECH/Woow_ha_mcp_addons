@@ -1,4 +1,4 @@
-"""All seven source inventories must stay synchronized; unknown remains denied."""
+"""All eight source inventories must stay synchronized; unknown remains denied."""
 import ast
 import importlib.util
 import json
@@ -23,7 +23,8 @@ def test_inventory_names_hashes_schema_and_documentation_do_not_drift():
     assert actual == expected
     assert inventory.markdown(actual) == (ROOT / 'docs/tool-surface.md').read_text()
     assert {p: d['upstream_count'] for p, d in actual['products'].items()} == {
-        'n8n': 28, 'odoo': 41, 'odoo-manage': 10, 'hermes': 11, 'opendesign': 15, 'emqx': 39, 'litellm': 40}
+        'n8n': 28, 'odoo': 41, 'odoo-manage': 10, 'hermes': 11, 'opendesign': 15, 'emqx': 39, 'litellm': 40,
+        'nextcloud': 9}
 
 
 def test_all_withheld_tools_deny_even_when_writes_enabled():
@@ -49,7 +50,7 @@ def test_vendored_content_hashes_and_license_notices():
         assert hashlib.sha256(path.read_bytes()).hexdigest() == record.get('local_sha256', record['upstream_sha256'])
         if record.get('local_sha256'):
             assert record.get('modification')
-    for product in ('hermes', 'opendesign', 'emqx', 'litellm'):
+    for product in ('hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud'):
         assert 'MIT License' in (ROOT / 'apps' / product / 'vendor/LICENSE').read_text()
 
 

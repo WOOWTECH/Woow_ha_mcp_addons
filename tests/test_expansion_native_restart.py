@@ -13,7 +13,7 @@ from test_expansion_runtime import WRITES, fake_api, payload
 from test_real_products import connection, rpc
 
 
-@pytest.mark.parametrize('product', ['emqx', 'litellm'])
+@pytest.mark.parametrize('product', ['emqx', 'litellm', 'nextcloud'])
 async def test_api_enabling_writer_rebuilds_actual_native_gate(tmp_path, product):
     with fake_api() as (url, events, mutations, failures):
         store = ProductStore(tmp_path, product)

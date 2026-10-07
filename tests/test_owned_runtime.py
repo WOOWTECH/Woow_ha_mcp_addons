@@ -121,7 +121,7 @@ async def test_owned_decoy_receives_no_http():
         await server.wait_closed()
 
 
-@pytest.mark.parametrize('product', ['odoo', 'odoo-manage', 'emqx', 'litellm', 'hermes', 'opendesign', 'n8n'])
+@pytest.mark.parametrize('product', ['odoo', 'odoo-manage', 'emqx', 'litellm', 'nextcloud', 'hermes', 'opendesign', 'n8n'])
 def test_exact_spec_shape(product):
     from mcp_admin_core.products import ProductStore, child_spec
     from test_real_products import connection
@@ -141,7 +141,7 @@ def test_exact_spec_shape(product):
             assert result.cwd == original.cwd
             if product != 'n8n':
                 assert result.env == original.env
-            if product in ('odoo', 'odoo-manage', 'emqx', 'litellm'):
+            if product in ('odoo', 'odoo-manage', 'emqx', 'litellm', 'nextcloud'):
                 index = original.argv.index('--port') + 1
                 assert original.argv[index] == '3000'
                 assert result.argv[:index] == original.argv[:index]

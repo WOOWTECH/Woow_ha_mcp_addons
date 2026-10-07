@@ -25,7 +25,7 @@ from test_ha_role import (
 )
 from test_real_products import connection
 
-SIX = ('odoo', 'odoo-manage', 'hermes', 'opendesign', 'emqx', 'litellm')
+SIX = ('odoo', 'odoo-manage', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud')  # 0.1.7: Nextcloud joins the same wiring
 
 
 @pytest.fixture(autouse=True)
