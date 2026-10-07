@@ -55,7 +55,7 @@
 
 ## 已知問題（0.1.2 候選）
 
-1–4 已在 0.1.2 修正（準備中，見各產品 CHANGELOG）；第 3 項改為照實回報 `BACKEND_RPC_FAULT`，權限需求不變。
+1–4 已在 0.1.2 修正（準備中，見各產品 CHANGELOG）；第 3 項改為照實回報 `BACKEND_RPC_FAULT`，權限需求不變。（2026-10-07 補註：0.1.2 已發佈，驗證見 [ha-test-0.1.2](ha-test-0.1.2.md)。）
 
 1. **Odoo Manage 後端斷線時 session 失效**：initialize 回 200 但沒有內容，之後同一 session 回 404 `Session not found`、
    工具不列出（上游 server 建立 session 時連 Odoo 失敗）。後端恢復後立即正常，client 要重新連線。方向：gateway 對沒有

@@ -1,5 +1,10 @@
 # Builder runner contract — BLD2 (current route BLOCKED)
 
+> **現況（2026-10-07）：本文是歷史設計。** 這裡的 GitHub self-hosted runner 路線（BLD2）至今未啟用；下文的狀態描述是當時
+> （七支、18 個 release gates）的情形。實際映像改在負責人選定的專用一次性 KubeVirt builder VM（Docker classic store）建置與掃描，
+> 0.1.0–0.1.5 由該 VM 推送已測的同一 image ID 到 GHCR（見各版 `release-decision-*.md`）。`RELEASE-GATES.json` 現有 16 個 gates
+> （共用 4 個＋六支各 `image`／`ha`）仍全部 false，`approved_commit` 為 null。
+
 **WOOWTECH is a GitHub USER, not an organization. The current personal-repository
 route is BLOCKED, not merely unconfigured.** It cannot supply the mandatory
 organization/enterprise runner group and selected-workflow restrictions in this

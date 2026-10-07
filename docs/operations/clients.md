@@ -1,6 +1,6 @@
-# MCP client 連線（待真實 client／HA 驗收）
+# MCP client 連線（真實 client 待驗收）
 
-**n8n 管理 UI/provider 已本地串接，但映像與 HA 尚未驗收；其他六類正式管理仍 fail closed。
+**六支 0.1.5 映像已發佈，管理面板與 provider 已在測試 HA 實測（owner 可用、一般使用者 403）；真實 MCP client 尚未驗收（見文末）。
 以下是配置形狀，不是可用憑證或繞過授權操作。** 支援的本地契約是
 Streamable HTTP `/mcp`（回應可含 SSE），不是 legacy `/sse` 或 token path。
 
@@ -50,7 +50,7 @@ read。Bearer 要送在每個 POST/GET/DELETE、stream reconnect/session request
 transport session ID 不是額外認證。瀏覽器 Origin 在現有 tracer 拒絕；不承諾
 browser SDK 或 SaaS OAuth client 相容。
 
-工具預設唯讀，有些已支援 schema 比上游更窄，未支援 119 tools 一律 deny。
+工具預設唯讀，有些已支援 schema 比上游更窄；六支合計上游 174 個工具中支援 67 個，未支援的 107 個一律 deny。
 寫入需有效 HA 管理員 UI 的逐工具／operation exact grant，且符合參數與 disabled gate；
 v3 保存取代全部 `enabled_write_tools` 並關閉 legacy global，不能僅用 global false 當撤銷；
 直接偽造 `tools/call` 不能繞過。[工具表](../tool-surface.md) 是唯一支援對照。
@@ -58,15 +58,32 @@ v3 保存取代全部 `enabled_write_tools` 並關閉 legacy global，不能僅�
 ## Token 事件與故障
 
 - 缺失／錯誤／撤銷 Bearer：401。不要透過換 URL path、HA headers 或 cookie 規避。
-- 工具不支援／停用／write 未開：403；不應因此開全權限後端帳號。
+- 工具不支援／停用／write 未開：403；不應因此開全權限後端帳號。403 的 body 只有 `{"error":"request denied"}`，
+  不說是哪個工具或參數被擋。已知 client 差異（0.1.5 審查 RC F7，修法待負責人決定）：Python MCP SDK client 遇到
+  這個 403 會讓整個 session 斷線（要重新連線）；TypeScript SDK 只有那一次呼叫失敗。
 - 輪替後所有 client 更新秘密；舊 token 的新請求與 stream 後續轉送被拒。
   已送到 backend 的工作不會交易式回滾；輪替不等於取消後端工作。
 - 備份還原會復活備份中的 token／policy，需核對舊 token 暴露風險，再經批准流程輪替。
 - 503 readiness 可能只是未設定／backend 離線；不要自動重啟 HA 或既有服務。
 - initialize 回 HTTP 503＋JSON-RPC 錯誤 `BACKEND_UNAVAILABLE`（Retry-After 5，0.1.2 起）：child 沒有回覆這次初始化，
-  通常是後端連不上（例如 Odoo Manage 每個連線階段都要先連 Odoo），但也可能是 child 本身異常；沒有 session id，
-  稍後重新 initialize 即可。502 是 child 回了格式錯誤或過大的回覆。
+  通常是後端連不上（例如已下架的 Odoo Manage 每個連線階段都要先連 Odoo），但也可能是 child 本身異常；沒有 session id，
+  稍後重新 initialize 即可。502 是 child 回了格式錯誤或過大的回覆，或根本沒有 child 可轉送。
+- n8n 以外各支未設定後端時沒有 child（設定後端後才有；n8n 沒有後端也會啟動內建文件 runtime）。
+  2026-10-07 對測試 HA 上未設定後端的 LiteLLM 逐一打 45 個案例，支援的讀取分兩種：標記為需要後端的
+  （例如 `litellm_model_info`、`litellm_team_info`、`litellm_list_users`）由 gateway 直接回 403；不需檢查後端就轉送的
+  （例如 `litellm_list_models`、`litellm_health_readiness`）和 initialize、tools/list 一樣回 502。
+  寫入、暫不支援與不存在的工具照常 403，readiness 503。這些 403 與 502 的 body 都只有 `{"error":"request denied"}`。
 
 記錄每個真實 client 版本、network mode、正確 DNS/port（公開證據需匿名化）、
 初始化/list/read/stream/reconnect／缺錯撤 token 結果；不保存秘密或 raw payload。
-目前同 HA Pi／Omnigent／Hermes、LAN client 以及 HA E2E 全部待驗收。
+目前完成的只有 HA 主機上的腳本 probe（[P9 工具](ha-p9-kit.md)，標準庫 HTTP，不是 MCP SDK client）：0.1.1–0.1.5 每版的
+initialize／tools/list／讀取／拒絕／缺錯撤 token／後端斷線回歸（[0.1.5 紀錄](ha-test-0.1.5.md)）。同 HA Pi／Omnigent／Hermes、
+LAN client、HA Assist、n8n AI Agent 等真實 client 仍待驗收。
+
+**已知相容性問題（0.1.5）：** 2026-10-07 不經 HA 的模型供應商測試（只送 0.1.5 的工具 schema，只走 OpenRouter）：Claude Sonnet 4.5、
+GPT-4o-mini 拒收 n8n、Odoo、Hermes 的完整工具清單（HTTP 400；7 個工具的 `inputSchema` 頂層有 `oneOf`／`allOf`），
+OpenDesign、EMQX、LiteLLM 兩家都接受；另外三個模型（GLM-4.6、MiniMax-M2、Llama-3.3-70B）六支都接受。
+供應商拒絕的是整個請求，不只那幾個工具。直連 Anthropic／OpenAI API 與實際 client（Claude Code、HA 對話代理、n8n AI Agent 等）
+都沒測，不知道它們會不會先改寫 schema；原樣轉送的話，預期這兩家模型在這三支一個工具都叫不到。client 若把多個 MCP server
+的工具併成一個請求送給這兩家模型，只要含這三支的工具，整個請求都會 400，連其他 server 的工具也不能用（依同一個錯誤推論，未實測）。
+原始紀錄在 Claude 交付線 `e2e/B0-provider-smoke-20261007T0941Z/`（不在 repo）。

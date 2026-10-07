@@ -24,7 +24,8 @@ gates 未被自動改寫，仍由整合者依此紀錄處理。
 
 - OpenDesign 原上游權利人尚未確認。
 - 公開的 Git 歷史含內部營運文件曾提及的內部主機名稱與路徑（非憑證；現行文件已移除）。
-- 映像為 experimental：尚無 HA 實機驗收、真後端 E2E、aarch64；工具僅部分支援（71/184 已審）。
+- 映像為 experimental：尚無 HA 實機驗收、真後端 E2E、aarch64；工具僅部分支援（71/184 已審）。（2026-10-07 補註：以上為 0.1.0 當時；
+  之後的 HA 回歸見 [ha-test-0.1.5](ha-test-0.1.5.md) 等；0.1.5 六支工具數為 67/174，見[工具表](../tool-surface.md)。）
 - 映像內 `THIRD_PARTY_NOTICES.md` 為建置當時版本；最新授權說明以 repo 的 `docs/licenses/` 為準。
 
 ## 回復
