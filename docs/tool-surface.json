@@ -7148,7 +7148,8 @@
             "tests/test_tool_inventory.py",
             "tests/test_expansion_security.py",
             "tests/test_expansion_runtime.py",
-            "tests/test_stream_error_redaction.py"
+            "tests/test_stream_error_redaction.py",
+            "tests/test_nextcloud_child.py"
           ]
         },
         {
@@ -7199,7 +7200,8 @@
             "tests/test_tool_inventory.py",
             "tests/test_expansion_security.py",
             "tests/test_expansion_runtime.py",
-            "tests/test_stream_error_redaction.py"
+            "tests/test_stream_error_redaction.py",
+            "tests/test_nextcloud_child.py"
           ]
         },
         {
@@ -7239,7 +7241,8 @@
             "tests/test_tool_inventory.py",
             "tests/test_expansion_security.py",
             "tests/test_expansion_runtime.py",
-            "tests/test_stream_error_redaction.py"
+            "tests/test_stream_error_redaction.py",
+            "tests/test_nextcloud_child.py"
           ]
         },
         {
@@ -7284,7 +7287,8 @@
             "tests/test_tool_inventory.py",
             "tests/test_expansion_security.py",
             "tests/test_expansion_runtime.py",
-            "tests/test_stream_error_redaction.py"
+            "tests/test_stream_error_redaction.py",
+            "tests/test_nextcloud_child.py"
           ]
         },
         {
@@ -7313,7 +7317,8 @@
             "tests/test_tool_inventory.py",
             "tests/test_expansion_security.py",
             "tests/test_expansion_runtime.py",
-            "tests/test_stream_error_redaction.py"
+            "tests/test_stream_error_redaction.py",
+            "tests/test_nextcloud_child.py"
           ]
         },
         {
@@ -7372,7 +7377,8 @@
             "tests/test_tool_inventory.py",
             "tests/test_expansion_security.py",
             "tests/test_expansion_runtime.py",
-            "tests/test_stream_error_redaction.py"
+            "tests/test_stream_error_redaction.py",
+            "tests/test_nextcloud_child.py"
           ]
         },
         {
@@ -7412,7 +7418,8 @@
             "tests/test_tool_inventory.py",
             "tests/test_expansion_security.py",
             "tests/test_expansion_runtime.py",
-            "tests/test_stream_error_redaction.py"
+            "tests/test_stream_error_redaction.py",
+            "tests/test_nextcloud_child.py"
           ]
         },
         {
@@ -7470,7 +7477,8 @@
             "tests/test_tool_inventory.py",
             "tests/test_expansion_security.py",
             "tests/test_expansion_runtime.py",
-            "tests/test_stream_error_redaction.py"
+            "tests/test_stream_error_redaction.py",
+            "tests/test_nextcloud_child.py"
           ]
         },
         {
@@ -7537,7 +7545,8 @@
             "tests/test_tool_inventory.py",
             "tests/test_expansion_security.py",
             "tests/test_expansion_runtime.py",
-            "tests/test_stream_error_redaction.py"
+            "tests/test_stream_error_redaction.py",
+            "tests/test_nextcloud_child.py"
           ]
         }
       ]
@@ -10049,10 +10058,10 @@
                   "action": {
                     "const": "list"
                   },
-                  "folderId": {
+                  "name": {
                     "type": "null"
                   },
-                  "name": {
+                  "folderId": {
                     "type": "null"
                   }
                 },
@@ -10065,11 +10074,11 @@
                   "action": {
                     "const": "create"
                   },
-                  "folderId": {
-                    "type": "null"
-                  },
                   "name": {
                     "type": "string"
+                  },
+                  "folderId": {
+                    "type": "null"
                   }
                 },
                 "required": [
@@ -10082,10 +10091,10 @@
                   "action": {
                     "const": "rename"
                   },
-                  "folderId": {
+                  "name": {
                     "type": "string"
                   },
-                  "name": {
+                  "folderId": {
                     "type": "string"
                   }
                 },
@@ -10100,14 +10109,14 @@
                   "action": {
                     "const": "get"
                   },
+                  "name": {
+                    "type": "null"
+                  },
                   "folderId": {
                     "not": {
                       "pattern": "[^A-Za-z0-9_-]"
                     },
                     "type": "string"
-                  },
-                  "name": {
-                    "type": "null"
                   },
                   "projectId": {
                     "not": {

@@ -18,5 +18,10 @@
 - 健康檢查用子程序私有的 `woow_backend_probe`（不在工具清單，gateway 不列出也不授權）：每次用新的連線
   讀一次 OCS `cloud/user`，只回 ok 與使用者 id，不佔用工具的連線；公開工具全部停用時照樣運作。
 - 限制：gateway 每個請求最多 256 KiB，所以一次能寫入的文字與上傳的檔案（base64 後）都小於 256 KiB；
-  檔名含 `%` 的檔案會被 `backend_policy` 拒絕（`BACKEND_DESTINATION_DENIED`）。
+  檔名含 `%` 的檔案或資料夾會被 `backend_policy` 拒絕（`BACKEND_DESTINATION_DENIED`）；`get_file_tree` 遞迴時略過
+  這種子資料夾並設 `truncated: true`，其他資料夾照常列出。
+- 帳密錯誤（401）或被 Nextcloud 暴力破解防護擋下（429）後，子程序不再連 Nextcloud、一律回同一錯誤碼，直到子程序重啟
+  （重新儲存後端設定或重啟 Add-on），避免健康檢查反覆登入失敗而讓 Nextcloud 封鎖 Add-on 所在的 IP。撤銷 App 密碼前請先停用
+  Add-on；已被封鎖時用 `occ security:bruteforce:reset <ip>` 或暴力破解 IP 白名單解除（見 DOCS）。
+- 管理面板存檔時就拒絕 `backend_policy` 不接受的網址，以及空白或前後有空白的使用者名稱／App 密碼。
 - 映像 `ghcr.io/woowtech/amd64-mcp-nextcloud:0.1.7` 尚未建置；先前版本號沒有 Nextcloud 映像，也不會補建。

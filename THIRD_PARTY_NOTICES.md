@@ -19,7 +19,7 @@ new work. Owner authorization for publication still needs explicit confirmation.
 | n8n child | npm `n8n-mcp==2.91.0`, czlonkowski/n8n-mcp; `ipaddr.js==1.9.1` | MIT package notices retained by `npm ci`; not the n8n backend's license |
 | Nextcloud vendored runtime (0.1.7, not yet released) | `WOOWTECH/Woow_nextcloud_mcp_server@1f94258bbfaa92f2693c60e7905c86ef2efb711a` (tag v0.1.0), package `nextcloud_mcp_server` | MIT, Copyright 2026 WOOWTECH; `apps/nextcloud/vendor/LICENSE`. Five files carry local add-on changes, each with its reason in `docs/provenance/runtime-sources.json`; they are not upstream behaviour |
 | EMQX/LiteLLM/Nextcloud child dependency | FastMCP 3.4.5 and fastmcp-slim extras | **Apache-2.0**, preserve package LICENSE and any shipped NOTICE; not MIT |
-| Nextcloud child dependencies beyond the EMQX closure | `defusedxml==0.7.1`, `tzdata==2026.5` (lock `apps/nextcloud/uv.lock`; everything else is the reviewed EMQX lock, same versions) | defusedxml: Python Software Foundation License 2 (shipped LICENSE text; its metadata says `PSFL`, which is not an SPDX id, so the supply-chain license gate may need an owner-approved version-pinned entry `python:defusedxml:0.7.1` = `PSF-2.0`, **not added**); tzdata: Apache-2.0. Both keep their dist-info license files |
+| Nextcloud child dependencies beyond the EMQX closure | `defusedxml==0.7.1`, `tzdata==2026.5` (lock `apps/nextcloud/uv.lock`; everything else is the reviewed EMQX lock, same versions) | defusedxml: Python Software Foundation License 2 (shipped LICENSE text; its metadata says only `PSFL`, which is not an SPDX id, so the supply-chain license gate **will block** the first Nextcloud image until the owner approves a version-pinned entry `python:defusedxml:0.7.1` = `PSF-2.0`; **not added**, a release blocker); tzdata: Apache-2.0. Both keep their dist-info license files |
 
 Only the selected app code, its vendored license, core, complete shared UI dist and `apps/runtime` are
 copied into each image. Shared provenance/notice documents may describe other
@@ -65,7 +65,7 @@ whole-image review; local integration is not redistribution/CVE clearance.
 
 ## Self-hosted management UI assets
 
-All seven images (eight with Nextcloud, 0.1.7) build the package-local UI lock using the existing pinned Node base;
+All store images (`packaging/inputs.json`: six; seven with Nextcloud from 0.1.7) build the package-local UI lock using the existing pinned Node base;
 only complete dist/assets/licenses are copied, not fixtures or build dependencies.
 Fontsource Poppins5.2.7, Outfit5.2.8, Noto Sans TC5.2.9 retain OFL texts;
 Yellowtail5.2.8 retains Apache-2.0; MDI7.4.47 retains its package license.

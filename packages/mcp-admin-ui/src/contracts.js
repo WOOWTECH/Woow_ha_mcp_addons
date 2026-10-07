@@ -53,6 +53,8 @@ export function backendPayload(product, action, values) {
     if (dashboard.some(v => v !== null) && dashboard.some(v => v === null)) throw new UiError('Dashboard URL、使用者與密碼需整組提供，或全部留空。');
   }
   if (product === 'emqx' && connection.url.endsWith('/api/v5')) throw new UiError('請使用 Broker 基底 URL，不含 /api/v5。');
+  // The Nextcloud child strips both and refuses an empty result: never save blank or padded values.
+  if (product === 'nextcloud' && ['username', 'app_password'].some(k => connection[k].trim() === '' || connection[k] !== connection[k].trim())) throw new UiError('使用者名稱與 App 密碼不可空白，前後也不可有空白。');
   return product === 'n8n' ? connection : { connection };
 }
 

@@ -27,11 +27,11 @@ fresh-query fail-closed verifier、child token 隔離與 UI 已整合。審查�
 本地真 bootstrap/guard/n8n/fake WS/browser 不替代映像／HA；真 HA 的 owner／non-admin 已在 0.1.1–0.1.5 實測，
 但對應的 `products.<app>.image`／`ha` gates 仍是 false。不可用此批准清除下列任何 gate。
 
-## Root-context 獨立 builds（六產品）
+## Root-context 獨立 builds（商店產品，見 `packaging/inputs.json`）
 
 ```sh
 # 範例而非已執行紀錄；在有 Docker 的 disposable runner
-APP=n8n # 僅可選 checked-in 六產品 allowlist（packaging/inputs.json）
+APP=n8n # 僅可選 checked-in 商店產品 allowlist（packaging/inputs.json）
 VERSION=0.1.5 # 須等於 packaging/inputs.json 的 version（container_acceptance 會檢查）
 docker build --platform linux/amd64 --file "apps/$APP/Dockerfile" \
   --build-arg "BUILD_VERSION=$VERSION" --tag "local/mcp-$APP:$VERSION" .
@@ -65,7 +65,7 @@ pull_request_target、不使用 production self-hosted runner。
    意外測到 runner 系統舊 Node。不改 core/tests；此操作未在本地工作環境執行。
    `sh packaging/unit.sh` 真正安裝七個 runtime locks（含封存的 Odoo Manage 原始碼）、inventory drift、全 core/
    adapter tests，Junit 明確拒絕 skipped/empty/failure。
-4. 固定六產品 matrix，root context amd64 `push:false load:true`。
+4. 固定商店產品 matrix（與 packaging/inputs.json 相同），root context amd64 `push:false load:true`。
 5. 每個 build 執行 `packaging/container_acceptance.py`，network-none owned mocks，
    不以 health smoke 取代 protocol/auth/policy/lifecycle/data 驗證。
 

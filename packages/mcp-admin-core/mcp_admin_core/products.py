@@ -6,6 +6,7 @@ all upstream tools and the individually deferred capabilities.
 from pathlib import Path
 import re
 import secrets
+from urllib.parse import unquote, urlsplit
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, AfterValidator, field_validator, model_validator
@@ -91,6 +92,28 @@ class NextcloudConnection(Connection):
     url: URL  # the Nextcloud root URL (NEXTCLOUD_MCP_BASE_URL)
     username: Name
     app_password: Credential = Field(repr=False)
+
+    @field_validator('url')
+    @classmethod
+    def child_destination(cls, value):
+        """Refused when saved, not on every call: what apps/runtime/backend_policy.Destination denies ('.'/'..' path
+        segments, '%' or '\\' after percent-decoding, metadata host names) and what the child's Settings refuse
+        ('?' or '#' anywhere, '@' in the authority)."""
+        parts = urlsplit(value)
+        path = unquote(parts.path)
+        if ('%' in path or '\\' in path or any(part in ('.', '..') for part in path.split('/'))
+                or '?' in value or '#' in value or '@' in parts.netloc
+                or (parts.hostname or '').lower().rstrip('.') in ('metadata', 'metadata.google.internal', 'instance-data')):
+            raise ValueError('URL refused by the backend policy')
+        return value
+
+    @field_validator('username', 'app_password')
+    @classmethod
+    def no_outer_whitespace(cls, value):
+        # The child strips both and refuses an empty result (exit 2): refuse blank and padded values when saved.
+        if not value.strip() or value != value.strip():
+            raise ValueError('leading/trailing whitespace or blank')
+        return value
 
 
 CONNECTIONS = dict(zip(PRODUCTS, (OdooConnection, ManageConnection, HermesConnection,

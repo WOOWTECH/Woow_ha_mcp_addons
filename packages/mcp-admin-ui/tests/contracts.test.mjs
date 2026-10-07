@@ -19,11 +19,12 @@ test('URLs reject credentials/query/fragment, preserve explicit client endpoint'
 test('eight typed product payloads; no invented OpenDesign token, preserve means no request', () => {
   assert.equal(Object.keys(products).length, 8);
   for (const [product, spec] of Object.entries(products)) {
-    const values = Object.fromEntries(spec.fields.map(([key, , type]) => [key, type.startsWith('optional') ? '' : type === 'mode' ? 'read' : type === 'url' ? 'https://backend.example.test' : ' fixture value ']));
+    const filler = product === 'nextcloud' ? 'fixture value' : ' fixture value ';  // Nextcloud refuses padded values
+    const values = Object.fromEntries(spec.fields.map(([key, , type]) => [key, type.startsWith('optional') ? '' : type === 'mode' ? 'read' : type === 'url' ? 'https://backend.example.test' : filler]));
     const payload = backendPayload(product, 'replace', values);
     const connection = product === 'n8n' ? payload : payload.connection;
     assert.deepEqual(Object.keys(connection), spec.fields.map(([key]) => key));
-    for (const [key, , type] of spec.fields) if (type === 'secret') assert.equal(connection[key], ' fixture value ');
+    for (const [key, , type] of spec.fields) if (type === 'secret') assert.equal(connection[key], filler);
     assert.equal(backendPayload(product, 'preserve', {}), null);
     assert.deepEqual(backendPayload(product, 'clear', {}), product === 'n8n' ? { url: null, key: null } : { connection: null });
   }
@@ -34,6 +35,11 @@ test('typed replacement refuses blank secrets, partial dashboard, malformed cred
   assert.throws(() => backendPayload('n8n', 'replace', { url: 'https://n8n.example.test', key: 'bad\nkey' }));
   assert.throws(() => backendPayload('hermes', 'replace', { gateway_url: 'https://hermes.example.test', gateway_api_key: 'fixture', dashboard_url: 'https://dashboard.example.test' }));
   assert.throws(() => backendPayload('emqx', 'replace', { url: 'https://broker.example.test/api/v5', api_key: 'fixture', api_secret: 'fixture' }));
+  for (const [username, app_password] of [['   ', 'fixture'], [' tester', 'fixture'], ['tester ', 'fixture'], ['tester', '   '], ['tester', ' fixture'], ['tester', 'fixture ']]) {
+    assert.throws(() => backendPayload('nextcloud', 'replace', { url: 'https://cloud.example.test', username, app_password }), /不可空白/);
+  }
+  assert.deepEqual(backendPayload('nextcloud', 'replace', { url: 'https://cloud.example.test/', username: 'tester', app_password: 'fix ture' }),
+    { connection: { url: 'https://cloud.example.test', username: 'tester', app_password: 'fix ture' } });
 });
 test('unknown policy contract cannot save hidden grants; v3 is explicit/data driven', () => {
   const old = { tools: { read_one: { write: false }, write_one: { write: true }, mixed: { write: false, write_operations: ['create', 'delete'] }, unknown: {} } };

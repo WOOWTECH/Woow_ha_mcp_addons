@@ -38,8 +38,9 @@ def multistatus(responses):
 class NextcloudFake:
     """handle() answers one request: (status, headers, body). Each successful PUT/DELETE appends a mutation."""
 
-    def __init__(self, files=None):
+    def __init__(self, files=None, password=PASSWORD):
         self.files = initial_files() if files is None else files
+        self.password = password
         self.mutations = []
         self.counter = 0
 
@@ -56,7 +57,7 @@ class NextcloudFake:
         return FILES + '/'.join(quote(part) for part in path.split('/')) if path else FILES
 
     def handle(self, command, target, headers, body):
-        if headers.get('Authorization') != basic():
+        if headers.get('Authorization') != basic(password=self.password):
             return 401, {}, b''
         if target == OCS_PATH and command == 'GET':
             assert headers.get('OCS-APIRequest') == 'true'
@@ -86,6 +87,9 @@ class NextcloudFake:
             parent = name.rsplit('/', 1)[0] if '/' in name else ''
             if parent not in self.files or self.files[parent][0] is not None:
                 return 404, {}, b''
+            if headers.get('If-None-Match') != '*' and headers.get('If-Match') is None:
+                # Every write of the child carries a precondition; one without could silently overwrite a file.
+                return 428, {}, b''
             if headers.get('If-None-Match') == '*' and name in self.files:
                 return 412, {}, b''
             match = headers.get('If-Match')

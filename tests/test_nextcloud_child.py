@@ -179,6 +179,7 @@ class Sabre(Quiet):
     Location) that must never reach a client."""
     mode = {'status': 404}
     seen = []
+    base = ''  # this fake's own URL: a followed redirect would come back here
 
     def nextcloud(self):
         body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
@@ -194,7 +195,7 @@ class Sabre(Quiet):
                 f'<s:exception>Sabre\\DAV\\Exception</s:exception><s:message>{CANARY}</s:message></d:error>').encode()
         headers = {'Content-Type': 'application/xml', 'X-Debug': CANARY}
         if 300 <= status < 400:
-            headers['Location'] = f'https://{CANARY.lower()}.example/remote.php/dav/'
+            headers['Location'] = f'{self.base}/remote.php/dav/{CANARY}'
         respond(self, status, headers, text)
 
     do_GET = do_PUT = do_DELETE = do_PROPFIND = do_REPORT = nextcloud
@@ -210,7 +211,6 @@ async def test_backend_statuses_become_public_codes_without_backend_text(tmp_pat
         ('get_file_tree', {'path': 'x'}, 500, 'BACKEND_HTTP_ERROR status=500'),
         ('get_file_tree', {'path': 'x'}, 503, 'BACKEND_HTTP_ERROR status=503'),
         ('get_file_tree', {'path': 'x'}, 422, 'BACKEND_HTTP_ERROR status=422'),
-        ('get_file_tree', {'path': 'x'}, 401, 'BACKEND_HTTP_ERROR status=401: Nextcloud rejected the username or app password.'),
         ('get_file_tree', {'path': 'x'}, 200, 'BACKEND_HTTP_ERROR status=200'),  # a 2xx that is not 207
         ('get_file_tree', {'path': 'x'}, 'invalid-xml', 'BACKEND_INVALID_RESPONSE'),
         ('get_file_tree', {'path': 'x'}, 'not-multistatus', 'BACKEND_INVALID_RESPONSE'),
@@ -221,19 +221,24 @@ async def test_backend_statuses_become_public_codes_without_backend_text(tmp_pat
         ('create_text_file', {'path': 'a/b.md', 'content': 'x'}, 507, 'BACKEND_HTTP_ERROR status=507'),
         ('upload_file', {'path': 'a/b.bin', 'content_base64': 'AA=='}, 413, 'BACKEND_HTTP_ERROR status=413'),
     ] + [('get_file_tree', {'path': 'x'}, status, f'BACKEND_HTTP_ERROR status={status}') for status in (301, 302, 307, 308)]
+    # Last: an authentication failure (the child may stop contacting the backend after it).
+    cases.append(('get_file_tree', {'path': 'x'}, 401, 'BACKEND_HTTP_ERROR status=401: Nextcloud rejected the username or app password.'))
     with serve(Sabre) as url:
+        Sabre.base = url
         async with runtime(tmp_path, 'nextcloud', url, json_response=json_response, write_grants=grants) as (client, headers, *_):
-            for name, args, status, expected in cases:
+            for index, (name, args, status, expected) in enumerate(cases):
                 Sabre.mode['status'] = status
                 before = len(Sabre.seen)
                 response = await client.post('/mcp', headers=headers, json=call(name, args))
-                assert response.status_code == 200 and len(Sabre.seen) > before
+                # Exactly the tool's own request (plus the account lookup on the first call): a redirect is never
+                # followed, not even to this same server.
+                assert response.status_code == 200 and len(Sabre.seen) - before == (2 if index == 0 else 1), (
+                    name, status, Sabre.seen[before:])
                 assert CANARY not in response.text and CANARY.lower() not in response.text, (name, status, response.text)
                 assert '"isError":true' in response.text.replace(' ', ''), (name, status, response.text)
                 assert expected in response.text, (name, status, expected, response.text)
                 assert len(response.content) < 4096
-    # Redirects are never followed: only the one request per call, never the Location.
-    assert not any(CANARY.lower() in path for _, path in Sabre.seen)
+    assert not any(CANARY in path for _, path in Sabre.seen)
 
 
 async def test_stale_etag_write_reports_current_etag_and_writes_nothing(tmp_path):
@@ -252,8 +257,12 @@ async def test_stale_etag_write_reports_current_etag_and_writes_nothing(tmp_path
                                ('upload_file', {'path': 'Documents/notes.md', 'content_base64': 'AA==', 'expected_etag': 'stale'})):
                 reply = await rpc(client, '/mcp', headers, call(name, args))
                 assert reply.get('isError') and 'current etag one' in json.dumps(reply), (name, reply)
-            reply = await rpc(client, '/mcp', headers, call('create_text_file', {'path': 'Documents/notes.md', 'content': 'x'}))
-            assert reply.get('isError') and 'already exists' in json.dumps(reply)
+            for name, args in (('create_text_file', {'path': 'Documents/notes.md', 'content': 'x'}),
+                               # upload_file without an etag only creates: If-None-Match: * (the fake answers 428 to
+                               # a PUT without any precondition, so a dropped header cannot overwrite silently).
+                               ('upload_file', {'path': 'Documents/notes.md', 'content_base64': 'AA=='})):
+                reply = await rpc(client, '/mcp', headers, call(name, args))
+                assert reply.get('isError') and 'already exists' in json.dumps(reply), (name, reply)
             reply = await rpc(client, '/mcp', headers, call('delete_file_checked', {'path': 'Documents', 'expected_etag': 'docs'}))
             assert reply.get('isError') and 'is a folder' in json.dumps(reply)
             assert fake.mutations == [] and fake.files['Documents/notes.md'][1] == 'one'
@@ -263,31 +272,48 @@ async def test_stale_etag_write_reports_current_etag_and_writes_nothing(tmp_path
                            plain=True)['text'] == text['content']
 
 
+# (tool, arguments, the request of that tool that breaks): every earlier request of the call answers normally, so the
+# failure reaches the tool's own body handling (file GET, CalDAV REPORT, writer PUT/DELETE, PROPFIND listings).
+LATE_CASES = [
+    ('get_file_tree', {}, 'PROPFIND'), ('list_calendars', {}, 'PROPFIND'),
+    ('read_text_file', {'path': 'Documents/notes.md'}, 'GET'), ('get_file_content', {'path': 'Documents/notes.md'}, 'GET'),
+    ('list_tasks', {}, 'REPORT'),
+    ('create_text_file', {'path': 'Owned/new.md', 'content': 'x'}, 'PUT'),
+    ('update_text_file', {'path': 'Documents/notes.md', 'content': 'x', 'expected_etag': 'one'}, 'PUT'),
+    ('upload_file', {'path': 'Owned/new.bin', 'content_base64': 'AA=='}, 'PUT'),
+    ('delete_file_checked', {'path': 'Documents/old.txt', 'expected_etag': 'old'}, 'DELETE'),
+]
+
+
 @pytest.mark.parametrize('failure', ['chunk', 'disconnect', 'gzip', 'invalid-xml'])
-async def test_late_body_failures_after_account_lookup_are_public_codes(tmp_path, failure):
-    """The account lookup succeeds; then WebDAV/CalDAV/file bodies break: only public codes, never the body."""
+async def test_late_body_failures_of_each_tools_own_request_are_public_codes(tmp_path, failure):
+    """The account lookup and every earlier request succeed; then the tool's own request answers its expected
+    success status with a broken body: only public codes, never the body (which echoes the app password)."""
+    broken = {'command': None}
     seen = []
-    fake = NextcloudFake()
 
     class Backend(Quiet):
         def handle_api(self):
             body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
-            # The real answer's status (207 multistatus or 200 file), then a broken body.
-            status, headers, _ = fake.handle(self.command, self.path, self.headers, body)
-            if self.path == OCS_PATH:
-                return respond(self, *fake.handle(self.command, self.path, self.headers, body))
+            # A fresh fake per request: the real status for this request, from an unchanged file set.
+            status, headers, data = NextcloudFake(password=CANARY).handle(self.command, self.path, self.headers, body)
+            if self.path == OCS_PATH or self.command != broken['command']:
+                return respond(self, status, headers, data)
             seen.append((self.command, self.path))
+            echoed = __import__('base64').b64decode(self.headers['Authorization'].split()[1]).decode().split(':', 1)[1]
+            assert echoed == CANARY
+            status = 200 if status == 204 else status  # a 204 cannot carry the broken body
             if failure == 'invalid-xml':
-                return respond(self, status, {'Content-Type': 'application/xml'}, b'<' + CANARY.encode())
+                return respond(self, status, {'Content-Type': 'application/xml'}, b'<' + echoed.encode())
             self.send_response(status)
             if failure == 'chunk':
                 self.send_header('Transfer-Encoding', 'chunked')
-                data = CANARY.encode() + b'\r\n'
+                data = echoed.encode() + b'\r\n'
             elif failure == 'disconnect':
                 self.send_header('Content-Length', '10000')
-                data = CANARY.encode()
+                data = echoed.encode()
             else:
-                data = CANARY.encode()
+                data = echoed.encode()
                 self.send_header('Content-Length', str(len(data)))
                 self.send_header('Content-Encoding', 'gzip')
             self.end_headers()
@@ -298,14 +324,36 @@ async def test_late_body_failures_after_account_lookup_are_public_codes(tmp_path
 
     code = 'BACKEND_STREAM_ERROR' if failure in ('chunk', 'disconnect') else 'BACKEND_INVALID_RESPONSE'
     with serve(Backend) as url:
-        async with runtime(tmp_path, 'nextcloud', url) as (client, headers, *_):
-            for name, args in (('get_file_tree', {}), ('list_calendars', {}), ('list_tasks', {}),
-                               ('read_text_file', {'path': 'Documents/notes.md'})):
+        async with runtime(tmp_path, 'nextcloud', url, canary=CANARY, write_grants=sorted(WRITERS)) as (client, headers, *_):
+            for name, args, command in LATE_CASES:
+                if failure == 'invalid-xml' and command in ('GET', 'PUT', 'DELETE'):
+                    continue  # bodies the child does not parse: a valid read of any bytes is not an error
+                broken['command'] = command
                 before = len(seen)
                 response = await client.post('/mcp', headers=headers, json=call(name, args))
-                assert len(seen) > before, (name, response.text)
+                assert len(seen) == before + 1 and seen[-1][0] == command, (name, seen[before:])
                 assert CANARY not in response.text, (name, failure, response.text)
                 assert code in response.text, (name, failure, response.text)
+
+
+async def test_listing_outside_the_home_folder_is_refused_without_backend_paths(tmp_path):
+    """tools.py: a multistatus whose hrefs are all outside the account's files home is refused with a public code;
+    neither the home path (it contains the backend's user id) nor the foreign hrefs reach the client."""
+    class Backend(Quiet):
+        def handle_api(self):
+            body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
+            if self.path == OCS_PATH:
+                return respond(self, 200, {'Content-Type': 'application/json'},
+                               b'{"ocs": {"data": {"id": "%s"}}}' % CANARY.encode())
+            foreign = [(f'/remote.php/dav/files/{CANARY}-other/{n}', '<d:resourcetype/>') for n in ('a', 'b')]
+            respond(self, 207, {'Content-Type': 'application/xml'}, nextcloud_fixtures.multistatus(foreign))
+        do_PROPFIND = do_GET = handle_api
+
+    with serve(Backend) as url:
+        async with runtime(tmp_path, 'nextcloud', url) as (client, headers, *_):
+            response = await client.post('/mcp', headers=headers, json=call('get_file_tree', {}))
+            assert 'BACKEND_INVALID_RESPONSE' in response.text and 'outside the account' in response.text
+            assert CANARY not in response.text and '/remote.php/dav/files' not in response.text, response.text
 
 
 async def test_private_probe_never_waits_for_busy_tool_connections(tmp_path):
@@ -350,3 +398,60 @@ async def test_private_probe_never_waits_for_busy_tool_connections(tmp_path):
                 assert all(isinstance(r, dict) and not r.get('isError') for r in results), results
         finally:
             release.set()
+
+
+URL_CASES = ['https://cloud.example.test', 'https://cloud.example.test/', 'https://cloud.example.test/nextcloud',
+             'http://192.0.2.10:8080/nc', 'https://cloud.example.test/a/./b', 'https://cloud.example.test/a/../b',
+             'https://cloud.example.test/..', 'https://cloud.example.test/next%25cloud', 'https://cloud.example.test/a%2e%2e/b',
+             'https://cloud.example.test/%2e%2e', 'https://cloud.example.test/a%5cb', 'https://metadata',
+             'https://METADATA.google.internal./x', 'http://instance-data', 'https://cloud.example.test/?',
+             'https://cloud.example.test/#', 'https://@cloud.example.test', 'https://cloud.example.test/a%20b']
+CREDENTIALS = [('tester', 'DUMMY'), ('test user', 'DUMMY pass'), ('   ', 'DUMMY'), (' tester', 'DUMMY'), ('tester ', 'DUMMY'),
+               ('tester', '   '), ('tester', ' DUMMY'), ('tester', 'DUMMY ')]
+
+
+def test_every_saved_connection_is_accepted_by_backend_policy_and_child_settings(tmp_path):
+    """What the GUI saves (NextcloudConnection) must be what backend_policy.Destination and the child's Settings
+    accept: a URL either is refused when saved, or works at run time; blank or padded credentials are refused."""
+    from pydantic import ValidationError
+    from mcp_admin_core.products import NextcloudConnection
+    spec = child_spec(state(), tmp_path)  # only argv[0] and PYTHONPATH are used
+    cases = [(url, user, password) for url in URL_CASES for user, password in CREDENTIALS[:1]]
+    cases += [(URL_CASES[0], user, password) for user, password in CREDENTIALS[1:]]
+    program = '''
+import json, sys
+from backend_policy import BackendDenied, Destination
+from nextcloud_mcp_server.settings import SettingsError, load_settings
+result = []
+for url, user, password in json.loads(sys.stdin.read()):
+    try:
+        Destination(url); policy = True
+    except (BackendDenied, ValueError):
+        policy = False
+    try:
+        load_settings(base_url=url, username=user, app_password=password, _env_file=None); settings = True
+    except SettingsError:
+        settings = False
+    result.append([policy, settings])
+print(json.dumps(result))
+'''
+    run = subprocess.run([spec.argv[0], '-c', program], input=json.dumps(cases), env={
+        'PATH': '/usr/bin:/bin', 'PYTHONPATH': spec.env['PYTHONPATH'], 'PYTHONDONTWRITEBYTECODE': '1'},
+        capture_output=True, text=True, timeout=30, cwd='/')
+    assert run.returncode == 0, run.stderr
+    accepted_somewhere = False
+    for (url, user, password), (policy, settings) in zip(cases, json.loads(run.stdout)):
+        try:
+            NextcloudConnection.model_validate({'url': url, 'username': user, 'app_password': password})
+            saved = True
+        except ValidationError:
+            saved = False
+        if saved:
+            accepted_somewhere = True
+            assert policy and settings, (url, user, policy, settings)
+        if not policy or not settings:
+            assert not saved, (url, user)
+    assert accepted_somewhere
+    for bad in ('https://cloud.example.test/a/../b', 'https://cloud.example.test/next%25cloud', 'https://metadata'):
+        with pytest.raises(ValidationError):
+            NextcloudConnection.model_validate({'url': bad, 'username': 'tester', 'app_password': 'DUMMY'})

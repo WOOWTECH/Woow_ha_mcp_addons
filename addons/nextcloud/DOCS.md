@@ -33,8 +33,17 @@
 
 一個 Add-on 只有一個 Nextcloud 帳號：**url（Nextcloud 根網址）、username、app_password**。
 
-- 請在 Nextcloud「個人設定 → 安全性 → 裝置與工作階段」為本 Add-on 建立專用 **App 密碼**，不要填登入密碼；
-  停用 Add-on 時在同一頁撤銷它。建議用權限最小的專用帳號，只分享需要的資料夾給它。
+- 請在 Nextcloud「個人設定 → 安全性 → 裝置與工作階段」為本 Add-on 建立專用 **App 密碼**，不要填登入密碼。
+  建議用權限最小的專用帳號，只分享需要的資料夾給它。url、使用者名稱與 App 密碼存檔時就會檢查：
+  `backend_policy` 會拒絕的網址（路徑含 `.`／`..` 片段、解碼後含 `%` 或 `\`、metadata 類主機）與空白或前後有空白的帳密都存不進去。
+- **帳密錯誤會鎖住，而不是一直重試**：Nextcloud 回 401（帳密錯誤）或 429（暴力破解防護擋下）之後，子程序不再連
+  Nextcloud，工具與健康檢查都直接回同一個公開錯誤碼，直到子程序重啟（在面板重新儲存後端設定，或重新啟動 Add-on）。
+  這是為了避免每 15 秒一次的健康檢查不斷送出失敗的登入，觸發 Nextcloud 的暴力破解防護、把 Add-on 所在的 IP
+  （在家用 NAT 或沒設 trusted_proxies 的反向代理後面，常是整個網路共用的 IP）封鎖，連同一 IP 的網頁登入與其他用戶端一起被擋。
+- **要撤銷或輪替 App 密碼，請先停用 Add-on**，在 Nextcloud 撤銷舊密碼、建立新密碼，到面板存入新密碼後再啟動。
+- 若 IP 已被封鎖：Nextcloud 管理員可執行 `occ security:bruteforce:reset <ip>` 清除該 IP 的紀錄；長期可在
+  「管理設定 → 安全性」的暴力破解 IP 白名單（Brute-force settings app）加入 Add-on 所在的 IP。修好密碼後也要等舊紀錄過期或先清除，
+  否則登入可能被延遲到超過健康檢查的逾時，readiness 會停在 503。
 - 後端憑證／URL、token、policy 由 GUI/state 擁有；HA options 為空，不放 credentials、不覆寫 state。
 - 所有後端請求都經 gateway 的 `backend_policy`：DNS 只解析一次並檢查所有位址類別、連線釘在檢查過的位址、
   不跟隨轉址、不讀 proxy 環境變數、TLS 一定驗證。所以 URL 必須是最終位址（轉址會回 `BACKEND_HTTP_ERROR status=30x`）；
@@ -45,7 +54,8 @@
 ## 已知限制
 
 - gateway 每個 MCP 請求最多 256 KiB：`create_text_file`／`update_text_file` 的內容與 `upload_file` 的 base64 都要小於此值。
-- 檔名或路徑含 `%` 的檔案會被 `backend_policy` 拒絕（`BACKEND_DESTINATION_DENIED`）。
+- 檔名或路徑含 `%` 的檔案會被 `backend_policy` 拒絕（`BACKEND_DESTINATION_DENIED`）；直接讀寫這種檔案或資料夾都會失敗。
+  `get_file_tree` 往下列子資料夾（depth 2–3）時，遇到名稱含 `%` 的子資料夾會略過它、不中斷整個列表，並把 `truncated` 設為 true。
 - 不能建立資料夾、不能修改任務、不展開重複任務；`list_tasks` 描述截 500 字。
 
 ## 網路、健康與更新

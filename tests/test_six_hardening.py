@@ -16,6 +16,7 @@ from mcp_admin_core.gateway import make_apps
 from owned_runtime import Endpoint
 from mcp_admin_core.products import PRODUCTS, PROBES, ProductStore, TOOLS, child_spec
 from test_real_products import connection, rpc
+import nextcloud_fixtures
 
 
 @contextmanager
@@ -137,6 +138,11 @@ async def test_error_bodies_never_enter_gateway_stream(tmp_path, product, json_r
 
     class Backend(Quiet):
         def do_GET(self):
+            if product == 'nextcloud':
+                self.rfile.read(int(self.headers.get('Content-Length', 0)))
+                if self.path == nextcloud_fixtures.OCS_PATH:  # account lookup succeeds: the tool's own request fails
+                    return nextcloud_fixtures.respond(self, 200, {'Content-Type': 'application/json'},
+                                                      b'{"ocs": {"data": {"id": "tester"}}}')
             calls.append(self.path)
             payload = {'detail': canary} if mode['shape'] == 'detail' else {'error': {'message': canary, 'nested': {'key': canary}}} if mode['shape'] == 'nested' else canary.encode()
             self.reply(payload, mode['status'])
@@ -152,6 +158,8 @@ async def test_error_bodies_never_enter_gateway_stream(tmp_path, product, json_r
                 return
             value = {'server_version': '18.0', 'server_version_info': [18,0,0,'final',0]} if method == 'version' else 7 if method == 'authenticate' else [{'model': 'res.partner', 'name': 'Contact'}]
             self.reply(xmlrpc.client.dumps((value,), methodresponse=True).encode())
+
+        do_PROPFIND = do_GET
 
     with serve(Backend) as url:
         async with runtime(tmp_path, product, url, canary=canary, json_response=json_response) as (client, headers, *_):

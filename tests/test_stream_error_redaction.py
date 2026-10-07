@@ -11,6 +11,7 @@ import pytest
 from test_backend_policy_python import policy
 from test_expansion_runtime import WRITES
 from nextcloud_fixtures import READS
+import nextcloud_fixtures
 from litellm_metadata_fixtures import FIXTURES as LITELLM_METADATA_CASES
 
 from mcp_admin_core.lifecycle import ChildSpec
@@ -21,8 +22,23 @@ from test_six_hardening import Quiet, call, runtime, serve
 CANARY = 'DUMMY-LATE-RESPONSE-SECRET'
 
 
-def broken_response(handler, mode, credential):
-    handler.send_response(200)
+# Nextcloud: the success status the child expects for each of its own requests (a broken body must arrive on an
+# accepted status, or the child reports the status without reading the body).
+NEXTCLOUD_OK = {'GET': 200, 'PROPFIND': 207, 'REPORT': 207, 'PUT': 201, 'DELETE': 200}
+
+
+def nextcloud_account(handler):
+    """Answer the account lookup (OCS cloud/user) normally, so only each tool's own request is broken. True if
+    this was that lookup."""
+    if handler.path != nextcloud_fixtures.OCS_PATH:
+        return False
+    nextcloud_fixtures.respond(handler, 200, {'Content-Type': 'application/json'},
+                               b'{"ocs": {"meta": {"status": "ok"}, "data": {"id": "tester"}}}')
+    return True
+
+
+def broken_response(handler, mode, credential, status=200):
+    handler.send_response(status)
     if mode == 'chunk':
         handler.send_header('Transfer-Encoding', 'chunked')
         body = credential.encode() + b'\r\n'
@@ -55,10 +71,15 @@ async def test_actual_child_late_response_errors(tmp_path, product, json_respons
             if product == 'hermes':
                 assert credential == 'Bearer ' + CANARY
             if product == 'nextcloud':  # echo the decoded app password itself, not its base64 form
+                self.rfile.read(int(self.headers.get('Content-Length', 0)))
+                if nextcloud_account(self):
+                    return
                 credential = base64.b64decode(credential.split()[1]).decode().split(':', 1)[1]
                 assert credential == CANARY
             seen.append(credential)
-            broken_response(self, mode['value'], credential)
+            broken_response(self, mode['value'], credential, NEXTCLOUD_OK.get(self.command, 200))
+
+        do_PROPFIND = do_GET
 
     with serve(Backend) as url:
         async with runtime(tmp_path, product, url, canary=CANARY,
@@ -253,10 +274,16 @@ async def test_every_enabled_http_handler_has_safe_body_errors(tmp_path, product
             self.wfile.write(b'{}')
 
         def do_GET(self):
+            if product == 'nextcloud':
+                if self.command not in ('PUT', 'POST'):  # do_POST already consumed the body
+                    self.rfile.read(int(self.headers.get('Content-Length', 0)))
+                if nextcloud_account(self):  # only each tool's own (first) request is broken
+                    return
             seen.append(self.path)
             if mode['value'] == 'success':
                 return self.reply({'note': CANARY, 'data': []})
-            broken_response(self, mode['value'], CANARY)
+            broken_response(self, mode['value'], CANARY,
+                            NEXTCLOUD_OK.get(self.command, 200) if product == 'nextcloud' else 200)
 
         do_DELETE = do_PROPFIND = do_REPORT = do_GET
         do_PUT = do_POST
@@ -290,7 +317,7 @@ async def test_every_enabled_http_handler_has_safe_body_errors(tmp_path, product
                     # Status-only writers do not parse unused JSON/text bodies.
                     # Chunk/decompression errors must still be safely redacted.
                     if failure in ('encoding', 'json') and (
-                        product == 'emqx' and TOOLS[product][name].write
+                        product in ('emqx', 'nextcloud') and TOOLS[product][name].write
                         or product == 'hermes' and arguments.get('action') in ('enable', 'disable', 'restart', 'pause', 'delete')
                     ):
                         continue
