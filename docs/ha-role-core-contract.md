@@ -92,7 +92,8 @@ and for the adjacent `http/const.py`, `http/__init__.py`, `hassio/const.py` and 
 4. In the same change, update every other place that spells out the reviewed versions:
    - the comment above `_HA_VERSIONS` in `ha_role.py`;
    - `tests/test_ha_role.py`: add the version to `test_the_reviewed_versions_are_exactly_these` and remove it from
-     `NEAR_MISSES` (the list holds, for example, `2026.10.1`; the near-miss tests fail until it is removed);
+     `NEAR_MISSES` (the list holds, for example, `2026.10.1`; the near-miss tests fail until it is removed), and
+     replace it where it serves as the unreviewed example in `test_wrong_sequence_and_revoked_machine_capability`;
    - the version-list sentence in [n8n-ha-role.md](n8n-ha-role.md) ("Compatibility is deliberately restricted to …");
    - the new release's section of all six `addons/*/CHANGELOG.md`, naming the added version;
    - the supported-version note in the six `addons/*/DOCS.md`, `README.md` and `docs/operations/guide.md`.

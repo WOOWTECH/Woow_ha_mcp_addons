@@ -20,9 +20,12 @@
 - gateway：tools/list 宣告的 inputSchema 頂層一律是 `type: object`。7 個工具（n8n `n8n_manage_folders`；Odoo `diagnose_odoo_call`、
   `generate_json2_payload`；Hermes `hermes_skill`、`hermes_tools`、`hermes_session`、`hermes_cron`）拿掉頂層 oneOf／allOf，分支規則改寫成
   description 的英文短句；驗證不變，gateway 仍用原本嚴格的 pydantic 模型檢查每個呼叫（D21）。
+- n8n：子程序的 MCP TypeScript SDK 由 1.30.0 升到 1.31.0（GHSA-6qxp-vccf-f47h／CVE-2026-104850，High，OAuth client 的漏洞；子程序是
+  MCP server、內附 client 只用固定 Bearer，不受影響，但 0.1.6 第一次建置時 supply-chain gate 因「有修正版的 High」擋下 n8n，所以升級；
+  n8n-mcp 2.91.0 鎖 1.30.0，以 npm overrides 調整；1.31.0 的 server 端只多了請求內容 4 MiB 上限與批次 100 筆上限）。
 - 程式 commit：518253a、a7dfcd0（tools/list）；79302e1、c8f601e、d9b50ac（Core 版本清單）；37013ca（initialize 收尾）；df3aaae（schema
-  扁平化）。e4828da 合併商店分支到 797d4e1（含 92e9695；只改 README、docs/operations 與 `addons/odoo/DOCS.md` 一段，都不在映像內）。
-  RC 文件修正：（建置後填入）；版號 0.1.5→0.1.6（20 處，獨立 commit）：（建置後填入）。
+  扁平化）；n8n SDK 1.31.0：（建置後填入）。e4828da 合併商店分支到 797d4e1（含 92e9695；只改 README、docs/operations 與 `addons/odoo/DOCS.md` 一段，都不在映像內）。
+  RC 文件修正：2698bea；版號 0.1.5→0.1.6（20 處，獨立 commit）：f53a1d9。
 - 不在 0.1.6：Nextcloud（第七支 add-on，在另一條開發線）；Odoo Manage 維持下架、不建置。
 - 0.1.5 留下的 0.1.6 待辦：RC F3 與「initialize 回 502 時子程序 session 沒關」已在本版處理；RC F7 延到 0.1.7（見文末）；ledger 罕見的
   動態載入仍靠審查（0.1.5 R2 #1，本版未改）。
@@ -65,7 +68,9 @@
 - 發佈前要用 core-contract-watch 再確認 Core 2026.10.1 是否已發佈（2026-10-08 查詢時最新是 2026.10.0）。若已發佈，0.1.6 在該版的
   管理面板整個 403；要納入就照 [ha-role-core-contract](../ha-role-core-contract.md) 的「Adding a release」。
 - aarch64 未建；LAN client、LiteLLM 工具（無後端）未測；真實 MCP client（同 HA Pi／Omnigent／Hermes、HA Assist、n8n AI Agent 等）未驗收。
-- 文件（DOCS 的版本行、README 與 client 文件的目前版本、CHANGELOG 的「準備中」、授權清單）在映像建置後更新，不在映像內，不影響已測映像。
+- 文件（DOCS 的版本行、README 與 client 文件的目前版本、CHANGELOG 的「準備中」、授權清單）在映像建置後更新，不在映像內，不影響已測映像；
+  其中 README 的「AI client 相容性（已知問題）」與 client 文件的「已知相容性問題（0.1.5）」要改成 0.1.6 的現況（D21 已修正 Claude、GPT
+  拒收 n8n、Odoo、Hermes 工具清單的問題）。
 
 ## 0.1.7 待辦（審查留下、0.1.6 未改程式的部分）
 

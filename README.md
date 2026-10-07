@@ -5,6 +5,7 @@
 
 **Odoo Manage 已於 2026-10-06 下架封存**：0.1.4 是最後一版，0.1.5 起不在商店，也不再建置或發佈。已安裝的仍以 0.1.4 執行，但不會再有更新或安全修正；它的設定保有 Odoo API key，並有 `homeassistant_api` 權限，建議改用 WOOW Odoo MCP 後移除。WOOW Odoo MCP 是不同的 MCP server（工具與設定不同，要另設後端、endpoint 與 token）。已發佈的 0.1.0–0.1.4 映像保留，舊備份仍可還原。步驟見[更新、備份與回復](docs/operations/update-backup-rollback.md)；原始碼保留在 `apps/odoo-manage`。
 僅以 **amd64 / Supervisor 2026.09.3** 為封裝目標；不是 Core 最低版本。
+
 **管理面板支援的 Core 版本**：只在該版 add-on 審查過的 HA Core 版本運作（0.1.6：2026.7.2–2026.9.4 與 2026.10.0；0.1.5 及更早只有 2026.7.2）；
 其他版本（含之後的 patch 與 beta）整個管理面板都回 403，看起來和「不是管理員」完全一樣（add-on 紀錄也沒有訊息）；
 MCP 端點（Bearer token）不受影響。新的 Core 版本要等 add-on 發新版才支援，升級 Core 前請先對照這份清單。

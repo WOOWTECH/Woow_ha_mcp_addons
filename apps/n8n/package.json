@@ -4,5 +4,6 @@
   "license": "Apache-2.0",
   "version": "0.0.0",
   "description": "Pinned local HTTP child; not a published npm package",
-  "dependencies": { "ipaddr.js": "1.9.1", "n8n-mcp": "2.91.0" }
+  "dependencies": { "ipaddr.js": "1.9.1", "n8n-mcp": "2.91.0" },
+  "overrides": { "@modelcontextprotocol/sdk": "1.31.0" }
 }

@@ -61,7 +61,9 @@ bundled-data, transitive dependency and any future copied-source obligations rem
 integrities. Use `npm ci --prefix apps/n8n --ignore-scripts --no-audit --no-fund`.
 No global npm installs or native build/install scripts are required for this tracer.
 The tested fallback is **sql.js 1.14.2**; optional better-sqlite3 11.10.0 is installed
-as package contents but its native addon is not built. MCP JS SDK is **1.30.0**.
+as package contents but its native addon is not built. MCP JS SDK is **1.31.0** (0.1.6: an npm `overrides` entry in
+`apps/n8n/package.json` lifts n8n-mcp 2.91.0's exact 1.30.0 pin for GHSA-6qxp-vccf-f47h / CVE-2026-104850, an OAuth-client
+flaw this child does not use; 1.31.0's server-side changes are a 4 MiB request-body bound and a 100-message batch bound).
 
 ### Important launcher correction
 

@@ -10,7 +10,7 @@
   子程序文字放進錯誤訊息、Python client 會去抓子程序指定的 $ref 網址，execution.taskSupport 為 required 時會拒絕呼叫該工具。
   影響：client 不再依子程序的 outputSchema 檢查 structuredContent（n8n validate_* 截斷結果時原本會失敗，現在正常）；
   n8n 給 Claude Code 的 `anthropic/maxResultSizeChars` 也不再轉送，Claude Code 會套用它預設的 MCP 輸出上限。
-- gateway（0.1.6 R2 審查）：gateway 拒絕 initialize 時（Bearer 在等待中被撤銷 401；回覆格式錯誤、過大、protocolVersion 不是日期、
+- gateway（0.1.5 R2 審查觀察）：gateway 拒絕 initialize 時（Bearer 在等待中被撤銷 401；回覆格式錯誤、過大、protocolVersion 不是日期、
   子程序回 401/403 或轉址 502；BACKEND_UNAVAILABLE 或狀態讀取失敗 503；子程序自己的 4xx/5xx 照轉但不帶 session id），子程序可能已經
   建立 session 並回了 Mcp-Session-Id。這個 id 不會交給 client，session 原本只能等子程序閒置回收（n8n：所有 client 共用 20 個 session、
   閒置 10 分鐘回收；本機以釘選的 n8n-mcp 實測，改版前連續 20 次被拒後，之後的 initialize 全部回 429，直到這些 session 被回收）。
@@ -28,6 +28,11 @@
   仍用原本嚴格的 pydantic 模型檢查每個呼叫（含分支規則），只違反分支規則的呼叫照樣回 403、不會送到子程序。這支工具
   原本分支內的欄位順序隨行程改變，現在宣告的 schema 每次都逐位元組相同。其他工具的 schema 頂層本來就沒有這些
   關鍵字，內容不變；管理面板 bootstrap 顯示的仍是原本用來驗證的 schema。
+- 安全更新：n8n 子程序用的 MCP TypeScript SDK 由 1.30.0 升到 1.31.0（GHSA-6qxp-vccf-f47h／CVE-2026-104850，High）。這個漏洞在 SDK 的
+  OAuth client：惡意的 MCP server 可以讓 client 把 OAuth 憑證送到它指定的授權伺服器。本 Add-on 的 n8n 子程序是 MCP server，內附連 n8n
+  官方 MCP 的 client 只用固定 Bearer、不用 OAuth，所以不受影響；但供應鏈檢查對有修正版的 High 一律擋下，因此升級。1.31.0 在 server 端
+  另外加了請求內容 4 MiB 上限與 JSON-RPC 批次 100 筆上限（gateway 本來就限制單一請求 256 KiB）。n8n-mcp 2.91.0 本身鎖 1.30.0，
+  以 npm overrides 調整。
 - 映像 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.6` 尚未建置；0.1.0–0.1.5 tag 不覆寫。
 - 已知問題（延到 0.1.7）：
   - 被 policy 拒絕的 tools/call 仍回 HTTP 403（0.1.5 發佈候選審查 F7；上面 R2 的修正只涵蓋被拒的 initialize）。Python MCP SDK

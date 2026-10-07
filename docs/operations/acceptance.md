@@ -16,7 +16,7 @@ session URL、備份或私人拓樸。LOCAL/MOCK、CONTAINER/MOCK、HA、PUBLIC 
 | Admin trust | 六支權限已批准（n8n 2026-10-03；其他 0.1.1 起）；provider 經獨立 SPEC＋安全審（0.1.1）；真 HA owner 成功、non-admin 對面板／管理 API 403、無 cookie 401 已在 0.1.1–0.1.5 實測；登入後降權、token 長時間過期與瀏覽器 UX 未在真 HA 測。真實 HA admin 成功、non-admin 直接 Ingress URL/API 拒絕；缺少／重複 ID、偽造 peer/role headers 不得權。敏感操作前 fresh query，停權／降權／timeout／錯誤均拒絕且無副作用；role query 不等於立即撤銷 browser Ingress session。 |
 | Ingress UX | 有效 base path 的 assets/API/navigation/deep link/refresh，CSRF／origin 負面測試；MCP endpoint 不是 iframe origin。本地真 Core/browser 已覆蓋，尚非 HA iframe 驗收。 |
 | Protocol | 每類 initialize→initialized→tools/list→已審無副作用 call，檢查真實 payload，不只 HTTP200。對照完整工具表，六支 174/67/107（上游／支援／暫不支援）不可說完整 parity。 |
-| Bearer/policy | missing/wrong/revoked token、GET/POST/DELETE/stream reconnect；disabled/unknown/write direct-call 拒绝且 backend 計數不變；舊 session 不繞過新政策。 |
+| Bearer/policy | missing/wrong/revoked token、GET/POST/DELETE/stream reconnect；disabled/unknown/write direct-call 拒絕且 backend 計數不變；舊 session 不繞過新政策。 |
 | Streams | native Streamable HTTP JSON/SSE/session/cancel/reconnect；不宣稱 legacy /sse；錯 protocol/session/origin 與中斷清理。成功資料本身不是通用 secret-free 保證。 |
 | Lifecycle/outage | 只殺 disposable/new child，觀察有界退避、終止傳遞、孤兒回收；mock backend 離線 readiness503，但 child PID 不變。禁止停現有 backend 注入故障；backend-dependent readiness 不作 watchdog。 |
 | Persistence | GUI 修改後重啟持久化，options 不覆寫；完整 n8n v1／product v2→v3（新增空 exact grants）、future/corrupt 拒絕，失敗原資料不變；舊版+相容 backup rollback。 |
