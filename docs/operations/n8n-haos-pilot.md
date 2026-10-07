@@ -1,6 +1,9 @@
 # n8n 試點：從已審 commit 到 HAOS 的逐步程序
 
-**狀態：程序提案＋部分實跑。** 2026-10-04 在 woow k3s 一次性 KubeVirt VM（Docker 29.8.2／buildx 0.37.1）實跑：
+**歷史文件：** 本文是 0.1.0 n8n 試點（2026-10-04～05）的程序與當時狀態。之後各支都從 HA 商店安裝並逐版回歸
+（0.1.1–0.1.4 是七支、含 Odoo Manage；0.1.5 起六支），現況見 [0.1.5 回歸紀錄](ha-test-0.1.5.md)；P9 矩陣與證據格式仍沿用。
+
+**狀態（當時）：程序提案＋部分實跑。** 2026-10-04 在 woow k3s 一次性 KubeVirt VM（Docker 29.8.2／buildx 0.37.1）實跑：
 已審 `34f06d8` 的 P3 失敗（runtime 固定 PATH 找不到 `ldconfig`）；含修正的**實驗、未核准**候選 `6bd0a90`
 P1–P4 通過、P5 supply-chain gate CLOSED（secret findings 待正式 triage；SBOM/CVE/license 未執行）；
 另六支 build＋container/mock 通過（未跑 P5）。**沒有 registry 推送或 HA 安裝。**
@@ -13,10 +16,10 @@ P0 已在本機執行；P1 起每一步都要對應批准（見各步「前提�
 
 | 項目 | 值 |
 |---|---|
-| 候選 source commit | `34f06d838c5a1a18dbf623a071fbede0644ef5c0`（B3 checkpoint，71/184 工具）——要建置的程式 |
+| 候選 source commit | `34f06d838c5a1a18dbf623a071fbede0644ef5c0`（B3 checkpoint，當時七支合計 71/184 工具）——要建置的程式 |
 | 交付工具 commit | `local/claude-delivery` 上審查通過的 commit——只提供 `source_bundle.py`、`context_closure.py` 兩支工具，**不進入**候選 checkout |
 | 產品 | n8n，version `0.1.0`，amd64 only；公開 slug `woow_mcp_n8n`；**試點**是本地 app `woow_mcp_n8n_pilot`，安裝後顯示為 `local_woow_mcp_n8n_pilot` |
-| 映像 | 本地 tag `local/mcp-n8n:0.1.0`；`config.yaml` 公開名 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.0`（**未發佈**） |
+| 映像 | 本地 tag `local/mcp-n8n:0.1.0`；`config.yaml` 公開名 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.0`（當時**未發佈**；2026-10-05 已公開） |
 | Ports | Ingress `8099`（容器內、無 host mapping）；MCP `8081/tcp: null`（預設不對 LAN 開） |
 | 資料 | `/data/mcp`，uid/gid 10001，0700／0600；`backup: cold` |
 | 權限 | 僅 `homeassistant_api: true`（n8n 試點路徑 A 已批准）；`hassio_api`/`auth_api` false；protection on |

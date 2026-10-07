@@ -1,9 +1,11 @@
 # 手動更新、備份與回復
 
-以下是批准後的受控程序。HA 實證（2026-10-05，測試 HA，[紀錄](ha-test-0.1.1.md)）：n8n 0.1.0→0.1.1 升版、0.1.1 cold backup→partial
-restore 皆成功；其他六支未逐支驗證。
+以下是批准後的受控程序。HA 實證（測試 HA）：n8n 0.1.0→0.1.1 升版、0.1.1 cold backup→partial
+restore（[0.1.1 紀錄](ha-test-0.1.1.md)）與 0.1.2 還原修復（[0.1.2 紀錄](ha-test-0.1.2.md)；權杖延續本輪沒驗到）皆成功；0.1.1→0.1.5 每版都以
+`ha apps update` 更新全部產品並回歸（[0.1.5 紀錄](ha-test-0.1.5.md) 等），0.1.3 起更新前先做冷備份。其餘五支（Odoo、Hermes、
+OpenDesign、EMQX、LiteLLM）未逐支做還原，版本回退（降版＋相容備份）也還沒演練。
 只允許操作本次新增的 MCP Add-on，不重啟現有 backend、Core、Supervisor 或 k3s。
-映像在私有 builder 建置並通過 supply-chain gate 後發佈到 GHCR（0.1.0、0.1.1）；HA 安裝依 [逐步指令](n8n-pilot-commands.md) 逐步批准。
+映像在私有 builder 建置並通過 supply-chain gate 後發佈到 GHCR（0.1.0–0.1.5；Odoo Manage 只到 0.1.4）；HA 安裝依 [逐步指令](n8n-pilot-commands.md) 逐步批准。
 
 ## 更新前
 
@@ -11,8 +13,8 @@ restore 皆成功；其他六支未逐支驗證。
    typed backend schema、migration 相容性、必要 notices 與來源／安全審查。
 2. 確認實際安裝 slug、repository 身分未變，8099/3000 沒有外部 mapping，
    可選 MCP host port 不衝突。改 slug/repo 不是原地更新，要另做資料遷移計畫。
-3. 確認 auto-update 關閉。不要追 latest 或覆寫既有版本 tag；七個產品各自更新，
-   不要求其他六個一起停止。每次只有一個已批准產品。
+3. 確認 auto-update 關閉。不要追 latest 或覆寫既有版本 tag；六個產品各自更新，
+   不要求其他五個一起停止。依序一次更新一支，每支都要在核准清單內。
 4. 提前定義可容許中斷、timeout、失敗停止點、回復映像 digest、相容 backup、
    恢復 client 的方法與負責人。受限非正式測試帳號不能擴展到正式副作用。
 
@@ -59,8 +61,9 @@ backup ID、版本、時間、保管位置類型、權限檢查結論，不記�
 - backend unreachable 不重啟 backend，也不將 readiness 接 watchdog。遇 state_error、
   unknown schema、source guard drift、角色 verifier 缺失、資料 owner 不符立即停止，
   保留原狀以便回復，不重新 bootstrap 或開寬權限硬闖。
-- 七支的管理面板（`homeassistant_api`，0.1.1 起）已在測試 HA 以 owner 實測 Ingress、後端設定與 token；
-  一般使用者一律 403（2026-10-05 實測）。升版只在 n8n 實測過，其他產品升版仍須逐支驗證，也不能擴及既有 HA 變更。
+- 六支的管理面板（`homeassistant_api`：n8n 自 0.1.0、其他自 0.1.1 起）已在測試 HA 以 owner 實測 Ingress、後端設定與 token；
+  一般使用者一律 403（0.1.1–0.1.5 每版實測）。0.1.1→0.1.5 升版已在測試 HA 對每支實測；還原只在 n8n 實測過，
+  其他產品的還原仍須逐支驗證，也不能擴及既有 HA 變更。
 
 ## Migration 與 rollback
 

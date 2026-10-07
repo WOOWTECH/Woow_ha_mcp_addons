@@ -6,13 +6,13 @@
 
 ## 管理 process 的 token 界線
 
-所有七個 fixed bootstrap command 最後 exec `packaging/management_launcher.py`。
+每個 fixed bootstrap command（商店六支，以及封存的 Odoo Manage 原始碼）最後 exec `packaging/management_launcher.py`。
 它在 **final exec 之後、任何 core/app import/child 之前**設定並讀回
 `PR_SET_DUMPABLE=0`、`RLIMIT_CORE=(0,0)`、`no_new_privs=1`。任何失敗停止。
-然後只以 `runpy` 執行固定 n8n script／其他六類 core module；**不能改成再次 exec**，
+然後只以 `runpy` 執行固定 n8n script／其他各支 core module；**不能改成再次 exec**，
 否則 exec 可重設 dumpability。保持 uid/gid10001、無 extra caps、protection/AppArmor。
 
-只有 n8n 管理端保留 runtime `SUPERVISOR_TOKEN`；六類不接收，child 仍必須使用
+各支管理端都保留 runtime `SUPERVISOR_TOKEN`（0.1.0 只有 n8n；0.1.1 起全部，負責人 2026-10-05 核准）；child 一律不接收，必須使用
 allowlisted env。Linux 測試用虛構 token、真正 bootstrap/drop/exec 與同 UID child，
 確認 `/proc/<parent>/environ`、`/proc/<parent>/mem`、`process_vm_readv` 都拒絕；
 unguarded control 能讀到虛構 procfs token。這不是 HA AppArmor 實測，也不防 root /
@@ -22,7 +22,7 @@ machine token 不入 state/argv/client/log/child；這不是 image／HA 實測�
 
 ## Write denial 的正確證據
 
-七类都有 schema-valid supported write fixture：n8n delete、OpenDesign delete UUID、
+七類（商店六支＋封存的 Odoo Manage 原始碼）都有 schema-valid supported write fixture：n8n delete、OpenDesign delete UUID、
 Odoo chatter、Manage create_record、Hermes skill:disable、EMQX kick、LiteLLM team create。
 HTTP403 **且 backend counter delta=0** 才通過，未知／畸形參數分開。
 Mutation test 僅移除 dispatch whole-tool/operation grant 檢查，保留 schema、list filter、
@@ -57,11 +57,17 @@ CI image jobs 與 protected `public-release` job 都執行以下流程：
    產生 Syft JSON 與 SPDX 2.3。驗 imageID、scope、非空 files/packages、必要 package types。
    掃描器的 catalog 能力不是「每個檔案都有可判定 license」保證。
 7. Grype 掃該 Syft SBOM；required schema6 DB checksum/build timestamp 與 120 小時 freshness。
-   DB 無法取得／過舊／scanner error 都停止。High/Critical/Unknown severity、未知 severity
-   拒絕，**不忽略 unfixed CVE**；Low/Medium/Negligible 仍記錄計數並交人工 image review。
-   每一 package 的 license 必須非空且逐項符合 `supply-chain-policy.json` 明確 allowlist；
-   NOASSERTION、未知、自訂/複合 expression 不猜測，全部拒絕。此保守初始 policy 很可能
-   拒絕 Debian image 中尚未審的 licenses；必須審核後明確改 policy，不可忽略或假成功。
+   DB 無法取得／過舊／scanner error 都停止。未知 severity 拒絕；High/Critical/Unknown 的 match 一律擋，
+   唯一例外是 Grype 的 `fix.state` 正好是 `not-fixed` 或 `wont-fix`（上游明確標示尚無修補或不修）：仍完整記在掃描證據，
+   但不擋（`unfixed_vulnerabilities: exclude`）；`fixed`、缺少、`unknown` 或其他狀態照擋。
+   Low/Medium/Negligible 仍記錄計數並交人工 image review。
+   每一 package 的 license 必須非空並符合 `supply-chain-policy.json` 的 allowlist；NOASSERTION、未知、
+   自訂或複合 expression 不猜測，一律拒絕。例外只有政策檔明列的幾項：Debian main 的 deb 套件授權不擋
+   （`debian_main_licenses: accept`）；純 `A OR B` 表達式只要任一選項在 allowlist 就過
+   （`or_expressions: accept-if-any-allowed`；含 AND、WITH 等其他寫法照擋）；另有逐版本釘定的套件授權與 binary 授權對照。
+   這些是負責人 2026-10-05 的決定，原文在政策檔的 `decision` 欄位，0.1.0–0.1.5 都用這份政策
+   （實作見 `packaging/supply_chain.py` 的 `license_allowed` 與漏洞檢查）。再改政策也要經負責人決定並寫進
+   `decision`，不可忽略或假成功。
 8. SBOM 本身再過 secret gate。只有 sanitized scan summary、完整 SBOM、source commit /
    imageID / diffIDs / archive hash、evidence hashes 與 unsigned provenance 可以離開私有
    暫存區；raw reports 自動刪除、不上傳。缺失／subject/hash/policy/tools 不符全部拒絕。
@@ -86,6 +92,6 @@ manifest digest**，連結相同 SBOM/summary hashes。原 candidate provenance 
 **不是可自行生成 JSON 的密碼學可信性，也不宣稱任何 SLSA level**。無 id-token 權限。
 
 本地測試的 synthetic evidence／mock registry 只驗 negative gates；不能當 scanner、
-真實 Docker layers/push/digest 或 HA 成功。Docker build、完整七 image gates、Grype 對
-真正 image SBOM、registry anonymous pull/digest 對應、HA AppArmor/Ingress/provider 整合
-都要在有權限的隔離環境另跑，並經規格與新的安全審查。
+真實 Docker layers/push/digest 或 HA 成功。Docker build、完整 image gates、Grype 對
+真正 image SBOM、registry anonymous pull/digest 對應已在私有 builder 對每版另跑（0.1.5 六支見 [發佈紀錄](release-decision-0.1.5.md)）；
+HA Ingress／provider 整合已在測試 HA 實測（[ha-test-0.1.5](ha-test-0.1.5.md) 等），HA AppArmor 下的 procfs／memory 拒絕未單獨實測。

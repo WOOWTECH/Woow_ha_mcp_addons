@@ -1,13 +1,14 @@
 # n8n 試點：逐步指令（公開 repo＋公開映像）
 
-**狀態：指令準備。** 2026-10-05 專案負責人決定公開 repo 與 GHCR 映像，試點改走 HA 商店安裝，不再需要
+**狀態：2026-10-05 n8n 試點已依本文執行；之後其他支也以同樣方式從商店安裝（slug 換成 `_woow_mcp_<product>`），
+現況見 [0.1.5 回歸紀錄](ha-test-0.1.5.md)。** 2026-10-05 專案負責人決定公開 repo 與 GHCR 映像，試點改走 HA 商店安裝，不再需要
 私有 registry 與權杖（舊的私有路線見 [私有映像交付設計](n8n-pilot-image-delivery.md)，已停用）。
 每個 H 步驟仍要先取得負責人對「那一步」的批准。`ha` 指令在試點 HA 的 SSH add-on 內執行。
 
 ## 0. 前提
 
-- 七個映像 `ghcr.io/woowtech/amd64-mcp-<product>:0.1.0` 已公開，且匿名 manifest digest 與 supply-chain
-  gate 證據一致（`packaging/registry_gate.py public <product> <evidence>`）。
+- 要安裝版本的映像 `ghcr.io/woowtech/amd64-mcp-<product>:<version>`（試點時是七支 0.1.0；目前是六支 0.1.5）已公開，
+  且匿名 manifest digest 與 supply-chain gate 證據一致（`packaging/registry_gate.py public <product> <evidence>`）。
 - repo `https://github.com/WOOWTECH/Woow_ha_mcp_addons` 已公開。
 - P7 唯讀檢查在試點當天重跑（版本、無同名 app、8081 未佔用）；近期完整備份存在。
 - n8n API key 由管理員在 n8n 介面建立（Settings → n8n API），試點時直接填進本 add-on 的設定頁，不經對話。
@@ -20,7 +21,10 @@ ha store reload
 ha store --raw-json | jq -r '.data.repositories[] | select(.url | test("Woow_ha_mcp_addons")) | "\(.slug) \(.url)"'
 ```
 
-分支整合到 `main` 之後改用不帶 `#branch` 的網址。回復：`ha store delete <repository slug>`。
+已安裝者維持這個網址：Supervisor 以網址決定 repository slug（這個網址是 `1ee8889c`），換網址（例如拿掉 `#claude-delivery`
+會變成 `f1d622e7`）就換 slug，已安裝的 app 不會原地更新；要改網址需另做資料遷移計畫（見[更新、備份與回復](update-backup-rollback.md)）。
+2026-10-07 時 GitHub 預設分支是 `claude-delivery`；`main` 仍停在 0.1.0 之前的 B3 checkpoint `34f06d8`，不要用 `#main`。
+回復：`ha store delete <repository slug>`。
 
 ## 2. H2 安裝與啟動 n8n add-on（HA，需批准）
 

@@ -39,7 +39,7 @@ opendesign `94d6869f…`／`ab630fa6…`、emqx `537a3028…`／`08b36ab9…`、
 - #2 non-admin：**PASS**，臨時一般使用者對六支面板、`api/bootstrap`、`api/token/reveal`、`PUT api/backend` 全部 403，owner 200，沒有
   cookie 401；使用者已刪、兩邊的 refresh token 已撤銷。
 - 未過的讀取與 0.1.4 相同：n8n `n8n_manage_folders`（n8n 2.12 沒有資料夾 API）；Odoo `list_models`、`schema_catalog`（測試帳號是最小
-  權限、讀不到 `ir.model`，回 `BACKEND_RPC_FAULT`）。
+  權限、讀不到 `ir.model`，回 `BACKEND_RPC_FAULT`）。（2026-10-07 補註：「最小權限」只指這一點，見文末。）
 - Odoo 依負責人決定 B 暫時把 Odoo MCP 容器 IP/32 加進 Woow Odoo `lan_networks`（10:32:57Z 重啟），測完改回原值並重啟（10:40:39Z），
   改回後 MCP 容器的連線被斷開（已確認恢復封鎖）。
 
@@ -61,3 +61,12 @@ opendesign `94d6869f…`／`ab630fa6…`、emqx `537a3028…`／`08b36ab9…`、
 ## 未測
 
 - LAN client（需區網內機器）、LiteLLM 工具（沒有後端）、aarch64。
+
+## 補註（2026-10-07）：Odoo 測試帳號不是全面最小權限
+
+本頁與 0.1.1–0.1.4 紀錄說的「最小權限」只指讀不到 `ir.model`。2026-10-07 唯讀查核：同一個測試帳號對 `res.partner` 模型有讀、寫、建、刪權，
+對真實聯絡人的 write／unlink 存取檢查也通過；Odoo 在聯絡人上發 chatter 需要對該紀錄有寫權，這個帳號也有。上面的回歸都沒有開寫入
+（工具預設唯讀、寫入要逐工具授權），所以不受影響；但只要對 Odoo 開寫入，模型選錯 id 就可能寫到真實客戶。
+因此任何 Odoo 寫入測試都有硬性前提：先加一條只允許寫測試專用聯絡人的暫時 record rule（掛在只含測試帳號的群組），確認對真實聯絡人的
+寫入會被拒、其他群組沒有更寬的規則（Odoo 的群組規則以 OR 合併），之後才開寫入授權（e2e 計畫 D12）。
+原始紀錄在 Claude 交付線 `e2e/M1a-20261007T0902Z/A3-1-odoo.txt`（不在 repo）。

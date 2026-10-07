@@ -1,7 +1,7 @@
 # P9 工具：在 HA 實機上量測一個 MCP app
 
 `packaging/ha_p9_driver.mjs`（操作端，Node ≥ 22）＋`packaging/ha_p9_probe.py`（HA 主機端，只用 python3 標準庫）。
-對象是**一個**已安裝的本專案 app；不碰其他 app、Core、Supervisor。2026-10-05 已在 n8n app 實跑。
+對象是**一個**已安裝的本專案 app；不碰其他 app、Core、Supervisor。2026-10-05 先在 n8n app 實跑，之後用於 0.1.1–0.1.5 各支的 HA 回歸（`ha-test-0.1.*.md`）。
 
 ## 前提
 
@@ -27,9 +27,9 @@ driver 以 HA 登入流程取得管理員 token → WebSocket `supervisor/api` �
 | `childkill` | 在 app 容器內 SIGKILL management launcher 的子程序，量恢復時間；容器不應重啟 | 中斷這個 app 的 MCP 連線數秒 |
 | `bench` | initialize×5、tools/list×50、`PROBE_TOOL`×50 的 p50／p95 | 無（只用唯讀工具） |
 | `cycle` | 25 次 initialize＋DELETE，確認 session 名額有釋放 | 無 |
-| `--backend-file F` | 用 0600 JSON（n8n `{"url","key"}`；其他六支 `{"connection":{...}}`）填面板後端，內容不印 | 改這個 app 的後端設定、重啟它的 MCP child |
+| `--backend-file F` | 用 0600 JSON（n8n `{"url","key"}`；其他各支 `{"connection":{...}}`）填面板後端，內容不印 | 改這個 app 的後端設定、重啟它的 MCP child |
 | `--plan P` | 依清單呼叫工具：reads 必須成功（HTTP 200、非 isError、無 `success:false`）；denials 必須 HTTP 403 | 無（防護失效時見下方說明） |
-| `--outage-url U` | 搭配前兩者：後端所有網址欄位（`url`、`gateway_url`、`dashboard_url`…）換成不通的 U，每個 read 都須回 HTTP 200（本機工具照常、後端工具回結構化錯誤），且至少一個 read 回結構化錯誤（只有加 `--outage-refusal` 的產品——每個連線階段都要先連後端的 Odoo Manage——可改以「0.1.2 gateway 在初始化就回 503 `BACKEND_UNAVAILABLE` 且不帶 session id」為準，此時只檢查拒絕）；改回原設定後清單須再次全過 | 暫時改這個 app 的後端設定 |
+| `--outage-url U` | 搭配前兩者：後端所有網址欄位（`url`、`gateway_url`、`dashboard_url`…）換成不通的 U，每個 read 都須回 HTTP 200（本機工具照常、後端工具回結構化錯誤），且至少一個 read 回結構化錯誤（只有加 `--outage-refusal` 的產品——每個連線階段都要先連後端的 Odoo Manage（已下架）——可改以「0.1.2 gateway 在初始化就回 503 `BACKEND_UNAVAILABLE` 且不帶 session id」為準，此時只檢查拒絕）；改回原設定後清單須再次全過 | 暫時改這個 app 的後端設定 |
 
 probe 開的每個 session 都會 DELETE，不吃掉 app 的共用 session 名額（n8n 為 20 個、閒置 10 分鐘回收）。
 
