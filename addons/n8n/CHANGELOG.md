@@ -29,6 +29,10 @@
   原本分支內的欄位順序隨行程改變，現在宣告的 schema 每次都逐位元組相同。其他工具的 schema 頂層本來就沒有這些
   關鍵字，內容不變；管理面板 bootstrap 顯示的仍是原本用來驗證的 schema。
 - 映像 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.6` 尚未建置；0.1.0–0.1.5 tag 不覆寫。
+- 已知問題（延到 0.1.7）：
+  - 被 policy 拒絕的 tools/call 仍回 HTTP 403（0.1.5 發佈候選審查 F7；上面 R2 的修正只涵蓋被拒的 initialize）。Python MCP SDK
+    1.x client 收到這個 403 會整段斷線、不送 DELETE，子程序的 session 就留下來。所有 client 共用 20 個 session，10 分鐘內約
+    20 次這種拒絕就會用完，之後所有 client 的 initialize 都回 429，要等閒置 10 分鐘的 session 被回收。
 
 ## 0.1.5 — 2026-10-06 公開（experimental）
 

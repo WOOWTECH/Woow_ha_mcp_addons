@@ -9,7 +9,8 @@ unknown／未審工具即使開啟寫入仍拒絕。六支都有有界 writers�
 仍不是完整 writer parity；107 個暫不支援是明列內部工作，不假稱全部完成。
 
 **映像已發佈，0.1.1–0.1.5 已在測試 HA 回歸（[0.1.5 紀錄](ha-test-0.1.5.md)）。** 六支都批准
-`homeassistant_api: true`（n8n 自 0.1.0、其他自 0.1.1 起）；正式 fixed-WS provider 已實作並經審查。
+`homeassistant_api: true`（n8n 自 0.1.0、其他自 0.1.1 起，負責人 2026-10-05 核准）；正式 fixed-WS provider 已實作並經審查，
+六支共用同一個驗證器（n8n 經 `apps/n8n/run.py`、其他五支經 `run_product.py`），下方的 Core 版本清單六支一體適用。
 管理 HTML/assets/API 與 UI 已串接：真 HA 上已實測 owner 經 Ingress 的後端設定與 token reveal/rotate/revoke（管理 API），
 一般使用者 403；瀏覽器 UI 只在本地 Chromium（真 Core + fake HA transport）測過。
 不要直接修改 state、搬入 test verifier 或映射8099 LAN。
@@ -30,6 +31,11 @@ Ingress session，亦不保證已在執行的跨系統操作能原子撤銷。pr
 SPEC＋安全審，範圍只有這兩段程式，不含映像、HA 或發佈（[0.1.1 發佈紀錄](release-decision-0.1.1.md)）。
 映像與真實 admin/non-admin 驗收對應 `RELEASE-GATES.json` 的 `products.<app>.image`／`ha`：測試 HA 已實測
 owner／non-admin（0.1.1–0.1.5），但這些 gates 和其他人工 gates 一樣仍全部 false。
+
+**支援的 Core 版本**：六支的管理面板只在該版 add-on 審查過的 HA Core 版本運作（`ha_role._HA_VERSIONS`；0.1.6：2026.7.2–2026.9.4
+與 2026.10.0，0.1.5 及更早只有 2026.7.2；審查紀錄見 [ha-role-core-contract](../ha-role-core-contract.md)）。其他版本（含之後的 patch
+與 beta）整個管理面板都回 403，看起來和「不是管理員」完全一樣（add-on 紀錄也沒有訊息）；MCP 端點（Bearer token）不受影響。
+新的 Core 版本要等 add-on 發新版才支援，升級 Core 前請先對照這份清單。
 
 ## 批准後的安裝檢查表（不是現在的操作授權）
 

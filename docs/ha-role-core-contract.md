@@ -87,5 +87,15 @@ and for the adjacent `http/const.py`, `http/__init__.py`, `hassio/const.py` and 
 1. Fetch the GitHub tree of the new tag and compare the blob SHAs of the files above with the last reviewed tag.
 2. For every changed file, review the diff line by line for the consumed contract (a hash comparison alone is not
    enough: 2026.10.0 moves Core's schemas from voluptuous to probatio, which changes most of these files).
-3. Add the version to `_HA_VERSIONS`, to `test_the_reviewed_versions_are_exactly_these`, and a row to this table.
+3. Add the version to `_HA_VERSIONS` and add a column for it to the table above (files are rows, versions are columns);
+   note under the table what changed, and update the heading of that review section.
+4. In the same change, update every other place that spells out the reviewed versions:
+   - the comment above `_HA_VERSIONS` in `ha_role.py`;
+   - `tests/test_ha_role.py`: add the version to `test_the_reviewed_versions_are_exactly_these` and remove it from
+     `NEAR_MISSES` (the list holds, for example, `2026.10.1`; the near-miss tests fail until it is removed);
+   - the version-list sentence in [n8n-ha-role.md](n8n-ha-role.md) ("Compatibility is deliberately restricted to …");
+   - the new release's section of all six `addons/*/CHANGELOG.md`, naming the added version;
+   - the supported-version note in the six `addons/*/DOCS.md`, `README.md` and `docs/operations/guide.md`.
+5. Ship it in a new add-on release: an installed add-on accepts only the versions listed in its own image.
+
 Any version not listed, including pre-releases, later patch releases and differently formatted strings, is refused.

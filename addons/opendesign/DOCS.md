@@ -8,6 +8,10 @@
 system-admin 才放行；token 只給管理程序，child 不繼承。此 token 具**廣泛 Core 管理能力**，負責人已知情核准。
 不得注入 test verifier 或直接編輯 state 解鎖；`panel_admin` 不是角色授權。
 
+**支援的 Core 版本**：管理面板只在本版審查過的 HA Core 版本運作（0.1.6：2026.7.2–2026.9.4 與 2026.10.0）。
+其他版本（含之後的 patch 與 beta）整個管理面板都回 403，看起來和「不是管理員」完全一樣（add-on 紀錄也沒有訊息）；
+MCP 端點（Bearer token）不受影響。新的 Core 版本要等 add-on 發新版才支援，升級 Core 前請先對照這份清單。
+
 本產品 runtime：**vendored SDK MCP 1.28.1**。完整來源 15 tools，局部支援 11，
 暫不支援 4；全部產品合計見[工具表](../../docs/tool-surface.md)，**不是 full functional parity**。
 十個有界 reads（含 run metadata）；delete_project 需明確啟用且 canonical UUID；其餘四個工具 deny。
@@ -32,6 +36,7 @@ system-admin 才放行；token 只給管理程序，child 不繼承。此 token 
 - `8099`：Ingress-only，無主機 mapping；不是 MCP endpoint。
 - `8081/mcp`：Bearer Streamable HTTP；`8081/tcp: null` 預設不公開 LAN mapping。
 - `3000`：child loopback-only，永不暴露。各容器內部 ports 可相同，LAN host ports 必須各異。
+- Session：client 用完要送 `DELETE /mcp`（帶 `Mcp-Session-Id`）。子程序沒有閒置回收，沒結束的 session 會留到 MCP child 重啟（含 Add-on 重啟）；詳見 [client 文件](../../docs/operations/clients.md)。
 - 使用實際安裝後 DNS placeholder，不能猜 repository hash 或從 iframe origin 推導。
   [client 範例](../../docs/operations/clients.md) 不含真實秘密。
 

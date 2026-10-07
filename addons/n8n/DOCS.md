@@ -9,6 +9,10 @@
 真 HA 上管理員 Ingress 與 token 操作已通過（見上）；整合獨立規格及新安全審查仍待完成。
 不得注入 test verifier 或直接編輯 state 解鎖；`panel_admin` 不是角色授權。
 
+**支援的 Core 版本**：管理面板只在本版審查過的 HA Core 版本運作（0.1.6：2026.7.2–2026.9.4 與 2026.10.0）。
+其他版本（含之後的 patch 與 beta）整個管理面板都回 403，看起來和「不是管理員」完全一樣（add-on 紀錄也沒有訊息）；
+MCP 端點（Bearer token）不受影響。新的 Core 版本要等 add-on 發新版才支援，升級 Core 前請先對照這份清單。
+
 此 token 授予**廣泛 Core 管理能力**（使用者管理、可能透過服務間接影響
 Supervisor／host），不是可強制的唯讀角色權限。批准不授權所有 HA 變更，亦不
 允許修改／重啟既有 HA／後端。hassio_api/auth_api 保持 false，role 省略／預設，
@@ -24,7 +28,7 @@ protection mode 保持 on，無新增 host mounts、Docker socket 或 capabiliti
 
 本產品 runtime：**n8n-mcp 2.91.0 / Node 22.23.2**。完整來源 28 tools，局部支援 13，
 暫不支援 15；全部產品合計見[工具表](../../docs/tool-surface.md)，**不是 full functional parity**。
-文件/search/get_node、workflow list/minimal read、folder list/create/rename，加上 local validate_node/validate_workflow（manualTrigger/noOp 空參數圖）。`n8n_create_workflow` 僅建立2..20節點 inactive draft，不允許 code/URL/credentials/settings/activation；必須 exact grant，legacy global 不授權。delete_workflow 与 folder writes 權限不變。
+文件/search/get_node、workflow list/minimal read、folder list/create/rename，加上 local validate_node/validate_workflow（manualTrigger/noOp 空參數圖）。`n8n_create_workflow` 僅建立2..20節點 inactive draft，不允許 code/URL/credentials/settings/activation；必須 exact grant，legacy global 不授權。delete_workflow 與 folder writes 權限不變。
 B3 新增 tags catalog（只掃第一頁最多250、本地query/limit）、executions list metadata（API includeData=false、最多100）、health status（服務availability，不證明APIkey權限），以及 folder get（明確非personal project/folder IDs、無workflow內容）。新API及get缺URL或key均在child send前拒絕；unconfigured本機docs/search/validators仍啟動。health不讀npm/official-MCP/settings、不回URL/config/env/metrics/version；既有credential health monitor不變。B3待獨立SPEC→NEW SECURITY。
 逐名 schema／預設／operation／啟用限制／deferred reason 以
 [工具對照](../../docs/tool-surface.md) 與 [machine manifest](../../docs/tool-surface.json)
@@ -47,7 +51,7 @@ B3 新增 tags catalog（只掃第一頁最多250、本地query/limit）、execu
 - `8099`：Ingress-only，無主機 mapping；不是 MCP endpoint。
 - `8081/mcp`：Bearer Streamable HTTP；`8081/tcp: null` 預設不公開 LAN mapping。
 - `3000`：child loopback-only，永不暴露。各容器內部 ports 可相同，LAN host ports 必須各異。
-- Session：所有 client **共用 20 個**同時 session，閒置 10 分鐘回收。client 用完要送 `DELETE /mcp`（帶 `Mcp-Session-Id`），額滿時 initialize 回 429「Session limit reached」。MCP child 重啟（含 Add-on 重啟）後舊 session 失效，client 需重新 initialize；token 不變。
+- Session：所有 client **共用 20 個**同時 session，閒置 10 分鐘回收。client 用完要送 `DELETE /mcp`（帶 `Mcp-Session-Id`）。額滿時 initialize 回 HTTP 429，body 是 JSON-RPC 錯誤 -32000「Too Many Requests」（0.1.4 起 gateway 不轉送子程序的錯誤原文，看不到「Session limit reached」）。被 policy 拒絕的 tools/call 也可能耗盡名額：Python MCP SDK 1.x client 收到 403 會整段斷線、不送 DELETE，每次留下一個 session（見 [CHANGELOG](CHANGELOG.md) 0.1.6 已知問題）。MCP child 重啟（含 Add-on 重啟）後舊 session 失效，client 需重新 initialize；token 不變。
 - 使用實際安裝後 DNS placeholder，不能猜 repository hash 或從 iframe origin 推導。
   [client 範例](../../docs/operations/clients.md) 不含真實秘密。
 

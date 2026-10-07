@@ -2,9 +2,9 @@
 
 ## Status and authority
 
-The broad Core-administrator capability exception is **approved for the new n8n pilot only** (2026-10-03 upstream decision). The real verifier is implemented and wired into `apps/n8n/run.py`. Local protocol/executable tests are not HA acceptance. **No live HA test, installation or deployment has occurred in this work.** The bounded provider component passed specification/security review; the combined UI/packaging integration still requires independent specification and new security review.
+**Current state (0.1.6).** The broad Core-administrator capability exception was first approved for the n8n pilot only (2026-10-03 upstream decision; n8n ships it since 0.1.0); since 2026-10-05 the owner has approved it for all six store products (odoo, hermes, opendesign, emqx and litellm from 0.1.1). All six use the same verifier, `make_ha_admin_verifier()` in `ha_role.py`: n8n wires it in `apps/n8n/run.py`, the other five in `mcp_admin_core/run_product.py` (`tests/test_ha_role.py` asserts the shared factory). The reviewed Core list `_HA_VERSIONS` below therefore applies to all six management panels. The local integration (n8n only at the time) passed a bounded specification/security review on 2026-10-03; in 0.1.1 the provider wiring and the token hand-off passed an independent specification and security review that did not cover images, HA or publication. Every release 0.1.1–0.1.5 was regressed on the test HA (Core 2026.7.2): owner allowed, non-administrator 403. Post-login demotion and the browser UI were verified only locally; local protocol/executable tests are not HA acceptance.
 
-The n8n manifest enables the approved `homeassistant_api: true`; no sibling permission was added. Keep `hassio_api: false`, `auth_api: false`, default Supervisor role and protection mode, with no new host mounts/capabilities. The other six executables still have no role provider and fail closed for management; this approval grants them no privileges.
+All six manifests enable the approved `homeassistant_api: true`; no sibling permission was added. Keep `hassio_api: false`, `auth_api: false`, default Supervisor role and protection mode, with no new host mounts/capabilities. The archived Odoo Manage (last release 0.1.4) used the same verifier; it is no longer built or published.
 
 **The token is not read-only.** The Supervisor Core proxy authenticates as a privileged Core system user. A stolen machine token can exercise broad Core administrator APIs, including potential indirect Supervisor/host service effects. Restricting this implementation to a single query does not reduce that credential's underlying authority.
 
@@ -62,7 +62,7 @@ A role lookup and an Add-on commit are not a distributed transaction. Demotion c
 
 **HA logout is not identical to role revocation.** Ingress forwards a user ID, not the browser's originating refresh-token/session ID. An independently valid Ingress cookie may outlive revocation/logout of one browser token while the user remains active/admin. This verifier cannot detect that event and does not claim immediate browser-session logout invalidation. Session-bound enforcement would require separately approved architecture.
 
-Plain internal WS, the Supervisor/Ingress trust boundary, upstream HA logging and same-security-domain process compromise remain deployment risks. Suppressing this client's logs is not a claim about all HA logs. Live administrator/nonadministrator Ingress, demotion/disable/deletion, machine-capability revocation and client acceptance still require an explicitly approved disposable HA pilot.
+Plain internal WS, the Supervisor/Ingress trust boundary, upstream HA logging and same-security-domain process compromise remain deployment risks. Suppressing this client's logs is not a claim about all HA logs. Live administrator/nonadministrator Ingress has been tested on the test HA (0.1.1–0.1.5, Core 2026.7.2 only); live demotion/disable/deletion, machine-capability revocation and client acceptance still require an explicitly approved disposable HA pilot.
 
 ## Local verification
 

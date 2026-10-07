@@ -29,6 +29,12 @@
   只違反分支規則的呼叫（例如 action=enable 沒帶 name）照樣回 403、不會送到子程序。其他工具的 schema 頂層本來就沒有
   這些關鍵字，內容不變；管理面板 bootstrap 顯示的仍是原本用來驗證的 schema。
 - 映像 `ghcr.io/woowtech/amd64-mcp-hermes:0.1.6` 尚未建置；0.1.0–0.1.5 tag 不覆寫。
+- 已知問題（延到 0.1.7）：
+  - 被 policy 拒絕的 tools/call 仍回 HTTP 403（0.1.5 發佈候選審查 F7；上面 R2 的修正只涵蓋被拒的 initialize）。Python MCP SDK
+    1.x client 收到這個 403 會整段斷線、不送 DELETE，每次在子程序留下一個 session，一直留到子程序重啟（見下一項）。
+  - 子程序沒有閒置回收：一般 session 也只在 client 送 `DELETE /mcp` 或子程序重啟（含 Add-on 重啟）時結束，client 當掉、斷線或
+    結束時沒送 DELETE，session 就一直留著、佔用記憶體。沒帶 `Mcp-Session-Id` 的 initialize 以外請求（例如 ping、tools/list、
+    GET、DELETE）也會讓子程序開一個新 session 並留下來。client 用完請送 `DELETE /mcp`（帶 `Mcp-Session-Id`）。
 
 ## 0.1.5 — 2026-10-06 公開（experimental）
 

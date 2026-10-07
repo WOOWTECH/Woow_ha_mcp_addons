@@ -8,6 +8,10 @@
 system-admin 才放行；token 只給管理程序，child 不繼承。此 token 具**廣泛 Core 管理能力**，負責人已知情核准。
 不得注入 test verifier 或直接編輯 state 解鎖；`panel_admin` 不是角色授權。
 
+**支援的 Core 版本**：管理面板只在本版審查過的 HA Core 版本運作（0.1.6：2026.7.2–2026.9.4 與 2026.10.0）。
+其他版本（含之後的 patch 與 beta）整個管理面板都回 403，看起來和「不是管理員」完全一樣（add-on 紀錄也沒有訊息）；
+MCP 端點（Bearer token）不受影響。新的 Core 版本要等 add-on 發新版才支援，升級 Core 前請先對照這份清單。
+
 本產品 runtime：**odoo-mcp 1.1.0**。完整來源 41 tools，局部支援 13，
 暫不支援 28；全部產品合計見[工具表](../../docs/tool-surface.md)，**不是 full functional parity**。
 health/model list、res.partner 指定欄位 read/search/fields，及 exact-grant chatter preview+confirm；B1 增加 build_domain、generate_json2_payload、diagnose_odoo_call 純 preview（不執行 payload），以及按 active 分組的 id:count aggregate_records。有界輸出不含 ORM domain/context；不開放任意 model/method。
@@ -32,6 +36,7 @@ B2 增加 schema_catalog（固定 res.partner、limit1、兩個 metadata cache k
 - `8099`：Ingress-only，無主機 mapping；不是 MCP endpoint。
 - `8081/mcp`：Bearer Streamable HTTP；`8081/tcp: null` 預設不公開 LAN mapping。
 - `3000`：child loopback-only，永不暴露。各容器內部 ports 可相同，LAN host ports 必須各異。
+- Session：client 用完要送 `DELETE /mcp`（帶 `Mcp-Session-Id`）。子程序沒有閒置回收，沒結束的 session 會留到 MCP child 重啟（含 Add-on 重啟）；詳見 [client 文件](../../docs/operations/clients.md)。
 - 同一台 HA 的 Woow Odoo 18 add-on：它的 8069 只放行 `lan_networks` 來源，HA add-on 網路（172.30.32.0/23）固定排除，所以從本 Add-on 用內部主機名或主機 LAN IP 連線都會被直接斷線；只有 Host 等於它 `public_url` 主機名的請求進入 public 層（只擋 db service）。本版連線固定目的主機、不能改 Host，可行做法是讓 `public_url` 網域可解析並經 tunnel 連入，backend url 填 `https://<public host>`。2026-10-06 已在測試 HA 以這個做法實測（Cloudflare tunnel 新增對外網址，`public_url` 改成同一個網址）：讀取、拒絕、斷線與 readiness 都和內部放行時相同，不必改 `lan_networks`。Cloudflare 的瀏覽器完整性檢查會擋 `Python-urllib` User-Agent；本 Add-on 用的 XML-RPC 不受影響。**不要**把 172.30.x 加進 Odoo 的 `lan_networks`：那會讓同網路的 tunnel 取得 LAN 層權限（含資料庫管理）。
 - 使用實際安裝後 DNS placeholder，不能猜 repository hash 或從 iframe origin 推導。
   [client 範例](../../docs/operations/clients.md) 不含真實秘密。
