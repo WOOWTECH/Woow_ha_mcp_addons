@@ -276,5 +276,81 @@
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/models.py",
     "upstream_sha256": "0d247d845738f37d2673fd0e50203cc8c4f3c4cf6a2d3b10db7bd2a0b9740801"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/1f94258bbfaa92f2693c60e7905c86ef2efb711a",
+    "path": "nextcloud_mcp_server/__init__.py",
+    "upstream_sha256": "2f6d96255502d9d54b61780e1206faedab975256f07ad2348612aff963b94073"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/1f94258bbfaa92f2693c60e7905c86ef2efb711a",
+    "path": "nextcloud_mcp_server/server.py",
+    "upstream_sha256": "e76f1088e9de6cba12a90f861e5a955ccd4e2534defeeb6256b6286955f3916d",
+    "local_sha256": "7a4ad255e3fc4f882f77fd07370be1f852f25bf8eec00e1b1ee0f25a76312f6d",
+    "modification": "WOOW HA add-on: register the private tool woow_backend_probe (calls client.probe()) after the nine tools. It is not in tools.ALL_TOOLS, so READONLY/ALLOW_DELETE/DISABLED_TOOLS never remove it and DISABLED_TOOLS cannot name it; the gateway never lists or authorizes it (not in TOOLS), as for the Odoo add-on's probe. on_duplicate='error' fails start-up if the name is taken."
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/1f94258bbfaa92f2693c60e7905c86ef2efb711a",
+    "path": "nextcloud_mcp_server/settings.py",
+    "upstream_sha256": "4f4160d873a374f16847b2afabdc32caa7780fa3bd5cc8425142926f0f56a79b"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/1f94258bbfaa92f2693c60e7905c86ef2efb711a",
+    "path": "nextcloud_mcp_server/client.py",
+    "upstream_sha256": "aff1a554ee7e9635bfa40da1d01517d4d54408091105173989f7c39a359fd782",
+    "local_sha256": "6022b7b961a596aa4787a46996d4dae3258d5845d60129d0acc666c71e84aac9",
+    "modification": "WOOW HA add-on: (1) http(): do not pass follow_redirects, trust_env, transport or verify to backend_policy.async_client, which sets the first two itself (v0.1.0 raised TypeError on every call) and owns the transport (TLS always verified). (2) send(): any failure, not only httpx's, goes through errors.backend_error(); redirect and unexpected-status texts are fixed (no Location target, the error body and its Sabre message are never read); a failed response close is logged by type and does not replace the answer or the original error. (3) _fetch_user_id(): its own messages start with BACKEND_HTTP_ERROR status=N / BACKEND_INVALID_RESPONSE. (4) probe(): the gateway HealthMonitor's private readiness probe: one OCS GET cloud/user on a fresh client (never the tools' connections or the cached user id), closed afterwards, answering only {ok, user_id}."
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/1f94258bbfaa92f2693c60e7905c86ef2efb711a",
+    "path": "nextcloud_mcp_server/errors.py",
+    "upstream_sha256": "609f816f1b747a52dea2e56fa5cfeb973b8df33f95b59c40bde4fa30dc400194",
+    "local_sha256": "7ab82e3d7cfde2cb90e5b714f4b1962f5d9cb463f5a105e87e55f23011229545",
+    "modification": "WOOW HA add-on: import the gateway's backend_policy unconditionally (BackendHTTPError, public_backend_error; the child cannot run without it) and add backend_error(): every failed exchange becomes its public_backend_error() code; a non-2xx status (backend_policy never reads that body) becomes NextcloudHTTPError carrying the status, so the tools' 404/412 handling keeps working, with this module's fixed explanation (caller label only). Existing messages unchanged."
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/1f94258bbfaa92f2693c60e7905c86ef2efb711a",
+    "path": "nextcloud_mcp_server/paths.py",
+    "upstream_sha256": "e4eddd67c7339acf61d60fead9e78a2f6c0ade0d1c6bf96581a4387ab6b50b62"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/1f94258bbfaa92f2693c60e7905c86ef2efb711a",
+    "path": "nextcloud_mcp_server/webdav.py",
+    "upstream_sha256": "c806ef4fe7b1f4d4b9c6539699ef8be9e8970630066aa1af1a0f9ff2329b453a",
+    "local_sha256": "51ab5176021921186cd847fcc54cd787b73b1e0fc6b14f570b510a418aae8c44",
+    "modification": "WOOW HA add-on: the two unparseable-answer messages (invalid WebDAV XML, not a multistatus) start with BACKEND_INVALID_RESPONSE; texts otherwise unchanged."
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/1f94258bbfaa92f2693c60e7905c86ef2efb711a",
+    "path": "nextcloud_mcp_server/caldav.py",
+    "upstream_sha256": "62c0b669f1437cc7e3bd934dc34c61dab931e1af635b8a39351124b10fa6b213"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/1f94258bbfaa92f2693c60e7905c86ef2efb711a",
+    "path": "nextcloud_mcp_server/ical.py",
+    "upstream_sha256": "11fd8cdca4b94e49d6725b3dcbc9cb867c21687634a23684057360b69a1c1593"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/1f94258bbfaa92f2693c60e7905c86ef2efb711a",
+    "path": "nextcloud_mcp_server/tools.py",
+    "upstream_sha256": "2db4966f07f4d55d399cbf470ecd22d31918f2222e52fa3753c4df4cae77a329",
+    "local_sha256": "da4dc481a5ebae32850ca2d45af0d921b1de1c2b7b59b415d5b58b9300d3e6a6",
+    "modification": "WOOW HA add-on: the 'paths outside the home folder' error no longer prints the account's home path (it contains the backend's user id); it starts with BACKEND_INVALID_RESPONSE. Nothing else changed."
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/1f94258bbfaa92f2693c60e7905c86ef2efb711a",
+    "path": "LICENSE",
+    "upstream_sha256": "1b05bfafc14067beabe8885c164528c122ebf545eabe97984b222fe377143a69"
   }
 ]

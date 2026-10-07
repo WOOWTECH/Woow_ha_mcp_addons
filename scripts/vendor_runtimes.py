@@ -13,7 +13,11 @@ SOURCES = {
         'emqx_mcp_server/' + p + '.py' for p in ['__init__', 'server', 'settings', 'lifespan', 'gating', 'registry', 'errors', 'deps', 'models', 'tools/__init__', 'tools/_common', 'tools/cluster', 'tools/clients', 'tools/topics', 'tools/messaging', 'tools/security', 'tools/diagnostics', 'tools/integration']]),
     'litellm': ('WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609', [
         'woow_litellm_mcp_server/' + p + '.py' for p in ['__init__', 'server', 'settings', 'lifespan', 'gating', 'registry', 'errors', 'deps', 'middleware', 'tools/__init__', 'tools/_common', 'tools/models', 'tools/chat', 'tools/keys', 'tools/teams', 'tools/users', 'tools/spend', 'tools/health', 'tools/plugins']]),
+    # Tag v0.1.0. The package lives under src/ upstream (SOURCE_PREFIX); LICENSE is at the repository root.
+    'nextcloud': ('WOOWTECH/Woow_nextcloud_mcp_server/1f94258bbfaa92f2693c60e7905c86ef2efb711a', [
+        'nextcloud_mcp_server/' + p + '.py' for p in ['__init__', 'server', 'settings', 'client', 'errors', 'paths', 'webdav', 'caldav', 'ical', 'tools']]),
 }
+SOURCE_PREFIX = {'nextcloud': 'src/'}
 
 if __name__ == '__main__':
     # Never overwrite reviewed local hardening or provenance during re-acquisition.
@@ -27,7 +31,8 @@ if __name__ == '__main__':
             if source.startswith('local:'):
                 data = (LEGACY / 'apps' / product / path).read_bytes()
             else:
-                with urlopen('https://raw.githubusercontent.com/' + source + '/' + path, timeout=30) as response:
+                upstream = path if path == 'LICENSE' else SOURCE_PREFIX.get(product, '') + path
+                with urlopen('https://raw.githubusercontent.com/' + source + '/' + upstream, timeout=30) as response:
                     data = response.read()
             dest = ROOT / 'apps' / product / 'vendor' / path
             dest.parent.mkdir(parents=True, exist_ok=True)
