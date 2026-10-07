@@ -1,5 +1,5 @@
 name: WOOW Odoo MCP (experimental)
-version: 0.1.5
+version: 0.1.6
 slug: woow_mcp_odoo
 description: Experimental; HA admin-role management; partial tools, read-only by default.
 url: https://github.com/WOOWTECH/Woow_ha_mcp_addons

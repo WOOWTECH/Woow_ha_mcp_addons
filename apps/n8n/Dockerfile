@@ -19,7 +19,7 @@ WORKDIR /opt/woow
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --python /usr/local/bin/python
 FROM python:3.13.16-slim-bookworm@sha256:f040863673aea2570c3ff6a5c3fb4c673a016cbc5375005ad145915922b6b78a AS runtime
-ARG BUILD_VERSION=0.1.5
+ARG BUILD_VERSION=0.1.6
 LABEL io.hass.type="app" io.hass.arch="amd64" io.hass.version="${BUILD_VERSION}" \
       io.hass.name="WOOW n8n MCP" io.hass.description="Experimental bounded MCP; HA acceptance pending" \
       io.hass.url="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \
