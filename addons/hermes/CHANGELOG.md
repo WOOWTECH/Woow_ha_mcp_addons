@@ -10,6 +10,14 @@
   子程序文字放進錯誤訊息、Python client 會去抓子程序指定的 $ref 網址，execution.taskSupport 為 required 時會拒絕呼叫該工具。
   影響：client 不再依子程序的 outputSchema 檢查 structuredContent（n8n validate_* 截斷結果時原本會失敗，現在正常）；
   n8n 給 Claude Code 的 `anthropic/maxResultSizeChars` 也不再轉送，Claude Code 會套用它預設的 MCP 輸出上限。
+- gateway（0.1.6 R2 審查）：gateway 拒絕 initialize 時（Bearer 在等待中被撤銷 401；回覆格式錯誤、過大、protocolVersion 不是日期、
+  子程序回 401/403 或轉址 502；BACKEND_UNAVAILABLE 或狀態讀取失敗 503；子程序自己的 4xx/5xx 照轉但不帶 session id），子程序可能已經
+  建立 session 並回了 Mcp-Session-Id。這個 id 不會交給 client，而本 add-on 的子程序（釘選的 Python MCP SDK 1.28.1 FastMCP）沒有設定閒置回收，
+  這個 session 原本會一直留到子程序重啟（本機以釘選版本的 SDK 實測：改版前被扣住的 session 直接 ping 仍回 200，改版後回 404）。
+  現在 gateway 會自己送一次 `DELETE /mcp` 結束該 session：只限 gateway 會轉送的 session id（可見 ASCII、1–256 字元），
+  且不是 client 自己帶來的 id；先關閉子程序的回覆，在同一個請求名額內送出，最多等 2 秒，子程序的回應一律不讀、不轉送，
+  錯誤一律忽略，session id 也不寫進任何紀錄。client 收到的回覆完全不變，最多晚 2 秒（本機以釘選版本的 SDK 實測，延遲沒有
+  可量測的差別）；initialize 成功（含 JSON-RPC 錯誤回覆）時 session 照常交給 client，其他方法不受影響。
 - 映像 `ghcr.io/woowtech/amd64-mcp-hermes:0.1.6` 尚未建置；0.1.0–0.1.5 tag 不覆寫。
 
 ## 0.1.5 — 2026-10-06 公開（experimental）

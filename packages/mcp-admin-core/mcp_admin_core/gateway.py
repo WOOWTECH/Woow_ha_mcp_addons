@@ -6,6 +6,7 @@ No legacy SSE /sse or /messages endpoints are exposed.
 from __future__ import annotations
 
 import asyncio
+import functools
 import hashlib
 import hmac
 from http import HTTPStatus
@@ -46,6 +47,8 @@ SSE_COMMENT = re.compile(rb":[\x20-\x7e]{0,1024}")
 LIST_CHANGED = b'data: {"jsonrpc":"2.0","method":"notifications/tools/list_changed"}'
 # 0.1.5 (R1 #6): the pinned TS client puts an unsupported protocolVersion into an error; a date carries no child text.
 PROTOCOL_VERSION = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+# 0.1.6 (R2): the bound of the gateway's own DELETE that ends an initialize session no client received.
+SESSION_END_SECONDS = 2
 
 
 def sse_frame(frame: bytes):
@@ -129,13 +132,15 @@ RoleVerifier = Callable[[str], Awaitable[bool]]
 
 
 class UpstreamOwner:
-    """Own the reader, response and slot across ASGI cancellation and handoff."""
+    """Own the reader, response and slot across ASGI cancellation and handoff (0.1.6: and the end of an initialize
+    session that no client received)."""
     def __init__(self, slots):
         self.slots = slots
         self.response = None
         self.reader = None
         self.closed = False
         self.overflowed = False  # chunks() stopped at MAX_RESPONSE, not at the end of the reply
+        self.end_session = None  # 0.1.6 (R2): set while the child's new session id is withheld from the client
 
     async def close(self):
         if self.closed:
@@ -154,7 +159,14 @@ class UpstreamOwner:
             except (TimeoutError, httpx.HTTPError):
                 pass
             finally:
-                self.slots.release()
+                try:
+                    if self.end_session is not None:
+                        # After the reply is closed (its connection is free) or the budget above cut that close, and
+                        # inside this request's slot, so these DELETEs never outnumber the slots. Bounded; no Exception
+                        # leaves it (a BaseException such as a cancellation can, and the slot is still released).
+                        await self.end_session()
+                finally:
+                    self.slots.release()
 
         # ASGI 2.3 level cancellation and direct asyncio cancellation both must
         # join this bounded cleanup. No reader/cleanup task is detached.
@@ -471,6 +483,23 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         except (httpx.HTTPError, TimeoutError):
             return
 
+    async def end_session(child_token, session):
+        """0.1.6 (R2 review): end a session the child opened for an initialize whose answer withholds its id (401,
+        502, 503, a refused child status, a state error); otherwise it stays open until the child's idle reaping (n8n:
+        10 minutes, with 20 sessions shared by all clients) or, in the pinned Python SDK children (no idle timeout
+        set), until the child restarts. One DELETE with the gateway's own headers and none of the client's; best effort
+        and bounded: nothing of the child's reply is read or relayed (it is streamed and closed unread: a body may be
+        large or never end, and a reply left open would keep its pooled connection) and no Exception escapes, since the
+        client's answer is already decided and must not change."""
+        try:
+            async with asyncio.timeout(SESSION_END_SECONDS):
+                async with child.stream("DELETE", child_url, follow_redirects=False, headers={
+                        "Authorization": "Bearer " + child_token, "Accept": "application/json, text/event-stream",
+                        "Accept-Encoding": "identity", "mcp-session-id": session}):
+                    pass  # the child's status, headers and body are never read
+        except Exception:
+            pass
+
     async def initialize_reply(owner, token, is_sse, ident):
         """Read the child's reply to initialize: (outcome, message, SSE frame lines other than data).
 
@@ -645,6 +674,13 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             response_headers = {k: v for k, v in upstream.headers.items()
                                 if k in FORWARDED_HEADERS and FORWARDED_HEADERS[k].fullmatch(v)}
             response_headers["Cache-Control"] = "no-store"
+            session = response_headers.get("mcp-session-id")
+            if method == "initialize" and session not in (None, headers.get("mcp-session-id")):
+                # 0.1.6 (R2): the child opened this session for this initialize. Until an answer hands its id to the
+                # client the gateway owns it, and every other way out ends it (UpstreamOwner.close). Only a usable
+                # id (one the gateway would forward), and never one the client sent itself: that session is the
+                # client's (a child may echo it).
+                owner.end_session = functools.partial(end_session, state.child_token, session)
             if not still_authorized(state.token):
                 raise BadRequest(401)
             if not 200 <= upstream.status_code <= 599 or 300 <= upstream.status_code < 400:
@@ -695,10 +731,13 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 except ValueError:
                     raise BadRequest(502) from None
                 if frame is None:
-                    return json_reply(value, 200, response_headers)
-                # The child's event framing (id/event/retry lines) with the filtered data.
-                frame.append(b"data: " + json.dumps(value, separators=(",", ":")).encode())
-                return Response(b"\n".join(frame) + b"\n\n", status_code=200, headers=response_headers)
+                    answer = json_reply(value, 200, response_headers)
+                else:
+                    # The child's event framing (id/event/retry lines) with the filtered data.
+                    frame.append(b"data: " + json.dumps(value, separators=(",", ":")).encode())
+                    answer = Response(b"\n".join(frame) + b"\n\n", status_code=200, headers=response_headers)
+                owner.end_session = None  # the answer hands the session id over: ending it is the client's call
+                return answer
             if request_id and not is_sse and upstream.status_code == 200:
                 # Every JSON reply is parsed, must answer this request, is filtered and re-serialized: a child
                 # cannot hand a client an unfiltered list under another request's id or in a batch.
@@ -721,6 +760,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 raise BadRequest(502)  # unreachable (R1 #8): every other success body was answered or refused above
             response = OwnedStreamingResponse(stream(owner, state.token, (message.get("id"), method) if request_id else None),
                                               owner=owner, status_code=200, headers=response_headers)
+            # This answer hands any session id it carries over to the client, so the end of its stream must never
+            # DELETE that session (an initialize never streams today: it is answered or refused above).
+            owner.end_session = None
             handed_off = True  # only once the response owns the slot: a failed constructor must release it
             return response
         except (httpx.HTTPError, TimeoutError):

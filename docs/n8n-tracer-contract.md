@@ -182,6 +182,19 @@ client compiled a child's `outputSchema` (a `$ref` or `pattern` became its error
 validate `structuredContent` against a child schema, and child `_meta` hints such as `anthropic/maxResultSizeChars` are not
 passed on (Claude Code then applies its default MCP output budget).
 
+0.1.6 (R2): an initialize the gateway refuses after the child answered (401 for a Bearer revoked meanwhile, the 502s
+and 503s above, a child 4xx/5xx relayed without its session id, a state error) may leave a session the child opened:
+its `Mcp-Session-Id` never reaches the client, so before 0.1.6 it stayed open until the child's idle reaping (n8n: 20
+sessions shared by all clients, 10 idle minutes; with the pinned n8n-mcp, 20 refused initializes made every later
+initialize 429 until then). The gateway now ends it with its own `DELETE /mcp`, carrying only the child's Bearer, the
+fixed Accept and Accept-Encoding and that session id (no client header, no `MCP-Protocol-Version`). This applies only
+to a session id the gateway would forward (`[\x21-\x7e]{1,256}`) that is not the one the client sent itself (that
+session is the client's; a child may echo it), and never to a successful initialize (a JSON-RPC error reply included,
+which carries the id to the client) or to another method. The DELETE is sent once, after the child's reply is closed
+and within the request's slot, never follows a redirect and is bounded at 2 seconds; its reply is never read or
+relayed, every error is ignored and the id is never logged. The client's answer is unchanged, at most 2 seconds later
+(about 1-3 ms with the pinned n8n-mcp).
+
 | Tracer tool | Executable default / omission contract |
 |---|---|
 | `tools_documentation` | Missing `topic` becomes `"overview"`; missing `depth` becomes `"essentials"`. Both match the pinned handler's overview fallback / depth default. Explicit null is rejected. |
@@ -217,7 +230,8 @@ Bearer and session/event headers, but a reconnected (GET) stream carries notific
 stream was cut must be sent again (0.1.5; no pinned child keeps an event store, so no stream is resumed). A response owner joins its reader cancellation
 and upstream close under a 3-second cleanup budget, shields ASGI 2.3 AnyIO level
 cancellation and joins direct asyncio cancellation, then unconditionally releases
-its slot. Headers/body/send/idle disconnect paths share that owner; cleanup is not
+its slot (0.1.6: after the 2-second DELETE of a refused initialize's session, above, which the same shield covers).
+Headers/body/send/idle disconnect paths share that owner; cleanup is not
 detached from response completion.
 
 Rotation/revocation does not change the independent child token. Old Bearers are
