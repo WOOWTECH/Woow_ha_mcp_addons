@@ -49,13 +49,39 @@ class Backend(BaseHTTPRequestHandler):
             return
         values = {'/v1/capabilities': {'models': []}, '/api/health': {'status': 'ok'},
                   '/api/v5/nodes': [{'node': 'fake@local', 'version': '5.fake'}],
-                  '/v1/models': {'data': [{'id': 'fake-model'}]}}
+                  '/v1/models': {'data': [{'id': 'fake-model'}]},
+                  # Nextcloud OCS: the account answer the child (and its private health probe) reads first.
+                  '/ocs/v2.php/cloud/user?format=json': {'ocs': {'meta': {'status': 'ok', 'statuscode': 200},
+                                                                 'data': {'id': 'tester'}}}}
         if self.path.startswith('/api/v1/workflows'):
             self.respond({'data': [], 'nextCursor': None})
         elif self.path in values:
             self.respond(values[self.path])
         else:
             self.send_error(404)
+
+    def do_PROPFIND(self):
+        # Nextcloud WebDAV: the home folder with one file (get_file_tree, the representative read).
+        CALLS.append(('PROPFIND', self.path))
+        self.rfile.read(int(self.headers.get('Content-Length', 0)))
+        if OFFLINE.is_set():
+            self.send_error(503)
+            return
+        if self.path != '/remote.php/dav/files/tester/':
+            self.send_error(404)
+            return
+        prop = ('<d:response><d:href>/remote.php/dav/files/tester/%s</d:href><d:propstat><d:prop>%s</d:prop>'
+                '<d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>')
+        data = ('<?xml version="1.0"?><d:multistatus xmlns:d="DAV:">'
+                + prop % ('', '<d:resourcetype><d:collection/></d:resourcetype><d:getetag>"home"</d:getetag>')
+                + prop % ('notes.md', '<d:resourcetype/><d:getcontentlength>5</d:getcontentlength>'
+                                      '<d:getetag>"one"</d:getetag><d:getcontenttype>text/markdown</d:getcontenttype>')
+                + '</d:multistatus>').encode()
+        self.send_response(207)
+        self.send_header('Content-Type', 'application/xml; charset=utf-8')
+        self.send_header('Content-Length', str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
     def do_DELETE(self):
         # Any dispatch mutation may write ONLY to this disposable fake.
@@ -147,7 +173,7 @@ async def rpc(client, headers, message):
 
 
 async def run():
-    assert APP in ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm')
+    assert APP in ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud')
     assert {p.name for p in (ROOT / 'apps').iterdir()} == {APP, 'runtime'}, 'sibling application shipped'
     assert not DATA.exists(), 'refuse non-disposable state'
     assert not (ROOT / '.git').exists()
@@ -182,7 +208,8 @@ async def run():
                     'odoo-manage': dict(url=url, database='test', username='tester', api_key='DUMMY'),
                     'hermes': dict(gateway_url=url, gateway_api_key='DUMMY'),
                     'opendesign': dict(url=url), 'emqx': dict(url=url, api_key='DUMMY', api_secret='DUMMY'),
-                    'litellm': dict(url=url, master_key='DUMMY')}
+                    'litellm': dict(url=url, master_key='DUMMY'),
+                    'nextcloud': dict(url=url, username='tester', app_password='DUMMY')}
                 state = fixture_update(connection=connections[APP])
                 public_tools = TOOLS[APP]
                 name, args = PROBES[APP]

@@ -1,4 +1,4 @@
-"""Executable six-product boundary with approved, fail-closed HA admin verification.
+"""Executable product boundary (Odoo, Odoo Manage, Hermes, OpenDesign, EMQX, LiteLLM, Nextcloud) with approved, fail-closed HA admin verification.
 
 PYTHONPATH=packages/mcp-admin-core .venv/bin/python -m mcp_admin_core.run_product emqx
 GUI owns typed connection/token/policy. CLI owns deployment fields only.

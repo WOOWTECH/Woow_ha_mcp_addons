@@ -14,8 +14,8 @@ from .config import State, Store, http_url
 from .lifecycle import ChildSpec
 from .policy import Tool
 
-PRODUCTS = ('odoo', 'odoo-manage', 'hermes', 'opendesign', 'emqx', 'litellm')
-Product = Literal['n8n', 'odoo', 'odoo-manage', 'hermes', 'opendesign', 'emqx', 'litellm']
+PRODUCTS = ('odoo', 'odoo-manage', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud')
+Product = Literal['n8n', 'odoo', 'odoo-manage', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud']
 ROOT = Path(__file__).resolve().parents[3]
 URL = Annotated[str, AfterValidator(http_url)]
 
@@ -87,15 +87,21 @@ class LiteLLMConnection(Connection):
     master_key: Credential = Field(repr=False)
 
 
+class NextcloudConnection(Connection):
+    url: URL  # the Nextcloud root URL (NEXTCLOUD_MCP_BASE_URL)
+    username: Name
+    app_password: Credential = Field(repr=False)
+
+
 CONNECTIONS = dict(zip(PRODUCTS, (OdooConnection, ManageConnection, HermesConnection,
-                                  OpenDesignConnection, EmqxConnection, LiteLLMConnection)))
+                                  OpenDesignConnection, EmqxConnection, LiteLLMConnection, NextcloudConnection)))
 
 
 class ProductState(State):
     schema_version: int = 3
     enabled_write_tools: list[str] = Field(default_factory=list)
     product: Product
-    connection: OdooConnection | ManageConnection | HermesConnection | OpenDesignConnection | EmqxConnection | LiteLLMConnection | None = Field(default=None, repr=False)
+    connection: OdooConnection | ManageConnection | HermesConnection | OpenDesignConnection | EmqxConnection | LiteLLMConnection | NextcloudConnection | None = Field(default=None, repr=False)
 
     @field_validator('schema_version')
     @classmethod
@@ -233,6 +239,79 @@ class FileInfo(Project):
         return value
 
 
+def nextcloud_path(value):
+    """The vendored child's own path rules (nextcloud_mcp_server/paths.normalize_path), checked before dispatch: no
+    C0/C1 control or bidirectional override/isolate characters, no backslash, no empty, '.' or '..' segment ("" and
+    "/" are the home folder; one leading and one trailing '/' are allowed)."""
+    if any(ord(c) < 0x20 or 0x7f <= ord(c) <= 0x9f or 0x202a <= ord(c) <= 0x202e or 0x2066 <= ord(c) <= 0x2069
+           for c in value) or '\\' in value:
+        raise ValueError('invalid path character')
+    inner = value[1:] if value.startswith('/') else value
+    inner = inner[:-1] if inner.endswith('/') else inner
+    if value not in ('', '/') and any(part in ('', '.', '..') for part in inner.split('/')):
+        raise ValueError('empty, . or .. path segment')
+    return value
+
+
+def nextcloud_file(value):
+    if value in ('', '/'):
+        raise ValueError('a file path is required, not the home folder')
+    return nextcloud_path(value)
+
+
+NextcloudFolder = Annotated[str, Field(max_length=1024, description=(
+    "Folder (or file) path relative to the account's home folder; '' or '/' is the home folder itself. "
+    "Do not percent-encode it.")), AfterValidator(nextcloud_path)]
+NextcloudFile = Annotated[str, Field(min_length=1, max_length=1024, description=(
+    "File path relative to the account's home folder, '/' as separator, e.g. 'Documents/notes.md'. A leading '/' "
+    "is optional. Do not percent-encode it.")), AfterValidator(nextcloud_file)]
+# Visible ASCII as the read tools returned it (quotes optional); the child checks the exact RFC 9110 etag form.
+NextcloudEtag = Annotated[str, Field(min_length=1, max_length=258, pattern=r'^[\x21-\x7e]+$', description=(
+    "The etag returned by read_text_file or get_file_tree for the version you read. Quotes are optional."))]
+# The gateway accepts request bodies up to 256 KiB (gateway.MAX_REQUEST); the child limits text to 1 MiB and
+# uploads to 10 MiB, so these bounds only describe what can arrive.
+NextcloudText = Annotated[str, Field(max_length=262144, description=(
+    "The complete new text of the file (UTF-8). It replaces nothing else."))]
+
+
+class FileTree(Arguments):
+    path: NextcloudFolder = ''
+    depth: int = Field(default=1, ge=1, le=3, description=(
+        'How many folder levels to list: 1 = direct children only, at most 3.'))
+
+
+class FilePath(Arguments):
+    path: NextcloudFile
+
+
+class Tasks(Arguments):
+    calendar: str | None = Field(default=None, min_length=1, max_length=256, description=(
+        'Calendar id from list_calendars to read only that calendar; omit (or null) to read every calendar that '
+        'holds tasks.'))
+    include_completed: bool = Field(default=False, description='Also return completed and cancelled tasks.')
+    limit: int = Field(default=100, ge=1, le=500, description='Maximum number of tasks to return (1-500).')
+
+
+class CreateText(FilePath):
+    content: NextcloudText
+
+
+class UpdateText(CreateText):
+    expected_etag: NextcloudEtag
+
+
+class Upload(FilePath):
+    content_base64: str = Field(min_length=1, max_length=262144, description=(
+        "The file's bytes, standard base64 (RFC 4648, with padding)."))
+    expected_etag: NextcloudEtag | None = Field(default=None, description=(
+        'Omit (or null) to create a new file only. To replace an existing file, give the etag of the version you '
+        'read (from get_file_tree or read_text_file).'))
+
+
+class DeleteChecked(FilePath):
+    expected_etag: NextcloudEtag
+
+
 TOOLS = {
     'odoo': {'health_check': Tool(Arguments), 'list_models': Tool(Models)},
     'odoo-manage': {'list_models': Tool(Arguments)},
@@ -243,6 +322,12 @@ TOOLS = {
                    'delete_project': Tool(Project, write=True, legacy_write=True)},
     'emqx': {name: Tool(Arguments) for name in ('emqx_cluster_status', 'emqx_broker_stats', 'emqx_metrics_current')},
     'litellm': {name: Tool(Arguments) for name in ('litellm_list_models', 'litellm_health_readiness')},
+    # 0.1.7: all nine tools of the pinned child. Every writer is off until the owner grants it individually; the
+    # child also registers writers only when READONLY=false and delete_file_checked only when ALLOW_DELETE=true.
+    'nextcloud': {'get_file_tree': Tool(FileTree), 'get_file_content': Tool(FilePath), 'read_text_file': Tool(FilePath),
+                  'list_calendars': Tool(Arguments), 'list_tasks': Tool(Tasks),
+                  'create_text_file': Tool(CreateText, write=True), 'update_text_file': Tool(UpdateText, write=True),
+                  'upload_file': Tool(Upload, write=True), 'delete_file_checked': Tool(DeleteChecked, write=True)},
 }
 from .expansion import expand_tools
 expand_tools(TOOLS)
@@ -255,7 +340,8 @@ TOOLS['odoo'].update(ODOO_B2_TOOLS)
 # and Odoo Manage have private authentication-only probes instead (RC review notes, 0.1.3 #6 and 0.1.4 #7).
 PROBES = {'odoo': ('list_models', {'limit': 1}), 'odoo-manage': ('list_models', {}),
           'hermes': ('hermes_inspect', {'target': 'capabilities'}), 'opendesign': ('health', {}),
-          'emqx': ('emqx_cluster_status', {}), 'litellm': ('litellm_list_models', {})}
+          'emqx': ('emqx_cluster_status', {}), 'litellm': ('litellm_list_models', {}),
+          'nextcloud': ('get_file_tree', {'path': '', 'depth': 1})}
 
 
 def probe_success(product, payload):
@@ -291,13 +377,21 @@ def probe_success(product, payload):
                 and len({n['node'] for n in nodes}) == len(nodes))
     if product == 'litellm':
         return isinstance(payload.get('data'), list)
+    if product == 'nextcloud':
+        # nextcloud_mcp_server/tools.py FileTree: the home folder's listing, entries built by webdav.file_entry.
+        entries = payload.get('entries')
+        return (payload.get('path') == '' and type(payload.get('truncated')) is bool and isinstance(entries, list)
+                and all(isinstance(e, dict) and isinstance(e.get('path'), str) and isinstance(e.get('name'), str)
+                        and e.get('type') in ('file', 'folder') for e in entries))
     return False
 
 
 # HealthMonitor's backend probe. Odoo's and (0.1.4) Odoo Manage's are private to the child (apps/odoo*/launch.py,
 # not in TOOLS): they run on their own owned thread, never the tool path, and only authenticate (no ir.model access).
+# 0.1.7: Nextcloud's is private too (vendored nextcloud_mcp_server/server.py, same name, not in TOOLS): one OCS GET
+# cloud/user on a fresh client of its own, never the tools' connections, answering only ok and the user id.
 ODOO_HEALTH_PROBE = 'woow_backend_probe'
-PRIVATE_PROBES = ('odoo', 'odoo-manage')
+PRIVATE_PROBES = ('odoo', 'odoo-manage', 'nextcloud')
 
 
 def health_probe(product):
@@ -305,6 +399,10 @@ def health_probe(product):
 
 
 def health_probe_success(product, payload):
+    if product == 'nextcloud':
+        # client.py _fetch_user_id: the OCS answer's ocs.data.id, a non-empty string; any failure is a tool error.
+        return (isinstance(payload, dict) and set(payload) == {'ok', 'user_id'} and payload['ok'] is True
+                and isinstance(payload['user_id'], str) and 0 < len(payload['user_id']) <= 256)
     if product in PRIVATE_PROBES:
         # Odoo's authenticate answer: a positive user id (it answers False for rejected credentials).
         return isinstance(payload, dict) and set(payload) == {'uid'} and type(payload['uid']) is int and payload['uid'] > 0
@@ -351,6 +449,12 @@ def child_spec(state: ProductState, directory: Path) -> ChildSpec | None:
         if product == 'emqx':
             env.update(EMQX_MCP_BASE_URL=c.url, EMQX_MCP_API_KEY=c.api_key, EMQX_MCP_API_SECRET=c.api_secret, EMQX_MCP_READONLY='true')
             module = 'emqx_mcp_server.server'
+        elif product == 'nextcloud':
+            # No ALLOWED_HOSTS (the gateway reaches the child as 127.0.0.1, which its Host/Origin guard accepts)
+            # and no CA_BUNDLE/VERIFY_TLS: backend_policy's transport always verifies TLS (a private CA needs review).
+            env.update(NEXTCLOUD_MCP_BASE_URL=c.url, NEXTCLOUD_MCP_USERNAME=c.username,
+                       NEXTCLOUD_MCP_APP_PASSWORD=c.app_password, NEXTCLOUD_MCP_READONLY='true')
+            module = 'nextcloud_mcp_server.server'
         else:
             env.update(LITELLM_MCP_BASE_URL=c.url, LITELLM_MCP_MASTER_KEY=c.master_key, LITELLM_MCP_READONLY='true')
             module = 'woow_litellm_mcp_server.server'
@@ -362,12 +466,16 @@ def child_spec(state: ProductState, directory: Path) -> ChildSpec | None:
         public_allowed = {name for name in TOOLS[product] if enabled(name, TOOLS[product], state)}
         # Private loopback registration also serves HealthMonitor, independently
         # of public disables. Reserve ONLY the fixed, argument-free read probe:
-        # EMQX GET /nodes or LiteLLM GET /v1/models (never provider /health).
+        # EMQX GET /nodes or LiteLLM GET /v1/models (never provider /health); Nextcloud's
+        # private woow_backend_probe (OCS GET cloud/user) is not in NAMES and never disabled.
         # Parent authorize/filter_list still enforce every public disable; raw
         # child tools/list is intentionally not the public authorization surface.
         native_allowed = public_allowed | {health_probe(product)[0]}  # the probe HealthMonitor actually calls
-        prefix = 'EMQX_MCP_' if product == 'emqx' else 'LITELLM_MCP_'
+        prefix = {'emqx': 'EMQX_MCP_', 'litellm': 'LITELLM_MCP_', 'nextcloud': 'NEXTCLOUD_MCP_'}[product]
         env[prefix + 'READONLY'] = 'false' if any(TOOLS[product][name].write for name in public_allowed) else 'true'
+        if product == 'nextcloud':
+            # The child registers delete_file_checked only with READONLY=false AND ALLOW_DELETE=true.
+            env[prefix + 'ALLOW_DELETE'] = 'true' if 'delete_file_checked' in public_allowed else 'false'
         env[prefix + 'DISABLED_TOOLS'] = ','.join(sorted(set(NAMES[product]) - native_allowed))
         argv = (str(python), '-m', module, '--transport', 'http', '--host', '127.0.0.1', '--port', '3000', '--path', '/mcp')
     return ChildSpec(argv, env, cwd)

@@ -17,6 +17,7 @@ from the supply-chain gate's SBOM of the exact published image:
 | OpenDesign | [opendesign-0.1.6.md](opendesign-0.1.6.md)（0.1.5：[opendesign-0.1.5.md](opendesign-0.1.5.md)；0.1.4：[opendesign-0.1.4.md](opendesign-0.1.4.md)；0.1.3：[opendesign-0.1.3.md](opendesign-0.1.3.md)；0.1.2：[opendesign-0.1.2.md](opendesign-0.1.2.md)；0.1.1：[opendesign-0.1.1.md](opendesign-0.1.1.md)；0.1.0：[opendesign-0.1.0.md](opendesign-0.1.0.md)） |
 | EMQX | [emqx-0.1.6.md](emqx-0.1.6.md)（0.1.5：[emqx-0.1.5.md](emqx-0.1.5.md)；0.1.4：[emqx-0.1.4.md](emqx-0.1.4.md)；0.1.3：[emqx-0.1.3.md](emqx-0.1.3.md)；0.1.2：[emqx-0.1.2.md](emqx-0.1.2.md)；0.1.1：[emqx-0.1.1.md](emqx-0.1.1.md)；0.1.0：[emqx-0.1.0.md](emqx-0.1.0.md)） |
 | LiteLLM | [litellm-0.1.6.md](litellm-0.1.6.md)（0.1.5：[litellm-0.1.5.md](litellm-0.1.5.md)；0.1.4：[litellm-0.1.4.md](litellm-0.1.4.md)；0.1.3：[litellm-0.1.3.md](litellm-0.1.3.md)；0.1.2：[litellm-0.1.2.md](litellm-0.1.2.md)；0.1.1：[litellm-0.1.1.md](litellm-0.1.1.md)；0.1.0：[litellm-0.1.0.md](litellm-0.1.0.md)） |
+| Nextcloud（0.1.7 準備中，尚無映像） | [nextcloud-0.1.7-lock.md](nextcloud-0.1.7-lock.md)：由 `apps/nextcloud/uv.lock` 安裝後的 metadata 產生，不是映像 SBOM；第一個映像建置後以 SBOM 版 `nextcloud-0.1.7.md` 取代 |
 
 License texts ship inside every image: Python `*.dist-info/licenses/`, Node `node_modules/*/LICENSE*`,
 Debian `/usr/share/doc/*/copyright`, and the repository files `THIRD_PARTY_NOTICES.md` and

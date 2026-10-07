@@ -3,7 +3,7 @@
 set -eu
 unset SUPERVISOR_TOKEN
 uv sync --frozen --python python3.13
-for app in odoo odoo-manage hermes opendesign emqx litellm; do
+for app in odoo odoo-manage hermes opendesign emqx litellm nextcloud; do
   uv sync --project "apps/$app" --frozen --no-dev --python python3.13
 done
 npm ci --prefix apps/n8n --ignore-scripts --no-audit --no-fund

@@ -1,0 +1,22 @@
+# Nextcloud Changelog
+
+## 0.1.7 — 準備中（未發佈）
+
+- 新產品：WOOW Nextcloud MCP。子程序是 WOOWTECH 自己的 MIT 套件 `nextcloud_mcp_server`
+  （[Woow_nextcloud_mcp_server](https://github.com/WOOWTECH/Woow_nextcloud_mcp_server) tag v0.1.0，commit 1f94258），
+  原始碼放在 `apps/nextcloud/vendor`；對上游的每一處修改與原因記在 `docs/provenance/runtime-sources.json`。
+- 一個 Add-on 連一個 Nextcloud 帳號：根網址、使用者名稱、App 密碼（管理面板設定，不放在 HA options）。
+- 工具 9 個全部支援，由 gateway 用本地嚴格 schema 檢查每個呼叫、自己重建 tools/list：
+  讀取 `get_file_tree`、`get_file_content`、`read_text_file`、`list_calendars`、`list_tasks` 預設開啟；
+  寫入 `create_text_file`、`update_text_file`、`upload_file`、`delete_file_checked` 預設關閉，必須逐項授權。
+  子程序只在授權了寫入工具時才以 `READONLY=false` 啟動，只在授權了 `delete_file_checked` 時才設 `ALLOW_DELETE=true`，
+  其餘未授權或停用的工具也不在子程序註冊（`DISABLED_TOOLS`）。寫入全部以 etag 防止覆蓋別人改過的版本；
+  刪除只刪單一檔案並進 Nextcloud 垃圾桶。
+- 後端連線一律經 gateway 的 `backend_policy`（DNS 釘選、位址類別檢查、不跟隨轉址、不走 proxy、TLS 一定驗證）；
+  錯誤一律回公開代碼（`BACKEND_HTTP_ERROR status=…`、`BACKEND_UNAVAILABLE`、`BACKEND_TIMEOUT` 等），
+  不轉送 Nextcloud 的錯誤內容。自訂 CA（`CA_BUNDLE`）與關閉 TLS 驗證都不提供。
+- 健康檢查用子程序私有的 `woow_backend_probe`（不在工具清單，gateway 不列出也不授權）：每次用新的連線
+  讀一次 OCS `cloud/user`，只回 ok 與使用者 id，不佔用工具的連線；公開工具全部停用時照樣運作。
+- 限制：gateway 每個請求最多 256 KiB，所以一次能寫入的文字與上傳的檔案（base64 後）都小於 256 KiB；
+  檔名含 `%` 的檔案會被 `backend_policy` 拒絕（`BACKEND_DESTINATION_DENIED`）。
+- 映像 `ghcr.io/woowtech/amd64-mcp-nextcloud:0.1.7` 尚未建置；先前版本號沒有 Nextcloud 映像，也不會補建。

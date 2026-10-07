@@ -25,6 +25,7 @@ READ = {
  'opendesign': 'get_file_info get_project health list_agents list_connectors list_plugins list_project_files list_projects list_runs list_skills read_file version',
  'emqx': 'emqx_authz_settings emqx_broker_stats emqx_client_subscriptions emqx_cluster_status emqx_get_client emqx_get_retained emqx_get_rule_metrics emqx_get_trace_log emqx_list_actions emqx_list_alarms emqx_list_authn emqx_list_authz_sources emqx_list_banned emqx_list_clients emqx_list_connectors emqx_list_listeners emqx_list_retained emqx_list_rules emqx_list_subscriptions emqx_list_topics emqx_list_traces emqx_metrics_current emqx_metrics_history emqx_node_detail emqx_prometheus_stats',
  'litellm': 'litellm_global_spend_report litellm_health_readiness litellm_key_info litellm_list_keys litellm_list_models litellm_list_plugins litellm_list_teams litellm_list_users litellm_model_group_info litellm_model_info litellm_plugin_info litellm_skill_hub litellm_spend_logs litellm_team_info litellm_user_info',
+ 'nextcloud': 'get_file_content get_file_tree list_calendars list_tasks read_text_file',
  'n8n': 'tools_documentation search_nodes get_node validate_node get_template search_templates validate_workflow n8n_get_workflow n8n_list_workflows n8n_validate_workflow n8n_health_check n8n_list_catalog',
 }
 WRITE = {
@@ -33,6 +34,7 @@ WRITE = {
  'hermes': 'hermes_chat',
  'opendesign': 'create_project delete_project send_message',
  'emqx': 'emqx_ban emqx_client_subscribe emqx_client_unsubscribe emqx_create_trace emqx_delete_retained emqx_delete_trace emqx_kick_client emqx_publish emqx_publish_bulk emqx_toggle_rule emqx_unban',
+ 'nextcloud': 'create_text_file delete_file_checked update_text_file upload_file',
  'litellm': 'litellm_health litellm_token_counter litellm_spend_calculate litellm_add_model litellm_block_key litellm_chat_completion litellm_create_team litellm_create_user litellm_delete_key litellm_delete_model litellm_delete_plugin litellm_delete_team litellm_delete_user litellm_disable_plugin litellm_enable_plugin litellm_generate_key litellm_regenerate_key litellm_register_plugin litellm_team_member_add litellm_team_member_delete litellm_unblock_key litellm_update_key litellm_update_model litellm_update_team litellm_update_user',
  'n8n': 'n8n_manage_agents n8n_explore_node_resources n8n_create_workflow n8n_update_full_workflow n8n_update_partial_workflow n8n_delete_workflow n8n_autofix_workflow n8n_test_workflow n8n_deploy_template',
 }
@@ -96,6 +98,19 @@ def source_inventory():
                     rows[name] = {'source': relative, 'line': node.lineno, 'evidence': 'python-decorator-AST',
                                   'operations': {k: sorted(v) for k, v in operations.items()},
                                   'source_signature': ast.unparse(node.args)}
+            if product == 'nextcloud' and file.name == 'tools.py':
+                # No decorators: register_tools() adds Tool.from_function for the nested handlers that _functions()
+                # returns by name (READONLY/ALLOW_DELETE/DISABLED_TOOLS only remove some). The add-on's private
+                # woow_backend_probe is added in server.py, not here, and is never inventoried as an upstream tool.
+                [functions] = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == '_functions']
+                handlers = {n.name: n for n in functions.body if isinstance(n, ast.AsyncFunctionDef)}
+                [returned] = [n.value for n in functions.body if isinstance(n, ast.Return)]
+                assert isinstance(returned, ast.Dict) and [k.value for k in returned.keys] == [v.id for v in returned.values]
+                for key in returned.keys:
+                    node = handlers[key.value]
+                    assert key.value not in rows
+                    rows[key.value] = {'source': relative, 'line': node.lineno, 'evidence': 'python-registration-AST',
+                                       'operations': {}, 'source_signature': ast.unparse(node.args)}
         inventory[product] = rows
     base = ROOT / 'apps/n8n/node_modules/n8n-mcp/dist/mcp'
     code = "const p=process.argv[1]; const a=require(p+'/tools.js').n8nDocumentationToolsFinal; const b=require(p+'/tools-n8n-manager.js').n8nManagementTools; console.log(JSON.stringify([a,b]));"
@@ -199,8 +214,8 @@ def build():
 
 
 def markdown(data):
-    lines = ['# 七類完整 upstream 工具對照（W2b bounded）', '',
-             '由 `scripts/tool_inventory.py` 產生；Python 是 decorator AST（含條件註冊），n8n 是 pinned runtime 定義 export，不冒充全部都曾由 MCP tools/list 觀察。',
+    lines = ['# 八類完整 upstream 工具對照（W2b bounded）', '',
+             '由 `scripts/tool_inventory.py` 產生；Python 是 decorator AST（含條件註冊；Nextcloud 是 `_functions()` 註冊表 AST），n8n 是 pinned runtime 定義 export，不冒充全部都曾由 MCP tools/list 觀察。',
              '每個工具的精確參數／default／允許 operation 見 `tool-surface.json` 的 accepted_schema。混合工具逐 operation 授權；enabled_write_tools 使用 exact tool 或 tool:operation；舊 writes_enabled 不授權新增 writer。來源 signature/schema 與本地 accepted_schema 分列。',
              'read 表示 wrapper 沒有刻意業務寫入，不保證無敏感資料、cache/log/auth 活動；未驗證副作用明列，不按 GET/annotation 猜安全。',
              '管理需 HA 可信 admin role；只有 n8n 接正式 provider，其餘六類維持 fail closed；不新增 UI。所有新增 writers 預設關閉；未支援工具即使 writes_enabled=true 仍拒絕。',

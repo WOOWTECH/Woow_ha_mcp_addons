@@ -29,6 +29,7 @@ async function fillConnection(page, product) {
     opendesign: { url: 'https://design.example.test' },
     emqx: { url: 'https://emqx.example.test', api_key: 'MOCK_ONLY_INPUT', api_secret: 'MOCK_ONLY_INPUT' },
     litellm: { url: 'https://litellm.example.test', master_key: 'MOCK_ONLY_INPUT' },
+    nextcloud: { url: 'https://cloud.example.test', username: 'mock_user', app_password: 'MOCK_ONLY_INPUT' },
   };
   for (const [field, value] of Object.entries(values[product])) await page.locator(`#${field}`).fill(value);
 }
@@ -101,7 +102,7 @@ for (const width of [1440, 320, 360]) {
     expect(loaded.every(asset => asset.path.startsWith(`${prefix}/assets/`) && asset.status === 200)).toBe(true);
   });
 }
-for (const product of ['odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm']) {
+for (const product of ['odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud']) {
   test(`MOCK ${product} typed replace / preserve / clear`, async ({ page, request }) => {
     await reset(request, { product, configured: true });
     await start(page, '/backend');
@@ -244,7 +245,7 @@ test('MOCK changing grant contract on fresh bootstrap prevents stale writes', as
 });
 test('MOCK all product forms fit 320px and dashboard is validated as a triplet', async ({ page, request }) => {
   await page.setViewportSize({ width: 320, height: 860 });
-  for (const product of ['odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm']) {
+  for (const product of ['odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud']) {
     await reset(request, { product });
     await start(page, '/backend');
     await fillConnection(page, product);

@@ -167,6 +167,17 @@
     "litellm_list_teams": "litellm_list_teams：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新讀取使用 100 筆 scalar 正向欄位投影；不返回 prompt/messages/keys/config/path。",
     "litellm_update_team": "litellm_update_team：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。"
   },
+  "nextcloud": {
+    "get_file_tree": "get_file_tree：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 只列一個帳號 home 底下的路徑、大小、時間、etag 與類型；深度 1–3、筆數上限由子程序設定（預設 500）。",
+    "get_file_content": "get_file_content：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 回 UTF-8 文字檔內容（含使用者資料）；資料夾、二進位與超過大小上限（預設 1 MiB）的檔案拒絕。",
+    "read_text_file": "read_text_file：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 同 get_file_content 另含 etag／大小／類型；內容是使用者資料。",
+    "list_calendars": "list_calendars：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 只回行事曆 id、名稱、元件、顏色與寫入權限。",
+    "list_tasks": "list_tasks：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 只讀 VTODO（摘要、狀態、日期、優先度、描述截 500 字）；不能改任務。",
+    "create_text_file": "create_text_file：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。 只建立新檔（If-None-Match: *），從不覆寫；上層資料夾必須已存在。",
+    "update_text_file": "update_text_file：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。 只在 etag 相符時整份取代（If-Match）；檔案被改過就失敗。",
+    "upload_file": "upload_file：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。 不帶 expected_etag 只建立新檔，帶 etag 只取代該版本；內容可為任意類型（base64），請求本體受 gateway 256 KiB 上限。預設關閉。",
+    "delete_file_checked": "delete_file_checked：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。 只刪單一檔案、不刪資料夾，且 etag 必須相符（If-Match）；檔案進 Nextcloud 垃圾桶（Deleted files app 啟用時）。子程序另需 ALLOW_DELETE=true（只在授權此工具時設定）。預設關閉。"
+  },
   "n8n": {
     "get_template": "get_template：模板完整 node parameters 可含 URL/credential examples，且完整取得有遠端來源路徑；需限定 pinned local DB 和投影，不擴 backend_policy 到公共模板站。",
     "search_templates": "search_templates：模板完整 node parameters 可含 URL/credential examples，且完整取得有遠端來源路徑；需限定 pinned local DB 和投影，不擴 backend_policy 到公共模板站。",

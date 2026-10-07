@@ -77,6 +77,16 @@
         "cleared": false,
         "evidence": null
       }
+    },
+    "nextcloud": {
+      "image": {
+        "cleared": false,
+        "evidence": null
+      },
+      "ha": {
+        "cleared": false,
+        "evidence": null
+      }
     }
   }
 }

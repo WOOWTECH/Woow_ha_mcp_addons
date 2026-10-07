@@ -7,6 +7,7 @@ export const products = {
   opendesign: { name: 'OpenDesign', fields: [['url', 'OpenDesign URL', 'url']] },
   emqx: { name: 'EMQX', fields: [['url', 'Broker 基底 URL（不含 /api/v5）', 'url'], ['api_key', 'API 金鑰', 'secret'], ['api_secret', 'API Secret', 'secret']] },
   litellm: { name: 'LiteLLM', fields: [['url', 'Proxy 基底 URL', 'url'], ['master_key', 'Master Key', 'secret']] },
+  nextcloud: { name: 'Nextcloud', fields: [['url', 'Nextcloud 根網址', 'url'], ['username', '使用者名稱', 'name'], ['app_password', 'App 密碼（非登入密碼）', 'secret']] },
 };
 
 export class UiError extends Error {}

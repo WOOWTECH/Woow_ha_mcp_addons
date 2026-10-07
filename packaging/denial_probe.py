@@ -7,6 +7,7 @@ WRITE_CASES = {
     'hermes': ('hermes_skill', {'action':'disable', 'name':'example'}),
     'emqx': ('emqx_kick_client', {'clientid':'device'}),
     'litellm': ('litellm_create_team', {'team_alias':'Owned'}),
+    'nextcloud': ('create_text_file', {'path':'Owned/denied.md', 'content':'Owned'}),
 }
 
 

@@ -2,6 +2,7 @@
 
 六個獨立產品：Odoo、n8n、Hermes、OpenDesign、EMQX、LiteLLM。目前版本 **0.1.6**（2026-10-08 發佈；映像
 `ghcr.io/woowtech/amd64-mcp-<product>:0.1.6`，來源 `302c96d`；[發佈紀錄](docs/operations/release-decision-0.1.6.md)）。
+第七個 **Nextcloud**（一個帳號的檔案、行事曆與任務）預定 0.1.7 起加入，目前尚未發佈、無映像，見 [addons/nextcloud](addons/nextcloud/DOCS.md)。
 
 **Odoo Manage 已於 2026-10-06 下架封存**：0.1.4 是最後一版，0.1.5 起不在商店，也不再建置或發佈。已安裝的仍以 0.1.4 執行，但不會再有更新或安全修正；它的設定保有 Odoo API key，並有 `homeassistant_api` 權限，建議改用 WOOW Odoo MCP 後移除。WOOW Odoo MCP 是不同的 MCP server（工具與設定不同，要另設後端、endpoint 與 token）。已發佈的 0.1.0–0.1.4 映像保留，舊備份仍可還原。步驟見[更新、備份與回復](docs/operations/update-backup-rollback.md)；原始碼保留在 `apps/odoo-manage`。
 僅以 **amd64 / Supervisor 2026.09.3** 為封裝目標；不是 Core 最低版本。

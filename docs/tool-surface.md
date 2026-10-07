@@ -1,6 +1,6 @@
-# 七類完整 upstream 工具對照（W2b bounded）
+# 八類完整 upstream 工具對照（W2b bounded）
 
-由 `scripts/tool_inventory.py` 產生；Python 是 decorator AST（含條件註冊），n8n 是 pinned runtime 定義 export，不冒充全部都曾由 MCP tools/list 觀察。
+由 `scripts/tool_inventory.py` 產生；Python 是 decorator AST（含條件註冊；Nextcloud 是 `_functions()` 註冊表 AST），n8n 是 pinned runtime 定義 export，不冒充全部都曾由 MCP tools/list 觀察。
 每個工具的精確參數／default／允許 operation 見 `tool-surface.json` 的 accepted_schema。混合工具逐 operation 授權；enabled_write_tools 使用 exact tool 或 tool:operation；舊 writes_enabled 不授權新增 writer。來源 signature/schema 與本地 accepted_schema 分列。
 read 表示 wrapper 沒有刻意業務寫入，不保證無敏感資料、cache/log/auth 活動；未驗證副作用明列，不按 GET/annotation 猜安全。
 管理需 HA 可信 admin role；只有 n8n 接正式 provider，其餘六類維持 fail closed；不新增 UI。所有新增 writers 預設關閉；未支援工具即使 writes_enabled=true 仍拒絕。
@@ -191,6 +191,20 @@ read 表示 wrapper 沒有刻意業務寫入，不保證無敏感資料、cache/
 | `litellm_update_team` | write | supported-bounded / off | {} | litellm_update_team | litellm_update_team：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。 PUT /api/policy (HA admin+CSRF): enabled_write_tools 選取精確 grant；disabled 優先；舊全域開關僅保留兩個既有 writer | tests/test_tool_inventory.py, tests/test_expansion_security.py, tests/test_expansion_runtime.py, tests/test_stream_error_redaction.py |
 | `litellm_update_user` | write | temporarily-unsupported / off | {} | — | litellm_update_user：user/admin 角色、email、key 及私人資訊尚無範圍／輸出政策；需逐角色欄位 schema 與非升權的使用者管理測試。 不可由 GUI 啟用；需 source/policy/test review | tests/test_tool_inventory.py |
 | `litellm_user_info` | read | supported-bounded / on | {} | — | LiteLLM metadata batch：真 GET /user/info，必填有界 user_id；嚴格 user_id/user_info envelope 與回應身分一致，只投影 user_id/user_alias/user_role/max_budget/tpm_limit/rpm_limit。無 email/keys/teams/spend/config。單次256KiB/5秒、depth8/list100；missing/錯shape/非2xx拒絕。見 docs/litellm-metadata-delivery.md 與 tests/test_litellm_metadata*.py；candidate，待独立審查與實機驗收。 authorized-admin-policy: remove from disabled | tests/test_tool_inventory.py, tests/test_expansion_security.py, tests/test_expansion_runtime.py, tests/test_stream_error_redaction.py |
+
+## nextcloud：上游 9／本地 bounded 9
+
+| exact tool | 來源副作用 | 支援／預設唯讀 | operations（來源） | 寫入 grants | 理由／剩餘工作 | 測試 |
+|---|---|---|---|---|---|---|
+| `create_text_file` | write | supported-bounded / off | {} | create_text_file | create_text_file：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。 只建立新檔（If-None-Match: *），從不覆寫；上層資料夾必須已存在。 PUT /api/policy (HA admin+CSRF): enabled_write_tools 選取精確 grant；disabled 優先；舊全域開關僅保留兩個既有 writer | tests/test_tool_inventory.py, tests/test_expansion_security.py, tests/test_expansion_runtime.py, tests/test_stream_error_redaction.py |
+| `delete_file_checked` | write | supported-bounded / off | {} | delete_file_checked | delete_file_checked：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。 只刪單一檔案、不刪資料夾，且 etag 必須相符（If-Match）；檔案進 Nextcloud 垃圾桶（Deleted files app 啟用時）。子程序另需 ALLOW_DELETE=true（只在授權此工具時設定）。預設關閉。 PUT /api/policy (HA admin+CSRF): enabled_write_tools 選取精確 grant；disabled 優先；舊全域開關僅保留兩個既有 writer | tests/test_tool_inventory.py, tests/test_expansion_security.py, tests/test_expansion_runtime.py, tests/test_stream_error_redaction.py |
+| `get_file_content` | read | supported-bounded / on | {} | — | get_file_content：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 回 UTF-8 文字檔內容（含使用者資料）；資料夾、二進位與超過大小上限（預設 1 MiB）的檔案拒絕。 authorized-admin-policy: remove from disabled | tests/test_tool_inventory.py, tests/test_expansion_security.py, tests/test_expansion_runtime.py, tests/test_stream_error_redaction.py |
+| `get_file_tree` | read | supported-bounded / on | {} | — | get_file_tree：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 只列一個帳號 home 底下的路徑、大小、時間、etag 與類型；深度 1–3、筆數上限由子程序設定（預設 500）。 authorized-admin-policy: remove from disabled | tests/test_tool_inventory.py, tests/test_expansion_security.py, tests/test_expansion_runtime.py, tests/test_stream_error_redaction.py |
+| `list_calendars` | read | supported-bounded / on | {} | — | list_calendars：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 只回行事曆 id、名稱、元件、顏色與寫入權限。 authorized-admin-policy: remove from disabled | tests/test_tool_inventory.py, tests/test_expansion_security.py, tests/test_expansion_runtime.py, tests/test_stream_error_redaction.py |
+| `list_tasks` | read | supported-bounded / on | {} | — | list_tasks：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 只讀 VTODO（摘要、狀態、日期、優先度、描述截 500 字）；不能改任務。 authorized-admin-policy: remove from disabled | tests/test_tool_inventory.py, tests/test_expansion_security.py, tests/test_expansion_runtime.py, tests/test_stream_error_redaction.py |
+| `read_text_file` | read | supported-bounded / on | {} | — | read_text_file：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 同 get_file_content 另含 etag／大小／類型；內容是使用者資料。 authorized-admin-policy: remove from disabled | tests/test_tool_inventory.py, tests/test_expansion_security.py, tests/test_expansion_runtime.py, tests/test_stream_error_redaction.py |
+| `update_text_file` | write | supported-bounded / off | {} | update_text_file | update_text_file：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。 只在 etag 相符時整份取代（If-Match）；檔案被改過就失敗。 PUT /api/policy (HA admin+CSRF): enabled_write_tools 選取精確 grant；disabled 優先；舊全域開關僅保留兩個既有 writer | tests/test_tool_inventory.py, tests/test_expansion_security.py, tests/test_expansion_runtime.py, tests/test_stream_error_redaction.py |
+| `upload_file` | write | supported-bounded / off | {} | upload_file | upload_file：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。 不帶 expected_etag 只建立新檔，帶 etag 只取代該版本；內容可為任意類型（base64），請求本體受 gateway 256 KiB 上限。預設關閉。 PUT /api/policy (HA admin+CSRF): enabled_write_tools 選取精確 grant；disabled 優先；舊全域開關僅保留兩個既有 writer | tests/test_tool_inventory.py, tests/test_expansion_security.py, tests/test_expansion_runtime.py, tests/test_stream_error_redaction.py |
 
 ## n8n：上游 28／本地 bounded 13
 

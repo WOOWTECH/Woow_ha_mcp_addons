@@ -75,6 +75,7 @@
     "apps/litellm/vendor/woow_litellm_mcp_server/errors.py": "3615e517ac06aef789b9dad2387bd6fe4238f49f493d3fe2e95a4965c10a034f",
     "apps/litellm/vendor/woow_litellm_mcp_server/gating.py": "b53476befdf8ff25c6f5688a510c669c0cca6cc704f8b00f7b5dfd0265b79bcb",
     "apps/litellm/vendor/woow_litellm_mcp_server/lifespan.py": "02f2d2998dd0ada21d8560203409184a359d35b18e546ee6c68a7b24f87c18da",
+    "apps/litellm/vendor/woow_litellm_mcp_server/metadata.py": "e606ccda155cbcf20d058fa609617b247506ef7b64efdb93c812b0c153e0d90b",
     "apps/litellm/vendor/woow_litellm_mcp_server/middleware.py": "a019bb77516d924981301c06a933263fc6743380c32488efaba2748bd28a05c5",
     "apps/litellm/vendor/woow_litellm_mcp_server/registry.py": "a074a48ceeef9393ab46500420156fc59c39471c1fa6739e9030c81e7c597cae",
     "apps/litellm/vendor/woow_litellm_mcp_server/server.py": "85c3cb8f6d50bed817279754c16309919bdf419f8193b6291f47f08f80db89f7",
@@ -89,6 +90,16 @@
     "apps/litellm/vendor/woow_litellm_mcp_server/tools/spend.py": "f90f29026fb32c96d0c8030338383426661c63c44ba5c1602c83824ddadf7a70",
     "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py": "dec04344367fbdf95ff8146448f0dd083934a5f636cb528551eebf5aaa52a082",
     "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py": "6a27ed1b1f466a32e9d255ecfdad319854b42027d5547ceb53337d95d55ae620",
+    "apps/nextcloud/vendor/nextcloud_mcp_server/__init__.py": "2f6d96255502d9d54b61780e1206faedab975256f07ad2348612aff963b94073",
+    "apps/nextcloud/vendor/nextcloud_mcp_server/caldav.py": "62c0b669f1437cc7e3bd934dc34c61dab931e1af635b8a39351124b10fa6b213",
+    "apps/nextcloud/vendor/nextcloud_mcp_server/client.py": "6022b7b961a596aa4787a46996d4dae3258d5845d60129d0acc666c71e84aac9",
+    "apps/nextcloud/vendor/nextcloud_mcp_server/errors.py": "7ab82e3d7cfde2cb90e5b714f4b1962f5d9cb463f5a105e87e55f23011229545",
+    "apps/nextcloud/vendor/nextcloud_mcp_server/ical.py": "11fd8cdca4b94e49d6725b3dcbc9cb867c21687634a23684057360b69a1c1593",
+    "apps/nextcloud/vendor/nextcloud_mcp_server/paths.py": "e4eddd67c7339acf61d60fead9e78a2f6c0ade0d1c6bf96581a4387ab6b50b62",
+    "apps/nextcloud/vendor/nextcloud_mcp_server/server.py": "7a4ad255e3fc4f882f77fd07370be1f852f25bf8eec00e1b1ee0f25a76312f6d",
+    "apps/nextcloud/vendor/nextcloud_mcp_server/settings.py": "4f4160d873a374f16847b2afabdc32caa7780fa3bd5cc8425142926f0f56a79b",
+    "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py": "da4dc481a5ebae32850ca2d45af0d921b1de1c2b7b59b415d5b58b9300d3e6a6",
+    "apps/nextcloud/vendor/nextcloud_mcp_server/webdav.py": "51ab5176021921186cd847fcc54cd787b73b1e0fc6b14f570b510a418aae8c44",
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools.js": "acb4d2a3ec74b5f2b41d327a93340a0f9a799e99947656afd010a76390fb10cb",
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js": "28d54ea6a3001678fd510542c82c04c26b2ff3b55b7db63b630800e82e02191f",
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/agents-action-map.js": "9282db04957b8a7931cd99ceddcbfd943419732930325256b03ecc443075c8e8",
@@ -128,8 +139,7 @@
     "apps/hermes/launch.py": "5c9197f5898a7fbae317e824a4601f6d076996f229054cb2e664a5f5f785a0f3",
     "apps/odoo/launch.py": "0d5b45e54909264c7fce027c0d271331b8b4e3dd46073b1ce3c0783008b5c06e",
     "apps/odoo-manage/launch.py": "7e2adc8ce3ece9240ce54d1c7429ceed3bd61d95e6a700ef00094816f9cca515",
-    "apps/opendesign/launch.py": "b08e650f3309555db5f5291e948e1831c30da6ea41be7121579494729ce117dc",
-    "apps/litellm/vendor/woow_litellm_mcp_server/metadata.py": "e606ccda155cbcf20d058fa609617b247506ef7b64efdb93c812b0c153e0d90b"
+    "apps/opendesign/launch.py": "b08e650f3309555db5f5291e948e1831c30da6ea41be7121579494729ce117dc"
   },
   "products": {
     "odoo": {
@@ -7077,6 +7087,450 @@
               "user_id"
             ],
             "title": "LiteLLMUserInfo",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
+          ]
+        }
+      ]
+    },
+    "nextcloud": {
+      "upstream_count": 9,
+      "supported_count": 9,
+      "tools": [
+        {
+          "name": "create_text_file",
+          "source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py",
+          "line": 815,
+          "evidence": "python-registration-AST",
+          "operations": {},
+          "source_signature": "path: PathArg, content: ContentArg",
+          "effect": "write",
+          "operation_effects": {},
+          "dispatch_operations": {},
+          "status": "supported-bounded",
+          "default_enabled": false,
+          "write_grants": [
+            "create_text_file"
+          ],
+          "operation_parameter": null,
+          "enable": "PUT /api/policy (HA admin+CSRF): enabled_write_tools 選取精確 grant；disabled 優先；舊全域開關僅保留兩個既有 writer",
+          "reason": "create_text_file：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。 只建立新檔（If-None-Match: *），從不覆寫；上層資料夾必須已存在。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "description": "File path relative to the account's home folder, '/' as separator, e.g. 'Documents/notes.md'. A leading '/' is optional. Do not percent-encode it.",
+                "maxLength": 1024,
+                "minLength": 1,
+                "title": "Path",
+                "type": "string"
+              },
+              "content": {
+                "description": "The complete new text of the file (UTF-8). It replaces nothing else.",
+                "maxLength": 262144,
+                "title": "Content",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "content"
+            ],
+            "title": "CreateText",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
+          ]
+        },
+        {
+          "name": "delete_file_checked",
+          "source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py",
+          "line": 828,
+          "evidence": "python-registration-AST",
+          "operations": {},
+          "source_signature": "path: PathArg, expected_etag: EtagArg",
+          "effect": "write",
+          "operation_effects": {},
+          "dispatch_operations": {},
+          "status": "supported-bounded",
+          "default_enabled": false,
+          "write_grants": [
+            "delete_file_checked"
+          ],
+          "operation_parameter": null,
+          "enable": "PUT /api/policy (HA admin+CSRF): enabled_write_tools 選取精確 grant；disabled 優先；舊全域開關僅保留兩個既有 writer",
+          "reason": "delete_file_checked：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。 只刪單一檔案、不刪資料夾，且 etag 必須相符（If-Match）；檔案進 Nextcloud 垃圾桶（Deleted files app 啟用時）。子程序另需 ALLOW_DELETE=true（只在授權此工具時設定）。預設關閉。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "description": "File path relative to the account's home folder, '/' as separator, e.g. 'Documents/notes.md'. A leading '/' is optional. Do not percent-encode it.",
+                "maxLength": 1024,
+                "minLength": 1,
+                "title": "Path",
+                "type": "string"
+              },
+              "expected_etag": {
+                "description": "The etag returned by read_text_file or get_file_tree for the version you read. Quotes are optional.",
+                "maxLength": 258,
+                "minLength": 1,
+                "pattern": "^[\\x21-\\x7e]+$",
+                "title": "Expected Etag",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "expected_etag"
+            ],
+            "title": "DeleteChecked",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
+          ]
+        },
+        {
+          "name": "get_file_content",
+          "source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py",
+          "line": 799,
+          "evidence": "python-registration-AST",
+          "operations": {},
+          "source_signature": "path: PathArg",
+          "effect": "read",
+          "operation_effects": {},
+          "dispatch_operations": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "write_grants": [],
+          "operation_parameter": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "get_file_content：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 回 UTF-8 文字檔內容（含使用者資料）；資料夾、二進位與超過大小上限（預設 1 MiB）的檔案拒絕。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "description": "File path relative to the account's home folder, '/' as separator, e.g. 'Documents/notes.md'. A leading '/' is optional. Do not percent-encode it.",
+                "maxLength": 1024,
+                "minLength": 1,
+                "title": "Path",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "title": "FilePath",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
+          ]
+        },
+        {
+          "name": "get_file_tree",
+          "source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py",
+          "line": 796,
+          "evidence": "python-registration-AST",
+          "operations": {},
+          "source_signature": "path: FolderArg='', depth: DepthArg=1",
+          "effect": "read",
+          "operation_effects": {},
+          "dispatch_operations": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "write_grants": [],
+          "operation_parameter": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "get_file_tree：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 只列一個帳號 home 底下的路徑、大小、時間、etag 與類型；深度 1–3、筆數上限由子程序設定（預設 500）。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "default": "",
+                "description": "Folder (or file) path relative to the account's home folder; '' or '/' is the home folder itself. Do not percent-encode it.",
+                "maxLength": 1024,
+                "title": "Path",
+                "type": "string"
+              },
+              "depth": {
+                "default": 1,
+                "description": "How many folder levels to list: 1 = direct children only, at most 3.",
+                "maximum": 3,
+                "minimum": 1,
+                "title": "Depth",
+                "type": "integer"
+              }
+            },
+            "title": "FileTree",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
+          ]
+        },
+        {
+          "name": "list_calendars",
+          "source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py",
+          "line": 805,
+          "evidence": "python-registration-AST",
+          "operations": {},
+          "source_signature": "",
+          "effect": "read",
+          "operation_effects": {},
+          "dispatch_operations": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "write_grants": [],
+          "operation_parameter": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "list_calendars：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 只回行事曆 id、名稱、元件、顏色與寫入權限。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "Arguments",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
+          ]
+        },
+        {
+          "name": "list_tasks",
+          "source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py",
+          "line": 808,
+          "evidence": "python-registration-AST",
+          "operations": {},
+          "source_signature": "calendar: CalendarArg=None, include_completed: IncludeCompletedArg=False, limit: LimitArg=100",
+          "effect": "read",
+          "operation_effects": {},
+          "dispatch_operations": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "write_grants": [],
+          "operation_parameter": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "list_tasks：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 只讀 VTODO（摘要、狀態、日期、優先度、描述截 500 字）；不能改任務。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "calendar": {
+                "anyOf": [
+                  {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Calendar id from list_calendars to read only that calendar; omit (or null) to read every calendar that holds tasks.",
+                "title": "Calendar"
+              },
+              "include_completed": {
+                "default": false,
+                "description": "Also return completed and cancelled tasks.",
+                "title": "Include Completed",
+                "type": "boolean"
+              },
+              "limit": {
+                "default": 100,
+                "description": "Maximum number of tasks to return (1-500).",
+                "maximum": 500,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              }
+            },
+            "title": "Tasks",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
+          ]
+        },
+        {
+          "name": "read_text_file",
+          "source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py",
+          "line": 802,
+          "evidence": "python-registration-AST",
+          "operations": {},
+          "source_signature": "path: PathArg",
+          "effect": "read",
+          "operation_effects": {},
+          "dispatch_operations": {},
+          "status": "supported-bounded",
+          "default_enabled": true,
+          "write_grants": [],
+          "operation_parameter": null,
+          "enable": "authorized-admin-policy: remove from disabled",
+          "reason": "read_text_file：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 同 get_file_content 另含 etag／大小／類型；內容是使用者資料。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "description": "File path relative to the account's home folder, '/' as separator, e.g. 'Documents/notes.md'. A leading '/' is optional. Do not percent-encode it.",
+                "maxLength": 1024,
+                "minLength": 1,
+                "title": "Path",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "title": "FilePath",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
+          ]
+        },
+        {
+          "name": "update_text_file",
+          "source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py",
+          "line": 818,
+          "evidence": "python-registration-AST",
+          "operations": {},
+          "source_signature": "path: PathArg, content: ContentArg, expected_etag: EtagArg",
+          "effect": "write",
+          "operation_effects": {},
+          "dispatch_operations": {},
+          "status": "supported-bounded",
+          "default_enabled": false,
+          "write_grants": [
+            "update_text_file"
+          ],
+          "operation_parameter": null,
+          "enable": "PUT /api/policy (HA admin+CSRF): enabled_write_tools 選取精確 grant；disabled 優先；舊全域開關僅保留兩個既有 writer",
+          "reason": "update_text_file：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。 只在 etag 相符時整份取代（If-Match）；檔案被改過就失敗。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "description": "File path relative to the account's home folder, '/' as separator, e.g. 'Documents/notes.md'. A leading '/' is optional. Do not percent-encode it.",
+                "maxLength": 1024,
+                "minLength": 1,
+                "title": "Path",
+                "type": "string"
+              },
+              "content": {
+                "description": "The complete new text of the file (UTF-8). It replaces nothing else.",
+                "maxLength": 262144,
+                "title": "Content",
+                "type": "string"
+              },
+              "expected_etag": {
+                "description": "The etag returned by read_text_file or get_file_tree for the version you read. Quotes are optional.",
+                "maxLength": 258,
+                "minLength": 1,
+                "pattern": "^[\\x21-\\x7e]+$",
+                "title": "Expected Etag",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "content",
+              "expected_etag"
+            ],
+            "title": "UpdateText",
+            "type": "object"
+          },
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_expansion_security.py",
+            "tests/test_expansion_runtime.py",
+            "tests/test_stream_error_redaction.py"
+          ]
+        },
+        {
+          "name": "upload_file",
+          "source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py",
+          "line": 823,
+          "evidence": "python-registration-AST",
+          "operations": {},
+          "source_signature": "path: PathArg, content_base64: Base64Arg, expected_etag: OptionalEtagArg=None",
+          "effect": "write",
+          "operation_effects": {},
+          "dispatch_operations": {},
+          "status": "supported-bounded",
+          "default_enabled": false,
+          "write_grants": [
+            "upload_file"
+          ],
+          "operation_parameter": null,
+          "enable": "PUT /api/policy (HA admin+CSRF): enabled_write_tools 選取精確 grant；disabled 優先；舊全域開關僅保留兩個既有 writer",
+          "reason": "upload_file：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。 不帶 expected_etag 只建立新檔，帶 etag 只取代該版本；內容可為任意類型（base64），請求本體受 gateway 256 KiB 上限。預設關閉。",
+          "accepted_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "description": "File path relative to the account's home folder, '/' as separator, e.g. 'Documents/notes.md'. A leading '/' is optional. Do not percent-encode it.",
+                "maxLength": 1024,
+                "minLength": 1,
+                "title": "Path",
+                "type": "string"
+              },
+              "content_base64": {
+                "description": "The file's bytes, standard base64 (RFC 4648, with padding).",
+                "maxLength": 262144,
+                "minLength": 1,
+                "title": "Content Base64",
+                "type": "string"
+              },
+              "expected_etag": {
+                "anyOf": [
+                  {
+                    "description": "The etag returned by read_text_file or get_file_tree for the version you read. Quotes are optional.",
+                    "maxLength": 258,
+                    "minLength": 1,
+                    "pattern": "^[\\x21-\\x7e]+$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Omit (or null) to create a new file only. To replace an existing file, give the etag of the version you read (from get_file_tree or read_text_file).",
+                "title": "Expected Etag"
+              }
+            },
+            "required": [
+              "path",
+              "content_base64"
+            ],
+            "title": "Upload",
             "type": "object"
           },
           "tests": [

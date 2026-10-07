@@ -16,8 +16,8 @@ test('URLs reject credentials/query/fragment, preserve explicit client endpoint'
   assert.equal(explicitUrl('http://192.0.2.4:8081/mcp/', true), 'http://192.0.2.4:8081/mcp');
   assert.throws(() => explicitUrl('https://example.test/api', true));
 });
-test('seven typed product payloads; no invented OpenDesign token, preserve means no request', () => {
-  assert.equal(Object.keys(products).length, 7);
+test('eight typed product payloads; no invented OpenDesign token, preserve means no request', () => {
+  assert.equal(Object.keys(products).length, 8);
   for (const [product, spec] of Object.entries(products)) {
     const values = Object.fromEntries(spec.fields.map(([key, , type]) => [key, type.startsWith('optional') ? '' : type === 'mode' ? 'read' : type === 'url' ? 'https://backend.example.test' : ' fixture value ']));
     const payload = backendPayload(product, 'replace', values);

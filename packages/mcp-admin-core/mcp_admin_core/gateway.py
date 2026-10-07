@@ -368,7 +368,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 # No yield between durable commit and lifecycle ownership transfer.
                 # An authorized mutation is not undone by losing its HTTP caller.
                 committed.set()
-                if (name == "backend" or (name == "policy" and getattr(state, 'product', 'n8n') in ('emqx', 'litellm'))) and backend_changed:
+                if (name == "backend" or (name == "policy" and getattr(state, 'product', 'n8n') in ('emqx', 'litellm', 'nextcloud'))) and backend_changed:
                     await backend_changed(updated)
                 return JSONResponse({"saved": True}, headers=headers)
             return Response(status_code=404)

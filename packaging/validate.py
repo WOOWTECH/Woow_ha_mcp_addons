@@ -16,13 +16,13 @@ import yaml
 from builder_contract import RUNNER
 
 ROOT = Path(__file__).resolve().parents[1]
-PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm')  # in the store, built and released
+PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud')  # in the store, built and released
 # Owner decision 2026-10-06: Odoo Manage is archived. It left the store and no image is built or released again
 # (0.1.4 was the last); its source stays in apps/odoo-manage and the shared core, and is still tested.
 RETIRED = ('odoo-manage',)
 URL = 'https://github.com/WOOWTECH/Woow_ha_mcp_addons'
 VERSION = '0.1.6'
-TITLES = dict(zip(PRODUCTS, ('Odoo', 'n8n', 'Hermes', 'OpenDesign', 'EMQX', 'LiteLLM')))
+TITLES = dict(zip(PRODUCTS, ('Odoo', 'n8n', 'Hermes', 'OpenDesign', 'EMQX', 'LiteLLM', 'Nextcloud')))
 
 
 class Invalid(ValueError):
@@ -102,7 +102,9 @@ def manifest(value, product):
                 'full_access', 'docker_api', 'hassio_api', 'auth_api'):
         expected[key] = False
     # Approved broad-Core capability exception: n8n pilot (2026-10-04) and the other six (owner decision
-    # 2026-10-05, 0.1.1). hassio_role remains omitted/default; all other privileges stay closed.
+    # 2026-10-05, 0.1.1). Nextcloud (0.1.7) carries the same manifest per its integration contract (HAOS delivery
+    # line, 2026-10-08; owner confirmation before release). hassio_role remains omitted/default; all other
+    # privileges stay closed.
     expected['homeassistant_api'] = True
     for text in (expected['description'], expected['ports_description']['8081/tcp']):
         require(isinstance(text, str) and 1 <= len(text) <= 512, 'missing description')
@@ -345,7 +347,7 @@ def validate(root=ROOT):
                 for step in job['steps']:
                     if step.get('uses', '').startswith('actions/checkout@'):
                         exact(step['with']['ref'], '${{ github.sha }}', 'no arbitrary release checkout')
-    print('PASS: six strict Supervisor-subset manifests, translations, pins, workflow policy and clearance shape')
+    print('PASS: seven strict Supervisor-subset manifests, translations, pins, workflow policy and clearance shape')
 
 
 if __name__ == '__main__':

@@ -9,7 +9,8 @@
     "hermes",
     "opendesign",
     "emqx",
-    "litellm"
+    "litellm",
+    "nextcloud"
   ],
   "version": "0.1.6",
   "bases": {
