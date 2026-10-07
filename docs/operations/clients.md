@@ -1,6 +1,6 @@
 # MCP client 連線（真實 client 待驗收）
 
-**六支 0.1.5 映像已發佈，管理面板與 provider 已在測試 HA 實測（owner 可用、一般使用者 403）；真實 MCP client 尚未驗收（見文末）。
+**六支 0.1.6 映像已發佈（0.1.5 的管理面板與 provider 已在測試 HA 實測，owner 可用、一般使用者 403；0.1.6 待回歸）；真實 MCP client 尚未驗收（見文末）。
 以下是配置形狀，不是可用憑證或繞過授權操作。** 支援的本地契約是
 Streamable HTTP `/mcp`（回應可含 SSE），不是 legacy `/sse` 或 token path。
 
@@ -88,7 +88,11 @@ v3 保存取代全部 `enabled_write_tools` 並關閉 legacy global，不能僅�
 initialize／tools/list／讀取／拒絕／缺錯撤 token／後端斷線回歸（[0.1.5 紀錄](ha-test-0.1.5.md)）。同 HA Pi／Omnigent／Hermes、
 LAN client、HA Assist、n8n AI Agent 等真實 client 仍待驗收。
 
-**已知相容性問題（0.1.5）：** 2026-10-07 不經 HA 的模型供應商測試（只送 0.1.5 的工具 schema，只走 OpenRouter）：Claude Sonnet 4.5、
+**AI client 相容性（0.1.6 已修正）：** 0.1.6 把下面 7 個工具宣告的 `inputSchema` 頂層改成單純的 `type: object`（拿掉 `oneOf`／`allOf`，
+分支規則寫進 description；gateway 驗證不變）。2026-10-07 以同樣五個模型經 OpenRouter 複驗，六支全部接受（30/30）；直連
+Anthropic／OpenAI API 與實際 client 仍未測。以下是 0.1.5 的紀錄。
+
+**0.1.5 的已知相容性問題（0.1.6 已修正）：** 2026-10-07 不經 HA 的模型供應商測試（只送 0.1.5 的工具 schema，只走 OpenRouter）：Claude Sonnet 4.5、
 GPT-4o-mini 拒收 n8n、Odoo、Hermes 的完整工具清單（HTTP 400；7 個工具的 `inputSchema` 頂層有 `oneOf`／`allOf`），
 OpenDesign、EMQX、LiteLLM 兩家都接受；另外三個模型（GLM-4.6、MiniMax-M2、Llama-3.3-70B）六支都接受。
 供應商拒絕的是整個請求，不只那幾個工具。直連 Anthropic／OpenAI API 與實際 client（Claude Code、HA 對話代理、n8n AI Agent 等）

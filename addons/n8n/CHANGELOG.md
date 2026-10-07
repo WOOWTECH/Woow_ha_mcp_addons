@@ -1,6 +1,6 @@
 # n8n Changelog
 
-## 0.1.6 — 準備中（未發佈）
+## 0.1.6 — 2026-10-08 公開（experimental）
 
 - 管理面板（HA 角色驗證）：原本只認 Home Assistant Core 2026.7.2，Core 一升級，管理面板與管理 API 就全部回 403。改為經原始碼審查的版本清單 2026.7.2–2026.9.4 與 2026.10.0（驗證器用到的 Core 使用者清單 API、欄位、回應格式與管理員群組在這些版本間沒有變動；2026.10.0 改用 probatio，相關的 13 個檔案有改動，逐行審查後確認不影響；auth 訊息由 Supervisor 產生，審查紀錄見 docs/ha-role-core-contract.md）；清單外的版本照樣拒絕，auth_required 與 auth_ok 回報的版本也必須相同。MCP 端點不受影響（它用 Bearer token）。
 - gateway（0.1.5 發佈候選審查 F3 與 0.1.6 審查）：tools/list 的結果由 gateway 重新組成，只留工具清單與字串型的 nextCursor，同名工具只留第一個。
@@ -33,7 +33,7 @@
   官方 MCP 的 client 只用固定 Bearer、不用 OAuth，所以不受影響；但供應鏈檢查對有修正版的 High 一律擋下，因此升級。1.31.0 在 server 端
   另外加了請求內容 4 MiB 上限與 JSON-RPC 批次 100 筆上限（gateway 本來就限制單一請求 256 KiB）。n8n-mcp 2.91.0 本身鎖 1.30.0，
   以 npm overrides 調整。
-- 映像 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.6` 尚未建置；0.1.0–0.1.5 tag 不覆寫。
+- 映像 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.6`（候選 302c96d，build／container／supply-chain gate 全過；發佈候選完整獨立審查與複審 APPROVE WITH NOTES）；0.1.0–0.1.5 tag 不覆寫。
 - 已知問題（延到 0.1.7）：
   - 被 policy 拒絕的 tools/call 仍回 HTTP 403（0.1.5 發佈候選審查 F7；上面 R2 的修正只涵蓋被拒的 initialize）。Python MCP SDK
     1.x client 收到這個 403 會整段斷線、不送 DELETE，子程序的 session 就留下來。所有 client 共用 20 個 session，10 分鐘內約

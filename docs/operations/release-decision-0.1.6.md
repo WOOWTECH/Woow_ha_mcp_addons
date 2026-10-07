@@ -1,12 +1,13 @@
-# 0.1.6 發佈紀錄（草稿）
+# 0.1.6 發佈紀錄（2026-10-08）
 
-**狀態：** 2026-10-08 起草，映像尚未建置。發佈日期與標「（建置後填入）」的地方在映像建置、推送 GHCR 後補上；發佈時標題改成發佈日期。
+**狀態：** 2026-10-08 發佈（experimental）。六支映像由 302c96d 建置、通過 gate，以測過的 image ID 推送 GHCR，並以匿名 registry_gate public
+驗證；測試 HA 回歸待負責人核准更新窗口。
 
 **依據：** 0.1.5 留下的 0.1.6 待辦（[release-decision-0.1.5](release-decision-0.1.5.md)）；0.1.5 只認 Core 2026.7.2，Core 升級後管理面板
 整個 403；AI 測試第 0 階段（B0）經 OpenRouter 發現 Claude、GPT 拒收 n8n、Odoo、Hermes 的工具清單（負責人決定 D21）；Core 2026.10.0
 （2026-10-07 發佈）；以及 0.1.6 各輪審查（R1、R2-harole、R3-init-cleanup、R4-schema-flatten、RC）的意見。
 
-## 內容（映像來源 （建置後填入））
+## 內容（映像來源 `302c96d6b4c99a1fcfb5424dceee7e2337a02a57`）
 
 - 管理面板（HA 角色驗證，六支共用同一個驗證器）：原本只認 Core 2026.7.2，改為經原始碼審查的 13 個版本：2026.7.2–2026.9.4 與
   2026.10.0（`ha_role._HA_VERSIONS`，審查紀錄 [ha-role-core-contract](../ha-role-core-contract.md)）；`auth_required` 與 `auth_ok`
@@ -24,7 +25,7 @@
   MCP server、內附 client 只用固定 Bearer，不受影響，但 0.1.6 第一次建置時 supply-chain gate 因「有修正版的 High」擋下 n8n，所以升級；
   n8n-mcp 2.91.0 鎖 1.30.0，以 npm overrides 調整；1.31.0 的 server 端只多了請求內容 4 MiB 上限與批次 100 筆上限）。
 - 程式 commit：518253a、a7dfcd0（tools/list）；79302e1、c8f601e、d9b50ac（Core 版本清單）；37013ca（initialize 收尾）；df3aaae（schema
-  扁平化）；n8n SDK 1.31.0：（建置後填入）。e4828da 合併商店分支到 797d4e1（含 92e9695；只改 README、docs/operations 與 `addons/odoo/DOCS.md` 一段，都不在映像內）。
+  扁平化）；n8n SDK 1.31.0：302c96d（同一個 commit 也處理 RC 複審的文件註記）。e4828da 合併商店分支到 797d4e1（含 92e9695；只改 README、docs/operations 與 `addons/odoo/DOCS.md` 一段，都不在映像內）。
   RC 文件修正：2698bea；版號 0.1.5→0.1.6（20 處，獨立 commit）：f53a1d9。
 - 不在 0.1.6：Nextcloud（第七支 add-on，在另一條開發線）；Odoo Manage 維持下架、不建置。
 - 0.1.5 留下的 0.1.6 待辦：RC F3 與「initialize 回 502 時子程序 session 沒關」已在本版處理；RC F7 延到 0.1.7（見文末）；ledger 罕見的
@@ -43,28 +44,32 @@
     （RC：RELEASE-3 修正後沒有 high／medium，符合 APPROVE WITH NOTES 的條件）；GATEWAY-2、GATEWAY-3、RELEASE-4（F7）是 0.1.6 之前就有的程式問題，延到 0.1.7，寫進六支 CHANGELOG 的已知問題與
     [client 文件](clients.md)。
 - 全套 `tests/` 1644 passed／0 failed／0 error／0 skipped；packaging 147 OK；validate PASS（Claude 交付線 tests-016/run7，tree `9913ce7b`
-  ＝d9b50ac）。之後的商店合併、RC 文件修正與版號 commit 都不在其中，要在版號 commit 上重跑：（建置後填入）。
+  ＝d9b50ac）。之後在版號 commit f53a1d9（tests-016/run8，tree `2c989c87`）與映像來源 302c96d（tests-016/run9，tree `de079d69`）各重跑一次：
+  兩次都是 1644 passed／0 failed／0 error／0 skipped；packaging 147 OK；validate PASS。
 - 供應商重驗（B0 複驗 016，2026-10-07，經 OpenRouter；Claude 交付線 e2e/B0-recheck-016-20261007T1040Z/）：宣告的 schema 送五個模型 ×
   六支，接受度由 B0 的 24/30 變成 30/30（Claude、GPT 對 n8n、Odoo、Hermes 都回 200）；直連 Anthropic／OpenAI API 與實際 client 未測。
-- builder VM：六支 build、container/mock、supply-chain gate（source／history／image／evidence secrets、SBOM、CVE、license）：（建置後填入）。
+- builder VM：第一次候選 f53a1d9（2026-10-07 21:01–21:25Z）五支 P1–P5 全過；n8n 的 supply-chain gate 因 `@modelcontextprotocol/sdk` 1.30.0
+  的 GHSA-6qxp-vccf-f47h（High、有修正版）擋下，302c96d 改用 1.31.0。第二次候選 302c96d（21:37–22:01Z）六支 build、container/mock、
+  supply-chain gate（source／history／image／evidence secrets、SBOM、CVE、license）全過；推送後匿名 registry_gate public 六支 PASS。
+  證據在 Claude 交付線 evidence-rc-302c96d/（第一次候選的 n8n 診斷 diag-n8n-f53a1d9.* 一併保存）。
 
 | 產品 | 已測 image ID（推送的就是這個 ID，不重建） | GHCR manifest digest（匿名 registry_gate public） |
 |---|---|---|
-| n8n | （建置後填入） | （建置後填入） |
-| odoo | （建置後填入） | （建置後填入） |
-| hermes | （建置後填入） | （建置後填入） |
-| opendesign | （建置後填入） | （建置後填入） |
-| emqx | （建置後填入） | （建置後填入） |
-| litellm | （建置後填入） | （建置後填入） |
+| n8n | `sha256:7f2d06d0a2d980148dbb1fecb26b453ee67914f571dbd7d67a0a9ac098f597e3` | `sha256:274a4268be3cce9f7646745bf81609188b2f12ee3b646f331a503593b7552947` |
+| odoo | `sha256:9d3238c1f7a5040a864adadc4cc2b837d5f73f5aa276f922a7590d24ad7de7ce` | `sha256:a5c6ab141cef837b867e86554d40c9a53a2e1a68d956d187b32391909228d94f` |
+| hermes | `sha256:b47cb7b2c27ce37294bde1954f80fa12f1df3d286c95e9cc7e05810299e0c07c` | `sha256:d8f56790c309a8869ed0775477184ff4115bb7cea5b164c16ae56ed4375fa6a8` |
+| opendesign | `sha256:32ea0687f992543e61824e236b6803b3c5ef84530b97b9f46368c0d3a716c039` | `sha256:8caa01745528e2f82d9b83e9e35a8ab44fafbcf8f73b175550e710c8c35f3bf3` |
+| emqx | `sha256:7b621fed626119c2b35a083938d97f29eb57d2eccb24413ae98d2154af3dfb7e` | `sha256:5331892a55aec40f82bf505b2a74ba4e423f5e6b2ff6d91ed93235ae3d3aa32c` |
+| litellm | `sha256:fd4bfcf3ae893b6d69d7a4d5c62af22417d1515af1b27899884621405279323f` | `sha256:098f3667898b079dee79ae492a08d511336cba7dcdaf2962e84208856ef70e0d` |
 
-商店分支：0.1.6 已先合併商店分支的 797d4e1（e4828da），發佈後商店分支可 fast-forward 到 0.1.6。映像來源：（建置後填入）；
-發佈文件 commit：（建置後填入）；release tag v0.1.6 指向映像來源：（建置後填入）。
+商店分支：0.1.6 已先合併商店分支的 797d4e1（e4828da），發佈後商店分支可 fast-forward 到 0.1.6。映像來源：302c96d；
+發佈文件 commit：本 commit（緊接在 302c96d 之後，只改文件，不在映像內）；release tag v0.1.6 指向映像來源 302c96d。
 
 ## 未通過／未驗
 
 - 真 HA：只有 Core 2026.7.2 有真機證據（woowtech-ha，Supervisor 2026.09.3；Claude 交付線 e2e/ 的 M1a、O-D11 報告，2026-10-07）：
   測試用 HA 管理員經 Ingress 讀六支的管理 API，角色驗證放行；當時執行的是 0.1.5 映像。2026.7.3–2026.10.0 只靠原始碼審查與本機
-  loopback 測試，沒有真機證據。0.1.6 映像在測試 HA 的回歸：（建置後填入）。
+  loopback 測試，沒有真機證據。0.1.6 映像在測試 HA 的回歸：待負責人核准更新窗口後執行，結果另寫 ha-test-0.1.6.md。
 - 發佈前要用 core-contract-watch 再確認 Core 2026.10.1 是否已發佈（2026-10-08 查詢時最新是 2026.10.0）。若已發佈，0.1.6 在該版的
   管理面板整個 403；要納入就照 [ha-role-core-contract](../ha-role-core-contract.md) 的「Adding a release」。
 - aarch64 未建；LAN client、LiteLLM 工具（無後端）未測；真實 MCP client（同 HA Pi／Omnigent／Hermes、HA Assist、n8n AI Agent 等）未驗收。

@@ -2,13 +2,13 @@
 
 ## 目前狀態與安全邊界
 
-六份 manifest 是可從 HA 商店安裝的實驗版產品（0.1.5，映像已公開；Odoo Manage 已下架）。工具支援僅
+六份 manifest 是可從 HA 商店安裝的實驗版產品（0.1.6，映像已公開；Odoo Manage 已下架）。工具支援僅
 174/67/107（六支合計：來源／支援／暫不支援；工具表另列已下架的 Odoo Manage），[完整逐名工具表](../tool-surface.md)
 包含混合 operation、預設、啟用限制及未完成原因。唯讀分類不是由名字推測，
 unknown／未審工具即使開啟寫入仍拒絕。六支都有有界 writers／mixed operations，
 仍不是完整 writer parity；107 個暫不支援是明列內部工作，不假稱全部完成。
 
-**映像已發佈，0.1.1–0.1.5 已在測試 HA 回歸（[0.1.5 紀錄](ha-test-0.1.5.md)）。** 六支都批准
+**映像已發佈（目前 0.1.6）；0.1.1–0.1.5 已在測試 HA 回歸（[0.1.5 紀錄](ha-test-0.1.5.md)），0.1.6 待回歸。** 六支都批准
 `homeassistant_api: true`（n8n 自 0.1.0、其他自 0.1.1 起，負責人 2026-10-05 核准）；正式 fixed-WS provider 已實作並經審查，
 六支共用同一個驗證器（n8n 經 `apps/n8n/run.py`、其他五支經 `run_product.py`），下方的 Core 版本清單六支一體適用。
 管理 HTML/assets/API 與 UI 已串接：真 HA 上已實測 owner 經 Ingress 的後端設定與 token reveal/rotate/revoke（管理 API），
