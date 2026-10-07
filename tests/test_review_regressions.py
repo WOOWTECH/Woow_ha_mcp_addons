@@ -12,7 +12,7 @@ import pytest
 from mcp_admin_core.config import ConfigError, Store
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.lifecycle import ChildSpec, Supervisor
-from mcp_admin_core.policy import authorize
+from mcp_admin_core.policy import authorize, declared_schema
 from n8n_adapter import TOOLS
 
 
@@ -92,7 +92,8 @@ async def test_advertisements_match_local_contract(store, sse, method):
         assert reply["result"]["capabilities"] == {"tools": {}}
     else:
         for tool in reply["result"]["tools"]:
-            assert tool["inputSchema"] == TOOLS[tool["name"]].arguments.model_json_schema()
+            # 0.1.6 (AI Stage 0): the declared form of the local model (n8n_manage_folders loses its top-level oneOf).
+            assert tool["inputSchema"] == declared_schema(TOOLS[tool["name"]].arguments)
             assert tool["description"] == "upstream description"
         schemas = {tool["name"]: tool["inputSchema"] for tool in reply["result"]["tools"]}
         workflow = schemas["n8n_list_workflows"]

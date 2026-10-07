@@ -51,7 +51,8 @@ class DenialTests(unittest.TestCase):
             tools[name].arguments.model_validate(arguments)  # schema-valid, not a malformed false pass
             state = ProductState(product=product, token='a' * 43, child_token='b' * 43)
             listed = policy.filter_list({'result': {'tools': [{'name': name}]}}, tools, state)
-            self.assertEqual(listed['result']['tools'], [] if tools[name].write else [{'name':name, 'inputSchema':tools[name].arguments.model_json_schema()}])
+            # 0.1.6 (AI Stage 0): the declared form of the local model (hermes_skill loses its top-level oneOf).
+            self.assertEqual(listed['result']['tools'], [] if tools[name].write else [{'name':name, 'inputSchema':policy.declared_schema(tools[name].arguments)}])
             for args, disabled in (({'unreviewed': True}, []), (arguments, [name])):
                 with self.assertRaises(policy.Denied):
                     ns['authorize']({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call',

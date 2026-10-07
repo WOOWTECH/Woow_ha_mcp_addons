@@ -18,6 +18,11 @@
   且不是 client 自己帶來的 id；先關閉子程序的回覆，在同一個請求名額內送出，最多等 2 秒，子程序的回應一律不讀、不轉送，
   錯誤一律忽略，session id 也不寫進任何紀錄。client 收到的回覆完全不變，最多晚 2 秒（本機以釘選版本的 SDK 實測，延遲沒有
   可量測的差別）；initialize 成功（含 JSON-RPC 錯誤回覆）時 session 照常交給 client，其他方法不受影響。
+- gateway（0.1.6 AI 測試第 0 階段的發現，負責人決定 D21）：經 OpenRouter 實測，Claude 與 GPT 只要看到任一工具的
+  inputSchema 頂層有 oneOf、anyOf 或 allOf（GPT 另含 enum、const、not），就拒收整個請求（HTTP 400），所以原樣轉送
+  工具清單的 client 先前在 n8n、Odoo、Hermes 三支 add-on 上一個工具都叫不到。共用的 gateway 現在只宣告頂層為
+  `type: object` 的 schema（分支規則改寫進 description）。本 add-on 的工具 schema 頂層本來就沒有這些關鍵字，
+  tools/list 內容不變；驗證完全不變，gateway 仍用原本嚴格的 pydantic 模型檢查每個呼叫。
 - 映像 `ghcr.io/woowtech/amd64-mcp-emqx:0.1.6` 尚未建置；0.1.0–0.1.5 tag 不覆寫。
 
 ## 0.1.5 — 2026-10-06 公開（experimental）

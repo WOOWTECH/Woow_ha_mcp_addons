@@ -164,8 +164,8 @@ keeps only its id/event/retry lines; other events are dropped). A 200 without th
 response (empty body, stream ended or broken, only notifications/other ids) becomes HTTP
 503 with JSON-RPC error -32000 `BACKEND_UNAVAILABLE`, Retry-After 5 and no session id:
 the child gave no reply, e.g. its per-session lifespan could not reach the backend.
-Malformed or oversize replies are 502; 4xx/5xx replies keep their status (child 401/403: 502) with the gateway's body. JSON/SSE tool lists use the exact
-local argument model's inputSchema, not the broader upstream schema. On a permitted
+Malformed or oversize replies are 502; 4xx/5xx replies keep their status (child 401/403: 502) with the gateway's body. JSON/SSE tool lists use the
+local argument model's own inputSchema (0.1.6: its declared form, see below), not the broader upstream schema. On a permitted
 call, the gateway forwards the **validated model's serialized arguments**, including
 reviewed defaults and field-specific omission rules, not the raw client object.
 Reauthorization immediately before dispatch uses the same normalized values.
@@ -181,6 +181,36 @@ client compiled a child's `outputSchema` (a `$ref` or `pattern` became its error
 `$ref` URL) and refuses every call to a tool whose `execution.taskSupport` is `required`. Clients therefore no longer
 validate `structuredContent` against a child schema, and child `_meta` hints such as `anthropic/maxResultSizeChars` are not
 passed on (Claude Code then applies its default MCP output budget).
+
+0.1.6 (AI Stage 0, owner decision D21), declared vs validated schema: the `inputSchema` a tools/list carries is the
+*declared* form of the local argument model (`policy.declared_schema`), and the model itself stays the *validated* one.
+Claude and GPT refuse a whole request (HTTP 400) when any tool's input schema has `oneOf`, `anyOf` or `allOf` (GPT also
+`enum`, `const` or `not`) at its top level (measured through OpenRouter; direct Anthropic and OpenAI API calls were
+not tested). Seven local models had one: `n8n_manage_folders` (top-level `oneOf`), Odoo `diagnose_odoo_call` and
+`generate_json2_payload` (top-level `allOf` with `if`/`then`), Hermes `hermes_skill`, `hermes_tools`, `hermes_session`
+and `hermes_cron` (top-level `oneOf`); so a client that forwards the list unchanged to these models could use none of
+the n8n, Odoo or Hermes tools. A schema whose top level is already `{"type": "object", ...}` without those keywords,
+`if`/`then`/`else` or `$ref` is declared unchanged (69 of the 76 tools). Otherwise `policy.flat_schema` removes the
+top-level combinators (and `unevaluated*`, which pydantic does not emit and which would no longer see what the branches
+evaluated) and declares a superset:
+
+- the model's own members stay: `title`, `description`, `properties` (with their defaults and nested `anyOf`/`$ref`),
+  `required`, `additionalProperties` and the `$defs` still referenced;
+- members only the combinators declare are added where no branch leaves them free: identical schemas once, string
+  `const`/`enum` values merged into one `enum`, otherwise a nested `anyOf` of the distinct schemas;
+- `required` gains only what every branch requires; `additionalProperties: false` is added only when every branch has it;
+- the branch rules are appended to the schema `description` as plain clauses, members named in the model's own order
+  (then by name), so the declared bytes do not change between processes when only the member order inside the branches
+  does (`n8n_b3.folder_schema` builds each branch's members from a set); the order of the branches themselves is the
+  generator's, and it still orders what they add (merged `enum` values, nested `anyOf` members, added members, the
+  clauses). For example `n8n_manage_folders`: `Argument rules (checked by the server): action="list": omit folderId and
+  name; action="create": requires name, omit folderId; action="rename": requires folderId and name; action="get":
+  requires projectId and folderId, omit name, projectId must not be "personal".`
+
+Validation is unchanged: `authorize()` validates every call with the original strict pydantic model, branch rules
+included, before any dispatch, so a call that only the description rules out (for example `search_count` with a `limit`)
+is still a 403 that never reaches the child. The model's own JSON schema, with its branches, is the validated contract;
+the admin bootstrap (`GET /api/bootstrap`, `tools.*.inputSchema`) keeps showing it.
 
 0.1.6 (R2): an initialize the gateway refuses after the child answered (401 for a Bearer revoked meanwhile, the 502s
 and 503s above, a child 4xx/5xx relayed without its session id, a state error) may leave a session the child opened:

@@ -115,8 +115,9 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
                              "n8n_list_catalog", "n8n_executions", "n8n_health_check"}
             assert 'get_node' in names
             from n8n_adapter import TOOLS
+            from mcp_admin_core.policy import declared_schema
             for tool in tools["tools"]:
-                assert tool["inputSchema"] == TOOLS[tool["name"]].arguments.model_json_schema()
+                assert tool["inputSchema"] == declared_schema(TOOLS[tool["name"]].arguments)  # 0.1.6 declared form
             if configured_backend:
                 # Forged instance headers must not redirect the real Node API path.
                 async with client.stream("POST", url, headers={**headers,

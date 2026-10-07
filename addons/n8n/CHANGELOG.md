@@ -18,6 +18,16 @@
   且不是 client 自己帶來的 id；先關閉子程序的回覆，在同一個請求名額內送出，最多等 2 秒，子程序的回應一律不讀、不轉送，
   錯誤一律忽略，session id 也不寫進任何紀錄。client 收到的回覆完全不變，最多晚 2 秒（實測 n8n 每次只多約 1–3 毫秒）；
   initialize 成功（含 JSON-RPC 錯誤回覆）時 session 照常交給 client，其他方法不受影響。
+- gateway（0.1.6 AI 測試第 0 階段的發現，負責人決定 D21）：經 OpenRouter 實測，Claude 與 GPT 只要看到任一工具的
+  inputSchema 頂層有 oneOf、anyOf 或 allOf（GPT 另含 enum、const、not），就拒收整個請求（HTTP 400）。本 add-on 的
+  `n8n_manage_folders` 頂層是 oneOf，所以原樣轉送工具清單給 Claude 或 GPT 的 client 先前在
+  n8n 上一個工具都叫不到（Odoo、Hermes 也一樣）。現在 tools/list 宣告的 inputSchema 頂層一律是 `type: object`：
+  拿掉頂層組合子，title、properties（含預設值）、required、additionalProperties 照舊，分支規則改寫成英文短句附在
+  schema 的 description，例如 `Argument rules (checked by the server): action="list": omit folderId and name;
+  action="create": requires name, omit folderId; ...`。宣告的 schema 比原本寬（是原本的超集），驗證完全不變：gateway
+  仍用原本嚴格的 pydantic 模型檢查每個呼叫（含分支規則），只違反分支規則的呼叫照樣回 403、不會送到子程序。這支工具
+  原本分支內的欄位順序隨行程改變，現在宣告的 schema 每次都逐位元組相同。其他工具的 schema 頂層本來就沒有這些
+  關鍵字，內容不變；管理面板 bootstrap 顯示的仍是原本用來驗證的 schema。
 - 映像 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.6` 尚未建置；0.1.0–0.1.5 tag 不覆寫。
 
 ## 0.1.5 — 2026-10-06 公開（experimental）

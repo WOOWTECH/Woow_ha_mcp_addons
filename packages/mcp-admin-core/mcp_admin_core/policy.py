@@ -1,5 +1,6 @@
 """Audited dispatch allowlist. Tool advertisements are not authorization."""
 from dataclasses import dataclass
+import json
 from typing import Literal, Mapping, get_args, get_origin
 
 from pydantic import BaseModel, ValidationError
@@ -102,16 +103,295 @@ def authorize(message, tools: Mapping[str, Tool], state: State) -> str:
 # write path: the reviewed local Tool decides, never the child (0.1.6 R1 #1).
 CAUTIOUS_HINTS = {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": True}
 
+# 0.1.6 (AI Stage 0, owner decision D21): Claude and GPT refuse a WHOLE request (HTTP 400) when any tool's input schema
+# has one of these at its top level (Claude: oneOf/anyOf/allOf; OpenAI: also enum/const/not, and type must be "object");
+# if, then and else mean nothing there without them. Nested uses are accepted. A top-level $ref is resolved too.
+TOP_LEVEL_REFUSED = frozenset({"oneOf", "anyOf", "allOf", "enum", "const", "not", "if", "then", "else"})
+RULES_PREFIX = "Argument rules (checked by the server): "
+
+
+def declared_schema(arguments):
+    """The inputSchema a tools/list declares for a local argument model; authorize() still validates with the model."""
+    return flat_schema(arguments.model_json_schema())
+
+
+def flat_schema(schema):
+    """`schema` itself when its top level is {"type": "object"} without TOP_LEVEL_REFUSED keywords or $ref. Otherwise a
+    SUPERSET with such a top level: the schema's own members (title, description, defaults, properties...) are kept,
+    its combinators are replaced by what every instance they accept must satisfy (_object_view: required members, and
+    members the schema itself does not declare), and their rules are appended to the description as plain clauses. The
+    $defs still referenced are kept. Nothing the pinned model refuses is dispatched: authorize() validates with it."""
+    if schema.get("type") == "object" and not (TOP_LEVEL_REFUSED | {"$ref"}) & schema.keys():
+        return schema
+    defs = schema["$defs"] if isinstance(schema.get("$defs"), dict) else {}
+    # unevaluated* would no longer see what the removed branches evaluated: dropped (pydantic emits none).
+    dropped = TOP_LEVEL_REFUSED | {"$ref", "discriminator", "unevaluatedProperties", "unevaluatedItems"}
+    flat = {key: value for key, value in schema.items() if key not in dropped}
+    properties, required, closed = _object_view(schema, defs)
+    flat.update(type="object", properties=properties)
+    if required:
+        flat["required"] = required
+    if closed and "additionalProperties" not in flat:
+        flat["additionalProperties"] = False
+    # Clauses name members in the schema's own order (pydantic's field order), then alphabetically: never in the order
+    # of a branch, which a generator may build from a set (n8n_b3.folder_schema; the order then changes per process).
+    order = list(schema["properties"]) if isinstance(schema.get("properties"), dict) else []
+    rules = _rules(schema, defs, frozenset(), order)
+    if rules:
+        text = RULES_PREFIX + "; ".join(rules) + "."
+        own = flat.get("description")
+        flat["description"] = own + " " + text if isinstance(own, str) and own else text
+    used = _used_defs({key: value for key, value in flat.items() if key != "$defs"}, defs)
+    if used:
+        flat["$defs"] = {name: value for name, value in defs.items() if name in used}
+    else:
+        flat.pop("$defs", None)
+    return flat
+
+
+def _object_view(schema, defs, seen=frozenset()):
+    """(properties, required, closed) that every object `schema` accepts satisfies: an over-approximation. The schema's
+    own properties win over those its combinators add (it is a conjunct of them, so its own are always checked); closed
+    means additionalProperties false without patternProperties."""
+    if not isinstance(schema, dict):
+        return {}, [], False
+    properties = dict(schema["properties"]) if isinstance(schema.get("properties"), dict) else {}
+    required = [name for name in _listed(schema.get("required")) if isinstance(name, str)]
+    closed = _closed(schema)
+    views = [_object_view(member, defs, seen) for member in _listed(schema.get("allOf"))]  # all of them hold
+    ref = _def_name(schema.get("$ref"))
+    if ref in defs and ref not in seen:
+        views.append(_object_view(defs[ref], defs, seen | {ref}))
+    for key in ("oneOf", "anyOf"):
+        if isinstance(schema.get(key), list):
+            views.append(_union([_object_view(branch, defs, seen) for branch in schema[key] if branch is not False]))
+    if "if" in schema and "then" in schema and "else" in schema:  # one of then/else holds; then alone may not
+        views.append(_union([_object_view(schema["then"], defs, seen), _object_view(schema["else"], defs, seen)]))
+    for other_properties, other_required, other_closed in views:
+        for name, value in other_properties.items():
+            if name not in properties and not closed:
+                properties[name] = value
+        required += [name for name in other_required if name not in required]
+        closed = closed or other_closed  # properties then lists every member name the other view allows
+    return properties, required, closed
+
+
+def _closed(schema):
+    return (isinstance(schema, dict) and schema.get("additionalProperties") is False
+            and "patternProperties" not in schema)
+
+
+def _union(views):
+    """What every object accepted by one of `views` satisfies: the members every view requires; a member's schemas
+    merged (_any_of) unless a view leaves it free; closed only if every view is."""
+    if not views:
+        return {}, [], False
+    required = [name for name in views[0][1] if all(name in view[1] for view in views[1:])]
+    properties = {}
+    for name in dict.fromkeys(name for view in views for name in view[0]):
+        # A false member schema only forbids the member: left out, as where a view leaves it free.
+        schemas = [view[0][name] for view in views if name in view[0] and view[0][name] is not False]
+        if not schemas or any(name not in view[0] and not view[2] for view in views):
+            continue
+        properties[name] = {} if any(schema is True or schema == {} for schema in schemas) else _any_of(schemas)
+    return properties, required, all(view[2] for view in views)
+
+
+def _any_of(schemas):
+    """A schema accepting what any of `schemas` accepts: identical schemas kept once, string const/enum values merged
+    into one enum, otherwise a nested anyOf of the distinct schemas."""
+    distinct = []
+    for schema in schemas:
+        if all(_canonical(schema) != _canonical(kept) for kept in distinct):
+            distinct.append(schema)
+    literals = [schema for schema in distinct if _strings(schema) is not None]
+    if len(literals) > 1:
+        values = []
+        for schema in literals:
+            values += [value for value in _strings(schema) if value not in values]
+        first = next(index for index, schema in enumerate(distinct) if schema is literals[0])
+        distinct = [schema for schema in distinct if not any(schema is literal for literal in literals)]
+        distinct.insert(first, {"type": "string", "enum": values})
+    return distinct[0] if len(distinct) == 1 else {"anyOf": distinct}
+
+
+def _canonical(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
+def _strings(schema):
+    """The values of a string const or enum schema (optionally typed and titled), else None. A type other than string
+    matches none of the values: merging such a schema only widens what accepted nothing."""
+    if (not isinstance(schema, dict) or set(schema) - {"const", "enum", "type", "title", "description"}
+            or ("const" in schema) == ("enum" in schema)):
+        return None
+    values = [schema["const"]] if "const" in schema else schema["enum"]
+    return values if isinstance(values, list) and values and all(isinstance(v, str) for v in values) else None
+
+
+def _def_name(ref):
+    return ref[len("#/$defs/"):].split("/")[0] if isinstance(ref, str) and ref.startswith("#/$defs/") else None
+
+
+def _used_defs(value, defs):
+    """The $defs `value` references, directly or through other $defs."""
+    used, todo = set(), [value]
+    while todo:
+        item = todo.pop()
+        if isinstance(item, dict):
+            name = _def_name(item.get("$ref"))
+            if name in defs and name not in used:
+                used.add(name)
+                todo.append(defs[name])
+            todo += list(item.values())
+        elif isinstance(item, list):
+            todo += item
+    return used
+
+
+def _rules(schema, defs, seen, order):
+    """Clauses for the rules of `schema`'s top-level combinators, which the declared form no longer carries."""
+    if not isinstance(schema, dict):
+        return []
+    rules = []
+    for member in _listed(schema.get("allOf")):
+        rules += _clauses(member, order=order) + _rules(member, defs, seen, order)
+    ref = _def_name(schema.get("$ref"))
+    if ref in defs and ref not in seen:
+        rules += _rules(defs[ref], defs, seen | {ref}, order)
+    for key in ("oneOf", "anyOf"):
+        if isinstance(schema.get(key), list):
+            rules.append(_branch_rules([branch for branch in schema[key] if branch is not False], defs, order))
+    if "if" in schema and ("then" in schema or "else" in schema):
+        then, other = (", ".join(_clauses(schema.get(key), order=order)) for key in ("then", "else"))
+        rules.append("if " + _condition(schema["if"], order) + ": " + (then or "no further rules")
+                     + ("; otherwise: " + (other or "no further rules") if "else" in schema else ""))
+    if "not" in schema:
+        rules.append("the arguments must not match " + _compact(schema["not"]))
+    if "const" in schema:
+        rules.append("the arguments must equal " + _compact(schema["const"]))
+    if isinstance(schema.get("enum"), list):
+        rules.append("the arguments must be one of " + _compact(schema["enum"]))
+    return [rule for rule in rules if rule]
+
+
+def _branch_rules(branches, defs, order):
+    """One clause list per branch, labelled by the member whose string values tell the branches apart, if any."""
+    if not branches:
+        return ""
+    branches = [defs.get(_def_name(branch.get("$ref")), branch) if isinstance(branch, dict) else branch
+                for branch in branches]
+    members = [branch.get("properties") if isinstance(branch, dict) and isinstance(branch.get("properties"), dict)
+               else {} for branch in branches]
+    key = next((name for name in _sorted(members[0], order) if len(branches) > 1
+                and all(_strings(m.get(name)) for m in members)
+                and len({v for m in members for v in _strings(m[name])})
+                == sum(len(_strings(m[name])) for m in members)), None)
+    names = _sorted(dict.fromkeys(name for member in members for name in member), order)
+    parts = []
+    for branch, member in zip(branches, members):
+        absent = [name for name in names if name not in member] if _closed(branch) else []  # declared by others only
+        clauses = ", ".join(_clauses(branch, skip=key, absent=absent, order=order)) or "no further rules"
+        if key is None:
+            parts.append(f"({len(parts) + 1}) {clauses}")
+            continue
+        values = _strings(member[key])
+        label = key + "=" + _compact(values[0]) if len(values) == 1 else key + " one of " + _compact(values)
+        omittable = isinstance(branch, dict) and key not in _listed(branch.get("required"))
+        parts.append(label + (" (or omitted)" if omittable else "") + ": " + clauses)
+    return "; ".join(parts) if key is not None else "the arguments must match one of: " + "; ".join(parts)
+
+
+def _clauses(schema, skip=None, prefix="", absent=(), order=()):
+    """Plain clauses for what `schema` asks of an object's members: required, to omit (null-only or false, and the
+    `absent` names), fixed or excluded values; members in `order`, then by name; nested members as dotted paths. Other
+    keywords are left to the member schemas and the server."""
+    if not isinstance(schema, dict):
+        return []
+    properties = schema["properties"] if isinstance(schema.get("properties"), dict) else {}
+    required = [name for name in _listed(schema.get("required")) if isinstance(name, str) and name != skip]
+    names = [name for name in _sorted(properties, order) if name != skip]
+    needs = [prefix + name for name in _sorted(dict.fromkeys(required), order) if not _omitted(properties.get(name))]
+    omits = [prefix + name for name in _sorted(dict.fromkeys(
+        [name for name in names if name not in required and _omitted(properties[name])] + list(absent)), order)]
+    clauses = (["requires " + _names(needs)] if needs else []) + (["omit " + _names(omits)] if omits else [])
+    for name in names:
+        sub = properties[name]
+        if not isinstance(sub, dict):
+            continue
+        path = prefix + name
+        if name in required and _omitted(sub):
+            clauses.append(path + " must be null")
+        values = [sub["const"]] if "const" in sub else _listed(sub.get("enum"))
+        if values:
+            clauses.append(path + (" must be " + _compact(values[0]) if len(values) == 1
+                                   else " must be one of " + ", ".join(map(_compact, values))))
+        excluded = _excluded(sub.get("not"))
+        if excluded:
+            clauses.append(path + " must not be " + " or ".join(map(_compact, excluded)))
+        if isinstance(sub.get("properties"), dict) or sub.get("required"):
+            clauses += _clauses(sub, prefix=path + ".")
+    return clauses
+
+
+def _omitted(schema):
+    return schema is False or isinstance(schema, dict) and schema.get("type") == "null" and not (
+        set(schema) - {"type", "title", "description", "default"})
+
+
+def _excluded(schema):
+    """The values a `not` schema names (const, enum, or such members of anyOf/oneOf); patterns are left as they are."""
+    if not isinstance(schema, dict):
+        return []
+    values = [schema["const"]] if "const" in schema else list(_listed(schema.get("enum")))
+    for key in ("anyOf", "oneOf"):
+        for member in _listed(schema.get(key)):
+            if isinstance(member, dict):
+                values += _excluded({k: v for k, v in member.items() if k in ("const", "enum")})
+    return values
+
+
+def _condition(schema, order):
+    """An `if` schema as `member="value"` terms when it only fixes member values (or asks for members), else as JSON."""
+    members = schema.get("properties") if isinstance(schema, dict) else None
+    if (isinstance(members, dict) and not set(schema) - {"properties", "required"}
+            and all(isinstance(sub, dict) and ("const" in sub or isinstance(sub.get("enum"), list))
+                    and not set(sub) - {"const", "enum", "type", "title", "description"} for sub in members.values())):
+        parts = [name + ("=" + _compact(members[name]["const"]) if "const" in members[name]
+                         else " is one of " + _compact(members[name]["enum"])) for name in _sorted(members, order)]
+        parts += [name + " is present" for name in _sorted(dict.fromkeys(_listed(schema.get("required"))), order)]
+        if parts:
+            return " and ".join(parts)
+    return "the arguments match " + _compact(schema)
+
+
+def _sorted(names, order):
+    order = list(order)
+    return sorted(names, key=lambda name: (order.index(name) if name in order else len(order), name))
+
+
+def _listed(value):
+    return value if isinstance(value, list) else []
+
+
+def _compact(value):
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
+def _names(names):
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+
 
 def listed_tool(tool, local):
     """A listed tool rebuilt from known members (0.1.6, 0.1.5 RC review F3). The name and inputSchema are the gateway's
-    own (the locally pinned argument model); title, description and annotations.title are the child's text, kept only
-    as strings; the four hint booleans are kept when cautious, or when the local tool has no write path. outputSchema,
-    execution, icons, _meta and unknown members are dropped: the pinned TS client compiles a child's outputSchema (a $ref
-    or pattern then becomes its error text, and the Python client fetched a child $ref URL) and refuses every call to a
-    tool whose execution.taskSupport is "required"; icons are child-chosen URLs."""
+    own (0.1.6 AI Stage 0: the declared form of the locally pinned argument model, declared_schema()); title,
+    description and annotations.title are the child's text, kept only as strings; the four hint booleans are kept when
+    cautious, or when the local tool has no write path. outputSchema, execution, icons, _meta and unknown members are
+    dropped: the pinned TS client compiles a child's outputSchema (a $ref or pattern then becomes its error text, and
+    the Python client fetched a child $ref URL) and refuses every call to a tool whose execution.taskSupport is
+    "required"; icons are child-chosen URLs."""
     read_only = not (local.write or local.legacy_write or local.write_operations)
-    listed = {"name": tool["name"], "inputSchema": local.arguments.model_json_schema()}
+    listed = {"name": tool["name"], "inputSchema": declared_schema(local.arguments)}
     listed.update({key: tool[key] for key in ("title", "description") if isinstance(tool.get(key), str)})
     annotations = tool.get("annotations")
     if isinstance(annotations, dict):

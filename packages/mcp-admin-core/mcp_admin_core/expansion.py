@@ -9,7 +9,8 @@ from .policy import Tool
 
 
 def branch_schema(schema, cls):
-    """Advertise the same conditional fields enforced before dispatch."""
+    """Describe the conditional fields the model's validators enforce before dispatch in its JSON schema (the
+    validated contract; 0.1.6: tools/list declares these branches as description clauses, policy.flat_schema)."""
     rules = {
         'Skill': {'list': (), 'enable': ('name',), 'disable': ('name',)},
         'Toolsets': {'list': (), 'enable': ('toolset',), 'disable': ('toolset',)},
