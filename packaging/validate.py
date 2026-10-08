@@ -16,7 +16,7 @@ import yaml
 from builder_contract import RUNNER
 
 ROOT = Path(__file__).resolve().parents[1]
-PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud')  # in the store, built and released
+PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud')  # CI/release build allowlist; nextcloud is first released with 0.1.7 (no image for earlier versions)
 # Owner decision 2026-10-06: Odoo Manage is archived. It left the store and no image is built or released again
 # (0.1.4 was the last); its source stays in apps/odoo-manage and the shared core, and is still tested.
 RETIRED = ('odoo-manage',)

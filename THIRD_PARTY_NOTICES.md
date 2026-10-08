@@ -65,7 +65,7 @@ whole-image review; local integration is not redistribution/CVE clearance.
 
 ## Self-hosted management UI assets
 
-All store images (`packaging/inputs.json`: six; seven with Nextcloud from 0.1.7) build the package-local UI lock using the existing pinned Node base;
+All store images (`packaging/inputs.json`: seven, Nextcloud first built with 0.1.7) build the package-local UI lock using the existing pinned Node base;
 only complete dist/assets/licenses are copied, not fixtures or build dependencies.
 Fontsource Poppins5.2.7, Outfit5.2.8, Noto Sans TC5.2.9 retain OFL texts;
 Yellowtail5.2.8 retains Apache-2.0; MDI7.4.47 retains its package license.

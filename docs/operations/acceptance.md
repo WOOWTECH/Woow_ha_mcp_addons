@@ -11,9 +11,9 @@ session URL、備份或私人拓樸。LOCAL/MOCK、CONTAINER/MOCK、HA、PUBLIC 
 | Gate | 最低證據／失敗停止點 |
 |---|---|
 | Source/license/secret | 逐檔來源、公開授權、OpenDesign 原來源缺 LICENSE 解決、Manage MPL covered-source 與 notices、整個新歷史與 tree／映像 layers/config／release/docs 去密掃描加人工審查。Regex PASS 不等於 clearance。 |
-| Package | root context 六個（商店產品）獨立 amd64 builds；固定 Python/Node/uv base digest、uv/npm lock；selected app 隔離、HA app labels/version；不得將無法 build 當 skip。 |
+| Package | root context 每個商店產品（`packaging/inputs.json`）各自獨立的 amd64 build；固定 Python/Node/uv base digest、uv/npm lock；selected app 隔離、HA app labels/version；不得將無法 build 當 skip。 |
 | Bootstrap | 空且受控 `/data` 唯一 token、nonempty command；uid10001、0700/0600；第二次啟動不覆寫；n8n 以外各支未設定不 spawn/probe。錯 owner（0.1.1 起，HA 還原留下的 root 擁有狀態檢查後一次改回）/symlink/future state 拒絕。 |
-| Admin trust | 六支權限已批准（n8n 2026-10-03；其他 0.1.1 起）；provider 經獨立 SPEC＋安全審（0.1.1）；真 HA owner 成功、non-admin 對面板／管理 API 403、無 cookie 401 已在 0.1.1–0.1.5 實測；登入後降權、token 長時間過期與瀏覽器 UX 未在真 HA 測。真實 HA admin 成功、non-admin 直接 Ingress URL/API 拒絕；缺少／重複 ID、偽造 peer/role headers 不得權。敏感操作前 fresh query，停權／降權／timeout／錯誤均拒絕且無副作用；role query 不等於立即撤銷 browser Ingress session。 |
+| Admin trust | 各支權限已批准（n8n 2026-10-03；其他六支 0.1.1 起；Nextcloud 2026-10-08）；provider 經獨立 SPEC＋安全審（0.1.1）；真 HA owner 成功、non-admin 對面板／管理 API 403、無 cookie 401 已在 0.1.1–0.1.5 實測；登入後降權、token 長時間過期與瀏覽器 UX 未在真 HA 測。真實 HA admin 成功、non-admin 直接 Ingress URL/API 拒絕；缺少／重複 ID、偽造 peer/role headers 不得權。敏感操作前 fresh query，停權／降權／timeout／錯誤均拒絕且無副作用；role query 不等於立即撤銷 browser Ingress session。 |
 | Ingress UX | 有效 base path 的 assets/API/navigation/deep link/refresh，CSRF／origin 負面測試；MCP endpoint 不是 iframe origin。本地真 Core/browser 已覆蓋，尚非 HA iframe 驗收。 |
 | Protocol | 每類 initialize→initialized→tools/list→已審無副作用 call，檢查真實 payload，不只 HTTP200。對照完整工具表，六支 174/67/107（上游／支援／暫不支援）不可說完整 parity。 |
 | Bearer/policy | missing/wrong/revoked token、GET/POST/DELETE/stream reconnect；disabled/unknown/write direct-call 拒絕且 backend 計數不變；舊 session 不繞過新政策。 |
@@ -31,7 +31,7 @@ session URL、備份或私人拓樸。LOCAL/MOCK、CONTAINER/MOCK、HA、PUBLIC 
   image/slug/arch、權限、translation scope、意外 config.* discovery、工作流基本政策。
   不是整個 Supervisor import；該版本本身會 REMOVE_EXTRA，本 validator 反而拒絕。
 - `python -m unittest discover -s packaging -p 'test_*.py' -v`：惡意 manifest／翻譯／
-  YAML/clearance fixtures；六支都必須是 `homeassistant_api: true`（唯一核准的權限例外），拒絕新增 API／
+  YAML/clearance fixtures；`validate.PRODUCTS` 的每一支都必須是 `homeassistant_api: true`（唯一核准的權限例外），拒絕新增 API／
   role／host 權限。invented dummy env 的 bootstrap exec 測試核對固定 management
   launcher argv、token 只傳給各支管理程序、missing/empty 不自行產生，不讀 runner 環境。
   真正 Linux post-exec guard 測試拒絕同 UID child 的 parent environ/mem/process_vm_readv；

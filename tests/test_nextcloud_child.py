@@ -103,8 +103,8 @@ print(','.join(names))
 
 
 def test_child_policy_client_and_mandatory_backend_policy(tmp_path):
-    """backend_policy.async_client builds the child's client (the v0.1.0 kwargs clash is patched), TLS verification
-    cannot be turned off through it, and a broken policy module stops the child (exit 2) before any request."""
+    """backend_policy.async_client builds the child's client (upstream passes only auth, timeout and headers to it),
+    TLS verification cannot be turned off through it, and a broken policy module stops the child before any request."""
     spec = child_spec(state(), tmp_path)
     program = '''
 import asyncio, ssl
@@ -405,7 +405,8 @@ URL_CASES = ['https://cloud.example.test', 'https://cloud.example.test/', 'https
              'https://cloud.example.test/..', 'https://cloud.example.test/next%25cloud', 'https://cloud.example.test/a%2e%2e/b',
              'https://cloud.example.test/%2e%2e', 'https://cloud.example.test/a%5cb', 'https://metadata',
              'https://METADATA.google.internal./x', 'http://instance-data', 'https://cloud.example.test/?',
-             'https://cloud.example.test/#', 'https://@cloud.example.test', 'https://cloud.example.test/a%20b']
+             'https://cloud.example.test/#', 'https://@cloud.example.test', 'https://cloud.example.test/a%20b',
+             'https://雲端.example.tw', 'https://cloud.台灣/nc', 'https://xn--suzq78c.example.tw']
 CREDENTIALS = [('tester', 'DUMMY'), ('test user', 'DUMMY pass'), ('   ', 'DUMMY'), (' tester', 'DUMMY'), ('tester ', 'DUMMY'),
                ('tester', '   '), ('tester', ' DUMMY'), ('tester', 'DUMMY ')]
 
@@ -420,13 +421,14 @@ def test_every_saved_connection_is_accepted_by_backend_policy_and_child_settings
     cases += [(URL_CASES[0], user, password) for user, password in CREDENTIALS[1:]]
     program = '''
 import json, sys
+import httpx
 from backend_policy import BackendDenied, Destination
 from nextcloud_mcp_server.settings import SettingsError, load_settings
 result = []
 for url, user, password in json.loads(sys.stdin.read()):
-    try:
-        Destination(url); policy = True
-    except (BackendDenied, ValueError):
+    try:  # the URL a real request uses, checked the way the transport checks it
+        Destination(url).check_url(httpx.URL(url.rstrip('/') + '/ocs/v2.php/cloud/user')); policy = True
+    except (BackendDenied, ValueError, httpx.InvalidURL):
         policy = False
     try:
         load_settings(base_url=url, username=user, app_password=password, _env_file=None); settings = True
@@ -452,9 +454,16 @@ print(json.dumps(result))
         if not policy or not settings:
             assert not saved, (url, user)
     assert accepted_somewhere
-    for bad in ('https://cloud.example.test/a/../b', 'https://cloud.example.test/next%25cloud', 'https://metadata'):
+    for bad in ('https://cloud.example.test/a/../b', 'https://cloud.example.test/next%25cloud', 'https://metadata',
+                'https://雲端.example.tw'):
         with pytest.raises(ValidationError):
             NextcloudConnection.model_validate({'url': bad, 'username': 'tester', 'app_password': 'DUMMY'})
+    NextcloudConnection.model_validate({'url': 'https://xn--suzq78c.example.tw', 'username': 'tester', 'app_password': 'DUMMY'})
+    # R2 #7: blank or padded credentials are refused by the saved model itself, not only by agreement with the child.
+    for user, password in ((' tester', 'DUMMY'), ('tester ', 'DUMMY'), ('tester', ' DUMMY'), ('tester', 'DUMMY '),
+                           ('   ', 'DUMMY'), ('tester', '   ')):
+        with pytest.raises(ValidationError):
+            NextcloudConnection.model_validate({'url': 'https://cloud.example.test', 'username': user, 'app_password': password})
 
 
 async def test_auth_failure_latches_tools_and_probe_until_restart(tmp_path):
@@ -609,3 +618,118 @@ async def test_tree_skips_policy_refused_sub_folder_and_marks_truncated(tmp_path
             assert not any('100' in path for _, path in seen)
             reply = await rpc(client, '/mcp', headers, call('read_text_file', {'path': '100% done/inside.md'}))
             assert reply.get('isError') and 'BACKEND_DESTINATION_DENIED' in json.dumps(reply)
+
+
+def _broken_body(handler, failure, echoed, status=200):
+    """Answer `status` with a body that breaks the way `failure` says; the body echoes the app password."""
+    if failure == 'json':
+        return respond(handler, status, {'Content-Type': 'application/json'}, b'{"' + echoed.encode())
+    handler.send_response(status)
+    if failure == 'chunk':
+        handler.send_header('Transfer-Encoding', 'chunked')
+        data = echoed.encode() + b'\r\n'
+    elif failure == 'disconnect':
+        handler.send_header('Content-Length', '10000')
+        data = echoed.encode()
+    else:
+        data = echoed.encode()
+        handler.send_header('Content-Length', str(len(data)))
+        handler.send_header('Content-Encoding', 'gzip')
+    handler.end_headers()
+    handler.wfile.write(data)
+    handler.wfile.flush()
+    handler.close_connection = True
+
+
+def _password(handler):
+    return __import__('base64').b64decode(handler.headers['Authorization'].split()[1]).decode().split(':', 1)[1]
+
+
+@pytest.mark.parametrize('failure', ['chunk', 'disconnect', 'gzip', 'json'])
+async def test_account_lookup_body_failures_before_the_first_lookup_are_public_codes(tmp_path, failure):
+    """R2 #6: the account lookup (OCS cloud/user, never cached until it succeeds) answers 200 with a broken body that
+    echoes the app password: every call and the private probe report a public code, never the body."""
+    seen = []
+
+    class Backend(Quiet):
+        def do_GET(self):
+            seen.append(self.path)
+            assert self.path == OCS_PATH
+            _broken_body(self, failure, _password(self))
+
+    code = 'BACKEND_STREAM_ERROR' if failure in ('chunk', 'disconnect') else 'BACKEND_INVALID_RESPONSE'
+    with serve(Backend) as url:
+        async with runtime(tmp_path, 'nextcloud', url, canary=CANARY) as (client, headers, store, manager, child):
+            for name, args in (('get_file_tree', {}), ('list_calendars', {}), ('read_text_file', {'path': 'a.md'})):
+                before = len(seen)
+                response = await client.post('/mcp', headers=headers, json=call(name, args))
+                assert len(seen) == before + 1, (name, seen[before:])
+                assert CANARY not in response.text and code in response.text, (name, failure, response.text)
+            raw = await rpc(child, manager.endpoint.url, headers, call(ODOO_HEALTH_PROBE, {}, id=9))
+            assert raw.get('isError') and CANARY not in json.dumps(raw) and code in json.dumps(raw), raw
+
+
+@pytest.mark.parametrize('failure', ['chunk', 'gzip', 'invalid-xml'])
+async def test_write_without_etag_header_and_broken_follow_up_lookup(tmp_path, failure):
+    """R2 #6: the PUT succeeds without an ETag header, so the child asks for the etag with a PROPFIND; that answer is
+    broken (and echoes the app password): the write still reports success with etag null, and nothing leaks."""
+    fake = NextcloudFake(password=CANARY)
+    seen = []
+
+    class Backend(Quiet):
+        def handle_api(self):
+            body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
+            seen.append((self.command, self.path))
+            status, headers, data = fake.handle(self.command, self.path, self.headers, body)
+            if self.command == 'PUT':
+                headers = {k: v for k, v in headers.items() if k.lower() != 'etag'}
+                return respond(self, status, headers, data)
+            if self.command == 'PROPFIND' and self.headers.get('Depth') == '0' and 'Owned/' in self.path:
+                if failure == 'invalid-xml':
+                    return respond(self, 207, {'Content-Type': 'application/xml'}, b'<' + _password(self).encode())
+                return _broken_body(self, failure, _password(self), 207)
+            respond(self, status, headers, data)
+        do_GET = do_PUT = do_PROPFIND = handle_api
+
+    with serve(Backend) as url:
+        async with runtime(tmp_path, 'nextcloud', url, canary=CANARY, write_grants=sorted(WRITERS)) as (client, headers, *_):
+            for name, args in (('create_text_file', {'path': 'Owned/new.md', 'content': 'x'}),
+                               ('upload_file', {'path': 'Owned/new.bin', 'content_base64': 'AA=='})):
+                reply = await rpc(client, '/mcp', headers, call(name, args))
+                assert CANARY not in json.dumps(reply), reply
+                result = payload(reply)
+                assert result['status'] == 'created' and result['etag'] is None, result
+            assert [c for c, p in seen if 'Owned/' in p] == ['PUT', 'PROPFIND', 'PUT', 'PROPFIND']
+
+
+async def test_slow_401_still_latches_after_health_check_timeouts(tmp_path):
+    """R2 observation: a 401 that arrives after HealthMonitor's 5 s probe timeout (Nextcloud may delay failed logins)
+    still latches: at most two failed logins, then none (FastMCP 3.4.5 lets the probe finish after the session
+    ends; an upgrade that cancels it would fail here)."""
+    import time
+    seen = []
+
+    class Slow(Quiet):
+        def do_GET(self):
+            seen.append(time.monotonic())
+            time.sleep(6.5)
+            try:
+                respond(self, 401, {'Content-Type': 'application/json'}, b'{}')
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
+    with serve(Slow) as url:
+        async with runtime(tmp_path, 'nextcloud', url) as (client, headers, store, manager, child):
+            monitor = HealthMonitor(store, manager, child, child_url=manager.endpoint.url)
+            for _ in range(2):
+                await monitor.check()
+                assert monitor.backend == 'unreachable'
+            assert len(seen) <= 2
+            await asyncio.sleep(7.5)  # every pending login has answered 401 by now
+            before = len(seen)
+            for _ in range(2):
+                await monitor.check()
+                assert monitor.backend == 'unreachable'
+            response = await client.post('/mcp', headers=headers, json=call('get_file_tree', {}))
+            assert 'BACKEND_HTTP_ERROR status=401' in response.text
+            assert len(seen) == before <= 2, len(seen)

@@ -19,7 +19,7 @@ Python 3.13.16 slim-bookworm、Node 22.23.2 bookworm-slim、uv 0.12.10。
 **開發容器本身仍無 Docker；映像改在專用一次性 builder 建置。** 2026-10-05 起映像都在專用一次性 KubeVirt builder（Docker classic store）建置，container/mock 驗收與 supply-chain gate（source／history／image secrets、SBOM、CVE、license）全數通過才推送 GHCR（0.1.0 是七類候選 `f75fe32`，證據在協作區 `claude-delivery/evidence-real-f75fe32/`；0.1.5 是六支候選 `0c66bd0`，見 [發佈紀錄](release-decision-0.1.5.md)）。建置與推送都不經 remote Actions；0.1.0–0.1.5 已發佈，
 0.1.1–0.1.5 已在測試 HA 回歸（[ha-test-0.1.5](ha-test-0.1.5.md) 等）。靜態與本地 packaging tests 不能升格成 image PASS。
 
-六支的 `homeassistant_api:true` **權限已批准**（n8n 路徑 A 2026-10-03；其他 0.1.1 起，負責人 2026-10-05 核准），不是 publication clearance。
+各支的 `homeassistant_api:true` **權限已批准**（n8n 路徑 A 2026-10-03；其他六支 0.1.1 起，負責人 2026-10-05 核准；Nextcloud 2026-10-08，0.1.7 起），不是 publication clearance。
 hassio/auth API、預設 role、host 邊界不變。真實 fixed-URL／
 fresh-query fail-closed verifier、child token 隔離與 UI 已整合。審查範圍分開看：本地整合（當時只有 n8n 接 provider）
 2026-10-03 經有界 SPEC／安全審，只核准本地整合；0.1.1 的獨立 SPEC＋安全審只涵蓋 provider 接線與 token 傳遞兩段程式，
@@ -63,7 +63,7 @@ pull_request_target、不使用 production self-hosted runner。
 3. 既有 TCP tests 固定 subprocess PATH=/usr/bin:/bin；只在 disposable hosted runner
    將 /usr/bin/node 指向 setup-node 已安裝的確切 binary，並檢查 v22.23.2，避免
    意外測到 runner 系統舊 Node。不改 core/tests；此操作未在本地工作環境執行。
-   `sh packaging/unit.sh` 真正安裝七個 runtime locks（含封存的 Odoo Manage 原始碼）、inventory drift、全 core/
+   `sh packaging/unit.sh` 真正安裝 `packaging/unit.sh` 列出的每個 runtime lock（各 Python app 含封存的 Odoo Manage 原始碼與 Nextcloud，加上 n8n）、inventory drift、全 core/
    adapter tests，Junit 明確拒絕 skipped/empty/failure。
 4. 固定商店產品 matrix（與 packaging/inputs.json 相同），root context amd64 `push:false load:true`。
 5. 每個 build 執行 `packaging/container_acceptance.py`，network-none owned mocks，

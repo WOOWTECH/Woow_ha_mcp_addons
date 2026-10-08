@@ -105,6 +105,9 @@ class NextcloudConnection(Connection):
                 or '?' in value or '#' in value or '@' in parts.netloc
                 or (parts.hostname or '').lower().rstrip('.') in ('metadata', 'metadata.google.internal', 'instance-data')):
             raise ValueError('URL refused by the backend policy')
+        if not (parts.hostname or '').isascii():
+            # backend_policy compares the configured host with the IDNA (xn--) host httpx sends: never equal.
+            raise ValueError('use the ASCII (xn--) form of an internationalized host name')
         return value
 
     @field_validator('username', 'app_password')

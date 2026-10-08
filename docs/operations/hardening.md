@@ -6,7 +6,7 @@
 
 ## 管理 process 的 token 界線
 
-每個 fixed bootstrap command（商店六支，以及封存的 Odoo Manage 原始碼）最後 exec `packaging/management_launcher.py`。
+每個 fixed bootstrap command（`packaging/entrypoint.py` 的 PRODUCTS：商店各支，以及封存的 Odoo Manage 原始碼）最後 exec `packaging/management_launcher.py`。
 它在 **final exec 之後、任何 core/app import/child 之前**設定並讀回
 `PR_SET_DUMPABLE=0`、`RLIMIT_CORE=(0,0)`、`no_new_privs=1`。任何失敗停止。
 然後只以 `runpy` 執行固定 n8n script／其他各支 core module；**不能改成再次 exec**，
@@ -22,11 +22,12 @@ machine token 不入 state/argv/client/log/child；這不是 image／HA 實測�
 
 ## Write denial 的正確證據
 
-七類（商店六支＋封存的 Odoo Manage 原始碼）都有 schema-valid supported write fixture：n8n delete、OpenDesign delete UUID、
-Odoo chatter、Manage create_record、Hermes skill:disable、EMQX kick、LiteLLM team create。
+`packaging/denial_probe.py` 的 WRITE_CASES 每一支（商店各支＋封存的 Odoo Manage 原始碼）都有 schema-valid supported write fixture：
+n8n delete、OpenDesign delete UUID、Odoo chatter、Manage create_record、Hermes skill:disable、EMQX kick、LiteLLM team create、
+Nextcloud create_text_file。
 HTTP403 **且 backend counter delta=0** 才通過，未知／畸形參數分開。
 Mutation test 僅移除 dispatch whole-tool/operation grant 檢查，保留 schema、list filter、
-disabled check；七個合法 write assertions 必須失敗，不靠 native gating 或無效參數假證明。
+disabled check；WRITE_CASES 的每一個合法 write assertion 都必須失敗，不靠 native gating 或無效參數假證明。
 只有 owned fake 接收副作用，不接真實後端。
 容器健康探針若恰好並行增加 counter，該次測試保守失敗，不忽略 backend activity。
 
