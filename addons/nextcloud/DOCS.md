@@ -11,7 +11,7 @@
 此 token 具**廣泛 Core 管理能力**（`homeassistant_api: true`），負責人已於 2026-10-08 核准本 Add-on 使用（與其他六支相同，
 只用於管理面板確認 HA owner／管理員）。`panel_admin` 不是角色授權。
 
-本產品 runtime：**FastMCP 3.4.5**，子程序是 WOOWTECH 的 MIT 套件 `nextcloud_mcp_server` v0.1.3（commit 6228f88）
+本產品 runtime：**FastMCP 3.4.5**，子程序是 WOOWTECH 的 MIT 套件 `nextcloud_mcp_server` v0.1.4（commit fe1fbb2）
 放在 `apps/nextcloud/vendor`，對上游的修改逐檔記在 `docs/provenance/runtime-sources.json`。上游 9 個工具全部支援：
 
 | 工具 | 類型 | 預設 |
@@ -54,14 +54,21 @@
 - 所有後端請求都經 gateway 的 `backend_policy`：DNS 只解析一次並檢查所有位址類別、連線釘在檢查過的位址、
   不跟隨轉址、不讀 proxy 環境變數、TLS 一定驗證。所以 URL 必須是最終位址（轉址會回 `BACKEND_HTTP_ERROR status=30x`）；
   私有 CA 的 Nextcloud 目前不支援（`CA_BUNDLE` 未提供，需另行審查），`http://` 只建議在可信任的內網使用。
-- 錯誤一律是公開代碼，例如 `BACKEND_HTTP_ERROR status=404: "x" does not exist.`、`BACKEND_UNAVAILABLE`、
-  `BACKEND_TIMEOUT`；Nextcloud 回應的錯誤內容不會轉給 client。
+- 錯誤代碼：凡是後端回應或連線造成的錯誤，訊息都以公開代碼開頭，後面接說明，例如
+  `BACKEND_HTTP_ERROR status=404: "x" does not exist.`、`BACKEND_HTTP_ERROR status=412: "x" changed since it was read (current etag …)`、
+  `BACKEND_INVALID_RESPONSE`（無效、無法解碼或過大的回應）、`BACKEND_TIMEOUT`、`BACKEND_UNAVAILABLE`、`BACKEND_DESTINATION_DENIED`、
+  `BACKEND_BUSY`；鎖存的 401／429 與轉址也是 `BACKEND_HTTP_ERROR status=N`。`delete_file_checked` 在送出前發現 etag 不符時是
+  `ETAG_MISMATCH:`（沒有送出任何請求）。工具自己的拒絕（需要檔案卻是資料夾、文字工具遇到二進位檔、未知的行事曆 id、行事曆沒有
+  VTODO）與輸入檢查錯誤不帶代碼。訊息中的 etag 只顯示合法的 etag 字元（最長 256），否則顯示 unknown；Nextcloud 回應的內容一律不轉給 client。
 
 ## 已知限制
 
 - gateway 每個 MCP 請求最多 256 KiB：`create_text_file`／`update_text_file` 的內容與 `upload_file` 的 base64 都要小於此值。
 - 檔名或路徑含 `%` 的檔案會被 `backend_policy` 拒絕（`BACKEND_DESTINATION_DENIED`）；直接讀寫這種檔案或資料夾都會失敗。
   `get_file_tree` 往下列子資料夾（depth 2–3）時，遇到名稱含 `%` 的子資料夾會略過它、不中斷整個列表，並把 `truncated` 設為 true。
+- `list_tasks` 不指定行事曆時，遇到 gateway 拒絕（例如 id 含 `%`）或無權讀取（403／404）的行事曆會略過，結果多一個
+  `skipped_calendars` 計數；直接指定這種行事曆則回 `BACKEND_DESTINATION_DENIED`。
+- 單一任務物件巢狀超過 32 層（或超過 1 MiB）會略過，計入 `skipped_large_objects`。
 - 不能建立資料夾、不能修改任務、不展開重複任務；`list_tasks` 描述截 500 字。
 - Nextcloud 的 etag 大約以秒為單位：同一個檔案在一秒內連續寫兩次，etag 可能不變。這時 `update_text_file`／`upload_file`
   的結果會多一個 `note` 欄位提醒，下一次有條件寫入前請等一秒。

@@ -90,7 +90,7 @@ def create_server(
     async def woow_backend_probe() -> dict[str, Any]:
         # WOOW HA add-on: upstream probe() on a FRESH client with the same settings and policy, closed afterwards:
         # it never waits for or holds the tools' connections, and still shares the credentials-keyed auth latch.
-        fresh = NextcloudClient(settings, transport=transport, policy=nc.policy)
+        fresh = NextcloudClient(settings, transport=transport, policy=nc.policy, public_error=nc.public_error)
         try:
             return await fresh.probe()
         finally:

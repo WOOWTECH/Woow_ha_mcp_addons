@@ -3,7 +3,7 @@
 ## 0.1.7 — 準備中（未發佈）
 
 - 新產品：WOOW Nextcloud MCP。子程序是 WOOWTECH 自己的 MIT 套件 `nextcloud_mcp_server`
-  （[Woow_nextcloud_mcp_server](https://github.com/WOOWTECH/Woow_nextcloud_mcp_server) tag v0.1.3，commit 6228f88），
+  （[Woow_nextcloud_mcp_server](https://github.com/WOOWTECH/Woow_nextcloud_mcp_server) tag v0.1.4，commit fe1fbb2），
   原始碼放在 `apps/nextcloud/vendor`；對上游的每一處修改與原因記在 `docs/provenance/runtime-sources.json`。
 - 一個 Add-on 連一個 Nextcloud 帳號：根網址、使用者名稱、App 密碼（管理面板設定，不放在 HA options）。
 - 工具 9 個全部支援，由 gateway 用本地嚴格 schema 檢查每個呼叫、自己重建 tools/list：
@@ -13,7 +13,8 @@
   其餘未授權或停用的工具也不在子程序註冊（`DISABLED_TOOLS`）。寫入全部以 etag 防止覆蓋別人改過的版本；
   刪除只刪單一檔案並進 Nextcloud 垃圾桶。
 - 後端連線一律經 gateway 的 `backend_policy`（DNS 釘選、位址類別檢查、不跟隨轉址、不走 proxy、TLS 一定驗證）；
-  錯誤一律回公開代碼（`BACKEND_HTTP_ERROR status=…`、`BACKEND_UNAVAILABLE`、`BACKEND_TIMEOUT` 等），
+  凡是後端回應或連線造成的錯誤都以公開代碼開頭（`BACKEND_HTTP_ERROR status=N`，含 412 衝突與 404；`BACKEND_INVALID_RESPONSE`、
+  `BACKEND_UNAVAILABLE`、`BACKEND_TIMEOUT`、`BACKEND_DESTINATION_DENIED` 等），刪除前的本地 etag 不符是 `ETAG_MISMATCH`，
   不轉送 Nextcloud 的錯誤內容。自訂 CA（`CA_BUNDLE`）與關閉 TLS 驗證都不提供。
 - 健康檢查用子程序私有的 `woow_backend_probe`（不在工具清單，gateway 不列出也不授權）：每次用新的連線
   讀一次 OCS `cloud/user`，只回 ok 與使用者 id，不佔用工具的連線；公開工具全部停用時照樣運作。
@@ -24,5 +25,7 @@
   被 Nextcloud 暴力破解防護擋下（429）時停 5 分鐘再試，避免健康檢查反覆登入失敗而讓 Nextcloud 封鎖 Add-on 所在的 IP。輪替 App 密碼時先建立新密碼、
   在面板存入並確認可連線，再撤銷舊密碼；只撤銷時先清除後端連線或停止 Add-on；緊急撤銷只會失敗一次（見 DOCS）。
   已被封鎖時用 `occ security:bruteforce:reset <ip>` 或暴力破解 IP 白名單解除。
+- `list_tasks` 略過 gateway 拒絕或無權讀取的行事曆並回報 `skipped_calendars`；巢狀超過 32 層的任務物件會略過並計入
+  `skipped_large_objects`。
 - 管理面板存檔時就拒絕 `backend_policy` 不接受的網址，以及空白或前後有空白的使用者名稱／App 密碼。
 - 映像 `ghcr.io/woowtech/amd64-mcp-nextcloud:0.1.7` 尚未建置；先前版本號沒有 Nextcloud 映像，也不會補建。

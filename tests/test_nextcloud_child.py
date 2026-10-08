@@ -214,10 +214,10 @@ async def test_backend_statuses_become_public_codes_without_backend_text(tmp_pat
         ('get_file_tree', {'path': 'x'}, 200, 'BACKEND_HTTP_ERROR status=200'),  # a 2xx that is not 207
         ('get_file_tree', {'path': 'x'}, 'invalid-xml', 'BACKEND_INVALID_RESPONSE'),
         ('get_file_tree', {'path': 'x'}, 'not-multistatus', 'BACKEND_INVALID_RESPONSE'),
-        ('list_calendars', {}, 404, 'no calendar home'),
-        ('create_text_file', {'path': 'a/b.md', 'content': 'x'}, 412, 'already exists; read it first'),
-        ('create_text_file', {'path': 'a/b.md', 'content': 'x'}, 404, 'The parent folder of'),
-        ('create_text_file', {'path': 'a/b.md', 'content': 'x'}, 423, 'is locked'),
+        ('list_calendars', {}, 404, 'BACKEND_HTTP_ERROR status=404: This account has no calendar home'),
+        ('create_text_file', {'path': 'a/b.md', 'content': 'x'}, 412, 'BACKEND_HTTP_ERROR status=412: \\"a/b.md\\" already exists; read it first'),
+        ('create_text_file', {'path': 'a/b.md', 'content': 'x'}, 404, 'BACKEND_HTTP_ERROR status=404: The parent folder of'),
+        ('create_text_file', {'path': 'a/b.md', 'content': 'x'}, 423, 'BACKEND_HTTP_ERROR status=423: \\"a/b.md\\" is locked'),
         ('create_text_file', {'path': 'a/b.md', 'content': 'x'}, 507, 'BACKEND_HTTP_ERROR status=507'),
         ('upload_file', {'path': 'a/b.bin', 'content_base64': 'AA=='}, 413, 'BACKEND_HTTP_ERROR status=413'),
     ] + [('get_file_tree', {'path': 'x'}, status, f'BACKEND_HTTP_ERROR status={status}') for status in (301, 302, 307, 308)]
@@ -252,19 +252,32 @@ async def test_stale_etag_write_reports_current_etag_and_writes_nothing(tmp_path
 
     with serve(Backend) as url:
         async with runtime(tmp_path, 'nextcloud', url, write_grants=sorted(WRITERS)) as (client, headers, *_):
-            for name, args in (('update_text_file', {'path': 'Documents/notes.md', 'content': 'x', 'expected_etag': 'stale'}),
-                               ('delete_file_checked', {'path': 'Documents/notes.md', 'expected_etag': 'stale'}),
-                               ('upload_file', {'path': 'Documents/notes.md', 'content_base64': 'AA==', 'expected_etag': 'stale'})):
+            # Contract A: a backend 412 is BACKEND_HTTP_ERROR status=412; delete's local etag pre-check sends nothing
+            # and is ETAG_MISMATCH (never a BACKEND_ code). The current etag is shown after the code.
+            for name, args, prefix in (
+                    ('update_text_file', {'path': 'Documents/notes.md', 'content': 'x', 'expected_etag': 'stale'},
+                     'BACKEND_HTTP_ERROR status=412: '),
+                    ('delete_file_checked', {'path': 'Documents/notes.md', 'expected_etag': 'stale'}, 'ETAG_MISMATCH: '),
+                    ('upload_file', {'path': 'Documents/notes.md', 'content_base64': 'AA==', 'expected_etag': 'stale'},
+                     'BACKEND_HTTP_ERROR status=412: ')):
                 reply = await rpc(client, '/mcp', headers, call(name, args))
-                assert reply.get('isError') and 'current etag one' in json.dumps(reply), (name, reply)
+                text = reply['content'][0]['text']
+                assert reply.get('isError') and text.startswith(prefix) and 'current etag one' in text, (name, reply)
+            # A 412 whose follow-up PROPFIND shows the file is gone is reported as status=404.
+            for name, args in (('update_text_file', {'path': 'Documents/gone.md', 'content': 'x', 'expected_etag': 'e1'}),
+                               ('upload_file', {'path': 'Documents/gone.md', 'content_base64': 'AA==', 'expected_etag': 'e1'})):
+                reply = await rpc(client, '/mcp', headers, call(name, args))
+                text = reply['content'][0]['text']
+                assert reply.get('isError') and text.startswith('BACKEND_HTTP_ERROR status=404: ') and 'does not exist' in text, reply
             for name, args in (('create_text_file', {'path': 'Documents/notes.md', 'content': 'x'}),
                                # upload_file without an etag only creates: If-None-Match: * (the fake answers 428 to
                                # a PUT without any precondition, so a dropped header cannot overwrite silently).
                                ('upload_file', {'path': 'Documents/notes.md', 'content_base64': 'AA=='})):
                 reply = await rpc(client, '/mcp', headers, call(name, args))
-                assert reply.get('isError') and 'already exists' in json.dumps(reply), (name, reply)
+                text = reply['content'][0]['text']
+                assert reply.get('isError') and text.startswith('BACKEND_HTTP_ERROR status=412: ') and 'already exists' in text, (name, reply)
             reply = await rpc(client, '/mcp', headers, call('delete_file_checked', {'path': 'Documents', 'expected_etag': 'docs'}))
-            assert reply.get('isError') and 'is a folder' in json.dumps(reply)
+            assert reply.get('isError') and reply['content'][0]['text'].startswith('"Documents" is a folder')  # tool refusal: uncoded
             assert fake.mutations == [] and fake.files['Documents/notes.md'][1] == 'one'
             text = payload(await rpc(client, '/mcp', headers, call('read_text_file', {'path': 'Documents/notes.md'})))
             assert text['etag'] == 'one' and text['content'].startswith('# Notes')
@@ -523,7 +536,7 @@ def answer(request):
     calls.append(request.url.path)
     return httpx.Response(429, headers={'Retry-After': '2'})
 async def main():
-    settings = load_settings()
+    settings = load_settings(error_codes='true')  # no backend_policy here: code mode forced on
     nc = NextcloudClient(settings, transport=httpx.MockTransport(answer), policy=None)
     for _ in range(3):
         try:
@@ -531,7 +544,8 @@ async def main():
         except Exception as exc:
             assert str(exc).startswith('BACKEND_HTTP_ERROR status=429: '), str(exc)
     assert len(calls) == 1, calls
-    other = NextcloudClient(load_settings(app_password='DUMMY-other'), transport=httpx.MockTransport(answer), policy=None)
+    other = NextcloudClient(load_settings(app_password='DUMMY-other', error_codes='true'),
+                            transport=httpx.MockTransport(answer), policy=None)
     try:
         await other.probe()
     except Exception:
@@ -574,7 +588,8 @@ async def main():
             try:
                 await call()
             except Exception as exc:
-                assert str(exc).startswith('BACKEND_DESTINATION_DENIED: '), (url, str(exc))
+                # Inside the client the code is attached; tools and probe() render it as the message prefix.
+                assert str(nc.render(exc)).startswith('BACKEND_DESTINATION_DENIED: '), (url, str(exc))
             else:
                 raise AssertionError(url)
         server = create_server(settings)
@@ -733,3 +748,56 @@ async def test_slow_401_still_latches_after_health_check_timeouts(tmp_path):
             response = await client.post('/mcp', headers=headers, json=call('get_file_tree', {}))
             assert 'BACKEND_HTTP_ERROR status=401' in response.text
             assert len(seen) == before <= 2, len(seen)
+
+
+async def test_too_large_listing_is_invalid_response(tmp_path):
+    """Contract A: a listing over the child's 8 MiB cap is BACKEND_INVALID_RESPONSE; its body is never shown."""
+    class Backend(Quiet):
+        def handle_api(self):
+            self.rfile.read(int(self.headers.get('Content-Length', 0)))
+            if self.path == OCS_PATH:
+                return respond(self, *NextcloudFake().handle('GET', self.path, self.headers, b''))
+            entry = '<d:response><d:href>/remote.php/dav/files/tester/%s</d:href></d:response>' % CANARY
+            data = ('<?xml version="1.0"?><d:multistatus xmlns:d="DAV:">' + entry * (9 * 1024 * 1024 // len(entry))
+                    + '</d:multistatus>').encode()
+            respond(self, 207, {'Content-Type': 'application/xml'}, data)
+        do_GET = do_PROPFIND = handle_api
+
+    with serve(Backend) as url:
+        async with runtime(tmp_path, 'nextcloud', url) as (client, headers, *_):
+            reply = await rpc(client, '/mcp', headers, call('get_file_tree', {}))
+            text = reply['content'][0]['text']
+            assert reply.get('isError') and text.startswith('BACKEND_INVALID_RESPONSE: ') and 'too large' in text, text
+            assert CANARY not in json.dumps(reply)
+
+
+async def test_list_tasks_skips_policy_refused_calendars(tmp_path):
+    """A calendar whose id contains '%' is refused by backend_policy: list_tasks() skips it and reports
+    skipped_calendars; naming it explicitly is BACKEND_DESTINATION_DENIED; nothing is sent for it."""
+    seen = []
+    calendars = nextcloud_fixtures.CALENDARS
+
+    class Backend(Quiet):
+        def handle_api(self):
+            body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
+            seen.append((self.command, self.path))
+            if self.command == 'PROPFIND' and self.path == calendars:
+                todo = ('<d:resourcetype><d:collection/><c:calendar/></d:resourcetype><c:supported-calendar-component-set>'
+                        '<c:comp name="VTODO"/></c:supported-calendar-component-set>')
+                data = nextcloud_fixtures.multistatus([
+                    (calendars, '<d:resourcetype><d:collection/></d:resourcetype>'),
+                    (calendars + 'personal/', '<d:displayname>Personal</d:displayname>' + todo),
+                    (calendars + 'a%25b/', '<d:displayname>Shared</d:displayname>' + todo)])
+                return respond(self, 207, {'Content-Type': 'application/xml'}, data)
+            respond(self, *NextcloudFake().handle(self.command, self.path, self.headers, body))
+        do_GET = do_PROPFIND = do_REPORT = handle_api
+
+    with serve(Backend) as url:
+        async with runtime(tmp_path, 'nextcloud', url) as (client, headers, *_):
+            listed = payload(await rpc(client, '/mcp', headers, call('list_calendars', {})))
+            assert sorted(c['id'] for c in listed['calendars']) == ['a%b', 'personal']
+            tasks = payload(await rpc(client, '/mcp', headers, call('list_tasks', {})))
+            assert [t['uid'] for t in tasks['tasks']] == ['owned-task'] and tasks['skipped_calendars'] == 1, tasks
+            reply = await rpc(client, '/mcp', headers, call('list_tasks', {'calendar': 'a%b'}))
+            assert reply.get('isError') and reply['content'][0]['text'].startswith('BACKEND_DESTINATION_DENIED: ')
+            assert not any('a%25b' in path or 'a%b' in path for command, path in seen if command == 'REPORT')

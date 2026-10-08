@@ -279,77 +279,73 @@
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/6228f880cc7cf7909a43ad3b324256938e6616d6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
     "path": "nextcloud_mcp_server/__init__.py",
-    "upstream_sha256": "e31bb3f75187f98de70cb1b51d0f65241ff3c168957041be936e03a851d4f03a"
+    "upstream_sha256": "4c1e50cfccf486c208d2d71d98315a08632cfdd6dd9d690d9d9d31085f02a4e9"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/6228f880cc7cf7909a43ad3b324256938e6616d6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
     "path": "nextcloud_mcp_server/server.py",
     "upstream_sha256": "fa2f912301bd0d3eabeadfe5dba304f9db9fa869de5f91ea9f53f62e6fe129b2",
-    "local_sha256": "c1a1af520cc899340fa0411b03db8fa54025ebdffc93c5f387a07f5d69a76b1e",
-    "modification": "WOOW HA add-on: register the private tool woow_backend_probe: upstream NextcloudClient.probe() on a fresh client with the same settings and policy, closed afterwards (never the tools' connections; the credentials-keyed auth latch is shared). It is not in tools.ALL_TOOLS, so READONLY/ALLOW_DELETE/DISABLED_TOOLS never remove it and DISABLED_TOOLS cannot name it; the gateway never lists or authorizes it (not in TOOLS), as for the Odoo add-on's probe. on_duplicate='error' fails start-up if the name is taken."
+    "local_sha256": "04e8a361367e7b586d611887b9494f18b8cd88ca0dad8c1d949bb9af3275ff9f",
+    "modification": "WOOW HA add-on: register the private tool woow_backend_probe: upstream NextcloudClient.probe() on a fresh client with the same settings, policy and public-error mapping, closed afterwards (never the tools' connections; the credentials-keyed auth latch is shared). It is not in tools.ALL_TOOLS, so READONLY/ALLOW_DELETE/DISABLED_TOOLS never remove it and DISABLED_TOOLS cannot name it; the gateway never lists or authorizes it (not in TOOLS), as for the Odoo add-on's probe. on_duplicate='error' fails start-up if the name is taken."
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/6228f880cc7cf7909a43ad3b324256938e6616d6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
     "path": "nextcloud_mcp_server/settings.py",
-    "upstream_sha256": "4f4160d873a374f16847b2afabdc32caa7780fa3bd5cc8425142926f0f56a79b"
+    "upstream_sha256": "d8283658375f65ec0022a5e04e48d0109e14d49a8df1f7e6c8fcbd905ebb45ad"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/6228f880cc7cf7909a43ad3b324256938e6616d6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
     "path": "nextcloud_mcp_server/client.py",
-    "upstream_sha256": "7db78207d2430a2048449925d5ebbb426211e74a8c02cbe0f59647d0fc2ff977",
-    "local_sha256": "3446bbc0710cb1514c6534d72487ce8c8e0e904606f2fa97ae35eb239515f0a8",
-    "modification": "WOOW HA add-on, gateway error contract only: (1) failure_error() returns upstream's message (now _failure_error) behind public_backend_error(exc) (BACKEND_DESTINATION_DENIED, BACKEND_BUSY, BACKEND_TIMEOUT, BACKEND_UNAVAILABLE, BACKEND_STREAM_ERROR, BACKEND_INVALID_RESPONSE ...), same exception type; (2) redirect, unexpected-status and auth-latch messages start with BACKEND_HTTP_ERROR status=N (upstream text kept after it); (3) the error body of an unexpected status is never read (upstream would put Nextcloud's Sabre message text into the error); (4) the account-lookup messages start with BACKEND_HTTP_ERROR status=N / BACKEND_INVALID_RESPONSE. The latch, probe(), policy kwargs and client-construction mapping are upstream v0.1.3, unchanged."
+    "upstream_sha256": "966322cd8fb174d09624319396d05e37d02b55254bdcea3328ef0f610ea1638f",
+    "local_sha256": "c7c2dc36cbbcce5c22aa7bd35d547a581eb5c029228e1dbe4717499179a49fcf",
+    "modification": "WOOW HA add-on, gateway contract only (upstream v0.1.4 code mode already prefixes every backend/transport error with its public code, using backend_policy.public_backend_error for hook exceptions): (1) load_backend_policy() refuses to start (BackendPolicyError, exit 2) when no backend_policy module exists, instead of falling back to an unrestricted client; (2) the error body of an unexpected status is never read: behind backend_policy only an unexpected 2xx (e.g. 200 where 207 is expected) arrives with a real body, and its Sabre message is backend text that must not reach a tool error."
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/6228f880cc7cf7909a43ad3b324256938e6616d6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
     "path": "nextcloud_mcp_server/errors.py",
-    "upstream_sha256": "665326cb71945c670e24e5c0309b2bfeedb01a1d818df6bc1d5faf7b81c70138",
-    "local_sha256": "e7eb0c927a925a00663a46e4218304b2363ba33cc8f8baead03d78f9143fcb73",
-    "modification": "WOOW HA add-on: import the gateway's backend_policy unconditionally (public_backend_error; the child cannot run without it) and add coded(), which puts the gateway's public code in front of an upstream ToolError, keeping its type (GatewayDenied, NextcloudHTTPError with its status)."
+    "upstream_sha256": "47c695afd7d99a050abc08e1bd431d8d3b31e923dd66fe4fdbbe349f07888800"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/6228f880cc7cf7909a43ad3b324256938e6616d6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
     "path": "nextcloud_mcp_server/paths.py",
-    "upstream_sha256": "e4eddd67c7339acf61d60fead9e78a2f6c0ade0d1c6bf96581a4387ab6b50b62"
+    "upstream_sha256": "91ff0372619e900f643bddd72534408c37f3abff41cb4b825b5f71ca68c1cee2"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/6228f880cc7cf7909a43ad3b324256938e6616d6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
     "path": "nextcloud_mcp_server/webdav.py",
-    "upstream_sha256": "c806ef4fe7b1f4d4b9c6539699ef8be9e8970630066aa1af1a0f9ff2329b453a",
-    "local_sha256": "f90e22ed325251c676e651a6b33240ce74fada076cd4f9cbe835262ea769cc7a",
-    "modification": "WOOW HA add-on: the two unparseable-answer messages (invalid WebDAV XML, not a multistatus) start with BACKEND_INVALID_RESPONSE; texts otherwise unchanged."
+    "upstream_sha256": "ab4b2834053a47ab0354924bb6d4883035bfd2830e78ebeb9099b2588faf0254"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/6228f880cc7cf7909a43ad3b324256938e6616d6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
     "path": "nextcloud_mcp_server/caldav.py",
-    "upstream_sha256": "62c0b669f1437cc7e3bd934dc34c61dab931e1af635b8a39351124b10fa6b213"
+    "upstream_sha256": "74083f1c5d0c8596e43255677534eae4f42153c10318eac68c66e8632c906d10"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/6228f880cc7cf7909a43ad3b324256938e6616d6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
     "path": "nextcloud_mcp_server/ical.py",
-    "upstream_sha256": "11fd8cdca4b94e49d6725b3dcbc9cb867c21687634a23684057360b69a1c1593"
+    "upstream_sha256": "531ca3c58684ea1c7dd504b440703c80699ccbf024278e568121195d9738b9af"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/6228f880cc7cf7909a43ad3b324256938e6616d6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
     "path": "nextcloud_mcp_server/tools.py",
-    "upstream_sha256": "83055cf40406aab524440c5f07095006569669c8d3841e54bb532181defc383a",
-    "local_sha256": "e928984d2f29151f19b88e95d40c74b9cebeafa5debb798b9064a7514cbe3a51",
-    "modification": "WOOW HA add-on: the 'paths outside the home folder' error no longer prints the account's home path (it contains the backend's user id); it starts with BACKEND_INVALID_RESPONSE. Nothing else changed."
+    "upstream_sha256": "df0d6d4661d13518df051db5bdb4bdae84343603fbdeafe4e6fede6159abe189",
+    "local_sha256": "6bf421331ded887b8677c315c78118711552038387f37c9930e52e2abee2516f",
+    "modification": "WOOW HA add-on: the 'paths outside the home folder' error no longer prints the account's home path (it contains the backend's user id); upstream's BACKEND_INVALID_RESPONSE code is kept. Nothing else changed."
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/6228f880cc7cf7909a43ad3b324256938e6616d6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
     "path": "LICENSE",
     "upstream_sha256": "1b05bfafc14067beabe8885c164528c122ebf545eabe97984b222fe377143a69"
   }
