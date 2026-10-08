@@ -14,7 +14,7 @@ Kubernetes MCP 與 Vibe Kanban 不在範圍。
 **目前狀態與限制（experimental）：**
 
 - 六個商店產品各有 runtime（封存的 Odoo Manage 原始碼也還在）；只開放部分有界支援的工具，不是完整功能遷移：六支合計上游 174 個工具，支援 67 個、暫不支援 107 個（工具表另列已下架的 Odoo Manage，不計入）。逐名對照見 [工具表](docs/tool-surface.md)。
-- 六份 `addons/*/config.yaml` 可從本 repository 的 HA 商店安裝，映像已公開、可匿名拉取。0.1.1–0.1.5 每版都在測試 HA 回歸（[0.1.5 紀錄](docs/operations/ha-test-0.1.5.md)，之前各版見同目錄 `ha-test-0.1.*.md`；0.1.6 待負責人核准更新窗口後回歸）：映像身分、管理面板權限、token、五支真後端的讀取冒煙與拒寫、後端斷線、重啟、升版；LiteLLM 沒有後端，工具未測（只測了未設定後端時的拒絕與錯誤碼，見 [client 文件](docs/operations/clients.md)）。真實 MCP client（同 HA Pi／Omnigent／Hermes、LAN client、AI client）、授權寫入、n8n 以外五支的備份還原、版本回退與 aarch64 尚未驗收。
+- 六份 `addons/*/config.yaml` 可從本 repository 的 HA 商店安裝，映像已公開、可匿名拉取。0.1.1–0.1.6 每版都在測試 HA 回歸（[0.1.6 紀錄](docs/operations/ha-test-0.1.6.md)，之前各版見同目錄 `ha-test-0.1.*.md`）：映像身分、管理面板權限、token、五支真後端的讀取冒煙與拒寫、後端斷線、重啟、升版；LiteLLM 沒有後端，工具未測（只測了未設定後端時的拒絕與錯誤碼，見 [client 文件](docs/operations/clients.md)）。真實 MCP client（同 HA Pi／Omnigent／Hermes、LAN client、AI client）、授權寫入、n8n 以外五支的備份還原、版本回退與 aarch64 尚未驗收。
 - **AI client 相容性**：0.1.5 經 OpenRouter 實測，Claude、GPT 拒收 n8n、Odoo、Hermes 的工具清單（7 個工具的 `inputSchema` 頂層有 `oneOf`／`allOf`，整個請求 HTTP 400）。0.1.6 已修正：這 7 個工具宣告的 schema 頂層改成單純的 object（驗證不變），2026-10-07 以同樣五個模型複驗六支全部接受（30/30）；直連 API 與實際 client 仍未測。詳見 [client 文件](docs/operations/clients.md)。
 - **HA 管理權限**：六支都有 `homeassistant_api: true`（n8n 自 0.1.0、其他自 0.1.1 起，負責人核准），用來確認管理面板的使用者是 HA owner 或系統管理員；測試 HA 上 owner 可用、一般使用者 403（0.1.1–0.1.5 每版實測）。`panel_admin` 不是授權。
 - 此例外授予**廣泛 Core 管理能力**（含使用者管理及可能間接 Supervisor／host 影響），不是可強制的唯讀角色權限；不代表批准所有 HA 變更。`hassio_api/auth_api` 仍 false、Supervisor role 預設、protection mode 不變，無新增 host 權限。
@@ -28,7 +28,7 @@ Kubernetes MCP 與 Vibe Kanban 不在範圍。
 - [手動更新、備份、migration、回復](docs/operations/update-backup-rollback.md)
 - [故障驗收與證據格式](docs/operations/acceptance.md)
 - [建置、CI、發佈關卡](docs/operations/release.md)
-- [0.1.6 發佈紀錄](docs/operations/release-decision-0.1.6.md)；[0.1.5 發佈紀錄](docs/operations/release-decision-0.1.5.md)、[0.1.5 HA 回歸](docs/operations/ha-test-0.1.5.md)（之前各版在同目錄）
+- [0.1.6 發佈紀錄](docs/operations/release-decision-0.1.6.md)、[0.1.6 HA 回歸](docs/operations/ha-test-0.1.6.md)；[0.1.5 發佈紀錄](docs/operations/release-decision-0.1.5.md)、[0.1.5 HA 回歸](docs/operations/ha-test-0.1.5.md)（之前各版在同目錄）
 - [授權範圍與第三方通知](THIRD_PARTY_NOTICES.md)
 
 各產品 `addons/<product>/DOCS.md`、`CHANGELOG.md`、`translations/zh-Hant.yaml`

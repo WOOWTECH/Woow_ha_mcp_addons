@@ -1,7 +1,7 @@
 # 0.1.6 發佈紀錄（2026-10-08）
 
 **狀態：** 2026-10-08 發佈（experimental）。六支映像由 302c96d 建置、通過 gate，以測過的 image ID 推送 GHCR，並以匿名 registry_gate public
-驗證；測試 HA 回歸待負責人核准更新窗口。
+驗證；2026-10-08 已在測試 HA 回歸（[ha-test-0.1.6](ha-test-0.1.6.md)）。
 
 **依據：** 0.1.5 留下的 0.1.6 待辦（[release-decision-0.1.5](release-decision-0.1.5.md)）；0.1.5 只認 Core 2026.7.2，Core 升級後管理面板
 整個 403；AI 測試第 0 階段（B0）經 OpenRouter 發現 Claude、GPT 拒收 n8n、Odoo、Hermes 的工具清單（負責人決定 D21）；Core 2026.10.0
@@ -69,7 +69,7 @@
 
 - 真 HA：只有 Core 2026.7.2 有真機證據（woowtech-ha，Supervisor 2026.09.3；Claude 交付線 e2e/ 的 M1a、O-D11 報告，2026-10-07）：
   測試用 HA 管理員經 Ingress 讀六支的管理 API，角色驗證放行；當時執行的是 0.1.5 映像。2026.7.3–2026.10.0 只靠原始碼審查與本機
-  loopback 測試，沒有真機證據。0.1.6 映像在測試 HA 的回歸：待負責人核准更新窗口後執行，結果另寫 ha-test-0.1.6.md。
+  loopback 測試，沒有真機證據。0.1.6 映像在測試 HA 的回歸：2026-10-08 通過（[ha-test-0.1.6](ha-test-0.1.6.md)；Core 2026.7.2，結果與 0.1.5 相同，另驗了工具清單的欄位與 schema 頂層）。
 - 發佈前要用 core-contract-watch 再確認 Core 2026.10.1 是否已發佈（2026-10-08 查詢時最新是 2026.10.0）。若已發佈，0.1.6 在該版的
   管理面板整個 403；要納入就照 [ha-role-core-contract](../ha-role-core-contract.md) 的「Adding a release」。
 - aarch64 未建；LAN client、LiteLLM 工具（無後端）未測；真實 MCP client（同 HA Pi／Omnigent／Hermes、HA Assist、n8n AI Agent 等）未驗收。

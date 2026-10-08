@@ -1,6 +1,6 @@
 # MCP client 連線（真實 client 待驗收）
 
-**六支 0.1.6 映像已發佈（0.1.5 的管理面板與 provider 已在測試 HA 實測，owner 可用、一般使用者 403；0.1.6 待回歸）；真實 MCP client 尚未驗收（見文末）。
+**六支 0.1.6 映像已發佈，管理面板與 provider 已在測試 HA 實測（0.1.6：owner 可用、一般使用者 403）；真實 MCP client 尚未驗收（見文末）。
 以下是配置形狀，不是可用憑證或繞過授權操作。** 支援的本地契約是
 Streamable HTTP `/mcp`（回應可含 SSE），不是 legacy `/sse` 或 token path。
 
