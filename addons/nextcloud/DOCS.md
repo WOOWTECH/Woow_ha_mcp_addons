@@ -4,8 +4,9 @@
 
 **0.1.7（experimental，本產品第一個版本）**：映像 `ghcr.io/woowtech/amd64-mcp-nextcloud:0.1.7` 由候選 7cc8bcb 建置，第一次送 gate
 就通過 container/mock 與 supply-chain gate（2026-10-08），以測過的 image ID 推送、匿名拉取驗證通過，可從本 repository 的 HA 商店安裝；
-先前版本號沒有 Nextcloud 映像。內容見 [CHANGELOG](CHANGELOG.md)。0.1.7 的測試 HA 回歸待負責人核准窗口：本產品還沒在 HA 上實測，
-目前只有本機的單元／整合測試（真實子程序＋假 Nextcloud 後端）與一次對測試用 Nextcloud 35.0.1 的本機端到端讀取。
+先前版本號沒有 Nextcloud 映像。內容見 [CHANGELOG](CHANGELOG.md)。2026-10-08 第一次在測試 HA 實測（[0.1.7 回歸紀錄](../../docs/operations/ha-test-0.1.7.md)）：讀取 6/6、寫入與未知工具 5/5 拒絕、
+後端斷線、重啟、child 恢復、權杖輪替、一般使用者 403 皆通過；後端是同一台 HA 的 Nextcloud 35.0.1（專屬測試使用者，只讀它自己的檔案）。
+寫入工具尚未在實機授權實測。
 [發佈關卡](../../docs/operations/release.md) 的人工 gates 和其他產品一樣維持關閉。
 
 管理面板與其他產品相同：管理程序以 runtime `SUPERVISOR_TOKEN` 連固定 `ws://supervisor/core/websocket`，只查

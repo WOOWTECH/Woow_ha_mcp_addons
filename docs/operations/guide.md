@@ -8,7 +8,7 @@
 unknown／未審工具即使開啟寫入仍拒絕。七支都有有界 writers／mixed operations，
 仍不是完整 writer parity；107 個暫不支援是明列內部工作，不假稱全部完成。
 
-**映像已發佈（目前 0.1.7），0.1.1–0.1.6 已在測試 HA 回歸（[0.1.6 紀錄](ha-test-0.1.6.md)）；0.1.7 的測試 HA 回歸待負責人核准窗口。** 七支都批准
+**映像已發佈（目前 0.1.7），0.1.1–0.1.7 已在測試 HA 回歸（[0.1.7 紀錄](ha-test-0.1.7.md)）。** 七支都批准
 `homeassistant_api: true`（n8n 自 0.1.0、其他五支自 0.1.1 起，負責人 2026-10-05 核准；Nextcloud 自 0.1.7 起，2026-10-08 核准）；正式 fixed-WS provider 已實作並經審查，
 七支共用同一個驗證器（n8n 經 `apps/n8n/run.py`、其他六支經 `run_product.py`），下方的 Core 版本清單七支一體適用。
 管理 HTML/assets/API 與 UI 已串接：真 HA 上已實測 owner 經 Ingress 的後端設定與 token reveal/rotate/revoke（管理 API），

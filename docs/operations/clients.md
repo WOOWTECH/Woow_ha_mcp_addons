@@ -1,7 +1,6 @@
 # MCP client 連線（真實 client 待驗收）
 
-**七支 0.1.7 映像已發佈；管理面板與 provider 已在測試 HA 實測到 0.1.6（owner 可用、一般使用者 403），0.1.7 的測試 HA 回歸待負責人核准窗口
-（Nextcloud 還沒在 HA 上實測）；真實 MCP client 尚未驗收（見文末）。
+**七支 0.1.7 映像已發佈；管理面板與 provider 已在測試 HA 實測（0.1.7，七支：owner 可用、一般使用者 403）；真實 MCP client 尚未驗收（見文末）。
 以下是配置形狀，不是可用憑證或繞過授權操作。** 支援的本地契約是
 Streamable HTTP `/mcp`（回應可含 SSE），不是 legacy `/sse` 或 token path。
 
@@ -87,8 +86,7 @@ v3 保存取代全部 `enabled_write_tools` 並關閉 legacy global，不能僅�
 記錄每個真實 client 版本、network mode、正確 DNS/port（公開證據需匿名化）、
 初始化/list/read/stream/reconnect／缺錯撤 token 結果；不保存秘密或 raw payload。
 目前完成的只有 HA 主機上的腳本 probe（[P9 工具](ha-p9-kit.md)，標準庫 HTTP，不是 MCP SDK client）：0.1.1–0.1.6 每版的
-initialize／tools/list／讀取／拒絕／缺錯撤 token／後端斷線回歸（[0.1.6 紀錄](ha-test-0.1.6.md)；0.1.7 的測試 HA 回歸待負責人核准窗口，
-Nextcloud 還沒在 HA 上實測）。同 HA Pi／Omnigent／Hermes、
+initialize／tools/list／讀取／拒絕／缺錯撤 token／後端斷線回歸（[0.1.7 紀錄](ha-test-0.1.7.md)，含 Nextcloud）。同 HA Pi／Omnigent／Hermes、
 LAN client、HA Assist、n8n AI Agent 等真實 client 仍待驗收。
 
 **AI client 相容性（0.1.6 已修正）：** 0.1.6 把下面 7 個工具宣告的 `inputSchema` 頂層改成單純的 `type: object`（拿掉 `oneOf`／`allOf`，

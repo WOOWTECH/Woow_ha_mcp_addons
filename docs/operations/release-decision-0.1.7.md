@@ -1,7 +1,7 @@
 # 0.1.7 發佈紀錄（2026-10-08）
 
 **狀態：** 2026-10-08 發佈（experimental）。七支映像由 7cc8bcb 建置、通過 gate，以測過的 image ID 推送 GHCR，並以匿名 registry_gate public
-驗證（Nextcloud 在負責人把新的 GHCR package 改為公開之後）；0.1.7 的測試 HA 回歸待負責人核准窗口。
+驗證（Nextcloud 在負責人把新的 GHCR package 改為公開之後）；2026-10-08 已在測試 HA 回歸（[ha-test-0.1.7](ha-test-0.1.7.md)）。
 
 **依據：** 0.1.6 紀錄中「不在 0.1.6」的第七支 Nextcloud（另一條開發線，[release-decision-0.1.6](release-decision-0.1.6.md)）在 0.1.7 首次發佈；
 所有 add-on 共用同一個版號，所以既有六支隨同重建，功能不變。負責人 2026-10-08：核准 defusedxml 0.7.1 以版本釘選的
@@ -65,10 +65,9 @@
 
 ## 未通過／未驗
 
-- 真 HA：測試 HA（woowtech-ha）仍執行 0.1.6。六支更新到 0.1.7 與安裝 Nextcloud 都要負責人核准的窗口，尚未進行：0.1.7 的測試 HA 回歸
-  待負責人核准窗口，結果另寫 ha-test-0.1.7.md。Nextcloud 還沒在 HA 上實測，目前只有本機的單元／整合測試（真實子程序＋假 Nextcloud
-  後端）與一次對測試用 Nextcloud 35.0.1 的本機端到端讀取；真實 Nextcloud 版本與受限帳號、管理員與 non-admin、Ingress UX、備份還原、
-  效能都還沒有證據。
+- 真 HA：2026-10-08 依負責人核准的窗口 U-017，woowtech-ha 六支更新到 0.1.7、安裝 Nextcloud MCP 並回歸通過（[ha-test-0.1.7](ha-test-0.1.7.md)）：
+  映像身分 7/7；六支結果與 0.1.6 相同；Nextcloud 讀取 6/6、拒絕 5/5、後端斷線、重啟、child 恢復、權杖、一般使用者 403 皆通過（後端是
+  同一台 HA 的 Nextcloud 35.0.1，專屬一般使用者）。仍未驗：Nextcloud 寫入工具的實機授權、管理員帳號以外的 Ingress UX、備份還原。
 - 管理面板支援的 Core 版本與 0.1.6 相同（2026.7.2–2026.9.4 與 2026.10.0），真機證據只有 Core 2026.7.2（0.1.6 回歸）。清單外的 Core 版本
   （含之後的 patch）照樣整個管理面板 403，要照 [ha-role-core-contract](../ha-role-core-contract.md) 的「Adding a release」審查後發新版。
 - aarch64 未建；LAN client、LiteLLM 工具（無後端）未測；真實 MCP client（同 HA Pi／Omnigent／Hermes、HA Assist、n8n AI Agent 等）未驗收。
