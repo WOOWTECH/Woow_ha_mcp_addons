@@ -2,15 +2,15 @@
 
 ## 目前狀態與安全邊界
 
-六份 manifest 是可從 HA 商店安裝的實驗版產品（0.1.6，映像已公開；Odoo Manage 已下架）。工具支援僅
-174/67/107（六支合計：來源／支援／暫不支援；工具表另列已下架的 Odoo Manage），[完整逐名工具表](../tool-surface.md)
+七份 manifest 是可從 HA 商店安裝的實驗版產品（0.1.7，映像已公開；Nextcloud 自 0.1.7 起；Odoo Manage 已下架）。工具支援僅
+183/76/107（七支合計：來源／支援／暫不支援；工具表另列已下架的 Odoo Manage），[完整逐名工具表](../tool-surface.md)
 包含混合 operation、預設、啟用限制及未完成原因。唯讀分類不是由名字推測，
-unknown／未審工具即使開啟寫入仍拒絕。六支都有有界 writers／mixed operations，
+unknown／未審工具即使開啟寫入仍拒絕。七支都有有界 writers／mixed operations，
 仍不是完整 writer parity；107 個暫不支援是明列內部工作，不假稱全部完成。
 
-**映像已發佈（目前 0.1.6），0.1.1–0.1.6 已在測試 HA 回歸（[0.1.6 紀錄](ha-test-0.1.6.md)）。** 六支都批准
-`homeassistant_api: true`（n8n 自 0.1.0、其他自 0.1.1 起，負責人 2026-10-05 核准）；正式 fixed-WS provider 已實作並經審查，
-六支共用同一個驗證器（n8n 經 `apps/n8n/run.py`、其他五支經 `run_product.py`），下方的 Core 版本清單六支一體適用。
+**映像已發佈（目前 0.1.7），0.1.1–0.1.6 已在測試 HA 回歸（[0.1.6 紀錄](ha-test-0.1.6.md)）；0.1.7 的測試 HA 回歸待負責人核准窗口。** 七支都批准
+`homeassistant_api: true`（n8n 自 0.1.0、其他五支自 0.1.1 起，負責人 2026-10-05 核准；Nextcloud 自 0.1.7 起，2026-10-08 核准）；正式 fixed-WS provider 已實作並經審查，
+七支共用同一個驗證器（n8n 經 `apps/n8n/run.py`、其他六支經 `run_product.py`），下方的 Core 版本清單七支一體適用。
 管理 HTML/assets/API 與 UI 已串接：真 HA 上已實測 owner 經 Ingress 的後端設定與 token reveal/rotate/revoke（管理 API），
 一般使用者 403；瀏覽器 UI 只在本地 Chromium（真 Core + fake HA transport）測過。
 不要直接修改 state、搬入 test verifier 或映射8099 LAN。
@@ -30,9 +30,9 @@ socket peer 與唯一 forwarded ID 的目前 active、人類、owner 或 system-
 Ingress session，亦不保證已在執行的跨系統操作能原子撤銷。provider 與 token 傳遞在 0.1.1 經獨立
 SPEC＋安全審，範圍只有這兩段程式，不含映像、HA 或發佈（[0.1.1 發佈紀錄](release-decision-0.1.1.md)）。
 映像與真實 admin/non-admin 驗收對應 `RELEASE-GATES.json` 的 `products.<app>.image`／`ha`：測試 HA 已實測
-owner／non-admin（0.1.1–0.1.5），但這些 gates 和其他人工 gates 一樣仍全部 false。
+owner／non-admin（0.1.1–0.1.6；Nextcloud 尚未在 HA 實測），但這些 gates 和其他人工 gates 一樣仍全部 false。
 
-**支援的 Core 版本**：六支的管理面板只在該版 add-on 審查過的 HA Core 版本運作（`ha_role._HA_VERSIONS`；0.1.6：2026.7.2–2026.9.4
+**支援的 Core 版本**：七支的管理面板只在該版 add-on 審查過的 HA Core 版本運作（`ha_role._HA_VERSIONS`；0.1.6、0.1.7：2026.7.2–2026.9.4
 與 2026.10.0，0.1.5 及更早只有 2026.7.2；審查紀錄見 [ha-role-core-contract](../ha-role-core-contract.md)）。其他版本（含之後的 patch
 與 beta）整個管理面板都回 403，看起來和「不是管理員」完全一樣（add-on 紀錄也沒有訊息）；MCP 端點（Bearer token）不受影響。
 新的 Core 版本要等 add-on 發新版才支援，升級 Core 前請先對照這份清單。
@@ -46,7 +46,7 @@ owner／non-admin（0.1.1–0.1.5），但這些 gates 和其他人工 gates 一
    Supervisor 以網址轉小寫後的 sha1 前 8 碼當 repository slug：這個網址是 `1ee8889c`，app slug 為
    `1ee8889c_woow_mcp_<product>`。換網址（例如拿掉 `#claude-delivery`，slug 會變成 `f1d622e7`）會讓所有 app 的
    slug 跟著變，不是原地更新；已安裝者維持原網址，要換網址需另做資料遷移計畫（見[更新、備份與回復](update-backup-rollback.md)）。
-3. 首試 n8n，使用批准的非正式 workflow 受限測試 key。其他五支逐支批准。
+3. 首試 n8n，使用批准的非正式 workflow 受限測試 key。其他六支逐支批准。
 4. 保留 protection mode（預設 on）；`protected` 是使用者狀態，不是假造
    manifest key。手動更新設定（auto-update off）要在安裝後確認；`boot: manual`
    只控制開機啟動，不代表自動更新開關。

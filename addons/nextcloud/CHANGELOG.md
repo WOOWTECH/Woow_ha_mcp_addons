@@ -1,6 +1,6 @@
 # Nextcloud Changelog
 
-## 0.1.7 — 準備中（未發佈）
+## 0.1.7 — 2026-10-08 公開（experimental）
 
 - 新產品：WOOW Nextcloud MCP。子程序是 WOOWTECH 自己的 MIT 套件 `nextcloud_mcp_server`
   （[Woow_nextcloud_mcp_server](https://github.com/WOOWTECH/Woow_nextcloud_mcp_server) tag v0.1.5，commit 4e09c86），
@@ -28,4 +28,7 @@
 - `list_tasks` 略過 gateway 拒絕或無權讀取的行事曆並回報 `skipped_calendars`；巢狀超過 32 層的任務物件會略過並計入
   `skipped_large_objects`。
 - 管理面板存檔時就拒絕 `backend_policy` 不接受的網址、含非 ASCII 字元的主機名稱（請改填 `xn--` 形式，面板會顯示），以及空白或前後有空白的使用者名稱／App 密碼。
-- 映像 `ghcr.io/woowtech/amd64-mcp-nextcloud:0.1.7` 尚未建置；先前版本號沒有 Nextcloud 映像，也不會補建。
+- 映像 `ghcr.io/woowtech/amd64-mcp-nextcloud:0.1.7`（候選 7cc8bcb，第一次送 gate 就通過 build／container／supply-chain gate；審查 R1 REQUEST CHANGES，修正後 R2、R3 APPROVE WITH NOTES，最後由交付線做差異檢查）。這是本產品第一個版本：先前版本號沒有 Nextcloud 映像，也不會補建。
+- 已知問題（共用 gateway 的既有問題，與其他產品相同，延到 0.1.8）：被 policy 拒絕的 tools/call 回 HTTP 403，Python MCP SDK 1.x
+  client 收到會整段斷線、不送 DELETE。子程序與 EMQX 一樣是 FastMCP 3.4.5、啟動時沒有設定閒置回收，沒送 DELETE 的 session
+  預期會留到子程序重啟（未另外實測）；client 用完請送 `DELETE /mcp`（帶 `Mcp-Session-Id`），見 docs/operations/clients.md。

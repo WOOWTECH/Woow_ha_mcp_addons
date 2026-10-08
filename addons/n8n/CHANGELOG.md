@@ -1,8 +1,9 @@
 # n8n Changelog
 
-## 0.1.7 — 準備中（未發佈）
+## 0.1.7 — 2026-10-08 公開（experimental）
 
-- 本產品功能沒有變動。0.1.7 新增第七支產品 WOOW Nextcloud MCP；所有 add-on 共用同一個版號，所以隨同重建映像 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.7`（尚未建置；0.1.0–0.1.6 tag 不覆寫）。
+- 本產品功能沒有變動。0.1.7 新增第七支產品 WOOW Nextcloud MCP；所有 add-on 共用同一個版號，所以隨同重建映像 `ghcr.io/woowtech/amd64-mcp-n8n:0.1.7`（候選 7cc8bcb，build／container／supply-chain gate 全過；本版的審查針對新增的 Nextcloud：R1 REQUEST CHANGES，修正後 R2、R3 APPROVE WITH NOTES，最後由交付線做差異檢查）；0.1.0–0.1.6 tag 不覆寫。
+- 已知問題：0.1.6 列出的已知問題（延到 0.1.7 的那幾項）本版都沒有處理（本版刻意不改既有六支產品的行為），延到 0.1.8。
 
 ## 0.1.6 — 2026-10-08 公開（experimental）
 

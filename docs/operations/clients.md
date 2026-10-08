@@ -1,6 +1,7 @@
 # MCP client 連線（真實 client 待驗收）
 
-**六支 0.1.6 映像已發佈，管理面板與 provider 已在測試 HA 實測（0.1.6：owner 可用、一般使用者 403）；真實 MCP client 尚未驗收（見文末）。
+**七支 0.1.7 映像已發佈；管理面板與 provider 已在測試 HA 實測到 0.1.6（owner 可用、一般使用者 403），0.1.7 的測試 HA 回歸待負責人核准窗口
+（Nextcloud 還沒在 HA 上實測）；真實 MCP client 尚未驗收（見文末）。
 以下是配置形狀，不是可用憑證或繞過授權操作。** 支援的本地契約是
 Streamable HTTP `/mcp`（回應可含 SSE），不是 legacy `/sse` 或 token path。
 
@@ -50,7 +51,7 @@ read。Bearer 要送在每個 POST/GET/DELETE、stream reconnect/session request
 transport session ID 不是額外認證。瀏覽器 Origin 在現有 tracer 拒絕；不承諾
 browser SDK 或 SaaS OAuth client 相容。
 
-工具預設唯讀，有些已支援 schema 比上游更窄；六支合計上游 174 個工具中支援 67 個，未支援的 107 個一律 deny。
+工具預設唯讀，有些已支援 schema 比上游更窄；七支合計上游 183 個工具中支援 76 個，未支援的 107 個一律 deny。
 寫入需有效 HA 管理員 UI 的逐工具／operation exact grant，且符合參數與 disabled gate；
 v3 保存取代全部 `enabled_write_tools` 並關閉 legacy global，不能僅用 global false 當撤銷；
 直接偽造 `tools/call` 不能繞過。[工具表](../tool-surface.md) 是唯一支援對照。
@@ -59,7 +60,7 @@ v3 保存取代全部 `enabled_write_tools` 並關閉 legacy global，不能僅�
 
 - 缺失／錯誤／撤銷 Bearer：401。不要透過換 URL path、HA headers 或 cookie 規避。
 - 工具不支援／停用／write 未開：403；不應因此開全權限後端帳號。403 的 body 只有 `{"error":"request denied"}`，
-  不說是哪個工具或參數被擋。已知 client 差異（0.1.5 審查 RC F7；0.1.6 未改，延到 0.1.7，修法待負責人決定）：Python MCP SDK
+  不說是哪個工具或參數被擋。已知 client 差異（0.1.5 審查 RC F7；0.1.6、0.1.7 都未改，延到 0.1.8，修法待負責人決定）：Python MCP SDK
   1.x client 遇到這個 403 會讓整個 session 斷線（要重新連線）；TypeScript SDK 只有那一次呼叫失敗。斷線時 Python client 不送
   DELETE，子程序的 session 會留下來：n8n 所有 client 共用 20 個 session，10 分鐘內約 20 次這種拒絕就會用完，之後所有 client 的
   initialize 都回 429（JSON-RPC 錯誤 -32000「Too Many Requests」），要等閒置 10 分鐘的 session 被回收；其他五支的子程序沒有
@@ -68,7 +69,8 @@ v3 保存取代全部 `enabled_write_tools` 並關閉 legacy global，不能僅�
   閒置回收，沒送 DELETE 的 session 會留到子程序重啟，例如 client 當掉、斷線，或 TypeScript SDK 只呼叫 `close()`（1.30.0 的
   `close()` 不送 DELETE，要先呼叫 transport 的 `terminateSession()`）。這五支收到沒帶 `Mcp-Session-Id` 的 initialize 以外請求
   （ping、tools/list、GET、DELETE 等）也會開一個新 session 並留下來，所以要先 initialize，之後每個請求都帶 `Mcp-Session-Id`。
-  0.1.6 仍是如此，延到 0.1.7。
+  0.1.6、0.1.7 仍是如此，延到 0.1.8。0.1.7 新增的 Nextcloud 子程序和 EMQX 一樣是 FastMCP 3.4.5、啟動時沒有設定閒置回收，
+  預期和這五支相同（未另外實測）。
 - 輪替後所有 client 更新秘密；舊 token 的新請求與 stream 後續轉送被拒。
   已送到 backend 的工作不會交易式回滾；輪替不等於取消後端工作。
 - 備份還原會復活備份中的 token／policy，需核對舊 token 暴露風險，再經批准流程輪替。
@@ -84,12 +86,13 @@ v3 保存取代全部 `enabled_write_tools` 並關閉 legacy global，不能僅�
 
 記錄每個真實 client 版本、network mode、正確 DNS/port（公開證據需匿名化）、
 初始化/list/read/stream/reconnect／缺錯撤 token 結果；不保存秘密或 raw payload。
-目前完成的只有 HA 主機上的腳本 probe（[P9 工具](ha-p9-kit.md)，標準庫 HTTP，不是 MCP SDK client）：0.1.1–0.1.5 每版的
-initialize／tools/list／讀取／拒絕／缺錯撤 token／後端斷線回歸（[0.1.5 紀錄](ha-test-0.1.5.md)）。同 HA Pi／Omnigent／Hermes、
+目前完成的只有 HA 主機上的腳本 probe（[P9 工具](ha-p9-kit.md)，標準庫 HTTP，不是 MCP SDK client）：0.1.1–0.1.6 每版的
+initialize／tools/list／讀取／拒絕／缺錯撤 token／後端斷線回歸（[0.1.6 紀錄](ha-test-0.1.6.md)；0.1.7 的測試 HA 回歸待負責人核准窗口，
+Nextcloud 還沒在 HA 上實測）。同 HA Pi／Omnigent／Hermes、
 LAN client、HA Assist、n8n AI Agent 等真實 client 仍待驗收。
 
 **AI client 相容性（0.1.6 已修正）：** 0.1.6 把下面 7 個工具宣告的 `inputSchema` 頂層改成單純的 `type: object`（拿掉 `oneOf`／`allOf`，
-分支規則寫進 description；gateway 驗證不變）。2026-10-07 以同樣五個模型經 OpenRouter 複驗，六支全部接受（30/30）；直連
+分支規則寫進 description；gateway 驗證不變）。2026-10-07 以同樣五個模型經 OpenRouter 複驗，六支全部接受（30/30）；0.1.7 新增的 Nextcloud 沒有做這項測試；直連
 Anthropic／OpenAI API 與實際 client 仍未測。以下是 0.1.5 的紀錄。
 
 **0.1.5 的已知相容性問題（0.1.6 已修正）：** 2026-10-07 不經 HA 的模型供應商測試（只送 0.1.5 的工具 schema，只走 OpenRouter）：Claude Sonnet 4.5、

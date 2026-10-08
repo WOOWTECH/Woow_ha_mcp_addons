@@ -2,14 +2,20 @@
 
 ## 現況與範圍
 
-**尚未發佈（預定 0.1.7，experimental）**：映像 `ghcr.io/woowtech/amd64-mcp-nextcloud` 尚未建置，也還沒在 HA 上實測；
+**0.1.7（experimental，本產品第一個版本）**：映像 `ghcr.io/woowtech/amd64-mcp-nextcloud:0.1.7` 由候選 7cc8bcb 建置，第一次送 gate
+就通過 container/mock 與 supply-chain gate（2026-10-08），以測過的 image ID 推送、匿名拉取驗證通過，可從本 repository 的 HA 商店安裝；
+先前版本號沒有 Nextcloud 映像。內容見 [CHANGELOG](CHANGELOG.md)。0.1.7 的測試 HA 回歸待負責人核准窗口：本產品還沒在 HA 上實測，
 目前只有本機的單元／整合測試（真實子程序＋假 Nextcloud 後端）與一次對測試用 Nextcloud 35.0.1 的本機端到端讀取。
-[發佈關卡](../../docs/operations/release.md) 全部維持關閉。
+[發佈關卡](../../docs/operations/release.md) 的人工 gates 和其他產品一樣維持關閉。
 
 管理面板與其他產品相同：管理程序以 runtime `SUPERVISOR_TOKEN` 連固定 `ws://supervisor/core/websocket`，只查
 `config/auth/list`，確認 Ingress 使用者是 active 的 owner 或 system-admin 才放行；token 只給管理程序，child 不繼承。
 此 token 具**廣泛 Core 管理能力**（`homeassistant_api: true`），負責人已於 2026-10-08 核准本 Add-on 使用（與其他六支相同，
 只用於管理面板確認 HA owner／管理員）。`panel_admin` 不是角色授權。
+
+**支援的 Core 版本**：管理面板只在本版審查過的 HA Core 版本運作（0.1.7：2026.7.2–2026.9.4 與 2026.10.0，和其他六支共用同一個驗證器）。
+其他版本（含之後的 patch 與 beta）整個管理面板都回 403，看起來和「不是管理員」完全一樣（add-on 紀錄也沒有訊息）；
+MCP 端點（Bearer token）不受影響。新的 Core 版本要等 add-on 發新版才支援，升級 Core 前請先對照這份清單。
 
 本產品 runtime：**FastMCP 3.4.5**，子程序是 WOOWTECH 的 MIT 套件 `nextcloud_mcp_server` v0.1.5（commit 4e09c86）
 放在 `apps/nextcloud/vendor`，對上游的修改逐檔記在 `docs/provenance/runtime-sources.json`。上游 9 個工具全部支援：

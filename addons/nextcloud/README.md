@@ -1,7 +1,7 @@
 # WOOW Nextcloud MCP（experimental）
 
 獨立 amd64 Home Assistant Add-on：把一個 Nextcloud 帳號的檔案、行事曆與任務以 MCP（Streamable HTTP）提供給 AI client。
-**尚未發佈**：第一個版本預定 0.1.7，映像 `ghcr.io/woowtech/amd64-mcp-nextcloud` 尚未建置；現況見 [本產品操作](DOCS.md) 開頭。
+0.1.7 起發佈（本產品第一個版本）；目前發佈的版本、映像與在 HA 上的實測狀態見 [本產品操作](DOCS.md) 開頭。
 
 - 工具：上游 9 個全部支援。預設只開 5 個讀取（檔案樹、讀文字檔、行事曆、任務）；4 個寫入
   （建立／更新文字檔、上傳、刪除）必須由 HA 管理員逐項授權，其中上傳與刪除特別預設關閉
