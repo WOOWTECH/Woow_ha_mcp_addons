@@ -19,7 +19,38 @@ SOURCES = {
 }
 SOURCE_PREFIX = {'nextcloud': 'src/'}
 
+def fetch(product, path):
+    source, _ = SOURCES[product]
+    upstream = path if path == 'LICENSE' else SOURCE_PREFIX.get(product, '') + path
+    with urlopen('https://raw.githubusercontent.com/' + source + '/' + upstream, timeout=30) as response:
+        return response.read()
+
+
+def stage(product, directory):
+    """Re-acquisition of ONE public product into an empty staging directory (never apps/ or provenance): the
+    reviewer ports the recorded local changes onto the staged upstream files, then replaces the vendor tree and
+    the product's runtime-sources.json records. Prints the new upstream records."""
+    source, paths = SOURCES[product]
+    assert not source.startswith('local:'), 'staging is for public sources only'
+    directory = Path(directory)
+    if directory.exists() and any(directory.iterdir()):
+        raise SystemExit('staging directory must be empty')
+    records = []
+    for path in [*paths, 'LICENSE']:
+        data = fetch(product, path)
+        dest = directory / path
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(data)
+        records.append({'product': product, 'source': source, 'path': path, 'upstream_sha256': hashlib.sha256(data).hexdigest()})
+    print(json.dumps(records, indent=2))
+
+
 if __name__ == '__main__':
+    import sys
+    if sys.argv[1:2] == ['--stage']:
+        # python scripts/vendor_runtimes.py --stage <product> <empty directory>
+        stage(sys.argv[2], sys.argv[3])
+        raise SystemExit(0)
     # Never overwrite reviewed local hardening or provenance during re-acquisition.
     if any((ROOT / 'apps' / product / 'vendor').exists() for product in SOURCES):
         raise SystemExit('vendor directories already exist; review updates in a separate staging tree')
@@ -31,9 +62,7 @@ if __name__ == '__main__':
             if source.startswith('local:'):
                 data = (LEGACY / 'apps' / product / path).read_bytes()
             else:
-                upstream = path if path == 'LICENSE' else SOURCE_PREFIX.get(product, '') + path
-                with urlopen('https://raw.githubusercontent.com/' + source + '/' + upstream, timeout=30) as response:
-                    data = response.read()
+                data = fetch(product, path)
             dest = ROOT / 'apps' / product / 'vendor' / path
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(data)
