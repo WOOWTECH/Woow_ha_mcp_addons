@@ -29,7 +29,7 @@ child 一律 127.0.0.1:3000/mcp，不能對外映射。管理與 MCP 各自 list
 | OpenDesign | 新固定 SDK native HTTP launcher，原真實 handlers | url（無虛构 backend token） | health；只認 status=ok/healthy，或（0.1.4，OpenDesign 0.21.1 實機）`ok` 為 true 且 `version` 為非空字串；其他 shape 顯示 unreachable |
 | EMQX | pinned public source `--transport http --host 127.0.0.1 --port 3000 --path /mcp` / FastMCP3.4.5 | url（不含 /api/v5）, api_key, api_secret | emqx_cluster_status；非空真實 node/version evidence、unique nodes、node_count 一致 |
 | LiteLLM | pinned public source 同固定 HTTP args / FastMCP3.4.5 | url, master_key | litellm_list_models；data array，不用可能付費 /health |
-| Nextcloud（0.1.7） | vendored `nextcloud_mcp_server` v0.1.0（`-m nextcloud_mcp_server.server` 同固定 HTTP args）/ FastMCP3.4.5 | url（根網址）, username, app_password | 子程序私有 `woow_backend_probe`（不在 TOOLS；每次新 client 讀一次 OCS `cloud/user`）；需恰好 `{"ok": true, "user_id": 非空字串}`。代表性公開讀取 `get_file_tree`（home）：path 為空字串、truncated 為 boolean、entries 格式正確 |
+| Nextcloud（0.1.7） | vendored `nextcloud_mcp_server` v0.1.3（`-m nextcloud_mcp_server.server` 同固定 HTTP args）/ FastMCP3.4.5 | url（根網址）, username, app_password | 子程序私有 `woow_backend_probe`（不在 TOOLS；每次新 client 讀一次 OCS `cloud/user`）；需恰好 `{"ok": true, "user_id": 非空字串}`。代表性公開讀取 `get_file_tree`（home）：path 為空字串、truncated 為 boolean、entries 格式正確 |
 
 Manage 只啟用 upstream XML-RPC YOLO **read**，不是 full YOLO，也不安裝 Odoo-side module。初始化需要可用後端及認證；沒有 backend 的成功 initialize 不被編造。Odoo writes/unknown methods/chatter-direct 關閉；Manage arbitrary method calls 關閉。EMQX/LiteLLM readonly=true 作第二層防禦，不取代 outer gate。OpenDesign delete_project 是本批新增唯一六類 writer：必須 explicit writes_enabled=true、工具未 disabled、canonical UUID；只用 disposable fake daemon 驗證過。其餘 writer 擴展留 W2b，不能宣稱 writer 完整。
 

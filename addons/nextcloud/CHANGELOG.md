@@ -3,7 +3,7 @@
 ## 0.1.7 — 準備中（未發佈）
 
 - 新產品：WOOW Nextcloud MCP。子程序是 WOOWTECH 自己的 MIT 套件 `nextcloud_mcp_server`
-  （[Woow_nextcloud_mcp_server](https://github.com/WOOWTECH/Woow_nextcloud_mcp_server) tag v0.1.0，commit 1f94258），
+  （[Woow_nextcloud_mcp_server](https://github.com/WOOWTECH/Woow_nextcloud_mcp_server) tag v0.1.3，commit 6228f88），
   原始碼放在 `apps/nextcloud/vendor`；對上游的每一處修改與原因記在 `docs/provenance/runtime-sources.json`。
 - 一個 Add-on 連一個 Nextcloud 帳號：根網址、使用者名稱、App 密碼（管理面板設定，不放在 HA options）。
 - 工具 9 個全部支援，由 gateway 用本地嚴格 schema 檢查每個呼叫、自己重建 tools/list：
@@ -20,8 +20,8 @@
 - 限制：gateway 每個請求最多 256 KiB，所以一次能寫入的文字與上傳的檔案（base64 後）都小於 256 KiB；
   檔名含 `%` 的檔案或資料夾會被 `backend_policy` 拒絕（`BACKEND_DESTINATION_DENIED`）；`get_file_tree` 遞迴時略過
   這種子資料夾並設 `truncated: true`，其他資料夾照常列出。
-- 帳密錯誤（401）或被 Nextcloud 暴力破解防護擋下（429）後，子程序不再連 Nextcloud、一律回同一錯誤碼，直到子程序重啟
-  （重新儲存後端設定或重啟 Add-on），避免健康檢查反覆登入失敗而讓 Nextcloud 封鎖 Add-on 所在的 IP。撤銷 App 密碼前請先停用
+- 帳密錯誤（401）後子程序不再用這組帳密連 Nextcloud、一律回同一錯誤碼，直到子程序重啟（重新儲存後端設定或重啟 Add-on）；
+  被 Nextcloud 暴力破解防護擋下（429）時停 5 分鐘再試，避免健康檢查反覆登入失敗而讓 Nextcloud 封鎖 Add-on 所在的 IP。撤銷 App 密碼前請先停用
   Add-on；已被封鎖時用 `occ security:bruteforce:reset <ip>` 或暴力破解 IP 白名單解除（見 DOCS）。
 - 管理面板存檔時就拒絕 `backend_policy` 不接受的網址，以及空白或前後有空白的使用者名稱／App 密碼。
 - 映像 `ghcr.io/woowtech/amd64-mcp-nextcloud:0.1.7` 尚未建置；先前版本號沒有 Nextcloud 映像，也不會補建。

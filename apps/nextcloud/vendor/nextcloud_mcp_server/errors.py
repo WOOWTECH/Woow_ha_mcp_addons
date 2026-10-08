@@ -8,9 +8,9 @@ from typing import Literal
 import httpx
 from fastmcp.exceptions import ToolError
 
-# WOOW HA add-on (vendored copy): the gateway's backend_policy is mandatory here. Every backend failure is reported
-# through its public_backend_error() code; no backend exception text or response body reaches a tool error.
-from backend_policy import BackendHTTPError, public_backend_error
+# WOOW HA add-on (vendored copy): the gateway's backend_policy is mandatory here, and every backend failure starts with
+# its public code (public_backend_error, BACKEND_HTTP_ERROR status=N, ...); upstream's explanation follows the code.
+from backend_policy import public_backend_error
 
 Operation = Literal[
     "read",
@@ -24,6 +24,27 @@ Operation = Literal[
 ]
 
 AUTH_MESSAGE = "Nextcloud rejected the username or app password."
+AUTH_LATCHED_MESSAGE = (
+    AUTH_MESSAGE + " Fix the credentials and restart the server; no further login attempts "
+    "will be made until then."
+)
+THROTTLED_MESSAGE = (
+    "Nextcloud is throttling requests from this server (too many failed logins); ask the "
+    "Nextcloud administrator to reset brute-force protection for this IP, then restart "
+    "the server."
+)
+
+
+class GatewayDenied(ToolError):
+    """The gateway's backend_policy refused the destination or path."""
+
+
+def coded(code: str, error: ToolError) -> ToolError:
+    """WOOW HA add-on: ``error`` (same type, same status) with the gateway's public code in front."""
+    message = f"{code}: {error}"
+    if isinstance(error, NextcloudHTTPError):
+        return NextcloudHTTPError(message, error.status)
+    return type(error)(message)
 
 
 class NextcloudHTTPError(ToolError):
@@ -52,6 +73,8 @@ def status_message(
     """Translate a backend HTTP status into the message of the error table (SPEC §6)."""
     if status == 401:
         return AUTH_MESSAGE
+    if status == 429:
+        return THROTTLED_MESSAGE
     if status == 403:
         return f'Permission denied for "{label}".'
     if status == 404 and op in ("create", "upload_create"):
@@ -85,20 +108,6 @@ def status_message(
         return f"Nextcloud returned an error ({status}); try again later."
     suffix = f": {detail}" if detail else ""
     return f'Nextcloud refused the request for "{label}" ({status}){suffix}.'
-
-
-def backend_error(exc: Exception, label: str, op: Operation) -> ToolError:
-    """WOOW HA add-on: a failed exchange as its public backend_policy code.
-
-    backend_policy answers every non-2xx status with BackendHTTPError (the body is never read): it becomes a
-    NextcloudHTTPError carrying the status, so the tools' 404/412 handling keeps working, with this module's fixed
-    explanation (caller label only). Everything else (transport, DNS-pinning denial, busy resolver, timeout, broken
-    stream, decoding) is the bare code.
-    """
-    code = public_backend_error(exc)
-    if isinstance(exc, BackendHTTPError):
-        return NextcloudHTTPError(f"{code}: {status_message(exc.status, label, op)}", exc.status)
-    return ToolError(code)
 
 
 def network_message(exc: httpx.TransportError) -> str:

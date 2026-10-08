@@ -455,3 +455,157 @@ print(json.dumps(result))
     for bad in ('https://cloud.example.test/a/../b', 'https://cloud.example.test/next%25cloud', 'https://metadata'):
         with pytest.raises(ValidationError):
             NextcloudConnection.model_validate({'url': bad, 'username': 'tester', 'app_password': 'DUMMY'})
+
+
+async def test_auth_failure_latches_tools_and_probe_until_restart(tmp_path):
+    """R1 #1: after a 401 the child sends nothing more with these credentials (tools and the private health probe);
+    readiness reports the backend unreachable; a restarted child (e.g. after new credentials) contacts it again."""
+    seen = []
+    status = {'value': 401}
+
+    class Backend(Quiet):
+        def handle_api(self):
+            self.rfile.read(int(self.headers.get('Content-Length', 0)))
+            seen.append((self.command, self.path))
+            if self.path == OCS_PATH and status['value'] == 200:
+                return respond(self, *NextcloudFake().handle('GET', self.path, self.headers, b''))
+            respond(self, status['value'], {'Content-Type': 'application/json'}, b'{"detail": "%s"}' % CANARY.encode())
+        do_GET = do_PROPFIND = do_REPORT = handle_api
+
+    with serve(Backend) as url:
+        async with runtime(tmp_path, 'nextcloud', url) as (client, headers, store, manager, child):
+            response = await client.post('/mcp', headers=headers, json=call('get_file_tree', {}))
+            assert 'BACKEND_HTTP_ERROR status=401' in response.text and CANARY not in response.text
+            assert len(seen) == 1
+            monitor = HealthMonitor(store, manager, child, child_url=manager.endpoint.url)
+            for name, args in (('list_calendars', {}), ('read_text_file', {'path': 'Documents/notes.md'}), ('get_file_tree', {})):
+                response = await client.post('/mcp', headers=headers, json=call(name, args))
+                assert 'BACKEND_HTTP_ERROR status=401' in response.text, response.text
+                await monitor.check()
+                assert monitor.backend == 'unreachable'
+            assert len(seen) == 1, seen  # nothing after the first failed login
+            status['value'] = 200
+            await monitor.check()
+            assert monitor.backend == 'unreachable' and len(seen) == 1  # fixed backend, same credentials: still latched
+            await manager.stop()
+            await manager.start()  # what saving the backend settings does (backend_changed restarts the child)
+            async with asyncio.timeout(20):
+                while True:
+                    await monitor.check()
+                    if monitor.backend == 'reachable':
+                        break
+                    await asyncio.sleep(.2)
+            assert seen[1:] and all(event == ('GET', OCS_PATH) for event in seen[1:])
+
+
+def test_throttle_latch_expires_and_errors_keep_public_codes(tmp_path):
+    """R1 #1: a 429 latches the credentials until Retry-After (or 5 min when the gateway transport hides the
+    headers), then requests resume; a different password is not latched; every message starts with its code."""
+    spec = child_spec(state(), tmp_path)
+    program = '''
+import asyncio, httpx
+import nextcloud_mcp_server.client as client_module
+from nextcloud_mcp_server.client import NextcloudClient
+from nextcloud_mcp_server.settings import load_settings
+now = [1000.0]
+client_module._clock = lambda: now[0]
+calls = []
+def answer(request):
+    calls.append(request.url.path)
+    return httpx.Response(429, headers={'Retry-After': '2'})
+async def main():
+    settings = load_settings()
+    nc = NextcloudClient(settings, transport=httpx.MockTransport(answer), policy=None)
+    for _ in range(3):
+        try:
+            await nc.probe()
+        except Exception as exc:
+            assert str(exc).startswith('BACKEND_HTTP_ERROR status=429: '), str(exc)
+    assert len(calls) == 1, calls
+    other = NextcloudClient(load_settings(app_password='DUMMY-other'), transport=httpx.MockTransport(answer), policy=None)
+    try:
+        await other.probe()
+    except Exception:
+        pass
+    assert len(calls) == 2, calls  # other credentials: their own latch
+    now[0] += 2.5
+    try:
+        await nc.probe()
+    except Exception:
+        pass
+    assert len(calls) == 3, calls  # Retry-After passed: one more attempt
+    # Through backend_policy the 429 arrives without headers: the default 5 minutes apply.
+    client_module.reset_auth_latch()
+    assert client_module.retry_after_seconds(None) == 300.0
+asyncio.run(main())
+'''
+    result = subprocess.run([spec.argv[0], '-c', program], env=spec.env, cwd=spec.cwd, capture_output=True,
+                            text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+
+
+def test_policy_denied_destination_is_a_public_code_for_tools_and_probe(tmp_path):
+    """R1 #3: backend_policy refusing the base URL while the client is built (metadata host, '%'/'..' path) gives
+    BACKEND_DESTINATION_DENIED for a tool request and for the private probe, without any connection attempt."""
+    spec = child_spec(state(), tmp_path)
+    program = '''
+import asyncio, socket
+from nextcloud_mcp_server.client import NextcloudClient
+from nextcloud_mcp_server.server import create_server
+from nextcloud_mcp_server.settings import load_settings
+def forbidden(*args, **kwargs):
+    raise AssertionError('no DNS or connection for a refused destination')
+socket.getaddrinfo = forbidden
+socket.socket.connect = forbidden
+async def main():
+    for url in ('https://metadata', 'https://cloud.example.test/next%25cloud', 'https://cloud.example.test/a/../b'):
+        settings = load_settings(base_url=url)
+        nc = NextcloudClient(settings)
+        for call in (nc.user_id, nc.probe):
+            try:
+                await call()
+            except Exception as exc:
+                assert str(exc).startswith('BACKEND_DESTINATION_DENIED: '), (url, str(exc))
+            else:
+                raise AssertionError(url)
+        server = create_server(settings)
+        try:
+            await server.call_tool('woow_backend_probe', {})
+        except Exception as exc:
+            assert 'BACKEND_DESTINATION_DENIED' in str(exc), (url, str(exc))
+        else:
+            raise AssertionError(url)
+asyncio.run(main())
+'''
+    result = subprocess.run([spec.argv[0], '-c', program], env=spec.env, cwd=spec.cwd, capture_output=True,
+                            text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+
+
+async def test_tree_skips_policy_refused_sub_folder_and_marks_truncated(tmp_path):
+    """R1 #5: a sub-folder whose name has '%' is refused by backend_policy; get_file_tree (depth >= 2) skips it,
+    sets truncated and still lists everything else; nothing is sent for the refused folder."""
+    files = nextcloud_fixtures.initial_files()
+    files['100% done'] = (None, 'pct')
+    files['100% done/inside.md'] = (b'x', 'in')
+    fake = NextcloudFake(files)
+    seen = []
+
+    class Backend(Quiet):
+        def handle_api(self):
+            body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
+            seen.append((self.command, self.path))
+            respond(self, *fake.handle(self.command, self.path, self.headers, body))
+        do_GET = do_PROPFIND = handle_api
+
+    with serve(Backend) as url:
+        async with runtime(tmp_path, 'nextcloud', url) as (client, headers, *_):
+            shallow = payload(await rpc(client, '/mcp', headers, call('get_file_tree', {'depth': 1})))
+            assert '100% done' in {e['path'] for e in shallow['entries']} and shallow['truncated'] is False
+            deep = payload(await rpc(client, '/mcp', headers, call('get_file_tree', {'depth': 2})))
+            paths = {e['path'] for e in deep['entries']}
+            assert deep['truncated'] is True
+            assert {'Documents/notes.md', 'Documents/old.txt', '100% done'} <= paths and '100% done/inside.md' not in paths
+            assert not any('100' in path for _, path in seen)
+            reply = await rpc(client, '/mcp', headers, call('read_text_file', {'path': '100% done/inside.md'}))
+            assert reply.get('isError') and 'BACKEND_DESTINATION_DENIED' in json.dumps(reply)

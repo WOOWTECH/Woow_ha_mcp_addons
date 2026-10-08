@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import importlib
 import inspect
 import json
 import logging
+import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import quote, urljoin, urlsplit
 
@@ -17,14 +22,19 @@ from fastmcp.exceptions import ToolError
 
 from . import __version__
 from .errors import (
-    AUTH_MESSAGE,
+    AUTH_LATCHED_MESSAGE,
+    THROTTLED_MESSAGE,
+    GatewayDenied,
     NextcloudHTTPError,
     Operation,
-    backend_error,
+    coded,
+    http_error_message,
+    public_backend_error,
     status_message,
 )
 from .paths import encode_path
 from .settings import Settings
+from .webdav import server_message
 
 logger = logging.getLogger("nextcloud_mcp_server")
 
@@ -52,6 +62,154 @@ class BodyTooLarge(ToolError):
             f"Nextcloud's answer{target} is larger than {limit} bytes and was not processed."
         )
         self.limit = limit
+
+
+_STATUS_CODE = re.compile(r"^BACKEND_HTTP_ERROR status=(\d{3})$")
+
+
+def carried_status(exc: BaseException) -> int | None:
+    """HTTP status carried by an exception (gateway transports raise for non-2xx).
+
+    Duck-typed: an int ``status`` attribute, or a ``code`` string of the form
+    ``BACKEND_HTTP_ERROR status=NNN`` on a wrapped failure.
+    """
+    status = getattr(exc, "status", None)
+    if isinstance(status, int) and not isinstance(status, bool) and 100 <= status <= 599:
+        return status
+    code = getattr(exc, "code", None)
+    if isinstance(code, str):
+        match = _STATUS_CODE.match(code)
+        if match:
+            return int(match[1])
+    return None
+
+
+def _gateway_code(exc: BaseException) -> str | None:
+    name = type(exc).__name__
+    if name == "BackendDenied":
+        return "BACKEND_DESTINATION_DENIED"
+    if name == "BackendBusy":
+        return "BACKEND_BUSY"
+    code = getattr(exc, "code", None)
+    if isinstance(code, str) and code.startswith("BACKEND_"):
+        return code
+    if isinstance(exc, (ValueError, httpx.HTTPError)) and str(exc) in (
+        "BACKEND_DESTINATION_DENIED",
+        "BACKEND_BUSY",
+    ):
+        return str(exc)
+    return None
+
+
+def failure_error(exc: BaseException, label: str) -> ToolError:
+    """WOOW HA add-on: upstream's message (below) behind the public backend_policy code."""
+    return coded(public_backend_error(exc), _failure_error(exc, label))
+
+
+def _failure_error(exc: BaseException, label: str) -> ToolError:
+    """ToolError for a failed exchange. Never includes text from the exception."""
+    code = _gateway_code(exc)
+    if code == "BACKEND_DESTINATION_DENIED":
+        return GatewayDenied(
+            f'The gateway refused this request for "{label}" (destination or path not allowed).'
+        )
+    if code == "BACKEND_BUSY":
+        return ToolError("Nextcloud is busy; try again later.")
+    if code == "BACKEND_TIMEOUT":
+        return ToolError("Could not reach Nextcloud (timed out).")
+    if code == "BACKEND_UNAVAILABLE":
+        return ToolError("Could not reach Nextcloud (connection failed).")
+    if isinstance(exc, _HTTPX_ERRORS):
+        return ToolError(http_error_message(exc))
+    return ToolError(f"Nextcloud returned an error ({type(exc).__name__}); try again later.")
+
+
+# Authentication latch (brute-force protection). After a 401 or 429 from Nextcloud no
+# further request is sent with the same credentials: every failed Basic-auth login
+# counts against the client IP and can get it throttled or banned. The latch is
+# process-wide but keyed by (base URL, username, SHA-256 of the app password), so other
+# clients in the same process with the same credentials share it, while a client built
+# with different (e.g. corrected) credentials is not affected. A 401 stays latched until
+# the process restarts; a 429 expires after Retry-After (capped) or a default period.
+THROTTLE_DEFAULT_SECONDS = 5 * 60
+THROTTLE_MAX_SECONDS = 15 * 60
+
+LatchKey = tuple[str, str, str]
+
+_clock: Callable[[], float] = time.monotonic  # replaced in tests
+
+
+@dataclass(frozen=True)
+class _Latch:
+    status: int
+    until: float | None  # monotonic deadline; None = until the process restarts
+
+
+_latches: dict[LatchKey, _Latch] = {}
+
+
+def latch_key(settings: Settings) -> LatchKey:
+    """Credentials identity for the latch. Holds only a hash of the password."""
+    parts = urlsplit(settings.base_url)
+    base = f"{parts.scheme.lower()}://{parts.netloc.lower()}{parts.path}"
+    digest = hashlib.sha256(settings.app_password.get_secret_value().encode()).hexdigest()
+    return (base, settings.username, digest)
+
+
+def _latch_message(status: int) -> str:
+    # WOOW HA add-on: public code first.
+    return f"BACKEND_HTTP_ERROR status={status}: " + (
+        AUTH_LATCHED_MESSAGE if status == 401 else THROTTLED_MESSAGE
+    )
+
+
+def _latched(key: LatchKey) -> NextcloudHTTPError | None:
+    latch = _latches.get(key)
+    if latch is None:
+        return None
+    if latch.until is not None and _clock() >= latch.until:
+        del _latches[key]
+        return None
+    return NextcloudHTTPError(_latch_message(latch.status), latch.status)
+
+
+def retry_after_seconds(value: str | None) -> float:
+    """Seconds to wait after a 429: Retry-After (delta or HTTP date), capped; else default."""
+    seconds: float | None = None
+    if value:
+        value = value.strip()
+        if value.isdigit():
+            seconds = float(value)
+        else:
+            try:
+                moment = parsedate_to_datetime(value)
+            except (TypeError, ValueError, IndexError):
+                moment = None
+            if moment is not None:
+                if moment.tzinfo is None:
+                    moment = moment.replace(tzinfo=UTC)
+                seconds = (moment - datetime.now(UTC)).total_seconds()
+    if seconds is None:
+        return float(THROTTLE_DEFAULT_SECONDS)
+    return float(min(max(seconds, 1.0), THROTTLE_MAX_SECONDS))
+
+
+def _set_latch(key: LatchKey, status: int, retry_after: str | None = None) -> NextcloudHTTPError:
+    if status == 429:
+        wait = retry_after_seconds(retry_after)
+        _latches[key] = _Latch(status, _clock() + wait)
+        logger.warning("Nextcloud answered 429; no requests with these credentials for %d s", wait)
+    else:
+        _latches[key] = _Latch(status, None)
+        logger.warning(
+            "Nextcloud answered %s; no requests with these credentials until restart", status
+        )
+    return NextcloudHTTPError(_latch_message(status), status)
+
+
+def reset_auth_latch() -> None:
+    """Clear every authentication latch (for tests; production clears 401 by restarting)."""
+    _latches.clear()
 
 
 class BackendPolicyError(Exception):
@@ -124,6 +282,7 @@ class NextcloudClient:
         self._transport = transport
         self.policy: PolicyFactory | None = load_backend_policy() if policy is _UNSET else policy
         self._verify = settings.tls_verify()
+        self.latch_key = latch_key(settings)
         self._client: httpx.AsyncClient | None = None
         self._client_lock = asyncio.Lock()
         self._user_id: str | None = None
@@ -131,20 +290,24 @@ class NextcloudClient:
 
     # -- lifecycle -----------------------------------------------------------------
 
-    def client_kwargs(self) -> dict[str, Any]:
-        """Keyword arguments used to build the HTTP client (plain or via ``backend_policy``)."""
+    def policy_kwargs(self) -> dict[str, Any]:
+        """Keyword arguments for ``backend_policy.async_client`` (besides ``base_url``).
+
+        Only what the server must decide: credentials, timeouts and headers. The hook owns
+        the transport, TLS verification, ``trust_env`` and ``follow_redirects`` (it sets
+        them itself, so passing them would be a duplicate keyword argument).
+        """
         settings = self.settings
-        kwargs: dict[str, Any] = {
+        return {
             "auth": httpx.BasicAuth(settings.username, settings.app_password.get_secret_value()),
-            "follow_redirects": False,
-            "trust_env": False,
-            "verify": self._verify,
-            "timeout": httpx.Timeout(
-                settings.request_timeout,
-                connect=CONNECT_TIMEOUT,
-            ),
+            "timeout": httpx.Timeout(settings.request_timeout, connect=CONNECT_TIMEOUT),
             "headers": {"User-Agent": USER_AGENT},
         }
+
+    def client_kwargs(self) -> dict[str, Any]:
+        """Keyword arguments for the plain ``httpx.AsyncClient`` (no ``backend_policy``)."""
+        kwargs = self.policy_kwargs()
+        kwargs.update(follow_redirects=False, trust_env=False, verify=self._verify)
         if self._transport is not None:
             kwargs["transport"] = self._transport
         return kwargs
@@ -155,18 +318,14 @@ class NextcloudClient:
             return self._client
         async with self._client_lock:
             if self._client is None:
-                kwargs = self.client_kwargs()
                 if self.policy is not None:
-                    # WOOW HA add-on: the gateway's backend_policy.async_client sets follow_redirects and
-                    # trust_env itself (passing them again is a TypeError) and owns the transport, whose TLS
-                    # verification is always on: verify and a custom transport are not handed to it.
-                    for key in ("follow_redirects", "trust_env", "transport", "verify"):
-                        kwargs.pop(key, None)
-                    client = self.policy(base_url=self.settings.base_url, **kwargs)
+                    client = self.policy(base_url=self.settings.base_url, **self.policy_kwargs())
                     if inspect.isawaitable(client):
                         client = await client
                 else:
-                    client = httpx.AsyncClient(base_url=self.settings.base_url, **kwargs)
+                    client = httpx.AsyncClient(
+                        base_url=self.settings.base_url, **self.client_kwargs()
+                    )
                 self._client = client
         return self._client
 
@@ -196,26 +355,44 @@ class NextcloudClient:
         (also a ToolError) when the body exceeds ``max_body`` bytes (default
         :data:`MAX_XML_BYTES`).
         """
-        client = await self.http()
-        # WOOW HA add-on: any failure (not only httpx's) is reported by backend_error(), i.e. as a
-        # backend_policy public code; redirects and unexpected statuses use fixed texts and the error body is
-        # never read, so no backend text (Location, Sabre message) reaches a tool error.
+        latched = _latched(self.latch_key)
+        if latched is not None:
+            raise latched
         try:
+            # Building the client (a gateway hook may refuse the base URL) and the request
+            # fail through the same mapping as the exchange itself.
+            client = await self.http()
             request = client.build_request(method, url, headers=headers, content=content)
+        except Exception as exc:
+            raise failure_error(exc, label) from None
+        try:
             response = await client.send(request, stream=True)
         except Exception as exc:
-            logger.warning("%s request failed: %s", method, type(exc).__name__)
-            raise backend_error(exc, label, op) from None
+            status = carried_status(exc)
+            if status is None:
+                logger.warning("%s request failed: %s", method, type(exc).__name__)
+                raise failure_error(exc, label) from None
+            # A gateway transport (backend_policy) raises instead of returning non-2xx
+            # answers; treat it exactly like that answer without headers or body.
+            response = httpx.Response(status, request=request)
         try:
             logger.debug("%s -> %s", method, response.status_code)
             if 300 <= response.status_code < 400:
+                target = _redirect_target(str(request.url), response.headers.get("location"))
+                # WOOW HA add-on: public code first (backend_policy raises for a 3xx, so the response here
+                # is synthetic and has no Location: target is "an unknown address").
                 raise ToolError(
-                    f"BACKEND_HTTP_ERROR status={response.status_code}: Nextcloud answered with a "
-                    "redirect; set NEXTCLOUD_MCP_BASE_URL to the final address."
+                    f"BACKEND_HTTP_ERROR status={response.status_code}: "
+                    f"Nextcloud answered with a redirect to {target}; "
+                    "set NEXTCLOUD_MCP_BASE_URL to the final address."
                 )
             if response.status_code not in ok:
-                if response.status_code == 401:
-                    raise NextcloudHTTPError(AUTH_MESSAGE, 401)
+                if response.status_code in (401, 429):
+                    raise _set_latch(
+                        self.latch_key, response.status_code, response.headers.get("retry-after")
+                    )
+                # WOOW HA add-on: never read the error body (an unexpected 2xx would otherwise put Nextcloud's
+                # own Sabre message text into the tool error); public code first.
                 raise NextcloudHTTPError(
                     f"BACKEND_HTTP_ERROR status={response.status_code}: "
                     + status_message(response.status_code, label, op),
@@ -231,12 +408,9 @@ class NextcloudClient:
             raise
         except Exception as exc:
             logger.warning("%s response failed: %s", method, type(exc).__name__)
-            raise backend_error(exc, label, op) from None
+            raise failure_error(exc, label) from None
         finally:
-            try:
-                await response.aclose()
-            except Exception as exc:  # the answer was already read or has already failed
-                logger.warning("%s response close failed: %s", method, type(exc).__name__)
+            await response.aclose()
 
     @staticmethod
     async def _read_capped(
@@ -267,6 +441,19 @@ class NextcloudClient:
                 self._user_id = await self._fetch_user_id()
         return self._user_id
 
+    async def probe(self) -> dict[str, Any]:
+        """Cheap health check for gateways (not an MCP tool).
+
+        Sends one authenticated OCS ``cloud/user`` request (no file or calendar data) and
+        returns ``{"ok": True, "user_id": <id>}``; on failure raises the same
+        :class:`ToolError` a tool would. It shares the user-id cache and the
+        authentication latch: after a 401/429 it fails without contacting Nextcloud.
+        """
+        user_id = await self._fetch_user_id()
+        if self._user_id is None:
+            self._user_id = user_id
+        return {"ok": True, "user_id": user_id}
+
     async def _fetch_user_id(self) -> str:
         url = f"{self.settings.base_url}/ocs/v2.php/cloud/user?format=json"
         try:
@@ -280,14 +467,15 @@ class NextcloudClient:
                 ok=(200,),
             )
         except NextcloudHTTPError as exc:
-            if exc.status == 401:
+            if exc.status in (401, 429):
                 raise
-            raise ToolError(
-                f"BACKEND_HTTP_ERROR status={exc.status}: Could not read the Nextcloud account; check "
+            raise ToolError(  # WOOW HA add-on: public code first
+                f"BACKEND_HTTP_ERROR status={exc.status}: "
+                f"Could not read the Nextcloud account ({exc.status}); check "
                 "NEXTCLOUD_MCP_BASE_URL points at the Nextcloud root."
             ) from None
         except BodyTooLarge:
-            raise ToolError(
+            raise ToolError(  # WOOW HA add-on: public code first
                 "BACKEND_INVALID_RESPONSE: Nextcloud sent an unexpectedly large account answer."
             ) from None
         try:
@@ -296,24 +484,12 @@ class NextcloudClient:
         except (ValueError, KeyError, TypeError):
             user_id = None
         if not isinstance(user_id, str) or not user_id:
-            raise ToolError(
-                "BACKEND_INVALID_RESPONSE: The address in NEXTCLOUD_MCP_BASE_URL did not answer like a "
-                "Nextcloud server; check that it is the Nextcloud root URL."
+            raise ToolError(  # WOOW HA add-on: public code first
+                "BACKEND_INVALID_RESPONSE: "
+                "The address in NEXTCLOUD_MCP_BASE_URL did not answer like a Nextcloud "
+                "server; check that it is the Nextcloud root URL."
             )
         return user_id
-
-    async def probe(self) -> dict[str, Any]:
-        """WOOW HA add-on: the gateway HealthMonitor's private readiness probe (woow_backend_probe).
-
-        One fixed OCS GET (cloud/user) on a FRESH client built the same way as the tools' one (through
-        backend_policy), closed afterwards: it never waits for or holds the tools' connections and never uses the
-        cached user id. Answers only ok and the account's user id; failures are the tools' public errors.
-        """
-        fresh = NextcloudClient(self.settings, transport=self._transport, policy=self.policy)
-        try:
-            return {"ok": True, "user_id": await fresh._fetch_user_id()}
-        finally:
-            await fresh.aclose()
 
     # -- URLs ----------------------------------------------------------------------
 

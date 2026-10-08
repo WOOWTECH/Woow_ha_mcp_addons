@@ -8,7 +8,7 @@ import binascii
 import logging
 import mimetypes
 from collections.abc import Callable
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, NotRequired
 from urllib.parse import quote, unquote, urlsplit
 
 from fastmcp import FastMCP
@@ -21,7 +21,7 @@ from typing_extensions import TypedDict
 
 from .caldav import calendar_entry, is_done, sort_tasks, tasks_from_report
 from .client import BodyTooLarge, NextcloudClient
-from .errors import NextcloudHTTPError, Operation, stale_message
+from .errors import GatewayDenied, NextcloudHTTPError, Operation, stale_message
 from .paths import (
     caller_etag,
     display_path,
@@ -46,6 +46,12 @@ logger = logging.getLogger("nextcloud_mcp_server")
 
 XML_CONTENT_TYPE = "application/xml; charset=utf-8"
 OFFLOAD_BYTES = 256 * 1024  # parse answers larger than this in a worker thread
+# Nextcloud's ETags have about one-second resolution for writes to the same file: a
+# second write within that second may keep the old ETag (or still match it).
+UNCHANGED_ETAG_NOTE = (
+    "Nextcloud did not change the etag; wait a second before the next conditional write "
+    "to this file."
+)
 DELETE_NOTE = "Moved to the Nextcloud trash bin when the Deleted files app is enabled."
 _MIME = mimetypes.MimeTypes()  # built-in table only: same answer on every platform
 
@@ -132,6 +138,7 @@ class UpdatedFile(TypedDict):
     previous_etag: str
     etag: str | None
     bytes: int
+    note: NotRequired[str]
 
 
 class UploadedFile(TypedDict):
@@ -139,6 +146,7 @@ class UploadedFile(TypedDict):
     path: str
     etag: str | None
     bytes: int
+    note: NotRequired[str]
 
 
 class DeletedFile(TypedDict):
@@ -304,6 +312,7 @@ class NextcloudTools:
                 # empty folder) describes the requested resource itself.
                 own = file_entry(items[0], normalized)  # type: ignore[assignment]
             else:
+                # WOOW HA add-on: no home path (it contains the backend's user id); public code first.
                 raise ToolError(
                     "BACKEND_INVALID_RESPONSE: Nextcloud answered with paths outside the account's "
                     "home folder; check NEXTCLOUD_MCP_BASE_URL and, behind a reverse proxy, the "
@@ -322,6 +331,8 @@ class NextcloudTools:
         try:
             items = await self._propfind(url, "0", label, body=ETAG_PROPFIND, op="read")
         except NextcloudHTTPError as exc:
+            if exc.status in (401, 429):
+                raise  # authentication latch: report it, not a stale etag
             return exc.status != 404, None
         except ToolError:
             return True, None
@@ -403,6 +414,7 @@ class NextcloudTools:
 
         frontier = add(normalized, children)
         level = 1
+        refused = False
         while level < depth and frontier and not truncated:
             next_frontier: list[FileEntry] = []
             for folder in frontier:
@@ -416,6 +428,11 @@ class NextcloudTools:
                         logger.info("skipped a sub-folder that vanished or is not readable")
                         continue
                     raise
+                except GatewayDenied:
+                    # e.g. a folder name with '%' that the gateway's policy refuses
+                    logger.info("skipped a sub-folder the gateway refused")
+                    refused = True
+                    continue
                 next_frontier.extend(add(folder["path"], sub))
                 if truncated:
                     break
@@ -431,7 +448,7 @@ class NextcloudTools:
                     emit(entry["path"])
 
         emit(normalized)
-        return {"path": normalized, "entries": result, "truncated": truncated}
+        return {"path": normalized, "entries": result, "truncated": truncated or refused}
 
     async def read_text_file(self, path: str) -> TextFile:
         normalized = normalize_path(path)
@@ -607,13 +624,16 @@ class NextcloudTools:
                 ) from None
             raise
         etag = await self._etag_after_write(url, normalized, reply.headers)
-        return {
+        result: UpdatedFile = {
             "status": "updated",
             "path": normalized,
             "previous_etag": previous,
             "etag": etag,
             "bytes": len(data),
         }
+        if etag == previous:
+            result["note"] = UNCHANGED_ETAG_NOTE
+        return result
 
     def _decode_upload(self, content_base64: str) -> bytes:
         cleaned = "".join(content_base64.split())
@@ -662,12 +682,15 @@ class NextcloudTools:
                 ) from None
             raise
         etag = await self._etag_after_write(url, normalized, reply.headers)
-        return {
+        uploaded: UploadedFile = {
             "status": "created" if previous is None else "replaced",
             "path": normalized,
             "etag": etag,
             "bytes": len(data),
         }
+        if previous is not None and etag == previous:
+            uploaded["note"] = UNCHANGED_ETAG_NOTE
+        return uploaded
 
     # -- delete tool ---------------------------------------------------------------
 
@@ -705,7 +728,8 @@ DESCRIPTIONS: dict[str, str] = {
         "List files and folders of the Nextcloud account, starting at a folder (default: the "
         "home folder) and going down up to `depth` levels (1-3). Each entry has path, name, "
         "type (file/folder), size, modified (UTC), etag and content_type; folders come first. "
-        "The listing stops at the configured maximum and then sets truncated=true; list a "
+        "The listing stops at the configured maximum and then sets truncated=true (also when "
+        "a sub-folder could not be listed because the gateway refused it); list a "
         "sub-folder to see more. If `path` is a file, that file is the only entry. Next: "
         "read_text_file to read a text file; use the etag for updates or deletes."
     ),

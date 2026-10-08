@@ -164,7 +164,10 @@ async def test_error_bodies_never_enter_gateway_stream(tmp_path, product, json_r
     with serve(Backend) as url:
         async with runtime(tmp_path, product, url, canary=canary, json_response=json_response) as (client, headers, *_):
             name, arguments = PROBES[product]
-            for status in (401, 403, 422, 500, 503):
+            # Nextcloud latches its credentials after a 401 (no further backend contact until restart): last.
+            statuses = (403, 422, 500, 503, 401) if product == 'nextcloud' else (401, 403, 422, 500, 503)
+            latched = False
+            for status in statuses:
                 for shape in ('detail', 'text', 'nested'):
                     mode.update(status=status, shape=shape)
                     before = len(calls)
@@ -178,7 +181,11 @@ async def test_error_bodies_never_enter_gateway_stream(tmp_path, product, json_r
                     assert canary not in response.text, response.text
                     assert len(response.content) < 4096
                     assert 'BACKEND_' in response.text, response.text
-                    assert len(calls) > before
+                    if latched:
+                        assert len(calls) == before  # the auth latch sends nothing more
+                    else:
+                        assert len(calls) > before
+                    latched = product == 'nextcloud' and status == 401
 
 
 @pytest.mark.parametrize('product,capacity', [('opendesign', 4), ('odoo', 1)])

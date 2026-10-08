@@ -60,6 +60,11 @@ def create_server(
     nc = NextcloudClient(settings, transport=transport)
     if nc.policy is not None:
         logger.info("backend_policy.async_client will build the HTTP client")
+        if not settings.verify_tls or settings.ca_bundle:
+            logger.warning(
+                "NEXTCLOUD_MCP_VERIFY_TLS / NEXTCLOUD_MCP_CA_BUNDLE are ignored: "
+                "backend_policy owns TLS verification."
+            )
     for warning in settings.startup_warnings():
         logger.warning(warning)
 
@@ -79,9 +84,17 @@ def create_server(
         on_duplicate="error",
     )
     register_tools(server, nc, settings)
+    # For gateways: ``await server.nextcloud_client.probe()`` is a cheap health check.
+    server.nextcloud_client = nc  # type: ignore[attr-defined]
 
     async def woow_backend_probe() -> dict[str, Any]:
-        return await nc.probe()
+        # WOOW HA add-on: upstream probe() on a FRESH client with the same settings and policy, closed afterwards:
+        # it never waits for or holds the tools' connections, and still shares the credentials-keyed auth latch.
+        fresh = NextcloudClient(settings, transport=transport, policy=nc.policy)
+        try:
+            return await fresh.probe()
+        finally:
+            await fresh.aclose()
 
     # on_duplicate="error": start-up fails if the name were ever taken by a tool.
     server.add_tool(

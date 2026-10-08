@@ -10,7 +10,7 @@
 `config/auth/list`，確認 Ingress 使用者是 active 的 owner 或 system-admin 才放行；token 只給管理程序，child 不繼承。
 此 token 具**廣泛 Core 管理能力**（`homeassistant_api: true`）。`panel_admin` 不是角色授權。
 
-本產品 runtime：**FastMCP 3.4.5**，子程序是 WOOWTECH 的 MIT 套件 `nextcloud_mcp_server` v0.1.0（commit 1f94258）
+本產品 runtime：**FastMCP 3.4.5**，子程序是 WOOWTECH 的 MIT 套件 `nextcloud_mcp_server` v0.1.3（commit 6228f88）
 放在 `apps/nextcloud/vendor`，對上游的修改逐檔記在 `docs/provenance/runtime-sources.json`。上游 9 個工具全部支援：
 
 | 工具 | 類型 | 預設 |
@@ -36,8 +36,9 @@
 - 請在 Nextcloud「個人設定 → 安全性 → 裝置與工作階段」為本 Add-on 建立專用 **App 密碼**，不要填登入密碼。
   建議用權限最小的專用帳號，只分享需要的資料夾給它。url、使用者名稱與 App 密碼存檔時就會檢查：
   `backend_policy` 會拒絕的網址（路徑含 `.`／`..` 片段、解碼後含 `%` 或 `\`、metadata 類主機）與空白或前後有空白的帳密都存不進去。
-- **帳密錯誤會鎖住，而不是一直重試**：Nextcloud 回 401（帳密錯誤）或 429（暴力破解防護擋下）之後，子程序不再連
-  Nextcloud，工具與健康檢查都直接回同一個公開錯誤碼，直到子程序重啟（在面板重新儲存後端設定，或重新啟動 Add-on）。
+- **帳密錯誤會鎖住，而不是一直重試**：Nextcloud 回 401（帳密錯誤）之後，子程序不再用這組帳密連 Nextcloud，工具與健康檢查
+  都直接回 `BACKEND_HTTP_ERROR status=401`，直到子程序重啟（在面板重新儲存後端設定，或重新啟動 Add-on）。回 429（暴力破解防護
+  擋下）時同樣停止連線，但只停 5 分鐘（gateway 的傳輸層看不到 Retry-After，所以一律用預設的 5 分鐘），之後再試一次。
   這是為了避免每 15 秒一次的健康檢查不斷送出失敗的登入，觸發 Nextcloud 的暴力破解防護、把 Add-on 所在的 IP
   （在家用 NAT 或沒設 trusted_proxies 的反向代理後面，常是整個網路共用的 IP）封鎖，連同一 IP 的網頁登入與其他用戶端一起被擋。
 - **要撤銷或輪替 App 密碼，請先停用 Add-on**，在 Nextcloud 撤銷舊密碼、建立新密碼，到面板存入新密碼後再啟動。
@@ -57,6 +58,8 @@
 - 檔名或路徑含 `%` 的檔案會被 `backend_policy` 拒絕（`BACKEND_DESTINATION_DENIED`）；直接讀寫這種檔案或資料夾都會失敗。
   `get_file_tree` 往下列子資料夾（depth 2–3）時，遇到名稱含 `%` 的子資料夾會略過它、不中斷整個列表，並把 `truncated` 設為 true。
 - 不能建立資料夾、不能修改任務、不展開重複任務；`list_tasks` 描述截 500 字。
+- Nextcloud 的 etag 大約以秒為單位：同一個檔案在一秒內連續寫兩次，etag 可能不變。這時 `update_text_file`／`upload_file`
+  的結果會多一個 `note` 欄位提醒，下一次有條件寫入前請等一秒。
 
 ## 網路、健康與更新
 

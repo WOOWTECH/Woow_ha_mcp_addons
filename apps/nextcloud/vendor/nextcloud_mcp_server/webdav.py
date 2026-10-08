@@ -93,7 +93,7 @@ def parse_xml(body: bytes) -> Element:
     try:
         return SafeET.fromstring(body, forbid_dtd=True)
     except (DefusedXmlException, SafeET.ParseError, ValueError) as exc:
-        raise ToolError(
+        raise ToolError(  # WOOW HA add-on: public code first
             "BACKEND_INVALID_RESPONSE: Nextcloud sent an answer that is not valid WebDAV XML."
         ) from exc
 
@@ -106,7 +106,7 @@ def parse_multistatus(body: bytes) -> list[DavResponse]:
     """
     root = parse_xml(body)
     if root.tag != tag(DAV, "multistatus"):
-        raise ToolError(
+        raise ToolError(  # WOOW HA add-on: public code first
             "BACKEND_INVALID_RESPONSE: Nextcloud sent an answer that is not a WebDAV multistatus."
         )
     results: list[DavResponse] = []
