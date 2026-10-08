@@ -44,7 +44,7 @@ Fixture 不連後端、不是正式 verifier，也不進 image/dist。Guard 依�
 | OpenDesign | `{connection:{url}}`，無虛構 token |
 | EMQX | `{connection:{url,api_key,api_secret}}`，URL 不附 `/api/v5` |
 | LiteLLM | `{connection:{url,master_key}}` |
-| Nextcloud | `{connection:{url,username,app_password}}`，url 是 Nextcloud 根網址；username／app_password 不可空白、前後不可有空白 |
+| Nextcloud | `{connection:{url,username,app_password}}`，url 是 Nextcloud 根網址，主機名稱含非 ASCII 字元（IDN）時要填 `xn--` 形式（表單會顯示）；username／app_password 不可空白、前後不可有空白 |
 
 - Manage `module` 要求**後端 MCP module 已存在**，UI 不安裝／變更 Odoo；read 不允許 writer grants。
 - 保留完全不發 PUT；替換是完整 typed connection，必要秘密需重新輸入，不 trim。

@@ -23,9 +23,9 @@
   這種子資料夾並設 `truncated: true`，其他資料夾照常列出。
 - 帳密錯誤（401）後子程序不再用這組帳密連 Nextcloud、一律回同一錯誤碼，直到子程序重啟（重新儲存後端設定或重啟 Add-on）；
   被 Nextcloud 暴力破解防護擋下（429）時停 5 分鐘再試，避免健康檢查反覆登入失敗而讓 Nextcloud 封鎖 Add-on 所在的 IP。輪替 App 密碼時先建立新密碼、
-  在面板存入並確認可連線，再撤銷舊密碼；只撤銷時先清除後端連線或停止 Add-on；緊急撤銷只會失敗一次（見 DOCS）。
+  在面板存入並確認可連線，再撤銷舊密碼；只撤銷時先清除後端連線或停止 Add-on；緊急撤銷通常只失敗一次（Nextcloud 延遲回應或有請求在途時可能多幾次，見 DOCS）。
   已被封鎖時用 `occ security:bruteforce:reset <ip>` 或暴力破解 IP 白名單解除。
 - `list_tasks` 略過 gateway 拒絕或無權讀取的行事曆並回報 `skipped_calendars`；巢狀超過 32 層的任務物件會略過並計入
   `skipped_large_objects`。
-- 管理面板存檔時就拒絕 `backend_policy` 不接受的網址，以及空白或前後有空白的使用者名稱／App 密碼。
+- 管理面板存檔時就拒絕 `backend_policy` 不接受的網址、含非 ASCII 字元的主機名稱（請改填 `xn--` 形式，面板會顯示），以及空白或前後有空白的使用者名稱／App 密碼。
 - 映像 `ghcr.io/woowtech/amd64-mcp-nextcloud:0.1.7` 尚未建置；先前版本號沒有 Nextcloud 映像，也不會補建。

@@ -478,8 +478,11 @@ def child_spec(state: ProductState, directory: Path) -> ChildSpec | None:
         elif product == 'nextcloud':
             # No ALLOWED_HOSTS (the gateway reaches the child as 127.0.0.1, which its Host/Origin guard accepts)
             # and no CA_BUNDLE/VERIFY_TLS: backend_policy's transport always verifies TLS (a private CA needs review).
+            # ERROR_CODES: the gateway's error contract (every backend/transport error starts with its public code)
+            # is declared here, not left to the child's 'auto' default.
             env.update(NEXTCLOUD_MCP_BASE_URL=c.url, NEXTCLOUD_MCP_USERNAME=c.username,
-                       NEXTCLOUD_MCP_APP_PASSWORD=c.app_password, NEXTCLOUD_MCP_READONLY='true')
+                       NEXTCLOUD_MCP_APP_PASSWORD=c.app_password, NEXTCLOUD_MCP_READONLY='true',
+                       NEXTCLOUD_MCP_ERROR_CODES='true')
             module = 'nextcloud_mcp_server.server'
         else:
             env.update(LITELLM_MCP_BASE_URL=c.url, LITELLM_MCP_MASTER_KEY=c.master_key, LITELLM_MCP_READONLY='true')

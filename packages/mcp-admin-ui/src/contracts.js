@@ -54,6 +54,16 @@ export function backendPayload(product, action, values) {
   }
   if (product === 'emqx' && connection.url.endsWith('/api/v5')) throw new UiError('請使用 Broker 基底 URL，不含 /api/v5。');
   // The Nextcloud child strips both and refuses an empty result: never save blank or padded values.
+  if (product === 'nextcloud') {
+    // An internationalized host is sent by the browser/httpx as xn--; the backend policy compares hosts exactly, so
+    // only the ASCII form can work: show it instead of a generic refusal from the server.
+    const authority = connection.url.split('://')[1].split('/')[0];
+    const parsed = new URL(connection.url);
+    // Compare the host as typed with the browser's (xn--) hostname; only a non-ASCII host differs this way.
+    if (/[^\x00-\x7f]/.test(authority) && parsed.hostname !== authority.replace(/:\d+$/, '').toLowerCase()) {
+      throw new UiError(`主機名稱含非 ASCII 字元，請改填 xn-- 形式：${connection.url.replace(authority, parsed.host)}`);
+    }
+  }
   if (product === 'nextcloud' && ['username', 'app_password'].some(k => connection[k].trim() === '' || connection[k] !== connection[k].trim())) throw new UiError('使用者名稱與 App 密碼不可空白，前後也不可有空白。');
   return product === 'n8n' ? connection : { connection };
 }

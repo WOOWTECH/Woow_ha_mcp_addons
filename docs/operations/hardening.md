@@ -12,7 +12,7 @@
 然後只以 `runpy` 執行固定 n8n script／其他各支 core module；**不能改成再次 exec**，
 否則 exec 可重設 dumpability。保持 uid/gid10001、無 extra caps、protection/AppArmor。
 
-各支管理端都保留 runtime `SUPERVISOR_TOKEN`（0.1.0 只有 n8n；0.1.1 起全部，負責人 2026-10-05 核准）；child 一律不接收，必須使用
+各支管理端都保留 runtime `SUPERVISOR_TOKEN`（0.1.0 只有 n8n；其他六支 0.1.1 起，負責人 2026-10-05 核准；Nextcloud 0.1.7 起，2026-10-08 核准）；child 一律不接收，必須使用
 allowlisted env。Linux 測試用虛構 token、真正 bootstrap/drop/exec 與同 UID child，
 確認 `/proc/<parent>/environ`、`/proc/<parent>/mem`、`process_vm_readv` 都拒絕；
 unguarded control 能讀到虛構 procfs token。這不是 HA AppArmor 實測，也不防 root /

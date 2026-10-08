@@ -65,7 +65,7 @@ def test_child_spec_is_exact_and_grant_driven(tmp_path):
         'PYTHONPATH': f'{app / "vendor"}:{ROOT / "apps/runtime"}',
         'NEXTCLOUD_MCP_BASE_URL': 'https://cloud.example.test', 'NEXTCLOUD_MCP_USERNAME': 'tester',
         'NEXTCLOUD_MCP_APP_PASSWORD': 'DUMMY', 'NEXTCLOUD_MCP_READONLY': 'true', 'NEXTCLOUD_MCP_ALLOW_DELETE': 'false',
-        'NEXTCLOUD_MCP_DISABLED_TOOLS': ','.join(sorted(WRITERS)),
+        'NEXTCLOUD_MCP_DISABLED_TOOLS': ','.join(sorted(WRITERS)), 'NEXTCLOUD_MCP_ERROR_CODES': 'true',
         'FASTMCP_CHECK_FOR_UPDATES': 'off', 'FASTMCP_SHOW_SERVER_BANNER': 'false'}
     # A writer grant alone: READONLY off, delete still not registered, the other writers disabled natively.
     env = child_spec(state(['update_text_file']), tmp_path).env
@@ -111,8 +111,10 @@ import asyncio, ssl
 import backend_policy
 from nextcloud_mcp_server.client import NextcloudClient
 from nextcloud_mcp_server.settings import load_settings
+from nextcloud_mcp_server.settings import Settings
+assert 'error_codes' in Settings.model_fields  # the env name child_spec sets must still exist upstream
 nc = NextcloudClient(load_settings(verify_tls=False))
-assert nc.policy is backend_policy.async_client
+assert nc.policy is backend_policy.async_client and nc.code_mode is True
 async def main():
     client = await nc.http()
     assert isinstance(client._transport, backend_policy.AsyncTransport)
@@ -131,6 +133,11 @@ asyncio.run(main())
     env = {**spec.env, 'PYTHONPATH': f'{broken}:{spec.env["PYTHONPATH"]}'}
     result = subprocess.run(list(spec.argv), env=env, cwd=spec.cwd, capture_output=True, text=True, timeout=30)
     assert result.returncode != 0 and 'Uvicorn running' not in result.stderr
+    # Local change (client.py): no backend_policy module at all never falls back to an unrestricted client.
+    env = {**spec.env, 'PYTHONPATH': str(ROOT / 'apps/nextcloud/vendor')}
+    result = subprocess.run(list(spec.argv), env=env, cwd=spec.cwd, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 2, (result.returncode, result.stderr)
+    assert 'backend_policy is required' in result.stderr and 'Uvicorn running' not in result.stderr
 
 
 async def test_child_host_origin_guard_accepts_the_gateway_only(tmp_path):
@@ -252,8 +259,8 @@ async def test_stale_etag_write_reports_current_etag_and_writes_nothing(tmp_path
 
     with serve(Backend) as url:
         async with runtime(tmp_path, 'nextcloud', url, write_grants=sorted(WRITERS)) as (client, headers, *_):
-            # Contract A: a backend 412 is BACKEND_HTTP_ERROR status=412; delete's local etag pre-check sends nothing
-            # and is ETAG_MISMATCH (never a BACKEND_ code). The current etag is shown after the code.
+            # Contract A: a backend 412 is BACKEND_HTTP_ERROR status=412; delete's local etag pre-check (after a PROPFIND)
+            # sends no DELETE and is ETAG_MISMATCH (never a BACKEND_ code). The current etag is shown after the code.
             for name, args, prefix in (
                     ('update_text_file', {'path': 'Documents/notes.md', 'content': 'x', 'expected_etag': 'stale'},
                      'BACKEND_HTTP_ERROR status=412: '),

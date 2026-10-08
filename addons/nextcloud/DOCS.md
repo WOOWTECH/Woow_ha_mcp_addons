@@ -37,6 +37,8 @@
 - 請在 Nextcloud「個人設定 → 安全性 → 裝置與工作階段」為本 Add-on 建立專用 **App 密碼**，不要填登入密碼。
   建議用權限最小的專用帳號，只分享需要的資料夾給它。url、使用者名稱與 App 密碼存檔時就會檢查：
   `backend_policy` 會拒絕的網址（路徑含 `.`／`..` 片段、解碼後含 `%` 或 `\`、metadata 類主機）與空白或前後有空白的帳密都存不進去。
+  主機名稱含中文等非 ASCII 字元（IDN，例如 `.台灣`）時，請改填 `xn--` 形式（punycode），例如 `https://雲端.example.tw` 要填成
+  `https://xn--suzq78c.example.tw`；面板會直接顯示要填的 `xn--` 形式。
 - **帳密錯誤會鎖住，而不是一直重試**：Nextcloud 回 401（帳密錯誤）之後，子程序不再用這組帳密連 Nextcloud，工具與健康檢查
   都直接回 `BACKEND_HTTP_ERROR status=401`，直到子程序重啟（在面板重新儲存後端設定，或重新啟動 Add-on）。回 429（暴力破解防護
   擋下）時同樣停止連線，但只停 5 分鐘（gateway 的傳輸層看不到 Retry-After，所以一律用預設的 5 分鐘），之後再試一次。
@@ -46,7 +48,8 @@
   （存檔會以新密碼重啟子程序）→ 等面板顯示後端可連線 → 再到 Nextcloud 撤銷舊密碼。
 - **只撤銷、不再使用**：先在面板清除後端連線（清除後子程序停止、健康檢查不再登入），或停止 Add-on，然後再撤銷。
   （管理面板只在 Add-on 執行中才能開啟，所以要換新密碼時不要先停止 Add-on。）
-- **必須立刻撤銷**（例如密碼外洩）：可以先撤銷；Add-on 只會失敗登入一次就鎖住、不再嘗試，到面板存入新密碼後自動恢復。
+- **必須立刻撤銷**（例如密碼外洩）：可以先撤銷。Add-on 通常只會失敗登入一次就鎖住；若 Nextcloud 延遲回應或撤銷時有請求
+  正在進行，可能多幾次（健康探測最多兩次，每個在途的工具請求一次），之後就不再嘗試，到面板存入新密碼後自動恢復。
 - 若 IP 已被封鎖：Nextcloud 管理員可執行 `occ security:bruteforce:reset <ip>` 清除該 IP 的紀錄；長期可在
   「管理設定 → 安全性」的暴力破解 IP 白名單（Brute-force settings app）加入 Add-on 所在的 IP。修好密碼後也要等舊紀錄過期或先清除，
   否則登入可能被延遲到超過健康檢查的逾時，readiness 會停在 503。
@@ -58,7 +61,7 @@
   `BACKEND_HTTP_ERROR status=404: "x" does not exist.`、`BACKEND_HTTP_ERROR status=412: "x" changed since it was read (current etag …)`、
   `BACKEND_INVALID_RESPONSE`（無效、無法解碼或過大的回應）、`BACKEND_TIMEOUT`、`BACKEND_UNAVAILABLE`、`BACKEND_DESTINATION_DENIED`、
   `BACKEND_BUSY`；鎖存的 401／429 與轉址也是 `BACKEND_HTTP_ERROR status=N`。`delete_file_checked` 在送出前發現 etag 不符時是
-  `ETAG_MISMATCH:`（沒有送出任何請求）。工具自己的拒絕（需要檔案卻是資料夾、文字工具遇到二進位檔、未知的行事曆 id、行事曆沒有
+  `ETAG_MISMATCH:`（只讀取了檔案資訊，沒有送出刪除請求）。工具自己的拒絕（需要檔案卻是資料夾、文字工具遇到二進位檔、未知的行事曆 id、行事曆沒有
   VTODO）與輸入檢查錯誤不帶代碼。訊息中的 etag 只顯示合法的 etag 字元（最長 256），否則顯示 unknown；Nextcloud 回應的內容一律不轉給 client。
 
 ## 已知限制
@@ -67,7 +70,8 @@
 - 檔名或路徑含 `%` 的檔案會被 `backend_policy` 拒絕（`BACKEND_DESTINATION_DENIED`）；直接讀寫這種檔案或資料夾都會失敗。
   `get_file_tree` 往下列子資料夾（depth 2–3）時，遇到名稱含 `%` 的子資料夾會略過它、不中斷整個列表，並把 `truncated` 設為 true。
 - `list_tasks` 不指定行事曆時，遇到 gateway 拒絕（例如 id 含 `%`）或無權讀取（403／404）的行事曆會略過，結果多一個
-  `skipped_calendars` 計數；直接指定這種行事曆則回 `BACKEND_DESTINATION_DENIED`。
+  `skipped_calendars` 計數。直接指定時：被 gateway 拒絕的行事曆（例如 id 含 `%`）回 `BACKEND_DESTINATION_DENIED`，
+  無權讀取或已不存在的回 `BACKEND_HTTP_ERROR status=403` 或 `status=404`。
 - 單一任務物件巢狀超過 32 層（或超過 1 MiB）會略過，計入 `skipped_large_objects`。
 - 不能建立資料夾、不能修改任務、不展開重複任務；`list_tasks` 描述截 500 字。
 - Nextcloud 的 etag 大約以秒為單位：同一個檔案在一秒內連續寫兩次，etag 可能不變。這時 `update_text_file`／`upload_file`

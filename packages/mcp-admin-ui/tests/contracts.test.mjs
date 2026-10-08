@@ -38,6 +38,12 @@ test('typed replacement refuses blank secrets, partial dashboard, malformed cred
   for (const [username, app_password] of [['   ', 'fixture'], [' tester', 'fixture'], ['tester ', 'fixture'], ['tester', '   '], ['tester', ' fixture'], ['tester', 'fixture ']]) {
     assert.throws(() => backendPayload('nextcloud', 'replace', { url: 'https://cloud.example.test', username, app_password }), /不可空白/);
   }
+  assert.throws(() => backendPayload('nextcloud', 'replace', { url: 'https://雲端.example.tw', username: 'tester', app_password: 'fixture' }),
+    /xn-- 形式：https:\/\/xn--suzq78c\.example\.tw$/);
+  assert.throws(() => backendPayload('nextcloud', 'replace', { url: 'https://cloud.台灣:8443/nc', username: 'tester', app_password: 'fixture' }),
+    /xn--.*:8443\/nc$/);
+  for (const url of ['https://xn--suzq78c.example.tw', 'https://Cloud.Example.test:8443/nc', 'http://192.0.2.4/nc', 'https://[2001:DB8:0::1]:8443'])
+    assert.equal(backendPayload('nextcloud', 'replace', { url, username: 'tester', app_password: 'fixture' }).connection.url, url);
   assert.deepEqual(backendPayload('nextcloud', 'replace', { url: 'https://cloud.example.test/', username: 'tester', app_password: 'fix ture' }),
     { connection: { url: 'https://cloud.example.test', username: 'tester', app_password: 'fix ture' } });
 });
