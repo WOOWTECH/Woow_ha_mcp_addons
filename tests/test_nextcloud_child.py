@@ -808,3 +808,77 @@ async def test_list_tasks_skips_policy_refused_calendars(tmp_path):
             reply = await rpc(client, '/mcp', headers, call('list_tasks', {'calendar': 'a%b'}))
             assert reply.get('isError') and reply['content'][0]['text'].startswith('BACKEND_DESTINATION_DENIED: ')
             assert not any('a%25b' in path or 'a%b' in path for command, path in seen if command == 'REPORT')
+
+
+MALFORMED_FILES = {
+    # (1) unknown XML encoding: LookupError inside the XML parser
+    'bogus-encoding': lambda href: (b'<?xml version="1.0" encoding="x-bogus"?><d:multistatus xmlns:d="DAV:">'
+                                    b'<d:response><d:href>' + href.encode() + b'</d:href></d:response></d:multistatus>'),
+}
+
+
+async def test_malformed_answers_are_handled_through_the_real_child(tmp_path):
+    """R3 #2 (upstream v0.1.5): answers that used to escape as uncoded 'Error calling tool' errors are either handled
+    (bad href skipped, impossible date -> modified null) or reported as BACKEND_INVALID_RESPONSE; nothing leaks."""
+    files_home = nextcloud_fixtures.FILES
+    mode = {'value': None}
+    seen = []
+
+    class Backend(Quiet):
+        def handle_api(self):
+            body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
+            seen.append((self.command, self.path))
+            if self.path == OCS_PATH:
+                if mode['value'] == 'deep-json':  # (4) 200k '[' within the 1 MiB cap: RecursionError
+                    return respond(self, 200, {'Content-Type': 'application/json'}, b'[' * 200_000)
+                if mode['value'] == 'surrogate-id':  # (5) a lone surrogate as user id
+                    return respond(self, 200, {'Content-Type': 'application/json'},
+                                   b'{"ocs": {"data": {"id": "\\ud800%s"}}}' % CANARY.encode())
+                return respond(self, *NextcloudFake().handle('GET', self.path, self.headers, body))
+            if self.command == 'PROPFIND' and self.path == files_home:
+                if mode['value'] == 'bogus-encoding':
+                    return respond(self, 207, {'Content-Type': 'application/xml'}, MALFORMED_FILES['bogus-encoding'](files_home))
+                own = (files_home, '<d:resourcetype><d:collection/></d:resourcetype>')
+                if mode['value'] == 'bad-href':  # (2) urlsplit refuses it: treated as outside the home and skipped
+                    entries = [own, ('http://[bad/x', '<d:resourcetype/>'),
+                               (files_home + 'ok.md', '<d:resourcetype/><d:getetag>"e"</d:getetag>')]
+                else:  # (3) a date beyond what datetime can convert: modified null
+                    entries = [own, (files_home + 'ok.md', '<d:resourcetype/><d:getetag>"e"</d:getetag>'
+                                     '<d:getlastmodified>Fri, 31 Dec 9999 23:59:59 -0100</d:getlastmodified>')]
+                return respond(self, 207, {'Content-Type': 'application/xml'}, nextcloud_fixtures.multistatus(entries))
+            if self.command == 'PROPFIND' and self.path == nextcloud_fixtures.CALENDARS:
+                todo = ('<d:resourcetype><d:collection/><c:calendar/></d:resourcetype><c:supported-calendar-component-set>'
+                        '<c:comp name="VTODO"/></c:supported-calendar-component-set>')
+                return respond(self, 207, {'Content-Type': 'application/xml'}, nextcloud_fixtures.multistatus([
+                    (nextcloud_fixtures.CALENDARS, '<d:resourcetype><d:collection/></d:resourcetype>'),
+                    ('http://[bad/x', todo), (nextcloud_fixtures.CALENDARS + 'personal/', todo)]))
+            respond(self, *NextcloudFake().handle(self.command, self.path, self.headers, body))
+        do_GET = do_PROPFIND = do_REPORT = handle_api
+
+    with serve(Backend) as url:
+        # A fresh child per account-lookup case: the user id is cached after the first successful lookup.
+        for case in ('deep-json', 'surrogate-id'):
+            mode['value'] = case
+            async with runtime(tmp_path / case, 'nextcloud', url) as (client, headers, store, manager, child):
+                reply = await rpc(client, '/mcp', headers, call('get_file_tree', {}))
+                text = reply['content'][0]['text']
+                assert reply.get('isError') and text.startswith('BACKEND_INVALID_RESPONSE: '), (case, reply)
+                raw = await rpc(child, manager.endpoint.url, headers, call(ODOO_HEALTH_PROBE, {}, id=9))
+                assert raw.get('isError') and 'BACKEND_INVALID_RESPONSE' in json.dumps(raw), (case, raw)
+                assert CANARY not in json.dumps(reply) + json.dumps(raw) and 'Error calling tool' not in json.dumps(raw)
+                monitor = HealthMonitor(store, manager, child, child_url=manager.endpoint.url)
+                await monitor.check()
+                assert monitor.backend == 'unreachable'
+        mode['value'] = None
+        async with runtime(tmp_path / 'listings', 'nextcloud', url) as (client, headers, *_):
+            mode['value'] = 'bogus-encoding'
+            reply = await rpc(client, '/mcp', headers, call('get_file_tree', {}))
+            assert reply.get('isError') and reply['content'][0]['text'].startswith('BACKEND_INVALID_RESPONSE: '), reply
+            mode['value'] = 'bad-href'
+            tree = payload(await rpc(client, '/mcp', headers, call('get_file_tree', {})))
+            assert [e['path'] for e in tree['entries']] == ['ok.md'], tree
+            calendars = payload(await rpc(client, '/mcp', headers, call('list_calendars', {})))
+            assert [c['id'] for c in calendars['calendars']] == ['personal'], calendars
+            mode['value'] = 'year-9999'
+            tree = payload(await rpc(client, '/mcp', headers, call('get_file_tree', {})))
+            assert tree['entries'] == [{**tree['entries'][0], 'modified': None}] and tree['entries'][0]['path'] == 'ok.md'

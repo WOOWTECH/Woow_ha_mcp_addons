@@ -13,8 +13,8 @@ SOURCES = {
         'emqx_mcp_server/' + p + '.py' for p in ['__init__', 'server', 'settings', 'lifespan', 'gating', 'registry', 'errors', 'deps', 'models', 'tools/__init__', 'tools/_common', 'tools/cluster', 'tools/clients', 'tools/topics', 'tools/messaging', 'tools/security', 'tools/diagnostics', 'tools/integration']]),
     'litellm': ('WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609', [
         'woow_litellm_mcp_server/' + p + '.py' for p in ['__init__', 'server', 'settings', 'lifespan', 'gating', 'registry', 'errors', 'deps', 'middleware', 'tools/__init__', 'tools/_common', 'tools/models', 'tools/chat', 'tools/keys', 'tools/teams', 'tools/users', 'tools/spend', 'tools/health', 'tools/plugins']]),
-    # Tag v0.1.4. The package lives under src/ upstream (SOURCE_PREFIX); LICENSE is at the repository root.
-    'nextcloud': ('WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5', [
+    # Tag v0.1.5. The package lives under src/ upstream (SOURCE_PREFIX); LICENSE is at the repository root.
+    'nextcloud': ('WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6', [
         'nextcloud_mcp_server/' + p + '.py' for p in ['__init__', 'server', 'settings', 'client', 'errors', 'paths', 'webdav', 'caldav', 'ical', 'tools']]),
 }
 SOURCE_PREFIX = {'nextcloud': 'src/'}

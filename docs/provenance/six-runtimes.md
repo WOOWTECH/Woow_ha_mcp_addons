@@ -12,7 +12,7 @@
 | OpenDesign | 同 SHA，app `opendesign_mcp_server/od_mcp_server.py` only | app MIT，`apps/opendesign/vendor/LICENSE`；原 vendor header 提及 `d6d157a` 的獨立完整來源鏈仍待查證 |
 | EMQX | PUBLIC `WOOWTECH/Woow_emqx_mcp_server@1be17bad5aef6c7b7519686ccbfe1d80762bc10e` | MIT，`apps/emqx/vendor/LICENSE`；不是現行 image→commit attestation |
 | LiteLLM | PUBLIC `WOOWTECH/Woow_litellm_mcp_server@4d4190369216a2d068d1100d53406a67a1d81609` | MIT，`apps/litellm/vendor/LICENSE`；不是現行 image→commit attestation |
-| Nextcloud（0.1.7，未發佈） | PUBLIC `WOOWTECH/Woow_nextcloud_mcp_server@fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5`（tag v0.1.4；上游在 `src/` 底下，`vendor_runtimes.py` 以 `SOURCE_PREFIX` 對應） | MIT，`apps/nextcloud/vendor/LICENSE`；尚無映像 |
+| Nextcloud（0.1.7，未發佈） | PUBLIC `WOOWTECH/Woow_nextcloud_mcp_server@4e09c86f8ee66f147a2d227e7ed1eb9d989394a6`（tag v0.1.5；上游在 `src/` 底下，`vendor_runtimes.py` 以 `SOURCE_PREFIX` 對應） | MIT，`apps/nextcloud/vendor/LICENSE`；尚無映像 |
 
 逐檔 upstream SHA256／本地修改 SHA256 見 `runtime-sources.json`，由 drift tests 驗證。`scripts/vendor_runtimes.py` 是明確 allowlist：只抓必要 runtime `.py` 與 LICENSE；不下載 repository archive/history、admin/UI、deployment、examples、設定或 credentials。既有 vendor 目錄拒絕覆寫，更新需另 staging 及 review。Hermes/OpenDesign 不匯入 legacy shared core/UI/launcher。
 
@@ -27,9 +27,10 @@
 - 新 `apps/runtime/backend_policy.py`、`bounded_tools.py` 是 scoped 本地程式，不改 global DNS/socket/SSRF；HTTPX/httpcore 及 SDK private integration 也有 source-hash guard。Odoo sync tools 只允許 1 worker（避免 cached XMLRPC transport race），OpenDesign 4；無等待工作佇列、超載回 BACKEND_BUSY、取消不提前釋放 slot。0.1.3：Odoo 健康探測改為子程序私有 `woow_backend_probe`，只驗證登入、在自己的 1-thread owned executor 執行（`OwnedWorkers`），不佔使用者的 1 worker。0.1.4：Odoo Manage 同樣改為私有 `woow_backend_probe`（每次新連線只做連線與登入，不碰 session 共用連線）。關機硬期限由原 Supervisor process-group SIGTERM→SIGKILL/reap 持有。
 - Resolver 修復只改共用 `backend_policy.py`，無新增 vendor 差異／依賴版本：完整 DNS answer validation 後，在單一 DNS/TCP deadline 內以數字位址 fallback（sync/XMLRPC/async）；所有 client 共用 process-wide 4-worker executor / 4-slot immediate admission，取消／逾時不提前歸還仍執行的 resolver slot。既有 hostname/SNI/TLS、混合禁止位址 fail-closed、group reap 邊界不變。
 - Response-stream 修復：共用 transport 回傳 lazy sync/async wrapper，iteration／close（含 httpcore 直接丟出的 cleanup exception）映射為固定 `BACKEND_STREAM_ERROR`／`BACKEND_TIMEOUT`；非 2xx cleanup 保留 status error 優先，不 catch cancellation、不 eager buffering。Hermes inspect 不再公開 `str(exc)`；其他已啟用 Hermes/OpenDesign handlers 明確加 error-only boundary，保持成功結果、signature、同步 offload；EMQX/LiteLLM request/JSON parser 使用安全固定 codes。四個 vendor 檔案更新既有 local hashes，總數仍七個。
-- Nextcloud（0.1.7）：vendored 上游 v0.1.4（fe1fbb2）。上游已處理 `backend_policy` 參數、client 建立錯誤、依憑證鍵控的 401/429 鎖存
+- Nextcloud（0.1.7）：vendored 上游 v0.1.5（4e09c86）。上游已處理 `backend_policy` 參數、client 建立錯誤、依憑證鍵控的 401/429 鎖存
   （401 到重啟為止，429 依 Retry-After 或預設 5 分鐘）、`probe()`、被拒子資料夾與行事曆的略過，以及「code mode」：使用 `backend_policy`
-  時自動開啟，每個後端或傳輸錯誤以公開代碼開頭（hook 例外的代碼取自 `public_backend_error`），刪除前本地 etag 不符為 `ETAG_MISMATCH`。
+  時自動開啟，每個後端或傳輸錯誤以公開代碼開頭（hook 例外的代碼取自 `public_backend_error`），刪除前本地 etag 不符為 `ETAG_MISMATCH`；
+  v0.1.5 起無法處理的異常回應（未知 XML 編碼、壞 href、超界日期、過深 JSON、不合法 user id 等）一律為 `BACKEND_INVALID_RESPONSE`。
   本地只留三處（逐檔原因見 `runtime-sources.json`）：① client.py：沒有 `backend_policy` 就拒絕啟動（不退回無限制的 client），非預期狀態的
   錯誤 body（Sabre 訊息）不讀；② server.py：子程序私有 `woow_backend_probe`，每次以新 client 呼叫上游 `probe()`，只回 ok／user id，
   不佔工具的連線，共用同一組憑證的鎖存，不在 `ALL_TOOLS`，gateway 不列出也不授權；③ tools.py：錯誤訊息不帶後端給的使用者路徑。

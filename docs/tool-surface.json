@@ -90,16 +90,16 @@
     "apps/litellm/vendor/woow_litellm_mcp_server/tools/spend.py": "f90f29026fb32c96d0c8030338383426661c63c44ba5c1602c83824ddadf7a70",
     "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py": "dec04344367fbdf95ff8146448f0dd083934a5f636cb528551eebf5aaa52a082",
     "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py": "6a27ed1b1f466a32e9d255ecfdad319854b42027d5547ceb53337d95d55ae620",
-    "apps/nextcloud/vendor/nextcloud_mcp_server/__init__.py": "4c1e50cfccf486c208d2d71d98315a08632cfdd6dd9d690d9d9d31085f02a4e9",
-    "apps/nextcloud/vendor/nextcloud_mcp_server/caldav.py": "74083f1c5d0c8596e43255677534eae4f42153c10318eac68c66e8632c906d10",
-    "apps/nextcloud/vendor/nextcloud_mcp_server/client.py": "c7c2dc36cbbcce5c22aa7bd35d547a581eb5c029228e1dbe4717499179a49fcf",
+    "apps/nextcloud/vendor/nextcloud_mcp_server/__init__.py": "0f541abd284ed5379955acb5c8e52b56911024f2dbaf188a251bfb1be2842ff9",
+    "apps/nextcloud/vendor/nextcloud_mcp_server/caldav.py": "a6643700ae4f2b9c998020cd4ba0e4f03c3716fc33049ec1364eb39c742c921f",
+    "apps/nextcloud/vendor/nextcloud_mcp_server/client.py": "3b3c1513de0d6adfb7be4f562f451433c74bc6c12dcffda139545aea8266679a",
     "apps/nextcloud/vendor/nextcloud_mcp_server/errors.py": "47c695afd7d99a050abc08e1bd431d8d3b31e923dd66fe4fdbbe349f07888800",
     "apps/nextcloud/vendor/nextcloud_mcp_server/ical.py": "531ca3c58684ea1c7dd504b440703c80699ccbf024278e568121195d9738b9af",
-    "apps/nextcloud/vendor/nextcloud_mcp_server/paths.py": "91ff0372619e900f643bddd72534408c37f3abff41cb4b825b5f71ca68c1cee2",
+    "apps/nextcloud/vendor/nextcloud_mcp_server/paths.py": "806f187a9ad668c89ddfa71c4e827ac78f69e9649493fd76228a17683e4b7c4d",
     "apps/nextcloud/vendor/nextcloud_mcp_server/server.py": "04e8a361367e7b586d611887b9494f18b8cd88ca0dad8c1d949bb9af3275ff9f",
     "apps/nextcloud/vendor/nextcloud_mcp_server/settings.py": "d8283658375f65ec0022a5e04e48d0109e14d49a8df1f7e6c8fcbd905ebb45ad",
-    "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py": "6bf421331ded887b8677c315c78118711552038387f37c9930e52e2abee2516f",
-    "apps/nextcloud/vendor/nextcloud_mcp_server/webdav.py": "ab4b2834053a47ab0354924bb6d4883035bfd2830e78ebeb9099b2588faf0254",
+    "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py": "6793cb95acea38f746803c3a486511ea3ecea3eb204abccaec43aa380a4fcafa",
+    "apps/nextcloud/vendor/nextcloud_mcp_server/webdav.py": "56aa67abf1a1cea641be2a7704d09bd51e9682b441a07189744f0c48494aa4eb",
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools.js": "acb4d2a3ec74b5f2b41d327a93340a0f9a799e99947656afd010a76390fb10cb",
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js": "28d54ea6a3001678fd510542c82c04c26b2ff3b55b7db63b630800e82e02191f",
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/agents-action-map.js": "9282db04957b8a7931cd99ceddcbfd943419732930325256b03ecc443075c8e8",
@@ -7105,7 +7105,7 @@
         {
           "name": "create_text_file",
           "source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py",
-          "line": 877,
+          "line": 879,
           "evidence": "python-registration-AST",
           "operations": {},
           "source_signature": "path: PathArg, content: ContentArg",
@@ -7155,7 +7155,7 @@
         {
           "name": "delete_file_checked",
           "source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py",
-          "line": 890,
+          "line": 892,
           "evidence": "python-registration-AST",
           "operations": {},
           "source_signature": "path: PathArg, expected_etag: EtagArg",
@@ -7207,7 +7207,7 @@
         {
           "name": "get_file_content",
           "source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py",
-          "line": 861,
+          "line": 863,
           "evidence": "python-registration-AST",
           "operations": {},
           "source_signature": "path: PathArg",
@@ -7248,7 +7248,7 @@
         {
           "name": "get_file_tree",
           "source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py",
-          "line": 858,
+          "line": 860,
           "evidence": "python-registration-AST",
           "operations": {},
           "source_signature": "path: FolderArg='', depth: DepthArg=1",
@@ -7294,7 +7294,7 @@
         {
           "name": "list_calendars",
           "source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py",
-          "line": 867,
+          "line": 869,
           "evidence": "python-registration-AST",
           "operations": {},
           "source_signature": "",
@@ -7324,7 +7324,7 @@
         {
           "name": "list_tasks",
           "source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py",
-          "line": 870,
+          "line": 872,
           "evidence": "python-registration-AST",
           "operations": {},
           "source_signature": "calendar: CalendarArg=None, include_completed: IncludeCompletedArg=False, limit: LimitArg=100",
@@ -7384,7 +7384,7 @@
         {
           "name": "read_text_file",
           "source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py",
-          "line": 864,
+          "line": 866,
           "evidence": "python-registration-AST",
           "operations": {},
           "source_signature": "path: PathArg",
@@ -7425,7 +7425,7 @@
         {
           "name": "update_text_file",
           "source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py",
-          "line": 880,
+          "line": 882,
           "evidence": "python-registration-AST",
           "operations": {},
           "source_signature": "path: PathArg, content: ContentArg, expected_etag: EtagArg",
@@ -7484,7 +7484,7 @@
         {
           "name": "upload_file",
           "source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py",
-          "line": 885,
+          "line": 887,
           "evidence": "python-registration-AST",
           "operations": {},
           "source_signature": "path: PathArg, content_base64: Base64Arg, expected_etag: OptionalEtagArg=None",
@@ -10058,10 +10058,10 @@
                   "action": {
                     "const": "list"
                   },
-                  "name": {
+                  "folderId": {
                     "type": "null"
                   },
-                  "folderId": {
+                  "name": {
                     "type": "null"
                   }
                 },
@@ -10074,11 +10074,11 @@
                   "action": {
                     "const": "create"
                   },
-                  "name": {
-                    "type": "string"
-                  },
                   "folderId": {
                     "type": "null"
+                  },
+                  "name": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -10091,10 +10091,10 @@
                   "action": {
                     "const": "rename"
                   },
-                  "name": {
+                  "folderId": {
                     "type": "string"
                   },
-                  "folderId": {
+                  "name": {
                     "type": "string"
                   }
                 },
@@ -10109,14 +10109,14 @@
                   "action": {
                     "const": "get"
                   },
-                  "name": {
-                    "type": "null"
-                  },
                   "folderId": {
                     "not": {
                       "pattern": "[^A-Za-z0-9_-]"
                     },
                     "type": "string"
+                  },
+                  "name": {
+                    "type": "null"
                   },
                   "projectId": {
                     "not": {

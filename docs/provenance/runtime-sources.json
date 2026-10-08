@@ -279,13 +279,13 @@
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "nextcloud_mcp_server/__init__.py",
-    "upstream_sha256": "4c1e50cfccf486c208d2d71d98315a08632cfdd6dd9d690d9d9d31085f02a4e9"
+    "upstream_sha256": "0f541abd284ed5379955acb5c8e52b56911024f2dbaf188a251bfb1be2842ff9"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "nextcloud_mcp_server/server.py",
     "upstream_sha256": "fa2f912301bd0d3eabeadfe5dba304f9db9fa869de5f91ea9f53f62e6fe129b2",
     "local_sha256": "04e8a361367e7b586d611887b9494f18b8cd88ca0dad8c1d949bb9af3275ff9f",
@@ -293,59 +293,59 @@
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "nextcloud_mcp_server/settings.py",
     "upstream_sha256": "d8283658375f65ec0022a5e04e48d0109e14d49a8df1f7e6c8fcbd905ebb45ad"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "nextcloud_mcp_server/client.py",
-    "upstream_sha256": "966322cd8fb174d09624319396d05e37d02b55254bdcea3328ef0f610ea1638f",
-    "local_sha256": "c7c2dc36cbbcce5c22aa7bd35d547a581eb5c029228e1dbe4717499179a49fcf",
-    "modification": "WOOW HA add-on, gateway contract only (upstream v0.1.4 code mode already prefixes every backend/transport error with its public code, using backend_policy.public_backend_error for hook exceptions): (1) load_backend_policy() refuses to start (BackendPolicyError, exit 2) when no backend_policy module exists, instead of falling back to an unrestricted client; (2) the error body of an unexpected status is never read: behind backend_policy only an unexpected 2xx (e.g. 200 where 207 is expected) arrives with a real body, and its Sabre message is backend text that must not reach a tool error."
+    "upstream_sha256": "303355520e6465fd8919c0e631151d5220c7703bfd7cde801a41daf2cdf90db8",
+    "local_sha256": "3b3c1513de0d6adfb7be4f562f451433c74bc6c12dcffda139545aea8266679a",
+    "modification": "WOOW HA add-on, gateway contract only (upstream code mode (v0.1.4+) already prefixes every backend/transport error with its public code, using backend_policy.public_backend_error for hook exceptions): (1) load_backend_policy() refuses to start (BackendPolicyError, exit 2) when no backend_policy module exists, instead of falling back to an unrestricted client; (2) the error body of an unexpected status is never read: behind backend_policy only an unexpected 2xx (e.g. 200 where 207 is expected) arrives with a real body, and its Sabre message is backend text that must not reach a tool error."
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "nextcloud_mcp_server/errors.py",
     "upstream_sha256": "47c695afd7d99a050abc08e1bd431d8d3b31e923dd66fe4fdbbe349f07888800"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "nextcloud_mcp_server/paths.py",
-    "upstream_sha256": "91ff0372619e900f643bddd72534408c37f3abff41cb4b825b5f71ca68c1cee2"
+    "upstream_sha256": "806f187a9ad668c89ddfa71c4e827ac78f69e9649493fd76228a17683e4b7c4d"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "nextcloud_mcp_server/webdav.py",
-    "upstream_sha256": "ab4b2834053a47ab0354924bb6d4883035bfd2830e78ebeb9099b2588faf0254"
+    "upstream_sha256": "56aa67abf1a1cea641be2a7704d09bd51e9682b441a07189744f0c48494aa4eb"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "nextcloud_mcp_server/caldav.py",
-    "upstream_sha256": "74083f1c5d0c8596e43255677534eae4f42153c10318eac68c66e8632c906d10"
+    "upstream_sha256": "a6643700ae4f2b9c998020cd4ba0e4f03c3716fc33049ec1364eb39c742c921f"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "nextcloud_mcp_server/ical.py",
     "upstream_sha256": "531ca3c58684ea1c7dd504b440703c80699ccbf024278e568121195d9738b9af"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "nextcloud_mcp_server/tools.py",
-    "upstream_sha256": "df0d6d4661d13518df051db5bdb4bdae84343603fbdeafe4e6fede6159abe189",
-    "local_sha256": "6bf421331ded887b8677c315c78118711552038387f37c9930e52e2abee2516f",
+    "upstream_sha256": "9b22f15816e56e6808a509886d89f52a04152dec99bf9078ccd257e098fb4aa4",
+    "local_sha256": "6793cb95acea38f746803c3a486511ea3ecea3eb204abccaec43aa380a4fcafa",
     "modification": "WOOW HA add-on: the 'paths outside the home folder' error no longer prints the account's home path (it contains the backend's user id); upstream's BACKEND_INVALID_RESPONSE code is kept. Nothing else changed."
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/fe1fbb2d530fff12d1dcc1b3f70cae28edf5cdf5",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "LICENSE",
     "upstream_sha256": "1b05bfafc14067beabe8885c164528c122ebf545eabe97984b222fe377143a69"
   }
