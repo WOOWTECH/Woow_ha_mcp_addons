@@ -8,7 +8,8 @@
 
 管理面板與其他產品相同：管理程序以 runtime `SUPERVISOR_TOKEN` 連固定 `ws://supervisor/core/websocket`，只查
 `config/auth/list`，確認 Ingress 使用者是 active 的 owner 或 system-admin 才放行；token 只給管理程序，child 不繼承。
-此 token 具**廣泛 Core 管理能力**（`homeassistant_api: true`）。`panel_admin` 不是角色授權。
+此 token 具**廣泛 Core 管理能力**（`homeassistant_api: true`），負責人已於 2026-10-08 核准本 Add-on 使用（與其他六支相同，
+只用於管理面板確認 HA owner／管理員）。`panel_admin` 不是角色授權。
 
 本產品 runtime：**FastMCP 3.4.5**，子程序是 WOOWTECH 的 MIT 套件 `nextcloud_mcp_server` v0.1.3（commit 6228f88）
 放在 `apps/nextcloud/vendor`，對上游的修改逐檔記在 `docs/provenance/runtime-sources.json`。上游 9 個工具全部支援：

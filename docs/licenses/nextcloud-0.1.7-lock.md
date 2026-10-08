@@ -5,11 +5,11 @@
 the supply-chain gate's syft SBOM of the first built image replaces it (`nextcloud-0.1.7.md`), together with the
 Debian packages and binaries of the pinned base image, which are the same as for the other products.
 
-**Release blocker (owner decision required before the first Nextcloud image build):** `defusedxml` 0.7.1 records only
-`License: PSFL` (no License-Expression; not an SPDX id), and syft records that value as is. The supply-chain license gate
-accepts exact allowed ids only, so the first Nextcloud candidate **will fail** the gate (fail closed) until the owner
-approves a version-pinned `known_package_licenses` entry `python:defusedxml:0.7.1` = `PSF-2.0` (its shipped LICENSE is
-the Python Software Foundation License 2). That entry has **not** been added.
+`defusedxml` 0.7.1 records only `License: PSFL` (no License-Expression; not an SPDX id), and syft records that value as
+is; its shipped LICENSE is the Python Software Foundation License 2. The project owner approved on 2026-10-08 the
+version-pinned `known_package_licenses` entry `python:defusedxml:0.7.1` = `PSF-2.0` (same approach as exceptiongroup,
+markdown-it-py and pyperclip on 2026-10-05), now in `packaging/supply-chain-policy.json`; a later defusedxml version drops
+out of the entry and needs a new review.
 
 | package | version | license expression / metadata | classifiers | license files in dist-info |
 |---|---|---|---|---|

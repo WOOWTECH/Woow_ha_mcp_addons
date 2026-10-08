@@ -98,7 +98,7 @@ class BootstrapTests(unittest.TestCase):
 
     def test_runtime_token_passthrough_only(self):
         # Replace environ itself: never inspect/copy the test runner environment.
-        # All seven management verifiers are approved (n8n 2026-10-04, the other six 2026-10-05).
+        # All eight management verifiers are approved (n8n 2026-10-04, the other six 2026-10-05, Nextcloud 2026-10-08).
         dummy = 'INVENTED-PACKAGING-ONLY-NOT-A-CREDENTIAL'
         for product in e.PRODUCTS:
             with self.subTest(product=product):

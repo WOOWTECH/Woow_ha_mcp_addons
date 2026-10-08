@@ -3,7 +3,8 @@
 No command override, runtime install or bootstrap HA API call. No recursive chown, except the bounded,
 verified repair of state that Home Assistant restored root-owned (observed in the 2026-10-05 HA pilot).
 Each product's management process receives the runtime Supervisor token for the approved HA admin
-verifier (n8n 2026-10-04; the other six 2026-10-05, 0.1.1); children are started with allowlisted env.
+verifier (n8n 2026-10-04; the other six 2026-10-05, 0.1.1; Nextcloud 2026-10-08, 0.1.7); children are started
+with allowlisted env.
 Existing state must belong to uid/gid 10001. The restore repair: pass 1 approves a bounded tree of plain
 directories and single-link regular files on one filesystem and keeps a descriptor on every approved
 inode; pass 2 requires the same names to still name those pinned inodes and changes only the pinned

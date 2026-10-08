@@ -37,7 +37,7 @@ class PackagingTests(unittest.TestCase):
                     v.manifest(doc, 'n8n')
 
     def test_approved_permission_exception_is_homeassistant_api_only(self):
-        # n8n approved 2026-10-04; the other six by owner decision 2026-10-05 (0.1.1).
+        # n8n approved 2026-10-04; the other six by owner decision 2026-10-05 (0.1.1); Nextcloud 2026-10-08 (0.1.7).
         for product in v.PRODUCTS:
             original = v.load(v.ROOT / 'addons' / product / 'config.yaml')
             self.assertIs(original['homeassistant_api'], True)

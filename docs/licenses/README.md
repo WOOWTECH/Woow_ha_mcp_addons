@@ -27,7 +27,8 @@ The supply-chain license policy (`packaging/supply-chain-policy.json`) records t
 decisions of 2026-10-05: Debian main package licenses accepted, pure OR expressions with an allowed option
 accepted, MIT-0 and BlueOak-1.0.0 allowed, and version-pinned licenses for three packages whose metadata
 is missing or non-SPDX but whose shipped license text was checked (exceptiongroup 1.3.1 MIT,
-markdown-it-py 4.2.0 MIT, pyperclip 1.11.0 BSD-3-Clause).
+markdown-it-py 4.2.0 MIT, pyperclip 1.11.0 BSD-3-Clause). On 2026-10-08 the owner added defusedxml 0.7.1 PSF-2.0
+for Nextcloud 0.1.7 (metadata `PSFL`, shipped license text PSF License 2).
 
 ## MPL-2.0 source (Odoo Manage)
 

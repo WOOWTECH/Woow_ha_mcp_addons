@@ -102,9 +102,8 @@ def manifest(value, product):
                 'full_access', 'docker_api', 'hassio_api', 'auth_api'):
         expected[key] = False
     # Approved broad-Core capability exception: n8n pilot (2026-10-04) and the other six (owner decision
-    # 2026-10-05, 0.1.1). Nextcloud (0.1.7) carries the same manifest per its integration contract (HAOS delivery
-    # line, 2026-10-08; owner confirmation before release). hassio_role remains omitted/default; all other
-    # privileges stay closed.
+    # 2026-10-05, 0.1.1) and Nextcloud (owner decision 2026-10-08, 0.1.7). hassio_role remains omitted/default; all
+    # other privileges stay closed.
     expected['homeassistant_api'] = True
     for text in (expected['description'], expected['ports_description']['8081/tcp']):
         require(isinstance(text, str) and 1 <= len(text) <= 512, 'missing description')
