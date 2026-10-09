@@ -641,6 +641,16 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 raise BadRequest()
             if values:
                 headers[name] = values[0]
+        if method != "initialize" and "mcp-session-id" not in headers:
+            # 0.1.8 (0.1.6 RC GATEWAY-2): every child is stateful, so anything but initialize needs the session it
+            # opened (MCP: such a server SHOULD answer 400). Forwarded, the pinned Python SDK children opened a new
+            # session for it before refusing it, and kept it until they restarted (they reap no idle sessions).
+            # The answer is the one a refusing child got relayed as (child_status_reply), minus its session id.
+            if request.method == "DELETE" or request.method == "POST" and not (isinstance(message, dict)
+                                                                                and "id" in message):
+                return Response(status_code=400, headers={"Cache-Control": "no-store"})
+            return child_status_reply(message.get("id") if request.method == "POST" else None, 400,
+                                      {"Cache-Control": "no-store"})
         try:
             async with asyncio.timeout(1):
                 await slots.acquire()

@@ -133,7 +133,7 @@ async def test_duplicate_keys_and_body_limit(harness, store):
 
 async def test_read_call_filter_policy_rotation_and_separate_child_secret(harness, store):
     a, m, calls = harness
-    headers = bearer(store)
+    headers = {**bearer(store), "Mcp-Session-Id": "test-session"}  # 0.1.8: only initialize comes without one
     r = await m.post("/mcp", headers={**headers, "x-n8n-url": "http://invalid", "x-n8n-key": "override"}, json=rpc(name="tools_documentation", arguments={}))
     assert r.status_code == 200
     assert r.headers["mcp-session-id"] == "test-session"
@@ -169,7 +169,8 @@ async def test_admin_write_enable_disable_and_no_generic_secrets(harness, store)
     headers = {"X-Remote-User-Id": "admin-test"}
     headers["X-CSRF-Token"] = (await a.get("/api/bootstrap", headers=headers)).json()["csrf"]
     assert (await a.put("/api/policy", headers=headers, json={"writes_enabled": True, "disabled": []})).status_code == 200
-    assert (await m.post("/mcp", headers=bearer(store), json=rpc(name="n8n_delete_workflow", arguments={"id": "MOCK"}))).status_code == 200
+    assert (await m.post("/mcp", headers={**bearer(store), "Mcp-Session-Id": "test-session"},
+                         json=rpc(name="n8n_delete_workflow", arguments={"id": "MOCK"}))).status_code == 200
     assert (await a.put("/api/backend", headers=headers, json={"url": "http://127.0.0.1:4567", "key": "MOCK-secret"})).status_code == 200
     text = (await a.get("/api/bootstrap", headers=headers)).text
     assert "MOCK-secret" not in text

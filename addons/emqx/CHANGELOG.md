@@ -1,5 +1,9 @@
 # EMQX Changelog
 
+## 0.1.8 — 開發中（未發佈）
+
+- gateway（0.1.6 發佈候選審查 GATEWAY-2）：除了 initialize，沒帶 `Mcp-Session-Id` 的請求（ping、tools/list、tools/call、通知、GET、DELETE）改由 gateway 直接回 HTTP 400，不再轉給子程序。原本五支 Python 子程序（Odoo、Hermes、OpenDesign、EMQX、LiteLLM；Nextcloud 也一樣）會先為這種請求開一個新 session 再拒絕，而且不會回收：每分鐘一次就一天留下約 1,440 個，直到子程序重啟；n8n 子程序本來就直接回 400。回覆和以前子程序拒絕時相同（有 id 的請求是 JSON-RPC 錯誤 -32000「Bad Request」，通知與 DELETE 沒有內容），只是不再帶新的 session id。照規範先 initialize 的 client 不受影響；Bearer 與 policy 檢查仍在前面（沒帶或帶錯 token 401、被拒的工具 403）。
+
 ## 0.1.7 — 2026-10-08 公開（experimental）
 
 - 2026-10-09 補充（映像與功能不變，不需要更新）：顯示名稱改為「Woow EMQX MCP Server」，圖示改用 EMQX 的圖示（[來源](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/provenance/icons.md)）；同時上架 [WOOW HA App Store](https://github.com/WOOWTECH/Woow_HA_App_Store) 與 ha-rebrand 的 Local Download。兩個商店的同名 add-on 在 HA 裡是不同的 add-on，同一台 HA 只裝其中一個來源的。

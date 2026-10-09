@@ -32,7 +32,8 @@ async def test_cross_cutting_litellm_read_arguments_reach_dispatch(tmp_path, jso
             _, app = make_apps(store, TOOLS['litellm'], child)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://boundary') as client:
                 headers = {'Authorization': 'Bearer '+store.load().token,
-                           'Accept': 'application/json, text/event-stream'}
+                           'Accept': 'application/json, text/event-stream',
+                           'Mcp-Session-Id': 'test-session'}  # 0.1.8: only initialize comes without one
                 for name, tool in TOOLS['litellm'].items():
                     if tool.write:
                         continue

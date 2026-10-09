@@ -29,10 +29,11 @@ def initialize_result(capabilities):
 async def post(store, upstream, method="initialize", **headers):
     message = {"jsonrpc": "2.0", "id": 7, "method": method,
                "params": {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {}} if method == "initialize" else {}}
+    session = {} if method == "initialize" else {"Mcp-Session-Id": "s"}  # 0.1.8: only initialize comes without one
     async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as child:
         _, app = make_apps(store, TOOLS, child)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mcp") as client:
-            return await client.post("/mcp", headers={"Authorization": "Bearer " + store.load().token, **headers},
+            return await client.post("/mcp", headers={"Authorization": "Bearer " + store.load().token, **session, **headers},
                                      json=message)
 
 
@@ -332,7 +333,7 @@ async def test_bad_child_header_values_never_leak_slots(store):
         _, app = make_apps(store, TOOLS, child)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mcp") as client:
             for _ in range(40):  # more than the 32 slots
-                response = await client.post("/mcp", headers={"Authorization": "Bearer " + store.load().token},
+                response = await client.post("/mcp", headers={"Authorization": "Bearer " + store.load().token, "Mcp-Session-Id": "s"},
                                              json={"jsonrpc": "2.0", "id": 9, "method": "ping"})
                 assert response.status_code == 200, response.status_code
                 assert "mcp-session-id" not in response.headers and "retry-after" not in response.headers
@@ -363,7 +364,7 @@ async def test_overflowing_numbers_are_refused_both_ways(store):
             200, headers={"content-type": "application/json"}, content=b'{"jsonrpc":"2.0","id":9,"result":{"x":1e400}}'))) as child:
         _, app = make_apps(store, TOOLS, child)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mcp") as client:
-            headers = {"Authorization": "Bearer " + store.load().token, "Content-Type": "application/json"}
+            headers = {"Authorization": "Bearer " + store.load().token, "Content-Type": "application/json", "Mcp-Session-Id": "s"}
             request = await client.post("/mcp", headers=headers, content=b'{"jsonrpc":"2.0","id":1e400,"method":"ping"}')
             assert request.status_code == 400 and not seen  # never forwarded as Infinity
             reply = await client.post("/mcp", headers=headers, content=b'{"jsonrpc":"2.0","id":9,"method":"ping"}')
@@ -389,7 +390,7 @@ async def test_a_failing_stream_response_constructor_releases_its_slot(store, mo
                                      base_url="http://mcp") as client:
             statuses = []
             for _ in range(34):
-                response = await client.post("/mcp", headers={"Authorization": "Bearer " + store.load().token},
+                response = await client.post("/mcp", headers={"Authorization": "Bearer " + store.load().token, "Mcp-Session-Id": "s"},
                                              json={"jsonrpc": "2.0", "id": 9, "method": "ping"})
                 statuses.append(response.status_code)
     assert statuses == [500] * 32 + [200, 200]  # with a leaked slot per failure the last two would be 503
@@ -585,7 +586,7 @@ async def test_repeated_child_errors_never_leak_a_slot(store):
         _, app = make_apps(store, TOOLS, child)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mcp") as client:
             for _ in range(40):
-                response = await client.post("/mcp", headers={"Authorization": "Bearer " + store.load().token},
+                response = await client.post("/mcp", headers={"Authorization": "Bearer " + store.load().token, "Mcp-Session-Id": "s"},
                                              json={"jsonrpc": "2.0", "id": 9, "method": "ping"})
                 statuses.append(response.status_code)
     assert statuses == [404] * 40

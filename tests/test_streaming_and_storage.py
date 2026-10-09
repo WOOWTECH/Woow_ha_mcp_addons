@@ -101,7 +101,8 @@ async def test_fragmented_sse_filter_preserves_event_and_session_semantics(store
     async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as child:
         _, app = make_apps(store, TOOLS, child)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mcp") as client:
-            response = await client.post("/mcp", headers={"Authorization": "Bearer " + store.load().token}, json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+            response = await client.post("/mcp", headers={"Authorization": "Bearer " + store.load().token, "Mcp-Session-Id": "session"},
+                                         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
     assert response.status_code == 200
     assert response.headers["mcp-session-id"] == "session"
     assert "set-cookie" not in response.headers and "connection" not in response.headers
@@ -134,7 +135,8 @@ async def test_rotation_closes_idle_authenticated_stream(store):
         task = asyncio.create_task(app({"type": "http", "asgi": {"version": "3.0", "spec_version": "2.4"},
             "http_version": "1.1", "method": "GET", "path": "/mcp", "raw_path": b"/mcp", "query_string": b"",
             "scheme": "http", "server": ("localhost", 8081), "client": ("127.0.0.1", 1),
-            "headers": [(b"authorization", ("Bearer " + store.load().token).encode())]}, receive, send))
+            "headers": [(b"authorization", ("Bearer " + store.load().token).encode()),
+                        (b"mcp-session-id", b"test-session")]}, receive, send))
         await asyncio.wait_for(opened.wait(), 2)
         store.update(token=None)
         await asyncio.wait_for(task, 2)

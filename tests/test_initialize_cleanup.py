@@ -404,6 +404,10 @@ async def test_other_requests_never_end_a_session(tmp_path, method, client):
     for scenario, status in ((raw(200, JSON, content=b"{not json"), 502), (raw(500), 500), (raw(307), 502),
                              (json_reply({"jsonrpc": "2.0", "id": 7, "result": {}}), 200)):
         outcome = await run(tmp_path, scenario, session=SESSION, message=message, client_headers=client)
+        if client is None:  # 0.1.8 (GATEWAY-2): without a session id the gateway answers 400 itself
+            assert outcome.response.status_code == 400 and "mcp-session-id" not in outcome.response.headers
+            assert_requests(outcome)
+            continue
         assert outcome.response.status_code == status
         assert_requests(outcome, "POST")
 
@@ -495,13 +499,14 @@ async def test_the_delete_runs_inside_the_requests_slot(tmp_path, monkeypatch):
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mcp") as client:
                 headers = {"Authorization": "Bearer " + store.load().token}
                 ping = {"jsonrpc": "2.0", "id": 9, "method": "ping"}
+                session = {**headers, "Mcp-Session-Id": "client-session"}  # 0.1.8: only initialize comes without one
                 pending = [asyncio.create_task(client.post("/mcp", headers=headers, json=INITIALIZE)) for _ in range(32)]
                 await asyncio.wait_for(entered.wait(), 10)
-                assert (await client.post("/mcp", headers=headers, json=ping)).status_code == 503
+                assert (await client.post("/mcp", headers=session, json=ping)).status_code == 503
                 assert not any(task.done() for task in pending)  # each answer waits for its own DELETE (bounded)
                 release.set()
                 answers = await asyncio.wait_for(asyncio.gather(*pending), 10)
-                assert (await client.post("/mcp", headers=headers, json=ping)).status_code == 200
+                assert (await client.post("/mcp", headers=session, json=ping)).status_code == 200
     finally:
         store.close()
     assert [answer.status_code for answer in answers] == [500] * 32
@@ -528,7 +533,8 @@ async def test_the_slot_is_released_whatever_ends_the_delete(tmp_path):
                     request = asyncio.create_task(client.post("/mcp", headers=headers, json=INITIALIZE))
                     with pytest.raises(asyncio.CancelledError):
                         await asyncio.wait_for(request, 5)
-                ping = await client.post("/mcp", headers=headers, json={"jsonrpc": "2.0", "id": 9, "method": "ping"})
+                ping = await client.post("/mcp", headers={**headers, "Mcp-Session-Id": "client-session"},
+                                         json={"jsonrpc": "2.0", "id": 9, "method": "ping"})
     finally:
         store.close()
     assert ping.status_code == 200

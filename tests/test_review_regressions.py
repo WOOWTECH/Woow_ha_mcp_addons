@@ -84,7 +84,8 @@ async def test_advertisements_match_local_contract(store, sse, method):
         _, app = make_apps(store, TOOLS, child)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://local") as client:
             params = {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {}} if method == "initialize" else {}
-            response = await client.post("/mcp", headers={"Authorization": "Bearer " + store.load().token},
+            session = {} if method == "initialize" else {"Mcp-Session-Id": "test-session"}  # 0.1.8: GATEWAY-2
+            response = await client.post("/mcp", headers={"Authorization": "Bearer " + store.load().token, **session},
                                          json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
     assert response.status_code == 200
     reply = json.loads(next(line[6:] for line in response.text.splitlines() if line.startswith("data: "))) if sse else response.json()
@@ -132,7 +133,8 @@ async def disconnect_request(app, token, phase="body"):
     await asyncio.wait_for(app({"type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"},
         "http_version": "1.1", "method": "GET", "path": "/mcp", "raw_path": b"/mcp", "query_string": b"",
         "scheme": "http", "server": ("localhost", 8081), "client": ("127.0.0.1", 1),
-        "headers": [(b"authorization", ("Bearer " + token).encode())]}, receive, send), 6)
+        "headers": [(b"authorization", ("Bearer " + token).encode()), (b"mcp-session-id", b"test-session")]},
+        receive, send), 6)
     return sent[0]["status"]
 
 

@@ -195,7 +195,8 @@ async def test_omitted_gateway_and_monitor_urls_fail_before_dispatch(tmp_path):
             _, app = make_apps(store, TOOLS, child)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://test') as client:
                 with pytest.raises(OwnershipError, match='destination'):
-                    await client.post('/mcp', headers={'Authorization':'Bearer '+store.load().token},
+                    await client.post('/mcp', headers={'Authorization':'Bearer '+store.load().token,
+                                                       'Mcp-Session-Id':'test-session'},
                                       json={'jsonrpc':'2.0','id':1,'method':'ping'})
             assert calls == []
     finally:

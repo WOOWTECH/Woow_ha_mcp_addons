@@ -93,7 +93,7 @@ async def test_writer_is_denied_before_dispatch_then_explicitly_enabled(tmp_path
         async with httpx.AsyncClient(transport=httpx.MockTransport(dispatch)) as child:
             _, app = make_apps(store, TOOLS['opendesign'], child)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://mcp') as client:
-                headers = {'Authorization': 'Bearer ' + store.load().token}
+                headers = {'Authorization': 'Bearer ' + store.load().token, 'Mcp-Session-Id': 'test-session'}
                 assert (await client.post('/mcp', headers=headers, json=message)).status_code == 403
                 assert requests == []
                 store.update(writes_enabled=True)

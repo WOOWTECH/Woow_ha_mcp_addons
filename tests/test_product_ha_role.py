@@ -237,7 +237,8 @@ async def test_runtime_mcp_bearer_and_ingress_separation(tmp_path, monkeypatch, 
         assert (await admin.get('/api/bootstrap', headers={
             'Authorization': 'Bearer ' + state.token})).status_code == 403
         assert fake_ws['connections'] == 0 and requests == []
-        accepted = await mcp.post('/mcp', headers={**spoof, 'Authorization': 'Bearer ' + state.token},
+        accepted = await mcp.post('/mcp', headers={**spoof, 'Authorization': 'Bearer ' + state.token,
+                                                   'Mcp-Session-Id': 'test-session'},
                                   json={'jsonrpc': '2.0', 'id': 1, 'method': 'ping'})
         assert accepted.status_code == 200
         assert len(requests) == 1
