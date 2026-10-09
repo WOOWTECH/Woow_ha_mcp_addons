@@ -128,7 +128,7 @@ ledger 中一個 SDK 檔的雜湊改掉（`test_runtime_patch_ledger_and_guarded
 |---|---|---|
 | I-1 | 過時的註解與說明（gateway 的 end_session、GATEWAY-2 註解，cleanup 測試說明，本文件）改成「到 0.1.7 留到子程序重啟；0.1.8 起閒置 30 分鐘結束」 | 0079c46 |
 | L-1 | `docs/n8n-tracer-contract.md`（provenance 稱它為完整政策）寫明 initialize 的結果由 gateway 組成、protocolVersion 只接受四個版本（否則 502 並以 DELETE 結束子程序的 session）、沒有 session 的請求由 gateway 回 400（n8n 的通知 202 改 400） | 7779fac |
-| I-2 | `clients.md` 與七份 DOCS：400 排在 Bearer 401、方法 405、Origin 403、policy 403 之後；被結束的 session 回 404 的形狀（有 id 的請求與 GET 是 JSON，通知與 DELETE 沒有內容）；502 的原因加上 protocolVersion 不在四個版本內（n8n DOCS 寫明 2024-06-25） | 65f4a9d |
+| I-2 | `clients.md` 與七份 DOCS：400 排在 Bearer 401、方法 405、Origin 403、policy 403 之後；六份 Python DOCS 寫明被結束的 session 回 404 的形狀（有 id 的請求與 GET 是 JSON，通知與 DELETE 沒有內容；`clients.md` 另列 n8n 的例外：GET 400、通知 202，L-3）；502 的原因加上 protocolVersion 不在四個版本內（n8n DOCS 寫明 2024-06-25） | 65f4a9d |
 | L-2 | `PROTOCOL_VERSIONS` 釘住子程序：六個 Python venv 的 `mcp.shared.version.SUPPORTED_PROTOCOL_VERSIONS` 必須等於它、`LATEST_PROTOCOL_VERSION` 在其中；n8n-mcp `dist/utils/protocol-version.js` 的 SUPPORTED_VERSIONS 減掉它只剩 2024-06-25，STANDARD 與 N8N 版本都在其中。ledger 新增 gateway.py 條目，guarded sources 是這七個檔，並註明 SDK 或 n8n-mcp 改版要重新審查 `PROTOCOL_VERSIONS` | 98725b1 |
 
 I-3（改寫要求的版本而不回 502）與 I-4（AST 邊界情況）照指示不做。

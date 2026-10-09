@@ -73,8 +73,11 @@ v3 保存取代全部 `enabled_write_tools` 並關閉 legacy global，不能僅�
   SDK 只呼叫 `close()`：1.30.0 的 `close()` 不送 DELETE，要先呼叫 transport 的 `terminateSession()`）：
   - n8n：不變，所有 client 共用 20 個 session，閒置 10 分鐘回收。
   - Odoo、Hermes、OpenDesign、EMQX、LiteLLM、Nextcloud：0.1.8 起閒置 30 分鐘由子程序結束（0.1.7 以前留到子程序重啟）。
-  被結束的 session，之後用它的請求回 404：有 id 的請求與 GET 是 JSON-RPC 錯誤 -32000「Not Found」（GET 的 id 是 null），
-  通知與 DELETE 是沒有內容的 404。client 要重新 initialize。
+  被結束的 session，之後用它的請求：
+  - Odoo、Hermes、OpenDesign、EMQX、LiteLLM、Nextcloud：回 404，有 id 的請求與 GET 是 JSON-RPC 錯誤 -32000「Not Found」
+    （GET 的 id 是 null），通知與 DELETE 是沒有內容的 404。
+  - n8n：有 id 的請求與 DELETE 回 404；GET 回 400（JSON-RPC 錯誤 -32000「Bad Request」，id 是 null）；通知回 202、沒有內容。
+  client 要重新 initialize。
   MCP 規範要求 client 收到 404 時重新 initialize；各 client 是否自動這樣做，0.1.8 尚未實測。子程序重啟（含 Add-on 重啟）後
   舊 session 也會失效。
 - 輪替後所有 client 更新秘密；舊 token 的新請求與 stream 後續轉送被拒。
