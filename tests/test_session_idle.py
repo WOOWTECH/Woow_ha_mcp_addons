@@ -72,6 +72,67 @@ def test_an_invalid_limit_refuses_to_start(value):
     assert 'refused' in unit('hermes', 'sdk', value)
 
 
+BOOTSTRAP = ROOT / 'tests/owned_bootstrap'  # the test network sentinel every test subprocess loads as sitecustomize
+SDK_WITHOUT_IDLE = """import runpy
+runpy.run_path(%r)  # keep the sentinel: this file shadows its sitecustomize
+import mcp.server.streamable_http_manager as m
+original = m.StreamableHTTPSessionManager.__init__
+def __init__(self, app, event_store=None, json_response=False, stateless=False, security_settings=None, retry_interval=None):
+    original(self, app, event_store, json_response, stateless, security_settings, retry_interval)
+m.StreamableHTTPSessionManager.__init__ = __init__
+""" % str(BOOTSTRAP / 'sitecustomize.py')
+
+
+def child(product, tmp_path):
+    with backend(product) as (url, _calls, _offline):
+        store = ProductStore(tmp_path / ('state-' + product), product)
+        store.update(connection=connection(product, url))
+        spec = child_spec(store.load(), store.directory)
+        store.close()
+    return spec
+
+
+def start(spec, **env):
+    """Run a child as the add-on starts it, expecting it to refuse before it serves (bounded: a child that does start
+    is killed by the timeout and fails the test)."""
+    return subprocess.run(list(spec.argv), env={**spec.env, **env}, cwd=spec.cwd, capture_output=True, text=True,
+                          timeout=60)
+
+
+@pytest.mark.parametrize('product', ['hermes', 'emqx'])  # one launch.py child, one run_child child
+def test_a_child_whose_sdk_has_no_idle_parameter_refuses_to_start(tmp_path, product):
+    # 0.1.8 review F-5b: session_idle.install() fails closed when the pinned SDK lacks session_idle_timeout.
+    shim = tmp_path / 'shim'
+    shim.mkdir()
+    (shim / 'sitecustomize.py').write_text(SDK_WITHOUT_IDLE)  # imported at startup: the SDK as an older version
+    spec = child(product, tmp_path)
+    # First on the path, before the sentinel's directory (which the test harness then leaves in place).
+    done = start(spec, PYTHONPATH=f'{shim}:{BOOTSTRAP}:{spec.env["PYTHONPATH"]}')
+    assert done.returncode != 0 and 'pinned MCP SDK without session_idle_timeout' in done.stderr, done.stderr[-2000:]
+    assert 'Uvicorn running' not in done.stderr + done.stdout
+
+
+@pytest.mark.parametrize('value', ['0', 'abc'])
+def test_a_child_with_an_invalid_limit_refuses_to_start(tmp_path, value):
+    spec = child('emqx', tmp_path)
+    done = start(spec, WOOW_MCP_SESSION_IDLE_SECONDS=value)
+    assert done.returncode != 0 and 'ValueError' in done.stderr, done.stderr[-2000:]
+    assert 'Uvicorn running' not in done.stderr + done.stdout
+
+
+@pytest.mark.parametrize('argv', [[], ['os'], ['marker_module'], ['emqx_mcp_server']])
+def test_run_child_refuses_any_other_module(tmp_path, argv):
+    # 0.1.8 review F-5b: only the three vendored FastMCP modules; anything else exits before it is imported.
+    (tmp_path / 'marker_module.py').write_text(
+        'import pathlib\npathlib.Path(%r).write_text("imported")\n' % str(tmp_path / 'imported'))
+    env = {'PATH': '/usr/bin:/bin', 'PYTHONDONTWRITEBYTECODE': '1',
+           'PYTHONPATH': f'{tmp_path}:{ROOT / "apps/emqx/vendor"}:{ROOT / "apps/runtime"}'}
+    done = subprocess.run([str(ROOT / 'apps/emqx/.venv/bin/python'), '-m', 'run_child', *argv], env=env, cwd=tmp_path,
+                          capture_output=True, text=True, timeout=60)
+    assert done.returncode == 1 and 'run_child: unknown child module' in done.stderr, (done.returncode, done.stderr)
+    assert not (tmp_path / 'imported').exists()
+
+
 def test_every_python_child_installs_it():
     for product in ('odoo', 'hermes', 'opendesign'):
         assert 'session_idle.install()' in (ROOT / 'apps' / product / 'launch.py').read_text()
@@ -104,7 +165,7 @@ async def ping(client, url, headers):
 
 @pytest.mark.parametrize('product', CHILDREN)
 async def test_real_child_ends_an_idle_session_and_keeps_an_active_one(tmp_path, product):
-    idle = 2.0
+    idle = 4.0  # the measured value (review F-5c): a slow ping must not let the used session expire
     with backend(product) as (url, _calls, _offline):
         store = ProductStore(tmp_path / 'state', product)
         store.update(connection=connection(product, url))
