@@ -16,6 +16,7 @@ from urllib.parse import parse_qs, urlsplit
 import httpx
 import pytest
 
+from mcp_admin_core import VERSION
 from mcp_admin_core.config import Store
 from mcp_admin_core.health import protocol_reply
 
@@ -98,8 +99,8 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
                     except httpx.HTTPError:
                         pass
                     await asyncio.sleep(0.2)
-            assert result["serverInfo"]["name"] == "n8n-documentation-mcp"
-            assert result["serverInfo"]["version"] == "2.91.0"
+            # 0.1.8 (F6): the add-on's identity, not n8n-mcp's ("n8n-documentation-mcp" 2.91.0); no instructions.
+            assert result["serverInfo"] == {"name": "woow-mcp-n8n", "version": VERSION} and "instructions" not in result
             assert result["capabilities"] == {"tools": {}}
             assert session
             headers["Mcp-Session-Id"] = session

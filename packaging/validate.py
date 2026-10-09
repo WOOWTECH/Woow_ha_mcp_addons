@@ -247,6 +247,8 @@ def validate(root=ROOT):
     inputs = load(root / 'packaging/inputs.json')
     exact(inputs['products'], list(PRODUCTS), 'build allowlist')
     exact(inputs['version'], VERSION, 'build version')
+    runtime_version = re.search(r"^VERSION = '([^']+)'$", (root / 'packages/mcp-admin-core/mcp_admin_core/__init__.py').read_text(), re.M)
+    require(runtime_version is not None and runtime_version.group(1) == VERSION, 'initialize serverInfo version')  # 0.1.8 F6
     exact(inputs['supervisor'], {'version': '2026.09.3', 'commit': '64ea3be4322537fd5dcfbf620c4dc25490c1f56d'}, 'Supervisor schema pin')
     require(set(inputs['bases']) == {'python', 'node', 'uv'}, 'base allowlist')
     for image in inputs['bases'].values():

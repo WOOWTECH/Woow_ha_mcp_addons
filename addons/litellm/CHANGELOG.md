@@ -3,6 +3,7 @@
 ## 0.1.8 — 開發中（未發佈）
 
 - gateway（0.1.6 發佈候選審查 GATEWAY-2）：除了 initialize，沒帶 `Mcp-Session-Id` 的請求（ping、tools/list、tools/call、通知、GET、DELETE）改由 gateway 直接回 HTTP 400，不再轉給子程序。原本五支 Python 子程序（Odoo、Hermes、OpenDesign、EMQX、LiteLLM；Nextcloud 也一樣）會先為這種請求開一個新 session 再拒絕，而且不會回收：每分鐘一次就一天留下約 1,440 個，直到子程序重啟；n8n 子程序本來就直接回 400。回覆和以前子程序拒絕時相同（有 id 的請求是 JSON-RPC 錯誤 -32000「Bad Request」，通知與 DELETE 沒有內容），只是不再帶新的 session id。照規範先 initialize 的 client 不受影響；Bearer 與 policy 檢查仍在前面（沒帶或帶錯 token 401、被拒的工具 403）。
+- gateway（0.1.6 審查 R1 F6）：initialize 的回覆改由 gateway 自己組成，只保留子程序的 protocolVersion（日期格式）；capabilities 一律是 `{"tools": {}}`，serverInfo 改成這支 add-on 的名稱與版本（`woow-mcp-litellm`、add-on 版號），不再是子程序自己的名稱與版本；子程序的 instructions 不再轉送（Claude Code 會把 instructions 放進模型的 system prompt，而子程序的說明寫的是它全部的工具，包括本 add-on 隱藏或拒絕的工具）。LiteLLM 子程序原本的說明提到管理模型、對話補全、發金鑰、管理團隊等（本 add-on 預設唯讀、多數不提供），不再送出。
 
 ## 0.1.7 — 2026-10-08 公開（experimental）
 

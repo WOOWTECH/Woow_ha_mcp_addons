@@ -47,7 +47,8 @@ async def run(args):
                 await manager.restart(child_spec(state, store.directory))
             admin, mcp = make_apps(store, TOOLS, child, health=health.snapshot,
                                    backend_changed=backend_changed,
-                                   verify_admin=make_ha_admin_verifier())
+                                   verify_admin=make_ha_admin_verifier(),
+                                   server_name="woow-mcp-n8n")
             servers = [Listener(uvicorn.Config(app, host=args.host, port=port,
                 proxy_headers=False, access_log=False, log_level="warning", server_header=False,
                 lifespan="off",  # this function, not ASGI lifespan, owns runtime resources

@@ -8,6 +8,7 @@ import json
 import httpx
 import pytest
 
+from mcp_admin_core import VERSION
 from mcp_admin_core.config import Store
 from mcp_admin_core.gateway import make_apps
 from n8n_adapter import TOOLS
@@ -46,11 +47,16 @@ def data_lines(text):
 
 
 async def test_bom_line_cannot_smuggle_unfiltered_initialize(store):
-    hidden = json.dumps({"jsonrpc": "2.0", "id": 7, "result": initialize_result(UNFILTERED)}).encode()
+    # 0.1.8 (F6): the result is the gateway's own, so the hidden event differs in what still comes from the child:
+    # its protocolVersion.
+    hidden = json.dumps({"jsonrpc": "2.0", "id": 7,
+                         "result": {**initialize_result(UNFILTERED), "protocolVersion": "2024-11-05"}}).encode()
     reply = json.dumps({"jsonrpc": "2.0", "id": 7, "result": initialize_result({"tools": {}})}).encode()
     response = await post(store, sse(b"\xef\xbb\xbfdata: " + hidden + b"\ndata: " + reply + b"\n\n"))
     assert response.status_code == 200
-    assert data_lines(response.text) == ["data: " + json.dumps(json.loads(reply), separators=(",", ":"))]
+    own = {"jsonrpc": "2.0", "id": 7, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}},
+                                                  "serverInfo": {"name": "woow-mcp", "version": VERSION}}}
+    assert data_lines(response.text) == ["data: " + json.dumps(own, separators=(",", ":"))]
     assert "﻿" not in response.text and "resources" not in response.text
 
 
@@ -198,7 +204,8 @@ async def test_empty_priming_events_pass(store):
 
 
 async def test_lone_surrogate_in_a_child_reply_is_escaped(store):
-    value = {"jsonrpc": "2.0", "id": 7, "result": {**initialize_result({"tools": {}}), "instructions": "\ud800"}}
+    # 0.1.8 (F6): no child text is left in an initialize result, so the relayed text is an error message.
+    value = {"jsonrpc": "2.0", "id": 7, "error": {"code": -32602, "message": "\ud800"}}
     raw = json.dumps(value).encode()  # ASCII escape \ud800, valid JSON text
     response = await post(store, lambda _: httpx.Response(200, headers={"content-type": "application/json"}, content=raw))
     assert response.status_code == 200 and "\\ud800" in response.text

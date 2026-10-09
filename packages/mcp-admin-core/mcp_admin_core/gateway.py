@@ -25,6 +25,7 @@ from starlette.middleware import Middleware
 
 from . import ui
 
+from . import VERSION
 from .config import ConfigError, State, Store, strict_json
 from .policy import Denied, authorize, filter_list
 from .ha_role import valid_user_id
@@ -49,6 +50,8 @@ LIST_CHANGED = b'data: {"jsonrpc":"2.0","method":"notifications/tools/list_chang
 PROTOCOL_VERSION = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 # 0.1.6 (R2): the bound of the gateway's own DELETE that ends an initialize session no client received.
 SESSION_END_SECONDS = 2
+# 0.1.8 (0.1.6 R1 F6): the name the initialize answer gives when the caller names no product.
+SERVER_NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 
 
 def sse_frame(frame: bytes):
@@ -261,7 +264,11 @@ async def error_handler(_, exc):
 
 def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               verify_admin: RoleVerifier | None = None,
-              child_url="http://127.0.0.1:3000/mcp", health=None, backend_changed=None):
+              child_url="http://127.0.0.1:3000/mcp", health=None, backend_changed=None,
+              server_name="woow-mcp", instructions: str | None = None):
+    if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
+            isinstance(instructions, str) and 0 < len(instructions) <= 4096):
+        raise ValueError("invalid server identity")
     csrf_key = secrets.token_bytes(32)
     mutation_lock = asyncio.Lock()
     slots = asyncio.Semaphore(32)
@@ -733,11 +740,19 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     if "mcp-session-id" in upstream.headers and "mcp-session-id" not in response_headers:
                         raise ValueError("unusable session id")  # a client could not continue the session
                     value = gateway_reply(value)
-                    if "result" in value and not (isinstance(value["result"], dict)
-                                                  and isinstance(value["result"].get("protocolVersion"), str)
-                                                  and PROTOCOL_VERSION.fullmatch(value["result"]["protocolVersion"])):
-                        raise ValueError("unusable protocol version")
-                    value = filter_list(value, tools, store.load())
+                    if "result" in value:
+                        if not (isinstance(value["result"], dict) and isinstance(value["result"].get("protocolVersion"), str)
+                                and PROTOCOL_VERSION.fullmatch(value["result"]["protocolVersion"])):
+                            raise ValueError("unusable protocol version")
+                        # 0.1.8 (0.1.6 R1 F6): the result is the gateway's own; only the child's protocolVersion (a date)
+                        # remains. serverInfo names this add-on, not the child (n8n-mcp calls itself
+                        # "n8n-documentation-mcp"), and the child's instructions are never relayed: Claude Code puts
+                        # instructions into the model's system prompt, and the children's text describes their whole tool
+                        # set, including the tools this gateway hides or refuses. The caller may pass reviewed fixed text.
+                        value["result"] = {"protocolVersion": value["result"]["protocolVersion"],
+                                           "capabilities": {"tools": {}},
+                                           "serverInfo": {"name": server_name, "version": VERSION},
+                                           **({"instructions": instructions} if instructions else {})}
                 except ValueError:
                     raise BadRequest(502) from None
                 if frame is None:

@@ -27,8 +27,28 @@
   綁 0.1.8 時要改成 400、body 為上面的 JSON-RPC 錯誤（outcome 改判 rejected）。其他沒有 session 的案例（PROTO-04／05 的格式錯誤、
   401、403、405、413、415）在這個檢查之前就被擋，不受影響；PROTO-06（帶了不存在的 session id）照舊轉給子程序。
 
+### F6：initialize 的回覆由 gateway 組成（0.1.6 R1 F6）
+
+- 行為：initialize 成功時，result 只有 `protocolVersion`（子程序的值，仍須是日期格式）、`capabilities: {"tools": {}}`、
+  `serverInfo: {"name": "woow-mcp-<產品>", "version": <add-on 版號>}`，以及（只有 Nextcloud）gateway 自己的 `instructions`。
+  子程序的 serverInfo（含 title、icons、websiteUrl）、instructions、`_meta` 與其他欄位都不再轉送。JSON-RPC 錯誤回覆照舊。
+- 原因：Claude Code 會把 instructions 放進模型的 system prompt。目前會送 instructions 的子程序有 EMQX、LiteLLM 與 Nextcloud：
+  EMQX 與 LiteLLM 的文字描述的是上游的全部工具（斷線、刪憑證、對話補全、發金鑰等），本 add-on 都隱藏或拒絕；
+  Nextcloud 是 WOOWTECH 自己的 server，說明有用（先讀再寫、etag），所以改由 gateway 送一份審查過的副本
+  （`products.INSTRUCTIONS`；`tests/test_initialize_identity.py` 會比對 vendored 原文，re-vendor 改了說明就失敗，要先審再改副本）。
+  n8n、Odoo、Hermes、OpenDesign 的子程序沒有送 instructions，只有 serverInfo 改變。
+- 版號：新增 `mcp_admin_core.VERSION`（目前 0.1.7），`packaging/validate.py` 要求它等於發版的 VERSION，發版準備時一起改成 0.1.8。
+- 刻意不做：serverInfo 不加 title（只放規範必填的 name、version，避免任何 client 的嚴格 schema 出問題）。
+- 測試：`tests/test_initialize_identity.py`（新）；`test_initialize_reply.py`、`test_sse_sanitize.py`（BOM 測試改用 protocolVersion 區分；
+  lone surrogate 測試改用錯誤訊息，因為 initialize 的 result 已沒有子程序文字）、`test_initialize_cleanup.py`（拿掉「filtering 時狀態錯誤」
+  這個已不存在的拒絕路徑：initialize 的回覆不再讀取狀態）。真實子程序測試：`test_real_products.py`（六支經 run_product 的 serverInfo
+  與 instructions）、`test_real_n8n.py`、`test_nextcloud_child.py`、`integration_local_runtime.py`（root 才跑）改為新的名稱。
+  撤回 gateway 修正後 6 項失敗。
+- 對 e2e 的影響（只記錄）：e2e 案例對 initialize 只斷言 `result.capabilities` 與 `result.protocolVersion`，不受影響；
+  `ha_p9_probe.py` 報告的 `serverInfo=` 會從 `n8n-documentation-mcp` 等變成 `woow-mcp-<產品>`（只是報告文字）；
+  AI 測試 harness（`e2e/ai/mcp_client.py`）只記錄 serverInfo。AI 實測若比較「有無 instructions」，Nextcloud 以外的產品已沒有 instructions。
+
 ## 待辦（0.1.8 範圍內，進行中）
 
-- F6（0.1.6 R1 F6）：initialize 回覆的 serverInfo、instructions 不再是子程序內容。
 - GATEWAY-3：五支 Python 子程序（加上 Nextcloud）的 session 閒置回收；先量測單一閒置 session 的記憶體。
 - F7 不在本版自行決定：負責人在 AI 實測 Stage 0 之後決定（f7-design.md）。

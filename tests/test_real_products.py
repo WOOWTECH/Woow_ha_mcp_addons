@@ -18,8 +18,9 @@ import xmlrpc.client
 import httpx
 import pytest
 
+from mcp_admin_core import VERSION
 from mcp_admin_core.health import protocol_reply
-from mcp_admin_core.products import ODOO_HEALTH_PROBE, PRODUCTS, PROBES, ProductStore, TOOLS, child_spec
+from mcp_admin_core.products import INSTRUCTIONS, ODOO_HEALTH_PROBE, PRODUCTS, PROBES, ProductStore, TOOLS, child_spec
 
 from owned_executable import Executable
 from batch2_owned_port import reserve_port
@@ -179,6 +180,9 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     else:
                         pytest.fail(f'{product}: initialization timed out ({last}); {log_path.read_text()}')
                     assert result['capabilities'] == {'tools': {}}
+                    # 0.1.8 (F6): run_product names the add-on; only Nextcloud carries (reviewed) instructions.
+                    assert result['serverInfo'] == {'name': 'woow-mcp-' + product, 'version': VERSION}
+                    assert result.get('instructions') == INSTRUCTIONS.get(product)
                     headers['MCP-Protocol-Version'] = result['protocolVersion']
                     await rpc(client, endpoint, headers, {'jsonrpc': '2.0', 'method': 'notifications/initialized'})
                     listed = await rpc(client, endpoint, headers, {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'})

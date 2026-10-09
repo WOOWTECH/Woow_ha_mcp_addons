@@ -19,7 +19,7 @@ import httpx
 import pytest
 
 import mcp_admin_core.gateway as gateway
-from mcp_admin_core.config import ConfigError, Store
+from mcp_admin_core.config import Store
 from mcp_admin_core.gateway import make_apps
 from n8n_adapter import TOOLS
 
@@ -136,10 +136,6 @@ def state_broken_first(session, child):
     return json_reply(REPLY)(session, child)
 
 
-def failing_filter(*_):
-    raise ConfigError("state unavailable")
-
-
 def failing_answer(*_):
     raise RuntimeError(CANARY)
 
@@ -175,7 +171,8 @@ REFUSALS = {
     "protocolVersion not a date (JSON)": (json_reply(BAD_VERSION), 502, {}),
     "protocolVersion not a date (SSE held open)": (sse_reply(event(BAD_VERSION), hold_open=True), 502, {}),
     "result not an object": (json_reply({"jsonrpc": "2.0", "id": 7, "result": "2025-03-26"}), 502, {}),
-    "state error while filtering": (json_reply(REPLY), 503, {"filter_list": failing_filter}),
+    # 0.1.8 (F6): "state error while filtering" is gone: the initialize answer is built without the state (the
+    # result is the gateway's own), and a state error during the revocation check is the 401 case above.
     "answer could not be built": (json_reply(REPLY), 500, {"json_reply": failing_answer}),
 }
 # The answers that hand the session id to the client.

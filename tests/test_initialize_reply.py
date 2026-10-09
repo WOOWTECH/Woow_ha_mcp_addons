@@ -6,6 +6,7 @@ import json
 import httpx
 import pytest
 
+from mcp_admin_core import VERSION
 from mcp_admin_core.config import Store
 from mcp_admin_core.gateway import make_apps
 from n8n_adapter import TOOLS
@@ -96,7 +97,7 @@ async def test_sse_reply_is_returned_promptly_with_its_framing_and_filtered(stor
     assert lines[:2] == ["id: event-7", "event: message"] and response.text.endswith("\n\n")
     value = json.loads(next(line[6:] for line in lines if line.startswith("data: ")))
     assert value["id"] == 7 and value["result"]["capabilities"] == {"tools": {}}
-    assert value["result"]["serverInfo"] == {"name": "mock", "version": "0"}
+    assert value["result"]["serverInfo"] == {"name": "woow-mcp", "version": VERSION}  # 0.1.8 (F6): the gateway's own
     assert "notifications/message" not in response.text and stream.closed
 
 

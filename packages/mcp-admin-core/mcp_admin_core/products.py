@@ -417,6 +417,21 @@ def probe_success(product, payload):
 # 0.1.7: Nextcloud's is private too (vendored nextcloud_mcp_server/server.py, same name, not in TOOLS): one OCS GET
 # cloud/user on a fresh client of its own, never the tools' connections, answering only ok and the user id.
 ODOO_HEALTH_PROBE = 'woow_backend_probe'
+# 0.1.8 (0.1.6 R1 F6): initialize carries the gateway's own text, never the child's. Only Nextcloud has reviewed text:
+# a copy of the instructions of the vendored nextcloud_mcp_server (WOOWTECH's own server); tests/test_initialize_identity
+# fails when a re-vendor changes the child's text, so a change is reviewed before it reaches clients. The EMQX and
+# LiteLLM children's text describes upstream tools this add-on hides (destructive ones, chat completions, key minting).
+INSTRUCTIONS = {'nextcloud': '\n'.join((
+    'This server works with ONE Nextcloud account chosen by the administrator; you cannot switch accounts.',
+    'Paths are relative to that account\'s home folder ("" or "/" is the home); use \'/\' as separator.',
+    'Start with get_file_tree to see folders and files, then read_text_file to read a text file.',
+    'Always read a file first: update_text_file, upload_file (replace) and delete_file_checked need its etag.',
+    'If a write fails because the file changed (etag mismatch, HTTP 412), never retry blindly: read it again, merge, then retry.',
+    'create_text_file and upload_file without expected_etag never overwrite an existing file.',
+    'Deleted files go to the Nextcloud trash bin (when the Deleted files app is enabled).',
+    'Text tools refuse folders, binary (non UTF-8) files and files over the configured size limit.',
+    'list_calendars shows calendar ids; list_tasks reads tasks (VTODO) from them.',
+    'Some tools may be absent because the administrator made the server read-only or disabled them.'))}
 PRIVATE_PROBES = ('odoo', 'odoo-manage', 'nextcloud')
 
 

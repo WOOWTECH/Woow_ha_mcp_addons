@@ -11,10 +11,11 @@ import threading
 import httpx
 import pytest
 
+from mcp_admin_core import VERSION
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.health import HealthMonitor
 from mcp_admin_core.native_inventory import NAMES
-from mcp_admin_core.products import (ODOO_HEALTH_PROBE, PROBES, ROOT, ProductState, ProductStore, TOOLS, child_spec,
+from mcp_admin_core.products import (INSTRUCTIONS, ODOO_HEALTH_PROBE, PROBES, ROOT, ProductState, ProductStore, TOOLS, child_spec,
                                      health_probe, health_probe_success, probe_success)
 from owned_runtime import Endpoint
 import nextcloud_fixtures
@@ -169,11 +170,14 @@ async def test_child_host_origin_guard_accepts_the_gateway_only(tmp_path):
                     refused = await child.post(endpoint.url, headers={**base, **headers}, json=init)
                     assert refused.status_code == status, (headers, refused.status_code)
                 # The gateway itself, through its fixed child URL, works end to end.
-                _, app = make_apps(store, TOOLS['nextcloud'], child, child_url=endpoint.url)
+                _, app = make_apps(store, TOOLS['nextcloud'], child, child_url=endpoint.url,
+                                   server_name='woow-mcp-nextcloud', instructions=INSTRUCTIONS['nextcloud'])
                 async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://boundary') as client:
                     headers = {'Authorization': 'Bearer ' + store.load().token, 'Accept': 'application/json, text/event-stream'}
                     result = await rpc(client, '/mcp', headers, init)
-                    assert result['serverInfo']['name'] == 'Woow Nextcloud'
+                    # 0.1.8 (F6): the add-on's identity and reviewed text, not the child's ('Woow Nextcloud').
+                    assert result['serverInfo'] == {'name': 'woow-mcp-nextcloud', 'version': VERSION}
+                    assert result['instructions'] == INSTRUCTIONS['nextcloud']
         finally:
             await manager.stop()
             endpoint.close()

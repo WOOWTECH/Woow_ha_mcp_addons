@@ -17,7 +17,7 @@ from .gateway import make_apps
 from .ha_role import make_ha_admin_verifier
 from .health import HealthMonitor
 from .lifecycle import Supervisor
-from .products import PRODUCTS, ProductStore, TOOLS, child_spec
+from .products import INSTRUCTIONS, PRODUCTS, ProductStore, TOOLS, child_spec
 
 
 class Listener(uvicorn.Server):
@@ -51,7 +51,8 @@ async def run(args):
 
             admin, mcp = make_apps(store, TOOLS[args.product], child,
                                   verify_admin=make_ha_admin_verifier(),
-                                  health=health.snapshot, backend_changed=backend_changed)
+                                  health=health.snapshot, backend_changed=backend_changed,
+                                  server_name='woow-mcp-' + args.product, instructions=INSTRUCTIONS.get(args.product))
             servers = [Listener(uvicorn.Config(app, host=args.host, port=port,
                 proxy_headers=False, access_log=False, log_level='warning', server_header=False,
                 lifespan='off', limit_concurrency=64, timeout_keep_alive=5))
