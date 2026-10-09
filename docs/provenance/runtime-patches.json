@@ -204,13 +204,26 @@
     {
       "path": "apps/runtime/session_idle.py",
       "sha256": "98eea032ee68d45eb0e7365ccc0305b5886d896d7ea4d640990c358948a36633",
-      "change": "0.1.8 (0.1.6 RC GATEWAY-3): install() wraps mcp.server.streamable_http_manager.StreamableHTTPSessionManager.__init__ so every stateful manager the process builds gets session_idle_timeout=1800 (an explicit value and stateless managers are kept); FastMCP 3.4.5's subclass reaches it through super().__init__. Refuses to start when the pinned SDK has no session_idle_timeout parameter or WOOW_MCP_SESSION_IDLE_SECONDS (tests only) is outside 1-86400. No source digest guard: the SDK applies the limit itself (run_server and the per-request deadline push); tests/test_session_idle.py checks both SDK flavours and six real children.",
-      "guarded_sources": {}
+      "change": "0.1.8 (0.1.6 RC GATEWAY-3): install() wraps mcp.server.streamable_http_manager.StreamableHTTPSessionManager.__init__ so every stateful manager the process builds gets session_idle_timeout=1800 (an explicit value and stateless managers are kept); FastMCP 3.4.5's subclass reaches it through super().__init__. Refuses to start when the pinned SDK has no session_idle_timeout parameter or WOOW_MCP_SESSION_IDLE_SECONDS (tests only) is outside 1-86400. Call sites (each before its server builds the session manager): apps/odoo/launch.py, apps/hermes/launch.py, apps/opendesign/launch.py, and apps/runtime/run_child.py, which products.child_spec uses to start EMQX, LiteLLM and Nextcloud. The limit is applied by the SDK itself (run_server's idle_scope, and the deadline pushed forward when a request reaches an existing session), so that SDK file is a guarded source in all six venvs: an SDK upgrade fails tests/test_tool_inventory.py until it is re-reviewed (review 6a). No runtime digest check: the guard is test-time, like the ledger; tests/test_session_idle.py checks both SDK flavours, the fail-closed branches and six real children.",
+      "guarded_sources": {
+        "apps/odoo/.venv/lib/python3.13/site-packages/mcp/server/streamable_http_manager.py": "5fc265202379607164d7711b43dcee51cf087b98c60a4ed5555045a243f34458",
+        "apps/hermes/.venv/lib/python3.13/site-packages/mcp/server/streamable_http_manager.py": "5fc265202379607164d7711b43dcee51cf087b98c60a4ed5555045a243f34458",
+        "apps/opendesign/.venv/lib/python3.13/site-packages/mcp/server/streamable_http_manager.py": "5fc265202379607164d7711b43dcee51cf087b98c60a4ed5555045a243f34458",
+        "apps/emqx/.venv/lib/python3.13/site-packages/mcp/server/streamable_http_manager.py": "5fc265202379607164d7711b43dcee51cf087b98c60a4ed5555045a243f34458",
+        "apps/litellm/.venv/lib/python3.13/site-packages/mcp/server/streamable_http_manager.py": "5fc265202379607164d7711b43dcee51cf087b98c60a4ed5555045a243f34458",
+        "apps/nextcloud/.venv/lib/python3.13/site-packages/mcp/server/streamable_http_manager.py": "5fc265202379607164d7711b43dcee51cf087b98c60a4ed5555045a243f34458"
+      }
     },
     {
       "path": "apps/runtime/run_child.py",
       "sha256": "720930274b2a6e67a2effe0c4463cc713f0318ece45a4cef951ea45488241fe5",
-      "change": "0.1.8: python -m run_child <module>: only the three vendored FastMCP child modules; installs session_idle, then runs the module as __main__ with its own arguments (runpy, alter_sys), exactly as python -m <module>.",
+      "change": "0.1.8: python -m run_child <module>: only the three vendored FastMCP child modules (EMQX, LiteLLM, Nextcloud; anything else exits before importing it); installs session_idle, then runs the module as __main__ with its own arguments (runpy, alter_sys), exactly as python -m <module>.",
+      "guarded_sources": {}
+    },
+    {
+      "path": "apps/hermes/launch.py",
+      "sha256": "cdcb47b778a98c2639276d6be93930c185923194ab51fee8098f4a5cbff12c4a",
+      "change": "Fixed native SDK launcher (no legacy shared wrapper or UI): the vendored hermes_mcp_server FastMCP on 127.0.0.1:3000/mcp over streamable-http. 0.1.8: installs apps/runtime/session_idle.py before mcp.run builds its session manager (listed in review F-4; earlier versions had no ledger entry for this launcher).",
       "guarded_sources": {}
     }
   ]
