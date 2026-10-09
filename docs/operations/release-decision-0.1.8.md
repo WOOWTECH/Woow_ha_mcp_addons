@@ -93,6 +93,7 @@
 - 基準（d01c530）：pytest 1754 passed、1 failed；packaging unittest 147 OK（5 skipped）；validate PASS。
 - 三項修正後（77d594d）：pytest 1790 passed、1 failed；packaging unittest 147 OK（5 skipped）；validate PASS。
 - 審查 notes 處理後（55503ad，tests-018/review-fixes/）：pytest 1821 passed、1 failed；packaging unittest 149 OK（5 skipped）；validate PASS。
+- 複審 notes 處理後（98725b1，tests-018/re-review/）：pytest 1828 passed、1 failed；packaging unittest 149 OK（5 skipped）；validate PASS。
 - 每次唯一的失敗都是 `tests/test_owned_executable.py::test_uid10001_nondumpable_self_and_own_child_proof`：它要求以 root 執行，
   這個容器現在是 uid 1000（0.1.7 的 run2 是 root，1755 全過）。與本版修改無關。
 - 注意：F6 那個 commit（e792d5a）單獨看會讓 `test_tool_inventory.py::test_runtime_patch_ledger_and_guarded_wheel_sources` 失敗
@@ -118,6 +119,22 @@
 標籤精確檢查（4 項）、版本只綁一次（5 項）、`validate()` 對兩個檢查的呼叫（各 1 項）、protocolVersion 限縮（12 項）、
 ledger 中一個 SDK 檔的雜湊改掉（`test_runtime_patch_ledger_and_guarded_wheel_sources` 失敗）。
 `docs/tool-surface.json` 沒有變（`75db0eca…`），本輪的程式改動不在它的雜湊範圍內。
+
+## 0.1.8 複審（eade3f3..4e8f245，APPROVE WITH NOTES）的處理
+
+沒有 High／Medium；F-1～F-5、6a～6c 經複審確認，6b 的 502 接受。各項 notes 的處理：
+
+| 項目 | 內容 | commit |
+|---|---|---|
+| I-1 | 過時的註解與說明（gateway 的 end_session、GATEWAY-2 註解，cleanup 測試說明，本文件）改成「到 0.1.7 留到子程序重啟；0.1.8 起閒置 30 分鐘結束」 | 0079c46 |
+| L-1 | `docs/n8n-tracer-contract.md`（provenance 稱它為完整政策）寫明 initialize 的結果由 gateway 組成、protocolVersion 只接受四個版本（否則 502 並以 DELETE 結束子程序的 session）、沒有 session 的請求由 gateway 回 400（n8n 的通知 202 改 400） | 7779fac |
+| I-2 | `clients.md` 與七份 DOCS：400 排在 Bearer 401、方法 405、Origin 403、policy 403 之後；被結束的 session 回 404 的形狀（有 id 的請求與 GET 是 JSON，通知與 DELETE 沒有內容）；502 的原因加上 protocolVersion 不在四個版本內（n8n DOCS 寫明 2024-06-25） | 65f4a9d |
+| L-2 | `PROTOCOL_VERSIONS` 釘住子程序：六個 Python venv 的 `mcp.shared.version.SUPPORTED_PROTOCOL_VERSIONS` 必須等於它、`LATEST_PROTOCOL_VERSION` 在其中；n8n-mcp `dist/utils/protocol-version.js` 的 SUPPORTED_VERSIONS 減掉它只剩 2024-06-25，STANDARD 與 N8N 版本都在其中。ledger 新增 gateway.py 條目，guarded sources 是這七個檔，並註明 SDK 或 n8n-mcp 改版要重新審查 `PROTOCOL_VERSIONS` | 98725b1 |
+
+I-3（改寫要求的版本而不回 502）與 I-4（AST 邊界情況）照指示不做。
+撤回驗證：`PROTOCOL_VERSIONS` 加入 2024-06-25 → 7 項失敗（六個 venv 與 n8n-mcp）；拿掉 2025-11-25 → 6 項失敗；
+ledger 中 n8n-mcp `protocol-version.js` 的雜湊改掉 → `test_runtime_patch_ledger_and_guarded_wheel_sources` 失敗。
+`docs/tool-surface.json` 沒有變（`75db0eca…`）。
 
 ## 待辦（0.1.8 範圍內）
 
