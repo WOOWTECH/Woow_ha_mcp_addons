@@ -48,7 +48,23 @@
   `ha_p9_probe.py` 報告的 `serverInfo=` 會從 `n8n-documentation-mcp` 等變成 `woow-mcp-<產品>`（只是報告文字）；
   AI 測試 harness（`e2e/ai/mcp_client.py`）只記錄 serverInfo。AI 實測若比較「有無 instructions」，Nextcloud 以外的產品已沒有 instructions。
 
-## 待辦（0.1.8 範圍內，進行中）
+### GATEWAY-3：Python 子程序結束閒置的 session（0.1.6 RC GATEWAY-3）
 
-- GATEWAY-3：五支 Python 子程序（加上 Nextcloud）的 session 閒置回收；先量測單一閒置 session 的記憶體。
+- 量測（Claude 交付線 `reviews-018/idle-session-measure.md`，本機、假後端）：每個閒置 session 佔 Odoo 約 350 KiB、Hermes 約 100、
+  OpenDesign 約 50–70、EMQX 約 100、LiteLLM 約 80–90、Nextcloud 約 90–100 KiB；每分鐘留一個，Odoo 一天約 480 MiB、其他 70–140 MiB。
+- 行為：`apps/runtime/session_idle.py` 的 `install()` 讓這個程序建的每個有狀態 `StreamableHTTPSessionManager` 帶
+  `session_idle_timeout=1800`（30 分鐘；stateless 與已指定的不動）。Odoo、Hermes、OpenDesign 的 `launch.py` 在建 server 前呼叫；
+  EMQX、LiteLLM、Nextcloud 改由 `apps/runtime/run_child.py` 啟動（`python -m run_child <module> …`，`products.child_spec` 的 argv 跟著改）。
+  上限時間內沒有任何請求的 session 被 SDK 取消並移除，下一個請求收到 404；有請求就順延。`WOOW_MCP_SESSION_IDLE_SECONDS` 只給測試覆寫
+  （1–86400 秒，無效值子程序不啟動）。n8n 不變（n8n-mcp 自己 10 分鐘回收）。
+- 測試：`tests/test_session_idle.py`：兩種 SDK（mcp 1.28.1 FastMCP、FastMCP 3.4.5）各自的 venv 裡，預設、指定、stateless、
+  位置參數、FastMCP 建的 manager 都拿到正確上限；無效上限拒絕啟動；六個真實子程序（照 add-on 的啟動方式、私有埠、假後端，
+  上限縮成 2 秒）閒置的 session 回 404、使用中的回 200。`test_nextcloud_child.py` 的 argv 期待值改為 `-m run_child`。
+- 待 RC 審查或負責人決定：30 分鐘是否合適（client 閒置後第一個請求收到 404，Claude Code、n8n、HA 等 client 是否都自動重新
+  initialize 沒有實測，要在 e2e／AI 實測補）；`install()` 改的是 SDK 類別的建構子，依賴釘選版本（SDK 改版時找不到參數就拒絕啟動）。
+- 對 e2e 的影響（只記錄）：e2e 窗口內同一個 session 最長閒置不會到 30 分鐘；若有案例刻意長時間保留 session，要留意 404。
+- `docs/tool-surface.json` 重新產生：只多了 `apps/runtime/session_idle.py`、`run_child.py` 兩個檔與三個 `launch.py` 的雜湊，工具本身沒有變。sha256 從 0.1.7 的 `fa924793…` 變成 `75db0eca…`；e2e 案例檔與 scenarios 的 `tool_surface_sha256`（R11）綁 0.1.8 時要改成發版當時的值。
+
+## 待辦（0.1.8 範圍內）
+
 - F7 不在本版自行決定：負責人在 AI 實測 Stage 0 之後決定（f7-design.md）。

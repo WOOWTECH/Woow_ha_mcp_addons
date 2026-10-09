@@ -521,5 +521,7 @@ def child_spec(state: ProductState, directory: Path) -> ChildSpec | None:
             # The child registers delete_file_checked only with READONLY=false AND ALLOW_DELETE=true.
             env[prefix + 'ALLOW_DELETE'] = 'true' if 'delete_file_checked' in public_allowed else 'false'
         env[prefix + 'DISABLED_TOOLS'] = ','.join(sorted(set(NAMES[product]) - native_allowed))
-        argv = (str(python), '-m', module, '--transport', 'http', '--host', '127.0.0.1', '--port', '3000', '--path', '/mcp')
+        # 0.1.8 (GATEWAY-3): run_child installs the session idle limit before the module builds its server.
+        argv = (str(python), '-m', 'run_child', module, '--transport', 'http', '--host', '127.0.0.1', '--port', '3000',
+                '--path', '/mcp')
     return ChildSpec(argv, env, cwd)

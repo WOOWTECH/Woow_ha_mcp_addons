@@ -58,7 +58,8 @@ def test_contract_names_tools_and_probe_shapes():
 def test_child_spec_is_exact_and_grant_driven(tmp_path):
     spec = child_spec(state(), tmp_path)
     app = ROOT / 'apps/nextcloud'
-    assert spec.argv == (str(app / '.venv/bin/python'), '-m', 'nextcloud_mcp_server.server', '--transport', 'http',
+    # 0.1.8 (GATEWAY-3): run_child installs the session idle limit, then runs the module as `python -m` would.
+    assert spec.argv == (str(app / '.venv/bin/python'), '-m', 'run_child', 'nextcloud_mcp_server.server', '--transport', 'http',
                          '--host', '127.0.0.1', '--port', '3000', '--path', '/mcp')
     assert spec.cwd == tmp_path / 'child' and not list(spec.cwd.iterdir())
     assert spec.env == {
@@ -135,8 +136,14 @@ asyncio.run(main())
     result = subprocess.run(list(spec.argv), env=env, cwd=spec.cwd, capture_output=True, text=True, timeout=30)
     assert result.returncode != 0 and 'Uvicorn running' not in result.stderr
     # Local change (client.py): no backend_policy module at all never falls back to an unrestricted client.
+    # 0.1.8: the add-on starts the module through apps/runtime/run_child.py, which is missing here as well, so the
+    # child's own check is run with the module started directly (as `python -m` did before 0.1.8).
     env = {**spec.env, 'PYTHONPATH': str(ROOT / 'apps/nextcloud/vendor')}
+    assert spec.argv[1:4] == ('-m', 'run_child', 'nextcloud_mcp_server.server')
     result = subprocess.run(list(spec.argv), env=env, cwd=spec.cwd, capture_output=True, text=True, timeout=30)
+    assert result.returncode != 0 and 'Uvicorn running' not in result.stderr
+    direct = [spec.argv[0], '-m', 'nextcloud_mcp_server.server', *spec.argv[4:]]
+    result = subprocess.run(direct, env=env, cwd=spec.cwd, capture_output=True, text=True, timeout=30)
     assert result.returncode == 2, (result.returncode, result.stderr)
     assert 'backend_policy is required' in result.stderr and 'Uvicorn running' not in result.stderr
 

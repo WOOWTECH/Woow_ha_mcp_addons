@@ -22,6 +22,8 @@ class BackendTransport(XMLTransport):
 client.RedirectTransport = BackendTransport
 
 if __name__ == '__main__':
+    import session_idle
+    session_idle.install()  # 0.1.8 (GATEWAY-3): before odoo_mcp builds the session manager
     from odoo_mcp.server import mcp
     from bounded_tools import BoundedTools
     from batch2_outputs import odoo_counts
