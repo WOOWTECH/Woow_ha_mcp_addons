@@ -77,7 +77,8 @@
 
 ## 0.1.8 待辦（0.1.6 留下的 0.1.7 待辦；0.1.7 刻意不改既有六支的行為，所以原樣延後）
 
-- 映像標籤 `io.hass.name` 仍是 0.1.7 的「WOOW ○○ MCP」；2026-10-09 起顯示名稱是「Woow ○○ MCP Server」（manifest 已改，映像不變），下一版重建時一併改標籤。
+- 映像標籤 `io.hass.name` 仍是 0.1.7 的「WOOW ○○ MCP」；2026-10-09 起顯示名稱是「Woow ○○ MCP Server」（manifest 已改，映像不變），下一版重建時一併改標籤。（0.1.8 分支 61c72da 已改：標籤與 manifest 相同，`packaging/validate.py` 會擋不一致。）
+- 2026-10-09 起 J1900／J6412 出貨機預裝七支（負責人決定）。woowtech-ha 本身是 J6412（沒有 AVX），J1900 另以 QEMU user-mode `-cpu Nehalem`（比 J1900 嚴格）檢查過 0.1.7 七個映像全部通過（Claude 交付線 j1900-isa-check-1009/）。之後每次發版的 RC 都要再跑一次，並考慮把腳本收進 `packaging/`，成為 gate 的一步。
 
 這幾項是共用 gateway 或 Python 子程序的既有問題。0.1.7 新增的 Nextcloud 共用同一個 gateway，子程序和 EMQX 一樣是 FastMCP 3.4.5、
 啟動時沒有帶閒置設定，預期也受影響（未另外實測）。
