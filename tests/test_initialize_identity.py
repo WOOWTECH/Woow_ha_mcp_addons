@@ -1,6 +1,6 @@
 """LOCAL/MOCK: 0.1.8 (0.1.6 R1 F6): the initialize result is the gateway's own.
 
-Only the child's protocolVersion (a date) reaches the client. serverInfo names the add-on and its version, not the
+Only the child's protocolVersion (one of the reviewed MCP revisions) reaches the client. serverInfo names the add-on and its version, not the
 child (n8n-mcp calls itself "n8n-documentation-mcp"), and the child's instructions are never relayed: Claude Code puts
 instructions into the model's system prompt; EMQX's and LiteLLM's text describes their whole upstream tool set, including
 tools the gateway hides or refuses, and Odoo's is a generic line. A product may pass reviewed fixed text (Nextcloud: a
@@ -16,7 +16,7 @@ import pytest
 
 from mcp_admin_core import VERSION
 from mcp_admin_core.config import Store
-from mcp_admin_core.gateway import make_apps
+from mcp_admin_core.gateway import PROTOCOL_VERSIONS, make_apps
 from mcp_admin_core.products import INSTRUCTIONS
 from n8n_adapter import TOOLS
 
@@ -88,6 +88,25 @@ async def test_a_lone_surrogate_in_child_instructions_never_matters(store):
     raw = json.dumps({"jsonrpc": "2.0", "id": 7, "result": {**CHILD_RESULT, "instructions": "\ud800"}}).encode()  # \ud800 escape
     response = await initialize(store, lambda _: httpx.Response(200, headers={"content-type": "application/json"}, content=raw))
     assert response.status_code == 200 and "instructions" not in response.json()["result"]
+
+
+def test_the_reviewed_protocol_versions():
+    # 0.1.8 (review 6b): the MCP revisions the pinned clients and children were reviewed with, not any date.
+    assert PROTOCOL_VERSIONS == {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
+
+
+@pytest.mark.parametrize("version", sorted(PROTOCOL_VERSIONS))
+async def test_a_reviewed_protocol_version_passes(store, version):
+    response = await initialize(store, json_child({**CHILD_RESULT, "protocolVersion": version}))
+    assert response.status_code == 200 and response.json()["result"]["protocolVersion"] == version
+
+
+@pytest.mark.parametrize("version", ["2024-06-25", "2024-10-07", "2025-03-27", "2026-01-01", "9999-99-99", " 2025-03-26",
+                                     "2025-03-26\n", 20250326, None, ["2025-03-26"], {"v": "2025-03-26"}])
+async def test_any_other_protocol_version_is_refused(store, version):
+    response = await initialize(store, json_child({**CHILD_RESULT, "protocolVersion": version}))
+    assert response.status_code == 502 and "mcp-session-id" not in response.headers
+    assert "2025-03-27" not in response.text and "n8n-documentation-mcp" not in response.text
 
 
 async def test_the_version_is_the_release_version():

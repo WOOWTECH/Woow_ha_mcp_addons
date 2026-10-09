@@ -32,7 +32,7 @@
 
 ### F6：initialize 的回覆由 gateway 組成（0.1.6 R1 F6）
 
-- 行為：initialize 成功時，result 只有 `protocolVersion`（子程序的值，仍須是日期格式）、`capabilities: {"tools": {}}`、
+- 行為：initialize 成功時，result 只有 `protocolVersion`（子程序的值，必須是審查過的 MCP 版本，見下一節）、`capabilities: {"tools": {}}`、
   `serverInfo: {"name": "woow-mcp-<產品>", "version": <add-on 版號>}`，以及（只有 Nextcloud）gateway 自己的 `instructions`。
   子程序的 serverInfo（含 title、icons、websiteUrl）、instructions、`_meta` 與其他欄位都不再轉送。JSON-RPC 錯誤回覆照舊。
 - 原因：Claude Code 會把 instructions 放進模型的 system prompt。目前會送 instructions 的子程序有 Odoo、EMQX、LiteLLM 與 Nextcloud：
@@ -52,6 +52,16 @@
 - 對 e2e 的影響（只記錄）：e2e 案例對 initialize 只斷言 `result.capabilities` 與 `result.protocolVersion`，不受影響；
   `ha_p9_probe.py` 報告的 `serverInfo=` 會從 `n8n-documentation-mcp` 等變成 `woow-mcp-<產品>`（只是報告文字）；
   AI 測試 harness（`e2e/ai/mcp_client.py`）只記錄 serverInfo。AI 實測若比較「有無 instructions」，Nextcloud 以外的產品已沒有 instructions。
+
+### initialize 的 protocolVersion 只接受審查過的版本（0.1.8 審查建議 6b）
+
+- 行為：initialize 回覆的 `protocolVersion` 必須是 2024-11-05、2025-03-26、2025-06-18、2025-11-25 之一（0.1.5 起原本是任何日期格式）；
+  其他值 gateway 回 502，並照 0.1.6 的 R2 收尾結束子程序剛開的 session。
+- 影響：Python 子程序（mcp 1.28.1）只會回這四個之一（client 要求別的版本時回 2025-11-25）。n8n-mcp 2.91.0 自己協商：n8n／langchain
+  client 一律 2024-11-05，client 要求 2025-03-26、2024-11-05、2024-06-25 時照回，其他回 2025-03-26；所以只有要求 2024-06-25 的 client
+  會從「照轉」變成 502（MCP 沒有這個正式版本，實務上應該沒有 client 這樣要求）。
+- 測試：`tests/test_initialize_identity.py`（四個版本通過；2024-06-25、2024-10-07、2025-03-27、前後空白、非字串等 11 種回 502）、
+  `tests/test_initialize_cleanup.py` 新增「protocolVersion not reviewed」拒絕情境（子程序的 session 被結束、id 與子程序文字不外流）。
 
 ### GATEWAY-3：Python 子程序結束閒置的 session（0.1.6 RC GATEWAY-3）
 

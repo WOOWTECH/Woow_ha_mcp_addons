@@ -170,6 +170,8 @@ REFUSALS = {
                        {"MAX_RESPONSE": 4096}),
     "protocolVersion not a date (JSON)": (json_reply(BAD_VERSION), 502, {}),
     "protocolVersion not a date (SSE held open)": (sse_reply(event(BAD_VERSION), hold_open=True), 502, {}),
+    # 0.1.8 (review 6b): a date outside the reviewed MCP revisions (n8n-mcp echoes this one to a client that asks for it)
+    "protocolVersion not reviewed": (json_reply({**REPLY, "result": {**RESULT, "protocolVersion": "2024-06-25"}}), 502, {}),
     "result not an object": (json_reply({"jsonrpc": "2.0", "id": 7, "result": "2025-03-26"}), 502, {}),
     # 0.1.8 (F6): "state error while filtering" is gone: the initialize answer is built without the state (the
     # result is the gateway's own), and a state error during the revocation check is the 401 case above.

@@ -46,8 +46,10 @@ SSE_COMMENT = re.compile(rb":[\x20-\x7e]{0,1024}")
 # text (the pinned TS client puts unknown-token progress into an error message); log messages and resource updates
 # carry child text or name surfaces the gateway never exposes.
 LIST_CHANGED = b'data: {"jsonrpc":"2.0","method":"notifications/tools/list_changed"}'
-# 0.1.5 (R1 #6): the pinned TS client puts an unsupported protocolVersion into an error; a date carries no child text.
-PROTOCOL_VERSION = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+# 0.1.5 (R1 #6): the pinned TS client puts an unsupported protocolVersion into an error, so no child text may pass.
+# 0.1.8 (review 6b): only the reviewed MCP revisions, not any date. The pinned children negotiate within this set,
+# except n8n-mcp, which echoes "2024-06-25" to a client that asks for it: that initialize is now refused (502).
+PROTOCOL_VERSIONS = frozenset({"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"})
 # 0.1.6 (R2): the bound of the gateway's own DELETE that ends an initialize session no client received.
 SESSION_END_SECONDS = 2
 # 0.1.8 (0.1.6 R1 F6): the name the initialize answer gives when the caller names no product.
@@ -743,16 +745,16 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         raise ValueError("unusable session id")  # a client could not continue the session
                     value = gateway_reply(value)
                     if "result" in value:
-                        if not (isinstance(value["result"], dict) and isinstance(value["result"].get("protocolVersion"), str)
-                                and PROTOCOL_VERSION.fullmatch(value["result"]["protocolVersion"])):
+                        version = value["result"].get("protocolVersion") if isinstance(value["result"], dict) else None
+                        if not (isinstance(version, str) and version in PROTOCOL_VERSIONS):
                             raise ValueError("unusable protocol version")
-                        # 0.1.8 (0.1.6 R1 F6): the result is the gateway's own; only the child's protocolVersion (a date)
-                        # remains. serverInfo names this add-on, not the child (n8n-mcp calls itself
+                        # 0.1.8 (0.1.6 R1 F6): the result is the gateway's own; only the child's protocolVersion (one of
+                        # the reviewed revisions) remains. serverInfo names this add-on, not the child (n8n-mcp calls itself
                         # "n8n-documentation-mcp"), and the child's instructions are never relayed: Claude Code puts
                         # instructions into the model's system prompt, and EMQX's and LiteLLM's describe their whole
                         # upstream tool set, including tools this gateway hides or refuses (Odoo's is a generic line).
                         # The caller may pass reviewed fixed text.
-                        value["result"] = {"protocolVersion": value["result"]["protocolVersion"],
+                        value["result"] = {"protocolVersion": version,
                                            "capabilities": {"tools": {}},
                                            "serverInfo": {"name": server_name, "version": VERSION},
                                            **({"instructions": instructions} if instructions else {})}
