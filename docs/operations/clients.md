@@ -66,13 +66,15 @@ v3 保存取代全部 `enabled_write_tools` 並關閉 legacy global，不能僅�
   OpenDesign、EMQX、LiteLLM、Nextcloud）留下的 session 0.1.8 起閒置 30 分鐘就結束（0.1.7 以前會累積到子程序重啟）。
 - Session：先 initialize，之後每個請求都帶 `Mcp-Session-Id`。0.1.8 起 initialize 以外沒帶 `Mcp-Session-Id` 的請求（ping、
   tools/list、tools/call、通知、GET、DELETE）一律由 gateway 回 400，不轉給子程序、不會開 session（有 id 的請求與 GET 是 JSON-RPC
-  錯誤 -32000「Bad Request」，通知與 DELETE 沒有內容）。0.1.7 以前，Odoo、Hermes、OpenDesign、EMQX、LiteLLM、Nextcloud 的子程序
+  錯誤 -32000「Bad Request」，通知與 DELETE 沒有內容）。這個檢查排在 Bearer（401）、方法（405）、Origin（403）與 policy（403）
+  之後：缺 Bearer 仍是 401，被拒的工具仍是 403。0.1.7 以前，Odoo、Hermes、OpenDesign、EMQX、LiteLLM、Nextcloud 的子程序
   會為這種請求開一個新 session 並留到子程序重啟；n8n 對這種請求回 400，但沒有 session 的通知回 202。
 - Session 結束：client 用完要送 `DELETE /mcp`（帶 `Mcp-Session-Id`）。沒送 DELETE 的 session（例如 client 當掉、斷線，或 TypeScript
   SDK 只呼叫 `close()`：1.30.0 的 `close()` 不送 DELETE，要先呼叫 transport 的 `terminateSession()`）：
   - n8n：不變，所有 client 共用 20 個 session，閒置 10 分鐘回收。
   - Odoo、Hermes、OpenDesign、EMQX、LiteLLM、Nextcloud：0.1.8 起閒置 30 分鐘由子程序結束（0.1.7 以前留到子程序重啟）。
-  被結束的 session，之後用它的請求回 404（有 id 的請求是 JSON-RPC 錯誤 -32000「Not Found」），client 要重新 initialize。
+  被結束的 session，之後用它的請求回 404：有 id 的請求與 GET 是 JSON-RPC 錯誤 -32000「Not Found」（GET 的 id 是 null），
+  通知與 DELETE 是沒有內容的 404。client 要重新 initialize。
   MCP 規範要求 client 收到 404 時重新 initialize；各 client 是否自動這樣做，0.1.8 尚未實測。子程序重啟（含 Add-on 重啟）後
   舊 session 也會失效。
 - 輪替後所有 client 更新秘密；舊 token 的新請求與 stream 後續轉送被拒。
@@ -81,7 +83,9 @@ v3 保存取代全部 `enabled_write_tools` 並關閉 legacy global，不能僅�
 - 503 readiness 可能只是未設定／backend 離線；不要自動重啟 HA 或既有服務。
 - initialize 回 HTTP 503＋JSON-RPC 錯誤 `BACKEND_UNAVAILABLE`（Retry-After 5，0.1.2 起）：child 沒有回覆這次初始化，
   通常是後端連不上（例如已下架的 Odoo Manage 每個連線階段都要先連 Odoo），但也可能是 child 本身異常；沒有 session id，
-  稍後重新 initialize 即可。502 是 child 回了格式錯誤或過大的回覆，或根本沒有 child 可轉送。
+  稍後重新 initialize 即可。502 是 child 回了格式錯誤或過大的回覆、initialize 協商出的 protocolVersion 不在審查過的四個版本
+  （2024-11-05、2025-03-26、2025-06-18、2025-11-25）之內（0.1.8 起；目前只有 n8n 對要求 2024-06-25 的 client 會這樣），
+  或根本沒有 child 可轉送。
 - n8n 以外各支未設定後端時沒有 child（設定後端後才有；n8n 沒有後端也會啟動內建文件 runtime）。
   2026-10-07 對測試 HA 上未設定後端的 LiteLLM 逐一打 45 個案例，支援的讀取分兩種：標記為需要後端的
   （例如 `litellm_model_info`、`litellm_team_info`、`litellm_list_users`）由 gateway 直接回 403；不需檢查後端就轉送的
