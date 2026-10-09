@@ -59,17 +59,22 @@ v3 保存取代全部 `enabled_write_tools` 並關閉 legacy global，不能僅�
 
 - 缺失／錯誤／撤銷 Bearer：401。不要透過換 URL path、HA headers 或 cookie 規避。
 - 工具不支援／停用／write 未開：403；不應因此開全權限後端帳號。403 的 body 只有 `{"error":"request denied"}`，
-  不說是哪個工具或參數被擋。已知 client 差異（0.1.5 審查 RC F7；0.1.6、0.1.7 都未改，延到 0.1.8，修法待負責人決定）：Python MCP SDK
+  不說是哪個工具或參數被擋。已知 client 差異（0.1.5 審查 RC F7；到 0.1.8 都未改，修法待負責人決定）：Python MCP SDK
   1.x client 遇到這個 403 會讓整個 session 斷線（要重新連線）；TypeScript SDK 只有那一次呼叫失敗。斷線時 Python client 不送
   DELETE，子程序的 session 會留下來：n8n 所有 client 共用 20 個 session，10 分鐘內約 20 次這種拒絕就會用完，之後所有 client 的
-  initialize 都回 429（JSON-RPC 錯誤 -32000「Too Many Requests」），要等閒置 10 分鐘的 session 被回收；其他五支的子程序沒有
-  閒置回收，留下的 session 會累積到子程序重啟（含 Add-on 重啟）。
-- Session 結束：client 用完要送 `DELETE /mcp`（帶 `Mcp-Session-Id`）。n8n 的 session 閒置 10 分鐘回收；其他五支的子程序沒有
-  閒置回收，沒送 DELETE 的 session 會留到子程序重啟，例如 client 當掉、斷線，或 TypeScript SDK 只呼叫 `close()`（1.30.0 的
-  `close()` 不送 DELETE，要先呼叫 transport 的 `terminateSession()`）。這五支收到沒帶 `Mcp-Session-Id` 的 initialize 以外請求
-  （ping、tools/list、GET、DELETE 等）也會開一個新 session 並留下來，所以要先 initialize，之後每個請求都帶 `Mcp-Session-Id`。
-  0.1.6、0.1.7 仍是如此，延到 0.1.8。0.1.7 新增的 Nextcloud 子程序和 EMQX 一樣是 FastMCP 3.4.5、啟動時沒有設定閒置回收，
-  預期和這五支相同（未另外實測）。
+  initialize 都回 429（JSON-RPC 錯誤 -32000「Too Many Requests」），要等閒置 10 分鐘的 session 被回收；其他六支（Odoo、Hermes、
+  OpenDesign、EMQX、LiteLLM、Nextcloud）留下的 session 0.1.8 起閒置 30 分鐘就結束（0.1.7 以前會累積到子程序重啟）。
+- Session：先 initialize，之後每個請求都帶 `Mcp-Session-Id`。0.1.8 起 initialize 以外沒帶 `Mcp-Session-Id` 的請求（ping、
+  tools/list、tools/call、通知、GET、DELETE）一律由 gateway 回 400，不轉給子程序、不會開 session（有 id 的請求與 GET 是 JSON-RPC
+  錯誤 -32000「Bad Request」，通知與 DELETE 沒有內容）。0.1.7 以前，Odoo、Hermes、OpenDesign、EMQX、LiteLLM、Nextcloud 的子程序
+  會為這種請求開一個新 session 並留到子程序重啟；n8n 對這種請求回 400，但沒有 session 的通知回 202。
+- Session 結束：client 用完要送 `DELETE /mcp`（帶 `Mcp-Session-Id`）。沒送 DELETE 的 session（例如 client 當掉、斷線，或 TypeScript
+  SDK 只呼叫 `close()`：1.30.0 的 `close()` 不送 DELETE，要先呼叫 transport 的 `terminateSession()`）：
+  - n8n：不變，所有 client 共用 20 個 session，閒置 10 分鐘回收。
+  - Odoo、Hermes、OpenDesign、EMQX、LiteLLM、Nextcloud：0.1.8 起閒置 30 分鐘由子程序結束（0.1.7 以前留到子程序重啟）。
+  被結束的 session，之後用它的請求回 404（有 id 的請求是 JSON-RPC 錯誤 -32000「Not Found」），client 要重新 initialize。
+  MCP 規範要求 client 收到 404 時重新 initialize；各 client 是否自動這樣做，0.1.8 尚未實測。子程序重啟（含 Add-on 重啟）後
+  舊 session 也會失效。
 - 輪替後所有 client 更新秘密；舊 token 的新請求與 stream 後續轉送被拒。
   已送到 backend 的工作不會交易式回滾；輪替不等於取消後端工作。
 - 備份還原會復活備份中的 token／policy，需核對舊 token 暴露風險，再經批准流程輪替。

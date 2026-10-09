@@ -68,6 +68,7 @@
 - 待 RC 審查或負責人決定：30 分鐘是否合適（client 閒置後第一個請求收到 404，Claude Code、n8n、HA 等 client 是否都自動重新
   initialize 沒有實測，要在 e2e／AI 實測補）；`install()` 改的是 SDK 類別的建構子，依賴釘選版本（SDK 改版時找不到參數就拒絕啟動）。
 - 對 e2e 的影響（只記錄）：e2e 窗口內同一個 session 最長閒置不會到 30 分鐘；若有案例刻意長時間保留 session，要留意 404。
+- 文件（審查 F-1）：Odoo、Hermes、OpenDesign、EMQX、LiteLLM 的 DOCS.md 與 `docs/operations/clients.md` 改寫，Nextcloud 的 DOCS.md 新增 Session 一點：閒置 30 分鐘的 session 由子程序結束，之後用它的請求回 404，client 要重新 initialize；initialize 以外沒帶 `Mcp-Session-Id` 的請求一律回 400、不開 session。n8n 的 session 行為不變（共用 20 個、閒置 10 分鐘回收），DOCS 只補上 400（沒有 session 的通知以前回 202）。
 - `docs/tool-surface.json` 重新產生：只多了 `apps/runtime/session_idle.py`、`run_child.py` 兩個檔與三個 `launch.py` 的雜湊，工具本身沒有變。sha256 從 0.1.7 的 `fa924793…` 變成 `75db0eca…`；e2e 案例檔與 scenarios 的 `tool_surface_sha256`（R11）綁 0.1.8 時要改成發版當時的值。
 
 ## 本機測試（2026-10-09，Claude 交付線 tests-018/）
@@ -82,3 +83,4 @@
 ## 待辦（0.1.8 範圍內）
 
 - F7 不在本版自行決定：負責人在 AI 實測 Stage 0 之後決定（f7-design.md）。
+- GATEWAY-3 改變了 F7 的影響（審查建議）：Python SDK 1.x client 被 policy 的 403 斷線、不送 DELETE 而留下的 session，在 Odoo、Hermes、OpenDesign、EMQX、LiteLLM、Nextcloud 六支 Python 子程序裡 30 分鐘內就會被回收，不再累積到子程序重啟；n8n 共用 20 個 session、閒置 10 分鐘回收的限制不變，10 分鐘內約 20 次這種拒絕仍會讓所有 client 的 initialize 回 429。F7 本身（403 讓 Python client 整段斷線）沒有改變。f7-design.md 已加註。
