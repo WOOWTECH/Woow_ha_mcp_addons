@@ -58,3 +58,20 @@ hermes `884c2acc…`、opendesign `c088352b…`、emqx `107f4a11…`、litellm `
 
 測試用 HA 帳號的 refresh token 全部撤銷；HA `/tmp` 的暫存探測檔與更新腳本已刪；更新前備份已刪；證據秘密掃描 0 命中。
 Nextcloud 測試使用者 `woow-mcp-test` 與它的測試檔保留給之後的 e2e 實測，e2e 結束後以 `occ user:delete woow-mcp-test` 刪除。
+
+## 2026-10-09：從 WOOW HA App Store 與 Local Download 安裝（窗口 I-017）
+
+七支同時上架 WOOW HA App Store（`1b7b4ce7_woow_mcp_<產品>`）與 ha-rebrand 的 Local Download 之後，在同一台 HA 用 n8n
+實際從這兩個新管道各裝一次。這台主機的 CPU 是 Intel Celeron J6412（沒有 AVX），七支的所有實測都在這顆 CPU 上跑。
+
+- 上架前檢查（唯讀）：商店的七個目錄與這個分支逐檔相同；Supervisor 看到七支的新名稱、0.1.7、可安裝，圖示 bytes 與本 repo 相同；
+  在 HA 上用 `download_addon.py` 下載七支都成功，Dockerfile 只有一行 `FROM ghcr.io/woowtech/amd64-mcp-<產品>@<digest>`、boot 為 manual。
+- WOOW HA App Store：安裝 `1b7b4ce7_woow_mcp_n8n` 一次成功（24 秒，主機上已有同一個映像）。未設後端時 readiness 503、
+  未帶權杖 401；設好後端後跑 U-017 同一份讀取＋拒絕計畫 **34/35**（與上面 n8n 的結果相同，未過的仍是 `n8n_manage_folders`），
+  readiness 200。解除安裝後，另一支仍在使用的同一映像沒有被刪（Supervisor 2026.09.3 對共用映像不刪）。
+- Local Download：下載到 `/addons/woow_mcp_n8n`、商店重新載入後出現本機 add-on `local_woow_mcp_n8n`。Supervisor 建出
+  `local/amd64-addon-woow_mcp_n8n:0.1.7`，映像層與已發佈映像完全相同，`io.hass.name` 標籤是新名稱。同一份計畫 **34/35**、
+  readiness 200。第一次安裝因主機暫時查不到 `ghcr.io` 而失敗（建置帶 `--pull`，即使映像已在主機上也要連 GHCR 確認 digest），
+  30 秒後重試成功。**用 Local Download 安裝時，主機要能連到 ghcr.io。**
+- 兩支測試 add-on、`/addons/woow_mcp_n8n` 與 HA `/tmp` 暫存都已刪除；原本的七支全程執行中、image ID 不變。
+- 已安裝的七支（獨立商店）名稱仍是舊名、圖示已換新：Supervisor 只在安裝或更新時讀名稱，0.1.8 更新後就會換。
