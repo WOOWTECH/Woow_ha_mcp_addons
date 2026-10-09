@@ -1,4 +1,4 @@
-name: WOOW n8n MCP (experimental)
+name: Woow n8n MCP Server
 version: 0.1.7
 slug: woow_mcp_n8n
 description: Experimental; HA admin-role management; partial tools, read-only by default.

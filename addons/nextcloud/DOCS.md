@@ -4,10 +4,10 @@
 
 **0.1.7（experimental，本產品第一個版本）**：映像 `ghcr.io/woowtech/amd64-mcp-nextcloud:0.1.7` 由候選 7cc8bcb 建置，第一次送 gate
 就通過 container/mock 與 supply-chain gate（2026-10-08），以測過的 image ID 推送、匿名拉取驗證通過，可從本 repository 的 HA 商店安裝；
-先前版本號沒有 Nextcloud 映像。內容見 [CHANGELOG](CHANGELOG.md)。2026-10-08 第一次在測試 HA 實測（[0.1.7 回歸紀錄](../../docs/operations/ha-test-0.1.7.md)）：讀取 6/6、寫入與未知工具 5/5 拒絕、
+先前版本號沒有 Nextcloud 映像。內容見 [CHANGELOG](CHANGELOG.md)。2026-10-08 第一次在測試 HA 實測（[0.1.7 回歸紀錄](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/ha-test-0.1.7.md)）：讀取 6/6、寫入與未知工具 5/5 拒絕、
 後端斷線、重啟、child 恢復、權杖輪替、一般使用者 403 皆通過；後端是同一台 HA 的 Nextcloud 35.0.1（專屬測試使用者，只讀它自己的檔案）。
 寫入工具尚未在實機授權實測。
-[發佈關卡](../../docs/operations/release.md) 的人工 gates 和其他產品一樣維持關閉。
+[發佈關卡](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/release.md) 的人工 gates 和其他產品一樣維持關閉。
 
 管理面板與其他產品相同：管理程序以 runtime `SUPERVISOR_TOKEN` 連固定 `ws://supervisor/core/websocket`，只查
 `config/auth/list`，確認 Ingress 使用者是 active 的 owner 或 system-admin 才放行；token 只給管理程序，child 不繼承。
@@ -31,7 +31,7 @@ MCP 端點（Bearer token）不受影響。新的 Core 版本要等 add-on 發�
 | `upload_file` | 寫：上傳任意檔案（base64），不帶 etag 只建新檔 | 關，需授權 |
 | `delete_file_checked` | 寫：etag 相符才刪單一檔案（進垃圾桶） | 關，需授權 |
 
-逐名 schema／預設以 [工具對照](../../docs/tool-surface.md) 與 [machine manifest](../../docs/tool-surface.json) 為準。
+逐名 schema／預設以 [工具對照](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-surface.md) 與 [machine manifest](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-surface.json) 為準。
 寫入授權只認逐工具的 exact grant；舊的全域寫入開關不授權任何 Nextcloud 工具。停用（disabled）永遠優先。
 政策一變更，子程序就以新的環境變數重啟：有授權寫入工具才 `NEXTCLOUD_MCP_READONLY=false`，有授權
 `delete_file_checked` 才 `NEXTCLOUD_MCP_ALLOW_DELETE=true`，其他沒開放的工具列入 `NEXTCLOUD_MCP_DISABLED_TOOLS`，
@@ -93,7 +93,7 @@ MCP 端點（Bearer token）不受影響。新的 Core 版本要等 add-on 發�
 後端健康檢查用子程序私有的 `woow_backend_probe`（不在工具清單，gateway 不列出也不授權）：每 15 秒用一個新的連線
 讀一次 OCS `cloud/user`，只回 ok 與使用者 id，不佔用工具的連線，也不讀任何檔案；公開工具全部停用時照樣運作。
 後端斷線時 readiness 回 503，但不重啟 Add-on（故意不設 watchdog）。資料夾權限、備份還原與更新流程同其他產品，
-見 [操作指南](../../docs/operations/guide.md) 與 [更新備份回復](../../docs/operations/update-backup-rollback.md)。
+見 [操作指南](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/guide.md) 與 [更新備份回復](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/update-backup-rollback.md)。
 
 ## 發佈與尚未通過關卡
 

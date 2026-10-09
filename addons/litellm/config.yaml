@@ -1,4 +1,4 @@
-name: WOOW LiteLLM MCP (experimental)
+name: Woow LiteLLM MCP Server
 version: 0.1.7
 slug: woow_mcp_litellm
 description: Experimental; HA admin-role management; partial tools, read-only by default.

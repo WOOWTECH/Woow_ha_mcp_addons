@@ -1,0 +1,23 @@
+# Publishes the seven MCP Server add-ons (addons/*) to the WOOW HA App Store and its Local Download
+# (owner decision 2026-10-09). The reusable publisher runs the Store's own tooling and registry; the Store
+# consumer re-validates every notification (source commit, context checksums, publisher run on this repository's
+# default branch, and the published GHCR images per architecture). This repository keeps its own add-on store as
+# well; release gating stays with the builder VM pipeline (docs/operations/release.md).
+name: WOOW addon source notification
+'on':
+  push:
+    branches:
+    - claude-delivery
+  workflow_dispatch: {}
+  schedule:
+  - cron: 41 */6 * * *
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: woow-addon-source-notification
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/claude-delivery'
+    uses: WOOWTECH/Woow_HA_App_Store/.github/workflows/woow-addon-publish.yml@main

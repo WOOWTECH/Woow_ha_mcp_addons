@@ -2,6 +2,7 @@
 
 ## 0.1.7 — 2026-10-08 公開（experimental）
 
+- 2026-10-09 補充（映像與功能不變，不需要更新）：顯示名稱改為「Woow LiteLLM MCP Server」，圖示改用 LiteLLM 的圖示（[來源](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/provenance/icons.md)）；同時上架 [WOOW HA App Store](https://github.com/WOOWTECH/Woow_HA_App_Store) 與 ha-rebrand 的 Local Download。兩個商店的同名 add-on 在 HA 裡是不同的 add-on，同一台 HA 只裝其中一個來源的。
 - 本產品功能沒有變動。0.1.7 新增第七支產品 WOOW Nextcloud MCP；所有 add-on 共用同一個版號，所以隨同重建映像 `ghcr.io/woowtech/amd64-mcp-litellm:0.1.7`（候選 7cc8bcb，build／container／supply-chain gate 全過；本版的審查針對新增的 Nextcloud：R1 REQUEST CHANGES，修正後 R2、R3 APPROVE WITH NOTES，最後由交付線做差異檢查）；0.1.0–0.1.6 tag 不覆寫。
 - 已知問題：0.1.6 列出的已知問題（延到 0.1.7 的那幾項）本版都沒有處理（本版刻意不改既有六支產品的行為），延到 0.1.8。
 
@@ -75,11 +76,11 @@
 
 - 新增獨立 amd64 root-context 封裝、Supervisor 2026.09.3 安全子集 manifest。
 - runtime：FastMCP 3.4.5 / pinned public vendor；40 個來源工具中支援 7，33 個明列 withheld，
-  [工具對照](../../docs/tool-surface.md) 尚未完成功能平齊。
+  [工具對照](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-surface.md) 尚未完成功能平齊。
 - 8099 Ingress-only／8081 可選 LAN／3000 loopback；保護模式、init true；不設
   backend-dependent watchdog、不開 HA/Supervisor/Docker API 權限。
 - 共用 UI 已本地整合，exact grants/typed forms 已接 Core；本產品正式角色路徑仍封鎖；未建置 image、未做 HA E2E。
 - 資料 v3：完整 v1/v2 migration、新增空 exact grants；UI 保存完整 grants+global false，disabled 優先，其他產品不可匯入 n8n state。
 - 手動更新前做受控 cold backup（只中斷本 Add-on，含秘密）；rollback 必須使用相容
-  image+完整資料，不可盲目 downgrade。請見 [完整步驟](../../docs/operations/update-backup-rollback.md)。
+  image+完整資料，不可盲目 downgrade。請見 [完整步驟](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/update-backup-rollback.md)。
 - 授權／公開去密／映像／實際 backend／Ingress/client／備份還原驗收仍待批准。

@@ -90,7 +90,7 @@ def exact(value, expected, context):
 def manifest(value, product):
     require(product in PRODUCTS, 'unsupported product')
     require(isinstance(value.get('ports_description'), dict), 'ports_description mapping required')
-    expected = dict(name=f'WOOW {TITLES[product]} MCP (experimental)', version=VERSION,
+    expected = dict(name=f'Woow {TITLES[product]} MCP Server', version=VERSION,
         slug='woow_mcp_' + product.replace('-', '_'), description=value.get('description'),
         url=URL, arch=['amd64'], startup='application', boot='manual', init=True,
         stage='experimental', image=f'ghcr.io/woowtech/{{arch}}-mcp-{product}',

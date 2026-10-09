@@ -1,4 +1,4 @@
-name: WOOW Nextcloud MCP (experimental)
+name: Woow Nextcloud MCP Server
 # Shared add-on version (packaging/validate.py VERSION): every add-on carries the same value until the next release
 # bump. Nextcloud is first released with 0.1.7; no Nextcloud image exists for any earlier version.
 version: 0.1.7
