@@ -204,7 +204,7 @@
     {
       "path": "apps/runtime/session_idle.py",
       "sha256": "98eea032ee68d45eb0e7365ccc0305b5886d896d7ea4d640990c358948a36633",
-      "change": "0.1.8 (0.1.6 RC GATEWAY-3): install() wraps mcp.server.streamable_http_manager.StreamableHTTPSessionManager.__init__ so every stateful manager the process builds gets session_idle_timeout=1800 (an explicit value and stateless managers are kept); FastMCP 3.4.5's subclass reaches it through super().__init__. Refuses to start when the pinned SDK has no session_idle_timeout parameter or WOOW_MCP_SESSION_IDLE_SECONDS (tests only) is outside 1-86400. Call sites (each before its server builds the session manager): apps/odoo/launch.py, apps/hermes/launch.py, apps/opendesign/launch.py, and apps/runtime/run_child.py, which products.child_spec uses to start EMQX, LiteLLM and Nextcloud. The limit is applied by the SDK itself (run_server's idle_scope, and the deadline pushed forward when a request reaches an existing session), so that SDK file is a guarded source in all six venvs: an SDK upgrade fails tests/test_tool_inventory.py until it is re-reviewed (review 6a). No runtime digest check: the guard is test-time, like the ledger; tests/test_session_idle.py checks both SDK flavours, the fail-closed branches and six real children.",
+      "change": "0.1.8 (0.1.6 RC GATEWAY-3): install() wraps mcp.server.streamable_http_manager.StreamableHTTPSessionManager.__init__ so every stateful manager the process builds gets session_idle_timeout=1800 (an explicit value and stateless managers are kept); FastMCP 3.4.5's subclass reaches it through super().__init__. Refuses to start when the pinned SDK has no session_idle_timeout parameter or WOOW_MCP_SESSION_IDLE_SECONDS (tests only) is outside 1-86400. Call sites (each before its server builds the session manager): apps/odoo/launch.py, apps/hermes/launch.py, apps/opendesign/launch.py, and apps/runtime/run_child.py, which products.child_spec uses to start EMQX, LiteLLM and Nextcloud. The limit is applied by the SDK itself (run_server's idle_scope, and the deadline pushed forward when a request reaches an existing session), so that SDK file is a guarded source in all six venvs: an SDK upgrade fails tests/test_tool_inventory.py until it is re-reviewed (review 6a). No runtime digest check: the guard is test-time, like the ledger; tests/test_session_idle.py checks both SDK flavours, the fail-closed branches and six real children. An SDK upgrade must also re-review the gateway's PROTOCOL_VERSIONS (gateway.py entry, re-review L-2).",
       "guarded_sources": {
         "apps/odoo/.venv/lib/python3.13/site-packages/mcp/server/streamable_http_manager.py": "5fc265202379607164d7711b43dcee51cf087b98c60a4ed5555045a243f34458",
         "apps/hermes/.venv/lib/python3.13/site-packages/mcp/server/streamable_http_manager.py": "5fc265202379607164d7711b43dcee51cf087b98c60a4ed5555045a243f34458",
@@ -225,6 +225,20 @@
       "sha256": "cdcb47b778a98c2639276d6be93930c185923194ab51fee8098f4a5cbff12c4a",
       "change": "Fixed native SDK launcher (no legacy shared wrapper or UI): the vendored hermes_mcp_server FastMCP on 127.0.0.1:3000/mcp over streamable-http. 0.1.8: installs apps/runtime/session_idle.py before mcp.run builds its session manager (listed in review F-4; earlier versions had no ledger entry for this launcher).",
       "guarded_sources": {}
+    },
+    {
+      "path": "packages/mcp-admin-core/mcp_admin_core/gateway.py",
+      "sha256": "588f4adc68307af52c6682312c6006d2a1f6ff6a7aff5798cd7fd68bf9024b42",
+      "change": "The add-on gateway (WOOWTECH code, not upstream), listed from 0.1.8 for the child sources its initialize contract depends on (re-review L-2). PROTOCOL_VERSIONS, the protocolVersion values an initialize answer may carry (review 6b: 2024-11-05, 2025-03-26, 2025-06-18, 2025-11-25; anything else is 502 and the child's new session is ended), equals the pinned Python SDK's SUPPORTED_PROTOCOL_VERSIONS (mcp/shared/version.py in all six Python venvs; its LATEST_PROTOCOL_VERSION, the answer to any other request, is in the set) and covers n8n-mcp's own negotiation (dist/utils/protocol-version.js) except its 2024-06-25. Both sources are guarded: an MCP SDK or n8n-mcp upgrade fails tests/test_tool_inventory.py and must re-review PROTOCOL_VERSIONS (tests/test_initialize_identity.py pins the set to both). Other 0.1.8 gateway changes: GATEWAY-2 (400 for requests other than initialize without Mcp-Session-Id) and F6 (the initialize result is the gateway's own); see docs/operations/release-decision-0.1.8.md.",
+      "guarded_sources": {
+        "apps/odoo/.venv/lib/python3.13/site-packages/mcp/shared/version.py": "18ac0ce561c0c1dd839ababb4f2ac01c41968533bff54289254982efdd4970c9",
+        "apps/hermes/.venv/lib/python3.13/site-packages/mcp/shared/version.py": "18ac0ce561c0c1dd839ababb4f2ac01c41968533bff54289254982efdd4970c9",
+        "apps/opendesign/.venv/lib/python3.13/site-packages/mcp/shared/version.py": "18ac0ce561c0c1dd839ababb4f2ac01c41968533bff54289254982efdd4970c9",
+        "apps/emqx/.venv/lib/python3.13/site-packages/mcp/shared/version.py": "18ac0ce561c0c1dd839ababb4f2ac01c41968533bff54289254982efdd4970c9",
+        "apps/litellm/.venv/lib/python3.13/site-packages/mcp/shared/version.py": "18ac0ce561c0c1dd839ababb4f2ac01c41968533bff54289254982efdd4970c9",
+        "apps/nextcloud/.venv/lib/python3.13/site-packages/mcp/shared/version.py": "18ac0ce561c0c1dd839ababb4f2ac01c41968533bff54289254982efdd4970c9",
+        "apps/n8n/node_modules/n8n-mcp/dist/utils/protocol-version.js": "ec7a65657af6e7a35a3ce11497e2a8bf42babd4139481b8dc62179ffcacf8c63"
+      }
     }
   ]
 }

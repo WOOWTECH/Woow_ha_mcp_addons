@@ -10,6 +10,8 @@ import ast
 import asyncio
 import json
 from pathlib import Path
+import re
+import subprocess
 
 import httpx
 import pytest
@@ -93,6 +95,43 @@ async def test_a_lone_surrogate_in_child_instructions_never_matters(store):
 def test_the_reviewed_protocol_versions():
     # 0.1.8 (review 6b): the MCP revisions the pinned clients and children were reviewed with, not any date.
     assert PROTOCOL_VERSIONS == {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
+
+
+@pytest.mark.parametrize("product", ["odoo", "hermes", "opendesign", "emqx", "litellm", "nextcloud"])
+def test_the_reviewed_versions_are_each_python_childs_sdk_versions(product):
+    # 0.1.8 re-review L-2: an SDK upgrade that changes what a child negotiates must re-review PROTOCOL_VERSIONS.
+    done = subprocess.run([str(ROOT / "apps" / product / ".venv/bin/python"), "-c",
+                           "import json, mcp.shared.version as v, mcp.types as t; "
+                           "print(json.dumps([v.SUPPORTED_PROTOCOL_VERSIONS, t.LATEST_PROTOCOL_VERSION]))"],
+                          env={"PATH": "/usr/bin:/bin", "PYTHONDONTWRITEBYTECODE": "1"}, capture_output=True, text=True,
+                          timeout=120)
+    assert done.returncode == 0, done.stderr[-2000:]
+    supported, latest = json.loads(done.stdout.splitlines()[-1])
+    assert len(supported) == len(set(supported)) and set(supported) == PROTOCOL_VERSIONS
+    assert latest in PROTOCOL_VERSIONS  # what the SDK answers a client that asks for another version
+
+
+def n8n_protocol_versions():
+    """n8n-mcp's own initialize negotiation (dist/utils/protocol-version.js): its named versions and SUPPORTED_VERSIONS.
+    Anything this parser does not understand fails, so a changed file is reviewed rather than half-read."""
+    text = (ROOT / "apps/n8n/node_modules/n8n-mcp/dist/utils/protocol-version.js").read_text()
+    constants = dict(re.findall(r"^exports\.(\w+) = '([0-9]{4}-[0-9]{2}-[0-9]{2})';$", text, re.M))
+    body = re.findall(r"^exports\.SUPPORTED_VERSIONS = \[\n(.*?)\n\];$", text, re.M | re.S)
+    assert len(body) == 1, "SUPPORTED_VERSIONS not found once"
+    supported = []
+    for item in (line.strip().rstrip(",") for line in body[0].splitlines() if line.strip()):
+        name, literal = re.fullmatch(r"exports\.(\w+)", item), re.fullmatch(r"'([0-9]{4}-[0-9]{2}-[0-9]{2})'", item)
+        assert name and name.group(1) in constants or literal, item
+        supported.append(constants[name.group(1)] if name else literal.group(1))
+    return constants, supported
+
+
+def test_the_reviewed_versions_cover_n8n_mcp_except_2024_06_25():
+    # 0.1.8 re-review L-2: n8n-mcp echoes a requested version from its own list; only 2024-06-25 is outside the set.
+    constants, supported = n8n_protocol_versions()
+    assert set(supported) - PROTOCOL_VERSIONS == {"2024-06-25"}
+    assert constants["STANDARD_PROTOCOL_VERSION"] in PROTOCOL_VERSIONS  # its answer to any other request
+    assert constants["N8N_PROTOCOL_VERSION"] in PROTOCOL_VERSIONS  # its answer to n8n and langchain clients
 
 
 @pytest.mark.parametrize("version", sorted(PROTOCOL_VERSIONS))
