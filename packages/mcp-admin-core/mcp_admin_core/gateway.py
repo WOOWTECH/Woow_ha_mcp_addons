@@ -495,11 +495,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     async def end_session(child_token, session):
         """0.1.6 (R2 review): end a session the child opened for an initialize whose answer withholds its id (401,
         502, 503, a refused child status, a state error); otherwise it stays open until the child's idle reaping (n8n:
-        10 minutes, with 20 sessions shared by all clients) or, in the pinned Python SDK children (no idle timeout
-        set), until the child restarts. One DELETE with the gateway's own headers and none of the client's; best effort
-        and bounded: nothing of the child's reply is read or relayed (it is streamed and closed unread: a body may be
-        large or never end, and a reply left open would keep its pooled connection) and no Exception escapes, since the
-        client's answer is already decided and must not change."""
+        10 minutes, with 20 sessions shared by all clients; the pinned Python SDK children kept it until they restarted
+        until 0.1.7, and from 0.1.8 end it after 30 idle minutes, apps/runtime/session_idle.py). One DELETE with the
+        gateway's own headers and none of the client's; best effort and bounded: nothing of the child's reply is read or
+        relayed (it is streamed and closed unread: a body may be large or never end, and a reply left open would keep its
+        pooled connection) and no Exception escapes, since the client's answer is already decided and must not change."""
         try:
             async with asyncio.timeout(SESSION_END_SECONDS):
                 async with child.stream("DELETE", child_url, follow_redirects=False, headers={
@@ -653,7 +653,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         if method != "initialize" and "mcp-session-id" not in headers:
             # 0.1.8 (0.1.6 RC GATEWAY-2): every child is stateful, so anything but initialize needs the session it
             # opened (MCP: such a server SHOULD answer 400). Forwarded, the pinned Python SDK children opened a new
-            # session for it before refusing it, and kept it until they restarted (they reap no idle sessions).
+            # session for it before refusing it, and kept it until they restarted (until 0.1.7; from 0.1.8 idle sessions
+            # end after 30 minutes, GATEWAY-3).
             # The answer has the shape a refusing child's answer was relayed in (child_status_reply; a bare 400 for a
             # notification or DELETE), minus the child's new session id. n8n-mcp, which opens no session for these,
             # accepted a notification without one (202); it now gets 400 like every other request.

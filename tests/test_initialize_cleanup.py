@@ -3,7 +3,8 @@
 The child opens a session for an initialize and names it in Mcp-Session-Id. When the gateway answers that initialize
 without handing the id to the client (401, 502, 503, a refused child status, a state error, an unexpected failure),
 the session stayed open until the child's idle reaping (n8n: 10 minutes, 20 sessions shared by all clients) or, in the
-pinned Python SDK children (no idle timeout set), until the child restarted. The gateway now sends the child its own
+pinned Python SDK children, until the child restarted (until 0.1.7; from 0.1.8 idle sessions end after 30 minutes,
+apps/runtime/session_idle.py). The gateway now sends the child its own
 DELETE for that id: once, after the reply is closed (or its close ran out of budget), inside the request's slot,
 bounded by SESSION_END_SECONDS, its reply never read and always closed, never relayed, every error swallowed, the
 client's answer unchanged. Never on success, never for an unusable id (one the gateway would not forward), never

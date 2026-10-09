@@ -20,7 +20,8 @@
   （`dist/http-server-single-session.js:590–597`），現在這種通知改由 gateway 回 400。994c49c 的 commit 說明與 0.1.8 CHANGELOG 初稿寫成
   「n8n 本來就回 400」，以本段為準。
 - 原因：六個子程序都是有狀態的。mcp 1.28.1（FastMCP 3.4.5 沿用）的 session manager 對沒有 session 的非 initialize 請求，
-  會先建 transport、啟動 server task，再回 400 並帶上新 id；這些 session 沒有閒置回收（見 GATEWAY-3），會留到子程序重啟。
+  會先建 transport、啟動 server task，再回 400 並帶上新 id；到 0.1.7 為止這些 session 沒有閒置回收，會留到子程序重啟
+  （0.1.8 起閒置 30 分鐘結束，見 GATEWAY-3）。
   MCP Streamable HTTP 規範：要求 session 的 server 對沒帶 session id 的非 initialize 請求 SHOULD 回 400。
 - 測試：`tests/test_session_required.py`（15 項；撤回修正後 7 項失敗：ping／tools/list／tools/call／通知／DELETE／GET 與 50 次 ping
   都會轉給子程序）。既有 10 個測試檔的請求原本沒帶 session id，補上 `Mcp-Session-Id`（行為不變）；
