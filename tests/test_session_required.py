@@ -3,7 +3,8 @@
 Every child is stateful. Forwarded without a session id, a request made the pinned Python SDK children (mcp 1.28.1,
 FastMCP 3.4.5) open a new session before refusing it with 400, and they kept that session until they restarted: a
 monitoring script pinging once a minute left about 1,440 sessions a day. The gateway now answers such a request itself
-with the 400 a refusing child got relayed as, carrying no session id, and the child never sees it.
+with a 400 shaped like a refusing child's relayed answer, carrying no session id, and the child never sees it. n8n-mcp
+opened no session for these but accepted a notification without one (202); that notification now gets 400 as well.
 """
 import asyncio
 import json

@@ -2,8 +2,9 @@
 
 Only the child's protocolVersion (a date) reaches the client. serverInfo names the add-on and its version, not the
 child (n8n-mcp calls itself "n8n-documentation-mcp"), and the child's instructions are never relayed: Claude Code puts
-instructions into the model's system prompt, and the children's text describes their whole tool set, including the
-tools the gateway hides or refuses. A product may pass reviewed fixed text (Nextcloud: a copy of its own server's).
+instructions into the model's system prompt; EMQX's and LiteLLM's text describes their whole upstream tool set, including
+tools the gateway hides or refuses, and Odoo's is a generic line. A product may pass reviewed fixed text (Nextcloud: a
+copy of its own server's).
 """
 import ast
 import asyncio

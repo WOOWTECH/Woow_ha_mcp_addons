@@ -652,7 +652,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             # 0.1.8 (0.1.6 RC GATEWAY-2): every child is stateful, so anything but initialize needs the session it
             # opened (MCP: such a server SHOULD answer 400). Forwarded, the pinned Python SDK children opened a new
             # session for it before refusing it, and kept it until they restarted (they reap no idle sessions).
-            # The answer is the one a refusing child got relayed as (child_status_reply), minus its session id.
+            # The answer has the shape a refusing child's answer was relayed in (child_status_reply; a bare 400 for a
+            # notification or DELETE), minus the child's new session id. n8n-mcp, which opens no session for these,
+            # accepted a notification without one (202); it now gets 400 like every other request.
             if request.method == "DELETE" or request.method == "POST" and not (isinstance(message, dict)
                                                                                 and "id" in message):
                 return Response(status_code=400, headers={"Cache-Control": "no-store"})
@@ -747,8 +749,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         # 0.1.8 (0.1.6 R1 F6): the result is the gateway's own; only the child's protocolVersion (a date)
                         # remains. serverInfo names this add-on, not the child (n8n-mcp calls itself
                         # "n8n-documentation-mcp"), and the child's instructions are never relayed: Claude Code puts
-                        # instructions into the model's system prompt, and the children's text describes their whole tool
-                        # set, including the tools this gateway hides or refuses. The caller may pass reviewed fixed text.
+                        # instructions into the model's system prompt, and EMQX's and LiteLLM's describe their whole
+                        # upstream tool set, including tools this gateway hides or refuses (Odoo's is a generic line).
+                        # The caller may pass reviewed fixed text.
                         value["result"] = {"protocolVersion": value["result"]["protocolVersion"],
                                            "capabilities": {"tools": {}},
                                            "serverInfo": {"name": server_name, "version": VERSION},

@@ -15,7 +15,10 @@
 - 行為：除了 initialize，沒帶 `Mcp-Session-Id` 的 POST（請求或通知）、GET、DELETE 由 gateway 直接回 400，不轉給子程序。
   Bearer（401）、方法（405）、Origin（403）、query（400）、body（415／413／400）與 policy（403）的檢查都在它前面，順序不變。
 - 回覆：有 id 的請求與 GET 是 `child_status_reply` 的形狀（`{"jsonrpc":"2.0","id":<id 或 null>,"error":{"code":-32000,"message":"Bad Request"}}`），
-  通知與 DELETE 是沒有內容的 400，和以前子程序拒絕時 gateway 轉出的形狀相同，只是不帶子程序新開的 session id；都帶 `Cache-Control: no-store`。
+  通知與 DELETE 是沒有內容的 400，和以前 gateway 轉出子程序拒絕時的形狀相同，只是不帶子程序新開的 session id；都帶 `Cache-Control: no-store`。
+  n8n 例外（審查 F-3 更正）：n8n-mcp 2.91.0 對沒有 session 的請求、GET、DELETE 本來就回 400、不開 session，但對沒有 session 的通知回 202
+  （`dist/http-server-single-session.js:590–597`），現在這種通知改由 gateway 回 400。994c49c 的 commit 說明與 0.1.8 CHANGELOG 初稿寫成
+  「n8n 本來就回 400」，以本段為準。
 - 原因：六個子程序都是有狀態的。mcp 1.28.1（FastMCP 3.4.5 沿用）的 session manager 對沒有 session 的非 initialize 請求，
   會先建 transport、啟動 server task，再回 400 並帶上新 id；這些 session 沒有閒置回收（見 GATEWAY-3），會留到子程序重啟。
   MCP Streamable HTTP 規範：要求 session 的 server 對沒帶 session id 的非 initialize 請求 SHOULD 回 400。
@@ -32,11 +35,13 @@
 - 行為：initialize 成功時，result 只有 `protocolVersion`（子程序的值，仍須是日期格式）、`capabilities: {"tools": {}}`、
   `serverInfo: {"name": "woow-mcp-<產品>", "version": <add-on 版號>}`，以及（只有 Nextcloud）gateway 自己的 `instructions`。
   子程序的 serverInfo（含 title、icons、websiteUrl）、instructions、`_meta` 與其他欄位都不再轉送。JSON-RPC 錯誤回覆照舊。
-- 原因：Claude Code 會把 instructions 放進模型的 system prompt。目前會送 instructions 的子程序有 EMQX、LiteLLM 與 Nextcloud：
+- 原因：Claude Code 會把 instructions 放進模型的 system prompt。目前會送 instructions 的子程序有 Odoo、EMQX、LiteLLM 與 Nextcloud：
   EMQX 與 LiteLLM 的文字描述的是上游的全部工具（斷線、刪憑證、對話補全、發金鑰等），本 add-on 都隱藏或拒絕；
   Nextcloud 是 WOOWTECH 自己的 server，說明有用（先讀再寫、etag），所以改由 gateway 送一份審查過的副本
   （`products.INSTRUCTIONS`；`tests/test_initialize_identity.py` 會比對 vendored 原文，re-vendor 改了說明就失敗，要先審再改副本）。
-  n8n、Odoo、Hermes、OpenDesign 的子程序沒有送 instructions，只有 serverInfo 改變。
+  Odoo（審查 F-2 更正）送的是 odoo-mcp 1.1.0 通用的一句「MCP Server for interacting with Odoo ERP systems」（`server_core.py:100、130–135`），
+  不再轉送；啟用中的 `health_check` 工具結果仍帶 `server.instructions`（`tools_read.py:216`），是工具輸出、內容無害，維持不變。
+  n8n、Hermes、OpenDesign 的子程序沒有送 instructions，只有 serverInfo 改變。
 - 版號：新增 `mcp_admin_core.VERSION`（目前 0.1.7），`packaging/validate.py` 要求它等於發版的 VERSION，發版準備時一起改成 0.1.8。
 - 刻意不做：serverInfo 不加 title（只放規範必填的 name、version，避免任何 client 的嚴格 schema 出問題）。
 - 測試：`tests/test_initialize_identity.py`（新）；`test_initialize_reply.py`、`test_sse_sanitize.py`（BOM 測試改用 protocolVersion 區分；
