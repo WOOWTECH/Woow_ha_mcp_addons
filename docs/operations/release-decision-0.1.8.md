@@ -65,6 +65,15 @@
 - 對 e2e 的影響（只記錄）：e2e 窗口內同一個 session 最長閒置不會到 30 分鐘；若有案例刻意長時間保留 session，要留意 404。
 - `docs/tool-surface.json` 重新產生：只多了 `apps/runtime/session_idle.py`、`run_child.py` 兩個檔與三個 `launch.py` 的雜湊，工具本身沒有變。sha256 從 0.1.7 的 `fa924793…` 變成 `75db0eca…`；e2e 案例檔與 scenarios 的 `tool_surface_sha256`（R11）綁 0.1.8 時要改成發版當時的值。
 
+## 本機測試（2026-10-09，Claude 交付線 tests-018/）
+
+- 基準（d01c530）：pytest 1754 passed、1 failed；packaging unittest 147 OK（5 skipped）；validate PASS。
+- 三項修正後（77d594d）：pytest 1790 passed、1 failed；packaging unittest 147 OK（5 skipped）；validate PASS。
+- 兩次唯一的失敗都是 `tests/test_owned_executable.py::test_uid10001_nondumpable_self_and_own_child_proof`：它要求以 root 執行，
+  這個容器現在是 uid 1000（0.1.7 的 run2 是 root，1755 全過）。與本版修改無關。
+- 注意：F6 那個 commit（e792d5a）單獨看會讓 `test_tool_inventory.py::test_runtime_patch_ledger_and_guarded_wheel_sources` 失敗
+  （改了 products.py 卻沒更新 `docs/provenance/runtime-patches.json`），在 GATEWAY-3 的 commit（77d594d）一併修正。
+
 ## 待辦（0.1.8 範圍內）
 
 - F7 不在本版自行決定：負責人在 AI 實測 Stage 0 之後決定（f7-design.md）。
