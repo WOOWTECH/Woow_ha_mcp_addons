@@ -284,6 +284,8 @@ def validate(root=ROOT):
         require('EXPOSE 8081\n' in dockerfile and 'EXPOSE 3000' not in dockerfile and 'EXPOSE 8099' not in dockerfile, 'port scope')
         require('COPY apps/ ./apps/' not in dockerfile and 'COPY . .' not in dockerfile, 'broad app copy')
         require('io.hass.type="app"' in dockerfile and 'io.hass.arch="amd64"' in dockerfile, 'HA labels')
+        require(f'io.hass.name="{value["name"]}" io.hass.description="{value["description"]}"' in dockerfile,
+                'image name/description labels differ from the add-on manifest')
         require('uv sync --frozen --no-dev' in dockerfile, 'unlocked core')
         if product == 'n8n':
             require('npm ci --ignore-scripts --no-audit --no-fund' in dockerfile, 'unlocked/scripted npm')

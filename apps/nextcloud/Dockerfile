@@ -19,7 +19,7 @@ RUN uv sync --project apps/nextcloud --frozen --no-dev --python /usr/local/bin/p
 FROM python:3.13.16-slim-bookworm@sha256:f040863673aea2570c3ff6a5c3fb4c673a016cbc5375005ad145915922b6b78a AS runtime
 ARG BUILD_VERSION=0.1.7
 LABEL io.hass.type="app" io.hass.arch="amd64" io.hass.version="${BUILD_VERSION}" \
-      io.hass.name="WOOW Nextcloud MCP" io.hass.description="Experimental Nextcloud MCP; read-only by default" \
+      io.hass.name="Woow Nextcloud MCP Server" io.hass.description="Experimental; HA admin-role management; one Nextcloud account (files, calendars, tasks), read-only by default." \
       io.hass.url="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \
       org.opencontainers.image.source="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \
       org.opencontainers.image.version="${BUILD_VERSION}"
