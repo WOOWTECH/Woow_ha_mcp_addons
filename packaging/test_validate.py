@@ -219,6 +219,46 @@ class PackagingTests(unittest.TestCase):
             with self.subTest(cleared=cleared, evidence=evidence), self.assertRaises(v.Invalid):
                 v.clearance_shape(gates)
 
+    def test_initialize_version_is_the_release_version(self):
+        # 0.1.8 review F-5a: mcp_admin_core.VERSION (initialize serverInfo) is bound once, to the release version.
+        good = "VERSION = '%s'\n" % v.VERSION
+        v.runtime_version(good)
+        v.runtime_version((v.ROOT / 'packages/mcp-admin-core/mcp_admin_core/__init__.py').read_text())
+        for text in ("VERSION = '0.1.6'\n", '', "VERSION = None\n", "VERSION = VERSION_TEXT\n",
+                     "VERSION, OTHER = '%s', 1\n" % v.VERSION, good + "VERSION = '0.1.6'\n",
+                     good + "VERSION: str = '0.1.6'\n", good + "VERSION += '-dirty'\n",
+                     good + "from os import sep as VERSION\n", good + "def f():\n    VERSION = '0.1.6'\n"):
+            with self.subTest(text=text), self.assertRaisesRegex(v.Invalid, 'initialize serverInfo version'):
+                v.runtime_version(text)
+        # validate() runs this check on the real tree.
+        with patch.object(v, 'runtime_version', side_effect=v.Invalid('initialize serverInfo version')):
+            with self.assertRaisesRegex(v.Invalid, 'initialize serverInfo version'):
+                v.validate(v.ROOT)
+
+    def test_image_labels_are_exactly_the_manifest(self):
+        # 0.1.8 review F-5a, F-5d: one io.hass.name and one io.hass.description, equal to config.yaml; Docker keeps the
+        # last value of a repeated label, so a second one must fail even when the first is right.
+        for product in v.PRODUCTS:
+            v.image_labels((v.ROOT / 'apps' / product / 'Dockerfile').read_text(),
+                           v.load(v.ROOT / 'addons' / product / 'config.yaml'))
+        value = v.load(v.ROOT / 'addons/n8n/config.yaml')
+        dockerfile = (v.ROOT / 'apps/n8n/Dockerfile').read_text()
+        pair = f'io.hass.name="{value["name"]}" io.hass.description="{value["description"]}"'
+        self.assertEqual(dockerfile.count(pair), 1)
+        for mutated in (dockerfile.replace(pair, pair.replace(value['name'], 'WOOW n8n MCP')),
+                        dockerfile.replace(pair, pair.replace(value['description'], 'HA acceptance pending')),
+                        dockerfile.replace(pair, 'io.hass.description="%s" io.hass.name="%s"' % (value['description'], value['name'])),
+                        dockerfile.replace(pair, ''),
+                        dockerfile + 'LABEL io.hass.name="%s (other)"\n' % value['name'],
+                        dockerfile + 'LABEL io.hass.description="other"\n',
+                        dockerfile + 'LABEL "io.hass.name"="%s"\n' % value['name'],
+                        dockerfile + '# io.hass.name is set above\n'):
+            with self.subTest(mutated=mutated[-120:]), self.assertRaisesRegex(v.Invalid, 'labels differ from the add-on manifest'):
+                v.image_labels(mutated, value)
+        with patch.object(v, 'image_labels', side_effect=v.Invalid('image name/description labels differ from the add-on manifest')):
+            with self.assertRaisesRegex(v.Invalid, 'labels differ from the add-on manifest'):
+                v.validate(v.ROOT)
+
 
 if __name__ == '__main__':
     unittest.main()

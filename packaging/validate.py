@@ -6,6 +6,7 @@ Supervisor REMOVE_EXTRA is deliberately replaced with rejection. This is NOT a
 vendored/full Supervisor implementation; new fields require explicit review.
 """
 import argparse
+import ast
 import json
 from pathlib import Path
 import re
@@ -139,6 +140,31 @@ def source_paths(root):
     return subprocess.check_output(['git', '-C', str(root), 'ls-files', '--cached', '--others', '--exclude-standard', '-z']).decode().split('\0')[:-1]
 
 
+def runtime_version(text):
+    """0.1.8 (F6): mcp_admin_core.VERSION, the add-on version initialize reports, is bound exactly once, to the release
+    VERSION (an annotated, augmented or imported VERSION would rebind it)."""
+    bindings = []
+    for node in ast.walk(ast.parse(text)):
+        if isinstance(node, ast.Assign):
+            bindings += [node for target in node.targets for name in ast.walk(target)
+                         if isinstance(name, ast.Name) and name.id == 'VERSION']
+        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)) and isinstance(node.target, ast.Name) and node.target.id == 'VERSION':
+            bindings.append(node)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)) and any((a.asname or a.name) == 'VERSION' for a in node.names):
+            bindings.append(node)
+    require(len(bindings) == 1 and isinstance(bindings[0], ast.Assign) and len(bindings[0].targets) == 1
+            and isinstance(bindings[0].targets[0], ast.Name) and isinstance(bindings[0].value, ast.Constant)
+            and bindings[0].value.value == VERSION, 'initialize serverInfo version')
+
+
+def image_labels(dockerfile, value):
+    """0.1.8: exactly one io.hass.name and one io.hass.description in the Dockerfile, equal to the add-on manifest. Docker
+    keeps the last value of a repeated label, so a second LABEL (or any other mention) fails (review F-5d)."""
+    require(dockerfile.count('io.hass.name') == 1 and dockerfile.count('io.hass.description') == 1
+            and f'io.hass.name="{value["name"]}" io.hass.description="{value["description"]}"' in dockerfile,
+            'image name/description labels differ from the add-on manifest')
+
+
 def builder_workflow(value, workflow):
     """Strict builder recipe; runner labels/approval markers are not a sandbox."""
     require('env' not in value and 'defaults' not in value, 'no workflow environment/default injection')
@@ -247,8 +273,7 @@ def validate(root=ROOT):
     inputs = load(root / 'packaging/inputs.json')
     exact(inputs['products'], list(PRODUCTS), 'build allowlist')
     exact(inputs['version'], VERSION, 'build version')
-    runtime_version = re.search(r"^VERSION = '([^']+)'$", (root / 'packages/mcp-admin-core/mcp_admin_core/__init__.py').read_text(), re.M)
-    require(runtime_version is not None and runtime_version.group(1) == VERSION, 'initialize serverInfo version')  # 0.1.8 F6
+    runtime_version((root / 'packages/mcp-admin-core/mcp_admin_core/__init__.py').read_text())
     exact(inputs['supervisor'], {'version': '2026.09.3', 'commit': '64ea3be4322537fd5dcfbf620c4dc25490c1f56d'}, 'Supervisor schema pin')
     require(set(inputs['bases']) == {'python', 'node', 'uv'}, 'base allowlist')
     for image in inputs['bases'].values():
@@ -286,8 +311,7 @@ def validate(root=ROOT):
         require('EXPOSE 8081\n' in dockerfile and 'EXPOSE 3000' not in dockerfile and 'EXPOSE 8099' not in dockerfile, 'port scope')
         require('COPY apps/ ./apps/' not in dockerfile and 'COPY . .' not in dockerfile, 'broad app copy')
         require('io.hass.type="app"' in dockerfile and 'io.hass.arch="amd64"' in dockerfile, 'HA labels')
-        require(f'io.hass.name="{value["name"]}" io.hass.description="{value["description"]}"' in dockerfile,
-                'image name/description labels differ from the add-on manifest')
+        image_labels(dockerfile, value)
         require('uv sync --frozen --no-dev' in dockerfile, 'unlocked core')
         if product == 'n8n':
             require('npm ci --ignore-scripts --no-audit --no-fund' in dockerfile, 'unlocked/scripted npm')
