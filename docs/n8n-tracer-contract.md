@@ -96,6 +96,14 @@ unknown methods, invalid IDs/params/arguments and unknown/disabled/write-disallo
 tools fail before the upstream request. Notifications/initialized is the only
 accepted notification. See provenance for the narrow source-backed tool subset.
 
+0.1.8 (0.1.6 RC GATEWAY-2): every request other than initialize must carry `Mcp-Session-Id`. Without one the gateway
+answers 400 itself and the child never sees the request; this check comes after the Bearer (401), method (405), Origin
+(403), query and body (400, 413, 415) and policy (403) checks. A request with an id and a GET get the gateway's JSON-RPC
+error (`-32000`, `Bad Request`, the request's id or null) as `application/json`; a notification and a DELETE get a bare
+400; all carry `Cache-Control: no-store` and no session id. Until 0.1.7 such a request was forwarded: the pinned Python
+SDK children opened a session for it and kept it until they restarted, and n8n-mcp, which opens none, answered 400 to a
+request, GET or DELETE but 202 to a notification without a session (that notification now gets 400 as well).
+
 The gateway preserves the upstream status of 4xx/5xx replies, notifications and DELETE, except that a child
 401/403 (the child refusing the gateway's own token or Host, not a client credential problem) is 502, and
 interim (1xx) or redirect (3xx) child statuses are 502 for every request, DELETE and notification (0.1.4).
@@ -145,11 +153,20 @@ or `error`; an error keeps only `code` as an integer, `message` and `data`), so 
 members, whose names the pinned TS client would put into an error, never reach a client (unknown error members,
 which that client strips anyway, are dropped as well); a successful ping
 is always `{}` (the client parses it with a strict empty schema); other results are relayed as the child sent
-them (tool lists and capabilities filtered). A POST SSE stream relays only the reply to its own request and
+them (tool lists and capabilities filtered), except an initialize result (0.1.8, 0.1.6 R1 F6): the gateway builds it,
+keeping only the child's `protocolVersion` (below), with `capabilities: {"tools": {}}`, `serverInfo: {"name":
+"woow-mcp-<product>", "version": <add-on version>}` (n8n: `woow-mcp-n8n`) and `instructions` only where the gateway
+has reviewed fixed text (Nextcloud); the child's serverInfo, instructions and every other member are dropped (Claude
+Code puts instructions into the model's system prompt). A POST SSE stream relays only the reply to its own request and
 ends right after it; a GET stream relays no reply (MCP allows one only when resuming a stream, and no pinned
 child keeps an event store). An error code outside the 32-bit range or a non-string message makes the error
-malformed. An initialize result must be an object whose `protocolVersion` is a date (`YYYY-MM-DD`), else 502:
-the pinned TS client puts an unsupported version into its error message. An error whose code is not a JSON integer (integral floats
+malformed. An initialize result must be an object whose `protocolVersion` is one of the reviewed MCP revisions
+`2024-11-05`, `2025-03-26`, `2025-06-18` and `2025-11-25` (0.1.8; 0.1.5 to 0.1.7 accepted any date `YYYY-MM-DD`), else
+502, and the session the child opened is ended with the gateway's own DELETE (0.1.6 R2, below): the pinned TS client
+puts an unsupported version into its error message. The pinned Python SDK supports exactly these four (tests pin
+`mcp.shared.version.SUPPORTED_PROTOCOL_VERSIONS` of every Python child); n8n-mcp answers 2024-11-05 to n8n and
+langchain clients, echoes 2025-03-26, 2024-11-05 or 2024-06-25 when a client asks for one of them and otherwise answers
+2025-03-26, so only a client asking for 2024-06-25 gets 502. An error whose code is not a JSON integer (integral floats
 count, as for clients; a string such as `"-32042"` does not, though a Python client would
 coerce it) becomes `{"code": -32000, "message": "Invalid error from the MCP server"}`, and a URL
 elicitation error (`-32042`) becomes `{"code": -32000, "message": "URL elicitation is not
