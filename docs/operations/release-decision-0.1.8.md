@@ -1,8 +1,32 @@
-# 0.1.8 發佈紀錄（草稿，準備中）
+# 0.1.8 發佈紀錄（2026-10-11）
 
-> 本機分支 `local/claude-0.1.8`。下列各項已審查（見下方審查、複審與 RR-03 審查），尚未發佈。2026-10-11 負責人決定 RR-03 修正併進 0.1.8
-> 一起發；版號（config.yaml、`packaging/validate.py` 的 VERSION、`packaging/inputs.json`、Dockerfile 的 BUILD_VERSION、CI／release workflow）
-> 已在 release prep commit 改成 0.1.8。推上 GHCR、商店與測試 HA 都要負責人核准。
+**狀態：** 2026-10-11 發佈（experimental）。七支映像由 04ae485 建置、通過 gate，以測過的 image ID 推送 GHCR，並以匿名 registry_gate public 驗證；測試 HA 回歸（窗口 U-018）進行中。
+
+**依據：** 負責人 2026-10-11：RR-03 修正「併進 0.1.8 一起發」，發佈與 woowtech-ha 更新清單（P-018＋U-018）整份核准。版號（config.yaml、`packaging/validate.py` 的 VERSION、`packaging/inputs.json`、Dockerfile 的 BUILD_VERSION、CI／release workflow、gateway 的 serverInfo VERSION）在 release prep commit 04ae485 改成 0.1.8。
+
+## 已通過（映像來源 `04ae4855c47e0940446d8158c2a6976433a7439c`）
+
+- 審查：0.1.8 審查（3fcda09..eade3f3）與複審（eade3f3..4e8f245）APPROVE WITH NOTES；RR-03 審查（d8b6a28）沒有 High／Medium，notes 於 d0ce3e2 處理（各節見下方）。
+- 全套 `tests/`（映像來源 04ae485）：1831 passed、1 failed——唯一的失敗是 `test_owned_executable.py::test_uid10001_nondumpable_self_and_own_child_proof`，它要求以 root 執行（這個容器是 uid 1000），與本版無關；packaging unittest 149 OK（5 skipped）；validate PASS（七份 manifest）。
+- builder VM：候選 04ae485（rc-04ae485，2026-10-10 16:17–16:44Z）七支 P1–P5 全過：bundle 驗證、context closure、build、container/mock、supply-chain gate（source／history／image／evidence secrets、SBOM、CVE、license）。以測過的 image ID 推送（不重建）；推送後匿名 registry_gate public 七支 PASS。證據在 Claude 交付線 evidence-rc-04ae485/。
+
+| 產品 | 已測 image ID（推送的就是這個 ID，不重建） | GHCR manifest digest（匿名 registry_gate public） |
+|---|---|---|
+| odoo | `sha256:413d5e8389feb418c7c6522270aa044d2afff3e523d971305f55b86b89f732d8` | `sha256:a839d2930c8b950976ab15770bb6745677908f4706a621e1324b8045c21cf377` |
+| n8n | `sha256:191380f9724bf565c2ad82d73ca011cc1ed84d9db141a774a999373e677aad53` | `sha256:c166bff77e05c367ba82474ee94a331b95eb3359e1db63b80e97291252d57c5c` |
+| hermes | `sha256:5287db15e27aaf9652a0d4e4c362c2ed7d90e7b343f0451acf40940dfb543869` | `sha256:c6b669ed92b4750d86a19673be34b6a451145211ddc89c8edc19ad4557a382a7` |
+| opendesign | `sha256:3cb95d46e39ada91074da9d7ea69397585dc91dd24a4e485c3f5792dd47817b2` | `sha256:145de3291aedef8211ae1fccf828e3e1815ea7f6c1c018c0c9132e9f7aa9e58c` |
+| emqx | `sha256:6d6d693c99a4fd67b795e01cd82f4dfba4a62e6b941c966993abb7a9912fbfdf` | `sha256:485e93539a1ea6a06bafad4f44cfe3a3e6219a4077f0bf49fd103f657cf60c52` |
+| litellm | `sha256:635ade10350ac004f7b0abcd6fce0f8b6fbfa7c772df51047b2f85698b69f468` | `sha256:733fa791b17da078c7d7ae191ca12e0937048a6c62e3e5ca4cc815ccc933a294` |
+| nextcloud | `sha256:644614d721ac62ab26585fae47e1b2dc8de38f28316e306b8981f0b62bb7e11c` | `sha256:3a8ac60c83f15e551e9744eaf50f6d844823645571d7a6de9f778514e1ecc8b7` |
+
+商店分支：發佈後 `claude-delivery` fast-forward 到發佈文件 commit（緊接在 04ae485 之後，只改文件）；release tag v0.1.8 指向映像來源 04ae485。授權清單由 gate 的 SBOM 產生（`docs/licenses/<產品>-0.1.8.md`）。
+
+## 未驗
+
+- 測試 HA 回歸（窗口 U-018：七支 0.1.7→0.1.8、唯讀回歸含 RR-03 與 0.1.8 新行為），結果寫在 ha-test-0.1.8.md。
+- 沒有 aarch64、LAN client 與真實 MCP client 的實測。
+
 
 ## 內容
 
