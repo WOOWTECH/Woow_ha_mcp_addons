@@ -93,16 +93,24 @@
 - 問題：woowtech-ha 的 M2a 實測（2026-10-10，三次 run 都重現）ODOO-RR-03／RR-03b：`read_record` 只要 `fields: ["id"]` 時，
   不存在（或已刪除）的聯絡人也回 `success: true`、`result: {"id": n}`。原因在 Odoo：`read()` 只讀 `id` 時不查資料庫，任何 id 都照回；
   讀任何其他欄位時 Odoo 會讀那一列，不存在的記錄被略過，原本的 handler 就回「Record not found」。
-- 修正：`apps/runtime/odoo_read_exists.py` 包住原本（釘選、source-guard）的 read_record。只有原本的讀取成功、而且讀的欄位只有 `id`（或沒有）時，
+- 修正：`apps/runtime/odoo_read_exists.py` 包住原本（釘選、source-guard）的 read_record。只有原本的讀取成功、而且讀的欄位只有 `id`（可重複）時，
   才多做一次 `search_count [['id','=',id]]`（`active_test` 關閉，封存的記錄照樣算存在，和 `read()` 一致；用呼叫者自己的帳號與 record rule，
   被規則擋住的記錄也回 not found，和讀其他欄位時一樣）。0 筆回原本 handler 的「Record not found: <model> ID <id>」；
-  回傳值不是整數 0 或 1 時回 BACKEND_RESPONSE_INVALID；呼叫失敗照原本 handler 的做法回錯誤（transport 的固定代碼，例如 BACKEND_RPC_FAULT）。
-  讀其他欄位的行為不變，也不多打任何 RPC。`apps/odoo/launch.py` 在 B2 之後、單一 worker 包裝之前安裝；安裝前比對 tools_read、server_core 的雜湊。
-- 測試：`tests/test_odoo_read_exists.py`（新）：釘選的 Odoo 直譯器裡跑真的 handler（不存在、存在、封存、讀其他欄位不多查、
-  回傳值格式錯、Fault、record_id 不合法）；真的 Odoo 子程序經 gateway 對假 Odoo（`read` 只讀 id 時照回任何 id，和真的 Odoo 一樣）。
-  撤回驗證：拿掉 launch.py 的安裝，真子程序測試就回到 RR-03 的錯誤（success、沒有 search_count）。
+  回傳值不是整數 0 或 1 時回 BACKEND_RESPONSE_INVALID；呼叫失敗只回 transport 的固定代碼（例如 BACKEND_RPC_FAULT，經 `odoo_b2_scope.public_failure`），
+  其他一律 BACKEND_RESPONSE_INVALID，不帶例外文字。讀其他欄位的行為不變，也不多打任何 RPC。`apps/odoo/launch.py` 在 B2 之後、單一 worker
+  包裝之前安裝；安裝前比對 tools_read、server_core 的雜湊，並確認包的是原本的 `tools_read.read_record`（同步函式）。
+- 測試：`tests/test_odoo_read_exists.py`（新）：釘選的 Odoo 直譯器裡跑真的 handler（不存在、存在、`id` 重複、空欄位清單不多查、
+  讀其他欄位不多查、回傳值格式錯、三種失敗只回固定代碼、record_id 不合法）與安裝時的檢查；真的 Odoo 子程序經 gateway 對假 Odoo
+  （`read` 只讀 id 時照回任何 id，和真的 Odoo 一樣；封存的 id 5 只有 active_test 關閉時才數得到）：不存在、`id` 重複、`instance: default`、
+  存在與封存、讀其他欄位、Fault 不外流。撤回驗證：拿掉 launch.py 的安裝，真子程序測試就回到 RR-03 的錯誤（success、沒有 search_count）。
+- 已知限制（審查備註，不在本修正範圍）：只讀 id 時 Odoo 在 Python 判斷 record rule（filtered_domain），讀其他欄位時在 SQL 判斷；
+  兩者結果不同的少見規則下，只讀 id 仍可能回 not found 而讀其他欄位可讀（反過來的情況現在一致）。
 - ledger：`docs/provenance/runtime-patches.json` 新增 `apps/runtime/odoo_read_exists.py`，更新 `apps/odoo/launch.py`；
-  `docs/tool-surface.json` 只多了這個檔的雜湊、launch.py 的新雜湊與 read_record 的測試清單（工具本身沒變）。
+  `docs/tool-surface.json` 只多了這個檔的雜湊、launch.py 的新雜湊與 read_record 的測試清單（工具本身沒變）：sha256 由 `75db0eca…`
+  變成 `1e70adce…`（e2e 綁 0.1.8 時的 `tool_surface_sha256` 以發版當時的值為準）。
+- 審查（2026-10-10，d8b6a28）：沒有 High／Medium。Low：失敗改只回固定代碼、補 `id` 重複與 `instance: default` 測試；
+  Note：封存的說法、tool-surface 雜湊、空欄位清單不算只讀 id、安裝時確認是原本的 handler，都已處理；Python／SQL 規則差異記為已知限制。
+- 本機測試：d8b6a28 完整 pytest 1831 passed、1 failed（只有既有的 root 測試 `test_uid10001_nondumpable_self_and_own_child_proof`）。
 - 對 e2e 的影響：0.1.8 在 woowtech-ha 實測時，ODOO-RR-03／RR-03b 應該通過。
 
 ## 本機測試（2026-10-09，Claude 交付線 tests-018/）

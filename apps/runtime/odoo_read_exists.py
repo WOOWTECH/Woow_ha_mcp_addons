@@ -6,11 +6,14 @@ record included, and the pinned read_record (odoo_mcp.tools_read, source-guarded
 missing record out, which the handler reports as not found; so only after a successful read of no field but 'id' this
 asks Odoo whether the record exists: search_count on its id with active_test off (read() does not hide archived
 records), with the caller's own credential and record rules (a record they hide is not found, as a read of any other
-field reports it). A missing record gets the handler's own not-found answer; a failed or malformed count fails the call.
+field reports it). A missing record gets the handler's own not-found answer; a failed or malformed count fails the call
+with one of the transport's fixed codes only (odoo_b2_scope.public_failure), never exception text.
 """
 import functools
 import hashlib
 from pathlib import Path
+
+from odoo_b2_scope import public_failure
 
 ID_ONLY = frozenset({'id'})
 # The pinned sources this depends on: the handler it wraps and the client resolution it repeats.
@@ -21,11 +24,11 @@ SOURCES = {
 
 
 def needs_check(report):
-    """True for a successful native read whose fields were only 'id' (or none)."""
+    """True for a successful native read whose fields were only 'id' (once or more)."""
     if type(report) is not dict or report.get('success') is not True:
         return False
     used = report.get('fields_used')
-    return type(used) is list and set(used) <= ID_ONLY
+    return type(used) is list and bool(used) and set(used) <= ID_ONLY
 
 
 def checked(original):
@@ -40,8 +43,9 @@ def checked(original):
             _, odoo = _resolve_odoo(kwargs['ctx'], kwargs.get('instance'))
             count = odoo.execute_method(model, 'search_count', [['id', '=', record_id]],
                                         context={'active_test': False})
-        except Exception as e:  # as the native handler reports a failed call (the transport's fixed codes)
-            return {'success': False, 'error': str(e)}
+        except Exception as e:  # a fixed transport code (e.g. BACKEND_RPC_FAULT), never the exception text
+            failure = {'success': False, 'error': str(e)}
+            return {'success': False, 'error': public_failure(failure) or 'BACKEND_RESPONSE_INVALID'}
         if type(count) is not int or count not in (0, 1):
             return {'success': False, 'error': 'BACKEND_RESPONSE_INVALID'}
         if count == 0:
@@ -61,7 +65,8 @@ def guard_sources():
 def install(mcp):
     """Wrap the registered read_record; before BoundedTools, which moves sync handlers to its worker."""
     guard_sources()
+    from odoo_mcp import tools_read
     tool = mcp._tool_manager.get_tool('read_record')
-    if tool is None or tool.is_async:
+    if tool is None or tool.is_async or tool.fn is not tools_read.read_record:
         raise RuntimeError('read_record requires source review')
     tool.fn = checked(tool.fn)

@@ -35,7 +35,7 @@ class Client:
         self.count, self.fail, self.calls = count, fail, []
     def read_records(self, model, ids, fields=None):
         self.calls.append(['read', model, ids, fields])
-        if fields == ['id']:
+        if fields and set(fields) == {'id'}:
             return [{'id': i} for i in ids]   # Odoo fetches nothing for 'id' only
         return [{'id': i, 'name': 'Owned'} for i in ids] if self.count == 1 else []
     def execute_method(self, model, method, *args, **kwargs):
@@ -53,14 +53,17 @@ out = {}
 for name, count, args in (('missing', 0, {'record_id': 2147483647}), ('present', 1, {'record_id': 1}),
                           ('named', 1, {'record_id': 1, 'fields': ['id', 'name']}),
                           ('named_missing', 0, {'record_id': 7, 'fields': ['name']}),
+                          ('twice', 0, {'record_id': 8, 'fields': ['id', 'id']}),
+                          ('empty', 1, {'record_id': 1, 'fields': []}),
                           ('invalid_id', 0, {'record_id': 0})):
     client = Client(count)
     out[name] = [run(client, **args), client.calls]
 for bad in (True, 2, '1', None, -1):
     client = Client(bad)
     out['bad %r' % (bad,)] = [run(client, record_id=1), len(client.calls)]
-client = Client(fail='BACKEND_RPC_FAULT')
-out['fault'] = [run(client, record_id=1), len(client.calls)]
+for fail in ('BACKEND_RPC_FAULT', 'BACKEND_HTTP_ERROR status=502', 'raw backend text'):
+    client = Client(fail=fail)
+    out['fail ' + fail] = [run(client, record_id=1), len(client.calls)]
 print(json.dumps(out))
 '''))
     count = ['execute', 'res.partner', 'search_count', [[['id', '=', MISSING]]], {'context': {'active_test': False}}]
@@ -73,11 +76,19 @@ print(json.dumps(out))
     assert [c[0] for c in calls] == ['read']
     assert out['named_missing'] == [{'success': False, 'error': 'Record not found: res.partner ID 7'},
                                     [['read', 'res.partner', [7], ['name']]]]
+    report, calls = out['twice']   # a repeated 'id' is still an id-only read
+    assert report == {'success': False, 'error': 'Record not found: res.partner ID 8'}
+    assert [c[0] for c in calls] == ['read', 'execute']
+    report, calls = out['empty']   # no field list entry: Odoo reads every field and drops a missing record itself
+    assert report['success'] is True and [c[0] for c in calls] == ['read']
     report, calls = out['invalid_id']   # the native refusal, before any RPC
     assert report['success'] is False and calls == []
     for bad in (True, 2, '1', None, -1):
         assert out['bad %r' % (bad,)] == [{'success': False, 'error': 'BACKEND_RESPONSE_INVALID'}, 2]
-    assert out['fault'] == [{'success': False, 'error': 'BACKEND_RPC_FAULT'}, 2]
+    # a failed count: only a fixed transport code is reported, never exception text
+    assert out['fail BACKEND_RPC_FAULT'] == [{'success': False, 'error': 'BACKEND_RPC_FAULT'}, 2]
+    assert out['fail BACKEND_HTTP_ERROR status=502'] == [{'success': False, 'error': 'BACKEND_HTTP_ERROR status=502'}, 2]
+    assert out['fail raw backend text'] == [{'success': False, 'error': 'BACKEND_RESPONSE_INVALID'}, 2]
 
 
 def test_install_wraps_the_registered_sync_handler_only():
@@ -89,7 +100,7 @@ tool = server.mcp._tool_manager.get_tool('read_record')
 assert tool.fn is tools_read.read_record and tool.is_async is False
 r.install(server.mcp)
 assert tool.fn is not tools_read.read_record and tool.fn.__wrapped__ is tools_read.read_record
-for found in (None, NS(is_async=True, fn=None)):
+for found in (None, NS(is_async=True, fn=tools_read.read_record), NS(is_async=False, fn=lambda **kw: None)):
     try:
         r.install(NS(_tool_manager=NS(get_tool=lambda name, found=found: found)))
     except RuntimeError:
@@ -109,7 +120,8 @@ for module in r.SOURCES:   # a source that differs from the reviewed one stops t
 ''')
 
 
-PRESENT = {1, 5}   # 5 is archived: read() returns it, search_count finds it only with active_test off
+ACTIVE, ARCHIVED = {1}, {5}   # read() returns both; search_count finds 5 only with active_test off
+PRESENT = ACTIVE | ARCHIVED
 
 
 @contextmanager
@@ -134,8 +146,8 @@ def fake_odoo():
                     assert model == 'res.partner'
                     if op == 'read':
                         (ids,) = args
-                        if kw.get('fields') == ['id']:
-                            value = [{'id': i} for i in ids]
+                        if kw.get('fields') and set(kw['fields']) == {'id'}:
+                            value = [{'id': i} for i in ids]   # Odoo fetches nothing for 'id' only
                         else:
                             value = [{'id': i, 'name': 'Owned'} for i in ids if i in PRESENT]
                     else:
@@ -144,7 +156,8 @@ def fake_odoo():
                             raise xmlrpc.client.Fault(1, 'raw backend fault text')
                         ((field, operator, record_id),) = args[0]
                         assert (field, operator) == ('id', '=')
-                        value = 1 if record_id in PRESENT else 0
+                        visible = PRESENT if kw['context'].get('active_test') is False else ACTIVE
+                        value = 1 if record_id in visible else 0
                 data = xmlrpc.client.dumps((value,), methodresponse=True, allow_none=True).encode()
             except xmlrpc.client.Fault as exc:
                 data = xmlrpc.client.dumps(exc).encode()
@@ -178,14 +191,16 @@ async def test_genuine_child_reports_a_missing_id_only_read_as_not_found(tmp_pat
                                'Accept': 'application/json, text/event-stream'}
                     await initialize(client, headers)
 
-                    async def read(record_id, fields):
+                    async def read(record_id, fields, **extra):
                         before = len(events)
                         reply = await rpc(client, '/mcp', headers, call(
-                            'read_record', {'model': 'res.partner', 'record_id': record_id, 'fields': fields}))
+                            'read_record', {'model': 'res.partner', 'record_id': record_id, 'fields': fields, **extra}))
                         assert reply.get('isError') is not True, reply
                         return json.loads(reply['content'][0]['text']), [e[0] for e in events[before:]]
 
                     assert await read(MISSING, ['id']) == (NOT_FOUND, ['read', 'search_count'])
+                    assert await read(MISSING, ['id', 'id']) == (NOT_FOUND, ['read', 'search_count'])
+                    assert await read(MISSING, ['id'], instance='default') == (NOT_FOUND, ['read', 'search_count'])
                     for present in sorted(PRESENT):
                         value, ops = await read(present, ['id'])
                         assert value['success'] is True and value['result'] == {'id': present}, value
