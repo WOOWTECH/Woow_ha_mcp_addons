@@ -1,7 +1,8 @@
-# 0.1.8 發佈紀錄（草稿，開發中）
+# 0.1.8 發佈紀錄（草稿，準備中）
 
-> 本機分支 `local/claude-0.1.8`，尚未建置、審查或發佈。下列每一項都改到 gateway 或子程序的行為，留給 0.1.8 RC 審查。
-> 版號（config.yaml、`packaging/validate.py` 的 VERSION、Dockerfile 的 BUILD_VERSION）在發版準備時才改成 0.1.8。
+> 本機分支 `local/claude-0.1.8`。下列各項已審查（見下方審查、複審與 RR-03 審查），尚未發佈。2026-10-11 負責人決定 RR-03 修正併進 0.1.8
+> 一起發；版號（config.yaml、`packaging/validate.py` 的 VERSION、`packaging/inputs.json`、Dockerfile 的 BUILD_VERSION、CI／release workflow）
+> 已在 release prep commit 改成 0.1.8。推上 GHCR、商店與測試 HA 都要負責人核准。
 
 ## 內容
 

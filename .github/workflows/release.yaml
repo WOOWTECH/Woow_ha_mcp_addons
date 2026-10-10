@@ -101,8 +101,8 @@ jobs:
           platforms: linux/amd64
           push: false
           load: true
-          tags: local/mcp-${{ inputs.app }}:0.1.7
-          build-args: BUILD_VERSION=0.1.7
+          tags: local/mcp-${{ inputs.app }}:0.1.8
+          build-args: BUILD_VERSION=0.1.8
           labels: org.opencontainers.image.revision=${{ github.sha }}
       - name: Pinned scanners (public checksum-verified binaries)
         run: python packaging/install_scanners.py "$RUNNER_TEMP/scanners"
@@ -121,7 +121,7 @@ jobs:
         run: |
           set -eu
           python packaging/supply_chain.py verify "$APP" "$RUNNER_TEMP/candidate"
-          IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:0.1.7"
+          IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:0.1.8"
           TESTED_ID="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate/subject.json")"
           docker tag "$TESTED_ID" "$IMAGE"
           test "$(docker image inspect "$IMAGE" --format '{{.Id}}')" = "$TESTED_ID"
@@ -130,7 +130,7 @@ jobs:
         run: python packaging/registry_gate.py public "$APP" "$RUNNER_TEMP/candidate"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: published-evidence-${{ inputs.app }}-0.1.7-${{ github.sha }}
+          name: published-evidence-${{ inputs.app }}-0.1.8-${{ github.sha }}
           path: |
             ${{ runner.temp }}/candidate/subject.json
             ${{ runner.temp }}/candidate/sbom.syft.json

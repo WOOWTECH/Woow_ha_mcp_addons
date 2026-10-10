@@ -17,7 +17,7 @@ RUN uv sync --frozen --no-dev --python /usr/local/bin/python
 COPY apps/odoo/pyproject.toml apps/odoo/uv.lock ./apps/odoo/
 RUN uv sync --project apps/odoo --frozen --no-dev --python /usr/local/bin/python
 FROM python:3.13.16-slim-bookworm@sha256:f040863673aea2570c3ff6a5c3fb4c673a016cbc5375005ad145915922b6b78a AS runtime
-ARG BUILD_VERSION=0.1.7
+ARG BUILD_VERSION=0.1.8
 LABEL io.hass.type="app" io.hass.arch="amd64" io.hass.version="${BUILD_VERSION}" \
       io.hass.name="Woow Odoo MCP Server" io.hass.description="Experimental; HA admin-role management; partial tools, read-only by default." \
       io.hass.url="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \

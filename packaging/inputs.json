@@ -12,7 +12,7 @@
     "litellm",
     "nextcloud"
   ],
-  "version": "0.1.7",
+  "version": "0.1.8",
   "bases": {
     "python": "python:3.13.16-slim-bookworm@sha256:f040863673aea2570c3ff6a5c3fb4c673a016cbc5375005ad145915922b6b78a",
     "node": "node:22.23.2-bookworm-slim@sha256:43aeff40f4afc22e83f7589a2f37e111cff5ca84529571f1c8415bcc5fcc21b2",
