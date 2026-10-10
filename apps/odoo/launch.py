@@ -47,6 +47,8 @@ if __name__ == '__main__':
     aggregate.fn = bounded_counts
     from odoo_b2_scope import install as install_b2
     install_b2(mcp)
+    from odoo_read_exists import install as install_read_exists
+    install_read_exists(mcp)  # 0.1.8 (RR-03): a missing record read by 'id' only is not found
     from bounded_tools import OwnedWorkers
     from odoo_mcp.odoo_client import get_odoo_client
     # HealthMonitor's private probe: not in TOOLS, so the gateway neither lists nor authorizes it. It only

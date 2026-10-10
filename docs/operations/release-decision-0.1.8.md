@@ -88,6 +88,23 @@
 - 文件（審查 F-1）：Odoo、Hermes、OpenDesign、EMQX、LiteLLM 的 DOCS.md 與 `docs/operations/clients.md` 改寫，Nextcloud 的 DOCS.md 新增 Session 一點：閒置 30 分鐘的 session 由子程序結束，之後用它的請求回 404，client 要重新 initialize；initialize 以外沒帶 `Mcp-Session-Id` 的請求一律回 400、不開 session。n8n 的 session 行為不變（共用 20 個、閒置 10 分鐘回收），DOCS 只補上 400（沒有 session 的通知以前回 202）。
 - `docs/tool-surface.json` 重新產生：只多了 `apps/runtime/session_idle.py`、`run_child.py` 兩個檔與三個 `launch.py` 的雜湊，工具本身沒有變。sha256 從 0.1.7 的 `fa924793…` 變成 `75db0eca…`；e2e 案例檔與 scenarios 的 `tool_surface_sha256`（R11）綁 0.1.8 時要改成發版當時的值。
 
+### Odoo read_record：只讀 id 時查不存在的記錄回 not found（RR-03，woowtech-ha M2a）
+
+- 問題：woowtech-ha 的 M2a 實測（2026-10-10，三次 run 都重現）ODOO-RR-03／RR-03b：`read_record` 只要 `fields: ["id"]` 時，
+  不存在（或已刪除）的聯絡人也回 `success: true`、`result: {"id": n}`。原因在 Odoo：`read()` 只讀 `id` 時不查資料庫，任何 id 都照回；
+  讀任何其他欄位時 Odoo 會讀那一列，不存在的記錄被略過，原本的 handler 就回「Record not found」。
+- 修正：`apps/runtime/odoo_read_exists.py` 包住原本（釘選、source-guard）的 read_record。只有原本的讀取成功、而且讀的欄位只有 `id`（或沒有）時，
+  才多做一次 `search_count [['id','=',id]]`（`active_test` 關閉，封存的記錄照樣算存在，和 `read()` 一致；用呼叫者自己的帳號與 record rule，
+  被規則擋住的記錄也回 not found，和讀其他欄位時一樣）。0 筆回原本 handler 的「Record not found: <model> ID <id>」；
+  回傳值不是整數 0 或 1 時回 BACKEND_RESPONSE_INVALID；呼叫失敗照原本 handler 的做法回錯誤（transport 的固定代碼，例如 BACKEND_RPC_FAULT）。
+  讀其他欄位的行為不變，也不多打任何 RPC。`apps/odoo/launch.py` 在 B2 之後、單一 worker 包裝之前安裝；安裝前比對 tools_read、server_core 的雜湊。
+- 測試：`tests/test_odoo_read_exists.py`（新）：釘選的 Odoo 直譯器裡跑真的 handler（不存在、存在、封存、讀其他欄位不多查、
+  回傳值格式錯、Fault、record_id 不合法）；真的 Odoo 子程序經 gateway 對假 Odoo（`read` 只讀 id 時照回任何 id，和真的 Odoo 一樣）。
+  撤回驗證：拿掉 launch.py 的安裝，真子程序測試就回到 RR-03 的錯誤（success、沒有 search_count）。
+- ledger：`docs/provenance/runtime-patches.json` 新增 `apps/runtime/odoo_read_exists.py`，更新 `apps/odoo/launch.py`；
+  `docs/tool-surface.json` 只多了這個檔的雜湊、launch.py 的新雜湊與 read_record 的測試清單（工具本身沒變）。
+- 對 e2e 的影響：0.1.8 在 woowtech-ha 實測時，ODOO-RR-03／RR-03b 應該通過。
+
 ## 本機測試（2026-10-09，Claude 交付線 tests-018/）
 
 - 基準（d01c530）：pytest 1754 passed、1 failed；packaging unittest 147 OK（5 skipped）；validate PASS。
