@@ -1,8 +1,8 @@
 # WOOW HA MCP Add-ons（實驗版，已公開發佈）
 
-七個獨立產品：Odoo、n8n、Hermes、OpenDesign、EMQX、LiteLLM、Nextcloud。目前版本 **0.1.8**（2026-10-11 發佈；映像
-`ghcr.io/woowtech/amd64-mcp-<product>:0.1.8`，來源 `04ae485`；[發佈紀錄](docs/operations/release-decision-0.1.8.md)）。
-0.1.8：沒帶 session 的請求由 gateway 回 400、initialize 回覆由 gateway 組成（只接受審查過的 MCP 版本）、Python 子程序結束閒置 30 分鐘的 session、
+七個獨立產品：Odoo、n8n、Hermes、OpenDesign、EMQX、LiteLLM、Nextcloud。目前版本 **0.1.9**（2026-10-11 發佈；映像
+`ghcr.io/woowtech/amd64-mcp-<product>:0.1.9`，來源 `57c96f2`；[發佈紀錄](docs/operations/release-decision-0.1.9.md)）。
+0.1.9：管理面板支援 Core 2026.10.1。0.1.8：沒帶 session 的請求由 gateway 回 400、initialize 回覆由 gateway 組成（只接受審查過的 MCP 版本）、Python 子程序結束閒置 30 分鐘的 session、
 Odoo `read_record` 只讀 id 時不存在的記錄回 not found。0.1.7 起有第七個 **Nextcloud**（見 [addons/nextcloud](addons/nextcloud/DOCS.md)）。
 
 **Odoo Manage 已於 2026-10-06 下架封存**：0.1.4 是最後一版，0.1.5 起不在商店，也不再建置或發佈。已安裝的仍以 0.1.4 執行，但不會再有更新或安全修正；它的設定保有 Odoo API key，並有 `homeassistant_api` 權限，建議改用 Woow Odoo MCP Server 後移除。Woow Odoo MCP Server 是不同的 MCP server（工具與設定不同，要另設後端、endpoint 與 token）。已發佈的 0.1.0–0.1.4 映像保留，舊備份仍可還原。步驟見[更新、備份與回復](docs/operations/update-backup-rollback.md)；原始碼保留在 `apps/odoo-manage`。
@@ -30,7 +30,7 @@ Kubernetes MCP 與 Vibe Kanban 不在範圍。
 - [手動更新、備份、migration、回復](docs/operations/update-backup-rollback.md)
 - [故障驗收與證據格式](docs/operations/acceptance.md)
 - [建置、CI、發佈關卡](docs/operations/release.md)
-- [0.1.8 發佈紀錄](docs/operations/release-decision-0.1.8.md)、[0.1.8 HA 回歸](docs/operations/ha-test-0.1.8.md)；[0.1.7 發佈紀錄](docs/operations/release-decision-0.1.7.md)、[0.1.7 HA 回歸](docs/operations/ha-test-0.1.7.md)；[0.1.6 發佈紀錄](docs/operations/release-decision-0.1.6.md)、[0.1.6 HA 回歸](docs/operations/ha-test-0.1.6.md)（之前各版在同目錄）
+- [0.1.9 發佈紀錄](docs/operations/release-decision-0.1.9.md)（測試 HA 回歸進行中）；[0.1.8 發佈紀錄](docs/operations/release-decision-0.1.8.md)、[0.1.8 HA 回歸](docs/operations/ha-test-0.1.8.md)；[0.1.7 發佈紀錄](docs/operations/release-decision-0.1.7.md)、[0.1.7 HA 回歸](docs/operations/ha-test-0.1.7.md)；[0.1.6 發佈紀錄](docs/operations/release-decision-0.1.6.md)、[0.1.6 HA 回歸](docs/operations/ha-test-0.1.6.md)（之前各版在同目錄）
 - [授權範圍與第三方通知](THIRD_PARTY_NOTICES.md)
 
 各產品 `addons/<product>/DOCS.md`、`CHANGELOG.md`、`translations/zh-Hant.yaml`
@@ -64,8 +64,8 @@ uv pip install --python "$PACKAGING_ENV/bin/python" --require-hashes --only-bina
 "$PACKAGING_ENV/bin/python" -m unittest discover -s packaging -p 'test_*.py' -v
 # 有 Docker 的隔離 runner 才執行；root context 最後的點不可省略
 # 這不是已執行的成功紀錄：
-docker build --platform linux/amd64 -f apps/n8n/Dockerfile -t local/mcp-n8n:0.1.8 .
-"$PACKAGING_ENV/bin/python" packaging/container_acceptance.py n8n local/mcp-n8n:0.1.8
+docker build --platform linux/amd64 -f apps/n8n/Dockerfile -t local/mcp-n8n:0.1.9 .
+"$PACKAGING_ENV/bin/python" packaging/container_acceptance.py n8n local/mcp-n8n:0.1.9
 ```
 
 PR/main CI 沒有發佈權限；固定商店產品 matrix（與 `packaging/inputs.json` 相同）`push: false`。HA 無法以 Add-on
