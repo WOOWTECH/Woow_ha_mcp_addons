@@ -1,6 +1,6 @@
 # 0.1.9 發佈紀錄（2026-10-11）
 
-**狀態：** 2026-10-11 發佈（experimental）。七支映像由 57c96f2 建置、通過 gate，以測過的 image ID 推送 GHCR，並以匿名 registry_gate public 驗證；測試 HA 回歸（窗口 U-019）進行中。
+**狀態：** 2026-10-11 發佈（experimental）。七支映像由 57c96f2 建置、通過 gate，以測過的 image ID 推送 GHCR，並以匿名 registry_gate public 驗證；2026-10-11 已在測試 HA 回歸（[ha-test-0.1.9](ha-test-0.1.9.md)，窗口 U-019；既有後端限制不變）。2026-10-11 獨立收斂審查 PASS，依主對話裁定完成原範圍驗收；依主對話 `U019-MAIN-DECISION.md`（2026-10-11）裁定，本輪 14/14 與診斷登入已撤銷、指定 e2e client=0、temporary users=0，窗口前根 client 登入 1 筆保留未更動；兩個 u018 probe 屬原 S5/S6 指定 runner 本輪暫存清理範圍，非事後補授權。原追加兩相關 client strict comparison exit=1 保留，不代表所有 HA client inventory；詳細依據見回歸文件。審查通過不等於推送或 HA 交還已成功，S7/S8 結果以實際回執為準；既有映像發佈不等於本次窗口已交還。
 
 **依據：** 負責人 2026-10-11「現在就發 0.1.9」，只為了支援 Core 2026.10.1；之後的 Core patch 維持逐版審查。發佈與 woowtech-ha 更新清單（P-019＋U-019）整份核准。
 
@@ -23,7 +23,6 @@
 
 ## 未驗
 
-- 測試 HA 回歸（窗口 U-019），結果寫在 ha-test-0.1.9.md。
 - Core 2026.10.1 上的管理面板沒有實機測（woowtech-ha 是 Core 2026.7.2），由單元測試與合約檔比對涵蓋。
 
 

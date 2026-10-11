@@ -30,7 +30,7 @@ Kubernetes MCP 與 Vibe Kanban 不在範圍。
 - [手動更新、備份、migration、回復](docs/operations/update-backup-rollback.md)
 - [故障驗收與證據格式](docs/operations/acceptance.md)
 - [建置、CI、發佈關卡](docs/operations/release.md)
-- [0.1.9 發佈紀錄](docs/operations/release-decision-0.1.9.md)（測試 HA 回歸進行中）；[0.1.8 發佈紀錄](docs/operations/release-decision-0.1.8.md)、[0.1.8 HA 回歸](docs/operations/ha-test-0.1.8.md)；[0.1.7 發佈紀錄](docs/operations/release-decision-0.1.7.md)、[0.1.7 HA 回歸](docs/operations/ha-test-0.1.7.md)；[0.1.6 發佈紀錄](docs/operations/release-decision-0.1.6.md)、[0.1.6 HA 回歸](docs/operations/ha-test-0.1.6.md)（之前各版在同目錄）
+- [0.1.9 發佈紀錄](docs/operations/release-decision-0.1.9.md)、[0.1.9 HA 回歸](docs/operations/ha-test-0.1.9.md)（2026-10-11 獨立收斂審查 PASS，依主對話裁定完成原範圍驗收；窗口前根 client 登入 1 筆保留未更動、兩個 u018 probe 屬原 S5/S6 指定 runner 本輪清理範圍，原追加兩 client strict comparison exit=1 保留；推送／HA 交還以 S7/S8 實際回執為準）；[0.1.8 發佈紀錄](docs/operations/release-decision-0.1.8.md)、[0.1.8 HA 回歸](docs/operations/ha-test-0.1.8.md)；[0.1.7 發佈紀錄](docs/operations/release-decision-0.1.7.md)、[0.1.7 HA 回歸](docs/operations/ha-test-0.1.7.md)；[0.1.6 發佈紀錄](docs/operations/release-decision-0.1.6.md)、[0.1.6 HA 回歸](docs/operations/ha-test-0.1.6.md)（之前各版在同目錄）
 - [授權範圍與第三方通知](THIRD_PARTY_NOTICES.md)
 
 各產品 `addons/<product>/DOCS.md`、`CHANGELOG.md`、`translations/zh-Hant.yaml`
