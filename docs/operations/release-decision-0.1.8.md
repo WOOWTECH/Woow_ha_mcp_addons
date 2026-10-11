@@ -1,6 +1,6 @@
 # 0.1.8 發佈紀錄（2026-10-11）
 
-**狀態：** 2026-10-11 發佈（experimental）。七支映像由 04ae485 建置、通過 gate，以測過的 image ID 推送 GHCR，並以匿名 registry_gate public 驗證；測試 HA 回歸（窗口 U-018）進行中。
+**狀態：** 2026-10-11 發佈（experimental）。七支映像由 04ae485 建置、通過 gate，以測過的 image ID 推送 GHCR，並以匿名 registry_gate public 驗證；2026-10-11 已在測試 HA 回歸（[ha-test-0.1.8](ha-test-0.1.8.md)，窗口 U-018）。
 
 **依據：** 負責人 2026-10-11：RR-03 修正「併進 0.1.8 一起發」，發佈與 woowtech-ha 更新清單（P-018＋U-018）整份核准。版號（config.yaml、`packaging/validate.py` 的 VERSION、`packaging/inputs.json`、Dockerfile 的 BUILD_VERSION、CI／release workflow、gateway 的 serverInfo VERSION）在 release prep commit 04ae485 改成 0.1.8。
 
@@ -24,7 +24,6 @@
 
 ## 未驗
 
-- 測試 HA 回歸（窗口 U-018：七支 0.1.7→0.1.8、唯讀回歸含 RR-03 與 0.1.8 新行為），結果寫在 ha-test-0.1.8.md。
 - 沒有 aarch64、LAN client 與真實 MCP client 的實測。
 
 
