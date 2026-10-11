@@ -124,7 +124,7 @@ async def test_failclosed_result_schema(monkeypatch, response):
     ("first", {"type": "auth_required", "ha_version": 2026}),
     ("first", {"type": "auth_required", "ha_version": "unreviewed-version"}),
     ("first", {"type": "auth_required", "ha_version": "2026.7.1"}),
-    ("first", {"type": "auth_required", "ha_version": "2026.10.1"}),
+    ("first", {"type": "auth_required", "ha_version": "2026.10.2"}),
     ("first", {"type": "auth_required", "ha_version": "2026.9.4 "}),
     ("first", {"type": "auth_required", "ha_version": ["2026.7.2"]}),
     ("first", {"type": "auth_required", "ha_version": {"v": "2026.7.2"}}),
@@ -156,7 +156,8 @@ def test_a_non_string_version_is_refused_explicitly(version):
 
 NEAR_MISSES = ["2026.9.5", "2026.8.4", "2026.7.5", "2026.7.0", "2026.09.4", "2026.9.04", "02026.9.4", "2026.9.0b9",
                "2026.10.0b2", "2026.9.4.dev0", "v2026.9.4", "", "2026.9", "2026.9.4.0",
-               "2026.10.1", "2026.10.0b4", "2026.10.0b7", "2026.10", "2026.10.0.0", "2026.10.00", "2026.11.0"]
+               "2026.10.2", "2026.10.1b1", "2026.10.0b4", "2026.10.0b7", "2026.10", "2026.10.0.0", "2026.10.00", "2026.10.01",
+               "2026.11.0"]
 
 
 @pytest.mark.parametrize("version", NEAR_MISSES)
@@ -184,7 +185,8 @@ async def test_an_extra_key_in_an_auth_frame_denies(monkeypatch, phase):
 def test_the_reviewed_versions_are_exactly_these():
     # A new Core release is added only after its contract files are reviewed; this list changes with that review.
     assert ha_role._HA_VERSIONS == {"2026.7.2", "2026.7.3", "2026.7.4", "2026.8.0", "2026.8.1", "2026.8.2", "2026.8.3",
-                                    "2026.9.0", "2026.9.1", "2026.9.2", "2026.9.3", "2026.9.4", "2026.10.0"}
+                                    "2026.9.0", "2026.9.1", "2026.9.2", "2026.9.3", "2026.9.4", "2026.10.0",
+                                    "2026.10.1"}
 
 
 async def test_fresh_connection_no_positive_cache_token_reloaded(monkeypatch):
