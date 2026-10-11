@@ -157,7 +157,7 @@ def test_a_non_string_version_is_refused_explicitly(version):
 NEAR_MISSES = ["2026.9.5", "2026.8.4", "2026.7.5", "2026.7.0", "2026.09.4", "2026.9.04", "02026.9.4", "2026.9.0b9",
                "2026.10.0b2", "2026.9.4.dev0", "v2026.9.4", "", "2026.9", "2026.9.4.0",
                "2026.10.2", "2026.10.1b1", "2026.10.0b4", "2026.10.0b7", "2026.10", "2026.10.0.0", "2026.10.00", "2026.10.01",
-               "2026.11.0"]
+               "2026.10.1.0", "2026.10.10", "2026.10.1 ", " 2026.10.1", "2026.11.0"]
 
 
 @pytest.mark.parametrize("version", NEAR_MISSES)
@@ -180,6 +180,15 @@ async def test_an_extra_key_in_an_auth_frame_denies(monkeypatch, phase):
     message = {"type": "auth_required" if phase == "first" else "auth_ok", "ha_version": "2026.7.2", "x": 1}
     async with owned_provider(monkeypatch, **{phase: message}) as (verify, _, __):
         assert await verify("human") is False
+
+
+def test_the_review_table_lists_exactly_the_accepted_versions():
+    # docs/ha-role-core-contract.md has one column per reviewed release (short form, e.g. `10.1` for 2026.10.1)
+    from pathlib import Path
+    doc = (Path(__file__).resolve().parents[1] / 'docs/ha-role-core-contract.md').read_text()
+    header = next(line for line in doc.splitlines() if line.startswith('| file (`homeassistant/`) |'))
+    columns = [cell.strip() for cell in header.strip('|').split('|')[1:]]
+    assert {'2026.' + column for column in columns} == ha_role._HA_VERSIONS
 
 
 def test_the_reviewed_versions_are_exactly_these():

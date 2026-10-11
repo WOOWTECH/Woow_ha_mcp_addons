@@ -7,7 +7,8 @@ administrator. This page records why it accepts the Core releases listed in `_HA
 
 - **Auth frames.** The add-on connects to `ws://supervisor/core/websocket`. Supervisor's WebSocket proxy
   (`supervisor/api/proxy.py`, reviewed at Supervisor 2026.09.3, git blob `fc11251d`; Supervisor 2026.10.0 ships the same
-  blob) terminates the add-on handshake:
+  blob; Supervisor 2026.10.1 ships blob `002174e5`, reviewed 2026-10-08: the `auth_required`/`auth_ok` frames are unchanged and
+  its new message filtering does not touch the add-on's `config/auth/list` request) terminates the add-on handshake:
   it sends `{"type": "auth_required", "ha_version": <version>}` and `{"type": "auth_ok", "ha_version": <version>}`,
   where the version is the Core version Supervisor has recorded (`sys_homeassistant.version`), and checks the add-on's
   `SUPERVISOR_TOKEN` itself. The verifier requires exactly these keys, a listed version, and the same version in both
@@ -61,7 +62,10 @@ Changes inside 2026.7.2–2026.9.4 and why they do not touch the consumed contra
 - `onboarding/views.py` @9.0, @9.3: the owner is still created in `system-admin`.
 
 Changes in 2026.10.1 (0.1.9): none. All 21 files have the same git blob as in 2026.10.0 (compared on the GitHub trees of
-both tags on 2026-10-11), so the consumed contract is unchanged and there is no hunk to read.
+both tags on 2026-10-11), and so do the adjacent `http/const.py`, `http/__init__.py`, `hassio/const.py` and `hassio/auth.py`;
+the consumed contract is unchanged and there is no hunk to read. The only auth-related change between the tags is in
+`components/auth/indieauth.py` and `login_flow.py` (an OAuth loopback redirect may change port when PKCE is used), which is
+not on the `config/auth/list` path the add-on uses.
 
 Changes in 2026.10.0 (13 files, every hunk read at 2026.10.0b4; the 2026.10.0 tag is identical to b4 for these 21 files
 and for the adjacent `http/const.py`, `http/__init__.py`, `hassio/const.py` and `hassio/auth.py`):
@@ -95,11 +99,11 @@ and for the adjacent `http/const.py`, `http/__init__.py`, `hassio/const.py` and 
 4. In the same change, update every other place that spells out the reviewed versions:
    - the comment above `_HA_VERSIONS` in `ha_role.py`;
    - `tests/test_ha_role.py`: add the version to `test_the_reviewed_versions_are_exactly_these` and remove it from
-     `NEAR_MISSES` (the list holds, for example, `2026.10.1`; the near-miss tests fail until it is removed), and
+     `NEAR_MISSES` (the list holds, for example, `2026.10.2`; the near-miss tests fail until it is removed), and
      replace it where it serves as the unreviewed example in `test_wrong_sequence_and_revoked_machine_capability`;
    - the version-list sentence in [n8n-ha-role.md](n8n-ha-role.md) ("Compatibility is deliberately restricted to …");
-   - the new release's section of all six `addons/*/CHANGELOG.md`, naming the added version;
-   - the supported-version note in the six `addons/*/DOCS.md`, `README.md` and `docs/operations/guide.md`.
+   - the new release's section of all seven `addons/*/CHANGELOG.md`, naming the added version;
+   - the supported-version note in the seven `addons/*/DOCS.md`, `README.md` and `docs/operations/guide.md`.
 5. Ship it in a new add-on release: an installed add-on accepts only the versions listed in its own image.
 
 Any version not listed, including pre-releases, later patch releases and differently formatted strings, is refused.
