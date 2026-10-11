@@ -1,6 +1,6 @@
 # Nextcloud Changelog
 
-## 0.1.9 — 開發中（未發佈）
+## 0.1.9 — 準備中（未發佈）
 
 - 管理面板（HA 角色驗證）：支援的 Core 版本加上 2026.10.1（2026-10-10 發佈）。驗證器用到的 21 個 Core 檔案與 2026.10.0 完全相同（[審查紀錄](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/ha-role-core-contract.md)）。0.1.8 及更早的版本在 Core 2026.10.1 上整個管理面板回 403（MCP 端點不受影響），升 Core 前先更新本 add-on。
 
