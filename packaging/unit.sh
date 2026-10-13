@@ -15,5 +15,7 @@ node packages/mcp-admin-ui/tests/build-closure.mjs
 npm run browser:install --prefix packages/mcp-admin-ui
 UI_EVIDENCE_DIR=/tmp/woow-ui-evidence npm run test:browser --prefix packages/mcp-admin-ui -- --output=/tmp/woow-ui-results
 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/tool_inventory.py
-PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider tests --junitxml=/tmp/woow-unit-results.xml
+# The unchanged UID10001 nondumpable proof needs chown/setuid from UID0.
+# Elevate only pytest on this disposable runner; keep installs and UI unprivileged.
+sudo -n -- env PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider tests --junitxml=/tmp/woow-unit-results.xml
 python3 packaging/check_results.py /tmp/woow-unit-results.xml
