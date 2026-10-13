@@ -75,7 +75,7 @@
     "apps/litellm/vendor/woow_litellm_mcp_server/errors.py": "3615e517ac06aef789b9dad2387bd6fe4238f49f493d3fe2e95a4965c10a034f",
     "apps/litellm/vendor/woow_litellm_mcp_server/gating.py": "b53476befdf8ff25c6f5688a510c669c0cca6cc704f8b00f7b5dfd0265b79bcb",
     "apps/litellm/vendor/woow_litellm_mcp_server/lifespan.py": "02f2d2998dd0ada21d8560203409184a359d35b18e546ee6c68a7b24f87c18da",
-    "apps/litellm/vendor/woow_litellm_mcp_server/metadata.py": "e606ccda155cbcf20d058fa609617b247506ef7b64efdb93c812b0c153e0d90b",
+    "apps/litellm/vendor/woow_litellm_mcp_server/metadata.py": "ada56b2daf807f04e02734c13588b011d4d11465ae33be83e5f04cbdb1350eac",
     "apps/litellm/vendor/woow_litellm_mcp_server/middleware.py": "a019bb77516d924981301c06a933263fc6743380c32488efaba2748bd28a05c5",
     "apps/litellm/vendor/woow_litellm_mcp_server/registry.py": "a074a48ceeef9393ab46500420156fc59c39471c1fa6739e9030c81e7c597cae",
     "apps/litellm/vendor/woow_litellm_mcp_server/server.py": "85c3cb8f6d50bed817279754c16309919bdf419f8193b6291f47f08f80db89f7",
