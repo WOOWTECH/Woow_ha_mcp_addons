@@ -59,7 +59,7 @@ def bounded_shape(value, depth=0, budget=None):
     if depth > 8 or budget[0] < 0:
         invalid()
     if type(value) is dict:
-        if len(value) > 128:
+        if len(value) > 256:
             invalid()
         for key, item in value.items():
             if len(key) > 256:

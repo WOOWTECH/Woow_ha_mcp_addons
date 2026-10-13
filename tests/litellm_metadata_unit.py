@@ -17,7 +17,7 @@ from woow_litellm_mcp_server.errors import LiteLLMApiError
 from woow_litellm_mcp_server import metadata
 
 INPUT = json.load(sys.stdin)
-from litellm_metadata_fixtures import FIXTURES, SECRET
+from litellm_metadata_fixtures import FIXTURES, SECRET, model_info_body
 class Capture:
     def __init__(self): self.functions = {}
     def tool(self, *, name, **kwargs):
@@ -51,6 +51,93 @@ class MetadataTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(request.method, 'GET'); self.assertEqual(request.url.path, path)
                 self.assertEqual(dict(request.url.params), {k:str(v) for k,v in args.items()})
                 self.assertEqual(request.content, b'')
+
+    async def test_model_info_accepts_156_backend_fields_without_private_data(self):
+        # Live readonly diagnosis found 156 keys, below every other resource cap.
+        name = 'litellm_model_info'
+        actual = await self.invoke(name, model_info_body(156))
+        self.assertEqual(actual, FIXTURES[name][3])
+        self.assertNotIn(SECRET, json.dumps(actual))
+        self.assertEqual(len(self.requests), 1)
+        request = self.requests[0]
+        self.assertEqual(request.method, 'GET')
+        self.assertEqual(request.url.path, '/model/info')
+        self.assertEqual(dict(request.url.params), {'litellm_model_id': 'model-1'})
+        self.assertEqual(request.headers['Accept-Encoding'], 'identity')
+        self.assertEqual(request.content, b'')
+
+    async def test_model_info_dict_limit_applies_before_private_projection(self):
+        name = 'litellm_model_info'
+        for location in ('model_info', 'private_nested'):
+            for count in (256, 257):
+                with self.subTest(location=location, fields=count):
+                    body = model_info_body(count if location == 'model_info' else 156)
+                    if location == 'private_nested':
+                        body['data'][0]['model_info']['config'] = {
+                            'nested': {f'private_{index}': SECRET for index in range(count)}}
+                    if count == 256:
+                        actual = await self.invoke(name, body)
+                        self.assertEqual(actual, FIXTURES[name][3])
+                        self.assertNotIn(SECRET, json.dumps(actual))
+                    else:
+                        with self.assertRaisesRegex(LiteLLMApiError, '^BACKEND_INVALID_RESPONSE$'):
+                            await self.invoke(name, body)
+
+    async def test_model_info_nested_private_data_shares_total_node_budget(self):
+        name = 'litellm_model_info'
+        # The wide fixture is 164 nodes (including all envelopes/private values).
+        # Extra list: 1 + 38 * (1 dict + 256 scalars) + (1 dict + 68 scalars).
+        # Together exactly 10000 nodes; one extra private scalar must fail.
+        for tail_count in (68, 69):
+            with self.subTest(nodes=9932 + tail_count):
+                body = model_info_body(156)
+                body['ignored'] = [{str(index): 0 for index in range(256)} for _ in range(38)]
+                body['ignored'].append({str(index): SECRET for index in range(tail_count)})
+                self.assertLess(len(json.dumps(body).encode()), 256 * 1024)
+                if tail_count == 68:
+                    actual = await self.invoke(name, body)
+                    self.assertEqual(actual, FIXTURES[name][3])
+                    self.assertNotIn(SECRET, json.dumps(actual))
+                else:
+                    with self.assertRaisesRegex(LiteLLMApiError, '^BACKEND_INVALID_RESPONSE$'):
+                        await self.invoke(name, body)
+
+    async def test_wide_model_info_preserves_other_private_shape_limits(self):
+        name = 'litellm_model_info'
+        for dimension, limit in (('list', 100), ('string', 16384), ('key', 256), ('depth', 8)):
+            for size in (limit, limit + 1):
+                with self.subTest(dimension=dimension, size=size):
+                    body = model_info_body(156)
+                    if dimension == 'list': extra = [SECRET] * size
+                    elif dimension == 'string': extra = SECRET.ljust(size, 'x')
+                    elif dimension == 'key': extra = {'k' * size: SECRET}
+                    else:
+                        # config is at depth 4 (root 0); wrap the scalar to the target depth.
+                        extra = SECRET
+                        for _ in range(size - 4): extra = {'nested': extra}
+                    body['data'][0]['model_info']['config'] = extra
+                    if size == limit:
+                        actual = await self.invoke(name, body)
+                        self.assertEqual(actual, FIXTURES[name][3])
+                        self.assertNotIn(SECRET, json.dumps(actual))
+                    else:
+                        with self.assertRaisesRegex(LiteLLMApiError, '^BACKEND_INVALID_RESPONSE$'):
+                            await self.invoke(name, body)
+
+    async def test_wide_model_info_preserves_response_byte_limit(self):
+        name = 'litellm_model_info'
+        encoded = json.dumps(model_info_body(156)).encode()
+        # JSON trailing whitespace isolates the wire-byte limit from shape bounds.
+        for size in (256 * 1024, 256 * 1024 + 1):
+            with self.subTest(bytes=size):
+                content = encoded.ljust(size, b' ')
+                if size == 256 * 1024:
+                    actual = await self.invoke(name, None, content=content)
+                    self.assertEqual(actual, FIXTURES[name][3])
+                    self.assertNotIn(SECRET, json.dumps(actual))
+                else:
+                    with self.assertRaisesRegex(LiteLLMApiError, '^BACKEND_INVALID_RESPONSE$'):
+                        await self.invoke(name, None, content=content)
 
     async def test_responses_metadata_preserves_mode_and_excludes_private_fields(self):
         cases = (

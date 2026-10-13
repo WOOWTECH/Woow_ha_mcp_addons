@@ -50,7 +50,7 @@ IDs：1..128 ASCII `[A-Za-z0-9_-]`；不接受 email 型 user ID、逗號、空�
 
 新 `metadata.py` 只借用原 `LiteLLMHttp.raw` 的 pooled/scoped client（原 origin/DNS/TLS/redirect/error policy 不變），每次一個固定 GET、零 retry／fallback／auto paging。僅本批讀取加上256KiB identity response及5秒總期限；content encoding 非identity拒絕。沒有修改共用 transport 或其它產品的 parser/guard。
 
-JSON 限depth8（root depth0）、每個list100、object128欄、總10000 nodes、key256字元、未投影字串16384字元。包括將被捨棄的內容也受形狀上限，不能先無界讀取再截斷。這些限制可能拒絕含很多keys/members的team/user detail；不偷偷另叫key/member API，也不聲稱限制後端在送回應前的內部掃描。忽略內容仍可能由後端送達但不會回到 MCP 結果。
+JSON 限depth8（root depth0）、每個list100、object256欄、總10000 nodes、key256字元、未投影字串16384字元。包括將被捨棄的內容也受形狀上限，不能先無界讀取再截斷。這些限制可能拒絕含很多keys/members的team/user detail；不偷偷另叫key/member API，也不聲稱限制後端在送回應前的內部掃描。忽略內容仍可能由後端送達但不會回到 MCP 結果。
 
 Model/group 不開省略 selector 的全量掃描、wildcard／多筆／空 detail；即使上游在fresh install回空data，明確detail呼叫也報錯。User list 不自動翻頁，反映一頁；pagination必填、page/page_size等於request、total_pages符合ceil(total/page_size)，非空remaining total不能偽裝空成功。大於本地上限、未知envelope或新增型態須另行review。
 

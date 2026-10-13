@@ -24,3 +24,14 @@ FIXTURES = {
        'user_email': SECRET, 'metadata': SECRET, 'password': SECRET}, 'keys': [SECRET], 'teams': [SECRET]},
    {'user_id': 'user-1', 'user_info': {'user_id': 'user-1', 'user_role': 'proxy_admin', 'rpm_limit': 10}}),
 }
+
+
+def model_info_body(field_count):
+    """Synthetic wide backend metadata; unknown fields must stay private."""
+    import copy
+    body = copy.deepcopy(FIXTURES['litellm_model_info'][2])
+    info = body['data'][0]['model_info']
+    info.update({f'backend_field_{index}': SECRET
+                 for index in range(field_count - len(info))})
+    assert len(info) == field_count
+    return body
