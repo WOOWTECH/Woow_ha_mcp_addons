@@ -15,7 +15,7 @@ from .errors import LiteLLMApiError
 MAX_BYTES = 256 * 1024
 TIMEOUT = 5
 ROLES = ('proxy_admin', 'proxy_admin_viewer', 'internal_user', 'internal_user_viewer')
-MODES = ('chat', 'completion', 'embedding', 'image_generation', 'image_edit',
+MODES = ('chat', 'responses', 'completion', 'embedding', 'image_generation', 'image_edit',
          'audio_transcription', 'audio_speech', 'moderation', 'rerank', 'video_generation', 'search')
 SEGMENT = r'^[A-Za-z0-9_-]+$'
 GROUP = r'^[A-Za-z0-9][A-Za-z0-9_./:-]*$'

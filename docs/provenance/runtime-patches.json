@@ -3,8 +3,8 @@
   "patches": [
     {
       "path": "apps/litellm/vendor/woow_litellm_mcp_server/metadata.py",
-      "sha256": "e606ccda155cbcf20d058fa609617b247506ef7b64efdb93c812b0c153e0d90b",
-      "change": "New local LiteLLM-only metadata helper, not upstream vendor code: borrow original scoped DNS-pinned client for one GET on five fixed existing routes; 256KiB identity response/5s total, depth8/list100/object128/node10000 bounds. Explicit single model/group selectors and bounded user pagination; validate typed required envelopes/identity then reuse positive output_policy.record. No keys/provider params/api_base/config/email/teams/membership/spend, retries, new grants or shared transport edits. See docs/litellm-metadata-delivery.md; candidate pending independent review, not HA/backend acceptance.",
+      "sha256": "ada56b2daf807f04e02734c13588b011d4d11465ae33be83e5f04cbdb1350eac",
+      "change": "New local LiteLLM-only metadata helper, not upstream vendor code: borrow original scoped DNS-pinned client for one GET on five fixed existing routes; 256KiB identity response/5s total, depth8/list100/object128/node10000 bounds. Explicit single model/group selectors and bounded user pagination; validate typed required envelopes/identity then reuse positive output_policy.record. No keys/provider params/api_base/config/email/teams/membership/spend, retries, new grants or shared transport edits. See docs/litellm-metadata-delivery.md; candidate pending independent review, not HA/backend acceptance. C8 Responses fix: accept the exact responses mode in model and model-group metadata; retain typed allowlisting and positive secret projection. No inference endpoint, policy or transport change.",
       "guarded_sources": {}
     },
     {

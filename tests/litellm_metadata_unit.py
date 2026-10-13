@@ -52,6 +52,46 @@ class MetadataTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(dict(request.url.params), {k:str(v) for k,v in args.items()})
                 self.assertEqual(request.content, b'')
 
+    async def test_responses_metadata_preserves_mode_and_excludes_private_fields(self):
+        cases = (
+            ('litellm_model_group_info', {'model_group': 'chatgpt/gpt-6-luna'},
+             {'data': [{'model_group': 'chatgpt/gpt-6-luna', 'mode': 'responses',
+                        'max_input_tokens': 8192.0, 'rpm': 20}]}),
+            ('litellm_model_info', {'litellm_model_id': 'model-1'},
+             {'data': [{'model_name': 'example', 'model_info': {
+                 'id': 'model-1', 'mode': 'responses', 'max_input_tokens': 8192}}]}),
+        )
+        for name, args, expected in cases:
+            with self.subTest(name=name):
+                body = copy.deepcopy(FIXTURES[name][2])
+                row = body['data'][0]
+                if name == 'litellm_model_group_info':
+                    row.update(model_group=args['model_group'], mode='responses')
+                else:
+                    row['model_info']['mode'] = 'responses'
+                before = len(self.requests)
+                actual = await self.invoke(name, body, args=args)
+                self.assertEqual(actual, expected)
+                self.assertNotIn(SECRET, json.dumps(actual))
+                self.assertEqual(len(self.requests), before + 1)
+                request = self.requests[-1]
+                self.assertEqual(request.method, 'GET')
+                self.assertEqual(request.url.path, FIXTURES[name][1])
+                self.assertEqual(dict(request.url.params), args)
+                self.assertEqual(request.content, b'')
+
+    async def test_unknown_and_mistyped_model_modes_fail_closed(self):
+        for name in ('litellm_model_group_info', 'litellm_model_info'):
+            for mode in ('invented', 'Responses', 'responses ', '', SECRET,
+                         True, 1, ['responses'], {'mode': 'responses'}):
+                with self.subTest(name=name, mode=mode):
+                    body = copy.deepcopy(FIXTURES[name][2])
+                    row = body['data'][0]
+                    selected = row['model_info'] if name == 'litellm_model_info' else row
+                    selected['mode'] = mode
+                    with self.assertRaisesRegex(LiteLLMApiError, '^BACKEND_INVALID_RESPONSE$'):
+                        await self.invoke(name, body)
+
     async def test_user_filters_use_existing_wire_names(self):
         name = 'litellm_list_users'
         args = {'page': 1, 'page_size': 50, 'role': 'internal_user', 'user_ids': ['u1','u2'], 'team':'t1'}
