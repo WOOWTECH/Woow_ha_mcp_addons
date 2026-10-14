@@ -2,6 +2,7 @@
 
 ## 0.1.12 — 準備中（未發佈）
 
+- 修正 HA 側邊欄打開管理面板顯示「網頁可能暫時離線」：manifest 移除 `ingress_entry: /`。Supervisor 2026.09 以 `/api/hassio_ingress/<token>/` 直接接上 ingress_entry，舊值讓入口變成 `…/<token>//`（404，0.1.11 起七支皆受影響）；不設此鍵即為根目錄。只改 manifest，映像不變。
 - 開機預設由 `boot: manual` 改為 `boot: auto`（使用者 2026-10-14 決定）：HAOS／Supervisor 重開機後自動啟動，不必再手動啟動；packaging/validate.py 的 manifest 規則同步改為 auto。
 - 新增 Claude.ai 網頁版自訂連接器用的密鑰網址 `/private_<token>/mcp`（七支共用 gateway）：Claude.ai 自訂連接器無法帶 Authorization header，改把同一把 Add-on 權杖放在路徑（重新產生／撤銷同時生效）；權杖錯誤、空白或已撤銷一律回與不存在路徑相同的 404，忽略請求自帶的 Authorization，允許 Origin（不轉給子程序）；`/mcp` 的 Bearer 行為不變（含 Origin 403）。所有 log 把 `/private_…/` 遮成 `/private_[REDACTED]/`。管理面板「連線與權杖」新增「顯示 Claude.ai 連線網址」（需先設定對外端點，經確認後短暫顯示並可複製）。**網址等同密碼，外洩請重新產生權杖。**說明見 [client 設定](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/clients.md)；尚未以真實 Claude.ai 實測。
 - 除上述兩項外本產品功能未變更；七支共用版本規則一致升版。

@@ -12,7 +12,6 @@ stage: experimental
 image: ghcr.io/woowtech/{arch}-mcp-n8n
 ingress: true
 ingress_port: 8099
-ingress_entry: /
 ingress_stream: true
 panel_admin: true
 panel_icon: mdi:connection

@@ -95,7 +95,7 @@ def manifest(value, product):
         slug='woow_mcp_' + product.replace('-', '_'), description=value.get('description'),
         url=URL, arch=['amd64'], startup='application', boot='auto', init=True,
         stage='experimental', image=f'ghcr.io/woowtech/{{arch}}-mcp-{product}',
-        ingress=True, ingress_port=8099, ingress_entry='/', ingress_stream=True,
+        ingress=True, ingress_port=8099, ingress_stream=True,
         panel_admin=True, panel_icon='mdi:connection', ports={'8081/tcp': None},
         ports_description={'8081/tcp': value.get('ports_description', {}).get('8081/tcp')},
         timeout=30, backup='cold', apparmor=True, options={}, schema={})
@@ -108,6 +108,9 @@ def manifest(value, product):
     expected['homeassistant_api'] = True
     for text in (expected['description'], expected['ports_description']['8081/tcp']):
         require(isinstance(text, str) and 1 <= len(text) <= 512, 'missing description')
+    # 0.1.12: no ingress_entry. Supervisor 2026.09 builds ingress_url as f"/api/hassio_ingress/{token}/{ingress_entry}", so
+    # the former ingress_entry '/' made the HA sidebar open .../<token>// (404 in every MCP admin UI). The default
+    # (key absent) is the root; exact() rejects the key if it ever comes back.
     exact(value, expected, product)
 
 

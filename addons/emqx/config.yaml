@@ -12,7 +12,6 @@ stage: experimental
 image: ghcr.io/woowtech/{arch}-mcp-emqx
 ingress: true
 ingress_port: 8099
-ingress_entry: /
 ingress_stream: true
 panel_admin: true
 panel_icon: mdi:connection

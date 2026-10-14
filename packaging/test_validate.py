@@ -28,7 +28,7 @@ class PackagingTests(unittest.TestCase):
             ('privileged', ['SYS_ADMIN']), ('watchdog', 'http://[HOST]:8081/health/ready'),
             ('protected', True), ('auto_update', False), ('homeassistant', '2026.09.3'),
             ('options', {'backend_url': 'http://example.invalid'}), ('schema', False),
-            ('boot', 'manual'), ('unknown_typo', False)]
+            ('boot', 'manual'), ('ingress_entry', '/'), ('ingress_entry', '/access'), ('unknown_typo', False)]
         for key, value in mutations:
             with self.subTest(key=key, value=value):
                 doc = copy.deepcopy(original)
