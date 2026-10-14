@@ -30,6 +30,11 @@ MESSAGES = {
     'BACKEND_UNAVAILABLE': 'The n8n operation could not be completed.',
 }
 
+FOLDER_MESSAGES = {
+    'FORBIDDEN': 'Folder access denied. Verify folder entitlement (Registered Community or eligible plan), API key folder scopes, and project access.',
+    'NOT_FOUND': 'Folder API route or resource not found. Verify backend folder API support and explicit project/folder IDs.',
+}
+
 # Audited server.js dispatch -> manager handlers -> API methods, NOT inferred names.
 BRANCHES = [
     ('n8n_list_workflows', {'limit': 1}, None, 'GET', '/api/v1/workflows'),
@@ -165,7 +170,7 @@ async def runtime(tmp_path):
             store.close()
 
 
-def error_result(reply, wire, code, *, write=False):
+def error_result(reply, wire, code, *, write=False, folder=False):
     raw = b''.join(wire).decode()
     assert KEY not in raw and PRIVATE not in raw, raw
     assert KEY not in json.dumps(reply) and PRIVATE not in json.dumps(reply)
@@ -173,7 +178,7 @@ def error_result(reply, wire, code, *, write=False):
     value = json.loads(next(c['text'] for c in reply['content'] if c['type'] == 'text'))
     assert set(value) == {'success', 'error', 'code'}
     assert value['success'] is False and value['code'] == code, value
-    assert value['error'] == MESSAGES[code] + (
+    assert value['error'] == (FOLDER_MESSAGES.get(code, MESSAGES[code]) if folder else MESSAGES[code]) + (
         ' Write outcome may be unknown; verify before retrying.' if write else '')
     assert 10 <= len(value['error']) <= 256
     return value
@@ -220,7 +225,7 @@ async def test_enabled_api_error_corpus(tmp_path, branch):
             assert len(state['calls']) == before + 1
             assert state['calls'][-1][:2] == (method, path)
             assert state['keys'][-1] == KEY
-            error_result(reply, wire, code, write=grant is not None)
+            error_result(reply, wire, code, write=grant is not None, folder=name == 'n8n_manage_folders')
             print('N8N_PUBLIC_CASE', name, args.get('action', ''), case, code)
         if grant:
             for policy in ({'disabled': [name]}, {'disabled': [], 'enabled_write_tools': []}):
@@ -291,6 +296,6 @@ async def test_personal_folder_resolution_errors(tmp_path, action):
             paths = ['/api/v1/projects'] + (['/api/v1/workflows'] if case in (403, 404) else [])
             assert [c[:2] for c in state['calls']] == [('GET', p) for p in paths]
             assert all(key == KEY for key in state['keys'])
-            error_result(reply, wire, expected, write=action == 'rename')
+            error_result(reply, wire, expected, write=action == 'rename', folder=True)
             print('N8N_PERSONAL_CASE', action, case, paths)
         assert not state['failures']

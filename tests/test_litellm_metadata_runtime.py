@@ -18,7 +18,7 @@ from mcp_admin_core.products import ProductStore, TOOLS, child_spec
 from owned_runtime import Endpoint
 from test_real_products import rpc
 from test_litellm_metadata import call, BAD
-from litellm_metadata_fixtures import FIXTURES, SECRET
+from litellm_metadata_fixtures import FIXTURES, SECRET, model_info_body
 
 
 @contextmanager
@@ -37,6 +37,7 @@ def fake_backend():
                 if path.path == '/v1/models': body = {'data': [{'id': 'old-model'}]}
                 elif path.path == '/health/readiness': body = {'status': 'healthy'}
                 elif path.path == '/v2/team/list': body = {'teams': [{'team_id':'old-team'}]}
+                elif path.path == '/model/info': body = model_info_body(156)
                 else: body = by_path[path.path][2]
                 if control['malformed']: body = {'unexpected': SECRET}
                 if control['status'] != 200: body = {'error': SECRET}

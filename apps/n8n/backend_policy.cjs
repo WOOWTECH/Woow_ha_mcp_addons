@@ -94,10 +94,20 @@ const publicMessages = new Map([
     ["BACKEND_INVALID_RESPONSE", "The n8n backend returned an invalid response."],
     ["BACKEND_UNAVAILABLE", "The n8n operation could not be completed."],
 ]);
+// Keep status-derived codes: a folder 403 alone cannot distinguish an absent
+// entitlement from API-key/project scope. Fixed guidance never reflects backend
+// messages, and performs no discovery, extra request or privilege change.
+const folderMessages = new Map([
+    ["FORBIDDEN", "Folder access denied. Verify folder entitlement (Registered Community or eligible plan), API key folder scopes, and project access."],
+    ["NOT_FOUND", "Folder API route or resource not found. Verify backend folder API support and explicit project/folder IDs."],
+]);
 function publicFailure(error, write) {
     const code = error instanceof N8nApiError && error.code === "BACKEND_INVALID_RESPONSE"
         ? "BACKEND_INVALID_RESPONSE" : classifyApiError(error).code;
-    return {success: false, code, error: publicMessages.get(code) +
+    const boundary = publicErrors.getStore();
+    const folder = boundary?.folder === true || boundary?.metadata === 'folder';
+    const message = (folder && folderMessages.get(code)) || publicMessages.get(code);
+    return {success: false, code, error: message +
         (write ? " Write outcome may be unknown; verify before retrying." : "")};
 }
 // Concurrent requests must not share classification, and the context contains
@@ -121,7 +131,8 @@ for (const [name, write] of [
 ]) {
     const handler = handlers[name];
     handlers[name] = function (...args) {
-        return publicErrors.run({write}, async () => {
+        const folder = ['handleListFolders', 'handleCreateFolder', 'handleRenameFolder'].includes(name);
+        return publicErrors.run({write, folder}, async () => {
             try {
                 const result = await handler.apply(this, args);
                 // Business data on success is not diagnostic text or a DLP target.
