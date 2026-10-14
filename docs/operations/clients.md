@@ -1,8 +1,15 @@
 # MCP client 連線（真實 client 待驗收）
 
 **七支 0.1.7 映像已發佈；管理面板與 provider 已在測試 HA 實測（0.1.7，七支：owner 可用、一般使用者 403）；真實 MCP client 尚未驗收（見文末）。
-以下是配置形狀，不是可用憑證或繞過授權操作。** 支援的本地契約是
-Streamable HTTP `/mcp`（回應可含 SSE），不是 legacy `/sse` 或 token path。
+以下是配置形狀，不是可用憑證或繞過授權操作。** 支援的本地契約是 Streamable HTTP（回應可含 SSE），不是 legacy `/sse`。
+0.1.12 起有兩種接法，用的是**同一把** Add-on 權杖（管理面板「連線與權杖」頁；重新產生／撤銷對兩種接法同時生效）：
+
+| 接法 | 網址 | 權杖放哪裡 | 適用 |
+|---|---|---|---|
+| 一、Bearer header | `<端點>/mcp` | `Authorization: Bearer <token>` header | 能自訂 header 的 client（例如 Claude Code、腳本；其他 client 依其文件確認） |
+| 二、密鑰網址 | `<端點去掉結尾 /mcp>/private_<token>/mcp` | 網址路徑裡 | 不能帶自訂 header 的 client：**Claude.ai 網頁版自訂連接器** |
+
+能帶 header 的 client 一律用接法一；接法二只給做不到的 client。
 
 ## Endpoint 與網路
 
@@ -11,12 +18,17 @@ Streamable HTTP `/mcp`（回應可含 SSE），不是 legacy `/sse` 或 token pa
   固定 repository hash，也不重用舊商店 DNS。
 - LAN：`http://<HA-LAN-IP>:<本產品明確配置的host-port>/mcp`。預設 `8081/tcp: null`
   不做 LAN host mapping；跨不可信網路必須另行核准 TLS／路由，沒有預設公網。
+- Claude.ai（接法二）從 Anthropic 的雲端連線，不是從你的瀏覽器：端點必須是網際網路連得到的 **HTTPS** 網址
+  （例如經 Cloudflare Tunnel／反向代理轉到 Add-on 的 8081）。Add-on 本身不提供 TLS、公網或 tunnel；這些由你另行設定與核准。
+  反向代理要把 `/private_<token>/mcp` 原樣轉給 Add-on（不改寫路徑、不加查詢參數），並且**不要記錄這段路徑**（見下方「接法二」）。
 - Pi／Omnigent／Hermes 的實際安裝可能 host-network 或不同隔離網路；bridge DNS
   不一定可達。逐 client／版本／transport 驗證，必要時才配置唯一 LAN port。
 - Ingress iframe 的 origin、`/api/hassio_ingress/...`、8099 都**不是** MCP URL。
   不從 browser `window.location.origin` 推導。管理 UI 與 MCP token 完全分離。
+- 管理面板「MCP 用戶端端點」存的是**不含權杖**的 `/mcp` 網址（`PUT /api/endpoint {"endpoint": "https://…/mcp"}`；必須以 `/mcp` 結尾，
+  不可含帳密、查詢參數或片段，可清除為 `null`）。它只用來產生連線範例與接法二的網址，不影響 Add-on 實際監聽的位址。
 
-## Client 設定形狀（無真實 token）
+## 接法一：Bearer header
 
 各 client key 名稱要以其已安裝版本文件為準，不承諾下列通用 JSON 可直接匯入：
 
@@ -28,7 +40,7 @@ Streamable HTTP `/mcp`（回應可含 SSE），不是 legacy `/sse` 或 token pa
 }
 ```
 
-不要把 token 放在 URL path/query、同步設定庫、命令列參數、screenshot 或 log。
+這個接法下不要把 token 放在 URL path/query、同步設定庫、命令列參數、screenshot 或 log。
 使用 client 的秘密儲存；每 Add-on 一把 token，不承諾 per-client token/OAuth。
 不要拿 HA Cookie、Ingress header、backend key 或 session ID 取代 Bearer。
 
@@ -47,8 +59,40 @@ Accept: application/json, text/event-stream
 依 initialize 回傳協議／session headers，送 `notifications/initialized`，再
 `tools/list`，最後該產品已審的無副作用 `tools/call`。成功 list 不等於成功 backend
 read。Bearer 要送在每個 POST/GET/DELETE、stream reconnect/session request；
-transport session ID 不是額外認證。瀏覽器 Origin 在現有 tracer 拒絕；不承諾
-browser SDK 或 SaaS OAuth client 相容。
+transport session ID 不是額外認證。`/mcp` 帶瀏覽器 `Origin` header 一律 403（不變）；不承諾
+browser SDK 或 SaaS OAuth client 相容。錯誤、缺少或已撤銷的 Bearer 回 401（帶 `WWW-Authenticate: Bearer`）。
+
+## 接法二：Claude.ai 自訂連接器（密鑰網址，0.1.12 起）
+
+Claude.ai 網頁版的自訂連接器（custom connector）只能填網址與選填的 OAuth 設定，無法帶自訂 `Authorization` header。
+這時把權杖放進路徑：
+
+```text
+https://<你的對外網址>/private_<token>/mcp
+```
+
+1. 在管理面板「連線與權杖」頁，先把「MCP 用戶端端點」設成 Claude.ai 連得到的 `https://…/mcp` 並儲存。
+2. 按「顯示 Claude.ai 連線網址」，確認後網址只顯示 60 秒（與「顯示權杖」同一個 CSRF 保護的 reveal 流程；離開頁面、切換視窗即隱藏），
+   按「複製 Claude.ai 連線網址」。沒設定端點時按鈕停用並顯示說明，不會產生猜測的網址。
+3. 在 Claude.ai 新增自訂連接器，把網址貼進伺服器網址欄位；OAuth 進階設定留空。
+
+**這個網址等同密碼。** 拿到網址的人不需要其他東西就能以本 Add-on 目前的工具權限呼叫工具。只貼進 Claude.ai 的連接器設定；
+不要分享、截圖、貼到聊天、Git、工單或文件。網址可能外洩（被分享、出現在代理或 CDN 的 log、瀏覽器紀錄）時，立刻在管理面板按
+「重新產生」：舊網址（和舊 Bearer）立即失效，再把新網址貼回 Claude.ai。不再使用時按「撤銷權杖」。
+
+Gateway 在這條路徑上的行為：
+
+- 路徑裡的權杖與 Bearer 用同一把，以固定長度摘要做常數時間比對。權杖錯誤、空白、已撤銷或已輪替掉時，回應與「不存在的路徑」
+  完全相同（404、同樣的 body 與 headers，沒有 `WWW-Authenticate`），不透露是哪一種原因；405（方法）等其他檢查都排在這之後。
+  請求處理途中權杖被撤銷或輪替，同樣回 404（Bearer 路徑是 401）。
+- 請求自帶的 `Authorization` header 一律忽略：不能用它開啟錯誤的密鑰路徑，錯誤的值也不影響正確的密鑰路徑。
+- 允許帶 `Origin` header（Bearer 的 `/mcp` 仍然 403），但 `Origin` 不會轉給子程序。
+- 其他規則與 `/mcp` 相同：查詢參數 400、方法 405、initialize 以外沒帶 `Mcp-Session-Id` 回 400、工具 policy 403、
+  共用的同時連線上限與 session 規則；session 結束用 `DELETE /private_<token>/mcp`。
+- Add-on 自己的 log 不記錄存取紀錄（uvicorn `access_log` 關閉），而且任何 log 行裡的 `/private_<…>/` 都會被遮成
+  `/private_[REDACTED]/`（含錯誤 traceback）。Add-on 前面的反向代理、tunnel 或 CDN 的 log 不在這個保護範圍內，請自行關閉或遮罩。
+
+真實 Claude.ai 連線尚未實測（0.1.12 只有本機 mock 與單元／整合測試）。
 
 工具預設唯讀，有些已支援 schema 比上游更窄；七支合計上游 183 個工具中支援 76 個，未支援的 107 個一律 deny。
 寫入需有效 HA 管理員 UI 的逐工具／operation exact grant，且符合參數與 disabled gate；
@@ -57,7 +101,7 @@ v3 保存取代全部 `enabled_write_tools` 並關閉 legacy global，不能僅�
 
 ## Token 事件與故障
 
-- 缺失／錯誤／撤銷 Bearer：401。不要透過換 URL path、HA headers 或 cookie 規避。
+- 缺失／錯誤／撤銷 Bearer：401。密鑰網址的權杖錯誤／撤銷：404。不要用 HA headers 或 cookie 規避。
 - 工具不支援／停用／write 未開：403；不應因此開全權限後端帳號。403 的 body 只有 `{"error":"request denied"}`，
   不說是哪個工具或參數被擋。已知 client 差異（0.1.5 審查 RC F7；到 0.1.8 都未改，修法待負責人決定）：Python MCP SDK
   1.x client 遇到這個 403 會讓整個 session 斷線（要重新連線）；TypeScript SDK 只有那一次呼叫失敗。斷線時 Python client 不送
@@ -80,7 +124,7 @@ v3 保存取代全部 `enabled_write_tools` 並關閉 legacy global，不能僅�
   client 要重新 initialize。
   MCP 規範要求 client 收到 404 時重新 initialize；各 client 是否自動這樣做，0.1.8 尚未實測。子程序重啟（含 Add-on 重啟）後
   舊 session 也會失效。
-- 輪替後所有 client 更新秘密；舊 token 的新請求與 stream 後續轉送被拒。
+- 輪替後所有 client 更新秘密（Bearer client 換 header，Claude.ai 換成新的密鑰網址）；舊 token 的新請求與 stream 後續轉送被拒。
   已送到 backend 的工作不會交易式回滾；輪替不等於取消後端工作。
 - 備份還原會復活備份中的 token／policy，需核對舊 token 暴露風險，再經批准流程輪替。
 - 503 readiness 可能只是未設定／backend 離線；不要自動重啟 HA 或既有服務。

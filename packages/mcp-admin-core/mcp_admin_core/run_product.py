@@ -12,6 +12,7 @@ import signal
 import httpx
 import uvicorn
 
+from . import redact
 from .config import ConfigError
 from .gateway import make_apps
 from .ha_role import make_ha_admin_verifier
@@ -57,6 +58,11 @@ async def run(args):
                 proxy_headers=False, access_log=False, log_level='warning', server_header=False,
                 lifespan='off', limit_concurrency=64, timeout_keep_alive=5))
                 for app, port in ((admin, args.admin_port), (mcp, args.mcp_port))]
+            # 0.1.12: /private_<token>/mcp puts the token in the request path. access_log stays False; every record
+            # (uvicorn's error log, tracebacks, any library) is scrubbed to /private_[REDACTED]/ when created and
+            # again by uvicorn's handlers.
+            redact.install()
+            redact.guard_handlers(*redact.UVICORN_LOGGERS)
             await manager.start()
             tasks = [asyncio.create_task(server.serve()) for server in servers]
             monitor = asyncio.create_task(health.run())
