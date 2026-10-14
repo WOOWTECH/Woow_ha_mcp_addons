@@ -19,6 +19,7 @@ from owned_runtime import Endpoint
 from test_real_products import rpc
 from test_litellm_metadata import call, BAD
 from litellm_metadata_fixtures import FIXTURES, SECRET, model_info_body
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 
 @contextmanager
@@ -110,12 +111,12 @@ async def test_owned_real_metadata_reads_and_error_regression(tmp_path):
                     before, dispatches = len(events), endpoint.dispatches
                     for name, (args,*_) in FIXTURES.items():
                         store.update(disabled=[name])
-                        assert (await client.post('/mcp',headers=headers,json=call(name,args))).status_code == 403
+                        assert refused(await client.post('/mcp',headers=headers,json=call(name,args)))
                     store.update(disabled=[])
                     for name,args in BAD:
-                        assert (await client.post('/mcp',headers=headers,json=call(name,args))).status_code == 403
+                        assert refused(await client.post('/mcp',headers=headers,json=call(name,args)))
                     for name in ('litellm_health','litellm_chat_completion','litellm_list_keys','litellm_create_user'):
-                        assert (await client.post('/mcp',headers=headers,json=call(name,{}))).status_code == 403
+                        assert refused(await client.post('/mcp',headers=headers,json=call(name,{})))
                     assert endpoint.dispatches == dispatches and len(events) == before
                     # Ordinary HTTP failures and wrong envelopes, no attack replay.
                     for status in (401,403,429,500,503):

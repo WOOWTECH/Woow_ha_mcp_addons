@@ -17,7 +17,8 @@ import ha_p9_probe as probe
 
 TOKEN = 'tok-' + 'x' * 40
 TOOLS = [{'name': 'search_nodes'}, {'name': 'tools_documentation'}, {'name': 'n8n_list_workflows'}]
-DENIED = {'n8n_delete_workflow', 'definitely_not_a_tool'}  # the gateway refuses these with HTTP 403
+# The gateway refuses these: HTTP 403 without a session, from 0.1.14 inside one HTTP 200 with JSON-RPC -32602.
+DENIED = {'n8n_delete_workflow', 'definitely_not_a_tool'}
 BACKEND_TOOLS = {'n8n_list_workflows'}
 
 
@@ -84,7 +85,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.server.sessions.add(sid)
             return self.reply(200, {'jsonrpc': '2.0', 'id': body['id'], 'result': {'serverInfo': {'name': 'fake'}}},
                               {'Mcp-Session-Id': sid})
-        if method == 'tools/call' and body['params']['name'] in DENIED:  # like the gateway: policy before session
+        if method == 'tools/call' and body['params']['name'] in DENIED and sid not in self.server.sessions:
             return self.reply(403, {'jsonrpc': '2.0', 'id': body['id'],
                                     'error': {'code': -32001, 'message': 'request denied'}})
         if sid not in self.server.sessions:
@@ -95,9 +96,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, {'jsonrpc': '2.0', 'id': body['id'], 'result': {'tools': TOOLS}}, sse=True)
         if method == 'tools/call':
             name = body['params']['name']
-            if name in DENIED:
-                return self.reply(403, {'jsonrpc': '2.0', 'id': body['id'],
-                                        'error': {'code': -32001, 'message': 'request denied'}})
+            if name in DENIED:  # 0.1.14: the gateway's own JSON-RPC answer inside a session
+                return self.reply(200, {'jsonrpc': '2.0', 'id': body['id'],
+                                        'error': {'code': -32602, 'message': 'Unknown tool', 'data': {'tool': name}}})
+            if name == 'child_error_tool':  # a child's JSON-RPC error is not a gateway refusal
+                return self.reply(200, {'jsonrpc': '2.0', 'id': body['id'],
+                                        'error': {'code': -32000, 'message': 'child failed'}})
             if name == 'not_ready_tool':  # a plain-text error body, like a proxy in front of the gateway
                 raw = b'child transport not ready'
                 self.send_response(503)
@@ -196,11 +200,12 @@ class ProbeTests(unittest.TestCase):
         plan = {'denials': [['n8n_delete_workflow', {}], ['not_ready_tool', {}]]}
         with self.assertRaises(SystemExit):  # the 503 is not a refusal
             probe.main(['--port', str(self.server.port), 'plan'], io.StringIO(TOKEN + '\n' + json.dumps(plan)), out)
-        self.assertIn('http=403 isError=None | error -32001: request denied', out.getvalue())
+        self.assertIn('http=200 isError=None | error -32602: Unknown tool', out.getvalue())
         self.assertIn('http=503 isError=None | error : child transport not ready', out.getvalue())
 
     def test_plan_fails_when_a_read_is_denied_or_a_denial_succeeds(self):
-        for plan in ({'reads': [['n8n_delete_workflow', {}]]}, {'denials': [['search_nodes', {'query': 'x'}]]}):
+        for plan in ({'reads': [['n8n_delete_workflow', {}]]}, {'denials': [['search_nodes', {'query': 'x'}]]},
+                     {'denials': [['child_error_tool', {}]]}, {'denials': [['not_a_listed_tool', {}]]}):
             with self.subTest(plan=plan), self.assertRaises(SystemExit):
                 self.main('plan', stdin=TOKEN + '\n' + json.dumps(plan))
         self.assertEqual(self.server.sessions, set())

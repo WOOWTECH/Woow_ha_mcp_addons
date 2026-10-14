@@ -13,6 +13,7 @@ from test_batch2_policy import BAD_CONNECTION_KEYS, CASES, GRAPH, GRAPH_NAME_CAS
 from test_expansion_policy import call
 from test_expansion_runtime import fake_api, payload
 from test_real_products import connection, rpc
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 PURE = {'build_domain', 'generate_json2_payload', 'diagnose_odoo_call', 'validate_node', 'validate_workflow'}
 
@@ -56,7 +57,7 @@ async def test_batch2_real_handlers(tmp_path, product, major, allow_write):
                         if p != product: continue
                         before, count, dispatched_before = len(events), len(mutations), len(dispatches)
                         if tools[name].write:
-                            assert (await client.post('/mcp', headers=headers, json=call(name, args))).status_code == 403
+                            assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
                             assert len(events) == before and len(mutations) == count and len(dispatches) == dispatched_before
                             store.update(enabled_write_tools=[name])
                         reply = await rpc(client, '/mcp', headers, call(name, args))
@@ -120,7 +121,7 @@ async def test_batch2_real_handlers(tmp_path, product, major, allow_write):
                                 graph = {**GRAPH, 'connections': {key: {'unexpected': 'not a typed edge'}}}
                                 invalid_args = {'workflow': graph} if name == 'validate_workflow' else graph
                                 response = await client.post('/mcp', headers=headers, json=call(name, invalid_args))
-                                assert response.status_code == 403
+                                assert refused(response)
                                 assert len(events) == before and len(mutations) == count
                                 assert len(dispatches) == dispatched_before
                             for boundary in ('id', 'name', 'connection-key', 'edge-target'):
@@ -129,17 +130,17 @@ async def test_batch2_real_handlers(tmp_path, product, major, allow_write):
                                     graph = graph_with_name(value, boundary)
                                     invalid_args = {'workflow': graph} if name == 'validate_workflow' else graph
                                     response = await client.post('/mcp', headers=headers, json=call(name, invalid_args))
-                                    assert response.status_code == 403, (boundary, repr(value))
+                                    assert refused(response), (boundary, repr(value))
                                     assert len(events) == before and len(mutations) == count
                                     assert len(dispatches) == dispatched_before
                         for extra in ('ctx', 'session', '__proto__', 'action'):
-                            assert (await client.post('/mcp', headers=headers, json=call(name, {**args, extra: {}}))).status_code == 403
+                            assert refused(await client.post('/mcp', headers=headers, json=call(name, {**args, extra: {}})))
                         store.update(disabled=[name])
-                        assert (await client.post('/mcp', headers=headers, json=call(name, args))).status_code == 403
+                        assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
                         assert len(events) == before and len(mutations) == count and len(dispatches) == dispatched_before
                         store.update(disabled=[], enabled_write_tools=[])
                         if tools[name].write:
-                            assert (await client.post('/mcp', headers=headers, json=call(name, args))).status_code == 403
+                            assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
                             assert len(events) == before and len(dispatches) == dispatched_before
                     assert not failures, failures
                     await client.delete('/mcp', headers=headers)

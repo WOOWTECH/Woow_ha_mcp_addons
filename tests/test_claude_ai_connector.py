@@ -165,11 +165,19 @@ async def test_tool_policy_is_unchanged_with_meta(store, route):
     path, auth = route(store)
     headers = {**auth, **SESSION}
     writer = next(name for name, tool in TOOLS.items() if tool.write)
-    for params in ({"name": "no_such_tool", "arguments": {}}, {"name": writer, "arguments": {"id": "x"}},
-                   {"name": READ_TOOL, "arguments": {"unreviewed": True}}, {"name": READ_TOOL, "arguments": []},
-                   {"name": READ_TOOL, "arguments": {}, "extra": 1}, {}):
+    # 0.1.14: refused well-formed calls inside a session are JSON-RPC errors (tests/test_tool_call_refusals.py);
+    # malformed params stay 403. None of them reaches the child.
+    for params, answer in (({"name": "no_such_tool", "arguments": {}}, "Unknown tool"),
+                           ({"name": writer, "arguments": {"id": "x"}}, "Unknown tool"),
+                           ({"name": READ_TOOL, "arguments": {"unreviewed": True}}, "Invalid params"),
+                           ({"name": READ_TOOL, "arguments": []}, "Invalid params"),
+                           ({"name": READ_TOOL, "arguments": {}, "extra": 1}, 403), ({}, 403)):
         message = {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"_meta": TRACE, **params}}
-        assert (await call(store, Forbidden(), path, message, headers)).status_code == 403, params
+        response = await call(store, Forbidden(), path, message, headers)
+        if answer == 403:
+            assert response.status_code == 403, params
+        else:
+            assert response.status_code == 200 and response.json()["error"]["message"] == answer, params
     for message in ({"jsonrpc": "2.0", "id": 5, "method": "ping", "params": {"_meta": TRACE, "x": 1}},
                     {"jsonrpc": "2.0", "id": 5, "method": "tools/list", "params": {"_meta": TRACE, "cursor": 1}},
                     {"jsonrpc": "2.0", "method": "notifications/initialized", "params": {"_meta": TRACE, "x": 1}},

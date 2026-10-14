@@ -21,6 +21,7 @@ from mcp_admin_core.products import ProductStore, TOOLS, child_spec, health_prob
 from test_b2_odoo_runtime import initialize
 from test_expansion_policy import call
 from test_real_products import connection, rpc
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 
 @contextmanager
@@ -151,7 +152,7 @@ async def test_odoo_manage_probe_authenticates_on_a_fresh_connection(tmp_path, m
                     listed = await rpc(client, '/mcp', headers, {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'})
                     assert name not in {t['name'] for t in listed['tools']}
                     before = len(calls)
-                    assert (await client.post('/mcp', headers=headers, json=call(name, arguments))).status_code == 403
+                    assert refused(await client.post('/mcp', headers=headers, json=call(name, arguments)))
                     assert len(calls) == before
 
                     # Rejected credentials and an unavailable backend are not reachable; recovery is.

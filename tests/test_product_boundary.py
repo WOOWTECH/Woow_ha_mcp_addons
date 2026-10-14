@@ -10,6 +10,7 @@ from mcp_admin_core.lifecycle import Supervisor
 from mcp_admin_core.products import (PRODUCTS, PROBES, ProductStore, TOOLS, child_spec, health_probe_success,
                                     probe_success)
 from test_real_products import connection
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 
 @pytest.mark.parametrize('product', PRODUCTS)
@@ -94,13 +95,13 @@ async def test_writer_is_denied_before_dispatch_then_explicitly_enabled(tmp_path
             _, app = make_apps(store, TOOLS['opendesign'], child)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://mcp') as client:
                 headers = {'Authorization': 'Bearer ' + store.load().token, 'Mcp-Session-Id': 'test-session'}
-                assert (await client.post('/mcp', headers=headers, json=message)).status_code == 403
+                assert refused(await client.post('/mcp', headers=headers, json=message))
                 assert requests == []
                 store.update(writes_enabled=True)
                 assert (await client.post('/mcp', headers=headers, json=message)).status_code == 200
                 assert requests == [message]
                 store.update(disabled=['delete_project'])
-                assert (await client.post('/mcp', headers=headers, json=message)).status_code == 403
+                assert refused(await client.post('/mcp', headers=headers, json=message))
                 assert len(requests) == 1
     finally: store.close()
 

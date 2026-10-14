@@ -14,6 +14,7 @@ from test_real_products import connection, rpc
 from test_expansion_policy import call
 from test_expansion_runtime import payload
 from test_b2_odoo_policy import CASES, BAD
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 FIELDS = {'id':'integer', 'name':'char', 'display_name':'char', 'active':'boolean',
           'parent_id':'many2one', 'child_ids':'one2many'}
@@ -136,9 +137,9 @@ async def test_b2_genuine_handlers_rpc_cache_errors_and_denials(tmp_path):
                             assert value.get('instance') is None
                         before=len(events)
                         for change in BAD[name]+[{'context':{}},{'instance':'other'}]:
-                            assert (await client.post('/mcp',headers=headers,json=call(name,{**args,**change}))).status_code==403
+                            assert refused(await client.post('/mcp',headers=headers,json=call(name,{**args,**change})))
                         store.update(disabled=[name],writes_enabled=True)
-                        assert (await client.post('/mcp',headers=headers,json=call(name,args))).status_code==403
+                        assert refused(await client.post('/mcp',headers=headers,json=call(name,args)))
                         assert len(events)==before
                         store.update(disabled=[])
                     for mode in ('fault','malformed','bad_count','relation'):

@@ -9,6 +9,7 @@ import pytest
 from mcp_admin_core.config import ConfigError, Store
 from mcp_admin_core.gateway import make_apps
 from n8n_adapter import TOOLS, child_spec
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 
 def rpc(method="tools/call", **params):
@@ -157,7 +158,7 @@ async def test_read_call_filter_policy_rotation_and_separate_child_secret(harnes
     store.update(disabled=["tools_documentation"])
     headers["Mcp-Session-Id"] = "test-session"
     count = len(calls)
-    assert (await m.post("/mcp", headers=headers, json=rpc(name="tools_documentation"))).status_code == 403
+    assert refused(await m.post("/mcp", headers=headers, json=rpc(name="tools_documentation")))
     assert len(calls) == count
     # Rotation/revoke are privileged CSRF-protected routes, never ordinary GET settings.
     identity = {"X-Remote-User-Id": "admin-test", "X-Ingress-Path": "/api/hassio_ingress/opaque"}

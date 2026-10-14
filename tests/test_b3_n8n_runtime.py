@@ -10,6 +10,7 @@ import test_batch2_n8n_public_errors as owned
 from test_b3_n8n_policy import CASES, BAD
 from test_expansion_policy import call
 from test_real_products import rpc
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 KEY = owned.KEY
 PRIVATE = owned.PRIVATE
@@ -102,16 +103,17 @@ async def test_b3_real_success_and_predispatch_denials(tmp_path,monkeypatch,name
         assert KEY not in json.dumps(reply) and PRIVATE not in json.dumps(reply)
         for change in BAD[name]:
             before = len(dispatches)
-            assert (await client.post('/mcp',headers=headers,json=call(name,{**args,**change}))).status_code == 403
+            assert refused(await client.post('/mcp',headers=headers,json=call(name,{**args,**change})))
             assert len(dispatches) == before and state['calls'] == [expected]
         before = len(dispatches)
-        assert (await client.post('/mcp',headers=headers,json=call('unknown_b3',{}))).status_code == 403
+        assert refused(await client.post('/mcp',headers=headers,json=call('unknown_b3',{})))
         assert len(dispatches) == before
         for update in [{'disabled':[name]}, {'disabled':[],'backend_key':None},
                        {'backend_url':None,'backend_key':KEY}, {'backend_key':None}]:
             store.update(**update)
             before = len(dispatches)
-            assert (await client.post('/mcp',headers=headers,json=call(name,args))).status_code in (403,503)
+            response = await client.post('/mcp',headers=headers,json=call(name,args))
+            assert response.status_code == 503 or refused(response)
             assert len(dispatches) == before
 
 @pytest.mark.parametrize('name,args',CASES)
@@ -129,7 +131,7 @@ async def test_b3_fresh_presend_authorization(tmp_path,monkeypatch,name,args):
             return result
         monkeypatch.setattr(gateway,'authorize',clear_after_first)
         before = len(dispatches)
-        assert (await client.post('/mcp',headers=headers,json=call(name,args))).status_code == 403
+        assert refused(await client.post('/mcp',headers=headers,json=call(name,args)))
         assert checked == ['tools/call']
         assert len(dispatches) == before and not state['calls']
 
@@ -166,7 +168,7 @@ async def test_b3_genuine_unconfigured_local_startup(tmp_path,monkeypatch):
         assert reply['content'][0]['text'].startswith('# n8n MCP Tools Reference')
         for name,args in CASES:
             before = len(dispatches)
-            assert (await client.post('/mcp',headers=headers,json=call(name,args))).status_code == 403
+            assert refused(await client.post('/mcp',headers=headers,json=call(name,args)))
             assert len(dispatches) == before
         assert not state['calls']
 

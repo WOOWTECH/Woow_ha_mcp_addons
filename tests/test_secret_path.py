@@ -20,6 +20,7 @@ from mcp_admin_core import redact
 from mcp_admin_core.config import Store
 from mcp_admin_core.gateway import make_apps, secret_valid
 from n8n_adapter import TOOLS
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 ROOT = Path(__file__).resolve().parents[1]
 INITIALIZE = {"jsonrpc": "2.0", "id": 1, "method": "initialize",
@@ -208,7 +209,7 @@ async def test_secret_path_keeps_the_query_method_and_session_rules(store):
     assert (await call(store, child, "DELETE", path)).status_code == 400
     # Policy still applies: an unsupported tool is 403 before the child.
     denied = {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "no_such_tool", "arguments": {}}}
-    assert (await call(store, child, "POST", path, denied, {"Mcp-Session-Id": "child-session"})).status_code == 403
+    assert refused(await call(store, child, "POST", path, denied, {"Mcp-Session-Id": "child-session"}))
     assert child.seen == []
 
 

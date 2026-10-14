@@ -9,6 +9,7 @@ import pytest
 from mcp_admin_core.config import Store
 from mcp_admin_core.gateway import make_apps
 from n8n_adapter import TOOLS
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 
 @pytest.fixture
@@ -68,7 +69,7 @@ async def test_explicit_null_never_reaches_child(store, name, arguments):
                                                           "Mcp-Session-Id": "test-session"},  # 0.1.8: GATEWAY-2
                 json={"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {
                     "name": name, "arguments": arguments}})
-    assert response.status_code == 403
+    assert refused(response)
     assert not calls
 
 
