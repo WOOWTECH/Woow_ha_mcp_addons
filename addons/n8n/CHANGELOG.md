@@ -1,5 +1,11 @@
 # n8n Changelog
 
+## 0.1.12 — 準備中（未發佈）
+
+- 開機預設由 `boot: manual` 改為 `boot: auto`（使用者 2026-10-14 決定）：HAOS／Supervisor 重開機後自動啟動，不必再手動啟動；packaging/validate.py 的 manifest 規則同步改為 auto。
+- 本產品其他功能未變更；七支共用版本規則一致升版。
+- 新版候選需獨立建置、掃描與 PaaS HAOS VM 驗收（含重開機後自動回來）；既有 0.1.11 標籤不覆寫。
+
 ## 0.1.11 — 準備中（未發佈）
 
 - Folder API 403/404 回覆加入固定的 entitlement、API key folder scopes、project access 與 route/resource 檢查提示；保留原錯誤碼、私密內容遮蔽與寫入結果可能未知的提醒，不增加 request、retry 或權限。

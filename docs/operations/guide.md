@@ -48,8 +48,9 @@ owner／non-admin（0.1.1–0.1.6；Nextcloud 尚未在 HA 實測），但這些
    slug 跟著變，不是原地更新；已安裝者維持原網址，要換網址需另做資料遷移計畫（見[更新、備份與回復](update-backup-rollback.md)）。
 3. 首試 n8n，使用批准的非正式 workflow 受限測試 key。其他六支逐支批准。
 4. 保留 protection mode（預設 on）；`protected` 是使用者狀態，不是假造
-   manifest key。手動更新設定（auto-update off）要在安裝後確認；`boot: manual`
-   只控制開機啟動，不代表自動更新開關。
+   manifest key。手動更新設定（auto-update off）要在安裝後確認；0.1.12 起 manifest 為 `boot: auto`
+   （使用者 2026-10-14 決定；HAOS 重開機後由 Supervisor 自動啟動），只控制開機啟動，不代表自動更新開關；
+   0.1.11 以前為 `boot: manual`，重開機後需手動啟動。
 5. MCP 8081 預設主機映射為空；如需 LAN，選未使用的唯一 host port 並檢查
    防火牆。各容器內相同 8081/8099 不衝突；主機映射不可重複。
 6. 8099 僅 Ingress（真實 peer `172.30.32.2`）；3000 僅容器 loopback，永不對外。

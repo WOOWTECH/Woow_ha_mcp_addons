@@ -22,7 +22,7 @@ PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud
 # (0.1.4 was the last); its source stays in apps/odoo-manage and the shared core, and is still tested.
 RETIRED = ('odoo-manage',)
 URL = 'https://github.com/WOOWTECH/Woow_ha_mcp_addons'
-VERSION = '0.1.11'
+VERSION = '0.1.12'
 TITLES = dict(zip(PRODUCTS, ('Odoo', 'n8n', 'Hermes', 'OpenDesign', 'EMQX', 'LiteLLM', 'Nextcloud')))
 
 
@@ -93,7 +93,7 @@ def manifest(value, product):
     require(isinstance(value.get('ports_description'), dict), 'ports_description mapping required')
     expected = dict(name=f'Woow {TITLES[product]} MCP Server', version=VERSION,
         slug='woow_mcp_' + product.replace('-', '_'), description=value.get('description'),
-        url=URL, arch=['amd64'], startup='application', boot='manual', init=True,
+        url=URL, arch=['amd64'], startup='application', boot='auto', init=True,
         stage='experimental', image=f'ghcr.io/woowtech/{{arch}}-mcp-{product}',
         ingress=True, ingress_port=8099, ingress_entry='/', ingress_stream=True,
         panel_admin=True, panel_icon='mdi:connection', ports={'8081/tcp': None},

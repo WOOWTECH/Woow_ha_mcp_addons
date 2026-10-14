@@ -1,5 +1,11 @@
 # OpenDesign Changelog
 
+## 0.1.12 — 準備中（未發佈）
+
+- 開機預設由 `boot: manual` 改為 `boot: auto`（使用者 2026-10-14 決定）：HAOS／Supervisor 重開機後自動啟動，不必再手動啟動；packaging/validate.py 的 manifest 規則同步改為 auto。
+- 本產品其他功能未變更；七支共用版本規則一致升版。
+- 新版候選需獨立建置、掃描與 PaaS HAOS VM 驗收（含重開機後自動回來）；既有 0.1.11 標籤不覆寫。
+
 ## 0.1.11 — 準備中（未發佈）
 
 - 本產品功能未變更；依既有七支共用版本規則隨同 LiteLLM MCP metadata 修補升版。

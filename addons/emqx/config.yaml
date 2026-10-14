@@ -1,12 +1,12 @@
 name: Woow EMQX MCP Server
-version: 0.1.11
+version: 0.1.12
 slug: woow_mcp_emqx
 description: Experimental; HA admin-role management; partial tools, read-only by default.
 url: https://github.com/WOOWTECH/Woow_ha_mcp_addons
 arch:
 - amd64
 startup: application
-boot: manual
+boot: auto
 init: true
 stage: experimental
 image: ghcr.io/woowtech/{arch}-mcp-emqx
