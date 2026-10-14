@@ -12,6 +12,44 @@ class Denied(ValueError):
     pass
 
 
+class UnknownMethod(Denied):
+    """0.1.13: a well-formed request (string or integer id) or notification whose method the gateway does not serve.
+
+    The gateway answers it itself, before any session check, slot or child (a request: HTTP 200 with JSON-RPC -32601;
+    a notification: 202). Claude.ai probes server/discover before initialize and needs a JSON-RPC answer, not 403.
+    Still a Denied, so a caller that does not tell them apart keeps refusing it."""
+    def __init__(self, request):
+        super().__init__("method not found")
+        self.request = request  # True when the message has an id (a request), False for a notification
+
+
+# Served methods; anything else is UnknownMethod (0.1.13), never forwarded.
+REQUEST_METHODS = frozenset({"initialize", "ping", "tools/list", "tools/call"})
+# 0.1.13: MCP reserves params._meta on every request and notification (Claude.ai sends traceparent and, for
+# server/discover, client identity). It is accepted when it is an object of at most this many bytes (compact JSON)
+# and removed before dispatch: no child ever gets it, so progressToken and the like never reach a child either.
+META_LIMIT = 8192
+
+
+def strip_meta(message, params):
+    """Validate and remove params._meta; drop params altogether when it held nothing else."""
+    if "_meta" not in params:
+        return params
+    meta = params["_meta"]
+    if not isinstance(meta, dict):
+        raise Denied("invalid _meta")
+    try:
+        size = len(json.dumps(meta, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+    except (ValueError, RecursionError):
+        raise Denied("invalid _meta") from None
+    if size > META_LIMIT:
+        raise Denied("_meta too large")
+    del params["_meta"]
+    if not params:
+        del message["params"]
+    return params
+
+
 @dataclass(frozen=True)
 class Tool:
     arguments: type[BaseModel]
@@ -57,6 +95,13 @@ def authorize(message, tools: Mapping[str, Tool], state: State) -> str:
     params = message.get("params", {})
     if not isinstance(params, dict):
         raise Denied("params must be object")
+    if "id" not in message and method != "notifications/initialized" and method not in REQUEST_METHODS:
+        raise UnknownMethod(request=False)  # e.g. notifications/cancelled: answered 202, never forwarded
+    if "id" in message and type(message["id"]) in (str, int) and method not in REQUEST_METHODS:
+        if method == "notifications/initialized":
+            raise Denied("invalid initialized notification")
+        raise UnknownMethod(request=True)  # e.g. server/discover, resources/list: JSON-RPC -32601
+    params = strip_meta(message, params)
     if method == "notifications/initialized":
         if "id" in message or params:
             raise Denied("invalid initialized notification")
@@ -93,7 +138,7 @@ def authorize(message, tools: Mapping[str, Tool], state: State) -> str:
             if not configured:
                 raise Denied('configured backend required')
         params["arguments"] = normalized
-    else:
+    else:  # unreachable: every other method is UnknownMethod above
         raise Denied("method not permitted")
     return method
 

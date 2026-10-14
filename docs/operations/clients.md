@@ -2,7 +2,7 @@
 
 **七支 0.1.7 映像已發佈；管理面板與 provider 已在測試 HA 實測（0.1.7，七支：owner 可用、一般使用者 403）；真實 MCP client 尚未驗收（見文末）。
 以下是配置形狀，不是可用憑證或繞過授權操作。** 支援的本地契約是 Streamable HTTP（回應可含 SSE），不是 legacy `/sse`。
-0.1.12 起有兩種接法，用的是**同一把** Add-on 權杖（管理面板「連線與權杖」頁；重新產生／撤銷對兩種接法同時生效）：
+0.1.13 起有兩種接法，用的是**同一把** Add-on 權杖（管理面板「連線與權杖」頁；重新產生／撤銷對兩種接法同時生效）：
 
 | 接法 | 網址 | 權杖放哪裡 | 適用 |
 |---|---|---|---|
@@ -62,7 +62,7 @@ read。Bearer 要送在每個 POST/GET/DELETE、stream reconnect/session request
 transport session ID 不是額外認證。`/mcp` 帶瀏覽器 `Origin` header 一律 403（不變）；不承諾
 browser SDK 或 SaaS OAuth client 相容。錯誤、缺少或已撤銷的 Bearer 回 401（帶 `WWW-Authenticate: Bearer`）。
 
-## 接法二：Claude.ai 自訂連接器（密鑰網址，0.1.12 起）
+## 接法二：Claude.ai 自訂連接器（密鑰網址，0.1.13 起）
 
 Claude.ai 網頁版的自訂連接器（custom connector）只能填網址與選填的 OAuth 設定，無法帶自訂 `Authorization` header。
 這時把權杖放進路徑：
@@ -89,10 +89,13 @@ Gateway 在這條路徑上的行為：
 - 允許帶 `Origin` header（Bearer 的 `/mcp` 仍然 403），但 `Origin` 不會轉給子程序。
 - 其他規則與 `/mcp` 相同：查詢參數 400、方法 405、initialize 以外沒帶 `Mcp-Session-Id` 回 400、工具 policy 403、
   共用的同時連線上限與 session 規則；session 結束用 `DELETE /private_<token>/mcp`。
+- 兩條路徑相同（0.1.13 起）：params 的 MCP 保留欄位 `_meta`（例如 Claude.ai 帶的 traceparent）接受為至多 8 KiB 的物件，
+  轉給子程序前移除；gateway 不提供的 JSON-RPC 方法（例如 Claude.ai 先送的 `server/discover`、`resources/list`）由 gateway
+  自己回 HTTP 200 的 `-32601 Method not found`，不認識的 notification 回 202，都不需 session、不轉給子程序。
 - Add-on 自己的 log 不記錄存取紀錄（uvicorn `access_log` 關閉），而且任何 log 行裡的 `/private_<…>/` 都會被遮成
   `/private_[REDACTED]/`（含錯誤 traceback）。Add-on 前面的反向代理、tunnel 或 CDN 的 log 不在這個保護範圍內，請自行關閉或遮罩。
 
-真實 Claude.ai 連線尚未實測（0.1.12 只有本機 mock 與單元／整合測試）。
+2026-10-14 首次以真實 Claude.ai 連 PaaS 測試 VM：Claude.ai 送的 `server/discover` 與帶 `_meta` 的 `initialize` 都被 0.1.12 候選回 403，0.1.13 已修正（見 [0.1.13 發佈紀錄](release-decision-0.1.13.md)）；修正後尚未以真實 Claude.ai 重測（目前只有本機 mock 與單元／整合測試）。
 
 工具預設唯讀，有些已支援 schema 比上游更窄；七支合計上游 183 個工具中支援 76 個，未支援的 107 個一律 deny。
 寫入需有效 HA 管理員 UI 的逐工具／operation exact grant，且符合參數與 disabled gate；

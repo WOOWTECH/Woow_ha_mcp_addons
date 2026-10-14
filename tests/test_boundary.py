@@ -108,16 +108,29 @@ async def test_all_session_requests_authenticate(harness, method, authorization)
     rpc(name="search_nodes", arguments=[]), rpc(name="search_nodes", arguments={}),
     rpc(name="search_nodes", arguments={"query": "x", "unreviewed": True}),
     {"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "tools_documentation"}},
-    [rpc(name="tools_documentation")], rpc("arbitrary/execute"),
-    rpc("resources/list"), rpc("resources/read", uri="file:///not-accessed"),
-    rpc("resources/templates/list"), rpc("prompts/list"), rpc("prompts/get", name="unknown"),
-    rpc("logging/setLevel", level="debug"),
+    [rpc(name="tools_documentation")],
     {"jsonrpc": "2.0", "id": True, "method": "tools/call", "params": {"name": "tools_documentation"}},
+    {"jsonrpc": "2.0", "id": None, "method": "resources/list"},
 ])
 async def test_denied_calls_never_forward(harness, store, message):
     _, m, calls = harness
     r = await m.post("/mcp", headers=bearer(store), json=message)
     assert r.status_code in (400, 403)
+    assert calls == []
+
+
+@pytest.mark.parametrize("message", [
+    rpc("arbitrary/execute"), rpc("resources/list"), rpc("resources/read", uri="file:///not-accessed"),
+    rpc("resources/templates/list"), rpc("prompts/list"), rpc("prompts/get", name="unknown"),
+    rpc("logging/setLevel", level="debug"), rpc("server/discover"),
+])
+async def test_unknown_methods_are_answered_by_the_gateway_never_forwarded(harness, store, message):
+    """0.1.13: a JSON-RPC Method not found (HTTP 200) from the gateway itself, as Claude.ai's server/discover needs;
+    still never forwarded (0.1.12 and earlier: 403)."""
+    _, m, calls = harness
+    r = await m.post("/mcp", headers=bearer(store), json=message)
+    assert r.status_code == 200
+    assert r.json() == {"jsonrpc": "2.0", "id": 1, "error": {"code": -32601, "message": "Method not found"}}
     assert calls == []
 
 

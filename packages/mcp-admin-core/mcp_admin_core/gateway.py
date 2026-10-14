@@ -29,7 +29,7 @@ from . import redact, ui
 
 from . import VERSION
 from .config import ConfigError, State, Store, strict_json
-from .policy import Denied, authorize, filter_list
+from .policy import Denied, UnknownMethod, authorize, filter_list
 from .ha_role import valid_user_id
 
 MAX_REQUEST = 262144
@@ -44,9 +44,9 @@ LONE_CR = re.compile(rb"\r(?!\n)")
 SSE_FIELD = re.compile(rb"(?:id|event):[ ]?[\x21-\x7e]{0,256}|retry:[ ]?[0-9]{1,10}")  # id as Last-Event-ID allows
 SSE_COMMENT = re.compile(rb":[\x20-\x7e]{0,1024}")
 # 0.1.4: the only child notification a client gets, and only as these fixed bytes (no child params). Progress is
-# never relayed: authorize refuses _meta, so no client can ask for it and any progress event is unsolicited child
-# text (the pinned TS client puts unknown-token progress into an error message); log messages and resource updates
-# carry child text or name surfaces the gateway never exposes.
+# never relayed: authorize removes params._meta before dispatch (0.1.13; refused it before), so no client can ask for
+# it and any progress event is unsolicited child text (the pinned TS client puts unknown-token progress into an error
+# message); log messages and resource updates carry child text or name surfaces the gateway never exposes.
 LIST_CHANGED = b'data: {"jsonrpc":"2.0","method":"notifications/tools/list_changed"}'
 # 0.1.5 (R1 #6): the pinned TS client puts an unsupported protocolVersion into an error, so no child text may pass.
 # 0.1.8 (review 6b): only the reviewed MCP revisions, not any date. The pinned children negotiate within this set,
@@ -270,6 +270,12 @@ def secret_valid(secret, state):
         return False
     supplied = hashlib.sha256(secret.encode("utf-8", "replace")).digest()
     return hmac.compare_digest(supplied, hashlib.sha256(state.token.encode()).digest())
+
+
+def json_only(request):
+    """0.1.13: the client's Accept names application/json and neither text/event-stream nor */*."""
+    accept = ",".join(request.headers.getlist("accept")).lower()
+    return "application/json" in accept and "text/event-stream" not in accept and "*/*" not in accept
 
 
 async def error_handler(_, exc):
@@ -673,6 +679,14 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             message = await json_body(request)
             try:
                 method = authorize(message, tools, state)
+            except UnknownMethod as unknown:
+                # 0.1.13: answered here, before the session check, a slot or the child (Claude.ai sends server/discover
+                # first and needs a JSON-RPC answer to fall back to initialize). Only after the token check above.
+                if not unknown.request:
+                    return Response(status_code=202, headers={"Cache-Control": "no-store"})
+                return json_reply({"jsonrpc": "2.0", "id": message["id"],
+                                   "error": {"code": -32601, "message": "Method not found"}},
+                                  200, {"Cache-Control": "no-store"})
             except Denied:
                 raise BadRequest(403) from None
         elif await body(request):
@@ -797,7 +811,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                                            **({"instructions": instructions} if instructions else {})}
                 except ValueError:
                     raise BadRequest(502) from None
-                if frame is None:
+                if frame is None or json_only(request):
+                    # 0.1.13: a client that accepts only application/json gets the initialize answer as JSON even when
+                    # the child framed it as an SSE event (the gateway holds the parsed reply either way).
                     answer = json_reply(value, 200, response_headers)
                 else:
                     # The child's event framing (id/event/retry lines) with the filtered data.

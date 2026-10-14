@@ -102,7 +102,9 @@ async def test_batch2_real_handlers(tmp_path, product, major, allow_write):
                             assert 'denied' in value['note']
                             before_resource = len(events)
                             response = await client.post('/mcp', headers=headers, json={'jsonrpc': '2.0', 'id': 2, 'method': 'resources/read', 'params': {'uri': 'odoo://res.partner/record/1'}})
-                            assert response.status_code == 403 and len(events) == before_resource
+                            # 0.1.13: the gateway's own JSON-RPC Method not found (was 403); never forwarded.
+                            assert response.status_code == 200 and response.json()['error']['code'] == -32601
+                            assert len(events) == before_resource
                         if name == 'post_message':
                             assert value['message_id'] == 2
                             assert mutations[-1][3] == {'body': args['body'], 'message_type': 'comment', 'subtype_xmlid': 'mail.mt_note'}
