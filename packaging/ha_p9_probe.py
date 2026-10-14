@@ -109,8 +109,8 @@ class Client:
         return status, (result or {}).get('isError') if isinstance(result, dict) else None
 
     def call_text(self, sid, name, arguments, ident=10):
-        status, message, _ = self.request('POST', {'jsonrpc': '2.0', 'id': ident, 'method': 'tools/call',
-                                                   'params': {'name': name, 'arguments': arguments}}, sid, timeout=60)
+        status, message, _ = self.call_reply(sid, name, arguments, ident)
+        self.last_message = message  # for gateway_refused()
         result = (message or {}).get('result') if isinstance(message, dict) else None
         result = result if isinstance(result, dict) else {}
         text = ' '.join(c.get('text', '') for c in result.get('content', []) if isinstance(c, dict))
@@ -118,6 +118,23 @@ class Client:
         if not text and isinstance(error, dict):
             text = 'error %s: %s' % (error.get('code', ''), str(error.get('message', ''))[:200])
         return status, result.get('isError'), text
+
+    def call_reply(self, sid, name, arguments, ident=10):
+        return self.request('POST', {'jsonrpc': '2.0', 'id': ident, 'method': 'tools/call',
+                                     'params': {'name': name, 'arguments': arguments}}, sid, timeout=60)
+
+
+def gateway_refused(status, message, ident):
+    """The gateway's refusal of a tools/call: 403 (no session, or a gateway before 0.1.14), or from 0.1.14 inside a
+    session HTTP 200 with its own JSON-RPC error for this id (-32602, or -32603 for a backend not configured) and no
+    result. A child's reply (a result, isError or another code) is never a refusal."""
+    if status == 403:
+        return True
+    if status != 200 or not isinstance(message, dict) or 'result' in message:
+        return False
+    error = message.get('error')
+    return (type(message.get('id')) is int and message['id'] == ident and isinstance(error, dict)
+            and error.get('code') in (-32602, -32603))
 
 
 def first_call(client, sid, opts):
@@ -282,13 +299,15 @@ def describe(message):
 
 
 def mode_plan(opts, client, out, plan):
-    """reads must succeed (HTTP 200, not isError, no in-band failure); denials must be refused (HTTP 403).
+    """reads must succeed (HTTP 200, not isError, no in-band failure); denials must be refused by the gateway (HTTP 403,
+    or from 0.1.14 inside a session HTTP 200 with the gateway's JSON-RPC -32602/-32603 error: gateway_refused()).
 
     With --expect-backend-down, every read must still be answered (HTTP 200: local tools keep working,
     backend tools report the failure) and at least one read must fail in a structured way (isError or an
     in-band failure), proving the server answers instead of hanging or crashing during an outage. A child
     that cannot open a session without its backend makes the gateway refuse initialize with HTTP 503 and
-    BACKEND_UNAVAILABLE (0.1.2); that refusal is the structured failure, and denials must still be 403.
+    BACKEND_UNAVAILABLE (0.1.2); that refusal is the structured failure, and denials (sent without a session) must
+    still be 403.
     """
     status, message, sid = client.open()
     refused = (opts.expect_backend_down and opts.allow_initialize_refusal and status == 503
@@ -306,14 +325,16 @@ def mode_plan(opts, client, out, plan):
             out.write('tools/list http=%s tools=%d\n' % (list_status, len(listed)))
         for kind in kinds:
             for i, (name, arguments) in enumerate(plan.get(kind, [])):
-                call_status, is_error, text = client.call_text(sid, name, arguments, ident=300 + len(rows))
+                ident = 300 + len(rows)
+                call_status, is_error, text = client.call_text(sid, name, arguments, ident=ident)
                 structured = bool(is_error or backend_failed(text))
+                answered = isinstance(client.last_message, dict) and isinstance(client.last_message.get('result'), dict)
                 if kind == 'reads' and opts.expect_backend_down:
-                    ok = call_status == 200
-                elif kind == 'reads':
-                    ok = call_status == 200 and not is_error and not backend_failed(text)
+                    ok = call_status == 200 and not gateway_refused(call_status, client.last_message, ident)
+                elif kind == 'reads':  # 0.1.14: a gateway refusal is HTTP 200 too, without a result
+                    ok = call_status == 200 and answered and not is_error and not backend_failed(text)
                 else:
-                    ok = call_status == 403
+                    ok = gateway_refused(call_status, client.last_message, ident)
                 rows.append({'kind': kind, 'tool': name, 'listed': name in listed, 'http': call_status,
                              'isError': is_error, 'structured_failure': structured, 'pass': ok})
                 out.write('%-7s %-5s %-34s listed=%-5s http=%s isError=%s | %s\n' % (

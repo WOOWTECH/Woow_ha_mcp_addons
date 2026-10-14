@@ -249,8 +249,10 @@ async def run():
             assert any(t.get('success') is True if APP == 'n8n' else probe_success(APP, t) for t in texts)
             for auth in ({}, {'Authorization': 'Bearer wrong'}):
                 assert (await client.post(ENDPOINT, headers=auth, json=initialize)).status_code == 401
-            for method in ('resources/list', 'prompts/list', 'tasks/get'):
-                assert (await client.post(ENDPOINT, headers=headers, json={'jsonrpc': '2.0', 'id': 4, 'method': method})).status_code == 403
+            for method in ('resources/list', 'prompts/list', 'tasks/get', 'server/discover'):
+                # 0.1.13: the gateway's own JSON-RPC Method not found (was 403); never forwarded.
+                response = await client.post(ENDPOINT, headers=headers, json={'jsonrpc': '2.0', 'id': 4, 'method': method})
+                assert response.status_code == 200 and response.json()['error']['code'] == -32601
             await assert_denials(client, ENDPOINT, headers, APP, lambda: len(CALLS))
             # Missing identity and forged role/peer headers must still deny,
             # including after the separately implemented real verifier integrates.

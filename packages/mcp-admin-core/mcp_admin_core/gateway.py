@@ -1,7 +1,8 @@
-"""Independent Ingress-only admin and Bearer-only Streamable HTTP applications.
+"""Independent Ingress-only admin and token-authenticated Streamable HTTP applications.
 
 Management fails closed without an explicit role provider (installed only by n8n).
-No legacy SSE /sse or /messages endpoints are exposed.
+No legacy SSE /sse or /messages endpoints are exposed. The MCP endpoint is /mcp with a Bearer header and, from 0.1.12,
+/private_<token>/mcp with the same token in the path (Claude.ai custom connectors cannot send headers).
 """
 from __future__ import annotations
 
@@ -18,16 +19,17 @@ from typing import Awaitable, Callable
 import anyio
 import httpx
 from starlette.applications import Starlette
+from starlette.exceptions import HTTPException
 from starlette.requests import ClientDisconnect, Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route, request_response
 from starlette.middleware import Middleware
 
-from . import ui
+from . import redact, ui
 
 from . import VERSION
 from .config import ConfigError, State, Store, strict_json
-from .policy import Denied, authorize, filter_list
+from .policy import Denied, ToolCallRefused, UnknownMethod, authorize, filter_list
 from .ha_role import valid_user_id
 
 MAX_REQUEST = 262144
@@ -42,9 +44,9 @@ LONE_CR = re.compile(rb"\r(?!\n)")
 SSE_FIELD = re.compile(rb"(?:id|event):[ ]?[\x21-\x7e]{0,256}|retry:[ ]?[0-9]{1,10}")  # id as Last-Event-ID allows
 SSE_COMMENT = re.compile(rb":[\x20-\x7e]{0,1024}")
 # 0.1.4: the only child notification a client gets, and only as these fixed bytes (no child params). Progress is
-# never relayed: authorize refuses _meta, so no client can ask for it and any progress event is unsolicited child
-# text (the pinned TS client puts unknown-token progress into an error message); log messages and resource updates
-# carry child text or name surfaces the gateway never exposes.
+# never relayed: authorize removes params._meta before dispatch (0.1.13; refused it before), so no client can ask for
+# it and any progress event is unsolicited child text (the pinned TS client puts unknown-token progress into an error
+# message); log messages and resource updates carry child text or name surfaces the gateway never exposes.
 LIST_CHANGED = b'data: {"jsonrpc":"2.0","method":"notifications/tools/list_changed"}'
 # 0.1.5 (R1 #6): the pinned TS client puts an unsupported protocolVersion into an error, so no child text may pass.
 # 0.1.8 (review 6b): only the reviewed MCP revisions, not any date. The pinned children negotiate within this set,
@@ -258,6 +260,24 @@ def token_valid(request, state):
             and hmac.compare_digest(values[0].encode(), ("Bearer " + state.token).encode()))
 
 
+def secret_valid(secret, state):
+    """0.1.12: the /private_<secret>/mcp credential is the add-on token itself (rotate and revoke apply at once).
+
+    Both sides are hashed to fixed-length digests before hmac.compare_digest, so neither the token's length nor how
+    much of a guess matches shows in the timing; there is no separate length or charset check to leak through. A
+    revoked token (None) matches nothing."""
+    if state.token is None:
+        return False
+    supplied = hashlib.sha256(secret.encode("utf-8", "replace")).digest()
+    return hmac.compare_digest(supplied, hashlib.sha256(state.token.encode()).digest())
+
+
+def json_only(request):
+    """0.1.13: the client's Accept names application/json and neither text/event-stream nor */*."""
+    accept = ",".join(request.headers.getlist("accept")).lower()
+    return "application/json" in accept and "text/event-stream" not in accept and "*/*" not in accept
+
+
 async def error_handler(_, exc):
     if isinstance(exc, ConfigError):
         return JSONResponse({"error": "state unavailable"}, status_code=503)
@@ -271,6 +291,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
+    redact.install()  # 0.1.12: a request path may now carry the token; no log record may show it
     csrf_key = secrets.token_bytes(32)
     mutation_lock = asyncio.Lock()
     slots = asyncio.Semaphore(32)
@@ -622,21 +643,64 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         # A truncated SSE event is intentionally not dispatched.
 
     async def mcp(request):
-        state = store.load()
-        if not token_valid(request, state):
+        return await serve(request, None)
+
+    async def private_mcp(request):
+        return await serve(request, request.path_params["secret"])
+
+    async def serve(request, secret):
+        """secret is None on /mcp (Bearer header) and the path segment on /private_<secret>/mcp.
+
+        On the secret path a wrong, revoked or unset token is the same 404 as any unknown path (Starlette's own
+        HTTPException(404): same status, body and headers, no WWW-Authenticate), so the reply never says whether
+        the path exists, the token was revoked or the guess was close. The request's own Authorization header is
+        never read there, and an Origin header is allowed (never forwarded: the child only gets the gateway's own
+        headers). /mcp is unchanged: 401 with WWW-Authenticate, Origin 403.
+
+        0.1.14: on both paths, a well-formed tools/call the policy refuses (policy.ToolCallRefused) is answered HTTP 200
+        with a JSON-RPC error giving the reason, when it carries a session id; without one it stays 403 as before."""
+        def authorized(state):
+            return token_valid(request, state) if secret is None else secret_valid(secret, state)
+
+        def refused():
+            return BadRequest(401) if secret is None else HTTPException(404)
+
+        def unauthorized():
+            if secret is not None:
+                raise refused()
             return Response(status_code=401, headers={"WWW-Authenticate": "Bearer"})
-        if request.method not in ("GET", "POST", "DELETE"):  # any other method, only after the Bearer check
+
+        def tool_refusal(ident, refusal):
+            """0.1.14: a refused well-formed tools/call is answered as JSON-RPC (ToolCallRefused.error()), not 403."""
+            return json_reply({"jsonrpc": "2.0", "id": ident, "error": refusal.error()}, 200, {"Cache-Control": "no-store"})
+
+        state = store.load()
+        if not authorized(state):
+            return unauthorized()
+        if request.method not in ("GET", "POST", "DELETE"):  # any other method, only after the token check
             return Response(status_code=405, headers={"Allow": "GET, POST, DELETE"})
-        if request.headers.get("origin") is not None:
-            raise BadRequest(403)  # Browser clients not in this tracer contract.
+        if secret is None and request.headers.get("origin") is not None:
+            raise BadRequest(403)  # Browser clients not in the Bearer contract; the secret path is for Claude.ai.
         if request.url.query:
             raise BadRequest()
-        method = message = None
+        method = message = refusal = None
         content = b""
         if request.method == "POST":
             message = await json_body(request)
             try:
                 method = authorize(message, tools, state)
+            except ToolCallRefused as refused_call:
+                # 0.1.14: answered below with its reason when the request also carries usable session headers (as any
+                # tools/call needs), never with a slot or the child; otherwise still 403, as in 0.1.13.
+                method, refusal = "tools/call", refused_call
+            except UnknownMethod as unknown:
+                # 0.1.13: answered here, before the session check, a slot or the child (Claude.ai sends server/discover
+                # first and needs a JSON-RPC answer to fall back to initialize). Only after the token check above.
+                if not unknown.request:
+                    return Response(status_code=202, headers={"Cache-Control": "no-store"})
+                return json_reply({"jsonrpc": "2.0", "id": message["id"],
+                                   "error": {"code": -32601, "message": "Method not found"}},
+                                  200, {"Cache-Control": "no-store"})
             except Denied:
                 raise BadRequest(403) from None
         elif await body(request):
@@ -647,9 +711,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         for name in ("mcp-session-id", "mcp-protocol-version", "last-event-id"):
             values = request.headers.getlist(name)
             if len(values) > 1 or (values and (len(values[0]) > 256 or not re.fullmatch(r"[\x21-\x7e]+", values[0]))):
-                raise BadRequest()
+                raise BadRequest(403 if refusal is not None else 400)
             if values:
                 headers[name] = values[0]
+        if refusal is not None and "mcp-session-id" not in headers:
+            raise BadRequest(403)  # a refused call without a session: unchanged from 0.1.13
         if method != "initialize" and "mcp-session-id" not in headers:
             # 0.1.8 (0.1.6 RC GATEWAY-2): every child is stateful, so anything but initialize needs the session it
             # opened (MCP: such a server SHOULD answer 400). Forwarded, the pinned Python SDK children opened a new
@@ -663,6 +729,18 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 return Response(status_code=400, headers={"Cache-Control": "no-store"})
             return child_status_reply(message.get("id") if request.method == "POST" else None, 400,
                                       {"Cache-Control": "no-store"})
+        if refusal is not None:
+            # Decided again on fresh state (reading the body yielded): a revoked token is still refused as above, and a
+            # call the policy now allows takes the normal path below.
+            state = store.load()
+            if not authorized(state):
+                return unauthorized()
+            try:
+                authorize(message, tools, state)
+            except ToolCallRefused as refused_call:
+                return tool_refusal(message["id"], refused_call)
+            except Denied:
+                raise BadRequest(403) from None
         try:
             async with asyncio.timeout(1):
                 await slots.acquire()
@@ -674,11 +752,15 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         try:
             # Revalidate after yielding for body/concurrency; sessions do not cache policy.
             state = store.load()
-            if not token_valid(request, state):
-                raise BadRequest(401)
+            if not authorized(state):
+                raise refused()
             if request.method == "POST":
                 try:
                     authorize(message, tools, state)
+                except ToolCallRefused as refused_call:
+                    # The policy changed while this call waited for a slot: the same answer as above (the slot is
+                    # released by the finally below; the child is never reached).
+                    return tool_refusal(message["id"], refused_call)
                 except Denied:
                     raise BadRequest(403) from None
                 forwarded = message
@@ -704,7 +786,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 # client's (a child may echo it).
                 owner.end_session = functools.partial(end_session, state.child_token, session)
             if not still_authorized(state.token):
-                raise BadRequest(401)
+                raise refused()
             if not 200 <= upstream.status_code <= 599 or 300 <= upstream.status_code < 400:
                 raise BadRequest(502)  # no interim reply (an ASGI server cannot send it), no child redirect
             if upstream.status_code in (401, 403):
@@ -736,7 +818,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             if method == "initialize" and upstream.status_code == 200:
                 outcome, value, frame = await initialize_reply(owner, state.token, is_sse, message.get("id"))
                 if not still_authorized(state.token):
-                    raise BadRequest(401)
+                    raise refused()
                 if outcome == "missing":
                     return backend_unavailable(message.get("id"))
                 try:
@@ -761,7 +843,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                                            **({"instructions": instructions} if instructions else {})}
                 except ValueError:
                     raise BadRequest(502) from None
-                if frame is None:
+                if frame is None or json_only(request):
+                    # 0.1.13: a client that accepts only application/json gets the initialize answer as JSON even when
+                    # the child framed it as an SSE event (the gateway holds the parsed reply either way).
                     answer = json_reply(value, 200, response_headers)
                 else:
                     # The child's event framing (id/event/retry lines) with the filtered data.
@@ -776,7 +860,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 async for chunk in chunks(owner, state.token):
                     result.extend(chunk)
                 if not still_authorized(state.token):
-                    raise BadRequest(401)
+                    raise refused()
                 try:
                     if owner.overflowed:
                         raise ValueError("oversize reply")
@@ -817,7 +901,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     exceptions = {BadRequest: error_handler, ConfigError: error_handler}
     admin = Starlette(routes=[Route("/{path:path}", admin_page, methods=["GET", "HEAD", "PUT", "POST"])],
                       middleware=[Middleware(ui.SecurityHeaders)], exception_handlers=exceptions)
-    mcp_app = Starlette(routes=[Route("/mcp", AnyMethod(mcp)), Route("/health/ready", readiness)],
+    mcp_app = Starlette(routes=[Route("/mcp", AnyMethod(mcp)), Route("/private_{secret}/mcp", AnyMethod(private_mcp)),
+                                Route("/health/ready", readiness)],
                         exception_handlers=exceptions)
     admin.router.redirect_slashes = False
     mcp_app.router.redirect_slashes = False

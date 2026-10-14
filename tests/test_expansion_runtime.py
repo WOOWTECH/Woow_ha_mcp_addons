@@ -17,6 +17,7 @@ from test_real_products import connection, rpc
 from test_expansion_policy import call
 from n8n_adapter import TOOLS as N8N_TOOLS, child_spec as n8n_spec
 import nextcloud_fixtures
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 PID = '12345678-1234-1234-1234-123456789abc'
 READS = {
@@ -222,7 +223,7 @@ async def test_real_expanded_reads_and_explicit_writes(tmp_path, product):
                         tool = tools[name]
                         grant = name if tool.write else f'{name}:{args[tool.selector]}'
                         before = len(events)
-                        assert (await client.post('/mcp', headers=headers, json=call(name, args))).status_code == 403
+                        assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
                         assert len(events) == before
                         store.update(enabled_write_tools=[grant])
                         if product == 'odoo':
@@ -236,7 +237,7 @@ async def test_real_expanded_reads_and_explicit_writes(tmp_path, product):
                         assert len(mutations) == count + 1, (product, name, reply, failures)
                         before = len(events)
                         store.update(disabled=[name])
-                        assert (await client.post('/mcp', headers=headers, json=call(name, args))).status_code == 403
+                        assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
                         assert len(events) == before
                         store.update(disabled=[], enabled_write_tools=[])
                     assert not failures, failures

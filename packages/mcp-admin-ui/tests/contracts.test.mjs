@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { products, mountPath, explicitUrl, backendPayload, policyPayload, toolRows, clientExample } from '../src/contracts.js';
+import { products, mountPath, explicitUrl, backendPayload, policyPayload, toolRows, clientExample, claudeConnectorUrl } from '../src/contracts.js';
 import { AdminApi, ApiError } from '../src/api.js';
 const base = '/api/hassio_ingress/DUMMY';
 const bootstrap = () => ({ base_path: base, api_base: `${base}/api`, product: 'n8n', csrf: 'fresh_csrf_for_mock_only', tools: {} });
@@ -95,4 +95,14 @@ test('MOCK HTTP 200 without typed saved acknowledgement is not success', async (
 test('MOCK denied save never reports success or reflects server/body credentials', async () => {
   const api = new AdminApi(base, async path => path.endsWith('bootstrap') ? response(bootstrap()) : new Response('PRIVATE_CANARY', { status: 403 }));
   await assert.rejects(() => api.mutate('backend', { url: null, key: null }), error => error instanceof ApiError && error.status === 403 && !error.message.includes('PRIVATE_CANARY'));
+});
+test('Claude.ai connector URL: saved /mcp endpoint base + /private_<token>/mcp, never without an endpoint or valid token', () => {
+  const token = 'A'.repeat(21) + '-_' + 'z'.repeat(20);
+  assert.equal(claudeConnectorUrl('https://mcp.example.test/mcp', token), `https://mcp.example.test/private_${token}/mcp`);
+  assert.equal(claudeConnectorUrl('https://mcp.example.test:8443/mcp/', token), `https://mcp.example.test:8443/private_${token}/mcp`);
+  assert.equal(claudeConnectorUrl('https://proxy.example.test/odoo/mcp', token), `https://proxy.example.test/odoo/private_${token}/mcp`);
+  for (const endpoint of [null, undefined, '', 'https://mcp.example.test/api', 'https://mcp.example.test/mcp?x=1', 'https://u:p@mcp.example.test/mcp'])
+    assert.throws(() => claudeConnectorUrl(endpoint, token));
+  for (const bad of [null, '', 'short', 'A'.repeat(42), 'A'.repeat(44), 'A'.repeat(42) + '/', 'A'.repeat(42) + '?'])
+    assert.throws(() => claudeConnectorUrl('https://mcp.example.test/mcp', bad));
 });

@@ -14,6 +14,7 @@ from n8n_adapter import TOOLS as N8N_TOOLS
 from test_expansion_policy import call
 from test_expansion_runtime import READS, WRITES
 from test_real_products import connection
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 CASES = [(p, name, args) for p in READS for name, args in READS[p] + WRITES[p]]
 
@@ -41,9 +42,9 @@ async def test_extras_and_disabled_have_zero_child_dispatch(product, name, args,
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://boundary') as client:
             headers = {'Authorization': 'Bearer '+store.load().token, 'Mcp-Session-Id': 'existing'}
             for invalid in (call(name, {**args, 'unreviewed': True}), call('unknown', args)):
-                assert (await client.post('/mcp', headers=headers, json=invalid)).status_code == 403
+                assert refused(await client.post('/mcp', headers=headers, json=invalid))
             store.update(disabled=[name])
-            assert (await client.post('/mcp', headers=headers, json=call(name, args))).status_code == 403
+            assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
     assert calls == []
     store.close()
 
@@ -148,7 +149,7 @@ async def test_policy_api_commits_live_denial_before_owned_restart(tmp_path, pro
             await asyncio.wait_for(started.wait(), 2)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://boundary') as c:
                 denied = await c.post('/mcp', headers={'Authorization': 'Bearer '+store.load().token, 'Mcp-Session-Id': 'existing'}, json=call(name, args))
-                assert denied.status_code == 403
+                assert refused(denied)
             assert not calls and not task.done()
             finish.set()
             assert (await task).status_code == 200

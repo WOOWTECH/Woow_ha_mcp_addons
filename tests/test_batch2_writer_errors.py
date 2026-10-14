@@ -18,6 +18,7 @@ from test_batch2_policy import GRAPH
 from test_expansion_policy import call
 from test_expansion_runtime import payload
 from test_real_products import connection, rpc
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 KEY = 'OWNED_DUMMY_BACKEND_KEY_NOT_A_REAL_CREDENTIAL'
 CANARY = 'OWNED_PRIVATE_DIAGNOSTIC_MUST_NOT_ESCAPE'
@@ -190,7 +191,7 @@ async def test_writer_errors_real_owned_runtime(tmp_path, product):
                     args = GRAPH if product == 'n8n' else {'model': 'res.partner', 'record_id': 1, 'body': 'Owned note'}
                     store.update(writes_enabled=True)
                     before = len(dispatches)
-                    assert (await client.post('/mcp', headers=headers, json=call(name, args))).status_code == 403
+                    assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
                     assert not state['posts'] and len(dispatches) == before
                     store.update(enabled_write_tools=[name])
                     cases = (['exact', 401, 403, 'forbidden-publish', 404, 429, 500, 502, 503, 'text',
@@ -243,7 +244,7 @@ async def test_writer_errors_real_owned_runtime(tmp_path, product):
                     for policy in ({'disabled': [name]}, {'disabled': [], 'enabled_write_tools': []}):
                         store.update(**policy)
                         before, count = len(dispatches), len(state['posts'])
-                        assert (await client.post('/mcp', headers=headers, json=call(name, args))).status_code == 403
+                        assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
                         assert len(dispatches) == before and len(state['posts']) == count
                     assert not state['failures'], state['failures']
                     await client.delete('/mcp', headers=headers)

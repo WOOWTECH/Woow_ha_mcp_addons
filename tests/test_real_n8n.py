@@ -22,6 +22,7 @@ from mcp_admin_core.health import protocol_reply
 
 from owned_executable import Executable
 from batch2_owned_port import reserve_port
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -156,7 +157,7 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
                     for arguments in ({"active": None}, {"limit": None}):
                         before = len(fake_backend[1])
                         response = await workflow_call(arguments)
-                        assert response.status_code == 403
+                        assert refused(response)
                         # Any concurrent automatic health read has its own limit=1.
                         assert all(query["limit"] == ["1"] for query in workflow_queries()[before:])
                 assert all(call.startswith(b"GET /api/v1/workflows?") for call in fake_backend[1])

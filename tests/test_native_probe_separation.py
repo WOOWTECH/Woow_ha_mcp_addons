@@ -23,6 +23,7 @@ from mcp_admin_core.products import PROBES, ProductStore, TOOLS, child_spec
 from test_expansion_policy import call
 from test_expansion_runtime import WRITES, payload
 from test_real_products import connection, rpc
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 
 @contextmanager
@@ -151,7 +152,7 @@ async def test_policy_disable_keeps_private_probe_and_public_denial(tmp_path, pr
                         for name in names:
                             arguments = dict(WRITES[product]).get(name, {})
                             response = await client.post('/mcp', headers=headers, json=call(name, arguments))
-                            assert response.status_code == 403, (name, response.text)
+                            assert refused(response), (name, response.text)
                         assert (len(child_requests), len(events), len(mutations)) == before
 
                     # Same still-live session is denied before the owned restart.
@@ -311,7 +312,7 @@ async def test_nextcloud_private_probe_survives_public_disable(tmp_path, grant_w
                     assert ODOO_HEALTH_PROBE not in {t['name'] for t in listed['tools']}
                     before = len(events)
                     response = await client.post('/mcp', headers=headers, json=call(ODOO_HEALTH_PROBE, {}))
-                    assert response.status_code == 403 and len(events) == before
+                    assert refused(response) and len(events) == before
                     read, read_args = PROBES[product]
                     payload(await rpc(client, '/mcp', headers, call(read, read_args)))
                     if grant_writer:

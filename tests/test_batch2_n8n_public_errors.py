@@ -16,6 +16,7 @@ from n8n_adapter import TOOLS, child_spec
 from test_batch2_policy import GRAPH
 from test_expansion_policy import call
 from test_real_products import rpc
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 KEY = 'OWNED_N8N_READ_RECEIVED_DUMMY_KEY'
 PRIVATE = 'OWNED_N8N_PRIVATE_DIAGNOSTIC'
@@ -190,7 +191,7 @@ async def test_readonly_404_received_key_no_writer_grants(tmp_path):
         for name, args, grant, *_ in BRANCHES:
             if grant:
                 before = len(dispatches)
-                assert (await client.post('/mcp', headers=headers, json=call(name, args))).status_code == 403
+                assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
                 assert len(dispatches) == before and not state['calls']
         wire.clear()
         reply = await rpc(client, '/mcp', headers, call('n8n_list_workflows', {'limit': 1}))
@@ -231,7 +232,7 @@ async def test_enabled_api_error_corpus(tmp_path, branch):
             for policy in ({'disabled': [name]}, {'disabled': [], 'enabled_write_tools': []}):
                 store.update(**policy)
                 before, count = len(dispatches), len(state['calls'])
-                assert (await client.post('/mcp', headers=headers, json=call(name, args))).status_code == 403
+                assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
                 assert len(dispatches) == before and len(state['calls']) == count
         assert not state['failures'], state['failures']
 

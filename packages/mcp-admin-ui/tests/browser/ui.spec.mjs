@@ -193,6 +193,39 @@ test('MOCK explicit endpoint and clipboard defaults never guess ingress origin o
   expect(clip).toContain('https://mcp.example.test:8081/mcp');
   expect(clip).toContain('<YOUR_ADDON_TOKEN>');
 });
+test('MOCK Claude.ai connector URL needs a saved endpoint, a deliberate CSRF reveal, and hides like the token', async ({ page, context, request }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await start(page, '/access');
+  const show = page.getByRole('button', { name: '顯示 Claude.ai 連線網址', exact: true });
+  await expect(show).toBeDisabled();
+  await expect(page.getByText('尚未設定 MCP 用戶端端點：', { exact: false })).toBeVisible();
+  await expect(page.locator('body')).not.toContainText('private_');
+  await page.getByLabel('MCP 用戶端端點').fill('https://mcp.example.test:8443/mcp');
+  await page.getByRole('button', { name: '儲存端點', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('MCP 端點已儲存');
+  await expect(page.locator('#claude-secret')).toBeHidden();
+  await expect(page.locator('body')).not.toContainText('private_');
+  await show.click();
+  await page.getByRole('dialog').getByRole('button', { name: '取消' }).click();
+  expect((await calls(request)).filter(call => call.operation.startsWith('token/'))).toHaveLength(0);
+  await show.click();
+  await confirm(page, '確認繼續');
+  const url = `https://mcp.example.test:8443/private_${'M'.repeat(43)}/mcp`;
+  await expect(page.locator('#claude-secret code')).toHaveText(url);
+  await expect(page.locator('#token-secret')).toBeHidden();
+  await page.getByRole('button', { name: '複製 Claude.ai 連線網址', exact: true }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(url);
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await expect(page.locator('#claude-secret')).toBeHidden();
+  await expect(page.locator('body')).not.toContainText('private_');
+  expect((await calls(request)).filter(call => call.operation.startsWith('token/')).map(call => ({ operation: call.operation, method: call.method, validCsrf: call.validCsrf })))
+    .toEqual([{ operation: 'token/reveal', method: 'POST', validCsrf: true }]);
+  await page.getByRole('button', { name: '撤銷權杖', exact: true }).click();
+  await confirm(page, '確認撤銷');
+  await expect(page.getByRole('status')).toContainText('權杖已撤銷');
+  await expect(show).toBeDisabled();
+  expect(page.url()).not.toContain('MMMM');
+});
 test('MOCK per-tool/per-operation grants and disabled controls; legacy broad writes never enabled', async ({ page, request }) => {
   await reset(request, { granular: true });
   await start(page, '/tools');

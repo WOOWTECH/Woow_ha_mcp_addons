@@ -25,6 +25,7 @@ from mcp_admin_core.products import INSTRUCTIONS, ODOO_HEALTH_PROBE, PRODUCTS, P
 from owned_executable import Executable
 from batch2_owned_port import reserve_port
 import nextcloud_fixtures
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -211,12 +212,13 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     assert any(probe_success(product, text) for text in texts), texts
                     assert calls, 'no real backend call'
                     before = len(calls)
-                    for denied in ('resources/list', 'resources/read', 'prompts/list', 'tasks/get'):
+                    for denied in ('resources/list', 'resources/read', 'prompts/list', 'tasks/get', 'server/discover'):
+                        # 0.1.13: the gateway's own JSON-RPC Method not found (was 403); still never forwarded.
                         response = await client.post(endpoint, headers=headers, json={'jsonrpc': '2.0', 'id': 4, 'method': denied})
-                        assert response.status_code == 403
+                        assert response.status_code == 200 and response.json()['error']['code'] == -32601
                     for denied in ('unknown', 'hermes_chat', 'delete_project', 'emqx_publish', 'litellm_chat_completion', 'execute_method'):
                         response = await client.post(endpoint, headers=headers, json={'jsonrpc': '2.0', 'id': 5, 'method': 'tools/call', 'params': {'name': denied, 'arguments': {}}})
-                        assert response.status_code == 403
+                        assert refused(response)
                     for auth in ({}, {'Authorization': 'Bearer wrong'}):
                         response = await client.post(endpoint, headers=auth, json=init)
                         assert response.status_code == 401

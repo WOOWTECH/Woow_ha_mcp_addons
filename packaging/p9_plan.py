@@ -7,7 +7,8 @@ reads   supported-bounded tools (or operations) whose effect is read, with minim
         arguments cannot be built safely (free-form or patterned strings) is listed under needs_args unless
         --overrides supplies its arguments
 denials supported write tools/operations (writes are off by default), read operations the accepted schema
-        does not admit, withheld tools and one unknown tool; the gateway must refuse each with HTTP 403.
+        does not admit, withheld tools and one unknown tool; the gateway must refuse each (HTTP 403, or from 0.1.14
+        inside a session HTTP 200 with its own JSON-RPC -32602/-32603 error; ha_p9_probe.gateway_refused).
         Their arguments are schema-valid where possible but aim at records that cannot exist (largest
         allowed integer ids, placeholder names) so a broken guard harms nothing
 

@@ -13,6 +13,7 @@ import signal
 import httpx
 import uvicorn
 
+from mcp_admin_core import redact
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.products import ProductStore
 from mcp_admin_core.gateway import make_apps
@@ -54,6 +55,9 @@ async def run(args):
                 lifespan="off",  # this function, not ASGI lifespan, owns runtime resources
                 limit_concurrency=64, timeout_keep_alive=5)) for app, port in
                 ((admin, args.admin_port), (mcp, args.mcp_port))]
+            # 0.1.12: the token may be in a request path (/private_<token>/mcp): scrub every log record.
+            redact.install()
+            redact.guard_handlers(*redact.UVICORN_LOGGERS)
             await manager.start()
             monitor_task = asyncio.create_task(health.run())
             tasks = [asyncio.create_task(server.serve()) for server in servers]

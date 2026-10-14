@@ -12,6 +12,7 @@ import test_batch2_n8n_public_errors as owned
 from test_b3_n8n_runtime import backend
 from test_expansion_policy import call
 from test_real_products import rpc
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 QUERIES = [
     ('bmp256', '界' * 256, True),
@@ -98,7 +99,7 @@ async def test_b3_unicode_actual_query_boundaries(tmp_path, monkeypatch):
             if not valid:
                 before = len(dispatches), len(state['calls'])
                 response = await client.post('/mcp', headers=headers, json=call('n8n_list_catalog', args))
-                assert response.status_code == 403
+                assert refused(response)
                 assert (len(dispatches), len(state['calls'])) == before
                 continue
             # Both matching and nonmatching use the genuine upstream filter.

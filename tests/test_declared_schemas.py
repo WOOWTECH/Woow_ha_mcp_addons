@@ -25,6 +25,7 @@ from test_batch2_bounds import BAD as NESTED_BYPASSES
 from test_expansion_policy import call
 from test_expansion_runtime import READS, WRITES
 from test_real_products import connection
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 ROOT = Path(__file__).resolve().parents[1]
 # The provider refusals, written out here rather than imported: a keyword dropped from the gateway's list must fail.
@@ -378,7 +379,8 @@ def test_gateway_still_refuses_what_only_the_branch_rules_forbid(name, verdicts)
     assert tight
 
 
-# Branch-only refusals named one by one, through the gateway: 403 and the child is never called.
+# Branch-only refusals named one by one, through the gateway: refused (0.1.14: JSON-RPC Invalid params inside a session,
+# formerly 403) and the child is never called.
 BRANCH_INVALID = [
     ('n8n_manage_folders', {'action': 'list', 'name': 'x'}), ('n8n_manage_folders', {'action': 'create'}),
     ('n8n_manage_folders', {'action': 'rename', 'name': 'x'}),
@@ -420,7 +422,7 @@ async def test_branch_invalid_calls_never_reach_the_child(tmp_path):
                     for name, args in BRANCH_INVALID:
                         if SEVEN[name] == product:
                             response = await client.post('/mcp', headers=headers, json=call(name, args))
-                            assert response.status_code == 403 and response.json() == {'error': 'request denied'}, args
+                            assert refused(response, 'Invalid params'), args
                     # A branch-valid call still goes through: the refusals above are the arguments', not the policy's.
                     name, args = BRANCH_VALID[product]
                     assert (await client.post('/mcp', headers=headers, json=call(name, args))).status_code == 200

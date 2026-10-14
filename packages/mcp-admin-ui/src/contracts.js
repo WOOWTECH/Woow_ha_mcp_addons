@@ -109,3 +109,12 @@ export function policyPayload(bootstrap, disabled, grants) {
 export function clientExample(endpoint, token = null) {
   return JSON.stringify({ mcpServers: { woow: { type: 'http', url: endpoint ? explicitUrl(endpoint, true) : 'https://YOUR-MCP-HOST:PORT/mcp', headers: { Authorization: `Bearer ${token ?? '<YOUR_ADDON_TOKEN>'}` } } } }, null, 2);
 }
+// 0.1.12: Claude.ai custom connectors cannot send an Authorization header. The gateway also accepts the add-on token
+// as a path segment: <the saved /mcp endpoint without its final /mcp>/private_<token>/mcp. Built only from the
+// explicitly saved endpoint (never this page's origin) and only from a freshly revealed token.
+export function claudeConnectorUrl(endpoint, token) {
+  if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) throw new UiError('權杖格式不符，未產生連線網址。');
+  if (!endpoint) throw new UiError('尚未設定 MCP 用戶端端點，無法產生 Claude.ai 連線網址。');
+  const clean = explicitUrl(endpoint, true);
+  return `${clean.slice(0, -'/mcp'.length)}/private_${token}/mcp`;
+}

@@ -22,8 +22,11 @@ class DenialTests(unittest.TestCase):
         calls = []
         async def fake(request):
             import json
+            message = json.loads(request.content)
             try:
-                authorize(json.loads(request.content), tools, state)
+                authorize(message, tools, state)
+            except policy.ToolCallRefused as refused:  # the gateway's 0.1.14 answer
+                return httpx.Response(200, json={'jsonrpc': '2.0', 'id': message['id'], 'error': refused.error()})
             except policy.Denied:
                 return httpx.Response(403)
             calls.append('OWNED fake backend only')
@@ -58,7 +61,7 @@ class DenialTests(unittest.TestCase):
                     ns['authorize']({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call',
                         'params': {'name': name, 'arguments': copy.deepcopy(args)}},
                         tools, state.model_copy(update={'disabled': disabled}))
-            with self.subTest(product=product), self.assertRaisesRegex(AssertionError, 'schema-valid supported write: HTTP denial missing'):
+            with self.subTest(product=product), self.assertRaisesRegex(AssertionError, 'schema-valid supported write: refusal missing'):
                 self.exercise(product, ns['authorize'])
 
     def test_denial_status_without_zero_backend_delta_fails(self):
