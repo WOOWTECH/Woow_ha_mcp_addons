@@ -630,7 +630,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                             # and no pinned child keeps an event store.
                             continue
                         else:
-                            checked = gateway_reply(value, request[1])
+                            # 0.2.0: backend errors carry their own text; no credential the add-on holds leaves
+                            checked = redact.redact_secrets(gateway_reply(value, request[1]),
+                                                            redact.secret_values(store.load()))
                             if (isinstance(checked.get("result"), dict)
                                     and {"tools", "capabilities"} & checked["result"].keys()):
                                 checked = filter_list(checked, tools, store.load())
@@ -870,7 +872,10 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     value = strict_json(bytes(result))
                     if not (one_reply(value) and same_id(value.get("id"), message.get("id"))):
                         raise ValueError("not this request's reply")
-                    value = filter_list(gateway_reply(value, method), tools, store.load())
+                    current = store.load()
+                    # 0.2.0: backend errors carry their own text; no credential the add-on holds leaves
+                    value = filter_list(redact.redact_secrets(gateway_reply(value, method), redact.secret_values(current)),
+                                        tools, current)
                 except (ValueError, RecursionError):
                     raise BadRequest(502) from None
                 return json_reply(value, 200, response_headers)

@@ -4,8 +4,8 @@
     "source": "local:614ae663fadd91c76972f60017a76d2627bea87e",
     "path": "hermes_mcp_server/server.py",
     "upstream_sha256": "e1c3f7be4de0302fafb85848641d89a43e83565afa844da9f813f10a718c25a6",
-    "local_sha256": "ce2c40bc15896b2bd460d2e3d577f3bff0c3644a64fcdc7d5ed949532f198176",
-    "modification": "Use scoped DNS-pinned HTTPX transport for gateway, dashboard login and cookie clients; deny redirects/proxies. Map inspect exception fields by type, never raw exception text; explicit safe error boundaries (backend_errors) on every other handler, including late decoding/JSON failures, preserving signatures and successful output. 0.2.0: the W2b session/cron metadata projections are gone (upstream's own list output again); hermes_mcp, hermes_config, hermes_chat and hermes_webhook got the same error boundary."
+    "local_sha256": "b902871ecc9a60c5013e807a94c512a196f3b53d6c176abaac22bd8761214337",
+    "modification": "Use scoped DNS-pinned HTTPX transport for gateway, dashboard login and cookie clients; deny redirects/proxies. Inspect exception fields carry backend_error_text (class code and the backend's own text, 0.2.0); explicit safe error boundaries (backend_errors) on every other handler, including late decoding/JSON failures, preserving signatures and successful output. 0.2.0: the W2b session/cron metadata projections are gone (upstream's own list output again); hermes_mcp, hermes_config, hermes_chat and hermes_webhook got the same error boundary."
   },
   {
     "product": "hermes",
@@ -69,9 +69,7 @@
     "product": "emqx",
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/errors.py",
-    "upstream_sha256": "c7e0035e810600c10db1bd5ff21f511f3023c4b1c0c57931b3487ba6d4611795",
-    "local_sha256": "d8264e158ade0102720f7d35762c9edadba6244dbbbf768a527bc2cc9ee0813b",
-    "modification": "Map request exceptions by type into stable public ToolError codes, including lazy stream/close/decompression failures; reject invalid JSON/encoding instead of returning an empty success. No raw exception or response-body diagnostics."
+    "upstream_sha256": "c7e0035e810600c10db1bd5ff21f511f3023c4b1c0c57931b3487ba6d4611795"
   },
   {
     "product": "emqx",
@@ -183,9 +181,7 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/errors.py",
-    "upstream_sha256": "3bc39077a69c07b2b0ceeb306510dc2f71ccc3b604187a4cecedab784efc1768",
-    "local_sha256": "3615e517ac06aef789b9dad2387bd6fe4238f49f493d3fe2e95a4965c10a034f",
-    "modification": "Replace raw-body/exception public errors with bounded stable BACKEND codes/status; use shared type-based mapping for lazy stream/close/decompression failures and reject all JSON parsing exceptions without returning raw text."
+    "upstream_sha256": "3bc39077a69c07b2b0ceeb306510dc2f71ccc3b604187a4cecedab784efc1768"
   },
   {
     "product": "litellm",
@@ -296,8 +292,8 @@
     "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "nextcloud_mcp_server/client.py",
     "upstream_sha256": "303355520e6465fd8919c0e631151d5220c7703bfd7cde801a41daf2cdf90db8",
-    "local_sha256": "3b3c1513de0d6adfb7be4f562f451433c74bc6c12dcffda139545aea8266679a",
-    "modification": "WOOW HA add-on, gateway contract only (upstream code mode (v0.1.4+) already prefixes every backend/transport error with its public code, using backend_policy.public_backend_error for hook exceptions): (1) load_backend_policy() refuses to start (BackendPolicyError, exit 2) when no backend_policy module exists, instead of falling back to an unrestricted client; (2) the error body of an unexpected status is never read: behind backend_policy only an unexpected 2xx (e.g. 200 where 207 is expected) arrives with a real body, and its Sabre message is backend text that must not reach a tool error."
+    "local_sha256": "ff580443469ca9e3db8068b14417100f3953b456e14ae2ab533e927d023def70",
+    "modification": "WOOW HA add-on: load_backend_policy() refuses to start (BackendPolicyError, exit 2) when no backend_policy module exists, instead of falling back to an unrestricted client. 0.2.0: the upstream error-body detail (server_message of a non-2xx answer) is reported again, as upstream."
   },
   {
     "product": "nextcloud",
@@ -333,9 +329,7 @@
     "product": "nextcloud",
     "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "nextcloud_mcp_server/tools.py",
-    "upstream_sha256": "9b22f15816e56e6808a509886d89f52a04152dec99bf9078ccd257e098fb4aa4",
-    "local_sha256": "6793cb95acea38f746803c3a486511ea3ecea3eb204abccaec43aa380a4fcafa",
-    "modification": "WOOW HA add-on: the 'paths outside the home folder' error no longer prints the account's home path (it contains the backend's user id); upstream's BACKEND_INVALID_RESPONSE code is kept. Nothing else changed."
+    "upstream_sha256": "9b22f15816e56e6808a509886d89f52a04152dec99bf9078ccd257e098fb4aa4"
   },
   {
     "product": "nextcloud",

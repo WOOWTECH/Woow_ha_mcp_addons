@@ -16,7 +16,7 @@ import time
 from typing import Any
 
 import httpx
-from backend_policy import async_client, backend_errors, public_backend_error
+from backend_policy import async_client, backend_errors, backend_error_text
 from mcp.server.fastmcp import FastMCP
 
 # ---------------------------------------------------------------------------
@@ -193,7 +193,7 @@ async def hermes_inspect(target: str = "all") -> str:
                 resp.raise_for_status()
                 result["capabilities"] = resp.json()
         except Exception as exc:
-            result["capabilities_error"] = public_backend_error(exc)
+            result["capabilities_error"] = backend_error_text(exc)
 
     if target in ("all", "config"):
         try:
@@ -207,7 +207,7 @@ async def hermes_inspect(target: str = "all") -> str:
                     "max_live_sessions": cfg.get("max_live_sessions"),
                 }
         except Exception as exc:
-            result["config_error"] = public_backend_error(exc)
+            result["config_error"] = backend_error_text(exc)
 
     if target in ("all", "model"):
         try:
@@ -216,7 +216,7 @@ async def hermes_inspect(target: str = "all") -> str:
                 resp.raise_for_status()
                 result["model_info"] = resp.json()
         except Exception as exc:
-            result["model_info_error"] = public_backend_error(exc)
+            result["model_info_error"] = backend_error_text(exc)
 
     if target in ("all", "status"):
         try:
@@ -230,7 +230,7 @@ async def hermes_inspect(target: str = "all") -> str:
                     "active_sessions": st.get("active_sessions"),
                 }
         except Exception as exc:
-            result["status_error"] = public_backend_error(exc)
+            result["status_error"] = backend_error_text(exc)
 
     return json.dumps(result, indent=2, default=str)
 

@@ -113,10 +113,10 @@ print(json.dumps(out))
     assert report['success'] is False and calls == []
     for bad in (True, 2, '1', None, -1):
         assert out['bad %r' % (bad,)] == [{'success': False, 'error': 'BACKEND_RESPONSE_INVALID'}, 2]
-    # a failed count: only a fixed transport code is reported, never exception text
+    # 0.2.0 (owner decision 2026-10-15): a failed count reports the backend's own text (the gateway redacts credentials)
     assert out['fail BACKEND_RPC_FAULT'] == [{'success': False, 'error': 'BACKEND_RPC_FAULT'}, 2]
     assert out['fail BACKEND_HTTP_ERROR status=502'] == [{'success': False, 'error': 'BACKEND_HTTP_ERROR status=502'}, 2]
-    assert out['fail raw backend text'] == [{'success': False, 'error': 'BACKEND_RESPONSE_INVALID'}, 2]
+    assert out['fail raw backend text'] == [{'success': False, 'error': 'raw backend text'}, 2]
 
 
 def test_install_wraps_the_registered_sync_handler_only():
@@ -239,8 +239,9 @@ async def test_genuine_child_reports_a_missing_id_only_read_as_not_found(tmp_pat
                                                        ['read'])
                     state['fault'] = True
                     value, ops = await read(1, ['id'])
-                    assert value == {'success': False, 'error': 'BACKEND_RPC_FAULT'} and ops == ['read', 'search_count']
-                    assert 'raw backend fault text' not in json.dumps(value)
+                    # 0.2.0: Odoo's own fault text (it was BACKEND_RPC_FAULT)
+                    assert value['success'] is False and 'raw backend fault text' in value['error'], value
+                    assert ops == ['read', 'search_count']
                     assert not failures, failures
                     await client.delete('/mcp', headers=headers)
         finally:

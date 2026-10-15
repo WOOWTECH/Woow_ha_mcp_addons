@@ -73,12 +73,12 @@ class BackendDenied(ValueError):
 
 
 class BackendStreamError(httpx.HTTPError):
-    def __init__(self):
-        super().__init__('BACKEND_STREAM_ERROR')
+    def __init__(self, cause=None):
+        super().__init__('BACKEND_STREAM_ERROR' + (f': {cause}' if cause is not None and str(cause) else ''))
 
 
-def public_backend_error(exc):
-    """Type-based public error mapping. Never inspect backend exception text."""
+def error_code(exc):
+    """The type-based class of a backend failure (a stable prefix; the backend's own text follows it)."""
     if isinstance(exc, BackendFailure):
         return exc.code
     if isinstance(exc, BackendHTTPError):
@@ -96,10 +96,33 @@ def public_backend_error(exc):
     return 'BACKEND_UNAVAILABLE'
 
 
+def public_backend_error(exc):
+    """The class code only (the stable hook other code keys on: Nextcloud's code mode, Odoo Manage)."""
+    return error_code(exc)
+
+
+def backend_error_text(exc):
+    """0.2.0 (owner decision 2026-10-15, as the PaaS servers): the class code AND the backend's own error text, e.g.
+    'BACKEND_UNAVAILABLE: [Errno 111] Connection refused'. The gateway replaces every credential the add-on holds
+    (tokens, backend keys and passwords, their Basic forms) with [REDACTED] in every reply it relays
+    (redact.redact_secrets); child output never reaches a log (the Supervisor discards it)."""
+    if isinstance(exc, BackendFailure):
+        return exc.message
+    code = error_code(exc)
+    try:
+        detail = str(exc).strip()
+    except Exception:
+        detail = ''
+    if not detail:
+        detail = type(exc).__name__
+    return detail if detail == code or detail.startswith(code + ':') else f'{code}: {detail}'
+
+
 class BackendFailure(httpx.HTTPError):
     def __init__(self, exc):
-        self.code = public_backend_error(exc)
-        super().__init__(self.code)
+        self.code = error_code(exc)
+        self.message = backend_error_text(exc)
+        super().__init__(self.message)
 
 
 def backend_errors(function):
@@ -310,16 +333,16 @@ class SyncResponseStream(httpx.SyncByteStream):
             yield from self.stream
         except (httpx.TimeoutException, httpcore.TimeoutException):
             raise httpx.TimeoutException('BACKEND_TIMEOUT') from None
-        except Exception:
-            raise BackendStreamError() from None
+        except Exception as exc:
+            raise BackendStreamError(exc) from None
 
     def close(self):
         try:
             self.stream.close()
         except (httpx.TimeoutException, httpcore.TimeoutException):
             raise httpx.TimeoutException('BACKEND_TIMEOUT') from None
-        except Exception:
-            raise BackendStreamError() from None
+        except Exception as exc:
+            raise BackendStreamError(exc) from None
 
 
 class AsyncResponseStream(httpx.AsyncByteStream):
@@ -332,16 +355,16 @@ class AsyncResponseStream(httpx.AsyncByteStream):
                 yield chunk
         except (httpx.TimeoutException, httpcore.TimeoutException):
             raise httpx.TimeoutException('BACKEND_TIMEOUT') from None
-        except Exception:
-            raise BackendStreamError() from None
+        except Exception as exc:
+            raise BackendStreamError(exc) from None
 
     async def aclose(self):
         try:
             await self.stream.aclose()
         except (httpx.TimeoutException, httpcore.TimeoutException):
             raise httpx.TimeoutException('BACKEND_TIMEOUT') from None
-        except Exception:
-            raise BackendStreamError() from None
+        except Exception as exc:
+            raise BackendStreamError(exc) from None
 
 
 class SyncTransport(httpx.HTTPTransport):
@@ -358,17 +381,13 @@ class SyncTransport(httpx.HTTPTransport):
             response = super().handle_request(request)
         except (BackendDenied, BackendBusy):
             raise
-        except httpx.TimeoutException:
-            raise httpx.TimeoutException('BACKEND_TIMEOUT') from None
-        except Exception:
-            raise httpx.ConnectError('BACKEND_UNAVAILABLE') from None
+        except httpx.TimeoutException as exc:
+            raise httpx.TimeoutException(f'BACKEND_TIMEOUT: {exc}') from None
+        except Exception as exc:
+            raise httpx.ConnectError(f'BACKEND_UNAVAILABLE: {exc}') from None
+        # 0.2.0: a non-2xx answer goes to the child's own handling, which reports the backend's error body as the
+        # original server does (it was a body-less BackendHTTPError before).
         response.stream = SyncResponseStream(response.stream)
-        if not 200 <= response.status_code < 300:
-            try:
-                response.close()
-            except Exception:
-                pass  # Status is authoritative; cleanup diagnostics are not public.
-            raise BackendHTTPError(response.status_code)
         return response
 
 
@@ -386,17 +405,12 @@ class AsyncTransport(httpx.AsyncHTTPTransport):
             response = await super().handle_async_request(request)
         except (BackendDenied, BackendBusy):
             raise
-        except httpx.TimeoutException:
-            raise httpx.TimeoutException('BACKEND_TIMEOUT') from None
-        except Exception:
-            raise httpx.ConnectError('BACKEND_UNAVAILABLE') from None
+        except httpx.TimeoutException as exc:
+            raise httpx.TimeoutException(f'BACKEND_TIMEOUT: {exc}') from None
+        except Exception as exc:
+            raise httpx.ConnectError(f'BACKEND_UNAVAILABLE: {exc}') from None
+        # 0.2.0: a non-2xx answer goes to the child's own handling (see SyncTransport).
         response.stream = AsyncResponseStream(response.stream)
-        if not 200 <= response.status_code < 300:
-            try:
-                await response.aclose()
-            except Exception:
-                pass  # Do not swallow cancellation or replace the status error.
-            raise BackendHTTPError(response.status_code)
         return response
 
 
@@ -460,13 +474,13 @@ class XMLTransport(xmlrpc.client.Transport):
             return self.single_request(host, handler, request_body, verbose)
         except (BackendDenied, BackendBusy):
             raise
-        except TimeoutError:
-            raise ValueError('BACKEND_TIMEOUT') from None
+        except TimeoutError as exc:
+            raise ValueError(f'BACKEND_TIMEOUT: {exc}') from None
         except xmlrpc.client.ProtocolError as exc:
-            raise ValueError(f'BACKEND_HTTP_ERROR status={int(exc.errcode)}') from None
+            raise ValueError(f'BACKEND_HTTP_ERROR status={int(exc.errcode)}: {exc.errmsg}') from None
         except xmlrpc.client.Fault:
-            raise ValueError('BACKEND_RPC_FAULT') from None
-        except Exception:
-            raise ValueError('BACKEND_UNAVAILABLE') from None
+            raise  # 0.2.0: Odoo's own fault (AccessError, ValidationError...) reaches odoo-mcp as the PaaS server sees it
+        except Exception as exc:
+            raise ValueError(f'BACKEND_UNAVAILABLE: {exc}') from None
         finally:
             self.close()

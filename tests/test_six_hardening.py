@@ -3,6 +3,7 @@ import asyncio
 from contextlib import asynccontextmanager, contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import re
 from pathlib import Path
 import socket
 import threading
@@ -28,6 +29,10 @@ def serve(handler):
         yield f'http://127.0.0.1:{server.server_port}'
     finally:
         server.shutdown(); server.server_close(); thread.join()
+
+
+# An error reply: a tool error, a failure payload or a JSON-RPC error.
+ERROR_REPLY = re.compile(r'"isError":\s*true|"success\\?":\s*false|"error":\s*\{|"error\\?":\s*\\?"[^"\\]|_error\\?":')
 
 
 class Quiet(BaseHTTPRequestHandler):
@@ -180,7 +185,9 @@ async def test_error_bodies_never_enter_gateway_stream(tmp_path, product, json_r
                     # Entire raw JSON/SSE: includes text, structuredContent and any notifications.
                     assert canary not in response.text, response.text
                     assert len(response.content) < 4096
-                    assert 'BACKEND_' in response.text, response.text
+                    # 0.2.0: the backend's own error text is relayed (as the PaaS servers), the configured
+                    # credential it echoes is [REDACTED] by the gateway; the reply is still an error.
+                    assert ERROR_REPLY.search(response.text), response.text
                     if latched:
                         assert len(calls) == before  # the auth latch sends nothing more
                     else:
@@ -321,5 +328,5 @@ async def test_hermes_dashboard_login_and_cookie_errors_are_safe(tmp_path):
                     mode['status'] = status
                     response = await client.post('/mcp', headers=headers, json=call('hermes_inspect', {'target': 'status'}))
                     assert canary not in response.text
-                    assert f'BACKEND_HTTP_ERROR status={status}' in response.text
+                    assert str(status) in response.text  # 0.2.0: the backend's own status text, credential redacted
             assert len(cookies) == 4

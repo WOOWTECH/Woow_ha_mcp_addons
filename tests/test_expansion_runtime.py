@@ -42,7 +42,9 @@ READS = {
 WRITES = {
     'odoo': [('chatter_post', {'model': 'res.partner', 'record_id': 1, 'body': 'Owned test comment'}),
              # 0.2.0: direct ORM writes through execute_method (ODOO_MCP_ALLOW_DIRECT_WRITES=1, PaaS patch)
-             ('execute_method', {'model': 'res.partner', 'method': 'write', 'args': [[1], {'name': 'Changed'}]})],
+             ('execute_method', {'model': 'res.partner', 'method': 'write', 'args': [[1], {'name': 'Changed'}]}),
+             # 0.2.0: an unreviewed side-effect method too (ODOO_MCP_ALLOW_UNKNOWN_METHODS=1, owner decision 2026-10-15)
+             ('execute_method', {'model': 'res.partner', 'method': 'action_confirm', 'args': [[1]]})],
     'odoo-manage': [('create_record', {'model': 'res.partner', 'values': {'name': 'New'}}),
                     ('update_record', {'model': 'res.partner', 'record_id': 1, 'values': {'name': 'Changed'}}),
                     ('delete_record', {'model': 'res.partner', 'record_id': 1})],
@@ -106,7 +108,7 @@ def fake_api(*, major=18, allow_write=True):
                         model, op = params[3:5]
                         assert model in ('ir.model', 'res.partner')
                         args, kwargs = params[5], params[6] if len(params) > 6 else {}
-                        if op in ('create', 'write', 'unlink', 'message_post'):
+                        if op in ('create', 'write', 'unlink', 'message_post', 'action_confirm'):
                             mutations.append((model, op, args, kwargs))
                             value = 2 if op in ('create', 'message_post') else True
                         elif op in ('read_group', 'formatted_read_group'):
@@ -232,12 +234,12 @@ async def test_real_expanded_reads_and_explicit_writes(tmp_path, product):
                         assert len(events) == before
                         store.update(enabled_write_tools=[grant])
                         if (product, name) == ('odoo', 'chatter_post'):
-                            preview = payload(await rpc(client, '/mcp', headers, call(name, args)))
-                            assert preview.get('mode') == 'preview', preview
-                            # As the child's text says: the returned approval, unchanged, with confirm=true
-                            # (earlier versions refused every member but token: -32602).
-                            assert set(preview['approval']) == {'model', 'method', 'record_ids', 'kwargs', 'instance', 'token'}
-                            args = {**args, 'approval': preview['approval'], 'confirm': True}
+                            # 0.2.0 (owner decision 2026-10-15): MCP_CHATTER_DIRECT=1 posts at once; a call that still
+                            # carries an approval and confirm=true (the 0.1.x preview flow) posts the same way.
+                            count = len(mutations)
+                            posted = payload(await rpc(client, '/mcp', headers, call(name, args)))
+                            assert posted.get('mode') == 'direct' and len(mutations) == count + 1, posted
+                            args = {**args, 'approval': {'token': 'odoo-write:' + '0' * 32}, 'confirm': True}
                         count = len(mutations)
                         reply = await rpc(client, '/mcp', headers, call(name, args))
                         payload(reply)

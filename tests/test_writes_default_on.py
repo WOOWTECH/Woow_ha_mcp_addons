@@ -1,8 +1,8 @@
 """Owner decision 2026-10-15: the full add-on, every tool and every write on by default.
 
 A new state (first boot) and every state migrated to schema 4 (from a 0.1.x schema 3, or 1/2 through 3) hold every
-write grant and writes_enabled true; the migration runs once and keeps the token, connection, endpoint and disabled
-list. After that the panel's choices are kept: a revoked grant stays revoked across restarts.
+write grant and writes_enabled true and no disabled tool; the migration runs once and keeps the token, connection and
+endpoint. After that the panel's choices are kept: a revoked grant or a disabled tool stays so across restarts.
 """
 from contextlib import closing
 import json
@@ -127,12 +127,14 @@ def test_a_0_1_state_migrates_once_to_every_write(tmp_path, product):
         state = store.load()
         assert state.schema_version == 4 and state.writes_enabled is True
         assert state.enabled_write_tools == fresh_write_grants(product) == sorted(grants_of(product))
-        for key in ('token', 'child_token', 'connection', 'backend_url', 'backend_key', 'endpoint', 'disabled'):
-            assert state.model_dump()[key] == old[key], key  # kept, disabled tools stay disabled
+        for key in ('token', 'child_token', 'connection', 'backend_url', 'backend_key', 'endpoint'):
+            assert state.model_dump()[key] == old[key], key  # kept
+        assert old['disabled'] and state.disabled == []  # owner decision 2026-10-15: every tool on after the upgrade
         assert json.loads(store.path.read_text())['schema_version'] == 4  # migrated durably
-        store.update(enabled_write_tools=[])  # the administrator revokes everything after the upgrade
+        tool = next(iter(tools_of(product)))
+        store.update(enabled_write_tools=[], disabled=[tool])  # the administrator turns things off after the upgrade
     with closing(ProductStore(tmp_path, product)) as store:
-        assert store.load().enabled_write_tools == []  # the migration ran once
+        assert store.load().enabled_write_tools == [] and store.load().disabled == [tool]  # the migration ran once
 
 
 @pytest.mark.parametrize('product', ['hermes', 'n8n'])
@@ -140,7 +142,7 @@ def test_older_states_migrate_through_3_to_every_write(tmp_path, product):
     with closing(ProductStore(tmp_path, product)) as store:
         old = store.load().model_dump()
     old.pop('enabled_write_tools')
-    old.update(schema_version=2, writes_enabled=False)
+    old.update(schema_version=2, writes_enabled=False, disabled=[next(iter(tools_of(product)))])
     if product == 'n8n':
         old = {k: v for k, v in old.items() if k not in ('product', 'connection')}
         old['schema_version'] = 1
@@ -148,15 +150,16 @@ def test_older_states_migrate_through_3_to_every_write(tmp_path, product):
     with closing(ProductStore(tmp_path, product)) as store:
         state = store.load()
         assert state.schema_version == 4 and state.enabled_write_tools == fresh_write_grants(product)
-        assert state.writes_enabled is True and state.token == old['token']
+        assert state.writes_enabled is True and state.token == old['token'] and state.disabled == []
 
 
 def test_odoo_manage_keeps_its_grants_on_migration(tmp_path):
     with closing(ProductStore(tmp_path, 'odoo-manage')) as store:
-        v3_state(store, 'odoo-manage', writes_enabled=False, enabled_write_tools=[])
+        v3_state(store, 'odoo-manage', writes_enabled=False, enabled_write_tools=[], disabled=['list_models'])
     with closing(ProductStore(tmp_path, 'odoo-manage')) as store:
         state = store.load()
         assert state.schema_version == 4 and state.enabled_write_tools == [] and state.writes_enabled is False
+        assert state.disabled == ['list_models']  # retired, unchanged
 
 
 def test_a_future_or_foreign_state_is_refused_not_rewritten(tmp_path):

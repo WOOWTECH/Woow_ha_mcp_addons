@@ -20,6 +20,7 @@ import test_six_hardening
 from test_six_hardening import Quiet, call, runtime, serve
 
 CANARY = 'DUMMY-LATE-RESPONSE-SECRET'
+from test_six_hardening import ERROR_REPLY  # noqa: E402
 
 
 # Nextcloud: the success status the child expects for each of its own requests (a broken body must arrive on an
@@ -90,11 +91,14 @@ async def test_actual_child_late_response_errors(tmp_path, product, json_respons
                 before = len(seen)
                 response = await client.post('/mcp', headers=headers, json=call(name, args))
                 assert len(seen) > before
-                # Whole raw wire payload includes content, structuredContent, notifications.
-                assert CANARY not in response.text, (product, failure, response.text)
-                code = 'BACKEND_STREAM_ERROR' if failure in ('chunk', 'disconnect') else 'BACKEND_INVALID_RESPONSE'
-                assert code in response.text, (product, failure, response.text)
-                assert len(response.content) < 4096
+                # Whole raw wire payload includes content, structuredContent, notifications. 0.2.0: backend text is
+                # relayed (as the PaaS servers); the canary is the configured credential (OpenDesign has none) and the
+                # gateway replaces it with [REDACTED]. The reply is still an error.
+                if product != 'opendesign':
+                    assert CANARY not in response.text, (product, failure, response.text)
+                if failure in ('chunk', 'disconnect'):  # a broken stream is an error; upstream EMQX/LiteLLM tolerate a
+                    assert ERROR_REPLY.search(response.text), (product, failure, response.text)  # bad body as data
+                assert len(response.content) < 65536
                 assert response.headers['content-type'].startswith(
                     'application/json' if json_response else 'text/event-stream')
 
@@ -132,9 +136,8 @@ async def test_actual_dashboard_late_response_errors(tmp_path, phase):
                 response = await client.post('/mcp', headers=headers,
                     json=call('hermes_inspect', {'target': 'status'}))
                 assert seen and seen[-1] == phase
-                assert CANARY not in response.text, (phase, failure, response.text)
-                code = 'BACKEND_STREAM_ERROR' if failure in ('chunk', 'disconnect') else 'BACKEND_INVALID_RESPONSE'
-                assert code in response.text, (phase, failure, response.text)
+                assert CANARY not in response.text, (phase, failure, response.text)  # the dashboard password, redacted
+                assert ERROR_REPLY.search(response.text), (phase, failure, response.text)
                 assert len(response.content) < 4096
 
 
@@ -153,7 +156,7 @@ async def test_actual_httpcore_lazy_stream_and_close(monkeypatch, kind, failure)
                 self.reply({'ok': True}, 503 if failure == 'status-close' else 200)
 
     expected = ('BACKEND_TIMEOUT' if failure == 'timeout' else
-                'BACKEND_HTTP_ERROR status=503' if failure == 'status-close' else
+                # 0.2.0: a non-2xx answer is the child's to read; its broken close is a stream error
                 'BACKEND_STREAM_ERROR')
     with serve(Backend) as url:
         if kind == 'sync':
@@ -175,7 +178,7 @@ async def test_actual_httpcore_lazy_stream_and_close(monkeypatch, kind, failure)
                             with client.stream('GET', '/') as response:
                                 assert response.status_code == 200  # lazy: no eager body read
                                 list(response.iter_bytes())
-                        assert str(caught.value) == expected
+                        assert str(caught.value).startswith(expected)  # 0.2.0: 'CODE: the cause'
                         assert not client._transport._pool._requests
                         assert not client._transport._pool.connections
                 # Broken wire cases remain broken; other cases prove same-pool reuse.
@@ -200,7 +203,7 @@ async def test_actual_httpcore_lazy_stream_and_close(monkeypatch, kind, failure)
                             async with client.stream('GET', '/') as response:
                                 assert response.status_code == 200
                                 [chunk async for chunk in response.aiter_bytes()]
-                        assert str(caught.value) == expected
+                        assert str(caught.value).startswith(expected)  # 0.2.0: 'CODE: the cause'
                         assert not client._transport._pool._requests
                         assert not client._transport._pool.connections
                 if failure not in ('chunk', 'disconnect', 'status-close'):
@@ -324,34 +327,17 @@ async def test_every_enabled_http_handler_has_safe_body_errors(tmp_path, product
                     before = len(seen)
                     response = await client.post('/mcp', headers=headers, json=call(name, arguments))
                     assert len(seen) > before, (product, name, response.text)
-                    assert CANARY not in response.text, (product, name, failure, response.text)
-                    code = 'BACKEND_STREAM_ERROR' if failure == 'chunk' else 'BACKEND_INVALID_RESPONSE'
-                    assert code in response.text, (product, name, failure, response.text)
-                    assert len(response.content) < 4096
+                    if product != 'opendesign':  # 0.2.0: see test_actual_child_late_response_errors
+                        assert CANARY not in response.text, (product, name, failure, response.text)
+                    if failure == 'chunk':  # 0.2.0: upstream handlers may report an undecodable body as data
+                        assert ERROR_REPLY.search(response.text), (product, name, failure, response.text)
+                    assert len(response.content) < 65536
             if product in ('hermes', 'opendesign', 'litellm'):
                 # Explicit non-goal: do not filter arbitrary valid business output.
                 mode['value'] = 'success'
                 name, arguments = PROBES[product]
                 response = await client.post('/mcp', headers=headers, json=call(name, arguments))
-                assert CANARY in response.text
-
-
-def test_public_error_mapping_never_reads_exception_text():
-    class Poison(ValueError):
-        def __str__(self):
-            raise AssertionError('raw exception text must not be inspected')
-
-    @policy.backend_errors
-    def parse():
-        raise Poison(CANARY)
-
-    with pytest.raises(policy.BackendFailure, match='^BACKEND_INVALID_RESPONSE$'):
-        parse()
-    assert policy.public_backend_error(RuntimeError(CANARY)) == 'BACKEND_UNAVAILABLE'
-    assert policy.public_backend_error(httpx.DecodingError(CANARY)) == 'BACKEND_INVALID_RESPONSE'
-    assert policy.public_backend_error(UnicodeDecodeError('utf-8', CANARY.encode(), 0, 1, CANARY)) == 'BACKEND_INVALID_RESPONSE'
-    assert policy.public_backend_error(policy.BackendBusy()) == 'BACKEND_BUSY'
-    assert policy.public_backend_error(policy.BackendDenied()) == 'BACKEND_DESTINATION_DENIED'
+                assert CANARY in response.text or '[REDACTED]' in response.text  # the configured credential, redacted
 
 
 async def test_public_handler_and_stream_boundaries_preserve_cancellation():
@@ -453,6 +439,7 @@ async def test_actual_gateway_late_core_faults(tmp_path, monkeypatch, phase, fai
                 before = len(seen)
                 response = await client.post('/mcp', headers=headers, json=call(name, arguments))
                 assert len(seen) > before
-                assert CANARY not in response.text
+                if product != 'opendesign':  # the Hermes password, redacted; OpenDesign holds no credential
+                    assert CANARY not in response.text
                 assert ('BACKEND_TIMEOUT' if failure == 'timeout' else 'BACKEND_STREAM_ERROR') in response.text
                 assert len(response.content) < 4096

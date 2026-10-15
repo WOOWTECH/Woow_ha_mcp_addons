@@ -369,7 +369,7 @@ async def test_late_body_failures_of_each_tools_own_request_are_public_codes(tmp
 
 async def test_listing_outside_the_home_folder_is_refused_without_backend_paths(tmp_path):
     """tools.py: a multistatus whose hrefs are all outside the account's files home is refused with a public code;
-    neither the home path (it contains the backend's user id) nor the foreign hrefs reach the client."""
+    the foreign hrefs never reach the client (0.2.0: the home path is shown again, as upstream)."""
     class Backend(Quiet):
         def handle_api(self):
             body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
@@ -383,8 +383,9 @@ async def test_listing_outside_the_home_folder_is_refused_without_backend_paths(
     with serve(Backend) as url:
         async with runtime(tmp_path, 'nextcloud', url) as (client, headers, *_):
             response = await client.post('/mcp', headers=headers, json=call('get_file_tree', {}))
-            assert 'BACKEND_INVALID_RESPONSE' in response.text and 'outside the account' in response.text
-            assert CANARY not in response.text and '/remote.php/dav/files' not in response.text, response.text
+            # 0.2.0: upstream's own message again, naming the account's home path (the backend user id).
+            assert 'BACKEND_INVALID_RESPONSE' in response.text and 'paths outside' in response.text, response.text
+            assert f'{CANARY}-other' not in response.text  # the foreign hrefs still never reach the client
 
 
 async def test_private_probe_never_waits_for_busy_tool_connections(tmp_path):

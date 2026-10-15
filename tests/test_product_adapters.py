@@ -38,8 +38,10 @@ def test_v1_migration_preserves_every_gui_field_and_rollback_fails_closed(tmp_pa
     old.close()
     migrated = ProductStore(tmp_path / 'state', 'n8n')
     for key, value in original.items():
-        if key != 'schema_version':
+        if key not in ('schema_version', 'disabled'):
             assert getattr(migrated.load(), key) == value
+    # 0.2.0 (owner decision 2026-10-15): the upgrade to schema 4 turns every tool on once (disabled cleared).
+    assert migrated.load().disabled == [] and migrated.load().schema_version == 4
     raw = migrated.path.read_bytes()
     migrated.close()
     with pytest.raises(ConfigError):

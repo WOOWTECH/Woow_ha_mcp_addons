@@ -190,12 +190,13 @@ class ProductStore(Store):
     """Explicit v1 n8n / v2 product -> v3 grants -> v4 full-surface migration; never downgrade.
 
     Construction-only migration under the exclusive writer lock. All legacy
-    fields are validated and preserved. 0.2.0 (owner decision 2026-10-15, the
+    fields are validated and preserved. 0.2.0 (owner decisions 2026-10-15, the
     full add-on): a NEW state and every state migrated to 4 (from 3, or from
     1/2 through 3) hold every write grant and writes_enabled true
-    (fresh_write_grants); the token, connection, endpoint and the disabled list
-    are kept. The migration runs once: a 4 state is loaded as stored, so a grant
-    revoked in the panel stays revoked across restarts and later upgrades.
+    (fresh_write_grants) and no disabled tool; the token, connection and
+    endpoint are kept. The migration runs once: a 4 state is loaded as stored,
+    so a grant revoked or a tool disabled in the panel stays so across restarts
+    and later upgrades.
     Odoo Manage (retired) keeps its grants. Restore a protected compatible
     backup to roll back (a 0.1.x add-on refuses schema 4), never rewrite the
     version in place.
@@ -238,10 +239,13 @@ class ProductStore(Store):
         if isinstance(value, dict) and type(value.get('schema_version')) is int and value['schema_version'] == 3:
             if not self._migrate or set(value) != set(ProductState.model_fields) or value.get('product') != self.product:
                 raise ValueError('incomplete legacy state or unexpected downgrade')
-            # 0.2.0: the full add-on. Every write grant and the legacy switch on, once; disabled tools stay disabled.
-            grants = value.get('enabled_write_tools') if self.product == 'odoo-manage' else fresh_write_grants(self.product)
-            value = {**value, 'schema_version': 4, 'enabled_write_tools': grants,
-                     'writes_enabled': FRESH_WRITES_ENABLED if self.product != 'odoo-manage' else value.get('writes_enabled')}
+            # 0.2.0: the full add-on. Once: every write grant and the legacy switch on, and the 0.1.x disabled list
+            # cleared (owner decision 2026-10-15: after the upgrade every tool is on). What an administrator disables
+            # in a schema 4 state is kept (a 4 state is never migrated again). Odoo Manage (retired) is unchanged.
+            if self.product != 'odoo-manage':
+                value = {**value, 'enabled_write_tools': fresh_write_grants(self.product),
+                         'writes_enabled': FRESH_WRITES_ENABLED, 'disabled': []}
+            value = {**value, 'schema_version': 4}
             self._migrated = True
         if not isinstance(value, dict) or set(value) != set(ProductState.model_fields) or value.get('product') != self.product:
             raise ValueError('wrong product or incomplete schema')
@@ -508,13 +512,15 @@ def child_spec(state: ProductState, directory: Path) -> ChildSpec | None:
     if product == 'odoo':
         env.update(ODOO_URL=c.url, ODOO_DB=c.database, ODOO_USERNAME=c.username, ODOO_PASSWORD=c.password,
                    ODOO_TRANSPORT='xmlrpc', ODOO_VERIFY_SSL='1', ODOO_TIMEOUT='5',
-                   # 0.2.0 (owner decision 2026-10-15, as the PaaS woow-mcp-server): approved writes on
-                   # (ODOO_MCP_ENABLE_WRITES=1, PaaS seed_defaults) and direct create/write/unlink through
+                   # 0.2.0 (owner decisions 2026-10-15, the full add-on): approved writes on
+                   # (ODOO_MCP_ENABLE_WRITES=1, PaaS seed_defaults); direct create/write/unlink through
                    # execute_method (ODOO_MCP_ALLOW_DIRECT_WRITES=1, the PaaS fix_direct_writes switch; the three-step
                    # preview/validate/execute_approved_write tools stay listed: fix_remove_3step_tools is not
-                   # applied). Unreviewed side-effect methods and direct chatter keep the PaaS defaults (off).
+                   # applied); any method through execute_method, unreviewed side effects included (action_confirm,
+                   # action_post...: ODOO_MCP_ALLOW_UNKNOWN_METHODS=1); chatter_post posts at once
+                   # (MCP_CHATTER_DIRECT=1; a call that still carries approval/confirm posts the same way).
                    ODOO_MCP_ENABLE_WRITES='1', ODOO_MCP_ALLOW_DIRECT_WRITES='1',
-                   ODOO_MCP_ALLOW_UNKNOWN_METHODS='0', MCP_CHATTER_DIRECT='0')
+                   ODOO_MCP_ALLOW_UNKNOWN_METHODS='1', MCP_CHATTER_DIRECT='1')
         argv = (str(python), str(app / 'launch.py'), '--transport', 'streamable-http', '--host', '127.0.0.1', '--port', '3000', '--path', '/mcp')
     elif product == 'odoo-manage':
         env.update(ODOO_URL=c.url, ODOO_DB=c.database, ODOO_USER=c.username, ODOO_API_KEY=c.api_key,

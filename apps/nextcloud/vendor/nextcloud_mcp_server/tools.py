@@ -334,8 +334,7 @@ class NextcloudTools:
                 own = file_entry(items[0], normalized)  # type: ignore[assignment]
             else:
                 raise coded(
-                    # WOOW HA add-on: no home path (it contains the backend's user id).
-                    "Nextcloud answered with paths outside the account's home folder; check "
+                    f"Nextcloud answered with paths outside {unquote(home_path)}; check "
                     "NEXTCLOUD_MCP_BASE_URL and, behind a reverse proxy, the 'overwritewebroot' "
                     "setting of Nextcloud.",
                     INVALID_RESPONSE,

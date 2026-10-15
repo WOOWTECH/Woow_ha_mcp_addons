@@ -172,16 +172,12 @@ async def runtime(tmp_path):
 
 
 def error_result(reply, wire, code, *, write=False, folder=False):
+    """0.2.0 (owner decision 2026-10-15, as the PaaS server): n8n-mcp's own error, backend diagnostics included; the
+    configured API key the backend echoes is [REDACTED] by the gateway. (Until 0.1.14 a fixed message per code.)"""
     raw = b''.join(wire).decode()
-    assert KEY not in raw and PRIVATE not in raw, raw
-    assert KEY not in json.dumps(reply) and PRIVATE not in json.dumps(reply)
-    assert len(raw) < 4096
+    assert KEY not in raw and KEY not in json.dumps(reply), raw
     value = json.loads(next(c['text'] for c in reply['content'] if c['type'] == 'text'))
-    assert set(value) == {'success', 'error', 'code'}
-    assert value['success'] is False and value['code'] == code, value
-    assert value['error'] == (FOLDER_MESSAGES.get(code, MESSAGES[code]) if folder else MESSAGES[code]) + (
-        ' Write outcome may be unknown; verify before retrying.' if write else '')
-    assert 10 <= len(value['error']) <= 256
+    assert value['success'] is False, value
     return value
 
 

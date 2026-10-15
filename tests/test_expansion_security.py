@@ -182,8 +182,9 @@ def test_v2_migration_reaches_schema_4_with_every_write(tmp_path, product):
     store.path.write_text(json.dumps(old)); store.close()
     store = ProductStore(tmp_path, product)
     actual = store.load().model_dump()
-    # 0.2.0: through 3 to 4, every write grant on (the full add-on); disabled entries kept as stored.
-    assert actual == {**old, 'schema_version': 4, 'enabled_write_tools': fresh_write_grants(product), 'writes_enabled': True}
+    # 0.2.0: through 3 to 4, every write grant on and the disabled list cleared (the full add-on, every tool on).
+    assert actual == {**old, 'schema_version': 4, 'enabled_write_tools': fresh_write_grants(product), 'writes_enabled': True,
+                      'disabled': []}
     store.close()
 
 

@@ -126,8 +126,11 @@ async def test_https_original_hostname_verification_and_sni(tmp_path, monkeypatc
         for code in (301, 302, 303, 307, 308):
             status['value'] = code
             before = len(requests)
-            with pytest.raises(Exception, match=f'BACKEND_HTTP_ERROR status={code}'):
-                await fetch('configured.invalid')
+            if kind == 'xmlrpc':
+                with pytest.raises(Exception, match=f'BACKEND_HTTP_ERROR status={code}'):
+                    await fetch('configured.invalid')
+            else:  # 0.2.0: the answer goes to the child's own handling (never followed)
+                assert await fetch('configured.invalid') == code
             assert len(requests) == before + 1, 'HTTPS redirect was replayed'
     finally:
         server.shutdown(); server.server_close(); thread.join()
