@@ -1,7 +1,8 @@
 "use strict";
 // New local adapter code, not copied upstream. Loaded only by our fixed launcher.
 // The pinned API client's base backend is trusted configuration, NOT a webhook.
-// Do not change WEBHOOK_SECURITY_MODE or the global SSRFProtection validators.
+// 0.2.1: the child runs with WEBHOOK_SECURITY_MODE=permissive (owner decision 2026-10-15, set by n8n_adapter);
+// the global SSRFProtection validators are not patched here.
 const dns = require("node:dns");
 const net = require("node:net");
 const crypto = require("node:crypto");

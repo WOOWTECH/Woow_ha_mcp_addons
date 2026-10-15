@@ -86,5 +86,9 @@ def child_spec(state: State, directory: Path) -> ChildSpec:
         # 0.2.1: n8n's instance-level MCP key, optional; without it the official-MCP features are NOT_CONFIGURED.
         if getattr(state, "mcp_access_token", None):
             env["N8N_MCP_ACCESS_TOKEN"] = state.mcp_access_token
+    # 0.2.1 (owner decision 2026-10-15): n8n-mcp's widest webhook/URL mode (dist/utils/ssrf-protection.js): any
+    # address, private and loopback included (only cloud metadata names stay blocked), so n8n_test_workflow can reach
+    # an n8n on the HA network. The configured API backend keeps its own DNS-pinned agents (backend_policy.cjs).
+    env["WEBHOOK_SECURITY_MODE"] = "permissive"
     policy = Path(__file__).with_name("backend_policy.cjs").resolve()
     return ChildSpec((node, "--require", str(policy), str(entry.resolve())), env, directory)

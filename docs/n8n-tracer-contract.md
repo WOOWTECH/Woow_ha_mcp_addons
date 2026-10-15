@@ -345,12 +345,18 @@ runtime, with a sanitized recovery message and nonzero exit, never a clean exit.
 
 `apps/n8n/backend_policy.cjs` is an explicit adapter for the pinned API client's
 `getPinnedAgents` method. The fixed launcher preloads it; an API-client source hash
-guard fails closed on package drift. It does **not** change global webhook SSRF
-validation or set `WEBHOOK_SECURITY_MODE=permissive`.
+guard fails closed on package drift. It does not patch the global webhook SSRF
+validators. **0.2.1 (owner decision 2026-10-15):** the child runs with
+`WEBHOOK_SECURITY_MODE=permissive`, n8n-mcp 2.91.0's widest mode
+(`dist/utils/ssrf-protection.js`: permissive accepts every resolved address, private,
+ULA and loopback included; only the cloud metadata host names stay blocked), so
+`n8n_test_workflow` and the official-MCP calls can reach an n8n on the HA network
+(e.g. 172.30.33.x, fd0c:ac1e:2100::/64). Risk: a webhook or derived URL may then point at
+any internal address the add-on can reach.
 
 - Only the GUI-owned exact HTTP(S) origin **and base path** may create backend
   agents. No userinfo/query/fragment; no client-selected URL/key headers or arbitrary
-  network tools. Webhook validators retain upstream strict behavior.
+  network tools. Webhook validators: upstream permissive mode (0.2.1, see above).
 - That selected backend may be loopback, RFC1918 LAN/HA, IPv6 ULA or public unicast.
   Public IPv6 is limited to global-unicast 2000::/3, excluding classified transition
   ranges. Link-local, metadata (including AWS ULA/Azure virtual endpoint), multicast,
