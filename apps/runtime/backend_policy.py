@@ -477,6 +477,10 @@ class XMLTransport(xmlrpc.client.Transport):
         super().__init__()
         self.destination = Destination(base_url)
         self.timeout, self.database = timeout, database
+        # 0.2.1 (B4): one exchange at a time. xmlrpc's Transport caches ONE http.client connection, and odoo-mcp's
+        # async tasks run on their own threads with the session's client while foreground calls use it too: an
+        # overlapping request or the close() below broke the other ("BACKEND_UNAVAILABLE: Idle").
+        self._exchange = threading.Lock()
 
     def make_connection(self, host):
         url = urlsplit(f'{self.destination.scheme}://{host}')
@@ -492,6 +496,10 @@ class XMLTransport(xmlrpc.client.Transport):
             connection.putheader('X-Odoo-Database', self.database)
 
     def request(self, host, handler, request_body, verbose=False):
+        with self._exchange:
+            return self._request(host, handler, request_body, verbose)
+
+    def _request(self, host, handler, request_body, verbose):
         self.destination.check_url(f'{self.destination.scheme}://{host}{handler}')
         # No redirect following (including relative/same origin), no unbounded retry.
         try:
