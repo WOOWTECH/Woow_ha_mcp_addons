@@ -12,7 +12,7 @@ system-admin 才放行；token 只給管理程序，child 不繼承。此 token 
 其他版本（含之後的 patch 與 beta）整個管理面板都回 403，看起來和「不是管理員」完全一樣（add-on 紀錄也沒有訊息）；
 MCP 端點（Bearer token）不受影響。新的 Core 版本要等 add-on 發新版才支援，升級 Core 前請先對照這份清單。
 
-本產品 runtime：**odoo-mcp 1.1.0**（套上 PaaS woow-mcp-server 的兩個 build patch：跨 session approval token、直接寫入開關）。**0.2.0 起完整版**（負責人 2026-10-15 決定）：上游 41 個工具全部開放，與原始 MCP server 及 PaaS 版功能一致；tools/list 用子程序自己的 inputSchema（經 provider-safe 正規化），tools/call 參數原樣轉給子程序驗證，輸出不再截斷或投影。子程序環境 `ODOO_MCP_ENABLE_WRITES=1`、`ODOO_MCP_ALLOW_DIRECT_WRITES=1`：`execute_method` 可直接 create／write／unlink，三步驟 `preview_write`→`validate_write`→`execute_approved_write` 也照常列出可用（approval token 跨 session 有效）；未審查的副作用方法（`ODOO_MCP_ALLOW_UNKNOWN_METHODS`）與 chatter 直發（`MCP_CHATTER_DIRECT`）維持 PaaS 預設關閉。`chatter_post` 先 preview，再把回傳的 `approval` 原樣帶回並加 `confirm: true`。逐名清單與分類見[工具表](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-surface.md)，轉送規則與保留的安全層見[工具範圍](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-expansion.md)。子程序新增但尚未分類的工具一律拒絕。
+本產品 runtime：**odoo-mcp 1.1.0**（套上 PaaS woow-mcp-server 的兩個 build patch：跨 session approval token、直接寫入開關）。**0.2.0 起完整版**（負責人 2026-10-15 決定）：上游 41 個工具全部開放，與原始 MCP server 及 PaaS 版功能一致；tools/list 用子程序自己的 inputSchema（經 provider-safe 正規化），tools/call 參數原樣轉給子程序驗證，輸出不再截斷或投影。子程序環境 `ODOO_MCP_ENABLE_WRITES=1`、`ODOO_MCP_ALLOW_DIRECT_WRITES=1`：`execute_method` 可直接 create／write／unlink，三步驟 `preview_write`→`validate_write`→`execute_approved_write` 也照常列出可用（approval token 跨 session 有效）；`ODOO_MCP_ALLOW_UNKNOWN_METHODS=1`：`execute_method` 也可呼叫未審查的副作用方法（例如 `action_confirm`、`action_post`）；`MCP_CHATTER_DIRECT=1`：`chatter_post` 直接送出，不必先 preview（帶了 `approval`／`confirm` 也照樣送出）。Odoo 的錯誤（例如 AccessError）原文回傳。逐名清單與分類見[工具表](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-surface.md)，轉送規則與保留的安全層見[工具範圍](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-expansion.md)。子程序新增但尚未分類的工具一律拒絕。
 
 ## 後端與設定主權
 
@@ -23,7 +23,7 @@ MCP 端點（Bearer token）不受影響。新的 Core 版本要等 add-on 發�
 
 工具頁依實際 metadata 顯示每個工具的停用開關與寫入授權（寫入工具一個 grant，混合工具每個寫入 operation 一個）；保存取代全部
 `enabled_write_tools` 並 `writes_enabled:false`，disabled 優先；失配／過期契約停止保存。
-**全部工具與寫入預設開啟**：新安裝，以及從 0.1.x 升級時一次（state schema 4 遷移：寫入全開，token、連線、對外端點與停用清單保留）；之後管理員取消的寫入或停用的工具，重啟與升級都維持。**風險：網址＝完整後端權限**，後端帳號權限要設對，只保留需要的工具與寫入（見 [寫入預設開啟](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/guide.md#寫入預設開啟)）。
+**全部工具與寫入預設開啟**：新安裝，以及從 0.1.x 升級時一次（state schema 4 遷移：寫入全開、0.1.x 的停用清單清空，token、連線與對外端點保留）；之後管理員取消的寫入或停用的工具，重啟與升級都維持。**風險：網址＝完整後端權限**；後端錯誤回傳原始訊息（可能含後端內部資訊，add-on 持有的憑證會換成 `[REDACTED]`）。後端帳號權限要設對，只保留需要的工具與寫入（見 [寫入預設開啟](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/guide.md#寫入預設開啟)）。
 
 ## 網路與認證
 

@@ -9,7 +9,7 @@ pydantic 模型、res.partner 限定、輸出投影）自 0.2.0 起不再用於�
 
 | 產品 | 子程序工具數 | 開放 | 說明 |
 |---|---:|---:|---|
-| Odoo | 41 | 41 | odoo-mcp 1.1.0 全部工具，套上 PaaS 的兩個 build patch（跨 session approval token、直接寫入開關）；`ODOO_MCP_ENABLE_WRITES=1`、`ODOO_MCP_ALLOW_DIRECT_WRITES=1`（`execute_method` 可直接 create／write／unlink，三步驟 preview／validate／execute_approved_write 仍列出可用） |
+| Odoo | 41 | 41 | odoo-mcp 1.1.0 全部工具，套上 PaaS 的兩個 build patch（跨 session approval token、直接寫入開關）；`ODOO_MCP_ENABLE_WRITES=1`、`ODOO_MCP_ALLOW_DIRECT_WRITES=1`（`execute_method` 可直接 create／write／unlink，三步驟 preview／validate／execute_approved_write 仍列出可用）、`ODOO_MCP_ALLOW_UNKNOWN_METHODS=1`（任意方法，含 `action_confirm` 等副作用方法）、`MCP_CHATTER_DIRECT=1`（chatter 直接送出） |
 | n8n | 28 | 28 | n8n-mcp 2.91.0 全部工具（credentials、test_workflow、datatable、versions、agents 等） |
 | Hermes | 11 | 11 | 與 PaaS 版 hermes_mcp_server 相同（chat、config set、mcp add、webhook、cron create 等）；保留 server 本身的 stdio／command 拒絕與 config 拒絕清單 |
 | OpenDesign | 15 | 15 | 全部工具（create_project、send_message 等） |
@@ -32,12 +32,15 @@ pydantic 模型、res.partner 限定、輸出投影）自 0.2.0 起不再用於�
   JSON-RPC 錯誤（`-32602 Unknown tool`／`Invalid params`／`Operation not permitted`）。
 - **輸出**：子程序原樣輸出（0.1.x 的 100 筆／256 字截斷與白名單欄位投影都已移除：Hermes session／cron 列表、OpenDesign
   run 列表、LiteLLM team／user／model metadata、n8n 建立 workflow／tags／executions／folder／health、Odoo B1／B2 統計）。
+- **錯誤**：後端錯誤回傳原始訊息（與 PaaS 一致）：Odoo 的 XML-RPC fault 原樣交給 odoo-mcp、HTTP 子程序收到非 2xx 回應自行處理
+  （EMQX、LiteLLM 的 errors.py 回到上游、Nextcloud 回報自己的 server message）、n8n 用 n8n-mcp 自己的訊息、傳輸失敗為「代碼: 原因」。
+  gateway 在每個轉送的回覆中把 add-on 持有的憑證換成 `[REDACTED]`（`redact.secret_values`／`redact_secrets`）。
 - **請求大小**：16 MiB（原 256 KiB），配合 Nextcloud 上傳 10 MiB（base64 約 13.4 MiB）與 1 MiB 文字檔。
 
 ## 預設與狀態遷移
 
 - state schema 4：新安裝，以及從 0.1.x（schema 3，或更舊的 1／2 經 3）升級時**一次**遷移成：每個寫入 grant 全開、
-  `writes_enabled=true`；token、連線、對外端點與停用清單（disabled）保留。之後管理員在「工具與寫入授權」取消的寫入或停用的工具，
+  `writes_enabled=true`、0.1.x 的停用清單（disabled）清空；token、連線與對外端點保留。之後管理員在「工具與寫入授權」取消的寫入或停用的工具，
   重啟與後續升級都維持。
 - 回退：0.1.x 不接受 schema 4（state 會被拒絕並要求人工回復），回退請還原升級前的備份。
 
@@ -47,14 +50,15 @@ pydantic 模型、res.partner 限定、輸出投影）自 0.2.0 起不再用於�
   `/private_[REDACTED]/`。
 - session 規則、32 個併發 slot、請求大小上限、回應 8 MiB 上限、SSE 重組與 JSON-RPC 回覆整形。
 - 子程序出站：DNS pin、只連設定的後端、拒絕 redirect／proxy、TLS 驗證、metadata 位址拒絕（Python `apps/runtime/backend_policy.py`、
-  n8n `apps/n8n/backend_policy.cjs`）；後端錯誤只回固定代碼／訊息，不回原始錯誤文字（各 vendor 的 error boundary 保留並補到
-  Hermes／OpenDesign 原本沒有的 handler）。
+  n8n `apps/n8n/backend_policy.cjs`）。
+- 回覆中的憑證遮罩：add-on 權杖、child token、後端 API key／密碼與其 Basic 認證形式在每個轉送的回覆中換成 `[REDACTED]`；
+  子程序輸出不進 log（Supervisor 丟棄），log 的密鑰網址遮罩不變。
 - 原始碼守門：Odoo（含 patch 後的 tools_write／server_core）、n8n 與 vendored 檔案 digest 不符即拒絕啟動。
 - 子程序環境不繼承父程序秘密；child token、乾淨工作目錄、私有 readiness probe 不列出也不能呼叫。
 - 管理面板：只有 HA owner／系統管理員可進入，CSRF、確認對話框；設定只存在 add-on state。
 
 ## 風險
 
-網址（或權杖）等同後端帳號的完整權限：AI client 可以刪改 Odoo 任意紀錄（`execute_method`）、建立或刪除 n8n credentials 與
+網址（或權杖）等同後端帳號的完整權限：AI client 可以刪改 Odoo 任意紀錄並呼叫任意方法（`execute_method`，含 `action_confirm`、`action_post`）、直接送出 chatter 留言、建立或刪除 n8n credentials 與
 workflow、產生 LiteLLM key、改 Hermes 設定或加 MCP server、發佈 MQTT 訊息或封鎖 client、刪除 Nextcloud 檔案。請把後端帳號
-權限設對（最小權限），只保留需要的工具與寫入，網址外洩時立刻在管理面板重新產生權杖。
+權限設對（最小權限），只保留需要的工具與寫入，網址外洩時立刻在管理面板重新產生權杖。後端錯誤原文回傳，可能含後端內部資訊（模型、欄位、路徑、帳號 user id、版本）。

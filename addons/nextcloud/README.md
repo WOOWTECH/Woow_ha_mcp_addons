@@ -6,7 +6,7 @@
 - 工具：上游 9 個全部支援。5 個讀取（檔案樹、讀文字檔、行事曆、任務）與 4 個寫入（建立／更新文字檔、上傳、刪除）
   預設都開啟（新安裝與從 0.1.x 升級），可在管理面板逐一停用或取消寫入
   （[逐名工具對照](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-surface.md)）。
-- **風險：網址＝這個 Nextcloud 帳號的完整檔案權限**。拿到權杖或 Claude.ai 密鑰網址的 MCP client（包括 AI 助理誤判時）不需再授權就能建立、覆寫、上傳與刪除檔案（刪除進垃圾桶）；App 密碼請用權限最小的帳號，只保留需要的寫入，外洩時立刻在管理面板重新產生權杖（[說明](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/guide.md#寫入預設開啟)）。
+- **風險：網址＝這個 Nextcloud 帳號的完整檔案權限**。拿到權杖或 Claude.ai 密鑰網址的 MCP client（包括 AI 助理誤判時）不需再授權就能建立、覆寫、上傳與刪除檔案（刪除進垃圾桶）；錯誤訊息照 Nextcloud 回傳（add-on 持有的憑證換成 `[REDACTED]`）；App 密碼請用權限最小的帳號，只保留需要的寫入，外洩時立刻在管理面板重新產生權杖（[說明](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/guide.md#寫入預設開啟)）。
 - 連線：Nextcloud 根網址、使用者名稱與 **App 密碼**（Nextcloud「個人設定 → 安全性 → 裝置與工作階段」建立，不要用登入密碼）。
 - 管理面板在 HA 側邊欄（Ingress），只有 HA 的 owner 或系統管理員能設定後端與管理權杖；為了驗證這個身分，
   Add-on 需要 `homeassistant_api: true`，這個 token 具廣泛的 Core 存取能力。`hassio_api: false`、保護模式開啟、無 host 網路。
