@@ -437,7 +437,7 @@ class NextcloudClient:
                         self.latch_key, response.status_code, response.headers.get("retry-after")
                     )
                 body = await self._read_capped(response, MAX_ERROR_BODY, tolerate=True)
-                detail = server_message(body) if response.status_code < 500 else None
+                detail = server_message(body)  # WOOW HA add-on 0.2.1: 5xx too (raw backend errors)
                 raise NextcloudHTTPError(
                     status_message(response.status_code, label, op, detail=detail),
                     response.status_code,

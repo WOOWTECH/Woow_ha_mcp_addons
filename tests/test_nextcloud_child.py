@@ -252,6 +252,8 @@ async def test_backend_statuses_become_public_codes_without_backend_text(tmp_pat
                 # followed, not even to this same server.
                 assert response.status_code == 200 and len(Sabre.seen) - before == (2 if index == 0 else 1), (
                     name, status, Sabre.seen[before:])
+                # 0.2.1: Nextcloud's own message is relayed (test_nextcloud_own_error_message_is_relayed); this canary
+                # starts with the fixture app password 'DUMMY', so it only ever shows as [REDACTED]-...
                 assert CANARY not in response.text and CANARY.lower() not in response.text, (name, status, response.text)
                 assert '"isError":true' in response.text.replace(' ', ''), (name, status, response.text)
                 assert expected in response.text, (name, status, expected, response.text)
@@ -894,3 +896,43 @@ async def test_malformed_answers_are_handled_through_the_real_child(tmp_path):
             mode['value'] = 'year-9999'
             tree = payload(await rpc(client, '/mcp', headers, call('get_file_tree', {})))
             assert tree['entries'] == [{**tree['entries'][0], 'modified': None}] and tree['entries'][0]['path'] == 'ok.md'
+
+
+class NextcloudMessages(Quiet):
+    """0.2.1 (B5): OCS answers normally; the tool's own request fails with Nextcloud's own message in the shape
+    `mode` names (Sabre WebDAV XML, OCS JSON or plain text)."""
+    mode = {'status': 403, 'shape': 'sabre'}
+    MESSAGE = 'Quota of the home folder is exhausted on node-7'
+
+    def nextcloud(self):
+        body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
+        if self.path == OCS_PATH:
+            return respond(self, *NextcloudFake().handle('GET', self.path, self.headers, body))
+        shape, message = self.mode['shape'], self.MESSAGE
+        if shape == 'sabre':
+            text = ('<?xml version="1.0"?><d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">'
+                    f'<s:exception>Sabre\\DAV\\Exception\\Forbidden</s:exception><s:message>{message}</s:message>'
+                    '</d:error>').encode()
+            kind = 'application/xml'
+        elif shape == 'ocs':
+            text = json.dumps({'ocs': {'meta': {'status': 'failure', 'statuscode': 997, 'message': message}}}).encode()
+            kind = 'application/json'
+        else:
+            text, kind = message.encode(), 'text/plain'
+        respond(self, self.mode['status'], {'Content-Type': kind}, text)
+
+    do_GET = do_PUT = do_DELETE = do_PROPFIND = do_REPORT = nextcloud
+
+
+@pytest.mark.parametrize('status', [403, 500, 503, 422])
+@pytest.mark.parametrize('shape', ['sabre', 'ocs', 'text'])
+async def test_nextcloud_own_error_message_is_relayed(tmp_path, status, shape):
+    # 0.2.1 (B5, owner decision 2026-10-15): 403 and 5xx carried only the fixed table text before
+    # ('Permission denied for "<path>"', 'try again later'); now Nextcloud's own message follows it.
+    NextcloudMessages.mode.update(status=status, shape=shape)
+    with serve(NextcloudMessages) as url:
+        async with runtime(tmp_path, 'nextcloud', url) as (client, headers, *_):
+            response = await client.post('/mcp', headers=headers, json=call('get_file_tree', {'path': 'x'}))
+            assert f'BACKEND_HTTP_ERROR status={status}' in response.text, response.text
+            assert 'Nextcloud: ' + NextcloudMessages.MESSAGE in response.text, response.text
+            assert nextcloud_fixtures.PASSWORD not in response.text

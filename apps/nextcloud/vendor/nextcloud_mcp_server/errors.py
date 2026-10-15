@@ -102,7 +102,16 @@ def status_message(
     current_etag: str | None = None,
     detail: str | None = None,
 ) -> str:
-    """Translate a backend HTTP status into the message of the error table (SPEC §6)."""
+    """Translate a backend HTTP status into the message of the error table (SPEC §6).
+
+    WOOW HA add-on 0.2.1 (owner decision 2026-10-15): every message also carries Nextcloud's own error text when the
+    answer had one (``detail``, webdav.server_message), not only the generic fallback.
+    """
+    message = _status_message(status, label, op, current_etag=current_etag)
+    return f"{message} Nextcloud: {detail}" if detail else message
+
+
+def _status_message(status: int, label: str, op: Operation, *, current_etag: str | None = None) -> str:
     if status == 401:
         return AUTH_MESSAGE
     if status == 429:
@@ -138,8 +147,7 @@ def status_message(
         return f'Not enough storage or file too large for "{label}".'
     if status >= 500:
         return f"Nextcloud returned an error ({status}); try again later."
-    suffix = f": {detail}" if detail else ""
-    return f'Nextcloud refused the request for "{label}" ({status}){suffix}.'
+    return f'Nextcloud refused the request for "{label}" ({status}).'
 
 
 def network_message(exc: httpx.TransportError) -> str:
