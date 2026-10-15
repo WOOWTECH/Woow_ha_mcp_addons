@@ -98,7 +98,7 @@ async def test_writer_is_denied_before_dispatch_then_explicitly_enabled(tmp_path
                 headers = {'Authorization': 'Bearer ' + store.load().token, 'Mcp-Session-Id': 'test-session'}
                 assert refused(await client.post('/mcp', headers=headers, json=message))
                 assert requests == []
-                store.update(writes_enabled=True)
+                store.update(enabled_write_tools=['delete_project'])  # 0.2.0: an exact grant, no legacy switch
                 assert (await client.post('/mcp', headers=headers, json=message)).status_code == 200
                 assert requests == [message]
                 store.update(disabled=['delete_project'])

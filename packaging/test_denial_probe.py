@@ -55,8 +55,11 @@ class DenialTests(unittest.TestCase):
             state = ProductState(product=product, token='a' * 43, child_token='b' * 43)
             listed = policy.filter_list({'result': {'tools': [{'name': name}]}}, tools, state)
             # 0.1.6 (AI Stage 0): the declared form of the local model (hermes_skill loses its top-level oneOf).
-            self.assertEqual(listed['result']['tools'], [] if tools[name].write else [{'name':name, 'inputSchema':policy.declared_schema(tools[name].arguments)}])
-            for args, disabled in (({'unreviewed': True}, []), (arguments, [name])):
+            self.assertEqual(listed['result']['tools'], [] if tools[name].write else [{'name':name, 'inputSchema':
+                policy.child_input_schema(None) if tools[name].child_schema else policy.declared_schema(tools[name].arguments)}])
+            # 0.2.0: a full-surface tool forwards any object to the child, so only a bounded model refuses extra keys.
+            cases = ((arguments, [name]),) if tools[name].child_schema else (({'unreviewed': True}, []), (arguments, [name]))
+            for args, disabled in cases:
                 with self.assertRaises(policy.Denied):
                     ns['authorize']({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call',
                         'params': {'name': name, 'arguments': copy.deepcopy(args)}},

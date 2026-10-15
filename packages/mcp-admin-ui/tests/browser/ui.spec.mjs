@@ -253,7 +253,7 @@ test('MOCK a new install shows every write allowed with a risk note; unticking o
   // What a new state holds since 2026-10-15: the legacy switch and every exact grant on.
   await reset(request, { legacyWrites: true, grants: ['write_example', 'mixed_example:create', 'mixed_example:delete'] });
   await start(page, '/tools');
-  await expect(page.getByText('新安裝預設開啟所有寫入：MCP 用戶端（例如 AI 助理）可直接新增、修改或刪除後端資料。', { exact: false })).toBeVisible();
+  await expect(page.getByText('預設開啟所有工具與寫入（新安裝，以及從 0.1.x 升級時一次）：MCP 用戶端（例如 AI 助理）可直接新增、修改或刪除後端資料', { exact: false })).toBeVisible();
   for (const label of ['明確允許此工具寫入', '允許寫入操作：create', '允許寫入操作：delete']) await expect(page.getByLabel(label, { exact: true })).toBeChecked();
   await page.getByLabel('允許寫入操作：delete', { exact: true }).uncheck();
   await page.getByRole('button', { name: '儲存工具權限' }).click();

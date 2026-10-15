@@ -7,16 +7,21 @@ import pytest
 
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.gateway import make_apps
-from mcp_admin_core.products import ProductStore, ProductState, TOOLS, child_spec
+from mcp_admin_core.products import ProductStore, ProductState, BOUNDED_TOOLS as TOOLS, TOOLS as FULL_TOOLS, child_spec, fresh_write_grants  # 0.2.0: the 0.1.x bounded surface (local models); products serve the full child surface
 from mcp_admin_core.policy import Denied, authorize
 from mcp_admin_core.native_inventory import NAMES
-from n8n_adapter import TOOLS as N8N_TOOLS
+from n8n_adapter import BOUNDED_TOOLS as N8N_TOOLS
 from test_expansion_policy import call
 from test_expansion_runtime import READS, WRITES
 from test_real_products import connection
 from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
-CASES = [(p, name, args) for p in READS for name, args in READS[p] + WRITES[p]]
+# 0.2.0: the 0.1.x bounded models (BOUNDED_TOOLS); calls added for the full surface (e.g. execute_method) are not in them.
+def bounded(p, name):
+    return name in (N8N_TOOLS if p == 'n8n' else TOOLS[p])
+
+
+CASES = [(p, name, args) for p in READS for name, args in READS[p] + WRITES[p] if bounded(p, name)]
 
 
 def state_for(product, grants=(), **kwargs):
@@ -49,7 +54,7 @@ async def test_extras_and_disabled_have_zero_child_dispatch(product, name, args,
     store.close()
 
 
-@pytest.mark.parametrize('product,name,args', [(p,n,a) for p in WRITES for n,a in WRITES[p]])
+@pytest.mark.parametrize('product,name,args', [(p,n,a) for p in WRITES for n,a in WRITES[p] if bounded(p, n)])
 def test_legacy_switch_never_grants_expansion_writes(product, name, args):
     tools = N8N_TOOLS if product == 'n8n' else TOOLS[product]
     if tools[name].legacy_write:
@@ -114,12 +119,14 @@ def test_native_gates_allow_exact_writer_and_disable_all_others(tmp_path, produc
     assert spec.env[prefix+'READONLY'] == 'false'
     assert spec.env['FASTMCP_CHECK_FOR_UPDATES'] == 'off'
     assert spec.env['FASTMCP_SHOW_SERVER_BANNER'] == 'false'
-    blocked = set(spec.env[prefix+'DISABLED_TOOLS'].split(','))
+    blocked = set(spec.env[prefix+'DISABLED_TOOLS'].split(',')) - {''}
     assert tool not in blocked
-    assert set(NAMES[product]) - set(TOOLS[product]) <= blocked
-    assert {name for name,t in TOOLS[product].items() if t.write and name != tool} <= blocked
+    # 0.2.0: the child's full surface; only disabled tools and writers without their grant are blocked natively.
+    assert set(NAMES[product]) == set(FULL_TOOLS[product])
+    assert blocked == {name for name, t in FULL_TOOLS[product].items() if t.write and name != tool}
     state = state_for(product, [tool], disabled=[tool])
-    assert child_spec(state, tmp_path).env[prefix+'READONLY'] == 'true'
+    mixed = any(t.write_operations for t in FULL_TOOLS[product].values())  # EMQX authn/authz: registered only when writable
+    assert child_spec(state, tmp_path).env[prefix+'READONLY'] == ('false' if mixed else 'true')
 
 
 @pytest.mark.parametrize('product', ['emqx', 'litellm', 'nextcloud'])
@@ -167,7 +174,7 @@ def test_manage_read_mode_cannot_accept_writer_grants(tmp_path):
 
 
 @pytest.mark.parametrize('product', ['n8n', 'opendesign'])
-def test_v2_migration_preserves_only_old_writer_semantics(tmp_path, product):
+def test_v2_migration_reaches_schema_4_with_every_write(tmp_path, product):
     store = ProductStore(tmp_path, product)
     old = store.load().model_dump()
     old.pop('enabled_write_tools'); old['schema_version'] = 2; old['writes_enabled'] = True
@@ -175,7 +182,8 @@ def test_v2_migration_preserves_only_old_writer_semantics(tmp_path, product):
     store.path.write_text(json.dumps(old)); store.close()
     store = ProductStore(tmp_path, product)
     actual = store.load().model_dump()
-    assert actual == {**old, 'schema_version': 3, 'enabled_write_tools': []}
+    # 0.2.0: through 3 to 4, every write grant on (the full add-on); disabled entries kept as stored.
+    assert actual == {**old, 'schema_version': 4, 'enabled_write_tools': fresh_write_grants(product), 'writes_enabled': True}
     store.close()
 
 
@@ -184,7 +192,7 @@ def test_invalid_v3_never_rewritten(tmp_path, bad):
     store = ProductStore(tmp_path, 'hermes')
     data = store.load().model_dump(); store.close()
     if bad == 'wrong_product': data['product'] = 'emqx'
-    if bad == 'future': data['schema_version'] = 4
+    if bad == 'future': data['schema_version'] = 5
     if bad == 'missing': data.pop('enabled_write_tools')
     if bad == 'corrupt_grant': data['enabled_write_tools'] = ['hermes_skill:typo']
     if bad == 'duplicate_grant': data['enabled_write_tools'] = ['hermes_skill:disable']*2

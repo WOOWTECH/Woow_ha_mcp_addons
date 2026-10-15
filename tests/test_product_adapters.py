@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from mcp_admin_core.config import ConfigError, Store
-from mcp_admin_core.products import ProductStore, PRODUCTS, TOOLS, child_spec
+from mcp_admin_core.products import BOUNDED_TOOLS, ProductStore, PRODUCTS, TOOLS, child_spec
 from mcp_admin_core.policy import Denied, authorize
 
 
@@ -83,11 +83,11 @@ def test_exact_source_arguments_and_unknown_deny(tmp_path, product, name, good, 
     store = ProductStore(tmp_path / product, product)
     store.update(writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
     try:
-        authorize(call(name, good), TOOLS[product], store.load())
-        with pytest.raises(Denied): authorize(call(name, bad), TOOLS[product], store.load())
-        with pytest.raises(Denied): authorize(call('unknown', {}), TOOLS[product], store.load())
+        authorize(call(name, good), BOUNDED_TOOLS[product], store.load())
+        with pytest.raises(Denied): authorize(call(name, bad), BOUNDED_TOOLS[product], store.load())
+        with pytest.raises(Denied): authorize(call('unknown', {}), BOUNDED_TOOLS[product], store.load())
         store.update(disabled=[name])
-        with pytest.raises(Denied): authorize(call(name, good), TOOLS[product], store.load())
+        with pytest.raises(Denied): authorize(call(name, good), BOUNDED_TOOLS[product], store.load())
     finally: store.close()
 
 
@@ -96,10 +96,10 @@ def test_writer_enable_and_path_policy(tmp_path):
     store.update(writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
     args = {'project_id': '12345678-1234-1234-1234-123456789abc'}
     try:
-        with pytest.raises(Denied): authorize(call('delete_project', args), TOOLS['opendesign'], store.load())
+        with pytest.raises(Denied): authorize(call('delete_project', args), BOUNDED_TOOLS['opendesign'], store.load())
         store.update(writes_enabled=True)
-        authorize(call('delete_project', args), TOOLS['opendesign'], store.load())
+        authorize(call('delete_project', args), BOUNDED_TOOLS['opendesign'], store.load())
         for value in ('../a', '/etc/passwd', 'x%2fy', 'x?secret', 'x\\y', './x'):
             with pytest.raises(Denied):
-                authorize(call('get_file_info', {**args, 'file_path': value}), TOOLS['opendesign'], store.load())
+                authorize(call('get_file_info', {**args, 'file_path': value}), BOUNDED_TOOLS['opendesign'], store.load())
     finally: store.close()

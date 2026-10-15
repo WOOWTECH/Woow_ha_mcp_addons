@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, AfterValidator, field_validat
 from .config import FRESH_WRITES_ENABLED, State, Store, http_url
 from .lifecycle import ChildSpec
 from .policy import Tool
+from .surface import FULL_PRODUCTS, full_tools
 
 PRODUCTS = ('odoo', 'odoo-manage', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud')
 Product = Literal['n8n', 'odoo', 'odoo-manage', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud']
@@ -124,7 +125,8 @@ CONNECTIONS = dict(zip(PRODUCTS, (OdooConnection, ManageConnection, HermesConnec
 
 
 class ProductState(State):
-    schema_version: int = 3
+    # 4 (0.2.0): the full child surface; every state migrated from 3 (or older) gets every write grant once.
+    schema_version: int = 4
     enabled_write_tools: list[str] = Field(default_factory=list)
     product: Product
     connection: OdooConnection | ManageConnection | HermesConnection | OpenDesignConnection | EmqxConnection | LiteLLMConnection | NextcloudConnection | None = Field(default=None, repr=False)
@@ -132,7 +134,7 @@ class ProductState(State):
     @field_validator('schema_version')
     @classmethod
     def version(cls, value):
-        if value != 3:
+        if value != 4:
             raise ValueError('unsupported schema')
         return value
 
@@ -168,33 +170,35 @@ class ProductState(State):
 
 
 def write_grants(product):
-    """Every reviewed write grant of a product: each write Tool's name and each name:operation of a selector Tool
-    (Hermes tool:action, n8n_manage_folders:create/rename); n8n's are N8N_GRANTS (its Tools live in apps/n8n)."""
-    if product == 'n8n':
-        from .expansion import N8N_GRANTS
-        return N8N_GRANTS
-    return frozenset(g for name, tool in TOOLS[product].items() for g in tool.grants(name))
+    """Every write grant of a product: each write Tool's name and each name:operation of a mixed Tool's write
+    operations (Hermes tool:action, n8n manage/versions actions, EMQX authn/authz operations). n8n's Tools are the
+    same full surface apps/n8n serves (surface.full_tools('n8n'))."""
+    tools = full_tools('n8n') if product == 'n8n' else TOOLS[product]
+    return frozenset(g for name, tool in tools.items() for g in tool.grants(name))
 
 
 def fresh_write_grants(product):
-    """The exact grants a NEW state starts with (owner decision 2026-10-15: writes on by default; each can be turned
-    off in the panel). Odoo Manage (retired) keeps none: its writers need an existing MCP module connection
-    (mode 'module'), which a new state does not have, so reviewed_grants would refuse them."""
+    """The exact grants a NEW state, and every state migrated to schema 4, holds (owner decision 2026-10-15: the full
+    add-on, every write on; each can be revoked in the panel). Odoo Manage (retired) keeps none: its writers need an
+    existing MCP module connection (mode 'module'), which a new state does not have."""
     if product == 'odoo-manage' or not FRESH_WRITES_ENABLED:
         return []
     return sorted(write_grants(product))
 
 
 class ProductStore(Store):
-    """Explicit v1 n8n / v2 product -> v3 grants migration; never downgrade.
+    """Explicit v1 n8n / v2 product -> v3 grants -> v4 full-surface migration; never downgrade.
 
     Construction-only migration under the exclusive writer lock. All legacy
-    fields are validated and preserved; migrated grants are empty (an existing
-    installation keeps what it had: writes are not turned on by an upgrade).
-    Only a NEW state (no state file yet) starts with every reviewed write grant
-    and the legacy switch on (fresh_write_grants, 2026-10-15). The legacy global
-    switch still applies ONLY to n8n_delete_workflow and delete_project. Restore
-    a protected compatible backup to roll back, never rewrite version in place.
+    fields are validated and preserved. 0.2.0 (owner decision 2026-10-15, the
+    full add-on): a NEW state and every state migrated to 4 (from 3, or from
+    1/2 through 3) hold every write grant and writes_enabled true
+    (fresh_write_grants); the token, connection, endpoint and the disabled list
+    are kept. The migration runs once: a 4 state is loaded as stored, so a grant
+    revoked in the panel stays revoked across restarts and later upgrades.
+    Odoo Manage (retired) keeps its grants. Restore a protected compatible
+    backup to roll back (a 0.1.x add-on refuses schema 4), never rewrite the
+    version in place.
     """
     def __init__(self, directory, product):
         if product not in (*PRODUCTS, 'n8n'):
@@ -214,7 +218,7 @@ class ProductStore(Store):
 
     def _initial_state(self):
         # Only when no state exists yet: Store writes it on the first boot of a new data directory, never over an
-        # existing (or migrated) state, so a write the administrator turned off stays off across restarts/upgrades.
+        # existing state (a 4 state is never re-seeded, so a revoked grant stays revoked).
         return ProductState(product=self.product, token=secrets.token_urlsafe(32), child_token=secrets.token_urlsafe(32),
                             writes_enabled=FRESH_WRITES_ENABLED, enabled_write_tools=fresh_write_grants(self.product))
 
@@ -230,6 +234,14 @@ class ProductStore(Store):
                 raise ValueError('incomplete legacy state or unexpected downgrade')
             # Validate every legacy field before any durable replacement.
             value = {**value, 'schema_version': 3, 'enabled_write_tools': []}
+            self._migrated = True
+        if isinstance(value, dict) and type(value.get('schema_version')) is int and value['schema_version'] == 3:
+            if not self._migrate or set(value) != set(ProductState.model_fields) or value.get('product') != self.product:
+                raise ValueError('incomplete legacy state or unexpected downgrade')
+            # 0.2.0: the full add-on. Every write grant and the legacy switch on, once; disabled tools stay disabled.
+            grants = value.get('enabled_write_tools') if self.product == 'odoo-manage' else fresh_write_grants(self.product)
+            value = {**value, 'schema_version': 4, 'enabled_write_tools': grants,
+                     'writes_enabled': FRESH_WRITES_ENABLED if self.product != 'odoo-manage' else value.get('writes_enabled')}
             self._migrated = True
         if not isinstance(value, dict) or set(value) != set(ProductState.model_fields) or value.get('product') != self.product:
             raise ValueError('wrong product or incomplete schema')
@@ -382,6 +394,10 @@ from .batch2 import expand_tools as expand_batch2
 expand_batch2(TOOLS)
 from .odoo_b2 import TOOLS as ODOO_B2_TOOLS
 TOOLS['odoo'].update(ODOO_B2_TOOLS)
+# The 0.1.x bounded surface (local argument models, reviewed subsets). Since 0.2.0 only Odoo Manage (retired, not
+# shipped) still uses it; every shipped product serves its child's complete surface (surface.full_tools).
+BOUNDED_TOOLS = TOOLS
+TOOLS = {product: (BOUNDED_TOOLS[product] if product not in FULL_PRODUCTS else full_tools(product)) for product in PRODUCTS}
 
 # Each product's representative public read (tests, container acceptance). HealthMonitor uses health_probe(): Odoo
 # and Odoo Manage have private authentication-only probes instead (RC review notes, 0.1.3 #6 and 0.1.4 #7).
@@ -492,7 +508,13 @@ def child_spec(state: ProductState, directory: Path) -> ChildSpec | None:
     if product == 'odoo':
         env.update(ODOO_URL=c.url, ODOO_DB=c.database, ODOO_USERNAME=c.username, ODOO_PASSWORD=c.password,
                    ODOO_TRANSPORT='xmlrpc', ODOO_VERIFY_SSL='1', ODOO_TIMEOUT='5',
-                   ODOO_MCP_ENABLE_WRITES='0', ODOO_MCP_ALLOW_UNKNOWN_METHODS='0', MCP_CHATTER_DIRECT='0')
+                   # 0.2.0 (owner decision 2026-10-15, as the PaaS woow-mcp-server): approved writes on
+                   # (ODOO_MCP_ENABLE_WRITES=1, PaaS seed_defaults) and direct create/write/unlink through
+                   # execute_method (ODOO_MCP_ALLOW_DIRECT_WRITES=1, the PaaS fix_direct_writes switch; the three-step
+                   # preview/validate/execute_approved_write tools stay listed: fix_remove_3step_tools is not
+                   # applied). Unreviewed side-effect methods and direct chatter keep the PaaS defaults (off).
+                   ODOO_MCP_ENABLE_WRITES='1', ODOO_MCP_ALLOW_DIRECT_WRITES='1',
+                   ODOO_MCP_ALLOW_UNKNOWN_METHODS='0', MCP_CHATTER_DIRECT='0')
         argv = (str(python), str(app / 'launch.py'), '--transport', 'streamable-http', '--host', '127.0.0.1', '--port', '3000', '--path', '/mcp')
     elif product == 'odoo-manage':
         env.update(ODOO_URL=c.url, ODOO_DB=c.database, ODOO_USER=c.username, ODOO_API_KEY=c.api_key,
@@ -537,7 +559,10 @@ def child_spec(state: ProductState, directory: Path) -> ChildSpec | None:
         # child tools/list is intentionally not the public authorization surface.
         native_allowed = public_allowed | {health_probe(product)[0]}  # the probe HealthMonitor actually calls
         prefix = {'emqx': 'EMQX_MCP_', 'litellm': 'LITELLM_MCP_', 'nextcloud': 'NEXTCLOUD_MCP_'}[product]
-        env[prefix + 'READONLY'] = 'false' if any(TOOLS[product][name].write for name in public_allowed) else 'true'
+        # 0.2.0: a mixed tool (EMQX authn/authz users and rules) is registered only with READONLY=false, also for its
+        # read operation; the gateway checks each write operation's grant.
+        env[prefix + 'READONLY'] = 'false' if any(TOOLS[product][name].write or TOOLS[product][name].write_operations
+                                                  for name in public_allowed) else 'true'
         if product == 'nextcloud':
             # The child registers delete_file_checked only with READONLY=false AND ALLOW_DELETE=true.
             env[prefix + 'ALLOW_DELETE'] = 'true' if 'delete_file_checked' in public_allowed else 'false'

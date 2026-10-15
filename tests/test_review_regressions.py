@@ -13,7 +13,7 @@ from mcp_admin_core.config import ConfigError, Store
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.lifecycle import ChildSpec, Supervisor
 from mcp_admin_core.policy import authorize, declared_schema
-from n8n_adapter import TOOLS
+from n8n_adapter import BOUNDED_TOOLS as TOOLS
 
 
 @pytest.fixture

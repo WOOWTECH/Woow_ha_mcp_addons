@@ -1,4 +1,4 @@
-"""n8n-mcp 2.91.0: intentionally narrow, source-audited policy and fixed launcher."""
+"""n8n-mcp 2.91.0: the full tool surface (0.2.0) and the fixed launcher."""
 from pathlib import Path
 import shutil
 from typing import Literal
@@ -60,6 +60,11 @@ from mcp_admin_core.batch2 import N8N_TOOLS as BATCH2_TOOLS
 TOOLS.update(BATCH2_TOOLS)
 from mcp_admin_core.n8n_b3 import N8N_TOOLS as B3_TOOLS
 TOOLS.update(B3_TOOLS)
+# The 0.1.x bounded surface above stays importable (its models are still tested); since 0.2.0 the add-on serves the
+# pinned n8n-mcp's complete surface: all 28 tools, the child's own schemas and validation (surface.full_tools).
+BOUNDED_TOOLS = TOOLS
+from mcp_admin_core.surface import full_tools
+TOOLS = full_tools("n8n")
 CHILD_URL = "http://127.0.0.1:3000/mcp"
 
 

@@ -213,12 +213,13 @@ async def run():
                 state = fixture_update(connection=connections[APP])
                 public_tools = TOOLS[APP]
                 name, args = PROBES[APP]
-            # 2026-10-15: the executable created a NEW state, so every reviewed write grant and the legacy switch
+            # 0.2.0 (the full add-on): the executable created a NEW state, so every write grant and the legacy switch
             # are on (Odoo Manage none: its writers need module mode).
+            assert state.schema_version == 4
             assert state.writes_enabled is True and state.enabled_write_tools == fresh_write_grants(APP)
             # Valid complete v2 backup fixture (an installation older than exact grants, legacy switch off): actual
-            # executable migrates it under writer ownership, preserving settings and denying new writes; the new-state
-            # default never reaches an existing state.
+            # executable migrates it under writer ownership through 3 to 4, preserving settings and turning every write
+            # on once (0.2.0).
             legacy = state.model_dump()
             legacy.pop('enabled_write_tools')
             legacy['schema_version'] = 2
@@ -227,9 +228,14 @@ async def run():
             process = start()
             await ready_listener(client, process)
             migrated = json.loads((DATA / 'state.json').read_text())
-            assert migrated['schema_version'] == 3 and migrated['enabled_write_tools'] == []
-            assert migrated == {**state.model_dump(), 'writes_enabled': False, 'enabled_write_tools': []}
-            state = type(state).model_validate(migrated)
+            assert migrated['schema_version'] == 4 and migrated['enabled_write_tools'] == fresh_write_grants(APP)
+            assert migrated == {**state.model_dump(), 'writes_enabled': APP != 'odoo-manage'}
+            # The denial checks below need every write revoked, as the panel saves it (and the restart keeps it).
+            stop(process)
+            process = None
+            state = fixture_update(writes_enabled=False, enabled_write_tools=[])
+            process = start()
+            await ready_listener(client, process)
             name_write, valid_write = WRITE_CASES[APP]
             public_tools[name_write].arguments.model_validate(valid_write)
             headers = {'Authorization': 'Bearer ' + state.token, 'Accept': 'application/json, text/event-stream'}
@@ -299,7 +305,7 @@ async def run():
             assert (await client.post(ENDPOINT, headers=headers, json=initialize)).status_code == 401
             # Read only this disposable fixture, never log tokens/state.
             restored = json.loads((DATA / 'state.json').read_text())
-            assert restored['schema_version'] == 3 and restored['enabled_write_tools'] == grants
+            assert restored['schema_version'] == 4 and restored['enabled_write_tools'] == grants
             token = restored['token']
             assert (await client.post(ENDPOINT, headers={'Authorization': 'Bearer ' + token}, json=message)).status_code == 403
             stop(process)

@@ -32,7 +32,10 @@ from .config import ConfigError, State, Store, strict_json
 from .policy import Denied, ToolCallRefused, UnknownMethod, authorize, filter_list
 from .ha_role import valid_user_id
 
-MAX_REQUEST = 262144
+# 0.2.0: 16 MiB (was 256 KiB). The full Nextcloud surface uploads up to 10 MiB as base64 (about 13.4 MiB of JSON) and
+# writes text files up to 1 MiB; a body is read only after the token check. BODY_SECONDS bounds the read.
+MAX_REQUEST = 16 * 1024 * 1024
+BODY_SECONDS = 60
 MAX_RESPONSE = 8 * 1024 * 1024
 STREAM_SECONDS = 120
 EVENT_BOUNDARY = re.compile(rb"\r?\n\r?\n")
@@ -220,7 +223,7 @@ class BadRequest(Exception):
 async def body(request: Request):
     content = bytearray()
     try:
-        async with asyncio.timeout(10):
+        async with asyncio.timeout(BODY_SECONDS):
             async for chunk in request.stream():
                 content.extend(chunk)
                 if len(content) > MAX_REQUEST:

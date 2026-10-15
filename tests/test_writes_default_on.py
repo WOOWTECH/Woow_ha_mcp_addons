@@ -1,7 +1,8 @@
-"""Owner decision 2026-10-15: a NEW installation starts with every reviewed write enabled.
+"""Owner decision 2026-10-15: the full add-on, every tool and every write on by default.
 
-Only a state created on first boot gets the default; an existing state (and what an administrator saved in it) is
-never rewritten, a write turned off stays off across restarts, and an upgrade from an older state keeps its grants.
+A new state (first boot) and every state migrated to schema 4 (from a 0.1.x schema 3, or 1/2 through 3) hold every
+write grant and writes_enabled true; the migration runs once and keeps the token, connection, endpoint and disabled
+list. After that the panel's choices are kept: a revoked grant stays revoked across restarts.
 """
 from contextlib import closing
 import json
@@ -17,18 +18,20 @@ from mcp_admin_core.policy import Denied, ToolCallRefused, authorize, enabled
 from mcp_admin_core.products import PRODUCTS, ProductStore, TOOLS, fresh_write_grants, write_grants
 from n8n_adapter import TOOLS as N8N_TOOLS
 from test_expansion_policy import call
+from test_real_products import connection
 
 ROOT = Path(__file__).resolve().parents[1]
 ALL = (*PRODUCTS, 'n8n')
-# One representative write call per product (exact grant shown); Odoo Manage keeps writes off (module mode only).
+FULL = tuple(p for p in ALL if p != 'odoo-manage')
+# One representative write call per product (exact grant shown).
 WRITE_CALLS = {
-    'odoo': ('chatter_post', {'model': 'res.partner', 'record_id': 1, 'body': 'x'}),
-    'hermes': ('hermes_skill', {'action': 'disable', 'name': 'example'}),
-    'opendesign': ('delete_project', {'project_id': '12345678-1234-1234-1234-123456789abc'}),
-    'emqx': ('emqx_kick_client', {'clientid': 'device'}),
-    'litellm': ('litellm_delete_model', {'model_id': 'one'}),
+    'odoo': ('execute_method', {'model': 'res.partner', 'method': 'write', 'args': [[1], {'name': 'x'}]}),
+    'hermes': ('hermes_config', {'action': 'set', 'key': 'model.default', 'value': 'x'}),
+    'opendesign': ('send_message', {'project_id': '12345678-1234-1234-1234-123456789abc', 'message': 'x'}),
+    'emqx': ('emqx_publish', {'topic': 'owned/test', 'payload': 'x'}),
+    'litellm': ('litellm_generate_key', {}),
     'nextcloud': ('delete_file_checked', {'path': 'a.txt', 'expected_etag': '"e"'}),
-    'n8n': ('n8n_manage_folders', {'action': 'create', 'projectId': 'project', 'name': 'New'}),
+    'n8n': ('n8n_manage_credentials', {'action': 'create', 'name': 'x', 'type': 'x', 'data': {}}),
 }
 
 
@@ -40,22 +43,29 @@ def grants_of(product):
     return {g for name, tool in tools_of(product).items() for g in tool.grants(name)}
 
 
-def test_reviewed_grant_sets_match_the_tools():
+def grant_of(product):
+    name, arguments = WRITE_CALLS[product]
+    tool = tools_of(product)[name]
+    return name if tool.write else f'{name}:{arguments[tool.selector]}'
+
+
+def test_grant_sets_match_the_full_tools():
     for product in ALL:
         assert write_grants(product) == grants_of(product), product
-    # Hermes tool:action and n8n_manage_folders operation grants are part of the default.
-    assert {'hermes_skill:enable', 'hermes_skill:disable', 'hermes_gateway:restart', 'hermes_session:delete',
-            'hermes_tools:enable', 'hermes_tools:disable', 'hermes_cron:delete', 'hermes_cron:pause'} <= write_grants('hermes')
-    assert {'n8n_manage_folders:create', 'n8n_manage_folders:rename', 'n8n_delete_workflow'} <= write_grants('n8n')
+    assert {'hermes_config:set', 'hermes_mcp:add', 'hermes_cron:create', 'hermes_chat'} <= write_grants('hermes')
+    assert {'n8n_manage_credentials:create', 'n8n_test_workflow', 'n8n_workflow_versions:rollback'} <= write_grants('n8n')
+    assert {'execute_method', 'execute_approved_write', 'chatter_post'} <= write_grants('odoo')
+    assert {'litellm_generate_key', 'litellm_chat_completion'} <= write_grants('litellm')
+    assert {'emqx_publish', 'emqx_manage_authn_users:create'} <= write_grants('emqx')
 
 
 @pytest.mark.parametrize('product', ALL)
-def test_new_state_enables_every_write(tmp_path, product):
+def test_new_state_enables_every_tool_and_write(tmp_path, product):
     with closing(ProductStore(tmp_path, product)) as store:
         state = store.load()
-        assert state.writes_enabled is True
+        assert state.schema_version == 4 and state.writes_enabled is True and state.disabled == []
         if product == 'odoo-manage':
-            # Its writers require an existing MCP module connection (mode 'module'); a new state has none.
+            # Retired; its writers require an existing MCP module connection (mode 'module'); a new state has none.
             assert state.enabled_write_tools == [] and fresh_write_grants(product) == []
             return
         assert state.enabled_write_tools == sorted(grants_of(product)) == fresh_write_grants(product)
@@ -66,59 +76,67 @@ def test_new_state_enables_every_write(tmp_path, product):
 
 
 @pytest.mark.parametrize('product', sorted(WRITE_CALLS))
-def test_new_state_authorizes_a_write_and_a_revoked_grant_stays_revoked(tmp_path, product):
+def test_a_write_is_allowed_by_default_and_a_revoked_grant_stays_revoked(tmp_path, product):
     name, arguments = WRITE_CALLS[product]
     tools = tools_of(product)
-    tool = tools[name]
-    grant = name if tool.write else f'{name}:{arguments[tool.selector]}'
-    store = ProductStore(tmp_path, product)
-    try:
-        if product == 'n8n':
-            store.update(backend_url='http://127.0.0.1:9', backend_key='DUMMY')
-        assert authorize(call(name, arguments), tools, store.load()) == 'tools/call'
-        # What the panel saves when the administrator unticks one write (the UI always sends writes_enabled false).
+    grant = grant_of(product)
+    with closing(ProductStore(tmp_path, product)) as store:
+        message = call(name, arguments)
+        assert authorize(message, tools, store.load()) == 'tools/call'
+        assert message['params']['arguments'] == arguments  # forwarded unchanged: the child validates
         remaining = [g for g in store.load().enabled_write_tools if g != grant]
-        store.update(writes_enabled=False, enabled_write_tools=remaining)
-    finally:
-        store.close()
-    store = ProductStore(tmp_path, product)  # restart: the existing state is loaded, never re-seeded
-    try:
-        state = store.load()
-        assert state.writes_enabled is False and state.enabled_write_tools == remaining
-        with pytest.raises(ToolCallRefused):
-            authorize(call(name, arguments), tools, state)
-    finally:
-        store.close()
+        store.update(writes_enabled=False, enabled_write_tools=remaining)  # what the panel saves
+    for _ in range(2):  # restarts: a schema 4 state is loaded as stored, never re-seeded
+        with closing(ProductStore(tmp_path, product)) as store:
+            state = store.load()
+            assert state.writes_enabled is False and state.enabled_write_tools == remaining
+            with pytest.raises(ToolCallRefused):
+                authorize(call(name, arguments), tools, state)
 
 
 @pytest.mark.parametrize('product', ALL)
-def test_existing_read_only_state_is_not_rewritten(tmp_path, product):
+def test_disabled_closes_a_tool_even_with_its_grant(tmp_path, product):
+    tools = tools_of(product)
+    name = next(iter(tools))
     with closing(ProductStore(tmp_path, product)) as store:
-        store.update(writes_enabled=False, enabled_write_tools=[])
-        before = store.path.read_bytes()
-    for _ in range(2):  # two restarts
-        with closing(ProductStore(tmp_path, product)) as store:
-            assert store.path.read_bytes() == before
-            state = store.load()
-            assert state.writes_enabled is False and state.enabled_write_tools == []
-            tools = tools_of(product)
-            assert not any(enabled(name, tools, state) for name, tool in tools.items() if tool.write)
+        store.update(disabled=[name])
+    with closing(ProductStore(tmp_path, product)) as store:
+        assert store.load().disabled == [name]
+        with pytest.raises(ToolCallRefused) as refused:
+            authorize(call(name, {}), tools, store.load())
+        assert refused.value.kind == 'unknown_tool'
 
 
-def test_state_written_by_an_older_version_keeps_its_grants(tmp_path):
-    # A v3 state as 0.1.14 created it (writes off, one grant the administrator chose) is loaded unchanged.
-    with closing(ProductStore(tmp_path, 'emqx')) as store:
-        old = {**store.load().model_dump(), 'writes_enabled': False, 'enabled_write_tools': ['emqx_kick_client']}
-    store.path.write_text(json.dumps(old))
-    raw = store.path.read_bytes()
-    with closing(ProductStore(tmp_path, 'emqx')) as store:
-        assert store.path.read_bytes() == raw
-        assert store.load().enabled_write_tools == ['emqx_kick_client'] and store.load().writes_enabled is False
+def v3_state(store, product, **changes):
+    """A schema 3 state as 0.1.x wrote it: exact grants of the bounded surface, the legacy switch, disabled."""
+    value = {**store.load().model_dump(), 'schema_version': 3, **changes}
+    store.path.write_text(json.dumps(value))
+    return value
+
+
+@pytest.mark.parametrize('product', FULL)
+def test_a_0_1_state_migrates_once_to_every_write(tmp_path, product):
+    with closing(ProductStore(tmp_path, product)) as store:
+        if product != 'n8n':
+            store.update(connection=connection(product, 'http://127.0.0.1:9'))
+        else:
+            store.update(backend_url='http://127.0.0.1:9', backend_key='DUMMY')
+        old = v3_state(store, product, writes_enabled=False, enabled_write_tools=[], disabled=[next(iter(tools_of(product)))],
+                       endpoint='https://mcp.example.test/mcp')
+    with closing(ProductStore(tmp_path, product)) as store:
+        state = store.load()
+        assert state.schema_version == 4 and state.writes_enabled is True
+        assert state.enabled_write_tools == fresh_write_grants(product) == sorted(grants_of(product))
+        for key in ('token', 'child_token', 'connection', 'backend_url', 'backend_key', 'endpoint', 'disabled'):
+            assert state.model_dump()[key] == old[key], key  # kept, disabled tools stay disabled
+        assert json.loads(store.path.read_text())['schema_version'] == 4  # migrated durably
+        store.update(enabled_write_tools=[])  # the administrator revokes everything after the upgrade
+    with closing(ProductStore(tmp_path, product)) as store:
+        assert store.load().enabled_write_tools == []  # the migration ran once
 
 
 @pytest.mark.parametrize('product', ['hermes', 'n8n'])
-def test_migrated_legacy_state_does_not_gain_writes(tmp_path, product):
-    # v2 (and n8n v1) states predate exact grants: the upgrade keeps them without any (existing installations).
+def test_older_states_migrate_through_3_to_every_write(tmp_path, product):
     with closing(ProductStore(tmp_path, product)) as store:
         old = store.load().model_dump()
     old.pop('enabled_write_tools')
@@ -129,7 +147,26 @@ def test_migrated_legacy_state_does_not_gain_writes(tmp_path, product):
     store.path.write_text(json.dumps(old))
     with closing(ProductStore(tmp_path, product)) as store:
         state = store.load()
-        assert state.schema_version == 3 and state.enabled_write_tools == [] and state.writes_enabled is False
+        assert state.schema_version == 4 and state.enabled_write_tools == fresh_write_grants(product)
+        assert state.writes_enabled is True and state.token == old['token']
+
+
+def test_odoo_manage_keeps_its_grants_on_migration(tmp_path):
+    with closing(ProductStore(tmp_path, 'odoo-manage')) as store:
+        v3_state(store, 'odoo-manage', writes_enabled=False, enabled_write_tools=[])
+    with closing(ProductStore(tmp_path, 'odoo-manage')) as store:
+        state = store.load()
+        assert state.schema_version == 4 and state.enabled_write_tools == [] and state.writes_enabled is False
+
+
+def test_a_future_or_foreign_state_is_refused_not_rewritten(tmp_path):
+    with closing(ProductStore(tmp_path, 'emqx')) as store:
+        value = {**store.load().model_dump(), 'schema_version': 5}
+    store.path.write_text(json.dumps(value))
+    raw = store.path.read_bytes()
+    with pytest.raises(Exception):
+        ProductStore(tmp_path, 'emqx')
+    assert store.path.read_bytes() == raw
 
 
 def test_plain_v1_store_is_unchanged(tmp_path):
@@ -139,10 +176,10 @@ def test_plain_v1_store_is_unchanged(tmp_path):
 
 
 @pytest.mark.parametrize('product,grant', [('n8n', 'n8n_delete_workflow'), ('hermes', 'hermes_cron:delete'),
-                                          ('opendesign', 'delete_project')])
+                                          ('opendesign', 'delete_project'), ('odoo', 'execute_method')])
 async def test_panel_shows_all_writes_on_and_unticking_one_survives_restart(tmp_path, product, grant):
     """The unmodified production UI serializers on a new state: every write is ticked; saving with one unticked
-    stores exactly the rest, clears the legacy switch (so a legacy writer really is off) and survives a restart."""
+    stores exactly the rest and survives a restart; that write is then refused."""
     async def role(_): return True
     tools = tools_of(product)
     with closing(ProductStore(tmp_path, product)) as store:
@@ -154,6 +191,7 @@ async def test_panel_shows_all_writes_on_and_unticking_one_survives_restart(tmp_
                 bootstrap = (await client.get('/api/bootstrap', headers=identity)).json()
                 assert bootstrap['writes_enabled'] is True
                 assert sorted(bootstrap['enabled_write_tools']) == sorted(grants_of(product))
+                assert set(bootstrap['tools']) == set(tools)
                 probe = subprocess.run(['node', '--input-type=module', '-e', '''
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -182,10 +220,7 @@ console.log(JSON.stringify(policyPayload(b, [], ticked)));
     with closing(ProductStore(tmp_path, product)) as store:
         state = store.load()
         assert state.writes_enabled is False and sorted(state.enabled_write_tools) == expected
-        name = grant.split(':')[0]
-        arguments = {'n8n_delete_workflow': {'id': 'one'}, 'hermes_cron': {'action': 'delete', 'job_id': 'example'},
-                     'delete_project': {'project_id': '12345678-1234-1234-1234-123456789abc'}}[name]
-        if product == 'n8n':
-            store.update(backend_url='http://127.0.0.1:9', backend_key='DUMMY')
+        name, _, operation = grant.partition(':')
+        arguments = {'action': operation, 'job_id': 'example'} if operation else {}
         with pytest.raises(Denied):
-            authorize(call(name, arguments), tools, store.load())
+            authorize(call(name, arguments), tools, state)

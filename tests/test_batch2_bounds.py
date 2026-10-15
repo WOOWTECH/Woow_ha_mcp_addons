@@ -6,9 +6,9 @@ import importlib.util
 from pathlib import Path
 import pytest
 from pydantic import ValidationError
-from mcp_admin_core.products import ProductStore, TOOLS
+from mcp_admin_core.products import ProductStore, BOUNDED_TOOLS as TOOLS  # 0.2.0: the 0.1.x bounded surface (local models); products serve the full child surface
 from mcp_admin_core.policy import authorize, Denied, filter_list
-from n8n_adapter import TOOLS as N8N_TOOLS
+from n8n_adapter import BOUNDED_TOOLS as N8N_TOOLS
 from test_batch2_policy import BAD_CONNECTION_KEYS, CASES, GRAPH, GRAPH_NAME_CASES, graph_with_name
 from test_expansion_policy import call
 from test_real_products import connection

@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 
 from mcp_admin_core.native_inventory import NAMES
-from mcp_admin_core.products import TOOLS
-from n8n_adapter import TOOLS as N8N_TOOLS
+from mcp_admin_core.products import BOUNDED_TOOLS as TOOLS  # 0.2.0: the 0.1.x bounded surface (local models); products serve the full child surface
+from n8n_adapter import BOUNDED_TOOLS as N8N_TOOLS
 from test_expansion_runtime import READS, WRITES
 from test_batch2_policy import CASES as B1_CASES
 from test_b2_odoo_policy import CASES as B2_CASES
@@ -61,18 +61,6 @@ assert not list(Path(os.environ['HOME']).iterdir())
         assert result.returncode == 0, result.stderr
 
 
-def test_legacy_writer_documentation_matches_authorization():
-    ledger = json.loads((ROOT/'docs/tool-review.json').read_text())
-    inventory = json.loads((ROOT/'docs/tool-surface.json').read_text())
-    for product, name in [('n8n', 'n8n_delete_workflow'), ('opendesign', 'delete_project')]:
-        reason = ledger[product][name]
-        assert 'writes_enabled=true 或 exact grant' in reason
-        assert 'disabled 永遠優先' in reason
-        assert '一般開關不授權' not in reason
-        row = next(t for t in inventory['products'][product]['tools'] if t['name'] == name)
-        assert reason in json.dumps(row, ensure_ascii=False)
-
-
 def test_every_added_tool_has_real_handler_positive_case():
     policies = {**TOOLS, 'n8n': N8N_TOOLS}
     assert {(p,n) for p,tools in policies.items() for n,t in tools.items() if t.legacy_write} == {
@@ -90,14 +78,13 @@ def test_every_added_tool_has_real_handler_positive_case():
         b1_cases = [(name, args) for p, name, args in B1_CASES if p == product]
         b2_cases = B2_CASES if product == 'odoo' else []
         b3_cases = B3_CASES if product == 'n8n' else []
-        # These exact cases are dispatched and projected by the genuine child in
-        # test_litellm_metadata_runtime, not merely advertised in tools/list.
+        # 0.1.x LiteLLM metadata cases (their projection runtime test was removed with the projection in 0.2.0).
         litellm_cases = [(name, fixture[0]) for name, fixture in LITELLM_METADATA_CASES.items()] if product == 'litellm' else []
         actual_cases = {name for name, _ in READS[product]+WRITES[product]+b1_cases+b2_cases+b3_cases+litellm_cases}
         assert set(tools)-old[product] <= actual_cases
         # Every new operation grant has a real writer case, not just tools/list.
         covered = {name if tools[name].write else f'{name}:{args[tools[name].selector]}'
-                   for name,args in WRITES[product]+[(n,a) for n,a in b1_cases if tools[n].write]}
+                   for name,args in [(n, a) for n, a in WRITES[product] if n in tools]+[(n,a) for n,a in b1_cases if tools[n].write]}
         for name,tool in tools.items():
             if not tool.legacy_write:
                 assert set(tool.grants(name)) <= covered

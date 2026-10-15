@@ -2,9 +2,9 @@
 import copy
 from contextlib import closing
 import pytest
-from mcp_admin_core.products import ProductStore, TOOLS
+from mcp_admin_core.products import ProductStore, BOUNDED_TOOLS as TOOLS  # 0.2.0: the 0.1.x bounded surface (local models); products serve the full child surface
 from mcp_admin_core.policy import authorize, Denied
-from n8n_adapter import TOOLS as N8N_TOOLS
+from n8n_adapter import BOUNDED_TOOLS as N8N_TOOLS
 from test_expansion_policy import call
 from test_real_products import connection
 

@@ -8,7 +8,7 @@ import pytest
 
 from mcp_admin_core.config import ConfigError, Store
 from mcp_admin_core.gateway import make_apps
-from n8n_adapter import TOOLS
+from n8n_adapter import BOUNDED_TOOLS as TOOLS
 
 
 @pytest.fixture

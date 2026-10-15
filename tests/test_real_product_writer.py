@@ -38,7 +38,7 @@ async def test_real_delete_requires_enable_and_disabled_direct_call_still_denied
                         'name': 'delete_project', 'arguments': {'project_id': '12345678-1234-1234-1234-123456789abc'}}}
                     assert refused(await client.post('/mcp', headers=headers, json=message))
                     assert calls == []
-                    store.update(writes_enabled=True)
+                    store.update(enabled_write_tools=['delete_project'])  # 0.2.0: an exact grant, no legacy switch
                     reply = await rpc(client, '/mcp', headers, message)
                     assert not reply.get('isError')
                     assert calls == [('DELETE', '/api/projects/12345678-1234-1234-1234-123456789abc')]

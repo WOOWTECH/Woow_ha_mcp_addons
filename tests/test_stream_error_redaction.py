@@ -15,7 +15,7 @@ import nextcloud_fixtures
 from litellm_metadata_fixtures import FIXTURES as LITELLM_METADATA_CASES
 
 from mcp_admin_core.lifecycle import ChildSpec
-from mcp_admin_core.products import PROBES, TOOLS
+from mcp_admin_core.products import PROBES, BOUNDED_TOOLS as TOOLS  # 0.2.0: the 0.1.x bounded surface (local models); products serve the full child surface
 import test_six_hardening
 from test_six_hardening import Quiet, call, runtime, serve
 
