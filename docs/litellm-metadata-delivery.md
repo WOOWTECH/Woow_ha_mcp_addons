@@ -1,5 +1,7 @@
 # LiteLLM 一般唯讀 metadata batch（experimental candidate）
 
+> **0.2.0（2026-10-15）**：本文件描述的 LiteLLM metadata 有界投影（`metadata.py` 與 tools/models、teams、users 的修改）已隨完整版移除，vendor 回到 Woow_litellm_mcp_server 4d41903 原始碼（只保留 lifespan／errors 的出站與錯誤防護）；文中測試檔也已刪除。以下為歷史紀錄。
+
 Base `4300ae07c42c0d16b0cf6a37b98b0af2c791b8ca`；branch `feat/litellm-metadata-20261005`。
 這是五個真既有工具的 bounded 子集，不是完整 LiteLLM 產品、後端版本相容承諾或 HA／商用驗收。沒有新 writer/grant、inference、provider health probe、key administration 或跨 instance。
 

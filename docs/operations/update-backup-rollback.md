@@ -73,6 +73,10 @@ backup ID、版本、時間、保管位置類型、權限檢查結論，不記�
 不會授權新增 writers。其他產品不能匯入 n8n state；unknown/duplicate grants、未知未來／
 損毀／不完整 state 拒絕且不重寫。UI 保存取代全部 exact grants，disabled 永遠優先。
 
+**0.2.0（完整版，2026-10-15）**：v3（以及經 v3 的 v1／v2）再遷移一次到 **v4**：每個寫入 grant 全開、`writes_enabled=true`，
+token、child token、backend、endpoint、disabled 保留；v4 之後照存檔載入，管理員取消的寫入不會被再次打開。
+0.1.x executable **不接受 v4**：從 0.2.0 退回 0.1.x 必須還原升級前的備份。**升級前請先備份**，並知悉升級後寫入全開。
+
 舊 v1/v2 executable **不接受 v3**：退 image 不等於退資料。必須使用升級前的
 受保護相容 v1/v2 backup；不能手改 schema_version、刪 writer marker 或刪 state 讓系統
 重建 token。若無相容 backup，先停用新 Add-on 並尋求核准恢復，不嘗試 lossy downgrade。

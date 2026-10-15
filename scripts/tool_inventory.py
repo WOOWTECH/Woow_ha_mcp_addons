@@ -18,48 +18,8 @@ from n8n_adapter import TOOLS as N8N_TOOLS
 
 POLICIES = {**TOOLS, 'n8n': N8N_TOOLS}
 
-READ = {
- 'odoo': 'accounting_health_across_instances accounting_health_summary aggregate_across_instances aggregate_records analyze_upgrade_log build_domain business_pack_report data_quality_report diagnose_access diagnose_odoo_call fit_gap_report generate_json2_payload get_async_task get_model_fields get_odoo_profile health_check inspect_model_relationships knowledge_stats list_async_tasks list_instances list_models lookup_model_history read_attachment read_record receivable_payable_aging scan_addons_source schema_catalog search_across_instances search_employee search_holidays search_knowledge search_records upgrade_risk_report',
- 'odoo-manage': 'aggregate_records get_record list_models list_resource_templates search_records',
- 'hermes': 'hermes_inspect',
- 'opendesign': 'get_file_info get_project health list_agents list_connectors list_plugins list_project_files list_projects list_runs list_skills read_file version',
- 'emqx': 'emqx_authz_settings emqx_broker_stats emqx_client_subscriptions emqx_cluster_status emqx_get_client emqx_get_retained emqx_get_rule_metrics emqx_get_trace_log emqx_list_actions emqx_list_alarms emqx_list_authn emqx_list_authz_sources emqx_list_banned emqx_list_clients emqx_list_connectors emqx_list_listeners emqx_list_retained emqx_list_rules emqx_list_subscriptions emqx_list_topics emqx_list_traces emqx_metrics_current emqx_metrics_history emqx_node_detail emqx_prometheus_stats',
- 'litellm': 'litellm_global_spend_report litellm_health_readiness litellm_key_info litellm_list_keys litellm_list_models litellm_list_plugins litellm_list_teams litellm_list_users litellm_model_group_info litellm_model_info litellm_plugin_info litellm_skill_hub litellm_spend_logs litellm_team_info litellm_user_info',
- 'nextcloud': 'get_file_content get_file_tree list_calendars list_tasks read_text_file',
- 'n8n': 'tools_documentation search_nodes get_node validate_node get_template search_templates validate_workflow n8n_get_workflow n8n_list_workflows n8n_validate_workflow n8n_health_check n8n_list_catalog',
-}
-WRITE = {
- 'odoo': 'cancel_async_task chatter_post execute_approved_write index_knowledge submit_async_task validate_write preview_write execute_method',
- 'odoo-manage': 'create_record delete_record post_message update_record call_model_method',
- 'hermes': 'hermes_chat',
- 'opendesign': 'create_project delete_project send_message',
- 'emqx': 'emqx_ban emqx_client_subscribe emqx_client_unsubscribe emqx_create_trace emqx_delete_retained emqx_delete_trace emqx_kick_client emqx_publish emqx_publish_bulk emqx_toggle_rule emqx_unban',
- 'nextcloud': 'create_text_file delete_file_checked update_text_file upload_file',
- 'litellm': 'litellm_health litellm_token_counter litellm_spend_calculate litellm_add_model litellm_block_key litellm_chat_completion litellm_create_team litellm_create_user litellm_delete_key litellm_delete_model litellm_delete_plugin litellm_delete_team litellm_delete_user litellm_disable_plugin litellm_enable_plugin litellm_generate_key litellm_regenerate_key litellm_register_plugin litellm_team_member_add litellm_team_member_delete litellm_unblock_key litellm_update_key litellm_update_model litellm_update_team litellm_update_user',
- 'n8n': 'n8n_manage_agents n8n_explore_node_resources n8n_create_workflow n8n_update_full_workflow n8n_update_partial_workflow n8n_delete_workflow n8n_autofix_workflow n8n_test_workflow n8n_deploy_template',
-}
-MIXED = {
- 'odoo': '', 'odoo-manage': '',
- 'hermes': 'hermes_config hermes_cron hermes_gateway hermes_mcp hermes_model hermes_session hermes_skill hermes_tools hermes_webhook',
- 'opendesign': '', 'emqx': 'emqx_manage_authn_users emqx_manage_authz_rules', 'litellm': '',
- 'n8n': 'n8n_executions n8n_evaluations n8n_workflow_versions n8n_manage_datatable n8n_manage_folders n8n_manage_credentials',
-}
-# These handlers are not proven non-mutating by the wrapper. Explicitly NOT read.
-UNCERTAIN = {'emqx': 'emqx_test_rule_sql', 'litellm': '',
-             'n8n': 'n8n_audit_instance'}
-
-# Exact source operation splits, only used for inventory (never authorization).
-OPERATION_READS = {
- 'hermes_config': ['get'], 'hermes_cron': ['list'], 'hermes_gateway': ['status'],
- 'hermes_mcp': ['list'], 'hermes_model': ['info', 'list_providers'],
- 'hermes_session': ['list', 'get'], 'hermes_skill': ['list'], 'hermes_tools': ['list'],
- 'hermes_webhook': ['list'], 'emqx_manage_authn_users': ['read'], 'emqx_manage_authz_rules': ['read'],
- 'n8n_executions': ['get', 'list'], 'n8n_evaluations': ['list_runs', 'get_run', 'list_cases'],
- 'n8n_workflow_versions': ['list', 'get', 'diff'],
- 'n8n_manage_datatable': ['listTables', 'getTable', 'getRows'],
- 'n8n_manage_folders': ['list', 'get'], 'n8n_manage_credentials': ['list', 'get', 'getSchema'],
- 'n8n_manage_agents': ['reference', 'search', 'get', 'validate', 'versions', 'discover_assets'],
-}
+# The reviewed classification lives in the runtime now (0.2.0: it decides the write grants of the full surface).
+from mcp_admin_core.surface import MIXED, OPERATION_READS, READ, UNCERTAIN, WRITE  # noqa: E402
 
 def source_inventory():
     inventory = {}
@@ -132,7 +92,7 @@ def source_inventory():
     # B1 local validators and workflow creation depend on these pinned helpers.
     for file in sorted((base.parent / 'services').glob('*valid*.js')):
         digests[str(file.relative_to(ROOT))] = hashlib.sha256(file.read_bytes()).hexdigest()
-    for relative in ('apps/n8n/backend_policy.cjs', 'apps/n8n/metadata_reads.cjs',
+    for relative in ('apps/n8n/backend_policy.cjs',
                      'apps/n8n/node_modules/n8n-mcp/dist/utils/npm-version-checker.js'):
         file = ROOT / relative
         digests[relative] = hashlib.sha256(file.read_bytes()).hexdigest()
@@ -184,13 +144,15 @@ def build():
             if name in ('execute_method', 'call_model_method', 'n8n_explore_node_resources'):
                 operation_effects['arbitrary-method'] = {'*': 'write'}
             dispatch = {}
-            properties = tool.arguments.model_json_schema().get('properties', {}) if tool else {}
+            full = supported and tool.child_schema
+            properties = tool.arguments.model_json_schema().get('properties', {}) if supported and not full else {}
             for parameter, values in evidence['operations'].items():
                 accepted = properties.get(parameter, {})
                 choices = accepted.get('enum', [accepted['const']] if 'const' in accepted else [])
                 dispatch[parameter] = {}
                 for operation in values:
-                    allowed = supported and operation in choices
+                    # 0.2.0: a full-surface tool forwards every value to the child, which validates it.
+                    allowed = supported and (full or operation in choices)
                     writer = allowed and (tool.write or parameter == tool.selector and operation in tool.write_operations)
                     dispatch[parameter][operation] = {
                         'supported_explicit': allowed,
@@ -198,33 +160,42 @@ def build():
                         'write_grant': (name if tool.write else f'{name}:{operation}') if writer else None,
                         'deferred_reason': None if allowed else DEFERRED_BRANCHES.get(name, review[product][name]),
                     }
+            status = ('supported-full' if full else 'supported-bounded') if supported else 'temporarily-unsupported'
+            if full:
+                enable = '預設開啟（新安裝與從 0.1.x 升級）；管理面板可逐一停用工具或撤銷寫入 grant；disabled 優先'
+            elif supported:
+                enable = ('PUT /api/policy (HA admin+CSRF): enabled_write_tools 選取精確 grant；disabled 優先；舊全域開關僅保留兩個既有 writer'
+                          if tool.grants(name) else 'authorized-admin-policy: remove from disabled')
+            else:
+                enable = '不可由 GUI 啟用；需 source/policy/test review'
             entries.append({'name': name, **evidence, 'effect': categories[name], 'operation_effects': operation_effects,
                 'dispatch_operations': dispatch,
-                'status': 'supported-bounded' if supported else 'temporarily-unsupported',
-                # On a NEW state (2026-10-15: every reviewed write grant on; Odoo Manage none). Existing states keep
-                # what they had; default_readonly above is the operation's classification, not this default.
+                'status': status,
+                # On a new state and on every state migrated to schema 4 (0.2.0): every write grant on (Odoo Manage none).
                 'default_enabled': supported and set(tool.grants(name)) <= set(fresh_write_grants(product)),
                 'write_grants': tool.grants(name) if supported else [],
                 'operation_parameter': tool.selector if supported else None,
-                'enable': ('PUT /api/policy (HA admin+CSRF): enabled_write_tools 選取精確 grant；disabled 優先；舊全域開關僅保留兩個既有 writer' if tool.grants(name) else 'authorized-admin-policy: remove from disabled') if supported else '不可由 GUI 啟用；需 source/policy/test review',
-                'reason': review[product][name],
-                'accepted_schema': tool.arguments.model_json_schema() if supported else None,
-                'tests': ['tests/test_tool_inventory.py'] + (['tests/test_b3_n8n_policy.py', 'tests/test_b3_n8n_runtime.py', 'tests/test_b3_n8n_boundaries.py'] if supported and product == 'n8n' and name in ('n8n_list_catalog', 'n8n_executions', 'n8n_health_check', 'n8n_manage_folders') else []) + (['tests/test_b2_odoo_policy.py', 'tests/test_b2_odoo_runtime.py', 'tests/test_b2_odoo_scope.py'] if supported and product == 'odoo' and name in ('schema_catalog', 'inspect_model_relationships', 'data_quality_report') else []) + (['tests/test_batch2_policy.py', 'tests/test_batch2_bounds.py', 'tests/test_batch2_runtime.py'] if supported and product in ('odoo', 'odoo-manage', 'n8n') and name in ('build_domain', 'generate_json2_payload', 'diagnose_odoo_call', 'aggregate_records', 'list_resource_templates', 'post_message', 'validate_node', 'validate_workflow', 'n8n_create_workflow') else []) + ((['tests/test_expansion_security.py', 'tests/test_expansion_runtime.py', 'tests/test_stream_error_redaction.py'] if product != 'n8n' else ['tests/test_expansion_runtime.py', 'tests/test_schema_defaults.py', 'tests/test_real_n8n.py']) if supported else []) + (['tests/test_nextcloud_child.py'] if supported and product == 'nextcloud' else []) + (['tests/test_odoo_read_exists.py'] if supported and product == 'odoo' and name == 'read_record' else [])})
+                'enable': enable,
+                'reason': '子程序完整工具（0.2.0）：參數由子程序驗證，輸入原樣轉送，輸出不再投影。' if full else review[product][name],
+                # A full-surface tool has no local argument model: tools/list carries the child's own inputSchema.
+                'accepted_schema': None if full or not supported else tool.arguments.model_json_schema(),
+                'tests': ['tests/test_tool_inventory.py'] + (['tests/test_full_surface.py', 'tests/test_real_products.py']
+                                                             if full else [])})
         products[product] = {'upstream_count': len(entries), 'supported_count': len(POLICIES[product]), 'tools': entries}
-    return {'format': 2, 'scope': 'W2b plus BATCH2 B1/B2/B3 bounded expansion; B3 pending SPEC then NEW SECURITY; not complete product/HA/release acceptance',
+    return {'format': 3, 'scope': '0.2.0 full child surface (owner decision 2026-10-15); Odoo Manage (retired) keeps the 0.1.x bounded surface; not HA/release acceptance',
             'source_digests': digests, 'products': products}
 
 
 def markdown(data):
-    lines = ['# 八類完整 upstream 工具對照（W2b bounded）', '',
+    lines = ['# 八類完整 upstream 工具對照（0.2.0 完整版）', '',
              '由 `scripts/tool_inventory.py` 產生；Python 是 decorator AST（含條件註冊；Nextcloud 是 `_functions()` 註冊表 AST），n8n 是 pinned runtime 定義 export，不冒充全部都曾由 MCP tools/list 觀察。',
-             '每個工具的精確參數／default／允許 operation 見 `tool-surface.json` 的 accepted_schema。混合工具逐 operation 授權；enabled_write_tools 使用 exact tool 或 tool:operation；舊 writes_enabled 不授權新增 writer。來源 signature/schema 與本地 accepted_schema 分列。',
-             'read 表示 wrapper 沒有刻意業務寫入，不保證無敏感資料、cache/log/auth 活動；未驗證副作用明列，不按 GET/annotation 猜安全。',
-             '管理需 HA 可信 admin role；只有 n8n 接正式 provider，其餘七類維持 fail closed；不新增 UI。全新安裝（新 state）時所有支援的 writers 與 operation grants 預設開啟（2026-10-15；已下架的 Odoo Manage 除外），管理員可在面板逐一撤銷，既有 state 升版不變；未支援工具即使 writes_enabled=true 仍拒絕。',
+             '0.2.0（負責人 2026-10-15 決定）：七支（Odoo、n8n、Hermes、OpenDesign、EMQX、LiteLLM、Nextcloud）開放子程序的全部工具（supported-full），tools/list 用子程序自己的 inputSchema（經 provider-safe 正規化），tools/call 參數原樣轉送、由子程序驗證；已下架的 Odoo Manage 維持 0.1.x 有界版（supported-bounded）。',
+             '寫入 grants：寫入工具是工具名，混合工具是 tool:operation；新安裝與從 0.1.x 升級（state schema 4 遷移一次）時全部開啟，管理員可在面板逐一撤銷或停用工具（disabled 優先）。read 表示 wrapper 沒有刻意業務寫入，不保證無敏感資料、cache/log/auth 活動；未驗證副作用（unverified-side-effects）以寫入 grant 管理。',
+             '管理需 HA 可信 admin role。子程序名單之外的工具（升級後上游新增者）在此重新分類前一律拒絕。',
              '來源版本／修改／授權見 `provenance/six-runtimes.md`。每次升版須 drift test 及重新審查，不可自動允許新工具。', '']
     for product, group in data['products'].items():
-        lines += [f"## {product}：上游 {group['upstream_count']}／本地 bounded {group['supported_count']}", '',
-                  '| exact tool | 來源副作用 | 支援／新安裝預設 | operations（來源） | 寫入 grants | 理由／剩餘工作 | 測試 |', '|---|---|---|---|---|---|---|']
+        lines += [f"## {product}：上游 {group['upstream_count']}／開放 {group['supported_count']}", '',
+                  '| exact tool | 來源副作用 | 支援／預設 | operations（來源） | 寫入 grants | 理由／剩餘工作 | 測試 |', '|---|---|---|---|---|---|---|']
         for tool in group['tools']:
             operations = json.dumps(tool['operation_effects'], ensure_ascii=False)
             if tool['dispatch_operations']:
