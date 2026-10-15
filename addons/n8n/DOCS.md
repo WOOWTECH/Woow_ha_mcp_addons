@@ -43,6 +43,7 @@ B3 新增 tags catalog（只掃第一頁最多250、本地query/limit）、execu
 
 工具頁依實際 v3 metadata 顯示 exact tool/operation grants；保存取代全部
 `enabled_write_tools` 並 `writes_enabled:false`，disabled 優先；失配／過期契約停止保存。
+全新安裝（資料目錄還沒有 state）時，所有寫入工具與寫入 operation 的 exact grants 以及舊 global 開關預設開啟；既有 state 不會被改寫（舊版安裝的寫入全關、或管理員關掉的寫入，升版與重啟後都維持），要開啟請到工具頁勾選。**風險**：client 不需先授權就能寫入，權杖或密鑰網址外洩時影響更大；請關掉不需要的寫入（見 [寫入預設開啟](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/guide.md#寫入預設開啟)）。
 舊 delete_workflow global true 會顯示有效授權；保存轉為 exact grants，不靜默留寫入。
 113 個延期工具是透明內部 backlog，並非完整遷移完成。
 

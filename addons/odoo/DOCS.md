@@ -14,7 +14,7 @@ MCP 端點（Bearer token）不受影響。新的 Core 版本要等 add-on 發�
 
 本產品 runtime：**odoo-mcp 1.1.0**。完整來源 41 tools，局部支援 13，
 暫不支援 28；全部產品合計見[工具表](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-surface.md)，**不是 full functional parity**。
-health/model list、res.partner 指定欄位 read/search/fields，及 exact-grant chatter preview+confirm；B1 增加 build_domain、generate_json2_payload、diagnose_odoo_call 純 preview（不執行 payload），以及按 active 分組的 id:count aggregate_records。有界輸出不含 ORM domain/context；不開放任意 model/method。
+health/model list、res.partner 指定欄位 read/search/fields，及 exact-grant chatter preview+confirm（confirm 時把 preview 回傳的 `approval` 原樣帶回、加 `confirm: true` 即可，只帶 `{token}` 也可以；帶回的欄位必須與這次呼叫一致，只有 token 會轉給後端）；B1 增加 build_domain、generate_json2_payload、diagnose_odoo_call 純 preview（不執行 payload），以及按 active 分組的 id:count aggregate_records。有界輸出不含 ORM domain/context；不開放任意 model/method。
 B2 增加 schema_catalog（固定 res.partner、limit1、兩個 metadata cache keys）、inspect_model_relationships（僅 parent_id/child_ids 自關係 metadata 深度1，絕不讀 relation values）、data_quality_report（只 missing_required、name/active、最多兩次 search_count，無樣本或私密值）。舊 record fields 不擴張。Cache 非即時；refresh=true 才強制更新。品質總數是缺值欄位次數，不是唯一 records；duplicates/format/orphan checks 仍禁止。詳見 [有界功能](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-expansion.md)；B2 待獨立 SPEC → NEW SECURITY。
 逐名 schema／預設／operation／啟用限制／deferred reason 以
 [工具對照](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-surface.md) 與 [machine manifest](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-surface.json)
@@ -29,6 +29,7 @@ B2 增加 schema_catalog（固定 res.partner、limit1、兩個 metadata cache k
 
 工具頁依實際 v3 metadata 顯示 exact tool/operation grants；保存取代全部
 `enabled_write_tools` 並 `writes_enabled:false`，disabled 優先；失配／過期契約停止保存。
+全新安裝（資料目錄還沒有 state）時，所有寫入工具與寫入 operation 的 exact grants 以及舊 global 開關預設開啟；既有 state 不會被改寫（舊版安裝的寫入全關、或管理員關掉的寫入，升版與重啟後都維持），要開啟請到工具頁勾選。**風險**：client 不需先授權就能寫入，權杖或密鑰網址外洩時影響更大；請關掉不需要的寫入（見 [寫入預設開啟](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/guide.md#寫入預設開啟)）。
 116 個延期工具是透明內部 backlog，並非完整遷移完成。
 
 ## 網路與認證

@@ -64,6 +64,18 @@ UI 保留不送 PUT；替換完整 typed connection，空白秘密不代表保�
 工具頁保存完整 `enabled_write_tools`、`writes_enabled:false`，disabled 優先。
 舊 global 只授權原 n8n/OpenDesign 兩個 legacy writers，UI 顯示其有效狀態並可精確撤銷。
 撤銷 exact grants 必須送空陣列，global false 本身不撤銷 grants。詳見 [v3契約](../tool-expansion.md)。
+
+## 寫入預設開啟
+
+使用者 2026-10-15 決定：寫入工具都要預設開啟。自 0.1.14 之後的下一版起，**全新安裝**（Add-on 資料目錄還沒有 state，首次啟動時建立）的 state 預設：
+
+- 該產品每個已審查的寫入授權都在 `enabled_write_tools`：寫入工具本身（例如 Odoo `chatter_post`、EMQX `emqx_kick_client`、LiteLLM `litellm_delete_model`、Nextcloud `delete_file_checked`、OpenDesign `delete_project`、n8n `n8n_create_workflow`／`n8n_delete_workflow`），以及混合工具的每個寫入 operation（Hermes `hermes_skill:enable` 等 `tool:action`、n8n `n8n_manage_folders:create`／`rename`）。
+- 舊 global 開關 `writes_enabled` 也是 true（只影響原兩個 legacy writers，且它們的 exact grant 也已在清單內）。
+- 例外：已下架的 Odoo Manage 不預設開啟（它的寫入要求 module 模式連線，新 state 沒有連線）。
+
+**既有 state 不覆寫**：只有在沒有 state 時才產生預設；已安裝的實例升版、重啟都不會改動 state。0.1.14 以前建立、寫入全關的實例升版後仍全關，要開啟請到管理面板勾選；v1／v2 舊格式升 v3 仍給空 grants。管理員在「工具與寫入授權」取消勾選並儲存的寫入（儲存時 `writes_enabled` 改為 false，以逐項勾選為準），重啟與升版後維持關閉。停用（disabled）仍優先於任何授權。
+
+**風險提醒**：寫入預設開啟後，任何拿到 Add-on 權杖或 Claude.ai 密鑰網址的 MCP client（包括 AI 助理誤判時）不需管理員再授權，就能直接改動後端：例如刪除 Nextcloud 檔案（進垃圾桶）、刪除 LiteLLM model／team、刪除 OpenDesign 專案或 n8n workflow、踢除 EMQX client、重啟 Hermes gateway、在 Odoo 留言（仍需先 preview 再 confirm）。安裝後請先到管理面板關掉不需要的寫入；後端帳號、API key、App 密碼一律用最小權限；權杖或密鑰網址外洩時立刻在管理面板「重新產生」。工具白名單、參數檢查與未支援工具一律拒絕的規則不變，寫入預設開啟不會開放清單以外的工具或操作。
 不要在 options、URL query、Git、issue、聊天或 release artifact 放秘密。
 
 ## 映像／資料契約

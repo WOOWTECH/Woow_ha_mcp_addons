@@ -627,7 +627,7 @@
           "operation_effects": {},
           "dispatch_operations": {},
           "status": "supported-bounded",
-          "default_enabled": false,
+          "default_enabled": true,
           "write_grants": [
             "chatter_post"
           ],
@@ -638,17 +638,109 @@
             "$defs": {
               "Approval": {
                 "additionalProperties": false,
+                "description": "The approval object returned by the chatter_post preview. Send it back unchanged (or only its token) with\nconfirm=true and the same model, record_id and body.",
                 "properties": {
                   "token": {
                     "pattern": "^odoo-write:[a-f0-9]{32}$",
                     "title": "Token",
                     "type": "string"
+                  },
+                  "model": {
+                    "anyOf": [
+                      {
+                        "const": "res.partner",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "title": "Model"
+                  },
+                  "method": {
+                    "anyOf": [
+                      {
+                        "const": "message_post",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "title": "Method"
+                  },
+                  "record_ids": {
+                    "anyOf": [
+                      {
+                        "items": {
+                          "maximum": 2147483647,
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "maxItems": 1,
+                        "minItems": 1,
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "title": "Record Ids"
+                  },
+                  "kwargs": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/$defs/ChatterKwargs"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "instance": {
+                    "anyOf": [
+                      {
+                        "const": "default",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "title": "Instance"
                   }
                 },
                 "required": [
                   "token"
                 ],
                 "title": "Approval",
+                "type": "object"
+              },
+              "ChatterKwargs": {
+                "additionalProperties": false,
+                "properties": {
+                  "body": {
+                    "maxLength": 4000,
+                    "minLength": 1,
+                    "title": "Body",
+                    "type": "string"
+                  },
+                  "message_type": {
+                    "const": "comment",
+                    "title": "Message Type",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "body",
+                  "message_type"
+                ],
+                "title": "ChatterKwargs",
                 "type": "object"
               }
             },
@@ -4192,7 +4284,7 @@
           "operation_effects": {},
           "dispatch_operations": {},
           "status": "supported-bounded",
-          "default_enabled": false,
+          "default_enabled": true,
           "write_grants": [
             "delete_project"
           ],
@@ -4697,7 +4789,7 @@
           "operation_effects": {},
           "dispatch_operations": {},
           "status": "supported-bounded",
-          "default_enabled": false,
+          "default_enabled": true,
           "write_grants": [
             "emqx_client_subscribe"
           ],
@@ -4774,7 +4866,7 @@
           "operation_effects": {},
           "dispatch_operations": {},
           "status": "supported-bounded",
-          "default_enabled": false,
+          "default_enabled": true,
           "write_grants": [
             "emqx_client_unsubscribe"
           ],
@@ -4999,7 +5091,7 @@
           "operation_effects": {},
           "dispatch_operations": {},
           "status": "supported-bounded",
-          "default_enabled": false,
+          "default_enabled": true,
           "write_grants": [
             "emqx_kick_client"
           ],
@@ -5906,7 +5998,7 @@
           "operation_effects": {},
           "dispatch_operations": {},
           "status": "supported-bounded",
-          "default_enabled": false,
+          "default_enabled": true,
           "write_grants": [
             "litellm_create_team"
           ],
@@ -6044,7 +6136,7 @@
           "operation_effects": {},
           "dispatch_operations": {},
           "status": "supported-bounded",
-          "default_enabled": false,
+          "default_enabled": true,
           "write_grants": [
             "litellm_delete_model"
           ],
@@ -6107,7 +6199,7 @@
           "operation_effects": {},
           "dispatch_operations": {},
           "status": "supported-bounded",
-          "default_enabled": false,
+          "default_enabled": true,
           "write_grants": [
             "litellm_delete_team"
           ],
@@ -6978,7 +7070,7 @@
           "operation_effects": {},
           "dispatch_operations": {},
           "status": "supported-bounded",
-          "default_enabled": false,
+          "default_enabled": true,
           "write_grants": [
             "litellm_update_team"
           ],
@@ -7117,7 +7209,7 @@
           "operation_effects": {},
           "dispatch_operations": {},
           "status": "supported-bounded",
-          "default_enabled": false,
+          "default_enabled": true,
           "write_grants": [
             "create_text_file"
           ],
@@ -7167,13 +7259,13 @@
           "operation_effects": {},
           "dispatch_operations": {},
           "status": "supported-bounded",
-          "default_enabled": false,
+          "default_enabled": true,
           "write_grants": [
             "delete_file_checked"
           ],
           "operation_parameter": null,
           "enable": "PUT /api/policy (HA admin+CSRF): enabled_write_tools 選取精確 grant；disabled 優先；舊全域開關僅保留兩個既有 writer",
-          "reason": "delete_file_checked：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。 只刪單一檔案、不刪資料夾，且 etag 必須相符（If-Match）；檔案進 Nextcloud 垃圾桶（Deleted files app 啟用時）。子程序另需 ALLOW_DELETE=true（只在授權此工具時設定）。預設關閉。",
+          "reason": "delete_file_checked：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。 只刪單一檔案、不刪資料夾，且 etag 必須相符（If-Match）；檔案進 Nextcloud 垃圾桶（Deleted files app 啟用時）。子程序另需 ALLOW_DELETE=true（只在授權此工具時設定）。新安裝預設開啟（2026-10-15），可在面板關閉。",
           "accepted_schema": {
             "additionalProperties": false,
             "properties": {
@@ -7437,7 +7529,7 @@
           "operation_effects": {},
           "dispatch_operations": {},
           "status": "supported-bounded",
-          "default_enabled": false,
+          "default_enabled": true,
           "write_grants": [
             "update_text_file"
           ],
@@ -7496,13 +7588,13 @@
           "operation_effects": {},
           "dispatch_operations": {},
           "status": "supported-bounded",
-          "default_enabled": false,
+          "default_enabled": true,
           "write_grants": [
             "upload_file"
           ],
           "operation_parameter": null,
           "enable": "PUT /api/policy (HA admin+CSRF): enabled_write_tools 選取精確 grant；disabled 優先；舊全域開關僅保留兩個既有 writer",
-          "reason": "upload_file：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。 不帶 expected_etag 只建立新檔，帶 etag 只取代該版本；內容可為任意類型（base64），請求本體受 gateway 256 KiB 上限。預設關閉。",
+          "reason": "upload_file：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。 新 writer 必須 exact grant；一般開關不授權。 不帶 expected_etag 只建立新檔，帶 etag 只取代該版本；內容可為任意類型（base64），請求本體受 gateway 256 KiB 上限。新安裝預設開啟（2026-10-15），可在面板關閉。",
           "accepted_schema": {
             "additionalProperties": false,
             "properties": {
@@ -8127,7 +8219,7 @@
           "operation_effects": {},
           "dispatch_operations": {},
           "status": "supported-bounded",
-          "default_enabled": false,
+          "default_enabled": true,
           "write_grants": [
             "n8n_create_workflow"
           ],
@@ -8381,7 +8473,7 @@
           "operation_effects": {},
           "dispatch_operations": {},
           "status": "supported-bounded",
-          "default_enabled": false,
+          "default_enabled": true,
           "write_grants": [
             "n8n_delete_workflow"
           ],
@@ -10062,10 +10154,10 @@
                   "action": {
                     "const": "list"
                   },
-                  "folderId": {
+                  "name": {
                     "type": "null"
                   },
-                  "name": {
+                  "folderId": {
                     "type": "null"
                   }
                 },
@@ -10078,11 +10170,11 @@
                   "action": {
                     "const": "create"
                   },
-                  "folderId": {
-                    "type": "null"
-                  },
                   "name": {
                     "type": "string"
+                  },
+                  "folderId": {
+                    "type": "null"
                   }
                 },
                 "required": [
@@ -10095,10 +10187,10 @@
                   "action": {
                     "const": "rename"
                   },
-                  "folderId": {
+                  "name": {
                     "type": "string"
                   },
-                  "name": {
+                  "folderId": {
                     "type": "string"
                   }
                 },
@@ -10113,14 +10205,14 @@
                   "action": {
                     "const": "get"
                   },
+                  "name": {
+                    "type": "null"
+                  },
                   "folderId": {
                     "not": {
                       "pattern": "[^A-Za-z0-9_-]"
                     },
                     "type": "string"
-                  },
-                  "name": {
-                    "type": "null"
                   },
                   "projectId": {
                     "not": {

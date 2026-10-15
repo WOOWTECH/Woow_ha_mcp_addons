@@ -14,7 +14,7 @@ from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 async def test_real_delete_requires_enable_and_disabled_direct_call_still_denied(tmp_path):
     with backend('opendesign') as (url, calls, _):
         store = ProductStore(tmp_path / 'state', 'opendesign')
-        store.update(connection=connection('opendesign', url))
+        store.update(connection=connection('opendesign', url), writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
         endpoint = Endpoint('opendesign')
         process = endpoint.supervisor(child_spec(store.load(), store.directory))
         try:

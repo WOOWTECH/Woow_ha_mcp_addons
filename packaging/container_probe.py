@@ -19,7 +19,7 @@ import xmlrpc.client
 import httpx
 from denial_probe import assert_denials, WRITE_CASES
 from mcp_admin_core.health import protocol_reply
-from mcp_admin_core.products import ProductStore, PROBES, TOOLS, probe_success
+from mcp_admin_core.products import ProductStore, PROBES, TOOLS, fresh_write_grants, probe_success
 
 APP = sys.argv[1]
 ROOT = Path('/opt/woow')
@@ -213,17 +213,23 @@ async def run():
                 state = fixture_update(connection=connections[APP])
                 public_tools = TOOLS[APP]
                 name, args = PROBES[APP]
-            # Valid complete v2 backup fixture: actual executable migrates it
-            # under writer ownership, preserving settings and denying new writes.
+            # 2026-10-15: the executable created a NEW state, so every reviewed write grant and the legacy switch
+            # are on (Odoo Manage none: its writers need module mode).
+            assert state.writes_enabled is True and state.enabled_write_tools == fresh_write_grants(APP)
+            # Valid complete v2 backup fixture (an installation older than exact grants, legacy switch off): actual
+            # executable migrates it under writer ownership, preserving settings and denying new writes; the new-state
+            # default never reaches an existing state.
             legacy = state.model_dump()
             legacy.pop('enabled_write_tools')
             legacy['schema_version'] = 2
+            legacy['writes_enabled'] = False
             (DATA / 'state.json').write_text(json.dumps(legacy))
             process = start()
             await ready_listener(client, process)
             migrated = json.loads((DATA / 'state.json').read_text())
             assert migrated['schema_version'] == 3 and migrated['enabled_write_tools'] == []
-            assert migrated == state.model_dump()
+            assert migrated == {**state.model_dump(), 'writes_enabled': False, 'enabled_write_tools': []}
+            state = type(state).model_validate(migrated)
             name_write, valid_write = WRITE_CASES[APP]
             public_tools[name_write].arguments.model_validate(valid_write)
             headers = {'Authorization': 'Bearer ' + state.token, 'Accept': 'application/json, text/event-stream'}

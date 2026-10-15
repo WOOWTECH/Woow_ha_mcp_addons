@@ -135,7 +135,7 @@ def backend():
 async def runtime(tmp_path):
     with backend() as (url, state):
         store = ProductStore(tmp_path / 'n8n', 'n8n')
-        store.update(backend_url=url, backend_key=KEY)
+        store.update(backend_url=url, backend_key=KEY, writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
         spec = child_spec(store.load(), store.directory)
         process = Supervisor(spec, retries=0)
         reservation = reserve_port()

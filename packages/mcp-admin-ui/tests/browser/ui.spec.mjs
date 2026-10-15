@@ -243,11 +243,23 @@ test('MOCK per-tool/per-operation grants and disabled controls; legacy broad wri
   await page.reload();
   await expect(page.getByLabel('明確允許此工具寫入')).toBeChecked();
   await page.getByLabel('明確允許此工具寫入').uncheck();
-  await expect(page.getByText('注意：伺服器回報舊版全域寫入目前開啟。此頁不將它標示為唯讀。')).toBeVisible();
+  await expect(page.getByText('注意：伺服器回報舊版全域寫入目前開啟（新安裝的預設）。此頁不將它標示為唯讀；儲存後改以下方逐項勾選為準，未勾選的寫入即關閉。')).toBeVisible();
   await page.getByRole('button', { name: '儲存工具權限' }).click();
   await confirm(page, '確認套用');
   await expect(page.getByRole('status')).toContainText('伺服器已確認儲存工具權限');
   expect((await calls(request))[0].policy).toEqual({ writes_enabled: false, disabled: [], enabled_write_tools: [] });
+});
+test('MOCK a new install shows every write allowed with a risk note; unticking one saves exactly the rest', async ({ page, request }) => {
+  // What a new state holds since 2026-10-15: the legacy switch and every exact grant on.
+  await reset(request, { legacyWrites: true, grants: ['write_example', 'mixed_example:create', 'mixed_example:delete'] });
+  await start(page, '/tools');
+  await expect(page.getByText('新安裝預設開啟所有寫入：MCP 用戶端（例如 AI 助理）可直接新增、修改或刪除後端資料。', { exact: false })).toBeVisible();
+  for (const label of ['明確允許此工具寫入', '允許寫入操作：create', '允許寫入操作：delete']) await expect(page.getByLabel(label, { exact: true })).toBeChecked();
+  await page.getByLabel('允許寫入操作：delete', { exact: true }).uncheck();
+  await page.getByRole('button', { name: '儲存工具權限' }).click();
+  await confirm(page, '確認套用');
+  await expect(page.getByRole('status')).toContainText('伺服器已確認儲存工具權限');
+  expect((await calls(request))[0].policy).toEqual({ writes_enabled: false, disabled: [], enabled_write_tools: ['write_example', 'mixed_example:create'] });
 });
 test('MOCK token expires, and a reveal completing after focus loss stays hidden', async ({ page }) => {
   await start(page, '/access');

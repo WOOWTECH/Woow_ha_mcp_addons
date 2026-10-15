@@ -84,6 +84,7 @@ def test_fixed_child_ignores_parent_secrets_and_gui_commands(tmp_path, product, 
 
 async def test_writer_is_denied_before_dispatch_then_explicitly_enabled(tmp_path):
     store = ProductStore(tmp_path / 'state', 'opendesign')
+    store.update(writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
     requests = []
     async def dispatch(request):
         requests.append(json.loads(request.content))

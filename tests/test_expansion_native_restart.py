@@ -18,7 +18,7 @@ from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 async def test_api_enabling_writer_rebuilds_actual_native_gate(tmp_path, product):
     with fake_api() as (url, events, mutations, failures):
         store = ProductStore(tmp_path, product)
-        store.update(connection=connection(product, url))
+        store.update(connection=connection(product, url), writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
         endpoint = Endpoint(product)
         manager = endpoint.supervisor(child_spec(store.load(), store.directory))
         async def restart(state):

@@ -81,6 +81,7 @@ def test_invalid_migration_is_not_rewritten(tmp_path, bad):
 ])
 def test_exact_source_arguments_and_unknown_deny(tmp_path, product, name, good, bad):
     store = ProductStore(tmp_path / product, product)
+    store.update(writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
     try:
         authorize(call(name, good), TOOLS[product], store.load())
         with pytest.raises(Denied): authorize(call(name, bad), TOOLS[product], store.load())
@@ -92,6 +93,7 @@ def test_exact_source_arguments_and_unknown_deny(tmp_path, product, name, good, 
 
 def test_writer_enable_and_path_policy(tmp_path):
     store = ProductStore(tmp_path / 'state', 'opendesign')
+    store.update(writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
     args = {'project_id': '12345678-1234-1234-1234-123456789abc'}
     try:
         with pytest.raises(Denied): authorize(call('delete_project', args), TOOLS['opendesign'], store.load())

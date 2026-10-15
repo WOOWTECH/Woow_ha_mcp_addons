@@ -207,7 +207,7 @@ async def test_real_expanded_reads_and_explicit_writes(tmp_path, product):
                             except ValueError: await asyncio.sleep(.1)
                     headers['MCP-Protocol-Version'] = result['protocolVersion']
                     await rpc(client, '/mcp', headers, {'jsonrpc': '2.0', 'method': 'notifications/initialized'})
-                    store.update(enabled_write_tools=[])
+                    store.update(writes_enabled=False, enabled_write_tools=[])  # 2026-10-15: a new state starts with every write on
                     for name, args in READS[product]:
                         before = len(events)
                         reply = await rpc(client, '/mcp', headers, call(name, args))
@@ -229,7 +229,10 @@ async def test_real_expanded_reads_and_explicit_writes(tmp_path, product):
                         if product == 'odoo':
                             preview = payload(await rpc(client, '/mcp', headers, call(name, args)))
                             assert preview.get('mode') == 'preview', preview
-                            args = {**args, 'approval': {'token': preview['approval']['token']}, 'confirm': True}
+                            # As the child's text says: the returned approval, unchanged, with confirm=true
+                            # (earlier versions refused every member but token: -32602).
+                            assert set(preview['approval']) == {'model', 'method', 'record_ids', 'kwargs', 'instance', 'token'}
+                            args = {**args, 'approval': preview['approval'], 'confirm': True}
                         count = len(mutations)
                         reply = await rpc(client, '/mcp', headers, call(name, args))
                         payload(reply)

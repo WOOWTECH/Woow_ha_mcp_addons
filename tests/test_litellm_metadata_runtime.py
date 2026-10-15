@@ -78,7 +78,7 @@ async def test_owned_real_metadata_reads_and_error_regression(tmp_path):
     with fake_backend() as (url, events, failures, control):
         store = ProductStore(tmp_path/'state', 'litellm')
         endpoint = Endpoint('litellm')
-        store.update(connection={'url': url, 'master_key': 'DUMMY'})
+        store.update(connection={'url': url, 'master_key': 'DUMMY'}, writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
         process = endpoint.supervisor(child_spec(store.load(), store.directory))
         pid = None
         try:

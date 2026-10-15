@@ -13,7 +13,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'packages/mcp-admin-core'), str(ROOT / 'apps/n8n')]
-from mcp_admin_core.products import TOOLS
+from mcp_admin_core.products import TOOLS, fresh_write_grants
 from n8n_adapter import TOOLS as N8N_TOOLS
 
 POLICIES = {**TOOLS, 'n8n': N8N_TOOLS}
@@ -201,7 +201,9 @@ def build():
             entries.append({'name': name, **evidence, 'effect': categories[name], 'operation_effects': operation_effects,
                 'dispatch_operations': dispatch,
                 'status': 'supported-bounded' if supported else 'temporarily-unsupported',
-                'default_enabled': supported and not tool.write,
+                # On a NEW state (2026-10-15: every reviewed write grant on; Odoo Manage none). Existing states keep
+                # what they had; default_readonly above is the operation's classification, not this default.
+                'default_enabled': supported and set(tool.grants(name)) <= set(fresh_write_grants(product)),
                 'write_grants': tool.grants(name) if supported else [],
                 'operation_parameter': tool.selector if supported else None,
                 'enable': ('PUT /api/policy (HA admin+CSRF): enabled_write_tools 選取精確 grant；disabled 優先；舊全域開關僅保留兩個既有 writer' if tool.grants(name) else 'authorized-admin-policy: remove from disabled') if supported else '不可由 GUI 啟用；需 source/policy/test review',
@@ -218,11 +220,11 @@ def markdown(data):
              '由 `scripts/tool_inventory.py` 產生；Python 是 decorator AST（含條件註冊；Nextcloud 是 `_functions()` 註冊表 AST），n8n 是 pinned runtime 定義 export，不冒充全部都曾由 MCP tools/list 觀察。',
              '每個工具的精確參數／default／允許 operation 見 `tool-surface.json` 的 accepted_schema。混合工具逐 operation 授權；enabled_write_tools 使用 exact tool 或 tool:operation；舊 writes_enabled 不授權新增 writer。來源 signature/schema 與本地 accepted_schema 分列。',
              'read 表示 wrapper 沒有刻意業務寫入，不保證無敏感資料、cache/log/auth 活動；未驗證副作用明列，不按 GET/annotation 猜安全。',
-             '管理需 HA 可信 admin role；只有 n8n 接正式 provider，其餘七類維持 fail closed；不新增 UI。所有新增 writers 預設關閉；未支援工具即使 writes_enabled=true 仍拒絕。',
+             '管理需 HA 可信 admin role；只有 n8n 接正式 provider，其餘七類維持 fail closed；不新增 UI。全新安裝（新 state）時所有支援的 writers 與 operation grants 預設開啟（2026-10-15；已下架的 Odoo Manage 除外），管理員可在面板逐一撤銷，既有 state 升版不變；未支援工具即使 writes_enabled=true 仍拒絕。',
              '來源版本／修改／授權見 `provenance/six-runtimes.md`。每次升版須 drift test 及重新審查，不可自動允許新工具。', '']
     for product, group in data['products'].items():
         lines += [f"## {product}：上游 {group['upstream_count']}／本地 bounded {group['supported_count']}", '',
-                  '| exact tool | 來源副作用 | 支援／預設唯讀 | operations（來源） | 寫入 grants | 理由／剩餘工作 | 測試 |', '|---|---|---|---|---|---|---|']
+                  '| exact tool | 來源副作用 | 支援／新安裝預設 | operations（來源） | 寫入 grants | 理由／剩餘工作 | 測試 |', '|---|---|---|---|---|---|---|']
         for tool in group['tools']:
             operations = json.dumps(tool['operation_effects'], ensure_ascii=False)
             if tool['dispatch_operations']:

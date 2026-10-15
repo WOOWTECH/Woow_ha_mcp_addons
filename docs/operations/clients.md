@@ -99,8 +99,8 @@ Gateway 在這條路徑上的行為：
 
 2026-10-14 首次以真實 Claude.ai 連 PaaS 測試 VM：Claude.ai 送的 `server/discover` 與帶 `_meta` 的 `initialize` 都被 0.1.12 候選回 403，0.1.13 候選已修正；同日經 Claude.ai 呼叫工具時，參數不符（例如 Odoo `aggregate_records` 的 group_by 不是 `active`、`schema_catalog` 的 limit 大於 1、LiteLLM `litellm_model_info` 的 id 含 `/`、n8n `validate_workflow` 少 nodes）也都只得到 HTTP 403，Claude.ai 只看到傳輸錯誤，0.1.14 改為回 JSON-RPC 錯誤說明原因。兩項都隨 0.1.14 發佈（見 [0.1.14 發佈紀錄](release-decision-0.1.14.md)）；修正後尚未以真實 Claude.ai 重測（目前只有本機 mock 與單元／整合測試）。
 
-工具預設唯讀，有些已支援 schema 比上游更窄；七支合計上游 183 個工具中支援 76 個，未支援的 107 個一律 deny。
-寫入需有效 HA 管理員 UI 的逐工具／operation exact grant，且符合參數與 disabled gate；
+全新安裝時寫入預設開啟（2026-10-15 使用者決定；已安裝的實例升版後保留原本的設定），管理員可在管理面板逐一關閉，風險見 [寫入預設開啟](guide.md#寫入預設開啟)；有些已支援 schema 比上游更窄；七支合計上游 183 個工具中支援 76 個，未支援的 107 個一律 deny。
+寫入需 state 中有該工具／operation 的 exact grant（新安裝預設全有，HA 管理員可在 UI 撤銷），且符合參數與 disabled gate；
 v3 保存取代全部 `enabled_write_tools` 並關閉 legacy global，不能僅用 global false 當撤銷；
 直接偽造 `tools/call` 不能繞過。[工具表](../tool-surface.md) 是唯一支援對照。
 

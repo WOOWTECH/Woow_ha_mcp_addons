@@ -11,7 +11,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, AfterValidator, field_validator, model_validator
 
-from .config import State, Store, http_url
+from .config import FRESH_WRITES_ENABLED, State, Store, http_url
 from .lifecycle import ChildSpec
 from .policy import Tool
 
@@ -155,11 +155,7 @@ class ProductState(State):
 
     @model_validator(mode='after')
     def reviewed_grants(self):
-        if self.product == 'n8n':
-            from .expansion import N8N_GRANTS
-            allowed = N8N_GRANTS
-        else:
-            allowed = {g for name, tool in TOOLS[self.product].items() for g in tool.grants(name)}
+        allowed = write_grants(self.product)
         if self.product == 'odoo-manage' and self.enabled_write_tools and (self.connection is None or self.connection.mode != 'module'):
             raise ValueError('Manage writers require existing MCP module mode; never full YOLO')
         if len(set(self.enabled_write_tools)) != len(self.enabled_write_tools) or set(self.enabled_write_tools) - set(allowed):
@@ -171,11 +167,32 @@ class ProductState(State):
         return bool(self.backend_url and self.backend_key) if self.product == 'n8n' else self.connection is not None
 
 
+def write_grants(product):
+    """Every reviewed write grant of a product: each write Tool's name and each name:operation of a selector Tool
+    (Hermes tool:action, n8n_manage_folders:create/rename); n8n's are N8N_GRANTS (its Tools live in apps/n8n)."""
+    if product == 'n8n':
+        from .expansion import N8N_GRANTS
+        return N8N_GRANTS
+    return frozenset(g for name, tool in TOOLS[product].items() for g in tool.grants(name))
+
+
+def fresh_write_grants(product):
+    """The exact grants a NEW state starts with (owner decision 2026-10-15: writes on by default; each can be turned
+    off in the panel). Odoo Manage (retired) keeps none: its writers need an existing MCP module connection
+    (mode 'module'), which a new state does not have, so reviewed_grants would refuse them."""
+    if product == 'odoo-manage' or not FRESH_WRITES_ENABLED:
+        return []
+    return sorted(write_grants(product))
+
+
 class ProductStore(Store):
     """Explicit v1 n8n / v2 product -> v3 grants migration; never downgrade.
 
     Construction-only migration under the exclusive writer lock. All legacy
-    fields are validated and preserved; new grants are empty. The legacy global
+    fields are validated and preserved; migrated grants are empty (an existing
+    installation keeps what it had: writes are not turned on by an upgrade).
+    Only a NEW state (no state file yet) starts with every reviewed write grant
+    and the legacy switch on (fresh_write_grants, 2026-10-15). The legacy global
     switch still applies ONLY to n8n_delete_workflow and delete_project. Restore
     a protected compatible backup to roll back, never rewrite version in place.
     """
@@ -196,7 +213,10 @@ class ProductStore(Store):
             self._migrate = False
 
     def _initial_state(self):
-        return ProductState(product=self.product, token=secrets.token_urlsafe(32), child_token=secrets.token_urlsafe(32))
+        # Only when no state exists yet: Store writes it on the first boot of a new data directory, never over an
+        # existing (or migrated) state, so a write the administrator turned off stays off across restarts/upgrades.
+        return ProductState(product=self.product, token=secrets.token_urlsafe(32), child_token=secrets.token_urlsafe(32),
+                            writes_enabled=FRESH_WRITES_ENABLED, enabled_write_tools=fresh_write_grants(self.product))
 
     def _decode(self, value):
         if isinstance(value, dict) and type(value.get('schema_version')) is int and value['schema_version'] == 1:
@@ -348,8 +368,9 @@ TOOLS = {
                    'delete_project': Tool(Project, write=True, legacy_write=True)},
     'emqx': {name: Tool(Arguments) for name in ('emqx_cluster_status', 'emqx_broker_stats', 'emqx_metrics_current')},
     'litellm': {name: Tool(Arguments) for name in ('litellm_list_models', 'litellm_health_readiness')},
-    # 0.1.7: all nine tools of the pinned child. Every writer is off until the owner grants it individually; the
-    # child also registers writers only when READONLY=false and delete_file_checked only when ALLOW_DELETE=true.
+    # 0.1.7: all nine tools of the pinned child. Every writer needs its own exact grant (a new state starts with all
+    # of them, 2026-10-15; each can be revoked in the panel); the child also registers writers only when
+    # READONLY=false and delete_file_checked only when ALLOW_DELETE=true.
     'nextcloud': {'get_file_tree': Tool(FileTree), 'get_file_content': Tool(FilePath), 'read_text_file': Tool(FilePath),
                   'list_calendars': Tool(Arguments), 'list_tasks': Tool(Tasks),
                   'create_text_file': Tool(CreateText, write=True), 'update_text_file': Tool(UpdateText, write=True),

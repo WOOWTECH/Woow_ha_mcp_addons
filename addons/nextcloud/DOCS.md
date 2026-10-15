@@ -26,12 +26,13 @@ MCP 端點（Bearer token）不受影響。新的 Core 版本要等 add-on 發�
 | `get_file_tree` | 讀：列出資料夾（深度 1–3，最多 500 筆） | 開 |
 | `get_file_content`、`read_text_file` | 讀：UTF-8 文字檔（最大 1 MiB），後者另回 etag | 開 |
 | `list_calendars`、`list_tasks` | 讀：行事曆與任務（VTODO，不能改） | 開 |
-| `create_text_file` | 寫：只建新檔，從不覆寫 | 關，需授權 |
-| `update_text_file` | 寫：etag 相符才整份取代 | 關，需授權 |
-| `upload_file` | 寫：上傳任意檔案（base64），不帶 etag 只建新檔 | 關，需授權 |
-| `delete_file_checked` | 寫：etag 相符才刪單一檔案（進垃圾桶） | 關，需授權 |
+| `create_text_file` | 寫：只建新檔，從不覆寫 | 開，可逐一關閉 |
+| `update_text_file` | 寫：etag 相符才整份取代 | 開，可逐一關閉 |
+| `upload_file` | 寫：上傳任意檔案（base64），不帶 etag 只建新檔 | 開，可逐一關閉 |
+| `delete_file_checked` | 寫：etag 相符才刪單一檔案（進垃圾桶） | 開，可逐一關閉 |
 
 逐名 schema／預設以 [工具對照](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-surface.md) 與 [machine manifest](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-surface.json) 為準。
+「預設」指全新安裝（資料目錄還沒有 state）：四個寫入的 exact grants 預設都在 state 裡；既有 state 不會被改寫（舊版安裝的寫入全關、或管理員關掉的寫入，升版與重啟後都維持），要開啟請到工具頁勾選。**風險**：client 不需先授權就能建立、覆寫、上傳與刪除檔案，權杖或密鑰網址外洩時影響更大；請關掉不需要的寫入（見 [寫入預設開啟](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/guide.md#寫入預設開啟)）。
 寫入授權只認逐工具的 exact grant；舊的全域寫入開關不授權任何 Nextcloud 工具。停用（disabled）永遠優先。
 政策一變更，子程序就以新的環境變數重啟：有授權寫入工具才 `NEXTCLOUD_MCP_READONLY=false`，有授權
 `delete_file_checked` 才 `NEXTCLOUD_MCP_ALLOW_DELETE=true`，其他沒開放的工具列入 `NEXTCLOUD_MCP_DISABLED_TOOLS`，
