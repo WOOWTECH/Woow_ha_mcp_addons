@@ -15,7 +15,7 @@ Kubernetes MCP 與 Vibe Kanban 不在範圍。
 
 **目前狀態與限制（experimental）：**
 
-- 七個商店產品（見 `packaging/inputs.json`）各有 runtime（封存的 Odoo Manage 原始碼也還在）；只開放部分有界支援的工具，不是完整功能遷移：七支合計上游 183 個工具，支援 76 個、暫不支援 107 個（Nextcloud 上游 9 個全部支援；工具表另列已下架的 Odoo Manage，不計入）。逐名對照見 [工具表](docs/tool-surface.md)。
+- 七個商店產品（見 `packaging/inputs.json`）各有 runtime（封存的 Odoo Manage 原始碼也還在）。**0.2.1 起完整版**（負責人 2026-10-15 決定）：七支開放子程序的全部工具，合計 183 個，與原始 MCP server 及 PaaS woow-mcp-server 一致；全部工具與寫入預設開啟（新安裝與從 0.1.x 升級時），管理面板可逐一停用或取消寫入。**網址（權杖）＝完整後端權限**，後端帳號權限要設對，見 [寫入預設開啟](docs/operations/guide.md#寫入預設開啟)。逐名對照見 [工具表](docs/tool-surface.md)，轉送規則與保留的安全層見 [工具範圍](docs/tool-expansion.md)。
 - 七支（odoo、n8n、hermes、opendesign、emqx、litellm、nextcloud）的顯示名稱是「Woow ○○ MCP Server」，圖示與所連接的軟體相同（來源見 [圖示來源](docs/provenance/icons.md)）。兩種安裝來源內容相同：本 repository 的 HA 商店，以及 2026-10-09 起的 [WOOW HA App Store](https://github.com/WOOWTECH/Woow_HA_App_Store)（含 ha-rebrand 的 Local Download）。兩個商店的同名 add-on 在 HA 裡是不同的 add-on（slug 前綴不同，設定與資料不互通），同一台 HA 只裝其中一個來源的。映像已公開、可匿名拉取。0.1.1–0.1.7 每版都在測試 HA 回歸（[0.1.7 紀錄](docs/operations/ha-test-0.1.7.md)，含 Nextcloud 第一次實機；之前各版見同目錄 `ha-test-0.1.*.md`）：映像身分、管理面板權限、token、五支真後端的讀取冒煙與拒寫、後端斷線、重啟、升版；LiteLLM 沒有後端，工具未測（只測了未設定後端時的拒絕與錯誤碼，見 [client 文件](docs/operations/clients.md)）。真實 MCP client（同 HA Pi／Omnigent／Hermes、LAN client、AI client）、授權寫入、n8n 以外六支的備份還原、版本回退與 aarch64 尚未驗收。
 - **AI client 相容性**：0.1.5 經 OpenRouter 實測，Claude、GPT 拒收 n8n、Odoo、Hermes 的工具清單（7 個工具的 `inputSchema` 頂層有 `oneOf`／`allOf`，整個請求 HTTP 400）。0.1.6 已修正：這 7 個工具宣告的 schema 頂層改成單純的 object（驗證不變），2026-10-07 以同樣五個模型複驗六支全部接受（30/30；0.1.7 新增的 Nextcloud 沒有做這項測試）；直連 API 與實際 client 仍未測。詳見 [client 文件](docs/operations/clients.md)。
 - **HA 管理權限**：七支都有 `homeassistant_api: true`（n8n 自 0.1.0、其他五支自 0.1.1 起，負責人核准；Nextcloud 於 2026-10-08 核准，0.1.7 起），用來確認管理面板的使用者是 HA owner 或系統管理員；測試 HA 上 owner 可用、一般使用者 403（0.1.1–0.1.6 每版實測；Nextcloud 尚未在 HA 實測）。`panel_admin` 不是授權。
@@ -34,22 +34,16 @@ Kubernetes MCP 與 Vibe Kanban 不在範圍。
 - [授權範圍與第三方通知](THIRD_PARTY_NOTICES.md)
 
 各產品 `addons/<product>/DOCS.md`、`CHANGELOG.md`、`translations/zh-Hant.yaml`
-提供獨立工具數、連線欄位、風險與更新狀態（2026-10-07：各 DOCS.md 的延期工具數與 LiteLLM 的支援數仍是舊值、待更新，
-工具數以[工具表](docs/tool-surface.md)各產品段落為準）。一台 HA 可分別選裝，每個 Add-on
+提供工具數、連線欄位、風險與更新狀態（工具數以[工具表](docs/tool-surface.md)各產品段落為準）。一台 HA 可分別選裝，每個 Add-on
 一組後端、獨立 token／資料／版本；不宣稱多租戶或同產品多 profile。
 
 ## 管理功能與範圍
 
 [共用 UI](packages/mcp-admin-ui/README.md) 提供各產品 typed connection 的保留／完整替換／清除、
 三維健康、明確 client endpoint、確認式 token reveal/rotate/revoke。已下架的 Odoo Manage（0.1.4 為止）支援 read/module；
-module 必須已在後端安裝，UI 不安裝 Odoo 模組。工具頁對齊實際 v3 exact grants，
+module 必須已在後端安裝，UI 不安裝 Odoo 模組。工具頁依實際 metadata 顯示每個工具的停用開關與寫入授權（寫入工具一個 grant，混合工具每個寫入 operation 一個），
 保存取代全部 `enabled_write_tools` 並 `writes_enabled:false`，disabled 優先；未知或過期契約拒絕保存。
-原兩個 legacy writers 的有效 global 授權如實顯示，不讓 global false 靜默保留隱藏 writes。
-B1 新增 Odoo 三個純 preview builders 與 partner counts、Manage counts/template metadata/internal note（已隨 Odoo Manage 下架）、n8n local validators 與安全 inactive draft create。新 writer `post_message`（Odoo Manage，已下架）／`n8n_create_workflow` 必須 exact grant，舊全域開關不授權；詳見 [B1 範圍](docs/tool-expansion.md)。
-B2 增加有界 Odoo metadata/品質統計；B3 增加 n8n tags、execution metadata、service status 與 folder get（操作不另計工具名）。B3 已於 2026-10-04 通過獨立 SPEC 與 NEW SECURITY 審查（只核准這批有界範圍，不是 HA 或發佈驗收），0.1.0 起隨映像發佈；
-詳見 [有界契約](docs/tool-expansion.md)（2026-10-07：該頁開頭仍是 184／71／113 與「B3 待審」，工具表開頭仍寫「七類」「只有 n8n
-接正式 provider」，都是 0.1.1 之前的舊說明、待更新）。
-七支合計 107 個暫不支援的工具（都在 Nextcloud 以外的六支）是透明的內部功能／安全設計 backlog，不是已完成完整產品遷移。
+0.2.1 起不再用本地有界模型（0.1.x 的 B1／B2／B3 有界範圍與輸出投影已移除，只剩已下架的 Odoo Manage 使用），見 [工具範圍](docs/tool-expansion.md)。
 
 ## 本地封裝驗證
 

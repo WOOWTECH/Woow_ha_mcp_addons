@@ -16,8 +16,36 @@ from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.products import ProductStore, TOOLS, child_spec
 from test_real_products import connection, rpc
 from test_expansion_policy import call
-from test_b2_odoo_runtime import initialize
-from test_b2_odoo_scope import probe
+import asyncio
+from pathlib import Path
+import subprocess
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+async def initialize(client, headers):
+    # (0.2.0: moved here from the removed test_b2_odoo_runtime.)
+    init = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {'protocolVersion': '2025-03-26',
+            'capabilities': {}, 'clientInfo': {'name': 'b2-owned', 'version': '0'}}}
+    async with asyncio.timeout(25):
+        while True:
+            try:
+                result = await rpc(client, '/mcp', headers, init)
+                break
+            except ValueError:
+                await asyncio.sleep(.1)
+    headers['MCP-Protocol-Version'] = result['protocolVersion']
+    await rpc(client, '/mcp', headers, {'jsonrpc': '2.0', 'method': 'notifications/initialized'})
+
+
+def probe(code, data=None):
+    # (0.2.0: moved here from the removed test_b2_odoo_scope.) Runs code in the Odoo child's own venv.
+    result = subprocess.run([str(ROOT / 'apps/odoo/.venv/bin/python'), '-c', code],
+        input=json.dumps(data), text=True, capture_output=True, timeout=20,
+        env={'PATH': '/usr/bin:/bin', 'HOME': '/tmp', 'PYTHONDONTWRITEBYTECODE': '1',
+             'PYTHONPATH': str(ROOT / 'apps/runtime')})
+    assert result.returncode == 0, result.stderr
+    return result.stdout
 
 MISSING = 2147483647
 NOT_FOUND = {'success': False, 'error': f'Record not found: res.partner ID {MISSING}'}
@@ -85,10 +113,10 @@ print(json.dumps(out))
     assert report['success'] is False and calls == []
     for bad in (True, 2, '1', None, -1):
         assert out['bad %r' % (bad,)] == [{'success': False, 'error': 'BACKEND_RESPONSE_INVALID'}, 2]
-    # a failed count: only a fixed transport code is reported, never exception text
+    # 0.2.0 (owner decision 2026-10-15): a failed count reports the backend's own text (the gateway redacts credentials)
     assert out['fail BACKEND_RPC_FAULT'] == [{'success': False, 'error': 'BACKEND_RPC_FAULT'}, 2]
     assert out['fail BACKEND_HTTP_ERROR status=502'] == [{'success': False, 'error': 'BACKEND_HTTP_ERROR status=502'}, 2]
-    assert out['fail raw backend text'] == [{'success': False, 'error': 'BACKEND_RESPONSE_INVALID'}, 2]
+    assert out['fail raw backend text'] == [{'success': False, 'error': 'raw backend text'}, 2]
 
 
 def test_install_wraps_the_registered_sync_handler_only():
@@ -211,8 +239,9 @@ async def test_genuine_child_reports_a_missing_id_only_read_as_not_found(tmp_pat
                                                        ['read'])
                     state['fault'] = True
                     value, ops = await read(1, ['id'])
-                    assert value == {'success': False, 'error': 'BACKEND_RPC_FAULT'} and ops == ['read', 'search_count']
-                    assert 'raw backend fault text' not in json.dumps(value)
+                    # 0.2.0: Odoo's own fault text (it was BACKEND_RPC_FAULT)
+                    assert value['success'] is False and 'raw backend fault text' in value['error'], value
+                    assert ops == ['read', 'search_count']
                     assert not failures, failures
                     await client.delete('/mcp', headers=headers)
         finally:

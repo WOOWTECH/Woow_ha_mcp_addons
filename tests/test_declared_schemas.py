@@ -19,8 +19,8 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 from mcp_admin_core.expansion import N8N_GRANTS
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.policy import RULES_PREFIX, Denied, authorize, declared_schema, enabled, filter_list, flat_schema
-from mcp_admin_core.products import ProductState, ProductStore, TOOLS
-from n8n_adapter import TOOLS as N8N_TOOLS
+from mcp_admin_core.products import ProductState, ProductStore, BOUNDED_TOOLS as TOOLS  # 0.2.0: the 0.1.x bounded surface (local models); products serve the full child surface
+from n8n_adapter import BOUNDED_TOOLS as N8N_TOOLS
 from test_batch2_bounds import BAD as NESTED_BYPASSES
 from test_expansion_policy import call
 from test_expansion_runtime import READS, WRITES

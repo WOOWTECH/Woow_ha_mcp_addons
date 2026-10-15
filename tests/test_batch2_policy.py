@@ -2,9 +2,9 @@
 import copy
 from contextlib import closing
 import pytest
-from mcp_admin_core.products import ProductStore, TOOLS
+from mcp_admin_core.products import ProductStore, BOUNDED_TOOLS as TOOLS  # 0.2.0: the 0.1.x bounded surface (local models); products serve the full child surface
 from mcp_admin_core.policy import authorize, Denied
-from n8n_adapter import TOOLS as N8N_TOOLS
+from n8n_adapter import BOUNDED_TOOLS as N8N_TOOLS
 from test_expansion_policy import call
 from test_real_products import connection
 
@@ -70,7 +70,7 @@ def test_b1_surface_exact_grants_and_unknown_fields(tmp_path, product, name, arg
     with closing(ProductStore(tmp_path, product)) as store:
         if product == 'odoo-manage':
             store.update(connection={**connection(product, 'http://127.0.0.1:12345'), 'mode': 'module'})
-        store.update(writes_enabled=True)
+        store.update(writes_enabled=True, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
         tool = tools[name]
         if tool.write:
             with pytest.raises(Denied): authorize(call(name, args), tools, store.load())

@@ -1,14 +1,14 @@
 "use strict";
 // New local adapter code, not copied upstream. Loaded only by our fixed launcher.
 // The pinned API client's base backend is trusted configuration, NOT a webhook.
-// Do not change WEBHOOK_SECURITY_MODE or the global SSRFProtection validators.
+// 0.2.1: the child runs with WEBHOOK_SECURITY_MODE=permissive (owner decision 2026-10-15, set by n8n_adapter);
+// the global SSRFProtection validators are not patched here.
 const dns = require("node:dns");
 const net = require("node:net");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const ipaddr = require("ipaddr.js");
 const path = require("node:path");
-const { AsyncLocalStorage } = require("node:async_hooks");
 const runtime = path.join(__dirname, "node_modules/n8n-mcp/dist");
 const apiPath = path.join(runtime, "services/n8n-api-client.js");
 // This deliberately fails closed on package drift until the adapter is re-audited.
@@ -31,120 +31,12 @@ for (const [relative, digest] of [
 }
 const { N8nApiClient } = require(apiPath);
 const { SSRFProtection } = require(path.join(runtime, "utils/ssrf-protection.js"));
-const { N8nApiError } = require(path.join(runtime, "utils/n8n-errors.js"));
 
-function classifyApiError(error) {
-    // Only the pinned mapper's typed status/code is authority, never backend
-    // message/details (including publish-specific codes inferred from its body).
-    let code = "BACKEND_UNAVAILABLE";
-    let status;
-    if (error instanceof N8nApiError) {
-        const codes = new Map([[400, "VALIDATION_ERROR"], [401, "AUTHENTICATION_ERROR"],
-            [403, "FORBIDDEN"], [404, "NOT_FOUND"], [429, "RATE_LIMIT_ERROR"]]);
-        if (codes.has(error.statusCode)) {
-            status = error.statusCode;
-            code = codes.get(status);
-        } else if (Number.isInteger(error.statusCode) && error.statusCode >= 500 && error.statusCode <= 599) {
-            status = error.statusCode;
-            code = "SERVER_ERROR";
-        } else if (error.code === "NO_RESPONSE") {
-            code = "NO_RESPONSE";
-        }
-    }
-    return {status, code};
-}
-function publicCreateError(error) {
-    const {status, code} = classifyApiError(error);
-    return new N8nApiError("Workflow creation failed; backend outcome may be unknown.", status, code);
-}
-
-// Creation returns metadata only. Rejections must be narrowed BEFORE the real
-// handler formats them. Keep upstream cleaner/retry semantics; never fake success
-// or claim rollback after a POST, even when its response cannot be accepted.
-const createWorkflow = N8nApiClient.prototype.createWorkflow;
-N8nApiClient.prototype.createWorkflow = async function (...args) {
-    let value;
-    try {
-        value = await createWorkflow.apply(this, args);
-    } catch (error) {
-        throw publicCreateError(error);
-    }
-    if (!value || typeof value.id !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(value.id) ||
-        typeof value.name !== "string" || value.name.length > 256 ||
-        value.active !== false || !Array.isArray(value.nodes) || value.nodes.length > 20) {
-        throw new N8nApiError("Backend workflow metadata invalid; creation may have committed.",
-            undefined, "BACKEND_INVALID_RESPONSE");
-    }
-    return {id: value.id, name: value.name, active: false, nodes: value.nodes.map(() => ({}))};
-};
-
-// Public formatting is deliberately separate from handleN8nApiError and the
-// client's raw-error settings fallback/retry logic. The genuine handlers copy
-// details and sometimes catch ordinary exceptions themselves, so merely replacing
-// their error text is insufficient. Retain only this per-call typed classification
-// at the final boundary; never inspect a returned error/message/details/stack.
-const publicMessages = new Map([
-    ["VALIDATION_ERROR", "The n8n backend rejected the request."],
-    ["AUTHENTICATION_ERROR", "Authentication with the n8n backend failed."],
-    ["FORBIDDEN", "The n8n backend denied access to this operation."],
-    ["NOT_FOUND", "The requested n8n resource or API route was not found."],
-    ["RATE_LIMIT_ERROR", "The n8n backend rate limit was reached. Try again later."],
-    ["SERVER_ERROR", "The n8n backend reported a server error."],
-    ["NO_RESPONSE", "No response was received from the n8n backend."],
-    ["BACKEND_INVALID_RESPONSE", "The n8n backend returned an invalid response."],
-    ["BACKEND_UNAVAILABLE", "The n8n operation could not be completed."],
-]);
-// Keep status-derived codes: a folder 403 alone cannot distinguish an absent
-// entitlement from API-key/project scope. Fixed guidance never reflects backend
-// messages, and performs no discovery, extra request or privilege change.
-const folderMessages = new Map([
-    ["FORBIDDEN", "Folder access denied. Verify folder entitlement (Registered Community or eligible plan), API key folder scopes, and project access."],
-    ["NOT_FOUND", "Folder API route or resource not found. Verify backend folder API support and explicit project/folder IDs."],
-]);
-function publicFailure(error, write) {
-    const code = error instanceof N8nApiError && error.code === "BACKEND_INVALID_RESPONSE"
-        ? "BACKEND_INVALID_RESPONSE" : classifyApiError(error).code;
-    const boundary = publicErrors.getStore();
-    const folder = boundary?.folder === true || boundary?.metadata === 'folder';
-    const message = (folder && folderMessages.get(code)) || publicMessages.get(code);
-    return {success: false, code, error: message +
-        (write ? " Write outcome may be unknown; verify before retrying." : "")};
-}
-// Concurrent requests must not share classification, and the context contains
-// only a fixed public result, never a raw error. No new client/retry/write occurs.
-const publicErrors = new AsyncLocalStorage();
-const errors = require(path.join(runtime, "utils/n8n-errors.js"));
-errors.getUserFriendlyErrorMessage = function (error) {
-    const boundary = publicErrors.getStore();
-    const failure = publicFailure(error, boundary?.write === true);
-    if (boundary) boundary.failure = failure;
-    return failure.error;
-};
-const handlers = require(path.join(runtime, "mcp/handlers-n8n-manager.js"));
-// Audited server.js dispatch: minimal only, and list/create/rename folder actions.
-// Other handlers remain withheld by the existing parent policy (65 tools total).
-for (const [name, write] of [
-    ["handleListWorkflows", false], ["handleGetWorkflowMinimal", false],
-    ["handleDeleteWorkflow", true], ["handleListFolders", false],
-    ["handleCreateFolder", true], ["handleRenameFolder", true],
-    ["handleCreateWorkflow", true],
-]) {
-    const handler = handlers[name];
-    handlers[name] = function (...args) {
-        const folder = ['handleListFolders', 'handleCreateFolder', 'handleRenameFolder'].includes(name);
-        return publicErrors.run({write, folder}, async () => {
-            try {
-                const result = await handler.apply(this, args);
-                // Business data on success is not diagnostic text or a DLP target.
-                if (result?.success === true) return result;
-                return publicErrors.getStore().failure || publicFailure(undefined, write);
-            } catch (error) {
-                // Unexpected ordinary rejections also fail closed, never success.
-                return publicFailure(error, write);
-            }
-        });
-    };
-}
+// 0.2.0 (owner decision 2026-10-15, as the PaaS server): the pinned handlers report the n8n backend's own errors
+// (n8n-errors.getUserFriendlyErrorMessage and the handlers unchanged) and return their own results; the fixed
+// public messages, the per-handler failure boundary and the metadata-only workflow creation are gone. The gateway
+// replaces every credential the add-on holds with [REDACTED] in each relayed reply. Only the backend network
+// policy below (DNS-pinned agents for the configured origin) and the source guards above remain.
 
 function denied() { throw new Error("configured backend network policy denied"); }
 function hostname(value) { return value.toLowerCase().replace(/^\[|\]$/g, ""); }
@@ -199,4 +91,3 @@ N8nApiClient.prototype.getPinnedAgents = async function () {
     return agents;
 };
 
-require('./metadata_reads.cjs')({runtime, N8nApiClient, publicErrors, publicFailure});

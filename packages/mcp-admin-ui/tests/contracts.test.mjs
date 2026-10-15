@@ -106,3 +106,10 @@ test('Claude.ai connector URL: saved /mcp endpoint base + /private_<token>/mcp, 
   for (const bad of [null, '', 'short', 'A'.repeat(42), 'A'.repeat(44), 'A'.repeat(42) + '/', 'A'.repeat(42) + '?'])
     assert.throws(() => claudeConnectorUrl('https://mcp.example.test/mcp', bad));
 });
+test('0.2.1 n8n: the optional MCP access token is sent with the connection, null when left blank', () => {
+  assert.deepEqual(backendPayload('n8n', 'replace', { url: 'https://n8n.example.test', key: 'fixture', mcp_access_token: '' }),
+    { url: 'https://n8n.example.test', key: 'fixture', mcp_access_token: null });
+  assert.deepEqual(backendPayload('n8n', 'replace', { url: 'https://n8n.example.test', key: 'fixture', mcp_access_token: 'mcp-fixture' }),
+    { url: 'https://n8n.example.test', key: 'fixture', mcp_access_token: 'mcp-fixture' });
+  assert.throws(() => backendPayload('n8n', 'replace', { url: 'https://n8n.example.test', key: 'fixture', mcp_access_token: 'bad\ntoken' }));
+});

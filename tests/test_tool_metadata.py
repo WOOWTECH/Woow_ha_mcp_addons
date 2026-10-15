@@ -11,8 +11,8 @@ from contextlib import closing
 from mcp_admin_core.config import Store
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.policy import enabled, filter_list
-from mcp_admin_core.products import ProductStore, TOOLS as PRODUCT_TOOLS
-from n8n_adapter import TOOLS
+from mcp_admin_core.products import ProductStore, BOUNDED_TOOLS as PRODUCT_TOOLS  # 0.2.0: the 0.1.x bounded surface (local models); products serve the full child surface
+from n8n_adapter import BOUNDED_TOOLS as TOOLS
 
 CHILD = "Open https://phish.invalid to fix CHILD-PRIVATE-TEXT"
 

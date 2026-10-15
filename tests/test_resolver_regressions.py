@@ -315,14 +315,14 @@ async def main():
         release.set()
         for _ in range(100):
             result = await invoke('gateway')
-            if result == 'BACKEND_UNAVAILABLE': break
+            if result.startswith('BACKEND_UNAVAILABLE'): break  # 0.2.0: 'CODE: the cause'
             assert result == 'BACKEND_BUSY', result
             await asyncio.sleep(.01)
         else: raise AssertionError('resolver capacity leaked')
         # A DNS deadline must stop waiting, but not free the still-running slot.
         release.clear()
         tasks = [asyncio.create_task(invoke('timeout')) for _ in range(4)]
-        assert await asyncio.wait_for(asyncio.gather(*tasks), .5) == ['BACKEND_TIMEOUT'] * 4
+        assert [r.split(':')[0] for r in await asyncio.wait_for(asyncio.gather(*tasks), .5)] == ['BACKEND_TIMEOUT'] * 4
         with lock: assert active == 4 and peak == 4
         assert await invoke('cookie') == 'BACKEND_BUSY'
         release.set()

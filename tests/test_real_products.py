@@ -144,7 +144,7 @@ async def rpc(client, url, headers, message):
 async def test_real_child_fake_backend_and_boundary(tmp_path, product):
     with backend(product) as (url, calls, offline):
         store = ProductStore(tmp_path / 'state', product)
-        store.update(connection=connection(product, url))
+        store.update(connection=connection(product, url), writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
         state = store.load()
         spec = child_spec(state, store.directory)
         assert 'SUPERVISOR_TOKEN' not in spec.env and state.token not in spec.env.values()

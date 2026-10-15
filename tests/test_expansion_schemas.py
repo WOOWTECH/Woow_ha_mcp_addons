@@ -3,8 +3,8 @@ import json
 from pathlib import Path
 import subprocess
 
-from mcp_admin_core.products import TOOLS
-from n8n_adapter import TOOLS as N8N_TOOLS
+from mcp_admin_core.products import BOUNDED_TOOLS as TOOLS  # 0.2.0: the 0.1.x bounded surface (local models); products serve the full child surface
+from n8n_adapter import BOUNDED_TOOLS as N8N_TOOLS
 from test_expansion_security import CASES
 
 ROOT = Path(__file__).resolve().parents[1]

@@ -4,8 +4,8 @@
     "source": "local:614ae663fadd91c76972f60017a76d2627bea87e",
     "path": "hermes_mcp_server/server.py",
     "upstream_sha256": "e1c3f7be4de0302fafb85848641d89a43e83565afa844da9f813f10a718c25a6",
-    "local_sha256": "8248cd4b308e8159fc52d00532fdbdbd39fc03fb4513f6bc68183fd65dfdf1d0",
-    "modification": "Use scoped DNS-pinned HTTPX transport for gateway, dashboard login and cookie clients; deny redirects/proxies. Map inspect exception fields by type, never raw exception text; explicit safe error boundaries on other enabled handlers include late decoding/JSON failures, preserving signatures. W2b adds session/cron handler error boundaries and bounded positive metadata projections without private message/prompt contents."
+    "local_sha256": "b902871ecc9a60c5013e807a94c512a196f3b53d6c176abaac22bd8761214337",
+    "modification": "Use scoped DNS-pinned HTTPX transport for gateway, dashboard login and cookie clients; deny redirects/proxies. Inspect exception fields carry backend_error_text (class code and the backend's own text, 0.2.0); explicit safe error boundaries (backend_errors) on every other handler, including late decoding/JSON failures, preserving signatures and successful output. 0.2.0: the W2b session/cron metadata projections are gone (upstream's own list output again); hermes_mcp, hermes_config, hermes_chat and hermes_webhook got the same error boundary."
   },
   {
     "product": "hermes",
@@ -18,8 +18,8 @@
     "source": "local:614ae663fadd91c76972f60017a76d2627bea87e",
     "path": "opendesign_mcp_server/od_mcp_server.py",
     "upstream_sha256": "89caa06f96a62a6df663609fa468f00b41180970c835ceb03f3a1cf196f2e717",
-    "local_sha256": "337e40c3e6e069568baad938c373e0492f37462abe10d3a7b422163a5d0ee0fc",
-    "modification": "Require explicit OD_API_BASE and corrected provenance header; all HTTP clients use scoped DNS-pinned transport, redirect/proxy denial, safe errors and five-second ordinary I/O timeout. Explicit enabled-handler error boundaries cover late response decoding/JSON/processing failures without altering successful output or SDK signatures. Bounded SDK offload is in the separate launcher. W2b adds list_runs safe error boundary and id/projectId/status-only bounded projection."
+    "local_sha256": "903db04b90d34a6819a7d06fcd197025665fdb5fd0545500214c2716c42fe97f",
+    "modification": "Require explicit OD_API_BASE and corrected provenance header; all HTTP clients use scoped DNS-pinned transport, redirect/proxy denial and safe errors (backend_errors on every handler), connect timeout 5 s. Successful output and SDK signatures are unchanged. 0.2.0: list_runs returns upstream's own answer again (no id/projectId/status projection) and the ordinary client uses upstream's 60 s read timeout again."
   },
   {
     "product": "opendesign",
@@ -69,9 +69,7 @@
     "product": "emqx",
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/errors.py",
-    "upstream_sha256": "c7e0035e810600c10db1bd5ff21f511f3023c4b1c0c57931b3487ba6d4611795",
-    "local_sha256": "d8264e158ade0102720f7d35762c9edadba6244dbbbf768a527bc2cc9ee0813b",
-    "modification": "Map request exceptions by type into stable public ToolError codes, including lazy stream/close/decompression failures; reject invalid JSON/encoding instead of returning an empty success. No raw exception or response-body diagnostics."
+    "upstream_sha256": "c7e0035e810600c10db1bd5ff21f511f3023c4b1c0c57931b3487ba6d4611795"
   },
   {
     "product": "emqx",
@@ -183,9 +181,7 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/errors.py",
-    "upstream_sha256": "3bc39077a69c07b2b0ceeb306510dc2f71ccc3b604187a4cecedab784efc1768",
-    "local_sha256": "3615e517ac06aef789b9dad2387bd6fe4238f49f493d3fe2e95a4965c10a034f",
-    "modification": "Replace raw-body/exception public errors with bounded stable BACKEND codes/status; use shared type-based mapping for lazy stream/close/decompression failures and reject all JSON parsing exceptions without returning raw text."
+    "upstream_sha256": "3bc39077a69c07b2b0ceeb306510dc2f71ccc3b604187a4cecedab784efc1768"
   },
   {
     "product": "litellm",
@@ -215,9 +211,7 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/models.py",
-    "upstream_sha256": "8b3e9a184f6e12633ffb724aa69c55a09fae13df3d8f5112f3704d61aa6d94ec",
-    "local_sha256": "8d20e7f46ec9cc5af8de8edd66a2a92444c2383eb23ee5108cfe6bd41982ccba",
-    "modification": "W2b delete_model unchanged. Metadata batch: genuine model_info/model_group_info routes with explicit single selector, local bounded streaming read and strict positive metadata projection; no provider parameters, keys or inference."
+    "upstream_sha256": "8b3e9a184f6e12633ffb724aa69c55a09fae13df3d8f5112f3704d61aa6d94ec"
   },
   {
     "product": "litellm",
@@ -235,17 +229,13 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/teams.py",
-    "upstream_sha256": "15fe1783df2740477c0dd222f51c50c6043844fc3c0bf2361050d9c70904ea96",
-    "local_sha256": "dec04344367fbdf95ff8146448f0dd083934a5f636cb528551eebf5aaa52a082",
-    "modification": "W2b list/create/update/delete unchanged. Metadata batch: genuine team_info GET with explicit ID, bounded streaming and strict team identity/alias/limit projection, excluding keys/members/spend/config. Existing native grants unchanged."
+    "upstream_sha256": "15fe1783df2740477c0dd222f51c50c6043844fc3c0bf2361050d9c70904ea96"
   },
   {
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/users.py",
-    "upstream_sha256": "19da4359727177e950b4a222633baa179d9a843fae50db6aece3d86ccee87517",
-    "local_sha256": "6a27ed1b1f466a32e9d255ecfdad319854b42027d5547ceb53337d95d55ae620",
-    "modification": "Metadata batch: genuine user_info/list_users GET routes, single bounded page and limited filters, typed positive ID/alias/role/limit projection; exclude email, keys, teams, spend and arbitrary metadata. Existing writers remain unsupported and unmodified."
+    "upstream_sha256": "19da4359727177e950b4a222633baa179d9a843fae50db6aece3d86ccee87517"
   },
   {
     "product": "litellm",
@@ -302,14 +292,16 @@
     "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "nextcloud_mcp_server/client.py",
     "upstream_sha256": "303355520e6465fd8919c0e631151d5220c7703bfd7cde801a41daf2cdf90db8",
-    "local_sha256": "3b3c1513de0d6adfb7be4f562f451433c74bc6c12dcffda139545aea8266679a",
-    "modification": "WOOW HA add-on, gateway contract only (upstream code mode (v0.1.4+) already prefixes every backend/transport error with its public code, using backend_policy.public_backend_error for hook exceptions): (1) load_backend_policy() refuses to start (BackendPolicyError, exit 2) when no backend_policy module exists, instead of falling back to an unrestricted client; (2) the error body of an unexpected status is never read: behind backend_policy only an unexpected 2xx (e.g. 200 where 207 is expected) arrives with a real body, and its Sabre message is backend text that must not reach a tool error."
+    "local_sha256": "bfe17c31bd1acd14a5fffbe6aca865503fbd87e0a14b447f04c876fdfb87cd89",
+    "modification": "WOOW HA add-on: load_backend_policy() refuses to start (BackendPolicyError, exit 2) when no backend_policy module exists, instead of falling back to an unrestricted client. 0.2.0: the upstream error-body detail (server_message of a non-2xx answer) is reported again, as upstream. 0.2.1: Nextcloud's own error message (Sabre, OCS or plain text, 1000 characters) is relayed for every non-2xx status: server_message reads it, client.py reads it for 5xx too, status_message appends ' Nextcloud: <message>'."
   },
   {
     "product": "nextcloud",
     "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "nextcloud_mcp_server/errors.py",
-    "upstream_sha256": "47c695afd7d99a050abc08e1bd431d8d3b31e923dd66fe4fdbbe349f07888800"
+    "upstream_sha256": "47c695afd7d99a050abc08e1bd431d8d3b31e923dd66fe4fdbbe349f07888800",
+    "local_sha256": "df1ccbd7590f8868b8297c0be57e00b532fd49786787bebfa94b3e0641609432",
+    "modification": "WOOW HA add-on 0.2.1 (owner decision 2026-10-15: raw backend errors). 0.2.1: Nextcloud's own error message (Sabre, OCS or plain text, 1000 characters) is relayed for every non-2xx status: server_message reads it, client.py reads it for 5xx too, status_message appends ' Nextcloud: <message>'."
   },
   {
     "product": "nextcloud",
@@ -321,7 +313,9 @@
     "product": "nextcloud",
     "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "nextcloud_mcp_server/webdav.py",
-    "upstream_sha256": "56aa67abf1a1cea641be2a7704d09bd51e9682b441a07189744f0c48494aa4eb"
+    "upstream_sha256": "56aa67abf1a1cea641be2a7704d09bd51e9682b441a07189744f0c48494aa4eb",
+    "local_sha256": "1e304349885f5dd3474e923dd0fc8b48c38e1acb3d19423b6f89e41333382604",
+    "modification": "WOOW HA add-on 0.2.1 (owner decision 2026-10-15: raw backend errors). 0.2.1: Nextcloud's own error message (Sabre, OCS or plain text, 1000 characters) is relayed for every non-2xx status: server_message reads it, client.py reads it for 5xx too, status_message appends ' Nextcloud: <message>'."
   },
   {
     "product": "nextcloud",
@@ -339,9 +333,7 @@
     "product": "nextcloud",
     "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "nextcloud_mcp_server/tools.py",
-    "upstream_sha256": "9b22f15816e56e6808a509886d89f52a04152dec99bf9078ccd257e098fb4aa4",
-    "local_sha256": "6793cb95acea38f746803c3a486511ea3ecea3eb204abccaec43aa380a4fcafa",
-    "modification": "WOOW HA add-on: the 'paths outside the home folder' error no longer prints the account's home path (it contains the backend's user id); upstream's BACKEND_INVALID_RESPONSE code is kept. Nothing else changed."
+    "upstream_sha256": "9b22f15816e56e6808a509886d89f52a04152dec99bf9078ccd257e098fb4aa4"
   },
   {
     "product": "nextcloud",

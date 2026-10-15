@@ -64,6 +64,7 @@ UI 驗證契約並依實際 metadata 產生每工具／每 operation 控制；�
 {"writes_enabled":false,"disabled":[],"enabled_write_tools":["n8n_manage_folders:create"]}
 ```
 
+新安裝的 state 預設所有寫入 grants 與 `writes_enabled` 都開啟（2026-10-15），工具頁一開始全部勾選並顯示風險提醒；管理員取消勾選並儲存後即關閉，既有 state 不被預設改寫。
 PUT 取代**全部** exact grants。disabled 優先並清除該列選擇。原兩個 legacy writers
 在 `writes_enabled:true` 時顯示實際有效授權；儲存轉為明確 grants 並關閉 global。
 未知契約禁止儲存，絕不降到只送 global false 而留下隱藏 grants。每次保存重新

@@ -84,6 +84,7 @@ def test_fixed_child_ignores_parent_secrets_and_gui_commands(tmp_path, product, 
 
 async def test_writer_is_denied_before_dispatch_then_explicitly_enabled(tmp_path):
     store = ProductStore(tmp_path / 'state', 'opendesign')
+    store.update(writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
     requests = []
     async def dispatch(request):
         requests.append(json.loads(request.content))
@@ -97,7 +98,7 @@ async def test_writer_is_denied_before_dispatch_then_explicitly_enabled(tmp_path
                 headers = {'Authorization': 'Bearer ' + store.load().token, 'Mcp-Session-Id': 'test-session'}
                 assert refused(await client.post('/mcp', headers=headers, json=message))
                 assert requests == []
-                store.update(writes_enabled=True)
+                store.update(enabled_write_tools=['delete_project'])  # 0.2.0: an exact grant, no legacy switch
                 assert (await client.post('/mcp', headers=headers, json=message)).status_code == 200
                 assert requests == [message]
                 store.update(disabled=['delete_project'])

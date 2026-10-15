@@ -6,8 +6,8 @@ import httpx
 import pytest
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.lifecycle import Supervisor
-from mcp_admin_core.products import ProductStore, TOOLS, child_spec
-from n8n_adapter import TOOLS as N8N_TOOLS, child_spec as n8n_spec
+from mcp_admin_core.products import ProductStore, BOUNDED_TOOLS as TOOLS, child_spec  # 0.2.0: the 0.1.x bounded surface (local models); products serve the full child surface
+from n8n_adapter import BOUNDED_TOOLS as N8N_TOOLS, child_spec as n8n_spec
 from batch2_owned_port import private_spec, reserve_port, request_guard, wait_owned_listener
 from test_batch2_policy import BAD_CONNECTION_KEYS, CASES, GRAPH, GRAPH_NAME_CASES, graph_with_name
 from test_expansion_policy import call
@@ -17,7 +17,9 @@ from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 PURE = {'build_domain', 'generate_json2_payload', 'diagnose_odoo_call', 'validate_node', 'validate_workflow'}
 
-@pytest.mark.parametrize('product,major,allow_write', [('odoo', 18, True), ('odoo', 19, True), ('odoo-manage', 18, True), ('odoo-manage', 19, True), ('odoo-manage', 19, False), ('n8n', 18, True)])
+# 0.2.0: Odoo serves the published handlers (no B1 aggregate projection); its full surface is covered by
+# test_expansion_runtime and test_full_surface. The retired Odoo Manage and n8n's local validators keep these cases.
+@pytest.mark.parametrize('product,major,allow_write', [('odoo-manage', 18, True), ('odoo-manage', 19, True), ('odoo-manage', 19, False), ('n8n', 18, True)])
 async def test_batch2_real_handlers(tmp_path, product, major, allow_write):
     with fake_api(major=major, allow_write=allow_write) as (url, events, mutations, failures):
         store = ProductStore(tmp_path / 'state', product)

@@ -137,19 +137,48 @@ def parse_multistatus(body: bytes) -> list[DavResponse]:
     return results
 
 
+SERVER_MESSAGE_LIMIT = 1000
+
+
 def server_message(body: bytes) -> str | None:
-    """Extract ``<s:message>`` from a Sabre error body, truncated to 200 characters."""
+    """The backend's own error message, whitespace folded and cut to SERVER_MESSAGE_LIMIT characters.
+
+    WOOW HA add-on 0.2.1 (owner decision 2026-10-15: raw backend errors): a Sabre ``<s:message>`` (WebDAV/CalDAV)
+    as upstream, and also an OCS ``meta/message`` (XML or JSON), a JSON ``message``/``error`` and a short plain-text
+    body; HTML pages give nothing. The gateway replaces the add-on's credentials with [REDACTED].
+    """
     if not body or len(body) > 65536:
         return None
-    try:
-        root = SafeET.fromstring(body, forbid_dtd=True)
-    except Exception:
-        return None
-    message = root.findtext(tag(SABRE, "message"))
+    message = None
+    text = body.decode("utf-8", "replace").strip()
+    if text.startswith("<"):
+        try:
+            root = SafeET.fromstring(body, forbid_dtd=True)
+        except Exception:
+            return None
+        message = root.findtext(tag(SABRE, "message")) or root.findtext("meta/message") or root.findtext("message")
+    elif text.startswith("{"):
+        try:
+            import json
+
+            value = json.loads(text)
+        except ValueError:
+            value = None
+        if isinstance(value, dict):
+            ocs = value.get("ocs")
+            meta = ocs.get("meta") if isinstance(ocs, dict) else None
+            for candidate in ((meta or {}).get("message") if isinstance(meta, dict) else None,
+                              value.get("message"), value.get("error")):
+                if isinstance(candidate, str) and candidate.strip():
+                    message = candidate
+                    break
+    else:
+        message = text
     if not message:
         return None
     message = " ".join(message.split())
-    return message[:200] or None
+    return message[:SERVER_MESSAGE_LIMIT] or None
+
 
 
 def http_date_to_iso(value: str | None) -> str | None:

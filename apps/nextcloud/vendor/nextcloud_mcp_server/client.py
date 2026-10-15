@@ -436,11 +436,10 @@ class NextcloudClient:
                     raise _set_latch(
                         self.latch_key, response.status_code, response.headers.get("retry-after")
                     )
-                # WOOW HA add-on: never read the error body. Behind backend_policy only an unexpected 2xx
-                # (e.g. 200 where 207 is expected) gets here with a real body; its Sabre message is
-                # backend text and must not reach a tool error.
+                body = await self._read_capped(response, MAX_ERROR_BODY, tolerate=True)
+                detail = server_message(body)  # WOOW HA add-on 0.2.1: 5xx too (raw backend errors)
                 raise NextcloudHTTPError(
-                    status_message(response.status_code, label, op),
+                    status_message(response.status_code, label, op, detail=detail),
                     response.status_code,
                 )
             limit = MAX_XML_BYTES if max_body is None else max_body

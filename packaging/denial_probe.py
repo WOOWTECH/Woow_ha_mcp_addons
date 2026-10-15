@@ -4,7 +4,9 @@ WRITE_CASES = {
     'opendesign': ('delete_project', {'project_id': '00000000-0000-0000-0000-000000000001'}),
     'odoo': ('chatter_post', {'model':'res.partner', 'record_id':1, 'body':'Owned test comment'}),
     'odoo-manage': ('create_record', {'model':'res.partner', 'values':{'name':'Owned'}}),
-    'hermes': ('hermes_skill', {'action':'disable', 'name':'example'}),
+    # 0.2.0: a whole-tool writer (a mixed tool's malformed call without its selector now reaches the child, which
+    # refuses it itself; this probe asserts the gateway's own refusal).
+    'hermes': ('hermes_chat', {'message':'Owned'}),
     'emqx': ('emqx_kick_client', {'clientid':'device'}),
     'litellm': ('litellm_create_team', {'team_alias':'Owned'}),
     'nextcloud': ('create_text_file', {'path':'Owned/denied.md', 'content':'Owned'}),

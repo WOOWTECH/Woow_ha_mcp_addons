@@ -21,8 +21,8 @@ from mcp_admin_core.config import Store
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.policy import (ARGUMENT_ERROR_LIMIT, ARGUMENT_ERROR_TEXT, FIXED_ARGUMENT_ERROR, Denied,
                                    ToolCallRefused, UnknownMethod, argument_errors, authorize)
-from mcp_admin_core.products import TOOLS as PRODUCT_TOOLS, ProductStore
-from n8n_adapter import TOOLS
+from mcp_admin_core.products import BOUNDED_TOOLS as PRODUCT_TOOLS, ProductStore  # 0.2.0: the 0.1.x bounded surface (local models); products serve the full child surface
+from n8n_adapter import BOUNDED_TOOLS as TOOLS
 
 ACCEPT = {"Accept": "application/json, text/event-stream"}
 SESSION = {"Mcp-Session-Id": "child-session"}

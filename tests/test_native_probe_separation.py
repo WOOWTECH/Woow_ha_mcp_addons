@@ -192,7 +192,9 @@ async def test_policy_disable_keeps_private_probe_and_public_denial(tmp_path, pr
                     else:
                         assert len(mutations) == int(grant_writer)
                     prefix = 'EMQX_MCP_' if product == 'emqx' else 'LITELLM_MCP_'
-                    assert manager.spec.env[prefix+'READONLY'] == ('false' if grant_writer and not disable_all else 'true')
+                    # 0.2.0: an enabled mixed tool (EMQX authn/authz) also needs READONLY=false to be registered.
+                    writable = any(TOOLS[product][n].write or TOOLS[product][n].write_operations for n in public_names)
+                    assert manager.spec.env[prefix+'READONLY'] == ('false' if writable else 'true')
                     pid, starts = manager.process.pid, manager.starts
                     offline.set()
                     for _ in range(3):

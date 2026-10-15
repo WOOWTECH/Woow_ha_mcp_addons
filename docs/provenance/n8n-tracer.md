@@ -36,7 +36,7 @@ ported or modified.
 | Shared `__init__.py`, `config.py`, `policy.py`, `gateway.py`, `lifecycle.py`, `health.py` | Newly authored Python boundary; `config.py` uses the conceptual atomic-write pattern noted above, not an imported legacy file. Review repairs are newly written here |
 | `apps/n8n/n8n_adapter.py`, `run.py` | New launcher/policy/runtime; conceptual launcher reference above |
 | `apps/n8n/backend_policy.cjs` | New scoped preload adapter written in the repair pass; calls installed upstream `N8nApiClient` / `SSRFProtection.createPinnedAgents`, does not copy their implementation or edit node_modules |
-| `apps/n8n/metadata_reads.cjs`, core `n8n_b3.py` | New B3 narrow adapters/schemas around genuine pinned handlers/client methods; no dependency source copied or modified. Default-off shared Tool backend preconditions are the explicit policy scope exception; no lifecycle/state migration |
+| core `n8n_b3.py` (`apps/n8n/metadata_reads.cjs` until 0.1.14; removed in 0.2.0, the full surface) | New B3 narrow adapters/schemas around genuine pinned handlers/client methods; no dependency source copied or modified. Default-off shared Tool backend preconditions are the explicit policy scope exception; no lifecycle/state migration |
 | `tests/*.py` | New disposable local regression harnesses; no legacy test/config data imported |
 | `licenses/n8n-mcp-MIT.txt` | Actual copied upstream notice; retain attribution, not an umbrella license |
 | npm/Python lockfiles | Generated dependency metadata; actual npm application/third-party source is installed via locks, not authored here or copied from the old repo |

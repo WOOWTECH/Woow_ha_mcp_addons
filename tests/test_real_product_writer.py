@@ -14,7 +14,7 @@ from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 async def test_real_delete_requires_enable_and_disabled_direct_call_still_denied(tmp_path):
     with backend('opendesign') as (url, calls, _):
         store = ProductStore(tmp_path / 'state', 'opendesign')
-        store.update(connection=connection('opendesign', url))
+        store.update(connection=connection('opendesign', url), writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
         endpoint = Endpoint('opendesign')
         process = endpoint.supervisor(child_spec(store.load(), store.directory))
         try:
@@ -38,7 +38,7 @@ async def test_real_delete_requires_enable_and_disabled_direct_call_still_denied
                         'name': 'delete_project', 'arguments': {'project_id': '12345678-1234-1234-1234-123456789abc'}}}
                     assert refused(await client.post('/mcp', headers=headers, json=message))
                     assert calls == []
-                    store.update(writes_enabled=True)
+                    store.update(enabled_write_tools=['delete_project'])  # 0.2.0: an exact grant, no legacy switch
                     reply = await rpc(client, '/mcp', headers, message)
                     assert not reply.get('isError')
                     assert calls == [('DELETE', '/api/projects/12345678-1234-1234-1234-123456789abc')]

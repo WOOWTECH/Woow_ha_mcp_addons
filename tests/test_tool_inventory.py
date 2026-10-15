@@ -39,7 +39,8 @@ def test_all_withheld_tools_deny_even_when_writes_enabled():
                                'params': {'name': tool['name'], 'arguments': {}}}, inventory.POLICIES[product], state)
                 assert tool['reason'] and tool['enable'] and tool['source']
                 count += 1
-    assert count == 108  # 184 exact pinned tools, 76 bounded supported (+5 LiteLLM metadata reads).
+    # 0.2.0: every shipped product serves its child's complete surface; only the retired Odoo Manage withholds one.
+    assert count == 1
 
 
 def test_vendored_content_hashes_and_license_notices():
@@ -237,6 +238,16 @@ def test_reviewed_read_tools_have_no_local_write_path():
     data = json.loads((ROOT / 'docs/tool-surface.json').read_text())
     for product, group in data['products'].items():
         for tool in group['tools']:
+            if tool['status'] == 'supported-full':
+                # 0.2.0: no local argument model; the reviewed classification decides the write path.
+                local = inventory.POLICIES[product][tool['name']]
+                no_write_path = not (local.write or local.legacy_write or local.write_operations)
+                assert no_write_path == (tool['effect'] == 'read'), (product, tool['name'])
+                if local.write_operations:
+                    effects = tool['operation_effects'][local.selector]
+                    assert set(local.write_operations) == {v for v, e in effects.items() if e != 'read'}, tool['name']
+                    assert set(local.read_operations) == {v for v, e in effects.items() if e == 'read'}, tool['name']
+                continue
             if tool['status'] != 'supported-bounded':
                 continue
             local = inventory.POLICIES[product][tool['name']]

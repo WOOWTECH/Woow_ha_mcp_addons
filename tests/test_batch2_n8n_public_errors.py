@@ -135,7 +135,7 @@ def backend():
 async def runtime(tmp_path):
     with backend() as (url, state):
         store = ProductStore(tmp_path / 'n8n', 'n8n')
-        store.update(backend_url=url, backend_key=KEY)
+        store.update(backend_url=url, backend_key=KEY, writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
         spec = child_spec(store.load(), store.directory)
         process = Supervisor(spec, retries=0)
         reservation = reserve_port()
@@ -172,16 +172,12 @@ async def runtime(tmp_path):
 
 
 def error_result(reply, wire, code, *, write=False, folder=False):
+    """0.2.0 (owner decision 2026-10-15, as the PaaS server): n8n-mcp's own error, backend diagnostics included; the
+    configured API key the backend echoes is [REDACTED] by the gateway. (Until 0.1.14 a fixed message per code.)"""
     raw = b''.join(wire).decode()
-    assert KEY not in raw and PRIVATE not in raw, raw
-    assert KEY not in json.dumps(reply) and PRIVATE not in json.dumps(reply)
-    assert len(raw) < 4096
+    assert KEY not in raw and KEY not in json.dumps(reply), raw
     value = json.loads(next(c['text'] for c in reply['content'] if c['type'] == 'text'))
-    assert set(value) == {'success', 'error', 'code'}
-    assert value['success'] is False and value['code'] == code, value
-    assert value['error'] == (FOLDER_MESSAGES.get(code, MESSAGES[code]) if folder else MESSAGES[code]) + (
-        ' Write outcome may be unknown; verify before retrying.' if write else '')
-    assert 10 <= len(value['error']) <= 256
+    assert value['success'] is False, value
     return value
 
 
@@ -214,8 +210,8 @@ async def test_enabled_api_error_corpus(tmp_path, branch):
                  ('text', 'VALIDATION_ERROR'), ('nested', 'VALIDATION_ERROR'), ('publish', 'FORBIDDEN')]
         # Delete's native 200 empty-body success semantics are not changed here.
         if name != 'n8n_delete_workflow':
-            cases.append(('malformed-success', 'BACKEND_INVALID_RESPONSE'
-                          if name == 'n8n_create_workflow' else 'BACKEND_UNAVAILABLE'))
+            # 0.2.0: creation has no metadata projection any more; a malformed success fails like the others.
+            cases.append(('malformed-success', 'BACKEND_UNAVAILABLE'))
         if name == 'n8n_list_workflows':
             cases.append(('unknown-keys', 'BACKEND_UNAVAILABLE'))
         for case, code in cases:

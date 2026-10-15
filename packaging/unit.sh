@@ -6,6 +6,9 @@ uv sync --frozen --python python3.13
 for app in odoo odoo-manage hermes opendesign emqx litellm nextcloud; do
   uv sync --project "apps/$app" --frozen --no-dev --python python3.13
 done
+# 0.2.0: the PaaS build patches the Odoo image applies (apps/odoo/Dockerfile); launch.py checks the patched digests.
+apps/odoo/.venv/bin/python apps/odoo/patches/fix_cross_session_token_store.py
+apps/odoo/.venv/bin/python apps/odoo/patches/fix_direct_writes.py
 npm ci --prefix apps/n8n --ignore-scripts --no-audit --no-fund
 node --check apps/n8n/backend_policy.cjs
 npm ci --prefix packages/mcp-admin-ui --ignore-scripts --no-audit --no-fund

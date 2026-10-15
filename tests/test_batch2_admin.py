@@ -18,7 +18,7 @@ async def test_b1_real_admin_ui_grants_roundtrip(tmp_path, product, grant):
     async def role(_): return True
     with closing(ProductStore(tmp_path, product)) as store:
         if product == 'odoo-manage': store.update(connection={**connection(product, 'http://127.0.0.1:12345'), 'mode': 'module'})
-        store.update(writes_enabled=True)
+        store.update(writes_enabled=True, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
         tools = N8N_TOOLS if product == 'n8n' else TOOLS[product]
         async with httpx.AsyncClient(trust_env=False) as child:
             admin, _ = make_apps(store, tools, child, verify_admin=role)

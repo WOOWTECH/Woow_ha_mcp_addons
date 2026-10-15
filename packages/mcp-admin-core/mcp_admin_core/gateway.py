@@ -32,7 +32,10 @@ from .config import ConfigError, State, Store, strict_json
 from .policy import Denied, ToolCallRefused, UnknownMethod, authorize, filter_list
 from .ha_role import valid_user_id
 
-MAX_REQUEST = 262144
+# 0.2.0: 16 MiB (was 256 KiB). The full Nextcloud surface uploads up to 10 MiB as base64 (about 13.4 MiB of JSON) and
+# writes text files up to 1 MiB; a body is read only after the token check. BODY_SECONDS bounds the read.
+MAX_REQUEST = 16 * 1024 * 1024
+BODY_SECONDS = 60
 MAX_RESPONSE = 8 * 1024 * 1024
 STREAM_SECONDS = 120
 EVENT_BOUNDARY = re.compile(rb"\r?\n\r?\n")
@@ -220,7 +223,7 @@ class BadRequest(Exception):
 async def body(request: Request):
     content = bytearray()
     try:
-        async with asyncio.timeout(10):
+        async with asyncio.timeout(BODY_SECONDS):
             async for chunk in request.stream():
                 content.extend(chunk)
                 if len(content) > MAX_REQUEST:
@@ -345,9 +348,16 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         raise ValueError()
                     if name == "backend":
                         if getattr(state, 'product', 'n8n') == 'n8n':
-                            if set(value) != {"url", "key"}:
+                            # 0.2.1: optional mcp_access_token (n8n's instance-level MCP key); the whole set is
+                            # replaced, so leaving it out (or clearing) removes a stored token.
+                            if set(value) not in ({"url", "key"}, {"url", "key", "mcp_access_token"}):
                                 raise ValueError()
                             changes = dict(backend_url=value["url"], backend_key=value["key"])
+                            if hasattr(state, "mcp_access_token"):
+                                token = value.get("mcp_access_token")
+                                changes["mcp_access_token"] = None if value["url"] is None else token
+                            elif value.get("mcp_access_token") is not None:
+                                raise ValueError()
                         else:
                             if set(value) != {"connection"}:
                                 raise ValueError()
@@ -377,6 +387,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 return JSONResponse({"base_path": base, "api_base": base + "/api", "csrf": csrf,
                     "endpoint": state.endpoint, "backend_url": state.backend_url,
                     "backend_key_set": state.backend_key is not None, "token_active": state.token is not None,
+                    "mcp_access_token_set": getattr(state, "mcp_access_token", None) is not None,
                     "product": getattr(state, 'product', 'n8n'),
                     "connection_configured": getattr(state, 'configured', bool(state.backend_url and state.backend_key)),
                     "writes_enabled": state.writes_enabled, "disabled": state.disabled,
@@ -627,7 +638,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                             # and no pinned child keeps an event store.
                             continue
                         else:
-                            checked = gateway_reply(value, request[1])
+                            # 0.2.0: backend errors carry their own text; no credential the add-on holds leaves
+                            checked = redact.redact_secrets(gateway_reply(value, request[1]),
+                                                            redact.secret_values(store.load()))
                             if (isinstance(checked.get("result"), dict)
                                     and {"tools", "capabilities"} & checked["result"].keys()):
                                 checked = filter_list(checked, tools, store.load())
@@ -867,7 +880,10 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     value = strict_json(bytes(result))
                     if not (one_reply(value) and same_id(value.get("id"), message.get("id"))):
                         raise ValueError("not this request's reply")
-                    value = filter_list(gateway_reply(value, method), tools, store.load())
+                    current = store.load()
+                    # 0.2.0: backend errors carry their own text; no credential the add-on holds leaves
+                    value = filter_list(redact.redact_secrets(gateway_reply(value, method), redact.secret_values(current)),
+                                        tools, current)
                 except (ValueError, RecursionError):
                     raise BadRequest(502) from None
                 return json_reply(value, 200, response_headers)

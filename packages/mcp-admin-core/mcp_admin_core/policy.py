@@ -182,6 +182,12 @@ class Tool:
     # Opt-in only: local tools and previously reviewed API behavior stay intact.
     requires_backend: bool = False
     backend_required_operations: tuple[str, ...] = ()
+    # 0.2.0 (full surface, surface.full_tools): the child validates the arguments (forwarded unchanged) and tools/list
+    # shows the child's own inputSchema. read_operations are the selector values that only read; default_operation is
+    # the source's default (a read) when the selector is omitted, None when the child requires it.
+    child_schema: bool = False
+    read_operations: tuple[str, ...] = ()
+    default_operation: str | None = None
 
     def __post_init__(self):
         if self.backend_required_operations:
@@ -248,6 +254,9 @@ def authorize(message, tools: Mapping[str, Tool], state: State) -> str:
         # 0.1.14: the four refusals of a well-formed call are ToolCallRefused (answered as JSON-RPC errors).
         if not enabled(name, tools, state):
             raise ToolCallRefused("unknown_tool", name)
+        if tools[name].child_schema:
+            child_call(name, tools[name], params, state)
+            return method
         model = tools[name].arguments
         try:
             arguments = model.model_validate(params.get("arguments", {}))
@@ -266,6 +275,26 @@ def authorize(message, tools: Mapping[str, Tool], state: State) -> str:
     else:  # unreachable: every other method is UnknownMethod above
         raise Denied("method not permitted")
     return method
+
+
+def child_call(name, tool, params, state):
+    """0.2.0: a full-surface tool. The arguments must be a JSON object (or absent) and are forwarded unchanged: the
+    child validates them and answers its own errors. Only the operation grants of a mixed tool are checked here."""
+    arguments = params.get("arguments", {})
+    if not isinstance(arguments, dict):
+        raise ToolCallRefused("invalid_params", name, [{"field": "arguments", "message": "Input should be a valid dictionary",
+                                                        "type": "dict_type"}])
+    if tool.write_operations:
+        granted = getattr(state, "enabled_write_tools", ())
+        operation = arguments.get(tool.selector, tool.default_operation)
+        if operation in tool.write_operations:
+            needed = [operation]
+        elif operation is None or type(operation) is str and operation in tool.read_operations:
+            needed = []  # a read, or a required selector left out (the child refuses the call)
+        else:  # not a string or a value this add-on has not classified: it could be a new write
+            needed = list(tool.write_operations)
+        if any(f"{name}:{value}" not in granted for value in needed):
+            raise ToolCallRefused("operation_not_permitted", name)
 
 
 # The four MCP hint annotations and their cautious values. A client may relax its own checks on the other value (Claude
@@ -552,6 +581,20 @@ def _names(names):
     return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
 
 
+def child_input_schema(schema):
+    """0.2.0: the child's own inputSchema, made provider-safe like a local one (flat_schema: a top-level object without
+    oneOf/anyOf/allOf/enum/const/not/$ref, which Claude and GPT refuse for a whole request). A schema that is not an
+    object, or that flat_schema cannot read, is listed as a plain object: the child still validates every call."""
+    if not isinstance(schema, dict):
+        return {"type": "object"}
+    try:
+        flat = flat_schema(schema)
+        json.dumps(flat)
+    except Exception:
+        return {"type": "object"}
+    return flat
+
+
 def listed_tool(tool, local):
     """A listed tool rebuilt from known members (0.1.6, 0.1.5 RC review F3). The name and inputSchema are the gateway's
     own (0.1.6 AI Stage 0: the declared form of the locally pinned argument model, declared_schema()); title,
@@ -561,7 +604,8 @@ def listed_tool(tool, local):
     the Python client fetched a child $ref URL) and refuses every call to a tool whose execution.taskSupport is
     "required"; icons are child-chosen URLs."""
     read_only = not (local.write or local.legacy_write or local.write_operations)
-    listed = {"name": tool["name"], "inputSchema": declared_schema(local.arguments)}
+    listed = {"name": tool["name"], "inputSchema": child_input_schema(tool.get("inputSchema")) if local.child_schema
+              else declared_schema(local.arguments)}
     listed.update({key: tool[key] for key in ("title", "description") if isinstance(tool.get(key), str)})
     annotations = tool.get("annotations")
     if isinstance(annotations, dict):

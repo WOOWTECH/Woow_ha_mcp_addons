@@ -140,7 +140,8 @@ function tools() {
   const rows = toolRows(state);
   form.append(p('停用與授權必須由伺服器逐次檢查 tools/call。此頁的控制項不是安全邊界，也不會替你執行工具。'));
   if (!granular) form.append(el('div', { class: 'notice' }, '工具授權版本不相容，無法儲存。請重新整理；不會以舊版全域開關取代精確授權。'));
-  if (state.writes_enabled) form.append(p('注意：伺服器回報舊版全域寫入目前開啟。此頁不將它標示為唯讀。'));
+  form.append(el('div', { class: 'notice' }, '預設開啟所有工具與寫入（新安裝，以及從 0.1.x 升級時一次）：MCP 用戶端（例如 AI 助理）可直接新增、修改或刪除後端資料，權限等同後端帳號。請只保留確實需要的工具與寫入，其餘在此逐一停用或取消勾選後儲存。'));
+  if (state.writes_enabled && rows.some(row => row.legacy)) form.append(p('注意：伺服器回報舊版全域寫入目前開啟（新安裝的預設）。此頁不將它標示為唯讀；儲存後改以下方逐項勾選為準，未勾選的寫入即關閉。'));
   if (!rows.length) form.append(p('伺服器未提供工具清單，無法編輯權限。'));
   for (const row of rows) {
     const disabled = el('input', { type: 'checkbox', name: 'disabled', value: row.name, checked: state.disabled?.includes(row.name) });

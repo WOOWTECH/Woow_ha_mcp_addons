@@ -17,7 +17,7 @@ import pytest
 from mcp_admin_core.config import Store
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.policy import META_LIMIT, Denied, UnknownMethod, authorize
-from n8n_adapter import TOOLS
+from n8n_adapter import BOUNDED_TOOLS as TOOLS
 
 TRACE = {"traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"}
 CLAUDE_INITIALIZE = {"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {

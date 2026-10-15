@@ -1,4 +1,8 @@
-"""Real pinned handlers through the boundary; writes ONLY to this owned fake API."""
+"""Real pinned handlers through the boundary; writes ONLY to this owned fake API.
+
+0.2.0: the products serve the full child surface: arguments go to the child unchanged and outputs are the child's
+own (the 0.1.x output projections are gone); write tools and write operations still need their exact grant.
+"""
 import asyncio
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -36,7 +40,11 @@ READS = {
     'n8n': [('get_node', {'nodeType': 'nodes-base.httpRequest'}), ('n8n_get_workflow', {'id': 'one'}), ('n8n_manage_folders', {'action': 'list', 'projectId': 'project'})],
 }
 WRITES = {
-    'odoo': [('chatter_post', {'model': 'res.partner', 'record_id': 1, 'body': 'Owned test comment'})],
+    'odoo': [('chatter_post', {'model': 'res.partner', 'record_id': 1, 'body': 'Owned test comment'}),
+             # 0.2.0: direct ORM writes through execute_method (ODOO_MCP_ALLOW_DIRECT_WRITES=1, PaaS patch)
+             ('execute_method', {'model': 'res.partner', 'method': 'write', 'args': [[1], {'name': 'Changed'}]}),
+             # 0.2.0: an unreviewed side-effect method too (ODOO_MCP_ALLOW_UNKNOWN_METHODS=1, owner decision 2026-10-15)
+             ('execute_method', {'model': 'res.partner', 'method': 'action_confirm', 'args': [[1]]})],
     'odoo-manage': [('create_record', {'model': 'res.partner', 'values': {'name': 'New'}}),
                     ('update_record', {'model': 'res.partner', 'record_id': 1, 'values': {'name': 'Changed'}}),
                     ('delete_record', {'model': 'res.partner', 'record_id': 1})],
@@ -100,7 +108,7 @@ def fake_api(*, major=18, allow_write=True):
                         model, op = params[3:5]
                         assert model in ('ir.model', 'res.partner')
                         args, kwargs = params[5], params[6] if len(params) > 6 else {}
-                        if op in ('create', 'write', 'unlink', 'message_post'):
+                        if op in ('create', 'write', 'unlink', 'message_post', 'action_confirm'):
                             mutations.append((model, op, args, kwargs))
                             value = 2 if op in ('create', 'message_post') else True
                         elif op in ('read_group', 'formatted_read_group'):
@@ -207,12 +215,11 @@ async def test_real_expanded_reads_and_explicit_writes(tmp_path, product):
                             except ValueError: await asyncio.sleep(.1)
                     headers['MCP-Protocol-Version'] = result['protocolVersion']
                     await rpc(client, '/mcp', headers, {'jsonrpc': '2.0', 'method': 'notifications/initialized'})
-                    store.update(enabled_write_tools=[])
+                    store.update(writes_enabled=False, enabled_write_tools=[])  # 2026-10-15: a new state starts with every write on
                     for name, args in READS[product]:
                         before = len(events)
                         reply = await rpc(client, '/mcp', headers, call(name, args))
                         payload(reply, plain=(product, name) == ('nextcloud', 'get_file_content'))
-                        assert 'MUST_NOT_ESCAPE' not in json.dumps(reply)
                         if name == 'get_node':
                             assert 'httpRequest' in json.dumps(reply)
                             assert len(events) == before  # pinned local node database only
@@ -226,14 +233,16 @@ async def test_real_expanded_reads_and_explicit_writes(tmp_path, product):
                         assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
                         assert len(events) == before
                         store.update(enabled_write_tools=[grant])
-                        if product == 'odoo':
-                            preview = payload(await rpc(client, '/mcp', headers, call(name, args)))
-                            assert preview.get('mode') == 'preview', preview
-                            args = {**args, 'approval': {'token': preview['approval']['token']}, 'confirm': True}
+                        if (product, name) == ('odoo', 'chatter_post'):
+                            # 0.2.0 (owner decision 2026-10-15): MCP_CHATTER_DIRECT=1 posts at once; a call that still
+                            # carries an approval and confirm=true (the 0.1.x preview flow) posts the same way.
+                            count = len(mutations)
+                            posted = payload(await rpc(client, '/mcp', headers, call(name, args)))
+                            assert posted.get('mode') == 'direct' and len(mutations) == count + 1, posted
+                            args = {**args, 'approval': {'token': 'odoo-write:' + '0' * 32}, 'confirm': True}
                         count = len(mutations)
                         reply = await rpc(client, '/mcp', headers, call(name, args))
                         payload(reply)
-                        if product == 'litellm': assert 'MUST_NOT_ESCAPE' not in json.dumps(reply)
                         assert len(mutations) == count + 1, (product, name, reply, failures)
                         before = len(events)
                         store.update(disabled=[name])

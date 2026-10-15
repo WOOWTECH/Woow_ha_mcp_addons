@@ -2,11 +2,10 @@
 
 ## 目前狀態與安全邊界
 
-七份 manifest 是可從 HA 商店安裝的實驗版產品（0.1.7，映像已公開；Nextcloud 自 0.1.7 起；Odoo Manage 已下架）。工具支援僅
-183/76/107（七支合計：來源／支援／暫不支援；工具表另列已下架的 Odoo Manage），[完整逐名工具表](../tool-surface.md)
-包含混合 operation、預設、啟用限制及未完成原因。唯讀分類不是由名字推測，
-unknown／未審工具即使開啟寫入仍拒絕。七支都有有界 writers／mixed operations，
-仍不是完整 writer parity；107 個暫不支援是明列內部工作，不假稱全部完成。
+七份 manifest 是可從 HA 商店安裝的實驗版產品（0.1.7，映像已公開；Nextcloud 自 0.1.7 起；Odoo Manage 已下架）。0.2.1 起為完整版：
+七支合計 183 個子程序工具全部開放（工具表另列已下架、維持有界版的 Odoo Manage），[完整逐名工具表](../tool-surface.md)
+列出分類（read／write／mixed）與寫入 grants。分類不是由名字推測；子程序新增但未分類的工具一律拒絕。
+全部工具與寫入預設開啟，見下方 [寫入預設開啟](#寫入預設開啟)。
 
 **映像已發佈（目前 0.1.7），0.1.1–0.1.7 已在測試 HA 回歸（[0.1.7 紀錄](ha-test-0.1.7.md)）。** 七支都批准
 `homeassistant_api: true`（n8n 自 0.1.0、其他五支自 0.1.1 起，負責人 2026-10-05 核准；Nextcloud 自 0.1.7 起，2026-10-08 核准）；正式 fixed-WS provider 已實作並經審查，
@@ -64,7 +63,40 @@ UI 保留不送 PUT；替換完整 typed connection，空白秘密不代表保�
 工具頁保存完整 `enabled_write_tools`、`writes_enabled:false`，disabled 優先。
 舊 global 只授權原 n8n/OpenDesign 兩個 legacy writers，UI 顯示其有效狀態並可精確撤銷。
 撤銷 exact grants 必須送空陣列，global false 本身不撤銷 grants。詳見 [v3契約](../tool-expansion.md)。
-不要在 options、URL query、Git、issue、聊天或 release artifact 放秘密。
+
+## 寫入預設開啟
+
+使用者 2026-10-15 決定：HA add-on 做**完整版**，與原始 MCP server 及 PaaS woow-mcp-server 功能一致，所有工具（含高風險）
+全部開放、全部預設開啟，管理介面可逐一關閉。0.2.1 起：
+
+- 七支開放子程序的全部工具（Odoo 41、n8n 28、Hermes 11、OpenDesign 15、EMQX 39、LiteLLM 40、Nextcloud 9）；tools/list 用
+  子程序自己的 inputSchema，tools/call 參數原樣轉給子程序驗證，輸出不再截斷或投影。細節見 [工具範圍](../tool-expansion.md)。
+- **新安裝**與**從 0.1.x 升級**（state schema 3→4，只遷移一次）時：每個寫入工具與混合工具的每個寫入 operation 都有 grant，
+  `writes_enabled` 為 true；token、後端連線與對外端點保留，**0.1.x 的停用清單（disabled）清空**，升級後所有工具全開。
+- 管理員在「工具與寫入授權」停用的工具或取消的寫入，儲存後重啟與後續升級都維持（schema 4 的 state 不再被預設值改寫）。
+  停用優先於任何授權。已下架的 Odoo Manage 例外（寫入需 module 模式）。
+- 回退到 0.1.x：舊版不接受 schema 4，請還原升級前的備份。
+- Odoo：`execute_method` 可直接 create／write／unlink，也可呼叫**任意方法**，包括未審查的副作用方法（`action_confirm`、
+  `action_post` 等，`ODOO_MCP_ALLOW_UNKNOWN_METHODS=1`）；`chatter_post` **直接送出**，不經 preview／confirm（`MCP_CHATTER_DIRECT=1`）。
+- n8n：管理面板可另填選填的 **MCP Access Token**（n8n 設定 → Instance-level MCP），版本歷史、資料表欄位、`n8n_test_workflow`
+  prepare／pinned／direct、`n8n_explore_node_resources`、`n8n_manage_agents` 需要它。n8n 的 webhook／URL SSRF 防護**已關閉**
+  （`WEBHOOK_SECURITY_MODE=permissive`，使用者 2026-10-15 決定），以便連到 HA 內網的 n8n。
+- 後端錯誤**回傳原始訊息**（與 PaaS 一致；例如 Odoo 的 AccessError 原文、LiteLLM／EMQX 的錯誤 body），不再只回固定代碼。
+  gateway 在每個轉送的回覆中把 add-on 持有的憑證（Add-on 權杖、child token、後端 API key／密碼與其 Basic 認證形式，4 字元以上）
+  換成 `[REDACTED]`；log 的密鑰網址遮罩不變。
+
+**風險提醒：網址（或權杖）＝完整後端權限。**任何拿到 Add-on 權杖或 Claude.ai 密鑰網址的 MCP client（包括 AI 助理誤判時）
+不需管理員再授權，就能以後端帳號的權限直接操作：例如以 Odoo `execute_method` 新增／修改／刪除任何紀錄、建立或刪除 n8n
+credentials 與 workflow 並執行、產生或刪除 LiteLLM API key 並呼叫模型（產生費用）、修改 Hermes 設定或新增 MCP server、
+發佈 MQTT 訊息或封鎖 client、刪除 Nextcloud 檔案；Odoo 還能呼叫任意方法（確認訂單、過帳發票等不可輕易回復的動作），
+留言直接送出、不經確認；n8n 的 webhook／URL 檢查已關閉，**MCP 可經 n8n-mcp 連到 add-on 能到的任何內網位址**（HA 內網、
+其他 add-on、區網裝置）。**原始錯誤訊息可能含後端內部資訊**（模型與欄位名稱、檔案路徑、帳號 user id、版本），一樣只給該拿到的人。請：
+
+1. 後端帳號、API key、App 密碼一律只給需要的權限（這是真正的權限邊界）；
+2. 安裝或升級後先到管理面板停用不需要的工具、取消不需要的寫入；
+3. 權杖或密鑰網址外洩時立刻在管理面板「重新產生」。
+
+工具名單（子程序新增但未分類的工具一律拒絕）、停用、寫入授權、出站 DNS／TLS 防護、回覆中的憑證遮罩與 log 遮罩仍由 add-on 強制。
 
 ## 映像／資料契約
 

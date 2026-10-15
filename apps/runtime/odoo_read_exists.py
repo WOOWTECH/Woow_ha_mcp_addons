@@ -7,19 +7,18 @@ missing record out, which the handler reports as not found; so only after a succ
 asks Odoo whether the record exists: search_count on its id with active_test off (read() does not hide archived
 records), with the caller's own credential and record rules (a record they hide is not found, as a read of any other
 field reports it). A missing record gets the handler's own not-found answer; a failed or malformed count fails the call
-with one of the transport's fixed codes only (odoo_b2_scope.public_failure), never exception text.
+with the backend's own error text (0.2.0, as the PaaS server; the gateway redacts the add-on's credentials).
 """
 import functools
 import hashlib
 from pathlib import Path
 
-from odoo_b2_scope import public_failure
 
 ID_ONLY = frozenset({'id'})
 # The pinned sources this depends on: the handler it wraps and the client resolution it repeats.
 SOURCES = {
     'tools_read': '4c8bf33b35c54757b93f0cc367b4f5027488ca8fbf63f68c1241f1a4be784de0',
-    'server_core': 'b6872eb7dd7e4b937ebb8dd0ae2b80e29a79a3e34f2beaeaf092f0d9b2b79c03',
+    'server_core': '7b4e2a03a25447f151f7459883af7721814da310afeb5b55e5aa94b9b8c78641',  # 0.2.0: PaaS-patched
 }
 
 
@@ -43,9 +42,8 @@ def checked(original):
             _, odoo = _resolve_odoo(kwargs['ctx'], kwargs.get('instance'))
             count = odoo.execute_method(model, 'search_count', [['id', '=', record_id]],
                                         context={'active_test': False})
-        except Exception as e:  # a fixed transport code (e.g. BACKEND_RPC_FAULT), never the exception text
-            failure = {'success': False, 'error': str(e)}
-            return {'success': False, 'error': public_failure(failure) or 'BACKEND_RESPONSE_INVALID'}
+        except Exception as e:  # 0.2.0: the backend's own text (e.g. Odoo's AccessError), as the handler reports it
+            return {'success': False, 'error': str(e) or type(e).__name__}
         if type(count) is not int or count not in (0, 1):
             return {'success': False, 'error': 'BACKEND_RESPONSE_INVALID'}
         if count == 0:
