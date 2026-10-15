@@ -1,8 +1,8 @@
-# 工具範圍：0.2.0 完整版
+# 工具範圍：0.2.1 完整版
 
 **2026-10-15 負責人決定：HA add-on 做「完整版」，與原始 MCP server（GitHub／Gitea）及 PaaS woow-mcp-server 功能對齊，
 所有工具（含高風險）全部開放、全部預設開啟，管理介面可逐一關閉。** 0.1.x 的有界子集（W2b、BATCH2 B1／B2／B3：本地
-pydantic 模型、res.partner 限定、輸出投影）自 0.2.0 起不再用於任何出貨產品；其原始內容見 git 歷史（0.1.14 為止的本檔）。
+pydantic 模型、res.partner 限定、輸出投影）自 0.2.1 起不再用於任何出貨產品；其原始內容見 git 歷史（0.1.14 為止的本檔）。
 已下架、不出貨的 Odoo Manage 仍保留 0.1.x 有界版。
 
 ## 每支開放的工具
@@ -10,7 +10,7 @@ pydantic 模型、res.partner 限定、輸出投影）自 0.2.0 起不再用於�
 | 產品 | 子程序工具數 | 開放 | 說明 |
 |---|---:|---:|---|
 | Odoo | 41 | 41 | odoo-mcp 1.1.0 全部工具，套上 PaaS 的兩個 build patch（跨 session approval token、直接寫入開關）；`ODOO_MCP_ENABLE_WRITES=1`、`ODOO_MCP_ALLOW_DIRECT_WRITES=1`（`execute_method` 可直接 create／write／unlink，三步驟 preview／validate／execute_approved_write 仍列出可用）、`ODOO_MCP_ALLOW_UNKNOWN_METHODS=1`（任意方法，含 `action_confirm` 等副作用方法）、`MCP_CHATTER_DIRECT=1`（chatter 直接送出） |
-| n8n | 28 | 28 | n8n-mcp 2.91.0 全部工具（credentials、test_workflow、datatable、versions、agents 等） |
+| n8n | 28 | 28 | n8n-mcp 2.91.0 全部工具（credentials、test_workflow、datatable、versions、agents 等）；選填 MCP Access Token（`N8N_MCP_ACCESS_TOKEN`）啟用官方 MCP 功能；`WEBHOOK_SECURITY_MODE=permissive`（webhook／URL SSRF 防護關閉，可連任何內網位址） |
 | Hermes | 11 | 11 | 與 PaaS 版 hermes_mcp_server 相同（chat、config set、mcp add、webhook、cron create 等）；保留 server 本身的 stdio／command 拒絕與 config 拒絕清單 |
 | OpenDesign | 15 | 15 | 全部工具（create_project、send_message 等） |
 | EMQX | 39 | 39 | `EMQX_MCP_READONLY=false`（publish、ban、retained、trace、authn／authz 管理等） |
@@ -50,7 +50,7 @@ pydantic 模型、res.partner 限定、輸出投影）自 0.2.0 起不再用於�
   `/private_[REDACTED]/`。
 - session 規則、32 個併發 slot、請求大小上限、回應 8 MiB 上限、SSE 重組與 JSON-RPC 回覆整形。
 - 子程序出站：DNS pin、只連設定的後端、拒絕 redirect／proxy、TLS 驗證、metadata 位址拒絕（Python `apps/runtime/backend_policy.py`、
-  n8n `apps/n8n/backend_policy.cjs`）。
+  n8n `apps/n8n/backend_policy.cjs`；n8n 的 webhook／URL 檢查則依使用者決定關閉，見上表）。
 - 回覆中的憑證遮罩：add-on 權杖、child token、後端 API key／密碼與其 Basic 認證形式在每個轉送的回覆中換成 `[REDACTED]`；
   子程序輸出不進 log（Supervisor 丟棄），log 的密鑰網址遮罩不變。
 - 原始碼守門：Odoo（含 patch 後的 tools_write／server_core）、n8n 與 vendored 檔案 digest 不符即拒絕啟動。

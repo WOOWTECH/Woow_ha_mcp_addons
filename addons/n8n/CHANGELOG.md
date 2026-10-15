@@ -1,6 +1,13 @@
 # n8n Changelog
 
-## 0.2.0 — 準備中（未發佈）
+## 0.2.1 — 準備中（未發佈）
+
+- **0.2.0 未上架**：0.2.0 映像已推上 GHCR（標籤不可覆寫）並在測試 VM 實測，但不發佈到 Store；**0.1.14 直接升 0.2.1**，下方 0.2.0 段落的內容（完整版、寫入與工具預設全開、原始錯誤訊息）一併由 0.2.1 發佈。升級遷移與 0.2.0 相同：state schema 3→4 只遷移一次，寫入授權全開、0.1.x 的停用清單清空，token、連線與對外端點保留；0.2.0 寫的 schema 4 state 照樣載入（n8n 另補一個空的 MCP access token 欄位）。
+- 新增選填的 **n8n MCP Access Token**（管理面板「後端連線設定」；n8n 設定 → Instance-level MCP 產生、與 API 金鑰不同）。設定後子程序取得 `N8N_MCP_ACCESS_TOKEN`，原生版本歷史、資料表欄位操作（addColumn 等）、`n8n_test_workflow` 的 prepare／pinned／direct、`n8n_explore_node_resources`、`n8n_manage_agents` 才能用（0.2.0 一律 NOT_CONFIGURED）。權杖只存 state，面板只顯示是否已設定，回覆中換成 `[REDACTED]`。
+- **關閉 n8n 的 webhook／URL SSRF 防護**（使用者 2026-10-15 決定）：子程序改用 n8n-mcp 2.91.0 最寬的 `WEBHOOK_SECURITY_MODE=permissive`（原為 strict），`n8n_test_workflow` 等可連到 HA 內網的 n8n（測試 VM 的 172.30.33.10、fd0c:ac1e:2100::11；0.2.0 回「SSRF protection: IPv6 private address not allowed」）。**風險：MCP 可經 n8n-mcp 連到 add-on 能到的任何內網位址**（上游只保留擋雲端 metadata 主機名）。API 後端連線的 DNS 固定與其他產品的出站防護不變。
+- 新版候選需獨立建置、掃描與 PaaS HAOS VM 驗收；既有 0.1.x、0.2.0 標籤不覆寫。
+
+## 0.2.0 — 未上架（映像只推 GHCR；內容隨 0.2.1 發佈）
 
 - **完整版**（使用者 2026-10-15 決定）：與原始 MCP server 及 PaaS woow-mcp-server 功能一致，所有工具（含高風險）全部開放、全部預設開啟，管理介面可逐一停用工具或取消寫入。本產品開放上游 28 個工具全部（0.1.x 為 13 個有界子集）：tools/list 用子程序自己的 inputSchema（經 provider-safe 正規化），tools/call 參數原樣轉給子程序驗證，輸出不再截斷或投影。gateway 仍檢查工具名在分類名單內（上游新增但未分類的工具一律拒絕）、未停用、寫入工具或混合工具的寫入 operation 有 grant，被拒時回 JSON-RPC 錯誤（見下方 0.1.14 段落）。
 - **寫入預設開啟**：新安裝的 state 每個寫入 grant 都開、`writes_enabled=true`；**既有安裝升級時一次遷移成全開**（state schema 3→4；token、連線與對外端點保留，**0.1.x 的停用清單清空**，升級後所有工具全開）。之後管理員取消的寫入或停用的工具，重啟與後續升級都維持。0.1.x 不接受 schema 4，回退請還原升級前的備份。

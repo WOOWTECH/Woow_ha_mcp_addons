@@ -1,6 +1,12 @@
 # Odoo Changelog
 
-## 0.2.0 — 準備中（未發佈）
+## 0.2.1 — 準備中（未發佈）
+
+- **0.2.0 未上架**：0.2.0 映像已推上 GHCR（標籤不可覆寫）並在測試 VM 實測，但不發佈到 Store；**0.1.14 直接升 0.2.1**，下方 0.2.0 段落的內容（完整版、寫入與工具預設全開、原始錯誤訊息）一併由 0.2.1 發佈。升級遷移與 0.2.0 相同：state schema 3→4 只遷移一次，寫入授權全開、0.1.x 的停用清單清空，token、連線與對外端點保留；0.2.0 寫的 schema 4 state 照樣載入（n8n 另補一個空的 MCP access token 欄位）。
+- 修正競態（測試 VM 實測）：非同步任務被取消後仍在執行時，前景 `execute_method` create 與 `chatter_post` 各回一次 `BACKEND_UNAVAILABLE: Idle`。根因是 odoo-mcp 的 `submit_async_task` 用同一個 session 的 Odoo client 在自己的執行緒跑（不經 add-on 的單一工作者），兩個執行緒共用同一條 XML-RPC 連線、每次請求後又關閉連線；現在同一個 transport 一次只跑一個請求（每個 RPC 之間仍可交錯）。
+- 新版候選需獨立建置、掃描與 PaaS HAOS VM 驗收；既有 0.1.x、0.2.0 標籤不覆寫。
+
+## 0.2.0 — 未上架（映像只推 GHCR；內容隨 0.2.1 發佈）
 
 - **完整版**（使用者 2026-10-15 決定）：與原始 MCP server 及 PaaS woow-mcp-server 功能一致，所有工具（含高風險）全部開放、全部預設開啟，管理介面可逐一停用工具或取消寫入。本產品開放上游 41 個工具全部（0.1.x 為 13 個有界子集）：tools/list 用子程序自己的 inputSchema（經 provider-safe 正規化），tools/call 參數原樣轉給子程序驗證，輸出不再截斷或投影。gateway 仍檢查工具名在分類名單內（上游新增但未分類的工具一律拒絕）、未停用、寫入工具或混合工具的寫入 operation 有 grant，被拒時回 JSON-RPC 錯誤（見下方 0.1.14 段落）。
 - **寫入預設開啟**：新安裝的 state 每個寫入 grant 都開、`writes_enabled=true`；**既有安裝升級時一次遷移成全開**（state schema 3→4；token、連線與對外端點保留，**0.1.x 的停用清單清空**，升級後所有工具全開）。之後管理員取消的寫入或停用的工具，重啟與後續升級都維持。0.1.x 不接受 schema 4，回退請還原升級前的備份。
