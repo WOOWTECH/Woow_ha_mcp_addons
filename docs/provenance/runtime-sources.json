@@ -4,8 +4,8 @@
     "source": "local:614ae663fadd91c76972f60017a76d2627bea87e",
     "path": "hermes_mcp_server/server.py",
     "upstream_sha256": "e1c3f7be4de0302fafb85848641d89a43e83565afa844da9f813f10a718c25a6",
-    "local_sha256": "8248cd4b308e8159fc52d00532fdbdbd39fc03fb4513f6bc68183fd65dfdf1d0",
-    "modification": "Use scoped DNS-pinned HTTPX transport for gateway, dashboard login and cookie clients; deny redirects/proxies. Map inspect exception fields by type, never raw exception text; explicit safe error boundaries on other enabled handlers include late decoding/JSON failures, preserving signatures. W2b adds session/cron handler error boundaries and bounded positive metadata projections without private message/prompt contents."
+    "local_sha256": "ce2c40bc15896b2bd460d2e3d577f3bff0c3644a64fcdc7d5ed949532f198176",
+    "modification": "Use scoped DNS-pinned HTTPX transport for gateway, dashboard login and cookie clients; deny redirects/proxies. Map inspect exception fields by type, never raw exception text; explicit safe error boundaries (backend_errors) on every other handler, including late decoding/JSON failures, preserving signatures and successful output. 0.2.0: the W2b session/cron metadata projections are gone (upstream's own list output again); hermes_mcp, hermes_config, hermes_chat and hermes_webhook got the same error boundary."
   },
   {
     "product": "hermes",
@@ -18,8 +18,8 @@
     "source": "local:614ae663fadd91c76972f60017a76d2627bea87e",
     "path": "opendesign_mcp_server/od_mcp_server.py",
     "upstream_sha256": "89caa06f96a62a6df663609fa468f00b41180970c835ceb03f3a1cf196f2e717",
-    "local_sha256": "337e40c3e6e069568baad938c373e0492f37462abe10d3a7b422163a5d0ee0fc",
-    "modification": "Require explicit OD_API_BASE and corrected provenance header; all HTTP clients use scoped DNS-pinned transport, redirect/proxy denial, safe errors and five-second ordinary I/O timeout. Explicit enabled-handler error boundaries cover late response decoding/JSON/processing failures without altering successful output or SDK signatures. Bounded SDK offload is in the separate launcher. W2b adds list_runs safe error boundary and id/projectId/status-only bounded projection."
+    "local_sha256": "903db04b90d34a6819a7d06fcd197025665fdb5fd0545500214c2716c42fe97f",
+    "modification": "Require explicit OD_API_BASE and corrected provenance header; all HTTP clients use scoped DNS-pinned transport, redirect/proxy denial and safe errors (backend_errors on every handler), connect timeout 5 s. Successful output and SDK signatures are unchanged. 0.2.0: list_runs returns upstream's own answer again (no id/projectId/status projection) and the ordinary client uses upstream's 60 s read timeout again."
   },
   {
     "product": "opendesign",
@@ -215,9 +215,7 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/models.py",
-    "upstream_sha256": "8b3e9a184f6e12633ffb724aa69c55a09fae13df3d8f5112f3704d61aa6d94ec",
-    "local_sha256": "8d20e7f46ec9cc5af8de8edd66a2a92444c2383eb23ee5108cfe6bd41982ccba",
-    "modification": "W2b delete_model unchanged. Metadata batch: genuine model_info/model_group_info routes with explicit single selector, local bounded streaming read and strict positive metadata projection; no provider parameters, keys or inference."
+    "upstream_sha256": "8b3e9a184f6e12633ffb724aa69c55a09fae13df3d8f5112f3704d61aa6d94ec"
   },
   {
     "product": "litellm",
@@ -235,17 +233,13 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/teams.py",
-    "upstream_sha256": "15fe1783df2740477c0dd222f51c50c6043844fc3c0bf2361050d9c70904ea96",
-    "local_sha256": "dec04344367fbdf95ff8146448f0dd083934a5f636cb528551eebf5aaa52a082",
-    "modification": "W2b list/create/update/delete unchanged. Metadata batch: genuine team_info GET with explicit ID, bounded streaming and strict team identity/alias/limit projection, excluding keys/members/spend/config. Existing native grants unchanged."
+    "upstream_sha256": "15fe1783df2740477c0dd222f51c50c6043844fc3c0bf2361050d9c70904ea96"
   },
   {
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/users.py",
-    "upstream_sha256": "19da4359727177e950b4a222633baa179d9a843fae50db6aece3d86ccee87517",
-    "local_sha256": "6a27ed1b1f466a32e9d255ecfdad319854b42027d5547ceb53337d95d55ae620",
-    "modification": "Metadata batch: genuine user_info/list_users GET routes, single bounded page and limited filters, typed positive ID/alias/role/limit projection; exclude email, keys, teams, spend and arbitrary metadata. Existing writers remain unsupported and unmodified."
+    "upstream_sha256": "19da4359727177e950b4a222633baa179d9a843fae50db6aece3d86ccee87517"
   },
   {
     "product": "litellm",

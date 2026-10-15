@@ -3,7 +3,6 @@ import asyncio
 import json
 import pytest
 import test_batch2_n8n_public_errors as owned
-import test_b3_n8n_runtime as metadata
 from test_expansion_policy import call
 from test_real_products import rpc
 
@@ -12,10 +11,10 @@ FOLDER_MESSAGES = {
     'NOT_FOUND': 'Folder API route or resource not found. Verify backend folder API support and explicit project/folder IDs.',
 }
 
-@pytest.mark.parametrize('action', ['list', 'create', 'rename', 'get'])
+# 0.2.0: folder get is the pinned handler as published (no B3 metadata_reads boundary): its failures get the generic
+# public message, like every other unwrapped handler.
+@pytest.mark.parametrize('action', ['list', 'create', 'rename'])
 async def test_folder_guidance_is_fixed_and_does_not_infer_cause(tmp_path, monkeypatch, action):
-    if action == 'get':
-        monkeypatch.setattr(owned, 'backend', metadata.backend)
     async with asyncio.timeout(65), owned.runtime(tmp_path) as (store, state, client, headers, wire, dispatches):
         args = {'action':action, 'projectId':'project1'}
         write = action in ('create', 'rename')

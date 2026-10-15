@@ -214,8 +214,8 @@ async def test_enabled_api_error_corpus(tmp_path, branch):
                  ('text', 'VALIDATION_ERROR'), ('nested', 'VALIDATION_ERROR'), ('publish', 'FORBIDDEN')]
         # Delete's native 200 empty-body success semantics are not changed here.
         if name != 'n8n_delete_workflow':
-            cases.append(('malformed-success', 'BACKEND_INVALID_RESPONSE'
-                          if name == 'n8n_create_workflow' else 'BACKEND_UNAVAILABLE'))
+            # 0.2.0: creation has no metadata projection any more; a malformed success fails like the others.
+            cases.append(('malformed-success', 'BACKEND_UNAVAILABLE'))
         if name == 'n8n_list_workflows':
             cases.append(('unknown-keys', 'BACKEND_UNAVAILABLE'))
         for case, code in cases:

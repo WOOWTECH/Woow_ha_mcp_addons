@@ -112,14 +112,15 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
                 tools = await protocol_reply(response, 2)
             names = {tool["name"] for tool in tools["tools"]}
             assert {"tools_documentation", "search_nodes"} <= names
-            assert names <= {"tools_documentation", "search_nodes", "n8n_list_workflows",
-                             "get_node", "n8n_get_workflow", "n8n_manage_folders", "validate_node", "validate_workflow",
-                             "n8n_list_catalog", "n8n_executions", "n8n_health_check"}
-            assert 'get_node' in names
+            # 0.2.0: the full n8n-mcp surface, the child's own schemas (provider-safe), every name classified.
             from n8n_adapter import TOOLS
-            from mcp_admin_core.policy import declared_schema
+            from mcp_admin_core.policy import TOP_LEVEL_REFUSED
+            assert names <= set(TOOLS)
+            assert names == set(TOOLS) if configured_backend else len(names) >= 7
+            assert 'get_node' in names
             for tool in tools["tools"]:
-                assert tool["inputSchema"] == declared_schema(TOOLS[tool["name"]].arguments)  # 0.1.6 declared form
+                schema = tool["inputSchema"]
+                assert schema.get("type") == "object" and not TOP_LEVEL_REFUSED & schema.keys(), tool["name"]
             if configured_backend:
                 # Forged instance headers must not redirect the real Node API path.
                 async with client.stream("POST", url, headers={**headers,
@@ -143,8 +144,9 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
                 if check_defaults == "omission":
                     # The health monitor uses limit=1; assert the *actual* Node API
                     # query for each client call, not the advertised/local model.
-                    for arguments, expected in [({}, {"limit": ["20"], "excludePinnedData": ["true"]}),
-                            ({"active": False}, {"limit": ["20"], "active": ["false"], "excludePinnedData": ["true"]}),
+                    # 0.2.0: the published handler's own default (limit 100; the 0.1.x model sent 20).
+                    for arguments, expected in [({}, {"limit": ["100"], "excludePinnedData": ["true"]}),
+                            ({"active": False}, {"limit": ["100"], "active": ["false"], "excludePinnedData": ["true"]}),
                             ({"active": True, "limit": 7}, {"limit": ["7"], "active": ["true"], "excludePinnedData": ["true"]})]:
                         before = len(fake_backend[1])
                         response = await workflow_call(arguments)
@@ -154,12 +156,13 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
                         queries = workflow_queries()[before:]
                         assert expected in queries, queries
                 else:
+                    # 0.2.0: the arguments reach the child unchanged; the child validates them (a null is its error,
+                    # never a backend query with it).
                     for arguments in ({"active": None}, {"limit": None}):
                         before = len(fake_backend[1])
                         response = await workflow_call(arguments)
-                        assert refused(response)
-                        # Any concurrent automatic health read has its own limit=1.
-                        assert all(query["limit"] == ["1"] for query in workflow_queries()[before:])
+                        assert response.status_code == 200
+                        assert all("null" not in json.dumps(query) for query in workflow_queries()[before:])
                 assert all(call.startswith(b"GET /api/v1/workflows?") for call in fake_backend[1])
             latencies = []
             for name, args in [("tools_documentation", {}), ("search_nodes", {"query": "webhook", "limit": 1})]:

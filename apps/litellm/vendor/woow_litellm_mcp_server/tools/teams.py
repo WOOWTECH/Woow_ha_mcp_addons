@@ -5,12 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from fastmcp import Context
-from output_policy import rows, record
-
-TEAM_FIELDS = ('team_id', 'team_alias', 'max_budget', 'tpm_limit', 'rpm_limit', 'blocked')
 
 from ..deps import litellm_client
-from ..metadata import identifier, read_metadata
 from ..gating import ToolGate
 from ..registry import OP_CREATE, OP_DELETE, OP_UPDATE
 from ._common import destructive, prune_none, read_only, writing
@@ -46,7 +42,7 @@ def register(mcp: Any, gate: ToolGate) -> None:
                     "organization_id": organization_id,
                 }
             )
-            return record(await litellm_client(ctx).post("/team/new", json_data=body), TEAM_FIELDS)
+            return await litellm_client(ctx).post("/team/new", json_data=body)
 
     if gate.is_tool_enabled("litellm_list_teams"):
 
@@ -79,7 +75,7 @@ def register(mcp: Any, gate: ToolGate) -> None:
                     "organization_id": organization_id,
                 }
             )
-            return rows(await litellm_client(ctx).get("/v2/team/list", params=params), 'teams', TEAM_FIELDS)
+            return await litellm_client(ctx).get("/v2/team/list", params=params)
 
     if gate.is_tool_enabled("litellm_team_info"):
 
@@ -88,9 +84,10 @@ def register(mcp: Any, gate: ToolGate) -> None:
             annotations=read_only("Team info"),
         )
         async def litellm_team_info(ctx: Context, team_id: str) -> dict:
-            """Bounded team identity/alias/limits only; no members, keys or spend."""
-            params = {"team_id": identifier(team_id)}
-            return await read_metadata(litellm_client(ctx), "/team/info", params)
+            """Get one team's members, budget and spend by team_id."""
+            return await litellm_client(ctx).get(
+                "/team/info", params={"team_id": team_id}
+            )
 
     if gate.is_tool_enabled("litellm_update_team"):
 
@@ -119,7 +116,7 @@ def register(mcp: Any, gate: ToolGate) -> None:
                     "rpm_limit": rpm_limit,
                 }
             )
-            return record(await litellm_client(ctx).post("/team/update", json_data=body), TEAM_FIELDS)
+            return await litellm_client(ctx).post("/team/update", json_data=body)
 
     if gate.is_tool_enabled("litellm_delete_team"):
 
@@ -133,9 +130,9 @@ def register(mcp: Any, gate: ToolGate) -> None:
             Removes the teams and their membership associations permanently.
             """
             gate.require_operation("litellm_delete_team", OP_DELETE)
-            return record(await litellm_client(ctx).post(
+            return await litellm_client(ctx).post(
                 "/team/delete", json_data={"team_ids": team_ids}
-            ), ('status', 'deleted_teams'))
+            )
 
     if gate.is_tool_enabled("litellm_team_member_add"):
 

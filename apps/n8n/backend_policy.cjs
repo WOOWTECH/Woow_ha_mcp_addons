@@ -58,24 +58,15 @@ function publicCreateError(error) {
     return new N8nApiError("Workflow creation failed; backend outcome may be unknown.", status, code);
 }
 
-// Creation returns metadata only. Rejections must be narrowed BEFORE the real
-// handler formats them. Keep upstream cleaner/retry semantics; never fake success
-// or claim rollback after a POST, even when its response cannot be accepted.
+// 0.2.0 (the full add-on): workflow creation returns the pinned client's own result again (no metadata-only
+// projection, no inactive/20-node limit); its failures still get the typed public message below.
 const createWorkflow = N8nApiClient.prototype.createWorkflow;
 N8nApiClient.prototype.createWorkflow = async function (...args) {
-    let value;
     try {
-        value = await createWorkflow.apply(this, args);
+        return await createWorkflow.apply(this, args);
     } catch (error) {
         throw publicCreateError(error);
     }
-    if (!value || typeof value.id !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(value.id) ||
-        typeof value.name !== "string" || value.name.length > 256 ||
-        value.active !== false || !Array.isArray(value.nodes) || value.nodes.length > 20) {
-        throw new N8nApiError("Backend workflow metadata invalid; creation may have committed.",
-            undefined, "BACKEND_INVALID_RESPONSE");
-    }
-    return {id: value.id, name: value.name, active: false, nodes: value.nodes.map(() => ({}))};
 };
 
 // Public formatting is deliberately separate from handleN8nApiError and the
@@ -121,8 +112,9 @@ errors.getUserFriendlyErrorMessage = function (error) {
     return failure.error;
 };
 const handlers = require(path.join(runtime, "mcp/handlers-n8n-manager.js"));
-// Audited server.js dispatch: minimal only, and list/create/rename folder actions.
-// Other handlers remain withheld by the existing parent policy (65 tools total).
+// These handlers keep their per-call write/folder classification for the public messages; every other handler's
+// failures go through the same typed formatter (errors.getUserFriendlyErrorMessage above). 0.2.0: all 28 tools are
+// served (the parent forwards the child's full surface).
 for (const [name, write] of [
     ["handleListWorkflows", false], ["handleGetWorkflowMinimal", false],
     ["handleDeleteWorkflow", true], ["handleListFolders", false],
@@ -199,4 +191,3 @@ N8nApiClient.prototype.getPinnedAgents = async function () {
     return agents;
 };
 
-require('./metadata_reads.cjs')({runtime, N8nApiClient, publicErrors, publicFailure});

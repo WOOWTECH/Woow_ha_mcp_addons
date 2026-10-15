@@ -16,10 +16,18 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --python /usr/local/bin/python
 COPY apps/odoo/pyproject.toml apps/odoo/uv.lock ./apps/odoo/
 RUN uv sync --project apps/odoo --frozen --no-dev --python /usr/local/bin/python
+# 0.2.0: the two PaaS woow-mcp-server build patches (cross-session approval tokens; direct writes switch), applied to
+# the installed odoo-mcp 1.1.0 exactly as there; launch.py refuses to start unless the patched digests match.
+COPY apps/odoo/patches ./apps/odoo/patches
+RUN apps/odoo/.venv/bin/python apps/odoo/patches/fix_cross_session_token_store.py \
+ && apps/odoo/.venv/bin/python apps/odoo/patches/fix_direct_writes.py \
+ && grep -q '_GLOBAL_WRITE_APPROVALS' apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/server_core.py \
+ && grep -q 'ODOO_MCP_ALLOW_DIRECT_WRITES' apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_write.py \
+ && find apps/odoo/.venv -type d -name __pycache__ -path '*odoo_mcp*' -prune -exec rm -rf {} +
 FROM python:3.13.16-slim-bookworm@sha256:f040863673aea2570c3ff6a5c3fb4c673a016cbc5375005ad145915922b6b78a AS runtime
 ARG BUILD_VERSION=0.1.14
 LABEL io.hass.type="app" io.hass.arch="amd64" io.hass.version="${BUILD_VERSION}" \
-      io.hass.name="Woow Odoo MCP Server" io.hass.description="Experimental; HA admin-role management; partial tools, writes on by default (each can be turned off in the panel)." \
+      io.hass.name="Woow Odoo MCP Server" io.hass.description="Experimental; HA admin-role management; full tool surface; every tool and write on by default (each can be turned off in the panel)." \
       io.hass.url="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \
       org.opencontainers.image.source="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \
       org.opencontainers.image.version="${BUILD_VERSION}"

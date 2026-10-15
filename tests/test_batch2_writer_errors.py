@@ -151,7 +151,9 @@ def writer_backend(product):
         assert not thread.is_alive()
 
 
-@pytest.mark.parametrize('product', ['n8n', 'odoo-manage'])
+# 0.2.0: n8n creation returns the published client's result (no metadata-only projection or malformed-success
+# check), so only the retired Odoo Manage keeps this bounded writer contract.
+@pytest.mark.parametrize('product', ['odoo-manage'])
 async def test_writer_errors_real_owned_runtime(tmp_path, product):
     with writer_backend(product) as (url, state):
         name = 'n8n_create_workflow' if product == 'n8n' else 'post_message'

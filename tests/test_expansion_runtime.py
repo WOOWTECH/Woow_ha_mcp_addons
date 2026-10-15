@@ -1,4 +1,8 @@
-"""Real pinned handlers through the boundary; writes ONLY to this owned fake API."""
+"""Real pinned handlers through the boundary; writes ONLY to this owned fake API.
+
+0.2.0: the products serve the full child surface: arguments go to the child unchanged and outputs are the child's
+own (the 0.1.x output projections are gone); write tools and write operations still need their exact grant.
+"""
 import asyncio
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -36,7 +40,9 @@ READS = {
     'n8n': [('get_node', {'nodeType': 'nodes-base.httpRequest'}), ('n8n_get_workflow', {'id': 'one'}), ('n8n_manage_folders', {'action': 'list', 'projectId': 'project'})],
 }
 WRITES = {
-    'odoo': [('chatter_post', {'model': 'res.partner', 'record_id': 1, 'body': 'Owned test comment'})],
+    'odoo': [('chatter_post', {'model': 'res.partner', 'record_id': 1, 'body': 'Owned test comment'}),
+             # 0.2.0: direct ORM writes through execute_method (ODOO_MCP_ALLOW_DIRECT_WRITES=1, PaaS patch)
+             ('execute_method', {'model': 'res.partner', 'method': 'write', 'args': [[1], {'name': 'Changed'}]})],
     'odoo-manage': [('create_record', {'model': 'res.partner', 'values': {'name': 'New'}}),
                     ('update_record', {'model': 'res.partner', 'record_id': 1, 'values': {'name': 'Changed'}}),
                     ('delete_record', {'model': 'res.partner', 'record_id': 1})],
@@ -212,7 +218,6 @@ async def test_real_expanded_reads_and_explicit_writes(tmp_path, product):
                         before = len(events)
                         reply = await rpc(client, '/mcp', headers, call(name, args))
                         payload(reply, plain=(product, name) == ('nextcloud', 'get_file_content'))
-                        assert 'MUST_NOT_ESCAPE' not in json.dumps(reply)
                         if name == 'get_node':
                             assert 'httpRequest' in json.dumps(reply)
                             assert len(events) == before  # pinned local node database only
@@ -226,7 +231,7 @@ async def test_real_expanded_reads_and_explicit_writes(tmp_path, product):
                         assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
                         assert len(events) == before
                         store.update(enabled_write_tools=[grant])
-                        if product == 'odoo':
+                        if (product, name) == ('odoo', 'chatter_post'):
                             preview = payload(await rpc(client, '/mcp', headers, call(name, args)))
                             assert preview.get('mode') == 'preview', preview
                             # As the child's text says: the returned approval, unchanged, with confirm=true
@@ -236,7 +241,6 @@ async def test_real_expanded_reads_and_explicit_writes(tmp_path, product):
                         count = len(mutations)
                         reply = await rpc(client, '/mcp', headers, call(name, args))
                         payload(reply)
-                        if product == 'litellm': assert 'MUST_NOT_ESCAPE' not in json.dumps(reply)
                         assert len(mutations) == count + 1, (product, name, reply, failures)
                         before = len(events)
                         store.update(disabled=[name])

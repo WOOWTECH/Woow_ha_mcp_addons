@@ -16,8 +16,36 @@ from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.products import ProductStore, TOOLS, child_spec
 from test_real_products import connection, rpc
 from test_expansion_policy import call
-from test_b2_odoo_runtime import initialize
-from test_b2_odoo_scope import probe
+import asyncio
+from pathlib import Path
+import subprocess
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+async def initialize(client, headers):
+    # (0.2.0: moved here from the removed test_b2_odoo_runtime.)
+    init = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {'protocolVersion': '2025-03-26',
+            'capabilities': {}, 'clientInfo': {'name': 'b2-owned', 'version': '0'}}}
+    async with asyncio.timeout(25):
+        while True:
+            try:
+                result = await rpc(client, '/mcp', headers, init)
+                break
+            except ValueError:
+                await asyncio.sleep(.1)
+    headers['MCP-Protocol-Version'] = result['protocolVersion']
+    await rpc(client, '/mcp', headers, {'jsonrpc': '2.0', 'method': 'notifications/initialized'})
+
+
+def probe(code, data=None):
+    # (0.2.0: moved here from the removed test_b2_odoo_scope.) Runs code in the Odoo child's own venv.
+    result = subprocess.run([str(ROOT / 'apps/odoo/.venv/bin/python'), '-c', code],
+        input=json.dumps(data), text=True, capture_output=True, timeout=20,
+        env={'PATH': '/usr/bin:/bin', 'HOME': '/tmp', 'PYTHONDONTWRITEBYTECODE': '1',
+             'PYTHONPATH': str(ROOT / 'apps/runtime')})
+    assert result.returncode == 0, result.stderr
+    return result.stdout
 
 MISSING = 2147483647
 NOT_FOUND = {'success': False, 'error': f'Record not found: res.partner ID {MISSING}'}

@@ -16,14 +16,15 @@ from owned_runtime import Endpoint
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.health import HealthMonitor
 from mcp_admin_core.products import ProductStore, TOOLS, child_spec, health_probe
-from test_b2_odoo_runtime import initialize
+from test_odoo_read_exists import initialize  # 0.2.0: test_b2_odoo_runtime was removed
 from test_expansion_policy import call
 from test_expansion_runtime import payload
 from test_real_products import connection, rpc
 from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 FIELDS = {'name': 'char', 'active': 'boolean'}
-REPORT = call('data_quality_report', {'model': 'res.partner'})
+# 0.2.0: the pinned handler as published (no B2 scope fills these in): the one check this fake Odoo answers.
+REPORT = call('data_quality_report', {'model': 'res.partner', 'checks': ['missing_required'], 'key_fields': ['name']})
 
 
 @contextmanager
@@ -56,7 +57,8 @@ def fake_odoo():
                     if model == 'ir.model':
                         raise xmlrpc.client.Fault(4, 'AccessError')
                     if op == 'fields_get':
-                        value = {n: {'type': FIELDS[n], 'required': n == 'name', 'store': True} for n in args[0]}
+                        names = args[0] if args else list(FIELDS)  # the published handler asks for every field
+                        value = {n: {'type': FIELDS[n], 'required': n == 'name', 'store': True} for n in names}
                     else:
                         assert op == 'search_count', op
                         value = 3

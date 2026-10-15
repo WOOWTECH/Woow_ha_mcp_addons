@@ -9,7 +9,6 @@ from fastmcp import Context
 
 from ..deps import litellm_client
 from ..errors import ToolError
-from ..metadata import identifier, read_metadata
 from ..gating import ToolGate
 from ..registry import OP_CREATE, OP_DELETE, OP_UPDATE
 from ._common import destructive, prune_none, read_only, writing
@@ -74,13 +73,13 @@ def register(mcp: Any, gate: ToolGate) -> None:
         async def litellm_model_info(
             ctx: Context, litellm_model_id: str | None = None
         ) -> dict:
-            """Bounded metadata for one explicit deployment ID; no provider config.
+            """Full deployment detail per model.
 
-            The upstream optional/all-model view is intentionally unsupported.
-            Returns name and selected model_info identity/type/numeric limits.
+            Provider, ``litellm_params`` and ``model_info`` for each deployment.
+            Optionally filter to a single deployment by ``litellm_model_id``.
             """
-            params = {"litellm_model_id": identifier(litellm_model_id)}
-            return await read_metadata(litellm_client(ctx), "/model/info", params)
+            params = prune_none({"litellm_model_id": litellm_model_id})
+            return await litellm_client(ctx).get("/model/info", params=params)
 
     if gate.is_tool_enabled("litellm_model_group_info"):
 
@@ -91,9 +90,11 @@ def register(mcp: Any, gate: ToolGate) -> None:
         async def litellm_model_group_info(
             ctx: Context, model_group: str | None = None
         ) -> dict:
-            """Bounded type/limit metadata for one explicit group; no provider params."""
-            params = {"model_group": identifier(model_group, group=True)}
-            return await read_metadata(litellm_client(ctx), "/model_group/info", params)
+            """Aggregated per-model-group capabilities (context window, modes)."""
+            params = prune_none({"model_group": model_group})
+            return await litellm_client(ctx).get(
+                "/model_group/info", params=params
+            )
 
     if gate.is_tool_enabled("litellm_add_model"):
 
@@ -193,7 +194,6 @@ def register(mcp: Any, gate: ToolGate) -> None:
             undone without re-adding the model.
             """
             gate.require_operation("litellm_delete_model", OP_DELETE)
-            from output_policy import record
-            return record(await litellm_client(ctx).post(
+            return await litellm_client(ctx).post(
                 "/model/delete", json_data={"id": model_id}
-            ), ('id', 'status'))
+            )

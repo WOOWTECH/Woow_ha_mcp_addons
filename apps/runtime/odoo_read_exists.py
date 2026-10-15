@@ -7,19 +7,36 @@ missing record out, which the handler reports as not found; so only after a succ
 asks Odoo whether the record exists: search_count on its id with active_test off (read() does not hide archived
 records), with the caller's own credential and record rules (a record they hide is not found, as a read of any other
 field reports it). A missing record gets the handler's own not-found answer; a failed or malformed count fails the call
-with one of the transport's fixed codes only (odoo_b2_scope.public_failure), never exception text.
+with one of the transport's fixed codes only (public_failure), never exception text.
 """
 import functools
 import hashlib
 from pathlib import Path
+import re
 
-from odoo_b2_scope import public_failure
+# Fixed codes the pinned transport raises (backend_policy); native handlers report them as str(exc). (0.2.0: moved here
+# from the removed odoo_b2_scope, which bounded the B2 tools to res.partner.)
+PUBLIC_FAILURES = frozenset({'BACKEND_RPC_FAULT', 'BACKEND_TIMEOUT', 'BACKEND_UNAVAILABLE', 'BACKEND_BUSY',
+                             'BACKEND_DESTINATION_DENIED', 'BACKEND_STREAM_ERROR', 'BACKEND_INVALID_RESPONSE'})
+
+
+def public_failure(report):
+    """The error of a native failure report when it is exactly one fixed transport code, else None.
+
+    Anything else (exception text, partial data) stays hidden behind BACKEND_RESPONSE_INVALID.
+    """
+    if type(report) is dict and report.get('success') is False:
+        error = report.get('error')
+        if type(error) is str and (error in PUBLIC_FAILURES
+                                   or re.fullmatch(r'BACKEND_HTTP_ERROR status=[1-5][0-9]{2}', error)):
+            return error
+    return None
 
 ID_ONLY = frozenset({'id'})
 # The pinned sources this depends on: the handler it wraps and the client resolution it repeats.
 SOURCES = {
     'tools_read': '4c8bf33b35c54757b93f0cc367b4f5027488ca8fbf63f68c1241f1a4be784de0',
-    'server_core': 'b6872eb7dd7e4b937ebb8dd0ae2b80e29a79a3e34f2beaeaf092f0d9b2b79c03',
+    'server_core': '7b4e2a03a25447f151f7459883af7721814da310afeb5b55e5aa94b9b8c78641',  # 0.2.0: PaaS-patched
 }
 
 
