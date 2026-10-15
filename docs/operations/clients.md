@@ -2,7 +2,7 @@
 
 **七支 0.1.7 映像已發佈；管理面板與 provider 已在測試 HA 實測（0.1.7，七支：owner 可用、一般使用者 403）；真實 MCP client 尚未驗收（見文末）。
 以下是配置形狀，不是可用憑證或繞過授權操作。** 支援的本地契約是 Streamable HTTP（回應可含 SSE），不是 legacy `/sse`。
-0.2.0 起有兩種接法，用的是**同一把** Add-on 權杖（管理面板「連線與權杖」頁；重新產生／撤銷對兩種接法同時生效）：
+0.1.14 起有兩種接法，用的是**同一把** Add-on 權杖（管理面板「連線與權杖」頁；重新產生／撤銷對兩種接法同時生效）：
 
 | 接法 | 網址 | 權杖放哪裡 | 適用 |
 |---|---|---|---|
@@ -62,7 +62,7 @@ read。Bearer 要送在每個 POST/GET/DELETE、stream reconnect/session request
 transport session ID 不是額外認證。`/mcp` 帶瀏覽器 `Origin` header 一律 403（不變）；不承諾
 browser SDK 或 SaaS OAuth client 相容。錯誤、缺少或已撤銷的 Bearer 回 401（帶 `WWW-Authenticate: Bearer`）。
 
-## 接法二：Claude.ai 自訂連接器（密鑰網址，0.2.0 起）
+## 接法二：Claude.ai 自訂連接器（密鑰網址，0.1.14 起）
 
 Claude.ai 網頁版的自訂連接器（custom connector）只能填網址與選填的 OAuth 設定，無法帶自訂 `Authorization` header。
 這時把權杖放進路徑：
@@ -89,22 +89,22 @@ Gateway 在這條路徑上的行為：
 - 允許帶 `Origin` header（Bearer 的 `/mcp` 仍然 403），但 `Origin` 不會轉給子程序。
 - 其他規則與 `/mcp` 相同：查詢參數 400、方法 405、initialize 以外沒帶 `Mcp-Session-Id` 回 400、工具 policy 拒絕（見下）、
   共用的同時連線上限與 session 規則；session 結束用 `DELETE /private_<token>/mcp`。
-- 兩條路徑相同（0.2.0 起）：params 的 MCP 保留欄位 `_meta`（例如 Claude.ai 帶的 traceparent）接受為至多 8 KiB 的物件，
+- 兩條路徑相同（0.1.14 起）：params 的 MCP 保留欄位 `_meta`（例如 Claude.ai 帶的 traceparent）接受為至多 8 KiB 的物件，
   轉給子程序前移除；gateway 不提供的 JSON-RPC 方法（例如 Claude.ai 先送的 `server/discover`、`resources/list`）由 gateway
   自己回 HTTP 200 的 `-32601 Method not found`，不認識的 notification 回 202，都不需 session、不轉給子程序。
-- 工具呼叫被拒（兩條路徑相同，0.2.0 起）：見下方「Token 事件與故障」；帶 session 的拒絕回 JSON-RPC 錯誤說明原因，
+- 工具呼叫被拒（兩條路徑相同，0.1.14 起）：見下方「Token 事件與故障」；帶 session 的拒絕回 JSON-RPC 錯誤說明原因，
   Claude.ai 會把它當成工具錯誤顯示給模型，模型可據此修正參數重試。
 - Add-on 自己的 log 不記錄存取紀錄（uvicorn `access_log` 關閉），而且任何 log 行裡的 `/private_<…>/` 都會被遮成
   `/private_[REDACTED]/`（含錯誤 traceback）。Add-on 前面的反向代理、tunnel 或 CDN 的 log 不在這個保護範圍內，請自行關閉或遮罩。
 
 2026-10-14 首次以真實 Claude.ai 連 PaaS 測試 VM：Claude.ai 送的 `server/discover` 與帶 `_meta` 的 `initialize` 都被 0.1.12 候選回 403，0.1.13 候選已修正；同日經 Claude.ai 呼叫工具時，參數不符（例如 Odoo `aggregate_records` 的 group_by 不是 `active`、`schema_catalog` 的 limit 大於 1、LiteLLM `litellm_model_info` 的 id 含 `/`、n8n `validate_workflow` 少 nodes）也都只得到 HTTP 403，Claude.ai 只看到傳輸錯誤，0.1.14 改為回 JSON-RPC 錯誤說明原因。兩項都隨 0.2.0 發佈（0.1.14 未發佈；見 [0.1.14 紀錄](release-decision-0.1.14.md) 與 [0.2.0 紀錄](release-decision-0.2.0.md)）；修正後尚未以真實 Claude.ai 重測（目前只有本機 mock 與單元／整合測試）。
 
-0.2.0 起是完整版（2026-10-15 使用者決定）：七支開放子程序的全部工具（合計 183 個），全部工具與寫入預設開啟（新安裝與從 0.1.x 升級時），管理員可在管理面板逐一停用或取消寫入，風險見 [寫入預設開啟](guide.md#寫入預設開啟)。tools/list 的 inputSchema 是子程序自己的（經 provider-safe 正規化），tools/call 參數原樣轉給子程序，參數錯誤由子程序回覆；gateway 只檢查工具名在名單內、未停用、寫入工具或寫入 operation 有 grant，不符時回 0.2.0 起的 JSON-RPC 錯誤（見下）。直接偽造 `tools/call` 不能繞過這些檢查。[工具表](../tool-surface.md) 是唯一支援對照。請求上限 16 MiB。
+0.2.0 起是完整版（2026-10-15 使用者決定）：七支開放子程序的全部工具（合計 183 個），全部工具與寫入預設開啟（新安裝與從 0.1.x 升級時），管理員可在管理面板逐一停用或取消寫入，風險見 [寫入預設開啟](guide.md#寫入預設開啟)。tools/list 的 inputSchema 是子程序自己的（經 provider-safe 正規化），tools/call 參數原樣轉給子程序，參數錯誤由子程序回覆；gateway 只檢查工具名在名單內、未停用、寫入工具或寫入 operation 有 grant，不符時回 0.1.14 起的 JSON-RPC 錯誤（見下）。直接偽造 `tools/call` 不能繞過這些檢查。[工具表](../tool-surface.md) 是唯一支援對照。請求上限 16 MiB。
 
 ## Token 事件與故障
 
 - 缺失／錯誤／撤銷 Bearer：401。密鑰網址的權杖錯誤／撤銷：404。不要用 HA headers 或 cookie 規避。
-- 工具呼叫被拒（0.2.0 起）：帶 `Mcp-Session-Id`、格式正確（字串或整數 id、params 只有 `name`（字串）與 `arguments`）的
+- 工具呼叫被拒（0.1.14 起）：帶 `Mcp-Session-Id`、格式正確（字串或整數 id、params 只有 `name`（字串）與 `arguments`）的
   tools/call，被 policy 拒絕時由 gateway 回 HTTP 200、`application/json`、`Cache-Control: no-store` 的 JSON-RPC 錯誤，
   不轉給子程序、不開 session、不佔同時連線名額（權限本身不變，同樣的呼叫照樣被拒）：
   - 工具不存在、被停用或寫入工具未授權：`-32602`「Unknown tool」，`data` 只有 `tool`（截到 128 字）；不區分是哪一種。
@@ -122,7 +122,7 @@ Gateway 在這條路徑上的行為：
   斷線（要重新連線）；TypeScript SDK 只有那一次呼叫失敗。斷線時 Python client 不送 DELETE，子程序的 session 會留下來：n8n 所有
   client 共用 20 個 session，10 分鐘內約 20 次這種拒絕就會用完，之後所有 client 的 initialize 都回 429（JSON-RPC 錯誤 -32000
   「Too Many Requests」），要等閒置 10 分鐘的 session 被回收；其他六支（Odoo、Hermes、OpenDesign、EMQX、LiteLLM、Nextcloud）
-  留下的 session 0.1.8 起閒置 30 分鐘就結束（0.1.7 以前會累積到子程序重啟）。0.2.0 起帶 session 的工具拒絕不再是 403，
+  留下的 session 0.1.8 起閒置 30 分鐘就結束（0.1.7 以前會累積到子程序重啟）。0.1.14 起帶 session 的工具拒絕不再是 403，
   Python client 對 JSON-RPC 錯誤的行為尚未在本 repo 重測。
 - Session：先 initialize，之後每個請求都帶 `Mcp-Session-Id`。0.1.8 起 initialize 以外沒帶 `Mcp-Session-Id` 的請求（ping、
   tools/list、tools/call、通知、GET、DELETE）一律由 gateway 回 400，不轉給子程序、不會開 session（有 id 的請求與 GET 是 JSON-RPC
