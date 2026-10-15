@@ -217,3 +217,44 @@ async def test_real_litellm_child_relays_the_backend_error_body(tmp_path):
             await process.stop()
             endpoint.close()
             store.close()
+
+
+def test_http_status_errors_are_classified_by_status_with_the_response_body():
+    # 0.2.1 (B3): Hermes' raise_for_status() on a 422 was BACKEND_UNAVAILABLE with httpx's own text only.
+    request = httpx.Request('POST', 'http://hermes.test/api/cron/jobs?secret=x')
+    response = httpx.Response(422, request=request, json={'detail': [{'loc': ['body', 'schedule'], 'msg': 'invalid cron'}]})
+    error = httpx.HTTPStatusError('Client error', request=request, response=response)
+    assert backend_policy.error_code(error) == 'BACKEND_HTTP_ERROR status=422'
+    text = backend_policy.backend_error_text(error)
+    assert text.startswith('BACKEND_HTTP_ERROR status=422: 422 Unprocessable Entity for POST /api/cron/jobs: ')
+    assert 'invalid cron' in text and 'secret=x' not in text
+    failure = backend_policy.BackendFailure(error)  # the Hermes handler boundary
+    assert failure.code == 'BACKEND_HTTP_ERROR status=422' and 'invalid cron' in str(failure)
+    long = httpx.HTTPStatusError('x', request=request, response=httpx.Response(500, request=request, text='y' * 9000))
+    assert backend_policy.backend_error_text(long).endswith('y' * backend_policy.ERROR_BODY_LIMIT)
+    unread = httpx.Response(503, request=request, stream=httpx.ByteStream(b'not read'))
+    assert backend_policy.backend_error_text(httpx.HTTPStatusError('x', request=request, response=unread)) == \
+        'BACKEND_HTTP_ERROR status=503: 503 Service Unavailable for POST /api/cron/jobs'
+
+
+async def test_real_hermes_child_reports_status_and_body_of_a_rejected_request(tmp_path):
+    from test_six_hardening import Quiet, runtime, serve, call as hcall
+
+    class Dashboard(Quiet):
+        def do_POST(self):
+            self.rfile.read(int(self.headers['Content-Length']))
+            self.send_response(200)
+            self.send_header('Set-Cookie', 'hermes_session_at=session-cookie-0815')
+            self.send_header('Content-Length', '2')
+            self.end_headers()
+            self.wfile.write(b'{}')
+
+        def do_GET(self):
+            self.reply({'detail': 'gateway state not ready for this request'}, 422)
+
+    with serve(Dashboard) as url:
+        async with runtime(tmp_path, 'hermes', url, canary='hermes-secret-0815') as (client, headers, *_):
+            response = await client.post('/mcp', headers=headers, json=hcall('hermes_inspect', {'target': 'status'}))
+            assert 'BACKEND_HTTP_ERROR status=422' in response.text, response.text
+            assert 'gateway state not ready for this request' in response.text
+            assert 'hermes-secret-0815' not in response.text

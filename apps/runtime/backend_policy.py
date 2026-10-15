@@ -83,6 +83,8 @@ def error_code(exc):
         return exc.code
     if isinstance(exc, BackendHTTPError):
         return f'BACKEND_HTTP_ERROR status={exc.status}'
+    if isinstance(exc, httpx.HTTPStatusError):  # 0.2.1: a child's raise_for_status() (e.g. Hermes 422), by status
+        return f'BACKEND_HTTP_ERROR status={exc.response.status_code}'
     if isinstance(exc, BackendBusy):
         return 'BACKEND_BUSY'
     if isinstance(exc, BackendDenied):
@@ -94,6 +96,25 @@ def error_code(exc):
     if isinstance(exc, (httpx.DecodingError, UnicodeError, ValueError)):
         return 'BACKEND_INVALID_RESPONSE'
     return 'BACKEND_UNAVAILABLE'
+
+
+ERROR_BODY_LIMIT = 4096
+
+
+def http_status_detail(exc):
+    """'<status> <reason> for <METHOD> <path>: <response body>' of an httpx.HTTPStatusError; the body is cut to
+    ERROR_BODY_LIMIT characters and left out when it was not read."""
+    response = exc.response
+    try:
+        where = f' for {exc.request.method} {exc.request.url.path}'
+    except Exception:
+        where = ''
+    try:
+        body = response.text.strip()
+    except Exception:  # httpx.ResponseNotRead and decoding failures: the status alone
+        body = ''
+    text = f'{response.status_code} {response.reason_phrase}{where}'
+    return f'{text}: {body[:ERROR_BODY_LIMIT]}' if body else text
 
 
 def public_backend_error(exc):
@@ -109,6 +130,9 @@ def backend_error_text(exc):
     if isinstance(exc, BackendFailure):
         return exc.message
     code = error_code(exc)
+    if isinstance(exc, httpx.HTTPStatusError):
+        # 0.2.1: the status line, the request path and the backend's own response body (it was only httpx's text).
+        return f'{code}: {http_status_detail(exc)}'
     try:
         detail = str(exc).strip()
     except Exception:

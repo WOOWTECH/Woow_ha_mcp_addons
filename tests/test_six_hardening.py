@@ -182,8 +182,11 @@ async def test_error_bodies_never_enter_gateway_stream(tmp_path, product, json_r
                         assert response.headers['content-type'].startswith('application/json')
                     else:
                         assert response.headers['content-type'].startswith('text/event-stream')
-                    # Entire raw JSON/SSE: includes text, structuredContent and any notifications.
-                    assert canary not in response.text, response.text
+                    # Entire raw JSON/SSE: includes text, structuredContent and any notifications. The canary is the
+                    # configured credential, [REDACTED] by the gateway; OpenDesign holds none, so there it is just the
+                    # backend's own text, which 0.2.1 relays (Hermes/OpenDesign status errors carry the body).
+                    if product != 'opendesign':
+                        assert canary not in response.text, response.text
                     assert len(response.content) < 4096
                     # 0.2.0: the backend's own error text is relayed (as the PaaS servers), the configured
                     # credential it echoes is [REDACTED] by the gateway; the reply is still an error.
