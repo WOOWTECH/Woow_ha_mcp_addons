@@ -144,7 +144,7 @@ def test_older_states_migrate_through_3_to_every_write(tmp_path, product):
     old.pop('enabled_write_tools')
     old.update(schema_version=2, writes_enabled=False, disabled=[next(iter(tools_of(product)))])
     if product == 'n8n':
-        old = {k: v for k, v in old.items() if k not in ('product', 'connection')}
+        old = {k: v for k, v in old.items() if k not in ('product', 'connection', 'mcp_access_token')}
         old['schema_version'] = 1
     store.path.write_text(json.dumps(old))
     with closing(ProductStore(tmp_path, product)) as store:

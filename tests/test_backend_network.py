@@ -135,7 +135,9 @@ dns.promises.lookup = async () => answers;
     assert result["allowed"] == [not mixed, False, False, False]
 
 
-async def test_webhook_ssrf_stays_strict_and_socket_origin_guard(store):
+async def test_webhook_ssrf_is_permissive_and_socket_origin_guard_stays(store):
+    # 0.2.1 (owner decision 2026-10-15): the child runs with WEBHOOK_SECURITY_MODE=permissive, so a private webhook
+    # address is valid; the configured backend's pinned agents still refuse every other host, port and scheme.
     store.update(backend_url="http://127.0.0.1:5678", backend_key="DUMMY")
     result = await node(store, IMPORT + f"const client = {CLIENT};" + f'''
 const {{SSRFProtection}} = require({str(ROOT / 'dist/utils/ssrf-protection.js')!r});
@@ -151,4 +153,4 @@ const {{SSRFProtection}} = require({str(ROOT / 'dist/utils/ssrf-protection.js')!
     console.log(JSON.stringify({{strict: !validation.valid, denied}}));
 }})();
 ''')
-    assert result == {"strict": True, "denied": 3}
+    assert result == {"strict": False, "denied": 3}
