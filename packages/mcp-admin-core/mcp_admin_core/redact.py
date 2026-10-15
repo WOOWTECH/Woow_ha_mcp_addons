@@ -111,10 +111,11 @@ MIN_SECRET = 4  # shorter values are too common in ordinary text to replace
 
 
 def secret_values(state):
-    """The credentials of a state: the add-on and child tokens, n8n's backend key, every secret connection field, and
+    """The credentials of a state: the add-on and child tokens, n8n's backend key and MCP access token, every secret connection field, and
     the Basic Authorization forms (base64 of user:secret, also URL-safe and unpadded) built from them. Longest first."""
     import base64
-    found = {getattr(state, "token", None), getattr(state, "child_token", None), getattr(state, "backend_key", None)}
+    found = {getattr(state, "token", None), getattr(state, "child_token", None), getattr(state, "backend_key", None),
+             getattr(state, "mcp_access_token", None)}  # 0.2.1: n8n's MCP access token
     connection = getattr(state, "connection", None)
     fields = connection.model_dump() if connection is not None else {}
     found.update(fields.get(name) for name in SECRET_FIELDS)

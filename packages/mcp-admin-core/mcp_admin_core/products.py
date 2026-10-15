@@ -130,12 +130,24 @@ class ProductState(State):
     enabled_write_tools: list[str] = Field(default_factory=list)
     product: Product
     connection: OdooConnection | ManageConnection | HermesConnection | OpenDesignConnection | EmqxConnection | LiteLLMConnection | NextcloudConnection | None = Field(default=None, repr=False)
+    # 0.2.1 (n8n only, optional): the MCP access token of n8n's instance-level MCP server (Settings -> Instance-level
+    # MCP), a separate key from the API key. n8n-mcp needs it for native version history, data table column actions,
+    # n8n_test_workflow prepare/pinned/direct, n8n_explore_node_resources and n8n_manage_agents (NOT_CONFIGURED
+    # without it). A schema 4 state written by 0.2.0 has no such key and gets None (ProductStore._decode).
+    mcp_access_token: str | None = Field(default=None, repr=False)
 
     @field_validator('schema_version')
     @classmethod
     def version(cls, value):
         if value != 4:
             raise ValueError('unsupported schema')
+        return value
+
+    @field_validator('mcp_access_token')
+    @classmethod
+    def access_token(cls, value):
+        if value is not None and (not value or len(value) > 8192 or any(not 32 <= ord(c) <= 126 for c in value)):
+            raise ValueError('invalid credential')
         return value
 
     @model_validator(mode='before')
@@ -162,6 +174,8 @@ class ProductState(State):
             raise ValueError('Manage writers require existing MCP module mode; never full YOLO')
         if len(set(self.enabled_write_tools)) != len(self.enabled_write_tools) or set(self.enabled_write_tools) - set(allowed):
             raise ValueError('unknown or wrong-product write grant')
+        if self.mcp_access_token is not None and self.product != 'n8n':
+            raise ValueError('only n8n has an MCP access token')
         return self
 
     @property
@@ -229,6 +243,13 @@ class ProductStore(Store):
                 raise ValueError('wrong product or unexpected downgrade')
             old = super()._decode(value)
             value = {**old.model_dump(), 'schema_version': 2, 'product': 'n8n', 'connection': None}
+            self._migrated = True
+        if (isinstance(value, dict) and type(value.get('schema_version')) is int and value['schema_version'] in (2, 3, 4)
+                and 'mcp_access_token' not in value):
+            # 0.2.1: the field is new (additive, optional); states written before have none.
+            if not self._migrate:
+                raise ValueError('incomplete schema')
+            value = {**value, 'mcp_access_token': None}
             self._migrated = True
         if isinstance(value, dict) and type(value.get('schema_version')) is int and value['schema_version'] == 2:
             if not self._migrate or set(value) != set(ProductState.model_fields) - {'enabled_write_tools'}:

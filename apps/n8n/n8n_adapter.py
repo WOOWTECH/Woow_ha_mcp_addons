@@ -83,5 +83,8 @@ def child_spec(state: State, directory: Path) -> ChildSpec:
     }
     if state.backend_url and state.backend_key:
         env.update(N8N_API_URL=state.backend_url, N8N_API_KEY=state.backend_key)
+        # 0.2.1: n8n's instance-level MCP key, optional; without it the official-MCP features are NOT_CONFIGURED.
+        if getattr(state, "mcp_access_token", None):
+            env["N8N_MCP_ACCESS_TOKEN"] = state.mcp_access_token
     policy = Path(__file__).with_name("backend_policy.cjs").resolve()
     return ChildSpec((node, "--require", str(policy), str(entry.resolve())), env, directory)

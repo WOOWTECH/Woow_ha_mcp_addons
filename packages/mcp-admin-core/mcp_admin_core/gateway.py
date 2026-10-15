@@ -348,9 +348,16 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         raise ValueError()
                     if name == "backend":
                         if getattr(state, 'product', 'n8n') == 'n8n':
-                            if set(value) != {"url", "key"}:
+                            # 0.2.1: optional mcp_access_token (n8n's instance-level MCP key); the whole set is
+                            # replaced, so leaving it out (or clearing) removes a stored token.
+                            if set(value) not in ({"url", "key"}, {"url", "key", "mcp_access_token"}):
                                 raise ValueError()
                             changes = dict(backend_url=value["url"], backend_key=value["key"])
+                            if hasattr(state, "mcp_access_token"):
+                                token = value.get("mcp_access_token")
+                                changes["mcp_access_token"] = None if value["url"] is None else token
+                            elif value.get("mcp_access_token") is not None:
+                                raise ValueError()
                         else:
                             if set(value) != {"connection"}:
                                 raise ValueError()
@@ -380,6 +387,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 return JSONResponse({"base_path": base, "api_base": base + "/api", "csrf": csrf,
                     "endpoint": state.endpoint, "backend_url": state.backend_url,
                     "backend_key_set": state.backend_key is not None, "token_active": state.token is not None,
+                    "mcp_access_token_set": getattr(state, "mcp_access_token", None) is not None,
                     "product": getattr(state, 'product', 'n8n'),
                     "connection_configured": getattr(state, 'configured', bool(state.backend_url and state.backend_key)),
                     "writes_enabled": state.writes_enabled, "disabled": state.disabled,

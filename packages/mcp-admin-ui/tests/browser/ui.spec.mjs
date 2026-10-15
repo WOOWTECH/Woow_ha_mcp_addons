@@ -117,7 +117,7 @@ for (const product of ['odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'em
     await page.getByRole('button', { name: '儲存後端設定', exact: true }).click();
     await confirm(page);
     await expect(page.getByRole('status')).toContainText('伺服器已確認儲存');
-    expect((await calls(request))[0]).toMatchObject({ operation: 'backend', method: 'PUT', validCsrf: true, fields: product === 'n8n' ? ['url', 'key'] : ['connection'] });
+    expect((await calls(request))[0]).toMatchObject({ operation: 'backend', method: 'PUT', validCsrf: true, fields: product === 'n8n' ? ['url', 'key', 'mcp_access_token'] : ['connection'] });
     expect(await page.locator('body').textContent()).not.toContain('MOCK_ONLY_INPUT');
     expect(await page.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 });
     await page.getByLabel('這次要如何處理設定？').selectOption('clear');

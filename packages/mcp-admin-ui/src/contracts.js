@@ -2,7 +2,7 @@
 export const products = {
   odoo: { name: 'Odoo', fields: [['url', '後端 URL', 'url'], ['database', '資料庫', 'name'], ['username', '使用者名稱', 'name'], ['password', '密碼', 'secret']] },
   'odoo-manage': { name: 'Odoo Manage', fields: [['url', '後端 URL', 'url'], ['database', '資料庫', 'name'], ['username', '使用者名稱', 'name'], ['api_key', 'API 金鑰', 'secret'], ['mode', '存取模式', 'mode']] },
-  n8n: { name: 'n8n', fields: [['url', 'n8n 伺服器 URL', 'url'], ['key', 'API 金鑰', 'secret']] },
+  n8n: { name: 'n8n', fields: [['url', 'n8n 伺服器 URL', 'url'], ['key', 'API 金鑰', 'secret'], ['mcp_access_token', 'MCP Access Token（選填；n8n 設定 → Instance-level MCP）', 'optional-secret']] },
   hermes: { name: 'Hermes', fields: [['gateway_url', 'Gateway URL', 'url'], ['gateway_api_key', 'Gateway API 金鑰', 'secret'], ['dashboard_url', 'Dashboard URL（選填）', 'optional-url'], ['dashboard_username', 'Dashboard 使用者（選填）', 'optional-name'], ['dashboard_password', 'Dashboard 密碼（選填）', 'optional-secret']] },
   opendesign: { name: 'OpenDesign', fields: [['url', 'OpenDesign URL', 'url']] },
   emqx: { name: 'EMQX', fields: [['url', 'Broker 基底 URL（不含 /api/v5）', 'url'], ['api_key', 'API 金鑰', 'secret'], ['api_secret', 'API Secret', 'secret']] },
