@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from typing import Any
 
@@ -36,6 +37,51 @@ DENIED_CONFIG_KEYS = {
     "dashboard.basic_auth",
     "secrets",
 }
+
+# ---------------------------------------------------------------------------
+# Credential redaction for config reads (Woow 0.2.2)
+# ---------------------------------------------------------------------------
+
+# Hermes keeps the credentials it uses in its config (e.g. custom_providers[].api_key for a custom OpenAI-compatible
+# endpoint) and GET /api/config returns them in plain text. A config read keeps every field name and shows whether a
+# secret is set, never its value. A key is secret when one of its words (split at non-alphanumerics and camelCase) is in
+# SECRET_WORDS, or its last word is in SECRET_LAST_WORDS (api_key, OPENAI_API_KEY, access_token, basic_auth; not
+# max_tokens or auth_mode). Every non-empty value under such a key (nested objects and lists included) becomes
+# [REDACTED]; empty strings, null and booleans stay, so "not set" remains visible. A URL's userinfo password is
+# redacted in every string. Writes (action=set) are unchanged.
+REDACTED = "[REDACTED]"
+SECRET_WORDS = frozenset({"password", "passwd", "passphrase", "secret", "secrets", "authorization", "credential",
+                          "credentials", "apikey", "cookie", "cookies"})
+SECRET_LAST_WORDS = frozenset({"key", "token", "auth", "pat", "bearer"})
+_KEY_WORD = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|[0-9]+")
+_URL_PASSWORD = re.compile(r"(://[^/\s:@]*:)[^/\s@]+@")
+
+
+def _secret_key(name: Any) -> bool:
+    words = [word.lower() for word in _KEY_WORD.findall(str(name))]
+    return bool(words) and (any(word in SECRET_WORDS for word in words) or words[-1] in SECRET_LAST_WORDS)
+
+
+def _redact_all(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _redact_all(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redact_all(v) for v in value]
+    if value is None or isinstance(value, bool) or value == "":
+        return value
+    return REDACTED
+
+
+def redact_config(value: Any) -> Any:
+    """A config value with the value of every secret field replaced by [REDACTED] (field names kept)."""
+    if isinstance(value, dict):
+        return {k: _redact_all(v) if _secret_key(k) else redact_config(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [redact_config(v) for v in value]
+    if isinstance(value, str):
+        return _URL_PASSWORD.sub(r"\1" + REDACTED + "@", value)
+    return value
+
 
 # ---------------------------------------------------------------------------
 # Connection helpers
@@ -201,11 +247,11 @@ async def hermes_inspect(target: str = "all") -> str:
                 resp = await client.get("/api/config")
                 resp.raise_for_status()
                 cfg = resp.json()
-                result["config_summary"] = {
+                result["config_summary"] = redact_config({
                     "model": cfg.get("model", ""),
                     "toolsets": cfg.get("toolsets", []),
                     "max_live_sessions": cfg.get("max_live_sessions"),
-                }
+                })
         except Exception as exc:
             result["config_error"] = backend_error_text(exc)
 
@@ -366,8 +412,10 @@ async def hermes_config(action: str = "get", key: str | None = None, value: str 
                         current = current[part]
                     else:
                         return json.dumps({"error": f"Key '{key}' not found"})
+                # A secret anywhere on the path (model.api_key, secrets.x) hides the whole value.
+                current = _redact_all(current) if any(_secret_key(part) for part in parts) else redact_config(current)
                 return json.dumps({"key": key, "value": current}, indent=2, default=str)
-            return json.dumps(data, indent=2, default=str)
+            return json.dumps(redact_config(data), indent=2, default=str)
 
         if action == "set":
             if not key or value is None:
