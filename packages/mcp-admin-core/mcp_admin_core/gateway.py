@@ -41,6 +41,11 @@ MAX_REQUEST = 16 * 1024 * 1024
 BODY_SECONDS = 60
 MAX_RESPONSE = 8 * 1024 * 1024
 STREAM_SECONDS = 120
+# 0.2.2 (test VM 2026-10-16, G2): a tools/call reply may take as long as its child allows. Each child bounds its own
+# backend calls; the longest is a Hermes chat turn (hermes_chat, 300 s: free models took 28-30 s, past the former 30 s).
+# A tools/call reply may be idle (between bytes) and take in total up to CALL_SECONDS; every other request keeps the 30 s
+# idle and STREAM_SECONDS total limits. The call holds one of the 32 slots meanwhile.
+CALL_SECONDS = 330
 EVENT_BOUNDARY = re.compile(rb"\r?\n\r?\n")
 FORWARDED_HEADERS = {"mcp-session-id": re.compile(r"[\x21-\x7e]{1,256}"),
                      "mcp-protocol-version": re.compile(r"[\x21-\x7e]{1,256}"),
@@ -526,12 +531,12 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         except ConfigError:
             return False
 
-    async def chunks(owner, token):
-        """Bound total bytes/time; poll revocation even while upstream is idle."""
+    async def chunks(owner, token, seconds=None):
+        """Bound total bytes/time (seconds, default STREAM_SECONDS); poll revocation even while upstream is idle."""
         iterator = owner.response.aiter_bytes()
         total = 0
         try:
-            async with asyncio.timeout(STREAM_SECONDS):
+            async with asyncio.timeout(seconds or STREAM_SECONDS):
                 while True:
                     pending = owner.reader = asyncio.create_task(anext(iterator))
                     while not pending.done():
@@ -626,13 +631,13 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         outcome = reply(value)
         return ("ok", value, None) if outcome == "ok" else ("invalid" if outcome else "missing", None, None)
 
-    async def stream(owner, token, request=None):
+    async def stream(owner, token, request=None, seconds=None):
         """Relay a child's SSE 200 (the only stream the caller hands over). request is the (id, method) of the POST
-        this stream answers, None for a GET stream."""
+        this stream answers, None for a GET stream; seconds bounds it (chunks)."""
         # Every event is rebuilt from the lines the gateway understood (sse_frame), so nothing it did not filter
         # can reach a client as data.
         pending = bytearray()
-        async for chunk in chunks(owner, token):
+        async for chunk in chunks(owner, token, seconds):
             start = max(0, len(pending) - 3)  # only new bytes, plus a boundary split across chunks
             pending.extend(chunk)
             while match := EVENT_BOUNDARY.search(pending, start):
@@ -906,10 +911,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     forwarded = {**message, "params": {**message["params"], "capabilities": {}}}
                 content = json.dumps(forwarded, separators=(",", ":")).encode()
             waited = time.monotonic() + CHILD_WAIT_SECONDS
-            async with asyncio.timeout(35):
+            call_seconds = CALL_SECONDS if method == "tools/call" else None  # 0.2.2: see CALL_SECONDS
+            async with asyncio.timeout(call_seconds + 5 if call_seconds else 35):
                 while True:
                     outgoing = child.build_request(request.method, child_url, headers=headers, content=content,
-                                                   timeout=httpx.Timeout(30, connect=3, pool=3))
+                                                   timeout=httpx.Timeout(call_seconds or 30, connect=3, pool=3))
                     try:
                         upstream = owner.response = await child.send(outgoing, stream=True, follow_redirects=False)
                         break
@@ -1007,7 +1013,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 # Every JSON reply is parsed, must answer this request, is filtered and re-serialized: a child
                 # cannot hand a client an unfiltered list under another request's id or in a batch.
                 result = bytearray()
-                async for chunk in chunks(owner, state.token):
+                async for chunk in chunks(owner, state.token, call_seconds):
                     result.extend(chunk)
                 if not still_authorized(state.token):
                     raise refused()
@@ -1026,7 +1032,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 return json_reply(value, 200, response_headers)
             if not (is_sse and upstream.status_code == 200):
                 raise BadRequest(502)  # unreachable (R1 #8): every other success body was answered or refused above
-            response = OwnedStreamingResponse(stream(owner, state.token, (message.get("id"), method) if request_id else None),
+            response = OwnedStreamingResponse(stream(owner, state.token, (message.get("id"), method) if request_id else None,
+                                                     call_seconds),
                                               owner=owner, status_code=200, headers=response_headers)
             # This answer hands any session id it carries over to the client, so the end of its stream must never
             # DELETE that session (an initialize never streams today: it is answered or refused above).

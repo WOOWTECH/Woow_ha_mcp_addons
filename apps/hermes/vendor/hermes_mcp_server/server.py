@@ -11,6 +11,7 @@ Environment variables for connection config:
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import time
@@ -152,7 +153,22 @@ def _check_gateway_response(resp: httpx.Response, api_key: str) -> None:
         )
 
 
-def _gateway_client(url: str, api_key: str) -> httpx.AsyncClient:
+# Woow 0.2.2 (test VM 2026-10-16, G2): one Hermes agent turn (POST /v1/responses, ~14.5k prompt tokens) routinely took
+# 28-30 s with free models, so hermes_chat's former 30 s limit failed 2 of 3 turns with BACKEND_TIMEOUT although Hermes
+# finished them. A chat turn may take CHAT_TIMEOUT seconds (HERMES_MCP_CHAT_TIMEOUT, 1-3600, default 300; the add-on's
+# gateway allows a tools/call reply up to 330 s); connecting, and every other Gateway/Dashboard call, keep 30 s.
+CHAT_TIMEOUT = 300.0
+
+
+def _chat_timeout() -> float:
+    try:
+        value = float(os.environ.get("HERMES_MCP_CHAT_TIMEOUT", CHAT_TIMEOUT))
+    except ValueError:
+        return CHAT_TIMEOUT
+    return min(max(value, 1.0), 3600.0) if math.isfinite(value) else CHAT_TIMEOUT
+
+
+def _gateway_client(url: str, api_key: str, timeout: float | httpx.Timeout = 30.0) -> httpx.AsyncClient:
     """Create an httpx client for the Hermes Gateway API with Bearer auth."""
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if api_key:
@@ -160,7 +176,7 @@ def _gateway_client(url: str, api_key: str) -> httpx.AsyncClient:
     return async_client(
         base_url=_require_url(url, "gateway_url"),
         headers=headers,
-        timeout=30.0,
+        timeout=timeout,
     )
 
 
@@ -506,7 +522,8 @@ async def hermes_chat(message: str, session_id: str | None = None) -> str:
     """Send a chat message to Hermes and receive a response."""
     conn = _get_connection()
 
-    async with _gateway_client(conn["gateway_url"], conn["gateway_api_key"]) as client:
+    timeout = httpx.Timeout(_chat_timeout(), connect=30.0)  # a whole agent turn (see CHAT_TIMEOUT)
+    async with _gateway_client(conn["gateway_url"], conn["gateway_api_key"], timeout) as client:
         payload = {"model": "default", "input": message}
         resp = await client.post("/v1/responses", json=payload)
         _check_gateway_response(resp, conn["gateway_api_key"])
