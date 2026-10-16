@@ -7,19 +7,19 @@ import json
 
 from test_six_hardening import Quiet, call, runtime, serve
 
-PROVIDER_KEY = 'sk-or-v1-backend-held-0123456789'
-WEBHOOK_SECRET = 'whsec-backend-held-4711'
+PROVIDER_KEY = 'held-provider-key'
+WEBHOOK_SECRET = 'held-sign-key'
 CONFIG = {
     'model': {'default': 'woow-free', 'provider': 'custom', 'base_url': 'https://proxy.test/v1'},
     'max_tokens': 4096, 'auth_mode': 'basic', 'toolsets': ['web'], 'max_live_sessions': 4,
-    'custom_providers': [{'name': 'litellm', 'base_url': 'https://user:url-pass-1234@proxy.test/v1', 'api_key': PROVIDER_KEY,
+    'custom_providers': [{'name': 'litellm', 'base_url': 'https://user:held-url-pass@proxy.test/v1', 'api_key': PROVIDER_KEY,
                           'models': ['woow-free']},
                          {'name': 'unset', 'api_key': '', 'token': None}],
-    'mcp_servers': {'github': {'url': 'https://mcp.test', 'env': {'GITHUB_TOKEN': 'ghp-backend-held-0815', 'LOG_LEVEL': 'info'}}},
-    'secrets': {'OPENROUTER_API_KEY': 'or-backend-held-2222'},
+    'mcp_servers': {'github': {'url': 'https://mcp.test', 'env': {'GITHUB_TOKEN': 'held-gh-token', 'LOG_LEVEL': 'info'}}},
+    'secrets': {'OPENROUTER_API_KEY': 'held-or-key'},
     'webhooks': {'signing': {'secret': WEBHOOK_SECRET, 'enabled': True}},
 }
-HELD = (PROVIDER_KEY, WEBHOOK_SECRET, 'url-pass-1234', 'ghp-backend-held-0815', 'or-backend-held-2222')
+HELD = (PROVIDER_KEY, WEBHOOK_SECRET, 'held-url-pass', 'held-gh-token', 'held-or-key')
 
 
 def dashboard(writes):
@@ -76,7 +76,7 @@ async def test_config_reads_never_return_backend_held_credentials(tmp_path):
             assert text_of(summary)['config_summary'] == {'model': CONFIG['model'], 'toolsets': ['web'], 'max_live_sessions': 4}
             # Writes are unchanged: the value goes to Hermes as given and the reply echoes it.
             written = await client.post('/mcp', headers=headers, json=call('hermes_config', {
-                'action': 'set', 'key': 'model.api_key', 'value': 'new-key-9999'}))
+                'action': 'set', 'key': 'model.api_key', 'value': 'new-held-key'}))
             assert written.status_code == 200, written.text
-            assert text_of(written) == {'ok': True, 'key': 'model.api_key', 'value': 'new-key-9999'}
-            assert writes == [{'config': {'model.api_key': 'new-key-9999'}}]
+            assert text_of(written) == {'ok': True, 'key': 'model.api_key', 'value': 'new-held-key'}
+            assert writes == [{'config': {'model.api_key': 'new-held-key'}}]
