@@ -7,6 +7,8 @@ No legacy SSE /sse or /messages endpoints are exposed. The MCP endpoint is /mcp 
 from __future__ import annotations
 
 import asyncio
+from collections import OrderedDict
+import copy
 import functools
 import hashlib
 import hmac
@@ -14,6 +16,7 @@ from http import HTTPStatus
 import json
 import re
 import secrets
+import time
 from typing import Awaitable, Callable
 
 import anyio
@@ -59,6 +62,14 @@ PROTOCOL_VERSIONS = frozenset({"2024-11-05", "2025-03-26", "2025-06-18", "2025-1
 SESSION_END_SECONDS = 2
 # 0.1.8 (0.1.6 R1 F6): the name the initialize answer gives when the caller names no product.
 SERVER_NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
+# 0.2.2: sessions the gateway opens itself when no child can answer (make_apps listing=). Idle ones end after 30 minutes,
+# as the children's (GATEWAY-3); at most LOCAL_SESSION_LIMIT, the least recently used ending first.
+LOCAL_SESSION_SECONDS = 30 * 60
+LOCAL_SESSION_LIMIT = 256
+# 0.2.2: how long an initialize waits for a child that is starting (connection refused) before the gateway answers it.
+CHILD_WAIT_SECONDS = 10
+CHILD_RETRY_SECONDS = .25
+CHILD_UP = ("running", "starting")
 
 
 def sse_frame(frame: bytes):
@@ -290,10 +301,27 @@ async def error_handler(_, exc):
 def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               verify_admin: RoleVerifier | None = None,
               child_url="http://127.0.0.1:3000/mcp", health=None, backend_changed=None,
-              server_name="woow-mcp", instructions: str | None = None):
+              server_name="woow-mcp", instructions: str | None = None,
+              listing=None, availability=None):
+    """listing (0.2.2): the product's tools/list tools as its child lists them (surface.listing). With it, a client
+    connects whatever the backend's state: when no child can answer (no backend configured, so no child; a child that is
+    not up) the gateway answers initialize, notifications/initialized, ping and tools/list itself, from listing through
+    the same filter_list, in a session of its own, and refuses tools/call with a JSON-RPC error; a tool that
+    requires_backend is refused without a configured backend (-32603 Backend not configured; n8n's child, which runs
+    without one, still answers its documentation tools) and while the last health check finds the backend unreachable
+    (-32603 Backend unreachable, with the check's reason). availability() is HealthMonitor.availability. Without listing
+    (Odoo Manage, older tests) nothing changes."""
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
+    if listing is not None:
+        listing = copy.deepcopy(list(listing))
+        if not all(isinstance(tool, dict) and isinstance(tool.get("name"), str) for tool in listing):
+            raise ValueError("invalid tool listing")
+    if availability is None:
+        def availability():
+            return {"child": "running", "ready": True, "backend": "unknown", "reason": None}
+    local_sessions = OrderedDict()  # 0.2.2: session id -> last use (time.monotonic())
     redact.install()  # 0.1.12: a request path may now carry the token; no log record may show it
     csrf_key = secrets.token_bytes(32)
     mutation_lock = asyncio.Lock()
@@ -655,6 +683,38 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     return  # a duplicate reply or anything after it is never relayed
         # A truncated SSE event is intentionally not dispatched.
 
+    def local_session(session):
+        """0.2.2: whether session is a live session the gateway opened itself (its last use is renewed)."""
+        now = time.monotonic()
+        while local_sessions and now - next(iter(local_sessions.values())) >= LOCAL_SESSION_SECONDS:
+            local_sessions.popitem(last=False)
+        if session not in local_sessions:
+            return False
+        local_sessions[session] = now
+        local_sessions.move_to_end(session)
+        return True
+
+    def local_initialize(message):
+        """0.2.2: the initialize answer the gateway gives itself: the same result a child's answer is rebuilt into, the
+        client's protocolVersion when it is a reviewed one (else the newest reviewed one), and a new session of its own."""
+        local_session(None)  # ends idle sessions first
+        session = "woow-local-" + secrets.token_hex(16)
+        local_sessions[session] = time.monotonic()
+        while len(local_sessions) > LOCAL_SESSION_LIMIT:
+            local_sessions.popitem(last=False)
+        requested = message["params"]["protocolVersion"]
+        result = {"protocolVersion": requested if requested in PROTOCOL_VERSIONS else max(PROTOCOL_VERSIONS),
+                  "capabilities": {"tools": {}}, "serverInfo": {"name": server_name, "version": VERSION},
+                  **({"instructions": instructions} if instructions else {})}
+        return json_reply({"jsonrpc": "2.0", "id": message["id"], "result": result}, 200,
+                          {"Cache-Control": "no-store", "mcp-session-id": session})
+
+    def listed_reply(ident, state):
+        """0.2.2: tools/list answered from listing, filtered exactly as a child's answer (redact, then filter_list)."""
+        value = {"jsonrpc": "2.0", "id": ident, "result": {"tools": copy.deepcopy(listing)}}
+        value = filter_list(redact.redact_secrets(value, redact.secret_values(state)), tools, state)
+        return json_reply(value, 200, {"Cache-Control": "no-store"})
+
     async def mcp(request):
         return await serve(request, None)
 
@@ -686,6 +746,65 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         def tool_refusal(ident, refusal):
             """0.1.14: a refused well-formed tools/call is answered as JSON-RPC (ToolCallRefused.error()), not 403."""
             return json_reply({"jsonrpc": "2.0", "id": ident, "error": refusal.error()}, 200, {"Cache-Control": "no-store"})
+
+        def session_gone():
+            """0.2.2: the session is no longer served (its child stopped, or the gateway's own session ends because the
+            child is up): 404, as a child answers for a session it does not know; MCP clients then initialize again."""
+            if request.method == "POST" and isinstance(message, dict) and "id" in message:
+                return child_status_reply(message["id"], 404, {"Cache-Control": "no-store"})
+            return Response(status_code=404, headers={"Cache-Control": "no-store"})
+
+        def backend_refusal(available, configured):
+            """0.2.2: a tools/call no child is asked: None when it may be forwarded."""
+            name = message["params"]["name"]
+            tool = tools[name]
+            if not tool.requires_backend:
+                return None
+            if not configured:
+                return tool_refusal(message["id"], ToolCallRefused("backend_not_configured", name))
+            if available["ready"] and available["backend"] == "unreachable":
+                return tool_refusal(message["id"], ToolCallRefused("backend_unreachable", name, reason=available["reason"]))
+            return None
+
+        def without_child():
+            """0.2.2 (listing only): the answers the gateway gives itself, before a slot or the child; None forwards."""
+            state = store.load()  # reading the body yielded: a revoked token is refused as on any other path
+            if not authorized(state):
+                return unauthorized()
+            available = availability()
+            configured = getattr(state, "configured", bool(state.backend_url and state.backend_key))
+            child_up = available["child"] in CHILD_UP
+            if method == "initialize":
+                return None if child_up else local_initialize(message)
+            session = headers["mcp-session-id"]
+            if local_session(session):
+                if available["ready"]:
+                    local_sessions.pop(session, None)  # the child answers now: the client opens a session with it
+                    return session_gone()
+                if request.method == "DELETE":
+                    local_sessions.pop(session, None)
+                    return Response(status_code=200, headers={"Cache-Control": "no-store"})
+                if request.method == "GET":  # no server-to-client stream (MCP: 405 when a server offers none)
+                    return Response(status_code=405, headers={"Allow": "POST, DELETE", "Cache-Control": "no-store"})
+                if method == "notifications/initialized":
+                    return Response(status_code=202, headers={"Cache-Control": "no-store"})
+                if method == "ping":
+                    return json_reply({"jsonrpc": "2.0", "id": message["id"], "result": {}}, 200, {"Cache-Control": "no-store"})
+                if method == "tools/list":
+                    return listed_reply(message["id"], state)
+                name = message["params"]["name"]  # tools/call: authorize allows nothing else here
+                if not configured and tools[name].requires_backend:
+                    return tool_refusal(message["id"], ToolCallRefused("backend_not_configured", name))
+                reason = (available["reason"] if available["backend"] == "unreachable" and available["reason"] else
+                          "MCP_SERVER_NOT_READY: the add-on's MCP server is " + available["child"] + "; try again shortly")
+                return tool_refusal(message["id"], ToolCallRefused("backend_unreachable", name, reason=reason))
+            if not child_up:
+                return session_gone()  # a child session: it ended with the child
+            if request.method == "POST" and method == "tools/list" and not configured:
+                return listed_reply(message["id"], state)  # n8n: its unconfigured child lists only documentation tools
+            if request.method == "POST" and method == "tools/call":
+                return backend_refusal(available, configured)
+            return None
 
         state = store.load()
         if not authorized(state):
@@ -754,6 +873,10 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 return tool_refusal(message["id"], refused_call)
             except Denied:
                 raise BadRequest(403) from None
+        if listing is not None:
+            answer = without_child()
+            if answer is not None:
+                return answer
         try:
             async with asyncio.timeout(1):
                 await slots.acquire()
@@ -782,10 +905,24 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     # child must not expect any, whatever the real client declared.
                     forwarded = {**message, "params": {**message["params"], "capabilities": {}}}
                 content = json.dumps(forwarded, separators=(",", ":")).encode()
-            outgoing = child.build_request(request.method, child_url, headers=headers, content=content,
-                                           timeout=httpx.Timeout(30, connect=3, pool=3))
+            waited = time.monotonic() + CHILD_WAIT_SECONDS
             async with asyncio.timeout(35):
-                upstream = owner.response = await child.send(outgoing, stream=True, follow_redirects=False)
+                while True:
+                    outgoing = child.build_request(request.method, child_url, headers=headers, content=content,
+                                                   timeout=httpx.Timeout(30, connect=3, pool=3))
+                    try:
+                        upstream = owner.response = await child.send(outgoing, stream=True, follow_redirects=False)
+                        break
+                    except httpx.ConnectError:
+                        # 0.2.2 (listing only): nothing listens on the child's port. Its sessions ended with it; an
+                        # initialize waits for a child that is starting, then the gateway answers it itself.
+                        if listing is None:
+                            raise
+                        if method != "initialize":
+                            return session_gone()
+                        if time.monotonic() >= waited or availability()["child"] not in CHILD_UP:
+                            return local_initialize(message)
+                        await asyncio.sleep(CHILD_RETRY_SECONDS)
             # Only well-formed values of four headers are forwarded (a non-Latin-1 value from a child could
             # not be encoded into the reply); session/protocol values follow the same rule as request headers.
             response_headers = {k: v for k, v in upstream.headers.items()

@@ -33,20 +33,27 @@ class ToolCallRefused(Denied):
     Still a Denied with the former text, so a caller that does not tell them apart keeps refusing it.
 
     kind is one of KINDS. error() carries the tool name and, for invalid arguments, sanitized pydantic errors: never
-    an argument value (argument_errors), a backend address, a credential or a token."""
-    KINDS = {"unknown_tool": "tool not permitted", "invalid_params": "invalid tool arguments",
-             "operation_not_permitted": "operation not permitted", "backend_not_configured": "configured backend required"}
+    an argument value (argument_errors), a backend address, a credential or a token.
 
-    def __init__(self, kind, tool, errors=()):
+    0.2.2: "backend_unreachable" is raised by the gateway itself, never by authorize: a configured backend its health
+    check last found unreachable, or an MCP server (child) that is not up. reason is the health check's own text
+    (credentials replaced by [REDACTED]) or the gateway's fixed MCP_SERVER_NOT_READY text."""
+    KINDS = {"unknown_tool": "tool not permitted", "invalid_params": "invalid tool arguments",
+             "operation_not_permitted": "operation not permitted", "backend_not_configured": "configured backend required",
+             "backend_unreachable": "backend unreachable"}
+
+    def __init__(self, kind, tool, errors=(), reason=None):
         super().__init__(self.KINDS[kind])
         self.kind = kind
         self.tool = tool
         self.errors = list(errors)
+        self.reason = reason
 
     def error(self):
         """The JSON-RPC error object. -32602 (invalid params, MCP's code for an unknown tool or invalid arguments) when
         the request itself must change; -32603 (internal error) for a backend the add-on has not been configured with:
-        the arguments are valid and no other call would succeed until an administrator configures the add-on."""
+        the arguments are valid and no other call would succeed until an administrator configures the add-on (0.2.2: or
+        until the backend is reachable again, "Backend unreachable" with data.reason)."""
         if self.kind == "unknown_tool":
             # The same answer for a tool that does not exist and one that is disabled or lacks its write grant.
             return {"code": -32602, "message": "Unknown tool", "data": {"tool": self.tool[:TOOL_NAME_LIMIT]}}
@@ -55,6 +62,8 @@ class ToolCallRefused(Denied):
         if self.kind == "operation_not_permitted":
             return {"code": -32602, "message": "Operation not permitted", "data": {"tool": self.tool, "reason": (
                 "write operation disabled by the add-on policy; an administrator can enable it in the add-on panel")}}
+        if self.kind == "backend_unreachable":
+            return {"code": -32603, "message": "Backend unreachable", "data": {"tool": self.tool, "reason": self.reason}}
         return {"code": -32603, "message": "Backend not configured", "data": {"tool": self.tool}}
 
 

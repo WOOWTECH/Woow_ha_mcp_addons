@@ -105,6 +105,7 @@ async def test_committed_runtime_backend_transition_is_joined(tmp_path, monkeypa
     class Monitor:
         def __init__(self, *args): pass
         def snapshot(self): return {}
+        def availability(self): return {'child': 'running', 'ready': False, 'backend': 'unknown', 'reason': None}  # 0.2.2: forward
         async def run(self): await asyncio.Event().wait()
 
     monkeypatch.setattr(module, 'Supervisor', Manager)

@@ -116,7 +116,9 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
             from n8n_adapter import TOOLS
             from mcp_admin_core.policy import TOP_LEVEL_REFUSED
             assert names <= set(TOOLS)
-            assert names == set(TOOLS) if configured_backend else len(names) >= 7
+            # 0.2.2: also without a backend (the child then lists only its documentation tools; the gateway answers
+            # tools/list from the packaged snapshot).
+            assert names == set(TOOLS)
             assert 'get_node' in names
             for tool in tools["tools"]:
                 schema = tool["inputSchema"]
