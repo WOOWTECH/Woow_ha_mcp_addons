@@ -19,7 +19,7 @@ WORKDIR /opt/woow
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --python /usr/local/bin/python
 FROM python:3.13.16-slim-bookworm@sha256:f040863673aea2570c3ff6a5c3fb4c673a016cbc5375005ad145915922b6b78a AS runtime
-ARG BUILD_VERSION=0.2.1
+ARG BUILD_VERSION=0.2.2
 LABEL io.hass.type="app" io.hass.arch="amd64" io.hass.version="${BUILD_VERSION}" \
       io.hass.name="Woow n8n MCP Server" io.hass.description="Experimental; HA admin-role management; full tool surface; every tool and write on by default (each can be turned off in the panel)." \
       io.hass.url="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \
@@ -38,6 +38,8 @@ COPY --from=npm /usr/local/bin/node /usr/local/bin/node
 COPY --from=npm /usr/lib/x86_64-linux-gnu/libstdc++.so.6 /usr/local/lib/libstdc++.so.6
 COPY --from=npm /lib/x86_64-linux-gnu/libgcc_s.so.1 /usr/local/lib/libgcc_s.so.1
 COPY --from=npm /npm/node_modules ./apps/n8n/node_modules
+# 0.2.2: n8n-mcp's test-run errors keep n8n's own message; backend_policy.cjs refuses to start unless the patched digest matches.
+RUN /usr/local/bin/python apps/n8n/patches/fix_test_run_error_messages.py
 RUN /usr/sbin/ldconfig && node --version
 COPY packaging/entrypoint.py packaging/management_launcher.py ./packaging/
 COPY THIRD_PARTY_NOTICES.md ./THIRD_PARTY_NOTICES.md

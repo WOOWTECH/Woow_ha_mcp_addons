@@ -76,6 +76,10 @@ https://<你的對外網址>/private_<token>/mcp
    按「複製 Claude.ai 連線網址」。沒設定端點時按鈕停用並顯示說明，不會產生猜測的網址。
 3. 在 Claude.ai 新增自訂連接器，把網址貼進伺服器網址欄位；OAuth 進階設定留空。
 
+0.2.2 起不必先設定後端：還沒設定或後端暫時連不上時，連接器照樣能新增並列出全部工具，呼叫工具會得到說明原因的錯誤
+（「Backend not configured」／「Backend unreachable」，見下方「Token 事件與故障」）。0.2.1 以前這時 initialize 回 502，
+連接器加不上去。
+
 **這個網址等同密碼。** 拿到網址的人不需要其他東西就能以本 Add-on 目前的工具權限呼叫工具。只貼進 Claude.ai 的連接器設定；
 不要分享、截圖、貼到聊天、Git、工單或文件。網址可能外洩（被分享、出現在代理或 CDN 的 log、瀏覽器紀錄）時，立刻在管理面板按
 「重新產生」：舊網址（和舊 Bearer）立即失效，再把新網址貼回 Claude.ai。不再使用時按「撤銷權杖」。
@@ -113,7 +117,8 @@ Gateway 在這條路徑上的行為：
     schema 沒有的鍵名（多餘欄位、dict 的鍵）顯示為 `*`；說明可能夾帶輸入值的錯誤類型（解析錯誤、tag 不符、Python 自己的
     ValueError 等）改用固定說明，說明中出現呼叫者送的字串（schema 自己的名稱與允許值除外）時也改用固定說明。
   - 寫入操作未開放（例如 n8n 資料夾 create／rename）：`-32602`「Operation not permitted」，`data.reason` 說明管理員可在面板開啟。
-  - 後端未設定：`-32603`「Backend not configured」（參數本身沒錯，換參數也不會成功，要管理員先設定 add-on）。
+  - 後端未設定：`-32603`「Backend not configured」（參數本身沒錯，換參數也不會成功，要管理員先設定 add-on）。0.2.2 起另有
+    後端連不上的 `-32603`「Backend unreachable」（`data.reason` 說明原因），見下方「後端未設定或連不上時也能連線」。
   例：`{"jsonrpc":"2.0","id":7,"error":{"code":-32602,"message":"Invalid params","data":{"tool":"schema_catalog",
   "errors":[{"field":"limit","message":"Input should be less than or equal to 1","type":"less_than_equal"}]}}}`。
   沒帶 `Mcp-Session-Id`（或 session header 格式錯誤）的這類呼叫，以及格式錯誤的請求（id 為 null／布林／小數、params 非物件、
@@ -144,16 +149,36 @@ Gateway 在這條路徑上的行為：
   已送到 backend 的工作不會交易式回滾；輪替不等於取消後端工作。
 - 備份還原會復活備份中的 token／policy，需核對舊 token 暴露風險，再經批准流程輪替。
 - 503 readiness 可能只是未設定／backend 離線；不要自動重啟 HA 或既有服務。
-- initialize 回 HTTP 503＋JSON-RPC 錯誤 `BACKEND_UNAVAILABLE`（Retry-After 5，0.1.2 起）：child 沒有回覆這次初始化，
-  通常是後端連不上（例如已下架的 Odoo Manage 每個連線階段都要先連 Odoo），但也可能是 child 本身異常；沒有 session id，
-  稍後重新 initialize 即可。502 是 child 回了格式錯誤或過大的回覆、initialize 協商出的 protocolVersion 不在審查過的四個版本
-  （2024-11-05、2025-03-26、2025-06-18、2025-11-25）之內（0.1.8 起；目前只有 n8n 對要求 2024-06-25 的 client 會這樣），
-  或根本沒有 child 可轉送。
-- n8n 以外各支未設定後端時沒有 child（設定後端後才有；n8n 沒有後端也會啟動內建文件 runtime）。
+- **後端未設定或連不上時也能連線（0.2.2 起）**：Claude.ai 等 client 一律能完成 initialize、`notifications/initialized`、
+  tools/list，tools/list 回完整工具清單與 schema（依管理面板的停用與寫入授權過濾，與有後端時相同），不再回 HTTP 502；
+  tools/call 回 JSON-RPC 錯誤說明原因，不轉給子程序：
+  - 後端未設定：`-32603`「Backend not configured」，`data` 只有 `tool`。n8n 例外：沒有後端時子程序仍會啟動，7 個文件工具
+    （`tools_documentation`、`search_nodes`、`get_node`、`validate_node`、`get_template`、`search_templates`、`validate_workflow`）
+    照常回答，其他工具才回這個錯誤。
+  - 後端已設定但連不上：`-32603`「Backend unreachable」，`data.reason` 是最近一次健康檢查得到的原因（後端自己的錯誤文字，
+    例如 `Cannot reach the EMQX broker. …`、`Unable to connect to n8n. … (ECONNREFUSED)`；add-on 持有的憑證換成 `[REDACTED]`；
+    最多 1000 字）。判斷依據是最近一次**完成**的健康檢查（每 15 秒一次）：後端恢復後最多約 15 秒內呼叫就會轉送；子程序剛重啟、
+    還沒有完成的檢查時一律轉送，不靠猜測拒絕。n8n 的文件工具不需要後端，照常轉送。initialize 與 tools/list 照常由子程序回答。
+  - add-on 的 MCP 子程序沒有在跑（啟動中、當掉後退避重啟、失敗）：initialize 先等啟動中的子程序最多 10 秒，之後由 gateway
+    自己回答；tools/call 回「Backend unreachable」，`data.reason` 為 `MCP_SERVER_NOT_READY: …`（或最近一次檢查的後端原因）。
+  沒有子程序可回答時，gateway 用 add-on 內附的工具清單（`mcp_admin_core/tool_snapshot.py`，由真實子程序產生、測試確認一致）
+  回答，並開一個自己的 session（id 以 `woow-local-` 開頭，閒置 30 分鐘結束，最多 256 個）。這個 session 只用來列工具與回錯誤：
+  GET（伺服器推送）回 405，DELETE 回 200。管理員設定好後端、子程序起來並通過一次健康檢查後，用這個 session 的下一個請求回 404，
+  client 依 MCP 規範重新 initialize，就改連子程序（同樣地，子程序停掉後，它開的 session 也回 404）。Claude.ai 收到 404 是否
+  自動重連，尚未實測；不會自動時請在 Claude.ai 重新連線。
+  權杖檢查仍最先（錯誤權杖 401／404），沒帶 session 的請求仍 400，policy 拒絕（Unknown tool 等）照舊優先回答。readiness
+  （`/health/ready`）與管理面板不變：未設定或後端連不上仍是 503。
+- initialize 回 HTTP 503＋JSON-RPC 錯誤 `BACKEND_UNAVAILABLE`（Retry-After 5，0.1.2 起）：child 收到初始化卻沒有回覆（已下架的
+  Odoo Manage 每個連線階段都要先連 Odoo）；沒有 session id，稍後重新 initialize 即可。2026-10-16 實測七支現行子程序在後端連不上
+  時都照常回 initialize 與完整 tools/list。502 是 child 回了格式錯誤或過大的回覆，或 initialize 協商出的 protocolVersion 不在
+  審查過的四個版本（2024-11-05、2025-03-26、2025-06-18、2025-11-25）之內（0.1.8 起；目前只有 n8n 對要求 2024-06-25 的 client
+  會這樣）。0.2.1 以前，沒有 child 可轉送（後端未設定、子程序沒在跑）時也是 502。
+- 0.1.x 紀錄：n8n 以外各支未設定後端時沒有 child（設定後端後才有；n8n 沒有後端也會啟動內建文件 runtime）。
   2026-10-07 對測試 HA 上未設定後端的 LiteLLM 逐一打 45 個案例，支援的讀取分兩種：標記為需要後端的
   （例如 `litellm_model_info`、`litellm_team_info`、`litellm_list_users`）由 gateway 直接回 403；不需檢查後端就轉送的
   （例如 `litellm_list_models`、`litellm_health_readiness`）和 initialize、tools/list 一樣回 502。
   寫入、暫不支援與不存在的工具照常 403，readiness 503。這些 403 與 502 的 body 都只有 `{"error":"request denied"}`。
+  0.2.2 起見上方「後端未設定或連不上時也能連線」。
 
 記錄每個真實 client 版本、network mode、正確 DNS/port（公開證據需匿名化）、
 初始化/list/read/stream/reconnect／缺錯撤 token 結果；不保存秘密或 raw payload。

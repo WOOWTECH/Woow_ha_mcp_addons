@@ -1,6 +1,6 @@
 # 0.1.11 候選發佈紀錄
 
-狀態：準備中，尚未發佈或部署；release gates 維持關閉。
+狀態：**已發佈**：2026-10-14 上架商店，七支（含 OpenDesign）（GitHub tag／release `v0.1.11`，以映像建置 commit `7e328f7` 為準）。以下為發佈前的候選紀錄，內文的「準備中」「待驗收」等字樣是當時的狀態。
 
 本版納入 PR2 的 LiteLLM metadata dict 128 → 256 修正，接受實測的 156 欄位 model_info。256 KiB、depth 8、nodes 10000、list 100、string 16384 與欄位投影限制不變。此 repo 七個產品共用 VERSION、initialize 身分、manifest、Dockerfile 與 CI/release 版本，因此一致準備 0.1.11；同時納入 n8n Folder API 403/404 的固定診斷提示，不推斷單一拒絕原因、不增加 request/retry/權限；其餘五支產品無功能修正，不新增版號分流機制。
 

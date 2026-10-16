@@ -80,6 +80,11 @@ DEFAULT_OPERATIONS = {'hermes_config': 'get', 'hermes_cron': 'list', 'hermes_gat
                       'hermes_session': 'list', 'hermes_tools': 'list', 'hermes_webhook': 'list',
                       'n8n_executions': 'list', 'n8n_workflow_versions': 'list'}
 assert all(value in OPERATION_READS[name] for name, value in DEFAULT_OPERATIONS.items())
+# 0.2.2: the tools that answer without a backend (n8n-mcp's documentation tools, bundled data; the unconfigured child lists
+# exactly these, tests/test_tool_snapshot.py). Every other tool requires_backend: without a configured backend the gateway
+# refuses it (-32603 Backend not configured), and while the health check finds the backend unreachable it refuses it with
+# the reason (-32603 Backend unreachable); neither reaches the child.
+BACKEND_FREE = {'n8n': 'tools_documentation search_nodes get_node validate_node get_template search_templates validate_workflow'}
 # The products whose public surface is the child's complete one. Odoo Manage (retired after 0.1.4) keeps its bounded
 # 0.1.x surface (products.BOUNDED_TOOLS) and is not shipped.
 FULL_PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud')
@@ -102,6 +107,7 @@ def full_tools(product):
     if product not in FULL_PRODUCTS:
         raise ValueError('not a full-surface product')
     groups = names(product)
+    free = BACKEND_FREE.get(product, '').split()
     tools = {}
     for effect, members in groups.items():
         for name in members:
@@ -110,8 +116,21 @@ def full_tools(product):
                 reads = tuple(v for v in values.split() if v in OPERATION_READS[name])
                 writes = tuple(v for v in values.split() if v not in OPERATION_READS[name])
                 tool = Tool(ChildArguments, selector=selector, write_operations=writes, read_operations=reads,
-                            default_operation=DEFAULT_OPERATIONS.get(name), child_schema=True)
+                            default_operation=DEFAULT_OPERATIONS.get(name), child_schema=True,
+                            requires_backend=name not in free)
             else:
-                tool = Tool(ChildArguments, write=effect in ('write', 'unverified'), child_schema=True)
+                tool = Tool(ChildArguments, write=effect in ('write', 'unverified'), child_schema=True,
+                            requires_backend=name not in free)
             tools[name] = tool
     return dict(sorted(tools.items()))
+
+
+def listing(product):
+    """0.2.2: the tools/list result tools of the product's pinned child, as the child lists them with every tool enabled
+    (name, title, description, inputSchema, annotations; tool_snapshot.py, generated from the real children and kept
+    equal to them by tests/test_tool_snapshot.py). The gateway answers tools/list with it, through the same filter_list
+    as a child's own answer, whenever no child can answer: an unconfigured backend (no child; n8n's child then lists only
+    its documentation tools) or a child that is not up. A fresh copy each call."""
+    import copy
+    from .tool_snapshot import LISTED
+    return copy.deepcopy(LISTED[product])

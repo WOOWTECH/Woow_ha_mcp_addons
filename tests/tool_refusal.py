@@ -4,7 +4,8 @@ Before 0.1.14 these refusals were HTTP 403 {"error":"request denied"}; now they 
 JSON-RPC error (-32602 Unknown tool / Invalid params / Operation not permitted, -32603 Backend not configured) and no
 result. Callers keep asserting that the child or backend was not reached.
 """
-MESSAGES = {-32602: ("Unknown tool", "Invalid params", "Operation not permitted"), -32603: ("Backend not configured",)}
+MESSAGES = {-32602: ("Unknown tool", "Invalid params", "Operation not permitted"),
+            -32603: ("Backend not configured", "Backend unreachable")}  # 0.2.2: Backend unreachable
 
 
 def refusal(response):
