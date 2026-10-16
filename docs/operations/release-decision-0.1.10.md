@@ -1,6 +1,6 @@
 # 0.1.10 候選發佈紀錄
 
-狀態：準備候選，尚未發佈或部署。
+狀態：**已發佈**：2026-10-13 上架商店，七支（含 OpenDesign）（GitHub tag／release `v0.1.10`，以映像建置 commit `9762a94` 為準）。以下為發佈前的候選紀錄，內文的「準備中」「待驗收」等字樣是當時的狀態。
 
 LiteLLM MCP 的 metadata 投影接受 mode=responses，以連接已實測的 HA Woow LiteLLM 0.1.1。未知模式仍拒絕，私密欄位仍排除。
 
