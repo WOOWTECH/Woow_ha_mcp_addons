@@ -25,7 +25,7 @@ RUN apps/odoo/.venv/bin/python apps/odoo/patches/fix_cross_session_token_store.p
  && grep -q 'ODOO_MCP_ALLOW_DIRECT_WRITES' apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_write.py \
  && find apps/odoo/.venv -type d -name __pycache__ -path '*odoo_mcp*' -prune -exec rm -rf {} +
 FROM python:3.13.16-slim-bookworm@sha256:f040863673aea2570c3ff6a5c3fb4c673a016cbc5375005ad145915922b6b78a AS runtime
-ARG BUILD_VERSION=0.2.1
+ARG BUILD_VERSION=0.2.2
 LABEL io.hass.type="app" io.hass.arch="amd64" io.hass.version="${BUILD_VERSION}" \
       io.hass.name="Woow Odoo MCP Server" io.hass.description="Experimental; HA admin-role management; full tool surface; every tool and write on by default (each can be turned off in the panel)." \
       io.hass.url="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \

@@ -77,6 +77,8 @@ backup ID、版本、時間、保管位置類型、權限檢查結論，不記�
 token、child token、backend、endpoint 保留，0.1.x 的 disabled 清空（升級後所有工具全開）；v4 之後照存檔載入，管理員取消的寫入或停用的工具不會被再次打開。
 0.1.x executable **不接受 v4**：從 0.2.1 退回 0.1.x 必須還原升級前的備份。**升級前請先備份**，並知悉升級後寫入全開。
 
+**0.2.2**：state 格式不變（仍是 v4，不遷移）；0.2.1 與 0.2.2 可互相升降版而不需還原備份。
+
 舊 v1/v2 executable **不接受 v3**：退 image 不等於退資料。必須使用升級前的
 受保護相容 v1/v2 backup；不能手改 schema_version、刪 writer marker 或刪 state 讓系統
 重建 token。若無相容 backup，先停用新 Add-on 並尋求核准恢復，不嘗試 lossy downgrade。

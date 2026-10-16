@@ -117,7 +117,9 @@ credentials 與 workflow 並執行、產生或刪除 LiteLLM API key 並呼叫�
   （2026-10-05 實測：root 擁有、檔案 0644）；0.1.0 因此停止（已知問題），0.1.1 起依上述例外改回。
   其他不符合即停止並由核准維護流程恢復，不自動寬鬆 chmod。
 - Bootstrap 產生獨立強 token，沒有共用密碼。缺 backend 的 n8n 以外各支不 spawn child
-  或探測外部服務；n8n 可啟動內建文件 runtime，但 backend readiness 仍 503。
+  或探測外部服務；n8n 可啟動內建文件 runtime，但 backend readiness 仍 503。0.2.2 起 client 這時仍能連線：
+  gateway 自己回 initialize 與完整 tools/list（add-on 內附、與子程序一致的工具清單），tools/call 回 `-32603`
+  「Backend not configured」；後端連不上時回「Backend unreachable」並附原因（[client 文件](clients.md#token-事件與故障)）。
 - child command/env 固定；bootstrap 只把 runtime `SUPERVISOR_TOKEN` 傳給管理程序（0.1.0 只有 n8n；
   0.1.1 起每支皆是，負責人 2026-10-05 核准），不寫 config/options/argv/log；child 以白名單 env 啟動、不繼承。proxy、Python
   注入及 provider URL／command 覆寫均不傳遞。n8n child 已使用不含 machine token 的 allowlist；
@@ -132,7 +134,8 @@ credentials 與 workflow 並執行、產生或刪除 LiteLLM API key 並呼叫�
 ## 健康與故障
 
 分別觀察管理程序、child/protocol、backend reachability，不把綠色 PID 當後端成功。
-`GET :8081/health/ready` 僅回 `{ready:boolean}`；未設定或 backend offline 為 503。
+`GET :8081/health/ready` 僅回 `{ready:boolean}`；未設定或 backend offline 為 503（0.2.2 起 MCP 端點在這兩種情況下
+仍可連線、列工具，readiness 不變）。
 **故意省略 Supervisor watchdog**：此 endpoint 依賴 backend，不可拿來重啟容器。
 需待真正 local-supervisor liveness endpoint 設計與測試才可新增 watchdog。
 child 結束有有界退避／恢復，backend 中斷不 restart child/container。
