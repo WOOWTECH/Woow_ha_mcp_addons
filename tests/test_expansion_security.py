@@ -7,15 +7,21 @@ import pytest
 
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.gateway import make_apps
-from mcp_admin_core.products import ProductStore, ProductState, TOOLS, child_spec
+from mcp_admin_core.products import ProductStore, ProductState, BOUNDED_TOOLS as TOOLS, TOOLS as FULL_TOOLS, child_spec, fresh_write_grants  # 0.2.0: the 0.1.x bounded surface (local models); products serve the full child surface
 from mcp_admin_core.policy import Denied, authorize
 from mcp_admin_core.native_inventory import NAMES
-from n8n_adapter import TOOLS as N8N_TOOLS
+from n8n_adapter import BOUNDED_TOOLS as N8N_TOOLS
 from test_expansion_policy import call
 from test_expansion_runtime import READS, WRITES
 from test_real_products import connection
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
-CASES = [(p, name, args) for p in READS for name, args in READS[p] + WRITES[p]]
+# 0.2.0: the 0.1.x bounded models (BOUNDED_TOOLS); calls added for the full surface (e.g. execute_method) are not in them.
+def bounded(p, name):
+    return name in (N8N_TOOLS if p == 'n8n' else TOOLS[p])
+
+
+CASES = [(p, name, args) for p in READS for name, args in READS[p] + WRITES[p] if bounded(p, name)]
 
 
 def state_for(product, grants=(), **kwargs):
@@ -41,14 +47,14 @@ async def test_extras_and_disabled_have_zero_child_dispatch(product, name, args,
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://boundary') as client:
             headers = {'Authorization': 'Bearer '+store.load().token, 'Mcp-Session-Id': 'existing'}
             for invalid in (call(name, {**args, 'unreviewed': True}), call('unknown', args)):
-                assert (await client.post('/mcp', headers=headers, json=invalid)).status_code == 403
+                assert refused(await client.post('/mcp', headers=headers, json=invalid))
             store.update(disabled=[name])
-            assert (await client.post('/mcp', headers=headers, json=call(name, args))).status_code == 403
+            assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
     assert calls == []
     store.close()
 
 
-@pytest.mark.parametrize('product,name,args', [(p,n,a) for p in WRITES for n,a in WRITES[p]])
+@pytest.mark.parametrize('product,name,args', [(p,n,a) for p in WRITES for n,a in WRITES[p] if bounded(p, n)])
 def test_legacy_switch_never_grants_expansion_writes(product, name, args):
     tools = N8N_TOOLS if product == 'n8n' else TOOLS[product]
     if tools[name].legacy_write:
@@ -77,6 +83,22 @@ def test_legacy_switch_never_grants_expansion_writes(product, name, args):
     ('emqx', 'emqx_client_subscribe', {'clientid': 'x', 'topic': 't', 'qos': True}),
     ('litellm', 'litellm_create_team', {'team_alias': 'x', 'members_with_roles': [{'role': 'admin'}]}),
     ('litellm', 'litellm_list_teams', {'page_size': 101}),
+    # 0.1.7 Nextcloud: the child's own path rules, checked by the gateway before dispatch.
+    *[('nextcloud', 'read_text_file', {'path': bad}) for bad in (
+        '', '/', '../x', 'Documents/../../x', './x', 'a//b', '//a', 'a\\b', 'a\x00b', 'a\nb', 'a\x85b',
+        'a\u202eb', 'a\u2066b', 'x' * 1025)],
+    ('nextcloud', 'get_file_tree', {'path': 'Documents/..'}),
+    ('nextcloud', 'get_file_tree', {'depth': 0}),
+    ('nextcloud', 'get_file_tree', {'depth': '1'}),
+    ('nextcloud', 'list_tasks', {'calendar': ''}),
+    ('nextcloud', 'list_tasks', {'include_completed': 'true'}),
+    ('nextcloud', 'update_text_file', {'path': 'a.md', 'content': 'x'}),
+    ('nextcloud', 'update_text_file', {'path': 'a.md', 'content': 'x', 'expected_etag': 'has space'}),
+    ('nextcloud', 'update_text_file', {'path': 'a.md', 'content': 'x', 'expected_etag': 'e' * 259}),
+    ('nextcloud', 'create_text_file', {'path': 'a.md', 'content': 'x' * 262145}),
+    ('nextcloud', 'create_text_file', {'path': 'a.md', 'content': None}),
+    ('nextcloud', 'upload_file', {'path': 'a.bin', 'content_base64': ''}),
+    ('nextcloud', 'delete_file_checked', {'path': 'Documents', 'expected_etag': None}),
     ('n8n', 'get_node', {'nodeType': 'nodes-base.httpRequest', 'includeExamples': 0}),
     ('n8n', 'n8n_get_workflow', {'id': 'one', 'mode': 'full'}),
     ('n8n', 'n8n_manage_folders', {'action': 'delete', 'folderId': 'one'}),
@@ -88,24 +110,26 @@ def test_restricted_scopes_and_strict_types(product, name, args):
         authorize(call(name, args), tools, state_for(product, tools[name].grants(name)))
 
 
-@pytest.mark.parametrize('product', ['emqx', 'litellm'])
+@pytest.mark.parametrize('product', ['emqx', 'litellm', 'nextcloud'])
 def test_native_gates_allow_exact_writer_and_disable_all_others(tmp_path, product):
-    tool = 'emqx_kick_client' if product == 'emqx' else 'litellm_create_team'
+    tool = {'emqx': 'emqx_kick_client', 'litellm': 'litellm_create_team', 'nextcloud': 'create_text_file'}[product]
     state = state_for(product, [tool])
     spec = child_spec(state, tmp_path)
-    prefix = 'EMQX_MCP_' if product == 'emqx' else 'LITELLM_MCP_'
+    prefix = {'emqx': 'EMQX_MCP_', 'litellm': 'LITELLM_MCP_', 'nextcloud': 'NEXTCLOUD_MCP_'}[product]
     assert spec.env[prefix+'READONLY'] == 'false'
     assert spec.env['FASTMCP_CHECK_FOR_UPDATES'] == 'off'
     assert spec.env['FASTMCP_SHOW_SERVER_BANNER'] == 'false'
-    blocked = set(spec.env[prefix+'DISABLED_TOOLS'].split(','))
+    blocked = set(spec.env[prefix+'DISABLED_TOOLS'].split(',')) - {''}
     assert tool not in blocked
-    assert set(NAMES[product]) - set(TOOLS[product]) <= blocked
-    assert {name for name,t in TOOLS[product].items() if t.write and name != tool} <= blocked
+    # 0.2.0: the child's full surface; only disabled tools and writers without their grant are blocked natively.
+    assert set(NAMES[product]) == set(FULL_TOOLS[product])
+    assert blocked == {name for name, t in FULL_TOOLS[product].items() if t.write and name != tool}
     state = state_for(product, [tool], disabled=[tool])
-    assert child_spec(state, tmp_path).env[prefix+'READONLY'] == 'true'
+    mixed = any(t.write_operations for t in FULL_TOOLS[product].values())  # EMQX authn/authz: registered only when writable
+    assert child_spec(state, tmp_path).env[prefix+'READONLY'] == ('false' if mixed else 'true')
 
 
-@pytest.mark.parametrize('product', ['emqx', 'litellm'])
+@pytest.mark.parametrize('product', ['emqx', 'litellm', 'nextcloud'])
 async def test_policy_api_commits_live_denial_before_owned_restart(tmp_path, product):
     store = ProductStore(tmp_path, product)
     started, finish = asyncio.Event(), asyncio.Event()
@@ -132,7 +156,7 @@ async def test_policy_api_commits_live_denial_before_owned_restart(tmp_path, pro
             await asyncio.wait_for(started.wait(), 2)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://boundary') as c:
                 denied = await c.post('/mcp', headers={'Authorization': 'Bearer '+store.load().token, 'Mcp-Session-Id': 'existing'}, json=call(name, args))
-                assert denied.status_code == 403
+                assert refused(denied)
             assert not calls and not task.done()
             finish.set()
             assert (await task).status_code == 200
@@ -150,7 +174,7 @@ def test_manage_read_mode_cannot_accept_writer_grants(tmp_path):
 
 
 @pytest.mark.parametrize('product', ['n8n', 'opendesign'])
-def test_v2_migration_preserves_only_old_writer_semantics(tmp_path, product):
+def test_v2_migration_reaches_schema_4_with_every_write(tmp_path, product):
     store = ProductStore(tmp_path, product)
     old = store.load().model_dump()
     old.pop('enabled_write_tools'); old['schema_version'] = 2; old['writes_enabled'] = True
@@ -158,7 +182,9 @@ def test_v2_migration_preserves_only_old_writer_semantics(tmp_path, product):
     store.path.write_text(json.dumps(old)); store.close()
     store = ProductStore(tmp_path, product)
     actual = store.load().model_dump()
-    assert actual == {**old, 'schema_version': 3, 'enabled_write_tools': []}
+    # 0.2.0: through 3 to 4, every write grant on and the disabled list cleared (the full add-on, every tool on).
+    assert actual == {**old, 'schema_version': 4, 'enabled_write_tools': fresh_write_grants(product), 'writes_enabled': True,
+                      'disabled': []}
     store.close()
 
 
@@ -167,7 +193,7 @@ def test_invalid_v3_never_rewritten(tmp_path, bad):
     store = ProductStore(tmp_path, 'hermes')
     data = store.load().model_dump(); store.close()
     if bad == 'wrong_product': data['product'] = 'emqx'
-    if bad == 'future': data['schema_version'] = 4
+    if bad == 'future': data['schema_version'] = 5
     if bad == 'missing': data.pop('enabled_write_tools')
     if bad == 'corrupt_grant': data['enabled_write_tools'] = ['hermes_skill:typo']
     if bad == 'duplicate_grant': data['enabled_write_tools'] = ['hermes_skill:disable']*2

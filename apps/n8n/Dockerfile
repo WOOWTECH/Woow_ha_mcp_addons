@@ -12,16 +12,16 @@ FROM node:22.23.2-bookworm-slim@sha256:43aeff40f4afc22e83f7589a2f37e111cff5ca845
 WORKDIR /npm
 COPY apps/n8n/package.json apps/n8n/package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund && npm cache clean --force
-FROM python:3.13.12-slim-bookworm@sha256:3121f8b0804aa3698ab750d9a39ea4a42657a385c9b133722b915e55c51551a6 AS dependencies
+FROM python:3.13.16-slim-bookworm@sha256:f040863673aea2570c3ff6a5c3fb4c673a016cbc5375005ad145915922b6b78a AS dependencies
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_PYTHON_DOWNLOADS=never UV_LINK_MODE=copy
 WORKDIR /opt/woow
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --python /usr/local/bin/python
-FROM python:3.13.12-slim-bookworm@sha256:3121f8b0804aa3698ab750d9a39ea4a42657a385c9b133722b915e55c51551a6 AS runtime
-ARG BUILD_VERSION=0.1.0
+FROM python:3.13.16-slim-bookworm@sha256:f040863673aea2570c3ff6a5c3fb4c673a016cbc5375005ad145915922b6b78a AS runtime
+ARG BUILD_VERSION=0.2.2
 LABEL io.hass.type="app" io.hass.arch="amd64" io.hass.version="${BUILD_VERSION}" \
-      io.hass.name="WOOW n8n MCP" io.hass.description="Experimental bounded MCP; HA acceptance pending" \
+      io.hass.name="Woow n8n MCP Server" io.hass.description="Experimental; HA admin-role management; full tool surface; every tool and write on by default (each can be turned off in the panel)." \
       io.hass.url="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \
       org.opencontainers.image.source="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \
       org.opencontainers.image.version="${BUILD_VERSION}"
@@ -38,13 +38,16 @@ COPY --from=npm /usr/local/bin/node /usr/local/bin/node
 COPY --from=npm /usr/lib/x86_64-linux-gnu/libstdc++.so.6 /usr/local/lib/libstdc++.so.6
 COPY --from=npm /lib/x86_64-linux-gnu/libgcc_s.so.1 /usr/local/lib/libgcc_s.so.1
 COPY --from=npm /npm/node_modules ./apps/n8n/node_modules
-RUN ldconfig && node --version
+# 0.2.2: n8n-mcp's test-run errors keep n8n's own message; backend_policy.cjs refuses to start unless the patched digest matches.
+RUN /usr/local/bin/python apps/n8n/patches/fix_test_run_error_messages.py
+RUN /usr/sbin/ldconfig && node --version
 COPY packaging/entrypoint.py packaging/management_launcher.py ./packaging/
 COPY THIRD_PARTY_NOTICES.md ./THIRD_PARTY_NOTICES.md
 COPY docs/provenance ./docs/provenance
-RUN groupadd --gid 10001 mcp && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /data/mcp --shell /usr/sbin/nologin mcp
+RUN /usr/sbin/groupadd --gid 10001 mcp && /usr/sbin/useradd --uid 10001 --gid 10001 --no-create-home --home-dir /data/mcp --shell /usr/sbin/nologin mcp
 # Root ONLY for no-follow creation/ownership of a NEW /data/mcp, then irreversible uid/gid drop.
-# No Supervisor-owned options file or existing tree is chowned. No backend-dependent watchdog.
+# Supervisor-owned options are never chowned; an existing tree only in the verified HA-restore
+# repair (packaging/entrypoint.py). No backend-dependent watchdog.
 EXPOSE 8081
 STOPSIGNAL SIGTERM
 ENTRYPOINT ["/usr/local/bin/python", "/opt/woow/packaging/entrypoint.py", "n8n"]

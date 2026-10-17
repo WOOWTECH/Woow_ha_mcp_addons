@@ -10,14 +10,17 @@ Environment variables for connection config:
 
 from __future__ import annotations
 
+import asyncio
+import email.utils
 import json
+import math
 import os
+import re
 import time
 from typing import Any
 
 import httpx
-from backend_policy import async_client, backend_errors, public_backend_error
-from output_policy import rows
+from backend_policy import async_client, backend_errors, backend_error_text
 from mcp.server.fastmcp import FastMCP
 
 # ---------------------------------------------------------------------------
@@ -37,6 +40,51 @@ DENIED_CONFIG_KEYS = {
     "dashboard.basic_auth",
     "secrets",
 }
+
+# ---------------------------------------------------------------------------
+# Credential redaction for config reads (Woow 0.2.2)
+# ---------------------------------------------------------------------------
+
+# Hermes keeps the credentials it uses in its config (e.g. custom_providers[].api_key for a custom OpenAI-compatible
+# endpoint) and GET /api/config returns them in plain text. A config read keeps every field name and shows whether a
+# secret is set, never its value. A key is secret when one of its words (split at non-alphanumerics and camelCase) is in
+# SECRET_WORDS, or its last word is in SECRET_LAST_WORDS (api_key, OPENAI_API_KEY, access_token, basic_auth; not
+# max_tokens or auth_mode). Every non-empty value under such a key (nested objects and lists included) becomes
+# [REDACTED]; empty strings, null and booleans stay, so "not set" remains visible. A URL's userinfo password is
+# redacted in every string. Writes (action=set) are unchanged.
+REDACTED = "[REDACTED]"
+SECRET_WORDS = frozenset({"password", "passwd", "passphrase", "secret", "secrets", "authorization", "credential",
+                          "credentials", "apikey", "cookie", "cookies"})
+SECRET_LAST_WORDS = frozenset({"key", "token", "auth", "pat", "bearer"})
+_KEY_WORD = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|[0-9]+")
+_URL_PASSWORD = re.compile(r"(://[^/\s:@]*:)[^/\s@]+@")
+
+
+def _secret_key(name: Any) -> bool:
+    words = [word.lower() for word in _KEY_WORD.findall(str(name))]
+    return bool(words) and (any(word in SECRET_WORDS for word in words) or words[-1] in SECRET_LAST_WORDS)
+
+
+def _redact_all(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _redact_all(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redact_all(v) for v in value]
+    if value is None or isinstance(value, bool) or value == "":
+        return value
+    return REDACTED
+
+
+def redact_config(value: Any) -> Any:
+    """A config value with the value of every secret field replaced by [REDACTED] (field names kept)."""
+    if isinstance(value, dict):
+        return {k: _redact_all(v) if _secret_key(k) else redact_config(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [redact_config(v) for v in value]
+    if isinstance(value, str):
+        return _URL_PASSWORD.sub(r"\1" + REDACTED + "@", value)
+    return value
+
 
 # ---------------------------------------------------------------------------
 # Connection helpers
@@ -107,7 +155,22 @@ def _check_gateway_response(resp: httpx.Response, api_key: str) -> None:
         )
 
 
-def _gateway_client(url: str, api_key: str) -> httpx.AsyncClient:
+# Woow 0.2.2 (test VM 2026-10-16, G2): one Hermes agent turn (POST /v1/responses, ~14.5k prompt tokens) routinely took
+# 28-30 s with free models, so hermes_chat's former 30 s limit failed 2 of 3 turns with BACKEND_TIMEOUT although Hermes
+# finished them. A chat turn may take CHAT_TIMEOUT seconds (HERMES_MCP_CHAT_TIMEOUT, 1-3600, default 300; the add-on's
+# gateway allows a tools/call reply up to 330 s); connecting, and every other Gateway/Dashboard call, keep 30 s.
+CHAT_TIMEOUT = 300.0
+
+
+def _chat_timeout() -> float:
+    try:
+        value = float(os.environ.get("HERMES_MCP_CHAT_TIMEOUT", CHAT_TIMEOUT))
+    except ValueError:
+        return CHAT_TIMEOUT
+    return min(max(value, 1.0), 3600.0) if math.isfinite(value) else CHAT_TIMEOUT
+
+
+def _gateway_client(url: str, api_key: str, timeout: float | httpx.Timeout = 30.0) -> httpx.AsyncClient:
     """Create an httpx client for the Hermes Gateway API with Bearer auth."""
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if api_key:
@@ -115,25 +178,78 @@ def _gateway_client(url: str, api_key: str) -> httpx.AsyncClient:
     return async_client(
         base_url=_require_url(url, "gateway_url"),
         headers=headers,
-        timeout=30.0,
+        timeout=timeout,
     )
 
 
 # Dashboard cookie cache: {url: (cookie, expiry)}
 _cookie_cache: dict[str, tuple[str, float]] = {}
 
+# Single-flight login locks: {url: asyncio.Lock} (commercial acceptance AI-HER-PERF-1). The Hermes dashboard allows 10
+# POST /auth/password-login per client IP per 60 s (successful logins count too) and its 429 has no Retry-After. One
+# child serves every MCP session, so when 10+ calls start cold (or the cookie expires) and each logs in, the 11th gets
+# 429. Only one caller per dashboard_url logs in; the others wait for its cookie in the cache and share it.
+_login_locks: dict[str, asyncio.Lock] = {}
 
-async def _dashboard_login(url: str, username: str, password: str) -> str:
-    """Login to Hermes Dashboard and return session cookie (cached 10 min)."""
-    url = _require_url(url, "dashboard_url")
+# A 429 login is retried up to LOGIN_MAX_RETRIES times: after Retry-After (seconds or an HTTP date) capped at
+# LOGIN_RETRY_AFTER_CAP, otherwise (Hermes 0.21.6 sends none) after 1 s, then 2 s. Other statuses are not retried.
+LOGIN_MAX_RETRIES = 2
+LOGIN_BACKOFF_BASE = 1.0
+LOGIN_RETRY_AFTER_CAP = 10.0
+
+
+def _login_retry_delay(resp: httpx.Response, attempt: int) -> float:
+    """Seconds to wait after the attempt-th (0-based) 429: Retry-After first, else exponential backoff."""
+    value = (resp.headers.get("retry-after") or "").strip()
+    delay: float | None = None
+    if value:
+        try:
+            delay = float(value)
+        except ValueError:
+            try:
+                delay = email.utils.parsedate_to_datetime(value).timestamp() - time.time()
+            except (TypeError, ValueError, IndexError, OverflowError):
+                delay = None
+    if delay is None or not math.isfinite(delay):
+        delay = LOGIN_BACKOFF_BASE * (2 ** attempt)
+    return min(max(delay, 0.0), LOGIN_RETRY_AFTER_CAP)
+
+
+def _cached_cookie(url: str) -> str | None:
     cached = _cookie_cache.get(url)
     if cached and cached[1] > time.time():
         return cached[0]
+    return None
+
+
+async def _dashboard_login(url: str, username: str, password: str) -> str:
+    """Login to Hermes Dashboard and return session cookie (cached 10 min).
+
+    Concurrent logins for one dashboard_url are coalesced into one; a 429 login is retried (AI-HER-PERF-1).
+    """
+    url = _require_url(url, "dashboard_url")
+    cached = _cached_cookie(url)
+    if cached is not None:
+        return cached
+    async with _login_locks.setdefault(url, asyncio.Lock()):
+        # The previous holder may have logged in while this caller waited.
+        cached = _cached_cookie(url)
+        if cached is not None:
+            return cached
+        return await _password_login(url, username, password)
+
+
+async def _password_login(url: str, username: str, password: str) -> str:
+    """POST /auth/password-login; the caller holds this url's login lock."""
     async with async_client(base_url=url, timeout=5.0) as client:
-        resp = await client.post(
-            "/auth/password-login",
-            json={"provider": "basic", "username": username, "password": password},
-        )
+        for attempt in range(LOGIN_MAX_RETRIES + 1):
+            resp = await client.post(
+                "/auth/password-login",
+                json={"provider": "basic", "username": username, "password": password},
+            )
+            if resp.status_code != 429 or attempt == LOGIN_MAX_RETRIES:
+                break
+            await asyncio.sleep(_login_retry_delay(resp, attempt))
         # 帳密沒設定又被拒 ⇒ 講「沒設定」；有填卻被拒才是真的認證失敗（維持原樣拋出）。
         if resp.status_code in (401, 403) and not (username and password):
             missing = " / ".join(
@@ -194,7 +310,7 @@ async def hermes_inspect(target: str = "all") -> str:
                 resp.raise_for_status()
                 result["capabilities"] = resp.json()
         except Exception as exc:
-            result["capabilities_error"] = public_backend_error(exc)
+            result["capabilities_error"] = backend_error_text(exc)
 
     if target in ("all", "config"):
         try:
@@ -202,13 +318,13 @@ async def hermes_inspect(target: str = "all") -> str:
                 resp = await client.get("/api/config")
                 resp.raise_for_status()
                 cfg = resp.json()
-                result["config_summary"] = {
+                result["config_summary"] = redact_config({
                     "model": cfg.get("model", ""),
                     "toolsets": cfg.get("toolsets", []),
                     "max_live_sessions": cfg.get("max_live_sessions"),
-                }
+                })
         except Exception as exc:
-            result["config_error"] = public_backend_error(exc)
+            result["config_error"] = backend_error_text(exc)
 
     if target in ("all", "model"):
         try:
@@ -217,7 +333,7 @@ async def hermes_inspect(target: str = "all") -> str:
                 resp.raise_for_status()
                 result["model_info"] = resp.json()
         except Exception as exc:
-            result["model_info_error"] = public_backend_error(exc)
+            result["model_info_error"] = backend_error_text(exc)
 
     if target in ("all", "status"):
         try:
@@ -231,7 +347,7 @@ async def hermes_inspect(target: str = "all") -> str:
                     "active_sessions": st.get("active_sessions"),
                 }
         except Exception as exc:
-            result["status_error"] = public_backend_error(exc)
+            result["status_error"] = backend_error_text(exc)
 
     return json.dumps(result, indent=2, default=str)
 
@@ -274,6 +390,7 @@ async def hermes_skill(action: str, name: str | None = None) -> str:
 
 
 @mcp.tool()
+@backend_errors
 async def hermes_mcp(action: str, name: str | None = None, url: str | None = None) -> str:
     """Manage Hermes MCP server connections. Actions: list, add, remove"""
     conn = _get_connection()
@@ -348,6 +465,7 @@ async def hermes_model(action: str = "info", model: str | None = None, provider:
 
 
 @mcp.tool()
+@backend_errors
 async def hermes_config(action: str = "get", key: str | None = None, value: str | None = None, dry_run: bool = False) -> str:
     """Read or update Hermes config. Actions: get, set"""
     conn = _get_connection()
@@ -365,8 +483,10 @@ async def hermes_config(action: str = "get", key: str | None = None, value: str 
                         current = current[part]
                     else:
                         return json.dumps({"error": f"Key '{key}' not found"})
+                # A secret anywhere on the path (model.api_key, secrets.x) hides the whole value.
+                current = _redact_all(current) if any(_secret_key(part) for part in parts) else redact_config(current)
                 return json.dumps({"key": key, "value": current}, indent=2, default=str)
-            return json.dumps(data, indent=2, default=str)
+            return json.dumps(redact_config(data), indent=2, default=str)
 
         if action == "set":
             if not key or value is None:
@@ -452,11 +572,13 @@ async def hermes_gateway(action: str = "status") -> str:
 
 
 @mcp.tool()
+@backend_errors
 async def hermes_chat(message: str, session_id: str | None = None) -> str:
     """Send a chat message to Hermes and receive a response."""
     conn = _get_connection()
 
-    async with _gateway_client(conn["gateway_url"], conn["gateway_api_key"]) as client:
+    timeout = httpx.Timeout(_chat_timeout(), connect=30.0)  # a whole agent turn (see CHAT_TIMEOUT)
+    async with _gateway_client(conn["gateway_url"], conn["gateway_api_key"], timeout) as client:
         payload = {"model": "default", "input": message}
         resp = await client.post("/v1/responses", json=payload)
         _check_gateway_response(resp, conn["gateway_api_key"])
@@ -492,7 +614,10 @@ async def hermes_session(action: str = "list", session_id: str | None = None) ->
             resp = await client.get("/api/sessions")
             resp.raise_for_status()
             data = resp.json()
-            return json.dumps(rows(data, 'sessions', ('id', 'session_id', 'created_at', 'updated_at')), indent=2)
+            if isinstance(data, dict):
+                sessions = data.get("sessions", [])
+                return json.dumps({"total": data.get("total", len(sessions)), "sessions": sessions[:20]}, indent=2, default=str)
+            return json.dumps(data, indent=2, default=str)
 
         if action == "get":
             if not session_id:
@@ -545,7 +670,21 @@ async def hermes_cron(
             resp = await client.get("/api/cron/jobs")
             resp.raise_for_status()
             jobs = resp.json()
-            return json.dumps(rows(jobs, 'jobs', ('id', 'name', 'enabled', 'state', 'next_run_at')), indent=2)
+            if isinstance(jobs, list):
+                summary = []
+                for j in jobs:
+                    if isinstance(j, dict):
+                        summary.append({
+                            "id": j.get("id"),
+                            "name": j.get("name"),
+                            "schedule": j.get("schedule", {}).get("expr") if isinstance(j.get("schedule"), dict) else j.get("schedule"),
+                            "prompt": (j.get("prompt") or "")[:80],
+                            "enabled": j.get("enabled"),
+                            "state": j.get("state"),
+                            "next_run": j.get("next_run_at"),
+                        })
+                return json.dumps({"total": len(summary), "jobs": summary}, indent=2, default=str)
+            return json.dumps(jobs, indent=2, default=str)
 
         if action == "create":
             if not name or not schedule or not prompt:
@@ -614,6 +753,7 @@ async def hermes_cron(
 
 
 @mcp.tool()
+@backend_errors
 async def hermes_webhook(
     action: str = "list",
     name: str | None = None,

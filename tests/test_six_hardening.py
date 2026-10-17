@@ -3,6 +3,7 @@ import asyncio
 from contextlib import asynccontextmanager, contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import re
 from pathlib import Path
 import socket
 import threading
@@ -16,6 +17,7 @@ from mcp_admin_core.gateway import make_apps
 from owned_runtime import Endpoint
 from mcp_admin_core.products import PRODUCTS, PROBES, ProductStore, TOOLS, child_spec
 from test_real_products import connection, rpc
+import nextcloud_fixtures
 
 
 @contextmanager
@@ -27,6 +29,10 @@ def serve(handler):
         yield f'http://127.0.0.1:{server.server_port}'
     finally:
         server.shutdown(); server.server_close(); thread.join()
+
+
+# An error reply: a tool error, a failure payload or a JSON-RPC error.
+ERROR_REPLY = re.compile(r'"isError":\s*true|"success\\?":\s*false|"error":\s*\{|"error\\?":\s*\\?"[^"\\]|_error\\?":')
 
 
 class Quiet(BaseHTTPRequestHandler):
@@ -49,7 +55,7 @@ async def runtime(tmp_path, product, url, *, canary=None, json_response=False, w
     store = ProductStore(tmp_path / 'state', product)
     configured = connection(product, url)
     if canary:
-        for key in ('password', 'api_key', 'api_secret', 'master_key', 'gateway_api_key', 'dashboard_password'):
+        for key in ('password', 'api_key', 'api_secret', 'master_key', 'gateway_api_key', 'dashboard_password', 'app_password'):
             if key in configured:
                 configured[key] = canary
     store.update(connection=configured, enabled_write_tools=list(write_grants))
@@ -137,6 +143,11 @@ async def test_error_bodies_never_enter_gateway_stream(tmp_path, product, json_r
 
     class Backend(Quiet):
         def do_GET(self):
+            if product == 'nextcloud':
+                self.rfile.read(int(self.headers.get('Content-Length', 0)))
+                if self.path == nextcloud_fixtures.OCS_PATH:  # account lookup succeeds: the tool's own request fails
+                    return nextcloud_fixtures.respond(self, 200, {'Content-Type': 'application/json'},
+                                                      b'{"ocs": {"data": {"id": "tester"}}}')
             calls.append(self.path)
             payload = {'detail': canary} if mode['shape'] == 'detail' else {'error': {'message': canary, 'nested': {'key': canary}}} if mode['shape'] == 'nested' else canary.encode()
             self.reply(payload, mode['status'])
@@ -153,10 +164,15 @@ async def test_error_bodies_never_enter_gateway_stream(tmp_path, product, json_r
             value = {'server_version': '18.0', 'server_version_info': [18,0,0,'final',0]} if method == 'version' else 7 if method == 'authenticate' else [{'model': 'res.partner', 'name': 'Contact'}]
             self.reply(xmlrpc.client.dumps((value,), methodresponse=True).encode())
 
+        do_PROPFIND = do_GET
+
     with serve(Backend) as url:
         async with runtime(tmp_path, product, url, canary=canary, json_response=json_response) as (client, headers, *_):
             name, arguments = PROBES[product]
-            for status in (401, 403, 422, 500, 503):
+            # Nextcloud latches its credentials after a 401 (no further backend contact until restart): last.
+            statuses = (403, 422, 500, 503, 401) if product == 'nextcloud' else (401, 403, 422, 500, 503)
+            latched = False
+            for status in statuses:
                 for shape in ('detail', 'text', 'nested'):
                     mode.update(status=status, shape=shape)
                     before = len(calls)
@@ -166,11 +182,20 @@ async def test_error_bodies_never_enter_gateway_stream(tmp_path, product, json_r
                         assert response.headers['content-type'].startswith('application/json')
                     else:
                         assert response.headers['content-type'].startswith('text/event-stream')
-                    # Entire raw JSON/SSE: includes text, structuredContent and any notifications.
-                    assert canary not in response.text, response.text
+                    # Entire raw JSON/SSE: includes text, structuredContent and any notifications. The canary is the
+                    # configured credential, [REDACTED] by the gateway; OpenDesign holds none, so there it is just the
+                    # backend's own text, which 0.2.1 relays (Hermes/OpenDesign status errors carry the body).
+                    if product != 'opendesign':
+                        assert canary not in response.text, response.text
                     assert len(response.content) < 4096
-                    assert 'BACKEND_' in response.text, response.text
-                    assert len(calls) > before
+                    # 0.2.0: the backend's own error text is relayed (as the PaaS servers), the configured
+                    # credential it echoes is [REDACTED] by the gateway; the reply is still an error.
+                    assert ERROR_REPLY.search(response.text), response.text
+                    if latched:
+                        assert len(calls) == before  # the auth latch sends nothing more
+                    else:
+                        assert len(calls) > before
+                    latched = product == 'nextcloud' and status == 401
 
 
 @pytest.mark.parametrize('product,capacity', [('opendesign', 4), ('odoo', 1)])
@@ -221,6 +246,12 @@ async def test_slow_backend_does_not_starve_protocol(tmp_path, product, capacity
                     monitor = HealthMonitor(store, manager, child, child_url=manager.endpoint.url)
                     await monitor.check()
                     assert monitor.backend == 'unreachable'
+                    if product == 'odoo':
+                        # 0.1.3: Odoo's probe has its own owned thread, never the full tool worker, so the hung
+                        # backend sees one more call and the probe fails by the monitor's timeout, not BACKEND_BUSY.
+                        assert peak == capacity + 1
+                    else:
+                        assert peak <= capacity
                     assert manager.starts == 1
                     pid = manager.process.pid
                     started = time.monotonic()
@@ -300,5 +331,5 @@ async def test_hermes_dashboard_login_and_cookie_errors_are_safe(tmp_path):
                     mode['status'] = status
                     response = await client.post('/mcp', headers=headers, json=call('hermes_inspect', {'target': 'status'}))
                     assert canary not in response.text
-                    assert f'BACKEND_HTTP_ERROR status={status}' in response.text
+                    assert str(status) in response.text  # 0.2.0: the backend's own status text, credential redacted
             assert len(cookies) == 4

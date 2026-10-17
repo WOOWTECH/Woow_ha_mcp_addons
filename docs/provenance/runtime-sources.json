@@ -4,8 +4,8 @@
     "source": "local:614ae663fadd91c76972f60017a76d2627bea87e",
     "path": "hermes_mcp_server/server.py",
     "upstream_sha256": "e1c3f7be4de0302fafb85848641d89a43e83565afa844da9f813f10a718c25a6",
-    "local_sha256": "8248cd4b308e8159fc52d00532fdbdbd39fc03fb4513f6bc68183fd65dfdf1d0",
-    "modification": "Use scoped DNS-pinned HTTPX transport for gateway, dashboard login and cookie clients; deny redirects/proxies. Map inspect exception fields by type, never raw exception text; explicit safe error boundaries on other enabled handlers include late decoding/JSON failures, preserving signatures. W2b adds session/cron handler error boundaries and bounded positive metadata projections without private message/prompt contents."
+    "local_sha256": "4a230eb1176e3c565ea05db83f665083bff157c4da1879cdefa8e96992f5a179",
+    "modification": "Use scoped DNS-pinned HTTPX transport for gateway, dashboard login and cookie clients; deny redirects/proxies. Inspect exception fields carry backend_error_text (class code and the backend's own text, 0.2.0); explicit safe error boundaries (backend_errors) on every other handler, including late decoding/JSON failures, preserving signatures and successful output. 0.2.0: the W2b session/cron metadata projections are gone (upstream's own list output again); hermes_mcp, hermes_config, hermes_chat and hermes_webhook got the same error boundary. 0.2.2 (test VM 2026-10-16, G1): config reads redact backend-held credentials. redact_config replaces every non-empty value under a secret key (a word in SECRET_WORDS, or a last word in SECRET_LAST_WORDS: api_key, *_TOKEN, basic_auth; not max_tokens) with [REDACTED], nested objects and lists included, keeps field names, empty strings, null and booleans, and the password of a URL's userinfo; hermes_config get (whole config, or a key path: a secret part hides the whole value) and hermes_inspect's config_summary use it. Writes (set) unchanged. 0.2.2 (test VM 2026-10-16, G2): hermes_chat's POST /v1/responses may take CHAT_TIMEOUT (HERMES_MCP_CHAT_TIMEOUT, 1-3600 s, default 300; connect 30 s); _gateway_client takes the timeout, every other Gateway/Dashboard call keeps 30 s. Commercial acceptance AI-HER-PERF-1 (PaaS Hermes MCP 249, 2026-10-18): the Hermes dashboard allows 10 logins per client IP per 60 s (successful ones count) and its 429 has no Retry-After, so 10+ concurrent cold calls each logging in got 429. _dashboard_login coalesces concurrent logins per dashboard_url (asyncio.Lock single-flight, the cache re-checked under the lock) and retries a 429 login up to twice after Retry-After (seconds or HTTP date, capped at 10 s) or 1 s / 2 s; other statuses are not retried. Same change as woow-mcp-server PR #67."
   },
   {
     "product": "hermes",
@@ -18,8 +18,8 @@
     "source": "local:614ae663fadd91c76972f60017a76d2627bea87e",
     "path": "opendesign_mcp_server/od_mcp_server.py",
     "upstream_sha256": "89caa06f96a62a6df663609fa468f00b41180970c835ceb03f3a1cf196f2e717",
-    "local_sha256": "337e40c3e6e069568baad938c373e0492f37462abe10d3a7b422163a5d0ee0fc",
-    "modification": "Require explicit OD_API_BASE and corrected provenance header; all HTTP clients use scoped DNS-pinned transport, redirect/proxy denial, safe errors and five-second ordinary I/O timeout. Explicit enabled-handler error boundaries cover late response decoding/JSON/processing failures without altering successful output or SDK signatures. Bounded SDK offload is in the separate launcher. W2b adds list_runs safe error boundary and id/projectId/status-only bounded projection."
+    "local_sha256": "903db04b90d34a6819a7d06fcd197025665fdb5fd0545500214c2716c42fe97f",
+    "modification": "Require explicit OD_API_BASE and corrected provenance header; all HTTP clients use scoped DNS-pinned transport, redirect/proxy denial and safe errors (backend_errors on every handler), connect timeout 5 s. Successful output and SDK signatures are unchanged. 0.2.0: list_runs returns upstream's own answer again (no id/projectId/status projection) and the ordinary client uses upstream's 60 s read timeout again."
   },
   {
     "product": "opendesign",
@@ -69,9 +69,7 @@
     "product": "emqx",
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/errors.py",
-    "upstream_sha256": "c7e0035e810600c10db1bd5ff21f511f3023c4b1c0c57931b3487ba6d4611795",
-    "local_sha256": "d8264e158ade0102720f7d35762c9edadba6244dbbbf768a527bc2cc9ee0813b",
-    "modification": "Map request exceptions by type into stable public ToolError codes, including lazy stream/close/decompression failures; reject invalid JSON/encoding instead of returning an empty success. No raw exception or response-body diagnostics."
+    "upstream_sha256": "c7e0035e810600c10db1bd5ff21f511f3023c4b1c0c57931b3487ba6d4611795"
   },
   {
     "product": "emqx",
@@ -183,9 +181,7 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/errors.py",
-    "upstream_sha256": "3bc39077a69c07b2b0ceeb306510dc2f71ccc3b604187a4cecedab784efc1768",
-    "local_sha256": "3615e517ac06aef789b9dad2387bd6fe4238f49f493d3fe2e95a4965c10a034f",
-    "modification": "Replace raw-body/exception public errors with bounded stable BACKEND codes/status; use shared type-based mapping for lazy stream/close/decompression failures and reject all JSON parsing exceptions without returning raw text."
+    "upstream_sha256": "3bc39077a69c07b2b0ceeb306510dc2f71ccc3b604187a4cecedab784efc1768"
   },
   {
     "product": "litellm",
@@ -215,9 +211,7 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/models.py",
-    "upstream_sha256": "8b3e9a184f6e12633ffb724aa69c55a09fae13df3d8f5112f3704d61aa6d94ec",
-    "local_sha256": "e058ffd9b6557d3228f2318d30776e37cbd173a358aabfcf29f6c8f3fe723f47",
-    "modification": "W2b: delete_model response projected to id/status only; transport and native require_operation retained."
+    "upstream_sha256": "8b3e9a184f6e12633ffb724aa69c55a09fae13df3d8f5112f3704d61aa6d94ec"
   },
   {
     "product": "litellm",
@@ -235,9 +229,7 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/teams.py",
-    "upstream_sha256": "15fe1783df2740477c0dd222f51c50c6043844fc3c0bf2361050d9c70904ea96",
-    "local_sha256": "6525b7e6d2224a28fed3a6f1809cfec9acabd6b15e030743f656ba84b420e619",
-    "modification": "W2b: list/create/update/delete team responses use bounded positive scalar metadata projection, excluding keys/members/private metadata. Native operation gates and fixed API calls retained."
+    "upstream_sha256": "15fe1783df2740477c0dd222f51c50c6043844fc3c0bf2361050d9c70904ea96"
   },
   {
     "product": "litellm",
@@ -274,5 +266,79 @@
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/models.py",
     "upstream_sha256": "0d247d845738f37d2673fd0e50203cc8c4f3c4cf6a2d3b10db7bd2a0b9740801"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "path": "nextcloud_mcp_server/__init__.py",
+    "upstream_sha256": "0f541abd284ed5379955acb5c8e52b56911024f2dbaf188a251bfb1be2842ff9"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "path": "nextcloud_mcp_server/server.py",
+    "upstream_sha256": "fa2f912301bd0d3eabeadfe5dba304f9db9fa869de5f91ea9f53f62e6fe129b2",
+    "local_sha256": "04e8a361367e7b586d611887b9494f18b8cd88ca0dad8c1d949bb9af3275ff9f",
+    "modification": "WOOW HA add-on: register the private tool woow_backend_probe: upstream NextcloudClient.probe() on a fresh client with the same settings, policy and public-error mapping, closed afterwards (never the tools' connections; the credentials-keyed auth latch is shared). It is not in tools.ALL_TOOLS, so READONLY/ALLOW_DELETE/DISABLED_TOOLS never remove it and DISABLED_TOOLS cannot name it; the gateway never lists or authorizes it (not in TOOLS), as for the Odoo add-on's probe. on_duplicate='error' fails start-up if the name is taken."
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "path": "nextcloud_mcp_server/settings.py",
+    "upstream_sha256": "d8283658375f65ec0022a5e04e48d0109e14d49a8df1f7e6c8fcbd905ebb45ad"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "path": "nextcloud_mcp_server/client.py",
+    "upstream_sha256": "303355520e6465fd8919c0e631151d5220c7703bfd7cde801a41daf2cdf90db8",
+    "local_sha256": "bfe17c31bd1acd14a5fffbe6aca865503fbd87e0a14b447f04c876fdfb87cd89",
+    "modification": "WOOW HA add-on: load_backend_policy() refuses to start (BackendPolicyError, exit 2) when no backend_policy module exists, instead of falling back to an unrestricted client. 0.2.0: the upstream error-body detail (server_message of a non-2xx answer) is reported again, as upstream. 0.2.1: Nextcloud's own error message (Sabre, OCS or plain text, 1000 characters) is relayed for every non-2xx status: server_message reads it, client.py reads it for 5xx too, status_message appends ' Nextcloud: <message>'."
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "path": "nextcloud_mcp_server/errors.py",
+    "upstream_sha256": "47c695afd7d99a050abc08e1bd431d8d3b31e923dd66fe4fdbbe349f07888800",
+    "local_sha256": "df1ccbd7590f8868b8297c0be57e00b532fd49786787bebfa94b3e0641609432",
+    "modification": "WOOW HA add-on 0.2.1 (owner decision 2026-10-15: raw backend errors). 0.2.1: Nextcloud's own error message (Sabre, OCS or plain text, 1000 characters) is relayed for every non-2xx status: server_message reads it, client.py reads it for 5xx too, status_message appends ' Nextcloud: <message>'."
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "path": "nextcloud_mcp_server/paths.py",
+    "upstream_sha256": "806f187a9ad668c89ddfa71c4e827ac78f69e9649493fd76228a17683e4b7c4d"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "path": "nextcloud_mcp_server/webdav.py",
+    "upstream_sha256": "56aa67abf1a1cea641be2a7704d09bd51e9682b441a07189744f0c48494aa4eb",
+    "local_sha256": "1e304349885f5dd3474e923dd0fc8b48c38e1acb3d19423b6f89e41333382604",
+    "modification": "WOOW HA add-on 0.2.1 (owner decision 2026-10-15: raw backend errors). 0.2.1: Nextcloud's own error message (Sabre, OCS or plain text, 1000 characters) is relayed for every non-2xx status: server_message reads it, client.py reads it for 5xx too, status_message appends ' Nextcloud: <message>'."
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "path": "nextcloud_mcp_server/caldav.py",
+    "upstream_sha256": "a6643700ae4f2b9c998020cd4ba0e4f03c3716fc33049ec1364eb39c742c921f"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "path": "nextcloud_mcp_server/ical.py",
+    "upstream_sha256": "531ca3c58684ea1c7dd504b440703c80699ccbf024278e568121195d9738b9af"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "path": "nextcloud_mcp_server/tools.py",
+    "upstream_sha256": "9b22f15816e56e6808a509886d89f52a04152dec99bf9078ccd257e098fb4aa4"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "path": "LICENSE",
+    "upstream_sha256": "1b05bfafc14067beabe8885c164528c122ebf545eabe97984b222fe377143a69"
   }
 ]

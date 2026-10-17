@@ -1,4 +1,4 @@
-"""Executable six-product boundary. Management remains fail closed pending HA approval.
+"""Executable product boundary (Odoo, Odoo Manage, Hermes, OpenDesign, EMQX, LiteLLM, Nextcloud) with approved, fail-closed HA admin verification.
 
 PYTHONPATH=packages/mcp-admin-core .venv/bin/python -m mcp_admin_core.run_product emqx
 GUI owns typed connection/token/policy. CLI owns deployment fields only.
@@ -12,11 +12,14 @@ import signal
 import httpx
 import uvicorn
 
+from . import redact
 from .config import ConfigError
 from .gateway import make_apps
+from .ha_role import make_ha_admin_verifier
 from .health import HealthMonitor
 from .lifecycle import Supervisor
-from .products import PRODUCTS, ProductStore, TOOLS, child_spec
+from .products import INSTRUCTIONS, PRODUCTS, ProductStore, TOOLS, child_spec
+from .surface import FULL_PRODUCTS, listing
 
 
 class Listener(uvicorn.Server):
@@ -49,11 +52,21 @@ async def run(args):
                 await manager.start()
 
             admin, mcp = make_apps(store, TOOLS[args.product], child,
-                                  health=health.snapshot, backend_changed=backend_changed)
+                                  verify_admin=make_ha_admin_verifier(),
+                                  health=health.snapshot, backend_changed=backend_changed,
+                                  server_name='woow-mcp-' + args.product, instructions=INSTRUCTIONS.get(args.product),
+                                  # 0.2.2: clients connect without a backend or a running child (Odoo Manage: unchanged)
+                                  listing=listing(args.product) if args.product in FULL_PRODUCTS else None,
+                                  availability=health.availability)
             servers = [Listener(uvicorn.Config(app, host=args.host, port=port,
                 proxy_headers=False, access_log=False, log_level='warning', server_header=False,
                 lifespan='off', limit_concurrency=64, timeout_keep_alive=5))
                 for app, port in ((admin, args.admin_port), (mcp, args.mcp_port))]
+            # 0.1.12: /private_<token>/mcp puts the token in the request path. access_log stays False; every record
+            # (uvicorn's error log, tracebacks, any library) is scrubbed to /private_[REDACTED]/ when created and
+            # again by uvicorn's handlers.
+            redact.install()
+            redact.guard_handlers(*redact.UVICORN_LOGGERS)
             await manager.start()
             tasks = [asyncio.create_task(server.serve()) for server in servers]
             monitor = asyncio.create_task(health.run())

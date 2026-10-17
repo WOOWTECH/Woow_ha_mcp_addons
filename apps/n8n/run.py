@@ -13,12 +13,14 @@ import signal
 import httpx
 import uvicorn
 
+from mcp_admin_core import redact
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.products import ProductStore
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.ha_role import make_ha_admin_verifier
 from mcp_admin_core.health import HealthMonitor
 from mcp_admin_core.lifecycle import Supervisor
+from mcp_admin_core.surface import listing
 from n8n_adapter import TOOLS, child_spec
 
 
@@ -47,12 +49,18 @@ async def run(args):
                 await manager.restart(child_spec(state, store.directory))
             admin, mcp = make_apps(store, TOOLS, child, health=health.snapshot,
                                    backend_changed=backend_changed,
-                                   verify_admin=make_ha_admin_verifier())
+                                   verify_admin=make_ha_admin_verifier(),
+                                   server_name="woow-mcp-n8n",
+                                   # 0.2.2: the full list and clean refusals without a backend or a running child
+                                   listing=listing("n8n"), availability=health.availability)
             servers = [Listener(uvicorn.Config(app, host=args.host, port=port,
                 proxy_headers=False, access_log=False, log_level="warning", server_header=False,
                 lifespan="off",  # this function, not ASGI lifespan, owns runtime resources
                 limit_concurrency=64, timeout_keep_alive=5)) for app, port in
                 ((admin, args.admin_port), (mcp, args.mcp_port))]
+            # 0.1.12: the token may be in a request path (/private_<token>/mcp): scrub every log record.
+            redact.install()
+            redact.guard_handlers(*redact.UVICORN_LOGGERS)
             await manager.start()
             monitor_task = asyncio.create_task(health.run())
             tasks = [asyncio.create_task(server.serve()) for server in servers]

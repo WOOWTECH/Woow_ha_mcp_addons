@@ -22,6 +22,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 from websockets.asyncio.server import serve
 
+from mcp_admin_core import VERSION
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.products import ProductStore, TOOLS
 from test_real_n8n import fake_backend
@@ -157,8 +158,7 @@ fs.writeFileSync(process.env.HOME+'/real-child-guard',String(process.pid));
                             initialized = await rpc(client,endpoint,headers,init)
                             break
                         except ValueError: await asyncio.sleep(.1)
-                assert initialized['serverInfo']['name']=='n8n-documentation-mcp'
-                assert initialized['serverInfo']['version']=='2.91.0'
+                assert initialized['serverInfo']=={'name':'woow-mcp-n8n','version':VERSION}  # 0.1.8 (F6)
                 headers['MCP-Protocol-Version']=initialized['protocolVersion']
                 await rpc(client,endpoint,headers,{'jsonrpc':'2.0','method':'notifications/initialized'})
                 documentation=await rpc(client,endpoint,headers,{'jsonrpc':'2.0','id':2,'method':'tools/call',

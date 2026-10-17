@@ -19,7 +19,7 @@ import xmlrpc.client
 import httpx
 from denial_probe import assert_denials, WRITE_CASES
 from mcp_admin_core.health import protocol_reply
-from mcp_admin_core.products import ProductStore, PROBES, TOOLS, probe_success
+from mcp_admin_core.products import ProductStore, PROBES, TOOLS, fresh_write_grants, probe_success
 
 APP = sys.argv[1]
 ROOT = Path('/opt/woow')
@@ -49,13 +49,39 @@ class Backend(BaseHTTPRequestHandler):
             return
         values = {'/v1/capabilities': {'models': []}, '/api/health': {'status': 'ok'},
                   '/api/v5/nodes': [{'node': 'fake@local', 'version': '5.fake'}],
-                  '/v1/models': {'data': [{'id': 'fake-model'}]}}
+                  '/v1/models': {'data': [{'id': 'fake-model'}]},
+                  # Nextcloud OCS: the account answer the child (and its private health probe) reads first.
+                  '/ocs/v2.php/cloud/user?format=json': {'ocs': {'meta': {'status': 'ok', 'statuscode': 200},
+                                                                 'data': {'id': 'tester'}}}}
         if self.path.startswith('/api/v1/workflows'):
             self.respond({'data': [], 'nextCursor': None})
         elif self.path in values:
             self.respond(values[self.path])
         else:
             self.send_error(404)
+
+    def do_PROPFIND(self):
+        # Nextcloud WebDAV: the home folder with one file (get_file_tree, the representative read).
+        CALLS.append(('PROPFIND', self.path))
+        self.rfile.read(int(self.headers.get('Content-Length', 0)))
+        if OFFLINE.is_set():
+            self.send_error(503)
+            return
+        if self.path != '/remote.php/dav/files/tester/':
+            self.send_error(404)
+            return
+        prop = ('<d:response><d:href>/remote.php/dav/files/tester/%s</d:href><d:propstat><d:prop>%s</d:prop>'
+                '<d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>')
+        data = ('<?xml version="1.0"?><d:multistatus xmlns:d="DAV:">'
+                + prop % ('', '<d:resourcetype><d:collection/></d:resourcetype><d:getetag>"home"</d:getetag>')
+                + prop % ('notes.md', '<d:resourcetype/><d:getcontentlength>5</d:getcontentlength>'
+                                      '<d:getetag>"one"</d:getetag><d:getcontenttype>text/markdown</d:getcontenttype>')
+                + '</d:multistatus>').encode()
+        self.send_response(207)
+        self.send_header('Content-Type', 'application/xml; charset=utf-8')
+        self.send_header('Content-Length', str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
     def do_DELETE(self):
         # Any dispatch mutation may write ONLY to this disposable fake.
@@ -147,7 +173,7 @@ async def rpc(client, headers, message):
 
 
 async def run():
-    assert APP in ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm')
+    assert APP in ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud')
     assert {p.name for p in (ROOT / 'apps').iterdir()} == {APP, 'runtime'}, 'sibling application shipped'
     assert not DATA.exists(), 'refuse non-disposable state'
     assert not (ROOT / '.git').exists()
@@ -182,21 +208,34 @@ async def run():
                     'odoo-manage': dict(url=url, database='test', username='tester', api_key='DUMMY'),
                     'hermes': dict(gateway_url=url, gateway_api_key='DUMMY'),
                     'opendesign': dict(url=url), 'emqx': dict(url=url, api_key='DUMMY', api_secret='DUMMY'),
-                    'litellm': dict(url=url, master_key='DUMMY')}
+                    'litellm': dict(url=url, master_key='DUMMY'),
+                    'nextcloud': dict(url=url, username='tester', app_password='DUMMY')}
                 state = fixture_update(connection=connections[APP])
                 public_tools = TOOLS[APP]
                 name, args = PROBES[APP]
-            # Valid complete v2 backup fixture: actual executable migrates it
-            # under writer ownership, preserving settings and denying new writes.
+            # 0.2.0 (the full add-on): the executable created a NEW state, so every write grant and the legacy switch
+            # are on (Odoo Manage none: its writers need module mode).
+            assert state.schema_version == 4
+            assert state.writes_enabled is True and state.enabled_write_tools == fresh_write_grants(APP)
+            # Valid complete v2 backup fixture (an installation older than exact grants, legacy switch off): actual
+            # executable migrates it under writer ownership through 3 to 4, preserving settings and turning every write
+            # on once (0.2.0).
             legacy = state.model_dump()
             legacy.pop('enabled_write_tools')
             legacy['schema_version'] = 2
+            legacy['writes_enabled'] = False
             (DATA / 'state.json').write_text(json.dumps(legacy))
             process = start()
             await ready_listener(client, process)
             migrated = json.loads((DATA / 'state.json').read_text())
-            assert migrated['schema_version'] == 3 and migrated['enabled_write_tools'] == []
-            assert migrated == state.model_dump()
+            assert migrated['schema_version'] == 4 and migrated['enabled_write_tools'] == fresh_write_grants(APP)
+            assert migrated == {**state.model_dump(), 'writes_enabled': APP != 'odoo-manage'}
+            # The denial checks below need every write revoked, as the panel saves it (and the restart keeps it).
+            stop(process)
+            process = None
+            state = fixture_update(writes_enabled=False, enabled_write_tools=[])
+            process = start()
+            await ready_listener(client, process)
             name_write, valid_write = WRITE_CASES[APP]
             public_tools[name_write].arguments.model_validate(valid_write)
             headers = {'Authorization': 'Bearer ' + state.token, 'Accept': 'application/json, text/event-stream'}
@@ -222,8 +261,10 @@ async def run():
             assert any(t.get('success') is True if APP == 'n8n' else probe_success(APP, t) for t in texts)
             for auth in ({}, {'Authorization': 'Bearer wrong'}):
                 assert (await client.post(ENDPOINT, headers=auth, json=initialize)).status_code == 401
-            for method in ('resources/list', 'prompts/list', 'tasks/get'):
-                assert (await client.post(ENDPOINT, headers=headers, json={'jsonrpc': '2.0', 'id': 4, 'method': method})).status_code == 403
+            for method in ('resources/list', 'prompts/list', 'tasks/get', 'server/discover'):
+                # 0.1.13: the gateway's own JSON-RPC Method not found (was 403); never forwarded.
+                response = await client.post(ENDPOINT, headers=headers, json={'jsonrpc': '2.0', 'id': 4, 'method': method})
+                assert response.status_code == 200 and response.json()['error']['code'] == -32601
             await assert_denials(client, ENDPOINT, headers, APP, lambda: len(CALLS))
             # Missing identity and forged role/peer headers must still deny,
             # including after the separately implemented real verifier integrates.
@@ -264,7 +305,7 @@ async def run():
             assert (await client.post(ENDPOINT, headers=headers, json=initialize)).status_code == 401
             # Read only this disposable fixture, never log tokens/state.
             restored = json.loads((DATA / 'state.json').read_text())
-            assert restored['schema_version'] == 3 and restored['enabled_write_tools'] == grants
+            assert restored['schema_version'] == 4 and restored['enabled_write_tools'] == grants
             token = restored['token']
             assert (await client.post(ENDPOINT, headers={'Authorization': 'Bearer ' + token}, json=message)).status_code == 403
             stop(process)

@@ -18,7 +18,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 CHECKS = ('source-secrets', 'history-secrets', 'image-secrets', 'vulnerabilities', 'licenses', 'container')
 EVIDENCE = ('sbom.syft.json', 'sbom.spdx.json', 'scan-summary.json')
-PRODUCTS = ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm')
+PRODUCTS = tuple(json.loads((ROOT / 'packaging/inputs.json').read_text())['products'])  # 0.1.5: retired odoo-manage refused
 
 
 class Closed(ValueError):
@@ -66,22 +66,92 @@ def write_json(path, value):
     path.write_text(json.dumps(value, sort_keys=True, indent=2) + '\n')
 
 
+def grype_db(report):
+    # Normalise the DB descriptor: grype <=0.89 reports db.{schemaVersion,checksum,built};
+    # grype 0.120 reports db.status.{schemaVersion 'v6.x', built, valid, from=...?checksum=sha256:...}.
+    db = report.get('descriptor', {}).get('db', {})
+    if isinstance(db.get('status'), dict):
+        status = db['status']
+        require(status.get('valid') is True and not status.get('error'))
+        match = re.search(r'[?&]checksum=sha256(?::|%3A)([0-9a-f]{64})(?:&|$)', str(status.get('from', '')))
+        return {'schemaVersion': str(status.get('schemaVersion', '')).removeprefix('v'), 'built': status.get('built'),
+                'checksum': match.group(1) if match else ''}
+    require(not db.get('error'))
+    return {'schemaVersion': str(db.get('schemaVersion', '')), 'built': db.get('built'), 'checksum': db.get('checksum', '')}
+
+
+OR_EXPRESSION = re.compile(r'\(?\s*([A-Za-z0-9.+-]+)(?:\s+OR\s+([A-Za-z0-9.+-]+))+\s*\)?')
+
+
+def license_allowed(policy, package, value):
+    # Default policy: exact allowed SPDX ids only; expressions are NOT split. Optional owner-approved
+    # extensions, all off unless set in supply-chain-policy.json:
+    #   debian_main_licenses = 'accept'          -> deb packages' Debian copyright names are recorded, not blocking
+    #   or_expressions = 'accept-if-any-allowed' -> a pure 'A OR B' expression passes if one option is allowed
+    allowed = policy['allowed_licenses']
+    if value in allowed:
+        return True
+    if not isinstance(value, str) or not value:
+        return False
+    if policy.get('debian_main_licenses', 'deny') == 'accept' and package.get('type') == 'deb':
+        return True
+    if policy.get('or_expressions', 'deny') == 'accept-if-any-allowed' and OR_EXPRESSION.fullmatch(value.strip()):
+        return any(token in allowed for token in re.findall(r'[A-Za-z0-9.+-]+', value) if token != 'OR')
+    return False
+
+
+def is_listed_fixture(fixtures, package):
+    # Owner-approved exact SBOM locations that are example/test manifests, not installed packages.
+    paths = [location.get('path') for location in package.get('locations') or []]
+    return bool(paths) and all(path in fixtures for path in paths)
+
+
+def known_package_license(policy, package):
+    # Owner-approved, VERSION-PINNED map 'type:name:version' -> allowed SPDX id, for packages whose
+    # shipped license text was checked but whose metadata is missing or not an SPDX id (e.g. 'BSD').
+    # A version bump drops out of the map and must be re-reviewed.
+    known = policy.get('known_package_licenses', {})
+    key = '%s:%s:%s' % (package.get('type'), package.get('name'), package.get('version'))
+    return [{'value': known[key]}] if key in known else []
+
+
+def known_binary_license(policy, package):
+    # Owner-approved map for binary artifacts syft cannot license (e.g. the python/node executables).
+    known = policy.get('known_binary_licenses', {})
+    if package.get('type') == 'binary' and package.get('name') in known:
+        return [{'value': known[package['name']]}]
+    return []
+
+
 def enforce_policy(sbom, vulnerabilities):
     policy = read_json(ROOT / 'packaging/supply-chain-policy.json')
+    require(policy.get('debian_main_licenses', 'deny') in ('deny', 'accept')
+            and policy.get('or_expressions', 'deny') in ('deny', 'accept-if-any-allowed')
+            and isinstance(policy.get('known_binary_licenses', {}), dict)
+            and isinstance(policy.get('known_package_licenses', {}), dict)
+            and all(re.fullmatch(r'[a-z]+:[^:\s]+:[^:\s]+', k) and v in policy['allowed_licenses']
+                    for k, v in policy.get('known_package_licenses', {}).items())
+            and isinstance(policy.get('non_package_fixtures', []), list)
+            and all(isinstance(p, str) and p.startswith('/') and '*' not in p for p in policy.get('non_package_fixtures', []))
+            and all(v in policy['allowed_licenses'] for v in policy.get('known_binary_licenses', {}).values()))
     require(policy['schema'] == 1 and policy['id'] == 'woow-conservative-v1'
             and policy['unknown_or_missing_license'] == 'deny'
-            and policy['unfixed_vulnerabilities'] == 'include')
+            and policy['unfixed_vulnerabilities'] in ('include', 'exclude'))
     require(isinstance(sbom.get('artifacts'), list) and bool(sbom['artifacts']))
+    fixtures = policy.get('non_package_fixtures', [])
     for package in sbom['artifacts']:
-        licenses = package.get('licenses')
+        if is_listed_fixture(fixtures, package):
+            continue
+        licenses = known_package_license(policy, package) or package.get('licenses')
+        if not licenses:
+            licenses = known_binary_license(policy, package)
         require(isinstance(licenses, list) and bool(licenses))
         for license_ in licenses:
-            # Expressions are NOT guessed/split: unreviewed AND/OR/custom licenses deny.
-            require(license_.get('value') in policy['allowed_licenses'])
+            require(license_allowed(policy, package, license_.get('value')))
     descriptor = vulnerabilities.get('descriptor', {})
     require(descriptor.get('name') == 'grype' and descriptor.get('version') == pins()['grype']['version'])
-    db = descriptor.get('db', {})
-    require(not db.get('error') and str(db.get('schemaVersion', '')).startswith('6.'))
+    db = grype_db(vulnerabilities)
+    require(db['schemaVersion'].startswith('6.'))
     require(bool(re.fullmatch(r'[0-9a-f]{64}', db.get('checksum', '').removeprefix('sha256:'))))
     try:
         age = (datetime.now(timezone.utc) - datetime.fromisoformat(db['built'].replace('Z', '+00:00'))).total_seconds()
@@ -90,9 +160,17 @@ def enforce_policy(sbom, vulnerabilities):
     require(0 <= age <= policy['grype_database_max_age_hours'] * 3600)
     require(isinstance(vulnerabilities.get('matches'), list))
     require(not vulnerabilities.get('ignoredMatches'))
+    # 'include': every blocked-severity match fails. 'exclude' (owner decision 2026-10-05): matches whose
+    # grype fix.state is exactly 'not-fixed' or 'wont-fix' are still reported in the scan evidence but do
+    # not block; 'fixed', missing, 'unknown' or any other state still fails.
     for match in vulnerabilities['matches']:
-        severity = match.get('vulnerability', {}).get('severity')
-        require(severity in policy['known_severities'] and severity not in policy['blocked_severities'])
+        vulnerability = match.get('vulnerability', {})
+        severity = vulnerability.get('severity')
+        require(severity in policy['known_severities'])
+        if severity in policy['blocked_severities']:
+            # Only an explicit upstream verdict may exempt a match; missing/unknown/other states block.
+            state = vulnerability.get('fix', {}).get('state')
+            require(policy['unfixed_vulnerabilities'] == 'exclude' and state in ('not-fixed', 'wont-fix'))
 
 
 def validate_sbom(sbom, spdx, subject):
@@ -144,7 +222,7 @@ def verify_remote(raw_manifest, digest, pulled, subject):
 
 def fixed_image(app):
     require(app in PRODUCTS)
-    return f'local/mcp-{app}:0.1.0'
+    return 'local/mcp-%s:%s' % (app, json.loads((ROOT / 'packaging/inputs.json').read_text())['version'])
 
 
 def inspect_image(app):
@@ -203,20 +281,81 @@ def scanner_env(private):
             'SYFT_CHECK_FOR_APP_UPDATE': 'false'}
 
 
+def triaged_pins():
+    # Only exact public sha256 file pins already triaged as false positives (packaging/secret-triage.json).
+    triage = read_json(ROOT / 'packaging/secret-triage.json')
+    require(triage.get('schema') == 1 and triage.get('requires_security_review') is True)
+    values = [entry.get('sha256_pin') for entry in triage.get('values', [])]
+    require(bool(values) and all(isinstance(v, str) and re.fullmatch(r'[0-9a-f]{64}', v) for v in values))
+    require(len(set(values)) == len(values) and all(entry.get('seen_in') for entry in triage['values']))
+    return sorted(values)
+
+
+def recorded_digests():
+    # The triage file itself publishes sha256 digests of image-layer hits (never the values); gitleaks
+    # flags those digests next to the word 'secret', so they are allowed by exact value as well.
+    entries = read_json(ROOT / 'packaging/secret-triage.json').get('image_findings', {}).get('entries', [])
+    digests = [entry.get('secret_sha256') for entry in entries]
+    require(all(isinstance(d, str) and re.fullmatch(r'[0-9a-f]{64}', d) for d in digests))
+    return digests
+
+
+def gitleaks_config():
+    # Default rules unchanged. Allowlist matches the WHOLE secret against exact 64-hex values only,
+    # so any other finding (or any other value) still fails closed. Reports stay --redact=100.
+    values = sorted(set(triaged_pins()) | set(recorded_digests()))
+    return ('[extend]\nuseDefault = true\n\n[[allowlists]]\n'
+            'description = "triaged sha256 file pins and recorded hit digests (packaging/secret-triage.json)"\n'
+            "regexes = ['''^(?:" + '|'.join(values) + ")$''']\n")
+
+
+def approved_image_findings():
+    # Third-party image-layer hits approved by owner/security review: (gitleaks rule, sha256 of value).
+    # Values are never stored; entries still PENDING approval do not count.
+    section = read_json(ROOT / 'packaging/secret-triage.json').get('image_findings', {})
+    approved = set()
+    for entry in section.get('entries', []):
+        rule, digest = entry.get('rule'), entry.get('secret_sha256')
+        require(isinstance(rule, str) and bool(rule) and isinstance(digest, str)
+                and bool(re.fullmatch(r'[0-9a-f]{64}', digest)) and bool(entry.get('seen')))
+        if entry.get('approved') is True:
+            approved.add((rule, digest))
+    return approved
+
+
 def secret_scan(tool, mode, target, private, label, env):
     config = private / 'gitleaks.toml'
-    config.write_text('[extend]\nuseDefault = true\n')
+    config.write_text(gitleaks_config())
     ignore = private / 'empty-ignore'
     ignore.write_text('')
     report = private / (label + '.json')
+    # Image layers hold third-party files whose hits are triaged by value hash; the retained evidence
+    # (SBOMs) is derived from that same image and repeats its metadata (e.g. the base image GPG_KEY),
+    # so both use the SAME approved (rule, value-hash) list. Only these scans read unredacted values,
+    # inside this private temporary directory, scrubbed right after hashing. Source/history stay
+    # redacted and zero-tolerance.
+    hashed = label in ('image', 'evidence')
     command = [str(tool), mode, str(target), '--config', str(config),
                '--gitleaks-ignore-path', str(ignore), '--ignore-gitleaks-allow',
                '--max-decode-depth', '5', '--max-archive-depth', '5', '--max-target-megabytes', '0',
-               '--log-level', 'warn', '--redact=100', '--no-banner', '--report-format', 'json', '--report-path', str(report)]
+               '--log-level', 'warn', '--redact=0' if hashed else '--redact=100', '--no-banner',
+               '--report-format', 'json', '--report-path', str(report)]
+    if hashed:
+        command += ['--exit-code', '0']
     if mode == 'git':
         command += ['--log-opts=--all --full-history -m']
-    run(command, cwd=private, env=env, reject_stderr=True)
-    require(read_json(report) == [])
+    run(command, cwd=private, env=env, reject_stderr=not hashed)
+    findings = read_json(report)
+    if not hashed:
+        require(findings == [])
+        return
+    try:
+        allowed = approved_image_findings()
+        keys = [(f.get('RuleID'), hashlib.sha256(str(f.get('Secret', '')).encode()).hexdigest()) for f in findings]
+    finally:
+        report.write_text('[]\n')  # never leave raw values behind, even on failure
+        findings = None
+    require(isinstance(keys, list) and all(key in allowed for key in keys))
 
 
 def source_scans(tool, private, env):
@@ -268,6 +407,8 @@ def candidate(app, tools, output):
         grype_config = private / 'grype.yaml'
         grype_config.write_text('check-for-app-update: false\ndb:\n  validate-age: true\n  max-allowed-built-age: 120h\n')
         vulnerabilities = private / 'vulnerabilities.json'
+        # Fetch and validate the DB first, alone; then scan the SBOM against it.
+        run([str(tools / 'grype'), 'db', 'update', '--config', str(grype_config)], cwd=private, env=env)
         raw = run([str(tools / 'grype'), 'sbom:' + str(syft), '--config', str(grype_config),
                    '-o', 'json'], cwd=private, env=env)
         vulnerabilities.write_bytes(raw)
@@ -281,8 +422,7 @@ def candidate(app, tools, output):
         write_json(evidence / 'subject.json', subject)
         write_json(evidence / 'scan-summary.json', {'subject': subject, 'policy_sha256': policy_hash(),
                    'tools': pins(), 'checks': dict.fromkeys(CHECKS, 'pass'),
-                   'vulnerability_database': {key: vulnerability_report['descriptor']['db'][key]
-                                              for key in ('schemaVersion', 'built', 'checksum')},
+                   'vulnerability_database': grype_db(vulnerability_report),
                    'package_count': len(sbom['artifacts']),
                    'vulnerability_count': len(vulnerability_report['matches'])})
         write_json(evidence / 'provenance.json', provenance(subject, evidence))

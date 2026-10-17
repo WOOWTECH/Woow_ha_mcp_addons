@@ -9,7 +9,8 @@ from .policy import Tool
 
 
 def branch_schema(schema, cls):
-    """Advertise the same conditional fields enforced before dispatch."""
+    """Describe the conditional fields the model's validators enforce before dispatch in its JSON schema (the
+    validated contract; 0.1.6: tools/list declares these branches as description clauses, policy.flat_schema)."""
     rules = {
         'Skill': {'list': (), 'enable': ('name',), 'disable': ('name',)},
         'Toolsets': {'list': (), 'enable': ('toolset',), 'disable': ('toolset',)},
@@ -111,8 +112,26 @@ class UpdatePartner(Record):
     values: PartnerValues
 
 
+class ChatterKwargs(Args):
+    body: str = Field(min_length=1, max_length=4000)
+    message_type: Literal['comment']
+
+
+# The approval object chatter_post's preview returns is {model, method, record_ids, kwargs, instance, token}, and the
+# child's text says to re-call with "the returned approval" and confirm=true. Up to 0.1.14 only {token} was accepted
+# (additionalProperties false), so following that text was always -32602. The echoed members are optional, bounded to
+# the preview's own shape and must agree with this call (Chatter.same_call); they are then dropped (exclude=True): only
+# the token reaches the child, which checks it against the payload it rebuilds from this call's own arguments
+# (odoo_mcp tools_write.chatter_post reads approval['token'] only). The docstring below is client-facing schema text.
 class Approval(Args):
+    """The approval object returned by the chatter_post preview. Send it back unchanged (or only its token) with
+    confirm=true and the same model, record_id and body."""
     token: str = Field(pattern=r'^odoo-write:[a-f0-9]{32}$')
+    model: Literal['res.partner'] | None = Field(default=None, exclude=True)
+    method: Literal['message_post'] | None = Field(default=None, exclude=True)
+    record_ids: list[Positive] | None = Field(default=None, min_length=1, max_length=1, exclude=True)
+    kwargs: ChatterKwargs | None = Field(default=None, exclude=True)
+    instance: Literal['default'] | None = Field(default=None, exclude=True)
 
 
 class Chatter(Record):
@@ -124,6 +143,19 @@ class Chatter(Record):
     approval: Approval | None = None
     confirm: bool = False
     instance: Literal['default'] | None = None
+
+    @model_validator(mode='after')
+    def same_call(self):
+        # The preview's canonical payload (tools_write._build_chatter_payload): the stripped body, this record, the
+        # resolved instance. A member that disagrees is a stale or foreign preview; the token would not match either.
+        a = self.approval
+        if a is not None and ((a.model is not None and a.model != self.model)
+                              or (a.record_ids is not None and a.record_ids != [self.record_id])
+                              or (a.kwargs is not None and (a.kwargs.body != self.body.strip()
+                                                            or a.kwargs.message_type != self.message_type))
+                              or (a.instance is not None and a.instance != (self.instance or 'default'))):
+            raise ValueError('approval does not match this call, run the preview again')
+        return self
 
 
 class Skill(Args):
@@ -231,6 +263,39 @@ class Teams(Args):
     organization_id: None = None
 
 
+# JSON Schema engines can treat `$` as before a final newline, unlike the
+# strict validator. Explicit character exclusion keeps the public schema equal.
+MetadataSegment = Annotated[Segment, Field(json_schema_extra={'not': {'pattern': r'[^A-Za-z0-9_-]'}})]
+
+
+class LiteLLMModelInfo(Args):
+    litellm_model_id: MetadataSegment
+
+
+class LiteLLMModelGroupInfo(Args):
+    model_group: str = Field(min_length=1, max_length=256, pattern=r'^[A-Za-z0-9][A-Za-z0-9_./:-]*$',
+                             json_schema_extra={'not': {'pattern': r'[^A-Za-z0-9_./:-]'}})
+
+
+class LiteLLMTeamInfo(Args):
+    team_id: MetadataSegment
+
+
+class LiteLLMUserInfo(Args):
+    user_id: MetadataSegment
+
+
+class LiteLLMUsers(Args):
+    page: int = Field(default=1, ge=1, le=10000)
+    page_size: int = Field(default=50, ge=1, le=100)
+    role: Literal['proxy_admin', 'proxy_admin_viewer', 'internal_user', 'internal_user_viewer'] | None = None
+    user_ids: list[MetadataSegment] | None = Field(default=None, min_length=1, max_length=20)
+    team: MetadataSegment | None = None
+    user_email: None = None
+    sort_by: None = None
+    sort_order: None = None
+
+
 class CreateTeam(Args):
     team_alias: Text
     # No arbitrary metadata, membership/role escalation or provider URLs.
@@ -330,4 +395,9 @@ def expand_tools(tools):
         'litellm_list_teams': Tool(Teams), 'litellm_create_team': Tool(CreateTeam, write=True),
         'litellm_update_team': Tool(UpdateTeam, write=True), 'litellm_delete_team': Tool(DeleteTeam, write=True),
         'litellm_delete_model': Tool(ModelId, write=True),
+        'litellm_model_info': Tool(LiteLLMModelInfo, requires_backend=True),
+        'litellm_model_group_info': Tool(LiteLLMModelGroupInfo, requires_backend=True),
+        'litellm_team_info': Tool(LiteLLMTeamInfo, requires_backend=True),
+        'litellm_list_users': Tool(LiteLLMUsers, requires_backend=True),
+        'litellm_user_info': Tool(LiteLLMUserInfo, requires_backend=True),
     })

@@ -22,8 +22,11 @@ class DenialTests(unittest.TestCase):
         calls = []
         async def fake(request):
             import json
+            message = json.loads(request.content)
             try:
-                authorize(json.loads(request.content), tools, state)
+                authorize(message, tools, state)
+            except policy.ToolCallRefused as refused:  # the gateway's 0.1.14 answer
+                return httpx.Response(200, json={'jsonrpc': '2.0', 'id': message['id'], 'error': refused.error()})
             except policy.Denied:
                 return httpx.Response(403)
             calls.append('OWNED fake backend only')
@@ -51,13 +54,17 @@ class DenialTests(unittest.TestCase):
             tools[name].arguments.model_validate(arguments)  # schema-valid, not a malformed false pass
             state = ProductState(product=product, token='a' * 43, child_token='b' * 43)
             listed = policy.filter_list({'result': {'tools': [{'name': name}]}}, tools, state)
-            self.assertEqual(listed['result']['tools'], [] if tools[name].write else [{'name':name, 'inputSchema':tools[name].arguments.model_json_schema()}])
-            for args, disabled in (({'unreviewed': True}, []), (arguments, [name])):
+            # 0.1.6 (AI Stage 0): the declared form of the local model (hermes_skill loses its top-level oneOf).
+            self.assertEqual(listed['result']['tools'], [] if tools[name].write else [{'name':name, 'inputSchema':
+                policy.child_input_schema(None) if tools[name].child_schema else policy.declared_schema(tools[name].arguments)}])
+            # 0.2.0: a full-surface tool forwards any object to the child, so only a bounded model refuses extra keys.
+            cases = ((arguments, [name]),) if tools[name].child_schema else (({'unreviewed': True}, []), (arguments, [name]))
+            for args, disabled in cases:
                 with self.assertRaises(policy.Denied):
                     ns['authorize']({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call',
                         'params': {'name': name, 'arguments': copy.deepcopy(args)}},
                         tools, state.model_copy(update={'disabled': disabled}))
-            with self.subTest(product=product), self.assertRaisesRegex(AssertionError, 'schema-valid supported write: HTTP denial missing'):
+            with self.subTest(product=product), self.assertRaisesRegex(AssertionError, 'schema-valid supported write: refusal missing'):
                 self.exercise(product, ns['authorize'])
 
     def test_denial_status_without_zero_backend_delta_fails(self):

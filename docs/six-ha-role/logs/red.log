@@ -1,0 +1,130 @@
+FFFFFF                                                                   [100%]
+=================================== FAILURES ===================================
+________________ test_runtime_uses_shared_admin_verifier[odoo] _________________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-17/test_runtime_uses_shared_admin0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x73ea686b29e0>
+fake_ws = {'closed': 0, 'connections': 0, 'frames': [], 'response': {'id': 1, 'result': [{'group_ids': ['system-admin'], 'id': 'human', 'is_active': True, 'is_owner': False, ...}], 'success': True, 'type': 'result'}, ...}
+product = 'odoo'
+caplog = <_pytest.logging.LogCaptureFixture object at 0x73ea686ce660>
+
+    @pytest.mark.parametrize('product', SIX)
+    async def test_runtime_uses_shared_admin_verifier(tmp_path, monkeypatch, fake_ws, product, caplog):
+        with caplog.at_level(logging.DEBUG):
+            async with runtime_apps(tmp_path, monkeypatch, product) as (admin, _, captured, __):
+                response = await admin.get('/api/bootstrap', headers=IDENTITY)
+>               assert response.status_code == 200
+E               assert 403 == 200
+E                +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests/test_product_ha_role.py:129: AssertionError
+------------------------------ Captured log call -------------------------------
+INFO     httpx:_client.py:1740 HTTP Request: GET http://admin/api/bootstrap "HTTP/1.1 403 Forbidden"
+_____________ test_runtime_uses_shared_admin_verifier[odoo-manage] _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-17/test_runtime_uses_shared_admin1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x73ea68452c30>
+fake_ws = {'closed': 0, 'connections': 0, 'frames': [], 'response': {'id': 1, 'result': [{'group_ids': ['system-admin'], 'id': 'human', 'is_active': True, 'is_owner': False, ...}], 'success': True, 'type': 'result'}, ...}
+product = 'odoo-manage'
+caplog = <_pytest.logging.LogCaptureFixture object at 0x73ea6857a490>
+
+    @pytest.mark.parametrize('product', SIX)
+    async def test_runtime_uses_shared_admin_verifier(tmp_path, monkeypatch, fake_ws, product, caplog):
+        with caplog.at_level(logging.DEBUG):
+            async with runtime_apps(tmp_path, monkeypatch, product) as (admin, _, captured, __):
+                response = await admin.get('/api/bootstrap', headers=IDENTITY)
+>               assert response.status_code == 200
+E               assert 403 == 200
+E                +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests/test_product_ha_role.py:129: AssertionError
+------------------------------ Captured log call -------------------------------
+INFO     httpx:_client.py:1740 HTTP Request: GET http://admin/api/bootstrap "HTTP/1.1 403 Forbidden"
+_______________ test_runtime_uses_shared_admin_verifier[hermes] ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-17/test_runtime_uses_shared_admin2')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x73ea686a7790>
+fake_ws = {'closed': 0, 'connections': 0, 'frames': [], 'response': {'id': 1, 'result': [{'group_ids': ['system-admin'], 'id': 'human', 'is_active': True, 'is_owner': False, ...}], 'success': True, 'type': 'result'}, ...}
+product = 'hermes'
+caplog = <_pytest.logging.LogCaptureFixture object at 0x73ea6857a210>
+
+    @pytest.mark.parametrize('product', SIX)
+    async def test_runtime_uses_shared_admin_verifier(tmp_path, monkeypatch, fake_ws, product, caplog):
+        with caplog.at_level(logging.DEBUG):
+            async with runtime_apps(tmp_path, monkeypatch, product) as (admin, _, captured, __):
+                response = await admin.get('/api/bootstrap', headers=IDENTITY)
+>               assert response.status_code == 200
+E               assert 403 == 200
+E                +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests/test_product_ha_role.py:129: AssertionError
+------------------------------ Captured log call -------------------------------
+INFO     httpx:_client.py:1740 HTTP Request: GET http://admin/api/bootstrap "HTTP/1.1 403 Forbidden"
+_____________ test_runtime_uses_shared_admin_verifier[opendesign] ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-17/test_runtime_uses_shared_admin3')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x73ea684ecf50>
+fake_ws = {'closed': 0, 'connections': 0, 'frames': [], 'response': {'id': 1, 'result': [{'group_ids': ['system-admin'], 'id': 'human', 'is_active': True, 'is_owner': False, ...}], 'success': True, 'type': 'result'}, ...}
+product = 'opendesign'
+caplog = <_pytest.logging.LogCaptureFixture object at 0x73ea684b0770>
+
+    @pytest.mark.parametrize('product', SIX)
+    async def test_runtime_uses_shared_admin_verifier(tmp_path, monkeypatch, fake_ws, product, caplog):
+        with caplog.at_level(logging.DEBUG):
+            async with runtime_apps(tmp_path, monkeypatch, product) as (admin, _, captured, __):
+                response = await admin.get('/api/bootstrap', headers=IDENTITY)
+>               assert response.status_code == 200
+E               assert 403 == 200
+E                +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests/test_product_ha_role.py:129: AssertionError
+------------------------------ Captured log call -------------------------------
+INFO     httpx:_client.py:1740 HTTP Request: GET http://admin/api/bootstrap "HTTP/1.1 403 Forbidden"
+________________ test_runtime_uses_shared_admin_verifier[emqx] _________________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-17/test_runtime_uses_shared_admin4')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x73ea684609b0>
+fake_ws = {'closed': 0, 'connections': 0, 'frames': [], 'response': {'id': 1, 'result': [{'group_ids': ['system-admin'], 'id': 'human', 'is_active': True, 'is_owner': False, ...}], 'success': True, 'type': 'result'}, ...}
+product = 'emqx'
+caplog = <_pytest.logging.LogCaptureFixture object at 0x73ea684b35c0>
+
+    @pytest.mark.parametrize('product', SIX)
+    async def test_runtime_uses_shared_admin_verifier(tmp_path, monkeypatch, fake_ws, product, caplog):
+        with caplog.at_level(logging.DEBUG):
+            async with runtime_apps(tmp_path, monkeypatch, product) as (admin, _, captured, __):
+                response = await admin.get('/api/bootstrap', headers=IDENTITY)
+>               assert response.status_code == 200
+E               assert 403 == 200
+E                +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests/test_product_ha_role.py:129: AssertionError
+------------------------------ Captured log call -------------------------------
+INFO     httpx:_client.py:1740 HTTP Request: GET http://admin/api/bootstrap "HTTP/1.1 403 Forbidden"
+_______________ test_runtime_uses_shared_admin_verifier[litellm] _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-17/test_runtime_uses_shared_admin5')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x73ea68497310>
+fake_ws = {'closed': 0, 'connections': 0, 'frames': [], 'response': {'id': 1, 'result': [{'group_ids': ['system-admin'], 'id': 'human', 'is_active': True, 'is_owner': False, ...}], 'success': True, 'type': 'result'}, ...}
+product = 'litellm'
+caplog = <_pytest.logging.LogCaptureFixture object at 0x73ea68451eb0>
+
+    @pytest.mark.parametrize('product', SIX)
+    async def test_runtime_uses_shared_admin_verifier(tmp_path, monkeypatch, fake_ws, product, caplog):
+        with caplog.at_level(logging.DEBUG):
+            async with runtime_apps(tmp_path, monkeypatch, product) as (admin, _, captured, __):
+                response = await admin.get('/api/bootstrap', headers=IDENTITY)
+>               assert response.status_code == 200
+E               assert 403 == 200
+E                +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests/test_product_ha_role.py:129: AssertionError
+------------------------------ Captured log call -------------------------------
+INFO     httpx:_client.py:1740 HTTP Request: GET http://admin/api/bootstrap "HTTP/1.1 403 Forbidden"
+=========================== short test summary info ============================
+FAILED tests/test_product_ha_role.py::test_runtime_uses_shared_admin_verifier[odoo]
+FAILED tests/test_product_ha_role.py::test_runtime_uses_shared_admin_verifier[odoo-manage]
+FAILED tests/test_product_ha_role.py::test_runtime_uses_shared_admin_verifier[hermes]
+FAILED tests/test_product_ha_role.py::test_runtime_uses_shared_admin_verifier[opendesign]
+FAILED tests/test_product_ha_role.py::test_runtime_uses_shared_admin_verifier[emqx]
+FAILED tests/test_product_ha_role.py::test_runtime_uses_shared_admin_verifier[litellm]
+6 failed in 0.80s

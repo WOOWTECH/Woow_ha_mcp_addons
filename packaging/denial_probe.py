@@ -4,10 +4,16 @@ WRITE_CASES = {
     'opendesign': ('delete_project', {'project_id': '00000000-0000-0000-0000-000000000001'}),
     'odoo': ('chatter_post', {'model':'res.partner', 'record_id':1, 'body':'Owned test comment'}),
     'odoo-manage': ('create_record', {'model':'res.partner', 'values':{'name':'Owned'}}),
-    'hermes': ('hermes_skill', {'action':'disable', 'name':'example'}),
+    # 0.2.0: a whole-tool writer (a mixed tool's malformed call without its selector now reaches the child, which
+    # refuses it itself; this probe asserts the gateway's own refusal).
+    'hermes': ('hermes_chat', {'message':'Owned'}),
     'emqx': ('emqx_kick_client', {'clientid':'device'}),
     'litellm': ('litellm_create_team', {'team_alias':'Owned'}),
+    'nextcloud': ('create_text_file', {'path':'Owned/denied.md', 'content':'Owned'}),
 }
+
+
+REFUSALS = ('Unknown tool', 'Operation not permitted', 'Invalid params')
 
 
 async def assert_denials(client, endpoint, headers, product, backend_count):
@@ -20,5 +26,11 @@ async def assert_denials(client, endpoint, headers, product, backend_count):
         response = await client.post(endpoint, headers=headers, json={
             'jsonrpc': '2.0', 'id': 5, 'method': 'tools/call',
             'params': {'name': name, 'arguments': arguments}})
-        assert response.status_code == 403, label + ': HTTP denial missing'
+        # 0.1.14: inside a session a refused well-formed call is the gateway's own JSON-RPC error (HTTP 200), not 403:
+        # "Unknown tool" for a missing tool or a write tool without its grant (whatever its arguments), "Operation not
+        # permitted" for a write operation of a read tool, "Invalid params" for its malformed arguments. Never a result.
+        reply = response.json() if response.status_code == 200 else None
+        error = reply.get('error') if isinstance(reply, dict) and 'result' not in reply else None
+        assert (isinstance(error, dict) and error.get('code') == -32602 and error.get('message') in REFUSALS
+                and error.get('data', {}).get('tool') == name), label + ': refusal missing'
         assert backend_count() == before, label + ': backend contacted'

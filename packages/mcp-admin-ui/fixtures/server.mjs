@@ -20,7 +20,7 @@ function reset(next = {}) {
     product: next.product ?? 'n8n', endpoint: next.endpoint ?? null,
     backend_url: null, backend_key_set: false, connection_configured: next.configured ?? false,
     token_active: true, writes_enabled: next.legacyWrites ?? false, disabled: [],
-    ...(next.granular !== false ? { policy_contract: 'woow-v3-exact-grants' } : {}), enabled_write_tools: [],
+    ...(next.granular !== false ? { policy_contract: 'woow-v3-exact-grants' } : {}), enabled_write_tools: next.grants ?? [],
     tools: {
       read_example: { write: false, legacy_write:false, write_grants:[], operation_parameter:null, inputSchema:{} },
       write_example: { write: true, legacy_write:true, write_grants:['write_example'], operation_parameter:null, inputSchema:{} },

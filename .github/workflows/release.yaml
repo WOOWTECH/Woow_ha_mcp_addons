@@ -6,7 +6,7 @@ on:
         description: Independently cleared product (no arbitrary ref/version)
         type: choice
         required: true
-        options: [odoo, odoo-manage, n8n, hermes, opendesign, emqx, litellm]
+        options: [odoo, n8n, hermes, opendesign, emqx, litellm, nextcloud]
 permissions:
   contents: read
 concurrency:
@@ -29,7 +29,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
-          python-version: '3.13.12'
+          python-version: '3.13.16'
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22.23.2'
@@ -81,7 +81,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
-          python-version: '3.13.12'
+          python-version: '3.13.16'
       - run: |
           python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
       - run: python packaging/validate.py && python packaging/check_release.py "$APP"
@@ -101,8 +101,8 @@ jobs:
           platforms: linux/amd64
           push: false
           load: true
-          tags: local/mcp-${{ inputs.app }}:0.1.0
-          build-args: BUILD_VERSION=0.1.0
+          tags: local/mcp-${{ inputs.app }}:0.2.2
+          build-args: BUILD_VERSION=0.2.2
           labels: org.opencontainers.image.revision=${{ github.sha }}
       - name: Pinned scanners (public checksum-verified binaries)
         run: python packaging/install_scanners.py "$RUNNER_TEMP/scanners"
@@ -121,7 +121,7 @@ jobs:
         run: |
           set -eu
           python packaging/supply_chain.py verify "$APP" "$RUNNER_TEMP/candidate"
-          IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:0.1.0"
+          IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:0.2.2"
           TESTED_ID="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate/subject.json")"
           docker tag "$TESTED_ID" "$IMAGE"
           test "$(docker image inspect "$IMAGE" --format '{{.Id}}')" = "$TESTED_ID"
@@ -130,7 +130,7 @@ jobs:
         run: python packaging/registry_gate.py public "$APP" "$RUNNER_TEMP/candidate"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: published-evidence-${{ inputs.app }}-0.1.0-${{ github.sha }}
+          name: published-evidence-${{ inputs.app }}-0.2.2-${{ github.sha }}
           path: |
             ${{ runner.temp }}/candidate/subject.json
             ${{ runner.temp }}/candidate/sbom.syft.json

@@ -1,5 +1,5 @@
 import { AdminApi, ApiError } from './api.js';
-import { products, UiError, explicitUrl, backendPayload, granularPolicy, toolRows, policyPayload, policyFingerprint, effectiveGrant, clientExample } from './contracts.js';
+import { products, UiError, explicitUrl, backendPayload, granularPolicy, toolRows, policyPayload, policyFingerprint, effectiveGrant, clientExample, claudeConnectorUrl } from './contracts.js';
 import './styles.css';
 
 const root = document.querySelector('#app');
@@ -40,8 +40,10 @@ function hideToken() {
   revealEpoch++;
   revealed = null;
   clearTimeout(revealTimer);
-  document.querySelector('#token-secret')?.replaceChildren();
-  document.querySelector('#token-secret')?.setAttribute('hidden', '');
+  for (const id of ['#token-secret', '#claude-secret']) {
+    document.querySelector(id)?.replaceChildren();
+    document.querySelector(id)?.setAttribute('hidden', '');
+  }
 }
 function fail(error) {
   hideToken();
@@ -138,7 +140,8 @@ function tools() {
   const rows = toolRows(state);
   form.append(p('停用與授權必須由伺服器逐次檢查 tools/call。此頁的控制項不是安全邊界，也不會替你執行工具。'));
   if (!granular) form.append(el('div', { class: 'notice' }, '工具授權版本不相容，無法儲存。請重新整理；不會以舊版全域開關取代精確授權。'));
-  if (state.writes_enabled) form.append(p('注意：伺服器回報舊版全域寫入目前開啟。此頁不將它標示為唯讀。'));
+  form.append(el('div', { class: 'notice' }, '預設開啟所有工具與寫入（新安裝，以及從 0.1.x 升級時一次）：MCP 用戶端（例如 AI 助理）可直接新增、修改或刪除後端資料，權限等同後端帳號。請只保留確實需要的工具與寫入，其餘在此逐一停用或取消勾選後儲存。'));
+  if (state.writes_enabled && rows.some(row => row.legacy)) form.append(p('注意：伺服器回報舊版全域寫入目前開啟（新安裝的預設）。此頁不將它標示為唯讀；儲存後改以下方逐項勾選為準，未勾選的寫入即關閉。'));
   if (!rows.length) form.append(p('伺服器未提供工具清單，無法編輯權限。'));
   for (const row of rows) {
     const disabled = el('input', { type: 'checkbox', name: 'disabled', value: row.name, checked: state.disabled?.includes(row.name) });
@@ -182,6 +185,7 @@ async function copy(text) {
 async function tokenAction(action) {
   const descriptions = {
     reveal: ['顯示目前權杖？', '權杖將在此頁短暫顯示 60 秒，切換頁面或離開視窗即隱藏。請避免螢幕分享。'],
+    claude: ['顯示 Claude.ai 連線網址？', '這個網址含有真實權杖，等同密碼：只貼進 Claude.ai 的自訂連接器設定，不要分享、截圖或貼到聊天。網址將短暫顯示 60 秒，切換頁面或離開視窗即隱藏。'],
     rotate: ['重新產生權杖？', '舊權杖立即失效，所有用戶端都需更新。已送出的後端工作不會因此復原。新權杖僅短暫顯示。'],
     revoke: ['撤銷權杖？', '用戶端將無法使用此權杖連線。已送出的工作不會回復；需重新產生權杖才能恢復存取。'],
   };
@@ -189,13 +193,22 @@ async function tokenAction(action) {
   if (!await confirmAction(...descriptions[action], action === 'revoke' ? '確認撤銷' : '確認繼續')) return;
   const epoch = revealEpoch;
   await task(async () => {
-    const result = await api.mutate(`token/${action}`);
+    const result = await api.mutate(`token/${action === 'claude' ? 'reveal' : action}`); // same CSRF reveal as 顯示權杖
     if (action === 'revoke') { await reload('權杖已撤銷。舊權杖不可再用於新的授權請求。'); return; }
     state = await api.bootstrap();
     render();
     if (!result?.token) { notice('目前沒有有效權杖。請確認伺服器狀態。', true); return; }
     if (typeof result.token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(result.token)) throw new UiError('權杖回應格式不符，未顯示。');
     if (epoch !== revealEpoch || document.hidden) { notice('操作已完成，但頁面曾離開焦點，權杖未顯示。需要時請重新要求顯示。'); return; }
+    if (action === 'claude') {
+      const url = claudeConnectorUrl(safeEndpoint(), result.token);
+      revealed = url;
+      const area = document.querySelector('#claude-secret');
+      area.hidden = false;
+      area.replaceChildren(p('60 秒後自動隱藏；剪貼簿不會自動清除。網址外洩時請按「重新產生」，舊網址立即失效。'), el('code', { class: 'secret' }, url), el('div', { class: 'actions' }, button('複製 Claude.ai 連線網址', () => revealed && copy(revealed)), button('立即隱藏', hideToken)));
+      revealTimer = setTimeout(hideToken, 60000);
+      return;
+    }
     revealed = result.token;
     const area = document.querySelector('#token-secret');
     area.hidden = false;
@@ -208,7 +221,7 @@ async function tokenAction(action) {
 function access() {
   const endpoint = safeEndpoint();
   const input = el('input', { id: 'endpoint', name: 'endpoint', type: 'url', value: endpoint ?? '', placeholder: 'https://YOUR-MCP-HOST:PORT/mcp', autocomplete: 'off', required: true, 'aria-describedby': 'endpoint-help' });
-  const form = el('form', {}, el('div', { class: 'field' }, el('label', { for: 'endpoint' }, 'MCP 用戶端端點'), input), el('p', { id: 'endpoint-help', class: 'hint' }, '明確填寫用戶端可到達的 /mcp URL，不是 Ingress 網址。不會由此頁的網域推測；不可把權杖放進 URL。'), el('div', { class: 'actions' }, el('button', { type: 'submit', class: 'primary' }, '儲存端點'), button('清除端點', async () => {
+  const form = el('form', {}, el('div', { class: 'field' }, el('label', { for: 'endpoint' }, 'MCP 用戶端端點'), input), el('p', { id: 'endpoint-help', class: 'hint' }, '明確填寫用戶端可到達的 /mcp URL，不是 Ingress 網址。不會由此頁的網域推測；這裡不要放權杖（Claude.ai 用的含權杖網址由下方另外產生）。'), el('div', { class: 'actions' }, el('button', { type: 'submit', class: 'primary' }, '儲存端點'), button('清除端點', async () => {
     if (await confirmAction('清除 MCP 端點？', '只清除用戶端連線範例的端點設定，不會撤銷權杖。')) await task(async () => { await api.mutate('endpoint', { endpoint: null }); await reload('已清除端點。'); });
   })));
   form.addEventListener('submit', event => {
@@ -219,6 +232,13 @@ function access() {
   });
   return el('div', { class: 'stack' }, card('明確設定你的連線端點', chip(endpoint ? '已設定端點' : '尚未設定'), form),
     card('Add-on 權杖', chip(state.token_active ? '有效 · 預設隱藏' : '已撤銷 / 未啟用'), p('每個 Add-on 使用一把獨立 Bearer 權杖。權杖不是 HA 管理員密碼，也不會授予管理介面權限。'), el('div', { class: 'actions' }, button('顯示權杖', () => tokenAction('reveal'), { disabled: !state.token_active }), button('重新產生', () => tokenAction('rotate')), button('撤銷權杖', () => tokenAction('revoke'), { disabled: !state.token_active })), el('div', { id: 'token-secret', class: 'secret-box', hidden: true, 'aria-live': 'polite' })),
+    card('Claude.ai 自訂連接器', chip(endpoint && state.token_active ? '可產生 · 預設隱藏' : '尚無法產生'),
+      p('Claude.ai 網頁版的自訂連接器無法帶 Authorization header，改用含權杖的專屬網址：在 Claude.ai 新增自訂連接器時貼進伺服器網址欄位，OAuth 進階設定留空。Claude.ai 從網際網路連線，上方端點必須是它連得到的 HTTPS 網址。'),
+      p('這個網址等同密碼：任何拿到網址的人都能以本 Add-on 的權限呼叫工具。只貼進 Claude.ai，不要分享、截圖或貼到聊天、Git；外洩或不再使用時請按上方「重新產生」或「撤銷權杖」，舊網址立即失效。'),
+      endpoint ? null : p('尚未設定 MCP 用戶端端點：請先在上方填寫 Claude.ai 可從網際網路連到的 https://…/mcp 網址並儲存，才能產生連線網址。'),
+      endpoint && !state.token_active ? p('權杖已撤銷或未啟用：請先按「重新產生」。') : null,
+      el('div', { class: 'actions' }, button('顯示 Claude.ai 連線網址', () => tokenAction('claude'), { disabled: !endpoint || !state.token_active })),
+      el('div', { id: 'claude-secret', class: 'secret-box', hidden: true, 'aria-live': 'polite' })),
     card('手動加入 MCP 用戶端', p('適用支援 Streamable HTTP 的用戶端；欄位名稱依用戶端而異。先填端點，再於用戶端安全地填入 Bearer。未驗證所有用戶端相容性。'),
       endpoint ? null : p('以下端點只是佔位文字，不能直接連線。'), el('pre', { tabindex: '0', 'aria-label': '不含真實權杖的連線範例' }, el('code', {}, clientExample(endpoint))), button('複製佔位範例', () => copy(clientExample(endpoint))), p('一般複製永遠使用 <YOUR_ADDON_TOKEN> 佔位文字，不含真實權杖。建議跨主機連線使用 HTTPS。')));
 }

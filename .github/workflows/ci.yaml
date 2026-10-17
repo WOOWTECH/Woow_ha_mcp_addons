@@ -19,7 +19,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
-          python-version: '3.13.12'
+          python-version: '3.13.16'
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22.23.2'
@@ -70,7 +70,7 @@ jobs:
       max-parallel: 1
       fail-fast: false
       matrix:
-        app: [odoo, odoo-manage, n8n, hermes, opendesign, emqx, litellm]
+        app: [odoo, n8n, hermes, opendesign, emqx, litellm, nextcloud]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -92,8 +92,8 @@ jobs:
           platforms: linux/amd64
           push: false
           load: true
-          tags: local/mcp-${{ matrix.app }}:0.1.0
-          build-args: BUILD_VERSION=0.1.0
+          tags: local/mcp-${{ matrix.app }}:0.2.2
+          build-args: BUILD_VERSION=0.2.2
           labels: org.opencontainers.image.revision=${{ github.sha }}
       - name: Pinned scanners (public checksum-verified binaries)
         run: python3 packaging/install_scanners.py "$RUNNER_TEMP/scanners"

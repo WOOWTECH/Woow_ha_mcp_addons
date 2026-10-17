@@ -1,0 +1,42 @@
+# Publishes the seven MCP Server add-ons (addons/*) to the WOOW HA App Store and its Local Download
+# (owner decision 2026-10-09). The reusable publisher runs the Store's own tooling and registry; the Store
+# consumer re-validates every notification (source commit, context checksums, publisher run on this repository's
+# default branch, and the published GHCR images per architecture). This repository keeps its own add-on store as
+# well; release gating stays with the builder VM pipeline (docs/operations/release.md).
+name: WOOW addon source notification
+'on':
+  push:
+    branches:
+    - claude-delivery
+  workflow_dispatch: {}
+  schedule:
+  - cron: 41 */6 * * *
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: woow-addon-source-notification
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/claude-delivery'
+    uses: WOOWTECH/Woow_HA_App_Store/.github/workflows/woow-addon-publish.yml@main
+  # Ask the Store to synchronize now instead of at its next (often hours-late)
+  # schedule. Runs only when publish wrote a new notification; the Store
+  # re-validates everything, so the dispatch carries no payload.
+  notify-store:
+    needs: publish
+    if: needs.publish.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+    - name: Send woow-addon-ready to the Store
+      env:
+        GH_TOKEN: ${{ secrets.APP_STORE_DISPATCH_TOKEN }}
+      run: |
+        if [ -z "$GH_TOKEN" ]; then
+          echo "::warning title=Store not notified::APP_STORE_DISPATCH_TOKEN is not set; the Store takes this version at its next scheduled synchronization."
+          exit 0
+        fi
+        gh api --method POST repos/WOOWTECH/Woow_HA_App_Store/dispatches -f event_type=woow-addon-ready

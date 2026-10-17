@@ -18,6 +18,7 @@ from test_batch2_policy import GRAPH
 from test_expansion_policy import call
 from test_expansion_runtime import payload
 from test_real_products import connection, rpc
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 KEY = 'OWNED_DUMMY_BACKEND_KEY_NOT_A_REAL_CREDENTIAL'
 CANARY = 'OWNED_PRIVATE_DIAGNOSTIC_MUST_NOT_ESCAPE'
@@ -150,13 +151,15 @@ def writer_backend(product):
         assert not thread.is_alive()
 
 
-@pytest.mark.parametrize('product', ['n8n', 'odoo-manage'])
+# 0.2.0: n8n creation returns the published client's result (no metadata-only projection or malformed-success
+# check), so only the retired Odoo Manage keeps this bounded writer contract.
+@pytest.mark.parametrize('product', ['odoo-manage'])
 async def test_writer_errors_real_owned_runtime(tmp_path, product):
     with writer_backend(product) as (url, state):
         name = 'n8n_create_workflow' if product == 'n8n' else 'post_message'
         store = ProductStore(tmp_path / product, product)
         if product == 'n8n':
-            store.update(backend_url=url, backend_key=KEY)
+            store.update(backend_url=url, backend_key=KEY, writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
         else:
             store.update(connection={**connection(product, url), 'api_key': KEY, 'mode': 'module'})
         spec = (n8n_spec if product == 'n8n' else child_spec)(store.load(), store.directory)
@@ -190,7 +193,7 @@ async def test_writer_errors_real_owned_runtime(tmp_path, product):
                     args = GRAPH if product == 'n8n' else {'model': 'res.partner', 'record_id': 1, 'body': 'Owned note'}
                     store.update(writes_enabled=True)
                     before = len(dispatches)
-                    assert (await client.post('/mcp', headers=headers, json=call(name, args))).status_code == 403
+                    assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
                     assert not state['posts'] and len(dispatches) == before
                     store.update(enabled_write_tools=[name])
                     cases = (['exact', 401, 403, 'forbidden-publish', 404, 429, 500, 502, 503, 'text',
@@ -243,7 +246,7 @@ async def test_writer_errors_real_owned_runtime(tmp_path, product):
                     for policy in ({'disabled': [name]}, {'disabled': [], 'enabled_write_tools': []}):
                         store.update(**policy)
                         before, count = len(dispatches), len(state['posts'])
-                        assert (await client.post('/mcp', headers=headers, json=call(name, args))).status_code == 403
+                        assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
                         assert len(dispatches) == before and len(state['posts']) == count
                     assert not state['failures'], state['failures']
                     await client.delete('/mcp', headers=headers)

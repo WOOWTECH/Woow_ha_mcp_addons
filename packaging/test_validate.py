@@ -28,7 +28,7 @@ class PackagingTests(unittest.TestCase):
             ('privileged', ['SYS_ADMIN']), ('watchdog', 'http://[HOST]:8081/health/ready'),
             ('protected', True), ('auto_update', False), ('homeassistant', '2026.09.3'),
             ('options', {'backend_url': 'http://example.invalid'}), ('schema', False),
-            ('boot', 'auto'), ('unknown_typo', False)]
+            ('boot', 'manual'), ('ingress_entry', '/'), ('ingress_entry', '/access'), ('unknown_typo', False)]
         for key, value in mutations:
             with self.subTest(key=key, value=value):
                 doc = copy.deepcopy(original)
@@ -36,14 +36,15 @@ class PackagingTests(unittest.TestCase):
                 with self.assertRaises(v.Invalid):
                     v.manifest(doc, 'n8n')
 
-    def test_n8n_only_approved_permission_exception(self):
+    def test_approved_permission_exception_is_homeassistant_api_only(self):
+        # n8n approved 2026-10-04; the other six by owner decision 2026-10-05 (0.1.1); Nextcloud 2026-10-08 (0.1.7).
         for product in v.PRODUCTS:
             original = v.load(v.ROOT / 'addons' / product / 'config.yaml')
-            self.assertIs(original['homeassistant_api'], product == 'n8n')
+            self.assertIs(original['homeassistant_api'], True)
             v.manifest(original, product)
             # Exact booleans; no new API, Supervisor role or host privileges.
             mutations = [('homeassistant_api', value) for value in
-                         (product != 'n8n', 0, 1, 'true', 'false', None)]
+                         (False, 0, 1, 'true', 'false', None)]
             mutations += [(key, True) for key in ('hassio_api', 'auth_api',
                           'docker_api', 'full_access', 'host_network', 'host_pid',
                           'host_ipc', 'host_uts', 'host_dbus')]
@@ -183,6 +184,23 @@ class PackagingTests(unittest.TestCase):
             with self.subTest(workflow=workflow, mutation='verify-after-build'), self.assertRaises(v.Invalid):
                 v.builder_workflow(doc, workflow)
 
+    def test_odoo_manage_is_retired_from_store_build_and_release(self):
+        # Owner decision 2026-10-06: off the store, never built or released again; the source stays (archived).
+        self.assertEqual(v.RETIRED, ('odoo-manage',))
+        self.assertNotIn('odoo-manage', v.PRODUCTS)
+        self.assertFalse((v.ROOT / 'addons/odoo-manage').exists())
+        self.assertNotIn('odoo-manage', v.load(v.ROOT / 'packaging/inputs.json')['products'])
+        self.assertNotIn('odoo-manage', v.load(v.ROOT / 'RELEASE-GATES.json')['products'])
+        for workflow in ('ci.yaml', 'release.yaml'):
+            self.assertNotIn('odoo-manage', (v.ROOT / '.github/workflows' / workflow).read_text())
+        self.assertTrue((v.ROOT / 'apps/odoo-manage/launch.py').is_file())
+        # RC review F2: the builder-side gate tools refuse it too, so no odoo-manage 0.1.5 image can pass the gate.
+        import container_acceptance
+        import context_closure
+        import supply_chain
+        for products in (container_acceptance.PRODUCTS, supply_chain.PRODUCTS, tuple(context_closure.products(v.ROOT))):
+            self.assertEqual(tuple(products), v.PRODUCTS)
+
     def test_release_defaults_closed(self):
         gates = v.load(v.ROOT / 'RELEASE-GATES.json')
         v.clearance_shape(gates)
@@ -200,6 +218,46 @@ class PackagingTests(unittest.TestCase):
             gates['source'] = {'cleared': cleared, 'evidence': evidence}
             with self.subTest(cleared=cleared, evidence=evidence), self.assertRaises(v.Invalid):
                 v.clearance_shape(gates)
+
+    def test_initialize_version_is_the_release_version(self):
+        # 0.1.8 review F-5a: mcp_admin_core.VERSION (initialize serverInfo) is bound once, to the release version.
+        good = "VERSION = '%s'\n" % v.VERSION
+        v.runtime_version(good)
+        v.runtime_version((v.ROOT / 'packages/mcp-admin-core/mcp_admin_core/__init__.py').read_text())
+        for text in ("VERSION = '0.1.6'\n", '', "VERSION = None\n", "VERSION = VERSION_TEXT\n",
+                     "VERSION, OTHER = '%s', 1\n" % v.VERSION, good + "VERSION = '0.1.6'\n",
+                     good + "VERSION: str = '0.1.6'\n", good + "VERSION += '-dirty'\n",
+                     good + "from os import sep as VERSION\n", good + "def f():\n    VERSION = '0.1.6'\n"):
+            with self.subTest(text=text), self.assertRaisesRegex(v.Invalid, 'initialize serverInfo version'):
+                v.runtime_version(text)
+        # validate() runs this check on the real tree.
+        with patch.object(v, 'runtime_version', side_effect=v.Invalid('initialize serverInfo version')):
+            with self.assertRaisesRegex(v.Invalid, 'initialize serverInfo version'):
+                v.validate(v.ROOT)
+
+    def test_image_labels_are_exactly_the_manifest(self):
+        # 0.1.8 review F-5a, F-5d: one io.hass.name and one io.hass.description, equal to config.yaml; Docker keeps the
+        # last value of a repeated label, so a second one must fail even when the first is right.
+        for product in v.PRODUCTS:
+            v.image_labels((v.ROOT / 'apps' / product / 'Dockerfile').read_text(),
+                           v.load(v.ROOT / 'addons' / product / 'config.yaml'))
+        value = v.load(v.ROOT / 'addons/n8n/config.yaml')
+        dockerfile = (v.ROOT / 'apps/n8n/Dockerfile').read_text()
+        pair = f'io.hass.name="{value["name"]}" io.hass.description="{value["description"]}"'
+        self.assertEqual(dockerfile.count(pair), 1)
+        for mutated in (dockerfile.replace(pair, pair.replace(value['name'], 'WOOW n8n MCP')),
+                        dockerfile.replace(pair, pair.replace(value['description'], 'HA acceptance pending')),
+                        dockerfile.replace(pair, 'io.hass.description="%s" io.hass.name="%s"' % (value['description'], value['name'])),
+                        dockerfile.replace(pair, ''),
+                        dockerfile + 'LABEL io.hass.name="%s (other)"\n' % value['name'],
+                        dockerfile + 'LABEL io.hass.description="other"\n',
+                        dockerfile + 'LABEL "io.hass.name"="%s"\n' % value['name'],
+                        dockerfile + '# io.hass.name is set above\n'):
+            with self.subTest(mutated=mutated[-120:]), self.assertRaisesRegex(v.Invalid, 'labels differ from the add-on manifest'):
+                v.image_labels(mutated, value)
+        with patch.object(v, 'image_labels', side_effect=v.Invalid('image name/description labels differ from the add-on manifest')):
+            with self.assertRaisesRegex(v.Invalid, 'labels differ from the add-on manifest'):
+                v.validate(v.ROOT)
 
 
 if __name__ == '__main__':

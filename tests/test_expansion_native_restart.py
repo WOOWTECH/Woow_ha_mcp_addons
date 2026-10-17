@@ -11,13 +11,14 @@ from mcp_admin_core.products import ProductStore, TOOLS, child_spec
 from test_expansion_policy import call
 from test_expansion_runtime import WRITES, fake_api, payload
 from test_real_products import connection, rpc
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 
-@pytest.mark.parametrize('product', ['emqx', 'litellm'])
+@pytest.mark.parametrize('product', ['emqx', 'litellm', 'nextcloud'])
 async def test_api_enabling_writer_rebuilds_actual_native_gate(tmp_path, product):
     with fake_api() as (url, events, mutations, failures):
         store = ProductStore(tmp_path, product)
-        store.update(connection=connection(product, url))
+        store.update(connection=connection(product, url), writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
         endpoint = Endpoint(product)
         manager = endpoint.supervisor(child_spec(store.load(), store.directory))
         async def restart(state):
@@ -43,7 +44,7 @@ async def test_api_enabling_writer_rebuilds_actual_native_gate(tmp_path, product
                     headers = await initialize()
                     name,args = WRITES[product][0]
                     before = len(events)
-                    assert (await client.post('/mcp', headers=headers, json=call(name,args))).status_code == 403
+                    assert refused(await client.post('/mcp', headers=headers, json=call(name,args)))
                     assert len(events) == before and not mutations
                     old_pid = manager.process.pid
                     async with httpx.AsyncClient(transport=httpx.ASGITransport(admin, client=('172.30.32.2',1)), base_url='http://admin') as a:
@@ -63,7 +64,7 @@ async def test_api_enabling_writer_rebuilds_actual_native_gate(tmp_path, product
                         assert response.status_code == 200
                         before = len(events)
                         # The old session must never bypass the new parent gate.
-                        assert (await client.post('/mcp', headers=headers, json=call(name,args))).status_code == 403
+                        assert refused(await client.post('/mcp', headers=headers, json=call(name,args)))
                         assert len(events) == before and len(mutations) == 1
                     assert not failures
         finally:

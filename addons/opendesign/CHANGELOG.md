@@ -1,14 +1,163 @@
 # OpenDesign Changelog
 
-## 0.1.0 — 未發佈候選
+## 0.2.2 — 不發佈（本產品已下架，見 0.2.1）
+
+- **後端未設定或連不上時也能連線**（使用者 2026-10-16 核准）：0.2.1 以前沒有後端時 initialize 回 HTTP 502（沒有子程序可轉送），Claude.ai 連接器加不上去。現在 initialize、`notifications/initialized`、tools/list 一律成功，tools/list 回完整工具清單與 schema（依停用與寫入授權過濾，與有後端時相同）；tools/call 回 JSON-RPC 錯誤說明原因，不轉給子程序。
+- 未設定：沒有後端時沒有子程序，gateway 自己回 initialize、`notifications/initialized`、ping 與 tools/list（完整 15 個工具），tools/call 回 `-32603 Backend not configured`。
+- 後端已設定但連不上：initialize 與 tools/list 照常由子程序回答（實測七支子程序在後端連不上時都照常列出全部工具）；需要後端的工具呼叫回 `-32603 Backend unreachable`，`data.reason` 是最近一次完成的健康檢查得到的原因（後端自己的錯誤文字，add-on 持有的憑證換成 `[REDACTED]`，最多 1000 字）。健康檢查每 15 秒一次：後端恢復後最多約 15 秒內恢復轉送；子程序剛重啟、還沒完成檢查時一律轉送。
+- 子程序沒在跑（啟動中、退避重啟、失敗）：initialize 最多等 10 秒，之後由 gateway 自己回答；工具呼叫回 `Backend unreachable`，原因 `MCP_SERVER_NOT_READY`。子程序停掉後它開的 session 回 404。
+- 工具清單來源：add-on 內附 `mcp_admin_core/tool_snapshot.py`，是建置前由真實子程序（每個工具都啟用）產生的 tools/list（名稱、說明、原始 inputSchema、annotations），經與子程序回覆相同的過濾；測試確認它與真實子程序逐字一致、與工具分類（surface.py）一致，子程序升級後不一致即測試失敗。
+- gateway 自己開的 session id 以 `woow-local-` 開頭（閒置 30 分鐘結束、最多 256 個）；GET 回 405、DELETE 回 200。設定好後端、子程序通過一次健康檢查後，這個 session 的下一個請求回 404，client 依 MCP 規範重新 initialize 即改連子程序；Claude.ai 是否自動重連尚未實測。
+- gateway：tools/call 的回覆最多可閒置、總共可持續 330 秒（原為閒置 30 秒、總共 120 秒；Python SDK 子程序每 15 秒送 SSE 註解保持連線，所以實際卡住的是 120 秒總時限），配合 Hermes 對話最長 300 秒；其他請求維持原時限。長呼叫期間佔用 32 個同時連線名額之一；各子程序對後端的逾時不變。
+- 不變：權杖檢查最先（401／404）、沒帶 session 400、policy 拒絕優先、readiness（未設定或連不上仍 503）、管理面板、子程序與後端的其他行為。
+- 本產品不建置映像、不上架（共用 gateway 的程式碼變更紀錄）；其他六支的新版候選需獨立建置、掃描與 PaaS HAOS VM 驗收（含真實 Claude.ai 在未設定與後端離線時新增連接器）；既有 0.1.x、0.2.0、0.2.1 標籤不覆寫。
+
+## 0.2.1 — 未建置映像、未上架（商店停在 0.1.11）
+
+- **OpenDesign MCP add-on 已下架**：商店停在 0.1.11（2026-10-14 公開），0.1.12 起本產品沒有建置映像（repo 的 tag `v0.2.1`，`88a707f`，不含 OpenDesign 映像），之後改由 OpenDesign add-on 本身（`woow_ha_opendesign`）內建 MCP。下方是與其他六支共用的程式碼變更紀錄，本產品沒有隨之發佈。
+- **0.2.0 未上架**：其他六支的 0.2.0 映像已推上 GHCR 並在測試 VM 實測但不發佈到 Store，由 0.1.14 直接升 0.2.1；本產品 0.2.0、0.2.1 都沒有映像。
+- 後端拒絕請求時（例如 HTTP 422）改依狀態碼分類為 `BACKEND_HTTP_ERROR status=<碼>`，並附上「狀態、方法與路徑：後端回應內容」（最多 4096 字、不含查詢字串）；0.2.0 會誤標成 `BACKEND_UNAVAILABLE` 且只有 httpx 的文字（測試 VM 實測 Hermes 422）。add-on 持有的憑證仍換成 `[REDACTED]`。
+- 新版候選需獨立建置、掃描與 PaaS HAOS VM 驗收；既有 0.1.x、0.2.0 標籤不覆寫。
+
+## 0.2.0 — 未建置映像、未上架
+
+- 本產品這版沒有建置映像（repo 的 tag `v0.2.0`，`baac83b`，不含 OpenDesign 映像）。
+- **完整版**（使用者 2026-10-15 決定）：與原始 MCP server 及 PaaS woow-mcp-server 功能一致，所有工具（含高風險）全部開放、全部預設開啟，管理介面可逐一停用工具或取消寫入。本產品開放上游 15 個工具全部（0.1.x 為 11 個有界子集）：tools/list 用子程序自己的 inputSchema（經 provider-safe 正規化），tools/call 參數原樣轉給子程序驗證，輸出不再截斷或投影。gateway 仍檢查工具名在分類名單內（上游新增但未分類的工具一律拒絕）、未停用、寫入工具或混合工具的寫入 operation 有 grant，被拒時回 JSON-RPC 錯誤（見下方 0.1.14 段落）。
+- **寫入預設開啟**：新安裝的 state 每個寫入 grant 都開、`writes_enabled=true`；**既有安裝升級時一次遷移成全開**（state schema 3→4；token、連線與對外端點保留，**0.1.x 的停用清單清空**，升級後所有工具全開）。之後管理員取消的寫入或停用的工具，重啟與後續升級都維持。0.1.x 不接受 schema 4，回退請還原升級前的備份。
+- **風險：網址（權杖）＝完整後端權限**。拿到權杖或 Claude.ai 密鑰網址的 client（包括 AI 助理誤判時）不需再授權即可以後端帳號的權限寫入；後端帳號權限要設對，只保留需要的工具與寫入，外洩時立刻重新產生權杖。說明見 [共用指南](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/guide.md#寫入預設開啟)。
+- OpenDesign：`list_runs` 回上游原始內容（移除 id／projectId／status 投影），create_project、send_message 等全部開放；一般請求逾時回到上游 60 秒（連線 5 秒）。
+- 保留的安全層：Bearer／密鑰網址驗證（錯誤即 404）與 log 遮罩、session 與併發 slot、子程序出站 DNS pin／TLS／redirect 拒絕、回覆中憑證換成 `[REDACTED]`、原始碼 digest 守門、管理面板 HA 管理員驗證。請求上限提高到 16 MiB。
+- 管理面板工具頁加上預設全開的風險提示。
+- **後端錯誤回傳原始訊息**（使用者 2026-10-15 決定，與 PaaS 一致）：拿掉 0.1.x 對後端錯誤的固定代碼遮蔽（例如 `BACKEND_RPC_FAULT`、`BACKEND_UNAVAILABLE`），client 看到後端的實際錯誤文字（例如 Odoo 的 AccessError 訊息、LiteLLM／EMQX 的錯誤 body；傳輸失敗為「代碼: 原因」）。gateway 在每個轉送的回覆中把 add-on 自己持有的憑證（Add-on 權杖、child token、後端 API key／密碼與其 Basic 認證形式）換成 `[REDACTED]`；log 的密鑰網址遮罩不變。**原始錯誤可能含後端內部資訊**（模型、欄位、路徑、版本），請留意誰能拿到網址。
+- 新版候選需獨立建置、掃描與 PaaS HAOS VM 驗收（含升級遷移、真實 Claude.ai 連線與完整工具實測）；既有 0.1.x 標籤不覆寫。
+
+## 0.1.14 — 未建置映像、未上架（商店停在 0.1.11）
+
+- 本產品這版沒有建置映像（repo 的 tag `v0.1.14`，`ed3122b`，不含 OpenDesign 映像）。下方是與其他六支共用的程式碼變更紀錄。
+- 其他六支的 0.1.12、0.1.13 映像已推上 GHCR 但從未發佈到 Store；以下原為 0.1.12、0.1.13 準備的內容由其他六支的 0.1.14 發佈，本產品沒有 0.1.12 起的映像。
+- 工具呼叫被拒時改為正常回話說明原因（2026-10-14 經 Claude.ai 實測：參數不符的 tools/call 都只得到 HTTP 403，用戶端只看到傳輸錯誤、無法自行修正）：帶 `Mcp-Session-Id`、格式正確的 tools/call 遇到下列四種拒絕，gateway 回 HTTP 200 的 JSON-RPC 錯誤（`application/json`、`Cache-Control: no-store`）：工具不存在或未啟用 `-32602 Unknown tool`（不區分是哪一種）；參數驗證失敗 `-32602 Invalid params`，`data.errors` 列出欄位路徑、pydantic 錯誤類型與說明（最多 20 筆、每筆 300 字），**不回顯任何參數值**（自訂的鍵名顯示為 `*`，可能夾帶輸入值的錯誤類型改用固定說明）；寫入操作未開放 `-32602 Operation not permitted`（附管理員可在面板開啟的說明）；後端未設定 `-32603 Backend not configured`。權限本身不變：同樣的呼叫照樣被拒、不轉給子程序、不佔連線名額；權杖錯誤仍 401／404，沒帶 session 或格式錯誤的請求仍 403。`/mcp` 與 `/private_<token>/mcp` 相同。修正後尚未以真實 Claude.ai 重測。
+- 修正真實 Claude.ai 自訂連接器連不上（2026-10-14 經 Cloudflare 到測試 VM 的實機紀錄）：Claude.ai 先送 `server/discover`、再退回 `initialize`，params 帶 MCP 保留欄位 `_meta`（traceparent 等），gateway 兩者都回 HTTP 403。現在每個允許的方法都接受選填 `params._meta`（必須是物件、序列化後至多 8 KiB，否則仍 403），並在轉給子程序前移除；不認識的 request（例如 `server/discover`、`resources/list`、`prompts/list`）由 gateway 自己回 HTTP 200 的 JSON-RPC `-32601 Method not found`，不認識的 notification 回 202，兩者都不轉給子程序、不需 session、不佔連線名額；權杖檢查仍最先（錯誤權杖仍 401／404）。只接受 `application/json` 的 client 收到 JSON 格式的 initialize 回覆。工具權限、參數驗證、寫入閘與 `/mcp`、`/private_<token>/mcp` 其他規則不變。修正後尚未以真實 Claude.ai 重測。
+- 修正 HA 側邊欄打開管理面板顯示「網頁可能暫時離線」：manifest 移除 `ingress_entry: /`。Supervisor 2026.09 以 `/api/hassio_ingress/<token>/` 直接接上 ingress_entry，舊值讓入口變成 `…/<token>//`（404，0.1.11 起七支皆受影響）；不設此鍵即為根目錄。只改 manifest，映像不變。
+- 開機預設由 `boot: manual` 改為 `boot: auto`（使用者 2026-10-14 決定）：HAOS／Supervisor 重開機後自動啟動，不必再手動啟動；packaging/validate.py 的 manifest 規則同步改為 auto。
+- 新增 Claude.ai 網頁版自訂連接器用的密鑰網址 `/private_<token>/mcp`（七支共用 gateway）：Claude.ai 自訂連接器無法帶 Authorization header，改把同一把 Add-on 權杖放在路徑（重新產生／撤銷同時生效）；權杖錯誤、空白或已撤銷一律回與不存在路徑相同的 404，忽略請求自帶的 Authorization，允許 Origin（不轉給子程序）；`/mcp` 的 Bearer 行為不變（含 Origin 403）。所有 log 把 `/private_…/` 遮成 `/private_[REDACTED]/`。管理面板「連線與權杖」新增「顯示 Claude.ai 連線網址」（需先設定對外端點，經確認後短暫顯示並可複製）。**網址等同密碼，外洩請重新產生權杖。**說明見 [client 設定](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/clients.md)；尚未以真實 Claude.ai 實測。
+- 除上述各項外本產品功能未變更；七支共用版本規則一致升版。
+- 新版候選需獨立建置、掃描與 PaaS HAOS VM 驗收（含重開機後自動回來）；既有 0.1.11、0.1.12、0.1.13 標籤不覆寫。
+
+## 0.1.13 — 未建置映像、未上架
+
+- 本產品這版沒有建置映像（repo 的 tag `v0.1.13`，`72b672e`，不含 OpenDesign 映像）；內容見 0.1.14 段落。
+
+## 0.1.12 — 未建置映像、未上架
+
+- 本產品這版沒有建置映像（repo 的 tag `v0.1.12`，`439308f`，不含 OpenDesign 映像）；內容見 0.1.14 段落。
+
+## 0.1.11 — 2026-10-14 公開（experimental）
+
+- GitHub tag／release `v0.1.11`（以映像建置 commit `7e328f7` 為準）。
+- 本產品功能未變更；依既有七支共用版本規則隨同 LiteLLM MCP metadata 修補升版。
+- hosted CI 的完整 Python 測試階段使用 UID 0，以執行原有 UID10001 nondumpable proof；不略過測試，不改 builder admission。
+- 新版候選需獨立建置、掃描與 PaaS HAOS VM 驗收；既有 0.1.10 標籤不覆寫。
+
+## 0.1.10 — 2026-10-13 公開（experimental）
+
+- GitHub tag／release `v0.1.10`（以映像建置 commit `9762a94` 為準）。
+- 本產品功能未變更；依既有七支共用版本規則隨同 LiteLLM MCP metadata 修補升版。
+- 建置、掃描與實機結果待候選證據；不覆寫 0.1.9 標籤。
+
+## 0.1.9 — 2026-10-11 公開（experimental）
+
+- 管理面板（HA 角色驗證）：支援的 Core 版本加上 2026.10.1（2026-10-10 發佈）。驗證器用到的 21 個 Core 檔案與 2026.10.0 完全相同（[審查紀錄](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/ha-role-core-contract.md)）。0.1.8 及更早的版本在 Core 2026.10.1 上整個管理面板回 403（MCP 端點不受影響），升 Core 前先更新本 add-on。
+- 映像 `ghcr.io/woowtech/amd64-mcp-opendesign:0.1.9`（候選 57c96f2，build／container／supply-chain gate 全過；審查沒有 High／Medium）；0.1.0–0.1.8 tag 不覆寫。
+
+## 0.1.8 — 2026-10-11 公開（experimental）
+
+- gateway（0.1.6 發佈候選審查 GATEWAY-2）：除了 initialize，沒帶 `Mcp-Session-Id` 的請求（ping、tools/list、tools/call、通知、GET、DELETE）改由 gateway 直接回 HTTP 400，不再轉給子程序。原本五支 Python 子程序（Odoo、Hermes、OpenDesign、EMQX、LiteLLM；Nextcloud 也一樣）會先為這種請求開一個新 session 再拒絕，而且不會回收：每分鐘一次就一天留下約 1,440 個，直到子程序重啟；n8n 子程序對這種請求、GET、DELETE 本來就回 400、不開 session，但沒有 session 的通知它回 202，現在一樣改回 400。回覆的形狀和以前 gateway 轉出子程序拒絕時相同（有 id 的請求與 GET 是 JSON-RPC 錯誤 -32000「Bad Request」，通知與 DELETE 是沒有內容的 400），只是不再帶子程序新開的 session id。照規範先 initialize 的 client 不受影響；Bearer 與 policy 檢查仍在前面（沒帶或帶錯 token 401、被拒的工具 403）。
+- gateway（0.1.6 審查 R1 F6）：initialize 的回覆改由 gateway 自己組成，只保留子程序的 protocolVersion，而且必須是審查過的 MCP 版本（2024-11-05、2025-03-26、2025-06-18、2025-11-25；以前任何日期格式都接受，其他值一律回 502）；capabilities 一律是 `{"tools": {}}`，serverInfo 改成這支 add-on 的名稱與版本（`woow-mcp-opendesign`、add-on 版號），不再是子程序自己的名稱與版本；子程序的 instructions 不再轉送（Claude Code 會把 instructions 放進模型的 system prompt；EMQX、LiteLLM 子程序的說明寫的是上游全部的工具，包括本 add-on 隱藏或拒絕的工具）。OpenDesign 子程序原本沒有送 instructions。
+- 子程序（0.1.6 發佈候選審查 GATEWAY-3）：client 用完不送 DELETE 留下的 session，原本要等子程序重啟才結束（本機量測每個約 50–70 KiB，每分鐘留一個就一天多 70–140 MiB）。現在 30 分鐘沒有任何請求的 session 會被結束，client 下一個請求收到 404，依 MCP 規範重新 initialize 即可；使用中的 session 不受影響（gateway 對每個請求最多等 35 秒、每個 stream 最多 120 秒）。
+- 映像 `ghcr.io/woowtech/amd64-mcp-opendesign:0.1.8`（候選 04ae485，build／container／supply-chain gate 全過；0.1.8 的審查、複審與 RR-03 審查都沒有 High／Medium）；0.1.0–0.1.7 tag 不覆寫。
+
+## 0.1.7 — 2026-10-08 公開（experimental）
+
+- 2026-10-09 補充（映像與功能不變，不需要更新）：顯示名稱改為「Woow OpenDesign MCP Server」，圖示改用 OpenDesign 的圖示（[來源](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/provenance/icons.md)）；同時上架 [WOOW HA App Store](https://github.com/WOOWTECH/Woow_HA_App_Store) 與 ha-rebrand 的 Local Download。兩個商店的同名 add-on 在 HA 裡是不同的 add-on，同一台 HA 只裝其中一個來源的。
+- 本產品功能沒有變動。0.1.7 新增第七支產品 WOOW Nextcloud MCP；所有 add-on 共用同一個版號，所以隨同重建映像 `ghcr.io/woowtech/amd64-mcp-opendesign:0.1.7`（候選 7cc8bcb，build／container／supply-chain gate 全過；本版的審查針對新增的 Nextcloud：R1 REQUEST CHANGES，修正後 R2、R3 APPROVE WITH NOTES，最後由交付線做差異檢查）；0.1.0–0.1.6 tag 不覆寫。
+- 已知問題：0.1.6 列出的已知問題（延到 0.1.7 的那幾項）本版都沒有處理（本版刻意不改既有六支產品的行為），延到 0.1.8。
+
+## 0.1.6 — 2026-10-08 公開（experimental）
+
+- 管理面板（HA 角色驗證）：原本只認 Home Assistant Core 2026.7.2，Core 一升級，管理面板與管理 API 就全部回 403。改為經原始碼審查的版本清單 2026.7.2–2026.9.4 與 2026.10.0（驗證器用到的 Core 使用者清單 API、欄位、回應格式與管理員群組在這些版本間沒有變動；2026.10.0 改用 probatio，相關的 13 個檔案有改動，逐行審查後確認不影響；auth 訊息由 Supervisor 產生，審查紀錄見 docs/ha-role-core-contract.md）；清單外的版本照樣拒絕，auth_required 與 auth_ok 回報的版本也必須相同。MCP 端點不受影響（它用 Bearer token）。
+- gateway（0.1.5 發佈候選審查 F3 與 0.1.6 審查）：tools/list 的結果由 gateway 重新組成，只留工具清單與字串型的 nextCursor，同名工具只留第一個。
+  每個工具的名稱與 inputSchema 用 gateway 自己的定義；title、description、annotations.title 是子程序文字，只在是字串時保留；
+  四個提示（readOnlyHint、destructiveHint、idempotentHint、openWorldHint）只保留保守的值，或本地定義沒有寫入路徑的工具才保留放寬的值
+  （Claude Code 會把 readOnlyHint 當作唯讀）。outputSchema、execution、icons、_meta 與其他欄位不再轉送：TS client 會把 outputSchema 裡的
+  子程序文字放進錯誤訊息、Python client 會去抓子程序指定的 $ref 網址，execution.taskSupport 為 required 時會拒絕呼叫該工具。
+  影響：client 不再依子程序的 outputSchema 檢查 structuredContent（n8n validate_* 截斷結果時原本會失敗，現在正常）；
+  n8n 給 Claude Code 的 `anthropic/maxResultSizeChars` 也不再轉送，Claude Code 會套用它預設的 MCP 輸出上限。
+- gateway（0.1.5 R2 審查觀察）：gateway 拒絕 initialize 時（Bearer 在等待中被撤銷 401；回覆格式錯誤、過大、protocolVersion 不是日期、
+  子程序回 401/403 或轉址 502；BACKEND_UNAVAILABLE 或狀態讀取失敗 503；子程序自己的 4xx/5xx 照轉但不帶 session id），子程序可能已經
+  建立 session 並回了 Mcp-Session-Id。這個 id 不會交給 client，而本 add-on 的子程序（釘選的 Python MCP SDK 1.28.1 FastMCP）沒有設定閒置回收，
+  這個 session 原本會一直留到子程序重啟（本機以釘選版本的 SDK 實測：改版前被扣住的 session 直接 ping 仍回 200，改版後回 404）。
+  現在 gateway 會自己送一次 `DELETE /mcp` 結束該 session：只限 gateway 會轉送的 session id（可見 ASCII、1–256 字元），
+  且不是 client 自己帶來的 id；先關閉子程序的回覆，在同一個請求名額內送出，最多等 2 秒，子程序的回應一律不讀、不轉送，
+  錯誤一律忽略，session id 也不寫進任何紀錄。client 收到的回覆完全不變，最多晚 2 秒（本機以釘選版本的 SDK 實測，延遲沒有
+  可量測的差別）；initialize 成功（含 JSON-RPC 錯誤回覆）時 session 照常交給 client，其他方法不受影響。
+- gateway（0.1.6 AI 測試第 0 階段的發現，負責人決定 D21）：經 OpenRouter 實測，Claude 與 GPT 只要看到任一工具的
+  inputSchema 頂層有 oneOf、anyOf 或 allOf（GPT 另含 enum、const、not），就拒收整個請求（HTTP 400），所以原樣轉送
+  工具清單的 client 先前在 n8n、Odoo、Hermes 三支 add-on 上一個工具都叫不到。共用的 gateway 現在只宣告頂層為
+  `type: object` 的 schema（分支規則改寫進 description）。本 add-on 的工具 schema 頂層本來就沒有這些關鍵字，
+  tools/list 內容不變；驗證完全不變，gateway 仍用原本嚴格的 pydantic 模型檢查每個呼叫。
+- 映像 `ghcr.io/woowtech/amd64-mcp-opendesign:0.1.6`（候選 302c96d，build／container／supply-chain gate 全過；發佈候選完整獨立審查與複審 APPROVE WITH NOTES）；0.1.0–0.1.5 tag 不覆寫。
+- 已知問題（延到 0.1.7）：
+  - 被 policy 拒絕的 tools/call 仍回 HTTP 403（0.1.5 發佈候選審查 F7；上面 R2 的修正只涵蓋被拒的 initialize）。Python MCP SDK
+    1.x client 收到這個 403 會整段斷線、不送 DELETE，每次在子程序留下一個 session，一直留到子程序重啟（見下一項）。
+  - 子程序沒有閒置回收：一般 session 也只在 client 送 `DELETE /mcp` 或子程序重啟（含 Add-on 重啟）時結束，client 當掉、斷線或
+    結束時沒送 DELETE，session 就一直留著、佔用記憶體。沒帶 `Mcp-Session-Id` 的 initialize 以外請求（例如 ping、tools/list、
+    GET、DELETE）也會讓子程序開一個新 session 並留下來。client 用完請送 `DELETE /mcp`（帶 `Mcp-Session-Id`）。
+
+## 0.1.5 — 2026-10-06 公開（experimental）
+
+- gateway（0.1.4 複審與 0.1.5 審查的縱深防禦建議）：client 收到的每個回覆都由 gateway 重新組成，只含 jsonrpc、id 與 result 或 error 其中一個，error 只保留 code（一律整數）、message、data；子程序加在回覆最外層的其他欄位不再轉送（TS client 會把未知的最外層欄位名稱放進錯誤訊息），error 裡多出的欄位也一併去掉，ping 成功一律回 `{}`，其他 result 照子程序內容轉送（工具清單與 capabilities 照舊過濾）。POST 的 SSE 串流只轉送這個請求自己的回覆，送出後立即結束；GET 串流不轉送任何回覆（各子程序都沒有可續傳的事件紀錄）。錯誤碼超出 32 位元範圍或 message 不是字串時，改成 gateway 自己的錯誤。initialize 回覆的 protocolVersion 必須是日期格式（YYYY-MM-DD），否則回 502。
+- 來源紀錄（ledger）：補列 backend_policy.py 在六個 Python venv（五支商店服務加上封存的 Odoo Manage 原始碼）守住的 httpx／httpcore 原始碼、odoo_b2_scope.py 在 Odoo venv 漏列的 4 個原始碼，以及 bounded_tools.py 在 OpenDesign venv 守住的 MCP SDK 原始碼。測試以 Python 語法樹找出各服務載入哪些共用模組（各種 import 寫法、常數參數的動態載入與間接載入，掃描服務內所有 Python 檔），逐一確認對應 venv 都有列；判定不了的載入方式（exec／eval、非常數參數、改名或以字串取得的載入函式）會讓測試失敗。
+- 基底映像：`python:3.13.16-slim-bookworm` 改釘 Docker Hub 2026-10-06 重建版（amd64 `f0408636…`），已內含 libpcre2-8-0 10.42-1+deb12u2 與 perl-base 5.36.0-7+deb12u4 安全更新；原本從 Debian snapshot 升級 libpcre2 的步驟已移除。
+- 映像 `ghcr.io/woowtech/amd64-mcp-opendesign:0.1.5`（候選 0c66bd0，build／container／supply-chain gate 全過；發佈候選完整獨立審查 APPROVE WITH NOTES）；0.1.0–0.1.4 tag 不覆寫。
+
+## 0.1.4 — 2026-10-06 公開（experimental）
+
+- 健康檢查接受 OpenDesign 0.21.1 的 health 回應 `{"ok": true, "version": "…"}`（0.1.3 HA 回歸時這個版本的後端狀態一律無法連線、8081 readiness 503，讀取其實正常）；舊的 `status` 為 ok／healthy 仍接受。兩個欄位同時出現時必須一致，version 須是一般的版本字串。
+- gateway（0.1.2 審查留下的建議，經 0.1.4 發佈候選審查補強）：子程序對請求的 4xx／5xx 回應保留狀態碼（404 讓 client 重開 session、Retry-After 照轉），內容改由 gateway 產生（JSON-RPC 錯誤 -32000 與 HTTP 狀態說明），不再轉送子程序的文字；失敗的 initialize 不帶 session id；子程序回 401／403（拒絕的是 gateway 自己的權杖）以及任何請求、DELETE、通知收到 1xx／3xx 都回 502。子程序的通知只轉 `notifications/tools/list_changed`，而且是 gateway 固定的內容；progress、log 等其他通知不轉送。回覆必須正好帶 result 或 error 其中一個；錯誤碼不是 JSON 整數（例如字串 "-32042"）或為 URL elicitation（-32042）時，改成 gateway 自己的錯誤、不帶子程序資料（JSON、SSE、initialize 都適用）。
+- 共用核心：原生探測名稱改由健康檢查實際使用的探測取得（0.1.3 發佈候選審查 #6，行為不變）。
+- 映像 `ghcr.io/woowtech/amd64-mcp-opendesign:0.1.4`（候選 73a40eb，build／container／supply-chain gate 全過；發佈候選完整獨立審查 APPROVE WITH NOTES）；0.1.0–0.1.3 tag 不覆寫。
+
+## 0.1.3 — 2026-10-06 公開（experimental）
+
+- gateway：`/mcp` 的所有 HTTP 方法都先驗 Bearer 再回 405（`Allow: GET, POST, DELETE`）；TRACE、PROPFIND 等以前由框架在驗證前就回 405，Allow 清單還列了 gateway 實際拒絕的方法（0.1.2 審查的 NIT）。
+- 健康檢查：子程序回的 `protocolVersion` 須符合與 session id 相同的規則（可列印 ASCII、不含空白、1–256 字元）才沿用為標頭；否則該輪判定失敗，並照常帶 session id 關閉 session（以前遇到無法當標頭的值會在清理前出錯，留下子程序 session）。
+- 映像 `ghcr.io/woowtech/amd64-mcp-opendesign:0.1.3`（候選 a0db7d7，build／container／supply-chain gate 全過；獨立審查：Odoo 健康探測 APPROVE WITH NOTES、意見已修，發佈候選完整審查 APPROVE WITH NOTES）；0.1.0、0.1.1、0.1.2 tag 不覆寫。
+
+## 0.1.2 — 2026-10-06 公開（experimental）
+
+- 初始化時子程序沒有回覆（例如後端連不上、子程序無法建立連線階段），gateway 改回 HTTP 503＋JSON-RPC 錯誤 `BACKEND_UNAVAILABLE`（附 Retry-After），不再給出 200 空回應與失效的 session id；串流回應只保留回覆那個事件的 id／event／retry 行，其餘事件（heartbeat、通知）不轉送；過大或格式錯誤的回覆回 502。
+- 成功回應只接受 gateway 能解析、過濾的格式（0.1.2 獨立資安審查與複審的建議，舊版即有的缺口）：GET 必須是 SSE；請求的回覆必須是 SSE 或 HTTP 200 的 JSON，其他 2xx、其他、重複或缺少的媒體型別回 502，且不轉送該回應的任何內容（即使宣稱長度為 0）；通知與 DELETE 的回應只帶狀態與轉送標頭；轉送的標頭值須合規（不合規就丟掉，避免子程序的怪字元讓 gateway 出錯並佔住連線名額）；HEAD／PUT／PATCH／OPTIONS 驗證後回 405、不轉給子程序；轉給子程序的 Accept 固定；子程序回 100–599 以外的狀態碼時回 502；initialize 回覆的 session id 無法轉送時回 502；會溢位成無限大的數字（如 `1e400`）視同 NaN 拒絕；媒體型別不分大小寫、不帶參數比對，送給 client 的固定是 `text/event-stream` 或 `application/json`。JSON 回覆一律解析、須回應同一個請求（id 與型別相同），過濾後重新序列化；批次回 502。SSE 事件依看得懂的行重組（data、合規的 id／event／retry 與純 ASCII 註解），BOM、未知欄位等不轉送，單獨的 CR 視為格式錯誤；空 data 的 priming 事件照常通過；子程序發起的反向請求（elicitation、sampling、roots 等）不轉送。請求內容任何位置含孤立 surrogate 回 400。轉給子程序的 initialize 一律帶 `capabilities: {}`（gateway 不轉 sampling／elicitation 等反向請求）。
+- 健康檢查：子程序的異常回應（不合規的 session id、怪異內容）只會讓就緒狀態為 false，不再讓整個 add-on 停止（獨立審查發現的舊問題）。
+- bootstrap 在 HA 還原修復後，等 `/data/mcp` 通過最後檢查才印 `re-owned` 訊息；修復時暫時調高的 soft `RLIMIT_NOFILE` 修完即還原，不再沿用到管理程序。
+- `list_agents` 讀取逾時放寬到 20 秒（OpenDesign 偵測 agent CLI 在小型 HA 主機約 8 秒，原本固定 5 秒會逾時）；其他請求維持 5 秒。
+- 映像 `ghcr.io/woowtech/amd64-mcp-opendesign:0.1.2`（候選 114f23a，build／container／supply-chain gate 全過；獨立 SPEC 與安全審 APPROVE WITH NOTES、意見已修，修正複審 APPROVE WITH NOTES）；0.1.0、0.1.1 tag 不覆寫。
+
+## 0.1.1 — 2026-10-05 公開（experimental）
+
+- HA 管理權限 `homeassistant_api: true`（負責人 2026-10-05 核准，與 n8n 相同的固定 WebSocket 角色驗證），讓 HA owner／system-admin 能在 Ingress 面板設定後端；provider 90153cb 已 SPEC＋安全審。
+- bootstrap 把 runtime `SUPERVISOR_TOKEN` 交給本產品管理程序（僅此一個變數，child 不繼承），供 HA 管理角色驗證使用。
+- 修正 HA 還原本 Add-on 後資料變成 root 擁有、無法啟動的問題：bootstrap 只在資料剛好屬 root 時，第一遍核准並握住每個 inode、第二遍只改這些重驗過的 inode（R1 修正 d687cad、19892a3，獨立 SPEC＋安全審）。
+- 映像 `ghcr.io/woowtech/amd64-mcp-opendesign:0.1.1`（候選 d2e1e3b，build／container／supply-chain gate 全過）；0.1.0 tag 不覆寫。
+
+## 0.1.0 — 2026-10-05 公開（experimental）
 
 - 新增獨立 amd64 root-context 封裝、Supervisor 2026.09.3 安全子集 manifest。
 - runtime：vendored SDK MCP 1.28.1；15 個來源工具中支援 11，4 個明列 withheld，
-  [工具對照](../../docs/tool-surface.md) 尚未完成功能平齊。
+  [工具對照](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-surface.md) 尚未完成功能平齊。
 - 8099 Ingress-only／8081 可選 LAN／3000 loopback；保護模式、init true；不設
   backend-dependent watchdog、不開 HA/Supervisor/Docker API 權限。
 - 共用 UI 已本地整合，exact grants/typed forms 已接 Core；本產品正式角色路徑仍封鎖；未建置 image、未做 HA E2E。
 - 資料 v3：完整 v1/v2 migration、新增空 exact grants；UI 顯示 legacy 有效授權、保存完整 grants+global false，其他產品不可匯入 n8n state。
 - 手動更新前做受控 cold backup（只中斷本 Add-on，含秘密）；rollback 必須使用相容
-  image+完整資料，不可盲目 downgrade。請見 [完整步驟](../../docs/operations/update-backup-rollback.md)。
+  image+完整資料，不可盲目 downgrade。請見 [完整步驟](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/update-backup-rollback.md)。
 - 授權／公開去密／映像／實際 backend／Ingress/client／備份還原驗收仍待批准。

@@ -123,6 +123,13 @@ async def test_failclosed_result_schema(monkeypatch, response):
     ("first", {"type": "auth_required"}),
     ("first", {"type": "auth_required", "ha_version": 2026}),
     ("first", {"type": "auth_required", "ha_version": "unreviewed-version"}),
+    ("first", {"type": "auth_required", "ha_version": "2026.7.1"}),
+    ("first", {"type": "auth_required", "ha_version": "2026.10.2"}),
+    ("first", {"type": "auth_required", "ha_version": "2026.9.4 "}),
+    ("first", {"type": "auth_required", "ha_version": ["2026.7.2"]}),
+    ("first", {"type": "auth_required", "ha_version": {"v": "2026.7.2"}}),
+    ("auth", {"type": "auth_ok", "ha_version": "2026.9.4"}),  # auth_required said 2026.7.2: versions must agree
+    ("auth", {"type": "auth_ok", "ha_version": "2026.10.0"}),  # listed, but auth_required said 2026.7.2
     ("auth", {"type": "auth_invalid", "message": "DUMMY-revoked-or-flag-disabled"}),
     ("auth", {"type": "result", "id": 1, "success": True, "result": [user()]}),
 ])
@@ -130,6 +137,65 @@ async def test_wrong_sequence_and_revoked_machine_capability(monkeypatch, phase,
     async with owned_provider(monkeypatch, **{phase: message}) as (verify, seen, _):
         assert await verify("human") is False
         assert len(seen["frames"]) == (0 if phase == "first" else 1)
+
+
+@pytest.mark.parametrize("version", sorted(ha_role._HA_VERSIONS))
+async def test_every_reviewed_core_version_is_accepted(monkeypatch, version):
+    # 0.1.6: the reviewed Core releases keep the consumed contract (docs/ha-role-core-contract.md).
+    hello = {"type": "auth_required", "ha_version": version}
+    async with owned_provider(monkeypatch, first=hello, auth={"type": "auth_ok", "ha_version": version}) as (verify, _, __):
+        assert await verify("human") is True
+
+
+@pytest.mark.parametrize("version", [["2026.7.2"], {"v": "2026.7.2"}, 2026, None])
+def test_a_non_string_version_is_refused_explicitly(version):
+    # The refusal is the check's own ValueError, not an accidental TypeError from hashing a list or dict.
+    with pytest.raises(ValueError):
+        ha_role._auth_message(json.dumps({"type": "auth_required", "ha_version": version}), "auth_required")
+
+
+NEAR_MISSES = ["2026.9.5", "2026.8.4", "2026.7.5", "2026.7.0", "2026.09.4", "2026.9.04", "02026.9.4", "2026.9.0b9",
+               "2026.10.0b2", "2026.9.4.dev0", "v2026.9.4", "", "2026.9", "2026.9.4.0",
+               "2026.10.2", "2026.10.1b1", "2026.10.0b4", "2026.10.0b7", "2026.10", "2026.10.0.0", "2026.10.00", "2026.10.01",
+               "2026.10.1.0", "2026.10.10", "2026.10.1 ", " 2026.10.1", "2026.11.0"]
+
+
+@pytest.mark.parametrize("version", NEAR_MISSES)
+def test_near_miss_versions_are_refused(version):
+    # 0.1.6 review L3: later patches, other formats and pre-releases are not reviewed releases.
+    with pytest.raises(ValueError):
+        ha_role._auth_message(json.dumps({"type": "auth_required", "ha_version": version}), "auth_required")
+
+
+@pytest.mark.parametrize("version", NEAR_MISSES)
+async def test_near_miss_versions_deny_before_the_token_is_sent(monkeypatch, version):
+    hello, ok = {"type": "auth_required", "ha_version": version}, {"type": "auth_ok", "ha_version": version}
+    async with owned_provider(monkeypatch, first=hello, auth=ok) as (verify, seen, _):
+        assert await verify("human") is False
+        assert seen["frames"] == []
+
+
+@pytest.mark.parametrize("phase", ["first", "auth"])
+async def test_an_extra_key_in_an_auth_frame_denies(monkeypatch, phase):
+    message = {"type": "auth_required" if phase == "first" else "auth_ok", "ha_version": "2026.7.2", "x": 1}
+    async with owned_provider(monkeypatch, **{phase: message}) as (verify, _, __):
+        assert await verify("human") is False
+
+
+def test_the_review_table_lists_exactly_the_accepted_versions():
+    # docs/ha-role-core-contract.md has one column per reviewed release (short form, e.g. `10.1` for 2026.10.1)
+    from pathlib import Path
+    doc = (Path(__file__).resolve().parents[1] / 'docs/ha-role-core-contract.md').read_text()
+    header = next(line for line in doc.splitlines() if line.startswith('| file (`homeassistant/`) |'))
+    columns = [cell.strip() for cell in header.strip('|').split('|')[1:]]
+    assert {'2026.' + column for column in columns} == ha_role._HA_VERSIONS
+
+
+def test_the_reviewed_versions_are_exactly_these():
+    # A new Core release is added only after its contract files are reviewed; this list changes with that review.
+    assert ha_role._HA_VERSIONS == {"2026.7.2", "2026.7.3", "2026.7.4", "2026.8.0", "2026.8.1", "2026.8.2", "2026.8.3",
+                                    "2026.9.0", "2026.9.1", "2026.9.2", "2026.9.3", "2026.9.4", "2026.10.0",
+                                    "2026.10.1"}
 
 
 async def test_fresh_connection_no_positive_cache_token_reloaded(monkeypatch):
@@ -315,13 +381,14 @@ async def test_disconnect_cancels_role_query_without_disclosure(tmp_path, monkey
             assert b"csrf" not in b"".join(m.get("body", b"") for m in output)
 
 
-def test_n8n_factory_wired_and_other_six_unchanged():
+def test_n8n_and_six_products_share_factory():
     import inspect
     import run
     from mcp_admin_core import run_product
     assert run.make_ha_admin_verifier is ha_role.make_ha_admin_verifier
     assert "verify_admin=make_ha_admin_verifier()" in inspect.getsource(run.run)
-    assert "verify_admin=" not in inspect.getsource(run_product)
+    assert run_product.make_ha_admin_verifier is ha_role.make_ha_admin_verifier
+    assert "verify_admin=make_ha_admin_verifier()" in inspect.getsource(run_product.run)
     assert not isinstance(ha_role._NoRedirectConnect.process_redirect(None, RuntimeError()), str)
 
 

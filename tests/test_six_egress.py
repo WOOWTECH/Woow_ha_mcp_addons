@@ -45,6 +45,12 @@ async def main():
         elif p=='emqx':
             from emqx_mcp_server.lifespan import make_client
             async with make_client() as c:await c.get('/nodes')
+        elif p=='nextcloud':
+            from nextcloud_mcp_server.client import NextcloudClient
+            from nextcloud_mcp_server.settings import load_settings
+            nc=NextcloudClient(load_settings())
+            try: await nc.probe()
+            finally: await nc.aclose()
         else:
             from woow_litellm_mcp_server.lifespan import build_client
             async with build_client() as c:await c.get('/v1/models')

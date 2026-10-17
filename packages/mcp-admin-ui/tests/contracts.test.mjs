@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { products, mountPath, explicitUrl, backendPayload, policyPayload, toolRows, clientExample } from '../src/contracts.js';
+import { products, mountPath, explicitUrl, backendPayload, policyPayload, toolRows, clientExample, claudeConnectorUrl } from '../src/contracts.js';
 import { AdminApi, ApiError } from '../src/api.js';
 const base = '/api/hassio_ingress/DUMMY';
 const bootstrap = () => ({ base_path: base, api_base: `${base}/api`, product: 'n8n', csrf: 'fresh_csrf_for_mock_only', tools: {} });
@@ -16,14 +16,15 @@ test('URLs reject credentials/query/fragment, preserve explicit client endpoint'
   assert.equal(explicitUrl('http://192.0.2.4:8081/mcp/', true), 'http://192.0.2.4:8081/mcp');
   assert.throws(() => explicitUrl('https://example.test/api', true));
 });
-test('seven typed product payloads; no invented OpenDesign token, preserve means no request', () => {
-  assert.equal(Object.keys(products).length, 7);
+test('eight typed product payloads; no invented OpenDesign token, preserve means no request', () => {
+  assert.equal(Object.keys(products).length, 8);
   for (const [product, spec] of Object.entries(products)) {
-    const values = Object.fromEntries(spec.fields.map(([key, , type]) => [key, type.startsWith('optional') ? '' : type === 'mode' ? 'read' : type === 'url' ? 'https://backend.example.test' : ' fixture value ']));
+    const filler = product === 'nextcloud' ? 'fixture value' : ' fixture value ';  // Nextcloud refuses padded values
+    const values = Object.fromEntries(spec.fields.map(([key, , type]) => [key, type.startsWith('optional') ? '' : type === 'mode' ? 'read' : type === 'url' ? 'https://backend.example.test' : filler]));
     const payload = backendPayload(product, 'replace', values);
     const connection = product === 'n8n' ? payload : payload.connection;
     assert.deepEqual(Object.keys(connection), spec.fields.map(([key]) => key));
-    for (const [key, , type] of spec.fields) if (type === 'secret') assert.equal(connection[key], ' fixture value ');
+    for (const [key, , type] of spec.fields) if (type === 'secret') assert.equal(connection[key], filler);
     assert.equal(backendPayload(product, 'preserve', {}), null);
     assert.deepEqual(backendPayload(product, 'clear', {}), product === 'n8n' ? { url: null, key: null } : { connection: null });
   }
@@ -34,6 +35,17 @@ test('typed replacement refuses blank secrets, partial dashboard, malformed cred
   assert.throws(() => backendPayload('n8n', 'replace', { url: 'https://n8n.example.test', key: 'bad\nkey' }));
   assert.throws(() => backendPayload('hermes', 'replace', { gateway_url: 'https://hermes.example.test', gateway_api_key: 'fixture', dashboard_url: 'https://dashboard.example.test' }));
   assert.throws(() => backendPayload('emqx', 'replace', { url: 'https://broker.example.test/api/v5', api_key: 'fixture', api_secret: 'fixture' }));
+  for (const [username, app_password] of [['   ', 'fixture'], [' tester', 'fixture'], ['tester ', 'fixture'], ['tester', '   '], ['tester', ' fixture'], ['tester', 'fixture ']]) {
+    assert.throws(() => backendPayload('nextcloud', 'replace', { url: 'https://cloud.example.test', username, app_password }), /不可空白/);
+  }
+  assert.throws(() => backendPayload('nextcloud', 'replace', { url: 'https://雲端.example.tw', username: 'tester', app_password: 'fixture' }),
+    /xn-- 形式：https:\/\/xn--suzq78c\.example\.tw$/);
+  assert.throws(() => backendPayload('nextcloud', 'replace', { url: 'https://cloud.台灣:8443/nc', username: 'tester', app_password: 'fixture' }),
+    /xn--.*:8443\/nc$/);
+  for (const url of ['https://xn--suzq78c.example.tw', 'https://Cloud.Example.test:8443/nc', 'http://192.0.2.4/nc', 'https://[2001:DB8:0::1]:8443'])
+    assert.equal(backendPayload('nextcloud', 'replace', { url, username: 'tester', app_password: 'fixture' }).connection.url, url);
+  assert.deepEqual(backendPayload('nextcloud', 'replace', { url: 'https://cloud.example.test/', username: 'tester', app_password: 'fix ture' }),
+    { connection: { url: 'https://cloud.example.test', username: 'tester', app_password: 'fix ture' } });
 });
 test('unknown policy contract cannot save hidden grants; v3 is explicit/data driven', () => {
   const old = { tools: { read_one: { write: false }, write_one: { write: true }, mixed: { write: false, write_operations: ['create', 'delete'] }, unknown: {} } };
@@ -83,4 +95,21 @@ test('MOCK HTTP 200 without typed saved acknowledgement is not success', async (
 test('MOCK denied save never reports success or reflects server/body credentials', async () => {
   const api = new AdminApi(base, async path => path.endsWith('bootstrap') ? response(bootstrap()) : new Response('PRIVATE_CANARY', { status: 403 }));
   await assert.rejects(() => api.mutate('backend', { url: null, key: null }), error => error instanceof ApiError && error.status === 403 && !error.message.includes('PRIVATE_CANARY'));
+});
+test('Claude.ai connector URL: saved /mcp endpoint base + /private_<token>/mcp, never without an endpoint or valid token', () => {
+  const token = 'A'.repeat(21) + '-_' + 'z'.repeat(20);
+  assert.equal(claudeConnectorUrl('https://mcp.example.test/mcp', token), `https://mcp.example.test/private_${token}/mcp`);
+  assert.equal(claudeConnectorUrl('https://mcp.example.test:8443/mcp/', token), `https://mcp.example.test:8443/private_${token}/mcp`);
+  assert.equal(claudeConnectorUrl('https://proxy.example.test/odoo/mcp', token), `https://proxy.example.test/odoo/private_${token}/mcp`);
+  for (const endpoint of [null, undefined, '', 'https://mcp.example.test/api', 'https://mcp.example.test/mcp?x=1', 'https://u:p@mcp.example.test/mcp'])
+    assert.throws(() => claudeConnectorUrl(endpoint, token));
+  for (const bad of [null, '', 'short', 'A'.repeat(42), 'A'.repeat(44), 'A'.repeat(42) + '/', 'A'.repeat(42) + '?'])
+    assert.throws(() => claudeConnectorUrl('https://mcp.example.test/mcp', bad));
+});
+test('0.2.1 n8n: the optional MCP access token is sent with the connection, null when left blank', () => {
+  assert.deepEqual(backendPayload('n8n', 'replace', { url: 'https://n8n.example.test', key: 'fixture', mcp_access_token: '' }),
+    { url: 'https://n8n.example.test', key: 'fixture', mcp_access_token: null });
+  assert.deepEqual(backendPayload('n8n', 'replace', { url: 'https://n8n.example.test', key: 'fixture', mcp_access_token: 'mcp-fixture' }),
+    { url: 'https://n8n.example.test', key: 'fixture', mcp_access_token: 'mcp-fixture' });
+  assert.throws(() => backendPayload('n8n', 'replace', { url: 'https://n8n.example.test', key: 'fixture', mcp_access_token: 'bad\ntoken' }));
 });

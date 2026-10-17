@@ -4,18 +4,20 @@ from pathlib import Path
 import subprocess
 import sys
 
-PRODUCTS = ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm')
+INPUTS = json.loads((Path(__file__).resolve().parent / 'inputs.json').read_text())
+PRODUCTS = tuple(INPUTS['products'])  # 0.1.5: the store products; the retired odoo-manage is refused
+VERSION = INPUTS['version']
 
 
 def main(app, image, expected_id=None):
-    if app not in PRODUCTS or image != f'local/mcp-{app}:0.1.0':
+    if app not in PRODUCTS or image != f'local/mcp-{app}:{VERSION}':
         raise SystemExit('fixed image/app allowlist required')
     metadata = json.loads(subprocess.check_output(['docker', 'image', 'inspect', image]))[0]
     assert metadata['Architecture'] == 'amd64' and metadata['Os'] == 'linux'
     if expected_id is not None:
         assert metadata['Id'] == expected_id, 'image changed before acceptance'
     labels = metadata['Config']['Labels']
-    for key, value in {'io.hass.type': 'app', 'io.hass.arch': 'amd64', 'io.hass.version': '0.1.0'}.items():
+    for key, value in {'io.hass.type': 'app', 'io.hass.arch': 'amd64', 'io.hass.version': VERSION}.items():
         assert labels.get(key) == value, key
     assert set(metadata['Config'].get('ExposedPorts', {})) == {'8081/tcp'}
     assert metadata['Config']['Entrypoint'] == ['/usr/local/bin/python', '/opt/woow/packaging/entrypoint.py', app]
@@ -29,5 +31,5 @@ def main(app, image, expected_id=None):
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:
-        raise SystemExit('usage: container_acceptance.py APP local/mcp-APP:0.1.0')
+        raise SystemExit('usage: container_acceptance.py APP local/mcp-APP:' + VERSION)
     main(*sys.argv[1:])

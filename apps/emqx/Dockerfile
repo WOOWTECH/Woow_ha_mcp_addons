@@ -8,7 +8,7 @@ COPY packages/mcp-admin-ui/scripts/build.mjs ./scripts/build.mjs
 COPY packages/mcp-admin-ui/NOTICE.txt ./NOTICE.txt
 RUN npm run build
 FROM astral/uv:0.12.10@sha256:34c0f9a55abeb840c34391bb7b63a1a06f8cb9281e028f27757a01a1a8a2d461 AS uv
-FROM python:3.13.12-slim-bookworm@sha256:3121f8b0804aa3698ab750d9a39ea4a42657a385c9b133722b915e55c51551a6 AS dependencies
+FROM python:3.13.16-slim-bookworm@sha256:f040863673aea2570c3ff6a5c3fb4c673a016cbc5375005ad145915922b6b78a AS dependencies
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_PYTHON_DOWNLOADS=never UV_LINK_MODE=copy
 WORKDIR /opt/woow
@@ -16,10 +16,10 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --python /usr/local/bin/python
 COPY apps/emqx/pyproject.toml apps/emqx/uv.lock ./apps/emqx/
 RUN uv sync --project apps/emqx --frozen --no-dev --python /usr/local/bin/python
-FROM python:3.13.12-slim-bookworm@sha256:3121f8b0804aa3698ab750d9a39ea4a42657a385c9b133722b915e55c51551a6 AS runtime
-ARG BUILD_VERSION=0.1.0
+FROM python:3.13.16-slim-bookworm@sha256:f040863673aea2570c3ff6a5c3fb4c673a016cbc5375005ad145915922b6b78a AS runtime
+ARG BUILD_VERSION=0.2.2
 LABEL io.hass.type="app" io.hass.arch="amd64" io.hass.version="${BUILD_VERSION}" \
-      io.hass.name="WOOW EMQX MCP" io.hass.description="Experimental partial MCP; management blocked" \
+      io.hass.name="Woow EMQX MCP Server" io.hass.description="Experimental; HA admin-role management; full tool surface; every tool and write on by default (each can be turned off in the panel)." \
       io.hass.url="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \
       org.opencontainers.image.source="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \
       org.opencontainers.image.version="${BUILD_VERSION}"
@@ -36,9 +36,10 @@ COPY --from=dependencies /opt/woow/apps/emqx/.venv ./apps/emqx/.venv
 COPY packaging/entrypoint.py packaging/management_launcher.py ./packaging/
 COPY THIRD_PARTY_NOTICES.md ./THIRD_PARTY_NOTICES.md
 COPY docs/provenance ./docs/provenance
-RUN groupadd --gid 10001 mcp && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /data/mcp --shell /usr/sbin/nologin mcp
+RUN /usr/sbin/groupadd --gid 10001 mcp && /usr/sbin/useradd --uid 10001 --gid 10001 --no-create-home --home-dir /data/mcp --shell /usr/sbin/nologin mcp
 # Root ONLY for no-follow creation/ownership of a NEW /data/mcp, then irreversible uid/gid drop.
-# No Supervisor-owned options file or existing tree is chowned. No backend-dependent watchdog.
+# Supervisor-owned options are never chowned; an existing tree only in the verified HA-restore
+# repair (packaging/entrypoint.py). No backend-dependent watchdog.
 EXPOSE 8081
 STOPSIGNAL SIGTERM
 ENTRYPOINT ["/usr/local/bin/python", "/opt/woow/packaging/entrypoint.py", "emqx"]

@@ -36,7 +36,7 @@ ported or modified.
 | Shared `__init__.py`, `config.py`, `policy.py`, `gateway.py`, `lifecycle.py`, `health.py` | Newly authored Python boundary; `config.py` uses the conceptual atomic-write pattern noted above, not an imported legacy file. Review repairs are newly written here |
 | `apps/n8n/n8n_adapter.py`, `run.py` | New launcher/policy/runtime; conceptual launcher reference above |
 | `apps/n8n/backend_policy.cjs` | New scoped preload adapter written in the repair pass; calls installed upstream `N8nApiClient` / `SSRFProtection.createPinnedAgents`, does not copy their implementation or edit node_modules |
-| `apps/n8n/metadata_reads.cjs`, core `n8n_b3.py` | New B3 narrow adapters/schemas around genuine pinned handlers/client methods; no dependency source copied or modified. Default-off shared Tool backend preconditions are the explicit policy scope exception; no lifecycle/state migration |
+| core `n8n_b3.py` (`apps/n8n/metadata_reads.cjs` until 0.1.14; removed in 0.2.0, the full surface) | New B3 narrow adapters/schemas around genuine pinned handlers/client methods; no dependency source copied or modified. Default-off shared Tool backend preconditions are the explicit policy scope exception; no lifecycle/state migration |
 | `tests/*.py` | New disposable local regression harnesses; no legacy test/config data imported |
 | `licenses/n8n-mcp-MIT.txt` | Actual copied upstream notice; retain attribution, not an umbrella license |
 | npm/Python lockfiles | Generated dependency metadata; actual npm application/third-party source is installed via locks, not authored here or copied from the old repo |
@@ -61,7 +61,9 @@ bundled-data, transitive dependency and any future copied-source obligations rem
 integrities. Use `npm ci --prefix apps/n8n --ignore-scripts --no-audit --no-fund`.
 No global npm installs or native build/install scripts are required for this tracer.
 The tested fallback is **sql.js 1.14.2**; optional better-sqlite3 11.10.0 is installed
-as package contents but its native addon is not built. MCP JS SDK is **1.30.0**.
+as package contents but its native addon is not built. MCP JS SDK is **1.31.0** (0.1.6: an npm `overrides` entry in
+`apps/n8n/package.json` lifts n8n-mcp 2.91.0's exact 1.30.0 pin for GHSA-6qxp-vccf-f47h / CVE-2026-104850, an OAuth-client
+flaw this child does not use; 1.31.0's server-side changes are a 4 MiB request-body bound and a 100-message batch bound).
 
 ### Important launcher correction
 

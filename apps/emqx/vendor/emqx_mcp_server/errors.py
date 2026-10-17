@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import httpx
 from fastmcp.exceptions import ToolError
-from backend_policy import public_backend_error
 
 
 class EmqxApiError(ToolError):
@@ -21,8 +20,16 @@ async def emqx_request(
     """Call the EMQX REST API, converting failures into actionable errors."""
     try:
         response = await client.request(method, path, **kwargs)
-    except Exception as exc:
-        raise EmqxApiError(public_backend_error(exc)) from None
+    except httpx.TimeoutException as exc:
+        raise EmqxApiError(
+            f"EMQX timed out on {method} {path}. The broker may be busy — "
+            "retry with a smaller `limit`."
+        ) from exc
+    except httpx.ConnectError as exc:
+        raise EmqxApiError(
+            "Cannot reach the EMQX broker. Check that the dashboard API "
+            "(default port 18083) is running and reachable."
+        ) from exc
 
     if response.status_code == 401:
         raise EmqxApiError(
@@ -36,7 +43,8 @@ async def emqx_request(
         )
     if response.status_code >= 400:
         raise EmqxApiError(
-            f"BACKEND_HTTP_ERROR status={response.status_code}"
+            f"EMQX API error {response.status_code} on {method} {path}: "
+            f"{response.text[:300]}"
         )
     return response
 
@@ -47,5 +55,5 @@ def json_body(response: httpx.Response) -> dict | list:
         return {}
     try:
         return response.json()
-    except Exception:
-        raise EmqxApiError('BACKEND_INVALID_RESPONSE') from None
+    except ValueError:
+        return {}

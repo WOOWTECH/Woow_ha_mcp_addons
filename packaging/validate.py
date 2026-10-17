@@ -6,6 +6,7 @@ Supervisor REMOVE_EXTRA is deliberately replaced with rejection. This is NOT a
 vendored/full Supervisor implementation; new fields require explicit review.
 """
 import argparse
+import ast
 import json
 from pathlib import Path
 import re
@@ -16,10 +17,13 @@ import yaml
 from builder_contract import RUNNER
 
 ROOT = Path(__file__).resolve().parents[1]
-PRODUCTS = ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm')
+PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud')  # CI/release build allowlist; nextcloud is first released with 0.1.7 (no image for earlier versions)
+# Owner decision 2026-10-06: Odoo Manage is archived. It left the store and no image is built or released again
+# (0.1.4 was the last); its source stays in apps/odoo-manage and the shared core, and is still tested.
+RETIRED = ('odoo-manage',)
 URL = 'https://github.com/WOOWTECH/Woow_ha_mcp_addons'
-VERSION = '0.1.0'
-TITLES = dict(zip(PRODUCTS, ('Odoo', 'Odoo Manage', 'n8n', 'Hermes', 'OpenDesign', 'EMQX', 'LiteLLM')))
+VERSION = '0.2.2'
+TITLES = dict(zip(PRODUCTS, ('Odoo', 'n8n', 'Hermes', 'OpenDesign', 'EMQX', 'LiteLLM', 'Nextcloud')))
 
 
 class Invalid(ValueError):
@@ -87,22 +91,26 @@ def exact(value, expected, context):
 def manifest(value, product):
     require(product in PRODUCTS, 'unsupported product')
     require(isinstance(value.get('ports_description'), dict), 'ports_description mapping required')
-    expected = dict(name=f'WOOW {TITLES[product]} MCP (experimental)', version=VERSION,
+    expected = dict(name=f'Woow {TITLES[product]} MCP Server', version=VERSION,
         slug='woow_mcp_' + product.replace('-', '_'), description=value.get('description'),
-        url=URL, arch=['amd64'], startup='application', boot='manual', init=True,
+        url=URL, arch=['amd64'], startup='application', boot='auto', init=True,
         stage='experimental', image=f'ghcr.io/woowtech/{{arch}}-mcp-{product}',
-        ingress=True, ingress_port=8099, ingress_entry='/', ingress_stream=True,
+        ingress=True, ingress_port=8099, ingress_stream=True,
         panel_admin=True, panel_icon='mdi:connection', ports={'8081/tcp': None},
         ports_description={'8081/tcp': value.get('ports_description', {}).get('8081/tcp')},
         timeout=30, backup='cold', apparmor=True, options={}, schema={})
     for key in ('host_network', 'host_pid', 'host_ipc', 'host_uts', 'host_dbus',
                 'full_access', 'docker_api', 'hassio_api', 'auth_api'):
         expected[key] = False
-    # Approved broad-Core capability exception: new n8n pilot ONLY.
-    # hassio_role remains omitted/default; all other privileges stay closed.
-    expected['homeassistant_api'] = product == 'n8n'
+    # Approved broad-Core capability exception: n8n pilot (2026-10-04) and the other six (owner decision
+    # 2026-10-05, 0.1.1) and Nextcloud (owner decision 2026-10-08, 0.1.7). hassio_role remains omitted/default; all
+    # other privileges stay closed.
+    expected['homeassistant_api'] = True
     for text in (expected['description'], expected['ports_description']['8081/tcp']):
         require(isinstance(text, str) and 1 <= len(text) <= 512, 'missing description')
+    # 0.1.12: no ingress_entry. Supervisor 2026.09 builds ingress_url as f"/api/hassio_ingress/{token}/{ingress_entry}", so
+    # the former ingress_entry '/' made the HA sidebar open .../<token>// (404 in every MCP admin UI). The default
+    # (key absent) is the root; exact() rejects the key if it ever comes back.
     exact(value, expected, product)
 
 
@@ -133,6 +141,31 @@ def clearance_shape(value):
 def source_paths(root):
     # Match the store's checkout, not local ignored dependency installations.
     return subprocess.check_output(['git', '-C', str(root), 'ls-files', '--cached', '--others', '--exclude-standard', '-z']).decode().split('\0')[:-1]
+
+
+def runtime_version(text):
+    """0.1.8 (F6): mcp_admin_core.VERSION, the add-on version initialize reports, is bound exactly once, to the release
+    VERSION (an annotated, augmented or imported VERSION would rebind it)."""
+    bindings = []
+    for node in ast.walk(ast.parse(text)):
+        if isinstance(node, ast.Assign):
+            bindings += [node for target in node.targets for name in ast.walk(target)
+                         if isinstance(name, ast.Name) and name.id == 'VERSION']
+        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)) and isinstance(node.target, ast.Name) and node.target.id == 'VERSION':
+            bindings.append(node)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)) and any((a.asname or a.name) == 'VERSION' for a in node.names):
+            bindings.append(node)
+    require(len(bindings) == 1 and isinstance(bindings[0], ast.Assign) and len(bindings[0].targets) == 1
+            and isinstance(bindings[0].targets[0], ast.Name) and isinstance(bindings[0].value, ast.Constant)
+            and bindings[0].value.value == VERSION, 'initialize serverInfo version')
+
+
+def image_labels(dockerfile, value):
+    """0.1.8: exactly one io.hass.name and one io.hass.description in the Dockerfile, equal to the add-on manifest. Docker
+    keeps the last value of a repeated label, so a second LABEL (or any other mention) fails (review F-5d)."""
+    require(dockerfile.count('io.hass.name') == 1 and dockerfile.count('io.hass.description') == 1
+            and f'io.hass.name="{value["name"]}" io.hass.description="{value["description"]}"' in dockerfile,
+            'image name/description labels differ from the add-on manifest')
 
 
 def builder_workflow(value, workflow):
@@ -183,7 +216,7 @@ def builder_workflow(value, workflow):
                 'python packaging/registry_gate.py unused "$APP"',
                 '\n'.join(['set -eu',
                     'python packaging/supply_chain.py verify "$APP" "$RUNNER_TEMP/candidate"',
-                    'IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:0.1.0"',
+                    f'IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:{VERSION}"',
                     'TESTED_ID="$(python -c \'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])\' "$RUNNER_TEMP/candidate/subject.json")"',
                     'docker tag "$TESTED_ID" "$IMAGE"',
                     'test "$(docker image inspect "$IMAGE" --format \'{{.Id}}\')" = "$TESTED_ID"',
@@ -236,13 +269,14 @@ def builder_workflow(value, workflow):
 
 
 def validate(root=ROOT):
-    exact(load(root / 'repository.yaml'), {'name': 'WOOW MCP Add-ons (experimental / blocked)', 'url': URL, 'maintainer': 'WOOWTECH'}, 'repository')
+    exact(load(root / 'repository.yaml'), {'name': 'WOOW MCP Add-ons (experimental)', 'url': URL, 'maintainer': 'WOOWTECH'}, 'repository')
     paths = source_paths(root)
     app_scopes = {Path(p).parts[1] for p in paths if p.startswith('apps/') and len(Path(p).parts) > 1}
-    require(app_scopes == set(PRODUCTS) | {'runtime'}, 'application source scope')
+    require(app_scopes == set(PRODUCTS) | set(RETIRED) | {'runtime'}, 'application source scope')
     inputs = load(root / 'packaging/inputs.json')
     exact(inputs['products'], list(PRODUCTS), 'build allowlist')
     exact(inputs['version'], VERSION, 'build version')
+    runtime_version((root / 'packages/mcp-admin-core/mcp_admin_core/__init__.py').read_text())
     exact(inputs['supervisor'], {'version': '2026.09.3', 'commit': '64ea3be4322537fd5dcfbf620c4dc25490c1f56d'}, 'Supervisor schema pin')
     require(set(inputs['bases']) == {'python', 'node', 'uv'}, 'base allowlist')
     for image in inputs['bases'].values():
@@ -280,6 +314,7 @@ def validate(root=ROOT):
         require('EXPOSE 8081\n' in dockerfile and 'EXPOSE 3000' not in dockerfile and 'EXPOSE 8099' not in dockerfile, 'port scope')
         require('COPY apps/ ./apps/' not in dockerfile and 'COPY . .' not in dockerfile, 'broad app copy')
         require('io.hass.type="app"' in dockerfile and 'io.hass.arch="amd64"' in dockerfile, 'HA labels')
+        image_labels(dockerfile, value)
         require('uv sync --frozen --no-dev' in dockerfile, 'unlocked core')
         if product == 'n8n':
             require('npm ci --ignore-scripts --no-audit --no-fund' in dockerfile, 'unlocked/scripted npm')

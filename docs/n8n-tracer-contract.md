@@ -96,14 +96,151 @@ unknown methods, invalid IDs/params/arguments and unknown/disabled/write-disallo
 tools fail before the upstream request. Notifications/initialized is the only
 accepted notification. See provenance for the narrow source-backed tool subset.
 
-The gateway preserves upstream status, empty 202/204 responses, session/protocol
-headers and SSE event IDs/data/comments/retry. JSON/SSE tool lists use the exact
-local argument model's inputSchema, not the broader upstream schema. On a permitted
+0.1.8 (0.1.6 RC GATEWAY-2): every request other than initialize must carry `Mcp-Session-Id`. Without one the gateway
+answers 400 itself and the child never sees the request; this check comes after the Bearer (401), method (405), Origin
+(403), query and body (400, 413, 415) and policy (403) checks. A request with an id and a GET get the gateway's JSON-RPC
+error (`-32000`, `Bad Request`, the request's id or null) as `application/json`; a notification and a DELETE get a bare
+400; all carry `Cache-Control: no-store` and no session id. Until 0.1.7 such a request was forwarded: the pinned Python
+SDK children opened a session for it and kept it until they restarted, and n8n-mcp, which opens none, answered 400 to a
+request, GET or DELETE but 202 to a notification without a session (that notification now gets 400 as well).
+
+The gateway preserves the upstream status of 4xx/5xx replies, notifications and DELETE, except that a child
+401/403 (the child refusing the gateway's own token or Host, not a client credential problem) is 502, and
+interim (1xx) or redirect (3xx) child statuses are 502 for every request, DELETE and notification (0.1.4).
+0.1.4: a 4xx/5xx reply to a request or GET never carries the child's bytes: its body is the gateway's own
+JSON-RPC error (`-32000`, the HTTP reason phrase, the request's id or null) as `application/json`, since
+clients show error bodies to users; a failed initialize carries no session id. Replies to notifications
+and DELETE carry no body at all (below).
+It forwards four headers only when well formed (session and protocol ids
+`[\x21-\x7e]{1,256}` as for requests, numeric Retry-After, printable Content-Type) and
+drops them otherwise. A 2xx body must be one the gateway parses and filters
+itself (0.1.2): for GET an SSE stream, for a request (POST with an id) an SSE stream or
+a plain 200 JSON reply; other 2xx codes and other, duplicate or missing media types
+are 502 and not one byte of such a body is relayed, even when it is declared empty
+(framing headers can lie: `Content-Length: 0` with chunked encoding still carries a
+body); an initialize declared empty is 503 `BACKEND_UNAVAILABLE`. Replies to
+notifications and to DELETE carry only the status, the forwarded session/protocol/
+Retry-After headers (no Content-Type) and `Cache-Control: no-store`, never the child's
+body. Every method other than GET, POST and DELETE (HEAD, PUT, PATCH, OPTIONS, TRACE,
+CONNECT, unknown or lower-case tokens) is checked for the Bearer first (401) and then
+gets 405 (`Allow: GET, POST, DELETE`; 0.1.3 for the methods that used to get the
+framework's 405 before the check); none reaches the child. The child always receives `Accept: application/json,
+text/event-stream`; statuses outside 200-599, and 3xx, are 502 (0.1.4: also for DELETE and notifications); an initialize reply whose session
+id cannot be forwarded is 502. Media types compare case-insensitively without
+parameters; a 2xx reply always reaches the client as plain `text/event-stream` or
+`application/json` (0.1.4: so does every 4xx/5xx reply to a request or GET, with the gateway's own body;
+DELETE and notification replies carry no body). Every JSON reply to a request is parsed, must
+be one object answering that request (same id and JSON type, `result` or `error`, no
+`method`), is filtered and re-serialized with ASCII escapes; batches are 502. SSE events
+are rebuilt from the lines the gateway understood: data, `id`/`event` values of up to 256
+characters without spaces (as `Last-Event-ID` allows), numeric `retry` and printable-ASCII
+comments up to 1024 characters; other lines (a BOM, unknown fields, non-ASCII comments)
+are dropped. A lone CR (a line end for SSE parsers, not for the gateway's scan) refuses
+the event: initialize is 502, other streams stop. An event whose data is empty (an MCP
+2025-11-25 priming event) passes as an empty event; a batch in an event stops the stream;
+a server-to-client request (an event with `method` and `id`: elicitation, sampling,
+roots, ping) is dropped, since the client could not answer it through the gateway and it
+would carry child text to the user. Of the child's notifications (no id) only
+`notifications/tools/list_changed` reaches a client, as the gateway's own fixed bytes without
+the child's params (0.1.4). Progress is not relayed: authorize refuses `_meta`, so no client can
+ask for it and any progress event is unsolicited child text (the pinned TS client puts
+unknown-token progress into an error message); log messages and other notifications are
+dropped. A reply must carry exactly one of `result` and `error`: with both, a JSON reply is 502,
+an SSE stream stops at that event and an initialize is 502; with neither, a JSON reply is 502 (as
+in 0.1.2), an SSE event is dropped (0.1.4; it was relayed before) and initialize skips it (as in 0.1.2).
+0.1.5: every reply a client gets is the gateway's own object (`jsonrpc`, `id` and exactly one of `result`
+or `error`; an error keeps only `code` as an integer, `message` and `data`), so unknown top-level
+members, whose names the pinned TS client would put into an error, never reach a client (unknown error members,
+which that client strips anyway, are dropped as well); a successful ping
+is always `{}` (the client parses it with a strict empty schema); other results are relayed as the child sent
+them (tool lists and capabilities filtered), except an initialize result (0.1.8, 0.1.6 R1 F6): the gateway builds it,
+keeping only the child's `protocolVersion` (below), with `capabilities: {"tools": {}}`, `serverInfo: {"name":
+"woow-mcp-<product>", "version": <add-on version>}` (n8n: `woow-mcp-n8n`) and `instructions` only where the gateway
+has reviewed fixed text (Nextcloud); the child's serverInfo, instructions and every other member are dropped (Claude
+Code puts instructions into the model's system prompt). A POST SSE stream relays only the reply to its own request and
+ends right after it; a GET stream relays no reply (MCP allows one only when resuming a stream, and no pinned
+child keeps an event store). An error code outside the 32-bit range or a non-string message makes the error
+malformed. An initialize result must be an object whose `protocolVersion` is one of the reviewed MCP revisions
+`2024-11-05`, `2025-03-26`, `2025-06-18` and `2025-11-25` (0.1.8; 0.1.5 to 0.1.7 accepted any date `YYYY-MM-DD`), else
+502, and the session the child opened is ended with the gateway's own DELETE (0.1.6 R2, below): the pinned TS client
+puts an unsupported version into its error message. The pinned Python SDK supports exactly these four (tests pin
+`mcp.shared.version.SUPPORTED_PROTOCOL_VERSIONS` of every Python child); n8n-mcp answers 2024-11-05 to n8n and
+langchain clients, echoes 2025-03-26, 2024-11-05 or 2024-06-25 when a client asks for one of them and otherwise answers
+2025-03-26, so only a client asking for 2024-06-25 gets 502. An error whose code is not a JSON integer (integral floats
+count, as for clients; a string such as `"-32042"` does not, though a Python client would
+coerce it) becomes `{"code": -32000, "message": "Invalid error from the MCP server"}`, and a URL
+elicitation error (`-32042`) becomes `{"code": -32000, "message": "URL elicitation is not
+supported"}`, both without the child's data, in JSON, SSE and initialize replies (0.1.4).
+Request bodies with lone surrogates anywhere are 400; numbers that overflow to infinity
+(e.g. `1e400`) are refused like NaN/Infinity (a request 400; a reply 502 for initialize
+or JSON, other SSE streams stop), so nothing is re-serialized as `Infinity`. The child receives initialize with
+`capabilities: {}`, since the gateway answers no server-to-client request (sampling,
+elicitation, roots). Initialize is further special-cased: the gateway reads a 200 reply
+up to the JSON-RPC response for the request and answers with that one response (SSE
+keeps only its id/event/retry lines; other events are dropped). A 200 without that
+response (empty body, stream ended or broken, only notifications/other ids) becomes HTTP
+503 with JSON-RPC error -32000 `BACKEND_UNAVAILABLE`, Retry-After 5 and no session id:
+the child gave no reply, e.g. its per-session lifespan could not reach the backend.
+Malformed or oversize replies are 502; 4xx/5xx replies keep their status (child 401/403: 502) with the gateway's body. JSON/SSE tool lists use the
+local argument model's own inputSchema (0.1.6: its declared form, see below), not the broader upstream schema. On a permitted
 call, the gateway forwards the **validated model's serialized arguments**, including
 reviewed defaults and field-specific omission rules, not the raw client object.
 Reauthorization immediately before dispatch uses the same normalized values.
 Strict types, bounds and unknown-field rejection remain unchanged; no extra upstream
 arguments are enabled.
+
+0.1.6: a tools/list result is rebuilt: the tools and a string `nextCursor` only, and the first entry per name. In
+each tool, `name` and `inputSchema` are the gateway's own; `title`, `description` and `annotations.title` are the child's
+text, kept only as strings; the four hint booleans (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`)
+are kept when they are the cautious value, or when the local tool has no write path (a client such as Claude Code treats
+`readOnlyHint` as read-only). `outputSchema`, `execution`, `icons`, `_meta` and unknown members are dropped: the pinned TS
+client compiled a child's `outputSchema` (a `$ref` or `pattern` became its error text; the Python client fetched a child
+`$ref` URL) and refuses every call to a tool whose `execution.taskSupport` is `required`. Clients therefore no longer
+validate `structuredContent` against a child schema, and child `_meta` hints such as `anthropic/maxResultSizeChars` are not
+passed on (Claude Code then applies its default MCP output budget).
+
+0.1.6 (AI Stage 0, owner decision D21), declared vs validated schema: the `inputSchema` a tools/list carries is the
+*declared* form of the local argument model (`policy.declared_schema`), and the model itself stays the *validated* one.
+Claude and GPT refuse a whole request (HTTP 400) when any tool's input schema has `oneOf`, `anyOf` or `allOf` (GPT also
+`enum`, `const` or `not`) at its top level (measured through OpenRouter; direct Anthropic and OpenAI API calls were
+not tested). Seven local models had one: `n8n_manage_folders` (top-level `oneOf`), Odoo `diagnose_odoo_call` and
+`generate_json2_payload` (top-level `allOf` with `if`/`then`), Hermes `hermes_skill`, `hermes_tools`, `hermes_session`
+and `hermes_cron` (top-level `oneOf`); so a client that forwards the list unchanged to these models could use none of
+the n8n, Odoo or Hermes tools. A schema whose top level is already `{"type": "object", ...}` without those keywords,
+`if`/`then`/`else` or `$ref` is declared unchanged (69 of the 76 tools). Otherwise `policy.flat_schema` removes the
+top-level combinators (and `unevaluated*`, which pydantic does not emit and which would no longer see what the branches
+evaluated) and declares a superset:
+
+- the model's own members stay: `title`, `description`, `properties` (with their defaults and nested `anyOf`/`$ref`),
+  `required`, `additionalProperties` and the `$defs` still referenced;
+- members only the combinators declare are added where no branch leaves them free: identical schemas once, string
+  `const`/`enum` values merged into one `enum`, otherwise a nested `anyOf` of the distinct schemas;
+- `required` gains only what every branch requires; `additionalProperties: false` is added only when every branch has it;
+- the branch rules are appended to the schema `description` as plain clauses, members named in the model's own order
+  (then by name), so the declared bytes do not change between processes when only the member order inside the branches
+  does (`n8n_b3.folder_schema` builds each branch's members from a set); the order of the branches themselves is the
+  generator's, and it still orders what they add (merged `enum` values, nested `anyOf` members, added members, the
+  clauses). For example `n8n_manage_folders`: `Argument rules (checked by the server): action="list": omit folderId and
+  name; action="create": requires name, omit folderId; action="rename": requires folderId and name; action="get":
+  requires projectId and folderId, omit name, projectId must not be "personal".`
+
+Validation is unchanged: `authorize()` validates every call with the original strict pydantic model, branch rules
+included, before any dispatch, so a call that only the description rules out (for example `search_count` with a `limit`)
+is still a 403 that never reaches the child. The model's own JSON schema, with its branches, is the validated contract;
+the admin bootstrap (`GET /api/bootstrap`, `tools.*.inputSchema`) keeps showing it.
+
+0.1.6 (R2): an initialize the gateway refuses after the child answered (401 for a Bearer revoked meanwhile, the 502s
+and 503s above, a child 4xx/5xx relayed without its session id, a state error) may leave a session the child opened:
+its `Mcp-Session-Id` never reaches the client, so before 0.1.6 it stayed open until the child's idle reaping (n8n: 20
+sessions shared by all clients, 10 idle minutes; with the pinned n8n-mcp, 20 refused initializes made every later
+initialize 429 until then). The gateway now ends it with its own `DELETE /mcp`, carrying only the child's Bearer, the
+fixed Accept and Accept-Encoding and that session id (no client header, no `MCP-Protocol-Version`). This applies only
+to a session id the gateway would forward (`[\x21-\x7e]{1,256}`) that is not the one the client sent itself (that
+session is the client's; a child may echo it), and never to a successful initialize (a JSON-RPC error reply included,
+which carries the id to the client) or to another method. The DELETE is sent once, after the child's reply is closed
+and within the request's slot, never follows a redirect and is bounded at 2 seconds; its reply is never read or
+relayed, every error is ignored and the id is never logged. The client's answer is unchanged, at most 2 seconds later
+(about 1-3 ms with the pinned n8n-mcp).
 
 | Tracer tool | Executable default / omission contract |
 |---|---|
@@ -124,18 +261,24 @@ These **four tools remain a partial W1 tracer**. W2a now inventories all 28 pinn
 upstream tools in `tool-surface.json` / `tool-surface.md`; expansion remains W2b.
 
 Initialize
-advertises only `tools: {}` (no resources/prompts/logging/listChanged). Resumed SSE
-advertisements receive the same restrictions. Every call is authorized independently. Compression is disabled on the internal hop;
+advertises only `tools: {}` (no resources/prompts/logging/listChanged). GET SSE streams
+(resumed ones too) are rebuilt and filtered the same way and carry notifications only, never a reply (0.1.5);
+a non-SSE 2xx GET reply is 502. Every call is authorized independently. Compression is disabled on the internal hop;
 redirects, response cookies and hop-by-hop headers are not forwarded.
 
 Limits: 256 KiB request body, 10-second request-body timeout; 32 concurrent upstream
 streams; 3-second connect/pool and 30-second upstream inactivity timeout; 120-second
-stream lifetime and 8 MiB response budget. Oversize/truncated streams close rather
-than invent a successful protocol result. Clients may reconnect with a fresh
-Bearer and session/event headers. A response owner joins its reader cancellation
+stream lifetime and 8 MiB response budget. A JSON reply (and each SSE event) is read whole before it is
+parsed and filtered; parsing and re-serializing can take up to about 25 times the raw size (measured:
+about 200 MiB for an 8 MiB reply of small objects), so 32 large replies at once could need several GiB:
+keep client concurrency low on small hosts (0.1.4 RC review #3; unchanged since 0.1.2). Oversize/truncated streams close rather
+than invent a successful protocol result (initialize: 502 oversize, 503 without a reply). Clients may reconnect with a fresh
+Bearer and session/event headers, but a reconnected (GET) stream carries notifications only: a request whose POST
+stream was cut must be sent again (0.1.5; no pinned child keeps an event store, so no stream is resumed). A response owner joins its reader cancellation
 and upstream close under a 3-second cleanup budget, shields ASGI 2.3 AnyIO level
 cancellation and joins direct asyncio cancellation, then unconditionally releases
-its slot. Headers/body/send/idle disconnect paths share that owner; cleanup is not
+its slot (0.1.6: after the 2-second DELETE of a refused initialize's session, above, which the same shield covers).
+Headers/body/send/idle disconnect paths share that owner; cleanup is not
 detached from response completion.
 
 Rotation/revocation does not change the independent child token. Old Bearers are
@@ -190,19 +333,30 @@ its success payload. Thus health uses the same Node backend network policy as th
 tool, not an unrestricted Python HTTP path. This automatic read-only health probe
 runs independently of client tool visibility (as the previous direct health GET
 did); it never enables a client call or performs writes. Checks repeat every 15
-seconds. An unexpected monitor exit/exception stops the runtime with a sanitized
-recovery message and nonzero exit, not a discarded exception/clean exit.
+seconds. Errors while probing the child or the backend (0.1.2: any exception, e.g. an
+odd session id or reply shape from a misbehaving child) only leave readiness false and
+the backend unreachable for that round; the child's session id is validated
+(`[\x21-\x7e]{1,256}`) before it is reused, and (0.1.3) so is the initialize
+`protocolVersion` before it is sent as `MCP-Protocol-Version`: an unusable value fails
+the round and the session is still closed with its id. Only the monitor task itself ending stops the
+runtime, with a sanitized recovery message and nonzero exit, never a clean exit.
 
 ## Single configured backend network policy
 
 `apps/n8n/backend_policy.cjs` is an explicit adapter for the pinned API client's
 `getPinnedAgents` method. The fixed launcher preloads it; an API-client source hash
-guard fails closed on package drift. It does **not** change global webhook SSRF
-validation or set `WEBHOOK_SECURITY_MODE=permissive`.
+guard fails closed on package drift. It does not patch the global webhook SSRF
+validators. **0.2.1 (owner decision 2026-10-15):** the child runs with
+`WEBHOOK_SECURITY_MODE=permissive`, n8n-mcp 2.91.0's widest mode
+(`dist/utils/ssrf-protection.js`: permissive accepts every resolved address, private,
+ULA and loopback included; only the cloud metadata host names stay blocked), so
+`n8n_test_workflow` and the official-MCP calls can reach an n8n on the HA network
+(e.g. 172.30.33.x, fd0c:ac1e:2100::/64). Risk: a webhook or derived URL may then point at
+any internal address the add-on can reach.
 
 - Only the GUI-owned exact HTTP(S) origin **and base path** may create backend
   agents. No userinfo/query/fragment; no client-selected URL/key headers or arbitrary
-  network tools. Webhook validators retain upstream strict behavior.
+  network tools. Webhook validators: upstream permissive mode (0.2.1, see above).
 - That selected backend may be loopback, RFC1918 LAN/HA, IPv6 ULA or public unicast.
   Public IPv6 is limited to global-unicast 2000::/3, excluding classified transition
   ranges. Link-local, metadata (including AWS ULA/Azure virtual endpoint), multicast,

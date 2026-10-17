@@ -11,13 +11,15 @@ new work. Owner authorization for publication still needs explicit confirmation.
 | Distribution scope | Source / version | Applicable notices |
 |---|---|---|
 | Odoo image | `odoo-mcp==1.1.0`, tuanle96/mcp-odoo | MIT, Copyright 2025 Lê Anh Tuấn; full text `docs/provenance/odoo-LICENSE` |
-| Odoo Manage image | `mcp-server-odoo==0.7.1`, ivnvxd/mcp-server-odoo | **MPL-2.0**, full text `docs/provenance/odoo-manage-LICENSE`; see source availability below |
+| Odoo Manage image (0.1.0–0.1.4; archived 2026-10-06, no later image) | `mcp-server-odoo==0.7.1`, ivnvxd/mcp-server-odoo | **MPL-2.0**, full text `docs/provenance/odoo-manage-LICENSE`; see source availability below |
 | Hermes vendored runtime | legacy app-only snapshot `614ae663fadd91c76972f60017a76d2627bea87e` | MIT, Copyright 2026 WOOWTECH; `apps/hermes/vendor/LICENSE` |
 | OpenDesign vendored runtime | same app-only snapshot; original `WOOWTECH/Woow_opendesign_mcp_server@d6d157ab9542cf18515d7168f5c8082c88b11331` | App MIT text preserved in `apps/opendesign/vendor/LICENSE`; original pinned repository has **no LICENSE/NOTICE/COPYING**. Owner must confirm rights covering the imported file before release. Public availability is not permission. |
 | EMQX vendored runtime | `WOOWTECH/Woow_emqx_mcp_server@1be17bad5aef6c7b7519686ccbfe1d80762bc10e` | MIT, Copyright 2026 WOOWTECH; `apps/emqx/vendor/LICENSE` |
 | LiteLLM vendored runtime | `WOOWTECH/Woow_litellm_mcp_server@4d4190369216a2d068d1100d53406a67a1d81609` | MIT, Copyright 2026 WOOWTECH; `apps/litellm/vendor/LICENSE` |
 | n8n child | npm `n8n-mcp==2.91.0`, czlonkowski/n8n-mcp; `ipaddr.js==1.9.1` | MIT package notices retained by `npm ci`; not the n8n backend's license |
-| EMQX/LiteLLM child dependency | FastMCP 3.4.5 and fastmcp-slim extras | **Apache-2.0**, preserve package LICENSE and any shipped NOTICE; not MIT |
+| Nextcloud vendored runtime (from 0.1.7) | `WOOWTECH/Woow_nextcloud_mcp_server@4e09c86f8ee66f147a2d227e7ed1eb9d989394a6` (tag v0.1.5), package `nextcloud_mcp_server` | MIT, Copyright 2026 WOOWTECH; `apps/nextcloud/vendor/LICENSE`. Three files (client.py, server.py, tools.py) carry local add-on changes, each with its reason in `docs/provenance/runtime-sources.json`; they are not upstream behaviour |
+| EMQX/LiteLLM/Nextcloud child dependency | FastMCP 3.4.5 and fastmcp-slim extras | **Apache-2.0**, preserve package LICENSE and any shipped NOTICE; not MIT |
+| Nextcloud child dependencies beyond the EMQX closure | `defusedxml==0.7.1`, `tzdata==2026.5` (lock `apps/nextcloud/uv.lock`; everything else is the reviewed EMQX lock, same versions) | defusedxml: Python Software Foundation License 2 (shipped LICENSE text; its metadata says only `PSFL`, which is not an SPDX id; owner decision 2026-10-08: version-pinned `known_package_licenses` entry `python:defusedxml:0.7.1` = `PSF-2.0` in `packaging/supply-chain-policy.json`); tzdata: Apache-2.0. Both keep their dist-info license files |
 
 Only the selected app code, its vendored license, core, complete shared UI dist and `apps/runtime` are
 copied into each image. Shared provenance/notice documents may describe other
@@ -63,7 +65,7 @@ whole-image review; local integration is not redistribution/CVE clearance.
 
 ## Self-hosted management UI assets
 
-All seven images build the package-local UI lock using the existing pinned Node base;
+All store images (`packaging/inputs.json`: seven, Nextcloud first built with 0.1.7) build the package-local UI lock using the existing pinned Node base;
 only complete dist/assets/licenses are copied, not fixtures or build dependencies.
 Fontsource Poppins5.2.7, Outfit5.2.8, Noto Sans TC5.2.9 retain OFL texts;
 Yellowtail5.2.8 retains Apache-2.0; MDI7.4.47 retains its package license.

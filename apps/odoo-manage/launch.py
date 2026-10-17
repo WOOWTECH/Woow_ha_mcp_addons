@@ -157,4 +157,44 @@ async def bounded_post_message(self, *args, **kwargs):
 tools.OdooToolHandler._handle_post_message_tool = bounded_post_message
 
 if __name__ == '__main__':
-    runpy.run_module('mcp_server_odoo', run_name='__main__')
+    import mcp_server_odoo.server as server
+    if hashlib.sha256(Path(server.__file__).read_bytes()).hexdigest() != '4dec3375d722e2eb6af054949be31e66ca35f1713bbc1908398d46f35c09b4fe':
+        raise RuntimeError('Manage server requires source review')
+    from bounded_tools import OwnedWorkers
+    # HealthMonitor's private probe (0.1.4), as for Odoo: not in TOOLS, so the gateway neither lists nor authorizes
+    # it. A fresh connection (own transport and pool, never the shared session connection) connects and
+    # authenticates on its own owned thread; the uid is the only result. list_models needed ir.model read access,
+    # so a least-privilege account always read as unreachable (0.1.3 HA regression).
+    probe_worker = OwnedWorkers(1, 'backend-probe')
+    server_init = server.OdooMCPServer.__init__
+
+    @functools.wraps(server_init)
+    def init_with_probe(self, *args, **kwargs):
+        server_init(self, *args, **kwargs)
+        config = self.config
+
+        def authenticate():
+            odoo = connection.OdooConnection(config, performance_manager=performance.PerformanceManager(config))
+            try:
+                odoo.connect()
+                odoo.authenticate()
+                return odoo.uid
+            finally:
+                odoo.disconnect(suppress_logging=True)
+
+        async def woow_backend_probe():
+            try:
+                uid = await probe_worker.run(authenticate)
+            except Exception:
+                raise ValueError('BACKEND_UNAVAILABLE') from None
+            return {'uid': uid}
+
+        self.app.add_tool(woow_backend_probe, name='woow_backend_probe', description='Add-on readiness probe (private).')
+        if self.app._tool_manager.get_tool('woow_backend_probe').fn is not woow_backend_probe:
+            raise RuntimeError('readiness probe name taken')  # add_tool keeps an existing tool of the same name
+
+    server.OdooMCPServer.__init__ = init_with_probe
+    try:
+        runpy.run_module('mcp_server_odoo', run_name='__main__')
+    finally:
+        probe_worker.close()

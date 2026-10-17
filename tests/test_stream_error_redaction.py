@@ -1,5 +1,6 @@
 """Late failures through real pinned children/gateway and owned HTTP backends."""
 import asyncio
+import base64
 import json
 import threading
 
@@ -9,17 +10,36 @@ import pytest
 
 from test_backend_policy_python import policy
 from test_expansion_runtime import WRITES
+from nextcloud_fixtures import READS
+import nextcloud_fixtures
+from litellm_metadata_fixtures import FIXTURES as LITELLM_METADATA_CASES
 
 from mcp_admin_core.lifecycle import ChildSpec
-from mcp_admin_core.products import PROBES, TOOLS
+from mcp_admin_core.products import PROBES, BOUNDED_TOOLS as TOOLS  # 0.2.0: the 0.1.x bounded surface (local models); products serve the full child surface
 import test_six_hardening
 from test_six_hardening import Quiet, call, runtime, serve
 
 CANARY = 'DUMMY-LATE-RESPONSE-SECRET'
+from test_six_hardening import ERROR_REPLY  # noqa: E402
 
 
-def broken_response(handler, mode, credential):
-    handler.send_response(200)
+# Nextcloud: the success status the child expects for each of its own requests (a broken body must arrive on an
+# accepted status, or the child reports the status without reading the body).
+NEXTCLOUD_OK = {'GET': 200, 'PROPFIND': 207, 'REPORT': 207, 'PUT': 201, 'DELETE': 200}
+
+
+def nextcloud_account(handler):
+    """Answer the account lookup (OCS cloud/user) normally, so only each tool's own request is broken. True if
+    this was that lookup."""
+    if handler.path != nextcloud_fixtures.OCS_PATH:
+        return False
+    nextcloud_fixtures.respond(handler, 200, {'Content-Type': 'application/json'},
+                               b'{"ocs": {"meta": {"status": "ok"}, "data": {"id": "tester"}}}')
+    return True
+
+
+def broken_response(handler, mode, credential, status=200):
+    handler.send_response(status)
     if mode == 'chunk':
         handler.send_header('Transfer-Encoding', 'chunked')
         body = credential.encode() + b'\r\n'
@@ -41,7 +61,7 @@ def broken_response(handler, mode, credential):
 
 @pytest.mark.parametrize('product,json_response', [
     ('hermes', False), ('opendesign', False), ('emqx', False),
-    ('litellm', False), ('litellm', True)])
+    ('litellm', False), ('litellm', True), ('nextcloud', False)])
 async def test_actual_child_late_response_errors(tmp_path, product, json_response):
     mode = {'value': 'chunk'}
     seen = []
@@ -51,8 +71,16 @@ async def test_actual_child_late_response_errors(tmp_path, product, json_respons
             credential = self.headers.get('Authorization', CANARY)
             if product == 'hermes':
                 assert credential == 'Bearer ' + CANARY
+            if product == 'nextcloud':  # echo the decoded app password itself, not its base64 form
+                self.rfile.read(int(self.headers.get('Content-Length', 0)))
+                if nextcloud_account(self):
+                    return
+                credential = base64.b64decode(credential.split()[1]).decode().split(':', 1)[1]
+                assert credential == CANARY
             seen.append(credential)
-            broken_response(self, mode['value'], credential)
+            broken_response(self, mode['value'], credential, NEXTCLOUD_OK.get(self.command, 200))
+
+        do_PROPFIND = do_GET
 
     with serve(Backend) as url:
         async with runtime(tmp_path, product, url, canary=CANARY,
@@ -63,11 +91,14 @@ async def test_actual_child_late_response_errors(tmp_path, product, json_respons
                 before = len(seen)
                 response = await client.post('/mcp', headers=headers, json=call(name, args))
                 assert len(seen) > before
-                # Whole raw wire payload includes content, structuredContent, notifications.
-                assert CANARY not in response.text, (product, failure, response.text)
-                code = 'BACKEND_STREAM_ERROR' if failure in ('chunk', 'disconnect') else 'BACKEND_INVALID_RESPONSE'
-                assert code in response.text, (product, failure, response.text)
-                assert len(response.content) < 4096
+                # Whole raw wire payload includes content, structuredContent, notifications. 0.2.0: backend text is
+                # relayed (as the PaaS servers); the canary is the configured credential (OpenDesign has none) and the
+                # gateway replaces it with [REDACTED]. The reply is still an error.
+                if product != 'opendesign':
+                    assert CANARY not in response.text, (product, failure, response.text)
+                if failure in ('chunk', 'disconnect'):  # a broken stream is an error; upstream EMQX/LiteLLM tolerate a
+                    assert ERROR_REPLY.search(response.text), (product, failure, response.text)  # bad body as data
+                assert len(response.content) < 65536
                 assert response.headers['content-type'].startswith(
                     'application/json' if json_response else 'text/event-stream')
 
@@ -105,9 +136,8 @@ async def test_actual_dashboard_late_response_errors(tmp_path, phase):
                 response = await client.post('/mcp', headers=headers,
                     json=call('hermes_inspect', {'target': 'status'}))
                 assert seen and seen[-1] == phase
-                assert CANARY not in response.text, (phase, failure, response.text)
-                code = 'BACKEND_STREAM_ERROR' if failure in ('chunk', 'disconnect') else 'BACKEND_INVALID_RESPONSE'
-                assert code in response.text, (phase, failure, response.text)
+                assert CANARY not in response.text, (phase, failure, response.text)  # the dashboard password, redacted
+                assert ERROR_REPLY.search(response.text), (phase, failure, response.text)
                 assert len(response.content) < 4096
 
 
@@ -126,7 +156,7 @@ async def test_actual_httpcore_lazy_stream_and_close(monkeypatch, kind, failure)
                 self.reply({'ok': True}, 503 if failure == 'status-close' else 200)
 
     expected = ('BACKEND_TIMEOUT' if failure == 'timeout' else
-                'BACKEND_HTTP_ERROR status=503' if failure == 'status-close' else
+                # 0.2.0: a non-2xx answer is the child's to read; its broken close is a stream error
                 'BACKEND_STREAM_ERROR')
     with serve(Backend) as url:
         if kind == 'sync':
@@ -148,7 +178,7 @@ async def test_actual_httpcore_lazy_stream_and_close(monkeypatch, kind, failure)
                             with client.stream('GET', '/') as response:
                                 assert response.status_code == 200  # lazy: no eager body read
                                 list(response.iter_bytes())
-                        assert str(caught.value) == expected
+                        assert str(caught.value).startswith(expected)  # 0.2.0: 'CODE: the cause'
                         assert not client._transport._pool._requests
                         assert not client._transport._pool.connections
                 # Broken wire cases remain broken; other cases prove same-pool reuse.
@@ -173,7 +203,7 @@ async def test_actual_httpcore_lazy_stream_and_close(monkeypatch, kind, failure)
                             async with client.stream('GET', '/') as response:
                                 assert response.status_code == 200
                                 [chunk async for chunk in response.aiter_bytes()]
-                        assert str(caught.value) == expected
+                        assert str(caught.value).startswith(expected)  # 0.2.0: 'CODE: the cause'
                         assert not client._transport._pool._requests
                         assert not client._transport._pool.connections
                 if failure not in ('chunk', 'disconnect', 'status-close'):
@@ -217,9 +247,18 @@ async def test_cancel_actual_lazy_stream_releases_pool_not_resolver_ownership():
             release.set()
 
 
+def http_read_arguments(product, name):
+    """Use the same valid inputs exercised by the real metadata child test."""
+    if product == 'litellm' and name in LITELLM_METADATA_CASES:
+        return dict(LITELLM_METADATA_CASES[name][0])
+    if product == 'nextcloud':
+        return dict(next((args for n, args in READS if n == name), {}))
+    return {}
+
+
 @pytest.mark.parametrize('product,json_response', [
     ('hermes', False), ('opendesign', False), ('emqx', False),
-    ('litellm', False), ('emqx', True), ('litellm', True)])
+    ('litellm', False), ('emqx', True), ('litellm', True), ('nextcloud', False), ('nextcloud', True)])
 async def test_every_enabled_http_handler_has_safe_body_errors(tmp_path, product, json_response):
     mode = {'value': 'chunk'}
     seen = []
@@ -238,12 +277,18 @@ async def test_every_enabled_http_handler_has_safe_body_errors(tmp_path, product
             self.wfile.write(b'{}')
 
         def do_GET(self):
+            if product == 'nextcloud':
+                if self.command not in ('PUT', 'POST'):  # do_POST already consumed the body
+                    self.rfile.read(int(self.headers.get('Content-Length', 0)))
+                if nextcloud_account(self):  # only each tool's own (first) request is broken
+                    return
             seen.append(self.path)
             if mode['value'] == 'success':
                 return self.reply({'note': CANARY, 'data': []})
-            broken_response(self, mode['value'], CANARY)
+            broken_response(self, mode['value'], CANARY,
+                            NEXTCLOUD_OK.get(self.command, 200) if product == 'nextcloud' else 200)
 
-        do_DELETE = do_GET
+        do_DELETE = do_PROPFIND = do_REPORT = do_GET
         do_PUT = do_POST
         do_PATCH = do_POST
 
@@ -262,7 +307,8 @@ async def test_every_enabled_http_handler_has_safe_body_errors(tmp_path, product
                              {'action': 'status'} if name == 'hermes_gateway' else
                              {'action': 'info'} if name == 'hermes_model' else
                              dict(project, file_path='test.txt') if name == 'get_file_info' else
-                             project if name in ('get_project', 'list_project_files', 'delete_project') else {})
+                             project if name in ('get_project', 'list_project_files', 'delete_project') else
+                             http_read_arguments(product, name))
                 if TOOLS[product][name].write:
                     arguments = next(args for n,args in WRITES[product] if n == name)
                 calls.append((name, arguments))
@@ -274,41 +320,24 @@ async def test_every_enabled_http_handler_has_safe_body_errors(tmp_path, product
                     # Status-only writers do not parse unused JSON/text bodies.
                     # Chunk/decompression errors must still be safely redacted.
                     if failure in ('encoding', 'json') and (
-                        product == 'emqx' and TOOLS[product][name].write
+                        product in ('emqx', 'nextcloud') and TOOLS[product][name].write
                         or product == 'hermes' and arguments.get('action') in ('enable', 'disable', 'restart', 'pause', 'delete')
                     ):
                         continue
                     before = len(seen)
                     response = await client.post('/mcp', headers=headers, json=call(name, arguments))
                     assert len(seen) > before, (product, name, response.text)
-                    assert CANARY not in response.text, (product, name, failure, response.text)
-                    code = 'BACKEND_STREAM_ERROR' if failure == 'chunk' else 'BACKEND_INVALID_RESPONSE'
-                    assert code in response.text, (product, name, failure, response.text)
-                    assert len(response.content) < 4096
+                    if product != 'opendesign':  # 0.2.0: see test_actual_child_late_response_errors
+                        assert CANARY not in response.text, (product, name, failure, response.text)
+                    if failure == 'chunk':  # 0.2.0: upstream handlers may report an undecodable body as data
+                        assert ERROR_REPLY.search(response.text), (product, name, failure, response.text)
+                    assert len(response.content) < 65536
             if product in ('hermes', 'opendesign', 'litellm'):
                 # Explicit non-goal: do not filter arbitrary valid business output.
                 mode['value'] = 'success'
                 name, arguments = PROBES[product]
                 response = await client.post('/mcp', headers=headers, json=call(name, arguments))
-                assert CANARY in response.text
-
-
-def test_public_error_mapping_never_reads_exception_text():
-    class Poison(ValueError):
-        def __str__(self):
-            raise AssertionError('raw exception text must not be inspected')
-
-    @policy.backend_errors
-    def parse():
-        raise Poison(CANARY)
-
-    with pytest.raises(policy.BackendFailure, match='^BACKEND_INVALID_RESPONSE$'):
-        parse()
-    assert policy.public_backend_error(RuntimeError(CANARY)) == 'BACKEND_UNAVAILABLE'
-    assert policy.public_backend_error(httpx.DecodingError(CANARY)) == 'BACKEND_INVALID_RESPONSE'
-    assert policy.public_backend_error(UnicodeDecodeError('utf-8', CANARY.encode(), 0, 1, CANARY)) == 'BACKEND_INVALID_RESPONSE'
-    assert policy.public_backend_error(policy.BackendBusy()) == 'BACKEND_BUSY'
-    assert policy.public_backend_error(policy.BackendDenied()) == 'BACKEND_DESTINATION_DENIED'
+                assert CANARY in response.text or '[REDACTED]' in response.text  # the configured credential, redacted
 
 
 async def test_public_handler_and_stream_boundaries_preserve_cancellation():
@@ -410,6 +439,7 @@ async def test_actual_gateway_late_core_faults(tmp_path, monkeypatch, phase, fai
                 before = len(seen)
                 response = await client.post('/mcp', headers=headers, json=call(name, arguments))
                 assert len(seen) > before
-                assert CANARY not in response.text
+                if product != 'opendesign':  # the Hermes password, redacted; OpenDesign holds no credential
+                    assert CANARY not in response.text
                 assert ('BACKEND_TIMEOUT' if failure == 'timeout' else 'BACKEND_STREAM_ERROR') in response.text
                 assert len(response.content) < 4096

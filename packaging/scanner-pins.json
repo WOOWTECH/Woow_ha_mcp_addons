@@ -6,15 +6,15 @@
     "sha256": "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb"
   },
   "syft": {
-    "version": "1.20.0",
-    "url": "https://github.com/anchore/syft/releases/download/v1.20.0/syft_1.20.0_linux_amd64.tar.gz",
-    "checksums": "https://github.com/anchore/syft/releases/download/v1.20.0/syft_1.20.0_checksums.txt",
-    "sha256": "689e12c5cbf67521ce61b9c126068f9eaabe1223e77971b2fede50033ff6b5cc"
+    "version": "1.54.0",
+    "url": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_linux_amd64.tar.gz",
+    "checksums": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_checksums.txt",
+    "sha256": "54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860"
   },
   "grype": {
-    "version": "0.89.0",
-    "url": "https://github.com/anchore/grype/releases/download/v0.89.0/grype_0.89.0_linux_amd64.tar.gz",
-    "checksums": "https://github.com/anchore/grype/releases/download/v0.89.0/grype_0.89.0_checksums.txt",
-    "sha256": "3dbbf5c4f3c28dfc9f9e070a937dc680170ee83a873b946e59bb58c71b8a3ae5"
+    "version": "0.120.0",
+    "url": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_linux_amd64.tar.gz",
+    "checksums": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_checksums.txt",
+    "sha256": "a5a1218dce63acdac152a6b3b5bb366e7267e36f4069848cf455543b3fa5700e"
   }
 }

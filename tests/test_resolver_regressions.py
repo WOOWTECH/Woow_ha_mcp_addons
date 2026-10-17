@@ -148,10 +148,12 @@ async def test_dns_and_all_connect_attempts_share_deadline(monkeypatch, kind):
     if kind != 'async': assert len(closed) == 3
 
 
-@pytest.mark.parametrize('product', ['opendesign', 'hermes'])
-async def test_real_localhost_health_and_readiness(tmp_path, product):
+# 0.1.4: OpenDesign 0.21.1 answers {"ok": true, "version"} (0.1.3 HA regression: readiness was 503 with working reads).
+@pytest.mark.parametrize('product,answer', [('opendesign', {'status': 'ok'}), ('opendesign', {'ok': True, 'version': '0.21.1'}),
+                                            ('hermes', {'status': 'ok'})])
+async def test_real_localhost_health_and_readiness(tmp_path, product, answer):
     class Backend(Quiet):
-        def do_GET(self): self.reply({'status': 'ok'})
+        def do_GET(self): self.reply(answer)
     with serve(Backend) as url:
         async with runtime(tmp_path, product, url.replace('127.0.0.1', 'localhost')) as (client, headers, store, manager, child):
             name, args = PROBES[product]
@@ -313,14 +315,14 @@ async def main():
         release.set()
         for _ in range(100):
             result = await invoke('gateway')
-            if result == 'BACKEND_UNAVAILABLE': break
+            if result.startswith('BACKEND_UNAVAILABLE'): break  # 0.2.0: 'CODE: the cause'
             assert result == 'BACKEND_BUSY', result
             await asyncio.sleep(.01)
         else: raise AssertionError('resolver capacity leaked')
         # A DNS deadline must stop waiting, but not free the still-running slot.
         release.clear()
         tasks = [asyncio.create_task(invoke('timeout')) for _ in range(4)]
-        assert await asyncio.wait_for(asyncio.gather(*tasks), .5) == ['BACKEND_TIMEOUT'] * 4
+        assert [r.split(':')[0] for r in await asyncio.wait_for(asyncio.gather(*tasks), .5)] == ['BACKEND_TIMEOUT'] * 4
         with lock: assert active == 4 and peak == 4
         assert await invoke('cookie') == 'BACKEND_BUSY'
         release.set()

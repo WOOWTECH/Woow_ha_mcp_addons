@@ -108,6 +108,7 @@ try {
     opendesign:{url:'https://design.example.test'},
     emqx:{url:'https://emqx.example.test',api_key:'DUMMY-LOCAL-ONLY',api_secret:'DUMMY-LOCAL-ONLY'},
     litellm:{url:'https://litellm.example.test',master_key:'DUMMY-LOCAL-ONLY'},
+    nextcloud:{url:'https://cloud.example.test',username:'tester',app_password:'DUMMY-LOCAL-ONLY'},
   };
   for (const [product,values] of Object.entries(connections)) {
     const origin=product==='n8n'?admin:control;
@@ -191,5 +192,5 @@ try {
   assert.equal(await page.evaluate(()=>localStorage.length+sessionStorage.length),0);
   assert.deepEqual(errors,[]);
   assert(requests.every(url=>url.startsWith(admin)||url.startsWith(control)));
-  console.log('PASS LOCAL CORE: root/prefix refresh/fonts; 7 typed forms; v3 exact/legacy/stale/disabled; endpoint; CSRF; token blur/TTL/rotate/revoke; real WS demotion/error. No HA claim.');
+  console.log('PASS LOCAL CORE: root/prefix refresh/fonts; 8 typed forms; v3 exact/legacy/stale/disabled; endpoint; CSRF; token blur/TTL/rotate/revoke; real WS demotion/error. No HA claim.');
 } finally { await context.close(); await browser.close(); proof.close(); }

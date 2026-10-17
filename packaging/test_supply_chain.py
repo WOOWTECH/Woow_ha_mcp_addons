@@ -4,11 +4,13 @@ from datetime import datetime, timezone
 import hashlib
 import io
 import json
+import re
 from pathlib import Path
 import shutil
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import supply_chain as s
 
@@ -16,13 +18,13 @@ import supply_chain as s
 class SupplyChainTests(unittest.TestCase):
     def test_policy_unknown_missing_and_high_vulnerabilities_deny(self):
         sbom = {'artifacts': [{'name': 'fixture', 'licenses': [{'value': 'MIT'}]}]}
-        report = {'matches': [], 'descriptor': {'name': 'grype', 'version': '0.89.0',
+        report = {'matches': [], 'descriptor': {'name': 'grype', 'version': s.pins()['grype']['version'],
                   'db': {'schemaVersion': '6.0.2', 'checksum': 'a' * 64, 'error': '',
                          'built': datetime.now(timezone.utc).isoformat()}}}
         s.enforce_policy(sbom, report)
         for severity in ('High', 'Critical', 'Unknown', '', 'invented'):
             bad = copy.deepcopy(report)
-            bad['matches'] = [{'vulnerability': {'severity': severity}}]
+            bad['matches'] = [{'vulnerability': {'severity': severity, 'fix': {'state': 'fixed'}}}]
             with self.subTest(severity=severity), self.assertRaises(s.Closed):
                 s.enforce_policy(sbom, bad)
         for value in ('NOASSERTION', 'UNKNOWN', 'invented', ''):
@@ -33,6 +35,184 @@ class SupplyChainTests(unittest.TestCase):
                 s.enforce_policy(bad, report)
         for bad in ({}, {'matches': []}, {**report, 'descriptor': {'db': {'error': 'invalid'}}}):
             with self.assertRaises(s.Closed):
+                s.enforce_policy(sbom, bad)
+
+    def test_unfixed_vulnerability_policy_switch(self):
+        sbom = {'artifacts': [{'name': 'fixture', 'licenses': [{'value': 'MIT'}]}]}
+        report = {'matches': [], 'descriptor': {'name': 'grype', 'version': s.pins()['grype']['version'],
+                  'db': {'schemaVersion': '6.0.2', 'checksum': 'a' * 64, 'error': '',
+                         'built': datetime.now(timezone.utc).isoformat()}}}
+        policy = json.loads((s.ROOT / 'packaging/supply-chain-policy.json').read_text())
+        self.assertEqual(policy['unfixed_vulnerabilities'], 'exclude')  # owner decision 2026-10-05
+        match = lambda sev, state: {'vulnerability': {'severity': sev, 'fix': {'state': state}}}
+        real = s.read_json
+        for mode, matches, ok in (
+                ('include', [match('High', 'not-fixed')], False),
+                ('exclude', [match('High', 'not-fixed'), match('Critical', 'wont-fix')], True),
+                ('exclude', [match('Unknown', 'unknown')], False),
+                ('exclude', [{'vulnerability': {'severity': 'High'}}], False),
+                ('exclude', [match('High', '')], False),
+                ('exclude', [match('Critical', 'fixed')], False),
+                ('exclude', [match('High', 'fixed'), match('High', 'not-fixed')], False),
+                ('exclude', [match('Medium', 'fixed')], True),
+                ('exclude', [match('invented', 'not-fixed')], False),
+                ('maybe', [], False)):
+            doc = dict(policy, unfixed_vulnerabilities=mode)
+            with self.subTest(mode=mode, matches=str(matches)[:60]), patch.object(
+                    s, 'read_json', side_effect=lambda path: doc if path.name == 'supply-chain-policy.json' else real(path)):
+                if ok:
+                    s.enforce_policy(sbom, dict(report, matches=matches))
+                else:
+                    with self.assertRaises(s.Closed):
+                        s.enforce_policy(sbom, dict(report, matches=matches))
+
+    def test_optional_license_extensions_default_off(self):
+        repo = json.loads((s.ROOT / 'packaging/supply-chain-policy.json').read_text())
+        self.assertEqual((repo['debian_main_licenses'], repo['or_expressions']), ('accept', 'accept-if-any-allowed'))
+        self.assertEqual(repo['known_binary_licenses'], {'python': 'PSF-2.0', 'node': 'MIT', 'Simple Launcher': 'PSF-2.0'})
+        policy = {k: v for k, v in repo.items()
+                  if k not in ('debian_main_licenses', 'or_expressions', 'known_binary_licenses', 'non_package_fixtures')}
+        deb = {'type': 'deb', 'name': 'libc6'}
+        npm = {'type': 'npm', 'name': 'x'}
+        self.assertFalse(s.license_allowed(policy, deb, 'BSD-3-clause'))
+        self.assertFalse(s.license_allowed(policy, npm, '(MIT OR WTFPL)'))
+        self.assertEqual(s.known_binary_license(policy, {'type': 'binary', 'name': 'python'}), [])
+        on = dict(policy, debian_main_licenses='accept', or_expressions='accept-if-any-allowed',
+                  known_binary_licenses={'python': 'PSF-2.0'})
+        self.assertTrue(s.license_allowed(on, deb, 'BSD-3-clause'))
+        self.assertFalse(s.license_allowed(on, npm, 'BSD-3-clause'))  # deb rule never covers npm
+        self.assertFalse(s.license_allowed(on, deb, ''))
+        for value, ok in (('(MIT OR WTFPL)', True), ('(BSD-2-Clause OR MIT OR Apache-2.0)', True), ('MIT OR GPL-3.0', True),
+                          ('(GPL-3.0 OR WTFPL)', False), ('(MIT AND GPL-3.0)', False), ('MIT WITH x', False),
+                          ('(MIT OR (GPL-3.0 AND x))', False), ('OR', False)):
+            with self.subTest(value=value):
+                self.assertEqual(s.license_allowed(on, npm, value), ok)
+        self.assertEqual(s.known_binary_license(on, {'type': 'binary', 'name': 'python'}), [{'value': 'PSF-2.0'}])
+        self.assertEqual(s.known_binary_license(on, {'type': 'npm', 'name': 'python'}), [])
+        real = s.read_json
+        sbom = {'artifacts': [{'type': 'binary', 'name': 'python', 'licenses': []}]}
+        report = {'matches': [], 'descriptor': {'name': 'grype', 'version': s.pins()['grype']['version'],
+                  'db': {'schemaVersion': '6.0.2', 'checksum': 'a' * 64, 'error': '',
+                         'built': datetime.now(timezone.utc).isoformat()}}}
+        for doc, ok in ((policy, False), (on, True), (dict(on, known_binary_licenses={'python': 'GPL-3.0'}), False),
+                        (dict(on, debian_main_licenses='maybe'), False)):
+            with self.subTest(doc=str({k: doc.get(k) for k in ('debian_main_licenses', 'known_binary_licenses')})), patch.object(
+                    s, 'read_json', side_effect=lambda path: doc if path.name == 'supply-chain-policy.json' else real(path)):
+                if ok:
+                    s.enforce_policy(sbom, report)
+                else:
+                    with self.assertRaises(s.Closed):
+                        s.enforce_policy(sbom, report)
+
+    def test_non_package_fixtures_are_exact_paths_only(self):
+        fx = ['/opt/x/node_modules/a/example/package.json']
+        self.assertTrue(s.is_listed_fixture(fx, {'locations': [{'path': fx[0]}]}))
+        self.assertFalse(s.is_listed_fixture(fx, {'locations': [{'path': fx[0]}, {'path': '/opt/x/other/package.json'}]}))
+        self.assertFalse(s.is_listed_fixture(fx, {'locations': []}))
+        self.assertFalse(s.is_listed_fixture(fx, {}))
+        self.assertFalse(s.is_listed_fixture([], {'locations': [{'path': fx[0]}]}))
+        policy = json.loads((s.ROOT / 'packaging/supply-chain-policy.json').read_text())
+        real = s.read_json
+        sbom = {'artifacts': [{'type': 'npm', 'name': 'beep-boop', 'licenses': [], 'locations': [{'path': fx[0]}]},
+                              {'type': 'npm', 'name': 'ok', 'licenses': [{'value': 'MIT'}]}]}
+        report = {'matches': [], 'descriptor': {'name': 'grype', 'version': s.pins()['grype']['version'],
+                  'db': {'schemaVersion': '6.0.2', 'checksum': 'a' * 64, 'error': '',
+                         'built': datetime.now(timezone.utc).isoformat()}}}
+        for doc, ok in ((dict(policy, non_package_fixtures=[]), False), (dict(policy, non_package_fixtures=fx), True),
+                        (dict(policy, non_package_fixtures=['/opt/x/*']), False),
+                        (dict(policy, non_package_fixtures=['relative/package.json']), False)):
+            with self.subTest(fixtures=doc['non_package_fixtures']), patch.object(
+                    s, 'read_json', side_effect=lambda path: doc if path.name == 'supply-chain-policy.json' else real(path)):
+                if ok:
+                    s.enforce_policy(sbom, report)
+                else:
+                    with self.assertRaises(s.Closed):
+                        s.enforce_policy(sbom, report)
+
+    def test_deb_packages_only_come_from_the_pinned_official_base(self):
+        # debian_main_licenses=accept relies on this: no Dockerfile installs OS packages or adds package
+        # sources, so every deb in an image is from the pinned official python slim image (Debian main
+        # plus security). Adding apt/dpkg/apk or a sources list here must force a policy re-review.
+        # The ONLY allowed OS package step is the exact block rendered from inputs.json
+        # os_security_upgrades (fixed debian-security snapshot, exact versions), at most once.
+        import os_upgrades
+        inputs = json.loads((s.ROOT / 'packaging/inputs.json').read_text())
+        allowed = os_upgrades.render(inputs) if 'os_security_upgrades' in inputs else None
+        forbidden = re.compile(r'\b(apt-get|apt|aptitude|dpkg|dpkg-query|apk|add-apt-repository)\b|sources\.list|/etc/apt/', re.I)
+        for dockerfile in sorted((s.ROOT / 'apps').glob('*/Dockerfile')):
+            with self.subTest(dockerfile=dockerfile.parent.name):
+                text = dockerfile.read_text()
+                if allowed is not None:
+                    self.assertEqual(text.count(allowed), 1)
+                    text = text.replace(allowed, '')
+                self.assertIsNone(forbidden.search(text))
+                bases = re.findall(r'^FROM\s+(\S+)', text, re.M)
+                runtime = [b for b in re.findall(r'^FROM\s+(\S+)\s+AS\s+runtime', text, re.M)]
+                self.assertEqual(runtime, [json.loads((s.ROOT / 'packaging/inputs.json').read_text())['bases']['python']])
+                self.assertTrue(bases)
+
+    def test_known_package_licenses_are_version_pinned(self):
+        policy = json.loads((s.ROOT / 'packaging/supply-chain-policy.json').read_text())
+        self.assertEqual(policy['known_package_licenses'], {  # owner decisions 2026-10-05 and 2026-10-08 (defusedxml)
+            'python:exceptiongroup:1.3.1': 'MIT', 'python:markdown-it-py:4.2.0': 'MIT',
+            'python:pyperclip:1.11.0': 'BSD-3-Clause', 'python:defusedxml:0.7.1': 'PSF-2.0'})
+        policy = dict(policy, known_package_licenses={})
+        on = dict(policy, known_package_licenses={'python:pyperclip:1.11.0': 'BSD-3-Clause'})
+        if 'BSD-3-Clause' not in on['allowed_licenses']:
+            on['allowed_licenses'] = on['allowed_licenses'] + ['BSD-3-Clause']
+        pkg = {'type': 'python', 'name': 'pyperclip', 'version': '1.11.0', 'licenses': [{'value': 'BSD'}]}
+        self.assertEqual(s.known_package_license(on, pkg), [{'value': 'BSD-3-Clause'}])
+        self.assertEqual(s.known_package_license(on, dict(pkg, version='1.12.0')), [])
+        self.assertEqual(s.known_package_license(on, dict(pkg, type='npm')), [])
+        real = s.read_json
+        report = {'matches': [], 'descriptor': {'name': 'grype', 'version': s.pins()['grype']['version'],
+                  'db': {'schemaVersion': '6.0.2', 'checksum': 'a' * 64, 'error': '',
+                         'built': datetime.now(timezone.utc).isoformat()}}}
+        for doc, sbom_pkg, ok in ((on, pkg, True), (policy, pkg, False), (on, dict(pkg, version='1.12.0'), False),
+                                  (dict(on, known_package_licenses={'python:pyperclip:1.11.0': 'GPL-3.0'}), pkg, False),
+                                  (dict(on, known_package_licenses={'pyperclip': 'BSD-3-Clause'}), pkg, False)):
+            with self.subTest(doc=str(doc.get('known_package_licenses')), version=sbom_pkg['version']), patch.object(
+                    s, 'read_json', side_effect=lambda path: doc if path.name == 'supply-chain-policy.json' else real(path)):
+                if ok:
+                    s.enforce_policy({'artifacts': [sbom_pkg]}, report)
+                else:
+                    with self.assertRaises(s.Closed):
+                        s.enforce_policy({'artifacts': [sbom_pkg]}, report)
+
+    def test_os_upgrade_block_is_exact_and_pinned(self):
+        # 0.1.5: the 2026-10-06 base carries the last upgrade, so inputs.json has none now; the generator stays
+        # tested with that last spec, ready for the next Debian security fix that is not yet in the base.
+        import os_upgrades
+        inputs = json.loads((s.ROOT / 'packaging/inputs.json').read_text())
+        inputs.setdefault('os_security_upgrades', {'snapshot': '20261003T211304Z', 'suite': 'bookworm-security',
+                                                   'packages': {'libpcre2-8-0': '10.42-1+deb12u2'}})
+        spec = inputs['os_security_upgrades']
+        self.assertRegex(spec['snapshot'], r'^\d{8}T\d{6}Z$')
+        self.assertEqual(spec['suite'], 'bookworm-security')
+        for name, version in spec['packages'].items():
+            self.assertRegex(name, r'^[a-z0-9][a-z0-9+.-]+$')
+            self.assertRegex(version, r'^[0-9A-Za-z.+~:-]+$')
+        block = os_upgrades.render(inputs)
+        self.assertIn('/archive/debian-security/%s ' % spec['snapshot'], block)
+        self.assertIn('--only-upgrade', block)
+        self.assertIn('rm -rf /var/lib/apt/lists/*', block)
+        self.assertNotIn('deb.debian.org', block)
+
+    def test_grype_0120_status_descriptor_is_normalised(self):
+        sbom = {'artifacts': [{'name': 'fixture', 'licenses': [{'value': 'MIT'}]}]}
+        built = datetime.now(timezone.utc).isoformat()
+        status = {'schemaVersion': 'v6.1.10', 'built': built, 'valid': True,
+                  'from': 'https://grype.anchore.io/databases/v6/db.tar.zst?checksum=sha256%3A' + 'b' * 64}
+        report = {'matches': [], 'descriptor': {'name': 'grype', 'version': s.pins()['grype']['version'],
+                  'db': {'status': status, 'providers': {}}}}
+        s.enforce_policy(sbom, report)
+        self.assertEqual(s.grype_db(report), {'schemaVersion': '6.1.10', 'built': built, 'checksum': 'b' * 64})
+        for bad_status in (dict(status, valid=False), dict(status, schemaVersion='v5.0.0'),
+                           dict(status, built='2000-01-01T00:00:00Z'), dict(status, error='x'),
+                           dict(status, **{'from': 'https://x/db?checksum=sha256%3Azz'})):
+            bad = copy.deepcopy(report)
+            bad['descriptor']['db']['status'] = bad_status
+            with self.subTest(status=str(bad_status)[:50]), self.assertRaises(s.Closed):
                 s.enforce_policy(sbom, bad)
 
     def test_scanner_nonzero_and_missing_executable_deny_without_output(self):

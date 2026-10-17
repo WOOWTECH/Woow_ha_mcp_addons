@@ -12,7 +12,7 @@ import runpy
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-PRODUCTS = ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm')
+PRODUCTS = ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud')
 
 
 def guard():

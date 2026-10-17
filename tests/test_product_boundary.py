@@ -7,8 +7,10 @@ import pytest
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.health import HealthMonitor
 from mcp_admin_core.lifecycle import Supervisor
-from mcp_admin_core.products import PRODUCTS, PROBES, ProductStore, TOOLS, child_spec, probe_success
+from mcp_admin_core.products import (PRODUCTS, PROBES, ProductStore, TOOLS, child_spec, health_probe_success,
+                                    probe_success)
 from test_real_products import connection
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 
 @pytest.mark.parametrize('product', PRODUCTS)
@@ -44,12 +46,17 @@ async def test_config_api_typed_secret_safe_and_restart_on_rotation(tmp_path, pr
 async def test_unconfigured_does_not_spawn_or_probe(tmp_path, product):
     store = ProductStore(tmp_path / product, product)
     process = Supervisor(child_spec(store.load(), store.directory))
-    async def forbidden(_): raise AssertionError('unconfigured must not contact child/backend')
+    contacted = []
+
+    async def forbidden(request):
+        contacted.append(request)  # recorded: the monitor contains exceptions raised here (0.1.2)
+        raise AssertionError('unconfigured must not contact child/backend')
     try:
         await process.start()
         async with httpx.AsyncClient(transport=httpx.MockTransport(forbidden)) as client:
             monitor = HealthMonitor(store, process, client)
             await monitor.check()
+            assert contacted == [], 'unconfigured must not contact child/backend'
             assert monitor.backend == 'unconfigured'
             assert process.status == 'unconfigured' and process.starts == 0
     finally:
@@ -77,6 +84,7 @@ def test_fixed_child_ignores_parent_secrets_and_gui_commands(tmp_path, product, 
 
 async def test_writer_is_denied_before_dispatch_then_explicitly_enabled(tmp_path):
     store = ProductStore(tmp_path / 'state', 'opendesign')
+    store.update(writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
     requests = []
     async def dispatch(request):
         requests.append(json.loads(request.content))
@@ -87,14 +95,14 @@ async def test_writer_is_denied_before_dispatch_then_explicitly_enabled(tmp_path
         async with httpx.AsyncClient(transport=httpx.MockTransport(dispatch)) as child:
             _, app = make_apps(store, TOOLS['opendesign'], child)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://mcp') as client:
-                headers = {'Authorization': 'Bearer ' + store.load().token}
-                assert (await client.post('/mcp', headers=headers, json=message)).status_code == 403
+                headers = {'Authorization': 'Bearer ' + store.load().token, 'Mcp-Session-Id': 'test-session'}
+                assert refused(await client.post('/mcp', headers=headers, json=message))
                 assert requests == []
-                store.update(writes_enabled=True)
+                store.update(enabled_write_tools=['delete_project'])  # 0.2.0: an exact grant, no legacy switch
                 assert (await client.post('/mcp', headers=headers, json=message)).status_code == 200
                 assert requests == [message]
                 store.update(disabled=['delete_project'])
-                assert (await client.post('/mcp', headers=headers, json=message)).status_code == 403
+                assert refused(await client.post('/mcp', headers=headers, json=message))
                 assert len(requests) == 1
     finally: store.close()
 
@@ -103,3 +111,21 @@ async def test_writer_is_denied_before_dispatch_then_explicitly_enabled(tmp_path
 def test_health_rejects_generic_success_and_error_payloads(product):
     for payload in ({'success': True}, {}, {'error': 'DUMMY'}, [], None):
         assert not probe_success(product, payload)
+        assert not health_probe_success(product, payload)
+    if product == 'opendesign':
+        # 0.1.4: OpenDesign 0.21.1's {"ok": true, "version"} (seen on the test HA), besides the older status shape.
+        for payload in ({'ok': True, 'version': '0.21.1'}, {'status': 'ok'}, {'status': 'healthy'}):
+            assert probe_success(product, payload) and health_probe_success(product, payload)
+        for payload in ({'ok': True}, {'ok': True, 'version': ''}, {'ok': True, 'version': ' '}, {'ok': True, 'version': 21},
+                        {'ok': 'true', 'version': '0.21.1'}, {'ok': 1, 'version': '0.21.1'}, {'ok': False, 'version': '0.21.1'},
+                        {'ok': True, 'version': '0.21.1', 'error': 'DUMMY'},
+                        # RC review #8: contradicting or invisible answers
+                        {'ok': True, 'version': '1', 'status': 'unhealthy'}, {'status': 'ok', 'ok': False},
+                        {'ok': True, 'version': '\u200b'}, {'ok': True, 'version': '\u00a0'}, {'status': 'ok', 'ok': None}):
+            assert not probe_success(product, payload)
+    if product == 'odoo':
+        # Only Odoo's authenticate answer, exactly: a positive int user id (False for rejected credentials).
+        assert health_probe_success(product, {'uid': 7})
+        for payload in ({'uid': False}, {'uid': 0}, {'uid': -1}, {'uid': True}, {'uid': '7'}, {'uid': 7.0},
+                        {'uid': 7, 'error': None}, {'uid': 7, 'success': True}):
+            assert not health_probe_success(product, payload)

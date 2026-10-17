@@ -22,7 +22,7 @@ def private_spec(spec, product, port):
         return None
     if product in ('n8n', 'odoo', 'odoo-manage'):
         return b1_private_spec(spec, product, port)
-    if product in ('emqx', 'litellm'):
+    if product in ('emqx', 'litellm', 'nextcloud'):
         assert spec.argv.count('--port') == 1
         index = spec.argv.index('--port') + 1
         assert spec.argv[index] == '3000'

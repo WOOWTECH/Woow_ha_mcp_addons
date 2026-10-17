@@ -2,11 +2,12 @@
 export const products = {
   odoo: { name: 'Odoo', fields: [['url', '後端 URL', 'url'], ['database', '資料庫', 'name'], ['username', '使用者名稱', 'name'], ['password', '密碼', 'secret']] },
   'odoo-manage': { name: 'Odoo Manage', fields: [['url', '後端 URL', 'url'], ['database', '資料庫', 'name'], ['username', '使用者名稱', 'name'], ['api_key', 'API 金鑰', 'secret'], ['mode', '存取模式', 'mode']] },
-  n8n: { name: 'n8n', fields: [['url', 'n8n 伺服器 URL', 'url'], ['key', 'API 金鑰', 'secret']] },
+  n8n: { name: 'n8n', fields: [['url', 'n8n 伺服器 URL', 'url'], ['key', 'API 金鑰', 'secret'], ['mcp_access_token', 'MCP Access Token（選填；n8n 設定 → Instance-level MCP）', 'optional-secret']] },
   hermes: { name: 'Hermes', fields: [['gateway_url', 'Gateway URL', 'url'], ['gateway_api_key', 'Gateway API 金鑰', 'secret'], ['dashboard_url', 'Dashboard URL（選填）', 'optional-url'], ['dashboard_username', 'Dashboard 使用者（選填）', 'optional-name'], ['dashboard_password', 'Dashboard 密碼（選填）', 'optional-secret']] },
   opendesign: { name: 'OpenDesign', fields: [['url', 'OpenDesign URL', 'url']] },
   emqx: { name: 'EMQX', fields: [['url', 'Broker 基底 URL（不含 /api/v5）', 'url'], ['api_key', 'API 金鑰', 'secret'], ['api_secret', 'API Secret', 'secret']] },
   litellm: { name: 'LiteLLM', fields: [['url', 'Proxy 基底 URL', 'url'], ['master_key', 'Master Key', 'secret']] },
+  nextcloud: { name: 'Nextcloud', fields: [['url', 'Nextcloud 根網址', 'url'], ['username', '使用者名稱', 'name'], ['app_password', 'App 密碼（非登入密碼）', 'secret']] },
 };
 
 export class UiError extends Error {}
@@ -52,6 +53,18 @@ export function backendPayload(product, action, values) {
     if (dashboard.some(v => v !== null) && dashboard.some(v => v === null)) throw new UiError('Dashboard URL、使用者與密碼需整組提供，或全部留空。');
   }
   if (product === 'emqx' && connection.url.endsWith('/api/v5')) throw new UiError('請使用 Broker 基底 URL，不含 /api/v5。');
+  // The Nextcloud child strips both and refuses an empty result: never save blank or padded values.
+  if (product === 'nextcloud') {
+    // An internationalized host is sent by the browser/httpx as xn--; the backend policy compares hosts exactly, so
+    // only the ASCII form can work: show it instead of a generic refusal from the server.
+    const authority = connection.url.split('://')[1].split('/')[0];
+    const parsed = new URL(connection.url);
+    // Compare the host as typed with the browser's (xn--) hostname; only a non-ASCII host differs this way.
+    if (/[^\x00-\x7f]/.test(authority) && parsed.hostname !== authority.replace(/:\d+$/, '').toLowerCase()) {
+      throw new UiError(`主機名稱含非 ASCII 字元，請改填 xn-- 形式：${connection.url.replace(authority, parsed.host)}`);
+    }
+  }
+  if (product === 'nextcloud' && ['username', 'app_password'].some(k => connection[k].trim() === '' || connection[k] !== connection[k].trim())) throw new UiError('使用者名稱與 App 密碼不可空白，前後也不可有空白。');
   return product === 'n8n' ? connection : { connection };
 }
 
@@ -95,4 +108,13 @@ export function policyPayload(bootstrap, disabled, grants) {
 }
 export function clientExample(endpoint, token = null) {
   return JSON.stringify({ mcpServers: { woow: { type: 'http', url: endpoint ? explicitUrl(endpoint, true) : 'https://YOUR-MCP-HOST:PORT/mcp', headers: { Authorization: `Bearer ${token ?? '<YOUR_ADDON_TOKEN>'}` } } } }, null, 2);
+}
+// 0.1.12: Claude.ai custom connectors cannot send an Authorization header. The gateway also accepts the add-on token
+// as a path segment: <the saved /mcp endpoint without its final /mcp>/private_<token>/mcp. Built only from the
+// explicitly saved endpoint (never this page's origin) and only from a freshly revealed token.
+export function claudeConnectorUrl(endpoint, token) {
+  if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) throw new UiError('權杖格式不符，未產生連線網址。');
+  if (!endpoint) throw new UiError('尚未設定 MCP 用戶端端點，無法產生 Claude.ai 連線網址。');
+  const clean = explicitUrl(endpoint, true);
+  return `${clean.slice(0, -'/mcp'.length)}/private_${token}/mcp`;
 }
