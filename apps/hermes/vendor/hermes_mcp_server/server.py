@@ -10,6 +10,8 @@ Environment variables for connection config:
 
 from __future__ import annotations
 
+import asyncio
+import email.utils
 import json
 import math
 import os
@@ -183,18 +185,71 @@ def _gateway_client(url: str, api_key: str, timeout: float | httpx.Timeout = 30.
 # Dashboard cookie cache: {url: (cookie, expiry)}
 _cookie_cache: dict[str, tuple[str, float]] = {}
 
+# Single-flight login locks: {url: asyncio.Lock} (commercial acceptance AI-HER-PERF-1). The Hermes dashboard allows 10
+# POST /auth/password-login per client IP per 60 s (successful logins count too) and its 429 has no Retry-After. One
+# child serves every MCP session, so when 10+ calls start cold (or the cookie expires) and each logs in, the 11th gets
+# 429. Only one caller per dashboard_url logs in; the others wait for its cookie in the cache and share it.
+_login_locks: dict[str, asyncio.Lock] = {}
 
-async def _dashboard_login(url: str, username: str, password: str) -> str:
-    """Login to Hermes Dashboard and return session cookie (cached 10 min)."""
-    url = _require_url(url, "dashboard_url")
+# A 429 login is retried up to LOGIN_MAX_RETRIES times: after Retry-After (seconds or an HTTP date) capped at
+# LOGIN_RETRY_AFTER_CAP, otherwise (Hermes 0.21.6 sends none) after 1 s, then 2 s. Other statuses are not retried.
+LOGIN_MAX_RETRIES = 2
+LOGIN_BACKOFF_BASE = 1.0
+LOGIN_RETRY_AFTER_CAP = 10.0
+
+
+def _login_retry_delay(resp: httpx.Response, attempt: int) -> float:
+    """Seconds to wait after the attempt-th (0-based) 429: Retry-After first, else exponential backoff."""
+    value = (resp.headers.get("retry-after") or "").strip()
+    delay: float | None = None
+    if value:
+        try:
+            delay = float(value)
+        except ValueError:
+            try:
+                delay = email.utils.parsedate_to_datetime(value).timestamp() - time.time()
+            except (TypeError, ValueError, IndexError, OverflowError):
+                delay = None
+    if delay is None or not math.isfinite(delay):
+        delay = LOGIN_BACKOFF_BASE * (2 ** attempt)
+    return min(max(delay, 0.0), LOGIN_RETRY_AFTER_CAP)
+
+
+def _cached_cookie(url: str) -> str | None:
     cached = _cookie_cache.get(url)
     if cached and cached[1] > time.time():
         return cached[0]
+    return None
+
+
+async def _dashboard_login(url: str, username: str, password: str) -> str:
+    """Login to Hermes Dashboard and return session cookie (cached 10 min).
+
+    Concurrent logins for one dashboard_url are coalesced into one; a 429 login is retried (AI-HER-PERF-1).
+    """
+    url = _require_url(url, "dashboard_url")
+    cached = _cached_cookie(url)
+    if cached is not None:
+        return cached
+    async with _login_locks.setdefault(url, asyncio.Lock()):
+        # The previous holder may have logged in while this caller waited.
+        cached = _cached_cookie(url)
+        if cached is not None:
+            return cached
+        return await _password_login(url, username, password)
+
+
+async def _password_login(url: str, username: str, password: str) -> str:
+    """POST /auth/password-login; the caller holds this url's login lock."""
     async with async_client(base_url=url, timeout=5.0) as client:
-        resp = await client.post(
-            "/auth/password-login",
-            json={"provider": "basic", "username": username, "password": password},
-        )
+        for attempt in range(LOGIN_MAX_RETRIES + 1):
+            resp = await client.post(
+                "/auth/password-login",
+                json={"provider": "basic", "username": username, "password": password},
+            )
+            if resp.status_code != 429 or attempt == LOGIN_MAX_RETRIES:
+                break
+            await asyncio.sleep(_login_retry_delay(resp, attempt))
         # 帳密沒設定又被拒 ⇒ 講「沒設定」；有填卻被拒才是真的認證失敗（維持原樣拋出）。
         if resp.status_code in (401, 403) and not (username and password):
             missing = " / ".join(
