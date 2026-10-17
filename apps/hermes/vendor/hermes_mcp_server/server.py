@@ -11,14 +11,18 @@ Environment variables for connection config:
 from __future__ import annotations
 
 import json
+import ipaddress
 import math
 import os
 import re
 import time
+import unicodedata
 from typing import Any
+from urllib.parse import quote, urlsplit
 
 import httpx
-from backend_policy import async_client, backend_errors, backend_error_text
+from backend_policy import (BackendBusy, BackendDenied, async_client, backend_errors, backend_error_text,
+                            connection_deadline, resolve_async)
 from mcp.server.fastmcp import FastMCP
 
 # ---------------------------------------------------------------------------
@@ -28,16 +32,108 @@ from mcp.server.fastmcp import FastMCP
 mcp = FastMCP("hermes-mcp-server")
 
 # ---------------------------------------------------------------------------
-# Deny-list for config writes
+# Deny-list for config writes (commercial acceptance AI-HMCP-001-3)
 # ---------------------------------------------------------------------------
 
-DENIED_CONFIG_KEYS = {
-    "terminal.backend",
-    "api_server.cors_origins",
-    "api_server.host",
-    "dashboard.basic_auth",
-    "secrets",
-}
+# Root keys: the key itself, every key under it and every ancestor of it (writing a parent replaces the whole subtree)
+# are refused. The old list (terminal.backend, api_server.cors_origins, api_server.host, dashboard.basic_auth, secrets)
+# was compared with exact string equality, so "terminal", "Terminal.Backend", spaces, full-width or zero-width
+# characters all got through. model and MCP servers have their own tools (hermes_model, hermes_mcp); security is the
+# command-scanner setting; providers/custom_providers decide where model traffic goes and with which key.
+DENIED_CONFIG_KEYS = frozenset({
+    "api_server", "custom_providers", "dashboard", "mcp_servers", "model", "providers", "secrets", "security", "terminal",
+})
+_CONFIG_KEY_SEGMENT = re.compile(r"[a-z0-9_-]+")
+
+
+def normalize_config_key(key: str) -> str:
+    """For comparison: NFKC (full-width to ASCII), format characters (zero-width space, soft hyphen) removed, strip,
+    casefold."""
+    text = "".join(ch for ch in unicodedata.normalize("NFKC", key) if unicodedata.category(ch) != "Cf")
+    return text.strip().casefold()
+
+
+def config_key_denial(key: Any) -> str | None:
+    """Why a hermes_config set key is refused, or None. A secret segment (api_key, *_token...) or a leading '_'
+    (internal keys) is refused as well: credentials are not written through MCP."""
+    if not isinstance(key, str) or not key.strip():
+        return "key is required"
+    parts = normalize_config_key(key).split(".")
+    if not all(_CONFIG_KEY_SEGMENT.fullmatch(part) for part in parts):
+        return "key must be dot-separated segments of letters, digits, '_' or '-'"
+    if parts[0].startswith("_"):
+        return "internal keys (leading '_') cannot be written"
+    for denied in DENIED_CONFIG_KEYS:
+        d_parts = denied.split(".")
+        if parts[: len(d_parts)] == d_parts or d_parts[: len(parts)] == parts:
+            return f"'{denied}' and the keys under it cannot be changed through MCP"
+    if any(_secret_key(part) for part in parts):
+        return "credential keys cannot be changed through MCP"
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Ids and names in dashboard URLs (commercial acceptance AI-HMCP-001-1)
+# ---------------------------------------------------------------------------
+
+# session_id, job_id and webhook/toolset/MCP server names went into the URL through an f-string; HTTPX normalizes ".."
+# before sending, so session_id="../config/raw" read GET /api/config/raw (the raw yaml with the provider api_key), and
+# backend_policy's path check only sees the already-normalized path. Real ids: 20261016_193839_d56dfbc7, UUIDs, 12-hex
+# cron ids, names. Letters and digits (Unicode included), _ . - : @ + ~ and single inner spaces; never "..", "." or a
+# "/", so one value is always exactly one path segment; then percent-encoded.
+_PATH_SEGMENT = re.compile(r"[\w.:@+~-]+(?: [\w.:@+~-]+)*")
+
+
+def _segment_refusal(value: Any, field: str) -> str | None:
+    """The JSON error reply for an id or name that is not one plain path segment, or None."""
+    if not isinstance(value, str) or not value:
+        return json.dumps({"error": f"{field} required"})
+    if len(value) > 200 or value == "." or ".." in value or not _PATH_SEGMENT.fullmatch(value):
+        return json.dumps({"error": f"invalid {field}: only letters, digits, spaces and _ . - : @ + ~ are allowed, "
+                                    f"without '..' or '/'"})
+    return None
+
+
+def _segment(value: str) -> str:
+    return quote(value, safe="")
+
+
+# ---------------------------------------------------------------------------
+# MCP server URLs for hermes_mcp add (commercial acceptance AI-HMCP-002-2)
+# ---------------------------------------------------------------------------
+
+# Only a lower-case "stdio:" / "command:" prefix used to be refused ("STDIO:", " stdio:", file:// and link-local or
+# loopback URLs were registered in Hermes). Now: http/https with a host and no userinfo, and every resolved address
+# must pass the add-on's own backend address policy (backend_policy.resolve_async: the bounded resolver and
+# checked_answers, i.e. no link-local/metadata, CGNAT, multicast or reserved ranges); loopback and unspecified
+# addresses (Hermes' own host) are refused too. LAN MCP servers stay allowed, as LAN backends do.
+_METADATA_HOSTS = frozenset({"metadata", "metadata.google.internal", "instance-data"})
+
+
+async def _mcp_url_refusal(url: str) -> str | None:
+    try:
+        parts = urlsplit(url)
+        host = (parts.hostname or "").rstrip(".").lower()
+        port = parts.port or (443 if parts.scheme.lower() == "https" else 80)
+    except ValueError:
+        return "invalid url"
+    if parts.scheme.lower() not in ("http", "https") or not host:
+        return "only http:// or https:// MCP servers can be added (stdio/command transports are blocked)"
+    if parts.username or parts.password:
+        return "userinfo in the url is not allowed"
+    if host in _METADATA_HOSTS or host == "localhost" or host.endswith(".localhost"):
+        return "the url's host is not allowed"
+    try:
+        answers = await resolve_async(host, port, connection_deadline(5.0))
+    except (BackendDenied, OSError, UnicodeError):
+        return "the url's host does not resolve to an allowed address"
+    except (BackendBusy, TimeoutError):
+        return "the url's host could not be checked (resolver busy or timed out); try again"
+    for _, address in answers:
+        ip = ipaddress.ip_address(address[0])
+        if ip.is_loopback or ip.is_unspecified or (ip.version == 6 and ip.ipv4_mapped and ip.ipv4_mapped.is_loopback):
+            return "the url's host does not resolve to an allowed address"
+    return None
 
 # ---------------------------------------------------------------------------
 # Credential redaction for config reads (Woow 0.2.2)
@@ -349,8 +445,11 @@ async def hermes_mcp(action: str, name: str | None = None, url: str | None = Non
         if action == "add":
             if not name or not url:
                 return json.dumps({"error": "Both 'name' and 'url' required"})
-            if url.startswith("stdio:") or url.startswith("command:"):
-                return json.dumps({"error": "stdio transport is blocked for security"})
+            if refused := _segment_refusal(name, "name"):
+                return refused
+            url = url.strip()
+            if reason := await _mcp_url_refusal(url):
+                return json.dumps({"error": f"url refused: {reason}"})
             resp = await client.post("/api/mcp/servers", json={
                 "name": name, "transport": "streamable-http", "url": url,
             })
@@ -360,7 +459,9 @@ async def hermes_mcp(action: str, name: str | None = None, url: str | None = Non
         if action == "remove":
             if not name:
                 return json.dumps({"error": "Name required for 'remove'"})
-            resp = await client.delete(f"/api/mcp/servers/{name}")
+            if refused := _segment_refusal(name, "name"):
+                return refused
+            resp = await client.delete(f"/api/mcp/servers/{_segment(name)}")
             resp.raise_for_status()
             return json.dumps({"ok": True, "name": name, "removed": True})
 
@@ -436,8 +537,9 @@ async def hermes_config(action: str = "get", key: str | None = None, value: str 
         if action == "set":
             if not key or value is None:
                 return json.dumps({"error": "Both 'key' and 'value' required"})
-            if key in DENIED_CONFIG_KEYS:
-                return json.dumps({"error": f"Key '{key}' is denied", "denied_keys": sorted(DENIED_CONFIG_KEYS)})
+            if denial := config_key_denial(key):
+                return json.dumps({"error": f"Key '{key}' is denied: {denial}", "denied_keys": sorted(DENIED_CONFIG_KEYS)})
+            key = unicodedata.normalize("NFKC", key).strip()
             if dry_run:
                 return json.dumps({"dry_run": True, "key": key, "value": value, "message": "No changes made"}, indent=2)
             # Parse value as JSON if possible
@@ -473,7 +575,9 @@ async def hermes_tools(action: str = "list", toolset: str | None = None) -> str:
             if not toolset:
                 return json.dumps({"error": f"Toolset name required for '{action}'"})
             enabled = action == "enable"
-            resp = await client.put(f"/api/tools/toolsets/{toolset}", json={"enabled": enabled})
+            if refused := _segment_refusal(toolset, "toolset"):
+                return refused
+            resp = await client.put(f"/api/tools/toolsets/{_segment(toolset)}", json={"enabled": enabled})
             resp.raise_for_status()
             return json.dumps({"ok": True, "toolset": toolset, "enabled": enabled})
 
@@ -567,14 +671,18 @@ async def hermes_session(action: str = "list", session_id: str | None = None) ->
         if action == "get":
             if not session_id:
                 return json.dumps({"error": "session_id required"})
-            resp = await client.get(f"/api/sessions/{session_id}")
+            if refused := _segment_refusal(session_id, "session_id"):
+                return refused
+            resp = await client.get(f"/api/sessions/{_segment(session_id)}")
             resp.raise_for_status()
             return json.dumps(resp.json(), indent=2, default=str)
 
         if action == "delete":
             if not session_id:
                 return json.dumps({"error": "session_id required"})
-            resp = await client.delete(f"/api/sessions/{session_id}")
+            if refused := _segment_refusal(session_id, "session_id"):
+                return refused
+            resp = await client.delete(f"/api/sessions/{_segment(session_id)}")
             resp.raise_for_status()
             return json.dumps({"ok": True, "deleted": session_id})
 
@@ -657,35 +765,45 @@ async def hermes_cron(
                 updates["name"] = name
             if not updates:
                 return json.dumps({"error": "provide at least one field to update (prompt, schedule, name)"})
-            resp = await client.put(f"/api/cron/jobs/{job_id}", json={"updates": updates})
+            if refused := _segment_refusal(job_id, "job_id"):
+                return refused
+            resp = await client.put(f"/api/cron/jobs/{_segment(job_id)}", json={"updates": updates})
             resp.raise_for_status()
             return json.dumps({"ok": True, "updated": job_id}, indent=2)
 
         if action == "delete":
             if not job_id:
                 return json.dumps({"error": "job_id required"})
-            resp = await client.delete(f"/api/cron/jobs/{job_id}")
+            if refused := _segment_refusal(job_id, "job_id"):
+                return refused
+            resp = await client.delete(f"/api/cron/jobs/{_segment(job_id)}")
             resp.raise_for_status()
             return json.dumps({"ok": True, "deleted": job_id})
 
         if action == "trigger":
             if not job_id:
                 return json.dumps({"error": "job_id required"})
-            resp = await client.post(f"/api/cron/jobs/{job_id}/trigger")
+            if refused := _segment_refusal(job_id, "job_id"):
+                return refused
+            resp = await client.post(f"/api/cron/jobs/{_segment(job_id)}/trigger")
             resp.raise_for_status()
             return json.dumps({"ok": True, "triggered": job_id})
 
         if action == "pause":
             if not job_id:
                 return json.dumps({"error": "job_id required"})
-            resp = await client.post(f"/api/cron/jobs/{job_id}/pause")
+            if refused := _segment_refusal(job_id, "job_id"):
+                return refused
+            resp = await client.post(f"/api/cron/jobs/{_segment(job_id)}/pause")
             resp.raise_for_status()
             return json.dumps({"ok": True, "paused": job_id})
 
         if action == "resume":
             if not job_id:
                 return json.dumps({"error": "job_id required"})
-            resp = await client.post(f"/api/cron/jobs/{job_id}/resume")
+            if refused := _segment_refusal(job_id, "job_id"):
+                return refused
+            resp = await client.post(f"/api/cron/jobs/{_segment(job_id)}/resume")
             resp.raise_for_status()
             return json.dumps({"ok": True, "resumed": job_id})
 
@@ -750,14 +868,18 @@ async def hermes_webhook(
         if action == "delete":
             if not name:
                 return json.dumps({"error": "name required"})
-            resp = await client.delete(f"/api/webhooks/{name}")
+            if refused := _segment_refusal(name, "name"):
+                return refused
+            resp = await client.delete(f"/api/webhooks/{_segment(name)}")
             resp.raise_for_status()
             return json.dumps({"ok": True, "deleted": name})
 
         if action == "toggle":
             if not name:
                 return json.dumps({"error": "name required"})
-            resp = await client.put(f"/api/webhooks/{name}/enabled", json={"enabled": enabled})
+            if refused := _segment_refusal(name, "name"):
+                return refused
+            resp = await client.put(f"/api/webhooks/{_segment(name)}/enabled", json={"enabled": enabled})
             resp.raise_for_status()
             return json.dumps({"ok": True, "name": name, "enabled": enabled})
 

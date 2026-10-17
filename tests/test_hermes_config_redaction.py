@@ -74,9 +74,13 @@ async def test_config_reads_never_return_backend_held_credentials(tmp_path):
             assert (await get({'action': 'get', 'key': 'max_tokens'}))['value'] == 4096
             summary = await client.post('/mcp', headers=headers, json=call('hermes_inspect', {'target': 'config'}))
             assert text_of(summary)['config_summary'] == {'model': CONFIG['model'], 'toolsets': ['web'], 'max_live_sessions': 4}
-            # Writes are unchanged: the value goes to Hermes as given and the reply echoes it.
+            # Writes are unchanged: the value goes to Hermes as given and the reply echoes it. (model.* and credential
+            # keys are no longer writable through MCP since AI-HMCP-001-3, see test_hermes_security_guards.py.)
             written = await client.post('/mcp', headers=headers, json=call('hermes_config', {
-                'action': 'set', 'key': 'model.api_key', 'value': 'new-held-key'}))
+                'action': 'set', 'key': 'display.skin', 'value': 'new-held-key'}))
             assert written.status_code == 200, written.text
-            assert text_of(written) == {'ok': True, 'key': 'model.api_key', 'value': 'new-held-key'}
-            assert writes == [{'config': {'model.api_key': 'new-held-key'}}]
+            assert text_of(written) == {'ok': True, 'key': 'display.skin', 'value': 'new-held-key'}
+            assert writes == [{'config': {'display.skin': 'new-held-key'}}]
+            denied = await client.post('/mcp', headers=headers, json=call('hermes_config', {
+                'action': 'set', 'key': 'model.api_key', 'value': 'new-held-key'}))
+            assert 'error' in text_of(denied) and len(writes) == 1
