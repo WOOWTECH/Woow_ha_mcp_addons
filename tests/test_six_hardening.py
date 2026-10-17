@@ -332,4 +332,5 @@ async def test_hermes_dashboard_login_and_cookie_errors_are_safe(tmp_path):
                     response = await client.post('/mcp', headers=headers, json=call('hermes_inspect', {'target': 'status'}))
                     assert canary not in response.text
                     assert str(status) in response.text  # 0.2.0: the backend's own status text, credential redacted
-            assert len(cookies) == 4
+            # 4 statuses, plus the one resend after the 401 (stale cookie -> log in once, resend once: AI-HMCP-003-1)
+            assert len(cookies) == 5
