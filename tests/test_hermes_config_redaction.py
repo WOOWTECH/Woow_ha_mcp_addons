@@ -3,6 +3,7 @@ custom_providers[].api_key (set through the Hermes dashboard) reached the MCP cl
 every field name and whether a secret is set, never its value; writes are unchanged. The real Hermes child against a
 LOCAL fake dashboard. Not the "backend errors carry their own text" decision: these are credentials the backend holds.
 """
+import copy
 import json
 
 from test_six_hardening import Quiet, call, runtime, serve
@@ -19,6 +20,14 @@ CONFIG = {
     'secrets': {'OPENROUTER_API_KEY': 'held-or-key'},
     'webhooks': {'signing': {'secret': WEBHOOK_SECRET, 'enabled': True}},
 }
+def merge(base, incoming):
+    for key, value in incoming.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            merge(base[key], value)
+        else:
+            base[key] = value
+
+
 HELD = (PROVIDER_KEY, WEBHOOK_SECRET, 'held-url-pass', 'held-gh-token', 'held-or-key')
 
 
@@ -34,7 +43,10 @@ def dashboard(writes):
 
         def do_GET(self):
             assert self.path == '/api/config', self.path
-            self.reply(CONFIG)
+            config = copy.deepcopy(CONFIG)
+            for write in writes:  # Hermes deep-merges a PUT; the write is read back (AI-HMCP-001-4)
+                merge(config, write['config'])
+            self.reply(config)
 
         def do_PUT(self):
             writes.append(json.loads(self.rfile.read(int(self.headers['Content-Length']))))
@@ -74,9 +86,10 @@ async def test_config_reads_never_return_backend_held_credentials(tmp_path):
             assert (await get({'action': 'get', 'key': 'max_tokens'}))['value'] == 4096
             summary = await client.post('/mcp', headers=headers, json=call('hermes_inspect', {'target': 'config'}))
             assert text_of(summary)['config_summary'] == {'model': CONFIG['model'], 'toolsets': ['web'], 'max_live_sessions': 4}
-            # Writes are unchanged: the value goes to Hermes as given and the reply echoes it.
+            # Writes are not redacted: the value goes to Hermes as given and the reply echoes it (a dotted key is nested and
+            # read back since AI-HMCP-001-4).
             written = await client.post('/mcp', headers=headers, json=call('hermes_config', {
                 'action': 'set', 'key': 'model.api_key', 'value': 'new-held-key'}))
             assert written.status_code == 200, written.text
             assert text_of(written) == {'ok': True, 'key': 'model.api_key', 'value': 'new-held-key'}
-            assert writes == [{'config': {'model.api_key': 'new-held-key'}}]
+            assert writes == [{'config': {'model': {'api_key': 'new-held-key'}}}]

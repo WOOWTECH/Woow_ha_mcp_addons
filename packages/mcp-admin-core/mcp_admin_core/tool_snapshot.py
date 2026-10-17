@@ -2100,14 +2100,23 @@ LISTED = {'odoo': [{'name': 'data_quality_report',
                              'title': 'hermes_mcpArguments',
                              'type': 'object'}},
             {'name': 'hermes_model',
-             'description': 'Manage Hermes model. Actions: info, set, list_providers',
+             'description': 'Manage Hermes model. Actions: info, set, list_providers\n'
+                            '\n'
+                            '- info: the configured main model and provider\n'
+                            '- list_providers: providers Hermes can use (from Hermes itself), each with its models\n'
+                            '- set: switch the main model for new sessions (requires model; provider defaults to the '
+                            'current one).\n'
+                            '  If Hermes asks to confirm an expensive model, call again with confirm_expensive=true.\n',
              'inputSchema': {'properties': {'action': {'default': 'info', 'title': 'Action', 'type': 'string'},
                                             'model': {'anyOf': [{'type': 'string'}, {'type': 'null'}],
                                                       'default': None,
                                                       'title': 'Model'},
                                             'provider': {'anyOf': [{'type': 'string'}, {'type': 'null'}],
                                                          'default': None,
-                                                         'title': 'Provider'}},
+                                                         'title': 'Provider'},
+                                            'confirm_expensive': {'default': False,
+                                                                  'title': 'Confirm Expensive',
+                                                                  'type': 'boolean'}},
                              'title': 'hermes_modelArguments',
                              'type': 'object'}},
             {'name': 'hermes_config',
@@ -2136,7 +2145,16 @@ LISTED = {'odoo': [{'name': 'data_quality_report',
                              'title': 'hermes_gatewayArguments',
                              'type': 'object'}},
             {'name': 'hermes_chat',
-             'description': 'Send a chat message to Hermes and receive a response.',
+             'description': 'Send a chat message to Hermes and receive a response.\n'
+                            '\n'
+                            'session_id: optional conversation name. Reuse the same value to continue a multi-turn '
+                            'conversation\n'
+                            '(Hermes keeps the history under that conversation name; an unknown name starts a new '
+                            'one). A value\n'
+                            'starting with "resp_" continues from that Hermes response id. Omit it for a one-off '
+                            'turn.\n'
+                            'A turn may take up to HERMES_MCP_CHAT_TIMEOUT seconds (default 300); on timeout the turn '
+                            'is stopped.\n',
              'inputSchema': {'properties': {'message': {'title': 'Message', 'type': 'string'},
                                             'session_id': {'anyOf': [{'type': 'string'}, {'type': 'null'}],
                                                            'default': None,
@@ -2186,12 +2204,15 @@ LISTED = {'odoo': [{'name': 'data_quality_report',
                             'Actions: list, enable_platform, create, delete, toggle\n'
                             '- list: show webhook platform status and subscriptions\n'
                             '- enable_platform: enable the webhook listener (triggers gateway restart)\n'
-                            '- create: new webhook (requires name, prompt). Use {{payload}} in prompt for incoming '
-                            'data\n'
+                            '- create: new webhook (requires name, prompt). In the prompt, {__raw__} is the whole '
+                            'incoming JSON\n'
+                            '  payload and {field.path} is one field of it (e.g. {order.id}); {event_type} is the '
+                            'event name\n'
                             '- delete: remove webhook (requires name)\n'
                             '- toggle: enable/disable webhook (requires name, set enabled=true/false)\n'
                             '\n'
-                            "Example prompt: 'New order received: {{payload}}. Summarize the order details.'\n",
+                            "Example prompt: 'New order {order.id} received: {__raw__}. Summarize the order "
+                            "details.'\n",
              'inputSchema': {'properties': {'action': {'default': 'list', 'title': 'Action', 'type': 'string'},
                                             'name': {'anyOf': [{'type': 'string'}, {'type': 'null'}],
                                                      'default': None,
