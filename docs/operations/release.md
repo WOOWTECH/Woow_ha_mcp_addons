@@ -133,3 +133,26 @@ GHCR visibility 不由 repo public 自動決定；失敗停止、不更換／覆
 GitHub artifact 保留 **90 天**；publisher 需在到期前保存這些證據以供長期 release review。
 這是 **unsigned CI receipt，不是 signed attestation 或 SLSA 認證**；未索取 id-token/write。
 不聲稱 buildx load 保留 attestations。正式 release/stable/HA acceptance 仍需全表驗收。
+
+## 正式 Release 與 WOOW App Store 出貨（手動）
+
+WOOW HA App Store 的 registry 對本 repo 採 `ref_policy: release`（2026-10-20 起，WOOW addon pipeline #76）：
+Store 只出貨 **GitHub 上最新的正式 Release**（非 prerelease、非 draft）所指的 commit。只在 `claude-delivery`
+升版號、或只發 pre-release，Store 的 catalog 都不會前進。本 repo 是 Store 的例外：整個 repo 用一個 `v<ver>` tag
+（不是各 add-on 一個 `<slug>-v<ver>`），由維護者手動發，Store 端沒有 required workflow；把關就是 builder VM 的驗收。
+
+builder VM 驗收完成、映像已推送 GHCR 之後：
+
+1. 在 GitHub 把該版的 `v<ver>` 發成**正式 Release**（不勾 pre-release、不是 draft），並設為 latest。
+   tag 要指向已驗收、且已在 `claude-delivery` 上的 commit。例如 tag 已存在、目前是 pre-release 時：
+   ```sh
+   gh release edit v<ver> -R WOOWTECH/Woow_ha_mcp_addons --prerelease=false --latest
+   ```
+2. 在 `claude-delivery` 上手動執行 **WOOW addon source notification**（`.github/workflows/woow-addon-sync.yml`，`workflow_dispatch`）：
+   ```sh
+   gh workflow run woow-addon-sync.yml -R WOOWTECH/Woow_ha_mcp_addons --ref claude-delivery
+   ```
+   發 Release 本身**不會**觸發這個 workflow。不手動執行的話，Store 最晚要等下一次 6 小時排程才會收到。
+   不要替這個 workflow 加 `release` 觸發：那種 run 不在 `claude-delivery` 上執行，Store 會拒收。
+
+已下架的 `woow_mcp_opendesign`（Store registry `enabled: false`）不會出貨，不需要另外處理。
