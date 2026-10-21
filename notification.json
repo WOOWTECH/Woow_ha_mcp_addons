@@ -7,11 +7,11 @@
       "name": "Woow n8n MCP Server",
       "version": "0.2.2",
       "repository": "WOOWTECH/Woow_ha_mcp_addons",
-      "source_sha": "3f6c9c3953f582b6d4e10fa80d9b87344755531e",
+      "source_sha": "17b6ebd2bc5e5e38bb796dfb9afb93fd21cb6a78",
       "source_path": "addons/n8n",
       "config_file": "config.yaml",
       "config_sha256": "sha256:f5a3b31a797e7dcd5e61168dc9aef244ea006269450170cd9f6f4267296251de",
-      "archive_sha256": "sha256:1b4141ca474e2ab6ea385c8f7ce1873476e04ec7554ffa687a0c7ada50e7abc8",
+      "archive_sha256": "sha256:ee57e93e1619089b71feb99bb3fee86d4543ed82fc3bffda0a0c9d5265557e74",
       "context_fingerprint": "sha256:98ba68cd07718a354204e8559f2823bfb84a2acc51d895496af5e73f204e1946",
       "material_fingerprint": "sha256:93ddc1b48b98bb3c2dc5aba6b7947247a0f4a717d2ce3c5e544941f8e1451b8f",
       "architectures": [
@@ -69,7 +69,7 @@
       },
       "delivery": "published-image",
       "validation": "manifest+architecture-images+configured-CI",
-      "publisher_run_id": "39547982333",
+      "publisher_run_id": "39560461564",
       "channel": "stable"
     },
     "woow_mcp_odoo": {
@@ -77,11 +77,11 @@
       "name": "Woow Odoo MCP Server",
       "version": "0.2.2",
       "repository": "WOOWTECH/Woow_ha_mcp_addons",
-      "source_sha": "3f6c9c3953f582b6d4e10fa80d9b87344755531e",
+      "source_sha": "17b6ebd2bc5e5e38bb796dfb9afb93fd21cb6a78",
       "source_path": "addons/odoo",
       "config_file": "config.yaml",
       "config_sha256": "sha256:6fcad56bed0fd7fe4a2c96885807ea13f0001898a041255887cb5ca4e38d0546",
-      "archive_sha256": "sha256:1b4141ca474e2ab6ea385c8f7ce1873476e04ec7554ffa687a0c7ada50e7abc8",
+      "archive_sha256": "sha256:ee57e93e1619089b71feb99bb3fee86d4543ed82fc3bffda0a0c9d5265557e74",
       "context_fingerprint": "sha256:b521d76252ffac83a8272d75ff5a5f88f82da12146980e62285cb0d32638ffec",
       "material_fingerprint": "sha256:3486c65931dc2c3c62649fdc6e82be0c96a5bb95e6f1754791d02ea8fa42f54e",
       "architectures": [
@@ -139,7 +139,7 @@
       },
       "delivery": "published-image",
       "validation": "manifest+architecture-images+configured-CI",
-      "publisher_run_id": "39547982333",
+      "publisher_run_id": "39560461564",
       "channel": "stable"
     },
     "woow_mcp_hermes": {
@@ -147,11 +147,11 @@
       "name": "Woow Hermes MCP Server",
       "version": "0.2.2",
       "repository": "WOOWTECH/Woow_ha_mcp_addons",
-      "source_sha": "3f6c9c3953f582b6d4e10fa80d9b87344755531e",
+      "source_sha": "17b6ebd2bc5e5e38bb796dfb9afb93fd21cb6a78",
       "source_path": "addons/hermes",
       "config_file": "config.yaml",
       "config_sha256": "sha256:061251c7b2f815591202dbb7334d2254a5a7a039832027015d27f3dcb1c7cfb5",
-      "archive_sha256": "sha256:1b4141ca474e2ab6ea385c8f7ce1873476e04ec7554ffa687a0c7ada50e7abc8",
+      "archive_sha256": "sha256:ee57e93e1619089b71feb99bb3fee86d4543ed82fc3bffda0a0c9d5265557e74",
       "context_fingerprint": "sha256:e4a99cf9cf5cddd53467d3e02d38692feaff5c423674629c524779d97f39f142",
       "material_fingerprint": "sha256:e4cd7e4e9c771a0fc75a75a121dd9d0c18f1bf215e624fe4e466d90472bf3c60",
       "architectures": [
@@ -209,7 +209,7 @@
       },
       "delivery": "published-image",
       "validation": "manifest+architecture-images+configured-CI",
-      "publisher_run_id": "39547982333",
+      "publisher_run_id": "39560461564",
       "channel": "stable"
     },
     "woow_mcp_opendesign": {
@@ -288,11 +288,11 @@
       "name": "Woow EMQX MCP Server",
       "version": "0.2.2",
       "repository": "WOOWTECH/Woow_ha_mcp_addons",
-      "source_sha": "3f6c9c3953f582b6d4e10fa80d9b87344755531e",
+      "source_sha": "17b6ebd2bc5e5e38bb796dfb9afb93fd21cb6a78",
       "source_path": "addons/emqx",
       "config_file": "config.yaml",
       "config_sha256": "sha256:1bd5c5ccb13cfd441c800ae72ef61a2ac13829755dd75c0287e3dd36dce5e530",
-      "archive_sha256": "sha256:1b4141ca474e2ab6ea385c8f7ce1873476e04ec7554ffa687a0c7ada50e7abc8",
+      "archive_sha256": "sha256:ee57e93e1619089b71feb99bb3fee86d4543ed82fc3bffda0a0c9d5265557e74",
       "context_fingerprint": "sha256:182b46393562363add811f870c4c8508113ab0820882cf7a20e33b643f5beb7f",
       "material_fingerprint": "sha256:ee3d7ef192949dc5ac3f4811060e6663a94eef67ea553de5395ac2e8fa5effe3",
       "architectures": [
@@ -350,7 +350,7 @@
       },
       "delivery": "published-image",
       "validation": "manifest+architecture-images+configured-CI",
-      "publisher_run_id": "39547982333",
+      "publisher_run_id": "39560461564",
       "channel": "stable"
     },
     "woow_mcp_litellm": {
@@ -358,11 +358,11 @@
       "name": "Woow LiteLLM MCP Server",
       "version": "0.2.2",
       "repository": "WOOWTECH/Woow_ha_mcp_addons",
-      "source_sha": "3f6c9c3953f582b6d4e10fa80d9b87344755531e",
+      "source_sha": "17b6ebd2bc5e5e38bb796dfb9afb93fd21cb6a78",
       "source_path": "addons/litellm",
       "config_file": "config.yaml",
       "config_sha256": "sha256:e19d7de45687007e6909495826f508912136485571ec061ae56c62f190fb4740",
-      "archive_sha256": "sha256:1b4141ca474e2ab6ea385c8f7ce1873476e04ec7554ffa687a0c7ada50e7abc8",
+      "archive_sha256": "sha256:ee57e93e1619089b71feb99bb3fee86d4543ed82fc3bffda0a0c9d5265557e74",
       "context_fingerprint": "sha256:34bbd9f9aa48bd6bff8117f8f465cd5fd897720b8ccd23f70c6058c280cfaf8e",
       "material_fingerprint": "sha256:9861d60c2f2d8e8384335e217cacca9fc7da409029caac21a8139b1d71d59099",
       "architectures": [
@@ -420,7 +420,7 @@
       },
       "delivery": "published-image",
       "validation": "manifest+architecture-images+configured-CI",
-      "publisher_run_id": "39547982333",
+      "publisher_run_id": "39560461564",
       "channel": "stable"
     },
     "woow_mcp_nextcloud": {
@@ -428,11 +428,11 @@
       "name": "Woow Nextcloud MCP Server",
       "version": "0.2.2",
       "repository": "WOOWTECH/Woow_ha_mcp_addons",
-      "source_sha": "3f6c9c3953f582b6d4e10fa80d9b87344755531e",
+      "source_sha": "17b6ebd2bc5e5e38bb796dfb9afb93fd21cb6a78",
       "source_path": "addons/nextcloud",
       "config_file": "config.yaml",
       "config_sha256": "sha256:d5c7701f9e5b98a2b620e259dcffca9f45518baeed186e804b96d17b598ccac2",
-      "archive_sha256": "sha256:1b4141ca474e2ab6ea385c8f7ce1873476e04ec7554ffa687a0c7ada50e7abc8",
+      "archive_sha256": "sha256:ee57e93e1619089b71feb99bb3fee86d4543ed82fc3bffda0a0c9d5265557e74",
       "context_fingerprint": "sha256:471c36c88e49284db6fa7dd41eb4640fce494e63caad2f0da4349ef0ee55700c",
       "material_fingerprint": "sha256:a203759c4c1716bcc0cd95c2ef69692ba52c57230f672a19bd0b428382c3a1c8",
       "architectures": [
@@ -490,7 +490,7 @@
       },
       "delivery": "published-image",
       "validation": "manifest+architecture-images+configured-CI",
-      "publisher_run_id": "39547982333",
+      "publisher_run_id": "39560461564",
       "channel": "stable"
     }
   }
