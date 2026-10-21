@@ -1,8 +1,10 @@
 name: Local and container gates
+# Pull requests run the hosted checks in woow-addon-release.yml instead: builder
+# admission denies every PR by design, so it cannot be a required PR check.
 on:
-  pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:

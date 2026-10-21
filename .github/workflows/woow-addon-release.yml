@@ -1,0 +1,96 @@
+# Stable Releases for the WOOW HA App Store (the Store registry ships only stable
+# Releases of this repository: ref_policy release, required_workflows this file).
+# Shipping a version is merging a pull request that bumps it and passes these checks
+# (pipeline ADR-0005); there is no manual Release step.
+#
+#   checks     packaging validator, packaging tests and packaging/unit.sh (the
+#              hosted part of ci.yaml; builder admission is not a PR check).
+#   readiness  for every add-on the Store enables: the amd64 image of the manifest
+#              version can be pulled anonymously from GHCR, and a version with no
+#              stable Release yet is named in docs/operations/release-decision-*.md
+#              (the builder VM acceptance, which Actions cannot see).
+#   release    on claude-delivery only: the Store's shared workflow publishes one
+#              stable Release <slug>-v<version> per enabled add-on whose version
+#              has none. An already released version is left alone, so a push
+#              without a version bump releases nothing.
+#
+# Releases made with GITHUB_TOKEN do not trigger other workflows, so
+# woow-addon-sync.yml runs on workflow_run of this workflow.
+name: WOOW addon release
+'on':
+  pull_request:
+  push:
+    branches: [claude-delivery]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: woow-addon-release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  checks:
+    name: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.13.16'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.2'
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: '0.12.10'
+          enable-cache: false
+      - run: |
+          python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
+      - run: python packaging/validate.py
+      - run: |
+          uv sync --frozen --no-dev --python python3.13
+          uv pip install --python .venv/bin/python --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
+          .venv/bin/python -m unittest discover -s packaging -p 'test_*.py' -v
+      - name: Pin the existing fixed subprocess PATH on this disposable runner
+        run: |
+          test "$(node --version)" = v22.23.2
+          NODE_BIN="$(readlink -f "$(command -v node)")"
+          if [ "$NODE_BIN" != /usr/bin/node ]; then sudo ln -sfn "$NODE_BIN" /usr/bin/node; fi
+          test "$(/usr/bin/node --version)" = v22.23.2
+      - run: sh packaging/unit.sh
+  readiness:
+    name: readiness
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Read the Store registry (which add-ons ship)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: WOOWTECH/Woow_HA_App_Store
+          ref: main
+          path: .store
+          persist-credentials: false
+          sparse-checkout: .addon-sync/registry.json
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.13.16'
+      - run: |
+          python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
+      - name: GHCR images and release records
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python packaging/release_gate.py all .store/.addon-sync/registry.json
+  release:
+    name: release
+    needs: [checks, readiness]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/claude-delivery'
+    permissions:
+      contents: write
+    uses: WOOWTECH/Woow_HA_App_Store/.github/workflows/woow-addon-release.yml@main

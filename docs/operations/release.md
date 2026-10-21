@@ -52,9 +52,26 @@ Manifest `image` 是**未帶 tag**的 lowercase ref，`version` 固定為 `packa
 aarch64 或偽造 OCI license umbrella。HA 子目錄 fallback build 不支援 root context；
 必須先有可匿名 pull 的已核准預建 image。`io.hass.type=app` 不是 legacy addon。
 
+## WOOW App Store 正式 Release（自動）
+
+WOOW App Store 只出貨本 repo 的正式 Release（Store registry `ref_policy: release`，`required_workflows` 是
+`.github/workflows/woow-addon-release.yml`）。放行就是合併一個升了 add-on 版本、且通過必要檢查的 PR，沒有手動發 Release 的步驟
+（母專案 ADR-0005）。`woow-addon-release.yml` 在 PR 與推送 `claude-delivery` 時執行：
+
+- `checks`：本頁下一節 `ci.yaml` 的第 1–3 項（validator、packaging tests、`packaging/unit.sh`），不含 builder admission。
+- `readiness`：`packaging/release_gate.py` 對 Store registry 啟用的每一支（`woow_mcp_opendesign` 已停用，不檢查）確認：
+  - manifest 版本的 amd64 映像可以從 GHCR 匿名拉取；
+  - 還沒有正式 Release（tag `<slug>-v<版本>`）的版本，有 `docs/operations/release-decision-*.md` 寫到這個版本。這份紀錄證明映像已在
+    builder VM 驗收過，GitHub Actions 看不到這一段，所以**升版的 PR 要先推好映像、寫好發佈紀錄**。
+- `release`：只在推送 `claude-delivery` 且上面兩項都通過時執行，呼叫 Store 的 `woow-addon-release.yml`，替每支還沒有 Release 的版本發
+  `<slug>-v<版本>` 正式 Release。已發過的版本不會重發，所以沒升版號的推送不會發 Release，catalog 也不會前進。
+- `woow-addon-sync.yml` 在這個 workflow 完成後經由 `workflow_run` 執行，通知 Store；不必手動執行。
+
+舊的整個 repo 一個 `v<版本>` tag（`v0.1.0`…`v0.2.2`）保留不動；`v0.2.2` 是改制時的種子正式 Release。
+
 ## PR/main CI（只讀）
 
-`.github/workflows/ci.yaml`：contents read、checkout 不保留 credentials、hosted
+`.github/workflows/ci.yaml`（推送 `main` 或手動執行；PR 改由上一節的 `checks` 檢查，因為 builder admission 依設計會拒絕每個 PR）：contents read、checkout 不保留 credentials、hosted
 ubuntu-24.04、有 timeout/concurrency；不讀 secrets、不 login、不 push、不用
 pull_request_target、不使用 production self-hosted runner。
 
