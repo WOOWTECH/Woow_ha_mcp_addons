@@ -68,6 +68,7 @@ WOOW App Store 只出貨本 repo 的正式 Release（Store registry `ref_policy:
 - `woow-addon-sync.yml` 在這個 workflow 完成後經由 `workflow_run` 執行，通知 Store；不必手動執行。
 
 舊的整個 repo 一個 `v<版本>` tag（`v0.1.0`…`v0.2.2`）保留不動；`v0.2.2` 是改制時的種子正式 Release。
+改制後第一次推送 `claude-delivery`（`17b6ebd`，run 39558332683）替 6 支啟用的 add-on 各發了 `<slug>-v0.2.2`，`woow_mcp_opendesign` 沒有發。
 
 ## PR/main CI（只讀）
 
