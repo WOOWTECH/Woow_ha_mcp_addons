@@ -28,13 +28,35 @@ function reset(next = {}) {
     },
     health: { management: 'alive', child: { state: 'not_started', transport_ready: false }, backend: next.offline ? 'unreachable' : 'unconfigured' },
   };
+  if (next.operations) {
+    state.denied_operations = next.denied_operations ?? {};
+    for (const tool of Object.values(state.tools)) Object.assign(tool, {operations: [], default_operation: null});
+    Object.assign(state.tools.mixed_example, {default_operation: 'list', operations: [
+      {name:'list', write:false}, {name:'get', write:false}, {name:'create', write:true}, {name:'delete', write:true},
+    ]});
+  }
 }
 function capabilities() {
-  return {schema_version:1, deployment:{kind:config.fixed ? 'builtin' : 'ha-addon'}, product:{id:state.product,version:'test'},
+  const result = {schema_version:1, deployment:{kind:config.fixed ? 'builtin' : 'ha-addon'}, product:{id:state.product,version:'test'},
     admin:{authority:config.fixed ? 'paas-password' : 'ha-admin'}, backend:{mode:config.fixed?'fixed':'manual',can_edit:!config.fixed,can_test:true},
     capabilities:{tool_schema:true,effective_tools:true,operation_policy:true,logs:true,restart_child:true,revoke_token:true},
     tools:{catalog_count:3,policy_enabled_count:3,effective_count:config.offline?null:3,status:config.offline?'unknown':'observed',
       items:Object.keys(state.tools).map(name=>({name,description:`Description for ${name}`,inputSchema:{type:'object',properties:{value:{type:'string'}}},schema_source:'child',policy_enabled:true,effective:config.offline?null:true}))}};
+  if (config.operations) {
+    result.capabilities.operation_denies = true;
+    for (const item of result.tools.items) {
+      const tool = state.tools[item.name];
+      const whole = !state.disabled.includes(item.name) && (!tool.write || state.enabled_write_tools.includes(item.name) || tool.legacy_write && state.writes_enabled);
+      item.operations = tool.operations.map(op => ({...op, denied: state.denied_operations[item.name]?.includes(op.name) ?? false,
+        policy_enabled: whole && !state.denied_operations[item.name]?.includes(op.name) && (!op.write || state.enabled_write_tools.includes(`${item.name}:${op.name}`))}));
+      item.policy_enabled = whole && (!item.operations.length || item.operations.some(op => op.policy_enabled));
+      item.effective = item.policy_enabled ? config.offline ? null : true : false;
+      if (!item.policy_enabled) item.reason = 'operations_not_permitted';
+    }
+    result.tools.policy_enabled_count = result.tools.items.filter(item => item.policy_enabled).length;
+    result.tools.effective_count = config.offline ? null : result.tools.policy_enabled_count;
+  }
+  return result;
 }
 reset();
 const json = (response, status, value) => { response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); response.end(JSON.stringify(value)); };
@@ -82,7 +104,7 @@ const server = http.createServer(async (request, response) => {
         state.connection_configured = !clear;
       } else if (operation === 'endpoint') state.endpoint = payload.endpoint;
       else if (operation === 'policy') {
-        if (Object.keys(payload).sort().join() !== 'disabled,enabled_write_tools,writes_enabled') return json(response, 400, {});
+        if (Object.keys(payload).sort().join() !== (config.operations ? 'denied_operations,disabled,enabled_write_tools,writes_enabled' : 'disabled,enabled_write_tools,writes_enabled')) return json(response, 400, {});
         Object.assign(state, payload);
       } else return json(response, 404, {});
       return json(response, 200, { saved: true });

@@ -60,7 +60,7 @@ class ToolCallRefused(Denied):
         if self.kind == "invalid_params":
             return {"code": -32602, "message": "Invalid params", "data": {"tool": self.tool, "errors": self.errors}}
         if self.kind == "operation_not_permitted":
-            return {"code": -32602, "message": "Operation not permitted", "data": {"tool": self.tool, "reason": (
+            return {"code": -32602, "message": "Operation not permitted", "data": {"tool": self.tool, "reason": self.reason or (
                 "write operation disabled by the add-on policy; an administrator can enable it in the add-on panel")}}
         if self.kind == "backend_unreachable":
             return {"code": -32603, "message": "Backend unreachable", "data": {"tool": self.tool, "reason": self.reason}}
@@ -199,6 +199,10 @@ class Tool:
     default_operation: str | None = None
 
     def __post_init__(self):
+        operations = self.operations
+        if (operations and not self.selector or len(set(operations)) != len(operations)
+                or self.default_operation is not None and self.default_operation not in operations):
+            raise ValueError('operations require an audited selector and matching default')
         if self.backend_required_operations:
             field = self.arguments.model_fields.get(self.selector)
             if (field is None or get_origin(field.annotation) is not Literal
@@ -208,6 +212,11 @@ class Tool:
     def grants(self, name):
         return ([name] if self.write else []) + [f'{name}:{op}' for op in self.write_operations]
 
+    @property
+    def operations(self):
+        """Explicitly audited operations only; never infer from arbitrary schema enums."""
+        return (*self.read_operations, *self.write_operations)
+
 
 def has_grant(name, tool, state):
     return name in getattr(state, 'enabled_write_tools', ()) or (tool.legacy_write and state.writes_enabled)
@@ -215,6 +224,46 @@ def has_grant(name, tool, state):
 
 def enabled(name: str, tools: Mapping[str, Tool], state: State) -> bool:
     return name in tools and name not in state.disabled and (not tools[name].write or has_grant(name, tools[name], state))
+
+
+def operation_enabled(name, tool, operation, state):
+    return (operation in tool.operations
+            and operation not in getattr(state, 'denied_operations', {}).get(name, ())
+            and (operation not in tool.write_operations
+                 or f'{name}:{operation}' in getattr(state, 'enabled_write_tools', ())))
+
+
+def policy_enabled(name, tools, state):
+    """Whether at least one audited call can pass policy (not backend readiness)."""
+    if not enabled(name, tools, state):
+        return False
+    tool = tools[name]
+    if tool.operations and (tool.child_schema or tool.read_operations):
+        return any(operation_enabled(name, tool, op, state) for op in tool.operations)
+    return bool(tool.operations) or not getattr(state, 'denied_operations', {}).get(name)
+
+
+def check_operation_denies(name, tool, arguments, state):
+    denied = getattr(state, 'denied_operations', {}).get(name, ())
+    if not denied:
+        return
+    operation = arguments.get(tool.selector, tool.default_operation)
+    # A restricted tool requires a positively audited operation. Missing required
+    # selectors, explicit null, malformed/unknown values, or removed metadata may
+    # otherwise bypass a deny via a child's coercion/default or a new write path.
+    if type(operation) is not str or operation not in tool.operations or operation in denied:
+        raise ToolCallRefused('operation_not_permitted', name, reason=(
+            'operation restricted by the add-on policy; use an allowed audited operation or ask an administrator'))
+
+
+def validate_operation_denies(denied, tools, state):
+    """The state model validates shape first. API additions require audited metadata;
+    persisted stale entries may be retained or removed, never newly introduced."""
+    saved = getattr(state, 'denied_operations', {})
+    for name, operations in denied.items():
+        audited = tools[name].operations if name in tools else ()
+        if any(op not in audited and op not in saved.get(name, ()) for op in operations):
+            raise ValueError('unknown operation deny')
 
 
 def authorize(message, tools: Mapping[str, Tool], state: State) -> str:
@@ -273,6 +322,7 @@ def authorize(message, tools: Mapping[str, Tool], state: State) -> str:
             raise ToolCallRefused("invalid_params", name, argument_errors(model, error, params.get("arguments"))) from None
         normalized = arguments.model_dump(mode="json")
         tool = tools[name]
+        check_operation_denies(name, tool, normalized, state)
         if tool.selector and normalized.get(tool.selector) in tool.write_operations:
             if f'{name}:{normalized[tool.selector]}' not in getattr(state, 'enabled_write_tools', ()):
                 raise ToolCallRefused("operation_not_permitted", name)
@@ -293,6 +343,7 @@ def child_call(name, tool, params, state):
     if not isinstance(arguments, dict):
         raise ToolCallRefused("invalid_params", name, [{"field": "arguments", "message": "Input should be a valid dictionary",
                                                         "type": "dict_type"}])
+    check_operation_denies(name, tool, arguments, state)
     if tool.write_operations:
         granted = getattr(state, "enabled_write_tools", ())
         operation = arguments.get(tool.selector, tool.default_operation)
@@ -639,7 +690,7 @@ def filter_list(message, tools: Mapping[str, Tool], state: State):
         for tool in result["tools"]:
             # The first entry per name only (0.1.6 R1 #5): LLM providers refuse duplicate function names.
             if (isinstance(tool, dict) and isinstance(tool.get("name"), str) and tool["name"] not in names
-                    and enabled(tool["name"], tools, state)):
+                    and policy_enabled(tool["name"], tools, state)):
                 names.add(tool["name"])
                 listed.append(listed_tool(tool, tools[tool["name"]]))
         # The result is rebuilt as well (0.1.6 R1 #4): the tools and a string nextCursor, nothing else from the child.

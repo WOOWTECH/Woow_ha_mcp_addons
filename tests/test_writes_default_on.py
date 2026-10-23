@@ -142,6 +142,7 @@ def test_older_states_migrate_through_3_to_every_write(tmp_path, product):
     with closing(ProductStore(tmp_path, product)) as store:
         old = store.load().model_dump()
     old.pop('enabled_write_tools')
+    old.pop('denied_operations')  # additive schema-4 field did not exist in these legacy records
     old.update(schema_version=2, writes_enabled=False, disabled=[next(iter(tools_of(product)))])
     if product == 'n8n':
         old = {k: v for k, v in old.items() if k not in ('product', 'connection', 'mcp_access_token')}

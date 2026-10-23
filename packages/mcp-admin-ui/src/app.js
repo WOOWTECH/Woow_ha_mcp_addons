@@ -1,5 +1,5 @@
 import { AdminApi, ApiError } from './api.js';
-import { products, UiError, explicitUrl, backendPayload, granularPolicy, toolRows, policyPayload, policyFingerprint, effectiveGrant, policySummary, catalogSummary, environmentLabels, clientExample, claudeConnectorUrl } from './contracts.js';
+import { products, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, environmentLabels, clientExample, claudeConnectorUrl } from './contracts.js';
 import './styles.css';
 
 const root = document.querySelector('#app');
@@ -150,11 +150,17 @@ function backend() {
 }
 function tools() {
   const granular = granularPolicy(state);
+  const operationControls = operationPolicy(state);
   const form = el('form');
   const rows = toolRows(state);
   form.append(p('停用與授權必須由伺服器逐次檢查 tools/call。此頁的控制項不是安全邊界，也不會替你執行工具。'));
   if (!granular) form.append(el('div', { class: 'notice' }, '工具授權版本不相容，無法儲存。請重新整理；不會以舊版全域開關取代精確授權。'));
   form.append(el('div', { class: 'notice' }, policySummary(state)), p('已允許的寫入可新增、修改或刪除後端資料。下方勾選需儲存後才套用；後端帳號權限仍會限制操作。'));
+  if (operationControls) {
+    form.append(p('你可以禁止個別讀取或寫入操作。取消禁止不會新增寫入授權；寫入仍需另行授權。'));
+    const stale = staleOperationDenies(state);
+    if (stale.length) form.append(p(`保留未列於目前操作目錄的限制：${stale.map(({tool, operation}) => `${tool}:${operation}`).join('、')}。儲存此頁會保留這些限制。`));
+  }
   if (state.writes_enabled && rows.some(row => row.legacy)) form.append(p('注意：伺服器回報舊版全域寫入目前開啟（新安裝的預設）。此頁不將它標示為唯讀；儲存後改以下方逐項勾選為準，未勾選的寫入即關閉。'));
   if (!rows.length) form.append(p('伺服器未提供工具清單，無法編輯權限。'));
   const catalog = state.capabilities?.tools;
@@ -177,7 +183,7 @@ function tools() {
     for (const operation of operations) {
       const value = JSON.stringify({ tool: row.name, operation });
       controls.append(el('label', { class: 'check' }, el('input', { type: 'checkbox', name: 'grant', value,
-        checked: granular && effectiveGrant(state, row, operation),
+        checked: granular && !disabled.checked && savedGrant(state, row, operation),
         disabled: !granular || !row.classified || disabled.checked,
       }), operation === null ? '明確允許此工具寫入' : `允許寫入操作：${operation}`));
     }
@@ -185,9 +191,18 @@ function tools() {
       input.disabled = disabled.checked || !granular || !row.classified;
       if (disabled.checked) input.checked = false;
     }));
+    if (operationControls) {
+      for (const operation of row.auditedOperations ?? []) {
+        controls.append(el('label', { class: 'check' }, el('input', { type: 'checkbox', name: 'deny-operation',
+          value: JSON.stringify({tool: row.name, operation: operation.name}),
+          checked: state.denied_operations[row.name]?.includes(operation.name),
+        }), `禁止${operation.write ? '寫入' : '讀取'}操作：${operation.name}`));
+      }
+      if (row.auditedOperations?.length) controls.append(p(`操作參數：${state.tools[row.name].operation_parameter}；省略時：${state.tools[row.name].default_operation ?? '必須提供操作'}。`));
+    }
     const detail = details.get(row.name);
     const effective = detail?.effective === true ? '子行程有效' : detail?.effective === false ? '未生效' : '有效狀態未知';
-    const reasons = { policy_disabled: '政策停用', write_not_granted: '未授權寫入', child_unavailable: '未能取得子行程工具清單', not_registered_by_child: '子行程未註冊', not_in_registry: '尚未納入核准目錄' };
+    const reasons = { policy_disabled: '政策停用', write_not_granted: '未授權寫入', operations_not_permitted: '所有操作皆被政策禁止', child_unavailable: '未能取得子行程工具清單', not_registered_by_child: '子行程未註冊', not_in_registry: '尚未納入核准目錄' };
     const schema = detail?.inputSchema ?? state.tools?.[row.name]?.inputSchema;
     const article = el('article', { class: 'tool-row' }, el('div', {}, el('h3', { class: 'tool-name' }, row.name),
       chip(!row.classified ? '分類未知 · 不提供授權' : operations.length ? '含寫入操作' : '唯讀'),
@@ -203,13 +218,14 @@ function tools() {
   form.addEventListener('submit', async event => {
     event.preventDefault();
     const data = new FormData(form);
-    try { policyPayload(state, data.getAll('disabled'), data.getAll('grant').map(v => JSON.parse(v))); } catch (error) { fail(error); return; }
+    const denies = operationControls ? data.getAll('deny-operation').map(v => JSON.parse(v)) : undefined;
+    try { policyPayload(state, data.getAll('disabled'), data.getAll('grant').map(v => JSON.parse(v)), denies); } catch (error) { fail(error); return; }
     if (!await confirmAction('套用工具權限？', '寫入可能變更後端資料。只授權你確實需要的工具或操作；伺服器仍必須強制檢查每次呼叫。', '確認套用')) return;
     const expectedPolicy = policyFingerprint(state);
     await task(async () => {
       await api.mutate('policy', fresh => {
         if (policyFingerprint(fresh) !== expectedPolicy) throw new UiError('工具授權版本已變更。請重新整理後再試。');
-        return policyPayload(fresh, data.getAll('disabled'), data.getAll('grant').map(v => JSON.parse(v)));
+        return policyPayload(fresh, data.getAll('disabled'), data.getAll('grant').map(v => JSON.parse(v)), denies);
       });
       await reload('伺服器已確認儲存工具權限。此頁未執行任何工具。');
     });

@@ -32,7 +32,7 @@ from . import redact, ui
 
 from . import VERSION
 from .config import ConfigError, State, Store, strict_json
-from .policy import Denied, ToolCallRefused, UnknownMethod, authorize, filter_list
+from .policy import Denied, ToolCallRefused, UnknownMethod, authorize, filter_list, validate_operation_denies
 from .admin_auth import AdminAuthority, BadRequest, prefix
 from .capabilities import ManagementOptions, capability_snapshot, observe_tools, tool_catalog
 
@@ -368,12 +368,16 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                             raise ValueError()
                         changes = value
                     else:
-                        if (set(value) not in ({"writes_enabled", "disabled"}, {"writes_enabled", "disabled", "enabled_write_tools"}) or not isinstance(value["disabled"], list)
+                        if (not {"writes_enabled", "disabled"} <= set(value)
+                                or set(value) - {"writes_enabled", "disabled", "enabled_write_tools", "denied_operations"}
+                                or not isinstance(value["disabled"], list)
                                 or any(not isinstance(t, str) or t not in tools for t in value["disabled"])):
                             raise ValueError()
                         changes = value
                     # Validate without writing. Store.update revalidates on commit.
-                    type(state).model_validate({**state.model_dump(), **changes})
+                    candidate = type(state).model_validate({**state.model_dump(), **changes})
+                    if name == 'policy' and 'denied_operations' in changes:
+                        validate_operation_denies(candidate.denied_operations, tools, state)
                 except ValueError:
                     raise BadRequest() from None
             if peer_disconnected.is_set():
@@ -396,9 +400,12 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     "writes_enabled": state.writes_enabled, "disabled": state.disabled,
                     "policy_contract": "woow-v3-exact-grants",
                     "enabled_write_tools": getattr(state, 'enabled_write_tools', []),
+                    **({"denied_operations": state.denied_operations} if hasattr(state, 'denied_operations') else {}),
                     "capabilities": capabilities(state, catalog),
                     "tools": {k: {"write": v.write, "write_grants": v.grants(k),
                                   "operation_parameter": v.selector, "legacy_write": v.legacy_write,
+                                  "default_operation": v.default_operation,
+                                  "operations": [{"name": op, "write": op in v.write_operations} for op in v.operations],
                                   "inputSchema": schemas.get(k) or v.arguments.model_json_schema()} for k, v in tools.items()}, "health": snapshot()}, headers=headers)
             if name == "capabilities" and request.method == "GET":
                 before = snapshot().get("child")
