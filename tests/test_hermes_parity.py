@@ -5,6 +5,14 @@ from test_six_hardening import Quiet, call, runtime, serve
 from test_real_products import rpc
 
 
+def deep_merge(target, incoming):
+    for key, value in incoming.items():
+        if isinstance(value, dict) and isinstance(target.get(key), dict):
+            deep_merge(target[key], value)
+        else:
+            target[key] = value
+
+
 def backend(state):
     class Backend(Quiet):
         def do_GET(self):
@@ -43,7 +51,7 @@ def backend(state):
             body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
             state['requests'].append((self.path, body))
             if not state.get('ignore_write'):
-                state['config'].update(body['config'])
+                deep_merge(state['config'], body['config'])
             return self.reply({'ok': True})
     return Backend
 
@@ -85,3 +93,25 @@ async def test_real_child_model_config_chat_and_path_contract(tmp_path):
             traversed = await invoke('hermes_session', action='get', session_id='../config/raw')
             assert traversed['isError'] is True
             assert '/api/config/raw' not in state['paths']
+
+
+async def test_real_child_config_parent_guard_and_deep_merge(tmp_path):
+    state = {'config': {'display': {'compact': False, 'theme': 'dark'}}, 'requests': [], 'paths': []}
+    with serve(backend(state)) as url:
+        async with runtime(tmp_path, 'hermes', url, write_grants=['hermes_config:set']) as (client, headers, *_):
+            async def config(**args):
+                return await rpc(client, '/mcp', headers, call('hermes_config', {'action': 'set', **args}))
+            for value in ({'secret': 'CANARY-denied-secret'},
+                          {'items': [{'credentials': {'password': 'CANARY-denied-secret'}}]},
+                          {'items': [{'ＡＰＩ＿ＫＥＹ': 'CANARY-denied-secret'}]}):
+                for dry_run in (False, True):
+                    reply = await config(key='webhooks.signing', value=json.dumps(value), dry_run=dry_run)
+                    assert 'denied' in result_text(reply)
+                    assert 'CANARY-denied-secret' not in result_text(reply)
+            assert not any(path == '/api/config' for path, _ in state['requests'])
+            reply = await config(key='display', value='{"compact":true}')
+            assert not reply.get('isError') and json.loads(result_text(reply))['ok']
+            assert state['config']['display'] == {'compact': True, 'theme': 'dark'}
+            state['ignore_write'] = True
+            reply = await config(key='display', value='{"compact":false}')
+            assert reply['isError'] is True

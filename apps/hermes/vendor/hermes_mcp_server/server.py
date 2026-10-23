@@ -617,8 +617,8 @@ async def hermes_model(
 
 @mcp.tool()
 @_backend_errors("dashboard")
-async def hermes_config(action: str = "get", key: str | None = None, value: str | None = None, dry_run: bool = False) -> str:
-    """Read or update Hermes config. Actions: get, set"""
+async def hermes_config(action: str = "get", key: str | None = None, value: str | dict[str, Any] | list[Any] | None = None, dry_run: bool = False) -> str:
+    """Read or update Hermes config. Actions: get, set. Value accepts JSON text, objects or arrays."""
     conn = _get_connection()
 
     async with await _get_dashboard_client(conn) as client:
@@ -646,13 +646,16 @@ async def hermes_config(action: str = "get", key: str | None = None, value: str 
             if denial:
                 return json.dumps({"error": f"Key '{key}' is denied: {denial}", "denied_keys": sorted(DENIED_CONFIG_KEYS)})
             key = guards.clean_config_key(key)
-            if dry_run:
-                return json.dumps({"dry_run": True, "key": key, "value": value, "message": "No changes made"}, indent=2)
             # Parse value as JSON if possible
             try:
                 parsed_value = json.loads(value)
             except (json.JSONDecodeError, TypeError):
                 parsed_value = value
+            denial = guards.config_value_denial(key, parsed_value, _secret_key)
+            if denial:
+                return json.dumps({"error": f"Key '{key}' contains a denied value: {denial}"})
+            if dry_run:
+                return json.dumps({"dry_run": True, "key": key, "value": value, "message": "No changes made"}, indent=2)
             # AI-HMCP-001-4：Hermes 的 PUT /api/config 把 body 深合併進設定，點號 key 原樣送出會變成頂層字面鍵
             # （"display.compact: true"）而 display.compact 沒變。依點號拆段組成巢狀物件，寫完讀回驗證。
             parts = key.split(".")
@@ -673,7 +676,7 @@ async def hermes_config(action: str = "get", key: str | None = None, value: str 
                 else:
                     found = False
                     break
-            if not found or actual != parsed_value:
+            if not found or not guards.config_patch_applied(parsed_value, actual):
                 shown = (_redact_all(actual) if any(_secret_key(part) for part in parts) else redact_config(actual))
                 raise HermesConfigNotApplied(
                     f"Hermes accepted the write but '{key}' reads back as "

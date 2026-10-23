@@ -98,6 +98,35 @@ def config_key_denial(key: Any, secret_key: Any = None) -> str | None:
     return None
 
 
+def config_value_denial(key: str, value: Any, secret_key: Any = None) -> str | None:
+    """Apply the same path policy to every descendant, including objects in lists."""
+    denial = config_key_denial(key, secret_key)
+    if denial:
+        return denial
+    if isinstance(value, dict):
+        for child, item in value.items():
+            denial = config_value_denial(f"{key}.{child}", item, secret_key)
+            if denial:
+                return denial
+    elif isinstance(value, list):
+        for item in value:
+            denial = config_value_denial(key, item, secret_key)
+            if denial:
+                return denial
+    return None
+
+
+def config_patch_applied(requested: Any, actual: Any) -> bool:
+    """Hermes deep-merges objects; untouched siblings are not failed writes."""
+    if isinstance(requested, dict):
+        return isinstance(actual, dict) and all(
+            key in actual and config_patch_applied(value, actual[key])
+            for key, value in requested.items()
+        )
+    # Arrays and scalar values are replaced, rather than merged.
+    return type(actual) is type(requested) and actual == requested
+
+
 def clean_config_key(key: str) -> str:
     """實際送給 Hermes 的鍵：NFKC＋strip（大小寫保留）。只在 config_key_denial() 回 None 之後使用。"""
     return unicodedata.normalize("NFKC", key).strip()
