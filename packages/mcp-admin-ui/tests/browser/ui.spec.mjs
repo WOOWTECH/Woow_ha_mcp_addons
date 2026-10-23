@@ -131,7 +131,7 @@ test('MOCK denied bootstrap and denied save show truthful permission failure, no
   await reset(request, { deniedBootstrap: true });
   await start(page);
   await expect(page.getByRole('heading', { name: '管理介面無法使用' })).toBeVisible();
-  await expect(page.getByText('此頁只接受 Home Assistant', { exact: false })).toBeVisible();
+  await expect(page.getByText('請從原服務入口確認你的管理權限，再重新開啟此頁。')).toBeVisible();
   await expect(page.locator('form')).toHaveCount(0);
   await reset(request, { deniedSave: true });
   await start(page, '/backend');
@@ -253,7 +253,7 @@ test('MOCK a new install shows every write allowed with a risk note; unticking o
   // What a new state holds since 2026-10-15: the legacy switch and every exact grant on.
   await reset(request, { legacyWrites: true, grants: ['write_example', 'mixed_example:create', 'mixed_example:delete'] });
   await start(page, '/tools');
-  await expect(page.getByText('預設開啟所有工具與寫入（新安裝，以及從 0.1.x 升級時一次）：MCP 用戶端（例如 AI 助理）可直接新增、修改或刪除後端資料', { exact: false })).toBeVisible();
+  await expect(page.getByText('目前已儲存政策：停用 0 個工具，允許 3 / 3 項寫入授權。')).toBeVisible();
   for (const label of ['明確允許此工具寫入', '允許寫入操作：create', '允許寫入操作：delete']) await expect(page.getByLabel(label, { exact: true })).toBeChecked();
   await page.getByLabel('允許寫入操作：delete', { exact: true }).uncheck();
   await page.getByRole('button', { name: '儲存工具權限' }).click();

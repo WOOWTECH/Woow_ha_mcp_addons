@@ -38,7 +38,14 @@ async def main():
             if mode=='dashboard-login': await _dashboard_login(os.environ['HERMES_DASHBOARD_URL'],'tester','DUMMY')
             elif mode=='dashboard-cookie':
                 async with _dashboard_client(os.environ['HERMES_DASHBOARD_URL'],'DUMMY-COOKIE') as c: await c.get('/api/status')
-            else: outcome = await hermes_inspect(target='capabilities')
+            else:
+                outcome = await hermes_inspect(target='capabilities')
+                # Inspection now reports partial failures as an MCP error result.
+                # Keep both the public error contract and zero-connect proof.
+                from mcp.types import CallToolResult
+                if isinstance(outcome, CallToolResult):
+                    assert outcome.isError is True
+                    outcome = '\n'.join(item.text for item in outcome.content if item.type == 'text')
         elif p=='opendesign':
             from opendesign_mcp_server.od_mcp_server import health
             health()

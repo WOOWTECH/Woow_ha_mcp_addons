@@ -14,6 +14,7 @@ import uvicorn
 
 from . import redact
 from .config import ConfigError
+from .capabilities import ManagementOptions
 from .gateway import make_apps
 from .ha_role import make_ha_admin_verifier
 from .health import HealthMonitor
@@ -54,6 +55,8 @@ async def run(args):
             admin, mcp = make_apps(store, TOOLS[args.product], child,
                                   verify_admin=make_ha_admin_verifier(),
                                   health=health.snapshot, backend_changed=backend_changed,
+                                  management=ManagementOptions(kind="ha-addon", authority="ha-admin"),
+                                  backend_check=getattr(health, "test_saved", None), restart_child=backend_changed, diagnostics=getattr(manager, "diagnostics", None),
                                   server_name='woow-mcp-' + args.product, instructions=INSTRUCTIONS.get(args.product),
                                   # 0.2.2: clients connect without a backend or a running child (Odoo Manage: unchanged)
                                   listing=listing(args.product) if args.product in FULL_PRODUCTS else None,

@@ -29,6 +29,13 @@ function reset(next = {}) {
     health: { management: 'alive', child: { state: 'not_started', transport_ready: false }, backend: next.offline ? 'unreachable' : 'unconfigured' },
   };
 }
+function capabilities() {
+  return {schema_version:1, deployment:{kind:config.fixed ? 'builtin' : 'ha-addon'}, product:{id:state.product,version:'test'},
+    admin:{authority:config.fixed ? 'paas-password' : 'ha-admin'}, backend:{mode:config.fixed?'fixed':'manual',can_edit:!config.fixed,can_test:true},
+    capabilities:{tool_schema:true,effective_tools:true,operation_policy:true,logs:true,restart_child:true,revoke_token:true},
+    tools:{catalog_count:3,policy_enabled_count:3,effective_count:config.offline?null:3,status:config.offline?'unknown':'observed',
+      items:Object.keys(state.tools).map(name=>({name,description:`Description for ${name}`,inputSchema:{type:'object',properties:{value:{type:'string'}}},schema_source:'child',policy_enabled:true,effective:config.offline?null:true}))}};
+}
 reset();
 const json = (response, status, value) => { response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); response.end(JSON.stringify(value)); };
 async function body(request) {
@@ -44,10 +51,12 @@ const server = http.createServer(async (request, response) => {
     if (path === '/__fixture/calls') return json(response, 200, calls);
     const mount = mounts.find(candidate => candidate === '' || path.startsWith(`${candidate}/`));
     const local = path.slice(mount.length);
+    if (local === '/api/capabilities') return json(response, 200, capabilities());
+    if (local === '/api/diagnostics') return json(response, 200, {logs:{entries:[{at:'2026-10-23',stream:'stderr',generation:1,text:'token=[REDACTED]'}],redacted:true,bytes:100,dropped:2}});
     if (local === '/api/bootstrap') {
       if (config.deniedBootstrap) return json(response, 403, { error: 'MOCK denied' });
       nonce++;
-      return json(response, 200, { ...state, base_path: mount, api_base: `${mount}/api`, csrf: config.missingCsrf ? null : `mock_fresh_csrf_value_${nonce}` });
+      return json(response, 200, { ...state, capabilities:capabilities(), base_path: mount, api_base: `${mount}/api`, csrf: config.missingCsrf ? null : `mock_fresh_csrf_value_${nonce}` });
     }
     if (local.startsWith('/api/')) {
       const operation = local.slice(5);
@@ -56,6 +65,8 @@ const server = http.createServer(async (request, response) => {
       calls.push({ operation, method: request.method, validCsrf, fields: Object.keys(payload ?? {}), ...(operation === 'policy' ? { policy: payload } : {}) });
       if (!validCsrf || config.deniedSave) return json(response, 403, { error: 'MOCK DENIED PRIVATE_CANARY_MUST_NOT_RENDER' });
       if (config.saveStatus) return json(response, config.saveStatus, { error: 'MOCK PRIVATE_CANARY_MUST_NOT_RENDER' });
+      if (operation === 'backend/test') return json(response,200,{tested_configuration:'saved',backend:'reachable',health:state.health});
+      if (operation === 'child/restart') return json(response,202,{accepted:true,apply_state:'pending'});
       if (operation.startsWith('token/')) {
         if (request.method !== 'POST' || payload !== null) return json(response, 400, { error: 'MOCK token contract' });
         if (operation === 'token/revoke') { state.token_active = false; response.writeHead(204); return response.end(); }
@@ -83,7 +94,7 @@ const server = http.createServer(async (request, response) => {
       response.writeHead(200, { 'Content-Type': types[extname(filename)] ?? 'application/octet-stream' });
       return response.end(await readFile(filename));
     }
-    if (!['/', '/overview', '/backend', '/tools', '/access'].includes(local)) return json(response, 404, {});
+    if (!['/', '/overview', '/backend', '/tools', '/access', '/diagnostics'].includes(local)) return json(response, 404, {});
     // Same validation required in production AFTER trusted HA role/prefix resolution.
     const html = (await readFile(`${dist}/index.html`, 'utf8')).replaceAll('__MCP_UI_BASE__', mountPath(mount));
     response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'", 'X-Content-Type-Options': 'nosniff' });

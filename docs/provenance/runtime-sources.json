@@ -1,11 +1,11 @@
 [
   {
     "product": "hermes",
-    "source": "local:614ae663fadd91c76972f60017a76d2627bea87e",
+    "source": "woow-mcp-server:5526e8658a8046253a0b324825a12222096fa858+feat/mcp-parity-20261023",
     "path": "hermes_mcp_server/server.py",
-    "upstream_sha256": "e1c3f7be4de0302fafb85848641d89a43e83565afa844da9f813f10a718c25a6",
-    "local_sha256": "c8b441d8c23ffb194e02c3e74ee1a737e7a1dfe299539b59793d950ad94ba957",
-    "modification": "Use scoped DNS-pinned HTTPX transport for gateway, dashboard login and cookie clients; deny redirects/proxies. Inspect exception fields carry backend_error_text (class code and the backend's own text, 0.2.0); explicit safe error boundaries (backend_errors) on every other handler, including late decoding/JSON failures, preserving signatures and successful output. 0.2.0: the W2b session/cron metadata projections are gone (upstream's own list output again); hermes_mcp, hermes_config, hermes_chat and hermes_webhook got the same error boundary. 0.2.2 (test VM 2026-10-16, G1): config reads redact backend-held credentials. redact_config replaces every non-empty value under a secret key (a word in SECRET_WORDS, or a last word in SECRET_LAST_WORDS: api_key, *_TOKEN, basic_auth; not max_tokens) with [REDACTED], nested objects and lists included, keeps field names, empty strings, null and booleans, and the password of a URL's userinfo; hermes_config get (whole config, or a key path: a secret part hides the whole value) and hermes_inspect's config_summary use it. Writes (set) unchanged. 0.2.2 (test VM 2026-10-16, G2): hermes_chat's POST /v1/responses may take CHAT_TIMEOUT (HERMES_MCP_CHAT_TIMEOUT, 1-3600 s, default 300; connect 30 s); _gateway_client takes the timeout, every other Gateway/Dashboard call keeps 30 s."
+    "upstream_sha256": "46cd8637447ceb16545238bdf6e2fc122503b09a33c93ffa896f197e88ffcfc5",
+    "local_sha256": "f5698d9b85eb8392af6238c478a63a092aa86c9b5859be89e0a044f89d2692aa",
+    "modification": "PaaS functional parity: scoped HA async_client and stable backend errors retained; 300s chat budget; model scope/provider/expensive confirmation, dotted config writes with readback, session continuation, login single-flight/401 retry, guarded resource paths and config keys. HA MCP URL registration permits LAN destinations and checks metadata/address classes at registration; future outbound DNS is owned by Hermes. Chat timeout does not claim remote cancellation; incomplete final responses are errors."
   },
   {
     "product": "hermes",
@@ -340,5 +340,21 @@
     "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "LICENSE",
     "upstream_sha256": "1b05bfafc14067beabe8885c164528c122ebf545eabe97984b222fe377143a69"
+  },
+  {
+    "product": "hermes",
+    "path": "hermes_mcp_server/guards.py",
+    "source": "woow-mcp-server:5526e8658a8046253a0b324825a12222096fa858+feat/mcp-parity-20261023",
+    "upstream_sha256": "28a9c35aabf86d284d53bdac9b8397e0e8ed5fa5918e3c917294176dd94734cf",
+    "local_sha256": "23eafea5098eaa117413f1732df1b2c8ebadc81a2d85d8d46d3acd6692d7009e",
+    "modification": "PaaS functional parity: scoped HA async_client and stable backend errors retained; 300s chat budget; model scope/provider/expensive confirmation, dotted config writes with readback, session continuation, login single-flight/401 retry, guarded resource paths and config keys. HA MCP URL registration permits LAN destinations and checks metadata/address classes at registration; future outbound DNS is owned by Hermes. Chat timeout does not claim remote cancellation; incomplete final responses are errors."
+  },
+  {
+    "product": "hermes",
+    "path": "hermes_mcp_server/errors.py",
+    "source": "woow-mcp-server:5526e8658a8046253a0b324825a12222096fa858+feat/mcp-parity-20261023",
+    "upstream_sha256": "fc9fae57953e55c5da14d90f95d63e40a0cad1cd57f7be5be6d7a7732b8de6be",
+    "local_sha256": "fc9fae57953e55c5da14d90f95d63e40a0cad1cd57f7be5be6d7a7732b8de6be",
+    "modification": "PaaS functional parity: scoped HA async_client and stable backend errors retained; 300s chat budget; model scope/provider/expensive confirmation, dotted config writes with readback, session continuation, login single-flight/401 retry, guarded resource paths and config keys. HA MCP URL registration permits LAN destinations and checks metadata/address classes at registration; future outbound DNS is owned by Hermes. Chat timeout does not claim remote cancellation; incomplete final responses are errors."
   }
 ]

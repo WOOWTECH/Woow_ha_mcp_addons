@@ -74,9 +74,10 @@ async def test_config_reads_never_return_backend_held_credentials(tmp_path):
             assert (await get({'action': 'get', 'key': 'max_tokens'}))['value'] == 4096
             summary = await client.post('/mcp', headers=headers, json=call('hermes_inspect', {'target': 'config'}))
             assert text_of(summary)['config_summary'] == {'model': CONFIG['model'], 'toolsets': ['web'], 'max_live_sessions': 4}
-            # Writes are unchanged: the value goes to Hermes as given and the reply echoes it.
+            # Credential writes use the service settings, matching the PaaS guard; no credential echoes.
             written = await client.post('/mcp', headers=headers, json=call('hermes_config', {
                 'action': 'set', 'key': 'model.api_key', 'value': 'new-held-key'}))
             assert written.status_code == 200, written.text
-            assert text_of(written) == {'ok': True, 'key': 'model.api_key', 'value': 'new-held-key'}
-            assert writes == [{'config': {'model.api_key': 'new-held-key'}}]
+            assert 'cannot be changed through MCP' in written.text
+            assert 'new-held-key' not in written.text
+            assert writes == []
