@@ -1,0 +1,21 @@
+name: Release train
+
+# woow release train: compare this repository's upstream version pins with the version manifest
+# shared by HA and the WOOW PaaS (Gitea woow-paas/woow-release-train, public mirror
+# WOOWTECH/woow-release-train). What fails is decided by the manifest's `enforcement`, not here.
+# Compared: the upstream of each MCP child (n8n-mcp, odoo-mcp, the vendored Woow MCP servers) and the
+# Python mcp SDK pins. In phase 3 these products have no hard rules, so findings are warnings.
+
+on:
+  push:
+    branches: [claude-delivery]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Release train
+    uses: WOOWTECH/woow-release-train/.github/workflows/wvt-check.yml@main
