@@ -346,8 +346,8 @@
     "path": "hermes_mcp_server/guards.py",
     "source": "woow-mcp-server:5526e8658a8046253a0b324825a12222096fa858+feat/mcp-parity-20261023",
     "upstream_sha256": "28a9c35aabf86d284d53bdac9b8397e0e8ed5fa5918e3c917294176dd94734cf",
-    "local_sha256": "267d050d8591147d2f2762adae38cc380c458c64f1805c618b23801e20a36d6d",
-    "modification": "PaaS functional parity: scoped HA async_client and stable backend errors retained; 300s chat budget; model scope/provider/expensive confirmation, dotted config writes with readback, session continuation, login single-flight/401 retry, guarded resource paths and config keys. HA MCP URL registration permits LAN destinations and checks metadata/address classes at registration; future outbound DNS is owned by Hermes. Chat timeout does not claim remote cancellation; incomplete final responses are errors. Parent-object writes recursively enforce credential path restrictions; readback verifies deep-merged requested leaves. JSON text, objects and arrays are accepted without SDK preparse failures."
+    "local_sha256": "1deed97bc324f6ced6b3c9bcb6a1fc582dd61630850017ce8419f20e28d9c978",
+    "modification": "PaaS functional parity: scoped HA async_client and stable backend errors retained; 300s chat budget; model scope/provider/expensive confirmation, dotted config writes with readback, session continuation, login single-flight/401 retry, guarded resource paths and config keys. HA MCP URL registration permits LAN destinations and checks metadata/address classes at registration; future outbound DNS is owned by Hermes. Chat timeout does not claim remote cancellation; incomplete final responses are errors. Parent-object writes recursively enforce credential path restrictions; readback verifies deep-merged requested leaves. JSON text, objects and arrays are accepted without SDK preparse failures. Credential checks preserve camel-case boundaries; array replacement readback compares recursive scalar types and complete dictionary keys."
   },
   {
     "product": "hermes",

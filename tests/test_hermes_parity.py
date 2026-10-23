@@ -108,6 +108,16 @@ async def test_real_child_config_parent_guard_and_deep_merge(tmp_path):
                     reply = await config(key='webhooks.signing', value=json.dumps(value), dry_run=dry_run)
                     assert 'denied' in result_text(reply)
                     assert 'CANARY-denied-secret' not in result_text(reply)
+            for name in ('clientSecret', 'accessToken'):
+                for dry_run in (False, True):
+                    for key, value in [
+                        ('webhooks.signing.' + name, 'CANARY-camel-secret'),
+                        ('webhooks.signing', {'items': [{name: 'CANARY-camel-secret'}]}),
+                        ('webhooks.signing', json.dumps({'items': [{name: 'CANARY-camel-secret'}]})),
+                    ]:
+                        reply = await config(key=key, value=value, dry_run=dry_run)
+                        assert 'denied' in result_text(reply)
+                        assert 'CANARY-camel-secret' not in result_text(reply)
             assert not any(path == '/api/config' for path, _ in state['requests'])
             reply = await config(key='display', value='{"compact":true}')
             assert not reply.get('isError') and json.loads(result_text(reply))['ok']
@@ -115,3 +125,11 @@ async def test_real_child_config_parent_guard_and_deep_merge(tmp_path):
             state['ignore_write'] = True
             reply = await config(key='display', value='{"compact":false}')
             assert reply['isError'] is True
+            for requested, actual in [
+                ([True], [1]),
+                ([{'enabled': True}], [{'enabled': 1}]),
+                ([{'enabled': True}], [{'enabled': True, 'extra': 1}]),
+            ]:
+                state['config']['display']['flags'] = actual
+                reply = await config(key='display', value={'flags': requested})
+                assert reply['isError'] is True

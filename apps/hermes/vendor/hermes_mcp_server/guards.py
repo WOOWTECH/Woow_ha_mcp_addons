@@ -74,9 +74,13 @@ _KEY_SEGMENT = re.compile(r"[a-z0-9_-]+")
 
 def normalize_config_key(key: str) -> str:
     """比對用：NFKC（全形→半形）、去掉格式字元（零寬空白、soft hyphen）、strip、casefold。"""
+    return _normalized_key_spelling(key).casefold()
+
+
+def _normalized_key_spelling(key: str) -> str:
+    # Keep camel-case boundaries for the credential-name detector.
     text = unicodedata.normalize("NFKC", key)
-    text = "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
-    return text.strip().casefold()
+    return "".join(ch for ch in text if unicodedata.category(ch) != "Cf").strip()
 
 
 def config_key_denial(key: Any, secret_key: Any = None) -> str | None:
@@ -93,7 +97,7 @@ def config_key_denial(key: Any, secret_key: Any = None) -> str | None:
         # 本身或子鍵（terminal.backend）被擋；祖先（寫父鍵會把整棵子樹換掉）也被擋。
         if parts[: len(d_parts)] == d_parts or d_parts[: len(parts)] == parts:
             return f"'{denied}' and the keys under it cannot be changed through MCP"
-    if secret_key is not None and any(secret_key(part) for part in parts):
+    if secret_key is not None and any(secret_key(part) for part in _normalized_key_spelling(key).split(".")):
         return "credential keys cannot be changed through MCP"
     return None
 
@@ -124,7 +128,21 @@ def config_patch_applied(requested: Any, actual: Any) -> bool:
             for key, value in requested.items()
         )
     # Arrays and scalar values are replaced, rather than merged.
-    return type(actual) is type(requested) and actual == requested
+    return _exact_config_value(requested, actual)
+
+
+def _exact_config_value(requested: Any, actual: Any) -> bool:
+    if type(actual) is not type(requested):
+        return False
+    if isinstance(requested, dict):
+        return requested.keys() == actual.keys() and all(
+            _exact_config_value(value, actual[key]) for key, value in requested.items()
+        )
+    if isinstance(requested, list):
+        return len(requested) == len(actual) and all(
+            _exact_config_value(value, observed) for value, observed in zip(requested, actual)
+        )
+    return actual == requested
 
 
 def clean_config_key(key: str) -> str:
