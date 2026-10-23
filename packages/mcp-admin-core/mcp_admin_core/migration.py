@@ -312,17 +312,24 @@ def apply_migration(directory, product, *, policy, expected_sha256):
     or existing recovery record is refused, never overwritten.
     """
     with _existing_writer(directory) as writer:
-        value = read_document(writer.path)
-        plan = plan_migration(value, product, policy=policy)
-        if plan.report['source_sha256'] != expected_sha256:
-            raise MigrationError('state changed since preview; run preview again')
-        if plan.recovery is not None:
-            save_recovery(writer.directory / 'migration-policy-recovery.json', plan)
-            try:
-                writer._write(plan.state)
-            except ConfigError:
-                raise MigrationError('durable migration write failed; recovery record retained; inspect state') from None
-        return plan.report
+        return apply_migration_locked(writer, product, policy=policy, expected_sha256=expected_sha256)
+
+
+def apply_migration_locked(writer, product, *, policy, expected_sha256):
+    """Apply under the existing writer's lock, shared by CLI and startup review."""
+    if writer._lock_fd is None or writer._poisoned:
+        raise MigrationError('migration writer unavailable')
+    value = read_document(writer.path)
+    plan = plan_migration(value, product, policy=policy)
+    if plan.report['source_sha256'] != expected_sha256:
+        raise MigrationError('state changed since preview; run preview again')
+    if plan.recovery is not None:
+        save_recovery(writer.directory / 'migration-policy-recovery.json', plan)
+        try:
+            writer._write(plan.state)
+        except ConfigError:
+            raise MigrationError('durable migration write failed; recovery record retained; inspect state') from None
+    return plan.report
 
 
 def apply_restore(directory, product, recovery_path, *, expected_sha256):

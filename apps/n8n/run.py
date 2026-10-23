@@ -33,6 +33,9 @@ class Listener(uvicorn.Server):
 
 
 async def run(args):
+    from mcp_admin_core.upgrade import run_upgrade_review
+    if not await run_upgrade_review(args, 'n8n'):
+        return
     store = ProductStore(args.data, 'n8n')
     manager = Supervisor(child_spec(store.load(), store.directory))
     stop = asyncio.Event()

@@ -1,16 +1,19 @@
 # Offline legacy permission migration
 
-The existing add-on startup still uses its established all-on migration. It does
-not import or invoke this CLI. The tool requires an explicit `preserve` or
-`all_on` choice; invocation without `--apply` is a read-only dry run. It never
-starts a backend or an MCP child.
+The candidate runtime detects schema 1/2/3 before constructing ProductStore or
+starting a child. It serves an authenticated Home Assistant Ingress upgrade
+review instead. Open the add-on panel, review the policy changes, choose
+`all_on` (selected by default) or `preserve`, then confirm. MCP remains unavailable
+until the durable migration succeeds and normal startup begins. This changes
+legacy-upgrade startup timing: unattended legacy upgrades now wait for an admin.
+New installations and existing schema 4 start normally.
 
-Run the candidate tool **after stopping the runtime and before upgrading/starting
-the new add-on normally**. Normal startup can otherwise consume schema 1/2/3 and
-replace the old policy before it is previewed. The installed 0.1.14 image does
-not contain this new tool. Use the candidate Python environment or candidate
-image with its normal entrypoint overridden, against the stopped data directory,
-as the runtime owner (production uid/gid 10001). An active writer is refused.
+The offline CLI remains available for planned maintenance. Run it after stopping
+the runtime, as its state owner (production uid/gid 10001). Invocation without
+`--apply` is a read-only dry run and never starts a child. Older published images
+do not contain this candidate workflow; use the candidate environment for this
+tool. Existing writers, including a running upgrade-review screen, refuse CLI
+apply. Close/stop the runtime before offline recovery.
 
 ## Preview and explicit apply
 
@@ -61,8 +64,9 @@ flag adds only n8n `n8n_delete_workflow` or OpenDesign `delete_project`; disable
 tools remain disabled even if their grant is saved. Other writes never inherit
 that flag. New tool names, including new reads and unclassified tools, are
 disabled; new write operations remain ungranted. Hermes `hermes_session` and n8n
-`n8n_executions` gain a `get` read operation that cannot be separately disabled in
-schema 4, so preserve disables those whole tools pending review. The report
+`n8n_executions` gain a `get` read operation. Although the new management UI supports operation denies,
+preserve still disables these tools pending review because their argument
+validation also expanded. The report
 identifies this reduction in access.
 
 | Product | Old/current tools | New tool names | New write grants/operations |

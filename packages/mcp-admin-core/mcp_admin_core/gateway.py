@@ -33,7 +33,7 @@ from . import redact, ui
 from . import VERSION
 from .config import ConfigError, State, Store, strict_json
 from .policy import Denied, ToolCallRefused, UnknownMethod, authorize, filter_list
-from .ha_role import valid_user_id
+from .admin_auth import AdminAuthority, BadRequest, prefix
 from .capabilities import ManagementOptions, capability_snapshot, observe_tools, tool_catalog
 
 # 0.2.0: 16 MiB (was 256 KiB). The full Nextcloud surface uploads up to 10 MiB as base64 (about 13.4 MiB of JSON) and
@@ -232,11 +232,6 @@ class AnyMethod:
         await self.app(scope, receive, send)
 
 
-class BadRequest(Exception):
-    def __init__(self, status=400):
-        self.status = status
-
-
 async def body(request: Request):
     content = bytearray()
     try:
@@ -262,16 +257,6 @@ async def json_body(request):
         return value
     except (ValueError, RecursionError):  # UnicodeEncodeError is a ValueError
         raise BadRequest() from None
-
-
-def prefix(request):
-    values = request.headers.getlist("x-ingress-path")
-    if len(values) > 1:
-        raise BadRequest()
-    value = values[0] if values else ""
-    if value and (not re.fullmatch(r"(?:/[A-Za-z0-9_-]+)+", value) or len(value) > 512):
-        raise BadRequest()
-    return value
 
 
 def token_valid(request, state):
@@ -331,7 +316,6 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             return {"child": "running", "ready": True, "backend": "unknown", "reason": None}
     local_sessions = OrderedDict()  # 0.2.2: session id -> last use (time.monotonic())
     redact.install()  # 0.1.12: a request path may now carry the token; no log record may show it
-    csrf_key = secrets.token_bytes(32)
     mutation_lock = asyncio.Lock()
     slots = asyncio.Semaphore(32)
     admin_slots = asyncio.Semaphore(16)
@@ -343,32 +327,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         return capability_snapshot(management, state, snapshot(), catalog, can_test=backend_check is not None,
                                    can_restart=restart_child is not None, logs=diagnostics is not None)
 
-    def admin_identity(request):
-        # Uvicorn MUST have proxy_headers=False; request.client is the socket peer.
-        if not request.client or request.client.host != "172.30.32.2" or verify_admin is None:
-            raise BadRequest(403)
-        identities = request.headers.getlist("x-remote-user-id")
-        if len(identities) != 1 or not valid_user_id(identities[0]):
-            raise BadRequest(403)
-        user = identities[0]
-        base = prefix(request)
-        csrf = hmac.new(csrf_key, (user + "\0" + base).encode(), hashlib.sha256).hexdigest()
-        if request.method not in ("GET", "HEAD"):
-            values = request.headers.getlist("x-csrf-token")
-            if len(values) != 1 or not hmac.compare_digest(values[0].encode(), csrf.encode()):
-                raise BadRequest(403)
-            if request.headers.get("sec-fetch-site") == "cross-site":
-                raise BadRequest(403)
-        return user, base, csrf
-
-    async def final_role(user):
-        try:
-            async with asyncio.timeout(3):
-                allowed = await verify_admin(user)
-        except Exception:
-            allowed = False
-        if allowed is not True:
-            raise BadRequest(403)
+    authority = AdminAuthority(verify_admin)
+    admin_identity = authority.identity
+    final_role = authority.verify
 
     async def admin_action(request, user, base, csrf, value, peer_disconnected, committed):
         name = request.path_params["operation"]

@@ -30,6 +30,9 @@ class Listener(uvicorn.Server):
 
 
 async def run(args):
+    from .upgrade import run_upgrade_review
+    if not await run_upgrade_review(args, args.product):
+        return
     store = ProductStore(args.data, args.product)
     manager = None
     loop = asyncio.get_running_loop()
