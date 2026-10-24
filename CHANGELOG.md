@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.3.2 — release candidate (2026-10-24)
+
+This candidate integrates a bounded n8n authorization correction in the shared
+runtime. Exact-source freeze/CI remain pending, followed by fresh six-image
+container/supply-chain gates and publication. See the
+[0.3.2 release decision](docs/operations/release-decision-0.3.2.md).
+Published 0.3.1 images and their evidence remain unchanged.
+
+- All 28 n8n tools normalize the pinned child's one-level eligible `output` JSON
+  wrapper before checking operation denies/grants and forwarding the same
+  effective arguments. This closes outer-read/inner-write overrides for all six
+  mixed selectors. A second eligible wrapper is refused as ambiguous; repeated
+  authorization is idempotent, with existing input budgets applied first.
+- A workflow-history read with effective `exposeToMcp=true` can also change the
+  workflow's MCP exposure setting. The correction requires the existing
+  `n8n_update_partial_workflow` tool to be enabled with its effective write grant,
+  in addition to the invoking tool/mode's own permission, before child dispatch.
+  The same dependency applies to `n8n_test_workflow` exposure requests.
+- Revoking or disabling the updater must prevent this indirect write, including
+  the pinned child's accepted boolean and output-wrapper representations.
+  Requests without exposure retain their existing read behavior; full-policy
+  users retain exposure functionality. No new write grant is introduced.
+- Additive `conditional_writes` capability metadata names the exposure parameter,
+  existing updater dependency and its effective policy state. Existing UI grant
+  controls remain sufficient; no UI source or new persisted permission is added.
+- The n8n contract remains 28 tools and 33 write grants. Schema 4, saved tokens,
+  dependencies, child versions and UI source are unchanged by this correction.
+  Fresh installs retain maximum functionality. Existing schema 1/2/3 upgrades
+  retain authenticated prestart review with `all_on` preselected and explicit
+  administrator confirmation; current-schema startup remains unchanged.
+
+All six enabled products advance together under the shared-core version
+contract. OpenDesign receives source metadata only and remains unpublished.
+No option, port, architecture, image name or privilege change is planned.
+Existing state needs no migration, but downgrading the binary restores the
+conditional-write defect. Preserve a backup and current token/policy state.
+The planned official Hermes test upgrades 0.3.0 directly to 0.3.2 with a fresh
+backup; no official 0.3.1 HAOS upgrade is claimed.
+
 ## 0.3.1 — release candidate (2026-10-24)
 
 Six enabled add-ons share the runtime and UI fixes below. OpenDesign remains

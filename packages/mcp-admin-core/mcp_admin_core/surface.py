@@ -2,7 +2,8 @@
 original MCP servers and the PaaS woow-mcp-server; every tool open, every write on by default).
 
 Every tool a child registers is listed and forwarded: its name, the child's own inputSchema (made provider-safe by
-policy.flat_schema) and the arguments unchanged; the child validates them. What the gateway still decides per tool:
+policy.flat_schema); the child validates arguments. n8n's reviewed output wrappers are normalized before policy
+and forwarding. What the gateway still decides per tool:
 
 - the name must be one of this product's child tools below (a tool a child adds after an upgrade stays unlisted and
   refused until it is classified here; tests/test_full_surface.py compares these names with the pinned sources);
@@ -111,16 +112,20 @@ def full_tools(product):
     tools = {}
     for effect, members in groups.items():
         for name in members:
+            exposure = ('n8n_update_partial_workflow' if product == 'n8n' and
+                        name in ('n8n_workflow_versions', 'n8n_test_workflow') else None)
             if effect == 'mixed':
                 selector, values = SELECTORS[name]
                 reads = tuple(v for v in values.split() if v in OPERATION_READS[name])
                 writes = tuple(v for v in values.split() if v not in OPERATION_READS[name])
                 tool = Tool(ChildArguments, selector=selector, write_operations=writes, read_operations=reads,
                             default_operation=DEFAULT_OPERATIONS.get(name), child_schema=True,
-                            requires_backend=name not in free)
+                            requires_backend=name not in free, exposure_write_tool=exposure,
+                            n8n_arguments=product == 'n8n')
             else:
                 tool = Tool(ChildArguments, write=effect in ('write', 'unverified'), child_schema=True,
-                            requires_backend=name not in free)
+                            requires_backend=name not in free, exposure_write_tool=exposure,
+                            n8n_arguments=product == 'n8n')
             tools[name] = tool
     return dict(sorted(tools.items()))
 

@@ -191,12 +191,17 @@ class Tool:
     # Opt-in only: local tools and previously reviewed API behavior stay intact.
     requires_backend: bool = False
     backend_required_operations: tuple[str, ...] = ()
-    # 0.2.0 (full surface, surface.full_tools): the child validates the arguments (forwarded unchanged) and tools/list
+    # 0.2.0 (full surface, surface.full_tools): the child validates arguments and tools/list
     # shows the child's own inputSchema. read_operations are the selector values that only read; default_operation is
     # the source's default (a read) when the selector is omitted, None when the child requires it.
     child_schema: bool = False
     read_operations: tuple[str, ...] = ()
     default_operation: str | None = None
+    # n8n's pinned child may replace the entire argument object from output JSON.
+    n8n_arguments: bool = False
+    # n8n's exposeToMcp flag can update a workflow while executing a read mode.
+    # Reuse the existing updater permission; this adds no persisted grant.
+    exposure_write_tool: str | None = None
 
     def __post_init__(self):
         operations = self.operations
@@ -270,7 +275,7 @@ def authorize(message, tools: Mapping[str, Tool], state: State) -> str:
     """Authorize, replacing tool arguments with the reviewed model's wire values.
 
     Defaults and field-specific omission rules are applied before dispatch;
-    repeated authorization is idempotent. Invalid calls are never normalized.
+    repeated authorization is idempotent. Only authorized calls may be dispatched.
     """
     if not isinstance(message, dict) or set(message) - {"jsonrpc", "id", "method", "params"}:
         raise Denied("single JSON-RPC request required")
@@ -313,7 +318,7 @@ def authorize(message, tools: Mapping[str, Tool], state: State) -> str:
         if not enabled(name, tools, state):
             raise ToolCallRefused("unknown_tool", name)
         if tools[name].child_schema:
-            child_call(name, tools[name], params, state)
+            child_call(name, tools[name], params, state, tools)
             return method
         model = tools[name].arguments
         try:
@@ -336,13 +341,30 @@ def authorize(message, tools: Mapping[str, Tool], state: State) -> str:
     return method
 
 
-def child_call(name, tool, params, state):
-    """0.2.0: a full-surface tool. The arguments must be a JSON object (or absent) and are forwarded unchanged: the
-    child validates them and answers its own errors. Only the operation grants of a mixed tool are checked here."""
+def child_call(name, tool, params, state, tools):
+    """A full-surface tool's child validates arguments and answers its own errors.
+
+    Arguments must be a JSON object (or absent). n8n calls first
+    normalize their reviewed wrapper/boolean forms, idempotently; other child
+    arguments are forwarded unchanged.
+    """
     arguments = params.get("arguments", {})
     if not isinstance(arguments, dict):
         raise ToolCallRefused("invalid_params", name, [{"field": "arguments", "message": "Input should be a valid dictionary",
                                                         "type": "dict_type"}])
+    if tool.n8n_arguments:
+        from .n8n_arguments import normalize
+        try:
+            arguments = normalize(name, arguments)
+        except ValueError:
+            raise ToolCallRefused('invalid_params', name, [{
+                'field': 'arguments', 'message': 'Use one unambiguous argument object',
+                'type': 'value_error'}]) from None
+        params['arguments'] = arguments
+    if (tool.exposure_write_tool and arguments.get('exposeToMcp') is True
+            and not policy_enabled(tool.exposure_write_tool, tools, state)):
+        raise ToolCallRefused('operation_not_permitted', name,
+            reason='exposeToMcp requires the enabled n8n_update_partial_workflow write grant')
     check_operation_denies(name, tool, arguments, state)
     if tool.write_operations:
         granted = getattr(state, "enabled_write_tools", ())

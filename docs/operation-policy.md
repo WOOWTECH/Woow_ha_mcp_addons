@@ -43,6 +43,27 @@ The UI edits read/write denies separately from write grants and preserves stale
 denies on unrelated saves. It displays stored grants even when an operation deny
 makes them ineffective. Clearing a deny does not create a missing grant.
 
+For n8n, `exposeToMcp=true` on `n8n_workflow_versions` or `n8n_test_workflow`
+can persistently enable a workflow's "Available in MCP" setting. It additionally
+requires the existing `n8n_update_partial_workflow` grant with that tool enabled
+and not denied. Normal history reads with exposure omitted/false remain available;
+the test-workflow tool still needs its own grant. Capabilities reports this as
+`conditional_writes`, without adding a grant or disabling the whole read tool.
+The existing UI write grant for `n8n_update_partial_workflow` controls this
+dependency; no new grant control or automatic grant is introduced.
+The legacy `writes_enabled` switch alone cannot authorize this write.
+
+For all 28 n8n tools, the gateway follows the pinned child's one-level JSON
+`output` extraction before checking operation grants/denies and forwarding the
+same effective arguments. This prevents an outer read selector from hiding an
+inner write selector. The two exposure tools also follow the child's trimmed
+`"true"`/`"false"` flag conversion. A second eligible output wrapper is refused
+as ambiguous. Authorization is idempotent; encoded request byte/element/depth
+limits still apply first.
+There are still 28 tools/33 write grants, and fresh all-on keeps all features.
+Schema 4, saved grants, tokens and backend fields are unchanged; no auto-grant or
+state migration occurs. Reverting the binary also reverts this security guard.
+
 Legacy schema-2/3 automatic `all_on` migration validates the original record before
 clearing disables and denies and reseeding grants; retired Odoo Manage retains its
 policy. Schema 1 has no deny field. The separate upgrade review gate and offline

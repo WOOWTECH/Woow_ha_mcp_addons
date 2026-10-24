@@ -1,5 +1,10 @@
 # OpenDesign Changelog
 
+## 0.3.2 — 不發佈（本產品維持下架）
+
+- 為七個保留產品的封裝版本契約同步 source metadata 至 0.3.2；OpenDesign 仍不建置映像、不發布 stable Release，也不重新啟用於 Store。
+- 本次 n8n 授權修正與六個啟用產品的驗收進度見 [0.3.2 發布候選紀錄](../../docs/operations/release-decision-0.3.2.md)；不新增本產品測試或發布成功的宣稱。
+
 ## 0.3.1 — 不發佈（本產品維持下架）
 
 - 只同步共用 core／manifest／Dockerfile 的版本 metadata；共用設定狀態、編輯衝突與 active-token 串流修正保留在原始碼中。
