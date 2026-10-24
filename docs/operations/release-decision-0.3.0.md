@@ -24,7 +24,9 @@ Runtime acceptance baseline: `3573535a118b5dca629c9192acb6a02b68634cce`.
 Release metadata advances the minor version because it adds permission controls
 and changes unattended legacy boot timing. Dependencies and runtime/UI logic
 remain those of the accepted baseline; only version/provenance/docs change for
-release preparation.
+release preparation. The container gate fixture now asserts pending legacy
+review and an explicit stopped-runtime CLI migration instead of expecting the
+old automatic boot migration; it does not bypass HA authentication.
 
 ## Defaults, upgrade and recovery
 
