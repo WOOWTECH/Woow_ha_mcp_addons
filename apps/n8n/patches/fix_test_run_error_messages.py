@@ -1,4 +1,9 @@
-"""Build-time patch of the pinned n8n-mcp 2.91.0: test-run errors keep n8n's own message.
+"""Build-time patch of the pinned n8n-mcp 2.96.2: test-run errors keep n8n's own message.
+
+0.3.4: n8n-mcp 2.91.0 -> 2.96.2. ``handleTestRunError`` and its OLD block below are unchanged upstream; the file around
+it changed (validation errors/warnings carry an optional ``code``, the health check reports ``checkStatus``, the HTTP
+debug text reads AUTH_TOKEN/AUTH_TOKEN_FILE), so PINNED and PATCHED are recomputed from n8n-mcp-2.96.2.tgz and the
+replacement itself is unchanged.
 
 Problem (test VM 2026-10-16)
 ----------------------------
@@ -25,8 +30,8 @@ from pathlib import Path
 import sys
 
 TARGET = Path(__file__).resolve().parents[1] / 'node_modules/n8n-mcp/dist/mcp/handlers-n8n-manager.js'
-PINNED = '0d99e10ec1eb9a6e4d78726636aa79f52eb4f3862be506785b794f1aeb9608cc'  # n8n-mcp 2.91.0 as published
-PATCHED = '5b8205754d24e8c6b2d001d4b04e6c0e408d5037215668a75049ce932d6d985d'  # the digest backend_policy.cjs checks
+PINNED = '6860193f1217c222c1ee1b1b08b7beb38847b85a182c36f2d8b8be7339cfad7b'  # n8n-mcp 2.96.2 as published
+PATCHED = '6cd673423e829902f3e56de66afe90f7e2196d7ef76cca02551a20eee03ae2eb'  # the digest backend_policy.cjs checks
 
 OLD = '''    if (error instanceof n8n_errors_1.N8nApiError) {
         if (error.statusCode === 402) {
@@ -92,7 +97,7 @@ def main(argv: list[str]) -> int:
         print(f'{target}: already patched')
         return 0
     if digest(source) != PINNED:
-        raise SystemExit(f'{target}: not the pinned n8n-mcp 2.91.0 file (sha256 {digest(source)}); review required')
+        raise SystemExit(f'{target}: not the pinned n8n-mcp 2.96.2 file (sha256 {digest(source)}); review required')
     result = patched(source)
     if digest(result) != PATCHED:
         raise SystemExit(f'{target}: patch result {digest(result)} is not the reviewed digest')

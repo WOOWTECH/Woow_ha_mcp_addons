@@ -1,5 +1,5 @@
 # Build from repository ROOT: docker build -f apps/litellm/Dockerfile .
-FROM node:22.23.2-bookworm-slim@sha256:43aeff40f4afc22e83f7589a2f37e111cff5ca84529571f1c8415bcc5fcc21b2 AS ui
+FROM node:22.23.4-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d AS ui
 WORKDIR /ui
 COPY packages/mcp-admin-ui/package.json packages/mcp-admin-ui/package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
@@ -17,7 +17,7 @@ RUN uv sync --frozen --no-dev --python /usr/local/bin/python
 COPY apps/litellm/pyproject.toml apps/litellm/uv.lock ./apps/litellm/
 RUN uv sync --project apps/litellm --frozen --no-dev --python /usr/local/bin/python
 FROM python:3.13.16-slim-bookworm@sha256:f040863673aea2570c3ff6a5c3fb4c673a016cbc5375005ad145915922b6b78a AS runtime
-ARG BUILD_VERSION=0.3.3
+ARG BUILD_VERSION=0.3.4
 LABEL io.hass.type="app" io.hass.arch="amd64" io.hass.version="${BUILD_VERSION}" \
       io.hass.name="Woow LiteLLM MCP Server" io.hass.description="Experimental; HA admin-role management; full tool surface; every tool and write on by default (each can be turned off in the panel)." \
       io.hass.url="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \

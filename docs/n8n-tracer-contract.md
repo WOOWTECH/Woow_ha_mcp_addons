@@ -250,7 +250,7 @@ relayed, every error is ignored and the id is never logged. The client's answer 
 | `n8n_delete_workflow` | No defaults; `id` is required and non-null. Writes remain disabled unless explicitly enabled. This repair tests writer normalization only with a mock, never a real delete. |
 
 The upstream workflow handler retains `excludePinnedData=true`; that option is not
-client-configurable in this tracer. Source references (installed n8n-mcp 2.91.0):
+client-configurable in this tracer. Source references (installed n8n-mcp 2.91.0; the same handlers in 2.96.2, 0.3.4):
 `dist/mcp/server.js` cases `tools_documentation` / `search_nodes` and
 `getToolsDocumentation`; `dist/mcp/handlers-n8n-manager.js` `listWorkflowsSchema` /
 `handleListWorkflows`. Real-child/fake-backend tests assert the actual GET query,
@@ -347,7 +347,7 @@ runtime, with a sanitized recovery message and nonzero exit, never a clean exit.
 `getPinnedAgents` method. The fixed launcher preloads it; an API-client source hash
 guard fails closed on package drift. It does not patch the global webhook SSRF
 validators. **0.2.1 (owner decision 2026-10-15):** the child runs with
-`WEBHOOK_SECURITY_MODE=permissive`, n8n-mcp 2.91.0's widest mode
+`WEBHOOK_SECURITY_MODE=permissive`, n8n-mcp 2.91.0's widest mode (in 2.96.2, 0.3.4, also four more cloud-metadata IPv6 addresses are refused)
 (`dist/utils/ssrf-protection.js`: permissive accepts every resolved address, private,
 ULA and loopback included; only the cloud metadata host names stay blocked), so
 `n8n_test_workflow` and the official-MCP calls can reach an n8n on the HA network

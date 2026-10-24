@@ -101,8 +101,8 @@ credentials 與 workflow 並執行、產生或刪除 LiteLLM API key 並呼叫�
 ## 映像／資料契約
 
 - 固定 Python **3.13.16** slim-bookworm，符合既有 `>=3.13,<3.14`；未宣稱
-  3.12 或 aarch64。核心 `.venv` 與 n8n 以外各支的 child `.venv` 分開，FastMCP 的
-  Starlette 1.7.0 不覆蓋核心 0.49.3。n8n 使用 Node **22.23.2**、npm lock、
+  3.12 或 aarch64。核心 `.venv` 與 n8n 以外各支的 child `.venv` 分開，child 的
+  Starlette 1.9.0 不覆蓋核心 1.3.1（0.3.4）。n8n 使用 Node **22.23.4**（0.3.4 起；n8n-mcp 2.96.2 要求）、npm lock、
   `npm ci --ignore-scripts`，保留 sql.js fallback；不下載 native addon/script。
 - Stock image 搭配 Supervisor `init: true`；不是 s6。映像啟動只有 bootstrap
   短暫 root，用 no-follow directory fd 建立**新的** `/data/mcp`，設定 10001:10001

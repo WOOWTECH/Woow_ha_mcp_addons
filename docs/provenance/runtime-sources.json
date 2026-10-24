@@ -1,11 +1,11 @@
 [
   {
     "product": "hermes",
-    "source": "woow-mcp-server:5526e8658a8046253a0b324825a12222096fa858+feat/mcp-parity-20261023",
+    "source": "woow-mcp-server:a5db051488e6656598a6d93a797fa513fe213db1",
     "path": "hermes_mcp_server/server.py",
-    "upstream_sha256": "46cd8637447ceb16545238bdf6e2fc122503b09a33c93ffa896f197e88ffcfc5",
+    "upstream_sha256": "46257acee37e1e900d97e11643f51e6c6fde4353bcee2407f6dd025ff8f21a9f",
     "local_sha256": "ba844e607f27eaa6f46b2fe346e77cb86eff247243320c470b57b290f83e99c6",
-    "modification": "PaaS functional parity: scoped HA async_client and stable backend errors retained; 300s chat budget; model scope/provider/expensive confirmation, dotted config writes with readback, session continuation, login single-flight/401 retry, guarded resource paths and config keys. HA MCP URL registration permits LAN destinations and checks metadata/address classes at registration; future outbound DNS is owned by Hermes. Chat timeout does not claim remote cancellation; incomplete final responses are errors. Parent-object writes recursively enforce credential path restrictions; readback verifies deep-merged requested leaves. JSON text, objects and arrays are accepted without SDK preparse failures."
+    "modification": "0.3.4: re-snapshot of woow-mcp-server main a5db051 (server.py last changed upstream in c4c1e69, guards.py in fe6b0e3; 0.3.0 vendored 29c383f plus those same two changes, so the vendored files did not change). Upstream features now included: model scope/provider/expensive confirmation, dotted and parent-object config writes with credential path checks on every descendant (camel-case names kept), deep-merge/exact-array readback, JSON text/object/array values, session continuation, truthful incomplete/timeout chat results, login single-flight/429 back-off and 401 relogin, guarded resource ids and config keys. HA changes kept: every HTTP client (gateway, login, dashboard) is backend_policy.async_client (DNS-pinned configured destination); tools raise the stable HA backend error codes (backend_errors/backend_error_text) instead of errors.describe; hermes_chat waits CHAT_TIMEOUT 300 s (PaaS 90 s; the HA gateway allows 330 s), which does not claim remote cancellation."
   },
   {
     "product": "hermes",
@@ -344,17 +344,17 @@
   {
     "product": "hermes",
     "path": "hermes_mcp_server/guards.py",
-    "source": "woow-mcp-server:5526e8658a8046253a0b324825a12222096fa858+feat/mcp-parity-20261023",
-    "upstream_sha256": "28a9c35aabf86d284d53bdac9b8397e0e8ed5fa5918e3c917294176dd94734cf",
-    "local_sha256": "1deed97bc324f6ced6b3c9bcb6a1fc582dd61630850017ce8419f20e28d9c978",
-    "modification": "PaaS functional parity: scoped HA async_client and stable backend errors retained; 300s chat budget; model scope/provider/expensive confirmation, dotted config writes with readback, session continuation, login single-flight/401 retry, guarded resource paths and config keys. HA MCP URL registration permits LAN destinations and checks metadata/address classes at registration; future outbound DNS is owned by Hermes. Chat timeout does not claim remote cancellation; incomplete final responses are errors. Parent-object writes recursively enforce credential path restrictions; readback verifies deep-merged requested leaves. JSON text, objects and arrays are accepted without SDK preparse failures. Credential checks preserve camel-case boundaries; array replacement readback compares recursive scalar types and complete dictionary keys."
+    "source": "woow-mcp-server:a5db051488e6656598a6d93a797fa513fe213db1",
+    "upstream_sha256": "f0f37d340546edb8584b06e4136486f05e3cccf55e399b1e77440dd4d9f17809",
+    "local_sha256": "e7345d0a12c9aeaa2f29c05a28a4a1262e42168bc5ab5e853c984a06025acfa8",
+    "modification": "0.3.4: re-snapshot of woow-mcp-server main a5db051 (server.py last changed upstream in c4c1e69, guards.py in fe6b0e3; 0.3.0 vendored 29c383f plus those same two changes, so the vendored files did not change). Upstream features now included: model scope/provider/expensive confirmation, dotted and parent-object config writes with credential path checks on every descendant (camel-case names kept), deep-merge/exact-array readback, JSON text/object/array values, session continuation, truthful incomplete/timeout chat results, login single-flight/429 back-off and 401 relogin, guarded resource ids and config keys. HA changes kept: MCP server registration validates the destination with backend_policy (Destination and the resolver address classes) instead of the PaaS strict SSRF check, so LAN destinations are allowed while metadata names/addresses, link-local, 0.0.0.0, userinfo and non-http(s) are refused; future outbound DNS is owned by Hermes. 0.3.4 (AI-HMCP-002-2): registration also refuses localhost names (localhost, *.localhost, localhost.localdomain) and any loopback answer (127.0.0.0/8, ::1, IPv4-mapped loopback), which backend_policy permits for the add-on's own backends; tests/test_hermes_mcp_url_guard.py."
   },
   {
     "product": "hermes",
     "path": "hermes_mcp_server/errors.py",
-    "source": "woow-mcp-server:5526e8658a8046253a0b324825a12222096fa858+feat/mcp-parity-20261023",
+    "source": "woow-mcp-server:a5db051488e6656598a6d93a797fa513fe213db1",
     "upstream_sha256": "fc9fae57953e55c5da14d90f95d63e40a0cad1cd57f7be5be6d7a7732b8de6be",
     "local_sha256": "fc9fae57953e55c5da14d90f95d63e40a0cad1cd57f7be5be6d7a7732b8de6be",
-    "modification": "PaaS functional parity: scoped HA async_client and stable backend errors retained; 300s chat budget; model scope/provider/expensive confirmation, dotted config writes with readback, session continuation, login single-flight/401 retry, guarded resource paths and config keys. HA MCP URL registration permits LAN destinations and checks metadata/address classes at registration; future outbound DNS is owned by Hermes. Chat timeout does not claim remote cancellation; incomplete final responses are errors. Parent-object writes recursively enforce credential path restrictions; readback verifies deep-merged requested leaves. JSON text, objects and arrays are accepted without SDK preparse failures."
+    "modification": "0.3.4: re-snapshot of woow-mcp-server main a5db051 (server.py last changed upstream in c4c1e69, guards.py in fe6b0e3; 0.3.0 vendored 29c383f plus those same two changes, so the vendored files did not change). Upstream features now included: model scope/provider/expensive confirmation, dotted and parent-object config writes with credential path checks on every descendant (camel-case names kept), deep-merge/exact-array readback, JSON text/object/array values, session continuation, truthful incomplete/timeout chat results, login single-flight/429 back-off and 401 relogin, guarded resource ids and config keys. Unmodified (the HA server does not use errors.describe)."
   }
 ]

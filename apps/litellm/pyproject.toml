@@ -2,4 +2,4 @@
 name = "woow-litellm-child"
 version = "0.0.0"
 requires-python = ">=3.13,<3.14"
-dependencies = ["fastmcp==3.4.5", "httpx==0.28.1", "mcp==1.28.1"]
+dependencies = ["fastmcp==3.4.11", "httpx==0.28.1", "mcp==1.30.0"]

@@ -103,7 +103,7 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
                     except httpx.HTTPError:
                         pass
                     await asyncio.sleep(0.2)
-            # 0.1.8 (F6): the add-on's identity, not n8n-mcp's ("n8n-documentation-mcp" 2.91.0); no instructions.
+            # 0.1.8 (F6): the add-on's identity, not n8n-mcp's ("n8n-documentation-mcp" 2.96.2); no instructions.
             assert result["serverInfo"] == {"name": "woow-mcp-n8n", "version": VERSION} and "instructions" not in result
             assert result["capabilities"] == {"tools": {}}
             assert session
@@ -221,7 +221,7 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
             children = [int(v) for v in Path(f"/proc/{process.pid}/task/{process.pid}/children").read_text().split()]
             assert len(children) == 1
             rss = next(line.split()[1] for line in Path(f"/proc/{children[0]}/status").read_text().splitlines() if line.startswith("VmRSS:"))
-            print(f"REAL LOCAL n8n 2.91.0: elapsed={time.monotonic()-started:.2f}s tool_latency_ms={latencies} child_rss_kib={rss}; fake_backend={configured_backend}, NOT production/HA E2E")
+            print(f"REAL LOCAL n8n-mcp 2.96.2: elapsed={time.monotonic()-started:.2f}s tool_latency_ms={latencies} child_rss_kib={rss}; fake_backend={configured_backend}, NOT production/HA E2E")
     finally:
         if process.returncode is None:
             process.send_signal(signal.SIGTERM)

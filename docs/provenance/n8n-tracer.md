@@ -46,11 +46,15 @@ bundled-data, transitive dependency and any future copied-source obligations rem
 
 ## Actual npm artifact inspected
 
-- Package: **n8n-mcp 2.91.0**, registry `https://registry.npmjs.org`.
-- Tarball: `https://registry.npmjs.org/n8n-mcp/-/n8n-mcp-2.91.0.tgz`.
-- npm integrity: `sha512-0dQtYV6+pcYUvgmZflwa84cxZLs2h/stby7gzlv3//6EiYIZyp6NZyuIAVUIudktahpHZtt0epd9TyTPWxd50A==`.
-- npm shasum: `2c999da6fbe2594a093b5920e93dcd816577df17`.
-- Registry-reported gitHead: `3a2ec761e006089638d281a27d15ba030ec3ec88`.
+- Package: **n8n-mcp 2.96.2** (0.3.4; 2.91.0 until 0.3.3), registry `https://registry.npmjs.org`.
+- Tarball: `https://registry.npmjs.org/n8n-mcp/-/n8n-mcp-2.96.2.tgz` (sha256 `3fffe30b0393e3c629bb1b01b7209871d592cc9f332e57ce8c9d234ce3e576f8`).
+- npm integrity: `sha512-fnpvAEuXOBRP0J6Uy3BjIyRja3y4Ox9rsmohqPb1qUEshso9aBt4L5/aYgSEl6lq/HoBPJ+DmZV0hP/GS+B/Dg==`.
+- npm shasum: `af2f94f805e43c254de88f4228b3dda6eb1fa17b` (equal to the downloaded tarball's SHA-1).
+- Registry-reported gitHead: `ef2463f43387549b5c0ab9b87490e263ea4ac7e3`.
+- `engines.node`: `^22.23.4 || ^24.22.1 || >=26.12.1` (2.91.0: `>=20.0.0`), so 0.3.4 moves every Node image to
+  22.23.4.
+- 2.91.0 (until 0.3.3): integrity `sha512-0dQtYV6+pcYUvgmZflwa84cxZLs2h/stby7gzlv3//6EiYIZyp6NZyuIAVUIudktahpHZtt0epd9TyTPWxd50A==`,
+  shasum `2c999da6fbe2594a093b5920e93dcd816577df17`, gitHead `3a2ec761e006089638d281a27d15ba030ec3ec88`.
 - Source: `https://github.com/czlonkowski/n8n-mcp`.
 - Artifact license: MIT, copyright 2024 Romuald Czlonkowski; retained at
   `licenses/n8n-mcp-MIT.txt`. This is NOT a transitive/bundled-data license clearance.
@@ -60,8 +64,13 @@ bundled-data, transitive dependency and any future copied-source obligations rem
 `apps/n8n/package-lock.json` pins the complete npm resolution with registry URLs and
 integrities. Use `npm ci --prefix apps/n8n --ignore-scripts --no-audit --no-fund`.
 No global npm installs or native build/install scripts are required for this tracer.
-The tested fallback is **sql.js 1.14.2**; optional better-sqlite3 11.10.0 is installed
-as package contents but its native addon is not built. MCP JS SDK is **1.32.0** for 0.3.0. The previous **1.31.0** override (0.1.6: an npm `overrides` entry in
+The tested fallback is **sql.js 1.15.1** (0.3.4; 1.14.2 before); optional better-sqlite3 11.10.0 is installed
+as package contents but its native addon is not built. MCP JS SDK is **1.32.2** for 0.3.4 (**1.32.0** for 0.3.0 to 0.3.3; 1.32.1
+and 1.32.2 change only `McpServer`, which registers handlers for capabilities declared in its options, so this child's
+low-level `Server` path is unchanged; n8n-mcp 2.96.2 still pins 1.30.0 exactly). 0.3.4 also takes the newest npm
+versions inside the existing ranges, which clears every `npm audit` finding of the 0.3.0-0.3.3 lock (body-parser 2.4.0 for
+GHSA-27r3-jxmh-p828, undici 6.29.1 for GHSA-4qv8-2p9j-2685 and GHSA-xjj6-f33q-929c, zod 4.6.7 for
+GHSA-mrhx-c7xc-m3w5, fast-uri 3.1.9, ip-address 10.7.4; express 5.3.0). The previous **1.31.0** override (0.1.6: an npm `overrides` entry in
 `apps/n8n/package.json` lifts n8n-mcp 2.91.0's exact 1.30.0 pin for GHSA-6qxp-vccf-f47h / CVE-2026-104850, an OAuth-client
 flaw this child does not use; 1.31.0's server-side changes are a 4 MiB request-body bound and a 100-message batch bound) is superseded for GHSA-22jm-h49p-29qw and GHSA-46jr-4wx8-v453.
 The active n8n child uses the low-level SDK `Server`, not `McpServer`, and does
@@ -106,15 +115,32 @@ Ingress identity, cookies, forwarded headers, Origin, arbitrary paths or query s
 
 ### SHA-256 of distributed files inspected
 
-| File below npm package | SHA-256 |
-|---|---|
-| `dist/mcp/index.js` | `4476ee45971533c0b7e97cfec4f53466e88100af616fa3fd0a7df49e90128e15` |
-| `dist/http-server-single-session.js` | `da499542df98783e93961cf7a5c410d38fc1d45876828172a7119b0f7c0db74b` |
-| `dist/http-server.js` (NOT launched) | `8eb7359605a29b25c5083e2bdbc8ac703e59e4a98d55c0bbe8107ed21a98ffe3` |
-| `dist/mcp/server.js` | `a4dfc41f48282423a610ee9ac45c0374357b7409cdaa4858e11ba58a32b2128c` |
-| `dist/mcp/handlers-n8n-manager.js` | `0d99e10ec1eb9a6e4d78726636aa79f52eb4f3862be506785b794f1aeb9608cc` |
-| `dist/services/n8n-api-client.js` | `e64be8d3def0623b6710c6e98f7a08ed14a49a1764a5f789def58ea1e900947c` |
-| `LICENSE` | `8292ff05257b8f1ceae44382f0585abb0df9dc007d2ee2254c5a835c01920b35` |
+n8n-mcp 2.96.2 as published (0.3.4). `handlers-n8n-manager.js` is the unpatched file; the image runs it after the build
+patch (`apps/n8n/patches/fix_test_run_error_messages.py`, `6cd673423e829902f3e56de66afe90f7e2196d7ef76cca02551a20eee03ae2eb`).
+
+| File below npm package | SHA-256 (2.96.2) | 2.91.0 (until 0.3.3) |
+|---|---|---|
+| `dist/mcp/index.js` | `4476ee45971533c0b7e97cfec4f53466e88100af616fa3fd0a7df49e90128e15` | same |
+| `dist/http-server-single-session.js` | `30e23550a45be6372ab043ed0e421296af2f6772faec13b52d326de3b442337a` | `da499542df98783e93961cf7a5c410d38fc1d45876828172a7119b0f7c0db74b` |
+| `dist/http-server.js` (NOT launched) | `8eb7359605a29b25c5083e2bdbc8ac703e59e4a98d55c0bbe8107ed21a98ffe3` | same |
+| `dist/mcp/server.js` | `a1237f5cafe34cddcecb85c48bc467c38a443be487a34b0f24c5cbbb343b30e9` | `a4dfc41f48282423a610ee9ac45c0374357b7409cdaa4858e11ba58a32b2128c` |
+| `dist/mcp/handlers-n8n-manager.js` | `6860193f1217c222c1ee1b1b08b7beb38847b85a182c36f2d8b8be7339cfad7b` | `0d99e10ec1eb9a6e4d78726636aa79f52eb4f3862be506785b794f1aeb9608cc` |
+| `dist/services/n8n-api-client.js` | `e64be8d3def0623b6710c6e98f7a08ed14a49a1764a5f789def58ea1e900947c` | same |
+| `LICENSE` | `8292ff05257b8f1ceae44382f0585abb0df9dc007d2ee2254c5a835c01920b35` | same |
+
+0.3.4 review of the cumulative 2.91.0 -> 2.96.2 tarball diff: `dist/mcp/tools.js` and `dist/mcp/tools-n8n-manager.js`
+are byte-identical, so the 28 tool names, descriptions, input schemas and annotations are unchanged (no tool added,
+removed or renamed). `http-server-single-session.js` runs each request in a per-request AsyncLocalStorage scope
+(`utils/request-context.js`) and serializes multi-tenant context switches; this child is single-tenant (no
+`ENABLE_MULTI_TENANT`), so the scope holds the environment context. `server.js` reads `instanceContext` through that
+scope, injects the MCP Apps UI metadata unless `N8N_MCP_DISABLE_UI_APPS=true` (not set), adds an optional `instance`
+argument to the management tools only for a context with `instanceArgument=true` (never set here) and strips an
+`instance` key from built-in tool arguments, reports deprecated node versions (`deprecated`/`deprecation` fields and a
+validation error for a deprecated type version) and passes validation `code`s through. `utils/ssrf-protection.js` blocks
+four more cloud-metadata IPv6 addresses, canonicalizes IPv6 before its checks and resolves IPv4-mapped/compatible
+forms. `npm-version-checker.js` adds a `status` field, the `N8N_MCP_VERSION_CHECK_DISABLED` switch and a 5-minute
+cache for failed checks; 0.3.4 sets the switch to `true` in the fixed child environment (as the PaaS), so
+`n8n_health_check` reports `checkStatus: "disabled"` and never queries the npm registry. The line numbers in the narrow-policy table below refer to 2.91.0.
 
 ## Audited narrow tool policy
 
@@ -136,7 +162,7 @@ forwarding, even in an existing session; list filtering is secondary.
 
 ## B3 narrow metadata reads (pending independent SPEC then NEW SECURITY)
 
-The installed 2.91.0 dispatch calls genuine `handleListCatalog` → `listTags`
+The installed 2.91.0 dispatch (unchanged in 2.96.2) calls genuine `handleListCatalog` → `listTags`
 (single `/tags?limit=250`, then original filter/slice); `handleListExecutions` →
 `listExecutions` (single `/executions`, includeData=false); `handleGetFolder` →
 `getFolder` (explicit non-personal project/folder, no discovery); and
@@ -161,7 +187,7 @@ Before requiring runtime/helper code, the preload additionally guards:
 |---|---|
 | `dist/mcp/handlers-official-tools.js` | `e85937c58d5a8426d54b1b69598adc83a14648402fc58a8714ef5db8132977cd` |
 | `dist/mcp/official-mcp-access.js` | `113d3556e4b93a870b36986a0fce8de45391ce64d7ab4c9f50fd6715eee3c733` |
-| `dist/utils/npm-version-checker.js` | `35eb4789eef7766e4516f78caf125542778cf7de33e1fff4bc670c1f1029057a` |
+| `dist/utils/npm-version-checker.js` | `8ffe192878574d0c4a7a6453205be7916858344e889b8b681998b4f22451a426` (2.96.2; `35eb4789eef7766e4516f78caf125542778cf7de33e1fff4bc670c1f1029057a` in 2.91.0) |
 
 ## Python and local runtime
 
@@ -173,5 +199,6 @@ version upgrade or new registry download was used. The latter predates RFC8215
 classification, so the adapter also restricts public IPv6 to 2000::/3 and tests
 translation-prefix rejection explicitly. Their license/security obligations remain.
 Local verification used CPython **3.13.2**, Node **22.23.2**, npm **10.9.8**, uv
-**0.12.10**, Linux x86_64. OS/Node/Python container base digests are a packaging gate,
+**0.12.10**, Linux x86_64. The 0.3.4 dependency update was verified with CPython **3.13.15**, Node **22.23.4**, npm
+**10.9.9** and uv **0.12.10**. OS/Node/Python container base digests are a packaging gate,
 not resolved by these application locks. No container tooling was installed.

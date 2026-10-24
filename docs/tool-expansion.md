@@ -10,7 +10,7 @@ pydantic 模型、res.partner 限定、輸出投影）自 0.2.1 起不再用於�
 | 產品 | 子程序工具數 | 開放 | 說明 |
 |---|---:|---:|---|
 | Odoo | 41 | 41 | odoo-mcp 1.1.0 全部工具，套上 PaaS 的兩個 build patch（跨 session approval token、直接寫入開關）；`ODOO_MCP_ENABLE_WRITES=1`、`ODOO_MCP_ALLOW_DIRECT_WRITES=1`（`execute_method` 可直接 create／write／unlink，三步驟 preview／validate／execute_approved_write 仍列出可用）、`ODOO_MCP_ALLOW_UNKNOWN_METHODS=1`（任意方法，含 `action_confirm` 等副作用方法）、`MCP_CHATTER_DIRECT=1`（chatter 直接送出） |
-| n8n | 28 | 28 | n8n-mcp 2.91.0 全部工具（credentials、test_workflow、datatable、versions、agents 等）；選填 MCP Access Token（`N8N_MCP_ACCESS_TOKEN`）啟用官方 MCP 功能；`WEBHOOK_SECURITY_MODE=permissive`（webhook／URL SSRF 防護關閉，可連任何內網位址） |
+| n8n | 28 | 28 | n8n-mcp 2.96.2（0.3.4 起；之前 2.91.0，28 個工具定義逐位元相同）全部工具（credentials、test_workflow、datatable、versions、agents 等）；選填 MCP Access Token（`N8N_MCP_ACCESS_TOKEN`）啟用官方 MCP 功能；`WEBHOOK_SECURITY_MODE=permissive`（webhook／URL SSRF 防護關閉，可連任何內網位址） |
 | Hermes | 11 | 11 | 與 PaaS 版 hermes_mcp_server 相同（chat、config set、mcp add、webhook、cron create 等）；保留 server 本身的 stdio／command 拒絕與 config 拒絕清單 |
 | OpenDesign | 15 | 15 | 全部工具（create_project、send_message 等） |
 | EMQX | 39 | 39 | `EMQX_MCP_READONLY=false`（publish、ban、retained、trace、authn／authz 管理等） |

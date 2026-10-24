@@ -2,6 +2,7 @@
 lacks testRun scopes" hint and dropped n8n's own reason ("Evaluations are not available on your plan"); the 402, 409 and
 404 hints did the same. The build patch apps/n8n/patches/fix_test_run_error_messages.py appends " n8n: <n8n's message>"
 (owner decision 2026-10-15: backend errors carry the backend's text); backend_policy.cjs only starts the patched file.
+0.3.4: n8n-mcp 2.96.2 keeps the same handleTestRunError block; the patch's pinned and patched digests are recomputed.
 """
 import asyncio
 import importlib.util

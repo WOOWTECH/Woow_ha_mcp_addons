@@ -43,9 +43,9 @@
 
 ## 依賴隔離與可重現性
 
-每類 `apps/PRODUCT/{pyproject.toml,uv.lock}` 是獨立 project，`.venv` 不入 Git。六類 SDK 固定 `mcp==1.28.1`、HTTPX `0.28.1`；EMQX/LiteLLM 固定 `fastmcp==3.4.5`（含同版本 slim client/server extras），lock 的 Starlette `1.7.0` 與 core `0.49.3` **隔離**。完整依賴 URL/hash 由各自 uv.lock 保存，不能只把 direct pin 當完整 graph。
+每類 `apps/PRODUCT/{pyproject.toml,uv.lock}` 是獨立 project，`.venv` 不入 Git。六類 SDK 固定 `mcp==1.30.0`（0.3.4 起；0.3.3 以前 `mcp==1.28.1`）、HTTPX `0.28.1`；EMQX/LiteLLM/Nextcloud 固定 `fastmcp==3.4.11`（0.3.4 起；之前 3.4.5，含同版本 slim client/server extras），child lock 的 Starlette `1.9.0`（0.3.4）與 core lock 的 `1.3.1` **隔離**；0.3.4 起各 child lock 以 `uv lock --upgrade` 取同 major 最新（certifi 2026.10.23、pydantic 2.14.1、pydantic-settings 2.16.1 等），odoo-mcp 1.1.0／mcp-server-odoo 0.7.1 維持不變。完整依賴 URL/hash 由各自 uv.lock 保存，不能只把 direct pin 當完整 graph。
 
-本地使用 Python 3.13.2；各 child project 限 `>=3.13,<3.14`，與目前 core 一致。未宣稱原規劃 Python 3.12 image 已建置；W3 必須選擇並實測 image Python 版本。`uv sync --project apps/PRODUCT --frozen --no-dev` 可重建本地 child；無 system-wide pip install。n8n npm pin 2.91.0／原 lock／network policy 未升級。
+本地使用 Python 3.13.2；各 child project 限 `>=3.13,<3.14`，與目前 core 一致。未宣稱原規劃 Python 3.12 image 已建置；W3 必須選擇並實測 image Python 版本。`uv sync --project apps/PRODUCT --frozen --no-dev` 可重建本地 child；無 system-wide pip install。n8n npm pin 0.3.4 起為 2.96.2（之前 2.91.0），MCP TS SDK override 1.32.2，Node 22.23.4；network policy 未改。
 
 FastMCP 依賴 Apache-2.0 及其他 third-party 義務仍需 SBOM/NOTICE/敏感掃描；不宣稱全部 image MIT。Odoo Manage 對應源碼可由其 uv.lock 所列固定 sdist URL/hash 追查，尚未完成對外分發義務審核。
 

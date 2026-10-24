@@ -2,6 +2,8 @@
 
 六個啟用的商店產品：Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud。**0.3.3 六支 canonical 映像已完成驗收、掃描與公開發布**，包含 n8n 全部 28 個工具的有效 `output` 參數正規化、六個混合工具的 selector 保護，以及 versions/test 的 `exposeToMcp` 既有 updater 有效權限檢查。新增 `conditional_writes` capability metadata，保持 28 個工具、33 個寫入 grants、schema 4 與完整功能預設；不變更 dependency／child pins 或 UI 原始碼。正常 stable Release／Store 與正式 HAOS 升級分別驗證，不由映像發布推定完成。見 [0.3.3 發布證據與驗收邊界](docs/operations/release-decision-0.3.3.md)、[不可變映像紀錄](docs/provenance/release-0.3.3-images.json)。
 
+本分支準備 **0.3.4**（接在 0.3.3 之後；0.3.2 不使用）：相依更新並與 WOOW PaaS 對齊（MCP Python SDK 1.30.0、FastMCP 3.4.11、n8n-mcp 2.96.2、Node 22.23.4）、Hermes 恢復拒絕 loopback MCP server 網址（AI-HMCP-002-2）、n8n 健康檢查不再查詢 npm registry；尚未建置或發布映像，見 [0.3.4 發佈狀態與驗收邊界](docs/operations/release-decision-0.3.4.md)。
+
 先前 **0.3.1** 六支 canonical 映像已完成驗收與公開發布；[0.3.1 發布證據](docs/operations/release-decision-0.3.1.md)與[不可變映像紀錄](docs/provenance/release-0.3.1-images.json)保留。各版 stable Release 與 Store 更新仍依正常受保護合併流程驗證，不由映像發布宣稱後續流程已完成。指定正式 Hermes 預計由 0.3.0 直接升級至 0.3.3，屆時建立新備份並驗證實際映像；不宣稱 0.3.1 正式 HAOS 升級。OpenDesign 原始碼保留、商店維持停用，本次不建置或發布它的映像。
 
 **版本隔離：** 0.3.2 已由獨立的 dependency-update [PR17](https://github.com/WOOWTECH/Woow_ha_mcp_addons/pull/17) 保留；本次有限授權修正改用 0.3.3，避免不同 source 共用映像 tag。我們未發布的 0.3.2 候選已被取代，不合併 PR17 的 dependency 更新；0.3.1 歷史證據保持不變。
@@ -61,8 +63,8 @@ uv pip install --python "$PACKAGING_ENV/bin/python" --require-hashes --only-bina
 "$PACKAGING_ENV/bin/python" -m unittest discover -s packaging -p 'test_*.py' -v
 # 有 Docker 的隔離 runner 才執行；root context 最後的點不可省略
 # 這不是已執行的成功紀錄：
-docker build --platform linux/amd64 -f apps/n8n/Dockerfile -t local/mcp-n8n:0.3.3 .
-"$PACKAGING_ENV/bin/python" packaging/container_acceptance.py n8n local/mcp-n8n:0.3.3
+docker build --platform linux/amd64 -f apps/n8n/Dockerfile -t local/mcp-n8n:0.3.4 .
+"$PACKAGING_ENV/bin/python" packaging/container_acceptance.py n8n local/mcp-n8n:0.3.4
 ```
 
 PR/main CI 沒有發佈權限；固定商店產品 matrix（與 `packaging/inputs.json` 相同）`push: false`。HA 無法以 Add-on

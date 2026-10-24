@@ -1,6 +1,54 @@
 # Changelog
 
-## 0.3.3 — release candidate (2026-10-24)
+## 0.3.4 — release candidate (2026-10-24)
+
+The same six enabled add-ons (Odoo, n8n, Hermes, EMQX, LiteLLM, Nextcloud) move to
+0.3.4, after 0.3.3; 0.3.2 is not used (it had been reserved for this release).
+OpenDesign stays disabled (metadata version only, no image). 0.3.4 is a dependency
+and Hermes security release on top of 0.3.3: no option, port, architecture, image
+name, tool name or state schema changes; schema stays 4 and the full-functionality
+defaults are unchanged. See the
+[0.3.4 release decision](docs/operations/release-decision-0.3.4.md).
+
+### Dependencies (aligned with the WOOW PaaS twin)
+
+- Python MCP SDK `mcp` 1.28.1 -> 1.30.0 in every Python child (GHSA-84m7-p3x7-pcfv:
+  Streamable HTTP sessions were never reclaimed). The add-on keeps its 30-minute
+  session idle limit and raises the SDK's new 4 MiB request-body default to the
+  gateway's 16 MiB (`apps/runtime/session_idle.py`).
+- FastMCP 3.4.5 -> 3.4.11 (EMQX, LiteLLM, Nextcloud; includes the GHSA-7xgj-8392-5q4r fix);
+  `certifi` 2026.10.19 -> 2026.10.23;
+  the other locked Python packages move to their newest release in the same major
+  (pydantic 2.14.1, pydantic-settings 2.16.1, starlette 1.9.0, websockets 17.3, ...).
+  `odoo-mcp` 1.1.0 and `mcp-server-odoo` 0.7.1 stay (the same as the PaaS; Odoo's
+  build patches match their source text).
+- n8n: `n8n-mcp` 2.91.0 -> 2.96.2, MCP TypeScript SDK override 1.32.0 -> 1.32.2, and
+  the newest npm versions inside the existing ranges (`npm audit`: 0 findings; fixes
+  body-parser GHSA-27r3-jxmh-p828, undici GHSA-4qv8-2p9j-2685 and GHSA-xjj6-f33q-929c,
+  zod GHSA-mrhx-c7xc-m3w5 and moderate fast-uri/ip-address advisories). The 28 tool
+  definitions are byte-identical to 2.91.0's; the test-run error build patch is
+  re-pinned to the 2.96.2 file. `n8n_health_check` no longer queries the npm
+  registry: the child runs with `N8N_MCP_VERSION_CHECK_DISABLED=true`, as the PaaS
+  (`checkStatus: "disabled"`).
+  The 0.3.3 effective-argument authorization (`output` extraction, conditional
+  `exposeToMcp` writes) is re-reviewed against 2.96.2: `validateExtractedArgs`, the
+  extraction and `coerceStringifiedJsonParams` are byte-identical and its tests pass
+  against the 2.96.2 child.
+- Node 22.23.2 -> 22.23.4 for every image (n8n-mcp 2.96.2 requires `^22.23.4`).
+- MCP SDK 2.x, FastMCP 4 and Node 24 are a separate migration.
+
+### Hermes
+
+- `hermes_mcp` action=add refuses loopback MCP server URLs again (localhost,
+  *.localhost, localhost.localdomain, 127.0.0.0/8, ::1, IPv4-mapped loopback):
+  the loopback part of AI-HMCP-002-2 that the LAN-friendly guard of 0.3.0-0.3.3
+  dropped. LAN addresses stay allowed; metadata, link-local and 0.0.0.0 stay refused.
+  A refused URL sends no dashboard API request. Servers registered earlier are not
+  removed.
+- The vendored Hermes MCP files are recorded against woow-mcp-server main `a5db051`;
+  0.3.0-0.3.3 already contain the same code.
+
+## 0.3.3 — stable Release (2026-10-24)
 
 This candidate integrates a bounded n8n authorization correction in the shared
 runtime. Exact-source freeze/CI remain pending, followed by fresh six-image
@@ -44,7 +92,7 @@ conditional-write defect. Preserve a backup and current token/policy state.
 The planned official Hermes test upgrades 0.3.0 directly to 0.3.3 with a fresh
 backup; no official 0.3.1 HAOS upgrade is claimed.
 
-## 0.3.1 — release candidate (2026-10-24)
+## 0.3.1 — stable Release (2026-10-24)
 
 Six enabled add-ons share the runtime and UI fixes below. OpenDesign remains
 disabled: metadata only, no image or stable Release. Exact 0.3.1 image acceptance,

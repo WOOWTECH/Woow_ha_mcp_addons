@@ -40,7 +40,9 @@ def test_native_update_checker_source_and_no_network_no_cache(tmp_path):
     import subprocess
     for product in ('emqx', 'litellm', 'nextcloud'):
         base = ROOT/'apps'/product/'.venv/lib/python3.13/site-packages/fastmcp'
-        assert hashlib.sha256((base/'settings.py').read_bytes()).hexdigest() == 'f96cd4e29b0d56e1f24c522ea977170f1b6efbdb88dc59023b1e9fa9afe3397c'
+        # 0.3.4 (FastMCP 3.4.5 -> 3.4.11): settings.py only adds ssrf_trust_proxy (auth metadata/JWKS fetches, default off;
+        # these children configure no auth); the banner and update-check settings and version_check.py are unchanged.
+        assert hashlib.sha256((base/'settings.py').read_bytes()).hexdigest() == '59780d8e9be7b3185d726c604378ce482a9bc80ab0eb86b8918a4aeef81c3954'
         assert hashlib.sha256((base/'utilities/version_check.py').read_bytes()).hexdigest() == 'ce36361da496e1fd3d1a3ba7dd5e932f269e242fd93cf7f5e95bd001d0e280ef'
         result = subprocess.run([str(ROOT/'apps'/product/'.venv/bin/python'), '-c', '''
 import fastmcp.utilities.version_check as check
