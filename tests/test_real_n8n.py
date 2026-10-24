@@ -17,7 +17,7 @@ import httpx
 import pytest
 
 from mcp_admin_core import VERSION
-from mcp_admin_core.config import Store
+from mcp_admin_core.products import ProductStore
 from mcp_admin_core.health import protocol_reply
 
 from owned_executable import Executable
@@ -66,7 +66,10 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
     if not (ROOT / "apps/n8n/node_modules/n8n-mcp/dist/mcp/index.js").exists():
         pytest.skip("EXTERNAL GATE: run npm ci --ignore-scripts --prefix apps/n8n")
     data = tmp_path / "state"
-    store = Store(data)
+    # This exercises normal runtime startup. Legacy schema 1 now correctly
+    # waits for authenticated upgrade review (covered by test_upgrade_review).
+    store = ProductStore(data, 'n8n')
+    assert store.load().schema_version == 4
     if configured_backend:
         store.update(backend_url=fake_backend[0], backend_key="DUMMY-local-only")
     token = store.load().token
