@@ -1,6 +1,7 @@
 """Protocol readiness and separate read-only backend reachability (not E2E)."""
 import asyncio
 import re
+from datetime import datetime, timezone
 
 import httpx
 
@@ -75,6 +76,7 @@ class HealthMonitor:
         # 0.2.2: the outcome of the last COMPLETED check (child start count, child answered, backend, reason). snapshot()
         # (readiness, the panel) is unchanged and still shows a check in progress; availability() never does.
         self.settled = None
+        self._check_lock = asyncio.Lock()
 
     def snapshot(self):
         return {"management": self.management, "child": self.process.health(), "backend": self.backend}
@@ -90,6 +92,22 @@ class HealthMonitor:
                 "backend": settled[2] if current else "unknown", "reason": settled[3] if current else None}
 
     async def check(self):
+        async with self._check_lock:
+            await self._check_saved()
+
+    async def test_saved(self, state):
+        """Explicit read-only check of the saved config, serialized with monitoring.
+
+        The gateway holds its mutation lock throughout. This callback never saves,
+        replaces credentials, changes policy or restarts a child.
+        """
+        async with self._check_lock:
+            await self._check_saved()
+            return {"tested_configuration": "saved", "checked_at": datetime.now(timezone.utc).isoformat(),
+                    "health": self.snapshot(), "backend": self.backend,
+                    "reason": self.settled[3] if self.settled else None}
+
+    async def _check_saved(self):
         generation = getattr(self.process, "starts", 0)
         try:
             state = self.store.load()

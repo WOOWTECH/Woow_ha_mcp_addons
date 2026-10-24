@@ -15,6 +15,7 @@ import uvicorn
 
 from mcp_admin_core import redact
 from mcp_admin_core.config import ConfigError
+from mcp_admin_core.capabilities import ManagementOptions
 from mcp_admin_core.products import ProductStore
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.ha_role import make_ha_admin_verifier
@@ -32,6 +33,9 @@ class Listener(uvicorn.Server):
 
 
 async def run(args):
+    from mcp_admin_core.upgrade import run_upgrade_review
+    if not await run_upgrade_review(args, 'n8n'):
+        return
     store = ProductStore(args.data, 'n8n')
     manager = Supervisor(child_spec(store.load(), store.directory))
     stop = asyncio.Event()
@@ -49,6 +53,8 @@ async def run(args):
                 await manager.restart(child_spec(state, store.directory))
             admin, mcp = make_apps(store, TOOLS, child, health=health.snapshot,
                                    backend_changed=backend_changed,
+                                   management=ManagementOptions(kind="ha-addon", authority="ha-admin"),
+                                   backend_check=getattr(health, "test_saved", None), restart_child=backend_changed, diagnostics=getattr(manager, "diagnostics", None),
                                    verify_admin=make_ha_admin_verifier(),
                                    server_name="woow-mcp-n8n",
                                    # 0.2.2: the full list and clean refusals without a backend or a running child

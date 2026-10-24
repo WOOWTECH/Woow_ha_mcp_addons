@@ -1,0 +1,13 @@
+{
+  "schema_version": 3,
+  "token": "ttttttttttttttttttttttttttttttttttttttttttt",
+  "child_token": "ccccccccccccccccccccccccccccccccccccccccccc",
+  "backend_url": "https://legacy.example.test",
+  "backend_key": "LEGACY_FIXTURE_KEY",
+  "endpoint": "https://public.example.test/mcp",
+  "writes_enabled": false,
+  "disabled": ["n8n_list_workflows"],
+  "product": "n8n",
+  "connection": null,
+  "enabled_write_tools": ["n8n_manage_folders:create"]
+}

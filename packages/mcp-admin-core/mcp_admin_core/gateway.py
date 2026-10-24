@@ -32,12 +32,20 @@ from . import redact, ui
 
 from . import VERSION
 from .config import ConfigError, State, Store, strict_json
-from .policy import Denied, ToolCallRefused, UnknownMethod, authorize, filter_list
-from .ha_role import valid_user_id
+from .policy import Denied, ToolCallRefused, UnknownMethod, authorize, filter_list, validate_operation_denies
+from .admin_auth import AdminAuthority, BadRequest, prefix
+from .capabilities import ManagementOptions, capability_snapshot, observe_tools, tool_catalog
+from .request_limits import McpRequestLimits, RequestLimitError
 
 # 0.2.0: 16 MiB (was 256 KiB). The full Nextcloud surface uploads up to 10 MiB as base64 (about 13.4 MiB of JSON) and
 # writes text files up to 1 MiB; a body is read only after the token check. BODY_SECONDS bounds the read.
 MAX_REQUEST = 16 * 1024 * 1024
+# n8n-mcp uses the SDK's low-level Server, so the SDK 1.32.0 McpServer input-element option does not protect it.
+# Bound only authenticated n8n ingress here; other products retain MAX_REQUEST for large inputs such as Nextcloud.
+N8N_MAX_REQUEST = 4 * 1024 * 1024
+N8N_MAX_ARGUMENT_ELEMENTS = 10_000
+N8N_MAX_ARGUMENT_DEPTH = 64
+N8N_REQUEST_LIMITS = McpRequestLimits(N8N_MAX_REQUEST, N8N_MAX_ARGUMENT_ELEMENTS, N8N_MAX_ARGUMENT_DEPTH)
 BODY_SECONDS = 60
 MAX_RESPONSE = 8 * 1024 * 1024
 STREAM_SECONDS = 120
@@ -231,11 +239,6 @@ class AnyMethod:
         await self.app(scope, receive, send)
 
 
-class BadRequest(Exception):
-    def __init__(self, status=400):
-        self.status = status
-
-
 async def body(request: Request):
     content = bytearray()
     try:
@@ -263,14 +266,8 @@ async def json_body(request):
         raise BadRequest() from None
 
 
-def prefix(request):
-    values = request.headers.getlist("x-ingress-path")
-    if len(values) > 1:
-        raise BadRequest()
-    value = values[0] if values else ""
-    if value and (not re.fullmatch(r"(?:/[A-Za-z0-9_-]+)+", value) or len(value) > 512):
-        raise BadRequest()
-    return value
+def request_limit_reply(error):
+    return json_reply(error.payload, error.status, {"Cache-Control": "no-store"})
 
 
 def token_valid(request, state):
@@ -307,7 +304,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               verify_admin: RoleVerifier | None = None,
               child_url="http://127.0.0.1:3000/mcp", health=None, backend_changed=None,
               server_name="woow-mcp", instructions: str | None = None,
-              listing=None, availability=None):
+              listing=None, availability=None, management: ManagementOptions | None = None,
+              backend_check=None, restart_child=None, diagnostics=None):
     """listing (0.2.2): the product's tools/list tools as its child lists them (surface.listing). With it, a client
     connects whatever the backend's state: when no child can answer (no backend configured, so no child; a child that is
     not up) the gateway answers initialize, notifications/initialized, ping and tools/list itself, from listing through
@@ -319,6 +317,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
+    n8n_request_bounds = getattr(store, "product", None) == "n8n"
+    management = management or ManagementOptions()
     if listing is not None:
         listing = copy.deepcopy(list(listing))
         if not all(isinstance(tool, dict) and isinstance(tool.get("name"), str) for tool in listing):
@@ -328,7 +328,6 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             return {"child": "running", "ready": True, "backend": "unknown", "reason": None}
     local_sessions = OrderedDict()  # 0.2.2: session id -> last use (time.monotonic())
     redact.install()  # 0.1.12: a request path may now carry the token; no log record may show it
-    csrf_key = secrets.token_bytes(32)
     mutation_lock = asyncio.Lock()
     slots = asyncio.Semaphore(32)
     admin_slots = asyncio.Semaphore(16)
@@ -336,32 +335,13 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     def snapshot():
         return health() if health else {"management": "alive", "child": {"state": "not_started", "transport_ready": False}, "backend": "unconfigured"}
 
-    def admin_identity(request):
-        # Uvicorn MUST have proxy_headers=False; request.client is the socket peer.
-        if not request.client or request.client.host != "172.30.32.2" or verify_admin is None:
-            raise BadRequest(403)
-        identities = request.headers.getlist("x-remote-user-id")
-        if len(identities) != 1 or not valid_user_id(identities[0]):
-            raise BadRequest(403)
-        user = identities[0]
-        base = prefix(request)
-        csrf = hmac.new(csrf_key, (user + "\0" + base).encode(), hashlib.sha256).hexdigest()
-        if request.method not in ("GET", "HEAD"):
-            values = request.headers.getlist("x-csrf-token")
-            if len(values) != 1 or not hmac.compare_digest(values[0].encode(), csrf.encode()):
-                raise BadRequest(403)
-            if request.headers.get("sec-fetch-site") == "cross-site":
-                raise BadRequest(403)
-        return user, base, csrf
+    def capabilities(state, catalog):
+        return capability_snapshot(management, state, snapshot(), catalog, can_test=backend_check is not None,
+                                   can_restart=restart_child is not None, logs=diagnostics is not None)
 
-    async def final_role(user):
-        try:
-            async with asyncio.timeout(3):
-                allowed = await verify_admin(user)
-        except Exception:
-            allowed = False
-        if allowed is not True:
-            raise BadRequest(403)
+    authority = AdminAuthority(verify_admin)
+    admin_identity = authority.identity
+    final_role = authority.verify
 
     async def admin_action(request, user, base, csrf, value, peer_disconnected, committed):
         name = request.path_params["operation"]
@@ -400,12 +380,16 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                             raise ValueError()
                         changes = value
                     else:
-                        if (set(value) not in ({"writes_enabled", "disabled"}, {"writes_enabled", "disabled", "enabled_write_tools"}) or not isinstance(value["disabled"], list)
+                        if (not {"writes_enabled", "disabled"} <= set(value)
+                                or set(value) - {"writes_enabled", "disabled", "enabled_write_tools", "denied_operations"}
+                                or not isinstance(value["disabled"], list)
                                 or any(not isinstance(t, str) or t not in tools for t in value["disabled"])):
                             raise ValueError()
                         changes = value
                     # Validate without writing. Store.update revalidates on commit.
-                    type(state).model_validate({**state.model_dump(), **changes})
+                    candidate = type(state).model_validate({**state.model_dump(), **changes})
+                    if name == 'policy' and 'denied_operations' in changes:
+                        validate_operation_denies(candidate.denied_operations, tools, state)
                 except ValueError:
                     raise BadRequest() from None
             if peer_disconnected.is_set():
@@ -417,6 +401,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             if name == "__ui__" and hasattr(request.state, "ui_path") and request.method in ("GET", "HEAD"):
                 return ui.response(request.state.ui_path, base)
             if name == "bootstrap" and request.method == "GET":
+                catalog = tool_catalog(tools, listing, None, state)
+                schemas = {item["name"]: item.get("inputSchema") for item in catalog["items"]}
                 return JSONResponse({"base_path": base, "api_base": base + "/api", "csrf": csrf,
                     "endpoint": state.endpoint, "backend_url": state.backend_url,
                     "backend_key_set": state.backend_key is not None, "token_active": state.token is not None,
@@ -426,9 +412,46 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     "writes_enabled": state.writes_enabled, "disabled": state.disabled,
                     "policy_contract": "woow-v3-exact-grants",
                     "enabled_write_tools": getattr(state, 'enabled_write_tools', []),
+                    **({"denied_operations": state.denied_operations} if hasattr(state, 'denied_operations') else {}),
+                    "capabilities": capabilities(state, catalog),
                     "tools": {k: {"write": v.write, "write_grants": v.grants(k),
                                   "operation_parameter": v.selector, "legacy_write": v.legacy_write,
-                                  "inputSchema": v.arguments.model_json_schema()} for k, v in tools.items()}, "health": snapshot()}, headers=headers)
+                                  "default_operation": v.default_operation,
+                                  "operations": [{"name": op, "write": op in v.write_operations} for op in v.operations],
+                                  "inputSchema": schemas.get(k) or v.arguments.model_json_schema()} for k, v in tools.items()}, "health": snapshot()}, headers=headers)
+            if name == "capabilities" and request.method == "GET":
+                before = snapshot().get("child")
+                observed = await observe_tools(child, child_url, state)
+                await final_role(user)  # the probe awaited work; recheck before disclosure
+                # Include exits/replacements during the final awaited role lookup.
+                if before != snapshot().get("child"):
+                    observed = None
+                return JSONResponse(capabilities(state, tool_catalog(tools, listing, observed, state)), headers=headers)
+            if name == "backend/test" and request.method == "POST":
+                if backend_check is None:
+                    return JSONResponse({"error": "unsupported"}, status_code=409, headers=headers)
+                try:
+                    async with asyncio.timeout(20):
+                        result = await backend_check(state)
+                except Exception:
+                    return JSONResponse({"error": "backend_check_failed"}, status_code=503, headers=headers)
+                await final_role(user)
+                return JSONResponse(redact.redact_secrets(result, redact.secret_values(state)), headers=headers)
+            if name == "child/restart" and request.method == "POST":
+                if restart_child is None:
+                    return JSONResponse({"error": "unsupported"}, status_code=409, headers=headers)
+                # Same ownership transfer as a committed backend update. Disconnect
+                # cannot abandon stop/reap/restart or release the mutation lock early.
+                committed.set()
+                try:
+                    await restart_child(state)
+                except Exception:
+                    return JSONResponse({"error": "child_restart_failed", "health": snapshot()}, status_code=503, headers=headers)
+                return JSONResponse({"accepted": True, "apply_state": "pending", "health": snapshot()}, status_code=202, headers=headers)
+            if name == "diagnostics" and request.method == "GET":
+                if diagnostics is None:
+                    return JSONResponse({"error": "unsupported"}, status_code=409, headers=headers)
+                return JSONResponse(redact.redact_secrets(diagnostics(), redact.secret_values(state)), headers=headers)
             if name == "token/reveal" and request.method == "POST":
                 return JSONResponse({"token": store.load().token}, headers=headers)
             if name == "token/rotate" and request.method == "POST":
@@ -438,6 +461,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 store.update(token=None)
                 return Response(status_code=204, headers=headers)
             if changes is not None:
+                if name == "backend" and not management.backend_can_edit:
+                    return JSONResponse({"error": "backend_fixed"}, status_code=409, headers=headers)
                 updated = store.update(**changes)
                 # No yield between durable commit and lifecycle ownership transfer.
                 # An authorized mutation is not undone by losing its HTTP caller.
@@ -823,7 +848,28 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         method = message = refusal = None
         content = b""
         if request.method == "POST":
-            message = await json_body(request)
+            if n8n_request_bounds:
+                if request.headers.get("content-type", "").split(";")[0] != "application/json":
+                    raise BadRequest(415)
+                try:
+                    async with asyncio.timeout(BODY_SECONDS):
+                        limited_body = await N8N_REQUEST_LIMITS.read_body(request)
+                    N8N_REQUEST_LIMITS.parse_and_check(limited_body)
+                    try:
+                        message = strict_json(limited_body)
+                        # Preserve HA's duplicate/nonfinite checks and reject lone surrogates before any dispatch.
+                        json.dumps(message, ensure_ascii=False).encode("utf-8")
+                    except (ValueError, RecursionError):  # UnicodeEncodeError is a ValueError
+                        raise RequestLimitError(
+                            "Invalid or excessively nested JSON", status=400, code=-32700) from None
+                except RequestLimitError as error:
+                    return request_limit_reply(error)
+                except ClientDisconnect:
+                    raise BadRequest(403) from None
+                except TimeoutError:
+                    raise BadRequest(408) from None
+            else:
+                message = await json_body(request)
             try:
                 method = authorize(message, tools, state)
             except ToolCallRefused as refused_call:
@@ -840,8 +886,21 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                                   200, {"Cache-Control": "no-store"})
             except Denied:
                 raise BadRequest(403) from None
-        elif await body(request):
-            raise BadRequest()
+        else:
+            if n8n_request_bounds:
+                try:
+                    async with asyncio.timeout(BODY_SECONDS):
+                        nonempty = await N8N_REQUEST_LIMITS.read_body(request)
+                except RequestLimitError as error:
+                    return request_limit_reply(error)
+                except ClientDisconnect:
+                    raise BadRequest(403) from None
+                except TimeoutError:
+                    raise BadRequest(408) from None
+            else:
+                nonempty = await body(request)
+            if nonempty:
+                raise BadRequest()
         headers = {"Authorization": "Bearer " + state.child_token, "Content-Type": "application/json",
                    "Accept": "application/json, text/event-stream",  # fixed: the gateway reads both itself
                    "Accept-Encoding": "identity"}

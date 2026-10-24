@@ -13,7 +13,7 @@ export const products = {
 export class UiError extends Error {}
 export function mountPath(value) {
   if (typeof value !== 'string' || value.length > 512 || (value !== '' && !/^(\/[A-Za-z0-9_-]+)+$/.test(value))) {
-    throw new UiError('管理介面掛載路徑無效。請由 Home Assistant 重新開啟。');
+    throw new UiError('管理介面掛載路徑無效。請從原服務入口重新開啟。');
   }
   return value;
 }
@@ -85,15 +85,58 @@ export function toolRows(bootstrap) {
   return Object.entries(bootstrap.tools ?? {}).map(([name, tool]) => ({
     name, write: tool.write === true, legacy: tool.legacy_write === true, classified: typeof tool.write === 'boolean',
     operations: Array.isArray(tool.write_grants) ? tool.write_grants.filter(g => typeof g === 'string' && g.startsWith(`${name}:`)).map(g => g.slice(name.length + 1)) : [],
+    auditedOperations: Array.isArray(tool.operations) ? tool.operations : [],
   }));
 }
+export function operationPolicy(b) {
+  if (!granularPolicy(b) || !b.denied_operations || typeof b.denied_operations !== 'object' || Array.isArray(b.denied_operations)) return false;
+  if (!Object.entries(b.denied_operations).every(([name, ops]) => /^[A-Za-z0-9_]{1,128}$/.test(name) && Array.isArray(ops) && ops.length > 0 &&
+    ops.every(op => typeof op === 'string' && /^[A-Za-z0-9_.-]{1,128}$/.test(op)) && new Set(ops).size === ops.length)) return false;
+  return Object.values(b.tools).every(t => Array.isArray(t.operations) &&
+    t.operations.every(op => op && typeof op.name === 'string' && typeof op.write === 'boolean') &&
+    new Set(t.operations.map(op => op.name)).size === t.operations.length &&
+    (!t.operations.length || typeof t.operation_parameter === 'string') &&
+    (t.default_operation === null || t.operations.some(op => op.name === t.default_operation)));
+}
+export function staleOperationDenies(b) {
+  return Object.entries(b.denied_operations ?? {}).flatMap(([tool, operations]) =>
+    operations.filter(op => !(Object.hasOwn(b.tools, tool) && b.tools[tool].operations?.some(item => item.name === op)))
+      .map(operation => ({ tool, operation })));
+}
 export function policyFingerprint(b) {
-  return JSON.stringify([b.product, b.policy_contract, b.tools, b.disabled, b.writes_enabled, b.enabled_write_tools]);
+  return JSON.stringify([b.product, b.policy_contract, b.tools, b.disabled, b.writes_enabled, b.enabled_write_tools, b.denied_operations]);
+}
+export function savedGrant(b, row, operation) {
+  return b.enabled_write_tools.includes(operation === null ? row.name : `${row.name}:${operation}`) || operation === null && row.legacy && b.writes_enabled;
 }
 export function effectiveGrant(b, row, operation) {
-  return !b.disabled.includes(row.name) && (b.enabled_write_tools.includes(operation === null ? row.name : `${row.name}:${operation}`) || operation === null && row.legacy && b.writes_enabled);
+  return !b.disabled.includes(row.name) && !b.denied_operations?.[row.name]?.includes(operation) && savedGrant(b, row, operation);
 }
-export function policyPayload(bootstrap, disabled, grants) {
+export function policySummary(b) {
+  const rows = toolRows(b);
+  const grants = rows.flatMap(row => (row.write ? [null] : []).concat(row.operations)
+    .map(operation => effectiveGrant(b, row, operation)));
+  const denies = Object.values(b.denied_operations ?? {}).reduce((sum, ops) => sum + ops.length, 0);
+  return `目前已儲存政策：停用 ${b.disabled?.length ?? 0} 個工具，允許 ${grants.filter(Boolean).length} / ${grants.length} 項寫入授權。${Object.hasOwn(b, 'denied_operations') ? `已禁止 ${denies} 項操作。` : ''}`;
+}
+export function catalogSummary(catalog) {
+  if (!catalog) return '尚未取得工具能力快照。';
+  const tools = `目錄 ${catalog.catalog_count} · 政策允許 ${catalog.policy_enabled_count} · 子行程有效 ${catalog.effective_count ?? '未知'}`;
+  if (!Object.hasOwn(catalog, 'operation_count')) return tools;
+  return `${tools}；操作目錄 ${catalog.operation_count ?? '未知'} · 已儲存政策允許 ${catalog.policy_enabled_operation_count ?? '未知'} · 子行程有效 ${catalog.effective_operation_count ?? '未知'}`;
+}
+export function operationSummary(operation) {
+  const policy = operation.policy_enabled === true ? '已儲存政策允許' : operation.policy_enabled === false ? '已儲存政策禁止' : '已儲存政策未知';
+  const effective = operation.effective === true ? '子行程有效' : operation.effective === false ? '子行程未生效' : '子行程有效狀態未知';
+  return `${operation.name} · ${operation.write ? '寫入' : '讀取'} · ${policy} · ${effective}`;
+}
+export function environmentLabels(snapshot) {
+  return {
+    deployment: ({ 'ha-addon': 'HA 管理介面', builtin: '內建 MCP 管理', paas: 'PaaS 管理介面' })[snapshot?.deployment?.kind] ?? 'MCP 管理介面',
+    authority: ({ 'ha-admin': 'HA 管理員授權', 'ha-ingress': 'Ingress 存取授權', 'paas-password': 'PaaS 管理授權' })[snapshot?.admin?.authority] ?? '伺服器端管理授權',
+  };
+}
+export function policyPayload(bootstrap, disabled, grants, denies) {
   if (!granularPolicy(bootstrap)) throw new UiError('工具授權版本不相容。請重新整理，未送出變更。');
   const rows = toolRows(bootstrap);
   if (disabled.some(name => !rows.some(row => row.name === name))) throw new UiError('工具清單已變更，請重新整理。');
@@ -104,7 +147,25 @@ export function policyPayload(bootstrap, disabled, grants) {
     if (!row?.classified || disabled.includes(tool) || !bootstrap.tools[tool].write_grants.includes(grant)) throw new UiError('寫入授權與工具定義不符。');
     enabled.add(grant);
   }
-  return { writes_enabled: false, disabled, enabled_write_tools: [...enabled] };
+  const result = { writes_enabled: false, disabled, enabled_write_tools: [...enabled] };
+  if (Object.hasOwn(bootstrap, 'denied_operations')) {
+    if (!operationPolicy(bootstrap)) throw new UiError('操作限制版本不相容。請重新整理，未送出變更。');
+    // No new controls supplied: preserve all saved restrictions. An explicit
+    // selection replaces only audited entries; stale entries survive UI edits.
+    if (denies === undefined) result.denied_operations = structuredClone(bootstrap.denied_operations);
+    else {
+      const entries = new Map();
+      for (const {tool, operation} of denies) {
+        if (!Object.hasOwn(bootstrap.tools, tool) || !bootstrap.tools[tool].operations.some(op => op.name === operation)) throw new UiError('操作限制與工具定義不符。');
+      }
+      for (const {tool, operation} of [...staleOperationDenies(bootstrap), ...denies]) {
+        if (!entries.has(tool)) entries.set(tool, new Set());
+        entries.get(tool).add(operation);
+      }
+      result.denied_operations = Object.fromEntries([...entries].map(([tool, ops]) => [tool, [...ops]]));
+    }
+  } else if (denies?.length) throw new UiError('伺服器不支援操作限制。');
+  return result;
 }
 export function clientExample(endpoint, token = null) {
   return JSON.stringify({ mcpServers: { woow: { type: 'http', url: endpoint ? explicitUrl(endpoint, true) : 'https://YOUR-MCP-HOST:PORT/mcp', headers: { Authorization: `Bearer ${token ?? '<YOUR_ADDON_TOKEN>'}` } } } }, null, 2);

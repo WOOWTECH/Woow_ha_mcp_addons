@@ -307,6 +307,7 @@ async def test_hermes_dashboard_login_and_cookie_errors_are_safe(tmp_path):
     mode = {'login_error': True, 'status': 401}
     canary = 'DUMMY-DASHBOARD-SECRET-CANARY'
     cookies = []
+    statuses = []
     class Dashboard(Quiet):
         def do_POST(self):
             assert self.path == '/auth/password-login'
@@ -320,6 +321,7 @@ async def test_hermes_dashboard_login_and_cookie_errors_are_safe(tmp_path):
                 self.send_header('Content-Length', '2'); self.end_headers(); self.wfile.write(b'{}')
         def do_GET(self):
             assert self.path == '/api/status'
+            statuses.append(mode['status'])
             cookies.append(self.headers['Cookie'])
             assert canary in cookies[-1]
             self.reply({'error': {'message': self.headers['Cookie']}}, mode['status'])
@@ -332,4 +334,6 @@ async def test_hermes_dashboard_login_and_cookie_errors_are_safe(tmp_path):
                     response = await client.post('/mcp', headers=headers, json=call('hermes_inspect', {'target': 'status'}))
                     assert canary not in response.text
                     assert str(status) in response.text  # 0.2.0: the backend's own status text, credential redacted
-            assert len(cookies) == 4
+            # The parity port refreshes a rejected cookie once on 401 only.
+            assert statuses == [401, 401, 403, 422, 500]
+            assert len(cookies) == 5

@@ -4,6 +4,7 @@ The W2b allowlists are deliberately bounded; docs/tool-surface.json enumerates
 all upstream tools and the individually deferred capabilities.
 """
 from pathlib import Path
+import json
 import re
 import secrets
 from urllib.parse import unquote, urlsplit
@@ -128,6 +129,9 @@ class ProductState(State):
     # 4 (0.2.0): the full child surface; every state migrated from 3 (or older) gets every write grant once.
     schema_version: int = 4
     enabled_write_tools: list[str] = Field(default_factory=list)
+    # Additive schema 4: denies never grant writes. Keep stale entries on disk so
+    # a temporarily removed operation/tool cannot silently regain permission.
+    denied_operations: dict[str, list[str]] = Field(default_factory=dict)
     product: Product
     connection: OdooConnection | ManageConnection | HermesConnection | OpenDesignConnection | EmqxConnection | LiteLLMConnection | NextcloudConnection | None = Field(default=None, repr=False)
     # 0.2.1 (n8n only, optional): the MCP access token of n8n's instance-level MCP server (Settings -> Instance-level
@@ -148,6 +152,18 @@ class ProductState(State):
     def access_token(cls, value):
         if value is not None and (not value or len(value) > 8192 or any(not 32 <= ord(c) <= 126 for c in value)):
             raise ValueError('invalid credential')
+        return value
+
+    @field_validator('denied_operations')
+    @classmethod
+    def operation_denies(cls, value):
+        if (len(value) > 256 or any(
+                not re.fullmatch(r'[A-Za-z0-9_]{1,128}', name)
+                or not 1 <= len(operations) <= 128 or len(set(operations)) != len(operations)
+                or any(not re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', op) for op in operations)
+                for name, operations in value.items())
+                or len(json.dumps(value, separators=(',', ':'))) > 16384):
+            raise ValueError('invalid operation denies')
         return value
 
     @model_validator(mode='before')
@@ -245,6 +261,14 @@ class ProductStore(Store):
             value = {**old.model_dump(), 'schema_version': 2, 'product': 'n8n', 'connection': None}
             self._migrated = True
         if (isinstance(value, dict) and type(value.get('schema_version')) is int and value['schema_version'] in (2, 3, 4)
+                and 'denied_operations' not in value):
+            # Only this new field may be absent. All other exact-key validation
+            # below still applies before the migrated state is ever written.
+            if not self._migrate:
+                raise ValueError('incomplete schema')
+            value = {**value, 'denied_operations': {}}
+            self._migrated = True
+        if (isinstance(value, dict) and type(value.get('schema_version')) is int and value['schema_version'] in (2, 3, 4)
                 and 'mcp_access_token' not in value):
             # 0.2.1: the field is new (additive, optional); states written before have none.
             if not self._migrate:
@@ -260,12 +284,15 @@ class ProductStore(Store):
         if isinstance(value, dict) and type(value.get('schema_version')) is int and value['schema_version'] == 3:
             if not self._migrate or set(value) != set(ProductState.model_fields) or value.get('product') != self.product:
                 raise ValueError('incomplete legacy state or unexpected downgrade')
+            # Validate before all_on replaces policy, including a deny map supplied
+            # in a legacy record. An explicit migration must not repair corruption.
+            ProductState.model_validate({**value, 'schema_version': 4})
             # 0.2.0: the full add-on. Once: every write grant and the legacy switch on, and the 0.1.x disabled list
             # cleared (owner decision 2026-10-15: after the upgrade every tool is on). What an administrator disables
             # in a schema 4 state is kept (a 4 state is never migrated again). Odoo Manage (retired) is unchanged.
             if self.product != 'odoo-manage':
                 value = {**value, 'enabled_write_tools': fresh_write_grants(self.product),
-                         'writes_enabled': FRESH_WRITES_ENABLED, 'disabled': []}
+                         'writes_enabled': FRESH_WRITES_ENABLED, 'disabled': [], 'denied_operations': {}}
             value = {**value, 'schema_version': 4}
             self._migrated = True
         if not isinstance(value, dict) or set(value) != set(ProductState.model_fields) or value.get('product') != self.product:

@@ -1,5 +1,9 @@
 # OpenDesign Changelog
 
+## 0.3.0 — 不發佈（本產品已下架）
+
+- 僅依共用版本規則同步原始碼／manifest 版本；不建置、不發布 OpenDesign 映像，不重新啟用 Store。
+
 ## 0.2.2 — 不發佈（本產品已下架，見 0.2.1）
 
 - **後端未設定或連不上時也能連線**（使用者 2026-10-16 核准）：0.2.1 以前沒有後端時 initialize 回 HTTP 502（沒有子程序可轉送），Claude.ai 連接器加不上去。現在 initialize、`notifications/initialized`、tools/list 一律成功，tools/list 回完整工具清單與 schema（依停用與寫入授權過濾，與有後端時相同）；tools/call 回 JSON-RPC 錯誤說明原因，不轉給子程序。

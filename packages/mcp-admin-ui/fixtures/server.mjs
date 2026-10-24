@@ -28,6 +28,40 @@ function reset(next = {}) {
     },
     health: { management: 'alive', child: { state: 'not_started', transport_ready: false }, backend: next.offline ? 'unreachable' : 'unconfigured' },
   };
+  if (next.operations) {
+    state.denied_operations = next.denied_operations ?? {};
+    for (const tool of Object.values(state.tools)) Object.assign(tool, {operations: [], default_operation: null});
+    Object.assign(state.tools.mixed_example, {default_operation: 'list', operations: [
+      {name:'list', write:false}, {name:'get', write:false}, {name:'create', write:true}, {name:'delete', write:true},
+    ]});
+  }
+}
+function capabilities() {
+  const result = {schema_version:1, deployment:{kind:config.fixed ? 'builtin' : 'ha-addon'}, product:{id:state.product,version:'test'},
+    admin:{authority:config.fixed ? 'paas-password' : 'ha-admin'}, backend:{mode:config.fixed?'fixed':'manual',can_edit:!config.fixed,can_test:true},
+    capabilities:{tool_schema:true,effective_tools:true,operation_policy:true,logs:true,restart_child:true,revoke_token:true},
+    tools:{catalog_count:3,policy_enabled_count:3,effective_count:config.offline?null:3,status:config.offline?'unknown':'observed',
+      items:Object.keys(state.tools).map(name=>({name,description:`Description for ${name}`,inputSchema:{type:'object',properties:{value:{type:'string'}}},schema_source:'child',policy_enabled:true,effective:config.offline?null:true}))}};
+  if (config.operations) {
+    result.capabilities.operation_denies = true;
+    for (const item of result.tools.items) {
+      const tool = state.tools[item.name];
+      const whole = !state.disabled.includes(item.name) && (!tool.write || state.enabled_write_tools.includes(item.name) || tool.legacy_write && state.writes_enabled);
+      item.operations = tool.operations.map(op => ({...op, denied: state.denied_operations[item.name]?.includes(op.name) ?? false,
+        policy_enabled: whole && !state.denied_operations[item.name]?.includes(op.name) && (!op.write || state.enabled_write_tools.includes(`${item.name}:${op.name}`))}));
+      for (const operation of item.operations) operation.effective = operation.policy_enabled ? config.offline ? null : true : false;
+      item.policy_enabled = whole && (!item.operations.length || item.operations.some(op => op.policy_enabled));
+      item.effective = item.policy_enabled ? config.offline ? null : true : false;
+      if (!item.policy_enabled) item.reason = 'operations_not_permitted';
+    }
+    result.tools.policy_enabled_count = result.tools.items.filter(item => item.policy_enabled).length;
+    result.tools.effective_count = config.offline ? null : result.tools.policy_enabled_count;
+    const operations = result.tools.items.flatMap(item => item.operations);
+    result.tools.operation_count = operations.length;
+    result.tools.policy_enabled_operation_count = operations.filter(operation => operation.policy_enabled).length;
+    result.tools.effective_operation_count = config.offline ? null : operations.filter(operation => operation.effective === true).length;
+  }
+  return result;
 }
 reset();
 const json = (response, status, value) => { response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); response.end(JSON.stringify(value)); };
@@ -44,10 +78,12 @@ const server = http.createServer(async (request, response) => {
     if (path === '/__fixture/calls') return json(response, 200, calls);
     const mount = mounts.find(candidate => candidate === '' || path.startsWith(`${candidate}/`));
     const local = path.slice(mount.length);
+    if (local === '/api/capabilities') return json(response, 200, capabilities());
+    if (local === '/api/diagnostics') return json(response, 200, {logs:{entries:[{at:'2026-10-23',stream:'stderr',generation:1,text:'token=[REDACTED]'}],redacted:true,bytes:100,dropped:2}});
     if (local === '/api/bootstrap') {
       if (config.deniedBootstrap) return json(response, 403, { error: 'MOCK denied' });
       nonce++;
-      return json(response, 200, { ...state, base_path: mount, api_base: `${mount}/api`, csrf: config.missingCsrf ? null : `mock_fresh_csrf_value_${nonce}` });
+      return json(response, 200, { ...state, capabilities:capabilities(), base_path: mount, api_base: `${mount}/api`, csrf: config.missingCsrf ? null : `mock_fresh_csrf_value_${nonce}` });
     }
     if (local.startsWith('/api/')) {
       const operation = local.slice(5);
@@ -56,6 +92,8 @@ const server = http.createServer(async (request, response) => {
       calls.push({ operation, method: request.method, validCsrf, fields: Object.keys(payload ?? {}), ...(operation === 'policy' ? { policy: payload } : {}) });
       if (!validCsrf || config.deniedSave) return json(response, 403, { error: 'MOCK DENIED PRIVATE_CANARY_MUST_NOT_RENDER' });
       if (config.saveStatus) return json(response, config.saveStatus, { error: 'MOCK PRIVATE_CANARY_MUST_NOT_RENDER' });
+      if (operation === 'backend/test') return json(response,200,{tested_configuration:'saved',backend:'reachable',health:state.health});
+      if (operation === 'child/restart') return json(response,202,{accepted:true,apply_state:'pending'});
       if (operation.startsWith('token/')) {
         if (request.method !== 'POST' || payload !== null) return json(response, 400, { error: 'MOCK token contract' });
         if (operation === 'token/revoke') { state.token_active = false; response.writeHead(204); return response.end(); }
@@ -71,7 +109,7 @@ const server = http.createServer(async (request, response) => {
         state.connection_configured = !clear;
       } else if (operation === 'endpoint') state.endpoint = payload.endpoint;
       else if (operation === 'policy') {
-        if (Object.keys(payload).sort().join() !== 'disabled,enabled_write_tools,writes_enabled') return json(response, 400, {});
+        if (Object.keys(payload).sort().join() !== (config.operations ? 'denied_operations,disabled,enabled_write_tools,writes_enabled' : 'disabled,enabled_write_tools,writes_enabled')) return json(response, 400, {});
         Object.assign(state, payload);
       } else return json(response, 404, {});
       return json(response, 200, { saved: true });
@@ -83,7 +121,7 @@ const server = http.createServer(async (request, response) => {
       response.writeHead(200, { 'Content-Type': types[extname(filename)] ?? 'application/octet-stream' });
       return response.end(await readFile(filename));
     }
-    if (!['/', '/overview', '/backend', '/tools', '/access'].includes(local)) return json(response, 404, {});
+    if (!['/', '/overview', '/backend', '/tools', '/access', '/diagnostics'].includes(local)) return json(response, 404, {});
     // Same validation required in production AFTER trusted HA role/prefix resolution.
     const html = (await readFile(`${dist}/index.html`, 'utf8')).replaceAll('__MCP_UI_BASE__', mountPath(mount));
     response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'", 'X-Content-Type-Options': 'nosniff' });
