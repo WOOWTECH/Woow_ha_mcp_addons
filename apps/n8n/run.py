@@ -15,6 +15,7 @@ import uvicorn
 
 from mcp_admin_core import redact
 from mcp_admin_core.config import ConfigError
+from mcp_admin_core.configuration import ConfigurationState
 from mcp_admin_core.capabilities import ManagementOptions
 from mcp_admin_core.products import ProductStore
 from mcp_admin_core.gateway import make_apps
@@ -37,7 +38,7 @@ async def run(args):
     if not await run_upgrade_review(args, 'n8n'):
         return
     store = ProductStore(args.data, 'n8n')
-    manager = Supervisor(child_spec(store.load(), store.directory))
+    manager = Supervisor(None)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -48,11 +49,19 @@ async def run(args):
         async with httpx.AsyncClient(trust_env=False, follow_redirects=False,
             timeout=httpx.Timeout(10, connect=3), limits=httpx.Limits(max_connections=40)) as child:
             health = HealthMonitor(store, manager, child)
+            configuration = ConfigurationState(store, manager, health)
             async def backend_changed(state):
+                configuration.begin(state)
                 health.backend = "unknown"
-                await manager.restart(child_spec(state, store.directory))
+                try:
+                    await manager.stop()
+                    manager.spec = child_spec(state, store.directory)
+                    await manager.start()
+                except Exception:
+                    configuration.failed('child_start_failed')
+                    raise
             admin, mcp = make_apps(store, TOOLS, child, health=health.snapshot,
-                                   backend_changed=backend_changed,
+                                   backend_changed=backend_changed, configuration=configuration,
                                    management=ManagementOptions(kind="ha-addon", authority="ha-admin"),
                                    backend_check=getattr(health, "test_saved", None), restart_child=backend_changed, diagnostics=getattr(manager, "diagnostics", None),
                                    verify_admin=make_ha_admin_verifier(),
@@ -67,7 +76,11 @@ async def run(args):
             # 0.1.12: the token may be in a request path (/private_<token>/mcp): scrub every log record.
             redact.install()
             redact.guard_handlers(*redact.UVICORN_LOGGERS)
-            await manager.start()
+            try:
+                await backend_changed(store.load())
+            except Exception:
+                # A launch failure leaves management available for diagnosis/retry.
+                pass
             monitor_task = asyncio.create_task(health.run())
             tasks = [asyncio.create_task(server.serve()) for server in servers]
             stop_task = asyncio.create_task(stop.wait())

@@ -29,9 +29,11 @@ from starlette.routing import Route, request_response
 from starlette.middleware import Middleware
 
 from . import redact, ui
+from .access import AccessChanged, LeasedResponse, TokenAccess
 
 from . import VERSION
 from .config import ConfigError, State, Store, strict_json
+from .configuration import ConfigurationState
 from .policy import Denied, ToolCallRefused, UnknownMethod, authorize, filter_list, validate_operation_denies
 from .admin_auth import AdminAuthority, BadRequest, prefix
 from .capabilities import ManagementOptions, capability_snapshot, observe_tools, tool_catalog
@@ -172,6 +174,7 @@ class UpstreamOwner:
         self.slots = slots
         self.response = None
         self.reader = None
+        self.iterator = None
         self.closed = False
         self.overflowed = False  # chunks() stopped at MAX_RESPONSE, not at the end of the reply
         self.end_session = None  # 0.1.6 (R2): set while the child's new session id is withheld from the client
@@ -188,6 +191,10 @@ class UpstreamOwner:
                         if not self.reader.done():
                             self.reader.cancel()
                         await asyncio.gather(self.reader, return_exceptions=True)
+                    if self.iterator is not None:
+                        # A send can be cancelled while iteration is paused at a
+                        # yield, with no pending anext task left to cancel.
+                        await self.iterator.aclose()
                     if self.response is not None:
                         await self.response.aclose()
             except (TimeoutError, httpx.HTTPError):
@@ -227,6 +234,20 @@ class OwnedStreamingResponse(StreamingResponse):
             await super().__call__(scope, receive, send)
         finally:
             # Includes headers/send failures where a generator may never start.
+            await self.owner.close()
+
+
+class OwnedInitializeResponse:
+    """Retain the new-session cleanup obligation until its complete answer is sent."""
+    def __init__(self, response, owner):
+        self.response, self.owner = response, owner
+        self.status_code = response.status_code
+
+    async def __call__(self, scope, receive, send):
+        try:
+            await self.response(scope, receive, send)
+            self.owner.end_session = None
+        finally:
             await self.owner.close()
 
 
@@ -305,7 +326,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               child_url="http://127.0.0.1:3000/mcp", health=None, backend_changed=None,
               server_name="woow-mcp", instructions: str | None = None,
               listing=None, availability=None, management: ManagementOptions | None = None,
-              backend_check=None, restart_child=None, diagnostics=None):
+              backend_check=None, restart_child=None, diagnostics=None, configuration=None):
     """listing (0.2.2): the product's tools/list tools as its child lists them (surface.listing). With it, a client
     connects whatever the backend's state: when no child can answer (no backend configured, so no child; a child that is
     not up) the gateway answers initialize, notifications/initialized, ping and tools/list itself, from listing through
@@ -329,6 +350,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     local_sessions = OrderedDict()  # 0.2.2: session id -> last use (time.monotonic())
     redact.install()  # 0.1.12: a request path may now carry the token; no log record may show it
     mutation_lock = asyncio.Lock()
+    token_access = TokenAccess(store)
+    configuration = configuration or ConfigurationState(store)
     slots = asyncio.Semaphore(32)
     admin_slots = asyncio.Semaphore(16)
 
@@ -398,12 +421,18 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             if peer_disconnected.is_set():
                 raise BadRequest(403)
             # No awaited work between this final decision and disclosure/commit.
+            headers['ETag'] = configuration.etag(state)
+            if changes is not None or name in ('token/rotate', 'token/revoke', 'child/restart'):
+                matches = request.headers.getlist('if-match')
+                if matches and (len(matches) != 1 or matches[0] != headers['ETag']):
+                    return JSONResponse({'detail': {'code': 'config_conflict'}}, status_code=409, headers=headers)
             if name == "__ui__" and hasattr(request.state, "ui_path") and request.method in ("GET", "HEAD"):
                 return ui.response(request.state.ui_path, base)
             if name == "bootstrap" and request.method == "GET":
                 catalog = tool_catalog(tools, listing, None, state)
                 schemas = {item["name"]: item.get("inputSchema") for item in catalog["items"]}
                 return JSONResponse({"base_path": base, "api_base": base + "/api", "csrf": csrf,
+                    "configuration": configuration.snapshot(state),
                     "endpoint": state.endpoint, "backend_url": state.backend_url,
                     "backend_key_set": state.backend_key is not None, "token_active": state.token is not None,
                     "mcp_access_token_set": getattr(state, "mcp_access_token", None) is not None,
@@ -419,6 +448,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                                   "default_operation": v.default_operation,
                                   "operations": [{"name": op, "write": op in v.write_operations} for op in v.operations],
                                   "inputSchema": schemas.get(k) or v.arguments.model_json_schema()} for k, v in tools.items()}, "health": snapshot()}, headers=headers)
+            if name == "configuration" and request.method == "GET":
+                return JSONResponse({'configuration': configuration.snapshot(state)}, headers=headers)
             if name == "capabilities" and request.method == "GET":
                 before = snapshot().get("child")
                 observed = await observe_tools(child, child_url, state)
@@ -446,8 +477,10 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 try:
                     await restart_child(state)
                 except Exception:
-                    return JSONResponse({"error": "child_restart_failed", "health": snapshot()}, status_code=503, headers=headers)
-                return JSONResponse({"accepted": True, "apply_state": "pending", "health": snapshot()}, status_code=202, headers=headers)
+                    return JSONResponse({"error": "child_restart_failed", "detail": {"code": "config_apply_failed"},
+                                         "configuration": configuration.snapshot(state), "health": snapshot()}, status_code=503, headers=headers)
+                return JSONResponse({"accepted": True, "apply_state": "pending", "health": snapshot(),
+                                     "configuration": configuration.snapshot(state)}, status_code=202, headers=headers)
             if name == "diagnostics" and request.method == "GET":
                 if diagnostics is None:
                     return JSONResponse({"error": "unsupported"}, status_code=409, headers=headers)
@@ -456,9 +489,13 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 return JSONResponse({"token": store.load().token}, headers=headers)
             if name == "token/rotate" and request.method == "POST":
                 updated = store.update(token=secrets.token_urlsafe(32))
+                token_access.committed()
+                headers['ETag'] = configuration.etag(updated)
                 return JSONResponse({"token": updated.token}, headers=headers)
             if name == "token/revoke" and request.method == "POST":
-                store.update(token=None)
+                updated = store.update(token=None)
+                token_access.committed()
+                headers['ETag'] = configuration.etag(updated)
                 return Response(status_code=204, headers=headers)
             if changes is not None:
                 if name == "backend" and not management.backend_can_edit:
@@ -467,9 +504,14 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 # No yield between durable commit and lifecycle ownership transfer.
                 # An authorized mutation is not undone by losing its HTTP caller.
                 committed.set()
+                headers['ETag'] = configuration.etag(updated)
                 if (name == "backend" or (name == "policy" and getattr(state, 'product', 'n8n') in ('emqx', 'litellm', 'nextcloud'))) and backend_changed:
-                    await backend_changed(updated)
-                return JSONResponse({"saved": True}, headers=headers)
+                    try:
+                        await backend_changed(updated)
+                    except Exception:
+                        return JSONResponse({'saved': True, 'detail': {'code': 'config_apply_failed'},
+                                             'configuration': configuration.snapshot(updated)}, status_code=503, headers=headers)
+                return JSONResponse({"saved": True, 'configuration': configuration.snapshot(updated)}, headers=headers)
             return Response(status_code=404)
         finally:
             mutation_lock.release()
@@ -556,23 +598,19 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         except ConfigError:
             return False
 
-    async def chunks(owner, token, seconds=None):
+    async def chunks(owner, lease, seconds=None):
         """Bound total bytes/time (seconds, default STREAM_SECONDS); poll revocation even while upstream is idle."""
-        iterator = owner.response.aiter_bytes()
+        iterator = owner.iterator = owner.response.aiter_bytes()
         total = 0
         try:
             async with asyncio.timeout(seconds or STREAM_SECONDS):
                 while True:
-                    pending = owner.reader = asyncio.create_task(anext(iterator))
-                    while not pending.done():
-                        await asyncio.wait({pending}, timeout=0.2)
-                        if not still_authorized(token):
-                            return
+                    async def read_one():
+                        owner.reader = asyncio.create_task(anext(iterator))
+                        return await owner.reader
                     try:
-                        chunk = pending.result()
+                        chunk = await lease.run(read_one)
                     except StopAsyncIteration:
-                        return
-                    if not still_authorized(token):
                         return
                     total += len(chunk)
                     if total > MAX_RESPONSE:
@@ -599,7 +637,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         except Exception:
             pass
 
-    async def initialize_reply(owner, token, is_sse, ident):
+    async def initialize_reply(owner, lease, is_sse, ident):
         """Read the child's reply to initialize: (outcome, message, SSE frame lines other than data).
 
         outcome is "ok", "missing" or "invalid". Stops at the JSON-RPC response with the request's id
@@ -615,7 +653,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             return "ok" if one_reply(value) else "invalid"
 
         pending = bytearray()
-        reader = chunks(owner, token)
+        reader = chunks(owner, lease)
         try:
             async for chunk in reader:
                 start = max(0, len(pending) - 3)  # only new bytes, plus a boundary split across chunks
@@ -656,13 +694,13 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         outcome = reply(value)
         return ("ok", value, None) if outcome == "ok" else ("invalid" if outcome else "missing", None, None)
 
-    async def stream(owner, token, request=None, seconds=None):
+    async def stream(owner, lease, request=None, seconds=None):
         """Relay a child's SSE 200 (the only stream the caller hands over). request is the (id, method) of the POST
         this stream answers, None for a GET stream; seconds bounds it (chunks)."""
         # Every event is rebuilt from the lines the gateway understood (sse_frame), so nothing it did not filter
         # can reach a client as data.
         pending = bytearray()
-        async for chunk in chunks(owner, token, seconds):
+        async for chunk in chunks(owner, lease, seconds):
             start = max(0, len(pending) - 3)  # only new bytes, plus a boundary split across chunks
             pending.extend(chunk)
             while match := EVENT_BOUNDARY.search(pending, start):
@@ -746,10 +784,22 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         return json_reply(value, 200, {"Cache-Control": "no-store"})
 
     async def mcp(request):
-        return await serve(request, None)
+        return await leased_serve(request, None)
 
     async def private_mcp(request):
-        return await serve(request, request.path_params["secret"])
+        return await leased_serve(request, request.path_params["secret"])
+
+    async def leased_serve(request, secret):
+        def refused():
+            return BadRequest(401) if secret is None else HTTPException(404)
+        try:
+            response = await serve(request, secret)
+        except AccessChanged:
+            raise refused() from None
+        lease = getattr(request.state, "token_lease", None)
+        if lease is None or response.status_code in (401, 404):
+            return response
+        return LeasedResponse(response, lease, refused)
 
     async def serve(request, secret):
         """secret is None on /mcp (Bearer header) and the path segment on /private_<secret>/mcp.
@@ -839,6 +889,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         state = store.load()
         if not authorized(state):
             return unauthorized()
+        lease = request.state.token_lease = token_access.lease(state.token)
         if request.method not in ("GET", "POST", "DELETE"):  # any other method, only after the token check
             return Response(status_code=405, headers={"Allow": "GET, POST, DELETE"})
         if secret is None and request.headers.get("origin") is not None:
@@ -853,7 +904,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     raise BadRequest(415)
                 try:
                     async with asyncio.timeout(BODY_SECONDS):
-                        limited_body = await N8N_REQUEST_LIMITS.read_body(request)
+                        limited_body = await lease.run(lambda: N8N_REQUEST_LIMITS.read_body(request))
                     N8N_REQUEST_LIMITS.parse_and_check(limited_body)
                     try:
                         message = strict_json(limited_body)
@@ -869,7 +920,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 except TimeoutError:
                     raise BadRequest(408) from None
             else:
-                message = await json_body(request)
+                message = await lease.run(lambda: json_body(request))
             try:
                 method = authorize(message, tools, state)
             except ToolCallRefused as refused_call:
@@ -890,7 +941,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             if n8n_request_bounds:
                 try:
                     async with asyncio.timeout(BODY_SECONDS):
-                        nonempty = await N8N_REQUEST_LIMITS.read_body(request)
+                        nonempty = await lease.run(lambda: N8N_REQUEST_LIMITS.read_body(request))
                 except RequestLimitError as error:
                     return request_limit_reply(error)
                 except ClientDisconnect:
@@ -898,7 +949,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 except TimeoutError:
                     raise BadRequest(408) from None
             else:
-                nonempty = await body(request)
+                nonempty = await lease.run(lambda: body(request))
             if nonempty:
                 raise BadRequest()
         headers = {"Authorization": "Bearer " + state.child_token, "Content-Type": "application/json",
@@ -973,10 +1024,21 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             call_seconds = CALL_SECONDS if method == "tools/call" else None  # 0.2.2: see CALL_SECONDS
             async with asyncio.timeout(call_seconds + 5 if call_seconds else 35):
                 while True:
+                    lease.check()
                     outgoing = child.build_request(request.method, child_url, headers=headers, content=content,
                                                    timeout=httpx.Timeout(call_seconds or 30, connect=3, pool=3))
                     try:
-                        upstream = owner.response = await child.send(outgoing, stream=True, follow_redirects=False)
+                        async def send_owned():
+                            owner.response = await child.send(outgoing, stream=True, follow_redirects=False)
+                            # Adopt a newly opened session before the lease's post-I/O check:
+                            # revocation may race the arrival of initialize headers.
+                            session = owner.response.headers.get("mcp-session-id")
+                            if (method == "initialize" and session is not None
+                                    and FORWARDED_HEADERS["mcp-session-id"].fullmatch(session)
+                                    and session != headers.get("mcp-session-id")):
+                                owner.end_session = functools.partial(end_session, state.child_token, session)
+                            return owner.response
+                        upstream = await lease.run(send_owned)
                         break
                     except httpx.ConnectError:
                         # 0.2.2 (listing only): nothing listens on the child's port. Its sessions ended with it; an
@@ -987,7 +1049,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                             return session_gone()
                         if time.monotonic() >= waited or availability()["child"] not in CHILD_UP:
                             return local_initialize(message)
-                        await asyncio.sleep(CHILD_RETRY_SECONDS)
+                        await lease.run(lambda: asyncio.sleep(CHILD_RETRY_SECONDS))
             # Only well-formed values of four headers are forwarded (a non-Latin-1 value from a child could
             # not be encoded into the reply); session/protocol values follow the same rule as request headers.
             response_headers = {k: v for k, v in upstream.headers.items()
@@ -1031,7 +1093,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         return backend_unavailable(message.get("id"))  # the child sent no reply
                     raise BadRequest(502)
             if method == "initialize" and upstream.status_code == 200:
-                outcome, value, frame = await initialize_reply(owner, state.token, is_sse, message.get("id"))
+                outcome, value, frame = await initialize_reply(owner, lease, is_sse, message.get("id"))
                 if not still_authorized(state.token):
                     raise refused()
                 if outcome == "missing":
@@ -1066,13 +1128,13 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     # The child's event framing (id/event/retry lines) with the filtered data.
                     frame.append(b"data: " + json.dumps(value, separators=(",", ":")).encode())
                     answer = Response(b"\n".join(frame) + b"\n\n", status_code=200, headers=response_headers)
-                owner.end_session = None  # the answer hands the session id over: ending it is the client's call
-                return answer
+                handed_off = True
+                return OwnedInitializeResponse(answer, owner)
             if request_id and not is_sse and upstream.status_code == 200:
                 # Every JSON reply is parsed, must answer this request, is filtered and re-serialized: a child
                 # cannot hand a client an unfiltered list under another request's id or in a batch.
                 result = bytearray()
-                async for chunk in chunks(owner, state.token, call_seconds):
+                async for chunk in chunks(owner, lease, call_seconds):
                     result.extend(chunk)
                 if not still_authorized(state.token):
                     raise refused()
@@ -1091,7 +1153,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 return json_reply(value, 200, response_headers)
             if not (is_sse and upstream.status_code == 200):
                 raise BadRequest(502)  # unreachable (R1 #8): every other success body was answered or refused above
-            response = OwnedStreamingResponse(stream(owner, state.token, (message.get("id"), method) if request_id else None,
+            response = OwnedStreamingResponse(stream(owner, lease, (message.get("id"), method) if request_id else None,
                                                      call_seconds),
                                               owner=owner, status_code=200, headers=response_headers)
             # This answer hands any session id it carries over to the client, so the end of its stream must never
