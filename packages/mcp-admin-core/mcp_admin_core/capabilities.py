@@ -133,6 +133,10 @@ def tool_catalog(registry, pinned, observed, state):
         if tool is not None:
             item["write"] = tool.write
             item["write_grants"] = tool.grants(name)
+            if tool.exposure_write_tool:
+                item['conditional_writes'] = [{'parameter': 'exposeToMcp',
+                    'requires_tool': tool.exposure_write_tool,
+                    'policy_enabled': policy_enabled(tool.exposure_write_tool, registry, state)}]
             item["operation_parameter"] = tool.selector
             item["default_operation"] = tool.default_operation
             item["denied_operations"] = getattr(state, 'denied_operations', {}).get(name, [])

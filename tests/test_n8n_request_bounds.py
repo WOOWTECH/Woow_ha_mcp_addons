@@ -9,6 +9,7 @@ from mcp_admin_core import gateway as gateway_module
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.products import ProductStore, TOOLS as PRODUCT_TOOLS
 from n8n_adapter import TOOLS as N8N_TOOLS
+from test_n8n_exposure_policy import MIXED
 
 
 N8N_BODY_LIMIT = 4 * 1024 * 1024
@@ -223,13 +224,15 @@ async def test_n8n_child_decoded_structures_share_element_budget(n8n_store, kind
     ("schema-array", 9_999),
     ("schema-object", 9_998),
 ])
-async def test_n8n_child_decoded_structures_allow_exact_boundary_without_mutating_args(
+async def test_n8n_child_decoded_structures_allow_exact_boundary_with_canonical_output(
         n8n_store, kind, count):
     child = Child()
     message = encoded_structure_case(kind, count)
     response = await send(n8n_store, N8N_TOOLS, child, encoded(message))
     assert response.status_code == 200
     assert len(child.seen) == 1
+    if kind == 'output':
+        message['params']['arguments'] = json.loads(message['params']['arguments']['output'])
     assert json.loads(child.seen[0].content) == message
 
 
@@ -250,6 +253,67 @@ async def test_n8n_encoded_depth_error_preserves_parsed_request_id(n8n_store):
     response = await send(n8n_store, N8N_TOOLS, child, encoded(tool_call({"packed": deep})))
     assert_rpc_error(response, 413, 7, -32602, "MCP JSON exceeds 64 levels of nesting")
     assert child.seen == []
+
+
+@pytest.mark.parametrize('route', ['bearer','private'])
+@pytest.mark.parametrize('kind', ['elements','depth','decoded_bytes'])
+async def test_exposure_wrapper_is_bounded_before_normalization(n8n_store, route, kind):
+    inner = {'mode':'list','exposeToMcp':True}
+    if kind == 'elements':
+        inner['extra'] = [0] * 10_001
+    elif kind == 'depth':
+        inner['extra'] = '[' * 65 + '0' + ']' * 65
+    else:
+        inner['first'] = json.dumps({'blob':'x' * 1_100_000})
+        inner['second'] = inner['first']
+    message = tool_call({'output':json.dumps(inner)}, name='n8n_workflow_versions')
+    child = Child()
+    response = await send(n8n_store,N8N_TOOLS,child,encoded(message),route)
+    assert response.status_code == 413
+    assert response.json()['error']['code'] == -32602
+    assert child.seen == []
+
+
+@pytest.mark.parametrize('route', ['bearer','private'])
+async def test_exposure_authorization_and_canonical_forwarding_over_both_routes(n8n_store, route):
+    n8n_store.update(backend_url='https://offline.invalid',backend_key='synthetic',
+                     enabled_write_tools=[],writes_enabled=False)
+    args = {'mode':'list','source':'native','workflowId':'synthetic','exposeToMcp':True}
+    message = tool_call({'mode':'list','exposeToMcp':False,'output':json.dumps(args)},
+                        name='n8n_workflow_versions')
+    child = Child()
+    response = await send(n8n_store,N8N_TOOLS,child,encoded(message),route)
+    assert response.json()['error']['code'] == -32602
+    assert response.json()['error']['message'] == 'Operation not permitted'
+    assert child.seen == []
+    n8n_store.update(enabled_write_tools=['n8n_update_partial_workflow'])
+    response = await send(n8n_store,N8N_TOOLS,child,encoded(message),route)
+    assert response.status_code == 200 and 'error' not in response.json()
+    assert len(child.seen) == 1
+    assert json.loads(child.seen[0].content)['params']['arguments'] == args
+
+
+@pytest.mark.parametrize('route', ['bearer','private'])
+@pytest.mark.parametrize('name,selector,read,write', MIXED)
+async def test_effective_write_selector_cannot_reach_transport_until_granted(
+        n8n_store,route,name,selector,read,write):
+    n8n_store.update(backend_url='https://offline.invalid',backend_key='synthetic',
+                     enabled_write_tools=[],writes_enabled=False)
+    inner = {selector:write,'workflowId':'synthetic','id':'synthetic'}
+    message = tool_call({selector:read,'output':json.dumps(inner)},name=name)
+    child = Child()
+    for denied in (False,True):
+        if denied:
+            n8n_store.update(enabled_write_tools=[name+':'+write],denied_operations={name:[write]})
+        response = await send(n8n_store,N8N_TOOLS,child,encoded(message),route)
+        assert response.json()['error']['message'] == 'Operation not permitted'
+        assert response.json()['error']['code'] == -32602
+        assert child.seen == []
+    n8n_store.update(enabled_write_tools=[name+':'+write],denied_operations={})
+    response = await send(n8n_store,N8N_TOOLS,child,encoded(message),route)
+    assert response.status_code == 200 and 'error' not in response.json()
+    assert len(child.seen) == 1
+    assert json.loads(child.seen[0].content)['params']['arguments'] == inner
 
 
 async def test_n8n_nonidentity_content_encoding_is_415_without_reading_body(n8n_store):
