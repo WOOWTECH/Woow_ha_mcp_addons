@@ -1,6 +1,56 @@
 # Changelog
 
-## 0.3.4 — release candidate (2026-10-24)
+## 0.4.0 — release candidate (2026-10-25)
+
+The six enabled add-ons (Odoo, n8n, Hermes, EMQX, LiteLLM, Nextcloud) move to 0.4.0,
+after 0.3.4: phase 2 of the MCP SDK 2 migration (issue #21; the WOOW PaaS twin
+woow-mcp-server did phase 1 in #81 and #82). OpenDesign stays disabled (metadata
+version only, no image). No option, port, architecture, image name, tool name or
+state schema changes; schema stays 4 and the full-functionality defaults are
+unchanged. One declared breaking change: 13 Odoo tools return their structured
+result unwrapped (`upgrade-notes.yaml`). See the
+[0.4.0 release decision](docs/operations/release-decision-0.4.0.md).
+
+### Dependencies
+
+- Python MCP SDK `mcp` 1.30.0 -> 2.3.0 (plus `mcp-types` 2.3.0) in the six Store
+  children; FastMCP 3.4.11 -> 4.1.3 (EMQX, LiteLLM, Nextcloud); `odoo-mcp` 1.1.0 ->
+  1.3.0 (Odoo; both build patches apply unchanged). The SDK brings httpx2/httpcore2
+  2.16.0, truststore 0.10.5 and opentelemetry-api 1.45.1 and drops httpx-sse; the
+  children's backend clients stay on HTTPX 0.28.1. The archived Odoo Manage keeps its
+  own mcp 1.30.0 / mcp-server-odoo 0.7.1 lock.
+- Node 22.23.4 -> 26.12.1 (Active LTS from 2026-10-28) in every image and in CI
+  (`node:26.12.1-bookworm-slim`, multi-arch index digest). Node 26's official binary
+  links libatomic.so.1: the n8n image copies the node stage's Debian libatomic1 library
+  next to libstdc++/libgcc_s and checks `node --version` right after. n8n-mcp 2.96.2
+  and the 28 n8n tools are unchanged; the n8n child keeps its sql.js fallback
+  (`npm ci --ignore-scripts`, no native better-sqlite3).
+
+### MCP SDK 1 -> 2 behaviour, kept as it was
+
+- Tool error text: SDK 2 shows only `Error executing tool <name>` for any exception but
+  `ToolError`. `apps/runtime/tool_error_text.py` (port of the PaaS `keep_error_text`)
+  restores the 1.x text in Odoo, Hermes and OpenDesign; the real children answer the
+  same texts as 0.3.4.
+- Odoo concurrency: SDK 2 runs sync tools on parallel worker threads; `BoundedTools`
+  still serializes every Odoo tool (writes included) on its one owned worker.
+- Request body 16 MiB and the 30-minute session idle limit still take effect
+  (`apps/runtime/session_idle.py`, verified with SDK 2 and six real children).
+- FastMCP 4 cancels a running async tool when its session is deleted: the Nextcloud
+  readiness probe is shielded, so a slow 401 still latches (at most two failed logins).
+- Protocol: clients stay on the 2025 handshake era. The gateway still answers
+  `server/discover` itself (-32601) and no longer forwards a client's
+  `MCP-Protocol-Version` header with an initialize (SDK 2 children refuse such an
+  initialize). Raw JSON-RPC, the Python SDK 1.30 and 2.3 clients and the TypeScript SDK
+  1.32 client connect, list and call through the gateway (`tests/test_protocol_clients.py`).
+
+### Hermes
+
+- The vendored Hermes files are re-snapshotted from woow-mcp-server main (server.py
+  as of 471efdf: SDK 2 `MCPServer`, 1.x error text), keeping the HA changes, including
+  the 0.3.4 loopback refusal (AI-HMCP-002-2) and the LAN allowance.
+
+## 0.3.4 — stable Release (2026-10-24)
 
 The same six enabled add-ons (Odoo, n8n, Hermes, EMQX, LiteLLM, Nextcloud) move to
 0.3.4, after 0.3.3; 0.3.2 is not used (it had been reserved for this release).
