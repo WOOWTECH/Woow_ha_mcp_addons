@@ -1,10 +1,12 @@
-# 0.3.4 release decision — 2026-10-24
+# 0.3.4 發布決策 — 2026-10-24
 
-Status: pending image publication. Candidate dependency/Hermes changes and release
-metadata only: no 0.3.4 image build, container/supply-chain acceptance, registry
-publication or stable Release is claimed. All six exact-image gates and publication
-receipts remain pending. The presence of this document is not evidence that those
-gates passed.
+映像驗證時點：2026-10-24 17:21 UTC。六個產品已由精確來源
+`53f996a5fdc1bd2a6717f2f94bb3bf04d2204bb4` 全新建置，完成 P1–P5、
+實際映像 UI 檢查、發布、匿名完整拉取及獨立 manifest/config/diff IDs 驗證。
+各產品的不可變 digest、實際 SBOM 版本與證據雜湊見
+[0.3.4 映像發布收據](../provenance/release-0.3.4-images.json)。
+正式 stable Release 與 Store catalog 由後續受保護的 PR 合併流程產生並另行驗證；
+本文件不代表 HAOS 升級、真實業務後端或備份還原已通過驗收。
 
 ## Scope
 
@@ -12,17 +14,17 @@ Six Store-enabled products move to 0.3.4: Odoo, n8n, Hermes, EMQX, LiteLLM and
 Nextcloud. 0.3.4 follows 0.3.3 (PR #19: n8n effective-argument authorization and
 conditional exposure writes), which followed 0.3.1 (PR #16: configuration application
 status and active token revocation); both keep the 0.3.0 dependency pins. 0.3.2 is
-not used: it had been reserved for this release. The latest stable release is 0.3.3
-(six stable Releases published 2026-10-24 11:22 UTC); this branch is based on
-`2343850`.
+not used: it had been reserved for this release. 本次來源以 `2343850` 的 0.3.3
+為基底；該版六個 stable Releases 於 2026-10-24 11:22 UTC 發布。
 OpenDesign remains disabled in the Store registry; its source manifest shares the
 version but no OpenDesign image or stable Release is requested. Existing immutable
 tags must never be replaced. `RELEASE-GATES.json` stays closed.
 
 0.3.4 contains:
 
-1. the dependency alignment with the WOOW PaaS twin (woow-mcp-server) below,
-   including `N8N_MCP_VERSION_CHECK_DISABLED=true` in the n8n child environment;
+1. 下表的 HA 相容依賴更新與 MCP 安全底線，包括 n8n child 固定設定
+   `N8N_MCP_VERSION_CHECK_DISABLED=true`；PaaS 已採用 SDK2／FastMCP4／Node26，
+   兩者各自維護 major 版本線；
 2. the Hermes loopback refusal of AI-HMCP-002-2 (below).
 
 Ports, architectures, image names, manifest options, privileges, tool names and the
@@ -48,11 +50,11 @@ installations upgrade without the legacy review page (that is only for schema 1/
 | CI Node (`setup-node`) | 22.23.2 | 22.23.4 |
 | Core gateway pins (anyio, httpx, pydantic 2.12.5, starlette 1.3.1, uvicorn 0.38.0, websockets 15.0.1) | — | unchanged; only `certifi` moves in `uv.lock` |
 
-`odoo-mcp` 1.2.0–1.2.3 and `mcp-server-odoo` 0.8.0 still declare `mcp<2`, but the
-PaaS twin pins 1.1.0 / 0.7.1 and Odoo's two build patches match `odoo_mcp` source
-text, so they stay; their latest releases (1.3.0, 0.9.0) require MCP SDK 2.x. MCP
-SDK 2.x, FastMCP 4.x and Node 24 are a separate migration, as are the core
-gateway's own pins.
+本次 HA 保留 `odoo-mcp` 1.1.0／`mcp-server-odoo` 0.7.1，維持 Odoo 的兩個
+build patches 與受保護來源文字相符。作者依賴審查記錄指出，1.2.0–1.2.3／0.8.0
+仍宣告 `mcp<2`，而 1.3.0／0.9.0 要求 MCP SDK 2.x。PaaS 的 SDK2／FastMCP4／
+Node26 版本線與 HA 此次要求的 SDK1／FastMCP3／Node22 相容版本分別驗證；
+core gateway 自身的其他 pins 亦保持原樣。
 
 ## Dependency review
 
@@ -129,7 +131,10 @@ loopback MCP server URLs (servers registered earlier are not removed), and
 `n8n_health_check` reports the version check as `disabled` instead of querying the
 npm registry.
 
-## Local evidence (this pod; not image or HA acceptance)
+## 作者歷史來源驗證（原始紀錄；非本次映像或 HAOS 驗收）
+
+以下保留作者在依賴分支及先前基底上的驗證紀錄。其執行環境、案例數與當時
+未發布映像的狀態均屬歷史資訊；本次精確來源與映像驗收另記於下一節。
 
 Merged onto `2343850` (0.3.3) in the pi-agent pod: Node 22.23.4, CPython 3.13.15,
 uv 0.12.10, no root and no container runtime.
@@ -158,6 +163,41 @@ uv 0.12.10, no root and no container runtime.
 - `packaging/release_gate.py all` finds this record for all six products and fails
   only on the images (HTTP 404) until 0.3.4 is published.
 
+## 本次精確來源與映像驗收
+
+- 建置來源為 `53f996a5fdc1bd2a6717f2f94bb3bf04d2204bb4`，tree 為
+  `5bd137a4c2547a21920637e7b8cf695b91296e59`；完整 history bundle 含 238 個
+  commits。建置前此 head 的 [checks](https://github.com/WOOWTECH/Woow_ha_mcp_addons/actions/runs/40111875933/job/120925113055)
+  與 [Release train / wvt check](https://github.com/WOOWTECH/Woow_ha_mcp_addons/actions/runs/40111876328/job/120925113709)
+  均成功。六支映像重新建置 runtime 層，各自執行完整 P1–P5。
+- 先前 `921955b` 來源的 EMQX 驗收因秘密掃描誤報而停止。Codex 安全來源審查
+  證明該命中是 dnspython 2.9.0 官方檔案的公開型別識別字；僅新增一組精確
+  rule/hash triage，證據見 [dnspython 來源證明](../provenance/dnspython-2.9.0-secret-triage.md)。
+  舊來源的四個本地 image IDs 已保留於獨立標籤，歷史成功、失敗與診斷收據保持
+  原件；本次沒有採用舊 build/gate。scanner、CVE/license 政策及廣泛例外均未變更。
+- 實際映像 SBOM 確認：五個 Python children 為 MCP 1.30.0；EMQX、LiteLLM、
+  Nextcloud 為 FastMCP／fastmcp-slim 3.4.11；六產品 certifi 均為 2026.10.23；
+  n8n 為 2.96.2、TS SDK 1.32.2、Node 22.23.4。這些結果來自已驗收 image ID，
+  而非僅讀取 lock 檔。
+- Hermes 實際 handler probe 驗證 18 個拒絕案例均無 dashboard 寫入，包含
+  11 個 Hermes loopback marker 與 mapped 位址的共享拒絕碼及實際 loopback
+  辨識；2 個 LAN／ULA 允許案例成功。n8n 實際 adapter/checker 驗證 inherited
+  `false` 被固定環境覆蓋、停用時 fetch=0、控制組 fetch=1，實際 Node 為
+  v22.23.4。probes 使用 network none、UID10001、唯讀 rootfs 與既定資源限制，
+  自有容器及 dashboard 均已清理。
+- 精確53來源重新執行 UI build、26 項單元測試及 41 項 browser 測試；六支已
+  驗收映像的實際 UI 最終檔案與權限均核對通過。凍結發布 helpers 的 68 項離線
+  測試亦通過，包含保留舊 image IDs 的拒絕與競態測試。
+- 六個 `0.3.4` tags 在首次發布前均不存在。發布已驗收 ID 後，逐一以匿名
+  immutable full pull 確認內容，再由獨立讀取核對 manifest、config、diff IDs、
+  平台及來源標籤。臨時憑證設定與自有 registry refs 已清理，已驗收本地映像保留。
+  收據列出所有弱點偵測數量；原有政策通過不代表零弱點。
+
+本次使用明確授權的 private builder 與共享 daemon；不宣稱 hosted BLD2、
+host isolation、簽章 provenance 或 SLSA。公開收據在映像發布後才加入，因此文件
+head／正式 merge 與映像來源分開記錄，且這份新收據不在已發布映像內；未宣稱由
+文件 head 重建會得到完全相同的映像或全部 provenance 檔案。
+
 ## Release gates
 
 1. Clean exact committed source and canonical Dockerfiles for linux/amd64; labels
@@ -173,5 +213,7 @@ uv 0.12.10, no root and no container runtime.
    six `<slug>-v0.3.4` stable Releases and Store sync follows. Do not create tags or
    releases manually or enable OpenDesign.
 
-No image has been built for 0.3.4: this pod has no container runtime, and PR checks
-do not build images (builder admission denies PR image execution by design).
+六映像的建置、驗收及發布由上述 private builder 證據證明。PR checks 本身不建置
+映像，`RELEASE-GATES.json` 仍保持關閉。後續須在公開文件的精確 head 上取得
+checks、readiness、wvt 全綠，正常合併後再確認六個正式 stable Releases 與 Store
+catalog；既有版本 tags 不得覆寫，OpenDesign 維持停用。
