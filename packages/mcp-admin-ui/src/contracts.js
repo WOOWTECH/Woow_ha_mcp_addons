@@ -130,6 +130,10 @@ export function operationSummary(operation) {
   const effective = operation.effective === true ? '子行程有效' : operation.effective === false ? '子行程未生效' : '子行程有效狀態未知';
   return `${operation.name} · ${operation.write ? '寫入' : '讀取'} · ${policy} · ${effective}`;
 }
+export function conditionalWriteSummary(rule) {
+  const policy = rule.policy_enabled === true ? '允許' : rule.policy_enabled === false ? '禁止' : '未知';
+  return `${rule.parameter} 正規化後為 true 時，表示要將工作流程開放給 MCP 存取；需要 ${rule.requires_tool}；相依權限：已儲存政策${policy}。`;
+}
 export function environmentLabels(snapshot) {
   return {
     deployment: ({ 'ha-addon': 'HA 管理介面', builtin: '內建 MCP 管理', paas: 'PaaS 管理介面' })[snapshot?.deployment?.kind] ?? 'MCP 管理介面',
