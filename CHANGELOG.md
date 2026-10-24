@@ -21,6 +21,19 @@ confirm. After durable migration, review listeners stop and the normal runtime
 starts on the same ports. `preserve` disables new tools and tools whose expanded
 arguments need review; it cannot recreate old binary argument restrictions.
 
+### Security dependencies
+
+- Pin certifi 2026.10.19 in the six published products to address
+  GHSA-6q48-6c7w-9gw2; rebuild the vendored Python environments.
+- Pin n8n MCP SDK 1.32.0 for GHSA-22jm-h49p-29qw and
+  GHSA-46jr-4wx8-v453, with a product-specific input-budget mitigation.
+  After authentication, n8n requests are limited to 4 MiB, 10,000 recursive
+  argument members/elements and depth 64. JSON-looking encoded argument
+  structures share the element budget and a cumulative 4 MiB decoding budget;
+  compressed requests are rejected. Oversized workflows must be split or
+  reduced. Other products retain their existing request limits.
+  Release scans retain the original policy and severity threshold.
+
 ### Policy and token management
 
 - Per-operation denies and exact write grants distinguish saved from effective

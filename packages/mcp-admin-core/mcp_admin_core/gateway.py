@@ -35,10 +35,17 @@ from .config import ConfigError, State, Store, strict_json
 from .policy import Denied, ToolCallRefused, UnknownMethod, authorize, filter_list, validate_operation_denies
 from .admin_auth import AdminAuthority, BadRequest, prefix
 from .capabilities import ManagementOptions, capability_snapshot, observe_tools, tool_catalog
+from .request_limits import McpRequestLimits, RequestLimitError
 
 # 0.2.0: 16 MiB (was 256 KiB). The full Nextcloud surface uploads up to 10 MiB as base64 (about 13.4 MiB of JSON) and
 # writes text files up to 1 MiB; a body is read only after the token check. BODY_SECONDS bounds the read.
 MAX_REQUEST = 16 * 1024 * 1024
+# n8n-mcp uses the SDK's low-level Server, so the SDK 1.32.0 McpServer input-element option does not protect it.
+# Bound only authenticated n8n ingress here; other products retain MAX_REQUEST for large inputs such as Nextcloud.
+N8N_MAX_REQUEST = 4 * 1024 * 1024
+N8N_MAX_ARGUMENT_ELEMENTS = 10_000
+N8N_MAX_ARGUMENT_DEPTH = 64
+N8N_REQUEST_LIMITS = McpRequestLimits(N8N_MAX_REQUEST, N8N_MAX_ARGUMENT_ELEMENTS, N8N_MAX_ARGUMENT_DEPTH)
 BODY_SECONDS = 60
 MAX_RESPONSE = 8 * 1024 * 1024
 STREAM_SECONDS = 120
@@ -259,6 +266,10 @@ async def json_body(request):
         raise BadRequest() from None
 
 
+def request_limit_reply(error):
+    return json_reply(error.payload, error.status, {"Cache-Control": "no-store"})
+
+
 def token_valid(request, state):
     values = request.headers.getlist("authorization")
     return (state.token is not None and len(values) == 1
@@ -306,6 +317,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
+    n8n_request_bounds = getattr(store, "product", None) == "n8n"
     management = management or ManagementOptions()
     if listing is not None:
         listing = copy.deepcopy(list(listing))
@@ -836,7 +848,28 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         method = message = refusal = None
         content = b""
         if request.method == "POST":
-            message = await json_body(request)
+            if n8n_request_bounds:
+                if request.headers.get("content-type", "").split(";")[0] != "application/json":
+                    raise BadRequest(415)
+                try:
+                    async with asyncio.timeout(BODY_SECONDS):
+                        limited_body = await N8N_REQUEST_LIMITS.read_body(request)
+                    N8N_REQUEST_LIMITS.parse_and_check(limited_body)
+                    try:
+                        message = strict_json(limited_body)
+                        # Preserve HA's duplicate/nonfinite checks and reject lone surrogates before any dispatch.
+                        json.dumps(message, ensure_ascii=False).encode("utf-8")
+                    except (ValueError, RecursionError):  # UnicodeEncodeError is a ValueError
+                        raise RequestLimitError(
+                            "Invalid or excessively nested JSON", status=400, code=-32700) from None
+                except RequestLimitError as error:
+                    return request_limit_reply(error)
+                except ClientDisconnect:
+                    raise BadRequest(403) from None
+                except TimeoutError:
+                    raise BadRequest(408) from None
+            else:
+                message = await json_body(request)
             try:
                 method = authorize(message, tools, state)
             except ToolCallRefused as refused_call:
@@ -853,8 +886,21 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                                   200, {"Cache-Control": "no-store"})
             except Denied:
                 raise BadRequest(403) from None
-        elif await body(request):
-            raise BadRequest()
+        else:
+            if n8n_request_bounds:
+                try:
+                    async with asyncio.timeout(BODY_SECONDS):
+                        nonempty = await N8N_REQUEST_LIMITS.read_body(request)
+                except RequestLimitError as error:
+                    return request_limit_reply(error)
+                except ClientDisconnect:
+                    raise BadRequest(403) from None
+                except TimeoutError:
+                    raise BadRequest(408) from None
+            else:
+                nonempty = await body(request)
+            if nonempty:
+                raise BadRequest()
         headers = {"Authorization": "Bearer " + state.child_token, "Content-Type": "application/json",
                    "Accept": "application/json, text/event-stream",  # fixed: the gateway reads both itself
                    "Accept-Encoding": "identity"}
