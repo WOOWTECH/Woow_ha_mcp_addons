@@ -19,10 +19,15 @@ if (crypto.createHash("sha256").update(fs.readFileSync(apiPath)).digest("hex") !
 // The error types/formatter and actual handler are part of this boundary too.
 // 0.2.2: handlers-n8n-manager.js is the file apps/n8n/patches/fix_test_run_error_messages.py writes (test-run errors keep
 // n8n's own message; applied by the Dockerfile and packaging/unit.sh): an unpatched or altered package fails closed.
+// 0.2.3 (n8n-mcp 2.91.0 -> 2.92.1): of the guarded files only mcp/server.js changed. Reviewed: instanceContext became
+// a getter that reads a per-request context (AsyncLocalStorage, utils/request-context.js) set by the HTTP server,
+// else the session's own context; tools/list, tools/call and resources/list attach the MCP Apps UI metadata unless
+// N8N_MCP_DISABLE_UI_APPS=true (not set: n8n_adapter passes a fixed environment), so the output is unchanged. Tool
+// dispatch, results and error formatting are unchanged; the other guarded files are byte-identical.
 for (const [relative, digest] of [
     ["utils/n8n-errors.js", "efd5783846cf1eb61dbf9387de260e5a1d336ec609bc4c4d5601c369b5d2f20a"],
     ["mcp/handlers-n8n-manager.js", "5b8205754d24e8c6b2d001d4b04e6c0e408d5037215668a75049ce932d6d985d"],
-    ["mcp/server.js", "a4dfc41f48282423a610ee9ac45c0374357b7409cdaa4858e11ba58a32b2128c"],
+    ["mcp/server.js", "e9bf1ffcbf79df6d024a2e10c0446f182e5e62e5110ce8154109843d9ff25f76"],
     ["mcp/handlers-official-tools.js", "e85937c58d5a8426d54b1b69598adc83a14648402fc58a8714ef5db8132977cd"],
     ["mcp/official-mcp-access.js", "113d3556e4b93a870b36986a0fce8de45391ce64d7ab4c9f50fd6715eee3c733"],
     ["utils/npm-version-checker.js", "35eb4789eef7766e4516f78caf125542778cf7de33e1fff4bc670c1f1029057a"],

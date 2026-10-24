@@ -2,9 +2,12 @@
 
 Real children (each in its pinned venv, started from products.child_spec on a private port, fake backends): a session
 nobody uses is gone after the limit (the child answers 404, so MCP clients initialize again) while a session in use
-stays. Unit checks run session_idle inside both pinned SDK flavours (mcp 1.28.1 FastMCP; FastMCP 3.4.5).
+stays. Unit checks run session_idle inside both pinned SDK flavours (mcp 1.30.0 FastMCP; FastMCP 3.4.5); 0.2.3: mcp
+1.30.0 has its own 30-minute default, which its FastMCP passes explicitly, and the add-on's limit still replaces it;
+its 4 MiB request body limit becomes the gateway's 16 MiB (a real child takes a body just under it).
 """
 import asyncio
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -13,6 +16,7 @@ import time
 
 import pytest
 
+from mcp_admin_core import gateway
 from mcp_admin_core.health import protocol_reply
 from mcp_admin_core.products import PRODUCTS, ProductStore, child_spec
 
@@ -21,6 +25,7 @@ from test_real_products import backend, connection
 
 ROOT = Path(__file__).resolve().parents[1]
 CHILDREN = [p for p in PRODUCTS if p != 'odoo-manage']  # retired: no image since 0.1.5
+BODY = 16 * 1024 * 1024  # 0.2.3: the request body every Python child accepts (the gateway's MAX_REQUEST)
 INIT = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
         'params': {'protocolVersion': '2025-03-26', 'capabilities': {}, 'clientInfo': {'name': 'idle-test', 'version': '0'}}}
 
@@ -38,14 +43,20 @@ out['default'] = Manager(app=object()).session_idle_timeout
 out['explicit'] = Manager(app=object(), session_idle_timeout=5).session_idle_timeout
 out['stateless'] = Manager(app=object(), stateless=True).session_idle_timeout
 out['positional'] = Manager(object(), None, False, False).session_idle_timeout
+# 0.2.3 (mcp 1.30.0): the request body limit (SDK default 4 MiB) becomes the gateway's MAX_REQUEST unless set otherwise.
+out['body'] = Manager(app=object()).max_request_body_size
+out['body_explicit'] = Manager(app=object(), max_request_body_size=1024).max_request_body_size
+out['body_stateless'] = Manager(app=object(), stateless=True).max_request_body_size
 if sys.argv[1] == 'fastmcp':
     from fastmcp.server.http import FastMCPStreamableHTTPSessionManager
-    out['fastmcp'] = FastMCPStreamableHTTPSessionManager(app=object()).session_idle_timeout
+    manager = FastMCPStreamableHTTPSessionManager(app=object())
 else:
     from mcp.server.fastmcp import FastMCP
     server = FastMCP('t')
     server.streamable_http_app()
-    out['fastmcp'] = server.session_manager.session_idle_timeout
+    manager = server.session_manager
+out['fastmcp'] = manager.session_idle_timeout
+out['fastmcp_body'] = manager.max_request_body_size
 print(json.dumps(out))
 '''
 
@@ -62,9 +73,22 @@ def unit(venv, flavour, idle=None):
 
 @pytest.mark.parametrize('venv,flavour', [('hermes', 'sdk'), ('emqx', 'fastmcp')])
 def test_every_stateful_manager_gets_the_limit(venv, flavour):
+    # 0.2.3 (mcp 1.30.0): a stateless manager keeps the SDK's own default (1800 s, unused without sessions; 1.28.1 had
+    # None) whatever the limit is, and the SDK's FastMCP, which passes that default explicitly, still gets the limit.
+    body = {'body': BODY, 'body_explicit': 1024, 'body_stateless': BODY, 'fastmcp_body': BODY}
     assert unit(venv, flavour) == {'limit': 1800.0, 'again': 1800.0, 'default': 1800.0, 'explicit': 5,
-                                   'stateless': None, 'positional': 1800.0, 'fastmcp': 1800.0}
-    assert unit(venv, flavour, '7')['fastmcp'] == 7.0
+                                   'stateless': 1800, 'positional': 1800.0, 'fastmcp': 1800.0, **body}
+    assert unit(venv, flavour, '7') == {'limit': 7.0, 'again': 7.0, 'default': 7.0, 'explicit': 5,
+                                        'stateless': 1800, 'positional': 7.0, 'fastmcp': 7.0, **body}
+
+
+def test_the_childs_body_limit_is_the_gateways():
+    # 0.2.3: mcp 1.30.0 refuses a body over its max_request_body_size (4 MiB by default) with 413; the gateway admits up
+    # to MAX_REQUEST (0.2.0: 16 MiB, Nextcloud uploads up to 10 MiB as base64); session_idle gives the children that.
+    spec = importlib.util.spec_from_file_location('session_idle_module', ROOT / 'apps/runtime/session_idle.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.BODY_BYTES == BODY == gateway.MAX_REQUEST
 
 
 @pytest.mark.parametrize('value', ['0', '-1', 'abc', '100000', 'nan'])
@@ -193,6 +217,11 @@ async def test_real_child_ends_an_idle_session_and_keeps_an_active_one(tmp_path,
                     await asyncio.sleep(idle / 4)
                 assert await ping(client, endpoint.url, left) == 404
                 assert await ping(client, endpoint.url, used) == 200
+                # 0.2.3: a body just under the gateway's MAX_REQUEST still reaches the child (mcp 1.30.0 alone: 413).
+                padding = 'A' * (BODY - 4096)
+                big = {'jsonrpc': '2.0', 'id': 4, 'method': 'ping', 'params': {'_meta': {'padding': padding}}}
+                assert len(json.dumps(big)) < BODY
+                assert (await post(client, endpoint.url, used, big))[0] == 200
         finally:
             await manager.stop()
             endpoint.close()

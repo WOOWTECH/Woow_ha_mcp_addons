@@ -46,11 +46,22 @@ bundled-data, transitive dependency and any future copied-source obligations rem
 
 ## Actual npm artifact inspected
 
-- Package: **n8n-mcp 2.91.0**, registry `https://registry.npmjs.org`.
-- Tarball: `https://registry.npmjs.org/n8n-mcp/-/n8n-mcp-2.91.0.tgz`.
-- npm integrity: `sha512-0dQtYV6+pcYUvgmZflwa84cxZLs2h/stby7gzlv3//6EiYIZyp6NZyuIAVUIudktahpHZtt0epd9TyTPWxd50A==`.
-- npm shasum: `2c999da6fbe2594a093b5920e93dcd816577df17`.
-- Registry-reported gitHead: `3a2ec761e006089638d281a27d15ba030ec3ec88`.
+- Package: **n8n-mcp 2.92.1** (0.2.3; 0.1.0–0.2.2 shipped 2.91.0), registry `https://registry.npmjs.org`.
+- Tarball: `https://registry.npmjs.org/n8n-mcp/-/n8n-mcp-2.92.1.tgz` (SHA-256
+  `ed9f318c3220f06d4f42382e3f1daec8d77ce93dbd7b7d1fc3b52f34dfa1ca2d`).
+- npm integrity: `sha512-cnNxuA/JzUT90eqtNpvXtvATcRZgG6uaaiczR9Q/OGrW3ZSntTvx0Ztonjnw//F404qIIOhPkyBe61mi+dyJ4w==`.
+- npm shasum: `68d8254bfabe35280d69beda5e58ad61a2b90f17`.
+- Registry-reported gitHead: `347cf93fed96bb91d76a92466df7ec6d8d5fe23e`.
+- 2.91.0 (0.1.0–0.2.2): integrity `sha512-0dQtYV6+pcYUvgmZflwa84cxZLs2h/stby7gzlv3//6EiYIZyp6NZyuIAVUIudktahpHZtt0epd9TyTPWxd50A==`,
+  shasum `2c999da6fbe2594a093b5920e93dcd816577df17`, gitHead `3a2ec761e006089638d281a27d15ba030ec3ec88`.
+- 0.2.3 review of 2.91.0 → 2.92.1 (both tarballs diffed): same dependencies (only the version changed in
+  `package.json`), same `data/` and `ui-apps/`, same tool definitions (`dist/mcp/tools.js`, `tools-n8n-manager.js`) and
+  handlers. Changed: `dist/mcp/server.js` and `dist/http-server-single-session.js` (an optional per-request instance
+  context for multi-tenant HTTP, new `dist/utils/request-context.js`), `dist/mcp/ui/*` and `dist/types/instance-context.js`
+  (the new `N8N_MCP_DISABLE_UI_APPS` / `uiAppsEnabled` switch for MCP Apps UI metadata, on by default as before), and
+  `.env.example`. The add-on's child (single tenant, fixed environment without that switch) lists the same 28 tools
+  with identical names, descriptions, schemas, annotations and UI metadata (real 2.91.0 and 2.92.1 children compared,
+  configured and unconfigured); see `apps/n8n/backend_policy.cjs` for the reviewed guard digests.
 - Source: `https://github.com/czlonkowski/n8n-mcp`.
 - Artifact license: MIT, copyright 2024 Romuald Czlonkowski; retained at
   `licenses/n8n-mcp-MIT.txt`. This is NOT a transitive/bundled-data license clearance.
@@ -63,7 +74,8 @@ No global npm installs or native build/install scripts are required for this tra
 The tested fallback is **sql.js 1.14.2**; optional better-sqlite3 11.10.0 is installed
 as package contents but its native addon is not built. MCP JS SDK is **1.31.0** (0.1.6: an npm `overrides` entry in
 `apps/n8n/package.json` lifts n8n-mcp 2.91.0's exact 1.30.0 pin for GHSA-6qxp-vccf-f47h / CVE-2026-104850, an OAuth-client
-flaw this child does not use; 1.31.0's server-side changes are a 4 MiB request-body bound and a 100-message batch bound).
+flaw this child does not use; 1.31.0's server-side changes are a 4 MiB request-body bound and a 100-message batch bound;
+2.92.1 keeps the same exact 1.30.0 pin, so the override stays).
 
 ### Important launcher correction
 
@@ -102,15 +114,15 @@ Ingress identity, cookies, forwarded headers, Origin, arbitrary paths or query s
 
 ### SHA-256 of distributed files inspected
 
-| File below npm package | SHA-256 |
+| File below npm package (2.92.1, as published) | SHA-256 |
 |---|---|
-| `dist/mcp/index.js` | `4476ee45971533c0b7e97cfec4f53466e88100af616fa3fd0a7df49e90128e15` |
-| `dist/http-server-single-session.js` | `da499542df98783e93961cf7a5c410d38fc1d45876828172a7119b0f7c0db74b` |
-| `dist/http-server.js` (NOT launched) | `8eb7359605a29b25c5083e2bdbc8ac703e59e4a98d55c0bbe8107ed21a98ffe3` |
-| `dist/mcp/server.js` | `a4dfc41f48282423a610ee9ac45c0374357b7409cdaa4858e11ba58a32b2128c` |
-| `dist/mcp/handlers-n8n-manager.js` | `0d99e10ec1eb9a6e4d78726636aa79f52eb4f3862be506785b794f1aeb9608cc` |
-| `dist/services/n8n-api-client.js` | `e64be8d3def0623b6710c6e98f7a08ed14a49a1764a5f789def58ea1e900947c` |
-| `LICENSE` | `8292ff05257b8f1ceae44382f0585abb0df9dc007d2ee2254c5a835c01920b35` |
+| `dist/mcp/index.js` | `4476ee45971533c0b7e97cfec4f53466e88100af616fa3fd0a7df49e90128e15` (same in 2.91.0) |
+| `dist/http-server-single-session.js` | `30e23550a45be6372ab043ed0e421296af2f6772faec13b52d326de3b442337a` (2.91.0: `da499542df98783e93961cf7a5c410d38fc1d45876828172a7119b0f7c0db74b`) |
+| `dist/http-server.js` (NOT launched) | `8eb7359605a29b25c5083e2bdbc8ac703e59e4a98d55c0bbe8107ed21a98ffe3` (same in 2.91.0) |
+| `dist/mcp/server.js` | `e9bf1ffcbf79df6d024a2e10c0446f182e5e62e5110ce8154109843d9ff25f76` (2.91.0: `a4dfc41f48282423a610ee9ac45c0374357b7409cdaa4858e11ba58a32b2128c`) |
+| `dist/mcp/handlers-n8n-manager.js` | `0d99e10ec1eb9a6e4d78726636aa79f52eb4f3862be506785b794f1aeb9608cc` (same in 2.91.0; the 0.2.2 build patch writes `5b8205754d24e8c6b2d001d4b04e6c0e408d5037215668a75049ce932d6d985d`) |
+| `dist/services/n8n-api-client.js` | `e64be8d3def0623b6710c6e98f7a08ed14a49a1764a5f789def58ea1e900947c` (same in 2.91.0) |
+| `LICENSE` | `8292ff05257b8f1ceae44382f0585abb0df9dc007d2ee2254c5a835c01920b35` (same in 2.91.0) |
 
 ## Audited narrow tool policy
 

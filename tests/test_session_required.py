@@ -5,6 +5,7 @@ FastMCP 3.4.5) open a new session before refusing it with 400, and they kept tha
 monitoring script pinging once a minute left about 1,440 sessions a day. The gateway now answers such a request itself
 with a 400 shaped like a refusing child's relayed answer, carrying no session id, and the child never sees it. n8n-mcp
 opened no session for these but accepted a notification without one (202); that notification now gets 400 as well.
+0.2.3: mcp 1.30.0 itself discards a session whose opening request fails; the gateway rule and these tests stay.
 """
 import asyncio
 import json

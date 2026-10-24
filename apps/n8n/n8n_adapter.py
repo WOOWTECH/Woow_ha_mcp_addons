@@ -1,4 +1,8 @@
-"""n8n-mcp 2.91.0: the full tool surface (0.2.0) and the fixed launcher."""
+"""n8n-mcp 2.92.1 (0.2.3; 2.91.0 before): the full tool surface (0.2.0) and the fixed launcher.
+
+2.92.1 lists the same 28 tools with the same descriptions, schemas and annotations as 2.91.0 (tools.js and
+tools-n8n-manager.js are byte-identical); its one new option, N8N_MCP_DISABLE_UI_APPS, is not set by child_spec.
+"""
 from pathlib import Path
 import shutil
 from typing import Literal
