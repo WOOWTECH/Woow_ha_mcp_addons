@@ -228,10 +228,40 @@ async def test_origin_query_and_nonadmin_denied(harness, store):
 def test_fixed_adapter_environment(store, monkeypatch):
     monkeypatch.setenv("SUPERVISOR_TOKEN", "must-not-inherit")
     monkeypatch.setenv("NODE_OPTIONS", "must-not-inherit")
+    monkeypatch.setenv("N8N_MCP_VERSION_CHECK_DISABLED", "false")  # 0.3.4: an inherited value never turns it back on
     spec = child_spec(store.load(), store.path.parent)
     assert spec.argv[-1].endswith("n8n-mcp/dist/mcp/index.js")
     assert spec.env["HOST"] == "127.0.0.1"
     assert spec.env["AUTH_TOKEN"] == store.load().child_token
     assert spec.env["N8N_MCP_TELEMETRY_DISABLED"] == "true"
+    assert spec.env["N8N_MCP_VERSION_CHECK_DISABLED"] == "true"
     assert "SUPERVISOR_TOKEN" not in spec.env and "NODE_OPTIONS" not in spec.env
     assert "N8N_API_KEY" not in spec.env
+
+
+def test_pinned_version_check_is_disabled_without_npm_query(store):
+    """0.3.4 (n8n-mcp 2.96.2, as the PaaS): in the child's own environment the pinned npm-version-checker answers
+    "disabled" (what n8n_health_check reports as checkStatus) and never reaches fetch, so no npm registry query."""
+    import subprocess
+    from pathlib import Path
+    spec = child_spec(store.load(), store.path.parent)
+    checker = Path(spec.argv[-1]).parents[1] / "utils/npm-version-checker.js"
+    code = (
+        "globalThis.fetch = () => { throw new Error('npm registry queried'); };"
+        "const c = require(process.argv[1]);"
+        "c.checkNpmVersion(true).then(r => process.stdout.write(JSON.stringify({status: r.status,"
+        " latest: r.latestVersion, upToDate: c.getUpToDate(r), message: c.formatVersionMessage(r)})));"
+    )
+
+    def check(env):
+        result = subprocess.run([spec.argv[0], "-e", code, str(checker)], env=env, cwd=spec.cwd,
+                                capture_output=True, text=True, timeout=30)
+        assert result.returncode == 0, result.stderr
+        return json.loads(result.stdout)
+
+    assert check(spec.env) == {
+        "status": "disabled", "latest": None, "upToDate": None,
+        "message": "Version check disabled (N8N_MCP_VERSION_CHECK_DISABLED). Current version: 2.96.2"}
+    # Control: without the switch the same checker reaches the (stubbed) registry fetch.
+    control = check({k: v for k, v in spec.env.items() if k != "N8N_MCP_VERSION_CHECK_DISABLED"})
+    assert control["status"] == "failed" and "npm registry queried" in control["message"], control

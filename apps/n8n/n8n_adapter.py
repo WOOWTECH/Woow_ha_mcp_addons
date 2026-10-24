@@ -1,4 +1,10 @@
-"""n8n-mcp 2.91.0: the full tool surface (0.2.0) and the fixed launcher."""
+"""n8n-mcp 2.96.2 (0.3.4; 2.91.0 before): the full tool surface (0.2.0) and the fixed launcher.
+
+2.96.2 lists the same 28 tools with the same descriptions, schemas and annotations as 2.91.0 (tools.js and
+tools-n8n-manager.js are byte-identical). Of its new switches child_spec sets only N8N_MCP_VERSION_CHECK_DISABLED=true
+(no npm registry query from n8n_health_check, as the PaaS); N8N_MCP_DISABLE_UI_APPS and the per-context
+instanceArgument are not set.
+"""
 from pathlib import Path
 import shutil
 from typing import Literal
@@ -78,6 +84,9 @@ def child_spec(state: State, directory: Path) -> ChildSpec:
         "PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": str(directory),
         "NODE_ENV": "production", "MCP_MODE": "http", "HOST": "127.0.0.1", "PORT": "3000",
         "AUTH_TOKEN": state.child_token, "N8N_MCP_TELEMETRY_DISABLED": "true",
+        # 0.3.4 (n8n-mcp 2.96.2, as the PaaS): n8n_health_check reports the version check as "disabled" instead of querying
+        # the npm registry. The environment is built here, never inherited, so nothing outside can turn it back on.
+        "N8N_MCP_VERSION_CHECK_DISABLED": "true",
         "LOG_LEVEL": "error", "DISABLE_CONSOLE_OUTPUT": "true",
         "N8N_MCP_MAX_SESSIONS": "20", "SESSION_TIMEOUT_MINUTES": "10",
     }

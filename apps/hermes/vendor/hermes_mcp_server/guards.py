@@ -14,6 +14,7 @@ MCP 工具（server.py）與管理後台的 dashboard 直通（hermes_mcp_admin/
 
 from __future__ import annotations
 
+import ipaddress
 import re
 import unicodedata
 from typing import Any
@@ -158,8 +159,28 @@ def clean_config_key(key: str) -> str:
 STDIO_FIELDS = ("command", "args", "env", "cwd")
 
 
+# AI-HMCP-002-2 (loopback, restored in 0.3.4): Hermes connects to a registered MCP server from its own host, so a
+# loopback URL reaches whatever listens only there (Hermes itself, its dashboard or API server). backend_policy permits
+# loopback for the add-on's own configured backends; registration refuses it here, by name and by every resolved address.
+LOOPBACK_NAMES = frozenset({"localhost", "localhost.localdomain"})
+
+
+def _loopback_name(host: str) -> bool:
+    name = host.rstrip(".").lower()
+    return name in LOOPBACK_NAMES or name.endswith(".localhost")
+
+
+def _loopback_address(address: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(address.split("%", 1)[0])
+    except ValueError:
+        return False
+    mapped = getattr(ip, "ipv4_mapped", None)
+    return ip.is_loopback or (mapped is not None and mapped.is_loopback)
+
+
 async def check_mcp_server_url(url: Any) -> str:
-    """回傳 strip 過的網址；不是 http／https、帶帳密，或指向 metadata 就丟 GuardError；HA 允許區網服務。"""
+    """回傳 strip 過的網址；不是 http／https、帶帳密，或指向 loopback／metadata 就丟 GuardError；HA 允許區網服務。"""
     if not isinstance(url, str) or not url.strip():
         raise GuardError("url is required")
     url = url.strip()
@@ -172,7 +193,11 @@ async def check_mcp_server_url(url: Any) -> str:
     # Registration validates the destination now. Hermes owns future connections;
     # its DNS resolution cannot be pinned by this add-on's HTTP client.
     destination = Destination(url)
-    await resolve_async(destination.host, destination.port, connection_deadline(5.0))
+    if _loopback_name(destination.host):
+        raise GuardError("loopback MCP servers (localhost, 127.0.0.0/8, ::1) cannot be added")
+    answers = await resolve_async(destination.host, destination.port, connection_deadline(5.0))
+    if any(_loopback_address(address[0]) for _, address in answers):
+        raise GuardError("loopback MCP servers (localhost, 127.0.0.0/8, ::1) cannot be added")
     return url
 
 

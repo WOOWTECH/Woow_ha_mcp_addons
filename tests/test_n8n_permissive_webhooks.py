@@ -1,7 +1,9 @@
 """0.2.1 (owner decision 2026-10-15): the n8n child runs with WEBHOOK_SECURITY_MODE=permissive, the pinned n8n-mcp
 2.91.0's widest webhook/URL mode (dist/utils/ssrf-protection.js), so n8n_test_workflow and the official-MCP calls reach
 an n8n on the HA network (0.2.0: "SSRF protection: IPv6 private address not allowed" for fd0c:ac1e:2100::11). Only the
-cloud metadata host names stay blocked upstream. The other products' backend policies are unchanged.
+cloud metadata host names stay blocked upstream (0.3.4: n8n-mcp 2.96.2 also blocks four cloud-metadata IPv6 addresses and
+canonicalizes IPv6 first; permissive still admits private, ULA and loopback). The other products' backend policies are
+unchanged.
 """
 import json
 from pathlib import Path

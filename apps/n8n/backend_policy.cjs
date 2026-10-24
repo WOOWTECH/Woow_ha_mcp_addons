@@ -19,13 +19,23 @@ if (crypto.createHash("sha256").update(fs.readFileSync(apiPath)).digest("hex") !
 // The error types/formatter and actual handler are part of this boundary too.
 // 0.2.2: handlers-n8n-manager.js is the file apps/n8n/patches/fix_test_run_error_messages.py writes (test-run errors keep
 // n8n's own message; applied by the Dockerfile and packaging/unit.sh): an unpatched or altered package fails closed.
+// 0.3.4 (n8n-mcp 2.91.0 -> 2.96.2): n8n-api-client.js, n8n-errors.js, handlers-official-tools.js and
+// official-mcp-access.js are byte-identical. Reviewed changes: mcp/server.js reads instanceContext through a getter
+// (per-request AsyncLocalStorage scope set by the HTTP server, else the session's own context; this child is
+// single-tenant, both are its environment context), injects the MCP Apps UI metadata only when isUIAppsEnabled (true
+// unless N8N_MCP_DISABLE_UI_APPS=true, which n8n_adapter never sets), adds an "instance" argument only for a context
+// with instanceArgument=true (never set here) and drops an "instance" key from built-in tool arguments (no built-in tool
+// has one), and adds deprecation details and validation codes to results. Tool definitions (tools.js,
+// tools-n8n-manager.js), dispatch, args.output and coerceStringifiedJsonParams are unchanged, so tools/list is
+// unchanged. utils/npm-version-checker.js adds a status field, an N8N_MCP_VERSION_CHECK_DISABLED switch (n8n_adapter sets
+// it to true: no npm registry query) and a shorter cache for failed checks. handlers-n8n-manager.js: the build patch is re-pinned (see the patch script).
 for (const [relative, digest] of [
     ["utils/n8n-errors.js", "efd5783846cf1eb61dbf9387de260e5a1d336ec609bc4c4d5601c369b5d2f20a"],
-    ["mcp/handlers-n8n-manager.js", "5b8205754d24e8c6b2d001d4b04e6c0e408d5037215668a75049ce932d6d985d"],
-    ["mcp/server.js", "a4dfc41f48282423a610ee9ac45c0374357b7409cdaa4858e11ba58a32b2128c"],
+    ["mcp/handlers-n8n-manager.js", "6cd673423e829902f3e56de66afe90f7e2196d7ef76cca02551a20eee03ae2eb"],
+    ["mcp/server.js", "a1237f5cafe34cddcecb85c48bc467c38a443be487a34b0f24c5cbbb343b30e9"],
     ["mcp/handlers-official-tools.js", "e85937c58d5a8426d54b1b69598adc83a14648402fc58a8714ef5db8132977cd"],
     ["mcp/official-mcp-access.js", "113d3556e4b93a870b36986a0fce8de45391ce64d7ab4c9f50fd6715eee3c733"],
-    ["utils/npm-version-checker.js", "35eb4789eef7766e4516f78caf125542778cf7de33e1fff4bc670c1f1029057a"],
+    ["utils/npm-version-checker.js", "8ffe192878574d0c4a7a6453205be7916858344e889b8b681998b4f22451a426"],
 ]) {
     if (crypto.createHash("sha256").update(fs.readFileSync(path.join(runtime, relative))).digest("hex") !== digest) {
         throw new Error("public API error boundary requires source review");

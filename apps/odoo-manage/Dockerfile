@@ -2,7 +2,7 @@
 # or released. The last published image, 0.1.4, was built from 73a40eb (base 88310c08 plus the snapshot libpcre2
 # upgrade); this file is only kept consistent with the repository checks.
 # Build from repository ROOT: docker build -f apps/odoo-manage/Dockerfile .
-FROM node:22.23.2-bookworm-slim@sha256:43aeff40f4afc22e83f7589a2f37e111cff5ca84529571f1c8415bcc5fcc21b2 AS ui
+FROM node:22.23.4-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d AS ui
 WORKDIR /ui
 COPY packages/mcp-admin-ui/package.json packages/mcp-admin-ui/package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
