@@ -1,7 +1,8 @@
 # 0.3.0 release decision — 2026-10-24
 
-Status: release preparation. Image publication and Store merge remain gated by
-fresh exact-image receipts; this document is not evidence that those gates passed.
+Status: image publication complete. All six exact-image P1–P5 gates and anonymous
+immutable manifest/config/layer verification passed on 2026-10-24. Root retains
+PR12 merge and designated HAOS upgrade ownership; required PR checks still gate merge.
 
 ## Authorization and publication route
 
@@ -113,9 +114,9 @@ separately verified (five checks, 11 effective tools / 21 write grants).
 
 Receipt filenames, SHA-256 hashes and bounded check counts are retained in
 [the sanitized runtime summary](../provenance/release-0.3.0-runtime.json); raw
-private receipts remain with the release operator. These are candidate-runtime proofs, not a claim that official 0.3.0 images have
-already passed image or Store-upgrade acceptance. No formal Store add-on was
-modified. HA active-stream cancellation was not independently live-proven;
+private receipts remain with the release operator. These are candidate-runtime proofs. The new official images separately passed
+the exact-image gates recorded below; an official Store-upgrade acceptance is
+not claimed here. This release sidecar did not modify a formal Store add-on. HA active-stream cancellation was not independently live-proven;
 existing-client subsequent requests were rejected after revocation. Backend reads
 proved non-error MCP results and backend GET paths, not complete cross-product
 response semantics. The original n8n MCP response shape was not retained; its
@@ -126,11 +127,13 @@ product full backup recovery, power-loss recovery, or nondefault mount setup is
 claimed. The user has authorized the designated HAOS official-channel upgrade
 test, which root coordinates. The release sidecar has not received root's VM
 handoff and must not mutate the VM; this is a delegation boundary, not a request
-for renewed user permission. HAOS disk remains below the Supervisor 2 GiB
-installation guard at the latest check, so that guard must be satisfied before
-installation.
+for renewed user permission. Root reported 2.380 GiB free on HAOS at 03:03 UTC after an external baseline
+change. The canonical Hermes image is 183,775,072 bytes uncompressed (175.26 MiB);
+backup, extraction and filesystem overhead are additional. Root must recheck the
+Supervisor 2 GiB installation guard and actual free space immediately before the
+scoped upgrade; no guard was disabled.
 
-## Required fresh release gates
+## Release gates
 
 1. Clean exact committed source and canonical Dockerfiles for linux/amd64; labels
    identify source revision and 0.3.0. Product dependency closure stays pinned.
@@ -146,12 +149,71 @@ installation.
    Do not manually create tags/releases or enable OpenDesign.
 
 The current automated decision-file check only matches the version string; it
-does not validate this document's status or receipt digests. Root must keep PR12
-unmerged until the completed six-image receipt is incorporated and independently
-checked, even if readiness becomes green as images appear. No gate code is
-weakened in this release.
+does not validate this document's status or receipt digests. The completed six-image receipt is incorporated below and root has independently
+verified its published manifest/config identities. Required PR checks still gate
+merge. No gate code is weakened in this release.
 
-Fresh build, scan, publish and anonymous-pull receipts will identify the exact
-source commit and six immutable digests. Until recorded as passing, publication
-and merge are not ready. Root retains merge and VM-operation ownership; a sidecar
-VM action requires root's scoped handoff within the user's existing authorization.
+## Completed image publication
+
+Exact image-source commit: `769ee23ebc52d016587f2e1dad0d65b098ab9a40`.
+All six canonical linux/amd64 images were built from its Git archive, with the
+full 223-commit source bundle and tracked Docker COPY closure verified first.
+Each exact image ID passed packaged-runtime/owned-mock acceptance and the
+unchanged P5 policy: source/history/all-layer/config/evidence Gitleaks, Syft
+SBOM/SPDX, fresh Grype database and license validation. Scanner pins remain
+Gitleaks 8.28.0, Syft 1.54.0 and Grype 0.120.0. Database build time was
+2026-10-23T06:30:15Z. No scanner pin, severity threshold or exception was relaxed.
+All six SBOMs identify certifi 2026.10.19; n8n identifies SDK 1.32.0. The original
+policy still reports lower-severity and explicitly not-fixed/wont-fix matches;
+passing does not mean zero vulnerabilities.
+
+At 03:20:34 UTC, all six `ghcr.io/woowtech/amd64-mcp-<product>:0.3.0` tags had
+been published from those accepted local image IDs without rebuilding and
+verified through anonymous immutable pulls. The [public image receipt](../provenance/release-0.3.0-images.json)
+records each manifest digest, config/image ID, layer diffIDs, uncompressed size,
+source/bundle identity, scan counts/database and evidence hashes. OpenDesign was
+not published. Root independently fetched all six tag/immutable manifests and
+config blobs anonymously, checked their hashes and rootfs diffIDs against the
+accepted image IDs, and bound the full-pull worker receipts without another
+Docker pull. Its receipt hash is included in the public image summary.
+Detailed retained SBOM/provenance evidence remains private with the release
+operator; raw transient scanner findings are not published.
+
+The original publisher review's four conditions are closed:
+
+1. Before importing project helpers, the pinned driver required exact clean
+   source (including untracked files), nonshallow history and both helper hashes.
+   Fresh postchecks again found the same clean 223-commit source.
+2. Python optimization was disabled and nonempty `PYTHONOPTIMIZE` was refused;
+   critical checks use explicit exceptions rather than removable assertions.
+3. Both build queues ended before publication. The delegated operator owned the
+   six destination refs, acquired an exclusive owned lock and persisted the
+   declaration. All-six and immediate per-product unused-tag checks passed.
+   This remains cooperative shared-daemon admission, not host exclusivity or an
+   atomic registry compare-and-swap claim.
+4. The durable exact-ref journal records all six anonymous verifications,
+   removal of 12 owned tag/digest refs, preservation of accepted local images,
+   deletion of ephemeral credential configuration and release of the lock.
+   The final private receipt hashes and declaration/journal hashes are retained
+   in the public image summary; no credential is retained there.
+
+The exact image-source commit's complete `checks` CI passed at 03:18:58 UTC
+([run](https://github.com/WOOWTECH/Woow_ha_mcp_addons/actions/runs/40056742468));
+focused n8n/mock-surface/provenance tests passed 62 with eight real-child/inventory
+tests excluded from that bounded controller run and covered by full CI instead.
+The release train check also passed. The initial readiness check preceded image
+publication; the final receipt commit triggers required checks again, and root
+must verify them before merge.
+
+The final follow-up commit changes only this excluded operations document and
+adds the post-publication image receipt. The receipt is intentionally absent
+from the already accepted images; it would be included by a rebuild because the
+Dockerfiles copy `docs/provenance`. Images continue to claim the exact source
+commit above, never the later receipt/merge commit. The closure check proves
+runtime, dependencies, Docker policy, entrypoint, UI, notices and pre-existing
+provenance unchanged. This avoids an endless receipt/rebuild cycle without
+claiming complete final-tree/image equality.
+
+Root retains merge and VM-operation ownership. This completed publication
+record does not merge PR12, create a stable GitHub Release or upgrade the VM;
+those coordinated steps remain within the user's existing authorization.
