@@ -49,12 +49,17 @@ function capabilities() {
       const whole = !state.disabled.includes(item.name) && (!tool.write || state.enabled_write_tools.includes(item.name) || tool.legacy_write && state.writes_enabled);
       item.operations = tool.operations.map(op => ({...op, denied: state.denied_operations[item.name]?.includes(op.name) ?? false,
         policy_enabled: whole && !state.denied_operations[item.name]?.includes(op.name) && (!op.write || state.enabled_write_tools.includes(`${item.name}:${op.name}`))}));
+      for (const operation of item.operations) operation.effective = operation.policy_enabled ? config.offline ? null : true : false;
       item.policy_enabled = whole && (!item.operations.length || item.operations.some(op => op.policy_enabled));
       item.effective = item.policy_enabled ? config.offline ? null : true : false;
       if (!item.policy_enabled) item.reason = 'operations_not_permitted';
     }
     result.tools.policy_enabled_count = result.tools.items.filter(item => item.policy_enabled).length;
     result.tools.effective_count = config.offline ? null : result.tools.policy_enabled_count;
+    const operations = result.tools.items.flatMap(item => item.operations);
+    result.tools.operation_count = operations.length;
+    result.tools.policy_enabled_operation_count = operations.filter(operation => operation.policy_enabled).length;
+    result.tools.effective_operation_count = config.offline ? null : operations.filter(operation => operation.effective === true).length;
   }
   return result;
 }

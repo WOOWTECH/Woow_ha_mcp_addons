@@ -101,7 +101,7 @@ schema 4 state:
 ```
 
 Append `--apply --expected-sha256 DIGEST_FROM_RECOVERY_PREVIEW` to apply. Recovery
-unions disabled tools and intersects write grants with the saved preserve policy.
+unions disabled tools and operation denies, and intersects write grants with the saved preserve policy.
 Later revocations therefore remain revoked. All current identity/backend fields
 are carried forward; an old token is never present in the recovery record and
 cannot be resurrected. A changed catalog or wrong product is refused. This is

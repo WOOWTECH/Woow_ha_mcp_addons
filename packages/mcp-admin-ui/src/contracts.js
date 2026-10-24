@@ -121,7 +121,14 @@ export function policySummary(b) {
 }
 export function catalogSummary(catalog) {
   if (!catalog) return '尚未取得工具能力快照。';
-  return `目錄 ${catalog.catalog_count} · 政策允許 ${catalog.policy_enabled_count} · 子行程有效 ${catalog.effective_count === null ? '未知' : catalog.effective_count}`;
+  const tools = `目錄 ${catalog.catalog_count} · 政策允許 ${catalog.policy_enabled_count} · 子行程有效 ${catalog.effective_count ?? '未知'}`;
+  if (!Object.hasOwn(catalog, 'operation_count')) return tools;
+  return `${tools}；操作目錄 ${catalog.operation_count ?? '未知'} · 已儲存政策允許 ${catalog.policy_enabled_operation_count ?? '未知'} · 子行程有效 ${catalog.effective_operation_count ?? '未知'}`;
+}
+export function operationSummary(operation) {
+  const policy = operation.policy_enabled === true ? '已儲存政策允許' : operation.policy_enabled === false ? '已儲存政策禁止' : '已儲存政策未知';
+  const effective = operation.effective === true ? '子行程有效' : operation.effective === false ? '子行程未生效' : '子行程有效狀態未知';
+  return `${operation.name} · ${operation.write ? '寫入' : '讀取'} · ${policy} · ${effective}`;
 }
 export function environmentLabels(snapshot) {
   return {

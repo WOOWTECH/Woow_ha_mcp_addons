@@ -224,7 +224,7 @@ def test_optional_mcp_token_preserved_and_schema4_policy_untouched(version):
         plan = plan_migration(value, 'n8n', policy=policy)
         assert plan.state.mcp_access_token == 'CURRENT_MCP_SECRET'
         if version == 4:
-            assert plan.state.model_dump() == value
+            assert plan.state.model_dump() == {**value, 'denied_operations': value.get('denied_operations', {})}
 
 
 @pytest.mark.parametrize('token', [None, 'r' * 43])
@@ -434,3 +434,30 @@ def test_production_module_entrypoint_needs_only_core_closure(tmp_path):
                                 cwd=tmp_path, env=env, capture_output=True, text=True, timeout=10)
         assert result.returncode == 0, result.stderr
         assert json.loads(result.stdout)['dry_run'] is True and path.read_bytes() == raw
+
+
+def test_new_operation_denies_and_old_recovery_records_remain_restrictive():
+    source = fixture(3, 'hermes')
+    source['denied_operations'] = {'hermes_cron': ['pause']}
+    plan = plan_migration(source, 'hermes', policy='all_on')
+    assert plan.state.denied_operations == {}
+    assert 'hermes_cron:pause' in plan.report['effective_writes_added']
+    current = {**plan.state.model_dump(), 'token': None,
+               'denied_operations': {'hermes_cron': ['resume'], 'hermes_session': ['get']}}
+    restored = plan_restore(current, 'hermes', plan.recovery).state
+    assert restored.denied_operations == {'hermes_cron': ['pause', 'resume'], 'hermes_session': ['get']}
+    assert restored.token is None
+    old_recovery = deepcopy(plan.recovery)
+    old_recovery['policy'].pop('denied_operations')
+    old_restored = plan_restore(current, 'hermes', old_recovery).state
+    assert old_restored.denied_operations == current['denied_operations']
+    assert old_restored.token is None
+
+
+def test_existing_schema4_operation_denies_are_unchanged_by_both_choices():
+    value = {**plan_migration(fixture(3, 'hermes'), 'hermes', policy='all_on').state.model_dump(),
+             'denied_operations': {'hermes_session': ['get']}, 'token': None}
+    for policy in ('all_on', 'preserve'):
+        plan = plan_migration(value, 'hermes', policy=policy)
+        assert plan.state.model_dump() == value
+        assert plan.report['changed'] is False and plan.recovery is None

@@ -1,7 +1,8 @@
 """Offline migration planning. Never invoked by ProductStore startup.
 
-Both policies are explicit; no default decides the owner's pending migration
-choice. Reports and recovery records contain policy only. A returned state is
+Both policies are explicit. The runtime review defaults its selection to all_on
+but requires administrator confirmation before applying a legacy migration.
+Reports and recovery records contain policy only. A returned state is
 private operational data and must not be logged or used as a rollback backup.
 """
 from __future__ import annotations
@@ -16,7 +17,7 @@ import os
 from pathlib import Path
 import stat
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .config import ConfigError, State, Store, strict_json
 from .legacy_catalog import LEGACY_TOOLS
@@ -24,7 +25,7 @@ from .products import PRODUCTS, ProductState, TOOLS, fresh_write_grants, write_g
 from .surface import full_tools, names
 
 POLICIES = ('preserve', 'all_on')
-POLICY_FIELDS = ('writes_enabled', 'disabled', 'enabled_write_tools')
+POLICY_FIELDS = ('writes_enabled', 'disabled', 'enabled_write_tools', 'denied_operations')
 MAX_BYTES = 65536
 
 
@@ -44,6 +45,12 @@ class _RecoveryPolicy(BaseModel):
     writes_enabled: bool
     disabled: list[str]
     enabled_write_tools: list[str]
+    denied_operations: dict[str, list[str]] = Field(default_factory=dict)
+
+    @field_validator('denied_operations')
+    @classmethod
+    def valid_denies(cls, value):
+        return ProductState.operation_denies(value)
 
     @field_validator('disabled')
     @classmethod
@@ -79,14 +86,16 @@ def _validate(value, product):
                 raise ValueError
             value = {**State.model_validate(value).model_dump(), 'product': product, 'connection': None}
         else:
-            expected = set(ProductState.model_fields) - {'mcp_access_token'}
+            expected = set(ProductState.model_fields) - {'mcp_access_token', 'denied_operations'}
             if version == 2:
                 expected -= {'enabled_write_tools'}
-            if set(value) not in (expected, expected | {'mcp_access_token'}) or value.get('product') != product:
+            if (set(value) - {'mcp_access_token', 'denied_operations'} != expected
+                    or value.get('product') != product):
                 raise ValueError
         if version < 3:
             value['enabled_write_tools'] = []
         value.setdefault('mcp_access_token', None)
+        value.setdefault('denied_operations', {})
         value['schema_version'] = 4
         state = ProductState.model_validate(value)
         if version < 4 and set(state.enabled_write_tools) - _legacy_grants(product):
@@ -100,14 +109,15 @@ def _effective(state, *, legacy):
     grants = set(state.enabled_write_tools)
     if legacy and state.writes_enabled:
         grants.update(name for name, tool in LEGACY_TOOLS[state.product].items() if tool['legacy_write'])
-    return {g for g in grants if g.split(':', 1)[0] not in state.disabled}
+    return {g for g in grants if g.split(':', 1)[0] not in state.disabled
+            and (':' not in g or g.split(':', 1)[1] not in state.denied_operations.get(g.split(':', 1)[0], ()))}
 
 
 def _preserve(state):
     tools = _tools(state.product)
     old = LEGACY_TOOLS[state.product]
-    # A new read operation cannot be separately disabled by schema 4 policy.
-    # Disable that mixed tool until reviewed; keep its saved grants dormant.
+    # Keep the conservative batch2 migration boundary: expanded argument validation
+    # also needs review before the tool is enabled, even with operation denies.
     expanded_reads = {name for name, tool in tools.items() if name in old
                       and set(tool.read_operations) - set(old[name]['read_operations'])}
     # The full child validates a broader argument surface than the old bounded
@@ -152,7 +162,7 @@ def plan_migration(value, product, *, policy):
         after = preserved
         if policy == 'all_on' and product != 'odoo-manage':
             after = ProductState.model_validate({**before.model_dump(), 'writes_enabled': True,
-                                                 'disabled': [], 'enabled_write_tools': fresh_write_grants(product)})
+                                                 'disabled': [], 'denied_operations': {}, 'enabled_write_tools': fresh_write_grants(product)})
         recovery = {'format': 1, 'product': product, 'source_schema': version,
                     'catalog_sha256': _catalog_digest(product), 'policy': _policy(preserved)}
     before_grants, after_grants = _effective(before, legacy=version < 4), _effective(after, legacy=False)
@@ -201,7 +211,8 @@ def plan_restore(value, product, recovery):
                 or type(recovery['source_schema']) is not int or recovery['source_schema'] not in (1, 2, 3)
                 or recovery['product'] != product or (recovery['source_schema'] == 1 and product != 'n8n')
                 or recovery['catalog_sha256'] != _catalog_digest(product)
-                or not isinstance(recovery['policy'], dict) or set(recovery['policy']) != set(POLICY_FIELDS)):
+                or not isinstance(recovery['policy'], dict)
+                or set(recovery['policy']) not in (set(POLICY_FIELDS), set(POLICY_FIELDS) - {'denied_operations'})):
             raise ValueError
         baseline = _RecoveryPolicy.model_validate(recovery['policy'])
         if (len(set(baseline.enabled_write_tools)) != len(baseline.enabled_write_tools)
@@ -212,6 +223,9 @@ def plan_restore(value, product, recovery):
             'disabled': sorted(set(current.disabled) | set(baseline.disabled)),
             'enabled_write_tools': sorted(set(current.enabled_write_tools) & set(baseline.enabled_write_tools)),
             'writes_enabled': current.writes_enabled and baseline.writes_enabled,
+            'denied_operations': {name: sorted(set(current.denied_operations.get(name, ()))
+                                                | set(baseline.denied_operations.get(name, ())))
+                                  for name in current.denied_operations.keys() | baseline.denied_operations.keys()},
         })
     except (ValueError, TypeError, RecursionError):
         raise MigrationError('invalid or incompatible policy recovery record') from None

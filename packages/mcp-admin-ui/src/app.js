@@ -1,5 +1,5 @@
 import { AdminApi, ApiError } from './api.js';
-import { products, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, environmentLabels, clientExample, claudeConnectorUrl } from './contracts.js';
+import { products, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, environmentLabels, clientExample, claudeConnectorUrl } from './contracts.js';
 import './styles.css';
 
 const root = document.querySelector('#app');
@@ -209,7 +209,7 @@ function tools() {
       p(detail?.description || '此目錄沒有提供工具說明。'), p(`${effective}${detail?.reason ? ` · ${reasons[detail.reason] ?? '未知原因'}` : ''}`),
       el('details', {}, el('summary', {}, '工具參數與操作詳情'),
         p(`參數來源：${({ child: '目前子行程', pinned: '隨版本保存的工具快照', registry: '管理登錄' })[detail?.schema_source] ?? '管理登錄'}`),
-        ...(detail?.operations ?? []).map(op => p(`${op.name} · ${op.write ? '寫入' : '讀取'} · ${op.policy_enabled ? '政策允許' : '政策禁止'}`)),
+        ...(detail?.operations ?? []).map(op => p(operationSummary(op))),
         el('pre', { tabindex: '0', 'aria-label': `${row.name} inputSchema` }, el('code', {}, schema ? JSON.stringify(schema, null, 2) : '尚未取得參數定義。')))), controls);
     entries.push([article, `${row.name} ${detail?.description ?? ''} ${(detail?.operations ?? []).map(op => op.name).join(' ')}`.toLocaleLowerCase()]);
     form.append(article);

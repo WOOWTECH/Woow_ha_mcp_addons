@@ -22,6 +22,7 @@ from . import redact, ui
 from .admin_auth import AdminAuthority, BadRequest
 from .config import ConfigError, strict_json
 from .ha_role import make_ha_admin_verifier
+from .lifecycle import _join_transition
 from .migration import (MigrationError, POLICIES, _existing_writer,
                         apply_migration_locked, plan_migration, read_document)
 
@@ -217,21 +218,27 @@ async def run_upgrade_review(args, product):
                 done, _ = await asyncio.wait([*serving, *waits], return_when=asyncio.FIRST_COMPLETED)
                 if any(task in done for task in serving):
                     raise RuntimeError('upgrade listener stopped') from None
-                return review.completed.is_set() and not stop.is_set()
             finally:
-                for server in servers:
-                    server.should_exit = True
-                for task in waits:
-                    task.cancel()
-                await asyncio.gather(*waits, return_exceptions=True)
-                try:
-                    async with asyncio.timeout(5):
-                        await asyncio.gather(*serving)
-                except TimeoutError:
-                    for task in serving:
-                        task.cancel()
-                    await asyncio.gather(*serving, return_exceptions=True)
-                for sig in (signal.SIGINT, signal.SIGTERM):
-                    loop.remove_signal_handler(sig)
+                async def shutdown():
+                    try:
+                        for server in servers:
+                            server.should_exit = True
+                        for task in waits:
+                            task.cancel()
+                        await asyncio.gather(*waits, return_exceptions=True)
+                        try:
+                            async with asyncio.timeout(5):
+                                await asyncio.gather(*serving)
+                        except TimeoutError:
+                            for task in serving:
+                                task.cancel()
+                            await asyncio.gather(*serving, return_exceptions=True)
+                    finally:
+                        for sig in (signal.SIGINT, signal.SIGTERM):
+                            loop.remove_signal_handler(sig)
+                await _join_transition(shutdown())
+            # A stop can arrive while committed HTTP responses/listeners drain.
+            # Decide only after the final awaited cleanup, before returning to startup.
+            return review.completed.is_set() and not stop.is_set()
     except MigrationError:
         raise ConfigError('upgrade review unavailable; inspect protected state') from None

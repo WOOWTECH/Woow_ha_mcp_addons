@@ -49,8 +49,8 @@ for (const width of [320, 360, 1440]) test(`operation controls fit ${width}px an
   await expect(page.getByText('目錄 3 · 政策允許 2 · 子行程有效 2')).toBeVisible();
   await page.getByLabel('搜尋工具').fill('mixed_example');
   await page.getByText('工具參數與操作詳情', {exact:true}).last().click();
-  await expect(page.getByText('get · 讀取 · 政策禁止', {exact:true})).toBeVisible();
-  await expect(page.getByText('list · 讀取 · 政策允許', {exact:true})).toBeVisible();
+  await expect(page.getByText('get · 讀取 · 已儲存政策禁止 · 子行程未生效', {exact:true})).toBeVisible();
+  await expect(page.getByText('list · 讀取 · 已儲存政策允許 · 子行程有效', {exact:true})).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   expect(await page.locator('.mdi').first().evaluate(node => getComputedStyle(node, '::before').content)).not.toBe('none');
   if (process.env.HA_OPERATIONS_EVIDENCE) {
@@ -60,4 +60,23 @@ for (const width of [320, 360, 1440]) test(`operation controls fit ${width}px an
       await page.screenshot({path:`${process.env.HA_OPERATIONS_EVIDENCE}/ha-operations-overview.png`, fullPage:true});
     }
   }
+});
+
+for (const offline of [false, true]) test(`operation policy and effectiveness remain distinct with child ${offline ? 'unavailable' : 'observed'}`, async ({page, request}) => {
+  await request.post('/__fixture/reset', {data:{operations:true, offline, grants:['mixed_example:delete'],
+    denied_operations:{mixed_example:['get','delete']}}});
+  await page.goto(`${prefix}/tools`);
+  const row = page.locator('.tool-row').filter({has:page.getByRole('heading', {name:'mixed_example', exact:true})});
+  await row.getByText('工具參數與操作詳情', {exact:true}).click();
+  const summary = `目錄 3 · 政策允許 2 · 子行程有效 ${offline ? '未知' : '2'}；操作目錄 4 · 已儲存政策允許 1 · 子行程有效 ${offline ? '未知' : '1'}`;
+  await expect(page.getByText(summary, {exact:true})).toBeVisible();
+  const list = `list · 讀取 · 已儲存政策允許 · ${offline ? '子行程有效狀態未知' : '子行程有效'}`;
+  await expect(row.getByText(list, {exact:true})).toBeVisible();
+  for (const [name, kind] of [['get','讀取'], ['create','寫入'], ['delete','寫入']]) {
+    await expect(row.getByText(`${name} · ${kind} · 已儲存政策禁止 · 子行程未生效`, {exact:true})).toBeVisible();
+  }
+  // Unsaved form edits do not claim to change saved policy or observed state.
+  await row.getByLabel('禁止讀取操作：list', {exact:true}).check();
+  await expect(row.getByText(list, {exact:true})).toBeVisible();
+  await expect(page.getByText(summary, {exact:true})).toBeVisible();
 });

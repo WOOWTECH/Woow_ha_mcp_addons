@@ -137,8 +137,8 @@ async def test_disconnect_while_role_pending_has_no_effect_and_joins_role(tmp_pa
         assert closed.is_set() and state.read_bytes()==old
         assert replies[0]['status']==403
 
-@pytest.mark.parametrize('confirm',[False,True])
-async def test_pending_runtime_owns_lock_then_releases_after_both_listeners_stop(tmp_path,monkeypatch,confirm):
+@pytest.mark.parametrize('confirm,stop_during_drain',[(False,False),(True,False),(True,True)])
+async def test_pending_runtime_owns_lock_then_releases_after_both_listeners_stop(tmp_path,monkeypatch,confirm,stop_during_drain):
     state=install_fixture(tmp_path/'state',fixture(3,'hermes'));old=state.read_bytes();listeners=[];signals={}
     class Listener:
         def __init__(self,config):
@@ -151,7 +151,10 @@ async def test_pending_runtime_owns_lock_then_releases_after_both_listeners_stop
         async def serve(self):
             self.ready.set()
             try:await self.exit.wait()
-            finally:self.closed=True
+            finally:
+                if stop_during_drain and not self.closed:
+                    signals[upgrade.signal.SIGTERM]()
+                self.closed=True
     monkeypatch.setattr(upgrade,'_Listener',Listener)
     monkeypatch.setattr(upgrade,'make_ha_admin_verifier',lambda:allow)
     loop=asyncio.get_running_loop()
@@ -170,10 +173,40 @@ async def test_pending_runtime_owns_lock_then_releases_after_both_listeners_stop
             response=await c.post('/api/upgrade/apply',headers={'x-csrf-token':b['csrf']},json={'policy':'all_on','expected_sha256':b['plans']['all_on']['source_sha256']})
             assert response.status_code==202
     else:signals[upgrade.signal.SIGTERM]()
-    assert await asyncio.wait_for(task,2) is confirm
+    assert await asyncio.wait_for(task,2) is (confirm and not stop_during_drain)
     assert all(x.closed for x in listeners) and not signals
     if confirm:
         with closing(ProductStore(state.parent,'hermes')) as store:assert store.load().schema_version==4
     else:
         assert state.read_bytes()==old
         with _existing_writer(state.parent):pass
+
+async def test_repeated_runtime_cancellation_joins_listeners_before_unlock(tmp_path,monkeypatch):
+    state=install_fixture(tmp_path/'state',fixture(3,'hermes'));old=state.read_bytes()
+    listeners=[];draining=asyncio.Event();release=asyncio.Event();signals={}
+    class Listener:
+        def __init__(self,config):self.exit=asyncio.Event();self.closed=False;listeners.append(self)
+        @property
+        def should_exit(self):return self.exit.is_set()
+        @should_exit.setter
+        def should_exit(self,value):
+            if value:self.exit.set()
+        async def serve(self):
+            await self.exit.wait();draining.set();await release.wait();self.closed=True
+    monkeypatch.setattr(upgrade,'_Listener',Listener)
+    monkeypatch.setattr(upgrade,'make_ha_admin_verifier',lambda:allow)
+    loop=asyncio.get_running_loop()
+    monkeypatch.setattr(loop,'add_signal_handler',lambda sig,cb:signals.__setitem__(sig,cb))
+    monkeypatch.setattr(loop,'remove_signal_handler',lambda sig:signals.pop(sig,None))
+    task=asyncio.create_task(upgrade.run_upgrade_review(SimpleNamespace(data=state.parent,host='127.0.0.1',admin_port=18099,mcp_port=18081),'hermes'))
+    for _ in range(100):
+        if len(listeners)==2:break
+        await asyncio.sleep(.001)
+    task.cancel();await asyncio.wait_for(draining.wait(),1);task.cancel();await asyncio.sleep(0)
+    assert not task.done()
+    with pytest.raises(MigrationError):
+        with _existing_writer(state.parent):pass
+    release.set()
+    with pytest.raises(asyncio.CancelledError):await asyncio.wait_for(task,1)
+    assert all(x.closed for x in listeners) and not signals and state.read_bytes()==old
+    with _existing_writer(state.parent):pass
