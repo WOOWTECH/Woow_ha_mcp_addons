@@ -1,20 +1,12 @@
-# 0.3.3 release preparation — 2026-10-24
+# 0.3.3 image publication decision — 2026-10-24
 
-## Status and source boundary
+Status: six canonical images completed fresh P1–P5 gates, publication without rebuilding, and anonymous immutable manifest/config/rootfs verification. This records completed image publication. Exact-head CI, normal protected merge, stable Releases, Store synchronization and the official HAOS upgrade are separate root-owned stages; publication does not imply their completion.
 
-**Pending: exact-source freeze/CI, six-image
-P1–P5 gates, publication and independent anonymous verification.** This document
-is a candidate record, not completed builder acceptance or permission to skip a
-release gate. No 0.3.3 image digest or successful publication is recorded yet.
+## Exact source and documentation boundary
 
-Preparation starts from merged PR16,
-`da6edd7fcfae83360931eb4dab1848eaaf9a4645`. The reviewed guard is integrated with
-the release metadata; the exact 0.3.3 image-source commit will be frozen after
-the integrated checks and root review.
-The final publication record must distinguish that source from the later
-documentation head and protected merge. Historical [0.3.1 image evidence](../provenance/release-0.3.1-images.json)
-and its [publication decision](release-decision-0.3.1.md) remain unchanged; they
-cannot satisfy new 0.3.3 gates. No 0.3.1 tag or image is overwritten.
+Image source is `26888f9a45fef8f35185b358b66ef568e487d87d`, tree `00cca708474cff9b18f69a6ba2c5903a837b077e`. Root freeze receipt SHA256 is `443840f618f4bce1774b63b6066508bcacfc444e5ae50e29e9dd086ec9f78ffc`. This is a new normal 0.3.3 publication, not a 0.3.1 recovery or image overwrite. The plan SHA256 is `4a675f7be17d31b65d6ffadb7abb4a44ff3da9764a369e29fb9996baac34840a`; full-history, archive, context, helper, gate and journal bindings are recorded in the [image receipt](../provenance/release-0.3.3-images.json).
+
+The later documentation head and protected merge are not the image source. The read-only closure verifier checks that their only delta is README, this decision and the image receipt, with unchanged runtime, dependencies, child pins, Dockerfiles, entrypoint and UI. README is excluded by Docker context policy; the operations decision is not a Docker COPY input. The new receipt is under `docs/provenance`, which all six Dockerfiles copy, and was absent from the already published images. A future rebuild would include that receipt, so full shipped provenance/tree equality is not claimed. The post-publication receipt does not require rebuilding its own image.
 
 ## Separate version reservation
 
@@ -27,6 +19,23 @@ preparation evidence, not a release or publication proof. Do not publish its
 changes are merged. The new source/version requires its own exact-image gates,
 publication, normal PR checks and Store evidence. Published 0.3.1 history remains
 unchanged.
+
+## Completed image gates and route limits
+
+P1/P2 bound the clean frozen commit, full reachable history, canonical archive and context bytes/modes. P3 built canonical linux/amd64 images. P4 exercised exact packaged runtimes with owned mocks. P5 retained source/history/all-layer/config/evidence secret scans, SBOM/SPDX, the vulnerability database and the existing vulnerability/license policy. Passing policy is not a zero-vulnerability claim. Scanner pins, policy thresholds and exception rules were unchanged.
+
+Each of the six accepted image IDs was pushed only after exact-tag absence checks, without a rebuild. The completed normal publisher journal binds push intent/completion, anonymous immutable pull, private credential removal, owned tag/digest alias cleanup and lock release. Independent anonymous verification binds tags/manifests/configs/rootfs to those accepted subjects. Image UI bytes match the tested `dist/assets/app.js` SHA256 `f20cdd713606aeaf05ff3a4183ad5c5603e089680665d7514ab025d6c7520871` with fresh 0.3.3 effective-layer and runtime UID 10001 readability proof. The build/browser tests are reused from source `c1ec45d81424459e5e045101ee40e8aeb89d61f2` because the complete UI source manifest is byte-identical; no new 0.3.3 browser or build-test run is claimed. Original build receipt SHA256 `04578ab41f74d7f3c26f08d45d36d504d6044638ddeffb9ebc34844b197bcd50` and browser receipt SHA256 `cf4971d31cf242fabd779761126082c92ea137603038f82f8957fc584a8e64d7` remain unchanged and are included with the new GO-bound reuse attestation in the image record. These reused UI tests do not substitute for any of the six fresh 0.3.3 image gates.
+
+| Product | Immutable published image |
+| --- | --- |
+| odoo | `ghcr.io/woowtech/amd64-mcp-odoo@sha256:2aa3c6be06fabe2b9cdb75e054f93a8fba17f06e7ca8308789d01a8ec93db169` |
+| n8n | `ghcr.io/woowtech/amd64-mcp-n8n@sha256:4e51a90b50f7b97ff7f0ef2935b9dbec5c11bae82814335e41e81fb1ea0c7f64` |
+| hermes | `ghcr.io/woowtech/amd64-mcp-hermes@sha256:2fbf3ab3c9cba860223bbd10c64d441c12fa23703642908073c625cebc64d10c` |
+| emqx | `ghcr.io/woowtech/amd64-mcp-emqx@sha256:d64d8502659fb4cc65382abb95d06bb15edbbfd2d5ffb512ec7a99e0a7ae4a6e` |
+| litellm | `ghcr.io/woowtech/amd64-mcp-litellm@sha256:9883e77a11fe12434d4ac01db2735e0547d6bab9367a8eb9b963e5746da635b1` |
+| nextcloud | `ghcr.io/woowtech/amd64-mcp-nextcloud@sha256:faeb787605f80516cc265e36310b4014805bba0b436743a613c5ee9a0c24c39b` |
+
+Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud advance together. OpenDesign remains Store-disabled and has no published 0.3.3 image or stable Release. The operator-local shared-daemon route is unsigned, not host isolation, hosted BLD2 admission or SLSA. Sole publisher means cooperative ownership of six refs, not an idle daemon or registry compare-and-swap. BLD2 remains blocked; closed hosted/manual workflows and release gates are not bypassed.
 
 ## Bounded correction and compatibility
 
@@ -45,7 +54,7 @@ versions, executions, evaluations, credentials, folders and datatables. A second
 eligible wrapper is refused as ambiguous. Repeated authorization sees the same
 canonical arguments, and existing encoded byte/element/depth budgets run first.
 
-The candidate correction requires the existing `n8n_update_partial_workflow`
+The correction requires the existing `n8n_update_partial_workflow`
 tool to be enabled with its effective write permission before exposure can be
 forwarded, in addition to the invoking tool/mode's own authorization. The same
 dependency applies to `n8n_test_workflow` exposure. Effective boolean and
@@ -70,72 +79,14 @@ restores the conditional-write defect. State compatibility does not establish
 equivalent security behavior. Preserve a backup and review current token and
 policy state before any separately coordinated recovery.
 
-## Products and unchanged release gates
+## Functional evidence and limits
 
-Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud advance together under the shared
-core contract. Their intended immutable version tags are
-`ghcr.io/woowtech/amd64-mcp-<product>:0.3.3` (`linux/amd64`). OpenDesign's retained
-source metadata advances for packaging consistency, but Store remains disabled;
-it has no 0.3.3 image build, stable Release or acceptance claim.
+Integrated local verification passed 339 policy, bounds, filtered full-surface, operation-deny, capability, full-default and provenance checks, with eight external-inventory/real-child cases deliberately excluded. Packaging validation and 28 focused version/release-contract tests passed. These prior source results used existing dependency environments and mocked registry responses; they are not publication receipts. Fresh image acceptance above provides separate canonical packaged-runtime evidence.
 
-The existing operator-local builder/publisher route may be reused only with
-fresh exact source/tree/full-history/context/helper bindings and current builder
-identity. Canonical Dockerfiles and dependency/UI caches may be reused; context
-permissions and the bounded runtime-stage cache correction remain enforced.
-Every published image must receive fresh P1–P5 acceptance, pinned-tool secret,
-SBOM/license/vulnerability checks under the existing policy, actual UI-byte proof
-and anonymous immutable-manifest/config/rootfs verification. A version-string
-readiness check alone does not establish completed acceptance.
+Historical 0.3.0 and 0.3.1 decisions/receipts remain unchanged. No official 0.3.1 HAOS upgrade is claimed. The authorized designated Hermes plan is one direct 0.3.0 → 0.3.3 upgrade after normal release/catalog proof, with fresh VM/route/addon identity, protected inventory, the Supervisor free-space guard, exact old/new image identity, complete private cold state archive and verified Supervisor partial backup. Root owns execution. Configuration, active token and restrictive policy must remain byte-identical; final proof covers actual read-only MCP and masked desktop/mobile UI. Backup creation is not a restore rehearsal, and an uncertain phase cannot be replayed automatically.
 
-Only the tested image IDs may be pushed, after exact-tag absence checks. Complete
-phase journals, owned-reference cleanup, credential cleanup and independent
-anonymous verification are required before publication PASS. An uncertain phase
-requires diagnosis and a separately bound continuation; no blind retry, overwrite
-or invented recovery receipt. The existing route is cooperative on a shared
-daemon, not host isolation, hosted BLD2 admission, signed provenance or SLSA.
-Closed hosted-builder/manual-release gates and scan thresholds stay unchanged.
+A successful Hermes upgrade proves its own shared-runtime path, not a real-backend n8n exposure write. The n8n correction's proof remains bounded to the recorded regressions and canonical-image tests unless a separate candidate receipt is produced. No business write, billable inference, every-product backend acceptance, or successful rollback is inferred.
 
-After actual six-image completion, the release owner records the immutable
-identities and evidence hashes in a new `release-0.3.3-images.json`, closes this
-pending decision and verifies documentation/runtime closure. Required exact-head
-checks then permit the normal protected PR merge. The ordinary push workflow
-creates six `woow_mcp_<product>-v0.3.3` stable Releases; notification and Store
-catalog verification must bind actual run heads, resolved tags, merge and image
-source. Optional Local Download evidence remains a separate proof.
+## Remaining normal release stages
 
-## Acceptance still required
-
-Integrated local verification passed 339 policy, request-bound, filtered
-full-surface, operation-deny, capability, full-default and provenance checks
-(eight external-inventory/real-child cases deliberately excluded). Packaging
-validation and 28 focused version/release-contract tests also passed. Dependency
-source hashes were checked through temporary links to existing environments;
-no dependency installation or change was made. Mocked registry responses in
-packaging tests are fixtures, not publication proof. These scoped results do not
-replace final exact-head CI, canonical-image or live acceptance.
-
-| Gate | Current state |
-|---|---|
-| Guard integration/review and scoped integrated regressions | PASS within the local scope above |
-| Exact integrated source freeze and CI | Pending |
-| Local version/packaging checks | PASS; normal exact-head CI remains pending |
-| Six canonical image P1–P5 gates and tested UI bytes | Pending |
-| Publication, anonymous immutable verification and cleanup | Pending |
-| Completed image record, normal merge/stable Releases/Store catalog | Pending |
-| Official Hermes 0.3.0 → 0.3.3 upgrade | Pending separate root-owned execution |
-
-The designated official Hermes may remain on 0.3.0 while normal 0.3.1
-Release/Store delivery completes. After 0.3.3 publication/catalog proof, the
-authorized plan is one direct 0.3.0 → 0.3.3 upgrade with fresh VM/addon/route
-identity, protected inventory, exact old/new image proof, private cold state
-archive and verified Supervisor partial backup. Keep the Supervisor disk guard.
-Verify preserved configuration/token/policy, runtime/read-only MCP and masked
-desktop/mobile UI evidence afterward. Existing authorization covers this work;
-root owns its execution, and this metadata step performs no VM action.
-
-No official 0.3.1 HAOS upgrade is claimed. A future successful Hermes upgrade
-would validate its shared-runtime upgrade, not a real-backend n8n exposure write.
-The n8n correction's evidence remains scoped to its actual regressions and image
-acceptance unless a separate bounded n8n candidate proof is recorded. No business
-write, billable inference, complete every-product backend acceptance or successful
-rollback is inferred from this release preparation.
+Root verifies documentation/runtime closure, obtains required exact-head checks and normally merges the release PR into protected `claude-delivery`. Existing push workflows create six `woow_mcp_<product>-v0.3.3` stable Releases; notification and Store verification must bind actual run heads, resolved tags, merge and image source. Optional Local Download catalog/downloader proof is separate and does not claim installation. This docs update performs no VM action.

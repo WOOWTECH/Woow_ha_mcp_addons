@@ -1,8 +1,8 @@
 # WOOW HA MCP Add-ons（實驗版，已公開發佈）
 
-六個啟用的商店產品：Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud。**0.3.3 是尚未發布的候選版本**，已整合 n8n 授權修正：全部 28 個工具先正規化 pinned child 的有效 `output` 參數，再檢查操作權限，避免六個混合工具的外層讀取選項掩蓋內層寫入；versions/test 的 `exposeToMcp` 另需既有 updater 的有效寫入權限。新增 `conditional_writes` capability metadata 說明這項依賴，沒有新增 grant 或 UI 控制。精確 source freeze／CI 與六支正式映像驗收／掃描／發布仍待完成，見 [0.3.3 候選決策與驗收邊界](docs/operations/release-decision-0.3.3.md)。保持 28 個 n8n 工具、33 個寫入 grants、schema 4 與完整功能預設，不變更 dependency／child pins 或 UI 原始碼。
+六個啟用的商店產品：Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud。**0.3.3 六支 canonical 映像已完成驗收、掃描與公開發布**，包含 n8n 全部 28 個工具的有效 `output` 參數正規化、六個混合工具的 selector 保護，以及 versions/test 的 `exposeToMcp` 既有 updater 有效權限檢查。新增 `conditional_writes` capability metadata，保持 28 個工具、33 個寫入 grants、schema 4 與完整功能預設；不變更 dependency／child pins 或 UI 原始碼。正常 stable Release／Store 與正式 HAOS 升級分別驗證，不由映像發布推定完成。見 [0.3.3 發布證據與驗收邊界](docs/operations/release-decision-0.3.3.md)、[不可變映像紀錄](docs/provenance/release-0.3.3-images.json)。
 
-先前 **0.3.1** 六支 canonical 映像已完成驗收與公開發布；[0.3.1 發布證據](docs/operations/release-decision-0.3.1.md)與[不可變映像紀錄](docs/provenance/release-0.3.1-images.json)保留。各版 stable Release 與 Store 更新仍依正常受保護合併流程驗證，不以此候選宣稱後續流程已完成。指定正式 Hermes 預計由 0.3.0 直接升級至 0.3.3，屆時建立新備份並驗證實際映像；不宣稱 0.3.1 正式 HAOS 升級。OpenDesign 原始碼保留、商店維持停用，本次不建置或發布它的映像。
+先前 **0.3.1** 六支 canonical 映像已完成驗收與公開發布；[0.3.1 發布證據](docs/operations/release-decision-0.3.1.md)與[不可變映像紀錄](docs/provenance/release-0.3.1-images.json)保留。各版 stable Release 與 Store 更新仍依正常受保護合併流程驗證，不由映像發布宣稱後續流程已完成。指定正式 Hermes 預計由 0.3.0 直接升級至 0.3.3，屆時建立新備份並驗證實際映像；不宣稱 0.3.1 正式 HAOS 升級。OpenDesign 原始碼保留、商店維持停用，本次不建置或發布它的映像。
 
 **版本隔離：** 0.3.2 已由獨立的 dependency-update [PR17](https://github.com/WOOWTECH/Woow_ha_mcp_addons/pull/17) 保留；本次有限授權修正改用 0.3.3，避免不同 source 共用映像 tag。我們未發布的 0.3.2 候選已被取代，不合併 PR17 的 dependency 更新；0.3.1 歷史證據保持不變。
 
