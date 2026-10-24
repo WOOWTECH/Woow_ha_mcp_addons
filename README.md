@@ -1,6 +1,6 @@
 # WOOW HA MCP Add-ons（實驗版，已公開發佈）
 
-六個啟用的商店產品：Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud。最新正式版 **0.2.2**（六個 per-addon stable Release 於 2026-10-21 發佈）。本分支準備 **0.3.0**，包含逐 operation 權限、共用 token 撤銷與舊資料升級確認；[發佈狀態與驗收邊界](docs/operations/release-decision-0.3.0.md)。OpenDesign 原始碼保留、商店已停用，本次不建置或發布它的映像。
+六個啟用的商店產品：Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud。本次版本 **0.3.1** 的六支 canonical 映像已完成驗收與公開發布，包含已保存／已套用狀態、過期編輯保護、進行中串流撤銷與設定卡片 `null` 修正。每支 stable Release 與 Store 更新依正常受保護合併流程發布；[0.3.1 發布證據與驗收邊界](docs/operations/release-decision-0.3.1.md)、[不可變映像紀錄](docs/provenance/release-0.3.1-images.json)。先前 [0.3.0 紀錄](docs/operations/release-decision-0.3.0.md) 保留為歷史證據。OpenDesign 原始碼保留、商店已停用，本次不建置或發布它的映像。
 
 **Odoo Manage 已於 2026-10-06 下架封存**：0.1.4 是最後一版，0.1.5 起不在商店，也不再建置或發佈。已安裝的仍以 0.1.4 執行，但不會再有更新或安全修正；它的設定保有 Odoo API key，並有 `homeassistant_api` 權限，建議改用 Woow Odoo MCP Server 後移除。Woow Odoo MCP Server 是不同的 MCP server（工具與設定不同，要另設後端、endpoint 與 token）。已發佈的 0.1.0–0.1.4 映像保留，舊備份仍可還原。步驟見[更新、備份與回復](docs/operations/update-backup-rollback.md)；原始碼保留在 `apps/odoo-manage`。
 僅以 **amd64 / Supervisor 2026.09.3** 為封裝目標；不是 Core 最低版本。
@@ -36,6 +36,8 @@ Kubernetes MCP 與 Vibe Kanban 不在範圍。
 
 ## 管理功能與範圍
 
+0.3.1 的管理面板區分設定已保存、等待套用、已套用與套用失敗；「已套用」代表目前子程序完成協定檢查，與後端服務健康分開顯示。修正初次顯示與更新套用狀態時末尾出現字面 `null` 的問題。表單帶入載入時的 revision，過期儲存回 409 並保留草稿；明確重新載入後才可再送出。管理程序重啟也需要重新載入舊表單。既有不帶 `If-Match` 的 API client 保持相容，但沒有這項衝突保護。詳細 API 與已保存但套用失敗的處理見 [runtime configuration](docs/runtime-configuration.md)。
+
 [共用 UI](packages/mcp-admin-ui/README.md) 提供各產品 typed connection 的保留／完整替換／清除、
 三維健康、明確 client endpoint、確認式 token reveal/rotate/revoke。已下架的 Odoo Manage（0.1.4 為止）支援 read/module；
 module 必須已在後端安裝，UI 不安裝 Odoo 模組。工具頁依實際 metadata 顯示每個工具的停用開關與寫入授權（寫入工具一個 grant，混合工具每個寫入 operation 一個），
@@ -55,8 +57,8 @@ uv pip install --python "$PACKAGING_ENV/bin/python" --require-hashes --only-bina
 "$PACKAGING_ENV/bin/python" -m unittest discover -s packaging -p 'test_*.py' -v
 # 有 Docker 的隔離 runner 才執行；root context 最後的點不可省略
 # 這不是已執行的成功紀錄：
-docker build --platform linux/amd64 -f apps/n8n/Dockerfile -t local/mcp-n8n:0.3.0 .
-"$PACKAGING_ENV/bin/python" packaging/container_acceptance.py n8n local/mcp-n8n:0.3.0
+docker build --platform linux/amd64 -f apps/n8n/Dockerfile -t local/mcp-n8n:0.3.1 .
+"$PACKAGING_ENV/bin/python" packaging/container_acceptance.py n8n local/mcp-n8n:0.3.1
 ```
 
 PR/main CI 沒有發佈權限；固定商店產品 matrix（與 `packaging/inputs.json` 相同）`push: false`。HA 無法以 Add-on

@@ -1,6 +1,30 @@
 import {test, expect} from '../owned-fixture.mjs';
 const prefix = '/api/hassio_ingress/DUMMY';
 
+test('applied status has no literal null on first load, status refresh or reload', async ({page, request}) => {
+  await request.post('/__fixture/reset', {data: {parity: true, product: 'hermes', applyState: 'applied'}});
+  await page.goto(prefix + '/backend');
+  const summary = page.locator('#configuration-state');
+  for (const action of [null, '更新套用狀態（保留草稿）', '重新整理狀態']) {
+    if (action) {
+      await page.getByRole('button', {name: action, exact: true}).click();
+      await expect(page.locator('#app')).not.toHaveAttribute('aria-busy', 'true');
+    }
+    await expect(summary).toHaveAttribute('data-apply-state', 'applied');
+    await expect(summary).toContainText('目前子行程完成協定探測');
+    await expect(summary).not.toContainText('null');
+    expect(await summary.evaluate(node => [...node.childNodes].every(child => child.nodeType === Node.ELEMENT_NODE))).toBe(true);
+  }
+});
+
+test('older bootstrap without configuration omits the card without literal null', async ({page, request}) => {
+  await request.post('/__fixture/reset', {data: {parity: false, product: 'hermes'}});
+  await page.goto(prefix + '/backend');
+  await expect(page.getByRole('heading', {name: '後端連線設定', exact: true})).toBeVisible();
+  await expect(page.locator('#configuration-state')).toHaveCount(0);
+  await expect(page.locator('main')).not.toContainText('null');
+});
+
 test('two editors: status refresh retains draft/revision, stale save cannot replay', async ({page, context, request}) => {
   await request.post('/__fixture/reset', {data: {parity: true, product: 'hermes', applyState: 'pending'}});
   await page.goto(prefix + '/backend');
@@ -43,6 +67,7 @@ test('pending/applied/failed/unconfigured remain separate from backend health at
     await page.getByRole('button', {name: '更新套用狀態（保留草稿）', exact: true}).click();
     await expect(page.locator('#configuration-state')).toHaveAttribute('data-apply-state', state);
     await expect(page.locator('#configuration-state')).toContainText('後端是否可連線分開判定');
+    await expect(page.locator('#configuration-state')).not.toContainText('null');
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
