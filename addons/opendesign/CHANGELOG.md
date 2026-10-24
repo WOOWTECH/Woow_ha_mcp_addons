@@ -1,5 +1,9 @@
 # OpenDesign Changelog
 
+## 0.4.0 — 不發佈（本產品維持下架）
+
+- 僅依共用版本規則同步原始碼／manifest 版本與相依（MCP SDK 2.3.0、Node 26.12.1）；vendored server 改用 SDK 2 的 `MCPServer`，launcher 補回工具錯誤文字。不建置、不發布 OpenDesign 映像，不重新啟用 Store。
+
 ## 0.3.4 — 不發佈（本產品維持下架）
 
 - 僅依共用版本規則同步原始碼／manifest 版本與相依（MCP SDK 1.30.0、Node 22.23.4）；不建置、不發布 OpenDesign 映像，不重新啟用 Store。

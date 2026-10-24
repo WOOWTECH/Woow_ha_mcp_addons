@@ -23,6 +23,16 @@ it, in both FastMCP flavours (fastmcp 3.4.11 never passes it). The gateway admit
 0.2.0: Nextcloud uploads up to 10 MiB as base64), so the same wrapper sets BODY_BYTES (equal to it, asserted by
 tests/test_session_idle.py) for every manager, stateless or not, whose caller passed nothing or the SDK's default; an
 explicit other value is kept. An SDK without the parameter has no such limit and is left as it is.
+
+0.4.0 (mcp 2.3.0, FastMCP 4.1.3): StreamableHTTPSessionManager.__init__ has the same parameters and defaults as in
+1.30.0 (session_idle_timeout 1800 s, max_request_body_size 4 MiB, max_sessions 10 000, the last left as it is).
+MCPServer (mcp 1.x's FastMCP: Odoo, Hermes, OpenDesign) takes the transport settings in run() and passes both defaults
+explicitly, which this replaces as before; FastMCP 4's own manager passes neither (its http_session_idle_timeout setting
+is 'auto', the SDK default). The manager now enters the server lifespan once per process and ends an idle session by
+cancelling its serve loop; a request in flight or an open GET stream still keeps a session. A request whose
+MCP-Protocol-Version header is not an initialize-handshake revision goes to the SDK's 2026-07-28 handling instead;
+through the gateway none succeeds there, as such a header failed in mcp 1.x (it answers server/discover itself, forwards
+no such header with an initialize and removes params._meta, the 2026-07-28 envelope, from every request).
 """
 import functools
 import inspect

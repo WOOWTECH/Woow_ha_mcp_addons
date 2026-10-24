@@ -24,7 +24,7 @@ from backend_policy import Destination, resolve_async, connection_deadline
 
 
 class GuardError(ValueError):
-    """輸入被安全規則拒絕。ValueError：FastMCP 回 isError=true，後台轉成 HTTP 400。"""
+    """輸入被安全規則拒絕。ValueError：MCP 工具回 isError=true（文字由 server.py 的 keep_error_text 保留），後台轉成 HTTP 400。"""
 
 
 # ---------------------------------------------------------------------------

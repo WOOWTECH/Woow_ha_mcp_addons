@@ -1,5 +1,5 @@
 # Build from repository ROOT: docker build -f apps/emqx/Dockerfile .
-FROM node:22.23.4-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d AS ui
+FROM node:26.12.1-bookworm-slim@sha256:28147155d47dc31abe0a46e0d12b59b2fb3d0a2dcc5dc65fce76a074180b16fe AS ui
 WORKDIR /ui
 COPY packages/mcp-admin-ui/package.json packages/mcp-admin-ui/package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
@@ -17,7 +17,7 @@ RUN uv sync --frozen --no-dev --python /usr/local/bin/python
 COPY apps/emqx/pyproject.toml apps/emqx/uv.lock ./apps/emqx/
 RUN uv sync --project apps/emqx --frozen --no-dev --python /usr/local/bin/python
 FROM python:3.13.16-slim-bookworm@sha256:f040863673aea2570c3ff6a5c3fb4c673a016cbc5375005ad145915922b6b78a AS runtime
-ARG BUILD_VERSION=0.3.4
+ARG BUILD_VERSION=0.4.0
 LABEL io.hass.type="app" io.hass.arch="amd64" io.hass.version="${BUILD_VERSION}" \
       io.hass.name="Woow EMQX MCP Server" io.hass.description="Experimental; HA admin-role management; full tool surface; every tool and write on by default (each can be turned off in the panel)." \
       io.hass.url="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \

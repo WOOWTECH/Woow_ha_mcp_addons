@@ -2,9 +2,10 @@
 
 Real children (each in its pinned venv, started from products.child_spec on a private port, fake backends): a session
 nobody uses is gone after the limit (the child answers 404, so MCP clients initialize again) while a session in use
-stays. Unit checks run session_idle inside both pinned SDK flavours (mcp 1.30.0 FastMCP; FastMCP 3.4.11); 0.3.4: mcp
-1.30.0 has its own 30-minute default, which its FastMCP passes explicitly, and the add-on's limit still replaces it;
-its 4 MiB request body limit becomes the gateway's 16 MiB (a real child takes a body just under it).
+stays. Unit checks run session_idle inside both pinned SDK flavours (0.4.0: mcp 2.3.0 MCPServer; FastMCP 4.1.3); since
+0.3.4 the SDK has its own 30-minute default, which MCPServer (FastMCP in mcp 1.30.0) passes explicitly, and the add-on's
+limit still replaces it; its 4 MiB request body limit becomes the gateway's 16 MiB (a real child takes a body just under
+it).
 """
 import asyncio
 import importlib.util
@@ -51,8 +52,9 @@ if sys.argv[1] == 'fastmcp':
     from fastmcp.server.http import FastMCPStreamableHTTPSessionManager
     manager = FastMCPStreamableHTTPSessionManager(app=object())
 else:
-    from mcp.server.fastmcp import FastMCP
-    server = FastMCP('t')
+    # 0.4.0 (mcp 2.3.0): mcp 1.x's FastMCP is MCPServer; it passes the SDK defaults to the manager explicitly.
+    from mcp.server.mcpserver import MCPServer
+    server = MCPServer('t')
     server.streamable_http_app()
     manager = server.session_manager
 out['fastmcp'] = manager.session_idle_timeout
