@@ -139,10 +139,12 @@ async def test_rotation_closes_idle_authenticated_stream(store):
                         (b"mcp-session-id", b"test-session")]}, receive, send))
         await asyncio.wait_for(opened.wait(), 2)
         store.update(token=None)
-        await asyncio.wait_for(task, 2)
+        from starlette.requests import ClientDisconnect
+        with pytest.raises(ClientDisconnect):
+            await asyncio.wait_for(task, 2)
         assert closed.is_set()
         assert messages[0]["status"] == 200
-        assert messages[-1].get("more_body") is False
+        assert not any(m.get('type') == 'http.response.body' and not m.get('more_body') for m in messages)
 
 
 async def test_upstream_status_and_empty_notification_response_preserved(store):

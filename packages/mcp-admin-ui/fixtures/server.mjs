@@ -11,11 +11,12 @@ import { mountPath, products, backendPayload } from '../src/contracts.js';
 const dist = process.env.OWNED_UI_ASSET_ROOT ?? fileURLToPath(new URL('../dist/', import.meta.url));
 const prefix = '/api/hassio_ingress/DUMMY';
 const mounts = [prefix, ''];
-let config, state, calls, nonce;
+let config, state, calls, nonce, revision;
 function reset(next = {}) {
   config = next;
   calls = [];
   nonce = 0;
+  revision = 1;
   state = {
     product: next.product ?? 'n8n', endpoint: next.endpoint ?? null,
     backend_url: null, backend_key_set: false, connection_configured: next.configured ?? false,
@@ -64,6 +65,10 @@ function capabilities() {
   return result;
 }
 reset();
+const etag = () => `"${revision.toString(16).padStart(64, '0')}"`;
+const configuration = () => ({revision: etag().slice(1, -1), saved_revision: 'launch-fixture',
+  applied_revision: config.applyState === 'pending' || config.applyState === 'failed' ? null : 'launch-fixture',
+  apply_state: config.applyState ?? 'applied', last_error_code: config.applyState === 'failed' ? 'child_start_failed' : null});
 const json = (response, status, value) => { response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); response.end(JSON.stringify(value)); };
 async function body(request) {
   let raw = '';
@@ -76,22 +81,30 @@ const server = http.createServer(async (request, response) => {
     if (path === '/__fixture/ready') return json(response, 200, { fixture: 'LOCAL MOCK — not HA security' });
     if (path === '/__fixture/reset' && request.method === 'POST') { reset(await body(request) ?? {}); return json(response, 200, { reset: true }); }
     if (path === '/__fixture/calls') return json(response, 200, calls);
+    if (path === '/__fixture/configuration' && request.method === 'POST') {
+      const value = await body(request);
+      if (value.changed) revision++;
+      config.applyState = value.applyState;
+      return json(response, 200, {});
+    }
     const mount = mounts.find(candidate => candidate === '' || path.startsWith(`${candidate}/`));
     const local = path.slice(mount.length);
     if (local === '/api/capabilities') return json(response, 200, capabilities());
     if (local === '/api/diagnostics') return json(response, 200, {logs:{entries:[{at:'2026-10-23',stream:'stderr',generation:1,text:'token=[REDACTED]'}],redacted:true,bytes:100,dropped:2}});
+    if (local === '/api/configuration') return json(response, 200, {configuration: configuration()});
     if (local === '/api/bootstrap') {
       if (config.deniedBootstrap) return json(response, 403, { error: 'MOCK denied' });
       nonce++;
-      return json(response, 200, { ...state, capabilities:capabilities(), base_path: mount, api_base: `${mount}/api`, csrf: config.missingCsrf ? null : `mock_fresh_csrf_value_${nonce}` });
+      return json(response, 200, { ...state, ...(config.parity ? {configuration: configuration()} : {}), capabilities:capabilities(), base_path: mount, api_base: `${mount}/api`, csrf: config.missingCsrf ? null : `mock_fresh_csrf_value_${nonce}` });
     }
     if (local.startsWith('/api/')) {
       const operation = local.slice(5);
       const payload = await body(request);
       const validCsrf = request.headers['x-csrf-token'] === `mock_fresh_csrf_value_${nonce}`;
-      calls.push({ operation, method: request.method, validCsrf, fields: Object.keys(payload ?? {}), ...(operation === 'policy' ? { policy: payload } : {}) });
+      calls.push({ operation, method: request.method, validCsrf, ifMatch: request.headers['if-match'], fields: Object.keys(payload ?? {}), ...(operation === 'policy' ? { policy: payload } : {}) });
       if (!validCsrf || config.deniedSave) return json(response, 403, { error: 'MOCK DENIED PRIVATE_CANARY_MUST_NOT_RENDER' });
       if (config.saveStatus) return json(response, config.saveStatus, { error: 'MOCK PRIVATE_CANARY_MUST_NOT_RENDER' });
+      if (config.parity && request.headers['if-match'] && request.headers['if-match'] !== etag()) return json(response, 409, {detail: {code: 'config_conflict'}, untrusted: 'PRIVATE_CANARY_MUST_NOT_RENDER'});
       if (operation === 'backend/test') return json(response,200,{tested_configuration:'saved',backend:'reachable',health:state.health});
       if (operation === 'child/restart') return json(response,202,{accepted:true,apply_state:'pending'});
       if (operation.startsWith('token/')) {
@@ -112,6 +125,7 @@ const server = http.createServer(async (request, response) => {
         if (Object.keys(payload).sort().join() !== (config.operations ? 'denied_operations,disabled,enabled_write_tools,writes_enabled' : 'disabled,enabled_write_tools,writes_enabled')) return json(response, 400, {});
         Object.assign(state, payload);
       } else return json(response, 404, {});
+      revision++;
       return json(response, 200, { saved: true });
     }
     if (local.startsWith('/assets/')) {
