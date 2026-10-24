@@ -6,6 +6,7 @@ Do not run this against a real /data; host harness always supplies an empty tmpf
 """
 import asyncio
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from itertools import islice
 import json
 import hashlib
 import os
@@ -155,7 +156,7 @@ async def ready_listener(client, process):
 
 def fixture_snapshot():
     # Bounded, private synthetic fixture only; never log its contents or hashes.
-    entries = list(DATA.iterdir())
+    entries = list(islice(DATA.iterdir(), 17))
     assert len(entries) <= 16
     snapshot = {}
     for path in entries:
