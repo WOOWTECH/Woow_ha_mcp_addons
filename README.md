@@ -1,8 +1,10 @@
 # WOOW HA MCP Add-ons（實驗版，已公開發佈）
 
-六個啟用的商店產品：Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud。**0.3.2 是尚未發布的候選版本**，已整合 n8n 授權修正：全部 28 個工具先正規化 pinned child 的有效 `output` 參數，再檢查操作權限，避免六個混合工具的外層讀取選項掩蓋內層寫入；versions/test 的 `exposeToMcp` 另需既有 updater 的有效寫入權限。新增 `conditional_writes` capability metadata 說明這項依賴，沒有新增 grant 或 UI 控制。精確 source freeze／CI 與六支正式映像驗收／掃描／發布仍待完成，見 [0.3.2 候選決策與驗收邊界](docs/operations/release-decision-0.3.2.md)。保持 28 個 n8n 工具、33 個寫入 grants、schema 4 與完整功能預設，不變更 dependency／child pins 或 UI 原始碼。
+六個啟用的商店產品：Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud。**0.3.3 是尚未發布的候選版本**，已整合 n8n 授權修正：全部 28 個工具先正規化 pinned child 的有效 `output` 參數，再檢查操作權限，避免六個混合工具的外層讀取選項掩蓋內層寫入；versions/test 的 `exposeToMcp` 另需既有 updater 的有效寫入權限。新增 `conditional_writes` capability metadata 說明這項依賴，沒有新增 grant 或 UI 控制。精確 source freeze／CI 與六支正式映像驗收／掃描／發布仍待完成，見 [0.3.3 候選決策與驗收邊界](docs/operations/release-decision-0.3.3.md)。保持 28 個 n8n 工具、33 個寫入 grants、schema 4 與完整功能預設，不變更 dependency／child pins 或 UI 原始碼。
 
-先前 **0.3.1** 六支 canonical 映像已完成驗收與公開發布；[0.3.1 發布證據](docs/operations/release-decision-0.3.1.md)與[不可變映像紀錄](docs/provenance/release-0.3.1-images.json)保留。各版 stable Release 與 Store 更新仍依正常受保護合併流程驗證，不以此候選宣稱後續流程已完成。指定正式 Hermes 預計由 0.3.0 直接升級至 0.3.2，屆時建立新備份並驗證實際映像；不宣稱 0.3.1 正式 HAOS 升級。OpenDesign 原始碼保留、商店維持停用，本次不建置或發布它的映像。
+先前 **0.3.1** 六支 canonical 映像已完成驗收與公開發布；[0.3.1 發布證據](docs/operations/release-decision-0.3.1.md)與[不可變映像紀錄](docs/provenance/release-0.3.1-images.json)保留。各版 stable Release 與 Store 更新仍依正常受保護合併流程驗證，不以此候選宣稱後續流程已完成。指定正式 Hermes 預計由 0.3.0 直接升級至 0.3.3，屆時建立新備份並驗證實際映像；不宣稱 0.3.1 正式 HAOS 升級。OpenDesign 原始碼保留、商店維持停用，本次不建置或發布它的映像。
+
+**版本隔離：** 0.3.2 已由獨立的 dependency-update [PR17](https://github.com/WOOWTECH/Woow_ha_mcp_addons/pull/17) 保留；本次有限授權修正改用 0.3.3，避免不同 source 共用映像 tag。我們未發布的 0.3.2 候選已被取代，不合併 PR17 的 dependency 更新；0.3.1 歷史證據保持不變。
 
 **Odoo Manage 已於 2026-10-06 下架封存**：0.1.4 是最後一版，0.1.5 起不在商店，也不再建置或發佈。已安裝的仍以 0.1.4 執行，但不會再有更新或安全修正；它的設定保有 Odoo API key，並有 `homeassistant_api` 權限，建議改用 Woow Odoo MCP Server 後移除。Woow Odoo MCP Server 是不同的 MCP server（工具與設定不同，要另設後端、endpoint 與 token）。已發佈的 0.1.0–0.1.4 映像保留，舊備份仍可還原。步驟見[更新、備份與回復](docs/operations/update-backup-rollback.md)；原始碼保留在 `apps/odoo-manage`。
 僅以 **amd64 / Supervisor 2026.09.3** 為封裝目標；不是 Core 最低版本。
@@ -59,8 +61,8 @@ uv pip install --python "$PACKAGING_ENV/bin/python" --require-hashes --only-bina
 "$PACKAGING_ENV/bin/python" -m unittest discover -s packaging -p 'test_*.py' -v
 # 有 Docker 的隔離 runner 才執行；root context 最後的點不可省略
 # 這不是已執行的成功紀錄：
-docker build --platform linux/amd64 -f apps/n8n/Dockerfile -t local/mcp-n8n:0.3.2 .
-"$PACKAGING_ENV/bin/python" packaging/container_acceptance.py n8n local/mcp-n8n:0.3.2
+docker build --platform linux/amd64 -f apps/n8n/Dockerfile -t local/mcp-n8n:0.3.3 .
+"$PACKAGING_ENV/bin/python" packaging/container_acceptance.py n8n local/mcp-n8n:0.3.3
 ```
 
 PR/main CI 沒有發佈權限；固定商店產品 matrix（與 `packaging/inputs.json` 相同）`push: false`。HA 無法以 Add-on

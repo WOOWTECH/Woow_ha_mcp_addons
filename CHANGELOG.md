@@ -1,12 +1,17 @@
 # Changelog
 
-## 0.3.2 — release candidate (2026-10-24)
+## 0.3.3 — release candidate (2026-10-24)
 
 This candidate integrates a bounded n8n authorization correction in the shared
 runtime. Exact-source freeze/CI remain pending, followed by fresh six-image
 container/supply-chain gates and publication. See the
-[0.3.2 release decision](docs/operations/release-decision-0.3.2.md).
+[0.3.3 release decision](docs/operations/release-decision-0.3.3.md).
 Published 0.3.1 images and their evidence remain unchanged.
+
+Version 0.3.2 is reserved by the separate dependency-update PR17. This bounded
+authorization release uses 0.3.3 to avoid assigning the same image tags to
+different sources. Our unpublished 0.3.2 candidate is superseded; no PR17
+dependency changes are merged into this release.
 
 - All 28 n8n tools normalize the pinned child's one-level eligible `output` JSON
   wrapper before checking operation denies/grants and forwarding the same
@@ -36,7 +41,7 @@ contract. OpenDesign receives source metadata only and remains unpublished.
 No option, port, architecture, image name or privilege change is planned.
 Existing state needs no migration, but downgrading the binary restores the
 conditional-write defect. Preserve a backup and current token/policy state.
-The planned official Hermes test upgrades 0.3.0 directly to 0.3.2 with a fresh
+The planned official Hermes test upgrades 0.3.0 directly to 0.3.3 with a fresh
 backup; no official 0.3.1 HAOS upgrade is claimed.
 
 ## 0.3.1 — release candidate (2026-10-24)

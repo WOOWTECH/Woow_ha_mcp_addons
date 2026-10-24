@@ -1,20 +1,32 @@
-# 0.3.2 release preparation — 2026-10-24
+# 0.3.3 release preparation — 2026-10-24
 
 ## Status and source boundary
 
 **Pending: exact-source freeze/CI, six-image
 P1–P5 gates, publication and independent anonymous verification.** This document
 is a candidate record, not completed builder acceptance or permission to skip a
-release gate. No 0.3.2 image digest or successful publication is recorded yet.
+release gate. No 0.3.3 image digest or successful publication is recorded yet.
 
 Preparation starts from merged PR16,
 `da6edd7fcfae83360931eb4dab1848eaaf9a4645`. The reviewed guard is integrated with
-the release metadata; the exact 0.3.2 image-source commit will be frozen after
+the release metadata; the exact 0.3.3 image-source commit will be frozen after
 the integrated checks and root review.
 The final publication record must distinguish that source from the later
 documentation head and protected merge. Historical [0.3.1 image evidence](../provenance/release-0.3.1-images.json)
 and its [publication decision](release-decision-0.3.1.md) remain unchanged; they
-cannot satisfy new 0.3.2 gates. No 0.3.1 tag or image is overwritten.
+cannot satisfy new 0.3.3 gates. No 0.3.1 tag or image is overwritten.
+
+## Separate version reservation
+
+The independent dependency-update [PR17](https://github.com/WOOWTECH/Woow_ha_mcp_addons/pull/17)
+already reserves 0.3.2 for different source and dependency changes. This bounded
+authorization correction therefore uses 0.3.3. Our unpublished 0.3.2 candidate
+source `c1ec45d81424459e5e045101ee40e8aeb89d61f2` is retained as historical
+preparation evidence, not a release or publication proof. Do not publish its
+0.3.2 refs or reuse its local image gates as 0.3.3 acceptance. No PR17 dependency
+changes are merged. The new source/version requires its own exact-image gates,
+publication, normal PR checks and Store evidence. Published 0.3.1 history remains
+unchanged.
 
 ## Bounded correction and compatibility
 
@@ -62,9 +74,9 @@ policy state before any separately coordinated recovery.
 
 Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud advance together under the shared
 core contract. Their intended immutable version tags are
-`ghcr.io/woowtech/amd64-mcp-<product>:0.3.2` (`linux/amd64`). OpenDesign's retained
+`ghcr.io/woowtech/amd64-mcp-<product>:0.3.3` (`linux/amd64`). OpenDesign's retained
 source metadata advances for packaging consistency, but Store remains disabled;
-it has no 0.3.2 image build, stable Release or acceptance claim.
+it has no 0.3.3 image build, stable Release or acceptance claim.
 
 The existing operator-local builder/publisher route may be reused only with
 fresh exact source/tree/full-history/context/helper bindings and current builder
@@ -84,10 +96,10 @@ daemon, not host isolation, hosted BLD2 admission, signed provenance or SLSA.
 Closed hosted-builder/manual-release gates and scan thresholds stay unchanged.
 
 After actual six-image completion, the release owner records the immutable
-identities and evidence hashes in a new `release-0.3.2-images.json`, closes this
+identities and evidence hashes in a new `release-0.3.3-images.json`, closes this
 pending decision and verifies documentation/runtime closure. Required exact-head
 checks then permit the normal protected PR merge. The ordinary push workflow
-creates six `woow_mcp_<product>-v0.3.2` stable Releases; notification and Store
+creates six `woow_mcp_<product>-v0.3.3` stable Releases; notification and Store
 catalog verification must bind actual run heads, resolved tags, merge and image
 source. Optional Local Download evidence remains a separate proof.
 
@@ -110,11 +122,11 @@ replace final exact-head CI, canonical-image or live acceptance.
 | Six canonical image P1–P5 gates and tested UI bytes | Pending |
 | Publication, anonymous immutable verification and cleanup | Pending |
 | Completed image record, normal merge/stable Releases/Store catalog | Pending |
-| Official Hermes 0.3.0 → 0.3.2 upgrade | Pending separate root-owned execution |
+| Official Hermes 0.3.0 → 0.3.3 upgrade | Pending separate root-owned execution |
 
 The designated official Hermes may remain on 0.3.0 while normal 0.3.1
-Release/Store delivery completes. After 0.3.2 publication/catalog proof, the
-authorized plan is one direct 0.3.0 → 0.3.2 upgrade with fresh VM/addon/route
+Release/Store delivery completes. After 0.3.3 publication/catalog proof, the
+authorized plan is one direct 0.3.0 → 0.3.3 upgrade with fresh VM/addon/route
 identity, protected inventory, exact old/new image proof, private cold state
 archive and verified Supervisor partial backup. Keep the Supervisor disk guard.
 Verify preserved configuration/token/policy, runtime/read-only MCP and masked
