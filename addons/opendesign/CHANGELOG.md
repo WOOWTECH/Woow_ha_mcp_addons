@@ -1,5 +1,10 @@
 # OpenDesign Changelog
 
+## 0.3.1 — 不發佈（本產品維持下架）
+
+- 只同步共用 core／manifest／Dockerfile 的版本 metadata；共用設定狀態、編輯衝突與 active-token 串流修正保留在原始碼中。
+- Store 仍停用 OpenDesign，本次不建置或發布映像、不建立正式 Release；沒有新增本產品 live 或 image 驗收的宣稱。其餘六支的候選進度見 [0.3.1 發佈紀錄](../../docs/operations/release-decision-0.3.1.md)。
+
 ## 0.3.0 — 不發佈（本產品已下架）
 
 - 僅依共用版本規則同步原始碼／manifest 版本；不建置、不發布 OpenDesign 映像，不重新啟用 Store。

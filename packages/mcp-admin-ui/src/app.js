@@ -94,9 +94,10 @@ function configurationCard(initial) {
       unconfigured: '尚未設定後端。可先連線查看工具；需要後端的工具尚不可用。',
       unknown: '設定已儲存，但目前無法確認子行程使用的設定。',
     };
-    summary.replaceChildren(p(labels[value?.apply_state] ?? labels.unknown),
-      p('套用狀態與後端是否可連線分開判定；權杖與端點變更不代表子行程重新啟動。'),
-      value?.revision !== initial.revision ? p('伺服器設定已更新。此頁保留原編輯版本與草稿；儲存前請重新整理狀態並檢查新設定。') : null);
+    const rows = [p(labels[value?.apply_state] ?? labels.unknown),
+      p('套用狀態與後端是否可連線分開判定；權杖與端點變更不代表子行程重新啟動。')];
+    if (value?.revision !== initial.revision) rows.push(p('伺服器設定已更新。此頁保留原編輯版本與草稿；儲存前請重新整理狀態並檢查新設定。'));
+    summary.replaceChildren(...rows);
     summary.dataset.applyState = Object.hasOwn(labels, value?.apply_state) ? value.apply_state : 'unknown';
   }
   update(initial);
