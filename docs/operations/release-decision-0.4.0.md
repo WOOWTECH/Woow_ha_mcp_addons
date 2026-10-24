@@ -37,7 +37,7 @@ installations upgrade without the legacy review page (that is only for schema
 | Python MCP SDK `mcp` (Odoo, Hermes, OpenDesign, EMQX, LiteLLM, Nextcloud) | 1.30.0 | 2.3.0, plus `mcp-types` 2.3.0 |
 | FastMCP / fastmcp-slim (EMQX, LiteLLM, Nextcloud) | 3.4.11 | 4.1.3 |
 | `odoo-mcp` (Odoo) | 1.1.0 | 1.3.0 (PyPI sdist sha256 `5c1fb57c…`, the release-train target) |
-| SDK 2 closure (the six children) | httpx-sse 0.4.3 | httpx2 / httpcore2 2.16.0, truststore 0.10.5; opentelemetry-api 1.45.1 now also in Odoo, Hermes, OpenDesign; pydantic-settings and python-dotenv leave those three locks |
+| SDK 2 closure (the six children) | httpx-sse 0.4.3 | httpx2 / httpcore2 2.16.0, truststore 0.10.5 (httpx2-jsfetch 1.0 is locked for emscripten only, never installed); opentelemetry-api 1.45.1 now also in Odoo, Hermes, OpenDesign; pydantic-settings and python-dotenv leave those three locks |
 | Backend HTTP clients of the children | HTTPX 0.28.1 / httpcore 1.0.9 | unchanged (the backend policy guards stay valid) |
 | Odoo Manage (archived, not built) | mcp 1.30.0 / mcp-server-odoo 0.7.1 | unchanged, own lock |
 | `n8n-mcp` / MCP TypeScript SDK override | 2.96.2 / 1.32.2 | unchanged (28 tools, guards and build patch unchanged) |
@@ -128,7 +128,11 @@ copies node into the Python base: it copies `libatomic.so.1` next to libstdc++/l
 (no package installation in images, `packaging/test_supply_chain.py`) and checks
 `node --version` = v26.12.1 right after. The UI stages run in the node image. The n8n
 child keeps the sql.js fallback (`npm ci --ignore-scripts`: no native better-sqlite3,
-`tests/test_boundary.py`); the PaaS better-sqlite3 override does not apply.
+`tests/test_boundary.py`, which also asserts that the child runs Node 26.12.1); the PaaS better-sqlite3 override
+does not apply. CI: pytest runs under `sudo`, whose secure PATH found the hosted runner's own `/usr/local/bin/node`
+before the pinned `/usr/bin/node`, so the n8n child in CI could run on the runner's own Node (22.23.3 in the first
+0.4.0 run, caught by that assertion); the workflows now pin `/usr/local/bin/node` to the setup-node binary as well
+and check `sudo -n -- node --version`.
 
 ## Local evidence (this pod; not image or HA acceptance)
 

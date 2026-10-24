@@ -56,6 +56,10 @@ jobs:
           NODE_BIN="$(readlink -f "$(command -v node)")"
           if [ "$NODE_BIN" != /usr/bin/node ]; then sudo ln -sfn "$NODE_BIN" /usr/bin/node; fi
           test "$(/usr/bin/node --version)" = v26.12.1
+          # 0.4.0: unit.sh runs pytest under sudo, whose secure PATH finds the runner's own /usr/local/bin/node (v22) first,
+          # and the n8n child takes node from that PATH (as in the image, /usr/local/bin/node): pin it to the same binary.
+          if [ "$NODE_BIN" != /usr/local/bin/node ]; then sudo ln -sfn "$NODE_BIN" /usr/local/bin/node; fi
+          test "$(sudo -n -- node --version)" = v26.12.1
       - run: sh packaging/unit.sh
   publish:
     needs: gate

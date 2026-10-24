@@ -81,7 +81,10 @@ pull_request_target、不使用 production self-hosted runner。
 2. strict packaging validator + packaging tests。
 3. 既有 TCP tests 固定 subprocess PATH=/usr/bin:/bin；只在 disposable hosted runner
    將 /usr/bin/node 指向 setup-node 已安裝的確切 binary，並檢查 v26.12.1，避免
-   意外測到 runner 系統舊 Node。不改 core/tests；此操作未在本地工作環境執行。
+   意外測到 runner 系統舊 Node。0.4.0 起 /usr/local/bin/node 也指向它並以 `sudo -n -- node --version` 檢查：
+   pytest 以 sudo 執行，sudo 的 secure PATH 先找到 runner 自帶的 /usr/local/bin/node，而 n8n 子程序從 PATH 取 node
+   （映像中也是 /usr/local/bin/node），CI 的 n8n 子程序因此可能跑在 runner 自帶的 Node（0.4.0 第一次 CI 是
+   22.23.3，由 `tests/test_boundary.py` 新增的子程序 Node 版本斷言發現）。不改 core；此操作未在本地工作環境執行。
    `sh packaging/unit.sh` 真正安裝 `packaging/unit.sh` 列出的每個 runtime lock（各 Python app 含封存的 Odoo Manage 原始碼與 Nextcloud，加上 n8n）、inventory drift、全 core/
    adapter tests，Junit 明確拒絕 skipped/empty/failure。
 4. 固定商店產品 matrix（與 packaging/inputs.json 相同），root context amd64 `push:false load:true`。
