@@ -36,6 +36,16 @@ function reset(next = {}) {
       {name:'list', write:false}, {name:'get', write:false}, {name:'create', write:true}, {name:'delete', write:true},
     ]});
   }
+  if (next.n8nExposure) {
+    // 僅供介面測試；與正式 n8n 三個工具的既有授權形狀相同。
+    state.tools = {
+      n8n_workflow_versions: {write:false, legacy_write:false, operation_parameter:'mode', default_operation:'list',
+        write_grants:['rollback','delete','prune'].map(op => `n8n_workflow_versions:${op}`),
+        operations:['list','get','diff','rollback','delete','prune'].map(name => ({name,write:['rollback','delete','prune'].includes(name)})), inputSchema:{}},
+      n8n_test_workflow: {write:true, legacy_write:false, write_grants:['n8n_test_workflow'], operation_parameter:null, default_operation:null, operations:[], inputSchema:{}},
+      n8n_update_partial_workflow: {write:true, legacy_write:false, write_grants:['n8n_update_partial_workflow'], operation_parameter:null, default_operation:null, operations:[], inputSchema:{}},
+    };
+  }
 }
 function capabilities() {
   const result = {schema_version:1, deployment:{kind:config.fixed ? 'builtin' : 'ha-addon'}, product:{id:state.product,version:'test'},
@@ -51,7 +61,7 @@ function capabilities() {
       item.operations = tool.operations.map(op => ({...op, denied: state.denied_operations[item.name]?.includes(op.name) ?? false,
         policy_enabled: whole && !state.denied_operations[item.name]?.includes(op.name) && (!op.write || state.enabled_write_tools.includes(`${item.name}:${op.name}`))}));
       for (const operation of item.operations) operation.effective = operation.policy_enabled ? config.offline ? null : true : false;
-      item.policy_enabled = whole && (!item.operations.length || item.operations.some(op => op.policy_enabled));
+      item.policy_enabled = whole && (item.operations.length ? item.operations.some(op => op.policy_enabled) : !state.denied_operations[item.name]?.length);
       item.effective = item.policy_enabled ? config.offline ? null : true : false;
       if (!item.policy_enabled) item.reason = 'operations_not_permitted';
     }
@@ -61,6 +71,13 @@ function capabilities() {
     result.tools.operation_count = operations.length;
     result.tools.policy_enabled_operation_count = operations.filter(operation => operation.policy_enabled).length;
     result.tools.effective_operation_count = config.offline ? null : operations.filter(operation => operation.effective === true).length;
+  }
+  if (config.n8nExposure) {
+    const updater = result.tools.items.find(item => item.name === 'n8n_update_partial_workflow');
+    for (const item of result.tools.items.filter(item => item.name !== updater.name)) {
+      item.conditional_writes = [{parameter:'exposeToMcp', requires_tool:updater.name,
+        policy_enabled:config.unknownExposure ? null : updater.policy_enabled}];
+    }
   }
   return result;
 }
