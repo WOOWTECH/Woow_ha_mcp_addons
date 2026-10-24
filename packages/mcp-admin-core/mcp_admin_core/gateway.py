@@ -959,7 +959,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             values = request.headers.getlist(name)
             if len(values) > 1 or (values and (len(values[0]) > 256 or not re.fullmatch(r"[\x21-\x7e]+", values[0]))):
                 raise BadRequest(403 if refusal is not None else 400)
-            if values:
+            # 0.4.0: never on an initialize. The body's protocolVersion negotiates; mcp 1.x children ignored the header
+            # there, but MCP SDK 2 (2.3.0) routes any request whose header is not an initialize-handshake revision
+            # (2026-07-28, a typo) to its 2026-07-28 handling, which refuses an initialize (HTTP 400), so a client that
+            # still sends its server/discover header could no longer connect.
+            if values and not (name == "mcp-protocol-version" and method == "initialize"):
                 headers[name] = values[0]
         if refusal is not None and "mcp-session-id" not in headers:
             raise BadRequest(403)  # a refused call without a session: unchanged from 0.1.13

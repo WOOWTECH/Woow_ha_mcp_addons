@@ -198,6 +198,54 @@ async def test_error_bodies_never_enter_gateway_stream(tmp_path, product, json_r
                     latched = product == 'nextcloud' and status == 401
 
 
+
+async def test_odoo_writes_stay_serialized_under_mcp_sdk2(tmp_path):
+    """0.4.0 (mcp 2.3.0): the SDK runs a sync tool on an anyio worker thread, in parallel with the others (mcp 1.x ran it
+    on the event loop). BoundedTools turns every Odoo tool, the writes execute_method and chatter_post included, into
+    one owned worker: concurrent writes never overlap at the backend; one runs, the others get BACKEND_BUSY at once."""
+    entered, release = threading.Event(), threading.Event()
+    active = peak = 0
+    lock = threading.Lock()
+    methods = []
+
+    class Slow(Quiet):
+        def do_POST(self):
+            nonlocal active, peak
+            params, method = xmlrpc.client.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            with lock:
+                active += 1; peak = max(peak, active)
+                methods.append(params[4] if method == 'execute_kw' else method)
+            entered.set()
+            release.wait(8)
+            with lock:
+                active -= 1
+            value = {'version': {'server_version': '18.0', 'server_version_info': [18, 0, 0, 'final', 0]},
+                     'authenticate': 7}.get(method, True)
+            self.reply(xmlrpc.client.dumps((value,), methodresponse=True, allow_none=True).encode())
+
+    writes = [call('execute_method', {'model': 'res.partner', 'method': 'write', 'args': [[1], {'name': f'n{i}'}]},
+                   id=10 + i) for i in range(6)]
+    writes += [call('chatter_post', {'model': 'res.partner', 'record_id': 1, 'body': f'note {i}'}, id=20 + i)
+               for i in range(2)]
+    with serve(Slow) as url:
+        try:
+            async with runtime(tmp_path, 'odoo', url, write_grants=('execute_method', 'chatter_post')) as (
+                    client, headers, store, manager, child):
+                tasks = [asyncio.create_task(rpc(client, '/mcp', headers, message)) for message in writes]
+                try:
+                    assert await asyncio.to_thread(entered.wait, 5)
+                    await asyncio.sleep(.5)
+                    completed = [task.result() for task in tasks if task.done()]
+                    assert len(completed) == len(writes) - 1  # all but the one holding the worker
+                    assert all('BACKEND_BUSY' in json.dumps(item) for item in completed)
+                    assert peak == 1
+                finally:
+                    release.set()
+                    await asyncio.gather(*tasks, return_exceptions=True)
+        finally:
+            release.set()
+    assert peak == 1 and methods  # the one admitted call authenticated and wrote alone
+
 @pytest.mark.parametrize('product,capacity', [('opendesign', 4), ('odoo', 1)])
 async def test_slow_backend_does_not_starve_protocol(tmp_path, product, capacity):
     entered, release = threading.Event(), threading.Event()

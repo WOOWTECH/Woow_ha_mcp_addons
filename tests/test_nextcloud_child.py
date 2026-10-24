@@ -741,7 +741,9 @@ async def test_write_without_etag_header_and_broken_follow_up_lookup(tmp_path, f
 async def test_slow_401_still_latches_after_health_check_timeouts(tmp_path):
     """R2 observation: a 401 that arrives after HealthMonitor's 5 s probe timeout (Nextcloud may delay failed logins)
     still latches: at most two failed logins, then none (FastMCP 3.4.5 lets the probe finish after the session
-    ends; an upgrade that cancels it would fail here)."""
+    ends; an upgrade that cancels it would fail here). 0.4.0: FastMCP 4.1.3 (MCP SDK 2) does cancel a running async
+    tool when HealthMonitor deletes its session; the vendored probe shields itself (anyio.CancelScope(shield=True)) and
+    this regression test fails without that (5 failed logins, measured 2026-10-25)."""
     import time
     seen = []
 

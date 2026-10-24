@@ -1,4 +1,4 @@
-"""Hermes MCP Server — FastMCP server with 11 tools bridging Gateway + Dashboard APIs.
+"""Hermes MCP Server — MCP SDK ``MCPServer`` with 11 tools bridging Gateway + Dashboard APIs.
 
 Gateway API  (:8642) — OpenAI-compatible API with Bearer auth  [A]
 Dashboard API (:9119) — Management REST API with cookie auth   [B]
@@ -23,16 +23,17 @@ from typing import Any, Awaitable, Callable
 
 import httpx
 from backend_policy import async_client, backend_errors, backend_error_text
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from mcp.types import CallToolResult, TextContent
+from tool_error_text import keep_error_text
 
 from . import errors
 
 # ---------------------------------------------------------------------------
-# FastMCP server instance
+# MCP server instance（MCP SDK 2.x 的 MCPServer，即 1.x 的 FastMCP；#78）
 # ---------------------------------------------------------------------------
 
-mcp = FastMCP("hermes-mcp-server")
+mcp = MCPServer("hermes-mcp-server")
 
 # ---------------------------------------------------------------------------
 # 輸入守衛：拼進網址的 id、設定寫入的 deny-list、MCP server 網址（AI-HMCP-001-1／-001-3／-002-2）
@@ -1068,10 +1069,18 @@ async def hermes_webhook(
 
 
 # ---------------------------------------------------------------------------
+# 工具例外的文字照舊給 client（#78）
+# ---------------------------------------------------------------------------
+
+# 這個檔與 errors.py／guards.py 的錯誤（後端不通、逾時、輸入被安全規則拒絕…）都是「丟例外、讓 client 看到文字」。
+# mcp 2.x 只保留 ToolError 的文字、其他例外只回 "Error executing tool <name>"；在工具邊界換回 1.x 的逐字行為。
+keep_error_text(mcp)
+
+# ---------------------------------------------------------------------------
 # Low-level server（供雙 transport wrapper 掛 SSE + StreamableHTTP）
 # ---------------------------------------------------------------------------
 
 # core 的 DualTransportApp 需要底層 low-level ``Server``（用 StreamableHTTPSessionManager
-# 與 ``server.run`` 的 API），FastMCP 內部即持有一個。以 module-level 名稱 ``server``
-# 暴露，對齊 odoo 的 ``mcp_server_odoo.server:server`` 命名，供 launcher 掛雙 transport。
-server = mcp._mcp_server
+# 與 ``server.run`` 的 API），MCPServer 內部即持有一個（mcp 2.x 的 ``_lowlevel_server``，1.x 叫 ``_mcp_server``）。
+# 以 module-level 名稱 ``server`` 暴露，供 launcher 掛雙 transport。
+server = mcp._lowlevel_server

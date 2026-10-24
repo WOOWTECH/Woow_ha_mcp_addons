@@ -15,14 +15,14 @@ import uuid
 
 import httpx
 from backend_policy import sync_client, backend_errors
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 OD_API_BASE = os.environ["OD_API_BASE"]
 
 # Chat operations can take minutes (AI agent generates code)
 CHAT_TIMEOUT = float(os.environ.get("OD_CHAT_TIMEOUT", "300"))
 
-mcp = FastMCP("Open Design MCP Server")
+mcp = MCPServer("Open Design MCP Server")
 _client: httpx.Client | None = None
 
 

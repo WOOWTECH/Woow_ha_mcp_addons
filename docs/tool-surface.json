@@ -3,37 +3,38 @@
   "scope": "0.2.0 full child surface (owner decision 2026-10-15); Odoo Manage (retired) keeps the 0.1.x bounded surface; not HA/release acceptance",
   "source_digests": {
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/__init__.py": "7f0d150faa30f109b34382fc0f1ca778432a0ba6e000475eeb69ef114aa21a04",
-    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/__main__.py": "078f0bab7f50b889b58b58962bbca16875e782370b5328618a5a842a83a1f1df",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/__main__.py": "70364c41331d1a1023556813f12d2cb867096fdf07761d4581a309b9ee37dc5b",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/access_helpers.py": "cacf992499dcbf8ec6f9a08f4b52b2055d4a99575b42992a032bbc273d839a4e",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/accounting_tools.py": "7eb4c7f835a247d80ef2b8404ccb385fcf34dad91078ff59eb133056e7dbeba9",
-    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/agent_tools.py": "5004b28b00e59efd903ae8d48240922a0bdb43fb9b0051e77dbcd919e3c434fd",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/agent_tools.py": "1e467c6e2871ace8ca935b028124630767968cd08c632875f99435434b2795ee",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/audit.py": "a83cd8fcc2c998ae2b7c57686c257dbf662ac23fd03f825b7f3c68944747fbfb",
-    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/auth.py": "90fc4a57275b723e37bee4455afc5c9564566addb2f2163e954913ceb5ed4d50",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/auth.py": "1d7079e992f3420b9cdcbcfff989f095de8447f1d3a8189627b5d0227502cf21",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/cross_instance.py": "053ed7d7bd66c4733dfd2f444ac9a517c5e2b0610e2ae7637e2ead9539e59821",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/data_quality.py": "c939be7370cd797abdb079513c1949339445c1e6aa3b9bb3d06a075924b1c3fe",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/diagnostics.py": "1fb1632cc711a7dfa4d5f6700472abeaffb897a094a4c399c21ce045aebb0dc7",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/field_policy.py": "f6763bd2d5eca68445cdc4302b68fcd38cf145f608de16a12b00e2ac1a7dd978",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/field_ranking.py": "7d958cc1e62d2bf3f9467ca30cb556a425ad70efe0237fc1a0dbd04d28f7065f",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/knowledge_index.py": "ec722a2d6d489d343e4e554915cdf45b16d19f1369bbfaf95adb35383ed0dfc2",
-    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/odoo_client.py": "8bd06a523cb8049f14f54d06d9b73c3d7787108e7e78cf58bfb725ec9a97f74d",
-    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/plugin_api.py": "51ca956175f69dd2b26e1e62bf913127e0012f2ac5f0d644f5b3b91e4a53f0fd",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/odoo_client.py": "3cb7796965772bbea02fa1fda5c4de1fdcb36055ae1dcf9db396fd22559ff6c7",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/plugin_api.py": "10df3b7477c121cca999fa9f8456f8ba38e963f386a53036da8a26a1dd460534",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/prompts.py": "945c1c8b201b7b63f9ab6d19cc6dea5297c85b53b87e3f9681d287af8c4c5346",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/prompts_workflows.py": "08424d456108f709c269d535cb98b2cf739290fc51d6d7a5788fbc5c9aab73a4",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/rate_limit.py": "f67ba63b68f6a4853e5f27caef28f8afe969ed409ac4f0397eda50efccc997e8",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/schema_cache.py": "8364474702eccc99e59c891e21359009f9951f07b12915b9be7daee13d55c423",
-    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/schemas.py": "f403c1794c79aa5c8ec6c8321b7eb93965f83929170e15997ee9ed95aee52f4e",
-    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/server.py": "5474438cf941678d7b80b12bc03ff32323f68c3b6dda90906a51ec530a7c2d48",
-    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/server_core.py": "7b4e2a03a25447f151f7459883af7721814da310afeb5b55e5aa94b9b8c78641",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/schemas.py": "1d8b93c25f695515b2e233fedfcfc8e156270ce5cd142c1d6cee57cba0fcbb46",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/server.py": "3b902786816da78d67a6e8aa432321b04c3872c73a2ca88e0840591490de5539",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/server_core.py": "4866870f36f905122f2a6fbdb105591268b51d26848a38b99cf25efb498bee1d",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/setup_wizard.py": "3896e54837a5083b86830cfb70268f6c35d33ddfbc67b696e4ee0d3055d78bb7",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/task_queue.py": "1e80ee0317d237e36cdaddf608059462c8e4adfe484cd336557976c9f29949a0",
-    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tool_helpers.py": "51276e68897d45f812048400d79100ba1a6a589de05fc7c50dff96d4c9596e64",
-    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_accounting.py": "875938eefb563923d4f9e6bbda97611329a455fd565f8e9063e521578422e93a",
-    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_async.py": "0fb5f638a1fb60cacec1d5479f2b258a9115053bc7c6c8707577936a18f1e632",
-    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_cross_instance.py": "09d269c9322bf934dc3e762c53c7d5dec305291c3f5bd893d4ade48ac38e2be0",
-    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_data_quality.py": "5a0b35eb4d5196321dbba042d89afe2d62d1e8e4d51337b6a54999e108ecaa34",
-    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py": "957f3affa479cb079350de8874064d89594ab0661cfbfd7675b7f26930d32772",
-    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_knowledge.py": "fc2dba8682c5286dc4009d1f66deb16462fbadae2c97beb45e050dda9bd1f757",
-    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py": "4c8bf33b35c54757b93f0cc367b4f5027488ca8fbf63f68c1241f1a4be784de0",
-    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_write.py": "c33bdd5ab4b3c719c269d76c2b2fc39fafc62e2efd1dcc36e201064268e0c09c",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tool_helpers.py": "139f4da574a8f43969fc9acd26b471210e34cbe03ccde6a26fdb1c30c0caeebf",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_accounting.py": "38023633b8413ce2643d1e8301ba25a8495912d31db151342dea49a317631065",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_async.py": "cf4c32b82f3160dc120ef8a1e50e1410b439ed89e6bf9bd5c44d9e8459f8f663",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_cross_instance.py": "bf6b4fb97a0e2e8b32a59d4e212e0d927befa6ea20ca63729da00c00da76ac5b",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_data_quality.py": "729066d00e28f7ef27db35577b6604f239f96084b75761c63a6181c87072d761",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py": "1355ad597fbe67cf4222c5c2295e229265c6654ebbfd83cebb62a7f291346bd5",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_knowledge.py": "8ce241e6007b19ed3f2ae8058f169d691cb6f6c8284771b8276e21a698b20f9a",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py": "c477b2a8a6276004b8bd55f51d7a0e5119096a68f0b81fc3dac43a916f906200",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_write.py": "50ac5cfa696524eb8c58e0ebf945f607d875aa1f5a95d964136085e47c9729ff",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/write_policy.py": "d2fa967f7efc942abfb7792608c6323c77fcda81def86fd7c0b265102415b154",
     "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/__init__.py": "ddc0cccc0c175133220e63b2ece3ce79ca44984fc53f1cadba1e0e73c41a1ba7",
     "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/__main__.py": "3ca759a344d9cd08e672c8d237226a182e6c951106f6bc1265651a2392c3008f",
@@ -51,9 +52,9 @@
     "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/tools.py": "5569568a6c86306d19bc4194ef7aeb504a238c4b8dba4d7fc809002104737249",
     "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/uri_schema.py": "2771d8c05d3a93a7b2b0256faf7c63c655f5cd232d22edc462d77c7a171f4af2",
     "apps/hermes/vendor/hermes_mcp_server/errors.py": "fc9fae57953e55c5da14d90f95d63e40a0cad1cd57f7be5be6d7a7732b8de6be",
-    "apps/hermes/vendor/hermes_mcp_server/guards.py": "e7345d0a12c9aeaa2f29c05a28a4a1262e42168bc5ab5e853c984a06025acfa8",
-    "apps/hermes/vendor/hermes_mcp_server/server.py": "ba844e607f27eaa6f46b2fe346e77cb86eff247243320c470b57b290f83e99c6",
-    "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py": "903db04b90d34a6819a7d06fcd197025665fdb5fd0545500214c2716c42fe97f",
+    "apps/hermes/vendor/hermes_mcp_server/guards.py": "12dab5cd73dabb337da579f5d86cdc81c931b2678637daaf4c34d1bc2169f9d5",
+    "apps/hermes/vendor/hermes_mcp_server/server.py": "a2989df01ce895e6766e5b68733858146cf998bebd83cd6f43a392b6fbbc248a",
+    "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py": "d4f16b9af152a71c8fa2a16bc013bd9e39d58db4e59206d331190d890643d50e",
     "apps/emqx/vendor/emqx_mcp_server/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "apps/emqx/vendor/emqx_mcp_server/deps.py": "fa949b1f1b3577be7c848af5bb74a5b9d068d39cba265b93cdd4dde4a41529e3",
     "apps/emqx/vendor/emqx_mcp_server/errors.py": "c7e0035e810600c10db1bd5ff21f511f3023c4b1c0c57931b3487ba6d4611795",
@@ -97,7 +98,7 @@
     "apps/nextcloud/vendor/nextcloud_mcp_server/errors.py": "df1ccbd7590f8868b8297c0be57e00b532fd49786787bebfa94b3e0641609432",
     "apps/nextcloud/vendor/nextcloud_mcp_server/ical.py": "531ca3c58684ea1c7dd504b440703c80699ccbf024278e568121195d9738b9af",
     "apps/nextcloud/vendor/nextcloud_mcp_server/paths.py": "806f187a9ad668c89ddfa71c4e827ac78f69e9649493fd76228a17683e4b7c4d",
-    "apps/nextcloud/vendor/nextcloud_mcp_server/server.py": "04e8a361367e7b586d611887b9494f18b8cd88ca0dad8c1d949bb9af3275ff9f",
+    "apps/nextcloud/vendor/nextcloud_mcp_server/server.py": "eb25088dc4d2158f1583e53b682d753711941bfc2352a2890ef6f6693fd3a108",
     "apps/nextcloud/vendor/nextcloud_mcp_server/settings.py": "d8283658375f65ec0022a5e04e48d0109e14d49a8df1f7e6c8fcbd905ebb45ad",
     "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py": "9b22f15816e56e6808a509886d89f52a04152dec99bf9078ccd257e098fb4aa4",
     "apps/nextcloud/vendor/nextcloud_mcp_server/webdav.py": "1e304349885f5dd3474e923dd0fc8b48c38e1acb3d19423b6f89e41333382604",
@@ -134,14 +135,15 @@
     "apps/n8n/node_modules/n8n-mcp/dist/utils/npm-version-checker.js": "8ffe192878574d0c4a7a6453205be7916858344e889b8b681998b4f22451a426",
     "apps/runtime/backend_policy.py": "45bea021e676a8714786ef226d8267b61d0ffcdb9cd5053a296c60f031976a65",
     "apps/runtime/batch2_outputs.py": "239add1fbbad29eecbfec82e33553b33b4ed7b0e5d3acdad01a33d83f2090352",
-    "apps/runtime/bounded_tools.py": "edffe52d3976fb71e46c563bb14ac0f34ad4a471eea302e82f94c9a811ecd250",
-    "apps/runtime/odoo_read_exists.py": "c7140f8fac45b85141a9ffe1dc9e263e10cf4bab1c6f51d5e416fd71ab9602a9",
+    "apps/runtime/bounded_tools.py": "33d87837b6e60c820f1ce53442606fa519182505a9a27f6c4c7f5262a4b8d745",
+    "apps/runtime/odoo_read_exists.py": "01a4c0e81a28e50c09e43238d612113fe4e76a0250402a21e4489da59ddfd4bf",
     "apps/runtime/run_child.py": "720930274b2a6e67a2effe0c4463cc713f0318ece45a4cef951ea45488241fe5",
-    "apps/runtime/session_idle.py": "f575b42d917e678479102d62f0ad1126031aa7abbe1c4b1996080e70b3749734",
-    "apps/hermes/launch.py": "cdcb47b778a98c2639276d6be93930c185923194ab51fee8098f4a5cbff12c4a",
-    "apps/odoo/launch.py": "1eeeef216fc112b06b2b6c055c4f436014c2c04087d38535442f338a7533e39d",
+    "apps/runtime/session_idle.py": "79ecbaffb832a00354ae659b56dc264361c6a6299d2d0a9a16ad41c958489493",
+    "apps/runtime/tool_error_text.py": "c21dd6b51e9ac2a7de457280b1f2bf3ab6a432c7b0115745f1d7363e98fadf59",
+    "apps/hermes/launch.py": "66567ea7820e005eb4cecc56efce928d084d9921ae09422336bfa0ca24aae5fc",
+    "apps/odoo/launch.py": "35918ad07f5fcea3118a718cc308865d2f7736b31040a599ddeab817004f31df",
     "apps/odoo-manage/launch.py": "7e2adc8ce3ece9240ce54d1c7429ceed3bd61d95e6a700ef00094816f9cca515",
-    "apps/opendesign/launch.py": "739f191b30031963013afcb4b85f244d74edd0488e180d94822b3d5d315b14cd"
+    "apps/opendesign/launch.py": "6a3d5e2c42537903d7509807facf699b9e680573f4f7bd04ccc9965c9e4f9723"
   },
   "products": {
     "odoo": {
@@ -151,10 +153,10 @@
         {
           "name": "accounting_health_across_instances",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_cross_instance.py",
-          "line": 306,
+          "line": 310,
           "evidence": "python-decorator-AST",
           "operations": {},
-          "source_signature": "ctx: Context, direction: str='receivable', as_of: Optional[str]=None, top_partners: int=10, instances: Optional[Any]=None",
+          "source_signature": "ctx: Context, direction: Annotated[str, Field(description=\"Aging direction: 'receivable' or 'payable'.\")]='receivable', as_of: Annotated[Optional[str], Field(description='Optional ISO date used as the aging reference date.')]=None, top_partners: Annotated[int, Field(description='Maximum top partners to include in each aging report; capped at 100.')]=10, instances: Annotated[Optional[Any], Field(description='Optional instance selector; defaults to all eligible instances.')]=None",
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
@@ -174,7 +176,7 @@
         {
           "name": "accounting_health_summary",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_accounting.py",
-          "line": 91,
+          "line": 108,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, instance: Optional[str]=None",
@@ -197,7 +199,7 @@
         {
           "name": "aggregate_across_instances",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_cross_instance.py",
-          "line": 264,
+          "line": 268,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, model: str, group_by: List[str], measures: Optional[List[str]]=None, domain: Optional[Any]=None, instances: Optional[Any]=None",
@@ -220,7 +222,7 @@
         {
           "name": "aggregate_records",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
-          "line": 592,
+          "line": 615,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, model: str, group_by: List[str], measures: Optional[List[str]]=None, domain: Optional[Any]=None, lazy: bool=False, limit: Optional[int]=None, offset: int=0, order: Optional[str]=None, instance: Optional[str]=None",
@@ -243,7 +245,7 @@
         {
           "name": "analyze_upgrade_log",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
-          "line": 505,
+          "line": 568,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "log_text: str, source_version: Optional[str]=None, target_version: Optional[str]=None",
@@ -266,7 +268,7 @@
         {
           "name": "build_domain",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
-          "line": 605,
+          "line": 668,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "conditions: List[Dict[str, Any]], logical_operator: str='and', fields_metadata: Optional[Dict[str, Any]]=None",
@@ -289,10 +291,10 @@
         {
           "name": "business_pack_report",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
-          "line": 627,
+          "line": 690,
           "evidence": "python-decorator-AST",
           "operations": {},
-          "source_signature": "ctx: Context, pack: str, use_live_metadata: bool=True, instance: Optional[str]=None",
+          "source_signature": "ctx: Context, pack: Annotated[str, Field(description='Business pack to report, such as sales, crm, inventory, accounting, or hr.')], use_live_metadata: Annotated[bool, Field(description='Whether to inspect live models and installed modules.')]=True, instance: Annotated[Optional[str], Field(description='Optional configured Odoo instance name; uses the default if omitted.')]=None",
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
@@ -312,7 +314,7 @@
         {
           "name": "cancel_async_task",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_async.py",
-          "line": 214,
+          "line": 216,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "task_id: str",
@@ -337,7 +339,7 @@
         {
           "name": "chatter_post",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_write.py",
-          "line": 422,
+          "line": 558,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, model: str, record_id: int, body: str, message_type: str='comment', subtype_xmlid: Optional[str]=None, partner_ids: Optional[List[int]]=None, attachment_ids: Optional[List[int]]=None, approval: Optional[Dict[str, Any]]=None, confirm: bool=False, instance: Optional[str]=None",
@@ -385,10 +387,10 @@
         {
           "name": "diagnose_access",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
-          "line": 180,
+          "line": 202,
           "evidence": "python-decorator-AST",
           "operations": {},
-          "source_signature": "ctx: Context, model: str, operation: str='read', domain: Optional[Any]=None, record_ids: Optional[List[int]]=None, expected_count: Optional[int]=None, include_rules: bool=True, observed_error: Optional[Any]=None, limit: int=50, instance: Optional[str]=None",
+          "source_signature": "ctx: Context, model: Annotated[str, Field(description='Technical Odoo model name to inspect.')], operation: Annotated[str, Field(description='Access operation to diagnose, such as read or write.')]='read', domain: Annotated[Optional[Any], Field(description='Optional Odoo domain used for the visibility check.')]=None, record_ids: Annotated[Optional[List[int]], Field(description='Optional record IDs to check directly.')]=None, expected_count: Annotated[Optional[int], Field(description='Optional expected visible record count for comparison.')]=None, include_rules: Annotated[bool, Field(description='Whether to include matching record-rule metadata.')]=True, observed_error: Annotated[Optional[Any], Field(description='Optional error text or structured error to classify.')]=None, limit: Annotated[int, Field(description='Maximum metadata rows to inspect; capped at 500.')]=50, instance: Annotated[Optional[str], Field(description='Optional configured Odoo instance name; uses the default if omitted.')]=None",
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
@@ -408,10 +410,10 @@
         {
           "name": "diagnose_odoo_call",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
-          "line": 65,
+          "line": 67,
           "evidence": "python-decorator-AST",
           "operations": {},
-          "source_signature": "model: str, method: str, args: Optional[List[Any]]=None, kwargs: Optional[Dict[str, Any]]=None, transport: str='auto', target_version: Optional[str]=None, observed_error: Optional[Any]=None, include_debug: bool=False, metadata: Optional[Dict[str, Any]]=None, use_live_metadata: bool=False",
+          "source_signature": "model: Annotated[str, Field(description='Technical Odoo model name to diagnose.')], method: Annotated[str, Field(description='Odoo model method name to diagnose.')], args: Annotated[Optional[List[Any]], Field(description='Optional positional call arguments.')]=None, kwargs: Annotated[Optional[Dict[str, Any]], Field(description='Optional keyword call arguments.')]=None, transport: Annotated[str, Field(description=\"Transport to assess, such as 'auto', 'xmlrpc', or 'json2'.\")]='auto', target_version: Annotated[Optional[str], Field(description='Optional target Odoo version for compatibility checks.')]=None, observed_error: Annotated[Optional[Any], Field(description='Optional error text or structured error to classify.')]=None, include_debug: Annotated[bool, Field(description='Whether to include additional diagnostic details.')]=False, metadata: Annotated[Optional[Dict[str, Any]], Field(description='Optional model or method metadata used by the diagnosis.')]=None, use_live_metadata: Annotated[bool, Field(description='Whether to request live metadata; this preview tool does not fetch it.')]=False",
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
@@ -431,10 +433,10 @@
         {
           "name": "execute_approved_write",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_write.py",
-          "line": 245,
+          "line": 360,
           "evidence": "python-decorator-AST",
           "operations": {},
-          "source_signature": "ctx: Context, approval: Dict[str, Any], confirm: bool=False",
+          "source_signature": "ctx: Context, approval: Dict[str, Any], confirm: bool=False, review: Annotated[ElicitationResult[WriteConfirmation], Resolve(_resolve_write_confirmation)]=_DIRECT_CALL_REVIEW",
           "effect": "write",
           "operation_effects": {},
           "dispatch_operations": {},
@@ -456,10 +458,10 @@
         {
           "name": "execute_method",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_write.py",
-          "line": 550,
+          "line": 686,
           "evidence": "python-decorator-AST",
           "operations": {},
-          "source_signature": "ctx: Context, model: str, method: str, args: Optional[List[Any]]=None, kwargs: Optional[Dict[str, Any]]=None, instance: Optional[str]=None",
+          "source_signature": "ctx: Context, model: Annotated[str, Field(description=\"Technical Odoo model name, for example 'res.partner'.\")], method: Annotated[str, Field(description='Odoo model method to call; direct create, write, and unlink are blocked.')], args: Annotated[Optional[List[Any]], Field(description='Optional positional method arguments.')]=None, kwargs: Annotated[Optional[Dict[str, Any]], Field(description='Optional keyword method arguments.')]=None, instance: Annotated[Optional[str], Field(description='Optional configured Odoo instance name; uses the default if omitted.')]=None",
           "effect": "write",
           "operation_effects": {
             "arbitrary-method": {
@@ -485,7 +487,7 @@
         {
           "name": "fit_gap_report",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
-          "line": 553,
+          "line": 616,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "requirements: List[Any], available_models: Optional[List[str]]=None, available_fields: Optional[Dict[str, Any]]=None, installed_modules: Optional[List[Any]]=None, business_context: Optional[Dict[str, Any]]=None, use_live_metadata: bool=False",
@@ -508,7 +510,7 @@
         {
           "name": "generate_json2_payload",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
-          "line": 108,
+          "line": 130,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "model: str, method: str, args: Optional[List[Any]]=None, kwargs: Optional[Dict[str, Any]]=None, base_url: Optional[str]=None, database: Optional[str]=None, include_database_header: bool=True",
@@ -531,7 +533,7 @@
         {
           "name": "get_async_task",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_async.py",
-          "line": 201,
+          "line": 203,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "task_id: str",
@@ -554,7 +556,7 @@
         {
           "name": "get_model_fields",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
-          "line": 303,
+          "line": 326,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, model: str, field_names: Optional[List[str]]=None, relevance: Optional[str]=None, max_fields: int=DEFAULT_MAX_RELEVANT_FIELDS, instance: Optional[str]=None",
@@ -577,10 +579,10 @@
         {
           "name": "get_odoo_profile",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
-          "line": 70,
+          "line": 72,
           "evidence": "python-decorator-AST",
           "operations": {},
-          "source_signature": "ctx: Context, include_modules: bool=True, module_limit: int=100, instance: Optional[str]=None",
+          "source_signature": "ctx: Context, include_modules: Annotated[bool, Field(description='Whether to include installed-module metadata.')]=True, module_limit: Annotated[int, Field(description='Maximum installed modules to include; capped at 500.')]=100, instance: Annotated[Optional[str], Field(description='Optional configured Odoo instance name; uses the default if omitted.')]=None",
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
@@ -600,7 +602,7 @@
         {
           "name": "health_check",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
-          "line": 208,
+          "line": 231,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "",
@@ -623,7 +625,7 @@
         {
           "name": "index_knowledge",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_knowledge.py",
-          "line": 66,
+          "line": 72,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, model: str, domain: Optional[Any]=None, fields: Optional[List[str]]=None, limit: int=500, replace: bool=False, instance: Optional[str]=None",
@@ -648,7 +650,7 @@
         {
           "name": "inspect_model_relationships",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
-          "line": 134,
+          "line": 156,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, model: str, fields_metadata: Optional[Dict[str, Any]]=None, include_readonly: bool=True, include_computed: bool=True, use_live_metadata: bool=True, instance: Optional[str]=None",
@@ -671,7 +673,7 @@
         {
           "name": "knowledge_stats",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_knowledge.py",
-          "line": 132,
+          "line": 136,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "",
@@ -694,7 +696,7 @@
         {
           "name": "list_async_tasks",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_async.py",
-          "line": 227,
+          "line": 229,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "",
@@ -717,7 +719,7 @@
         {
           "name": "list_instances",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
-          "line": 230,
+          "line": 253,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "",
@@ -740,7 +742,7 @@
         {
           "name": "list_models",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
-          "line": 256,
+          "line": 279,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, query: Optional[str]=None, limit: int=100, instance: Optional[str]=None",
@@ -763,7 +765,7 @@
         {
           "name": "lookup_model_history",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
-          "line": 535,
+          "line": 598,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "name: str",
@@ -786,7 +788,7 @@
         {
           "name": "preview_write",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_write.py",
-          "line": 104,
+          "line": 202,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "model: str, operation: str, values: Optional[Dict[str, Any]]=None, values_list: Optional[List[Dict[str, Any]]]=None, record_ids: Optional[List[int]]=None, context: Optional[Dict[str, Any]]=None, instance: Optional[str]=None",
@@ -811,7 +813,7 @@
         {
           "name": "read_attachment",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
-          "line": 501,
+          "line": 524,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, attachment_id: int, include_data: bool=True, instance: Optional[str]=None",
@@ -834,7 +836,7 @@
         {
           "name": "read_record",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
-          "line": 447,
+          "line": 470,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, model: str, record_id: int, fields: Optional[List[str]]=None, instance: Optional[str]=None",
@@ -857,10 +859,10 @@
         {
           "name": "receivable_payable_aging",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_accounting.py",
-          "line": 51,
+          "line": 54,
           "evidence": "python-decorator-AST",
           "operations": {},
-          "source_signature": "ctx: Context, direction: str='receivable', as_of: Optional[str]=None, top_partners: int=15, limit: int=MAX_AGING_LINES, instance: Optional[str]=None",
+          "source_signature": "ctx: Context, direction: Annotated[str, Field(description=\"Aging direction: 'receivable' or 'payable'.\")]='receivable', as_of: Annotated[Optional[str], Field(description='Optional ISO date used as the aging reference date.')]=None, top_partners: Annotated[int, Field(description='Maximum top partners to include; capped at 100.')]=15, limit: Annotated[int, Field(description='Maximum open-item lines to inspect.')]=MAX_AGING_LINES, instance: Annotated[Optional[str], Field(description='Optional configured Odoo instance name; uses the default if omitted.')]=None",
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
@@ -880,7 +882,7 @@
         {
           "name": "scan_addons_source",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
-          "line": 581,
+          "line": 644,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "addons_paths: Optional[List[str]]=None, max_files: int=200, max_file_bytes: int=300000",
@@ -903,10 +905,10 @@
         {
           "name": "schema_catalog",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
-          "line": 115,
+          "line": 124,
           "evidence": "python-decorator-AST",
           "operations": {},
-          "source_signature": "ctx: Context, query: Optional[str]=None, models: Optional[List[str]]=None, include_fields: bool=False, refresh: bool=False, limit: int=50, instance: Optional[str]=None",
+          "source_signature": "ctx: Context, query: Annotated[Optional[str], Field(description='Optional text used to filter catalog models.')]=None, models: Annotated[Optional[List[str]], Field(description='Optional technical model names to include in the catalog.')]=None, include_fields: Annotated[bool, Field(description='Whether to include field metadata for each model.')]=False, refresh: Annotated[bool, Field(description='Whether to bypass and refresh the cached catalog.')]=False, limit: Annotated[int, Field(description='Maximum catalog models to return; capped at 500.')]=50, instance: Annotated[Optional[str], Field(description='Optional configured Odoo instance name; uses the default if omitted.')]=None",
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
@@ -926,7 +928,7 @@
         {
           "name": "search_across_instances",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_cross_instance.py",
-          "line": 224,
+          "line": 228,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, model: str, domain: Optional[Any]=None, fields: Optional[List[str]]=None, limit_per_instance: int=DEFAULT_LIMIT_PER_INSTANCE, instances: Optional[Any]=None",
@@ -949,7 +951,7 @@
         {
           "name": "search_employee",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
-          "line": 719,
+          "line": 742,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, name: str, limit: int=20, instance: Optional[str]=None",
@@ -972,10 +974,10 @@
         {
           "name": "search_holidays",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
-          "line": 757,
+          "line": 780,
           "evidence": "python-decorator-AST",
           "operations": {},
-          "source_signature": "ctx: Context, start_date: str, end_date: str, employee_id: Optional[int]=None, instance: Optional[str]=None",
+          "source_signature": "ctx: Context, start_date: Annotated[str, Field(description='Start date in YYYY-MM-DD format.')], end_date: Annotated[str, Field(description='End date in YYYY-MM-DD format.')], employee_id: Annotated[Optional[int], Field(description='Optional employee ID used to filter holidays.')]=None, instance: Annotated[Optional[str], Field(description='Optional configured Odoo instance name; uses the default if omitted.')]=None",
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
@@ -995,7 +997,7 @@
         {
           "name": "search_knowledge",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_knowledge.py",
-          "line": 104,
+          "line": 110,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "query: str, model: str, limit: int=5, instance: Optional[str]=None",
@@ -1018,7 +1020,7 @@
         {
           "name": "search_records",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py",
-          "line": 370,
+          "line": 393,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, model: str, domain: Optional[Any]=None, fields: Optional[List[str]]=None, limit: int=10, offset: int=0, order: Optional[str]=None, query: Optional[str]=None, instance: Optional[str]=None",
@@ -1041,7 +1043,7 @@
         {
           "name": "submit_async_task",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_async.py",
-          "line": 157,
+          "line": 159,
           "evidence": "python-decorator-AST",
           "operations": {
             "operation": [
@@ -1107,10 +1109,10 @@
         {
           "name": "upgrade_risk_report",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py",
-          "line": 465,
+          "line": 505,
           "evidence": "python-decorator-AST",
           "operations": {},
-          "source_signature": "source_version: Optional[str]=None, target_version: Optional[str]=None, modules: Optional[List[Dict[str, Any]]]=None, methods: Optional[List[Dict[str, Any]]]=None, source_findings: Optional[List[Dict[str, Any]]]=None, observed_errors: Optional[List[Any]]=None, use_live_metadata: bool=False, include_debug: bool=False",
+          "source_signature": "source_version: Annotated[Optional[str], Field(description='Optional current Odoo version.')]=None, target_version: Annotated[Optional[str], Field(description='Optional target Odoo version.')]=None, modules: Annotated[Optional[List[Dict[str, Any]]], Field(description='Optional module metadata to assess for upgrade risks.')]=None, methods: Annotated[Optional[List[Dict[str, Any]]], Field(description='Optional model method metadata to assess for compatibility.')]=None, source_findings: Annotated[Optional[List[Dict[str, Any]]], Field(description='Optional source-code findings to include in the risk report.')]=None, observed_errors: Annotated[Optional[List[Any]], Field(description='Optional observed upgrade or migration errors to classify.')]=None, use_live_metadata: Annotated[bool, Field(description='Whether to request live metadata; this preview tool does not fetch it.')]=False, include_debug: Annotated[bool, Field(description='Whether to include additional diagnostic details.')]=False",
           "effect": "read",
           "operation_effects": {},
           "dispatch_operations": {},
@@ -1130,7 +1132,7 @@
         {
           "name": "validate_write",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_write.py",
-          "line": 148,
+          "line": 246,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, model: str, operation: str, values: Optional[Dict[str, Any]]=None, values_list: Optional[List[Dict[str, Any]]]=None, record_ids: Optional[List[int]]=None, context: Optional[Dict[str, Any]]=None, fields_metadata: Optional[Dict[str, Any]]=None, use_live_metadata: bool=True, instance: Optional[str]=None",
@@ -1862,7 +1864,7 @@
         {
           "name": "hermes_chat",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 758,
+          "line": 759,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "message: str, session_id: str | None=None",
@@ -1887,7 +1889,7 @@
         {
           "name": "hermes_config",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 620,
+          "line": 621,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -1937,7 +1939,7 @@
         {
           "name": "hermes_cron",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 889,
+          "line": 890,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2032,7 +2034,7 @@
         {
           "name": "hermes_gateway",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 727,
+          "line": 728,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2082,7 +2084,7 @@
         {
           "name": "hermes_inspect",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 404,
+          "line": 405,
           "evidence": "python-decorator-AST",
           "operations": {
             "target": [
@@ -2154,7 +2156,7 @@
         {
           "name": "hermes_mcp",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 510,
+          "line": 511,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2213,7 +2215,7 @@
         {
           "name": "hermes_model",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 548,
+          "line": 549,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2271,7 +2273,7 @@
         {
           "name": "hermes_session",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 847,
+          "line": 848,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2329,7 +2331,7 @@
         {
           "name": "hermes_skill",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 478,
+          "line": 479,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2388,7 +2390,7 @@
         {
           "name": "hermes_tools",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 699,
+          "line": 700,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2447,7 +2449,7 @@
         {
           "name": "hermes_webhook",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 998,
+          "line": 999,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [

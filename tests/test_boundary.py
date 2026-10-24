@@ -265,3 +265,23 @@ def test_pinned_version_check_is_disabled_without_npm_query(store):
     # Control: without the switch the same checker reaches the (stubbed) registry fetch.
     control = check({k: v for k, v in spec.env.items() if k != "N8N_MCP_VERSION_CHECK_DISABLED"})
     assert control["status"] == "failed" and "npm registry queried" in control["message"], control
+
+
+def test_the_n8n_child_has_no_native_addon_and_uses_sql_js(store):
+    """0.4.0 (Node 26): `npm ci --ignore-scripts` never runs better-sqlite3's install script (the download of its prebuilt
+    native addon), so the n8n child has no native addon and n8n-mcp keeps the sql.js fallback it has used since 0.1.0;
+    Node's native ABI does not matter here. (The WOOW PaaS pins better-sqlite3 12.11.1 to load that addon on Node 26.)"""
+    import subprocess
+    from pathlib import Path
+    spec = child_spec(store.load(), store.path.parent)
+    app = Path(spec.argv[-1]).parents[4]  # apps/n8n (…/node_modules/n8n-mcp/dist/mcp/index.js)
+    assert (app / "package.json").is_file() and not list((app / "node_modules").rglob("*.node"))
+    code = (
+        "let native = 'loaded'; try { require('better-sqlite3')(':memory:'); } catch (e) { native = 'unavailable'; }"
+        "require('sql.js')().then(SQL => { const db = new SQL.Database();"
+        " process.stdout.write(JSON.stringify({native, sqljs: db.exec('select 1')[0].values[0][0], node: process.version}));"
+        " });"
+    )
+    result = subprocess.run([spec.argv[0], "-e", code], env=spec.env, cwd=app, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {"native": "unavailable", "sqljs": 1, "node": "v26.12.1"}

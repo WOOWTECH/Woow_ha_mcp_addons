@@ -10,6 +10,7 @@ from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from typing import Any
 
+import anyio
 import fastmcp
 import httpx
 from fastmcp import FastMCP
@@ -91,10 +92,14 @@ def create_server(
         # WOOW HA add-on: upstream probe() on a FRESH client with the same settings and policy, closed afterwards:
         # it never waits for or holds the tools' connections, and still shares the credentials-keyed auth latch.
         fresh = NextcloudClient(settings, transport=transport, policy=nc.policy, public_error=nc.public_error)
-        try:
-            return await fresh.probe()
-        finally:
-            await fresh.aclose()
+        # WOOW HA add-on 0.4.0: FastMCP 4 (MCP SDK 2) cancels a running async tool when its session is deleted
+        # (FastMCP 3 let it finish). HealthMonitor ends the session after its 5 s probe timeout, so a slow 401 would
+        # never reach the auth latch and every later check would log in again: the probe runs to its answer.
+        with anyio.CancelScope(shield=True):
+            try:
+                return await fresh.probe()
+            finally:
+                await fresh.aclose()
 
     # on_duplicate="error": start-up fails if the name were ever taken by a tool.
     server.add_tool(

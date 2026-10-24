@@ -15,10 +15,12 @@ from pathlib import Path
 
 
 ID_ONLY = frozenset({'id'})
-# The pinned sources this depends on: the handler it wraps and the client resolution it repeats.
+# The pinned sources this depends on: the handler it wraps and the client resolution it repeats. 0.4.0 (odoo-mcp 1.3.0):
+# read_record changed only in reading its lifespan state through server_core._app_context (the same object); it still
+# reports 'fields_used' and 'Record not found: <model> ID <id>', and _resolve_odoo(ctx, instance) is unchanged.
 SOURCES = {
-    'tools_read': '4c8bf33b35c54757b93f0cc367b4f5027488ca8fbf63f68c1241f1a4be784de0',
-    'server_core': '7b4e2a03a25447f151f7459883af7721814da310afeb5b55e5aa94b9b8c78641',  # 0.2.0: PaaS-patched
+    'tools_read': 'c477b2a8a6276004b8bd55f51d7a0e5119096a68f0b81fc3dac43a916f906200',
+    'server_core': '4866870f36f905122f2a6fbdb105591268b51d26848a38b99cf25efb498bee1d',  # 0.2.0: PaaS-patched
 }
 
 

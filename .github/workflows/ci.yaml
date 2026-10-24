@@ -24,7 +24,7 @@ jobs:
           python-version: '3.13.16'
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: '22.23.4'
+          node-version: '26.12.1'
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
         with:
           version: '0.12.10'
@@ -38,10 +38,10 @@ jobs:
           .venv/bin/python -m unittest discover -s packaging -p 'test_*.py' -v
       - name: Pin the existing fixed subprocess PATH on this disposable runner
         run: |
-          test "$(node --version)" = v22.23.4
+          test "$(node --version)" = v26.12.1
           NODE_BIN="$(readlink -f "$(command -v node)")"
           if [ "$NODE_BIN" != /usr/bin/node ]; then sudo ln -sfn "$NODE_BIN" /usr/bin/node; fi
-          test "$(/usr/bin/node --version)" = v22.23.4
+          test "$(/usr/bin/node --version)" = v26.12.1
       - run: sh packaging/unit.sh
   # BLOCKED: WOOWTECH is USER-owned; no runner-group/selected-workflow controls.
   # A variable/label cannot enable this future organization-controlled proposal.

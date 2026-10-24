@@ -52,7 +52,7 @@ bundled-data, transitive dependency and any future copied-source obligations rem
 - npm shasum: `af2f94f805e43c254de88f4228b3dda6eb1fa17b` (equal to the downloaded tarball's SHA-1).
 - Registry-reported gitHead: `ef2463f43387549b5c0ab9b87490e263ea4ac7e3`.
 - `engines.node`: `^22.23.4 || ^24.22.1 || >=26.12.1` (2.91.0: `>=20.0.0`), so 0.3.4 moves every Node image to
-  22.23.4.
+  22.23.4; 0.4.0 moves them to 26.12.1 (Node 26, Active LTS from 2026-10-28), inside the same range.
 - 2.91.0 (until 0.3.3): integrity `sha512-0dQtYV6+pcYUvgmZflwa84cxZLs2h/stby7gzlv3//6EiYIZyp6NZyuIAVUIudktahpHZtt0epd9TyTPWxd50A==`,
   shasum `2c999da6fbe2594a093b5920e93dcd816577df17`, gitHead `3a2ec761e006089638d281a27d15ba030ec3ec88`.
 - Source: `https://github.com/czlonkowski/n8n-mcp`.
@@ -65,7 +65,9 @@ bundled-data, transitive dependency and any future copied-source obligations rem
 integrities. Use `npm ci --prefix apps/n8n --ignore-scripts --no-audit --no-fund`.
 No global npm installs or native build/install scripts are required for this tracer.
 The tested fallback is **sql.js 1.15.1** (0.3.4; 1.14.2 before); optional better-sqlite3 11.10.0 is installed
-as package contents but its native addon is not built. MCP JS SDK is **1.32.2** for 0.3.4 (**1.32.0** for 0.3.0 to 0.3.3; 1.32.1
+as package contents but its native addon is not built (0.4.0, Node 26: unchanged; `npm ci --ignore-scripts` never runs
+its prebuilt-binary install script, so the child keeps the sql.js fallback it has used since 0.1.0, and the WOOW PaaS's
+better-sqlite3 12.11.1 override, which exists to load that native addon on Node 24/26, does not apply here). MCP JS SDK is **1.32.2** for 0.3.4 (**1.32.0** for 0.3.0 to 0.3.3; 1.32.1
 and 1.32.2 change only `McpServer`, which registers handlers for capabilities declared in its options, so this child's
 low-level `Server` path is unchanged; n8n-mcp 2.96.2 still pins 1.30.0 exactly). 0.3.4 also takes the newest npm
 versions inside the existing ranges, which clears every `npm audit` finding of the 0.3.0-0.3.3 lock (body-parser 2.4.0 for
@@ -200,5 +202,6 @@ classification, so the adapter also restricts public IPv6 to 2000::/3 and tests
 translation-prefix rejection explicitly. Their license/security obligations remain.
 Local verification used CPython **3.13.2**, Node **22.23.2**, npm **10.9.8**, uv
 **0.12.10**, Linux x86_64. The 0.3.4 dependency update was verified with CPython **3.13.15**, Node **22.23.4**, npm
-**10.9.9** and uv **0.12.10**. OS/Node/Python container base digests are a packaging gate,
+**10.9.9** and uv **0.12.10**; 0.4.0 with CPython **3.13.15**, Node **26.12.1** (official tarball, the binary in the pinned
+image), npm **11.20.0** and uv **0.12.10**. OS/Node/Python container base digests are a packaging gate,
 not resolved by these application locks. No container tooling was installed.

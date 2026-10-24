@@ -8,7 +8,10 @@ from backend_policy import XMLTransport
 
 import odoo_mcp.odoo_client as client
 
-if hashlib.sha256(Path(client.__file__).read_bytes()).hexdigest() != '8bd06a523cb8049f14f54d06d9b73c3d7787108e7e78cf58bfb725ec9a97f74d':
+# 0.4.0 (odoo-mcp 1.3.0): only get_model_fields changed (fields_get asks for a bounded attribute list); the XML-RPC
+# client still builds its ServerProxy transport through RedirectTransport(timeout=, use_https=, verify_ssl=), which the
+# BackendTransport below replaces, and ODOO_TRANSPORT=xmlrpc keeps the urllib JSON-2 path unused.
+if hashlib.sha256(Path(client.__file__).read_bytes()).hexdigest() != '3cb7796965772bbea02fa1fda5c4de1fdcb36055ae1dcf9db396fd22559ff6c7':
     raise RuntimeError('Odoo transport requires source review')
 
 class BackendTransport(XMLTransport):
@@ -27,20 +30,22 @@ if __name__ == '__main__':
     from odoo_mcp.server import mcp
     from bounded_tools import BoundedTools
     from odoo_mcp import tools_read, tools_diagnostics, agent_tools, diagnostics, tools_write, server_core
-    # 0.2.0 (owner decision 2026-10-15, the full add-on): the complete odoo-mcp 1.1.0 surface as the PaaS
+    # 0.2.0 (owner decision 2026-10-15, the full add-on): the complete odoo-mcp surface as the PaaS
     # woow-mcp-server serves it. tools_write and server_core carry the two PaaS build patches (apps/odoo/patches:
     # fix_cross_session_token_store, fix_direct_writes; applied to the venv by the Dockerfile and packaging/unit.sh):
-    # these digests are the patched files, so an unpatched or altered wheel fails closed here.
+    # these digests are the patched files, so an unpatched or altered wheel fails closed here. 0.4.0: odoo-mcp 1.3.0
+    # (MCP SDK 2), the PaaS pin since woow-mcp-server #82; both patches apply unchanged (reviewed in
+    # docs/provenance/runtime-patches.json) and the 41 tools keep their names, annotations and write gating.
     for module, digest in (
-        (tools_read, '4c8bf33b35c54757b93f0cc367b4f5027488ca8fbf63f68c1241f1a4be784de0'),
-        (tools_diagnostics, '957f3affa479cb079350de8874064d89594ab0661cfbfd7675b7f26930d32772'),
-        (agent_tools, '5004b28b00e59efd903ae8d48240922a0bdb43fb9b0051e77dbcd919e3c434fd'),
+        (tools_read, 'c477b2a8a6276004b8bd55f51d7a0e5119096a68f0b81fc3dac43a916f906200'),
+        (tools_diagnostics, '1355ad597fbe67cf4222c5c2295e229265c6654ebbfd83cebb62a7f291346bd5'),
+        (agent_tools, '1e467c6e2871ace8ca935b028124630767968cd08c632875f99435434b2795ee'),
         (diagnostics, '1fb1632cc711a7dfa4d5f6700472abeaffb897a094a4c399c21ce045aebb0dc7'),
-        (tools_write, 'c33bdd5ab4b3c719c269d76c2b2fc39fafc62e2efd1dcc36e201064268e0c09c'),
-        (server_core, '7b4e2a03a25447f151f7459883af7721814da310afeb5b55e5aa94b9b8c78641'),
+        (tools_write, '50ac5cfa696524eb8c58e0ebf945f607d875aa1f5a95d964136085e47c9729ff'),
+        (server_core, '4866870f36f905122f2a6fbdb105591268b51d26848a38b99cf25efb498bee1d'),
     ):
         if hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest() != digest:
-            raise RuntimeError('Odoo handlers require source review (patched odoo-mcp 1.1.0 expected)')
+            raise RuntimeError('Odoo handlers require source review (patched odoo-mcp 1.3.0 expected)')
     from odoo_read_exists import install as install_read_exists
     install_read_exists(mcp)  # 0.1.8 (RR-03): a missing record read by 'id' only is not found
     from bounded_tools import OwnedWorkers
@@ -61,8 +66,14 @@ if __name__ == '__main__':
     mcp.add_tool(woow_backend_probe, name='woow_backend_probe', description='Add-on readiness probe (private).')
     if mcp._tool_manager.get_tool('woow_backend_probe').fn is not woow_backend_probe:
         raise RuntimeError('readiness probe name taken')  # add_tool keeps an existing tool of the same name
-    # The stock client caches an XMLRPC transport: serialize its sync calls.
+    # The stock client caches an XMLRPC transport: serialize its sync calls. 0.4.0: mcp 2 runs a sync tool on an anyio
+    # worker thread, in parallel; BoundedTools turns every sync tool (the writes execute_method and chatter_post as
+    # well as the reads) into an async one on its single owned worker, so they still run one at a time.
     workers = BoundedTools(mcp, capacity=1)
+    # 0.4.0: mcp 2 hides an exception's text from the client unless it is a ToolError; keep 1.x's text for every tool
+    # (BACKEND_BUSY above, the probe's BACKEND_UNAVAILABLE, odoo-mcp's own errors). Last, around everything else.
+    from tool_error_text import keep_error_text
+    keep_error_text(mcp)
     try:
         runpy.run_module('odoo_mcp', run_name='__main__')
     finally:

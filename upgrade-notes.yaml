@@ -1,0 +1,66 @@
+# Human-readable declaration required by AGENTS.md rule 3. The centralized upgrade comparison gate (WOOW addon
+# pipeline #89) has not yet defined a machine-readable schema; this follows the format already used by
+# WOOWTECH/Woow_ha_cloudflare_tunnel_webgui. One release per entry, newest first.
+releases:
+  - to_version: "0.4.0"
+    from_version: "0.3.4"
+    addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]
+    summary: >-
+      MCP SDK 2 migration (MCP Python SDK 2.3.0, FastMCP 4.1.3, odoo-mcp 1.3.0, Node 26.12.1); see
+      docs/operations/release-decision-0.4.0.md. No option, port, architecture, image name, tool name or state
+      schema changes.
+    breaking_changes:
+      - id: odoo-structured-content-unwrapped
+        affects: >-
+          woow_mcp_odoo tools/call results of 13 tools: accounting_health_across_instances,
+          accounting_health_summary, aggregate_across_instances, build_domain, cancel_async_task, get_async_task,
+          index_knowledge, knowledge_stats, list_async_tasks, receivable_payable_aging, search_across_instances,
+          search_knowledge, submit_async_task.
+        change: >-
+          odoo-mcp 1.2.2 and later declare typed output models for these tools, so the MCP SDK sends the result
+          object itself as structuredContent instead of wrapping it as {"result": <object>}. The text content (the
+          same JSON object) and every other tool's result are unchanged; the gateway never lists outputSchema, so no
+          client validates either shape against a schema.
+        migration: >-
+          A client that reads structuredContent.result.<field> for one of these tools reads
+          structuredContent.<field> instead, or keeps parsing the text content, which did not change. LLM clients
+          that read the text are not affected.
+    behavior_changes:
+      - id: fastmcp-cancel-on-session-delete
+        change: >-
+          EMQX, LiteLLM and Nextcloud (FastMCP 4): when a client deletes its MCP session (HTTP DELETE) while one of
+          its async tool calls is still running, that call is now cancelled; FastMCP 3 let it finish. Odoo, Hermes
+          and OpenDesign already behaved like this. The add-on's own readiness probe for Nextcloud is not
+          cancelled, so a slow failed login still stops further logins.
+        migration: >-
+          Do not delete a session with a write still in flight; after such a cancel, read the backend before
+          retrying a write, as after any network interruption.
+      - id: odoo-parameter-descriptions
+        change: >-
+          57 parameters of 10 Odoo tools now carry a description in tools/list (types, required fields and
+          annotations unchanged). The description of execute_method's method says direct create, write and unlink
+          are blocked; this add-on still allows them (ODOO_MCP_ALLOW_DIRECT_WRITES=1, unchanged).
+        migration: None needed.
+      - id: odoo-none-result
+        change: >-
+          execute_method reports a call that Odoo executed and committed but whose None return value it cannot
+          send over XML-RPC as success with a warning, instead of an error that invited a retry.
+        migration: None needed.
+      - id: initialize-protocol-header
+        change: >-
+          The gateway no longer forwards a client's MCP-Protocol-Version header with an initialize request (the
+          body's protocolVersion negotiates, as before), so a client that keeps its 2026-07-28 server/discover
+          header still connects to the SDK 2 children. server/discover itself is still answered by the gateway
+          with JSON-RPC -32601.
+        migration: None needed.
+    preserved:
+      - Add-on slugs, image names (ghcr.io/woowtech/amd64-mcp-<product>), amd64 only, ports 8081/tcp and Ingress 8099.
+      - Manifest options and privileges, state schema 4 (no migration, no upgrade review page), tokens and settings.
+      - Tool names and counts, annotations, write grants and the full-functionality defaults.
+      - Error text of failed tools (the MCP SDK 2 children keep the mcp 1.x text).
+      - Session idle limit (30 minutes) and request body limit (16 MiB) of every Python child.
+    backup_and_rollback:
+      - Create a Home Assistant add-on backup before upgrading.
+      - >-
+        Rolling back to 0.3.4 needs no data conversion (both use state schema 4); restore the 0.3.4 add-on backup.
+        Downgrades are not tested.

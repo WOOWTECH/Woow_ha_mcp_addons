@@ -8,7 +8,8 @@ schema 子集。參考 `supervisor/apps/validate.py` 454–557/589–606 與
 `supervisor/store/validate.py` 10–17。未知 key 不准被 Supervisor 靜默丟棄。
 
 Base image 精確 linux/amd64 manifest digest 記錄於 `packaging/inputs.json`：
-Python 3.13.16 slim-bookworm、Node 22.23.4 bookworm-slim（0.3.4 起；這個 pin 是 multi-arch index digest，之前的 22.23.2 是 linux/amd64 child digest）、uv 0.12.10。
+Python 3.13.16 slim-bookworm、Node 26.12.1 bookworm-slim（0.4.0 起；0.3.4 是 22.23.4；Node 22.23.4 起這個 pin 是 multi-arch index digest，之前的 22.23.2 是 linux/amd64 child digest）、uv 0.12.10。
+Node 26 的官方執行檔另外連結 `libatomic.so.1`：node 映像本身裝有 Debian 的 libatomic1；n8n 映像把 node 複製到 Python 基底，連同這個函式庫一起複製（與 libstdc++、libgcc_s 相同做法，映像內不裝套件），複製後立刻檢查 `node --version` 等於 v26.12.1。
 2026-10-03 以 Docker Hub 公開匿名 metadata 查得（Python 基底 2026-10-05 升到 3.13.16、2026-10-06 改釘 Docker Hub 重建版），不是編造 hash，也不是
 映像安全掃描／license approval／成功 build。匿名 registry 短效 pull challenge
 不涉及既有帳號憑證。未使用 curl|sh、NodeSource 或 runtime 未固定下載。
@@ -76,10 +77,10 @@ WOOW App Store 只出貨本 repo 的正式 Release（Store registry `ref_policy:
 ubuntu-24.04、有 timeout/concurrency；不讀 secrets、不 login、不 push、不用
 pull_request_target、不使用 production self-hosted runner。
 
-1. Python3.13.16／Node22.23.4（0.3.4 起；之前 22.23.2）／uv0.12.10，hash-pinned PyYAML。
+1. Python3.13.16／Node26.12.1（0.4.0 起；0.3.4 是 22.23.4，之前 22.23.2）／uv0.12.10，hash-pinned PyYAML。
 2. strict packaging validator + packaging tests。
 3. 既有 TCP tests 固定 subprocess PATH=/usr/bin:/bin；只在 disposable hosted runner
-   將 /usr/bin/node 指向 setup-node 已安裝的確切 binary，並檢查 v22.23.4，避免
+   將 /usr/bin/node 指向 setup-node 已安裝的確切 binary，並檢查 v26.12.1，避免
    意外測到 runner 系統舊 Node。不改 core/tests；此操作未在本地工作環境執行。
    `sh packaging/unit.sh` 真正安裝 `packaging/unit.sh` 列出的每個 runtime lock（各 Python app 含封存的 Odoo Manage 原始碼與 Nextcloud，加上 n8n）、inventory drift、全 core/
    adapter tests，Junit 明確拒絕 skipped/empty/failure。

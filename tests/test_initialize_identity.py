@@ -100,9 +100,12 @@ def test_the_reviewed_protocol_versions():
 @pytest.mark.parametrize("product", ["odoo", "hermes", "opendesign", "emqx", "litellm", "nextcloud"])
 def test_the_reviewed_versions_are_each_python_childs_sdk_versions(product):
     # 0.1.8 re-review L-2: an SDK upgrade that changes what a child negotiates must re-review PROTOCOL_VERSIONS.
+    # 0.4.0 (mcp 2.3.0): mcp.shared.version is gone; mcp_types.version lists the revisions an initialize handshake
+    # reaches (the 2026-07-28 era has none: the gateway answers its server/discover itself) and the runner answers a
+    # request for any other revision with LATEST_HANDSHAKE_VERSION (mcp/server/runner.py _negotiate_initialize).
     done = subprocess.run([str(ROOT / "apps" / product / ".venv/bin/python"), "-c",
-                           "import json, mcp.shared.version as v, mcp.types as t; "
-                           "print(json.dumps([v.SUPPORTED_PROTOCOL_VERSIONS, t.LATEST_PROTOCOL_VERSION]))"],
+                           "import json, mcp_types.version as v; "
+                           "print(json.dumps([v.HANDSHAKE_PROTOCOL_VERSIONS, v.LATEST_HANDSHAKE_VERSION]))"],
                           env={"PATH": "/usr/bin:/bin", "PYTHONDONTWRITEBYTECODE": "1"}, capture_output=True, text=True,
                           timeout=120)
     assert done.returncode == 0, done.stderr[-2000:]
