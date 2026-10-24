@@ -97,6 +97,8 @@ token、child token、backend、endpoint 保留，0.1.x 的 disabled 清空（�
 
 **0.2.2**：state 格式不變（仍是 v4，不遷移）；0.2.1 與 0.2.2 可互相升降版而不需還原備份。
 
+**0.3.4**（接在 0.3.3 之後；0.3.2 不使用）：相依更新（MCP Python SDK 1.30.0、FastMCP 3.4.11、n8n-mcp 2.96.2、Node 22.23.4）、Hermes 恢復拒絕 loopback MCP server 網址、n8n 健康檢查不再查詢 npm registry；state 格式不變（仍是 v4，不遷移、不進升級確認頁），0.3.3（或更早的 schema 4 版本）→ 0.3.4 不需確認。退回 0.3.3 也不需還原備份，但會失去本版的相依與安全修正（未實測降版）。
+
 舊 v1/v2 executable **不接受 v3**：退 image 不等於退資料。必須使用升級前的
 受保護相容 v1/v2 backup；不能手改 schema_version、刪 writer marker 或刪 state 讓系統
 重建 token。若無相容 backup，先停用新 Add-on 並尋求核准恢復，不嘗試 lossy downgrade。

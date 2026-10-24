@@ -1,5 +1,9 @@
 # OpenDesign Changelog
 
+## 0.3.4 — 不發佈（本產品維持下架）
+
+- 僅依共用版本規則同步原始碼／manifest 版本與相依（MCP SDK 1.30.0、Node 22.23.4）；不建置、不發布 OpenDesign 映像，不重新啟用 Store。
+
 ## 0.3.3 — 不發佈（本產品維持下架）
 
 - 0.3.2 已由另一個獨立 dependency-update PR17 保留；本修正改用 0.3.3，避免不同 source 共用映像 tag，不合併該 PR 的相依套件變更。
