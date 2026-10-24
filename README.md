@@ -1,9 +1,6 @@
 # WOOW HA MCP Add-ons（實驗版，已公開發佈）
 
-七個獨立產品：Odoo、n8n、Hermes、OpenDesign、EMQX、LiteLLM、Nextcloud。目前版本 **0.1.9**（2026-10-11 發佈；映像
-`ghcr.io/woowtech/amd64-mcp-<product>:0.1.9`，來源 `57c96f2`；[發佈紀錄](docs/operations/release-decision-0.1.9.md)）。
-0.1.9：管理面板支援 Core 2026.10.1。0.1.8：沒帶 session 的請求由 gateway 回 400、initialize 回覆由 gateway 組成（只接受審查過的 MCP 版本）、Python 子程序結束閒置 30 分鐘的 session、
-Odoo `read_record` 只讀 id 時不存在的記錄回 not found。0.1.7 起有第七個 **Nextcloud**（見 [addons/nextcloud](addons/nextcloud/DOCS.md)）。
+六個啟用的商店產品：Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud。最新正式版 **0.2.2**（六個 per-addon stable Release 於 2026-10-21 發佈）。本分支準備 **0.3.0**，包含逐 operation 權限、共用 token 撤銷與舊資料升級確認；[發佈狀態與驗收邊界](docs/operations/release-decision-0.3.0.md)。OpenDesign 原始碼保留、商店已停用，本次不建置或發布它的映像。
 
 **Odoo Manage 已於 2026-10-06 下架封存**：0.1.4 是最後一版，0.1.5 起不在商店，也不再建置或發佈。已安裝的仍以 0.1.4 執行，但不會再有更新或安全修正；它的設定保有 Odoo API key，並有 `homeassistant_api` 權限，建議改用 Woow Odoo MCP Server 後移除。Woow Odoo MCP Server 是不同的 MCP server（工具與設定不同，要另設後端、endpoint 與 token）。已發佈的 0.1.0–0.1.4 映像保留，舊備份仍可還原。步驟見[更新、備份與回復](docs/operations/update-backup-rollback.md)；原始碼保留在 `apps/odoo-manage`。
 僅以 **amd64 / Supervisor 2026.09.3** 為封裝目標；不是 Core 最低版本。
@@ -15,7 +12,7 @@ Kubernetes MCP 與 Vibe Kanban 不在範圍。
 
 **目前狀態與限制（experimental）：**
 
-- 七個商店產品（見 `packaging/inputs.json`）各有 runtime（封存的 Odoo Manage 原始碼也還在）。**0.2.1 起完整版**（負責人 2026-10-15 決定）：七支開放子程序的全部工具，合計 183 個，與原始 MCP server 及 PaaS woow-mcp-server 一致；全部工具與寫入預設開啟（新安裝與從 0.1.x 升級時），管理面板可逐一停用或取消寫入。**網址（權杖）＝完整後端權限**，後端帳號權限要設對，見 [寫入預設開啟](docs/operations/guide.md#寫入預設開啟)。0.2.2 起後端還沒設定或連不上時 client（含 Claude.ai 連接器）照樣能連線並列出全部工具，呼叫工具回錯誤說明原因（[client 文件](docs/operations/clients.md#token-事件與故障)）。逐名對照見 [工具表](docs/tool-surface.md)，轉送規則與保留的安全層見 [工具範圍](docs/tool-expansion.md)。
+- 七個原始碼產品（其中六個 Store 啟用；見 `packaging/inputs.json`）各有 runtime（封存的 Odoo Manage 原始碼也還在）。**0.2.1 起完整版**（負責人 2026-10-15 決定）：七支開放子程序的全部工具，合計 183 個，與原始 MCP server 及 PaaS woow-mcp-server 一致；全部工具與寫入預設開啟；0.3.0 的 schema 1/2/3 升級先由 HA 管理員確認預選 `all_on`，也可明確選 `preserve`；新安裝與 schema 4 的正常啟動不變，管理面板可逐一停用或取消寫入。**網址（權杖）＝完整後端權限**，後端帳號權限要設對，見 [寫入預設開啟](docs/operations/guide.md#寫入預設開啟)。0.2.2 起後端還沒設定或連不上時 client（含 Claude.ai 連接器）照樣能連線並列出全部工具，呼叫工具回錯誤說明原因（[client 文件](docs/operations/clients.md#token-事件與故障)）。逐名對照見 [工具表](docs/tool-surface.md)，轉送規則與保留的安全層見 [工具範圍](docs/tool-expansion.md)。
 - 七支（odoo、n8n、hermes、opendesign、emqx、litellm、nextcloud）的顯示名稱是「Woow ○○ MCP Server」，圖示與所連接的軟體相同（來源見 [圖示來源](docs/provenance/icons.md)）。兩種安裝來源內容相同：本 repository 的 HA 商店，以及 2026-10-09 起的 [WOOW HA App Store](https://github.com/WOOWTECH/Woow_HA_App_Store)（含 ha-rebrand 的 Local Download）。兩個商店的同名 add-on 在 HA 裡是不同的 add-on（slug 前綴不同，設定與資料不互通），同一台 HA 只裝其中一個來源的。映像已公開、可匿名拉取。0.1.1–0.1.7 每版都在測試 HA 回歸（[0.1.7 紀錄](docs/operations/ha-test-0.1.7.md)，含 Nextcloud 第一次實機；之前各版見同目錄 `ha-test-0.1.*.md`）：映像身分、管理面板權限、token、五支真後端的讀取冒煙與拒寫、後端斷線、重啟、升版；LiteLLM 沒有後端，工具未測（只測了未設定後端時的拒絕與錯誤碼，見 [client 文件](docs/operations/clients.md)）。真實 MCP client（同 HA Pi／Omnigent／Hermes、LAN client、AI client）、授權寫入、n8n 以外六支的備份還原、版本回退與 aarch64 尚未驗收。
 - **AI client 相容性**：0.1.5 經 OpenRouter 實測，Claude、GPT 拒收 n8n、Odoo、Hermes 的工具清單（7 個工具的 `inputSchema` 頂層有 `oneOf`／`allOf`，整個請求 HTTP 400）。0.1.6 已修正：這 7 個工具宣告的 schema 頂層改成單純的 object（驗證不變），2026-10-07 以同樣五個模型複驗六支全部接受（30/30；0.1.7 新增的 Nextcloud 沒有做這項測試）；直連 API 與實際 client 仍未測。詳見 [client 文件](docs/operations/clients.md)。
 - **HA 管理權限**：七支都有 `homeassistant_api: true`（n8n 自 0.1.0、其他五支自 0.1.1 起，負責人核准；Nextcloud 於 2026-10-08 核准，0.1.7 起），用來確認管理面板的使用者是 HA owner 或系統管理員；測試 HA 上 owner 可用、一般使用者 403（0.1.1–0.1.6 每版實測；Nextcloud 尚未在 HA 實測）。`panel_admin` 不是授權。
@@ -58,8 +55,8 @@ uv pip install --python "$PACKAGING_ENV/bin/python" --require-hashes --only-bina
 "$PACKAGING_ENV/bin/python" -m unittest discover -s packaging -p 'test_*.py' -v
 # 有 Docker 的隔離 runner 才執行；root context 最後的點不可省略
 # 這不是已執行的成功紀錄：
-docker build --platform linux/amd64 -f apps/n8n/Dockerfile -t local/mcp-n8n:0.1.9 .
-"$PACKAGING_ENV/bin/python" packaging/container_acceptance.py n8n local/mcp-n8n:0.1.9
+docker build --platform linux/amd64 -f apps/n8n/Dockerfile -t local/mcp-n8n:0.3.0 .
+"$PACKAGING_ENV/bin/python" packaging/container_acceptance.py n8n local/mcp-n8n:0.3.0
 ```
 
 PR/main CI 沒有發佈權限；固定商店產品 matrix（與 `packaging/inputs.json` 相同）`push: false`。HA 無法以 Add-on

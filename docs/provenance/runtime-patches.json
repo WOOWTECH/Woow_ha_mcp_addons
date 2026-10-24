@@ -1,5 +1,5 @@
 {
-  "scope": "W2a/W2b plus BATCH2 B1/B2/B3 bounded expansion; no dependency edits; B3 pending independent SPEC then NEW SECURITY",
+  "scope": "Historical reviewed runtime patches plus 0.3.0 operation policy, shared-token lifecycle and authenticated legacy upgrade review. Runtime baseline 3573535a118b5dca629c9192acb6a02b68634cce passed independent SPEC/quality and scoped HA candidate acceptance; release image supply-chain/publication clearance is recorded separately in release-decision-0.3.0.md.",
   "patches": [
     {
       "path": "packages/mcp-admin-core/mcp_admin_core/expansion.py",
@@ -234,6 +234,11 @@
       "sha256": "40e3f009299e86aef26dd51847fddf8031ec217c68a6757b1d195db8b658c774",
       "change": "Authenticated review before legacy state migration and child construction. Exact reviewed digest, exclusive writer ownership, durable apply, pending MCP503, joined cancellation and shutdown before normal startup; fresh/current state bypasses review.",
       "guarded_sources": {}
+    },
+    {
+      "path": "packages/mcp-admin-core/mcp_admin_core/__init__.py",
+      "sha256": "4ee73712ebc1f6f2161228bf19c74d13377450aacd9a89f61816fcda0168c58f",
+      "change": "0.3.0 release metadata: product/core VERSION only. No runtime logic or dependency change relative to accepted baseline 3573535a118b5dca629c9192acb6a02b68634cce."
     }
   ]
 }

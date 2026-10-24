@@ -1,6 +1,6 @@
 # Offline legacy permission migration
 
-The candidate runtime detects schema 1/2/3 before constructing ProductStore or
+The 0.3.0 runtime detects schema 1/2/3 before constructing ProductStore or
 starting a child. It serves an authenticated Home Assistant Ingress upgrade
 review instead. Open the add-on panel, review the policy changes, choose
 `all_on` (selected by default) or `preserve`, then confirm. MCP remains unavailable
@@ -10,9 +10,8 @@ New installations and existing schema 4 start normally.
 
 The offline CLI remains available for planned maintenance. Run it after stopping
 the runtime, as its state owner (production uid/gid 10001). Invocation without
-`--apply` is a read-only dry run and never starts a child. Older published images
-do not contain this candidate workflow; use the candidate environment for this
-tool. Existing writers, including a running upgrade-review screen, refuse CLI
+`--apply` is a read-only dry run and never starts a child. Images before 0.3.0 do not contain this workflow; use the exact accepted
+0.3.0 image for this tool once its publication gates pass. Existing writers, including a running upgrade-review screen, refuse CLI
 apply. Close/stop the runtime before offline recovery.
 
 ## Preview and explicit apply

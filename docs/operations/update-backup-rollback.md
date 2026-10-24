@@ -7,6 +7,24 @@ OpenDesign、EMQX、LiteLLM）未逐支做還原，版本回退（降版＋相�
 只允許操作本次新增的 MCP Add-on，不重啟現有 backend、Core、Supervisor 或 k3s。
 映像在私有 builder 建置並通過 supply-chain gate 後發佈到 GHCR（0.1.0–0.1.5；Odoo Manage 只到 0.1.4）；HA 安裝依 [逐步指令](n8n-pilot-commands.md) 逐步批准。
 
+## 0.3.0 升級確認與回退邊界
+
+schema 1/2/3 第一次啟動會先停在經 HA 管理員驗證的 Ingress 升級頁，尚未建立
+ProductStore 或啟動 MCP 子程序；MCP/readiness 回 503。開啟面板、比較兩個預覽並確認
+預選 `all_on`（全部功能與寫入），或明確選 `preserve`，才會遷移並正常啟動。
+重新整理不會遷移。新安裝及既有 schema 4 正常啟動不變，已撤銷 token 不會被升級復活。
+
+`preserve` 會停用新增及需重新審查參數的工具；它不能重現舊二進位的參數限制。
+離線 CLI 必須在 runtime 停止後以狀態擁有者執行。限制性政策恢復保留當前 token、
+合併 disabled/operation denies 並縮減 grants；它不是完整備份恢復或 schema 降版。
+步驟見 [legacy migration](legacy-migration.md)。
+
+雖然仍是 schema 4，0.2.2 不會執行 0.3.0 新增的 operation denies；不可因 schema
+相同就宣稱可安全降版。若需要二進位回退，先停止服務，另行審核相容完整備份及當前
+token 撤銷／輪替狀態。完整備份可能帶回舊權杖，與不含權杖的政策恢復不同。
+目前實測涵蓋隔離 candidate 的舊狀態確認與政策恢復，未宣稱正式 Store 原地升級、
+所有產品完整備份回復或斷電恢復已驗收。
+
 ## 更新前
 
 1. 逐產品檢查 CHANGELOG、固定 version／immutable digest、支援工具差異、
