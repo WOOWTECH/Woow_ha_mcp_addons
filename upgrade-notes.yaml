@@ -38,8 +38,10 @@ releases:
       - id: odoo-parameter-descriptions
         change: >-
           57 parameters of 10 Odoo tools now carry a description in tools/list (types, required fields and
-          annotations unchanged). The description of execute_method's method says direct create, write and unlink
-          are blocked; this add-on still allows them (ODOO_MCP_ALLOW_DIRECT_WRITES=1, unchanged).
+          annotations unchanged). Two texts state this add-on's own gating instead of odoo-mcp's defaults:
+          execute_method's method parameter says create, write and unlink run directly (odoo-mcp says they are
+          blocked) and chatter_post says the first call posts at once (odoo-mcp says a preview approval token is
+          needed). The behaviour is that of 0.2.0-0.3.4 (ODOO_MCP_ALLOW_DIRECT_WRITES=1, MCP_CHATTER_DIRECT=1).
         migration: None needed.
       - id: odoo-none-result
         change: >-

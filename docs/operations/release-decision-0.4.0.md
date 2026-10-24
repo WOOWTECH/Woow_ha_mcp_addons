@@ -75,7 +75,7 @@ back from `server/discover` to initialize. All land on 2025-11-25 and list and c
 ## Odoo (odoo-mcp 1.1.0 -> 1.3.0)
 
 Both PaaS build patches apply to 1.3.0 at their anchors (patched `tools_write.py`
-`50ac5cfa…`, `server_core.py` `4866870f…`); the cross-session token store is redundant
+`353fbc5a…`, `server_core.py` `4866870f…`); the cross-session token store is redundant
 under SDK 2 (one lifespan per process) and harmless. Reviewed 1.1.0 -> 1.3.0 diffs of the
 seven guarded files (`docs/provenance/runtime-patches.json`, `apps/odoo/launch.py` and
 `odoo_read_exists.py` entries): the XML-RPC transport replacement, `read_record`'s
@@ -85,6 +85,14 @@ set; `<field>_from_path` uploads read a local file only from
 `ODOO_MCP_ATTACHMENT_UPLOAD_ROOTS`; OAuth starts only with `ODOO_MCP_AUTH_*`. The child
 environment sets none of these (`tests/test_product_boundary.py::test_odoo_mcp_1_3_opt_ins_stay_off`).
 Only `execute_approved_write` is async, as in 1.1.0.
+
+Tool texts: 1.3.0 tells the model that `execute_method` blocks direct create/write/unlink (its `method`
+parameter) and that `chatter_post` needs a preview approval token, while this add-on runs both directly
+(`ODOO_MCP_ALLOW_DIRECT_WRITES=1`, `MCP_CHATTER_DIRECT=1` since 0.2.0). The HA copy of
+`apps/odoo/patches/fix_direct_writes.py` (the WOOW PaaS keeps the original: its switch defaults to off) makes
+both texts follow the expressions the code reads, so they say the call runs directly here and keep upstream's
+text when a switch is off; it accepts only the published 1.3.0 `tools_write.py` (`d02045c6…`) and writes exactly
+the digest the launcher checks (`tests/test_odoo_write_descriptions.py`).
 
 Tool-surface diff (real children, raw `tools/list`, 0.3.4 vs 0.4.0): no tool added,
 removed or renamed in any product; annotations and descriptions unchanged; Odoo: 57

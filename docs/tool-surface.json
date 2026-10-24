@@ -34,7 +34,7 @@
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_diagnostics.py": "1355ad597fbe67cf4222c5c2295e229265c6654ebbfd83cebb62a7f291346bd5",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_knowledge.py": "8ce241e6007b19ed3f2ae8058f169d691cb6f6c8284771b8276e21a698b20f9a",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_read.py": "c477b2a8a6276004b8bd55f51d7a0e5119096a68f0b81fc3dac43a916f906200",
-    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_write.py": "50ac5cfa696524eb8c58e0ebf945f607d875aa1f5a95d964136085e47c9729ff",
+    "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_write.py": "353fbc5a11497a1b969105d3d58760b8df376df86d30008c875c83477efcad93",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/write_policy.py": "d2fa967f7efc942abfb7792608c6323c77fcda81def86fd7c0b265102415b154",
     "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/__init__.py": "ddc0cccc0c175133220e63b2ece3ce79ca44984fc53f1cadba1e0e73c41a1ba7",
     "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/__main__.py": "3ca759a344d9cd08e672c8d237226a182e6c951106f6bc1265651a2392c3008f",
@@ -141,7 +141,7 @@
     "apps/runtime/session_idle.py": "79ecbaffb832a00354ae659b56dc264361c6a6299d2d0a9a16ad41c958489493",
     "apps/runtime/tool_error_text.py": "c21dd6b51e9ac2a7de457280b1f2bf3ab6a432c7b0115745f1d7363e98fadf59",
     "apps/hermes/launch.py": "66567ea7820e005eb4cecc56efce928d084d9921ae09422336bfa0ca24aae5fc",
-    "apps/odoo/launch.py": "35918ad07f5fcea3118a718cc308865d2f7736b31040a599ddeab817004f31df",
+    "apps/odoo/launch.py": "58c18c19323594e056503b64b6f7a249e8f590842597d340c8461651f56fd47f",
     "apps/odoo-manage/launch.py": "7e2adc8ce3ece9240ce54d1c7429ceed3bd61d95e6a700ef00094816f9cca515",
     "apps/opendesign/launch.py": "6a3d5e2c42537903d7509807facf699b9e680573f4f7bd04ccc9965c9e4f9723"
   },
@@ -339,7 +339,7 @@
         {
           "name": "chatter_post",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_write.py",
-          "line": 558,
+          "line": 563,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, model: str, record_id: int, body: str, message_type: str='comment', subtype_xmlid: Optional[str]=None, partner_ids: Optional[List[int]]=None, attachment_ids: Optional[List[int]]=None, approval: Optional[Dict[str, Any]]=None, confirm: bool=False, instance: Optional[str]=None",
@@ -458,10 +458,10 @@
         {
           "name": "execute_method",
           "source": "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/tools_write.py",
-          "line": 686,
+          "line": 691,
           "evidence": "python-decorator-AST",
           "operations": {},
-          "source_signature": "ctx: Context, model: Annotated[str, Field(description=\"Technical Odoo model name, for example 'res.partner'.\")], method: Annotated[str, Field(description='Odoo model method to call; direct create, write, and unlink are blocked.')], args: Annotated[Optional[List[Any]], Field(description='Optional positional method arguments.')]=None, kwargs: Annotated[Optional[Dict[str, Any]], Field(description='Optional keyword method arguments.')]=None, instance: Annotated[Optional[str], Field(description='Optional configured Odoo instance name; uses the default if omitted.')]=None",
+          "source_signature": "ctx: Context, model: Annotated[str, Field(description=\"Technical Odoo model name, for example 'res.partner'.\")], method: Annotated[str, Field(description=\"Odoo model method to call; create, write and unlink run directly in this deployment (ODOO_MCP_ALLOW_DIRECT_WRITES is set), without the preview_write -> validate_write -> execute_approved_write flow; the Odoo user's own access rights still apply.\" if os.environ.get('ODOO_MCP_ALLOW_DIRECT_WRITES', '').strip().lower() in ('1', 'true', 'yes') else 'Odoo model method to call; direct create, write, and unlink are blocked.')], args: Annotated[Optional[List[Any]], Field(description='Optional positional method arguments.')]=None, kwargs: Annotated[Optional[Dict[str, Any]], Field(description='Optional keyword method arguments.')]=None, instance: Annotated[Optional[str], Field(description='Optional configured Odoo instance name; uses the default if omitted.')]=None",
           "effect": "write",
           "operation_effects": {
             "arbitrary-method": {

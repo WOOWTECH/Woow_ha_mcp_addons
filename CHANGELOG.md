@@ -44,6 +44,15 @@ result unwrapped (`upgrade-notes.yaml`). See the
   initialize). Raw JSON-RPC, the Python SDK 1.30 and 2.3 clients and the TypeScript SDK
   1.32 client connect, list and call through the gateway (`tests/test_protocol_clients.py`).
 
+### Odoo tool texts match the add-on's gating
+
+- odoo-mcp 1.3.0 tells the model that `execute_method` blocks direct create/write/unlink and
+  that `chatter_post` needs a preview approval token; this add-on runs both directly
+  (`ODOO_MCP_ALLOW_DIRECT_WRITES=1`, `MCP_CHATTER_DIRECT=1`). The HA copy of the
+  direct-writes build patch makes both texts follow those switches (and now accepts only
+  the published 1.3.0 file and writes one pinned digest); the behaviour is unchanged.
+  `tests/test_odoo_write_descriptions.py`.
+
 ### Hermes
 
 - The vendored Hermes files are re-snapshotted from woow-mcp-server main (server.py

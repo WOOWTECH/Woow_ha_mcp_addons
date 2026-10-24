@@ -689,8 +689,9 @@ LISTED = {'odoo': [{'name': 'data_quality_report',
                            'openWorldHint': True,
                            'readOnlyHint': False}},
           {'name': 'chatter_post',
-           'description': 'Post a chatter message on a mail.thread record. Default mode requires an approval token '
-                          'returned from a preview call; set MCP_CHATTER_DIRECT=1 to bypass and post immediately.',
+           'description': 'Post a chatter message on a mail.thread record. Direct mode is on in this deployment '
+                          '(MCP_CHATTER_DIRECT): the first call posts the message at once; there is no preview and no '
+                          'approval token.',
            'inputSchema': {'properties': {'model': {'title': 'Model', 'type': 'string'},
                                           'record_id': {'title': 'Record Id', 'type': 'integer'},
                                           'body': {'title': 'Body', 'type': 'string'},
@@ -729,8 +730,12 @@ LISTED = {'odoo': [{'name': 'data_quality_report',
                                                                    "'res.partner'.",
                                                     'title': 'Model',
                                                     'type': 'string'},
-                                          'method': {'description': 'Odoo model method to call; direct create, write, '
-                                                                    'and unlink are blocked.',
+                                          'method': {'description': 'Odoo model method to call; create, write and '
+                                                                    'unlink run directly in this deployment '
+                                                                    '(ODOO_MCP_ALLOW_DIRECT_WRITES is set), without '
+                                                                    'the preview_write -> validate_write -> '
+                                                                    "execute_approved_write flow; the Odoo user's own "
+                                                                    'access rights still apply.',
                                                      'title': 'Method',
                                                      'type': 'string'},
                                           'args': {'anyOf': [{'items': {}, 'type': 'array'}, {'type': 'null'}],

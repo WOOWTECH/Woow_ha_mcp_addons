@@ -17,7 +17,8 @@ RUN uv sync --frozen --no-dev --python /usr/local/bin/python
 COPY apps/odoo/pyproject.toml apps/odoo/uv.lock ./apps/odoo/
 RUN uv sync --project apps/odoo --frozen --no-dev --python /usr/local/bin/python
 # 0.2.0: the two PaaS woow-mcp-server build patches (cross-session approval tokens; direct writes switch), applied to
-# the installed odoo-mcp 1.1.0 exactly as there; launch.py refuses to start unless the patched digests match.
+# the installed odoo-mcp (1.3.0 from 0.4.0); launch.py refuses to start unless the patched digests match. 0.4.0: the HA
+# copy of fix_direct_writes also aligns two tool descriptions with the switches this add-on sets and pins its digests.
 COPY apps/odoo/patches ./apps/odoo/patches
 RUN apps/odoo/.venv/bin/python apps/odoo/patches/fix_cross_session_token_store.py \
  && apps/odoo/.venv/bin/python apps/odoo/patches/fix_direct_writes.py \

@@ -34,14 +34,16 @@ if __name__ == '__main__':
     # woow-mcp-server serves it. tools_write and server_core carry the two PaaS build patches (apps/odoo/patches:
     # fix_cross_session_token_store, fix_direct_writes; applied to the venv by the Dockerfile and packaging/unit.sh):
     # these digests are the patched files, so an unpatched or altered wheel fails closed here. 0.4.0: odoo-mcp 1.3.0
-    # (MCP SDK 2), the PaaS pin since woow-mcp-server #82; both patches apply unchanged (reviewed in
-    # docs/provenance/runtime-patches.json) and the 41 tools keep their names, annotations and write gating.
+    # (MCP SDK 2), the PaaS pin since woow-mcp-server #82; both patches apply at their anchors (reviewed in
+    # docs/provenance/runtime-patches.json) and the 41 tools keep their names, annotations and write gating. The HA copy of
+    # fix_direct_writes also makes the descriptions of execute_method's method and of chatter_post follow the switches
+    # this add-on sets (direct writes and direct chatter on): 1.3.0 told the model those calls were blocked or gated.
     for module, digest in (
         (tools_read, 'c477b2a8a6276004b8bd55f51d7a0e5119096a68f0b81fc3dac43a916f906200'),
         (tools_diagnostics, '1355ad597fbe67cf4222c5c2295e229265c6654ebbfd83cebb62a7f291346bd5'),
         (agent_tools, '1e467c6e2871ace8ca935b028124630767968cd08c632875f99435434b2795ee'),
         (diagnostics, '1fb1632cc711a7dfa4d5f6700472abeaffb897a094a4c399c21ce045aebb0dc7'),
-        (tools_write, '50ac5cfa696524eb8c58e0ebf945f607d875aa1f5a95d964136085e47c9729ff'),
+        (tools_write, '353fbc5a11497a1b969105d3d58760b8df376df86d30008c875c83477efcad93'),
         (server_core, '4866870f36f905122f2a6fbdb105591268b51d26848a38b99cf25efb498bee1d'),
     ):
         if hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest() != digest:
