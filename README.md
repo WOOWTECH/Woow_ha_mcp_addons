@@ -2,7 +2,7 @@
 
 六個啟用的商店產品：Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud。**0.3.3 六支 canonical 映像已完成驗收、掃描與公開發布**，包含 n8n 全部 28 個工具的有效 `output` 參數正規化、六個混合工具的 selector 保護，以及 versions/test 的 `exposeToMcp` 既有 updater 有效權限檢查。新增 `conditional_writes` capability metadata，保持 28 個工具、33 個寫入 grants、schema 4 與完整功能預設；不變更 dependency／child pins 或 UI 原始碼。正常 stable Release／Store 與正式 HAOS 升級分別驗證，不由映像發布推定完成。見 [0.3.3 發布證據與驗收邊界](docs/operations/release-decision-0.3.3.md)、[不可變映像紀錄](docs/provenance/release-0.3.3-images.json)。
 
-本分支準備 **0.4.0**（接在 0.3.4 之後）：MCP SDK 2 遷移，與 WOOW PaaS 對齊（MCP Python SDK 2.3.0、FastMCP 4.1.3、odoo-mcp 1.3.0、Node 26.12.1）；工具失敗的錯誤文字、Odoo 工具序列執行、16 MiB 請求上限、30 分鐘閒置與 client 相容性維持不變，Odoo 13 個工具的 `structuredContent` 不再包一層 `result`（[upgrade-notes.yaml](upgrade-notes.yaml)）；尚未建置或發布映像，見 [0.4.0 發佈狀態與驗收邊界](docs/operations/release-decision-0.4.0.md)。
+本分支準備 **0.4.1**（接在已合併的 0.4.0 之後）：HA 管理畫面顯示 n8n `exposeToMcp` 的條件寫入與既有 `n8n_update_partial_workflow` 相依權限。授權政策、工具、state schema、依賴與部署選項維持 0.4.0；正式映像、PR gate、Store 與 ws97 升級另行驗證，見 [0.4.1 發佈決策](docs/operations/release-decision-0.4.1.md)。0.4.0 的 SDK 2 遷移與 Odoo 13 工具輸出變更見[既有發布紀錄](docs/operations/release-decision-0.4.0.md)及 [upgrade-notes.yaml](upgrade-notes.yaml)。
 
 **0.3.4** 六支 canonical 映像已完成驗收與公開發布，六個 stable Release 於 2026-10-24 發布（MCP Python SDK 1.30.0、FastMCP 3.4.11、n8n-mcp 2.96.2、Node 22.23.4、Hermes 拒絕 loopback MCP server 網址）；見 [0.3.4 發布證據](docs/operations/release-decision-0.3.4.md)與[不可變映像紀錄](docs/provenance/release-0.3.4-images.json)。
 
@@ -65,8 +65,8 @@ uv pip install --python "$PACKAGING_ENV/bin/python" --require-hashes --only-bina
 "$PACKAGING_ENV/bin/python" -m unittest discover -s packaging -p 'test_*.py' -v
 # 有 Docker 的隔離 runner 才執行；root context 最後的點不可省略
 # 這不是已執行的成功紀錄：
-docker build --platform linux/amd64 -f apps/n8n/Dockerfile -t local/mcp-n8n:0.4.0 .
-"$PACKAGING_ENV/bin/python" packaging/container_acceptance.py n8n local/mcp-n8n:0.4.0
+docker build --platform linux/amd64 -f apps/n8n/Dockerfile -t local/mcp-n8n:0.4.1 .
+"$PACKAGING_ENV/bin/python" packaging/container_acceptance.py n8n local/mcp-n8n:0.4.1
 ```
 
 PR/main CI 沒有發佈權限；固定商店產品 matrix（與 `packaging/inputs.json` 相同）`push: false`。HA 無法以 Add-on

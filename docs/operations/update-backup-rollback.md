@@ -101,6 +101,8 @@ token、child token、backend、endpoint 保留，0.1.x 的 disabled 清空（�
 
 **0.4.0**（接在 0.3.4 之後）：MCP SDK 2 遷移（MCP Python SDK 2.3.0、FastMCP 4.1.3、odoo-mcp 1.3.0、Node 26.12.1）；state 格式不變（仍是 v4，不遷移、不進升級確認頁），選項、port、映像名稱、架構、工具名稱都不變，0.3.4（或更早的 schema 4 版本）→ 0.4.0 不需確認。唯一宣告的破壞性變更：Odoo 13 個工具的 `structuredContent` 不再包一層 `result`（文字內容不變），讀 `structuredContent.result` 的 client 要改讀頂層欄位，見 [upgrade-notes.yaml](../../upgrade-notes.yaml)。退回 0.3.4 不需還原備份（同為 v4），但會回到 SDK 1.x 與 0.3.4 的 Odoo 輸出形狀（未實測降版）。
 
+**0.4.1 候選**（接在 0.4.0 之後）：管理畫面增加 n8n `exposeToMcp` 條件寫入與現有 updater 相依權限的說明；state 仍為 v4，權限與工具執行規則、依賴、選項、port 及映像名稱不變。0.4.0 → 0.4.1 不需資料遷移；退回 0.4.0 只會失去新畫面說明（降版未實測）。映像尚未發佈，請先核對[0.4.1 發佈決策](release-decision-0.4.1.md)與正式 Store 版本。
+
 舊 v1/v2 executable **不接受 v3**：退 image 不等於退資料。必須使用升級前的
 受保護相容 v1/v2 backup；不能手改 schema_version、刪 writer marker 或刪 state 讓系統
 重建 token。若無相容 backup，先停用新 Add-on 並尋求核准恢復，不嘗試 lossy downgrade。

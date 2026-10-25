@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1 — release candidate (2026-10-25)
+
+The six Store-enabled add-ons carry the reviewed HA management UI update from PR #20 on the merged 0.4.0 base. For n8n, the Tools page shows that `exposeToMcp: true` can write even when the selected operation reads, names the existing `n8n_update_partial_workflow` dependency and distinguishes saved policy from a draft or unknown child state. No grant, default, gateway enforcement, dependency, option, port, image name or state-schema change is intended; OpenDesign remains disabled. 0.4.0 images do not contain this UI change. See [0.4.1 release decision](docs/operations/release-decision-0.4.1.md); image publication and ws97 upgrade remain pending.
+
 ## 0.4.0 — release candidate (2026-10-25)
 
 The six enabled add-ons (Odoo, n8n, Hermes, EMQX, LiteLLM, Nextcloud) move to 0.4.0,
