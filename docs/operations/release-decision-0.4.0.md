@@ -1,9 +1,9 @@
 # 0.4.0 release decision — 2026-10-25
 
-Status: pending image publication. Candidate MCP SDK 2 migration and release metadata
-only: no 0.4.0 image build, container/supply-chain acceptance, registry publication or
-stable Release is claimed. All six exact-image gates and publication receipts remain
-pending. The presence of this document is not evidence that those gates passed.
+Status: six 0.4.0 images built, accepted by exact-image P1–P5, published and
+anonymously verified. The [image publication receipt](../provenance/release-0.4.0-images.json)
+records the IDs, manifest digests, scans and provenance. PR #22 merge, stable Releases,
+Store sync and ws97 HAOS acceptance are separate subsequent gates.
 
 ## Scope
 
@@ -148,6 +148,51 @@ CPython 3.13.15, uv 0.12.10, Node 26.12.1 (official tarball; this pod lacks liba
 so the local copy loads the node image's `libatomic.so.1`), no root and no container
 runtime. Results are in the PR description.
 
+## Exact-image publication — 2026-10-25
+
+The private builder accepted the clean PR #22 source commit
+`97bb174673843721ebf42c40ac0135eaf2d9de09` (tree
+`ac1567c877b0a0763e0bd7775a14b986043f905b`, 245 commits of full history).
+Before building, that head had successful `checks` and `Release train / wvt check`;
+the readiness check was waiting for these images. All six `0.4.0` tags were
+confirmed absent before publication. The six prior `0.3.4` local image IDs were
+verified read-only; no prior tag was relocated or removed.
+
+Each new image was rebuilt with the runtime cache bypass and passed P1–P5 against
+its exact image ID: packaged container probe, source and full-history Gitleaks,
+all-layer/config/evidence secret scanning, Syft SBOM/SPDX, Grype with a database
+built 2026-10-24 17:45 UTC, and the unchanged license/CVE policy. The six raw
+vulnerability reports each contain 255 findings; policy acceptance does not mean
+zero vulnerabilities. No blanket secret or vulnerability exception was added.
+The two new `odoo-mcp` allowlist entries were independently matched to the
+published 1.3.0 wheel (`a49855b6…`) and its `auth.py`/`plugin_api.py` file digests;
+they are exact public code-digest metadata in `docs/tool-surface.json`, not secrets.
+
+The accepted SBOMs show MCP and mcp-types 2.3.0 on all five Python children,
+FastMCP and fastmcp-slim 4.1.3 on EMQX/LiteLLM/Nextcloud, odoo-mcp 1.3.0 on Odoo,
+and Node 26.12.1 with n8n-mcp 2.96.2 / TypeScript SDK 1.32.2 on n8n. All six
+contain certifi 2026.10.23. The packaged n8n probe observed zero fetches while
+the npm version check was disabled and one in its control; Hermes rejected 18
+dangerous URLs without dashboard writes and accepted two LAN/ULA URLs. These are
+owned container probes, not live backend acceptance.
+
+The exact source UI build passed 26 unit and 41 browser tests. All six accepted
+image final layers contain the same tested `app.js` bytes (`f20cdd71…`) readable
+by UID 10001. After pushing each accepted ID, a clean-config anonymous immutable
+pull verified its manifest, config and ordered layers. A separate anonymous
+metadata/config read confirmed all six digests, linux/amd64 platform and source
+labels. The publisher removed its credential configuration and 12 owned transient
+registry aliases; accepted local images remain. Provenance is digest-linked but
+unsigned, with no SLSA or host-isolation claim.
+The repository's `packaging/release_gate.py all` also passed against Store `main`
+registry blob `1bdc29e09ff04c8f959e9a8842d40dbfa29b3691`: all six tags are
+anonymously pullable and all six release decisions resolve to this record.
+
+The publication receipt is committed **after** the images: this documentation
+head is not the image source, and the published images do not contain this receipt.
+The remaining ws97 acceptance includes a real HAOS upgrade from 0.3.4, client
+connectivity and available backend flows, plus retained backup evidence.
+
 ## Release gates
 
 1. Clean exact committed source and canonical Dockerfiles for linux/amd64; labels
@@ -165,5 +210,7 @@ runtime. Results are in the PR description.
 6. Real HAOS acceptance on the dedicated test HAOS (ws97), coordinated separately: install
    and upgrade from 0.3.4, MCP clients, Odoo writes, Nextcloud upload and backup/restore.
 
-No image has been built for 0.4.0: this pod has no container runtime, and PR checks
-do not build images (builder admission denies PR image execution by design).
+The six image gates and public registry verification above are complete. PR checks,
+readiness, protected merge, stable Releases, Store sync and ws97 acceptance must
+be verified separately on their resulting head and runtime. CI itself does not
+build these images; the private builder run and immutable receipt provide that evidence.
