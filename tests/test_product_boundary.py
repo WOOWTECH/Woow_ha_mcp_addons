@@ -82,6 +82,25 @@ def test_fixed_child_ignores_parent_secrets_and_gui_commands(tmp_path, product, 
     finally: store.close()
 
 
+
+def test_odoo_mcp_1_3_opt_ins_stay_off(tmp_path, monkeypatch):
+    # 0.4.0 (odoo-mcp 1.3.0): validate_write reads a local file for a <field>_from_path value only from
+    # ODOO_MCP_ATTACHMENT_UPLOAD_ROOTS (unset: refused, nothing is read), execute_approved_write asks the client
+    # (elicitation) only with ODOO_MCP_ELICIT_WRITES, OAuth starts only with ODOO_MCP_AUTH_*. The child environment is
+    # built here, never inherited, and keeps exactly the three write switches of 0.2.0.
+    for name in ('ODOO_MCP_ATTACHMENT_UPLOAD_ROOTS', 'ODOO_MCP_MAX_ATTACHMENT_UPLOAD_BYTES', 'ODOO_MCP_ELICIT_WRITES',
+                 'ODOO_MCP_AUTH_ISSUER_URL', 'ODOO_MCP_POLICY_FILE', 'ODOO_MCP_TOOLS_EXCLUDE', 'MCP_ALLOW_REMOTE_HTTP'):
+        monkeypatch.setenv(name, '/')
+    store = ProductStore(tmp_path / 'odoo', 'odoo')
+    try:
+        store.update(connection=connection('odoo', 'http://127.0.0.1:9999'))
+        spec = child_spec(store.load(), store.directory)
+    finally:
+        store.close()
+    assert {name for name in spec.env if name.startswith('ODOO_MCP_')} == {
+        'ODOO_MCP_ENABLE_WRITES', 'ODOO_MCP_ALLOW_DIRECT_WRITES', 'ODOO_MCP_ALLOW_UNKNOWN_METHODS'}
+    assert not any(name.startswith('MCP_') and name != 'MCP_CHATTER_DIRECT' for name in spec.env)
+
 async def test_writer_is_denied_before_dispatch_then_explicitly_enabled(tmp_path):
     store = ProductStore(tmp_path / 'state', 'opendesign')
     store.update(writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)

@@ -44,7 +44,7 @@ async def main():
                 # Keep both the public error contract and zero-connect proof.
                 from mcp.types import CallToolResult
                 if isinstance(outcome, CallToolResult):
-                    assert outcome.isError is True
+                    assert outcome.is_error is True  # 0.4.0 (mcp 2.3.0): snake_case fields
                     outcome = '\n'.join(item.text for item in outcome.content if item.type == 'text')
         elif p=='opendesign':
             from opendesign_mcp_server.od_mcp_server import health
@@ -95,14 +95,16 @@ def test_cancelled_sdk_call_retains_worker_until_function_finishes(tmp_path):
     spec = child_spec(state, tmp_path)
     program = r'''
 import asyncio, threading
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from bounded_tools import BoundedTools
+from tool_error_text import keep_error_text
 entered, release = threading.Event(), threading.Event()
-mcp=FastMCP('owned-cancel-regression')
+mcp=MCPServer('owned-cancel-regression')
 @mcp.tool()
 def blocked() -> dict:
     entered.set(); release.wait(5); return {'done': True}
 workers=BoundedTools(mcp,1)
+keep_error_text(mcp)  # 0.4.0: as the launchers do; mcp 2 would hide BACKEND_BUSY otherwise
 async def main():
     task=asyncio.create_task(mcp.call_tool('blocked',{}))
     assert await asyncio.to_thread(entered.wait,2)

@@ -40,19 +40,24 @@ def test_native_update_checker_source_and_no_network_no_cache(tmp_path):
     import subprocess
     for product in ('emqx', 'litellm', 'nextcloud'):
         base = ROOT/'apps'/product/'.venv/lib/python3.13/site-packages/fastmcp'
-        # 0.3.4 (FastMCP 3.4.5 -> 3.4.11): settings.py only adds ssrf_trust_proxy (auth metadata/JWKS fetches, default off;
-        # these children configure no auth); the banner and update-check settings and version_check.py are unchanged.
-        assert hashlib.sha256((base/'settings.py').read_bytes()).hexdigest() == '59780d8e9be7b3185d726c604378ce482a9bc80ab0eb86b8918a4aeef81c3954'
-        assert hashlib.sha256((base/'utilities/version_check.py').read_bytes()).hexdigest() == 'ce36361da496e1fd3d1a3ba7dd5e932f269e242fd93cf7f5e95bd001d0e280ef'
+        # 0.4.0 (FastMCP 3.4.11 -> 4.1.3): settings.py drops the Docket and decorator_mode settings and adds
+        # oauth_encryption_key (no child configures auth), mcp_camelcase_compat, telemetry_mode (OpenTelemetry API only:
+        # no span or export without an SDK and exporter) and http_session_idle_timeout ('auto': the SDK default, which
+        # session_idle replaces); the banner and update-check settings are unchanged. version_check.py fetches with
+        # httpx2 instead of httpx (the SDK 2 client library) and validates its cache file; 'off' still returns first.
+        assert hashlib.sha256((base/'settings.py').read_bytes()).hexdigest() == '4781ecf616b8765c86da111206c26df912cdd37ae4f33f27fb27b3d0397255ff'
+        assert hashlib.sha256((base/'utilities/version_check.py').read_bytes()).hexdigest() == '15bf2b883b27d9e8a9923b74e87870db7dbfba6e2bf66ea5f8a82dce7ec131e4'
         result = subprocess.run([str(ROOT/'apps'/product/'.venv/bin/python'), '-c', '''
 import fastmcp.utilities.version_check as check
 import httpx
+import httpx2
 from pathlib import Path
 import os
 
 def forbidden(*args, **kwargs):
     raise AssertionError('update check must never access HTTP/cache')
 httpx.get = forbidden
+httpx2.get = forbidden  # 0.4.0: what FastMCP 4's update check would call
 check._read_cache = forbidden
 check._write_cache = forbidden
 assert check.check_for_newer_version() is None
