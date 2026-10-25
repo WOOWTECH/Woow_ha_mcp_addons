@@ -1,5 +1,5 @@
 import { AdminApi, ApiError } from './api.js';
-import { products, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, environmentLabels, clientExample, claudeConnectorUrl } from './contracts.js';
+import { products, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl } from './contracts.js';
 import './styles.css';
 
 const root = document.querySelector('#app');
@@ -245,17 +245,22 @@ function tools() {
       if (row.auditedOperations?.length) controls.append(p(`操作參數：${snapshot.tools[row.name].operation_parameter}；省略時：${snapshot.tools[row.name].default_operation ?? '必須提供操作'}。`));
     }
     const detail = details.get(row.name);
+    const conditional = detail?.conditional_writes ?? [];
     const effective = detail?.effective === true ? '子行程有效' : detail?.effective === false ? '未生效' : '有效狀態未知';
     const reasons = { policy_disabled: '政策停用', write_not_granted: '未授權寫入', operations_not_permitted: '所有操作皆被政策禁止', child_unavailable: '未能取得子行程工具清單', not_registered_by_child: '子行程未註冊', not_in_registry: '尚未納入核准目錄' };
     const schema = detail?.inputSchema ?? snapshot.tools?.[row.name]?.inputSchema;
     const article = el('article', { class: 'tool-row' }, el('div', {}, el('h3', { class: 'tool-name' }, row.name),
-      chip(!row.classified ? '分類未知 · 不提供授權' : operations.length ? '含寫入操作' : '唯讀'),
+      chip(!row.classified ? '分類未知 · 不提供授權' : conditional.length ? '含條件寫入' : operations.length ? '含寫入操作' : '唯讀'),
       p(detail?.description || '此目錄沒有提供工具說明。'), p(`${effective}${detail?.reason ? ` · ${reasons[detail.reason] ?? '未知原因'}` : ''}`),
+      ...conditional.map(rule => el('div', { 'aria-label': `${row.name} 條件寫入` },
+        el('h4', {}, '條件寫入'), p(conditionalWriteSummary(rule)),
+        p('即使所選操作是讀取，仍會額外寫入。false 或省略不觸發這項額外檢查，原工具與操作權限仍須允許。'),
+        p('請明確允許相依工具寫入，並確認它未停用、沒有禁止操作。此條件不新增獨立授權；儲存後對新呼叫立即生效，後端權限仍可能限制存取。'))),
       el('details', {}, el('summary', {}, '工具參數與操作詳情'),
         p(`參數來源：${({ child: '目前子行程', pinned: '隨版本保存的工具快照', registry: '管理登錄' })[detail?.schema_source] ?? '管理登錄'}`),
         ...(detail?.operations ?? []).map(op => p(operationSummary(op))),
         el('pre', { tabindex: '0', 'aria-label': `${row.name} inputSchema` }, el('code', {}, schema ? JSON.stringify(schema, null, 2) : '尚未取得參數定義。')))), controls);
-    entries.push([article, `${row.name} ${detail?.description ?? ''} ${(detail?.operations ?? []).map(op => op.name).join(' ')}`.toLocaleLowerCase()]);
+    entries.push([article, `${row.name} ${detail?.description ?? ''} ${JSON.stringify(conditional)} ${(detail?.operations ?? []).map(op => op.name).join(' ')}`.toLocaleLowerCase()]);
     form.append(article);
   }
   form.append(el('button', { type: 'submit', class: 'primary', disabled: !rows.length || !granular }, '儲存工具權限'));

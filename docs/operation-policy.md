@@ -68,3 +68,23 @@ Legacy schema-2/3 automatic `all_on` migration validates the original record bef
 clearing disables and denies and reseeding grants; retired Odoo Manage retains its
 policy. Schema 1 has no deny field. The separate upgrade review gate and offline
 migration/recovery adaptation are owned by the root batch3 work, not this change.
+
+## n8n 條件寫入的畫面說明
+
+工具權限頁直接使用能力快照的 `conditional_writes`，在
+`n8n_workflow_versions`、`n8n_test_workflow` 顯示「含條件寫入」與相依工具。
+`exposeToMcp` 正規化後為 `true` 會額外將工作流程設為可由 MCP 存取；
+即使所選操作是讀取，仍須明確授權 `n8n_update_partial_workflow`，且該工具
+未停用、沒有禁止操作。`false` 或省略只略過這項額外檢查，原工具與所選操作
+仍須授權，尤其 `n8n_test_workflow` 的自身 grant 不可省略。
+
+「相依權限：已儲存政策允許／禁止／未知」只描述既有相依工具政策，
+不代表完整呼叫、子行程或後端帳號已可用。未儲存的勾選不提前變成允許；
+儲存成功後依伺服器回讀立即更新，對新呼叫生效。未知狀態不會從 schema、
+子行程清單或草稿推測。既有精確 grant、操作限制、全功能出廠預設、CSRF、
+設定版本檢查與 Ingress 路徑保持不變，沒有新增 `expose` grant 或自動授權。
+
+瀏覽器測試 `conditional-writes.spec.mjs` 使用隔離本地 fixture 驗證兩個工具、
+允許／禁止／未知、儲存與失敗草稿、既有 grant／限制及 320／360／1440px。
+正式 guard 與 28 工具／33 grant 預設由 `test_n8n_exposure_policy.py` 驗證；
+這些本地測試不代表線上 HA 或 n8n 實測。
