@@ -285,8 +285,8 @@
     },
     {
       "path": "packages/mcp-admin-ui/src/app.js",
-      "sha256": "4290536780494fba3cee0de0353a3c2e7c9dfb18eb714d57f1e6785939280763",
-      "change": "0.3.1 release candidate: build configuration status DOM rows explicitly before native replaceChildren, avoiding literal null when the optional stale-revision message is absent. Browser regression covers initial applied display, status/page refresh, all apply states and older bootstrap without configuration. The outer el helper already filters absent cards. No API, credential or policy behavior change.",
+      "sha256": "a2f331d0a12688de4f00cf85eea60263207d08330cf2e905a923059ff96494c3",
+      "change": "0.3.1 release candidate: build configuration status DOM rows explicitly before native replaceChildren, avoiding literal null when the optional stale-revision message is absent. Browser regression covers initial applied display, status/page refresh, all apply states and older bootstrap without configuration. The outer el helper already filters absent cards. No API, credential or policy behavior change. 0.4.1: render backend-provided n8n conditional_writes in the Tools view, including the exposeToMcp write warning and the saved updater grant state. Display only; no permission or token mutation.",
       "guarded_sources": {}
     },
     {
