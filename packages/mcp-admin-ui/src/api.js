@@ -18,6 +18,7 @@ export class ApiError extends UiError {
     this.code = code;
     if (code === 'config_conflict') this.message = '設定已被其他操作更新。草稿已保留；請先重新整理狀態、檢查新設定，再重新編輯。未送出任何變更。';
     if (code === 'config_apply_failed') this.message = '設定已儲存，但子行程尚未套用成功。請重新整理套用狀態，檢查後再重試啟動。';
+    if (code === 'owner_defaults_unavailable') this.message = '升級通知已處理過，或升級前的限制紀錄無法使用。請重新整理狀態；未變更任何設定。';
     if (code === 'core_version_unreviewed') {
       this.haVersion = haVersion;
       this.message = `這個 HA Core 版本尚未審核：${haVersion ?? '（版本字串無法辨識）'}。這版 add-on 的管理面板只在審查過的 Core 版本上運作，暫時不能使用或變更設定；MCP 端點不經過這項檢查，照常服務。請更新 add-on。`;
@@ -43,7 +44,7 @@ export class AdminApi {
         code = detail?.code;
         if (code === 'core_version_unreviewed' && typeof detail.ha_version === 'string' && CORE_VERSION.test(detail.ha_version)) haVersion = detail.ha_version;
       } catch { /* non-JSON error */ }
-      const known = ['config_conflict', 'config_apply_failed'].includes(code) || (code === 'core_version_unreviewed' && response.status === 403);
+      const known = ['config_conflict', 'config_apply_failed', 'owner_defaults_unavailable'].includes(code) || (code === 'core_version_unreviewed' && response.status === 403);
       throw new ApiError(response.status, known ? code : null, haVersion);
     }
     if (response.status === 204) return null;
@@ -55,12 +56,16 @@ export class AdminApi {
     return value;
   }
   async mutate(operation, payload, revision) {
-    const allowed = ['backend', 'endpoint', 'policy', 'token/reveal', 'token/rotate', 'token/revoke', 'backend/test', 'child/restart'];
+    const allowed = ['backend', 'endpoint', 'policy', 'token/reveal', 'token/rotate', 'token/revoke', 'backend/test', 'child/restart',
+      'owner-defaults/restore', 'owner-defaults/dismiss'];
     if (!allowed.includes(operation)) throw new UiError('不支援的操作。');
     const fresh = await this.bootstrap();
     if (typeof fresh.csrf !== 'string' || !/^[A-Za-z0-9_-]{16,256}$/.test(fresh.csrf)) throw new UiError('缺少有效安全驗證；未送出變更。請重新開啟管理介面。');
     const token = operation.startsWith('token/');
-    const action = token || ['backend/test', 'child/restart'].includes(operation);
+    // 2026-10-27: the one-time all-on notice actions are POSTs without a body that always need the reviewed revision.
+    const notice = operation.startsWith('owner-defaults/');
+    if (notice && revision === undefined) throw new UiError('缺少設定版本；請重新整理後再試，未送出變更。');
+    const action = token || notice || ['backend/test', 'child/restart'].includes(operation);
     if (revision !== undefined && (typeof revision !== 'string' || !/^[A-Za-z0-9_-]{16,128}$/.test(revision))) throw new UiError('設定版本格式不符；請重新整理後再試。');
     const result = await this.request(`${fresh.api_base}/${operation}`, {
       method: action ? 'POST' : 'PUT',
@@ -68,7 +73,7 @@ export class AdminApi {
         ...(revision === undefined ? {} : { 'If-Match': `"${revision}"` }) },
       ...(action ? {} : { body: JSON.stringify(typeof payload === 'function' ? payload(fresh) : payload) }),
     });
-    if ((!action && result?.saved !== true) || (operation === 'token/revoke' && result !== null)
+    if (((!action || notice) && result?.saved !== true) || (operation === 'token/revoke' && result !== null)
         || (operation === 'child/restart' && (result?.accepted !== true || result?.apply_state !== 'pending'))
         || (operation === 'backend/test' && result?.tested_configuration !== 'saved')) throw new UiError('伺服器未回傳預期確認，無法確認操作結果。請重新整理狀態。');
     return result;

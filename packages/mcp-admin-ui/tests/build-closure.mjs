@@ -24,10 +24,10 @@ for (const name of files) {
 }
 assert(fonts>400);
 let references=0;
-const appCss=await readFile(resolve(dist,'assets/app.css'),'utf8');
-for (const entry of ['app','upgrade']) {
+// 2026-10-27: one entry only; the pre-start upgrade review page (upgrade.js) is gone.
+for (const removed of ['upgrade.js','upgrade.css']) assert(!files.includes(`assets/${removed}`),'no upgrade review entry');
+for (const entry of ['app']) {
   const css=await readFile(resolve(dist,`assets/${entry}.css`),'utf8');
-  assert.equal(css,appCss,'pending page must work with the same app.css');
   for (const [_,url] of css.matchAll(/url\("?([^"()]+)"?\)/g)) {
     assert(url.startsWith('./fonts/')&&!/[?#]/.test(url),'only content-hashed local query-free fonts');
     assert((await lstat(resolve(dist,'assets',url))).isFile()); references++;
@@ -38,21 +38,19 @@ for (const [target,source] of [
   ['noto-sans-tc-OFL.txt','node_modules/@fontsource/noto-sans-tc/LICENSE'],['yellowtail-Apache-2.0.txt','node_modules/@fontsource/yellowtail/LICENSE'],
   ['mdi-LICENSE.txt','node_modules/@mdi/font/LICENSE'],['NOTICE.txt','NOTICE.txt'],
 ]) assert.deepEqual(await readFile(resolve(dist,'licenses',target)),await readFile(resolve(root,source)));
-for (const entry of ['app','upgrade']) {
-  const js=await readFile(resolve(dist,`assets/${entry}.js`),'utf8');
-  for (const marker of ['__fixture','LOCAL MOCK','localStorage','sessionStorage','INVENTED-LOCAL','make_ha_admin_verifier']) assert(!js.includes(marker));
-  if (entry==='app') assert(js.includes('woow-v3-exact-grants'));
-  else for (const marker of ['upgrade_review','/api/upgrade/apply','expected_sha256','X-CSRF-Token']) assert(js.includes(marker));
+{
+  const js=await readFile(resolve(dist,'assets/app.js'),'utf8');
+  for (const marker of ['__fixture','LOCAL MOCK','localStorage','sessionStorage','INVENTED-LOCAL','make_ha_admin_verifier','upgrade_review','/api/upgrade/apply']) assert(!js.includes(marker));
+  for (const marker of ['woow-v3-exact-grants','owner-defaults/restore','owner-defaults/dismiss','X-CSRF-Token','If-Match']) assert(js.includes(marker));
 }
 const html=await readFile(resolve(dist,'index.html'),'utf8');
 assert(html.includes('__MCP_UI_BASE__'));
 assert.equal((html.match(/\/assets\/app\.js/g)||[]).length,1);
 assert(!/\son\w+=|<script(?![^>]*\bsrc=)/i.test(html),'no inline scripts/handlers');
-for (const entry of ['app','upgrade']) {
-  const page=html.replace('/assets/app.js',`/assets/${entry}.js`);
-  assert(page.includes('__MCP_UI_BASE__/assets/app.css'));
-  const assets=[...page.matchAll(/(?:src|href)="([^"]+)"/g)].map(match=>match[1]);
-  assert.deepEqual(assets,['__MCP_UI_BASE__/assets/app.css',`__MCP_UI_BASE__/assets/${entry}.js`]);
+{
+  assert(html.includes('__MCP_UI_BASE__/assets/app.css'));
+  const assets=[...html.matchAll(/(?:src|href)="([^"]+)"/g)].map(match=>match[1]);
+  assert.deepEqual(assets,['__MCP_UI_BASE__/assets/app.css','__MCP_UI_BASE__/assets/app.js']);
   for (const asset of assets) assert((await lstat(resolve(dist,asset.replace('__MCP_UI_BASE__/','')))).isFile());
 }
-console.log(`PASS build closure: app + upgrade entries, identical shared CSS, ${fonts} byte-identical fonts, ${references} local query-free references, 6 exact licenses/notices; no fixture/runtime bypass.`);
+console.log(`PASS build closure: single app entry (no upgrade review page), ${fonts} byte-identical fonts, ${references} local query-free references, 6 exact licenses/notices; no fixture/runtime bypass.`);
