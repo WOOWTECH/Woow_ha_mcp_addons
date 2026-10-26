@@ -1,7 +1,9 @@
 import { mountPath, products, UiError } from './contracts.js';
 
+// A Core release or pre-release string (the server sends only this form, ha_role.shown_version); anything else is not shown.
+const CORE_VERSION = /^[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,3}(?:(?:a|b|rc)[0-9]{1,3}|\.dev[0-9]{1,14})?$/;
 export class ApiError extends UiError {
-  constructor(status, code = null) {
+  constructor(status, code = null, haVersion = null) {
     const messages = {
       400: '設定格式不符。伺服器未確認儲存，請檢查欄位。',
       401: '管理身分已失效。請從服務入口重新開啟。',
@@ -16,6 +18,10 @@ export class ApiError extends UiError {
     this.code = code;
     if (code === 'config_conflict') this.message = '設定已被其他操作更新。草稿已保留；請先重新整理狀態、檢查新設定，再重新編輯。未送出任何變更。';
     if (code === 'config_apply_failed') this.message = '設定已儲存，但子行程尚未套用成功。請重新整理套用狀態，檢查後再重試啟動。';
+    if (code === 'core_version_unreviewed') {
+      this.haVersion = haVersion;
+      this.message = `這個 HA Core 版本尚未審核：${haVersion ?? '（版本字串無法辨識）'}。這版 add-on 的管理面板只在審查過的 Core 版本上運作，暫時不能使用或變更設定；MCP 端點不經過這項檢查，照常服務。請更新 add-on。`;
+    }
   }
 }
 export class AdminApi {
@@ -29,10 +35,16 @@ export class AdminApi {
       response = await this.fetcher(path, { ...options, credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(25000) });
     } catch { throw new UiError('連線中斷或逾時；無法確認操作結果。請重新整理狀態後再操作。'); }
     if (!response.ok) {
-      // Only these fixed codes affect copy. Never reflect server bodies or submitted secrets.
-      let code;
-      try { code = (await response.json())?.detail?.code; } catch { /* non-JSON error */ }
-      throw new ApiError(response.status, ['config_conflict', 'config_apply_failed'].includes(code) ? code : null);
+      // Only these fixed codes affect copy. Never reflect server bodies or submitted secrets; the one exception is a
+      // 403 core_version_unreviewed's Core version, shown only in the exact public release/pre-release form.
+      let code, haVersion = null;
+      try {
+        const detail = (await response.json())?.detail;
+        code = detail?.code;
+        if (code === 'core_version_unreviewed' && typeof detail.ha_version === 'string' && CORE_VERSION.test(detail.ha_version)) haVersion = detail.ha_version;
+      } catch { /* non-JSON error */ }
+      const known = ['config_conflict', 'config_apply_failed'].includes(code) || (code === 'core_version_unreviewed' && response.status === 403);
+      throw new ApiError(response.status, known ? code : null, haVersion);
     }
     if (response.status === 204) return null;
     try { return await response.json(); } catch { throw new UiError('伺服器回應格式不符，無法確認操作結果。'); }

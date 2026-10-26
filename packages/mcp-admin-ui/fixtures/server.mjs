@@ -111,6 +111,8 @@ const server = http.createServer(async (request, response) => {
     if (local === '/api/configuration') return json(response, 200, {configuration: configuration()});
     if (local === '/api/bootstrap') {
       if (config.deniedBootstrap) return json(response, 403, { error: 'MOCK denied' });
+      // The management server's answer while HA Core advertises a version the add-on has not reviewed.
+      if (config.unreviewedCore) return json(response, 403, { error: 'request denied', detail: { code: 'core_version_unreviewed', ha_version: config.unreviewedCore }, untrusted: 'MOCK PRIVATE_CANARY_MUST_NOT_RENDER' });
       nonce++;
       return json(response, 200, { ...state, ...(config.parity ? {configuration: configuration()} : {}), capabilities:capabilities(), base_path: mount, api_base: `${mount}/api`, csrf: config.missingCsrf ? null : `mock_fresh_csrf_value_${nonce}` });
     }

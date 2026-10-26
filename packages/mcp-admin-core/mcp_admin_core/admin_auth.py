@@ -5,11 +5,20 @@ import hmac
 import re
 import secrets
 
-from .ha_role import valid_user_id
+from .ha_role import Unreviewed, valid_user_id
 
 class BadRequest(Exception):
-    def __init__(self, status=400):
+    def __init__(self, status=400, detail=None):
         self.status = status
+        # Only denial_detail() sets it: a fixed code plus a validated, public Core version, never request data.
+        self.detail = detail
+
+
+def denial_detail(allowed):
+    """The one refusal an administrator can act on: HA Core advertised a version this release has not reviewed."""
+    if isinstance(allowed, Unreviewed):
+        return {"code": "core_version_unreviewed", "ha_version": allowed.ha_version}
+    return None
 
 
 def prefix(request):
@@ -52,4 +61,4 @@ class AdminAuthority:
         except Exception:
             allowed = False
         if allowed is not True:
-            raise BadRequest(403)
+            raise BadRequest(403, detail=denial_detail(allowed))

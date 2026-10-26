@@ -8,7 +8,9 @@ administrator. This page records why it accepts the Core releases listed in `_HA
 - **Auth frames.** The add-on connects to `ws://supervisor/core/websocket`. Supervisor's WebSocket proxy
   (`supervisor/api/proxy.py`, reviewed at Supervisor 2026.09.3, git blob `fc11251d`; Supervisor 2026.10.0 ships the same
   blob; Supervisor 2026.10.1 ships blob `002174e5`, reviewed 2026-10-08: the `auth_required`/`auth_ok` frames are unchanged and
-  its new message filtering does not touch the add-on's `config/auth/list` request) terminates the add-on handshake:
+  its new message filtering does not touch the add-on's `config/auth/list` request; Supervisor 2026.10.2, 2026.10.3 and
+  2026.10.4 ship blob `cab849dc`, reviewed 2026-10-27: its only hunk starts the two proxy loops with
+  `sys_create_background_task` instead of `sys_create_task`, the frames and the filter are unchanged) terminates the add-on handshake:
   it sends `{"type": "auth_required", "ha_version": <version>}` and `{"type": "auth_ok", "ha_version": <version>}`,
   where the version is the Core version Supervisor has recorded (`sys_homeassistant.version`), and checks the add-on's
   `SUPERVISOR_TOKEN` itself. The verifier requires exactly these keys, a listed version, and the same version in both
@@ -19,35 +21,36 @@ administrator. This page records why it accepts the Core releases listed in `_HA
   `{id, type: "result", success, result}`, and the admin group id `system-admin`. The verifier allows only an active,
   non-system user who is the owner or in `system-admin`.
 
-## Review of 2026.7.2–2026.9.4, 2026.10.0 (0.1.6) and 2026.10.1 (0.1.9)
+## Review of 2026.7.2–2026.9.4, 2026.10.0 (0.1.6), 2026.10.1 (0.1.9) and 2026.10.2–2026.10.4 (next release)
 
 Git blob SHAs (first 8 characters) of the Core files that produce or can change that contract, from the GitHub tree of
 each tag; `=` means unchanged from the previous tag. The `10.1` column is the 2026.10.1 tag (commit `abe1fdd7`). The `10.0` column is the 2026.10.0 tag (commit `6a811d33`), whose files
-are byte-identical to 2026.10.0b4, where the line-by-line review was done.
+are byte-identical to 2026.10.0b4, where the line-by-line review was done. The `10.2`, `10.3` and `10.4` columns are the
+2026.10.2 (commit `8d7fd8b6`), 2026.10.3 (commit `1f214b84`) and 2026.10.4 (commit `357cae5c`) tags.
 
-| file (`homeassistant/`) | 7.2 | 7.3 | 7.4 | 8.0 | 8.1 | 8.2 | 8.3 | 9.0 | 9.1 | 9.2 | 9.3 | 9.4 | 10.0 | 10.1 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `components/websocket_api/auth.py` | f4660664 | = | = | = | = | = | = | = | = | = | = | = | a4b73688 | = |
-| `components/websocket_api/messages.py` | 13f856e6 | = | = | a6d3b54f | = | = | = | = | = | = | = | = | f1f543e2 | = |
-| `components/websocket_api/decorators.py` | 37ac60ba | = | = | = | = | = | = | = | = | = | = | = | d5df7f88 | = |
-| `components/websocket_api/connection.py` | 19d4782a | = | = | = | = | = | = | d4f824d2 | = | = | = | = | cd6e0426 | = |
-| `components/websocket_api/http.py` | 9cfca068 | = | = | = | = | = | = | = | = | = | = | = | = | = |
-| `components/websocket_api/commands.py` | 5bc65849 | = | = | fe87a4e9 | = | = | = | = | = | = | = | = | d769c753 | = |
-| `components/websocket_api/__init__.py` | 3a526e32 | = | = | = | = | = | = | = | = | = | = | = | = | = |
-| `components/websocket_api/const.py` | f1eb480d | = | = | = | = | = | = | = | = | = | = | = | = | = |
-| `components/config/auth.py` | 2479fe65 | = | = | = | = | = | = | = | = | = | = | = | 75b0c88b | = |
-| `components/config/__init__.py` | ef7a1147 | = | = | = | = | = | = | = | = | = | = | = | = | = |
-| `auth/__init__.py` | 34a8bffa | = | = | 88a8b1d5 | = | = | = | = | = | = | = | = | a5850978 | = |
-| `auth/auth_store.py` | 13ecdfc6 | = | = | = | = | = | = | = | = | = | = | = | = | = |
-| `auth/const.py` | 05b9e6d7 | = | = | = | = | = | = | = | = | = | = | = | = | = |
-| `auth/models.py` | 5646d23d | = | = | a41b03d1 | = | = | = | = | = | = | = | = | 7342e9d4 | = |
-| `auth/permissions/__init__.py` | b5254236 | = | = | = | = | = | = | = | = | = | = | = | aeab7ff8 | = |
-| `components/hassio/__init__.py` | b38caf53 | = | = | 3a3cd368 | = | 373c0b0c | = | 59c14de4 | = | = | = | = | 67abae35 | = |
-| `components/http/auth.py` | e2c68719 | = | = | = | = | = | = | = | = | = | = | = | 702eb7c8 | = |
-| `components/http/auth_util.py` | 4eed1443 | = | = | = | = | = | = | = | = | = | = | = | = | = |
-| `helpers/json.py` | 1789bda1 | = | = | = | = | = | = | 3ea52348 | = | = | = | = | f6a778dd | = |
-| `util/json.py` | 1f8e6a0e | = | = | = | = | = | = | = | = | = | = | = | = | = |
-| `components/onboarding/views.py` | a4cd0198 | = | = | = | = | = | = | 2801f426 | = | = | d3144de5 | = | 2835631c | = |
+| file (`homeassistant/`) | 7.2 | 7.3 | 7.4 | 8.0 | 8.1 | 8.2 | 8.3 | 9.0 | 9.1 | 9.2 | 9.3 | 9.4 | 10.0 | 10.1 | 10.2 | 10.3 | 10.4 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `components/websocket_api/auth.py` | f4660664 | = | = | = | = | = | = | = | = | = | = | = | a4b73688 | = | = | = | = |
+| `components/websocket_api/messages.py` | 13f856e6 | = | = | a6d3b54f | = | = | = | = | = | = | = | = | f1f543e2 | = | = | = | = |
+| `components/websocket_api/decorators.py` | 37ac60ba | = | = | = | = | = | = | = | = | = | = | = | d5df7f88 | = | = | = | = |
+| `components/websocket_api/connection.py` | 19d4782a | = | = | = | = | = | = | d4f824d2 | = | = | = | = | cd6e0426 | = | = | = | = |
+| `components/websocket_api/http.py` | 9cfca068 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `components/websocket_api/commands.py` | 5bc65849 | = | = | fe87a4e9 | = | = | = | = | = | = | = | = | d769c753 | = | = | = | = |
+| `components/websocket_api/__init__.py` | 3a526e32 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `components/websocket_api/const.py` | f1eb480d | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `components/config/auth.py` | 2479fe65 | = | = | = | = | = | = | = | = | = | = | = | 75b0c88b | = | = | = | = |
+| `components/config/__init__.py` | ef7a1147 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `auth/__init__.py` | 34a8bffa | = | = | 88a8b1d5 | = | = | = | = | = | = | = | = | a5850978 | = | 0314c4b7 | = | = |
+| `auth/auth_store.py` | 13ecdfc6 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `auth/const.py` | 05b9e6d7 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `auth/models.py` | 5646d23d | = | = | a41b03d1 | = | = | = | = | = | = | = | = | 7342e9d4 | = | = | = | = |
+| `auth/permissions/__init__.py` | b5254236 | = | = | = | = | = | = | = | = | = | = | = | aeab7ff8 | = | = | = | = |
+| `components/hassio/__init__.py` | b38caf53 | = | = | 3a3cd368 | = | 373c0b0c | = | 59c14de4 | = | = | = | = | 67abae35 | = | = | = | = |
+| `components/http/auth.py` | e2c68719 | = | = | = | = | = | = | = | = | = | = | = | 702eb7c8 | = | = | = | = |
+| `components/http/auth_util.py` | 4eed1443 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `helpers/json.py` | 1789bda1 | = | = | = | = | = | = | 3ea52348 | = | = | = | = | f6a778dd | = | = | = | = |
+| `util/json.py` | 1f8e6a0e | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `components/onboarding/views.py` | a4cd0198 | = | = | = | = | = | = | 2801f426 | = | = | d3144de5 | = | 2835631c | = | = | = | = |
 
 Changes inside 2026.7.2–2026.9.4 and why they do not touch the consumed contract (source diffs reviewed):
 - `websocket_api/messages.py` @8.0: event and state-diff message caching only; the result message is unchanged.
@@ -66,6 +69,18 @@ both tags on 2026-10-11), and so do the adjacent `http/const.py`, `http/__init__
 the consumed contract is unchanged and there is no hunk to read. The only auth-related change between the tags is in
 `components/auth/indieauth.py` and `login_flow.py` (an OAuth loopback redirect may change port when PKCE is used), which is
 not on the `config/auth/list` path the add-on uses.
+
+Changes in 2026.10.2, 2026.10.3 and 2026.10.4 (next release; blobs read from the GitHub contents API of each tag on
+2026-10-27 and recomputed with `git hash-object` from the downloaded files): 20 of the 21 files and the adjacent
+`http/const.py`, `http/__init__.py`, `hassio/const.py` and `hassio/auth.py` have the same blob as in 2026.10.1. Only
+`auth/__init__.py` changed (`a5850978` → `0314c4b7`, the same blob in all three tags, so 2026.10.3 and 2026.10.4 change
+nothing more). Its one hunk (four lines, read in full) is in `AuthManager.async_remove_user`: before the user is deleted
+from the store, each of the user's refresh tokens is now removed with `async_remove_refresh_token`, whose revoke
+callbacks close the connections that use them. `async_get_users` (what `config/auth/list` returns), `User.is_admin`,
+`require_admin`, `_user_info` and the result envelope are untouched, so the consumed contract is unchanged; the add-on
+never removes users, and a removed user was already absent from the list the verifier reads per request. Supervisor
+2026.10.2–2026.10.4 (`api/proxy.py` blob `cab849dc`) are reviewed above. Raw evidence (blob listings, both versions of
+the file, the diffs) is kept outside the repository with the 2026-10-27 review.
 
 Changes in 2026.10.0 (13 files, every hunk read at 2026.10.0b4; the 2026.10.0 tag is identical to b4 for these 21 files
 and for the adjacent `http/const.py`, `http/__init__.py`, `hassio/const.py` and `hassio/auth.py`):
@@ -99,11 +114,20 @@ and for the adjacent `http/const.py`, `http/__init__.py`, `hassio/const.py` and 
 4. In the same change, update every other place that spells out the reviewed versions:
    - the comment above `_HA_VERSIONS` in `ha_role.py`;
    - `tests/test_ha_role.py`: add the version to `test_the_reviewed_versions_are_exactly_these` and remove it from
-     `NEAR_MISSES` (the list holds, for example, `2026.10.2`; the near-miss tests fail until it is removed), and
-     replace it where it serves as the unreviewed example in `test_wrong_sequence_and_revoked_machine_capability`;
+     `NEAR_MISSES` and `UNREVIEWED` (they hold, for example, `2026.10.5`; the near-miss tests fail until it is
+     removed), and replace it where it serves as the unreviewed example in
+     `test_wrong_sequence_and_revoked_machine_capability`;
    - the version-list sentence in [n8n-ha-role.md](n8n-ha-role.md) ("Compatibility is deliberately restricted to …");
    - the new release's section of all seven `addons/*/CHANGELOG.md`, naming the added version;
    - the supported-version note in the seven `addons/*/DOCS.md`, `README.md` and `docs/operations/guide.md`.
 5. Ship it in a new add-on release: an installed add-on accepts only the versions listed in its own image.
 
 Any version not listed, including pre-releases, later patch releases and differently formatted strings, is refused.
+Next release: the refusal says why. The verifier stops before it sends the machine token (as before) and returns a
+denial that carries the advertised version when it has the form of a Core release or pre-release (`shown_version`;
+any other string is reported as unrecognized and never echoed). The panel then answers its pages with a static page
+"這個 HA Core 版本尚未審核：<version>" and its API with HTTP 403
+`{"error": "request denied", "detail": {"code": "core_version_unreviewed", "ha_version": <version or null>}}`; every
+other refusal keeps the fixed `{"error": "request denied"}`. The add-on log gets one line per version and process
+(`management: Home Assistant Core <version> has not been reviewed for this add-on release …`), without any frame, token
+or user. MCP endpoints authenticate with the add-on token only and never use this check, so they keep serving.
