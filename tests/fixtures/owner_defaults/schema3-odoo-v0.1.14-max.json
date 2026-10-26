@@ -1,0 +1,22 @@
+{
+ "backend_key": null,
+ "backend_url": null,
+ "child_token": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+ "connection": {
+  "database": "db",
+  "password": "DUMMY-password",
+  "url": "http://odoo.invalid:8069",
+  "username": "u"
+ },
+ "disabled": [
+  "health_check"
+ ],
+ "enabled_write_tools": [
+  "chatter_post"
+ ],
+ "endpoint": null,
+ "product": "odoo",
+ "schema_version": 3,
+ "token": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+ "writes_enabled": true
+}

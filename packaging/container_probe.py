@@ -234,56 +234,43 @@ async def run():
             # are on (Odoo Manage none: its writers need module mode).
             assert state.schema_version == 4
             assert state.writes_enabled is True and state.enabled_write_tools == fresh_write_grants(APP)
-            # A valid v2 backup must wait for authenticated review before migration (0.3.0).
-            # This network-none mock has no HA authority: prove fail-closed review, then stop
-            # it and use the production offline CLI as the state owner to explicitly select all_on.
-            # Real authenticated Ingress confirmation is a separate HA acceptance gate.
+            # A valid v2 backup is switched once to the all-on defaults at its first start (owner decision
+            # 2026-10-27, aligned with the PaaS): no review stage, MCP serves at once and the normal child starts.
             legacy = state.model_dump()
             legacy.pop('enabled_write_tools')
             legacy['schema_version'] = 2
             legacy['writes_enabled'] = False
             (DATA / 'state.json').write_text(json.dumps(legacy))
-            legacy_bytes = (DATA / 'state.json').read_bytes()
-            calls_before_review = list(CALLS)
-            process = start()
-            await ready_listener(client, process)
-            assert (await client.get('http://127.0.0.1:8081/health/ready')).status_code == 503
-            assert (await client.post(ENDPOINT, json={'jsonrpc': '2.0', 'id': 1,
-                                                     'method': 'initialize', 'params': {}})).status_code == 503
-            for _ in range(2):
-                assert (await client.get('http://127.0.0.1:8099/api/bootstrap')).status_code == 403
-                assert (DATA / 'state.json').read_bytes() == legacy_bytes
-            assert not children(process), 'legacy review launched a child before confirmation'
-            assert CALLS == calls_before_review, 'legacy review contacted the backend'
-            stop(process)
-            process = None
-            command = [str(ROOT / '.venv/bin/python'), '-m', 'mcp_admin_core.migration',
-                       str(DATA), '--product', APP, '--policy', 'all_on']
-            before_preview = fixture_snapshot()
-            assert 'migration-policy-recovery.json' not in before_preview
-            preview = subprocess.run(command, user=10001, group=10001, extra_groups=[],
-                                     capture_output=True, text=True, check=True, timeout=20)
-            plan = json.loads(preview.stdout)
-            assert plan['dry_run'] is True and (DATA / 'state.json').read_bytes() == legacy_bytes
-            assert fixture_snapshot() == before_preview, 'preview changed fixture files or metadata'
-            applied = subprocess.run(command + ['--apply', '--expected-sha256', plan['source_sha256']],
-                                     user=10001, group=10001, extra_groups=[],
-                                     capture_output=True, text=True, check=True, timeout=20)
-            assert json.loads(applied.stdout)['dry_run'] is False
+            calls_before_upgrade = list(CALLS)
+            assert 'owner-defaults-20261025-recovery.json' not in fixture_snapshot()
+
+            async def ready_after_start():
+                running = start()
+                await ready_listener(client, running)
+                async with asyncio.timeout(40):
+                    while (await client.get('http://127.0.0.1:8081/health/ready')).status_code != 200:
+                        assert running.poll() is None
+                        await asyncio.sleep(.2)
+                return running
+            process = await ready_after_start()
+            assert children(process), 'migrated state did not start the normal child'
+            assert len(CALLS) > len(calls_before_upgrade), 'normal runtime did not probe backend'
             migrated = json.loads((DATA / 'state.json').read_text())
+            marker = migrated.pop('owner_defaults_20261025')
+            assert marker['applied'] == 'migrated' and marker['from_schema'] == 2 and marker['restored_at'] is None
             assert migrated['schema_version'] == 4 and migrated['enabled_write_tools'] == fresh_write_grants(APP)
             assert migrated == {**state.model_dump(), 'writes_enabled': APP != 'odoo-manage'}
-            assert CALLS == calls_before_review, 'offline CLI contacted the backend'
+            record_path = DATA / 'owner-defaults-20261025-recovery.json'
+            record = json.loads(record_path.read_text())
+            assert record['format'] == 2 and record['source_schema'] == 2 and record['legacy_policy']['writes_enabled'] is False
+            assert record_path.stat().st_mode & 0o777 == 0o600 and record_path.stat().st_uid == 10001
             migrated_bytes = (DATA / 'state.json').read_bytes()
-            process = start()
-            await ready_listener(client, process)
-            async with asyncio.timeout(40):
-                while (await client.get('http://127.0.0.1:8081/health/ready')).status_code != 200:
-                    assert process.poll() is None
-                    await asyncio.sleep(.2)
-            assert children(process), 'migrated state did not start the normal child'
-            assert len(CALLS) > len(calls_before_review), 'normal runtime did not probe backend'
-            assert (DATA / 'state.json').read_bytes() == migrated_bytes
+            record_bytes = record_path.read_bytes()
+            # The next start is a normal start: nothing is migrated or rewritten again.
+            stop(process)
+            process = None
+            process = await ready_after_start()
+            assert (DATA / 'state.json').read_bytes() == migrated_bytes and record_path.read_bytes() == record_bytes
             # The denial checks below need every write revoked, as the panel saves it (and the restart keeps it).
             stop(process)
             process = None

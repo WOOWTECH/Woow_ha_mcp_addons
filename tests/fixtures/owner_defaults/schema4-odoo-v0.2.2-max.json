@@ -1,0 +1,30 @@
+{
+ "backend_key": null,
+ "backend_url": null,
+ "child_token": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+ "connection": {
+  "database": "db",
+  "password": "DUMMY-password",
+  "url": "http://odoo.invalid:8069",
+  "username": "u"
+ },
+ "disabled": [
+  "accounting_health_across_instances"
+ ],
+ "enabled_write_tools": [
+  "cancel_async_task",
+  "chatter_post",
+  "execute_approved_write",
+  "execute_method",
+  "index_knowledge",
+  "preview_write",
+  "submit_async_task",
+  "validate_write"
+ ],
+ "endpoint": null,
+ "mcp_access_token": null,
+ "product": "odoo",
+ "schema_version": 4,
+ "token": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+ "writes_enabled": true
+}

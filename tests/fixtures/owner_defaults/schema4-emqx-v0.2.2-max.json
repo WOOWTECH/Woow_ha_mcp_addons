@@ -1,0 +1,37 @@
+{
+ "backend_key": null,
+ "backend_url": null,
+ "child_token": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+ "connection": {
+  "api_key": "DUMMY-api-key",
+  "api_secret": "DUMMY-api-secret",
+  "url": "http://emqx.invalid:18083"
+ },
+ "disabled": [
+  "emqx_authz_settings"
+ ],
+ "enabled_write_tools": [
+  "emqx_ban",
+  "emqx_client_subscribe",
+  "emqx_client_unsubscribe",
+  "emqx_create_trace",
+  "emqx_delete_retained",
+  "emqx_delete_trace",
+  "emqx_kick_client",
+  "emqx_manage_authn_users:create",
+  "emqx_manage_authn_users:delete",
+  "emqx_manage_authz_rules:create",
+  "emqx_manage_authz_rules:delete",
+  "emqx_publish",
+  "emqx_publish_bulk",
+  "emqx_test_rule_sql",
+  "emqx_toggle_rule",
+  "emqx_unban"
+ ],
+ "endpoint": null,
+ "mcp_access_token": null,
+ "product": "emqx",
+ "schema_version": 4,
+ "token": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+ "writes_enabled": true
+}

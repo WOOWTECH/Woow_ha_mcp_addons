@@ -66,8 +66,8 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
     if not (ROOT / "apps/n8n/node_modules/n8n-mcp/dist/mcp/index.js").exists():
         pytest.skip("EXTERNAL GATE: run npm ci --ignore-scripts --prefix apps/n8n")
     data = tmp_path / "state"
-    # This exercises normal runtime startup. Legacy schema 1 now correctly
-    # waits for authenticated upgrade review (covered by test_upgrade_review).
+    # This exercises normal runtime startup. A legacy schema 1 state is switched once to the all-on defaults before
+    # the store opens (2026-10-27, covered by test_owner_defaults).
     store = ProductStore(data, 'n8n')
     assert store.load().schema_version == 4
     if configured_backend:

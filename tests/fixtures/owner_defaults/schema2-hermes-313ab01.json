@@ -1,0 +1,20 @@
+{
+ "backend_key": null,
+ "backend_url": null,
+ "child_token": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+ "connection": {
+  "dashboard_password": "DUMMY-dashboard-password",
+  "dashboard_url": "http://hermes.invalid:9119",
+  "dashboard_username": "admin",
+  "gateway_api_key": "DUMMY-gateway-api-key",
+  "gateway_url": "http://hermes.invalid:8642"
+ },
+ "disabled": [
+  "hermes_inspect"
+ ],
+ "endpoint": null,
+ "product": "hermes",
+ "schema_version": 2,
+ "token": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+ "writes_enabled": false
+}

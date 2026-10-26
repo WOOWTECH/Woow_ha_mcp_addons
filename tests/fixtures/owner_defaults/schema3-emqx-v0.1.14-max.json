@@ -1,0 +1,23 @@
+{
+ "backend_key": null,
+ "backend_url": null,
+ "child_token": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+ "connection": {
+  "api_key": "DUMMY-api-key",
+  "api_secret": "DUMMY-api-secret",
+  "url": "http://emqx.invalid:18083"
+ },
+ "disabled": [
+  "emqx_cluster_status"
+ ],
+ "enabled_write_tools": [
+  "emqx_client_subscribe",
+  "emqx_client_unsubscribe",
+  "emqx_kick_client"
+ ],
+ "endpoint": null,
+ "product": "emqx",
+ "schema_version": 3,
+ "token": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+ "writes_enabled": true
+}
