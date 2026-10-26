@@ -1,10 +1,13 @@
 # 0.4.1 release decision — 2026-10-25
 
-Status: **candidate, images pending**. This branch follows merged UI PR #20
+Status: **six images published and independently verified; PR merge pending**.
+This branch follows merged UI PR #20
 (`e095b00928e2248f16aef9a5827aeff0dee2a6a0`) on `claude-delivery`.
-Do not publish from a moving parent.
-The six `0.4.1` tags must be absent before the private builder starts. No
-publication, stable Release, Store sync or ws97 upgrade is claimed here.
+The exact image source is `99507d9f1a79b6b50bf89b38fa33df204b25db62`;
+this later documentation commit is not an image source. The six-image
+[publication receipt](../provenance/release-0.4.1-images.json) records the
+immutable digests and verification evidence. Stable Releases, Store sync and
+ws97 upgrade remain separate checks.
 
 ## Scope and compatibility
 
@@ -66,6 +69,27 @@ but the conditional-write explanation disappears from the older UI.
    LiteLLM add-ons require their own client-safe upgrade window; a source-only
    check does not count as their live UI acceptance.
 
-Failure at any gate leaves the release pending. Keep the prior immutable
-0.4.0 images and published receipts intact; do not merge or update ws97 from
-an unaccepted image.
+## Exact-image publication — 2026-10-26
+
+The six `0.4.1` tags were absent before publication. The private builder
+accepted six fresh `linux/amd64` images from the frozen source above; each
+passed exact-image P1–P5, security and package checks, and final UI asset and
+UID 10001 checks. The prior `0.4.0` image IDs remained preserved. Odoo,
+n8n, Hermes, EMQX, LiteLLM and Nextcloud were pushed from their accepted
+image IDs. A separate anonymous verifier checked each immutable manifest,
+config, ordered layers, platform and source label. The receipt records all
+six digest references and the unchanged Odoo secret triage review. It is
+unsigned provenance and makes no host isolation or SLSA claim.
+
+The first publication attempt stopped on the initial Odoo push because the
+GitHub token lacked `write:packages`; its journal has no completed push and
+is preserved at the SHA-256 recorded in the receipt. After the WOOWTECH token
+gained that scope, a new one-shot recovery journal rechecked the exact source,
+six accepted local IDs and absent remote tags before publishing. The recovery
+journal has six completed pushes, and the independent anonymous verification
+receipt is bound to it. The original failed journal was not rewritten.
+
+The PR still requires a green readiness run and protected merge. Stable
+Releases, Store sync and the scoped ws97 n8n upgrade must be checked on the
+resulting merged version. Keep the prior immutable `0.4.0` images and
+published receipts intact.
