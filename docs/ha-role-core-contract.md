@@ -71,7 +71,7 @@ the consumed contract is unchanged and there is no hunk to read. The only auth-r
 not on the `config/auth/list` path the add-on uses.
 
 Changes in 2026.10.2, 2026.10.3 and 2026.10.4 (next release; blobs read from the GitHub contents API of each tag on
-2026-10-27 and recomputed with `git hash-object` from the downloaded files): 20 of the 21 files and the adjacent
+2026-10-27 and recomputed as git blobs from all 25 downloaded files of every tag, 0 mismatches): 20 of the 21 files and the adjacent
 `http/const.py`, `http/__init__.py`, `hassio/const.py` and `hassio/auth.py` have the same blob as in 2026.10.1. Only
 `auth/__init__.py` changed (`a5850978` → `0314c4b7`, the same blob in all three tags, so 2026.10.3 and 2026.10.4 change
 nothing more). Its one hunk (four lines, read in full) is in `AuthManager.async_remove_user`: before the user is deleted
