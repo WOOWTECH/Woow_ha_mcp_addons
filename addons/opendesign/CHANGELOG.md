@@ -1,5 +1,10 @@
 # OpenDesign Changelog
 
+## 0.4.1 — 不發佈（2026-10-25）
+
+- 維持下架；只同步原始碼版本中繼資料，不建置或發布映像。
+- 0.4.0 → 0.4.1 不需資料遷移；六個啟用產品的新映像仍須通過精確映像、匿名拉取與 Store gate，見[0.4.1 發佈決策](../../docs/operations/release-decision-0.4.1.md)。
+
 ## 0.4.0 — 不發佈（本產品維持下架）
 
 - 僅依共用版本規則同步原始碼／manifest 版本與相依（MCP SDK 2.3.0、Node 26.12.1）；vendored server 改用 SDK 2 的 `MCPServer`，launcher 補回工具錯誤文字。不建置、不發布 OpenDesign 映像，不重新啟用 Store。
