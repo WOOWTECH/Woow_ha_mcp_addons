@@ -1,10 +1,12 @@
 # 0.4.2 release decision — 2026-10-27
 
-Status: **pending exact-source six-image publication, readiness, protected merge, Store sync and ws97 acceptance**.
+Status: **six exact-source images published and independently verified; readiness, protected merge, Store sync and ws97 acceptance pending**.
 Source branch: `release/ha-core-allowlist-0.4.2`, based on merged PR #24 at
 `72c30fe2b59f6120f886b3d4a7af8383fc2aab13`.
-The exact source commit and immutable image digests must be recorded in
-`docs/provenance/release-0.4.2-images.json` before merge.
+The exact image source is `1f1924f15fe85c34bc3b22c8003d2328dc99e220`.
+The later documentation commit is not an image source. The six immutable
+digests and verification results are in the
+[publication receipt](../provenance/release-0.4.2-images.json).
 
 ## Scope
 
@@ -35,3 +37,21 @@ or gateway behavior changes. Existing schema 4 data needs no migration.
    a time, and verify the running digest, settings and state hashes, MCP reads,
    management panel behavior and unrelated add-ons. The separate PVC expansion
    and off-cluster backup issues remain tracked independently.
+
+## Exact-image publication — 2026-10-27
+
+The six `0.4.2` tags were absent before publication. The private builder
+accepted six fresh `linux/amd64` images from the frozen source. Each passed
+exact-image P1–P5, source/history/all-layer secret scans, SBOM, vulnerability
+and license policy, final UI asset and UID 10001 checks. The six prior `0.4.1`
+image IDs were preserved. Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud were
+pushed from their accepted IDs and anonymously pulled by immutable digest.
+An independent verifier compared each manifest, config, ordered layers,
+platform and source label with the publication receipt. The unchanged,
+exact-file Odoo secret triage review is carried forward. The receipt is
+unsigned provenance and does not claim builder host isolation or SLSA.
+
+This PR still requires green readiness and a protected merge. Stable Releases,
+Store synchronization and the six-product ws97 acceptance must be checked
+against the merged version. Keep the prior immutable `0.4.1` images and
+publication receipts intact.
