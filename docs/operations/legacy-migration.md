@@ -81,6 +81,38 @@ upgrade. A notice the panel cannot read (a server and panel of different version
 fixed card, 「升級通知無法顯示」, asking to reload or update the add-on; it is never silently hidden. Offline, with the
 runtime stopped, the same restore is `--restore-policy /data/mcp/owner-defaults-20261025-recovery.json` (below).
 
+### When the panel refuses an unreviewed Core
+
+The panel, and with it the restore and keep actions, works only on the Home Assistant Core releases the add-on version
+reviewed; on any other Core it answers 403 「這個 HA Core 版本尚未審核：<版本>」 and changes nothing, while MCP keeps
+serving with the migrated all-on policy (the role check does not apply to MCP). Then:
+
+1. **Recommended:** update the add-on to a version that has reviewed this Core, then restore from the panel. The
+   record stays in `/data/mcp` until then.
+2. **To limit MCP at once:** stop the add-on; MCP stops with it.
+3. **Advanced, with a root shell on the HA host that can run `docker`** (for example the HAOS developer SSH on port
+   22222): run the offline CLI from the add-on's own image as the state owner (uid/gid 10001), without network. Read
+   the add-on's data directory and image from its container while it still runs (HAOS 18 names it `app_<slug>` and
+   keeps the data in `/mnt/data/supervisor/apps/data/<slug>`; older releases `addon_<slug>` and
+   `/mnt/data/supervisor/addons/data/<slug>`), then stop the add-on and run the dry run:
+
+   ```sh
+   PRODUCT=hermes C=app_1b7b4ce7_woow_mcp_hermes   # app_<the slug Supervisor shows>; older releases addon_<slug>
+   DATA=$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Source}}{{end}}{{end}}' "$C")/mcp
+   IMAGE=$(docker inspect --format '{{.Config.Image}}' "$C")
+   # stop the add-on in Home Assistant, then: dry run (read-only mount), prints the preview and its source_sha256
+   docker run --rm --network none --user 10001:10001 -v "$DATA":/data/mcp:ro \
+     --entrypoint /opt/woow/.venv/bin/python "$IMAGE" -m mcp_admin_core.migration /data/mcp --product "$PRODUCT" \
+     --restore-policy /data/mcp/owner-defaults-20261025-recovery.json
+   # apply: the same command without :ro, adding --apply --expected-sha256 <source_sha256 from the dry run>
+   ```
+
+   The apply refuses while the add-on runs (its writer lock) or when the state changed since the dry run. Start the
+   add-on again afterwards; the panel shows the restore as done once it runs on a reviewed Core. For n8n use
+   `PRODUCT=n8n` and its container. (Checked 2026-10-27 on the test HAOS 18.3: these `docker inspect` and the read-only
+   dry run with the installed 0.4.1 image; the full dry run and apply of a format 2 record ran in that image with
+   this release's code, uid 10001.)
+
 **Rollback.** A migrated state carries the marker key, which 0.4.1 refuses (`runtime unavailable`): to go back to
 0.4.1 restore the add-on backup taken before the update. Every state without the marker keeps exactly the 0.4.1 keys.
 
