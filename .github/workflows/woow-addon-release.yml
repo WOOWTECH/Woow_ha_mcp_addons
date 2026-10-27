@@ -111,7 +111,7 @@ jobs:
       actions: read
     uses: WOOWTECH/Woow_HA_App_Store/.github/workflows/woow-addon-upgrade-check.yml@main
     with:
-      skip_vulnerability_scan: category 4 for mcp_addons moved to #90 (no PR image build)
+      skip_vulnerability_scan: 'category 4 for mcp_addons moved to #90 (no PR image build)'
   release:
     name: release
     needs: [checks, readiness]
