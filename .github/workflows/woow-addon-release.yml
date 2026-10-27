@@ -13,6 +13,9 @@
 #              stable Release <slug>-v<version> per enabled add-on whose version
 #              has none. An already released version is left alone, so a push
 #              without a version bump releases nothing.
+#   Upgrade comparison / compare
+#              the Store's configuration comparison of each add-on whose
+#              version the PR changes (pipeline #89; see the job below).
 #
 # Releases made with GITHUB_TOKEN do not trigger other workflows, so
 # woow-addon-sync.yml runs on workflow_run of this workflow.
@@ -91,6 +94,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python packaging/release_gate.py all .store/.addon-sync/registry.json
+  # Upgrade comparison (pipeline #89): each add-on whose version a PR changes
+  # is compared with its latest formal Release (<slug>-v<version>); add-ons
+  # whose version is unchanged are not compared. A breaking config.yaml change
+  # not declared in addons/<x>/upgrade-notes.yaml blocks the PR. The image
+  # vulnerability comparison (category 4) is not run here: images are built
+  # only on the self-hosted builder, never on a PR, so it moved to #90 (owner
+  # decision 2026-10-27) and the report says so. A PR that changes no version
+  # passes in seconds; on push the job passes at once, so this workflow's
+  # non-PR run (registry required_workflows) still succeeds. Reported as
+  # "Upgrade comparison / compare".
+  upgrade-comparison:
+    name: Upgrade comparison
+    permissions:
+      contents: read
+      actions: read
+    uses: WOOWTECH/Woow_HA_App_Store/.github/workflows/woow-addon-upgrade-check.yml@main
+    with:
+      skip_vulnerability_scan: category 4 for mcp_addons moved to #90 (no PR image build)
   release:
     name: release
     needs: [checks, readiness]
