@@ -2,7 +2,7 @@
 
 六個啟用的商店產品：Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud。**0.3.3 六支 canonical 映像已完成驗收、掃描與公開發布**，包含 n8n 全部 28 個工具的有效 `output` 參數正規化、六個混合工具的 selector 保護，以及 versions/test 的 `exposeToMcp` 既有 updater 有效權限檢查。新增 `conditional_writes` capability metadata，保持 28 個工具、33 個寫入 grants、schema 4 與完整功能預設；不變更 dependency／child pins 或 UI 原始碼。正常 stable Release／Store 與正式 HAOS 升級分別驗證，不由映像發布推定完成。見 [0.3.3 發布證據與驗收邊界](docs/operations/release-decision-0.3.3.md)、[不可變映像紀錄](docs/provenance/release-0.3.3-images.json)。
 
-本分支準備 **0.4.1**（接在已合併的 0.4.0 之後）：HA 管理畫面顯示 n8n `exposeToMcp` 的條件寫入與既有 `n8n_update_partial_workflow` 相依權限。授權政策、工具、state schema、依賴與部署選項維持 0.4.0；正式映像、PR gate、Store 與 ws97 升級另行驗證，見 [0.4.1 發佈決策](docs/operations/release-decision-0.4.1.md)。0.4.0 的 SDK 2 遷移與 Odoo 13 工具輸出變更見[既有發布紀錄](docs/operations/release-decision-0.4.0.md)及 [upgrade-notes.yaml](upgrade-notes.yaml)。
+本分支準備 **0.4.2**（接在已合併的 0.4.1 之後）：HA 管理面板新增經審核的 Core 2026.10.2–2026.10.4 支援，對未審核版本顯示明確拒絕原因。授權政策、工具、state schema、依賴與部署選項維持 0.4.1；正式映像、PR gate、Store 與 ws97 升級另行驗證，見 [0.4.2 發佈決策](docs/operations/release-decision-0.4.2.md)。0.4.0 的 SDK 2 遷移與 Odoo 13 工具輸出變更見[既有發布紀錄](docs/operations/release-decision-0.4.0.md)及 [upgrade-notes.yaml](upgrade-notes.yaml)。
 
 **下一版（未發版，負責人 2026-10-27 決定，與 PaaS 一致）**：舊版安裝（state schema 1/2/3，0.1.x 寫的）升級後**第一次啟動就一次性全開**，MCP 不再停在 503 等管理員確認；同一次原子寫入加上標記 `owner_defaults_20261025`，舊設定的限制存成 `/data/mcp/owner-defaults-20261025-recovery.json`。管理面板改成事後通知（只在管理面板與 add-on log 的一行，升級後請打開管理面板查看）：顯示「已於 <時間> 自動套用預設全開」與升級前後差異，可選「還原升級前的限制」（忠實還原：舊設定停用的工具再停用；寫入只保留舊設定授權過的，其他寫入連同新版才有的寫入操作都取消，與 0.1.x 實際能做的相同；新版才有的工具不會被停用（讀取照常可用），不再出現「全部停用」）或「保持全開，不再提示」。已是 schema 4 的設定（新安裝、0.2.0 之後、或在 0.3.0–0.4.1 升級頁確認過的）一律不動；讀不到或壞掉的設定照舊 fail-safe（不遷移、不覆寫，add-on 停止並在 log 說明）。版號與映像在發版 PR 決定，細節見 [legacy migration](docs/operations/legacy-migration.md)、[CHANGELOG](CHANGELOG.md) 與 [upgrade-notes.yaml](upgrade-notes.yaml)。
 
@@ -15,8 +15,8 @@
 **Odoo Manage 已於 2026-10-06 下架封存**：0.1.4 是最後一版，0.1.5 起不在商店，也不再建置或發佈。已安裝的仍以 0.1.4 執行，但不會再有更新或安全修正；它的設定保有 Odoo API key，並有 `homeassistant_api` 權限，建議改用 Woow Odoo MCP Server 後移除。Woow Odoo MCP Server 是不同的 MCP server（工具與設定不同，要另設後端、endpoint 與 token）。已發佈的 0.1.0–0.1.4 映像保留，舊備份仍可還原。步驟見[更新、備份與回復](docs/operations/update-backup-rollback.md)；原始碼保留在 `apps/odoo-manage`。
 僅以 **amd64 / Supervisor 2026.09.3** 為封裝目標；不是 Core 最低版本。
 
-**管理面板支援的 Core 版本**：只在該版 add-on 審查過的 HA Core 版本運作（0.1.6–0.1.8：2026.7.2–2026.9.4 與 2026.10.0；0.1.9 起再加 2026.10.1；下一版（未發佈）再加 2026.10.2–2026.10.4；0.1.5 及更早只有 2026.7.2）；
-其他版本（含之後的 patch 與 beta）整個管理面板都回 403；0.4.1 以前看起來和「不是管理員」完全一樣（add-on 紀錄也沒有訊息），下一版（未發佈）起管理面板改顯示「這個 HA Core 版本尚未審核：<版本>」，add-on 紀錄也記一行同樣的說明（不含權杖）；
+**管理面板支援的 Core 版本**：只在該版 add-on 審查過的 HA Core 版本運作（0.1.6–0.1.8：2026.7.2–2026.9.4 與 2026.10.0；0.1.9 起再加 2026.10.1；0.4.2 起再加 2026.10.2–2026.10.4；0.1.5 及更早只有 2026.7.2）；
+其他版本（含之後的 patch 與 beta）整個管理面板都回 403；0.4.1 以前看起來和「不是管理員」完全一樣（add-on 紀錄也沒有訊息），0.4.2 起管理面板改顯示「這個 HA Core 版本尚未審核：<版本>」，add-on 紀錄也記一行同樣的說明（不含權杖）；
 MCP 端點（Bearer token）不經這項檢查，不受影響。新的 Core 版本要等 add-on 發新版才支援，升級 Core 前請先對照這份清單。
 Kubernetes MCP 與 Vibe Kanban 不在範圍。
 
@@ -67,8 +67,8 @@ uv pip install --python "$PACKAGING_ENV/bin/python" --require-hashes --only-bina
 "$PACKAGING_ENV/bin/python" -m unittest discover -s packaging -p 'test_*.py' -v
 # 有 Docker 的隔離 runner 才執行；root context 最後的點不可省略
 # 這不是已執行的成功紀錄：
-docker build --platform linux/amd64 -f apps/n8n/Dockerfile -t local/mcp-n8n:0.4.1 .
-"$PACKAGING_ENV/bin/python" packaging/container_acceptance.py n8n local/mcp-n8n:0.4.1
+docker build --platform linux/amd64 -f apps/n8n/Dockerfile -t local/mcp-n8n:0.4.2 .
+"$PACKAGING_ENV/bin/python" packaging/container_acceptance.py n8n local/mcp-n8n:0.4.2
 ```
 
 PR/main CI 沒有發佈權限；固定商店產品 matrix（與 `packaging/inputs.json` 相同）`push: false`。HA 無法以 Add-on

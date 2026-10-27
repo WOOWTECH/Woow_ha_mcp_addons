@@ -45,11 +45,19 @@ No add-on version is changed by this section. Applies to the six Store-enabled a
   upgrade. A notice the panel cannot read is not hidden: a fixed card 「升級通知無法顯示」 asks to reload or update
   the add-on (no server value, no action).
 
-### HA Core 2026.10.2–2026.10.4 reviewed; an unreviewed Core is named
+### Tests and docs
+
+- `tests/test_owner_defaults.py` with real legacy samples (`tests/fixtures/owner_defaults`: schema 1/2 written by
+  313ab01, schema 3/4 by v0.1.14/v0.2.2 and by the real ws97 Hermes add-on; fake tokens only); browser and
+  unit tests for the notice. README, DOCS, guide, legacy migration,
+  update/rollback and `upgrade-notes.yaml` describe the new behavior. Rolling back a migrated installation to 0.4.1
+  needs the pre-update backup (0.4.1 refuses the marker key).
+
+## 0.4.2 — release candidate (2026-10-27)
 
 The management panel's HA role check (shared by the seven add-ons) accepts three more Home Assistant Core releases
-and says why when it refuses an unreviewed one. This part changes no image, option, port, tool, grant or state
-schema.
+and says why when it refuses an unreviewed one. This patch release builds new images for the six Store-enabled add-ons. It changes no option, port, tool,
+grant or state schema.
 
 - Core 2026.10.2, 2026.10.3 and 2026.10.4 are added to `ha_role._HA_VERSIONS` after the contract review recorded in
   [ha-role-core-contract.md](docs/ha-role-core-contract.md): 20 of the 21 consumed Core files and the 4 adjacent ones
@@ -62,14 +70,6 @@ schema.
   gets one line per version (no frame, token or user). The machine token is still never sent to such a version, and
   every other refusal keeps the fixed `{"error": "request denied"}`. MCP endpoints do not use this check.
   `tests/test_ha_role.py`, `packages/mcp-admin-ui/tests/core-version.test.mjs`.
-
-### Tests and docs
-
-- `tests/test_owner_defaults.py` with real legacy samples (`tests/fixtures/owner_defaults`: schema 1/2 written by
-  313ab01, schema 3/4 by v0.1.14/v0.2.2 and by the real ws97 Hermes add-on; fake tokens only); browser and
-  unit tests for the notice. README, DOCS, guide, legacy migration,
-  update/rollback and `upgrade-notes.yaml` describe the new behavior. Rolling back a migrated installation to 0.4.1
-  needs the pre-update backup (0.4.1 refuses the marker key).
 
 ## 0.4.1 — release candidate (2026-10-25)
 
