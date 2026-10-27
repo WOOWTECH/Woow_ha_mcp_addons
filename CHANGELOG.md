@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — next version (no add-on version change)
+
+The management panel's HA role check (shared by the seven add-ons) accepts three more Home Assistant Core releases
+and says why when it refuses an unreviewed one. This section changes no add-on version, image, option, port, tool,
+grant or state schema; it ships with the next release.
+
+- Core 2026.10.2, 2026.10.3 and 2026.10.4 are added to `ha_role._HA_VERSIONS` after the contract review recorded in
+  [ha-role-core-contract.md](docs/ha-role-core-contract.md): 20 of the 21 consumed Core files and the 4 adjacent ones
+  are byte-identical to 2026.10.1; `auth/__init__.py` only changes `AuthManager.async_remove_user` (it now revokes a
+  removed user's refresh tokens), outside `config/auth/list`. Supervisor 2026.10.2–2026.10.4 (`api/proxy.py`
+  `cab849dc`) only start the two proxy loops as background tasks; the auth frames are unchanged.
+- Any other Core version, pre-releases included, is still refused, now with the reason: the panel's pages show
+  「這個 HA Core 版本尚未審核：<version>」 as static text, its API answers 403
+  `{"error": "request denied", "detail": {"code": "core_version_unreviewed", "ha_version": ...}}`, and the add-on log
+  gets one line per version (no frame, token or user). The machine token is still never sent to such a version, and
+  every other refusal keeps the fixed `{"error": "request denied"}`. MCP endpoints do not use this check.
+  `tests/test_ha_role.py`, `packages/mcp-admin-ui/tests/core-version.test.mjs`.
+
 ## 0.4.1 — release candidate (2026-10-25)
 
 The six Store-enabled add-ons carry the reviewed HA management UI update from PR #20 on the merged 0.4.0 base. For n8n, the Tools page shows that `exposeToMcp: true` can write even when the selected operation reads, names the existing `n8n_update_partial_workflow` dependency and distinguishes saved policy from a draft or unknown child state. No grant, default, gateway enforcement, dependency, option, port, image name or state-schema change is intended; OpenDesign remains disabled. 0.4.0 images do not contain this UI change. See [0.4.1 release decision](docs/operations/release-decision-0.4.1.md); image publication and ws97 upgrade remain pending.

@@ -142,6 +142,21 @@ test('MOCK denied bootstrap and denied save show truthful permission failure, no
   await expect(page.locator('body')).not.toContainText('PRIVATE_CANARY');
   await expect(page.locator('body')).not.toContainText('已確認儲存');
 });
+test('MOCK unreviewed HA Core: the denied view names the version, nothing else from the answer renders', async ({ page, request }) => {
+  await reset(request, { unreviewedCore: '2026.11.0' });
+  await start(page);
+  await expect(page.getByRole('heading', { name: '管理介面無法使用' })).toBeVisible();
+  await expect(page.getByText('這個 HA Core 版本尚未審核：2026.11.0。', { exact: false })).toBeVisible();
+  await expect(page.getByText('MCP 端點不經過這項檢查，照常服務', { exact: false })).toBeVisible();
+  await expect(page.locator('form')).toHaveCount(0);
+  await expect(page.locator('body')).not.toContainText('PRIVATE_CANARY');
+  await reset(request, { unreviewedCore: '<img src=x onerror="window.coreInjected=1">' });
+  await start(page);
+  await expect(page.getByText('這個 HA Core 版本尚未審核：（版本字串無法辨識）', { exact: false })).toBeVisible();
+  await expect(page.locator('body')).not.toContainText('onerror');
+  expect(await page.evaluate(() => window.coreInjected)).toBeUndefined();
+  expect(await page.locator('#app img').count()).toBe(0);
+});
 test('MOCK missing CSRF prevents any mutation; validation / 503 save failures are sanitized', async ({ page, request }) => {
   for (const options of [{ missingCsrf: true }, { saveStatus: 422 }, { saveStatus: 503 }]) {
     await reset(request, options);

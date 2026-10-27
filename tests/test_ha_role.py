@@ -13,9 +13,11 @@ import pytest
 from websockets.asyncio.server import serve
 from websockets.exceptions import ConnectionClosed
 
-from mcp_admin_core import ha_role
+from mcp_admin_core import ha_role, ui
 from mcp_admin_core.config import Store
 from mcp_admin_core.gateway import make_apps
+from mcp_admin_core.products import ProductStore, TOOLS as PRODUCT_TOOLS
+from mcp_admin_core.surface import listing
 from n8n_adapter import TOOLS, child_spec
 
 DUMMY = "DUMMY-machine-token"
@@ -124,7 +126,7 @@ async def test_failclosed_result_schema(monkeypatch, response):
     ("first", {"type": "auth_required", "ha_version": 2026}),
     ("first", {"type": "auth_required", "ha_version": "unreviewed-version"}),
     ("first", {"type": "auth_required", "ha_version": "2026.7.1"}),
-    ("first", {"type": "auth_required", "ha_version": "2026.10.2"}),
+    ("first", {"type": "auth_required", "ha_version": "2026.10.5"}),
     ("first", {"type": "auth_required", "ha_version": "2026.9.4 "}),
     ("first", {"type": "auth_required", "ha_version": ["2026.7.2"]}),
     ("first", {"type": "auth_required", "ha_version": {"v": "2026.7.2"}}),
@@ -135,7 +137,11 @@ async def test_failclosed_result_schema(monkeypatch, response):
 ])
 async def test_wrong_sequence_and_revoked_machine_capability(monkeypatch, phase, message):
     async with owned_provider(monkeypatch, **{phase: message}) as (verify, seen, _):
-        assert await verify("human") is False
+        denied = await verify("human")
+        # An unreviewed version in a well-formed auth_required is the explained denial (Unreviewed, falsy); every
+        # other malformed or out-of-sequence frame is a plain False.
+        assert denied is False or isinstance(denied, ha_role.Unreviewed)
+        assert not denied
         assert len(seen["frames"]) == (0 if phase == "first" else 1)
 
 
@@ -156,8 +162,11 @@ def test_a_non_string_version_is_refused_explicitly(version):
 
 NEAR_MISSES = ["2026.9.5", "2026.8.4", "2026.7.5", "2026.7.0", "2026.09.4", "2026.9.04", "02026.9.4", "2026.9.0b9",
                "2026.10.0b2", "2026.9.4.dev0", "v2026.9.4", "", "2026.9", "2026.9.4.0",
-               "2026.10.2", "2026.10.1b1", "2026.10.0b4", "2026.10.0b7", "2026.10", "2026.10.0.0", "2026.10.00", "2026.10.01",
-               "2026.10.1.0", "2026.10.10", "2026.10.1 ", " 2026.10.1", "2026.11.0"]
+               "2026.10.1b1", "2026.10.0b4", "2026.10.0b7", "2026.10", "2026.10.0.0", "2026.10.00", "2026.10.01",
+               "2026.10.1.0", "2026.10.10", "2026.10.1 ", " 2026.10.1", "2026.11.0",
+               # next after the 2026-10-27 review (2026.10.2-2026.10.4 added): later patches, betas, other formats
+               "2026.10.5", "2026.10.4b0", "2026.10.4.0", "2026.10.40", "2026.10.04", "2026.10.4 ", " 2026.10.4",
+               "2026.11.0b0", "2026.11.0.dev0", "2026.12.0"]
 
 
 @pytest.mark.parametrize("version", NEAR_MISSES)
@@ -171,7 +180,9 @@ def test_near_miss_versions_are_refused(version):
 async def test_near_miss_versions_deny_before_the_token_is_sent(monkeypatch, version):
     hello, ok = {"type": "auth_required", "ha_version": version}, {"type": "auth_ok", "ha_version": version}
     async with owned_provider(monkeypatch, first=hello, auth=ok) as (verify, seen, _):
-        assert await verify("human") is False
+        denied = await verify("human")
+        assert isinstance(denied, ha_role.Unreviewed) and not denied and denied is not True
+        assert denied.ha_version == ha_role.shown_version(version)
         assert seen["frames"] == []
 
 
@@ -195,7 +206,150 @@ def test_the_reviewed_versions_are_exactly_these():
     # A new Core release is added only after its contract files are reviewed; this list changes with that review.
     assert ha_role._HA_VERSIONS == {"2026.7.2", "2026.7.3", "2026.7.4", "2026.8.0", "2026.8.1", "2026.8.2", "2026.8.3",
                                     "2026.9.0", "2026.9.1", "2026.9.2", "2026.9.3", "2026.9.4", "2026.10.0",
-                                    "2026.10.1"}
+                                    "2026.10.1", "2026.10.2", "2026.10.3", "2026.10.4"}
+
+
+@pytest.mark.parametrize("version", ["2026.10.2", "2026.10.3", "2026.10.4"])
+async def test_core_2026_10_2_to_10_4_are_reviewed_and_still_check_the_role(monkeypatch, version):
+    # Reviewed 2026-10-27 (docs/ha-role-core-contract.md): of the 21 contract files only auth/__init__.py changed
+    # (async_remove_user), outside config/auth/list. The machine token is sent and the role is still checked.
+    hello, ok = {"type": "auth_required", "ha_version": version}, {"type": "auth_ok", "ha_version": version}
+    async with owned_provider(monkeypatch, first=hello, auth=ok) as (verify, seen, _):
+        assert await verify("human") is True
+        assert seen["frames"] == [{"type": "auth", "access_token": DUMMY}, {"id": 1, "type": "config/auth/list"}]
+        seen["response"] = result([user(group_ids=[])])
+        assert await verify("human") is False
+
+
+UNREVIEWED = ["2026.10.5", "2026.11.0", "2026.11.0b0", "2026.11.0rc1", "2026.11.0.dev20261027", "2027.1.0"]
+
+
+@pytest.mark.parametrize("version", UNREVIEWED)
+async def test_an_unreviewed_core_version_denies_with_its_reason_and_one_log_line(monkeypatch, capsys, version):
+    hello, ok = {"type": "auth_required", "ha_version": version}, {"type": "auth_ok", "ha_version": version}
+    async with owned_provider(monkeypatch, first=hello, auth=ok) as (verify, seen, _):
+        for _ in range(3):
+            denied = await verify("human")
+            assert isinstance(denied, ha_role.Unreviewed) and not denied and denied.ha_version == version
+        assert seen["frames"] == []  # the machine token never goes to an unreviewed version
+        assert seen["connections"] == 3  # fresh query each time: no cached denial either
+    err = capsys.readouterr().err
+    lines = [line for line in err.splitlines() if line]
+    assert len(lines) == 1, err  # one add-on log line per version and process
+    assert lines[0].startswith(f"management: Home Assistant Core {version} has not been reviewed")
+    assert "(reviewed: 2026.7.2 to 2026.10.4)" in lines[0] and "MCP endpoints do not use this check." in lines[0]
+    assert DUMMY not in err
+
+
+@pytest.mark.parametrize("advertised", ["unreviewed-version", "2026.9.4 ", "v2026.11.0", "x" * 300, "2026.10.5<script>"])
+async def test_an_unrecognized_version_string_is_reported_but_never_echoed(monkeypatch, capsys, advertised):
+    async with owned_provider(monkeypatch, first={"type": "auth_required", "ha_version": advertised}) as (verify, seen, _):
+        denied = await verify("human")
+        assert isinstance(denied, ha_role.Unreviewed) and denied.ha_version is None
+        assert seen["frames"] == []
+    err = capsys.readouterr().err
+    assert "Home Assistant Core (an unrecognized version string) has not been reviewed" in err
+    assert advertised.strip() not in err and "<script>" not in err and DUMMY not in err
+
+
+def test_the_log_is_bounded_per_process(capsys):
+    verify = ha_role._Verifier(None)
+    for minor in range(ha_role._MAX_REPORTED + 8):
+        verify._report_unreviewed(f"2027.{minor}.0")
+        verify._report_unreviewed(f"2027.{minor}.0")
+    assert len(capsys.readouterr().err.splitlines()) == ha_role._MAX_REPORTED
+
+
+NO_CHILD = {"child": "unconfigured", "ready": False, "backend": "unknown", "reason": None}
+INIT = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+    "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "claude-ai", "version": "0"}}}
+
+
+@asynccontextmanager
+async def product_gateway(tmp_path, verify):
+    """A Hermes add-on as it starts after a fresh install (every tool and write on), without a backend: the gateway
+    itself answers initialize and tools/list from the packaged listing, as for Claude.ai before setup."""
+    store = ProductStore(tmp_path / "hermes", "hermes")
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(502))) as child:
+        admin, mcp = make_apps(store, PRODUCT_TOOLS["hermes"], child, verify_admin=verify, listing=listing("hermes"),
+                               availability=lambda: dict(NO_CHILD), server_name="woow-mcp-hermes")
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=admin, client=("172.30.32.2", 1)),
+                                     base_url="http://admin") as panel:
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=mcp), base_url="http://mcp") as client:
+                yield store, panel, client
+    store.close()
+
+
+async def listed_tools(client, token, secret_path):
+    url = f"/private_{token}/mcp" if secret_path else "/mcp"
+    headers = {"Accept": "application/json, text/event-stream"}
+    if not secret_path:
+        headers["Authorization"] = "Bearer " + token
+    initialized = await client.post(url, headers=headers, json=INIT)
+    assert initialized.status_code == 200, initialized.text
+    headers["Mcp-Session-Id"] = initialized.headers["mcp-session-id"]
+    assert (await client.post(url, headers=headers, json={"jsonrpc": "2.0", "method": "notifications/initialized"})).status_code == 202
+    listed = await client.post(url, headers=headers, json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+    assert listed.status_code == 200, listed.text
+    return {tool["name"] for tool in listed.json()["result"]["tools"]}
+
+
+async def test_on_an_unreviewed_core_mcp_serves_and_only_the_panel_refuses_with_the_reason(tmp_path, monkeypatch, capsys):
+    hello, ok = {"type": "auth_required", "ha_version": "2026.10.4"}, {"type": "auth_ok", "ha_version": "2026.10.4"}
+    async with owned_provider(monkeypatch, first=hello, auth=ok) as (verify, seen, _):
+        async with product_gateway(tmp_path, verify) as (store, panel, client):
+            bootstrap = await panel.get("/api/bootstrap", headers=IDENTITY)
+            assert bootstrap.status_code == 200  # a reviewed Core: the panel works
+            headers = {**IDENTITY, "X-CSRF-Token": bootstrap.json()["csrf"]}
+            # Core is updated to a release this add-on has not reviewed (the frames are read per connection).
+            hello["ha_version"] = ok["ha_version"] = "2026.11.0"
+            token, before = store.load().token, store.path.read_bytes()
+            reason = {"error": "request denied", "detail": {"code": "core_version_unreviewed", "ha_version": "2026.11.0"}}
+            policy = {"writes_enabled": False, "disabled": ["hermes_inspect"], "enabled_write_tools": []}
+            for method, path, payload in [("GET", "/api/bootstrap", None), ("PUT", "/api/policy", policy),
+                                          ("POST", "/api/token/reveal", None), ("POST", "/api/token/rotate", None),
+                                          ("PUT", "/api/endpoint", {"endpoint": "https://mcp.example.test/mcp"})]:
+                response = await panel.request(method, path, headers=headers, json=payload)
+                assert response.status_code == 403 and response.json() == reason, (path, response.text)
+                assert token not in response.text and "csrf" not in response.text
+            assert store.path.read_bytes() == before  # no setting changed
+            page = await panel.get("/", headers=IDENTITY)
+            assert page.status_code == 403 and page.headers["content-type"].startswith("text/html")
+            assert "<h1>這個 HA Core 版本尚未審核：2026.11.0</h1>" in page.text and "照常服務" in page.text
+            assert not any(tag in page.text for tag in ("<script", "<style", "<link", "<form", " style="))
+            assert "default-src 'self'" in page.headers["content-security-policy"]
+            asset = await panel.get("/assets/app.js", headers=IDENTITY)
+            assert asset.status_code == 403 and asset.json() == reason  # assets stay behind the role check
+            # MCP never uses the role check: Bearer and the Claude.ai secret path serve the full all-on catalog.
+            for secret_path in (False, True):
+                assert await listed_tools(client, token, secret_path) == set(PRODUCT_TOOLS["hermes"])
+            assert store.path.read_bytes() == before
+            assert seen["frames"].count({"type": "auth", "access_token": DUMMY}) == 1  # only the reviewed bootstrap
+            hello["ha_version"] = ok["ha_version"] = "2026.10.4"  # back on a reviewed Core: the panel works again
+            assert (await panel.get("/api/bootstrap", headers=IDENTITY)).status_code == 200
+    err = capsys.readouterr().err
+    assert err.count("has not been reviewed") == 1 and "Core 2026.11.0 " in err
+    assert DUMMY not in err and token not in err
+
+
+async def test_a_plain_denial_keeps_its_fixed_answer_and_page(tmp_path, monkeypatch):
+    async with owned_provider(monkeypatch, response=result([user(group_ids=[])])) as (verify, _, __):
+        async with product_gateway(tmp_path, verify) as (_, panel, __):
+            for path in ("/api/bootstrap", "/"):
+                response = await panel.get(path, headers=IDENTITY)
+                assert response.status_code == 403 and response.json() == {"error": "request denied"}
+
+
+@pytest.mark.parametrize("version,heading", [
+    ("2026.11.0", "<h1>這個 HA Core 版本尚未審核：2026.11.0</h1>"),
+    (None, "<h1>這個 HA Core 版本尚未審核（Supervisor 回報的版本字串無法辨識）</h1>"),
+    ('<img src=x onerror="1">', "<h1>這個 HA Core 版本尚未審核：&lt;img src=x onerror=&quot;1&quot;&gt;</h1>"),
+])
+def test_the_unreviewed_core_page_is_static_text(version, heading):
+    response = ui.unreviewed_core_page(version)
+    body = response.body.decode()
+    assert response.status_code == 403 and response.media_type == "text/html" and heading in body
+    assert "<img" not in body and not any(tag in body for tag in ("<script", "<style", "<link", "<form", " style="))
 
 
 async def test_fresh_connection_no_positive_cache_token_reloaded(monkeypatch):

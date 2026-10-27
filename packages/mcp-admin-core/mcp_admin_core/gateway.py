@@ -315,9 +315,16 @@ def json_only(request):
     return "application/json" in accept and "text/event-stream" not in accept and "*/*" not in accept
 
 
-async def error_handler(_, exc):
+async def error_handler(request, exc):
     if isinstance(exc, ConfigError):
         return JSONResponse({"error": "state unavailable"}, status_code=503)
+    detail = getattr(exc, "detail", None)
+    if detail is not None:
+        # An HA Core version this release has not reviewed (admin_auth.denial_detail). The role check guards every
+        # panel asset too, so a page request gets the reason as static HTML; API callers get the fixed code.
+        if getattr(request.state, "ui_path", None) in ui.PAGES:
+            return ui.unreviewed_core_page(detail["ha_version"])
+        return JSONResponse({"error": "request denied", "detail": detail}, status_code=exc.status)
     return JSONResponse({"error": "request denied"}, status_code=exc.status)
 
 
