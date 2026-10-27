@@ -71,6 +71,21 @@ PUT 取代**全部** exact grants。disabled 優先並清除該列選擇。原�
 bootstrap；product/contract/tools/schema/disabled/global/grants 任一變更即停止、要求刷新。
 這不是跨管理員原子 compare-and-swap 保證；server 仍逐次強制 dispatch。UI 不執行工具。
 
+## 舊版升級的一次性全開通知（下一版，2026-10-27）
+
+舊版安裝（state schema 1/2/3）在第一次以新版啟動時已自動全開（`mcp_admin_core/owner_defaults.py`），不再有啟動前的升級確認頁
+（`upgrade.js` 已移除）。Bootstrap 只在被遷移過的設定帶 `owner_defaults`：`at`、`from_schema`、`restored_at`、`acknowledged_at`、
+`notice`、`recovery`（available／missing／invalid）、`upgrade`（升級前後差異）、`restore`（還原會做的變更與 `available`）。
+`notice` 為 true 時每一頁頂端顯示「已自動套用預設全開」；之後在「診斷與維護」頁保留紀錄。兩個動作都是無 body 的 POST，
+需 CSRF 與目前 revision 的 `If-Match`（缺少回 428、過期回 409）：
+
+| 動作 | API | 結果 |
+|---|---|---|
+| 還原升級前的限制 | `POST /api/owner-defaults/restore` | 忠實還原舊設定停用的工具與沒授權的 0.1.x 寫入；新版工具與寫入維持開啟；記 `restored_at` |
+| 保持全開，不再提示 | `POST /api/owner-defaults/dismiss` | 記 `acknowledged_at`；之後仍可在診斷頁還原 |
+
+格式不符的通知整個不顯示（`ownerDefaultsView`），名稱一律以文字節點顯示，時間照伺服器的 UTC 顯示。
+
 ## 正式 listener 與 Ingress
 
 - 只有 admin listener。每頁、asset、license、API 都走實際 socket peer172.30.32.2、

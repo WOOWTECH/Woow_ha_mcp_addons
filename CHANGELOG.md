@@ -1,10 +1,45 @@
 # Changelog
 
-## Unreleased — next version (no add-on version change)
+## Unreleased — next version (no add-on version change; the release PR sets the version and images)
+
+No add-on version is changed by this section. Applies to the six Store-enabled add-ons and the OpenDesign source.
+
+### Legacy installations: one-time all-on at the first start (aligned with the PaaS; owner decision 2026-10-27)
+
+- A legacy state (schema 1/2/3, written by 0.1.x or the 2026-10-03 prototypes) is migrated before ProductStore or any
+  child starts (`mcp_admin_core/owner_defaults.py`, called by `run_product.py` and `apps/n8n/run.py`) to exactly the
+  all_on plan the 0.3.0–0.4.1 review page applied: schema 4, writes on, every write grant, nothing disabled, no
+  operation deny; token, child token, endpoint and backend kept. The same atomic state write adds the marker
+  `owner_defaults_20261025` (`applied`, `at`, `from_schema`, later `restored_at` / `acknowledged_at`), the PaaS
+  marker's name. Before it, the legacy policy is saved once as the format 2 record
+  `/data/mcp/owner-defaults-20261025-recovery.json` (0600, exclusive, policy and digests only); an identical record
+  from an interrupted attempt is reused, any other refused. MCP then serves at once: no 503 `upgrade_review_required`,
+  no review listener; one fixed line in the add-on log.
+- Schema 4 is never touched (new installations, 0.2.0+, states the review page migrated, ws97's writes-off Hermes).
+  The marker is omitted while absent, so such states keep exactly the 0.4.1 keys.
+- Unreadable, invalid, linked or busy state, or a record that cannot be saved: nothing is migrated or rewritten
+  (bytes, mode, mtime); the add-on logs why and stops with `runtime unavailable; local recovery required`.
+
+### The review page becomes a notice with an optional, faithful restore
+
+- The pre-start review listeners, `upgrade.py` and the `upgrade.js` page are removed. The normal panel shows, on
+  every page until the administrator acts, when (UTC) the defaults were applied, from which schema and the
+  differences (`bootstrap.owner_defaults`).
+- "還原升級前的限制" (`POST /api/owner-defaults/restore`, CSRF and `If-Match` required, 428 without it):
+  `migration.plan_owner_restore` disables again the tools the legacy state disabled and revokes the final 0.1.x write
+  grants it did not hold (exact grants; the legacy switch for n8n `n8n_delete_workflow` and OpenDesign
+  `delete_project`), and restores its legacy switch and operation denies. Tools and write operations added since
+  0.1.x stay on (the old format could not express them): never "everything disabled" as with `preserve` (ws97 Hermes
+  0.1.14 sample: 10 of 11 tools listed after the restore, `preserve` gave 0). Restrictive merge: later administrator
+  limits stay; nothing is enabled. EMQX, LiteLLM and Nextcloud restart their child, as for a saved policy.
+- "保持全開，不再提示" (`POST /api/owner-defaults/dismiss`) records `acknowledged_at`; the restore stays on the
+  diagnostics page. The offline CLI `--restore-policy` accepts the format 2 record too.
+
+### HA Core 2026.10.2–2026.10.4 reviewed; an unreviewed Core is named
 
 The management panel's HA role check (shared by the seven add-ons) accepts three more Home Assistant Core releases
-and says why when it refuses an unreviewed one. This section changes no add-on version, image, option, port, tool,
-grant or state schema; it ships with the next release.
+and says why when it refuses an unreviewed one. This part changes no image, option, port, tool, grant or state
+schema.
 
 - Core 2026.10.2, 2026.10.3 and 2026.10.4 are added to `ha_role._HA_VERSIONS` after the contract review recorded in
   [ha-role-core-contract.md](docs/ha-role-core-contract.md): 20 of the 21 consumed Core files and the 4 adjacent ones
@@ -17,6 +52,14 @@ grant or state schema; it ships with the next release.
   gets one line per version (no frame, token or user). The machine token is still never sent to such a version, and
   every other refusal keeps the fixed `{"error": "request denied"}`. MCP endpoints do not use this check.
   `tests/test_ha_role.py`, `packages/mcp-admin-ui/tests/core-version.test.mjs`.
+
+### Tests and docs
+
+- `tests/test_owner_defaults.py` with real legacy samples (`tests/fixtures/owner_defaults`: schema 1/2 written by
+  313ab01, schema 3/4 by v0.1.14/v0.2.2 and by the real ws97 Hermes add-on; fake tokens only); browser and
+  unit tests for the notice. README, DOCS, guide, legacy migration,
+  update/rollback and `upgrade-notes.yaml` describe the new behavior. Rolling back a migrated installation to 0.4.1
+  needs the pre-update backup (0.4.1 refuses the marker key).
 
 ## 0.4.1 — release candidate (2026-10-25)
 

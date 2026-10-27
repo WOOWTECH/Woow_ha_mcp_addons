@@ -25,7 +25,7 @@ MCP 端點（Bearer token）不經這項檢查，不受影響。新的 Core 版�
 
 工具頁依實際 metadata 顯示每個工具的停用開關與寫入授權（寫入工具一個 grant，混合工具每個寫入 operation 一個）；保存取代全部
 `enabled_write_tools` 並 `writes_enabled:false`，disabled 優先；失配／過期契約停止保存。
-**全部工具與寫入預設開啟**：新安裝，以及從 0.1.x 升級時一次（state schema 4 遷移：寫入全開、0.1.x 的停用清單清空，token、連線與對外端點保留）；之後管理員取消的寫入或停用的工具，重啟與升級都維持。**風險：網址＝完整後端權限**；後端錯誤回傳原始訊息（可能含後端內部資訊，add-on 持有的憑證會換成 `[REDACTED]`）。後端帳號權限要設對，只保留需要的工具與寫入（見 [寫入預設開啟](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/guide.md#寫入預設開啟)）。
+**全部工具與寫入預設開啟**：新安裝，以及從 0.1.x 升級時一次（state schema 4 遷移：寫入全開、0.1.x 的停用清單清空，token、連線與對外端點保留）；之後管理員取消的寫入或停用的工具，重啟與升級都維持。**從 0.1.x 升級**：0.3.0–0.4.1 會先停在管理面板的升級確認頁（MCP 回 503，直到管理員確認）；**下一版起（未發版，負責人 2026-10-27 決定）**第一次啟動就自動一次性全開，MCP 立刻可用，舊設定的限制存成 `/data/mcp/owner-defaults-20261025-recovery.json`，管理面板事後顯示「已於 <時間> 自動套用預設全開」與升級前後差異，可選「還原升級前的限制」（只關回舊設定停用的工具與沒授權的 0.1.x 寫入，新版才有的工具與寫入維持開啟）或「保持全開，不再提示」；已是 schema 4 的設定一律不動，讀不到或壞掉的設定不遷移、不覆寫，add-on 停止並在 log 說明（[legacy migration](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/legacy-migration.md)）。**風險：網址＝完整後端權限**；後端錯誤回傳原始訊息（可能含後端內部資訊，add-on 持有的憑證會換成 `[REDACTED]`）。後端帳號權限要設對，只保留需要的工具與寫入（見 [寫入預設開啟](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/guide.md#寫入預設開啟)）。
 
 ## 網路與認證
 

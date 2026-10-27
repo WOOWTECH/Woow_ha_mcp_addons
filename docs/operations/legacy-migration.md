@@ -1,12 +1,82 @@
-# Offline legacy permission migration
+# Legacy permission migration
 
-The 0.3.0 runtime detects schema 1/2/3 before constructing ProductStore or
-starting a child. It serves an authenticated Home Assistant Ingress upgrade
-review instead. Open the add-on panel, review the policy changes, choose
-`all_on` (selected by default) or `preserve`, then confirm. MCP remains unavailable
-until the durable migration succeeds and normal startup begins. This changes
-legacy-upgrade startup timing: unattended legacy upgrades now wait for an admin.
-New installations and existing schema 4 start normally.
+## Next release (owner decision 2026-10-27, not yet released): one-time all-on at the first start
+
+The runtime no longer waits for an upgrade review. Before it constructs ProductStore or starts a child, every add-on
+(`run_product.py` for Odoo, Hermes, OpenDesign, EMQX, LiteLLM and Nextcloud, `apps/n8n/run.py` for n8n) checks
+`/data/mcp/state.json` once (`mcp_admin_core/owner_defaults.py`, `apply_legacy_upgrade`):
+
+| State found | What happens |
+|---|---|
+| none (new installation) | Normal start: ProductStore writes the all-on defaults, without a marker. |
+| schema 4 (0.2.0 or later, including states the 0.3.0–0.4.1 review page migrated) | Not touched. What the administrator chose stays. |
+| valid schema 1/2/3 (0.1.x, or the 2026-10-03 prototypes) | Migrated once, then MCP starts at once (no 503). |
+| unreadable, invalid, linked, in use, or its recovery record cannot be saved | Nothing is migrated or rewritten (fail safe), see below. |
+
+The migration writes exactly the former review page's `all_on` plan: schema 4, `writes_enabled: true`, every write
+grant, no disabled tool, no operation deny; token (also a revoked `null` one), child token, endpoint, backend and the
+optional n8n MCP access token keep their values. The retired Odoo Manage keeps its policy. In the same atomic state
+write it adds the marker
+
+```json
+"owner_defaults_20261025": {"applied": "migrated", "at": "2026-10-27T03:04:05+00:00", "from_schema": 3,
+                            "restored_at": null, "acknowledged_at": null}
+```
+
+(same name as the PaaS marker). Before that write it saves the legacy policy once as
+`/data/mcp/owner-defaults-20261025-recovery.json` (format 2, mode 0600, created exclusively and fsynced): the
+`writes_enabled`, `disabled`, `enabled_write_tools` and `denied_operations` of the old state as validated, the digest
+of the old state and of the frozen 0.1.x catalog; never a token, endpoint or backend value. If the add-on stops between
+the two writes, the next start finds an identical record and continues; any other existing record stops the migration.
+The add-on log shows one line: `owner defaults 2026-10-25: the schema N state was switched once to schema 4 with every
+tool and write on; ...`.
+
+**Fail safe.** When `state.json` is unreadable or invalid JSON, has duplicate keys or non-finite numbers, is larger than
+64 KiB, a symlink or a hard link, has an unknown schema, the wrong product, a missing or extra key, a malformed policy,
+or the data directory is not owner-only, `.writer.lock` is missing or held, or the recovery record cannot be created,
+nothing is migrated or rewritten (bytes, mode and mtime stay; no record, no temporary file). The add-on log shows
+`owner defaults 2026-10-25: state.json is unreadable, invalid, linked or in use, or its recovery record cannot be saved;
+nothing was migrated or rewritten` and `runtime unavailable; local recovery required`, the add-on stops, and the panel
+and MCP are unavailable (as for a corrupt state before). Restore the add-on backup taken before the update; do not edit
+the state or delete the lock to force a start.
+
+### Panel notice and optional restore
+
+Until the administrator acts, every page of the add-on panel shows **已自動套用預設全開**: when (UTC), from which
+schema, and the differences (tools the old state disabled and now enabled, 0.1.x writes it did not grant and now
+granted, cleared operation denies, tools and write operations added since 0.1.x). Two actions; each needs the panel's
+current revision (`If-Match`), is recorded in the marker and ends the notice:
+
+- **還原升級前的限制** (`POST /api/owner-defaults/restore`): restores the old limits faithfully, as a restrictive merge
+  into the current state. The tools the old state disabled are disabled again; the 0.1.x write grants it did not hold
+  are revoked (an exact `enabled_write_tools` entry, or for n8n `n8n_delete_workflow` and OpenDesign `delete_project`
+  the legacy global switch); its `writes_enabled` and operation denies come back. Tools and write operations added
+  since 0.1.x stay on: the old format could not express them. What the administrator disabled, revoked or denied
+  after the upgrade stays so; nothing is enabled or granted; token and backend are the current ones. This is not the
+  0.3.0 `preserve` choice, which disabled every tool whose argument checks moved to the child (for Hermes all 11).
+  EMQX, LiteLLM and Nextcloud restart their child afterwards, as for a saved policy. Example (the ws97 Hermes 0.1.14
+  state: `hermes_skill` disabled, no write granted): after the restore `hermes_skill` is disabled, the 8 0.1.x Hermes
+  writes are revoked and the 13 newer ones stay granted; tools/list shows 10 of 11 tools.
+- **保持全開，不再提示** (`POST /api/owner-defaults/dismiss`): records `acknowledged_at`; the restore stays available
+  on the 診斷與維護 page.
+
+The panel shows no restore when the record is missing or invalid (then only the notice and the keep action) or when the
+old state had no limit to restore. Offline, with the runtime stopped, the same restore is
+`--restore-policy /data/mcp/owner-defaults-20261025-recovery.json` (below).
+
+**Rollback.** A migrated state carries the marker key, which 0.4.1 refuses (`runtime unavailable`): to go back to
+0.4.1 restore the add-on backup taken before the update. Every state without the marker keeps exactly the 0.4.1 keys.
+
+## Until 0.4.1: authenticated upgrade review (history)
+
+The 0.3.0–0.4.1 runtime detected schema 1/2/3 before constructing ProductStore or
+starting a child and served an authenticated Home Assistant Ingress upgrade
+review instead: the administrator chose `all_on` (selected by default) or
+`preserve` and confirmed. MCP answered 503 `upgrade_review_required` until then
+(ws97, 2026-10-26: more than 15 minutes without an administrator), and the review
+page refused Core releases after 2026.10.1 (403).
+
+## Offline CLI
 
 The offline CLI remains available for planned maintenance. Run it after stopping
 the runtime, as its state owner (production uid/gid 10001). Invocation without
@@ -91,6 +161,10 @@ inventory of an earlier installation; comparisons explicitly name the final
 0.1.x baseline rather than claiming an exact earlier inventory.
 
 ## Restrictive policy recovery
+
+`--restore-policy` reads both record formats: `owner-defaults-20261025-recovery.json` (format 2, written by the
+one-time all-on migration) is restored faithfully as described above and records `restored_at` in the marker;
+`migration-policy-recovery.json` (format 1, written by the 0.3.0–0.4.1 review or the CLI) keeps the behavior below.
 
 After an upgrade, stop the runtime and preview recovery against its **current**
 schema 4 state:

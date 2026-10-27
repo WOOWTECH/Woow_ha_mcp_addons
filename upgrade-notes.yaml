@@ -2,6 +2,64 @@
 # pipeline #89) has not yet defined a machine-readable schema; this follows the format already used by
 # WOOWTECH/Woow_ha_cloudflare_tunnel_webgui. One release per entry, newest first.
 releases:
+  # Next release (owner decision 2026-10-27). NOT released: no add-on version is changed yet. The release PR replaces
+  # "unreleased" with the version number it ships and moves this entry under that version.
+  - to_version: "unreleased"
+    from_version: "0.4.1"
+    addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]
+    summary: >-
+      Legacy installations (state schema 1/2/3) switch once to the full defaults at their first start, as on the
+      WOOW PaaS; the upgrade review page becomes a notice with an optional, faithful restore of the pre-upgrade
+      limits. See docs/operations/legacy-migration.md. No option, port, architecture, image name, tool name or state schema
+      change for a schema 4 installation.
+    breaking_changes: []
+    behavior_changes:
+      - id: legacy-upgrade-one-time-all-on
+        affects: Installations whose /data/mcp/state.json is schema 1, 2 or 3 (written by 0.1.x).
+        change: >-
+          0.3.0-0.4.1 kept such an installation in an authenticated review (MCP and readiness answered HTTP 503
+          upgrade_review_required) until an administrator confirmed all_on or preserve. Now its first start applies
+          the same all_on plan automatically before MCP starts (schema 4, writes on, every write grant, no disabled
+          tool, no operation deny; token, child token, endpoint and backend kept), adds the marker
+          owner_defaults_20261025 {applied, at, from_schema} in the same atomic state write, and before that saves
+          the legacy policy once as /data/mcp/owner-defaults-20261025-recovery.json (0600, policy and digests only).
+          MCP serves at once and the add-on log has one line about it.
+        migration: >-
+          None needed. To keep the old limits, choose "還原升級前的限制" in the add-on panel after the upgrade (offline:
+          python -m mcp_admin_core.migration /data/mcp --product <product> --restore-policy
+          /data/mcp/owner-defaults-20261025-recovery.json). Check the backend accounts' permissions, as for any
+          all-on installation.
+      - id: upgrade-review-page-replaced-by-notice
+        change: >-
+          The pre-start review listeners and page (/api/upgrade/apply, assets/upgrade.js) are removed. The normal panel
+          shows when the defaults were applied and the differences, and offers POST /api/owner-defaults/restore
+          (faithful: disables the tools the legacy state disabled and revokes the final 0.1.x write grants it did not
+          hold; tools and write operations added since 0.1.x stay on; restrictive merge, nothing is enabled) and POST
+          /api/owner-defaults/dismiss. Both need CSRF and If-Match, are recorded in the marker and end the notice.
+        migration: Nothing to confirm any more; automation that posted to /api/upgrade/apply is no longer needed.
+      - id: schema4-untouched
+        change: >-
+          A schema 4 state (new installations, 0.2.0 and later, states the review page migrated) is never rewritten at
+          startup. The marker is written only on a migrated state and omitted otherwise, so such states keep exactly
+          the 0.4.1 keys.
+        migration: None needed.
+      - id: legacy-upgrade-fail-safe
+        change: >-
+          An unreadable, invalid, linked or busy state, or a recovery record that cannot be saved, is neither migrated
+          nor rewritten; the add-on logs one fixed line and stops ("runtime unavailable; local recovery required"),
+          as it did for a corrupt state before.
+        migration: Restore the add-on backup taken before the update.
+    preserved:
+      - Add-on slugs, image names (ghcr.io/woowtech/amd64-mcp-<product>), amd64 only, ports 8081/tcp and Ingress 8099.
+      - Manifest options and privileges; state schema 4, tokens and settings of every schema 4 installation.
+      - Tool names and counts, annotations, write grants and the full-functionality defaults.
+      - The offline migration CLI (preserve, all_on, format 1 recovery records).
+    backup_and_rollback:
+      - Create a Home Assistant add-on backup before upgrading.
+      - >-
+        A migrated state carries the owner_defaults_20261025 key, which 0.4.1 refuses: roll a migrated installation
+        back by restoring the pre-update add-on backup. An installation that was already schema 4 goes back to 0.4.1
+        without conversion. Downgrades are not tested.
   - to_version: "0.4.0"
     from_version: "0.3.4"
     addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]

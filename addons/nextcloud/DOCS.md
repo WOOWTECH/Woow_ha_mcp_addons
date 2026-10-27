@@ -34,7 +34,7 @@ MCP 端點（Bearer token）不經這項檢查，不受影響。新的 Core 版�
 | `delete_file_checked` | 寫：etag 相符才刪單一檔案（進垃圾桶） | 開，可逐一關閉 |
 
 逐名 schema／預設以 [工具對照](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-surface.md) 與 [machine manifest](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-surface.json) 為準。
-「預設」指新安裝，以及從 0.1.x 升級時一次（state schema 4 遷移：四個寫入 grant 全開、0.1.x 的停用清單清空，token 與連線保留）；之後管理員取消的寫入或停用的工具，重啟與升級都維持。**風險：網址＝這個帳號的完整檔案權限**，client 不需先授權就能建立、覆寫、上傳與刪除檔案；App 密碼用權限最小的帳號，只保留需要的寫入（見 [寫入預設開啟](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/guide.md#寫入預設開啟)）。0.2.1 起 tools/list 用子程序自己的 inputSchema，tools/call 參數原樣轉給子程序驗證；請求上限 16 MiB（上傳 10 MiB）。錯誤訊息在對照文字後附上 Nextcloud 自己的訊息（0.2.1 起，含 403 與 5xx；401、429 仍為固定文字）。
+「預設」指新安裝，以及從 0.1.x 升級時一次（state schema 4 遷移：四個寫入 grant 全開、0.1.x 的停用清單清空，token 與連線保留）；之後管理員取消的寫入或停用的工具，重啟與升級都維持。從 0.1.x 升級在 0.3.0–0.4.1 要先經管理面板的升級確認頁；**下一版起（未發版，負責人 2026-10-27 決定）**第一次啟動自動一次性全開、MCP 立刻可用，事後可在管理面板「還原升級前的限制」（只關回舊設定停用的工具與沒授權的寫入）或「保持全開，不再提示」（[legacy migration](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/legacy-migration.md)）。**風險：網址＝這個帳號的完整檔案權限**，client 不需先授權就能建立、覆寫、上傳與刪除檔案；App 密碼用權限最小的帳號，只保留需要的寫入（見 [寫入預設開啟](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/guide.md#寫入預設開啟)）。0.2.1 起 tools/list 用子程序自己的 inputSchema，tools/call 參數原樣轉給子程序驗證；請求上限 16 MiB（上傳 10 MiB）。錯誤訊息在對照文字後附上 Nextcloud 自己的訊息（0.2.1 起，含 403 與 5xx；401、429 仍為固定文字）。
 寫入授權只認逐工具的 exact grant；舊的全域寫入開關不授權任何 Nextcloud 工具。停用（disabled）永遠優先。
 政策一變更，子程序就以新的環境變數重啟：有授權寫入工具才 `NEXTCLOUD_MCP_READONLY=false`，有授權
 `delete_file_checked` 才 `NEXTCLOUD_MCP_ALLOW_DELETE=true`，其他沒開放的工具列入 `NEXTCLOUD_MCP_DISABLED_TOOLS`，

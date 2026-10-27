@@ -7,12 +7,28 @@ OpenDesign、EMQX、LiteLLM）未逐支做還原，版本回退（降版＋相�
 只允許操作本次新增的 MCP Add-on，不重啟現有 backend、Core、Supervisor 或 k3s。
 映像在私有 builder 建置並通過 supply-chain gate 後發佈到 GHCR（0.1.0–0.1.5；Odoo Manage 只到 0.1.4）；HA 安裝依 [逐步指令](n8n-pilot-commands.md) 逐步批准。
 
-## 0.3.0 升級確認與回退邊界
+## 下一版（未發版，負責人 2026-10-27 決定）：舊版安裝第一次啟動一次性全開
+
+和 PaaS 一樣：schema 1/2/3（0.1.x 或 10-03 原型寫的）第一次以新版啟動時，在建立 ProductStore、啟動 MCP 子程序之前，
+一次性改成全開（與 0.3.0–0.4.1 升級頁的 `all_on` 完全相同：schema 4、寫入全開、全部寫入授權、停用清單清空；token、
+後端連線、對外端點保留），同一次原子寫入加上標記 `owner_defaults_20261025`（applied、at、from_schema），寫入前先把
+舊設定的限制存成 `/data/mcp/owner-defaults-20261025-recovery.json`（0600，只有政策、不含 token 與後端）。**MCP 不再停在
+503 等確認**，管理面板改成事後通知：顯示「已於 <時間> 自動套用預設全開」與升級前後差異，可選「還原升級前的限制」
+（忠實還原舊設定停用的工具與沒授權的 0.1.x 寫入；新版才有的工具與寫入維持開啟，不會變成全部停用；升級後管理員
+自己關掉的不會被打開）或「保持全開，不再提示」。已是 schema 4 的設定（新安裝、0.2.0 之後寫的、或已經在升級頁確認過的）
+一律不動。讀不到或壞掉的設定照舊 fail-safe：不遷移、不覆寫，add-on log 寫一行說明後停止（`runtime unavailable; local
+recovery required`），請還原升級前的備份。細節見 [legacy migration](legacy-migration.md)。
+
+回退：被遷移過的設定帶有標記欄位，0.4.1 不接受（啟動即停止），要退回 0.4.1 請還原更新前的 add-on 備份；沒有標記的
+schema 4 設定與 0.4.1 的欄位完全相同。
+
+## 0.3.0–0.4.1 升級確認與回退邊界（歷史）
 
 schema 1/2/3 第一次啟動會先停在經 HA 管理員驗證的 Ingress 升級頁，尚未建立
 ProductStore 或啟動 MCP 子程序；MCP/readiness 回 503。開啟面板、比較兩個預覽並確認
 預選 `all_on`（全部功能與寫入），或明確選 `preserve`，才會遷移並正常啟動。
 重新整理不會遷移。新安裝及既有 schema 4 正常啟動不變，已撤銷 token 不會被升級復活。
+（ws97 2026-10-26 實測：沒人確認就一直 503 超過 15 分鐘；離線驗證：Core 2026.10.2 以後升級頁回 403。下一版已改成上一節的行為。）
 
 `preserve` 會停用新增及需重新審查參數的工具；它不能重現舊二進位的參數限制。
 離線 CLI 必須在 runtime 停止後以狀態擁有者執行。限制性政策恢復保留當前 token、
@@ -102,6 +118,9 @@ token、child token、backend、endpoint 保留，0.1.x 的 disabled 清空（�
 **0.4.0**（接在 0.3.4 之後）：MCP SDK 2 遷移（MCP Python SDK 2.3.0、FastMCP 4.1.3、odoo-mcp 1.3.0、Node 26.12.1）；state 格式不變（仍是 v4，不遷移、不進升級確認頁），選項、port、映像名稱、架構、工具名稱都不變，0.3.4（或更早的 schema 4 版本）→ 0.4.0 不需確認。唯一宣告的破壞性變更：Odoo 13 個工具的 `structuredContent` 不再包一層 `result`（文字內容不變），讀 `structuredContent.result` 的 client 要改讀頂層欄位，見 [upgrade-notes.yaml](../../upgrade-notes.yaml)。退回 0.3.4 不需還原備份（同為 v4），但會回到 SDK 1.x 與 0.3.4 的 Odoo 輸出形狀（未實測降版）。
 
 **0.4.1 候選**（接在 0.4.0 之後）：管理畫面增加 n8n `exposeToMcp` 條件寫入與現有 updater 相依權限的說明；state 仍為 v4，權限與工具執行規則、依賴、選項、port 及映像名稱不變。0.4.0 → 0.4.1 不需資料遷移；退回 0.4.0 只會失去新畫面說明（降版未實測）。映像尚未發佈，請先核對[0.4.1 發佈決策](release-decision-0.4.1.md)與正式 Store 版本。
+
+**下一版（未發版）**：schema 1/2/3 第一次啟動一次性全開並加標記、保存 `owner-defaults-20261025-recovery.json`（見本頁開頭）；
+schema 4 不動。新增的標記欄位只出現在被遷移的設定，0.4.1 不接受它：被遷移的安裝要退回 0.4.1 必須還原更新前的備份。
 
 舊 v1/v2 executable **不接受 v3**：退 image 不等於退資料。必須使用升級前的
 受保護相容 v1/v2 backup；不能手改 schema_version、刪 writer marker 或刪 state 讓系統
