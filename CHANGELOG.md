@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased — next version (no add-on version change)
+## 0.4.2 — release candidate (2026-10-27)
 
 The management panel's HA role check (shared by the seven add-ons) accepts three more Home Assistant Core releases
-and says why when it refuses an unreviewed one. This section changes no add-on version, image, option, port, tool,
-grant or state schema; it ships with the next release.
+and says why when it refuses an unreviewed one. This patch release builds new images for the six Store-enabled add-ons. It changes no option, port, tool,
+grant or state schema.
 
 - Core 2026.10.2, 2026.10.3 and 2026.10.4 are added to `ha_role._HA_VERSIONS` after the contract review recorded in
   [ha-role-core-contract.md](docs/ha-role-core-contract.md): 20 of the 21 consumed Core files and the 4 adjacent ones
