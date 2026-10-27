@@ -124,6 +124,25 @@ class NextcloudConnection(Connection):
 CONNECTIONS = dict(zip(PRODUCTS, (OdooConnection, ManageConnection, HermesConnection,
                                   OpenDesignConnection, EmqxConnection, LiteLLMConnection, NextcloudConnection)))
 
+# Owner decision 2026-10-27 (the PaaS woow-mcp-server owner_defaults of 2026-10-25, for the HA add-ons): the state
+# field that marks the one-time all-on migration of a legacy (schema 1/2/3) state. Same name as the PaaS marker.
+OWNER_DEFAULTS = 'owner_defaults_20261025'
+Timestamp = Annotated[str, Field(pattern=r'^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+00:00$')]
+
+
+class OwnerDefaults(BaseModel):
+    """Written once, in the same atomic state write as the all-on policy (owner_defaults.apply_legacy_upgrade).
+
+    applied: always 'migrated' (a new installation and an existing schema 4 state never get this field). at: when
+    the all-on policy was written (UTC). from_schema: the legacy schema. restored_at / acknowledged_at: when the
+    administrator restored the pre-upgrade limits or chose to keep everything on; either ends the panel notice."""
+    model_config = ConfigDict(extra='forbid', strict=True, frozen=True)
+    applied: Literal['migrated']
+    at: Timestamp
+    from_schema: int = Field(ge=1, le=3)  # strict int: JSON true is not schema 1
+    restored_at: Timestamp | None = None
+    acknowledged_at: Timestamp | None = None
+
 
 class ProductState(State):
     # 4 (0.2.0): the full child surface; every state migrated from 3 (or older) gets every write grant once.
@@ -139,6 +158,9 @@ class ProductState(State):
     # n8n_test_workflow prepare/pinned/direct, n8n_explore_node_resources and n8n_manage_agents (NOT_CONFIGURED
     # without it). A schema 4 state written by 0.2.0 has no such key and gets None (ProductStore._decode).
     mcp_access_token: str | None = Field(default=None, repr=False)
+    # Owner decision 2026-10-27: present only on a state the one-time legacy migration wrote. Omitted from the stored
+    # JSON while None, so every other schema 4 state keeps exactly the 0.4.1 keys (and stays readable by 0.4.1).
+    owner_defaults_20261025: OwnerDefaults | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @field_validator('schema_version')
     @classmethod
@@ -199,6 +221,10 @@ class ProductState(State):
         return bool(self.backend_url and self.backend_key) if self.product == 'n8n' else self.connection is not None
 
 
+# The keys every stored product state carries (the owner-defaults marker is the only optional one, schema 4 only).
+STORED_FIELDS = frozenset(ProductState.model_fields) - {OWNER_DEFAULTS}
+
+
 def write_grants(product):
     """Every write grant of a product: each write Tool's name and each name:operation of a mixed Tool's write
     operations (Hermes tool:action, n8n manage/versions actions, EMQX authn/authz operations). n8n's Tools are the
@@ -230,6 +256,11 @@ class ProductStore(Store):
     Odoo Manage (retired) keeps its grants. Restore a protected compatible
     backup to roll back (a 0.1.x add-on refuses schema 4), never rewrite the
     version in place.
+
+    Owner decision 2026-10-27: the runtimes call owner_defaults.apply_legacy_upgrade
+    before constructing this store, which writes the same all-on policy together with
+    the owner-defaults marker and a faithful recovery record; this construction-time
+    migration therefore only ever sees schema 4 there (it remains for the offline tools).
     """
     def __init__(self, directory, product):
         if product not in (*PRODUCTS, 'n8n'):
@@ -276,13 +307,13 @@ class ProductStore(Store):
             value = {**value, 'mcp_access_token': None}
             self._migrated = True
         if isinstance(value, dict) and type(value.get('schema_version')) is int and value['schema_version'] == 2:
-            if not self._migrate or set(value) != set(ProductState.model_fields) - {'enabled_write_tools'}:
+            if not self._migrate or set(value) != STORED_FIELDS - {'enabled_write_tools'}:
                 raise ValueError('incomplete legacy state or unexpected downgrade')
             # Validate every legacy field before any durable replacement.
             value = {**value, 'schema_version': 3, 'enabled_write_tools': []}
             self._migrated = True
         if isinstance(value, dict) and type(value.get('schema_version')) is int and value['schema_version'] == 3:
-            if not self._migrate or set(value) != set(ProductState.model_fields) or value.get('product') != self.product:
+            if not self._migrate or set(value) != STORED_FIELDS or value.get('product') != self.product:
                 raise ValueError('incomplete legacy state or unexpected downgrade')
             # Validate before all_on replaces policy, including a deny map supplied
             # in a legacy record. An explicit migration must not repair corruption.
@@ -295,7 +326,9 @@ class ProductStore(Store):
                          'writes_enabled': FRESH_WRITES_ENABLED, 'disabled': [], 'denied_operations': {}}
             value = {**value, 'schema_version': 4}
             self._migrated = True
-        if not isinstance(value, dict) or set(value) != set(ProductState.model_fields) or value.get('product') != self.product:
+        # The owner-defaults marker is the one optional key of a schema 4 state; when present it is never null.
+        if (not isinstance(value, dict) or set(value) - {OWNER_DEFAULTS} != STORED_FIELDS
+                or (OWNER_DEFAULTS in value and value[OWNER_DEFAULTS] is None) or value.get('product') != self.product):
             raise ValueError('wrong product or incomplete schema')
         return ProductState.model_validate(value)
 

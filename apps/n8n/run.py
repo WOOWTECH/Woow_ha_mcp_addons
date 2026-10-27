@@ -34,9 +34,10 @@ class Listener(uvicorn.Server):
 
 
 async def run(args):
-    from mcp_admin_core.upgrade import run_upgrade_review
-    if not await run_upgrade_review(args, 'n8n'):
-        return
+    # Owner decision 2026-10-27: a legacy state is switched to the all-on defaults once, before anything starts
+    # (no upgrade review stage); a failure changes nothing and stops the runtime (ConfigError).
+    from mcp_admin_core.owner_defaults import apply_legacy_upgrade
+    apply_legacy_upgrade(args.data, 'n8n')
     store = ProductStore(args.data, 'n8n')
     manager = Supervisor(None)
     stop = asyncio.Event()

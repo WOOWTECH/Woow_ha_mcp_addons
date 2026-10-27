@@ -1,0 +1,22 @@
+{
+ "backend_key": null,
+ "backend_url": null,
+ "child_token": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+ "connection": {
+  "url": "http://opendesign.invalid:7456"
+ },
+ "disabled": [
+  "create_project"
+ ],
+ "enabled_write_tools": [
+  "create_project",
+  "delete_project",
+  "send_message"
+ ],
+ "endpoint": null,
+ "mcp_access_token": null,
+ "product": "opendesign",
+ "schema_version": 4,
+ "token": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+ "writes_enabled": true
+}

@@ -294,6 +294,23 @@ def test_recovery_persistence_is_private_exclusive_and_secret_free(tmp_path):
         save_recovery(tmp_path / 'other.json', plan)
 
 
+def test_a_failed_recovery_write_leaves_no_partial_record(tmp_path, monkeypatch):
+    """2026-10-27: the record is published complete (temporary file, fsync, link) or not at all."""
+    tmp_path.chmod(0o700)
+    plan = plan_migration(fixture(), 'n8n', policy='preserve')
+
+    def failed_fsync(_):
+        raise OSError(5, 'secret I/O error')
+    with monkeypatch.context() as patch:
+        patch.setattr('mcp_admin_core.migration.os.fsync', failed_fsync)
+        with pytest.raises(MigrationError, match='not durably saved'):
+            save_recovery(tmp_path / 'policy.json', plan)
+    assert list(tmp_path.iterdir()) == []
+    save_recovery(tmp_path / 'policy.json', plan)
+    assert [p.name for p in tmp_path.iterdir()] == ['policy.json'] and (tmp_path / 'policy.json').stat().st_nlink == 1
+    assert read_document(tmp_path / 'policy.json') == plan.recovery
+
+
 @pytest.mark.parametrize('policy', ['preserve', 'all_on'])
 def test_explicit_offline_apply_and_restore_never_resurrect_token(tmp_path, policy):
     value = fixture()

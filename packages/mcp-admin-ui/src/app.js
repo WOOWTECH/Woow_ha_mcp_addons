@@ -1,5 +1,5 @@
 import { AdminApi, ApiError } from './api.js';
-import { products, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl } from './contracts.js';
+import { products, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl, ownerDefaultsView, noticeTime } from './contracts.js';
 import './styles.css';
 
 const root = document.querySelector('#app');
@@ -117,6 +117,71 @@ function confirmAction(title, description, label = '確認繼續') {
     dialog.addEventListener('cancel', event => { event.preventDefault(); finish(false); });
     document.body.append(dialog);
     dialog.showModal();
+  });
+}
+// Owner decision 2026-10-27: a legacy installation was switched to the all-on defaults once, at its first start,
+// without waiting for anyone. Afterwards the panel says so, shows the differences and offers to restore the
+// pre-upgrade limits (faithful to the old settings: their disabled tools and only the writes they granted; never
+// "everything off") or to keep everything on.
+// A notice this panel cannot read (version drift) is never half shown, but it is not hidden either: a fixed card says
+// so on every page, without any value from the server and without actions.
+function ownerDefaults() {
+  try { return ownerDefaultsView(state.owner_defaults); } catch { return { malformed: true }; }
+}
+function ownerDefaultsUnavailable() {
+  return el('section', { class: 'card', id: 'owner-defaults-unavailable', 'aria-labelledby': 'owner-defaults-unavailable-title' },
+    el('h2', { id: 'owner-defaults-unavailable-title' }, '升級通知無法顯示'),
+    p('這個 add-on 從舊版升級時已自動套用預設全開，但伺服器送來的升級通知格式與這個管理介面不相容，所以無法顯示差異與還原選項。請重新整理；仍出現時請更新 add-on。未變更任何設定。'));
+}
+function noticeList(title, values, open = false) {
+  return el('details', { open: open && values.length > 0 }, el('summary', {}, `${title}（${values.length}）`),
+    values.length ? el('ul', { class: 'notice-list' }, ...values.map(value => el('li', {}, el('code', {}, value)))) : p('無'));
+}
+function ownerDefaultsCard(view) {
+  const revision = state.configuration?.revision;
+  const upgrade = view.upgrade;
+  const restore = view.restore;
+  const parts = [p(`已於 ${noticeTime(view.at)}自動套用預設全開：從舊版（設定格式 ${view.from_schema}）升級後第一次啟動時，一次打開全部工具與寫入，MCP 不用等確認就照常服務。`)];
+  if (upgrade) parts.push(el('div', { class: 'stack', id: 'owner-defaults-upgrade' }, el('h3', {}, '升級前後差異'),
+    noticeList('升級前停用、現在已啟用的工具', upgrade.enabled_tools, true),
+    noticeList('升級前沒有授權、現在已授權的寫入', upgrade.granted_writes, true),
+    noticeList('升級前禁止、現在已解除的操作', upgrade.cleared_operation_denies),
+    noticeList('新版新增的工具（舊版沒有，預設開啟）', upgrade.new_tools),
+    noticeList('新版新增的寫入操作（舊版沒有，預設授權）', upgrade.new_write_operations)));
+  if (view.restored_at) parts.push(p(`已於 ${noticeTime(view.restored_at)}還原升級前的限制。之後的變更請到「工具權限」頁設定。`));
+  else if (view.recovery !== 'available') parts.push(p('找不到可用的升級前限制紀錄（/data/mcp/owner-defaults-20261025-recovery.json），無法在這裡還原；需要時請改用升級前的備份。'));
+  else if (!restore.available) parts.push(p('舊版設定沒有需要還原的限制。'));
+  else parts.push(el('div', { class: 'stack', id: 'owner-defaults-restore-preview' }, el('h3', {}, '「還原升級前的限制」會做的變更'),
+    p('回到舊版設定實際允許的範圍。工具照舊版的停用清單：只停用舊設定停用的工具，新版新增的工具不會被停用。寫入照舊版的授權清單：舊版沒授權的寫入一律不能用，所以只保留舊設定授權過的寫入，新版新增的寫入操作也會取消授權（只能寫入的新工具因此無法使用）。你升級後自己關閉的項目不會被打開。'),
+    noticeList('會停用的工具', restore.disabled_added, true),
+    noticeList('會取消授權的寫入（含新版新增的寫入）', restore.write_grants_removed, true),
+    noticeList('會禁止的操作', restore.operation_denies_added),
+    noticeList('還原後仍可使用的新版工具', restore.kept_new_tools)));
+  if (view.acknowledged_at && !view.restored_at) parts.push(p(`已於 ${noticeTime(view.acknowledged_at)}選擇保持全開。`));
+  const actions = el('div', { class: 'actions' });
+  if (!view.restored_at && view.recovery === 'available' && restore.available) {
+    actions.append(button('還原升級前的限制', () => ownerDefaultsAction('restore', revision, view), { id: 'owner-defaults-restore' }));
+  }
+  if (view.notice) actions.append(button('保持全開，不再提示', () => ownerDefaultsAction('dismiss', revision, view), { class: 'primary', id: 'owner-defaults-dismiss' }));
+  if (actions.childElementCount) parts.push(actions);
+  return el('section', { class: 'card', id: 'owner-defaults', 'aria-labelledby': 'owner-defaults-title' },
+    el('h2', { id: 'owner-defaults-title' }, view.restored_at ? '升級紀錄：已還原升級前的限制' : view.notice ? '已自動套用預設全開' : '升級紀錄：預設全開'), ...parts);
+}
+async function ownerDefaultsAction(action, revision, view) {
+  const restoring = action === 'restore';
+  const later = view.recovery === 'available' && view.restore?.available ? '之後仍可在「診斷與維護」頁還原升級前的限制。' : '';
+  // The counts of the preview the administrator just read (the server applies the same plan or refuses a stale one).
+  const restore = view.restore ?? { disabled_added: [], write_grants_removed: [], operation_denies_added: [] };
+  const changes = [[restore.disabled_added, '停用', '個工具'], [restore.write_grants_removed, '取消', '個寫入授權'],
+    [restore.operation_denies_added, '禁止', '個操作']].filter(([names]) => names.length)
+    .map(([names, verb, unit]) => `${verb} ${names.length} ${unit}`).join('、');
+  if (!await confirmAction(restoring ? '還原升級前的限制？' : '保持全開，不再提示？',
+    restoring ? `${changes ? `${changes}，` : ''}回到舊版設定允許的範圍：只保留舊設定授權過的寫入，新版新增的寫入也取消。用戶端之後的呼叫立即套用。`
+      : `全部工具與寫入維持開啟，此通知不再顯示。${later}`,
+    restoring ? '確認還原' : '確認保持全開')) return;
+  await task(async () => {
+    await api.mutate(`owner-defaults/${action}`, undefined, revision);
+    await reload(restoring ? '已還原升級前的限制。目前的設定請看「工具權限」頁。' : '已保持全開，此通知不再顯示。');
   });
 }
 function renderDenied(message) {
@@ -351,7 +416,8 @@ function diagnostics() {
   const revision = state.configuration?.revision;
   const features = state.capabilities?.capabilities ?? {};
   const viewer = el('div', { 'aria-live': 'polite' }, p('按下讀取，取得目前保留的日誌。'));
-  return el('div', { class: 'stack' }, card('子行程維護', p(`目前狀態：${statusText(state.health?.child?.state)}`),
+  const history = ownerDefaults();
+  return el('div', { class: 'stack' }, history && !history.notice && !history.malformed ? ownerDefaultsCard(history) : null, card('子行程維護', p(`目前狀態：${statusText(state.health?.child?.state)}`),
     p('重新啟動會中斷子行程的現有連線；後端、政策與權杖設定會保留。'),
     features.restart_child ? button('重新啟動子行程', async () => {
       if (!await confirmAction('重新啟動 MCP 子行程？', '現有連線可能中斷。啟動請求完成後仍需等候協定與後端探測。', '確認重新啟動')) return;
@@ -373,6 +439,7 @@ function render() {
     el('header', { class: 'topbar' }, el('div', { class: 'brand-caption' }, icon('home-automation'), el('div', {}, el('strong', {}, 'Woow MCP'), el('span', {}, '智慧空間 · 服務管理'), el('span', { class: 'brand-accent', lang: 'en' }, 'Welcome'))), el('div', { class: 'product-label' }, products[state.product].name, chip(environmentLabels(state.capabilities).deployment))),
     el('div', { class: 'shell' }, el('aside', {}, el('p', { class: 'nav-caption' }, '工作空間'), el('nav', { 'aria-label': '管理導覽' }, ...Object.entries(routes).map(([key, label]) => el('a', { href: `${api.mount}/${key}`, 'aria-current': current === key ? 'page' : null, onclick: event => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey && event.button === 0) { event.preventDefault(); if (!busy) navigate(key); } } }, icon(icons[key]), label))), el('div', { class: 'sidebar-note' }, p('設定由你掌握'), p('後端憑證只在明確更新時送出。權限由伺服器驗證。'))),
       el('main', { id: 'main' }, el('div', { class: 'page-heading' }, el('div', {}, el('p', { class: 'eyebrow' }, `${products[state.product].name} / MANAGEMENT`), el('h1', { tabindex: '-1' }, routes[current]), p({ overview: '一眼看清連線，安心管理你的服務。', backend: '把連線留在這裡，把秘密留在伺服器。', tools: '只開啟需要的能力，每次寫入都有明確授權。', access: '給用戶端正確的入口，不混用管理網址。', diagnostics: '查看受限日誌與行程狀態，必要時重新啟動。' }[current])), button('重新整理狀態', () => task(() => reload('已取得最新管理狀態。')))), el('div', { id: 'notice', role: 'status', tabindex: '-1', hidden: true }),
+        ownerDefaults()?.malformed ? ownerDefaultsUnavailable() : ownerDefaults()?.notice ? ownerDefaultsCard(ownerDefaults()) : null,
         configurationCard(state.configuration), ({ overview, backend, tools, access, diagnostics })[current](), el('footer', {}, `GUI 管理設定 · ${environmentLabels(state.capabilities).authority} · Streamable HTTP`))));
 }
 window.addEventListener('popstate', () => { hideToken(); if (state) render(); });

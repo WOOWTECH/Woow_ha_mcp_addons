@@ -72,11 +72,17 @@ UI 保留不送 PUT；替換完整 typed connection，空白秘密不代表保�
 
 - 七支開放子程序的全部工具（Odoo 41、n8n 28、Hermes 11、OpenDesign 15、EMQX 39、LiteLLM 40、Nextcloud 9）；tools/list 用
   子程序自己的 inputSchema，tools/call 參數原樣轉給子程序驗證，輸出不再截斷或投影。細節見 [工具範圍](../tool-expansion.md)。
-- **新安裝**與**從 0.1.x 升級**（state schema 3→4，只遷移一次）時：每個寫入工具與混合工具的每個寫入 operation 都有 grant，
-  `writes_enabled` 為 true；token、後端連線與對外端點保留，**0.1.x 的停用清單（disabled）清空**，升級後所有工具全開。
+- **新安裝**：每個寫入工具與混合工具的每個寫入 operation 都有 grant，`writes_enabled` 為 true。
+- **從 0.1.x 升級**（state schema 1/2/3→4，只遷移一次）：**下一版起（未發版，負責人 2026-10-27 決定）**第一次啟動時自動改成
+  同樣的全開（**0.1.x 的停用清單清空**），token、後端連線與對外端點保留，MCP 立刻可用、不再停在 503 等確認；同一次寫入加上標記
+  `owner_defaults_20261025`，並把舊設定的限制存成 `/data/mcp/owner-defaults-20261025-recovery.json`。管理面板事後顯示「已於
+  <時間> 自動套用預設全開」與升級前後差異，可選「還原升級前的限制」（關回舊設定停用的工具；寫入只保留舊設定授權過的，
+  新版才有的寫入操作也取消，與 0.1.x 實際能做的相同；新版才有的工具不會被停用（讀取照常可用））或「保持全開，
+  不再提示」，見 [legacy migration](legacy-migration.md)。0.3.0–0.4.1 是先停在升級確認頁（預選 `all_on`），管理員確認後
+  才遷移。
 - 管理員在「工具與寫入授權」停用的工具或取消的寫入，儲存後重啟與後續升級都維持（schema 4 的 state 不再被預設值改寫）。
-  停用優先於任何授權。已下架的 Odoo Manage 例外（寫入需 module 模式）。
-- 回退到 0.1.x：舊版不接受 schema 4，請還原升級前的備份。
+  停用優先於任何授權。已下架的 Odoo Manage 例外（寫入需 module 模式，升級時保留原政策）。
+- 回退到 0.1.x：舊版不接受 schema 4，請還原升級前的備份。下一版自動遷移過的設定帶有標記，0.4.1 也不接受，同樣還原備份。
 - Odoo：`execute_method` 可直接 create／write／unlink，也可呼叫**任意方法**，包括未審查的副作用方法（`action_confirm`、
   `action_post` 等，`ODOO_MCP_ALLOW_UNKNOWN_METHODS=1`）；`chatter_post` **直接送出**，不經 preview／confirm（`MCP_CHATTER_DIRECT=1`）。
 - n8n：管理面板可另填選填的 **MCP Access Token**（n8n 設定 → Instance-level MCP），版本歷史、資料表欄位、`n8n_test_workflow`

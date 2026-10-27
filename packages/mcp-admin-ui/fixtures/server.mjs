@@ -28,6 +28,8 @@ function reset(next = {}) {
       mixed_example: { write: false, legacy_write:false, write_grants:['mixed_example:create','mixed_example:delete'], operation_parameter:'action', inputSchema:{} },
     },
     health: { management: 'alive', child: { state: 'not_started', transport_ready: false }, backend: next.offline ? 'unreachable' : 'unconfigured' },
+    // 2026-10-27 one-time all-on notice (shape of owner_defaults.view); omitted unless a test supplies it.
+    ...(next.ownerDefaults ? { owner_defaults: structuredClone(next.ownerDefaults) } : {}),
   };
   if (next.operations) {
     state.denied_operations = next.denied_operations ?? {};
@@ -125,6 +127,26 @@ const server = http.createServer(async (request, response) => {
       if (config.saveStatus) return json(response, config.saveStatus, { error: 'MOCK PRIVATE_CANARY_MUST_NOT_RENDER' });
       if (config.parity && request.headers['if-match'] && request.headers['if-match'] !== etag()) return json(response, 409, {detail: {code: 'config_conflict'}, untrusted: 'PRIVATE_CANARY_MUST_NOT_RENDER'});
       if (operation === 'backend/test') return json(response,200,{tested_configuration:'saved',backend:'reachable',health:state.health});
+      if (operation === 'owner-defaults/restore' || operation === 'owner-defaults/dismiss') {
+        // MOCK of the server rules: POST, no body, If-Match of the reviewed revision, a pending marker.
+        if (request.method !== 'POST' || payload !== null) return json(response, 400, { error: 'MOCK notice contract' });
+        if (!request.headers['if-match']) return json(response, 428, { detail: { code: 'precondition_required' } });
+        if (request.headers['if-match'] !== etag()) return json(response, 409, { detail: { code: 'config_conflict' }, untrusted: 'PRIVATE_CANARY_MUST_NOT_RENDER' });
+        const view = state.owner_defaults;
+        const restoring = operation.endsWith('/restore');
+        if (!view || view.restored_at || (restoring ? !view.restore?.available : view.acknowledged_at)) {
+          return json(response, 409, { detail: { code: 'owner_defaults_unavailable' }, untrusted: 'PRIVATE_CANARY_MUST_NOT_RENDER' });
+        }
+        const at = '2026-10-27T09:30:00+00:00';
+        if (restoring) {
+          state.disabled = [...new Set([...state.disabled, ...view.restore.disabled_added])];
+          state.enabled_write_tools = state.enabled_write_tools.filter(grant => !view.restore.write_grants_removed.includes(grant));
+          Object.assign(view, { restored_at: at, notice: false });
+          view.restore.available = false;
+        } else Object.assign(view, { acknowledged_at: at, notice: false });
+        revision++;
+        return json(response, 200, { saved: true, configuration: configuration(), owner_defaults: view });
+      }
       if (operation === 'child/restart') return json(response,202,{accepted:true,apply_state:'pending'});
       if (operation.startsWith('token/')) {
         if (request.method !== 'POST' || payload !== null) return json(response, 400, { error: 'MOCK token contract' });

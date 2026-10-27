@@ -28,7 +28,7 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route, request_response
 from starlette.middleware import Middleware
 
-from . import redact, ui
+from . import owner_defaults, redact, ui
 from .access import AccessChanged, LeasedResponse, TokenAccess
 
 from . import VERSION
@@ -429,16 +429,23 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 raise BadRequest(403)
             # No awaited work between this final decision and disclosure/commit.
             headers['ETag'] = configuration.etag(state)
-            if changes is not None or name in ('token/rotate', 'token/revoke', 'child/restart'):
+            notice_action = name in ('owner-defaults/restore', 'owner-defaults/dismiss') and request.method == 'POST'
+            if changes is not None or notice_action or name in ('token/rotate', 'token/revoke', 'child/restart'):
                 matches = request.headers.getlist('if-match')
                 if matches and (len(matches) != 1 or matches[0] != headers['ETag']):
                     return JSONResponse({'detail': {'code': 'config_conflict'}}, status_code=409, headers=headers)
+                if notice_action and not matches:
+                    # The notice actions apply only to the revision the administrator reviewed.
+                    return JSONResponse({'detail': {'code': 'precondition_required'}}, status_code=428, headers=headers)
             if name == "__ui__" and hasattr(request.state, "ui_path") and request.method in ("GET", "HEAD"):
                 return ui.response(request.state.ui_path, base)
             if name == "bootstrap" and request.method == "GET":
                 catalog = tool_catalog(tools, listing, None, state)
                 schemas = {item["name"]: item.get("inputSchema") for item in catalog["items"]}
+                # Owner decision 2026-10-27: the one-time all-on migration's notice (only on a state it wrote).
+                notice = owner_defaults.view(state, store.directory)
                 return JSONResponse({"base_path": base, "api_base": base + "/api", "csrf": csrf,
+                    **({"owner_defaults": notice} if notice is not None else {}),
                     "configuration": configuration.snapshot(state),
                     "endpoint": state.endpoint, "backend_url": state.backend_url,
                     "backend_key_set": state.backend_key is not None, "token_active": state.token is not None,
@@ -504,6 +511,26 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 token_access.committed()
                 headers['ETag'] = configuration.etag(updated)
                 return Response(status_code=204, headers=headers)
+            if notice_action:
+                # Owner decision 2026-10-27: restore the faithful pre-upgrade limits, or keep the defaults (dismiss).
+                restoring = name == 'owner-defaults/restore'
+                try:
+                    updated = (owner_defaults.restore if restoring else owner_defaults.dismiss)(store)
+                except owner_defaults.Unavailable:
+                    return JSONResponse({'error': 'owner_defaults_unavailable',
+                                         'detail': {'code': 'owner_defaults_unavailable'}}, status_code=409, headers=headers)
+                committed.set()
+                headers['ETag'] = configuration.etag(updated)
+                body = {'saved': True, 'configuration': configuration.snapshot(updated),
+                        'owner_defaults': owner_defaults.view(updated, store.directory)}
+                if restoring and getattr(state, 'product', 'n8n') in ('emqx', 'litellm', 'nextcloud') and backend_changed:
+                    # As a saved policy: these children are launched with the policy (READONLY, DISABLED_TOOLS).
+                    try:
+                        await backend_changed(updated)
+                    except Exception:
+                        return JSONResponse({**body, 'detail': {'code': 'config_apply_failed'}}, status_code=503,
+                                            headers=headers)
+                return JSONResponse(body, headers=headers)
             if changes is not None:
                 if name == "backend" and not management.backend_can_edit:
                     return JSONResponse({"error": "backend_fixed"}, status_code=409, headers=headers)

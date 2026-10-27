@@ -183,3 +183,32 @@ export function claudeConnectorUrl(endpoint, token) {
   const clean = explicitUrl(endpoint, true);
   return `${clean.slice(0, -'/mcp'.length)}/private_${token}/mcp`;
 }
+
+// Owner decision 2026-10-27: the one-time all-on migration of a legacy installation reports itself here
+// (bootstrap.owner_defaults). Names and times only; a malformed notice is refused rather than half shown.
+const NOTICE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00$/;
+const noticeNames = value => Array.isArray(value) && value.length <= 512
+  && value.every(item => typeof item === 'string' && item.length > 0 && item.length <= 300);
+const noticeSwitch = value => Array.isArray(value) && value.length === 2 && value.every(item => typeof item === 'boolean');
+export function ownerDefaultsView(value) {
+  if (value === undefined || value === null) return null;
+  const invalid = () => { throw new UiError('升級通知格式不相容。請重新整理；未送出任何變更。'); };
+  const time = (item, required = false) => (item === null && !required) || (typeof item === 'string' && NOTICE_TIME.test(item));
+  if (typeof value !== 'object' || Array.isArray(value) || value.applied !== 'migrated' || !time(value.at, true)
+      || ![1, 2, 3].includes(value.from_schema) || !time(value.restored_at) || !time(value.acknowledged_at)
+      || typeof value.notice !== 'boolean' || !['available', 'missing', 'invalid'].includes(value.recovery)) invalid();
+  if (value.upgrade !== null && (typeof value.upgrade !== 'object' || typeof value.upgrade.changed !== 'boolean'
+      || !noticeSwitch(value.upgrade.writes_enabled)
+      || ['enabled_tools', 'granted_writes', 'cleared_operation_denies', 'new_tools', 'new_write_operations']
+        .some(key => !noticeNames(value.upgrade[key])))) invalid();
+  if (value.restore !== null && (typeof value.restore !== 'object' || typeof value.restore.available !== 'boolean'
+      || typeof value.restore.policy_changed !== 'boolean' || !noticeSwitch(value.restore.writes_enabled)
+      || ['disabled_added', 'write_grants_removed', 'operation_denies_added', 'kept_new_tools']
+        .some(key => !noticeNames(value.restore[key])))) invalid();
+  if (value.recovery === 'available' && (value.upgrade === null || value.restore === null)) invalid();
+  return value;
+}
+// The server's UTC timestamp as written, without depending on the browser's time zone.
+export function noticeTime(value) {
+  return typeof value === 'string' && NOTICE_TIME.test(value) ? `${value.slice(0, 10)} ${value.slice(11, 16)}（UTC）` : '時間不明';
+}

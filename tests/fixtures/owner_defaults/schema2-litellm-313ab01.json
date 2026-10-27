@@ -1,0 +1,17 @@
+{
+ "backend_key": null,
+ "backend_url": null,
+ "child_token": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+ "connection": {
+  "master_key": "DUMMY-master-key",
+  "url": "http://litellm.invalid:4000"
+ },
+ "disabled": [
+  "litellm_list_models"
+ ],
+ "endpoint": null,
+ "product": "litellm",
+ "schema_version": 2,
+ "token": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+ "writes_enabled": false
+}

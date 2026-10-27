@@ -1,0 +1,45 @@
+{
+ "backend_key": null,
+ "backend_url": null,
+ "child_token": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+ "connection": {
+  "master_key": "DUMMY-master-key",
+  "url": "http://litellm.invalid:4000"
+ },
+ "disabled": [
+  "litellm_add_model"
+ ],
+ "enabled_write_tools": [
+  "litellm_add_model",
+  "litellm_block_key",
+  "litellm_chat_completion",
+  "litellm_create_team",
+  "litellm_create_user",
+  "litellm_delete_key",
+  "litellm_delete_model",
+  "litellm_delete_plugin",
+  "litellm_delete_team",
+  "litellm_delete_user",
+  "litellm_disable_plugin",
+  "litellm_enable_plugin",
+  "litellm_generate_key",
+  "litellm_health",
+  "litellm_regenerate_key",
+  "litellm_register_plugin",
+  "litellm_spend_calculate",
+  "litellm_team_member_add",
+  "litellm_team_member_delete",
+  "litellm_token_counter",
+  "litellm_unblock_key",
+  "litellm_update_key",
+  "litellm_update_model",
+  "litellm_update_team",
+  "litellm_update_user"
+ ],
+ "endpoint": null,
+ "mcp_access_token": null,
+ "product": "litellm",
+ "schema_version": 4,
+ "token": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+ "writes_enabled": true
+}
