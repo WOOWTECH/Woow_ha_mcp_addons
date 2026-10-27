@@ -25,7 +25,8 @@ releases:
           the legacy policy once as /data/mcp/owner-defaults-20261025-recovery.json (0600, policy and digests only).
           MCP serves at once and the add-on log has one line about it.
         migration: >-
-          None needed. To keep the old limits, choose "還原升級前的限制" in the add-on panel after the upgrade (offline:
+          None needed. Open the add-on panel after the upgrade: the notice and its differences are shown only there (and
+          in one add-on log line). To keep the old limits, choose "還原升級前的限制" in the add-on panel (offline:
           python -m mcp_admin_core.migration /data/mcp --product <product> --restore-policy
           /data/mcp/owner-defaults-20261025-recovery.json). Check the backend accounts' permissions, as for any
           all-on installation.

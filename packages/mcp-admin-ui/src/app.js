@@ -123,8 +123,15 @@ function confirmAction(title, description, label = '確認繼續') {
 // without waiting for anyone. Afterwards the panel says so, shows the differences and offers to restore the
 // pre-upgrade limits (faithful to the old settings: their disabled tools and only the writes they granted; never
 // "everything off") or to keep everything on.
+// A notice this panel cannot read (version drift) is never half shown, but it is not hidden either: a fixed card says
+// so on every page, without any value from the server and without actions.
 function ownerDefaults() {
-  try { return ownerDefaultsView(state.owner_defaults); } catch { return null; }
+  try { return ownerDefaultsView(state.owner_defaults); } catch { return { malformed: true }; }
+}
+function ownerDefaultsUnavailable() {
+  return el('section', { class: 'card', id: 'owner-defaults-unavailable', 'aria-labelledby': 'owner-defaults-unavailable-title' },
+    el('h2', { id: 'owner-defaults-unavailable-title' }, '升級通知無法顯示'),
+    p('這個 add-on 從舊版升級時已自動套用預設全開，但伺服器送來的升級通知格式與這個管理介面不相容，所以無法顯示差異與還原選項。請重新整理；仍出現時請更新 add-on。未變更任何設定。'));
 }
 function noticeList(title, values, open = false) {
   return el('details', { open: open && values.length > 0 }, el('summary', {}, `${title}（${values.length}）`),
@@ -410,7 +417,7 @@ function diagnostics() {
   const features = state.capabilities?.capabilities ?? {};
   const viewer = el('div', { 'aria-live': 'polite' }, p('按下讀取，取得目前保留的日誌。'));
   const history = ownerDefaults();
-  return el('div', { class: 'stack' }, history && !history.notice ? ownerDefaultsCard(history) : null, card('子行程維護', p(`目前狀態：${statusText(state.health?.child?.state)}`),
+  return el('div', { class: 'stack' }, history && !history.notice && !history.malformed ? ownerDefaultsCard(history) : null, card('子行程維護', p(`目前狀態：${statusText(state.health?.child?.state)}`),
     p('重新啟動會中斷子行程的現有連線；後端、政策與權杖設定會保留。'),
     features.restart_child ? button('重新啟動子行程', async () => {
       if (!await confirmAction('重新啟動 MCP 子行程？', '現有連線可能中斷。啟動請求完成後仍需等候協定與後端探測。', '確認重新啟動')) return;
@@ -432,7 +439,7 @@ function render() {
     el('header', { class: 'topbar' }, el('div', { class: 'brand-caption' }, icon('home-automation'), el('div', {}, el('strong', {}, 'Woow MCP'), el('span', {}, '智慧空間 · 服務管理'), el('span', { class: 'brand-accent', lang: 'en' }, 'Welcome'))), el('div', { class: 'product-label' }, products[state.product].name, chip(environmentLabels(state.capabilities).deployment))),
     el('div', { class: 'shell' }, el('aside', {}, el('p', { class: 'nav-caption' }, '工作空間'), el('nav', { 'aria-label': '管理導覽' }, ...Object.entries(routes).map(([key, label]) => el('a', { href: `${api.mount}/${key}`, 'aria-current': current === key ? 'page' : null, onclick: event => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey && event.button === 0) { event.preventDefault(); if (!busy) navigate(key); } } }, icon(icons[key]), label))), el('div', { class: 'sidebar-note' }, p('設定由你掌握'), p('後端憑證只在明確更新時送出。權限由伺服器驗證。'))),
       el('main', { id: 'main' }, el('div', { class: 'page-heading' }, el('div', {}, el('p', { class: 'eyebrow' }, `${products[state.product].name} / MANAGEMENT`), el('h1', { tabindex: '-1' }, routes[current]), p({ overview: '一眼看清連線，安心管理你的服務。', backend: '把連線留在這裡，把秘密留在伺服器。', tools: '只開啟需要的能力，每次寫入都有明確授權。', access: '給用戶端正確的入口，不混用管理網址。', diagnostics: '查看受限日誌與行程狀態，必要時重新啟動。' }[current])), button('重新整理狀態', () => task(() => reload('已取得最新管理狀態。')))), el('div', { id: 'notice', role: 'status', tabindex: '-1', hidden: true }),
-        ownerDefaults()?.notice ? ownerDefaultsCard(ownerDefaults()) : null,
+        ownerDefaults()?.malformed ? ownerDefaultsUnavailable() : ownerDefaults()?.notice ? ownerDefaultsCard(ownerDefaults()) : null,
         configurationCard(state.configuration), ({ overview, backend, tools, access, diagnostics })[current](), el('footer', {}, `GUI 管理設定 · ${environmentLabels(state.capabilities).authority} · Streamable HTTP`))));
 }
 window.addEventListener('popstate', () => { hideToken(); if (state) render(); });

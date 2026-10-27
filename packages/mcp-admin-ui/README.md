@@ -84,7 +84,8 @@ bootstrap；product/contract/tools/schema/disabled/global/grants 任一變更即
 | 還原升級前的限制 | `POST /api/owner-defaults/restore` | 忠實還原：舊設定停用的工具再停用；寫入只保留舊設定授權過的（新版的寫入也取消）；新版工具不會被停用（讀取照常可用）；記 `restored_at` |
 | 保持全開，不再提示 | `POST /api/owner-defaults/dismiss` | 記 `acknowledged_at`；之後仍可在診斷頁還原 |
 
-格式不符的通知整個不顯示（`ownerDefaultsView`），名稱一律以文字節點顯示，時間照伺服器的 UTC 顯示。
+格式不符的通知不顯示任何內容（`ownerDefaultsView` 整個拒絕），改在每一頁顯示固定的「升級通知無法顯示」卡片
+（不含伺服器送來的值、沒有動作，請重新整理或更新 add-on），不再整個隱藏。名稱一律以文字節點顯示，時間照伺服器的 UTC 顯示。
 
 ## 正式 listener 與 Ingress
 

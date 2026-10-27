@@ -131,19 +131,30 @@ test('no recovery record: no restore button, only keep; names render as text', a
   await settle(page);
 });
 
-test('nothing to restore, a malformed notice and a server without the notice show no actions', async ({page, request}) => {
+test('nothing to restore, a malformed notice (fixed text only) and a server without the notice show no actions', async ({page, request}) => {
   await reset(request, view({restore: {...view().restore, disabled_added: [], write_grants_removed: [], policy_changed: false, available: false}}));
   await open(page, `${prefix}/overview`);
   await expect(page.locator('#owner-defaults')).toContainText('舊版設定沒有需要還原的限制');
   await expect(page.locator('#owner-defaults').getByRole('button', {name: '還原升級前的限制', exact: true})).toHaveCount(0);
-  await reset(request, {...view(), at: 'yesterday'});
-  await open(page, `${prefix}/overview`);
-  await expect(page.getByRole('heading', {level: 1})).toBeVisible();
-  await expect(page.locator('#owner-defaults')).toHaveCount(0);
+  // A notice the panel cannot read is not half shown, and not silently hidden: one fixed card, no value, no action.
+  await reset(request, {...view(), at: 'yesterday', upgrade: {...view().upgrade, enabled_tools: ['PRIVATE_CANARY']}});
+  for (const route of ['overview', 'diagnostics']) {
+    await open(page, `${prefix}/${route}`);
+    await expect(page.getByRole('heading', {level: 1})).toBeVisible();
+    await expect(page.locator('#owner-defaults')).toHaveCount(0);
+    const unavailable = page.locator('#owner-defaults-unavailable');
+    await expect(unavailable).toHaveCount(1);
+    await expect(unavailable.getByRole('heading', {name: '升級通知無法顯示', exact: true})).toBeVisible();
+    await expect(unavailable).toContainText('請重新整理；仍出現時請更新 add-on。未變更任何設定。');
+    await expect(unavailable.getByRole('button')).toHaveCount(0);
+    await expect(page.locator('body')).not.toContainText('PRIVATE_CANARY');
+    await expect(page.locator('body')).not.toContainText('yesterday');
+  }
   await reset(request, undefined);
   await open(page, `${prefix}/diagnostics`);
   await expect(page.getByRole('heading', {level: 1})).toBeVisible();
   await expect(page.locator('#owner-defaults')).toHaveCount(0);
+  await expect(page.locator('#owner-defaults-unavailable')).toHaveCount(0);
   expect(await calls(request)).toEqual([]);
   await settle(page);
 });

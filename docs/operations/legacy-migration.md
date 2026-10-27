@@ -75,8 +75,11 @@ current revision (`If-Match`), is recorded in the marker and ends the notice:
   on the 診斷與維護 page.
 
 The panel shows no restore when the record is missing or invalid (then only the notice and the keep action) or when the
-old state had no limit to restore. Offline, with the runtime stopped, the same restore is
-`--restore-policy /data/mcp/owner-defaults-20261025-recovery.json` (below).
+old state had no limit to restore. The notice exists only in the add-on panel and as one line in the add-on log (by
+default the add-on has no sidebar entry, and it sends no Home Assistant notification): open the panel after the
+upgrade. A notice the panel cannot read (a server and panel of different versions) shows no value and no action but a
+fixed card, 「升級通知無法顯示」, asking to reload or update the add-on; it is never silently hidden. Offline, with the
+runtime stopped, the same restore is `--restore-policy /data/mcp/owner-defaults-20261025-recovery.json` (below).
 
 **Rollback.** A migrated state carries the marker key, which 0.4.1 refuses (`runtime unavailable`): to go back to
 0.4.1 restore the add-on backup taken before the update. Every state without the marker keeps exactly the 0.4.1 keys.

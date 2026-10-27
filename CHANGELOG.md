@@ -40,6 +40,10 @@ No add-on version is changed by this section. Applies to the six Store-enabled a
   policy.
 - "保持全開，不再提示" (`POST /api/owner-defaults/dismiss`) records `acknowledged_at`; the restore stays on the
   diagnostics page. The offline CLI `--restore-policy` accepts the format 2 record too.
+- The notice is only in the add-on panel and one add-on log line (no sidebar entry by default, no HA notification),
+  so the README, every DOCS and every add-on CHANGELOG (the Store's update notes) say to open the panel after the
+  upgrade. A notice the panel cannot read is not hidden: a fixed card 「升級通知無法顯示」 asks to reload or update
+  the add-on (no server value, no action).
 
 ### HA Core 2026.10.2–2026.10.4 reviewed; an unreviewed Core is named
 
