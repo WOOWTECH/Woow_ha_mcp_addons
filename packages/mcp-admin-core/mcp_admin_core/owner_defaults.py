@@ -19,8 +19,8 @@ The HA twin of the PaaS woow-mcp-server owner_defaults (2026-10-25 "every MCP on
   The runtime stops with "runtime unavailable; local recovery required".
 
 The panel then shows a notice (view) with the time and the differences, and offers "restore the pre-upgrade limits"
-(restore: migration.plan_owner_restore, faithful to the legacy policy) or "keep everything on" (dismiss). Either is
-recorded in the marker and ends the notice.
+(restore: migration.plan_owner_restore, faithful to the legacy policy: its disabled tools and only the writes it
+granted) or "keep everything on" (dismiss). Either is recorded in the marker and ends the notice.
 """
 from __future__ import annotations
 
@@ -137,7 +137,7 @@ def view(state, directory):
             report = plan.report
             result['restore'] = {key: report[key] for key in (
                 'disabled_added', 'write_grants_removed', 'operation_denies_added', 'writes_enabled',
-                'kept_new_tools', 'kept_new_write_operations', 'policy_changed')}
+                'kept_new_tools', 'policy_changed')}
             result['restore']['available'] = marker.restored_at is None and report['policy_changed']
     # Shown until the administrator restores or keeps the defaults; a migration that changed nothing needs no notice.
     result['notice'] = pending and (result['upgrade'] is None or result['upgrade']['changed'])

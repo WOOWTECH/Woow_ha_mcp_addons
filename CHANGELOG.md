@@ -29,12 +29,15 @@ No add-on version is changed by this section. Applies to the six Store-enabled a
   every page until the administrator acts, when (UTC) the defaults were applied, from which schema and the
   differences (`bootstrap.owner_defaults`).
 - "還原升級前的限制" (`POST /api/owner-defaults/restore`, CSRF and `If-Match` required, 428 without it):
-  `migration.plan_owner_restore` disables again the tools the legacy state disabled and revokes the final 0.1.x write
-  grants it did not hold (exact grants; the legacy switch for n8n `n8n_delete_workflow` and OpenDesign
-  `delete_project`), and restores its legacy switch and operation denies. Tools and write operations added since
-  0.1.x stay on (the old format could not express them): never "everything disabled" as with `preserve` (ws97 Hermes
-  0.1.14 sample: 10 of 11 tools listed after the restore, `preserve` gave 0). Restrictive merge: later administrator
-  limits stay; nothing is enabled. EMQX, LiteLLM and Nextcloud restart their child, as for a saved policy.
+  `migration.plan_owner_restore` reads each legacy list the way 0.1.x enforced it. Tools are a deny list: the tools
+  the legacy state disabled are disabled again and a tool added since 0.1.x stays enabled, so never "everything
+  disabled" as with `preserve`. Writes are an allow list: only the grants the legacy state held stay (exact grants;
+  the legacy switch for n8n `n8n_delete_workflow` and OpenDesign `delete_project`) and every other write is revoked,
+  one added since 0.1.x included, as 0.1.x refused it; its legacy switch and operation denies come back. The restored
+  policy permits exactly the writes the legacy runtime permitted (ws97 Hermes 0.1.14 sample: no write, 9 of 11 tools
+  listed, `preserve` gave 0; a 0.1.14 n8n default: no write, 18 of 28 tools). Restrictive merge: later
+  administrator limits stay; nothing is enabled. EMQX, LiteLLM and Nextcloud restart their child, as for a saved
+  policy.
 - "保持全開，不再提示" (`POST /api/owner-defaults/dismiss`) records `acknowledged_at`; the restore stays on the
   diagnostics page. The offline CLI `--restore-policy` accepts the format 2 record too.
 

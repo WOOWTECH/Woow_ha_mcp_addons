@@ -24,7 +24,7 @@ from mcp_admin_core.config import ConfigError
 from mcp_admin_core.legacy_catalog import LEGACY_TOOLS
 from mcp_admin_core.migration import (OWNER_RECOVERY, MigrationError, _effective, _legacy_grants, _validate, main,
                                       owner_record, plan_migration, plan_owner_restore, plan_restore, read_document)
-from mcp_admin_core.policy import enabled
+from mcp_admin_core.policy import enabled, policy_enabled
 from mcp_admin_core.products import (OWNER_DEFAULTS, STORED_FIELDS, ProductStore, TOOLS, fresh_write_grants,
                                      write_grants)
 from mcp_admin_core.surface import full_tools
@@ -393,35 +393,41 @@ def test_restore_is_faithful_to_the_legacy_limits_and_never_disables_everything(
         with pytest.raises(owner_defaults.Unavailable):
             owner_defaults.dismiss(store)
     assert getattr(restored, OWNER_DEFAULTS).restored_at is not None
-    # Exactly the tools the old state disabled, no more.
+    # Tools by the legacy deny list: exactly the tools the old state disabled, no more.
     assert set(restored.disabled) == set(legacy.disabled) & set(tools)
-    # The old write limits within the final 0.1.x catalog: effective exactly as the legacy runtime allowed them.
-    old = _effective(legacy, legacy=True)
-    now = {g for g in _legacy_grants(product) if g in restored.enabled_write_tools
-           and g.split(':', 1)[0] not in restored.disabled}
-    assert now == old
-    # What the old format could not express stays on: new tools enabled, new write operations granted.
+    # Writes by the legacy allow list (0.1.x enabled_write_tools; the legacy switch only for its two legacy writers):
+    # only the grants the old state held stay, every other one is revoked, one added since 0.1.x included.
+    held = set(legacy.enabled_write_tools) | (
+        {name for name, tool in LEGACY_TOOLS[product].items() if tool['legacy_write']} if legacy.writes_enabled else set())
+    assert set(restored.enabled_write_tools) == held & write_grants(product)
+    assert not (write_grants(product) - _legacy_grants(product)) & set(restored.enabled_write_tools)
+    # So the restored policy permits exactly the writes the legacy runtime permitted, and nothing else.
+    assert _effective(restored, legacy=False) == _effective(legacy, legacy=True)
+    # A tool added since 0.1.x is never disabled by the restore; one without any write grant stays usable.
     for tool in set(tools) - set(LEGACY_TOOLS[product]):
-        assert enabled(tool, tools, restored), tool
-    assert write_grants(product) - _legacy_grants(product) <= set(restored.enabled_write_tools)
-    assert sum(enabled(tool, tools, restored) for tool in tools) >= len(tools) - len(legacy.disabled) - len(old ^ _legacy_grants(product))
-    assert sum(enabled(tool, tools, restored) for tool in tools) > 0
+        assert tool not in restored.disabled, tool
+        if not tools[tool].grants(tool):
+            assert policy_enabled(tool, tools, restored), tool
+    assert sum(policy_enabled(tool, tools, restored) for tool in tools) > 0  # never "everything disabled"
     # Identity is the current one.
     for key in ('token', 'child_token', 'endpoint', 'backend_url', 'backend_key', 'connection'):
         assert restored.model_dump()[key] == ({**value, 'connection': value.get('connection')}).get(key)
 
 
-async def test_the_ws97_hermes_sample_restores_to_ten_tools_not_zero(tmp_path):
+async def test_the_ws97_hermes_sample_restores_to_its_read_only_policy_not_zero_tools(tmp_path):
+    """ws97's real Hermes 0.1.14 state: hermes_skill disabled, writes off, no grant. Restored: the same (no write at
+    all, as 0.1.14 allowed none), 9 of 11 tools listed (hermes_skill disabled, the write-only hermes_chat ungranted);
+    the 0.3.0 preserve choice listed 0."""
     value, product = _migrated(tmp_path, 'schema3-hermes-ws97-0.1.14.json')
     with closing(ProductStore(tmp_path, product)) as store:
         restored = owner_defaults.restore(store)
-        assert restored.disabled == ['hermes_skill']
-        assert set(restored.enabled_write_tools) == write_grants('hermes') - {
-            'hermes_cron:delete', 'hermes_cron:pause', 'hermes_gateway:restart', 'hermes_session:delete',
-            'hermes_skill:enable', 'hermes_skill:disable', 'hermes_tools:enable', 'hermes_tools:disable'}
+        assert restored.disabled == ['hermes_skill'] and restored.enabled_write_tools == []
+        assert restored.writes_enabled is False
         async with Boundary(store, product, NO_CHILD) as boundary:
             _, tools = await boundary.connect()
-        assert len(tools) == 10 and 'hermes_skill' not in {tool['name'] for tool in tools}
+        names = {tool['name'] for tool in tools}
+        assert len(tools) == 9 and not names & {'hermes_skill', 'hermes_chat'}
+        assert names == {name for name in TOOLS['hermes'] if policy_enabled(name, TOOLS['hermes'], restored)}
 
 
 def test_restore_keeps_what_the_administrator_changed_after_the_upgrade(tmp_path):
@@ -470,6 +476,14 @@ def test_the_notice_view_names_the_differences_and_holds_no_secret(tmp_path, nam
     assert view['upgrade']['enabled_tools'] == sorted(value['disabled'])
     assert view['upgrade']['new_tools'] == sorted(set(tools_of(product)) - set(LEGACY_TOOLS[product]))
     assert view['restore']['disabled_added'] == sorted(set(value['disabled']) & set(tools_of(product)))
+    # The preview names every write the restore revokes: all but the legacy state's own grants, newer ones included.
+    _, legacy = _validate(value, product)
+    held = set(legacy.enabled_write_tools) | (
+        {name for name, tool in LEGACY_TOOLS[product].items() if tool['legacy_write']} if legacy.writes_enabled else set())
+    assert view['restore']['write_grants_removed'] == sorted(write_grants(product) - held)
+    assert set(view['upgrade']['new_write_operations']) <= set(view['restore']['write_grants_removed'])
+    assert set(view['restore']) == {'disabled_added', 'write_grants_removed', 'operation_denies_added', 'writes_enabled',
+                                    'kept_new_tools', 'policy_changed', 'available'}
     assert view['notice'] is True and view['restore']['available'] is view['restore']['policy_changed']
     wire = json.dumps(view)
     assert not any(secret in wire for secret in SECRETS) and 'sha256' not in wire
@@ -569,7 +583,8 @@ async def test_keep_everything_on_ends_the_notice_and_restore_stays_possible(tmp
             assert done.status_code == 200
             # EMQX's child is launched with the policy: a restore restarts it, as a saved policy does.
             assert len(restarts) == 1 and restarts[0] == store.load()
-            assert 'emqx_kick_client' not in store.load().enabled_write_tools
+            # The 0.1.14 default granted no write: none is granted again, a write added since 0.1.x included.
+            assert store.load().enabled_write_tools == [] and 'emqx_kick_client' not in store.load().enabled_write_tools
 
 
 async def test_a_state_without_the_marker_has_no_notice_and_no_actions(tmp_path):

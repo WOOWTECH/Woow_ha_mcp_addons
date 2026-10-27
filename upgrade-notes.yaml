@@ -33,8 +33,9 @@ releases:
         change: >-
           The pre-start review listeners and page (/api/upgrade/apply, assets/upgrade.js) are removed. The normal panel
           shows when the defaults were applied and the differences, and offers POST /api/owner-defaults/restore
-          (faithful: disables the tools the legacy state disabled and revokes the final 0.1.x write grants it did not
-          hold; tools and write operations added since 0.1.x stay on; restrictive merge, nothing is enabled) and POST
+          (faithful: disables the tools the legacy state disabled and keeps only the write grants it held, so every
+          other write, one added since 0.1.x included, is revoked as 0.1.x refused it; tools added since 0.1.x stay
+          enabled; restrictive merge, nothing is enabled) and POST
           /api/owner-defaults/dismiss. Both need CSRF and If-Match, are recorded in the marker and end the notice.
         migration: Nothing to confirm any more; automation that posted to /api/upgrade/apply is no longer needed.
       - id: schema4-untouched

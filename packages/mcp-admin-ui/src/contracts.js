@@ -203,7 +203,7 @@ export function ownerDefaultsView(value) {
         .some(key => !noticeNames(value.upgrade[key])))) invalid();
   if (value.restore !== null && (typeof value.restore !== 'object' || typeof value.restore.available !== 'boolean'
       || typeof value.restore.policy_changed !== 'boolean' || !noticeSwitch(value.restore.writes_enabled)
-      || ['disabled_added', 'write_grants_removed', 'operation_denies_added', 'kept_new_tools', 'kept_new_write_operations']
+      || ['disabled_added', 'write_grants_removed', 'operation_denies_added', 'kept_new_tools']
         .some(key => !noticeNames(value.restore[key])))) invalid();
   if (value.recovery === 'available' && (value.upgrade === null || value.restore === null)) invalid();
   return value;

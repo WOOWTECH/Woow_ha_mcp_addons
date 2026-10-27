@@ -81,7 +81,7 @@ bootstrap；product/contract/tools/schema/disabled/global/grants 任一變更即
 
 | 動作 | API | 結果 |
 |---|---|---|
-| 還原升級前的限制 | `POST /api/owner-defaults/restore` | 忠實還原舊設定停用的工具與沒授權的 0.1.x 寫入；新版工具與寫入維持開啟；記 `restored_at` |
+| 還原升級前的限制 | `POST /api/owner-defaults/restore` | 忠實還原：舊設定停用的工具再停用；寫入只保留舊設定授權過的（新版的寫入也取消）；新版工具不會被停用（讀取照常可用）；記 `restored_at` |
 | 保持全開，不再提示 | `POST /api/owner-defaults/dismiss` | 記 `acknowledged_at`；之後仍可在診斷頁還原 |
 
 格式不符的通知整個不顯示（`ownerDefaultsView`），名稱一律以文字節點顯示，時間照伺服器的 UTC 顯示。

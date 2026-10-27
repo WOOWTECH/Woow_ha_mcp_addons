@@ -57,15 +57,20 @@ granted, cleared operation denies, tools and write operations added since 0.1.x)
 current revision (`If-Match`), is recorded in the marker and ends the notice:
 
 - **還原升級前的限制** (`POST /api/owner-defaults/restore`): restores the old limits faithfully, as a restrictive merge
-  into the current state. The tools the old state disabled are disabled again; the 0.1.x write grants it did not hold
-  are revoked (an exact `enabled_write_tools` entry, or for n8n `n8n_delete_workflow` and OpenDesign `delete_project`
-  the legacy global switch); its `writes_enabled` and operation denies come back. Tools and write operations added
-  since 0.1.x stay on: the old format could not express them. What the administrator disabled, revoked or denied
-  after the upgrade stays so; nothing is enabled or granted; token and backend are the current ones. This is not the
-  0.3.0 `preserve` choice, which disabled every tool whose argument checks moved to the child (for Hermes all 11).
-  EMQX, LiteLLM and Nextcloud restart their child afterwards, as for a saved policy. Example (the ws97 Hermes 0.1.14
-  state: `hermes_skill` disabled, no write granted): after the restore `hermes_skill` is disabled, the 8 0.1.x Hermes
-  writes are revoked and the 13 newer ones stay granted; tools/list shows 10 of 11 tools.
+  into the current state, reading each list the way the 0.1.x runtime enforced it (`policy.has_grant`, unchanged
+  since). `disabled` was a deny list: the tools the old state disabled are disabled again, and a tool added since
+  0.1.x stays enabled. `enabled_write_tools` was an allow list: a write it did not list was refused (for n8n
+  `n8n_delete_workflow` and OpenDesign `delete_project` the legacy global switch also allowed it). So only the write
+  grants the old state held stay granted, and every other write is revoked, the write operations added since 0.1.x
+  included, which 0.1.x would have refused as well. Its `writes_enabled` and operation denies come back. The restored
+  policy permits exactly the writes the old one did. What the administrator disabled, revoked or denied after the
+  upgrade stays so; nothing is enabled or granted; token and backend are the current ones. This is not the 0.3.0
+  `preserve` choice, which also disabled every tool whose argument checks moved to the child (for Hermes all 11).
+  EMQX, LiteLLM and Nextcloud restart their child afterwards, as for a saved policy. Examples: the ws97 Hermes 0.1.14
+  state (`hermes_skill` disabled, no write granted) is restored with `hermes_skill` disabled and none of the 21 write
+  grants, so tools/list shows 9 of 11 tools (the write-only `hermes_chat` is not listed); a 0.1.14 default (writes off,
+  no grant) is restored without any write to Odoo 33 of 41 tools, n8n 18 of 28, EMQX 27 of 39, LiteLLM 15 of 40,
+  OpenDesign 12 of 15 and Nextcloud 5 of 9.
 - **保持全開，不再提示** (`POST /api/owner-defaults/dismiss`): records `acknowledged_at`; the restore stays available
   on the 診斷與維護 page.
 

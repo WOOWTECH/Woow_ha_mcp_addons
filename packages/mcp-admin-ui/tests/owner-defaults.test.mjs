@@ -9,8 +9,8 @@ const valid = () => ({
   restored_at: null, acknowledged_at: null, notice: true, recovery: 'available',
   upgrade: {enabled_tools: ['hermes_skill'], granted_writes: ['hermes_cron:pause'], cleared_operation_denies: [],
     new_tools: ['hermes_chat'], new_write_operations: ['hermes_chat'], writes_enabled: [false, true], changed: true},
-  restore: {disabled_added: ['hermes_skill'], write_grants_removed: ['hermes_cron:pause'], operation_denies_added: [],
-    writes_enabled: [true, false], kept_new_tools: ['hermes_chat'], kept_new_write_operations: ['hermes_chat'],
+  restore: {disabled_added: ['hermes_skill'], write_grants_removed: ['hermes_chat', 'hermes_cron:pause'],
+    operation_denies_added: [], writes_enabled: [true, false], kept_new_tools: ['hermes_config'],
     policy_changed: true, available: true},
 });
 
@@ -28,6 +28,7 @@ test('malformed notices are refused, never half shown', () => {
     {...valid(), notice: 'yes'}, {...valid(), recovery: 'unknown'}, {...valid(), upgrade: null},
     {...valid(), upgrade: {...valid().upgrade, new_tools: [1]}}, {...valid(), upgrade: {...valid().upgrade, writes_enabled: [true]}},
     {...valid(), restore: {...valid().restore, available: 'true'}}, {...valid(), restore: {...valid().restore, kept_new_tools: ''}},
+    {...valid(), restore: {...valid().restore, write_grants_removed: undefined}},
     {...valid(), upgrade: {...valid().upgrade, enabled_tools: ['x'.repeat(301)]}}, [valid()], 'migrated',
   ];
   for (const value of broken) assert.throws(() => ownerDefaultsView(value), UiError);

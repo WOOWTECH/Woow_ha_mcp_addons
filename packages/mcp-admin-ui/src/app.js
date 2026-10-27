@@ -121,7 +121,8 @@ function confirmAction(title, description, label = '確認繼續') {
 }
 // Owner decision 2026-10-27: a legacy installation was switched to the all-on defaults once, at its first start,
 // without waiting for anyone. Afterwards the panel says so, shows the differences and offers to restore the
-// pre-upgrade limits (faithful to the old settings; never "everything off") or to keep everything on.
+// pre-upgrade limits (faithful to the old settings: their disabled tools and only the writes they granted; never
+// "everything off") or to keep everything on.
 function ownerDefaults() {
   try { return ownerDefaultsView(state.owner_defaults); } catch { return null; }
 }
@@ -144,12 +145,11 @@ function ownerDefaultsCard(view) {
   else if (view.recovery !== 'available') parts.push(p('找不到可用的升級前限制紀錄（/data/mcp/owner-defaults-20261025-recovery.json），無法在這裡還原；需要時請改用升級前的備份。'));
   else if (!restore.available) parts.push(p('舊版設定沒有需要還原的限制。'));
   else parts.push(el('div', { class: 'stack', id: 'owner-defaults-restore-preview' }, el('h3', {}, '「還原升級前的限制」會做的變更'),
-    p('只把舊版設定裡停用的工具、沒有授權的寫入關回去；新版新增的工具與寫入操作（舊版沒有這些設定）維持開啟。你升級後自己關閉的項目不會被打開。'),
+    p('回到舊版設定實際允許的範圍。工具照舊版的停用清單：只停用舊設定停用的工具，新版新增的工具不會被停用。寫入照舊版的授權清單：舊版沒授權的寫入一律不能用，所以只保留舊設定授權過的寫入，新版新增的寫入操作也會取消授權（只能寫入的新工具因此無法使用）。你升級後自己關閉的項目不會被打開。'),
     noticeList('會停用的工具', restore.disabled_added, true),
-    noticeList('會取消授權的寫入', restore.write_grants_removed, true),
+    noticeList('會取消授權的寫入（含新版新增的寫入）', restore.write_grants_removed, true),
     noticeList('會禁止的操作', restore.operation_denies_added),
-    noticeList('維持開啟的新版工具', restore.kept_new_tools),
-    noticeList('維持授權的新版寫入操作', restore.kept_new_write_operations)));
+    noticeList('還原後仍可使用的新版工具', restore.kept_new_tools)));
   if (view.acknowledged_at && !view.restored_at) parts.push(p(`已於 ${noticeTime(view.acknowledged_at)}選擇保持全開。`));
   const actions = el('div', { class: 'actions' });
   if (!view.restored_at && view.recovery === 'available' && restore.available) {
@@ -163,8 +163,13 @@ function ownerDefaultsCard(view) {
 async function ownerDefaultsAction(action, revision, view) {
   const restoring = action === 'restore';
   const later = view.recovery === 'available' && view.restore?.available ? '之後仍可在「診斷與維護」頁還原升級前的限制。' : '';
+  // The counts of the preview the administrator just read (the server applies the same plan or refuses a stale one).
+  const restore = view.restore ?? { disabled_added: [], write_grants_removed: [], operation_denies_added: [] };
+  const changes = [[restore.disabled_added, '停用', '個工具'], [restore.write_grants_removed, '取消', '個寫入授權'],
+    [restore.operation_denies_added, '禁止', '個操作']].filter(([names]) => names.length)
+    .map(([names, verb, unit]) => `${verb} ${names.length} ${unit}`).join('、');
   if (!await confirmAction(restoring ? '還原升級前的限制？' : '保持全開，不再提示？',
-    restoring ? '依上方清單停用舊版停用的工具、取消舊版沒有授權的寫入；新版新增的工具與寫入維持開啟。用戶端之後的呼叫立即套用。'
+    restoring ? `${changes ? `${changes}，` : ''}回到舊版設定允許的範圍：只保留舊設定授權過的寫入，新版新增的寫入也取消。用戶端之後的呼叫立即套用。`
       : `全部工具與寫入維持開啟，此通知不再顯示。${later}`,
     restoring ? '確認還原' : '確認保持全開')) return;
   await task(async () => {

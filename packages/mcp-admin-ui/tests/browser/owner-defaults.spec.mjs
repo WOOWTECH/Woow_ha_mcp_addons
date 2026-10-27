@@ -11,9 +11,10 @@ function view(changes = {}) {
     upgrade: {enabled_tools: ['hermes_skill'], granted_writes: ['hermes_cron:delete', 'hermes_cron:pause'],
       cleared_operation_denies: [], new_tools: ['hermes_chat', 'hermes_config'], new_write_operations: ['hermes_chat', 'hermes_config:set'],
       writes_enabled: [false, true], changed: true},
-    restore: {disabled_added: ['hermes_skill'], write_grants_removed: ['hermes_cron:delete', 'hermes_cron:pause'],
-      operation_denies_added: [], writes_enabled: [true, false], kept_new_tools: ['hermes_chat', 'hermes_config'],
-      kept_new_write_operations: ['hermes_chat', 'hermes_config:set'], policy_changed: true, available: true},
+    restore: {disabled_added: ['hermes_skill'],
+      write_grants_removed: ['hermes_chat', 'hermes_config:set', 'hermes_cron:delete', 'hermes_cron:pause'],
+      operation_denies_added: [], writes_enabled: [true, false], kept_new_tools: ['hermes_config', 'hermes_mcp'],
+      policy_changed: true, available: true},
     ...changes,
   };
 }
@@ -50,11 +51,18 @@ test('notice shows time, schema and both difference lists on every page; restore
   const card = page.locator('#owner-defaults');
   await expect(card.locator('#owner-defaults-upgrade')).toContainText('升級前停用、現在已啟用的工具（1）');
   await expect(card.locator('#owner-defaults-upgrade')).toContainText('升級前沒有授權、現在已授權的寫入（2）');
-  await expect(card.locator('#owner-defaults-restore-preview')).toContainText('會停用的工具（1）');
-  await expect(card.locator('#owner-defaults-restore-preview')).toContainText('維持開啟的新版工具（2）');
+  const preview = card.locator('#owner-defaults-restore-preview');
+  await expect(preview).toContainText('會停用的工具（1）');
+  // Writes follow the legacy allow list: every write the old settings did not grant is revoked, newer ones included.
+  await expect(preview).toContainText('會取消授權的寫入（含新版新增的寫入）（4）');
+  await expect(preview.locator('details', {hasText: '會取消授權的寫入'})).toHaveAttribute('open', '');
+  await expect(preview).toContainText('還原後仍可使用的新版工具（2）');
+  await expect(preview).toContainText('只保留舊設定授權過的寫入');
+  await expect(card).not.toContainText('維持授權的新版寫入');
   await expect(card).not.toContainText('全部停用');
   await card.getByRole('button', {name: '還原升級前的限制', exact: true}).click();
-  await expect(page.getByRole('dialog')).toContainText('新版新增的工具與寫入維持開啟');
+  await expect(page.getByRole('dialog')).toContainText('停用 1 個工具、取消 4 個寫入授權，回到舊版設定允許的範圍');
+  await expect(page.getByRole('dialog')).toContainText('新版新增的寫入也取消');
   await page.getByRole('dialog').getByRole('button', {name: '取消', exact: true}).click();
   expect(await calls(request)).toEqual([]);
   await card.getByRole('button', {name: '還原升級前的限制', exact: true}).click();

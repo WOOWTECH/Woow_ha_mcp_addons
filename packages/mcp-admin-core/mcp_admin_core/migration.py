@@ -3,7 +3,8 @@
 Owner decision 2026-10-27: the runtimes migrate a legacy (schema 1/2/3) state
 once, before starting, to exactly this module's all_on plan
 (owner_defaults.apply_legacy_upgrade) and keep a format 2 recovery record: the
-legacy policy itself, which plan_owner_restore restores faithfully. The offline
+legacy policy itself, which plan_owner_restore restores faithfully (tools by the
+legacy deny list, writes by the legacy allow list). The offline
 CLI keeps both explicit choices (preserve, all_on) and format 1 records.
 Reports and recovery records contain policy only. A returned state is
 private operational data and must not be logged or used as a rollback backup.
@@ -27,6 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .config import ConfigError, State, Store, strict_json
 from .legacy_catalog import LEGACY_TOOLS
+from .policy import policy_enabled
 from .products import (OWNER_DEFAULTS, PRODUCTS, STORED_FIELDS, ProductState, TOOLS,
                        fresh_write_grants, write_grants)
 from .surface import full_tools, names
@@ -265,15 +267,19 @@ def owner_legacy_policy(record, product):
     return legacy
 
 
-def _legacy_revoked(product, legacy):
-    """The final 0.1.x write grants the legacy state did not hold: the only write limits its format expressed.
-
-    A legacy write grant was an exact enabled_write_tools entry, or (legacy global switch on) one of the two legacy
-    writers (n8n_delete_workflow, OpenDesign delete_project)."""
+def _legacy_held(product, legacy):
+    """The write grants the legacy state held. 0.1.x enabled_write_tools was an allow list (policy.has_grant then as
+    now): an exact entry, or, with the legacy global switch on, one of the two legacy writers (n8n_delete_workflow,
+    OpenDesign delete_project). No other write was permitted, including any write the catalog did not have yet."""
     held = set(legacy.enabled_write_tools)
     if legacy.writes_enabled:
         held |= {name for name, tool in LEGACY_TOOLS[product].items() if tool['legacy_write']}
-    return _legacy_grants(product) - held
+    return held
+
+
+def _legacy_revoked(product, legacy):
+    """The final 0.1.x write grants the legacy state did not hold (what the migration granted within that catalog)."""
+    return _legacy_grants(product) - _legacy_held(product, legacy)
 
 
 def owner_upgrade_summary(product, legacy):
@@ -300,18 +306,20 @@ def owner_upgrade_summary(product, legacy):
 def plan_owner_restore(value, product, record, *, at=None):
     """Faithful restore of the pre-upgrade limits into CURRENT schema 4, from a format 2 record.
 
-    The tools the legacy state disabled are disabled again, the final 0.1.x write grants it did not hold are revoked,
-    and its legacy write switch and operation denies come back. What the old format could not express (tools and
-    write operations added since 0.1.x) stays as it is now: never "everything disabled". Restrictive merge: what the
-    administrator disabled, revoked or denied after the upgrade stays so, and nothing is enabled or granted. Token,
-    child token, endpoint and backend are the current ones. With at, the marker records restored_at.
+    Each list is read the way the legacy runtime enforced it. Tools: a deny list, so the tools the legacy state
+    disabled are disabled again and a tool added since 0.1.x stays enabled (never "everything disabled", unlike
+    preserve). Writes: an allow list, so only the write grants the legacy state held stay granted (_legacy_held);
+    every other one is revoked, a write operation added since 0.1.x included, as the legacy runtime refused it. Its
+    legacy write switch and operation denies come back. Restrictive merge: what the administrator disabled, revoked or
+    denied after the upgrade stays so, and nothing is enabled or granted. Token, child token, endpoint and backend are
+    the current ones. With at, the marker records restored_at.
     """
     version, current = _validate(value, product)
     if version != 4:
         raise MigrationError('recovery requires current schema 4 state')
     legacy = owner_legacy_policy(record, product)
     tools = _tools(product)
-    revoked = _legacy_revoked(product, legacy)
+    held = _legacy_held(product, legacy)
     marker = getattr(current, OWNER_DEFAULTS)
     if marker is not None and at is not None and marker.restored_at is None:
         marker = {**marker.model_dump(), 'restored_at': at}
@@ -326,7 +334,7 @@ def plan_owner_restore(value, product, record, *, at=None):
         restored = ProductState.model_validate({
             **current.model_dump(),
             'disabled': merged(current.disabled, set(current.disabled) | (set(legacy.disabled) & set(tools))),
-            'enabled_write_tools': merged(current.enabled_write_tools, set(current.enabled_write_tools) - revoked),
+            'enabled_write_tools': merged(current.enabled_write_tools, set(current.enabled_write_tools) & held),
             'writes_enabled': current.writes_enabled and legacy.writes_enabled,
             'denied_operations': denies,
             **({OWNER_DEFAULTS: marker} if marker is not None else {}),
@@ -343,9 +351,10 @@ def plan_owner_restore(value, product, record, *, at=None):
         'write_grants_removed': sorted(set(current.enabled_write_tools) - set(restored.enabled_write_tools)),
         'operation_denies_added': added_denies,
         'writes_enabled': [current.writes_enabled, restored.writes_enabled],
-        'kept_new_tools': sorted(set(tools) - set(LEGACY_TOOLS[product]) - set(restored.disabled)),
-        'kept_new_write_operations': sorted((write_grants(product) - _legacy_grants(product))
-                                            & set(restored.enabled_write_tools)),
+        # The tools added since 0.1.x that the restored policy still lets a client call (a write-only one needs its
+        # grant, which the legacy allow list did not hold).
+        'kept_new_tools': sorted(name for name in set(tools) - set(LEGACY_TOOLS[product])
+                                 if policy_enabled(name, tools, restored)),
         'ignored_disabled': sorted(set(legacy.disabled) - set(tools)),
         'policy_changed': _policy(current) != _policy(restored),
         'changed': current.model_dump() != restored.model_dump(),
