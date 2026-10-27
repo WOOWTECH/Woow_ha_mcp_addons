@@ -8,12 +8,15 @@ The HA twin of the PaaS woow-mcp-server owner_defaults (2026-10-25 "every MCP on
   writes on, every write grant, no disabled tool, no operation deny; token, child token, endpoint and backend kept),
   with the marker ``owner_defaults_20261025 = {applied, at, from_schema}`` in the same atomic state write. Before
   that write, the legacy policy itself is saved once as the format 2 recovery record
-  ``owner-defaults-20261025-recovery.json`` (0600, policy only). MCP then starts normally: no review stage, no 503.
+  ``owner-defaults-20261025-recovery.json`` (0600, policy only; published complete or not at all, so a failed or
+  interrupted attempt never leaves a partial record that blocks the next start). MCP then starts normally: no
+  review stage, no 503.
 - **Schema 4 (new installations, everything 0.2.0+ wrote, states the review page migrated):** not touched at all.
   What an administrator chose in the panel stays as it is.
 - **No state:** ProductStore seeds a new all-on state as before (no marker).
-- **Unreadable, invalid or unsafe state, a busy writer, or a recovery record that cannot be saved:** nothing is
-  migrated or rewritten (fail-safe). The runtime stops with "runtime unavailable; local recovery required".
+- **Unreadable, invalid or unsafe state, a busy writer, a recovery record that cannot be saved, or an existing record
+  that is not this state's:** nothing is migrated or rewritten (fail-safe); the add-on log says which (fixed text).
+  The runtime stops with "runtime unavailable; local recovery required".
 
 The panel then shows a notice (view) with the time and the differences, and offers "restore the pre-upgrade limits"
 (restore: migration.plan_owner_restore, faithful to the legacy policy) or "keep everything on" (dismiss). Either is
@@ -25,9 +28,9 @@ from pathlib import Path
 import sys
 
 from .config import ConfigError
-from .migration import (OWNER_RECOVERY, MigrationError, _existing_writer, owner_legacy_policy, owner_record,
-                        owner_upgrade_summary, plan_migration, plan_owner_restore, read_document, save_owner_record,
-                        utc_now, POLICY_FIELDS)
+from .migration import (OWNER_RECOVERY, MigrationError, RecordConflict, RecordNotSaved, _existing_writer,
+                        owner_legacy_policy, owner_record, owner_upgrade_summary, plan_migration, plan_owner_restore,
+                        read_document, save_owner_record, utc_now, POLICY_FIELDS)
 from .products import OWNER_DEFAULTS, ProductState
 
 DECISION = '2026-10-25'
@@ -57,6 +60,16 @@ def apply_legacy_upgrade(directory, product):
             return None
         with _existing_writer(directory) as writer:
             report = migrate_locked(writer, product)
+    except RecordConflict:
+        # Names the one file to check; nothing from it or from the state is logged.
+        _log(f'{OWNER_RECOVERY} already exists but is not the complete recovery record of this state.json '
+             '(incomplete, damaged or from another state); nothing was migrated or rewritten. Restore the add-on '
+             'backup taken before the update, or check that file and move it out of the data directory')
+        raise ConfigError('legacy upgrade unavailable; inspect protected state') from None
+    except RecordNotSaved:
+        _log(f'{OWNER_RECOVERY} could not be saved (disk full or I/O error); nothing was migrated or rewritten and no '
+             'partial record was left; free space and restart the add-on')
+        raise ConfigError('legacy upgrade unavailable; inspect protected state') from None
     except MigrationError:
         _log('state.json is unreadable, invalid, linked or in use, or its recovery record cannot be saved; '
              'nothing was migrated or rewritten')

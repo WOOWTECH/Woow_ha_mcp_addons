@@ -45,10 +45,13 @@ releases:
         migration: None needed.
       - id: legacy-upgrade-fail-safe
         change: >-
-          An unreadable, invalid, linked or busy state, or a recovery record that cannot be saved, is neither migrated
-          nor rewritten; the add-on logs one fixed line and stops ("runtime unavailable; local recovery required"),
-          as it did for a corrupt state before.
-        migration: Restore the add-on backup taken before the update.
+          An unreadable, invalid, linked or busy state, a recovery record that cannot be saved, or an existing recovery
+          record that is not this state's, is neither migrated nor rewritten; the add-on logs one fixed line saying
+          which and stops ("runtime unavailable; local recovery required"), as it did for a corrupt state before. The
+          record is published only when complete, so a failed or interrupted write leaves no partial record behind.
+        migration: >-
+          Restore the add-on backup taken before the update. When the log says the recovery record could not be saved
+          (disk full or I/O error), free space and restart the add-on instead; the migration then completes.
     preserved:
       - Add-on slugs, image names (ghcr.io/woowtech/amd64-mcp-<product>), amd64 only, ports 8081/tcp and Ingress 8099.
       - Manifest options and privileges; state schema 4, tokens and settings of every schema 4 installation.

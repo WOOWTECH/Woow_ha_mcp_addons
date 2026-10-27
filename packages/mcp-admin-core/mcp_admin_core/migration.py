@@ -11,7 +11,7 @@ private operational data and must not be logged or used as a rollback backup.
 from __future__ import annotations
 
 from copy import deepcopy
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import fcntl
@@ -20,6 +20,7 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import stat
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -41,6 +42,14 @@ OWNER_RECORD_FIELDS = frozenset({'format', 'decision', 'product', 'source_schema
 
 class MigrationError(ValueError):
     """Fixed public error; never expose validation input or credentials."""
+
+
+class RecordNotSaved(MigrationError):
+    """A recovery record could not be created durably (disk full, I/O error, unsafe directory); none was left behind."""
+
+
+class RecordConflict(MigrationError):
+    """An owner-defaults recovery record already exists that is not this state's complete record."""
 
 
 @dataclass(frozen=True)
@@ -347,17 +356,25 @@ def plan_owner_restore(value, product, record, *, at=None):
 def save_owner_record(path, record):
     """Create the format 2 record once (0600, exclusive, durable) in an existing owner-only directory.
 
-    An identical record (an earlier attempt stopped before its state write) is reused: True when created, False
-    when reused. Any other existing file is refused and kept: the caller must not migrate without its own record.
+    Called under the runtime's writer lock (owner_defaults.migrate_locked), so a temporary copy next to the record can
+    only be an interrupted earlier attempt's: it is removed first. An identical record (an earlier attempt stopped
+    before its state write) is reused: True when created, False when reused. Any other existing file (incomplete,
+    damaged, another state's, not a regular file) is refused and kept (RecordConflict): the caller must not migrate
+    without its own record. RecordNotSaved when it cannot be created; then no partial record is left behind.
     """
     owner_legacy_policy(record, record.get('product') if isinstance(record, dict) else None)
     data = json.dumps(record, sort_keys=True, indent=2).encode() + b'\n'
     if len(data) > MAX_BYTES:
         raise MigrationError('policy recovery record too large')
     path = Path(os.path.abspath(path))
+    _discard_temporaries(path)
     if path.exists() or path.is_symlink():
-        if read_document(path) != record:
-            raise MigrationError('a different owner-defaults recovery record exists; inspect protected state')
+        try:
+            existing = read_document(path)
+        except MigrationError:
+            existing = None
+        if existing != record:
+            raise RecordConflict('a different or incomplete owner-defaults recovery record exists; inspect protected state')
         return False
     _create_private(path, data)
     return True
@@ -441,9 +458,21 @@ def save_recovery(path, plan):
     _create_private(path, data)
 
 
+def _temporaries(name):
+    """The temporary names _create_private uses next to the record name: .<name>.<32 hex>.tmp"""
+    return re.compile(rf'\.{re.escape(name)}\.[0-9a-f]{{32}}\.tmp')
+
+
 def _create_private(path, data):
-    """Exclusive 0600 creation in an existing owner-only directory; fsync of the file and the directory."""
+    """Exclusive 0600 creation in an existing owner-only directory: the final name only ever holds the complete data.
+
+    The data is written and fsynced under a random temporary name in the same directory, then hard-linked to the final
+    name (which never replaces an existing file), the temporary name is removed and the directory fsynced. A failed
+    write (ENOSPC, EIO) removes the temporary file. A crash leaves at most a temporary name next to it (unpublished
+    data, or a second name of the complete record), never a partial record under the final name.
+    """
     directory_fd = None
+    temporary = None
     try:
         path = Path(os.path.abspath(path))
         if any(p.is_symlink() for p in (*path.parents, path)):
@@ -452,14 +481,41 @@ def _create_private(path, data):
         info = os.fstat(directory_fd)
         if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077:
             raise ValueError
-        fd = os.open(path.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=directory_fd)
+        name = f'.{path.name}.{secrets.token_hex(16)}.tmp'
+        fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=directory_fd)
+        temporary = name
         with os.fdopen(fd, 'wb') as stream:
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
+        os.link(temporary, path.name, src_dir_fd=directory_fd, dst_dir_fd=directory_fd, follow_symlinks=False)
+        os.unlink(temporary, dir_fd=directory_fd)
+        temporary = None
         os.fsync(directory_fd)
     except (OSError, ValueError):
-        raise MigrationError('policy recovery record not durably saved; source unchanged') from None
+        raise RecordNotSaved('policy recovery record not durably saved; source unchanged') from None
+    finally:
+        if temporary is not None:
+            with suppress(OSError):
+                os.unlink(temporary, dir_fd=directory_fd)
+        if directory_fd is not None:
+            os.close(directory_fd)
+
+
+def _discard_temporaries(path):
+    """Under the writer lock only: remove the temporary names an interrupted _create_private left next to path.
+
+    Each is unpublished data or a second name of the complete record (a crash between its link and unlink); either way
+    the record itself is untouched, and a second name would make read_document refuse it (two links)."""
+    directory_fd = None
+    try:
+        directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        pattern = _temporaries(path.name)
+        for name in os.listdir(directory_fd):
+            if pattern.fullmatch(name):
+                os.unlink(name, dir_fd=directory_fd)
+    except OSError:
+        raise RecordNotSaved('policy recovery record not durably saved; source unchanged') from None
     finally:
         if directory_fd is not None:
             os.close(directory_fd)

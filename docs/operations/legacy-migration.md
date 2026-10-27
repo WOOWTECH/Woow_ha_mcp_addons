@@ -24,21 +24,30 @@ write it adds the marker
 ```
 
 (same name as the PaaS marker). Before that write it saves the legacy policy once as
-`/data/mcp/owner-defaults-20261025-recovery.json` (format 2, mode 0600, created exclusively and fsynced): the
-`writes_enabled`, `disabled`, `enabled_write_tools` and `denied_operations` of the old state as validated, the digest
-of the old state and of the frozen 0.1.x catalog; never a token, endpoint or backend value. If the add-on stops between
-the two writes, the next start finds an identical record and continues; any other existing record stops the migration.
-The add-on log shows one line: `owner defaults 2026-10-25: the schema N state was switched once to schema 4 with every
-tool and write on; ...`.
+`/data/mcp/owner-defaults-20261025-recovery.json` (format 2, mode 0600): the `writes_enabled`, `disabled`,
+`enabled_write_tools` and `denied_operations` of the old state as validated, the digest of the old state and of the
+frozen 0.1.x catalog; never a token, endpoint or backend value. The record is written and fsynced under a temporary
+name in the same directory and then linked to its final name, which never replaces an existing file, so that name only
+ever holds a complete record: a write that fails (disk full, I/O error) removes its temporary file, and a kill or power
+loss can leave only a temporary `.owner-defaults-20261025-recovery.json.<random>.tmp`, which the next start removes. If
+the add-on stops between the record and the state write, the next start finds an identical record and continues; any
+other existing record stops the migration. The add-on log shows one line: `owner defaults 2026-10-25: the schema N
+state was switched once to schema 4 with every tool and write on; ...`.
 
 **Fail safe.** When `state.json` is unreadable or invalid JSON, has duplicate keys or non-finite numbers, is larger than
 64 KiB, a symlink or a hard link, has an unknown schema, the wrong product, a missing or extra key, a malformed policy,
-or the data directory is not owner-only, `.writer.lock` is missing or held, or the recovery record cannot be created,
-nothing is migrated or rewritten (bytes, mode and mtime stay; no record, no temporary file). The add-on log shows
-`owner defaults 2026-10-25: state.json is unreadable, invalid, linked or in use, or its recovery record cannot be saved;
-nothing was migrated or rewritten` and `runtime unavailable; local recovery required`, the add-on stops, and the panel
-and MCP are unavailable (as for a corrupt state before). Restore the add-on backup taken before the update; do not edit
-the state or delete the lock to force a start.
+or the data directory is not owner-only, `.writer.lock` is missing or held, the recovery record cannot be created, or a
+recovery record exists that is not this state's, nothing is migrated or rewritten (bytes, mode and mtime stay; no
+record, no temporary file). The add-on log shows one fixed line, then `runtime unavailable; local recovery required`;
+the add-on stops, and the panel and MCP are unavailable (as for a corrupt state before):
+
+| Add-on log (after `owner defaults 2026-10-25: `) | What to do |
+|---|---|
+| `owner-defaults-20261025-recovery.json could not be saved (disk full or I/O error); nothing was migrated or rewritten and no partial record was left; ...` | Free space on the HA data disk and restart the add-on; the migration then completes. |
+| `owner-defaults-20261025-recovery.json already exists but is not the complete recovery record of this state.json (incomplete, damaged or from another state); ...` | Restore the add-on backup taken before the update, or check that file (policy only, no secret) and move it out of `/data/mcp`. |
+| `state.json is unreadable, invalid, linked or in use, or its recovery record cannot be saved; nothing was migrated or rewritten` | Restore the add-on backup taken before the update. |
+
+Do not edit the state or delete the lock to force a start.
 
 ### Panel notice and optional restore
 
@@ -110,8 +119,9 @@ To apply the reviewed choice, use that preview's `source_sha256`:
 Apply acquires the existing runtime writer lock, rereads and validates state, and
 refuses a changed digest. It durably creates `migration-policy-recovery.json`
 (0600) before atomically replacing state. Existing records are never overwritten.
-On a persistence failure, inspect state and the record before retrying; a partial
-record fails validation and a completed record is retained. There is no automatic
+On a persistence failure, inspect state and the record before retrying; a record is
+published only when complete (2026-10-27: temporary file, fsync, link), so a failed
+write leaves none, and a completed record is retained. There is no automatic
 retry or overwrite. Existing schema 4 is a no-op for either migration choice.
 Tokens (including a revoked `null` token), child token, endpoint, backend and
 optional n8n MCP credential retain their current values.

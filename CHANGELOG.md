@@ -12,13 +12,16 @@ No add-on version is changed by this section. Applies to the six Store-enabled a
   operation deny; token, child token, endpoint and backend kept. The same atomic state write adds the marker
   `owner_defaults_20261025` (`applied`, `at`, `from_schema`, later `restored_at` / `acknowledged_at`), the PaaS
   marker's name. Before it, the legacy policy is saved once as the format 2 record
-  `/data/mcp/owner-defaults-20261025-recovery.json` (0600, exclusive, policy and digests only); an identical record
-  from an interrupted attempt is reused, any other refused. MCP then serves at once: no 503 `upgrade_review_required`,
-  no review listener; one fixed line in the add-on log.
+  `/data/mcp/owner-defaults-20261025-recovery.json` (0600, exclusive, policy and digests only), published complete or
+  not at all (temporary file, fsync, link), so a failed or interrupted write never leaves a partial record that would
+  stop every later start; an identical record from an interrupted attempt is reused, any other refused. MCP then
+  serves at once: no 503 `upgrade_review_required`, no review listener; one fixed line in the add-on log.
 - Schema 4 is never touched (new installations, 0.2.0+, states the review page migrated, ws97's writes-off Hermes).
   The marker is omitted while absent, so such states keep exactly the 0.4.1 keys.
-- Unreadable, invalid, linked or busy state, or a record that cannot be saved: nothing is migrated or rewritten
-  (bytes, mode, mtime); the add-on logs why and stops with `runtime unavailable; local recovery required`.
+- Unreadable, invalid, linked or busy state, a record that cannot be saved, or an existing record that is not this
+  state's: nothing is migrated or rewritten (bytes, mode, mtime); the add-on logs which of these (fixed text naming
+  the file) and stops with `runtime unavailable; local recovery required`. After a disk-full failure a restart with
+  free space completes the migration.
 
 ### The review page becomes a notice with an optional, faithful restore
 

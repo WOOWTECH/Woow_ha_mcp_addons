@@ -6,8 +6,10 @@ real ws97 Hermes add-on 0.4.1 (writes off). Only fake tokens and DUMMY credentia
 """
 import asyncio
 from contextlib import closing
+import errno
 import fcntl
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -155,17 +157,106 @@ def test_an_interrupted_migration_resumes_with_its_own_record(tmp_path, monkeypa
         assert store.load().enabled_write_tools == fresh_write_grants(product)
 
 
-def test_a_foreign_record_blocks_the_migration_and_nothing_changes(tmp_path, capsys):
+@pytest.mark.parametrize('content', ['another state', 'empty', 'truncated'])
+def test_a_foreign_or_incomplete_record_blocks_the_migration_and_nothing_changes(tmp_path, capsys, content):
     value, product = sample('schema3-hermes-ws97-0.1.14.json')
     other, _ = sample('schema3-hermes-v0.1.14-max.json')
     path = install(tmp_path, value)
-    (tmp_path / OWNER_RECOVERY).write_text(json.dumps(owner_record(other, product)))
+    own = json.dumps(owner_record(value, product), sort_keys=True, indent=2) + '\n'
+    (tmp_path / OWNER_RECOVERY).write_text({'another state': json.dumps(owner_record(other, product)),
+                                            'empty': '', 'truncated': own[:40]}[content])
     (tmp_path / OWNER_RECOVERY).chmod(0o600)
     before = snapshot(tmp_path)
     with pytest.raises(ConfigError):
         owner_defaults.apply_legacy_upgrade(tmp_path, product)
     assert snapshot(tmp_path) == before and path.read_bytes() == before['state.json'][0]
-    assert 'nothing was migrated or rewritten' in capsys.readouterr().err
+    # The add-on log names the one file to check (fixed text; nothing from the record or the state).
+    err = capsys.readouterr().err
+    assert f'{OWNER_RECOVERY} already exists but is not the complete recovery record of this state.json' in err
+    assert 'nothing was migrated or rewritten' in err and not any(secret in err for secret in SECRETS)
+
+
+TEMPORARY = re.compile(r'\.' + re.escape(OWNER_RECOVERY) + r'\.[0-9a-f]{32}\.tmp')
+
+
+def temporaries(directory):
+    return sorted(p.name for p in directory.iterdir() if TEMPORARY.fullmatch(p.name))
+
+
+def short_write(patch, written=40):
+    """ENOSPC after the first `written` bytes of a recovery record (the only binary-mode os.fdopen writer here)."""
+    real_fdopen = os.fdopen
+
+    class Short(io.RawIOBase):
+        def __init__(self, fd):
+            self.fd = fd
+
+        def writable(self):
+            return True
+
+        def write(self, data):
+            os.write(self.fd, bytes(data[:written]))
+            raise OSError(errno.ENOSPC, 'No space left on device')
+
+        def close(self):
+            if not self.closed:
+                os.close(self.fd)
+            super().close()
+
+    def fdopen(fd, mode='r', *args, **kwargs):
+        return Short(fd) if mode == 'wb' else real_fdopen(fd, mode, *args, **kwargs)
+    patch.setattr('mcp_admin_core.migration.os.fdopen', fdopen)
+
+
+@pytest.mark.parametrize('fault', ['short write', 'fsync'])
+def test_a_failed_record_write_leaves_nothing_and_the_next_start_migrates(tmp_path, monkeypatch, capsys, fault):
+    value, product = sample('schema3-hermes-ws97-0.1.14.json')
+    install(tmp_path, value)
+    before = snapshot(tmp_path)
+
+    def failed_fsync(_):
+        raise OSError(errno.EIO, 'secret I/O error')
+    with monkeypatch.context() as patch:
+        if fault == 'short write':
+            short_write(patch)  # disk full in the middle of the record
+        else:
+            patch.setattr('mcp_admin_core.migration.os.fsync', failed_fsync)
+        for _ in range(2):
+            with pytest.raises(ConfigError):
+                owner_defaults.apply_legacy_upgrade(tmp_path, product)
+    # No record, no temporary copy, the state as it was (bytes, mode, mtime of every file).
+    assert snapshot(tmp_path) == before and not temporaries(tmp_path)
+    err = capsys.readouterr().err
+    assert f'{OWNER_RECOVERY} could not be saved (disk full or I/O error)' in err and 'no partial record' in err
+    assert 'secret' not in err and not any(secret in err for secret in SECRETS)
+    # Space is back: the next start completes the migration with a complete record.
+    assert owner_defaults.apply_legacy_upgrade(tmp_path, product)['source_schema'] == 3
+    assert read_document(tmp_path / OWNER_RECOVERY) == owner_record(value, product) and not temporaries(tmp_path)
+    with closing(ProductStore(tmp_path, product)) as store:
+        assert getattr(store.load(), OWNER_DEFAULTS).from_schema == 3
+
+
+@pytest.mark.parametrize('crash', ['before the link', 'between the link and the unlink'])
+def test_an_interrupted_record_creation_never_blocks_the_next_start(tmp_path, crash):
+    """What a kill or power loss during the record's creation can leave: an unpublished, possibly partial temporary
+    copy, or a second name of the complete record. The next start removes it and migrates."""
+    value, product = sample('schema3-hermes-ws97-0.1.14.json')
+    install(tmp_path, value)
+    record = owner_record(value, product)
+    data = (json.dumps(record, sort_keys=True, indent=2) + '\n').encode()
+    temporary = tmp_path / f'.{OWNER_RECOVERY}.{"a" * 32}.tmp'
+    if crash == 'before the link':
+        temporary.write_bytes(data[:40])
+    else:
+        (tmp_path / OWNER_RECOVERY).write_bytes(data)
+        (tmp_path / OWNER_RECOVERY).chmod(0o600)
+        os.link(tmp_path / OWNER_RECOVERY, temporary)
+    temporary.chmod(0o600)
+    assert owner_defaults.apply_legacy_upgrade(tmp_path, product)['source_schema'] == 3
+    assert not temporaries(tmp_path) and (tmp_path / OWNER_RECOVERY).stat().st_nlink == 1
+    assert read_document(tmp_path / OWNER_RECOVERY) == record
+    with closing(ProductStore(tmp_path, product)) as store:
+        assert getattr(store.load(), OWNER_DEFAULTS).from_schema == 3
 
 
 def _broken(directory, case):
