@@ -24,7 +24,7 @@ from mcp_admin_core.config import ConfigError
 from mcp_admin_core.legacy_catalog import LEGACY_TOOLS
 from mcp_admin_core.migration import (OWNER_RECOVERY, MigrationError, _effective, _legacy_grants, _validate, main,
                                       owner_record, plan_migration, plan_owner_restore, plan_restore, read_document)
-from mcp_admin_core.policy import enabled, policy_enabled
+from mcp_admin_core.policy import enabled, operation_enabled, policy_enabled
 from mcp_admin_core.products import (OWNER_DEFAULTS, STORED_FIELDS, ProductStore, TOOLS, fresh_write_grants,
                                      write_grants)
 from mcp_admin_core.surface import full_tools
@@ -441,6 +441,67 @@ def test_restore_keeps_what_the_administrator_changed_after_the_upgrade(tmp_path
     assert set(restored.disabled) == {'hermes_inspect', 'hermes_skill'}
     assert 'hermes_chat' not in restored.enabled_write_tools and 'hermes_cron:pause' not in restored.enabled_write_tools
     assert restored.denied_operations == {'hermes_cron': ['trigger']}
+
+
+def test_restore_never_regrants_a_legacy_grant_revoked_after_the_upgrade(tmp_path):
+    """"Nothing is enabled or granted" with a legacy state that HELD grants: v0.1.14 max (every 0.1.x Hermes write,
+    hermes_inspect disabled, legacy switch on). After the upgrade the administrator saves a policy that revokes
+    hermes_cron:delete and disables hermes_chat (a panel save also turns the legacy switch off); the restore keeps all
+    of it, and the other seven legacy grants."""
+    value, product = _migrated(tmp_path, 'schema3-hermes-v0.1.14-max.json')
+    assert 'hermes_cron:delete' in value['enabled_write_tools'] and value['disabled'] == ['hermes_inspect']
+    assert value['writes_enabled'] is True
+    with closing(ProductStore(tmp_path, product)) as store:
+        grants = [g for g in store.load().enabled_write_tools if g != 'hermes_cron:delete']
+        store.update(enabled_write_tools=grants, disabled=['hermes_chat'], writes_enabled=False)
+        restored = owner_defaults.restore(store)
+    assert restored.writes_enabled is False  # the legacy switch was on, but nothing is switched back on
+    assert 'hermes_cron:delete' not in restored.enabled_write_tools
+    assert set(restored.enabled_write_tools) == set(value['enabled_write_tools']) - {'hermes_cron:delete'}
+    assert set(restored.disabled) == {'hermes_chat', 'hermes_inspect'}
+    assert not enabled('hermes_chat', TOOLS['hermes'], restored)
+
+
+def test_the_migration_writes_the_state_once_and_with_its_marker(tmp_path, monkeypatch):
+    """One atomic state write carries both the all-on policy and the marker: a crash can never leave an all-on state
+    without the marker (no notice, no restore in the panel)."""
+    from mcp_admin_core.config import Store
+    value, product = sample('schema3-hermes-ws97-0.1.14.json')
+    install(tmp_path, value)
+    written = []
+    real_write = Store._write
+
+    def recording(self, state):
+        written.append(state)
+        return real_write(self, state)
+    monkeypatch.setattr(Store, '_write', recording)
+    assert owner_defaults.apply_legacy_upgrade(tmp_path, product)['source_schema'] == 3
+    assert len(written) == 1
+    marker = getattr(written[0], OWNER_DEFAULTS)
+    assert marker.applied == 'migrated' and marker.from_schema == 3
+    assert written[0].enabled_write_tools == fresh_write_grants(product) and written[0].disabled == []
+    assert json.loads((tmp_path / 'state.json').read_text())[OWNER_DEFAULTS]['at'] == marker.at
+
+
+def test_restore_brings_back_legacy_operation_denies(tmp_path):
+    """No released 0.1.x wrote denied_operations (0.3.0 added it), but the legacy validation accepts the key on schema
+    2/3, so such a state (derived here from the real v0.1.14 max sample) gets its denies back after the migration
+    cleared them."""
+    value, product = sample('schema3-hermes-v0.1.14-max.json')
+    value = {**value, 'denied_operations': {'hermes_cron': ['pause']}}
+    install(tmp_path, value)
+    owner_defaults.apply_legacy_upgrade(tmp_path, product)
+    assert read_document(tmp_path / OWNER_RECOVERY)['legacy_policy']['denied_operations'] == {'hermes_cron': ['pause']}
+    with closing(ProductStore(tmp_path, product)) as store:
+        assert store.load().denied_operations == {}  # all on
+        view = owner_defaults.view(store.load(), tmp_path)
+        assert view['upgrade']['cleared_operation_denies'] == ['hermes_cron:pause']
+        assert view['restore']['operation_denies_added'] == ['hermes_cron:pause']
+        restored = owner_defaults.restore(store)
+    assert restored.denied_operations == {'hermes_cron': ['pause']}
+    assert 'hermes_cron:pause' in restored.enabled_write_tools  # still granted, but the deny wins
+    assert not operation_enabled('hermes_cron', TOOLS['hermes']['hermes_cron'], 'pause', restored)
+    assert operation_enabled('hermes_cron', TOOLS['hermes']['hermes_cron'], 'delete', restored)
 
 
 def test_restore_refuses_a_missing_or_tampered_record_without_changes(tmp_path):
