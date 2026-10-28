@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased — next version (no add-on version change; the release PR sets the version and images)
+## 0.4.3 — release candidate (2026-10-28)
 
-No add-on version is changed by this section. Applies to the six Store-enabled add-ons and the OpenDesign source.
+Applies to the six Store-enabled add-ons and the OpenDesign source. The six 0.4.3 images require
+fresh exact-image acceptance before release; OpenDesign stays disabled in the Store.
 
 ### Legacy installations: one-time all-on at the first start (aligned with the PaaS; owner decision 2026-10-27)
 
