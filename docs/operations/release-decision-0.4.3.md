@@ -33,6 +33,11 @@ ports, options and state schema remain as in 0.4.2. OpenDesign stays disabled
 in the Store and receives only matching source metadata; do not build or
 publish an OpenDesign image.
 
+The Odoo child-error contract correction in PR #30 is outside 0.4.3. A child
+reply with `success:false` can still surface as MCP `isError:false` in this
+release; the PaaS #89 result is `isError:true`. PR #30 will be reviewed and
+released separately as 0.4.4.
+
 ## Release gates
 
 1. Freeze and verify the exact source SHA. `packaging/inputs.json`, seven
@@ -40,6 +45,14 @@ publish an OpenDesign image.
    all say `0.4.3`; the retired Odoo Manage version remains untouched. Run
    validator, full unit/integration suite, UI build and browser tests, plus
    `checks` and Release train at that SHA.
+   The first 0.4.3 builder attempt from `193c281` stopped at the source
+   Gitleaks gate before publication: three #26 migration fixtures share one
+   synthetic dummy backend key. The follow-up source binds an exception to
+   that one whole value, its fixed SHA256 and three exact fixture paths in
+   `packaging/secret-triage.json`. The default scanner rules and blocked
+   vulnerability policy remain unchanged. Review this new exception and rerun
+   both current-source and full-history scans from the new source; the failed
+   attempt is not image acceptance evidence.
 2. On the same private builder route as 0.4.2, preserve the six 0.4.2 image
    IDs and confirm six 0.4.3 tags are absent. Build six new `linux/amd64`
    images from the frozen source, then run exact-image P1–P5, source/history/
