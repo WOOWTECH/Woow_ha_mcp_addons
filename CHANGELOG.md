@@ -4,6 +4,14 @@
 
 No add-on version is changed by this section. Applies to the six Store-enabled add-ons and the OpenDesign source.
 
+### Odoo MCP failure result parity with PaaS
+
+- An Odoo tool that returns `{"success": false, "error": ...}` now answers MCP `isError: true`, as the PaaS Odoo
+  child does. The text remains the same JSON and `structuredContent` keeps the tool's published output schema
+  (including the SDK's `{"result": ...}` envelope where required). A traceback inside the error text is reduced to
+  its final exception line. Successful results and the 41-tool surface stay unchanged. Fake backend tests cover both
+  result shapes and a genuine patched Odoo child; this source change has no add-on version or image publication.
+
 ### Legacy installations: one-time all-on at the first start (aligned with the PaaS; owner decision 2026-10-27)
 
 - A legacy state (schema 1/2/3, written by 0.1.x or the 2026-10-03 prototypes) is migrated before ProductStore or any
