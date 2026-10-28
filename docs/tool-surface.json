@@ -137,11 +137,12 @@
     "apps/runtime/batch2_outputs.py": "239add1fbbad29eecbfec82e33553b33b4ed7b0e5d3acdad01a33d83f2090352",
     "apps/runtime/bounded_tools.py": "33d87837b6e60c820f1ce53442606fa519182505a9a27f6c4c7f5262a4b8d745",
     "apps/runtime/odoo_read_exists.py": "01a4c0e81a28e50c09e43238d612113fe4e76a0250402a21e4489da59ddfd4bf",
+    "apps/runtime/odoo_tool_errors.py": "6957e4229fa5e93d7a5bddcb0be35e1c36ba5bf7b3e856c984b4ccc9fb71f482",
     "apps/runtime/run_child.py": "720930274b2a6e67a2effe0c4463cc713f0318ece45a4cef951ea45488241fe5",
     "apps/runtime/session_idle.py": "79ecbaffb832a00354ae659b56dc264361c6a6299d2d0a9a16ad41c958489493",
     "apps/runtime/tool_error_text.py": "c21dd6b51e9ac2a7de457280b1f2bf3ab6a432c7b0115745f1d7363e98fadf59",
     "apps/hermes/launch.py": "66567ea7820e005eb4cecc56efce928d084d9921ae09422336bfa0ca24aae5fc",
-    "apps/odoo/launch.py": "58c18c19323594e056503b64b6f7a249e8f590842597d340c8461651f56fd47f",
+    "apps/odoo/launch.py": "6210bde53d83a89210943ccf62941eda6ef010d0dfe4dd9508e8f0a8cbca388b",
     "apps/odoo-manage/launch.py": "7e2adc8ce3ece9240ce54d1c7429ceed3bd61d95e6a700ef00094816f9cca515",
     "apps/opendesign/launch.py": "6a3d5e2c42537903d7509807facf699b9e680573f4f7bd04ccc9965c9e4f9723"
   },
