@@ -28,7 +28,7 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route, request_response
 from starlette.middleware import Middleware
 
-from . import owner_defaults, redact, ui
+from . import odoo_methods, owner_defaults, redact, ui
 from .access import AccessChanged, LeasedResponse, TokenAccess, masked_token
 
 from . import VERSION
@@ -385,7 +385,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         try:
             state = store.load()
             changes = None
-            if name in ("backend", "backend/patch", "policy", "endpoint", "odoo/write-switches", "n8n/session") and request.method == "PUT":
+            if name in ("backend", "backend/patch", "policy", "endpoint", "odoo/write-switches", "n8n/session", odoo_methods.ROUTE) and request.method == "PUT":
                 try:
                     if not isinstance(value, dict):
                         raise ValueError()
@@ -418,6 +418,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         if set(value) != {"endpoint"}:
                             raise ValueError()
                         changes = value
+                    elif name == odoo_methods.ROUTE:
+                        changes = odoo_methods.changes(state, value)
                     elif name == 'odoo/write-switches':
                         if getattr(state, 'product', None) != 'odoo' or set(value) != {'odoo_write_switches'}:
                             raise ValueError()
@@ -450,7 +452,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 if notice_action and not matches:
                     # The notice actions apply only to the revision the administrator reviewed.
                     return JSONResponse({'detail': {'code': 'precondition_required'}}, status_code=428, headers=headers)
-                if name in ('odoo/write-switches', 'n8n/session', 'backend/patch') and not matches:
+                if name in ('odoo/write-switches', 'n8n/session', 'backend/patch', odoo_methods.ROUTE) and not matches:
                     return JSONResponse({'detail': {'code': 'precondition_required'}}, status_code=428, headers=headers)
             if name == "__ui__" and hasattr(request.state, "ui_path") and request.method in ("GET", "HEAD"):
                 return ui.response(request.state.ui_path, base)
@@ -464,6 +466,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 edit_view = connection_view(state) if hasattr(state, 'product') else None
                 return JSONResponse({"base_path": base, "api_base": base + "/api", "csrf": csrf,
                     **({"owner_defaults": notice} if notice is not None else {}),
+                    **odoo_methods.bootstrap(state),
                     "configuration": configuration.snapshot(state),
                     "endpoint": state.endpoint, "backend_url": edit_view['values']['url']
                     if edit_view and getattr(state, 'product', None) == 'n8n' else state.backend_url,
@@ -576,7 +579,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 # An authorized mutation is not undone by losing its HTTP caller.
                 committed.set()
                 headers['ETag'] = configuration.etag(updated)
-                if (name in ('backend', 'backend/patch', 'odoo/write-switches', 'n8n/session') or (name == "policy" and getattr(state, 'product', 'n8n') in ('emqx', 'litellm', 'nextcloud'))) and backend_changed:
+                if (name in ('backend', 'backend/patch', 'odoo/write-switches', 'n8n/session', odoo_methods.ROUTE) or (name == "policy" and getattr(state, 'product', 'n8n') in ('emqx', 'litellm', 'nextcloud'))) and backend_changed:
                     try:
                         await backend_changed(updated)
                     except Exception:
@@ -598,7 +601,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         committed = asyncio.Event()
         try:
             name = request.path_params["operation"]
-            if name in ("backend", "backend/patch", "policy", "endpoint", "odoo/write-switches", "n8n/session") and request.method == "PUT":
+            if name in ("backend", "backend/patch", "policy", "endpoint", "odoo/write-switches", "n8n/session", odoo_methods.ROUTE) and request.method == "PUT":
                 value = await json_body(request)
             else:
                 if await body(request):

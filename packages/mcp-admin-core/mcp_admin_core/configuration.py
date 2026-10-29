@@ -46,6 +46,7 @@ class ConfigurationState:
         if raw.get('product') == 'odoo':
             # Absent schema-4 key means the prior child configuration: all four on.
             value['odoo_write_switches'] = state.effective_odoo_write_switches.model_dump()
+            value['odoo_allowed_methods'] = state.odoo_allowed_methods or []
         return self._revision(value, 'launch')
 
     def begin(self, state):

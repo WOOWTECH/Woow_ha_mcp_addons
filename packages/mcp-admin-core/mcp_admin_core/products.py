@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, AfterValidator, field_validat
 from .access import masked_token
 from .config import FRESH_WRITES_ENABLED, State, Store, http_url
 from .lifecycle import ChildSpec
+from .odoo_methods import AllowedMethods, FIELD as ODOO_ALLOWED_METHODS
 from .policy import Tool
 from .surface import FULL_PRODUCTS, full_tools
 
@@ -215,6 +216,8 @@ class ProductState(State):
     # Optional on schema 4. Absent retains the exact prior child behavior (all four on), without changing any
     # outer grant, disabled tool or operation deny. A saved object is Odoo-only and must carry all four booleans.
     odoo_write_switches: OdooWriteSwitches | None = Field(default=None, exclude_if=lambda value: value is None)
+    # Absent means an empty exact method allowlist; reading old state never writes this key.
+    odoo_allowed_methods: AllowedMethods | None = Field(default=None, exclude_if=lambda value: value is None)
     # Additive schema 4 field, absent in pre-history states. Once a transition writes it, an older binary requires a
     # pre-update backup to read the state; merely starting this binary does not rewrite an existing schema 4 state.
     token_history: list[TokenHistoryEntry] | None = Field(default=None, exclude_if=lambda value: value is None)
@@ -283,6 +286,8 @@ class ProductState(State):
             raise ValueError('only Odoo has child write switches')
         if self.n8n_session is not None and self.product != 'n8n':
             raise ValueError('only n8n has native session settings')
+        if self.odoo_allowed_methods is not None and self.product != 'odoo':
+            raise ValueError('only Odoo has allowed methods')
         return self
 
     @property
@@ -303,8 +308,8 @@ class ProductState(State):
         return bool(self.backend_url and self.backend_key) if self.product == 'n8n' else self.connection is not None
 
 
-# The keys every stored product state carries; the three optional fields exist only on schema 4.
-STORED_FIELDS = frozenset(ProductState.model_fields) - {OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, TOKEN_HISTORY, N8N_SESSION}
+# The keys every stored product state carries; optional fields exist only on schema 4.
+STORED_FIELDS = frozenset(ProductState.model_fields) - {OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, TOKEN_HISTORY, N8N_SESSION, ODOO_ALLOWED_METHODS}
 
 
 def write_grants(product):
@@ -422,9 +427,10 @@ class ProductStore(Store):
             value = {**value, 'schema_version': 4}
             self._migrated = True
         # No optional field may be stored as null. Legacy states cannot carry the new keys.
-        if (not isinstance(value, dict) or set(value) - {OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, TOKEN_HISTORY, N8N_SESSION} != STORED_FIELDS
+        if (not isinstance(value, dict) or set(value) - {OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, TOKEN_HISTORY, N8N_SESSION, ODOO_ALLOWED_METHODS} != STORED_FIELDS
                 or (OWNER_DEFAULTS in value and value[OWNER_DEFAULTS] is None)
                 or (ODOO_WRITE_SWITCHES in value and value[ODOO_WRITE_SWITCHES] is None)
+                or (ODOO_ALLOWED_METHODS in value and value[ODOO_ALLOWED_METHODS] is None)
                 or (TOKEN_HISTORY in value and value[TOKEN_HISTORY] is None)
                 or (N8N_SESSION in value and value[N8N_SESSION] is None)
                 or value.get('product') != self.product):
@@ -698,6 +704,7 @@ def child_spec(state: ProductState, directory: Path) -> ChildSpec | None:
                    ODOO_MCP_ENABLE_WRITES='1' if switches.enable_writes else '0',
                    ODOO_MCP_ALLOW_DIRECT_WRITES='1' if switches.allow_direct_writes else '0',
                    ODOO_MCP_ALLOW_UNKNOWN_METHODS='1' if switches.allow_unknown_methods else '0',
+                   ODOO_MCP_ALLOWED_SIDE_EFFECT_METHODS=','.join(state.odoo_allowed_methods or []),
                    MCP_CHATTER_DIRECT='1' if switches.chatter_direct else '0')
         argv = (str(python), str(app / 'start_switches.py'), '--transport', 'streamable-http', '--host', '127.0.0.1', '--port', '3000', '--path', '/mcp')
     elif product == 'odoo-manage':

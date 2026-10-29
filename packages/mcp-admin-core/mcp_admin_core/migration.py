@@ -29,6 +29,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .config import ConfigError, State, Store, strict_json
 from .legacy_catalog import LEGACY_TOOLS
 from .policy import policy_enabled
+from .odoo_methods import FIELD as ODOO_ALLOWED_METHODS
 from .products import (OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, TOKEN_HISTORY, N8N_SESSION, PRODUCTS, STORED_FIELDS, ProductState, TOOLS,
                        fresh_write_grants, write_grants)
 from .surface import full_tools, names
@@ -111,10 +112,11 @@ def _validate(value, product):
             if version == 2:
                 expected -= {'enabled_write_tools'}
             # Only a schema 4 state may carry the owner-defaults marker (and then never null).
-            optional = {'mcp_access_token', 'denied_operations'} | ({OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, TOKEN_HISTORY, N8N_SESSION} if version == 4 else set())
+            optional = {'mcp_access_token', 'denied_operations'} | ({OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, TOKEN_HISTORY, N8N_SESSION, ODOO_ALLOWED_METHODS} if version == 4 else set())
             if (set(value) - optional != expected or value.get('product') != product
                     or (OWNER_DEFAULTS in value and value[OWNER_DEFAULTS] is None)
                     or (ODOO_WRITE_SWITCHES in value and value[ODOO_WRITE_SWITCHES] is None)
+                    or (ODOO_ALLOWED_METHODS in value and value[ODOO_ALLOWED_METHODS] is None)
                     or (TOKEN_HISTORY in value and value[TOKEN_HISTORY] is None)
                     or (N8N_SESSION in value and value[N8N_SESSION] is None)):
                 raise ValueError
