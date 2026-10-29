@@ -15,6 +15,11 @@ class AccessChanged(Exception):
     """The authenticated credential no longer authorizes this request."""
 
 
+def masked_token(token):
+    """PaaS-compatible display mask for the validated 43-character HA token."""
+    return token[:4] + '*' * 20 + token[-4:] if token else ''
+
+
 class TokenAccess:
     def __init__(self, store):
         self.store = store

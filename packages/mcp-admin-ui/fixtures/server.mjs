@@ -7,7 +7,7 @@ if (!process.send || !/^[a-f0-9]{64}$/.test(generation ?? '')) throw Error('owne
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { extname, resolve, sep } from 'node:path';
-import { mountPath, products, backendPayload } from '../src/contracts.js';
+import { mountPath, products, backendPayload, odooSwitchPayload } from '../src/contracts.js';
 const dist = process.env.OWNED_UI_ASSET_ROOT ?? fileURLToPath(new URL('../dist/', import.meta.url));
 const prefix = '/api/hassio_ingress/DUMMY';
 const mounts = [prefix, ''];
@@ -21,6 +21,8 @@ function reset(next = {}) {
     product: next.product ?? 'n8n', endpoint: next.endpoint ?? null,
     backend_url: null, backend_key_set: false, connection_configured: next.configured ?? false,
     token_active: true, writes_enabled: next.legacyWrites ?? false, disabled: [],
+    ...(Object.hasOwn(next, 'tokenMask') ? {token_masked: next.tokenMask} : {}),
+    ...(Object.hasOwn(next, 'tokenHistory') ? {token_history: structuredClone(next.tokenHistory)} : {}),
     ...(next.granular !== false ? { policy_contract: 'woow-v3-exact-grants' } : {}), enabled_write_tools: next.grants ?? [],
     tools: {
       read_example: { write: false, legacy_write:false, write_grants:[], operation_parameter:null, inputSchema:{} },
@@ -31,6 +33,11 @@ function reset(next = {}) {
     // 2026-10-27 one-time all-on notice (shape of owner_defaults.view); omitted unless a test supplies it.
     ...(next.ownerDefaults ? { owner_defaults: structuredClone(next.ownerDefaults) } : {}),
   };
+  if (state.product === 'odoo' && next.odooApi !== false) {
+    state.odoo_write_switches = next.odooSwitches ?? {enable_writes:true, allow_direct_writes:true,
+      allow_unknown_methods:true, chatter_direct:true};
+    state.odoo_write_switches_source = next.odooSource ?? 'legacy_all_on';
+  }
   if (next.operations) {
     state.denied_operations = next.denied_operations ?? {};
     for (const tool of Object.values(state.tools)) Object.assign(tool, {operations: [], default_operation: null});
@@ -122,7 +129,7 @@ const server = http.createServer(async (request, response) => {
       const operation = local.slice(5);
       const payload = await body(request);
       const validCsrf = request.headers['x-csrf-token'] === `mock_fresh_csrf_value_${nonce}`;
-      calls.push({ operation, method: request.method, validCsrf, ifMatch: request.headers['if-match'], fields: Object.keys(payload ?? {}), ...(operation === 'policy' ? { policy: payload } : {}) });
+      calls.push({ operation, method: request.method, validCsrf, ifMatch: request.headers['if-match'], fields: Object.keys(payload ?? {}), ...(operation === 'policy' ? { policy: payload } : {}), ...(operation === 'odoo/write-switches' ? {switches:payload} : {}) });
       if (!validCsrf || config.deniedSave) return json(response, 403, { error: 'MOCK DENIED PRIVATE_CANARY_MUST_NOT_RENDER' });
       if (config.saveStatus) return json(response, config.saveStatus, { error: 'MOCK PRIVATE_CANARY_MUST_NOT_RENDER' });
       if (config.parity && request.headers['if-match'] && request.headers['if-match'] !== etag()) return json(response, 409, {detail: {code: 'config_conflict'}, untrusted: 'PRIVATE_CANARY_MUST_NOT_RENDER'});
@@ -162,6 +169,12 @@ const server = http.createServer(async (request, response) => {
         if (JSON.stringify(payload) !== JSON.stringify(clear ? backendPayload(state.product, 'clear') : backendPayload(state.product, 'replace', connection))) return json(response, 400, {});
         state.connection_configured = !clear;
       } else if (operation === 'endpoint') state.endpoint = payload.endpoint;
+      else if (operation === 'odoo/write-switches') {
+        if (state.product !== 'odoo' || !state.odoo_write_switches ||
+            JSON.stringify(odooSwitchPayload(state, payload.odoo_write_switches)) !== JSON.stringify(payload)) return json(response, 400, {});
+        state.odoo_write_switches = structuredClone(payload.odoo_write_switches);
+        state.odoo_write_switches_source = 'saved';
+      }
       else if (operation === 'policy') {
         if (Object.keys(payload).sort().join() !== (config.operations ? 'denied_operations,disabled,enabled_write_tools,writes_enabled' : 'disabled,enabled_write_tools,writes_enabled')) return json(response, 400, {});
         Object.assign(state, payload);

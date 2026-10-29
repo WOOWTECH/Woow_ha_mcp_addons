@@ -11,6 +11,39 @@ export const products = {
 };
 
 export class UiError extends Error {}
+const tokenMaskPattern = /^[A-Za-z0-9_-]{4}\*{20}[A-Za-z0-9_-]{4}$/;
+export function maskedCurrentToken(bootstrap) {
+  const value = bootstrap?.token_masked;
+  if (value === undefined) return null; // Earlier HA servers did not expose a mask.
+  return typeof value === 'string' && (value === '' || tokenMaskPattern.test(value)) ? value : null;
+}
+export function tokenHistory(bootstrap) {
+  const entries = bootstrap?.token_history;
+  if (entries === undefined) return []; // Earlier HA servers did not expose a history.
+  if (!Array.isArray(entries) || entries.length > 5) return null;
+  const keys = ['action', 'previous_token_masked', 'rotated_at'];
+  if (!entries.every(item => item && typeof item === 'object' && !Array.isArray(item) &&
+      Object.keys(item).sort().join() === keys.join() && ['rotate', 'revoke'].includes(item.action) &&
+      typeof item.rotated_at === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00$/.test(item.rotated_at) &&
+      typeof item.previous_token_masked === 'string' &&
+      (item.previous_token_masked === '' || tokenMaskPattern.test(item.previous_token_masked)))) return null;
+  return entries;
+}
+export const odooSwitchKeys = ['enable_writes', 'allow_direct_writes', 'allow_unknown_methods', 'chatter_direct'];
+export function odooSwitches(bootstrap) {
+  if (bootstrap?.product !== 'odoo' || !['saved', 'legacy_all_on'].includes(bootstrap.odoo_write_switches_source)) return null;
+  const value = bootstrap.odoo_write_switches;
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+      Object.keys(value).sort().join() !== [...odooSwitchKeys].sort().join() ||
+      !odooSwitchKeys.every(key => typeof value[key] === 'boolean')) return null;
+  return value;
+}
+export function odooSwitchPayload(bootstrap, values) {
+  if (!odooSwitches(bootstrap) || !values || typeof values !== 'object' ||
+      Object.keys(values).sort().join() !== [...odooSwitchKeys].sort().join() ||
+      !odooSwitchKeys.every(key => typeof values[key] === 'boolean')) throw new UiError('Odoo 子操作開關格式不相容；未送出變更。');
+  return { odoo_write_switches: Object.fromEntries(odooSwitchKeys.map(key => [key, values[key]])) };
+}
 export function mountPath(value) {
   if (typeof value !== 'string' || value.length > 512 || (value !== '' && !/^(\/[A-Za-z0-9_-]+)+$/.test(value))) {
     throw new UiError('管理介面掛載路徑無效。請從原服務入口重新開啟。');

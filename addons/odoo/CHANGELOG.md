@@ -1,12 +1,22 @@
 # Odoo Changelog
 
-## 下一版（未發佈）
+## 0.4.4 — 發佈候選（2026-10-29；映像待驗收）
+
+- 管理面板顯示目前 MCP token 遮罩與最近最多五筆輪替／撤銷紀錄（只有時間、動作及舊 token 遮罩）。token 與紀錄同次原子儲存；重複撤銷不新增紀錄。
+- schema 4 啟動時不重寫。首次 token 變更會保存 `token_history`，0.4.3 拒絕此欄位；升級前請建立 add-on 備份，降版時連同程式還原升級前備份，再檢查 token 與用戶端設定。
+- Odoo `success:false` 結果改為 MCP `isError:true`，保留 JSON 與 structuredContent 包裝；錯誤 traceback 收斂成最後例外行。
+- 新增四個子操作開關：總寫入、直接寫入、未知方法、直接 chatter。管理員儲存需通過 CSRF／版本檢查，並重新啟動子程序；外層工具授權仍有效。精確 `model.method` 白名單編輯尚未提供。
+- 儲存開關會保存 `odoo_write_switches`，0.4.3 同樣拒絕此新 key；降版需升級前備份，不能只換映像或刪除新欄位。
+- 版本升至 0.4.4；映像建置、精確映像驗收、匿名讀回及正式發布尚未完成。
+- 詳見 [upgrade-notes.yaml](../../upgrade-notes.yaml) 與 [0.4.4 發佈決策](../../docs/operations/release-decision-0.4.4.md)。
+
+## 0.4.3 — 發佈候選（2026-10-28）
 
 - **舊版安裝升級後第一次啟動就一次性全開（與 PaaS 一致；負責人 2026-10-27 決定）**：state schema 1/2/3（0.1.x 寫的）在建立設定儲存、啟動 MCP 子程序之前，自動改成與 0.3.0–0.4.1 升級確認頁 `all_on` 完全相同的設定（schema 4、寫入全開、全部寫入授權、停用清單清空；token、後端連線與對外端點保留），同一次原子寫入加上標記 `owner_defaults_20261025`（`applied`、`at`、`from_schema`）；寫入前先把舊設定的限制存成 `/data/mcp/owner-defaults-20261025-recovery.json`（0600，只有政策，不含 token 與後端）。MCP 立刻可用，不再回 503 `upgrade_review_required` 等管理員確認；add-on log 會有一行說明。**升級後請打開這個 add-on 的管理面板（開啟網頁介面）查看通知與升級前後差異**：除了 add-on log 的那一行，沒有其他提示。
 - **升級確認頁改成事後通知**：管理面板每一頁顯示「已於 <時間> 自動套用預設全開」與升級前後差異，可選「還原升級前的限制」（與 0.1.x 實際能做的相同：舊設定停用的工具再停用；寫入只保留舊設定授權過的，其他寫入連同新版才有的寫入操作都取消；新版才有的工具不會被停用（讀取照常可用），不會像 0.3.0 的 `preserve` 那樣整個停用；升級後自己關掉的不會被打開）或「保持全開，不再提示」，兩者都記入標記、之後不再提示（保持全開後仍可在「診斷與維護」頁還原）。例：0.1.x 沒有授權 `chatter_post` 的設定，還原後取消 `chatter_post` 與新版的 7 個寫入（含可直接 create／write／unlink、呼叫任意方法的 `execute_method`）；41 個工具中 33 個可用（新版 28 個工具中唯讀的 21 個照常可用）。
 - 已是 schema 4 的設定（新安裝、0.2.0 之後寫的、或已在升級確認頁確認過的）一律不動；讀不到或壞掉的設定照舊 fail-safe：不遷移、不覆寫，add-on log 說明後停止（`runtime unavailable; local recovery required`），請還原更新前的備份。
-- 回退：自動遷移過的設定帶有標記欄位，0.4.1 不接受；要退回 0.4.1 請還原更新前的 add-on 備份。沒有標記的 schema 4 設定與 0.4.1 相同。見 [upgrade-notes.yaml](../../upgrade-notes.yaml)、[legacy migration](../../docs/operations/legacy-migration.md)。
-- 版本號、映像名稱與架構、選項、port 與工具都不變（版號與映像由發版 PR 決定）；隨下一版發佈。
+- 回退：自動遷移過的設定帶有標記欄位，0.4.2 不接受；要退回 0.4.2 請還原更新前的 add-on 備份。沒有標記的 schema 4 設定與 0.4.2 相同。見 [upgrade-notes.yaml](../../upgrade-notes.yaml)、[legacy migration](../../docs/operations/legacy-migration.md)。
+- 版本號升至 0.4.3；映像名稱、架構、選項、port 與工具不變。正式 0.4.3 映像須經精確映像驗收、匿名讀回和商店發版閘。
 
 ## 0.4.2 — 發佈候選（2026-10-27）
 

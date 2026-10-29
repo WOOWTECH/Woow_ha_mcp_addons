@@ -1,12 +1,8 @@
-"""0.4.0: the Odoo write-tool texts a model reads match the add-on's real gating.
+"""The pinned wheel text and the child overlay's all-on listing match their actual Odoo write gates.
 
-The add-on runs the odoo-mcp child with ODOO_MCP_ALLOW_DIRECT_WRITES=1 and MCP_CHATTER_DIRECT=1 (products.child_spec):
-execute_method runs create/write/unlink directly and chatter_post posts on its first call (test_expansion_runtime
-checks both against a fake Odoo). odoo-mcp 1.3.0's own text says the opposite: "direct create, write, and unlink are
-blocked" (execute_method's method parameter) and "Default mode requires an approval token" (chatter_post), so a model
-fell back to the three-step approval flow or expected a preview that never came. The HA copy of
-apps/odoo/patches/fix_direct_writes.py makes both texts follow the same expressions the code reads; the WOOW PaaS keeps
-upstream's text, accurate there because its switch defaults to off.
+The pinned HA wheel retains the earlier direct-write text patch. The source-guarded child overlay applies the PaaS
+#89 gate decisions and their descriptions before launch; its all-on listing is also the offline snapshot. The four
+saved child switches are exercised separately against a synthetic XML-RPC backend.
 """
 import asyncio
 from contextlib import closing
@@ -18,15 +14,17 @@ import httpx
 import pytest
 
 from mcp_admin_core.products import ProductStore, child_spec
+from mcp_admin_core.odoo_write_gates import METHOD_TEXT_ALL_ON
 from mcp_admin_core.tool_snapshot import LISTED
 from owned_runtime import Endpoint
 from test_expansion_runtime import fake_api
 from test_real_products import connection, rpc
 
 ROOT = Path(__file__).resolve().parents[1]
-DIRECT_METHOD = ("Odoo model method to call; create, write and unlink run directly in this deployment "
-                 "(ODOO_MCP_ALLOW_DIRECT_WRITES is set), without the preview_write -> validate_write -> "
-                 "execute_approved_write flow; the Odoo user's own access rights still apply.")
+DIRECT_METHOD = METHOD_TEXT_ALL_ON  # The child overlay's all-on text, also used by the offline snapshot.
+PATCHED_METHOD = ("Odoo model method to call; create, write and unlink run directly in this deployment "
+                  "(ODOO_MCP_ALLOW_DIRECT_WRITES is set), without the preview_write -> validate_write -> "
+                  "execute_approved_write flow; the Odoo user's own access rights still apply.")
 DIRECT_CHATTER = ("Post a chatter message on a mail.thread record. Direct mode is on in this deployment "
                   "(MCP_CHATTER_DIRECT): the first call posts the message at once; there is no preview and no "
                   "approval token.")
@@ -70,7 +68,7 @@ def test_the_patched_text_follows_the_switches_the_code_reads(switches):
                           text=True, timeout=120)
     assert done.returncode == 0, done.stderr[-2000:]
     method, chatter, direct_chatter = json.loads(done.stdout.splitlines()[-1])
-    expected = (DIRECT_METHOD, DIRECT_CHATTER, True) if switches == 'on' else (UPSTREAM_METHOD, UPSTREAM_CHATTER, False)
+    expected = (PATCHED_METHOD, DIRECT_CHATTER, True) if switches == 'on' else (UPSTREAM_METHOD, UPSTREAM_CHATTER, False)
     assert (method, chatter, direct_chatter) == expected
 
 

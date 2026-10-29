@@ -32,7 +32,7 @@ SPEC＋安全審，範圍只有這兩段程式，不含映像、HA 或發佈（[
 owner／non-admin（0.1.1–0.1.6；Nextcloud 尚未在 HA 實測），但這些 gates 和其他人工 gates 一樣仍全部 false。
 
 **支援的 Core 版本**：七支的管理面板只在該版 add-on 審查過的 HA Core 版本運作（`ha_role._HA_VERSIONS`；0.1.6–0.1.8：2026.7.2–2026.9.4
-與 2026.10.0，0.1.9 起再加 2026.10.1，下一版（未發佈）再加 2026.10.2–2026.10.4，0.1.5 及更早只有 2026.7.2；審查紀錄見 [ha-role-core-contract](../ha-role-core-contract.md)）。其他版本（含之後的 patch
+與 2026.10.0，0.1.9 起再加 2026.10.1，0.4.2 起再加 2026.10.2–2026.10.4，0.1.5 及更早只有 2026.7.2；審查紀錄見 [ha-role-core-contract](../ha-role-core-contract.md)）。其他版本（含之後的 patch
 與 beta）整個管理面板都回 403；0.4.1 以前看起來和「不是管理員」完全一樣（add-on 紀錄也沒有訊息），下一版起管理面板改顯示「這個 HA Core 版本尚未審核：<版本>」，
 API 回 `detail.code` = `core_version_unreviewed` 與版本，add-on 紀錄記一行（不含權杖）；MCP 端點（Bearer token）不經這項檢查，不受影響。
 新的 Core 版本要等 add-on 發新版才支援，升級 Core 前請先對照這份清單。

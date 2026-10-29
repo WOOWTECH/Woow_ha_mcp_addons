@@ -29,7 +29,7 @@ from starlette.routing import Route, request_response
 from starlette.middleware import Middleware
 
 from . import owner_defaults, redact, ui
-from .access import AccessChanged, LeasedResponse, TokenAccess
+from .access import AccessChanged, LeasedResponse, TokenAccess, masked_token
 
 from . import VERSION
 from .config import ConfigError, State, Store, strict_json
@@ -385,7 +385,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         try:
             state = store.load()
             changes = None
-            if name in ("backend", "policy", "endpoint") and request.method == "PUT":
+            if name in ("backend", "policy", "endpoint", "odoo/write-switches") and request.method == "PUT":
                 try:
                     if not isinstance(value, dict):
                         raise ValueError()
@@ -407,6 +407,10 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                             changes = value
                     elif name == "endpoint":
                         if set(value) != {"endpoint"}:
+                            raise ValueError()
+                        changes = value
+                    elif name == 'odoo/write-switches':
+                        if getattr(state, 'product', None) != 'odoo' or set(value) != {'odoo_write_switches'}:
                             raise ValueError()
                         changes = value
                     else:
@@ -437,10 +441,13 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 if notice_action and not matches:
                     # The notice actions apply only to the revision the administrator reviewed.
                     return JSONResponse({'detail': {'code': 'precondition_required'}}, status_code=428, headers=headers)
+                if name == 'odoo/write-switches' and not matches:
+                    return JSONResponse({'detail': {'code': 'precondition_required'}}, status_code=428, headers=headers)
             if name == "__ui__" and hasattr(request.state, "ui_path") and request.method in ("GET", "HEAD"):
                 return ui.response(request.state.ui_path, base)
             if name == "bootstrap" and request.method == "GET":
-                catalog = tool_catalog(tools, listing, None, state)
+                from .odoo_switch_listing import for_state as listing_for_state
+                catalog = tool_catalog(tools, listing_for_state(listing, state), None, state)
                 schemas = {item["name"]: item.get("inputSchema") for item in catalog["items"]}
                 # Owner decision 2026-10-27: the one-time all-on migration's notice (only on a state it wrote).
                 notice = owner_defaults.view(state, store.directory)
@@ -449,8 +456,13 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     "configuration": configuration.snapshot(state),
                     "endpoint": state.endpoint, "backend_url": state.backend_url,
                     "backend_key_set": state.backend_key is not None, "token_active": state.token is not None,
+                    "token_masked": masked_token(state.token),
+                    "token_history": [entry.model_dump() for entry in (getattr(state, 'token_history', None) or [])],
                     "mcp_access_token_set": getattr(state, "mcp_access_token", None) is not None,
                     "product": getattr(state, 'product', 'n8n'),
+                    **({'odoo_write_switches': state.effective_odoo_write_switches.model_dump(),
+                        'odoo_write_switches_source': 'saved' if state.odoo_write_switches is not None else 'legacy_all_on'}
+                       if getattr(state, 'product', None) == 'odoo' else {}),
                     "connection_configured": getattr(state, 'configured', bool(state.backend_url and state.backend_key)),
                     "writes_enabled": state.writes_enabled, "disabled": state.disabled,
                     "policy_contract": "woow-v3-exact-grants",
@@ -471,7 +483,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 # Include exits/replacements during the final awaited role lookup.
                 if before != snapshot().get("child"):
                     observed = None
-                return JSONResponse(capabilities(state, tool_catalog(tools, listing, observed, state)), headers=headers)
+                from .odoo_switch_listing import for_state as listing_for_state
+                return JSONResponse(capabilities(state, tool_catalog(tools, listing_for_state(listing, state), observed, state)), headers=headers)
             if name == "backend/test" and request.method == "POST":
                 if backend_check is None:
                     return JSONResponse({"error": "unsupported"}, status_code=409, headers=headers)
@@ -502,13 +515,20 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             if name == "token/reveal" and request.method == "POST":
                 return JSONResponse({"token": store.load().token}, headers=headers)
             if name == "token/rotate" and request.method == "POST":
-                updated = store.update(token=secrets.token_urlsafe(32))
+                new_token = secrets.token_urlsafe(32)
+                updated = (store.change_token(new_token, action='rotate')[0] if hasattr(store, 'change_token')
+                           else store.update(token=new_token))
                 token_access.committed()
                 headers['ETag'] = configuration.etag(updated)
                 return JSONResponse({"token": updated.token}, headers=headers)
             if name == "token/revoke" and request.method == "POST":
-                updated = store.update(token=None)
-                token_access.committed()
+                if hasattr(store, 'change_token'):
+                    updated, changed = store.change_token(None, action='revoke')
+                else:
+                    changed = state.token is not None
+                    updated = store.update(token=None) if changed else state
+                if changed:
+                    token_access.committed()
                 headers['ETag'] = configuration.etag(updated)
                 return Response(status_code=204, headers=headers)
             if notice_action:
@@ -539,7 +559,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 # An authorized mutation is not undone by losing its HTTP caller.
                 committed.set()
                 headers['ETag'] = configuration.etag(updated)
-                if (name == "backend" or (name == "policy" and getattr(state, 'product', 'n8n') in ('emqx', 'litellm', 'nextcloud'))) and backend_changed:
+                if (name in ('backend', 'odoo/write-switches') or (name == "policy" and getattr(state, 'product', 'n8n') in ('emqx', 'litellm', 'nextcloud'))) and backend_changed:
                     try:
                         await backend_changed(updated)
                     except Exception:
@@ -561,7 +581,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         committed = asyncio.Event()
         try:
             name = request.path_params["operation"]
-            if name in ("backend", "policy", "endpoint") and request.method == "PUT":
+            if name in ("backend", "policy", "endpoint", "odoo/write-switches") and request.method == "PUT":
                 value = await json_body(request)
             else:
                 if await body(request):
@@ -813,7 +833,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
 
     def listed_reply(ident, state):
         """0.2.2: tools/list answered from listing, filtered exactly as a child's answer (redact, then filter_list)."""
-        value = {"jsonrpc": "2.0", "id": ident, "result": {"tools": copy.deepcopy(listing)}}
+        from .odoo_switch_listing import for_state as listing_for_state
+        value = {"jsonrpc": "2.0", "id": ident, "result": {"tools": listing_for_state(listing, state)}}
         value = filter_list(redact.redact_secrets(value, redact.secret_values(state)), tools, state)
         return json_reply(value, 200, {"Cache-Control": "no-store"})
 

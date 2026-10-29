@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import base64
+import json
+import re
 from dataclasses import dataclass, field
 from datetime import UTC
 from email.utils import parsedate_to_datetime
 from typing import Any
+from urllib.parse import quote
 from xml.etree.ElementTree import Element
 
 from defusedxml import ElementTree as SafeET
@@ -140,12 +144,13 @@ def parse_multistatus(body: bytes) -> list[DavResponse]:
 SERVER_MESSAGE_LIMIT = 1000
 
 
-def server_message(body: bytes) -> str | None:
+def server_message(body: bytes, *, credentials: tuple[str, ...] = ()) -> str | None:
     """The backend's own error message, whitespace folded and cut to SERVER_MESSAGE_LIMIT characters.
 
     WOOW HA add-on 0.2.1 (owner decision 2026-10-15: raw backend errors): a Sabre ``<s:message>`` (WebDAV/CalDAV)
     as upstream, and also an OCS ``meta/message`` (XML or JSON), a JSON ``message``/``error`` and a short plain-text
-    body; HTML pages give nothing. The gateway replaces the add-on's credentials with [REDACTED].
+    body; HTML pages give nothing. Known credentials are replaced before folding/truncation;
+    the gateway additionally redacts its own tokens from the final MCP reply.
     """
     if not body or len(body) > 65536:
         return None
@@ -159,8 +164,6 @@ def server_message(body: bytes) -> str | None:
         message = root.findtext(tag(SABRE, "message")) or root.findtext("meta/message") or root.findtext("message")
     elif text.startswith("{"):
         try:
-            import json
-
             value = json.loads(text)
         except ValueError:
             value = None
@@ -176,6 +179,19 @@ def server_message(body: bytes) -> str | None:
         message = text
     if not message:
         return None
+    # Match the existing diagnostics.scrub_line credential encodings, plus the
+    # gateway's URL-safe/unpadded Basic forms. One pass never re-scrubs the mask.
+    variants = set()
+    for value in credentials:
+        if not value:
+            continue
+        variants.update((value, quote(value, safe=""), json.dumps(value)[1:-1]))
+        for encode in (base64.b64encode, base64.urlsafe_b64encode):
+            encoded = encode(value.encode()).decode()
+            variants.update((encoded, encoded.rstrip("=")))
+    if variants:
+        pattern = "|".join(re.escape(value) for value in sorted(variants, key=len, reverse=True))
+        message = re.sub(pattern, lambda _: "[REDACTED]", message)
     message = " ".join(message.split())
     return message[:SERVER_MESSAGE_LIMIT] or None
 

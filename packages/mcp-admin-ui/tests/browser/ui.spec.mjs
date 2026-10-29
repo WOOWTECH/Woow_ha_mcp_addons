@@ -195,6 +195,21 @@ test('MOCK rotation cancellation / reveal / hiding / revoke use deliberate CSRF 
   expect(await page.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 });
   expect(page.url()).not.toContain('MMMM');
 });
+test('MOCK token card renders only masked current and bounded history values', async ({ page, request }) => {
+  const mask = 'Ab12' + '*'.repeat(20) + 'xy_9';
+  await reset(request, { tokenMask: mask, tokenHistory: [{ action: 'rotate',
+    rotated_at: '2026-10-29T00:00:00+00:00', previous_token_masked: mask }] });
+  await start(page, '/access');
+  await expect(page.getByText(`目前權杖（遮罩）：${mask}`)).toBeVisible();
+  await expect(page.locator('#token-history li')).toHaveCount(1);
+  await expect(page.locator('#token-history li')).toContainText(`重新產生 · 2026-10-29T00:00:00+00:00 · ${mask}`);
+  await expect(page.locator('body')).not.toContainText('S'.repeat(43));
+  await reset(request, { tokenMask: 'S'.repeat(43), tokenHistory: [{ action: 'rotate',
+    rotated_at: '2026-10-29T00:00:00+00:00', previous_token_masked: 'S'.repeat(43) }] });
+  await page.reload();
+  await expect(page.getByText('權杖歷史格式不相容；請重新整理或更新附加元件。')).toBeVisible();
+  await expect(page.locator('body')).not.toContainText('S'.repeat(43));
+});
 test('MOCK explicit endpoint and clipboard defaults never guess ingress origin or include token', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await start(page, '/access');

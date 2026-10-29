@@ -1,5 +1,8 @@
 # Odoo 操作說明
 
+**0.4.4 候選**：工具頁可調整四個 Odoo 子操作開關，缺欄仍採既有全開值；下文 `=1` 描述的是此預設。儲存後由實際設定決定直接／核准寫入，外層工具授權仍先作用；精確 `model.method` 白名單編輯尚未提供。失敗結果回 MCP `isError:true`，保留 JSON 與 structuredContent 結構，traceback 縮為最後例外行。存入 `odoo_write_switches` 或 token 變更後的 `token_history` 都會讓 0.4.3 拒絕 state；請在升級前備份，降版時還原該備份。映像尚待建置與驗收。
+
+
 ## 現況與範圍
 
 **0.2.1（experimental，2026-10-15 上架商店）**：映像 `ghcr.io/woowtech/amd64-mcp-odoo:0.2.1`（GitHub tag／release `v0.2.1`，以映像建置 commit `88a707f` 為準）。0.2.1 起是完整版：上游 41 個工具全部開放，全部工具與寫入預設開啟（管理面板可逐一停用或取消寫入），後端錯誤回原始訊息（add-on 持有的憑證換成 `[REDACTED]`），見下方說明與 [CHANGELOG](CHANGELOG.md)。上架歷程：0.1.10（2026-10-13）、0.1.11、0.1.14（2026-10-14）與 0.2.1 已上架商店；0.1.12、0.1.13、0.2.0 映像只推 GHCR、未上架。下一段是 0.1.9 時的建置與回歸紀錄（測試 HA 的回歸紀錄目前到 0.1.9）。
@@ -10,9 +13,9 @@
 system-admin 才放行；token 只給管理程序，child 不繼承。此 token 具**廣泛 Core 管理能力**，負責人已知情核准。
 不得注入 test verifier 或直接編輯 state 解鎖；`panel_admin` 不是角色授權。
 
-**支援的 Core 版本**：管理面板只在本版審查過的 HA Core 版本運作（0.1.6–0.1.8：2026.7.2–2026.9.4 與 2026.10.0；0.1.9 起再加 2026.10.1；下一版（未發佈）再加 2026.10.2–2026.10.4）。
+**支援的 Core 版本**：管理面板只在本版審查過的 HA Core 版本運作（0.1.6–0.1.8：2026.7.2–2026.9.4 與 2026.10.0；0.1.9 起再加 2026.10.1；0.4.2 起再加 2026.10.2–2026.10.4）。
 其他版本（含之後的 patch 與 beta）整個管理面板都回 403；0.4.1 以前看起來和「不是管理員」完全一樣（add-on 紀錄也沒有訊息），0.4.2 起管理面板改顯示「這個 HA Core 版本尚未審核：<版本>」，add-on 紀錄也記一行同樣的說明（不含權杖）；
-MCP 端點（Bearer token）不經這項檢查，不受影響。新的 Core 版本要等 add-on 發新版才支援，升級 Core 前請先對照這份清單。下一版（未發佈）起，舊版升級後自動全開的設定在未審核的 Core 上也無法用管理面板還原或調整：請先把 add-on 更新到審過這個 Core 的版本，再到管理面板「還原升級前的限制」；需要立刻限制 MCP 時先停止 add-on（進階的離線還原步驟見 [legacy migration](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/legacy-migration.md#when-the-panel-refuses-an-unreviewed-core)）。
+MCP 端點（Bearer token）不經這項檢查，不受影響。新的 Core 版本要等 add-on 發新版才支援，升級 Core 前請先對照這份清單。0.4.3 起，舊版升級後自動全開的設定在未審核的 Core 上也無法用管理面板還原或調整：請先把 add-on 更新到審過這個 Core 的版本，再到管理面板「還原升級前的限制」；需要立刻限制 MCP 時先停止 add-on（進階的離線還原步驟見 [legacy migration](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/legacy-migration.md#when-the-panel-refuses-an-unreviewed-core)）。
 
 本產品 runtime：**odoo-mcp 1.3.0 / MCP SDK 2.3.0**（0.4.0 起；0.3.4 是 odoo-mcp 1.1.0 / SDK 1.30.0；套上 PaaS woow-mcp-server 的兩個 build patch：跨 session approval token、直接寫入開關；13 個工具的 structuredContent 不再包一層 `result`，見 [upgrade-notes.yaml](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/upgrade-notes.yaml)）。**0.2.1 起完整版**（負責人 2026-10-15 決定）：上游 41 個工具全部開放，與原始 MCP server 及 PaaS 版功能一致；tools/list 用子程序自己的 inputSchema（經 provider-safe 正規化），tools/call 參數原樣轉給子程序驗證，輸出不再截斷或投影。子程序環境 `ODOO_MCP_ENABLE_WRITES=1`、`ODOO_MCP_ALLOW_DIRECT_WRITES=1`：`execute_method` 可直接 create／write／unlink，三步驟 `preview_write`→`validate_write`→`execute_approved_write` 也照常列出可用（approval token 跨 session 有效）；`ODOO_MCP_ALLOW_UNKNOWN_METHODS=1`：`execute_method` 也可呼叫未審查的副作用方法（例如 `action_confirm`、`action_post`）；`MCP_CHATTER_DIRECT=1`：`chatter_post` 直接送出，不必先 preview（帶了 `approval`／`confirm` 也照樣送出）。Odoo 的錯誤（例如 AccessError）原文回傳。逐名清單與分類見[工具表](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-surface.md)，轉送規則與保留的安全層見[工具範圍](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-expansion.md)。子程序新增但尚未分類的工具一律拒絕。
 
