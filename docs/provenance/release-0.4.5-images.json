@@ -15,13 +15,30 @@
     }
   },
   "accepted_local_images_preserved": true,
-  "anonymous_immutable_full_pull_verified": true,
+  "anonymous_immutable_pull_succeeded": true,
   "builder_route": "explicit-operator-local-private-builder",
   "canonical_git_archive_sha256": "298cb0c8dd2e7d3b7725fe4b90da15bd677be68690e8fb8d63cb79c651a4dada",
   "collect_receipt_sha256": "c616e930becbc138464c6e8fdea7b5634bfe5c11c5d8cfee38494fc1c5c9d377",
   "credential_config_and_owned_registry_refs_cleaned": true,
   "disabled_product_not_published": "opendesign",
   "final_docs_commit_is_not_image_source": true,
+  "fresh_remote_layer_verification": {
+    "CDN_server_cache_state_claimed": false,
+    "all_six_images_covered": true,
+    "completed_at": "2026-10-29T08:13:33.772739+00:00",
+    "compressed_size_digest_and_uncompressed_diffIDs_verified": true,
+    "fresh_compressed_layer_bytes": 343598653,
+    "haos_acceptance_claimed": false,
+    "image_source_commit": "2910f5ee65cf27c04eb2d39072c2a357347d657c",
+    "no_docker_daemon_or_local_layer_cache": true,
+    "ordered_image_layer_references": 103,
+    "passed": true,
+    "receipt": "docs/provenance/release-0.4.5-remote-layers.json",
+    "receipt_sha256": "bc90ee714dcc90e1fdb5f17926c1ea9fa0cc1e17f24eb63480ce04097c776f09",
+    "started_at": "2026-10-29T08:11:59.709532+00:00",
+    "unique_decompressed_bytes_hashed": 913126912,
+    "unique_remote_layer_blobs": 83
+  },
   "full_history_commits": 285,
   "functional_scope": "Exact packaged runtime with owned mocks; separate synthetic-only HAOS 0.4.5 upgrade acceptance follows. No ws97 or production backend acceptance claimed.",
   "helper_sha256": {
@@ -43,6 +60,13 @@
   "image_source_tree": "4297c99ad05206e164e2b1f2e18355e613b8116f",
   "independent_anonymous_manifest_config_diffIDs_verified": true,
   "independent_verify_receipt_sha256": "99665b8264a312e2e33cd832a3d55afaba5faae0c556b8eabaa6a33d51a1a098",
+  "initial_anonymous_pull_evidence": {
+    "historical_flag_correction": "The earlier anonymous_immutable_full_pull_verified flag was too broad. Original evidence is retained; fresh remote bytes are established separately by the supplemental receipt.",
+    "original_private_receipts_modified": false,
+    "publication_receipt_sha256": "ef2a34a374c8ad56cd39bce0c9e02e9a5352cf122ee513dfed546155f56d83fd",
+    "recorded_at_commit": "46218e9567d83424d4ff363f8816d2034f4f4997",
+    "scope": "Clean-auth Docker pull succeeded using the retained builder daemon. Its local layers could be reused; this observation alone does not prove a fresh network download of every remote layer."
+  },
   "input_sha256": {
     "ha045_builder_identity.json": "872fdd79251cc101abd33684897c7e09b780f43a91cf0f63d749975ea0c7c853",
     "ha045_ownership.json": "7f011ba813985fd423e206faa50e45b8151813fa2f0ba11c13807ac1c2c87322",

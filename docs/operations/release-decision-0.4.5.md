@@ -34,7 +34,7 @@ The existing 0.4.4 images, receipt and readiness do not prove this source is bui
 2. Six fresh linux/amd64 images through the existing private builder, each with exact-image P1–P5, secret scans
    (current source, full history, all image layers), SBOM/CVE/license policy, installed Debian versions, UI and UID gates.
    Existing scanner/policy/triage bytes remain unchanged; a policy pass does not mean zero CVEs.
-3. Only accepted immutable IDs may publish; anonymous complete pulls and independent manifest/config/layer/source checks.
+3. Only accepted immutable IDs may publish; anonymous pulls and independent manifest/config/layer/source checks, with any daemon-cache boundary recorded explicitly.
    Provenance is unsigned and the private Docker daemon is shared; no host isolation or SLSA claim.
 4. Add the actual receipt only after publication. Final PR head must pass required checks and readiness before normal merge.
 5. Independently verify six stable Releases, Store and Local Download contents after merge. Synthetic HAOS and isolated
@@ -55,9 +55,17 @@ secret scans, SBOM/CVE/license policy, final installed Debian package versions, 
 The six prior 0.4.4 image IDs were preserved; new 0.4.5 tags were unused before this publication. Scanner/policy/triage
 bytes are unchanged from 0.4.4. A policy pass does not imply zero vulnerabilities; no broad secret/CVE exception was added.
 
-Only accepted immutable IDs were published. Anonymous complete pulls and a separate manifest/config/ordered-layer/
-source/version/platform comparison passed. Temporary publisher aliases and credentials were cleaned; accepted local
-images remain. See [provenance](../provenance/release-0.4.5-images.json). Provenance is unsigned and the private daemon
+Only accepted immutable IDs were published. Anonymous Docker pulls and a separate manifest/config/ordered-layer/
+source/version/platform comparison passed. The Docker daemon retained accepted images, so those pull receipts alone
+do not prove that every remote layer blob was downloaded again; the independent metadata check fetched manifest/config
+bytes and compared ordered diffIDs. The [separate remote-layer receipt](../provenance/release-0.4.5-remote-layers.json) records a fresh
+anonymous verification at 08:11:59–08:13:33 UTC: all 83 unique remote gzip blobs (343,598,653 compressed
+bytes) were downloaded without Docker or a local layer cache, covering all 103 ordered layer positions
+across the six images. Compressed size/SHA256 and streaming decompressed diffIDs all matched the
+immutable manifests/configs and original image gates; 913,126,912 decompressed bytes were hashed.
+Only identical descriptors share this run’s completed GET evidence. CDN server cache state is not claimed.
+The original private receipts and their historical Git revision remain unchanged; the current public provenance
+separates these two observations. Temporary publisher aliases and credentials were cleaned; accepted local images remain. See [provenance](../provenance/release-0.4.5-images.json). Provenance is unsigned and the private daemon
 is shared: no SLSA or host isolation claim.
 
 | Product | Immutable published reference |
