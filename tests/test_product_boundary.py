@@ -87,9 +87,11 @@ def test_odoo_mcp_1_3_opt_ins_stay_off(tmp_path, monkeypatch):
     # 0.4.0 (odoo-mcp 1.3.0): validate_write reads a local file for a <field>_from_path value only from
     # ODOO_MCP_ATTACHMENT_UPLOAD_ROOTS (unset: refused, nothing is read), execute_approved_write asks the client
     # (elicitation) only with ODOO_MCP_ELICIT_WRITES, OAuth starts only with ODOO_MCP_AUTH_*. The child environment is
-    # built here, never inherited, and keeps exactly the three write switches of 0.2.0.
+    # built here, never inherited. The three write switches remain, and 0.4.6 supplies an explicit empty
+    # method list until the administrator saves one; it must not inherit a parent's exceptions.
     for name in ('ODOO_MCP_ATTACHMENT_UPLOAD_ROOTS', 'ODOO_MCP_MAX_ATTACHMENT_UPLOAD_BYTES', 'ODOO_MCP_ELICIT_WRITES',
-                 'ODOO_MCP_AUTH_ISSUER_URL', 'ODOO_MCP_POLICY_FILE', 'ODOO_MCP_TOOLS_EXCLUDE', 'MCP_ALLOW_REMOTE_HTTP'):
+                 'ODOO_MCP_AUTH_ISSUER_URL', 'ODOO_MCP_POLICY_FILE', 'ODOO_MCP_TOOLS_EXCLUDE',
+                 'ODOO_MCP_ALLOWED_SIDE_EFFECT_METHODS', 'MCP_ALLOW_REMOTE_HTTP'):
         monkeypatch.setenv(name, '/')
     store = ProductStore(tmp_path / 'odoo', 'odoo')
     try:
@@ -98,7 +100,9 @@ def test_odoo_mcp_1_3_opt_ins_stay_off(tmp_path, monkeypatch):
     finally:
         store.close()
     assert {name for name in spec.env if name.startswith('ODOO_MCP_')} == {
-        'ODOO_MCP_ENABLE_WRITES', 'ODOO_MCP_ALLOW_DIRECT_WRITES', 'ODOO_MCP_ALLOW_UNKNOWN_METHODS'}
+        'ODOO_MCP_ENABLE_WRITES', 'ODOO_MCP_ALLOW_DIRECT_WRITES', 'ODOO_MCP_ALLOW_UNKNOWN_METHODS',
+        'ODOO_MCP_ALLOWED_SIDE_EFFECT_METHODS'}
+    assert spec.env['ODOO_MCP_ALLOWED_SIDE_EFFECT_METHODS'] == ''
     assert not any(name.startswith('MCP_') and name != 'MCP_CHATTER_DIRECT' for name in spec.env)
 
 async def test_writer_is_denied_before_dispatch_then_explicitly_enabled(tmp_path):
