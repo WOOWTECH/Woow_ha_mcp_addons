@@ -11,7 +11,7 @@ versions, dependencies, image tags, release receipts or deployment state.
 - Its parent: `f378a7752538d0cdbf2a23db4af3dfb7ceee0e39`.
 - Separate worktree/branch: `fix/n8n-error-contract-next-20261029`.
 - Before starting, the frozen tree and all 618 tracked file digests were checked
-  against the local release team's source freeze. The user then explicitly
+  against the local release team's source freeze. The main coordinator then explicitly
   confirmed that complete SHA.
 
 The preceding PaaS/HA audit found all 68 public n8n/LiteLLM tools and input
