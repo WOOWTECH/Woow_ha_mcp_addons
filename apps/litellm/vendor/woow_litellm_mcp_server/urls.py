@@ -21,4 +21,3 @@ def normalize_base_url(raw: str) -> str:
     _ = parts.port
     path = "" if parts.path == "/v1" else parts.path
     return urlunsplit((parts.scheme, parts.netloc, path, "", ""))
-
