@@ -1,5 +1,8 @@
 # 手動更新、備份與回復
 
+**0.4.4 候選（映像待驗收）**：schema 4 在儲存 Odoo 四開關後新增 `odoo_write_switches`，在輪替／撤銷 token 後新增 `token_history`。0.4.3 會拒絕任一新 key；降版必須同時還原升級前 add-on 備份與程式，再檢查復原的 grants／denies，並視需要重發 token、更新用戶端。不要刪除新欄位或手改 state。只啟動且未保存新欄位的舊 schema 4 檔案維持原位元組；這不表示所有更舊版本都相容。見 [0.4.4 發佈決策](release-decision-0.4.4.md)與 [upgrade-notes.yaml](../../upgrade-notes.yaml)。
+
+
 以下是批准後的受控程序。HA 實證（測試 HA）：n8n 0.1.0→0.1.1 升版、0.1.1 cold backup→partial
 restore（[0.1.1 紀錄](ha-test-0.1.1.md)）與 0.1.2 還原修復（[0.1.2 紀錄](ha-test-0.1.2.md)；權杖延續本輪沒驗到）皆成功；0.1.1→0.1.5 每版都以
 `ha apps update` 更新全部產品並回歸（[0.1.5 紀錄](ha-test-0.1.5.md) 等），0.1.3 起更新前先做冷備份。其餘五支（Odoo、Hermes、

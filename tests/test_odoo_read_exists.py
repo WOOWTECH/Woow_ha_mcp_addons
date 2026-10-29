@@ -223,8 +223,9 @@ async def test_genuine_child_reports_a_missing_id_only_read_as_not_found(tmp_pat
                         before = len(events)
                         reply = await rpc(client, '/mcp', headers, call(
                             'read_record', {'model': 'res.partner', 'record_id': record_id, 'fields': fields, **extra}))
-                        assert reply.get('isError') is not True, reply
-                        return json.loads(reply['content'][0]['text']), [e[0] for e in events[before:]]
+                        body = json.loads(reply['content'][0]['text'])
+                        assert (reply.get('isError') is True) is (body.get('success') is False), reply
+                        return body, [e[0] for e in events[before:]]
 
                     assert await read(MISSING, ['id']) == (NOT_FOUND, ['read', 'search_count'])
                     assert await read(MISSING, ['id', 'id']) == (NOT_FOUND, ['read', 'search_count'])

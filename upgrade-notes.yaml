@@ -2,6 +2,63 @@
 # pipeline #89) has not yet defined a machine-readable schema; this follows the format already used by
 # WOOWTECH/Woow_ha_cloudflare_tunnel_webgui. One release per entry, newest first.
 releases:
+  # Unified 0.4.4 release candidate, NOT released; exact-source images and acceptance pending.
+  - to_version: "0.4.4"
+    from_version: "0.4.3"
+    status: candidate
+    addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]
+    summary: >-
+      Unreleased integrated source candidate: Odoo MCP isError parity, four Odoo child write switches,
+      masked MCP token history, and Nextcloud configured-secret redaction. Seven source manifests target 0.4.4; six enabled products only. Image build, publication and deployment pending.
+    breaking_changes:
+      - id: schema4-optional-parity-state-keys
+        affects: >-
+          Odoo schema 4 after saving child write switches, and any product schema 4 after a token rotate or revoke.
+        change: >-
+          Saving Odoo switches adds optional odoo_write_switches to /data/mcp/state.json. A token transition adds
+          optional token_history. Each field is strict and retained by subsequent state updates. The schema number
+          remains 4, but 0.4.3 rejects either unknown key; downgrading only the binary cannot load that state.
+          History contains only an action, UTC time and previous-token mask, never a usable previous token.
+        migration: >-
+          Take a Home Assistant add-on backup before upgrading. After either new field is persisted, downgrade only
+          by restoring the pre-upgrade add-on backup together with its binary. Review restored outer grants and
+          operation denies; reissue the MCP token and update clients as needed because a backup can restore an old
+          token. Do not strip either key or edit state.json by hand. If neither key was written, the pre-existing
+          schema 4 bytes remain readable by 0.4.3. This is not a general claim of downgrade safety to older releases.
+    behavior_changes:
+      - id: odoo-mcp-error-result
+        change: >-
+          success:false Odoo tool results, including child-switch refusals, carry MCP isError:true with the original
+          JSON shape and the outputSchema-compatible structuredContent envelope. Tracebacks become their last line.
+        migration: Clients can now use isError to detect tool failure; successful results and tool names are unchanged.
+      - id: odoo-child-write-switches
+        change: >-
+          Four admin-only boolean switches use CSRF and a required If-Match revision. Saving restarts the child;
+          failed application reports saved:true and config_apply_failed. Absent switches keep the prior all-on
+          behavior. Outer tool permissions remain authoritative, and the reviewed child gates can narrow execution.
+        migration: >-
+          Review switches in the Odoo Tools panel. Exact model.method allowlist editing is not provided by this
+          candidate; disabling the outer execute_method grant also removes its reviewed reads.
+      - id: ha-masked-token-history-panel
+        change: >-
+          Authenticated Ingress bootstrap includes only the current token mask and at most five masked events.
+          Token and history commit atomically before lease invalidation. Repeated revoke adds no false event.
+        migration: None for clients; events before this upgrade cannot be reconstructed retroactively.
+      - id: nextcloud-error-secret-redaction
+        change: >-
+          Configured password and Basic-auth forms are masked in decoded error detail before whitespace folding
+          and truncation. Literal, URL-quoted, JSON-escaped and standard/URL-safe base64 values are covered;
+          detailed diagnostics, error codes, isError, auth latches and successful replies remain.
+        migration: No client or state migration; unknown backend secrets and arbitrary encodings are outside this contract.
+    preserved:
+      - Seven source manifests share 0.4.4; only six Store products publish. OpenDesign stays disabled and Odoo Manage archived.
+      - Addon options, ports, architectures, image names, MCP token format, and state schema number 4.
+      - Startup bytes of existing schema 4 state, outer grants/denies, and the full-default behavior of absent switches.
+      - Immutable 0.4.3 image receipt and release decision; they are not acceptance evidence for this candidate.
+    backup_and_rollback:
+      - Take a Home Assistant add-on backup before upgrading.
+      - Restore it before running 0.4.3 if odoo_write_switches or token_history has been written; never strip the fields.
+      - Review restored permissions and reissue tokens as needed. No live production downgrade is exercised here.
   # 0.4.3 carries the 2026-10-27 owner decision from merged PR #26. This entry also applies when
   # a schema 1/2/3 installation upgrades directly from 0.1.x; 0.4.2 did not rewrite those states.
   - to_version: "0.4.3"

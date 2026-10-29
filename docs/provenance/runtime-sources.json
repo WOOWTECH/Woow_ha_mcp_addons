@@ -292,8 +292,8 @@
     "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "nextcloud_mcp_server/client.py",
     "upstream_sha256": "303355520e6465fd8919c0e631151d5220c7703bfd7cde801a41daf2cdf90db8",
-    "local_sha256": "bfe17c31bd1acd14a5fffbe6aca865503fbd87e0a14b447f04c876fdfb87cd89",
-    "modification": "WOOW HA add-on: load_backend_policy() refuses to start (BackendPolicyError, exit 2) when no backend_policy module exists, instead of falling back to an unrestricted client. 0.2.0: the upstream error-body detail (server_message of a non-2xx answer) is reported again, as upstream. 0.2.1: Nextcloud's own error message (Sabre, OCS or plain text, 1000 characters) is relayed for every non-2xx status: server_message reads it, client.py reads it for 5xx too, status_message appends ' Nextcloud: <message>'."
+    "local_sha256": "26d45cc8b9c5339a154f260160d042c9fbc68f2614a9f30015bdf214679f8881",
+    "modification": "WOOW HA add-on: load_backend_policy() refuses to start (BackendPolicyError, exit 2) when no backend_policy module exists, instead of falling back to an unrestricted client. 0.2.0: the upstream error-body detail (server_message of a non-2xx answer) is reported again, as upstream. 0.2.1: Nextcloud's own error message (Sabre, OCS or plain text, 1000 characters) is relayed for every non-2xx status: server_message reads it, client.py reads it for 5xx too, status_message appends ' Nextcloud: <message>'. 2026-10-29: redact the configured Nextcloud app password and username:password (raw, URL-quoted, JSON-escaped, standard/URL-safe and unpadded base64 forms) after detail extraction but before whitespace folding and the 1000-character bound. Gateway exact-value redaction alone missed reversible encodings, folded passwords and truncated fragments. Preserve the owner detailed-error policy, public codes and auth latch. See docs/provenance/nextcloud-error-secrets-20261029.md."
   },
   {
     "product": "nextcloud",
@@ -314,8 +314,8 @@
     "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
     "path": "nextcloud_mcp_server/webdav.py",
     "upstream_sha256": "56aa67abf1a1cea641be2a7704d09bd51e9682b441a07189744f0c48494aa4eb",
-    "local_sha256": "1e304349885f5dd3474e923dd0fc8b48c38e1acb3d19423b6f89e41333382604",
-    "modification": "WOOW HA add-on 0.2.1 (owner decision 2026-10-15: raw backend errors). 0.2.1: Nextcloud's own error message (Sabre, OCS or plain text, 1000 characters) is relayed for every non-2xx status: server_message reads it, client.py reads it for 5xx too, status_message appends ' Nextcloud: <message>'."
+    "local_sha256": "b0e79f7446957f775a53e78444e0071c43b5c0c725a8c958bd9e68d6c64c83a5",
+    "modification": "WOOW HA add-on 0.2.1 (owner decision 2026-10-15: raw backend errors). 0.2.1: Nextcloud's own error message (Sabre, OCS or plain text, 1000 characters) is relayed for every non-2xx status: server_message reads it, client.py reads it for 5xx too, status_message appends ' Nextcloud: <message>'. 2026-10-29: redact the configured Nextcloud app password and username:password (raw, URL-quoted, JSON-escaped, standard/URL-safe and unpadded base64 forms) after detail extraction but before whitespace folding and the 1000-character bound. Gateway exact-value redaction alone missed reversible encodings, folded passwords and truncated fragments. Preserve the owner detailed-error policy, public codes and auth latch. See docs/provenance/nextcloud-error-secrets-20261029.md."
   },
   {
     "product": "nextcloud",
