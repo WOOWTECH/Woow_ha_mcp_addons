@@ -8,6 +8,7 @@ from typing import Literal, Mapping, get_args, get_origin
 from pydantic import BaseModel, ValidationError
 
 from .config import State
+from .output_schemas import reviewed_output_schema
 
 
 class Denied(ValueError):
@@ -687,18 +688,22 @@ def child_input_schema(schema):
     return flat
 
 
-def listed_tool(tool, local):
+def listed_tool(tool, local, *, product=None):
     """A listed tool rebuilt from known members (0.1.6, 0.1.5 RC review F3). The name and inputSchema are the gateway's
     own (0.1.6 AI Stage 0: the declared form of the locally pinned argument model, declared_schema()); title,
     description and annotations.title are the child's text, kept only as strings; the four hint booleans are kept when
-    cautious, or when the local tool has no write path. outputSchema, execution, icons, _meta and unknown members are
-    dropped: the pinned TS client compiles a child's outputSchema (a $ref or pattern then becomes its error text, and
-    the Python client fetched a child $ref URL) and refuses every call to a tool whose execution.taskSupport is
-    "required"; icons are child-chosen URLs."""
+    cautious, or when the local tool has no write path. Only exact reviewed product/tool outputSchema pins are
+    exposed for the full child surface. Arbitrary schemas remain dropped: clients may resolve refs or compile
+    regexes. execution, icons, _meta and unknown members remain dropped; execution.taskSupport="required" can
+    prevent clients from calling tools and icons are child-chosen URLs."""
     read_only = not (local.write or local.legacy_write or local.write_operations)
     listed = {"name": tool["name"], "inputSchema": child_input_schema(tool.get("inputSchema")) if local.child_schema
               else declared_schema(local.arguments)}
     listed.update({key: tool[key] for key in ("title", "description") if isinstance(tool.get(key), str)})
+    if local.child_schema:
+        output = reviewed_output_schema(product, tool["name"], tool.get("outputSchema"))
+        if output is not None:
+            listed["outputSchema"] = output
     annotations = tool.get("annotations")
     if isinstance(annotations, dict):
         kept = {"title": annotations["title"]} if isinstance(annotations.get("title"), str) else {}
@@ -724,7 +729,7 @@ def filter_list(message, tools: Mapping[str, Tool], state: State):
             if (isinstance(tool, dict) and isinstance(tool.get("name"), str) and tool["name"] not in names
                     and policy_enabled(tool["name"], tools, state)):
                 names.add(tool["name"])
-                listed.append(listed_tool(tool, tools[tool["name"]]))
+                listed.append(listed_tool(tool, tools[tool["name"]], product=getattr(state, "product", None)))
         # The result is rebuilt as well (0.1.6 R1 #4): the tools and a string nextCursor, nothing else from the child.
         message["result"] = result = {"tools": listed, **({"nextCursor": result["nextCursor"]}
                                                           if isinstance(result.get("nextCursor"), str) else {})}
