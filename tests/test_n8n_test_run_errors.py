@@ -20,22 +20,30 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('n8n_patch', ROOT / 'apps/n8n/patches/fix_test_run_error_messages.py')
 patch = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(patch)
+direct_spec = importlib.util.spec_from_file_location('n8n_direct_patch', ROOT / 'apps/n8n/patches/fix_direct_inputs.py')
+direct = importlib.util.module_from_spec(direct_spec)
+direct_spec.loader.exec_module(direct)
 
 
 def test_the_patch_turns_the_pinned_file_into_the_guarded_one(tmp_path):
     current = patch.TARGET.read_bytes()
-    assert patch.digest(current) == patch.PATCHED  # this checkout: packaging/unit.sh (or the image build) applied it
-    pinned = current.decode().replace(patch.NEW, patch.OLD).encode()
+    assert patch.digest(current) == patch.COMBINED  # this checkout: packaging/unit.sh (or the image build) applied it
+    message_only = current.decode()
+    for before, after in reversed(direct.REPLACEMENTS):
+        assert message_only.count(after) == 1
+        message_only = message_only.replace(after, before, 1)
+    assert patch.digest(message_only.encode()) == patch.PATCHED
+    pinned = message_only.replace(patch.NEW, patch.OLD).encode()
     assert patch.digest(pinned) == patch.PINNED
     assert patch.digest(patch.patched(pinned)) == patch.PATCHED
     guard = (ROOT / 'apps/n8n/backend_policy.cjs').read_text()
-    assert f'["mcp/handlers-n8n-manager.js", "{patch.PATCHED}"]' in guard
+    assert f'["mcp/handlers-n8n-manager.js", "{patch.COMBINED}"]' in guard
     target = tmp_path / 'handlers-n8n-manager.js'
     target.write_bytes(pinned)
     run = lambda: subprocess.run(['python3', str(ROOT / 'apps/n8n/patches/fix_test_run_error_messages.py'), str(target)],
                                  capture_output=True, text=True, timeout=30)
-    assert 'patched' in run().stdout and patch.digest(target.read_bytes()) == patch.PATCHED
-    assert 'already patched' in run().stdout and patch.digest(target.read_bytes()) == patch.PATCHED  # idempotent
+    assert 'patched' in run().stdout and patch.digest(target.read_bytes()) == patch.COMBINED
+    assert 'already patched' in run().stdout and patch.digest(target.read_bytes()) == patch.COMBINED  # idempotent
     target.write_bytes(pinned + b'\n// drift\n')
     drift = run()
     assert drift.returncode != 0 and 'review required' in drift.stderr

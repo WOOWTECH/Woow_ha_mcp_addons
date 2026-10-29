@@ -2,6 +2,56 @@
 # pipeline #89) has not yet defined a machine-readable schema; this follows the format already used by
 # WOOWTECH/Woow_ha_cloudflare_tunnel_webgui. One release per entry, newest first.
 releases:
+  - to_version: "0.4.6"
+    from_version: "0.4.5"
+    addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]
+    summary: Partial credential edits, native n8n sessions and input compatibility, Odoo exact methods, reviewed output schemas, and LiteLLM URL/active-operation parity.
+    breaking_changes:
+      - id: schema4-optional-session-and-method-settings
+        affects: n8n after saving native sessions; Odoo after saving exact method exceptions.
+        change: >-
+          Saving adds optional n8n_session or odoo_allowed_methods to schema 4. Existing state without these keys
+          keeps its prior defaults and is not rewritten at startup. Older binaries reject the new saved keys.
+        migration: >-
+          Back up before upgrade. Downgrade by restoring the compatible pre-upgrade add-on backup and binary
+          together. Do not remove keys manually or change the schema number. Review restored permissions and
+          reissue tokens because a backup may restore an earlier token.
+      - id: litellm-active-operation-classification
+        affects: litellm_health, litellm_token_counter, litellm_spend_calculate.
+        change: >-
+          Native child policy labels these operations create (active work); readonly exposes 15 rather than 18
+          tools. Health can incur provider charges or save history; token/cost calculations do not run inference
+          but may fetch tokenizer/image resources. Existing HA 25 exact write grants and all-enabled 40 tools
+          remain unchanged. Existing read denies remain effective; no policy is automatically rewritten.
+        migration: >-
+          Review these three tools before explicitly permitting active work. Before downgrading to a child that
+          labels them read, disable each whole tool and retain the policy backup; create-only denies cannot
+          restrict an older read-labelled handler.
+    behavior_changes:
+      - id: partial-connection-edit
+        change: >-
+          A reviewed-revision partial edit preserves omitted values and clears only explicitly nullable fields.
+          Configured credentials embedded in display fields are withheld. Existing whole replacement remains.
+        migration: Review changed destinations because retained credentials will be reused there; provide fresh values for withheld fields only when deliberately replacing them.
+      - id: n8n-native-sessions-and-direct-inputs
+        change: >-
+          Native sessions support 60–86400 seconds (rounded up to minutes) and 1–100 sessions; absent settings
+          retain HA 600 seconds/20. Direct inputs negotiate once only after the exact SDK discriminator failure,
+          cache the successful format per official client, and never retry ambiguous execution failures.
+        migration: Saving session settings restarts the child. Cleanup scheduling can delay idle expiry; this is not a workflow cancellation deadline.
+      - id: odoo-exact-method-exceptions
+        change: An admin editor saves up to 128 exact public model.method exceptions with current-revision checks and child restart.
+        migration: Outer tool grants, write switches, chatter and standard-write restrictions still apply. Broad unknown-method mode remains independent and can permit methods outside this list.
+      - id: reviewed-output-schemas
+        change: 35 LiteLLM and eight Nextcloud tools expose exact reviewed outputSchema contracts; changed or unknown live contracts remain omitted.
+        migration: Clients may now validate structured results. No tool result envelope, input schema or execution permission changes.
+      - id: litellm-root-url
+        change: Only exact origin-root /v1 and trailing slashes are normalized; prefixed mounts such as /proxy/v1 are preserved.
+        migration: Enter the actual gateway root, not an appended OpenAI API endpoint. Verify proxy mount compatibility before downgrading to an older suffix normalizer.
+    backup_and_rollback:
+      - Take a Home Assistant add-on backup before upgrading. Optional state fields and active-operation labels require the rollback steps above.
+      - Saving a setting commits before child restart; saved:true with config_apply_failed requires correcting application, not assuming the old settings were restored.
+      - Isolated acceptance, source checks and published image gates are separate evidence; none implies a full production HAOS restore.
   - to_version: "0.4.5"
     from_version: "0.4.4"
     addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]

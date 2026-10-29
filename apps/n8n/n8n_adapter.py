@@ -90,6 +90,10 @@ def child_spec(state: State, directory: Path) -> ChildSpec:
         "LOG_LEVEL": "error", "DISABLE_CONSOLE_OUTPUT": "true",
         "N8N_MCP_MAX_SESSIONS": "20", "SESSION_TIMEOUT_MINUTES": "10",
     }
+    if hasattr(state, 'effective_n8n_session'):
+        session = state.effective_n8n_session
+        env.update(N8N_MCP_MAX_SESSIONS=str(session.max_sessions),
+                   SESSION_TIMEOUT_MINUTES=str(session.timeout_minutes))
     if state.backend_url and state.backend_key:
         env.update(N8N_API_URL=state.backend_url, N8N_API_KEY=state.backend_key)
         # 0.2.1: n8n's instance-level MCP key, optional; without it the official-MCP features are NOT_CONFIGURED.

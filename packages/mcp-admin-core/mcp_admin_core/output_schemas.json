@@ -1,0 +1,926 @@
+{
+  "format": 1,
+  "scope": "Exact audited output schemas from pinned HA children. No inferred fields or arbitrary child schemas. None/unknown tools remain omitted.",
+  "canonicalization": "UTF-8 JSON; sort_keys=true; separators=comma/colon; ensure_ascii=false; allow_nan=false. binding_sha256 hashes {product,tool,schema}.",
+  "sources": {
+    "litellm": {
+      "ha_commit": "4e4d69a11ee9cf010e4ea23b1bce4ec009a6c4de",
+      "sdk": {
+        "fastmcp": "4.1.3",
+        "mcp": "2.3.0",
+        "mcp-types": "2.3.0"
+      },
+      "files": {
+        "apps/litellm/pyproject.toml": "f2201d8689030d6e6721e636b37dc8117677b97cfe42e1837db5938fddb250e8",
+        "apps/litellm/uv.lock": "350c2d83a5822127167bc852d60165815740190d0923e2807c4b3ec18ea2d85b",
+        "apps/litellm/vendor/woow_litellm_mcp_server/errors.py": "3bc39077a69c07b2b0ceeb306510dc2f71ccc3b604187a4cecedab784efc1768",
+        "apps/litellm/vendor/woow_litellm_mcp_server/gating.py": "d6ad9181d4459400f22b3dd553bc2af082c0c9a8af9888fe14e412045dc0b4a6",
+        "apps/litellm/vendor/woow_litellm_mcp_server/middleware.py": "a019bb77516d924981301c06a933263fc6743380c32488efaba2748bd28a05c5",
+        "apps/litellm/vendor/woow_litellm_mcp_server/server.py": "85c3cb8f6d50bed817279754c16309919bdf419f8193b6291f47f08f80db89f7",
+        "apps/litellm/vendor/woow_litellm_mcp_server/tools/chat.py": "e0afb3b37084c5cd9b79255a953fa02a979da6b34b6b43f9b5021d27c470d6d2",
+        "apps/litellm/vendor/woow_litellm_mcp_server/tools/health.py": "2d2151fe1ce42a0ceaf0d88914d75691764fa9d23bf3f78984ac74e90cf4058d",
+        "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py": "f53ffbcea4520fa4a95f2cb6722e6979d4515507076c5bcd1593ccf2ac9f63d8",
+        "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py": "8b3e9a184f6e12633ffb724aa69c55a09fae13df3d8f5112f3704d61aa6d94ec",
+        "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py": "f1a421b82ad96427d0d05d9f248d509f92a6cca320ee7f1217a6662eda85b054",
+        "apps/litellm/vendor/woow_litellm_mcp_server/tools/spend.py": "87a47df79cc41c4f3ea29c2128bf248a5a865ca11acb0f63f4a1950294fdee3b",
+        "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py": "15fe1783df2740477c0dd222f51c50c6043844fc3c0bf2361050d9c70904ea96",
+        "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py": "19da4359727177e950b4a222633baa179d9a843fae50db6aece3d86ccee87517"
+      }
+    },
+    "nextcloud": {
+      "ha_commit": "235338cc7d1a02d17fbb93b631e37c77a20c7889",
+      "sdk": {
+        "fastmcp": "4.1.3",
+        "mcp": "2.3.0",
+        "mcp-types": "2.3.0"
+      },
+      "files": {
+        "apps/nextcloud/pyproject.toml": "5602d26f9e22c7bed9a08aaecd18dc2699134faace6a817c127b744622e50915",
+        "apps/nextcloud/uv.lock": "e955fb3ecac323fd59af4c7d39bd081ac911de9ebb2a62cda28bc52f61518320",
+        "apps/nextcloud/vendor/nextcloud_mcp_server/errors.py": "df1ccbd7590f8868b8297c0be57e00b532fd49786787bebfa94b3e0641609432",
+        "apps/nextcloud/vendor/nextcloud_mcp_server/server.py": "eb25088dc4d2158f1583e53b682d753711941bfc2352a2890ef6f6693fd3a108",
+        "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py": "9b22f15816e56e6808a509886d89f52a04152dec99bf9078ccd257e098fb4aa4"
+      }
+    }
+  },
+  "entries": [
+    {
+      "product": "litellm",
+      "tool": "litellm_list_models",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "bf9163217dba23ea77d65cba113d5a59997bf5afbebbafebd3cfd1560a2434ac",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_model_info",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "480c99df3cff8c3a7137f39e86c50f4a5094bd917e40dd01fa158a6c939db62e",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_model_group_info",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "47d76cd4af4be9899682cf55a824f62ed742f120a380c806a6b8b1853b347800",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_add_model",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "ef8fdc0dd845f0458812e57eb1de16ead31a63b716e7210ca5680b355b31c963",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_update_model",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "98e86bacf65e37258d409391fbc17235b7aec5c37009ab3718c9c3062a5e66aa",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_delete_model",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "2cce7cbde55a178359ae638d17aa428ef711c251fd7ade2394e2d829e8d7544a",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_chat_completion",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "878e5a3a7d809543728640d5ab9e2d538f5b7b292583ccb3ae0e5f031fdc92e7",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/chat.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_token_counter",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "353b41371d90325215ba26511912260b198ca1a9c594bd55a55e47989fcadd40",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/chat.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_generate_key",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "ccadbba8a5158ec590f8987331e392365facf5d45993f1109dc4a5de34737733",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_list_keys",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "87761d6283e97a7321fef6985fa3ee6b9a74db5b4dfc3c3c53bbe78c529ab74f",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_key_info",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "447ea7113484eba079456a22ebb37417a977883a71695c8a73490c351ef6dcfe",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_update_key",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "a879a3722c0bf2b4186eb6f389b4861fdd0dc99c379cec5656bff0cacbdc2925",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_delete_key",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "2c54b6f02f1571921fd046fdab2445aad3f22b2deecbef7288d694ecc9c0ed53",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_block_key",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "a2d2fee00699eec148196043648921bbb58fba580f284c8061cf64cfc4876717",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_unblock_key",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "13e1629d0b743f9fb2a455424c75fee7f21a02c82f764f2505be7ae08faef9ac",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_regenerate_key",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "5d0dff0968b05746172d0e7ca2405e60f7608c50800953b8867d8f2c0a5bb40f",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_create_team",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "c7723e4df6ca8c0d4da452556731b5cb99f62df7221b24a9c2470551c98ba246",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_list_teams",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "c8ec4a338bb6d41bd23db4e90a2167a10272a111d1c29496369e606f95a2ea86",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_team_info",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "a2b2746beb354d2a0e89ed023f1216b18239c85f4173c6dd04d40ec1e69574bc",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_update_team",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "76b8192193d2318c4812237a250a584462a4c48fb1bc7a314e66a01dee7062a6",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_delete_team",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "cf7ce5f98cc4e9c2206f22787f674a96a585040dd6305d5e3c6bfbff1ec9fe02",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_team_member_add",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "90c2488fe3e681c45fd0aaaf87bdd8a7dc9cb8029e5db1ed3949d70f93d488a4",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_team_member_delete",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "cd64b1246105e89f54cd2bd4e41ee6fb75709c8ac7788a142a017a804e4a1c29",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_create_user",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "6ff0228e86e6187f39fe8ff3497c1ee3b7362b067338660761d95261a899fabf",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_list_users",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "d28005d0a041ab2caccf5ac9b185a1dc4aac0189bfc3621e5a98a6c8e770470f",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_user_info",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "047a9f5c01dbf539f02669d3084e28cee173e17a9fca6d25a0d430f5ea025bdf",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_update_user",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "b5ea823e8571513b46c831806a7e9b7d488a5ad98bada68b69a822d7af58a848",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_delete_user",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "4f478bc76810e8f83bfc5f3f8625409ef92925de64d7205aece1ef57d7a26ac0",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_global_spend_report",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "d8e5fecf65375176d3f0572050ce0ec3d89735da3feb4fb1abd7cba721b1c021",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/spend.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_spend_calculate",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "85130e5a906d068db741a059504160f71e5e4013c2f9253902e9fd3db0c0f28b",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/spend.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_health",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "1abeac916f9060083d00ea04a915d7aaffb76525debe4151925b661f450e59ec",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/health.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_health_readiness",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "9b9016cad51b761bf9976f78ee670b015b8a727914f897e0865e965411f9fb27",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/health.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_register_plugin",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "38b3edccb3f32d7aa7d8c092d915bd6358a5e53d9ca9d06cabe60ea9afe8b19e",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_enable_plugin",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "1565ee6b541297704168c328b3e596e660a172177abf5d78f39b29384e5bf4fd",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_disable_plugin",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "ab1a1926aa42d77034675cb09985a6966b37f230c459df23bcfb31a1f087b233",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py"
+    },
+    {
+      "product": "nextcloud",
+      "tool": "get_file_tree",
+      "schema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "entries": {
+            "items": {
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "enum": [
+                    "file",
+                    "folder"
+                  ],
+                  "type": "string"
+                },
+                "size": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "modified": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "etag": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "content_type": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "path",
+                "name",
+                "type",
+                "size",
+                "modified",
+                "etag",
+                "content_type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "entries",
+          "truncated"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "1e8c5b1f9ab97a377ee58baa58ce6c6d862f6ae1a0fc2b82a0d7b2a0b01aa909",
+      "binding_sha256": "9da98bc574482bd7e87c03ea0e7d305bad669c25f3524eda1ea19b895959e241",
+      "handler_source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py"
+    },
+    {
+      "product": "nextcloud",
+      "tool": "read_text_file",
+      "schema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "etag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "etag",
+          "bytes",
+          "content_type",
+          "content"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "09de3300cf3df5dd721ec4d69350d400e45fc7e75d52714241fd9734d1132225",
+      "binding_sha256": "daeedecee953d2bf589e20cf6c45ecaf94f88ff4019d6547d667470144f5cf2f",
+      "handler_source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py"
+    },
+    {
+      "product": "nextcloud",
+      "tool": "list_calendars",
+      "schema": {
+        "properties": {
+          "calendars": {
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "components": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "color": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "writable": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "components",
+                "color",
+                "writable"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "calendars"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "63771620058666cd41c22a4e005d4ffd679b78e1b80afae7e0ec43b0cd7b17da",
+      "binding_sha256": "7411b81baa5dd1dfbe51e14877b5861524555a6b9da427edb3995de604e0ba97",
+      "handler_source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py"
+    },
+    {
+      "product": "nextcloud",
+      "tool": "list_tasks",
+      "schema": {
+        "properties": {
+          "tasks": {
+            "items": {
+              "properties": {
+                "calendar": {
+                  "type": "string"
+                },
+                "uid": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "summary": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "status": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "due": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "start": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "completed": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "percent_complete": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "priority": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "description": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "calendar",
+                "uid",
+                "summary",
+                "status",
+                "due",
+                "start",
+                "completed",
+                "percent_complete",
+                "priority",
+                "description"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "skipped_large_objects": {
+            "type": "integer"
+          },
+          "skipped_calendars": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tasks",
+          "truncated",
+          "skipped_large_objects"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "f38a7ad7b166a8c1d842d43d6131e5c38f2c87c61059838e518c621120b7bc96",
+      "binding_sha256": "8e8508f1eaf66cdeb610d39f7548cfc8da36b6b00bd1bc3a0d27fce405f35519",
+      "handler_source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py"
+    },
+    {
+      "product": "nextcloud",
+      "tool": "create_text_file",
+      "schema": {
+        "properties": {
+          "status": {
+            "const": "created",
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "etag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bytes": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "path",
+          "etag",
+          "bytes"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "215097a312664b05b4d87edf228f9ddebbd16425a1b2daca57d29314ecaa4619",
+      "binding_sha256": "824a9c378d5d28cdb72a92f774512b97771c14110b07bdb8ea7812850a86381b",
+      "handler_source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py"
+    },
+    {
+      "product": "nextcloud",
+      "tool": "update_text_file",
+      "schema": {
+        "properties": {
+          "status": {
+            "const": "updated",
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "previous_etag": {
+            "type": "string"
+          },
+          "etag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "path",
+          "previous_etag",
+          "etag",
+          "bytes"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "949d70b3b3d5007d7f709b21c36e51c7387f4f1d77b3dd41087c748f1145bb3a",
+      "binding_sha256": "49c52fbe2ebb3efce9cccce6ee06856ea306a074da3bf89d22224c21369fbdc5",
+      "handler_source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py"
+    },
+    {
+      "product": "nextcloud",
+      "tool": "upload_file",
+      "schema": {
+        "properties": {
+          "status": {
+            "enum": [
+              "created",
+              "replaced"
+            ],
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "etag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "path",
+          "etag",
+          "bytes"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "5e8c8034bde7a70d92d5f5e67970a47336a9daf05ba23a0d403acecd3558a56f",
+      "binding_sha256": "8158f803f076adf9fde56690c8ac4511529eef3e83e0c54eba2519f54ad9607f",
+      "handler_source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py"
+    },
+    {
+      "product": "nextcloud",
+      "tool": "delete_file_checked",
+      "schema": {
+        "properties": {
+          "status": {
+            "const": "deleted",
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "etag": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "path",
+          "etag",
+          "note"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "a8930a8d5cb32cfd1c3315c7a2e37d0f5e4e4da258926b91da8c21772dc0e32b",
+      "binding_sha256": "35697c1f6f5497690e0d5ca0324f86e23ce277c6db9036aca67141627b085cc9",
+      "handler_source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py"
+    }
+  ]
+}

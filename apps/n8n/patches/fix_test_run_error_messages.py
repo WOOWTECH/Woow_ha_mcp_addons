@@ -17,8 +17,8 @@ Fix
 Each fixed hint of ``handleTestRunError`` is followed by `` n8n: <n8n's message>`` (the N8nApiError message: n8n's JSON
 ``message``, else axios' text) when there is one and the hint does not already contain it. Nothing else changes.
 
-Applied by apps/n8n/Dockerfile after ``npm ci`` and by packaging/unit.sh; apps/n8n/backend_policy.cjs refuses to start the
-child unless the file has the PATCHED digest below, so an unpatched or altered package fails closed. Idempotent: an
+Applied by apps/n8n/Dockerfile after ``npm ci`` and by packaging/unit.sh, then composed with fix_direct_inputs.py;
+apps/n8n/backend_policy.cjs requires the COMBINED digest below, so an unpatched or altered package fails closed. Idempotent: an
 already patched file is left as it is; any other content is refused.
 
     python3 apps/n8n/patches/fix_test_run_error_messages.py [path/to/handlers-n8n-manager.js]
@@ -27,11 +27,13 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+import subprocess
 import sys
 
 TARGET = Path(__file__).resolve().parents[1] / 'node_modules/n8n-mcp/dist/mcp/handlers-n8n-manager.js'
 PINNED = '6860193f1217c222c1ee1b1b08b7beb38847b85a182c36f2d8b8be7339cfad7b'  # n8n-mcp 2.96.2 as published
-PATCHED = '6cd673423e829902f3e56de66afe90f7e2196d7ef76cca02551a20eee03ae2eb'  # the digest backend_policy.cjs checks
+PATCHED = '6cd673423e829902f3e56de66afe90f7e2196d7ef76cca02551a20eee03ae2eb'  # message-only intermediate
+COMBINED = 'fe3181292ec5d1ad07195f55a7ab73569b15d990f687f620ecaf633742fb24aa'  # message + direct inputs
 
 OLD = '''    if (error instanceof n8n_errors_1.N8nApiError) {
         if (error.statusCode === 402) {
@@ -92,16 +94,21 @@ def patched(source: bytes) -> bytes:
 
 def main(argv: list[str]) -> int:
     target = Path(argv[1]) if len(argv) > 1 else TARGET
+    if target.is_symlink():
+        raise SystemExit(f'{target}: expected a regular handler')
     source = target.read_bytes()
-    if digest(source) == PATCHED:
+    if digest(source) == COMBINED:
         print(f'{target}: already patched')
         return 0
-    if digest(source) != PINNED:
+    if digest(source) not in (PINNED, PATCHED):
         raise SystemExit(f'{target}: not the pinned n8n-mcp 2.96.2 file (sha256 {digest(source)}); review required')
-    result = patched(source)
-    if digest(result) != PATCHED:
-        raise SystemExit(f'{target}: patch result {digest(result)} is not the reviewed digest')
-    target.write_bytes(result)
+    if digest(source) == PINNED:
+        result = patched(source)
+        if digest(result) != PATCHED:
+            raise SystemExit(f'{target}: patch result {digest(result)} is not the reviewed digest')
+        target.write_bytes(result)
+    # Keep Dockerfile and packaging/unit.sh on the same existing build entrypoint.
+    subprocess.run([sys.executable, str(Path(__file__).with_name('fix_direct_inputs.py')), str(target)], check=True)
     print(f'{target}: patched')
     return 0
 

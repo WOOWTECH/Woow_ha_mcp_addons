@@ -44,6 +44,23 @@ export function odooSwitchPayload(bootstrap, values) {
       !odooSwitchKeys.every(key => typeof values[key] === 'boolean')) throw new UiError('Odoo 子操作開關格式不相容；未送出變更。');
   return { odoo_write_switches: Object.fromEntries(odooSwitchKeys.map(key => [key, values[key]])) };
 }
+const exactOdooMethod = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.[A-Za-z][A-Za-z0-9_]*$/;
+function validMethods(value) {
+  return Array.isArray(value) && value.length <= 128 && new Set(value).size === value.length &&
+    value.every(item => typeof item === 'string' && item.length <= 256 && exactOdooMethod.test(item)) &&
+    JSON.stringify(value).length <= 16384;
+}
+export function odooMethods(bootstrap) {
+  if (bootstrap?.product !== 'odoo' || !['saved','legacy_empty'].includes(bootstrap.odoo_allowed_methods_source) ||
+      !validMethods(bootstrap.odoo_allowed_methods)) return null;
+  return bootstrap.odoo_allowed_methods;
+}
+export function odooMethodsPayload(bootstrap, text) {
+  if (!odooMethods(bootstrap) || typeof text !== 'string') throw new UiError('此伺服器尚未提供精確方法允許清單。');
+  const methods = text.trim() === '' ? [] : text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  if (!validMethods(methods)) throw new UiError('請每行填寫一個不重複的 model.method；最多 128 項，不接受萬用字元或私有方法。');
+  return {odoo_allowed_methods:methods};
+}
 export function mountPath(value) {
   if (typeof value !== 'string' || value.length > 512 || (value !== '' && !/^(\/[A-Za-z0-9_-]+)+$/.test(value))) {
     throw new UiError('管理介面掛載路徑無效。請從原服務入口重新開啟。');
@@ -99,6 +116,67 @@ export function backendPayload(product, action, values) {
   }
   if (product === 'nextcloud' && ['username', 'app_password'].some(k => connection[k].trim() === '' || connection[k] !== connection[k].trim())) throw new UiError('使用者名稱與 App 密碼不可空白，前後也不可有空白。');
   return product === 'n8n' ? connection : { connection };
+}
+
+export function backendEdit(bootstrap) {
+  const value = bootstrap?.backend_edit;
+  if (!Object.hasOwn(products, bootstrap?.product ?? '') || value?.contract !== 'woow-connection-patch-v1' ||
+      !value.values || !value.secret_set || typeof value.values !== 'object' || typeof value.secret_set !== 'object' ||
+      Array.isArray(value.values) || Array.isArray(value.secret_set)) return null;
+  const fields = products[bootstrap.product].fields;
+  const publicNames = fields.filter(([, , type]) => !type.includes('secret')).map(([name]) => name).sort();
+  const secretNames = fields.filter(([, , type]) => type.includes('secret')).map(([name]) => name).sort();
+  if (Object.keys(value.values).sort().join() !== publicNames.join() || Object.keys(value.secret_set).sort().join() !== secretNames.join() ||
+      !Object.values(value.values).every(v => v === null || typeof v === 'string') ||
+      !Object.values(value.secret_set).every(v => typeof v === 'boolean')) return null;
+  if (value.withheld_fields !== undefined && (!Array.isArray(value.withheld_fields) ||
+      new Set(value.withheld_fields).size !== value.withheld_fields.length ||
+      !value.withheld_fields.every(name => publicNames.includes(name) && value.values[name] === null))) return null;
+  return value;
+}
+
+export function backendPatchPayload(bootstrap, selections, values) {
+  if (!bootstrap.connection_configured || !backendEdit(bootstrap)) throw new UiError('此伺服器尚未提供個別欄位修改。');
+  const changes = {};
+  for (const [key, label, type] of products[bootstrap.product].fields) {
+    const action = selections[key];
+    if (action === 'keep') continue;
+    if (action === 'clear' && type.startsWith('optional')) { changes[key] = null; continue; }
+    if (action !== 'set' || typeof values[key] !== 'string' || values[key] === '') throw new UiError(`請提供${label}的新值。`);
+    const value = values[key];
+    if (type.includes('url')) changes[key] = explicitUrl(value);
+    else if (type.includes('secret')) {
+      if (!/^[\x20-\x7e]{1,8192}$/.test(value)) throw new UiError(`${label}格式不符。`);
+      changes[key] = value;
+    } else if (type === 'mode') {
+      if (!['read', 'module'].includes(value)) throw new UiError('存取模式格式不符。');
+      changes[key] = value;
+    } else {
+      if (!/^[A-Za-z0-9_@. -]{1,256}$/.test(value)) throw new UiError(`${label}格式不符。`);
+      changes[key] = value;
+    }
+  }
+  return Object.keys(changes).length ? {changes} : null;
+}
+
+export function n8nSession(bootstrap) {
+  const value = bootstrap?.n8n_session;
+  if (bootstrap?.product !== 'n8n' || !['legacy_default', 'saved'].includes(bootstrap.n8n_session_source) ||
+      !value || Object.keys(value).sort().join() !== 'max_sessions,timeout_seconds' ||
+      !Number.isInteger(value.timeout_seconds) || value.timeout_seconds < 60 || value.timeout_seconds > 86400 ||
+      !Number.isInteger(value.max_sessions) || value.max_sessions < 1 || value.max_sessions > 100) return null;
+  return value;
+}
+
+export function n8nSessionPayload(bootstrap, values) {
+  if (!n8nSession(bootstrap)) throw new UiError('此伺服器尚未提供 n8n 連線設定。');
+  const parsed = {};
+  for (const key of ['timeout_seconds', 'max_sessions']) {
+    if (typeof values[key] !== 'string' || !/^[0-9]+$/.test(values[key])) throw new UiError('請填寫有效的整數設定。');
+    parsed[key] = Number(values[key]);
+  }
+  if (!n8nSession({...bootstrap, n8n_session: parsed})) throw new UiError('逾時需為 60–86400 秒，連線上限需為 1–100。');
+  return {n8n_session: parsed};
 }
 
 // Exact production v3 contract. Unknown/legacy contracts cannot save policy:

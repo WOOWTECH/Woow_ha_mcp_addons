@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, AfterValidator, field_validat
 from .access import masked_token
 from .config import FRESH_WRITES_ENABLED, State, Store, http_url
 from .lifecycle import ChildSpec
+from .odoo_methods import AllowedMethods, FIELD as ODOO_ALLOWED_METHODS
 from .policy import Tool
 from .surface import FULL_PRODUCTS, full_tools
 
@@ -91,6 +92,13 @@ class LiteLLMConnection(Connection):
     url: URL
     master_key: Credential = Field(repr=False)
 
+    @field_validator('url')
+    @classmethod
+    def gateway_root(cls, value):
+        # http_url has validated the URL and removed trailing slashes. Only
+        # origin-root /v1 is an API suffix; /proxy/v1 is an intentional mount.
+        return value[:-3] if urlsplit(value).path == '/v1' else value
+
 
 class NextcloudConnection(Connection):
     url: URL  # the Nextcloud root URL (NEXTCLOUD_MCP_BASE_URL)
@@ -131,6 +139,7 @@ CONNECTIONS = dict(zip(PRODUCTS, (OdooConnection, ManageConnection, HermesConnec
 OWNER_DEFAULTS = 'owner_defaults_20261025'
 ODOO_WRITE_SWITCHES = 'odoo_write_switches'
 TOKEN_HISTORY = 'token_history'
+N8N_SESSION = 'n8n_session'
 Timestamp = Annotated[str, Field(pattern=r'^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+00:00$')]
 
 
@@ -182,6 +191,17 @@ class TokenHistoryEntry(BaseModel):
         return value
 
 
+class N8nSession(BaseModel):
+    """Seconds in the API; the pinned native child rounds up to whole minutes."""
+    model_config = ConfigDict(extra='forbid', strict=True, frozen=True)
+    timeout_seconds: int = Field(ge=60, le=86400)
+    max_sessions: int = Field(ge=1, le=100)
+
+    @property
+    def timeout_minutes(self):
+        return (self.timeout_seconds + 59) // 60
+
+
 class ProductState(State):
     # 4 (0.2.0): the full child surface; every state migrated from 3 (or older) gets every write grant once.
     schema_version: int = 4
@@ -203,9 +223,12 @@ class ProductState(State):
     # Optional on schema 4. Absent retains the exact prior child behavior (all four on), without changing any
     # outer grant, disabled tool or operation deny. A saved object is Odoo-only and must carry all four booleans.
     odoo_write_switches: OdooWriteSwitches | None = Field(default=None, exclude_if=lambda value: value is None)
+    # Absent means an empty exact method allowlist; reading old state never writes this key.
+    odoo_allowed_methods: AllowedMethods | None = Field(default=None, exclude_if=lambda value: value is None)
     # Additive schema 4 field, absent in pre-history states. Once a transition writes it, an older binary requires a
     # pre-update backup to read the state; merely starting this binary does not rewrite an existing schema 4 state.
     token_history: list[TokenHistoryEntry] | None = Field(default=None, exclude_if=lambda value: value is None)
+    n8n_session: N8nSession | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @field_validator('schema_version')
     @classmethod
@@ -268,7 +291,17 @@ class ProductState(State):
             raise ValueError('only n8n has an MCP access token')
         if self.odoo_write_switches is not None and self.product != 'odoo':
             raise ValueError('only Odoo has child write switches')
+        if self.n8n_session is not None and self.product != 'n8n':
+            raise ValueError('only n8n has native session settings')
+        if self.odoo_allowed_methods is not None and self.product != 'odoo':
+            raise ValueError('only Odoo has allowed methods')
         return self
+
+    @property
+    def effective_n8n_session(self):
+        if self.product != 'n8n':
+            raise ValueError('only n8n has native session settings')
+        return self.n8n_session or N8nSession(timeout_seconds=600, max_sessions=20)
 
     @property
     def effective_odoo_write_switches(self):
@@ -282,8 +315,8 @@ class ProductState(State):
         return bool(self.backend_url and self.backend_key) if self.product == 'n8n' else self.connection is not None
 
 
-# The keys every stored product state carries; the three optional fields exist only on schema 4.
-STORED_FIELDS = frozenset(ProductState.model_fields) - {OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, TOKEN_HISTORY}
+# The keys every stored product state carries; optional fields exist only on schema 4.
+STORED_FIELDS = frozenset(ProductState.model_fields) - {OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, TOKEN_HISTORY, N8N_SESSION, ODOO_ALLOWED_METHODS}
 
 
 def write_grants(product):
@@ -401,10 +434,12 @@ class ProductStore(Store):
             value = {**value, 'schema_version': 4}
             self._migrated = True
         # No optional field may be stored as null. Legacy states cannot carry the new keys.
-        if (not isinstance(value, dict) or set(value) - {OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, TOKEN_HISTORY} != STORED_FIELDS
+        if (not isinstance(value, dict) or set(value) - {OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, TOKEN_HISTORY, N8N_SESSION, ODOO_ALLOWED_METHODS} != STORED_FIELDS
                 or (OWNER_DEFAULTS in value and value[OWNER_DEFAULTS] is None)
                 or (ODOO_WRITE_SWITCHES in value and value[ODOO_WRITE_SWITCHES] is None)
+                or (ODOO_ALLOWED_METHODS in value and value[ODOO_ALLOWED_METHODS] is None)
                 or (TOKEN_HISTORY in value and value[TOKEN_HISTORY] is None)
+                or (N8N_SESSION in value and value[N8N_SESSION] is None)
                 or value.get('product') != self.product):
             raise ValueError('wrong product or incomplete schema')
         return ProductState.model_validate(value)
@@ -676,6 +711,7 @@ def child_spec(state: ProductState, directory: Path) -> ChildSpec | None:
                    ODOO_MCP_ENABLE_WRITES='1' if switches.enable_writes else '0',
                    ODOO_MCP_ALLOW_DIRECT_WRITES='1' if switches.allow_direct_writes else '0',
                    ODOO_MCP_ALLOW_UNKNOWN_METHODS='1' if switches.allow_unknown_methods else '0',
+                   ODOO_MCP_ALLOWED_SIDE_EFFECT_METHODS=','.join(state.odoo_allowed_methods or []),
                    MCP_CHATTER_DIRECT='1' if switches.chatter_direct else '0')
         argv = (str(python), str(app / 'start_switches.py'), '--transport', 'streamable-http', '--host', '127.0.0.1', '--port', '3000', '--path', '/mcp')
     elif product == 'odoo-manage':
