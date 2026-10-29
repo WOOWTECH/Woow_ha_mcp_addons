@@ -253,7 +253,7 @@ function backend() {
       await reload('伺服器已確認儲存。請等待健康探測更新，這不代表後端已連線成功。');
     });
   });
-  return card('後端連線設定', chip(state.connection_configured ? '已設定 · 憑證隱藏' : '尚未設定'), p('URL 與憑證由管理介面管理。測試只使用已儲存的設定，不會送出下方表單。'), backendTest(), form);
+  return card('後端連線設定', chip(state.connection_configured ? '已設定 · 憑證隱藏' : '尚未設定'), p('URL 與憑證由管理介面管理。測試只使用已儲存的設定，不會送出下方表單。'), state.product === 'litellm' ? p('請填 LiteLLM 閘道根網址。根路徑的 /v1 會移除；/proxy/v1 等代理掛載路徑會保留。健康探測可能產生供應商費用；token 與費用估算可能抓取圖片或分詞資源，三者都需要明確的操作權限。') : null, backendTest(), form);
 }
 function partialBackendCard() {
   const snapshot = state;

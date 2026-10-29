@@ -26,7 +26,7 @@ RUN mkdir /tmp/woow-apt-parts \
  && rm -rf /var/lib/apt/lists/* /tmp/woow-security.list /tmp/woow-apt-parts \
  && test "$(dpkg-query -W -f='${Version}' libssl3)" = "3.0.22-1~deb12u2" \
  && test "$(dpkg-query -W -f='${Version}' openssl)" = "3.0.22-1~deb12u2"
-ARG BUILD_VERSION=0.4.5
+ARG BUILD_VERSION=0.4.6
 LABEL io.hass.type="app" io.hass.arch="amd64" io.hass.version="${BUILD_VERSION}" \
       io.hass.name="Woow OpenDesign MCP Server" io.hass.description="Experimental; HA admin-role management; full tool surface; every tool and write on by default (each can be turned off in the panel)." \
       io.hass.url="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \

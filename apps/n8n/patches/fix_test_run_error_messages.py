@@ -33,7 +33,7 @@ import sys
 TARGET = Path(__file__).resolve().parents[1] / 'node_modules/n8n-mcp/dist/mcp/handlers-n8n-manager.js'
 PINNED = '6860193f1217c222c1ee1b1b08b7beb38847b85a182c36f2d8b8be7339cfad7b'  # n8n-mcp 2.96.2 as published
 PATCHED = '6cd673423e829902f3e56de66afe90f7e2196d7ef76cca02551a20eee03ae2eb'  # message-only intermediate
-COMBINED = '491d6dd15f39941bcda742c7da03cd6b7e4ffc3ca630a88eb88a9f6d215d246a'  # message + direct inputs
+COMBINED = 'fe3181292ec5d1ad07195f55a7ab73569b15d990f687f620ecaf633742fb24aa'  # message + direct inputs
 
 OLD = '''    if (error instanceof n8n_errors_1.N8nApiError) {
         if (error.statusCode === 402) {

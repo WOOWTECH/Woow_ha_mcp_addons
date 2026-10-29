@@ -19,6 +19,9 @@ Authorized bootstrap responses expose `backend_edit` with contract `woow-connect
 `values` and per-secret `secret_set` booleans. Passwords, API keys and native tokens are never prefilled. The UI has
 per-field keep/set/optional-clear choices. It explains that existing credentials will be used at a changed destination.
 This deliberate URL/account change requires the current revision; there is no automatic cross-destination migration.
+If a display field contains a configured credential, including reversible percent encoding, its whole value is
+withheld as `null` and its name appears in `withheld_fields`. The stored connection is unchanged. Keep preserves
+that value; replacing it requires fresh input. A display mask is never sent back as a connection value.
 
 ## n8n native sessions
 

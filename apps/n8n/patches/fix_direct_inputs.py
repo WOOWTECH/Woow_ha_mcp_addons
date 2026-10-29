@@ -13,7 +13,7 @@ from pathlib import Path
 import sys
 
 PINNED = '6cd673423e829902f3e56de66afe90f7e2196d7ef76cca02551a20eee03ae2eb'
-PATCHED = '491d6dd15f39941bcda742c7da03cd6b7e4ffc3ca630a88eb88a9f6d215d246a'
+PATCHED = 'fe3181292ec5d1ad07195f55a7ab73569b15d990f687f620ecaf633742fb24aa'
 TARGET = Path(__file__).resolve().parents[1] / 'node_modules/n8n-mcp/dist/mcp/handlers-n8n-manager.js'
 REPLACEMENTS = (
     ("const OFFICIAL_TEST_ACTION = 'test_workflow';",
@@ -65,9 +65,10 @@ const OFFICIAL_TEST_ACTION = 'test_workflow';"""),
                     const retry = await execute(true);
                     if (retry.success === true) {
                         if (sameClient()) woowDirectInputFormats.set(nativeClient, true);
-                        response = retry;
                     }
-                    // Keep the original rejection, including its code/text, if negotiation fails.
+                    // The retry may have executed before failing: preserve its actual outcome.
+                    // Never disguise an uncertain execution as the first pre-dispatch rejection.
+                    response = retry;
                 }
             }"""),
 )

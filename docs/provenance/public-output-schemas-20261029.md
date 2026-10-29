@@ -3,6 +3,12 @@
 Source feature only; no version change, image build, publication or deployment.
 Base: `235338cc7d1a02d17fbb93b631e37c77a20c7889` (protected PR37 merge).
 
+Integration follow-up: LiteLLM's reviewed source pin now names the 0.4.6 feature integration commit recorded in
+the JSON. Its health/token/cost descriptions, annotations and operation guards changed; signatures and all 35
+output schemas did not. The source hashes were re-reviewed and the real child snapshot regenerated. Nextcloud's
+original source pin is unchanged. The PaaS comparison below describes the earlier snapshot; the matching new
+LiteLLM source is being integrated separately in PaaS.
+
 ## Source and contract review
 
 `packages/mcp-admin-core/mcp_admin_core/output_schemas.json` records 43 exact

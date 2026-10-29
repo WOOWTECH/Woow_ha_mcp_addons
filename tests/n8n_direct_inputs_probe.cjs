@@ -138,15 +138,21 @@ async function main() {
     const native = client(null, function () { return this.calls.length === 1 ? first : { text: "denied", json: { error: "denied" }, isError: true }; });
     const result = await run(context(native));
     assert.equal(native.calls.length, 2);
-    assert.equal(result.error, first.text);
-    assert.equal(result.code, "INVALID_ARGS");
+    assert.equal(result.error, "denied");
+    assert.equal(result.code, "OFFICIAL_MCP_ERROR");
   } else if (scenario === "retry-timeout") {
     const first = rejection();
-    const native = client(null, function () { if (this.calls.length === 1) return first; throw new Error("synthetic timeout"); });
+    const native = client(null, function () {
+      if (this.calls.length === 1) return first;
+      this.writes++;
+      throw new Error("synthetic timeout after execution");
+    });
     const result = await run(context(native));
     assert.equal(native.calls.length, 2);
-    assert.equal(result.error, first.text);
-    assert.equal(result.code, "INVALID_ARGS");
+    assert.equal(native.writes, 1, "an uncertain execution must not trigger a third call");
+    assert.match(result.error, /synthetic timeout after execution/);
+    assert.notEqual(result.code, "INVALID_ARGS");
+    assert.equal(result.success, false);
   } else if (scenario === "failed-retry-not-cached") {
     const first = rejection(), normal = client("tagged");
     const native = client(null, function (tool, args, options) {

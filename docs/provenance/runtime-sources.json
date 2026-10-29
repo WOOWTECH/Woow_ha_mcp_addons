@@ -155,7 +155,9 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/settings.py",
-    "upstream_sha256": "0c89fa776b88ae00a52d4ed5bae67ba9e827f42e35ab74bf2c3fac81a465ded2"
+    "upstream_sha256": "0c89fa776b88ae00a52d4ed5bae67ba9e827f42e35ab74bf2c3fac81a465ded2",
+    "local_sha256": "d88e9523d99aa92e1cbd9496548ba1fe0d215fa94242a86ea985df5785748a0c",
+    "modification": "0.4.6 reviewed parity: Normalize only exact origin-root /v1 and trailing slashes with the new product URL helper; preserve proxy mounts; reject credentials/query/fragment. No generic product URL contract changes."
   },
   {
     "product": "litellm",
@@ -169,15 +171,17 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/gating.py",
-    "upstream_sha256": "b53476befdf8ff25c6f5688a510c669c0cca6cc704f8b00f7b5dfd0265b79bcb"
+    "upstream_sha256": "b53476befdf8ff25c6f5688a510c669c0cca6cc704f8b00f7b5dfd0265b79bcb",
+    "local_sha256": "d6ad9181d4459400f22b3dd553bc2af082c0c9a8af9888fe14e412045dc0b4a6",
+    "modification": "0.4.6 reviewed parity: Treat the three active-operation tools as create, retaining old per-tool and bare read denies. Dynamic child guard remains before HTTP. No other tool label changes."
   },
   {
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/registry.py",
     "upstream_sha256": "a074a48ceeef9393ab46500420156fc59c39471c1fa6739e9030c81e7c597cae",
-    "local_sha256": "1b813d1f15cbd1f46df2b3ed9a90155084bd3c8ad3a53d24c45d1f6cbec8102b",
-    "modification": "Next release after 0.4.4: correct only litellm_update_model registry metadata to PATCH /model/{model_id}/update, matching the unchanged handler. Operations, effects and schemas are unchanged."
+    "local_sha256": "720a559106629638af82ef1ef833b660d9e6a17866802655c4f67db707885bd5",
+    "modification": "Next release after 0.4.4: correct only litellm_update_model registry metadata to PATCH /model/{model_id}/update, matching the unchanged handler. Operations, effects and schemas are unchanged. 0.4.6 reviewed parity: Classify health, token_counter and spend_calculate as create/active work: active health may charge/save history; tokenization may fetch resources. Readonly becomes 15, all-enabled stays 40. Existing HA 25 exact grants unchanged."
   },
   {
     "product": "litellm",
@@ -219,7 +223,9 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/chat.py",
-    "upstream_sha256": "379330b6e1708fa1c454517fb3c162c11aea8d86bcc31fbc433e66ee42eaa276"
+    "upstream_sha256": "379330b6e1708fa1c454517fb3c162c11aea8d86bcc31fbc433e66ee42eaa276",
+    "local_sha256": "e0afb3b37084c5cd9b79255a953fa02a979da6b34b6b43f9b5021d27c470d6d2",
+    "modification": "0.4.6 reviewed parity: Token counter uses conservative writing annotations and requires create immediately before the existing HTTP call. No inference, input or output contract change."
   },
   {
     "product": "litellm",
@@ -243,13 +249,17 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/spend.py",
-    "upstream_sha256": "f90f29026fb32c96d0c8030338383426661c63c44ba5c1602c83824ddadf7a70"
+    "upstream_sha256": "f90f29026fb32c96d0c8030338383426661c63c44ba5c1602c83824ddadf7a70",
+    "local_sha256": "87a47df79cc41c4f3ea29c2128bf248a5a865ca11acb0f63f4a1950294fdee3b",
+    "modification": "0.4.6 reviewed parity: Spend calculator uses conservative writing annotations and create guard before existing HTTP. Describe possible tokenizer/image fetches, without implying inference or billing. Input/output unchanged."
   },
   {
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/health.py",
-    "upstream_sha256": "6d61c3741510b1ebd3e8fb78ec7696fbc63761c7cd7f4558295089114819ead7"
+    "upstream_sha256": "6d61c3741510b1ebd3e8fb78ec7696fbc63761c7cd7f4558295089114819ead7",
+    "local_sha256": "2d2151fe1ce42a0ceaf0d88914d75691764fa9d23bf3f78984ac74e90cf4058d",
+    "modification": "0.4.6 reviewed parity: Health uses conservative writing annotations and create guard before existing HTTP. Describe potential provider charge and health-history storage; readiness stays read."
   },
   {
     "product": "litellm",
@@ -358,5 +368,12 @@
     "upstream_sha256": "fc9fae57953e55c5da14d90f95d63e40a0cad1cd57f7be5be6d7a7732b8de6be",
     "local_sha256": "fc9fae57953e55c5da14d90f95d63e40a0cad1cd57f7be5be6d7a7732b8de6be",
     "modification": "0.4.0: re-snapshot of woow-mcp-server main 83d6de5 (server.py and guards.py last changed upstream in 471efdf, woow-mcp-server #82, MCP SDK 2: FastMCP is MCPServer, the low-level server is _lowlevel_server, and every tool keeps its mcp 1.x error text through keep_error_text; errors.py unchanged since a5db051). Unmodified (the HA server does not use errors.describe)."
+  },
+  {
+    "product": "litellm",
+    "source": "local:4e4d69a11ee9cf010e4ea23b1bce4ec009a6c4de",
+    "path": "woow_litellm_mcp_server/urls.py",
+    "upstream_sha256": "e2c4fd4ac2cc5f1ad143a8da92e0836ad07e30909d31ac1e6b5d5479bb8ea7bf",
+    "modification": "New local product URL helper, reviewed with the matching PaaS feature commits; not a file from the older vendored upstream snapshot."
   }
 ]

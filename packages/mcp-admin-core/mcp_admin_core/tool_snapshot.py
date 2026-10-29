@@ -3376,6 +3376,10 @@ LISTED = {'odoo': [{'name': 'data_quality_report',
               'title': 'Token counter',
               'description': 'Count prompt/message tokens for a model without inference.\n'
                              '\n'
+                             'Tokenization can fetch remote images or tokenizer resources.\n'
+                             'Requires active-operation permission; does not request the optional\n'
+                             'provider token-count endpoint.\n'
+                             '\n'
                              'Provide either ``prompt`` (a raw string) or ``messages`` (the chat\n'
                              'array). Returns the token count and the tokenizer used.',
               'inputSchema': {'properties': {'model': {'type': 'string'},
@@ -3390,9 +3394,9 @@ LISTED = {'odoo': [{'name': 'data_quality_report',
                               'type': 'object',
                               'additionalProperties': False},
               'annotations': {'destructiveHint': False,
-                              'idempotentHint': True,
+                              'idempotentHint': False,
                               'openWorldHint': True,
-                              'readOnlyHint': True,
+                              'readOnlyHint': False,
                               'title': 'Token counter'},
               'outputSchema': {'additionalProperties': True, 'type': 'object'}},
              {'name': 'litellm_generate_key',
@@ -3926,6 +3930,9 @@ LISTED = {'odoo': [{'name': 'data_quality_report',
               'title': 'Spend calculate',
               'description': 'Estimate cost without billing.\n'
                              '\n'
+                             'Tokenization can fetch remote images or tokenizer resources.\n'
+                             'Requires active-operation permission; this does not run inference.\n'
+                             '\n'
                              'Provide either ``model`` + ``messages`` (to price a hypothetical\n'
                              'request) or a ``completion_response`` (to price a past one).\n'
                              '\n'
@@ -3947,14 +3954,17 @@ LISTED = {'odoo': [{'name': 'data_quality_report',
                               'type': 'object',
                               'additionalProperties': False},
               'annotations': {'destructiveHint': False,
-                              'idempotentHint': True,
+                              'idempotentHint': False,
                               'openWorldHint': True,
-                              'readOnlyHint': True,
+                              'readOnlyHint': False,
                               'title': 'Spend calculate'},
               'outputSchema': {'additionalProperties': True, 'type': 'object'}},
              {'name': 'litellm_health',
               'title': 'Health',
-              'description': 'Per-deployment health check.\n'
+              'description': 'Active per-deployment health check; may incur provider charges.\n'
+                             '\n'
+                             'The backend may also save health history. Requires active-operation\n'
+                             'permission even when the backend serves cached health results.\n'
                              '\n'
                              'Optionally restrict the check to a single ``model``. Returns the\n'
                              'healthy/unhealthy endpoint lists.\n'
@@ -3967,9 +3977,9 @@ LISTED = {'odoo': [{'name': 'data_quality_report',
                               'type': 'object',
                               'additionalProperties': False},
               'annotations': {'destructiveHint': False,
-                              'idempotentHint': True,
+                              'idempotentHint': False,
                               'openWorldHint': True,
-                              'readOnlyHint': True,
+                              'readOnlyHint': False,
                               'title': 'Health'},
               'outputSchema': {'additionalProperties': True, 'type': 'object'}},
              {'name': 'litellm_health_readiness',

@@ -38,8 +38,11 @@ def test_audited_schema_is_exact_and_isolated(entry):
 
 def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
     assert {p: sum(e['product'] == p for e in ENTRIES) for p in DATA['sources']} == {'litellm': 35, 'nextcloud': 8}
-    for source in DATA['sources'].values():
-        assert source['ha_commit'] == '235338cc7d1a02d17fbb93b631e37c77a20c7889'
+    for product, source in DATA['sources'].items():
+        assert source['ha_commit'] == {
+            'litellm': '4e4d69a11ee9cf010e4ea23b1bce4ec009a6c4de',
+            'nextcloud': '235338cc7d1a02d17fbb93b631e37c77a20c7889',
+        }[product]
         for name, expected in source['files'].items():
             assert hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == expected, name
     assert 'woow_backend_probe' not in {e['tool'] for e in ENTRIES}
