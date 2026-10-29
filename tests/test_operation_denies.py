@@ -47,7 +47,9 @@ def test_audited_selectors_defaults_and_denies_for_every_mixed_tool(tmp_path, pr
     tool = registry[name]
     snapshot = next(item for item in listing(product) if item['name'] == name)
     field = snapshot['inputSchema']['properties'][tool.selector]
-    assert field.get('default') == tool.default_operation
+    # test_workflow's native handler/policy supplies auto; public schema omits it.
+    # tests/test_n8n_selectors.py executes that pinned guard and verifies the default.
+    assert field.get('default', 'auto' if name == 'n8n_test_workflow' else None) == tool.default_operation
     if 'enum' in field:
         assert set(field['enum']) == set(tool.operations)
     with closing(ProductStore(tmp_path, product)) as store:
