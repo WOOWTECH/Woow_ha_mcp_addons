@@ -8,7 +8,8 @@ from fastmcp import Context
 
 from ..deps import litellm_client
 from ..gating import ToolGate
-from ._common import prune_none, read_only
+from ..registry import OP_CREATE
+from ._common import prune_none, read_only, writing
 
 
 def register(mcp: Any, gate: ToolGate) -> None:
@@ -16,12 +17,15 @@ def register(mcp: Any, gate: ToolGate) -> None:
 
         @mcp.tool(
             name="litellm_health",
-            annotations=read_only("Health"),
+            annotations=writing("Health"),
         )
         async def litellm_health(
             ctx: Context, model: str | None = None
         ) -> dict:
-            """Per-deployment health check.
+            """Active per-deployment health check; may incur provider charges.
+
+            The backend may also save health history. Requires active-operation
+            permission even when the backend serves cached health results.
 
             Optionally restrict the check to a single ``model``. Returns the
             healthy/unhealthy endpoint lists.
@@ -30,6 +34,7 @@ def register(mcp: Any, gate: ToolGate) -> None:
             matched the name*, not "everything is fine" — a ``note`` is added to
             the payload in that case.
             """
+            gate.require_operation("litellm_health", OP_CREATE)
             params = prune_none({"model": model})
             result = await litellm_client(ctx).get("/health", params=params)
             # LiteLLM answers an unknown model with the same zeroed envelope it

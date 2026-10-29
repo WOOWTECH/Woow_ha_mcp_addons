@@ -77,6 +77,13 @@ _H = ToolCategory.HEALTH
 _P = ToolCategory.PLUGINS
 
 
+# These were formerly labelled read. Keep legacy read-denies effective when
+# applying the conservative create policy for active work (see PARITY.md).
+ACTIVE_OPERATION_TOOLS = frozenset({
+    "litellm_health", "litellm_token_counter", "litellm_spend_calculate",
+})
+
+
 TOOL_REGISTRY: tuple[ToolSpec, ...] = (
     # --- models -----------------------------------------------------------
     _t("litellm_list_models", _M, "GET", "/v1/models",
@@ -96,7 +103,8 @@ TOOL_REGISTRY: tuple[ToolSpec, ...] = (
     _t("litellm_chat_completion", _C, "POST", "/v1/chat/completions",
        "Run an OpenAI-compatible chat completion.", operations=(OP_CREATE,)),
     _t("litellm_token_counter", _C, "POST", "/utils/token_counter",
-       "Count prompt/message tokens for a model without inference."),
+       "Count tokens without inference; may fetch images/tokenizers. Requires active-operation permission.",
+       operations=(OP_CREATE,)),
     # --- keys -------------------------------------------------------------
     _t("litellm_generate_key", _K, "POST", "/key/generate",
        "Create a virtual key.", operations=(OP_CREATE,)),
@@ -166,10 +174,12 @@ TOOL_REGISTRY: tuple[ToolSpec, ...] = (
        "(community-edition safe: aggregates /spend/logs, falls back to "
        "/global/spend/teams and /global/spend/keys)."),
     _t("litellm_spend_calculate", _S, "POST", "/spend/calculate",
-       "Estimate cost for a model + messages or a completion_response."),
+       "Estimate cost without billing; tokenization may fetch images/tokenizers. Requires active-operation permission.",
+       operations=(OP_CREATE,)),
     # --- health -----------------------------------------------------------
     _t("litellm_health", _H, "GET", "/health",
-       "Per-deployment health check (optional model filter)."),
+       "Active deployment probes may incur provider charges and save health history (optional model filter).",
+       operations=(OP_CREATE,)),
     _t("litellm_health_readiness", _H, "GET", "/health/readiness",
        "Gateway readiness incl. DB/cache status."),
     # --- plugins (Claude-Code skill hub) ----------------------------------

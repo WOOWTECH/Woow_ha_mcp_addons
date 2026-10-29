@@ -147,7 +147,7 @@ class Settings(BaseSettings):
     # just the ones flagged ``dangerous`` (see gating.ToolGate.is_tool_enabled).
     readonly: bool = Field(
         default=False,
-        description="When true, every dangerous/mutating tool is dropped.",
+        description="When true, only read operations remain; active probes/calculations are also dropped.",
     )
     # ``NoDecode`` on all three: the value arrives as a JSON string and MUST be
     # parsed by our forgiving validator, not by pydantic-settings' strict one.
