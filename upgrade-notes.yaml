@@ -2,10 +2,10 @@
 # pipeline #89) has not yet defined a machine-readable schema; this follows the format already used by
 # WOOWTECH/Woow_ha_cloudflare_tunnel_webgui. One release per entry, newest first.
 releases:
-  # Next release (owner decision 2026-10-27). NOT released: no add-on version is changed yet. The release PR replaces
-  # "unreleased" with the version number it ships and moves this entry under that version.
-  - to_version: "unreleased"
-    from_version: "0.4.1"
+  # 0.4.3 carries the 2026-10-27 owner decision from merged PR #26. This entry also applies when
+  # a schema 1/2/3 installation upgrades directly from 0.1.x; 0.4.2 did not rewrite those states.
+  - to_version: "0.4.3"
+    from_version: "0.4.2"
     addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]
     summary: >-
       Legacy installations (state schema 1/2/3) switch once to the full defaults at their first start, as on the
@@ -62,8 +62,8 @@ releases:
     backup_and_rollback:
       - Create a Home Assistant add-on backup before upgrading.
       - >-
-        A migrated state carries the owner_defaults_20261025 key, which 0.4.1 refuses: roll a migrated installation
-        back by restoring the pre-update add-on backup. An installation that was already schema 4 goes back to 0.4.1
+        A migrated state carries the owner_defaults_20261025 key, which 0.4.2 refuses: roll a migrated installation
+        back by restoring the pre-update add-on backup. An installation that was already schema 4 goes back to 0.4.2
         without conversion. Downgrades are not tested.
   - to_version: "0.4.0"
     from_version: "0.3.4"

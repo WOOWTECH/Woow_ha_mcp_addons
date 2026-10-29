@@ -13,24 +13,28 @@ import supply_chain as s
 
 
 class SecretTriageTests(unittest.TestCase):
-    def test_config_is_default_rules_plus_exact_anchored_pins(self):
+    def test_config_is_default_rules_plus_exact_anchored_reviewed_values(self):
         config = s.gitleaks_config()
         self.assertTrue(config.startswith('[extend]\nuseDefault = true\n'))
         pattern = re.search(r"regexes = \['''(.*)'''\]", config).group(1)
         self.assertTrue(pattern.startswith('^(?:') and pattern.endswith(')$'))
         values = pattern[4:-2].split('|')
-        self.assertEqual(values, sorted(set(s.triaged_pins()) | set(s.recorded_digests())))
+        self.assertEqual(values, sorted(set(s.triaged_pins()) | set(s.recorded_digests()) |
+                                        {s.reviewed_fixture_value()}))
         self.assertTrue(set(s.recorded_digests()) <= set(values))
-        self.assertTrue(all(re.fullmatch(r'[0-9a-f]{64}', v) for v in values))
+        self.assertEqual([v for v in values if not re.fullmatch(r'[0-9a-f]{64}', v)],
+                         [s.reviewed_fixture_value()])
         compiled = re.compile(pattern)
         self.assertTrue(compiled.fullmatch(values[0]))
         for other in (values[0][:-1] + ('0' if values[0][-1] != '0' else '1'), values[0] + 'a',
-                      'x' + values[0], 'ghp_' + 'a' * 36, ''):
+                      'x' + values[0], s.reviewed_fixture_value() + 'x',
+                      'x' + s.reviewed_fixture_value(), 'ghp_' + 'a' * 36, ''):
             self.assertIsNone(compiled.fullmatch(other))
         self.assertNotIn('targetRules', config)  # observed: gitleaks 8.28.0 then ignores the allowlist
 
     def test_malformed_triage_fails_closed(self):
         good = json.loads((s.ROOT / 'packaging/secret-triage.json').read_text())
+        real_read = s.read_json
         bad_docs = [
             dict(good, schema=2),
             dict(good, requires_security_review=False),
@@ -39,11 +43,26 @@ class SecretTriageTests(unittest.TestCase):
             dict(good, values=[dict(good['values'][0], sha256_pin='A' * 64)]),
             dict(good, values=[dict(good['values'][0], sha256_pin='.*')]),
             dict(good, values=[dict(good['values'][0], seen_in=[])]),
+            dict(good, fixture_false_positive=dict(good['fixture_false_positive'], sha256='0' * 64)),
+            dict(good, fixture_false_positive=dict(good['fixture_false_positive'], paths=[])),
+            dict(good, fixture_false_positive=dict(good['fixture_false_positive'], requires_security_review=False)),
         ]
         for doc in bad_docs:
-            with self.subTest(doc=str(doc)[:60]), patch.object(s, 'read_json', return_value=doc):
+            with self.subTest(doc=str(doc)[:60]), patch.object(s, 'read_json',
+                    side_effect=lambda path: doc if path.name == 'secret-triage.json' else real_read(path)):
                 with self.assertRaises(s.Closed):
                     s.gitleaks_config()
+
+    def test_changed_fixture_value_fails_closed(self):
+        real_read = s.read_json
+        target = s.FIXTURE_PATHS[0]
+        def changed(path):
+            value = real_read(path)
+            if str(path).endswith(target):
+                return dict(value, backend_key='dummy-other-backend-key')
+            return value
+        with patch.object(s, 'read_json', side_effect=changed), self.assertRaises(s.Closed):
+            s.gitleaks_config()
 
     def _fake_gitleaks(self, tmp, findings, stderr=True):
         tool = Path(tmp) / 'gitleaks'

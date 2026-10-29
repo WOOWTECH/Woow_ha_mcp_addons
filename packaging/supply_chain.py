@@ -300,12 +300,40 @@ def recorded_digests():
     return digests
 
 
+FIXTURE_PATHS = (
+    'tests/fixtures/owner_defaults/schema1-n8n-313ab01.json',
+    'tests/fixtures/owner_defaults/schema3-n8n-v0.1.14-max.json',
+    'tests/fixtures/owner_defaults/schema4-n8n-v0.2.2-max.json',
+)
+FIXTURE_VALUE_SHA256 = '38d8585ca5d880118cb3c80049378ed545fd37c3f517fc7bbcab7435b35caef9'
+
+
+def reviewed_fixture_value():
+    """Allow only the one synthetic backend key already committed in #26 history."""
+    triage = read_json(ROOT / 'packaging/secret-triage.json')
+    row = triage.get('fixture_false_positive', {})
+    require(row.get('rule') == 'generic-api-key' and row.get('field') == 'backend_key'
+            and row.get('sha256') == FIXTURE_VALUE_SHA256
+            and row.get('paths') == list(FIXTURE_PATHS)
+            and row.get('requires_security_review') is True
+            and isinstance(row.get('review'), str) and bool(row['review']))
+    values = []
+    for name in FIXTURE_PATHS:
+        value = read_json(ROOT / name).get('backend_key')
+        require(isinstance(value, str) and re.fullmatch(r'[A-Za-z0-9_-]{10,64}', value)
+                and 'dummy' in value.lower())
+        values.append(value)
+    require(len(set(values)) == 1 and hashlib.sha256(values[0].encode()).hexdigest() == FIXTURE_VALUE_SHA256)
+    return values[0]
+
+
 def gitleaks_config():
-    # Default rules unchanged. Allowlist matches the WHOLE secret against exact 64-hex values only,
-    # so any other finding (or any other value) still fails closed. Reports stay --redact=100.
-    values = sorted(set(triaged_pins()) | set(recorded_digests()))
+    # Default rules unchanged. Allowlist matches only reviewed whole values:
+    # the existing 64-hex digests and the one hash-bound synthetic fixture key.
+    # Source/history reports stay --redact=100; every other finding fails closed.
+    values = sorted(set(triaged_pins()) | set(recorded_digests()) | {reviewed_fixture_value()})
     return ('[extend]\nuseDefault = true\n\n[[allowlists]]\n'
-            'description = "triaged sha256 file pins and recorded hit digests (packaging/secret-triage.json)"\n'
+            'description = "reviewed exact values: sha256 pins, hit digests, one synthetic fixture key (packaging/secret-triage.json)"\n'
             "regexes = ['''^(?:" + '|'.join(values) + ")$''']\n")
 
 
