@@ -4,7 +4,6 @@
 releases:
   - to_version: "0.4.5"
     from_version: "0.4.4"
-    status: candidate
     addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]
     summary: n8n result-error parity, audited operation denies, and accurate LiteLLM update-model metadata.
     breaking_changes:
