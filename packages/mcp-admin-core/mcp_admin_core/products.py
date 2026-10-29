@@ -92,6 +92,13 @@ class LiteLLMConnection(Connection):
     url: URL
     master_key: Credential = Field(repr=False)
 
+    @field_validator('url')
+    @classmethod
+    def gateway_root(cls, value):
+        # http_url has validated the URL and removed trailing slashes. Only
+        # origin-root /v1 is an API suffix; /proxy/v1 is an intentional mount.
+        return value[:-3] if urlsplit(value).path == '/v1' else value
+
 
 class NextcloudConnection(Connection):
     url: URL  # the Nextcloud root URL (NEXTCLOUD_MCP_BASE_URL)

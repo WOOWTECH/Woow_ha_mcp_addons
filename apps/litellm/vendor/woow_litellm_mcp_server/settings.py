@@ -30,6 +30,8 @@ from typing import Annotated, Any, Mapping
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from .urls import normalize_base_url
+
 
 def _split_csv(value: object) -> list[str]:
     """Accept a comma-separated string or a list and normalise to a list."""
@@ -133,7 +135,7 @@ class Settings(BaseSettings):
     # --- upstream connection -------------------------------------------------
     base_url: str = Field(
         default="http://localhost:4000",
-        description="Base URL of the LiteLLM gateway (no /api/v5 suffix).",
+        description="LiteLLM gateway root; origin /v1 is removed, prefixed mounts are preserved.",
     )
     master_key: str = Field(
         default="",
@@ -192,9 +194,9 @@ class Settings(BaseSettings):
 
     @field_validator("base_url", mode="before")
     @classmethod
-    def _strip_trailing_slash(cls, value: object) -> object:
+    def _normalize_gateway_root(cls, value: object) -> object:
         if isinstance(value, str):
-            return value.rstrip("/")
+            return normalize_base_url(value)
         return value
 
     def clamp_limit(self, requested: int | None) -> int:
