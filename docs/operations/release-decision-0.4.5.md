@@ -20,6 +20,10 @@ The existing 0.4.4 images, receipt and readiness do not prove this source is bui
 - PR36's hosted checks exposed two stale tests: the fixed operation-effect projection and a migration test that
   inadvertently borrowed current selectors for the historical catalog. The legacy catalog itself remains byte-identical.
   The corrected baseline checks restore the previous whole-write projection to verify that all other effects are unchanged.
+- The first integration CI run exposed the recurring standalone-browser context teardown race (63 browser tests
+  passed, one teardown timed out). The test harness now rejects new sends and drains retained route responses
+  before closing their API context, while keeping destination guards installed. A deterministic lifecycle
+  regression fails before this correction and passes after it. This changes test cleanup only, not the shipped UI.
 - No schema number or state key changes. Downgrading to 0.4.4 with new operation denies retains those restrictions but
   suppresses the entire affected tool because the old policy lacks that selector metadata. Back up first; review
   `upgrade-notes.yaml` and restore the pre-upgrade backup when old behavior is required. Backup restore may restore tokens.
