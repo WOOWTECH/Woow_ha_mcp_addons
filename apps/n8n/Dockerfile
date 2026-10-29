@@ -28,7 +28,7 @@ RUN mkdir /tmp/woow-apt-parts \
  && rm -rf /var/lib/apt/lists/* /tmp/woow-security.list /tmp/woow-apt-parts \
  && test "$(dpkg-query -W -f='${Version}' libssl3)" = "3.0.22-1~deb12u2" \
  && test "$(dpkg-query -W -f='${Version}' openssl)" = "3.0.22-1~deb12u2"
-ARG BUILD_VERSION=0.4.4
+ARG BUILD_VERSION=0.4.5
 LABEL io.hass.type="app" io.hass.arch="amd64" io.hass.version="${BUILD_VERSION}" \
       io.hass.name="Woow n8n MCP Server" io.hass.description="Experimental; HA admin-role management; full tool surface; every tool and write on by default (each can be turned off in the panel)." \
       io.hass.url="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \
@@ -54,7 +54,7 @@ RUN /usr/sbin/ldconfig && test "$(node --version)" = v26.12.1
 COPY --from=npm /npm/node_modules ./apps/n8n/node_modules
 # 0.2.2: n8n-mcp's test-run errors keep n8n's own message; backend_policy.cjs refuses to start unless the patched digest matches.
 RUN /usr/local/bin/python apps/n8n/patches/fix_test_run_error_messages.py
-# Next release after 0.4.4: unsuccessful tool results set isError; guarded independently of handler patches.
+# 0.4.5: unsuccessful tool results set isError; guarded independently of handler patches.
 RUN /usr/local/bin/python apps/n8n/patches/fix_tool_result_is_error.py
 COPY packaging/entrypoint.py packaging/management_launcher.py ./packaging/
 COPY THIRD_PARTY_NOTICES.md ./THIRD_PARTY_NOTICES.md

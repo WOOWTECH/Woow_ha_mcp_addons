@@ -20,7 +20,14 @@ def test_effect_classification_review_baseline():
     effects = {p: {t['name']: t['effect'] for t in g['tools']} for p,g in data['products'].items()}
     assert hashlib.sha256(json.dumps(effects, sort_keys=True).encode()).hexdigest() == '35532eb86d754c1ccae7099c0f538738da1b99704912b31f69cebec693f279da'  # 0.1.7: + Nextcloud (5 read, 4 write)
     operations = {p: {t['name']: t['operation_effects'] for t in g['tools']} for p,g in data['products'].items()}
-    assert hashlib.sha256(json.dumps(operations, sort_keys=True).encode()).hexdigest() == '8559d40b183c41dbb814aa1f76d91d7ea199a15f15b761cb58b3d498019f5476'  # 0.1.7: + Nextcloud (no operations)
+    assert hashlib.sha256(json.dumps(operations, sort_keys=True).encode()).hexdigest() == '0bc5f07b02db0ad47647e80cbfaf5d69147037c91ee7bf31db07ee4781116e1a'  # 0.4.5: three audited n8n selectors
+    # The former catalog marked every operation of these whole-write tools as
+    # write. Restore that projection to bind every other product/tool unchanged.
+    # Their whole-tool write grants remain required even for reviewed reads.
+    previous_operations = json.loads(json.dumps(operations))
+    for name, selector in (('n8n_manage_agents', 'action'), ('n8n_test_workflow', 'method')):
+        previous_operations['n8n'][name][selector] = dict.fromkeys(operations['n8n'][name][selector], 'write')
+    assert hashlib.sha256(json.dumps(previous_operations, sort_keys=True).encode()).hexdigest() == '8559d40b183c41dbb814aa1f76d91d7ea199a15f15b761cb58b3d498019f5476'
     for p, name in [('odoo', 'execute_method'), ('odoo-manage', 'call_model_method'),
                     ('hermes', 'hermes_chat'), ('opendesign', 'send_message'),
                     ('litellm', 'litellm_chat_completion'), ('litellm', 'litellm_health'),

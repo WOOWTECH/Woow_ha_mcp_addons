@@ -2,6 +2,32 @@
 # pipeline #89) has not yet defined a machine-readable schema; this follows the format already used by
 # WOOWTECH/Woow_ha_cloudflare_tunnel_webgui. One release per entry, newest first.
 releases:
+  - to_version: "0.4.5"
+    from_version: "0.4.4"
+    status: candidate
+    addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]
+    summary: n8n result-error parity, audited operation denies, and accurate LiteLLM update-model metadata.
+    breaking_changes:
+      - id: n8n-audited-selector-validation
+        affects: n8n_manage_agents.action, n8n_test_workflow.method, n8n_list_catalog.kind.
+        change: >-
+          Unknown, null, malformed or missing required selectors are refused before child dispatch even when no
+          operation deny is saved. Missing or ECMAScript-blank test method keeps native auto. Denying trigger
+          also denies auto/default because auto can invoke trigger. Existing whole-tool grants remain required.
+        migration: >-
+          Send one of the advertised native selector values. Review the 22 operation controls in the Tools panel.
+          Existing known native calls, all 33 write grants and saved state remain unchanged. No state key is added.
+    behavior_changes:
+      - id: n8n-native-tool-iserror
+        change: Native success:false tool results set MCP isError:true while preserving content and structuredContent.
+        migration: Clients can detect failed tools from isError. valid:false validation results remain normal tool results.
+      - id: litellm-update-model-metadata
+        change: Registry now describes the existing PATCH /model/{model_id}/update handler accurately.
+        migration: No URL, input schema, permission or runtime method changes.
+    backup_and_rollback:
+      - Back up the add-on before upgrade. Schema 4 and connection/token/grant storage stay unchanged.
+      - A downgrade to 0.4.4 retains new deny entries but suppresses the entire affected tool, because that binary has no selector metadata for these tools. Restore the pre-upgrade backup if old behavior is required.
+      - Review restored permissions and reissue tokens when restoring a backup; earlier 0.4.3 optional-key restrictions still apply.
   # Unified 0.4.4 release candidate, NOT released; exact-source images and acceptance pending.
   - to_version: "0.4.4"
     from_version: "0.4.3"
