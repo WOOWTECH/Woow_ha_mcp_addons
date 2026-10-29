@@ -437,7 +437,12 @@ class NextcloudClient:
                         self.latch_key, response.status_code, response.headers.get("retry-after")
                     )
                 body = await self._read_capped(response, MAX_ERROR_BODY, tolerate=True)
-                detail = server_message(body)  # WOOW HA add-on 0.2.1: 5xx too (raw backend errors)
+                # Scrub the decoded detail before whitespace folding/truncation can
+                # turn a credential into a fragment the gateway cannot recognize.
+                password = self.settings.app_password.get_secret_value()
+                detail = server_message(body, credentials=(
+                    password, f"{self.settings.username}:{password}",
+                ))
                 raise NextcloudHTTPError(
                     status_message(response.status_code, label, op, detail=detail),
                     response.status_code,
