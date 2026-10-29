@@ -83,7 +83,9 @@ def test_hermes_dashboard_denied_before_connect(tmp_path, case):
 def run_case(tmp_path, product, case, url):
     state = ProductState(product=product, token='a'*43, child_token='b'*43, connection=connection(product, url))
     spec = child_spec(state, tmp_path)
-    launcher = spec.argv[1] if product in ('odoo','odoo-manage') and spec.argv[1].endswith(('launch.py', 'start_switches.py')) else ''
+    # The egress guard lives in launch.py. The Odoo switch entrypoint starts the full server, while this
+    # isolated -c probe imports only the transport guard before constructing an XML-RPC client.
+    launcher = str(Path(spec.argv[1]).with_name('launch.py')) if product in ('odoo', 'odoo-manage') else ''
     result = subprocess.run([spec.argv[0], '-c', PROGRAM], env={**spec.env, 'PRODUCT': product,
         'CASE': case, 'POLICY_LAUNCH': launcher}, cwd=spec.cwd, capture_output=True, text=True, timeout=20)
     assert result.returncode == 0, result.stderr
