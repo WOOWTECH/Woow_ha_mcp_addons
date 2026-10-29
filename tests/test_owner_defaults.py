@@ -587,7 +587,12 @@ async def test_the_panel_restores_once_with_csrf_role_and_the_reviewed_revision(
             boot = await client.get('/api/bootstrap', headers=IDENTITY)
             view = boot.json()['owner_defaults']
             assert view['notice'] is True and view['restore']['available'] is True
-            assert not any(secret in boot.text for secret in SECRETS[2:])
+            # The partial-edit contract now shows nonsecret connection fields to
+            # the authorized admin. The migration notice still contains none of
+            # that connection data, and no actual credential may appear anywhere.
+            from mcp_admin_core.redact import secret_values
+            assert not any(secret in json.dumps(view) for secret in SECRETS[2:])
+            assert not any(secret in boot.text for secret in secret_values(store.load()))
             csrf = {**IDENTITY, 'x-csrf-token': boot.json()['csrf']}
             before = store.path.read_bytes()
             assert (await client.post('/api/owner-defaults/restore', headers=IDENTITY)).status_code == 403

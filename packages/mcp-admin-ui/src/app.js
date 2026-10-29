@@ -1,5 +1,5 @@
 import { AdminApi, ApiError } from './api.js';
-import { products, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl, ownerDefaultsView, noticeTime, odooSwitches, odooSwitchKeys, odooSwitchPayload, maskedCurrentToken, tokenHistory } from './contracts.js';
+import { products, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl, ownerDefaultsView, noticeTime, odooSwitches, odooSwitchKeys, odooSwitchPayload, maskedCurrentToken, tokenHistory, backendEdit, backendPatchPayload, n8nSession, n8nSessionPayload, odooMethods, odooMethodsPayload } from './contracts.js';
 import './styles.css';
 
 const root = document.querySelector('#app');
@@ -56,7 +56,7 @@ async function task(action) {
   if (busy) return;
   busy = true;
   root.setAttribute('aria-busy', 'true');
-  const controls = [...root.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled)')];
+  const controls = [...root.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled)')];
   controls.forEach(node => node.disabled = true);
   try { await action(); } catch (error) { fail(error); }
   finally { busy = false; root.removeAttribute('aria-busy'); controls.forEach(node => node.disabled = node.dataset.conflict === 'true'); }
@@ -235,7 +235,7 @@ function backend() {
     if (fields.hidden) fields.querySelectorAll('input').forEach(input => input.value = '');
   });
   form.append(el('div', { class: 'field' }, el('label', { for: 'connection-action' }, '這次要如何處理設定？'), action),
-    p('保留不會送出變更。此 API 不支援只保留個別憑證：取代時請重新輸入所有必要欄位，空白不代表保留。'),
+    p(backendEdit(state) && state.connection_configured ? '下方可修改個別欄位並保留其餘憑證；此表單仍是整組取代，需重新輸入必要欄位。' : '保留不會送出變更。取代時請重新輸入所有必要欄位，空白不代表保留。'),
     fields, el('p', { id: 'connection-help', class: 'hint' }, state.product === 'odoo-manage' ? 'module 模式要求後端已安裝 MCP module；此介面不會安裝模組或變更 Odoo。read 模式不可保存寫入授權。' : state.product === 'hermes' ? 'Dashboard 為選填；URL、使用者、密碼需整組提供。全部留空會移除 Dashboard 設定。' : state.product === 'opendesign' ? 'OpenDesign 只需要 URL；不要求後端 token。' : 'URL 不可含帳密、查詢參數或片段。新憑證只用於這次提交，不儲存在瀏覽器。'),
     el('button', { type: 'submit', class: 'primary' }, '儲存後端設定'));
   form.addEventListener('submit', async event => {
@@ -255,6 +255,70 @@ function backend() {
   });
   return card('後端連線設定', chip(state.connection_configured ? '已設定 · 憑證隱藏' : '尚未設定'), p('URL 與憑證由管理介面管理。測試只使用已儲存的設定，不會送出下方表單。'), backendTest(), form);
 }
+function partialBackendCard() {
+  const snapshot = state;
+  const current = backendEdit(snapshot);
+  if (!current || !snapshot.connection_configured || snapshot.capabilities?.backend?.can_edit === false) return null;
+  const form = el('form', {id: 'backend-partial', autocomplete: 'off'});
+  const controls = new Map();
+  form.append(p('只送出你選擇修改的欄位，其餘設定與憑證保留。修改網址或帳號後，保留的憑證會用於新的連線，請先確認目的地。'));
+  for (const [key, label, type] of products[snapshot.product].fields) {
+    const secret = type.includes('secret');
+    const select = el('select', {id: `patch-${key}-action`, name: `${key}-action`},
+      el('option', {value: 'keep'}, secret ? current.secret_set[key] ? '保留已儲存憑證' : '保留未設定狀態' : '保留目前值'),
+      el('option', {value: 'set'}, '提供新值'),
+      type.startsWith('optional') ? el('option', {value: 'clear'}, '明確清除') : null);
+    const input = type === 'mode' ? el('select', {id: `patch-${key}`, disabled:true}, el('option', {value:'read'}, 'read'), el('option', {value:'module'}, 'module')) : el('input', {
+      id: `patch-${key}`, type: secret ? 'password' : type.includes('url') ? 'url' : 'text',
+      disabled: true, autocomplete: secret ? 'new-password' : 'off',
+      maxlength: secret ? '8192' : type.includes('url') ? '2048' : '256',
+    });
+    input.value = secret ? '' : current.values[key] ?? '';
+    select.addEventListener('change', () => { input.disabled = select.value !== 'set'; input.required = !input.disabled; if (secret && input.disabled) input.value = ''; });
+    controls.set(key, {select, input});
+    form.append(el('div', {class:'field'}, el('label', {for:`patch-${key}-action`}, `${label}的處理方式`), select,
+      el('label', {for:`patch-${key}`}, `${label}新值`), input));
+  }
+  form.append(el('button', {type:'submit', class:'primary'}, '儲存選定欄位'));
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    let payload;
+    try { payload = backendPatchPayload(snapshot,
+      Object.fromEntries([...controls].map(([key, c]) => [key, c.select.value])),
+      Object.fromEntries([...controls].map(([key, c]) => [key, c.input.value]))); } catch (error) { fail(error); return; }
+    if (!payload) { notice('已保留全部欄位，未送出變更。'); return; }
+    if (!await confirmAction('修改選定連線欄位？', '未修改的憑證將保留並用於修改後的連線。儲存會重新啟動子行程，現有連線可能中斷。', '確認儲存')) { payload = null; return; }
+    await task(async () => {
+      try { await saveForm(form, 'backend/patch', payload, snapshot.configuration?.revision); }
+      finally { payload = null; if (form.dataset.conflict !== 'true') form.querySelectorAll('input[type=password]').forEach(input => input.value = ''); }
+      await reload('已儲存選定欄位，其餘設定保持不變。請查看子行程套用狀態。');
+    });
+  });
+  return card('修改個別欄位，保留其餘憑證', form);
+}
+function n8nSessionCard() {
+  const snapshot = state, current = n8nSession(snapshot);
+  if (!current || !snapshot.configuration?.revision) return null;
+  const form = el('form', {id:'n8n-session'});
+  form.append(p('管理 n8n 原生 MCP 子行程的閒置逾時與連線上限。儲存後會重新啟動子行程。'),
+    p(snapshot.n8n_session_source === 'legacy_default' ? '沿用既有 HA 預設：600 秒（10 分鐘）／20 個連線。' : '目前顯示已儲存的設定。'));
+  const seconds = el('input', {id:'session-timeout', type:'number', min:'60', max:'86400', step:'1', required:true, value:current.timeout_seconds});
+  const count = el('input', {id:'session-max', type:'number', min:'1', max:'100', step:'1', required:true, value:current.max_sessions});
+  const actual = p('');
+  const update = () => { actual.textContent = `子行程採整數分鐘：向上換算為 ${Math.ceil(Number(seconds.value) / 60)} 分鐘；原生清掃週期可能再延後回收。`; };
+  seconds.addEventListener('input', update); update();
+  form.append(el('div', {class:'field'}, el('label', {for:'session-timeout'}, '閒置逾時（秒）'), seconds),
+    el('div', {class:'field'}, el('label', {for:'session-max'}, '最大連線數'), count), actual,
+    el('button', {type:'submit', class:'primary'}, '儲存 n8n 連線設定'));
+  form.addEventListener('submit', async event => {
+    event.preventDefault(); let payload;
+    try { payload = n8nSessionPayload(snapshot, {timeout_seconds:seconds.value, max_sessions:count.value}); } catch (error) { fail(error); return; }
+    if (!await confirmAction('套用 n8n 連線設定？', '會重新啟動子行程並關閉既有原生連線，其他工具授權與後端憑證不變。', '確認套用')) return;
+    await task(async () => { await saveForm(form, 'n8n/session', payload, snapshot.configuration.revision); await reload('已儲存 n8n 連線設定。請查看子行程套用狀態。'); });
+  });
+  return card('n8n 原生連線設定', form);
+}
+
 function tools() {
   const snapshot = state;
   const revision = snapshot.configuration?.revision;
@@ -360,7 +424,7 @@ function odooSwitchCard() {
   ];
   const form = el('form');
   form.append(p('這四項只會收緊 Odoo 子行程。外層「工具權限」中的工具、寫入 grant 與操作禁止仍分別生效；開啟此處的開關不會授予外層權限。若外層未授權 execute_method，該工具的審核讀取也無法呼叫。'),
-    p('PaaS 的精確 model.method 白名單不在這四項設定內；此 add-on 目前沒有白名單編輯，關閉直接寫入或未審查方法後不會提供單一方法的例外放行。'),
+    p(odooMethods(snapshot) ? '下方「Odoo 精確方法允許清單」可逐一加入已審查方法；清單不會繞過寫入總閘門、Chatter 限制或外層授權。' : '此伺服器尚未提供精確 model.method 清單編輯，請更新後再使用單一方法的例外放行。'),
     p(snapshot.odoo_write_switches_source === 'legacy_all_on'
       ? '此既有設定沒有四開關欄位；沿用先前子行程的四項全開值。既有停用與撤銷權限仍保留。'
       : '畫面顯示已儲存的子行程設定；儲存後會重啟子行程，請查看上方套用狀態。'));
@@ -385,6 +449,28 @@ function odooSwitchCard() {
   });
   return card('Odoo 子操作開關', form);
 }
+function odooMethodsCard() {
+  const snapshot = state, current = odooMethods(snapshot);
+  if (!current || !snapshot.configuration?.revision) return null;
+  const form = el('form', {id:'odoo-allowed-methods'});
+  const input = el('textarea', {id:'odoo-method-list', rows:'7', maxlength:'16384', spellcheck:'false', autocomplete:'off'});
+  input.value = current.join('\n');
+  form.append(p('逐一允許已審查的 model.method，例如 sale.order.action_confirm；每行一項、最多 128 項，不接受 * 或私有方法。空白清單表示沒有額外例外。'),
+    p('這份清單只提供精確方法的例外。外層工具授權、寫入總閘門與 Chatter 限制仍生效；create、write、unlink 仍受直接寫入開關控制。'),
+    p(snapshot.odoo_write_switches?.allow_unknown_methods && snapshot.odoo_write_switches?.allow_direct_writes && snapshot.odoo_write_switches?.enable_writes
+      ? '目前「允許未審查方法」與直接寫入都開啟，因此不在清單上的方法也可能執行。要只開放已審查方法，請另行關閉「允許未審查方法」。'
+      : '未列入清單的方法仍依四項子操作開關判定；已審核的讀取方法維持可用。'),
+    el('div', {class:'field'}, el('label', {for:'odoo-method-list'}, '允許的 Odoo 方法（每行 model.method）'), input),
+    el('button', {type:'submit', class:'primary'}, '儲存 Odoo 方法清單'));
+  form.addEventListener('submit', async event => {
+    event.preventDefault(); let payload;
+    try { payload=odooMethodsPayload(snapshot,input.value); } catch (error) { fail(error); return; }
+    if (!await confirmAction('套用 Odoo 方法清單？', '儲存會重啟子行程。列入清單的方法仍須外層工具授權與 Odoo 帳號權限，未審查方法開關不會自動變更。', '確認套用')) return;
+    await task(async () => { await saveForm(form,'odoo/allowed-methods',payload,snapshot.configuration.revision); await reload('已儲存 Odoo 精確方法清單。請查看子行程套用狀態。'); });
+  });
+  return card('Odoo 精確方法允許清單', form);
+}
+
 function safeEndpoint() { try { return state.endpoint ? explicitUrl(state.endpoint, true) : null; } catch { return null; } }
 async function copy(text) {
   try { await navigator.clipboard.writeText(text); notice('已複製。若包含權杖，請在使用後清除剪貼簿。'); }
@@ -489,7 +575,10 @@ function render() {
       el('main', { id: 'main' }, el('div', { class: 'page-heading' }, el('div', {}, el('p', { class: 'eyebrow' }, `${products[state.product].name} / MANAGEMENT`), el('h1', { tabindex: '-1' }, routes[current]), p({ overview: '一眼看清連線，安心管理你的服務。', backend: '把連線留在這裡，把秘密留在伺服器。', tools: '只開啟需要的能力，每次寫入都有明確授權。', access: '給用戶端正確的入口，不混用管理網址。', diagnostics: '查看受限日誌與行程狀態，必要時重新啟動。' }[current])), button('重新整理狀態', () => task(() => reload('已取得最新管理狀態。')))), el('div', { id: 'notice', role: 'status', tabindex: '-1', hidden: true }),
         ownerDefaults()?.malformed ? ownerDefaultsUnavailable() : ownerDefaults()?.notice ? ownerDefaultsCard(ownerDefaults()) : null,
         configurationCard(state.configuration), ({ overview, backend, tools, access, diagnostics })[current](),
+        current === 'backend' ? partialBackendCard() : null,
+        current === 'backend' && state.product === 'n8n' ? n8nSessionCard() : null,
         current === 'tools' && state.product === 'odoo' ? odooSwitchCard() : null,
+        current === 'tools' && state.product === 'odoo' ? odooMethodsCard() : null,
         el('footer', {}, `GUI 管理設定 · ${environmentLabels(state.capabilities).authority} · Streamable HTTP`))));
 }
 window.addEventListener('popstate', () => { hideToken(); if (state) render(); });

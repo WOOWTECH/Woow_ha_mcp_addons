@@ -385,7 +385,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         try:
             state = store.load()
             changes = None
-            if name in ("backend", "policy", "endpoint", "odoo/write-switches") and request.method == "PUT":
+            if name in ("backend", "backend/patch", "policy", "endpoint", "odoo/write-switches", "n8n/session") and request.method == "PUT":
                 try:
                     if not isinstance(value, dict):
                         raise ValueError()
@@ -405,6 +405,15 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                             if set(value) != {"connection"}:
                                 raise ValueError()
                             changes = value
+                    elif name == "backend/patch":
+                        from .backend_edit import changes as connection_changes
+                        if not hasattr(state, 'product'):
+                            raise ValueError()
+                        changes = connection_changes(state, value)
+                    elif name == 'n8n/session':
+                        if getattr(state, 'product', None) != 'n8n' or set(value) != {'n8n_session'} or value['n8n_session'] is None:
+                            raise ValueError()
+                        changes = value
                     elif name == "endpoint":
                         if set(value) != {"endpoint"}:
                             raise ValueError()
@@ -441,7 +450,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 if notice_action and not matches:
                     # The notice actions apply only to the revision the administrator reviewed.
                     return JSONResponse({'detail': {'code': 'precondition_required'}}, status_code=428, headers=headers)
-                if name == 'odoo/write-switches' and not matches:
+                if name in ('odoo/write-switches', 'n8n/session', 'backend/patch') and not matches:
                     return JSONResponse({'detail': {'code': 'precondition_required'}}, status_code=428, headers=headers)
             if name == "__ui__" and hasattr(request.state, "ui_path") and request.method in ("GET", "HEAD"):
                 return ui.response(request.state.ui_path, base)
@@ -451,6 +460,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 schemas = {item["name"]: item.get("inputSchema") for item in catalog["items"]}
                 # Owner decision 2026-10-27: the one-time all-on migration's notice (only on a state it wrote).
                 notice = owner_defaults.view(state, store.directory)
+                from .backend_edit import view as connection_view
                 return JSONResponse({"base_path": base, "api_base": base + "/api", "csrf": csrf,
                     **({"owner_defaults": notice} if notice is not None else {}),
                     "configuration": configuration.snapshot(state),
@@ -463,6 +473,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     **({'odoo_write_switches': state.effective_odoo_write_switches.model_dump(),
                         'odoo_write_switches_source': 'saved' if state.odoo_write_switches is not None else 'legacy_all_on'}
                        if getattr(state, 'product', None) == 'odoo' else {}),
+                    **({'backend_edit': connection_view(state)} if hasattr(state, 'product') else {}),
+                    **({'n8n_session': state.effective_n8n_session.model_dump(),
+                        'n8n_session_source': 'saved' if state.n8n_session is not None else 'legacy_default',
+                        'n8n_session_effective_minutes': state.effective_n8n_session.timeout_minutes}
+                       if getattr(state, 'product', None) == 'n8n' else {}),
                     "connection_configured": getattr(state, 'configured', bool(state.backend_url and state.backend_key)),
                     "writes_enabled": state.writes_enabled, "disabled": state.disabled,
                     "policy_contract": "woow-v3-exact-grants",
@@ -552,14 +567,14 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                                             headers=headers)
                 return JSONResponse(body, headers=headers)
             if changes is not None:
-                if name == "backend" and not management.backend_can_edit:
+                if name in ("backend", "backend/patch") and not management.backend_can_edit:
                     return JSONResponse({"error": "backend_fixed"}, status_code=409, headers=headers)
                 updated = store.update(**changes)
                 # No yield between durable commit and lifecycle ownership transfer.
                 # An authorized mutation is not undone by losing its HTTP caller.
                 committed.set()
                 headers['ETag'] = configuration.etag(updated)
-                if (name in ('backend', 'odoo/write-switches') or (name == "policy" and getattr(state, 'product', 'n8n') in ('emqx', 'litellm', 'nextcloud'))) and backend_changed:
+                if (name in ('backend', 'backend/patch', 'odoo/write-switches', 'n8n/session') or (name == "policy" and getattr(state, 'product', 'n8n') in ('emqx', 'litellm', 'nextcloud'))) and backend_changed:
                     try:
                         await backend_changed(updated)
                     except Exception:
@@ -581,7 +596,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         committed = asyncio.Event()
         try:
             name = request.path_params["operation"]
-            if name in ("backend", "policy", "endpoint", "odoo/write-switches") and request.method == "PUT":
+            if name in ("backend", "backend/patch", "policy", "endpoint", "odoo/write-switches", "n8n/session") and request.method == "PUT":
                 value = await json_body(request)
             else:
                 if await body(request):

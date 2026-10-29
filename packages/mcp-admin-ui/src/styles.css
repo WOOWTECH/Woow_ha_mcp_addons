@@ -138,3 +138,6 @@ dialog::backdrop { background:rgba(33,33,33,.3); }
   .notice { padding:16px; }
 }
 @media(prefers-reduced-motion:reduce) { * { transition:none !important; } }
+
+/* Exact method editor follows the form width on narrow Ingress panels. */
+.field textarea { width:100%; max-width:100%; box-sizing:border-box; resize:vertical; font:inherit; }

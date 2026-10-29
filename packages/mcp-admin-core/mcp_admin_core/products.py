@@ -131,6 +131,7 @@ CONNECTIONS = dict(zip(PRODUCTS, (OdooConnection, ManageConnection, HermesConnec
 OWNER_DEFAULTS = 'owner_defaults_20261025'
 ODOO_WRITE_SWITCHES = 'odoo_write_switches'
 TOKEN_HISTORY = 'token_history'
+N8N_SESSION = 'n8n_session'
 Timestamp = Annotated[str, Field(pattern=r'^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+00:00$')]
 
 
@@ -182,6 +183,17 @@ class TokenHistoryEntry(BaseModel):
         return value
 
 
+class N8nSession(BaseModel):
+    """Seconds in the API; the pinned native child rounds up to whole minutes."""
+    model_config = ConfigDict(extra='forbid', strict=True, frozen=True)
+    timeout_seconds: int = Field(ge=60, le=86400)
+    max_sessions: int = Field(ge=1, le=100)
+
+    @property
+    def timeout_minutes(self):
+        return (self.timeout_seconds + 59) // 60
+
+
 class ProductState(State):
     # 4 (0.2.0): the full child surface; every state migrated from 3 (or older) gets every write grant once.
     schema_version: int = 4
@@ -206,6 +218,7 @@ class ProductState(State):
     # Additive schema 4 field, absent in pre-history states. Once a transition writes it, an older binary requires a
     # pre-update backup to read the state; merely starting this binary does not rewrite an existing schema 4 state.
     token_history: list[TokenHistoryEntry] | None = Field(default=None, exclude_if=lambda value: value is None)
+    n8n_session: N8nSession | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @field_validator('schema_version')
     @classmethod
@@ -268,7 +281,15 @@ class ProductState(State):
             raise ValueError('only n8n has an MCP access token')
         if self.odoo_write_switches is not None and self.product != 'odoo':
             raise ValueError('only Odoo has child write switches')
+        if self.n8n_session is not None and self.product != 'n8n':
+            raise ValueError('only n8n has native session settings')
         return self
+
+    @property
+    def effective_n8n_session(self):
+        if self.product != 'n8n':
+            raise ValueError('only n8n has native session settings')
+        return self.n8n_session or N8nSession(timeout_seconds=600, max_sessions=20)
 
     @property
     def effective_odoo_write_switches(self):
@@ -283,7 +304,7 @@ class ProductState(State):
 
 
 # The keys every stored product state carries; the three optional fields exist only on schema 4.
-STORED_FIELDS = frozenset(ProductState.model_fields) - {OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, TOKEN_HISTORY}
+STORED_FIELDS = frozenset(ProductState.model_fields) - {OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, TOKEN_HISTORY, N8N_SESSION}
 
 
 def write_grants(product):
@@ -401,10 +422,11 @@ class ProductStore(Store):
             value = {**value, 'schema_version': 4}
             self._migrated = True
         # No optional field may be stored as null. Legacy states cannot carry the new keys.
-        if (not isinstance(value, dict) or set(value) - {OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, TOKEN_HISTORY} != STORED_FIELDS
+        if (not isinstance(value, dict) or set(value) - {OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, TOKEN_HISTORY, N8N_SESSION} != STORED_FIELDS
                 or (OWNER_DEFAULTS in value and value[OWNER_DEFAULTS] is None)
                 or (ODOO_WRITE_SWITCHES in value and value[ODOO_WRITE_SWITCHES] is None)
                 or (TOKEN_HISTORY in value and value[TOKEN_HISTORY] is None)
+                or (N8N_SESSION in value and value[N8N_SESSION] is None)
                 or value.get('product') != self.product):
             raise ValueError('wrong product or incomplete schema')
         return ProductState.model_validate(value)

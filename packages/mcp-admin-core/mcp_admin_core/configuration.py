@@ -36,6 +36,9 @@ class ConfigurationState:
         # These are the inputs read by the fixed product/n8n child launchers.
         fields = ('product', 'child_token', 'connection', 'backend_url', 'backend_key', 'mcp_access_token')
         value = {key: raw.get(key) for key in fields}
+        if raw.get('product') == 'n8n':
+            session = state.effective_n8n_session
+            value['n8n_session'] = {'timeout_minutes': session.timeout_minutes, 'max_sessions': session.max_sessions}
         if raw.get('product') in ('emqx', 'litellm', 'nextcloud'):
             # Native child policy is also rebuilt for these products.
             value.update({key: raw.get(key) for key in
