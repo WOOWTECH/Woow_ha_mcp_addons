@@ -54,6 +54,8 @@ RUN /usr/sbin/ldconfig && test "$(node --version)" = v26.12.1
 COPY --from=npm /npm/node_modules ./apps/n8n/node_modules
 # 0.2.2: n8n-mcp's test-run errors keep n8n's own message; backend_policy.cjs refuses to start unless the patched digest matches.
 RUN /usr/local/bin/python apps/n8n/patches/fix_test_run_error_messages.py
+# Next release after 0.4.4: unsuccessful tool results set isError; guarded independently of handler patches.
+RUN /usr/local/bin/python apps/n8n/patches/fix_tool_result_is_error.py
 COPY packaging/entrypoint.py packaging/management_launcher.py ./packaging/
 COPY THIRD_PARTY_NOTICES.md ./THIRD_PARTY_NOTICES.md
 COPY docs/provenance ./docs/provenance

@@ -12,6 +12,7 @@ apps/odoo/.venv/bin/python apps/odoo/patches/fix_direct_writes.py
 npm ci --prefix apps/n8n --ignore-scripts --no-audit --no-fund
 # 0.2.2: the n8n-mcp build patch the n8n image applies (apps/n8n/Dockerfile); backend_policy.cjs checks the patched digest.
 python3 apps/n8n/patches/fix_test_run_error_messages.py
+python3 apps/n8n/patches/fix_tool_result_is_error.py
 node --check apps/n8n/backend_policy.cjs
 npm ci --prefix packages/mcp-admin-ui --ignore-scripts --no-audit --no-fund
 npm test --prefix packages/mcp-admin-ui

@@ -19,6 +19,8 @@ if (crypto.createHash("sha256").update(fs.readFileSync(apiPath)).digest("hex") !
 // The error types/formatter and actual handler are part of this boundary too.
 // 0.2.2: handlers-n8n-manager.js is the file apps/n8n/patches/fix_test_run_error_messages.py writes (test-run errors keep
 // n8n's own message; applied by the Dockerfile and packaging/unit.sh): an unpatched or altered package fails closed.
+// Next release after 0.4.4: server.js must also carry fix_tool_result_is_error.py (success === false sets isError;
+// valid:false validation answers remain normal). The separate handlers-n8n-manager.js patch/digest stays unchanged.
 // 0.3.4 (n8n-mcp 2.91.0 -> 2.96.2): n8n-api-client.js, n8n-errors.js, handlers-official-tools.js and
 // official-mcp-access.js are byte-identical. Reviewed changes: mcp/server.js reads instanceContext through a getter
 // (per-request AsyncLocalStorage scope set by the HTTP server, else the session's own context; this child is
@@ -32,7 +34,7 @@ if (crypto.createHash("sha256").update(fs.readFileSync(apiPath)).digest("hex") !
 for (const [relative, digest] of [
     ["utils/n8n-errors.js", "efd5783846cf1eb61dbf9387de260e5a1d336ec609bc4c4d5601c369b5d2f20a"],
     ["mcp/handlers-n8n-manager.js", "6cd673423e829902f3e56de66afe90f7e2196d7ef76cca02551a20eee03ae2eb"],
-    ["mcp/server.js", "a1237f5cafe34cddcecb85c48bc467c38a443be487a34b0f24c5cbbb343b30e9"],
+    ["mcp/server.js", "638b148f91c18d484b8bcede838be1032f82ddd1b3aa53b24cf005325ae3d9f7"],
     ["mcp/handlers-official-tools.js", "e85937c58d5a8426d54b1b69598adc83a14648402fc58a8714ef5db8132977cd"],
     ["mcp/official-mcp-access.js", "113d3556e4b93a870b36986a0fce8de45391ce64d7ab4c9f50fd6715eee3c733"],
     ["utils/npm-version-checker.js", "8ffe192878574d0c4a7a6453205be7916858344e889b8b681998b4f22451a426"],
