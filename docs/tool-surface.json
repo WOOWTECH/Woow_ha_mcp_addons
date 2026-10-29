@@ -79,7 +79,7 @@
     "apps/litellm/vendor/woow_litellm_mcp_server/gating.py": "b53476befdf8ff25c6f5688a510c669c0cca6cc704f8b00f7b5dfd0265b79bcb",
     "apps/litellm/vendor/woow_litellm_mcp_server/lifespan.py": "02f2d2998dd0ada21d8560203409184a359d35b18e546ee6c68a7b24f87c18da",
     "apps/litellm/vendor/woow_litellm_mcp_server/middleware.py": "a019bb77516d924981301c06a933263fc6743380c32488efaba2748bd28a05c5",
-    "apps/litellm/vendor/woow_litellm_mcp_server/registry.py": "a074a48ceeef9393ab46500420156fc59c39471c1fa6739e9030c81e7c597cae",
+    "apps/litellm/vendor/woow_litellm_mcp_server/registry.py": "1b813d1f15cbd1f46df2b3ed9a90155084bd3c8ad3a53d24c45d1f6cbec8102b",
     "apps/litellm/vendor/woow_litellm_mcp_server/server.py": "85c3cb8f6d50bed817279754c16309919bdf419f8193b6291f47f08f80db89f7",
     "apps/litellm/vendor/woow_litellm_mcp_server/settings.py": "0c89fa776b88ae00a52d4ed5bae67ba9e827f42e35ab74bf2c3fac81a465ded2",
     "apps/litellm/vendor/woow_litellm_mcp_server/tools/__init__.py": "fd4881256f2c77ece6e01f98742355d6bab7fbb170079d0474c7c78cf2772742",
@@ -113,7 +113,7 @@
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/instance-argument.js": "dac8db2cb5f8ee496f0d6f78c0c294f9d5f47937f2d6fe4c923cb9cbf61dc462",
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/official-mcp-access.js": "113d3556e4b93a870b36986a0fce8de45391ce64d7ab4c9f50fd6715eee3c733",
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/param-aliases.js": "9e2ead691b7439c57b73fc4c80b76a4d86b914c2cf7b08e1f6cdd2f46edfa834",
-    "apps/n8n/node_modules/n8n-mcp/dist/mcp/server.js": "a1237f5cafe34cddcecb85c48bc467c38a443be487a34b0f24c5cbbb343b30e9",
+    "apps/n8n/node_modules/n8n-mcp/dist/mcp/server.js": "638b148f91c18d484b8bcede838be1032f82ddd1b3aa53b24cf005325ae3d9f7",
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/stdio-wrapper.js": "08c1cad54e21017f4b527bcd602f6dc8e50cd813babd33372bfbf429fcaf2291",
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/tool-policy.js": "e3ec9753d7b64320d83829015905c32a1b03620a4b82f0e39d5fcbb142a75ec5",
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-documentation.js": "4e01752278c8dddea44a64aa1a26fb4f429823f42937c349aa1a2650abaeffc9",
@@ -131,7 +131,7 @@
     "apps/n8n/node_modules/n8n-mcp/dist/services/post-update-validator.js": "c8ad45a7e3a7bec8edc95ddf8d26a00b5a28dcce07af1db8e6ad928dc08235f5",
     "apps/n8n/node_modules/n8n-mcp/dist/services/universal-expression-validator.js": "49f86c40a9f26286c363eee3ed1dc779fc517458ec2388aaf5ea8f2d421085cd",
     "apps/n8n/node_modules/n8n-mcp/dist/services/workflow-validator.js": "375cdf41a73ec0978b99b8a33a68ec964fb4693b59a5643072095ea5a69f3009",
-    "apps/n8n/backend_policy.cjs": "73249b0334e1e993aedeb2e059a58b05e117b4c2e155865ca935dce249cb5e7f",
+    "apps/n8n/backend_policy.cjs": "33d7b6fa54e83021d963d220f7319e1eb3a2b61a12ee29fdab213d3aaebc8666",
     "apps/n8n/node_modules/n8n-mcp/dist/utils/npm-version-checker.js": "8ffe192878574d0c4a7a6453205be7916858344e889b8b681998b4f22451a426",
     "apps/runtime/backend_policy.py": "45bea021e676a8714786ef226d8267b61d0ffcdb9cd5053a296c60f031976a65",
     "apps/runtime/batch2_outputs.py": "239add1fbbad29eecbfec82e33553b33b4ed7b0e5d3acdad01a33d83f2090352",
@@ -6376,7 +6376,7 @@
           "status": "supported-full",
           "default_enabled": true,
           "write_grants": [],
-          "operation_parameter": null,
+          "operation_parameter": "kind",
           "enable": "預設開啟（新安裝與從 0.1.x 升級）；管理面板可逐一停用工具或撤銷寫入 grant；disabled 優先",
           "reason": "子程序完整工具（0.2.0）：參數由子程序驗證，輸入原樣轉送，輸出不再投影。",
           "accepted_schema": null,
@@ -6504,20 +6504,20 @@
           "effect": "write",
           "operation_effects": {
             "action": {
-              "reference": "write",
-              "search": "write",
-              "get": "write",
+              "reference": "read",
+              "search": "read",
+              "get": "read",
               "create": "write",
               "mutate": "write",
-              "validate": "write",
+              "validate": "read",
               "call": "write",
               "publish": "write",
               "unpublish": "write",
               "revert": "write",
-              "versions": "write",
+              "versions": "read",
               "delete": "write",
-              "discover_assets": "write",
-              "verify_mcp_server": "write",
+              "discover_assets": "read",
+              "verify_mcp_server": "read",
               "update_integration": "write"
             }
           },
@@ -6620,7 +6620,7 @@
           "write_grants": [
             "n8n_manage_agents"
           ],
-          "operation_parameter": null,
+          "operation_parameter": "action",
           "enable": "預設開啟（新安裝與從 0.1.x 升級）；管理面板可逐一停用工具或撤銷寫入 grant；disabled 優先",
           "reason": "子程序完整工具（0.2.0）：參數由子程序驗證，輸入原樣轉送，輸出不再投影。",
           "accepted_schema": null,
@@ -7304,7 +7304,7 @@
             "method": {
               "auto": "write",
               "trigger": "write",
-              "prepare": "write",
+              "prepare": "read",
               "pinned": "write",
               "direct": "write"
             }
@@ -7348,7 +7348,7 @@
           "write_grants": [
             "n8n_test_workflow"
           ],
-          "operation_parameter": null,
+          "operation_parameter": "method",
           "enable": "預設開啟（新安裝與從 0.1.x 升級）；管理面板可逐一停用工具或撤銷寫入 grant；disabled 優先",
           "reason": "子程序完整工具（0.2.0）：參數由子程序驗證，輸入原樣轉送，輸出不再投影。",
           "accepted_schema": null,

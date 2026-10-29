@@ -87,7 +87,7 @@ TOOL_REGISTRY: tuple[ToolSpec, ...] = (
        "Aggregated per-model-group capabilities."),
     _t("litellm_add_model", _M, "POST", "/model/new",
        "Register a new model deployment.", operations=(OP_CREATE,)),
-    _t("litellm_update_model", _M, "POST", "/model/update",
+    _t("litellm_update_model", _M, "PATCH", "/model/{model_id}/update",
        "Update an existing model deployment.", operations=(OP_UPDATE,)),
     _t("litellm_delete_model", _M, "POST", "/model/delete",
        "[DESTRUCTIVE] Remove a model deployment by id.",

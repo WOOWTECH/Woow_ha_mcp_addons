@@ -80,6 +80,35 @@ async function unit() {
   }
   for (let status = 300; status < 400; status++) await assert.rejects(api.get(String(status)), /redirect response denied/);
   assert.equal(sends, 107); assert.equal(proofs, 114); assert.equal(disposed, 100);
+  // A request already fetched by the guarded route still owns its response
+  // while fulfill is pending. Closing its context first invalidates that response.
+  let routeHandler, releaseResponse, enteredResponse, closeCalls = 0, forwarded = 0, aborts = 0;
+  const entered = new Promise(resolve => { enteredResponse = resolve; });
+  const release = new Promise(resolve => { releaseResponse = resolve; });
+  const context = {
+    pages: () => [], route: async (_pattern, handler) => { routeHandler = handler; },
+    routeWebSocket: async () => {}, request: { _innerFetch: async () => { forwarded++; return response(200); } },
+    close: async () => { closeCalls++; },
+  };
+  const close = await installUIContextGuard(context, { resolveURL: value => value, guard: async () => {} });
+  const pending = routeHandler({
+    request: () => ({ url: () => 'http://127.0.0.1:43211/pending' }),
+    fetch: async () => response(200),
+    fulfill: async () => { enteredResponse(); await release; }, abort: async () => { aborts++; },
+  });
+  await entered;
+  const closing = close();
+  await new Promise(resolve => setImmediate(resolve));
+  try {
+    assert.equal(closeCalls, 0, 'must drain retained responses before closing their context');
+    await routeHandler({ request: () => ({ url: () => 'http://127.0.0.1:43211/late' }),
+      fetch: async () => { forwarded++; return response(200); }, fulfill: async () => {},
+      abort: async () => { aborts++; } });
+    await assert.rejects(context.request._innerFetch({url:'http://127.0.0.1:43211/late'}), /closing/);
+    assert.equal(forwarded, 0, 'shutdown must reject newly queued sends without removing guards');
+    assert.equal(aborts, 1);
+  } finally { releaseResponse(); await pending; await closing; }
+  assert.equal(closeCalls, 1);
   console.log(JSON.stringify({ mode: 'unit', sends, proofs, disposed, deniedStale: 7, deniedRedirectStatuses: 100 }));
 }
 

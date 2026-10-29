@@ -135,9 +135,9 @@ def build():
             tool = POLICIES[product].get(name)
             supported = tool is not None
             operation_effects = {}
-            selector = next((k for k in ('action', 'operation', 'mode') if k in evidence['operations']), None)
+            selector = tool.selector if tool else None
             for parameter, values in evidence['operations'].items():
-                if categories[name] == 'mixed' and name in OPERATION_READS and parameter == selector:
+                if name in OPERATION_READS and parameter == selector:
                     operation_effects[parameter] = {v: ('read' if v in OPERATION_READS[name] else 'write') for v in values}
                 else:
                     operation_effects[parameter] = {v: categories[name] for v in values}

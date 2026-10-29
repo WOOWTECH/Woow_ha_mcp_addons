@@ -1,3 +1,8 @@
+## 0.4.5
+
+- Source metadata only; this product remains disabled and no image is published.
+- Back up before upgrading; review operation restrictions before downgrade. See root upgrade-notes.yaml.
+
 # OpenDesign Changelog
 
 ## 0.4.4 — 發佈候選（2026-10-29；映像待驗收）

@@ -2,14 +2,38 @@
 # pipeline #89) has not yet defined a machine-readable schema; this follows the format already used by
 # WOOWTECH/Woow_ha_cloudflare_tunnel_webgui. One release per entry, newest first.
 releases:
-  # Unified 0.4.4 release candidate, NOT released; exact-source images and acceptance pending.
+  - to_version: "0.4.5"
+    from_version: "0.4.4"
+    addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]
+    summary: n8n result-error parity, audited operation denies, and accurate LiteLLM update-model metadata.
+    breaking_changes:
+      - id: n8n-audited-selector-validation
+        affects: n8n_manage_agents.action, n8n_test_workflow.method, n8n_list_catalog.kind.
+        change: >-
+          Unknown, null, malformed or missing required selectors are refused before child dispatch even when no
+          operation deny is saved. Missing or ECMAScript-blank test method keeps native auto. Denying trigger
+          also denies auto/default because auto can invoke trigger. Existing whole-tool grants remain required.
+        migration: >-
+          Send one of the advertised native selector values. Review the 22 operation controls in the Tools panel.
+          Existing known native calls, all 33 write grants and saved state remain unchanged. No state key is added.
+    behavior_changes:
+      - id: n8n-native-tool-iserror
+        change: Native success:false tool results set MCP isError:true while preserving content and structuredContent.
+        migration: Clients can detect failed tools from isError. valid:false validation results remain normal tool results.
+      - id: litellm-update-model-metadata
+        change: Registry now describes the existing PATCH /model/{model_id}/update handler accurately.
+        migration: No URL, input schema, permission or runtime method changes.
+    backup_and_rollback:
+      - Back up the add-on before upgrade. Schema 4 and connection/token/grant storage stay unchanged.
+      - A downgrade to 0.4.4 retains new deny entries but suppresses the entire affected tool, because that binary has no selector metadata for these tools. Restore the pre-upgrade backup if old behavior is required.
+      - Review restored permissions and reissue tokens when restoring a backup; earlier 0.4.3 optional-key restrictions still apply.
+  # 0.4.4 was published through PR34 on 2026-10-29; see docs/provenance/release-0.4.4-images.json.
   - to_version: "0.4.4"
     from_version: "0.4.3"
-    status: candidate
     addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]
     summary: >-
-      Unreleased integrated source candidate: Odoo MCP isError parity, four Odoo child write switches,
-      masked MCP token history, and Nextcloud configured-secret redaction. Seven source manifests target 0.4.4; six enabled products only. Image build, publication and deployment pending.
+      Released integration: Odoo MCP isError parity, four Odoo child write switches,
+      masked MCP token history, and Nextcloud configured-secret redaction. Seven source manifests target 0.4.4; six enabled products were published. Stable Releases, Store and Local Download were verified after PR34; production installation is a separate operation.
     breaking_changes:
       - id: schema4-optional-parity-state-keys
         affects: >-
@@ -38,7 +62,7 @@ releases:
           behavior. Outer tool permissions remain authoritative, and the reviewed child gates can narrow execution.
         migration: >-
           Review switches in the Odoo Tools panel. Exact model.method allowlist editing is not provided by this
-          candidate; disabling the outer execute_method grant also removes its reviewed reads.
+          release; disabling the outer execute_method grant also removes its reviewed reads.
       - id: ha-masked-token-history-panel
         change: >-
           Authenticated Ingress bootstrap includes only the current token mask and at most five masked events.
@@ -54,7 +78,7 @@ releases:
       - Seven source manifests share 0.4.4; only six Store products publish. OpenDesign stays disabled and Odoo Manage archived.
       - Addon options, ports, architectures, image names, MCP token format, and state schema number 4.
       - Startup bytes of existing schema 4 state, outer grants/denies, and the full-default behavior of absent switches.
-      - Immutable 0.4.3 image receipt and release decision; they are not acceptance evidence for this candidate.
+      - Immutable 0.4.3 image receipt and release decision; they are not acceptance evidence for 0.4.4.
     backup_and_rollback:
       - Take a Home Assistant add-on backup before upgrading.
       - Restore it before running 0.4.3 if odoo_write_switches or token_history has been written; never strip the fields.

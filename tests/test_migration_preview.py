@@ -61,11 +61,13 @@ def install_fixture(directory, value):
 def test_catalog_matches_retained_legacy_models():
     for product in ALL:
         bounded = N8N_BOUNDED if product == 'n8n' else BOUNDED_TOOLS[product]
-        current = full_tools(product) if product == 'n8n' else TOOLS[product]
         assert set(LEGACY_TOOLS[product]) == set(bounded)
         for name, tool in bounded.items():
             entry = LEGACY_TOOLS[product][name]
-            selector = tool.selector or current[name].selector
+            # Historical read-only hermes_model had an action enum but no policy
+            # selector. Freeze that exception; current selectors must never
+            # rewrite the 0.1.x catalog (e.g. n8n_list_catalog added in 0.4.5).
+            selector = tool.selector or {('hermes', 'hermes_model'): 'action'}.get((product, name))
             field = tool.arguments.model_fields.get(selector)
             assert entry == {'write': tool.write, 'legacy_write': tool.legacy_write,
                              'write_operations': list(tool.write_operations),

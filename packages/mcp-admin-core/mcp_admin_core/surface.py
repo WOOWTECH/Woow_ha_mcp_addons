@@ -48,7 +48,7 @@ MIXED = {
 # These handlers are not proven non-mutating by the wrapper: granted (and revocable) as writes.
 UNCERTAIN = {'emqx': 'emqx_test_rule_sql', 'litellm': '', 'n8n': 'n8n_audit_instance'}
 
-# The operation parameter of each mixed tool, every value its source accepts, and those that only read.
+# Audited selectors and native values; whole-tool write grants remain whole-tool grants.
 SELECTORS = {
     'hermes_config': ('action', 'get set'), 'hermes_cron': ('action', 'create delete list pause resume trigger update'),
     'hermes_gateway': ('action', 'restart status'), 'hermes_mcp': ('action', 'add list remove'),
@@ -57,6 +57,9 @@ SELECTORS = {
     'hermes_webhook': ('action', 'create delete enable_platform list toggle'),
     'emqx_manage_authn_users': ('operation', 'create delete read'),
     'emqx_manage_authz_rules': ('operation', 'create delete read'),
+    'n8n_manage_agents': ('action', 'reference search get create mutate validate call publish unpublish revert versions delete discover_assets verify_mcp_server update_integration'),
+    'n8n_test_workflow': ('method', 'auto trigger prepare pinned direct'),
+    'n8n_list_catalog': ('kind', 'projects tags'),
     'n8n_evaluations': ('action', 'list_runs get_run list_cases run cancel'),
     'n8n_executions': ('action', 'get list delete'),
     'n8n_manage_credentials': ('action', 'list get create update delete getSchema'),
@@ -74,13 +77,15 @@ OPERATION_READS = {
     'n8n_workflow_versions': ['list', 'get', 'diff'],
     'n8n_manage_datatable': ['listTables', 'getTable', 'getRows'],
     'n8n_manage_folders': ['list', 'get'], 'n8n_manage_credentials': ['list', 'get', 'getSchema'],
-    'n8n_manage_agents': ['reference', 'search', 'get', 'validate', 'versions', 'discover_assets'],
+    'n8n_manage_agents': ['reference', 'search', 'get', 'validate', 'versions', 'discover_assets', 'verify_mcp_server'],
+    'n8n_test_workflow': ['prepare'], 'n8n_list_catalog': ['projects', 'tags'],
 }
-# The source default of a mixed tool's selector (always a read; the others require the selector).
+# Native defaults. test_workflow auto retains its existing whole-tool write grant.
 DEFAULT_OPERATIONS = {'hermes_config': 'get', 'hermes_cron': 'list', 'hermes_gateway': 'status', 'hermes_model': 'info',
                       'hermes_session': 'list', 'hermes_tools': 'list', 'hermes_webhook': 'list',
-                      'n8n_executions': 'list', 'n8n_workflow_versions': 'list'}
-assert all(value in OPERATION_READS[name] for name, value in DEFAULT_OPERATIONS.items())
+                      'n8n_executions': 'list', 'n8n_workflow_versions': 'list', 'n8n_test_workflow': 'auto'}
+assert all(value in SELECTORS[name][1].split() for name, value in DEFAULT_OPERATIONS.items())
+STRICT_SELECTORS = frozenset(('n8n_manage_agents', 'n8n_test_workflow', 'n8n_list_catalog'))
 # 0.2.2: the tools that answer without a backend (n8n-mcp's documentation tools, bundled data; the unconfigured child lists
 # exactly these, tests/test_tool_snapshot.py). Every other tool requires_backend: without a configured backend the gateway
 # refuses it (-32603 Backend not configured), and while the health check finds the backend unreachable it refuses it with
@@ -114,11 +119,14 @@ def full_tools(product):
         for name in members:
             exposure = ('n8n_update_partial_workflow' if product == 'n8n' and
                         name in ('n8n_workflow_versions', 'n8n_test_workflow') else None)
-            if effect == 'mixed':
+            if name in SELECTORS:
                 selector, values = SELECTORS[name]
                 reads = tuple(v for v in values.split() if v in OPERATION_READS[name])
                 writes = tuple(v for v in values.split() if v not in OPERATION_READS[name])
-                tool = Tool(ChildArguments, selector=selector, write_operations=writes, read_operations=reads,
+                tool = Tool(ChildArguments, write=effect in ('write', 'unverified'),
+                            selector=selector, write_operations=writes, read_operations=reads,
+                            strict_operations=name in STRICT_SELECTORS,
+                            operation_dependencies=(('auto', 'trigger'),) if name == 'n8n_test_workflow' else (),
                             default_operation=DEFAULT_OPERATIONS.get(name), child_schema=True,
                             requires_backend=name not in free, exposure_write_tool=exposure,
                             n8n_arguments=product == 'n8n')

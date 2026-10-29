@@ -76,4 +76,9 @@ def normalize(name, arguments):
     flag = normalized.get('exposeToMcp')
     if name in EXPOSURE_TOOLS and isinstance(flag, str) and flag.strip(JS_WHITESPACE) in ('true', 'false'):
         normalized['exposeToMcp'] = flag.strip(JS_WHITESPACE) == 'true'
+    # Native optionalEmptyAware treats blank method strings as omitted (auto).
+    # Null, non-strings and unknown nonempty values remain invalid selectors.
+    method = normalized.get('method')
+    if name == 'n8n_test_workflow' and isinstance(method, str) and not method.strip(JS_WHITESPACE):
+        del normalized['method']
     return normalized

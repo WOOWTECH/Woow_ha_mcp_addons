@@ -1,8 +1,8 @@
 # WOOW HA MCP Add-ons（實驗版，已公開發佈）
 
-六個啟用的商店產品：Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud。**0.3.3 六支 canonical 映像已完成驗收、掃描與公開發布**，包含 n8n 全部 28 個工具的有效 `output` 參數正規化、六個混合工具的 selector 保護，以及 versions/test 的 `exposeToMcp` 既有 updater 有效權限檢查。新增 `conditional_writes` capability metadata，保持 28 個工具、33 個寫入 grants、schema 4 與完整功能預設；不變更 dependency／child pins 或 UI 原始碼。正常 stable Release／Store 與正式 HAOS 升級分別驗證，不由映像發布推定完成。見 [0.3.3 發布證據與驗收邊界](docs/operations/release-decision-0.3.3.md)、[不可變映像紀錄](docs/provenance/release-0.3.3-images.json)。
+六個啟用的商店產品：Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud。**歷史版本 0.3.3：六支 canonical 映像已完成驗收、掃描與公開發布**，包含 n8n 全部 28 個工具的有效 `output` 參數正規化、六個混合工具的 selector 保護，以及 versions/test 的 `exposeToMcp` 既有 updater 有效權限檢查。新增 `conditional_writes` capability metadata，保持 28 個工具、33 個寫入 grants、schema 4 與完整功能預設；不變更 dependency／child pins 或 UI 原始碼。正常 stable Release／Store 與正式 HAOS 升級分別驗證，不由映像發布推定完成。見 [0.3.3 發布證據與驗收邊界](docs/operations/release-decision-0.3.3.md)、[不可變映像紀錄](docs/provenance/release-0.3.3-images.json)。
 
-本分支準備 **0.4.4 發佈候選**（基於 #29 `a3030679` 的 0.4.3）：整合 #30 Odoo MCP isError、#31 四個子操作開關、#32 遮罩 token history 與 #33 Nextcloud 錯誤憑證遮罩。七份來源 manifest 同版號，只有六個啟用產品發布；OpenDesign 維持停用。**0.4.4 映像尚未建置／發布，0.4.3 的映像證據不適用本候選。** 儲存開關或變更 token 會寫入 0.4.3 不接受的 schema 4 新 key；降版須還原升級前備份。見 [0.4.4 發佈決策](docs/operations/release-decision-0.4.4.md)、[整合來源與驗證](docs/provenance/ha-mcp-parity-integration-20261029.md)與 [upgrade-notes.yaml](upgrade-notes.yaml)。
+本分支包含 **0.4.5**：n8n MCP 錯誤標記、22 個細部操作限制，以及 LiteLLM PATCH 路由描述對齊。原本 33 個 n8n 寫入授權保留。六個啟用產品的映像已建置、發布並匿名核對；Store 上架另由合併後同步流程完成。OpenDesign 維持停用。見 [發佈決策與驗證範圍](docs/operations/release-decision-0.4.5.md)、[映像證據](docs/provenance/release-0.4.5-images.json)及 [升級／降版說明](upgrade-notes.yaml)。
 
 **0.4.3（與 PaaS 一致）**：舊版安裝（state schema 1/2/3，0.1.x 寫的）升級後**第一次啟動就一次性全開**，MCP 不再停在 503 等管理員確認；同一次原子寫入加上標記 `owner_defaults_20261025`，舊設定的限制存成 `/data/mcp/owner-defaults-20261025-recovery.json`。管理面板改成事後通知（只在管理面板與 add-on log 的一行，升級後請打開管理面板查看）：顯示「已於 <時間> 自動套用預設全開」與升級前後差異，可選「還原升級前的限制」（忠實還原：舊設定停用的工具再停用；寫入只保留舊設定授權過的，其他寫入連同新版才有的寫入操作都取消，與 0.1.x 實際能做的相同；新版才有的工具不會被停用（讀取照常可用），不再出現「全部停用」）或「保持全開，不再提示」。已是 schema 4 的設定（新安裝、0.2.0 之後、或在 0.3.0–0.4.1 升級頁確認過的）一律不動；讀不到或壞掉的設定照舊 fail-safe（不遷移、不覆寫，add-on 停止並在 log 說明）。0.4.3 的映像與正式發版須通過精確映像及商店閘；細節見 [legacy migration](docs/operations/legacy-migration.md)、[CHANGELOG](CHANGELOG.md) 與 [upgrade-notes.yaml](upgrade-notes.yaml)。
 
@@ -67,8 +67,8 @@ uv pip install --python "$PACKAGING_ENV/bin/python" --require-hashes --only-bina
 "$PACKAGING_ENV/bin/python" -m unittest discover -s packaging -p 'test_*.py' -v
 # 有 Docker 的隔離 runner 才執行；root context 最後的點不可省略
 # 這不是已執行的成功紀錄：
-docker build --platform linux/amd64 -f apps/n8n/Dockerfile -t local/mcp-n8n:0.4.4 .
-"$PACKAGING_ENV/bin/python" packaging/container_acceptance.py n8n local/mcp-n8n:0.4.4
+docker build --platform linux/amd64 -f apps/n8n/Dockerfile -t local/mcp-n8n:0.4.5 .
+"$PACKAGING_ENV/bin/python" packaging/container_acceptance.py n8n local/mcp-n8n:0.4.5
 ```
 
 PR/main CI 沒有發佈權限；固定商店產品 matrix（與 `packaging/inputs.json` 相同）`push: false`。HA 無法以 Add-on

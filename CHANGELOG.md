@@ -1,3 +1,12 @@
+## 0.4.5
+
+- Integrates PR35 and PR36 on the protected 0.4.4 merge.
+- n8n native success:false results carry isError:true; content and structuredContent are preserved.
+- Expose 22 audited n8n operation limits without changing the existing 33 write grants. Unknown selectors cannot dispatch; denying trigger also blocks auto/default.
+- Correct LiteLLM update-model registry to PATCH /model/{model_id}/update.
+- Keep the legacy migration catalog independent of current selector additions and verify only reviewed operation effect differences.
+- Six enabled images require fresh P1–P5, anonymous verification and provenance before merge; OpenDesign remains disabled.
+
 # Changelog
 
 ## 0.4.4 — release candidate (2026-10-29; images pending)

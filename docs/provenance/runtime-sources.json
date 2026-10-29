@@ -175,7 +175,9 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/registry.py",
-    "upstream_sha256": "a074a48ceeef9393ab46500420156fc59c39471c1fa6739e9030c81e7c597cae"
+    "upstream_sha256": "a074a48ceeef9393ab46500420156fc59c39471c1fa6739e9030c81e7c597cae",
+    "local_sha256": "1b813d1f15cbd1f46df2b3ed9a90155084bd3c8ad3a53d24c45d1f6cbec8102b",
+    "modification": "Next release after 0.4.4: correct only litellm_update_model registry metadata to PATCH /model/{model_id}/update, matching the unchanged handler. Operations, effects and schemas are unchanged."
   },
   {
     "product": "litellm",
