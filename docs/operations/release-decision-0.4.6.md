@@ -1,7 +1,6 @@
 # 0.4.6 release decision — 2026-10-29
 
-Status: **source integration; pending exact-source CI and image publication**. No 0.4.5 image or receipt covers
-this release. The immutable source commit will be recorded only after source review and its required checks.
+Status: **six exact-source images published and independently verified**. Final publication-record checks, protected merge and distribution remain separate gates in [PR #39](https://github.com/WOOWTECH/Woow_ha_mcp_addons/pull/39).
 
 ## Contents and compatibility
 
@@ -46,5 +45,38 @@ See [settings contract](partial-settings-contract.md) and the root upgrade notes
    acceptance is a separate gate; no ws97 reinstall, off-cluster backup or full production restore is implied.
 
 Seven source manifests share the version; only Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud publish.
-OpenDesign remains disabled and Odoo Manage archived. This decision will be completed with actual evidence;
-no image publication or installed-runtime success is claimed at this stage.
+OpenDesign remains disabled and Odoo Manage archived. Installed-runtime acceptance is recorded separately.
+
+
+## Exact-image publication
+
+Image source: `28b8317ec12c47c81c946fe9aaec18dd1d5ad852`; tree `74366796fc35251a7dba2499528698ea0934bfba`. The later documentation commit is not the image source.
+Fresh hosted source checks passed 3,088 Python tests and 68 browser cases; WVT and Upgrade comparison passed.
+The fresh UI build also passed 43 unit tests and 68 browser cases; 68 private-helper guards passed.
+
+All six linux/amd64 images passed P1–P5, packaged runtime with owned mocks, current/full-history/layer secret
+scans, SBOM/CVE/license policy, final installed package checks, exact UI bytes and UID10001 DAC. Prior 0.4.5
+image IDs were preserved. Scanner and precise secret-triage policy bytes are unchanged; their security review
+scope and exact exceptions remain explicit. Passing policy does not mean zero vulnerabilities.
+
+Only accepted immutable IDs were published. Anonymous manifest/config/source/platform/ordered-layer metadata
+checks passed. A separate fresh download verified 83 unique remote layer blobs
+covering 103 ordered image-layer positions and
+343,920,204 compressed bytes; every compressed digest/size and uncompressed
+diffID matched. This verification used neither Docker nor a local layer cache; CDN cache state is not claimed.
+Publisher credentials and owned temporary registry aliases were cleaned. Accepted local images remain.
+See [image provenance](../provenance/release-0.4.6-images.json) and
+[remote-layer evidence](../provenance/release-0.4.6-remote-layers.json).
+
+Provenance is unsigned and the Docker daemon is shared. No SLSA, host-isolation or hosted BLD2 admission is claimed.
+
+| Product | Immutable published reference |
+| --- | --- |
+| odoo | `ghcr.io/woowtech/amd64-mcp-odoo@sha256:747a820c93a9db7195cf1f436fc7b89da9ea9a2fb15273d2d722af55d901159f` |
+| n8n | `ghcr.io/woowtech/amd64-mcp-n8n@sha256:2963271d91c61495bc12e0945ebeddecb23b102250488b636e72600865ba20f4` |
+| hermes | `ghcr.io/woowtech/amd64-mcp-hermes@sha256:41aa90ccf9c5c44c7ad8312137e09104b3a9c48425b349e84b2f92e5baa957aa` |
+| emqx | `ghcr.io/woowtech/amd64-mcp-emqx@sha256:1d24f9e9c7176365d0e9bbc89909bd8fc1c238bf03c66e5b1eccd7c5502b0603` |
+| litellm | `ghcr.io/woowtech/amd64-mcp-litellm@sha256:36064f52e430f0f7ff9e1bd2a1a9fb3214b06c7ebaf76962279712bb61514abf` |
+| nextcloud | `ghcr.io/woowtech/amd64-mcp-nextcloud@sha256:4df8574149d70339e11da27568a7c85f1ef6f13ebf55d1d9fb6ce61204614631` |
+
+HAOS upgrade/settings/partial restore and real-backend acceptance are separate evidence. These image gates do not establish a ws97 reinstall, off-cluster backup or full production restore.
