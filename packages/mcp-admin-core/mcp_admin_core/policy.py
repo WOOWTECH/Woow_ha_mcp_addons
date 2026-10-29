@@ -203,11 +203,18 @@ class Tool:
     # Reuse the existing updater permission; this adds no persisted grant.
     exposure_write_tool: str | None = None
 
+    # Selectors added to whole-tool grants/read tools do not create new grants.
+    strict_operations: bool = False
+    # Reviewed native dependencies: denying trigger also denies test method auto.
+    operation_dependencies: tuple[tuple[str, str], ...] = ()
+
     def __post_init__(self):
         operations = self.operations
         if (operations and not self.selector or len(set(operations)) != len(operations)
                 or self.default_operation is not None and self.default_operation not in operations):
             raise ValueError('operations require an audited selector and matching default')
+        if any(a not in operations or b not in operations for a, b in self.operation_dependencies):
+            raise ValueError('operation dependencies require audited operations')
         if self.backend_required_operations:
             field = self.arguments.model_fields.get(self.selector)
             if (field is None or get_origin(field.annotation) is not Literal
@@ -215,7 +222,7 @@ class Tool:
                 raise ValueError('backend operations require a matching Literal selector')
 
     def grants(self, name):
-        return ([name] if self.write else []) + [f'{name}:{op}' for op in self.write_operations]
+        return [name] if self.write else [f'{name}:{op}' for op in self.write_operations]
 
     @property
     def operations(self):
@@ -234,8 +241,10 @@ def enabled(name: str, tools: Mapping[str, Tool], state: State) -> bool:
 def operation_enabled(name, tool, operation, state):
     return (operation in tool.operations
             and operation not in getattr(state, 'denied_operations', {}).get(name, ())
-            and (operation not in tool.write_operations
-                 or f'{name}:{operation}' in getattr(state, 'enabled_write_tools', ())))
+            and not any(a == operation and b in getattr(state, 'denied_operations', {}).get(name, ())
+                        for a, b in tool.operation_dependencies)
+            and (has_grant(name, tool, state) if tool.write else (operation not in tool.write_operations
+                 or f'{name}:{operation}' in getattr(state, 'enabled_write_tools', ()))))
 
 
 def policy_enabled(name, tools, state):
@@ -250,13 +259,14 @@ def policy_enabled(name, tools, state):
 
 def check_operation_denies(name, tool, arguments, state):
     denied = getattr(state, 'denied_operations', {}).get(name, ())
-    if not denied:
+    if not denied and not tool.strict_operations:
         return
     operation = arguments.get(tool.selector, tool.default_operation)
     # A restricted tool requires a positively audited operation. Missing required
     # selectors, explicit null, malformed/unknown values, or removed metadata may
     # otherwise bypass a deny via a child's coercion/default or a new write path.
-    if type(operation) is not str or operation not in tool.operations or operation in denied:
+    if (type(operation) is not str or operation not in tool.operations or operation in denied
+            or any(a == operation and b in denied for a, b in tool.operation_dependencies)):
         raise ToolCallRefused('operation_not_permitted', name, reason=(
             'operation restricted by the add-on policy; use an allowed audited operation or ask an administrator'))
 
@@ -366,7 +376,7 @@ def child_call(name, tool, params, state, tools):
         raise ToolCallRefused('operation_not_permitted', name,
             reason='exposeToMcp requires the enabled n8n_update_partial_workflow write grant')
     check_operation_denies(name, tool, arguments, state)
-    if tool.write_operations:
+    if tool.write_operations and not tool.write:
         granted = getattr(state, "enabled_write_tools", ())
         operation = arguments.get(tool.selector, tool.default_operation)
         if operation in tool.write_operations:

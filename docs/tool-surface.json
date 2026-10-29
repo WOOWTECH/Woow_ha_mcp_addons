@@ -6376,7 +6376,7 @@
           "status": "supported-full",
           "default_enabled": true,
           "write_grants": [],
-          "operation_parameter": null,
+          "operation_parameter": "kind",
           "enable": "預設開啟（新安裝與從 0.1.x 升級）；管理面板可逐一停用工具或撤銷寫入 grant；disabled 優先",
           "reason": "子程序完整工具（0.2.0）：參數由子程序驗證，輸入原樣轉送，輸出不再投影。",
           "accepted_schema": null,
@@ -6504,20 +6504,20 @@
           "effect": "write",
           "operation_effects": {
             "action": {
-              "reference": "write",
-              "search": "write",
-              "get": "write",
+              "reference": "read",
+              "search": "read",
+              "get": "read",
               "create": "write",
               "mutate": "write",
-              "validate": "write",
+              "validate": "read",
               "call": "write",
               "publish": "write",
               "unpublish": "write",
               "revert": "write",
-              "versions": "write",
+              "versions": "read",
               "delete": "write",
-              "discover_assets": "write",
-              "verify_mcp_server": "write",
+              "discover_assets": "read",
+              "verify_mcp_server": "read",
               "update_integration": "write"
             }
           },
@@ -6620,7 +6620,7 @@
           "write_grants": [
             "n8n_manage_agents"
           ],
-          "operation_parameter": null,
+          "operation_parameter": "action",
           "enable": "預設開啟（新安裝與從 0.1.x 升級）；管理面板可逐一停用工具或撤銷寫入 grant；disabled 優先",
           "reason": "子程序完整工具（0.2.0）：參數由子程序驗證，輸入原樣轉送，輸出不再投影。",
           "accepted_schema": null,
@@ -7304,7 +7304,7 @@
             "method": {
               "auto": "write",
               "trigger": "write",
-              "prepare": "write",
+              "prepare": "read",
               "pinned": "write",
               "direct": "write"
             }
@@ -7348,7 +7348,7 @@
           "write_grants": [
             "n8n_test_workflow"
           ],
-          "operation_parameter": null,
+          "operation_parameter": "method",
           "enable": "預設開啟（新安裝與從 0.1.x 升級）；管理面板可逐一停用工具或撤銷寫入 grant；disabled 優先",
           "reason": "子程序完整工具（0.2.0）：參數由子程序驗證，輸入原樣轉送，輸出不再投影。",
           "accepted_schema": null,
