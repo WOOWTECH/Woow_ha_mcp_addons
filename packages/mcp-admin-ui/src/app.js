@@ -1,5 +1,5 @@
 import { AdminApi, ApiError } from './api.js';
-import { products, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl, ownerDefaultsView, noticeTime } from './contracts.js';
+import { products, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl, ownerDefaultsView, noticeTime, odooSwitches, odooSwitchKeys, odooSwitchPayload } from './contracts.js';
 import './styles.css';
 
 const root = document.querySelector('#app');
@@ -346,6 +346,45 @@ function tools() {
   });
   return card('工具與寫入授權', p(catalog ? catalogSummary(catalog) : `${rows.length} 個管理登錄工具`), form);
 }
+function odooSwitchCard() {
+  const snapshot = state;
+  const current = odooSwitches(snapshot);
+  const revision = snapshot.configuration?.revision;
+  if (!current || !revision) return card('Odoo 子操作開關',
+    el('div', {class: 'notice'}, '此管理 API 尚未提供完整的四開關設定與版本。請更新伺服器後再編輯；目前不會送出變更。'));
+  const options = [
+    ['enable_writes', '啟用 Odoo 寫入總閘門', '關閉後 execute_method 只允許審核過的讀取方法；chatter_post 與 execute_approved_write 都拒絕。preview_write、validate_write 可預覽，但核准不能執行。'],
+    ['allow_direct_writes', '允許 execute_method 直接寫入', '關閉後 create、write、unlink 必須走 preview_write → validate_write → execute_approved_write；其他未審查方法也會拒絕。'],
+    ['allow_unknown_methods', '允許未審查方法', '關閉後未審查的 action_*、get_* 等方法會拒絕。只有總閘門與直接寫入也開啟時，這個開關才會放行未審查方法。'],
+    ['chatter_direct', '允許直接張貼 Chatter', '關閉後 chatter_post 先回預覽，需同參數與核准、confirm=true 才張貼；execute_method 的明確訊息張貼呼叫也會拒絕。其他業務方法自動產生的追蹤訊息仍由其方法權限管理。'],
+  ];
+  const form = el('form');
+  form.append(p('這四項只會收緊 Odoo 子行程。外層「工具權限」中的工具、寫入 grant 與操作禁止仍分別生效；開啟此處的開關不會授予外層權限。若外層未授權 execute_method，該工具的審核讀取也無法呼叫。'),
+    p('PaaS 的精確 model.method 白名單不在這四項設定內；此 add-on 目前沒有白名單編輯，關閉直接寫入或未審查方法後不會提供單一方法的例外放行。'),
+    p(snapshot.odoo_write_switches_source === 'legacy_all_on'
+      ? '此既有設定沒有四開關欄位；沿用先前子行程的四項全開值。既有停用與撤銷權限仍保留。'
+      : '畫面顯示已儲存的子行程設定；儲存後會重啟子行程，請查看上方套用狀態。'));
+  for (const [key, label, description] of options) {
+    form.append(el('div', {class: 'field'},
+      el('label', {class: 'check'}, el('input', {type: 'checkbox', name: key, checked: current[key]}), label),
+      p(description)));
+  }
+  form.append(el('button', {type: 'submit', class: 'primary'}, '儲存 Odoo 子操作開關'));
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const values = Object.fromEntries(odooSwitchKeys.map(key => [key, form.elements.namedItem(key).checked]));
+    try { odooSwitchPayload(snapshot, values); } catch (error) { fail(error); return; }
+    if (!await confirmAction('套用 Odoo 子操作開關？', '變更後會重啟 Odoo 子行程。開啟寫入仍需外層工具授權與 Odoo 帳號權限。', '確認套用')) return;
+    await task(async () => {
+      await saveForm(form, 'odoo/write-switches', fresh => {
+        if (JSON.stringify(odooSwitches(fresh)) !== JSON.stringify(current)) throw new UiError('子操作開關已被其他操作更新。請重新整理後再試。');
+        return odooSwitchPayload(fresh, values);
+      }, revision);
+      await reload('伺服器已確認儲存 Odoo 子操作開關。請查看子行程套用狀態。');
+    });
+  });
+  return card('Odoo 子操作開關', form);
+}
 function safeEndpoint() { try { return state.endpoint ? explicitUrl(state.endpoint, true) : null; } catch { return null; } }
 async function copy(text) {
   try { await navigator.clipboard.writeText(text); notice('已複製。若包含權杖，請在使用後清除剪貼簿。'); }
@@ -440,7 +479,9 @@ function render() {
     el('div', { class: 'shell' }, el('aside', {}, el('p', { class: 'nav-caption' }, '工作空間'), el('nav', { 'aria-label': '管理導覽' }, ...Object.entries(routes).map(([key, label]) => el('a', { href: `${api.mount}/${key}`, 'aria-current': current === key ? 'page' : null, onclick: event => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey && event.button === 0) { event.preventDefault(); if (!busy) navigate(key); } } }, icon(icons[key]), label))), el('div', { class: 'sidebar-note' }, p('設定由你掌握'), p('後端憑證只在明確更新時送出。權限由伺服器驗證。'))),
       el('main', { id: 'main' }, el('div', { class: 'page-heading' }, el('div', {}, el('p', { class: 'eyebrow' }, `${products[state.product].name} / MANAGEMENT`), el('h1', { tabindex: '-1' }, routes[current]), p({ overview: '一眼看清連線，安心管理你的服務。', backend: '把連線留在這裡，把秘密留在伺服器。', tools: '只開啟需要的能力，每次寫入都有明確授權。', access: '給用戶端正確的入口，不混用管理網址。', diagnostics: '查看受限日誌與行程狀態，必要時重新啟動。' }[current])), button('重新整理狀態', () => task(() => reload('已取得最新管理狀態。')))), el('div', { id: 'notice', role: 'status', tabindex: '-1', hidden: true }),
         ownerDefaults()?.malformed ? ownerDefaultsUnavailable() : ownerDefaults()?.notice ? ownerDefaultsCard(ownerDefaults()) : null,
-        configurationCard(state.configuration), ({ overview, backend, tools, access, diagnostics })[current](), el('footer', {}, `GUI 管理設定 · ${environmentLabels(state.capabilities).authority} · Streamable HTTP`))));
+        configurationCard(state.configuration), ({ overview, backend, tools, access, diagnostics })[current](),
+        current === 'tools' && state.product === 'odoo' ? odooSwitchCard() : null,
+        el('footer', {}, `GUI 管理設定 · ${environmentLabels(state.capabilities).authority} · Streamable HTTP`))));
 }
 window.addEventListener('popstate', () => { hideToken(); if (state) render(); });
 window.addEventListener('pagehide', () => {

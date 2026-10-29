@@ -56,7 +56,7 @@ export class AdminApi {
     return value;
   }
   async mutate(operation, payload, revision) {
-    const allowed = ['backend', 'endpoint', 'policy', 'token/reveal', 'token/rotate', 'token/revoke', 'backend/test', 'child/restart',
+    const allowed = ['backend', 'endpoint', 'policy', 'odoo/write-switches', 'token/reveal', 'token/rotate', 'token/revoke', 'backend/test', 'child/restart',
       'owner-defaults/restore', 'owner-defaults/dismiss'];
     if (!allowed.includes(operation)) throw new UiError('不支援的操作。');
     const fresh = await this.bootstrap();
@@ -65,6 +65,7 @@ export class AdminApi {
     // 2026-10-27: the one-time all-on notice actions are POSTs without a body that always need the reviewed revision.
     const notice = operation.startsWith('owner-defaults/');
     if (notice && revision === undefined) throw new UiError('缺少設定版本；請重新整理後再試，未送出變更。');
+    if (operation === 'odoo/write-switches' && revision === undefined) throw new UiError('缺少設定版本；請重新整理後再試，未送出變更。');
     const action = token || notice || ['backend/test', 'child/restart'].includes(operation);
     if (revision !== undefined && (typeof revision !== 'string' || !/^[A-Za-z0-9_-]{16,128}$/.test(revision))) throw new UiError('設定版本格式不符；請重新整理後再試。');
     const result = await this.request(`${fresh.api_base}/${operation}`, {

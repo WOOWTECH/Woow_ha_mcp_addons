@@ -29,7 +29,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .config import ConfigError, State, Store, strict_json
 from .legacy_catalog import LEGACY_TOOLS
 from .policy import policy_enabled
-from .products import (OWNER_DEFAULTS, PRODUCTS, STORED_FIELDS, ProductState, TOOLS,
+from .products import (OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, PRODUCTS, STORED_FIELDS, ProductState, TOOLS,
                        fresh_write_grants, write_grants)
 from .surface import full_tools, names
 
@@ -111,9 +111,10 @@ def _validate(value, product):
             if version == 2:
                 expected -= {'enabled_write_tools'}
             # Only a schema 4 state may carry the owner-defaults marker (and then never null).
-            optional = {'mcp_access_token', 'denied_operations'} | ({OWNER_DEFAULTS} if version == 4 else set())
+            optional = {'mcp_access_token', 'denied_operations'} | ({OWNER_DEFAULTS, ODOO_WRITE_SWITCHES} if version == 4 else set())
             if (set(value) - optional != expected or value.get('product') != product
-                    or (OWNER_DEFAULTS in value and value[OWNER_DEFAULTS] is None)):
+                    or (OWNER_DEFAULTS in value and value[OWNER_DEFAULTS] is None)
+                    or (ODOO_WRITE_SWITCHES in value and value[ODOO_WRITE_SWITCHES] is None)):
                 raise ValueError
         if version < 3:
             value['enabled_write_tools'] = []

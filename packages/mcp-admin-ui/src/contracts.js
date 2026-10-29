@@ -11,6 +11,21 @@ export const products = {
 };
 
 export class UiError extends Error {}
+export const odooSwitchKeys = ['enable_writes', 'allow_direct_writes', 'allow_unknown_methods', 'chatter_direct'];
+export function odooSwitches(bootstrap) {
+  if (bootstrap?.product !== 'odoo' || !['saved', 'legacy_all_on'].includes(bootstrap.odoo_write_switches_source)) return null;
+  const value = bootstrap.odoo_write_switches;
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+      Object.keys(value).sort().join() !== [...odooSwitchKeys].sort().join() ||
+      !odooSwitchKeys.every(key => typeof value[key] === 'boolean')) return null;
+  return value;
+}
+export function odooSwitchPayload(bootstrap, values) {
+  if (!odooSwitches(bootstrap) || !values || typeof values !== 'object' ||
+      Object.keys(values).sort().join() !== [...odooSwitchKeys].sort().join() ||
+      !odooSwitchKeys.every(key => typeof values[key] === 'boolean')) throw new UiError('Odoo 子操作開關格式不相容；未送出變更。');
+  return { odoo_write_switches: Object.fromEntries(odooSwitchKeys.map(key => [key, values[key]])) };
+}
 export function mountPath(value) {
   if (typeof value !== 'string' || value.length > 512 || (value !== '' && !/^(\/[A-Za-z0-9_-]+)+$/.test(value))) {
     throw new UiError('管理介面掛載路徑無效。請從原服務入口重新開啟。');
