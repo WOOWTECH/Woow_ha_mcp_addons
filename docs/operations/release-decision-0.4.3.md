@@ -1,11 +1,11 @@
 # 0.4.3 release decision — 2026-10-28
 
-Status: **source candidate; exact-image publication and protected merge pending**.
+Status: **six exact-source images published and independently verified; readiness, protected merge, Store sync and isolated HAOS acceptance pending**.
 Source branch: `release/ha-mcp-0.4.3-20261028`, based on merged PR #26 at
 `f71fb756baf5ca3458b32c5c20635e0689c13118`. The exact image source
-commit and six immutable digests will be recorded after the source checks and
-private builder acceptance. A later publication receipt commit is not image
-source.
+commit is `a1c118191a004a08e92273674de58bb7c24b18b4`. The six immutable
+digests and evidence hashes are in the [publication receipt](../provenance/release-0.4.3-images.json).
+This documentation commit is not an image source.
 
 ## Scope and compatibility
 
@@ -77,5 +77,41 @@ released separately as 0.4.4.
    acceptance is owned by the separate HAOS lane and is not inferred from
    image publication or Store visibility.
 
-Until these gates have actual receipts, this document is a plan rather than
-proof of image acceptance or publication.
+## Exact-image publication — 2026-10-29
+
+The first `a1c1181` private run built Odoo and passed its source/history/image
+secret scans, SBOM, vulnerability and license policy. Its private final package
+check then stopped because Syft's required all-layers SBOM retained both the
+superseded Debian u1 package and the installed u2 package. An isolated,
+read-only `dpkg-query` on that exact image ID confirmed u2 for `libssl3` and
+`openssl`; the failed run and image were preserved under forensic names, with
+no publication. The private worker check was corrected to retain the all-layer
+scan and verify the final installed versions by exact image ID. Its 30 offline
+guard tests passed. A new plan with the changed helper hash then rebuilt all
+six images from the same frozen source; no failed candidate evidence was reused.
+
+Six new `linux/amd64` images passed exact-image P1–P5, current-source and full
+history Gitleaks, all-layer image secret scan, SBOM, vulnerability and license
+policy, final installed Debian u2 versions, container mocks, UI asset and UID
+10001 checks. The six prior 0.4.2 image IDs were preserved. Each accepted
+image ID was pushed to its previously absent 0.4.3 tag and pulled anonymously
+by immutable digest. A separate verifier compared manifest, config, ordered
+layers, platform and source label. The private publisher cleaned its credential
+configuration and temporary registry aliases. This receipt contains unsigned
+provenance; it does not claim host isolation, SLSA or HAOS end-to-end testing.
+The independent [fixture triage review](evidence/0.4.3-synthetic-fixture-triage.md)
+is bound to the unchanged exact allowlist and was followed by full builder scans.
+
+| Add-on | Immutable published image |
+| --- | --- |
+| Odoo | `ghcr.io/woowtech/amd64-mcp-odoo@sha256:a4f14c0662746c7df9401c91ffe4c6e32653ce6b27cc34abbabfc9937972c5f8` |
+| n8n | `ghcr.io/woowtech/amd64-mcp-n8n@sha256:3fb2bf20a8e9ad9de48f6379982ddf2f9d12d0e4fbd68e5350b62e572f3b715b` |
+| Hermes | `ghcr.io/woowtech/amd64-mcp-hermes@sha256:10774f870286cbee20e1a0542af3047f9e3894e9c3f4066a27364ac3bf86c323` |
+| EMQX | `ghcr.io/woowtech/amd64-mcp-emqx@sha256:5ba09c89c82b618dcd1ad46083cf9848e9ecfb6c08b3a856a72ebfe7a477a594` |
+| LiteLLM | `ghcr.io/woowtech/amd64-mcp-litellm@sha256:d30998a0be28a10c5ec27c0415e1ccd67387325bbe4763c0e877656a5b1cea31` |
+| Nextcloud | `ghcr.io/woowtech/amd64-mcp-nextcloud@sha256:bef1145cdc8439f1911799321f695daafd9a34115d376a693c1d814915dc4d71` |
+
+Readiness must turn green at this receipt commit before protected merge. After
+merge, verify six stable Releases and WOOW HA App Store synchronization. The
+separate HAOS lane owns ws97; any new scratch HAOS acceptance uses fake
+credentials and exact images, without restoring a production backup.
