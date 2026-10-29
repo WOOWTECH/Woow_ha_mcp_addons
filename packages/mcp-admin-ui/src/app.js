@@ -1,5 +1,5 @@
 import { AdminApi, ApiError } from './api.js';
-import { products, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl, ownerDefaultsView, noticeTime } from './contracts.js';
+import { products, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl, ownerDefaultsView, noticeTime, odooSwitches, odooSwitchKeys, odooSwitchPayload, maskedCurrentToken, tokenHistory } from './contracts.js';
 import './styles.css';
 
 const root = document.querySelector('#app');
@@ -346,6 +346,45 @@ function tools() {
   });
   return card('工具與寫入授權', p(catalog ? catalogSummary(catalog) : `${rows.length} 個管理登錄工具`), form);
 }
+function odooSwitchCard() {
+  const snapshot = state;
+  const current = odooSwitches(snapshot);
+  const revision = snapshot.configuration?.revision;
+  if (!current || !revision) return card('Odoo 子操作開關',
+    el('div', {class: 'notice'}, '此管理 API 尚未提供完整的四開關設定與版本。請更新伺服器後再編輯；目前不會送出變更。'));
+  const options = [
+    ['enable_writes', '啟用 Odoo 寫入總閘門', '關閉後 execute_method 只允許審核過的讀取方法；chatter_post 與 execute_approved_write 都拒絕。preview_write、validate_write 可預覽，但核准不能執行。'],
+    ['allow_direct_writes', '允許 execute_method 直接寫入', '關閉後 create、write、unlink 必須走 preview_write → validate_write → execute_approved_write；其他未審查方法也會拒絕。'],
+    ['allow_unknown_methods', '允許未審查方法', '關閉後未審查的 action_*、get_* 等方法會拒絕。只有總閘門與直接寫入也開啟時，這個開關才會放行未審查方法。'],
+    ['chatter_direct', '允許直接張貼 Chatter', '關閉後 chatter_post 先回預覽，需同參數與核准、confirm=true 才張貼；execute_method 的明確訊息張貼呼叫也會拒絕。其他業務方法自動產生的追蹤訊息仍由其方法權限管理。'],
+  ];
+  const form = el('form');
+  form.append(p('這四項只會收緊 Odoo 子行程。外層「工具權限」中的工具、寫入 grant 與操作禁止仍分別生效；開啟此處的開關不會授予外層權限。若外層未授權 execute_method，該工具的審核讀取也無法呼叫。'),
+    p('PaaS 的精確 model.method 白名單不在這四項設定內；此 add-on 目前沒有白名單編輯，關閉直接寫入或未審查方法後不會提供單一方法的例外放行。'),
+    p(snapshot.odoo_write_switches_source === 'legacy_all_on'
+      ? '此既有設定沒有四開關欄位；沿用先前子行程的四項全開值。既有停用與撤銷權限仍保留。'
+      : '畫面顯示已儲存的子行程設定；儲存後會重啟子行程，請查看上方套用狀態。'));
+  for (const [key, label, description] of options) {
+    form.append(el('div', {class: 'field'},
+      el('label', {class: 'check'}, el('input', {type: 'checkbox', name: key, checked: current[key]}), label),
+      p(description)));
+  }
+  form.append(el('button', {type: 'submit', class: 'primary'}, '儲存 Odoo 子操作開關'));
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const values = Object.fromEntries(odooSwitchKeys.map(key => [key, form.elements.namedItem(key).checked]));
+    try { odooSwitchPayload(snapshot, values); } catch (error) { fail(error); return; }
+    if (!await confirmAction('套用 Odoo 子操作開關？', '變更後會重啟 Odoo 子行程。開啟寫入仍需外層工具授權與 Odoo 帳號權限。', '確認套用')) return;
+    await task(async () => {
+      await saveForm(form, 'odoo/write-switches', fresh => {
+        if (JSON.stringify(odooSwitches(fresh)) !== JSON.stringify(current)) throw new UiError('子操作開關已被其他操作更新。請重新整理後再試。');
+        return odooSwitchPayload(fresh, values);
+      }, revision);
+      await reload('伺服器已確認儲存 Odoo 子操作開關。請查看子行程套用狀態。');
+    });
+  });
+  return card('Odoo 子操作開關', form);
+}
 function safeEndpoint() { try { return state.endpoint ? explicitUrl(state.endpoint, true) : null; } catch { return null; } }
 async function copy(text) {
   try { await navigator.clipboard.writeText(text); notice('已複製。若包含權杖，請在使用後清除剪貼簿。'); }
@@ -390,6 +429,8 @@ async function tokenAction(action) {
 function access() {
   const revision = state.configuration?.revision;
   const endpoint = safeEndpoint();
+  const history = tokenHistory(state);
+  const currentMask = maskedCurrentToken(state);
   const input = el('input', { id: 'endpoint', name: 'endpoint', type: 'url', value: endpoint ?? '', placeholder: 'https://YOUR-MCP-HOST:PORT/mcp', autocomplete: 'off', required: true, 'aria-describedby': 'endpoint-help' });
   const form = el('form', {}, el('div', { class: 'field' }, el('label', { for: 'endpoint' }, 'MCP 用戶端端點'), input), el('p', { id: 'endpoint-help', class: 'hint' }, '明確填寫用戶端可到達的 /mcp URL，不是 Ingress 網址。不會由此頁的網域推測；這裡不要放權杖（Claude.ai 用的含權杖網址由下方另外產生）。'), el('div', { class: 'actions' }, el('button', { type: 'submit', class: 'primary' }, '儲存端點'), button('清除端點', async () => {
     if (await confirmAction('清除 MCP 端點？', '只清除用戶端連線範例的端點設定，不會撤銷權杖。')) await task(async () => { await saveForm(form, 'endpoint', { endpoint: null }, revision); await reload('已清除端點。'); });
@@ -401,7 +442,14 @@ function access() {
     task(async () => { await saveForm(form, 'endpoint', { endpoint: value }, revision); await reload('MCP 端點已儲存。這不代表網路可達性已驗證。'); });
   });
   return el('div', { class: 'stack' }, card('明確設定你的連線端點', chip(endpoint ? '已設定端點' : '尚未設定'), form),
-    card('MCP 權杖', chip(state.token_active ? '有效 · 預設隱藏' : '已撤銷 / 未啟用'), p('每個 MCP 服務共用一把 Bearer 權杖。權杖不是管理員密碼，也不會授予管理介面權限。'), el('div', { class: 'actions' }, button('顯示權杖', () => tokenAction('reveal'), { disabled: !state.token_active }), button('重新產生', () => tokenAction('rotate')), button('撤銷權杖', () => tokenAction('revoke'), { disabled: !state.token_active })), el('div', { id: 'token-secret', class: 'secret-box', hidden: true, 'aria-live': 'polite' })),
+    card('MCP 權杖', chip(state.token_active ? '有效 · 預設隱藏' : '已撤銷 / 未啟用'), p('每個 MCP 服務共用一把 Bearer 權杖。權杖不是管理員密碼，也不會授予管理介面權限。'),
+      currentMask && state.token_active ? p(`目前權杖（遮罩）：${currentMask}`) : null,
+      el('div', { class: 'actions' }, button('顯示權杖', () => tokenAction('reveal'), { disabled: !state.token_active }), button('重新產生', () => tokenAction('rotate')), button('撤銷權杖', () => tokenAction('revoke'), { disabled: !state.token_active })), el('div', { id: 'token-secret', class: 'secret-box', hidden: true, 'aria-live': 'polite' })),
+    card('最近權杖變更', history === null ? p('權杖歷史格式不相容；請重新整理或更新附加元件。') :
+      history.length ? el('ul', { id: 'token-history' }, ...history.map(item => el('li', {},
+        `${item.action === 'rotate' ? '重新產生' : '撤銷'} · `,
+        el('time', { datetime: item.rotated_at }, item.rotated_at), ' · ',
+        el('code', {}, item.previous_token_masked || '先前沒有權杖')))) : p('尚無記錄；舊版操作不會補記。')),
     card('Claude.ai 自訂連接器', chip(endpoint && state.token_active ? '可產生 · 預設隱藏' : '尚無法產生'),
       p('Claude.ai 網頁版的自訂連接器無法帶 Authorization header，改用含權杖的專屬網址：在 Claude.ai 新增自訂連接器時貼進伺服器網址欄位，OAuth 進階設定留空。Claude.ai 從網際網路連線，上方端點必須是它連得到的 HTTPS 網址。'),
       p('這個網址等同密碼：任何拿到網址的人都能以本 MCP 服務的權限呼叫工具。只貼進 Claude.ai，不要分享、截圖或貼到聊天、Git；外洩或不再使用時請按上方「重新產生」或「撤銷權杖」，舊網址立即失效。'),
@@ -440,7 +488,9 @@ function render() {
     el('div', { class: 'shell' }, el('aside', {}, el('p', { class: 'nav-caption' }, '工作空間'), el('nav', { 'aria-label': '管理導覽' }, ...Object.entries(routes).map(([key, label]) => el('a', { href: `${api.mount}/${key}`, 'aria-current': current === key ? 'page' : null, onclick: event => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey && event.button === 0) { event.preventDefault(); if (!busy) navigate(key); } } }, icon(icons[key]), label))), el('div', { class: 'sidebar-note' }, p('設定由你掌握'), p('後端憑證只在明確更新時送出。權限由伺服器驗證。'))),
       el('main', { id: 'main' }, el('div', { class: 'page-heading' }, el('div', {}, el('p', { class: 'eyebrow' }, `${products[state.product].name} / MANAGEMENT`), el('h1', { tabindex: '-1' }, routes[current]), p({ overview: '一眼看清連線，安心管理你的服務。', backend: '把連線留在這裡，把秘密留在伺服器。', tools: '只開啟需要的能力，每次寫入都有明確授權。', access: '給用戶端正確的入口，不混用管理網址。', diagnostics: '查看受限日誌與行程狀態，必要時重新啟動。' }[current])), button('重新整理狀態', () => task(() => reload('已取得最新管理狀態。')))), el('div', { id: 'notice', role: 'status', tabindex: '-1', hidden: true }),
         ownerDefaults()?.malformed ? ownerDefaultsUnavailable() : ownerDefaults()?.notice ? ownerDefaultsCard(ownerDefaults()) : null,
-        configurationCard(state.configuration), ({ overview, backend, tools, access, diagnostics })[current](), el('footer', {}, `GUI 管理設定 · ${environmentLabels(state.capabilities).authority} · Streamable HTTP`))));
+        configurationCard(state.configuration), ({ overview, backend, tools, access, diagnostics })[current](),
+        current === 'tools' && state.product === 'odoo' ? odooSwitchCard() : null,
+        el('footer', {}, `GUI 管理設定 · ${environmentLabels(state.capabilities).authority} · Streamable HTTP`))));
 }
 window.addEventListener('popstate', () => { hideToken(); if (state) render(); });
 window.addEventListener('pagehide', () => {

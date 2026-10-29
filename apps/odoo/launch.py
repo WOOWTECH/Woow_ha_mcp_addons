@@ -68,6 +68,11 @@ if __name__ == '__main__':
     mcp.add_tool(woow_backend_probe, name='woow_backend_probe', description='Add-on readiness probe (private).')
     if mcp._tool_manager.get_tool('woow_backend_probe').fn is not woow_backend_probe:
         raise RuntimeError('readiness probe name taken')  # add_tool keeps an existing tool of the same name
+    # The upstream Odoo tools return {"success": false, "error": ...} as a normal value. Convert those results to
+    # MCP isError=true before the worker wrapper, while preserving each published outputSchema's result envelope.
+    # This is the same source-backed contract as the PaaS Odoo launcher; fake-backend tests cover both shapes.
+    import odoo_tool_errors
+    odoo_tool_errors.install(mcp)
     # The stock client caches an XMLRPC transport: serialize its sync calls. 0.4.0: mcp 2 runs a sync tool on an anyio
     # worker thread, in parallel; BoundedTools turns every sync tool (the writes execute_method and chatter_post as
     # well as the reads) into an async one on its single owned worker, so they still run one at a time.

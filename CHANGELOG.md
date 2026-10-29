@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.4.4 — release candidate (2026-10-29; images pending)
+
+Combines PR30 Odoo error results, PR31 child write switches, PR32 token history and PR33 Nextcloud secret
+redaction on the PR29 0.4.3 base.
+Seven source manifests and version bindings are 0.4.4; only six Store-enabled products will publish.
+This candidate has no built or published images; the existing 0.4.3
+image receipt applies only to its recorded source, never to these changes.
+
+- Odoo tool results with `success: false` now carry MCP `isError: true`; text JSON and outputSchema-compatible
+  `structuredContent` are retained, including the SDK result envelope. Tracebacks are reduced to the final exception
+  line. The conversion also covers refusals from the four-switch overlay, before the existing worker/error wrappers.
+- Odoo exposes `enable_writes`, `allow_direct_writes`, `allow_unknown_methods` and `chatter_direct` in the admin panel.
+  A protected, revision-checked save persists all four booleans atomically and restarts the child. Missing state keeps
+  the prior all-on defaults. The source-guarded PaaS decision module controls actual child execution and descriptions;
+  outer tool grants and operation denies still apply. Exact `model.method` allowlist editing remains a parity gap.
+- The panel shows the current token's mask and at most five rotate/revoke events with UTC times and previous-token
+  masks. Each token transition and event share one durable write; repeated revoke adds no event. No old token is
+  retained in history, and active leases are invalidated only after commit.
+- Nextcloud masks its configured password and Basic-auth credential forms in decoded backend error detail before
+  whitespace folding or truncation. Literal, URL-quoted, JSON-escaped and standard/URL-safe base64 forms are covered;
+  detailed diagnostics, public error codes, isError, auth latches and successful replies are retained. Real child and
+  gateway tests use fake credentials; unknown secrets or arbitrary encodings are outside this bounded contract.
+- Schema 4 is unchanged in number and existing files are not rewritten at startup. Saving Odoo switches persists
+  `odoo_write_switches`; rotating/revoking a token persists `token_history`. The 0.4.3 decoder rejects either new key.
+  Back up before upgrading; downgrade after either action requires restoring that pre-upgrade add-on backup and
+  reviewing restored grants/tokens. Do not silently strip keys or manually edit state. See `upgrade-notes.yaml`.
+
 ## 0.4.3 — release candidate (2026-10-28)
 
 Applies to the six Store-enabled add-ons and the OpenDesign source. The six 0.4.3 images require

@@ -40,6 +40,9 @@ class ConfigurationState:
             # Native child policy is also rebuilt for these products.
             value.update({key: raw.get(key) for key in
                           ('writes_enabled', 'disabled', 'enabled_write_tools', 'denied_operations')})
+        if raw.get('product') == 'odoo':
+            # Absent schema-4 key means the prior child configuration: all four on.
+            value['odoo_write_switches'] = state.effective_odoo_write_switches.model_dump()
         return self._revision(value, 'launch')
 
     def begin(self, state):

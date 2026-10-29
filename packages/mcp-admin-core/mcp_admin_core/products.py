@@ -4,6 +4,7 @@ The W2b allowlists are deliberately bounded; docs/tool-surface.json enumerates
 all upstream tools and the individually deferred capabilities.
 """
 from pathlib import Path
+from datetime import datetime, timezone
 import json
 import re
 import secrets
@@ -12,6 +13,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, AfterValidator, field_validator, model_validator
 
+from .access import masked_token
 from .config import FRESH_WRITES_ENABLED, State, Store, http_url
 from .lifecycle import ChildSpec
 from .policy import Tool
@@ -127,6 +129,8 @@ CONNECTIONS = dict(zip(PRODUCTS, (OdooConnection, ManageConnection, HermesConnec
 # Owner decision 2026-10-27 (the PaaS woow-mcp-server owner_defaults of 2026-10-25, for the HA add-ons): the state
 # field that marks the one-time all-on migration of a legacy (schema 1/2/3) state. Same name as the PaaS marker.
 OWNER_DEFAULTS = 'owner_defaults_20261025'
+ODOO_WRITE_SWITCHES = 'odoo_write_switches'
+TOKEN_HISTORY = 'token_history'
 Timestamp = Annotated[str, Field(pattern=r'^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+00:00$')]
 
 
@@ -144,6 +148,40 @@ class OwnerDefaults(BaseModel):
     acknowledged_at: Timestamp | None = None
 
 
+class OdooWriteSwitches(BaseModel):
+    """Child-only PaaS #89 switches. Every pre-existing HA Odoo child ran with these four values on."""
+    model_config = ConfigDict(extra='forbid', strict=True, frozen=True)
+    enable_writes: bool
+    allow_direct_writes: bool
+    allow_unknown_methods: bool
+    chatter_direct: bool
+
+    @model_validator(mode='before')
+    @classmethod
+    def complete(cls, value):
+        if not isinstance(value, cls) and (not isinstance(value, dict) or set(value) != set(cls.model_fields)):
+            raise ValueError('all four Odoo child switches are required')
+        return value
+
+
+class TokenHistoryEntry(BaseModel):
+    """One masked credential transition; never contains a usable token."""
+    model_config = ConfigDict(extra='forbid', strict=True, frozen=True)
+    action: Literal['rotate', 'revoke']
+    rotated_at: Timestamp
+    previous_token_masked: str = Field(pattern=r'^(?:[A-Za-z0-9_-]{4}\*{20}[A-Za-z0-9_-]{4})?$')
+
+    @field_validator('rotated_at')
+    @classmethod
+    def actual_utc_second(cls, value):
+        try:
+            if datetime.fromisoformat(value).isoformat(timespec='seconds') != value:
+                raise ValueError('noncanonical timestamp')
+        except ValueError:
+            raise ValueError('invalid UTC timestamp') from None
+        return value
+
+
 class ProductState(State):
     # 4 (0.2.0): the full child surface; every state migrated from 3 (or older) gets every write grant once.
     schema_version: int = 4
@@ -159,8 +197,15 @@ class ProductState(State):
     # without it). A schema 4 state written by 0.2.0 has no such key and gets None (ProductStore._decode).
     mcp_access_token: str | None = Field(default=None, repr=False)
     # Owner decision 2026-10-27: present only on a state the one-time legacy migration wrote. Omitted from the stored
-    # JSON while None, so every other schema 4 state keeps exactly the 0.4.1 keys (and stays readable by 0.4.1).
+    # JSON while None. An old binary can read a state only until a newer optional field is explicitly saved;
+    # rollback after that requires restoring a backup made before the new field was written.
     owner_defaults_20261025: OwnerDefaults | None = Field(default=None, exclude_if=lambda value: value is None)
+    # Optional on schema 4. Absent retains the exact prior child behavior (all four on), without changing any
+    # outer grant, disabled tool or operation deny. A saved object is Odoo-only and must carry all four booleans.
+    odoo_write_switches: OdooWriteSwitches | None = Field(default=None, exclude_if=lambda value: value is None)
+    # Additive schema 4 field, absent in pre-history states. Once a transition writes it, an older binary requires a
+    # pre-update backup to read the state; merely starting this binary does not rewrite an existing schema 4 state.
+    token_history: list[TokenHistoryEntry] | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @field_validator('schema_version')
     @classmethod
@@ -186,6 +231,13 @@ class ProductState(State):
                 for name, operations in value.items())
                 or len(json.dumps(value, separators=(',', ':'))) > 16384):
             raise ValueError('invalid operation denies')
+        return value
+
+    @field_validator('token_history')
+    @classmethod
+    def bounded_history(cls, value):
+        if value is not None and len(value) > 5:
+            raise ValueError('too many token changes')
         return value
 
     @model_validator(mode='before')
@@ -214,15 +266,24 @@ class ProductState(State):
             raise ValueError('unknown or wrong-product write grant')
         if self.mcp_access_token is not None and self.product != 'n8n':
             raise ValueError('only n8n has an MCP access token')
+        if self.odoo_write_switches is not None and self.product != 'odoo':
+            raise ValueError('only Odoo has child write switches')
         return self
+
+    @property
+    def effective_odoo_write_switches(self):
+        if self.product != 'odoo':
+            raise ValueError('only Odoo has child write switches')
+        return self.odoo_write_switches or OdooWriteSwitches(enable_writes=True, allow_direct_writes=True,
+                                                            allow_unknown_methods=True, chatter_direct=True)
 
     @property
     def configured(self):
         return bool(self.backend_url and self.backend_key) if self.product == 'n8n' else self.connection is not None
 
 
-# The keys every stored product state carries (the owner-defaults marker is the only optional one, schema 4 only).
-STORED_FIELDS = frozenset(ProductState.model_fields) - {OWNER_DEFAULTS}
+# The keys every stored product state carries; the three optional fields exist only on schema 4.
+STORED_FIELDS = frozenset(ProductState.model_fields) - {OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, TOKEN_HISTORY}
 
 
 def write_grants(product):
@@ -284,6 +345,19 @@ class ProductStore(Store):
         return ProductState(product=self.product, token=secrets.token_urlsafe(32), child_token=secrets.token_urlsafe(32),
                             writes_enabled=FRESH_WRITES_ENABLED, enabled_write_tools=fresh_write_grants(self.product))
 
+    def change_token(self, token, *, action):
+        """One durable token + masked-history transition under this store's exclusive writer lock."""
+        if action not in ('rotate', 'revoke') or (action == 'revoke') != (token is None):
+            raise ValueError('invalid token transition')
+        before = self.load()
+        if token == before.token:
+            return before, False
+        previous = before.token
+        entry = TokenHistoryEntry(action=action, rotated_at=datetime.now(timezone.utc).isoformat(timespec='seconds'),
+                                  previous_token_masked=masked_token(previous))
+        updated = self.update(token=token, token_history=[entry, *(before.token_history or [])][:5])
+        return updated, True
+
     def _decode(self, value):
         if isinstance(value, dict) and type(value.get('schema_version')) is int and value['schema_version'] == 1:
             if not self._migrate or self.product != 'n8n':
@@ -326,9 +400,12 @@ class ProductStore(Store):
                          'writes_enabled': FRESH_WRITES_ENABLED, 'disabled': [], 'denied_operations': {}}
             value = {**value, 'schema_version': 4}
             self._migrated = True
-        # The owner-defaults marker is the one optional key of a schema 4 state; when present it is never null.
-        if (not isinstance(value, dict) or set(value) - {OWNER_DEFAULTS} != STORED_FIELDS
-                or (OWNER_DEFAULTS in value and value[OWNER_DEFAULTS] is None) or value.get('product') != self.product):
+        # No optional field may be stored as null. Legacy states cannot carry the new keys.
+        if (not isinstance(value, dict) or set(value) - {OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, TOKEN_HISTORY} != STORED_FIELDS
+                or (OWNER_DEFAULTS in value and value[OWNER_DEFAULTS] is None)
+                or (ODOO_WRITE_SWITCHES in value and value[ODOO_WRITE_SWITCHES] is None)
+                or (TOKEN_HISTORY in value and value[TOKEN_HISTORY] is None)
+                or value.get('product') != self.product):
             raise ValueError('wrong product or incomplete schema')
         return ProductState.model_validate(value)
 
@@ -591,18 +668,16 @@ def child_spec(state: ProductState, directory: Path) -> ChildSpec | None:
            'PYTHONUNBUFFERED': '1', 'PYTHONPATH': str(app / 'vendor') + ':' + str(ROOT / 'apps/runtime')}
     c = state.connection
     if product == 'odoo':
+        # The reviewed pure decision module is shared by management's fallback listing and the child overlay.
+        env['PYTHONPATH'] += ':' + str(ROOT / 'packages/mcp-admin-core')
+        switches = state.effective_odoo_write_switches
         env.update(ODOO_URL=c.url, ODOO_DB=c.database, ODOO_USERNAME=c.username, ODOO_PASSWORD=c.password,
                    ODOO_TRANSPORT='xmlrpc', ODOO_VERIFY_SSL='1', ODOO_TIMEOUT='5',
-                   # 0.2.0 (owner decisions 2026-10-15, the full add-on): approved writes on
-                   # (ODOO_MCP_ENABLE_WRITES=1, PaaS seed_defaults); direct create/write/unlink through
-                   # execute_method (ODOO_MCP_ALLOW_DIRECT_WRITES=1, the PaaS fix_direct_writes switch; the three-step
-                   # preview/validate/execute_approved_write tools stay listed: fix_remove_3step_tools is not
-                   # applied); any method through execute_method, unreviewed side effects included (action_confirm,
-                   # action_post...: ODOO_MCP_ALLOW_UNKNOWN_METHODS=1); chatter_post posts at once
-                   # (MCP_CHATTER_DIRECT=1; a call that still carries approval/confirm posts the same way).
-                   ODOO_MCP_ENABLE_WRITES='1', ODOO_MCP_ALLOW_DIRECT_WRITES='1',
-                   ODOO_MCP_ALLOW_UNKNOWN_METHODS='1', MCP_CHATTER_DIRECT='1')
-        argv = (str(python), str(app / 'launch.py'), '--transport', 'streamable-http', '--host', '127.0.0.1', '--port', '3000', '--path', '/mcp')
+                   ODOO_MCP_ENABLE_WRITES='1' if switches.enable_writes else '0',
+                   ODOO_MCP_ALLOW_DIRECT_WRITES='1' if switches.allow_direct_writes else '0',
+                   ODOO_MCP_ALLOW_UNKNOWN_METHODS='1' if switches.allow_unknown_methods else '0',
+                   MCP_CHATTER_DIRECT='1' if switches.chatter_direct else '0')
+        argv = (str(python), str(app / 'start_switches.py'), '--transport', 'streamable-http', '--host', '127.0.0.1', '--port', '3000', '--path', '/mcp')
     elif product == 'odoo-manage':
         env.update(ODOO_URL=c.url, ODOO_DB=c.database, ODOO_USER=c.username, ODOO_API_KEY=c.api_key,
                    ODOO_YOLO='off' if c.mode == 'module' else 'read', ODOO_MCP_ENABLE_METHOD_CALLS='false', ODOO_MCP_TRANSPORT='streamable-http')

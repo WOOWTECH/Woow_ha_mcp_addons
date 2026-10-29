@@ -730,12 +730,15 @@ LISTED = {'odoo': [{'name': 'data_quality_report',
                                                                    "'res.partner'.",
                                                     'title': 'Model',
                                                     'type': 'string'},
-                                          'method': {'description': 'Odoo model method to call; create, write and '
-                                                                    'unlink run directly in this deployment '
-                                                                    '(ODOO_MCP_ALLOW_DIRECT_WRITES is set), without '
-                                                                    'the preview_write -> validate_write -> '
-                                                                    "execute_approved_write flow; the Odoo user's own "
-                                                                    'access rights still apply.',
+                                          'method': {'description': 'Odoo model method to call; any method runs '
+                                                                    'directly in this deployment: create, write and '
+                                                                    'unlink (ODOO_MCP_ALLOW_DIRECT_WRITES is set; the '
+                                                                    'preview_write -> validate_write -> '
+                                                                    'execute_approved_write flow is optional) and '
+                                                                    'unreviewed side-effect methods such as '
+                                                                    'action_confirm or action_post '
+                                                                    '(ODOO_MCP_ALLOW_UNKNOWN_METHODS is set); the Odoo '
+                                                                    "user's own access rights still apply.",
                                                      'title': 'Method',
                                                      'type': 'string'},
                                           'args': {'anyOf': [{'items': {}, 'type': 'array'}, {'type': 'null'}],
