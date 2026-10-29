@@ -18,9 +18,10 @@ if (crypto.createHash("sha256").update(fs.readFileSync(apiPath)).digest("hex") !
 }
 // The error types/formatter and actual handler are part of this boundary too.
 // 0.2.2: handlers-n8n-manager.js is the file apps/n8n/patches/fix_test_run_error_messages.py writes (test-run errors keep
-// n8n's own message; applied by the Dockerfile and packaging/unit.sh): an unpatched or altered package fails closed.
+// n8n's own message, then fix_direct_inputs.py composes native input compatibility; both are applied by the
+// existing Dockerfile / packaging/unit.sh entrypoint): an unpatched or altered package fails closed.
 // Next release after 0.4.4: server.js must also carry fix_tool_result_is_error.py (success === false sets isError;
-// valid:false validation answers remain normal). The separate handlers-n8n-manager.js patch/digest stays unchanged.
+// valid:false validation answers remain normal). Its separate server.js patch/digest stays unchanged.
 // 0.3.4 (n8n-mcp 2.91.0 -> 2.96.2): n8n-api-client.js, n8n-errors.js, handlers-official-tools.js and
 // official-mcp-access.js are byte-identical. Reviewed changes: mcp/server.js reads instanceContext through a getter
 // (per-request AsyncLocalStorage scope set by the HTTP server, else the session's own context; this child is
@@ -33,7 +34,7 @@ if (crypto.createHash("sha256").update(fs.readFileSync(apiPath)).digest("hex") !
 // it to true: no npm registry query) and a shorter cache for failed checks. handlers-n8n-manager.js: the build patch is re-pinned (see the patch script).
 for (const [relative, digest] of [
     ["utils/n8n-errors.js", "efd5783846cf1eb61dbf9387de260e5a1d336ec609bc4c4d5601c369b5d2f20a"],
-    ["mcp/handlers-n8n-manager.js", "6cd673423e829902f3e56de66afe90f7e2196d7ef76cca02551a20eee03ae2eb"],
+    ["mcp/handlers-n8n-manager.js", "491d6dd15f39941bcda742c7da03cd6b7e4ffc3ca630a88eb88a9f6d215d246a"],
     ["mcp/server.js", "638b148f91c18d484b8bcede838be1032f82ddd1b3aa53b24cf005325ae3d9f7"],
     ["mcp/handlers-official-tools.js", "e85937c58d5a8426d54b1b69598adc83a14648402fc58a8714ef5db8132977cd"],
     ["mcp/official-mcp-access.js", "113d3556e4b93a870b36986a0fce8de45391ce64d7ab4c9f50fd6715eee3c733"],
