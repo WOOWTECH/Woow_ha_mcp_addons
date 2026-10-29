@@ -6,7 +6,7 @@
 
 HA 基準版在 `products.child_spec` 把四項固定為 `1`，但安裝的 `odoo-mcp 1.3.0` 與 HA 的 `fix_direct_writes.py` 仍使用舊判斷：`ODOO_MCP_ENABLE_WRITES=0` 只擋已核准寫入，`ODOO_MCP_ALLOW_DIRECT_WRITES=0` 搭配未知方法開啟時仍可能執行 `action_*`，`MCP_CHATTER_DIRECT=0` 不阻止 `execute_method` 直接呼叫張貼訊息的方法，未列入審核讀取的 `get_*` 仍可能被名稱啟發式當成讀取。PaaS #89 已用 `odoo_mcp_admin.write_gates` 收緊四項的聯合判斷。單純加設定會讓介面宣稱關閉、實際仍放行。
 
-`packages/mcp-admin-core/mcp_admin_core/odoo_write_gates.py` 是 PaaS #89 `apps/odoo/odoo_mcp_admin/write_gates.py` 的逐位元複本；兩者 SHA-256 均為 `b4852fb0ebd78b6d10c4a3fcd401d0d16eeb21a129ea3b2ece3b19e30c4a4b8d`。`apps/odoo/odoo_switch_overlay.py` 在已釘選的 HA wheel 上裝入同一決定、五支工具說明及 health posture；先核對四個 wheel 檔案與工具身份，再改任何處理器。`apps/odoo/start_switches.py` 先安裝覆蓋層，再執行原本已做來源檢查、運輸約束、工作佇列與私有 probe 的 `launch.py`。因此不改 #30 的啟動器、錯誤包裝或 wheel 補丁；後續 rebase 仍需重新跑精確來源測試。
+`packages/mcp-admin-core/mcp_admin_core/odoo_write_gates.py` 是 PaaS #89 `apps/odoo/odoo_mcp_admin/write_gates.py` 的逐位元複本；兩者 SHA-256 均為 `b4852fb0ebd78b6d10c4a3fcd401d0d16eeb21a129ea3b2ece3b19e30c4a4b8d`。`apps/odoo/odoo_switch_overlay.py` 在已釘選的 HA wheel 上裝入同一決定、五支工具說明及 health posture；先核對四個 wheel 檔案與工具身份，再改任何處理器。`apps/odoo/start_switches.py` 在載入 Odoo server 前先安裝原有的 session idle／16 MiB body 限制，再安裝覆蓋層、執行原本已做來源檢查、運輸約束、工作佇列與私有 probe 的 `launch.py`；該 launcher 重複安裝 session idle 是冪等的。因此不改 #30 的啟動器、錯誤包裝或 wheel 補丁；後續 rebase 仍需重新跑精確來源測試。
 
 | 設定欄位 | 子行程環境 | 關閉後的 PaaS #89 語意 |
 | --- | --- | --- |

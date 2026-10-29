@@ -343,8 +343,8 @@
     },
     {
       "path": "apps/odoo/start_switches.py",
-      "sha256": "3ac58a44096fe84d14798b619014acb72f5147ff15f60cdce337ff7753cfa842",
-      "change": "Install Odoo switch overlay before runpy of the existing source-guarded launch.py; Dockerfile copies apps/odoo and mcp-admin-core, no wheel source mutation.",
+      "sha256": "d3c366ee8c392875d0f712efc7bbafb2ab5aec04371018dadfad7827e268d85a",
+      "change": "Install session_idle before importing odoo_mcp.server (the existing launch.py repeats it idempotently), then install the Odoo switch overlay before runpy of the existing source-guarded launch.py; Dockerfile copies apps/odoo and mcp-admin-core, no wheel source mutation.",
       "guarded_sources": {}
     },
     {
