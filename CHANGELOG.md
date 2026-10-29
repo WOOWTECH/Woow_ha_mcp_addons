@@ -1,5 +1,15 @@
 # Changelog
 
+## Planned 0.4.6 — masked token history (source only; release pending)
+
+- The HA panel displays the current token's mask and up to five rotate/revoke events, each with a UTC time and only
+  the previous token's mask. A token change and its event share one durable state replacement. Repeating revoke on
+  an already revoked token leaves state and history unchanged. No old token is stored in history.
+- Existing schema 4 files are unchanged merely by starting this build. The first rotate/revoke writes the optional
+  `token_history` key; an older binary refuses that key. Take an add-on backup before updating, and restore the
+  pre-update backup before downgrading after a token change. See `upgrade-notes.yaml`.
+- This branch is stacked after the Odoo child-switch source PR and carries no add-on version or image publication.
+
 ## Unreleased — next version (no add-on version change; the release PR sets the version and images)
 
 No add-on version is changed by this section. Applies to the six Store-enabled add-ons and the OpenDesign source.

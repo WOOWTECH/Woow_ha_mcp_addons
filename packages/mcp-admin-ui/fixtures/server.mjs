@@ -21,6 +21,8 @@ function reset(next = {}) {
     product: next.product ?? 'n8n', endpoint: next.endpoint ?? null,
     backend_url: null, backend_key_set: false, connection_configured: next.configured ?? false,
     token_active: true, writes_enabled: next.legacyWrites ?? false, disabled: [],
+    ...(Object.hasOwn(next, 'tokenMask') ? {token_masked: next.tokenMask} : {}),
+    ...(Object.hasOwn(next, 'tokenHistory') ? {token_history: structuredClone(next.tokenHistory)} : {}),
     ...(next.granular !== false ? { policy_contract: 'woow-v3-exact-grants' } : {}), enabled_write_tools: next.grants ?? [],
     tools: {
       read_example: { write: false, legacy_write:false, write_grants:[], operation_parameter:null, inputSchema:{} },

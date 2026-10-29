@@ -4,6 +4,7 @@ The W2b allowlists are deliberately bounded; docs/tool-surface.json enumerates
 all upstream tools and the individually deferred capabilities.
 """
 from pathlib import Path
+from datetime import datetime, timezone
 import json
 import re
 import secrets
@@ -12,6 +13,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, AfterValidator, field_validator, model_validator
 
+from .access import masked_token
 from .config import FRESH_WRITES_ENABLED, State, Store, http_url
 from .lifecycle import ChildSpec
 from .policy import Tool
@@ -128,6 +130,7 @@ CONNECTIONS = dict(zip(PRODUCTS, (OdooConnection, ManageConnection, HermesConnec
 # field that marks the one-time all-on migration of a legacy (schema 1/2/3) state. Same name as the PaaS marker.
 OWNER_DEFAULTS = 'owner_defaults_20261025'
 ODOO_WRITE_SWITCHES = 'odoo_write_switches'
+TOKEN_HISTORY = 'token_history'
 Timestamp = Annotated[str, Field(pattern=r'^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+00:00$')]
 
 
@@ -161,6 +164,24 @@ class OdooWriteSwitches(BaseModel):
         return value
 
 
+class TokenHistoryEntry(BaseModel):
+    """One masked credential transition; never contains a usable token."""
+    model_config = ConfigDict(extra='forbid', strict=True, frozen=True)
+    action: Literal['rotate', 'revoke']
+    rotated_at: Timestamp
+    previous_token_masked: str = Field(pattern=r'^(?:[A-Za-z0-9_-]{4}\*{20}[A-Za-z0-9_-]{4})?$')
+
+    @field_validator('rotated_at')
+    @classmethod
+    def actual_utc_second(cls, value):
+        try:
+            if datetime.fromisoformat(value).isoformat(timespec='seconds') != value:
+                raise ValueError('noncanonical timestamp')
+        except ValueError:
+            raise ValueError('invalid UTC timestamp') from None
+        return value
+
+
 class ProductState(State):
     # 4 (0.2.0): the full child surface; every state migrated from 3 (or older) gets every write grant once.
     schema_version: int = 4
@@ -182,6 +203,9 @@ class ProductState(State):
     # Optional on schema 4. Absent retains the exact prior child behavior (all four on), without changing any
     # outer grant, disabled tool or operation deny. A saved object is Odoo-only and must carry all four booleans.
     odoo_write_switches: OdooWriteSwitches | None = Field(default=None, exclude_if=lambda value: value is None)
+    # Additive schema 4 field, absent in pre-history states. Once a transition writes it, an older binary requires a
+    # pre-update backup to read the state; merely starting this binary does not rewrite an existing schema 4 state.
+    token_history: list[TokenHistoryEntry] | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @field_validator('schema_version')
     @classmethod
@@ -207,6 +231,13 @@ class ProductState(State):
                 for name, operations in value.items())
                 or len(json.dumps(value, separators=(',', ':'))) > 16384):
             raise ValueError('invalid operation denies')
+        return value
+
+    @field_validator('token_history')
+    @classmethod
+    def bounded_history(cls, value):
+        if value is not None and len(value) > 5:
+            raise ValueError('too many token changes')
         return value
 
     @model_validator(mode='before')
@@ -251,8 +282,8 @@ class ProductState(State):
         return bool(self.backend_url and self.backend_key) if self.product == 'n8n' else self.connection is not None
 
 
-# The keys every stored product state carries; the two optional fields exist only on schema 4.
-STORED_FIELDS = frozenset(ProductState.model_fields) - {OWNER_DEFAULTS, ODOO_WRITE_SWITCHES}
+# The keys every stored product state carries; the three optional fields exist only on schema 4.
+STORED_FIELDS = frozenset(ProductState.model_fields) - {OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, TOKEN_HISTORY}
 
 
 def write_grants(product):
@@ -314,6 +345,19 @@ class ProductStore(Store):
         return ProductState(product=self.product, token=secrets.token_urlsafe(32), child_token=secrets.token_urlsafe(32),
                             writes_enabled=FRESH_WRITES_ENABLED, enabled_write_tools=fresh_write_grants(self.product))
 
+    def change_token(self, token, *, action):
+        """One durable token + masked-history transition under this store's exclusive writer lock."""
+        if action not in ('rotate', 'revoke') or (action == 'revoke') != (token is None):
+            raise ValueError('invalid token transition')
+        before = self.load()
+        if token == before.token:
+            return before, False
+        previous = before.token
+        entry = TokenHistoryEntry(action=action, rotated_at=datetime.now(timezone.utc).isoformat(timespec='seconds'),
+                                  previous_token_masked=masked_token(previous))
+        updated = self.update(token=token, token_history=[entry, *(before.token_history or [])][:5])
+        return updated, True
+
     def _decode(self, value):
         if isinstance(value, dict) and type(value.get('schema_version')) is int and value['schema_version'] == 1:
             if not self._migrate or self.product != 'n8n':
@@ -356,10 +400,11 @@ class ProductStore(Store):
                          'writes_enabled': FRESH_WRITES_ENABLED, 'disabled': [], 'denied_operations': {}}
             value = {**value, 'schema_version': 4}
             self._migrated = True
-        # Neither optional field may be stored as null. Legacy states cannot carry the new switch object.
-        if (not isinstance(value, dict) or set(value) - {OWNER_DEFAULTS, ODOO_WRITE_SWITCHES} != STORED_FIELDS
+        # No optional field may be stored as null. Legacy states cannot carry the new keys.
+        if (not isinstance(value, dict) or set(value) - {OWNER_DEFAULTS, ODOO_WRITE_SWITCHES, TOKEN_HISTORY} != STORED_FIELDS
                 or (OWNER_DEFAULTS in value and value[OWNER_DEFAULTS] is None)
                 or (ODOO_WRITE_SWITCHES in value and value[ODOO_WRITE_SWITCHES] is None)
+                or (TOKEN_HISTORY in value and value[TOKEN_HISTORY] is None)
                 or value.get('product') != self.product):
             raise ValueError('wrong product or incomplete schema')
         return ProductState.model_validate(value)

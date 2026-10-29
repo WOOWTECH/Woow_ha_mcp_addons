@@ -2,6 +2,36 @@
 # pipeline #89) has not yet defined a machine-readable schema; this follows the format already used by
 # WOOWTECH/Woow_ha_cloudflare_tunnel_webgui. One release per entry, newest first.
 releases:
+  # Planned after the 0.4.3, 0.4.4 and 0.4.5 release chain; this source-only branch does not change an add-on version.
+  - to_version: "0.4.6"
+    from_version: "0.4.5"
+    addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]
+    summary: >-
+      Show a masked current MCP token and up to five masked rotate/revoke events in the HA add-on panel, as on PaaS.
+      Existing schema 4 state is not rewritten at startup; token and event are saved in one atomic state write.
+    breaking_changes:
+      - id: ha-token-history-state-key
+        affects: Schema 4 installations after their first token rotate or revoke on this version.
+        change: >-
+          The first token change adds optional token_history to /data/mcp/state.json. Earlier add-on binaries reject
+          unknown stored keys and therefore cannot start from that changed state. The field contains only an action,
+          UTC timestamp and masked previous token; no usable previous token is retained.
+        migration: >-
+          Take an add-on backup before updating. To downgrade after a rotate or revoke, restore the pre-update add-on
+          backup, then explicitly reissue the MCP token and update clients as needed. Do not delete token_history or
+          edit state.json by hand. Before any token change, the old schema 4 bytes remain readable by the old binary.
+    behavior_changes:
+      - id: ha-masked-token-history-panel
+        change: >-
+          Authenticated HA Ingress bootstrap now returns only the current token mask and up to five masked events.
+          The panel shows them as text; reveal, rotation, revocation and existing CSRF/role protections remain.
+          A second revoke of an already revoked token returns success without adding a false event.
+        migration: None for clients; existing recorded changes cannot be reconstructed retroactively.
+    preserved:
+      - The token format, MCP endpoint authentication, access-lease invalidation, state schema number and add-on options.
+    backup_and_rollback:
+      - Take a Home Assistant add-on backup before the upgrade.
+      - Restore that backup before running an older add-on binary if the new optional key has been written.
   # Next release (owner decision 2026-10-27). NOT released: no add-on version is changed yet. The release PR replaces
   # "unreleased" with the version number it ships and moves this entry under that version.
   - to_version: "unreleased"

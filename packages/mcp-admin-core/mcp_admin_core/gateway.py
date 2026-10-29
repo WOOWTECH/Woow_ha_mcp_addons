@@ -29,7 +29,7 @@ from starlette.routing import Route, request_response
 from starlette.middleware import Middleware
 
 from . import owner_defaults, redact, ui
-from .access import AccessChanged, LeasedResponse, TokenAccess
+from .access import AccessChanged, LeasedResponse, TokenAccess, masked_token
 
 from . import VERSION
 from .config import ConfigError, State, Store, strict_json
@@ -456,6 +456,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     "configuration": configuration.snapshot(state),
                     "endpoint": state.endpoint, "backend_url": state.backend_url,
                     "backend_key_set": state.backend_key is not None, "token_active": state.token is not None,
+                    "token_masked": masked_token(state.token),
+                    "token_history": [entry.model_dump() for entry in (getattr(state, 'token_history', None) or [])],
                     "mcp_access_token_set": getattr(state, "mcp_access_token", None) is not None,
                     "product": getattr(state, 'product', 'n8n'),
                     **({'odoo_write_switches': state.effective_odoo_write_switches.model_dump(),
@@ -513,13 +515,20 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             if name == "token/reveal" and request.method == "POST":
                 return JSONResponse({"token": store.load().token}, headers=headers)
             if name == "token/rotate" and request.method == "POST":
-                updated = store.update(token=secrets.token_urlsafe(32))
+                new_token = secrets.token_urlsafe(32)
+                updated = (store.change_token(new_token, action='rotate')[0] if hasattr(store, 'change_token')
+                           else store.update(token=new_token))
                 token_access.committed()
                 headers['ETag'] = configuration.etag(updated)
                 return JSONResponse({"token": updated.token}, headers=headers)
             if name == "token/revoke" and request.method == "POST":
-                updated = store.update(token=None)
-                token_access.committed()
+                if hasattr(store, 'change_token'):
+                    updated, changed = store.change_token(None, action='revoke')
+                else:
+                    changed = state.token is not None
+                    updated = store.update(token=None) if changed else state
+                if changed:
+                    token_access.committed()
                 headers['ETag'] = configuration.etag(updated)
                 return Response(status_code=204, headers=headers)
             if notice_action:
