@@ -53,6 +53,16 @@ released separately as 0.4.4.
    vulnerability policy remain unchanged. Review this new exception and rerun
    both current-source and full-history scans from the new source; the failed
    attempt is not image acceptance evidence.
+   A second attempt from `049b7d1` built Odoo and passed container/mock,
+   source/history secret, image secret, and SBOM checks, but the policy gate
+   rejected two fixed High findings for `CVE-2026-84782` in the pinned Python
+   base's `libssl3` and `openssl` `3.0.22-1~deb12u1`. It produced no candidate
+   receipt or publication. [Debian's bookworm security fix](https://security-tracker.debian.org/tracker/CVE-2026-84782)
+   is `3.0.22-1~deb12u2`; `packaging/inputs.json` now binds both packages to that
+   exact version from the signature-checked `20261028T000000Z` Debian security
+   snapshot, using the repository's preexisting `os_upgrades.py` mechanism in
+   each Dockerfile. The six images must be rebuilt and all gates rerun from
+   this later source. The vulnerability policy is unchanged.
 2. On the same private builder route as 0.4.2, preserve the six 0.4.2 image
    IDs and confirm six 0.4.3 tags are absent. Build six new `linux/amd64`
    images from the frozen source, then run exact-image P1–P5, source/history/
