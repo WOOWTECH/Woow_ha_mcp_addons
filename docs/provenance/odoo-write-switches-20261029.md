@@ -23,6 +23,8 @@ HA 的外層 `enabled_write_tools`、`writes_enabled` 舊授權、`disabled`、`
 
 `PUT /api/odoo/write-switches` 使用既有 HA 管理員身份、CSRF、單寫入鎖、嚴格 JSON、必填 `If-Match` 與原子儲存；成功後同一提交所有權等待子行程重啟。回覆的 `configuration` 區分已儲存與套用中／失敗。UI 只在新版 Odoo bootstrap 有完整四開關契約時提供儲存；舊 API 及其他產品沒有可用控制項。子行程不在線時，管理端 `tools/list` 備用快照的五項說明也按儲存值變化，避免宣稱已關閉的行為仍可直接使用。
 
+**回退邊界**：舊 0.4.3 binary 的 `ProductStore._decode` 以精確鍵集合驗證 state。只升級程式、尚未儲存四開關的舊 state 仍可回退；一旦透過新畫面寫入 `odoo_write_switches`，單獨換回 0.4.3 binary 會拒絕讀取該 state。回退必須連同升級前的 state 備份一起還原，並重新檢查原有外層 grants／denies；不能只回退映像，也不能默默刪除新欄位。此欄位維持 schema 4 可選、缺欄不寫回的模式，讓後續 token history 欄位有相同的相容性規劃空間；本 PR 不加入 token history。
+
 ## 隔離驗證
 
 - 純判斷測試涵蓋 16 種組合、審核讀取、標準寫入、未知方法、`get_portal_url`、chatter、白名單優先順序。

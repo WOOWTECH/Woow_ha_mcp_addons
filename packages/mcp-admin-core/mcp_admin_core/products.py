@@ -176,7 +176,8 @@ class ProductState(State):
     # without it). A schema 4 state written by 0.2.0 has no such key and gets None (ProductStore._decode).
     mcp_access_token: str | None = Field(default=None, repr=False)
     # Owner decision 2026-10-27: present only on a state the one-time legacy migration wrote. Omitted from the stored
-    # JSON while None, so every other schema 4 state keeps exactly the 0.4.1 keys (and stays readable by 0.4.1).
+    # JSON while None. An old binary can read a state only until a newer optional field is explicitly saved;
+    # rollback after that requires restoring a backup made before the new field was written.
     owner_defaults_20261025: OwnerDefaults | None = Field(default=None, exclude_if=lambda value: value is None)
     # Optional on schema 4. Absent retains the exact prior child behavior (all four on), without changing any
     # outer grant, disabled tool or operation deny. A saved object is Odoo-only and must carry all four booleans.
