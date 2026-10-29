@@ -1,6 +1,6 @@
 # 0.4.4 release decision — 2026-10-29
 
-Status: **draft release candidate; images NOT built or published; exact-image acceptance and readiness pending**.
+Status: **six exact-source images published and independently verified; final-head checks/readiness and protected merge pending**.
 
 Mainline selected one 0.4.4 release for the integrated PR30/31/32/33 functionality. Seven source manifests,
 Dockerfile BUILD_VERSION defaults, core VERSION, packaging inputs/validator and workflow tags now bind 0.4.4.
@@ -48,8 +48,8 @@ separately; these three requested features and the Nextcloud security fix are in
 
 The Nextcloud correction covers known configured password/Basic forms (literal, URL quoting, JSON escaping,
 standard and URL-safe base64). Unknown backend secrets and arbitrary encodings remain outside the bounded
-contract. The unrelated helper-only Nextcloud 401/429 work at `21cd303` is not included. Mainline is reviewing
-PR33; this integration does not claim that independent review is complete.
+contract. The unrelated helper-only Nextcloud 401/429 work at `21cd303` is not included. Mainline reviewed PR33 and its bounded credential/error behavior before freezing the integration;
+fresh image scans and gates are recorded below.
 
 ## Gates owned by mainline after this draft
 
@@ -65,3 +65,45 @@ PR33; this integration does not claim that independent review is complete.
 
 No image build, release dispatch, publication, protected merge, Store update or HAOS/production change is
 performed by preparation of this draft. There is no fabricated 0.4.4 image receipt.
+
+
+## Exact-image publication — 2026-10-29
+
+Image source: `a373bc266e1287a29b8f57581c9f88d5a00983bc` (PR #34). The later publication-record commit is not
+the image source; it adds the real evidence after publication. Its documents are not inside the images.
+
+The fixed source passed hosted checks (2866 Python tests, 64 browser cases) and
+Release train. Main also ran 39 UI Node tests, all 64 browser cases against the
+exact source, and 30 private release-helper guard tests. Six previous 0.4.3 local
+image IDs were preserved; six new local tags were absent before building, and
+the publisher verified the six public targets were unused before publication.
+
+Every new linux/amd64 image passed P1–P5: actual packaged runtime with owned mocks,
+current source and full-history secret scans, all-layer image secret scan, SBOM,
+vulnerability/license policy, final installed Debian security packages, exact UI
+bytes and runtime UID10001 access. These policy passes do not mean zero findings.
+The scanner, policy and exact Gitleaks triage bytes are unchanged from 0.4.3; the
+[historical independent triage review](evidence/0.4.3-synthetic-fixture-triage.md)
+applies only to those inherited bytes. No broad secret/CVE exception was added.
+
+Only the accepted immutable IDs were published. Each manifest was pulled anonymously
+by digest; a separate verifier compared the manifest, config, ordered layers,
+source/version labels and architecture. Credentials and temporary publisher aliases
+were removed; accepted local images remain. See the
+[full receipt](../provenance/release-0.4.4-images.json). Provenance is unsigned;
+no SLSA or host-isolation claim is made for the shared private builder.
+
+| Add-on | Immutable published image |
+| --- | --- |
+| odoo | `ghcr.io/woowtech/amd64-mcp-odoo@sha256:fe13c24b135bb987cbd5c562591cb15c766026d3f17eac4783ec2e8c439fc673` |
+| n8n | `ghcr.io/woowtech/amd64-mcp-n8n@sha256:c3c97d4ad28a3e05b45fac1296ffdc30c32bf6b7439448126849054d0e9f6246` |
+| hermes | `ghcr.io/woowtech/amd64-mcp-hermes@sha256:f73eeae94a460e900562872120f65d6994fb5d9969e0d1fbf98220af8626ad9f` |
+| emqx | `ghcr.io/woowtech/amd64-mcp-emqx@sha256:7a3af755f4da9114ec763579f839e8c68b0711edfa0fde86c26936616fd98bd4` |
+| litellm | `ghcr.io/woowtech/amd64-mcp-litellm@sha256:928e0cbd8baf589f04858e6d55d5cf7a25adc40bd29e3f4ff295748fc4f3064d` |
+| nextcloud | `ghcr.io/woowtech/amd64-mcp-nextcloud@sha256:ab821e53e9a8031c928b3d0cdbfdbef12f71a583e4046ba940be0b389a22a8a4` |
+
+Final publication-record head must pass all protected checks/readiness before merge.
+After merge, verify six stable Releases, Store and Local Download synchronization.
+The separate synthetic-only HAOS lane owns upgrade, token/switch/restart and
+Odoo partial-backup rollback acceptance. Image gates are not that HAOS acceptance
+and do not claim production ws97, real business backends or a production full restore.
