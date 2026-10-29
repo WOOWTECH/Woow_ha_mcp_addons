@@ -95,3 +95,33 @@ async def test_partial_edit_respects_fixed_backend(tmp_path):
                 response = await client.put('/api/backend/patch', json={'changes': {'url': 'http://new.test'}},
                     headers={**IDENTITY, 'x-csrf-token': boot.json()['csrf'], 'if-match': boot.headers['etag']})
                 assert response.status_code == 409 and store.path.read_bytes() == before
+
+
+@pytest.mark.parametrize('product', ['odoo', 'litellm', 'nextcloud', 'n8n'])
+@pytest.mark.parametrize('encoded', [False, True])
+async def test_known_credentials_in_public_fields_are_withheld_without_rewriting(tmp_path, product, encoded):
+    secret = 'SYNTHETIC-CREDENTIAL-046'
+    fragment = ''.join(f'%{ord(c):02x}' for c in secret) if encoded else secret
+    url = 'https://backend.test/private_' + fragment + '/service'
+    async def verify(_): return True
+    with closing(ProductStore(tmp_path, product)) as store:
+        if product == 'n8n':
+            store.update(backend_url=url, backend_key=secret)
+        else:
+            key = {'odoo':'password','litellm':'master_key','nextcloud':'app_password'}[product]
+            store.update(connection={**CONNECTIONS[product], 'url':url, key:secret})
+        before = store.path.read_bytes()
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _:httpx.Response(500))) as child:
+            admin, _ = make_apps(store, N8N_TOOLS if product == 'n8n' else TOOLS[product], child, verify_admin=verify)
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(admin,client=('172.30.32.2',1)),base_url='http://admin') as client:
+                boot = await client.get('/api/bootstrap',headers=IDENTITY)
+                assert boot.status_code == 200
+                assert secret not in boot.text and fragment not in boot.text
+                assert boot.json()['backend_edit']['values']['url'] is None
+                assert boot.json()['backend_edit']['withheld_fields'] == ['url']
+                assert store.path.read_bytes() == before
+                # A deliberate fresh replacement works; hidden display values
+                # were never sent back as null/masks to erase the original.
+                payload = changes(store.load(), {'changes':{'url':'https://clean.test'}})
+                updated = store.update(**payload)
+                assert view(updated)['values']['url'] == 'https://clean.test'

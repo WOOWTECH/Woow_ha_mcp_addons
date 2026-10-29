@@ -274,6 +274,7 @@ function partialBackendCard() {
       maxlength: secret ? '8192' : type.includes('url') ? '2048' : '256',
     });
     input.value = secret ? '' : current.values[key] ?? '';
+    if (current.withheld_fields?.includes(key)) form.append(p(`${label}包含已知憑證，完整值不顯示；選「保留目前值」會保留伺服器原值。`));
     select.addEventListener('change', () => { input.disabled = select.value !== 'set'; input.required = !input.disabled; if (secret && input.disabled) input.value = ''; });
     controls.set(key, {select, input});
     form.append(el('div', {class:'field'}, el('label', {for:`patch-${key}-action`}, `${label}的處理方式`), select,

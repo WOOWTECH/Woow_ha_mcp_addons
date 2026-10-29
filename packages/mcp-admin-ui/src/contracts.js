@@ -129,6 +129,9 @@ export function backendEdit(bootstrap) {
   if (Object.keys(value.values).sort().join() !== publicNames.join() || Object.keys(value.secret_set).sort().join() !== secretNames.join() ||
       !Object.values(value.values).every(v => v === null || typeof v === 'string') ||
       !Object.values(value.secret_set).every(v => typeof v === 'boolean')) return null;
+  if (value.withheld_fields !== undefined && (!Array.isArray(value.withheld_fields) ||
+      new Set(value.withheld_fields).size !== value.withheld_fields.length ||
+      !value.withheld_fields.every(name => publicNames.includes(name) && value.values[name] === null))) return null;
   return value;
 }
 

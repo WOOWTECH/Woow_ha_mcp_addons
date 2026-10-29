@@ -461,10 +461,12 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 # Owner decision 2026-10-27: the one-time all-on migration's notice (only on a state it wrote).
                 notice = owner_defaults.view(state, store.directory)
                 from .backend_edit import view as connection_view
+                edit_view = connection_view(state) if hasattr(state, 'product') else None
                 return JSONResponse({"base_path": base, "api_base": base + "/api", "csrf": csrf,
                     **({"owner_defaults": notice} if notice is not None else {}),
                     "configuration": configuration.snapshot(state),
-                    "endpoint": state.endpoint, "backend_url": state.backend_url,
+                    "endpoint": state.endpoint, "backend_url": edit_view['values']['url']
+                    if edit_view and getattr(state, 'product', None) == 'n8n' else state.backend_url,
                     "backend_key_set": state.backend_key is not None, "token_active": state.token is not None,
                     "token_masked": masked_token(state.token),
                     "token_history": [entry.model_dump() for entry in (getattr(state, 'token_history', None) or [])],
@@ -473,7 +475,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     **({'odoo_write_switches': state.effective_odoo_write_switches.model_dump(),
                         'odoo_write_switches_source': 'saved' if state.odoo_write_switches is not None else 'legacy_all_on'}
                        if getattr(state, 'product', None) == 'odoo' else {}),
-                    **({'backend_edit': connection_view(state)} if hasattr(state, 'product') else {}),
+                    **({'backend_edit': edit_view} if edit_view is not None else {}),
                     **({'n8n_session': state.effective_n8n_session.model_dump(),
                         'n8n_session_source': 'saved' if state.n8n_session is not None else 'legacy_default',
                         'n8n_session_effective_minutes': state.effective_n8n_session.timeout_minutes}

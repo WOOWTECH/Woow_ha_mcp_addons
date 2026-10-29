@@ -4,6 +4,9 @@ Only administrators see nonsecret fields and presence flags. Omission keeps byte
 null clears only nullable fields. Existing credentials may be reused at a deliberately
 changed destination, so clients must present that choice and bind the saved revision.
 """
+from urllib.parse import unquote
+
+from .redact import secret_values
 
 FIELDS = {
     'n8n': ('url', 'key', 'mcp_access_token'),
@@ -29,8 +32,29 @@ def _values(state):
 def view(state):
     values = _values(state)
     fields = FIELDS[state.product]
+    # Public field names do not guarantee public contents: credentials can be
+    # embedded in URL paths (including reversible percent encodings). Withhold
+    # the whole display value, never a mask that could be accidentally saved.
+    secrets = set(secret_values(state)) | {value for name, value in values.items()
+                                         if name in SECRETS and isinstance(value, str) and value}
+    public, withheld = {}, []
+    for name in fields:
+        if name in SECRETS:
+            continue
+        value = values.get(name)
+        decoded = value
+        while isinstance(decoded, str):
+            if any(secret in decoded for secret in secrets):
+                withheld.append(name)
+                value = None
+                break
+            next_value = unquote(decoded)
+            if next_value == decoded:
+                break
+            decoded = next_value
+        public[name] = value
     return {'contract': 'woow-connection-patch-v1',
-            'values': {name: values.get(name) for name in fields if name not in SECRETS},
+            'values': public, 'withheld_fields': withheld,
             'secret_set': {name: values.get(name) is not None for name in fields if name in SECRETS}}
 
 
