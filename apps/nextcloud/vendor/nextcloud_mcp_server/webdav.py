@@ -2,21 +2,19 @@
 
 from __future__ import annotations
 
-import base64
 import json
-import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC
 from email.utils import parsedate_to_datetime
 from typing import Any
-from urllib.parse import quote
 from xml.etree.ElementTree import Element
 
 from defusedxml import ElementTree as SafeET
 from defusedxml.common import DefusedXmlException
 from fastmcp.exceptions import ToolError
 
-from .errors import INVALID_RESPONSE, with_code
+from .errors import INVALID_RESPONSE, mask_credentials, with_code
 from .paths import normalize_etag
 
 DAV = "DAV:"
@@ -141,16 +139,19 @@ def parse_multistatus(body: bytes) -> list[DavResponse]:
     return results
 
 
-SERVER_MESSAGE_LIMIT = 1000
+SERVER_MESSAGE_LIMIT = 1000  # WOOW HA add-on 0.2.1 (upstream 200): characters of Nextcloud's text
 
 
-def server_message(body: bytes, *, credentials: tuple[str, ...] = ()) -> str | None:
-    """The backend's own error message, whitespace folded and cut to SERVER_MESSAGE_LIMIT characters.
+def server_message(body: bytes, *, credentials: Iterable[str] = ()) -> str | None:
+    """Nextcloud's own error message, for an error message.
 
     WOOW HA add-on 0.2.1 (owner decision 2026-10-15: raw backend errors): a Sabre ``<s:message>`` (WebDAV/CalDAV)
     as upstream, and also an OCS ``meta/message`` (XML or JSON), a JSON ``message``/``error`` and a short plain-text
-    body; HTML pages give nothing. Known credentials are replaced before folding/truncation;
-    the gateway additionally redacts its own tokens from the final MCP reply.
+    body; HTML pages give nothing. As upstream, every known form of ``credentials`` is masked
+    first (errors.mask_credentials); only then is whitespace folded and the text cut to
+    :data:`SERVER_MESSAGE_LIMIT` characters, so neither step can turn a credential into a
+    fragment that no longer matches. The gateway additionally redacts its own tokens from the
+    final MCP reply.
     """
     if not body or len(body) > 65536:
         return None
@@ -179,22 +180,8 @@ def server_message(body: bytes, *, credentials: tuple[str, ...] = ()) -> str | N
         message = text
     if not message:
         return None
-    # Match the existing diagnostics.scrub_line credential encodings, plus the
-    # gateway's URL-safe/unpadded Basic forms. One pass never re-scrubs the mask.
-    variants = set()
-    for value in credentials:
-        if not value:
-            continue
-        variants.update((value, quote(value, safe=""), json.dumps(value)[1:-1]))
-        for encode in (base64.b64encode, base64.urlsafe_b64encode):
-            encoded = encode(value.encode()).decode()
-            variants.update((encoded, encoded.rstrip("=")))
-    if variants:
-        pattern = "|".join(re.escape(value) for value in sorted(variants, key=len, reverse=True))
-        message = re.sub(pattern, lambda _: "[REDACTED]", message)
-    message = " ".join(message.split())
+    message = " ".join(mask_credentials(message, credentials).split())
     return message[:SERVER_MESSAGE_LIMIT] or None
-
 
 
 def http_date_to_iso(value: str | None) -> str | None:

@@ -281,13 +281,13 @@
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/8aa6be3d034509e43b4501c1d3da1523f6a299e5",
     "path": "nextcloud_mcp_server/__init__.py",
-    "upstream_sha256": "0f541abd284ed5379955acb5c8e52b56911024f2dbaf188a251bfb1be2842ff9"
+    "upstream_sha256": "ca4f898ad6970c83760a031a353d48dc735860b9970f3f33a24742a7ae9047b6"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/8aa6be3d034509e43b4501c1d3da1523f6a299e5",
     "path": "nextcloud_mcp_server/server.py",
     "upstream_sha256": "fa2f912301bd0d3eabeadfe5dba304f9db9fa869de5f91ea9f53f62e6fe129b2",
     "local_sha256": "eb25088dc4d2158f1583e53b682d753711941bfc2352a2890ef6f6693fd3a108",
@@ -295,61 +295,61 @@
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/8aa6be3d034509e43b4501c1d3da1523f6a299e5",
     "path": "nextcloud_mcp_server/settings.py",
     "upstream_sha256": "d8283658375f65ec0022a5e04e48d0109e14d49a8df1f7e6c8fcbd905ebb45ad"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/8aa6be3d034509e43b4501c1d3da1523f6a299e5",
     "path": "nextcloud_mcp_server/client.py",
-    "upstream_sha256": "303355520e6465fd8919c0e631151d5220c7703bfd7cde801a41daf2cdf90db8",
-    "local_sha256": "26d45cc8b9c5339a154f260160d042c9fbc68f2614a9f30015bdf214679f8881",
-    "modification": "WOOW HA add-on: load_backend_policy() refuses to start (BackendPolicyError, exit 2) when no backend_policy module exists, instead of falling back to an unrestricted client. 0.2.0: the upstream error-body detail (server_message of a non-2xx answer) is reported again, as upstream. 0.2.1: Nextcloud's own error message (Sabre, OCS or plain text, 1000 characters) is relayed for every non-2xx status: server_message reads it, client.py reads it for 5xx too, status_message appends ' Nextcloud: <message>'. 2026-10-29: redact the configured Nextcloud app password and username:password (raw, URL-quoted, JSON-escaped, standard/URL-safe and unpadded base64 forms) after detail extraction but before whitespace folding and the 1000-character bound. Gateway exact-value redaction alone missed reversible encodings, folded passwords and truncated fragments. Preserve the owner detailed-error policy, public codes and auth latch. See docs/provenance/nextcloud-error-secrets-20261029.md."
+    "upstream_sha256": "ebc19b1faf64c7b952b66545738356cf01e2f075bb4384343fdbe74052fbb3f0",
+    "local_sha256": "d68fded078c54a4e4248c9d209980d7b9bdb8a15d3c4bf6df4d01670957abebf",
+    "modification": "WOOW HA add-on: load_backend_policy() refuses to start (BackendPolicyError, exit 2) when no backend_policy module exists, instead of falling back to an unrestricted client. 0.2.0: the upstream error-body detail (server_message of a non-2xx answer) is reported again, as upstream. 0.2.1: Nextcloud's own error message (Sabre, OCS or plain text, 1000 characters) is relayed for every non-2xx status: server_message reads it, client.py reads it for 5xx too, status_message appends ' Nextcloud: <message>'. 2026-10-29 (0.4.4): the configured app password and username:password were passed to server_message and masked before whitespace folding and the 1000-character bound (docs/provenance/nextcloud-error-secrets-20261029.md). 0.4.7 (upstream v0.1.6): upstream passes the same two credentials and masks them itself (errors.mask_credentials), for statuses below 500 only; the local change is only that the same masked call also runs for 5xx, whose detail HA relays. Public codes, isError and the auth latch (401/429 before the body is read) are unchanged. See docs/provenance/nextcloud-mcp-0.1.6-20261030.md."
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/8aa6be3d034509e43b4501c1d3da1523f6a299e5",
     "path": "nextcloud_mcp_server/errors.py",
-    "upstream_sha256": "47c695afd7d99a050abc08e1bd431d8d3b31e923dd66fe4fdbbe349f07888800",
-    "local_sha256": "df1ccbd7590f8868b8297c0be57e00b532fd49786787bebfa94b3e0641609432",
-    "modification": "WOOW HA add-on 0.2.1 (owner decision 2026-10-15: raw backend errors). 0.2.1: Nextcloud's own error message (Sabre, OCS or plain text, 1000 characters) is relayed for every non-2xx status: server_message reads it, client.py reads it for 5xx too, status_message appends ' Nextcloud: <message>'."
+    "upstream_sha256": "add1c055407964f346835e331530cf3cc9c73803234ebc79e0a580f788003f2b",
+    "local_sha256": "fcb45f44cac902a4f6e7ffd29eff3e3f67802cdaa1a2032c2044a92f253bc182",
+    "modification": "WOOW HA add-on 0.2.1 (owner decision 2026-10-15: raw backend errors). 0.2.1: Nextcloud's own error message (Sabre, OCS or plain text, 1000 characters) is relayed for every non-2xx status: server_message reads it, client.py reads it for 5xx too, status_message appends ' Nextcloud: <message>'. 0.4.7 (upstream v0.1.6): REDACTED, credential_forms and mask_credentials are upstream code, unmodified; only status_message is local."
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/8aa6be3d034509e43b4501c1d3da1523f6a299e5",
     "path": "nextcloud_mcp_server/paths.py",
     "upstream_sha256": "806f187a9ad668c89ddfa71c4e827ac78f69e9649493fd76228a17683e4b7c4d"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/8aa6be3d034509e43b4501c1d3da1523f6a299e5",
     "path": "nextcloud_mcp_server/webdav.py",
-    "upstream_sha256": "56aa67abf1a1cea641be2a7704d09bd51e9682b441a07189744f0c48494aa4eb",
-    "local_sha256": "b0e79f7446957f775a53e78444e0071c43b5c0c725a8c958bd9e68d6c64c83a5",
-    "modification": "WOOW HA add-on 0.2.1 (owner decision 2026-10-15: raw backend errors). 0.2.1: Nextcloud's own error message (Sabre, OCS or plain text, 1000 characters) is relayed for every non-2xx status: server_message reads it, client.py reads it for 5xx too, status_message appends ' Nextcloud: <message>'. 2026-10-29: redact the configured Nextcloud app password and username:password (raw, URL-quoted, JSON-escaped, standard/URL-safe and unpadded base64 forms) after detail extraction but before whitespace folding and the 1000-character bound. Gateway exact-value redaction alone missed reversible encodings, folded passwords and truncated fragments. Preserve the owner detailed-error policy, public codes and auth latch. See docs/provenance/nextcloud-error-secrets-20261029.md."
+    "upstream_sha256": "9ad656234100ea2a83603e9aa39f9bd01e027535670cb26dd6960e7d8fd2c5e8",
+    "local_sha256": "5a0ee7e6c896579faf5f48ebbc1578b7645d12c2cb55428f60a50df18f487ded",
+    "modification": "WOOW HA add-on 0.2.1 (owner decision 2026-10-15: raw backend errors). 0.2.1: Nextcloud's own error message (Sabre, OCS or plain text, 1000 characters) is relayed for every non-2xx status: server_message reads it, client.py reads it for 5xx too, status_message appends ' Nextcloud: <message>'. server_message also reads an OCS meta/message (XML or JSON), a JSON message/error and a plain-text body (HTML gives nothing) and keeps SERVER_MESSAGE_LIMIT = 1000 characters (upstream 200). 0.4.7 (upstream v0.1.6): masking is upstream errors.mask_credentials at the upstream position (after extraction, before whitespace folding and the length bound), for every extracted format. The local 2026-10-29 routine (literal, URL-quoted, JSON-escaped, standard/URL-safe and unpadded base64) is removed: upstream covers each of its forms and adds JSON '\\/' escapes, the non-ASCII JSON form and merging of overlapping occurrences. See docs/provenance/nextcloud-mcp-0.1.6-20261030.md."
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/8aa6be3d034509e43b4501c1d3da1523f6a299e5",
     "path": "nextcloud_mcp_server/caldav.py",
     "upstream_sha256": "a6643700ae4f2b9c998020cd4ba0e4f03c3716fc33049ec1364eb39c742c921f"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/8aa6be3d034509e43b4501c1d3da1523f6a299e5",
     "path": "nextcloud_mcp_server/ical.py",
     "upstream_sha256": "531ca3c58684ea1c7dd504b440703c80699ccbf024278e568121195d9738b9af"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/8aa6be3d034509e43b4501c1d3da1523f6a299e5",
     "path": "nextcloud_mcp_server/tools.py",
     "upstream_sha256": "9b22f15816e56e6808a509886d89f52a04152dec99bf9078ccd257e098fb4aa4"
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/4e09c86f8ee66f147a2d227e7ed1eb9d989394a6",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/8aa6be3d034509e43b4501c1d3da1523f6a299e5",
     "path": "LICENSE",
     "upstream_sha256": "1b05bfafc14067beabe8885c164528c122ebf545eabe97984b222fe377143a69"
   },

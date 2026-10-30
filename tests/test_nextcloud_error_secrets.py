@@ -11,6 +11,10 @@ from test_six_hardening import Quiet, call, runtime, serve
 
 PASSWORD = 'FAKE-nc-pass/+"quoted-4917'
 DIAGNOSTIC = 'FAKE storage temporarily unavailable'
+# 0.4.7 (vendored upstream v0.1.6, errors.mask_credentials): forms the 0.4.4 HA routine did not mask. A password
+# whose Basic value contains '/', and a periodic password whose occurrences overlap.
+SLASHED = 'FAKE-nc-basic??~-4917'
+PERIODIC = 'FAKE-nc-overlap-' * 2
 
 
 def error_result(response):
@@ -21,9 +25,10 @@ def error_result(response):
 
 
 @pytest.mark.parametrize('json_response', [False, True], ids=['sse', 'json'])
-@pytest.mark.parametrize('form', ['raw', 'basic', 'url', 'json', 'base64', 'folded', 'cut'])
+@pytest.mark.parametrize('form', ['raw', 'basic', 'url', 'json', 'base64', 'folded', 'cut',
+                                  'json-slash', 'basic-slash', 'overlap'])
 async def test_configured_secret_in_backend_detail(tmp_path, caplog, capfd, json_response, form):
-    password = 'FAKE-nc-pass  spaced-4917' if form == 'folded' else PASSWORD
+    password = {'folded': 'FAKE-nc-pass  spaced-4917', 'basic-slash': SLASHED, 'overlap': PERIODIC}.get(form, PASSWORD)
     fake = NextcloudFake(password=password)
     encoded = {
         'raw': PASSWORD,
@@ -33,6 +38,11 @@ async def test_configured_secret_in_backend_detail(tmp_path, caplog, capfd, json
         'base64': base64.b64encode(PASSWORD.encode()).decode(),
         'folded': ' '.join(password.split()),
         'cut': password[:16],
+        # JSON may write '/' as '\/' (PHP json_encode does by default; Nextcloud is PHP).
+        'json-slash': json.dumps(PASSWORD)[1:-1].replace('/', '\\/'),
+        'basic-slash': base64.b64encode(f'tester:{SLASHED}'.encode()).decode().replace('/', '\\/'),
+        # Echoed as password + its first half: the part a non-overlapping replacement leaves.
+        'overlap': PERIODIC[:16],
     }[form]
     mode = {'status': 500, 'shape': 'json'}
     seen = []
@@ -48,6 +58,8 @@ async def test_configured_secret_in_backend_detail(tmp_path, caplog, capfd, json
                 detail = f'{DIAGNOSTIC}; credential echo {password}; end diagnostic'
             elif form == 'cut':
                 detail = DIAGNOSTIC + 'x' * (984 - len(DIAGNOSTIC)) + password
+            elif form == 'overlap':
+                detail = f'{DIAGNOSTIC}; credential echo {password}{encoded}; end diagnostic'
             if mode['shape'] == 'sabre':
                 body = ('<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">'
                         f'<s:message>{escape(detail)}</s:message></d:error>').encode()

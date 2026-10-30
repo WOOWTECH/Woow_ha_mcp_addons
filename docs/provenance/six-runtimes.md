@@ -12,7 +12,7 @@
 | OpenDesign | 同 SHA，app `opendesign_mcp_server/od_mcp_server.py` only | app MIT，`apps/opendesign/vendor/LICENSE`；原 vendor header 提及 `d6d157a` 的獨立完整來源鏈仍待查證 |
 | EMQX | PUBLIC `WOOWTECH/Woow_emqx_mcp_server@1be17bad5aef6c7b7519686ccbfe1d80762bc10e` | MIT，`apps/emqx/vendor/LICENSE`；不是現行 image→commit attestation |
 | LiteLLM | PUBLIC `WOOWTECH/Woow_litellm_mcp_server@4d4190369216a2d068d1100d53406a67a1d81609` | MIT，`apps/litellm/vendor/LICENSE`；不是現行 image→commit attestation |
-| Nextcloud（0.1.7，未發佈） | PUBLIC `WOOWTECH/Woow_nextcloud_mcp_server@4e09c86f8ee66f147a2d227e7ed1eb9d989394a6`（tag v0.1.5；上游在 `src/` 底下，`vendor_runtimes.py` 以 `SOURCE_PREFIX` 對應） | MIT，`apps/nextcloud/vendor/LICENSE`；尚無映像 |
+| Nextcloud（0.1.7 起） | PUBLIC `WOOWTECH/Woow_nextcloud_mcp_server@8aa6be3d034509e43b4501c1d3da1523f6a299e5`（v0.1.6，0.4.7 起；0.1.7–0.4.6 是 tag v0.1.5 `4e09c86f8ee66f147a2d227e7ed1eb9d989394a6`；上游在 `src/` 底下，`vendor_runtimes.py` 以 `SOURCE_PREFIX` 對應） | MIT，`apps/nextcloud/vendor/LICENSE`；不是現行 image→commit attestation |
 
 逐檔 upstream SHA256／本地修改 SHA256 見 `runtime-sources.json`，由 drift tests 驗證。`scripts/vendor_runtimes.py` 是明確 allowlist：只抓必要 runtime `.py` 與 LICENSE；不下載 repository archive/history、admin/UI、deployment、examples、設定或 credentials。既有 vendor 目錄拒絕覆寫，更新需另 staging 及 review。Hermes/OpenDesign 不匯入 legacy shared core/UI/launcher。
 
@@ -34,6 +34,9 @@
   本地只留三處（逐檔原因見 `runtime-sources.json`）：① client.py：沒有 `backend_policy` 就拒絕啟動（不退回無限制的 client），非預期狀態的
   錯誤 body（Sabre 訊息）不讀；② server.py：子程序私有 `woow_backend_probe`，每次以新 client 呼叫上游 `probe()`，只回 ok／user id，
   不佔工具的連線，共用同一組憑證的鎖存，不在 `ALL_TOOLS`，gateway 不列出也不授權；③ tools.py：錯誤訊息不帶後端給的使用者路徑。
+  0.4.7 起 vendored 上游 v0.1.6（8aa6be3）：tools.py 已無本地修改；本地修改是 client.py（沒有 `backend_policy` 就拒絕啟動；5xx 也讀
+  Nextcloud 自己的訊息）、errors.py（`status_message` 附上 Nextcloud 原文）、server.py（`woow_backend_probe`）、webdav.py（OCS／JSON／純文字
+  擷取與 1000 字上限）。憑證遮罩改用上游 `errors.mask_credentials`，原本的本地遮罩程式移除（見 `nextcloud-mcp-0.1.6-20261030.md`）。
 - 新 adapter hashes、guarded wheel/SDK sources、修改理由見 `runtime-patches.json`；inventory 包含 launcher/helper digests，升級需重新審查。
 - 共用 `products.py`、`run_product.py`、tests/scripts、既有 boundary 擴展是本次新寫／修改，不直接複製 legacy shared 授權不明程式。未納入的 legacy shared 授權疑義不作此新寫程式永久 blocker。
 

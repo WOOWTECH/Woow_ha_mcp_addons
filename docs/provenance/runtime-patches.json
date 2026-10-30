@@ -381,9 +381,9 @@
     {
       "path": "packages/mcp-admin-core/mcp_admin_core/output_schemas.py",
       "sha256": "a4e184c3d64b8877c63160871bfd7c6287cc74391e621105c185d6babc703953",
-      "change": "0.4.6: Finite bounded schema vocabulary and exact canonical product/tool/schema pins for 43 reviewed contracts. No refs, patterns, formats or resolver. Unknown/missing/changed live contracts are omitted; corrupt registry fails closed and returned values are fresh copies.",
+      "change": "0.4.6: Finite bounded schema vocabulary and exact canonical product/tool/schema pins for 43 reviewed contracts. No refs, patterns, formats or resolver. Unknown/missing/changed live contracts are omitted; corrupt registry fails closed and returned values are fresh copies. 0.4.7: re-reviewed the Nextcloud source pin for the vendored upstream v0.1.6 errors.py, whose only changes are the credential-masking helpers (REDACTED, credential_forms, mask_credentials) and the unchanged local status_message; no TypedDict, handler or registration changed, so the eight Nextcloud schemas and their bindings are unchanged.",
       "guarded_sources": {
-        "packages/mcp-admin-core/mcp_admin_core/output_schemas.json": "58a985f13da00d84c0681ee92299867f62caa9f18a87ef3609455fccfcd00826"
+        "packages/mcp-admin-core/mcp_admin_core/output_schemas.json": "2024ce445c327cf0548e204dd726b4c606f9d2893b7fc0d29ff2d12e041cd0ea"
       }
     }
   ]
