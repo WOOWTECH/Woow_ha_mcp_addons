@@ -16,6 +16,36 @@ import supply_chain as s
 
 
 class SupplyChainTests(unittest.TestCase):
+    def test_python_base_includes_compromised_certificate_distrust_fix(self):
+        # PSF CVE-2026-115557: Python 3.13 before 3.13.18 is affected.
+        # Require both build-time dependencies and runtime to use the same fixed,
+        # immutable official base, including retained/retired source Dockerfiles.
+        inputs = json.loads((s.ROOT / 'packaging/inputs.json').read_text())
+        base = inputs['bases']['python']
+        match = re.fullmatch(r'python:3\.13\.(\d+)-slim-bookworm@sha256:[0-9a-f]{64}', base)
+        self.assertIsNotNone(match)
+        self.assertGreaterEqual(int(match[1]), 18)
+        for path in sorted((s.ROOT / 'apps').glob('*/Dockerfile')):
+            with self.subTest(product=path.parent.name):
+                stages = re.findall(r'^FROM\s+(\S+)\s+AS\s+(dependencies|runtime)$', path.read_text(), re.M)
+                self.assertEqual(stages, [(base, 'dependencies'), (base, 'runtime')])
+
+    def test_fixed_critical_python_certificate_vulnerability_still_blocks(self):
+        # Actual gate shape from 2026-10-30, not a scanner-success fixture.
+        package = {'type': 'binary', 'name': 'python', 'version': '3.13.16',
+                   'licenses': [{'value': 'PSF-2.0'}]}
+        report = {'descriptor': {'name': 'grype', 'version': s.pins()['grype']['version'],
+                  'db': {'schemaVersion': '6.1.10', 'checksum': 'a' * 64,
+                         'built': datetime.now(timezone.utc).isoformat()}},
+                  'matches': [{'artifact': package, 'vulnerability': {
+                      'id': 'CVE-2026-115557', 'severity': 'Critical',
+                      'fix': {'state': 'fixed', 'versions': ['3.13.18']}}}]}
+        clean = copy.deepcopy(report)
+        clean['matches'] = []
+        s.enforce_policy({'artifacts': [package]}, clean)
+        with self.assertRaises(s.Closed):
+            s.enforce_policy({'artifacts': [package]}, report)
+
     def test_policy_unknown_missing_and_high_vulnerabilities_deny(self):
         sbom = {'artifacts': [{'name': 'fixture', 'licenses': [{'value': 'MIT'}]}]}
         report = {'matches': [], 'descriptor': {'name': 'grype', 'version': s.pins()['grype']['version'],
