@@ -1,7 +1,7 @@
-## 0.4.9 — release candidate (images pending)
+## 0.4.9 — source only (disabled)
 
 - Synchronize source version only. OpenDesign remains disabled; no OpenDesign image is planned.
-- Fresh exact-source image gates and publication evidence are pending; see ../../docs/operations/release-decision-0.4.9.md.
+- OpenDesign remains disabled: no 0.4.9 image was built, gated or published. Source version synchronization only; see ../../docs/operations/release-decision-0.4.9.md.
 
 ## 0.4.8 — release candidate (2026-10-30; images pending)
 

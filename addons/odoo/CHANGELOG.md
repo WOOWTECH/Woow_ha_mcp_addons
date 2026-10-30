@@ -1,7 +1,7 @@
-## 0.4.9 — release candidate (images pending)
+## 0.4.9 — images published and verified
 
 - Synchronize 0.4.9 release metadata with the Hermes session deletion correction; this product retains the reviewed 0.4.8 behavior and dependency pins.
-- Fresh exact-source image gates and publication evidence are pending; see ../../docs/operations/release-decision-0.4.9.md.
+- Exact-source image `ghcr.io/woowtech/amd64-mcp-odoo@sha256:712797b4d9c26dd537116d7604ee09baa4d552c1d44e3aa2e38cf7ea8d947fdf` passed P1–P5, anonymous verification and fresh remote layer/diffID checks. See ../../docs/provenance/release-0.4.9-images.json and ../../docs/operations/release-decision-0.4.9.md. Stable Release/Store distribution and actual HAOS acceptance remain separate evidence.
 
 ## 0.4.8 — release candidate (2026-10-30; images pending)
 
