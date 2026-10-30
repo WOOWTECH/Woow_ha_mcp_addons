@@ -2,7 +2,7 @@
 
 六個啟用的商店產品：Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud。**歷史版本 0.3.3：六支 canonical 映像已完成驗收、掃描與公開發布**，包含 n8n 全部 28 個工具的有效 `output` 參數正規化、六個混合工具的 selector 保護，以及 versions/test 的 `exposeToMcp` 既有 updater 有效權限檢查。新增 `conditional_writes` capability metadata，保持 28 個工具、33 個寫入 grants、schema 4 與完整功能預設；不變更 dependency／child pins 或 UI 原始碼。正常 stable Release／Store 與正式 HAOS 升級分別驗證，不由映像發布推定完成。見 [0.3.3 發布證據與驗收邊界](docs/operations/release-decision-0.3.3.md)、[不可變映像紀錄](docs/provenance/release-0.3.3-images.json)。
 
-本分支包含 **0.4.7**：管理寫入須核對設定版本，token 旋轉／撤銷與子程序重啟保留操作收據，並修正 EMQX retained 訊息錯誤傳遞及 P9 操作工具的新版 API 相容性。六個啟用產品的映像已建置、發布並匿名核對；Store 上架另由合併後同步流程完成。OpenDesign 維持停用。見 [發佈決策與驗證範圍](docs/operations/release-decision-0.4.7.md)、[映像證據](docs/provenance/release-0.4.7-images.json)及 [升級／降版說明](upgrade-notes.yaml)。
+本分支準備 **0.4.8**：Nextcloud MCP 升至上游 v0.1.6，整合憑證遮罩，保留既有輸出結構及 0.4.7 管理寫入契約。六個啟用產品的映像尚待建置與驗證；OpenDesign 維持停用。見 [發佈決策與驗證範圍](docs/operations/release-decision-0.4.8.md)及 [Nextcloud 來源紀錄](docs/provenance/nextcloud-mcp-0.1.6-20261030.md)。
 
 **0.4.3（與 PaaS 一致）**：舊版安裝（state schema 1/2/3，0.1.x 寫的）升級後**第一次啟動就一次性全開**，MCP 不再停在 503 等管理員確認；同一次原子寫入加上標記 `owner_defaults_20261025`，舊設定的限制存成 `/data/mcp/owner-defaults-20261025-recovery.json`。管理面板改成事後通知（只在管理面板與 add-on log 的一行，升級後請打開管理面板查看）：顯示「已於 <時間> 自動套用預設全開」與升級前後差異，可選「還原升級前的限制」（忠實還原：舊設定停用的工具再停用；寫入只保留舊設定授權過的，其他寫入連同新版才有的寫入操作都取消，與 0.1.x 實際能做的相同；新版才有的工具不會被停用（讀取照常可用），不再出現「全部停用」）或「保持全開，不再提示」。已是 schema 4 的設定（新安裝、0.2.0 之後、或在 0.3.0–0.4.1 升級頁確認過的）一律不動；讀不到或壞掉的設定照舊 fail-safe（不遷移、不覆寫，add-on 停止並在 log 說明）。0.4.3 的映像與正式發版須通過精確映像及商店閘；細節見 [legacy migration](docs/operations/legacy-migration.md)、[CHANGELOG](CHANGELOG.md) 與 [upgrade-notes.yaml](upgrade-notes.yaml)。
 

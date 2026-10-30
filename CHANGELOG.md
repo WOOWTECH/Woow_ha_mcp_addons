@@ -1,3 +1,9 @@
+## 0.4.8 — release candidate (2026-10-30; images pending)
+
+- Vendor Nextcloud MCP v0.1.6 (`8aa6be3`) from merged PR #41; sanitize credentials through the upstream error-handling implementation.
+- Retain the reviewed Nextcloud output-schema adaptation (`0383334`) and inherited 0.4.7 management contracts. No new tool/schema/configuration breaking change.
+- Publish six products through the existing private exact-image P1–P5 pipeline after source checks. OpenDesign remains disabled. Publication, distribution and real HAOS acceptance are separate recorded outcomes.
+
 ## 0.4.7 — release candidate (2026-10-30; images pending)
 
 - Require the exact reviewed configuration revision for every persisted admin mutation.
