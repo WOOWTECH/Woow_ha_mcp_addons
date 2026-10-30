@@ -1,7 +1,8 @@
 import { test, expect } from '../owned-fixture.mjs';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 const prefix = '/api/hassio_ingress/DUMMY';
-const evidence = process.env.UI_EVIDENCE_DIR ?? '/data/pi-agent/home/work/mcp-haos-team-runtime/reports/ui-evidence';
+const evidence = process.env.UI_EVIDENCE_DIR ?? fileURLToPath(new URL('../../test-results/mock-evidence/', import.meta.url));
 const measurements = [];
 async function reset(request, options = {}) { await request.post('/__fixture/reset', { data: options }); }
 async function calls(request) { return (await request.get('/__fixture/calls')).json(); }

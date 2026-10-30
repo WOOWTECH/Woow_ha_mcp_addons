@@ -1,5 +1,6 @@
 """Owned state and mock child only: no live HA/backend or subprocess children."""
 from contextlib import closing
+from admin_write_headers import current_headers
 import copy
 import json
 
@@ -218,24 +219,24 @@ async def test_policy_api_optional_field_validation_and_stale_roundtrip(tmp_path
                 assert bootstrap['capabilities']['capabilities']['operation_denies'] is True
                 assert bootstrap['tools'][NAME]['default_operation'] == 'list'
                 base = {'disabled': [], 'writes_enabled': False, 'enabled_write_tools': []}
-                assert (await client.put('/api/policy', headers=headers, json={**base, 'denied_operations': {NAME: ['get']}})).status_code == 200
+                assert (await client.put('/api/policy', headers=await current_headers(client, headers), json={**base, 'denied_operations': {NAME: ['get']}})).status_code == 200
                 # Both historical request shapes retain saved restrictions.
                 for old in (base, {'disabled': [], 'writes_enabled': True}):
-                    assert (await client.put('/api/policy', headers=headers, json=old)).status_code == 200
+                    assert (await client.put('/api/policy', headers=await current_headers(client, headers), json=old)).status_code == 200
                     assert store.load().denied_operations == {NAME: ['get']}
                 for denies in (None, [], {NAME: []}, {NAME: ['get', 'get']}, {NAME: [False]},
                                {NAME: 'get'}, {NAME: ['unknown']}, {'hermes_session': ['get']},
                                {'n8n_list_workflows': ['list']}):
                     before = store.path.read_bytes()
-                    response = await client.put('/api/policy', headers=headers, json={**base, 'denied_operations': denies})
+                    response = await client.put('/api/policy', headers=await current_headers(client, headers), json={**base, 'denied_operations': denies})
                     assert response.status_code == 400, response.text
                     assert store.path.read_bytes() == before
                 saved = {NAME: ['get', 'retired'], 'retired_tool': ['removed']}
                 store.update(denied_operations=saved)
-                assert (await client.put('/api/policy', headers=headers, json={**base, 'denied_operations': saved})).status_code == 200
+                assert (await client.put('/api/policy', headers=await current_headers(client, headers), json={**base, 'denied_operations': saved})).status_code == 200
                 fresh = (await client.get('/api/bootstrap', headers=IDENTITY)).json()
                 assert fresh['denied_operations'] == saved
-                assert (await client.put('/api/policy', headers=headers, json={**base, 'denied_operations': {}})).status_code == 200
+                assert (await client.put('/api/policy', headers=await current_headers(client, headers), json={**base, 'denied_operations': {}})).status_code == 200
                 assert store.load().denied_operations == {}
 
 

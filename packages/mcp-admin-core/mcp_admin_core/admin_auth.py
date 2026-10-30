@@ -10,7 +10,8 @@ from .ha_role import Unreviewed, valid_user_id
 class BadRequest(Exception):
     def __init__(self, status=400, detail=None):
         self.status = status
-        # Only denial_detail() sets it: a fixed code plus a validated, public Core version, never request data.
+        # Fixed reviewed codes, public operation receipts, or a validated Core
+        # version only. Never include credentials or raw exception messages.
         self.detail = detail
 
 

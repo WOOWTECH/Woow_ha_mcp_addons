@@ -1,4 +1,5 @@
 """LOCAL/MOCK only: no Home Assistant identity or real n8n backend."""
+from admin_write_headers import reviewed_headers, current_headers
 import json
 import os
 import stat
@@ -168,31 +169,31 @@ async def test_read_call_filter_policy_rotation_and_separate_child_secret(harnes
     text = json.dumps(bootstrap)
     assert store.load().token not in text and store.load().child_token not in text
     assert (await a.post("/api/token/rotate", headers=identity)).status_code == 403
-    identity["X-CSRF-Token"] = bootstrap["csrf"]
+    identity = reviewed_headers(bootstrap, identity)
     rotated = await a.post("/api/token/rotate", headers=identity)
     assert rotated.status_code == 200
     assert rotated.json()["token"] != headers["Authorization"][7:]
     for method in ("GET", "POST", "DELETE"):
         assert (await m.request(method, "/mcp", headers=headers, json=rpc("ping"))).status_code == 401
-    assert (await a.post("/api/token/revoke", headers=identity)).status_code == 204
+    assert (await a.post("/api/token/revoke", headers=await current_headers(a, identity))).status_code == 200
     assert (await m.get("/mcp", headers={"Authorization": "Bearer " + rotated.json()["token"]})).status_code == 401
 
 
 async def test_admin_write_enable_disable_and_no_generic_secrets(harness, store):
     a, m, calls = harness
     headers = {"X-Remote-User-Id": "admin-test"}
-    headers["X-CSRF-Token"] = (await a.get("/api/bootstrap", headers=headers)).json()["csrf"]
+    headers = reviewed_headers((await a.get("/api/bootstrap", headers=headers)).json(), headers)
     assert (await a.put("/api/policy", headers=headers, json={"writes_enabled": True, "disabled": []})).status_code == 200
     assert (await m.post("/mcp", headers={**bearer(store), "Mcp-Session-Id": "test-session"},
                          json=rpc(name="n8n_delete_workflow", arguments={"id": "MOCK"}))).status_code == 200
-    assert (await a.put("/api/backend", headers=headers, json={"url": "http://127.0.0.1:4567", "key": "MOCK-secret"})).status_code == 200
+    assert (await a.put("/api/backend", headers=await current_headers(a, headers), json={"url": "http://127.0.0.1:4567", "key": "MOCK-secret"})).status_code == 200
     text = (await a.get("/api/bootstrap", headers=headers)).text
     assert "MOCK-secret" not in text
     assert (await a.get("/api/config", headers=headers)).status_code == 404
-    assert (await a.put("/api/backend", headers=headers, json={"command": "anything"})).status_code == 400
-    assert (await a.put("/api/endpoint", headers=headers, json={"endpoint": "http://mcp.example.test:8081/mcp"})).status_code == 200
+    assert (await a.put("/api/backend", headers=await current_headers(a, headers), json={"command": "anything"})).status_code == 400
+    assert (await a.put("/api/endpoint", headers=await current_headers(a, headers), json={"endpoint": "http://mcp.example.test:8081/mcp"})).status_code == 200
     assert (await a.get("/api/bootstrap", headers=headers)).json()["endpoint"] == "http://mcp.example.test:8081/mcp"
-    assert (await a.put("/api/backend", headers=headers, json={"url": None, "key": None})).status_code == 200
+    assert (await a.put("/api/backend", headers=await current_headers(a, headers), json={"url": None, "key": None})).status_code == 200
     assert store.load().backend_key is None
     assert (await a.post("/api/token/reveal", headers=headers)).json()["token"] == store.load().token
     assert (await a.post("/api/token/reveal", headers={**headers, "X-Ingress-Path": "/other"})).status_code == 403

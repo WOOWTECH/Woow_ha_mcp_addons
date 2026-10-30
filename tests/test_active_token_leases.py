@@ -3,6 +3,7 @@
 Admin requests use the normal verified-role API with a synthetic Ingress peer.
 No HA, third-party backend, production port, or child restart is used.
 """
+from admin_write_headers import reviewed_headers
 import asyncio
 from contextlib import asynccontextmanager, contextmanager
 import json
@@ -69,7 +70,7 @@ async def fixture(tmp_path, transport=None, child_url='http://mock-child/mcp'):
                                      base_url='http://admin') as management:
             boot = (await management.get('/api/bootstrap', headers=IDENTITY)).json()
             try:
-                yield store, mcp, management, {**IDENTITY, 'x-csrf-token': boot['csrf']}, restarts
+                yield store, mcp, management, reviewed_headers(boot, IDENTITY), restarts
             finally:
                 store.close()
 
@@ -123,7 +124,7 @@ async def test_real_socket_two_established_streams_close_and_reissue_works(tmp_p
                         assert await asyncio.wait_for(anext(reader), 2) == b': opened\n\n'
                         readers.append(reader)
                     mutation = await admin.post('/api/token/' + operation, headers=headers)
-                    assert mutation.status_code == (204 if operation == 'revoke' else 200)
+                    assert mutation.status_code == 200
                     for reader in readers:
                         with pytest.raises((httpx.RemoteProtocolError, StopAsyncIteration)):
                             await asyncio.wait_for(anext(reader), 2)
@@ -132,6 +133,7 @@ async def test_real_socket_two_established_streams_close_and_reissue_works(tmp_p
                     assert (await b.post(paths[1], json=INIT)).status_code == 404
                     if operation == 'revoke':
                         assert store.load().token is None
+                        headers = reviewed_headers((await admin.get('/api/bootstrap', headers=IDENTITY)).json(), IDENTITY)
                         mutation = await admin.post('/api/token/rotate', headers=headers)
                     new = mutation.json()['token']
                     assert new != old
@@ -179,14 +181,14 @@ async def test_revocation_joins_blocked_io_and_drops_unemitted_frames(tmp_path, 
                 elif phase == 'coalesced':
                     delivered.append(message['body'])
                     reached.set()
-                    assert (await admin.post('/api/token/revoke', headers=headers)).status_code == 204
+                    assert (await admin.post('/api/token/revoke', headers=headers)).status_code == 200
                     return
             delivered.append(message.get('body', b''))
         task = asyncio.create_task(asgi_get(app, store.load().token, send))
         try:
             await asyncio.wait_for(reached.wait(), 2)
             if phase != 'coalesced':
-                assert (await admin.post('/api/token/revoke', headers=headers)).status_code == 204
+                assert (await admin.post('/api/token/revoke', headers=headers)).status_code == 200
             if phase == 'headers':
                 await asyncio.wait_for(task, 2)
             else:

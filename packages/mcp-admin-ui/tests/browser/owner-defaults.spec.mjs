@@ -71,7 +71,7 @@ test('notice shows time, schema and both difference lists on every page; restore
   await expect(page.locator('#owner-defaults')).toHaveCount(0);
   const sent = await calls(request);
   expect(sent).toEqual([{operation: 'owner-defaults/restore', method: 'POST', validCsrf: true,
-    ifMatch: `"${'1'.padStart(64, '0')}"`, fields: []}]);
+    ifMatch: `"c1-${'1'.padStart(64, '0')}"`, fields: []}]);
   await page.getByRole('navigation').getByRole('link', {name: '診斷與維護', exact: true}).click();
   const history = page.locator('#owner-defaults');
   await expect(history.getByRole('heading', {name: '升級紀錄：已還原升級前的限制', exact: true})).toBeVisible();
@@ -110,7 +110,7 @@ test('a stale revision is refused without a write and the notice stays', async (
   await expect(page.locator('#owner-defaults')).toBeVisible();
   await expect(page.locator('body')).not.toContainText('PRIVATE_CANARY');
   const [sent] = await calls(request);
-  expect(sent.ifMatch).toBe(`"${'1'.padStart(64, '0')}"`);
+  expect(sent.ifMatch).toBe(`"c1-${'1'.padStart(64, '0')}"`);
   await settle(page);
 });
 

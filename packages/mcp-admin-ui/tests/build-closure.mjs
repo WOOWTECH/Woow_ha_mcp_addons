@@ -40,9 +40,14 @@ for (const [target,source] of [
 ]) assert.deepEqual(await readFile(resolve(dist,'licenses',target)),await readFile(resolve(root,source)));
 {
   const js=await readFile(resolve(dist,'assets/app.js'),'utf8');
-  for (const marker of ['__fixture','LOCAL MOCK','localStorage','sessionStorage','INVENTED-LOCAL','make_ha_admin_verifier','upgrade_review','/api/upgrade/apply']) assert(!js.includes(marker));
-  for (const marker of ['woow-v3-exact-grants','owner-defaults/restore','owner-defaults/dismiss','X-CSRF-Token','If-Match']) assert(js.includes(marker));
+  for (const marker of ['__fixture','LOCAL MOCK','localStorage','INVENTED-LOCAL','make_ha_admin_verifier','upgrade_review','/api/upgrade/apply']) assert(!js.includes(marker));
+  for (const marker of ['woow-v3-exact-grants','owner-defaults/restore','owner-defaults/dismiss','X-CSRF-Token','If-Match','Idempotency-Key','woow-admin-operation-v1:']) assert(js.includes(marker));
 }
+// N15: sessionStorage contains only the reviewed non-secret operation identity.
+const identity=await readFile(resolve(root,'src/operation-identity.js'),'utf8');
+assert(identity.includes("{ id, route, revision, product: fresh.product }"));
+assert(identity.includes("'id,product,revision,route'"));
+for (const marker of ['localStorage','password','csrf','token:','payload:']) assert(!identity.includes(marker));
 const html=await readFile(resolve(dist,'index.html'),'utf8');
 assert(html.includes('__MCP_UI_BASE__'));
 assert.equal((html.match(/\/assets\/app\.js/g)||[]).length,1);

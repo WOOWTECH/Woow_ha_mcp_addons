@@ -51,7 +51,7 @@ test('two editors: status refresh retains draft/revision, stale save cannot repl
   const calls = await (await request.get('/__fixture/calls')).json();
   expect(calls.filter(call => call.operation === 'backend')).toHaveLength(1);
   expect(calls.filter(call => ['backend', 'endpoint'].includes(call.operation)).map(call => call.ifMatch))
-    .toEqual([`"${'1'.padStart(64, '0')}"`, `"${'1'.padStart(64, '0')}"`]);
+    .toEqual([`"c1-${'1'.padStart(64, '0')}"`, `"c1-${'1'.padStart(64, '0')}"`]);
   await page.getByRole('button', {name: '重新整理狀態', exact: true}).click();
   await expect(page.getByRole('button', {name: '儲存後端設定', exact: true})).toBeEnabled();
   await expect(page.locator('#gateway_api_key')).toHaveValue('');
@@ -84,5 +84,5 @@ test('policy draft uses its captured revision even after a fresh bootstrap', asy
   await expect(disabled).toBeChecked();
   await expect(page.getByRole('button', {name: '儲存工具權限', exact: true})).toBeDisabled();
   const calls = await (await request.get('/__fixture/calls')).json();
-  expect(calls.filter(call => call.operation === 'policy').map(call => call.ifMatch)).toEqual([`"${'1'.padStart(64, '0')}"`]);
+  expect(calls.filter(call => call.operation === 'policy').map(call => call.ifMatch)).toEqual([`"c1-${'1'.padStart(64, '0')}"`]);
 });

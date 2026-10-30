@@ -59,7 +59,31 @@ async function task(action) {
   const controls = [...root.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled)')];
   controls.forEach(node => node.disabled = true);
   try { await action(); } catch (error) { fail(error); }
-  finally { busy = false; root.removeAttribute('aria-busy'); controls.forEach(node => node.disabled = node.dataset.conflict === 'true'); }
+  finally { busy = false; root.removeAttribute('aria-busy'); controls.forEach(node => node.disabled = node.dataset.conflict === 'true'); refreshOperation(); }
+}
+function pendingOperationCard() {
+  const pending = api.pendingOperation();
+  if (!pending) return null;
+  const label = { 'token/rotate': '重新產生權杖', 'token/revoke': '撤銷權杖', 'child/restart': '重新啟動子行程' }[pending.route];
+  return card('待確認操作', p(`${label}尚未取得完成確認。此分頁已保留原操作識別碼，重新載入也不會自動重送。`),
+    p('收據最多保存 24 小時。未知結果不代表未執行；查詢與重送都需重新驗證管理權限。'),
+    el('div', { class: 'actions' }, button('查詢操作結果', () => task(async () => {
+      const receipt = await api.queryOperation();
+      if (receipt.state === 'completed') await reload('已確認先前操作完成；未再次執行，也不會顯示歷史權杖。請檢查目前狀態。');
+      else notice('收據顯示結果未知；伺服器不會再次執行相同操作。請核對目前權杖與子行程狀態。', true);
+    })), button('以原識別碼重送', async () => {
+      if (!await confirmAction('以原識別碼重送？', '已完成的操作只回傳收據；結果未知的操作不會再次執行。若伺服器尚未接受，仍會檢查原設定版本。')) return;
+      await task(async () => { await api.retryOperation(); await reload('操作已確認；請檢查目前狀態。需要權杖時請另按「顯示權杖」。'); });
+    }), button('已核對目前狀態', async () => {
+      if (!await confirmAction('結束這筆操作的追蹤？', '請先獨立核對目前狀態。這只清除此分頁的識別紀錄，不會復原或證明先前操作未執行；下一筆操作會使用新識別碼。')) return;
+      await task(async () => { api.acknowledgeOperation(); await reload('已結束此分頁的操作追蹤。'); });
+    })));
+}
+function refreshOperation() {
+  const holder = document.querySelector('#pending-operation');
+  if (!holder || !state) return;
+  try { const panel = pendingOperationCard(); holder.replaceChildren(...(panel ? [panel] : [])); }
+  catch (error) { notice(error instanceof UiError ? error.message : '操作紀錄無法讀取；請核對服務狀態。', true); }
 }
 async function reload(message) {
   hideToken();
@@ -478,6 +502,7 @@ async function copy(text) {
   catch { notice('瀏覽器未允許剪貼簿。請手動選取並複製；未自動轉往其他服務。', true); }
 }
 async function tokenAction(action) {
+  const revision = state.configuration?.revision;
   const descriptions = {
     reveal: ['顯示目前權杖？', '權杖將在此頁短暫顯示 60 秒，切換頁面或離開視窗即隱藏。請避免螢幕分享。'],
     claude: ['顯示 Claude.ai 連線網址？', '這個網址含有真實權杖，等同密碼：只貼進 Claude.ai 的自訂連接器設定，不要分享、截圖或貼到聊天。網址將短暫顯示 60 秒，切換頁面或離開視窗即隱藏。'],
@@ -488,7 +513,9 @@ async function tokenAction(action) {
   if (!await confirmAction(...descriptions[action], action === 'revoke' ? '確認撤銷' : '確認繼續')) return;
   const epoch = revealEpoch;
   await task(async () => {
-    const result = await api.mutate(`token/${action === 'claude' ? 'reveal' : action}`); // same CSRF reveal as 顯示權杖
+    const result = await api.mutate(`token/${action === 'claude' ? 'reveal' : action}`, undefined,
+      ['rotate', 'revoke'].includes(action) ? revision : undefined);
+    if (result?.operation?.replayed) { await reload('已確認先前操作完成，沒有再次執行。需要時請另按「顯示權杖」取得目前權杖。'); return; }
     if (action === 'revoke') { await reload('權杖已撤銷。舊權杖不可再使用，進行中連線已收到關閉通知；已送出的後端工作不會回復。'); return; }
     state = await api.bootstrap();
     render();
@@ -575,12 +602,13 @@ function render() {
     el('div', { class: 'shell' }, el('aside', {}, el('p', { class: 'nav-caption' }, '工作空間'), el('nav', { 'aria-label': '管理導覽' }, ...Object.entries(routes).map(([key, label]) => el('a', { href: `${api.mount}/${key}`, 'aria-current': current === key ? 'page' : null, onclick: event => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey && event.button === 0) { event.preventDefault(); if (!busy) navigate(key); } } }, icon(icons[key]), label))), el('div', { class: 'sidebar-note' }, p('設定由你掌握'), p('後端憑證只在明確更新時送出。權限由伺服器驗證。'))),
       el('main', { id: 'main' }, el('div', { class: 'page-heading' }, el('div', {}, el('p', { class: 'eyebrow' }, `${products[state.product].name} / MANAGEMENT`), el('h1', { tabindex: '-1' }, routes[current]), p({ overview: '一眼看清連線，安心管理你的服務。', backend: '把連線留在這裡，把秘密留在伺服器。', tools: '只開啟需要的能力，每次寫入都有明確授權。', access: '給用戶端正確的入口，不混用管理網址。', diagnostics: '查看受限日誌與行程狀態，必要時重新啟動。' }[current])), button('重新整理狀態', () => task(() => reload('已取得最新管理狀態。')))), el('div', { id: 'notice', role: 'status', tabindex: '-1', hidden: true }),
         ownerDefaults()?.malformed ? ownerDefaultsUnavailable() : ownerDefaults()?.notice ? ownerDefaultsCard(ownerDefaults()) : null,
-        configurationCard(state.configuration), ({ overview, backend, tools, access, diagnostics })[current](),
+        el('div', { id: 'pending-operation' }), configurationCard(state.configuration), ({ overview, backend, tools, access, diagnostics })[current](),
         current === 'backend' ? partialBackendCard() : null,
         current === 'backend' && state.product === 'n8n' ? n8nSessionCard() : null,
         current === 'tools' && state.product === 'odoo' ? odooSwitchCard() : null,
         current === 'tools' && state.product === 'odoo' ? odooMethodsCard() : null,
         el('footer', {}, `GUI 管理設定 · ${environmentLabels(state.capabilities).authority} · Streamable HTTP`))));
+  refreshOperation();
 }
 window.addEventListener('popstate', () => { hideToken(); if (state) render(); });
 window.addEventListener('pagehide', () => {

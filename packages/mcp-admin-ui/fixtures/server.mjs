@@ -11,10 +11,11 @@ import { mountPath, products, backendPayload, odooSwitchPayload, n8nSessionPaylo
 const dist = process.env.OWNED_UI_ASSET_ROOT ?? fileURLToPath(new URL('../dist/', import.meta.url));
 const prefix = '/api/hassio_ingress/DUMMY';
 const mounts = [prefix, ''];
-let config, state, calls, nonce, revision;
+let config, state, calls, nonce, revision, receipts;
 function reset(next = {}) {
   config = next;
   calls = [];
+  receipts = new Map();
   nonce = 0;
   revision = 1;
   state = {
@@ -101,7 +102,7 @@ function capabilities() {
   return result;
 }
 reset();
-const etag = () => `"${revision.toString(16).padStart(64, '0')}"`;
+const etag = () => `"c1-${revision.toString(16).padStart(64, '0')}"`;
 const configuration = () => ({revision: etag().slice(1, -1), saved_revision: 'launch-fixture',
   applied_revision: config.applyState === 'pending' || config.applyState === 'failed' ? null : 'launch-fixture',
   apply_state: config.applyState ?? 'applied', last_error_code: config.applyState === 'failed' ? 'child_start_failed' : null});
@@ -133,16 +134,29 @@ const server = http.createServer(async (request, response) => {
       // The management server's answer while HA Core advertises a version the add-on has not reviewed.
       if (config.unreviewedCore) return json(response, 403, { error: 'request denied', detail: { code: 'core_version_unreviewed', ha_version: config.unreviewedCore }, untrusted: 'MOCK PRIVATE_CANARY_MUST_NOT_RENDER' });
       nonce++;
-      return json(response, 200, { ...state, ...(config.parity ? {configuration: configuration()} : {}), capabilities:capabilities(), base_path: mount, api_base: `${mount}/api`, csrf: config.missingCsrf ? null : `mock_fresh_csrf_value_${nonce}` });
+      return json(response, 200, { ...state, ...(config.parity === false ? {} : {configuration: configuration()}), operation_contract:{version:1,server_time_ms:Date.now(),retention_ms:86400000}, capabilities:capabilities(), base_path: mount, api_base: `${mount}/api`, csrf: config.missingCsrf ? null : `mock_fresh_csrf_value_${nonce}` });
+    }
+    if (local.startsWith('/api/operations/')) {
+      if (config.deniedSave) return json(response, 403, {});
+      const saved=receipts.get(local.slice('/api/operations/'.length));
+      return saved ? json(response,200,{operation:saved.operation,result:{status:'ok'}}) : json(response,404,{detail:{code:'operation_not_found'}});
     }
     if (local.startsWith('/api/')) {
       const operation = local.slice(5);
       const payload = await body(request);
       const validCsrf = request.headers['x-csrf-token'] === `mock_fresh_csrf_value_${nonce}`;
-      calls.push({ operation, method: request.method, validCsrf, ifMatch: request.headers['if-match'], fields: Object.keys(payload ?? {}), ...(operation === 'policy' ? { policy: payload } : {}), ...(operation === 'odoo/write-switches' ? {switches:payload} : {}), ...(['backend/patch','n8n/session','odoo/allowed-methods'].includes(operation) ? {changedKeys:Object.keys(payload?.changes ?? {}), session:payload?.n8n_session, methods:payload?.odoo_allowed_methods} : {}) });
+      calls.push({ operation, method: request.method, validCsrf, ifMatch: request.headers['if-match'], ...(request.headers['idempotency-key'] ? {operationId:request.headers['idempotency-key']} : {}), fields: Object.keys(payload ?? {}), ...(operation === 'policy' ? { policy: payload } : {}), ...(operation === 'odoo/write-switches' ? {switches:payload} : {}), ...(['backend/patch','n8n/session','odoo/allowed-methods'].includes(operation) ? {changedKeys:Object.keys(payload?.changes ?? {}), session:payload?.n8n_session, methods:payload?.odoo_allowed_methods} : {}) });
       if (!validCsrf || config.deniedSave) return json(response, 403, { error: 'MOCK DENIED PRIVATE_CANARY_MUST_NOT_RENDER' });
       if (config.saveStatus) return json(response, config.saveStatus, { error: 'MOCK PRIVATE_CANARY_MUST_NOT_RENDER' });
-      if (config.parity && request.headers['if-match'] && request.headers['if-match'] !== etag()) return json(response, 409, {detail: {code: 'config_conflict'}, untrusted: 'PRIVATE_CANARY_MUST_NOT_RENDER'});
+      const kind={'token/rotate':'token.rotate','token/revoke':'token.revoke','child/restart':'mcp.restart'}[operation];
+      const operationId=request.headers['idempotency-key'];
+      if (kind && receipts.has(operationId)) {
+        const prior=receipts.get(operationId);
+        if(prior.operation.kind!==kind)return json(response,409,{detail:{code:'operation_id_conflict'}});
+        return json(response,200,{status:'ok',operation:{...prior.operation,replayed:true}});
+      }
+      if (!['token/reveal','backend/test'].includes(operation) && !request.headers['if-match']) return json(response,428,{detail:{code:'config_revision_required'}});
+      if (request.headers['if-match'] && request.headers['if-match'] !== etag()) return json(response, 409, {detail: {code: 'config_conflict'}, untrusted: 'PRIVATE_CANARY_MUST_NOT_RENDER'});
       if (operation === 'backend/test') return json(response,200,{tested_configuration:'saved',backend:'reachable',health:state.health});
       if (operation === 'owner-defaults/restore' || operation === 'owner-defaults/dismiss') {
         // MOCK of the server rules: POST, no body, If-Match of the reviewed revision, a pending marker.
@@ -164,12 +178,18 @@ const server = http.createServer(async (request, response) => {
         revision++;
         return json(response, 200, { saved: true, configuration: configuration(), owner_defaults: view });
       }
-      if (operation === 'child/restart') return json(response,202,{accepted:true,apply_state:'pending'});
+      let receipt;
+      if(kind){
+        if(!/^[0-9]{13}\.[A-Za-z0-9_-]{16,64}$/.test(operationId??''))return json(response,428,{detail:{code:'operation_id_required'}});
+        receipt={id:operationId,kind,state:'completed',replayed:false};
+        receipts.set(operationId,{operation:receipt});
+      }
+      if (operation === 'child/restart') return json(response,202,{status:'ok',operation:receipt,accepted:true,apply_state:'pending'});
       if (operation.startsWith('token/')) {
         if (request.method !== 'POST' || payload !== null) return json(response, 400, { error: 'MOCK token contract' });
-        if (operation === 'token/revoke') { state.token_active = false; response.writeHead(204); return response.end(); }
-        if (operation === 'token/rotate') state.token_active = true;
-        return json(response, 200, { token: state.token_active ? 'M'.repeat(43) : null });
+        if (operation === 'token/revoke') { state.token_active = false; revision++; return json(response,200,{status:'ok',operation:receipt}); }
+        if (operation === 'token/rotate') {state.token_active = true; revision++;}
+        return json(response, 200, { ...(receipt ? {status:'ok',operation:receipt} : {}), token: state.token_active ? 'M'.repeat(43) : null });
       }
       if (request.method !== 'PUT') return json(response, 405, {});
       if (operation === 'backend') {

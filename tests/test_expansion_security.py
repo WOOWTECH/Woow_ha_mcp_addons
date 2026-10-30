@@ -1,4 +1,5 @@
 """W2b negative invariants: no child dispatch on invalid/disabled operations."""
+from admin_write_headers import reviewed_headers
 import asyncio
 import json
 
@@ -151,7 +152,7 @@ async def test_policy_api_commits_live_denial_before_owned_restart(tmp_path, pro
             bootstrap = (await a.get('/api/bootstrap', headers=identity)).json()
             assert name in bootstrap['tools'][name]['write_grants']
             assert bootstrap['enabled_write_tools'] == [name]
-            task = asyncio.create_task(a.put('/api/policy', headers={**identity, 'x-csrf-token': bootstrap['csrf']},
+            task = asyncio.create_task(a.put('/api/policy', headers=reviewed_headers(bootstrap, identity),
                 json={'writes_enabled': False, 'disabled': [name], 'enabled_write_tools': []}))
             await asyncio.wait_for(started.wait(), 2)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://boundary') as c:

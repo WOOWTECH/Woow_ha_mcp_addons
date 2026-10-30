@@ -27,7 +27,7 @@ test('legacy all-on is visible; saving only child switches preserves outer polic
   expect(last.operation).toBe('odoo/write-switches');
   expect(last.method).toBe('PUT');
   expect(last.validCsrf).toBe(true);
-  expect(last.ifMatch).toBe(`"${'1'.padStart(64, '0')}"`);
+  expect(last.ifMatch).toBe(`"c1-${'1'.padStart(64, '0')}"`);
   expect(last.switches).toEqual({odoo_write_switches:{enable_writes:false, allow_direct_writes:false,
     allow_unknown_methods:false, chatter_direct:false}});
   expect(calls.some(call => call.operation === 'policy')).toBe(false);
