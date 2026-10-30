@@ -1,4 +1,5 @@
 import { mountPath, products, UiError } from './contracts.js';
+import { OperationIdentity, operationKinds, operationReceipt } from './operation-identity.js';
 
 // A Core release or pre-release string (the server sends only this form, ha_role.shown_version); anything else is not shown.
 const CORE_VERSION = /^[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,3}(?:(?:a|b|rc)[0-9]{1,3}|\.dev[0-9]{1,14})?$/;
@@ -11,6 +12,8 @@ export class ApiError extends UiError {
       404: '此伺服器尚未提供所需管理 API。',
       409: '設定已變更或版本不相容。請重新整理後再試。',
       422: '欄位驗證未通過。請確認 URL、必要欄位與憑證格式。',
+      428: '缺少設定版本或操作識別碼；未接受變更，請重新整理狀態。',
+      410: '操作收據已超過保存期限；請核對目前狀態，勿假設先前操作未執行。',
       503: '管理狀態暫時無法使用。請檢查服務與受保護的設定儲存。',
     };
     super(messages[status] ?? '請求未獲成功確認。請重新整理狀態，勿假設變更已套用。');
@@ -18,6 +21,11 @@ export class ApiError extends UiError {
     this.code = code;
     if (code === 'config_conflict') this.message = '設定已被其他操作更新。草稿已保留；請先重新整理狀態、檢查新設定，再重新編輯。未送出任何變更。';
     if (code === 'config_apply_failed') this.message = '設定已儲存，但子行程尚未套用成功。請重新整理套用狀態，檢查後再重試啟動。';
+    if (code === 'operation_outcome_unknown') this.message = '操作結果未知；原識別碼已保留，伺服器不會再次執行相同操作。請查詢收據並核對目前狀態。';
+    if (code === 'operation_id_conflict') this.message = '操作識別碼已用於不同操作；未再次執行，請查詢原收據。';
+    if (code === 'operation_not_found') this.message = '目前找不到你可讀取的操作收據；不代表先前操作一定未執行。請核對狀態，或以原識別碼重送。';
+    if (code === 'operation_journal_full') this.message = '操作收據已達保存上限；未接受新操作，請稍後再試。';
+    if (code === 'operation_journal_unavailable') this.message = '操作收據儲存無法使用；請檢查服務儲存，勿改用新的識別碼重複操作。';
     if (code === 'owner_defaults_unavailable') this.message = '升級通知已處理過，或升級前的限制紀錄無法使用。請重新整理狀態；未變更任何設定。';
     if (code === 'core_version_unreviewed') {
       this.haVersion = haVersion;
@@ -26,9 +34,11 @@ export class ApiError extends UiError {
   }
 }
 export class AdminApi {
-  constructor(mount, fetcher = globalThis.fetch.bind(globalThis)) {
+  constructor(mount, fetcher = globalThis.fetch.bind(globalThis), storage) {
     this.mount = mountPath(mount);
     this.fetcher = fetcher;
+    if (storage === undefined) { try { storage = globalThis.sessionStorage; } catch { storage = null; } }
+    this.operations = new OperationIdentity(this.mount, storage);
   }
   async request(path, options = {}) {
     let response;
@@ -44,7 +54,9 @@ export class AdminApi {
         code = detail?.code;
         if (code === 'core_version_unreviewed' && typeof detail.ha_version === 'string' && CORE_VERSION.test(detail.ha_version)) haVersion = detail.ha_version;
       } catch { /* non-JSON error */ }
-      const known = ['config_conflict', 'config_apply_failed', 'owner_defaults_unavailable'].includes(code) || (code === 'core_version_unreviewed' && response.status === 403);
+      const known = ['config_conflict', 'config_revision_required', 'config_apply_failed', 'owner_defaults_unavailable',
+        'operation_outcome_unknown', 'operation_id_conflict', 'operation_not_found', 'operation_id_required',
+        'operation_id_invalid', 'operation_id_expired', 'operation_journal_full', 'operation_journal_unavailable'].includes(code) || (code === 'core_version_unreviewed' && response.status === 403);
       throw new ApiError(response.status, known ? code : null, haVersion);
     }
     if (response.status === 204) return null;
@@ -64,22 +76,49 @@ export class AdminApi {
     const token = operation.startsWith('token/');
     // 2026-10-27: the one-time all-on notice actions are POSTs without a body that always need the reviewed revision.
     const notice = operation.startsWith('owner-defaults/');
-    if (notice && revision === undefined) throw new UiError('缺少設定版本；請重新整理後再試，未送出變更。');
-    if (['odoo/write-switches', 'odoo/allowed-methods', 'n8n/session', 'backend/patch'].includes(operation) && revision === undefined) throw new UiError('缺少設定版本；請重新整理後再試，未送出變更。');
+    const durable = Object.hasOwn(operationKinds, operation);
+    if (!['token/reveal', 'backend/test'].includes(operation) && revision === undefined) throw new UiError('缺少設定版本；請重新整理後再試，未送出變更。');
     const action = token || notice || ['backend/test', 'child/restart'].includes(operation);
     if (revision !== undefined && (typeof revision !== 'string' || !/^[A-Za-z0-9_-]{16,128}$/.test(revision))) throw new UiError('設定版本格式不符；請重新整理後再試。');
-    const result = await this.request(`${fresh.api_base}/${operation}`, {
+    const pending = durable ? this.operations.start(operation, revision, fresh) : null;
+    if (pending) revision = pending.revision; // Never upgrade a retried operation's reviewed revision.
+    let result;
+    try { result = await this.request(`${fresh.api_base}/${operation}`, {
       method: action ? 'POST' : 'PUT',
       headers: { 'X-CSRF-Token': fresh.csrf, ...(action ? {} : { 'Content-Type': 'application/json' }),
-        ...(revision === undefined ? {} : { 'If-Match': `"${revision}"` }) },
+        ...(revision === undefined ? {} : { 'If-Match': `"${revision}"` }),
+        ...(pending ? { 'Idempotency-Key': pending.id } : {}) },
       ...(action ? {} : { body: JSON.stringify(typeof payload === 'function' ? payload(fresh) : payload) }),
-    });
-    if (((!action || notice) && result?.saved !== true) || (operation === 'token/revoke' && result !== null)
-        || (operation === 'child/restart' && (result?.accepted !== true || result?.apply_state !== 'pending'))
+    }); } catch (error) {
+      // Only explicit refusals before accepting an intent can release identity.
+      if (pending && error instanceof ApiError && ['config_conflict', 'config_revision_required', 'operation_id_required', 'operation_id_invalid'].includes(error.code)) this.operations.clear();
+      throw error;
+    }
+    if (pending) {
+      const receipt = operationReceipt(result?.operation, pending);
+      if (receipt.state !== 'completed' || result?.status !== 'ok') throw new UiError('操作結果尚未確認；原識別碼已保留，請查詢收據。');
+      this.operations.clear();
+    }
+    if (((!action || notice) && result?.saved !== true)
         || (operation === 'backend/test' && result?.tested_configuration !== 'saved')) throw new UiError('伺服器未回傳預期確認，無法確認操作結果。請重新整理狀態。');
     return result;
   }
   async capabilities() { return this.request(`${this.mount}/api/capabilities`); }
   async diagnostics() { return this.request(`${this.mount}/api/diagnostics`); }
   async configuration() { return this.request(`${this.mount}/api/configuration`); }
+  pendingOperation() { return this.operations.get(); }
+  async queryOperation() {
+    const pending = this.pendingOperation();
+    if (!pending) throw new UiError('目前沒有待確認的操作。');
+    const result = await this.request(`${this.mount}/api/operations/${pending.id}`);
+    const receipt = operationReceipt(result?.operation, pending);
+    if (receipt.state === 'completed') this.operations.clear();
+    return receipt;
+  }
+  async retryOperation() {
+    const pending = this.pendingOperation();
+    if (!pending) throw new UiError('目前沒有待確認的操作。');
+    return this.mutate(pending.route, undefined, pending.revision);
+  }
+  acknowledgeOperation() { this.operations.clear(); }
 }

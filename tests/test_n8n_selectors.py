@@ -1,5 +1,6 @@
 """Bounded offline selector audit: pinned native guards + real HA ASGI/policy/UI contracts."""
 from contextlib import closing
+from admin_write_headers import reviewed_headers
 import json
 from pathlib import Path
 import subprocess
@@ -119,7 +120,7 @@ process.stdout.write(JSON.stringify(policyPayload(b,[],grants,denies)));'''
                 assert result.returncode == 0, result.stderr
                 payload=json.loads(result.stdout)
                 assert set(payload['enabled_write_tools']) == set(store.load().enabled_write_tools)
-                headers={**identity,'x-csrf-token':bootstrap['csrf']}
+                headers=reviewed_headers(bootstrap, identity)
                 response=await client.put('/api/policy',headers=headers,json=payload)
                 assert response.status_code==200,response.text
                 assert store.load().denied_operations==payload['denied_operations']

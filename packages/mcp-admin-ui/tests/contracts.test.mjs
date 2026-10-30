@@ -90,11 +90,11 @@ test('MOCK missing CSRF and mismatched API base stop mutation before dispatch', 
 });
 test('MOCK HTTP 200 without typed saved acknowledgement is not success', async () => {
   const api = new AdminApi(base, async path => response(path.endsWith('bootstrap') ? bootstrap() : {}));
-  await assert.rejects(() => api.mutate('endpoint', { endpoint: null }), /無法確認/);
+  await assert.rejects(() => api.mutate('endpoint', { endpoint: null }, 'c1-'+'a'.repeat(64)), /無法確認/);
 });
 test('MOCK denied save never reports success or reflects server/body credentials', async () => {
   const api = new AdminApi(base, async path => path.endsWith('bootstrap') ? response(bootstrap()) : new Response('PRIVATE_CANARY', { status: 403 }));
-  await assert.rejects(() => api.mutate('backend', { url: null, key: null }), error => error instanceof ApiError && error.status === 403 && !error.message.includes('PRIVATE_CANARY'));
+  await assert.rejects(() => api.mutate('backend', { url: null, key: null }, 'c1-'+'a'.repeat(64)), error => error instanceof ApiError && error.status === 403 && !error.message.includes('PRIVATE_CANARY'));
 });
 test('Claude.ai connector URL: saved /mcp endpoint base + /private_<token>/mcp, never without an endpoint or valid token', () => {
   const token = 'A'.repeat(21) + '-_' + 'z'.repeat(20);

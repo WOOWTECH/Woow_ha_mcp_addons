@@ -5,6 +5,7 @@ write grant and writes_enabled true and no disabled tool; the migration runs onc
 endpoint. After that the panel's choices are kept: a revoked grant or a disabled tool stays so across restarts.
 """
 from contextlib import closing
+from admin_write_headers import reviewed_headers
 import json
 from pathlib import Path
 import subprocess
@@ -216,7 +217,7 @@ console.log(JSON.stringify(policyPayload(b, [], ticked)));
                 assert probe.returncode == 0, probe.stderr
                 payload = json.loads(probe.stdout)
                 assert payload['writes_enabled'] is False and grant not in payload['enabled_write_tools']
-                response = await client.put('/api/policy', headers={**identity, 'x-csrf-token': bootstrap['csrf']},
+                response = await client.put('/api/policy', headers=reviewed_headers(bootstrap, identity),
                                             json=payload)
                 assert response.status_code == 200, response.text
         expected = sorted(grants_of(product) - {grant})

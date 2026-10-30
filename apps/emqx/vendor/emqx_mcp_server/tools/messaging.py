@@ -54,8 +54,10 @@ async def _direct_lookup(emqx: httpx.AsyncClient, topic: str) -> dict | None:
     try:
         body = json_body(await emqx_request(
             emqx, "GET", f"/mqtt/retainer/message/{quote(topic, safe='')}"))
-    except EmqxApiError:
-        return None
+    except EmqxApiError as exc:
+        if exc.status_code == 404:
+            return None
+        raise
     return body if isinstance(body, dict) and body else None
 
 
@@ -251,20 +253,9 @@ def register(mcp: FastMCP, gate: ToolGate) -> None:
             entry or a ghost device state. It cannot be undone — the previous
             payload is gone unless something republishes it.
             """
-            try:
-                await emqx_request(
-                    emqx, "DELETE",
-                    f"/mqtt/retainer/message/{quote(topic, safe='')}")
-                return {"topic": topic, "deleted": True, "method": "delete"}
-            except EmqxApiError:
-                pass
-
-            # Fallback for brokers that refuse the direct endpoint: clear the
-            # topic the way MQTT itself does, by publishing an empty retained
-            # payload. Subscribers see this as a real message.
-            await emqx_request(emqx, "POST", "/publish", json={
-                "topic": topic, "payload": "", "qos": 0, "retain": True,
-                "payload_encoding": "plain",
-            })
-            return {"topic": topic, "deleted": True,
-                    "method": "empty_retained_publish"}
+            # A failed DELETE may already have taken effect. Never follow it
+            # with a publish: subscribers would receive a second operation.
+            await emqx_request(
+                emqx, "DELETE",
+                f"/mqtt/retainer/message/{quote(topic, safe='')}")
+            return {"topic": topic, "deleted": True, "method": "delete"}

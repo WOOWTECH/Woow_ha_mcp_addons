@@ -33,12 +33,13 @@ test('unknown counts and deployment labels do not imply read-only or HA authorit
 });
 for (const operation of ['backend/test', 'child/restart']) test(`${operation} requires fresh CSRF and sends no form values`, async () => {
   const calls=[];
+  const data=new Map();const storage={getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)};
   const api=new AdminApi('/mount', async (path, options) => {
     calls.push({path,options});
-    return new Response(JSON.stringify(path.endsWith('bootstrap') ? {product:'n8n',base_path:'/mount',api_base:'/mount/api',csrf:'fresh_csrf_value_1234'} :
-      operation === 'backend/test' ? {tested_configuration:'saved'} : {accepted:true,apply_state:'pending'}), {status:200});
-  });
-  await api.mutate(operation, {password:'SHOULD_NOT_SEND'});
+    return new Response(JSON.stringify(path.endsWith('bootstrap') ? {product:'n8n',base_path:'/mount',api_base:'/mount/api',csrf:'fresh_csrf_value_1234',operation_contract:{version:1,server_time_ms:Date.now()}} :
+      operation === 'backend/test' ? {tested_configuration:'saved'} : {status:'ok',operation:{id:options.headers['Idempotency-Key'],kind:'mcp.restart',state:'completed',replayed:false},accepted:true,apply_state:'pending'}), {status:200});
+  },storage);
+  await api.mutate(operation, {password:'SHOULD_NOT_SEND'}, 'c1-'+'a'.repeat(64));
   assert.equal(calls.length,2);
   assert.equal(calls[1].options.method,'POST');
   assert.equal(calls[1].options.headers['X-CSRF-Token'],'fresh_csrf_value_1234');

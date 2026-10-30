@@ -597,7 +597,7 @@ async def test_the_panel_restores_once_with_csrf_role_and_the_reviewed_revision(
             before = store.path.read_bytes()
             assert (await client.post('/api/owner-defaults/restore', headers=IDENTITY)).status_code == 403
             missing = await client.post('/api/owner-defaults/restore', headers=csrf)
-            assert missing.status_code == 428 and missing.json()['detail']['code'] == 'precondition_required'
+            assert missing.status_code == 428 and missing.json()['detail']['code'] == 'config_revision_required'
             stale = await client.post('/api/owner-defaults/restore', headers={**csrf, 'if-match': '"c1-' + '0' * 64 + '"'})
             assert stale.status_code == 409 and stale.json()['detail']['code'] == 'config_conflict'
             body = await client.post('/api/owner-defaults/restore', headers={**csrf, 'if-match': boot.headers['etag']},

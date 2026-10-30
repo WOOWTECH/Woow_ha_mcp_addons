@@ -1,4 +1,5 @@
 """Owned loopback WS only; never HA. All machine credentials are dummy values."""
+from admin_write_headers import reviewed_headers
 import asyncio
 from contextlib import asynccontextmanager
 import json
@@ -442,7 +443,7 @@ async def test_denied_fresh_action_no_mutation_or_disclosure(tmp_path, monkeypat
         async with gateway(tmp_path, verify) as (store, client, _, __):
             initial = store.path.read_bytes()
             headers = dict(IDENTITY)
-            headers["X-CSRF-Token"] = (await client.get("/api/bootstrap", headers=headers)).json()["csrf"]
+            headers = reviewed_headers((await client.get("/api/bootstrap", headers=headers)).json(), headers)
             seen["response"] = result([user(is_active=False)])
             response = await client.request(method, "/api/" + operation, headers=headers, json=payload)
             assert response.status_code == 403
@@ -456,7 +457,7 @@ async def test_body_and_validation_precede_fresh_query(tmp_path, monkeypatch):
     async with owned_provider(monkeypatch) as (verify, seen, _):
         async with gateway(tmp_path, verify) as (store, client, _, __):
             headers = dict(IDENTITY)
-            headers["X-CSRF-Token"] = (await client.get("/api/bootstrap", headers=headers)).json()["csrf"]
+            headers = reviewed_headers((await client.get("/api/bootstrap", headers=headers)).json(), headers)
             initial = store.path.read_bytes()
             for data in ({"writes_enabled": "true", "disabled": []}, {"bad": True}):
                 assert (await client.put("/api/policy", headers=headers, json=data)).status_code == 400
@@ -481,7 +482,7 @@ async def test_queued_demotion_checks_after_lock(tmp_path, monkeypatch):
     async with owned_provider(monkeypatch) as (verify, seen, _):
         async with gateway(tmp_path, verify, changed=changed) as (store, client, _, __):
             headers = dict(IDENTITY)
-            headers["X-CSRF-Token"] = (await client.get("/api/bootstrap", headers=headers)).json()["csrf"]
+            headers = reviewed_headers((await client.get("/api/bootstrap", headers=headers)).json(), headers)
             first = asyncio.create_task(client.put("/api/backend", headers=headers, json={"url": None, "key": None}))
             await holding.wait()
             initial = store.path.read_bytes()
@@ -593,7 +594,7 @@ run.main()
                             await asyncio.sleep(.05)
                 assert response.status_code == 200
                 assert seen["frames"] == [{"type": "auth", "access_token": DUMMY}, {"id": 1, "type": "config/auth/list"}]
-                headers = {**IDENTITY, "X-CSRF-Token": response.json()["csrf"]}
+                headers = reviewed_headers(response.json(), IDENTITY)
                 seen["response"] = result([user(group_ids=[])])
                 denied = await client.post("/api/token/reveal", headers=headers)
                 assert denied.status_code == 403 and denied.json() == {"error": "request denied"}

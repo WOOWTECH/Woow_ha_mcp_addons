@@ -2,6 +2,45 @@
 # pipeline #89) has not yet defined a machine-readable schema; this follows the format already used by
 # WOOWTECH/Woow_ha_cloudflare_tunnel_webgui. One release per entry, newest first.
 releases:
+  - to_version: "0.4.7"
+    from_version: "0.4.6"
+    addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]
+    summary: Mandatory reviewed revisions and durable token/restart operation receipts.
+    breaking_changes:
+      - id: admin-write-preconditions-and-receipts
+        affects: Direct admin API clients; the bundled UI is updated together.
+        change: >-
+          All persisted admin changes require one exact strong If-Match revision. Token rotate/revoke and
+          child restart also require Idempotency-Key. Missing headers return428; stale revisions return409.
+          Revoke returns200 JSON instead of204. Completed replay/query never returns a historical token.
+        migration: >-
+          Read a fresh bootstrap before reviewing changes, preserve its revision, and use its server_time_ms
+          plus a random suffix for one operation ID. Keep that ID after uncertain responses and query it.
+          Do not create a new ID to repeat an unknown outcome. Use the bundled UI or update custom clients.
+      - id: durable-journal-backup-boundary
+        affects: Backup, restore and downgrade procedures after any token/restart operation.
+        change: >-
+          A private hidden operation journal accompanies the existing schema4 state. Pending receipts mean
+          unknown outcome and never authorize automatic replay. Older binaries do not honor these receipts.
+        migration: >-
+          Back up the entire add-on data directory including hidden files. Restore matching data and binary
+          together, review current tokens and process state, and discard stale client retry intentions only
+          after review. Restoring older data cannot preserve newer receipts; no exactly-once restore claim.
+    behavior_changes:
+      - id: emqx-retained-error-and-delete-contract
+        change: >-
+          Retained reads fall back to listing only after404 or a valid empty result. Other HTTP failures and
+          invalid JSON propagate. Retained deletes make one DELETE request; failures, including404, never
+          dispatch an empty retained publish. Explicit204 remains a successful no-content response.
+        migration: >-
+          Clients must inspect the error and current retained state before a new write. Brokers without the
+          direct DELETE endpoint no longer receive a hidden fallback publish; choose an explicit reviewed
+          publish operation if that is intended. No tool name, input schema or grant default changes.
+      - id: p9-management-client-contract
+        change: P9 uses the shared admin API client for revisions, operation IDs and receipt validation.
+        migration: >-
+          Use the matching kit version. On an unconfirmed operation, preserve the printed non-secret ID,
+          query its receipt and review state before another run; the driver never automatically retries.
   - to_version: "0.4.6"
     from_version: "0.4.5"
     addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]

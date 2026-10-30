@@ -5,6 +5,7 @@ history, data table column actions, n8n_test_workflow prepare/pinned/direct, n8n
 n8n_manage_agents; 0.2.0 never passed it, so those answered NOT_CONFIGURED.
 """
 from contextlib import closing
+from admin_write_headers import reviewed_headers
 import json
 from pathlib import Path
 import subprocess
@@ -66,8 +67,8 @@ async def test_admin_api_saves_reports_and_clears_the_token(tmp_path):
             async with httpx.AsyncClient(transport=httpx.ASGITransport(admin, client=('172.30.32.2', 1)),
                                          base_url='http://local') as client:
                 async def put(value):
-                    csrf = (await client.get('/api/bootstrap', headers=IDENTITY)).json()['csrf']
-                    return await client.put('/api/backend', headers={**IDENTITY, 'x-csrf-token': csrf}, json=value)
+                    boot = (await client.get('/api/bootstrap', headers=IDENTITY)).json()
+                    return await client.put('/api/backend', headers=reviewed_headers(boot, IDENTITY), json=value)
 
                 assert (await client.get('/api/bootstrap', headers=IDENTITY)).json()['mcp_access_token_set'] is False
                 response = await put({'url': 'http://172.30.33.10:5678', 'key': 'api-key-0815', 'mcp_access_token': 'mcp-token-0815'})
