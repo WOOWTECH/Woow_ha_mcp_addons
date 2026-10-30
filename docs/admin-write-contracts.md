@@ -1,4 +1,4 @@
-# Admin write contracts (source candidate)
+# Admin write contracts (0.4.7 candidate)
 
 ## Reviewed configuration
 
@@ -18,7 +18,7 @@ Fresh HA admin authority is checked after the mutation lock is acquired, includi
 
 The private sidecar `.state.json.operations.json` is bounded to 128 receipts and 256 KiB, mode0600, single writer, strict JSON, atomic rename and file/directory fsync. Its intent is durable **before** token persistence or child callback acceptance. Unknown intents never execute again automatically. If the effect completes but its completion receipt cannot be made durable, return 409 `operation_outcome_unknown`. An effect can have happened; do not interpret this as rollback. Journal capacity/corruption/unavailability denies new operations. Old IDs expire after24 hours (410); pruning never makes an expired ID executable again.
 
-This is not an exactly-once transaction with the child process. A crash between intent and completion deliberately leaves uncertainty. Backups must include the entire data directory including the hidden journal. Deleting/restoring older data loses newer receipts; review current state after restore instead of replaying old commands. No schema or addon version is changed in this source candidate.
+This is not an exactly-once transaction with the child process. A crash between intent and completion deliberately leaves uncertainty. Backups must include the entire data directory including the hidden journal. Deleting/restoring older data loses newer receipts; review current state after restore instead of replaying old commands. The state schema remains4; the release integration binds add-on version0.4.7.
 
 ## Browser behavior
 
