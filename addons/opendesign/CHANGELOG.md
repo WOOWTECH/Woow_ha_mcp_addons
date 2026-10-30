@@ -1,3 +1,8 @@
+## 0.4.9 — source only (disabled)
+
+- Synchronize source version only. OpenDesign remains disabled; no OpenDesign image is planned.
+- OpenDesign remains disabled: no 0.4.9 image was built, gated or published. Source version synchronization only; see ../../docs/operations/release-decision-0.4.9.md.
+
 ## 0.4.8 — release candidate (2026-10-30; images pending)
 
 - Keep this product disabled; synchronize source version only. No OpenDesign image is published.
