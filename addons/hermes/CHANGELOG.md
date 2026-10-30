@@ -1,3 +1,11 @@
+## 0.4.9 — release candidate (images pending)
+
+- Port fenced session deletion and bounded authentication retry behavior from reviewed PaaS source 052887fa68d5e67b86c622ef92f46dd7f75a08ca.
+- DELETE reads fresh Agent revision/generation fences and sends one request; it never automatically resends after401 or an unknown outcome. Explicit replay retains request_id, expected_revision and expected_generation together.
+- Keep 11 tool names, existing grants, HA destination policy and redaction; the session description and three optional recovery fields match the real child.
+- Requires the Agent mutation-snapshot/receipt contract; no legacy unfenced deletion fallback. See ../../apps/hermes/docs/session-delete-contract.md.
+- Fresh exact-source image gates and publication evidence are pending; see ../../docs/operations/release-decision-0.4.9.md.
+
 ## 0.4.8 — release candidate (2026-10-30; images pending)
 
 - Synchronized 0.4.8 release with Nextcloud MCP v0.1.6; this product retains the 0.4.7 runtime and management contracts.

@@ -1,3 +1,8 @@
+## 0.4.9 — release candidate (images pending)
+
+- Synchronize 0.4.9 release metadata with the Hermes session deletion correction; this product retains the reviewed 0.4.8 behavior and dependency pins.
+- Fresh exact-source image gates and publication evidence are pending; see ../../docs/operations/release-decision-0.4.9.md.
+
 ## 0.4.8 — release candidate (2026-10-30; images pending)
 
 - Synchronized 0.4.8 release with Nextcloud MCP v0.1.6; this product retains the 0.4.7 runtime and management contracts.

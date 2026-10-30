@@ -98,8 +98,8 @@ jobs:
           platforms: linux/amd64
           push: false
           load: true
-          tags: local/mcp-${{ matrix.app }}:0.4.8
-          build-args: BUILD_VERSION=0.4.8
+          tags: local/mcp-${{ matrix.app }}:0.4.9
+          build-args: BUILD_VERSION=0.4.9
           labels: org.opencontainers.image.revision=${{ github.sha }}
       - name: Pinned scanners (public checksum-verified binaries)
         run: python3 packaging/install_scanners.py "$RUNNER_TEMP/scanners"
