@@ -1,6 +1,6 @@
 # Nextcloud child: vendored upstream v0.1.6
 
-Source change only. It ships with the next add-on release (planned 0.4.7); the version bump, image build,
+Source change only. It ships with the next add-on release (planned 0.4.8); the version bump, image build,
 publication and Store release belong to that release and its `release-decision-*.md`.
 
 ## Sources

@@ -11,7 +11,7 @@ from test_six_hardening import Quiet, call, runtime, serve
 
 PASSWORD = 'FAKE-nc-pass/+"quoted-4917'
 DIAGNOSTIC = 'FAKE storage temporarily unavailable'
-# 0.4.7 (vendored upstream v0.1.6, errors.mask_credentials): forms the 0.4.4 HA routine did not mask. A password
+# 0.4.8 (vendored upstream v0.1.6, errors.mask_credentials): forms the 0.4.4 HA routine did not mask. A password
 # whose Basic value contains '/', and a periodic password whose occurrences overlap.
 SLASHED = 'FAKE-nc-basic??~-4917'
 PERIODIC = 'FAKE-nc-overlap-' * 2
