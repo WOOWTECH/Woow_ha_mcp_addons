@@ -38,6 +38,7 @@ from .policy import Denied, ToolCallRefused, UnknownMethod, authorize, filter_li
 from .admin_auth import AdminAuthority, BadRequest, prefix
 from .capabilities import ManagementOptions, capability_snapshot, observe_tools, tool_catalog
 from .request_limits import McpRequestLimits, RequestLimitError
+from .operations import OperationJournal, KINDS as OPERATION_KINDS, RESULTS as OPERATION_RESULTS, TTL_MS
 
 # 0.2.0: 16 MiB (was 256 KiB). The full Nextcloud surface uploads up to 10 MiB as base64 (about 13.4 MiB of JSON) and
 # writes text files up to 1 MiB; a body is read only after the token check. BODY_SECONDS bounds the read.
@@ -359,6 +360,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     mutation_lock = asyncio.Lock()
     token_access = TokenAccess(store)
     configuration = configuration or ConfigurationState(store)
+    operations = OperationJournal(store.path)
     slots = asyncio.Semaphore(32)
     admin_slots = asyncio.Semaphore(16)
 
@@ -445,15 +447,51 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             # No awaited work between this final decision and disclosure/commit.
             headers['ETag'] = configuration.etag(state)
             notice_action = name in ('owner-defaults/restore', 'owner-defaults/dismiss') and request.method == 'POST'
-            if changes is not None or notice_action or name in ('token/rotate', 'token/revoke', 'child/restart'):
+            operation_kind = OPERATION_KINDS.get(name) if request.method == 'POST' else None
+            operation_id = None
+            operation_data = None
+            if changes is not None or notice_action or operation_kind:
                 matches = request.headers.getlist('if-match')
-                if matches and (len(matches) != 1 or matches[0] != headers['ETag']):
+                if not matches:
+                    raise BadRequest(428, {'code': 'config_revision_required'})
+                if len(matches) != 1 or not re.fullmatch(r'"c1-[0-9a-f]{64}"', matches[0]):
                     return JSONResponse({'detail': {'code': 'config_conflict'}}, status_code=409, headers=headers)
-                if notice_action and not matches:
-                    # The notice actions apply only to the revision the administrator reviewed.
-                    return JSONResponse({'detail': {'code': 'precondition_required'}}, status_code=428, headers=headers)
-                if name in ('odoo/write-switches', 'n8n/session', 'backend/patch', odoo_methods.ROUTE) and not matches:
-                    return JSONResponse({'detail': {'code': 'precondition_required'}}, status_code=428, headers=headers)
+                if operation_kind:
+                    ids = request.headers.getlist('idempotency-key')
+                    if not ids:
+                        raise BadRequest(428, {'code': 'operation_id_required'})
+                    if len(ids) != 1:
+                        raise BadRequest(400, {'code': 'operation_id_invalid'})
+                    operation_id = ids[0]
+                    operation_data, prior, fingerprint = operations.inspect(operation_id, operation_kind, user)
+                    if prior:
+                        public = operations.public(operation_id, prior, replayed=True)
+                        if prior['state'] != 'completed':
+                            raise BadRequest(409, {'code': 'operation_outcome_unknown', 'operation': public})
+                        # Receipt replay is an authenticated observation, not a new
+                        # write against an obsolete form or a rotated token.
+                        return JSONResponse({**OPERATION_RESULTS[operation_kind], 'operation': public,
+                                             'configuration': configuration.snapshot(state)}, headers=headers)
+                if matches[0] != headers['ETag']:
+                    return JSONResponse({'detail': {'code': 'config_conflict'}}, status_code=409, headers=headers)
+
+            def begin_operation():
+                operations.begin(operation_id, operation_data, operation_kind, user, fingerprint)
+                # Intent is now durable; own the effect through disconnect, as
+                # with an already persisted configuration mutation.
+                committed.set()
+
+            def finish_operation(updated):
+                try:
+                    public = operations.complete(operation_id, operation_data)
+                except (OSError, ValueError):
+                    raise BadRequest(409, {'code': 'operation_outcome_unknown'}) from None
+                headers['ETag'] = configuration.etag(updated)
+                return {**OPERATION_RESULTS[operation_kind], 'operation': public,
+                        'configuration': configuration.snapshot(updated)}
+
+            if name.startswith('operations/') and request.method == 'GET':
+                return JSONResponse(operations.query(name[len('operations/'):], user), headers=headers)
             if name == "__ui__" and hasattr(request.state, "ui_path") and request.method in ("GET", "HEAD"):
                 return ui.response(request.state.ui_path, base)
             if name == "bootstrap" and request.method == "GET":
@@ -465,6 +503,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 from .backend_edit import view as connection_view
                 edit_view = connection_view(state) if hasattr(state, 'product') else None
                 return JSONResponse({"base_path": base, "api_base": base + "/api", "csrf": csrf,
+                    "operation_contract": {"version": 1, "server_time_ms": int(time.time() * 1000),
+                                           "retention_ms": TTL_MS},
                     **({"owner_defaults": notice} if notice is not None else {}),
                     **odoo_methods.bootstrap(state),
                     "configuration": configuration.snapshot(state),
@@ -520,14 +560,13 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     return JSONResponse({"error": "unsupported"}, status_code=409, headers=headers)
                 # Same ownership transfer as a committed backend update. Disconnect
                 # cannot abandon stop/reap/restart or release the mutation lock early.
-                committed.set()
+                begin_operation()
                 try:
                     await restart_child(state)
                 except Exception:
-                    return JSONResponse({"error": "child_restart_failed", "detail": {"code": "config_apply_failed"},
-                                         "configuration": configuration.snapshot(state), "health": snapshot()}, status_code=503, headers=headers)
-                return JSONResponse({"accepted": True, "apply_state": "pending", "health": snapshot(),
-                                     "configuration": configuration.snapshot(state)}, status_code=202, headers=headers)
+                    raise BadRequest(409, {'code': 'operation_outcome_unknown'}) from None
+                return JSONResponse({**finish_operation(state), "accepted": True, "health": snapshot()},
+                                    status_code=202, headers=headers)
             if name == "diagnostics" and request.method == "GET":
                 if diagnostics is None:
                     return JSONResponse({"error": "unsupported"}, status_code=409, headers=headers)
@@ -535,22 +574,28 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             if name == "token/reveal" and request.method == "POST":
                 return JSONResponse({"token": store.load().token}, headers=headers)
             if name == "token/rotate" and request.method == "POST":
+                begin_operation()
                 new_token = secrets.token_urlsafe(32)
-                updated = (store.change_token(new_token, action='rotate')[0] if hasattr(store, 'change_token')
-                           else store.update(token=new_token))
+                try:
+                    updated = (store.change_token(new_token, action='rotate')[0] if hasattr(store, 'change_token')
+                               else store.update(token=new_token))
+                except (OSError, ConfigError):
+                    raise BadRequest(409, {'code': 'operation_outcome_unknown'}) from None
                 token_access.committed()
-                headers['ETag'] = configuration.etag(updated)
-                return JSONResponse({"token": updated.token}, headers=headers)
+                return JSONResponse({**finish_operation(updated), "token": updated.token}, headers=headers)
             if name == "token/revoke" and request.method == "POST":
-                if hasattr(store, 'change_token'):
-                    updated, changed = store.change_token(None, action='revoke')
-                else:
-                    changed = state.token is not None
-                    updated = store.update(token=None) if changed else state
+                begin_operation()
+                try:
+                    if hasattr(store, 'change_token'):
+                        updated, changed = store.change_token(None, action='revoke')
+                    else:
+                        changed = state.token is not None
+                        updated = store.update(token=None) if changed else state
+                except (OSError, ConfigError):
+                    raise BadRequest(409, {'code': 'operation_outcome_unknown'}) from None
                 if changed:
                     token_access.committed()
-                headers['ETag'] = configuration.etag(updated)
-                return Response(status_code=204, headers=headers)
+                return JSONResponse(finish_operation(updated), headers=headers)
             if notice_action:
                 # Owner decision 2026-10-27: restore the faithful pre-upgrade limits, or keep the defaults (dismiss).
                 restoring = name == 'owner-defaults/restore'

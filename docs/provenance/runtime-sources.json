@@ -69,7 +69,9 @@
     "product": "emqx",
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/errors.py",
-    "upstream_sha256": "c7e0035e810600c10db1bd5ff21f511f3023c4b1c0c57931b3487ba6d4611795"
+    "upstream_sha256": "c7e0035e810600c10db1bd5ff21f511f3023c4b1c0c57931b3487ba6d4611795",
+    "local_sha256": "3323df5685e667332516a57b1657024d865ea30b2792b4c889b1edc08d304d64",
+    "modification": "2026-10-30 HA047 candidate: carry HTTP status_code on EmqxApiError so retained lookup distinguishes404 from failures; reject empty, malformed and scalar JSON except explicit204. Preserve HTTP diagnostics and warn against replaying an ambiguous write. Port reviewed behavior from PaaS EMQX caad3965646f9dac3f4f57f3677aff92196745a2; keep HA backend transport unchanged."
   },
   {
     "product": "emqx",
@@ -113,7 +115,9 @@
     "product": "emqx",
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/tools/messaging.py",
-    "upstream_sha256": "afd34ac295d6fd12e6d9bc91718cfd7ae1e71606694d8b5a560962feea17b5c0"
+    "upstream_sha256": "afd34ac295d6fd12e6d9bc91718cfd7ae1e71606694d8b5a560962feea17b5c0",
+    "local_sha256": "ef5dd9178e701ea4df018ee9fffe202164277fdd072a4e828e6f57bf09527b4c",
+    "modification": "2026-10-30 HA047 candidate: retained read falls back to listing only for the existing404/no-result compatibility path; all other API/JSON failures propagate. Retained DELETE dispatches once, with no empty retained publish fallback after any error including404. Port from PaaS EMQX caad3965646f9dac3f4f57f3677aff92196745a2; tested through pinned child, gateway and owned HTTP fixtures."
   },
   {
     "product": "emqx",

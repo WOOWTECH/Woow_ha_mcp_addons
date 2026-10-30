@@ -3,6 +3,7 @@
 Only owned loopback backends and dummy credentials. No background monitor races:
 explicit HealthMonitor.check() calls own every health read in the counters.
 """
+from admin_write_headers import current_headers
 import asyncio
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -141,7 +142,7 @@ async def test_policy_disable_keeps_private_probe_and_public_denial(tmp_path, pr
                     identity['x-csrf-token'] = bootstrap['csrf']
                     old_pid = manager.process.pid
                     disabled = list(TOOLS[product]) if disable_all else [probe]
-                    pending = asyncio.create_task(a.put('/api/policy', headers=identity, json={
+                    pending = asyncio.create_task(a.put('/api/policy', headers=await current_headers(a, identity), json={
                         'writes_enabled': False, 'disabled': disabled, 'enabled_write_tools': grants}))
                     await asyncio.wait_for(committed.wait(), 3)
                     assert store.load().disabled == disabled and not pending.done()
@@ -326,7 +327,7 @@ async def test_nextcloud_private_probe_survives_public_disable(tmp_path, grant_w
                     identity['x-csrf-token'] = bootstrap['csrf']
                     old_pid = manager.process.pid
                     disabled = list(TOOLS[product]) if disable_all else [n for n, t in TOOLS[product].items() if not t.write]
-                    pending = asyncio.create_task(a.put('/api/policy', headers=identity, json={
+                    pending = asyncio.create_task(a.put('/api/policy', headers=await current_headers(a, identity), json={
                         'writes_enabled': False, 'disabled': disabled, 'enabled_write_tools': grants}))
                     await asyncio.wait_for(committed.wait(), 3)
                     assert not pending.done() and manager.process.pid == old_pid

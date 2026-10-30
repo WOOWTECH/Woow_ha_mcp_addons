@@ -1,5 +1,6 @@
 """Actual Core bootstrap/policy and unmodified production UI v3 serializers."""
 from contextlib import closing
+from admin_write_headers import reviewed_headers
 import json
 from pathlib import Path
 import subprocess
@@ -41,10 +42,10 @@ console.log(JSON.stringify(payload));
 '''], cwd=ROOT, input=json.dumps([bootstrap, grant]), text=True, capture_output=True, timeout=10,
                     env={'PATH': '/usr/local/bin:/usr/bin:/bin'})
                 assert probe.returncode == 0, probe.stderr
-                response = await client.put('/api/policy', headers={**identity, 'x-csrf-token': bootstrap['csrf']}, json=json.loads(probe.stdout))
+                response = await client.put('/api/policy', headers=reviewed_headers(bootstrap, identity), json=json.loads(probe.stdout))
                 assert response.status_code == 200, response.text
                 assert store.load().enabled_write_tools == [grant] and store.load().writes_enabled is False
                 fresh = (await client.get('/api/bootstrap', headers=identity)).json()
                 assert fresh['enabled_write_tools'] == [grant]
-                response = await client.put('/api/policy', headers={**identity, 'x-csrf-token': fresh['csrf']}, json={'writes_enabled': False, 'disabled': [], 'enabled_write_tools': []})
+                response = await client.put('/api/policy', headers=reviewed_headers(fresh, identity), json={'writes_enabled': False, 'disabled': [], 'enabled_write_tools': []})
                 assert response.status_code == 200 and store.load().enabled_write_tools == []

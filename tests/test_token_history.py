@@ -1,5 +1,6 @@
 """HA product state only: token transitions stay durable, bounded and masked."""
 from contextlib import closing
+from admin_write_headers import reviewed_headers
 import json
 import os
 
@@ -129,7 +130,7 @@ async def test_admin_bootstrap_only_exposes_masked_history(tmp_path):
                 boot = (await client.get('/api/bootstrap', headers=IDENTITY)).json()
                 assert boot['token_history'] == []
                 assert boot['token_masked'] == original[:4] + '*' * 20 + original[-4:]
-                headers = {**IDENTITY, 'x-csrf-token': boot['csrf']}
+                headers = reviewed_headers(boot, IDENTITY)
                 rotated = await client.post('/api/token/rotate', headers=headers)
                 assert rotated.status_code == 200
                 new = rotated.json()['token']
@@ -138,10 +139,11 @@ async def test_admin_bootstrap_only_exposes_masked_history(tmp_path):
                 assert boot['token_masked'] == new[:4] + '*' * 20 + new[-4:]
                 assert boot['token_history'] == [{'action': 'rotate', 'rotated_at': boot['token_history'][0]['rotated_at'],
                     'previous_token_masked': original[:4] + '*' * 20 + original[-4:]}]
+                headers = reviewed_headers(boot, IDENTITY)
                 revoked = await client.post('/api/token/revoke', headers=headers)
-                assert revoked.status_code == 204
+                assert revoked.status_code == 200
                 before = store.path.read_bytes()
-                assert (await client.post('/api/token/revoke', headers=headers)).status_code == 204
+                assert (await client.post('/api/token/revoke', headers=headers)).status_code == 200
                 assert store.path.read_bytes() == before
                 boot = (await client.get('/api/bootstrap', headers=IDENTITY)).json()
                 assert [entry['action'] for entry in boot['token_history']] == ['revoke', 'rotate']

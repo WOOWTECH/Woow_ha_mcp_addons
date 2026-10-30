@@ -121,7 +121,7 @@ async def test_log_drain_timeout_preserves_process_cleanup_failure(pipe_holder, 
 
 @pytest.mark.parametrize('phase', ['observation', 'final_role'])
 @pytest.mark.parametrize('change', ['unchanged', 'exit', 'replacement', 'role_revoked'])
-async def test_catalog_revalidates_child_after_final_role(phase, change):
+async def test_catalog_revalidates_child_after_final_role(phase, change, tmp_path):
     state = State.model_construct(child_token='mock-child-token', token='mock-public-token', disabled=[],
                                   enabled_write_tools=[], writes_enabled=False, backend_url=None,
                                   backend_key=None, endpoint=None)
@@ -164,7 +164,8 @@ async def test_catalog_revalidates_child_after_final_role(phase, change):
                               json={'jsonrpc': '2.0', 'id': message['id'], 'result': result})
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(reply)) as child:
-        app, _ = make_apps(SimpleNamespace(load=lambda: state), TOOLS, child, verify_admin=verify,
+        app, _ = make_apps(SimpleNamespace(path=tmp_path / 'state.json', load=lambda: state),
+                          TOOLS, child, verify_admin=verify,
                           health=lambda: {'management': 'alive', 'child': dict(health), 'backend': 'reachable'})
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app, client=('172.30.32.2', 1)),
                                      base_url='http://admin') as client:

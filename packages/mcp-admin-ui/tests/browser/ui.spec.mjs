@@ -1,7 +1,8 @@
 import { test, expect } from '../owned-fixture.mjs';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 const prefix = '/api/hassio_ingress/DUMMY';
-const evidence = process.env.UI_EVIDENCE_DIR ?? '/data/pi-agent/home/work/mcp-haos-team-runtime/reports/ui-evidence';
+const evidence = process.env.UI_EVIDENCE_DIR ?? fileURLToPath(new URL('../../test-results/mock-evidence/', import.meta.url));
 const measurements = [];
 async function reset(request, options = {}) { await request.post('/__fixture/reset', { data: options }); }
 async function calls(request) { return (await request.get('/__fixture/calls')).json(); }
@@ -311,11 +312,16 @@ test('MOCK token expires, and a reveal completing after focus loss stays hidden'
 test('MOCK changing grant contract on fresh bootstrap prevents stale writes', async ({ page, request }) => {
   await reset(request, { granular: true });
   await start(page, '/tools');
+  const before = (await (await request.get(`${prefix}/api/configuration`)).json()).configuration.revision;
+  expect(before).toMatch(/^c1-[a-f0-9]{64}$/);
   await page.getByLabel('明確允許此工具寫入').check();
   await reset(request, { granular: false });
+  // Runtime contract drift can occur without a persisted configuration edit.
+  expect((await (await request.get(`${prefix}/api/configuration`)).json()).configuration.revision).toBe(before);
   await page.getByRole('button', { name: '儲存工具權限' }).click();
   await confirm(page, '確認套用');
   await expect(page.getByRole('status')).toContainText('工具授權版本已變更');
+  await expect(page.getByLabel('明確允許此工具寫入')).toBeChecked();
   expect(await calls(request)).toHaveLength(0);
 });
 test('MOCK all product forms fit 320px and dashboard is validated as a triplet', async ({ page, request }) => {

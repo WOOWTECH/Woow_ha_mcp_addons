@@ -1,4 +1,5 @@
 """Saved state, actual child generation, and conditional admin edits (owned mocks)."""
+from admin_write_headers import reviewed_headers
 import asyncio
 from types import SimpleNamespace
 from contextlib import closing
@@ -28,8 +29,9 @@ async def test_bootstrap_revision_is_the_form_snapshot_and_stale_save_is_inert(t
         assert denied.status_code == 409
         assert denied.json()['detail']['code'] == 'config_conflict'
         assert store.path.read_bytes() == saved and record['restart'] == 0
-        # An old client remains supported; conditional protection is opt-in.
-        assert (await client.put('/api/endpoint', headers=headers, json={'endpoint': None})).status_code == 200
+        # A legacy request without the reviewed revision is now explicitly refused.
+        legacy = {k:v for k,v in headers.items() if k.lower() != 'if-match'}
+        assert (await client.put('/api/endpoint', headers=legacy, json={'endpoint': None})).status_code == 428
 
 
 async def test_save_acknowledgement_does_not_claim_child_readiness(tmp_path):
@@ -108,7 +110,7 @@ async def test_saved_but_failed_application_is_explicit_and_secret_free(tmp_path
                                          base_url='http://admin') as client:
                 identity = {'x-remote-user-id': 'owned-editor'}
                 boot = (await client.get('/api/bootstrap', headers=identity)).json()
-                response = await client.put('/api/backend', headers={**identity, 'x-csrf-token': boot['csrf']},
+                response = await client.put('/api/backend', headers=reviewed_headers(boot, identity),
                                             json={'url': 'https://saved.example', 'key': 'SYNTHETIC'})
                 assert response.status_code == 503
                 assert response.json()['saved'] is True

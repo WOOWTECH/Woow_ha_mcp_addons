@@ -1,4 +1,5 @@
 """Grant through the actual API -> owned native restart -> real fake write."""
+from admin_write_headers import current_headers
 import asyncio
 from pathlib import Path
 
@@ -51,7 +52,7 @@ async def test_api_enabling_writer_rebuilds_actual_native_gate(tmp_path, product
                         identity = {'x-remote-user-id': 'a'*32}
                         bootstrap = (await a.get('/api/bootstrap', headers=identity)).json()
                         identity['x-csrf-token'] = bootstrap['csrf']
-                        response = await a.put('/api/policy', headers=identity, json={
+                        response = await a.put('/api/policy', headers=await current_headers(a, identity), json={
                             'writes_enabled': False, 'disabled': [], 'enabled_write_tools': [name]})
                         assert response.status_code == 200
                         assert manager.process.pid != old_pid and not Path(f'/proc/{old_pid}').exists()
@@ -59,7 +60,7 @@ async def test_api_enabling_writer_rebuilds_actual_native_gate(tmp_path, product
                         reply = await rpc(client, '/mcp', headers, call(name,args))
                         payload(reply)
                         assert len(mutations) == 1
-                        response = await a.put('/api/policy', headers=identity, json={
+                        response = await a.put('/api/policy', headers=await current_headers(a, identity), json={
                             'writes_enabled': False, 'disabled': [name], 'enabled_write_tools': []})
                         assert response.status_code == 200
                         before = len(events)

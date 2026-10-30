@@ -1,4 +1,5 @@
 """Positive/negative product boundary tests; all transports are MOCK here."""
+from admin_write_headers import reviewed_headers, current_headers
 import json
 
 import httpx
@@ -25,7 +26,7 @@ async def test_config_api_typed_secret_safe_and_restart_on_rotation(tmp_path, pr
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=admin, client=('172.30.32.2', 123)), base_url='http://admin') as client:
                 headers = {'x-remote-user-id': 'test-admin'}
                 bootstrap = (await client.get('/api/bootstrap', headers=headers)).json()
-                headers['x-csrf-token'] = bootstrap['csrf']
+                headers = reviewed_headers(bootstrap, headers)
                 configured = connection(product, 'http://127.0.0.1:9999')
                 assert (await client.put('/api/backend', headers=headers, json={'connection': configured})).status_code == 200
                 assert len(changed) == 1
@@ -37,7 +38,7 @@ async def test_config_api_typed_secret_safe_and_restart_on_rotation(tmp_path, pr
                             {'connection': {**configured, 'env': {'SUPERVISOR_TOKEN': 'DUMMY'}}}):
                     assert (await client.put('/api/backend', headers=headers, json=bad)).status_code == 400
                     assert store.path.read_bytes() == original
-                assert (await client.put('/api/backend', headers=headers, json={'connection': None})).status_code == 200
+                assert (await client.put('/api/backend', headers=await current_headers(client, headers), json={'connection': None})).status_code == 200
                 assert not store.load().configured and len(changed) == 2
     finally: store.close()
 

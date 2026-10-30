@@ -1,4 +1,5 @@
 """Post-commit cancellation: real runtimes/supervisors, owned dummy children only."""
+from admin_write_headers import reviewed_headers
 import asyncio
 import json
 import os
@@ -129,7 +130,7 @@ async def test_committed_runtime_backend_transition_is_joined(tmp_path, monkeypa
             headers = {'x-remote-user-id': 'human'}
             response = await client.get('/api/bootstrap', headers=headers)
             assert response.status_code == 200
-            headers['x-csrf-token'] = response.json()['csrf']
+            headers = reviewed_headers(response.json(), headers)
             payload = ({'url': 'http://127.0.0.1:1', 'key': 'DUMMY-backend'} if product == 'n8n'
                        else {'connection': connection(product, 'http://127.0.0.1:1')})
             events, output = asyncio.Queue(), []
@@ -228,7 +229,7 @@ async def test_precommit_cancellation_has_no_effects(tmp_path, phase, cancel):
 
     async with gateway(tmp_path, verify, changed=changed) as (store, client, admin, _):
         headers = {'x-remote-user-id': 'human'}
-        headers['x-csrf-token'] = (await client.get('/api/bootstrap', headers=headers)).json()['csrf']
+        headers = reviewed_headers((await client.get('/api/bootstrap', headers=headers)).json(), headers)
         holder = pending = None
         before = set(asyncio.all_tasks())
         try:

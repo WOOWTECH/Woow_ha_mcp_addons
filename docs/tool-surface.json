@@ -57,7 +57,7 @@
     "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py": "d4f16b9af152a71c8fa2a16bc013bd9e39d58db4e59206d331190d890643d50e",
     "apps/emqx/vendor/emqx_mcp_server/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "apps/emqx/vendor/emqx_mcp_server/deps.py": "fa949b1f1b3577be7c848af5bb74a5b9d068d39cba265b93cdd4dde4a41529e3",
-    "apps/emqx/vendor/emqx_mcp_server/errors.py": "c7e0035e810600c10db1bd5ff21f511f3023c4b1c0c57931b3487ba6d4611795",
+    "apps/emqx/vendor/emqx_mcp_server/errors.py": "3323df5685e667332516a57b1657024d865ea30b2792b4c889b1edc08d304d64",
     "apps/emqx/vendor/emqx_mcp_server/gating.py": "9168feae3231c16df2513f3668a7ad6dacc67072ef5d0cc919bb963e2b6de057",
     "apps/emqx/vendor/emqx_mcp_server/lifespan.py": "e217a630de2a1d9061441a81dc463aaada787203e3c900890198a5789a0be811",
     "apps/emqx/vendor/emqx_mcp_server/models.py": "0d247d845738f37d2673fd0e50203cc8c4f3c4cf6a2d3b10db7bd2a0b9740801",
@@ -70,7 +70,7 @@
     "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py": "2a5f1943551498556b3ef525c6742d17980c40022dd6da9349307428da7b0f52",
     "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py": "f20e0868ebca0c2707d8f3b3fbe7a9e3651af9235d708abfced402ba3c6e26bf",
     "apps/emqx/vendor/emqx_mcp_server/tools/integration.py": "05ac8a89c35389d6793bb2e2c579947ee3bbc42a55c5fd67d9978a162e1636de",
-    "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py": "afd34ac295d6fd12e6d9bc91718cfd7ae1e71606694d8b5a560962feea17b5c0",
+    "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py": "ef5dd9178e701ea4df018ee9fffe202164277fdd072a4e828e6f57bf09527b4c",
     "apps/emqx/vendor/emqx_mcp_server/tools/security.py": "f113e5c365b7d25bca426f3dd663570e9302777b27d67ff24c9ad4af1d299dcf",
     "apps/emqx/vendor/emqx_mcp_server/tools/topics.py": "fb95c8cfcf2279e3b8b2545079bda8276a24210440123c5ac38624c372f1e353",
     "apps/litellm/vendor/woow_litellm_mcp_server/__init__.py": "9567c42afe6f2928bb9d7b550c3266c70d8e6c47bd0ebbe0d6a2558a90726f4c",
@@ -3083,7 +3083,7 @@
         {
           "name": "emqx_delete_retained",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py",
-          "line": 243,
+          "line": 245,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "topic: Annotated[str, Field(description='Exact topic whose retained message to remove.')], emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3156,7 +3156,7 @@
         {
           "name": "emqx_get_retained",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py",
-          "line": 216,
+          "line": 218,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "topic: Annotated[str, Field(description=\"Exact topic whose retained message to read, e.g. 'woow/test/switch/state'.\")], emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3434,7 +3434,7 @@
         {
           "name": "emqx_list_retained",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py",
-          "line": 192,
+          "line": 194,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "page: Annotated[int, Field(description='1-based page number.', ge=1)]=1, limit: Annotated[int, Field(description='Rows per page.', ge=1, le=200)]=settings.default_limit, emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3759,7 +3759,7 @@
         {
           "name": "emqx_publish",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py",
-          "line": 97,
+          "line": 99,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "topic: Annotated[str, Field(description=\"Target topic, e.g. 'woow/test/switch/state'. Wildcards (+ and #) are not allowed when publishing.\", min_length=1)], payload: Annotated[str, Field(description='Message body, encoded per `payload_encoding`.')], qos: Annotated[int, Field(description='MQTT QoS: 0, 1 or 2.', ge=0, le=2)]=0, retain: Annotated[bool, Field(description=\"Keep this as the topic's retained message, so new subscribers receive it on connect.\")]=False, payload_encoding: Annotated[Literal['plain', 'base64'], Field(description='Use base64 for binary payloads.')]='plain', emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3784,7 +3784,7 @@
         {
           "name": "emqx_publish_bulk",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py",
-          "line": 150,
+          "line": 152,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "messages: Annotated[list[OutgoingMessage], Field(description='Messages to publish, at most 50 per call.', max_length=50)], emqx: httpx.AsyncClient=Depends(emqx_client)",

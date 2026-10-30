@@ -1,4 +1,5 @@
 """New management routes use owned mock child sessions; never contact HA or a backend."""
+from admin_write_headers import reviewed_headers
 import asyncio
 from contextlib import asynccontextmanager
 import json
@@ -72,7 +73,7 @@ async def setup(tmp_path, **options):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=admin, client=('172.30.32.2', 1)), base_url='http://admin') as client:
             headers = dict(IDENTITY)
             bootstrap = (await client.get('/api/bootstrap', headers=headers)).json()
-            headers['x-csrf-token'] = bootstrap['csrf']
+            headers = reviewed_headers(bootstrap, headers)
             try: yield store, record, client, headers, admin, bootstrap
             finally: store.close()
 
@@ -151,6 +152,7 @@ async def test_saved_backend_check_and_restart_preserve_configuration(tmp_path):
         result = (await client.post('/api/backend/test', headers=headers)).json()
         assert result['backend'] == 'reachable' and result['tested_configuration'] == 'saved'
         assert store.path.read_bytes() == before and record['restart'] == 0
+        headers = reviewed_headers((await client.get('/api/bootstrap', headers=headers)).json(), headers)
         reply = await client.post('/api/child/restart', headers=headers)
         assert reply.status_code == 202 and reply.json()['apply_state'] == 'pending'
         assert record['restart'] == 1 and store.path.read_bytes() == before

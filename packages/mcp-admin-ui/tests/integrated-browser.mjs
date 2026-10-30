@@ -2,6 +2,7 @@
 // Invoked by pytest's owned integration harness, never a production entrypoint.
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 import { origin, proofGuard, routeForwarder } from '../../../tests/owned_browser.mjs';
 const admin = origin(process.env.LOCAL_ADMIN);
@@ -14,7 +15,7 @@ const fetch = async (url, options={}) => {
   return realFetch(url, {...options, redirect:'error'});
 };
 const prefix = '/api/hassio_ingress/DUMMY';
-const evidence = '/data/pi-agent/home/work/mcp-haos-team-runtime/reports/bt1-joined-fix-evidence/core';
+const evidence = process.env.UI_EVIDENCE_DIR ?? fileURLToPath(new URL('../test-results/integrated-evidence/', import.meta.url));
 const browser = await chromium.launch({headless:true});
 const context = await browser.newContext({serviceWorkers:'block'});
 const errors=[], requests=[];
@@ -69,7 +70,7 @@ async function open(origin,path) {
 async function bootstrap(origin=admin,base=prefix) { return (await fetch(origin+base+'/api/bootstrap')).json(); }
 async function policy(payload) {
   const b=await bootstrap();
-  const r=await fetch(admin+prefix+'/api/policy',{method:'PUT',headers:{'content-type':'application/json','x-csrf-token':b.csrf},body:JSON.stringify(payload)});
+  const r=await fetch(admin+prefix+'/api/policy',{method:'PUT',headers:{'content-type':'application/json','x-csrf-token':b.csrf,'If-Match':`"${b.configuration.revision}"`},body:JSON.stringify(payload)});
   assert.equal(r.status,200);
 }
 try {
