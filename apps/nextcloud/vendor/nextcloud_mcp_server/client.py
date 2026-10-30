@@ -437,12 +437,13 @@ class NextcloudClient:
                         self.latch_key, response.status_code, response.headers.get("retry-after")
                     )
                 body = await self._read_capped(response, MAX_ERROR_BODY, tolerate=True)
-                # Scrub the decoded detail before whitespace folding/truncation can
-                # turn a credential into a fragment the gateway cannot recognize.
+                # WOOW HA add-on 0.2.1 (owner decision 2026-10-15): Nextcloud's own text is
+                # relayed for 5xx too (upstream reads it below 500 only), with the same known
+                # credentials masked first (webdav.server_message).
                 password = self.settings.app_password.get_secret_value()
-                detail = server_message(body, credentials=(
-                    password, f"{self.settings.username}:{password}",
-                ))
+                detail = server_message(
+                    body, credentials=(password, f"{self.settings.username}:{password}")
+                )
                 raise NextcloudHTTPError(
                     status_message(response.status_code, label, op, detail=detail),
                     response.status_code,

@@ -1,5 +1,11 @@
 # Nextcloud error detail: configured credential masking
 
+> **0.4.8:** the vendored masking routine described below is replaced by upstream v0.1.6
+> `errors.mask_credentials` (same position: after extraction, before whitespace folding and the 1000-character
+> bound). It covers every form listed here and adds JSON `\/` escapes, the non-ASCII JSON form and merging of
+> overlapping occurrences. See [nextcloud-mcp-0.1.6-20261030.md](nextcloud-mcp-0.1.6-20261030.md). The evidence below
+> remains the record of the 0.4.4 change.
+
 ## Sources and existing owner contract
 
 - HA baseline: `f71fb756baf5ca3458b32c5c20635e0689c13118` (`claude-delivery`, merged #26).
