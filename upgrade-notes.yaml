@@ -26,6 +26,21 @@ releases:
           Back up the entire add-on data directory including hidden files. Restore matching data and binary
           together, review current tokens and process state, and discard stale client retry intentions only
           after review. Restoring older data cannot preserve newer receipts; no exactly-once restore claim.
+    behavior_changes:
+      - id: emqx-retained-error-and-delete-contract
+        change: >-
+          Retained reads fall back to listing only after404 or a valid empty result. Other HTTP failures and
+          invalid JSON propagate. Retained deletes make one DELETE request; failures, including404, never
+          dispatch an empty retained publish. Explicit204 remains a successful no-content response.
+        migration: >-
+          Clients must inspect the error and current retained state before a new write. Brokers without the
+          direct DELETE endpoint no longer receive a hidden fallback publish; choose an explicit reviewed
+          publish operation if that is intended. No tool name, input schema or grant default changes.
+      - id: p9-management-client-contract
+        change: P9 uses the shared admin API client for revisions, operation IDs and receipt validation.
+        migration: >-
+          Use the matching kit version. On an unconfirmed operation, preserve the printed non-secret ID,
+          query its receipt and review state before another run; the driver never automatically retries.
   - to_version: "0.4.6"
     from_version: "0.4.5"
     addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]

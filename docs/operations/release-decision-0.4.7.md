@@ -10,6 +10,8 @@ A private bounded journal persists an intent before the effect and a completion 
 
 This is not an exactly-once transaction with the child process. Backups must retain the full data directory including the hidden journal. Restore/downgrade requires compatible data/binary and independent review of current tokens, child state and outstanding client intentions. Older backups cannot retain receipts created afterward. See [API contract](../admin-write-contracts.md) and the root upgrade notes.
 
+EMQX retained-message failures now propagate instead of being converted into empty lookups or a second publish. The source tests reproduce the failures before the fix and verify one dispatch, explicit404 lookup compatibility and valid204/202 results afterward. Tool names, input schemas and grant defaults are unchanged. The P9 operator kit also uses the shared management client, validates receipts and stops after ambiguous responses without retrying.
+
 ## Evidence and release gates
 
 The integrated source includes HA implementation9af732a and real-backend harnessd71d352. Focused implementation checks and an independent journal review passed; full exact-source CI and browser results remain to be attached. The backend harness contains actual Odoo18, Nextcloud35.0.2 and EMQX5.8.9 acceptance, but its completed runs exercised the recorded0.4.6/PaaS sources, not this candidate. Tests of older images do not establish0.4.7 runtime acceptance.
