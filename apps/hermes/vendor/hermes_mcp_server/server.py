@@ -22,12 +22,13 @@ import time
 from typing import Any, Awaitable, Callable
 
 import httpx
+from pydantic import StrictInt
 from backend_policy import async_client, backend_errors, backend_error_text
 from mcp.server.mcpserver import MCPServer
 from mcp.types import CallToolResult, TextContent
 from tool_error_text import keep_error_text
 
-from . import errors
+from . import errors, session_mutations
 
 # ---------------------------------------------------------------------------
 # MCP server instance（MCP SDK 2.x 的 MCPServer，即 1.x 的 FastMCP；#78）
@@ -300,7 +301,8 @@ def _relogin_on_401(client: httpx.AsyncClient, relogin: Callable[[], Awaitable[s
     """dashboard 回 401（Hermes 重啟或輪替後舊 cookie 失效）時：清快取、重登一次、重送同一個請求。
 
     只重試一次：重登後仍 401（或登入本身 401＝密碼已變）就把錯誤交給呼叫端，訊息走 errors.describe
-    的「憑證被拒」。401 代表請求沒被處理，所以 POST／PUT／DELETE 重送也安全。
+    的「憑證被拒」。帶 hermes_no_auth_retry 的 fenced session DELETE 原樣回傳 401，
+    由呼叫端明確決定下一步；不在認證層隱式重送。
     包在 client 實例的 send 上（不換 transport），httpx 的 get／post／request 都經過它。
     """
     send = client.send
@@ -308,7 +310,7 @@ def _relogin_on_401(client: httpx.AsyncClient, relogin: Callable[[], Awaitable[s
 
     async def send_with_relogin(request: httpx.Request, **kwargs: Any) -> httpx.Response:
         response = await send(request, **kwargs)
-        if response.status_code != 401 or not pending:
+        if response.status_code != 401 or not pending or request.extensions.get("hermes_no_auth_retry") is True:
             return response
         retry = pending.pop()
         await response.aclose()
@@ -845,8 +847,19 @@ async def _chat_turn(client: httpx.AsyncClient, payload: dict[str, Any], api_key
 
 @mcp.tool()
 @_backend_errors("dashboard")
-async def hermes_session(action: str = "list", session_id: str | None = None) -> str:
-    """Manage Hermes sessions. Actions: list, get, delete"""
+async def hermes_session(
+    action: str = "list", session_id: str | None = None, request_id: str | None = None,
+    expected_revision: StrictInt | None = None, expected_generation: StrictInt | None = None,
+) -> str:
+    """Manage Hermes sessions. Actions: list, get, delete.
+
+    Delete reads fresh Agent fences and sends one request. It never retries automatically.
+    After an unknown outcome, inspect the session; an explicit identity replay requires
+    request_id, expected_revision and expected_generation together, unchanged from the error.
+    """
+    identity = session_mutations.mutation_identity(request_id, expected_revision, expected_generation)
+    if identity is not None and action != "delete":
+        raise guards.GuardError("session mutation identity is only valid for delete")
     conn = _get_connection()
 
     # Sessions go via Dashboard API (has the session data)
@@ -869,12 +882,7 @@ async def hermes_session(action: str = "list", session_id: str | None = None) ->
         if action == "delete":
             if not session_id:
                 return json.dumps({"error": "session_id required"})
-            resp = await _resource_request(client, "DELETE", f"/api/sessions/{guards.path_segment(session_id, 'session_id')}", "session", session_id)
-            # AI-HMCP-001-8：Hermes 對不存在的 session 回 200 {"ok": true, "already_absent": true}（給桌面版的冪等
-            # 刪除），以前照樣回 ok:true，分不出有沒有刪到東西。
-            data = resp.json() if resp.content else {}
-            if isinstance(data, dict) and data.get("already_absent"):
-                raise HermesNotFoundError(f"Hermes session {session_id!r} not found (不存在); nothing was deleted")
+            await session_mutations.delete_session(client, session_id, identity)
             return json.dumps({"ok": True, "deleted": session_id})
 
         return json.dumps({"error": f"Unknown action: {action}. Valid: list, get, delete"})
