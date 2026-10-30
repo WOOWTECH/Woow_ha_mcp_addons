@@ -1,7 +1,7 @@
-# Nextcloud child: vendored upstream v0.1.6 (HA 0.4.7)
+# Nextcloud child: vendored upstream v0.1.6
 
-Source change only. The version bump, image build, publication and Store release are recorded separately in
-[release-decision-0.4.7.md](../operations/release-decision-0.4.7.md).
+Source change only. It ships with the next add-on release (planned 0.4.7); the version bump, image build,
+publication and Store release belong to that release and its `release-decision-*.md`.
 
 ## Sources
 
