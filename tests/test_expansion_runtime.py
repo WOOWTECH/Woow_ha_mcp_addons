@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import threading
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 import xmlrpc.client
 
 import httpx
@@ -74,6 +74,7 @@ WRITES = {
 def fake_api(*, major=18, allow_write=True):
     events, mutations, failures = [], [], []
     nextcloud = nextcloud_fixtures.NextcloudFake()
+    hermes = {'exists': True, 'receipts': {}}
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args): pass
         def do_GET(self): self.handle_api()
@@ -88,6 +89,42 @@ def fake_api(*, major=18, allow_write=True):
             raw = self.rfile.read(int(self.headers.get('Content-Length', 0)))
             events.append((self.command, path))
             content_type = 'application/json'
+            if path in ('/api/sessions/example/mutation-snapshot', '/api/sessions/example'):
+                # Published Agent contract: authenticated snapshot, exact CAS and a
+                # receipt replay never counted as a second mutation. No bare DELETE.
+                status = 200
+                if self.command == 'GET' and path.endswith('/mutation-snapshot'):
+                    value = {'session_id': 'example', 'exists': hermes['exists'],
+                             'runtime_revision': 7 if hermes['exists'] else 0,
+                             'runtime_generation': 3 if hermes['exists'] else None}
+                elif self.command == 'DELETE' and path == '/api/sessions/example':
+                    identity = parse_qs(urlsplit(self.path).query)
+                    request_id = identity.get('request_id', [None])[0]
+                    if (set(identity) != {'request_id', 'expected_revision', 'expected_generation'}
+                            or not request_id or any(len(v) != 1 for v in identity.values())):
+                        status, value = 409, {'detail': 'client_upgrade_required'}
+                    elif request_id in hermes['receipts']:
+                        if identity == hermes['receipts'][request_id]:
+                            value = {'ok': True, 'deleted_ids': ['example']}
+                        else:
+                            status, value = 409, {'detail': 'admission_conflict'}
+                    elif not hermes['exists']:
+                        value = {'ok': True, 'already_absent': True}
+                    elif identity['expected_revision'] != ['7'] or identity['expected_generation'] != ['3']:
+                        status, value = 409, {'detail': 'revision_conflict'}
+                    else:
+                        hermes['exists'] = False
+                        hermes['receipts'][request_id] = identity
+                        mutations.append((self.command, path, identity))
+                        value = {'ok': True, 'deleted_ids': ['example']}
+                else:
+                    status, value = 405, {'detail': 'Method Not Allowed'}
+                data = json.dumps(value).encode()
+                self.send_response(status)
+                self.send_header('Content-Type', content_type)
+                self.send_header('Content-Length', str(len(data)))
+                self.end_headers(); self.wfile.write(data)
+                return
             if nextcloud_fixtures.is_nextcloud(self.path):
                 # Owned in-memory Nextcloud: only its successful PUT/DELETE count as mutations.
                 count = len(nextcloud.mutations)
