@@ -397,6 +397,18 @@
       "sha256": "982ed6fd9d1b39d278b3c12b5ef6fb4163450dd595025e1f1ea2fe9849074b22",
       "change": "0.4.7 reviewed: mount-scoped sessionStorage stores only operation ID, route, reviewed revision and product. Server time plus cryptographic random suffix avoids client-clock future IDs. Explicit query/retry retains the same identity; no form, credential or CSRF persistence. Missing storage/contract refuses new durable actions.",
       "guarded_sources": {}
+    },
+    {
+      "path": "apps/emqx/vendor/emqx_mcp_server/errors.py",
+      "sha256": "3323df5685e667332516a57b1657024d865ea30b2792b4c889b1edc08d304d64",
+      "change": "2026-10-30 HA047 candidate: carry HTTP status_code on EmqxApiError so retained lookup distinguishes404 from failures; reject empty, malformed and scalar JSON except explicit204. Preserve HTTP diagnostics and warn against replaying an ambiguous write. Port reviewed behavior from PaaS EMQX caad3965646f9dac3f4f57f3677aff92196745a2; keep HA backend transport unchanged.",
+      "guarded_sources": {}
+    },
+    {
+      "path": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py",
+      "sha256": "ef5dd9178e701ea4df018ee9fffe202164277fdd072a4e828e6f57bf09527b4c",
+      "change": "2026-10-30 HA047 candidate: retained read falls back to listing only for the existing404/no-result compatibility path; all other API/JSON failures propagate. Retained DELETE dispatches once, with no empty retained publish fallback after any error including404. Port from PaaS EMQX caad3965646f9dac3f4f57f3677aff92196745a2; tested through pinned child, gateway and owned HTTP fixtures.",
+      "guarded_sources": {}
     }
   ]
 }

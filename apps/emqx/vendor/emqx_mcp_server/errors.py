@@ -13,6 +13,10 @@ class EmqxApiError(ToolError):
     are written as instructions rather than stack traces.
     """
 
+    def __init__(self, message: str, *, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+
 
 async def emqx_request(
     client, method: str, path: str, **kwargs
@@ -23,7 +27,7 @@ async def emqx_request(
     except httpx.TimeoutException as exc:
         raise EmqxApiError(
             f"EMQX timed out on {method} {path}. The broker may be busy — "
-            "retry with a smaller `limit`."
+            "Check state before repeating a write; its result may be unknown."
         ) from exc
     except httpx.ConnectError as exc:
         raise EmqxApiError(
@@ -34,26 +38,32 @@ async def emqx_request(
     if response.status_code == 401:
         raise EmqxApiError(
             "EMQX rejected the API credentials (401). The configured API key "
-            "or secret is wrong, expired, or disabled."
+            "or secret is wrong, expired, or disabled.",
+            status_code=401,
         )
     if response.status_code == 404:
         raise EmqxApiError(
             f"EMQX has no such resource: {method} {path}. "
-            "Double-check the identifier — list the collection first."
+            "Double-check the identifier — list the collection first.",
+            status_code=404,
         )
     if response.status_code >= 400:
         raise EmqxApiError(
             f"EMQX API error {response.status_code} on {method} {path}: "
-            f"{response.text[:300]}"
+            f"{response.text[:300]}",
+            status_code=response.status_code,
         )
     return response
 
 
 def json_body(response: httpx.Response) -> dict | list:
     """Parse a response body, tolerating EMQX's empty 204s."""
-    if response.status_code == 204 or not response.content:
+    if response.status_code == 204:
         return {}
     try:
-        return response.json()
+        value = response.json()
+        if not isinstance(value, (dict, list)):
+            raise ValueError()
+        return value
     except ValueError:
-        return {}
+        raise EmqxApiError("EMQX_INVALID_RESPONSE: expected a JSON object or list") from None
