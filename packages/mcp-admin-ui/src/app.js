@@ -427,7 +427,9 @@ function tools() {
     const expectedPolicy = policyFingerprint(snapshot);
     await task(async () => {
       await saveForm(form, 'policy', fresh => {
-        if (revision === undefined && policyFingerprint(fresh) !== expectedPolicy) throw new UiError('工具授權版本已變更。請重新整理後再試。');
+        // If-Match binds saved state, not the runtime tool/grant definitions.
+        // A valid configuration revision must not bypass this contract check.
+        if (policyFingerprint(fresh) !== expectedPolicy) throw new UiError('工具授權版本已變更。請重新整理後再試。');
         return policyPayload(snapshot, data.getAll('disabled'), data.getAll('grant').map(v => JSON.parse(v)), denies);
       }, revision);
       await reload('伺服器已確認儲存工具權限。此頁未執行任何工具。');

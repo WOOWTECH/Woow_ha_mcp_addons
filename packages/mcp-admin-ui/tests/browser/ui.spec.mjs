@@ -312,11 +312,16 @@ test('MOCK token expires, and a reveal completing after focus loss stays hidden'
 test('MOCK changing grant contract on fresh bootstrap prevents stale writes', async ({ page, request }) => {
   await reset(request, { granular: true });
   await start(page, '/tools');
+  const before = (await (await request.get(`${prefix}/api/configuration`)).json()).configuration.revision;
+  expect(before).toMatch(/^c1-[a-f0-9]{64}$/);
   await page.getByLabel('明確允許此工具寫入').check();
   await reset(request, { granular: false });
+  // Runtime contract drift can occur without a persisted configuration edit.
+  expect((await (await request.get(`${prefix}/api/configuration`)).json()).configuration.revision).toBe(before);
   await page.getByRole('button', { name: '儲存工具權限' }).click();
   await confirm(page, '確認套用');
   await expect(page.getByRole('status')).toContainText('工具授權版本已變更');
+  await expect(page.getByLabel('明確允許此工具寫入')).toBeChecked();
   expect(await calls(request)).toHaveLength(0);
 });
 test('MOCK all product forms fit 320px and dashboard is validated as a triplet', async ({ page, request }) => {
