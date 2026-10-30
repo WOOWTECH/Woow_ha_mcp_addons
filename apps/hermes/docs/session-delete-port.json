@@ -1,6 +1,6 @@
 {
   "paas_source_commit": "052887fa68d5e67b86c622ef92f46dd7f75a08ca",
-  "ha_base_commit": "4d81dcc408c9b8cc2bdcd1af2dffcfb74d2a962a",
+  "ha_base_commit": "0807d4dfb8c2ce958ac052bbe14395c98bd0f298",
   "helper_sha256": "8f059b0d5108610d2c9a8b6598b573d236b12319fc59286f8d763afda40a796e",
   "exact_function_sha256": {
     "hermes_session": "52b8e3a723995aed97a8e284b14e5561eab9afbe6a3e86470f42ea70a18e2c0d",

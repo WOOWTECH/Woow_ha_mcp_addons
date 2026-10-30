@@ -23,15 +23,17 @@ PYTHONDONTWRITEBYTECODE=1 TMPDIR=/tmp .venv/bin/python -m pytest -q -p no:cachep
   tests/test_hermes_mcp_url_guard.py tests/test_hermes_chat_timeout.py \
   'tests/test_expansion_runtime.py::test_real_expanded_reads_and_explicit_writes[hermes]' \
   tests/test_raw_backend_errors.py::test_real_hermes_child_reports_status_and_body_of_a_rejected_request \
-  tests/test_six_hardening.py::test_hermes_dashboard_login_and_cookie_errors_are_safe
+  tests/test_six_hardening.py::test_hermes_dashboard_login_and_cookie_errors_are_safe \
+  'tests/test_tool_snapshot.py::test_snapshot_equals_the_real_child[hermes]' \
+  tests/test_tool_snapshot.py::test_snapshot_names_are_the_classified_surface
 ```
 
 The root session-contract test starts the app interpreter and reuses the root pytest libraries read-only. It verifies all28 ported contract cases ran without skips. No dependency or lockfile change is needed.
 
 ## Integration boundary
 
-This is a local source port from HA base `4d81dcc408c9b8cc2bdcd1af2dffcfb74d2a962a`, with no release version change. It does not establish acceptance of an HA image, HAOS ingress or an external LLM. The existing PaaS actual-Agent receipts are provenance only.
+This source port is based on merged HA0.4.8 commit `0807d4dfb8c2ce958ac052bbe14395c98bd0f298`, with no release version change. It does not establish acceptance of an HA image, HAOS ingress or an external LLM. The existing PaaS actual-Agent receipts are provenance only.
 
-Before integration, regenerate the Hermes entry in `packages/mcp-admin-core/mcp_admin_core/tool_snapshot.py` from the actual child and review it. Its fallback list must expose the same optional recovery fields and description. The separate backend-lane `ha049-hermes-port-20261030/TOOL-SNAPSHOT.proposed.patch` contains only this generated Hermes entry; shared runtime source is outside this app/tests checkpoint. The current snapshot equality test deliberately remains red until that patch is integrated. Do not weaken or skip the equality assertion.
+The Hermes entry in `packages/mcp-admin-core/mcp_admin_core/tool_snapshot.py` has been regenerated from the actual child and integrated. Its fallback list exposes the same optional recovery fields and description. All27 integration tests, including equality with the actual child snapshot, passed after rebasing onto HA0.4.8. The embedded contract suite also ran all28 cases without skips.
 
-Rebase onto the merged048 source before a future049 release review. The048 source, builder, Docker base, HAOS resources and production remain outside this port.
+Publication and actual HAOS acceptance belong to the subsequent release. This port does not change the published0.4.8 images, builder, Docker base or running services.
