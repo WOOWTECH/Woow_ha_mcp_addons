@@ -2300,11 +2300,25 @@ LISTED = {'odoo': [{'name': 'data_quality_report',
                              'type': 'object',
                              'title': 'hermes_chatArguments'}},
             {'name': 'hermes_session',
-             'description': 'Manage Hermes sessions. Actions: list, get, delete',
+             'description': 'Manage Hermes sessions. Actions: list, get, delete.\n'
+                            '\n'
+                            'Delete reads fresh Agent fences and sends one request. It never retries automatically.\n'
+                            'After an unknown outcome, inspect the session; an explicit identity replay requires\n'
+                            'request_id, expected_revision and expected_generation together, unchanged from the '
+                            'error.\n',
              'inputSchema': {'properties': {'action': {'default': 'list', 'title': 'Action', 'type': 'string'},
                                             'session_id': {'anyOf': [{'type': 'string'}, {'type': 'null'}],
                                                            'default': None,
-                                                           'title': 'Session Id'}},
+                                                           'title': 'Session Id'},
+                                            'request_id': {'anyOf': [{'type': 'string'}, {'type': 'null'}],
+                                                           'default': None,
+                                                           'title': 'Request Id'},
+                                            'expected_revision': {'anyOf': [{'type': 'integer'}, {'type': 'null'}],
+                                                                  'default': None,
+                                                                  'title': 'Expected Revision'},
+                                            'expected_generation': {'anyOf': [{'type': 'integer'}, {'type': 'null'}],
+                                                                    'default': None,
+                                                                    'title': 'Expected Generation'}},
                              'type': 'object',
                              'title': 'hermes_sessionArguments'}},
             {'name': 'hermes_cron',
