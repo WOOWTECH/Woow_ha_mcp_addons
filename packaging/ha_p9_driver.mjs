@@ -13,6 +13,7 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { createP9AdminClient } from './ha_p9_admin.mjs';
 
 const env = (name, fallback) => {
   const value = process.env[name] ?? fallback;
@@ -84,16 +85,29 @@ try {
   const session = (await call('/ingress/session', 'post')).session;
   console.log(`HA admin login ok; app ${SLUG} ${info.version} state=${info.state}`);
   const ING = H + info.ingress_url.replace(/\/*$/, '/'), hdr = { Cookie: 'ingress_session=' + session, 'User-Agent': UA };
-  const boot = async () => { const r = await fetch(ING + 'api/bootstrap', { headers: hdr }); return { status: r.status, ...(await r.json()) }; };
+  const admin = createP9AdminClient(ING, hdr);
+  const boot = async () => ({ status: 200, ...(await admin.bootstrap()) });
   let b = await boot();
   console.log('bootstrap', b.status, JSON.stringify({ product: b.product, backend_url_set: Boolean(b.backend_url), backend_key_set: b.backend_key_set, connection_configured: b.connection_configured, token_active: b.token_active, writes_enabled: b.writes_enabled, tools: Object.keys(b.tools || {}).length }));
-  const act = async (name) => { const r = await fetch(ING + 'api/token/' + name, { method: 'POST', headers: { ...hdr, 'x-csrf-token': b.csrf } });
-    console.log(`token/${name}:`, r.status); return r.status === 200 ? (await r.json()).token : undefined; };
+  const change = async (operation, payload) => {
+    try { return await admin.mutate(operation, payload, b.configuration?.revision); }
+    catch (error) {
+      const pending = admin.pendingOperation();
+      // Public receipt identity only; never retry automatically or print a response body.
+      if (pending) console.log('unconfirmed operation; inspect receipt before another run:', pending.id, pending.route);
+      throw error;
+    }
+  };
+  const act = async (name) => {
+    const result = await change('token/' + name);
+    console.log(`token/${name}: confirmed`);
+    b = await boot();
+    return result.token;
+  };
   const check = (rows) => remote('check', rows.map(([label, token]) => `${label}\t${token}\n`).join(''));
   const putBackend = async (body, label) => {
-    const r = await fetch(ING + 'api/backend', { method: 'PUT', headers: { ...hdr, 'x-csrf-token': b.csrf, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    console.log(`PUT api/backend (${label}):`, r.status);
-    if (r.status !== 200) throw new Error('backend update refused');
+    await change('backend', body);
+    console.log(`PUT api/backend (${label}): confirmed`);
     await new Promise((resolve) => setTimeout(resolve, 5000));  // the app restarts its MCP child
     b = await boot();
     console.log('bootstrap', JSON.stringify({ connection_configured: b.connection_configured, health: b.health }));
@@ -105,6 +119,7 @@ try {
   if (argv.includes('--tokens')) {
     const noCsrf = await fetch(ING + 'api/token/rotate', { method: 'POST', headers: hdr });
     console.log('token/rotate without csrf:', noCsrf.status, '(expect 403)');
+    if (noCsrf.status !== 403) throw new Error('missing-CSRF refusal failed');
     const t1 = await act('reveal');
     check([['T1 current', t1]]);
     const t2 = await act('rotate');
