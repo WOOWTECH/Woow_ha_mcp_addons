@@ -3,8 +3,6 @@
 Later Odoo follow-up: [odoo-output-schema-parity-20261031.md](odoo-output-schema-parity-20261031.md)
 adds 41 exact Odoo contracts to the 43 contracts described here. Counts and
 the uncurated-product statement below describe the 2026-10-29 state.
-The subsequent [n8n-output-schema-parity-20261031.md](n8n-output-schema-parity-20261031.md)
-adds two reviewed validator contracts.
 
 Source feature only; no version change, image build, publication or deployment.
 Base: `235338cc7d1a02d17fbb93b631e37c77a20c7889` (protected PR37 merge).
