@@ -94,9 +94,12 @@ def test_cycles_and_deep_or_oversize_schema_fail_closed():
         {'type': 'object', 'properties': {'x' * 50000: {'type': 'string'}}}) is None
 
 
-@pytest.mark.parametrize('tamper', ['digest', 'product', 'duplicate', 'external_ref', 'pattern', 'missing_file'])
+@pytest.mark.parametrize('tamper', ['digest', 'product', 'duplicate', 'external_ref',
+                                    'pattern', 'format_boolean', 'format_float', 'missing_file'])
 def test_packaged_registry_corruption_does_not_open_a_general_relay(tmp_path, monkeypatch, tamper):
     data = copy.deepcopy(DATA); entry = data['entries'][0]
+    if tamper == 'format_boolean': data['format'] = True
+    if tamper == 'format_float': data['format'] = 1.0
     if tamper == 'digest': entry['binding_sha256'] = '0' * 64
     if tamper == 'product': entry['product'] = 'another-product'
     if tamper == 'duplicate': data['entries'].append(entry)

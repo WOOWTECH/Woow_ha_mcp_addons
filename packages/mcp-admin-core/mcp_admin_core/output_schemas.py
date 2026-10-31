@@ -128,7 +128,7 @@ def _reviewed():
     """Load packaged pins once; a damaged registry exposes no output contracts."""
     try:
         data = json.loads(_DATA.read_text())
-        if data['format'] != 1 or type(data['entries']) is not list:
+        if type(data['format']) is not int or data['format'] != 1 or type(data['entries']) is not list:
             return {}
         pins = {}
         for entry in data['entries']:
