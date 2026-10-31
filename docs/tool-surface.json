@@ -58,7 +58,7 @@
     "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py": "d4f16b9af152a71c8fa2a16bc013bd9e39d58db4e59206d331190d890643d50e",
     "apps/emqx/vendor/emqx_mcp_server/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "apps/emqx/vendor/emqx_mcp_server/deps.py": "fa949b1f1b3577be7c848af5bb74a5b9d068d39cba265b93cdd4dde4a41529e3",
-    "apps/emqx/vendor/emqx_mcp_server/errors.py": "3323df5685e667332516a57b1657024d865ea30b2792b4c889b1edc08d304d64",
+    "apps/emqx/vendor/emqx_mcp_server/errors.py": "c4ec6ebe98df07ec625d2a438f316e8f2c43d78e825ba6194d121a9e37755b11",
     "apps/emqx/vendor/emqx_mcp_server/gating.py": "9168feae3231c16df2513f3668a7ad6dacc67072ef5d0cc919bb963e2b6de057",
     "apps/emqx/vendor/emqx_mcp_server/lifespan.py": "e217a630de2a1d9061441a81dc463aaada787203e3c900890198a5789a0be811",
     "apps/emqx/vendor/emqx_mcp_server/models.py": "0d247d845738f37d2673fd0e50203cc8c4f3c4cf6a2d3b10db7bd2a0b9740801",
