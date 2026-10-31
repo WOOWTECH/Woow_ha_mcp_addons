@@ -325,7 +325,7 @@
         "apps/n8n/node_modules/n8n-mcp/dist/mcp/server.js": "638b148f91c18d484b8bcede838be1032f82ddd1b3aa53b24cf005325ae3d9f7",
         "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools.js": "e30bddb3967661d36ae5dd8c6b5eb8b7e1b56f6053b2bb972543d7bbc4d57803",
         "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js": "28d54ea6a3001678fd510542c82c04c26b2ff3b55b7db63b630800e82e02191f",
-        "packages/mcp-admin-core/mcp_admin_core/tool_snapshot.py": "715be7c6c66845d0b390cc7deb93f257a532e41bfdbd312fcbc6fcb294143a5f",
+        "packages/mcp-admin-core/mcp_admin_core/tool_snapshot.py": "10281568fe2ba657a00511dfc2fd31dce156e078f54ae622efd062f469ff4a14",
         "apps/n8n/node_modules/n8n-mcp/dist/mcp/handlers-n8n-manager.js": "fe3181292ec5d1ad07195f55a7ab73569b15d990f687f620ecaf633742fb24aa"
       }
     },
@@ -349,8 +349,8 @@
     },
     {
       "path": "packages/mcp-admin-core/mcp_admin_core/tool_snapshot.py",
-      "sha256": "715be7c6c66845d0b390cc7deb93f257a532e41bfdbd312fcbc6fcb294143a5f",
-      "change": "Regenerated Odoo all-on tool description from the isolated real child; other products unchanged. 0.4.6 integration review: Regenerated from real pinned children: 43 exact output contracts plus the three LiteLLM active-operation descriptions and conservative annotations; tool names and input schemas remain unchanged. Hermes session CAS source candidate (2026-10-30): isolated real-child comparison confirms only hermes_session gains the three optional request_id, expected_revision and expected_generation fields. The 11 Hermes tool names, all other tool entries and authorization defaults remain unchanged; 27 focused integration tests and 28 embedded cases passed. No 0.4.9 image or publication is claimed. 0.4.10 source candidate: regenerated only Odoo fallback outputSchema metadata from the real pinned child; 41 name/input pairs and all other products are unchanged. Corrected n8n-mcp 2.96.2 validator output pins add only validate_node/validate_workflow outputSchema; workflow issue details are objects, not upstream strings.",
+      "sha256": "10281568fe2ba657a00511dfc2fd31dce156e078f54ae622efd062f469ff4a14",
+      "change": "Regenerated Odoo all-on tool description from the isolated real child; other products unchanged. 0.4.6 integration review: Regenerated from real pinned children: 43 exact output contracts plus the three LiteLLM active-operation descriptions and conservative annotations; tool names and input schemas remain unchanged. Hermes session CAS source candidate (2026-10-30): isolated real-child comparison confirms only hermes_session gains the three optional request_id, expected_revision and expected_generation fields. The 11 Hermes tool names, all other tool entries and authorization defaults remain unchanged; 27 focused integration tests and 28 embedded cases passed. No 0.4.9 image or publication is claimed. 0.4.10 source candidate: regenerated only Odoo fallback outputSchema metadata from the real pinned child; 41 name/input pairs and all other products are unchanged. Corrected n8n-mcp 2.96.2 validator output pins add only validate_node/validate_workflow outputSchema; workflow issue details are objects, not upstream strings. Hermes output-schema candidate: regenerated only the 11 pinned Hermes outputSchema fields in the fallback snapshot from the exact pinned child; names, inputs, annotations and other products remain unchanged.",
       "guarded_sources": {}
     },
     {
