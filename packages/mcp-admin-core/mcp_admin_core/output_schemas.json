@@ -75,6 +75,19 @@
         "apps/n8n/patches/fix_test_run_error_messages.py": "f2da0babef9db4a3878d211f47b1d83e552d6273d882462fee7607a805630a2a",
         "apps/n8n/patches/fix_workflow_output_schema.py": "2c7f00d3ac7c28d637621de946f571b963533d64ba564eab79432628c2e9f477"
       }
+    },
+    "hermes": {
+      "ha_commit": "0c3379965d1374f95fdaf4e8302dc82d453b8ae4",
+      "sdk": {
+        "mcp": "2.3.0",
+        "mcp-types": "2.3.0"
+      },
+      "files": {
+        "apps/hermes/pyproject.toml": "9173e975df2cbac2632fe1d3c7daaff9f8ccf76280bad3f844850ad3663fb351",
+        "apps/hermes/uv.lock": "f5c00b593f018f01959c50b0e9d06dcd93a6b8687a0732bb54c00381df3f2dab",
+        "apps/hermes/launch.py": "66567ea7820e005eb4cecc56efce928d084d9921ae09422336bfa0ca24aae5fc",
+        "apps/hermes/vendor/hermes_mcp_server/server.py": "dc4b58c18833694dd29b413d517f34a6e2f9d86f300382f5e62a0789d3cb6c12"
+      }
     }
   },
   "entries": [
@@ -4656,6 +4669,226 @@
       "schema_sha256": "48fa34938d91beaa12724562be8c9bd3819021ebf28274ef8a28c4e4661a2729",
       "binding_sha256": "1cafd6d10b09b676f80a5189427fe488bb96a22c203a4efeb3de21ab7861044d",
       "handler_source": "apps/n8n/patches/fix_workflow_output_schema.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_inspect",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_inspectOutput",
+        "type": "object"
+      },
+      "schema_sha256": "1a7397448a8d6a37604cb0e91e68e7cad501ee608dc522f5abb062b372b5f3a5",
+      "binding_sha256": "13c901f6463131723cff5e9a2d2697a7ac5c857476b8f5cfa8bbace1b33246f0",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_skill",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_skillOutput",
+        "type": "object"
+      },
+      "schema_sha256": "8a3400cba4e37b2d00fc4dbe74350d3dde5e96b2f0b93f3a6bea2e5cf1a259f8",
+      "binding_sha256": "4c815947408195d1ba6c8c74992d89bead6e80a58123e586fce3b59ceefeddbd",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_mcp",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_mcpOutput",
+        "type": "object"
+      },
+      "schema_sha256": "74e043bd06a1311713a10dfc9e0fb13c38beb1b7e2b161bd695a7e6611d014d5",
+      "binding_sha256": "915301b8cb0388cd3fb6105bf84c6364be650e123aea29b7ced7203b7ae5027f",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_model",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_modelOutput",
+        "type": "object"
+      },
+      "schema_sha256": "2e9dc6151992df6d6014b6e59785b0e6779f119796af51e6576cfbf6f9352711",
+      "binding_sha256": "f7d728104c69724b2085a38f11b468109b2bc7243fe9da54525ac990e9e487e6",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_config",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_configOutput",
+        "type": "object"
+      },
+      "schema_sha256": "be91cdb92c39268127f4fba768d61d507c053d0821e50a731678555235a2378f",
+      "binding_sha256": "e42c8fccd0ce78636cabb9b15a532a9538d2c8d4490bacfc04187db2ee2994d4",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_tools",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_toolsOutput",
+        "type": "object"
+      },
+      "schema_sha256": "f561f0f7142adec1fae5e100e42fdad36b19da797891fc21c024786dce4a3f9b",
+      "binding_sha256": "7558b2d9ac0e0595fa05a545be71be56a3fac4de2178e931c8efa940c3940a21",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_gateway",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_gatewayOutput",
+        "type": "object"
+      },
+      "schema_sha256": "4966ae6e536e8f3722e6ee7a863d1f03f49cb22b8ef87dc06d913b9e0f7cbef7",
+      "binding_sha256": "0d36b962628946c8ac75231e3b5d20cc4ba0000924fcbbf8c55486c526ad98ba",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_chat",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_chatOutput",
+        "type": "object"
+      },
+      "schema_sha256": "6f3e5e4a84325af82fd6e41c4c38d1bb350b642317905f0a661a576e4dcdae3f",
+      "binding_sha256": "abef882e28808eaa02dea2c6987e85d8dfe02697ded98da313c6e51dffe731d9",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_session",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_sessionOutput",
+        "type": "object"
+      },
+      "schema_sha256": "815fc29b1b75bf1e57a55205c9e27ac14842b44bf88efc83b16a6838d1efe12a",
+      "binding_sha256": "5b6ff548cf9979ea56d01ad3bc22a0349c7e61042525e2342b0cb347ae0a389f",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_cron",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_cronOutput",
+        "type": "object"
+      },
+      "schema_sha256": "787b9da3891cfa7627b2c37dd6aa485f1351839ede115cdb1243f95aba7a988e",
+      "binding_sha256": "819e2d7ae5abdd8c3020b22b1f6edefd3f49fc63e2207950ab91e6cfc20f1378",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_webhook",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_webhookOutput",
+        "type": "object"
+      },
+      "schema_sha256": "7e140f45c396d4d78a03344ea556f9f5945a09e3b3443b250791875ccaa9b933",
+      "binding_sha256": "717f06b4d3dc790997a1a798dcd86f1b17aaf0acd02d954cca97d59db1fb6bd7",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
     }
   ]
 }

@@ -38,13 +38,14 @@ def test_audited_schema_is_exact_and_isolated(entry):
 
 def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
     assert {p: sum(e['product'] == p for e in ENTRIES) for p in DATA['sources']} == {
-        'litellm': 35, 'nextcloud': 8, 'odoo': 41, 'n8n': 2}
+        'litellm': 35, 'nextcloud': 8, 'odoo': 41, 'n8n': 2, 'hermes': 11}
     for product, source in DATA['sources'].items():
         assert source['ha_commit'] == {
             'litellm': '4e4d69a11ee9cf010e4ea23b1bce4ec009a6c4de',
             'nextcloud': '03833340f11f78200062a731662e35d05dd9ec83',
             'odoo': 'fc5c7cf4fed1decf8fe8c9826724e23b3644ab7b',
             'n8n': '91aceb072dd86ba430545b207d75ad228e27a178',
+            'hermes': '0c3379965d1374f95fdaf4e8302dc82d453b8ae4',
         }[product]
         for name, expected in source['files'].items():
             assert hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == expected, name
@@ -56,6 +57,14 @@ def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
     assert {e['handler_source'] for e in ENTRIES if e['product'] == 'n8n'} == {
         'apps/n8n/patches/fix_workflow_output_schema.py'}
     assert DATA['sources']['n8n']['package'] == 'n8n-mcp==2.96.2'
+    assert {e['handler_source'] for e in ENTRIES if e['product'] == 'hermes'} == {
+        'apps/hermes/vendor/hermes_mcp_server/server.py'}
+    assert DATA['sources']['hermes']['sdk'] == {'mcp': '2.3.0', 'mcp-types': '2.3.0'}
+    hermes_hashes = {e['tool']: e['schema_sha256'] for e in ENTRIES if e['product'] == 'hermes'}
+    assert len(hermes_hashes) == 11
+    assert hashlib.sha256(json.dumps(hermes_hashes, sort_keys=True,
+        separators=(',', ':')).encode()).hexdigest() == (
+        '442e23b55b5db7a24604296aa51f46c286383232576383b69b662a727aa3b83e')
 
 
 def test_n8n_workflow_issue_details_match_reviewed_object_response():
@@ -147,17 +156,17 @@ def test_only_output_schema_is_added_existing_metadata_rules_remain():
     assert 'outputSchema' not in listed_tool({k:v for k,v in tool.items() if k != 'outputSchema'}, local, product='litellm')
 
 
-@pytest.mark.parametrize('product', ['litellm', 'nextcloud', 'odoo'])
+@pytest.mark.parametrize('product', ['litellm', 'nextcloud', 'odoo', 'hermes'])
 async def test_fallback_output_schema_stable_and_policy_still_filters(tmp_path, product):
     available = {'child': 'backoff', 'ready': False, 'backend': 'unknown', 'reason': None}
     with closing(ProductStore(tmp_path / product, product)) as store:
         first = await own_listing(store, product, available)
         second = await own_listing(store, product, available)
         assert first == second
-        expected = {'litellm': 35, 'nextcloud': 8, 'odoo': 41}[product]
+        expected = {'litellm': 35, 'nextcloud': 8, 'odoo': 41, 'hermes': 11}[product]
         assert sum('outputSchema' in t for t in first['tools']) == expected
         name = {'litellm': 'litellm_update_model', 'nextcloud': 'delete_file_checked',
-                'odoo': 'chatter_post'}[product]
+                'odoo': 'chatter_post', 'hermes': 'hermes_chat'}[product]
         store.update(disabled=[name])
         disabled = await own_listing(store, product, available)
         assert name not in {t['name'] for t in disabled['tools']}
