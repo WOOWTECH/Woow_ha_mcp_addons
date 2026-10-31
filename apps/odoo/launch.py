@@ -30,6 +30,7 @@ if __name__ == '__main__':
     from odoo_mcp.server import mcp
     from bounded_tools import BoundedTools
     from odoo_mcp import tools_read, tools_diagnostics, agent_tools, diagnostics, tools_write, server_core
+    from odoo_mcp.odoo_client import OdooClient, get_odoo_client
     # 0.2.0 (owner decision 2026-10-15, the full add-on): the complete odoo-mcp surface as the PaaS
     # woow-mcp-server serves it. tools_write and server_core carry the two PaaS build patches (apps/odoo/patches:
     # fix_cross_session_token_store, fix_direct_writes; applied to the venv by the Dockerfile and packaging/unit.sh):
@@ -48,10 +49,14 @@ if __name__ == '__main__':
     ):
         if hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest() != digest:
             raise RuntimeError('Odoo handlers require source review (patched odoo-mcp 1.3.0 expected)')
+    # Upstream swallows failed search_read/read calls into [], turning an Odoo
+    # access or connection error into a false "success, zero records" reply.
+    # Install the reviewed PaaS behavior before any client is constructed.
+    import odoo_read_errors
+    odoo_read_errors.propagate_read_errors(OdooClient)
     from odoo_read_exists import install as install_read_exists
     install_read_exists(mcp)  # 0.1.8 (RR-03): a missing record read by 'id' only is not found
     from bounded_tools import OwnedWorkers
-    from odoo_mcp.odoo_client import get_odoo_client
     # HealthMonitor's private probe: not in TOOLS, so the gateway neither lists nor authorizes it. It only
     # authenticates a fresh client (as every session does on its first live call), on its own owned thread:
     # it never takes the single tool worker below (0.1.2 HA: a probe held it while Odoo was slow and user
@@ -68,6 +73,10 @@ if __name__ == '__main__':
     mcp.add_tool(woow_backend_probe, name='woow_backend_probe', description='Add-on readiness probe (private).')
     if mcp._tool_manager.get_tool('woow_backend_probe').fn is not woow_backend_probe:
         raise RuntimeError('readiness probe name taken')  # add_tool keeps an existing tool of the same name
+    # Match PaaS's 2 MiB successful-result bound for generic record reads.
+    # An oversized result becomes success:false, then the next wrapper sets MCP isError.
+    import odoo_result_limits
+    odoo_result_limits.install(mcp)
     # The upstream Odoo tools return {"success": false, "error": ...} as a normal value. Convert those results to
     # MCP isError=true before the worker wrapper, while preserving each published outputSchema's result envelope.
     # This is the same source-backed contract as the PaaS Odoo launcher; fake-backend tests cover both shapes.
