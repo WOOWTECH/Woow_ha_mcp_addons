@@ -56,6 +56,25 @@
         "apps/odoo/odoo_switch_overlay.py": "d152e371f98a5ffab992aa7048cb773edb2263305272ec564a077b65215ff8f4",
         "apps/odoo/start_switches.py": "d3c366ee8c392875d0f712efc7bbafb2ab5aec04371018dadfad7827e268d85a"
       }
+    },
+    "n8n": {
+      "ha_commit": "91aceb072dd86ba430545b207d75ad228e27a178",
+      "package": "n8n-mcp==2.96.2",
+      "sdk": {
+        "@modelcontextprotocol/sdk": "1.32.2"
+      },
+      "files": {
+        "apps/n8n/package.json": "b516b7c858c4f4f60ae40d9c298d597669a26a293696debfc73398098b124956",
+        "apps/n8n/package-lock.json": "a9e1c4796f6a88620b3cdc863d7d3aca11f148d7546479d9494b876d6277e8aa",
+        "apps/n8n/n8n_adapter.py": "15236ab617b192e21e961662a7eff55299ebb8032d4287442f3475fd0c26059f",
+        "apps/n8n/run.py": "1f442cbd646a6882261762ab71903aa1a0e1c017af07a246d2b783e6aa08b048",
+        "apps/n8n/backend_policy.cjs": "497a90dd27a17632e2bdf7ffb950d905a3cf0a0339051ecf96df6e7bd97e4e78",
+        "apps/n8n/Dockerfile": "d1218eeb09f661dafe32b59bde0b6ed89986e8c3e3b37638368d197f42931b32",
+        "packaging/unit.sh": "e0024062aa7d8f3c8b925eddec71e08728d01e500f6e889b5eca8145c32f11c7",
+        "apps/n8n/patches/fix_tool_result_is_error.py": "10d6018a19a90f2eb88956bd72043f454cbc36ca331c7d2978c55cc3dab5a5c8",
+        "apps/n8n/patches/fix_test_run_error_messages.py": "f2da0babef9db4a3878d211f47b1d83e552d6273d882462fee7607a805630a2a",
+        "apps/n8n/patches/fix_workflow_output_schema.py": "2c7f00d3ac7c28d637621de946f571b963533d64ba564eab79432628c2e9f477"
+      }
     }
   },
   "entries": [
@@ -4450,6 +4469,193 @@
       "schema_sha256": "268c9003d500b165da778965deac05c5e39559c0a34e86733abd3340842d1d9d",
       "binding_sha256": "e3dde286345d23c7c34327c9d0d06b0128d8db0b161b6c2b025413df9797c4c0",
       "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "n8n",
+      "tool": "validate_node",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "nodeType": {
+            "type": "string"
+          },
+          "workflowNodeType": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "valid": {
+            "type": "boolean"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "property": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "fix": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "property": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "suggestion": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "missingRequiredFields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Only present in mode=minimal"
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "hasErrors": {
+                "type": "boolean"
+              },
+              "errorCount": {
+                "type": "number"
+              },
+              "warningCount": {
+                "type": "number"
+              },
+              "suggestionCount": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "required": [
+          "nodeType",
+          "displayName",
+          "valid"
+        ]
+      },
+      "schema_sha256": "4c6df217140940c3fdfe120aa473446bf37b0738d020f4a73057e13c1793dd60",
+      "binding_sha256": "2b77426406456a1a021706d1be34cb520d8fac942070bae4f64307d8419de6c2",
+      "handler_source": "apps/n8n/patches/fix_workflow_output_schema.py"
+    },
+    {
+      "product": "n8n",
+      "tool": "validate_workflow",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "totalNodes": {
+                "type": "number"
+              },
+              "enabledNodes": {
+                "type": "number"
+              },
+              "triggerNodes": {
+                "type": "number"
+              },
+              "validConnections": {
+                "type": "number"
+              },
+              "invalidConnections": {
+                "type": "number"
+              },
+              "expressionsValidated": {
+                "type": "number"
+              },
+              "errorCount": {
+                "type": "number"
+              },
+              "warningCount": {
+                "type": "number"
+              }
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "valid",
+          "summary"
+        ]
+      },
+      "schema_sha256": "48fa34938d91beaa12724562be8c9bd3819021ebf28274ef8a28c4e4661a2729",
+      "binding_sha256": "1cafd6d10b09b676f80a5189427fe488bb96a22c203a4efeb3de21ab7861044d",
+      "handler_source": "apps/n8n/patches/fix_workflow_output_schema.py"
     }
   ]
 }
