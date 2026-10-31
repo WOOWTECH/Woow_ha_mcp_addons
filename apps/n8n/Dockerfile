@@ -57,6 +57,9 @@ COPY --from=npm /npm/node_modules ./apps/n8n/node_modules
 RUN /usr/local/bin/python apps/n8n/patches/fix_test_run_error_messages.py
 # 0.4.5: unsuccessful tool results set isError; guarded independently of handler patches.
 RUN /usr/local/bin/python apps/n8n/patches/fix_tool_result_is_error.py
+# n8n-mcp 2.96.2 emits object-valued validate_workflow warning/error details.
+RUN /usr/local/bin/python apps/n8n/patches/fix_workflow_output_schema.py \
+ && node --check apps/n8n/node_modules/n8n-mcp/dist/mcp/tools.js
 COPY packaging/entrypoint.py packaging/management_launcher.py ./packaging/
 COPY THIRD_PARTY_NOTICES.md ./THIRD_PARTY_NOTICES.md
 COPY docs/provenance ./docs/provenance
