@@ -36,7 +36,7 @@ N8N_ERROR = {**N8N_WORKFLOW, 'nodes': [N8N_WORKFLOW['nodes'][0],
     {**N8N_WORKFLOW['nodes'][1], 'parameters': {'onError': 'continueErrorOutput'}}]}
 
 
-@pytest.mark.parametrize('product', ['litellm','nextcloud','odoo','n8n'])
+@pytest.mark.parametrize('product', ['litellm','nextcloud','odoo','n8n','hermes'])
 async def test_real_child_live_and_fallback_contracts_match(tmp_path,product):
     with fake_api() as (url,events,mutations,failures), closing(ProductStore(tmp_path/'state',product)) as store:
         if product == 'n8n':store.update(backend_url=url,backend_key='DUMMY')
@@ -51,7 +51,7 @@ async def test_real_child_live_and_fallback_contracts_match(tmp_path,product):
 
 
 @pytest.mark.parametrize('sdk',['python2','typescript'])
-@pytest.mark.parametrize('product',['litellm','nextcloud','odoo','n8n'])
+@pytest.mark.parametrize('product',['litellm','nextcloud','odoo','n8n','hermes'])
 async def test_sdk_clients_validate_actual_structured_results(tmp_path,product,sdk):
     # CI already installs the repository's pinned n8n SDK. Local isolated installs
     # may point only at a separately owned copy of that same exact SDK version.
