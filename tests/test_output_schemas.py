@@ -38,12 +38,13 @@ def test_audited_schema_is_exact_and_isolated(entry):
 
 def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
     assert {p: sum(e['product'] == p for e in ENTRIES) for p in DATA['sources']} == {
-        'litellm': 35, 'nextcloud': 8, 'odoo': 41}
+        'litellm': 35, 'nextcloud': 8, 'odoo': 41, 'n8n': 2}
     for product, source in DATA['sources'].items():
         assert source['ha_commit'] == {
             'litellm': '4e4d69a11ee9cf010e4ea23b1bce4ec009a6c4de',
             'nextcloud': '03833340f11f78200062a731662e35d05dd9ec83',
             'odoo': 'fc5c7cf4fed1decf8fe8c9826724e23b3644ab7b',
+            'n8n': '2a485662ecfa8b2452d5e02d83ca39cebf5d3bb0',
         }[product]
         for name, expected in source['files'].items():
             assert hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == expected, name
@@ -52,6 +53,8 @@ def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
     assert 'litellm_spend_logs' not in {e['tool'] for e in ENTRIES}  # no declared structured contract
     assert {e['handler_source'] for e in ENTRIES if e['product'] == 'odoo'} == {'apps/odoo/uv.lock'}
     assert DATA['sources']['odoo']['package'] == 'odoo-mcp==1.3.0'
+    assert {e['handler_source'] for e in ENTRIES if e['product'] == 'n8n'} == {'apps/n8n/package-lock.json'}
+    assert DATA['sources']['n8n']['package'] == 'n8n-mcp==2.96.2'
 
 
 def test_odoo_local_refs_are_bounded_and_external_refs_are_rejected():
@@ -153,6 +156,18 @@ async def test_fallback_output_schema_stable_and_policy_still_filters(tmp_path, 
         store.update(disabled=[], enabled_write_tools=[])
         no_grant = await own_listing(store, product, available)
         assert name not in {t['name'] for t in no_grant['tools']}
+
+
+async def test_n8n_fallback_exposes_only_two_reviewed_validator_contracts(tmp_path):
+    available = {'child': 'backoff', 'ready': False, 'backend': 'unknown', 'reason': None}
+    with closing(ProductStore(tmp_path / 'n8n', 'n8n')) as store:
+        first = await own_listing(store, 'n8n', available)
+        assert {t['name'] for t in first['tools'] if 'outputSchema' in t} == {
+            'validate_node', 'validate_workflow'}
+        store.update(disabled=['validate_node'])
+        denied = await own_listing(store, 'n8n', available)
+        assert 'validate_node' not in {t['name'] for t in denied['tools']}
+        assert {t['name'] for t in denied['tools'] if 'outputSchema' in t} == {'validate_workflow'}
 
 
 def test_first_entry_and_cursor_rules_still_apply(tmp_path):
