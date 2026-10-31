@@ -37,17 +37,37 @@ def test_audited_schema_is_exact_and_isolated(entry):
 
 
 def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
-    assert {p: sum(e['product'] == p for e in ENTRIES) for p in DATA['sources']} == {'litellm': 35, 'nextcloud': 8}
+    assert {p: sum(e['product'] == p for e in ENTRIES) for p in DATA['sources']} == {
+        'litellm': 35, 'nextcloud': 8, 'odoo': 41}
     for product, source in DATA['sources'].items():
         assert source['ha_commit'] == {
             'litellm': '4e4d69a11ee9cf010e4ea23b1bce4ec009a6c4de',
             'nextcloud': '03833340f11f78200062a731662e35d05dd9ec83',
+            'odoo': 'fc5c7cf4fed1decf8fe8c9826724e23b3644ab7b',
         }[product]
         for name, expected in source['files'].items():
             assert hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == expected, name
     assert 'woow_backend_probe' not in {e['tool'] for e in ENTRIES}
     assert 'get_file_content' not in {e['tool'] for e in ENTRIES}  # resource/content result, no output schema
     assert 'litellm_spend_logs' not in {e['tool'] for e in ENTRIES}  # no declared structured contract
+    assert {e['handler_source'] for e in ENTRIES if e['product'] == 'odoo'} == {'apps/odoo/uv.lock'}
+    assert DATA['sources']['odoo']['package'] == 'odoo-mcp==1.3.0'
+
+
+def test_odoo_local_refs_are_bounded_and_external_refs_are_rejected():
+    odoo = {e['tool']: e['schema'] for e in ENTRIES if e['product'] == 'odoo'}
+    assert len(odoo) == 41
+    for name in ('schema_catalog', 'list_models', 'search_employee', 'search_holidays'):
+        assert contracts._safe_schema(odoo[name]), name
+    assert not contracts._safe_schema({'type': 'object', 'properties': {
+        'x': {'$ref': 'https://example.invalid/schema'}}})
+    assert not contracts._safe_schema({'type': 'object', 'properties': {
+        'x': {'$ref': '#/$defs/Missing'}}})
+    assert not contracts._safe_schema({'type': 'object', '$defs': {
+        'Loop': {'$ref': '#/$defs/Loop'}}, 'properties': {
+        'x': {'$ref': '#/$defs/Loop'}}})
+    assert not contracts._safe_schema({'type': 'object', 'description': 'bad\nheader'})
+    assert not contracts._safe_schema({'type': 'object', 'default': {'from_child': True}})
 
 
 @pytest.mark.parametrize('candidate', [None, True, [], 'object', {}, {'type': 'array'},
@@ -74,9 +94,12 @@ def test_cycles_and_deep_or_oversize_schema_fail_closed():
         {'type': 'object', 'properties': {'x' * 50000: {'type': 'string'}}}) is None
 
 
-@pytest.mark.parametrize('tamper', ['digest', 'product', 'duplicate', 'external_ref', 'pattern', 'missing_file'])
+@pytest.mark.parametrize('tamper', ['digest', 'product', 'duplicate', 'external_ref',
+                                    'pattern', 'format_boolean', 'format_float', 'missing_file'])
 def test_packaged_registry_corruption_does_not_open_a_general_relay(tmp_path, monkeypatch, tamper):
     data = copy.deepcopy(DATA); entry = data['entries'][0]
+    if tamper == 'format_boolean': data['format'] = True
+    if tamper == 'format_float': data['format'] = 1.0
     if tamper == 'digest': entry['binding_sha256'] = '0' * 64
     if tamper == 'product': entry['product'] = 'another-product'
     if tamper == 'duplicate': data['entries'].append(entry)
@@ -112,15 +135,17 @@ def test_only_output_schema_is_added_existing_metadata_rules_remain():
     assert 'outputSchema' not in listed_tool({k:v for k,v in tool.items() if k != 'outputSchema'}, local, product='litellm')
 
 
-@pytest.mark.parametrize('product', ['litellm', 'nextcloud'])
+@pytest.mark.parametrize('product', ['litellm', 'nextcloud', 'odoo'])
 async def test_fallback_output_schema_stable_and_policy_still_filters(tmp_path, product):
     available = {'child': 'backoff', 'ready': False, 'backend': 'unknown', 'reason': None}
     with closing(ProductStore(tmp_path / product, product)) as store:
         first = await own_listing(store, product, available)
         second = await own_listing(store, product, available)
         assert first == second
-        assert sum('outputSchema' in t for t in first['tools']) == (35 if product == 'litellm' else 8)
-        name = 'litellm_update_model' if product == 'litellm' else 'delete_file_checked'
+        expected = {'litellm': 35, 'nextcloud': 8, 'odoo': 41}[product]
+        assert sum('outputSchema' in t for t in first['tools']) == expected
+        name = {'litellm': 'litellm_update_model', 'nextcloud': 'delete_file_checked',
+                'odoo': 'chatter_post'}[product]
         store.update(disabled=[name])
         disabled = await own_listing(store, product, available)
         assert name not in {t['name'] for t in disabled['tools']}

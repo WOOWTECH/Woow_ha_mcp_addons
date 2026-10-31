@@ -41,6 +41,21 @@
         "apps/nextcloud/vendor/nextcloud_mcp_server/server.py": "eb25088dc4d2158f1583e53b682d753711941bfc2352a2890ef6f6693fd3a108",
         "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py": "9b22f15816e56e6808a509886d89f52a04152dec99bf9078ccd257e098fb4aa4"
       }
+    },
+    "odoo": {
+      "ha_commit": "fc5c7cf4fed1decf8fe8c9826724e23b3644ab7b",
+      "package": "odoo-mcp==1.3.0",
+      "sdk": {
+        "mcp": "2.3.0",
+        "mcp-types": "2.3.0"
+      },
+      "files": {
+        "apps/odoo/pyproject.toml": "c58ac066571355e944d775f84c7b6b0cadcb5abfc817a9be589a25473cd2998d",
+        "apps/odoo/uv.lock": "fe6109498c3143d0b7f25d094a81f7b863984dd791a582c02a9db66e7c49a17a",
+        "apps/odoo/launch.py": "6bb4370ad498c10eaf09786f43f09af9af37c29544626c287394062442e0c7df",
+        "apps/odoo/odoo_switch_overlay.py": "d152e371f98a5ffab992aa7048cb773edb2263305272ec564a077b65215ff8f4",
+        "apps/odoo/start_switches.py": "d3c366ee8c392875d0f712efc7bbafb2ab5aec04371018dadfad7827e268d85a"
+      }
     }
   },
   "entries": [
@@ -921,6 +936,3520 @@
       "schema_sha256": "a8930a8d5cb32cfd1c3315c7a2e37d0f5e4e4da258926b91da8c21772dc0e32b",
       "binding_sha256": "35697c1f6f5497690e0d5ca0324f86e23ce277c6db9036aca67141627b085cc9",
       "handler_source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py"
+    },
+    {
+      "product": "odoo",
+      "tool": "accounting_health_across_instances",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "As Of"
+          },
+          "combined_buckets": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Combined Buckets"
+          },
+          "combined_total_outstanding": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Combined Total Outstanding"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Direction"
+          },
+          "elapsed_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Elapsed Ms"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Errors"
+          },
+          "instance_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instance Count"
+          },
+          "instances_queried": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instances Queried"
+          },
+          "results": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Results"
+          },
+          "skipped_opt_out": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Skipped Opt Out"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          },
+          "unknown_instances": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Unknown Instances"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "AccountingHealthAcrossInstancesResponse",
+        "type": "object"
+      },
+      "schema_sha256": "69ddec834cd0d104dafbc516f1529a86ffcdaf3ea9120bb7b24f9bda7fc8478c",
+      "binding_sha256": "b6552ef7cff85b50fc18fb2ca27d392536bc81e1f6288bbe623b5267e7d51238",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "accounting_health_summary",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "draft_invoices": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Draft Invoices"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "open_payable_items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Open Payable Items"
+          },
+          "open_receivable_items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Open Receivable Items"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "AccountingHealthSummaryResponse",
+        "type": "object"
+      },
+      "schema_sha256": "2985d50dcde37a51f204be3cf5280efad3003cdfb9581859e5e6e64bd2f7c5d7",
+      "binding_sha256": "ce156553a8f040ca4ad0b07134d11c5352273312a766f2184beb2112b0c8f99c",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "aggregate_across_instances",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "combined_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Combined Count"
+          },
+          "combined_measures": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Combined Measures"
+          },
+          "elapsed_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Elapsed Ms"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Errors"
+          },
+          "instance_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instance Count"
+          },
+          "instances_queried": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instances Queried"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "results": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Results"
+          },
+          "skipped_opt_out": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Skipped Opt Out"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          },
+          "unknown_instances": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Unknown Instances"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "AggregateAcrossInstancesResponse",
+        "type": "object"
+      },
+      "schema_sha256": "7a6dc607008c0b36a66a903a1a45aa1bc864e409bc9f9fe3922ebf9fca733ac0",
+      "binding_sha256": "01fa523aa8d4689e0713b1e63b047914538cb4a9b4c96687bc01c1bd184516b8",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "aggregate_records",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "fallback_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fallback Reason"
+          },
+          "group_by": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Group By"
+          },
+          "major_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Major Version"
+          },
+          "measures": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Measures"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "formatted_read_group (19+) or read_group.",
+            "title": "Method"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "row_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Row Count"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Aggregated group rows.",
+            "title": "Rows"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "AggregateRecordsResponse",
+        "type": "object"
+      },
+      "schema_sha256": "7335baa5dc3398e4ae97e742a41efdce7e70c34d2eacf6a4c16cdecb36f8b9be",
+      "binding_sha256": "e7a408320fbbba893972a629b697834531f6bfb4a48a23d7698c59bf0741d01a",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "analyze_upgrade_log",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "analyze_upgrade_logOutput",
+        "type": "object"
+      },
+      "schema_sha256": "b79a4767fa0b9b963f5c781264cbb2af43a00cc5d4efa979a94e9d93f2967b6a",
+      "binding_sha256": "debc87fc3a9dea1263bd42de2ef520403ffaf36e4a94f9a54ead07a50a00cbb6",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "build_domain",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "conditions": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {},
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Normalized field/operator/value conditions.",
+            "title": "Conditions"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Validated Odoo domain expression.",
+            "title": "Domain"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "issues": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Validation errors and warnings.",
+            "title": "Issues"
+          },
+          "metadata_used": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Metadata Used"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "BuildDomainResponse",
+        "type": "object"
+      },
+      "schema_sha256": "eb78ec4eeb039bcd5f832e1cb762d62332e83f766176bdafa1d7546a4edac7af",
+      "binding_sha256": "d71bb0852e5e48500e86d01d84ce9f0116e84e6010ff88226c2cb5e183ec170f",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "business_pack_report",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "business_pack_reportOutput",
+        "type": "object"
+      },
+      "schema_sha256": "a2cb2d9dd53eddcf81efdacfa4889935a668e7c847233ad86f989c12d31e7c3e",
+      "binding_sha256": "77f84b19b0a41e06709d9c75a775975389872ba73f9d1b5d0f510e7b6e1d9ff6",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "cancel_async_task",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Created At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Finished At"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Note"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started At"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Task Id"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "AsyncTaskResponse",
+        "type": "object"
+      },
+      "schema_sha256": "74531c20519c932e74876c2c4799dc2213c35ff65dc1d69a88e364a5bae9f54d",
+      "binding_sha256": "6998afae2da6c16bd7c711f7189a6896fb7142719e88a4657a42f7d1ec555d92",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "chatter_post",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "chatter_postOutput",
+        "type": "object"
+      },
+      "schema_sha256": "d442a062d26bb36af301a83ab725eda1ca3b6e54d1b574c3e6f3199e35e75119",
+      "binding_sha256": "ed4913a2ffc3893bdadbd5dcd616652fb7fc0220f8700fa99862db12f908acc3",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "data_quality_report",
+      "schema": {
+        "additionalProperties": true,
+        "description": "Typed envelope for data_quality_report (payload stays permissive).",
+        "properties": {
+          "checks_run": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Checks Run"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "instance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instance"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "results": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Results"
+          },
+          "sample_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Sample Limit"
+          },
+          "skipped_restricted_fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Skipped Restricted Fields"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Summary"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "DataQualityReportResponse",
+        "type": "object"
+      },
+      "schema_sha256": "4111c096267fbcdfa773b9a931799aef1cd18f3d8c45f501c872553e66c3662e",
+      "binding_sha256": "ac578677b3958c5b3e66ba2dc64ee8274da2ccd76ac82f62a5bf019f872be0c0",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "diagnose_access",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "diagnose_accessOutput",
+        "type": "object"
+      },
+      "schema_sha256": "174ce229404b5674b8847110085ac9d6e1d0a64b2d21dfbfcd1b39c33a958122",
+      "binding_sha256": "e9fefcd12f77cb58611d94b6a5905f8c57812c194a8a6c327660a0b124b80e5f",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "diagnose_odoo_call",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "diagnose_odoo_callOutput",
+        "type": "object"
+      },
+      "schema_sha256": "808eca2e58b75517aa03eb035408b01b08e81f07b3dbe8d38889fcded005a33f",
+      "binding_sha256": "4db06d01be2c98c85b33105eeaf969679adb7657c4a087e1af88eecafc4f6f86",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "execute_approved_write",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "execute_approved_write_toolOutput",
+        "type": "object"
+      },
+      "schema_sha256": "6f2ac55cd961ef9ec96f2b3248fd55387d04875af3076ab88f1207b2147aa7ac",
+      "binding_sha256": "9bb734d46c88a962267914c6c13c72c1df1e8798535b4733f11eaacab81f3fc5",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "execute_method",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "execute_methodOutput",
+        "type": "object"
+      },
+      "schema_sha256": "477e19607cc63dbaf21fc5e246e7976e02bc8377b3b00db4322aab7107a6c5bf",
+      "binding_sha256": "48a8d3baf83ab94c4d5878dcec81876ba1016efa9629da421221a047dc9f08c8",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "fit_gap_report",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "fit_gap_reportOutput",
+        "type": "object"
+      },
+      "schema_sha256": "938d4ea320ce6007f97f77719ce84a545313395c8f54f08bc56d7950b7554ac1",
+      "binding_sha256": "fc09ece1762e8861da77200e8c2a47d34ad92f303533e3078e0269ab52ae1f80",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "generate_json2_payload",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "generate_json2_payloadOutput",
+        "type": "object"
+      },
+      "schema_sha256": "bed12501199c4fa6491e7dbb9a2aa2af3348cffb9a4749d1958c2aed09ebf60c",
+      "binding_sha256": "8e47c608384858d3cb9737c677e3a55a58a51d0779960d58af99b4d4d2d64cc1",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "get_async_task",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Created At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Finished At"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Note"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started At"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Task Id"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "AsyncTaskResponse",
+        "type": "object"
+      },
+      "schema_sha256": "74531c20519c932e74876c2c4799dc2213c35ff65dc1d69a88e364a5bae9f54d",
+      "binding_sha256": "014d24f45b7422725df4617ac97c745801efb845b2d27b1bba15d202eed5c9d1",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "get_model_fields",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Count"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "ranking": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Relevance scores when relevance=\"top\".",
+            "title": "Ranking"
+          },
+          "relevance_applied": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Relevance Applied"
+          },
+          "restricted_fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Fields marked restricted by the field ACL.",
+            "title": "Restricted Fields"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Mapping of field name to fields_get metadata.",
+            "title": "Result"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "GetModelFieldsResponse",
+        "type": "object"
+      },
+      "schema_sha256": "8c7d54762e53d87a529794f0e719e43429ddad68e0c3839185a1c641efe0fe5a",
+      "binding_sha256": "fca8590929732e02b9a8498f6de668b2f43481d8e643e55afd255e9160c1582d",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "get_odoo_profile",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "metadata_used": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Metadata Used"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Server, user-context, transport, and module metadata.",
+            "title": "Profile"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "GetOdooProfileResponse",
+        "type": "object"
+      },
+      "schema_sha256": "36c09efd68f44c83dcc0dcc2e264a3c133afd98ebaa05beadb0bee22f7a422b7",
+      "binding_sha256": "9927bcf10807869a4563c310e67237360b758478e15fed5a0bc7cf673caf81ee",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "health_check",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "plugins": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Opt-in plugin load state and tool filtering.",
+            "title": "Plugins"
+          },
+          "rate_limits": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Rate Limits"
+          },
+          "runtime": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Non-secret runtime security posture.",
+            "title": "Runtime"
+          },
+          "server": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Server name, instructions, surface counts.",
+            "title": "Server"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "HealthCheckResponse",
+        "type": "object"
+      },
+      "schema_sha256": "b76b7b7c5292d0fae495bf02e01d6e2a0a6e714d1f9ba02c802eb03b8e2f6d99",
+      "binding_sha256": "c51235e52231a91ea71e1b3426ca127aa3afe83fddcff914b6a0ec6566810f06",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "index_knowledge",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "documents_in_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Documents In Index"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "fetched": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fetched"
+          },
+          "indexed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Indexed"
+          },
+          "indexed_fields": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Explicit field list or 'smart selection'.",
+            "title": "Indexed Fields"
+          },
+          "instance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instance"
+          },
+          "max_documents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Documents"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "redacted_fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Redacted Fields"
+          },
+          "skipped_over_budget": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Skipped Over Budget"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "IndexKnowledgeResponse",
+        "type": "object"
+      },
+      "schema_sha256": "49fcf6982a55ec42abcc1bc1af41daa06165340f95ddeb87271be97dbd3e3053",
+      "binding_sha256": "f3109a96b78121752b6166b7ce82c36dc77f44f28ba8fb5f38834da6b9663d00",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "inspect_model_relationships",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "inspect_model_relationshipsOutput",
+        "type": "object"
+      },
+      "schema_sha256": "556ce8d60777ddcd1b96bc20683c4e4ccc3455fac786bf549fb5c20b7f9e88fc",
+      "binding_sha256": "2c65fe9f8bc1c100b2c2c36be038f11880da21aaf8d39b5764687762b4e8406f",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "knowledge_stats",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "indexes": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Indexes"
+          },
+          "max_documents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Documents"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          },
+          "total_documents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total Documents"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "KnowledgeStatsResponse",
+        "type": "object"
+      },
+      "schema_sha256": "edd9e4d012ac87e10e182bd70bde77f851b16ac15b5f054e45bb7599973abfc7",
+      "binding_sha256": "7bebf4f1049e89ca986a89081c21489ae0611b5a4af660162d41b208e95cec55",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "list_async_tasks",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tasks": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tasks"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ListAsyncTasksResponse",
+        "type": "object"
+      },
+      "schema_sha256": "50720a9eee96cd69558463aca00ef27684fb3d8be0c8d5b73885f1d98957e7fa",
+      "binding_sha256": "d8b29cb8556cc0a79a08c3b42c162d91dfff4ffc7de68b3be0a2df43ab5d1a94",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "list_instances",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "default": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Name of the default instance.",
+            "title": "Default"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "instance_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instance Count"
+          },
+          "instances": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Instance entries (never credentials).",
+            "title": "Instances"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ListInstancesResponse",
+        "type": "object"
+      },
+      "schema_sha256": "f9494ba0fa7b0c80f5750a8ad506d0a55c98e051ae48ec8b4b6521d71bb8b263",
+      "binding_sha256": "e25a49bd5f34bd8a93aa096484f09f9388d174b5c1d30372023c7d52d30ebf0f",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "list_models",
+      "schema": {
+        "$defs": {
+          "ModelSummary": {
+            "additionalProperties": true,
+            "description": "One model entry from list_models / schema_catalog.",
+            "properties": {
+              "model": {
+                "description": "Technical model name, e.g. res.partner.",
+                "title": "Model",
+                "type": "string"
+              },
+              "name": {
+                "default": "",
+                "description": "Human display name.",
+                "title": "Name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "model"
+            ],
+            "title": "ModelSummary",
+            "type": "object"
+          }
+        },
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Count"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/ModelSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ListModelsResponse",
+        "type": "object"
+      },
+      "schema_sha256": "c6679365bf0454dcb3e852cd7426a32a3092e7e33b45e244e57586db80600309",
+      "binding_sha256": "56b5945cd40f7b676c2f822ee6128d4a44a96d0a73a60b6f6999ce142db2c716",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "lookup_model_history",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "lookup_model_historyOutput",
+        "type": "object"
+      },
+      "schema_sha256": "5a3672d1463f146a6e2648ec94defda500d94063765124aa8949b73b469965ac",
+      "binding_sha256": "ec3127bf1d8fad586f8bd689353b376b4900d56d9b5f657c0b5da872fa007469",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "preview_write",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "preview_writeOutput",
+        "type": "object"
+      },
+      "schema_sha256": "84f086531e8f7d65453bbe3612449d19280904bac07a0e4c286da0a1116b3ae8",
+      "binding_sha256": "a33b58aae0625380e5633c330a1ce607e75489018ec9cc11c5aa07e43eff440d",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "read_attachment",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "attachment": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "ir.attachment metadata row.",
+            "title": "Attachment"
+          },
+          "data_base64": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Base64 content when under the size cap.",
+            "title": "Data Base64"
+          },
+          "data_included": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Data Included"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "max_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Bytes"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ReadAttachmentResponse",
+        "type": "object"
+      },
+      "schema_sha256": "1b924098d29b63cd9de80af854e07958192c08ea698d138d0a420739aa5e23cf",
+      "binding_sha256": "c568c77c9698dfc1b1912a6c1eabdec0d408f5302ce44e48d12139a453e7f19b",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "read_record",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "fields_used": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fields Used"
+          },
+          "redacted_fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Redacted Fields"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The record (field-ACL redacted).",
+            "title": "Result"
+          },
+          "smart_fields_applied": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Smart Fields Applied"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ReadRecordResponse",
+        "type": "object"
+      },
+      "schema_sha256": "3a2e7bc75e796550f4c80b0c8d12d6b2471c1086769060eeae39b7a671ea6f71",
+      "binding_sha256": "9e38eb90c2be0461a420f8ee42edf27a3ccf502de547bedc805239640008716e",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "receivable_payable_aging",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "As Of"
+          },
+          "buckets": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Buckets"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Direction"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "line_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Line Count"
+          },
+          "partner_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Partner Count"
+          },
+          "partners": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Partners"
+          },
+          "skipped_lines": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Skipped Lines"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          },
+          "total_outstanding": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total Outstanding"
+          },
+          "truncated": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Truncated"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ReceivablePayableAgingResponse",
+        "type": "object"
+      },
+      "schema_sha256": "0a1265171fbb0285be9ea7b7a826325537307df46d48fa14eacff8d9f5f33f13",
+      "binding_sha256": "659b32197e3853fbe04f7e9c3651a0f02417b9df4f7512e59f1ce8baa942b194",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "scan_addons_source",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "scan_addons_sourceOutput",
+        "type": "object"
+      },
+      "schema_sha256": "1b8bffeb33bab6941f26abb532ab551815c6333342e1292d48f760177d2eb6e1",
+      "binding_sha256": "84a532c22b95fdd17eb28b52995f3b20bafdbb2a91b008bc54d57eb26b43a75b",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "schema_catalog",
+      "schema": {
+        "$defs": {
+          "ModelSummary": {
+            "additionalProperties": true,
+            "description": "One model entry from list_models / schema_catalog.",
+            "properties": {
+              "model": {
+                "description": "Technical model name, e.g. res.partner.",
+                "title": "Model",
+                "type": "string"
+              },
+              "name": {
+                "default": "",
+                "description": "Human display name.",
+                "title": "Name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "model"
+            ],
+            "title": "ModelSummary",
+            "type": "object"
+          }
+        },
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Count"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "metadata_used": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Metadata Used"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/ModelSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Model entries; fields included when requested.",
+            "title": "Result"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "SchemaCatalogResponse",
+        "type": "object"
+      },
+      "schema_sha256": "4f76cb56139123f5263477c52d3d44a1c92261e5a203caffec07cce3d0565bc3",
+      "binding_sha256": "def0f7f8779b9694d8b1c2bdb37f8a68f67c7936245af32e20345b99f6c0cde4",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "search_across_instances",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "elapsed_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Elapsed Ms"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Errors"
+          },
+          "instance_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instance Count"
+          },
+          "instances_queried": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instances Queried"
+          },
+          "merged": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Merged"
+          },
+          "merged_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Merged Count"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "results": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Results"
+          },
+          "skipped_opt_out": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Skipped Opt Out"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          },
+          "unknown_instances": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Unknown Instances"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "SearchAcrossInstancesResponse",
+        "type": "object"
+      },
+      "schema_sha256": "8c067de71e1d60f2fd12afd0ada9ee6141b3562800093eef2a3244dea64ab596",
+      "binding_sha256": "d3279753627050cdd81a7c40d68d8e3264d5c7a37150d464a6501e620c4a3bce",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "search_employee",
+      "schema": {
+        "$defs": {
+          "EmployeeSearchResult": {
+            "description": "Represents a single employee search result.",
+            "properties": {
+              "id": {
+                "description": "Employee ID",
+                "title": "Id",
+                "type": "integer"
+              },
+              "name": {
+                "description": "Employee name",
+                "title": "Name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "title": "EmployeeSearchResult",
+            "type": "object"
+          }
+        },
+        "description": "Response model for the search_employee tool.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Error message, if any",
+            "title": "Error"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/EmployeeSearchResult"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "List of employee search results",
+            "title": "Result"
+          },
+          "success": {
+            "description": "Indicates if the search was successful",
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "SearchEmployeeResponse",
+        "type": "object"
+      },
+      "schema_sha256": "b59fb431924bd355e936d35a3b0c6605ff0f8a475d3fc9c8eb970888373d3fee",
+      "binding_sha256": "3676d13773ebac27af9cc454401d22762b6d0e1992bee428994ea6a8797d9bc2",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "search_holidays",
+      "schema": {
+        "$defs": {
+          "Holiday": {
+            "description": "Represents a single holiday.",
+            "properties": {
+              "display_name": {
+                "description": "Display name of the holiday",
+                "title": "Display Name",
+                "type": "string"
+              },
+              "employee_id": {
+                "description": "Employee ID associated with the holiday",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "title": "Employee Id",
+                "type": "array"
+              },
+              "name": {
+                "description": "Name of the holiday",
+                "title": "Name",
+                "type": "string"
+              },
+              "start_datetime": {
+                "description": "Start date and time of the holiday",
+                "title": "Start Datetime",
+                "type": "string"
+              },
+              "state": {
+                "description": "State of the holiday",
+                "title": "State",
+                "type": "string"
+              },
+              "stop_datetime": {
+                "description": "End date and time of the holiday",
+                "title": "Stop Datetime",
+                "type": "string"
+              }
+            },
+            "required": [
+              "display_name",
+              "start_datetime",
+              "stop_datetime",
+              "employee_id",
+              "name",
+              "state"
+            ],
+            "title": "Holiday",
+            "type": "object"
+          }
+        },
+        "description": "Response model for the search_holidays tool.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Error message, if any",
+            "title": "Error"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/Holiday"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "List of holidays found",
+            "title": "Result"
+          },
+          "success": {
+            "description": "Indicates if the search was successful",
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "SearchHolidaysResponse",
+        "type": "object"
+      },
+      "schema_sha256": "a20c5b83a772acf3c1ed38d7938452f09eb845c2a7a80a659b8d1ac213010a1e",
+      "binding_sha256": "e3b8df92d66602d48d6076405f5ae9282e9baab1db24bb0341d6f684452c8b68",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "search_knowledge",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "instance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instance"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Query"
+          },
+          "results": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "BM25-ranked snippets from the local index.",
+            "title": "Results"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "SearchKnowledgeResponse",
+        "type": "object"
+      },
+      "schema_sha256": "f068c00206591570e554be1468e3d4be66cc3b78a160096fe660115630e7da46",
+      "binding_sha256": "8ab5e707456f7972e0ef7f71382568d14fc336ccf8bb393ec9a1abc638fbb043",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "search_records",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Count"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "fields_used": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fields Used"
+          },
+          "query_fields_used": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Fields matched by the free-text query shortcut.",
+            "title": "Query Fields Used"
+          },
+          "redacted_fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Redacted Fields"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Matched records (field-ACL redacted).",
+            "title": "Result"
+          },
+          "smart_fields_applied": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Smart Fields Applied"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "SearchRecordsResponse",
+        "type": "object"
+      },
+      "schema_sha256": "ba23fd58aea755e600e3b4a55df1149f767ae2582f4c45fecd434adc1b53e9aa",
+      "binding_sha256": "a9fb9c1d1855c0b6202d15ff724dc3cdda0b19bb78bd0456f6afc85917c6d5eb",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "submit_async_task",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Created At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Finished At"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Note"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started At"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Task Id"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "AsyncTaskResponse",
+        "type": "object"
+      },
+      "schema_sha256": "74531c20519c932e74876c2c4799dc2213c35ff65dc1d69a88e364a5bae9f54d",
+      "binding_sha256": "5a4fc7fb97133406f80f37471e07fb801185a18c1dab4ae8a9c9241860816e3c",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "upgrade_risk_report",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "upgrade_risk_reportOutput",
+        "type": "object"
+      },
+      "schema_sha256": "3db452c8ec0285f369ce395fdec359b366e4d1979018066c115103a1123f72ab",
+      "binding_sha256": "634f2c2b656f5ede4ddd1c48cbb9f76b7b2637fac18e3e8ed2ce86c369b01d55",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "validate_write",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "validate_writeOutput",
+        "type": "object"
+      },
+      "schema_sha256": "268c9003d500b165da778965deac05c5e39559c0a34e86733abd3340842d1d9d",
+      "binding_sha256": "e3dde286345d23c7c34327c9d0d06b0128d8db0b161b6c2b025413df9797c4c0",
+      "handler_source": "apps/odoo/uv.lock"
     }
   ]
 }

@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PINNED = json.loads((ROOT/'packages/mcp-admin-core/mcp_admin_core/output_schemas.json').read_text())
 
 
-@pytest.mark.parametrize('product', ['litellm','nextcloud'])
+@pytest.mark.parametrize('product', ['litellm','nextcloud','odoo'])
 async def test_real_child_live_and_fallback_contracts_match(tmp_path,product):
     with fake_api() as (url,events,mutations,failures), closing(ProductStore(tmp_path/'state',product)) as store:
         store.update(connection=connection(product,url))
@@ -35,15 +35,16 @@ async def test_real_child_live_and_fallback_contracts_match(tmp_path,product):
 
 
 @pytest.mark.parametrize('sdk',['python2','typescript'])
-@pytest.mark.parametrize('product',['litellm','nextcloud'])
+@pytest.mark.parametrize('product',['litellm','nextcloud','odoo'])
 async def test_sdk_clients_validate_actual_structured_results(tmp_path,product,sdk):
     # CI already installs the repository's pinned n8n SDK. Local isolated installs
     # may point only at a separately owned copy of that same exact SDK version.
     sdk_path=Path(os.environ.get('WOOW_OUTPUT_SCHEMA_SDK',ROOT/'apps/n8n/node_modules/@modelcontextprotocol/sdk'))
     if sdk=='typescript':assert json.loads((sdk_path/'package.json').read_text())['version']=='1.32.2'
-    calls=[(name,args,False) for name,args in READS[product]+WRITES[product] if name!='get_file_content']
+    cases = READS[product] if product == 'odoo' else READS[product] + WRITES[product]
+    calls=[(name,args,False) for name,args in cases if name!='get_file_content']
     if product=='nextcloud':calls.append(('read_text_file',{'path':'missing.txt'},True))
-    else:calls.append(('litellm_model_info',{},True))  # fake backend 404 -> tool error, no schema failure
+    elif product=='litellm':calls.append(('litellm_model_info',{},True))  # fake backend 404 -> tool error, no schema failure
     with fake_api() as (url,events,mutations,failures), closing(ProductStore(tmp_path/'state',product)) as store:
         store.update(connection=connection(product,url))
         endpoint=Endpoint(product);manager=endpoint.supervisor(child_spec(store.load(),store.directory))
