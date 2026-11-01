@@ -12,7 +12,7 @@
     "litellm",
     "nextcloud"
   ],
-  "version": "0.4.9",
+  "version": "0.4.10",
   "os_security_upgrades": {
     "snapshot": "20261028T000000Z",
     "suite": "bookworm-security",

@@ -1,6 +1,6 @@
 # EMQX public output-schema parity
 
-This source change prepares a later HA MCP release. It does not alter the published 0.4.9 images, the frozen 0.4.10 release candidate, a HAOS installation, or any PaaS tenant.
+This source change was reviewed separately from the earlier frozen 0.4.10 candidate. The owner's later #54 merge placed it on `claude-delivery`; release PR #47 now rebinds its 0.4.10 source candidate to that merge. It does not alter the published 0.4.9 images, a HAOS installation, or any PaaS tenant, and the earlier 0.4.10 freeze does not prove the rebound candidate.
 
 ## Observed contract gap
 
@@ -16,7 +16,7 @@ Two EMQX contracts use integer or Boolean defaults. The finite validator now acc
 
 ## Validation and release boundary
 
-Local focused validation passed 176 output-schema and real-child snapshot tests. The EMQX snapshot test launched the child and gateway against a fake API, compared their full `tools/list` results with the gateway fallback, and observed no fake-backend mutation. Full PR CI, exact-image build and checks, anonymous provenance, and HAOS Supervisor acceptance remain required. The 0.4.10 release source must not be rebound to this branch; merge this source-only patch only after that release's frozen image-source plan is resolved.
+Local focused validation passed 176 output-schema and real-child snapshot tests. The EMQX snapshot test launched the child and gateway against a fake API, compared their full `tools/list` results with the gateway fallback, and observed no fake-backend mutation. Full PR CI, exact-image build and checks, anonymous provenance, and HAOS Supervisor acceptance remain required. This source-only evidence did not clear the earlier frozen 0.4.10 source. The owner subsequently merged integration PR #54 into `claude-delivery` at `274f226edc1e4616a63835247b37ef8de6d6d25f` and requested a new source binding for release PR #47. Its new head requires a fresh freeze and independent builder gates; the old freeze and CI cannot be reused.
 
 ## 2026-11-01 source-only integration with EMQX error guidance
 

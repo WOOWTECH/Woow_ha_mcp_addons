@@ -1,3 +1,8 @@
+## 0.4.10 — release candidate (2026-10-31; images pending)
+
+- Correct n8n-mcp 2.96.2 `validate_workflow` output schemas for object-valued warning/error details, and publish the corrected validator schemas through the HA gateway. Tool names, input schemas, grants and dependency versions remain unchanged.
+- The 0.4.10 n8n image has not been built or published. Fresh exact-image gates, anonymous readback, provenance and HAOS validation remain pending. See ../../docs/operations/release-decision-0.4.10.md.
+
 ## 0.4.9 — images published and verified
 
 - Synchronize 0.4.9 release metadata with the Hermes session deletion correction; this product retains the reviewed 0.4.8 behavior and dependency pins.

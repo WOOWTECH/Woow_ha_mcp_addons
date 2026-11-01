@@ -1,3 +1,8 @@
+## 0.4.10 — local release candidate (2026-10-31; images pending)
+
+- Synchronize the source version only. OpenDesign remains disabled in the Store; no 0.4.10 OpenDesign image is planned or claimed.
+- The six enabled products' image and release gates remain pending. See ../../docs/operations/release-decision-0.4.10.md.
+
 ## 0.4.9 — source only (disabled)
 
 - Synchronize source version only. OpenDesign remains disabled; no OpenDesign image is planned.

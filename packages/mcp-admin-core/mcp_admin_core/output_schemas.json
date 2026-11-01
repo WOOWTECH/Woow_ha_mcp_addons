@@ -4,7 +4,7 @@
   "canonicalization": "UTF-8 JSON; sort_keys=true; separators=comma/colon; ensure_ascii=false; allow_nan=false. binding_sha256 hashes {product,tool,schema}.",
   "sources": {
     "litellm": {
-      "ha_commit": "4e4d69a11ee9cf010e4ea23b1bce4ec009a6c4de",
+      "ha_commit": "d6403f263f5246288864c15381c2d1bddbb9179c",
       "sdk": {
         "fastmcp": "4.1.3",
         "mcp": "2.3.0",
@@ -28,7 +28,7 @@
       }
     },
     "nextcloud": {
-      "ha_commit": "3abcf334e108118771e94a48ed20684d361085e9",
+      "ha_commit": "d6403f263f5246288864c15381c2d1bddbb9179c",
       "sdk": {
         "fastmcp": "4.1.3",
         "mcp": "2.3.0",
@@ -43,7 +43,7 @@
       }
     },
     "odoo": {
-      "ha_commit": "fc5c7cf4fed1decf8fe8c9826724e23b3644ab7b",
+      "ha_commit": "d6403f263f5246288864c15381c2d1bddbb9179c",
       "package": "odoo-mcp==1.3.0",
       "sdk": {
         "mcp": "2.3.0",
@@ -58,7 +58,7 @@
       }
     },
     "n8n": {
-      "ha_commit": "91aceb072dd86ba430545b207d75ad228e27a178",
+      "ha_commit": "d6403f263f5246288864c15381c2d1bddbb9179c",
       "package": "n8n-mcp==2.96.2",
       "sdk": {
         "@modelcontextprotocol/sdk": "1.32.2"
@@ -69,7 +69,7 @@
         "apps/n8n/n8n_adapter.py": "15236ab617b192e21e961662a7eff55299ebb8032d4287442f3475fd0c26059f",
         "apps/n8n/run.py": "1f442cbd646a6882261762ab71903aa1a0e1c017af07a246d2b783e6aa08b048",
         "apps/n8n/backend_policy.cjs": "497a90dd27a17632e2bdf7ffb950d905a3cf0a0339051ecf96df6e7bd97e4e78",
-        "apps/n8n/Dockerfile": "d1218eeb09f661dafe32b59bde0b6ed89986e8c3e3b37638368d197f42931b32",
+        "apps/n8n/Dockerfile": "fe1c2db733b3cf1eb2d3dbd289f1077f2d37cfdba2b29e0b6fa6f9f44f1173fd",
         "packaging/unit.sh": "e0024062aa7d8f3c8b925eddec71e08728d01e500f6e889b5eca8145c32f11c7",
         "apps/n8n/patches/fix_tool_result_is_error.py": "10d6018a19a90f2eb88956bd72043f454cbc36ca331c7d2978c55cc3dab5a5c8",
         "apps/n8n/patches/fix_test_run_error_messages.py": "f2da0babef9db4a3878d211f47b1d83e552d6273d882462fee7607a805630a2a",
@@ -77,7 +77,7 @@
       }
     },
     "hermes": {
-      "ha_commit": "a6108e5717cf28b07c41b3fb6fbe493370933287",
+      "ha_commit": "d6403f263f5246288864c15381c2d1bddbb9179c",
       "sdk": {
         "mcp": "2.3.0",
         "mcp-types": "2.3.0"
@@ -90,7 +90,7 @@
       }
     },
     "emqx": {
-      "ha_commit": "083959f241994ed82b87cec6e395d807c4eebcb2",
+      "ha_commit": "d6403f263f5246288864c15381c2d1bddbb9179c",
       "sdk": {
         "fastmcp": "4.1.3",
         "mcp": "2.3.0",
