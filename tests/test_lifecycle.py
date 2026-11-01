@@ -53,12 +53,14 @@ def term(*args):
     os.waitpid(pid, 0)
     raise SystemExit(0)
 signal.signal(signal.SIGTERM, term)
-open({str(pidfile)!r}, 'w').write(str(pid))
+with open({str(pidfile)!r}, 'w') as handle:
+    time.sleep(.05)  # Expose the interval between file creation and PID content.
+    handle.write(str(pid))
 while True: time.sleep(.01)
 '''
     manager = Supervisor(spec(code, tmp_path), grace=0.1)
     await manager.start()
-    await until(pidfile.exists)
+    await until(lambda: pidfile.exists() and pidfile.read_text().strip().isdigit())
     descendant = int(pidfile.read_text())
     leader = manager.process.pid
     await manager.stop()

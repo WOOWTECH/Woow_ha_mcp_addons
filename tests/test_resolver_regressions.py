@@ -135,7 +135,12 @@ async def test_dns_and_all_connect_attempts_share_deadline(monkeypatch, kind):
     else:
         monkeypatch.setattr(socket, 'socket', StallSocket)
     started = time.monotonic()
-    with pytest.raises((httpcore.ConnectTimeout, ValueError), match='BACKEND_TIMEOUT|synthetic blackhole'):
+    error_type, error_text = {
+        'sync': (httpcore.ConnectTimeout, '^BACKEND_TIMEOUT$'),
+        'async': (httpcore.ConnectTimeout, '^synthetic blackhole$'),
+        'xmlrpc': (TimeoutError, '^BACKEND_TIMEOUT: synthetic blackhole$'),
+    }[kind]
+    with pytest.raises(error_type, match=error_text):
         if kind == 'async':
             await policy.PinnedAsyncBackend(destination).connect_tcp(destination.host, 80, timeout=.24)
         elif kind == 'sync':
