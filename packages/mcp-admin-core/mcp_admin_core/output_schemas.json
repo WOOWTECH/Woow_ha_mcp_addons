@@ -37,7 +37,7 @@
       "files": {
         "apps/nextcloud/pyproject.toml": "5602d26f9e22c7bed9a08aaecd18dc2699134faace6a817c127b744622e50915",
         "apps/nextcloud/uv.lock": "e955fb3ecac323fd59af4c7d39bd081ac911de9ebb2a62cda28bc52f61518320",
-        "apps/nextcloud/vendor/nextcloud_mcp_server/errors.py": "fcb45f44cac902a4f6e7ffd29eff3e3f67802cdaa1a2032c2044a92f253bc182",
+        "apps/nextcloud/vendor/nextcloud_mcp_server/errors.py": "67339625603c9b4ed5a5bccf7960e52933e7b65f883e0a529df5e1718597dd04",
         "apps/nextcloud/vendor/nextcloud_mcp_server/server.py": "eb25088dc4d2158f1583e53b682d753711941bfc2352a2890ef6f6693fd3a108",
         "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py": "9b22f15816e56e6808a509886d89f52a04152dec99bf9078ccd257e098fb4aa4"
       }

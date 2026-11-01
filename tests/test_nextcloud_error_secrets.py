@@ -10,7 +10,9 @@ from nextcloud_fixtures import NextcloudFake, OCS_PATH, respond
 from test_six_hardening import Quiet, call, runtime, serve
 
 PASSWORD = 'FAKE-nc-pass/+"quoted-4917'
-DIAGNOSTIC = 'FAKE storage temporarily unavailable'
+DIAGNOSTIC = 'FAKE quota exhausted on isolated backend'
+UNKNOWN_TOKEN = 'FAKE-unknown-backend-token-20261101'
+INTERNAL_HOST = 'nextcloud-db.internal.svc.cluster.local'
 # 0.4.8 (vendored upstream v0.1.6, errors.mask_credentials): forms the 0.4.4 HA routine did not mask. A password
 # whose Basic value contains '/', and a periodic password whose occurrences overlap.
 SLASHED = 'FAKE-nc-basic??~-4917'
@@ -53,13 +55,17 @@ async def test_configured_secret_in_backend_detail(tmp_path, caplog, capfd, json
             seen.append((self.command, self.path))
             if self.path == OCS_PATH:
                 return respond(self, *fake.handle(self.command, self.path, self.headers, body))
-            detail = f'{DIAGNOSTIC}; credential echo {encoded}; end diagnostic'
+            detail = (f'{DIAGNOSTIC}; credential echo {encoded}; token={UNKNOWN_TOKEN}; '
+                      f'host={INTERNAL_HOST}; fake-response-tail')
             if form == 'folded':
-                detail = f'{DIAGNOSTIC}; credential echo {password}; end diagnostic'
+                detail = (f'{DIAGNOSTIC}; credential echo {password}; token={UNKNOWN_TOKEN}; '
+                          f'host={INTERNAL_HOST}; fake-response-tail')
             elif form == 'cut':
-                detail = DIAGNOSTIC + 'x' * (984 - len(DIAGNOSTIC)) + password
+                detail = (DIAGNOSTIC + 'x' * (984 - len(DIAGNOSTIC)) + password +
+                          f'; token={UNKNOWN_TOKEN}; host={INTERNAL_HOST}')
             elif form == 'overlap':
-                detail = f'{DIAGNOSTIC}; credential echo {password}{encoded}; end diagnostic'
+                detail = (f'{DIAGNOSTIC}; credential echo {password}{encoded}; '
+                          f'token={UNKNOWN_TOKEN}; host={INTERNAL_HOST}; fake-response-tail')
             if mode['shape'] == 'sabre':
                 body = ('<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">'
                         f'<s:message>{escape(detail)}</s:message></d:error>').encode()
@@ -69,7 +75,9 @@ async def test_configured_secret_in_backend_detail(tmp_path, caplog, capfd, json
                 body = detail.encode()
             else:
                 body = json.dumps({'message': detail}).encode()
-            respond(self, mode['status'], {'Content-Type': 'text/plain'}, body)
+            content_type = {'sabre': 'application/xml', 'ocs': 'application/json',
+                            'json': 'application/json', 'text': 'text/plain'}[mode['shape']]
+            respond(self, mode['status'], {'Content-Type': content_type}, body)
 
         do_GET = do_PROPFIND = answer
 
@@ -86,9 +94,14 @@ async def test_configured_secret_in_backend_detail(tmp_path, caplog, capfd, json
                 text = '\n'.join(block.get('text', '') for block in result['content'])
                 assert response.status_code == 200 and result['isError'] is True
                 assert f'BACKEND_HTTP_ERROR status={status}' in text
-                assert DIAGNOSTIC in text
-                if form != 'cut':
-                    assert 'end diagnostic' in text
+                if shape == 'json':  # Unstructured JSON is not a recognized diagnostic source.
+                    assert 'storage quota exhausted' not in text
+                else:
+                    assert 'storage quota exhausted' in text
+                leaked = [name for name, value in (
+                    ('diagnostic', DIAGNOSTIC), ('token', UNKNOWN_TOKEN),
+                    ('host', INTERNAL_HOST), ('suffix', 'fake-response-tail')) if value in text]
+                assert not leaked, leaked
                 if encoded in text or password in text:
                     failures.append((status, shape, form, 'tool response'))
             # Stop joins the genuine output readers before inspecting retained diagnostics.
@@ -98,6 +111,7 @@ async def test_configured_secret_in_backend_detail(tmp_path, caplog, capfd, json
             retained = json.dumps(snapshot, ensure_ascii=False)
             captured = capfd.readouterr()
             logs = caplog.text + captured.out + captured.err + retained
-            assert password not in logs and encoded not in logs
+            assert all(value not in logs for value in
+                       (password, encoded, UNKNOWN_TOKEN, INTERNAL_HOST))
     assert seen and not fake.mutations
     assert not failures, failures
