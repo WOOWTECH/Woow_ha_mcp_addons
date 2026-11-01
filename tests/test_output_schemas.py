@@ -42,12 +42,12 @@ def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
         'litellm': 35, 'nextcloud': 8, 'odoo': 41, 'n8n': 2, 'hermes': 11, 'emqx': 39}
     for product, source in DATA['sources'].items():
         assert source['ha_commit'] == {
-            'litellm': '4e4d69a11ee9cf010e4ea23b1bce4ec009a6c4de',
-            'nextcloud': '3abcf334e108118771e94a48ed20684d361085e9',
-            'odoo': 'fc5c7cf4fed1decf8fe8c9826724e23b3644ab7b',
-            'n8n': 'ab06b68f0663fbe9eb999a001d5ab880baa48289',
-            'hermes': 'a6108e5717cf28b07c41b3fb6fbe493370933287',
-            'emqx': '083959f241994ed82b87cec6e395d807c4eebcb2',
+            'litellm': 'd6403f263f5246288864c15381c2d1bddbb9179c',
+            'nextcloud': 'd6403f263f5246288864c15381c2d1bddbb9179c',
+            'odoo': 'd6403f263f5246288864c15381c2d1bddbb9179c',
+            'n8n': 'd6403f263f5246288864c15381c2d1bddbb9179c',
+            'hermes': 'd6403f263f5246288864c15381c2d1bddbb9179c',
+            'emqx': 'd6403f263f5246288864c15381c2d1bddbb9179c',
         }[product]
         ancestor = subprocess.run(
             ('git', '-c', f'safe.directory={ROOT}', 'merge-base', '--is-ancestor', source['ha_commit'], 'HEAD'),
