@@ -5,6 +5,7 @@ from dataclasses import replace
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 
 import httpx
 import pytest
@@ -42,7 +43,7 @@ def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
     for product, source in DATA['sources'].items():
         assert source['ha_commit'] == {
             'litellm': '4e4d69a11ee9cf010e4ea23b1bce4ec009a6c4de',
-            'nextcloud': '03833340f11f78200062a731662e35d05dd9ec83',
+            'nextcloud': '3abcf334e108118771e94a48ed20684d361085e9',
             'odoo': 'fc5c7cf4fed1decf8fe8c9826724e23b3644ab7b',
             'n8n': '91aceb072dd86ba430545b207d75ad228e27a178',
             'hermes': 'a6108e5717cf28b07c41b3fb6fbe493370933287',
@@ -50,6 +51,14 @@ def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
         }[product]
         for name, expected in source['files'].items():
             assert hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == expected, name
+            # A commit label must reproduce the recorded bytes, not merely pass a
+            # hard-coded string assertion while the current worktree has new files.
+            historical = subprocess.run(
+                ('git', '-c', f'safe.directory={ROOT}', 'show', f"{source['ha_commit']}:{name}"),
+                cwd=ROOT, capture_output=True, check=False,
+            )
+            assert historical.returncode == 0, (product, name, 'source commit unreadable')
+            assert hashlib.sha256(historical.stdout).hexdigest() == expected, (product, name)
     assert 'woow_backend_probe' not in {e['tool'] for e in ENTRIES}
     assert 'get_file_content' not in {e['tool'] for e in ENTRIES}  # resource/content result, no output schema
     assert 'litellm_spend_logs' not in {e['tool'] for e in ENTRIES}  # no declared structured contract
