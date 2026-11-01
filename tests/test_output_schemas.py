@@ -45,10 +45,15 @@ def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
             'litellm': '4e4d69a11ee9cf010e4ea23b1bce4ec009a6c4de',
             'nextcloud': '3abcf334e108118771e94a48ed20684d361085e9',
             'odoo': 'fc5c7cf4fed1decf8fe8c9826724e23b3644ab7b',
-            'n8n': '6fc1f59b03c07c754c8c5007064337c18743888f',
+            'n8n': 'ab06b68f0663fbe9eb999a001d5ab880baa48289',
             'hermes': 'a6108e5717cf28b07c41b3fb6fbe493370933287',
             'emqx': '083959f241994ed82b87cec6e395d807c4eebcb2',
         }[product]
+        ancestor = subprocess.run(
+            ('git', '-c', f'safe.directory={ROOT}', 'merge-base', '--is-ancestor', source['ha_commit'], 'HEAD'),
+            cwd=ROOT, capture_output=True, check=False,
+        )
+        assert ancestor.returncode == 0, (product, 'source commit not reachable from candidate')
         for name, expected in source['files'].items():
             assert hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == expected, name
             # A commit label must reproduce the recorded bytes, not merely pass a
