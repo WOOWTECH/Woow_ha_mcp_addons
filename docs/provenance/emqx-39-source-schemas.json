@@ -1,0 +1,330 @@
+{
+  "counts": {
+    "ha_child_output_present": 39,
+    "ha_gateway_output_present": 0,
+    "paas_child_output_present": 39,
+    "paas_vs_ha_child_input_equal": 39,
+    "paas_vs_ha_child_output_equal": 39,
+    "paas_vs_ha_gateway_input_equal": 39,
+    "paas_vs_ha_gateway_output_equal": 0
+  },
+  "ha_published_image_source": "2a485662ecfa8b2452d5e02d83ca39cebf5d3bb0",
+  "paas_checkout": "29fa3efb46bc8323444f35465224c35554add8fb",
+  "paas_published_image_source": "c195d5d50d0a8fa8022a825f0568bce8a989e3f1",
+  "rows": {
+    "emqx_authz_settings": {
+      "ha_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_ban": {
+      "ha_child_input_sha256": "bc2191a9668a7513bb6c7a82f3e39b53520a4c6faff408bace1682452d61a56e",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "bc2191a9668a7513bb6c7a82f3e39b53520a4c6faff408bace1682452d61a56e",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "bc2191a9668a7513bb6c7a82f3e39b53520a4c6faff408bace1682452d61a56e",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_broker_stats": {
+      "ha_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_child_output_sha256": "e0f33f59a97707bc8b70eef40b4bd0849bf9b2d54216baf855f60f0c09158164",
+      "ha_gateway_source_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "paas_child_output_sha256": "e0f33f59a97707bc8b70eef40b4bd0849bf9b2d54216baf855f60f0c09158164"
+    },
+    "emqx_client_subscribe": {
+      "ha_child_input_sha256": "25138c7b23c11cddff4eafc4c7947cebd2fd5acc12845358aae78a2bf46b68ce",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "25138c7b23c11cddff4eafc4c7947cebd2fd5acc12845358aae78a2bf46b68ce",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "25138c7b23c11cddff4eafc4c7947cebd2fd5acc12845358aae78a2bf46b68ce",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_client_subscriptions": {
+      "ha_child_input_sha256": "aff98c7a7989ca80a990ebf424625b5a54d5768d6115e1da0453feb23b48737e",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "aff98c7a7989ca80a990ebf424625b5a54d5768d6115e1da0453feb23b48737e",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "aff98c7a7989ca80a990ebf424625b5a54d5768d6115e1da0453feb23b48737e",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_client_unsubscribe": {
+      "ha_child_input_sha256": "db7e1edb8951dc40c25eb0e081f0d80c0558764dec7bc6c891a596deb88a8a04",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "db7e1edb8951dc40c25eb0e081f0d80c0558764dec7bc6c891a596deb88a8a04",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "db7e1edb8951dc40c25eb0e081f0d80c0558764dec7bc6c891a596deb88a8a04",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_cluster_status": {
+      "ha_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_create_trace": {
+      "ha_child_input_sha256": "b43e35c57aceded7e5d09bc896adc0e3708188004da28330125c0adb0bad2753",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "b43e35c57aceded7e5d09bc896adc0e3708188004da28330125c0adb0bad2753",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "b43e35c57aceded7e5d09bc896adc0e3708188004da28330125c0adb0bad2753",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_delete_retained": {
+      "ha_child_input_sha256": "0a6cb6edbdc58c83ee0072e131593b5ba6a52f681ad05e129d9c8e50806415a4",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "0a6cb6edbdc58c83ee0072e131593b5ba6a52f681ad05e129d9c8e50806415a4",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "0a6cb6edbdc58c83ee0072e131593b5ba6a52f681ad05e129d9c8e50806415a4",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_delete_trace": {
+      "ha_child_input_sha256": "ca7f5051562c9821feb97235533bffb077f0565000f54566ec6a3a44cb9d389d",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "ca7f5051562c9821feb97235533bffb077f0565000f54566ec6a3a44cb9d389d",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "ca7f5051562c9821feb97235533bffb077f0565000f54566ec6a3a44cb9d389d",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_get_client": {
+      "ha_child_input_sha256": "03514d4b753a7d50658bbf816f71b2326e00ec97e3a23f8b40a8c85f1c0aa560",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "03514d4b753a7d50658bbf816f71b2326e00ec97e3a23f8b40a8c85f1c0aa560",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "03514d4b753a7d50658bbf816f71b2326e00ec97e3a23f8b40a8c85f1c0aa560",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_get_retained": {
+      "ha_child_input_sha256": "2474991712c17c6c4040d21ec66ac17ed3e84845ad3d296ae3aeb2418381bbf2",
+      "ha_child_output_sha256": "7c1c608b1d17e5af36502b930712ff6a1f45c1a271f575cca913c713250704bc",
+      "ha_gateway_source_input_sha256": "2474991712c17c6c4040d21ec66ac17ed3e84845ad3d296ae3aeb2418381bbf2",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "2474991712c17c6c4040d21ec66ac17ed3e84845ad3d296ae3aeb2418381bbf2",
+      "paas_child_output_sha256": "7c1c608b1d17e5af36502b930712ff6a1f45c1a271f575cca913c713250704bc"
+    },
+    "emqx_get_rule_metrics": {
+      "ha_child_input_sha256": "039aacd8372344c814d50077771efcf278190d55a9eb2557710721006fb0583e",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "039aacd8372344c814d50077771efcf278190d55a9eb2557710721006fb0583e",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "039aacd8372344c814d50077771efcf278190d55a9eb2557710721006fb0583e",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_get_trace_log": {
+      "ha_child_input_sha256": "da889528d3ec3272801293d4b267af2bbadf69db36bb79cc162dfaab45f1b921",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "da889528d3ec3272801293d4b267af2bbadf69db36bb79cc162dfaab45f1b921",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "da889528d3ec3272801293d4b267af2bbadf69db36bb79cc162dfaab45f1b921",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_kick_client": {
+      "ha_child_input_sha256": "334fc77ed00ee297622439cc8c0ae6620807c4ab6ec1b73aa4666fdf3ff7766f",
+      "ha_child_output_sha256": "2c766278099ee735ef221bc951343dbbd4409caa40c41ea1d3fc94eff556fae5",
+      "ha_gateway_source_input_sha256": "334fc77ed00ee297622439cc8c0ae6620807c4ab6ec1b73aa4666fdf3ff7766f",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "334fc77ed00ee297622439cc8c0ae6620807c4ab6ec1b73aa4666fdf3ff7766f",
+      "paas_child_output_sha256": "2c766278099ee735ef221bc951343dbbd4409caa40c41ea1d3fc94eff556fae5"
+    },
+    "emqx_list_actions": {
+      "ha_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_list_alarms": {
+      "ha_child_input_sha256": "beec4999aff99f8f840e8a7dbe61c6d55527c617210153aaa89bf307b827b27c",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "beec4999aff99f8f840e8a7dbe61c6d55527c617210153aaa89bf307b827b27c",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "beec4999aff99f8f840e8a7dbe61c6d55527c617210153aaa89bf307b827b27c",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_list_authn": {
+      "ha_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_list_authz_sources": {
+      "ha_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_list_banned": {
+      "ha_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_list_clients": {
+      "ha_child_input_sha256": "39c38f2fb72b8b4bfa9e24727a8be4badcd806ee0b6de8d9c60a2fe5b0829107",
+      "ha_child_output_sha256": "21c80cac02ef2f241253de05b92f9bb2ab8826c43bd664237504167330c2371a",
+      "ha_gateway_source_input_sha256": "39c38f2fb72b8b4bfa9e24727a8be4badcd806ee0b6de8d9c60a2fe5b0829107",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "39c38f2fb72b8b4bfa9e24727a8be4badcd806ee0b6de8d9c60a2fe5b0829107",
+      "paas_child_output_sha256": "21c80cac02ef2f241253de05b92f9bb2ab8826c43bd664237504167330c2371a"
+    },
+    "emqx_list_connectors": {
+      "ha_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_list_listeners": {
+      "ha_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_list_retained": {
+      "ha_child_input_sha256": "07b51b9bd69462b5f4bbb09b2011a5cf387bb605f8d56316d9a8516519cd9367",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "07b51b9bd69462b5f4bbb09b2011a5cf387bb605f8d56316d9a8516519cd9367",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "07b51b9bd69462b5f4bbb09b2011a5cf387bb605f8d56316d9a8516519cd9367",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_list_rules": {
+      "ha_child_input_sha256": "a9c137a22c7452f9c2784b42bd490e4f9cb77cd2650acbf3a6c7eadeb3908ac6",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "a9c137a22c7452f9c2784b42bd490e4f9cb77cd2650acbf3a6c7eadeb3908ac6",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "a9c137a22c7452f9c2784b42bd490e4f9cb77cd2650acbf3a6c7eadeb3908ac6",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_list_subscriptions": {
+      "ha_child_input_sha256": "6771faf9f2636b984f5e9652cffeddc528db4541cb867d472db779b75afa2883",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "6771faf9f2636b984f5e9652cffeddc528db4541cb867d472db779b75afa2883",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "6771faf9f2636b984f5e9652cffeddc528db4541cb867d472db779b75afa2883",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_list_topics": {
+      "ha_child_input_sha256": "8dcd690c22540582bfc5aa45316d10e8931844c83f5eed4031e32d920f4195ea",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "8dcd690c22540582bfc5aa45316d10e8931844c83f5eed4031e32d920f4195ea",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "8dcd690c22540582bfc5aa45316d10e8931844c83f5eed4031e32d920f4195ea",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_list_traces": {
+      "ha_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_manage_authn_users": {
+      "ha_child_input_sha256": "39e4303fe657126d6c15497ad693a138954b700bfcbde92efdffee1b00e3d4d7",
+      "ha_child_output_sha256": "89c0145414fc07cfefa4b24448c31dc919dccc88bb0c959c26413c9691a015aa",
+      "ha_gateway_source_input_sha256": "39e4303fe657126d6c15497ad693a138954b700bfcbde92efdffee1b00e3d4d7",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "39e4303fe657126d6c15497ad693a138954b700bfcbde92efdffee1b00e3d4d7",
+      "paas_child_output_sha256": "89c0145414fc07cfefa4b24448c31dc919dccc88bb0c959c26413c9691a015aa"
+    },
+    "emqx_manage_authz_rules": {
+      "ha_child_input_sha256": "d33770e5d1f40c11f0441c779f743361798ec06713906cce8a1c160d33d00828",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "d33770e5d1f40c11f0441c779f743361798ec06713906cce8a1c160d33d00828",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "d33770e5d1f40c11f0441c779f743361798ec06713906cce8a1c160d33d00828",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_metrics_current": {
+      "ha_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_metrics_history": {
+      "ha_child_input_sha256": "2cf5a6b6e309eef5b3f10b75fd5a14b0622e9d29dfe41f4cb8b24de729adaa3a",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "2cf5a6b6e309eef5b3f10b75fd5a14b0622e9d29dfe41f4cb8b24de729adaa3a",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "2cf5a6b6e309eef5b3f10b75fd5a14b0622e9d29dfe41f4cb8b24de729adaa3a",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_node_detail": {
+      "ha_child_input_sha256": "38f08f4be0d3f5d0c89c602043e9848c4631a3ecacba90cd60f90c3666ee8dfa",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "38f08f4be0d3f5d0c89c602043e9848c4631a3ecacba90cd60f90c3666ee8dfa",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "38f08f4be0d3f5d0c89c602043e9848c4631a3ecacba90cd60f90c3666ee8dfa",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_prometheus_stats": {
+      "ha_child_input_sha256": "6db45b953aa31ab6abb5c553525028d625ee5336e5f506ba1d308d397d4b4487",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "6db45b953aa31ab6abb5c553525028d625ee5336e5f506ba1d308d397d4b4487",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "6db45b953aa31ab6abb5c553525028d625ee5336e5f506ba1d308d397d4b4487",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_publish": {
+      "ha_child_input_sha256": "55327bff761bdc4425bcd0202381fe9c75ae016a9f721b971c23c9c6b43f812b",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "55327bff761bdc4425bcd0202381fe9c75ae016a9f721b971c23c9c6b43f812b",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "55327bff761bdc4425bcd0202381fe9c75ae016a9f721b971c23c9c6b43f812b",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_publish_bulk": {
+      "ha_child_input_sha256": "41769a1e52cd3eaa8c409a6ddb6f2324feca582f9bec1517518fa5c46d66858e",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "41769a1e52cd3eaa8c409a6ddb6f2324feca582f9bec1517518fa5c46d66858e",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "41769a1e52cd3eaa8c409a6ddb6f2324feca582f9bec1517518fa5c46d66858e",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_test_rule_sql": {
+      "ha_child_input_sha256": "618d294e5e5cfde5261fa3e4cb270b8abce8a291d8b9d4bde31bceedafcab47a",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "618d294e5e5cfde5261fa3e4cb270b8abce8a291d8b9d4bde31bceedafcab47a",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "618d294e5e5cfde5261fa3e4cb270b8abce8a291d8b9d4bde31bceedafcab47a",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_toggle_rule": {
+      "ha_child_input_sha256": "fe3f497a1fb14901ef0e48cc09b62f354c5a0d6515a57cb2229788a4445f527e",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "fe3f497a1fb14901ef0e48cc09b62f354c5a0d6515a57cb2229788a4445f527e",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "fe3f497a1fb14901ef0e48cc09b62f354c5a0d6515a57cb2229788a4445f527e",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    },
+    "emqx_unban": {
+      "ha_child_input_sha256": "7ed547ad46f987927f70878131c1e4873e187cf3170c2f83e44369fd75917c3d",
+      "ha_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "ha_gateway_source_input_sha256": "7ed547ad46f987927f70878131c1e4873e187cf3170c2f83e44369fd75917c3d",
+      "ha_gateway_source_output_sha256": null,
+      "paas_child_input_sha256": "7ed547ad46f987927f70878131c1e4873e187cf3170c2f83e44369fd75917c3d",
+      "paas_child_output_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf"
+    }
+  },
+  "scope": "source and offline SDK declarations only, not OCI runtime or same broker",
+  "tool_count": 39
+}
