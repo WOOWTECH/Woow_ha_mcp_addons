@@ -1,3 +1,8 @@
+## 0.4.10 — release candidate (2026-10-31; images pending)
+
+- Carry merged PR #46: upstream `search_read`/`read_records` failures propagate to tool errors instead of a false success with zero rows. `search_records`/`read_record` successful results above the default 2 MiB bound return `success:false` and MCP `isError:true`, naming the largest fields. Smaller results, tool names, inputs and grants retain their contracts.
+- The HA gateway now advertises all 41 upstream Odoo output schemas (merged PR #48). Fresh exact-image gates, anonymous readback, provenance and real HAOS/same-backend validation are pending. See ../../docs/operations/release-decision-0.4.10.md.
+
 ## 0.4.9 — images published and verified
 
 - Synchronize 0.4.9 release metadata with the Hermes session deletion correction; this product retains the reviewed 0.4.8 behavior and dependency pins.

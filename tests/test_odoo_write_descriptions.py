@@ -15,13 +15,25 @@ import pytest
 
 from mcp_admin_core.products import ProductStore, child_spec
 from mcp_admin_core.odoo_write_gates import METHOD_TEXT_ALL_ON
+from mcp_admin_core.capabilities import tool_catalog
+from mcp_admin_core.odoo_switch_listing import for_state
+from mcp_admin_core.products import TOOLS
+from mcp_admin_core.surface import listing
 from mcp_admin_core.tool_snapshot import LISTED
 from owned_runtime import Endpoint
 from test_expansion_runtime import fake_api
 from test_real_products import connection, rpc
 
 ROOT = Path(__file__).resolve().parents[1]
-DIRECT_METHOD = METHOD_TEXT_ALL_ON  # The child overlay's all-on text, also used by the offline snapshot.
+# Independently pinned to PaaS 169f's all-on tools/list text. Keep this literal
+# separate from METHOD_TEXT_ALL_ON so a change to the gate cannot green its own test.
+DIRECT_METHOD = (
+    "Odoo model method to call; any method runs directly in this deployment: create, write "
+    "and unlink (ODOO_MCP_ALLOW_DIRECT_WRITES is set; the preview_write -> validate_write -> "
+    "execute_approved_write flow is optional) and unreviewed side-effect methods such as "
+    "action_confirm or action_post (ODOO_MCP_ALLOW_UNKNOWN_METHODS is set); the Odoo user's "
+    "own access rights still apply."
+)
 PATCHED_METHOD = ("Odoo model method to call; create, write and unlink run directly in this deployment "
                   "(ODOO_MCP_ALLOW_DIRECT_WRITES is set), without the preview_write -> validate_write -> "
                   "execute_approved_write flow; the Odoo user's own access rights still apply.")
@@ -50,9 +62,20 @@ def test_the_listing_the_gateway_ships_states_the_direct_mode():
     # tool_snapshot.py is what the gateway lists when no child answers; tests/test_tool_snapshot.py keeps it equal to the
     # real child's listing and to what the gateway relays from it.
     method, chatter = texts(LISTED['odoo'])
+    assert METHOD_TEXT_ALL_ON == DIRECT_METHOD
     assert (method, chatter) == (DIRECT_METHOD, DIRECT_CHATTER)
     for text in (method, chatter):
         assert 'blocked' not in text and 'requires an approval token' not in text
+
+
+def test_management_fallback_catalog_uses_paas_all_on_method_text(tmp_path):
+    with closing(ProductStore(tmp_path / 'state', 'odoo')) as store:
+        pinned = for_state(listing('odoo'), store.load())
+        item = next(row for row in tool_catalog(TOOLS['odoo'], pinned, None, store.load())['items']
+                    if row['name'] == 'execute_method')
+        assert item['schema_source'] == 'pinned'
+        assert item['inputSchema']['properties']['method']['description'] == DIRECT_METHOD
+        assert item['effective'] is None  # No observed child or backend claim.
 
 
 @pytest.mark.parametrize('switches', ['on', 'off'])
@@ -98,5 +121,10 @@ async def test_the_real_child_lists_the_direct_mode_text(tmp_path):
         finally:
             await process.stop()
             endpoint.close()
+        catalog = tool_catalog(TOOLS['odoo'], for_state(listing('odoo'), store.load()),
+                               listed['tools'], store.load())
     assert texts(listed['tools']) == (DIRECT_METHOD, DIRECT_CHATTER)
+    observed = next(row for row in catalog['items'] if row['name'] == 'execute_method')
+    assert observed['schema_source'] == 'child'
+    assert observed['inputSchema']['properties']['method']['description'] == DIRECT_METHOD
     assert mutations == []  # listing writes nothing

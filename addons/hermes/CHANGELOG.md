@@ -1,3 +1,8 @@
+## 0.4.10 — local release candidate (2026-11-01; images pending)
+
+- Synchronize 0.4.10 release metadata with the merged Odoo read-error/result-size correction. The Hermes gateway and fallback advertise 11 reviewed output schemas matching the pinned child and PaaS runtime. Dashboard connection and missing-configuration errors now give bounded guidance without exposing credentials; tool names, inputs, settings, permission and dependency contracts remain unchanged.
+- This preparation has not built or published a 0.4.10 hermes image. Fresh exact-image gates, anonymous readback, provenance and HAOS validation remain pending. See ../../docs/operations/release-decision-0.4.10.md.
+
 ## 0.4.9 — images published and verified
 
 - Port fenced session deletion and bounded authentication retry behavior from reviewed PaaS source 052887fa68d5e67b86c622ef92f46dd7f75a08ca.

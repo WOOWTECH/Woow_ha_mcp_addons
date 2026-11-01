@@ -1,3 +1,8 @@
+## 0.4.10 — local release candidate (2026-11-01; images pending)
+
+- Synchronize 0.4.10 release metadata with the merged Odoo read-error/result-size correction. EMQX source now bounds public broker errors, rejects redirects, and omits raw broker responses and request paths. The gateway/fallback advertise 39 exact reviewed EMQX output schemas. Tool names, inputs, permissions and dependency contracts remain unchanged.
+- This preparation has not built or published a 0.4.10 emqx image. Fresh exact-image gates, anonymous readback, provenance and HAOS validation remain pending. See ../../docs/operations/release-decision-0.4.10.md.
+
 ## 0.4.9 — images published and verified
 
 - Synchronize 0.4.9 release metadata with the Hermes session deletion correction; this product retains the reviewed 0.4.8 behavior and dependency pins.

@@ -1,3 +1,13 @@
+## 0.4.10 — release candidate (2026-11-01; images pending)
+
+- Based on the protected PR #46 merge `fc5c7cf4`: Odoo failed generic reads now return errors instead of successful empty results; successful generic record reads above the default 2 MiB limit return `success:false`/MCP `isError:true` with field-size guidance.
+- Include merged PR #48: the Odoo gateway now advertises all 41 upstream output schemas. Include merged PR #49: n8n-mcp 2.96.2 now declares object-valued workflow warning/error details correctly, and the HA gateway advertises the corrected validator schemas. Tool names, input schemas and grants do not change.
+- Include merged PR #50: the HA Hermes gateway and fallback now advertise 11 reviewed output schemas matching the pinned child and PaaS runtime; Hermes tool names, inputs, settings and grants do not change.
+- Include merged PR #54 (source PRs #51–#53): EMQX errors are bounded and redirects rejected; its gateway/fallback advertise 39 reviewed output schemas. Hermes dashboard connection and missing-configuration failures provide bounded user guidance. The merged registry has 136 exact output-schema pins; tool names, inputs and grants remain unchanged.
+- Include merged PR #55: Nextcloud now reports only a fixed quota category for recognized backend errors and omits redirect Location; arbitrary backend diagnostics stay private. Its source provenance is rebound to `3abcf334` without changing the eight reviewed output schemas, tool names, inputs or grants.
+- Advance seven source versions together; only Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud are enabled image products. OpenDesign stays disabled and Odoo Manage remains archived.
+- Six fresh exact-source P1–P5 image gates, anonymous readback, provenance, remote checks, Stable Releases/Store and actual HAOS/backend acceptance are pending. See [0.4.10 candidate decision](docs/operations/release-decision-0.4.10.md).
+
 ## 0.4.8 — release candidate (2026-10-30; images pending)
 
 - Vendor Nextcloud MCP v0.1.6 (`8aa6be3`) from merged PR #41; sanitize credentials through the upstream error-handling implementation.
