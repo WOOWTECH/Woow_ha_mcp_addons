@@ -121,6 +121,47 @@ def test_timeout_keeps_safe_public_category_and_retryable_type(monkeypatch):
     assert policy.backend_error_text(raised.value) == 'BACKEND_TIMEOUT: synthetic timeout'
 
 
+@pytest.mark.parametrize(('method', 'attempts'), [('read', 2), ('create', 1)])
+def test_upstream_timeout_retries_only_reads(method, attempts):
+    script = r'''
+import json
+import sys
+import xmlrpc.client
+from backend_policy import XMLTransport
+from odoo_mcp.odoo_client import OdooClient
+
+method = sys.argv[1]
+transport = XMLTransport('http://127.0.0.1:12001')
+calls = []
+def timed_out(*_args):
+    calls.append(1)
+    raise TimeoutError('synthetic timeout')
+transport.single_request = timed_out
+client = OdooClient.__new__(OdooClient)
+client.lang = None
+client.transport = 'xmlrpc'
+client.db, client.uid, client.password = 'test', 7, 'DUMMY'
+client._models = xmlrpc.client.ServerProxy('http://127.0.0.1:12001/xmlrpc/2/object',
+                                            transport=transport, allow_none=True)
+try:
+    client._execute('res.partner', method, [])
+except TimeoutError as exc:
+    print(json.dumps({'attempts': len(calls), 'error': str(exc)}))
+else:
+    raise AssertionError('timeout unexpectedly succeeded')
+'''
+    finished = subprocess.run(
+        [str(ROOT / 'apps/odoo/.venv/bin/python'), '-B', '-c', script, method],
+        cwd=ROOT, env={'PATH': '/usr/bin:/bin', 'PYTHONPATH': str(ROOT / 'apps/runtime'),
+                       'PYTHONDONTWRITEBYTECODE': '1', 'ODOO_MCP_RETRY_ATTEMPTS': '1',
+                       'ODOO_MCP_RETRY_BACKOFF': '0'},
+        capture_output=True, text=True, timeout=15, check=False,
+    )
+    assert finished.returncode == 0, finished.stderr
+    assert json.loads(finished.stdout) == {'attempts': attempts,
+                                           'error': 'BACKEND_TIMEOUT: synthetic timeout'}
+
+
 @pytest.mark.parametrize('failure', [policy.BackendDenied, policy.BackendBusy])
 def test_policy_denial_and_busy_are_never_reclassified_or_retried(monkeypatch, failure):
     transport = policy.XMLTransport('http://127.0.0.1:12001')
@@ -138,6 +179,19 @@ def test_policy_denial_and_busy_are_never_reclassified_or_retried(monkeypatch, f
 
 def test_redirect_and_foreign_host_fail_before_any_replay():
     paths = []
+    sink_posts = []
+
+    class Sink(BaseHTTPRequestHandler):
+        def log_message(self, *_args):
+            pass
+
+        def do_POST(self):
+            sink_posts.append(self.path)
+            self.send_error(500)
+
+    sink = ThreadingHTTPServer(('127.0.0.1', 0), Sink)
+    sink_thread = threading.Thread(target=sink.serve_forever, daemon=True)
+    sink_thread.start()
 
     class Redirect(BaseHTTPRequestHandler):
         def log_message(self, *_args):
@@ -146,8 +200,8 @@ def test_redirect_and_foreign_host_fail_before_any_replay():
         def do_POST(self):
             paths.append(self.path)
             self.rfile.read(int(self.headers['Content-Length']))
-            self.send_response(302)
-            self.send_header('Location', 'http://foreign.invalid/xmlrpc/2/object')
+            self.send_response(307)
+            self.send_header('location', f'http://127.0.0.1:{sink.server_port}/xmlrpc/2/object')
             self.send_header('Content-Length', '0')
             self.end_headers()
 
@@ -158,16 +212,21 @@ def test_redirect_and_foreign_host_fail_before_any_replay():
         base = f'http://127.0.0.1:{server.server_port}'
         transport = policy.XMLTransport(base)
         proxy = xmlrpc.client.ServerProxy(base + '/xmlrpc/2/object', transport=transport)
-        with pytest.raises(ValueError, match='BACKEND_HTTP_ERROR status=302'):
+        with pytest.raises(ValueError, match='BACKEND_HTTP_ERROR status=307'):
             proxy.execute_kw('test', 7, 'DUMMY', 'res.partner', 'read', [[]])
         assert paths == ['/xmlrpc/2/object']
+        assert sink_posts == []
 
         foreign = xmlrpc.client.ServerProxy('http://foreign.invalid/xmlrpc/2/object',
                                             transport=transport)
         with pytest.raises(policy.BackendDenied):
             foreign.execute_kw('test', 7, 'DUMMY', 'res.partner', 'read', [[]])
         assert paths == ['/xmlrpc/2/object']
+        assert sink_posts == []
     finally:
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+        sink.shutdown()
+        sink.server_close()
+        sink_thread.join(timeout=5)
