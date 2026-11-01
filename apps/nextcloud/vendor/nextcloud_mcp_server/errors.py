@@ -93,10 +93,10 @@ class NextcloudHTTPError(ToolError):
         self.code = http_code(status)
 
 
-# Credential masking. The configured app password and ``username:password`` (the Basic
-# credentials) never reach a message, also not when Nextcloud echoes them, encoded or
-# not, in its own diagnostic text (see webdav.server_message).
+# Credential masking remains available for known values. Public backend diagnostics
+# use fixed categories instead, since unknown tokens and hosts cannot be redacted safely.
 REDACTED = "[REDACTED]"
+SAFE_QUOTA_DIAGNOSTIC = "storage quota exhausted"
 
 
 def credential_forms(credential: str) -> set[str]:
@@ -176,22 +176,16 @@ def status_message(
     current_etag: str | None = None,
     detail: str | None = None,
 ) -> str:
-    """Translate a backend HTTP status into the message of the error table (SPEC §6).
-
-    WOOW HA add-on 0.2.1 (owner decision 2026-10-15): every message also carries Nextcloud's own error text when the
-    answer had one (``detail``, webdav.server_message), not only the generic fallback.
-    """
-    message = _status_message(status, label, op, current_etag=current_etag)
-    return f"{message} Nextcloud: {detail}" if detail else message
-
-
-def _status_message(status: int, label: str, op: Operation, *, current_etag: str | None = None) -> str:
+    """Translate a backend HTTP status into the message of the error table (SPEC §6)."""
+    # Only fixed categories may be appended. Callers cannot relay arbitrary backend text.
+    detail = detail if detail == SAFE_QUOTA_DIAGNOSTIC else None
     if status == 401:
         return AUTH_MESSAGE
     if status == 429:
         return THROTTLED_MESSAGE
     if status == 403:
-        return f'Permission denied for "{label}".'
+        message = f'Permission denied for "{label}".'
+        return message + (f" Backend diagnostic: {detail}." if detail else "")
     if status == 404 and op in ("create", "upload_create"):
         # Nextcloud (verified on 35) answers 404, not 409, when the parent folder is missing.
         return f'The parent folder of "{label}" does not exist.'
@@ -220,8 +214,10 @@ def _status_message(status: int, label: str, op: Operation, *, current_etag: str
     if status in (413, 507):
         return f'Not enough storage or file too large for "{label}".'
     if status >= 500:
-        return f"Nextcloud returned an error ({status}); try again later."
-    return f'Nextcloud refused the request for "{label}" ({status}).'
+        message = f"Nextcloud returned an error ({status}); try again later."
+        return message + (f" Backend diagnostic: {detail}." if detail else "")
+    suffix = f": {detail}" if detail else ""
+    return f'Nextcloud refused the request for "{label}" ({status}){suffix}.'
 
 
 def network_message(exc: httpx.TransportError) -> str:

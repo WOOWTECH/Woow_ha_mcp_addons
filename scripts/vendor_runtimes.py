@@ -13,9 +13,10 @@ SOURCES = {
         'emqx_mcp_server/' + p + '.py' for p in ['__init__', 'server', 'settings', 'lifespan', 'gating', 'registry', 'errors', 'deps', 'models', 'tools/__init__', 'tools/_common', 'tools/cluster', 'tools/clients', 'tools/topics', 'tools/messaging', 'tools/security', 'tools/diagnostics', 'tools/integration']]),
     'litellm': ('WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609', [
         'woow_litellm_mcp_server/' + p + '.py' for p in ['__init__', 'server', 'settings', 'lifespan', 'gating', 'registry', 'errors', 'deps', 'middleware', 'tools/__init__', 'tools/_common', 'tools/models', 'tools/chat', 'tools/keys', 'tools/teams', 'tools/users', 'tools/spend', 'tools/health', 'tools/plugins']]),
-    # v0.1.6 (0.4.8; v0.1.5 4e09c86f8ee66f147a2d227e7ed1eb9d989394a6 until 0.4.7). The package lives under src/
+    # 28767c4 adds bounded safe quota diagnostics (0.4.10 candidate); 0.4.8-0.4.9 used v0.1.6 8aa6be3.
+    # v0.1.5 4e09c86f8ee66f147a2d227e7ed1eb9d989394a6 was used until 0.4.7. The package lives under src/
     # upstream (SOURCE_PREFIX); LICENSE is at the repository root.
-    'nextcloud': ('WOOWTECH/Woow_nextcloud_mcp_server/8aa6be3d034509e43b4501c1d3da1523f6a299e5', [
+    'nextcloud': ('WOOWTECH/Woow_nextcloud_mcp_server/28767c4fa15acd4981586ed04906c48523f6bf26', [
         'nextcloud_mcp_server/' + p + '.py' for p in ['__init__', 'server', 'settings', 'client', 'errors', 'paths', 'webdav', 'caldav', 'ical', 'tools']]),
 }
 SOURCE_PREFIX = {'nextcloud': 'src/'}
