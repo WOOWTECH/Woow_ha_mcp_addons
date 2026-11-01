@@ -77,7 +77,7 @@
       }
     },
     "hermes": {
-      "ha_commit": "0c3379965d1374f95fdaf4e8302dc82d453b8ae4",
+      "ha_commit": "a6108e5717cf28b07c41b3fb6fbe493370933287",
       "sdk": {
         "mcp": "2.3.0",
         "mcp-types": "2.3.0"
@@ -86,11 +86,11 @@
         "apps/hermes/pyproject.toml": "9173e975df2cbac2632fe1d3c7daaff9f8ccf76280bad3f844850ad3663fb351",
         "apps/hermes/uv.lock": "f5c00b593f018f01959c50b0e9d06dcd93a6b8687a0732bb54c00381df3f2dab",
         "apps/hermes/launch.py": "66567ea7820e005eb4cecc56efce928d084d9921ae09422336bfa0ca24aae5fc",
-        "apps/hermes/vendor/hermes_mcp_server/server.py": "dc4b58c18833694dd29b413d517f34a6e2f9d86f300382f5e62a0789d3cb6c12"
+        "apps/hermes/vendor/hermes_mcp_server/server.py": "c9145149648c510476474b0d9978df8b67db3965d339543099633bdababaf8d9"
       }
     },
     "emqx": {
-      "ha_commit": "2a485662ecfa8b2452d5e02d83ca39cebf5d3bb0",
+      "ha_commit": "083959f241994ed82b87cec6e395d807c4eebcb2",
       "sdk": {
         "fastmcp": "4.1.3",
         "mcp": "2.3.0",
@@ -101,7 +101,7 @@
         "apps/emqx/uv.lock": "e3b8b4d14c4a89c320e1c05635a44c4753f72be2c5deadde74164c7aeae94c57",
         "apps/emqx/vendor/emqx_mcp_server/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "apps/emqx/vendor/emqx_mcp_server/deps.py": "fa949b1f1b3577be7c848af5bb74a5b9d068d39cba265b93cdd4dde4a41529e3",
-        "apps/emqx/vendor/emqx_mcp_server/errors.py": "3323df5685e667332516a57b1657024d865ea30b2792b4c889b1edc08d304d64",
+        "apps/emqx/vendor/emqx_mcp_server/errors.py": "c4ec6ebe98df07ec625d2a438f316e8f2c43d78e825ba6194d121a9e37755b11",
         "apps/emqx/vendor/emqx_mcp_server/gating.py": "9168feae3231c16df2513f3668a7ad6dacc67072ef5d0cc919bb963e2b6de057",
         "apps/emqx/vendor/emqx_mcp_server/lifespan.py": "e217a630de2a1d9061441a81dc463aaada787203e3c900890198a5789a0be811",
         "apps/emqx/vendor/emqx_mcp_server/models.py": "0d247d845738f37d2673fd0e50203cc8c4f3c4cf6a2d3b10db7bd2a0b9740801",

@@ -17,3 +17,7 @@ Two EMQX contracts use integer or Boolean defaults. The finite validator now acc
 ## Validation and release boundary
 
 Local focused validation passed 176 output-schema and real-child snapshot tests. The EMQX snapshot test launched the child and gateway against a fake API, compared their full `tools/list` results with the gateway fallback, and observed no fake-backend mutation. Full PR CI, exact-image build and checks, anonymous provenance, and HAOS Supervisor acceptance remain required. The 0.4.10 release source must not be rebound to this branch; merge this source-only patch only after that release's frozen image-source plan is resolved.
+
+## 2026-11-01 source-only integration with EMQX error guidance
+
+The integration of source PR #51 changes only `apps/emqx/vendor/emqx_mcp_server/errors.py` among the 20 EMQX files bound by this registry. All seven handler files for the 39 output contracts are byte-identical to the published 0.4.9 source in the receipt above. The registry's integrated EMQX source is therefore rebound to commit `083959f241994ed82b87cec6e395d807c4eebcb2`, whose 20 bound files match this tree, with `errors.py` SHA-256 `c4ec6ebe98df07ec625d2a438f316e8f2c43d78e825ba6194d121a9e37755b11`. The per-tool comparison receipt remains historical source/SDK evidence for 0.4.9; it is not an OCI or real-broker acceptance of the integrated tree.

@@ -53,7 +53,7 @@
     "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/uri_schema.py": "2771d8c05d3a93a7b2b0256faf7c63c655f5cd232d22edc462d77c7a171f4af2",
     "apps/hermes/vendor/hermes_mcp_server/errors.py": "fc9fae57953e55c5da14d90f95d63e40a0cad1cd57f7be5be6d7a7732b8de6be",
     "apps/hermes/vendor/hermes_mcp_server/guards.py": "12dab5cd73dabb337da579f5d86cdc81c931b2678637daaf4c34d1bc2169f9d5",
-    "apps/hermes/vendor/hermes_mcp_server/server.py": "dc4b58c18833694dd29b413d517f34a6e2f9d86f300382f5e62a0789d3cb6c12",
+    "apps/hermes/vendor/hermes_mcp_server/server.py": "c9145149648c510476474b0d9978df8b67db3965d339543099633bdababaf8d9",
     "apps/hermes/vendor/hermes_mcp_server/session_mutations.py": "8f059b0d5108610d2c9a8b6598b573d236b12319fc59286f8d763afda40a796e",
     "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py": "d4f16b9af152a71c8fa2a16bc013bd9e39d58db4e59206d331190d890643d50e",
     "apps/emqx/vendor/emqx_mcp_server/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -1869,7 +1869,7 @@
         {
           "name": "hermes_chat",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 761,
+          "line": 780,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "message: str, session_id: str | None=None",
@@ -1894,7 +1894,7 @@
         {
           "name": "hermes_config",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 623,
+          "line": 642,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -1944,7 +1944,7 @@
         {
           "name": "hermes_cron",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 898,
+          "line": 917,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2039,7 +2039,7 @@
         {
           "name": "hermes_gateway",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 730,
+          "line": 749,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2089,7 +2089,7 @@
         {
           "name": "hermes_inspect",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 407,
+          "line": 426,
           "evidence": "python-decorator-AST",
           "operations": {
             "target": [
@@ -2161,7 +2161,7 @@
         {
           "name": "hermes_mcp",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 513,
+          "line": 532,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2220,7 +2220,7 @@
         {
           "name": "hermes_model",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 551,
+          "line": 570,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2278,7 +2278,7 @@
         {
           "name": "hermes_session",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 850,
+          "line": 869,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2336,7 +2336,7 @@
         {
           "name": "hermes_skill",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 481,
+          "line": 500,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2395,7 +2395,7 @@
         {
           "name": "hermes_tools",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 702,
+          "line": 721,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2454,7 +2454,7 @@
         {
           "name": "hermes_webhook",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 1007,
+          "line": 1026,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
