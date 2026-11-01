@@ -77,8 +77,18 @@ def _safe_schema(schema):
                 return False
         if 'default' in node:
             value = node['default']
-            if value is not None and (type(value) is not str or len(value) > 256):
-                return False
+            if value is not None:
+                if type(value) is str:
+                    if kind != 'string' or len(value) > 256:
+                        return False
+                elif type(value) is bool:
+                    if kind != 'boolean':
+                        return False
+                elif type(value) is int:
+                    if kind != 'integer' or not -1000000 <= value <= 1000000:
+                        return False
+                else:
+                    return False
         if 'properties' in node:
             props = node['properties']
             if kind != 'object' or type(props) is not dict or len(props) > 128:

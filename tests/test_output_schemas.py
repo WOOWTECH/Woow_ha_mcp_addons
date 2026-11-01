@@ -38,7 +38,7 @@ def test_audited_schema_is_exact_and_isolated(entry):
 
 def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
     assert {p: sum(e['product'] == p for e in ENTRIES) for p in DATA['sources']} == {
-        'litellm': 35, 'nextcloud': 8, 'odoo': 41, 'n8n': 2, 'hermes': 11}
+        'litellm': 35, 'nextcloud': 8, 'odoo': 41, 'n8n': 2, 'hermes': 11, 'emqx': 39}
     for product, source in DATA['sources'].items():
         assert source['ha_commit'] == {
             'litellm': '4e4d69a11ee9cf010e4ea23b1bce4ec009a6c4de',
@@ -46,6 +46,7 @@ def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
             'odoo': 'fc5c7cf4fed1decf8fe8c9826724e23b3644ab7b',
             'n8n': '91aceb072dd86ba430545b207d75ad228e27a178',
             'hermes': '0c3379965d1374f95fdaf4e8302dc82d453b8ae4',
+            'emqx': '2a485662ecfa8b2452d5e02d83ca39cebf5d3bb0',
         }[product]
         for name, expected in source['files'].items():
             assert hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == expected, name
@@ -65,6 +66,24 @@ def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
     assert hashlib.sha256(json.dumps(hermes_hashes, sort_keys=True,
         separators=(',', ':')).encode()).hexdigest() == (
         '442e23b55b5db7a24604296aa51f46c286383232576383b69b662a727aa3b83e')
+    assert DATA['sources']['emqx']['sdk'] == {'fastmcp': '4.1.3', 'mcp': '2.3.0', 'mcp-types': '2.3.0'}
+    emqx = {e['tool']: e for e in ENTRIES if e['product'] == 'emqx'}
+    assert len(emqx) == 39
+    assert all(e['handler_source'].startswith('apps/emqx/vendor/emqx_mcp_server/tools/')
+               and e['handler_source'] in DATA['sources']['emqx']['files'] for e in emqx.values())
+    assert hashlib.sha256(json.dumps({name: e['schema_sha256'] for name, e in emqx.items()},
+        sort_keys=True, separators=(',', ':')).encode()).hexdigest() == (
+        'dd6ef3dcc321b5537147b0a3df36a7dd1e98930de655c5dddbd0c1850715e0c0')
+    receipt = json.loads((ROOT / 'docs/provenance/emqx-39-source-schemas.json').read_text())
+    assert receipt['tool_count'] == 39
+    assert receipt['scope'] == 'source and offline SDK declarations only, not OCI runtime or same broker'
+    assert receipt['counts'] == {
+        'paas_vs_ha_child_input_equal': 39, 'paas_vs_ha_gateway_input_equal': 39,
+        'paas_vs_ha_child_output_equal': 39, 'paas_vs_ha_gateway_output_equal': 0,
+        'paas_child_output_present': 39, 'ha_child_output_present': 39,
+        'ha_gateway_output_present': 0}
+    assert {name: row['ha_child_output_sha256'] for name, row in receipt['rows'].items()} == {
+        name: entry['schema_sha256'] for name, entry in emqx.items()}
 
 
 def test_n8n_workflow_issue_details_match_reviewed_object_response():
@@ -89,6 +108,31 @@ def test_odoo_local_refs_are_bounded_and_external_refs_are_rejected():
         'x': {'$ref': '#/$defs/Loop'}}})
     assert not contracts._safe_schema({'type': 'object', 'description': 'bad\nheader'})
     assert not contracts._safe_schema({'type': 'object', 'default': {'from_child': True}})
+
+
+def test_emqx_scalar_defaults_keep_the_reviewed_vocabulary_bounded():
+    good = {'type': 'object', 'properties': {
+        'retained': {'type': 'integer', 'default': 0},
+        'succeeded': {'type': 'boolean', 'default': True},
+    }}
+    assert contracts._safe_schema(good)
+    for value in (1.5, [], {}, 1000001, -1000001, True):
+        wrong = copy.deepcopy(good)
+        wrong['properties']['retained']['default'] = value
+        assert not contracts._safe_schema(wrong)
+    wrong = copy.deepcopy(good)
+    wrong['properties']['succeeded']['default'] = 1
+    assert not contracts._safe_schema(wrong)
+
+
+def test_emqx_changed_child_contract_does_not_leak_through_gateway():
+    schema = next(e['schema'] for e in ENTRIES if e['product'] == 'emqx'
+                  and e['tool'] == 'emqx_broker_stats')
+    changed = copy.deepcopy(schema)
+    changed['properties']['retained']['default'] = 1
+    assert contracts._safe_schema(changed)
+    assert contracts.reviewed_output_schema('emqx', 'emqx_broker_stats', changed) is None
+    assert contracts.reviewed_output_schema('emqx', 'emqx_broker_stats', schema) == schema
 
 
 @pytest.mark.parametrize('candidate', [None, True, [], 'object', {}, {'type': 'array'},
@@ -156,17 +200,17 @@ def test_only_output_schema_is_added_existing_metadata_rules_remain():
     assert 'outputSchema' not in listed_tool({k:v for k,v in tool.items() if k != 'outputSchema'}, local, product='litellm')
 
 
-@pytest.mark.parametrize('product', ['litellm', 'nextcloud', 'odoo', 'hermes'])
+@pytest.mark.parametrize('product', ['litellm', 'nextcloud', 'odoo', 'hermes', 'emqx'])
 async def test_fallback_output_schema_stable_and_policy_still_filters(tmp_path, product):
     available = {'child': 'backoff', 'ready': False, 'backend': 'unknown', 'reason': None}
     with closing(ProductStore(tmp_path / product, product)) as store:
         first = await own_listing(store, product, available)
         second = await own_listing(store, product, available)
         assert first == second
-        expected = {'litellm': 35, 'nextcloud': 8, 'odoo': 41, 'hermes': 11}[product]
+        expected = {'litellm': 35, 'nextcloud': 8, 'odoo': 41, 'hermes': 11, 'emqx': 39}[product]
         assert sum('outputSchema' in t for t in first['tools']) == expected
         name = {'litellm': 'litellm_update_model', 'nextcloud': 'delete_file_checked',
-                'odoo': 'chatter_post', 'hermes': 'hermes_chat'}[product]
+                'odoo': 'chatter_post', 'hermes': 'hermes_chat', 'emqx': 'emqx_kick_client'}[product]
         store.update(disabled=[name])
         disabled = await own_listing(store, product, available)
         assert name not in {t['name'] for t in disabled['tools']}
