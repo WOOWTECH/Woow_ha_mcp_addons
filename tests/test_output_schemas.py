@@ -45,7 +45,7 @@ def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
             'nextcloud': '03833340f11f78200062a731662e35d05dd9ec83',
             'odoo': 'fc5c7cf4fed1decf8fe8c9826724e23b3644ab7b',
             'n8n': '91aceb072dd86ba430545b207d75ad228e27a178',
-            'hermes': '0c3379965d1374f95fdaf4e8302dc82d453b8ae4',
+            'hermes': 'a6108e5717cf28b07c41b3fb6fbe493370933287',
         }[product]
         for name, expected in source['files'].items():
             assert hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == expected, name
