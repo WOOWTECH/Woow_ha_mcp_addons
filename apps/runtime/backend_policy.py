@@ -507,7 +507,10 @@ class XMLTransport(xmlrpc.client.Transport):
         except (BackendDenied, BackendBusy):
             raise
         except TimeoutError as exc:
-            raise ValueError(f'BACKEND_TIMEOUT: {exc}') from None
+            raise TimeoutError(f'BACKEND_TIMEOUT: {exc}') from None
+        except OSError as exc:
+            # Preserve the safe public category and the type odoo-mcp retries for reviewed reads only.
+            raise ConnectionError(f'BACKEND_UNAVAILABLE: {exc}') from None
         except xmlrpc.client.ProtocolError as exc:
             raise ValueError(f'BACKEND_HTTP_ERROR status={int(exc.errcode)}: {exc.errmsg}') from None
         except xmlrpc.client.Fault:
