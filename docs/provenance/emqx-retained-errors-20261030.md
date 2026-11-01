@@ -10,8 +10,7 @@ bounded behavior port, not a replacement of HA's destination/transport policy.
 
 ## Changed behavior
 
-- `errors.py` preserves the HTTP status as typed exception metadata. HTTP
-  diagnostics remain available. A timeout explicitly leaves the write result
+- `errors.py` preserves the HTTP status as typed exception metadata. A timeout explicitly leaves the write result
   uncertain. Empty, malformed, or scalar JSON is an error where a JSON body is
   expected; explicit HTTP204 retains its no-content behavior.
 - `tools/messaging.py` handles a retained GET404 through the existing listing
@@ -45,3 +44,12 @@ the implementing lane's external evidence directory.
 
 No version bump, image build/publication, registry change, or production action
 is performed by this port. Main owns final release integration and acceptance.
+
+## 2026-10-31 bounded-error follow-up
+
+The later source-only EMQX parity change keeps the typed `status_code` and the
+single-request retained DELETE behavior above. It rejects redirects, stops
+returning raw broker response bodies and request paths in tool errors, and
+maps additional `httpx` transport failures to bounded public codes. This
+matches the seven reviewed synthetic PaaS 29fa source cases. It requires a
+future HA image and real-broker replay; this document is not publication proof.
