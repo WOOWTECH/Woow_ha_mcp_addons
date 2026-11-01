@@ -77,7 +77,7 @@
       }
     },
     "hermes": {
-      "ha_commit": "0c3379965d1374f95fdaf4e8302dc82d453b8ae4",
+      "ha_commit": "a6108e5717cf28b07c41b3fb6fbe493370933287",
       "sdk": {
         "mcp": "2.3.0",
         "mcp-types": "2.3.0"
@@ -86,7 +86,37 @@
         "apps/hermes/pyproject.toml": "9173e975df2cbac2632fe1d3c7daaff9f8ccf76280bad3f844850ad3663fb351",
         "apps/hermes/uv.lock": "f5c00b593f018f01959c50b0e9d06dcd93a6b8687a0732bb54c00381df3f2dab",
         "apps/hermes/launch.py": "66567ea7820e005eb4cecc56efce928d084d9921ae09422336bfa0ca24aae5fc",
-        "apps/hermes/vendor/hermes_mcp_server/server.py": "dc4b58c18833694dd29b413d517f34a6e2f9d86f300382f5e62a0789d3cb6c12"
+        "apps/hermes/vendor/hermes_mcp_server/server.py": "c9145149648c510476474b0d9978df8b67db3965d339543099633bdababaf8d9"
+      }
+    },
+    "emqx": {
+      "ha_commit": "083959f241994ed82b87cec6e395d807c4eebcb2",
+      "sdk": {
+        "fastmcp": "4.1.3",
+        "mcp": "2.3.0",
+        "mcp-types": "2.3.0"
+      },
+      "files": {
+        "apps/emqx/pyproject.toml": "3c79a212aada05a143923a2a29fa78f3c318a2dd00041aa71875dca5f45d0053",
+        "apps/emqx/uv.lock": "e3b8b4d14c4a89c320e1c05635a44c4753f72be2c5deadde74164c7aeae94c57",
+        "apps/emqx/vendor/emqx_mcp_server/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "apps/emqx/vendor/emqx_mcp_server/deps.py": "fa949b1f1b3577be7c848af5bb74a5b9d068d39cba265b93cdd4dde4a41529e3",
+        "apps/emqx/vendor/emqx_mcp_server/errors.py": "c4ec6ebe98df07ec625d2a438f316e8f2c43d78e825ba6194d121a9e37755b11",
+        "apps/emqx/vendor/emqx_mcp_server/gating.py": "9168feae3231c16df2513f3668a7ad6dacc67072ef5d0cc919bb963e2b6de057",
+        "apps/emqx/vendor/emqx_mcp_server/lifespan.py": "e217a630de2a1d9061441a81dc463aaada787203e3c900890198a5789a0be811",
+        "apps/emqx/vendor/emqx_mcp_server/models.py": "0d247d845738f37d2673fd0e50203cc8c4f3c4cf6a2d3b10db7bd2a0b9740801",
+        "apps/emqx/vendor/emqx_mcp_server/registry.py": "c440d204de9091952ffbd6784d81cd7fd78184e266701f86cf051da332191652",
+        "apps/emqx/vendor/emqx_mcp_server/server.py": "e6ae5c32a62ae8942bdf2701f687dc7d840bc49745fd8b094e886f833c043c22",
+        "apps/emqx/vendor/emqx_mcp_server/settings.py": "7c4ad8c7d6c56c8a9d3ef62634a4a875bbb9ee25992e6ac0aaf972aaf32a3598",
+        "apps/emqx/vendor/emqx_mcp_server/tools/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "apps/emqx/vendor/emqx_mcp_server/tools/_common.py": "ecf9b4f3ec95b059dcda81d0c5e77c294c14e48cc4f8adc423d455bcf5400ae5",
+        "apps/emqx/vendor/emqx_mcp_server/tools/clients.py": "11b7029a4e57a78169fde8d006596513040c64cdcbb1b12b72f0e48eab0fc3af",
+        "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py": "2a5f1943551498556b3ef525c6742d17980c40022dd6da9349307428da7b0f52",
+        "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py": "f20e0868ebca0c2707d8f3b3fbe7a9e3651af9235d708abfced402ba3c6e26bf",
+        "apps/emqx/vendor/emqx_mcp_server/tools/integration.py": "05ac8a89c35389d6793bb2e2c579947ee3bbc42a55c5fd67d9978a162e1636de",
+        "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py": "ef5dd9178e701ea4df018ee9fffe202164277fdd072a4e828e6f57bf09527b4c",
+        "apps/emqx/vendor/emqx_mcp_server/tools/security.py": "f113e5c365b7d25bca426f3dd663570e9302777b27d67ff24c9ad4af1d299dcf",
+        "apps/emqx/vendor/emqx_mcp_server/tools/topics.py": "fb95c8cfcf2279e3b8b2545079bda8276a24210440123c5ac38624c372f1e353"
       }
     }
   },
@@ -4889,6 +4919,670 @@
       "schema_sha256": "7e140f45c396d4d78a03344ea556f9f5945a09e3b3443b250791875ccaa9b933",
       "binding_sha256": "717f06b4d3dc790997a1a798dcd86f1b17aaf0acd02d954cca97d59db1fb6bd7",
       "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_authz_settings",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "f59e267ecabcb719a22b11d0a7d38885178e0e4dc2cbd47e96321dcbb995866d",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_ban",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "314a99496e3503e33acfb05b3379e4d28666a76271cea5959eb56aa4bdef1889",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_broker_stats",
+      "schema": {
+        "description": "Live broker counters.",
+        "properties": {
+          "connections": {
+            "description": "Currently connected MQTT clients.",
+            "type": "integer"
+          },
+          "retained": {
+            "default": 0,
+            "description": "Retained messages held by the broker.",
+            "type": "integer"
+          },
+          "sessions": {
+            "description": "Sessions held, including offline ones.",
+            "type": "integer"
+          },
+          "subscriptions": {
+            "description": "Active subscriptions across the cluster.",
+            "type": "integer"
+          },
+          "topics": {
+            "description": "Distinct routed topics.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "connections",
+          "sessions",
+          "subscriptions",
+          "topics"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "e0f33f59a97707bc8b70eef40b4bd0849bf9b2d54216baf855f60f0c09158164",
+      "binding_sha256": "6855ceafd0c66b70aa7dc2e43ff07bdd5e3a4d0d94e122328e993ef96a397169",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_client_subscribe",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "41f795f4172d6a032e14e1d9c326d6db10bcc6fced2951b5eef089650d7fdaa3",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_client_subscriptions",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "10bbbf2367958fc61785911a7e157f45799aa90732f0bce3d6b70f6b6668ae11",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_client_unsubscribe",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "3c5e1206decbe76080d6df217ed4e5aeaa96f47e0054883cf34c56ad78846b96",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_cluster_status",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "9f822deed4e1dc5a8a1a22f9445d3ff4765a55930bedda9f6e12cc633713721e",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_create_trace",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "704391ef4f2c5fc3d793b7ac12bc4f5073777c63133b95eae3bf82b66553aec8",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_delete_retained",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "dc97f14b56f48c422e655acd6594aa10f963d03217f5911c800df45545555bd4",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_delete_trace",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "05de4def2d49cf3290117a21c239460a9378a7278887a0340da2c2eb16ae44d7",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_get_client",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "b5d3189ca9397765bdc7ab56451d8b7e2cf0c9caa4d13572704f8e8c1f661e68",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_get_retained",
+      "schema": {
+        "description": "A retained message, with its payload already decoded.",
+        "properties": {
+          "found": {
+            "description": "False when nothing is retained there.",
+            "type": "boolean"
+          },
+          "lookup": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "How it was located: 'direct' or 'listing'. Hierarchical topics cannot be addressed directly by EMQX's REST API."
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Decoded payload text."
+          },
+          "publish_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "When it was published."
+          },
+          "qos": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "QoS the message was published at."
+          },
+          "topic": {
+            "description": "Topic the message is retained on.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic",
+          "found"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "7c1c608b1d17e5af36502b930712ff6a1f45c1a271f575cca913c713250704bc",
+      "binding_sha256": "ac370331765d3b1499c095a9a5a9ad93d65eea11c721fd0269bcf2528b6d2995",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_get_rule_metrics",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "0868a23d68dff83576870231f7a76969ca8eae8b4487577b8005b1ed68339099",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_get_trace_log",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "1311bc04dcb0aa0a0a43aa31ef66571ce75bfc9d5a97831bc75c3b11b7a6edce",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_kick_client",
+      "schema": {
+        "description": "Outcome of disconnecting a client.",
+        "properties": {
+          "clientid": {
+            "type": "string"
+          },
+          "kicked": {
+            "description": "True when the broker accepted the disconnect.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "clientid",
+          "kicked"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "2c766278099ee735ef221bc951343dbbd4409caa40c41ea1d3fc94eff556fae5",
+      "binding_sha256": "5a69ae08f9099c59eb5bfc4035a9608d10ad1c35d76d4098ff09474014c7cb12",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_actions",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "504b4cdd9fd4c762c63ac9a03c9934fec00895917799eeddaa445b12e6693543",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_alarms",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "110b1b851c68e623cf39f0baf0f4ec163a1d7d5f036405e87f90f022ef414d15",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_authn",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "1dd83076d266e5d0b0936f8580ec518b9fa0112a3dbfe3c2126f1957af8ba1e7",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_authz_sources",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "3b7bf895a00f04d3c59e0df2c65272d6621f79a59a0193cde9e161f9d9b2bd06",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_banned",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "2f655d21b840f515c5db9a564211265e54fa7b5a3f8ae565210c0880c97778b0",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_clients",
+      "schema": {
+        "description": "A page of MQTT clients.",
+        "properties": {
+          "clients": {
+            "items": {
+              "description": "One MQTT client as EMQX reports it.",
+              "properties": {
+                "clientid": {
+                  "description": "MQTT client identifier.",
+                  "type": "string"
+                },
+                "connected": {
+                  "description": "Whether the client is connected right now.",
+                  "type": "boolean"
+                },
+                "connected_at": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "description": "ISO-8601 connection time."
+                },
+                "ip_address": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "description": "Peer IP address."
+                },
+                "proto_ver": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "description": "MQTT version (4 = 3.1.1, 5 = 5.0)."
+                },
+                "username": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "description": "Authenticated username, if any."
+                }
+              },
+              "required": [
+                "clientid",
+                "connected"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "has_more": {
+            "description": "True when further pages exist.",
+            "type": "boolean"
+          },
+          "total": {
+            "description": "Total clients matching the filters.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "clients",
+          "total",
+          "has_more"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "21c80cac02ef2f241253de05b92f9bb2ab8826c43bd664237504167330c2371a",
+      "binding_sha256": "d1c8cee26694dec009430f43925b3d93c8061bca7904cdd9a97cd62b9ed93044",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_connectors",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "442d80a85584df098a22d58729d5e122b83fa68201382c2e6b16bf0b33645ff3",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_listeners",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "4ae12e4a3a54311643c94ccba889ea903b576a7d96658f14d5c10f04e4da55c8",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_retained",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "c3f4e975a882dc8e2f699954b6010c2604ec32a2db0ee7d8699dbba0b5a7d351",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_rules",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "5591ee2bf68c8abfbf0db31f4efb7e1445ee8b43ff42bd7f160b554d07c2d272",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_subscriptions",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "64701d0ca5d314d3d59694f1c8f9ea121f1f3812faa63a46d45f81392f696819",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/topics.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_topics",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "63361c799c714325e5c3f5e2ebadc1de99c0faccf490eac3092b8204febe9170",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/topics.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_traces",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "18ae5433aab8baee298a3946ec83d329bbc47e8037268984367bde49a52dfeff",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_manage_authn_users",
+      "schema": {
+        "description": "Result of a built-in-database user operation.",
+        "properties": {
+          "operation": {
+            "description": "The operation that was performed.",
+            "type": "string"
+          },
+          "succeeded": {
+            "default": true,
+            "type": "boolean"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Subject of a create or delete."
+          },
+          "users": {
+            "description": "Users returned by a read.",
+            "items": {
+              "description": "An MQTT account in the built-in authentication database.",
+              "properties": {
+                "is_superuser": {
+                  "default": false,
+                  "description": "Whether the account bypasses ACLs.",
+                  "type": "boolean"
+                },
+                "user_id": {
+                  "description": "The MQTT username.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "user_id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "operation"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "89c0145414fc07cfefa4b24448c31dc919dccc88bb0c959c26413c9691a015aa",
+      "binding_sha256": "f9701a591d5620e4dac37fbc72680af1c01111832c04e8859be4333caf47c5bc",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_manage_authz_rules",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "190ae9eba14c1f1b48573c216220efba535605aacecfdbed39f6ece22a0d388e",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_metrics_current",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "6fed534fb4b4f335105e80e642e2d60b2ccbec07626152857022363a7201853c",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_metrics_history",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "f4083cf54119232d42b227b7ca280e91baa0fbc76573f1a0ca532ddb3d9f7fbb",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_node_detail",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "95549a174684386f8c348214b32adaf10fbcc149f1393a8ac8d0715034479837",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_prometheus_stats",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "ccccd10441da960e05f96bb57d781b26c7ef120f3da40872f18eaaac4ba75e81",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_publish",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "f75f8b8736f0421cdf82c4b69ce89312ac27d54f333f4d1840966b06453bf1a9",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_publish_bulk",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "c473fc45d9dbf23ca77bc2ec05c2073fcd672265499762f19cded67aae62f15d",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_test_rule_sql",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "a8722a7d5850aadebb1f3aab86bc96ab48e4382629204c74a7035cb8dddc7020",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_toggle_rule",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "3d4e6dee9313e58b9cd45bfe823e5b44cc5380778ca3a55a210b334ceed83155",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_unban",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "d19500fdcb159ef369c51c6dd3fccdf72d3928c0adc7a57e6128dbf4c56883c3",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py"
     }
   ]
 }

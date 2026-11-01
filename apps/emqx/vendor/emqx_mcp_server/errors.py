@@ -24,16 +24,14 @@ async def emqx_request(
     """Call the EMQX REST API, converting failures into actionable errors."""
     try:
         response = await client.request(method, path, **kwargs)
-    except httpx.TimeoutException as exc:
+    except httpx.TimeoutException:
         raise EmqxApiError(
-            f"EMQX timed out on {method} {path}. The broker may be busy — "
-            "Check state before repeating a write; its result may be unknown."
-        ) from exc
-    except httpx.ConnectError as exc:
+            "EMQX_TIMEOUT: the broker did not finish the request. Check state before repeating a write."
+        ) from None
+    except httpx.HTTPError:
         raise EmqxApiError(
-            "Cannot reach the EMQX broker. Check that the dashboard API "
-            "(default port 18083) is running and reachable."
-        ) from exc
+            "EMQX_UNAVAILABLE: the broker request failed. Check state before repeating a write."
+        ) from None
 
     if response.status_code == 401:
         raise EmqxApiError(
@@ -43,14 +41,15 @@ async def emqx_request(
         )
     if response.status_code == 404:
         raise EmqxApiError(
-            f"EMQX has no such resource: {method} {path}. "
+            "EMQX has no such resource (404). "
             "Double-check the identifier — list the collection first.",
             status_code=404,
         )
+    if 300 <= response.status_code < 400:
+        raise EmqxApiError("EMQX_REDIRECT_DENIED: configure the final broker URL")
     if response.status_code >= 400:
         raise EmqxApiError(
-            f"EMQX API error {response.status_code} on {method} {path}: "
-            f"{response.text[:300]}",
+            f"EMQX_API_ERROR status={response.status_code}",
             status_code=response.status_code,
         )
     return response

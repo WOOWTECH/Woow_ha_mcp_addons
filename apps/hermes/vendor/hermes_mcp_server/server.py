@@ -390,8 +390,27 @@ async def _resource_request(
 
 
 def _backend_errors(backend: str):
-    """Keep HA's stable error codes and backend details; the gateway redacts credentials."""
-    return backend_errors
+    """Keep HA's error codes; give Dashboard connection failures a safe next step."""
+    if backend != "dashboard":
+        return backend_errors
+
+    def decorate(function):
+        @functools.wraps(function)
+        async def with_dashboard_guidance(*args, **kwargs):
+            try:
+                return await function(*args, **kwargs)
+            except httpx.ConnectError:
+                # ConnectError text can contain a configured URL or proxy detail.
+                # The fixed hint is useful even for direct child callers, before
+                # the management gateway has a chance to redact credentials.
+                raise errors.HermesBackendError(
+                    "Hermes Dashboard 不可達 (unreachable): Check that the Hermes service is running "
+                    "and that Connection > Dashboard REST API in the MCP admin page has the right address."
+                ) from None
+
+        return backend_errors(with_dashboard_guidance)
+
+    return decorate
 
 
 def _section_error(exc: Exception, backend: str, conn: dict[str, str]) -> str:
