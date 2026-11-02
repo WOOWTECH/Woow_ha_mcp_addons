@@ -8,7 +8,6 @@ import re
 import httpx
 import pytest
 from mcp.client import Client
-from backend_policy import BackendFailure
 
 from hermes_mcp_server import server as hermes
 
@@ -220,7 +219,7 @@ async def test_backend_refusal_or_server_ambiguity_is_never_retried(dashboard, s
 async def test_partial_or_invalid_identity_is_rejected_before_network(
     dashboard, identity
 ):
-    with pytest.raises(BackendFailure, match="identity|request_id|revision"):
+    with pytest.raises(hermes.errors.HermesInputError, match="INVALID_INPUT: .*(identity|request_id|revision)"):
         await hermes.hermes_session(action="delete", session_id=SID, **identity)
     assert dashboard.requests == []
 

@@ -136,7 +136,8 @@ INIT = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {
     'protocolVersion': '2025-03-26', 'capabilities': {}, 'clientInfo': {'name': 'error-text', 'version': '0'}}}
 # The texts 0.3.4 (mcp 1.30.0) answered with the same calls; the private probes are called as HealthMonitor does.
 EXPECTED = {
-    'hermes': [('hermes_chat', {'message': 'hi'}, 'Error executing tool hermes_chat: BACKEND_UNAVAILABLE: All connection attempts failed')],
+    'hermes': [('hermes_chat', {'message': 'hi'}, ('Error executing tool hermes_chat: BACKEND_UNAVAILABLE: Hermes Gateway 不可達 (unreachable): Check that the '
+      'Hermes service is running and that Connection > Gateway API Server in the MCP admin page has the right address.'))],
     'opendesign': [('health', {}, 'Error executing tool health: BACKEND_UNAVAILABLE: BACKEND_CONNECT_FAILED'),
                    ('get_project', {'project_id': '12345678-1234-1234-1234-123456789abc'},
                     'Error executing tool get_project: BACKEND_UNAVAILABLE: BACKEND_CONNECT_FAILED')],
