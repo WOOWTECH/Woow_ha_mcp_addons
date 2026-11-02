@@ -58,7 +58,7 @@
       }
     },
     "n8n": {
-      "ha_commit": "d6403f263f5246288864c15381c2d1bddbb9179c",
+      "ha_commit": "e08fa0d693b5f82a04ba15c568549a6530a1459f",
       "package": "n8n-mcp==2.96.2",
       "sdk": {
         "@modelcontextprotocol/sdk": "1.32.2"
@@ -70,14 +70,14 @@
         "apps/n8n/run.py": "1f442cbd646a6882261762ab71903aa1a0e1c017af07a246d2b783e6aa08b048",
         "apps/n8n/backend_policy.cjs": "497a90dd27a17632e2bdf7ffb950d905a3cf0a0339051ecf96df6e7bd97e4e78",
         "apps/n8n/Dockerfile": "fe1c2db733b3cf1eb2d3dbd289f1077f2d37cfdba2b29e0b6fa6f9f44f1173fd",
-        "packaging/unit.sh": "e0024062aa7d8f3c8b925eddec71e08728d01e500f6e889b5eca8145c32f11c7",
+        "packaging/unit.sh": "bea86cec8cf87057cd6a70d4b5c1f892f2efbce0767f83805f2398a2b1e169de",
         "apps/n8n/patches/fix_tool_result_is_error.py": "10d6018a19a90f2eb88956bd72043f454cbc36ca331c7d2978c55cc3dab5a5c8",
         "apps/n8n/patches/fix_test_run_error_messages.py": "f2da0babef9db4a3878d211f47b1d83e552d6273d882462fee7607a805630a2a",
         "apps/n8n/patches/fix_workflow_output_schema.py": "2c7f00d3ac7c28d637621de946f571b963533d64ba564eab79432628c2e9f477"
       }
     },
     "hermes": {
-      "ha_commit": "d6403f263f5246288864c15381c2d1bddbb9179c",
+      "ha_commit": "607d6a5c886113be6e9bc83f1418c6a64e895974",
       "sdk": {
         "mcp": "2.3.0",
         "mcp-types": "2.3.0"
@@ -86,7 +86,7 @@
         "apps/hermes/pyproject.toml": "9173e975df2cbac2632fe1d3c7daaff9f8ccf76280bad3f844850ad3663fb351",
         "apps/hermes/uv.lock": "f5c00b593f018f01959c50b0e9d06dcd93a6b8687a0732bb54c00381df3f2dab",
         "apps/hermes/launch.py": "66567ea7820e005eb4cecc56efce928d084d9921ae09422336bfa0ca24aae5fc",
-        "apps/hermes/vendor/hermes_mcp_server/server.py": "c9145149648c510476474b0d9978df8b67db3965d339543099633bdababaf8d9"
+        "apps/hermes/vendor/hermes_mcp_server/server.py": "5a47248e28a9155f9316063bc1f845a59cceb4195f86abf817895c49a02e3bf9"
       }
     },
     "emqx": {

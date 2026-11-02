@@ -45,15 +45,24 @@ def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
             'litellm': 'd6403f263f5246288864c15381c2d1bddbb9179c',
             'nextcloud': 'd6403f263f5246288864c15381c2d1bddbb9179c',
             'odoo': 'd6403f263f5246288864c15381c2d1bddbb9179c',
-            'n8n': 'd6403f263f5246288864c15381c2d1bddbb9179c',
-            'hermes': 'd6403f263f5246288864c15381c2d1bddbb9179c',
+            'n8n': 'e08fa0d693b5f82a04ba15c568549a6530a1459f',
+            'hermes': '607d6a5c886113be6e9bc83f1418c6a64e895974',
             'emqx': 'd6403f263f5246288864c15381c2d1bddbb9179c',
         }[product]
         ancestor = subprocess.run(
             ('git', '-c', f'safe.directory={ROOT}', 'merge-base', '--is-ancestor', source['ha_commit'], 'HEAD'),
             cwd=ROOT, capture_output=True, check=False,
         )
-        assert ancestor.returncode == 0, (product, 'source commit not reachable from candidate')
+        assert ancestor.returncode == 0, (
+            product, 'source commit not reachable from candidate',
+            {name: subprocess.run(
+                ('git', '-c', f'safe.directory={ROOT}', 'rev-parse', argument),
+                cwd=ROOT, capture_output=True, check=False,
+            ).stdout.decode().strip() for name, argument in (
+                ('head', 'HEAD'), ('shallow', '--is-shallow-repository'),
+                ('toplevel', '--show-toplevel'),
+            )},
+        )
         for name, expected in source['files'].items():
             assert hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == expected, name
             # A commit label must reproduce the recorded bytes, not merely pass a

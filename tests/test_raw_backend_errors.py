@@ -237,7 +237,7 @@ def test_http_status_errors_are_classified_by_status_with_the_response_body():
         'BACKEND_HTTP_ERROR status=503: 503 Service Unavailable for POST /api/cron/jobs'
 
 
-async def test_real_hermes_child_reports_status_and_body_of_a_rejected_request(tmp_path):
+async def test_real_hermes_child_reports_status_without_reflecting_rejected_body(tmp_path):
     from test_six_hardening import Quiet, runtime, serve, call as hcall
 
     class Dashboard(Quiet):
@@ -256,5 +256,6 @@ async def test_real_hermes_child_reports_status_and_body_of_a_rejected_request(t
         async with runtime(tmp_path, 'hermes', url, canary='hermes-secret-0815') as (client, headers, *_):
             response = await client.post('/mcp', headers=headers, json=hcall('hermes_inspect', {'target': 'status'}))
             assert 'BACKEND_HTTP_ERROR status=422' in response.text, response.text
-            assert 'gateway state not ready for this request' in response.text
+            assert 'gateway state not ready for this request' not in response.text
+            assert 'verify Connection > Dashboard REST API in the MCP admin page' in response.text
             assert 'hermes-secret-0815' not in response.text

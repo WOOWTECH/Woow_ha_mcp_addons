@@ -26,14 +26,94 @@ _DETAIL_LIMIT = 200
 _URL_PASSWORD = re.compile(r"(://[^/\s:@]*:)[^/\s@]+@")
 # 前面的反向代理（Cloudflare、ingress）找不到後端時的狀態碼
 _UNREACHABLE_STATUS = frozenset({502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 530})
+_DASHBOARD_HINT = "Connection > Dashboard REST API in the MCP admin page"
+_DASHBOARD_CONFLICT_CODES = frozenset({
+    "revision_conflict", "admission_conflict", "client_upgrade_required",
+})
+_CONFLICT_BODY_PARSE_LIMIT = 4096
+DASHBOARD_NON_OBJECT_ERROR = (
+    "BACKEND_UNEXPECTED_RESPONSE: Hermes Dashboard returned a non-object JSON response; "
+    f"verify {_DASHBOARD_HINT}."
+)
+DASHBOARD_DECODE_ERROR = (
+    "BACKEND_UNEXPECTED_RESPONSE: Hermes Dashboard returned non-JSON; "
+    f"verify {_DASHBOARD_HINT}."
+)
 
 
 class HermesBackendError(RuntimeError):
     """Hermes 後端連不上、逾時或回了看不懂的內容；訊息已整理成給人看的句子。"""
 
 
+class HermesDashboardResponseError(HermesBackendError):
+    """A Dashboard JSON document cannot be decoded or has the wrong top-level shape."""
+
+
+class HermesCronOutcomeUnknown(HermesBackendError):
+    """A cron creation request was sent, but its committed outcome is unconfirmed."""
+
+
 class HermesBackendHTTPError(httpx.HTTPStatusError):
     """Hermes 後端回 4xx／5xx；保留 HTTPStatusError 型別（request／response 仍可取），只換訊息。"""
+
+
+def public_dashboard_error(exc: BaseException) -> str:
+    """Fixed MCP-visible Dashboard category, status and repair guidance.
+
+    Never include the configured URL, response body, redirect Location or
+    transport exception text. The three fenced-session 409 codes are an exact
+    allowlist because callers need to distinguish their business outcomes.
+    """
+    hint = _DASHBOARD_HINT
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        if status in (401, 403):
+            return (
+                f"BACKEND_AUTH_REJECTED status={status}: Hermes Dashboard 憑證被拒 "
+                f"(credentials rejected); update {hint} and press Save & Restart."
+            )
+        if 300 <= status < 400:
+            return (
+                f"BACKEND_REDIRECT_REJECTED status={status}: Hermes Dashboard returned a redirect; "
+                f"verify {hint} and press Save & Restart."
+            )
+        if status in _UNREACHABLE_STATUS:
+            return (
+                f"BACKEND_UNAVAILABLE status={status}: Hermes Dashboard 不可達 (unreachable); "
+                f"check that the Hermes service is running and verify {hint}."
+            )
+        # A conflict code is useful only when a small, shallow JSON body
+        # exactly matches the allowlist. Deep or large bodies are opaque.
+        if status == 409 and len(exc.response.content) <= _CONFLICT_BODY_PARSE_LIMIT:
+            try:
+                body = exc.response.json()
+                detail = body.get("detail") if isinstance(body, dict) else None
+            except (ValueError, UnicodeDecodeError, RecursionError):
+                detail = None
+            if isinstance(detail, str) and detail in _DASHBOARD_CONFLICT_CODES:
+                return (
+                    f"BACKEND_HTTP_ERROR status=409 code={detail}: Hermes Dashboard rejected the operation; "
+                    f"check the session state and {hint}."
+                )
+        return (
+            f"BACKEND_HTTP_ERROR status={status}: Hermes Dashboard request failed; "
+            f"verify {hint} and the operation settings."
+        )
+    if isinstance(exc, httpx.TimeoutException):
+        return f"BACKEND_TIMEOUT: Hermes Dashboard timed out; check the Hermes service and {hint}."
+    if isinstance(exc, httpx.TransportError):
+        return (
+            "BACKEND_UNAVAILABLE: Hermes Dashboard 不可達 (unreachable): Check that the Hermes service is running "
+            f"and that {hint} has the right address."
+        )
+    if isinstance(exc, (json.JSONDecodeError, UnicodeDecodeError)):
+        return DASHBOARD_DECODE_ERROR
+    if isinstance(exc, httpx.HTTPError):
+        return (
+            "BACKEND_UNEXPECTED_RESPONSE: Hermes Dashboard returned an unreadable response; "
+            f"verify {hint}."
+        )
+    raise TypeError("unsupported Dashboard error type")
 
 
 def _safe_url(url: str) -> str:
