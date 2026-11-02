@@ -51,10 +51,10 @@
     "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/server.py": "4dec3375d722e2eb6af054949be31e66ca35f1713bbc1908398d46f35c09b4fe",
     "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/tools.py": "5569568a6c86306d19bc4194ef7aeb504a238c4b8dba4d7fc809002104737249",
     "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/uri_schema.py": "2771d8c05d3a93a7b2b0256faf7c63c655f5cd232d22edc462d77c7a171f4af2",
-    "apps/hermes/vendor/hermes_mcp_server/errors.py": "692e8845c0bdf69cc17ef8a76ad60358201533d344c07f5f4f7e3b8647bf995a",
-    "apps/hermes/vendor/hermes_mcp_server/guards.py": "12dab5cd73dabb337da579f5d86cdc81c931b2678637daaf4c34d1bc2169f9d5",
-    "apps/hermes/vendor/hermes_mcp_server/server.py": "5a47248e28a9155f9316063bc1f845a59cceb4195f86abf817895c49a02e3bf9",
-    "apps/hermes/vendor/hermes_mcp_server/session_mutations.py": "8f059b0d5108610d2c9a8b6598b573d236b12319fc59286f8d763afda40a796e",
+    "apps/hermes/vendor/hermes_mcp_server/errors.py": "481ff5ff12e8069e999c07509ace73d3c9a630c5c2663b7084e805512aceae8b",
+    "apps/hermes/vendor/hermes_mcp_server/guards.py": "e15130d583c2cbffb2ce5711246f52c060812c703ba083eba3f8fffbd06b51a5",
+    "apps/hermes/vendor/hermes_mcp_server/server.py": "10c05ce8bee9db7044b039ba82c20bfb22dce2fa705e60dc9d92d9c1cb317087",
+    "apps/hermes/vendor/hermes_mcp_server/session_mutations.py": "e52a25d72b8da70f2cf4b8b298c760bf1cf34eb158287bbe451f8595c3f61cbb",
     "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py": "d4f16b9af152a71c8fa2a16bc013bd9e39d58db4e59206d331190d890643d50e",
     "apps/emqx/vendor/emqx_mcp_server/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "apps/emqx/vendor/emqx_mcp_server/deps.py": "fa949b1f1b3577be7c848af5bb74a5b9d068d39cba265b93cdd4dde4a41529e3",
@@ -1869,7 +1869,7 @@
         {
           "name": "hermes_chat",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 840,
+          "line": 878,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "message: str, session_id: str | None=None",
@@ -1894,7 +1894,7 @@
         {
           "name": "hermes_config",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 702,
+          "line": 740,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -1944,7 +1944,7 @@
         {
           "name": "hermes_cron",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 977,
+          "line": 1016,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2039,7 +2039,7 @@
         {
           "name": "hermes_gateway",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 809,
+          "line": 847,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2089,7 +2089,7 @@
         {
           "name": "hermes_inspect",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 478,
+          "line": 508,
           "evidence": "python-decorator-AST",
           "operations": {
             "target": [
@@ -2161,7 +2161,7 @@
         {
           "name": "hermes_mcp",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 584,
+          "line": 622,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2220,7 +2220,7 @@
         {
           "name": "hermes_model",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 622,
+          "line": 660,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2278,7 +2278,7 @@
         {
           "name": "hermes_session",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 929,
+          "line": 967,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2336,7 +2336,7 @@
         {
           "name": "hermes_skill",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 552,
+          "line": 582,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2395,7 +2395,7 @@
         {
           "name": "hermes_tools",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 781,
+          "line": 819,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
@@ -2454,7 +2454,7 @@
         {
           "name": "hermes_webhook",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 1121,
+          "line": 1160,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
