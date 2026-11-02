@@ -23,7 +23,7 @@ from typing import Any, Awaitable, Callable
 
 import httpx
 from pydantic import StrictInt
-from backend_policy import async_client, backend_errors, backend_error_text
+from backend_policy import BackendFailure, async_client, backend_errors, backend_error_text
 from mcp.server.mcpserver import MCPServer
 from mcp.types import CallToolResult, TextContent
 from tool_error_text import keep_error_text
@@ -139,9 +139,19 @@ def _require_url(value: str, field: str) -> str:
         )
     if not url.startswith(("http://", "https://")):
         raise ConnectionNotConfiguredError(
-            f"{field} must start with http:// or https:// (got {url!r}) - "
+            f"{field} must start with http:// or https:// - "
             f"fix it in the admin GUI under {where}"
         )
+    if field == "dashboard_url":
+        try:
+            parsed = httpx.URL(url)
+            if not parsed.host:
+                raise httpx.InvalidURL("missing host")
+        except httpx.InvalidURL:
+            raise ConnectionNotConfiguredError(
+                f"{field} must be a valid http:// or https:// URL - "
+                f"fix it in the admin GUI under {where}"
+            ) from None
     return url.rstrip("/")
 
 
@@ -390,7 +400,7 @@ async def _resource_request(
 
 
 def _backend_errors(backend: str):
-    """Keep HA's error codes; give Dashboard connection failures a safe next step."""
+    """Keep Gateway behavior; classify Dashboard failures before public output."""
     if backend != "dashboard":
         return backend_errors
 
@@ -399,22 +409,64 @@ def _backend_errors(backend: str):
         async def with_dashboard_guidance(*args, **kwargs):
             try:
                 return await function(*args, **kwargs)
-            except httpx.ConnectError:
-                # ConnectError text can contain a configured URL or proxy detail.
-                # The fixed hint is useful even for direct child callers, before
-                # the management gateway has a chance to redact credentials.
-                raise errors.HermesBackendError(
-                    "Hermes Dashboard 不可達 (unreachable): Check that the Hermes service is running "
-                    "and that Connection > Dashboard REST API in the MCP admin page has the right address."
+            except httpx.HTTPStatusError as exc:
+                raise errors.HermesBackendHTTPError(
+                    errors.public_dashboard_error(exc), request=exc.request, response=exc.response
                 ) from None
+            except (httpx.HTTPError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+                raise errors.HermesBackendError(errors.public_dashboard_error(exc)) from None
+            except (errors.HermesDashboardResponseError, errors.HermesCronOutcomeUnknown):
+                raise
+            except Exception as exc:  # noqa: BLE001 - retain the existing local failure wrapper
+                # Preserve the 9e67 handling of local guards/business failures.
+                raise BackendFailure(exc) from None
 
-        return backend_errors(with_dashboard_guidance)
+        return with_dashboard_guidance
 
     return decorate
 
 
 def _section_error(exc: Exception, backend: str, conn: dict[str, str]) -> str:
+    if isinstance(exc, errors.HermesDashboardResponseError):
+        return str(exc)
+    if backend == "dashboard" and isinstance(exc, (httpx.HTTPError, json.JSONDecodeError, UnicodeDecodeError)):
+        return errors.public_dashboard_error(exc)
     return backend_error_text(exc)
+
+
+def _dashboard_json(response: httpx.Response) -> Any:
+    """Keep excessive JSON nesting inside a fixed Dashboard decode category."""
+    try:
+        return response.json()
+    except RecursionError:
+        raise errors.HermesDashboardResponseError(errors.DASHBOARD_DECODE_ERROR) from None
+
+
+def _dashboard_object(response: httpx.Response) -> dict[str, Any]:
+    """Require the object shape used by Dashboard status/config fields."""
+    value = _dashboard_json(response)
+    if not isinstance(value, dict):
+        raise errors.HermesDashboardResponseError(errors.DASHBOARD_NON_OBJECT_ERROR)
+    return value
+
+
+def _dashboard_invalid_shape() -> errors.HermesDashboardResponseError:
+    return errors.HermesDashboardResponseError(
+        "BACKEND_UNEXPECTED_RESPONSE: Hermes Dashboard returned an unexpected JSON shape; "
+        "verify Connection > Dashboard REST API in the MCP admin page."
+    )
+
+
+def _cron_create_unknown() -> errors.HermesCronOutcomeUnknown:
+    return errors.HermesCronOutcomeUnknown(
+        "CRON_CREATE_OUTCOME_UNKNOWN: Hermes cron create outcome is unknown. "
+        "No automatic retry was made. List scheduled jobs in Hermes before deciding to retry."
+    )
+
+
+def _cron_optional_text_or_int(value: Any) -> bool:
+    """Accept Dashboard's projected scalar fields without treating bool as int."""
+    return value is None or isinstance(value, str) or type(value) is int
 
 
 # ---------------------------------------------------------------------------
@@ -446,7 +498,7 @@ async def hermes_inspect(target: str = "all") -> str:
             async with await _get_dashboard_client(conn) as client:
                 resp = await client.get("/api/config")
                 resp.raise_for_status()
-                cfg = resp.json()
+                cfg = _dashboard_object(resp)
                 result["config_summary"] = redact_config({
                     "model": cfg.get("model", ""),
                     "toolsets": cfg.get("toolsets", []),
@@ -469,7 +521,7 @@ async def hermes_inspect(target: str = "all") -> str:
             async with await _get_dashboard_client(conn) as client:
                 resp = await client.get("/api/status")
                 resp.raise_for_status()
-                st = resp.json()
+                st = _dashboard_object(resp)
                 result["status"] = {
                     "version": st.get("version"),
                     "gateway_running": st.get("gateway_running"),
@@ -592,17 +644,25 @@ async def hermes_model(
             # AI-HMCP-001-2：讀 Hermes 自己的 /api/model/options（寫死的清單沒有 custom 等實際 provider）。
             resp = await client.get("/api/model/options")
             resp.raise_for_status()
-            data = resp.json()
+            data = _dashboard_object(resp)
+            rows = data.get("providers", [])
+            if not isinstance(rows, list):
+                raise _dashboard_invalid_shape()
             providers = []
-            for row in data.get("providers", []) if isinstance(data, dict) else []:
+            for row in rows:
                 if not isinstance(row, dict):
                     continue
-                models = [str(m) for m in row.get("models") or []]
+                raw_models = row.get("models")
+                if raw_models is not None and not isinstance(raw_models, list):
+                    raise _dashboard_invalid_shape()
+                if raw_models is not None and not all(isinstance(item, str) for item in raw_models):
+                    raise _dashboard_invalid_shape()
+                models = [str(m) for m in (raw_models or [])]
                 providers.append({
                     "slug": row.get("slug"), "name": row.get("name"), "is_current": bool(row.get("is_current")),
                     "total_models": len(models), "models": models[:MODEL_LIST_LIMIT],
                 })
-            current = {"model": data.get("model"), "provider": data.get("provider")} if isinstance(data, dict) else {}
+            current = {"model": data.get("model"), "provider": data.get("provider")}
             return json.dumps({"current": current, "providers": providers}, indent=2)
 
         if action == "set":
@@ -754,7 +814,7 @@ async def hermes_gateway(action: str = "status") -> str:
         if action == "status":
             resp = await client.get("/api/status")
             resp.raise_for_status()
-            data = resp.json()
+            data = _dashboard_object(resp)
             return json.dumps({
                 "running": data.get("gateway_running", False),
                 "state": data.get("gateway_state", "unknown"),
@@ -940,31 +1000,66 @@ async def hermes_cron(
         if action == "list":
             resp = await client.get("/api/cron/jobs")
             resp.raise_for_status()
-            jobs = resp.json()
-            if isinstance(jobs, list):
-                summary = []
-                for j in jobs:
-                    if isinstance(j, dict):
-                        summary.append({
-                            "id": j.get("id"),
-                            "name": j.get("name"),
-                            "schedule": j.get("schedule", {}).get("expr") if isinstance(j.get("schedule"), dict) else j.get("schedule"),
-                            "prompt": (j.get("prompt") or "")[:80],
-                            "enabled": j.get("enabled"),
-                            "state": j.get("state"),
-                            "next_run": j.get("next_run_at"),
-                        })
-                return json.dumps({"total": len(summary), "jobs": summary}, indent=2, default=str)
-            return json.dumps(jobs, indent=2, default=str)
+            jobs = _dashboard_json(resp)
+            if not isinstance(jobs, list):
+                raise _dashboard_invalid_shape()
+            summary = []
+            for j in jobs:
+                if not isinstance(j, dict):
+                    raise _dashboard_invalid_shape()
+                raw_schedule = j.get("schedule")
+                if raw_schedule is not None and not isinstance(raw_schedule, (str, dict)):
+                    raise _dashboard_invalid_shape()
+                projected_schedule = raw_schedule.get("expr") if isinstance(raw_schedule, dict) else raw_schedule
+                if projected_schedule is not None and not isinstance(projected_schedule, str):
+                    raise _dashboard_invalid_shape()
+                raw_prompt = j.get("prompt")
+                if raw_prompt is not None and not isinstance(raw_prompt, str):
+                    raise _dashboard_invalid_shape()
+                if any(not _cron_optional_text_or_int(j.get(field)) for field in ("id", "name", "state", "next_run_at")):
+                    raise _dashboard_invalid_shape()
+                if j.get("enabled") is not None and type(j["enabled"]) is not bool:
+                    raise _dashboard_invalid_shape()
+                summary.append({
+                    "id": j.get("id"), "name": j.get("name"),
+                    "schedule": projected_schedule, "prompt": (raw_prompt or "")[:80],
+                    "enabled": j.get("enabled"), "state": j.get("state"),
+                    "next_run": j.get("next_run_at"),
+                })
+            return json.dumps({"total": len(summary), "jobs": summary}, indent=2, default=str)
 
         if action == "create":
             if not name or not schedule or not prompt:
                 return json.dumps({"error": "name, schedule, and prompt are all required"})
-            resp = await client.post("/api/cron/jobs", json={
-                "name": name, "schedule": schedule, "prompt": prompt, "enabled": enabled,
-            })
+            try:
+                resp = await client.post("/api/cron/jobs", json={
+                    "name": name, "schedule": schedule, "prompt": prompt, "enabled": enabled,
+                }, extensions={"hermes_no_auth_retry": True})
+            except httpx.HTTPError:
+                raise _cron_create_unknown() from None
+            if resp.status_code >= 500:
+                raise _cron_create_unknown()
             resp.raise_for_status()
-            data = resp.json()
+            try:
+                data = resp.json()
+            except (ValueError, UnicodeDecodeError, RecursionError, httpx.DecodingError):
+                raise _cron_create_unknown() from None
+            if not isinstance(data, dict):
+                raise _cron_create_unknown()
+            ident = data.get("id")
+            if not ((isinstance(ident, str) and bool(ident)) or (type(ident) is int and ident >= 0)):
+                raise _cron_create_unknown()
+            if data.get("ok", True) is not True:
+                raise _cron_create_unknown()
+            if data.get("name") is not None and not isinstance(data["name"], str):
+                raise _cron_create_unknown()
+            returned_schedule = data.get("schedule")
+            if returned_schedule is not None and not isinstance(returned_schedule, (str, dict)):
+                raise _cron_create_unknown()
+            if isinstance(returned_schedule, dict) and returned_schedule.get("expr") is not None and not isinstance(returned_schedule["expr"], str):
+                raise _cron_create_unknown()
+            if not _cron_optional_text_or_int(data.get("next_run_at")):
+                raise _cron_create_unknown()
             return json.dumps({
                 "ok": True, "id": data.get("id"), "name": data.get("name"),
                 "schedule": data.get("schedule", {}).get("expr") if isinstance(data.get("schedule"), dict) else schedule,
@@ -1047,16 +1142,19 @@ async def hermes_webhook(
         if action == "list":
             resp = await client.get("/api/webhooks")
             resp.raise_for_status()
-            data = resp.json()
-            if isinstance(data, dict):
-                subs = data.get("subscriptions", [])
-                return json.dumps({
-                    "platform_enabled": data.get("enabled", False),
-                    "base_url": data.get("base_url", ""),
-                    "total": len(subs),
-                    "webhooks": [{"name": w.get("name"), "enabled": w.get("enabled"), "prompt": (w.get("prompt") or "")[:80]} for w in subs if isinstance(w, dict)],
-                }, indent=2)
-            return json.dumps(data, indent=2, default=str)
+            data = _dashboard_object(resp)
+            subs = data.get("subscriptions", [])
+            if not isinstance(subs, list):
+                raise _dashboard_invalid_shape()
+            for row in subs:
+                if isinstance(row, dict) and row.get("prompt") is not None and not isinstance(row["prompt"], str):
+                    raise _dashboard_invalid_shape()
+            return json.dumps({
+                "platform_enabled": data.get("enabled", False),
+                "base_url": data.get("base_url", ""),
+                "total": len(subs),
+                "webhooks": [{"name": w.get("name"), "enabled": w.get("enabled"), "prompt": (w.get("prompt") or "")[:80]} for w in subs if isinstance(w, dict)],
+            }, indent=2)
 
         if action == "enable_platform":
             resp = await client.post("/api/webhooks/enable", json={})
