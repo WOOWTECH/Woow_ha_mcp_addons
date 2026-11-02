@@ -77,7 +77,7 @@
       }
     },
     "hermes": {
-      "ha_commit": "d6403f263f5246288864c15381c2d1bddbb9179c",
+      "ha_commit": "607d6a5c886113be6e9bc83f1418c6a64e895974",
       "sdk": {
         "mcp": "2.3.0",
         "mcp-types": "2.3.0"
@@ -86,7 +86,7 @@
         "apps/hermes/pyproject.toml": "9173e975df2cbac2632fe1d3c7daaff9f8ccf76280bad3f844850ad3663fb351",
         "apps/hermes/uv.lock": "f5c00b593f018f01959c50b0e9d06dcd93a6b8687a0732bb54c00381df3f2dab",
         "apps/hermes/launch.py": "66567ea7820e005eb4cecc56efce928d084d9921ae09422336bfa0ca24aae5fc",
-        "apps/hermes/vendor/hermes_mcp_server/server.py": "c9145149648c510476474b0d9978df8b67db3965d339543099633bdababaf8d9"
+        "apps/hermes/vendor/hermes_mcp_server/server.py": "5a47248e28a9155f9316063bc1f845a59cceb4195f86abf817895c49a02e3bf9"
       }
     },
     "emqx": {
