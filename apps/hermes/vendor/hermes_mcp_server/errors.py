@@ -57,29 +57,72 @@ class HermesBackendHTTPError(httpx.HTTPStatusError):
     """Hermes 後端回 4xx／5xx；保留 HTTPStatusError 型別（request／response 仍可取），只換訊息。"""
 
 
-def public_dashboard_error(exc: BaseException) -> str:
-    """Fixed MCP-visible Dashboard category, status and repair guidance.
+# ---------------------------------------------------------------------------
+# Stable error codes: every MCP-visible Hermes error reads ``CODE: text``.
+# Codes of the add-on (apps/runtime/backend_policy.py) are reused unchanged; the
+# local ones below are the only additions. The same table is carried by the PaaS
+# woow-mcp-server apps/hermes errors.py.
+#
+#   BACKEND_HTTP_ERROR status=N      backend answered with another HTTP status
+#   BACKEND_AUTH_REJECTED status=N   backend answered 401/403
+#   BACKEND_REDIRECT_REJECTED        backend answered a redirect
+#   BACKEND_UNAVAILABLE              backend unreachable, 5xx proxy statuses, or not configured
+#   BACKEND_TIMEOUT                  backend did not answer in time
+#   BACKEND_UNEXPECTED_RESPONSE      backend answered with a wrong shape / non-JSON / ended a stream early
+#   INVALID_INPUT                    the caller's arguments were refused by an input guard
+#   NOT_FOUND                        the named session / cron job / webhook / MCP server does not exist
+#   CONFIRMATION_REQUIRED            Hermes needs an explicit confirmation (expensive model); nothing changed
+#   CONFIG_NOT_APPLIED               a config write was accepted but reads back differently
+#   CHAT_TURN_FAILED                 the Gateway finished the chat turn as failed / incomplete / cancelled
+#   SESSION_DELETE_OUTCOME_UNKNOWN   (existing) a session delete may or may not have been committed
+#   CRON_CREATE_OUTCOME_UNKNOWN      (existing) a cron create may or may not have been committed
+# ---------------------------------------------------------------------------
+
+INVALID_INPUT = "INVALID_INPUT"
+NOT_FOUND = "NOT_FOUND"
+CONFIRMATION_REQUIRED = "CONFIRMATION_REQUIRED"
+CONFIG_NOT_APPLIED = "CONFIG_NOT_APPLIED"
+CHAT_TURN_FAILED = "CHAT_TURN_FAILED"
+BACKEND_UNEXPECTED_RESPONSE = "BACKEND_UNEXPECTED_RESPONSE"
+
+
+def coded(code: str, text: str) -> str:
+    """``CODE: text`` (idempotent when *text* already starts with the code)."""
+    return text if text.startswith(code + ":") else f"{code}: {text}"
+
+
+def coded_error(code: str, text: str) -> HermesBackendError:
+    return HermesBackendError(coded(code, text))
+
+
+class HermesInputError(HermesBackendError, ValueError):
+    """An input guard refused the caller's arguments (``INVALID_INPUT: text``); still a ValueError for callers."""
+
+
+def public_backend_error(exc: BaseException, backend: str) -> str:
+    """Fixed MCP-visible Hermes backend category, status and repair guidance.
 
     Never include the configured URL, response body, redirect Location or
     transport exception text. The three fenced-session 409 codes are an exact
     allowlist because callers need to distinguish their business outcomes.
     """
-    hint = _DASHBOARD_HINT
+    label, section = BACKENDS[backend]
+    hint = f"{section} in the MCP admin page"
     if isinstance(exc, httpx.HTTPStatusError):
         status = exc.response.status_code
         if status in (401, 403):
             return (
-                f"BACKEND_AUTH_REJECTED status={status}: Hermes Dashboard 憑證被拒 "
+                f"BACKEND_AUTH_REJECTED status={status}: {label} 憑證被拒 "
                 f"(credentials rejected); update {hint} and press Save & Restart."
             )
         if 300 <= status < 400:
             return (
-                f"BACKEND_REDIRECT_REJECTED status={status}: Hermes Dashboard returned a redirect; "
+                f"BACKEND_REDIRECT_REJECTED status={status}: {label} returned a redirect; "
                 f"verify {hint} and press Save & Restart."
             )
         if status in _UNREACHABLE_STATUS:
             return (
-                f"BACKEND_UNAVAILABLE status={status}: Hermes Dashboard 不可達 (unreachable); "
+                f"BACKEND_UNAVAILABLE status={status}: {label} 不可達 (unreachable); "
                 f"check that the Hermes service is running and verify {hint}."
             )
         # A conflict code is useful only when a small, shallow JSON body
@@ -92,28 +135,30 @@ def public_dashboard_error(exc: BaseException) -> str:
                 detail = None
             if isinstance(detail, str) and detail in _DASHBOARD_CONFLICT_CODES:
                 return (
-                    f"BACKEND_HTTP_ERROR status=409 code={detail}: Hermes Dashboard rejected the operation; "
+                    f"BACKEND_HTTP_ERROR status=409 code={detail}: {label} rejected the operation; "
                     f"check the session state and {hint}."
                 )
         return (
-            f"BACKEND_HTTP_ERROR status={status}: Hermes Dashboard request failed; "
+            f"BACKEND_HTTP_ERROR status={status}: {label} request failed; "
             f"verify {hint} and the operation settings."
         )
     if isinstance(exc, httpx.TimeoutException):
-        return f"BACKEND_TIMEOUT: Hermes Dashboard timed out; check the Hermes service and {hint}."
+        return f"BACKEND_TIMEOUT: {label} timed out; check the Hermes service and {hint}."
     if isinstance(exc, httpx.TransportError):
         return (
-            "BACKEND_UNAVAILABLE: Hermes Dashboard 不可達 (unreachable): Check that the Hermes service is running "
+            f"BACKEND_UNAVAILABLE: {label} 不可達 (unreachable): Check that the Hermes service is running "
             f"and that {hint} has the right address."
         )
     if isinstance(exc, (json.JSONDecodeError, UnicodeDecodeError)):
-        return DASHBOARD_DECODE_ERROR
+        return f"BACKEND_UNEXPECTED_RESPONSE: {label} returned non-JSON; verify {hint}."
     if isinstance(exc, httpx.HTTPError):
-        return (
-            "BACKEND_UNEXPECTED_RESPONSE: Hermes Dashboard returned an unreadable response; "
-            f"verify {hint}."
-        )
-    raise TypeError("unsupported Dashboard error type")
+        return f"BACKEND_UNEXPECTED_RESPONSE: {label} returned an unreadable response; verify {hint}."
+    raise TypeError("unsupported Hermes backend error type")
+
+
+def public_dashboard_error(exc: BaseException) -> str:
+    """Fixed MCP-visible Dashboard error (kept for callers of the pre-gateway name)."""
+    return public_backend_error(exc, "dashboard")
 
 
 def _safe_url(url: str) -> str:

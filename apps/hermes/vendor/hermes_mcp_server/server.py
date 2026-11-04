@@ -23,7 +23,7 @@ from typing import Any, Awaitable, Callable
 
 import httpx
 from pydantic import StrictInt
-from backend_policy import BackendFailure, async_client, backend_errors, backend_error_text
+from backend_policy import BackendBusy, BackendFailure, BackendHTTPError, BackendStreamError, async_client, backend_error_text
 from mcp.server.mcpserver import MCPServer
 from mcp.types import CallToolResult, TextContent
 from tool_error_text import keep_error_text
@@ -389,7 +389,7 @@ async def _resource_request(
     """
     response = await client.request(method, path, **kwargs)
     if response.status_code == 404 and errors.response_detail(response) not in ("", "Not Found"):
-        raise HermesNotFoundError(f"Hermes {kind} {ident!r} not found (不存在)")
+        raise HermesNotFoundError(errors.coded(errors.NOT_FOUND, f"Hermes {kind} {ident!r} not found (不存在)"))
     response.raise_for_status()
     return response
 
@@ -399,29 +399,53 @@ async def _resource_request(
 # ---------------------------------------------------------------------------
 
 
+# The add-on's own transport verdicts keep their stable code (BACKEND_BUSY, BACKEND_STREAM_ERROR, ...) on the Gateway.
+_ADDON_TRANSPORT_ERRORS = (BackendBusy, BackendHTTPError, BackendStreamError)
+
+
+def _public_failure(exc: BaseException, backend: str) -> bool:
+    """True when *exc* gets the fixed public Dashboard/Gateway wording instead of its backend_policy code."""
+    return isinstance(exc, (httpx.HTTPError, json.JSONDecodeError, UnicodeDecodeError)) and not (
+        backend == "gateway" and isinstance(exc, _ADDON_TRANSPORT_ERRORS)
+    )
+
+
 def _backend_errors(backend: str):
-    """Keep Gateway behavior; classify Dashboard failures before public output."""
-    if backend != "dashboard":
-        return backend_errors
+    """Every tool error becomes ``CODE: text``; HTTP/transport failures of either backend use fixed public wording.
+
+    Dashboard and Gateway failures never repeat the configured URL, the upstream body, a redirect Location or
+    the transport exception text (errors.public_backend_error). Input guards read INVALID_INPUT, local business
+    errors keep their own code; anything else keeps the add-on's stable backend_policy code and text.
+    """
 
     def decorate(function):
         @functools.wraps(function)
-        async def with_dashboard_guidance(*args, **kwargs):
+        async def with_public_errors(*args, **kwargs):
             try:
                 return await function(*args, **kwargs)
+            except (
+                errors.HermesBackendError,
+                HermesNotFoundError,
+                HermesConfirmRequired,
+                HermesConfigNotApplied,
+            ):
+                raise
+            except guards.GuardError as exc:
+                raise errors.HermesInputError(errors.coded(errors.INVALID_INPUT, str(exc))) from None
+            except ConnectionNotConfiguredError as exc:
+                raise ConnectionNotConfiguredError(f"BACKEND_UNAVAILABLE: {exc}") from None
             except httpx.HTTPStatusError as exc:
                 raise errors.HermesBackendHTTPError(
-                    errors.public_dashboard_error(exc), request=exc.request, response=exc.response
+                    errors.public_backend_error(exc, backend), request=exc.request, response=exc.response
                 ) from None
             except (httpx.HTTPError, json.JSONDecodeError, UnicodeDecodeError) as exc:
-                raise errors.HermesBackendError(errors.public_dashboard_error(exc)) from None
-            except (errors.HermesDashboardResponseError, errors.HermesCronOutcomeUnknown):
-                raise
-            except Exception as exc:  # noqa: BLE001 - retain the existing local failure wrapper
-                # Preserve the 9e67 handling of local guards/business failures.
+                if not _public_failure(exc, backend):
+                    raise BackendFailure(exc) from None
+                raise errors.HermesBackendError(errors.public_backend_error(exc, backend)) from None
+            except Exception as exc:  # noqa: BLE001 - retain the add-on's stable backend_policy code and text
                 raise BackendFailure(exc) from None
 
-        return with_dashboard_guidance
+        return with_public_errors
 
     return decorate
 
@@ -429,8 +453,8 @@ def _backend_errors(backend: str):
 def _section_error(exc: Exception, backend: str, conn: dict[str, str]) -> str:
     if isinstance(exc, errors.HermesDashboardResponseError):
         return str(exc)
-    if backend == "dashboard" and isinstance(exc, (httpx.HTTPError, json.JSONDecodeError, UnicodeDecodeError)):
-        return errors.public_dashboard_error(exc)
+    if _public_failure(exc, backend):
+        return errors.public_backend_error(exc, backend)
     return backend_error_text(exc)
 
 
@@ -455,6 +479,12 @@ def _dashboard_invalid_shape() -> errors.HermesDashboardResponseError:
         "BACKEND_UNEXPECTED_RESPONSE: Hermes Dashboard returned an unexpected JSON shape; "
         "verify Connection > Dashboard REST API in the MCP admin page."
     )
+
+
+def _dashboard_shape(valid: bool) -> None:
+    """Reject a decoded Dashboard field without reflecting its value or type."""
+    if not valid:
+        raise _dashboard_invalid_shape()
 
 
 def _cron_create_unknown() -> errors.HermesCronOutcomeUnknown:
@@ -512,7 +542,7 @@ async def hermes_inspect(target: str = "all") -> str:
             async with await _get_dashboard_client(conn) as client:
                 resp = await client.get("/api/model/info")
                 resp.raise_for_status()
-                result["model_info"] = resp.json()
+                result["model_info"] = _dashboard_object(resp)
         except Exception as exc:
             result["model_info_error"] = _section_error(exc, "dashboard", conn)
 
@@ -557,11 +587,19 @@ async def hermes_skill(action: str, name: str | None = None) -> str:
         if action == "list":
             resp = await client.get("/api/skills")
             resp.raise_for_status()
-            skills = resp.json()
-            if isinstance(skills, list):
-                summary = [{"name": s.get("name"), "enabled": s.get("enabled"), "category": s.get("category")} for s in skills if isinstance(s, dict)]
-                return json.dumps({"total": len(summary), "skills": summary}, indent=2)
-            return json.dumps(skills, indent=2)
+            skills = _dashboard_json(resp)
+            _dashboard_shape(isinstance(skills, list))
+            summary = []
+            for skill in skills:
+                _dashboard_shape(isinstance(skill, dict))
+                _dashboard_shape(skill.get("name") is None or isinstance(skill["name"], str))
+                _dashboard_shape(skill.get("enabled") is None or type(skill["enabled"]) is bool)
+                _dashboard_shape(skill.get("category") is None or isinstance(skill["category"], str))
+                summary.append({
+                    "name": skill.get("name"), "enabled": skill.get("enabled"),
+                    "category": skill.get("category"),
+                })
+            return json.dumps({"total": len(summary), "skills": summary}, indent=2)
 
         if action in ("enable", "disable"):
             if not name:
@@ -589,7 +627,7 @@ async def hermes_mcp(action: str, name: str | None = None, url: str | None = Non
         if action == "list":
             resp = await client.get("/api/mcp/servers")
             resp.raise_for_status()
-            return json.dumps(resp.json(), indent=2)
+            return json.dumps(_dashboard_json(resp), indent=2)
 
         if action == "add":
             if not name or not url:
@@ -638,7 +676,7 @@ async def hermes_model(
         if action == "info":
             resp = await client.get("/api/model/info")
             resp.raise_for_status()
-            return json.dumps(resp.json(), indent=2)
+            return json.dumps(_dashboard_object(resp), indent=2)
 
         if action == "list_providers":
             # AI-HMCP-001-2：讀 Hermes 自己的 /api/model/options（寫死的清單沒有 custom 等實際 provider）。
@@ -646,18 +684,17 @@ async def hermes_model(
             resp.raise_for_status()
             data = _dashboard_object(resp)
             rows = data.get("providers", [])
-            if not isinstance(rows, list):
-                raise _dashboard_invalid_shape()
+            _dashboard_shape(isinstance(rows, list))
+            _dashboard_shape(data.get("model") is None or isinstance(data["model"], str))
+            _dashboard_shape(data.get("provider") is None or isinstance(data["provider"], str))
             providers = []
             for row in rows:
-                if not isinstance(row, dict):
-                    continue
-                raw_models = row.get("models")
-                if raw_models is not None and not isinstance(raw_models, list):
-                    raise _dashboard_invalid_shape()
-                if raw_models is not None and not all(isinstance(item, str) for item in raw_models):
-                    raise _dashboard_invalid_shape()
-                models = [str(m) for m in (raw_models or [])]
+                _dashboard_shape(isinstance(row, dict))
+                models = row.get("models", [])
+                _dashboard_shape(isinstance(models, list) and all(isinstance(m, str) for m in models))
+                _dashboard_shape(row.get("slug") is None or isinstance(row["slug"], str))
+                _dashboard_shape(row.get("name") is None or isinstance(row["name"], str))
+                _dashboard_shape(type(row.get("is_current", False)) is bool)
                 providers.append({
                     "slug": row.get("slug"), "name": row.get("name"), "is_current": bool(row.get("is_current")),
                     "total_models": len(models), "models": models[:MODEL_LIST_LIMIT],
@@ -672,7 +709,7 @@ async def hermes_model(
             if not provider:
                 info = await client.get("/api/model/info")
                 info.raise_for_status()
-                provider = (info.json() or {}).get("provider") or ""
+                provider = _dashboard_object(info).get("provider") or ""
                 if not provider:
                     return json.dumps({"error": "Hermes has no current provider; specify 'provider' "
                                                 "(see hermes_model action=list_providers)"})
@@ -681,10 +718,11 @@ async def hermes_model(
                 payload["confirm_expensive_model"] = True
             resp = await client.post("/api/model/set", json=payload)
             resp.raise_for_status()
-            data = resp.json()
+            data = _dashboard_json(resp)
             if isinstance(data, dict) and data.get("confirm_required"):
                 raise HermesConfirmRequired(
-                    f"Hermes did not switch the model: {data.get('confirm_message') or 'confirmation required'} "
+                    f"{errors.CONFIRMATION_REQUIRED}: Hermes did not switch the model: "
+                    f"{data.get('confirm_message') or 'confirmation required'} "
                     f"Call hermes_model again with confirm_expensive=true to switch anyway."
                 )
             return json.dumps(data, indent=2)
@@ -707,7 +745,7 @@ async def hermes_config(action: str = "get", key: str | None = None, value: str 
         if action == "get":
             resp = await client.get("/api/config")
             resp.raise_for_status()
-            data = resp.json()
+            data = _dashboard_object(resp)
             if key and isinstance(data, dict):
                 parts = key.split(".")
                 current = data
@@ -751,7 +789,7 @@ async def hermes_config(action: str = "get", key: str | None = None, value: str 
 
             check = await client.get("/api/config")
             check.raise_for_status()
-            found, actual = True, check.json()
+            found, actual = True, _dashboard_json(check)
             for part in parts:
                 if isinstance(actual, dict) and part in actual:
                     actual = actual[part]
@@ -761,7 +799,7 @@ async def hermes_config(action: str = "get", key: str | None = None, value: str 
             if not found or not guards.config_patch_applied(parsed_value, actual):
                 shown = (_redact_all(actual) if any(_secret_key(part) for part in parts) else redact_config(actual))
                 raise HermesConfigNotApplied(
-                    f"Hermes accepted the write but '{key}' reads back as "
+                    f"{errors.CONFIG_NOT_APPLIED}: Hermes accepted the write but '{key}' reads back as "
                     f"{json.dumps(shown, default=str) if found else '(missing)'}, not "
                     f"{json.dumps(parsed_value, default=str)}. The key may not exist in this Hermes version "
                     f"(check with hermes_config action=get) or Hermes normalized the value."
@@ -786,7 +824,7 @@ async def hermes_tools(action: str = "list", toolset: str | None = None) -> str:
         if action == "list":
             resp = await client.get("/api/tools/toolsets")
             resp.raise_for_status()
-            return json.dumps(resp.json(), indent=2)
+            return json.dumps(_dashboard_json(resp), indent=2)
 
         if action in ("enable", "disable"):
             if not toolset:
@@ -870,11 +908,11 @@ async def hermes_chat(message: str, session_id: str | None = None) -> str:
                 f"Tools already run are not undone. Check the conversation before retrying a write operation."
             ) from None
     if not isinstance(data, dict):
-        raise errors.HermesBackendError("Hermes returned an invalid response: expected a JSON object")
+        raise errors.coded_error(errors.BACKEND_UNEXPECTED_RESPONSE, "Hermes returned an invalid response: expected a JSON object")
     if data.get("status") in ("failed", "incomplete", "cancelled") or data.get("error"):
         error = data.get("error") or data.get("incomplete_details")
         detail = (error.get("message") or error.get("reason")) if isinstance(error, dict) else error
-        raise errors.HermesBackendError(f"Hermes could not complete the turn: {detail or data.get('status')}")
+        raise errors.coded_error(errors.CHAT_TURN_FAILED, f"Hermes could not complete the turn: {detail or data.get('status')}")
     # Extract text from response
     output = data.get("output", [])
     texts = []
@@ -913,10 +951,10 @@ async def _chat_turn(client: httpx.AsyncClient, payload: dict[str, Any], api_key
                     body = json.loads("\n".join(data_lines))
                     envelope = body.get("response") if isinstance(body, dict) else None
                     if not isinstance(envelope, dict):
-                        raise errors.HermesBackendError("Hermes returned a final stream event without a response")
+                        raise errors.coded_error(errors.BACKEND_UNEXPECTED_RESPONSE, "Hermes returned a final stream event without a response")
                     return {**envelope, "status": envelope.get("status") or event.removeprefix("response.")}
                 event, data_lines = "", []
-    raise errors.HermesBackendError("Hermes Gateway ended the reply without a result (stream closed early); retry.")
+    raise errors.coded_error(errors.BACKEND_UNEXPECTED_RESPONSE, "Hermes Gateway ended the reply without a result (stream closed early); retry.")
 
 
 # ---------------------------------------------------------------------------
@@ -946,17 +984,18 @@ async def hermes_session(
         if action == "list":
             resp = await client.get("/api/sessions")
             resp.raise_for_status()
-            data = resp.json()
-            if isinstance(data, dict):
-                sessions = data.get("sessions", [])
-                return json.dumps({"total": data.get("total", len(sessions)), "sessions": sessions[:20]}, indent=2, default=str)
-            return json.dumps(data, indent=2, default=str)
+            data = _dashboard_object(resp)
+            sessions = data.get("sessions", [])
+            _dashboard_shape(isinstance(sessions, list) and all(isinstance(row, dict) for row in sessions))
+            total = data.get("total", len(sessions))
+            _dashboard_shape(type(total) is int and total >= 0)
+            return json.dumps({"total": total, "sessions": sessions[:20]}, indent=2, default=str)
 
         if action == "get":
             if not session_id:
                 return json.dumps({"error": "session_id required"})
             resp = await _resource_request(client, "GET", f"/api/sessions/{guards.path_segment(session_id, 'session_id')}", "session", session_id)
-            return json.dumps(resp.json(), indent=2, default=str)
+            return json.dumps(_dashboard_object(resp), indent=2, default=str)
 
         if action == "delete":
             if not session_id:
@@ -1144,16 +1183,24 @@ async def hermes_webhook(
             resp.raise_for_status()
             data = _dashboard_object(resp)
             subs = data.get("subscriptions", [])
-            if not isinstance(subs, list):
-                raise _dashboard_invalid_shape()
-            for row in subs:
-                if isinstance(row, dict) and row.get("prompt") is not None and not isinstance(row["prompt"], str):
-                    raise _dashboard_invalid_shape()
+            _dashboard_shape(isinstance(subs, list))
+            _dashboard_shape(type(data.get("enabled", False)) is bool)
+            _dashboard_shape(data.get("base_url") is None or isinstance(data["base_url"], str))
+            webhooks = []
+            for webhook in subs:
+                _dashboard_shape(isinstance(webhook, dict))
+                _dashboard_shape(webhook.get("name") is None or isinstance(webhook["name"], str))
+                _dashboard_shape(webhook.get("enabled") is None or type(webhook["enabled"]) is bool)
+                prompt_value = webhook.get("prompt")
+                _dashboard_shape(prompt_value is None or isinstance(prompt_value, str))
+                webhooks.append({
+                    "name": webhook.get("name"), "enabled": webhook.get("enabled"),
+                    "prompt": (prompt_value or "")[:80],
+                })
             return json.dumps({
                 "platform_enabled": data.get("enabled", False),
                 "base_url": data.get("base_url", ""),
-                "total": len(subs),
-                "webhooks": [{"name": w.get("name"), "enabled": w.get("enabled"), "prompt": (w.get("prompt") or "")[:80]} for w in subs if isinstance(w, dict)],
+                "total": len(subs), "webhooks": webhooks,
             }, indent=2)
 
         if action == "enable_platform":

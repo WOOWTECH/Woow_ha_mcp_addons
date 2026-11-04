@@ -8,7 +8,12 @@ import uuid
 
 import httpx
 
-from .errors import HermesBackendError
+from .errors import (
+    BACKEND_UNEXPECTED_RESPONSE,
+    NOT_FOUND,
+    HermesBackendError,
+    coded_error,
+)
 from .guards import GuardError, path_segment
 
 
@@ -44,9 +49,10 @@ def mutation_identity(
 async def _snapshot(client: httpx.AsyncClient, path: str, session_id: str) -> dict:
     response = await client.get(path + "/mutation-snapshot")
     if response.status_code in (404, 405):
-        raise HermesBackendError(
+        raise coded_error(
+            BACKEND_UNEXPECTED_RESPONSE,
             "Hermes Dashboard session mutation-snapshot contract is unavailable. "
-            "No delete was sent; a backend with the fenced session mutation API is required."
+            "No delete was sent; a backend with the fenced session mutation API is required.",
         )
     response.raise_for_status()
     value = response.json()
@@ -67,8 +73,9 @@ async def _snapshot(client: httpx.AsyncClient, path: str, session_id: str) -> di
             else revision == 0 and generation is None
         )
     if not valid:
-        raise HermesBackendError(
-            "Hermes returned an invalid session mutation snapshot; no unfenced delete is allowed."
+        raise coded_error(
+            BACKEND_UNEXPECTED_RESPONSE,
+            "Hermes returned an invalid session mutation snapshot; no unfenced delete is allowed.",
         )
     return value
 
@@ -89,8 +96,8 @@ async def delete_session(
     snapshot = await _snapshot(client, path, session_id)
     if identity is None:
         if not snapshot["exists"]:
-            raise HermesBackendError(
-                f"Hermes session {session_id!r} not found; nothing was deleted"
+            raise coded_error(
+                NOT_FOUND, f"Hermes session {session_id!r} not found; nothing was deleted"
             )
         identity = dict(
             request_id=uuid.uuid4().hex,
@@ -113,8 +120,9 @@ async def delete_session(
     except ValueError:
         raise _unknown(identity, "invalid acknowledgement") from None
     if isinstance(result, dict) and result.get("already_absent") is True:
-        raise HermesBackendError(
-            f"Hermes session {session_id!r} not found; no committed delete receipt was returned"
+        raise coded_error(
+            NOT_FOUND,
+            f"Hermes session {session_id!r} not found; no committed delete receipt was returned",
         )
     if not isinstance(result, dict) or result.get("ok") is not True:
         raise _unknown(identity, "invalid acknowledgement")

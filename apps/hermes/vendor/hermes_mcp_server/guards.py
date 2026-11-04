@@ -159,6 +159,10 @@ def clean_config_key(key: str) -> str:
 STDIO_FIELDS = ("command", "args", "env", "cwd")
 
 
+# One wording for a loopback MCP server URL on PaaS and the HA add-on (PaaS maps its SSRF module's loopback verdict
+# to the same sentence).
+LOOPBACK_MCP_URL_MESSAGE = "loopback MCP servers (localhost, 127.0.0.0/8, ::1) cannot be added"
+
 # AI-HMCP-002-2 (loopback, restored in 0.3.4): Hermes connects to a registered MCP server from its own host, so a
 # loopback URL reaches whatever listens only there (Hermes itself, its dashboard or API server). backend_policy permits
 # loopback for the add-on's own configured backends; registration refuses it here, by name and by every resolved address.
@@ -194,10 +198,10 @@ async def check_mcp_server_url(url: Any) -> str:
     # its DNS resolution cannot be pinned by this add-on's HTTP client.
     destination = Destination(url)
     if _loopback_name(destination.host):
-        raise GuardError("loopback MCP servers (localhost, 127.0.0.0/8, ::1) cannot be added")
+        raise GuardError(LOOPBACK_MCP_URL_MESSAGE)
     answers = await resolve_async(destination.host, destination.port, connection_deadline(5.0))
     if any(_loopback_address(address[0]) for _, address in answers):
-        raise GuardError("loopback MCP servers (localhost, 127.0.0.0/8, ::1) cannot be added")
+        raise GuardError(LOOPBACK_MCP_URL_MESSAGE)
     return url
 
 
