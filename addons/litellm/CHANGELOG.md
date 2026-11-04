@@ -1,7 +1,7 @@
-## 0.4.10 — local release candidate (2026-10-31; images pending)
+## 0.4.10 — images published and verified
 
 - Synchronize 0.4.10 release metadata with the merged Odoo read-error/result-size correction. litellm keeps its reviewed 0.4.9 tool, permission and dependency contracts.
-- This preparation has not built or published a 0.4.10 litellm image. Fresh exact-image gates, anonymous readback, provenance and HAOS validation remain pending. See ../../docs/operations/release-decision-0.4.10.md.
+- Exact-source image `ghcr.io/woowtech/amd64-mcp-litellm@sha256:6fb54c713f3c676fecfd2ac711001fd42f2f50f4edfc97c4d6d8dcde726ca0af` passed P1–P5, anonymous verification and fresh remote layer/diffID checks. See ../../docs/provenance/release-0.4.10-images.json and ../../docs/operations/release-decision-0.4.10.md. Stable Release/Store distribution and actual HAOS acceptance remain separate evidence.
 
 ## 0.4.9 — images published and verified
 

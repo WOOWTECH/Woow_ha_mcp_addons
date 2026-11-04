@@ -1,7 +1,8 @@
-## 0.4.10 — release candidate (2026-10-31; images pending)
+## 0.4.10 — images published and verified
 
 - Carry merged PR #46: upstream `search_read`/`read_records` failures propagate to tool errors instead of a false success with zero rows. `search_records`/`read_record` successful results above the default 2 MiB bound return `success:false` and MCP `isError:true`, naming the largest fields. Smaller results, tool names, inputs and grants retain their contracts.
-- The HA gateway now advertises all 41 upstream Odoo output schemas (merged PR #48). Fresh exact-image gates, anonymous readback, provenance and real HAOS/same-backend validation are pending. See ../../docs/operations/release-decision-0.4.10.md.
+- The HA gateway now advertises all 41 upstream Odoo output schemas (merged PR #48). Recoverable XML-RPC connection drops and timeouts keep `BACKEND_UNAVAILABLE`/`BACKEND_TIMEOUT`, so pinned `odoo-mcp==1.3.0` can retry reads within its bound; writes remain one attempt (merged PR #56).
+- Exact-source image `ghcr.io/woowtech/amd64-mcp-odoo@sha256:7e683111b3a06976fa5ad8a43fe877267de2aadeb4fbad2b0f8e5995c22c5b25` passed P1–P5, anonymous verification and fresh remote layer/diffID checks. See ../../docs/provenance/release-0.4.10-images.json and ../../docs/operations/release-decision-0.4.10.md. Stable Release/Store distribution and actual HAOS/same-backend acceptance remain separate evidence.
 
 ## 0.4.9 — images published and verified
 

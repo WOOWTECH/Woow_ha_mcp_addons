@@ -1,7 +1,7 @@
-## 0.4.10 — local release candidate (2026-10-31; images pending)
+## 0.4.10 — images published and verified
 
 - Synchronize 0.4.10 release metadata with the merged Odoo read-error/result-size correction. Include PR #55 safe diagnostics: recognized backend quota failures expose only a fixed category, unknown backend text stays private, and redirects omit Location. Tool, input/output schema, permission and dependency contracts remain unchanged.
-- This preparation has not built or published a 0.4.10 nextcloud image. Fresh exact-image gates, anonymous readback, provenance and HAOS validation remain pending. See ../../docs/operations/release-decision-0.4.10.md.
+- Exact-source image `ghcr.io/woowtech/amd64-mcp-nextcloud@sha256:7f9d3883bf69ec3d8676a7d72242b8aba96c0a3c1382cbbd9a89f18be65c7f84` passed P1–P5, anonymous verification and fresh remote layer/diffID checks. See ../../docs/provenance/release-0.4.10-images.json and ../../docs/operations/release-decision-0.4.10.md. Stable Release/Store distribution and actual HAOS acceptance remain separate evidence.
 
 ## 0.4.9 — images published and verified
 

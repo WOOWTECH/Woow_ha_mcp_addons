@@ -58,14 +58,14 @@
       }
     },
     "n8n": {
-      "ha_commit": "e08fa0d693b5f82a04ba15c568549a6530a1459f",
+      "ha_commit": "7cac166822c60c891c821135cf4c78ae3a0bff4b",
       "package": "n8n-mcp==2.96.2",
       "sdk": {
         "@modelcontextprotocol/sdk": "1.32.2"
       },
       "files": {
         "apps/n8n/package.json": "b516b7c858c4f4f60ae40d9c298d597669a26a293696debfc73398098b124956",
-        "apps/n8n/package-lock.json": "a9e1c4796f6a88620b3cdc863d7d3aca11f148d7546479d9494b876d6277e8aa",
+        "apps/n8n/package-lock.json": "1d128f699b0a9d4bf1018e5208f01e371469a4e639ebd0c9d4ef452fb367d6fa",
         "apps/n8n/n8n_adapter.py": "15236ab617b192e21e961662a7eff55299ebb8032d4287442f3475fd0c26059f",
         "apps/n8n/run.py": "1f442cbd646a6882261762ab71903aa1a0e1c017af07a246d2b783e6aa08b048",
         "apps/n8n/backend_policy.cjs": "497a90dd27a17632e2bdf7ffb950d905a3cf0a0339051ecf96df6e7bd97e4e78",

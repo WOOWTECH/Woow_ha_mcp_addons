@@ -1,0 +1,3580 @@
+{
+  "anonymous_tokens_memory_only": true,
+  "blob_reuse_scope": "Only digest-identical descriptors share this run's one complete fresh GET evidence; every image lists every ordered layer.",
+  "cdn_cache_bypassed_claimed": false,
+  "completed_at": "2026-11-04T15:10:10.080501+00:00",
+  "docker_daemon_used": false,
+  "docker_pull_used": false,
+  "environment_proxy_enabled": false,
+  "fresh_remote_compressed_layer_bytes": 324502879,
+  "fresh_remote_config_bytes": 71206,
+  "fresh_remote_manifest_bytes": 23699,
+  "haos_acceptance_claimed": false,
+  "image_source_commit": "78a4e69cde0e4a36f8287b90b88bd658fab2bac6",
+  "image_source_tree": "65ee0f412cc525bf63c5b18810055bba255a574a",
+  "limits": {
+    "chunk_bytes": 262144,
+    "metadata_bytes": 8388608,
+    "per_blob_compressed_bytes": 536870912,
+    "per_blob_deadline_seconds": 600,
+    "per_blob_uncompressed_bytes": 4294967296,
+    "process_address_space_bytes": 536870912,
+    "socket_timeout_seconds": 20,
+    "total_deadline_seconds": 2400,
+    "total_unique_uncompressed_bytes": 17179869184,
+    "unique_compressed_bytes": 2147483648
+  },
+  "local_layer_cache_used": false,
+  "network_host_allowlist": [
+    "ghcr.io",
+    "pkg-containers.githubusercontent.com"
+  ],
+  "ordered_image_layer_references": 104,
+  "original_inputs_unchanged_at_completion": true,
+  "original_pull_limitation": "Original clean-auth Docker pull reused the builder daemon containing accepted image layers; it did not prove fresh downloads of every remote layer. This supplement adds fresh full GET/size/compressed digest/decompressed diffID evidence without replacing original receipts.",
+  "original_verify_receipt_sha256": "cbcc1029542e423a3f0e2b1e0a58298676dc686a487c831ed021c3367efda06e",
+  "passed": true,
+  "peak_resident_bytes": 20971520,
+  "plan_sha256": "65dfea74bc391816ae404c46a92070a4cba4d2d55a2d4b11418518ee79ca638b",
+  "private_details_sha256": "d9858b50093e5d043c327d065590bb66a516871e0e808f5fc07b52d8f3ca45eb",
+  "products": {
+    "emqx": {
+      "all_ordered_remote_layers_verified": true,
+      "config_bytes": 11472,
+      "config_digest": "sha256:1813f071b58cd28ed4f4328d4ca973f3a1302400740482225674d3194858e07f",
+      "config_ordered_diff_ids_match_original_gate": true,
+      "manifest_bytes": 3671,
+      "manifest_digest": "sha256:26202df1d2ebfef7ddc30759ccf97f50f160da597d8242f547ea134ff869ede5",
+      "manifest_media_type": "application/vnd.docker.distribution.manifest.v2+json",
+      "ordered_layers": [
+        {
+          "diff_id": "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+          "digest": "sha256:3c5439d0ae62993af4cc4e21b8c777297e81bc40e200d4633c85a3e0f977a3bc",
+          "evidence_key": "sha256:3c5439d0ae62993af4cc4e21b8c777297e81bc40e200d4633c85a3e0f977a3bc",
+          "index": 0,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 28247437
+        },
+        {
+          "diff_id": "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+          "digest": "sha256:6826f8529239b0ebfe5dd429a795c8c4989724db6ae9059fa9f03dda8c31f8f5",
+          "evidence_key": "sha256:6826f8529239b0ebfe5dd429a795c8c4989724db6ae9059fa9f03dda8c31f8f5",
+          "index": 1,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 3341535
+        },
+        {
+          "diff_id": "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+          "digest": "sha256:2ed7a1a27c6d053227e15859d704914451dfa1f77792489b54ecc64103fe9db7",
+          "evidence_key": "sha256:2ed7a1a27c6d053227e15859d704914451dfa1f77792489b54ecc64103fe9db7",
+          "index": 2,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 12608442
+        },
+        {
+          "diff_id": "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+          "digest": "sha256:7e143ada11afde237a069ca6ba1887c691cf44e992e77da323c9139f47b8acd2",
+          "evidence_key": "sha256:7e143ada11afde237a069ca6ba1887c691cf44e992e77da323c9139f47b8acd2",
+          "index": 3,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 251
+        },
+        {
+          "diff_id": "sha256:610bff90549fe2d72e54a1647fa003ade1eab710fa1caeb41cdec268974c312c",
+          "digest": "sha256:a8bbd0d5859521e6563ec25565e91d42c16b8d096f6a6221831907b5e64cd51a",
+          "evidence_key": "sha256:a8bbd0d5859521e6563ec25565e91d42c16b8d096f6a6221831907b5e64cd51a",
+          "index": 4,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 361
+        },
+        {
+          "diff_id": "sha256:2cbd2e8f44208162e880976985bbf7445711acbe52fe23ed83b436ee76b7d21b",
+          "digest": "sha256:183e208f8c6a8e1e43483955a2edb4d0a8c7c945bb536e786cdb641c3f0ecf00",
+          "evidence_key": "sha256:183e208f8c6a8e1e43483955a2edb4d0a8c7c945bb536e786cdb641c3f0ecf00",
+          "index": 5,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 112
+        },
+        {
+          "diff_id": "sha256:fc1cc6f7edcf342f2eca6f6e4c65dcdcebb20ece8701c34ce6735f79dc741232",
+          "digest": "sha256:a2d44e37e187a89770ca1c4aa3bff09d67f8ec1daeebc8766820d9dcff94e4bd",
+          "evidence_key": "sha256:a2d44e37e187a89770ca1c4aa3bff09d67f8ec1daeebc8766820d9dcff94e4bd",
+          "index": 6,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 3480923
+        },
+        {
+          "diff_id": "sha256:b9beb730ea958db83bbbf379fd2a7a21c9e47e0d4862fe2526213d049fed6d10",
+          "digest": "sha256:95c49d9412443fa7d774f69ab5294cc3d725f22471ecf39369e61f095e359942",
+          "evidence_key": "sha256:95c49d9412443fa7d774f69ab5294cc3d725f22471ecf39369e61f095e359942",
+          "index": 7,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 182854
+        },
+        {
+          "diff_id": "sha256:230dac4da49ff7c68a239508d14d090384afb1b1741570d0a5d258e613011e2f",
+          "digest": "sha256:30b4674b6fa3d34f7547e504782c24fd919cb6dee16a9aa41b7e0ad74a5ceff4",
+          "evidence_key": "sha256:30b4674b6fa3d34f7547e504782c24fd919cb6dee16a9aa41b7e0ad74a5ceff4",
+          "index": 8,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 12738381
+        },
+        {
+          "diff_id": "sha256:1385a1bc14d87e14f16399c824fdb0f72ce722d3414205ef7a8d374141d3269c",
+          "digest": "sha256:be108a4160c18682639cc258c38041d003ee0cec0982e01b370c86490675db00",
+          "evidence_key": "sha256:be108a4160c18682639cc258c38041d003ee0cec0982e01b370c86490675db00",
+          "index": 9,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 18415
+        },
+        {
+          "diff_id": "sha256:482ade599a7258e303d8321a2ed4e3c08413df60054a017644b6d8c33a344bed",
+          "digest": "sha256:14750658137837bb1fdc69cd95adb4c184fb8d6f86da225e2b07b4776fbb3d1f",
+          "evidence_key": "sha256:14750658137837bb1fdc69cd95adb4c184fb8d6f86da225e2b07b4776fbb3d1f",
+          "index": 10,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 51996
+        },
+        {
+          "diff_id": "sha256:059efc6f6000e3374b174608a5c0f3e2b68e9f90294d53f34b59773f19512b05",
+          "digest": "sha256:be42523a98dfff0358ae6440056dab065730aeb853fc6dad2906b5049e684f1c",
+          "evidence_key": "sha256:be42523a98dfff0358ae6440056dab065730aeb853fc6dad2906b5049e684f1c",
+          "index": 11,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 16590896
+        },
+        {
+          "diff_id": "sha256:2eab14193f37589765240985a473d2791b6a7d6bff2374add7afd6433cd8b7fd",
+          "digest": "sha256:67747329838ed27772679319d28cc2eed9904f7bfe3431447a34bdee8883e193",
+          "evidence_key": "sha256:67747329838ed27772679319d28cc2eed9904f7bfe3431447a34bdee8883e193",
+          "index": 12,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 4294
+        },
+        {
+          "diff_id": "sha256:b2ece983329e20d068d75c3b352569b5dc74daaf3ae2bef57594d408a354b0c5",
+          "digest": "sha256:5ce5493d9e823a81de8114cf9f15ee8448bf9f3d86e54985d118890ffeb40512",
+          "evidence_key": "sha256:5ce5493d9e823a81de8114cf9f15ee8448bf9f3d86e54985d118890ffeb40512",
+          "index": 13,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 4237
+        },
+        {
+          "diff_id": "sha256:0c1d927e5ce550a6ce52855ce1c3392f97c1d8eb902cafe788ae735453ec07e4",
+          "digest": "sha256:8263388ecf8292a06316397454e1f98567e1df09621f298715736d3c1592282b",
+          "evidence_key": "sha256:8263388ecf8292a06316397454e1f98567e1df09621f298715736d3c1592282b",
+          "index": 14,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 365461
+        },
+        {
+          "diff_id": "sha256:35f709fc64957b8b5fe358eb8c54d6c3a3b42e533f1a402526938d297869c7cd",
+          "digest": "sha256:8286973624b63effa9af42609d3fda20cf8a840693e0e2858db15283f46e6752",
+          "evidence_key": "sha256:8286973624b63effa9af42609d3fda20cf8a840693e0e2858db15283f46e6752",
+          "index": 15,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 1202
+        }
+      ],
+      "platform": "linux/amd64",
+      "reference": "ghcr.io/woowtech/amd64-mcp-emqx@sha256:26202df1d2ebfef7ddc30759ccf97f50f160da597d8242f547ea134ff869ede5",
+      "source_commit": "78a4e69cde0e4a36f8287b90b88bd658fab2bac6",
+      "version": "0.4.10"
+    },
+    "hermes": {
+      "all_ordered_remote_layers_verified": true,
+      "config_bytes": 11494,
+      "config_digest": "sha256:738fb1f2da92ac6291f8ad2663994d7f8f95c3f850abf88dfd24f87d1e22e3c5",
+      "config_ordered_diff_ids_match_original_gate": true,
+      "manifest_bytes": 3670,
+      "manifest_digest": "sha256:7c2e7f9dd5c1bb54d597247098731ebe90743c2752d7e2f49478e9bc869a46a5",
+      "manifest_media_type": "application/vnd.docker.distribution.manifest.v2+json",
+      "ordered_layers": [
+        {
+          "diff_id": "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+          "digest": "sha256:3c5439d0ae62993af4cc4e21b8c777297e81bc40e200d4633c85a3e0f977a3bc",
+          "evidence_key": "sha256:3c5439d0ae62993af4cc4e21b8c777297e81bc40e200d4633c85a3e0f977a3bc",
+          "index": 0,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 28247437
+        },
+        {
+          "diff_id": "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+          "digest": "sha256:6826f8529239b0ebfe5dd429a795c8c4989724db6ae9059fa9f03dda8c31f8f5",
+          "evidence_key": "sha256:6826f8529239b0ebfe5dd429a795c8c4989724db6ae9059fa9f03dda8c31f8f5",
+          "index": 1,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 3341535
+        },
+        {
+          "diff_id": "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+          "digest": "sha256:2ed7a1a27c6d053227e15859d704914451dfa1f77792489b54ecc64103fe9db7",
+          "evidence_key": "sha256:2ed7a1a27c6d053227e15859d704914451dfa1f77792489b54ecc64103fe9db7",
+          "index": 2,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 12608442
+        },
+        {
+          "diff_id": "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+          "digest": "sha256:7e143ada11afde237a069ca6ba1887c691cf44e992e77da323c9139f47b8acd2",
+          "evidence_key": "sha256:7e143ada11afde237a069ca6ba1887c691cf44e992e77da323c9139f47b8acd2",
+          "index": 3,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 251
+        },
+        {
+          "diff_id": "sha256:1754236b4cbc6aaa4bc8d9d9e1dd6f5125f9b7a2dfe1c7cd3bffe27144b2c0e5",
+          "digest": "sha256:1875a369e0a746e2b6fbd8862389192b50ff4ec9b8c42147887fbb1bbdc63f29",
+          "evidence_key": "sha256:1875a369e0a746e2b6fbd8862389192b50ff4ec9b8c42147887fbb1bbdc63f29",
+          "index": 4,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 360
+        },
+        {
+          "diff_id": "sha256:c509034490110c4c1dca3b6e93e92d24dc0b127b3153ff0827889a3ffe667326",
+          "digest": "sha256:b64803e69e99aeb7c77e664c528cfc90b7935b0984012996460155774abf311d",
+          "evidence_key": "sha256:b64803e69e99aeb7c77e664c528cfc90b7935b0984012996460155774abf311d",
+          "index": 5,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 112
+        },
+        {
+          "diff_id": "sha256:88492c81f078d4f016add716f43d99e9849ab84c3db7a85b1bacd69f0e14368a",
+          "digest": "sha256:9889990e970e874083278b7849c966c1f3d9fbd4fb5986345867f4d44ecd2845",
+          "evidence_key": "sha256:9889990e970e874083278b7849c966c1f3d9fbd4fb5986345867f4d44ecd2845",
+          "index": 6,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 3480926
+        },
+        {
+          "diff_id": "sha256:a98d9bc9f4e0a428d24fda4cfa49a2448e33ec75461318b7fc32b25e2651483a",
+          "digest": "sha256:20ef90ad618094a51a0829354b8b8f44e66acba4dc34901a77d131a9822f7fdd",
+          "evidence_key": "sha256:20ef90ad618094a51a0829354b8b8f44e66acba4dc34901a77d131a9822f7fdd",
+          "index": 7,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 182858
+        },
+        {
+          "diff_id": "sha256:d72e9b955e0899c535a4b3c580ce56d4c3e688b5027f0dbd2150d4846ede4c21",
+          "digest": "sha256:f7ff8522e5275c70943088ecb3015e104d5dbc298641a51ca61278bf27b745d8",
+          "evidence_key": "sha256:f7ff8522e5275c70943088ecb3015e104d5dbc298641a51ca61278bf27b745d8",
+          "index": 8,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 12738374
+        },
+        {
+          "diff_id": "sha256:b8a9b99b30f983dcf086d80bead58b8368ddfb9e445eceee1740670d569ec121",
+          "digest": "sha256:9f50342ebb173f67c11250e2e4d9d2987dd0c91eddda3ad17689c3ffa26336cf",
+          "evidence_key": "sha256:9f50342ebb173f67c11250e2e4d9d2987dd0c91eddda3ad17689c3ffa26336cf",
+          "index": 9,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 18418
+        },
+        {
+          "diff_id": "sha256:1a48a86e1abbe90b95615315b4bb7dbcafdec64c90464b22a9d55c6029fa4e11",
+          "digest": "sha256:0e8fb55da2c2394bf4a70d519a209ed81fd622a3d5e842a44c12f08224143c26",
+          "evidence_key": "sha256:0e8fb55da2c2394bf4a70d519a209ed81fd622a3d5e842a44c12f08224143c26",
+          "index": 10,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 47427
+        },
+        {
+          "diff_id": "sha256:3fa88688422e6ccffd0b53318c4adb138859545a9453ffc5c0f45f2bb8bd6098",
+          "digest": "sha256:84188ae63a0b4de1f2edcfca8993e3aed7bfbf7f876e852a97bef0051c6ffb64",
+          "evidence_key": "sha256:84188ae63a0b4de1f2edcfca8993e3aed7bfbf7f876e852a97bef0051c6ffb64",
+          "index": 11,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 9687517
+        },
+        {
+          "diff_id": "sha256:4c7cf3490f679a849e50f6f15340f38db1bb00d5088e84bf021d4507dddef90d",
+          "digest": "sha256:1f44f791cb1c7cdc8570815b1bdb92f349c76b9db75351cc539452760d347a5f",
+          "evidence_key": "sha256:1f44f791cb1c7cdc8570815b1bdb92f349c76b9db75351cc539452760d347a5f",
+          "index": 12,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 4296
+        },
+        {
+          "diff_id": "sha256:2f84c0e1296c1e5056f7b3277c73c12ba24482f52c30bef045d4592690fc5c78",
+          "digest": "sha256:6fced8f8c22efa62c096304478869b191cee55a834b80b2e4493cf4b476ffd26",
+          "evidence_key": "sha256:6fced8f8c22efa62c096304478869b191cee55a834b80b2e4493cf4b476ffd26",
+          "index": 13,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 4239
+        },
+        {
+          "diff_id": "sha256:92ec50cb39f0b79f5d7451eab7ae662a355ce010d33b790bda901d8c6d87d42f",
+          "digest": "sha256:8fe65f5ac038901b8e3a0df42417f737889b744ac386f21d99726f572f61c8fc",
+          "evidence_key": "sha256:8fe65f5ac038901b8e3a0df42417f737889b744ac386f21d99726f572f61c8fc",
+          "index": 14,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 365463
+        },
+        {
+          "diff_id": "sha256:9bae1f5526a9672e60404b6afcd6b1e46b2362728bd76313badbd93cfea79e73",
+          "digest": "sha256:835c22506147cea35b00d429ea97b4df18a074c600228afdf2c346e420c5a9bf",
+          "evidence_key": "sha256:835c22506147cea35b00d429ea97b4df18a074c600228afdf2c346e420c5a9bf",
+          "index": 15,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 1202
+        }
+      ],
+      "platform": "linux/amd64",
+      "reference": "ghcr.io/woowtech/amd64-mcp-hermes@sha256:7c2e7f9dd5c1bb54d597247098731ebe90743c2752d7e2f49478e9bc869a46a5",
+      "source_commit": "78a4e69cde0e4a36f8287b90b88bd658fab2bac6",
+      "version": "0.4.10"
+    },
+    "litellm": {
+      "all_ordered_remote_layers_verified": true,
+      "config_bytes": 11499,
+      "config_digest": "sha256:102a76a77253b2bd4b86f861775f637c61f3f7afe2ffd41523cc1b693b0786e7",
+      "config_ordered_diff_ids_match_original_gate": true,
+      "manifest_bytes": 3671,
+      "manifest_digest": "sha256:6fb54c713f3c676fecfd2ac711001fd42f2f50f4edfc97c4d6d8dcde726ca0af",
+      "manifest_media_type": "application/vnd.docker.distribution.manifest.v2+json",
+      "ordered_layers": [
+        {
+          "diff_id": "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+          "digest": "sha256:3c5439d0ae62993af4cc4e21b8c777297e81bc40e200d4633c85a3e0f977a3bc",
+          "evidence_key": "sha256:3c5439d0ae62993af4cc4e21b8c777297e81bc40e200d4633c85a3e0f977a3bc",
+          "index": 0,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 28247437
+        },
+        {
+          "diff_id": "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+          "digest": "sha256:6826f8529239b0ebfe5dd429a795c8c4989724db6ae9059fa9f03dda8c31f8f5",
+          "evidence_key": "sha256:6826f8529239b0ebfe5dd429a795c8c4989724db6ae9059fa9f03dda8c31f8f5",
+          "index": 1,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 3341535
+        },
+        {
+          "diff_id": "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+          "digest": "sha256:2ed7a1a27c6d053227e15859d704914451dfa1f77792489b54ecc64103fe9db7",
+          "evidence_key": "sha256:2ed7a1a27c6d053227e15859d704914451dfa1f77792489b54ecc64103fe9db7",
+          "index": 2,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 12608442
+        },
+        {
+          "diff_id": "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+          "digest": "sha256:7e143ada11afde237a069ca6ba1887c691cf44e992e77da323c9139f47b8acd2",
+          "evidence_key": "sha256:7e143ada11afde237a069ca6ba1887c691cf44e992e77da323c9139f47b8acd2",
+          "index": 3,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 251
+        },
+        {
+          "diff_id": "sha256:a0d034c1072c33a6e86b3a18bb25a608c8309b42e9f947345cf3fdb8e2a1686c",
+          "digest": "sha256:5368ceec69983defb6289cfaa7135e708675326907b1aa489f372f98b5aeb46d",
+          "evidence_key": "sha256:5368ceec69983defb6289cfaa7135e708675326907b1aa489f372f98b5aeb46d",
+          "index": 4,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 357
+        },
+        {
+          "diff_id": "sha256:f9960ea63602ff2ed67b3852d144e595318cb1424af68145f0ee38f24e62573b",
+          "digest": "sha256:3deba3af198f48b6b993042641223fc3a91c5d9fdba6b80902b863994179c324",
+          "evidence_key": "sha256:3deba3af198f48b6b993042641223fc3a91c5d9fdba6b80902b863994179c324",
+          "index": 5,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 112
+        },
+        {
+          "diff_id": "sha256:1d30973c6555cd6c8745cd4919aa700ea69a303cc87a03bedcbaa55c1906cc53",
+          "digest": "sha256:1be2e3f154d4c38340b81ca2b3eeb0985ef1e7a3c32ce22d1cefedb2cc213e08",
+          "evidence_key": "sha256:1be2e3f154d4c38340b81ca2b3eeb0985ef1e7a3c32ce22d1cefedb2cc213e08",
+          "index": 6,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 3480929
+        },
+        {
+          "diff_id": "sha256:de143afec606a1863dc015d2872354a10d94c014e89457152cdfd127afee176f",
+          "digest": "sha256:9911e90b4d7625a1e95a6b3bdee142531357c0961121f56f11981da59fbbccfd",
+          "evidence_key": "sha256:9911e90b4d7625a1e95a6b3bdee142531357c0961121f56f11981da59fbbccfd",
+          "index": 7,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 182859
+        },
+        {
+          "diff_id": "sha256:96c7aebcc8eab9f734b43adb6992a64932f4862603dedec51176c59c4fdf68c2",
+          "digest": "sha256:6e2cf0567163e259a80f7daebac34a3e78e5e55a52774b80704f26d770bac4b7",
+          "evidence_key": "sha256:6e2cf0567163e259a80f7daebac34a3e78e5e55a52774b80704f26d770bac4b7",
+          "index": 8,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 12738374
+        },
+        {
+          "diff_id": "sha256:4505193155fe3d6a94737bdc273ca20b8dc518becc43b91df297d771055491fa",
+          "digest": "sha256:5543805bf8d2a0a7fce5bd85c5c469253ccbfd4c0df1dfff4d0a0b837a431964",
+          "evidence_key": "sha256:5543805bf8d2a0a7fce5bd85c5c469253ccbfd4c0df1dfff4d0a0b837a431964",
+          "index": 9,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 18415
+        },
+        {
+          "diff_id": "sha256:2233b53a2f1ab8c382dfb32d203c05caa410a77566153841874b8c620dc61de4",
+          "digest": "sha256:15bd615b281ade6c68d926e8ee20452b9c4fc5fd7c32366bb707b0e03f10645d",
+          "evidence_key": "sha256:15bd615b281ade6c68d926e8ee20452b9c4fc5fd7c32366bb707b0e03f10645d",
+          "index": 10,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 69640
+        },
+        {
+          "diff_id": "sha256:e4eb2fe13cbb1fdf674c0f8813887ca48cd5ecf77b7c17d050f1d99a1586b284",
+          "digest": "sha256:9978c3ce0c0704708b26bd67822faa5370a35e7dc342c735f47e9d03eb365b10",
+          "evidence_key": "sha256:9978c3ce0c0704708b26bd67822faa5370a35e7dc342c735f47e9d03eb365b10",
+          "index": 11,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 16591677
+        },
+        {
+          "diff_id": "sha256:64afdd44d917773afaed8349c53bc42f84d7045b88b6d8710c55f37cbbb28328",
+          "digest": "sha256:d445d4ac724385eec65ba749a0184091357e6c42e39ef1f94edf7cf078a42c04",
+          "evidence_key": "sha256:d445d4ac724385eec65ba749a0184091357e6c42e39ef1f94edf7cf078a42c04",
+          "index": 12,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 4296
+        },
+        {
+          "diff_id": "sha256:039602a369dd01b06245bc34728c9cf2c16e81ea558b19e49936c856946cf808",
+          "digest": "sha256:9a16dfafa87d5bb9d2efbb2fb41ed89c0a91d3a9a14d78ea3afe34dd275d0f92",
+          "evidence_key": "sha256:9a16dfafa87d5bb9d2efbb2fb41ed89c0a91d3a9a14d78ea3afe34dd275d0f92",
+          "index": 13,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 4239
+        },
+        {
+          "diff_id": "sha256:5ab9906ef5572a08b25459a4f59b83e451d742713bbb18c45a4e66aa0b18f80c",
+          "digest": "sha256:23ed40e20763dc10e913bd003480f1a5e98f8277e8b378912db1e739ebf9626d",
+          "evidence_key": "sha256:23ed40e20763dc10e913bd003480f1a5e98f8277e8b378912db1e739ebf9626d",
+          "index": 14,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 365461
+        },
+        {
+          "diff_id": "sha256:b21ae194f2195a5e71eb9aa5e86614dec1cb4abe4392dccc76a647fea5b68606",
+          "digest": "sha256:bb09fc60001a548daed76824ce8500a029f06ab8c0ad8693a7660397056aae22",
+          "evidence_key": "sha256:bb09fc60001a548daed76824ce8500a029f06ab8c0ad8693a7660397056aae22",
+          "index": 15,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 1201
+        }
+      ],
+      "platform": "linux/amd64",
+      "reference": "ghcr.io/woowtech/amd64-mcp-litellm@sha256:6fb54c713f3c676fecfd2ac711001fd42f2f50f4edfc97c4d6d8dcde726ca0af",
+      "source_commit": "78a4e69cde0e4a36f8287b90b88bd658fab2bac6",
+      "version": "0.4.10"
+    },
+    "n8n": {
+      "all_ordered_remote_layers_verified": true,
+      "config_bytes": 13683,
+      "config_digest": "sha256:fe2a6d5fe7b5a876596e5920a9805ae62d1134611aa4b108b96bc01276e52c47",
+      "config_ordered_diff_ids_match_original_gate": true,
+      "manifest_bytes": 5345,
+      "manifest_digest": "sha256:990e12c44250d841b6121425fb93487092b4ae4bfcc1c7166111a07f30078ad3",
+      "manifest_media_type": "application/vnd.docker.distribution.manifest.v2+json",
+      "ordered_layers": [
+        {
+          "diff_id": "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+          "digest": "sha256:3c5439d0ae62993af4cc4e21b8c777297e81bc40e200d4633c85a3e0f977a3bc",
+          "evidence_key": "sha256:3c5439d0ae62993af4cc4e21b8c777297e81bc40e200d4633c85a3e0f977a3bc",
+          "index": 0,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 28247437
+        },
+        {
+          "diff_id": "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+          "digest": "sha256:6826f8529239b0ebfe5dd429a795c8c4989724db6ae9059fa9f03dda8c31f8f5",
+          "evidence_key": "sha256:6826f8529239b0ebfe5dd429a795c8c4989724db6ae9059fa9f03dda8c31f8f5",
+          "index": 1,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 3341535
+        },
+        {
+          "diff_id": "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+          "digest": "sha256:2ed7a1a27c6d053227e15859d704914451dfa1f77792489b54ecc64103fe9db7",
+          "evidence_key": "sha256:2ed7a1a27c6d053227e15859d704914451dfa1f77792489b54ecc64103fe9db7",
+          "index": 2,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 12608442
+        },
+        {
+          "diff_id": "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+          "digest": "sha256:7e143ada11afde237a069ca6ba1887c691cf44e992e77da323c9139f47b8acd2",
+          "evidence_key": "sha256:7e143ada11afde237a069ca6ba1887c691cf44e992e77da323c9139f47b8acd2",
+          "index": 3,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 251
+        },
+        {
+          "diff_id": "sha256:8d8759eac9230099dc71744b0c0e98ccaf61ab0367d873662cad7f9cebbee6ed",
+          "digest": "sha256:f3032d231f9692cfd307b91344e4b83ada4334d101bd792c3fca207bf4dd18df",
+          "evidence_key": "sha256:f3032d231f9692cfd307b91344e4b83ada4334d101bd792c3fca207bf4dd18df",
+          "index": 4,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 360
+        },
+        {
+          "diff_id": "sha256:d10dd6fc9544e80169f11c2c1e9b5e4afeedbf62a389126b2896ef9a99fbe910",
+          "digest": "sha256:1dfeb4632063ec29fe08aa464bf619905572b5985a9e23746b2034cf1fec13de",
+          "evidence_key": "sha256:1dfeb4632063ec29fe08aa464bf619905572b5985a9e23746b2034cf1fec13de",
+          "index": 5,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 113
+        },
+        {
+          "diff_id": "sha256:4b3e1ed0067699f6c04b3d7759d73efeec4d0360527dfa80f6f6374317c7841e",
+          "digest": "sha256:6962e568874b22ee4f46f4bfc81663da11ecb5645b0ddadfe4fb69a031311d6f",
+          "evidence_key": "sha256:6962e568874b22ee4f46f4bfc81663da11ecb5645b0ddadfe4fb69a031311d6f",
+          "index": 6,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 3480922
+        },
+        {
+          "diff_id": "sha256:ab5ebcc7c79203eaeaa0b95c0ba315c0fb688f23d61d63ff3d3d81b776656842",
+          "digest": "sha256:1cbe557b44c489d88ff6427f078db6e5e77b077d68b683591ab07ca6803a2adb",
+          "evidence_key": "sha256:1cbe557b44c489d88ff6427f078db6e5e77b077d68b683591ab07ca6803a2adb",
+          "index": 7,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 182858
+        },
+        {
+          "diff_id": "sha256:48cb0bca9ac8dade2866c4f99c0bcacfca5af95d1d9c8c3ff5d56c3ef63cc9b5",
+          "digest": "sha256:02c8a44ed2aabb05f6538c046a0d616690ce774f5332b2073c175656eec60d5f",
+          "evidence_key": "sha256:02c8a44ed2aabb05f6538c046a0d616690ce774f5332b2073c175656eec60d5f",
+          "index": 8,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 12738380
+        },
+        {
+          "diff_id": "sha256:d74510a6fa73cb0a0e3cef0cbdbd38be6eb48f4d0e6d208a009bbbb297ae23d8",
+          "digest": "sha256:eae068241340b81b80573da026212f11f0039372091a6109c8bb89511c8a8341",
+          "evidence_key": "sha256:eae068241340b81b80573da026212f11f0039372091a6109c8bb89511c8a8341",
+          "index": 9,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 18417
+        },
+        {
+          "diff_id": "sha256:db7531e2aa90ee7c055fd5b96af67436c90b5247dd24f1b67bdd9b5a4af2bf65",
+          "digest": "sha256:728bf9b742a808e3da5d201120b51fc48df07bee0150f0452b32522063060150",
+          "evidence_key": "sha256:728bf9b742a808e3da5d201120b51fc48df07bee0150f0452b32522063060150",
+          "index": 10,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 32626
+        },
+        {
+          "diff_id": "sha256:21bf4d201107189b74d8b7142a56b3a0dfad4ae69f8d8c53e5035ae728d3d19f",
+          "digest": "sha256:3800c90674ac731456d44c45af80f9621da06854f55b4370920c63b470a74743",
+          "evidence_key": "sha256:3800c90674ac731456d44c45af80f9621da06854f55b4370920c63b470a74743",
+          "index": 11,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 51020256
+        },
+        {
+          "diff_id": "sha256:7792da9590caecf756d60a71be6afd39fadbbe66998e39283f63a1fc52477879",
+          "digest": "sha256:3368c92590f805f6cf461bf71856038da405c35ca812b614ba08aab2d96dd34f",
+          "evidence_key": "sha256:3368c92590f805f6cf461bf71856038da405c35ca812b614ba08aab2d96dd34f",
+          "index": 12,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 779358
+        },
+        {
+          "diff_id": "sha256:4368286194ad8caa4b5c34a70705b506280a33a6ede8e739f2902282899bcaac",
+          "digest": "sha256:409a08e5efd68e597e5b62941ea5676f30e57c4da33efd47dc6847ab63abbb4f",
+          "evidence_key": "sha256:409a08e5efd68e597e5b62941ea5676f30e57c4da33efd47dc6847ab63abbb4f",
+          "index": 13,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 58230
+        },
+        {
+          "diff_id": "sha256:44e8d0d526b9036537f9aec7186b8e3629e925e04324d9752a56c7a40ce3af43",
+          "digest": "sha256:f8bbb797a18c4f16b41d3aeb31c75b50890f2c4d7c67b434b1023f238d61ea8f",
+          "evidence_key": "sha256:f8bbb797a18c4f16b41d3aeb31c75b50890f2c4d7c67b434b1023f238d61ea8f",
+          "index": 14,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 10390
+        },
+        {
+          "diff_id": "sha256:66e6e83e34c5d3ddb4b18e2588374b26333f55c08b31023228e7f135a89c0b05",
+          "digest": "sha256:a556495263241c9900e4aebb99f3632886d5e034fca448b1ab4ec6ec75488852",
+          "evidence_key": "sha256:a556495263241c9900e4aebb99f3632886d5e034fca448b1ab4ec6ec75488852",
+          "index": 15,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 2850
+        },
+        {
+          "diff_id": "sha256:2f62f82d105dfe3723ce853d666d158b1fd0ec52883c01004d4ab422c64a9c26",
+          "digest": "sha256:67c2abdb129a9aa3f0cce8bc447868f8623bb9137d85c7de59dbeeb49457aa92",
+          "evidence_key": "sha256:67c2abdb129a9aa3f0cce8bc447868f8623bb9137d85c7de59dbeeb49457aa92",
+          "index": 16,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 55510379
+        },
+        {
+          "diff_id": "sha256:84587850a30d1114adcc7fa3f84d544c353670304d391ff58c6fec73cc119f40",
+          "digest": "sha256:0a50693d04f4eb2b46c089f25f60007f654dddbf20e4199cd062fe96ece4309c",
+          "evidence_key": "sha256:0a50693d04f4eb2b46c089f25f60007f654dddbf20e4199cd062fe96ece4309c",
+          "index": 17,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 30791
+        },
+        {
+          "diff_id": "sha256:b871f93ff28902560ca1c6cffae780368ee19f77dcd2b91700a3f4553da6713f",
+          "digest": "sha256:7f2445531dc76f0de8626d07ff8ee76582096085fddf997c857562d7ca0b4a33",
+          "evidence_key": "sha256:7f2445531dc76f0de8626d07ff8ee76582096085fddf997c857562d7ca0b4a33",
+          "index": 18,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 30545
+        },
+        {
+          "diff_id": "sha256:b60ec41a181479a4c92f04119fe4d73c33a16331a41aeeacdc9efce0b3be8f63",
+          "digest": "sha256:8fdf4d9837c1016ba63fe4dabbd6fc8fe496c48da46182ee968736d9a9d134b5",
+          "evidence_key": "sha256:8fdf4d9837c1016ba63fe4dabbd6fc8fe496c48da46182ee968736d9a9d134b5",
+          "index": 19,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 3737
+        },
+        {
+          "diff_id": "sha256:17e36398ca750cef0a391e8096fa62f11814f52acb7af01d130cfab5c4d3fcc4",
+          "digest": "sha256:aebd59719b7c2ab052fb3a25b95d940c4afdf76a4b92deeebd082a4bd33303aa",
+          "evidence_key": "sha256:aebd59719b7c2ab052fb3a25b95d940c4afdf76a4b92deeebd082a4bd33303aa",
+          "index": 20,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 4298
+        },
+        {
+          "diff_id": "sha256:1f083b354bb47694fe17c6567f2fd27bd1b36ace75350ae1c8684e01a08faf67",
+          "digest": "sha256:717ae20b5b912b39f239d8a63c2fc13094c358f264bd9e6020bcdbc3510b7d30",
+          "evidence_key": "sha256:717ae20b5b912b39f239d8a63c2fc13094c358f264bd9e6020bcdbc3510b7d30",
+          "index": 21,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 4241
+        },
+        {
+          "diff_id": "sha256:b6e143dcddfaea9d2b641f808605fb9159d1a5e016b6f1ccfd0005d2f5574463",
+          "digest": "sha256:a911fcbbc5cec5bca5dff7d2ddeaf2ec7bc0cf792acbf631f4286065e90e1f60",
+          "evidence_key": "sha256:a911fcbbc5cec5bca5dff7d2ddeaf2ec7bc0cf792acbf631f4286065e90e1f60",
+          "index": 22,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 365461
+        },
+        {
+          "diff_id": "sha256:ff95352900191e4aa1849982b03a149556bfc618e49f4f57d6765fd2b8a03b57",
+          "digest": "sha256:1c2a33585ea67bd3d143c75a6c00196e7bc060ae4b3f197fd0029068a88f7f1f",
+          "evidence_key": "sha256:1c2a33585ea67bd3d143c75a6c00196e7bc060ae4b3f197fd0029068a88f7f1f",
+          "index": 23,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 1205
+        }
+      ],
+      "platform": "linux/amd64",
+      "reference": "ghcr.io/woowtech/amd64-mcp-n8n@sha256:990e12c44250d841b6121425fb93487092b4ae4bfcc1c7166111a07f30078ad3",
+      "source_commit": "78a4e69cde0e4a36f8287b90b88bd658fab2bac6",
+      "version": "0.4.10"
+    },
+    "nextcloud": {
+      "all_ordered_remote_layers_verified": true,
+      "config_bytes": 11578,
+      "config_digest": "sha256:abee5ed0365401429c527045c3cfd57569536b24a23d0632fb7f111296cbf390",
+      "config_ordered_diff_ids_match_original_gate": true,
+      "manifest_bytes": 3671,
+      "manifest_digest": "sha256:7f9d3883bf69ec3d8676a7d72242b8aba96c0a3c1382cbbd9a89f18be65c7f84",
+      "manifest_media_type": "application/vnd.docker.distribution.manifest.v2+json",
+      "ordered_layers": [
+        {
+          "diff_id": "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+          "digest": "sha256:3c5439d0ae62993af4cc4e21b8c777297e81bc40e200d4633c85a3e0f977a3bc",
+          "evidence_key": "sha256:3c5439d0ae62993af4cc4e21b8c777297e81bc40e200d4633c85a3e0f977a3bc",
+          "index": 0,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 28247437
+        },
+        {
+          "diff_id": "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+          "digest": "sha256:6826f8529239b0ebfe5dd429a795c8c4989724db6ae9059fa9f03dda8c31f8f5",
+          "evidence_key": "sha256:6826f8529239b0ebfe5dd429a795c8c4989724db6ae9059fa9f03dda8c31f8f5",
+          "index": 1,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 3341535
+        },
+        {
+          "diff_id": "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+          "digest": "sha256:2ed7a1a27c6d053227e15859d704914451dfa1f77792489b54ecc64103fe9db7",
+          "evidence_key": "sha256:2ed7a1a27c6d053227e15859d704914451dfa1f77792489b54ecc64103fe9db7",
+          "index": 2,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 12608442
+        },
+        {
+          "diff_id": "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+          "digest": "sha256:7e143ada11afde237a069ca6ba1887c691cf44e992e77da323c9139f47b8acd2",
+          "evidence_key": "sha256:7e143ada11afde237a069ca6ba1887c691cf44e992e77da323c9139f47b8acd2",
+          "index": 3,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 251
+        },
+        {
+          "diff_id": "sha256:340e206cdc63dc608fdf174bdaebc102f622c6030cbc767911b26f528b7574d1",
+          "digest": "sha256:936dd1ef6b19971394b4d29481b5511d6ba36d04d1e48debf1e4aedbc3ddf692",
+          "evidence_key": "sha256:936dd1ef6b19971394b4d29481b5511d6ba36d04d1e48debf1e4aedbc3ddf692",
+          "index": 4,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 358
+        },
+        {
+          "diff_id": "sha256:30b6d4a16239d1f24a98ebbeda038347f9c721d0581f57051f31ed89cdf0579b",
+          "digest": "sha256:633438fb625b0406e8126f9497f9171e3da0e72d6002471ece84d1b77cae8b23",
+          "evidence_key": "sha256:633438fb625b0406e8126f9497f9171e3da0e72d6002471ece84d1b77cae8b23",
+          "index": 5,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 113
+        },
+        {
+          "diff_id": "sha256:2e4553eda4e0bd7e514f34f0565a5d30bbc4232413002642d5057c07f42e5db0",
+          "digest": "sha256:a6e5909b450997befa1dae34a3c8bad6168bb49569ca30d1fd9717ff54d87323",
+          "evidence_key": "sha256:a6e5909b450997befa1dae34a3c8bad6168bb49569ca30d1fd9717ff54d87323",
+          "index": 6,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 3480926
+        },
+        {
+          "diff_id": "sha256:9b0304fc00b6909ae8751a78d71d9369a2143b37c24b05ab7a18b5d29eaeb187",
+          "digest": "sha256:519032e80fe968e96a41eaac456ae29aa87eafaa0688b02305f7bb6f7000a22b",
+          "evidence_key": "sha256:519032e80fe968e96a41eaac456ae29aa87eafaa0688b02305f7bb6f7000a22b",
+          "index": 7,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 182862
+        },
+        {
+          "diff_id": "sha256:d45d0d975da1e774c9a0c1b4db7af0d2a5a31999108837f332a942e524d2017a",
+          "digest": "sha256:5e2d6fb9ab6e9b85e0a243a47483f30437a24ceec72b60864354f52acc53ebed",
+          "evidence_key": "sha256:5e2d6fb9ab6e9b85e0a243a47483f30437a24ceec72b60864354f52acc53ebed",
+          "index": 8,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 12738381
+        },
+        {
+          "diff_id": "sha256:e0b620208ac6addad79831387927a859dd283736a3bf2e27781574bbd039ebe9",
+          "digest": "sha256:a4b5b072e5cbdc50b828f92a0683bf11f29989b3f54bc8c0be60dc8f87bc2099",
+          "evidence_key": "sha256:a4b5b072e5cbdc50b828f92a0683bf11f29989b3f54bc8c0be60dc8f87bc2099",
+          "index": 9,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 18418
+        },
+        {
+          "diff_id": "sha256:30b49c1e627c7b854a66fbff0a3fd34b155ab8ec907ba02820bfc92952340475",
+          "digest": "sha256:94e652a9d23cc795873d17b475d9eb6c0a1a01e4542ded71dac83fb20375992a",
+          "evidence_key": "sha256:94e652a9d23cc795873d17b475d9eb6c0a1a01e4542ded71dac83fb20375992a",
+          "index": 10,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 66357
+        },
+        {
+          "diff_id": "sha256:0a8cd59082f6afa541c9f345534a6cc48f483e66dc01026e6c66aa5ae870fe97",
+          "digest": "sha256:bed6d8d8bf52fdbc9d6d98aca7a19d0b51b85f9857b94c306e86c8aecd6369ed",
+          "evidence_key": "sha256:bed6d8d8bf52fdbc9d6d98aca7a19d0b51b85f9857b94c306e86c8aecd6369ed",
+          "index": 11,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 16786765
+        },
+        {
+          "diff_id": "sha256:a023bdc82ed796faf94dcefca7ce03cac31251ac2773bfd1fc7bb5a3eac9e84c",
+          "digest": "sha256:e3ba12afc8a95091900bc98de9d9b407062e5400d1d4d6350534fc5cc56b36d2",
+          "evidence_key": "sha256:e3ba12afc8a95091900bc98de9d9b407062e5400d1d4d6350534fc5cc56b36d2",
+          "index": 12,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 4296
+        },
+        {
+          "diff_id": "sha256:be5b1135b4a51b4d1712175b8c8c28e0c2eabf4209f1288a42d48e908ba4b64c",
+          "digest": "sha256:c1bcb694d3adada23630656628b600dc87bfafcbb19a9b699ce3e56122ae0cd0",
+          "evidence_key": "sha256:c1bcb694d3adada23630656628b600dc87bfafcbb19a9b699ce3e56122ae0cd0",
+          "index": 13,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 4239
+        },
+        {
+          "diff_id": "sha256:3804d540ed031a33c5edf230f85ac1ef8f7f90f68f9dcf0fcefd2d9f1aadb55d",
+          "digest": "sha256:57eeedcc71d1f286c80adf2ecfb360d088500bdc7f62b69565adc9d7a75969be",
+          "evidence_key": "sha256:57eeedcc71d1f286c80adf2ecfb360d088500bdc7f62b69565adc9d7a75969be",
+          "index": 14,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 365463
+        },
+        {
+          "diff_id": "sha256:982217fdf7b249a1c2939843e8083242d1fd85e404386babf0efad09dbd4f7f6",
+          "digest": "sha256:fa5e64392a5436f9bad1c493f04885371ff45afaa40ae73f2d2d8523f8b1dbdc",
+          "evidence_key": "sha256:fa5e64392a5436f9bad1c493f04885371ff45afaa40ae73f2d2d8523f8b1dbdc",
+          "index": 15,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 1202
+        }
+      ],
+      "platform": "linux/amd64",
+      "reference": "ghcr.io/woowtech/amd64-mcp-nextcloud@sha256:7f9d3883bf69ec3d8676a7d72242b8aba96c0a3c1382cbbd9a89f18be65c7f84",
+      "source_commit": "78a4e69cde0e4a36f8287b90b88bd658fab2bac6",
+      "version": "0.4.10"
+    },
+    "odoo": {
+      "all_ordered_remote_layers_verified": true,
+      "config_bytes": 11480,
+      "config_digest": "sha256:559580ad34f7a81a351340cbb75a4946efb40a23a306d2b73a2fb939f09f7064",
+      "config_ordered_diff_ids_match_original_gate": true,
+      "manifest_bytes": 3671,
+      "manifest_digest": "sha256:7e683111b3a06976fa5ad8a43fe877267de2aadeb4fbad2b0f8e5995c22c5b25",
+      "manifest_media_type": "application/vnd.docker.distribution.manifest.v2+json",
+      "ordered_layers": [
+        {
+          "diff_id": "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+          "digest": "sha256:3c5439d0ae62993af4cc4e21b8c777297e81bc40e200d4633c85a3e0f977a3bc",
+          "evidence_key": "sha256:3c5439d0ae62993af4cc4e21b8c777297e81bc40e200d4633c85a3e0f977a3bc",
+          "index": 0,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 28247437
+        },
+        {
+          "diff_id": "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+          "digest": "sha256:6826f8529239b0ebfe5dd429a795c8c4989724db6ae9059fa9f03dda8c31f8f5",
+          "evidence_key": "sha256:6826f8529239b0ebfe5dd429a795c8c4989724db6ae9059fa9f03dda8c31f8f5",
+          "index": 1,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 3341535
+        },
+        {
+          "diff_id": "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+          "digest": "sha256:2ed7a1a27c6d053227e15859d704914451dfa1f77792489b54ecc64103fe9db7",
+          "evidence_key": "sha256:2ed7a1a27c6d053227e15859d704914451dfa1f77792489b54ecc64103fe9db7",
+          "index": 2,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 12608442
+        },
+        {
+          "diff_id": "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+          "digest": "sha256:7e143ada11afde237a069ca6ba1887c691cf44e992e77da323c9139f47b8acd2",
+          "evidence_key": "sha256:7e143ada11afde237a069ca6ba1887c691cf44e992e77da323c9139f47b8acd2",
+          "index": 3,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 251
+        },
+        {
+          "diff_id": "sha256:f67d2b77386679d451f9bbdac4ebe88cfaef30843e5d12e7ec91ccf1d744b476",
+          "digest": "sha256:0f0cd092847898c4939299265c5af2dca383212a0d7d186a2440659a4e298be6",
+          "evidence_key": "sha256:0f0cd092847898c4939299265c5af2dca383212a0d7d186a2440659a4e298be6",
+          "index": 4,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 358
+        },
+        {
+          "diff_id": "sha256:04e206923d5c2394c9fbb87a1cf0413fc59afab71bd4f15d89528c4f50526a4f",
+          "digest": "sha256:1394544b64aceea81b1f57c2e5135bca084395cdcae595d88fbbfae2f512449a",
+          "evidence_key": "sha256:1394544b64aceea81b1f57c2e5135bca084395cdcae595d88fbbfae2f512449a",
+          "index": 5,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 113
+        },
+        {
+          "diff_id": "sha256:b5e3669d915839eca0ec72685c7f7f2bb5c5dce7e144a66f70205b3b1d7b9e7c",
+          "digest": "sha256:05571a3c7a8c00e488945676e2319b3546c5b83b70db012820498d8d7a510d03",
+          "evidence_key": "sha256:05571a3c7a8c00e488945676e2319b3546c5b83b70db012820498d8d7a510d03",
+          "index": 6,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 3480926
+        },
+        {
+          "diff_id": "sha256:0b782344b0fa76129847d75d5500c313d852a95ca2f3ed18902b7b1ee392c468",
+          "digest": "sha256:f488c6f1fc27ae26a9e811af5b3ced5689014f82598ba6af637158b3999a1354",
+          "evidence_key": "sha256:f488c6f1fc27ae26a9e811af5b3ced5689014f82598ba6af637158b3999a1354",
+          "index": 7,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 182855
+        },
+        {
+          "diff_id": "sha256:1c39d0bae563d6b5280d6324bd1280f6f4ad57abf91fc7f0289e0bdde12821c4",
+          "digest": "sha256:eb38c349b0e2a4aa34bb9e6c78b1f33cee300b8ad597d28a0d4e13ce35b843cb",
+          "evidence_key": "sha256:eb38c349b0e2a4aa34bb9e6c78b1f33cee300b8ad597d28a0d4e13ce35b843cb",
+          "index": 8,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 12738389
+        },
+        {
+          "diff_id": "sha256:dfacd6094d576628ac04f31869a17adc2175f32f2c712736dd899e8b6ce10e41",
+          "digest": "sha256:f2ad81a8e35eb43069f0c7d1e6de2fa0823f3e2622575108f139ce96903a14e6",
+          "evidence_key": "sha256:f2ad81a8e35eb43069f0c7d1e6de2fa0823f3e2622575108f139ce96903a14e6",
+          "index": 9,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 18415
+        },
+        {
+          "diff_id": "sha256:af3d0f9dfc45ec8d00a21653550ee4de8cb3057e0b7b5b2afdd9cb623688a1fe",
+          "digest": "sha256:85c018d4e18323937f5ef9e23ebf4aca0ffd19d1666ee542794f08b1b1c22f8d",
+          "evidence_key": "sha256:85c018d4e18323937f5ef9e23ebf4aca0ffd19d1666ee542794f08b1b1c22f8d",
+          "index": 10,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 31104
+        },
+        {
+          "diff_id": "sha256:e8f7e7963591b409e661ab1163a9b76d64527e7a43fa301ebdde6a2e56b7ac57",
+          "digest": "sha256:9f48129d1339dc89cf371c0f2ba839e0e05cda92d13d3f788ce2b55a369c1b6a",
+          "evidence_key": "sha256:9f48129d1339dc89cf371c0f2ba839e0e05cda92d13d3f788ce2b55a369c1b6a",
+          "index": 11,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 12125176
+        },
+        {
+          "diff_id": "sha256:e4af91bbd7682bae5adc45f58d6c33e1742223b9921c67d9c9ec528efa2642a3",
+          "digest": "sha256:88a4afa55ae7f1ff4195de799b626942c3566f2eac8be79522614742491a367a",
+          "evidence_key": "sha256:88a4afa55ae7f1ff4195de799b626942c3566f2eac8be79522614742491a367a",
+          "index": 12,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 4297
+        },
+        {
+          "diff_id": "sha256:7fb3509d36cdcfef3210a1da79d426222bb9ae3ef88aa871d8977c3ee4605580",
+          "digest": "sha256:50116c8e471b31f1a2ce3846c96cb1ad8bfbcf7fa084a6a2ec7a869b5c0d530a",
+          "evidence_key": "sha256:50116c8e471b31f1a2ce3846c96cb1ad8bfbcf7fa084a6a2ec7a869b5c0d530a",
+          "index": 13,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 4240
+        },
+        {
+          "diff_id": "sha256:3e675417d86dd107eb0a54c72aca04200c6e0199dc6799cd7712221663f2ef45",
+          "digest": "sha256:05992cef83b3abc230f244987ebf40426e14aa072ec8168cde2bc8e74c03c4bc",
+          "evidence_key": "sha256:05992cef83b3abc230f244987ebf40426e14aa072ec8168cde2bc8e74c03c4bc",
+          "index": 14,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 365460
+        },
+        {
+          "diff_id": "sha256:cb9a2f03e72f05392fedc86fcd181af83ba26cc94bba5966ef7b8055691b69cb",
+          "digest": "sha256:4b5fd050e71ffaa32bc674cbf87d74539c3c39471dea41ccc56272ad30149ad7",
+          "evidence_key": "sha256:4b5fd050e71ffaa32bc674cbf87d74539c3c39471dea41ccc56272ad30149ad7",
+          "index": 15,
+          "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+          "size": 1200
+        }
+      ],
+      "platform": "linux/amd64",
+      "reference": "ghcr.io/woowtech/amd64-mcp-odoo@sha256:7e683111b3a06976fa5ad8a43fe877267de2aadeb4fbad2b0f8e5995c22c5b25",
+      "source_commit": "78a4e69cde0e4a36f8287b90b88bd658fab2bac6",
+      "version": "0.4.10"
+    }
+  },
+  "raw_layers_saved": false,
+  "registry_bearer_forwarded_to_CDN": false,
+  "remote_blobs": {
+    "sha256:02c8a44ed2aabb05f6538c046a0d616690ce774f5332b2073c175656eec60d5f": {
+      "completed_at": "2026-11-04T15:08:50.821401+00:00",
+      "compressed_bytes": 12738380,
+      "compressed_digest": "sha256:02c8a44ed2aabb05f6538c046a0d616690ce774f5332b2073c175656eec60d5f",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 12738380,
+      "diff_id": "sha256:48cb0bca9ac8dade2866c4f99c0bcacfca5af95d1d9c8c3ff5d56c3ef63cc9b5",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 1.7367,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 8,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:49.084705+00:00",
+      "uncompressed_bytes": 15071744,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:05571a3c7a8c00e488945676e2319b3546c5b83b70db012820498d8d7a510d03": {
+      "completed_at": "2026-11-04T15:08:35.677443+00:00",
+      "compressed_bytes": 3480926,
+      "compressed_digest": "sha256:05571a3c7a8c00e488945676e2319b3546c5b83b70db012820498d8d7a510d03",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 3480926,
+      "diff_id": "sha256:b5e3669d915839eca0ec72685c7f7f2bb5c5dce7e144a66f70205b3b1d7b9e7c",
+      "downloaded_via_product": "odoo",
+      "elapsed_seconds": 1.9512,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 6,
+          "product": "odoo"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:33.726274+00:00",
+      "uncompressed_bytes": 11107328,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:05992cef83b3abc230f244987ebf40426e14aa072ec8168cde2bc8e74c03c4bc": {
+      "completed_at": "2026-11-04T15:08:44.689287+00:00",
+      "compressed_bytes": 365460,
+      "compressed_digest": "sha256:05992cef83b3abc230f244987ebf40426e14aa072ec8168cde2bc8e74c03c4bc",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 365460,
+      "diff_id": "sha256:3e675417d86dd107eb0a54c72aca04200c6e0199dc6799cd7712221663f2ef45",
+      "downloaded_via_product": "odoo",
+      "elapsed_seconds": 0.8973,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 14,
+          "product": "odoo"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:43.792192+00:00",
+      "uncompressed_bytes": 1841664,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:0a50693d04f4eb2b46c089f25f60007f654dddbf20e4199cd062fe96ece4309c": {
+      "completed_at": "2026-11-04T15:09:12.282326+00:00",
+      "compressed_bytes": 30791,
+      "compressed_digest": "sha256:0a50693d04f4eb2b46c089f25f60007f654dddbf20e4199cd062fe96ece4309c",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 30791,
+      "diff_id": "sha256:84587850a30d1114adcc7fa3f84d544c353670304d391ff58c6fec73cc119f40",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 0.7194,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 17,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:11.562948+00:00",
+      "uncompressed_bytes": 167936,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:0e8fb55da2c2394bf4a70d519a209ed81fd622a3d5e842a44c12f08224143c26": {
+      "completed_at": "2026-11-04T15:09:23.571421+00:00",
+      "compressed_bytes": 47427,
+      "compressed_digest": "sha256:0e8fb55da2c2394bf4a70d519a209ed81fd622a3d5e842a44c12f08224143c26",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 47427,
+      "diff_id": "sha256:1a48a86e1abbe90b95615315b4bb7dbcafdec64c90464b22a9d55c6029fa4e11",
+      "downloaded_via_product": "hermes",
+      "elapsed_seconds": 0.8399,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 10,
+          "product": "hermes"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:22.731484+00:00",
+      "uncompressed_bytes": 160256,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:0f0cd092847898c4939299265c5af2dca383212a0d7d186a2440659a4e298be6": {
+      "completed_at": "2026-11-04T15:08:32.950871+00:00",
+      "compressed_bytes": 358,
+      "compressed_digest": "sha256:0f0cd092847898c4939299265c5af2dca383212a0d7d186a2440659a4e298be6",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 358,
+      "diff_id": "sha256:f67d2b77386679d451f9bbdac4ebe88cfaef30843e5d12e7ec91ccf1d744b476",
+      "downloaded_via_product": "odoo",
+      "elapsed_seconds": 0.7292,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 4,
+          "product": "odoo"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:32.221735+00:00",
+      "uncompressed_bytes": 8192,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:1394544b64aceea81b1f57c2e5135bca084395cdcae595d88fbbfae2f512449a": {
+      "completed_at": "2026-11-04T15:08:33.719281+00:00",
+      "compressed_bytes": 113,
+      "compressed_digest": "sha256:1394544b64aceea81b1f57c2e5135bca084395cdcae595d88fbbfae2f512449a",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 113,
+      "diff_id": "sha256:04e206923d5c2394c9fbb87a1cf0413fc59afab71bd4f15d89528c4f50526a4f",
+      "downloaded_via_product": "odoo",
+      "elapsed_seconds": 0.7635,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 5,
+          "product": "odoo"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:32.955837+00:00",
+      "uncompressed_bytes": 2048,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:14750658137837bb1fdc69cd95adb4c184fb8d6f86da225e2b07b4776fbb3d1f": {
+      "completed_at": "2026-11-04T15:09:36.764640+00:00",
+      "compressed_bytes": 51996,
+      "compressed_digest": "sha256:14750658137837bb1fdc69cd95adb4c184fb8d6f86da225e2b07b4776fbb3d1f",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 51996,
+      "diff_id": "sha256:482ade599a7258e303d8321a2ed4e3c08413df60054a017644b6d8c33a344bed",
+      "downloaded_via_product": "emqx",
+      "elapsed_seconds": 1.3047,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 10,
+          "product": "emqx"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:35.459948+00:00",
+      "uncompressed_bytes": 205824,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:15bd615b281ade6c68d926e8ee20452b9c4fc5fd7c32366bb707b0e03f10645d": {
+      "completed_at": "2026-11-04T15:09:49.551084+00:00",
+      "compressed_bytes": 69640,
+      "compressed_digest": "sha256:15bd615b281ade6c68d926e8ee20452b9c4fc5fd7c32366bb707b0e03f10645d",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 69640,
+      "diff_id": "sha256:2233b53a2f1ab8c382dfb32d203c05caa410a77566153841874b8c620dc61de4",
+      "downloaded_via_product": "litellm",
+      "elapsed_seconds": 0.7892,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 10,
+          "product": "litellm"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:48.761848+00:00",
+      "uncompressed_bytes": 260608,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:183e208f8c6a8e1e43483955a2edb4d0a8c7c945bb536e786cdb641c3f0ecf00": {
+      "completed_at": "2026-11-04T15:09:30.272827+00:00",
+      "compressed_bytes": 112,
+      "compressed_digest": "sha256:183e208f8c6a8e1e43483955a2edb4d0a8c7c945bb536e786cdb641c3f0ecf00",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 112,
+      "diff_id": "sha256:2cbd2e8f44208162e880976985bbf7445711acbe52fe23ed83b436ee76b7d21b",
+      "downloaded_via_product": "emqx",
+      "elapsed_seconds": 0.7045,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 5,
+          "product": "emqx"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:29.568347+00:00",
+      "uncompressed_bytes": 2048,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:1875a369e0a746e2b6fbd8862389192b50ff4ec9b8c42147887fbb1bbdc63f29": {
+      "completed_at": "2026-11-04T15:09:17.907685+00:00",
+      "compressed_bytes": 360,
+      "compressed_digest": "sha256:1875a369e0a746e2b6fbd8862389192b50ff4ec9b8c42147887fbb1bbdc63f29",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 360,
+      "diff_id": "sha256:1754236b4cbc6aaa4bc8d9d9e1dd6f5125f9b7a2dfe1c7cd3bffe27144b2c0e5",
+      "downloaded_via_product": "hermes",
+      "elapsed_seconds": 0.744,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 4,
+          "product": "hermes"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:17.163758+00:00",
+      "uncompressed_bytes": 8192,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:1be2e3f154d4c38340b81ca2b3eeb0985ef1e7a3c32ce22d1cefedb2cc213e08": {
+      "completed_at": "2026-11-04T15:09:45.702766+00:00",
+      "compressed_bytes": 3480929,
+      "compressed_digest": "sha256:1be2e3f154d4c38340b81ca2b3eeb0985ef1e7a3c32ce22d1cefedb2cc213e08",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 3480929,
+      "diff_id": "sha256:1d30973c6555cd6c8745cd4919aa700ea69a303cc87a03bedcbaa55c1906cc53",
+      "downloaded_via_product": "litellm",
+      "elapsed_seconds": 1.259,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 6,
+          "product": "litellm"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:44.443768+00:00",
+      "uncompressed_bytes": 11107328,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:1c2a33585ea67bd3d143c75a6c00196e7bc060ae4b3f197fd0029068a88f7f1f": {
+      "completed_at": "2026-11-04T15:09:16.884812+00:00",
+      "compressed_bytes": 1205,
+      "compressed_digest": "sha256:1c2a33585ea67bd3d143c75a6c00196e7bc060ae4b3f197fd0029068a88f7f1f",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 1205,
+      "diff_id": "sha256:ff95352900191e4aa1849982b03a149556bfc618e49f4f57d6765fd2b8a03b57",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 0.6992,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 23,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:16.185598+00:00",
+      "uncompressed_bytes": 14336,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:1cbe557b44c489d88ff6427f078db6e5e77b077d68b683591ab07ca6803a2adb": {
+      "completed_at": "2026-11-04T15:08:49.079388+00:00",
+      "compressed_bytes": 182858,
+      "compressed_digest": "sha256:1cbe557b44c489d88ff6427f078db6e5e77b077d68b683591ab07ca6803a2adb",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 182858,
+      "diff_id": "sha256:ab5ebcc7c79203eaeaa0b95c0ba315c0fb688f23d61d63ff3d3d81b776656842",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 0.811,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 7,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:48.268376+00:00",
+      "uncompressed_bytes": 1067008,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:1dfeb4632063ec29fe08aa464bf619905572b5985a9e23746b2034cf1fec13de": {
+      "completed_at": "2026-11-04T15:08:47.161599+00:00",
+      "compressed_bytes": 113,
+      "compressed_digest": "sha256:1dfeb4632063ec29fe08aa464bf619905572b5985a9e23746b2034cf1fec13de",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 113,
+      "diff_id": "sha256:d10dd6fc9544e80169f11c2c1e9b5e4afeedbf62a389126b2896ef9a99fbe910",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 0.738,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 5,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:46.423596+00:00",
+      "uncompressed_bytes": 2048,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:1f44f791cb1c7cdc8570815b1bdb92f349c76b9db75351cc539452760d347a5f": {
+      "completed_at": "2026-11-04T15:09:26.154312+00:00",
+      "compressed_bytes": 4296,
+      "compressed_digest": "sha256:1f44f791cb1c7cdc8570815b1bdb92f349c76b9db75351cc539452760d347a5f",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 4296,
+      "diff_id": "sha256:4c7cf3490f679a849e50f6f15340f38db1bb00d5088e84bf021d4507dddef90d",
+      "downloaded_via_product": "hermes",
+      "elapsed_seconds": 0.7251,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 12,
+          "product": "hermes"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:25.429214+00:00",
+      "uncompressed_bytes": 15872,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:20ef90ad618094a51a0829354b8b8f44e66acba4dc34901a77d131a9822f7fdd": {
+      "completed_at": "2026-11-04T15:09:20.550660+00:00",
+      "compressed_bytes": 182858,
+      "compressed_digest": "sha256:20ef90ad618094a51a0829354b8b8f44e66acba4dc34901a77d131a9822f7fdd",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 182858,
+      "diff_id": "sha256:a98d9bc9f4e0a428d24fda4cfa49a2448e33ec75461318b7fc32b25e2651483a",
+      "downloaded_via_product": "hermes",
+      "elapsed_seconds": 0.8291,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 7,
+          "product": "hermes"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:19.721532+00:00",
+      "uncompressed_bytes": 1067008,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:23ed40e20763dc10e913bd003480f1a5e98f8277e8b378912db1e739ebf9626d": {
+      "completed_at": "2026-11-04T15:09:53.596426+00:00",
+      "compressed_bytes": 365461,
+      "compressed_digest": "sha256:23ed40e20763dc10e913bd003480f1a5e98f8277e8b378912db1e739ebf9626d",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 365461,
+      "diff_id": "sha256:5ab9906ef5572a08b25459a4f59b83e451d742713bbb18c45a4e66aa0b18f80c",
+      "downloaded_via_product": "litellm",
+      "elapsed_seconds": 0.9042,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 14,
+          "product": "litellm"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:52.692267+00:00",
+      "uncompressed_bytes": 1841664,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:2ed7a1a27c6d053227e15859d704914451dfa1f77792489b54ecc64103fe9db7": {
+      "completed_at": "2026-11-04T15:08:31.431594+00:00",
+      "compressed_bytes": 12608442,
+      "compressed_digest": "sha256:2ed7a1a27c6d053227e15859d704914451dfa1f77792489b54ecc64103fe9db7",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 12608442,
+      "diff_id": "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+      "downloaded_via_product": "odoo",
+      "elapsed_seconds": 2.9167,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 2,
+          "product": "odoo"
+        },
+        {
+          "layer_index": 2,
+          "product": "n8n"
+        },
+        {
+          "layer_index": 2,
+          "product": "hermes"
+        },
+        {
+          "layer_index": 2,
+          "product": "emqx"
+        },
+        {
+          "layer_index": 2,
+          "product": "litellm"
+        },
+        {
+          "layer_index": 2,
+          "product": "nextcloud"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:28.514887+00:00",
+      "uncompressed_bytes": 38260224,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:30b4674b6fa3d34f7547e504782c24fd919cb6dee16a9aa41b7e0ad74a5ceff4": {
+      "completed_at": "2026-11-04T15:09:34.714116+00:00",
+      "compressed_bytes": 12738381,
+      "compressed_digest": "sha256:30b4674b6fa3d34f7547e504782c24fd919cb6dee16a9aa41b7e0ad74a5ceff4",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 12738381,
+      "diff_id": "sha256:230dac4da49ff7c68a239508d14d090384afb1b1741570d0a5d258e613011e2f",
+      "downloaded_via_product": "emqx",
+      "elapsed_seconds": 2.3941,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 8,
+          "product": "emqx"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:32.320027+00:00",
+      "uncompressed_bytes": 15071744,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:3368c92590f805f6cf461bf71856038da405c35ca812b614ba08aab2d96dd34f": {
+      "completed_at": "2026-11-04T15:09:01.150123+00:00",
+      "compressed_bytes": 779358,
+      "compressed_digest": "sha256:3368c92590f805f6cf461bf71856038da405c35ca812b614ba08aab2d96dd34f",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 779358,
+      "diff_id": "sha256:7792da9590caecf756d60a71be6afd39fadbbe66998e39283f63a1fc52477879",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 1.0152,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 12,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:00.134960+00:00",
+      "uncompressed_bytes": 2193920,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:3800c90674ac731456d44c45af80f9621da06854f55b4370920c63b470a74743": {
+      "completed_at": "2026-11-04T15:09:00.127335+00:00",
+      "compressed_bytes": 51020256,
+      "compressed_digest": "sha256:3800c90674ac731456d44c45af80f9621da06854f55b4370920c63b470a74743",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 51020256,
+      "diff_id": "sha256:21bf4d201107189b74d8b7142a56b3a0dfad4ae69f8d8c53e5035ae728d3d19f",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 7.5909,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 11,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:52.536441+00:00",
+      "uncompressed_bytes": 150322688,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:3c5439d0ae62993af4cc4e21b8c777297e81bc40e200d4633c85a3e0f977a3bc": {
+      "completed_at": "2026-11-04T15:08:27.394692+00:00",
+      "compressed_bytes": 28247437,
+      "compressed_digest": "sha256:3c5439d0ae62993af4cc4e21b8c777297e81bc40e200d4633c85a3e0f977a3bc",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 28247437,
+      "diff_id": "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+      "downloaded_via_product": "odoo",
+      "elapsed_seconds": 1.7219,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 0,
+          "product": "odoo"
+        },
+        {
+          "layer_index": 0,
+          "product": "n8n"
+        },
+        {
+          "layer_index": 0,
+          "product": "hermes"
+        },
+        {
+          "layer_index": 0,
+          "product": "emqx"
+        },
+        {
+          "layer_index": 0,
+          "product": "litellm"
+        },
+        {
+          "layer_index": 0,
+          "product": "nextcloud"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:25.672798+00:00",
+      "uncompressed_bytes": 77946880,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:3deba3af198f48b6b993042641223fc3a91c5d9fdba6b80902b863994179c324": {
+      "completed_at": "2026-11-04T15:09:44.436437+00:00",
+      "compressed_bytes": 112,
+      "compressed_digest": "sha256:3deba3af198f48b6b993042641223fc3a91c5d9fdba6b80902b863994179c324",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 112,
+      "diff_id": "sha256:f9960ea63602ff2ed67b3852d144e595318cb1424af68145f0ee38f24e62573b",
+      "downloaded_via_product": "litellm",
+      "elapsed_seconds": 0.6955,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 5,
+          "product": "litellm"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:43.740976+00:00",
+      "uncompressed_bytes": 2048,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:409a08e5efd68e597e5b62941ea5676f30e57c4da33efd47dc6847ab63abbb4f": {
+      "completed_at": "2026-11-04T15:09:02.676324+00:00",
+      "compressed_bytes": 58230,
+      "compressed_digest": "sha256:409a08e5efd68e597e5b62941ea5676f30e57c4da33efd47dc6847ab63abbb4f",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 58230,
+      "diff_id": "sha256:4368286194ad8caa4b5c34a70705b506280a33a6ede8e739f2902282899bcaac",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 1.5218,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 13,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:01.154571+00:00",
+      "uncompressed_bytes": 128512,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:4b5fd050e71ffaa32bc674cbf87d74539c3c39471dea41ccc56272ad30149ad7": {
+      "completed_at": "2026-11-04T15:08:45.406862+00:00",
+      "compressed_bytes": 1200,
+      "compressed_digest": "sha256:4b5fd050e71ffaa32bc674cbf87d74539c3c39471dea41ccc56272ad30149ad7",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 1200,
+      "diff_id": "sha256:cb9a2f03e72f05392fedc86fcd181af83ba26cc94bba5966ef7b8055691b69cb",
+      "downloaded_via_product": "odoo",
+      "elapsed_seconds": 0.7105,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 15,
+          "product": "odoo"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:44.696391+00:00",
+      "uncompressed_bytes": 14336,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:50116c8e471b31f1a2ce3846c96cb1ad8bfbcf7fa084a6a2ec7a869b5c0d530a": {
+      "completed_at": "2026-11-04T15:08:43.786733+00:00",
+      "compressed_bytes": 4240,
+      "compressed_digest": "sha256:50116c8e471b31f1a2ce3846c96cb1ad8bfbcf7fa084a6a2ec7a869b5c0d530a",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 4240,
+      "diff_id": "sha256:7fb3509d36cdcfef3210a1da79d426222bb9ae3ef88aa871d8977c3ee4605580",
+      "downloaded_via_product": "odoo",
+      "elapsed_seconds": 0.6768,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 13,
+          "product": "odoo"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:43.109922+00:00",
+      "uncompressed_bytes": 11264,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:519032e80fe968e96a41eaac456ae29aa87eafaa0688b02305f7bb6f7000a22b": {
+      "completed_at": "2026-11-04T15:09:59.339969+00:00",
+      "compressed_bytes": 182862,
+      "compressed_digest": "sha256:519032e80fe968e96a41eaac456ae29aa87eafaa0688b02305f7bb6f7000a22b",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 182862,
+      "diff_id": "sha256:9b0304fc00b6909ae8751a78d71d9369a2143b37c24b05ab7a18b5d29eaeb187",
+      "downloaded_via_product": "nextcloud",
+      "elapsed_seconds": 1.0334,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 7,
+          "product": "nextcloud"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:58.306619+00:00",
+      "uncompressed_bytes": 1067008,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:5368ceec69983defb6289cfaa7135e708675326907b1aa489f372f98b5aeb46d": {
+      "completed_at": "2026-11-04T15:09:43.735597+00:00",
+      "compressed_bytes": 357,
+      "compressed_digest": "sha256:5368ceec69983defb6289cfaa7135e708675326907b1aa489f372f98b5aeb46d",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 357,
+      "diff_id": "sha256:a0d034c1072c33a6e86b3a18bb25a608c8309b42e9f947345cf3fdb8e2a1686c",
+      "downloaded_via_product": "litellm",
+      "elapsed_seconds": 0.6998,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 4,
+          "product": "litellm"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:43.035802+00:00",
+      "uncompressed_bytes": 8192,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:5543805bf8d2a0a7fce5bd85c5c469253ccbfd4c0df1dfff4d0a0b837a431964": {
+      "completed_at": "2026-11-04T15:09:48.757699+00:00",
+      "compressed_bytes": 18415,
+      "compressed_digest": "sha256:5543805bf8d2a0a7fce5bd85c5c469253ccbfd4c0df1dfff4d0a0b837a431964",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 18415,
+      "diff_id": "sha256:4505193155fe3d6a94737bdc273ca20b8dc518becc43b91df297d771055491fa",
+      "downloaded_via_product": "litellm",
+      "elapsed_seconds": 0.7218,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 9,
+          "product": "litellm"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:48.035909+00:00",
+      "uncompressed_bytes": 64000,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:57eeedcc71d1f286c80adf2ecfb360d088500bdc7f62b69565adc9d7a75969be": {
+      "completed_at": "2026-11-04T15:10:09.318855+00:00",
+      "compressed_bytes": 365463,
+      "compressed_digest": "sha256:57eeedcc71d1f286c80adf2ecfb360d088500bdc7f62b69565adc9d7a75969be",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 365463,
+      "diff_id": "sha256:3804d540ed031a33c5edf230f85ac1ef8f7f90f68f9dcf0fcefd2d9f1aadb55d",
+      "downloaded_via_product": "nextcloud",
+      "elapsed_seconds": 0.8855,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 14,
+          "product": "nextcloud"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:10:08.433366+00:00",
+      "uncompressed_bytes": 1841664,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:5ce5493d9e823a81de8114cf9f15ee8448bf9f3d86e54985d118890ffeb40512": {
+      "completed_at": "2026-11-04T15:09:41.012875+00:00",
+      "compressed_bytes": 4237,
+      "compressed_digest": "sha256:5ce5493d9e823a81de8114cf9f15ee8448bf9f3d86e54985d118890ffeb40512",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 4237,
+      "diff_id": "sha256:b2ece983329e20d068d75c3b352569b5dc74daaf3ae2bef57594d408a354b0c5",
+      "downloaded_via_product": "emqx",
+      "elapsed_seconds": 0.691,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 13,
+          "product": "emqx"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:40.321880+00:00",
+      "uncompressed_bytes": 11264,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:5e2d6fb9ab6e9b85e0a243a47483f30437a24ceec72b60864354f52acc53ebed": {
+      "completed_at": "2026-11-04T15:10:01.748809+00:00",
+      "compressed_bytes": 12738381,
+      "compressed_digest": "sha256:5e2d6fb9ab6e9b85e0a243a47483f30437a24ceec72b60864354f52acc53ebed",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 12738381,
+      "diff_id": "sha256:d45d0d975da1e774c9a0c1b4db7af0d2a5a31999108837f332a942e524d2017a",
+      "downloaded_via_product": "nextcloud",
+      "elapsed_seconds": 2.4036,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 8,
+          "product": "nextcloud"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:59.345213+00:00",
+      "uncompressed_bytes": 15071744,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:633438fb625b0406e8126f9497f9171e3da0e72d6002471ece84d1b77cae8b23": {
+      "completed_at": "2026-11-04T15:09:57.081249+00:00",
+      "compressed_bytes": 113,
+      "compressed_digest": "sha256:633438fb625b0406e8126f9497f9171e3da0e72d6002471ece84d1b77cae8b23",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 113,
+      "diff_id": "sha256:30b6d4a16239d1f24a98ebbeda038347f9c721d0581f57051f31ed89cdf0579b",
+      "downloaded_via_product": "nextcloud",
+      "elapsed_seconds": 1.3748,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 5,
+          "product": "nextcloud"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:55.706450+00:00",
+      "uncompressed_bytes": 2048,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:67747329838ed27772679319d28cc2eed9904f7bfe3431447a34bdee8883e193": {
+      "completed_at": "2026-11-04T15:09:40.316452+00:00",
+      "compressed_bytes": 4294,
+      "compressed_digest": "sha256:67747329838ed27772679319d28cc2eed9904f7bfe3431447a34bdee8883e193",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 4294,
+      "diff_id": "sha256:2eab14193f37589765240985a473d2791b6a7d6bff2374add7afd6433cd8b7fd",
+      "downloaded_via_product": "emqx",
+      "elapsed_seconds": 0.7118,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 12,
+          "product": "emqx"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:39.604614+00:00",
+      "uncompressed_bytes": 15872,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:67c2abdb129a9aa3f0cce8bc447868f8623bb9137d85c7de59dbeeb49457aa92": {
+      "completed_at": "2026-11-04T15:09:11.557413+00:00",
+      "compressed_bytes": 55510379,
+      "compressed_digest": "sha256:67c2abdb129a9aa3f0cce8bc447868f8623bb9137d85c7de59dbeeb49457aa92",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 55510379,
+      "diff_id": "sha256:2f62f82d105dfe3723ce853d666d158b1fd0ec52883c01004d4ab422c64a9c26",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 7.2443,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 16,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:04.313056+00:00",
+      "uncompressed_bytes": 150316544,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:6826f8529239b0ebfe5dd429a795c8c4989724db6ae9059fa9f03dda8c31f8f5": {
+      "completed_at": "2026-11-04T15:08:28.510113+00:00",
+      "compressed_bytes": 3341535,
+      "compressed_digest": "sha256:6826f8529239b0ebfe5dd429a795c8c4989724db6ae9059fa9f03dda8c31f8f5",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 3341535,
+      "diff_id": "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+      "downloaded_via_product": "odoo",
+      "elapsed_seconds": 1.1105,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 1,
+          "product": "odoo"
+        },
+        {
+          "layer_index": 1,
+          "product": "n8n"
+        },
+        {
+          "layer_index": 1,
+          "product": "hermes"
+        },
+        {
+          "layer_index": 1,
+          "product": "emqx"
+        },
+        {
+          "layer_index": 1,
+          "product": "litellm"
+        },
+        {
+          "layer_index": 1,
+          "product": "nextcloud"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:27.399648+00:00",
+      "uncompressed_bytes": 8844288,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:6962e568874b22ee4f46f4bfc81663da11ecb5645b0ddadfe4fb69a031311d6f": {
+      "completed_at": "2026-11-04T15:08:48.262478+00:00",
+      "compressed_bytes": 3480922,
+      "compressed_digest": "sha256:6962e568874b22ee4f46f4bfc81663da11ecb5645b0ddadfe4fb69a031311d6f",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 3480922,
+      "diff_id": "sha256:4b3e1ed0067699f6c04b3d7759d73efeec4d0360527dfa80f6f6374317c7841e",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 1.0924,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 6,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:47.170064+00:00",
+      "uncompressed_bytes": 11107328,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:6e2cf0567163e259a80f7daebac34a3e78e5e55a52774b80704f26d770bac4b7": {
+      "completed_at": "2026-11-04T15:09:48.029773+00:00",
+      "compressed_bytes": 12738374,
+      "compressed_digest": "sha256:6e2cf0567163e259a80f7daebac34a3e78e5e55a52774b80704f26d770bac4b7",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 12738374,
+      "diff_id": "sha256:96c7aebcc8eab9f734b43adb6992a64932f4862603dedec51176c59c4fdf68c2",
+      "downloaded_via_product": "litellm",
+      "elapsed_seconds": 1.4622,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 8,
+          "product": "litellm"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:46.567599+00:00",
+      "uncompressed_bytes": 15071744,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:6fced8f8c22efa62c096304478869b191cee55a834b80b2e4493cf4b476ffd26": {
+      "completed_at": "2026-11-04T15:09:26.870036+00:00",
+      "compressed_bytes": 4239,
+      "compressed_digest": "sha256:6fced8f8c22efa62c096304478869b191cee55a834b80b2e4493cf4b476ffd26",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 4239,
+      "diff_id": "sha256:2f84c0e1296c1e5056f7b3277c73c12ba24482f52c30bef045d4592690fc5c78",
+      "downloaded_via_product": "hermes",
+      "elapsed_seconds": 0.7092,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 13,
+          "product": "hermes"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:26.160819+00:00",
+      "uncompressed_bytes": 11264,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:717ae20b5b912b39f239d8a63c2fc13094c358f264bd9e6020bcdbc3510b7d30": {
+      "completed_at": "2026-11-04T15:09:15.241259+00:00",
+      "compressed_bytes": 4241,
+      "compressed_digest": "sha256:717ae20b5b912b39f239d8a63c2fc13094c358f264bd9e6020bcdbc3510b7d30",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 4241,
+      "diff_id": "sha256:1f083b354bb47694fe17c6567f2fd27bd1b36ace75350ae1c8684e01a08faf67",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 0.6852,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 21,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:14.556068+00:00",
+      "uncompressed_bytes": 11264,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:728bf9b742a808e3da5d201120b51fc48df07bee0150f0452b32522063060150": {
+      "completed_at": "2026-11-04T15:08:52.530498+00:00",
+      "compressed_bytes": 32626,
+      "compressed_digest": "sha256:728bf9b742a808e3da5d201120b51fc48df07bee0150f0452b32522063060150",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 32626,
+      "diff_id": "sha256:db7531e2aa90ee7c055fd5b96af67436c90b5247dd24f1b67bdd9b5a4af2bf65",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 0.7731,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 10,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:51.757361+00:00",
+      "uncompressed_bytes": 119296,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:7e143ada11afde237a069ca6ba1887c691cf44e992e77da323c9139f47b8acd2": {
+      "completed_at": "2026-11-04T15:08:32.208958+00:00",
+      "compressed_bytes": 251,
+      "compressed_digest": "sha256:7e143ada11afde237a069ca6ba1887c691cf44e992e77da323c9139f47b8acd2",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 251,
+      "diff_id": "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+      "downloaded_via_product": "odoo",
+      "elapsed_seconds": 0.7707,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 3,
+          "product": "odoo"
+        },
+        {
+          "layer_index": 3,
+          "product": "n8n"
+        },
+        {
+          "layer_index": 3,
+          "product": "hermes"
+        },
+        {
+          "layer_index": 3,
+          "product": "emqx"
+        },
+        {
+          "layer_index": 3,
+          "product": "litellm"
+        },
+        {
+          "layer_index": 3,
+          "product": "nextcloud"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:31.437954+00:00",
+      "uncompressed_bytes": 5120,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:7f2445531dc76f0de8626d07ff8ee76582096085fddf997c857562d7ca0b4a33": {
+      "completed_at": "2026-11-04T15:09:13.066001+00:00",
+      "compressed_bytes": 30545,
+      "compressed_digest": "sha256:7f2445531dc76f0de8626d07ff8ee76582096085fddf997c857562d7ca0b4a33",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 30545,
+      "diff_id": "sha256:b871f93ff28902560ca1c6cffae780368ee19f77dcd2b91700a3f4553da6713f",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 0.7783,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 18,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:12.287760+00:00",
+      "uncompressed_bytes": 174080,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:8263388ecf8292a06316397454e1f98567e1df09621f298715736d3c1592282b": {
+      "completed_at": "2026-11-04T15:09:42.033852+00:00",
+      "compressed_bytes": 365461,
+      "compressed_digest": "sha256:8263388ecf8292a06316397454e1f98567e1df09621f298715736d3c1592282b",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 365461,
+      "diff_id": "sha256:0c1d927e5ce550a6ce52855ce1c3392f97c1d8eb902cafe788ae735453ec07e4",
+      "downloaded_via_product": "emqx",
+      "elapsed_seconds": 1.0154,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 14,
+          "product": "emqx"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:41.018491+00:00",
+      "uncompressed_bytes": 1841664,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:8286973624b63effa9af42609d3fda20cf8a840693e0e2858db15283f46e6752": {
+      "completed_at": "2026-11-04T15:09:42.757679+00:00",
+      "compressed_bytes": 1202,
+      "compressed_digest": "sha256:8286973624b63effa9af42609d3fda20cf8a840693e0e2858db15283f46e6752",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 1202,
+      "diff_id": "sha256:35f709fc64957b8b5fe358eb8c54d6c3a3b42e533f1a402526938d297869c7cd",
+      "downloaded_via_product": "emqx",
+      "elapsed_seconds": 0.7183,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 15,
+          "product": "emqx"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:42.039429+00:00",
+      "uncompressed_bytes": 14336,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:835c22506147cea35b00d429ea97b4df18a074c600228afdf2c346e420c5a9bf": {
+      "completed_at": "2026-11-04T15:09:28.530955+00:00",
+      "compressed_bytes": 1202,
+      "compressed_digest": "sha256:835c22506147cea35b00d429ea97b4df18a074c600228afdf2c346e420c5a9bf",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 1202,
+      "diff_id": "sha256:9bae1f5526a9672e60404b6afcd6b1e46b2362728bd76313badbd93cfea79e73",
+      "downloaded_via_product": "hermes",
+      "elapsed_seconds": 0.7005,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 15,
+          "product": "hermes"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:27.830447+00:00",
+      "uncompressed_bytes": 14336,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:84188ae63a0b4de1f2edcfca8993e3aed7bfbf7f876e852a97bef0051c6ffb64": {
+      "completed_at": "2026-11-04T15:09:25.423461+00:00",
+      "compressed_bytes": 9687517,
+      "compressed_digest": "sha256:84188ae63a0b4de1f2edcfca8993e3aed7bfbf7f876e852a97bef0051c6ffb64",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 9687517,
+      "diff_id": "sha256:3fa88688422e6ccffd0b53318c4adb138859545a9453ffc5c0f45f2bb8bd6098",
+      "downloaded_via_product": "hermes",
+      "elapsed_seconds": 1.8444,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 11,
+          "product": "hermes"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:23.579041+00:00",
+      "uncompressed_bytes": 32043008,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:85c018d4e18323937f5ef9e23ebf4aca0ffd19d1666ee542794f08b1b1c22f8d": {
+      "completed_at": "2026-11-04T15:08:40.479452+00:00",
+      "compressed_bytes": 31104,
+      "compressed_digest": "sha256:85c018d4e18323937f5ef9e23ebf4aca0ffd19d1666ee542794f08b1b1c22f8d",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 31104,
+      "diff_id": "sha256:af3d0f9dfc45ec8d00a21653550ee4de8cb3057e0b7b5b2afdd9cb623688a1fe",
+      "downloaded_via_product": "odoo",
+      "elapsed_seconds": 0.7113,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 10,
+          "product": "odoo"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:39.768186+00:00",
+      "uncompressed_bytes": 108544,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:88a4afa55ae7f1ff4195de799b626942c3566f2eac8be79522614742491a367a": {
+      "completed_at": "2026-11-04T15:08:43.103802+00:00",
+      "compressed_bytes": 4297,
+      "compressed_digest": "sha256:88a4afa55ae7f1ff4195de799b626942c3566f2eac8be79522614742491a367a",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 4297,
+      "diff_id": "sha256:e4af91bbd7682bae5adc45f58d6c33e1742223b9921c67d9c9ec528efa2642a3",
+      "downloaded_via_product": "odoo",
+      "elapsed_seconds": 0.7315,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 12,
+          "product": "odoo"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:42.372286+00:00",
+      "uncompressed_bytes": 15872,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:8fdf4d9837c1016ba63fe4dabbd6fc8fe496c48da46182ee968736d9a9d134b5": {
+      "completed_at": "2026-11-04T15:09:13.795404+00:00",
+      "compressed_bytes": 3737,
+      "compressed_digest": "sha256:8fdf4d9837c1016ba63fe4dabbd6fc8fe496c48da46182ee968736d9a9d134b5",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 3737,
+      "diff_id": "sha256:b60ec41a181479a4c92f04119fe4d73c33a16331a41aeeacdc9efce0b3be8f63",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 0.7233,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 19,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:13.072143+00:00",
+      "uncompressed_bytes": 25600,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:8fe65f5ac038901b8e3a0df42417f737889b744ac386f21d99726f572f61c8fc": {
+      "completed_at": "2026-11-04T15:09:27.823484+00:00",
+      "compressed_bytes": 365463,
+      "compressed_digest": "sha256:8fe65f5ac038901b8e3a0df42417f737889b744ac386f21d99726f572f61c8fc",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 365463,
+      "diff_id": "sha256:92ec50cb39f0b79f5d7451eab7ae662a355ce010d33b790bda901d8c6d87d42f",
+      "downloaded_via_product": "hermes",
+      "elapsed_seconds": 0.9455,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 14,
+          "product": "hermes"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:26.877967+00:00",
+      "uncompressed_bytes": 1841664,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:936dd1ef6b19971394b4d29481b5511d6ba36d04d1e48debf1e4aedbc3ddf692": {
+      "completed_at": "2026-11-04T15:09:55.700376+00:00",
+      "compressed_bytes": 358,
+      "compressed_digest": "sha256:936dd1ef6b19971394b4d29481b5511d6ba36d04d1e48debf1e4aedbc3ddf692",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 358,
+      "diff_id": "sha256:340e206cdc63dc608fdf174bdaebc102f622c6030cbc767911b26f528b7574d1",
+      "downloaded_via_product": "nextcloud",
+      "elapsed_seconds": 0.7519,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 4,
+          "product": "nextcloud"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:54.948525+00:00",
+      "uncompressed_bytes": 8192,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:94e652a9d23cc795873d17b475d9eb6c0a1a01e4542ded71dac83fb20375992a": {
+      "completed_at": "2026-11-04T15:10:03.433411+00:00",
+      "compressed_bytes": 66357,
+      "compressed_digest": "sha256:94e652a9d23cc795873d17b475d9eb6c0a1a01e4542ded71dac83fb20375992a",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 66357,
+      "diff_id": "sha256:30b49c1e627c7b854a66fbff0a3fd34b155ab8ec907ba02820bfc92952340475",
+      "downloaded_via_product": "nextcloud",
+      "elapsed_seconds": 0.8663,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 10,
+          "product": "nextcloud"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:10:02.567093+00:00",
+      "uncompressed_bytes": 233472,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:95c49d9412443fa7d774f69ab5294cc3d725f22471ecf39369e61f095e359942": {
+      "completed_at": "2026-11-04T15:09:32.315132+00:00",
+      "compressed_bytes": 182854,
+      "compressed_digest": "sha256:95c49d9412443fa7d774f69ab5294cc3d725f22471ecf39369e61f095e359942",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 182854,
+      "diff_id": "sha256:b9beb730ea958db83bbbf379fd2a7a21c9e47e0d4862fe2526213d049fed6d10",
+      "downloaded_via_product": "emqx",
+      "elapsed_seconds": 0.8938,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 7,
+          "product": "emqx"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:31.421141+00:00",
+      "uncompressed_bytes": 1067008,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:9889990e970e874083278b7849c966c1f3d9fbd4fb5986345867f4d44ecd2845": {
+      "completed_at": "2026-11-04T15:09:19.715571+00:00",
+      "compressed_bytes": 3480926,
+      "compressed_digest": "sha256:9889990e970e874083278b7849c966c1f3d9fbd4fb5986345867f4d44ecd2845",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 3480926,
+      "diff_id": "sha256:88492c81f078d4f016add716f43d99e9849ab84c3db7a85b1bacd69f0e14368a",
+      "downloaded_via_product": "hermes",
+      "elapsed_seconds": 1.0418,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 6,
+          "product": "hermes"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:18.673804+00:00",
+      "uncompressed_bytes": 11107328,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:9911e90b4d7625a1e95a6b3bdee142531357c0961121f56f11981da59fbbccfd": {
+      "completed_at": "2026-11-04T15:09:46.562448+00:00",
+      "compressed_bytes": 182859,
+      "compressed_digest": "sha256:9911e90b4d7625a1e95a6b3bdee142531357c0961121f56f11981da59fbbccfd",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 182859,
+      "diff_id": "sha256:de143afec606a1863dc015d2872354a10d94c014e89457152cdfd127afee176f",
+      "downloaded_via_product": "litellm",
+      "elapsed_seconds": 0.8538,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 7,
+          "product": "litellm"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:45.708664+00:00",
+      "uncompressed_bytes": 1067008,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:9978c3ce0c0704708b26bd67822faa5370a35e7dc342c735f47e9d03eb365b10": {
+      "completed_at": "2026-11-04T15:09:51.257452+00:00",
+      "compressed_bytes": 16591677,
+      "compressed_digest": "sha256:9978c3ce0c0704708b26bd67822faa5370a35e7dc342c735f47e9d03eb365b10",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 16591677,
+      "diff_id": "sha256:e4eb2fe13cbb1fdf674c0f8813887ca48cd5ecf77b7c17d050f1d99a1586b284",
+      "downloaded_via_product": "litellm",
+      "elapsed_seconds": 1.6992,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 11,
+          "product": "litellm"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:49.558282+00:00",
+      "uncompressed_bytes": 62820352,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:9a16dfafa87d5bb9d2efbb2fb41ed89c0a91d3a9a14d78ea3afe34dd275d0f92": {
+      "completed_at": "2026-11-04T15:09:52.688453+00:00",
+      "compressed_bytes": 4239,
+      "compressed_digest": "sha256:9a16dfafa87d5bb9d2efbb2fb41ed89c0a91d3a9a14d78ea3afe34dd275d0f92",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 4239,
+      "diff_id": "sha256:039602a369dd01b06245bc34728c9cf2c16e81ea558b19e49936c856946cf808",
+      "downloaded_via_product": "litellm",
+      "elapsed_seconds": 0.7058,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 13,
+          "product": "litellm"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:51.982618+00:00",
+      "uncompressed_bytes": 11264,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:9f48129d1339dc89cf371c0f2ba839e0e05cda92d13d3f788ce2b55a369c1b6a": {
+      "completed_at": "2026-11-04T15:08:42.367345+00:00",
+      "compressed_bytes": 12125176,
+      "compressed_digest": "sha256:9f48129d1339dc89cf371c0f2ba839e0e05cda92d13d3f788ce2b55a369c1b6a",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 12125176,
+      "diff_id": "sha256:e8f7e7963591b409e661ab1163a9b76d64527e7a43fa301ebdde6a2e56b7ac57",
+      "downloaded_via_product": "odoo",
+      "elapsed_seconds": 1.8815,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 11,
+          "product": "odoo"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:40.485808+00:00",
+      "uncompressed_bytes": 39051776,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:9f50342ebb173f67c11250e2e4d9d2987dd0c91eddda3ad17689c3ffa26336cf": {
+      "completed_at": "2026-11-04T15:09:22.726297+00:00",
+      "compressed_bytes": 18418,
+      "compressed_digest": "sha256:9f50342ebb173f67c11250e2e4d9d2987dd0c91eddda3ad17689c3ffa26336cf",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 18418,
+      "diff_id": "sha256:b8a9b99b30f983dcf086d80bead58b8368ddfb9e445eceee1740670d569ec121",
+      "downloaded_via_product": "hermes",
+      "elapsed_seconds": 0.7512,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 9,
+          "product": "hermes"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:21.975084+00:00",
+      "uncompressed_bytes": 64000,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:a2d44e37e187a89770ca1c4aa3bff09d67f8ec1daeebc8766820d9dcff94e4bd": {
+      "completed_at": "2026-11-04T15:09:31.415817+00:00",
+      "compressed_bytes": 3480923,
+      "compressed_digest": "sha256:a2d44e37e187a89770ca1c4aa3bff09d67f8ec1daeebc8766820d9dcff94e4bd",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 3480923,
+      "diff_id": "sha256:fc1cc6f7edcf342f2eca6f6e4c65dcdcebb20ece8701c34ce6735f79dc741232",
+      "downloaded_via_product": "emqx",
+      "elapsed_seconds": 1.1372,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 6,
+          "product": "emqx"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:30.278627+00:00",
+      "uncompressed_bytes": 11107328,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:a4b5b072e5cbdc50b828f92a0683bf11f29989b3f54bc8c0be60dc8f87bc2099": {
+      "completed_at": "2026-11-04T15:10:02.561983+00:00",
+      "compressed_bytes": 18418,
+      "compressed_digest": "sha256:a4b5b072e5cbdc50b828f92a0683bf11f29989b3f54bc8c0be60dc8f87bc2099",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 18418,
+      "diff_id": "sha256:e0b620208ac6addad79831387927a859dd283736a3bf2e27781574bbd039ebe9",
+      "downloaded_via_product": "nextcloud",
+      "elapsed_seconds": 0.8087,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 9,
+          "product": "nextcloud"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:10:01.753320+00:00",
+      "uncompressed_bytes": 64000,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:a556495263241c9900e4aebb99f3632886d5e034fca448b1ab4ec6ec75488852": {
+      "completed_at": "2026-11-04T15:09:04.305593+00:00",
+      "compressed_bytes": 2850,
+      "compressed_digest": "sha256:a556495263241c9900e4aebb99f3632886d5e034fca448b1ab4ec6ec75488852",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 2850,
+      "diff_id": "sha256:66e6e83e34c5d3ddb4b18e2588374b26333f55c08b31023228e7f135a89c0b05",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 0.7321,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 15,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:03.573521+00:00",
+      "uncompressed_bytes": 15360,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:a6e5909b450997befa1dae34a3c8bad6168bb49569ca30d1fd9717ff54d87323": {
+      "completed_at": "2026-11-04T15:09:58.299481+00:00",
+      "compressed_bytes": 3480926,
+      "compressed_digest": "sha256:a6e5909b450997befa1dae34a3c8bad6168bb49569ca30d1fd9717ff54d87323",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 3480926,
+      "diff_id": "sha256:2e4553eda4e0bd7e514f34f0565a5d30bbc4232413002642d5057c07f42e5db0",
+      "downloaded_via_product": "nextcloud",
+      "elapsed_seconds": 1.2116,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 6,
+          "product": "nextcloud"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:57.087925+00:00",
+      "uncompressed_bytes": 11107328,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:a8bbd0d5859521e6563ec25565e91d42c16b8d096f6a6221831907b5e64cd51a": {
+      "completed_at": "2026-11-04T15:09:29.562512+00:00",
+      "compressed_bytes": 361,
+      "compressed_digest": "sha256:a8bbd0d5859521e6563ec25565e91d42c16b8d096f6a6221831907b5e64cd51a",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 361,
+      "diff_id": "sha256:610bff90549fe2d72e54a1647fa003ade1eab710fa1caeb41cdec268974c312c",
+      "downloaded_via_product": "emqx",
+      "elapsed_seconds": 0.7511,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 4,
+          "product": "emqx"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:28.811446+00:00",
+      "uncompressed_bytes": 8192,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:a911fcbbc5cec5bca5dff7d2ddeaf2ec7bc0cf792acbf631f4286065e90e1f60": {
+      "completed_at": "2026-11-04T15:09:16.180379+00:00",
+      "compressed_bytes": 365461,
+      "compressed_digest": "sha256:a911fcbbc5cec5bca5dff7d2ddeaf2ec7bc0cf792acbf631f4286065e90e1f60",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 365461,
+      "diff_id": "sha256:b6e143dcddfaea9d2b641f808605fb9159d1a5e016b6f1ccfd0005d2f5574463",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 0.9331,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 22,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:15.247263+00:00",
+      "uncompressed_bytes": 1841664,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:aebd59719b7c2ab052fb3a25b95d940c4afdf76a4b92deeebd082a4bd33303aa": {
+      "completed_at": "2026-11-04T15:09:14.550671+00:00",
+      "compressed_bytes": 4298,
+      "compressed_digest": "sha256:aebd59719b7c2ab052fb3a25b95d940c4afdf76a4b92deeebd082a4bd33303aa",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 4298,
+      "diff_id": "sha256:17e36398ca750cef0a391e8096fa62f11814f52acb7af01d130cfab5c4d3fcc4",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 0.7497,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 20,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:13.800957+00:00",
+      "uncompressed_bytes": 15872,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:b64803e69e99aeb7c77e664c528cfc90b7935b0984012996460155774abf311d": {
+      "completed_at": "2026-11-04T15:09:18.659302+00:00",
+      "compressed_bytes": 112,
+      "compressed_digest": "sha256:b64803e69e99aeb7c77e664c528cfc90b7935b0984012996460155774abf311d",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 112,
+      "diff_id": "sha256:c509034490110c4c1dca3b6e93e92d24dc0b127b3153ff0827889a3ffe667326",
+      "downloaded_via_product": "hermes",
+      "elapsed_seconds": 0.7439,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 5,
+          "product": "hermes"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:17.915431+00:00",
+      "uncompressed_bytes": 2048,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:bb09fc60001a548daed76824ce8500a029f06ab8c0ad8693a7660397056aae22": {
+      "completed_at": "2026-11-04T15:09:54.662731+00:00",
+      "compressed_bytes": 1201,
+      "compressed_digest": "sha256:bb09fc60001a548daed76824ce8500a029f06ab8c0ad8693a7660397056aae22",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 1201,
+      "diff_id": "sha256:b21ae194f2195a5e71eb9aa5e86614dec1cb4abe4392dccc76a647fea5b68606",
+      "downloaded_via_product": "litellm",
+      "elapsed_seconds": 1.0595,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 15,
+          "product": "litellm"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:53.603245+00:00",
+      "uncompressed_bytes": 14336,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:be108a4160c18682639cc258c38041d003ee0cec0982e01b370c86490675db00": {
+      "completed_at": "2026-11-04T15:09:35.454616+00:00",
+      "compressed_bytes": 18415,
+      "compressed_digest": "sha256:be108a4160c18682639cc258c38041d003ee0cec0982e01b370c86490675db00",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 18415,
+      "diff_id": "sha256:1385a1bc14d87e14f16399c824fdb0f72ce722d3414205ef7a8d374141d3269c",
+      "downloaded_via_product": "emqx",
+      "elapsed_seconds": 0.734,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 9,
+          "product": "emqx"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:34.720655+00:00",
+      "uncompressed_bytes": 64000,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:be42523a98dfff0358ae6440056dab065730aeb853fc6dad2906b5049e684f1c": {
+      "completed_at": "2026-11-04T15:09:39.597812+00:00",
+      "compressed_bytes": 16590896,
+      "compressed_digest": "sha256:be42523a98dfff0358ae6440056dab065730aeb853fc6dad2906b5049e684f1c",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 16590896,
+      "diff_id": "sha256:059efc6f6000e3374b174608a5c0f3e2b68e9f90294d53f34b59773f19512b05",
+      "downloaded_via_product": "emqx",
+      "elapsed_seconds": 2.8268,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 11,
+          "product": "emqx"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:36.771033+00:00",
+      "uncompressed_bytes": 62820352,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:bed6d8d8bf52fdbc9d6d98aca7a19d0b51b85f9857b94c306e86c8aecd6369ed": {
+      "completed_at": "2026-11-04T15:10:05.979804+00:00",
+      "compressed_bytes": 16786765,
+      "compressed_digest": "sha256:bed6d8d8bf52fdbc9d6d98aca7a19d0b51b85f9857b94c306e86c8aecd6369ed",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 16786765,
+      "diff_id": "sha256:0a8cd59082f6afa541c9f345534a6cc48f483e66dc01026e6c66aa5ae870fe97",
+      "downloaded_via_product": "nextcloud",
+      "elapsed_seconds": 2.5417,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 11,
+          "product": "nextcloud"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:10:03.438110+00:00",
+      "uncompressed_bytes": 63998464,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:c1bcb694d3adada23630656628b600dc87bfafcbb19a9b699ce3e56122ae0cd0": {
+      "completed_at": "2026-11-04T15:10:08.428285+00:00",
+      "compressed_bytes": 4239,
+      "compressed_digest": "sha256:c1bcb694d3adada23630656628b600dc87bfafcbb19a9b699ce3e56122ae0cd0",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 4239,
+      "diff_id": "sha256:be5b1135b4a51b4d1712175b8c8c28e0c2eabf4209f1288a42d48e908ba4b64c",
+      "downloaded_via_product": "nextcloud",
+      "elapsed_seconds": 0.7405,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 13,
+          "product": "nextcloud"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:10:07.687758+00:00",
+      "uncompressed_bytes": 11264,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:d445d4ac724385eec65ba749a0184091357e6c42e39ef1f94edf7cf078a42c04": {
+      "completed_at": "2026-11-04T15:09:51.976360+00:00",
+      "compressed_bytes": 4296,
+      "compressed_digest": "sha256:d445d4ac724385eec65ba749a0184091357e6c42e39ef1f94edf7cf078a42c04",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 4296,
+      "diff_id": "sha256:64afdd44d917773afaed8349c53bc42f84d7045b88b6d8710c55f37cbbb28328",
+      "downloaded_via_product": "litellm",
+      "elapsed_seconds": 0.7133,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 12,
+          "product": "litellm"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:51.263102+00:00",
+      "uncompressed_bytes": 15872,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:e3ba12afc8a95091900bc98de9d9b407062e5400d1d4d6350534fc5cc56b36d2": {
+      "completed_at": "2026-11-04T15:10:07.679747+00:00",
+      "compressed_bytes": 4296,
+      "compressed_digest": "sha256:e3ba12afc8a95091900bc98de9d9b407062e5400d1d4d6350534fc5cc56b36d2",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 4296,
+      "diff_id": "sha256:a023bdc82ed796faf94dcefca7ce03cac31251ac2773bfd1fc7bb5a3eac9e84c",
+      "downloaded_via_product": "nextcloud",
+      "elapsed_seconds": 1.6945,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 12,
+          "product": "nextcloud"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:10:05.985255+00:00",
+      "uncompressed_bytes": 15872,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:eae068241340b81b80573da026212f11f0039372091a6109c8bb89511c8a8341": {
+      "completed_at": "2026-11-04T15:08:51.751866+00:00",
+      "compressed_bytes": 18417,
+      "compressed_digest": "sha256:eae068241340b81b80573da026212f11f0039372091a6109c8bb89511c8a8341",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 18417,
+      "diff_id": "sha256:d74510a6fa73cb0a0e3cef0cbdbd38be6eb48f4d0e6d208a009bbbb297ae23d8",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 0.9205,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 9,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:50.831340+00:00",
+      "uncompressed_bytes": 64000,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:eb38c349b0e2a4aa34bb9e6c78b1f33cee300b8ad597d28a0d4e13ce35b843cb": {
+      "completed_at": "2026-11-04T15:08:39.031568+00:00",
+      "compressed_bytes": 12738389,
+      "compressed_digest": "sha256:eb38c349b0e2a4aa34bb9e6c78b1f33cee300b8ad597d28a0d4e13ce35b843cb",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 12738389,
+      "diff_id": "sha256:1c39d0bae563d6b5280d6324bd1280f6f4ad57abf91fc7f0289e0bdde12821c4",
+      "downloaded_via_product": "odoo",
+      "elapsed_seconds": 2.4643,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 8,
+          "product": "odoo"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:36.567290+00:00",
+      "uncompressed_bytes": 15071744,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:f2ad81a8e35eb43069f0c7d1e6de2fa0823f3e2622575108f139ce96903a14e6": {
+      "completed_at": "2026-11-04T15:08:39.762227+00:00",
+      "compressed_bytes": 18415,
+      "compressed_digest": "sha256:f2ad81a8e35eb43069f0c7d1e6de2fa0823f3e2622575108f139ce96903a14e6",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 18415,
+      "diff_id": "sha256:dfacd6094d576628ac04f31869a17adc2175f32f2c712736dd899e8b6ce10e41",
+      "downloaded_via_product": "odoo",
+      "elapsed_seconds": 0.7255,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 9,
+          "product": "odoo"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:39.036778+00:00",
+      "uncompressed_bytes": 64000,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:f3032d231f9692cfd307b91344e4b83ada4334d101bd792c3fca207bf4dd18df": {
+      "completed_at": "2026-11-04T15:08:46.417341+00:00",
+      "compressed_bytes": 360,
+      "compressed_digest": "sha256:f3032d231f9692cfd307b91344e4b83ada4334d101bd792c3fca207bf4dd18df",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 360,
+      "diff_id": "sha256:8d8759eac9230099dc71744b0c0e98ccaf61ab0367d873662cad7f9cebbee6ed",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 0.727,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 4,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:45.690334+00:00",
+      "uncompressed_bytes": 8192,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:f488c6f1fc27ae26a9e811af5b3ced5689014f82598ba6af637158b3999a1354": {
+      "completed_at": "2026-11-04T15:08:36.560740+00:00",
+      "compressed_bytes": 182855,
+      "compressed_digest": "sha256:f488c6f1fc27ae26a9e811af5b3ced5689014f82598ba6af637158b3999a1354",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 182855,
+      "diff_id": "sha256:0b782344b0fa76129847d75d5500c313d852a95ca2f3ed18902b7b1ee392c468",
+      "downloaded_via_product": "odoo",
+      "elapsed_seconds": 0.8783,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 7,
+          "product": "odoo"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:08:35.682433+00:00",
+      "uncompressed_bytes": 1067008,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:f7ff8522e5275c70943088ecb3015e104d5dbc298641a51ca61278bf27b745d8": {
+      "completed_at": "2026-11-04T15:09:21.967711+00:00",
+      "compressed_bytes": 12738374,
+      "compressed_digest": "sha256:f7ff8522e5275c70943088ecb3015e104d5dbc298641a51ca61278bf27b745d8",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 12738374,
+      "diff_id": "sha256:d72e9b955e0899c535a4b3c580ce56d4c3e688b5027f0dbd2150d4846ede4c21",
+      "downloaded_via_product": "hermes",
+      "elapsed_seconds": 1.4118,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 8,
+          "product": "hermes"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:20.555933+00:00",
+      "uncompressed_bytes": 15071744,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:f8bbb797a18c4f16b41d3aeb31c75b50890f2c4d7c67b434b1023f238d61ea8f": {
+      "completed_at": "2026-11-04T15:09:03.561371+00:00",
+      "compressed_bytes": 10390,
+      "compressed_digest": "sha256:f8bbb797a18c4f16b41d3aeb31c75b50890f2c4d7c67b434b1023f238d61ea8f",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 10390,
+      "diff_id": "sha256:44e8d0d526b9036537f9aec7186b8e3629e925e04324d9752a56c7a40ce3af43",
+      "downloaded_via_product": "n8n",
+      "elapsed_seconds": 0.8781,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 14,
+          "product": "n8n"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:09:02.683280+00:00",
+      "uncompressed_bytes": 34304,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    },
+    "sha256:fa5e64392a5436f9bad1c493f04885371ff45afaa40ae73f2d2d8523f8b1dbdc": {
+      "completed_at": "2026-11-04T15:10:10.054103+00:00",
+      "compressed_bytes": 1202,
+      "compressed_digest": "sha256:fa5e64392a5436f9bad1c493f04885371ff45afaa40ae73f2d2d8523f8b1dbdc",
+      "compressed_digest_and_size_verified": true,
+      "content_length": 1202,
+      "diff_id": "sha256:982217fdf7b249a1c2939843e8083242d1fd85e404386babf0efad09dbd4f7f6",
+      "downloaded_via_product": "nextcloud",
+      "elapsed_seconds": 0.7283,
+      "eof_reached": true,
+      "fresh_get_count": 1,
+      "host_chain": [
+        "ghcr.io",
+        "pkg-containers.githubusercontent.com"
+      ],
+      "http_status": 200,
+      "media_type": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+      "range_request": false,
+      "references": [
+        {
+          "layer_index": 15,
+          "product": "nextcloud"
+        }
+      ],
+      "saved_raw_bytes": false,
+      "started_at": "2026-11-04T15:10:09.325831+00:00",
+      "uncompressed_bytes": 14336,
+      "uncompressed_diff_id_verified": true,
+      "used_local_blob_cache": false
+    }
+  },
+  "schema": 1,
+  "scope": "Anonymous immutable registry byte integrity and source/version/platform binding only; not a new build, signature, SLSA attestation, runtime test, HAOS certification or production/backend acceptance.",
+  "signed_urls_saved": false,
+  "started_at": "2026-11-04T15:08:16.726340+00:00",
+  "temporary_layer_files_created": false,
+  "transport": "HTTPS with certificate verification",
+  "unique_decompressed_bytes_hashed": 865478144,
+  "unique_remote_layer_blobs": 84,
+  "user_credentials_used": false,
+  "verification_kind": "fresh-anonymous-remote-layer-stream-verification",
+  "verifier_script_sha256": "964ded65dfac0d3aa5c0edc50cd2c7af07965e7c1bd13f69aead3a4fb83d398d",
+  "version": "0.4.10"
+}

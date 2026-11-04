@@ -1,7 +1,8 @@
-## 0.4.10 — release candidate (2026-10-31; images pending)
+## 0.4.10 — images published and verified
 
-- Correct n8n-mcp 2.96.2 `validate_workflow` output schemas for object-valued warning/error details, and publish the corrected validator schemas through the HA gateway. Tool names, input schemas, grants and dependency versions remain unchanged.
-- The 0.4.10 n8n image has not been built or published. Fresh exact-image gates, anonymous readback, provenance and HAOS validation remain pending. See ../../docs/operations/release-decision-0.4.10.md.
+- Correct n8n-mcp 2.96.2 `validate_workflow` output schemas for object-valued warning/error details, and publish the corrected validator schemas through the HA gateway. Tool names, input schemas and grants remain unchanged.
+- The lockfile now resolves `follow-redirects` 1.16.2 (was 1.16.1; GHSA-mrwp-f3q8-3g9p).
+- Exact-source image `ghcr.io/woowtech/amd64-mcp-n8n@sha256:990e12c44250d841b6121425fb93487092b4ae4bfcc1c7166111a07f30078ad3` passed P1–P5, anonymous verification and fresh remote layer/diffID checks. See ../../docs/provenance/release-0.4.10-images.json and ../../docs/operations/release-decision-0.4.10.md. Stable Release/Store distribution and actual HAOS acceptance remain separate evidence.
 
 ## 0.4.9 — images published and verified
 
