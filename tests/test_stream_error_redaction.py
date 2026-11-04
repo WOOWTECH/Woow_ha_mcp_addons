@@ -441,5 +441,10 @@ async def test_actual_gateway_late_core_faults(tmp_path, monkeypatch, phase, fai
                 assert len(seen) > before
                 if product != 'opendesign':  # the Hermes password, redacted; OpenDesign holds no credential
                     assert CANARY not in response.text
-                assert ('BACKEND_TIMEOUT' if failure == 'timeout' else 'BACKEND_STREAM_ERROR') in response.text
+                # Hermes Dashboard uses the same fixed public category as PaaS;
+                # the lower transport still classifies this as BackendStreamError.
+                expected = ('BACKEND_TIMEOUT' if failure == 'timeout' else
+                            'BACKEND_UNEXPECTED_RESPONSE' if phase in ('login', 'cookie') else
+                            'BACKEND_STREAM_ERROR')
+                assert expected in response.text
                 assert len(response.content) < 4096
