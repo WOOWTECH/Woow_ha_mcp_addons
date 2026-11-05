@@ -94,7 +94,7 @@ def manifest(value, product):
     expected = dict(name=f'Woow {TITLES[product]} MCP Server', version=VERSION,
         slug='woow_mcp_' + product.replace('-', '_'), description=value.get('description'),
         url=URL, arch=['amd64'], startup='application', boot='auto', init=True,
-        stage='experimental', image=f'ghcr.io/woowtech/{{arch}}-mcp-{product}',
+        stage='stable', image=f'ghcr.io/woowtech/{{arch}}-mcp-{product}',
         ingress=True, ingress_port=8099, ingress_stream=True,
         panel_admin=True, panel_icon='mdi:connection', ports={'8081/tcp': None},
         ports_description={'8081/tcp': value.get('ports_description', {}).get('8081/tcp')},
@@ -269,7 +269,7 @@ def builder_workflow(value, workflow):
 
 
 def validate(root=ROOT):
-    exact(load(root / 'repository.yaml'), {'name': 'WOOW MCP Add-ons (experimental)', 'url': URL, 'maintainer': 'WOOWTECH'}, 'repository')
+    exact(load(root / 'repository.yaml'), {'name': 'WOOW MCP Add-ons', 'url': URL, 'maintainer': 'WOOWTECH'}, 'repository')
     paths = source_paths(root)
     app_scopes = {Path(p).parts[1] for p in paths if p.startswith('apps/') and len(Path(p).parts) > 1}
     require(app_scopes == set(PRODUCTS) | set(RETIRED) | {'runtime'}, 'application source scope')

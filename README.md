@@ -1,4 +1,4 @@
-# WOOW HA MCP Add-ons（實驗版，已公開發佈）
+# WOOW HA MCP Add-ons（已公開發佈）
 
 六個啟用的商店產品：Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud。**歷史版本 0.3.3：六支 canonical 映像已完成驗收、掃描與公開發布**，包含 n8n 全部 28 個工具的有效 `output` 參數正規化、六個混合工具的 selector 保護，以及 versions/test 的 `exposeToMcp` 既有 updater 有效權限檢查。新增 `conditional_writes` capability metadata，保持 28 個工具、33 個寫入 grants、schema 4 與完整功能預設；不變更 dependency／child pins 或 UI 原始碼。正常 stable Release／Store 與正式 HAOS 升級分別驗證，不由映像發布推定完成。見 [0.3.3 發布證據與驗收邊界](docs/operations/release-decision-0.3.3.md)、[不可變映像紀錄](docs/provenance/release-0.3.3-images.json)。
 
@@ -20,7 +20,7 @@
 MCP 端點（Bearer token）不經這項檢查，不受影響。新的 Core 版本要等 add-on 發新版才支援，升級 Core 前請先對照這份清單。
 Kubernetes MCP 與 Vibe Kanban 不在範圍。
 
-**目前狀態與限制（experimental）：**
+**目前狀態與限制：**
 
 - 七個原始碼產品（其中六個 Store 啟用；見 `packaging/inputs.json`）各有 runtime（封存的 Odoo Manage 原始碼也還在）。**0.2.1 起完整版**（負責人 2026-10-15 決定）：七支開放子程序的全部工具，合計 183 個，與原始 MCP server 及 PaaS woow-mcp-server 一致；全部工具與寫入預設開啟；schema 1/2/3 的升級在 0.3.0–0.4.1 要先由 HA 管理員確認預選 `all_on`（或明確選 `preserve`），下一版起改成第一次啟動自動全開、事後可選還原（見上）；新安裝與 schema 4 的正常啟動不變，管理面板可逐一停用或取消寫入。**網址（權杖）＝完整後端權限**，後端帳號權限要設對，見 [寫入預設開啟](docs/operations/guide.md#寫入預設開啟)。0.2.2 起後端還沒設定或連不上時 client（含 Claude.ai 連接器）照樣能連線並列出全部工具，呼叫工具回錯誤說明原因（[client 文件](docs/operations/clients.md#token-事件與故障)）。逐名對照見 [工具表](docs/tool-surface.md)，轉送規則與保留的安全層見 [工具範圍](docs/tool-expansion.md)。
 - 七支（odoo、n8n、hermes、opendesign、emqx、litellm、nextcloud）的顯示名稱是「Woow ○○ MCP Server」，圖示與所連接的軟體相同（來源見 [圖示來源](docs/provenance/icons.md)）。兩種安裝來源內容相同：本 repository 的 HA 商店，以及 2026-10-09 起的 [WOOW HA App Store](https://github.com/WOOWTECH/Woow_HA_App_Store)（含 ha-rebrand 的 Local Download）。兩個商店的同名 add-on 在 HA 裡是不同的 add-on（slug 前綴不同，設定與資料不互通），同一台 HA 只裝其中一個來源的。映像已公開、可匿名拉取。0.1.1–0.1.7 每版都在測試 HA 回歸（[0.1.7 紀錄](docs/operations/ha-test-0.1.7.md)，含 Nextcloud 第一次實機；之前各版見同目錄 `ha-test-0.1.*.md`）：映像身分、管理面板權限、token、五支真後端的讀取冒煙與拒寫、後端斷線、重啟、升版；LiteLLM 沒有後端，工具未測（只測了未設定後端時的拒絕與錯誤碼，見 [client 文件](docs/operations/clients.md)）。真實 MCP client（同 HA Pi／Omnigent／Hermes、LAN client、AI client）、授權寫入、n8n 以外六支的備份還原、版本回退與 aarch64 尚未驗收。
