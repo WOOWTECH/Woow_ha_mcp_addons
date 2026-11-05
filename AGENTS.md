@@ -17,8 +17,10 @@ release mechanism is described in the Woow_HA_App_Store README (section
 3. **Breaking changes must be declared in `upgrade-notes.yaml`** next to the
    addon's `config.yaml` (here `addons/<x>/upgrade-notes.yaml`). Create the
    file only when the upgrade comparison asks for it; copy `change` and `key`
-   from its report and write the migration path. Here it does not scan images:
-   they are built only on the self-hosted builder, never on a PR, so the image
-   vulnerability comparison is left to pipeline #90. The release puts these
+   from its report and write the migration path. Images are built only on the
+   self-hosted builder, never on a PR, so the image vulnerability comparison
+   pulls the published GHCR images (the Release's and the new version's amd64
+   image, pipeline #148): publish the new version's image with the builder
+   before the PR can pass, as `readiness` also requires. The release puts these
    entries on the GitHub Release. Rules, change names and the file format: the
    Woow_HA_App_Store README, section "升版比對與 `upgrade-notes.yaml`".
