@@ -119,7 +119,9 @@ jobs:
     permissions:
       contents: read
       actions: read
-    uses: WOOWTECH/Woow_HA_App_Store/.github/workflows/woow-addon-upgrade-check.yml@main
+    uses: WOOWTECH/Woow_HA_App_Store/.github/workflows/woow-addon-upgrade-check.yml@feat/148-mcp-published-scan
+    with:
+      tooling_ref: feat/148-mcp-published-scan
   release:
     name: release
     needs: [checks, readiness]
