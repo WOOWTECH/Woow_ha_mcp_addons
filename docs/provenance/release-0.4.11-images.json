@@ -1,0 +1,1716 @@
+{
+  "UI_test_evidence": {
+    "app_js_sha256": "68fbece01856259080093d70cfa55d4032a531650a25576b18ed62d6ccb4d636",
+    "browser_tests": {
+      "failed": 0,
+      "passed": 71
+    },
+    "exact_image_ui_receipt_sha256": "5084a303cc8a9f1762c85ac13f9bbf720f0e904a4018cf293350ad1d499d87d3",
+    "fixture_shutdown_verified": true,
+    "source_commit": "2ad4521c5b61ea144dfa1ffbc658ee16a67591a5",
+    "source_manifest_sha256": "224ba88ffe7cfebbe1548b418ccc3c6ee3aed8db4d11c5a9835be00078d808db",
+    "unit_tests": {
+      "failed": 0,
+      "passed": 54
+    }
+  },
+  "accepted_local_images_preserved": true,
+  "anonymous_immutable_pull_succeeded": true,
+  "builder_route": "explicit-operator-local-private-builder",
+  "canonical_git_archive_sha256": "bbb059200dfc584181a128fe13fdadfa68ff69e2e0351dd3905006a3815ff407",
+  "collect_receipt_sha256": "68c74223148aff43fa7159491650616ef402c3e214fbcc3dc8b572cf05dd8481",
+  "credential_config_and_owned_registry_refs_cleaned": true,
+  "disabled_product_not_published": "opendesign",
+  "docker_root_disk_budget": {
+    "device": 2080,
+    "docker_root_dir": "/var/lib/docker",
+    "empirical_peak_docker_growth_known": false,
+    "filesystem_id": "172b7db97cb159e",
+    "journal_sha256": "0b8ca2f76cbdc41473813fa341b13b0ca5408785f9cee15684352ad59894c893",
+    "limits": {
+      "docker_data_root": "/var/lib/docker",
+      "during_required_for": [
+        "build",
+        "gate"
+      ],
+      "empirical_peak_docker_growth_known": false,
+      "first_inside_sample_seconds": 10,
+      "max_sample_gap_seconds": 300,
+      "maximum_aggregate_free_drop_bytes": 51539607552,
+      "publish_cooperative_stop_wait_seconds": 3600,
+      "run_base_stop_free_floor_bytes": 12884901888,
+      "sample_interval_seconds": 60,
+      "start_free_floor_bytes": 59055800320,
+      "stop_free_floor_bytes": 7516192768,
+      "stop_on_breach": true
+    },
+    "max_drop_bytes": 839958528,
+    "min_free_bytes": 95395504128,
+    "run_base_min_free_bytes": 54846410752,
+    "run_base_same_filesystem": false,
+    "samples": 117,
+    "scope": "Coordinator-side statfs readback on the bound DinD engine; operational cap, not isolation.",
+    "start_free_bytes": 96235462656,
+    "steps": 25
+  },
+  "final_docs_commit_is_not_image_source": true,
+  "fresh_remote_layer_verification": {
+    "all_compressed_digests_sizes_and_uncompressed_diffIDs_verified": true,
+    "cdn_cache_bypassed_claimed": false,
+    "completed_at": "2026-11-05T20:05:46.924774+00:00",
+    "docker_daemon_used": false,
+    "fresh_remote_compressed_layer_bytes": 336482290,
+    "local_layer_cache_used": false,
+    "ordered_image_layer_references": 104,
+    "receipt_repo_path": "docs/provenance/release-0.4.11-remote-layers.json",
+    "receipt_sha256": "1406292a0fd1a956b4ac5b688827e3b00af37d4ea86b26fc8fae147ed36132ed",
+    "started_at": "2026-11-05T20:03:47.867056+00:00",
+    "unique_remote_layer_blobs": 84
+  },
+  "full_history_commits": 399,
+  "functional_scope": "Exact packaged runtime with owned mocks; separate synthetic-only HAOS 0.4.11 upgrade acceptance follows. No ws97 or production backend acceptance claimed.",
+  "helper_sha256": {
+    "SOURCE-BINDING.json": "19227e562e12b61ffbc5671f67c22887334abdfccc7feb240db98c6cb79429a2",
+    "cleanup_observed_success.py": "0716a668b510483610f3e40ea3e766aacd7f854327c04069fa3762e3228ba489",
+    "ha0411_common.py": "c5beb6479308f68faffe171970dffa21ab7460e61eef1e462efa1894fd1ab31c",
+    "ha0411_disk.py": "3038be67e5e2fba775f0cbd86ac7092e6ff543ba4b50acd4f6c826dcae8d28b3",
+    "ha0411_observation.py": "f3bd43e4f33f94bacd4ecddf4337efafc1f5631be23da4730fcdadab2b269c20",
+    "ha0411_observation_resources.py": "ee640a40dca0818c0e9d7f4352a5b9f9b2762da5731cd28bb34730ef99444ac9",
+    "ha0411_policy_metadata.py": "b8e63ba3f6cbbce33231659905acdedd24663b94c4d935ee8eed54e85a9bbfc0",
+    "ha0411_prepare_inputs.py": "7b9f47d53b30651814767bc4e71e5213aefffcad390c898df3c63febe80f57cc",
+    "ha0411_provenance.py": "00dc5d724ebfa67001ea12334cb2830ae85506d1bbc5946c811a5b843e0db06b",
+    "ha0411_publisher.py": "a4642188d1ca1cda7432bf5ba4b4dff408415ae231cb4ad41b2d8587a905c3b5",
+    "ha0411_release.py": "cf8b79dbc091b9f8747fc9172034668637cee1e52ded4455278a29715c1f75d6",
+    "ha0411_remote_layers.py": "8a25f2f8238a0bfef532c56491305afcb0f88033efb6fd5b07fd114ce8707a24",
+    "ha0411_runtime.py": "38f035decde8caf7bad1e1da2a4571a82c122cb01df1ee74cc492bc36c006870",
+    "ha0411_ui.py": "775ef9f934874786bf58b5c93e7b612a2e28ff3b0d873966c02bc447f917fbd0",
+    "ha0411_verify.py": "f632188297213ebd0d529b52b7bf6838167fbe9c79a5a04a8e8a3bed72496740",
+    "ha0411_worker.py": "e19a3f72b3c1f589ea16768043a76ba808c57159f61f2df687b514021fb0de5d",
+    "run_release_once.py": "ec7818090c27c79a3fbd10cd58cb11f96fc091103b8937fb8a9fd8db62b55099"
+  },
+  "host_isolation_claimed": false,
+  "hosted_BLD2_admission_claimed": false,
+  "image_source_commit": "2ad4521c5b61ea144dfa1ffbc658ee16a67591a5",
+  "image_source_tree": "ff301dadcde57fb882e1fb36eeba8aba6004eb70",
+  "independent_anonymous_manifest_config_diffIDs_verified": true,
+  "independent_verify_receipt_sha256": "bf8159b407ffab9f9deb4e133c471d5ae17afe69aa48d1492824d3f8e1d886c9",
+  "initial_anonymous_pull_evidence": {
+    "cache_boundary": "The publisher used clean authentication state on a daemon retaining accepted images; this pull alone does not prove fresh remote layer GETs.",
+    "collect_receipt_sha256": "68c74223148aff43fa7159491650616ef402c3e214fbcc3dc8b572cf05dd8481"
+  },
+  "input_sha256": {
+    "ha0411_builder_identity.json": "2b4b604950104d847554f08ebc5528379d2487bab2a3f2691f7daa569bfd1782",
+    "ha0411_ownership.json": "871de563f268fde81be7776f7a5d59bee9ea205a67b6272769e9c59e052923b3",
+    "ha0411_previous_images.json": "8bfaf3ee01c2d98faf14fbf7f0b9202adbcb57a19eaa0821cbdd0e211ecacf85",
+    "ha0411_source_ci.json": "fa5e294ee0bf131f1c0c75409c5c0b7125150ff0be2137819d418224f8f9be7c",
+    "ha0411_source_freeze.json": "156e3dff76912622901bf29da2878884fdd50f8d133a6b362bbc7e1f3c8439d6",
+    "ha0411_ui_browser.json": "adcb76807139a681be47f86bb793cd53fe90827d4e8b077b8db4d5d88462a759",
+    "ha0411_ui_build.json": "2a539ec957b9a0b0bde02f80c21b0338a171e3eb1d3a0234c89d51121b2a1916"
+  },
+  "observed_at": "2026-11-05T20:07:10.030669+00:00",
+  "os_security_upgrade": {
+    "all_layer_sbom_retains_superseded_base_u1": true,
+    "debian_snapshot": "20261104T124343Z",
+    "final_installed_version_check": "docker run --network none --read-only --cap-drop ALL --user 10001:10001 --entrypoint /usr/bin/dpkg-query <accepted image ID>",
+    "new_vulnerability_policy_exception": false,
+    "packages": {
+      "apt": "2.6.2",
+      "libapt-pkg6.0": "2.6.2",
+      "libssl3": "3.0.22-1~deb12u2",
+      "openssl": "3.0.22-1~deb12u2"
+    },
+    "reason": "CVE-2026-109518 (High; fixed in apt and libapt-pkg6.0 2.6.2) in the pinned Python base, refused by the supply-chain gate of the first 0.4.11 attempt (closed before any publication); the libssl3/openssl pins of 0.4.10 are kept; the all-layer SBOM keeps the superseded base records (apt and libapt-pkg6.0 2.6.1 here; the key all_layer_sbom_retains_superseded_base_u1 covers every superseded base record); all-layer SBOM plus isolated final dpkg query by exact image ID in all six gates"
+  },
+  "p4_0_4_11_supplement": {
+    "probes": {
+      "emqx": [
+        "schemas",
+        "results"
+      ],
+      "hermes": [
+        "schemas",
+        "results",
+        "hermes_errors"
+      ],
+      "litellm": [
+        "schemas",
+        "results"
+      ],
+      "n8n": [
+        "schemas",
+        "results"
+      ],
+      "nextcloud": [
+        "schemas",
+        "results",
+        "nextcloud_errors"
+      ],
+      "odoo": [
+        "schemas",
+        "results"
+      ]
+    },
+    "registry_sha256": "e8b0a9c6201479c18078f6c3ff9669135d850866ec07e2b8356d853b9531f28c",
+    "schema_counts": {
+      "emqx": 39,
+      "hermes": 11,
+      "litellm": 35,
+      "n8n": 2,
+      "nextcloud": 8,
+      "odoo": 41
+    },
+    "scope": "Same accepted image IDs; owned loopback fakes; no HAOS or real backend."
+  },
+  "packaging_manifest_sha256": "56c7d41b4b45f5e0aed8c24529c7b9e8aaa1e7fe35ea8045b424736780aa2382",
+  "platform": "linux/amd64",
+  "post_publication_receipt_absent_from_images": true,
+  "previous_0_4_10_images": {
+    "images": {
+      "emqx": {
+        "bytes": 208352506,
+        "diff_ids": [
+          "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+          "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+          "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+          "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+          "sha256:610bff90549fe2d72e54a1647fa003ade1eab710fa1caeb41cdec268974c312c",
+          "sha256:2cbd2e8f44208162e880976985bbf7445711acbe52fe23ed83b436ee76b7d21b",
+          "sha256:fc1cc6f7edcf342f2eca6f6e4c65dcdcebb20ece8701c34ce6735f79dc741232",
+          "sha256:b9beb730ea958db83bbbf379fd2a7a21c9e47e0d4862fe2526213d049fed6d10",
+          "sha256:230dac4da49ff7c68a239508d14d090384afb1b1741570d0a5d258e613011e2f",
+          "sha256:1385a1bc14d87e14f16399c824fdb0f72ce722d3414205ef7a8d374141d3269c",
+          "sha256:482ade599a7258e303d8321a2ed4e3c08413df60054a017644b6d8c33a344bed",
+          "sha256:059efc6f6000e3374b174608a5c0f3e2b68e9f90294d53f34b59773f19512b05",
+          "sha256:2eab14193f37589765240985a473d2791b6a7d6bff2374add7afd6433cd8b7fd",
+          "sha256:b2ece983329e20d068d75c3b352569b5dc74daaf3ae2bef57594d408a354b0c5",
+          "sha256:0c1d927e5ce550a6ce52855ce1c3392f97c1d8eb902cafe788ae735453ec07e4",
+          "sha256:35f709fc64957b8b5fe358eb8c54d6c3a3b42e533f1a402526938d297869c7cd"
+        ],
+        "image_id": "sha256:1813f071b58cd28ed4f4328d4ca973f3a1302400740482225674d3194858e07f",
+        "tag": "local/mcp-emqx:0.4.10"
+      },
+      "hermes": {
+        "bytes": 179828495,
+        "diff_ids": [
+          "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+          "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+          "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+          "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+          "sha256:1754236b4cbc6aaa4bc8d9d9e1dd6f5125f9b7a2dfe1c7cd3bffe27144b2c0e5",
+          "sha256:c509034490110c4c1dca3b6e93e92d24dc0b127b3153ff0827889a3ffe667326",
+          "sha256:88492c81f078d4f016add716f43d99e9849ab84c3db7a85b1bacd69f0e14368a",
+          "sha256:a98d9bc9f4e0a428d24fda4cfa49a2448e33ec75461318b7fc32b25e2651483a",
+          "sha256:d72e9b955e0899c535a4b3c580ce56d4c3e688b5027f0dbd2150d4846ede4c21",
+          "sha256:b8a9b99b30f983dcf086d80bead58b8368ddfb9e445eceee1740670d569ec121",
+          "sha256:1a48a86e1abbe90b95615315b4bb7dbcafdec64c90464b22a9d55c6029fa4e11",
+          "sha256:3fa88688422e6ccffd0b53318c4adb138859545a9453ffc5c0f45f2bb8bd6098",
+          "sha256:4c7cf3490f679a849e50f6f15340f38db1bb00d5088e84bf021d4507dddef90d",
+          "sha256:2f84c0e1296c1e5056f7b3277c73c12ba24482f52c30bef045d4592690fc5c78",
+          "sha256:92ec50cb39f0b79f5d7451eab7ae662a355ce010d33b790bda901d8c6d87d42f",
+          "sha256:9bae1f5526a9672e60404b6afcd6b1e46b2362728bd76313badbd93cfea79e73"
+        ],
+        "image_id": "sha256:738fb1f2da92ac6291f8ad2663994d7f8f95c3f850abf88dfd24f87d1e22e3c5",
+        "tag": "local/mcp-hermes:0.4.10"
+      },
+      "litellm": {
+        "bytes": 208404252,
+        "diff_ids": [
+          "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+          "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+          "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+          "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+          "sha256:a0d034c1072c33a6e86b3a18bb25a608c8309b42e9f947345cf3fdb8e2a1686c",
+          "sha256:f9960ea63602ff2ed67b3852d144e595318cb1424af68145f0ee38f24e62573b",
+          "sha256:1d30973c6555cd6c8745cd4919aa700ea69a303cc87a03bedcbaa55c1906cc53",
+          "sha256:de143afec606a1863dc015d2872354a10d94c014e89457152cdfd127afee176f",
+          "sha256:96c7aebcc8eab9f734b43adb6992a64932f4862603dedec51176c59c4fdf68c2",
+          "sha256:4505193155fe3d6a94737bdc273ca20b8dc518becc43b91df297d771055491fa",
+          "sha256:2233b53a2f1ab8c382dfb32d203c05caa410a77566153841874b8c620dc61de4",
+          "sha256:e4eb2fe13cbb1fdf674c0f8813887ca48cd5ecf77b7c17d050f1d99a1586b284",
+          "sha256:64afdd44d917773afaed8349c53bc42f84d7045b88b6d8710c55f37cbbb28328",
+          "sha256:039602a369dd01b06245bc34728c9cf2c16e81ea558b19e49936c856946cf808",
+          "sha256:5ab9906ef5572a08b25459a4f59b83e451d742713bbb18c45a4e66aa0b18f80c",
+          "sha256:b21ae194f2195a5e71eb9aa5e86614dec1cb4abe4392dccc76a647fea5b68606"
+        ],
+        "image_id": "sha256:102a76a77253b2bd4b86f861775f637c61f3f7afe2ffd41523cc1b693b0786e7",
+        "tag": "local/mcp-litellm:0.4.10"
+      },
+      "n8n": {
+        "bytes": 447127713,
+        "diff_ids": [
+          "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+          "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+          "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+          "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+          "sha256:8d8759eac9230099dc71744b0c0e98ccaf61ab0367d873662cad7f9cebbee6ed",
+          "sha256:d10dd6fc9544e80169f11c2c1e9b5e4afeedbf62a389126b2896ef9a99fbe910",
+          "sha256:4b3e1ed0067699f6c04b3d7759d73efeec4d0360527dfa80f6f6374317c7841e",
+          "sha256:ab5ebcc7c79203eaeaa0b95c0ba315c0fb688f23d61d63ff3d3d81b776656842",
+          "sha256:48cb0bca9ac8dade2866c4f99c0bcacfca5af95d1d9c8c3ff5d56c3ef63cc9b5",
+          "sha256:d74510a6fa73cb0a0e3cef0cbdbd38be6eb48f4d0e6d208a009bbbb297ae23d8",
+          "sha256:db7531e2aa90ee7c055fd5b96af67436c90b5247dd24f1b67bdd9b5a4af2bf65",
+          "sha256:21bf4d201107189b74d8b7142a56b3a0dfad4ae69f8d8c53e5035ae728d3d19f",
+          "sha256:7792da9590caecf756d60a71be6afd39fadbbe66998e39283f63a1fc52477879",
+          "sha256:4368286194ad8caa4b5c34a70705b506280a33a6ede8e739f2902282899bcaac",
+          "sha256:44e8d0d526b9036537f9aec7186b8e3629e925e04324d9752a56c7a40ce3af43",
+          "sha256:66e6e83e34c5d3ddb4b18e2588374b26333f55c08b31023228e7f135a89c0b05",
+          "sha256:2f62f82d105dfe3723ce853d666d158b1fd0ec52883c01004d4ab422c64a9c26",
+          "sha256:84587850a30d1114adcc7fa3f84d544c353670304d391ff58c6fec73cc119f40",
+          "sha256:b871f93ff28902560ca1c6cffae780368ee19f77dcd2b91700a3f4553da6713f",
+          "sha256:b60ec41a181479a4c92f04119fe4d73c33a16331a41aeeacdc9efce0b3be8f63",
+          "sha256:17e36398ca750cef0a391e8096fa62f11814f52acb7af01d130cfab5c4d3fcc4",
+          "sha256:1f083b354bb47694fe17c6567f2fd27bd1b36ace75350ae1c8684e01a08faf67",
+          "sha256:b6e143dcddfaea9d2b641f808605fb9159d1a5e016b6f1ccfd0005d2f5574463",
+          "sha256:ff95352900191e4aa1849982b03a149556bfc618e49f4f57d6765fd2b8a03b57"
+        ],
+        "image_id": "sha256:fe2a6d5fe7b5a876596e5920a9805ae62d1134611aa4b108b96bc01276e52c47",
+        "tag": "local/mcp-n8n:0.4.10"
+      },
+      "nextcloud": {
+        "bytes": 209037493,
+        "diff_ids": [
+          "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+          "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+          "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+          "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+          "sha256:340e206cdc63dc608fdf174bdaebc102f622c6030cbc767911b26f528b7574d1",
+          "sha256:30b6d4a16239d1f24a98ebbeda038347f9c721d0581f57051f31ed89cdf0579b",
+          "sha256:2e4553eda4e0bd7e514f34f0565a5d30bbc4232413002642d5057c07f42e5db0",
+          "sha256:9b0304fc00b6909ae8751a78d71d9369a2143b37c24b05ab7a18b5d29eaeb187",
+          "sha256:d45d0d975da1e774c9a0c1b4db7af0d2a5a31999108837f332a942e524d2017a",
+          "sha256:e0b620208ac6addad79831387927a859dd283736a3bf2e27781574bbd039ebe9",
+          "sha256:30b49c1e627c7b854a66fbff0a3fd34b155ab8ec907ba02820bfc92952340475",
+          "sha256:0a8cd59082f6afa541c9f345534a6cc48f483e66dc01026e6c66aa5ae870fe97",
+          "sha256:a023bdc82ed796faf94dcefca7ce03cac31251ac2773bfd1fc7bb5a3eac9e84c",
+          "sha256:be5b1135b4a51b4d1712175b8c8c28e0c2eabf4209f1288a42d48e908ba4b64c",
+          "sha256:3804d540ed031a33c5edf230f85ac1ef8f7f90f68f9dcf0fcefd2d9f1aadb55d",
+          "sha256:982217fdf7b249a1c2939843e8083242d1fd85e404386babf0efad09dbd4f7f6"
+        ],
+        "image_id": "sha256:abee5ed0365401429c527045c3cfd57569536b24a23d0632fb7f111296cbf390",
+        "tag": "local/mcp-nextcloud:0.4.10"
+      },
+      "odoo": {
+        "bytes": 186390713,
+        "diff_ids": [
+          "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+          "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+          "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+          "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+          "sha256:f67d2b77386679d451f9bbdac4ebe88cfaef30843e5d12e7ec91ccf1d744b476",
+          "sha256:04e206923d5c2394c9fbb87a1cf0413fc59afab71bd4f15d89528c4f50526a4f",
+          "sha256:b5e3669d915839eca0ec72685c7f7f2bb5c5dce7e144a66f70205b3b1d7b9e7c",
+          "sha256:0b782344b0fa76129847d75d5500c313d852a95ca2f3ed18902b7b1ee392c468",
+          "sha256:1c39d0bae563d6b5280d6324bd1280f6f4ad57abf91fc7f0289e0bdde12821c4",
+          "sha256:dfacd6094d576628ac04f31869a17adc2175f32f2c712736dd899e8b6ce10e41",
+          "sha256:af3d0f9dfc45ec8d00a21653550ee4de8cb3057e0b7b5b2afdd9cb623688a1fe",
+          "sha256:e8f7e7963591b409e661ab1163a9b76d64527e7a43fa301ebdde6a2e56b7ac57",
+          "sha256:e4af91bbd7682bae5adc45f58d6c33e1742223b9921c67d9c9ec528efa2642a3",
+          "sha256:7fb3509d36cdcfef3210a1da79d426222bb9ae3ef88aa871d8977c3ee4605580",
+          "sha256:3e675417d86dd107eb0a54c72aca04200c6e0199dc6799cd7712221663f2ef45",
+          "sha256:cb9a2f03e72f05392fedc86fcd181af83ba26cc94bba5966ef7b8055691b69cb"
+        ],
+        "image_id": "sha256:559580ad34f7a81a351340cbb75a4946efb40a23a306d2b73a2fb939f09f7064",
+        "tag": "local/mcp-odoo:0.4.10"
+      }
+    },
+    "previous_release_receipt_repo_path": "docs/provenance/release-0.4.10-images.json",
+    "previous_release_receipt_sha256": "5ac458cdc9a288d935c8e13ff744e7722db0e0f75974cb47cd19564d0a8dc4fd",
+    "read_only_verified": true
+  },
+  "products": {
+    "emqx": {
+      "diff_ids": [
+        "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+        "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+        "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+        "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+        "sha256:9a434326c92ffc7053f6ae4300b1591ae7d5551ec6c769553125350126069b8d",
+        "sha256:3dfa6c83e8290dedea8d6721bd37ef971b4b2ae2e20ba7bd8bacf8485f00ee60",
+        "sha256:8682135bdf3d9786184cf17e2ceaabbff0dc3bb69157de59003e2cd418fc2893",
+        "sha256:dfeab7983ed0a6ff7e5bc60788fe6de2615c3c2ed3f2e8cb3ba2142ca282e7f2",
+        "sha256:ad270dff4fdac4354cc940e4cea5a6892266531e811bd21aa907dc3314863684",
+        "sha256:a3c6039f4bd35256dfc36559ca5c237c35142f064d30d51fa7da460926e2e69d",
+        "sha256:d1b0d734bd9fd46d070e222c5ea80af95a2d5a7e23407446a9dfba5554fba1af",
+        "sha256:0a23a65b81bbb1844964ef356352d5539dc6b953c48d9bcf33c6762b49e2969b",
+        "sha256:7fe0021d82e65b3e26c5235ee4c06b01b2357167669f11a5f1c1c1030b82e80f",
+        "sha256:fae906a30cef1ed490eec4694c382c13ce1f3e7c7700a6e9a2e75e3b7df33736",
+        "sha256:c9e9a68d70dc7851090d8107c14e40a67d62cc417d4baa1c7f7c42c905e79e54",
+        "sha256:6507ea90fd82f6e5ab6af6ee62233980e01dd8b5da2d81b6bc05b338eac02ec9"
+      ],
+      "evidence_sha256": {
+        "provenance.json": "29394312f33e9fdc236ed6103f3d32afe7dd1685e6454a6d856f6ba6df3a3910",
+        "sbom.spdx.json": "91eaa4273a6f97b361a63cd85000078822c49d99acecda75a53400a405bf654a",
+        "sbom.syft.json": "6b1aee62d5c5f535ee9e9a9e637a5ea8aac70ff0c21f0ac44ef86a798579fb43",
+        "scan-summary.json": "8b9fc15ac78f87792e18713527935fa9d6048f7d23adc328365d0e2e5cd43507",
+        "subject.json": "9245c53e6e351afb56de54ed9319292e3fe2dc99accf1f3ee8a8b0e2a3c2e688"
+      },
+      "exact_image_ui_sha256": "68fbece01856259080093d70cfa55d4032a531650a25576b18ed62d6ccb4d636",
+      "gate_receipt_sha256": "6f3cbd21586572b8a053c31a012d9c502fcc90dd4ead386948f1bf4e38777305",
+      "gates": {
+        "P1": true,
+        "P2": true,
+        "P3": true,
+        "P4": true,
+        "P5": true
+      },
+      "image_id": "sha256:5e8dc027c9c2cd148081e73e9c6604f43707d5f96765a2b478489b27bcb5cd3c",
+      "independent_anonymous_verification": {
+        "all_gates": true,
+        "config_digest": "sha256:5e8dc027c9c2cd148081e73e9c6604f43707d5f96765a2b478489b27bcb5cd3c",
+        "diff_ids_match": true,
+        "layers": 16,
+        "manifest_digest": "sha256:36fef7c4735d0b97cc50511ab08ebfae3703ded740e19e104412ad8940e1cd02",
+        "reference": "ghcr.io/woowtech/amd64-mcp-emqx@sha256:36fef7c4735d0b97cc50511ab08ebfae3703ded740e19e104412ad8940e1cd02"
+      },
+      "p4_supplement": {
+        "expected_output_schemas": 39,
+        "passed": true,
+        "probes": {
+          "results": {
+            "app": "emqx",
+            "backend_requests": 2,
+            "case_count": 3,
+            "cases": {
+              "listing_output_schema_pinned": true,
+              "representative_error_fixed_code": true,
+              "representative_result_schema_valid": true
+            },
+            "container_name": "ha0411-p4-results-emqx-2ad4521c5b61ea144dfa1ffbc658ee16a67591a5",
+            "image_id": "sha256:5e8dc027c9c2cd148081e73e9c6604f43707d5f96765a2b478489b27bcb5cd3c",
+            "network": "none",
+            "owned_container_removed": true,
+            "passed": true,
+            "probe": "results",
+            "probe_sha256": "38f035decde8caf7bad1e1da2a4571a82c122cb01df1ee74cc492bc36c006870",
+            "registry_sha256": "e8b0a9c6201479c18078f6c3ff9669135d850866ec07e2b8356d853b9531f28c",
+            "scope": "Exact-image real child + real gateway relay with owned loopback fake; no HAOS or real backend.",
+            "uid": 10001
+          },
+          "schemas": {
+            "app": "emqx",
+            "container_name": "ha0411-p4-schemas-emqx-2ad4521c5b61ea144dfa1ffbc658ee16a67591a5",
+            "expected_output_schemas": 39,
+            "gateway_fallback_without_child": true,
+            "gateway_listed_tools": 39,
+            "gateway_output_schemas": 39,
+            "image_id": "sha256:5e8dc027c9c2cd148081e73e9c6604f43707d5f96765a2b478489b27bcb5cd3c",
+            "network": "none",
+            "owned_container_removed": true,
+            "passed": true,
+            "probe": "schemas",
+            "probe_sha256": "38f035decde8caf7bad1e1da2a4571a82c122cb01df1ee74cc492bc36c006870",
+            "registry_counts": {
+              "emqx": 39,
+              "hermes": 11,
+              "litellm": 35,
+              "n8n": 2,
+              "nextcloud": 8,
+              "odoo": 41
+            },
+            "registry_sha256": "e8b0a9c6201479c18078f6c3ff9669135d850866ec07e2b8356d853b9531f28c",
+            "scope": "Exact-image gateway tools/list and packaged pins; no child, backend or HAOS.",
+            "uid": 10001,
+            "unreviewed_schema_refused": true
+          }
+        },
+        "registry_sha256": "e8b0a9c6201479c18078f6c3ff9669135d850866ec07e2b8356d853b9531f28c"
+      },
+      "publication_evidence_sha256": {
+        "published-digest.json": "ba4f5ca42eda7c706e4da03799f36bdcb7d2c70336cddcd74487732681d91e20",
+        "published-provenance.json": "dc4144cefd74f290573d5b372382ba8edd8e3bf163a15c0bbb855c97836ffa00"
+      },
+      "published": {
+        "config_digest": "sha256:5e8dc027c9c2cd148081e73e9c6604f43707d5f96765a2b478489b27bcb5cd3c",
+        "reference": "ghcr.io/woowtech/amd64-mcp-emqx@sha256:36fef7c4735d0b97cc50511ab08ebfae3703ded740e19e104412ad8940e1cd02"
+      },
+      "scan_summary": {
+        "checks": {
+          "container": "pass",
+          "history-secrets": "pass",
+          "image-secrets": "pass",
+          "licenses": "pass",
+          "source-secrets": "pass",
+          "vulnerabilities": "pass"
+        },
+        "package_count": 193,
+        "policy_sha256": "5643d5ce538191af203b641944664efd26f30726252486e7828f517a466c7930",
+        "subject": {
+          "app": "emqx",
+          "archive_sha256": "cc4d41a695241935d15940d48b178431b2513e24787e58997dcfa8d0a510a56e",
+          "diff_ids": [
+            "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+            "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+            "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+            "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+            "sha256:9a434326c92ffc7053f6ae4300b1591ae7d5551ec6c769553125350126069b8d",
+            "sha256:3dfa6c83e8290dedea8d6721bd37ef971b4b2ae2e20ba7bd8bacf8485f00ee60",
+            "sha256:8682135bdf3d9786184cf17e2ceaabbff0dc3bb69157de59003e2cd418fc2893",
+            "sha256:dfeab7983ed0a6ff7e5bc60788fe6de2615c3c2ed3f2e8cb3ba2142ca282e7f2",
+            "sha256:ad270dff4fdac4354cc940e4cea5a6892266531e811bd21aa907dc3314863684",
+            "sha256:a3c6039f4bd35256dfc36559ca5c237c35142f064d30d51fa7da460926e2e69d",
+            "sha256:d1b0d734bd9fd46d070e222c5ea80af95a2d5a7e23407446a9dfba5554fba1af",
+            "sha256:0a23a65b81bbb1844964ef356352d5539dc6b953c48d9bcf33c6762b49e2969b",
+            "sha256:7fe0021d82e65b3e26c5235ee4c06b01b2357167669f11a5f1c1c1030b82e80f",
+            "sha256:fae906a30cef1ed490eec4694c382c13ce1f3e7c7700a6e9a2e75e3b7df33736",
+            "sha256:c9e9a68d70dc7851090d8107c14e40a67d62cc417d4baa1c7f7c42c905e79e54",
+            "sha256:6507ea90fd82f6e5ab6af6ee62233980e01dd8b5da2d81b6bc05b338eac02ec9"
+          ],
+          "image_id": "sha256:5e8dc027c9c2cd148081e73e9c6604f43707d5f96765a2b478489b27bcb5cd3c",
+          "source": "2ad4521c5b61ea144dfa1ffbc658ee16a67591a5"
+        },
+        "tools": {
+          "gitleaks": {
+            "checksums": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_checksums.txt",
+            "sha256": "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb",
+            "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz",
+            "version": "8.28.0"
+          },
+          "grype": {
+            "checksums": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_checksums.txt",
+            "sha256": "a5a1218dce63acdac152a6b3b5bb366e7267e36f4069848cf455543b3fa5700e",
+            "url": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_linux_amd64.tar.gz",
+            "version": "0.120.0"
+          },
+          "syft": {
+            "checksums": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_checksums.txt",
+            "sha256": "54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860",
+            "url": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_linux_amd64.tar.gz",
+            "version": "1.54.0"
+          }
+        },
+        "vulnerability_count": 237,
+        "vulnerability_database": {
+          "built": "2026-11-05T06:21:06Z",
+          "checksum": "9fbc8d8f2428cd715ffc9591cce16c4179955a7f45c76c12fbcb9cea8dc93813",
+          "schemaVersion": "6.1.10"
+        }
+      },
+      "security_package_versions": {
+        "@modelcontextprotocol/sdk": [],
+        "apt": [
+          "2.6.2"
+        ],
+        "certifi": [
+          "2026.10.23"
+        ],
+        "fastmcp": [
+          "4.1.3"
+        ],
+        "fastmcp-slim": [
+          "4.1.3"
+        ],
+        "libapt-pkg6.0": [
+          "2.6.2"
+        ],
+        "libssl3": [
+          "3.0.22-1~deb12u2"
+        ],
+        "mcp": [
+          "2.3.0"
+        ],
+        "mcp-types": [
+          "2.3.0"
+        ],
+        "n8n-mcp": [],
+        "node": [],
+        "odoo-mcp": [],
+        "openssl": [
+          "3.0.22-1~deb12u2"
+        ]
+      },
+      "security_runtime": null,
+      "uid10001_dac_checked": true,
+      "uncompressed_bytes": 213910291
+    },
+    "hermes": {
+      "diff_ids": [
+        "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+        "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+        "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+        "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+        "sha256:e54d7b796ce9c370c3ef20fcb063ab3d7ef5ea5ce2e005b89f9cc3c6ed0be9bd",
+        "sha256:d6b3cae8e4dfe0bd0a63a9cad4a60749483a57b9082aeee6b4169330648eee45",
+        "sha256:5fcf10e8d3a4b287f5d28672c86687cbecc8e22910b30e9f394f1adc463d2984",
+        "sha256:003fd7982cecd95cf454b2e68053a1d270761e48448d0ea41779ffd6b20f5bb7",
+        "sha256:2aa3990db6ed35d7afe1d84124b110f03fc26f6fb5ad5d88d6a6abe63360c529",
+        "sha256:03cb5e2be4dd32c1573f3aac396e67fd249680c8e0defebf6d260534dbb18b6b",
+        "sha256:a0b85195def1dee10bd14fe45816939dd31cb240a0a48c8510b84366e236107c",
+        "sha256:34f428b1d6646c534f7fd4f397335b9624633e7683cc9e021b95a2c5b46db5a1",
+        "sha256:13bbe397e1c9154613a045c06d791ba69126db5aef267fc69e9a254eeb0225a4",
+        "sha256:811e48e039ecf34851dce2102ad5684f23c132abc281e52c721f08636ef8d0a0",
+        "sha256:da5c7841daced63c23559394013c47a172568347c2db2fe8f7e46c880c148d03",
+        "sha256:7e12a7620622ddb083315ec747aef567762ce2af2615fe6457140fa61b46644e"
+      ],
+      "evidence_sha256": {
+        "provenance.json": "32304f98d93514cbd18566886d0dc1bd16a0fd9f82cc29d570ddeec2e773273c",
+        "sbom.spdx.json": "c37c298ae0d7323c71dcc12dccd8984b98ae27112c0df2079d11f4825bbf2172",
+        "sbom.syft.json": "97c27195d7093c359a01eaec8586e232ed22211f4218608567d16e6efa49a2b3",
+        "scan-summary.json": "ceaa86c825427745396a855661ac09780237f5e8cabe91bab255f5920c7f7b3c",
+        "subject.json": "163756170d7910a2fd408f9ad3c49fa52784b2e9e5ac850da1ff6b47500aa142"
+      },
+      "exact_image_ui_sha256": "68fbece01856259080093d70cfa55d4032a531650a25576b18ed62d6ccb4d636",
+      "gate_receipt_sha256": "5c26839947fd1dde92aad529ad8dfa6e7b1500be111de450e08f2c2d6da9ffbd",
+      "gates": {
+        "P1": true,
+        "P2": true,
+        "P3": true,
+        "P4": true,
+        "P5": true
+      },
+      "image_id": "sha256:f8bb485077ebaab602339721d2a383ac033a02eee8830fcf001976acc47f93c8",
+      "independent_anonymous_verification": {
+        "all_gates": true,
+        "config_digest": "sha256:f8bb485077ebaab602339721d2a383ac033a02eee8830fcf001976acc47f93c8",
+        "diff_ids_match": true,
+        "layers": 16,
+        "manifest_digest": "sha256:a49a4fa8429e78ab062ac34422f41bfe585ce8077815e4d23674e2e0811a8fd8",
+        "reference": "ghcr.io/woowtech/amd64-mcp-hermes@sha256:a49a4fa8429e78ab062ac34422f41bfe585ce8077815e4d23674e2e0811a8fd8"
+      },
+      "p4_supplement": {
+        "expected_output_schemas": 11,
+        "passed": true,
+        "probes": {
+          "hermes_errors": {
+            "app": "hermes",
+            "case_count": 18,
+            "cases": {
+              "coded_confirmation_required": true,
+              "coded_gateway_auth_rejected": true,
+              "coded_invalid_input_guard": true,
+              "coded_loopback_mcp_url": true,
+              "coded_not_found_session": true,
+              "coded_wrong_shape_config": true,
+              "coded_wrong_shape_skill": true,
+              "cron_create_success_projection": true,
+              "cron_create_unknown_502_one_post": true,
+              "cron_create_unknown_disconnect_one_post": true,
+              "cron_create_unknown_null_ack_one_post": true,
+              "missing_configuration_guidance": true,
+              "nested_shape_fixed": true,
+              "refused_connection_guidance": true,
+              "status_auth_403": true,
+              "status_non_json": true,
+              "status_non_object": true,
+              "status_redirect_302": true
+            },
+            "container_name": "ha0411-p4-hermes_errors-hermes-2ad4521c5b61ea144dfa1ffbc658ee16a67591a5",
+            "image_id": "sha256:f8bb485077ebaab602339721d2a383ac033a02eee8830fcf001976acc47f93c8",
+            "network": "none",
+            "owned_container_removed": true,
+            "passed": true,
+            "probe": "hermes_errors",
+            "probe_sha256": "38f035decde8caf7bad1e1da2a4571a82c122cb01df1ee74cc492bc36c006870",
+            "scope": "Exact-image Hermes handlers with owned loopback dashboard; no HAOS or real Hermes.",
+            "uid": 10001
+          },
+          "results": {
+            "app": "hermes",
+            "backend_requests": 2,
+            "case_count": 3,
+            "cases": {
+              "listing_output_schema_pinned": true,
+              "representative_error_fixed_code": true,
+              "representative_result_schema_valid": true
+            },
+            "container_name": "ha0411-p4-results-hermes-2ad4521c5b61ea144dfa1ffbc658ee16a67591a5",
+            "image_id": "sha256:f8bb485077ebaab602339721d2a383ac033a02eee8830fcf001976acc47f93c8",
+            "network": "none",
+            "owned_container_removed": true,
+            "passed": true,
+            "probe": "results",
+            "probe_sha256": "38f035decde8caf7bad1e1da2a4571a82c122cb01df1ee74cc492bc36c006870",
+            "registry_sha256": "e8b0a9c6201479c18078f6c3ff9669135d850866ec07e2b8356d853b9531f28c",
+            "scope": "Exact-image real child + real gateway relay with owned loopback fake; no HAOS or real backend.",
+            "uid": 10001
+          },
+          "schemas": {
+            "app": "hermes",
+            "container_name": "ha0411-p4-schemas-hermes-2ad4521c5b61ea144dfa1ffbc658ee16a67591a5",
+            "expected_output_schemas": 11,
+            "gateway_fallback_without_child": true,
+            "gateway_listed_tools": 11,
+            "gateway_output_schemas": 11,
+            "image_id": "sha256:f8bb485077ebaab602339721d2a383ac033a02eee8830fcf001976acc47f93c8",
+            "network": "none",
+            "owned_container_removed": true,
+            "passed": true,
+            "probe": "schemas",
+            "probe_sha256": "38f035decde8caf7bad1e1da2a4571a82c122cb01df1ee74cc492bc36c006870",
+            "registry_counts": {
+              "emqx": 39,
+              "hermes": 11,
+              "litellm": 35,
+              "n8n": 2,
+              "nextcloud": 8,
+              "odoo": 41
+            },
+            "registry_sha256": "e8b0a9c6201479c18078f6c3ff9669135d850866ec07e2b8356d853b9531f28c",
+            "scope": "Exact-image gateway tools/list and packaged pins; no child, backend or HAOS.",
+            "uid": 10001,
+            "unreviewed_schema_refused": true
+          }
+        },
+        "registry_sha256": "e8b0a9c6201479c18078f6c3ff9669135d850866ec07e2b8356d853b9531f28c"
+      },
+      "publication_evidence_sha256": {
+        "published-digest.json": "81f3682953b7d3437b19723d9e2338ad40e5d6019f35757fe866b68b08aef604",
+        "published-provenance.json": "84e6e31d53843ef827d9109e8fa954eb2d5015cd2afe0b2fae537176092299e8"
+      },
+      "published": {
+        "config_digest": "sha256:f8bb485077ebaab602339721d2a383ac033a02eee8830fcf001976acc47f93c8",
+        "reference": "ghcr.io/woowtech/amd64-mcp-hermes@sha256:a49a4fa8429e78ab062ac34422f41bfe585ce8077815e4d23674e2e0811a8fd8"
+      },
+      "scan_summary": {
+        "checks": {
+          "container": "pass",
+          "history-secrets": "pass",
+          "image-secrets": "pass",
+          "licenses": "pass",
+          "source-secrets": "pass",
+          "vulnerabilities": "pass"
+        },
+        "package_count": 153,
+        "policy_sha256": "5643d5ce538191af203b641944664efd26f30726252486e7828f517a466c7930",
+        "subject": {
+          "app": "hermes",
+          "archive_sha256": "8ccf5029840c6105919c6aba27746b4c75a16efdb5707b6d1bd57c81e90a0f8a",
+          "diff_ids": [
+            "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+            "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+            "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+            "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+            "sha256:e54d7b796ce9c370c3ef20fcb063ab3d7ef5ea5ce2e005b89f9cc3c6ed0be9bd",
+            "sha256:d6b3cae8e4dfe0bd0a63a9cad4a60749483a57b9082aeee6b4169330648eee45",
+            "sha256:5fcf10e8d3a4b287f5d28672c86687cbecc8e22910b30e9f394f1adc463d2984",
+            "sha256:003fd7982cecd95cf454b2e68053a1d270761e48448d0ea41779ffd6b20f5bb7",
+            "sha256:2aa3990db6ed35d7afe1d84124b110f03fc26f6fb5ad5d88d6a6abe63360c529",
+            "sha256:03cb5e2be4dd32c1573f3aac396e67fd249680c8e0defebf6d260534dbb18b6b",
+            "sha256:a0b85195def1dee10bd14fe45816939dd31cb240a0a48c8510b84366e236107c",
+            "sha256:34f428b1d6646c534f7fd4f397335b9624633e7683cc9e021b95a2c5b46db5a1",
+            "sha256:13bbe397e1c9154613a045c06d791ba69126db5aef267fc69e9a254eeb0225a4",
+            "sha256:811e48e039ecf34851dce2102ad5684f23c132abc281e52c721f08636ef8d0a0",
+            "sha256:da5c7841daced63c23559394013c47a172568347c2db2fe8f7e46c880c148d03",
+            "sha256:7e12a7620622ddb083315ec747aef567762ce2af2615fe6457140fa61b46644e"
+          ],
+          "image_id": "sha256:f8bb485077ebaab602339721d2a383ac033a02eee8830fcf001976acc47f93c8",
+          "source": "2ad4521c5b61ea144dfa1ffbc658ee16a67591a5"
+        },
+        "tools": {
+          "gitleaks": {
+            "checksums": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_checksums.txt",
+            "sha256": "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb",
+            "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz",
+            "version": "8.28.0"
+          },
+          "grype": {
+            "checksums": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_checksums.txt",
+            "sha256": "a5a1218dce63acdac152a6b3b5bb366e7267e36f4069848cf455543b3fa5700e",
+            "url": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_linux_amd64.tar.gz",
+            "version": "0.120.0"
+          },
+          "syft": {
+            "checksums": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_checksums.txt",
+            "sha256": "54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860",
+            "url": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_linux_amd64.tar.gz",
+            "version": "1.54.0"
+          }
+        },
+        "vulnerability_count": 237,
+        "vulnerability_database": {
+          "built": "2026-11-05T06:21:06Z",
+          "checksum": "9fbc8d8f2428cd715ffc9591cce16c4179955a7f45c76c12fbcb9cea8dc93813",
+          "schemaVersion": "6.1.10"
+        }
+      },
+      "security_package_versions": {
+        "@modelcontextprotocol/sdk": [],
+        "apt": [
+          "2.6.2"
+        ],
+        "certifi": [
+          "2026.10.23"
+        ],
+        "fastmcp": [],
+        "fastmcp-slim": [],
+        "libapt-pkg6.0": [
+          "2.6.2"
+        ],
+        "libssl3": [
+          "3.0.22-1~deb12u2"
+        ],
+        "mcp": [
+          "2.3.0"
+        ],
+        "mcp-types": [
+          "2.3.0"
+        ],
+        "n8n-mcp": [],
+        "node": [],
+        "odoo-mcp": [],
+        "openssl": [
+          "3.0.22-1~deb12u2"
+        ]
+      },
+      "security_runtime": {
+        "app": "hermes",
+        "blocked_urls": 18,
+        "container_name": "ha0411-security-hermes-2ad4521c5b61ea144dfa1ffbc658ee16a67591a5",
+        "denied_dashboard_writes": 0,
+        "hermes_loopback_marker_cases": 11,
+        "image_id": "sha256:f8bb485077ebaab602339721d2a383ac033a02eee8830fcf001976acc47f93c8",
+        "lan_ula_writes": 2,
+        "mapped_hermes_loopback_recognized": true,
+        "mapped_shared_denial_cases": 1,
+        "network": "none",
+        "owned_container_removed": true,
+        "owned_dashboard_closed": true,
+        "passed": true,
+        "probe_sha256": "38f035decde8caf7bad1e1da2a4571a82c122cb01df1ee74cc492bc36c006870",
+        "scope": "\u5be6\u969b Hermes handler\uff0fguard\uff0fHTTP transport\uff1b\u4e0d\u6db5\u84cb HAOS\u3002",
+        "uid": 10001
+      },
+      "uid10001_dac_checked": true,
+      "uncompressed_bytes": 185392025
+    },
+    "litellm": {
+      "diff_ids": [
+        "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+        "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+        "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+        "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+        "sha256:5362103f1c5e21a5c499dfccb47e4dbcd25e15ccc3fe26a935cc7f5db690c1a0",
+        "sha256:dc5b5c23acd1ea9421ef30a600bb9d4917aef9d6df529dbe749aa8ab1f386a88",
+        "sha256:d6f2371abe0b586e7881364ef87e4d9c7f50e53905c508b8b60443ae551a4a8f",
+        "sha256:80525d3e6005de82be4392e205b0d2f540d2a876fd2c90f44e6de2acbdb1e983",
+        "sha256:727183152b07f4670895c881bcb81b9a93d7c99012aede4f83a825a77c5deee2",
+        "sha256:04b0c148b6d586c13d08028516ac932bf4d4a2fd25cba701bc59a8bb8e25219d",
+        "sha256:0d1e0d92ad542fff2e97f8d043dc173595b3d3bceae8565308e19756fce981ea",
+        "sha256:ec20e7bdaa0590e3d23534549e4b13145db95ace46113d122203ab7c44431777",
+        "sha256:4fa3fee427c93b8b7d78c6c737e639f12b741941a0ba41b44cfddf652f1e6213",
+        "sha256:efc6362d8656335349c7f67287b1a3672f1edeb65b921a40f4a6cf6b44ab52d0",
+        "sha256:9387486b997364c158ba5141f77ad9e3b13d2677f3dd71f22c0f9aad7fe81a74",
+        "sha256:3c16e6335cdbb3554237019b1704c6586b29e60e6d8535d684cf66fabdb064b8"
+      ],
+      "evidence_sha256": {
+        "provenance.json": "3ad37d9e31066813f4b08a1087623bd5c150627eb3b4386063d9777d8960815d",
+        "sbom.spdx.json": "898ccdad644b68e097d27571b365770a70ec0cbe8caf84ec2dc7b860d3af9b56",
+        "sbom.syft.json": "1bd5e3f910d08cd8ff29569e21519a6789539f4c3d942c6a8160521ca2a44f9d",
+        "scan-summary.json": "fd1e7ccbafaf9cd08fdc0b4ccc86f0456429beb1db2ad46f5758fff908c0e74e",
+        "subject.json": "cb100af997a358733e5220062e2d553dc636826bbf02fd44250d77953c652c85"
+      },
+      "exact_image_ui_sha256": "68fbece01856259080093d70cfa55d4032a531650a25576b18ed62d6ccb4d636",
+      "gate_receipt_sha256": "aa7482ed8ab10f72b83b1d39921e06c17786f6af191df5d835ff6dd89e748a55",
+      "gates": {
+        "P1": true,
+        "P2": true,
+        "P3": true,
+        "P4": true,
+        "P5": true
+      },
+      "image_id": "sha256:39f9878a0bb11ca510cbe76adc598bf9aea832e2f6aaf38e741c4caf5855892f",
+      "independent_anonymous_verification": {
+        "all_gates": true,
+        "config_digest": "sha256:39f9878a0bb11ca510cbe76adc598bf9aea832e2f6aaf38e741c4caf5855892f",
+        "diff_ids_match": true,
+        "layers": 16,
+        "manifest_digest": "sha256:3dd40c92b72a47ef2d1354b542d8bc452185835aa37929fb8a9fc2d4e8ec791a",
+        "reference": "ghcr.io/woowtech/amd64-mcp-litellm@sha256:3dd40c92b72a47ef2d1354b542d8bc452185835aa37929fb8a9fc2d4e8ec791a"
+      },
+      "p4_supplement": {
+        "expected_output_schemas": 35,
+        "passed": true,
+        "probes": {
+          "results": {
+            "app": "litellm",
+            "backend_requests": 2,
+            "case_count": 3,
+            "cases": {
+              "listing_output_schema_pinned": true,
+              "representative_error_fixed_code": true,
+              "representative_result_schema_valid": true
+            },
+            "container_name": "ha0411-p4-results-litellm-2ad4521c5b61ea144dfa1ffbc658ee16a67591a5",
+            "image_id": "sha256:39f9878a0bb11ca510cbe76adc598bf9aea832e2f6aaf38e741c4caf5855892f",
+            "network": "none",
+            "owned_container_removed": true,
+            "passed": true,
+            "probe": "results",
+            "probe_sha256": "38f035decde8caf7bad1e1da2a4571a82c122cb01df1ee74cc492bc36c006870",
+            "registry_sha256": "e8b0a9c6201479c18078f6c3ff9669135d850866ec07e2b8356d853b9531f28c",
+            "scope": "Exact-image real child + real gateway relay with owned loopback fake; no HAOS or real backend.",
+            "uid": 10001
+          },
+          "schemas": {
+            "app": "litellm",
+            "container_name": "ha0411-p4-schemas-litellm-2ad4521c5b61ea144dfa1ffbc658ee16a67591a5",
+            "expected_output_schemas": 35,
+            "gateway_fallback_without_child": true,
+            "gateway_listed_tools": 40,
+            "gateway_output_schemas": 35,
+            "image_id": "sha256:39f9878a0bb11ca510cbe76adc598bf9aea832e2f6aaf38e741c4caf5855892f",
+            "network": "none",
+            "owned_container_removed": true,
+            "passed": true,
+            "probe": "schemas",
+            "probe_sha256": "38f035decde8caf7bad1e1da2a4571a82c122cb01df1ee74cc492bc36c006870",
+            "registry_counts": {
+              "emqx": 39,
+              "hermes": 11,
+              "litellm": 35,
+              "n8n": 2,
+              "nextcloud": 8,
+              "odoo": 41
+            },
+            "registry_sha256": "e8b0a9c6201479c18078f6c3ff9669135d850866ec07e2b8356d853b9531f28c",
+            "scope": "Exact-image gateway tools/list and packaged pins; no child, backend or HAOS.",
+            "uid": 10001,
+            "unreviewed_schema_refused": true
+          }
+        },
+        "registry_sha256": "e8b0a9c6201479c18078f6c3ff9669135d850866ec07e2b8356d853b9531f28c"
+      },
+      "publication_evidence_sha256": {
+        "published-digest.json": "e029a48db615a3db53aeb8e2bd8649e5147bee55b3e6f336c22e5fd9a16a469c",
+        "published-provenance.json": "7137565c0101d06645f5b9b0677b7380ed51a955e55c3fdfe99f9952c1df342c"
+      },
+      "published": {
+        "config_digest": "sha256:39f9878a0bb11ca510cbe76adc598bf9aea832e2f6aaf38e741c4caf5855892f",
+        "reference": "ghcr.io/woowtech/amd64-mcp-litellm@sha256:3dd40c92b72a47ef2d1354b542d8bc452185835aa37929fb8a9fc2d4e8ec791a"
+      },
+      "scan_summary": {
+        "checks": {
+          "container": "pass",
+          "history-secrets": "pass",
+          "image-secrets": "pass",
+          "licenses": "pass",
+          "source-secrets": "pass",
+          "vulnerabilities": "pass"
+        },
+        "package_count": 193,
+        "policy_sha256": "5643d5ce538191af203b641944664efd26f30726252486e7828f517a466c7930",
+        "subject": {
+          "app": "litellm",
+          "archive_sha256": "2004a11ca0b267793582e0b2819b9ecbac4e49775f44438781ede4972d59bca7",
+          "diff_ids": [
+            "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+            "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+            "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+            "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+            "sha256:5362103f1c5e21a5c499dfccb47e4dbcd25e15ccc3fe26a935cc7f5db690c1a0",
+            "sha256:dc5b5c23acd1ea9421ef30a600bb9d4917aef9d6df529dbe749aa8ab1f386a88",
+            "sha256:d6f2371abe0b586e7881364ef87e4d9c7f50e53905c508b8b60443ae551a4a8f",
+            "sha256:80525d3e6005de82be4392e205b0d2f540d2a876fd2c90f44e6de2acbdb1e983",
+            "sha256:727183152b07f4670895c881bcb81b9a93d7c99012aede4f83a825a77c5deee2",
+            "sha256:04b0c148b6d586c13d08028516ac932bf4d4a2fd25cba701bc59a8bb8e25219d",
+            "sha256:0d1e0d92ad542fff2e97f8d043dc173595b3d3bceae8565308e19756fce981ea",
+            "sha256:ec20e7bdaa0590e3d23534549e4b13145db95ace46113d122203ab7c44431777",
+            "sha256:4fa3fee427c93b8b7d78c6c737e639f12b741941a0ba41b44cfddf652f1e6213",
+            "sha256:efc6362d8656335349c7f67287b1a3672f1edeb65b921a40f4a6cf6b44ab52d0",
+            "sha256:9387486b997364c158ba5141f77ad9e3b13d2677f3dd71f22c0f9aad7fe81a74",
+            "sha256:3c16e6335cdbb3554237019b1704c6586b29e60e6d8535d684cf66fabdb064b8"
+          ],
+          "image_id": "sha256:39f9878a0bb11ca510cbe76adc598bf9aea832e2f6aaf38e741c4caf5855892f",
+          "source": "2ad4521c5b61ea144dfa1ffbc658ee16a67591a5"
+        },
+        "tools": {
+          "gitleaks": {
+            "checksums": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_checksums.txt",
+            "sha256": "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb",
+            "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz",
+            "version": "8.28.0"
+          },
+          "grype": {
+            "checksums": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_checksums.txt",
+            "sha256": "a5a1218dce63acdac152a6b3b5bb366e7267e36f4069848cf455543b3fa5700e",
+            "url": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_linux_amd64.tar.gz",
+            "version": "0.120.0"
+          },
+          "syft": {
+            "checksums": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_checksums.txt",
+            "sha256": "54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860",
+            "url": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_linux_amd64.tar.gz",
+            "version": "1.54.0"
+          }
+        },
+        "vulnerability_count": 237,
+        "vulnerability_database": {
+          "built": "2026-11-05T06:21:06Z",
+          "checksum": "9fbc8d8f2428cd715ffc9591cce16c4179955a7f45c76c12fbcb9cea8dc93813",
+          "schemaVersion": "6.1.10"
+        }
+      },
+      "security_package_versions": {
+        "@modelcontextprotocol/sdk": [],
+        "apt": [
+          "2.6.2"
+        ],
+        "certifi": [
+          "2026.10.23"
+        ],
+        "fastmcp": [
+          "4.1.3"
+        ],
+        "fastmcp-slim": [
+          "4.1.3"
+        ],
+        "libapt-pkg6.0": [
+          "2.6.2"
+        ],
+        "libssl3": [
+          "3.0.22-1~deb12u2"
+        ],
+        "mcp": [
+          "2.3.0"
+        ],
+        "mcp-types": [
+          "2.3.0"
+        ],
+        "n8n-mcp": [],
+        "node": [],
+        "odoo-mcp": [],
+        "openssl": [
+          "3.0.22-1~deb12u2"
+        ]
+      },
+      "security_runtime": null,
+      "uid10001_dac_checked": true,
+      "uncompressed_bytes": 213962037
+    },
+    "n8n": {
+      "diff_ids": [
+        "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+        "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+        "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+        "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+        "sha256:1967d3c7486c9a0ef1c73117dfc77decfea7edda355e7e8262b87c79a331350e",
+        "sha256:06eace33434f7a11b3fa38145b60dd53590a799848bfcf75b5535f6a98ccf4a7",
+        "sha256:0ab366aed44fbf6a6fb02391421b676f5d43b1870a0ded2bc47ad712971a0018",
+        "sha256:d9b2f8b4e4200b9a1cf08d09c77b73207ea2436719e0b3961dd96701640b9081",
+        "sha256:cfd992b4a764bc5aa9537efacc3d0e2ee41c540d3f3d082e82f140e944bd0224",
+        "sha256:471c59a5ab7e7d91b0c06d06485d72bb1d472189b9c8057741a9f8cd73103ce7",
+        "sha256:cc21119bc7c845d3ad4fcad1e5117076099e90ceccdcaf1512740d0644504db4",
+        "sha256:fdf7b15b85307941cb4c331c046bc0e8966f180fb2097355d65f19404d96b45d",
+        "sha256:8024150f01ec8f6f1ce148644e58bc8d303a2e7baeaa0ad4cbe9736f7a3f43a0",
+        "sha256:d9e900ba4c950700ca4e61b9ef8d4e5f58f1b0b22bbfc3e9a6e804e8847c89ac",
+        "sha256:bb5d4da673d1fef5d17a28f5918674788bf04c6923af60bd1964b637d06ca843",
+        "sha256:8d17a4417540e273b51895455adad5cfedc45754fc5606d76cf2c470a940acee",
+        "sha256:44f9390613f25b1b68ba525d0e784f6451b010f2748a8a9c4374597a14625149",
+        "sha256:88b2105ebe3ff1bd1423e8a3bf9c7bf46a37b359c735c4ecaf6f8d588bcd9d23",
+        "sha256:ccc1f09e0f7899f2d5c7b020444dcf29f453cc1789745beb070d38ca16b037cf",
+        "sha256:c8dfc22ca3a06c945a59bbc929976606399918c78f714f4e0a98e5a1891cde03",
+        "sha256:82fc074ef3d185f3121ceb27b21f95376599a680374e19420eb9798232ac23ac",
+        "sha256:832e5144f71bf2ffca2af8b9db76cf4f508cffdea7e1a8948ed3155b1b4f3b0c",
+        "sha256:d2b62e2838bc854d12c4e16334046a0252a4bc54b968c328246ba8b29128e35e",
+        "sha256:00b5b2cd78fae06fce7023fb95e405d47c7ce431b851197e041ac947d133593f"
+      ],
+      "evidence_sha256": {
+        "provenance.json": "2e58db9a7e98295ff5862ff8867d52742bc3a6919a42cb238ed9616184d5a0bd",
+        "sbom.spdx.json": "30834b2f3ad4c86f41cf59a395e0ccebccd5e505f75228db61f45a03e7c43536",
+        "sbom.syft.json": "88d86c40f08b3f1e2d99002a522618935c41f0c4994a0c60ad124a7bdaeac4aa",
+        "scan-summary.json": "53c5fbdee7aa26f90ed609957a426ac2bc58a74f55165cd2ee0de17b78c857ac",
+        "subject.json": "06473e4f80f242abab7de25c59d6f9f06cb2790c75935143cda81bf797ed9923"
+      },
+      "exact_image_ui_sha256": "68fbece01856259080093d70cfa55d4032a531650a25576b18ed62d6ccb4d636",
+      "gate_receipt_sha256": "4ebd093efbb18ed86929789bfe49443d2583547f162b974a6c6a68eac4f25b58",
+      "gates": {
+        "P1": true,
+        "P2": true,
+        "P3": true,
+        "P4": true,
+        "P5": true
+      },
+      "image_id": "sha256:436db1a7ba9730b1331054ecbbee1cb44122941b10952bb016ca6012afc6e9e6",
+      "independent_anonymous_verification": {
+        "all_gates": true,
+        "config_digest": "sha256:436db1a7ba9730b1331054ecbbee1cb44122941b10952bb016ca6012afc6e9e6",
+        "diff_ids_match": true,
+        "layers": 24,
+        "manifest_digest": "sha256:62c977789688a6b5992a94801bd6a92f480d3eeff25ece77f75c49bcca73c6de",
+        "reference": "ghcr.io/woowtech/amd64-mcp-n8n@sha256:62c977789688a6b5992a94801bd6a92f480d3eeff25ece77f75c49bcca73c6de"
+      },
+      "p4_supplement": {
+        "expected_output_schemas": 2,
+        "passed": true,
+        "probes": {
+          "results": {
+            "app": "n8n",
+            "backend_requests": 0,
+            "case_count": 4,
+            "cases": {
+              "listing_output_schema_pinned": true,
+              "validate_workflow_error_details": true,
+              "validate_workflow_valid_schema": true,
+              "validate_workflow_warning_details": true
+            },
+            "container_name": "ha0411-p4-results-n8n-2ad4521c5b61ea144dfa1ffbc658ee16a67591a5",
+            "image_id": "sha256:436db1a7ba9730b1331054ecbbee1cb44122941b10952bb016ca6012afc6e9e6",
+            "network": "none",
+            "owned_container_removed": true,
+            "passed": true,
+            "probe": "results",
+            "probe_sha256": "38f035decde8caf7bad1e1da2a4571a82c122cb01df1ee74cc492bc36c006870",
+            "registry_sha256": "e8b0a9c6201479c18078f6c3ff9669135d850866ec07e2b8356d853b9531f28c",
+            "scope": "Exact-image real child + real gateway relay with owned loopback fake; no HAOS or real backend.",
+            "uid": 10001
+          },
+          "schemas": {
+            "app": "n8n",
+            "container_name": "ha0411-p4-schemas-n8n-2ad4521c5b61ea144dfa1ffbc658ee16a67591a5",
+            "expected_output_schemas": 2,
+            "gateway_fallback_without_child": true,
+            "gateway_listed_tools": 28,
+            "gateway_output_schemas": 2,
+            "image_id": "sha256:436db1a7ba9730b1331054ecbbee1cb44122941b10952bb016ca6012afc6e9e6",
+            "network": "none",
+            "owned_container_removed": true,
+            "passed": true,
+            "probe": "schemas",
+            "probe_sha256": "38f035decde8caf7bad1e1da2a4571a82c122cb01df1ee74cc492bc36c006870",
+            "registry_counts": {
+              "emqx": 39,
+              "hermes": 11,
+              "litellm": 35,
+              "n8n": 2,
+              "nextcloud": 8,
+              "odoo": 41
+            },
+            "registry_sha256": "e8b0a9c6201479c18078f6c3ff9669135d850866ec07e2b8356d853b9531f28c",
+            "scope": "Exact-image gateway tools/list and packaged pins; no child, backend or HAOS.",
+            "uid": 10001,
+            "unreviewed_schema_refused": true
+          }
+        },
+        "registry_sha256": "e8b0a9c6201479c18078f6c3ff9669135d850866ec07e2b8356d853b9531f28c"
+      },
+      "publication_evidence_sha256": {
+        "published-digest.json": "73e48bbba82efaeb3db1326ebec74f788ea5d9f689ed60757008db96286c17e7",
+        "published-provenance.json": "41f4d6546ad92fd5aa8803f849982e3e409d2c61097470f528894c149205e129"
+      },
+      "published": {
+        "config_digest": "sha256:436db1a7ba9730b1331054ecbbee1cb44122941b10952bb016ca6012afc6e9e6",
+        "reference": "ghcr.io/woowtech/amd64-mcp-n8n@sha256:62c977789688a6b5992a94801bd6a92f480d3eeff25ece77f75c49bcca73c6de"
+      },
+      "scan_summary": {
+        "checks": {
+          "container": "pass",
+          "history-secrets": "pass",
+          "image-secrets": "pass",
+          "licenses": "pass",
+          "source-secrets": "pass",
+          "vulnerabilities": "pass"
+        },
+        "package_count": 277,
+        "policy_sha256": "5643d5ce538191af203b641944664efd26f30726252486e7828f517a466c7930",
+        "subject": {
+          "app": "n8n",
+          "archive_sha256": "29eb98e53bf68ec99f81124ff658595b431f6b0e5157f998441009a574d16a49",
+          "diff_ids": [
+            "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+            "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+            "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+            "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+            "sha256:1967d3c7486c9a0ef1c73117dfc77decfea7edda355e7e8262b87c79a331350e",
+            "sha256:06eace33434f7a11b3fa38145b60dd53590a799848bfcf75b5535f6a98ccf4a7",
+            "sha256:0ab366aed44fbf6a6fb02391421b676f5d43b1870a0ded2bc47ad712971a0018",
+            "sha256:d9b2f8b4e4200b9a1cf08d09c77b73207ea2436719e0b3961dd96701640b9081",
+            "sha256:cfd992b4a764bc5aa9537efacc3d0e2ee41c540d3f3d082e82f140e944bd0224",
+            "sha256:471c59a5ab7e7d91b0c06d06485d72bb1d472189b9c8057741a9f8cd73103ce7",
+            "sha256:cc21119bc7c845d3ad4fcad1e5117076099e90ceccdcaf1512740d0644504db4",
+            "sha256:fdf7b15b85307941cb4c331c046bc0e8966f180fb2097355d65f19404d96b45d",
+            "sha256:8024150f01ec8f6f1ce148644e58bc8d303a2e7baeaa0ad4cbe9736f7a3f43a0",
+            "sha256:d9e900ba4c950700ca4e61b9ef8d4e5f58f1b0b22bbfc3e9a6e804e8847c89ac",
+            "sha256:bb5d4da673d1fef5d17a28f5918674788bf04c6923af60bd1964b637d06ca843",
+            "sha256:8d17a4417540e273b51895455adad5cfedc45754fc5606d76cf2c470a940acee",
+            "sha256:44f9390613f25b1b68ba525d0e784f6451b010f2748a8a9c4374597a14625149",
+            "sha256:88b2105ebe3ff1bd1423e8a3bf9c7bf46a37b359c735c4ecaf6f8d588bcd9d23",
+            "sha256:ccc1f09e0f7899f2d5c7b020444dcf29f453cc1789745beb070d38ca16b037cf",
+            "sha256:c8dfc22ca3a06c945a59bbc929976606399918c78f714f4e0a98e5a1891cde03",
+            "sha256:82fc074ef3d185f3121ceb27b21f95376599a680374e19420eb9798232ac23ac",
+            "sha256:832e5144f71bf2ffca2af8b9db76cf4f508cffdea7e1a8948ed3155b1b4f3b0c",
+            "sha256:d2b62e2838bc854d12c4e16334046a0252a4bc54b968c328246ba8b29128e35e",
+            "sha256:00b5b2cd78fae06fce7023fb95e405d47c7ce431b851197e041ac947d133593f"
+          ],
+          "image_id": "sha256:436db1a7ba9730b1331054ecbbee1cb44122941b10952bb016ca6012afc6e9e6",
+          "source": "2ad4521c5b61ea144dfa1ffbc658ee16a67591a5"
+        },
+        "tools": {
+          "gitleaks": {
+            "checksums": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_checksums.txt",
+            "sha256": "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb",
+            "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz",
+            "version": "8.28.0"
+          },
+          "grype": {
+            "checksums": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_checksums.txt",
+            "sha256": "a5a1218dce63acdac152a6b3b5bb366e7267e36f4069848cf455543b3fa5700e",
+            "url": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_linux_amd64.tar.gz",
+            "version": "0.120.0"
+          },
+          "syft": {
+            "checksums": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_checksums.txt",
+            "sha256": "54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860",
+            "url": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_linux_amd64.tar.gz",
+            "version": "1.54.0"
+          }
+        },
+        "vulnerability_count": 237,
+        "vulnerability_database": {
+          "built": "2026-11-05T06:21:06Z",
+          "checksum": "9fbc8d8f2428cd715ffc9591cce16c4179955a7f45c76c12fbcb9cea8dc93813",
+          "schemaVersion": "6.1.10"
+        }
+      },
+      "security_package_versions": {
+        "@modelcontextprotocol/sdk": [
+          "1.32.2"
+        ],
+        "apt": [
+          "2.6.2"
+        ],
+        "certifi": [
+          "2026.10.23"
+        ],
+        "fastmcp": [],
+        "fastmcp-slim": [],
+        "libapt-pkg6.0": [
+          "2.6.2"
+        ],
+        "libssl3": [
+          "3.0.22-1~deb12u2"
+        ],
+        "mcp": [],
+        "mcp-types": [],
+        "n8n-mcp": [
+          "2.96.2"
+        ],
+        "node": [
+          "26.12.1"
+        ],
+        "odoo-mcp": [],
+        "openssl": [
+          "3.0.22-1~deb12u2"
+        ]
+      },
+      "security_runtime": {
+        "app": "n8n",
+        "container_name": "ha0411-security-n8n-2ad4521c5b61ea144dfa1ffbc658ee16a67591a5",
+        "control_fetch_calls": 1,
+        "disabled_fetch_calls": 0,
+        "image_id": "sha256:436db1a7ba9730b1331054ecbbee1cb44122941b10952bb016ca6012afc6e9e6",
+        "inherited_false_overridden": true,
+        "network": "none",
+        "node_runtime_version": "v26.12.1",
+        "owned_container_removed": true,
+        "passed": true,
+        "probe_sha256": "38f035decde8caf7bad1e1da2a4571a82c122cb01df1ee74cc492bc36c006870",
+        "scope": "\u5be6\u969b adapter\uff0fNode\uff0fnpm checker\uff1bfetch \u7528\u53ef\u89c0\u5bdf\u63a7\u5236\u7d44\u66ff\u4ee3\uff0c\u7121\u5916\u90e8\u7db2\u8def\u3002",
+        "uid": 10001
+      },
+      "uid10001_dac_checked": true,
+      "uncompressed_bytes": 452685498
+    },
+    "nextcloud": {
+      "diff_ids": [
+        "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+        "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+        "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+        "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+        "sha256:762245cb3eb79f9a940d251066ee7fb9a0303bec494f38b1bd8e9036d6e650f2",
+        "sha256:810311983b4ad4233695bbf500f39a68408ba70a1bbfadea722e4157d8641fb3",
+        "sha256:8a9666fc385483cd0a45038f609e923d98296a320b7605060c2203e1e3c743ad",
+        "sha256:a76383f7cc0a0c1adfc01c736b1aaa906a9f709519cf504ac9e44cfd306228cf",
+        "sha256:3e257bfb78273897393ca9966ca191162eebc6ac05753b9f7a7083a50fdcff43",
+        "sha256:a8658eeb55cfd72bc669a9fb85bc24476ca8e9159dc9d0f30f706a6120ee8e95",
+        "sha256:e6918dec5743077e995ae328fcf47037ca90e0a38478c3b19793b40b939811bd",
+        "sha256:61cf56ba8a6be41370d91c874f5e493da5aafad140205e7c96609021037bdf2e",
+        "sha256:8fa6155468fd583a279729014999e0f066d32da82b7cb7b4eb39895be0bd581b",
+        "sha256:c86b7d4e15bf17f4ec94889c6a09ce647cb1fe4cb5a08a0725bb145a097451bd",
+        "sha256:7c9b57b8e3e85a416288a75de98e92ff5123905d0ad0edf14ea5521936c6f37f",
+        "sha256:01c38f4743ddc7922a2a501f98df1651dd601f0060f141f98a3d639ca517a457"
+      ],
+      "evidence_sha256": {
+        "provenance.json": "7feeb30da4602bf31bbe3667561526c3f668079f9dfca32cd67e7a8a7cac2acc",
+        "sbom.spdx.json": "7c1224e93ad1e14fadae6bad39bcd845c3b9a0fa14906eb8fd2fe4ae0bd416b8",
+        "sbom.syft.json": "c064f6599e980f9d73d2c817a90ecb94264b46313929bc40382a959c2b172d16",
+        "scan-summary.json": "d75b7adfb74865c1a7cdd9666ad7c5356acaca069e935959359bd4d9f2390026",
+        "subject.json": "5ed28992b47e8e9ce49aa78f50928b4ef660a27bb80a08ca284ae8283478efca"
+      },
+      "exact_image_ui_sha256": "68fbece01856259080093d70cfa55d4032a531650a25576b18ed62d6ccb4d636",
+      "gate_receipt_sha256": "e15dc0ba81dccc720f2f7254a9c1bfb9edcc327cd9db621c940a38a0f8d1410c",
+      "gates": {
+        "P1": true,
+        "P2": true,
+        "P3": true,
+        "P4": true,
+        "P5": true
+      },
+      "image_id": "sha256:9e004a5ffb0e6840500941b2a08044b9397d6a7c521d70eb6a997603e100ce3c",
+      "independent_anonymous_verification": {
+        "all_gates": true,
+        "config_digest": "sha256:9e004a5ffb0e6840500941b2a08044b9397d6a7c521d70eb6a997603e100ce3c",
+        "diff_ids_match": true,
+        "layers": 16,
+        "manifest_digest": "sha256:5b557049b783ab1a544f4dd78aeed5f139d7f2fe8eb92cd4de2b4069d9d2adcf",
+        "reference": "ghcr.io/woowtech/amd64-mcp-nextcloud@sha256:5b557049b783ab1a544f4dd78aeed5f139d7f2fe8eb92cd4de2b4069d9d2adcf"
+      },
+      "p4_supplement": {
+        "expected_output_schemas": 8,
+        "passed": true,
+        "probes": {
+          "nextcloud_errors": {
+            "app": "nextcloud",
+            "case_count": 19,
+            "cases": {
+              "quota_403_ocs_fixed": true,
+              "quota_403_sabre_fixed": true,
+              "quota_403_text_fixed": true,
+              "quota_422_ocs_fixed": true,
+              "quota_422_sabre_fixed": true,
+              "quota_422_text_fixed": true,
+              "quota_500_ocs_fixed": true,
+              "quota_500_sabre_fixed": true,
+              "quota_500_text_fixed": true,
+              "quota_503_ocs_fixed": true,
+              "quota_503_sabre_fixed": true,
+              "quota_503_text_fixed": true,
+              "redirect_301_withheld": true,
+              "redirect_302_withheld": true,
+              "redirect_307_withheld": true,
+              "redirect_308_withheld": true,
+              "unrecognized_403_text_withheld": true,
+              "unrecognized_500_json_withheld": true,
+              "unrecognized_500_sabre_withheld": true
+            },
+            "container_name": "ha0411-p4-nextcloud_errors-nextcloud-2ad4521c5b61ea144dfa1ffbc658ee16a67591a5",
+            "image_id": "sha256:9e004a5ffb0e6840500941b2a08044b9397d6a7c521d70eb6a997603e100ce3c",
+            "network": "none",
+            "owned_container_removed": true,
+            "passed": true,
+            "probe": "nextcloud_errors",
+            "probe_sha256": "38f035decde8caf7bad1e1da2a4571a82c122cb01df1ee74cc492bc36c006870",
+            "requests": 19,
+            "scope": "Exact-image Nextcloud client with shipped backend_policy and owned loopback fake; no HAOS.",
+            "uid": 10001
+          },
+          "results": {
+            "app": "nextcloud",
+            "backend_requests": 3,
+            "case_count": 3,
+            "cases": {
+              "listing_output_schema_pinned": true,
+              "representative_error_fixed_code": true,
+              "representative_result_schema_valid": true
+            },
+            "container_name": "ha0411-p4-results-nextcloud-2ad4521c5b61ea144dfa1ffbc658ee16a67591a5",
+            "image_id": "sha256:9e004a5ffb0e6840500941b2a08044b9397d6a7c521d70eb6a997603e100ce3c",
+            "network": "none",
+            "owned_container_removed": true,
+            "passed": true,
+            "probe": "results",
+            "probe_sha256": "38f035decde8caf7bad1e1da2a4571a82c122cb01df1ee74cc492bc36c006870",
+            "registry_sha256": "e8b0a9c6201479c18078f6c3ff9669135d850866ec07e2b8356d853b9531f28c",
+            "scope": "Exact-image real child + real gateway relay with owned loopback fake; no HAOS or real backend.",
+            "uid": 10001
+          },
+          "schemas": {
+            "app": "nextcloud",
+            "container_name": "ha0411-p4-schemas-nextcloud-2ad4521c5b61ea144dfa1ffbc658ee16a67591a5",
+            "expected_output_schemas": 8,
+            "gateway_fallback_without_child": true,
+            "gateway_listed_tools": 9,
+            "gateway_output_schemas": 8,
+            "image_id": "sha256:9e004a5ffb0e6840500941b2a08044b9397d6a7c521d70eb6a997603e100ce3c",
+            "network": "none",
+            "owned_container_removed": true,
+            "passed": true,
+            "probe": "schemas",
+            "probe_sha256": "38f035decde8caf7bad1e1da2a4571a82c122cb01df1ee74cc492bc36c006870",
+            "registry_counts": {
+              "emqx": 39,
+              "hermes": 11,
+              "litellm": 35,
+              "n8n": 2,
+              "nextcloud": 8,
+              "odoo": 41
+            },
+            "registry_sha256": "e8b0a9c6201479c18078f6c3ff9669135d850866ec07e2b8356d853b9531f28c",
+            "scope": "Exact-image gateway tools/list and packaged pins; no child, backend or HAOS.",
+            "uid": 10001,
+            "unreviewed_schema_refused": true
+          }
+        },
+        "registry_sha256": "e8b0a9c6201479c18078f6c3ff9669135d850866ec07e2b8356d853b9531f28c"
+      },
+      "publication_evidence_sha256": {
+        "published-digest.json": "58c97b7521d06f5288c825733be2790d62c4667e0388cef7df856c3311f5a09e",
+        "published-provenance.json": "5023f8439315edb9877041fd1d68789a02a0fb2bba04efc8de049ecb20453f94"
+      },
+      "published": {
+        "config_digest": "sha256:9e004a5ffb0e6840500941b2a08044b9397d6a7c521d70eb6a997603e100ce3c",
+        "reference": "ghcr.io/woowtech/amd64-mcp-nextcloud@sha256:5b557049b783ab1a544f4dd78aeed5f139d7f2fe8eb92cd4de2b4069d9d2adcf"
+      },
+      "scan_summary": {
+        "checks": {
+          "container": "pass",
+          "history-secrets": "pass",
+          "image-secrets": "pass",
+          "licenses": "pass",
+          "source-secrets": "pass",
+          "vulnerabilities": "pass"
+        },
+        "package_count": 195,
+        "policy_sha256": "5643d5ce538191af203b641944664efd26f30726252486e7828f517a466c7930",
+        "subject": {
+          "app": "nextcloud",
+          "archive_sha256": "dd4f6c0d97b848edb2d5930c97574e3bfd25de7c3d2b5c7fe4821c01e3699c30",
+          "diff_ids": [
+            "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+            "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+            "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+            "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+            "sha256:762245cb3eb79f9a940d251066ee7fb9a0303bec494f38b1bd8e9036d6e650f2",
+            "sha256:810311983b4ad4233695bbf500f39a68408ba70a1bbfadea722e4157d8641fb3",
+            "sha256:8a9666fc385483cd0a45038f609e923d98296a320b7605060c2203e1e3c743ad",
+            "sha256:a76383f7cc0a0c1adfc01c736b1aaa906a9f709519cf504ac9e44cfd306228cf",
+            "sha256:3e257bfb78273897393ca9966ca191162eebc6ac05753b9f7a7083a50fdcff43",
+            "sha256:a8658eeb55cfd72bc669a9fb85bc24476ca8e9159dc9d0f30f706a6120ee8e95",
+            "sha256:e6918dec5743077e995ae328fcf47037ca90e0a38478c3b19793b40b939811bd",
+            "sha256:61cf56ba8a6be41370d91c874f5e493da5aafad140205e7c96609021037bdf2e",
+            "sha256:8fa6155468fd583a279729014999e0f066d32da82b7cb7b4eb39895be0bd581b",
+            "sha256:c86b7d4e15bf17f4ec94889c6a09ce647cb1fe4cb5a08a0725bb145a097451bd",
+            "sha256:7c9b57b8e3e85a416288a75de98e92ff5123905d0ad0edf14ea5521936c6f37f",
+            "sha256:01c38f4743ddc7922a2a501f98df1651dd601f0060f141f98a3d639ca517a457"
+          ],
+          "image_id": "sha256:9e004a5ffb0e6840500941b2a08044b9397d6a7c521d70eb6a997603e100ce3c",
+          "source": "2ad4521c5b61ea144dfa1ffbc658ee16a67591a5"
+        },
+        "tools": {
+          "gitleaks": {
+            "checksums": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_checksums.txt",
+            "sha256": "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb",
+            "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz",
+            "version": "8.28.0"
+          },
+          "grype": {
+            "checksums": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_checksums.txt",
+            "sha256": "a5a1218dce63acdac152a6b3b5bb366e7267e36f4069848cf455543b3fa5700e",
+            "url": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_linux_amd64.tar.gz",
+            "version": "0.120.0"
+          },
+          "syft": {
+            "checksums": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_checksums.txt",
+            "sha256": "54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860",
+            "url": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_linux_amd64.tar.gz",
+            "version": "1.54.0"
+          }
+        },
+        "vulnerability_count": 237,
+        "vulnerability_database": {
+          "built": "2026-11-05T06:21:06Z",
+          "checksum": "9fbc8d8f2428cd715ffc9591cce16c4179955a7f45c76c12fbcb9cea8dc93813",
+          "schemaVersion": "6.1.10"
+        }
+      },
+      "security_package_versions": {
+        "@modelcontextprotocol/sdk": [],
+        "apt": [
+          "2.6.2"
+        ],
+        "certifi": [
+          "2026.10.23"
+        ],
+        "fastmcp": [
+          "4.1.3"
+        ],
+        "fastmcp-slim": [
+          "4.1.3"
+        ],
+        "libapt-pkg6.0": [
+          "2.6.2"
+        ],
+        "libssl3": [
+          "3.0.22-1~deb12u2"
+        ],
+        "mcp": [
+          "2.3.0"
+        ],
+        "mcp-types": [
+          "2.3.0"
+        ],
+        "n8n-mcp": [],
+        "node": [],
+        "odoo-mcp": [],
+        "openssl": [
+          "3.0.22-1~deb12u2"
+        ]
+      },
+      "security_runtime": null,
+      "uid10001_dac_checked": true,
+      "uncompressed_bytes": 214595278
+    },
+    "odoo": {
+      "diff_ids": [
+        "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+        "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+        "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+        "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+        "sha256:ab06697cc0fc094568d72c807500ab1347dd086e31e1ac855415e94473fb089a",
+        "sha256:f39c51a00d7cf6d50617d713e71da2903b9f2961774812a97b2f142be357d045",
+        "sha256:719ab3b80e3780f5f7350478d124ca29f2827cec8401338ce438f3a8228536f1",
+        "sha256:aa44bc727fa8c728ae4b0c74e2565231284cfa09ffb10d219fb295f8611f261a",
+        "sha256:6c43247ff21db4190f0de9c7747e360cf020544326f2f82e4f24fb74f634e8ea",
+        "sha256:a3af96262fd80fa70ce57b1e14e57f803a261ddd8c0b2b7de3913cec2bd8f7e9",
+        "sha256:9f040cc09856ec3d11f5b7ba36edef0e65ef097405ef02732017790f57fc0ec7",
+        "sha256:815d1d008b2615e531e4b06a4783e0e111983a1c496675daaaee9f903107ad49",
+        "sha256:64f2fa56b08c6a63d8c88b58ceb90c1bc764bee9d945f9cd150ca83f9fd6a429",
+        "sha256:a077c3795ba980d234ec64d35a5fceac6eb3325c962831255c7b018bae596fa8",
+        "sha256:9e54e341990ad9f9dacc3c3c02d12475dce517a9f4e480977f1185ca51bcabf3",
+        "sha256:29839323a54c67ba2889d33dacac4958f1b5326be6085c8be2d15f51c4051335"
+      ],
+      "evidence_sha256": {
+        "provenance.json": "e1db2b28abe402cbb71653021df339e3d1cd4a153fe0b1128f3a74966f6f438e",
+        "sbom.spdx.json": "f566039c5d27f9c46f0c21037b490039049f49364031dfb4b5cecdc7ad00058a",
+        "sbom.syft.json": "3ed4dce0c0e596735edc7998ca5d7c0e364d07037adae2b92e21f8948e8be42b",
+        "scan-summary.json": "5b23a69b68fd215e7c2c0142eaa3d5b075b92d20c812b3df128a2bfc20e776d3",
+        "subject.json": "40d388e314471995da5a3796b3e34a6d0348c6a2168ecc1130fb92de60e279e1"
+      },
+      "exact_image_ui_sha256": "68fbece01856259080093d70cfa55d4032a531650a25576b18ed62d6ccb4d636",
+      "gate_receipt_sha256": "22ce59e765b23c5f192db519aaec626e7e424c29cbb4b420bd9040436edf9def",
+      "gates": {
+        "P1": true,
+        "P2": true,
+        "P3": true,
+        "P4": true,
+        "P5": true
+      },
+      "image_id": "sha256:117e494f621e35c2e6504b8a93097aee68207365043334ec3c591ef50a0745a9",
+      "independent_anonymous_verification": {
+        "all_gates": true,
+        "config_digest": "sha256:117e494f621e35c2e6504b8a93097aee68207365043334ec3c591ef50a0745a9",
+        "diff_ids_match": true,
+        "layers": 16,
+        "manifest_digest": "sha256:f198a3c9c99618b18e85a22fae7920bbbccca90f76c6f181da64baa744a95b77",
+        "reference": "ghcr.io/woowtech/amd64-mcp-odoo@sha256:f198a3c9c99618b18e85a22fae7920bbbccca90f76c6f181da64baa744a95b77"
+      },
+      "p4_supplement": {
+        "expected_output_schemas": 41,
+        "passed": true,
+        "probes": {
+          "results": {
+            "app": "odoo",
+            "backend_requests": 4,
+            "case_count": 3,
+            "cases": {
+              "listing_output_schema_pinned": true,
+              "representative_error_fixed_code": true,
+              "representative_result_schema_valid": true
+            },
+            "container_name": "ha0411-p4-results-odoo-2ad4521c5b61ea144dfa1ffbc658ee16a67591a5",
+            "image_id": "sha256:117e494f621e35c2e6504b8a93097aee68207365043334ec3c591ef50a0745a9",
+            "network": "none",
+            "owned_container_removed": true,
+            "passed": true,
+            "probe": "results",
+            "probe_sha256": "38f035decde8caf7bad1e1da2a4571a82c122cb01df1ee74cc492bc36c006870",
+            "registry_sha256": "e8b0a9c6201479c18078f6c3ff9669135d850866ec07e2b8356d853b9531f28c",
+            "scope": "Exact-image real child + real gateway relay with owned loopback fake; no HAOS or real backend.",
+            "uid": 10001
+          },
+          "schemas": {
+            "app": "odoo",
+            "container_name": "ha0411-p4-schemas-odoo-2ad4521c5b61ea144dfa1ffbc658ee16a67591a5",
+            "expected_output_schemas": 41,
+            "gateway_fallback_without_child": true,
+            "gateway_listed_tools": 41,
+            "gateway_output_schemas": 41,
+            "image_id": "sha256:117e494f621e35c2e6504b8a93097aee68207365043334ec3c591ef50a0745a9",
+            "network": "none",
+            "owned_container_removed": true,
+            "passed": true,
+            "probe": "schemas",
+            "probe_sha256": "38f035decde8caf7bad1e1da2a4571a82c122cb01df1ee74cc492bc36c006870",
+            "registry_counts": {
+              "emqx": 39,
+              "hermes": 11,
+              "litellm": 35,
+              "n8n": 2,
+              "nextcloud": 8,
+              "odoo": 41
+            },
+            "registry_sha256": "e8b0a9c6201479c18078f6c3ff9669135d850866ec07e2b8356d853b9531f28c",
+            "scope": "Exact-image gateway tools/list and packaged pins; no child, backend or HAOS.",
+            "uid": 10001,
+            "unreviewed_schema_refused": true
+          }
+        },
+        "registry_sha256": "e8b0a9c6201479c18078f6c3ff9669135d850866ec07e2b8356d853b9531f28c"
+      },
+      "publication_evidence_sha256": {
+        "published-digest.json": "80f29329a1afd7b60f864e0df5df43c01163188218cb034e4f17e844b6ebae8c",
+        "published-provenance.json": "28e5908385422804e74e597690bd83f168b8b880a0abffcecf13d41fcfc9bc88"
+      },
+      "published": {
+        "config_digest": "sha256:117e494f621e35c2e6504b8a93097aee68207365043334ec3c591ef50a0745a9",
+        "reference": "ghcr.io/woowtech/amd64-mcp-odoo@sha256:f198a3c9c99618b18e85a22fae7920bbbccca90f76c6f181da64baa744a95b77"
+      },
+      "scan_summary": {
+        "checks": {
+          "container": "pass",
+          "history-secrets": "pass",
+          "image-secrets": "pass",
+          "licenses": "pass",
+          "source-secrets": "pass",
+          "vulnerabilities": "pass"
+        },
+        "package_count": 157,
+        "policy_sha256": "5643d5ce538191af203b641944664efd26f30726252486e7828f517a466c7930",
+        "subject": {
+          "app": "odoo",
+          "archive_sha256": "fba46d2538eab54cb708c00c6ef22cd799af5d1d468706ada5d3785465312695",
+          "diff_ids": [
+            "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+            "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+            "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+            "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+            "sha256:ab06697cc0fc094568d72c807500ab1347dd086e31e1ac855415e94473fb089a",
+            "sha256:f39c51a00d7cf6d50617d713e71da2903b9f2961774812a97b2f142be357d045",
+            "sha256:719ab3b80e3780f5f7350478d124ca29f2827cec8401338ce438f3a8228536f1",
+            "sha256:aa44bc727fa8c728ae4b0c74e2565231284cfa09ffb10d219fb295f8611f261a",
+            "sha256:6c43247ff21db4190f0de9c7747e360cf020544326f2f82e4f24fb74f634e8ea",
+            "sha256:a3af96262fd80fa70ce57b1e14e57f803a261ddd8c0b2b7de3913cec2bd8f7e9",
+            "sha256:9f040cc09856ec3d11f5b7ba36edef0e65ef097405ef02732017790f57fc0ec7",
+            "sha256:815d1d008b2615e531e4b06a4783e0e111983a1c496675daaaee9f903107ad49",
+            "sha256:64f2fa56b08c6a63d8c88b58ceb90c1bc764bee9d945f9cd150ca83f9fd6a429",
+            "sha256:a077c3795ba980d234ec64d35a5fceac6eb3325c962831255c7b018bae596fa8",
+            "sha256:9e54e341990ad9f9dacc3c3c02d12475dce517a9f4e480977f1185ca51bcabf3",
+            "sha256:29839323a54c67ba2889d33dacac4958f1b5326be6085c8be2d15f51c4051335"
+          ],
+          "image_id": "sha256:117e494f621e35c2e6504b8a93097aee68207365043334ec3c591ef50a0745a9",
+          "source": "2ad4521c5b61ea144dfa1ffbc658ee16a67591a5"
+        },
+        "tools": {
+          "gitleaks": {
+            "checksums": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_checksums.txt",
+            "sha256": "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb",
+            "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz",
+            "version": "8.28.0"
+          },
+          "grype": {
+            "checksums": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_checksums.txt",
+            "sha256": "a5a1218dce63acdac152a6b3b5bb366e7267e36f4069848cf455543b3fa5700e",
+            "url": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_linux_amd64.tar.gz",
+            "version": "0.120.0"
+          },
+          "syft": {
+            "checksums": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_checksums.txt",
+            "sha256": "54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860",
+            "url": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_linux_amd64.tar.gz",
+            "version": "1.54.0"
+          }
+        },
+        "vulnerability_count": 237,
+        "vulnerability_database": {
+          "built": "2026-11-05T06:21:06Z",
+          "checksum": "9fbc8d8f2428cd715ffc9591cce16c4179955a7f45c76c12fbcb9cea8dc93813",
+          "schemaVersion": "6.1.10"
+        }
+      },
+      "security_package_versions": {
+        "@modelcontextprotocol/sdk": [],
+        "apt": [
+          "2.6.2"
+        ],
+        "certifi": [
+          "2026.10.23"
+        ],
+        "fastmcp": [],
+        "fastmcp-slim": [],
+        "libapt-pkg6.0": [
+          "2.6.2"
+        ],
+        "libssl3": [
+          "3.0.22-1~deb12u2"
+        ],
+        "mcp": [
+          "2.3.0"
+        ],
+        "mcp-types": [
+          "2.3.0"
+        ],
+        "n8n-mcp": [],
+        "node": [],
+        "odoo-mcp": [
+          "1.3.0"
+        ],
+        "openssl": [
+          "3.0.22-1~deb12u2"
+        ]
+      },
+      "security_runtime": null,
+      "uid10001_dac_checked": true,
+      "uncompressed_bytes": 191948498
+    }
+  },
+  "publisher_journal_sha256": "7d4bf5f6191794212dee8b3bac84d63744f697725b4c203faf81fd15903f03ab",
+  "release_plan_sha256": "0da46808f2cf2358f98ab1cc5fd7da9b9c4dab3d8cceb88bc8e78fd743ed29bc",
+  "reviewed_secret_triage_change": {
+    "broad_rule_or_CVE_exception": false,
+    "matched_value_sha256": [
+      "10df3b7477c121cca999fa9f8456f8ba38e963f386a53036da8a26a1dd460534",
+      "1d7079e992f3420b9cdcbcfff989f095de8447f1d3a8189627b5d0227502cf21"
+    ],
+    "review": "Inherited 0.4.7 exact odoo-mcp 1.3.0 wheel, two-file allowlist and hash-bound synthetic fixture review; 0.4.11 preserves the same triage bytes, default scanner rules and vulnerability policy.",
+    "rule": "generic-api-key",
+    "source_commit": "2ad4521c5b61ea144dfa1ffbc658ee16a67591a5",
+    "synthetic_fixture_exception": {
+      "paths": [
+        "tests/fixtures/owner_defaults/schema1-n8n-313ab01.json",
+        "tests/fixtures/owner_defaults/schema3-n8n-v0.1.14-max.json",
+        "tests/fixtures/owner_defaults/schema4-n8n-v0.2.2-max.json"
+      ],
+      "requires_security_review": true,
+      "reviewed_in_source": "packaging/secret-triage.json",
+      "rule": "generic-api-key",
+      "value_sha256": "38d8585ca5d880118cb3c80049378ed545fd37c3f517fc7bbcab7435b35caef9",
+      "whole_value_anchored": true
+    },
+    "triage_file_sha256": "6fb0c25e53dd004eb03df38cf30a404861929cdb2f6811166b54ae3d179eaf26",
+    "wheel_sha256": "a49855b694cd4ed4025e929f899f281becb5f42a129d403a18c0f17f8759bb43"
+  },
+  "schema": 1,
+  "security_review": {
+    "independent_review_completed": true,
+    "independent_review_repo_copy": "docs/operations/evidence/0.4.3-synthetic-fixture-triage.md",
+    "independent_review_scope": "Historical independent review applies only to the unchanged exact Gitleaks triage and scanner-policy bytes. New 0.4.11 runtime/features require their own source tests and fresh full-history/current-source/image scans.",
+    "independent_review_sha256": "e06859981901cd1fccdcee74578083c39e8c36ae8e6d0b9ebee4994e53c44aa1",
+    "independent_review_source_commit": "049b7d1b826366eb5cefeffda84d81811d047493",
+    "inherited_exact_synthetic_fixture_exception": {
+      "paths": [
+        "tests/fixtures/owner_defaults/schema1-n8n-313ab01.json",
+        "tests/fixtures/owner_defaults/schema3-n8n-v0.1.14-max.json",
+        "tests/fixtures/owner_defaults/schema4-n8n-v0.2.2-max.json"
+      ],
+      "requires_security_review": true,
+      "reviewed_in_source": "packaging/secret-triage.json",
+      "rule": "generic-api-key",
+      "value_sha256": "38d8585ca5d880118cb3c80049378ed545fd37c3f517fc7bbcab7435b35caef9",
+      "whole_value_anchored": true
+    },
+    "new_broad_secret_or_vulnerability_exceptions": false,
+    "requires_security_review": true
+  },
+  "shared_daemon": true,
+  "signed_provenance": false,
+  "slsa_claimed": false,
+  "source_CI": {
+    "Release train / wvt check": "SUCCESS",
+    "Upgrade comparison / compare": "SUCCESS",
+    "checks": "SUCCESS"
+  },
+  "source_bundle_sha256": "605c993f8a4f9cb0c4c86f7adf4653169f085ed0e30a79c8aeca4c1f811090bf",
+  "source_freeze_sha256": "156e3dff76912622901bf29da2878884fdd50f8d133a6b362bbc7e1f3c8439d6",
+  "source_pr": 60,
+  "status": "published_exact_images_anonymously_verified",
+  "version": "0.4.11",
+  "vulnerability_counts_mean": "Raw findings accepted under policy; not zero vulnerabilities."
+}

@@ -1,8 +1,8 @@
-## 0.4.11 — local release candidate (2026-11-05; images pending)
+## 0.4.11 — source only (disabled)
 
 - Synchronize the source version only. OpenDesign remains disabled in the Store; no 0.4.11 OpenDesign image is planned or claimed. Its manifest also declares `stage: stable` so the validator treats all seven the same.
 - The shared OS-package step in its Dockerfile follows the other products (`apt`/`libapt-pkg6.0` 2.6.2, CVE-2026-109518); no OpenDesign image is built or published.
-- The six enabled products' image and release gates remain pending. See ../../docs/operations/release-decision-0.4.11.md.
+- OpenDesign remains disabled: no 0.4.11 image was built, gated or published. Source version synchronization only; see ../../docs/operations/release-decision-0.4.11.md.
 
 ## 0.4.10 — source only (disabled)
 
