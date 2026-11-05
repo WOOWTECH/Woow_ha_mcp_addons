@@ -3,6 +3,7 @@
 - Carry merged PR #58: every MCP-visible Hermes error reads `CODE: text` (`BACKEND_UNAVAILABLE`, `BACKEND_AUTH_REJECTED`, `BACKEND_REDIRECT_REJECTED`, `BACKEND_TIMEOUT`, `BACKEND_HTTP_ERROR`, `BACKEND_UNEXPECTED_RESPONSE`, `INVALID_INPUT`, `NOT_FOUND`, `CONFIRMATION_REQUIRED`, `CONFIG_NOT_APPLIED`, `CHAT_TURN_FAILED` and the existing outcome-unknown codes), the same table as the PaaS woow-mcp-server.
 - Dashboard and Gateway failures use fixed public wording and never repeat the configured URL, the upstream body, a redirect Location or transport text; wrong reply shapes are rejected with fixed wording. Tool names, inputs, settings, grants and the 11 reviewed output schemas do not change.
 - Remove the experimental label (PR #59): the manifest declares `stage: stable` and the store description no longer starts with "Experimental;" (the image `io.hass.description` label follows).
+- Security: the image's OS-package step also upgrades `apt` and `libapt-pkg6.0` to 2.6.2 from the signature-checked Debian security snapshot `20261104T124343Z` (CVE-2026-109518, High, fix available in the pinned Python base). Runtime, tools, permissions and Python/Node dependencies do not change.
 - This preparation has not built or published a 0.4.11 hermes image. Fresh exact-image gates, anonymous readback, provenance and HAOS validation remain pending. See ../../docs/operations/release-decision-0.4.11.md.
 
 ## 0.4.10 — images published and verified
