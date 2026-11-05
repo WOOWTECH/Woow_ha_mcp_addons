@@ -1,3 +1,10 @@
+## 0.4.11 — local release candidate (2026-11-05; images pending)
+
+- Include merged PR #58: every MCP-visible Hermes error reads `CODE: text` (same table as the PaaS woow-mcp-server); Dashboard and Gateway failures use fixed public wording that never repeats the configured URL, upstream body, redirect Location or transport text; wrong reply shapes are rejected. Hermes tool names, inputs, settings and grants do not change. The output-schema registry keeps its 136 reviewed entries; its n8n and Hermes source pins move to the commits that carry these sources.
+- Include merged PR #59: the seven MCP add-ons declare `stage: stable` and drop the "Experimental;" prefix from their store description (the image `io.hass.description` label follows), so the Home Assistant store stops showing the experimental badge once a Stable Release carries this version. The retired Odoo Manage image label is unchanged.
+- Advance seven source versions together; only Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud are enabled image products. OpenDesign stays disabled and Odoo Manage remains archived.
+- Six fresh exact-source P1–P5 image gates, anonymous readback, provenance, remote checks, Stable Releases/Store and actual HAOS/backend acceptance are pending. See [0.4.11 candidate decision](docs/operations/release-decision-0.4.11.md).
+
 ## 0.4.10 — images published and verified (2026-11-04)
 
 - Based on the protected PR #46 merge `fc5c7cf4`: Odoo failed generic reads now return errors instead of successful empty results; successful generic record reads above the default 2 MiB limit return `success:false`/MCP `isError:true` with field-size guidance.

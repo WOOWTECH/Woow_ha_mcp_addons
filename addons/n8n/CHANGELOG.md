@@ -1,3 +1,8 @@
+## 0.4.11 — local release candidate (2026-11-05; images pending)
+
+- Remove the experimental label (PR #59): the manifest declares `stage: stable` and the store description no longer starts with "Experimental;" (the image `io.hass.description` label follows). Runtime, tools, permissions and dependencies are unchanged from 0.4.10.
+- This preparation has not built or published a 0.4.11 n8n image. Fresh exact-image gates, anonymous readback, provenance and HAOS validation remain pending. See ../../docs/operations/release-decision-0.4.11.md.
+
 ## 0.4.10 — images published and verified
 
 - Correct n8n-mcp 2.96.2 `validate_workflow` output schemas for object-valued warning/error details, and publish the corrected validator schemas through the HA gateway. Tool names, input schemas and grants remain unchanged.

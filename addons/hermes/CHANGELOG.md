@@ -1,3 +1,10 @@
+## 0.4.11 — local release candidate (2026-11-05; images pending)
+
+- Carry merged PR #58: every MCP-visible Hermes error reads `CODE: text` (`BACKEND_UNAVAILABLE`, `BACKEND_AUTH_REJECTED`, `BACKEND_REDIRECT_REJECTED`, `BACKEND_TIMEOUT`, `BACKEND_HTTP_ERROR`, `BACKEND_UNEXPECTED_RESPONSE`, `INVALID_INPUT`, `NOT_FOUND`, `CONFIRMATION_REQUIRED`, `CONFIG_NOT_APPLIED`, `CHAT_TURN_FAILED` and the existing outcome-unknown codes), the same table as the PaaS woow-mcp-server.
+- Dashboard and Gateway failures use fixed public wording and never repeat the configured URL, the upstream body, a redirect Location or transport text; wrong reply shapes are rejected with fixed wording. Tool names, inputs, settings, grants and the 11 reviewed output schemas do not change.
+- Remove the experimental label (PR #59): the manifest declares `stage: stable` and the store description no longer starts with "Experimental;" (the image `io.hass.description` label follows).
+- This preparation has not built or published a 0.4.11 hermes image. Fresh exact-image gates, anonymous readback, provenance and HAOS validation remain pending. See ../../docs/operations/release-decision-0.4.11.md.
+
 ## 0.4.10 — images published and verified
 
 - Synchronize 0.4.10 release metadata with the merged Odoo read-error/result-size correction. The Hermes gateway and fallback advertise 11 reviewed output schemas matching the pinned child and PaaS runtime. Dashboard connection and missing-configuration errors now give bounded guidance without exposing credentials; tool names, inputs, settings, permission and dependency contracts remain unchanged.

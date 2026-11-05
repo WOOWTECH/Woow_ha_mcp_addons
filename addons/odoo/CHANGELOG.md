@@ -1,3 +1,8 @@
+## 0.4.11 — local release candidate (2026-11-05; images pending)
+
+- Remove the experimental label (PR #59): the manifest declares `stage: stable` and the store description no longer starts with "Experimental;" (the image `io.hass.description` label follows). Runtime, tools, permissions and dependencies are unchanged from 0.4.10.
+- This preparation has not built or published a 0.4.11 odoo image. Fresh exact-image gates, anonymous readback, provenance and HAOS validation remain pending. See ../../docs/operations/release-decision-0.4.11.md.
+
 ## 0.4.10 — images published and verified
 
 - Carry merged PR #46: upstream `search_read`/`read_records` failures propagate to tool errors instead of a false success with zero rows. `search_records`/`read_record` successful results above the default 2 MiB bound return `success:false` and MCP `isError:true`, naming the largest fields. Smaller results, tool names, inputs and grants retain their contracts.
