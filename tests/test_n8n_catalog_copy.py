@@ -106,8 +106,11 @@ def test_version_history_is_written_natively_on_the_copy_of_a_database_the_child
     spec = n8n_adapter.child_spec(store.load(), store.path.parent)
     no_copy = {key: value for key, value in spec.env.items() if key != "NODE_DB_PATH"}
     # Why the copy exists: without it the native engine opens the unwritable file read-only and the first write fails.
-    unwritable = versions_flow(spec, {**no_copy, "NODE_DB_PATH": str(image)})
-    assert unwritable["adapter"] == "BetterSQLiteAdapter" and "readonly database" in unwritable["error"]
+    # Only an unprivileged user can be shown that: root writes through a 0444 file (CI runs this suite as root), so the
+    # premise is checked when the suite runs as the child would (any non-root uid) and the rest of the test runs for both.
+    if os.geteuid() != 0:
+        unwritable = versions_flow(spec, {**no_copy, "NODE_DB_PATH": str(image)})
+        assert unwritable["adapter"] == "BetterSQLiteAdapter" and "readonly database" in unwritable["error"]
     # With the private copy the flow works and the counters are the real ones (sql.js reported ids 0 and one change per DELETE).
     n8n_adapter.prepare_catalog(tmp_path / "work", image)
     flow = versions_flow(spec, n8n_adapter.child_spec(store.load(), store.path.parent).env)
