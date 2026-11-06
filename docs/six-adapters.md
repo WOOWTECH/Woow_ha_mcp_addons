@@ -23,7 +23,7 @@ child 一律 127.0.0.1:3000/mcp，不能對外映射。管理與 MCP 各自 list
 
 | Product | Transport / runtime | Typed connection（exact fields） | 自動 read probe |
 |---|---|---|---|
-| Odoo | wheel 1.3.0（0.4.0 起；之前 1.1.0）；source-guarded `apps/odoo/launch.py` → 原 CLI native HTTP | url, database, username, password | 0.1.3 起子程序私有 `woow_backend_probe`（不在 TOOLS；以新 client 只做 authenticate，自己的 owned thread）；需恰好 `{"uid": 正整數}`（0.1.2 以前為 list_models(limit=1)、需 success=true + result array） |
+| Odoo | wheel 1.3.0（0.4.0 起；之前 1.1.0）；source-guarded `apps/odoo/launch.py` → 原 CLI native HTTP | url, database, username, password | 0.1.3 起子程序私有 `woow_backend_probe`（不在 TOOLS；以新 client 只做 authenticate，自己的 owned thread）；需恰好 `{"uid": 正整數}`（0.1.2 以前為 list_models(limit=1)、需 success=true + result array）。失敗只回固定代碼：尚未發版起，Odoo 自己拒絕登入（false uid、`AccessDenied`、資料庫名稱 PostgreSQL 不認得）回 `BACKEND_AUTH_REJECTED`，其餘（連不上、逾時、轉址、HTTP 錯誤、非 XML-RPC、其他錯誤、探測忙碌）仍回 `BACKEND_UNAVAILABLE` |
 | Odoo Manage | wheel 0.7.1；source-guarded `apps/odoo-manage/launch.py` → 原 CLI native HTTP | url, database, username, api_key, mode=read | 0.1.4 起子程序私有 `woow_backend_probe`（不在 TOOLS；以新連線只做 connect＋authenticate，自己的 owned thread，從不用 session 共用連線）；需恰好 `{"uid": 正整數}`（0.1.3 以前為 list_models、需 models array + yolo_mode.operations.read=true，最小權限帳號一律 unreachable） |
 | Hermes | 新固定 SDK native HTTP launcher，原真實 handlers | gateway_url, gateway_api_key；可選 dashboard_url/username/password 必須整組提供 | hermes_inspect(target=capabilities)；capabilities object，不能有 capabilities_error |
 | OpenDesign | 新固定 SDK native HTTP launcher，原真實 handlers | url（無虛构 backend token） | health；只認 status=ok/healthy，或（0.1.4，OpenDesign 0.21.1 實機）`ok` 為 true 且 `version` 為非空字串；其他 shape 顯示 unreachable |

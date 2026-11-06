@@ -1,8 +1,10 @@
 """Pinned wheel launcher: fail closed on source drift before runtime adaptation."""
 import hashlib
 from pathlib import Path
+import re
 import runpy
 import os
+import xmlrpc.client
 
 from backend_policy import XMLTransport
 
@@ -23,6 +25,42 @@ class BackendTransport(XMLTransport):
 
 # Replace the actual wheel transport before any client construction.
 client.RedirectTransport = BackendTransport
+
+# What the private readiness probe below tells the gateway when the login fails. HealthMonitor keeps the probe's error
+# text as the reason of "Backend unreachable" (-32603, data.reason), so a refused password must not read like a dead
+# server. Unreleased (0.4.12 line). Reviewed against odoo-mcp 1.3.0 (odoo_client.py, digest-checked above):
+# OdooClient.__init__ authenticates and raises ConnectionError for a refused, unresolvable or timed-out connection and
+# ValueError('Failed to authenticate with Odoo: ...') for everything else. That ValueError is built inside its own
+# except block, so the exception it caught is its __context__: ValueError('Authentication failed: Invalid username or
+# password') when Odoo answered authenticate with a false uid (a wrong password or an unknown login: Odoo does not tell
+# them apart), or the xmlrpc Fault Odoo itself sent.
+AUTH_REJECTED = ("BACKEND_AUTH_REJECTED: Odoo 憑證被拒 (credentials rejected); check the database, username and "
+                 "password in the add-on's connection settings.")  # no "admin": a password of that name would be masked in it
+UNAVAILABLE = 'BACKEND_UNAVAILABLE'
+NO_UID = 'Authentication failed: Invalid username or password'  # odoo_client.py: authenticate() answered a false uid
+ACCESS_DENIED_FAULT_CODES = (3, '3', 'AccessDenied')  # Odoo's RPC_FAULT_CODE_ACCESS_DENIED, and its pre-16 string form
+MISSING_DATABASE = re.compile(r'database "[^"\r\n]{1,128}" does not exist')  # PostgreSQL's words inside Odoo's fault
+
+
+def probe_failure(exc):
+    """The probe's fixed reason for a failed login: BACKEND_AUTH_REJECTED when Odoo answered and refused the connection's
+    database, username or password (a false uid, an AccessDenied fault, a database name PostgreSQL does not know: the
+    operator's fix is the same connection fields), BACKEND_UNAVAILABLE for everything else (refused, unresolvable or
+    timed-out connections, redirects, HTTP errors, answers that are not XML-RPC, any other fault, a busy probe worker).
+    Only the class is told, never the exception text: it can hold the URL, the database or the user name."""
+    seen = set()
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        if isinstance(exc, xmlrpc.client.Fault):
+            text = str(exc.faultString)[:8192]
+            last_line = text.rstrip().rsplit('\n', 1)[-1]
+            if (exc.faultCode in ACCESS_DENIED_FAULT_CODES or 'odoo.exceptions.AccessDenied' in last_line
+                    or MISSING_DATABASE.search(text)):
+                return AUTH_REJECTED
+        elif isinstance(exc, ValueError) and str(exc) == NO_UID:
+            return AUTH_REJECTED
+        exc = exc.__cause__ or exc.__context__
+    return UNAVAILABLE
 
 if __name__ == '__main__':
     import session_idle
@@ -66,8 +104,8 @@ if __name__ == '__main__':
     async def woow_backend_probe():
         try:
             odoo = await probe_worker.run(get_odoo_client)
-        except Exception:
-            raise ValueError('BACKEND_UNAVAILABLE') from None
+        except Exception as exc:
+            raise ValueError(probe_failure(exc)) from None  # a fixed reason: BACKEND_AUTH_REJECTED or BACKEND_UNAVAILABLE
         return {'uid': odoo.uid}
 
     mcp.add_tool(woow_backend_probe, name='woow_backend_probe', description='Add-on readiness probe (private).')
@@ -87,7 +125,8 @@ if __name__ == '__main__':
     # well as the reads) into an async one on its single owned worker, so they still run one at a time.
     workers = BoundedTools(mcp, capacity=1)
     # 0.4.0: mcp 2 hides an exception's text from the client unless it is a ToolError; keep 1.x's text for every tool
-    # (BACKEND_BUSY above, the probe's BACKEND_UNAVAILABLE, odoo-mcp's own errors). Last, around everything else.
+    # (BACKEND_BUSY above, the probe's BACKEND_UNAVAILABLE / BACKEND_AUTH_REJECTED, odoo-mcp's own errors). Last, around
+    # everything else.
     from tool_error_text import keep_error_text
     keep_error_text(mcp)
     try:
