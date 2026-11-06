@@ -146,14 +146,14 @@ async def test_transports_check_the_path_they_send(kind):
     server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
     host = f'127.0.0.1:{server.server_port}'
-    async def send(name):
+    async def send(name, **extensions):
         # The children build request URLs relative to the configured base URL.
         if kind == 'sync':
             with policy.sync_client(base_url=f'http://{host}/base', timeout=2) as client:
-                return client.get(name).status_code
+                return client.get(name, extensions=extensions).status_code
         if kind == 'async':
             async with policy.async_client(base_url=f'http://{host}/base', timeout=2) as client:
-                return (await client.get(name)).status_code
+                return (await client.get(name, extensions=extensions)).status_code
         return policy.XMLTransport(f'http://{host}/base').request(host, '/base/' + name, b'<methodCall/>')
     try:
         assert await send('100%25-off.txt') in (200, (7,))
@@ -161,6 +161,9 @@ async def test_transports_check_the_path_they_send(kind):
         for name in ('100%-off.txt', '%u002e%u002e/secret', '%25u002e%25u002e/secret', 'a%252fb', '%252e%252e/secret'):
             with pytest.raises(policy.BackendDenied):
                 await send(name)
+        if kind != 'xmlrpc':  # httpcore would send this target instead of the checked path
+            with pytest.raises(policy.BackendDenied):
+                await send('100%25-off.txt', target=b'/outside/secret')
         assert paths == ['/base/100%25-off.txt']
     finally:
         server.shutdown(); server.server_close(); thread.join()

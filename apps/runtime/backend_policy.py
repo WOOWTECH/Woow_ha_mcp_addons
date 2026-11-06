@@ -466,7 +466,8 @@ class SyncTransport(httpx.HTTPTransport):
 
     def handle_request(self, request):
         self.destination.check_url(request.url)
-        if 'sni_hostname' in request.extensions:
+        # httpcore sends extensions['target'] instead of the checked URL's path when it is present.
+        if 'sni_hostname' in request.extensions or 'target' in request.extensions:
             raise BackendDenied()
         try:
             response = super().handle_request(request)
@@ -490,7 +491,8 @@ class AsyncTransport(httpx.AsyncHTTPTransport):
 
     async def handle_async_request(self, request):
         self.destination.check_url(request.url)
-        if 'sni_hostname' in request.extensions:
+        # httpcore sends extensions['target'] instead of the checked URL's path when it is present.
+        if 'sni_hostname' in request.extensions or 'target' in request.extensions:
             raise BackendDenied()
         try:
             response = await super().handle_async_request(request)
