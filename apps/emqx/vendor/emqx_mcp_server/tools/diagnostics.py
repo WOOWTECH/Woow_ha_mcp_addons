@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 from typing import Annotated, Any, Literal
-from urllib.parse import quote
 
 import httpx
 from fastmcp import FastMCP
@@ -14,7 +13,7 @@ from pydantic import Field
 from ..deps import emqx_client
 from ..errors import emqx_request, json_body
 from ..gating import ToolGate
-from ._common import destructive, page_of, read_only, writing
+from ._common import destructive, page_of, path_segment, read_only, writing
 
 TraceTarget = Literal["clientid", "topic", "ip_address"]
 
@@ -93,7 +92,7 @@ def register(mcp: FastMCP, gate: ToolGate) -> None:
             """
             # log_detail reports only the file size per node. The captured text
             # lives behind /log, which needs an explicit node.
-            safe_name = quote(name, safe='')
+            safe_name = path_segment(name, 'name')
             detail = json_body(await emqx_request(
                 emqx, "GET", f"/trace/{safe_name}/log_detail"))
             rows = detail if isinstance(detail, list) else []
@@ -130,7 +129,7 @@ def register(mcp: FastMCP, gate: ToolGate) -> None:
             The log file goes with it. Call emqx_get_trace_log first if you
             still need what it captured.
             """
-            await emqx_request(emqx, "DELETE", f"/trace/{quote(name, safe='')}")
+            await emqx_request(emqx, "DELETE", f"/trace/{path_segment(name, 'name')}")
             return {"name": name, "deleted": True}
 
     if on("emqx_list_listeners"):

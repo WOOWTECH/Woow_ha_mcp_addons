@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import quote
 
 from fastmcp import Context
 
@@ -11,7 +10,7 @@ from ..deps import litellm_client
 from ..errors import ToolError
 from ..gating import ToolGate
 from ..registry import OP_CREATE, OP_DELETE, OP_UPDATE
-from ._common import destructive, prune_none, read_only, writing
+from ._common import destructive, path_segment, prune_none, read_only, writing
 
 #: Prefix LiteLLM uses in its *config file* to mean "read this from the
 #: environment". The REST API does NOT expand it — see :func:`_reject_env_refs`.
@@ -178,7 +177,7 @@ def register(mcp: Any, gate: ToolGate) -> None:
                 }
             )
             return await litellm_client(ctx).patch(
-                f"/model/{quote(model_id, safe='')}/update", json_data=body
+                f"/model/{path_segment(model_id, 'model_id')}/update", json_data=body
             )
 
     if gate.is_tool_enabled("litellm_delete_model"):
