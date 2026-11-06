@@ -58,7 +58,7 @@
       }
     },
     "n8n": {
-      "ha_commit": "bdf72a8e123f684be3d5c9812f8eaed6f1f98bc5",
+      "ha_commit": "8fe3418b2147eb02cdee7416646dd28db566d847",
       "package": "n8n-mcp==2.96.2",
       "sdk": {
         "@modelcontextprotocol/sdk": "1.32.2"
@@ -66,8 +66,8 @@
       "files": {
         "apps/n8n/package.json": "9dfa0c07850b98018ddea8da9491202e950a786779e8dd0fdc5d93fabe1c7a85",
         "apps/n8n/package-lock.json": "0ac5975bba687fc2a7d5ccfe4204f402b15c2c4e4dd1cdd630fa7194a99c2a89",
-        "apps/n8n/n8n_adapter.py": "15236ab617b192e21e961662a7eff55299ebb8032d4287442f3475fd0c26059f",
-        "apps/n8n/run.py": "1f442cbd646a6882261762ab71903aa1a0e1c017af07a246d2b783e6aa08b048",
+        "apps/n8n/n8n_adapter.py": "9884d76ad7d8b9c3785a15480ea70998dcf6ffe64305492bf2b7048b339417fd",
+        "apps/n8n/run.py": "aefd7498145840c4f6207dc00ce713ae327331ebf405002a346ebc4332f43283",
         "apps/n8n/backend_policy.cjs": "1dcdb4395bd76b12474e112ac41c04d3dfec9248b6b9290cecf1165b6cc70588",
         "apps/n8n/Dockerfile": "33cdf7f642647c78f506532b853a800f7509324a99578bea1fdb819177411c45",
         "packaging/unit.sh": "88126189f391ef76fa009e29fce247125e567cc33ed6f22dca9f9dfcb2c5e78c",
