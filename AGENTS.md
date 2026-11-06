@@ -21,6 +21,11 @@ release mechanism is described in the Woow_HA_App_Store README (section
    self-hosted builder, never on a PR, so the image vulnerability comparison
    pulls the published GHCR images (the Release's and the new version's amd64
    image, pipeline #148): publish the new version's image with the builder
-   before the PR can pass, as `readiness` also requires. The release puts these
+   before the PR can pass, as `readiness` also requires. The upgrade test
+   (pipeline #155) runs on the same published images: each changed addon's
+   Release image starts first, then the new version's on the same `/data`,
+   and both must answer ingress on 8099 and stay up. No backend is configured,
+   so it checks startup only, no data. An unpublished new tag fails both the
+   vulnerability comparison and the upgrade test. The release puts these
    entries on the GitHub Release. Rules, change names and the file format: the
    Woow_HA_App_Store README, section "升版比對與 `upgrade-notes.yaml`".
