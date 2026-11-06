@@ -94,8 +94,13 @@ def install(mcp):
         notes[2] = gates.runtime_note(current)
         broad = dict(runtime['broad_unknown_method_mode'])
         broad.update(enabled=gates.unknown_methods_run(current), risk='broad' if gates.unknown_methods_run(current) else 'off')
-        return {**result, 'runtime': {**runtime, 'direct_writes_enabled': current.direct,
-                                      'broad_unknown_method_mode': broad, 'notes': notes}}
+        # Unreleased (0.4.12 line, stage-C finding C2): the surface count includes the launcher's private readiness probe
+        # (woow_backend_probe, registered after this overlay and never listed by the gateway): report the published tools, as PaaS.
+        server = dict(result['server'])
+        if mcp._tool_manager.get_tool('woow_backend_probe') is not None:
+            server['tool_count'] -= 1
+        return {**result, 'server': server, 'runtime': {**runtime, 'direct_writes_enabled': current.direct,
+                                                         'broad_unknown_method_mode': broad, 'notes': notes}}
 
     found['execute_method'].fn = execute_method
     found['chatter_post'].fn = chatter_post
@@ -109,3 +114,20 @@ def install(mcp):
         ('execute_approved_write', gates.execute_approved_write_text(current)),
     ):
         found[name].description = description
+    # Unreleased (0.4.12 line, stage-C finding C1): the gate above lets every method of the reviewed read list through
+    # (gates.is_reviewed_read), but the wheel's own execute_method guard then classifies by name and, with Allow Unreviewed
+    # Methods off, refuses the Odoo 18/19 @api.readonly reads that upstream READ_ONLY_METHODS does not list (read_group,
+    # web_search_read, ...). PaaS replaces that guard (patches/fix_direct_writes.py); here the wheel stays byte-for-byte, so
+    # only the classification execute_method consults is corrected, for the reviewed list. Last, so a failed install touches
+    # nothing. Only tools_write's own reference changes: diagnose_odoo_call and diagnose_access keep upstream's classification.
+    upstream_classify = tools_write.classify_method_safety
+    if not getattr(upstream_classify, 'woow_reviewed_reads', False):
+        @functools.wraps(upstream_classify)
+        def classify_method_safety(method):
+            safety = upstream_classify(method)
+            if gates.is_reviewed_read(method) and safety.get('safety') != 'read_only':
+                return {**safety, 'safety': 'read_only', 'destructive_method': False}
+            return safety
+
+        classify_method_safety.woow_reviewed_reads = True
+        tools_write.classify_method_safety = classify_method_safety
