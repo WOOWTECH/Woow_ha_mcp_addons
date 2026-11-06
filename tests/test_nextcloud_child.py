@@ -628,11 +628,13 @@ asyncio.run(main())
 
 
 async def test_tree_skips_policy_refused_sub_folder_and_marks_truncated(tmp_path):
-    """R1 #5: a sub-folder whose name has '%' is refused by backend_policy; get_file_tree (depth >= 2) skips it,
-    sets truncated and still lists everything else; nothing is sent for the refused folder."""
+    """R1 #5: a sub-folder whose name backend_policy refuses (here 'a%2fb' and '%2e%2e': a second decode would turn them
+    into 'a/b' and '..') is skipped by get_file_tree (depth >= 2), which sets truncated and still lists everything
+    else; nothing is sent for the refused folders. (Until 0.4.11 any '%' was refused; see the next test.)"""
     files = nextcloud_fixtures.initial_files()
-    files['100% done'] = (None, 'pct')
-    files['100% done/inside.md'] = (b'x', 'in')
+    for name in ('a%2fb', '%2e%2e'):
+        files[name] = (None, 'enc')
+        files[name + '/inside.md'] = (b'x', 'in')
     fake = NextcloudFake(files)
     seen = []
 
@@ -646,14 +648,59 @@ async def test_tree_skips_policy_refused_sub_folder_and_marks_truncated(tmp_path
     with serve(Backend) as url:
         async with runtime(tmp_path, 'nextcloud', url) as (client, headers, *_):
             shallow = payload(await rpc(client, '/mcp', headers, call('get_file_tree', {'depth': 1})))
-            assert '100% done' in {e['path'] for e in shallow['entries']} and shallow['truncated'] is False
+            assert {'a%2fb', '%2e%2e'} <= {e['path'] for e in shallow['entries']} and shallow['truncated'] is False
             deep = payload(await rpc(client, '/mcp', headers, call('get_file_tree', {'depth': 2})))
             paths = {e['path'] for e in deep['entries']}
             assert deep['truncated'] is True
-            assert {'Documents/notes.md', 'Documents/old.txt', '100% done'} <= paths and '100% done/inside.md' not in paths
-            assert not any('100' in path for _, path in seen)
-            reply = await rpc(client, '/mcp', headers, call('read_text_file', {'path': '100% done/inside.md'}))
-            assert reply.get('isError') and 'BACKEND_DESTINATION_DENIED' in json.dumps(reply)
+            assert {'Documents/notes.md', 'Documents/old.txt', 'a%2fb', '%2e%2e'} <= paths
+            assert not {'a%2fb/inside.md', '%2e%2e/inside.md'} & paths
+            assert not any('%25' in path for _, path in seen)
+            for name in ('a%2fb', '%2e%2e'):
+                reply = await rpc(client, '/mcp', headers, call('read_text_file', {'path': name + '/inside.md'}))
+                assert reply.get('isError') and 'BACKEND_DESTINATION_DENIED' in json.dumps(reply)
+
+
+async def test_names_with_a_literal_percent_work_end_to_end(tmp_path):
+    """B2-1 (real Nextcloud, 2026-11-06): '%' in a file or folder name is an ordinary character. HA 0.4.11 refused every
+    such name while the PaaS server served it; now get_file_tree lists inside '100% done', the read tools open its
+    files and the writers create, update and delete them. Every request carries the name encoded exactly once."""
+    files = nextcloud_fixtures.initial_files()
+    files['100% done'] = (None, 'pct')
+    files['100% done/inside.md'] = (b'inside', 'in')
+    files['50%.txt'] = (b'half', 'half')
+    fake = NextcloudFake(files)
+    seen = []
+
+    class Backend(Quiet):
+        def handle_api(self):
+            body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
+            seen.append((self.command, self.path))
+            respond(self, *fake.handle(self.command, self.path, self.headers, body))
+        do_GET = do_PROPFIND = do_PUT = do_DELETE = handle_api
+
+    with serve(Backend) as url:
+        async with runtime(tmp_path, 'nextcloud', url, write_grants=sorted(WRITERS)) as (client, headers, *_):
+            deep = payload(await rpc(client, '/mcp', headers, call('get_file_tree', {'depth': 2})))
+            paths = {e['path'] for e in deep['entries']}
+            assert deep['truncated'] is False and {'100% done', '100% done/inside.md', '50%.txt'} <= paths
+            folder = payload(await rpc(client, '/mcp', headers, call('get_file_tree', {'path': '100% done'})))
+            assert [e['path'] for e in folder['entries']] == ['100% done/inside.md']
+            assert payload(await rpc(client, '/mcp', headers, call('read_text_file', {'path': '50%.txt'})))['content'] == 'half'
+            content = await rpc(client, '/mcp', headers, call('get_file_content', {'path': '100% done/inside.md'}))
+            assert not content.get('isError') and 'inside' in json.dumps(content)
+            created = payload(await rpc(client, '/mcp', headers, call(
+                'create_text_file', {'path': '100% done/new 5%.md', 'content': 'n1'})))
+            assert created['path'] == '100% done/new 5%.md' and fake.files['100% done/new 5%.md'][0] == b'n1'
+            updated = payload(await rpc(client, '/mcp', headers, call(
+                'update_text_file', {'path': '100% done/new 5%.md', 'content': 'n2', 'expected_etag': created['etag']})))
+            assert fake.files['100% done/new 5%.md'][0] == b'n2'
+            deleted = await rpc(client, '/mcp', headers, call(
+                'delete_file_checked', {'path': '100% done/new 5%.md', 'expected_etag': updated['etag']}))
+            assert not deleted.get('isError') and '100% done/new 5%.md' not in fake.files
+    assert fake.mutations == [('PUT', '100% done/new 5%.md'), ('PUT', '100% done/new 5%.md'), ('DELETE', '100% done/new 5%.md')]
+    sent = [path for _, path in seen if '100' in path or '50' in path]
+    assert sent and all('100%25%20done' in path or '50%25.txt' in path for path in sent), sent
+    assert not any('%2525' in path for _, path in seen)  # never encoded twice
 
 
 def _broken_body(handler, failure, echoed, status=200):
@@ -795,8 +842,9 @@ async def test_too_large_listing_is_invalid_response(tmp_path):
 
 
 async def test_list_tasks_skips_policy_refused_calendars(tmp_path):
-    """A calendar whose id contains '%' is refused by backend_policy: list_tasks() skips it and reports
-    skipped_calendars; naming it explicitly is BACKEND_DESTINATION_DENIED; nothing is sent for it."""
+    """A calendar whose id backend_policy refuses ('a%2fb': a second decode would make it 'a/b') is skipped by
+    list_tasks(), which reports skipped_calendars; naming it explicitly is BACKEND_DESTINATION_DENIED; nothing is sent
+    for it. A calendar whose id has an ordinary '%' ('a%b') is queried like any other: its tasks are listed."""
     seen = []
     calendars = nextcloud_fixtures.CALENDARS
 
@@ -810,20 +858,30 @@ async def test_list_tasks_skips_policy_refused_calendars(tmp_path):
                 data = nextcloud_fixtures.multistatus([
                     (calendars, '<d:resourcetype><d:collection/></d:resourcetype>'),
                     (calendars + 'personal/', '<d:displayname>Personal</d:displayname>' + todo),
-                    (calendars + 'a%25b/', '<d:displayname>Shared</d:displayname>' + todo)])
+                    (calendars + 'a%25b/', '<d:displayname>Shared</d:displayname>' + todo),
+                    (calendars + 'a%252fb/', '<d:displayname>Encoded</d:displayname>' + todo)])
                 return respond(self, 207, {'Content-Type': 'application/xml'}, data)
+            if self.command == 'REPORT' and self.path == calendars + 'a%25b/':
+                from xml.sax.saxutils import escape
+                props = ('<d:getetag>"pct"</d:getetag><c:calendar-data>'
+                         + escape(nextcloud_fixtures.TODO.replace('owned-task', 'pct-task')) + '</c:calendar-data>')
+                return respond(self, 207, {'Content-Type': 'application/xml'},
+                               nextcloud_fixtures.multistatus([(calendars + 'a%25b/pct-task.ics', props)]))
             respond(self, *NextcloudFake().handle(self.command, self.path, self.headers, body))
         do_GET = do_PROPFIND = do_REPORT = handle_api
 
     with serve(Backend) as url:
         async with runtime(tmp_path, 'nextcloud', url) as (client, headers, *_):
             listed = payload(await rpc(client, '/mcp', headers, call('list_calendars', {})))
-            assert sorted(c['id'] for c in listed['calendars']) == ['a%b', 'personal']
+            assert sorted(c['id'] for c in listed['calendars']) == ['a%2fb', 'a%b', 'personal']
             tasks = payload(await rpc(client, '/mcp', headers, call('list_tasks', {})))
-            assert [t['uid'] for t in tasks['tasks']] == ['owned-task'] and tasks['skipped_calendars'] == 1, tasks
-            reply = await rpc(client, '/mcp', headers, call('list_tasks', {'calendar': 'a%b'}))
+            assert sorted(t['uid'] for t in tasks['tasks']) == ['owned-task', 'pct-task'] and tasks['skipped_calendars'] == 1, tasks
+            only = payload(await rpc(client, '/mcp', headers, call('list_tasks', {'calendar': 'a%b'})))
+            assert [t['uid'] for t in only['tasks']] == ['pct-task']
+            reply = await rpc(client, '/mcp', headers, call('list_tasks', {'calendar': 'a%2fb'}))
             assert reply.get('isError') and reply['content'][0]['text'].startswith('BACKEND_DESTINATION_DENIED: ')
-            assert not any('a%25b' in path or 'a%b' in path for command, path in seen if command == 'REPORT')
+            reports = [path for command, path in seen if command == 'REPORT']
+            assert calendars + 'a%25b/' in reports and not any('2fb' in path for path in reports), reports
 
 
 MALFORMED_FILES = {
