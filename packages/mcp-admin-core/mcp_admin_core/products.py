@@ -706,8 +706,10 @@ def child_spec(state: ProductState, directory: Path) -> ChildSpec | None:
         # The reviewed pure decision module is shared by management's fallback listing and the child overlay.
         env['PYTHONPATH'] += ':' + str(ROOT / 'packages/mcp-admin-core')
         switches = state.effective_odoo_write_switches
+        # ODOO_TIMEOUT: unreleased (0.4.12 line) 30 s like the PaaS server (was 5); apps/odoo/launch.py caps the transport at
+        # the same 30 and gives the private readiness probe its own 5 s.
         env.update(ODOO_URL=c.url, ODOO_DB=c.database, ODOO_USERNAME=c.username, ODOO_PASSWORD=c.password,
-                   ODOO_TRANSPORT='xmlrpc', ODOO_VERIFY_SSL='1', ODOO_TIMEOUT='5',
+                   ODOO_TRANSPORT='xmlrpc', ODOO_VERIFY_SSL='1', ODOO_TIMEOUT='30',
                    ODOO_MCP_ENABLE_WRITES='1' if switches.enable_writes else '0',
                    ODOO_MCP_ALLOW_DIRECT_WRITES='1' if switches.allow_direct_writes else '0',
                    ODOO_MCP_ALLOW_UNKNOWN_METHODS='1' if switches.allow_unknown_methods else '0',

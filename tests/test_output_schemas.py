@@ -44,7 +44,7 @@ def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
         assert source['ha_commit'] == {
             'litellm': 'd6403f263f5246288864c15381c2d1bddbb9179c',
             'nextcloud': 'd6403f263f5246288864c15381c2d1bddbb9179c',
-            'odoo': 'd6403f263f5246288864c15381c2d1bddbb9179c',
+            'odoo': 'e24dba06d629e32c3a32d22ee64c4e42eea05b83',
             'n8n': 'ab2997665f1a1f1eaf343aa10094aa25f632c7ca',
             'hermes': 'c7baac6b21ce88a78a077179c3d6e6baa65498f0',
             'emqx': 'd6403f263f5246288864c15381c2d1bddbb9179c',

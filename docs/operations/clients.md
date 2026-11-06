@@ -159,6 +159,13 @@ Gateway 在這條路徑上的行為：
     例如 `Cannot reach the EMQX broker. …`、`Unable to connect to n8n. … (ECONNREFUSED)`；add-on 持有的憑證換成 `[REDACTED]`；
     最多 1000 字）。判斷依據是最近一次**完成**的健康檢查（每 15 秒一次）：後端恢復後最多約 15 秒內呼叫就會轉送；子程序剛重啟、
     還沒有完成的檢查時一律轉送，不靠猜測拒絕。n8n 的文件工具不需要後端，照常轉送。initialize 與 tools/list 照常由子程序回答。
+    **Odoo 的原因是固定文字，不帶後端原文**（健康探測 `woow_backend_probe` 只回代碼）。**尚未發版**：Odoo 自己回答並拒絕登入時
+    （密碼錯、帳號不存在、`AccessDenied` 錯誤，或 PostgreSQL 回「database "…" does not exist」的資料庫名稱錯誤——Odoo 分不出密碼錯與
+    帳號不存在，修法也同樣是改連線欄位，所以資料庫名稱錯誤歸在這一類）是
+    `BACKEND_AUTH_REJECTED: Odoo 憑證被拒 (credentials rejected); check the database, username and password in the add-on's connection settings.`
+    （與 Hermes 的 `BACKEND_AUTH_REJECTED` 同代碼）；連不上、逾時、轉址、HTTP 錯誤、回的不是 XML-RPC、Odoo 自己的資料庫連不上或其他錯誤，
+    仍是 `BACKEND_UNAVAILABLE`。原因裡不會有網址、資料庫、帳號、密碼或例外文字。後端狀態仍是「無法連線」，`health_check` 等工具照舊
+    一併被擋，只有原因文字不同。
   - add-on 的 MCP 子程序沒有在跑（啟動中、當掉後退避重啟、失敗）：initialize 先等啟動中的子程序最多 10 秒，之後由 gateway
     自己回答；tools/call 回「Backend unreachable」，`data.reason` 為 `MCP_SERVER_NOT_READY: …`（或最近一次檢查的後端原因）。
   沒有子程序可回答時，gateway 用 add-on 內附的工具清單（`mcp_admin_core/tool_snapshot.py`，由真實子程序產生、測試確認一致）
