@@ -59,6 +59,8 @@ COPY --from=npm /npm/node_modules ./apps/n8n/node_modules
 RUN /usr/local/bin/python apps/n8n/patches/fix_test_run_error_messages.py
 # 0.4.5: unsuccessful tool results set isError; guarded independently of handler patches.
 RUN /usr/local/bin/python apps/n8n/patches/fix_tool_result_is_error.py
+# 0.4.12: n8n_delete_workflow's description says a published workflow must be deactivated first (as the PaaS server).
+RUN /usr/local/bin/python apps/n8n/patches/fix_delete_workflow_description.py
 # n8n-mcp 2.96.2 emits object-valued validate_workflow warning/error details.
 RUN /usr/local/bin/python apps/n8n/patches/fix_workflow_output_schema.py \
  && node --check apps/n8n/node_modules/n8n-mcp/dist/mcp/tools.js

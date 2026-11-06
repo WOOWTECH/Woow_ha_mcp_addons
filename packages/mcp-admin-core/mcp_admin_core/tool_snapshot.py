@@ -2599,7 +2599,9 @@ LISTED = {'odoo': [{'name': 'data_quality_report',
                           'idempotentHint': True,
                           'openWorldHint': True}},
          {'name': 'n8n_delete_workflow',
-          'description': 'Permanently delete a workflow. This action cannot be undone.',
+          'description': 'Permanently delete a workflow. This action cannot be undone. A published (active) workflow '
+                         'cannot be deleted: deactivate it first with n8n_update_partial_workflow (operations: '
+                         '[{type: "deactivateWorkflow"}]), then delete it.',
           'inputSchema': {'type': 'object',
                           'properties': {'id': {'type': 'string', 'description': 'Workflow ID to delete'}},
                           'required': ['id']},
