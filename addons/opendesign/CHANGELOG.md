@@ -1,3 +1,8 @@
+## 0.4.12 — local release candidate (2026-11-07; images pending)
+
+- Synchronize the source version only. OpenDesign remains disabled in the Store; no 0.4.12 OpenDesign image is planned or claimed. The shared backend policy change of PR #70 (literal `%` in request paths, httpcore's `target` extension refused) applies to its child too.
+- The six enabled products' image and release gates remain pending.
+
 ## 0.4.11 — source only (disabled)
 
 - Synchronize the source version only. OpenDesign remains disabled in the Store; no 0.4.11 OpenDesign image is planned or claimed. Its manifest also declares `stage: stable` so the validator treats all seven the same.

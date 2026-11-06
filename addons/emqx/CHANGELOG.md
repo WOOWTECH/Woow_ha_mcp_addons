@@ -1,3 +1,8 @@
+## 0.4.12 — local release candidate (2026-11-07; images pending)
+
+- A client id, topic, rule id, trace name or user id that contains an ordinary `%` (sent as `%25`) now reaches the broker; 0.4.11 refused every such call before sending it. Names whose literal text a further decode would turn into path structure (for example `a%2fb`) stay refused. httpcore's `target` request extension is refused (shared backend policy, PR #70).
+- This preparation has not built or published a 0.4.12 emqx image. Fresh exact-image gates, anonymous readback, provenance and HAOS validation remain pending.
+
 ## 0.4.11 — images published and verified
 
 - Remove the experimental label (PR #59): the manifest declares `stage: stable` and the store description no longer starts with "Experimental;" (the image `io.hass.description` label follows). Runtime, tools, permissions and dependencies are unchanged from 0.4.10.

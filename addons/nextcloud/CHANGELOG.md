@@ -1,3 +1,9 @@
+## 0.4.12 — local release candidate (2026-11-07; images pending)
+
+- Names with an ordinary `%` (PR #70): files, folders and calendars whose name or id contains `%` (for example `100%-off.txt`, `%18 KDV.xlsx`, `frame_%04d.png`) can be read, written and listed, as on the PaaS server; 0.4.11 refused every request for them with `BACKEND_DESTINATION_DENIED`, and a depth-2 `get_file_tree` left out such a folder's contents. Names whose literal text a further decode would turn into path structure (`a%2fb`, `%2e%2e`, `%23 notes`) or that other servers decode differently (`10%uface.txt`, `%` followed by fullwidth digits) stay refused. httpcore's `target` request extension is refused.
+- Documentation: the size limits are corrected (texts up to 1 MiB, uploads up to 10 MiB, 16 MiB per MCP request; the "256 KiB per request" line dated from 0.1.x) and the `%` limitations are rewritten.
+- This preparation has not built or published a 0.4.12 nextcloud image. Fresh exact-image gates, anonymous readback, provenance and HAOS validation remain pending.
+
 ## 0.4.11 — images published and verified
 
 - Remove the experimental label (PR #59): the manifest declares `stage: stable` and the store description no longer starts with "Experimental;" (the image `io.hass.description` label follows). Runtime, tools, permissions and dependencies are unchanged from 0.4.10.

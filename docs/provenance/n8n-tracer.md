@@ -68,7 +68,7 @@ The tested fallback is **sql.js 1.15.1** (0.3.4; 1.14.2 before); optional better
 as package contents but its native addon is not built (0.4.0, Node 26: unchanged; `npm ci --ignore-scripts` never runs
 its prebuilt-binary install script, so the child keeps the sql.js fallback it has used since 0.1.0, and the WOOW PaaS's
 better-sqlite3 12.11.1 override, which exists to load that native addon on Node 24/26, does not apply here).
-**Unreleased (0.4.12 line):** the override applies now (`apps/n8n/package.json` overrides better-sqlite3 to 12.11.1; the lock
+**From 0.4.12:** the override applies (`apps/n8n/package.json` overrides better-sqlite3 to 12.11.1; the lock
 holds its registry integrity, the same value as the PaaS lock) and the Node 26 (ABI 147) prebuilt binary is added without any
 install script: `packaging/native_addon.mjs` takes it from the release asset pinned in `packaging/inputs.json` `native_addons`
 (archive size and sha256 checked before it is opened, one tar entry of the pinned name, size and sha256, written as 0644 under the

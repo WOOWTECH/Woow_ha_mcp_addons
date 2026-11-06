@@ -110,7 +110,7 @@ credentials 與 workflow 並執行、產生或刪除 LiteLLM API key 並呼叫�
 - 固定 Python **3.13.16** slim-bookworm，符合既有 `>=3.13,<3.14`；未宣稱
   3.12 或 aarch64。核心 `.venv` 與 n8n 以外各支的 child `.venv` 分開，child 的
   Starlette 1.9.0 不覆蓋核心 1.3.1（0.3.4 起）。n8n 使用 Node **26.12.1**（0.4.0 起；0.3.4 是 22.23.4，n8n-mcp 2.96.2
-  支援兩者）、npm lock、`npm ci --ignore-scripts`（仍不執行任何套件腳本）。**尚未發版（0.4.12 線）**：better-sqlite3 固定在
+  支援兩者）、npm lock、`npm ci --ignore-scripts`（仍不執行任何套件腳本）。**0.4.12 起**：better-sqlite3 固定在
   12.11.1（`apps/n8n/package.json` overrides，與 PaaS 映像相同），它在 Node 26（ABI 147）的預建原生檔是映像裡唯一的原生模組，
   只經 `packaging/native_addon.mjs` 從 `packaging/inputs.json` 固定的 GitHub release 資產取得：先驗檔案大小與 sha256 才開檔，
   tar 只准一個固定名稱、大小與 sha256 的一般檔，寫成 0644；建置期下載、執行期沒有下載，建置最後還要載入並跑 FTS5 才算過。
