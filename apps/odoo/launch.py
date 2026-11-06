@@ -16,11 +16,22 @@ import odoo_mcp.odoo_client as client
 if hashlib.sha256(Path(client.__file__).read_bytes()).hexdigest() != '3cb7796965772bbea02fa1fda5c4de1fdcb36055ae1dcf9db396fd22559ff6c7':
     raise RuntimeError('Odoo transport requires source review')
 
+# How long one XML-RPC exchange may wait for Odoo. Unreleased (0.4.12 line): a tool call waits as long as the PaaS server
+# does, 30 s (odoo-mcp's own ODOO_TIMEOUT default, which the PaaS server leaves alone; the child's ODOO_TIMEOUT is 30 in
+# mcp_admin_core/products.py). Up to 0.4.11 every exchange was cut at 5 s, so a read Odoo finishes in 6-30 s (a report, a
+# search_read on a big table, the first login of a cold worker) came back BACKEND_TIMEOUT here and succeeded on PaaS. The
+# cap stays as the ceiling of anything a client asks for. The readiness probe keeps 5 s (PROBE_TIMEOUT, passed as its own
+# client's timeout below): HealthMonitor waits 5 s for it and probes every 15 s, and the probe's one owned thread is free
+# again only when its call returns, so a longer probe would keep a recovered Odoo "unreachable" past those 15 s.
+TOOL_TIMEOUT = 30
+PROBE_TIMEOUT = 5
+
+
 class BackendTransport(XMLTransport):
-    def __init__(self, timeout=5, use_https=True, verify_ssl=True, **kwargs):
+    def __init__(self, timeout=TOOL_TIMEOUT, use_https=True, verify_ssl=True, **kwargs):
         if not verify_ssl:
             raise ValueError('TLS verification required')
-        super().__init__(os.environ['ODOO_URL'], timeout=min(timeout, 5))
+        super().__init__(os.environ['ODOO_URL'], timeout=min(timeout, TOOL_TIMEOUT))
 
 
 # Replace the actual wheel transport before any client construction.
@@ -68,7 +79,7 @@ if __name__ == '__main__':
     from odoo_mcp.server import mcp
     from bounded_tools import BoundedTools
     from odoo_mcp import tools_read, tools_diagnostics, agent_tools, diagnostics, tools_write, server_core
-    from odoo_mcp.odoo_client import OdooClient, get_odoo_client
+    from odoo_mcp.odoo_client import OdooClient, build_odoo_client, load_instances_config
     # 0.2.0 (owner decision 2026-10-15, the full add-on): the complete odoo-mcp surface as the PaaS
     # woow-mcp-server serves it. tools_write and server_core carry the two PaaS build patches (apps/odoo/patches:
     # fix_cross_session_token_store, fix_direct_writes; applied to the venv by the Dockerfile and packaging/unit.sh):
@@ -101,9 +112,15 @@ if __name__ == '__main__':
     # calls got BACKEND_BUSY), and an account without ir.model access still reads as reachable.
     probe_worker = OwnedWorkers(1, 'backend-probe')
 
+    def probe_client():
+        # get_odoo_client() as odoo_client.py defines it (digest-checked above), but with the probe's own timeout: an
+        # entry's "timeout" wins over the child's ODOO_TIMEOUT, which is the tools' TOOL_TIMEOUT.
+        default_name, instances = load_instances_config()
+        return build_odoo_client({**instances[default_name], 'timeout': PROBE_TIMEOUT}, name=default_name)
+
     async def woow_backend_probe():
         try:
-            odoo = await probe_worker.run(get_odoo_client)
+            odoo = await probe_worker.run(probe_client)
         except Exception as exc:
             raise ValueError(probe_failure(exc)) from None  # a fixed reason: BACKEND_AUTH_REJECTED or BACKEND_UNAVAILABLE
         return {'uid': odoo.uid}
