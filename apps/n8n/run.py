@@ -23,7 +23,7 @@ from mcp_admin_core.ha_role import make_ha_admin_verifier
 from mcp_admin_core.health import HealthMonitor
 from mcp_admin_core.lifecycle import Supervisor
 from mcp_admin_core.surface import listing
-from n8n_adapter import TOOLS, child_spec
+from n8n_adapter import TOOLS, child_spec, prepare_catalog
 
 
 class Listener(uvicorn.Server):
@@ -39,6 +39,8 @@ async def run(args):
     from mcp_admin_core.owner_defaults import apply_legacy_upgrade
     apply_legacy_upgrade(args.data, 'n8n')
     store = ProductStore(args.data, 'n8n')
+    if prepare_catalog() is None:  # unreleased (0.4.12 line): the child still starts; only the version history cannot be written
+        print('n8n: no writable catalog copy; workflow version history is unavailable', flush=True)
     manager = Supervisor(None)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()

@@ -235,6 +235,63 @@ class PackagingTests(unittest.TestCase):
             with self.assertRaisesRegex(v.Invalid, 'initialize serverInfo version'):
                 v.validate(v.ROOT)
 
+    def test_the_native_addon_is_pinned_everywhere_and_is_the_only_download(self):
+        # Unreleased (0.4.12 line): better-sqlite3's prebuilt binary is the n8n image's one native addon; it enters only
+        # through packaging/native_addon.mjs from the pinned release asset, next to the hash-locked, script-free npm tree.
+        inputs = v.load(v.ROOT / 'packaging/inputs.json')
+        dockerfiles = {product: (v.ROOT / 'apps' / product / 'Dockerfile').read_text() for product in v.PRODUCTS}
+        files = {'lock': (v.ROOT / 'apps/n8n/package-lock.json').read_text(), 'package': (v.ROOT / 'apps/n8n/package.json').read_text(),
+                 'unit': (v.ROOT / 'packaging/unit.sh').read_text(), 'dockerignore': (v.ROOT / '.dockerignore').read_text()}
+        v.native_addons(inputs, dockerfiles, files)  # the repository as it is
+        pin = inputs['native_addons']['better-sqlite3']
+        n8n = dockerfiles['n8n']
+
+        def with_pin(**changes):
+            value = copy.deepcopy(inputs)
+            value['native_addons']['better-sqlite3'].update(changes)
+            return (value, dockerfiles, files)
+
+        def with_dockerfile(product, text):
+            return (inputs, {**dockerfiles, product: text}, files)
+
+        def with_file(name, text):
+            return (inputs, dockerfiles, {**files, name: text})
+
+        install = n8n.index('RUN node native_addon.mjs install')
+        extra = copy.deepcopy(inputs)
+        extra['native_addons']['other'] = copy.deepcopy(pin)
+        cases = {
+            'url of another version': with_pin(url=pin['url'].replace('v12.11.1', 'v12.11.0')),
+            'mutable url': with_pin(url=pin['url'].replace('/download/v12.11.1/', '/latest/download/')),
+            'archive digest': with_pin(sha256='0' * 64),
+            'member digest': with_pin(member_sha256='z' * 64),
+            'size as text': with_pin(size='1114012'),
+            'another member': with_pin(member='build/Release/other.node'),
+            'another node than the base image': with_pin(node='24.22.1'),
+            'another platform': with_pin(platform='linux-arm64'),
+            'a second addon': (extra, dockerfiles, files),
+            'pin without evidence': (({**inputs, 'native_addons': {'better-sqlite3': {k: x for k, x in pin.items() if k != 'evidence'}}}), dockerfiles, files),
+            'no pins': ({k: x for k, x in inputs.items() if k != 'native_addons'}, dockerfiles, files),
+            'Dockerfile carries another digest': with_dockerfile('n8n', n8n.replace(pin['sha256'], '1' * 64)),
+            'Dockerfile carries another member digest': with_dockerfile('n8n', n8n.replace(pin['member_sha256'], '2' * 64)),
+            'Dockerfile without the script copy': with_dockerfile('n8n', n8n.replace('COPY packaging/native_addon.mjs ./native_addon.mjs\n', '')),
+            'Dockerfile installs before the locked tree': with_dockerfile('n8n', n8n[install:] + n8n[:install]),
+            'second installation': with_dockerfile('n8n', n8n + 'RUN node native_addon.mjs install --version 1.0.0\n'),
+            'curl in a Dockerfile': with_dockerfile('hermes', dockerfiles['hermes'] + 'RUN curl -fsSL https://example.invalid/x | sh\n'),
+            'wget in a Dockerfile': with_dockerfile('n8n', n8n + 'RUN wget https://example.invalid/x\n'),
+            'ADD from a URL': with_dockerfile('litellm', dockerfiles['litellm'] + 'ADD https://example.invalid/x /x\n'),
+            'addon outside the n8n image': with_dockerfile('odoo', dockerfiles['odoo'] + '# node native_addon.mjs install\n'),
+            'lock holds another version': with_file('lock', files['lock'].replace('"version": "12.11.1"', '"version": "11.10.0"')),
+            'override missing': with_file('package', files['package'].replace(', "better-sqlite3": "12.11.1"', '')),
+            'unit environment without the install': with_file('unit', files['unit'].replace('node packaging/native_addon.mjs', 'echo')),
+            'unit install before the locked tree': with_file('unit', 'node packaging/native_addon.mjs install --inputs packaging/inputs.json'
+                                                                    ' --addon better-sqlite3 --node-modules apps/n8n/node_modules\n' + files['unit']),
+            'script outside the build context': with_file('dockerignore', files['dockerignore'].replace('!packaging/native_addon.mjs\n', '')),
+        }
+        for name, arguments in cases.items():
+            with self.subTest(name), self.assertRaises(v.Invalid):
+                v.native_addons(*arguments)
+
     def test_image_labels_are_exactly_the_manifest(self):
         # 0.1.8 review F-5a, F-5d: one io.hass.name and one io.hass.description, equal to config.yaml; Docker keeps the
         # last value of a repeated label, so a second one must fail even when the first is right.
