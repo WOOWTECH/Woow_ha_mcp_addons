@@ -268,6 +268,53 @@ def builder_workflow(value, workflow):
         exact(candidate['needs'], 'gate', 'release admission dependency')
 
 
+NATIVE_ADDON_KEYS = {'package', 'version', 'node', 'node_abi', 'platform', 'url', 'sha256', 'size', 'member', 'member_size',
+                     'member_sha256', 'evidence'}
+
+
+def native_addons(inputs, dockerfiles, files):
+    """Unreleased (0.4.12 line): the n8n image has exactly one native addon, better-sqlite3's prebuilt binary, and it enters
+    only through packaging/native_addon.mjs from the release asset pinned in inputs.json native_addons. The npm tree
+    stays hash-locked (`npm ci --ignore-scripts`); no Dockerfile may download anything else. Checked here: the pin's
+    shape and immutable URL, that the lock and the override hold the same better-sqlite3 version, that the n8n Dockerfile
+    carries every pinned literal in the npm stage (and no other Dockerfile mentions the addon), and that the CI unit
+    environment and the build context install/reach the same script. files: lock, package, unit, dockerignore (texts)."""
+    addons = inputs.get('native_addons')
+    require(isinstance(addons, dict) and set(addons) == {'better-sqlite3'}, 'native addon allowlist')
+    pin = addons['better-sqlite3']
+    require(set(pin) == NATIVE_ADDON_KEYS, 'native addon pin shape')
+    version, abi, platform = pin['version'], pin['node_abi'], pin['platform']
+    require(pin['package'] == 'better-sqlite3' and re.fullmatch(r'\d+\.\d+\.\d+', version), 'native addon version')
+    require(pin['node'] == inputs['bases']['node'].split(':')[1].split('-')[0], 'native addon is for the base image Node')
+    require(re.fullmatch(r'v\d+', abi) and platform == 'linux-x64', 'native addon target')
+    require(pin['url'] == f'https://github.com/WiseLibs/better-sqlite3/releases/download/v{version}/'
+                          f'better-sqlite3-v{version}-node-{abi}-{platform}.tar.gz', 'native addon immutable release URL')
+    require(all(re.fullmatch(r'[0-9a-f]{64}', pin[key]) for key in ('sha256', 'member_sha256')), 'native addon digests')
+    require(all(type(pin[key]) is int and pin[key] > 0 for key in ('size', 'member_size')), 'native addon sizes')
+    require(pin['member'] == 'build/Release/better_sqlite3.node', 'native addon member')
+    require(json.loads(files['lock'])['packages']['node_modules/better-sqlite3']['version'] == version,
+            'lock holds another better-sqlite3 than the pinned addon')
+    require(json.loads(files['package']).get('overrides', {}).get('better-sqlite3') == version, 'package.json override of better-sqlite3')
+    n8n = dockerfiles['n8n']
+    for literal in ('COPY packaging/native_addon.mjs ./native_addon.mjs', 'RUN node native_addon.mjs install --version ' + version,
+                    '--into node_modules/better-sqlite3', '--url ' + pin['url'], '--sha256 ' + pin['sha256'],
+                    '--size ' + str(pin['size']), '--member ' + pin['member'], '--member-size ' + str(pin['member_size']),
+                    '--member-sha256 ' + pin['member_sha256']):
+        require(literal in n8n, 'n8n Dockerfile does not carry the pinned addon: ' + literal[:48])
+    require(n8n.count('native_addon.mjs install') == 1, 'one addon installation')
+    locked = 'RUN npm ci --ignore-scripts --no-audit --no-fund && npm cache clean --force'  # the npm stage's own line, not the UI stage's
+    require(locked in n8n and n8n.index(locked) < n8n.index('native_addon.mjs install') < n8n.index('COPY --from=npm /npm/node_modules'),
+            'the addon is installed in the npm stage, after the locked tree and before it is copied')
+    for product, text in dockerfiles.items():
+        require(not re.search(r'(?im)^\s*ADD\b|\b(curl|wget)\b', text), 'a Dockerfile downloads something: ' + product)
+        require(product == 'n8n' or 'native_addon' not in text, 'native addon outside the n8n image: ' + product)
+    unit = files['unit']
+    command = 'node packaging/native_addon.mjs install --inputs packaging/inputs.json --addon better-sqlite3 --node-modules apps/n8n/node_modules'
+    require(command in unit and unit.index('npm ci --prefix apps/n8n --ignore-scripts') < unit.index(command),
+            'CI unit environment does not install the pinned addon after the locked tree')
+    require('!packaging/native_addon.mjs' in files['dockerignore'], 'addon installer does not reach the build context')
+
+
 def validate(root=ROOT):
     exact(load(root / 'repository.yaml'), {'name': 'WOOW MCP Add-ons', 'url': URL, 'maintainer': 'WOOWTECH'}, 'repository')
     paths = source_paths(root)
@@ -285,6 +332,7 @@ def validate(root=ROOT):
     require(discovered == {f'addons/{p}/config.yaml' for p in PRODUCTS}, 'accidental/missing Supervisor config discovery')
     require({p.name for p in (root / 'addons').iterdir()} == set(PRODUCTS), 'addon directory allowlist')
     slugs = set()
+    dockerfiles = {}
     for product in PRODUCTS:
         path = root / 'addons' / product
         value = load(path / 'config.yaml')
@@ -297,6 +345,7 @@ def validate(root=ROOT):
         for doc in ('README.md', 'DOCS.md', 'CHANGELOG.md'):
             require((path / doc).is_file() and (path / doc).stat().st_size > 150, 'missing product document')
         dockerfile = (root / 'apps' / product / 'Dockerfile').read_text()
+        dockerfiles[product] = dockerfile
         bases = json.loads((root / 'packaging/inputs.json').read_text())['bases']
         for line in dockerfile.splitlines():
             if line.startswith('FROM '):
@@ -320,6 +369,8 @@ def validate(root=ROOT):
             require('npm ci --ignore-scripts --no-audit --no-fund' in dockerfile, 'unlocked/scripted npm')
         else:
             require(f'uv sync --project apps/{product} --frozen --no-dev' in dockerfile, 'missing isolated child lock')
+    native_addons(inputs, dockerfiles, {'lock': (root / 'apps/n8n/package-lock.json').read_text(), 'package': (root / 'apps/n8n/package.json').read_text(),
+                                         'unit': (root / 'packaging/unit.sh').read_text(), 'dockerignore': (root / '.dockerignore').read_text()})
     require('!packaging/management_launcher.py' in (root / '.dockerignore').read_text(), 'guard excluded from context')
     context = (root / '.dockerignore').read_text()
     for path in ('package.json', 'package-lock.json', 'NOTICE.txt', 'src/*.js', 'src/*.css', 'src/*.html', 'scripts/build.mjs'):

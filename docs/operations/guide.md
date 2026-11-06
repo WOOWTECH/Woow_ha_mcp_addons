@@ -110,8 +110,11 @@ credentials 與 workflow 並執行、產生或刪除 LiteLLM API key 並呼叫�
 - 固定 Python **3.13.16** slim-bookworm，符合既有 `>=3.13,<3.14`；未宣稱
   3.12 或 aarch64。核心 `.venv` 與 n8n 以外各支的 child `.venv` 分開，child 的
   Starlette 1.9.0 不覆蓋核心 1.3.1（0.3.4 起）。n8n 使用 Node **26.12.1**（0.4.0 起；0.3.4 是 22.23.4，n8n-mcp 2.96.2
-  支援兩者）、npm lock、`npm ci --ignore-scripts`，保留 sql.js fallback；不下載 native addon/script（better-sqlite3
-  的原生模組因此一直沒有建置，Node 26 也不用）。
+  支援兩者）、npm lock、`npm ci --ignore-scripts`（仍不執行任何套件腳本）。**尚未發版（0.4.12 線）**：better-sqlite3 固定在
+  12.11.1（`apps/n8n/package.json` overrides，與 PaaS 映像相同），它在 Node 26（ABI 147）的預建原生檔是映像裡唯一的原生模組，
+  只經 `packaging/native_addon.mjs` 從 `packaging/inputs.json` 固定的 GitHub release 資產取得：先驗檔案大小與 sha256 才開檔，
+  tar 只准一個固定名稱、大小與 sha256 的一般檔，寫成 0644；建置期下載、執行期沒有下載，建置最後還要載入並跑 FTS5 才算過。
+  n8n-mcp 因此用 FTS5 原生資料庫，不再退回 sql.js（0.4.11 以前的行為，`search_nodes` 的排序較差）；sql.js 仍在 npm 樹裡，只是不被選用。
 - Stock image 搭配 Supervisor `init: true`；不是 s6。映像啟動只有 bootstrap
   短暫 root，用 no-follow directory fd 建立**新的** `/data/mcp`，設定 10001:10001
   與 0700；不碰 Supervisor options。一般情況不遞迴 chown、不接管既有錯誤 owner；唯一例外（0.1.1 起）

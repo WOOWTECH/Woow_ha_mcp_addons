@@ -67,7 +67,13 @@ No global npm installs or native build/install scripts are required for this tra
 The tested fallback is **sql.js 1.15.1** (0.3.4; 1.14.2 before); optional better-sqlite3 11.10.0 is installed
 as package contents but its native addon is not built (0.4.0, Node 26: unchanged; `npm ci --ignore-scripts` never runs
 its prebuilt-binary install script, so the child keeps the sql.js fallback it has used since 0.1.0, and the WOOW PaaS's
-better-sqlite3 12.11.1 override, which exists to load that native addon on Node 24/26, does not apply here). MCP JS SDK is **1.32.2** for 0.3.4 (**1.32.0** for 0.3.0 to 0.3.3; 1.32.1
+better-sqlite3 12.11.1 override, which exists to load that native addon on Node 24/26, does not apply here).
+**Unreleased (0.4.12 line):** the override applies now (`apps/n8n/package.json` overrides better-sqlite3 to 12.11.1; the lock
+holds its registry integrity, the same value as the PaaS lock) and the Node 26 (ABI 147) prebuilt binary is added without any
+install script: `packaging/native_addon.mjs` takes it from the release asset pinned in `packaging/inputs.json` `native_addons`
+(archive size and sha256 checked before it is opened, one tar entry of the pinned name, size and sha256, written as 0644 under the
+installed package of the pinned version), in the image build and in `packaging/unit.sh`. n8n-mcp then runs on better-sqlite3 with
+FTS5 (SQLite 3.53.2 inside the binary); sql.js stays in the tree as upstream's fallback and is not selected. MCP JS SDK is **1.32.2** for 0.3.4 (**1.32.0** for 0.3.0 to 0.3.3; 1.32.1
 and 1.32.2 change only `McpServer`, which registers handlers for capabilities declared in its options, so this child's
 low-level `Server` path is unchanged; n8n-mcp 2.96.2 still pins 1.30.0 exactly). 0.3.4 also takes the newest npm
 versions inside the existing ranges, which clears every `npm audit` finding of the 0.3.0-0.3.3 lock (body-parser 2.4.0 for

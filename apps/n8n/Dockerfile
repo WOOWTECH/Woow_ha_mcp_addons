@@ -12,6 +12,20 @@ FROM node:26.12.1-bookworm-slim@sha256:28147155d47dc31abe0a46e0d12b59b2fb3d0a2dc
 WORKDIR /npm
 COPY apps/n8n/package.json apps/n8n/package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund && npm cache clean --force
+# Unreleased (0.4.12 line): the one native addon, better-sqlite3's prebuilt binary for Node 26 (ABI 147), so n8n-mcp opens its
+# FTS5 database natively instead of falling back to sql.js (search_nodes ranked core nodes behind community ones). npm
+# still installs nothing but the hash-locked tree and runs no script; this is the only other way a binary enters the
+# image: the pinned release asset (inputs.json native_addons, checked against these literals by packaging/validate.py),
+# verified by size and sha256 before it is opened, one tar entry of the pinned name, size and sha256, written as 0644 under
+# the installed package of the pinned version. The build stops unless the addon then loads and runs FTS5 on this node.
+COPY packaging/native_addon.mjs ./native_addon.mjs
+RUN node native_addon.mjs install --version 12.11.1 --into node_modules/better-sqlite3 \
+      --url https://github.com/WiseLibs/better-sqlite3/releases/download/v12.11.1/better-sqlite3-v12.11.1-node-v147-linux-x64.tar.gz \
+      --sha256 a90711eae785b646d6799b31cf8dd79a5d750b1af72d310472c3b996c5cee92d --size 1114012 \
+      --member build/Release/better_sqlite3.node --member-size 2162544 \
+      --member-sha256 44170d6656cd1a6b67c88816db5820f8f3719417b634f5218182e306c63784f7 \
+ && node -e "const db = require('./node_modules/better-sqlite3')(':memory:'); db.exec('create virtual table t using fts5(a)'); process.stdout.write('better-sqlite3 ' + db.prepare('select sqlite_version() v').get().v + ' fts5 ok on ' + process.version + '\n')" \
+ && rm native_addon.mjs
 FROM python:3.13.18-slim-bookworm@sha256:70bda1e795ded2a684ef9815955e05829b14ee5bb5c3eb2a940648e88f10fce9 AS dependencies
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_PYTHON_DOWNLOADS=never UV_LINK_MODE=copy
@@ -54,6 +68,9 @@ COPY --from=npm /lib/x86_64-linux-gnu/libgcc_s.so.1 /usr/local/lib/libgcc_s.so.1
 COPY --from=npm /usr/lib/x86_64-linux-gnu/libatomic.so.1 /usr/local/lib/libatomic.so.1
 RUN /usr/sbin/ldconfig && test "$(node --version)" = v26.12.1
 COPY --from=npm /npm/node_modules ./apps/n8n/node_modules
+# Unreleased (0.4.12 line): the pinned native addon must also load with this stage's own libraries (libstdc++ and libgcc_s
+# are copied above); a base or library change that breaks it stops the build here, not at the first search_nodes.
+RUN node -e "const db = require('/opt/woow/apps/n8n/node_modules/better-sqlite3')(':memory:'); db.exec('create virtual table t using fts5(a)')"
 # Compose backend-message preservation and native direct inputs compatibility through the same entrypoint as unit.sh.
 # backend_policy.cjs requires the combined digest; the separate isError patch below remains applied.
 RUN /usr/local/bin/python apps/n8n/patches/fix_test_run_error_messages.py

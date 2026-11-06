@@ -29,6 +29,7 @@
 !packaging/
 !packaging/entrypoint.py
 !packaging/management_launcher.py
+!packaging/native_addon.mjs
 !docs/
 !docs/provenance/
 !docs/provenance/*.md
