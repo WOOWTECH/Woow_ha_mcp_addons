@@ -100,47 +100,54 @@ function isLink(file) {
   try { return lstatSync(file).isSymbolicLink(); } catch { return false; }
 }
 
-/** GET with https only, at most 5 redirects and a byte cap; resolves the body of a 200. `request` is injectable for tests. */
-export function download(url, { request = https.get, maxBytes = MAX_DOWNLOAD, redirects = 5, timeoutMs = 60000 } = {}) {
+const permanent = (message) => Object.assign(new Error(message), { permanent: true });
+
+/** GET with https only, at most 5 redirects, a byte cap and an overall deadline; resolves the body of a 200. `request` is injectable for tests. */
+export function download(url, { request = https.get, maxBytes = MAX_DOWNLOAD, redirects = 5, timeoutMs = 60000, deadlineMs = 180000 } = {}) {
   return new Promise((resolve, reject) => {
+    let current;
+    const finish = (settle) => (value) => { clearTimeout(timer); settle(value); };
+    const done = finish(resolve);
+    const fail = finish(reject);
+    const timer = setTimeout(() => { current?.destroy(); fail(new Error(`download took more than ${deadlineMs} ms`)); }, deadlineMs);
     const fetch = (location, left) => {
       let parsed;
-      try { parsed = new URL(location); } catch { return reject(new Error('download URL is not a URL')); }
-      if (parsed.protocol !== 'https:') return reject(new Error(`download over ${parsed.protocol} refused`));
-      const req = request(parsed, { timeout: timeoutMs }, (res) => {
+      try { parsed = new URL(location); } catch { return fail(permanent('download URL is not a URL')); }
+      if (parsed.protocol !== 'https:') return fail(permanent(`download over ${parsed.protocol} refused`));
+      current = request(parsed, { timeout: timeoutMs }, (res) => {
         if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
           res.resume();
-          if (left <= 0 || !res.headers.location) return reject(new Error('too many redirects'));
+          if (left <= 0 || !res.headers.location) return fail(permanent('too many redirects'));
           let next;
-          try { next = new URL(res.headers.location, parsed).href; } catch { return reject(new Error('redirect to a URL that is not a URL')); }
+          try { next = new URL(res.headers.location, parsed).href; } catch { return fail(permanent('redirect to a URL that is not a URL')); }
           return fetch(next, left - 1);
         }
-        if (res.statusCode !== 200) { res.resume(); return reject(Object.assign(new Error(`HTTP ${res.statusCode}`), { status: res.statusCode })); }
+        if (res.statusCode !== 200) { res.resume(); return fail(Object.assign(new Error(`HTTP ${res.statusCode}`), { status: res.statusCode })); }
         const chunks = [];
         let total = 0;
         res.on('data', (chunk) => {
           total += chunk.length;
-          if (total > maxBytes) { res.destroy(); reject(new Error(`download is over ${maxBytes} bytes`)); } else chunks.push(chunk);
+          if (total > maxBytes) { res.destroy(); fail(permanent(`download is over ${maxBytes} bytes`)); } else chunks.push(chunk);
         });
-        res.on('end', () => resolve(Buffer.concat(chunks)));
-        res.on('error', reject);
+        res.on('end', () => done(Buffer.concat(chunks)));
+        res.on('error', fail);
       });
-      req.on('timeout', () => req.destroy(new Error('download timed out')));
-      req.on('error', reject);
+      current.on('timeout', () => current.destroy(new Error('download timed out')));
+      current.on('error', fail);
     };
     fetch(url, redirects);
   });
 }
 
-/** download() with 3 attempts for a network error or a 5xx; a wrong digest is never retried (verifiedMember decides). */
+/** download() with 3 attempts for a network error or a 5xx; a refused URL, a too large body, a 4xx or a wrong digest is never retried. */
 export async function downloadWithRetry(url, options = {}, { attempts = 3, pause = 2000 } = {}) {
   for (let attempt = 1; ; attempt += 1) {
     try {
       return await download(url, options);
     } catch (error) {
-      const retryable = error.status === undefined || error.status >= 500;
+      const retryable = !error.permanent && (error.status === undefined || error.status >= 500);
       if (attempt >= attempts || !retryable) throw error;
-      await new Promise((done) => setTimeout(done, pause * attempt));
+      await new Promise((resume) => setTimeout(resume, pause * attempt));
     }
   }
 }

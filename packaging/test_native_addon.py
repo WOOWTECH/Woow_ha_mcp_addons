@@ -244,6 +244,15 @@ class NativeAddonTests(unittest.TestCase):
         down = self.download([{'status': 503}] * 3, retry=True)
         self.assertEqual((down['ok'], down['status'], len(down['calls'])), (False, 503, 3))
 
+    def test_a_download_that_never_finishes_ends_at_the_deadline_and_a_refused_one_is_not_retried(self):
+        code = ("const request = (url, options, cb) => { const req = new EventEmitter(); req.destroy = (e) => { if (e) req.emit('error', e); }; return req; };"  # never answers
+                " const started = Date.now();"
+                " const slow = await m.download('https://github.com/x', { request, deadlineMs: 80 }).then(() => 'resolved', (e) => e.message);"
+                " let calls = 0; const refusing = (url, options, cb) => { calls += 1; return request(url, options, cb); };"
+                " const refused = await m.downloadWithRetry('http://github.com/x', { request: refusing }, { attempts: 3, pause: 1 }).then(() => 'resolved', (e) => e.message);"
+                " out({ slow, waited: Date.now() - started < 5000, refused, calls });")
+        self.assertEqual(node(code), {'slow': 'download took more than 80 ms', 'waited': True, 'refused': 'download over http: refused', 'calls': 0})
+
     def test_the_command_line_installs_from_inputs_or_from_flags_and_fails_closed(self):
         packed, _ = archive([(MEMBER, BODY, tarfile.REGTYPE)])
         (self.dir / 'a.tar.gz').write_bytes(packed)
