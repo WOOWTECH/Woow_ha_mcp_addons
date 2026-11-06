@@ -423,7 +423,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     elif name == odoo_methods.ROUTE:
                         changes = odoo_methods.changes(state, value)
                     elif name == 'odoo/write-switches':
-                        if getattr(state, 'product', None) != 'odoo' or set(value) != {'odoo_write_switches'}:
+                        # Unreleased (0.4.12 line): null is a field the model accepts ("not saved") but this route cannot express; it
+                        # reached the commit and answered 503 "state unavailable" instead of 400 (stage-C finding C3), as n8n/session
+                        # above has always refused it.
+                        if (getattr(state, 'product', None) != 'odoo' or set(value) != {'odoo_write_switches'}
+                                or value['odoo_write_switches'] is None):
                             raise ValueError()
                         changes = value
                     else:

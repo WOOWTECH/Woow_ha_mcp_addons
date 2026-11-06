@@ -132,7 +132,8 @@ async def test_admin_route_requires_role_csrf_revision_and_restarts_only_odoo(tm
                 role['allowed'] = True
                 for invalid in ({'odoo_write_switches': {'chatter_direct': False}},
                                 {'odoo_write_switches': {**ALL_ON, 'chatter_direct': 0}},
-                                {'odoo_write_switches': ALL_ON, 'writes_enabled': True}):
+                                {'odoo_write_switches': ALL_ON, 'writes_enabled': True},
+                                {'odoo_write_switches': None}):  # null reached the commit and answered 503 "state unavailable" until 0.4.12
                     assert (await client.put('/api/odoo/write-switches', headers=conditional, json=invalid)).status_code == 400
                 assert restarts == [] and store.load().odoo_write_switches is None
                 saved = await client.put('/api/odoo/write-switches', headers=conditional, json=payload)
