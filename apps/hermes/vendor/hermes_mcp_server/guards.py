@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
+import socket
 import unicodedata
 from typing import Any
 from urllib.parse import quote, urlsplit
@@ -183,6 +184,77 @@ def _loopback_address(address: str) -> bool:
     return ip.is_loopback or (mapped is not None and mapped.is_loopback)
 
 
+# A cloud-metadata destination reads like the PaaS answer (H7, found by the 2026-11-05 live comparison). The PaaS check
+# (util/ssrf.py) refuses a metadata host name or address before it looks at anything else, with "url blocked by SSRF
+# protection: Cloud metadata endpoint blocked"; backend_policy refuses the same destinations with the generic
+# BACKEND_DESTINATION_DENIED. CLOUD_METADATA is the PaaS list as it is. Two of its entries, fd20:ce::254 and
+# fd00:a9fe:a9fe::1, are unique-local (LAN) addresses that backend_policy lets through, so registration refuses them
+# here for the first time. Every other class backend_policy refuses (link-local, CGNAT, 0.0.0.0, userinfo) keeps its
+# code and text, and so does a host name that only RESOLVES to a metadata address: the resolver reports a refused answer
+# set, not the refused address. PaaS words a number form that a resolver turns into a metadata address (2852039166,
+# 0xa9fea9fe) one level up, "Hostname resolves to a blocked address (...)", because it reaches the verdict only after
+# resolving; so does this check. A trailing dot is ignored, as backend_policy does for its own metadata names.
+CLOUD_METADATA = frozenset({
+    "169.254.169.254", "169.254.170.2", "metadata.google.internal", "metadata", "100.100.100.200", "192.0.0.192",
+    "fd00:ec2::254", "fd20:ce::254", "fe80::a9fe:a9fe", "fd00:a9fe:a9fe::1",
+})
+CLOUD_METADATA_REASON = "Cloud metadata endpoint blocked"
+# A number, or dotted numbers, in decimal, octal or hex: a resolver reads it as an IPv4 address (2852039166, 0xa9fea9fe
+# and 169.254.43518 are all 169.254.169.254).
+_IPV4_NUMBER = re.compile(r"(?:0[xX][0-9a-fA-F]+|[0-9]+)(?:\.(?:0[xX][0-9a-fA-F]+|[0-9]+)){0,3}")
+
+
+def _ip_literal(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    try:
+        return ipaddress.ip_address(host.split("%", 1)[0])
+    except ValueError:
+        return None
+
+
+def _ipv4_number(host: str) -> ipaddress.IPv4Address | None:
+    if not _IPV4_NUMBER.fullmatch(host):
+        return None
+    try:
+        return ipaddress.IPv4Address(socket.inet_aton(host))
+    except OSError:
+        return None
+
+
+def _embedded_ipv4(ip: ipaddress.IPv6Address) -> ipaddress.IPv4Address | None:
+    """The IPv4 address an IPv6 address carries: compatible (::a.b.c.d), mapped (::ffff:a.b.c.d), translated
+    (::ffff:0:a.b.c.d), NAT64 (64:ff9b::/96 and 64:ff9b:1::/48 with a zero middle), 6to4 (2002::/16) and Teredo
+    (2001:0::/32, client address inverted): the forms the PaaS check follows from n8n-mcp's tryExtractTunneledIPv4."""
+    p = [int.from_bytes(ip.packed[i:i + 2], "big") for i in range(0, 16, 2)]
+    if p[0] == p[1] == p[2] == p[3] == 0 and ((p[4] == 0 and p[5] in (0, 0xFFFF)) or (p[4] == 0xFFFF and p[5] == 0)):
+        return ipaddress.IPv4Address((p[6] << 16) | p[7])
+    if p[0] == 0x64 and p[1] == 0xFF9B and p[3] == p[4] == p[5] == 0 and p[2] in (0, 1):
+        return ipaddress.IPv4Address((p[6] << 16) | p[7])
+    if p[0] == 0x2002:
+        return ipaddress.IPv4Address((p[1] << 16) | p[2])
+    if p[0] == 0x2001 and p[1] == 0:
+        return ipaddress.IPv4Address(((p[6] ^ 0xFFFF) << 16) | (p[7] ^ 0xFFFF))
+    return None
+
+
+def _metadata_address(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    embedded = _embedded_ipv4(ip) if isinstance(ip, ipaddress.IPv6Address) else None
+    return str(ip) in CLOUD_METADATA or (embedded is not None and str(embedded) in CLOUD_METADATA)
+
+
+def _cloud_metadata_reason(host: str) -> str | None:
+    """The PaaS reason when the URL's host is a metadata name or spells a metadata address, else None. No DNS."""
+    name = host.rstrip(".").lower()
+    if name in CLOUD_METADATA:
+        return CLOUD_METADATA_REASON
+    literal = _ip_literal(name)
+    if literal is not None:
+        return CLOUD_METADATA_REASON if _metadata_address(literal) else None
+    number = _ipv4_number(name)
+    if number is not None and _metadata_address(number):
+        return f"Hostname resolves to a blocked address ({CLOUD_METADATA_REASON})"
+    return None
+
+
 async def check_mcp_server_url(url: Any) -> str:
     """回傳 strip 過的網址；不是 http／https、帶帳密，或指向 loopback／metadata 就丟 GuardError；HA 允許區網服務。"""
     if not isinstance(url, str) or not url.strip():
@@ -194,6 +266,8 @@ async def check_mcp_server_url(url: Any) -> str:
         raise GuardError("invalid url") from exc
     if parts.scheme.lower() not in ("http", "https") or not parts.hostname:
         raise GuardError("only http:// or https:// MCP servers can be added (stdio/command transports are blocked)")
+    if (reason := _cloud_metadata_reason(parts.hostname)) is not None:
+        raise GuardError(f"url blocked by SSRF protection: {reason}")
     # Registration validates the destination now. Hermes owns future connections;
     # its DNS resolution cannot be pinned by this add-on's HTTP client.
     destination = Destination(url)
