@@ -5,6 +5,7 @@ all upstream tools and the individually deferred capabilities.
 """
 from pathlib import Path
 from datetime import datetime, timezone
+import ipaddress
 import json
 import re
 import secrets
@@ -24,6 +25,22 @@ PRODUCTS = ('odoo', 'odoo-manage', 'hermes', 'opendesign', 'emqx', 'litellm', 'n
 Product = Literal['n8n', 'odoo', 'odoo-manage', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud']
 ROOT = Path(__file__).resolve().parents[3]
 URL = Annotated[str, AfterValidator(http_url)]
+
+
+def backend_destination(value):
+    """A URL that apps/runtime/backend_policy.Destination refuses on every call: '.'/'..' path segments, '%' or '\\'
+    after percent-decoding, a metadata host name; also an empty '?' or '#', or an '@' in the authority, which the
+    parsers drop or read differently. A non-ASCII host never matches: the policy compares it with the IDNA (xn--) host
+    httpx sends."""
+    parts = urlsplit(value)
+    path = unquote(parts.path)
+    if ('%' in path or '\\' in path or any(part in ('.', '..') for part in path.split('/'))
+            or '?' in value or '#' in value or '@' in parts.netloc
+            or (parts.hostname or '').lower().rstrip('.') in ('metadata', 'metadata.google.internal', 'instance-data')):
+        raise ValueError('URL refused by the backend policy')
+    if not (parts.hostname or '').isascii():
+        raise ValueError('use the ASCII (xn--) form of an internationalized host name')
+    return value
 
 
 def credential(value):
@@ -108,19 +125,8 @@ class NextcloudConnection(Connection):
     @field_validator('url')
     @classmethod
     def child_destination(cls, value):
-        """Refused when saved, not on every call: what apps/runtime/backend_policy.Destination denies ('.'/'..' path
-        segments, '%' or '\\' after percent-decoding, metadata host names) and what the child's Settings refuse
-        ('?' or '#' anywhere, '@' in the authority)."""
-        parts = urlsplit(value)
-        path = unquote(parts.path)
-        if ('%' in path or '\\' in path or any(part in ('.', '..') for part in path.split('/'))
-                or '?' in value or '#' in value or '@' in parts.netloc
-                or (parts.hostname or '').lower().rstrip('.') in ('metadata', 'metadata.google.internal', 'instance-data')):
-            raise ValueError('URL refused by the backend policy')
-        if not (parts.hostname or '').isascii():
-            # backend_policy compares the configured host with the IDNA (xn--) host httpx sends: never equal.
-            raise ValueError('use the ASCII (xn--) form of an internationalized host name')
-        return value
+        """Refused when saved, not on every call (backend_destination); the child's Settings refuse the same URLs."""
+        return backend_destination(value)
 
     @field_validator('username', 'app_password')
     @classmethod
@@ -133,6 +139,57 @@ class NextcloudConnection(Connection):
 
 CONNECTIONS = dict(zip(PRODUCTS, (OdooConnection, ManageConnection, HermesConnection,
                                   OpenDesignConnection, EmqxConnection, LiteLLMConnection, NextcloudConnection)))
+URL_FIELDS = {'odoo': ('url',), 'odoo-manage': ('url',), 'hermes': ('gateway_url', 'dashboard_url'),
+              'opendesign': ('url',), 'emqx': ('url',), 'litellm': ('url',), 'nextcloud': ('url',)}
+# The address rule of apps/runtime/backend_policy.allowed_address (that module checks its pinned httpx sources when it is
+# imported, so the gateway keeps a copy; tests/test_saved_destinations.py fails if the two ever differ).
+_V4_DENY = tuple(map(ipaddress.ip_network, (
+    '0.0.0.0/8', '169.254.0.0/16', '100.64.0.0/10', '224.0.0.0/4',
+    '192.0.0.0/24', '192.0.2.0/24', '192.88.99.0/24', '198.51.100.0/24',
+    '203.0.113.0/24', '240.0.0.0/4', '168.63.129.16/32')))
+_V6_DENY = tuple(map(ipaddress.ip_network, ('2002::/16', '2001::/32', '2001:db8::/32', 'fd00:ec2::254/128')))
+
+
+def allowed_address(value):
+    try:
+        if '%' in value:
+            return False
+        ip = ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    if ip.version == 4:
+        return not any(ip in network for network in _V4_DENY)
+    return (ip == ipaddress.ip_address('::1') or ip in ipaddress.ip_network('fc00::/7') or
+            ip in ipaddress.ip_network('2000::/3')) and not any(ip in network for network in _V6_DENY)
+
+
+def saved_destination(value):
+    """backend_destination, plus what the policy refuses once it connects and a saved URL already shows: a numeric host
+    outside the allowed addresses (169.254.169.254, a 100.64.0.0/10 address, a documentation range, an IPv4-mapped
+    IPv6 address...), an IPv6 zone id, port 0."""
+    backend_destination(value)
+    parts = urlsplit(value)
+    host = parts.hostname or ''
+    try:
+        numeric = ipaddress.ip_address(host)
+    except ValueError:
+        numeric = None
+    if '%' in parts.netloc or parts.port == 0 or (numeric is not None and not allowed_address(host)):
+        raise ValueError('URL refused by the backend policy')
+    return value
+
+
+def check_saved_destinations(state, previous=None):
+    """Refuse, when a connection is saved through the admin API, a URL backend_policy would refuse on every call. Only
+    the URLs this save changes are checked, and the check is kept out of the Connection models (Nextcloud's had the
+    path rule from the start): a state saved before this check still loads after an upgrade, and a URL it holds does
+    not block editing the other fields, so its administrator can open the page and correct it."""
+    connection = getattr(state, 'connection', None)
+    before = getattr(previous, 'connection', None)
+    for name in URL_FIELDS.get(getattr(state, 'product', None), ()):
+        value = getattr(connection, name, None)
+        if value is not None and value != getattr(before, name, None):
+            saved_destination(value)
 
 # Owner decision 2026-10-27 (the PaaS woow-mcp-server owner_defaults of 2026-10-25, for the HA add-ons): the state
 # field that marks the one-time all-on migration of a legacy (schema 1/2/3) state. Same name as the PaaS marker.
