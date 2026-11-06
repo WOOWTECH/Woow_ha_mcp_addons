@@ -32,10 +32,13 @@ if (crypto.createHash("sha256").update(fs.readFileSync(apiPath)).digest("hex") !
 // tools-n8n-manager.js), dispatch, args.output and coerceStringifiedJsonParams are unchanged, so tools/list is
 // unchanged. utils/npm-version-checker.js adds a status field, an N8N_MCP_VERSION_CHECK_DISABLED switch (n8n_adapter sets
 // it to true: no npm registry query) and a shorter cache for failed checks. handlers-n8n-manager.js: the build patch is re-pinned (see the patch script).
+// Unreleased (0.4.12 line): tools-n8n-manager.js must carry fix_delete_workflow_description.py (the n8n_delete_workflow
+// description names how to delete a published workflow, as the PaaS server's description does); nothing else in it changes.
 for (const [relative, digest] of [
     ["utils/n8n-errors.js", "efd5783846cf1eb61dbf9387de260e5a1d336ec609bc4c4d5601c369b5d2f20a"],
     ["mcp/handlers-n8n-manager.js", "fe3181292ec5d1ad07195f55a7ab73569b15d990f687f620ecaf633742fb24aa"],
     ["mcp/server.js", "638b148f91c18d484b8bcede838be1032f82ddd1b3aa53b24cf005325ae3d9f7"],
+    ["mcp/tools-n8n-manager.js", "e31acfb4d4344704786d4a69fc4a2a0a6b784a265df3474073dd5bc5951efac7"],
     ["mcp/handlers-official-tools.js", "e85937c58d5a8426d54b1b69598adc83a14648402fc58a8714ef5db8132977cd"],
     ["mcp/official-mcp-access.js", "113d3556e4b93a870b36986a0fce8de45391ce64d7ab4c9f50fd6715eee3c733"],
     ["utils/npm-version-checker.js", "8ffe192878574d0c4a7a6453205be7916858344e889b8b681998b4f22451a426"],
