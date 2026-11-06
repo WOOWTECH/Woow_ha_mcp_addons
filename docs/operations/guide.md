@@ -115,6 +115,10 @@ credentials 與 workflow 並執行、產生或刪除 LiteLLM API key 並呼叫�
   只經 `packaging/native_addon.mjs` 從 `packaging/inputs.json` 固定的 GitHub release 資產取得：先驗檔案大小與 sha256 才開檔，
   tar 只准一個固定名稱、大小與 sha256 的一般檔，寫成 0644；建置期下載、執行期沒有下載，建置最後還要載入並跑 FTS5 才算過。
   n8n-mcp 因此用 FTS5 原生資料庫，不再退回 sql.js（0.4.11 以前的行為，`search_nodes` 的排序較差）；sql.js 仍在 npm 樹裡，只是不被選用。
+  n8n-mcp 把工作流版本歷史（更新與 autofix 前的備份、`n8n_workflow_versions`）寫在同一個 `nodes.db`，映像裡那個檔案是 root 擁有、子行程以
+  uid 10001 執行，原生引擎會把它當唯讀開、第一次寫入就失敗；所以管理程序啟動時（`n8n_adapter.prepare_catalog`）把它複製成私有工作副本
+  `/tmp/woow-n8n-mcp/nodes.db`（目錄 0700、檔案 0600，每次啟動都從目前映像的目錄重做，子行程重啟不重做），以 `NODE_DB_PATH` 交給子行程（PaaS 映像
+  同做法）。不在 `/data`，所以不進備份；歷史隨容器消失，與 sql.js 時記憶體裡的歷史相同。複製失敗時子行程仍會啟動，只是版本歷史寫不進去。
 - Stock image 搭配 Supervisor `init: true`；不是 s6。映像啟動只有 bootstrap
   短暫 root，用 no-follow directory fd 建立**新的** `/data/mcp`，設定 10001:10001
   與 0700；不碰 Supervisor options。一般情況不遞迴 chown、不接管既有錯誤 owner；唯一例外（0.1.1 起）

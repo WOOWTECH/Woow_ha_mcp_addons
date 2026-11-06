@@ -5,6 +5,7 @@ tools-n8n-manager.js are byte-identical). Of its new switches child_spec sets on
 (no npm registry query from n8n_health_check, as the PaaS); N8N_MCP_DISABLE_UI_APPS and the per-context
 instanceArgument are not set.
 """
+import os
 from pathlib import Path
 import shutil
 from typing import Literal
@@ -73,6 +74,48 @@ from mcp_admin_core.surface import full_tools
 TOOLS = full_tools("n8n")
 CHILD_URL = "http://127.0.0.1:3000/mcp"
 
+# Unreleased (0.4.12 line). n8n-mcp keeps its local workflow version history (table workflow_versions: the backups taken before
+# an update or autofix, n8n_workflow_versions) in the same SQLite file as its node catalog, nodes.db. In the image that file is
+# root-owned and the child runs as uid 10001. sql.js loaded it into memory, so writes worked (and were lost with the process; its
+# attempt to save them back failed unseen). Native better-sqlite3 opens an unwritable file read-only, and the first INSERT into
+# workflow_versions fails with "attempt to write a readonly database". So the child gets a private working copy, as the PaaS
+# image does (NODE_DB_PATH): made once when the management process starts (run.py), kept across child restarts, outside /data so
+# it is not part of backups, gone with the container like the in-memory history was, and always the catalog of the running image.
+CATALOG_DIR = Path("/tmp/woow-n8n-mcp")
+_catalog = None
+
+
+def prepare_catalog(directory=CATALOG_DIR, source=None):
+    """Copy the packaged nodes.db to <directory>/nodes.db (directory 0700, file 0600, replaced atomically) and make the next
+    child_spec() hand it to n8n-mcp. Returns the path, or None when the package has no database or the copy cannot be made
+    (the child then reads the packaged file: search works, version history writes fail). Never follows a link."""
+    global _catalog
+    _catalog = None
+    source = Path(source) if source is not None else Path(__file__).parent / "node_modules/n8n-mcp/data/nodes.db"
+    directory = Path(directory)
+    try:
+        if source.is_symlink() or not source.is_file():
+            return None
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        info = os.lstat(directory)
+        if directory.is_symlink() or info.st_uid != os.getuid() or info.st_mode & 0o077:
+            return None  # not our private directory
+        target, temporary = directory / "nodes.db", directory / f".nodes.db.{os.getpid()}.tmp"
+        try:
+            with open(source, "rb") as origin, os.fdopen(os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), "wb") as copy:
+                shutil.copyfileobj(origin, copy, 1024 * 1024)
+                copy.flush()
+                os.fsync(copy.fileno())
+            if temporary.stat().st_size != source.stat().st_size:
+                return None
+            os.replace(temporary, target)
+        finally:
+            temporary.unlink(missing_ok=True)
+    except OSError:
+        return None
+    _catalog = target
+    return target
+
 
 def child_spec(state: State, directory: Path) -> ChildSpec:
     entry = Path(__file__).parent / "node_modules/n8n-mcp/dist/mcp/index.js"
@@ -103,5 +146,7 @@ def child_spec(state: State, directory: Path) -> ChildSpec:
     # address, private and loopback included (only cloud metadata names stay blocked), so n8n_test_workflow can reach
     # an n8n on the HA network. The configured API backend keeps its own DNS-pinned agents (backend_policy.cjs).
     env["WEBHOOK_SECURITY_MODE"] = "permissive"
+    if _catalog is not None and _catalog.is_file():
+        env["NODE_DB_PATH"] = str(_catalog)  # the private writable copy made by prepare_catalog() at start-up
     policy = Path(__file__).with_name("backend_policy.cjs").resolve()
     return ChildSpec((node, "--require", str(policy), str(entry.resolve())), env, directory)
