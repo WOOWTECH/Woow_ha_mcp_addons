@@ -43,7 +43,7 @@
       }
     },
     "odoo": {
-      "ha_commit": "a7d4bc921092dae5e90d618473736d2ddccf0590",
+      "ha_commit": "e24dba06d629e32c3a32d22ee64c4e42eea05b83",
       "package": "odoo-mcp==1.3.0",
       "sdk": {
         "mcp": "2.3.0",
@@ -52,7 +52,7 @@
       "files": {
         "apps/odoo/pyproject.toml": "c58ac066571355e944d775f84c7b6b0cadcb5abfc817a9be589a25473cd2998d",
         "apps/odoo/uv.lock": "fe6109498c3143d0b7f25d094a81f7b863984dd791a582c02a9db66e7c49a17a",
-        "apps/odoo/launch.py": "f1872422203a28afbd1fdf9df615002ae6c96ba030d484ba020ae4510cda37e7",
+        "apps/odoo/launch.py": "c598000d69da8efaea38318774c53de8703882c8b5496d39eada8ae96c18a6bc",
         "apps/odoo/odoo_switch_overlay.py": "d152e371f98a5ffab992aa7048cb773edb2263305272ec564a077b65215ff8f4",
         "apps/odoo/start_switches.py": "d3c366ee8c392875d0f712efc7bbafb2ab5aec04371018dadfad7827e268d85a"
       }
