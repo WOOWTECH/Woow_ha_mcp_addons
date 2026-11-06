@@ -268,21 +268,43 @@ def test_pinned_version_check_is_disabled_without_npm_query(store):
     assert control["status"] == "failed" and "npm registry queried" in control["message"], control
 
 
-def test_the_n8n_child_has_no_native_addon_and_uses_sql_js(store):
-    """0.4.0 (Node 26): `npm ci --ignore-scripts` never runs better-sqlite3's install script (the download of its prebuilt
-    native addon), so the n8n child has no native addon and n8n-mcp keeps the sql.js fallback it has used since 0.1.0;
-    Node's native ABI does not matter here. (The WOOW PaaS pins better-sqlite3 12.11.1 to load that addon on Node 26.)"""
+def test_the_n8n_child_loads_the_one_pinned_native_addon_and_n8n_mcp_uses_it(store):
+    """Unreleased (0.4.12 line; 0.4.0 to 0.4.11 kept the sql.js fallback and asserted the addon unavailable). `npm ci
+    --ignore-scripts` still never runs better-sqlite3's install script, so the locked tree has no addon of its own. The
+    image (apps/n8n/Dockerfile) and this unit environment (packaging/unit.sh) add exactly one file, through
+    packaging/native_addon.mjs from the release asset pinned in packaging/inputs.json: the Node 26 (ABI 147) prebuild
+    of the locked better-sqlite3 version, whose sha256 is pinned. n8n-mcp then opens its FTS5 database with it instead of
+    falling back to sql.js, which has no FTS5 (search_nodes ranked community nodes ahead of the core ones)."""
+    import hashlib
     import subprocess
     from pathlib import Path
     spec = child_spec(store.load(), store.path.parent)
     app = Path(spec.argv[-1]).parents[4]  # apps/n8n (…/node_modules/n8n-mcp/dist/mcp/index.js)
-    assert (app / "package.json").is_file() and not list((app / "node_modules").rglob("*.node"))
+    pin = json.loads((app.parent.parent / "packaging/inputs.json").read_text())["native_addons"]["better-sqlite3"]
+    modules = app / "node_modules"
+    assert (app / "package.json").is_file()
+    assert json.loads((modules / "better-sqlite3/package.json").read_text())["version"] == pin["version"]
+    # Exactly one native file in the whole tree, the pinned one, 0644, with nothing else built next to it.
+    found = sorted(str(path.relative_to(modules)) for path in modules.rglob("*.node"))
+    assert found == ["better-sqlite3/" + pin["member"]]
+    addon = modules / found[0]
+    assert hashlib.sha256(addon.read_bytes()).hexdigest() == pin["member_sha256"] and addon.stat().st_size == pin["member_size"]
+    assert stat.S_IMODE(addon.stat().st_mode) == 0o644
+    assert sorted(path.name for path in (modules / "better-sqlite3/build").rglob("*") if path.is_file()) == [addon.name]
     code = (
-        "let native = 'loaded'; try { require('better-sqlite3')(':memory:'); } catch (e) { native = 'unavailable'; }"
-        "require('sql.js')().then(SQL => { const db = new SQL.Database();"
-        " process.stdout.write(JSON.stringify({native, sqljs: db.exec('select 1')[0].values[0][0], node: process.version}));"
-        " });"
+        "const out = { node: process.version };"
+        "try { const db = require('better-sqlite3')(':memory:'); out.native = 'loaded';"
+        " out.sqlite = db.prepare('select sqlite_version() v').get().v; db.exec('create virtual table t using fts5(a)'); out.fts5 = true; }"
+        " catch (e) { out.native = 'unavailable'; out.error = String(e).slice(0, 200); }"
+        # n8n-mcp's own choice, with the child's environment: the adapter class it ends up with and an FTS5 query on its database.
+        f"require({json.dumps(str(modules / 'n8n-mcp/dist/database/database-adapter.js'))})"
+        f".createDatabaseAdapter({json.dumps(str(modules / 'n8n-mcp/data/nodes.db'))}).then(adapter => {{"
+        " out.adapter = adapter.constructor.name;"
+        " out.fts_hits = adapter.prepare(\"select count(*) as c from nodes_fts where nodes_fts match 'webhook'\").get().c > 0;"
+        " process.stdout.write(JSON.stringify(out)); });"
     )
-    result = subprocess.run([spec.argv[0], "-e", code], env=spec.env, cwd=app, capture_output=True, text=True, timeout=30)
+    result = subprocess.run([spec.argv[0], "-e", code], env=spec.env, cwd=app, capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout) == {"native": "unavailable", "sqljs": 1, "node": "v26.12.1"}
+    found = json.loads(result.stdout)
+    assert found.pop("sqlite").count(".") == 2  # the SQLite inside the addon (3.53.2 for better-sqlite3 12.11.1)
+    assert found == {"node": "v26.12.1", "native": "loaded", "fts5": True, "adapter": "BetterSQLiteAdapter", "fts_hits": True}, found

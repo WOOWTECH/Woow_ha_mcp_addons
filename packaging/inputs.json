@@ -23,6 +23,22 @@
       "openssl": "3.0.22-1~deb12u2"
     }
   },
+  "native_addons": {
+    "better-sqlite3": {
+      "package": "better-sqlite3",
+      "version": "12.11.1",
+      "node": "26.12.1",
+      "node_abi": "v147",
+      "platform": "linux-x64",
+      "url": "https://github.com/WiseLibs/better-sqlite3/releases/download/v12.11.1/better-sqlite3-v12.11.1-node-v147-linux-x64.tar.gz",
+      "sha256": "a90711eae785b646d6799b31cf8dd79a5d750b1af72d310472c3b996c5cee92d",
+      "size": 1114012,
+      "member": "build/Release/better_sqlite3.node",
+      "member_size": 2162544,
+      "member_sha256": "44170d6656cd1a6b67c88816db5820f8f3719417b634f5218182e306c63784f7",
+      "evidence": "2026-11-05: the GitHub release asset digest (API) equals the sha256 of the downloaded file; the archive holds exactly this one file (SQLite 3.53.2 inside; needs glibc <= 2.34, GLIBCXX <= 3.4.29); the npm integrity of better-sqlite3 12.11.1 in apps/n8n/package-lock.json equals the registry value and the PaaS woow-mcp-server lock."
+    }
+  },
   "bases": {
     "python": "python:3.13.18-slim-bookworm@sha256:70bda1e795ded2a684ef9815955e05829b14ee5bb5c3eb2a940648e88f10fce9",
     "node": "node:26.12.1-bookworm-slim@sha256:28147155d47dc31abe0a46e0d12b59b2fb3d0a2dcc5dc65fce76a074180b16fe",

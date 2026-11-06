@@ -91,8 +91,9 @@ fail the new automated gate rather than inventing a repository-wide license.
 
 ## Whole-image obligations still to clear
 
-Python, Node, Debian packages, uv build tooling, MCP SDK, HTTPX, sql.js, bundled
-n8n metadata and every transitive dependency retain their own licenses. Base
+Python, Node, Debian packages, uv build tooling, MCP SDK, HTTPX, sql.js, the
+better-sqlite3 prebuilt binary (MIT; it embeds SQLite, public domain; n8n image, pinned in
+`packaging/inputs.json`), bundled n8n metadata and every transitive dependency retain their own licenses. Base
 image digest pinning is integrity evidence, not a CVE/redistribution review.
 Produce a per-image dependency/license SBOM and collect required notices/source
 obligations before clearance. uv/npm caches, tests, credentials, backups and Git

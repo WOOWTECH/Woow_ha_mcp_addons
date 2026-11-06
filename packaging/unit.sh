@@ -1,5 +1,5 @@
 #!/bin/sh
-# Disposable CI only: all downloads pinned by existing locks, no backend credentials.
+# Disposable CI only: all downloads pinned by existing locks (and the one native addon by packaging/inputs.json), no backend credentials.
 set -eu
 unset SUPERVISOR_TOKEN
 uv sync --frozen --python python3.13
@@ -10,6 +10,9 @@ done
 apps/odoo/.venv/bin/python apps/odoo/patches/fix_cross_session_token_store.py
 apps/odoo/.venv/bin/python apps/odoo/patches/fix_direct_writes.py
 npm ci --prefix apps/n8n --ignore-scripts --no-audit --no-fund
+# Unreleased (0.4.12 line): the pinned better-sqlite3 prebuild the n8n image installs (apps/n8n/Dockerfile), by the same
+# script and the same pin, so these tests run against the native addon the image has.
+node packaging/native_addon.mjs install --inputs packaging/inputs.json --addon better-sqlite3 --node-modules apps/n8n/node_modules
 # 0.2.2: the n8n-mcp build patch the n8n image applies (apps/n8n/Dockerfile); backend_policy.cjs checks the patched digest.
 python3 apps/n8n/patches/fix_test_run_error_messages.py
 python3 apps/n8n/patches/fix_tool_result_is_error.py
