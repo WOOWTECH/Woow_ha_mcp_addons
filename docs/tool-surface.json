@@ -99,7 +99,7 @@
     "apps/nextcloud/vendor/nextcloud_mcp_server/client.py": "e6dbd778777a4b34c7a796a78ac8ae2c5cb7a353c0db74424edde8bb80834cb7",
     "apps/nextcloud/vendor/nextcloud_mcp_server/errors.py": "67339625603c9b4ed5a5bccf7960e52933e7b65f883e0a529df5e1718597dd04",
     "apps/nextcloud/vendor/nextcloud_mcp_server/ical.py": "531ca3c58684ea1c7dd504b440703c80699ccbf024278e568121195d9738b9af",
-    "apps/nextcloud/vendor/nextcloud_mcp_server/paths.py": "806f187a9ad668c89ddfa71c4e827ac78f69e9649493fd76228a17683e4b7c4d",
+    "apps/nextcloud/vendor/nextcloud_mcp_server/paths.py": "231656621e3536928bc6d7b8457aaf9361ff699eb73e037c1a0caf8d7714e4d4",
     "apps/nextcloud/vendor/nextcloud_mcp_server/server.py": "eb25088dc4d2158f1583e53b682d753711941bfc2352a2890ef6f6693fd3a108",
     "apps/nextcloud/vendor/nextcloud_mcp_server/settings.py": "d8283658375f65ec0022a5e04e48d0109e14d49a8df1f7e6c8fcbd905ebb45ad",
     "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py": "9b22f15816e56e6808a509886d89f52a04152dec99bf9078ccd257e098fb4aa4",
