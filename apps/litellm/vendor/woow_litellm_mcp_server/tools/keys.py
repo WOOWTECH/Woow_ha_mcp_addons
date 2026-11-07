@@ -10,7 +10,7 @@ from ..deps import litellm_client
 from ..errors import ToolError
 from ..gating import ToolGate
 from ..registry import OP_CREATE, OP_DELETE, OP_UPDATE
-from ._common import destructive, prune_none, read_only, writing
+from ._common import destructive, path_segment, prune_none, read_only, writing
 
 # Fields /key/update accepts that a caller may legitimately want to RESET to
 # null. prune_none() can never transmit a null, so "clear" is the only way out
@@ -259,5 +259,5 @@ def register(mcp: Any, gate: ToolGate) -> None:
             gate.require_operation("litellm_regenerate_key", OP_UPDATE)
             body = prune_none({"new_master_key": new_master_key})
             return await litellm_client(ctx).post(
-                f"/key/{key}/regenerate", json_data=body
+                f"/key/{path_segment(key, 'key')}/regenerate", json_data=body
             )

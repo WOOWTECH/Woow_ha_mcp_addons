@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import Annotated, Any
-from urllib.parse import quote
 
 import httpx
 from fastmcp import FastMCP
@@ -15,14 +14,9 @@ from ..errors import emqx_request, json_body
 from ..gating import ToolGate
 from ..models import ClientInfo, ClientList, KickResult
 from ..settings import settings
-from ._common import destructive, page_of, read_only
+from ._common import destructive, page_of, path_segment, read_only
 
 QOS = Annotated[int, Field(description="MQTT QoS: 0, 1 or 2.", ge=0, le=2)]
-
-
-def _enc(value: str) -> str:
-    """Percent-encode a path segment, including any '/' it contains."""
-    return quote(value, safe="")
 
 
 def _to_info(row: dict) -> ClientInfo:
@@ -97,7 +91,7 @@ def register(mcp: FastMCP, gate: ToolGate) -> None:
             """Full session detail for one client: keepalive, in-flight queue,
             protocol, subscriptions count, connect and disconnect timestamps."""
             return json_body(
-                await emqx_request(emqx, "GET", f"/clients/{_enc(clientid)}")
+                await emqx_request(emqx, "GET", f"/clients/{path_segment(clientid, 'clientid')}")
             )
 
     if on("emqx_client_subscriptions"):
@@ -114,7 +108,7 @@ def register(mcp: FastMCP, gate: ToolGate) -> None:
             subscription filter does not match the publish topic.
             """
             body = json_body(await emqx_request(
-                emqx, "GET", f"/clients/{_enc(clientid)}/subscriptions"))
+                emqx, "GET", f"/clients/{path_segment(clientid, 'clientid')}/subscriptions"))
             rows = body if isinstance(body, list) else body.get("data", [])
             return {"clientid": clientid, "count": len(rows), "subscriptions": rows}
 
@@ -136,7 +130,7 @@ def register(mcp: FastMCP, gate: ToolGate) -> None:
             a fresh connection rather than blocking one — use emqx_ban to
             keep a client out.
             """
-            await emqx_request(emqx, "DELETE", f"/clients/{_enc(clientid)}")
+            await emqx_request(emqx, "DELETE", f"/clients/{path_segment(clientid, 'clientid')}")
             return KickResult(clientid=clientid, kicked=True)
 
     if on("emqx_client_subscribe"):
@@ -157,7 +151,7 @@ def register(mcp: FastMCP, gate: ToolGate) -> None:
             subscription after a clean-session reconnect.
             """
             await emqx_request(
-                emqx, "POST", f"/clients/{_enc(clientid)}/subscribe",
+                emqx, "POST", f"/clients/{path_segment(clientid, 'clientid')}/subscribe",
                 json={"topic": topic, "qos": qos},
             )
             return {"clientid": clientid, "topic": topic, "qos": qos,
@@ -180,7 +174,7 @@ def register(mcp: FastMCP, gate: ToolGate) -> None:
             to tell why.
             """
             await emqx_request(
-                emqx, "POST", f"/clients/{_enc(clientid)}/unsubscribe",
+                emqx, "POST", f"/clients/{path_segment(clientid, 'clientid')}/unsubscribe",
                 json={"topic": topic},
             )
             return {"clientid": clientid, "topic": topic, "unsubscribed": True}

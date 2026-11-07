@@ -55,10 +55,10 @@
     "apps/hermes/vendor/hermes_mcp_server/guards.py": "a3908868dc242ab342e4b70ea2f6fd0544ffd3e03515056a9958da64f7cd62db",
     "apps/hermes/vendor/hermes_mcp_server/server.py": "10c05ce8bee9db7044b039ba82c20bfb22dce2fa705e60dc9d92d9c1cb317087",
     "apps/hermes/vendor/hermes_mcp_server/session_mutations.py": "e52a25d72b8da70f2cf4b8b298c760bf1cf34eb158287bbe451f8595c3f61cbb",
-    "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py": "d4f16b9af152a71c8fa2a16bc013bd9e39d58db4e59206d331190d890643d50e",
+    "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py": "67c21098f7e6b9b2bd3693fc790fce278b57f0f4d999c5728215668c35d3b654",
     "apps/emqx/vendor/emqx_mcp_server/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "apps/emqx/vendor/emqx_mcp_server/deps.py": "fa949b1f1b3577be7c848af5bb74a5b9d068d39cba265b93cdd4dde4a41529e3",
-    "apps/emqx/vendor/emqx_mcp_server/errors.py": "c4ec6ebe98df07ec625d2a438f316e8f2c43d78e825ba6194d121a9e37755b11",
+    "apps/emqx/vendor/emqx_mcp_server/errors.py": "ac012ba5c20e7bfdc446b3f993bee902051cf6e9bbad5e09259e788716a97c96",
     "apps/emqx/vendor/emqx_mcp_server/gating.py": "9168feae3231c16df2513f3668a7ad6dacc67072ef5d0cc919bb963e2b6de057",
     "apps/emqx/vendor/emqx_mcp_server/lifespan.py": "e217a630de2a1d9061441a81dc463aaada787203e3c900890198a5789a0be811",
     "apps/emqx/vendor/emqx_mcp_server/models.py": "0d247d845738f37d2673fd0e50203cc8c4f3c4cf6a2d3b10db7bd2a0b9740801",
@@ -66,17 +66,17 @@
     "apps/emqx/vendor/emqx_mcp_server/server.py": "e6ae5c32a62ae8942bdf2701f687dc7d840bc49745fd8b094e886f833c043c22",
     "apps/emqx/vendor/emqx_mcp_server/settings.py": "7c4ad8c7d6c56c8a9d3ef62634a4a875bbb9ee25992e6ac0aaf972aaf32a3598",
     "apps/emqx/vendor/emqx_mcp_server/tools/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "apps/emqx/vendor/emqx_mcp_server/tools/_common.py": "ecf9b4f3ec95b059dcda81d0c5e77c294c14e48cc4f8adc423d455bcf5400ae5",
-    "apps/emqx/vendor/emqx_mcp_server/tools/clients.py": "11b7029a4e57a78169fde8d006596513040c64cdcbb1b12b72f0e48eab0fc3af",
-    "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py": "2a5f1943551498556b3ef525c6742d17980c40022dd6da9349307428da7b0f52",
-    "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py": "f20e0868ebca0c2707d8f3b3fbe7a9e3651af9235d708abfced402ba3c6e26bf",
-    "apps/emqx/vendor/emqx_mcp_server/tools/integration.py": "05ac8a89c35389d6793bb2e2c579947ee3bbc42a55c5fd67d9978a162e1636de",
-    "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py": "ef5dd9178e701ea4df018ee9fffe202164277fdd072a4e828e6f57bf09527b4c",
-    "apps/emqx/vendor/emqx_mcp_server/tools/security.py": "f113e5c365b7d25bca426f3dd663570e9302777b27d67ff24c9ad4af1d299dcf",
+    "apps/emqx/vendor/emqx_mcp_server/tools/_common.py": "dcd2dacb0bd4b046ea7f6a85f39929c07d1491420fb5b1486f0bdcfe46fc4fba",
+    "apps/emqx/vendor/emqx_mcp_server/tools/clients.py": "7972cd71b93a66cf904150296580de1a64a9b706474bc47c3da8242ab1dc8744",
+    "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py": "9b23d5bb1c62a2e3cd40549fbc4d6dc0755246963054d7b9d3a0a4a4dd1aeb4d",
+    "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py": "ef9bb5681af9235ebc1da7b8f836c7be320d6f7ff4e8e70d881466a0d0942cb3",
+    "apps/emqx/vendor/emqx_mcp_server/tools/integration.py": "6a417ac934f8f5d41c1d0439042ffff27dae1825cafe36106a814331c3339101",
+    "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py": "37c6177f9ee207fa497986f975775633505d02fce9f8ac1ad3667c448ab55c33",
+    "apps/emqx/vendor/emqx_mcp_server/tools/security.py": "c18d4c6b191c929cd42a4f817ec46caccab41aa60ef54ef45645456bd53a80f7",
     "apps/emqx/vendor/emqx_mcp_server/tools/topics.py": "fb95c8cfcf2279e3b8b2545079bda8276a24210440123c5ac38624c372f1e353",
     "apps/litellm/vendor/woow_litellm_mcp_server/__init__.py": "9567c42afe6f2928bb9d7b550c3266c70d8e6c47bd0ebbe0d6a2558a90726f4c",
     "apps/litellm/vendor/woow_litellm_mcp_server/deps.py": "4a283943aeb3ab74a4d88721cecd577263a66e2a83c64509c90a4235eec636ce",
-    "apps/litellm/vendor/woow_litellm_mcp_server/errors.py": "3bc39077a69c07b2b0ceeb306510dc2f71ccc3b604187a4cecedab784efc1768",
+    "apps/litellm/vendor/woow_litellm_mcp_server/errors.py": "febc2f7b04ac650d1bba13f27e7439e62c6c0f47cc79215ab8c7659cd4b8033d",
     "apps/litellm/vendor/woow_litellm_mcp_server/gating.py": "d6ad9181d4459400f22b3dd553bc2af082c0c9a8af9888fe14e412045dc0b4a6",
     "apps/litellm/vendor/woow_litellm_mcp_server/lifespan.py": "02f2d2998dd0ada21d8560203409184a359d35b18e546ee6c68a7b24f87c18da",
     "apps/litellm/vendor/woow_litellm_mcp_server/middleware.py": "a019bb77516d924981301c06a933263fc6743380c32488efaba2748bd28a05c5",
@@ -84,12 +84,12 @@
     "apps/litellm/vendor/woow_litellm_mcp_server/server.py": "85c3cb8f6d50bed817279754c16309919bdf419f8193b6291f47f08f80db89f7",
     "apps/litellm/vendor/woow_litellm_mcp_server/settings.py": "d88e9523d99aa92e1cbd9496548ba1fe0d215fa94242a86ea985df5785748a0c",
     "apps/litellm/vendor/woow_litellm_mcp_server/tools/__init__.py": "fd4881256f2c77ece6e01f98742355d6bab7fbb170079d0474c7c78cf2772742",
-    "apps/litellm/vendor/woow_litellm_mcp_server/tools/_common.py": "88ed7db06559d0ebaddf014831ad59e11ae3ca488c618cdc8994efb8185fe41e",
+    "apps/litellm/vendor/woow_litellm_mcp_server/tools/_common.py": "dc44cacd3af9a3a5d45398d18ec3d1a43cbf0f0031e48f9e07fad3645bd197b1",
     "apps/litellm/vendor/woow_litellm_mcp_server/tools/chat.py": "e0afb3b37084c5cd9b79255a953fa02a979da6b34b6b43f9b5021d27c470d6d2",
     "apps/litellm/vendor/woow_litellm_mcp_server/tools/health.py": "2d2151fe1ce42a0ceaf0d88914d75691764fa9d23bf3f78984ac74e90cf4058d",
-    "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py": "f53ffbcea4520fa4a95f2cb6722e6979d4515507076c5bcd1593ccf2ac9f63d8",
-    "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py": "8b3e9a184f6e12633ffb724aa69c55a09fae13df3d8f5112f3704d61aa6d94ec",
-    "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py": "f1a421b82ad96427d0d05d9f248d509f92a6cca320ee7f1217a6662eda85b054",
+    "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py": "70462f606e9c87172e7693c2356031ecae42c98422d061d4ba312c80b0049e51",
+    "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py": "53183755197a9b4f48dc7420e28ff0550b15771262aac4501ac7fa1ae280aa34",
+    "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py": "64b253925d13be62325331fa5269089ac24ceb661b3a4af6621a5ff5ec0e1046",
     "apps/litellm/vendor/woow_litellm_mcp_server/tools/spend.py": "87a47df79cc41c4f3ea29c2128bf248a5a865ca11acb0f63f4a1950294fdee3b",
     "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py": "15fe1783df2740477c0dd222f51c50c6043844fc3c0bf2361050d9c70904ea96",
     "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py": "19da4359727177e950b4a222633baa179d9a843fae50db6aece3d86ccee87517",
@@ -135,7 +135,7 @@
     "apps/n8n/node_modules/n8n-mcp/dist/services/workflow-validator.js": "375cdf41a73ec0978b99b8a33a68ec964fb4693b59a5643072095ea5a69f3009",
     "apps/n8n/backend_policy.cjs": "1dcdb4395bd76b12474e112ac41c04d3dfec9248b6b9290cecf1165b6cc70588",
     "apps/n8n/node_modules/n8n-mcp/dist/utils/npm-version-checker.js": "8ffe192878574d0c4a7a6453205be7916858344e889b8b681998b4f22451a426",
-    "apps/runtime/backend_policy.py": "3b9596b3ed8a67ce1b7ac22b6096185907974ed012b87cfb40e770d89998218e",
+    "apps/runtime/backend_policy.py": "1a5574e9099d42a4686d8179884ca0c0c7e071e2ac5a3781cabb6f0fb3dc5c6a",
     "apps/runtime/batch2_outputs.py": "239add1fbbad29eecbfec82e33553b33b4ed7b0e5d3acdad01a33d83f2090352",
     "apps/runtime/bounded_tools.py": "33d87837b6e60c820f1ce53442606fa519182505a9a27f6c4c7f5262a4b8d745",
     "apps/runtime/odoo_read_errors.py": "fe295494f3b01e59880a56f59dd829e351062fffd1cbeca1daabea713635b9e3",
@@ -2537,7 +2537,7 @@
         {
           "name": "create_project",
           "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
-          "line": 206,
+          "line": 220,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "prompt: str, agent_id: str='claude'",
@@ -2562,7 +2562,7 @@
         {
           "name": "delete_project",
           "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
-          "line": 240,
+          "line": 254,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "project_id: str",
@@ -2587,7 +2587,7 @@
         {
           "name": "get_file_info",
           "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
-          "line": 281,
+          "line": 295,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "project_id: str, file_path: str",
@@ -2610,7 +2610,7 @@
         {
           "name": "get_project",
           "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
-          "line": 195,
+          "line": 209,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "project_id: str",
@@ -2633,7 +2633,7 @@
         {
           "name": "health",
           "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
-          "line": 145,
+          "line": 159,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "",
@@ -2656,7 +2656,7 @@
         {
           "name": "list_agents",
           "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
-          "line": 159,
+          "line": 173,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "",
@@ -2679,7 +2679,7 @@
         {
           "name": "list_connectors",
           "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
-          "line": 176,
+          "line": 190,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "",
@@ -2702,7 +2702,7 @@
         {
           "name": "list_plugins",
           "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
-          "line": 342,
+          "line": 356,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "",
@@ -2725,7 +2725,7 @@
         {
           "name": "list_project_files",
           "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
-          "line": 251,
+          "line": 265,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "project_id: str",
@@ -2748,7 +2748,7 @@
         {
           "name": "list_projects",
           "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
-          "line": 188,
+          "line": 202,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "",
@@ -2771,7 +2771,7 @@
         {
           "name": "list_runs",
           "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
-          "line": 330,
+          "line": 344,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "",
@@ -2794,7 +2794,7 @@
         {
           "name": "list_skills",
           "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
-          "line": 363,
+          "line": 377,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "",
@@ -2817,7 +2817,7 @@
         {
           "name": "read_file",
           "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
-          "line": 267,
+          "line": 281,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "project_id: str, file_path: str",
@@ -2840,7 +2840,7 @@
         {
           "name": "send_message",
           "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
-          "line": 302,
+          "line": 316,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "project_id: str, prompt: str, agent_id: str='claude'",
@@ -2865,7 +2865,7 @@
         {
           "name": "version",
           "source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py",
-          "line": 152,
+          "line": 166,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "",
@@ -2894,7 +2894,7 @@
         {
           "name": "emqx_authz_settings",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py",
-          "line": 142,
+          "line": 137,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -2917,7 +2917,7 @@
         {
           "name": "emqx_ban",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py",
-          "line": 240,
+          "line": 235,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "subject_type: Annotated[BanSubject, Field(description='What to match on: client id, username or peer IP.')], who: Annotated[str, Field(description='The exact value to ban.')], reason: Annotated[str | None, Field(description='Free-text note kept with the ban entry.')]=None, until: Annotated[int | None, Field(description='Unix seconds when the ban lifts. Omit for permanent.')]=None, emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -2965,7 +2965,7 @@
         {
           "name": "emqx_client_subscribe",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py",
-          "line": 147,
+          "line": 141,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "clientid: Annotated[str, Field(description='Client id to act for.')], topic: Annotated[str, Field(description=\"Topic filter to subscribe, e.g. 'sensors/+/temp'.\")], qos: QOS=0, emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -2990,7 +2990,7 @@
         {
           "name": "emqx_client_subscriptions",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py",
-          "line": 107,
+          "line": 101,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "clientid: Annotated[str, Field(description='Exact client id.')], emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3013,7 +3013,7 @@
         {
           "name": "emqx_client_unsubscribe",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py",
-          "line": 171,
+          "line": 165,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "clientid: Annotated[str, Field(description='Client id to act for.')], topic: Annotated[str, Field(description='Exact topic filter to remove.')], emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3061,7 +3061,7 @@
         {
           "name": "emqx_create_trace",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py",
-          "line": 41,
+          "line": 40,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "name: Annotated[str, Field(description='Unique trace name; you will reuse it to read the log.')], target_type: Annotated[TraceTarget, Field(description='What to trace on.')], target: Annotated[str, Field(description='The client id, topic filter or IP to capture.')], duration_seconds: Annotated[int, Field(description='How long to capture for.', ge=10, le=3600)]=300, emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3086,7 +3086,7 @@
         {
           "name": "emqx_delete_retained",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py",
-          "line": 245,
+          "line": 248,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "topic: Annotated[str, Field(description='Exact topic whose retained message to remove.')], emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3111,7 +3111,7 @@
         {
           "name": "emqx_delete_trace",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py",
-          "line": 124,
+          "line": 123,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "name: Annotated[str, Field(description='Trace name to delete.')], emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3136,7 +3136,7 @@
         {
           "name": "emqx_get_client",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py",
-          "line": 92,
+          "line": 86,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "clientid: Annotated[str, Field(description='Exact client id, as returned by emqx_list_clients.')], emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3159,7 +3159,7 @@
         {
           "name": "emqx_get_retained",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py",
-          "line": 218,
+          "line": 221,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "topic: Annotated[str, Field(description=\"Exact topic whose retained message to read, e.g. 'woow/test/switch/state'.\")], emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3182,7 +3182,7 @@
         {
           "name": "emqx_get_rule_metrics",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py",
-          "line": 54,
+          "line": 53,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "rule_id: Annotated[str, Field(description='Rule id as listed by emqx_list_rules.')], emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3205,7 +3205,7 @@
         {
           "name": "emqx_get_trace_log",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py",
-          "line": 82,
+          "line": 81,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "name: Annotated[str, Field(description='Trace name to read.')], max_bytes: Annotated[int, Field(description='Truncate the log at this many bytes.', ge=1024, le=1048576)]=65536, emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3228,7 +3228,7 @@
         {
           "name": "emqx_kick_client",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py",
-          "line": 126,
+          "line": 120,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "clientid: Annotated[str, Field(description='Client id to disconnect. Call emqx_list_clients first to get an exact id.')], emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3253,7 +3253,7 @@
         {
           "name": "emqx_list_actions",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py",
-          "line": 134,
+          "line": 133,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3299,7 +3299,7 @@
         {
           "name": "emqx_list_authn",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py",
-          "line": 35,
+          "line": 30,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3322,7 +3322,7 @@
         {
           "name": "emqx_list_authz_sources",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py",
-          "line": 113,
+          "line": 108,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3345,7 +3345,7 @@
         {
           "name": "emqx_list_banned",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py",
-          "line": 228,
+          "line": 223,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3368,7 +3368,7 @@
         {
           "name": "emqx_list_clients",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py",
-          "line": 46,
+          "line": 40,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "username: Annotated[str | None, Field(description='Exact username match.')]=None, clientid: Annotated[str | None, Field(description='Exact client id match.')]=None, ip_address: Annotated[str | None, Field(description='Exact peer IP match.')]=None, connected_only: Annotated[bool, Field(description='Return only currently connected clients.')]=False, page: Annotated[int, Field(description='1-based page number.', ge=1)]=1, limit: Annotated[int, Field(description='Rows per page.', ge=1, le=200)]=settings.default_limit, emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3391,7 +3391,7 @@
         {
           "name": "emqx_list_connectors",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py",
-          "line": 118,
+          "line": 117,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3414,7 +3414,7 @@
         {
           "name": "emqx_list_listeners",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py",
-          "line": 140,
+          "line": 139,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3437,7 +3437,7 @@
         {
           "name": "emqx_list_retained",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py",
-          "line": 194,
+          "line": 197,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "page: Annotated[int, Field(description='1-based page number.', ge=1)]=1, limit: Annotated[int, Field(description='Rows per page.', ge=1, le=200)]=settings.default_limit, emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3460,7 +3460,7 @@
         {
           "name": "emqx_list_rules",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py",
-          "line": 27,
+          "line": 26,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "enabled_only: Annotated[bool, Field(description='Return only rules that are switched on.')]=False, page: Annotated[int, Field(description='1-based page number.', ge=1)]=1, limit: Annotated[int, Field(description='Rows per page.', ge=1, le=200)]=settings.default_limit, emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3529,7 +3529,7 @@
         {
           "name": "emqx_list_traces",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py",
-          "line": 29,
+          "line": 28,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3552,7 +3552,7 @@
         {
           "name": "emqx_manage_authn_users",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py",
-          "line": 64,
+          "line": 59,
           "evidence": "python-decorator-AST",
           "operations": {
             "operation": [
@@ -3611,7 +3611,7 @@
         {
           "name": "emqx_manage_authz_rules",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py",
-          "line": 164,
+          "line": 159,
           "evidence": "python-decorator-AST",
           "operations": {
             "operation": [
@@ -3762,7 +3762,7 @@
         {
           "name": "emqx_publish",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py",
-          "line": 99,
+          "line": 102,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "topic: Annotated[str, Field(description=\"Target topic, e.g. 'woow/test/switch/state'. Wildcards (+ and #) are not allowed when publishing.\", min_length=1)], payload: Annotated[str, Field(description='Message body, encoded per `payload_encoding`.')], qos: Annotated[int, Field(description='MQTT QoS: 0, 1 or 2.', ge=0, le=2)]=0, retain: Annotated[bool, Field(description=\"Keep this as the topic's retained message, so new subscribers receive it on connect.\")]=False, payload_encoding: Annotated[Literal['plain', 'base64'], Field(description='Use base64 for binary payloads.')]='plain', emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3787,7 +3787,7 @@
         {
           "name": "emqx_publish_bulk",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py",
-          "line": 152,
+          "line": 155,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "messages: Annotated[list[OutgoingMessage], Field(description='Messages to publish, at most 50 per call.', max_length=50)], emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3812,7 +3812,7 @@
         {
           "name": "emqx_test_rule_sql",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py",
-          "line": 92,
+          "line": 91,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "sql: Annotated[str, Field(description='Rule SQL to evaluate, e.g. \"SELECT payload FROM \\'sensors/#\\'\".')], topic: Annotated[str, Field(description='Topic of the sample event.')]='t/1', payload: Annotated[str, Field(description='Payload of the sample event.')]='{}', emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3837,7 +3837,7 @@
         {
           "name": "emqx_toggle_rule",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py",
-          "line": 72,
+          "line": 71,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "rule_id: Annotated[str, Field(description='Rule id to change.')], enable: Annotated[bool, Field(description='True to switch the rule on, False to switch it off.')], emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3862,7 +3862,7 @@
         {
           "name": "emqx_unban",
           "source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py",
-          "line": 270,
+          "line": 265,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "subject_type: Annotated[BanSubject, Field(description='Must match the type used when the ban was created.')], who: Annotated[str, Field(description='The exact banned value.')], emqx: httpx.AsyncClient=Depends(emqx_client)",
@@ -3893,7 +3893,7 @@
         {
           "name": "litellm_add_model",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py",
-          "line": 105,
+          "line": 104,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, model_name: str, litellm_params: dict[str, Any], model_info: dict[str, Any] | None=None",
@@ -4043,7 +4043,7 @@
         {
           "name": "litellm_delete_model",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py",
-          "line": 190,
+          "line": 189,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, model_id: str",
@@ -4068,7 +4068,7 @@
         {
           "name": "litellm_delete_plugin",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py",
-          "line": 165,
+          "line": 164,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, plugin_name: str",
@@ -4143,7 +4143,7 @@
         {
           "name": "litellm_disable_plugin",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py",
-          "line": 148,
+          "line": 147,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, plugin_name: str",
@@ -4168,7 +4168,7 @@
         {
           "name": "litellm_enable_plugin",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py",
-          "line": 135,
+          "line": 134,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, plugin_name: str",
@@ -4335,7 +4335,7 @@
         {
           "name": "litellm_list_models",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py",
-          "line": 60,
+          "line": 59,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context",
@@ -4358,7 +4358,7 @@
         {
           "name": "litellm_list_plugins",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py",
-          "line": 57,
+          "line": 56,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, enabled_only: bool=False",
@@ -4427,7 +4427,7 @@
         {
           "name": "litellm_model_group_info",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py",
-          "line": 90,
+          "line": 89,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, model_group: str | None=None",
@@ -4450,7 +4450,7 @@
         {
           "name": "litellm_model_info",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py",
-          "line": 73,
+          "line": 72,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, litellm_model_id: str | None=None",
@@ -4473,7 +4473,7 @@
         {
           "name": "litellm_plugin_info",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py",
-          "line": 77,
+          "line": 76,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, plugin_name: str",
@@ -4521,7 +4521,7 @@
         {
           "name": "litellm_register_plugin",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py",
-          "line": 87,
+          "line": 86,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, name: str, source: dict[str, str] | str, version: str | None=None, description: str | None=None, category: str | None=None, domain: str | None=None, namespace: str | None=None, author: str | None=None, homepage: str | None=None, keywords: list[str] | None=None",
@@ -4546,7 +4546,7 @@
         {
           "name": "litellm_skill_hub",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py",
-          "line": 180,
+          "line": 179,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context",
@@ -4765,7 +4765,7 @@
         {
           "name": "litellm_update_model",
           "source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py",
-          "line": 139,
+          "line": 138,
           "evidence": "python-decorator-AST",
           "operations": {},
           "source_signature": "ctx: Context, model_id: str, litellm_params: dict[str, Any] | None=None, model_info: dict[str, Any] | None=None, model_name: str | None=None",

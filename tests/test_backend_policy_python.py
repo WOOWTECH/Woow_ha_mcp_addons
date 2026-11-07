@@ -169,6 +169,43 @@ async def test_transports_check_the_path_they_send(kind):
         server.shutdown(); server.server_close(); thread.join()
 
 
+@pytest.mark.parametrize('kind', ['sync', 'async'])
+async def test_clients_refuse_dot_segments_before_httpx_drops_them(kind):
+    """httpx resolves '.' and '..' while it builds the URL, so check_url never sees them: a tool argument spliced into a
+    path ('..', '../../global/spend/reset?') would reach another endpoint under the base. The clients refuse them in
+    the path as written; a '..' in the query string, an encoded one (refused later by path_value) and ordinary paths
+    are unaffected."""
+    paths = []
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args): pass
+        def do_GET(self):
+            paths.append(self.path)
+            self.send_response(200); self.send_header('Content-Length', '2'); self.end_headers(); self.wfile.write(b'{}')
+    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+    origin = f'http://127.0.0.1:{server.server_port}'
+    async def send(url):
+        if kind == 'sync':
+            with policy.sync_client(base_url=f'{origin}/base', timeout=2) as client:
+                return client.get(url).status_code
+        async with policy.async_client(base_url=f'{origin}/base', timeout=2) as client:
+            return (await client.get(url)).status_code
+    try:
+        for url in ('banned/clientid/..', 'key/../../global/spend/reset?/regenerate', './x', 'x/.', 'a/../b', '..',
+                    '/base/x/../y', f'{origin}/base/x/../y', f'{origin}/base/..', httpx.URL('x/../y'),
+                    '//[/../x', '//evil.invalid/x', '//base/x'):
+            with pytest.raises(policy.BackendDenied):
+                await send(url)
+        assert paths == []
+        for url in ('x', 'a.b/..c/...', 'x?path=../y', f'{origin}/base/x', httpx.URL(f'{origin}/base/x')):
+            assert await send(url) == 200
+        assert paths == ['/base/x', '/base/a.b/..c/...', '/base/x?path=../y', '/base/x', '/base/x']
+        with pytest.raises(policy.BackendDenied):
+            await send('%2e%2e/x')
+    finally:
+        server.shutdown(); server.server_close(); thread.join()
+
+
 @pytest.mark.parametrize('base', ['http://configured.invalid/next%25cloud', 'http://configured.invalid/%25',
                                   'http://configured.invalid/a/%2e%2e', 'http://configured.invalid/a%5cb'])
 def test_configured_base_path_keeps_refusing_percent(base):

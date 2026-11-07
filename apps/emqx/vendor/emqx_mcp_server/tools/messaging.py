@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 from typing import Annotated, Any, Literal
-from urllib.parse import quote
 
 import httpx
 from fastmcp import FastMCP
@@ -17,7 +16,7 @@ from ..errors import EmqxApiError, emqx_request, json_body
 from ..gating import ToolGate
 from ..models import RetainedMessage
 from ..settings import settings
-from ._common import destructive, page_of, read_only, writing
+from ._common import destructive, page_of, path_segment, read_only, writing
 
 _SCAN_PAGES = 20
 
@@ -49,11 +48,15 @@ async def _direct_lookup(emqx: httpx.AsyncClient, topic: str) -> dict | None:
     EMQX accepts hierarchical topics here as long as the whole topic is
     percent-encoded, slashes included: `woow%2Ftest%2Fx` returns 200 where the
     raw form returns 404. A 404 means nothing is retained, which is an ordinary
-    answer rather than a failure.
+    answer rather than a failure. '', '.' and '..' are valid MQTT topics but no
+    URL path segment can carry them (httpx drops dot segments), so they are left
+    to the listing scan.
     """
+    if topic in ("", ".", ".."):
+        return None
     try:
         body = json_body(await emqx_request(
-            emqx, "GET", f"/mqtt/retainer/message/{quote(topic, safe='')}"))
+            emqx, "GET", f"/mqtt/retainer/message/{path_segment(topic, 'topic')}"))
     except EmqxApiError as exc:
         if exc.status_code == 404:
             return None
@@ -257,5 +260,5 @@ def register(mcp: FastMCP, gate: ToolGate) -> None:
             # with a publish: subscribers would receive a second operation.
             await emqx_request(
                 emqx, "DELETE",
-                f"/mqtt/retainer/message/{quote(topic, safe='')}")
+                f"/mqtt/retainer/message/{path_segment(topic, 'topic')}")
             return {"topic": topic, "deleted": True, "method": "delete"}

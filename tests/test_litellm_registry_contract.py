@@ -21,7 +21,8 @@ def test_update_model_registry_matches_handler_method_and_path():
     assert isinstance(path, ast.JoinedStr)
     prefix, parameter, suffix = path.values
     assert isinstance(parameter, ast.FormattedValue)
-    assert parameter.value.func.id == 'quote' and parameter.value.args[0].id == 'model_id'
-    assert {arg.arg: ast.literal_eval(arg.value) for arg in parameter.value.keywords} == {'safe': ''}
+    # 2026-11-06: one encoded segment through path_segment ('/' encoded, '', '.' and '..' refused); no safe= override
+    assert parameter.value.func.id == 'path_segment' and parameter.value.args[0].id == 'model_id'
+    assert ast.literal_eval(parameter.value.args[1]) == 'model_id' and parameter.value.keywords == []
     assert spec.path == prefix.value + '{model_id}' + suffix.value
     assert spec.operations == ('update',) and spec.dangerous is False

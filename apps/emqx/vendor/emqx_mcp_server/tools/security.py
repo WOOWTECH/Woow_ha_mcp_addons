@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import Annotated, Any, Literal
-from urllib.parse import quote
 
 import httpx
 from fastmcp import FastMCP
@@ -15,14 +14,10 @@ from ..deps import emqx_client
 from ..errors import emqx_request, json_body
 from ..gating import ToolGate
 from ..models import AuthnUser, AuthnUserResult
-from ._common import destructive, page_of, read_only
+from ._common import destructive, page_of, path_segment, read_only
 
 BUILT_IN = "password_based:built_in_database"
 BanSubject = Literal["clientid", "username", "peerhost"]
-
-
-def _enc(v: str) -> str:
-    return quote(v, safe="")
 
 
 def register(mcp: FastMCP, gate: ToolGate) -> None:
@@ -80,7 +75,7 @@ def register(mcp: FastMCP, gate: ToolGate) -> None:
                     f"Operation {operation!r} is switched off on this server. "
                     f"Allowed: {allowed_list}."
                 )
-            base = f"/authentication/{_enc(authenticator_id)}/users"
+            base = f"/authentication/{path_segment(authenticator_id, 'authenticator_id')}/users"
 
             if operation == "read":
                 rows, _ = page_of(json_body(await emqx_request(emqx, "GET", base)))
@@ -100,7 +95,7 @@ def register(mcp: FastMCP, gate: ToolGate) -> None:
             if operation == "delete":
                 if not user_id:
                     raise ToolError("delete requires `user_id`.")
-                await emqx_request(emqx, "DELETE", f"{base}/{_enc(user_id)}")
+                await emqx_request(emqx, "DELETE", f"{base}/{path_segment(user_id, 'user_id')}")
                 return AuthnUserResult(operation=operation, user_id=user_id)
 
             raise ToolError(
@@ -216,7 +211,7 @@ def register(mcp: FastMCP, gate: ToolGate) -> None:
             if operation == "delete":
                 if not subject:
                     raise ToolError("delete requires `subject`.")
-                await emqx_request(emqx, "DELETE", f"{base}/{_enc(subject)}")
+                await emqx_request(emqx, "DELETE", f"{base}/{path_segment(subject, 'subject')}")
                 return {"subject": subject, "deleted": True}
 
             raise ToolError(f"Unknown operation {operation!r}.")
@@ -275,5 +270,5 @@ def register(mcp: FastMCP, gate: ToolGate) -> None:
         ) -> dict[str, Any]:
             """[DESTRUCTIVE] Lift a ban so the client may connect again."""
             await emqx_request(
-                emqx, "DELETE", f"/banned/{_enc(subject_type)}/{_enc(who)}")
+                emqx, "DELETE", f"/banned/{path_segment(subject_type, 'subject_type')}/{path_segment(who, 'who')}")
             return {"as": subject_type, "who": who, "unbanned": True}
