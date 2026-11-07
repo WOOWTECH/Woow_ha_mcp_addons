@@ -1,4 +1,4 @@
-## 0.4.12 — local release candidate (2026-11-07; images pending)
+## 0.4.12 — images published and verified (2026-11-07)
 
 - Include merged PRs #65–#70 (#67–#70 reached `claude-delivery` through #71: they had been merged into their stacked base branches):
   - Odoo (#65, #66): the readiness probe tells a login Odoo refused (`BACKEND_AUTH_REJECTED`, fixed text) from a server that cannot be reached; tool calls wait up to 30 s for Odoo, as the PaaS server does (the probe keeps 5 s); with "Allow Unreviewed Methods" off `execute_method` runs every method of the reviewed read list; `health_check` reports 41 tools; the admin API answers 400 instead of 503 to a `null` body on `PUT api/odoo/write-switches`.
@@ -8,7 +8,7 @@
 - Documentation: every add-on's DOCS states that it publishes tools only (no prompts or resources; only Nextcloud sends server instructions, the same text as the PaaS server) and what the PaaS server publishes besides; the owner decided on 2026-11-07 to keep it so.
 - Build note: the n8n image build downloads one pinned file from github.com (the better-sqlite3 prebuilt for Node 26; URL, size and sha256 in `packaging/inputs.json`, checked by `packaging/native_addon.mjs`; no upstream signature exists). The builder needs egress to github.com and its redirect host.
 - Advance seven source versions together; only Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud are enabled image products. OpenDesign stays disabled and Odoo Manage remains archived.
-- This preparation has not built or published any 0.4.12 image. Fresh exact-image gates, anonymous readback, provenance and HAOS validation remain pending.
+- Six exact-source images (source `359963f4`) passed P1–P5 and were published; anonymous readback and fresh remote layer/diffID checks passed. Stable Releases/Store and actual HAOS/backend acceptance remain separate evidence. See [0.4.12 release decision](docs/operations/release-decision-0.4.12.md) and [image provenance](docs/provenance/release-0.4.12-images.json).
 
 ## 0.4.11 — images published and verified (2026-11-05)
 
