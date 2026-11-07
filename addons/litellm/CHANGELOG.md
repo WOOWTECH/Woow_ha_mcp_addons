@@ -1,3 +1,8 @@
+## 0.4.13 — local release candidate (images pending)
+
+- Tool arguments used in URL paths are encoded as single segments; unsafe dot segments are refused. The admin panel explains the master-key field and the child restart after a tool-policy save. Enterprise-only key rotation remains unverified by owner decision.
+- This preparation has not built or published a 0.4.13 image. Exact-image gates, distribution and HAOS/backend acceptance remain pending.
+
 ## 0.4.12 — images published and verified
 
 - A plugin name or model id that contains an ordinary `%` (sent as `%25`) now reaches LiteLLM; 0.4.11 refused every such call before sending it. Names whose literal text a further decode would turn into path structure stay refused. httpcore's `target` request extension is refused (shared backend policy, PR #70).

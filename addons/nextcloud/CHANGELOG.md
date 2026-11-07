@@ -1,3 +1,8 @@
+## 0.4.13 — local release candidate (images pending)
+
+- Read ETags have compression suffixes removed, so conditional writes using them work against a compressed GET. The admin panel explains app passwords and the child restart after a tool-policy save.
+- This preparation has not built or published a 0.4.13 image. Exact-image gates, distribution and HAOS/backend acceptance remain pending.
+
 ## 0.4.12 — images published and verified
 
 - Names with an ordinary `%` (PR #70): files, folders and calendars whose name or id contains `%` (for example `100%-off.txt`, `%18 KDV.xlsx`, `frame_%04d.png`) can be read, written and listed, as on the PaaS server; 0.4.11 refused every request for them with `BACKEND_DESTINATION_DENIED`, and a depth-2 `get_file_tree` left out such a folder's contents. Names whose literal text a further decode would turn into path structure (`a%2fb`, `%2e%2e`, `%23 notes`) or that other servers decode differently (`10%uface.txt`, `%` followed by fullwidth digits) stay refused. httpcore's `target` request extension is refused.

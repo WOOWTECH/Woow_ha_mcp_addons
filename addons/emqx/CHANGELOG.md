@@ -1,3 +1,8 @@
+## 0.4.13 — local release candidate (images pending)
+
+- Tool arguments used in URL paths are encoded as single segments, including client ids containing `/`; unsafe dot segments are refused. The admin panel normalizes a pasted trailing `/api/v5` and explains the child restart after a tool-policy save.
+- This preparation has not built or published a 0.4.13 image. Exact-image gates, distribution and HAOS/backend acceptance remain pending.
+
 ## 0.4.12 — images published and verified
 
 - A client id, topic, rule id, trace name or user id that contains an ordinary `%` (sent as `%25`) now reaches the broker; 0.4.11 refused every such call before sending it. Names whose literal text a further decode would turn into path structure (for example `a%2fb`) stay refused. httpcore's `target` request extension is refused (shared backend policy, PR #70).

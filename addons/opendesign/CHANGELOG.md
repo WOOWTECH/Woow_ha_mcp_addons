@@ -1,3 +1,7 @@
+## 0.4.13 — source only (disabled)
+
+- Tool path arguments are encoded as single URL segments; unsafe dot segments are refused. OpenDesign remains disabled in the HA Store, so no 0.4.13 HA image or HAOS image test is claimed.
+
 ## 0.4.12 — source only (disabled)
 
 - Synchronize the source version only. OpenDesign remains disabled in the Store; no 0.4.12 OpenDesign image is planned or claimed. The shared backend policy change of PR #70 (literal `%` in request paths, httpcore's `target` extension refused) applies to its child too.
