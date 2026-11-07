@@ -42,7 +42,7 @@ Fixture 不連後端、不是正式 verifier，也不進 image/dist。Guard 依�
 | Odoo Manage | `{connection:{url,database,username,api_key,mode:"read"或"module"}}` |
 | Hermes | `{connection:{gateway_url,gateway_api_key,dashboard_url,dashboard_username,dashboard_password}}` |
 | OpenDesign | `{connection:{url}}`，無虛構 token |
-| EMQX | `{connection:{url,api_key,api_secret}}`，URL 不附 `/api/v5` |
+| EMQX | `{connection:{url,api_key,api_secret}}`，URL 填 Broker 的基底網址；貼上帶 `/api/v5` 的網址也可以，存檔時（畫面與伺服器都）會去掉它 |
 | LiteLLM | `{connection:{url,master_key}}` |
 | Nextcloud | `{connection:{url,username,app_password}}`，url 是 Nextcloud 根網址，主機名稱含非 ASCII 字元（IDN）時要填 `xn--` 形式（表單會顯示）；username／app_password 不可空白、前後不可有空白 |
 

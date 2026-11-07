@@ -9,7 +9,7 @@ import ipaddress
 import json
 import re
 import secrets
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, AfterValidator, field_validator, model_validator
@@ -100,8 +100,12 @@ class EmqxConnection(Connection):
     @field_validator('url')
     @classmethod
     def base_only(cls, value):
-        if value.endswith('/api/v5'):
-            raise ValueError('provide broker base without /api/v5')
+        # The child appends /api/v5 itself: a pasted ".../api/v5" root is saved without it (the PaaS server accepts both).
+        parts = urlsplit(value)
+        if parts.path.endswith('/api/v5'):
+            value = urlunsplit((parts.scheme, parts.netloc, parts.path[:-len('/api/v5')], '', ''))
+        if '/api/v5' in urlsplit(value).path:
+            raise ValueError('provide the broker base URL')
         return value
 
 
