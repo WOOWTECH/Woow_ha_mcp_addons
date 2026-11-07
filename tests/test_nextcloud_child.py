@@ -305,6 +305,60 @@ async def test_stale_etag_write_reports_current_etag_and_writes_nothing(tmp_path
                            plain=True)['text'] == text['content']
 
 
+def test_a_content_coding_suffix_is_not_part_of_an_etag(tmp_path):
+    spec = child_spec(state(), tmp_path)
+    # Apache's mod_deflate answers a compressed GET with "<etag>-gzip" (mod_brotli "-br"); the file's etag is the plain part.
+    program = '''
+from nextcloud_mcp_server.paths import caller_etag, normalize_etag
+for raw, plain in (('"abc123-gzip"', 'abc123'), ('W/"abc123-gzip"', 'abc123'), ('"abc123-br"', 'abc123'), ('abc123-gzip', 'abc123'),
+                   ('"abc123-deflate"', 'abc123'), ('"abc123-zstd"', 'abc123'),
+                   ('"abc123"', 'abc123'), ('W/"abc123"', 'abc123'), ('"gzip"', 'gzip'), ('"x-gzipped"', 'x-gzipped'),
+                   ('"-gzip"', '-gzip'), ('"6b520502fdd60229b4a10a23dd1e910a-gzip"', '6b520502fdd60229b4a10a23dd1e910a')):
+    assert normalize_etag(raw) == plain, raw
+    assert caller_etag(raw) == plain, raw
+assert normalize_etag(None) is None and normalize_etag('""') is None and normalize_etag('  ') is None
+print('ok')
+'''
+    result = subprocess.run([spec.argv[0], '-c', program], env=spec.env, cwd=spec.cwd, capture_output=True,
+                            text=True, timeout=30)
+    assert result.returncode == 0 and result.stdout.strip() == 'ok', result.stderr
+
+
+async def test_the_etag_a_compressed_read_returns_works_for_the_conditional_writes(tmp_path):
+    big = b'x' * 5000
+    fake = NextcloudFake(gzip_etag_over=1000)
+    fake.files['Documents/big.txt'] = (big, 'big1')
+    fake.files['Documents/big2.txt'] = (big, 'big2')
+
+    class Backend(Quiet):
+        def handle_api(self):
+            body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
+            respond(self, *fake.handle(self.command, self.path, self.headers, body))
+        do_GET = do_PUT = do_DELETE = do_PROPFIND = do_REPORT = handle_api
+
+    with serve(Backend) as url:
+        async with runtime(tmp_path, 'nextcloud', url, write_grants=sorted(WRITERS)) as (client, headers, *_):
+            # The fake answers the GET of the larger file with ETag "big1-gzip"; the read tool must hand out the file's own etag.
+            read = payload(await rpc(client, '/mcp', headers, call('read_text_file', {'path': 'Documents/big.txt'})))
+            assert read['etag'] == 'big1' and read['content'] == big.decode()
+            # A small file (not compressed) is unchanged.
+            assert payload(await rpc(client, '/mcp', headers, call('read_text_file', {'path': 'Documents/notes.md'})))['etag'] == 'one'
+            # Update and delete with the etag as read succeed instead of ETAG_MISMATCH / status=412.
+            updated = payload(await rpc(client, '/mcp', headers, call(
+                'update_text_file', {'path': 'Documents/big.txt', 'content': 'y' * 3000, 'expected_etag': read['etag']})))
+            assert updated.get('status') == 'updated' and updated['previous_etag'] == 'big1' and fake.files['Documents/big.txt'][1] == 'v1', updated
+            deleted = payload(await rpc(client, '/mcp', headers, call(
+                'delete_file_checked', {'path': 'Documents/big2.txt', 'expected_etag': payload(await rpc(
+                    client, '/mcp', headers, call('read_text_file', {'path': 'Documents/big2.txt'})))['etag']})))
+            assert deleted.get('status') == 'deleted' and 'Documents/big2.txt' not in fake.files, deleted
+            # An etag a caller still holds from before (read with the suffix) is accepted too.
+            fake.files['Documents/big3.txt'] = (big, 'big3')
+            deleted = payload(await rpc(client, '/mcp', headers, call(
+                'delete_file_checked', {'path': 'Documents/big3.txt', 'expected_etag': '"big3-gzip"'})))
+            assert deleted.get('status') == 'deleted' and 'Documents/big3.txt' not in fake.files, deleted
+            assert fake.mutations == [('PUT', 'Documents/big.txt'), ('DELETE', 'Documents/big2.txt'), ('DELETE', 'Documents/big3.txt')]
+
+
 # (tool, arguments, the request of that tool that breaks): every earlier request of the call answers normally, so the
 # failure reaches the tool's own body handling (file GET, CalDAV REPORT, writer PUT/DELETE, PROPFIND listings).
 LATE_CASES = [

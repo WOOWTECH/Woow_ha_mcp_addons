@@ -347,9 +347,9 @@
   },
   {
     "product": "nextcloud",
-    "source": "WOOWTECH/Woow_nextcloud_mcp_server/28767c4fa15acd4981586ed04906c48523f6bf26",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/7af7dbaa441e31f2b0afbacd752bee40d7921319",
     "path": "nextcloud_mcp_server/paths.py",
-    "upstream_sha256": "806f187a9ad668c89ddfa71c4e827ac78f69e9649493fd76228a17683e4b7c4d"
+    "upstream_sha256": "231656621e3536928bc6d7b8457aaf9361ff699eb73e037c1a0caf8d7714e4d4"
   },
   {
     "product": "nextcloud",
