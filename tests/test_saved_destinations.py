@@ -105,10 +105,11 @@ async def test_a_url_the_policy_accepts_is_still_saved(product_admin):
     assert len(applied) == 2
 
 
+# Only the products that have a field besides their URL (OpenDesign has none): the cases are generated for those, so the
+# test never skips (the unit gate of the checks job refuses a run with a skipped test).
+@pytest.mark.parametrize('product_admin', sorted(UNRELATED), indirect=True)
 async def test_a_stale_url_does_not_block_editing_the_other_fields(product_admin):
     product, client, store, applied = product_admin
-    if product not in UNRELATED:
-        pytest.skip('the URL is its only field')
     stale = {**GOOD[product], FIELDS[product][0]: 'http://169.254.169.254'}
     store.update(connection=stale)
     name, value = UNRELATED[product]
