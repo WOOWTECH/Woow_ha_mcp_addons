@@ -5,6 +5,7 @@
 - With "Allow Unreviewed Methods" off, `execute_method` runs every method of the reviewed read list (`read_group`, `web_search_read`, `web_read`, `search_fetch`, `web_read_group`, `web_name_search`, `read_progress_bar`, `formatted_read_group` and `formatted_read_grouping_sets` were refused before), exactly as the PaaS server does; `health_check` reports 41 tools (the private readiness probe is no longer counted) (PR #66).
 - Admin API: `PUT api/odoo/write-switches` with a `null` body answers 400 (it was 503 `state unavailable`) (PR #66).
 - Shared backend policy (PR #70): a request path may carry a literal `%` as long as no decoder in front of or inside the backend can read more structure into it than the first decode gave; httpcore's `target` request extension is refused. Odoo's XML-RPC paths are fixed, so no Odoo call changes.
+- Documentation: DOCS states that the add-on publishes tools only (no prompts or resources) and what the PaaS server publishes besides; the owner decided on 2026-11-07 to keep it so.
 - This preparation has not built or published a 0.4.12 odoo image. Fresh exact-image gates, anonymous readback, provenance and HAOS validation remain pending.
 
 ## 0.4.11 — images published and verified

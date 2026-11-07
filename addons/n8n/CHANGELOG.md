@@ -4,6 +4,7 @@
 - The workflow version history lives inside the container (`/tmp/woow-n8n-mcp/nodes.db`, a private copy of the catalog) and is not part of the add-on's data or backups: it starts empty after the add-on is recreated or updated (the PaaS server keeps it on a volume) (PR #69).
 - Build note for operators: the image build downloads one pinned file from github.com (the better-sqlite3 prebuilt for Node 26; URL, size and sha256 in `packaging/inputs.json`, checked by `packaging/native_addon.mjs`; no upstream signature exists, the pin is the only check). The builder needs egress to github.com and its redirect host (PR #69).
 - `n8n_delete_workflow` now says that a published (active) workflow cannot be deleted and how to deactivate it first, the same sentence the PaaS server has (PR #67).
+- Documentation: DOCS states that the add-on publishes tools only (no prompts or resources) and what the PaaS server publishes besides; the owner decided on 2026-11-07 to keep it so.
 - This preparation has not built or published a 0.4.12 n8n image. Fresh exact-image gates, anonymous readback, provenance and HAOS validation remain pending.
 
 ## 0.4.11 — images published and verified

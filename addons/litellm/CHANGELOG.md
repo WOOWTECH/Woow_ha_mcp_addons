@@ -1,6 +1,7 @@
 ## 0.4.12 — local release candidate (2026-11-07; images pending)
 
 - A plugin name or model id that contains an ordinary `%` (sent as `%25`) now reaches LiteLLM; 0.4.11 refused every such call before sending it. Names whose literal text a further decode would turn into path structure stay refused. httpcore's `target` request extension is refused (shared backend policy, PR #70).
+- Documentation: DOCS states that the add-on publishes tools only (no prompts or resources) and what the PaaS server publishes besides; the owner decided on 2026-11-07 to keep it so.
 - This preparation has not built or published a 0.4.12 litellm image. Fresh exact-image gates, anonymous readback, provenance and HAOS validation remain pending.
 
 ## 0.4.11 — images published and verified

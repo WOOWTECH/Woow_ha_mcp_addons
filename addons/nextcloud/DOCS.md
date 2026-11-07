@@ -40,6 +40,8 @@ MCP 端點（Bearer token）不經這項檢查，不受影響。新的 Core 版�
 `delete_file_checked` 才 `NEXTCLOUD_MCP_ALLOW_DELETE=true`，其他沒開放的工具列入 `NEXTCLOUD_MCP_DISABLED_TOOLS`，
 子程序根本不註冊；gateway 另外檢查每個呼叫的工具名、停用與寫入授權。
 
+**MCP 提供的內容**：這個 add-on 透過 MCP 只提供工具（tools）：`initialize` 宣告的能力只有 `tools`，`prompts/list`、`resources/list` 等請求回 -32601（Method not found）。`initialize` 另外送出一段固定的 server instructions（只能用管理員設定的那一個帳號、路徑規則），與 WOOW PaaS 的 Nextcloud MCP 相同。負責人 2026-11-07 決定維持只提供工具。
+
 ## 後端與設定主權
 
 一個 Add-on 只有一個 Nextcloud 帳號：**url（Nextcloud 根網址）、username、app_password**。
