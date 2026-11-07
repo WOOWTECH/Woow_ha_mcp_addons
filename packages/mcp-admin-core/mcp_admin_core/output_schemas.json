@@ -28,7 +28,7 @@
       }
     },
     "nextcloud": {
-      "ha_commit": "d6403f263f5246288864c15381c2d1bddbb9179c",
+      "ha_commit": "9da728e13676264e0ab6c7cab2f79db0a2436eca",
       "sdk": {
         "fastmcp": "4.1.3",
         "mcp": "2.3.0",

@@ -38,11 +38,14 @@ def multistatus(responses):
 class NextcloudFake:
     """handle() answers one request: (status, headers, body). Each successful PUT/DELETE appends a mutation."""
 
-    def __init__(self, files=None, password=PASSWORD):
+    def __init__(self, files=None, password=PASSWORD, gzip_etag_over=None):
         self.files = initial_files() if files is None else files
         self.password = password
         self.mutations = []
         self.counter = 0
+        # Apache's mod_deflate (DeflateAlterETag AddSuffix) answers the GET of a larger text file with the ETag
+        # "<etag>-gzip" while PROPFIND and the write responses keep the plain one: bodies over this size get it.
+        self.gzip_etag_over = gzip_etag_over
 
     def file_props(self, path):
         data, etag = self.files[path]
@@ -82,6 +85,8 @@ class NextcloudFake:
             if name not in self.files or self.files[name][0] is None:
                 return 404, {}, b''
             data, etag = self.files[name]
+            if self.gzip_etag_over is not None and len(data) > self.gzip_etag_over:
+                etag += '-gzip'
             return 200, {'Content-Type': 'text/plain', 'ETag': f'"{etag}"'}, data
         if command == 'PUT':
             parent = name.rsplit('/', 1)[0] if '/' in name else ''
