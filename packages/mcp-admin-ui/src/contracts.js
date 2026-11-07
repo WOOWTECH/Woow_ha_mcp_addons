@@ -1,14 +1,28 @@
 // This is the only product/form and policy wire-format compatibility boundary.
 export const products = {
-  odoo: { name: 'Odoo', fields: [['url', '後端 URL', 'url'], ['database', '資料庫', 'name'], ['username', '使用者名稱', 'name'], ['password', '密碼', 'secret']] },
+  odoo: { name: 'Odoo', fields: [['url', '後端 URL', 'url'], ['database', '資料庫', 'name'], ['username', '使用者名稱', 'name'], ['password', '密碼或 API Key', 'secret']] },
   'odoo-manage': { name: 'Odoo Manage', fields: [['url', '後端 URL', 'url'], ['database', '資料庫', 'name'], ['username', '使用者名稱', 'name'], ['api_key', 'API 金鑰', 'secret'], ['mode', '存取模式', 'mode']] },
   n8n: { name: 'n8n', fields: [['url', 'n8n 伺服器 URL', 'url'], ['key', 'API 金鑰', 'secret'], ['mcp_access_token', 'MCP Access Token（選填；n8n 設定 → Instance-level MCP）', 'optional-secret']] },
   hermes: { name: 'Hermes', fields: [['gateway_url', 'Gateway URL', 'url'], ['gateway_api_key', 'Gateway API 金鑰', 'secret'], ['dashboard_url', 'Dashboard URL（選填）', 'optional-url'], ['dashboard_username', 'Dashboard 使用者（選填）', 'optional-name'], ['dashboard_password', 'Dashboard 密碼（選填）', 'optional-secret']] },
   opendesign: { name: 'OpenDesign', fields: [['url', 'OpenDesign URL', 'url']] },
-  emqx: { name: 'EMQX', fields: [['url', 'Broker 基底 URL（不含 /api/v5）', 'url'], ['api_key', 'API 金鑰', 'secret'], ['api_secret', 'API Secret', 'secret']] },
-  litellm: { name: 'LiteLLM', fields: [['url', 'Proxy 基底 URL', 'url'], ['master_key', 'Master Key', 'secret']] },
+  emqx: { name: 'EMQX', fields: [['url', 'Broker 基底 URL', 'url'], ['api_key', 'API 金鑰', 'secret'], ['api_secret', 'API Secret', 'secret']] },
+  litellm: { name: 'LiteLLM', fields: [['url', 'Proxy 基底 URL', 'url'], ['master_key', 'LiteLLM 金鑰', 'secret']] },
   nextcloud: { name: 'Nextcloud', fields: [['url', 'Nextcloud 根網址', 'url'], ['username', '使用者名稱', 'name'], ['app_password', 'App 密碼（非登入密碼）', 'secret']] },
 };
+
+// Help under the backend form, per product: what to paste in the credential fields (the PaaS admin UI says the same in its connection page).
+export const connectionHelp = {
+  odoo: 'Odoo API Key（Settings → Account Security → New API Key）可直接填在「密碼或 API Key」欄。後端用 XML-RPC 連線，開了兩步驟驗證（2FA）的帳號必須用 API Key；未開 2FA 的帳號也可改填登入密碼。',
+  emqx: '填 EMQX Dashboard API 的根網址（例：https://broker.example.com）；貼上帶 /api/v5 的網址也可以，存檔時會自動去掉。請使用最終網址，連線不會跟隨轉址。API 金鑰與 Secret 用專用的 EMQX API key，工具會以它的權限執行。',
+  litellm: 'MCP 預設全開（含寫入與刪除工具），AI 實際能做什麼由這把金鑰的權限決定：要讓 AI 發 key、改模型就用有寫入權限的 key；只想讓它查資料，就用 proxy_admin_viewer（唯讀管理員）使用者的 key，或到「工具權限」頁關掉寫入工具。不建議直接貼 master key。',
+  nextcloud: '建議為 AI 助理建一個專用帳號（例如 assistant），只把需要的資料夾與行事曆分享給它：app password 能存取該帳號看得到的一切，無法只限定某些資料夾。App 密碼的取得方式：以該帳號登入 Nextcloud → 右上角頭像 →「個人設定」→「安全性」→「裝置與工作階段」，輸入名稱（例如 MCP）後按「建立新應用程式密碼」，複製只顯示一次的密碼貼到這裡。不要填登入密碼；啟用兩步驟驗證的帳號也可用 app password，日後可在同一處撤銷。',
+};
+
+// EMQX, LiteLLM and Nextcloud children are launched WITH the tool policy (READONLY, DISABLED_TOOLS): saving a policy, or restoring the
+// pre-upgrade limits, restarts the child (gateway.py: name == "policy" / owner-defaults restore -> backend_changed). The other products enforce it in the gateway.
+const policyRestartProducts = ['emqx', 'litellm', 'nextcloud'];
+export const policyRestartsChild = product => policyRestartProducts.includes(product);
+export const policyRestartNotice = product => policyRestartsChild(product) ? ' 儲存後會重新啟動 MCP 子行程（這個產品的工具政策在子行程啟動時套用），現有連線可能中斷。' : '';
 
 export class UiError extends Error {}
 const tokenMaskPattern = /^[A-Za-z0-9_-]{4}\*{20}[A-Za-z0-9_-]{4}$/;
@@ -76,6 +90,12 @@ export function explicitUrl(value, endpoint = false) {
   if (endpoint && !clean.endsWith('/mcp')) throw new UiError('MCP 端點必須以 /mcp 結尾。');
   return clean;
 }
+// The EMQX child appends /api/v5 itself: a pasted ".../api/v5" root is saved without it (the PaaS server accepts both too). `url` came out of explicitUrl().
+export function emqxBaseUrl(url) {
+  const base = new URL(url).pathname.endsWith('/api/v5') ? url.slice(0, url.length - '/api/v5'.length) : url;
+  if (new URL(base).pathname.includes('/api/v5')) throw new UiError('Broker URL 的路徑含有 /api/v5 以外的部分，請只填 Broker 的基底 URL。');
+  return base;
+}
 export function backendPayload(product, action, values) {
   if (action === 'preserve') return null; // No API request: old API cannot preserve individual secrets.
   if (action === 'clear') return product === 'n8n' ? { url: null, key: null } : { connection: null };
@@ -89,7 +109,7 @@ export function backendPayload(product, action, values) {
     }
     if (type.startsWith('optional') && value === '') { connection[key] = null; continue; }
     if (!value) throw new UiError(`請填寫${label}。`);
-    if (type.includes('url')) connection[key] = explicitUrl(value);
+    if (type.includes('url')) connection[key] = product === 'emqx' ? emqxBaseUrl(explicitUrl(value)) : explicitUrl(value);
     else if (type.includes('secret')) {
       if (!/^[\x20-\x7e]{1,8192}$/.test(value)) throw new UiError(`${label}需為 1–8192 個可列印 ASCII 字元。`);
       connection[key] = value; // Never trim credential bytes.
@@ -102,7 +122,6 @@ export function backendPayload(product, action, values) {
     const dashboard = ['dashboard_url', 'dashboard_username', 'dashboard_password'].map(k => connection[k]);
     if (dashboard.some(v => v !== null) && dashboard.some(v => v === null)) throw new UiError('Dashboard URL、使用者與密碼需整組提供，或全部留空。');
   }
-  if (product === 'emqx' && connection.url.endsWith('/api/v5')) throw new UiError('請使用 Broker 基底 URL，不含 /api/v5。');
   // The Nextcloud child strips both and refuses an empty result: never save blank or padded values.
   if (product === 'nextcloud') {
     // An internationalized host is sent by the browser/httpx as xn--; the backend policy compares hosts exactly, so
@@ -144,7 +163,7 @@ export function backendPatchPayload(bootstrap, selections, values) {
     if (action === 'clear' && type.startsWith('optional')) { changes[key] = null; continue; }
     if (action !== 'set' || typeof values[key] !== 'string' || values[key] === '') throw new UiError(`請提供${label}的新值。`);
     const value = values[key];
-    if (type.includes('url')) changes[key] = explicitUrl(value);
+    if (type.includes('url')) changes[key] = bootstrap.product === 'emqx' ? emqxBaseUrl(explicitUrl(value)) : explicitUrl(value);
     else if (type.includes('secret')) {
       if (!/^[\x20-\x7e]{1,8192}$/.test(value)) throw new UiError(`${label}格式不符。`);
       changes[key] = value;

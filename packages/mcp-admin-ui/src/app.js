@@ -1,5 +1,5 @@
 import { AdminApi, ApiError } from './api.js';
-import { products, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl, ownerDefaultsView, noticeTime, odooSwitches, odooSwitchKeys, odooSwitchPayload, maskedCurrentToken, tokenHistory, backendEdit, backendPatchPayload, n8nSession, n8nSessionPayload, odooMethods, odooMethodsPayload } from './contracts.js';
+import { products, connectionHelp, policyRestartsChild, policyRestartNotice, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl, ownerDefaultsView, noticeTime, odooSwitches, odooSwitchKeys, odooSwitchPayload, maskedCurrentToken, tokenHistory, backendEdit, backendPatchPayload, n8nSession, n8nSessionPayload, odooMethods, odooMethodsPayload } from './contracts.js';
 import './styles.css';
 
 const root = document.querySelector('#app');
@@ -200,7 +200,7 @@ async function ownerDefaultsAction(action, revision, view) {
     [restore.operation_denies_added, '禁止', '個操作']].filter(([names]) => names.length)
     .map(([names, verb, unit]) => `${verb} ${names.length} ${unit}`).join('、');
   if (!await confirmAction(restoring ? '還原升級前的限制？' : '保持全開，不再提示？',
-    restoring ? `${changes ? `${changes}，` : ''}回到舊版設定允許的範圍：只保留舊設定授權過的寫入，新版新增的寫入也取消。用戶端之後的呼叫立即套用。`
+    restoring ? `${changes ? `${changes}，` : ''}回到舊版設定允許的範圍：只保留舊設定授權過的寫入，新版新增的寫入也取消。${policyRestartsChild(state.product) ? '會重新啟動 MCP 子行程以套用，現有連線可能中斷。' : '用戶端之後的呼叫立即套用。'}`
       : `全部工具與寫入維持開啟，此通知不再顯示。${later}`,
     restoring ? '確認還原' : '確認保持全開')) return;
   await task(async () => {
@@ -260,7 +260,7 @@ function backend() {
   });
   form.append(el('div', { class: 'field' }, el('label', { for: 'connection-action' }, '這次要如何處理設定？'), action),
     p(backendEdit(state) && state.connection_configured ? '下方可修改個別欄位並保留其餘憑證；此表單仍是整組取代，需重新輸入必要欄位。' : '保留不會送出變更。取代時請重新輸入所有必要欄位，空白不代表保留。'),
-    fields, el('p', { id: 'connection-help', class: 'hint' }, state.product === 'odoo-manage' ? 'module 模式要求後端已安裝 MCP module；此介面不會安裝模組或變更 Odoo。read 模式不可保存寫入授權。' : state.product === 'hermes' ? 'Dashboard 為選填；URL、使用者、密碼需整組提供。全部留空會移除 Dashboard 設定。' : state.product === 'opendesign' ? 'OpenDesign 只需要 URL；不要求後端 token。' : 'URL 不可含帳密、查詢參數或片段。新憑證只用於這次提交，不儲存在瀏覽器。'),
+    fields, el('p', { id: 'connection-help', class: 'hint' }, state.product === 'odoo-manage' ? 'module 模式要求後端已安裝 MCP module；此介面不會安裝模組或變更 Odoo。read 模式不可保存寫入授權。' : state.product === 'hermes' ? 'Dashboard 為選填；URL、使用者、密碼需整組提供。全部留空會移除 Dashboard 設定。' : state.product === 'opendesign' ? 'OpenDesign 只需要 URL；不要求後端 token。' : [connectionHelp[state.product], 'URL 不可含帳密、查詢參數或片段。新憑證只用於這次提交，不儲存在瀏覽器。'].filter(Boolean).join(' ')),
     el('button', { type: 'submit', class: 'primary' }, '儲存後端設定'));
   form.addEventListener('submit', async event => {
     event.preventDefault();
@@ -423,7 +423,7 @@ function tools() {
     const data = new FormData(form);
     const denies = operationControls ? data.getAll('deny-operation').map(v => JSON.parse(v)) : undefined;
     try { policyPayload(snapshot, data.getAll('disabled'), data.getAll('grant').map(v => JSON.parse(v)), denies); } catch (error) { fail(error); return; }
-    if (!await confirmAction('套用工具權限？', '寫入可能變更後端資料。只授權你確實需要的工具或操作；伺服器仍必須強制檢查每次呼叫。', '確認套用')) return;
+    if (!await confirmAction('套用工具權限？', '寫入可能變更後端資料。只授權你確實需要的工具或操作；伺服器仍必須強制檢查每次呼叫。' + policyRestartNotice(state.product), '確認套用')) return;
     const expectedPolicy = policyFingerprint(snapshot);
     await task(async () => {
       await saveForm(form, 'policy', fresh => {
