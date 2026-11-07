@@ -12,6 +12,7 @@ Connects to the explicitly configured daemon at OD_API_BASE.
 import json
 import os
 import uuid
+from urllib.parse import quote
 
 import httpx
 from backend_policy import sync_client, backend_errors
@@ -31,6 +32,19 @@ def _get_client() -> httpx.Client:
     if _client is None:
         _client = sync_client(base_url=OD_API_BASE, timeout=httpx.Timeout(60.0, connect=5.0))  # 0.2.0: upstream's 60 s
     return _client
+
+
+def _project(project_id: str) -> str:
+    """The project path, its id percent-encoded as ONE segment: spliced as-is, delete_project('x/files/a.html') or
+    '../x' reached another endpoint. A '.' or '..' id is refused by backend_policy's clients."""
+    return f"/api/projects/{quote(project_id, safe='')}"
+
+
+def _file(project_id: str, file_path: str) -> str:
+    """A project file's path: each segment of file_path percent-encoded ('%', '?', '#', spaces, non-ASCII), its '/'
+    and the characters httpx itself leaves in a path (sub-delims, ':' and '@') kept as they were sent before."""
+    return f"{_project(project_id)}/files/" + "/".join(
+        quote(part, safe="!$&'()*+,;=:@") for part in file_path.split("/"))
 
 
 def _api_get(path: str) -> dict:
@@ -198,7 +212,7 @@ def get_project(project_id: str) -> dict:
     Args:
         project_id: UUID of the project (e.g. '38c010dc-f7c8-4a35-a325-89d6f56e45a4')
     """
-    return _api_get(f"/api/projects/{project_id}")
+    return _api_get(_project(project_id))
 
 
 @mcp.tool()
@@ -243,7 +257,7 @@ def delete_project(project_id: str) -> dict:
     Args:
         project_id: UUID of the project to delete
     """
-    return _api_delete(f"/api/projects/{project_id}")
+    return _api_delete(_project(project_id))
 
 
 @mcp.tool()
@@ -254,7 +268,7 @@ def list_project_files(project_id: str) -> dict:
     Args:
         project_id: UUID of the project
     """
-    return _api_get(f"/api/projects/{project_id}/files")
+    return _api_get(f"{_project(project_id)}/files")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -271,7 +285,7 @@ def read_file(project_id: str, file_path: str) -> str:
         project_id: UUID of the project
         file_path: Relative path of the file within the project (e.g. 'index.html')
     """
-    resp = _get_client().get(f"/api/projects/{project_id}/files/{file_path}")
+    resp = _get_client().get(_file(project_id, file_path))
     resp.raise_for_status()
     return resp.text
 
@@ -285,7 +299,7 @@ def get_file_info(project_id: str, file_path: str) -> dict:
         project_id: UUID of the project
         file_path: Relative path of the file
     """
-    data = _api_get(f"/api/projects/{project_id}/files")
+    data = _api_get(f"{_project(project_id)}/files")
     for f in data.get("files", []):
         if f.get("path") == file_path or f.get("name") == file_path:
             return f

@@ -439,6 +439,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         changes = value
                     # Validate without writing. Store.update revalidates on commit.
                     candidate = type(state).model_validate({**state.model_dump(), **changes})
+                    if name in ("backend", "backend/patch"):
+                        from .products import check_saved_destinations
+                        check_saved_destinations(candidate, state)
                     if name == 'policy' and 'denied_operations' in changes:
                         validate_operation_denies(candidate.denied_operations, tools, state)
                 except ValueError:

@@ -5,6 +5,11 @@ from __future__ import annotations
 import httpx
 from fastmcp.exceptions import ToolError
 
+try:  # the add-on's shared outbound policy, on the child's path in the add-on
+    from backend_policy import BackendDenied
+except ImportError:  # the vendored server loaded on its own (unit tests): catch nothing
+    BackendDenied = ()
+
 
 class EmqxApiError(ToolError):
     """Raised for any EMQX REST API failure.
@@ -28,6 +33,8 @@ async def emqx_request(
         raise EmqxApiError(
             "EMQX_TIMEOUT: the broker did not finish the request. Check state before repeating a write."
         ) from None
+    except BackendDenied:  # the add-on's backend policy refused it before sending (same text as the PaaS server)
+        raise EmqxApiError("EMQX_DESTINATION_DENIED") from None
     except httpx.HTTPError:
         raise EmqxApiError(
             "EMQX_UNAVAILABLE: the broker request failed. Check state before repeating a write."

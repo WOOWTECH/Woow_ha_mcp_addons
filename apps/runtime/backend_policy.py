@@ -507,16 +507,46 @@ class AsyncTransport(httpx.AsyncHTTPTransport):
         return response
 
 
+def no_dot_segments(url):
+    """Refuse a '.' or '..' segment in a request path as the child wrote it. httpx drops them while it builds the URL
+    (RFC 3986), so check_url only sees the result: a tool argument such as '..' or '../../x' spliced into a path would
+    reach another endpoint under the configured base URL with this add-on's credentials."""
+    if isinstance(url, httpx.URL):
+        if not url.is_relative_url:
+            return  # parsed already, its dot segments are gone; the children pass strings
+        url = str(url)
+    if isinstance(url, str):
+        try:
+            parts = urlsplit(url)
+        except ValueError:
+            raise BackendDenied() from None  # httpx may still accept it: '//[/../x' was sent as GET /x
+        # '//host/x' (a network-path reference) is not a path under the base; httpx rewrote '//evil/x' to /x.
+        if (not parts.scheme and url.startswith('//')) or any(segment in ('.', '..') for segment in parts.path.split('/')):
+            raise BackendDenied()
+
+
+class CheckedClient(httpx.Client):
+    def build_request(self, method, url, *args, **kwargs):
+        no_dot_segments(url)
+        return super().build_request(method, url, *args, **kwargs)
+
+
+class CheckedAsyncClient(httpx.AsyncClient):
+    def build_request(self, method, url, *args, **kwargs):
+        no_dot_segments(url)
+        return super().build_request(method, url, *args, **kwargs)
+
+
 def sync_client(*, base_url, **kwargs):
     kwargs.pop('limits', None)
-    return httpx.Client(base_url=base_url, transport=SyncTransport(base_url),
-                        trust_env=False, follow_redirects=False, **kwargs)
+    return CheckedClient(base_url=base_url, transport=SyncTransport(base_url),
+                         trust_env=False, follow_redirects=False, **kwargs)
 
 
 def async_client(*, base_url, **kwargs):
     kwargs.pop('limits', None)
-    return httpx.AsyncClient(base_url=base_url, transport=AsyncTransport(base_url),
-                             trust_env=False, follow_redirects=False, **kwargs)
+    return CheckedAsyncClient(base_url=base_url, transport=AsyncTransport(base_url),
+                              trust_env=False, follow_redirects=False, **kwargs)
 
 
 class PinnedHTTPConnection(http.client.HTTPConnection):

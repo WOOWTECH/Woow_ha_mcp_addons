@@ -14,6 +14,11 @@ from typing import Any
 
 import httpx
 
+try:  # the add-on's shared outbound policy, on the child's path in the add-on
+    from backend_policy import BackendDenied
+except ImportError:  # the vendored server loaded on its own (unit tests): catch nothing
+    BackendDenied = ()
+
 try:  # FastMCP ships ToolError; fall back to a plain exception if absent.
     from fastmcp.exceptions import ToolError
 except Exception:  # pragma: no cover - defensive import
@@ -136,6 +141,8 @@ async def litellm_request(
             json=json_data,
             **kwargs,
         )
+    except BackendDenied:  # the add-on's backend policy refused it before sending
+        raise LiteLLMApiError("BACKEND_DESTINATION_DENIED") from None
     except httpx.ConnectError as exc:
         raise LiteLLMApiError(
             f"Cannot reach the LiteLLM gateway at {client.base_url!s} "
