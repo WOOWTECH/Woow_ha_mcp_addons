@@ -18,7 +18,8 @@ jobs:
   gate:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # The source gate includes browser and full Python suites; match the PR window.
+    timeout-minutes: 40
     env:
       BLD2_APPROVAL: ${{ vars.BLD2_APPROVAL }}
     steps:

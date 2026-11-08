@@ -34,7 +34,8 @@ jobs:
   checks:
     name: checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # The full browser + Python source gate reached 95% at the old 30 minute limit on PR #76.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
