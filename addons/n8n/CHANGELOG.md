@@ -1,7 +1,7 @@
-## 0.4.13 — local release candidate (images pending)
+## 0.4.13 — images published and verified
 
 - The shared save-time backend URL check rejects newly saved destinations that the runtime would refuse. Existing saved settings remain editable.
-- This preparation has not built or published a 0.4.13 image. Exact-image gates, distribution and HAOS/backend acceptance remain pending.
+- Exact-source image `ghcr.io/woowtech/amd64-mcp-n8n@sha256:846d02c97dd64a14c0ac1d976c8d5bacece8267e104a306a7121e430a358928c` passed P1–P5, anonymous and remote layer checks. See ../../docs/provenance/release-0.4.13-images.json and ../../docs/operations/release-decision-0.4.13.md. HAOS acceptance remains separate.
 
 ## 0.4.12 — images published and verified
 

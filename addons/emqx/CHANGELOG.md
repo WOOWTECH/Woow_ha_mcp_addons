@@ -1,7 +1,7 @@
-## 0.4.13 — local release candidate (images pending)
+## 0.4.13 — images published and verified
 
 - Tool arguments used in URL paths are encoded as single segments, including client ids containing `/`; unsafe dot segments are refused. The admin panel normalizes a pasted trailing `/api/v5` and explains the child restart after a tool-policy save.
-- This preparation has not built or published a 0.4.13 image. Exact-image gates, distribution and HAOS/backend acceptance remain pending.
+- Exact-source image `ghcr.io/woowtech/amd64-mcp-emqx@sha256:e6b1cce3b9aa17f3bc96811e3e6f3ba8b7c1262e8bf164c7111ba48bf5619a5e` passed P1–P5, anonymous and remote layer checks. See ../../docs/provenance/release-0.4.13-images.json and ../../docs/operations/release-decision-0.4.13.md. HAOS acceptance remains separate.
 
 ## 0.4.12 — images published and verified
 

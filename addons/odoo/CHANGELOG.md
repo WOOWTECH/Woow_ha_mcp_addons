@@ -1,7 +1,7 @@
-## 0.4.13 — local release candidate (images pending)
+## 0.4.13 — images published and verified
 
 - The shared save-time backend URL check rejects newly saved destinations that the runtime would refuse. The admin panel explains the API-key and 2FA connection settings.
-- This preparation has not built or published a 0.4.13 image. Exact-image gates, distribution and HAOS/backend acceptance remain pending.
+- Exact-source image `ghcr.io/woowtech/amd64-mcp-odoo@sha256:7ca917f3d034344357ee7b38360aa457dee5f68e20aa2da95d1a04ced1903786` passed P1–P5, anonymous and remote layer checks. See ../../docs/provenance/release-0.4.13-images.json and ../../docs/operations/release-decision-0.4.13.md. HAOS acceptance remains separate.
 
 ## 0.4.12 — images published and verified
 

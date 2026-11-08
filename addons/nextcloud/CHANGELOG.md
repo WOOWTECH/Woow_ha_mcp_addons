@@ -1,7 +1,7 @@
-## 0.4.13 — local release candidate (images pending)
+## 0.4.13 — images published and verified
 
 - Read ETags have compression suffixes removed, so conditional writes using them work against a compressed GET. The admin panel explains app passwords and the child restart after a tool-policy save.
-- This preparation has not built or published a 0.4.13 image. Exact-image gates, distribution and HAOS/backend acceptance remain pending.
+- Exact-source image `ghcr.io/woowtech/amd64-mcp-nextcloud@sha256:4c24074798f09ac2bf60a424e6bb5a53daac24251615c77dde30c65d40d93e90` passed P1–P5, anonymous and remote layer checks. See ../../docs/provenance/release-0.4.13-images.json and ../../docs/operations/release-decision-0.4.13.md. HAOS acceptance remains separate.
 
 ## 0.4.12 — images published and verified
 
