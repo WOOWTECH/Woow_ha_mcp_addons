@@ -45,7 +45,7 @@ def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
             'litellm': 'e142a6e43170625fed945bc3eb4a4e45327559bf',
             'nextcloud': '9da728e13676264e0ab6c7cab2f79db0a2436eca',
             'odoo': '825b2a98bbf60373ccf269b9e2bf9e8eb665312b',
-            'n8n': '3131251e77152fff8a499bcc0d2502ec8bb77393',
+            'n8n': '1cbfcb9ddff30947e11ddfa92fd0b0f3ecdffff8',
             'hermes': 'c7baac6b21ce88a78a077179c3d6e6baa65498f0',
             'emqx': 'e142a6e43170625fed945bc3eb4a4e45327559bf',
         }[product]

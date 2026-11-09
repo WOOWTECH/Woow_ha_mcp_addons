@@ -58,7 +58,7 @@
       }
     },
     "n8n": {
-      "ha_commit": "3131251e77152fff8a499bcc0d2502ec8bb77393",
+      "ha_commit": "1cbfcb9ddff30947e11ddfa92fd0b0f3ecdffff8",
       "package": "n8n-mcp==2.96.2",
       "sdk": {
         "@modelcontextprotocol/sdk": "1.32.2"
@@ -69,7 +69,7 @@
         "apps/n8n/n8n_adapter.py": "9884d76ad7d8b9c3785a15480ea70998dcf6ffe64305492bf2b7048b339417fd",
         "apps/n8n/run.py": "aefd7498145840c4f6207dc00ce713ae327331ebf405002a346ebc4332f43283",
         "apps/n8n/backend_policy.cjs": "1dcdb4395bd76b12474e112ac41c04d3dfec9248b6b9290cecf1165b6cc70588",
-        "apps/n8n/Dockerfile": "d2ba623a9a31cab639496df8e6153d1ecc93ff57acdae92d59962287f9e3bab6",
+        "apps/n8n/Dockerfile": "70113ca28efe54521773720291682811d31d689ced5b685fcf7da9acf63ef26e",
         "packaging/unit.sh": "88126189f391ef76fa009e29fce247125e567cc33ed6f22dca9f9dfcb2c5e78c",
         "apps/n8n/patches/fix_tool_result_is_error.py": "10d6018a19a90f2eb88956bd72043f454cbc36ca331c7d2978c55cc3dab5a5c8",
         "apps/n8n/patches/fix_test_run_error_messages.py": "f2da0babef9db4a3878d211f47b1d83e552d6273d882462fee7607a805630a2a",

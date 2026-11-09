@@ -1,3 +1,11 @@
+## 0.4.13 — images published and verified (2026-11-08)
+
+- Includes the merged post-0.4.12 source changes in PRs #73–#75. URL path arguments are encoded as one segment before HTTP normalization; the gateway also refuses dot-segment paths and rejects newly saved backend URLs that the runtime would refuse.
+- Nextcloud read ETags omit compression suffixes so conditional update and delete can use them; the upstream and PaaS source fixes have already merged.
+- The admin panel explains child restarts on policy saves, accepts an EMQX base URL ending in `/api/v5` by normalizing it, and improves Odoo, LiteLLM and Nextcloud credential guidance.
+- Advance all seven source versions together. OpenDesign stays disabled in the Store; only Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud are enabled image products.
+- Six images from source `4966f40f` passed P1–P5, anonymous readback and fresh remote layer verification. See [release decision](docs/operations/release-decision-0.4.13.md) and [provenance](docs/provenance/release-0.4.13-images.json). Stable distribution and HAOS acceptance are separate.
+
 ## 0.4.12 — images published and verified (2026-11-07)
 
 - Include merged PRs #65–#70 (#67–#70 reached `claude-delivery` through #71: they had been merged into their stacked base branches):

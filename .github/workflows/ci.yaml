@@ -13,7 +13,8 @@ concurrency:
 jobs:
   unit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Keep the same source gate window as the hosted PR and release workflows.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -98,8 +99,8 @@ jobs:
           platforms: linux/amd64
           push: false
           load: true
-          tags: local/mcp-${{ matrix.app }}:0.4.12
-          build-args: BUILD_VERSION=0.4.12
+          tags: local/mcp-${{ matrix.app }}:0.4.13
+          build-args: BUILD_VERSION=0.4.13
           labels: org.opencontainers.image.revision=${{ github.sha }}
       - name: Pinned scanners (public checksum-verified binaries)
         run: python3 packaging/install_scanners.py "$RUNNER_TEMP/scanners"
