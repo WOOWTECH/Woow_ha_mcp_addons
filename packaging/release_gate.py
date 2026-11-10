@@ -125,11 +125,17 @@ def stable_release_exists(tag, fetch=fetch):
     return not release.get('draft') and not release.get('prerelease')
 
 
-def decision_records(version, root=ROOT):
+def decision_records(version, root=ROOT, *, product=None):
     """release-decision-*.md files that name this exact version (0.2.2 does not match 0.2.20 or 10.2.2)."""
     pattern = re.compile(r'(?<![0-9.])' + re.escape(version) + r'(?![0-9]|\.[0-9])')
-    return sorted(p.name for p in (root / 'docs/operations').glob('release-decision-*.md')
-                  if pattern.search(p.read_text(encoding='utf-8')))
+    product_pattern = (re.compile(r'(?<![A-Za-z0-9_])' + re.escape(product) + r'(?![A-Za-z0-9_])')
+                       if product else None)
+    records = []
+    for path in (root / 'docs/operations').glob('release-decision-*.md'):
+        content = path.read_text(encoding='utf-8')
+        if pattern.search(content) and (product_pattern is None or product_pattern.search(content)):
+            records.append(path.name)
+    return sorted(records)
 
 
 def check_decisions(found, root=ROOT, fetch=fetch):
@@ -139,11 +145,15 @@ def check_decisions(found, root=ROOT, fetch=fetch):
         if stable_release_exists(tag, fetch=fetch):
             print(f'{slug} {version}: already released as {tag}')
             continue
-        records = decision_records(version, root)
+        # Headscale first appears at the same global 0.4.13 version already used
+        # by six published images. Their decision record cannot authorize a
+        # new, independently built image; require an explicit Headscale record.
+        records = decision_records(version, root, product=slug if slug == 'woow_mcp_headscale' else None)
         if records:
             print(f'{slug} {version}: release record {", ".join(records)}')
         else:
-            failures.append(f'{slug} {version}: no docs/operations/release-decision-*.md names {version}; '
+            subject = f'{slug} {version}' if slug == 'woow_mcp_headscale' else version
+            failures.append(f'{slug} {version}: no docs/operations/release-decision-*.md names {subject}; '
                             'record the builder VM acceptance before releasing')
     return failures
 
