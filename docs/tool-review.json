@@ -207,5 +207,18 @@
     "n8n_manage_folders": "B3 新增 readonly get：genuine handleGetFolder/getFolder、明確非personal projectId/folderId，單次 GET /projects/{project}/folders/{folder}；只回 bounded id/name/parentFolderId/ISO timestamps/projectId，無 workflow content。既有 list/create/rename 與 exact writer grants 不變；move/delete 拒絕。get 是操作擴充，不算新增工具名。",
     "search_nodes": "search_nodes：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。",
     "tools_documentation": "tools_documentation：只允許 accepted_schema；未列出的參數/operation 拒絕；非全產品授權。"
+  },
+  "headscale": {
+    "headscale_users": "list 讀使用者識別與 email；create、rename、delete 寫入使用者。rename 只改 Headscale 名稱，不改 IdP 帳號，OIDC 下次登入的名稱同步不保證；delete 具破壞性。",
+    "headscale_nodes": "list/get 讀節點資料；rename、set_tags、expire、delete 寫入。set_tags 轉成 tagged ownership 後無反向操作，標籤須先在 policy 存在。",
+    "headscale_register": "register 與 legacy 都完成現有 client registration，屬寫入；legacy 使用 query-based 相容端點。auth ID 必須來自原有 client 流程，不以此宣稱建立新的 client 註冊請求。",
+    "headscale_preauth_keys": "list 讀入網金鑰 metadata 且既有 secret 遮罩；create、expire、delete 寫入。create 需到期時間與明確 reveal_once，僅建立時回傳新 secret。",
+    "headscale_auth": "approve/reject 均寫入待決 SSH auth verdict；不替 client 註冊設備或指定 user。",
+    "headscale_api_keys": "list 讀 API key metadata 且既有 secret 遮罩；create、expire、delete 寫入，create 需明確 reveal_once。REST delete 使用 prefix，非任意 URL/path。",
+    "headscale_policy": "get 讀整份 policy；check 驗證候選、不持久化；diff 本地讀舊政策後計算差異；apply 先比 digest、check，再 SetPolicy 並讀回驗證，屬寫入。上游沒有 atomic CAS，其他 writer 可競爭。",
+    "headscale_routes_replace": "SetApprovedRoutes 覆蓋單一節點整份 approved routes；空陣列撤銷全部，出口 IPv4/IPv6 配對。此工具不讓 client 自動宣告路由。",
+    "headscale_health": "經認證 v1 API 的 Health GET，檢查資料庫連線；只代表此健康端點，不證明其它 28 個 operation 可用。",
+    "headscale_debug_node": "DebugCreateNode 建立合成測試節點，屬寫入；需要明確 confirm，不能作為真實 client enrollment 證據。",
+    "headscale_backfill_ips": "BackfillNodeIPs 會真的回填節點 IP，屬寫入；需要明確 confirm，不是 dry run。"
   }
 }

@@ -26,7 +26,8 @@ from test_expansion_runtime import fake_api
 from test_real_products import connection, rpc
 from tool_refusal import refused
 
-COUNTS = {'odoo': 41, 'n8n': 28, 'hermes': 11, 'opendesign': 15, 'emqx': 39, 'litellm': 40, 'nextcloud': 9}
+COUNTS = {'odoo': 41, 'n8n': 28, 'hermes': 11, 'opendesign': 15, 'emqx': 39, 'litellm': 40, 'nextcloud': 9,
+          'headscale': 11}
 ACCEPT = {'Accept': 'application/json, text/event-stream'}
 SESSION = {'Mcp-Session-Id': 'child-session'}
 
@@ -208,7 +209,7 @@ async def test_real_child_lists_its_complete_surface(tmp_path, product):
         if product == 'n8n':
             store.update(backend_url=url, backend_key='DUMMY')
         else:
-            store.update(connection=connection(product, url))
+            store.update(connection=connection(product, 'https://hs.example.test' if product == 'headscale' else url))
         endpoint = Endpoint(product)
         process = endpoint.supervisor((n8n_spec if product == 'n8n' else child_spec)(store.load(), store.directory))
         try:

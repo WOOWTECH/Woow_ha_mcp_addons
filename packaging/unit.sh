@@ -3,7 +3,7 @@
 set -eu
 unset SUPERVISOR_TOKEN
 uv sync --frozen --python python3.13
-for app in odoo odoo-manage hermes opendesign emqx litellm nextcloud; do
+for app in odoo odoo-manage hermes opendesign emqx litellm nextcloud headscale; do
   uv sync --project "apps/$app" --frozen --no-dev --python python3.13
 done
 # 0.2.0: the PaaS build patches the Odoo image applies (apps/odoo/Dockerfile); launch.py checks the patched digests.

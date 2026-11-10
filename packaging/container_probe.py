@@ -9,9 +9,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from itertools import islice
 import json
 import hashlib
+import ipaddress
 import os
 from pathlib import Path
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -21,7 +23,7 @@ import xmlrpc.client
 import httpx
 from denial_probe import assert_denials, WRITE_CASES
 from mcp_admin_core.health import protocol_reply
-from mcp_admin_core.products import ProductStore, PROBES, TOOLS, fresh_write_grants, probe_success
+from mcp_admin_core.products import ProductStore, PROBES, TOOLS, allowed_address, fresh_write_grants, probe_success
 
 APP = sys.argv[1]
 ROOT = Path('/opt/woow')
@@ -48,6 +50,13 @@ class Backend(BaseHTTPRequestHandler):
         CALLS.append(('GET', self.path))
         if OFFLINE.is_set():
             self.send_error(503)
+            return
+        if self.path == '/api/v1/health':
+            # Headscale v0.29.4 Health is an authenticated native v1 GET.
+            if self.headers.get('Authorization') != 'Bearer DUMMY':
+                self.send_error(401)
+                return
+            self.respond({'databaseConnectivity': True})
             return
         values = {'/v1/capabilities': {'models': []}, '/api/health': {'status': 'ok'},
                   '/api/v5/nodes': [{'node': 'fake@local', 'version': '5.fake'}],
@@ -179,6 +188,18 @@ def fixture_update(**updates):
     return state
 
 
+def mock_bind_host(app):
+    if app != 'headscale':
+        return '127.0.0.1'
+    # container_acceptance gives Headscale a disposable internal bridge. Its
+    # child rejects loopback destinations, so use this container's private IP.
+    host = socket.gethostbyname(socket.gethostname())
+    address = ipaddress.ip_address(host)
+    assert (address.version == 4 and address.is_private and not address.is_loopback
+            and not address.is_link_local and allowed_address(host)), 'Headscale mock needs private bridge IP'
+    return host
+
+
 async def rpc(client, headers, message):
     async with client.stream('POST', ENDPOINT, headers=headers, json=message) as response:
         if response.headers.get('mcp-session-id'):
@@ -190,7 +211,7 @@ async def rpc(client, headers, message):
 
 
 async def run():
-    assert APP in ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud')
+    assert APP in ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud', 'headscale')
     assert {p.name for p in (ROOT / 'apps').iterdir()} == {APP, 'runtime'}, 'sibling application shipped'
     assert not DATA.exists(), 'refuse non-disposable state'
     assert not (ROOT / '.git').exists()
@@ -200,10 +221,11 @@ async def run():
     assert list((UI_ROOT / 'assets').rglob('*.woff2'))
     assert (UI_ROOT / 'licenses').is_dir()
     assert not (UI_ROOT.parent / 'fixtures').exists()
-    server = ThreadingHTTPServer(('127.0.0.1', 0), Backend)
+    bind_host = mock_bind_host(APP)
+    server = ThreadingHTTPServer((bind_host, 0), Backend)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    url = f'http://127.0.0.1:{server.server_port}'
+    url = f'http://{bind_host}:{server.server_port}'
     process = None
     try:
         async with httpx.AsyncClient(trust_env=False, timeout=10) as client:
@@ -226,24 +248,14 @@ async def run():
                     'hermes': dict(gateway_url=url, gateway_api_key='DUMMY'),
                     'opendesign': dict(url=url), 'emqx': dict(url=url, api_key='DUMMY', api_secret='DUMMY'),
                     'litellm': dict(url=url, master_key='DUMMY'),
-                    'nextcloud': dict(url=url, username='tester', app_password='DUMMY')}
+                    'nextcloud': dict(url=url, username='tester', app_password='DUMMY'),
+                    'headscale': dict(url=url, api_key='DUMMY')}
                 state = fixture_update(connection=connections[APP])
                 public_tools = TOOLS[APP]
                 name, args = PROBES[APP]
-            # 0.2.0 (the full add-on): the executable created a NEW state, so every write grant and the legacy switch
-            # are on (Odoo Manage none: its writers need module mode).
+            # A new state has all write grants on (Odoo Manage writers also need module mode).
             assert state.schema_version == 4
             assert state.writes_enabled is True and state.enabled_write_tools == fresh_write_grants(APP)
-            # A valid v2 backup is switched once to the all-on defaults at its first start (owner decision
-            # 2026-10-27, aligned with the PaaS): no review stage, MCP serves at once and the normal child starts.
-            legacy = state.model_dump()
-            legacy.pop('enabled_write_tools')
-            legacy['schema_version'] = 2
-            legacy['writes_enabled'] = False
-            (DATA / 'state.json').write_text(json.dumps(legacy))
-            calls_before_upgrade = list(CALLS)
-            assert 'owner-defaults-20261025-recovery.json' not in fixture_snapshot()
-
             async def ready_after_start():
                 running = start()
                 await ready_listener(client, running)
@@ -252,25 +264,47 @@ async def run():
                         assert running.poll() is None
                         await asyncio.sleep(.2)
                 return running
-            process = await ready_after_start()
-            assert children(process), 'migrated state did not start the normal child'
-            assert len(CALLS) > len(calls_before_upgrade), 'normal runtime did not probe backend'
-            migrated = json.loads((DATA / 'state.json').read_text())
-            marker = migrated.pop('owner_defaults_20261025')
-            assert marker['applied'] == 'migrated' and marker['from_schema'] == 2 and marker['restored_at'] is None
-            assert migrated['schema_version'] == 4 and migrated['enabled_write_tools'] == fresh_write_grants(APP)
-            assert migrated == {**state.model_dump(), 'writes_enabled': APP != 'odoo-manage'}
-            record_path = DATA / 'owner-defaults-20261025-recovery.json'
-            record = json.loads(record_path.read_text())
-            assert record['format'] == 2 and record['source_schema'] == 2 and record['legacy_policy']['writes_enabled'] is False
-            assert record_path.stat().st_mode & 0o777 == 0o600 and record_path.stat().st_uid == 10001
-            migrated_bytes = (DATA / 'state.json').read_bytes()
-            record_bytes = record_path.read_bytes()
-            # The next start is a normal start: nothing is migrated or rewritten again.
-            stop(process)
-            process = None
-            process = await ready_after_start()
-            assert (DATA / 'state.json').read_bytes() == migrated_bytes and record_path.read_bytes() == record_bytes
+            calls_before_start = len(CALLS)
+            assert 'owner-defaults-20261025-recovery.json' not in fixture_snapshot()
+            if APP == 'headscale':
+                # Headscale is new: its core deliberately refuses pre-v4
+                # records. Exercise the normal configured child and two starts
+                # without fabricating a legacy backup or migration marker.
+                configured_bytes = (DATA / 'state.json').read_bytes()
+                process = await ready_after_start()
+                assert children(process), 'configured Headscale child not started'
+                assert len(CALLS) > calls_before_start, 'Headscale did not probe backend'
+                assert (DATA / 'state.json').read_bytes() == configured_bytes
+                stop(process)
+                process = None
+                process = await ready_after_start()
+                assert (DATA / 'state.json').read_bytes() == configured_bytes
+            else:
+                # Existing products migrate a valid v2 backup once to the
+                # 2026-10-27 all-on defaults, then restart without rewriting it.
+                legacy = state.model_dump()
+                legacy.pop('enabled_write_tools')
+                legacy['schema_version'] = 2
+                legacy['writes_enabled'] = False
+                (DATA / 'state.json').write_text(json.dumps(legacy))
+                process = await ready_after_start()
+                assert children(process), 'migrated state did not start the normal child'
+                assert len(CALLS) > calls_before_start, 'normal runtime did not probe backend'
+                migrated = json.loads((DATA / 'state.json').read_text())
+                marker = migrated.pop('owner_defaults_20261025')
+                assert marker['applied'] == 'migrated' and marker['from_schema'] == 2 and marker['restored_at'] is None
+                assert migrated['schema_version'] == 4 and migrated['enabled_write_tools'] == fresh_write_grants(APP)
+                assert migrated == {**state.model_dump(), 'writes_enabled': APP != 'odoo-manage'}
+                record_path = DATA / 'owner-defaults-20261025-recovery.json'
+                record = json.loads(record_path.read_text())
+                assert record['format'] == 2 and record['source_schema'] == 2 and record['legacy_policy']['writes_enabled'] is False
+                assert record_path.stat().st_mode & 0o777 == 0o600 and record_path.stat().st_uid == 10001
+                migrated_bytes = (DATA / 'state.json').read_bytes()
+                record_bytes = record_path.read_bytes()
+                stop(process)
+                process = None
+                process = await ready_after_start()
+                assert (DATA / 'state.json').read_bytes() == migrated_bytes and record_path.read_bytes() == record_bytes
             # The denial checks below need every write revoked, as the panel saves it (and the restart keeps it).
             stop(process)
             process = None

@@ -17,6 +17,7 @@ FIELDS = {
     'emqx': ('url', 'api_key', 'api_secret'),
     'litellm': ('url', 'master_key'),
     'nextcloud': ('url', 'username', 'app_password'),
+    'headscale': ('url', 'api_key'),
 }
 SECRETS = frozenset(('key', 'mcp_access_token', 'password', 'api_key', 'api_secret',
                      'gateway_api_key', 'dashboard_password', 'master_key', 'app_password'))

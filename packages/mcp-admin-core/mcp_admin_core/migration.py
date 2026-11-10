@@ -102,6 +102,8 @@ def _validate(value, product):
         version = value.get('schema_version')
         if type(version) is not int or version not in (1, 2, 3, 4):
             raise ValueError
+        if product == 'headscale' and version != 4:
+            raise ValueError  # No pre-release Headscale state exists to migrate.
         value = deepcopy(value)
         if version == 1:
             if product != 'n8n' or set(value) != set(State.model_fields):
@@ -180,6 +182,8 @@ def plan_migration(value, product, *, policy):
     """
     if policy not in POLICIES:
         raise MigrationError('choose preserve or all_on explicitly')
+    if product not in LEGACY_TOOLS:
+        raise MigrationError('this product has no legacy catalog')
     version, before = _validate(value, product)
     tools = _tools(product)
     old = LEGACY_TOOLS[product]

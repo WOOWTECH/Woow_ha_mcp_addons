@@ -235,6 +235,16 @@ class PackagingTests(unittest.TestCase):
             with self.assertRaisesRegex(v.Invalid, 'initialize serverInfo version'):
                 v.validate(v.ROOT)
 
+    def test_unit_script_installs_headscale_without_workflow_precondition(self):
+        unit = (v.ROOT / 'packaging/unit.sh').read_text()
+        v.unit_child_sync(unit)
+        with self.assertRaisesRegex(v.Invalid, 'unit.sh isolated child scope'):
+            v.unit_child_sync(unit.replace(' nextcloud headscale; do', ' nextcloud; do'))
+        for workflow in ('ci.yaml', 'release.yaml', 'woow-addon-release.yml'):
+            text = (v.ROOT / '.github/workflows' / workflow).read_text()
+            self.assertIn('sh packaging/unit.sh', text)
+            self.assertNotIn('run: uv sync --project apps/headscale', text)
+
     def test_the_native_addon_is_pinned_everywhere_and_is_the_only_download(self):
         # Unreleased (0.4.12 line): better-sqlite3's prebuilt binary is the n8n image's one native addon; it enters only
         # through packaging/native_addon.mjs from the pinned release asset, next to the hash-locked, script-free npm tree.

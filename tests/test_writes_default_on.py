@@ -23,7 +23,7 @@ from test_real_products import connection
 
 ROOT = Path(__file__).resolve().parents[1]
 ALL = (*PRODUCTS, 'n8n')
-FULL = tuple(p for p in ALL if p != 'odoo-manage')
+FULL = tuple(p for p in ALL if p not in ('odoo-manage', 'headscale'))  # Headscale has no 0.1.x state.
 # One representative write call per product (exact grant shown).
 WRITE_CALLS = {
     'odoo': ('execute_method', {'model': 'res.partner', 'method': 'write', 'args': [[1], {'name': 'x'}]}),
@@ -32,6 +32,7 @@ WRITE_CALLS = {
     'emqx': ('emqx_publish', {'topic': 'owned/test', 'payload': 'x'}),
     'litellm': ('litellm_generate_key', {}),
     'nextcloud': ('delete_file_checked', {'path': 'a.txt', 'expected_etag': '"e"'}),
+    'headscale': ('headscale_routes_replace', {'node_id': '1', 'routes': []}),
     'n8n': ('n8n_manage_credentials', {'action': 'create', 'name': 'x', 'type': 'x', 'data': {}}),
 }
 

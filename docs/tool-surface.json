@@ -1,6 +1,6 @@
 {
   "format": 3,
-  "scope": "0.2.0 full child surface (owner decision 2026-10-15); Odoo Manage (retired) keeps the 0.1.x bounded surface; not HA/release acceptance",
+  "scope": "0.2.0 full child surface for the original seven products (owner decision 2026-10-15); Odoo Manage (retired) keeps the 0.1.x bounded surface; Headscale targets v0.29.4 native API (11 tools, 29 operations) on new installs; not HA/release acceptance",
   "source_digests": {
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/__init__.py": "7f0d150faa30f109b34382fc0f1ca778432a0ba6e000475eeb69ef114aa21a04",
     "apps/odoo/.venv/lib/python3.13/site-packages/odoo_mcp/__main__.py": "70364c41331d1a1023556813f12d2cb867096fdf07761d4581a309b9ee37dc5b",
@@ -104,6 +104,17 @@
     "apps/nextcloud/vendor/nextcloud_mcp_server/settings.py": "d8283658375f65ec0022a5e04e48d0109e14d49a8df1f7e6c8fcbd905ebb45ad",
     "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py": "9b22f15816e56e6808a509886d89f52a04152dec99bf9078ccd257e098fb4aa4",
     "apps/nextcloud/vendor/nextcloud_mcp_server/webdav.py": "1bcf659aab461d5401cb52e95ebcb5403c6daf85390b345d4ff952954b5eedb2",
+    "apps/headscale/vendor/headscale_mcp_server/__init__.py": "c7b36f045379f80d9e90f0f28d66764a6db835ee9586bf4ad5512603144b3f26",
+    "apps/headscale/vendor/headscale_mcp_server/client.py": "75770652567e8e36c2a6b0951e7d2f92739b15051e5168257ac9e0ddae9e0701",
+    "apps/headscale/vendor/headscale_mcp_server/errors.py": "e149dd269b7ef4ee281408a3858ca3c48401b3cbb30fe414320b63f8bf27e6bd",
+    "apps/headscale/vendor/headscale_mcp_server/http_policy.py": "8714654ae8131b47928e30de652e6bdb86e777eb7ae27531534ef7fb5faf4473",
+    "apps/headscale/vendor/headscale_mcp_server/log_redaction.py": "67d4aa0a1d8fdee7572d19e4da6b5fa1aa0867c08c01dfa156352e5c88f64a1b",
+    "apps/headscale/vendor/headscale_mcp_server/models.py": "94b2664100fd5fc65f67aa6acdf4faf27612579f51a1d540a47c8338f38f156a",
+    "apps/headscale/vendor/headscale_mcp_server/native.py": "c27ddc043429376688140488e88aa8ef6946a856ff49430391010abf8aeeb054",
+    "apps/headscale/vendor/headscale_mcp_server/operation_policy.py": "f6fc80610276b6edca14118c1c9010b82bed02d10c7592ec727f32484dbe5dfb",
+    "apps/headscale/vendor/headscale_mcp_server/policy.py": "db25356154d0069ee141fe7d9ce596e766875a79b7d35d0fc31cb2f219f10cbd",
+    "apps/headscale/vendor/headscale_mcp_server/registry.py": "d8e4ff233de26fdabc1aaeff87200e7e22f2893acf115aa798ac95595cb99728",
+    "apps/headscale/vendor/headscale_mcp_server/server.py": "c502e31d22a6b614ab55729310cbbc11a941bca729310ed674964346d903d203",
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools.js": "e30bddb3967661d36ae5dd8c6b5eb8b7e1b56f6053b2bb972543d7bbc4d57803",
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools-n8n-manager.js": "e31acfb4d4344704786d4a69fc4a2a0a6b784a265df3474073dd5bc5951efac7",
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/agents-action-map.js": "9282db04957b8a7931cd99ceddcbfd943419732930325256b03ecc443075c8e8",
@@ -145,6 +156,7 @@
     "apps/runtime/run_child.py": "720930274b2a6e67a2effe0c4463cc713f0318ece45a4cef951ea45488241fe5",
     "apps/runtime/session_idle.py": "79ecbaffb832a00354ae659b56dc264361c6a6299d2d0a9a16ad41c958489493",
     "apps/runtime/tool_error_text.py": "c21dd6b51e9ac2a7de457280b1f2bf3ab6a432c7b0115745f1d7363e98fadf59",
+    "apps/headscale/launch.py": "99ae5ced3129c9f9999761ac8409f0c31a88aeab3a7e9c8300bd5142a2ae9b74",
     "apps/hermes/launch.py": "66567ea7820e005eb4cecc56efce928d084d9921ae09422336bfa0ca24aae5fc",
     "apps/odoo/launch.py": "c598000d69da8efaea38318774c53de8703882c8b5496d39eada8ae96c18a6bc",
     "apps/odoo-manage/launch.py": "7e2adc8ce3ece9240ce54d1c7429ceed3bd61d95e6a700ef00094816f9cca515",
@@ -5080,6 +5092,922 @@
             "tests/test_full_surface.py",
             "tests/test_real_products.py"
           ]
+        }
+      ]
+    },
+    "headscale": {
+      "upstream_count": 11,
+      "supported_count": 11,
+      "tools": [
+        {
+          "name": "headscale_api_keys",
+          "source": "apps/headscale/vendor/headscale_mcp_server/registry.py",
+          "line": 62,
+          "evidence": "python-group-registration-AST",
+          "operations": {
+            "operation": [
+              "create",
+              "delete",
+              "expire",
+              "list"
+            ]
+          },
+          "native_bindings": {
+            "list": "ListApiKeys",
+            "create": "CreateApiKey",
+            "expire": "ExpireApiKey",
+            "delete": "DeleteApiKey"
+          },
+          "source_signature": "{'list': ('ListApiKeys', {}), 'create': ('CreateApiKey', {'expiration': (Timestamp, ...), 'reveal_once': (Bool, ...)}), 'expire': ('ExpireApiKey', {'key_id': (Id, None), 'prefix': (Prefix, None)}), 'delete': ('DeleteApiKey', {'prefix': (Prefix, ...)})}",
+          "effect": "mixed",
+          "operation_effects": {
+            "operation": {
+              "create": "write",
+              "delete": "write",
+              "expire": "write",
+              "list": "read"
+            }
+          },
+          "dispatch_operations": {
+            "operation": {
+              "create": {
+                "supported_explicit": true,
+                "default_readonly": false,
+                "write_grant": "headscale_api_keys:create",
+                "deferred_reason": null
+              },
+              "delete": {
+                "supported_explicit": true,
+                "default_readonly": false,
+                "write_grant": "headscale_api_keys:delete",
+                "deferred_reason": null
+              },
+              "expire": {
+                "supported_explicit": true,
+                "default_readonly": false,
+                "write_grant": "headscale_api_keys:expire",
+                "deferred_reason": null
+              },
+              "list": {
+                "supported_explicit": true,
+                "default_readonly": true,
+                "write_grant": null,
+                "deferred_reason": null
+              }
+            }
+          },
+          "status": "supported-full",
+          "default_enabled": true,
+          "write_grants": [
+            "headscale_api_keys:create",
+            "headscale_api_keys:expire",
+            "headscale_api_keys:delete"
+          ],
+          "operation_parameter": "operation",
+          "enable": "新安裝預設開啟；管理面板可逐一停用工具或撤銷寫入 grant；disabled 優先；沒有 0.1.x 舊狀態升級路徑",
+          "reason": "Headscale 已審查工具：參數由子程序驗證，輸入原樣轉送。",
+          "review_reason": "list 讀 API key metadata 且既有 secret 遮罩；create、expire、delete 寫入，create 需明確 reveal_once。REST delete 使用 prefix，非任意 URL/path。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_full_surface.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "headscale_auth",
+          "source": "apps/headscale/vendor/headscale_mcp_server/registry.py",
+          "line": 59,
+          "evidence": "python-group-registration-AST",
+          "operations": {
+            "operation": [
+              "approve",
+              "reject"
+            ]
+          },
+          "native_bindings": {
+            "approve": "AuthApprove",
+            "reject": "AuthReject"
+          },
+          "source_signature": "{'approve': ('AuthApprove', {'auth_id': (AuthId, ...)}), 'reject': ('AuthReject', {'auth_id': (AuthId, ...)})}",
+          "effect": "mixed",
+          "operation_effects": {
+            "operation": {
+              "approve": "write",
+              "reject": "write"
+            }
+          },
+          "dispatch_operations": {
+            "operation": {
+              "approve": {
+                "supported_explicit": true,
+                "default_readonly": false,
+                "write_grant": "headscale_auth:approve",
+                "deferred_reason": null
+              },
+              "reject": {
+                "supported_explicit": true,
+                "default_readonly": false,
+                "write_grant": "headscale_auth:reject",
+                "deferred_reason": null
+              }
+            }
+          },
+          "status": "supported-full",
+          "default_enabled": true,
+          "write_grants": [
+            "headscale_auth:approve",
+            "headscale_auth:reject"
+          ],
+          "operation_parameter": "operation",
+          "enable": "新安裝預設開啟；管理面板可逐一停用工具或撤銷寫入 grant；disabled 優先；沒有 0.1.x 舊狀態升級路徑",
+          "reason": "Headscale 已審查工具：參數由子程序驗證，輸入原樣轉送。",
+          "review_reason": "approve/reject 均寫入待決 SSH auth verdict；不替 client 註冊設備或指定 user。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_full_surface.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "headscale_backfill_ips",
+          "source": "apps/headscale/vendor/headscale_mcp_server/registry.py",
+          "line": 77,
+          "evidence": "python-fixed-registration-AST",
+          "operations": {},
+          "native_bindings": {
+            "update": "BackfillNodeIPs"
+          },
+          "source_signature": "{'confirm': (Bool, ...)}",
+          "effect": "write",
+          "operation_effects": {},
+          "dispatch_operations": {},
+          "status": "supported-full",
+          "default_enabled": true,
+          "write_grants": [
+            "headscale_backfill_ips"
+          ],
+          "operation_parameter": null,
+          "enable": "新安裝預設開啟；管理面板可逐一停用工具或撤銷寫入 grant；disabled 優先；沒有 0.1.x 舊狀態升級路徑",
+          "reason": "Headscale 已審查工具：參數由子程序驗證，輸入原樣轉送。",
+          "review_reason": "BackfillNodeIPs 會真的回填節點 IP，屬寫入；需要明確 confirm，不是 dry run。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_full_surface.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "headscale_debug_node",
+          "source": "apps/headscale/vendor/headscale_mcp_server/registry.py",
+          "line": 76,
+          "evidence": "python-fixed-registration-AST",
+          "operations": {},
+          "native_bindings": {
+            "create": "DebugCreateNode"
+          },
+          "source_signature": "{'user': (Username, ...), 'auth_id': (AuthId, ...), 'name': (NodeName, ...), 'routes': (Routes, []), 'confirm': (Bool, ...)}",
+          "effect": "write",
+          "operation_effects": {},
+          "dispatch_operations": {},
+          "status": "supported-full",
+          "default_enabled": true,
+          "write_grants": [
+            "headscale_debug_node"
+          ],
+          "operation_parameter": null,
+          "enable": "新安裝預設開啟；管理面板可逐一停用工具或撤銷寫入 grant；disabled 優先；沒有 0.1.x 舊狀態升級路徑",
+          "reason": "Headscale 已審查工具：參數由子程序驗證，輸入原樣轉送。",
+          "review_reason": "DebugCreateNode 建立合成測試節點，屬寫入；需要明確 confirm，不能作為真實 client enrollment 證據。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_full_surface.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "headscale_health",
+          "source": "apps/headscale/vendor/headscale_mcp_server/registry.py",
+          "line": 75,
+          "evidence": "python-fixed-registration-AST",
+          "operations": {},
+          "native_bindings": {
+            "read": "Health"
+          },
+          "source_signature": "{}",
+          "effect": "read",
+          "operation_effects": {},
+          "dispatch_operations": {},
+          "status": "supported-full",
+          "default_enabled": true,
+          "write_grants": [],
+          "operation_parameter": null,
+          "enable": "新安裝預設開啟；管理面板可逐一停用工具或撤銷寫入 grant；disabled 優先；沒有 0.1.x 舊狀態升級路徑",
+          "reason": "Headscale 已審查工具：參數由子程序驗證，輸入原樣轉送。",
+          "review_reason": "經認證 v1 API 的 Health GET，檢查資料庫連線；只代表此健康端點，不證明其它 28 個 operation 可用。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_full_surface.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "headscale_nodes",
+          "source": "apps/headscale/vendor/headscale_mcp_server/registry.py",
+          "line": 44,
+          "evidence": "python-group-registration-AST",
+          "operations": {
+            "operation": [
+              "delete",
+              "expire",
+              "get",
+              "list",
+              "rename",
+              "set_tags"
+            ]
+          },
+          "native_bindings": {
+            "list": "ListNodes",
+            "get": "GetNode",
+            "rename": "RenameNode",
+            "set_tags": "SetTags",
+            "expire": "ExpireNode",
+            "delete": "DeleteNode"
+          },
+          "source_signature": "{'list': ('ListNodes', {'user': (Username, None)}), 'get': ('GetNode', {'node_id': (Id, ...)}), 'rename': ('RenameNode', {'node_id': (Id, ...), 'new_name': (NodeName, ...)}), 'set_tags': ('SetTags', {'node_id': (Id, ...), 'tags': (NonemptyTags, ...)}), 'expire': ('ExpireNode', {'node_id': (Id, ...), 'mode': (Literal['now', 'at', 'disable'], 'now'), 'expiry': (Timestamp, None)}), 'delete': ('DeleteNode', {'node_id': (Id, ...)})}",
+          "effect": "mixed",
+          "operation_effects": {
+            "operation": {
+              "delete": "write",
+              "expire": "write",
+              "get": "read",
+              "list": "read",
+              "rename": "write",
+              "set_tags": "write"
+            }
+          },
+          "dispatch_operations": {
+            "operation": {
+              "delete": {
+                "supported_explicit": true,
+                "default_readonly": false,
+                "write_grant": "headscale_nodes:delete",
+                "deferred_reason": null
+              },
+              "expire": {
+                "supported_explicit": true,
+                "default_readonly": false,
+                "write_grant": "headscale_nodes:expire",
+                "deferred_reason": null
+              },
+              "get": {
+                "supported_explicit": true,
+                "default_readonly": true,
+                "write_grant": null,
+                "deferred_reason": null
+              },
+              "list": {
+                "supported_explicit": true,
+                "default_readonly": true,
+                "write_grant": null,
+                "deferred_reason": null
+              },
+              "rename": {
+                "supported_explicit": true,
+                "default_readonly": false,
+                "write_grant": "headscale_nodes:rename",
+                "deferred_reason": null
+              },
+              "set_tags": {
+                "supported_explicit": true,
+                "default_readonly": false,
+                "write_grant": "headscale_nodes:set_tags",
+                "deferred_reason": null
+              }
+            }
+          },
+          "status": "supported-full",
+          "default_enabled": true,
+          "write_grants": [
+            "headscale_nodes:rename",
+            "headscale_nodes:set_tags",
+            "headscale_nodes:expire",
+            "headscale_nodes:delete"
+          ],
+          "operation_parameter": "operation",
+          "enable": "新安裝預設開啟；管理面板可逐一停用工具或撤銷寫入 grant；disabled 優先；沒有 0.1.x 舊狀態升級路徑",
+          "reason": "Headscale 已審查工具：參數由子程序驗證，輸入原樣轉送。",
+          "review_reason": "list/get 讀節點資料；rename、set_tags、expire、delete 寫入。set_tags 轉成 tagged ownership 後無反向操作，標籤須先在 policy 存在。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_full_surface.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "headscale_policy",
+          "source": "apps/headscale/vendor/headscale_mcp_server/registry.py",
+          "line": 67,
+          "evidence": "python-group-registration-AST",
+          "operations": {
+            "operation": [
+              "apply",
+              "check",
+              "diff",
+              "get"
+            ]
+          },
+          "native_bindings": {
+            "get": "GetPolicy",
+            "check": "CheckPolicy",
+            "diff": null,
+            "apply": "SetPolicy"
+          },
+          "source_signature": "{'get': ('GetPolicy', {}), 'check': ('CheckPolicy', {'policy': (PolicyText, ...)}), 'diff': (None, {'policy': (PolicyText, ...)}), 'apply': ('SetPolicy', {'policy': (PolicyText, ...), 'expected_digest': (Digest, ...)})}",
+          "effect": "mixed",
+          "operation_effects": {
+            "operation": {
+              "apply": "write",
+              "check": "read",
+              "diff": "read",
+              "get": "read"
+            }
+          },
+          "dispatch_operations": {
+            "operation": {
+              "apply": {
+                "supported_explicit": true,
+                "default_readonly": false,
+                "write_grant": "headscale_policy:apply",
+                "deferred_reason": null
+              },
+              "check": {
+                "supported_explicit": true,
+                "default_readonly": true,
+                "write_grant": null,
+                "deferred_reason": null
+              },
+              "diff": {
+                "supported_explicit": true,
+                "default_readonly": true,
+                "write_grant": null,
+                "deferred_reason": null
+              },
+              "get": {
+                "supported_explicit": true,
+                "default_readonly": true,
+                "write_grant": null,
+                "deferred_reason": null
+              }
+            }
+          },
+          "status": "supported-full",
+          "default_enabled": true,
+          "write_grants": [
+            "headscale_policy:apply"
+          ],
+          "operation_parameter": "operation",
+          "enable": "新安裝預設開啟；管理面板可逐一停用工具或撤銷寫入 grant；disabled 優先；沒有 0.1.x 舊狀態升級路徑",
+          "reason": "Headscale 已審查工具：參數由子程序驗證，輸入原樣轉送。",
+          "review_reason": "get 讀整份 policy；check 驗證候選、不持久化；diff 本地讀舊政策後計算差異；apply 先比 digest、check，再 SetPolicy 並讀回驗證，屬寫入。上游沒有 atomic CAS，其他 writer 可競爭。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_full_surface.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "headscale_preauth_keys",
+          "source": "apps/headscale/vendor/headscale_mcp_server/registry.py",
+          "line": 54,
+          "evidence": "python-group-registration-AST",
+          "operations": {
+            "operation": [
+              "create",
+              "delete",
+              "expire",
+              "list"
+            ]
+          },
+          "native_bindings": {
+            "list": "ListPreAuthKeys",
+            "create": "CreatePreAuthKey",
+            "expire": "ExpirePreAuthKey",
+            "delete": "DeletePreAuthKey"
+          },
+          "source_signature": "{'list': ('ListPreAuthKeys', {}), 'create': ('CreatePreAuthKey', {'user_id': (Id, None), 'tags': (Tags, []), 'reusable': (Bool, False), 'ephemeral': (Bool, False), 'expiration': (Timestamp, ...), 'reveal_once': (Bool, ...)}), 'expire': ('ExpirePreAuthKey', {'key_id': (Id, ...)}), 'delete': ('DeletePreAuthKey', {'key_id': (Id, ...)})}",
+          "effect": "mixed",
+          "operation_effects": {
+            "operation": {
+              "create": "write",
+              "delete": "write",
+              "expire": "write",
+              "list": "read"
+            }
+          },
+          "dispatch_operations": {
+            "operation": {
+              "create": {
+                "supported_explicit": true,
+                "default_readonly": false,
+                "write_grant": "headscale_preauth_keys:create",
+                "deferred_reason": null
+              },
+              "delete": {
+                "supported_explicit": true,
+                "default_readonly": false,
+                "write_grant": "headscale_preauth_keys:delete",
+                "deferred_reason": null
+              },
+              "expire": {
+                "supported_explicit": true,
+                "default_readonly": false,
+                "write_grant": "headscale_preauth_keys:expire",
+                "deferred_reason": null
+              },
+              "list": {
+                "supported_explicit": true,
+                "default_readonly": true,
+                "write_grant": null,
+                "deferred_reason": null
+              }
+            }
+          },
+          "status": "supported-full",
+          "default_enabled": true,
+          "write_grants": [
+            "headscale_preauth_keys:create",
+            "headscale_preauth_keys:expire",
+            "headscale_preauth_keys:delete"
+          ],
+          "operation_parameter": "operation",
+          "enable": "新安裝預設開啟；管理面板可逐一停用工具或撤銷寫入 grant；disabled 優先；沒有 0.1.x 舊狀態升級路徑",
+          "reason": "Headscale 已審查工具：參數由子程序驗證，輸入原樣轉送。",
+          "review_reason": "list 讀入網金鑰 metadata 且既有 secret 遮罩；create、expire、delete 寫入。create 需到期時間與明確 reveal_once，僅建立時回傳新 secret。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_full_surface.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "headscale_register",
+          "source": "apps/headscale/vendor/headscale_mcp_server/registry.py",
+          "line": 51,
+          "evidence": "python-group-registration-AST",
+          "operations": {
+            "operation": [
+              "legacy",
+              "register"
+            ]
+          },
+          "native_bindings": {
+            "register": "AuthRegister",
+            "legacy": "RegisterNode"
+          },
+          "source_signature": "{'register': ('AuthRegister', {'user': (Username, ...), 'auth_id': (AuthId, ...)}), 'legacy': ('RegisterNode', {'user': (Username, ...), 'auth_id': (AuthId, ...)})}",
+          "effect": "mixed",
+          "operation_effects": {
+            "operation": {
+              "legacy": "write",
+              "register": "write"
+            }
+          },
+          "dispatch_operations": {
+            "operation": {
+              "legacy": {
+                "supported_explicit": true,
+                "default_readonly": false,
+                "write_grant": "headscale_register:legacy",
+                "deferred_reason": null
+              },
+              "register": {
+                "supported_explicit": true,
+                "default_readonly": false,
+                "write_grant": "headscale_register:register",
+                "deferred_reason": null
+              }
+            }
+          },
+          "status": "supported-full",
+          "default_enabled": true,
+          "write_grants": [
+            "headscale_register:register",
+            "headscale_register:legacy"
+          ],
+          "operation_parameter": "operation",
+          "enable": "新安裝預設開啟；管理面板可逐一停用工具或撤銷寫入 grant；disabled 優先；沒有 0.1.x 舊狀態升級路徑",
+          "reason": "Headscale 已審查工具：參數由子程序驗證，輸入原樣轉送。",
+          "review_reason": "register 與 legacy 都完成現有 client registration，屬寫入；legacy 使用 query-based 相容端點。auth ID 必須來自原有 client 流程，不以此宣稱建立新的 client 註冊請求。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_full_surface.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "headscale_routes_replace",
+          "source": "apps/headscale/vendor/headscale_mcp_server/registry.py",
+          "line": 74,
+          "evidence": "python-fixed-registration-AST",
+          "operations": {},
+          "native_bindings": {
+            "replace": "SetApprovedRoutes"
+          },
+          "source_signature": "{'node_id': (Id, ...), 'routes': (Routes, ...)}",
+          "effect": "write",
+          "operation_effects": {},
+          "dispatch_operations": {},
+          "status": "supported-full",
+          "default_enabled": true,
+          "write_grants": [
+            "headscale_routes_replace"
+          ],
+          "operation_parameter": null,
+          "enable": "新安裝預設開啟；管理面板可逐一停用工具或撤銷寫入 grant；disabled 優先；沒有 0.1.x 舊狀態升級路徑",
+          "reason": "Headscale 已審查工具：參數由子程序驗證，輸入原樣轉送。",
+          "review_reason": "SetApprovedRoutes 覆蓋單一節點整份 approved routes；空陣列撤銷全部，出口 IPv4/IPv6 配對。此工具不讓 client 自動宣告路由。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_full_surface.py",
+            "tests/test_real_products.py"
+          ]
+        },
+        {
+          "name": "headscale_users",
+          "source": "apps/headscale/vendor/headscale_mcp_server/registry.py",
+          "line": 39,
+          "evidence": "python-group-registration-AST",
+          "operations": {
+            "operation": [
+              "create",
+              "delete",
+              "list",
+              "rename"
+            ]
+          },
+          "native_bindings": {
+            "list": "ListUsers",
+            "create": "CreateUser",
+            "rename": "RenameUser",
+            "delete": "DeleteUser"
+          },
+          "source_signature": "{'list': ('ListUsers', {'user_id': (Id, None), 'name': (Username, None), 'email': (Text, None)}), 'create': ('CreateUser', {'name': (Username, ...), 'display_name': (Text, ''), 'email': (Text, ''), 'picture_url': (Text, '')}), 'rename': ('RenameUser', {'user_id': (Id, ...), 'new_name': (Username, ...)}), 'delete': ('DeleteUser', {'user_id': (Id, ...)})}",
+          "effect": "mixed",
+          "operation_effects": {
+            "operation": {
+              "create": "write",
+              "delete": "write",
+              "list": "read",
+              "rename": "write"
+            }
+          },
+          "dispatch_operations": {
+            "operation": {
+              "create": {
+                "supported_explicit": true,
+                "default_readonly": false,
+                "write_grant": "headscale_users:create",
+                "deferred_reason": null
+              },
+              "delete": {
+                "supported_explicit": true,
+                "default_readonly": false,
+                "write_grant": "headscale_users:delete",
+                "deferred_reason": null
+              },
+              "list": {
+                "supported_explicit": true,
+                "default_readonly": true,
+                "write_grant": null,
+                "deferred_reason": null
+              },
+              "rename": {
+                "supported_explicit": true,
+                "default_readonly": false,
+                "write_grant": "headscale_users:rename",
+                "deferred_reason": null
+              }
+            }
+          },
+          "status": "supported-full",
+          "default_enabled": true,
+          "write_grants": [
+            "headscale_users:create",
+            "headscale_users:rename",
+            "headscale_users:delete"
+          ],
+          "operation_parameter": "operation",
+          "enable": "新安裝預設開啟；管理面板可逐一停用工具或撤銷寫入 grant；disabled 優先；沒有 0.1.x 舊狀態升級路徑",
+          "reason": "Headscale 已審查工具：參數由子程序驗證，輸入原樣轉送。",
+          "review_reason": "list 讀使用者識別與 email；create、rename、delete 寫入使用者。rename 只改 Headscale 名稱，不改 IdP 帳號，OIDC 下次登入的名稱同步不保證；delete 具破壞性。",
+          "accepted_schema": null,
+          "tests": [
+            "tests/test_tool_inventory.py",
+            "tests/test_full_surface.py",
+            "tests/test_real_products.py"
+          ]
+        }
+      ],
+      "native_operations": [
+        {
+          "operation_id": "AuthApprove",
+          "method": "POST",
+          "path": "/api/v1/auth/approve",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 53,
+          "tool": "headscale_auth",
+          "operation": "approve"
+        },
+        {
+          "operation_id": "AuthRegister",
+          "method": "POST",
+          "path": "/api/v1/auth/register",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 52,
+          "tool": "headscale_register",
+          "operation": "register"
+        },
+        {
+          "operation_id": "AuthReject",
+          "method": "POST",
+          "path": "/api/v1/auth/reject",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 54,
+          "tool": "headscale_auth",
+          "operation": "reject"
+        },
+        {
+          "operation_id": "BackfillNodeIPs",
+          "method": "POST",
+          "path": "/api/v1/node/backfillips",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 51,
+          "tool": "headscale_backfill_ips",
+          "operation": "update"
+        },
+        {
+          "operation_id": "CheckPolicy",
+          "method": "POST",
+          "path": "/api/v1/policy/check",
+          "read_only": true,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 61,
+          "tool": "headscale_policy",
+          "operation": "check"
+        },
+        {
+          "operation_id": "CreateApiKey",
+          "method": "POST",
+          "path": "/api/v1/apikey",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 55,
+          "tool": "headscale_api_keys",
+          "operation": "create"
+        },
+        {
+          "operation_id": "CreatePreAuthKey",
+          "method": "POST",
+          "path": "/api/v1/preauthkey",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 38,
+          "tool": "headscale_preauth_keys",
+          "operation": "create"
+        },
+        {
+          "operation_id": "CreateUser",
+          "method": "POST",
+          "path": "/api/v1/user",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 34,
+          "tool": "headscale_users",
+          "operation": "create"
+        },
+        {
+          "operation_id": "DebugCreateNode",
+          "method": "POST",
+          "path": "/api/v1/debug/node",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 42,
+          "tool": "headscale_debug_node",
+          "operation": "create"
+        },
+        {
+          "operation_id": "DeleteApiKey",
+          "method": "DELETE",
+          "path": "/api/v1/apikey/{prefix}",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 58,
+          "tool": "headscale_api_keys",
+          "operation": "delete"
+        },
+        {
+          "operation_id": "DeleteNode",
+          "method": "DELETE",
+          "path": "/api/v1/node/{nodeId}",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 47,
+          "tool": "headscale_nodes",
+          "operation": "delete"
+        },
+        {
+          "operation_id": "DeletePreAuthKey",
+          "method": "DELETE",
+          "path": "/api/v1/preauthkey",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 40,
+          "tool": "headscale_preauth_keys",
+          "operation": "delete"
+        },
+        {
+          "operation_id": "DeleteUser",
+          "method": "DELETE",
+          "path": "/api/v1/user/{id}",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 36,
+          "tool": "headscale_users",
+          "operation": "delete"
+        },
+        {
+          "operation_id": "ExpireApiKey",
+          "method": "POST",
+          "path": "/api/v1/apikey/expire",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 56,
+          "tool": "headscale_api_keys",
+          "operation": "expire"
+        },
+        {
+          "operation_id": "ExpireNode",
+          "method": "POST",
+          "path": "/api/v1/node/{nodeId}/expire",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 48,
+          "tool": "headscale_nodes",
+          "operation": "expire"
+        },
+        {
+          "operation_id": "ExpirePreAuthKey",
+          "method": "POST",
+          "path": "/api/v1/preauthkey/expire",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 39,
+          "tool": "headscale_preauth_keys",
+          "operation": "expire"
+        },
+        {
+          "operation_id": "GetNode",
+          "method": "GET",
+          "path": "/api/v1/node/{nodeId}",
+          "read_only": true,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 43,
+          "tool": "headscale_nodes",
+          "operation": "get"
+        },
+        {
+          "operation_id": "GetPolicy",
+          "method": "GET",
+          "path": "/api/v1/policy",
+          "read_only": true,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 59,
+          "tool": "headscale_policy",
+          "operation": "get"
+        },
+        {
+          "operation_id": "Health",
+          "method": "GET",
+          "path": "/api/v1/health",
+          "read_only": true,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 62,
+          "tool": "headscale_health",
+          "operation": "read"
+        },
+        {
+          "operation_id": "ListApiKeys",
+          "method": "GET",
+          "path": "/api/v1/apikey",
+          "read_only": true,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 57,
+          "tool": "headscale_api_keys",
+          "operation": "list"
+        },
+        {
+          "operation_id": "ListNodes",
+          "method": "GET",
+          "path": "/api/v1/node",
+          "read_only": true,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 50,
+          "tool": "headscale_nodes",
+          "operation": "list"
+        },
+        {
+          "operation_id": "ListPreAuthKeys",
+          "method": "GET",
+          "path": "/api/v1/preauthkey",
+          "read_only": true,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 41,
+          "tool": "headscale_preauth_keys",
+          "operation": "list"
+        },
+        {
+          "operation_id": "ListUsers",
+          "method": "GET",
+          "path": "/api/v1/user",
+          "read_only": true,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 37,
+          "tool": "headscale_users",
+          "operation": "list"
+        },
+        {
+          "operation_id": "RegisterNode",
+          "method": "POST",
+          "path": "/api/v1/node/register",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 46,
+          "tool": "headscale_register",
+          "operation": "legacy"
+        },
+        {
+          "operation_id": "RenameNode",
+          "method": "POST",
+          "path": "/api/v1/node/{nodeId}/rename/{newName}",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 49,
+          "tool": "headscale_nodes",
+          "operation": "rename"
+        },
+        {
+          "operation_id": "RenameUser",
+          "method": "POST",
+          "path": "/api/v1/user/{oldId}/rename/{newName}",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 35,
+          "tool": "headscale_users",
+          "operation": "rename"
+        },
+        {
+          "operation_id": "SetApprovedRoutes",
+          "method": "POST",
+          "path": "/api/v1/node/{nodeId}/approve_routes",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 45,
+          "tool": "headscale_routes_replace",
+          "operation": "replace"
+        },
+        {
+          "operation_id": "SetPolicy",
+          "method": "PUT",
+          "path": "/api/v1/policy",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 60,
+          "tool": "headscale_policy",
+          "operation": "apply"
+        },
+        {
+          "operation_id": "SetTags",
+          "method": "POST",
+          "path": "/api/v1/node/{nodeId}/tags",
+          "read_only": false,
+          "source": "apps/headscale/vendor/headscale_mcp_server/native.py",
+          "line": 44,
+          "tool": "headscale_nodes",
+          "operation": "set_tags"
         }
       ]
     },

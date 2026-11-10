@@ -21,6 +21,7 @@ import pytest
 from mcp_admin_core import VERSION
 from mcp_admin_core.health import protocol_reply
 from mcp_admin_core.products import INSTRUCTIONS, ODOO_HEALTH_PROBE, PRODUCTS, PROBES, ProductStore, TOOLS, child_spec
+from mcp_admin_core.policy import policy_enabled
 
 from owned_executable import Executable
 from batch2_owned_port import reserve_port
@@ -40,6 +41,7 @@ def connection(product, url):
         'emqx': dict(url=url, api_key='DUMMY', api_secret='DUMMY'),
         'litellm': dict(url=url, master_key='DUMMY'),
         'nextcloud': dict(url=url, username=nextcloud_fixtures.USER, app_password=nextcloud_fixtures.PASSWORD),
+        'headscale': dict(url=url, api_key='DUMMY'),
     }[product]
 
 
@@ -78,11 +80,14 @@ def backend(product):
                 self.send_error(503); return
             if product == 'emqx':
                 assert self.headers.get('Authorization') == 'Basic RFVNTVk6RFVNTVk='
+            if product == 'headscale':
+                assert self.headers.get('Authorization') == 'Bearer DUMMY'
             if product in ('hermes', 'litellm') and self.path in ('/v1/models', '/v1/capabilities'):
                 assert self.headers.get('Authorization') == 'Bearer DUMMY'
             values = {'/v1/capabilities': {'models': []}, '/api/health': {'status': 'ok'},
                       '/api/v5/nodes': [{'node': 'fake@local', 'version': '5.fake'}],
-                      '/v1/models': {'data': [{'id': 'fake-model'}]}}
+                      '/v1/models': {'data': [{'id': 'fake-model'}]},
+                      '/api/v1/health': {'databaseConnectivity': True}}
             if self.path not in values:
                 self.send_error(404); return
             self.respond(values[self.path])
@@ -116,11 +121,15 @@ def backend(product):
                 raise AssertionError(method)
             self.respond(xmlrpc.client.dumps((result,), methodresponse=True, allow_none=True).encode(), 'text/xml')
 
-    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    # The Headscale native transport refuses loopback even for a test server.
+    # Bind only the runner's own private address so the real TCP destination
+    # policy stays in force; all other existing product fixtures use loopback.
+    host = socket.gethostbyname(socket.gethostname()) if product == 'headscale' else '127.0.0.1'
+    server = ThreadingHTTPServer((host, 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        yield f'http://127.0.0.1:{server.server_port}', calls, offline
+        yield f'http://{host}:{server.server_port}', calls, offline
     finally:
         server.shutdown(); server.server_close(); thread.join()
 
@@ -187,7 +196,7 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     headers['MCP-Protocol-Version'] = result['protocolVersion']
                     await rpc(client, endpoint, headers, {'jsonrpc': '2.0', 'method': 'notifications/initialized'})
                     listed = await rpc(client, endpoint, headers, {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'})
-                    expected = {n for n, t in TOOLS[product].items() if not t.write}
+                    expected = {n for n in TOOLS[product] if policy_enabled(n, TOOLS[product], state)}
                     assert {t['name'] for t in listed['tools']} == expected
                     # Same real child session, bypass ONLY for observing upstream inventory.
                     # Public requests still go through the authenticated boundary above.

@@ -19,7 +19,7 @@ import resource
 import stat
 import sys
 
-PRODUCTS = ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud')
+PRODUCTS = ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud', 'headscale')
 UID = GID = 10001
 ROOT = Path('/opt/woow')
 RESTORE_OWNER = (0, 0)  # Supervisor extracts a restored app backup as root

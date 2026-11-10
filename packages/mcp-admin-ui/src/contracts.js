@@ -8,6 +8,7 @@ export const products = {
   emqx: { name: 'EMQX', fields: [['url', 'Broker 基底 URL', 'url'], ['api_key', 'API 金鑰', 'secret'], ['api_secret', 'API Secret', 'secret']] },
   litellm: { name: 'LiteLLM', fields: [['url', 'Proxy 基底 URL', 'url'], ['master_key', 'LiteLLM 金鑰', 'secret']] },
   nextcloud: { name: 'Nextcloud', fields: [['url', 'Nextcloud 根網址', 'url'], ['username', '使用者名稱', 'name'], ['app_password', 'App 密碼（非登入密碼）', 'secret']] },
+  headscale: { name: 'Headscale', fields: [['url', 'Headscale API 網址', 'url'], ['api_key', 'Headscale API 金鑰', 'secret']] },
 };
 
 // Help under the backend form, per product: what to paste in the credential fields (the PaaS admin UI says the same in its connection page).
@@ -16,13 +17,15 @@ export const connectionHelp = {
   emqx: '填 EMQX Dashboard API 的根網址（例：https://broker.example.com）；貼上帶 /api/v5 的網址也可以，存檔時會自動去掉。請使用最終網址，連線不會跟隨轉址。API 金鑰與 Secret 用專用的 EMQX API key，工具會以它的權限執行。',
   litellm: 'MCP 預設全開（含寫入與刪除工具），AI 實際能做什麼由這把金鑰的權限決定：要讓 AI 發 key、改模型就用有寫入權限的 key；只想讓它查資料，就用 proxy_admin_viewer（唯讀管理員）使用者的 key，或到「工具權限」頁關掉寫入工具。不建議直接貼 master key。',
   nextcloud: '建議為 AI 助理建一個專用帳號（例如 assistant），只把需要的資料夾與行事曆分享給它：app password 能存取該帳號看得到的一切，無法只限定某些資料夾。App 密碼的取得方式：以該帳號登入 Nextcloud → 右上角頭像 →「個人設定」→「安全性」→「裝置與工作階段」，輸入名稱（例如 MCP）後按「建立新應用程式密碼」，複製只顯示一次的密碼貼到這裡。不要填登入密碼；啟用兩步驟驗證的帳號也可用 app password，日後可在同一處撤銷。',
+  headscale: '填 Headscale 控制伺服器的管理 API 網址（根網址或 /api/v1），並使用專門建立的 API 金鑰。這個 Add-on 只管理同一個 Headscale 執行個體；工具預設開啟，請在工具權限頁限制不需要的寫入操作。它不會替使用者安裝或登入 Tailscale 客戶端。',
 };
 
-// EMQX, LiteLLM and Nextcloud children are launched WITH the tool policy (READONLY, DISABLED_TOOLS): saving a policy, or restoring the
-// pre-upgrade limits, restarts the child (gateway.py: name == "policy" / owner-defaults restore -> backend_changed). The other products enforce it in the gateway.
-const policyRestartProducts = ['emqx', 'litellm', 'nextcloud'];
+// These children restart after policy changes so public MCP sessions see one consistent tool list.
+// Headscale also reads the current saved policy on every child call, including direct child calls.
+const policyRestartProducts = ['emqx', 'litellm', 'nextcloud', 'headscale'];
 export const policyRestartsChild = product => policyRestartProducts.includes(product);
-export const policyRestartNotice = product => policyRestartsChild(product) ? ' 儲存後會重新啟動 MCP 子行程（這個產品的工具政策在子行程啟動時套用），現有連線可能中斷。' : '';
+export const policyRestartNotice = product => policyRestartsChild(product)
+  ? ' 儲存後會重新啟動 MCP 子行程，現有連線可能中斷。' : '';
 
 export class UiError extends Error {}
 const tokenMaskPattern = /^[A-Za-z0-9_-]{4}\*{20}[A-Za-z0-9_-]{4}$/;
@@ -96,6 +99,16 @@ export function emqxBaseUrl(url) {
   if (new URL(base).pathname.includes('/api/v5')) throw new UiError('Broker URL 的路徑含有 /api/v5 以外的部分，請只填 Broker 的基底 URL。');
   return base;
 }
+export function headscaleBaseUrl(url) {
+  const path = new URL(url).pathname;
+  if (path === '/' || path === '') return url;
+  if (path === '/api/v1') return url.slice(0, -'/api/v1'.length);
+  throw new UiError('Headscale URL 請填控制伺服器根網址或 /api/v1。');
+}
+function productBaseUrl(product, value) {
+  const url = explicitUrl(value);
+  return product === 'emqx' ? emqxBaseUrl(url) : product === 'headscale' ? headscaleBaseUrl(url) : url;
+}
 export function backendPayload(product, action, values) {
   if (action === 'preserve') return null; // No API request: old API cannot preserve individual secrets.
   if (action === 'clear') return product === 'n8n' ? { url: null, key: null } : { connection: null };
@@ -109,9 +122,10 @@ export function backendPayload(product, action, values) {
     }
     if (type.startsWith('optional') && value === '') { connection[key] = null; continue; }
     if (!value) throw new UiError(`請填寫${label}。`);
-    if (type.includes('url')) connection[key] = product === 'emqx' ? emqxBaseUrl(explicitUrl(value)) : explicitUrl(value);
+    if (type.includes('url')) connection[key] = productBaseUrl(product, value);
     else if (type.includes('secret')) {
       if (!/^[\x20-\x7e]{1,8192}$/.test(value)) throw new UiError(`${label}需為 1–8192 個可列印 ASCII 字元。`);
+      if (product === 'headscale' && key === 'api_key' && /\s/.test(value)) throw new UiError('Headscale API 金鑰不可包含空白。');
       connection[key] = value; // Never trim credential bytes.
     } else {
       if (!/^[A-Za-z0-9_@. -]{1,256}$/.test(value)) throw new UiError(`${label}格式不符（限英數及 _ @ . 空白 -）。`);
@@ -163,9 +177,10 @@ export function backendPatchPayload(bootstrap, selections, values) {
     if (action === 'clear' && type.startsWith('optional')) { changes[key] = null; continue; }
     if (action !== 'set' || typeof values[key] !== 'string' || values[key] === '') throw new UiError(`請提供${label}的新值。`);
     const value = values[key];
-    if (type.includes('url')) changes[key] = bootstrap.product === 'emqx' ? emqxBaseUrl(explicitUrl(value)) : explicitUrl(value);
+    if (type.includes('url')) changes[key] = productBaseUrl(bootstrap.product, value);
     else if (type.includes('secret')) {
       if (!/^[\x20-\x7e]{1,8192}$/.test(value)) throw new UiError(`${label}格式不符。`);
+      if (bootstrap.product === 'headscale' && key === 'api_key' && /\s/.test(value)) throw new UiError('Headscale API 金鑰不可包含空白。');
       changes[key] = value;
     } else if (type === 'mode') {
       if (!['read', 'module'].includes(value)) throw new UiError('存取模式格式不符。');

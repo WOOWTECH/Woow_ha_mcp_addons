@@ -39,7 +39,7 @@ class ConfigurationState:
         if raw.get('product') == 'n8n':
             session = state.effective_n8n_session
             value['n8n_session'] = {'timeout_minutes': session.timeout_minutes, 'max_sessions': session.max_sessions}
-        if raw.get('product') in ('emqx', 'litellm', 'nextcloud'):
+        if raw.get('product') in ('emqx', 'litellm', 'nextcloud', 'headscale'):
             # Native child policy is also rebuilt for these products.
             value.update({key: raw.get(key) for key in
                           ('writes_enabled', 'disabled', 'enabled_write_tools', 'denied_operations')})
