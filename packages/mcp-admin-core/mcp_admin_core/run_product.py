@@ -71,7 +71,11 @@ async def run(args):
                                   server_name='woow-mcp-' + args.product, instructions=INSTRUCTIONS.get(args.product),
                                   # 0.2.2: clients connect without a backend or a running child (Odoo Manage: unchanged)
                                   listing=listing(args.product) if args.product in FULL_PRODUCTS else None,
-                                  availability=health.availability)
+                                  availability=health.availability,
+                                  # Headscale's secret URL is used by Claude.ai; other browser origins must not
+                                  # acquire the Headscale API key's authority through a leaked link.
+                                  secret_path_allowed_origins=(frozenset({"https://claude.ai"})
+                                                               if args.product == "headscale" else None))
             servers = [Listener(uvicorn.Config(app, host=args.host, port=port,
                 proxy_headers=False, access_log=False, log_level='warning', server_header=False,
                 lifespan='off', limit_concurrency=64, timeout_keep_alive=5))

@@ -334,7 +334,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               child_url="http://127.0.0.1:3000/mcp", health=None, backend_changed=None,
               server_name="woow-mcp", instructions: str | None = None,
               listing=None, availability=None, management: ManagementOptions | None = None,
-              backend_check=None, restart_child=None, diagnostics=None, configuration=None):
+              backend_check=None, restart_child=None, diagnostics=None, configuration=None,
+              secret_path_allowed_origins: frozenset[str] | None = None):
     """listing (0.2.2): the product's tools/list tools as its child lists them (surface.listing). With it, a client
     connects whatever the backend's state: when no child can answer (no backend configured, so no child; a child that is
     not up) the gateway answers initialize, notifications/initialized, ping and tools/list itself, from listing through
@@ -934,8 +935,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         On the secret path a wrong, revoked or unset token is the same 404 as any unknown path (Starlette's own
         HTTPException(404): same status, body and headers, no WWW-Authenticate), so the reply never says whether
         the path exists, the token was revoked or the guess was close. The request's own Authorization header is
-        never read there, and an Origin header is allowed (never forwarded: the child only gets the gateway's own
-        headers). /mcp is unchanged: 401 with WWW-Authenticate, Origin 403.
+        never read there. A product may restrict the secret path to exact browser Origins; no Origin remains valid
+        for non-browser clients. /mcp is unchanged: 401 with WWW-Authenticate, Origin 403.
 
         0.1.14: on both paths, a well-formed tools/call the policy refuses (policy.ToolCallRefused) is answered HTTP 200
         with a JSON-RPC error giving the reason, when it carries a session id; without one it stays 403 as before."""
@@ -1019,8 +1020,12 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         lease = request.state.token_lease = token_access.lease(state.token)
         if request.method not in ("GET", "POST", "DELETE"):  # any other method, only after the token check
             return Response(status_code=405, headers={"Allow": "GET, POST, DELETE"})
-        if secret is None and request.headers.get("origin") is not None:
+        origins = request.headers.getlist("origin")
+        if secret is None and origins:
             raise BadRequest(403)  # Browser clients not in the Bearer contract; the secret path is for Claude.ai.
+        if secret is not None and secret_path_allowed_origins is not None and origins and (
+                len(origins) != 1 or origins[0] not in secret_path_allowed_origins):
+            raise BadRequest(403)
         if request.url.query:
             raise BadRequest()
         method = message = refusal = None

@@ -1,5 +1,10 @@
 # Headscale Add-on changelog
 
+## 0.4.15 — restrict secret URL browser origins
+
+- Accept the existing Claude.ai connector origin and requests without an Origin header on Headscale's secret URL; reject any other or duplicate Origin with HTTP 403 after validating the URL token.
+- Leave the Bearer MCP endpoint and all other add-on products' secret URL rules unchanged.
+
 ## 0.4.14 — HA Core 2026.11 compatibility candidate
 
 - Review 25 Home Assistant Core contract/adjacent files for 2026.11.0 and 2026.11.1, plus Supervisor 2026.10.5 WebSocket proxy. Add only these two exact Core releases to the admin verifier; later patches and prereleases remain denied.
