@@ -141,7 +141,7 @@ async def test_snapshot_equals_the_real_child(tmp_path, product):
         if product == 'n8n':
             store.update(backend_url=url, backend_key='DUMMY')
         else:
-            store.update(connection=connection(product, url))
+            store.update(connection=connection(product, 'https://hs.example.test' if product == 'headscale' else url))
         def seen(raw):
             if os.environ.get('WOOW_WRITE_TOOL_SNAPSHOT') == '1':
                 write_snapshot(product, reduced(product, raw['tools']))

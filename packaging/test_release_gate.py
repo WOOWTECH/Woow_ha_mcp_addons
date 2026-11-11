@@ -60,7 +60,7 @@ class ReleaseGateTest(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.root = Path(self.directory.name)
-        for name in ('n8n', 'opendesign'):
+        for name in ('n8n', 'opendesign', 'headscale'):
             path = self.root / 'addons' / name
             path.mkdir(parents=True)
             (path / 'config.yaml').write_text(
@@ -96,6 +96,16 @@ class ReleaseGateTest(unittest.TestCase):
         self.assertEqual(len(g.check_decisions(self.found(), self.root, fetch=fake)), 1)
         (self.root / 'docs/operations/release-decision-0.3.0.md').write_text('# 0.3.0 release record\n')
         self.assertEqual(g.check_decisions(self.found(), self.root, fetch=fake), [])
+
+    def test_new_headscale_needs_its_own_decision_record(self):
+        headscale = g.components(registry(('headscale', True)), self.root)
+        other_record = self.root / 'docs/operations/release-decision-0.3.0.md'
+        other_record.write_text('# 0.3.0: existing six images only\n')
+        self.assertIn('woow_mcp_headscale 0.3.0',
+                      g.check_decisions(headscale, self.root, fetch=FakeRegistry())[0])
+        headscale_record = self.root / 'docs/operations/release-decision-headscale-0.3.0.md'
+        headscale_record.write_text('# woow_mcp_headscale 0.3.0: accepted candidate image\n')
+        self.assertEqual(g.check_decisions(headscale, self.root, fetch=FakeRegistry()), [])
 
     def test_released_version_needs_no_record(self):
         self.assertEqual(g.check_decisions(self.found(), self.root, fetch=FakeRegistry(released=['woow_mcp_n8n-v0.3.0'])), [])

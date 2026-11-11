@@ -1,4 +1,4 @@
-"""All eight source inventories must stay synchronized; unknown remains denied."""
+"""All nine source inventories must stay synchronized; unknown remains denied."""
 import ast
 import importlib.util
 import json
@@ -24,7 +24,57 @@ def test_inventory_names_hashes_schema_and_documentation_do_not_drift():
     assert inventory.markdown(actual) == (ROOT / 'docs/tool-surface.md').read_text()
     assert {p: d['upstream_count'] for p, d in actual['products'].items()} == {
         'n8n': 28, 'odoo': 41, 'odoo-manage': 10, 'hermes': 11, 'opendesign': 15, 'emqx': 39, 'litellm': 40,
-        'nextcloud': 9}
+        'nextcloud': 9, 'headscale': 11}
+    native = actual['products']['headscale']['native_operations']
+    assert len(native) == 29
+    assert {row['operation_id'] for row in native} == {
+        native_id for tool in actual['products']['headscale']['tools']
+        for native_id in tool['native_bindings'].values() if native_id is not None}
+    assert all(row['source'] in actual['source_digests'] for row in native)
+
+
+def test_headscale_registry_and_native_contract_are_literal_and_complete():
+    import hashlib
+    base = ROOT / inventory.HEADSCALE_VENDOR
+    registry = (base / 'registry.py').read_text()
+    native = (base / 'native.py').read_text()
+    server = (base / 'server.py').read_text()
+    tools, operations = inventory.headscale_inventory(registry, native, server)
+    assert len(tools) == 11 and len(operations) == 29
+    assert tools['headscale_policy']['native_bindings']['diff'] is None
+    assert operations['CheckPolicy']['read_only'] is True
+    assert operations['SetPolicy']['method'] == 'PUT'
+    assert operations['SetApprovedRoutes']['path'] == '/api/v1/node/{nodeId}/approve_routes'
+    contract = {name: {key: row[key] for key in ('method', 'path', 'read_only', 'tool', 'operation')}
+                for name, row in operations.items()}
+    assert hashlib.sha256(json.dumps(contract, sort_keys=True).encode()).hexdigest() == (
+        '2be5bbec7f5150cdd5401b7382ebd143f76d08cdbad7cadd434b7f13dfa2cee9')
+
+    # Unreviewed source additions, dynamic keys, duplicate keys and alternate
+    # registration paths cannot be accepted by regenerating the snapshot.
+    variants = [
+        (registry.replace('"headscale_users": (', 'DYNAMIC_NAME: (', 1), native, server),
+        (registry.replace('"headscale_nodes": (', '"headscale_users": (', 1), native, server),
+        (registry + '\n_GROUPS["shadow"] = _GROUPS["headscale_users"]\n', native, server),
+        (registry, native.replace('    "Health": _op(', '    "HealthMissing": _op(', 1), server),
+        (registry, native.replace('    "Health": _op("Health",', '    "GetPolicy": _op("GetPolicy",', 1), server),
+        (registry, native, server + '\ndef shadow(server):\n    server.add_tool(None)\n'),
+    ]
+    for changed_registry, changed_native, changed_server in variants:
+        with pytest.raises(AssertionError):
+            inventory.headscale_inventory(changed_registry, changed_native, changed_server)
+
+
+def test_headscale_provenance_covers_every_vendored_file():
+    base = ROOT / 'apps/headscale/vendor'
+    records = [record for record in json.loads((ROOT / 'docs/provenance/runtime-sources.json').read_text())
+               if record['product'] == 'headscale']
+    source_paths = {str(path.relative_to(base)) for path in base.rglob('*.py')}
+    assert len(source_paths) == 11
+    assert {record['path'] for record in records} == source_paths | {'LICENSE'}
+    assert all(record['source'].startswith('woow-mcp-server:') and record['upstream_path']
+               for record in records if record['path'] in source_paths)
+    assert (base / 'LICENSE').read_text().startswith('MIT License\n')
 
 
 def test_all_withheld_tools_deny_even_when_writes_enabled():
@@ -51,7 +101,7 @@ def test_vendored_content_hashes_and_license_notices():
         assert hashlib.sha256(path.read_bytes()).hexdigest() == record.get('local_sha256', record['upstream_sha256'])
         if record.get('local_sha256'):
             assert record.get('modification')
-    for product in ('hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud'):
+    for product in ('hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud', 'headscale'):
         assert 'MIT License' in (ROOT / 'apps' / product / 'vendor/LICENSE').read_text()
 
 

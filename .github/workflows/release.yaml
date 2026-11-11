@@ -6,7 +6,7 @@ on:
         description: Independently cleared product (no arbitrary ref/version)
         type: choice
         required: true
-        options: [odoo, n8n, hermes, opendesign, emqx, litellm, nextcloud]
+        options: [odoo, n8n, hermes, opendesign, emqx, litellm, nextcloud, headscale]
 permissions:
   contents: read
 concurrency:

@@ -403,5 +403,109 @@
     "path": "woow_litellm_mcp_server/urls.py",
     "upstream_sha256": "e2c4fd4ac2cc5f1ad143a8da92e0836ad07e30909d31ac1e6b5d5479bb8ea7bf",
     "modification": "New local product URL helper, reviewed with the matching PaaS feature commits; not a file from the older vendored upstream snapshot."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/__init__.py",
+    "upstream_path": "apps/headscale/headscale_mcp_server/__init__.py",
+    "upstream_sha256": "943537728c9fb6287577f51772b63edf4719f1db1b4322773639012064bc32e2",
+    "local_sha256": "c7b36f045379f80d9e90f0f28d66764a6db835ee9586bf4ad5512603144b3f26",
+    "modification": "Trim one extra trailing blank line from the copied source; no behavior change."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/client.py",
+    "upstream_path": "apps/headscale/headscale_mcp_server/client.py",
+    "upstream_sha256": "ee78bcd772119e5bb1ecad7429386fbfae50d3c7a0787df58a30396db6ad28d1",
+    "local_sha256": "75770652567e8e36c2a6b0951e7d2f92739b15051e5168257ac9e0ddae9e0701",
+    "modification": "Adapt the fixed HA destination and mask both credential values and copied secret values in responses; only an explicit one-time creation reveal is exempt. Trim one extra trailing blank line; no behavior change."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/errors.py",
+    "upstream_path": "apps/headscale/headscale_mcp_server/errors.py",
+    "upstream_sha256": "93da9b8292245cf00b7c36eadb5eb316c30e8d2679c1bde789e2581ef7f65e5b",
+    "local_sha256": "e149dd269b7ef4ee281408a3858ca3c48401b3cbb30fe414320b63f8bf27e6bd",
+    "modification": "Trim one extra trailing blank line from the copied source; no behavior change."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/http_policy.py",
+    "upstream_path": "apps/headscale/headscale_mcp_server/http_policy.py",
+    "upstream_sha256": "dfedcd041bbb514ce4c05242d325d6a84d10361e50ba26376e080a9e2d6d2280",
+    "local_sha256": "8714654ae8131b47928e30de652e6bdb86e777eb7ae27531534ef7fb5faf4473",
+    "modification": "Use the HA backend address allow rules at the pinned TCP seam; reject alternate origin, path, transport extension, and mismatched DNS family. Trim one extra trailing blank line; no behavior change."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/log_redaction.py",
+    "upstream_path": "apps/headscale/headscale_mcp_admin/log_redaction.py",
+    "upstream_sha256": "67d4aa0a1d8fdee7572d19e4da6b5fa1aa0867c08c01dfa156352e5c88f64a1b"
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/models.py",
+    "upstream_path": "apps/headscale/headscale_mcp_server/models.py",
+    "upstream_sha256": "5092523ef12a6aa762b29d9b5e4ed1910082c3bbfb7caa2ae6e262179f77dc44",
+    "local_sha256": "94b2664100fd5fc65f67aa6acdf4faf27612579f51a1d540a47c8338f38f156a",
+    "modification": "Trim one extra trailing blank line from the copied source; no behavior change."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/native.py",
+    "upstream_path": "apps/headscale/headscale_mcp_server/native.py",
+    "upstream_sha256": "002b5b0302695ec8a367297c09f88b0de42c42e5949959fd084c390d7f3c9f89",
+    "local_sha256": "c27ddc043429376688140488e88aa8ef6946a856ff49430391010abf8aeeb054",
+    "modification": "Trim one extra trailing blank line from the copied source; no behavior change."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/operation_policy.py",
+    "upstream_path": "packages/mcp-admin-core/mcp_admin_core/operation_policy.py",
+    "upstream_sha256": "b21ca550fb700944971826f55adca3535a7b24e37fc8f8bb62dcda73462e01e4",
+    "local_sha256": "f6fc80610276b6edca14118c1c9010b82bed02d10c7592ec727f32484dbe5dfb",
+    "modification": "Extract a child-only OperationSpec subset from the source monorepo core so the vendored child has no dependency on that core operation module."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/policy.py",
+    "upstream_path": "apps/headscale/headscale_mcp_server/policy.py",
+    "upstream_sha256": "fb915802b08fa91ee036bc20e44f7e900547217a5ad1bf39621d9f1fcda771c2",
+    "local_sha256": "db25356154d0069ee141fe7d9ce596e766875a79b7d35d0fc31cb2f219f10cbd",
+    "modification": "Read the exact HA schema-4 state on every call with file identity, ownership and permission checks; bind saved connection, grants, disables and operation denials to this child."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/registry.py",
+    "upstream_path": "apps/headscale/headscale_mcp_server/registry.py",
+    "upstream_sha256": "164a99f847e048dc4b04abdb0a10dd9a31b28df9adc984baca94503010849df7",
+    "local_sha256": "d8e4ff233de26fdabc1aaeff87200e7e22f2893acf115aa798ac95595cb99728",
+    "modification": "Import the child-only OperationSpec subset rather than the source monorepo admin-core module; reviewed tool and native maps are unchanged. Trim one extra trailing blank line; no behavior change."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/server.py",
+    "upstream_path": "apps/headscale/headscale_mcp_server/server.py",
+    "upstream_sha256": "3c43be18c8f9d4581301bc4d72a73fc38c7a041c95fb8296d849b3b51c84f756",
+    "local_sha256": "c502e31d22a6b614ab55729310cbbc11a941bca729310ed674964346d903d203",
+    "modification": "Bind the HA saved-policy reader to calls and availability; register only the 11 reviewed tools and remove the source extension registration path. Trim one extra trailing blank line; no behavior change."
+  },
+  {
+    "product": "headscale",
+    "source": "local:MIT-notice-from-woow-mcp-server-pyproject:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "LICENSE",
+    "upstream_sha256": "1b05bfafc14067beabe8885c164528c122ebf545eabe97984b222fe377143a69",
+    "modification": "Vendor MIT notice for the child; the source pyproject.toml declares MIT but did not contain a LICENSE file."
   }
 ]

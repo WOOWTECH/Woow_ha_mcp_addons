@@ -20,7 +20,7 @@ from n8n_adapter import BOUNDED_TOOLS as N8N_BOUNDED
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).parent / 'fixtures/migration'
-ALL = (*PRODUCTS, 'n8n')
+ALL = (*(product for product in PRODUCTS if product != 'headscale'), 'n8n')
 CASES = [(1, 'n8n')] + [(version, product) for version in (2, 3) for product in ALL]
 CONNECTIONS = {
     'odoo': {'url': 'https://legacy.example.test', 'database': 'fixture', 'username': 'fixture', 'password': 'DUMMY'},

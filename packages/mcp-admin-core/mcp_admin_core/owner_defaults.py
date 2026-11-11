@@ -29,6 +29,7 @@ import sys
 
 from .config import ConfigError
 from .migration import (OWNER_RECOVERY, MigrationError, RecordConflict, RecordNotSaved, _existing_writer,
+                        _validate,
                         owner_legacy_policy, owner_record, owner_upgrade_summary, plan_migration, plan_owner_restore,
                         read_document, save_owner_record, utc_now, POLICY_FIELDS)
 from .products import OWNER_DEFAULTS, ProductState
@@ -56,7 +57,15 @@ def apply_legacy_upgrade(directory, product):
         return None  # new installation: ProductStore seeds the all-on defaults
     try:
         # Validate before any lock or write; a schema 4 state is never opened for writing here.
-        if plan_migration(read_document(path), product, policy='all_on').report['source_schema'] >= 4:
+        document = read_document(path)
+        if product == 'headscale':
+            # This product has never had a 0.1.x HA release. There is no
+            # historical catalog from which an older state could be migrated.
+            version, _ = _validate(document, product)
+            if version != 4:
+                raise MigrationError('Headscale has no legacy state')
+            return None
+        if plan_migration(document, product, policy='all_on').report['source_schema'] >= 4:
             return None
         with _existing_writer(directory) as writer:
             report = migrate_locked(writer, product)

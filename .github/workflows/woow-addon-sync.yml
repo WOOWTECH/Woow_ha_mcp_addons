@@ -1,4 +1,4 @@
-# Publishes the seven MCP Server add-ons (addons/*) to the WOOW HA App Store and its Local Download
+# Publishes the enabled MCP Server add-ons (addons/*) to the WOOW HA App Store and its Local Download
 # (owner decision 2026-10-09). The reusable publisher runs the Store's own tooling and registry; the Store
 # consumer re-validates every notification (source commit, context checksums, publisher run on this repository's
 # default branch, and the published GHCR images per architecture). This repository keeps its own add-on store as

@@ -615,7 +615,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 headers['ETag'] = configuration.etag(updated)
                 body = {'saved': True, 'configuration': configuration.snapshot(updated),
                         'owner_defaults': owner_defaults.view(updated, store.directory)}
-                if restoring and getattr(state, 'product', 'n8n') in ('emqx', 'litellm', 'nextcloud') and backend_changed:
+                if restoring and getattr(state, 'product', 'n8n') in ('emqx', 'litellm', 'nextcloud', 'headscale') and backend_changed:
                     # As a saved policy: these children are launched with the policy (READONLY, DISABLED_TOOLS).
                     try:
                         await backend_changed(updated)
@@ -631,7 +631,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 # An authorized mutation is not undone by losing its HTTP caller.
                 committed.set()
                 headers['ETag'] = configuration.etag(updated)
-                if (name in ('backend', 'backend/patch', 'odoo/write-switches', 'n8n/session', odoo_methods.ROUTE) or (name == "policy" and getattr(state, 'product', 'n8n') in ('emqx', 'litellm', 'nextcloud'))) and backend_changed:
+                if (name in ('backend', 'backend/patch', 'odoo/write-switches', 'n8n/session', odoo_methods.ROUTE) or (name == "policy" and getattr(state, 'product', 'n8n') in ('emqx', 'litellm', 'nextcloud', 'headscale'))) and backend_changed:
                     try:
                         await backend_changed(updated)
                     except Exception:

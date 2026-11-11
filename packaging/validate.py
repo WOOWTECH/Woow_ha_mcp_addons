@@ -17,13 +17,13 @@ import yaml
 from builder_contract import RUNNER
 
 ROOT = Path(__file__).resolve().parents[1]
-PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud')  # CI/release build allowlist; nextcloud is first released with 0.1.7 (no image for earlier versions)
+PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud', 'headscale')  # CI/release build allowlist; first Headscale image is 0.4.13
 # Owner decision 2026-10-06: Odoo Manage is archived. It left the store and no image is built or released again
 # (0.1.4 was the last); its source stays in apps/odoo-manage and the shared core, and is still tested.
 RETIRED = ('odoo-manage',)
 URL = 'https://github.com/WOOWTECH/Woow_ha_mcp_addons'
 VERSION = '0.4.13'
-TITLES = dict(zip(PRODUCTS, ('Odoo', 'n8n', 'Hermes', 'OpenDesign', 'EMQX', 'LiteLLM', 'Nextcloud')))
+TITLES = dict(zip(PRODUCTS, ('Odoo', 'n8n', 'Hermes', 'OpenDesign', 'EMQX', 'LiteLLM', 'Nextcloud', 'Headscale')))
 
 
 class Invalid(ValueError):
@@ -102,9 +102,10 @@ def manifest(value, product):
     for key in ('host_network', 'host_pid', 'host_ipc', 'host_uts', 'host_dbus',
                 'full_access', 'docker_api', 'hassio_api', 'auth_api'):
         expected[key] = False
-    # Approved broad-Core capability exception: n8n pilot (2026-10-04) and the other six (owner decision
-    # 2026-10-05, 0.1.1) and Nextcloud (owner decision 2026-10-08, 0.1.7). hassio_role remains omitted/default; all
-    # other privileges stay closed.
+    # Approved broad-Core capability exception: n8n pilot (2026-10-04), the other original products
+    # (owner decision 2026-10-05, 0.1.1), and Nextcloud (2026-10-08, 0.1.7). Headscale follows the
+    # same admin verifier contract, with independent image/HA gates. hassio_role stays omitted/default;
+    # every other privilege remains closed.
     expected['homeassistant_api'] = True
     for text in (expected['description'], expected['ports_description']['8081/tcp']):
         require(isinstance(text, str) and 1 <= len(text) <= 512, 'missing description')
@@ -166,6 +167,16 @@ def image_labels(dockerfile, value):
     require(dockerfile.count('io.hass.name') == 1 and dockerfile.count('io.hass.description') == 1
             and f'io.hass.name="{value["name"]}" io.hass.description="{value["description"]}"' in dockerfile,
             'image name/description labels differ from the add-on manifest')
+
+
+def unit_child_sync(text):
+    """The standalone source gate must install every isolated Python child."""
+    loops = re.findall(r'^for app in ([a-z0-9 -]+); do\n  uv sync --project "apps/\$app" '
+                       r'--frozen --no-dev --python python3\.13\ndone$', text, re.M)
+    require(len(loops) == 1, 'one frozen child sync loop required in unit.sh')
+    apps = loops[0].split()
+    require(len(apps) == len(set(apps)) and set(apps) == (set(PRODUCTS) | set(RETIRED)) - {'n8n'},
+            'unit.sh isolated child scope')
 
 
 def builder_workflow(value, workflow):
@@ -369,8 +380,10 @@ def validate(root=ROOT):
             require('npm ci --ignore-scripts --no-audit --no-fund' in dockerfile, 'unlocked/scripted npm')
         else:
             require(f'uv sync --project apps/{product} --frozen --no-dev' in dockerfile, 'missing isolated child lock')
+    unit = (root / 'packaging/unit.sh').read_text()
+    unit_child_sync(unit)
     native_addons(inputs, dockerfiles, {'lock': (root / 'apps/n8n/package-lock.json').read_text(), 'package': (root / 'apps/n8n/package.json').read_text(),
-                                         'unit': (root / 'packaging/unit.sh').read_text(), 'dockerignore': (root / '.dockerignore').read_text()})
+                                         'unit': unit, 'dockerignore': (root / '.dockerignore').read_text()})
     require('!packaging/management_launcher.py' in (root / '.dockerignore').read_text(), 'guard excluded from context')
     context = (root / '.dockerignore').read_text()
     for path in ('package.json', 'package-lock.json', 'NOTICE.txt', 'src/*.js', 'src/*.css', 'src/*.html', 'scripts/build.mjs'):
@@ -428,7 +441,7 @@ def validate(root=ROOT):
                 for step in job['steps']:
                     if step.get('uses', '').startswith('actions/checkout@'):
                         exact(step['with']['ref'], '${{ github.sha }}', 'no arbitrary release checkout')
-    print('PASS: seven strict Supervisor-subset manifests, translations, pins, workflow policy and clearance shape')
+    print(f'PASS: {len(PRODUCTS)} strict Supervisor-subset manifests, translations, pins, workflow policy and clearance shape')
 
 
 if __name__ == '__main__':

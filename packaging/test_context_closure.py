@@ -70,6 +70,24 @@ class ContextClosureTests(unittest.TestCase):
     def test_repository_dockerfiles_are_closed(self):
         c.main(ROOT)
 
+    def test_headscale_runtime_sources_reach_image(self):
+        dockerfile = (ROOT / 'apps/headscale/Dockerfile').read_text()
+        sources = c.copy_sources(dockerfile)
+        patterns = c.load_ignore((ROOT / '.dockerignore').read_text())
+        for path in ('apps/headscale/launch.py',
+                     'apps/headscale/vendor/headscale_mcp_server/client.py',
+                     'apps/headscale/vendor/headscale_mcp_server/http_policy.py',
+                     'apps/headscale/vendor/headscale_mcp_server/server.py',
+                     'packages/mcp-admin-core/mcp_admin_core/products.py',
+                     'packages/mcp-admin-core/mcp_admin_core/gateway.py',
+                     'packages/mcp-admin-ui/package.json',
+                     'packages/mcp-admin-ui/src/contracts.js'):
+            with self.subTest(path=path):
+                self.assertTrue((ROOT / path).is_file())
+                self.assertTrue(any(path == source or path.startswith(source.rstrip('/') + '/')
+                                    for source in sources), 'Dockerfile does not COPY ' + path)
+                self.assertFalse(c.excluded(patterns, path), '.dockerignore excludes ' + path)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -21,8 +21,8 @@ from .odoo_methods import AllowedMethods, FIELD as ODOO_ALLOWED_METHODS
 from .policy import Tool
 from .surface import FULL_PRODUCTS, full_tools
 
-PRODUCTS = ('odoo', 'odoo-manage', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud')
-Product = Literal['n8n', 'odoo', 'odoo-manage', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud']
+PRODUCTS = ('odoo', 'odoo-manage', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud', 'headscale')
+Product = Literal['n8n', 'odoo', 'odoo-manage', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud', 'headscale']
 ROOT = Path(__file__).resolve().parents[3]
 URL = Annotated[str, AfterValidator(http_url)]
 
@@ -141,10 +141,37 @@ class NextcloudConnection(Connection):
         return value
 
 
+class HeadscaleConnection(Connection):
+    url: URL
+    api_key: Credential = Field(repr=False)
+
+    @field_validator('api_key')
+    @classmethod
+    def headscale_bearer(cls, value):
+        if any(ord(char) <= 32 or ord(char) >= 127 for char in value):
+            raise ValueError('Headscale API key must not contain whitespace')
+        return value
+
+    @field_validator('url')
+    @classmethod
+    def api_origin(cls, value):
+        # Headscale appends /api/v1 itself. Accept a pasted API root, but no
+        # other prefix: the native child and the saved-destination guard must
+        # agree on the exact origin that receives this bearer credential.
+        parts = urlsplit(value)
+        if parts.path == '/api/v1':
+            value = urlunsplit((parts.scheme, parts.netloc, '', '', ''))
+        elif parts.path:
+            raise ValueError('provide the Headscale origin or /api/v1 root')
+        return backend_destination(value)
+
+
 CONNECTIONS = dict(zip(PRODUCTS, (OdooConnection, ManageConnection, HermesConnection,
-                                  OpenDesignConnection, EmqxConnection, LiteLLMConnection, NextcloudConnection)))
+                                  OpenDesignConnection, EmqxConnection, LiteLLMConnection, NextcloudConnection,
+                                  HeadscaleConnection)))
 URL_FIELDS = {'odoo': ('url',), 'odoo-manage': ('url',), 'hermes': ('gateway_url', 'dashboard_url'),
-              'opendesign': ('url',), 'emqx': ('url',), 'litellm': ('url',), 'nextcloud': ('url',)}
+              'opendesign': ('url',), 'emqx': ('url',), 'litellm': ('url',), 'nextcloud': ('url',),
+              'headscale': ('url',)}
 # The address rule of apps/runtime/backend_policy.allowed_address (that module checks its pinned httpx sources when it is
 # imported, so the gateway keeps a copy; tests/test_saved_destinations.py fails if the two ever differ).
 _V4_DENY = tuple(map(ipaddress.ip_network, (
@@ -271,7 +298,7 @@ class ProductState(State):
     # a temporarily removed operation/tool cannot silently regain permission.
     denied_operations: dict[str, list[str]] = Field(default_factory=dict)
     product: Product
-    connection: OdooConnection | ManageConnection | HermesConnection | OpenDesignConnection | EmqxConnection | LiteLLMConnection | NextcloudConnection | None = Field(default=None, repr=False)
+    connection: OdooConnection | ManageConnection | HermesConnection | OpenDesignConnection | EmqxConnection | LiteLLMConnection | NextcloudConnection | HeadscaleConnection | None = Field(default=None, repr=False)
     # 0.2.1 (n8n only, optional): the MCP access token of n8n's instance-level MCP server (Settings -> Instance-level
     # MCP), a separate key from the API key. n8n-mcp needs it for native version history, data table column actions,
     # n8n_test_workflow prepare/pinned/direct, n8n_explore_node_resources and n8n_manage_agents (NOT_CONFIGURED
@@ -453,6 +480,11 @@ class ProductStore(Store):
         return updated, True
 
     def _decode(self, value):
+        # Headscale first ships at schema 4. A fabricated older record has no
+        # historical permission catalog to migrate from, so refuse it.
+        if (self.product == 'headscale' and isinstance(value, dict)
+                and value.get('schema_version') in (1, 2, 3)):
+            raise ValueError('Headscale has no legacy state')
         if isinstance(value, dict) and type(value.get('schema_version')) is int and value['schema_version'] == 1:
             if not self._migrate or self.product != 'n8n':
                 raise ValueError('wrong product or unexpected downgrade')
@@ -662,7 +694,8 @@ TOOLS = {product: (BOUNDED_TOOLS[product] if product not in FULL_PRODUCTS else f
 PROBES = {'odoo': ('list_models', {'limit': 1}), 'odoo-manage': ('list_models', {}),
           'hermes': ('hermes_inspect', {'target': 'capabilities'}), 'opendesign': ('health', {}),
           'emqx': ('emqx_cluster_status', {}), 'litellm': ('litellm_list_models', {}),
-          'nextcloud': ('get_file_tree', {'path': '', 'depth': 1})}
+          'nextcloud': ('get_file_tree', {'path': '', 'depth': 1}),
+          'headscale': ('headscale_health', {})}
 
 
 def probe_success(product, payload):
@@ -704,6 +737,8 @@ def probe_success(product, payload):
         return (payload.get('path') == '' and type(payload.get('truncated')) is bool and isinstance(entries, list)
                 and all(isinstance(e, dict) and isinstance(e.get('path'), str) and isinstance(e.get('name'), str)
                         and e.get('type') in ('file', 'folder') for e in entries))
+    if product == 'headscale':
+        return payload.get('databaseConnectivity') is True
     return False
 
 
@@ -716,7 +751,10 @@ ODOO_HEALTH_PROBE = 'woow_backend_probe'
 # a copy of the instructions of the vendored nextcloud_mcp_server (WOOWTECH's own server); tests/test_initialize_identity
 # fails when a re-vendor changes the child's text, so a change is reviewed before it reaches clients. The EMQX and
 # LiteLLM children's text describes upstream tools this add-on hides (destructive ones, chat completions, key minting).
-INSTRUCTIONS = {'nextcloud': '\n'.join((
+INSTRUCTIONS = {'headscale': ('Manage one Headscale control server through its native v1 API. '
+                              'Registration and SSH approval are separate. Route replacement replaces the full approved set; '
+                              'an empty list revokes all. Policy apply uses observed digests and is not atomic CAS.'),
+                'nextcloud': '\n'.join((
     'This server works with ONE Nextcloud account chosen by the administrator; you cannot switch accounts.',
     'Paths are relative to that account\'s home folder ("" or "/" is the home); use \'/\' as separator.',
     'Start with get_file_tree to see folders and files, then read_text_file to read a text file.',
@@ -791,6 +829,13 @@ def child_spec(state: ProductState, directory: Path) -> ChildSpec | None:
             env['OD_API_BASE'] = c.url
         argv = (str(python), str(app / 'launch.py'))
     else:
+        if product == 'headscale':
+            env['PYTHONPATH'] += ':' + str(ROOT / 'packages/mcp-admin-core')
+            env.update(HEADSCALE_MCP_BASE_URL=c.url, HEADSCALE_MCP_API_KEY=c.api_key,
+                       HEADSCALE_MCP_STATE_PATH=str(directory / 'state.json'),
+                       FASTMCP_CHECK_FOR_UPDATES='off', FASTMCP_SHOW_SERVER_BANNER='false')
+            argv = (str(python), str(app / 'launch.py'), '--host', '127.0.0.1', '--port', '3000')
+            return ChildSpec(argv, env, cwd)
         if product == 'emqx':
             env.update(EMQX_MCP_BASE_URL=c.url, EMQX_MCP_API_KEY=c.api_key, EMQX_MCP_API_SECRET=c.api_secret, EMQX_MCP_READONLY='true')
             module = 'emqx_mcp_server.server'

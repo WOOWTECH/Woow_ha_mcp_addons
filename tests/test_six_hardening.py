@@ -2,6 +2,7 @@
 import asyncio
 from contextlib import asynccontextmanager, contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import ipaddress
 import json
 import re
 from pathlib import Path
@@ -21,12 +22,12 @@ import nextcloud_fixtures
 
 
 @contextmanager
-def serve(handler):
-    server = ThreadingHTTPServer(('127.0.0.1', 0), handler)
+def serve(handler, *, host='127.0.0.1'):
+    server = ThreadingHTTPServer((host, 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        yield f'http://127.0.0.1:{server.server_port}'
+        yield f'http://{host}:{server.server_port}'
     finally:
         server.shutdown(); server.server_close(); thread.join()
 
@@ -166,7 +167,15 @@ async def test_error_bodies_never_enter_gateway_stream(tmp_path, product, json_r
 
         do_PROPFIND = do_GET
 
-    with serve(Backend) as url:
+    # Headscale's real destination guard rejects loopback at construction.
+    # Bind its fake backend to this runner's owned RFC1918 interface instead.
+    host = socket.gethostbyname(socket.gethostname()) if product == 'headscale' else '127.0.0.1'
+    if product == 'headscale':
+        address = ipaddress.ip_address(host)
+        assert address.version == 4 and any(address in network for network in (
+            ipaddress.ip_network('10.0.0.0/8'), ipaddress.ip_network('172.16.0.0/12'),
+            ipaddress.ip_network('192.168.0.0/16')))
+    with serve(Backend, host=host) as url:
         async with runtime(tmp_path, product, url, canary=canary, json_response=json_response) as (client, headers, *_):
             name, arguments = PROBES[product]
             # Nextcloud latches its credentials after a 401 (no further backend contact until restart): last.

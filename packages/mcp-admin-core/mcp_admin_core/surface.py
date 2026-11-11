@@ -27,6 +27,7 @@ READ = {
  'emqx': 'emqx_authz_settings emqx_broker_stats emqx_client_subscriptions emqx_cluster_status emqx_get_client emqx_get_retained emqx_get_rule_metrics emqx_get_trace_log emqx_list_actions emqx_list_alarms emqx_list_authn emqx_list_authz_sources emqx_list_banned emqx_list_clients emqx_list_connectors emqx_list_listeners emqx_list_retained emqx_list_rules emqx_list_subscriptions emqx_list_topics emqx_list_traces emqx_metrics_current emqx_metrics_history emqx_node_detail emqx_prometheus_stats',
  'litellm': 'litellm_global_spend_report litellm_health_readiness litellm_key_info litellm_list_keys litellm_list_models litellm_list_plugins litellm_list_teams litellm_list_users litellm_model_group_info litellm_model_info litellm_plugin_info litellm_skill_hub litellm_spend_logs litellm_team_info litellm_user_info',
  'nextcloud': 'get_file_content get_file_tree list_calendars list_tasks read_text_file',
+ 'headscale': 'headscale_health',
  'n8n': 'tools_documentation search_nodes get_node validate_node get_template search_templates validate_workflow n8n_get_workflow n8n_list_workflows n8n_validate_workflow n8n_health_check n8n_list_catalog',
 }
 WRITE = {
@@ -36,6 +37,7 @@ WRITE = {
  'opendesign': 'create_project delete_project send_message',
  'emqx': 'emqx_ban emqx_client_subscribe emqx_client_unsubscribe emqx_create_trace emqx_delete_retained emqx_delete_trace emqx_kick_client emqx_publish emqx_publish_bulk emqx_toggle_rule emqx_unban',
  'nextcloud': 'create_text_file delete_file_checked update_text_file upload_file',
+ 'headscale': 'headscale_backfill_ips headscale_debug_node headscale_routes_replace',
  'litellm': 'litellm_health litellm_token_counter litellm_spend_calculate litellm_add_model litellm_block_key litellm_chat_completion litellm_create_team litellm_create_user litellm_delete_key litellm_delete_model litellm_delete_plugin litellm_delete_team litellm_delete_user litellm_disable_plugin litellm_enable_plugin litellm_generate_key litellm_regenerate_key litellm_register_plugin litellm_team_member_add litellm_team_member_delete litellm_unblock_key litellm_update_key litellm_update_model litellm_update_team litellm_update_user',
  'n8n': 'n8n_manage_agents n8n_explore_node_resources n8n_create_workflow n8n_update_full_workflow n8n_update_partial_workflow n8n_delete_workflow n8n_autofix_workflow n8n_test_workflow n8n_deploy_template',
 }
@@ -44,6 +46,7 @@ MIXED = {
  'hermes': 'hermes_config hermes_cron hermes_gateway hermes_mcp hermes_model hermes_session hermes_skill hermes_tools hermes_webhook',
  'opendesign': '', 'emqx': 'emqx_manage_authn_users emqx_manage_authz_rules', 'litellm': '', 'nextcloud': '',
  'n8n': 'n8n_executions n8n_evaluations n8n_workflow_versions n8n_manage_datatable n8n_manage_folders n8n_manage_credentials',
+ 'headscale': 'headscale_api_keys headscale_auth headscale_nodes headscale_policy headscale_preauth_keys headscale_register headscale_users',
 }
 # These handlers are not proven non-mutating by the wrapper: granted (and revocable) as writes.
 UNCERTAIN = {'emqx': 'emqx_test_rule_sql', 'litellm': '', 'n8n': 'n8n_audit_instance'}
@@ -67,6 +70,13 @@ SELECTORS = {
                                        'updateRows upsertRows deleteRows addColumn deleteColumn renameColumn'),
     'n8n_manage_folders': ('action', 'create list get rename move delete'),
     'n8n_workflow_versions': ('mode', 'list get rollback delete prune diff'),
+    'headscale_api_keys': ('operation', 'list create expire delete'),
+    'headscale_auth': ('operation', 'approve reject'),
+    'headscale_nodes': ('operation', 'list get rename set_tags expire delete'),
+    'headscale_policy': ('operation', 'get check diff apply'),
+    'headscale_preauth_keys': ('operation', 'list create expire delete'),
+    'headscale_register': ('operation', 'register legacy'),
+    'headscale_users': ('operation', 'list create rename delete'),
 }
 OPERATION_READS = {
     'hermes_config': ['get'], 'hermes_cron': ['list'], 'hermes_gateway': ['status'],
@@ -79,13 +89,18 @@ OPERATION_READS = {
     'n8n_manage_folders': ['list', 'get'], 'n8n_manage_credentials': ['list', 'get', 'getSchema'],
     'n8n_manage_agents': ['reference', 'search', 'get', 'validate', 'versions', 'discover_assets', 'verify_mcp_server'],
     'n8n_test_workflow': ['prepare'], 'n8n_list_catalog': ['projects', 'tags'],
+    'headscale_api_keys': ['list'], 'headscale_auth': [],
+    'headscale_nodes': ['list', 'get'], 'headscale_policy': ['get', 'check', 'diff'],
+    'headscale_preauth_keys': ['list'], 'headscale_register': [], 'headscale_users': ['list'],
 }
 # Native defaults. test_workflow auto retains its existing whole-tool write grant.
 DEFAULT_OPERATIONS = {'hermes_config': 'get', 'hermes_cron': 'list', 'hermes_gateway': 'status', 'hermes_model': 'info',
                       'hermes_session': 'list', 'hermes_tools': 'list', 'hermes_webhook': 'list',
                       'n8n_executions': 'list', 'n8n_workflow_versions': 'list', 'n8n_test_workflow': 'auto'}
 assert all(value in SELECTORS[name][1].split() for name, value in DEFAULT_OPERATIONS.items())
-STRICT_SELECTORS = frozenset(('n8n_manage_agents', 'n8n_test_workflow', 'n8n_list_catalog'))
+STRICT_SELECTORS = frozenset(('n8n_manage_agents', 'n8n_test_workflow', 'n8n_list_catalog',
+                              'headscale_api_keys', 'headscale_auth', 'headscale_nodes', 'headscale_policy',
+                              'headscale_preauth_keys', 'headscale_register', 'headscale_users'))
 # 0.2.2: the tools that answer without a backend (n8n-mcp's documentation tools, bundled data; the unconfigured child lists
 # exactly these, tests/test_tool_snapshot.py). Every other tool requires_backend: without a configured backend the gateway
 # refuses it (-32603 Backend not configured), and while the health check finds the backend unreachable it refuses it with
@@ -93,7 +108,7 @@ STRICT_SELECTORS = frozenset(('n8n_manage_agents', 'n8n_test_workflow', 'n8n_lis
 BACKEND_FREE = {'n8n': 'tools_documentation search_nodes get_node validate_node get_template search_templates validate_workflow'}
 # The products whose public surface is the child's complete one. Odoo Manage (retired after 0.1.4) keeps its bounded
 # 0.1.x surface (products.BOUNDED_TOOLS) and is not shipped.
-FULL_PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud')
+FULL_PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud', 'headscale')
 
 
 class ChildArguments(BaseModel):

@@ -48,7 +48,8 @@ UNREACHABLE = {'child': 'running', 'ready': True, 'backend': 'unreachable',
                'reason': 'BACKEND_UNAVAILABLE: [Errno 111] Connection refused'}
 UP = {'child': 'running', 'ready': True, 'backend': 'reachable', 'reason': None}
 PROBE = {'emqx': 'emqx_list_clients', 'odoo': 'search_records', 'n8n': 'n8n_list_workflows', 'hermes': 'hermes_inspect',
-         'opendesign': 'list_projects', 'litellm': 'litellm_list_models', 'nextcloud': 'get_file_tree'}
+         'opendesign': 'list_projects', 'litellm': 'litellm_list_models', 'nextcloud': 'get_file_tree',
+         'headscale': 'headscale_health'}
 
 
 def tools_of(product):

@@ -87,6 +87,16 @@
         "cleared": false,
         "evidence": null
       }
+    },
+    "headscale": {
+      "image": {
+        "cleared": false,
+        "evidence": null
+      },
+      "ha": {
+        "cleared": false,
+        "evidence": null
+      }
     }
   }
 }

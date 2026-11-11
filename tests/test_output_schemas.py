@@ -20,6 +20,10 @@ from test_tool_snapshot import own_listing
 ROOT = Path(__file__).resolve().parents[1]
 DATA = json.loads((ROOT / 'packages/mcp-admin-core/mcp_admin_core/output_schemas.json').read_text())
 ENTRIES = DATA['entries']
+# output_schemas.json records source-commit bytes. The CI harness changed for
+# Headscale after n8n's schema review; pin its current bytes separately while
+# still checking the original n8n commit below.
+CURRENT_POST_SOURCE_BYTES = {'packaging/unit.sh': '11f9b98b98c41777c3deeab8d78195c09577d22f0353ece60f994bd34ebefec4'}
 
 
 @pytest.mark.parametrize('entry', ENTRIES, ids=lambda e: e['product'] + '/' + e['tool'])
@@ -40,6 +44,7 @@ def test_audited_schema_is_exact_and_isolated(entry):
 def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
     assert {p: sum(e['product'] == p for e in ENTRIES) for p in DATA['sources']} == {
         'litellm': 35, 'nextcloud': 8, 'odoo': 41, 'n8n': 2, 'hermes': 11, 'emqx': 39}
+    seen_current_pins = set()
     for product, source in DATA['sources'].items():
         assert source['ha_commit'] == {
             'litellm': 'e142a6e43170625fed945bc3eb4a4e45327559bf',
@@ -64,7 +69,10 @@ def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
             )},
         )
         for name, expected in source['files'].items():
-            assert hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == expected, name
+            if name in CURRENT_POST_SOURCE_BYTES:
+                assert product == 'n8n' and expected != CURRENT_POST_SOURCE_BYTES[name]
+                seen_current_pins.add(name)
+            assert hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == CURRENT_POST_SOURCE_BYTES.get(name, expected), name
             # A commit label must reproduce the recorded bytes, not merely pass a
             # hard-coded string assertion while the current worktree has new files.
             historical = subprocess.run(
@@ -73,6 +81,7 @@ def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
             )
             assert historical.returncode == 0, (product, name, 'source commit unreadable')
             assert hashlib.sha256(historical.stdout).hexdigest() == expected, (product, name)
+    assert seen_current_pins == set(CURRENT_POST_SOURCE_BYTES)
     assert 'woow_backend_probe' not in {e['tool'] for e in ENTRIES}
     assert 'get_file_content' not in {e['tool'] for e in ENTRIES}  # resource/content result, no output schema
     assert 'litellm_spend_logs' not in {e['tool'] for e in ENTRIES}  # no declared structured contract

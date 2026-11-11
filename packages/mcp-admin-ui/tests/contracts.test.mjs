@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { products, mountPath, explicitUrl, backendPayload, backendPatchPayload, backendEdit, connectionHelp, policyRestartsChild, policyRestartNotice, emqxBaseUrl, policyPayload, toolRows, clientExample, claudeConnectorUrl } from '../src/contracts.js';
+import { products, mountPath, explicitUrl, backendPayload, backendPatchPayload, backendEdit, connectionHelp, policyRestartsChild, policyRestartNotice, emqxBaseUrl, headscaleBaseUrl, policyPayload, toolRows, clientExample, claudeConnectorUrl } from '../src/contracts.js';
 import { AdminApi, ApiError } from '../src/api.js';
 const base = '/api/hassio_ingress/DUMMY';
 const bootstrap = () => ({ base_path: base, api_base: `${base}/api`, product: 'n8n', csrf: 'fresh_csrf_for_mock_only', tools: {} });
@@ -16,10 +16,10 @@ test('URLs reject credentials/query/fragment, preserve explicit client endpoint'
   assert.equal(explicitUrl('http://192.0.2.4:8081/mcp/', true), 'http://192.0.2.4:8081/mcp');
   assert.throws(() => explicitUrl('https://example.test/api', true));
 });
-test('eight typed product payloads; no invented OpenDesign token, preserve means no request', () => {
-  assert.equal(Object.keys(products).length, 8);
+test('nine typed product payloads; no invented OpenDesign token, preserve means no request', () => {
+  assert.equal(Object.keys(products).length, 9);
   for (const [product, spec] of Object.entries(products)) {
-    const filler = product === 'nextcloud' ? 'fixture value' : ' fixture value ';  // Nextcloud refuses padded values
+    const filler = product === 'nextcloud' || product === 'headscale' ? 'fixturevalue' : ' fixture value ';
     const values = Object.fromEntries(spec.fields.map(([key, , type]) => [key, type.startsWith('optional') ? '' : type === 'mode' ? 'read' : type === 'url' ? 'https://backend.example.test' : filler]));
     const payload = backendPayload(product, 'replace', values);
     const connection = product === 'n8n' ? payload : payload.connection;
@@ -131,19 +131,39 @@ test('EMQX: a pasted /api/v5 root is saved without it (the child appends it), an
   assert.deepEqual(backendPatchPayload(emqx, { url: 'set', api_key: 'keep', api_secret: 'keep' }, { url: 'https://new.test/api/v5' }), { changes: { url: 'https://new.test' } });
   assert.throws(() => backendPatchPayload(emqx, { url: 'set', api_key: 'keep', api_secret: 'keep' }, { url: 'https://new.test/api/v5/x' }), /\/api\/v5/);
 });
+test('Headscale: the API root is normalized and other paths are refused before saving', () => {
+  for (const [typed, saved] of [
+    ['https://hs.example.test', 'https://hs.example.test'],
+    ['https://hs.example.test/api/v1', 'https://hs.example.test'],
+    ['https://hs.example.test/api/v1/', 'https://hs.example.test'],
+  ]) {
+    assert.equal(backendPayload('headscale', 'replace', {url: typed, api_key: 'DUMMY'}).connection.url, saved);
+  }
+  for (const bad of ['https://hs.example.test/proxy', 'https://hs.example.test/api/v1/user']) {
+    assert.throws(() => backendPayload('headscale', 'replace', {url: bad, api_key: 'DUMMY'}));
+  }
+  assert.equal(headscaleBaseUrl('https://hs.example.test/api/v1'), 'https://hs.example.test');
+  assert.throws(() => backendPayload('headscale', 'replace', {url: 'https://hs.example.test', api_key: 'bad key'}), /不可包含空白/);
+  const state = {product: 'headscale', connection_configured: true,
+    backend_edit: {contract: 'woow-connection-patch-v1', values: {url: 'https://old.test'}, secret_set: {api_key: true}}};
+  assert(backendEdit(state));
+  assert.deepEqual(backendPatchPayload(state, {url: 'set', api_key: 'keep'}, {url: 'https://new.test/api/v1'}),
+    {changes: {url: 'https://new.test'}});
+});
 test('credential fields say what to paste: labels and per-product help', () => {
   assert.equal(products.odoo.fields.find(([key]) => key === 'password')[1], '密碼或 API Key');
   assert.equal(products.litellm.fields.find(([key]) => key === 'master_key')[1], 'LiteLLM 金鑰');
   assert.equal(products.emqx.fields.find(([key]) => key === 'url')[1], 'Broker 基底 URL');
-  assert.deepEqual(Object.keys(connectionHelp).sort(), ['emqx', 'litellm', 'nextcloud', 'odoo']);
+  assert.deepEqual(Object.keys(connectionHelp).sort(), ['emqx', 'headscale', 'litellm', 'nextcloud', 'odoo']);
   assert(Object.keys(connectionHelp).every(product => Object.hasOwn(products, product)));
   assert.match(connectionHelp.odoo, /API Key.*2FA/);
   assert.match(connectionHelp.litellm, /不建議直接貼 master key/);
   assert.match(connectionHelp.nextcloud, /建立新應用程式密碼/);
   assert.match(connectionHelp.emqx, /\/api\/v5.*自動去掉/);
+  assert.match(connectionHelp.headscale, /\/api\/v1/);
 });
 test('saving a tool policy says it restarts the child for the products whose child is launched with the policy', () => {
-  for (const product of ['emqx', 'litellm', 'nextcloud']) {
+  for (const product of ['emqx', 'litellm', 'nextcloud', 'headscale']) {
     assert.equal(policyRestartsChild(product), true, product);
     assert.match(policyRestartNotice(product), /重新啟動 MCP 子行程.*現有連線可能中斷/, product);
   }
