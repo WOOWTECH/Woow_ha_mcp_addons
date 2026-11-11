@@ -11,14 +11,16 @@ PROGRAM = r'''
 import socket, os, asyncio, json, runpy
 attempts=[]
 mode=os.environ['CASE']
+p=os.environ['PRODUCT']
 def resolve(host, port, *a, **k):
     host=host.decode() if isinstance(host,bytes) else host
-    addresses = ['127.0.0.1', '169.254.169.254'] if mode=='mixed' else ['169.254.169.254']
+    # Headscale denies loopback too: use an allowed private answer first so
+    # mixed DNS proves the later forbidden answer is checked before connect.
+    addresses = [('10.0.0.2' if p=='headscale' else '127.0.0.1'), '169.254.169.254'] if mode=='mixed' else ['169.254.169.254']
     return [(socket.AF_INET,socket.SOCK_STREAM,socket.IPPROTO_TCP,'',(ip,int(port))) for ip in addresses]
 def stop(self,address):
     attempts.append(address);raise OSError(111,'intercepted before connect')
 socket.getaddrinfo=resolve;socket.socket.connect=stop;socket.socket.connect_ex=stop
-p=os.environ['PRODUCT']
 async def main():
     outcome=''
     try:
@@ -58,11 +60,18 @@ async def main():
             nc=NextcloudClient(load_settings())
             try: await nc.probe()
             finally: await nc.aclose()
+        elif p=='headscale':
+            from headscale_mcp_server.client import HeadscaleClient
+            async with HeadscaleClient(os.environ['HEADSCALE_MCP_BASE_URL'], os.environ['HEADSCALE_MCP_API_KEY']) as client:
+                await client.request('Health')
         else:
             from woow_litellm_mcp_server.lifespan import build_client
             async with build_client() as c:await c.get('/v1/models')
     except Exception as exc: outcome=str(exc)
-    assert 'BACKEND_DESTINATION_DENIED' in outcome, (p, outcome)
+    if p=='headscale':
+        assert outcome == 'HEADSCALE_DESTINATION_DENIED', (p, outcome)
+    else:
+        assert 'BACKEND_DESTINATION_DENIED' in outcome, (p, outcome)
     assert not attempts, (p,mode,attempts)
 asyncio.run(main())
 '''

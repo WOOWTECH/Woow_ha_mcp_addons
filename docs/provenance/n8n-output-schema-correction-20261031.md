@@ -7,3 +7,7 @@ PaaS [Gitea PR #103](https://git-prod.woowtech.io/WOOWTECH/woow-mcp-server/pulls
 HA 此來源變更先以 `91aceb072dd86ba430545b207d75ad228e27a178` 加入精確 npm 2.96.2 patch：`dist/mcp/tools.js` 原 SHA-256 `acb4d2a3ec74b5f2b41d327a93340a0f9a799e99947656afd010a76390fb10cb`，修後 `e30bddb3967661d36ae5dd8c6b5eb8b7e1b56f6053b2bb972543d7bbc4d57803`；只改兩處 details 型別，版本或來源不符即拒絕建置。隨後才把**修正後的 child** 兩份確定輸出 schema 釘入 gateway，並加到固定 fallback 清單。產品名稱、28 支工具名稱／輸入 schema、授權與其他產品中繼資料不變。來源檔案雜湊、精確 product/tool/schema binding 及執行期 ledger 均已更新。
 
 本機用固定 child、真 gateway、假 n8n 後端及兩種真 SDK 呼叫乾淨流程、含物件型 warning 與含物件型 error 的合成流程，均通過輸出驗證；無 n8n 業務後端寫入。還需正式來源 CI、六映像發行閘門、已發布映像的同呼叫與 HAOS Supervisor 實機讀回。此來源變更沒有版本號、映像或 ws97 變更。
+
+## PR #77 來源位元組追蹤（2026-11-11）
+
+`output_schemas.json` 的 n8n `ha_commit` 為 `1cbfcb9ddff30947e11ddfa92fd0b0f3ecdffff8`；其 `packaging/unit.sh` SHA256 `88126189f391ef76fa009e29fce247125e567cc33ed6f22dca9f9dfcb2c5e78c` 是該來源 commit 的歷史位元組，不是 PR #77 的現行測試腳本。Headscale 加入後，現行腳本 SHA256 為 `11f9b98b98c41777c3deeab8d78195c09577d22f0353ece60f994bd34ebefec4`。`tests/test_output_schemas.py` 對全部 58 個列出來源檔仍逐檔驗證歷史 commit；現行位元組也逐檔驗證，僅這個測試腳本使用獨立固定的現行雜湊。沒有調整 n8n 的兩份輸出 schema、handler 來源或 gateway 准入政策。

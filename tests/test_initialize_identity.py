@@ -4,7 +4,7 @@ Only the child's protocolVersion (one of the reviewed MCP revisions) reaches the
 child (n8n-mcp calls itself "n8n-documentation-mcp"), and the child's instructions are never relayed: Claude Code puts
 instructions into the model's system prompt; EMQX's and LiteLLM's text describes their whole upstream tool set, including
 tools the gateway hides or refuses, and Odoo's is a generic line. A product may pass reviewed fixed text (Nextcloud: a
-copy of its own server's).
+copy of its own server's; Headscale: HA-specific guidance reviewed separately from the child text).
 """
 import ast
 import asyncio
@@ -74,15 +74,16 @@ async def test_result_is_the_gateways_own(store, child):
     assert "n8n-documentation-mcp" not in response.text and "2.96.2" not in response.text
 
 
-async def test_the_product_name_and_reviewed_instructions(store):
-    response = await initialize(store, json_child(CHILD_RESULT), server_name="woow-mcp-nextcloud",
-                                instructions=INSTRUCTIONS["nextcloud"])
+@pytest.mark.parametrize('product', ['nextcloud', 'headscale'])
+async def test_the_product_name_and_reviewed_instructions(store, product):
+    response = await initialize(store, json_child(CHILD_RESULT), server_name='woow-mcp-' + product,
+                                instructions=INSTRUCTIONS[product])
     result = response.json()["result"]
-    assert result["serverInfo"] == {"name": "woow-mcp-nextcloud", "version": VERSION}
-    assert result["instructions"] == INSTRUCTIONS["nextcloud"] and "CHILD-TEXT-CANARY" not in response.text
+    assert result["serverInfo"] == {"name": 'woow-mcp-' + product, "version": VERSION}
+    assert result["instructions"] == INSTRUCTIONS[product] and "CHILD-TEXT-CANARY" not in response.text
     # The same reviewed text whether or not the child sends any.
     bare = {k: v for k, v in CHILD_RESULT.items() if k != "instructions"}
-    response = await initialize(store, json_child(bare), server_name="woow-mcp-nextcloud", instructions="Fixed text.")
+    response = await initialize(store, json_child(bare), server_name='woow-mcp-' + product, instructions="Fixed text.")
     assert response.json()["result"]["instructions"] == "Fixed text."
 
 
@@ -164,8 +165,12 @@ def test_an_invalid_identity_is_refused(store, identity):
         make_apps(store, TOOLS, httpx.AsyncClient(), **identity)
 
 
-def test_only_nextcloud_has_instructions_and_they_match_its_vendored_server():
-    assert set(INSTRUCTIONS) == {"nextcloud"}
+def test_reviewed_instructions_are_fixed_and_nextcloud_matches_its_vendored_server():
+    assert set(INSTRUCTIONS) == {'headscale', 'nextcloud'}
+    assert INSTRUCTIONS['headscale'] == (
+        'Manage one Headscale control server through its native v1 API. '
+        'Registration and SSH approval are separate. Route replacement replaces the full approved set; '
+        'an empty list revokes all. Policy apply uses observed digests and is not atomic CAS.')
     source = (ROOT / "apps/nextcloud/vendor/nextcloud_mcp_server/server.py").read_text()
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "INSTRUCTIONS" for t in node.targets):

@@ -47,14 +47,38 @@ def test_audited_selectors_defaults_and_denies_for_every_mixed_tool(tmp_path, pr
     registry = full_tools(product)
     tool = registry[name]
     snapshot = next(item for item in listing(product) if item['name'] == name)
-    field = snapshot['inputSchema']['properties'][tool.selector]
-    # test_workflow's native handler/policy supplies auto; public schema omits it.
-    # tests/test_n8n_selectors.py executes that pinned guard and verifies the default.
-    assert field.get('default', 'auto' if name == 'n8n_test_workflow' else None) == tool.default_operation
-    if 'enum' in field:
-        assert set(field['enum']) == set(tool.operations)
+    schema = snapshot['inputSchema']
+    if product == 'headscale':
+        # Each operation is a required discriminant in oneOf. Resolve only
+        # local $defs references so an external or missing branch fails closed.
+        assert schema['type'] == 'object' and schema['oneOf'] and tool.default_operation is None
+        definitions = schema.get('$defs', {})
+        operations = []
+        for branch in schema['oneOf']:
+            if '$ref' in branch:
+                assert set(branch) == {'$ref'}
+                ref = branch['$ref']
+                assert isinstance(ref, str) and ref.startswith('#/$defs/')
+                key = ref[len('#/$defs/'):]
+                assert key and '/' not in key and '~' not in key
+                branch = definitions[key]
+            assert branch['type'] == 'object' and branch['additionalProperties'] is False
+            assert tool.selector in branch['required']
+            field = branch['properties'][tool.selector]
+            assert field['type'] == 'string' and 'default' not in field
+            operations.append(field['const'])
+        assert len(operations) == len(set(operations)) and set(operations) == set(tool.operations)
+    else:
+        field = schema['properties'][tool.selector]
+        # test_workflow's native handler/policy supplies auto; public schema omits it.
+        # tests/test_n8n_selectors.py executes that pinned guard and verifies the default.
+        assert field.get('default', 'auto' if name == 'n8n_test_workflow' else None) == tool.default_operation
+        if 'enum' in field:
+            assert set(field['enum']) == set(tool.operations)
     with closing(ProductStore(tmp_path, product)) as store:
-        denied = tool.default_operation or tool.read_operations[0]
+        # Headscale auth/register are mixed-selector tools whose operations
+        # are all writes; deny one reviewed operation even without a read arm.
+        denied = tool.default_operation or (tool.read_operations[0] if tool.read_operations else tool.operations[0])
         state = store.update(denied_operations={name: [denied]})
         with pytest.raises(ToolCallRefused):
             authorize(call({tool.selector: denied}, name), registry, state)
