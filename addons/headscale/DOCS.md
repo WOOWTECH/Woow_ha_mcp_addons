@@ -2,7 +2,7 @@
 
 ## 目前狀態
 
-**0.4.13 已發布並上架；0.4.14 是尚待映像與新版 HAOS 驗收的相容性更新。** 0.4.13 的管理面板只接受已審核的 Core 版本至 2026.10.4；在 2026.11.1 會明確拒絕並顯示版本原因，MCP 端點仍可服務。0.4.14 的原始碼逐檔審核加入 2026.11.0 與 2026.11.1，正式可用狀態以 [Release](https://github.com/WOOWTECH/Woow_ha_mcp_addons/releases) 和商店版號為準。Headscale 使用獨立的 `woow_mcp_headscale` slug、映像名稱與 Release tag；其他七項產品仍維持各自 0.4.13 的已發布版號。
+**0.4.13 已發布並上架；0.4.14 修正了 Core 2026.11 的管理頁相容性。** 0.4.13 的管理面板只接受已審核的 Core 版本至 2026.10.4；在 2026.11.1 會明確拒絕並顯示版本原因，MCP 端點仍可服務。0.4.14 的原始碼逐檔審核加入 2026.11.0 與 2026.11.1，候選映像已在隔離 HAOS 2026.11.1 通過管理頁及角色權限驗證；正式可用狀態以 [Release](https://github.com/WOOWTECH/Woow_ha_mcp_addons/releases) 和商店版號為準。Headscale 使用獨立的 `woow_mcp_headscale` slug、映像名稱與 Release tag；其他七項產品仍維持各自 0.4.13 的已發布版號。
 
 ## 從商店安裝
 

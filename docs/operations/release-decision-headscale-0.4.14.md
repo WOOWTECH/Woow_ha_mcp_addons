@@ -1,6 +1,6 @@
 # woow_mcp_headscale 0.4.14 image decision
 
-Status: **exact-source candidate built, scanned and publicly verified**. HAOS 2026.11.1 and Store-installed upgrade acceptance are separate gates.
+Status: **exact-source candidate built, scanned, publicly verified and accepted on isolated HAOS 2026.11.1**. Store-installed 0.4.14 upgrade acceptance is a separate gate.
 
 The Store-installed 0.4.13 add-on on isolated HAOS 18.3 / Core 2026.11.1 / Supervisor 2026.10.5 installed and started, but its management Ingress returned HTTP 403 `core_version_unreviewed`. The 0.4.13 verifier intentionally accepts only Core releases through 2026.10.4. This release changes that explicit Core allowlist after [the 25-file source review](../ha-role-core-contract.md) and keeps every other product at its published 0.4.13 image.
 
@@ -10,4 +10,6 @@ The fixed source is commit `695e5b7bdbf607897af724175292a163329f9584` on PR #81,
 
 The authenticated registry precondition confirmed `ghcr.io/woowtech/amd64-mcp-headscale:0.4.14` absent. Only that accepted image ID was tagged and pushed. The temporary builder Docker login was removed. `packaging/registry_gate.py public` then anonymously verified manifest, config and layers against immutable amd64 manifest `sha256:c3099fc3398ffa8c5491edb8d728978f1f87f5a7592cd032eacddb8c8086ac92`; its config digest is the accepted image ID. See [published digest](../provenance/headscale-0.4.14-published-digest.json) and [unsigned published provenance](../provenance/headscale-0.4.14-published-provenance.json).
 
-This record does not yet claim HAOS 2026.11.1 management acceptance, Store 0.4.14 synchronization, production HA upgrade, or all 29 native Headscale API writes. The prior 0.4.13 isolated HAOS test covers the unchanged Headscale backend path, while the Core-version gate and runtime version have changed and require their own acceptance here.
+The isolated HAOS 18.3 VM with Core 2026.11.1 and Supervisor 2026.10.5 loaded the public 0.4.14 image through a local add-on manifest. The owner received HTTP 200 for the management page, JavaScript asset and bootstrap API; bootstrap reported Headscale 0.4.14. An anonymous bootstrap request received 401. A newly created ordinary HA user (no admin group) authenticated to Core and obtained an ingress session, but the same bootstrap returned 403. This tests the actual role boundary, not just a rejected login. See the [sanitized HAOS candidate receipt](evidence/headscale-0.4.14-haos-candidate.md).
+
+This record does not yet claim Store 0.4.14 synchronization, Store-installed upgrade acceptance, production HA upgrade, or all 29 native Headscale API writes. The prior 0.4.13 isolated HAOS test covers the unchanged Headscale backend path; the changed Core-version gate and runtime version passed the local 0.4.14 HAOS acceptance above.
