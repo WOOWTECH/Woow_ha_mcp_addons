@@ -192,7 +192,7 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     assert result['capabilities'] == {'tools': {}}
                     # 0.1.8 (F6): run_product names the add-on; only Nextcloud carries (reviewed) instructions.
                     assert result['serverInfo'] == {'name': 'woow-mcp-' + product,
-                                                    'version': '0.4.14' if product == 'headscale' else VERSION}
+                                                    'version': '0.4.16' if product == 'headscale' else VERSION}
                     assert result.get('instructions') == INSTRUCTIONS.get(product)
                     headers['MCP-Protocol-Version'] = result['protocolVersion']
                     await rpc(client, endpoint, headers, {'jsonrpc': '2.0', 'method': 'notifications/initialized'})

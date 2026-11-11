@@ -183,6 +183,29 @@ async def test_origin_allowed_only_on_the_secret_path(store):
     assert len(child.seen) == 1
 
 
+async def test_headscale_secret_path_rejects_untrusted_origin_after_valid_token(store):
+    """Headscale keeps Claude.ai's connector while refusing other browser origins."""
+    child = Child()
+    async with httpx.AsyncClient(transport=httpx.MockTransport(child)) as to_child:
+        _, app = make_apps(store, TOOLS, to_child,
+                           secret_path_allowed_origins=frozenset({"https://claude.ai"}))
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mcp") as client:
+            path = private(store)
+            for origin in ("https://untrusted.invalid", "null", "https://claude.ai.evil.invalid",
+                           "https://claude.ai/", "http://claude.ai"):
+                response = await client.post(path, headers={**ACCEPT, "Origin": origin}, json=INITIALIZE)
+                assert response.status_code == 403, origin
+            doubled = httpx.Headers([*ACCEPT.items(), ("Origin", "https://claude.ai"),
+                                     ("Origin", "https://untrusted.invalid")])
+            assert (await client.post(path, headers=doubled, json=INITIALIZE)).status_code == 403
+            assert (await client.post(path, headers=ACCEPT, json=INITIALIZE)).status_code == 200
+            assert (await client.post(path, headers={**ACCEPT, "Origin": "https://claude.ai"},
+                                      json=INITIALIZE)).status_code == 200
+            assert (await client.post("/private_wrong/mcp", headers={**ACCEPT, "Origin": "https://untrusted.invalid"},
+                                      json=INITIALIZE)).status_code == 404
+    assert len(child.seen) == 2
+
+
 async def test_authorization_header_cannot_stand_in_for_the_secret(store):
     """A valid Bearer header does not open a wrong secret path, and a wrong one does not close a right one."""
     child = Child()

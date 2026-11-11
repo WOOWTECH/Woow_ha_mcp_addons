@@ -14,7 +14,7 @@
     "headscale"
   ],
   "version": "0.4.13",
-  "version_overrides": {"headscale": "0.4.14"},
+  "version_overrides": {"headscale": "0.4.16"},
   "os_security_upgrades": {
     "snapshot": "20261104T124343Z",
     "suite": "bookworm-security",

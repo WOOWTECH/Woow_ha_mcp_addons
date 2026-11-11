@@ -157,7 +157,7 @@ async def test_unconfigured_client_connects_lists_everything_and_gets_backend_no
 
 @pytest.mark.parametrize('configured', [False, True])
 async def test_headscale_release_version_is_reported_by_both_initialize_paths(tmp_path, configured):
-    assert version_for_product('headscale') == '0.4.14'
+    assert version_for_product('headscale') == '0.4.16'
     assert version_for_product('emqx') == VERSION == '0.4.13'
     url = 'https://headscale.example.test' if configured else None
     with closing(store_for(tmp_path, 'headscale', url)) as store:
@@ -167,7 +167,7 @@ async def test_headscale_release_version_is_reported_by_both_initialize_paths(tm
                             management=management) as boundary:
             response, _ = await boundary.connect()
             assert response.json()['result']['serverInfo'] == {
-                'name': 'woow-mcp-headscale', 'version': '0.4.14'}
+                'name': 'woow-mcp-headscale', 'version': '0.4.16'}
 
 
 async def test_the_own_answers_follow_the_policy_and_the_session_rules(tmp_path):
