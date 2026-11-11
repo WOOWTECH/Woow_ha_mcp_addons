@@ -12,7 +12,7 @@ import signal
 import httpx
 import uvicorn
 
-from . import redact
+from . import redact, version_for_product
 from .config import ConfigError
 from .configuration import ConfigurationState
 from .capabilities import ManagementOptions
@@ -65,7 +65,8 @@ async def run(args):
             admin, mcp = make_apps(store, TOOLS[args.product], child,
                                   verify_admin=make_ha_admin_verifier(),
                                   health=health.snapshot, backend_changed=backend_changed, configuration=configuration,
-                                  management=ManagementOptions(kind="ha-addon", authority="ha-admin"),
+                                  management=ManagementOptions(kind="ha-addon", authority="ha-admin",
+                                                               product_version=version_for_product(args.product)),
                                   backend_check=getattr(health, "test_saved", None), restart_child=backend_changed, diagnostics=getattr(manager, "diagnostics", None),
                                   server_name='woow-mcp-' + args.product, instructions=INSTRUCTIONS.get(args.product),
                                   # 0.2.2: clients connect without a backend or a running child (Odoo Manage: unchanged)

@@ -13,10 +13,11 @@ NETWORK_ID = 'b' * 64
 
 class CandidateInvocationTests(unittest.TestCase):
     def invoke(self, app, *, internal=True, run_fails=False):
-        image = f'local/mcp-{app}:{acceptance.VERSION}'
+        version = acceptance.version_for(app)
+        image = f'local/mcp-{app}:{version}'
         metadata = {'Architecture': 'amd64', 'Os': 'linux', 'Id': IMAGE_ID,
                     'Config': {'Labels': {'io.hass.type': 'app', 'io.hass.arch': 'amd64',
-                                          'io.hass.version': acceptance.VERSION},
+                                          'io.hass.version': version},
                                'ExposedPorts': {'8081/tcp': {}},
                                'Entrypoint': ['/usr/local/bin/python', '/opt/woow/packaging/entrypoint.py', app]}}
         commands = []

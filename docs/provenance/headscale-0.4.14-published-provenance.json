@@ -1,0 +1,57 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "predicate": {
+    "evidence": {
+      "sbom.spdx.json": "676728a2732deedb02b529af4ab7e1cb2d0fc0f7d71fa81c9c4be1525e239ef9",
+      "sbom.syft.json": "953b5b196264b428d26489ac5d180ac15c7f269d9312cb1686bcd429050069de",
+      "scan-summary.json": "f487da943f709226a20449a406ee2cd404ef8ed2453ad7e40d20e175e0d7dd61"
+    },
+    "recipe": "packaging/supply_chain.py candidate (source commit below)",
+    "registry": {
+      "anonymous_pull_verified": true,
+      "config_digest": "sha256:df1d00d8a2f8a47f81f77f143533fd518bfbbea0372e882088404e236b3f1995",
+      "manifest_digest": "sha256:c3099fc3398ffa8c5491edb8d728978f1f87f5a7592cd032eacddb8c8086ac92",
+      "reference": "ghcr.io/woowtech/amd64-mcp-headscale@sha256:c3099fc3398ffa8c5491edb8d728978f1f87f5a7592cd032eacddb8c8086ac92"
+    },
+    "subject": {
+      "app": "headscale",
+      "archive_sha256": "dc9e39921d8ca47b5f98bd81cd9e78f0372ca34bfcbaa62bcbd66e955b83afad",
+      "diff_ids": [
+        "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+        "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+        "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+        "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+        "sha256:817e99d4e6ea3d779a379127676d0b193447d5f08e55f60080f7b7a64d4df12d",
+        "sha256:106302f22e950aafbf3346f0a2b8e15a3c2fabb8b0fed1e892bde0eebfd4a5de",
+        "sha256:a5ec665e66c3921ca0e2f6dce7677e7d781275ab0e2c9d0de73362126b3e4bed",
+        "sha256:3b5a2042c77b1927d3d9861c8c7e0205cb0e410b75e36ac1883863b514d992ca",
+        "sha256:50c0ea388a31726a3bbca7b6ad7b87ef5a31c7b8841d4309a12ee838f3abcc12",
+        "sha256:39df6cfbe4199120ac6b4ef5352de5392250f6423f9541af12bb114022317fd0",
+        "sha256:a82911462aaa742f4b090e4346cca7d484429025fabe000e8058593d1e72b26c",
+        "sha256:e508f16a25026052739e302a6b3d292d15d00e211e105a40debd245dc681f629",
+        "sha256:c4fb9c53008197085cb43af6fabdd71f70baab9b4fbc4c3461ac18739fe509ba",
+        "sha256:42e58fffe77774b992562bb82ce06cfc125c81284448e7e13753460fd3110ed5",
+        "sha256:0cf698bd7e7417cce2549b8391a9aa71fca461010e0f7636e5112c9dddd2d24c",
+        "sha256:28da2fd58f572e595564c1b9fb0d62e1408217f12899a55d82d9b36730bf8834"
+      ],
+      "image_id": "sha256:df1d00d8a2f8a47f81f77f143533fd518bfbbea0372e882088404e236b3f1995",
+      "source": "695e5b7bdbf607897af724175292a163329f9584"
+    },
+    "trust": "unsigned protected-workflow receipt; NOT SLSA certification"
+  },
+  "predicateType": "urn:woow:mcp:unsigned-candidate:v1",
+  "subject": [
+    {
+      "digest": {
+        "sha256": "df1d00d8a2f8a47f81f77f143533fd518bfbbea0372e882088404e236b3f1995"
+      },
+      "name": "local/mcp-headscale"
+    },
+    {
+      "digest": {
+        "sha256": "c3099fc3398ffa8c5491edb8d728978f1f87f5a7592cd032eacddb8c8086ac92"
+      },
+      "name": "ghcr.io/woowtech/amd64-mcp-headscale"
+    }
+  ]
+}

@@ -1,3 +1,9 @@
+## Headscale 0.4.14 — HA Core 2026.11 compatibility candidate
+
+- Source-reviewed Core 2026.11.0 and 2026.11.1 across 25 role-contract/adjacent files and Supervisor 2026.10.5 proxy. The HA admin verifier adds only these exact releases; later patches and prereleases remain denied.
+- Headscale gains an independently pinned 0.4.14 manifest, build, MCP version and registry tag. The seven other add-ons retain their published 0.4.13 images and compatibility until separately rebuilt.
+- Candidate image, public registry and Store-installed HAOS 2026.11.1 acceptance remain separate release gates.
+
 ## 0.4.13 — images published and verified (2026-11-08)
 
 - Includes the merged post-0.4.12 source changes in PRs #73–#75. URL path arguments are encoded as one segment before HTTP normalization; the gateway also refuses dot-segment paths and rejects newly saved backend URLs that the runtime would refuse.

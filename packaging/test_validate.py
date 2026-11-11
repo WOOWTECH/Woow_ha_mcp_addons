@@ -221,7 +221,7 @@ class PackagingTests(unittest.TestCase):
 
     def test_initialize_version_is_the_release_version(self):
         # 0.1.8 review F-5a: mcp_admin_core.VERSION (initialize serverInfo) is bound once, to the release version.
-        good = "VERSION = '%s'\n" % v.VERSION
+        good = "VERSION = '%s'\nPRODUCT_VERSIONS = %r\n" % (v.VERSION, v.VERSION_OVERRIDES)
         v.runtime_version(good)
         v.runtime_version((v.ROOT / 'packages/mcp-admin-core/mcp_admin_core/__init__.py').read_text())
         for text in ("VERSION = '0.1.6'\n", '', "VERSION = None\n", "VERSION = VERSION_TEXT\n",
@@ -234,6 +234,25 @@ class PackagingTests(unittest.TestCase):
         with patch.object(v, 'runtime_version', side_effect=v.Invalid('initialize serverInfo version')):
             with self.assertRaisesRegex(v.Invalid, 'initialize serverInfo version'):
                 v.validate(v.ROOT)
+        with self.assertRaisesRegex(v.Invalid, 'fixed per-product runtime version'):
+            v.runtime_version("VERSION = '%s'\nPRODUCT_VERSIONS = {}\n" % v.VERSION)
+
+    def test_headscale_version_is_independent_and_fixed_at_every_boundary(self):
+        self.assertEqual(v.version_for('headscale'), '0.4.14')
+        self.assertEqual({v.version_for(product) for product in v.PRODUCTS if product != 'headscale'}, {'0.4.13'})
+        with self.assertRaises(v.Invalid):
+            v.version_for('unknown')
+        headscale = v.load(v.ROOT / 'addons/headscale/config.yaml')
+        self.assertEqual(headscale['version'], v.version_for('headscale'))
+        with self.assertRaises(v.Invalid):
+            v.manifest({**headscale, 'version': '0.4.13'}, 'headscale')
+        for workflow in ('ci', 'release'):
+            document = v.load(v.ROOT / '.github/workflows' / (workflow + '.yaml'))
+            job = document['jobs']['images' if workflow == 'ci' else 'publish']
+            build = next(step for step in job['steps'] if step.get('uses', '').startswith('docker/build-push-action@'))
+            build['with']['build-args'] = 'BUILD_VERSION=0.4.13'
+            with self.assertRaises(v.Invalid):
+                v.builder_workflow(document, workflow)
 
     def test_unit_script_installs_headscale_without_workflow_precondition(self):
         unit = (v.ROOT / 'packaging/unit.sh').read_text()
