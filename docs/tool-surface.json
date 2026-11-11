@@ -107,7 +107,7 @@
     "apps/headscale/vendor/headscale_mcp_server/__init__.py": "c7b36f045379f80d9e90f0f28d66764a6db835ee9586bf4ad5512603144b3f26",
     "apps/headscale/vendor/headscale_mcp_server/client.py": "75770652567e8e36c2a6b0951e7d2f92739b15051e5168257ac9e0ddae9e0701",
     "apps/headscale/vendor/headscale_mcp_server/errors.py": "e149dd269b7ef4ee281408a3858ca3c48401b3cbb30fe414320b63f8bf27e6bd",
-    "apps/headscale/vendor/headscale_mcp_server/http_policy.py": "8714654ae8131b47928e30de652e6bdb86e777eb7ae27531534ef7fb5faf4473",
+    "apps/headscale/vendor/headscale_mcp_server/http_policy.py": "e89800d937df8d6b3571f257dc4694c1bdd9db1b310133399848ded5d560d38f",
     "apps/headscale/vendor/headscale_mcp_server/log_redaction.py": "67d4aa0a1d8fdee7572d19e4da6b5fa1aa0867c08c01dfa156352e5c88f64a1b",
     "apps/headscale/vendor/headscale_mcp_server/models.py": "94b2664100fd5fc65f67aa6acdf4faf27612579f51a1d540a47c8338f38f156a",
     "apps/headscale/vendor/headscale_mcp_server/native.py": "c27ddc043429376688140488e88aa8ef6946a856ff49430391010abf8aeeb054",
