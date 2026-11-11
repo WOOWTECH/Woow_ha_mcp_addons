@@ -1,0 +1,62 @@
+{
+  "checks": {
+    "container": "pass",
+    "history-secrets": "pass",
+    "image-secrets": "pass",
+    "licenses": "pass",
+    "source-secrets": "pass",
+    "vulnerabilities": "pass"
+  },
+  "package_count": 193,
+  "policy_sha256": "5643d5ce538191af203b641944664efd26f30726252486e7828f517a466c7930",
+  "subject": {
+    "app": "headscale",
+    "archive_sha256": "0f76eb1cd6696b0b1daea4fdbb17b7fc1f06c348cf60e99b28d317d71d1c362a",
+    "diff_ids": [
+      "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+      "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+      "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+      "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+      "sha256:7aafbb5275841eaa7c4c1dcb8fecbd2b22d378008067a44b05c4d91a96b3dba3",
+      "sha256:8c72b60fe68d19f39c5ba52e355b82d4a91f0bb752e481ee8a44fa94ef7a8d87",
+      "sha256:705c82eea736ce1f2063e30b2e07068bb691c28ccd02dc1957359b051491ebd2",
+      "sha256:6e2c5b5e02eb3e1c0063ea600b6929b4af4a1943c2a9bfb73637af71b243162a",
+      "sha256:b1de9f9ca5ddd7b9859d557e2a3130e4049bf2302d5cbdbb57a852cadd53ac9c",
+      "sha256:470ad21ebcf98ca67a49ad6fdee3ee7601a3dde41e7642cb700ada005034f8fb",
+      "sha256:844d8834a6016fe60b0d57598f6a01d4423f6e30bd7a3651f8feb0f7ea559138",
+      "sha256:8745208a6d426953d439d224fe0b71719e68dcdd15770e76007a090c19d3336c",
+      "sha256:c778032cbd268de11605f898f316efb6e21ebd059aaf6d6f7eeee1701ec973a0",
+      "sha256:c4bee12e9046741a6478fc47be60863a76149097c0ea6516b164bad9830318b3",
+      "sha256:a93a0a22d45f327abaf690fd3a1908556848757b4c59f1276a8800e51e932689",
+      "sha256:3f6edf2441feb26c4f052575d858aeaaab0a7a394dbbf0c7a396da03485d9d08"
+    ],
+    "image_id": "sha256:b4a46556548818d0d6c1b49a9b38f181d21469c0126768f940fdd728f2edb3a7",
+    "source": "1b45bdfa5338170d2b397ef5940bb4c241f8b343"
+  },
+  "tools": {
+    "gitleaks": {
+      "checksums": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_checksums.txt",
+      "sha256": "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb",
+      "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz",
+      "version": "8.28.0"
+    },
+    "grype": {
+      "checksums": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_checksums.txt",
+      "sha256": "a5a1218dce63acdac152a6b3b5bb366e7267e36f4069848cf455543b3fa5700e",
+      "url": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_linux_amd64.tar.gz",
+      "version": "0.120.0"
+    },
+    "syft": {
+      "checksums": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_checksums.txt",
+      "sha256": "54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860",
+      "url": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_linux_amd64.tar.gz",
+      "version": "1.54.0"
+    }
+  },
+  "vulnerability_count": 238,
+  "vulnerability_database": {
+    "built": "2026-11-10T06:21:20Z",
+    "checksum": "f536af5882d8e03ad3e3ea5b32b3fc1965d55321ddab67ad7a5d7aeec3725190",
+    "schemaVersion": "6.1.10"
+  }
+}
