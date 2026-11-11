@@ -164,10 +164,10 @@ def test_a_non_string_version_is_refused_explicitly(version):
 NEAR_MISSES = ["2026.9.5", "2026.8.4", "2026.7.5", "2026.7.0", "2026.09.4", "2026.9.04", "02026.9.4", "2026.9.0b9",
                "2026.10.0b2", "2026.9.4.dev0", "v2026.9.4", "", "2026.9", "2026.9.4.0",
                "2026.10.1b1", "2026.10.0b4", "2026.10.0b7", "2026.10", "2026.10.0.0", "2026.10.00", "2026.10.01",
-               "2026.10.1.0", "2026.10.10", "2026.10.1 ", " 2026.10.1", "2026.11.0",
+               "2026.10.1.0", "2026.10.10", "2026.10.1 ", " 2026.10.1", "2026.11.2",
                # next after the 2026-10-27 review (2026.10.2-2026.10.4 added): later patches, betas, other formats
                "2026.10.5", "2026.10.4b0", "2026.10.4.0", "2026.10.40", "2026.10.04", "2026.10.4 ", " 2026.10.4",
-               "2026.11.0b0", "2026.11.0.dev0", "2026.12.0"]
+               "2026.11.0b0", "2026.11.0.dev0", "2026.11.1rc1", "2026.12.0"]
 
 
 @pytest.mark.parametrize("version", NEAR_MISSES)
@@ -207,7 +207,8 @@ def test_the_reviewed_versions_are_exactly_these():
     # A new Core release is added only after its contract files are reviewed; this list changes with that review.
     assert ha_role._HA_VERSIONS == {"2026.7.2", "2026.7.3", "2026.7.4", "2026.8.0", "2026.8.1", "2026.8.2", "2026.8.3",
                                     "2026.9.0", "2026.9.1", "2026.9.2", "2026.9.3", "2026.9.4", "2026.10.0",
-                                    "2026.10.1", "2026.10.2", "2026.10.3", "2026.10.4"}
+                                    "2026.10.1", "2026.10.2", "2026.10.3", "2026.10.4",
+                                    "2026.11.0", "2026.11.1"}
 
 
 @pytest.mark.parametrize("version", ["2026.10.2", "2026.10.3", "2026.10.4"])
@@ -222,7 +223,17 @@ async def test_core_2026_10_2_to_10_4_are_reviewed_and_still_check_the_role(monk
         assert await verify("human") is False
 
 
-UNREVIEWED = ["2026.10.5", "2026.11.0", "2026.11.0b0", "2026.11.0rc1", "2026.11.0.dev20261027", "2027.1.0"]
+@pytest.mark.parametrize("version", ["2026.11.0", "2026.11.1"])
+async def test_core_2026_11_releases_keep_fresh_admin_check(monkeypatch, version):
+    hello, ok = {"type": "auth_required", "ha_version": version}, {"type": "auth_ok", "ha_version": version}
+    async with owned_provider(monkeypatch, first=hello, auth=ok) as (verify, seen, _):
+        assert await verify("human") is True
+        assert seen["frames"] == [{"type": "auth", "access_token": DUMMY}, {"id": 1, "type": "config/auth/list"}]
+        seen["response"] = result([user(group_ids=[])])
+        assert await verify("human") is False
+
+
+UNREVIEWED = ["2026.10.5", "2026.11.2", "2026.11.0b0", "2026.11.0rc1", "2026.11.0.dev20261027", "2027.1.0"]
 
 
 @pytest.mark.parametrize("version", UNREVIEWED)
@@ -238,7 +249,7 @@ async def test_an_unreviewed_core_version_denies_with_its_reason_and_one_log_lin
     lines = [line for line in err.splitlines() if line]
     assert len(lines) == 1, err  # one add-on log line per version and process
     assert lines[0].startswith(f"management: Home Assistant Core {version} has not been reviewed")
-    assert "(reviewed: 2026.7.2 to 2026.10.4)" in lines[0] and "MCP endpoints do not use this check." in lines[0]
+    assert "(reviewed: 2026.7.2 to 2026.11.1)" in lines[0] and "MCP endpoints do not use this check." in lines[0]
     assert DUMMY not in err
 
 
@@ -303,9 +314,9 @@ async def test_on_an_unreviewed_core_mcp_serves_and_only_the_panel_refuses_with_
             assert bootstrap.status_code == 200  # a reviewed Core: the panel works
             headers = {**IDENTITY, "X-CSRF-Token": bootstrap.json()["csrf"]}
             # Core is updated to a release this add-on has not reviewed (the frames are read per connection).
-            hello["ha_version"] = ok["ha_version"] = "2026.11.0"
+            hello["ha_version"] = ok["ha_version"] = "2026.11.2"
             token, before = store.load().token, store.path.read_bytes()
-            reason = {"error": "request denied", "detail": {"code": "core_version_unreviewed", "ha_version": "2026.11.0"}}
+            reason = {"error": "request denied", "detail": {"code": "core_version_unreviewed", "ha_version": "2026.11.2"}}
             policy = {"writes_enabled": False, "disabled": ["hermes_inspect"], "enabled_write_tools": []}
             for method, path, payload in [("GET", "/api/bootstrap", None), ("PUT", "/api/policy", policy),
                                           ("POST", "/api/token/reveal", None), ("POST", "/api/token/rotate", None),
@@ -316,7 +327,7 @@ async def test_on_an_unreviewed_core_mcp_serves_and_only_the_panel_refuses_with_
             assert store.path.read_bytes() == before  # no setting changed
             page = await panel.get("/", headers=IDENTITY)
             assert page.status_code == 403 and page.headers["content-type"].startswith("text/html")
-            assert "<h1>這個 HA Core 版本尚未審核：2026.11.0</h1>" in page.text and "照常服務" in page.text
+            assert "<h1>這個 HA Core 版本尚未審核：2026.11.2</h1>" in page.text and "照常服務" in page.text
             assert not any(tag in page.text for tag in ("<script", "<style", "<link", "<form", " style="))
             assert "default-src 'self'" in page.headers["content-security-policy"]
             asset = await panel.get("/assets/app.js", headers=IDENTITY)
@@ -329,7 +340,7 @@ async def test_on_an_unreviewed_core_mcp_serves_and_only_the_panel_refuses_with_
             hello["ha_version"] = ok["ha_version"] = "2026.10.4"  # back on a reviewed Core: the panel works again
             assert (await panel.get("/api/bootstrap", headers=IDENTITY)).status_code == 200
     err = capsys.readouterr().err
-    assert err.count("has not been reviewed") == 1 and "Core 2026.11.0 " in err
+    assert err.count("has not been reviewed") == 1 and "Core 2026.11.2 " in err
     assert DUMMY not in err and token not in err
 
 
@@ -342,7 +353,7 @@ async def test_a_plain_denial_keeps_its_fixed_answer_and_page(tmp_path, monkeypa
 
 
 @pytest.mark.parametrize("version,heading", [
-    ("2026.11.0", "<h1>這個 HA Core 版本尚未審核：2026.11.0</h1>"),
+    ("2026.11.2", "<h1>這個 HA Core 版本尚未審核：2026.11.2</h1>"),
     (None, "<h1>這個 HA Core 版本尚未審核（Supervisor 回報的版本字串無法辨識）</h1>"),
     ('<img src=x onerror="1">', "<h1>這個 HA Core 版本尚未審核：&lt;img src=x onerror=&quot;1&quot;&gt;</h1>"),
 ])

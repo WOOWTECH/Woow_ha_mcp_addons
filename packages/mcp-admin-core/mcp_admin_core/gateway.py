@@ -898,7 +898,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             local_sessions.popitem(last=False)
         requested = message["params"]["protocolVersion"]
         result = {"protocolVersion": requested if requested in PROTOCOL_VERSIONS else max(PROTOCOL_VERSIONS),
-                  "capabilities": {"tools": {}}, "serverInfo": {"name": server_name, "version": VERSION},
+                  "capabilities": {"tools": {}}, "serverInfo": {"name": server_name, "version": management.product_version or VERSION},
                   **({"instructions": instructions} if instructions else {})}
         return json_reply({"jsonrpc": "2.0", "id": message["id"], "result": result}, 200,
                           {"Cache-Control": "no-store", "mcp-session-id": session})
@@ -1247,7 +1247,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         # The caller may pass reviewed fixed text.
                         value["result"] = {"protocolVersion": version,
                                            "capabilities": {"tools": {}},
-                                           "serverInfo": {"name": server_name, "version": VERSION},
+                                           "serverInfo": {"name": server_name, "version": management.product_version or VERSION},
                                            **({"instructions": instructions} if instructions else {})}
                 except ValueError:
                     raise BadRequest(502) from None

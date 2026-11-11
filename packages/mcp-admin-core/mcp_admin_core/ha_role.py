@@ -29,10 +29,14 @@ _URL = "ws://supervisor/core/websocket"
 # tokens before deleting the user. config/auth/list, User.is_admin, require_admin and the result envelope are untouched.
 # Supervisor 2026.10.2-2026.10.4 ship api/proxy.py blob cab849dc (2026.10.1: 002174e5): the two proxy loops become
 # background tasks; the auth_required/auth_ok frames and the message filter are unchanged.
+# Core 2026.11.0 and 2026.11.1 were reviewed 2026-11-11 against the 25 contract/adjacent files. The 11.1 files
+# are byte-identical to 11.0. config/auth/list, User.is_admin, require_admin, result_message, and the system-admin
+# group are unchanged. WebSocket token revocation now closes a revoked connection; this verifier queries on a fresh
+# connection and still denies any failed response. Supervisor 2026.10.5 api/proxy.py is byte-identical to 2026.10.4.
 # Any other advertised version, including pre-releases, denies until reviewed and added.
 _HA_VERSIONS = frozenset({"2026.7.2", "2026.7.3", "2026.7.4", "2026.8.0", "2026.8.1", "2026.8.2", "2026.8.3",
                           "2026.9.0", "2026.9.1", "2026.9.2", "2026.9.3", "2026.9.4", "2026.10.0",
-                          "2026.10.1", "2026.10.2", "2026.10.3", "2026.10.4"})
+                          "2026.10.1", "2026.10.2", "2026.10.3", "2026.10.4", "2026.11.0", "2026.11.1"})
 _QUERY_SECONDS = 2.25  # plus <= .2s cleanup, below the gateway's 3s guard
 _MAX_RESPONSE = 1024 * 1024
 _MAX_CONCURRENT = 8

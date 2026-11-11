@@ -17,13 +17,21 @@ import yaml
 from builder_contract import RUNNER
 
 ROOT = Path(__file__).resolve().parents[1]
-PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud', 'headscale')  # CI/release build allowlist; first Headscale image is 0.4.13
+PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud', 'headscale')
 # Owner decision 2026-10-06: Odoo Manage is archived. It left the store and no image is built or released again
 # (0.1.4 was the last); its source stays in apps/odoo-manage and the shared core, and is still tested.
 RETIRED = ('odoo-manage',)
 URL = 'https://github.com/WOOWTECH/Woow_ha_mcp_addons'
 VERSION = '0.4.13'
+VERSION_OVERRIDES = {'headscale': '0.4.14'}
+CI_VERSION = "${{ matrix.app == 'headscale' && '0.4.14' || '0.4.13' }}"
+RELEASE_VERSION = "${{ inputs.app == 'headscale' && '0.4.14' || '0.4.13' }}"
 TITLES = dict(zip(PRODUCTS, ('Odoo', 'n8n', 'Hermes', 'OpenDesign', 'EMQX', 'LiteLLM', 'Nextcloud', 'Headscale')))
+
+
+def version_for(product):
+    require(product in PRODUCTS, 'unsupported product version')
+    return VERSION_OVERRIDES.get(product, VERSION)
 
 
 class Invalid(ValueError):
@@ -91,7 +99,7 @@ def exact(value, expected, context):
 def manifest(value, product):
     require(product in PRODUCTS, 'unsupported product')
     require(isinstance(value.get('ports_description'), dict), 'ports_description mapping required')
-    expected = dict(name=f'Woow {TITLES[product]} MCP Server', version=VERSION,
+    expected = dict(name=f'Woow {TITLES[product]} MCP Server', version=version_for(product),
         slug='woow_mcp_' + product.replace('-', '_'), description=value.get('description'),
         url=URL, arch=['amd64'], startup='application', boot='auto', init=True,
         stage='stable', image=f'ghcr.io/woowtech/{{arch}}-mcp-{product}',
@@ -159,6 +167,10 @@ def runtime_version(text):
     require(len(bindings) == 1 and isinstance(bindings[0], ast.Assign) and len(bindings[0].targets) == 1
             and isinstance(bindings[0].targets[0], ast.Name) and isinstance(bindings[0].value, ast.Constant)
             and bindings[0].value.value == VERSION, 'initialize serverInfo version')
+    overrides = [node for node in ast.walk(ast.parse(text)) if isinstance(node, ast.Assign)
+                 and any(isinstance(target, ast.Name) and target.id == 'PRODUCT_VERSIONS' for target in node.targets)]
+    require(len(overrides) == 1 and ast.literal_eval(overrides[0].value) == VERSION_OVERRIDES,
+            'fixed per-product runtime version')
 
 
 def image_labels(dockerfile, value):
@@ -222,12 +234,13 @@ def builder_workflow(value, workflow):
     uses = ['actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
             'docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8']
     if workflow == 'release':
+        release_version = RELEASE_VERSION
         runs = ['python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt',
                 'python packaging/validate.py && python packaging/check_release.py "$APP"', *runs,
                 'python packaging/registry_gate.py unused "$APP"',
                 '\n'.join(['set -eu',
                     'python packaging/supply_chain.py verify "$APP" "$RUNNER_TEMP/candidate"',
-                    f'IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:{VERSION}"',
+                    f'IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:{release_version}"',
                     'TESTED_ID="$(python -c \'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])\' "$RUNNER_TEMP/candidate/subject.json")"',
                     'docker tag "$TESTED_ID" "$IMAGE"',
                     'test "$(docker image inspect "$IMAGE" --format \'{{.Id}}\')" = "$TESTED_ID"',
@@ -258,10 +271,11 @@ def builder_workflow(value, workflow):
         exact(steps[login]['with'], {'registry': 'ghcr.io', 'username': '${{ github.actor }}',
               'password': '${{ secrets.GITHUB_TOKEN }}'}, 'late GHCR login only')
     app = '${{ matrix.app }}' if workflow == 'ci' else '${{ inputs.app }}'
+    build_version = CI_VERSION if workflow == 'ci' else RELEASE_VERSION
     exact(steps[build]['with'], {'builder': 'default', 'provenance': False, 'sbom': False,
           'context': '.', 'file': 'apps/' + app + '/Dockerfile', 'platforms': 'linux/amd64',
-          'push': False, 'load': True, 'tags': 'local/mcp-' + app + ':' + VERSION,
-          'build-args': 'BUILD_VERSION=' + VERSION,
+          'push': False, 'load': True, 'tags': 'local/mcp-' + app + ':' + build_version,
+          'build-args': 'BUILD_VERSION=' + build_version,
           'labels': 'org.opencontainers.image.revision=${{ github.sha }}'}, 'fixed local candidate build')
     admission = value['jobs']['builder-admission' if workflow == 'ci' else 'gate']
     guard(admission, 'admit')
@@ -334,6 +348,7 @@ def validate(root=ROOT):
     inputs = load(root / 'packaging/inputs.json')
     exact(inputs['products'], list(PRODUCTS), 'build allowlist')
     exact(inputs['version'], VERSION, 'build version')
+    exact(inputs['version_overrides'], VERSION_OVERRIDES, 'per-product version overrides')
     runtime_version((root / 'packages/mcp-admin-core/mcp_admin_core/__init__.py').read_text())
     exact(inputs['supervisor'], {'version': '2026.09.3', 'commit': '64ea3be4322537fd5dcfbf620c4dc25490c1f56d'}, 'Supervisor schema pin')
     require(set(inputs['bases']) == {'python', 'node', 'uv'}, 'base allowlist')
@@ -407,7 +422,9 @@ def validate(root=ROOT):
                 if step.get('uses', '').startswith('actions/checkout@'):
                     exact(step['with']['persist-credentials'], False, 'checkout credential persistence')
                 if step.get('uses', '').startswith('docker/build-push-action@'):
-                    for key, wanted in {'context': '.', 'platforms': 'linux/amd64', 'push': False, 'load': True, 'build-args': 'BUILD_VERSION=' + VERSION}.items():
+                    for key, wanted in {'context': '.', 'platforms': 'linux/amd64', 'push': False,
+                                        'load': True, 'build-args': 'BUILD_VERSION=' +
+                                        (CI_VERSION if workflow == 'ci' else RELEASE_VERSION)}.items():
                         exact(step['with'][key], wanted, 'build ' + key)
         exact(value['permissions'], {'contents': 'read'}, workflow + ' default permissions')
         require('pull_request_target' not in value['on'], 'unsafe event')

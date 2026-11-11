@@ -15,6 +15,8 @@ import sys
 import tarfile
 import tempfile
 
+from validate import version_for
+
 ROOT = Path(__file__).resolve().parents[1]
 CHECKS = ('source-secrets', 'history-secrets', 'image-secrets', 'vulnerabilities', 'licenses', 'container')
 EVIDENCE = ('sbom.syft.json', 'sbom.spdx.json', 'scan-summary.json')
@@ -222,7 +224,7 @@ def verify_remote(raw_manifest, digest, pulled, subject):
 
 def fixed_image(app):
     require(app in PRODUCTS)
-    return 'local/mcp-%s:%s' % (app, json.loads((ROOT / 'packaging/inputs.json').read_text())['version'])
+    return 'local/mcp-%s:%s' % (app, version_for(app))
 
 
 def inspect_image(app):

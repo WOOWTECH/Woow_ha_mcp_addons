@@ -24,7 +24,8 @@ import sys
 import httpx
 import pytest
 
-from mcp_admin_core import VERSION, gateway
+from mcp_admin_core import VERSION, gateway, version_for_product
+from mcp_admin_core.capabilities import ManagementOptions
 from mcp_admin_core.gateway import PROTOCOL_VERSIONS, make_apps
 from mcp_admin_core.health import HealthMonitor, probe_reason, protocol_reply
 from mcp_admin_core.products import ProductStore, TOOLS
@@ -81,16 +82,18 @@ class Child:
 
 
 class Boundary:
-    def __init__(self, store, product, available, child=None, path=None):
+    def __init__(self, store, product, available, child=None, path=None, management=None):
         self.store, self.product, self.available = store, product, dict(available)
         self.child = child or Child()
         self.child.product = product
         self.path = path
+        self.management = management
 
     async def __aenter__(self):
         self.to_child = httpx.AsyncClient(transport=httpx.MockTransport(self.child))
         _, app = make_apps(self.store, tools_of(self.product), self.to_child, listing=listing(self.product),
-                           availability=lambda: dict(self.available), server_name='woow-mcp-' + self.product)
+                           availability=lambda: dict(self.available), server_name='woow-mcp-' + self.product,
+                           management=self.management)
         self.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://mcp')
         token = self.store.load().token
         self.url = f'/private_{token}/mcp' if self.path == 'secret' else '/mcp'
@@ -150,6 +153,21 @@ async def test_unconfigured_client_connects_lists_everything_and_gets_backend_no
             else:
                 assert boundary.headers['Mcp-Session-Id'].startswith('woow-local-')
                 assert boundary.child.seen == []  # no child exists: none is asked
+
+
+@pytest.mark.parametrize('configured', [False, True])
+async def test_headscale_release_version_is_reported_by_both_initialize_paths(tmp_path, configured):
+    assert version_for_product('headscale') == '0.4.14'
+    assert version_for_product('emqx') == VERSION == '0.4.13'
+    url = 'https://headscale.example.test' if configured else None
+    with closing(store_for(tmp_path, 'headscale', url)) as store:
+        management = ManagementOptions(kind='ha-addon', authority='ha-admin',
+                                       product_version=version_for_product('headscale'))
+        async with Boundary(store, 'headscale', UP if configured else NO_CHILD,
+                            management=management) as boundary:
+            response, _ = await boundary.connect()
+            assert response.json()['result']['serverInfo'] == {
+                'name': 'woow-mcp-headscale', 'version': '0.4.14'}
 
 
 async def test_the_own_answers_follow_the_policy_and_the_session_rules(tmp_path):
@@ -394,7 +412,7 @@ async def test_unconfigured_connect_runtime(tmp_path, product):
         async with httpx.AsyncClient(trust_env=False, timeout=20, event_hooks={'request': [runner.guard]}) as client:
             headers = {'Authorization': 'Bearer ' + token, **ACCEPT}
             result = await rpc(client, url, headers, INIT)
-            assert result['serverInfo'] == {'name': 'woow-mcp-' + product, 'version': VERSION}
+            assert result['serverInfo'] == {'name': 'woow-mcp-' + product, 'version': version_for_product(product)}
             await rpc(client, url, headers, INITIALIZED)
             tools = (await rpc(client, url, headers, LIST))['tools']
             assert {t['name'] for t in tools} == set(tools_of(product)) and len(tools) == COUNTS[product]

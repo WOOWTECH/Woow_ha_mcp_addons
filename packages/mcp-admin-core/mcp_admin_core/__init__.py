@@ -1,5 +1,10 @@
 """New HA boundary adaptation. Publication/license clearance remains pending."""
 
-# The add-on version in initialize serverInfo (0.1.8, 0.1.6 R1 F6); packaging/validate.py keeps it equal to the
-# release VERSION, like config.yaml and the Dockerfile BUILD_VERSION.
+# The default release version; packaging/validate.py binds the fixed Headscale
+# override to its manifest, Docker label and build/publish tag.
 VERSION = '0.4.13'
+PRODUCT_VERSIONS = {'headscale': '0.4.14'}
+
+
+def version_for_product(product: str) -> str:
+    return PRODUCT_VERSIONS.get(product, VERSION)

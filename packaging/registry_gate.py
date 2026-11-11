@@ -16,7 +16,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from validate import PRODUCTS, VERSION
+from validate import PRODUCTS, version_for
 from supply_chain import verify_current, verify_bundle, verify_remote, require, write_json
 
 
@@ -47,7 +47,7 @@ def main(mode, app, evidence=None):
     with request('https://ghcr.io/token?' + query, headers) as response:
         bearer = json.load(response)['token']
     try:
-        with request(f'https://ghcr.io/v2/{repo}/manifests/{VERSION}', {
+        with request(f'https://ghcr.io/v2/{repo}/manifests/{version_for(app)}', {
             'Authorization': 'Bearer ' + bearer,
             'Accept': 'application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json',
         }) as response:
