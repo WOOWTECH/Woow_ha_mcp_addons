@@ -6,6 +6,7 @@ from pathlib import Path
 import socket
 import sys
 
+import httpcore
 import httpx
 import pytest
 
@@ -314,6 +315,27 @@ async def test_mixed_dns_answers_deny_before_tcp(monkeypatch):
     with pytest.raises(HeadscaleError, match="HEADSCALE_DESTINATION_DENIED"):
         await PinnedNetwork(destination).connect_tcp(destination.host, destination.port)
     assert attempted == []
+
+
+@pytest.mark.asyncio
+async def test_dns_falls_back_to_next_validated_address_after_stale_first_answer(monkeypatch):
+    addresses = ["10.43.1.2", "10.43.1.3"]
+    monkeypatch.setattr(socket, "getaddrinfo", lambda host, port, **kw: [
+        (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (address, port))
+        for address in addresses])
+    attempts = []
+
+    async def connect(self, host, port, **kw):
+        attempts.append((host, kw["timeout"]))
+        if host == addresses[0]:
+            raise httpcore.ConnectTimeout("stale address")
+        return "stream"
+
+    monkeypatch.setattr("httpcore._backends.anyio.AnyIOBackend.connect_tcp", connect)
+    destination = Destination("http://headscale.sandbox.svc:8080")
+    assert await PinnedNetwork(destination).connect_tcp(destination.host, destination.port) == "stream"
+    assert [host for host, _ in attempts] == addresses
+    assert attempts[0][1] <= 2.6
 
 
 def test_launch_contract_and_loopback_only(monkeypatch, state_path):
