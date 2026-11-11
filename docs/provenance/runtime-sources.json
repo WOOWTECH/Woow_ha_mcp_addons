@@ -437,7 +437,7 @@
     "path": "headscale_mcp_server/http_policy.py",
     "upstream_path": "apps/headscale/headscale_mcp_server/http_policy.py",
     "upstream_sha256": "dfedcd041bbb514ce4c05242d325d6a84d10361e50ba26376e080a9e2d6d2280",
-    "local_sha256": "8714654ae8131b47928e30de652e6bdb86e777eb7ae27531534ef7fb5faf4473",
+    "local_sha256": "e89800d937df8d6b3571f257dc4694c1bdd9db1b310133399848ded5d560d38f",
     "modification": "Use the HA backend address allow rules at the pinned TCP seam; reject alternate origin, path, transport extension, and mismatched DNS family. Trim one extra trailing blank line; no behavior change."
   },
   {
