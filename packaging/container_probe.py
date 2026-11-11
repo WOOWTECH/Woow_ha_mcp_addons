@@ -328,7 +328,12 @@ async def run():
             headers['MCP-Protocol-Version'] = result['protocolVersion']
             await rpc(client, headers, {'jsonrpc': '2.0', 'method': 'notifications/initialized'})
             result = await rpc(client, headers, {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'})
-            assert {t['name'] for t in result['tools']} == {n for n, t in public_tools.items() if not t.write}
+            # Mixed tools with only write operations (for example Headscale
+            # registration and auth decisions) disappear when all grants are
+            # revoked. Mixed tools with a read operation remain listable.
+            expected = {n for n, t in public_tools.items()
+                        if not t.write and (t.read_operations or not t.write_operations)}
+            assert {t['name'] for t in result['tools']} == expected
             message = {'jsonrpc': '2.0', 'id': 3, 'method': 'tools/call', 'params': {'name': name, 'arguments': args}}
             result = await rpc(client, headers, message)
             assert not result.get('isError') and CALLS
