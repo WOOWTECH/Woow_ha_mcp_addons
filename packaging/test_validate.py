@@ -238,7 +238,7 @@ class PackagingTests(unittest.TestCase):
             v.runtime_version("VERSION = '%s'\nPRODUCT_VERSIONS = {}\n" % v.VERSION)
 
     def test_headscale_version_is_independent_and_fixed_at_every_boundary(self):
-        self.assertEqual(v.version_for('headscale'), '0.4.15')
+        self.assertEqual(v.version_for('headscale'), '0.4.16')
         self.assertEqual({v.version_for(product) for product in v.PRODUCTS if product != 'headscale'}, {'0.4.13'})
         with self.assertRaises(v.Invalid):
             v.version_for('unknown')
