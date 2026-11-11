@@ -1,3 +1,9 @@
+## Headscale 0.4.17 — DNS address fallback release candidate
+
+- Include merged PR #83: after validating every resolved Headscale address, try each numeric address within the existing connection deadline. A failed first address no longer masks a reachable later address; destination validation and redirect denial remain in force.
+- Include the Headscale secret URL Origin policy from PR #82. Version 0.4.16 is already a Stable Release and in the Store; its immutable image predates the DNS fix. Version 0.4.17 must be built and accepted from the merged source before this fix can enter the Store.
+- Other products keep their published 0.4.13 versions. GHCR publication, Stable Release, Store sync and QA Supervisor upgrade remain separate gates.
+
 ## Headscale 0.4.14 — HA Core 2026.11 compatibility candidate
 
 - Source-reviewed Core 2026.11.0 and 2026.11.1 across 25 role-contract/adjacent files and Supervisor 2026.10.5 proxy. The HA admin verifier adds only these exact releases; later patches and prereleases remain denied.
