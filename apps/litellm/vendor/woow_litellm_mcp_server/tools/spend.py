@@ -22,7 +22,8 @@ from fastmcp import Context
 from ..deps import litellm_client
 from ..errors import ToolError
 from ..gating import ToolGate
-from ._common import prune_none, read_only
+from ..registry import OP_CREATE
+from ._common import prune_none, read_only, writing
 
 # group_by value -> the row fields that may carry the bucket identity, most
 # specific first. LiteLLM's log rows are not schema-stable across versions, so
@@ -310,7 +311,7 @@ def register(mcp: Any, gate: ToolGate) -> None:
 
         @mcp.tool(
             name="litellm_spend_calculate",
-            annotations=read_only("Spend calculate"),
+            annotations=writing("Spend calculate"),
         )
         async def litellm_spend_calculate(
             ctx: Context,
@@ -320,6 +321,9 @@ def register(mcp: Any, gate: ToolGate) -> None:
         ) -> dict:
             """Estimate cost without billing.
 
+            Tokenization can fetch remote images or tokenizer resources.
+            Requires active-operation permission; this does not run inference.
+
             Provide either ``model`` + ``messages`` (to price a hypothetical
             request) or a ``completion_response`` (to price a past one).
 
@@ -328,6 +332,7 @@ def register(mcp: Any, gate: ToolGate) -> None:
             which is keyed by provider model, and an alias it cannot resolve is
             priced at 0 rather than rejected.
             """
+            gate.require_operation("litellm_spend_calculate", OP_CREATE)
             body = prune_none(
                 {
                     "model": model,

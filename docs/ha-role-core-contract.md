@@ -1,0 +1,143 @@
+# HA role check: reviewed Core releases
+
+`packages/mcp-admin-core/mcp_admin_core/ha_role.py` decides whether the user behind an admin request is an HA owner or
+administrator. This page records why it accepts the Core releases listed in `_HA_VERSIONS` and how a release is added.
+
+## Who produces what
+
+- **Auth frames.** The add-on connects to `ws://supervisor/core/websocket`. Supervisor's WebSocket proxy
+  (`supervisor/api/proxy.py`, reviewed at Supervisor 2026.09.3, git blob `fc11251d`; Supervisor 2026.10.0 ships the same
+  blob; Supervisor 2026.10.1 ships blob `002174e5`, reviewed 2026-10-08: the `auth_required`/`auth_ok` frames are unchanged and
+  its new message filtering does not touch the add-on's `config/auth/list` request; Supervisor 2026.10.2, 2026.10.3 and
+  2026.10.4 ship blob `cab849dc`, reviewed 2026-10-27: its only hunk starts the two proxy loops with
+  `sys_create_background_task` instead of `sys_create_task`, the frames and the filter are unchanged) terminates the add-on handshake:
+  it sends `{"type": "auth_required", "ha_version": <version>}` and `{"type": "auth_ok", "ha_version": <version>}`,
+  where the version is the Core version Supervisor has recorded (`sys_homeassistant.version`), and checks the add-on's
+  `SUPERVISOR_TOKEN` itself. The verifier requires exactly these keys, a listed version, and the same version in both
+  frames (the agreement only fails during an update race). Supervisor updates are frozen during tests and pinned for
+  the build (Supervisor 2026.09.3); a different frame shape fails closed.
+- **The consumed Core contract** (Supervisor-to-Core leg): `config/auth/list` behind `require_admin`, its per-user fields
+  `id`, `is_owner`, `is_active`, `system_generated`, `group_ids`, `local_only`, the result envelope
+  `{id, type: "result", success, result}`, and the admin group id `system-admin`. The verifier allows only an active,
+  non-system user who is the owner or in `system-admin`.
+
+## Review of 2026.7.2–2026.9.4, 2026.10.0 (0.1.6), 2026.10.1 (0.1.9), 2026.10.2–2026.10.4 (0.4.2), and 2026.11.0–2026.11.1 (Headscale 0.4.14)
+
+Git blob SHAs (first 8 characters) of the Core files that produce or can change that contract, from the GitHub tree of
+each tag; `=` means unchanged from the previous tag. The `10.1` column is the 2026.10.1 tag (commit `abe1fdd7`). The `10.0` column is the 2026.10.0 tag (commit `6a811d33`), whose files
+are byte-identical to 2026.10.0b4, where the line-by-line review was done. The `10.2`, `10.3` and `10.4` columns are the
+2026.10.2 (commit `8d7fd8b6`), 2026.10.3 (commit `1f214b84`) and 2026.10.4 (commit `357cae5c`) tags.
+
+| file (`homeassistant/`) | 7.2 | 7.3 | 7.4 | 8.0 | 8.1 | 8.2 | 8.3 | 9.0 | 9.1 | 9.2 | 9.3 | 9.4 | 10.0 | 10.1 | 10.2 | 10.3 | 10.4 | 11.0 | 11.1 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `components/websocket_api/auth.py` | f4660664 | = | = | = | = | = | = | = | = | = | = | = | a4b73688 | = | = | = | = | 244484bf | = |
+| `components/websocket_api/messages.py` | 13f856e6 | = | = | a6d3b54f | = | = | = | = | = | = | = | = | f1f543e2 | = | = | = | = | = | = |
+| `components/websocket_api/decorators.py` | 37ac60ba | = | = | = | = | = | = | = | = | = | = | = | d5df7f88 | = | = | = | = | = | = |
+| `components/websocket_api/connection.py` | 19d4782a | = | = | = | = | = | = | d4f824d2 | = | = | = | = | cd6e0426 | = | = | = | = | e031b7c4 | = |
+| `components/websocket_api/http.py` | 9cfca068 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | da44d879 | = |
+| `components/websocket_api/commands.py` | 5bc65849 | = | = | fe87a4e9 | = | = | = | = | = | = | = | = | d769c753 | = | = | = | = | 03297e08 | = |
+| `components/websocket_api/__init__.py` | 3a526e32 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | a00ab2af | = |
+| `components/websocket_api/const.py` | f1eb480d | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `components/config/auth.py` | 2479fe65 | = | = | = | = | = | = | = | = | = | = | = | 75b0c88b | = | = | = | = | = | = |
+| `components/config/__init__.py` | ef7a1147 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | 784ba83b | = |
+| `auth/__init__.py` | 34a8bffa | = | = | 88a8b1d5 | = | = | = | = | = | = | = | = | a5850978 | = | 0314c4b7 | = | = | 851a64b7 | = |
+| `auth/auth_store.py` | 13ecdfc6 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `auth/const.py` | 05b9e6d7 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `auth/models.py` | 5646d23d | = | = | a41b03d1 | = | = | = | = | = | = | = | = | 7342e9d4 | = | = | = | = | = | = |
+| `auth/permissions/__init__.py` | b5254236 | = | = | = | = | = | = | = | = | = | = | = | aeab7ff8 | = | = | = | = | = | = |
+| `components/hassio/__init__.py` | b38caf53 | = | = | 3a3cd368 | = | 373c0b0c | = | 59c14de4 | = | = | = | = | 67abae35 | = | = | = | = | a35b70ef | = |
+| `components/http/auth.py` | e2c68719 | = | = | = | = | = | = | = | = | = | = | = | 702eb7c8 | = | = | = | = | 6188a2be | = |
+| `components/http/auth_util.py` | 4eed1443 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `helpers/json.py` | 1789bda1 | = | = | = | = | = | = | 3ea52348 | = | = | = | = | f6a778dd | = | = | = | = | c0b24680 | = |
+| `util/json.py` | 1f8e6a0e | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `components/onboarding/views.py` | a4cd0198 | = | = | = | = | = | = | 2801f426 | = | = | d3144de5 | = | 2835631c | = | = | = | = | 21eb4a5f | = |
+
+2026.11 review (2026-11-11): the exact GitHub tag commits are Core `74cf5a49c63ed8d4d87717844bf14f79c28c9cea` (11.0) and `d8a0dc698c8946b44e455d904000db563cfbf1ba` (11.1), compared to reviewed 10.4 `357cae5c598dfcd7a0ea7dc5b1facccd4ec6037b`. Every one of the 25 consumed and adjacent files is byte-identical between 11.0 and 11.1. Fourteen changed between 10.4 and 11.0; all their hunks were read. Full blob SHAs and tag commits are in [the comparison record](provenance/headscale-ha-core-2026-11-blobs.json).
+
+- `config/auth.py`, `websocket_api/decorators.py` and `messages.py`, `auth/models.py`, `auth/permissions/__init__.py`, and `auth/auth_store.py` did not change. Thus `config/auth/list`, its `require_admin` decorator, `_user_info` fields, `User.is_admin`, `system-admin`, and the `{id,type,success,result}` envelope are unchanged.
+- `websocket_api/auth.py` and `connection.py` changed token-revocation handling: a revoked connection now stops processing/sending, except for a short deferred reply by the revoking command. The verifier opens a fresh query-only connection, checks the same reply envelope, and denies on any unsuccessful or missing response. `http.py` added an unauthenticated message-size cap and debug-log redaction. `commands.py` added unrelated system-state and target commands. `websocket_api/__init__.py` and `config/__init__.py` only changed exports.
+- `auth/__init__.py` now initializes providers together, serializes new-user creation, and revokes sessions when credentials are removed; `async_get_users` and the role fields remain unchanged. `hassio/__init__.py` added log reader, auto-update, network event handling and unload cleanup, but kept the Supervisor system-user creation and its admin group. `hassio/const.py` added constants. `http/auth.py` moved a key import, `http/__init__.py` added an SSL-profile repair, `http/const.py` added SSL and request-size constants, and `helpers/json.py` only renamed its datetime import. `onboarding/views.py` tightened unauthenticated request size and redirect validation; owner group creation is unchanged.
+- Supervisor 2026.10.5 (tag `fdba115f215c61f7a02c7c0567263785cfcf0034`) has the same `supervisor/api/proxy.py` blob `cab849dc` as reviewed 2026.10.4 (tag `d92eb0e373a304c1e6a66dcef66585854a2002d1`). The `auth_required`/`auth_ok` frames and proxy filter therefore retain the reviewed shape. The isolated HAOS test reports Supervisor 2026.10.5 and Core 2026.11.1; role and Ingress acceptance is required before publishing the updated image.
+
+The 0.4.13 images continue to deny these Core versions. Only an image rebuilt and accepted for a new product release includes this reviewed allowlist. Headscale 0.4.14 is the initial target; other products retain their published versions and their documented compatibility until separately rebuilt.
+
+Changes inside 2026.7.2–2026.9.4 and why they do not touch the consumed contract (source diffs reviewed):
+- `websocket_api/messages.py` @8.0: event and state-diff message caching only; the result message is unchanged.
+- `websocket_api/commands.py` @8.0: a new `slugify` command.
+- `auth/__init__.py` @8.0: login-flow `credential_only` removed; an invalid JWT key now returns None.
+- `auth/models.py` @8.0: `credential_only` removed from the auth-flow context; the `User` model is unchanged.
+- `websocket_api/connection.py` @9.0: an import change.
+- `helpers/json.py` @9.0: date and time serialization.
+- `hassio/__init__.py` @8.0, @8.2, @9.0: the Supervisor user id moves into the config entry; the user is still created by
+  `async_create_system_user` (system-generated, `system-admin`); from 9.0 Core removes that user's refresh tokens and
+  Supervisor reaches Core over its Unix socket, authenticated as the same system user by `http/auth.py` (unchanged).
+- `onboarding/views.py` @9.0, @9.3: the owner is still created in `system-admin`.
+
+Changes in 2026.10.1 (0.1.9): none. All 21 files have the same git blob as in 2026.10.0 (compared on the GitHub trees of
+both tags on 2026-10-11), and so do the adjacent `http/const.py`, `http/__init__.py`, `hassio/const.py` and `hassio/auth.py`;
+the consumed contract is unchanged and there is no hunk to read. The only auth-related change between the tags is in
+`components/auth/indieauth.py` and `login_flow.py` (an OAuth loopback redirect may change port when PKCE is used), which is
+not on the `config/auth/list` path the add-on uses.
+
+Changes in 2026.10.2, 2026.10.3 and 2026.10.4 (next release; blobs read from the GitHub contents API of each tag on
+2026-10-27 and recomputed as git blobs from all 25 downloaded files of every tag, 0 mismatches): 20 of the 21 files and the adjacent
+`http/const.py`, `http/__init__.py`, `hassio/const.py` and `hassio/auth.py` have the same blob as in 2026.10.1. Only
+`auth/__init__.py` changed (`a5850978` → `0314c4b7`, the same blob in all three tags, so 2026.10.3 and 2026.10.4 change
+nothing more). Its one hunk (four lines, read in full) is in `AuthManager.async_remove_user`: before the user is deleted
+from the store, each of the user's refresh tokens is now removed with `async_remove_refresh_token`, whose revoke
+callbacks close the connections that use them. `async_get_users` (what `config/auth/list` returns), `User.is_admin`,
+`require_admin`, `_user_info` and the result envelope are untouched, so the consumed contract is unchanged; the add-on
+never removes users, and a removed user was already absent from the list the verifier reads per request. Supervisor
+2026.10.2–2026.10.4 (`api/proxy.py` blob `cab849dc`) are reviewed above. Raw evidence (blob listings, both versions of
+the file, the diffs) is kept outside the repository with the 2026-10-27 review.
+
+Changes in 2026.10.0 (13 files, every hunk read at 2026.10.0b4; the 2026.10.0 tag is identical to b4 for these 21 files
+and for the adjacent `http/const.py`, `http/__init__.py`, `hassio/const.py` and `hassio/auth.py`):
+- Most hunks move schemas from voluptuous to probatio (`config/auth.py`, `websocket_api/{decorators,messages,connection,
+  auth,commands}.py`, `auth/permissions/__init__.py`, `onboarding/views.py`). `config/auth/list` has a one-key schema,
+  so it still dispatches through `connection.async_handle`'s hand-written checks with `_ws_schema = False`; neither the
+  request nor the response passes through probatio. A probatio difference could only produce an error envelope, which the
+  verifier denies (`success is not True`).
+- `config/auth.py`: `websocket_list` (`@require_admin`, `async_get_users`, `result_message`) and `_user_info` (`id`,
+  `is_owner`, `is_active`, `local_only`, `system_generated`, `group_ids`, …) are unchanged; `config/auth/delete` now
+  refuses system-generated users and the owner.
+- `websocket_api/decorators.py`: `require_admin` is unchanged; `ws_require_user(only_supervisor=True)` now compares the
+  Supervisor user's id instead of its name.
+- `websocket_api/messages.py`, `helpers/json.py`: `result_message` and `json_bytes` are unchanged (new cached helpers only).
+- `auth/__init__.py`, `auth/models.py`: the owner cannot be removed; login-flow PKCE fields. `User.is_admin` (owner, or
+  active and in `system-admin`) and `async_create_system_user` are unchanged.
+- `hassio/__init__.py`, `http/auth.py`, `http/const.py`, `http/__init__.py`, `hassio/const.py`, `hassio/auth.py`: the
+  Supervisor user is kept under `DATA_SUPERVISOR_USER` (same `"hassio_supervisor_user"` key string) and looked up by id
+  on every Unix-socket request; it is still a system-generated, active `system-admin` user, so `require_admin` passes.
+- `onboarding/views.py`: the owner is still created in `system-admin`.
+- Unrelated to the contract but new in 2026.10: `subscribe_condition` no longer requires admin, and users may rename
+  themselves (`person/update_own_profile`); the verifier reads ids and roles, never names.
+
+## Adding a release
+
+1. Fetch the GitHub tree of the new tag and compare the blob SHAs of the files above with the last reviewed tag.
+2. For every changed file, review the diff line by line for the consumed contract (a hash comparison alone is not
+   enough: 2026.10.0 moves Core's schemas from voluptuous to probatio, which changes most of these files).
+3. Add the version to `_HA_VERSIONS` and add a column for it to the table above (files are rows, versions are columns);
+   note under the table what changed, and update the heading of that review section.
+4. In the same change, update every other place that spells out the reviewed versions:
+   - the comment above `_HA_VERSIONS` in `ha_role.py`;
+   - `tests/test_ha_role.py`: add the version to `test_the_reviewed_versions_are_exactly_these` and remove it from
+     `NEAR_MISSES` and `UNREVIEWED` (they hold, for example, `2026.11.2`; the near-miss tests fail until it is
+     removed), and replace it where it serves as the unreviewed example in
+     `test_wrong_sequence_and_revoked_machine_capability`;
+   - the version-list sentence in [n8n-ha-role.md](n8n-ha-role.md) ("Compatibility is deliberately restricted to …");
+   - the new release's `addons/<product>/CHANGELOG.md`, naming the added versions;
+   - the supported-version note in that product's `DOCS.md`, `README.md`, the repository `README.md`, and
+     `docs/operations/guide.md`. Other products' published images keep their earlier allowlist until separately built.
+5. Ship it in a new add-on release: an installed add-on accepts only the versions listed in its own image.
+
+Any version not listed, including pre-releases, later patch releases and differently formatted strings, is refused.
+Next release: the refusal says why. The verifier stops before it sends the machine token (as before) and returns a
+denial that carries the advertised version when it has the form of a Core release or pre-release (`shown_version`;
+any other string is reported as unrecognized and never echoed). The panel then answers its pages with a static page
+"這個 HA Core 版本尚未審核：<version>" and its API with HTTP 403
+`{"error": "request denied", "detail": {"code": "core_version_unreviewed", "ha_version": <version or null>}}`; every
+other refusal keeps the fixed `{"error": "request denied"}`. The add-on log gets one line per version and process
+(`management: Home Assistant Core <version> has not been reviewed for this add-on release …`), without any frame, token
+or user. MCP endpoints authenticate with the add-on token only and never use this check, so they keep serving.

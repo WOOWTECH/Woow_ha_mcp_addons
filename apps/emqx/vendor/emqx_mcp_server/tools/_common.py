@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
+from fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 
@@ -36,6 +38,17 @@ def writing(title: str) -> ToolAnnotations:
         idempotentHint=False,
         openWorldHint=True,
     )
+
+
+def path_segment(value: str, field: str, safe: str = "") -> str:
+    """One URL path segment, percent-encoded including any '/' (``safe`` keeps a few characters as they are).
+
+    '', '.' and '..' are refused: quote() leaves dots alone and httpx drops '.' and '..' segments while it builds the
+    URL, so unbanning '..' became DELETE /banned (every ban cleared) and deleting user '..' deleted its authenticator.
+    """
+    if value in ("", ".", ".."):
+        raise ToolError(f"{field} must not be empty, '.' or '..'.")
+    return quote(value, safe=safe)
 
 
 def page_of(body: Any) -> tuple[list[dict], dict]:

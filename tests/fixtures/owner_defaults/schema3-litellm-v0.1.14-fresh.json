@@ -1,0 +1,13 @@
+{
+ "backend_key": null,
+ "backend_url": null,
+ "child_token": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+ "connection": null,
+ "disabled": [],
+ "enabled_write_tools": [],
+ "endpoint": null,
+ "product": "litellm",
+ "schema_version": 3,
+ "token": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+ "writes_enabled": false
+}

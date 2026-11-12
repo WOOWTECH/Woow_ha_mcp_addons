@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from mcp_admin_core.config import ConfigError, Store
-from mcp_admin_core.products import ProductStore, PRODUCTS, TOOLS, child_spec
+from mcp_admin_core.products import BOUNDED_TOOLS, ProductStore, PRODUCTS, TOOLS, child_spec
 from mcp_admin_core.policy import Denied, authorize
 
 
@@ -38,8 +38,10 @@ def test_v1_migration_preserves_every_gui_field_and_rollback_fails_closed(tmp_pa
     old.close()
     migrated = ProductStore(tmp_path / 'state', 'n8n')
     for key, value in original.items():
-        if key != 'schema_version':
+        if key not in ('schema_version', 'disabled'):
             assert getattr(migrated.load(), key) == value
+    # 0.2.0 (owner decision 2026-10-15): the upgrade to schema 4 turns every tool on once (disabled cleared).
+    assert migrated.load().disabled == [] and migrated.load().schema_version == 4
     raw = migrated.path.read_bytes()
     migrated.close()
     with pytest.raises(ConfigError):
@@ -75,26 +77,31 @@ def test_invalid_migration_is_not_rewritten(tmp_path, bad):
     ('opendesign', 'get_project', {'project_id': '12345678-1234-1234-1234-123456789abc'}, {'project_id': '../secrets'}),
     ('emqx', 'emqx_cluster_status', {}, {'emqx': {}}),
     ('litellm', 'litellm_list_models', {}, {'ctx': {}}),
+    ('nextcloud', 'get_file_tree', {'path': 'Documents', 'depth': 3}, {'path': 'Documents', 'depth': 4}),
+    ('nextcloud', 'read_text_file', {'path': 'Documents/notes.md'}, {'path': '../other-user/notes.md'}),
+    ('nextcloud', 'list_tasks', {'calendar': 'personal', 'limit': 500}, {'limit': 501}),
 ])
 def test_exact_source_arguments_and_unknown_deny(tmp_path, product, name, good, bad):
     store = ProductStore(tmp_path / product, product)
+    store.update(writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
     try:
-        authorize(call(name, good), TOOLS[product], store.load())
-        with pytest.raises(Denied): authorize(call(name, bad), TOOLS[product], store.load())
-        with pytest.raises(Denied): authorize(call('unknown', {}), TOOLS[product], store.load())
+        authorize(call(name, good), BOUNDED_TOOLS[product], store.load())
+        with pytest.raises(Denied): authorize(call(name, bad), BOUNDED_TOOLS[product], store.load())
+        with pytest.raises(Denied): authorize(call('unknown', {}), BOUNDED_TOOLS[product], store.load())
         store.update(disabled=[name])
-        with pytest.raises(Denied): authorize(call(name, good), TOOLS[product], store.load())
+        with pytest.raises(Denied): authorize(call(name, good), BOUNDED_TOOLS[product], store.load())
     finally: store.close()
 
 
 def test_writer_enable_and_path_policy(tmp_path):
     store = ProductStore(tmp_path / 'state', 'opendesign')
+    store.update(writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
     args = {'project_id': '12345678-1234-1234-1234-123456789abc'}
     try:
-        with pytest.raises(Denied): authorize(call('delete_project', args), TOOLS['opendesign'], store.load())
+        with pytest.raises(Denied): authorize(call('delete_project', args), BOUNDED_TOOLS['opendesign'], store.load())
         store.update(writes_enabled=True)
-        authorize(call('delete_project', args), TOOLS['opendesign'], store.load())
+        authorize(call('delete_project', args), BOUNDED_TOOLS['opendesign'], store.load())
         for value in ('../a', '/etc/passwd', 'x%2fy', 'x?secret', 'x\\y', './x'):
             with pytest.raises(Denied):
-                authorize(call('get_file_info', {**args, 'file_path': value}), TOOLS['opendesign'], store.load())
+                authorize(call('get_file_info', {**args, 'file_path': value}), BOUNDED_TOOLS['opendesign'], store.load())
     finally: store.close()

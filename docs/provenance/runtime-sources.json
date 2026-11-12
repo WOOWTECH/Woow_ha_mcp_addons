@@ -1,11 +1,19 @@
 [
   {
     "product": "hermes",
-    "source": "local:614ae663fadd91c76972f60017a76d2627bea87e",
+    "source": "woow-mcp-server:83d6de53847b5c5b0da010a84e43f3e92faa1ea3",
     "path": "hermes_mcp_server/server.py",
-    "upstream_sha256": "e1c3f7be4de0302fafb85848641d89a43e83565afa844da9f813f10a718c25a6",
-    "local_sha256": "8248cd4b308e8159fc52d00532fdbdbd39fc03fb4513f6bc68183fd65dfdf1d0",
-    "modification": "Use scoped DNS-pinned HTTPX transport for gateway, dashboard login and cookie clients; deny redirects/proxies. Map inspect exception fields by type, never raw exception text; explicit safe error boundaries on other enabled handlers include late decoding/JSON failures, preserving signatures. W2b adds session/cron handler error boundaries and bounded positive metadata projections without private message/prompt contents."
+    "upstream_sha256": "6b8abf82d4c8604af4ef2d3f2a8c475c8d72abb39ee62d0e00d4bb084a191b56",
+    "local_sha256": "922ff27d13a1c67a0b0d6fd8cbd9c764d9697cd26f63b0189d7dbfba95e0d94a",
+    "modification": "0.4.0: re-snapshot of woow-mcp-server main 83d6de5 (server.py and guards.py last changed upstream in 471efdf, woow-mcp-server #82, MCP SDK 2: FastMCP is MCPServer, the low-level server is _lowlevel_server, and every tool keeps its mcp 1.x error text through keep_error_text; errors.py unchanged since a5db051). Upstream features as recorded for 0.3.4 (a5db051: model scope/provider/expensive confirmation, dotted and parent-object config writes with credential path checks on every descendant (camel-case names kept), deep-merge/exact-array readback, JSON text/object/array values, session continuation, truthful incomplete/timeout chat results, login single-flight/429 back-off and 401 relogin, guarded resource ids and config keys). HA changes kept: every HTTP client (gateway, login, dashboard) is backend_policy.async_client (DNS-pinned configured destination); tools raise the stable HA backend error codes (backend_errors/backend_error_text) instead of errors.describe; hermes_chat waits CHAT_TIMEOUT 300 s (PaaS 90 s; the HA gateway allows 330 s), which does not claim remote cancellation. 0.4.0: keep_error_text is imported from the add-on's apps/runtime/tool_error_text.py (the same function; the child cannot import mcp_admin_core). Next release: port hermes_session and _relogin_on_401 from woow-mcp-server 052887fa68d5e67b86c622ef92f46dd7f75a08ca. Session DELETE uses a fresh revision/generation snapshot, one request_id and explicit identity replay; its HTTP request disables automatic 401 authentication retry. Existing HA destination policy, error redaction, grants and chat timeout remain unchanged. 2026-11-01: Dashboard ConnectError now returns fixed service/address guidance under the stable BACKEND_UNAVAILABLE code; the child does not echo the configured URL or raw transport exception. 2026-11-02: fixed Dashboard public error categories, bounded nested JSON projection, and outcome-unknown cron create; 11 tool schemas unchanged. 2026-11-02 (error-code parity): Dashboard response-shape validation now matches the PaaS server (config get, model info, session list/get, inspect model, skill list, model list_providers, webhook list); every tool error reads CODE: text (NOT_FOUND, CONFIRMATION_REQUIRED, CONFIG_NOT_APPLIED, CHAT_TURN_FAILED, BACKEND_UNEXPECTED_RESPONSE for an incomplete Gateway stream; input guards read INVALID_INPUT); Gateway HTTP/transport failures use the same fixed public wording as Dashboard, with the add-on's BACKEND_BUSY/BACKEND_HTTP_ERROR/BACKEND_STREAM_ERROR verdicts kept on the Gateway; 11 tool schemas unchanged. 2026-11-12: cron create sends paused=not enabled and enabled=enabled in one POST, matching the isolated Hermes backend create contract while retaining the legacy flag; a strict 422 is not retried."
+  },
+  {
+    "product": "hermes",
+    "source": "woow-mcp-server:052887fa68d5e67b86c622ef92f46dd7f75a08ca",
+    "path": "hermes_mcp_server/session_mutations.py",
+    "upstream_sha256": "8f059b0d5108610d2c9a8b6598b573d236b12319fc59286f8d763afda40a796e",
+    "local_sha256": "e52a25d72b8da70f2cf4b8b298c760bf1cf34eb158287bbe451f8595c3f61cbb",
+    "modification": "Port of woow-mcp-server 052887f session_mutations.py with the 2026-11-02 error-code parity change: local failures carry codes (NOT_FOUND, BACKEND_UNEXPECTED_RESPONSE) via errors.coded_error; SESSION_DELETE_OUTCOME_UNKNOWN and every request are unchanged; response.json() is used where PaaS calls dashboard_json."
   },
   {
     "product": "hermes",
@@ -18,8 +26,8 @@
     "source": "local:614ae663fadd91c76972f60017a76d2627bea87e",
     "path": "opendesign_mcp_server/od_mcp_server.py",
     "upstream_sha256": "89caa06f96a62a6df663609fa468f00b41180970c835ceb03f3a1cf196f2e717",
-    "local_sha256": "337e40c3e6e069568baad938c373e0492f37462abe10d3a7b422163a5d0ee0fc",
-    "modification": "Require explicit OD_API_BASE and corrected provenance header; all HTTP clients use scoped DNS-pinned transport, redirect/proxy denial, safe errors and five-second ordinary I/O timeout. Explicit enabled-handler error boundaries cover late response decoding/JSON/processing failures without altering successful output or SDK signatures. Bounded SDK offload is in the separate launcher. W2b adds list_runs safe error boundary and id/projectId/status-only bounded projection."
+    "local_sha256": "67c21098f7e6b9b2bd3693fc790fce278b57f0f4d999c5728215668c35d3b654",
+    "modification": "Require explicit OD_API_BASE and corrected provenance header; all HTTP clients use scoped DNS-pinned transport, redirect/proxy denial and safe errors (backend_errors on every handler), connect timeout 5 s. Successful output and SDK signatures are unchanged. 0.2.0: list_runs returns upstream's own answer again (no id/projectId/status projection) and the ordinary client uses upstream's 60 s read timeout again. 0.4.0 (MCP SDK 2.3.0): FastMCP is now mcp.server.mcpserver.MCPServer, so the import and the constructor name it (two lines); tools, signatures and output are unchanged, and launch.py keeps the 1.x error text of every tool (tool_error_text.keep_error_text). 2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan."
   },
   {
     "product": "opendesign",
@@ -70,8 +78,8 @@
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/errors.py",
     "upstream_sha256": "c7e0035e810600c10db1bd5ff21f511f3023c4b1c0c57931b3487ba6d4611795",
-    "local_sha256": "d8264e158ade0102720f7d35762c9edadba6244dbbbf768a527bc2cc9ee0813b",
-    "modification": "Map request exceptions by type into stable public ToolError codes, including lazy stream/close/decompression failures; reject invalid JSON/encoding instead of returning an empty success. No raw exception or response-body diagnostics."
+    "local_sha256": "ac012ba5c20e7bfdc446b3f993bee902051cf6e9bbad5e09259e788716a97c96",
+    "modification": "2026-10-30 HA047: preserve HTTP status_code for retained404 fallback and reject invalid JSON, with uncertain-write warning. 2026-10-31: align errors with PaaS source29fa; reject redirects, hide backend response bodies and request paths, wrap all httpx transport failures into bounded codes. The retained DELETE one-request rule and HA destination policy are unchanged. 2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan."
   },
   {
     "product": "emqx",
@@ -89,21 +97,25 @@
     "product": "emqx",
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/tools/_common.py",
-    "upstream_sha256": "ecf9b4f3ec95b059dcda81d0c5e77c294c14e48cc4f8adc423d455bcf5400ae5"
+    "upstream_sha256": "ecf9b4f3ec95b059dcda81d0c5e77c294c14e48cc4f8adc423d455bcf5400ae5",
+    "local_sha256": "dcd2dacb0bd4b046ea7f6a85f39929c07d1491420fb5b1486f0bdcfe46fc4fba",
+    "modification": "2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan."
   },
   {
     "product": "emqx",
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/tools/cluster.py",
     "upstream_sha256": "6ff36613848cacae7e414a04e776c37a588a21cfc7ccacef606ab91c5dbe65c8",
-    "local_sha256": "2a5f1943551498556b3ef525c6742d17980c40022dd6da9349307428da7b0f52",
-    "modification": "Reject malformed/generic/empty/error/duplicate node payloads before projection; require nonempty name@host identifiers without whitespace and actual version evidence."
+    "local_sha256": "9b23d5bb1c62a2e3cd40549fbc4d6dc0755246963054d7b9d3a0a4a4dd1aeb4d",
+    "modification": "Reject malformed/generic/empty/error/duplicate node payloads before projection; require nonempty name@host identifiers without whitespace and actual version evidence. 2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan."
   },
   {
     "product": "emqx",
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/tools/clients.py",
-    "upstream_sha256": "11b7029a4e57a78169fde8d006596513040c64cdcbb1b12b72f0e48eab0fc3af"
+    "upstream_sha256": "11b7029a4e57a78169fde8d006596513040c64cdcbb1b12b72f0e48eab0fc3af",
+    "local_sha256": "7972cd71b93a66cf904150296580de1a64a9b706474bc47c3da8242ab1dc8744",
+    "modification": "2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan."
   },
   {
     "product": "emqx",
@@ -115,25 +127,33 @@
     "product": "emqx",
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/tools/messaging.py",
-    "upstream_sha256": "afd34ac295d6fd12e6d9bc91718cfd7ae1e71606694d8b5a560962feea17b5c0"
+    "upstream_sha256": "afd34ac295d6fd12e6d9bc91718cfd7ae1e71606694d8b5a560962feea17b5c0",
+    "local_sha256": "37c6177f9ee207fa497986f975775633505d02fce9f8ac1ad3667c448ab55c33",
+    "modification": "2026-10-30 HA047 candidate: retained read falls back to listing only for the existing404/no-result compatibility path; all other API/JSON failures propagate. Retained DELETE dispatches once, with no empty retained publish fallback after any error including404. Port from PaaS EMQX caad3965646f9dac3f4f57f3677aff92196745a2; tested through pinned child, gateway and owned HTTP fixtures. 2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan."
   },
   {
     "product": "emqx",
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/tools/security.py",
-    "upstream_sha256": "f113e5c365b7d25bca426f3dd663570e9302777b27d67ff24c9ad4af1d299dcf"
+    "upstream_sha256": "f113e5c365b7d25bca426f3dd663570e9302777b27d67ff24c9ad4af1d299dcf",
+    "local_sha256": "c18d4c6b191c929cd42a4f817ec46caccab41aa60ef54ef45645456bd53a80f7",
+    "modification": "2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan."
   },
   {
     "product": "emqx",
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/tools/diagnostics.py",
-    "upstream_sha256": "f20e0868ebca0c2707d8f3b3fbe7a9e3651af9235d708abfced402ba3c6e26bf"
+    "upstream_sha256": "f20e0868ebca0c2707d8f3b3fbe7a9e3651af9235d708abfced402ba3c6e26bf",
+    "local_sha256": "ef9bb5681af9235ebc1da7b8f836c7be320d6f7ff4e8e70d881466a0d0942cb3",
+    "modification": "2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan."
   },
   {
     "product": "emqx",
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/tools/integration.py",
-    "upstream_sha256": "05ac8a89c35389d6793bb2e2c579947ee3bbc42a55c5fd67d9978a162e1636de"
+    "upstream_sha256": "05ac8a89c35389d6793bb2e2c579947ee3bbc42a55c5fd67d9978a162e1636de",
+    "local_sha256": "89c6f167d6b9487a2ae6373ab498dd9eef9911895effe9e6d7c0c61c9ac4841d",
+    "modification": "2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan. 2026-11-12: Align emqx_test_rule_sql child annotation/tag/title with the conservative canonical Podman write-permission contract; POST /rule_test remains policy-gated as an unverified side-effect operation. No handler or API request change."
   },
   {
     "product": "emqx",
@@ -157,7 +177,9 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/settings.py",
-    "upstream_sha256": "0c89fa776b88ae00a52d4ed5bae67ba9e827f42e35ab74bf2c3fac81a465ded2"
+    "upstream_sha256": "0c89fa776b88ae00a52d4ed5bae67ba9e827f42e35ab74bf2c3fac81a465ded2",
+    "local_sha256": "d88e9523d99aa92e1cbd9496548ba1fe0d215fa94242a86ea985df5785748a0c",
+    "modification": "0.4.6 reviewed parity: Normalize only exact origin-root /v1 and trailing slashes with the new product URL helper; preserve proxy mounts; reject credentials/query/fragment. No generic product URL contract changes."
   },
   {
     "product": "litellm",
@@ -171,21 +193,25 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/gating.py",
-    "upstream_sha256": "b53476befdf8ff25c6f5688a510c669c0cca6cc704f8b00f7b5dfd0265b79bcb"
+    "upstream_sha256": "b53476befdf8ff25c6f5688a510c669c0cca6cc704f8b00f7b5dfd0265b79bcb",
+    "local_sha256": "d6ad9181d4459400f22b3dd553bc2af082c0c9a8af9888fe14e412045dc0b4a6",
+    "modification": "0.4.6 reviewed parity: Treat the three active-operation tools as create, retaining old per-tool and bare read denies. Dynamic child guard remains before HTTP. No other tool label changes."
   },
   {
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/registry.py",
-    "upstream_sha256": "a074a48ceeef9393ab46500420156fc59c39471c1fa6739e9030c81e7c597cae"
+    "upstream_sha256": "a074a48ceeef9393ab46500420156fc59c39471c1fa6739e9030c81e7c597cae",
+    "local_sha256": "720a559106629638af82ef1ef833b660d9e6a17866802655c4f67db707885bd5",
+    "modification": "Next release after 0.4.4: correct only litellm_update_model registry metadata to PATCH /model/{model_id}/update, matching the unchanged handler. Operations, effects and schemas are unchanged. 0.4.6 reviewed parity: Classify health, token_counter and spend_calculate as create/active work: active health may charge/save history; tokenization may fetch resources. Readonly becomes 15, all-enabled stays 40. Existing HA 25 exact grants unchanged."
   },
   {
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/errors.py",
     "upstream_sha256": "3bc39077a69c07b2b0ceeb306510dc2f71ccc3b604187a4cecedab784efc1768",
-    "local_sha256": "3615e517ac06aef789b9dad2387bd6fe4238f49f493d3fe2e95a4965c10a034f",
-    "modification": "Replace raw-body/exception public errors with bounded stable BACKEND codes/status; use shared type-based mapping for lazy stream/close/decompression failures and reject all JSON parsing exceptions without returning raw text."
+    "local_sha256": "febc2f7b04ac650d1bba13f27e7439e62c6c0f47cc79215ab8c7659cd4b8033d",
+    "modification": "2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan."
   },
   {
     "product": "litellm",
@@ -209,35 +235,39 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/_common.py",
-    "upstream_sha256": "88ed7db06559d0ebaddf014831ad59e11ae3ca488c618cdc8994efb8185fe41e"
+    "upstream_sha256": "88ed7db06559d0ebaddf014831ad59e11ae3ca488c618cdc8994efb8185fe41e",
+    "local_sha256": "dc44cacd3af9a3a5d45398d18ec3d1a43cbf0f0031e48f9e07fad3645bd197b1",
+    "modification": "2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan."
   },
   {
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/models.py",
     "upstream_sha256": "8b3e9a184f6e12633ffb724aa69c55a09fae13df3d8f5112f3704d61aa6d94ec",
-    "local_sha256": "e058ffd9b6557d3228f2318d30776e37cbd173a358aabfcf29f6c8f3fe723f47",
-    "modification": "W2b: delete_model response projected to id/status only; transport and native require_operation retained."
+    "local_sha256": "53183755197a9b4f48dc7420e28ff0550b15771262aac4501ac7fa1ae280aa34",
+    "modification": "2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan."
   },
   {
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/chat.py",
-    "upstream_sha256": "379330b6e1708fa1c454517fb3c162c11aea8d86bcc31fbc433e66ee42eaa276"
+    "upstream_sha256": "379330b6e1708fa1c454517fb3c162c11aea8d86bcc31fbc433e66ee42eaa276",
+    "local_sha256": "e0afb3b37084c5cd9b79255a953fa02a979da6b34b6b43f9b5021d27c470d6d2",
+    "modification": "0.4.6 reviewed parity: Token counter uses conservative writing annotations and requires create immediately before the existing HTTP call. No inference, input or output contract change."
   },
   {
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/keys.py",
-    "upstream_sha256": "f53ffbcea4520fa4a95f2cb6722e6979d4515507076c5bcd1593ccf2ac9f63d8"
+    "upstream_sha256": "f53ffbcea4520fa4a95f2cb6722e6979d4515507076c5bcd1593ccf2ac9f63d8",
+    "local_sha256": "70462f606e9c87172e7693c2356031ecae42c98422d061d4ba312c80b0049e51",
+    "modification": "2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan."
   },
   {
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/teams.py",
-    "upstream_sha256": "15fe1783df2740477c0dd222f51c50c6043844fc3c0bf2361050d9c70904ea96",
-    "local_sha256": "6525b7e6d2224a28fed3a6f1809cfec9acabd6b15e030743f656ba84b420e619",
-    "modification": "W2b: list/create/update/delete team responses use bounded positive scalar metadata projection, excluding keys/members/private metadata. Native operation gates and fixed API calls retained."
+    "upstream_sha256": "15fe1783df2740477c0dd222f51c50c6043844fc3c0bf2361050d9c70904ea96"
   },
   {
     "product": "litellm",
@@ -249,19 +279,25 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/spend.py",
-    "upstream_sha256": "f90f29026fb32c96d0c8030338383426661c63c44ba5c1602c83824ddadf7a70"
+    "upstream_sha256": "f90f29026fb32c96d0c8030338383426661c63c44ba5c1602c83824ddadf7a70",
+    "local_sha256": "87a47df79cc41c4f3ea29c2128bf248a5a865ca11acb0f63f4a1950294fdee3b",
+    "modification": "0.4.6 reviewed parity: Spend calculator uses conservative writing annotations and create guard before existing HTTP. Describe possible tokenizer/image fetches, without implying inference or billing. Input/output unchanged."
   },
   {
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/health.py",
-    "upstream_sha256": "6d61c3741510b1ebd3e8fb78ec7696fbc63761c7cd7f4558295089114819ead7"
+    "upstream_sha256": "6d61c3741510b1ebd3e8fb78ec7696fbc63761c7cd7f4558295089114819ead7",
+    "local_sha256": "2d2151fe1ce42a0ceaf0d88914d75691764fa9d23bf3f78984ac74e90cf4058d",
+    "modification": "0.4.6 reviewed parity: Health uses conservative writing annotations and create guard before existing HTTP. Describe potential provider charge and health-history storage; readiness stays read."
   },
   {
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/tools/plugins.py",
-    "upstream_sha256": "f1a421b82ad96427d0d05d9f248d509f92a6cca320ee7f1217a6662eda85b054"
+    "upstream_sha256": "f1a421b82ad96427d0d05d9f248d509f92a6cca320ee7f1217a6662eda85b054",
+    "local_sha256": "64b253925d13be62325331fa5269089ac24ceb661b3a4af6621a5ff5ec0e1046",
+    "modification": "2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan."
   },
   {
     "product": "litellm",
@@ -274,5 +310,202 @@
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/models.py",
     "upstream_sha256": "0d247d845738f37d2673fd0e50203cc8c4f3c4cf6a2d3b10db7bd2a0b9740801"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/28767c4fa15acd4981586ed04906c48523f6bf26",
+    "path": "nextcloud_mcp_server/__init__.py",
+    "upstream_sha256": "ca4f898ad6970c83760a031a353d48dc735860b9970f3f33a24742a7ae9047b6"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/28767c4fa15acd4981586ed04906c48523f6bf26",
+    "path": "nextcloud_mcp_server/server.py",
+    "upstream_sha256": "fa2f912301bd0d3eabeadfe5dba304f9db9fa869de5f91ea9f53f62e6fe129b2",
+    "local_sha256": "eb25088dc4d2158f1583e53b682d753711941bfc2352a2890ef6f6693fd3a108",
+    "modification": "WOOW HA add-on: register the private tool woow_backend_probe: upstream NextcloudClient.probe() on a fresh client with the same settings, policy and public-error mapping, closed afterwards (never the tools' connections; the credentials-keyed auth latch is shared). It is not in tools.ALL_TOOLS, so READONLY/ALLOW_DELETE/DISABLED_TOOLS never remove it and DISABLED_TOOLS cannot name it; the gateway never lists or authorizes it (not in TOOLS), as for the Odoo add-on's probe. on_duplicate='error' fails start-up if the name is taken. 0.4.0 (FastMCP 4.1.3): FastMCP 4 cancels a running async tool when its session is deleted (3.x let it finish); HealthMonitor deletes its probe session after its 5 s timeout, so the probe (probe() and aclose()) runs inside anyio.CancelScope(shield=True): a slow 401 still reaches the auth latch (at most two failed logins; tests/test_nextcloud_child.py::test_slow_401_still_latches_after_health_check_timeouts fails without it). The probe stays bounded by the client's request timeout."
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/28767c4fa15acd4981586ed04906c48523f6bf26",
+    "path": "nextcloud_mcp_server/settings.py",
+    "upstream_sha256": "d8283658375f65ec0022a5e04e48d0109e14d49a8df1f7e6c8fcbd905ebb45ad"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/28767c4fa15acd4981586ed04906c48523f6bf26",
+    "path": "nextcloud_mcp_server/client.py",
+    "upstream_sha256": "7c313e63307a4131cbd95e0dc36638f9f4173c7e4339043af57b6a17fa38a6b7",
+    "local_sha256": "e6dbd778777a4b34c7a796a78ac8ae2c5cb7a353c0db74424edde8bb80834cb7",
+    "modification": "WOOW HA add-on: load_backend_policy() requires the bundled backend_policy module and fails startup rather than falling back to an unrestricted client. Quota diagnostics, response-shape parsing and redirect masking are otherwise byte-identical to merged upstream 28767c4; no raw backend error text is relayed."
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/28767c4fa15acd4981586ed04906c48523f6bf26",
+    "path": "nextcloud_mcp_server/errors.py",
+    "upstream_sha256": "67339625603c9b4ed5a5bccf7960e52933e7b65f883e0a529df5e1718597dd04"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/7af7dbaa441e31f2b0afbacd752bee40d7921319",
+    "path": "nextcloud_mcp_server/paths.py",
+    "upstream_sha256": "231656621e3536928bc6d7b8457aaf9361ff699eb73e037c1a0caf8d7714e4d4"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/28767c4fa15acd4981586ed04906c48523f6bf26",
+    "path": "nextcloud_mcp_server/webdav.py",
+    "upstream_sha256": "1bcf659aab461d5401cb52e95ebcb5403c6daf85390b345d4ff952954b5eedb2"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/28767c4fa15acd4981586ed04906c48523f6bf26",
+    "path": "nextcloud_mcp_server/caldav.py",
+    "upstream_sha256": "a6643700ae4f2b9c998020cd4ba0e4f03c3716fc33049ec1364eb39c742c921f"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/28767c4fa15acd4981586ed04906c48523f6bf26",
+    "path": "nextcloud_mcp_server/ical.py",
+    "upstream_sha256": "531ca3c58684ea1c7dd504b440703c80699ccbf024278e568121195d9738b9af"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/28767c4fa15acd4981586ed04906c48523f6bf26",
+    "path": "nextcloud_mcp_server/tools.py",
+    "upstream_sha256": "9b22f15816e56e6808a509886d89f52a04152dec99bf9078ccd257e098fb4aa4"
+  },
+  {
+    "product": "nextcloud",
+    "source": "WOOWTECH/Woow_nextcloud_mcp_server/28767c4fa15acd4981586ed04906c48523f6bf26",
+    "path": "LICENSE",
+    "upstream_sha256": "1b05bfafc14067beabe8885c164528c122ebf545eabe97984b222fe377143a69"
+  },
+  {
+    "product": "hermes",
+    "path": "hermes_mcp_server/guards.py",
+    "source": "woow-mcp-server:83d6de53847b5c5b0da010a84e43f3e92faa1ea3",
+    "upstream_sha256": "6c818bebdabc9e8e10565c90261831dc5106617fe750742dac9c26aabf11a011",
+    "local_sha256": "a3908868dc242ab342e4b70ea2f6fd0544ffd3e03515056a9958da64f7cd62db",
+    "modification": "0.4.0: re-snapshot of woow-mcp-server main 83d6de5 (server.py and guards.py last changed upstream in 471efdf, woow-mcp-server #82, MCP SDK 2: FastMCP is MCPServer, the low-level server is _lowlevel_server, and every tool keeps its mcp 1.x error text through keep_error_text; errors.py unchanged since a5db051). Upstream changed only the GuardError docstring (its text reaches the client through keep_error_text). HA changes kept: MCP server registration validates the destination with backend_policy (Destination and the resolver address classes) instead of the PaaS strict SSRF check, so LAN destinations are allowed while metadata names/addresses, link-local, 0.0.0.0, userinfo and non-http(s) are refused; future outbound DNS is owned by Hermes. 0.3.4 (AI-HMCP-002-2): registration also refuses localhost names (localhost, *.localhost, localhost.localdomain) and any loopback answer (127.0.0.0/8, ::1, IPv4-mapped loopback), which backend_policy permits for the add-on's own backends; tests/test_hermes_mcp_url_guard.py. 2026-11-02 (error-code parity): the loopback refusal text is the shared constant LOOPBACK_MCP_URL_MESSAGE, which PaaS also uses; the tool wrapper prefixes it INVALID_INPUT. 2026-11-06 (H7, metadata wording parity): registration names a cloud-metadata host name or address the way the PaaS server does, INVALID_INPUT 'url blocked by SSRF protection: Cloud metadata endpoint blocked' (a number form a resolver turns into one: 'Hostname resolves to a blocked address (Cloud metadata endpoint blocked)'), instead of the generic BACKEND_DESTINATION_DENIED. The PaaS CLOUD_METADATA list and its tunnelled-IPv4 forms are copied, so fd20:ce::254 and fd00:a9fe:a9fe::1 (unique-local, which backend_policy allows) are refused as well; every other class backend_policy refuses, and a host name that only resolves to a metadata address, keep backend_policy's code. tests/test_hermes_mcp_url_guard.py."
+  },
+  {
+    "product": "hermes",
+    "path": "hermes_mcp_server/errors.py",
+    "source": "woow-mcp-server:83d6de53847b5c5b0da010a84e43f3e92faa1ea3",
+    "upstream_sha256": "fc9fae57953e55c5da14d90f95d63e40a0cad1cd57f7be5be6d7a7732b8de6be",
+    "local_sha256": "481ff5ff12e8069e999c07509ace73d3c9a630c5c2663b7084e805512aceae8b",
+    "modification": "0.4.0: re-snapshot of woow-mcp-server main 83d6de5 (server.py and guards.py last changed upstream in 471efdf, woow-mcp-server #82, MCP SDK 2: FastMCP is MCPServer, the low-level server is _lowlevel_server, and every tool keeps its mcp 1.x error text through keep_error_text; errors.py unchanged since a5db051). Originally unmodified for 0.4.0; the HA server does not use errors.describe. 2026-11-02: fixed public Dashboard errors hide URL, raw body, redirect and exception text; allow only three exact 409 protocol codes. 2026-11-02 (error-code parity): public_backend_error(exc, backend) serves Dashboard and Gateway with fixed wording; adds the code table (INVALID_INPUT, NOT_FOUND, CONFIRMATION_REQUIRED, CONFIG_NOT_APPLIED, CHAT_TURN_FAILED) and HermesInputError."
+  },
+  {
+    "product": "litellm",
+    "source": "local:4e4d69a11ee9cf010e4ea23b1bce4ec009a6c4de",
+    "path": "woow_litellm_mcp_server/urls.py",
+    "upstream_sha256": "e2c4fd4ac2cc5f1ad143a8da92e0836ad07e30909d31ac1e6b5d5479bb8ea7bf",
+    "modification": "New local product URL helper, reviewed with the matching PaaS feature commits; not a file from the older vendored upstream snapshot."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/__init__.py",
+    "upstream_path": "apps/headscale/headscale_mcp_server/__init__.py",
+    "upstream_sha256": "943537728c9fb6287577f51772b63edf4719f1db1b4322773639012064bc32e2",
+    "local_sha256": "c7b36f045379f80d9e90f0f28d66764a6db835ee9586bf4ad5512603144b3f26",
+    "modification": "Trim one extra trailing blank line from the copied source; no behavior change."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/client.py",
+    "upstream_path": "apps/headscale/headscale_mcp_server/client.py",
+    "upstream_sha256": "ee78bcd772119e5bb1ecad7429386fbfae50d3c7a0787df58a30396db6ad28d1",
+    "local_sha256": "75770652567e8e36c2a6b0951e7d2f92739b15051e5168257ac9e0ddae9e0701",
+    "modification": "Adapt the fixed HA destination and mask both credential values and copied secret values in responses; only an explicit one-time creation reveal is exempt. Trim one extra trailing blank line; no behavior change."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/errors.py",
+    "upstream_path": "apps/headscale/headscale_mcp_server/errors.py",
+    "upstream_sha256": "93da9b8292245cf00b7c36eadb5eb316c30e8d2679c1bde789e2581ef7f65e5b",
+    "local_sha256": "e149dd269b7ef4ee281408a3858ca3c48401b3cbb30fe414320b63f8bf27e6bd",
+    "modification": "Trim one extra trailing blank line from the copied source; no behavior change."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/http_policy.py",
+    "upstream_path": "apps/headscale/headscale_mcp_server/http_policy.py",
+    "upstream_sha256": "dfedcd041bbb514ce4c05242d325d6a84d10361e50ba26376e080a9e2d6d2280",
+    "local_sha256": "e89800d937df8d6b3571f257dc4694c1bdd9db1b310133399848ded5d560d38f",
+    "modification": "Use the HA backend address allow rules at the pinned TCP seam; reject alternate origin, path, transport extension, and mismatched DNS family. Trim one extra trailing blank line; no behavior change."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/log_redaction.py",
+    "upstream_path": "apps/headscale/headscale_mcp_admin/log_redaction.py",
+    "upstream_sha256": "67d4aa0a1d8fdee7572d19e4da6b5fa1aa0867c08c01dfa156352e5c88f64a1b"
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/models.py",
+    "upstream_path": "apps/headscale/headscale_mcp_server/models.py",
+    "upstream_sha256": "5092523ef12a6aa762b29d9b5e4ed1910082c3bbfb7caa2ae6e262179f77dc44",
+    "local_sha256": "94b2664100fd5fc65f67aa6acdf4faf27612579f51a1d540a47c8338f38f156a",
+    "modification": "Trim one extra trailing blank line from the copied source; no behavior change."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/native.py",
+    "upstream_path": "apps/headscale/headscale_mcp_server/native.py",
+    "upstream_sha256": "002b5b0302695ec8a367297c09f88b0de42c42e5949959fd084c390d7f3c9f89",
+    "local_sha256": "c27ddc043429376688140488e88aa8ef6946a856ff49430391010abf8aeeb054",
+    "modification": "Trim one extra trailing blank line from the copied source; no behavior change."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/operation_policy.py",
+    "upstream_path": "packages/mcp-admin-core/mcp_admin_core/operation_policy.py",
+    "upstream_sha256": "b21ca550fb700944971826f55adca3535a7b24e37fc8f8bb62dcda73462e01e4",
+    "local_sha256": "f6fc80610276b6edca14118c1c9010b82bed02d10c7592ec727f32484dbe5dfb",
+    "modification": "Extract a child-only OperationSpec subset from the source monorepo core so the vendored child has no dependency on that core operation module."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/policy.py",
+    "upstream_path": "apps/headscale/headscale_mcp_server/policy.py",
+    "upstream_sha256": "fb915802b08fa91ee036bc20e44f7e900547217a5ad1bf39621d9f1fcda771c2",
+    "local_sha256": "db25356154d0069ee141fe7d9ce596e766875a79b7d35d0fc31cb2f219f10cbd",
+    "modification": "Read the exact HA schema-4 state on every call with file identity, ownership and permission checks; bind saved connection, grants, disables and operation denials to this child."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/registry.py",
+    "upstream_path": "apps/headscale/headscale_mcp_server/registry.py",
+    "upstream_sha256": "164a99f847e048dc4b04abdb0a10dd9a31b28df9adc984baca94503010849df7",
+    "local_sha256": "d8e4ff233de26fdabc1aaeff87200e7e22f2893acf115aa798ac95595cb99728",
+    "modification": "Import the child-only OperationSpec subset rather than the source monorepo admin-core module; reviewed tool and native maps are unchanged. Trim one extra trailing blank line; no behavior change."
+  },
+  {
+    "product": "headscale",
+    "source": "woow-mcp-server:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "headscale_mcp_server/server.py",
+    "upstream_path": "apps/headscale/headscale_mcp_server/server.py",
+    "upstream_sha256": "3c43be18c8f9d4581301bc4d72a73fc38c7a041c95fb8296d849b3b51c84f756",
+    "local_sha256": "c502e31d22a6b614ab55729310cbbc11a941bca729310ed674964346d903d203",
+    "modification": "Bind the HA saved-policy reader to calls and availability; register only the 11 reviewed tools and remove the source extension registration path. Trim one extra trailing blank line; no behavior change."
+  },
+  {
+    "product": "headscale",
+    "source": "local:MIT-notice-from-woow-mcp-server-pyproject:d7c78aaeff001f5fcf87f69ecd3db290396a5906",
+    "path": "LICENSE",
+    "upstream_sha256": "1b05bfafc14067beabe8885c164528c122ebf545eabe97984b222fe377143a69",
+    "modification": "Vendor MIT notice for the child; the source pyproject.toml declares MIT but did not contain a LICENSE file."
   }
 ]

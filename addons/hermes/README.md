@@ -1,11 +1,16 @@
-# WOOW Hermes MCP（實驗／未發佈）
+# Woow Hermes MCP Server
 
-獨立 amd64 Add-on；固定候選版 **0.1.0**。此 manifest 可被 HA 探索，**不代表 GHCR
-映像已存在**。此批沒有映像建置或 HA／真實 backend E2E。
+獨立 amd64 Home Assistant Add-on：把 Hermes 的完整工具以 MCP（Streamable HTTP）提供給 AI client。
+目前發佈的版本、映像與在 HA 上的實測結果見 [本產品操作](DOCS.md) 開頭。
 
-來源工具 11 個，支援 7 個，暫不支援 4 個；不是完整功能遷移。
-管理 GUI 已本地 Core 整合（七類合計184/65/119），但本產品 production verifier fail closed，現在不能正常設定後端或取得 token。
-`homeassistant_api: false`，不可自行提高權限解鎖。
+- 工具：0.2.1 起完整版，上游 11 個工具全部開放，與原始 MCP server 及 PaaS 版一致；全部工具與寫入預設開啟（新安裝與從 0.1.x 升級），可在管理面板逐一停用或取消寫入
+  （[逐名工具對照](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/tool-surface.md)）。
+- **風險：網址＝完整後端權限**。拿到權杖或 Claude.ai 密鑰網址的 MCP client（包括 AI 助理誤判時）不需再授權就能與 agent 對話、修改設定、新增／移除 MCP server、建立 cron 與 webhook。後端錯誤原文回傳（可能含後端內部資訊，add-on 持有的憑證換成 `[REDACTED]`）；後端帳號權限要設對（只給需要的權限），只保留需要的工具與寫入，外洩時立刻在管理面板重新產生權杖（[說明](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/guide.md#寫入預設開啟)）。
+- 連線：Hermes gateway 網址與 API key；dashboard 的網址／帳號／密碼可選、須整組提供。
+- 管理面板在 HA 側邊欄（Ingress），只有 HA 的 owner 或系統管理員能設定後端與管理權杖；為了驗證這個身分，
+  Add-on 需要 `homeassistant_api: true`，這個 token 具廣泛的 Core 存取能力。`hassio_api: false`、保護模式開啟、無 host 網路。
+- MCP client 連 `8081/mcp` 並帶 Bearer 權杖；預設不對 LAN 開埠（`8081/tcp: null`）。Claude.ai 網頁版自訂連接器不能帶 header，改用管理面板產生的密鑰網址 `…/private_<token>/mcp`（0.1.14 起；網址等同密碼）。
+- 0.2.2 起後端還沒設定或暫時連不上時，client（含 Claude.ai 連接器）照樣能連線並列出全部工具；呼叫工具會回錯誤說明原因（未設定／連不上）。
 
-請先看 [本產品操作](DOCS.md)、[變更紀錄](CHANGELOG.md)、
-[共用繁中指南](../../docs/operations/guide.md) 與 [逐名工具對照](../../docs/tool-surface.md)。
+請先看 [本產品操作](DOCS.md)、[變更紀錄](CHANGELOG.md)、[共用繁中指南](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/guide.md)
+與 [client 設定](https://github.com/WOOWTECH/Woow_ha_mcp_addons/blob/claude-delivery/docs/operations/clients.md)。

@@ -49,6 +49,7 @@ HA 管理員 → HA Ingress → 專用 ingress listener → 共用 MCP 管理 UI
 - 每個 Add-on 一把獨立 Bearer token，能重新產生／撤銷。不採 URL-path token 為新部署契約。
 - 第一版不承諾每 client 一把 token 或 OAuth／特定 SaaS client 相容性。
 - 預設唯讀；寫入工具由管理員明確啟用。限制必須 server-side enforce，不能只隱藏 UI 或工具列表。
+  **（2026-10-15 負責人決定改為完整版、預設全開：0.2.0 起七支開放子程序全部工具，所有工具與寫入預設開啟，管理介面可逐一停用或撤銷，仍由 server-side 強制；見 [工具範圍](../tool-expansion.md)。）**
 - 既有來源不支援強制工具限制時，要補上攔截與測試後才能宣稱符合；未知工具不得默認當成唯讀。
 
 ## 4. 設定與持久化

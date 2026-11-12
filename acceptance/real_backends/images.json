@@ -1,0 +1,11 @@
+{
+  "ha_odoo": "ghcr.io/woowtech/amd64-mcp-odoo@sha256:747a820c93a9db7195cf1f436fc7b89da9ea9a2fb15273d2d722af55d901159f",
+  "ha_nextcloud": "ghcr.io/woowtech/amd64-mcp-nextcloud@sha256:4df8574149d70339e11da27568a7c85f1ef6f13ebf55d1d9fb6ce61204614631",
+  "ha_emqx": "ghcr.io/woowtech/amd64-mcp-emqx@sha256:1d24f9e9c7176365d0e9bbc89909bd8fc1c238bf03c66e5b1eccd7c5502b0603",
+  "paas_odoo": "jcr-prod.woowtech.io/woow-paas-docker-local/odoo-mcp-admin:f748090eb782bc103edcd99ac9aa821f77294fb0@sha256:95c38f880e97d0da7c4955cadde1b832e70a8012845051d6f23f2ee1714924d6",
+  "paas_nextcloud": "jcr-prod.woowtech.io/woow-paas-docker-local/nextcloud-mcp-admin:f748090eb782bc103edcd99ac9aa821f77294fb0@sha256:550331318e7203845ab8b72766db2b7390d71fa9cd44112bc356ddc2d26b60f6",
+  "odoo": "docker.io/library/odoo@sha256:4ea9b4667921130add13c1b859aa170a4572b5c3c3d747bfb0ef152fdb0b48a7",
+  "postgres": "docker.io/library/postgres@sha256:1a66d744c1b459e13b05a8fca341da84cb63383e99ce262210efee5a319d4551",
+  "nextcloud": "docker.io/library/nextcloud@sha256:89af7ee7a96ff5e9668280566209268ae6b2d02327f6ef6d56f6d68228cf9431",
+  "emqx": "docker.io/emqx/emqx@sha256:35b46f7aa7a0d51f3959e4344221ac5ec7f948b03e43099286b6c40a07bb393b"
+}

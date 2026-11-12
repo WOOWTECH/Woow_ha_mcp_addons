@@ -13,13 +13,17 @@ import signal
 import httpx
 import uvicorn
 
+from mcp_admin_core import redact
 from mcp_admin_core.config import ConfigError
+from mcp_admin_core.configuration import ConfigurationState
+from mcp_admin_core.capabilities import ManagementOptions
 from mcp_admin_core.products import ProductStore
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.ha_role import make_ha_admin_verifier
 from mcp_admin_core.health import HealthMonitor
 from mcp_admin_core.lifecycle import Supervisor
-from n8n_adapter import TOOLS, child_spec
+from mcp_admin_core.surface import listing
+from n8n_adapter import TOOLS, child_spec, prepare_catalog
 
 
 class Listener(uvicorn.Server):
@@ -30,8 +34,14 @@ class Listener(uvicorn.Server):
 
 
 async def run(args):
+    # Owner decision 2026-10-27: a legacy state is switched to the all-on defaults once, before anything starts
+    # (no upgrade review stage); a failure changes nothing and stops the runtime (ConfigError).
+    from mcp_admin_core.owner_defaults import apply_legacy_upgrade
+    apply_legacy_upgrade(args.data, 'n8n')
     store = ProductStore(args.data, 'n8n')
-    manager = Supervisor(child_spec(store.load(), store.directory))
+    if prepare_catalog() is None:  # unreleased (0.4.12 line): the child still starts; only the version history cannot be written
+        print('n8n: no writable catalog copy; workflow version history is unavailable', flush=True)
+    manager = Supervisor(None)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -42,18 +52,38 @@ async def run(args):
         async with httpx.AsyncClient(trust_env=False, follow_redirects=False,
             timeout=httpx.Timeout(10, connect=3), limits=httpx.Limits(max_connections=40)) as child:
             health = HealthMonitor(store, manager, child)
+            configuration = ConfigurationState(store, manager, health)
             async def backend_changed(state):
+                configuration.begin(state)
                 health.backend = "unknown"
-                await manager.restart(child_spec(state, store.directory))
+                try:
+                    await manager.stop()
+                    manager.spec = child_spec(state, store.directory)
+                    await manager.start()
+                except Exception:
+                    configuration.failed('child_start_failed')
+                    raise
             admin, mcp = make_apps(store, TOOLS, child, health=health.snapshot,
-                                   backend_changed=backend_changed,
-                                   verify_admin=make_ha_admin_verifier())
+                                   backend_changed=backend_changed, configuration=configuration,
+                                   management=ManagementOptions(kind="ha-addon", authority="ha-admin"),
+                                   backend_check=getattr(health, "test_saved", None), restart_child=backend_changed, diagnostics=getattr(manager, "diagnostics", None),
+                                   verify_admin=make_ha_admin_verifier(),
+                                   server_name="woow-mcp-n8n",
+                                   # 0.2.2: the full list and clean refusals without a backend or a running child
+                                   listing=listing("n8n"), availability=health.availability)
             servers = [Listener(uvicorn.Config(app, host=args.host, port=port,
                 proxy_headers=False, access_log=False, log_level="warning", server_header=False,
                 lifespan="off",  # this function, not ASGI lifespan, owns runtime resources
                 limit_concurrency=64, timeout_keep_alive=5)) for app, port in
                 ((admin, args.admin_port), (mcp, args.mcp_port))]
-            await manager.start()
+            # 0.1.12: the token may be in a request path (/private_<token>/mcp): scrub every log record.
+            redact.install()
+            redact.guard_handlers(*redact.UVICORN_LOGGERS)
+            try:
+                await backend_changed(store.load())
+            except Exception:
+                # A launch failure leaves management available for diagnosis/retry.
+                pass
             monitor_task = asyncio.create_task(health.run())
             tasks = [asyncio.create_task(server.serve()) for server in servers]
             stop_task = asyncio.create_task(stop.wait())

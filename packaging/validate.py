@@ -6,6 +6,7 @@ Supervisor REMOVE_EXTRA is deliberately replaced with rejection. This is NOT a
 vendored/full Supervisor implementation; new fields require explicit review.
 """
 import argparse
+import ast
 import json
 from pathlib import Path
 import re
@@ -16,10 +17,21 @@ import yaml
 from builder_contract import RUNNER
 
 ROOT = Path(__file__).resolve().parents[1]
-PRODUCTS = ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm')
+PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud', 'headscale')
+# Owner decision 2026-10-06: Odoo Manage is archived. It left the store and no image is built or released again
+# (0.1.4 was the last); its source stays in apps/odoo-manage and the shared core, and is still tested.
+RETIRED = ('odoo-manage',)
 URL = 'https://github.com/WOOWTECH/Woow_ha_mcp_addons'
-VERSION = '0.1.0'
-TITLES = dict(zip(PRODUCTS, ('Odoo', 'Odoo Manage', 'n8n', 'Hermes', 'OpenDesign', 'EMQX', 'LiteLLM')))
+VERSION = '0.4.13'
+VERSION_OVERRIDES = {'headscale': '0.4.18'}
+CI_VERSION = "${{ matrix.app == 'headscale' && '0.4.18' || '0.4.13' }}"
+RELEASE_VERSION = "${{ inputs.app == 'headscale' && '0.4.18' || '0.4.13' }}"
+TITLES = dict(zip(PRODUCTS, ('Odoo', 'n8n', 'Hermes', 'OpenDesign', 'EMQX', 'LiteLLM', 'Nextcloud', 'Headscale')))
+
+
+def version_for(product):
+    require(product in PRODUCTS, 'unsupported product version')
+    return VERSION_OVERRIDES.get(product, VERSION)
 
 
 class Invalid(ValueError):
@@ -87,22 +99,27 @@ def exact(value, expected, context):
 def manifest(value, product):
     require(product in PRODUCTS, 'unsupported product')
     require(isinstance(value.get('ports_description'), dict), 'ports_description mapping required')
-    expected = dict(name=f'WOOW {TITLES[product]} MCP (experimental)', version=VERSION,
+    expected = dict(name=f'Woow {TITLES[product]} MCP Server', version=version_for(product),
         slug='woow_mcp_' + product.replace('-', '_'), description=value.get('description'),
-        url=URL, arch=['amd64'], startup='application', boot='manual', init=True,
-        stage='experimental', image=f'ghcr.io/woowtech/{{arch}}-mcp-{product}',
-        ingress=True, ingress_port=8099, ingress_entry='/', ingress_stream=True,
+        url=URL, arch=['amd64'], startup='application', boot='auto', init=True,
+        stage='stable', image=f'ghcr.io/woowtech/{{arch}}-mcp-{product}',
+        ingress=True, ingress_port=8099, ingress_stream=True,
         panel_admin=True, panel_icon='mdi:connection', ports={'8081/tcp': None},
         ports_description={'8081/tcp': value.get('ports_description', {}).get('8081/tcp')},
         timeout=30, backup='cold', apparmor=True, options={}, schema={})
     for key in ('host_network', 'host_pid', 'host_ipc', 'host_uts', 'host_dbus',
                 'full_access', 'docker_api', 'hassio_api', 'auth_api'):
         expected[key] = False
-    # Approved broad-Core capability exception: new n8n pilot ONLY.
-    # hassio_role remains omitted/default; all other privileges stay closed.
-    expected['homeassistant_api'] = product == 'n8n'
+    # Approved broad-Core capability exception: n8n pilot (2026-10-04), the other original products
+    # (owner decision 2026-10-05, 0.1.1), and Nextcloud (2026-10-08, 0.1.7). Headscale follows the
+    # same admin verifier contract, with independent image/HA gates. hassio_role stays omitted/default;
+    # every other privilege remains closed.
+    expected['homeassistant_api'] = True
     for text in (expected['description'], expected['ports_description']['8081/tcp']):
         require(isinstance(text, str) and 1 <= len(text) <= 512, 'missing description')
+    # 0.1.12: no ingress_entry. Supervisor 2026.09 builds ingress_url as f"/api/hassio_ingress/{token}/{ingress_entry}", so
+    # the former ingress_entry '/' made the HA sidebar open .../<token>// (404 in every MCP admin UI). The default
+    # (key absent) is the root; exact() rejects the key if it ever comes back.
     exact(value, expected, product)
 
 
@@ -133,6 +150,45 @@ def clearance_shape(value):
 def source_paths(root):
     # Match the store's checkout, not local ignored dependency installations.
     return subprocess.check_output(['git', '-C', str(root), 'ls-files', '--cached', '--others', '--exclude-standard', '-z']).decode().split('\0')[:-1]
+
+
+def runtime_version(text):
+    """0.1.8 (F6): mcp_admin_core.VERSION, the add-on version initialize reports, is bound exactly once, to the release
+    VERSION (an annotated, augmented or imported VERSION would rebind it)."""
+    bindings = []
+    for node in ast.walk(ast.parse(text)):
+        if isinstance(node, ast.Assign):
+            bindings += [node for target in node.targets for name in ast.walk(target)
+                         if isinstance(name, ast.Name) and name.id == 'VERSION']
+        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)) and isinstance(node.target, ast.Name) and node.target.id == 'VERSION':
+            bindings.append(node)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)) and any((a.asname or a.name) == 'VERSION' for a in node.names):
+            bindings.append(node)
+    require(len(bindings) == 1 and isinstance(bindings[0], ast.Assign) and len(bindings[0].targets) == 1
+            and isinstance(bindings[0].targets[0], ast.Name) and isinstance(bindings[0].value, ast.Constant)
+            and bindings[0].value.value == VERSION, 'initialize serverInfo version')
+    overrides = [node for node in ast.walk(ast.parse(text)) if isinstance(node, ast.Assign)
+                 and any(isinstance(target, ast.Name) and target.id == 'PRODUCT_VERSIONS' for target in node.targets)]
+    require(len(overrides) == 1 and ast.literal_eval(overrides[0].value) == VERSION_OVERRIDES,
+            'fixed per-product runtime version')
+
+
+def image_labels(dockerfile, value):
+    """0.1.8: exactly one io.hass.name and one io.hass.description in the Dockerfile, equal to the add-on manifest. Docker
+    keeps the last value of a repeated label, so a second LABEL (or any other mention) fails (review F-5d)."""
+    require(dockerfile.count('io.hass.name') == 1 and dockerfile.count('io.hass.description') == 1
+            and f'io.hass.name="{value["name"]}" io.hass.description="{value["description"]}"' in dockerfile,
+            'image name/description labels differ from the add-on manifest')
+
+
+def unit_child_sync(text):
+    """The standalone source gate must install every isolated Python child."""
+    loops = re.findall(r'^for app in ([a-z0-9 -]+); do\n  uv sync --project "apps/\$app" '
+                       r'--frozen --no-dev --python python3\.13\ndone$', text, re.M)
+    require(len(loops) == 1, 'one frozen child sync loop required in unit.sh')
+    apps = loops[0].split()
+    require(len(apps) == len(set(apps)) and set(apps) == (set(PRODUCTS) | set(RETIRED)) - {'n8n'},
+            'unit.sh isolated child scope')
 
 
 def builder_workflow(value, workflow):
@@ -178,12 +234,13 @@ def builder_workflow(value, workflow):
     uses = ['actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
             'docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8']
     if workflow == 'release':
+        release_version = RELEASE_VERSION
         runs = ['python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt',
                 'python packaging/validate.py && python packaging/check_release.py "$APP"', *runs,
                 'python packaging/registry_gate.py unused "$APP"',
                 '\n'.join(['set -eu',
                     'python packaging/supply_chain.py verify "$APP" "$RUNNER_TEMP/candidate"',
-                    'IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:0.1.0"',
+                    f'IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:{release_version}"',
                     'TESTED_ID="$(python -c \'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])\' "$RUNNER_TEMP/candidate/subject.json")"',
                     'docker tag "$TESTED_ID" "$IMAGE"',
                     'test "$(docker image inspect "$IMAGE" --format \'{{.Id}}\')" = "$TESTED_ID"',
@@ -214,10 +271,11 @@ def builder_workflow(value, workflow):
         exact(steps[login]['with'], {'registry': 'ghcr.io', 'username': '${{ github.actor }}',
               'password': '${{ secrets.GITHUB_TOKEN }}'}, 'late GHCR login only')
     app = '${{ matrix.app }}' if workflow == 'ci' else '${{ inputs.app }}'
+    build_version = CI_VERSION if workflow == 'ci' else RELEASE_VERSION
     exact(steps[build]['with'], {'builder': 'default', 'provenance': False, 'sbom': False,
           'context': '.', 'file': 'apps/' + app + '/Dockerfile', 'platforms': 'linux/amd64',
-          'push': False, 'load': True, 'tags': 'local/mcp-' + app + ':' + VERSION,
-          'build-args': 'BUILD_VERSION=' + VERSION,
+          'push': False, 'load': True, 'tags': 'local/mcp-' + app + ':' + build_version,
+          'build-args': 'BUILD_VERSION=' + build_version,
           'labels': 'org.opencontainers.image.revision=${{ github.sha }}'}, 'fixed local candidate build')
     admission = value['jobs']['builder-admission' if workflow == 'ci' else 'gate']
     guard(admission, 'admit')
@@ -235,14 +293,63 @@ def builder_workflow(value, workflow):
         exact(candidate['needs'], 'gate', 'release admission dependency')
 
 
+NATIVE_ADDON_KEYS = {'package', 'version', 'node', 'node_abi', 'platform', 'url', 'sha256', 'size', 'member', 'member_size',
+                     'member_sha256', 'evidence'}
+
+
+def native_addons(inputs, dockerfiles, files):
+    """Unreleased (0.4.12 line): the n8n image has exactly one native addon, better-sqlite3's prebuilt binary, and it enters
+    only through packaging/native_addon.mjs from the release asset pinned in inputs.json native_addons. The npm tree
+    stays hash-locked (`npm ci --ignore-scripts`); no Dockerfile may download anything else. Checked here: the pin's
+    shape and immutable URL, that the lock and the override hold the same better-sqlite3 version, that the n8n Dockerfile
+    carries every pinned literal in the npm stage (and no other Dockerfile mentions the addon), and that the CI unit
+    environment and the build context install/reach the same script. files: lock, package, unit, dockerignore (texts)."""
+    addons = inputs.get('native_addons')
+    require(isinstance(addons, dict) and set(addons) == {'better-sqlite3'}, 'native addon allowlist')
+    pin = addons['better-sqlite3']
+    require(set(pin) == NATIVE_ADDON_KEYS, 'native addon pin shape')
+    version, abi, platform = pin['version'], pin['node_abi'], pin['platform']
+    require(pin['package'] == 'better-sqlite3' and re.fullmatch(r'\d+\.\d+\.\d+', version), 'native addon version')
+    require(pin['node'] == inputs['bases']['node'].split(':')[1].split('-')[0], 'native addon is for the base image Node')
+    require(re.fullmatch(r'v\d+', abi) and platform == 'linux-x64', 'native addon target')
+    require(pin['url'] == f'https://github.com/WiseLibs/better-sqlite3/releases/download/v{version}/'
+                          f'better-sqlite3-v{version}-node-{abi}-{platform}.tar.gz', 'native addon immutable release URL')
+    require(all(re.fullmatch(r'[0-9a-f]{64}', pin[key]) for key in ('sha256', 'member_sha256')), 'native addon digests')
+    require(all(type(pin[key]) is int and pin[key] > 0 for key in ('size', 'member_size')), 'native addon sizes')
+    require(pin['member'] == 'build/Release/better_sqlite3.node', 'native addon member')
+    require(json.loads(files['lock'])['packages']['node_modules/better-sqlite3']['version'] == version,
+            'lock holds another better-sqlite3 than the pinned addon')
+    require(json.loads(files['package']).get('overrides', {}).get('better-sqlite3') == version, 'package.json override of better-sqlite3')
+    n8n = dockerfiles['n8n']
+    for literal in ('COPY packaging/native_addon.mjs ./native_addon.mjs', 'RUN node native_addon.mjs install --version ' + version,
+                    '--into node_modules/better-sqlite3', '--url ' + pin['url'], '--sha256 ' + pin['sha256'],
+                    '--size ' + str(pin['size']), '--member ' + pin['member'], '--member-size ' + str(pin['member_size']),
+                    '--member-sha256 ' + pin['member_sha256']):
+        require(literal in n8n, 'n8n Dockerfile does not carry the pinned addon: ' + literal[:48])
+    require(n8n.count('native_addon.mjs install') == 1, 'one addon installation')
+    locked = 'RUN npm ci --ignore-scripts --no-audit --no-fund && npm cache clean --force'  # the npm stage's own line, not the UI stage's
+    require(locked in n8n and n8n.index(locked) < n8n.index('native_addon.mjs install') < n8n.index('COPY --from=npm /npm/node_modules'),
+            'the addon is installed in the npm stage, after the locked tree and before it is copied')
+    for product, text in dockerfiles.items():
+        require(not re.search(r'(?im)^\s*ADD\b|\b(curl|wget)\b', text), 'a Dockerfile downloads something: ' + product)
+        require(product == 'n8n' or 'native_addon' not in text, 'native addon outside the n8n image: ' + product)
+    unit = files['unit']
+    command = 'node packaging/native_addon.mjs install --inputs packaging/inputs.json --addon better-sqlite3 --node-modules apps/n8n/node_modules'
+    require(command in unit and unit.index('npm ci --prefix apps/n8n --ignore-scripts') < unit.index(command),
+            'CI unit environment does not install the pinned addon after the locked tree')
+    require('!packaging/native_addon.mjs' in files['dockerignore'], 'addon installer does not reach the build context')
+
+
 def validate(root=ROOT):
-    exact(load(root / 'repository.yaml'), {'name': 'WOOW MCP Add-ons (experimental / blocked)', 'url': URL, 'maintainer': 'WOOWTECH'}, 'repository')
+    exact(load(root / 'repository.yaml'), {'name': 'WOOW MCP Add-ons', 'url': URL, 'maintainer': 'WOOWTECH'}, 'repository')
     paths = source_paths(root)
     app_scopes = {Path(p).parts[1] for p in paths if p.startswith('apps/') and len(Path(p).parts) > 1}
-    require(app_scopes == set(PRODUCTS) | {'runtime'}, 'application source scope')
+    require(app_scopes == set(PRODUCTS) | set(RETIRED) | {'runtime'}, 'application source scope')
     inputs = load(root / 'packaging/inputs.json')
     exact(inputs['products'], list(PRODUCTS), 'build allowlist')
     exact(inputs['version'], VERSION, 'build version')
+    exact(inputs['version_overrides'], VERSION_OVERRIDES, 'per-product version overrides')
+    runtime_version((root / 'packages/mcp-admin-core/mcp_admin_core/__init__.py').read_text())
     exact(inputs['supervisor'], {'version': '2026.09.3', 'commit': '64ea3be4322537fd5dcfbf620c4dc25490c1f56d'}, 'Supervisor schema pin')
     require(set(inputs['bases']) == {'python', 'node', 'uv'}, 'base allowlist')
     for image in inputs['bases'].values():
@@ -251,6 +358,7 @@ def validate(root=ROOT):
     require(discovered == {f'addons/{p}/config.yaml' for p in PRODUCTS}, 'accidental/missing Supervisor config discovery')
     require({p.name for p in (root / 'addons').iterdir()} == set(PRODUCTS), 'addon directory allowlist')
     slugs = set()
+    dockerfiles = {}
     for product in PRODUCTS:
         path = root / 'addons' / product
         value = load(path / 'config.yaml')
@@ -263,6 +371,7 @@ def validate(root=ROOT):
         for doc in ('README.md', 'DOCS.md', 'CHANGELOG.md'):
             require((path / doc).is_file() and (path / doc).stat().st_size > 150, 'missing product document')
         dockerfile = (root / 'apps' / product / 'Dockerfile').read_text()
+        dockerfiles[product] = dockerfile
         bases = json.loads((root / 'packaging/inputs.json').read_text())['bases']
         for line in dockerfile.splitlines():
             if line.startswith('FROM '):
@@ -280,11 +389,16 @@ def validate(root=ROOT):
         require('EXPOSE 8081\n' in dockerfile and 'EXPOSE 3000' not in dockerfile and 'EXPOSE 8099' not in dockerfile, 'port scope')
         require('COPY apps/ ./apps/' not in dockerfile and 'COPY . .' not in dockerfile, 'broad app copy')
         require('io.hass.type="app"' in dockerfile and 'io.hass.arch="amd64"' in dockerfile, 'HA labels')
+        image_labels(dockerfile, value)
         require('uv sync --frozen --no-dev' in dockerfile, 'unlocked core')
         if product == 'n8n':
             require('npm ci --ignore-scripts --no-audit --no-fund' in dockerfile, 'unlocked/scripted npm')
         else:
             require(f'uv sync --project apps/{product} --frozen --no-dev' in dockerfile, 'missing isolated child lock')
+    unit = (root / 'packaging/unit.sh').read_text()
+    unit_child_sync(unit)
+    native_addons(inputs, dockerfiles, {'lock': (root / 'apps/n8n/package-lock.json').read_text(), 'package': (root / 'apps/n8n/package.json').read_text(),
+                                         'unit': unit, 'dockerignore': (root / '.dockerignore').read_text()})
     require('!packaging/management_launcher.py' in (root / '.dockerignore').read_text(), 'guard excluded from context')
     context = (root / '.dockerignore').read_text()
     for path in ('package.json', 'package-lock.json', 'NOTICE.txt', 'src/*.js', 'src/*.css', 'src/*.html', 'scripts/build.mjs'):
@@ -308,7 +422,9 @@ def validate(root=ROOT):
                 if step.get('uses', '').startswith('actions/checkout@'):
                     exact(step['with']['persist-credentials'], False, 'checkout credential persistence')
                 if step.get('uses', '').startswith('docker/build-push-action@'):
-                    for key, wanted in {'context': '.', 'platforms': 'linux/amd64', 'push': False, 'load': True, 'build-args': 'BUILD_VERSION=' + VERSION}.items():
+                    for key, wanted in {'context': '.', 'platforms': 'linux/amd64', 'push': False,
+                                        'load': True, 'build-args': 'BUILD_VERSION=' +
+                                        (CI_VERSION if workflow == 'ci' else RELEASE_VERSION)}.items():
                         exact(step['with'][key], wanted, 'build ' + key)
         exact(value['permissions'], {'contents': 'read'}, workflow + ' default permissions')
         require('pull_request_target' not in value['on'], 'unsafe event')
@@ -342,7 +458,7 @@ def validate(root=ROOT):
                 for step in job['steps']:
                     if step.get('uses', '').startswith('actions/checkout@'):
                         exact(step['with']['ref'], '${{ github.sha }}', 'no arbitrary release checkout')
-    print('PASS: seven strict Supervisor-subset manifests, translations, pins, workflow policy and clearance shape')
+    print(f'PASS: {len(PRODUCTS)} strict Supervisor-subset manifests, translations, pins, workflow policy and clearance shape')
 
 
 if __name__ == '__main__':

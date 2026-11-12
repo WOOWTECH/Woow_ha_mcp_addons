@@ -9,7 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from validate import ROOT, PRODUCTS, VERSION, Invalid, clearance_shape, load, require
+from validate import ROOT, PRODUCTS, Invalid, clearance_shape, load, require, version_for
 
 
 def check(product):
@@ -32,7 +32,7 @@ def check(product):
         evidence = ROOT / gate['evidence']
         require(evidence.is_file() and not evidence.is_symlink() and evidence.stat().st_size > 100, 'missing reviewed evidence')
         require(subprocess.run(['git', 'ls-files', '--error-unmatch', gate['evidence']], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0, 'evidence must be tracked')
-    print(f'PASS: approved main source and source/license/secret/publisher/image/HA gates for {product} {VERSION}')
+    print(f'PASS: approved main source and source/license/secret/publisher/image/HA gates for {product} {version_for(product)}')
 
 
 if __name__ == '__main__':

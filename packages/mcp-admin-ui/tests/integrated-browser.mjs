@@ -2,6 +2,7 @@
 // Invoked by pytest's owned integration harness, never a production entrypoint.
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 import { origin, proofGuard, routeForwarder } from '../../../tests/owned_browser.mjs';
 const admin = origin(process.env.LOCAL_ADMIN);
@@ -14,7 +15,7 @@ const fetch = async (url, options={}) => {
   return realFetch(url, {...options, redirect:'error'});
 };
 const prefix = '/api/hassio_ingress/DUMMY';
-const evidence = '/data/pi-agent/home/work/mcp-haos-team-runtime/reports/bt1-joined-fix-evidence/core';
+const evidence = process.env.UI_EVIDENCE_DIR ?? fileURLToPath(new URL('../test-results/integrated-evidence/', import.meta.url));
 const browser = await chromium.launch({headless:true});
 const context = await browser.newContext({serviceWorkers:'block'});
 const errors=[], requests=[];
@@ -69,7 +70,7 @@ async function open(origin,path) {
 async function bootstrap(origin=admin,base=prefix) { return (await fetch(origin+base+'/api/bootstrap')).json(); }
 async function policy(payload) {
   const b=await bootstrap();
-  const r=await fetch(admin+prefix+'/api/policy',{method:'PUT',headers:{'content-type':'application/json','x-csrf-token':b.csrf},body:JSON.stringify(payload)});
+  const r=await fetch(admin+prefix+'/api/policy',{method:'PUT',headers:{'content-type':'application/json','x-csrf-token':b.csrf,'If-Match':`"${b.configuration.revision}"`},body:JSON.stringify(payload)});
   assert.equal(r.status,200);
 }
 try {
@@ -108,6 +109,7 @@ try {
     opendesign:{url:'https://design.example.test'},
     emqx:{url:'https://emqx.example.test',api_key:'DUMMY-LOCAL-ONLY',api_secret:'DUMMY-LOCAL-ONLY'},
     litellm:{url:'https://litellm.example.test',master_key:'DUMMY-LOCAL-ONLY'},
+    nextcloud:{url:'https://cloud.example.test',username:'tester',app_password:'DUMMY-LOCAL-ONLY'},
   };
   for (const [product,values] of Object.entries(connections)) {
     const origin=product==='n8n'?admin:control;
@@ -191,5 +193,5 @@ try {
   assert.equal(await page.evaluate(()=>localStorage.length+sessionStorage.length),0);
   assert.deepEqual(errors,[]);
   assert(requests.every(url=>url.startsWith(admin)||url.startsWith(control)));
-  console.log('PASS LOCAL CORE: root/prefix refresh/fonts; 7 typed forms; v3 exact/legacy/stale/disabled; endpoint; CSRF; token blur/TTL/rotate/revoke; real WS demotion/error. No HA claim.');
+  console.log('PASS LOCAL CORE: root/prefix refresh/fonts; 8 typed forms; v3 exact/legacy/stale/disabled; endpoint; CSRF; token blur/TTL/rotate/revoke; real WS demotion/error. No HA claim.');
 } finally { await context.close(); await browser.close(); proof.close(); }

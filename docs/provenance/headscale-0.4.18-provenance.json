@@ -1,0 +1,45 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "predicate": {
+    "evidence": {
+      "sbom.spdx.json": "ee076f378b4e484de388e63f6db381bd402d698179bbe13f260a15b27487bfe1",
+      "sbom.syft.json": "ceba5d03c4435bd9f8862d588466a91b5f0a7c3493eb15e87025c0bb180866df",
+      "scan-summary.json": "958944ebba6b6d59d7aa441f2732a3af313bd73810781629c0f837999d5edd31"
+    },
+    "recipe": "packaging/supply_chain.py candidate (source commit below)",
+    "subject": {
+      "app": "headscale",
+      "archive_sha256": "660d4ae5220b32d2a16cc19726b30df45520f67a3e30d9913a5cf654d2df2c35",
+      "diff_ids": [
+        "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+        "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+        "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+        "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+        "sha256:8e4b68cc3fd123d150bfe5103b8c45df7e501bb42e51c9a20af5ba4a7edfb159",
+        "sha256:372cd2a15e358e09cc2cac85fffbc620d7b81b71f7226e50fe523e7c506a29aa",
+        "sha256:24acd2c36f8a25fd98e0e131e06f8edb2a0fa969776a7fc4422530dca007fb7b",
+        "sha256:efb14c6c490979c6b26ceb02a9bf245c4dd529d7c57fd73538dc7046e51f1eb2",
+        "sha256:10233f2ba282158f1bd727dae78329d200bebda2695c5923c1c44dbbf85d681b",
+        "sha256:c4c125d1fb5bb789fedbeaf3b0b41af61119d7c250f0256e8a22c584a9d17c68",
+        "sha256:ad98f6f321879a3e4ff941fa17e825b3e3bde9ee47b5b612d8064bb0c05d15a1",
+        "sha256:b8780e5db4243295c475822163eb6e5692be04e0f28a77f8e40468c8444bdeb3",
+        "sha256:151931a9b784e53c763f2972ebd52b6977130fa75bf5d62c1480bfc8ddfbb892",
+        "sha256:4f38db2adbf3f4467de4bad52d5d404f087b00f9eaebf17cde30601f4fd9352f",
+        "sha256:fd82ce2f0e1405470aa7757109b3947dee555835cdc95bc1ad284a3fe5a9cf5b",
+        "sha256:31d42586f3545ab5454423d97eb24a6f149df410bdbab3f13b0ad05569f0afd8"
+      ],
+      "image_id": "sha256:a9dc0c528cb3202e5b294319bac1fd8f189a606c9191e610b8ff9ca65520748e",
+      "source": "55f35286a7b245cabb79f0a369dec6283f12adc5"
+    },
+    "trust": "unsigned protected-workflow receipt; NOT SLSA certification"
+  },
+  "predicateType": "urn:woow:mcp:unsigned-candidate:v1",
+  "subject": [
+    {
+      "digest": {
+        "sha256": "a9dc0c528cb3202e5b294319bac1fd8f189a606c9191e610b8ff9ca65520748e"
+      },
+      "name": "local/mcp-headscale"
+    }
+  ]
+}

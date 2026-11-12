@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 from typing import Annotated, Any, Literal
-from urllib.parse import quote
 
 import httpx
 from fastmcp import FastMCP
@@ -17,7 +16,7 @@ from ..errors import EmqxApiError, emqx_request, json_body
 from ..gating import ToolGate
 from ..models import RetainedMessage
 from ..settings import settings
-from ._common import destructive, page_of, read_only, writing
+from ._common import destructive, page_of, path_segment, read_only, writing
 
 _SCAN_PAGES = 20
 
@@ -49,13 +48,19 @@ async def _direct_lookup(emqx: httpx.AsyncClient, topic: str) -> dict | None:
     EMQX accepts hierarchical topics here as long as the whole topic is
     percent-encoded, slashes included: `woow%2Ftest%2Fx` returns 200 where the
     raw form returns 404. A 404 means nothing is retained, which is an ordinary
-    answer rather than a failure.
+    answer rather than a failure. '', '.' and '..' are valid MQTT topics but no
+    URL path segment can carry them (httpx drops dot segments), so they are left
+    to the listing scan.
     """
+    if topic in ("", ".", ".."):
+        return None
     try:
         body = json_body(await emqx_request(
-            emqx, "GET", f"/mqtt/retainer/message/{quote(topic, safe='')}"))
-    except EmqxApiError:
-        return None
+            emqx, "GET", f"/mqtt/retainer/message/{path_segment(topic, 'topic')}"))
+    except EmqxApiError as exc:
+        if exc.status_code == 404:
+            return None
+        raise
     return body if isinstance(body, dict) and body else None
 
 
@@ -251,20 +256,9 @@ def register(mcp: FastMCP, gate: ToolGate) -> None:
             entry or a ghost device state. It cannot be undone — the previous
             payload is gone unless something republishes it.
             """
-            try:
-                await emqx_request(
-                    emqx, "DELETE",
-                    f"/mqtt/retainer/message/{quote(topic, safe='')}")
-                return {"topic": topic, "deleted": True, "method": "delete"}
-            except EmqxApiError:
-                pass
-
-            # Fallback for brokers that refuse the direct endpoint: clear the
-            # topic the way MQTT itself does, by publishing an empty retained
-            # payload. Subscribers see this as a real message.
-            await emqx_request(emqx, "POST", "/publish", json={
-                "topic": topic, "payload": "", "qos": 0, "retain": True,
-                "payload_encoding": "plain",
-            })
-            return {"topic": topic, "deleted": True,
-                    "method": "empty_retained_publish"}
+            # A failed DELETE may already have taken effect. Never follow it
+            # with a publish: subscribers would receive a second operation.
+            await emqx_request(
+                emqx, "DELETE",
+                f"/mqtt/retainer/message/{path_segment(topic, 'topic')}")
+            return {"topic": topic, "deleted": True, "method": "delete"}

@@ -1,0 +1,12 @@
+{
+ "backend_key": "DUMMY-n8n-api-key",
+ "backend_url": "http://n8n.invalid:5678",
+ "child_token": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+ "disabled": [
+  "n8n_list_workflows"
+ ],
+ "endpoint": "https://mcp.invalid:8081/mcp",
+ "schema_version": 1,
+ "token": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+ "writes_enabled": true
+}

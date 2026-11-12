@@ -84,8 +84,10 @@ export async function installUIContextGuard(context, proof) {
   assert.equal(context.pages().length, 0, 'UI guard must precede pages');
   const forward = routeForwarder(proof);
   const active = new Set();
+  let closing = false;
   async function handle(route) {
     try {
+      if (closing) return await route.abort('blockedbyclient');
       await forward({ request: () => route.request(), fetch: options => route.fetch({ ...options, maxRetries: 0 }) },
         response => route.fulfill({ response }));
     } catch {
@@ -106,6 +108,7 @@ export async function installUIContextGuard(context, proof) {
   // Playwright internals. This also guards ordinary page/context.request calls.
   const send = context.request._innerFetch.bind(context.request);
   context.request._innerFetch = async (options = {}) => {
+    if (closing) throw Error('UI context closing');
     const url = proof.resolveURL(options.url ?? options.request?.url());
     await proof.guard(url);
     const response = await send({ ...options, url, maxRedirects: 0, maxRetries: 0 });
@@ -116,10 +119,13 @@ export async function installUIContextGuard(context, proof) {
     return response;
   };
   return async () => {
-    // Close before draining: keep guards installed while cancelling pending
-    // navigations/fetches, and do not call Playwright APIs on a closed context.
-    await context.close();
-    const settled = await Promise.allSettled([...active]);
+    // Stop new sends while retaining every network guard. A fetched response
+    // can still be in route.fulfill: context.close disposes its APIRequestContext
+    // first. Drain those retained responses before destroying their context.
+    closing = true;
+    let settled;
+    try { settled = await Promise.allSettled([...active]); }
+    finally { await context.close(); }
     const failed = settled.find(result => result.status === 'rejected');
     if (failed) throw failed.reason;
   };

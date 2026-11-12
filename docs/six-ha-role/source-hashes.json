@@ -1,0 +1,25 @@
+{
+  "base": "4300ae07c42c0d16b0cf6a37b98b0af2c791b8ca",
+  "branch": "feat/six-ha-role-20261005",
+  "files": {
+    "packages/mcp-admin-core/mcp_admin_core/ha_role.py": {
+      "base_sha256": "0ebe46690b485bdb50ff9384b4bd53e721b47d60c9661bbf3cf47c4c486ff905",
+      "current_sha256": "6ee43dafdd70263bade37f0e4fff5aa13eabfb9dbb51d9197dc2d27eaaf428c9"
+    },
+    "packages/mcp-admin-core/mcp_admin_core/run_product.py": {
+      "base_sha256": "d03a8a0e72f8f96b654381a581946aeb830448d4eb7b505f7f681198a77ef212",
+      "current_sha256": "7e73826ffc6abf5e90ff4e40883d0f719a767fc33aea47ea1821d878c6a26c0e"
+    },
+    "tests/test_ha_role.py": {
+      "base_sha256": "538b3835af5388e35f788ed7293f7c02c5c29f4e90a00af04646132c53644bf8",
+      "current_sha256": "84037417e00f6448409793d7e37054356ccdac8fbba3f3bd32023d5c66891afc"
+    },
+    "tests/test_product_ha_role.py": {
+      "base_sha256": null,
+      "current_sha256": "8d46ed81dba81631c7d2c9b733a669a6e8f6a41e2d0c07cfb2a808b665973255"
+    }
+  },
+  "source_test_patch_sha256": "855ffbf9f0768c910b18a3f19ef205ac112734c8a419ef98a7c8b3cd6bccb42f",
+  "patch_recipe": "Concatenate stdout bytes: git diff --no-ext-diff --no-textconv --binary BASE -- [first three files in files order]; git diff --no-ext-diff --no-textconv --binary --no-index -- /dev/null tests/test_product_ha_role.py (exit 1 expected).",
+  "ha_role_ast_without_module_docstring_identical": true
+}

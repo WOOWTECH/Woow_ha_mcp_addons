@@ -1,0 +1,18 @@
+{
+ "backend_key": "DUMMY-n8n-api-key",
+ "backend_url": "http://n8n.invalid:5678",
+ "child_token": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+ "connection": null,
+ "disabled": [],
+ "enabled_write_tools": [
+  "n8n_create_workflow",
+  "n8n_delete_workflow",
+  "n8n_manage_folders:create",
+  "n8n_manage_folders:rename"
+ ],
+ "endpoint": null,
+ "product": "n8n",
+ "schema_version": 3,
+ "token": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+ "writes_enabled": true
+}

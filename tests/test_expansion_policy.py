@@ -1,6 +1,6 @@
 """W2b grants must not inherit the legacy blanket writer switch."""
 import pytest
-from mcp_admin_core.products import ProductState, ProductStore, TOOLS
+from mcp_admin_core.products import ProductState, ProductStore, BOUNDED_TOOLS as TOOLS  # 0.2.0: the 0.1.x bounded surface (local models); products serve the full child surface
 from mcp_admin_core.policy import authorize, Denied
 
 
@@ -33,18 +33,19 @@ def test_grants_validate_product_and_preserve_legacy_state(tmp_path):
     store.close()
 
 
-def test_old_v2_switch_never_grants_new_writers(tmp_path):
+def test_old_v2_state_migrates_to_every_write(tmp_path):
+    # 0.2.0 (the full add-on): v2 -> v3 -> v4 once, every write grant on; the old legacy switch value is not consulted.
     import json
+    from mcp_admin_core.products import fresh_write_grants
     store = ProductStore(tmp_path, 'hermes')
     old = store.load().model_dump()
     old.pop('enabled_write_tools', None)
     old['schema_version'] = 2
-    old['writes_enabled'] = True
+    old['writes_enabled'] = False
     store.path.write_text(json.dumps(old))
     store.close()
     store = ProductStore(tmp_path, 'hermes')
-    assert store.load().schema_version == 3
-    assert store.load().enabled_write_tools == []
-    with pytest.raises(Denied):
-        authorize(call('hermes_skill', {'action': 'disable', 'name': 'example'}), TOOLS['hermes'], store.load())
+    assert store.load().schema_version == 4
+    assert store.load().enabled_write_tools == fresh_write_grants('hermes')
+    authorize(call('hermes_skill', {'action': 'disable', 'name': 'example'}), TOOLS['hermes'], store.load())
     store.close()

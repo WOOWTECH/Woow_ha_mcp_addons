@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import httpx
 from fastmcp.exceptions import ToolError
-from backend_policy import public_backend_error
+
+try:  # the add-on's shared outbound policy, on the child's path in the add-on
+    from backend_policy import BackendDenied
+except ImportError:  # the vendored server loaded on its own (unit tests): catch nothing
+    BackendDenied = ()
 
 
 class EmqxApiError(ToolError):
@@ -14,6 +18,10 @@ class EmqxApiError(ToolError):
     are written as instructions rather than stack traces.
     """
 
+    def __init__(self, message: str, *, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+
 
 async def emqx_request(
     client, method: str, path: str, **kwargs
@@ -21,31 +29,47 @@ async def emqx_request(
     """Call the EMQX REST API, converting failures into actionable errors."""
     try:
         response = await client.request(method, path, **kwargs)
-    except Exception as exc:
-        raise EmqxApiError(public_backend_error(exc)) from None
+    except httpx.TimeoutException:
+        raise EmqxApiError(
+            "EMQX_TIMEOUT: the broker did not finish the request. Check state before repeating a write."
+        ) from None
+    except BackendDenied:  # the add-on's backend policy refused it before sending (same text as the PaaS server)
+        raise EmqxApiError("EMQX_DESTINATION_DENIED") from None
+    except httpx.HTTPError:
+        raise EmqxApiError(
+            "EMQX_UNAVAILABLE: the broker request failed. Check state before repeating a write."
+        ) from None
 
     if response.status_code == 401:
         raise EmqxApiError(
             "EMQX rejected the API credentials (401). The configured API key "
-            "or secret is wrong, expired, or disabled."
+            "or secret is wrong, expired, or disabled.",
+            status_code=401,
         )
     if response.status_code == 404:
         raise EmqxApiError(
-            f"EMQX has no such resource: {method} {path}. "
-            "Double-check the identifier — list the collection first."
+            "EMQX has no such resource (404). "
+            "Double-check the identifier — list the collection first.",
+            status_code=404,
         )
+    if 300 <= response.status_code < 400:
+        raise EmqxApiError("EMQX_REDIRECT_DENIED: configure the final broker URL")
     if response.status_code >= 400:
         raise EmqxApiError(
-            f"BACKEND_HTTP_ERROR status={response.status_code}"
+            f"EMQX_API_ERROR status={response.status_code}",
+            status_code=response.status_code,
         )
     return response
 
 
 def json_body(response: httpx.Response) -> dict | list:
     """Parse a response body, tolerating EMQX's empty 204s."""
-    if response.status_code == 204 or not response.content:
+    if response.status_code == 204:
         return {}
     try:
-        return response.json()
-    except Exception:
-        raise EmqxApiError('BACKEND_INVALID_RESPONSE') from None
+        value = response.json()
+        if not isinstance(value, (dict, list)):
+            raise ValueError()
+        return value
+    except ValueError:
+        raise EmqxApiError("EMQX_INVALID_RESPONSE: expected a JSON object or list") from None

@@ -30,6 +30,8 @@ from typing import Any, Iterable, Mapping
 
 from .errors import ToolError
 from .registry import (
+    ACTIVE_OPERATION_TOOLS,
+    OP_CREATE,
     OP_READ,
     TOOL_REGISTRY,
     TOOLS_BY_NAME,
@@ -136,6 +138,13 @@ class ToolGate:
 
     # -- operation ---------------------------------------------------------
     def is_operation_allowed(self, name: str, operation: str) -> bool:
+        # A policy-label correction must not revive a previously denied tool.
+        # Only these three fixed operations have the old read label.
+        if name in ACTIVE_OPERATION_TOOLS and operation == OP_CREATE and (
+            OP_READ in self._disabled_operations
+            or f"{name}:{OP_READ}" in self._disabled_operations
+        ):
+            return False
         if f"{name}:{operation}" in self._disabled_operations:
             return False
         if operation in self._disabled_operations:
@@ -226,7 +235,7 @@ class ToolGate:
             return (
                 f"Tool '{name}' is currently disabled: the server is in "
                 f"read-only mode and every operation this tool performs "
-                f"({'/'.join(spec.operations)}) is a write. Use a read-only "
+                f"({'/'.join(spec.operations)}) requires write or active-operation permission. Use a read-only "
                 f"tool instead.{hint}"
             )
         return (

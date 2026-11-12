@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { products, mountPath, explicitUrl, backendPayload, policyPayload, toolRows, clientExample } from '../src/contracts.js';
+import { products, mountPath, explicitUrl, backendPayload, backendPatchPayload, backendEdit, connectionHelp, policyRestartsChild, policyRestartNotice, emqxBaseUrl, headscaleBaseUrl, policyPayload, toolRows, clientExample, claudeConnectorUrl } from '../src/contracts.js';
 import { AdminApi, ApiError } from '../src/api.js';
 const base = '/api/hassio_ingress/DUMMY';
 const bootstrap = () => ({ base_path: base, api_base: `${base}/api`, product: 'n8n', csrf: 'fresh_csrf_for_mock_only', tools: {} });
@@ -16,24 +16,35 @@ test('URLs reject credentials/query/fragment, preserve explicit client endpoint'
   assert.equal(explicitUrl('http://192.0.2.4:8081/mcp/', true), 'http://192.0.2.4:8081/mcp');
   assert.throws(() => explicitUrl('https://example.test/api', true));
 });
-test('seven typed product payloads; no invented OpenDesign token, preserve means no request', () => {
-  assert.equal(Object.keys(products).length, 7);
+test('nine typed product payloads; no invented OpenDesign token, preserve means no request', () => {
+  assert.equal(Object.keys(products).length, 9);
   for (const [product, spec] of Object.entries(products)) {
-    const values = Object.fromEntries(spec.fields.map(([key, , type]) => [key, type.startsWith('optional') ? '' : type === 'mode' ? 'read' : type === 'url' ? 'https://backend.example.test' : ' fixture value ']));
+    const filler = product === 'nextcloud' || product === 'headscale' ? 'fixturevalue' : ' fixture value ';
+    const values = Object.fromEntries(spec.fields.map(([key, , type]) => [key, type.startsWith('optional') ? '' : type === 'mode' ? 'read' : type === 'url' ? 'https://backend.example.test' : filler]));
     const payload = backendPayload(product, 'replace', values);
     const connection = product === 'n8n' ? payload : payload.connection;
     assert.deepEqual(Object.keys(connection), spec.fields.map(([key]) => key));
-    for (const [key, , type] of spec.fields) if (type === 'secret') assert.equal(connection[key], ' fixture value ');
+    for (const [key, , type] of spec.fields) if (type === 'secret') assert.equal(connection[key], filler);
     assert.equal(backendPayload(product, 'preserve', {}), null);
     assert.deepEqual(backendPayload(product, 'clear', {}), product === 'n8n' ? { url: null, key: null } : { connection: null });
   }
   assert.deepEqual(backendPayload('opendesign', 'replace', { url: 'https://design.example.test' }), { connection: { url: 'https://design.example.test' } });
 });
-test('typed replacement refuses blank secrets, partial dashboard, malformed credentials and API suffix', () => {
+test('typed replacement refuses blank secrets, partial dashboard and malformed credentials', () => {
   assert.throws(() => backendPayload('n8n', 'replace', { url: 'https://n8n.example.test', key: '' }));
   assert.throws(() => backendPayload('n8n', 'replace', { url: 'https://n8n.example.test', key: 'bad\nkey' }));
   assert.throws(() => backendPayload('hermes', 'replace', { gateway_url: 'https://hermes.example.test', gateway_api_key: 'fixture', dashboard_url: 'https://dashboard.example.test' }));
-  assert.throws(() => backendPayload('emqx', 'replace', { url: 'https://broker.example.test/api/v5', api_key: 'fixture', api_secret: 'fixture' }));
+  for (const [username, app_password] of [['   ', 'fixture'], [' tester', 'fixture'], ['tester ', 'fixture'], ['tester', '   '], ['tester', ' fixture'], ['tester', 'fixture ']]) {
+    assert.throws(() => backendPayload('nextcloud', 'replace', { url: 'https://cloud.example.test', username, app_password }), /不可空白/);
+  }
+  assert.throws(() => backendPayload('nextcloud', 'replace', { url: 'https://雲端.example.tw', username: 'tester', app_password: 'fixture' }),
+    /xn-- 形式：https:\/\/xn--suzq78c\.example\.tw$/);
+  assert.throws(() => backendPayload('nextcloud', 'replace', { url: 'https://cloud.台灣:8443/nc', username: 'tester', app_password: 'fixture' }),
+    /xn--.*:8443\/nc$/);
+  for (const url of ['https://xn--suzq78c.example.tw', 'https://Cloud.Example.test:8443/nc', 'http://192.0.2.4/nc', 'https://[2001:DB8:0::1]:8443'])
+    assert.equal(backendPayload('nextcloud', 'replace', { url, username: 'tester', app_password: 'fixture' }).connection.url, url);
+  assert.deepEqual(backendPayload('nextcloud', 'replace', { url: 'https://cloud.example.test/', username: 'tester', app_password: 'fix ture' }),
+    { connection: { url: 'https://cloud.example.test', username: 'tester', app_password: 'fix ture' } });
 });
 test('unknown policy contract cannot save hidden grants; v3 is explicit/data driven', () => {
   const old = { tools: { read_one: { write: false }, write_one: { write: true }, mixed: { write: false, write_operations: ['create', 'delete'] }, unknown: {} } };
@@ -78,9 +89,86 @@ test('MOCK missing CSRF and mismatched API base stop mutation before dispatch', 
 });
 test('MOCK HTTP 200 without typed saved acknowledgement is not success', async () => {
   const api = new AdminApi(base, async path => response(path.endsWith('bootstrap') ? bootstrap() : {}));
-  await assert.rejects(() => api.mutate('endpoint', { endpoint: null }), /無法確認/);
+  await assert.rejects(() => api.mutate('endpoint', { endpoint: null }, 'c1-'+'a'.repeat(64)), /無法確認/);
 });
 test('MOCK denied save never reports success or reflects server/body credentials', async () => {
   const api = new AdminApi(base, async path => path.endsWith('bootstrap') ? response(bootstrap()) : new Response('PRIVATE_CANARY', { status: 403 }));
-  await assert.rejects(() => api.mutate('backend', { url: null, key: null }), error => error instanceof ApiError && error.status === 403 && !error.message.includes('PRIVATE_CANARY'));
+  await assert.rejects(() => api.mutate('backend', { url: null, key: null }, 'c1-'+'a'.repeat(64)), error => error instanceof ApiError && error.status === 403 && !error.message.includes('PRIVATE_CANARY'));
+});
+test('Claude.ai connector URL: saved /mcp endpoint base + /private_<token>/mcp, never without an endpoint or valid token', () => {
+  const token = 'A'.repeat(21) + '-_' + 'z'.repeat(20);
+  assert.equal(claudeConnectorUrl('https://mcp.example.test/mcp', token), `https://mcp.example.test/private_${token}/mcp`);
+  assert.equal(claudeConnectorUrl('https://mcp.example.test:8443/mcp/', token), `https://mcp.example.test:8443/private_${token}/mcp`);
+  assert.equal(claudeConnectorUrl('https://proxy.example.test/odoo/mcp', token), `https://proxy.example.test/odoo/private_${token}/mcp`);
+  for (const endpoint of [null, undefined, '', 'https://mcp.example.test/api', 'https://mcp.example.test/mcp?x=1', 'https://u:p@mcp.example.test/mcp'])
+    assert.throws(() => claudeConnectorUrl(endpoint, token));
+  for (const bad of [null, '', 'short', 'A'.repeat(42), 'A'.repeat(44), 'A'.repeat(42) + '/', 'A'.repeat(42) + '?'])
+    assert.throws(() => claudeConnectorUrl('https://mcp.example.test/mcp', bad));
+});
+test('0.2.1 n8n: the optional MCP access token is sent with the connection, null when left blank', () => {
+  assert.deepEqual(backendPayload('n8n', 'replace', { url: 'https://n8n.example.test', key: 'fixture', mcp_access_token: '' }),
+    { url: 'https://n8n.example.test', key: 'fixture', mcp_access_token: null });
+  assert.deepEqual(backendPayload('n8n', 'replace', { url: 'https://n8n.example.test', key: 'fixture', mcp_access_token: 'mcp-fixture' }),
+    { url: 'https://n8n.example.test', key: 'fixture', mcp_access_token: 'mcp-fixture' });
+  assert.throws(() => backendPayload('n8n', 'replace', { url: 'https://n8n.example.test', key: 'fixture', mcp_access_token: 'bad\ntoken' }));
+});
+
+const emqxValues = url => ({ url, api_key: 'fixture', api_secret: 'fixture' });
+test('EMQX: a pasted /api/v5 root is saved without it (the child appends it), anything else in the path is refused', () => {
+  for (const [typed, saved] of [['https://broker.example.test', 'https://broker.example.test'], ['https://broker.example.test/', 'https://broker.example.test'],
+    ['https://broker.example.test/api/v5', 'https://broker.example.test'], ['https://broker.example.test/api/v5/', 'https://broker.example.test'],
+    ['https://broker.example.test:8443/emqx/api/v5', 'https://broker.example.test:8443/emqx'],
+    ['https://api/v5', 'https://api/v5']]) {  // host "api" with the path /v5: not a suffix
+    assert.equal(backendPayload('emqx', 'replace', emqxValues(typed)).connection.url, saved, typed);
+  }
+  for (const bad of ['https://broker.example.test/api/v5/api/v5', 'https://broker.example.test/api/v5/status', 'https://broker.example.test/x/api/v5/y']) {
+    assert.throws(() => backendPayload('emqx', 'replace', emqxValues(bad)), /\/api\/v5/, bad);
+  }
+  assert.equal(emqxBaseUrl('https://b.test/api/v5'), 'https://b.test');
+  assert.equal(backendPayload('n8n', 'replace', { url: 'https://n8n.example.test/api/v5', key: 'fixture' }).url, 'https://n8n.example.test/api/v5');  // only EMQX is touched
+  const emqx = { product: 'emqx', connection_configured: true, backend_edit: { contract: 'woow-connection-patch-v1', values: { url: 'https://old.test' }, secret_set: { api_key: true, api_secret: true } } };
+  assert(backendEdit(emqx));
+  assert.deepEqual(backendPatchPayload(emqx, { url: 'set', api_key: 'keep', api_secret: 'keep' }, { url: 'https://new.test/api/v5' }), { changes: { url: 'https://new.test' } });
+  assert.throws(() => backendPatchPayload(emqx, { url: 'set', api_key: 'keep', api_secret: 'keep' }, { url: 'https://new.test/api/v5/x' }), /\/api\/v5/);
+});
+test('Headscale: the API root is normalized and other paths are refused before saving', () => {
+  for (const [typed, saved] of [
+    ['https://hs.example.test', 'https://hs.example.test'],
+    ['https://hs.example.test/api/v1', 'https://hs.example.test'],
+    ['https://hs.example.test/api/v1/', 'https://hs.example.test'],
+  ]) {
+    assert.equal(backendPayload('headscale', 'replace', {url: typed, api_key: 'DUMMY'}).connection.url, saved);
+  }
+  for (const bad of ['https://hs.example.test/proxy', 'https://hs.example.test/api/v1/user']) {
+    assert.throws(() => backendPayload('headscale', 'replace', {url: bad, api_key: 'DUMMY'}));
+  }
+  assert.equal(headscaleBaseUrl('https://hs.example.test/api/v1'), 'https://hs.example.test');
+  assert.throws(() => backendPayload('headscale', 'replace', {url: 'https://hs.example.test', api_key: 'bad key'}), /不可包含空白/);
+  const state = {product: 'headscale', connection_configured: true,
+    backend_edit: {contract: 'woow-connection-patch-v1', values: {url: 'https://old.test'}, secret_set: {api_key: true}}};
+  assert(backendEdit(state));
+  assert.deepEqual(backendPatchPayload(state, {url: 'set', api_key: 'keep'}, {url: 'https://new.test/api/v1'}),
+    {changes: {url: 'https://new.test'}});
+});
+test('credential fields say what to paste: labels and per-product help', () => {
+  assert.equal(products.odoo.fields.find(([key]) => key === 'password')[1], '密碼或 API Key');
+  assert.equal(products.litellm.fields.find(([key]) => key === 'master_key')[1], 'LiteLLM 金鑰');
+  assert.equal(products.emqx.fields.find(([key]) => key === 'url')[1], 'Broker 基底 URL');
+  assert.deepEqual(Object.keys(connectionHelp).sort(), ['emqx', 'headscale', 'litellm', 'nextcloud', 'odoo']);
+  assert(Object.keys(connectionHelp).every(product => Object.hasOwn(products, product)));
+  assert.match(connectionHelp.odoo, /API Key.*2FA/);
+  assert.match(connectionHelp.litellm, /不建議直接貼 master key/);
+  assert.match(connectionHelp.nextcloud, /建立新應用程式密碼/);
+  assert.match(connectionHelp.emqx, /\/api\/v5.*自動去掉/);
+  assert.match(connectionHelp.headscale, /\/api\/v1/);
+});
+test('saving a tool policy says it restarts the child for the products whose child is launched with the policy', () => {
+  for (const product of ['emqx', 'litellm', 'nextcloud', 'headscale']) {
+    assert.equal(policyRestartsChild(product), true, product);
+    assert.match(policyRestartNotice(product), /重新啟動 MCP 子行程.*現有連線可能中斷/, product);
+  }
+  for (const product of ['odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign']) {
+    assert.equal(policyRestartsChild(product), false, product);
+    assert.equal(policyRestartNotice(product), '', product);
+  }
 });

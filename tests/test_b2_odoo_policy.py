@@ -7,7 +7,7 @@ import httpx
 from test_batch2_bounds import schema_results
 import pytest
 from pydantic import ValidationError
-from mcp_admin_core.products import ProductStore, TOOLS, child_spec
+from mcp_admin_core.products import ProductStore, BOUNDED_TOOLS as TOOLS, child_spec  # 0.2.0: the 0.1.x bounded surface (local models); products serve the full child surface
 from mcp_admin_core.policy import authorize, Denied
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.lifecycle import Supervisor

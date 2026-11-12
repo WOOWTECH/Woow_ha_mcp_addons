@@ -6,17 +6,20 @@ import httpx
 import pytest
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.lifecycle import Supervisor
-from mcp_admin_core.products import ProductStore, TOOLS, child_spec
-from n8n_adapter import TOOLS as N8N_TOOLS, child_spec as n8n_spec
+from mcp_admin_core.products import ProductStore, BOUNDED_TOOLS as TOOLS, child_spec  # 0.2.0: the 0.1.x bounded surface (local models); products serve the full child surface
+from n8n_adapter import BOUNDED_TOOLS as N8N_TOOLS, child_spec as n8n_spec
 from batch2_owned_port import private_spec, reserve_port, request_guard, wait_owned_listener
 from test_batch2_policy import BAD_CONNECTION_KEYS, CASES, GRAPH, GRAPH_NAME_CASES, graph_with_name
 from test_expansion_policy import call
 from test_expansion_runtime import fake_api, payload
 from test_real_products import connection, rpc
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 PURE = {'build_domain', 'generate_json2_payload', 'diagnose_odoo_call', 'validate_node', 'validate_workflow'}
 
-@pytest.mark.parametrize('product,major,allow_write', [('odoo', 18, True), ('odoo', 19, True), ('odoo-manage', 18, True), ('odoo-manage', 19, True), ('odoo-manage', 19, False), ('n8n', 18, True)])
+# 0.2.0: Odoo serves the published handlers (no B1 aggregate projection); its full surface is covered by
+# test_expansion_runtime and test_full_surface. The retired Odoo Manage and n8n's local validators keep these cases.
+@pytest.mark.parametrize('product,major,allow_write', [('odoo-manage', 18, True), ('odoo-manage', 19, True), ('odoo-manage', 19, False), ('n8n', 18, True)])
 async def test_batch2_real_handlers(tmp_path, product, major, allow_write):
     with fake_api(major=major, allow_write=allow_write) as (url, events, mutations, failures):
         store = ProductStore(tmp_path / 'state', product)
@@ -56,7 +59,7 @@ async def test_batch2_real_handlers(tmp_path, product, major, allow_write):
                         if p != product: continue
                         before, count, dispatched_before = len(events), len(mutations), len(dispatches)
                         if tools[name].write:
-                            assert (await client.post('/mcp', headers=headers, json=call(name, args))).status_code == 403
+                            assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
                             assert len(events) == before and len(mutations) == count and len(dispatches) == dispatched_before
                             store.update(enabled_write_tools=[name])
                         reply = await rpc(client, '/mcp', headers, call(name, args))
@@ -102,7 +105,9 @@ async def test_batch2_real_handlers(tmp_path, product, major, allow_write):
                             assert 'denied' in value['note']
                             before_resource = len(events)
                             response = await client.post('/mcp', headers=headers, json={'jsonrpc': '2.0', 'id': 2, 'method': 'resources/read', 'params': {'uri': 'odoo://res.partner/record/1'}})
-                            assert response.status_code == 403 and len(events) == before_resource
+                            # 0.1.13: the gateway's own JSON-RPC Method not found (was 403); never forwarded.
+                            assert response.status_code == 200 and response.json()['error']['code'] == -32601
+                            assert len(events) == before_resource
                         if name == 'post_message':
                             assert value['message_id'] == 2
                             assert mutations[-1][3] == {'body': args['body'], 'message_type': 'comment', 'subtype_xmlid': 'mail.mt_note'}
@@ -118,7 +123,7 @@ async def test_batch2_real_handlers(tmp_path, product, major, allow_write):
                                 graph = {**GRAPH, 'connections': {key: {'unexpected': 'not a typed edge'}}}
                                 invalid_args = {'workflow': graph} if name == 'validate_workflow' else graph
                                 response = await client.post('/mcp', headers=headers, json=call(name, invalid_args))
-                                assert response.status_code == 403
+                                assert refused(response)
                                 assert len(events) == before and len(mutations) == count
                                 assert len(dispatches) == dispatched_before
                             for boundary in ('id', 'name', 'connection-key', 'edge-target'):
@@ -127,17 +132,17 @@ async def test_batch2_real_handlers(tmp_path, product, major, allow_write):
                                     graph = graph_with_name(value, boundary)
                                     invalid_args = {'workflow': graph} if name == 'validate_workflow' else graph
                                     response = await client.post('/mcp', headers=headers, json=call(name, invalid_args))
-                                    assert response.status_code == 403, (boundary, repr(value))
+                                    assert refused(response), (boundary, repr(value))
                                     assert len(events) == before and len(mutations) == count
                                     assert len(dispatches) == dispatched_before
                         for extra in ('ctx', 'session', '__proto__', 'action'):
-                            assert (await client.post('/mcp', headers=headers, json=call(name, {**args, extra: {}}))).status_code == 403
+                            assert refused(await client.post('/mcp', headers=headers, json=call(name, {**args, extra: {}})))
                         store.update(disabled=[name])
-                        assert (await client.post('/mcp', headers=headers, json=call(name, args))).status_code == 403
+                        assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
                         assert len(events) == before and len(mutations) == count and len(dispatches) == dispatched_before
                         store.update(disabled=[], enabled_write_tools=[])
                         if tools[name].write:
-                            assert (await client.post('/mcp', headers=headers, json=call(name, args))).status_code == 403
+                            assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
                             assert len(events) == before and len(dispatches) == dispatched_before
                     assert not failures, failures
                     await client.delete('/mcp', headers=headers)

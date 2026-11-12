@@ -1,14 +1,14 @@
 "use strict";
 // New local adapter code, not copied upstream. Loaded only by our fixed launcher.
 // The pinned API client's base backend is trusted configuration, NOT a webhook.
-// Do not change WEBHOOK_SECURITY_MODE or the global SSRFProtection validators.
+// 0.2.1: the child runs with WEBHOOK_SECURITY_MODE=permissive (owner decision 2026-10-15, set by n8n_adapter);
+// the global SSRFProtection validators are not patched here.
 const dns = require("node:dns");
 const net = require("node:net");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const ipaddr = require("ipaddr.js");
 const path = require("node:path");
-const { AsyncLocalStorage } = require("node:async_hooks");
 const runtime = path.join(__dirname, "node_modules/n8n-mcp/dist");
 const apiPath = path.join(runtime, "services/n8n-api-client.js");
 // This deliberately fails closed on package drift until the adapter is re-audited.
@@ -17,13 +17,31 @@ if (crypto.createHash("sha256").update(fs.readFileSync(apiPath)).digest("hex") !
     throw new Error("backend adapter requires source review");
 }
 // The error types/formatter and actual handler are part of this boundary too.
+// 0.2.2: handlers-n8n-manager.js is the file apps/n8n/patches/fix_test_run_error_messages.py writes (test-run errors keep
+// n8n's own message, then fix_direct_inputs.py composes native input compatibility; both are applied by the
+// existing Dockerfile / packaging/unit.sh entrypoint): an unpatched or altered package fails closed.
+// Next release after 0.4.4: server.js must also carry fix_tool_result_is_error.py (success === false sets isError;
+// valid:false validation answers remain normal). Its separate server.js patch/digest stays unchanged.
+// 0.3.4 (n8n-mcp 2.91.0 -> 2.96.2): n8n-api-client.js, n8n-errors.js, handlers-official-tools.js and
+// official-mcp-access.js are byte-identical. Reviewed changes: mcp/server.js reads instanceContext through a getter
+// (per-request AsyncLocalStorage scope set by the HTTP server, else the session's own context; this child is
+// single-tenant, both are its environment context), injects the MCP Apps UI metadata only when isUIAppsEnabled (true
+// unless N8N_MCP_DISABLE_UI_APPS=true, which n8n_adapter never sets), adds an "instance" argument only for a context
+// with instanceArgument=true (never set here) and drops an "instance" key from built-in tool arguments (no built-in tool
+// has one), and adds deprecation details and validation codes to results. Tool definitions (tools.js,
+// tools-n8n-manager.js), dispatch, args.output and coerceStringifiedJsonParams are unchanged, so tools/list is
+// unchanged. utils/npm-version-checker.js adds a status field, an N8N_MCP_VERSION_CHECK_DISABLED switch (n8n_adapter sets
+// it to true: no npm registry query) and a shorter cache for failed checks. handlers-n8n-manager.js: the build patch is re-pinned (see the patch script).
+// Unreleased (0.4.12 line): tools-n8n-manager.js must carry fix_delete_workflow_description.py (the n8n_delete_workflow
+// description names how to delete a published workflow, as the PaaS server's description does); nothing else in it changes.
 for (const [relative, digest] of [
     ["utils/n8n-errors.js", "efd5783846cf1eb61dbf9387de260e5a1d336ec609bc4c4d5601c369b5d2f20a"],
-    ["mcp/handlers-n8n-manager.js", "0d99e10ec1eb9a6e4d78726636aa79f52eb4f3862be506785b794f1aeb9608cc"],
-    ["mcp/server.js", "a4dfc41f48282423a610ee9ac45c0374357b7409cdaa4858e11ba58a32b2128c"],
+    ["mcp/handlers-n8n-manager.js", "fe3181292ec5d1ad07195f55a7ab73569b15d990f687f620ecaf633742fb24aa"],
+    ["mcp/server.js", "638b148f91c18d484b8bcede838be1032f82ddd1b3aa53b24cf005325ae3d9f7"],
+    ["mcp/tools-n8n-manager.js", "e31acfb4d4344704786d4a69fc4a2a0a6b784a265df3474073dd5bc5951efac7"],
     ["mcp/handlers-official-tools.js", "e85937c58d5a8426d54b1b69598adc83a14648402fc58a8714ef5db8132977cd"],
     ["mcp/official-mcp-access.js", "113d3556e4b93a870b36986a0fce8de45391ce64d7ab4c9f50fd6715eee3c733"],
-    ["utils/npm-version-checker.js", "35eb4789eef7766e4516f78caf125542778cf7de33e1fff4bc670c1f1029057a"],
+    ["utils/npm-version-checker.js", "8ffe192878574d0c4a7a6453205be7916858344e889b8b681998b4f22451a426"],
 ]) {
     if (crypto.createHash("sha256").update(fs.readFileSync(path.join(runtime, relative))).digest("hex") !== digest) {
         throw new Error("public API error boundary requires source review");
@@ -31,109 +49,12 @@ for (const [relative, digest] of [
 }
 const { N8nApiClient } = require(apiPath);
 const { SSRFProtection } = require(path.join(runtime, "utils/ssrf-protection.js"));
-const { N8nApiError } = require(path.join(runtime, "utils/n8n-errors.js"));
 
-function classifyApiError(error) {
-    // Only the pinned mapper's typed status/code is authority, never backend
-    // message/details (including publish-specific codes inferred from its body).
-    let code = "BACKEND_UNAVAILABLE";
-    let status;
-    if (error instanceof N8nApiError) {
-        const codes = new Map([[400, "VALIDATION_ERROR"], [401, "AUTHENTICATION_ERROR"],
-            [403, "FORBIDDEN"], [404, "NOT_FOUND"], [429, "RATE_LIMIT_ERROR"]]);
-        if (codes.has(error.statusCode)) {
-            status = error.statusCode;
-            code = codes.get(status);
-        } else if (Number.isInteger(error.statusCode) && error.statusCode >= 500 && error.statusCode <= 599) {
-            status = error.statusCode;
-            code = "SERVER_ERROR";
-        } else if (error.code === "NO_RESPONSE") {
-            code = "NO_RESPONSE";
-        }
-    }
-    return {status, code};
-}
-function publicCreateError(error) {
-    const {status, code} = classifyApiError(error);
-    return new N8nApiError("Workflow creation failed; backend outcome may be unknown.", status, code);
-}
-
-// Creation returns metadata only. Rejections must be narrowed BEFORE the real
-// handler formats them. Keep upstream cleaner/retry semantics; never fake success
-// or claim rollback after a POST, even when its response cannot be accepted.
-const createWorkflow = N8nApiClient.prototype.createWorkflow;
-N8nApiClient.prototype.createWorkflow = async function (...args) {
-    let value;
-    try {
-        value = await createWorkflow.apply(this, args);
-    } catch (error) {
-        throw publicCreateError(error);
-    }
-    if (!value || typeof value.id !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(value.id) ||
-        typeof value.name !== "string" || value.name.length > 256 ||
-        value.active !== false || !Array.isArray(value.nodes) || value.nodes.length > 20) {
-        throw new N8nApiError("Backend workflow metadata invalid; creation may have committed.",
-            undefined, "BACKEND_INVALID_RESPONSE");
-    }
-    return {id: value.id, name: value.name, active: false, nodes: value.nodes.map(() => ({}))};
-};
-
-// Public formatting is deliberately separate from handleN8nApiError and the
-// client's raw-error settings fallback/retry logic. The genuine handlers copy
-// details and sometimes catch ordinary exceptions themselves, so merely replacing
-// their error text is insufficient. Retain only this per-call typed classification
-// at the final boundary; never inspect a returned error/message/details/stack.
-const publicMessages = new Map([
-    ["VALIDATION_ERROR", "The n8n backend rejected the request."],
-    ["AUTHENTICATION_ERROR", "Authentication with the n8n backend failed."],
-    ["FORBIDDEN", "The n8n backend denied access to this operation."],
-    ["NOT_FOUND", "The requested n8n resource or API route was not found."],
-    ["RATE_LIMIT_ERROR", "The n8n backend rate limit was reached. Try again later."],
-    ["SERVER_ERROR", "The n8n backend reported a server error."],
-    ["NO_RESPONSE", "No response was received from the n8n backend."],
-    ["BACKEND_INVALID_RESPONSE", "The n8n backend returned an invalid response."],
-    ["BACKEND_UNAVAILABLE", "The n8n operation could not be completed."],
-]);
-function publicFailure(error, write) {
-    const code = error instanceof N8nApiError && error.code === "BACKEND_INVALID_RESPONSE"
-        ? "BACKEND_INVALID_RESPONSE" : classifyApiError(error).code;
-    return {success: false, code, error: publicMessages.get(code) +
-        (write ? " Write outcome may be unknown; verify before retrying." : "")};
-}
-// Concurrent requests must not share classification, and the context contains
-// only a fixed public result, never a raw error. No new client/retry/write occurs.
-const publicErrors = new AsyncLocalStorage();
-const errors = require(path.join(runtime, "utils/n8n-errors.js"));
-errors.getUserFriendlyErrorMessage = function (error) {
-    const boundary = publicErrors.getStore();
-    const failure = publicFailure(error, boundary?.write === true);
-    if (boundary) boundary.failure = failure;
-    return failure.error;
-};
-const handlers = require(path.join(runtime, "mcp/handlers-n8n-manager.js"));
-// Audited server.js dispatch: minimal only, and list/create/rename folder actions.
-// Other handlers remain withheld by the existing parent policy (65 tools total).
-for (const [name, write] of [
-    ["handleListWorkflows", false], ["handleGetWorkflowMinimal", false],
-    ["handleDeleteWorkflow", true], ["handleListFolders", false],
-    ["handleCreateFolder", true], ["handleRenameFolder", true],
-    ["handleCreateWorkflow", true],
-]) {
-    const handler = handlers[name];
-    handlers[name] = function (...args) {
-        return publicErrors.run({write}, async () => {
-            try {
-                const result = await handler.apply(this, args);
-                // Business data on success is not diagnostic text or a DLP target.
-                if (result?.success === true) return result;
-                return publicErrors.getStore().failure || publicFailure(undefined, write);
-            } catch (error) {
-                // Unexpected ordinary rejections also fail closed, never success.
-                return publicFailure(error, write);
-            }
-        });
-    };
-}
+// 0.2.0 (owner decision 2026-10-15, as the PaaS server): the pinned handlers report the n8n backend's own errors
+// (n8n-errors.getUserFriendlyErrorMessage and the handlers unchanged) and return their own results; the fixed
+// public messages, the per-handler failure boundary and the metadata-only workflow creation are gone. The gateway
+// replaces every credential the add-on holds with [REDACTED] in each relayed reply. Only the backend network
+// policy below (DNS-pinned agents for the configured origin) and the source guards above remain.
 
 function denied() { throw new Error("configured backend network policy denied"); }
 function hostname(value) { return value.toLowerCase().replace(/^\[|\]$/g, ""); }
@@ -188,4 +109,3 @@ N8nApiClient.prototype.getPinnedAgents = async function () {
     return agents;
 };
 
-require('./metadata_reads.cjs')({runtime, N8nApiClient, publicErrors, publicFailure});

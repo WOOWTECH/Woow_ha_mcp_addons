@@ -1,0 +1,20 @@
+{
+  "paas_source_commit": "052887fa68d5e67b86c622ef92f46dd7f75a08ca",
+  "ha_base_commit": "0807d4dfb8c2ce958ac052bbe14395c98bd0f298",
+  "helper_sha256": "8f059b0d5108610d2c9a8b6598b573d236b12319fc59286f8d763afda40a796e",
+  "exact_function_sha256": {
+    "hermes_session": "52b8e3a723995aed97a8e284b14e5561eab9afbe6a3e86470f42ea70a18e2c0d",
+    "_relogin_on_401": "ceaf3a967825ade772880adf0c54957185dddc88e1e1f9adc099c31109ef01d4"
+  },
+  "test_source": "apps/hermes/tests/test_session_mutations.py at same PaaS source",
+  "test_port_difference": "HA wraps GuardError as backend_policy.BackendFailure; only that exception assertion/import changed",
+  "changes_excluded": [
+    "release version",
+    "locks",
+    "Docker/build",
+    "shared runtime implementation",
+    "HAOS",
+    "production"
+  ],
+  "actual_HA_image_acceptance": false
+}

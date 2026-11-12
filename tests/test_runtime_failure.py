@@ -8,7 +8,7 @@ import sys
 
 import pytest
 
-from mcp_admin_core.config import Store
+from mcp_admin_core.products import ProductStore
 
 from owned_executable import Executable
 from batch2_owned_port import reserve_port
@@ -23,7 +23,9 @@ def free_port():
 
 @pytest.mark.parametrize("fault", ["monitor", "monitor_return", "persisted_key"])
 async def test_runtime_failure_is_sanitized_and_nonzero(tmp_path, fault):
-    store = Store(tmp_path / "data")
+    # Inject faults into the normal runtime, after the legacy-review boundary.
+    store = ProductStore(tmp_path / "data", 'n8n')
+    assert store.load().schema_version == 4
     if fault == "persisted_key":
         value = store.load().model_dump()
         value.update(backend_url="http://127.0.0.1:1", backend_key="DUMMY\u00a0")

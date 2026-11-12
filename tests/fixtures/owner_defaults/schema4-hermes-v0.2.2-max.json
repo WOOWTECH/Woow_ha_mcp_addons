@@ -1,0 +1,44 @@
+{
+ "backend_key": null,
+ "backend_url": null,
+ "child_token": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+ "connection": {
+  "dashboard_password": "DUMMY-dashboard-password",
+  "dashboard_url": "http://hermes.invalid:9119",
+  "dashboard_username": "admin",
+  "gateway_api_key": "DUMMY-gateway-api-key",
+  "gateway_url": "http://hermes.invalid:8642"
+ },
+ "disabled": [
+  "hermes_chat"
+ ],
+ "enabled_write_tools": [
+  "hermes_chat",
+  "hermes_config:set",
+  "hermes_cron:create",
+  "hermes_cron:delete",
+  "hermes_cron:pause",
+  "hermes_cron:resume",
+  "hermes_cron:trigger",
+  "hermes_cron:update",
+  "hermes_gateway:restart",
+  "hermes_mcp:add",
+  "hermes_mcp:remove",
+  "hermes_model:set",
+  "hermes_session:delete",
+  "hermes_skill:disable",
+  "hermes_skill:enable",
+  "hermes_tools:disable",
+  "hermes_tools:enable",
+  "hermes_webhook:create",
+  "hermes_webhook:delete",
+  "hermes_webhook:enable_platform",
+  "hermes_webhook:toggle"
+ ],
+ "endpoint": null,
+ "mcp_access_token": null,
+ "product": "hermes",
+ "schema_version": 4,
+ "token": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+ "writes_enabled": true
+}

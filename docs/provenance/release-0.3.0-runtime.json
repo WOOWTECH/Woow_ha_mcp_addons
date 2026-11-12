@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "scope": "Historical candidate runtime acceptance only; not official0.3.0 image publication or Store upgrade acceptance",
+  "runtime_commit": "3573535a118b5dca629c9192acb6a02b68634cce",
+  "receipts": [
+    {
+      "private_receipt_basename": "ha-gate-n8n-b3h3573535.json",
+      "sha256": "2a3072f2c45eccea9898128512a621d2ce67538755593899909aaf16a6861545",
+      "passed": true,
+      "check_count": 19,
+      "source_commit": "3573535a118b5dca629c9192acb6a02b68634cce",
+      "schema_from": 1
+    },
+    {
+      "private_receipt_basename": "ha-gate-litellm-b3h3573535.json",
+      "sha256": "94086f85c6fc20ac58e63154eba44f1f3491e547d590fa7006e126e611f5bb7a",
+      "passed": true,
+      "check_count": 18,
+      "source_commit": "3573535a118b5dca629c9192acb6a02b68634cce",
+      "schema_from": 2
+    },
+    {
+      "private_receipt_basename": "ha-gate-hermes-b3h3573535.json",
+      "sha256": "4905350d698e65ee941701c73bdfa859a7eeafab49dcc781be172e8a9874d73e",
+      "passed": true,
+      "check_count": 18,
+      "source_commit": "3573535a118b5dca629c9192acb6a02b68634cce",
+      "schema_from": 3
+    },
+    {
+      "private_receipt_basename": "ha-runtime-n8n-b3h3573535.json",
+      "sha256": "c954bef9dcebcddf52bf03a07ceb2ed964546414ad4e966a57c5aaa5ba4e22c6",
+      "passed": true,
+      "check_count": 38,
+      "source_commit": "3573535a118b5dca629c9192acb6a02b68634cce"
+    },
+    {
+      "private_receipt_basename": "ha-runtime-litellm-b3h3573535.json",
+      "sha256": "d3f0ae84840894033d638156e2e00854aa77b30e0ad912e3848c3c008c21581b",
+      "passed": true,
+      "check_count": 39,
+      "source_commit": "3573535a118b5dca629c9192acb6a02b68634cce",
+      "evidence_mode": "composite same exact installed candidate; initial full policy plus completed restrictive-policy resume"
+    },
+    {
+      "private_receipt_basename": "ha-runtime-hermes-b3h3573535.json",
+      "sha256": "d4d5cb75e62f340b3aecc0be1b8d9d4226362a36f1fc4ebfe1ca118fd1b9486c",
+      "passed": true,
+      "check_count": 48,
+      "source_commit": "3573535a118b5dca629c9192acb6a02b68634cce"
+    },
+    {
+      "private_receipt_basename": "ha-offline-fixture-hermes-b3h3573535.json",
+      "sha256": "ff5075eacbe3680798687283964539aab8700a130c420af8a246f9b393b88d5b",
+      "passed": true,
+      "check_count": 2,
+      "source_commit": "3573535a118b5dca629c9192acb6a02b68634cce",
+      "fixture_checks": 231
+    },
+    {
+      "private_receipt_basename": "final-cleanup-b3h3573535.json",
+      "sha256": "d3968905884612314f83f60c0cb0aa8052c00e5293e4faafceb6f38c79c58de6",
+      "passed": true,
+      "check_count": 25,
+      "source_commit": "3573535a118b5dca629c9192acb6a02b68634cce",
+      "guest_free_bytes_at_previous_acceptance": 1637642240
+    },
+    {
+      "private_receipt_basename": "ha-retained-full-policy.json",
+      "sha256": "0fafca4872d51e8b40ab6f5ed1daf0be41561e23ff26838c72daaad9fae58ece",
+      "passed": true,
+      "check_count": 5,
+      "source_commit": "3573535a118b5dca629c9192acb6a02b68634cce"
+    }
+  ],
+  "limitations": [
+    "HA 實機讀取檢查包含非錯誤 MCP 結果與後端 GET 路徑；尚未逐產品完整驗證回傳資料的語意。n8n 原始 MCP 回應結構未保留，後續直接 GET 的補充證據不算成另一份 MCP 驗收。LiteLLM 記錄了讀取結果的型態與數量。",
+    "HA 的撤銷驗收包含兩個既有客戶端的後續請求被拒絕；尚未驗證已經持續輸出的 HA SSE 串流是否立即中止。PaaS Hermes 已另外實測已開啟串流的關閉。",
+    "離線復原驗證的是只收緊權限、保留目前 token 撤銷狀態；不是整份資料還原或舊映像降版。正式 Store 升級、跨版本還原、斷電與非預設掛載路徑仍需另列測試。"
+  ]
+}

@@ -1,0 +1,24 @@
+{
+ "backend_key": null,
+ "backend_url": null,
+ "child_token": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+ "connection": {
+  "app_password": "DUMMY-app-password",
+  "url": "http://nextcloud.invalid:8080",
+  "username": "u"
+ },
+ "disabled": [
+  "get_file_tree"
+ ],
+ "enabled_write_tools": [
+  "create_text_file",
+  "delete_file_checked",
+  "update_text_file",
+  "upload_file"
+ ],
+ "endpoint": null,
+ "product": "nextcloud",
+ "schema_version": 3,
+ "token": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+ "writes_enabled": true
+}

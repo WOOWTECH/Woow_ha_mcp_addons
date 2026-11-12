@@ -1,0 +1,136 @@
+# Stable Releases for the WOOW HA App Store (the Store registry ships only stable
+# Releases of this repository: ref_policy release, required_workflows this file).
+# Shipping a version is merging a pull request that bumps it and passes these checks
+# (pipeline ADR-0005); there is no manual Release step.
+#
+#   checks     packaging validator, packaging tests and packaging/unit.sh (the
+#              hosted part of ci.yaml; builder admission is not a PR check).
+#   readiness  for every add-on the Store enables: the amd64 image of the manifest
+#              version can be pulled anonymously from GHCR, and a version with no
+#              stable Release yet is named in docs/operations/release-decision-*.md
+#              (the builder VM acceptance, which Actions cannot see).
+#   release    on claude-delivery only: the Store's shared workflow publishes one
+#              stable Release <slug>-v<version> per enabled add-on whose version
+#              has none. An already released version is left alone, so a push
+#              without a version bump releases nothing.
+#   Upgrade comparison / compare
+#              the Store's configuration comparison of each add-on whose
+#              version the PR changes (pipeline #89; see the job below).
+#
+# Releases made with GITHUB_TOKEN do not trigger other workflows, so
+# woow-addon-sync.yml runs on workflow_run of this workflow.
+name: WOOW addon release
+'on':
+  pull_request:
+  push:
+    branches: [claude-delivery]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: woow-addon-release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  checks:
+    name: checks
+    runs-on: ubuntu-24.04
+    # The full browser + Python source gate reached 95% at the old 30 minute limit on PR #76.
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Complete Git history for exact source provenance
+        run: |
+          if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
+            GIT_TERMINAL_PROMPT=0 git -c credential.helper= fetch --unshallow --no-tags origin
+          fi
+          test "$(git rev-parse --is-shallow-repository)" = false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.13.16'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '26.12.1'
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: '0.12.10'
+          enable-cache: false
+      - run: |
+          python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
+      - run: python packaging/validate.py
+      - run: |
+          uv sync --frozen --no-dev --python python3.13
+          uv pip install --python .venv/bin/python --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
+          .venv/bin/python -m unittest discover -s packaging -p 'test_*.py' -v
+      - name: Pin the existing fixed subprocess PATH on this disposable runner
+        run: |
+          test "$(node --version)" = v26.12.1
+          NODE_BIN="$(readlink -f "$(command -v node)")"
+          if [ "$NODE_BIN" != /usr/bin/node ]; then sudo ln -sfn "$NODE_BIN" /usr/bin/node; fi
+          test "$(/usr/bin/node --version)" = v26.12.1
+          # 0.4.0: unit.sh runs pytest under sudo, whose secure PATH finds the runner's own /usr/local/bin/node (v22) first,
+          # and the n8n child takes node from that PATH (as in the image, /usr/local/bin/node): pin it to the same binary.
+          if [ "$NODE_BIN" != /usr/local/bin/node ]; then sudo ln -sfn "$NODE_BIN" /usr/local/bin/node; fi
+          test "$(sudo -n -- node --version)" = v26.12.1
+      - run: sh packaging/unit.sh
+  readiness:
+    name: readiness
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Read the Store registry (which add-ons ship)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: WOOWTECH/Woow_HA_App_Store
+          ref: main
+          path: .store
+          persist-credentials: false
+          sparse-checkout: .addon-sync/registry.json
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.13.16'
+      - run: |
+          python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
+      - name: GHCR images and release records
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python packaging/release_gate.py all .store/.addon-sync/registry.json
+  # Upgrade comparison (pipeline #89): each add-on whose version a PR changes
+  # is compared with its latest formal Release (<slug>-v<version>); add-ons
+  # whose version is unchanged are not compared. A breaking config.yaml change
+  # not declared in addons/<x>/upgrade-notes.yaml blocks the PR. The image
+  # vulnerability comparison (category 4) scans published GHCR images: images
+  # are built only on the self-hosted builder, never on a PR, so the Store
+  # registry approves scan_published_image for this repo (pipeline #148). The
+  # compare job pulls the Release's amd64 image and the PR version's amd64
+  # image (config.yaml image, tag = version) and scans both with the same
+  # Syft and Grype DB; the readiness check already requires the new image to
+  # be published. The upgrade test (categories 2 and 3, pipeline #154, #155)
+  # pulls the same two published images, so no image_artifact is passed: each
+  # changed add-on's Release image starts under a mock Supervisor, then the new
+  # one on the same /data; both must answer ingress 8099 and stay up. No
+  # backend is configured, so it checks startup only, no data. An unpublished
+  # new tag fails it as the PR's fault, like category 4. A PR that changes no
+  # version passes in seconds; on push the
+  # job passes at once, so this workflow's non-PR run (registry
+  # required_workflows) still succeeds. Reported as
+  # "Upgrade comparison / compare".
+  upgrade-comparison:
+    name: Upgrade comparison
+    permissions:
+      contents: read
+      actions: read
+    uses: WOOWTECH/Woow_HA_App_Store/.github/workflows/woow-addon-upgrade-check.yml@main
+  release:
+    name: release
+    needs: [checks, readiness]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/claude-delivery'
+    permissions:
+      contents: write
+    uses: WOOWTECH/Woow_HA_App_Store/.github/workflows/woow-addon-release.yml@main

@@ -121,7 +121,7 @@ async def test_owned_decoy_receives_no_http():
         await server.wait_closed()
 
 
-@pytest.mark.parametrize('product', ['odoo', 'odoo-manage', 'emqx', 'litellm', 'hermes', 'opendesign', 'n8n'])
+@pytest.mark.parametrize('product', ['odoo', 'odoo-manage', 'emqx', 'litellm', 'nextcloud', 'hermes', 'opendesign', 'n8n'])
 def test_exact_spec_shape(product):
     from mcp_admin_core.products import ProductStore, child_spec
     from test_real_products import connection
@@ -141,7 +141,7 @@ def test_exact_spec_shape(product):
             assert result.cwd == original.cwd
             if product != 'n8n':
                 assert result.env == original.env
-            if product in ('odoo', 'odoo-manage', 'emqx', 'litellm'):
+            if product in ('odoo', 'odoo-manage', 'emqx', 'litellm', 'nextcloud'):
                 index = original.argv.index('--port') + 1
                 assert original.argv[index] == '3000'
                 assert result.argv[:index] == original.argv[:index]
@@ -173,14 +173,30 @@ async def test_omitted_gateway_and_monitor_urls_fail_before_dispatch(tmp_path):
         await manager.start()
         async with httpx.AsyncClient(transport=httpx.MockTransport(downstream)) as child:
             endpoint.attach(child)
+            rejected = []
+            hooks = child.event_hooks['request']
+            guard = hooks[hooks.index(endpoint.guard)]
+
+            async def recording_guard(request):
+                try:
+                    await guard(request)
+                except OwnershipError as exc:
+                    rejected.append(str(exc))
+                    raise
+            hooks[hooks.index(endpoint.guard)] = recording_guard
             # Deliberately OMIT both existing URL seams. These default Requests
             # stay in memory; the endpoint guard rejects before the mock spy.
-            with pytest.raises(OwnershipError, match='destination'):
-                await HealthMonitor(store, manager, child).check()
+            # Since 0.1.2 the monitor contains every error a child path raises (a misbehaving child must not
+            # stop the add-on), so the rejection is observed at the guard and readiness stays false.
+            monitor = HealthMonitor(store, manager, child)
+            await monitor.check()
+            assert rejected and 'destination' in rejected[0]
+            assert manager.ready is False and monitor.snapshot()['backend'] in ('unconfigured', 'unreachable')
             _, app = make_apps(store, TOOLS, child)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://test') as client:
                 with pytest.raises(OwnershipError, match='destination'):
-                    await client.post('/mcp', headers={'Authorization':'Bearer '+store.load().token},
+                    await client.post('/mcp', headers={'Authorization':'Bearer '+store.load().token,
+                                                       'Mcp-Session-Id':'test-session'},
                                       json={'jsonrpc':'2.0','id':1,'method':'ping'})
             assert calls == []
     finally:

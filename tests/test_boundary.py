@@ -1,4 +1,5 @@
 """LOCAL/MOCK only: no Home Assistant identity or real n8n backend."""
+from admin_write_headers import reviewed_headers, current_headers
 import json
 import os
 import stat
@@ -9,6 +10,7 @@ import pytest
 from mcp_admin_core.config import ConfigError, Store
 from mcp_admin_core.gateway import make_apps
 from n8n_adapter import TOOLS, child_spec
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 
 def rpc(method="tools/call", **params):
@@ -108,16 +110,29 @@ async def test_all_session_requests_authenticate(harness, method, authorization)
     rpc(name="search_nodes", arguments=[]), rpc(name="search_nodes", arguments={}),
     rpc(name="search_nodes", arguments={"query": "x", "unreviewed": True}),
     {"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "tools_documentation"}},
-    [rpc(name="tools_documentation")], rpc("arbitrary/execute"),
-    rpc("resources/list"), rpc("resources/read", uri="file:///not-accessed"),
-    rpc("resources/templates/list"), rpc("prompts/list"), rpc("prompts/get", name="unknown"),
-    rpc("logging/setLevel", level="debug"),
+    [rpc(name="tools_documentation")],
     {"jsonrpc": "2.0", "id": True, "method": "tools/call", "params": {"name": "tools_documentation"}},
+    {"jsonrpc": "2.0", "id": None, "method": "resources/list"},
 ])
 async def test_denied_calls_never_forward(harness, store, message):
     _, m, calls = harness
     r = await m.post("/mcp", headers=bearer(store), json=message)
     assert r.status_code in (400, 403)
+    assert calls == []
+
+
+@pytest.mark.parametrize("message", [
+    rpc("arbitrary/execute"), rpc("resources/list"), rpc("resources/read", uri="file:///not-accessed"),
+    rpc("resources/templates/list"), rpc("prompts/list"), rpc("prompts/get", name="unknown"),
+    rpc("logging/setLevel", level="debug"), rpc("server/discover"),
+])
+async def test_unknown_methods_are_answered_by_the_gateway_never_forwarded(harness, store, message):
+    """0.1.13: a JSON-RPC Method not found (HTTP 200) from the gateway itself, as Claude.ai's server/discover needs;
+    still never forwarded (0.1.12 and earlier: 403)."""
+    _, m, calls = harness
+    r = await m.post("/mcp", headers=bearer(store), json=message)
+    assert r.status_code == 200
+    assert r.json() == {"jsonrpc": "2.0", "id": 1, "error": {"code": -32601, "message": "Method not found"}}
     assert calls == []
 
 
@@ -133,7 +148,7 @@ async def test_duplicate_keys_and_body_limit(harness, store):
 
 async def test_read_call_filter_policy_rotation_and_separate_child_secret(harness, store):
     a, m, calls = harness
-    headers = bearer(store)
+    headers = {**bearer(store), "Mcp-Session-Id": "test-session"}  # 0.1.8: only initialize comes without one
     r = await m.post("/mcp", headers={**headers, "x-n8n-url": "http://invalid", "x-n8n-key": "override"}, json=rpc(name="tools_documentation", arguments={}))
     assert r.status_code == 200
     assert r.headers["mcp-session-id"] == "test-session"
@@ -144,7 +159,7 @@ async def test_read_call_filter_policy_rotation_and_separate_child_secret(harnes
     store.update(disabled=["tools_documentation"])
     headers["Mcp-Session-Id"] = "test-session"
     count = len(calls)
-    assert (await m.post("/mcp", headers=headers, json=rpc(name="tools_documentation"))).status_code == 403
+    assert refused(await m.post("/mcp", headers=headers, json=rpc(name="tools_documentation")))
     assert len(calls) == count
     # Rotation/revoke are privileged CSRF-protected routes, never ordinary GET settings.
     identity = {"X-Remote-User-Id": "admin-test", "X-Ingress-Path": "/api/hassio_ingress/opaque"}
@@ -154,30 +169,31 @@ async def test_read_call_filter_policy_rotation_and_separate_child_secret(harnes
     text = json.dumps(bootstrap)
     assert store.load().token not in text and store.load().child_token not in text
     assert (await a.post("/api/token/rotate", headers=identity)).status_code == 403
-    identity["X-CSRF-Token"] = bootstrap["csrf"]
+    identity = reviewed_headers(bootstrap, identity)
     rotated = await a.post("/api/token/rotate", headers=identity)
     assert rotated.status_code == 200
     assert rotated.json()["token"] != headers["Authorization"][7:]
     for method in ("GET", "POST", "DELETE"):
         assert (await m.request(method, "/mcp", headers=headers, json=rpc("ping"))).status_code == 401
-    assert (await a.post("/api/token/revoke", headers=identity)).status_code == 204
+    assert (await a.post("/api/token/revoke", headers=await current_headers(a, identity))).status_code == 200
     assert (await m.get("/mcp", headers={"Authorization": "Bearer " + rotated.json()["token"]})).status_code == 401
 
 
 async def test_admin_write_enable_disable_and_no_generic_secrets(harness, store):
     a, m, calls = harness
     headers = {"X-Remote-User-Id": "admin-test"}
-    headers["X-CSRF-Token"] = (await a.get("/api/bootstrap", headers=headers)).json()["csrf"]
+    headers = reviewed_headers((await a.get("/api/bootstrap", headers=headers)).json(), headers)
     assert (await a.put("/api/policy", headers=headers, json={"writes_enabled": True, "disabled": []})).status_code == 200
-    assert (await m.post("/mcp", headers=bearer(store), json=rpc(name="n8n_delete_workflow", arguments={"id": "MOCK"}))).status_code == 200
-    assert (await a.put("/api/backend", headers=headers, json={"url": "http://127.0.0.1:4567", "key": "MOCK-secret"})).status_code == 200
+    assert (await m.post("/mcp", headers={**bearer(store), "Mcp-Session-Id": "test-session"},
+                         json=rpc(name="n8n_delete_workflow", arguments={"id": "MOCK"}))).status_code == 200
+    assert (await a.put("/api/backend", headers=await current_headers(a, headers), json={"url": "http://127.0.0.1:4567", "key": "MOCK-secret"})).status_code == 200
     text = (await a.get("/api/bootstrap", headers=headers)).text
     assert "MOCK-secret" not in text
     assert (await a.get("/api/config", headers=headers)).status_code == 404
-    assert (await a.put("/api/backend", headers=headers, json={"command": "anything"})).status_code == 400
-    assert (await a.put("/api/endpoint", headers=headers, json={"endpoint": "http://mcp.example.test:8081/mcp"})).status_code == 200
+    assert (await a.put("/api/backend", headers=await current_headers(a, headers), json={"command": "anything"})).status_code == 400
+    assert (await a.put("/api/endpoint", headers=await current_headers(a, headers), json={"endpoint": "http://mcp.example.test:8081/mcp"})).status_code == 200
     assert (await a.get("/api/bootstrap", headers=headers)).json()["endpoint"] == "http://mcp.example.test:8081/mcp"
-    assert (await a.put("/api/backend", headers=headers, json={"url": None, "key": None})).status_code == 200
+    assert (await a.put("/api/backend", headers=await current_headers(a, headers), json={"url": None, "key": None})).status_code == 200
     assert store.load().backend_key is None
     assert (await a.post("/api/token/reveal", headers=headers)).json()["token"] == store.load().token
     assert (await a.post("/api/token/reveal", headers={**headers, "X-Ingress-Path": "/other"})).status_code == 403
@@ -213,10 +229,82 @@ async def test_origin_query_and_nonadmin_denied(harness, store):
 def test_fixed_adapter_environment(store, monkeypatch):
     monkeypatch.setenv("SUPERVISOR_TOKEN", "must-not-inherit")
     monkeypatch.setenv("NODE_OPTIONS", "must-not-inherit")
+    monkeypatch.setenv("N8N_MCP_VERSION_CHECK_DISABLED", "false")  # 0.3.4: an inherited value never turns it back on
     spec = child_spec(store.load(), store.path.parent)
     assert spec.argv[-1].endswith("n8n-mcp/dist/mcp/index.js")
     assert spec.env["HOST"] == "127.0.0.1"
     assert spec.env["AUTH_TOKEN"] == store.load().child_token
     assert spec.env["N8N_MCP_TELEMETRY_DISABLED"] == "true"
+    assert spec.env["N8N_MCP_VERSION_CHECK_DISABLED"] == "true"
     assert "SUPERVISOR_TOKEN" not in spec.env and "NODE_OPTIONS" not in spec.env
     assert "N8N_API_KEY" not in spec.env
+
+
+def test_pinned_version_check_is_disabled_without_npm_query(store):
+    """0.3.4 (n8n-mcp 2.96.2, as the PaaS): in the child's own environment the pinned npm-version-checker answers
+    "disabled" (what n8n_health_check reports as checkStatus) and never reaches fetch, so no npm registry query."""
+    import subprocess
+    from pathlib import Path
+    spec = child_spec(store.load(), store.path.parent)
+    checker = Path(spec.argv[-1]).parents[1] / "utils/npm-version-checker.js"
+    code = (
+        "globalThis.fetch = () => { throw new Error('npm registry queried'); };"
+        "const c = require(process.argv[1]);"
+        "c.checkNpmVersion(true).then(r => process.stdout.write(JSON.stringify({status: r.status,"
+        " latest: r.latestVersion, upToDate: c.getUpToDate(r), message: c.formatVersionMessage(r)})));"
+    )
+
+    def check(env):
+        result = subprocess.run([spec.argv[0], "-e", code, str(checker)], env=env, cwd=spec.cwd,
+                                capture_output=True, text=True, timeout=30)
+        assert result.returncode == 0, result.stderr
+        return json.loads(result.stdout)
+
+    assert check(spec.env) == {
+        "status": "disabled", "latest": None, "upToDate": None,
+        "message": "Version check disabled (N8N_MCP_VERSION_CHECK_DISABLED). Current version: 2.96.2"}
+    # Control: without the switch the same checker reaches the (stubbed) registry fetch.
+    control = check({k: v for k, v in spec.env.items() if k != "N8N_MCP_VERSION_CHECK_DISABLED"})
+    assert control["status"] == "failed" and "npm registry queried" in control["message"], control
+
+
+def test_the_n8n_child_loads_the_one_pinned_native_addon_and_n8n_mcp_uses_it(store):
+    """Unreleased (0.4.12 line; 0.4.0 to 0.4.11 kept the sql.js fallback and asserted the addon unavailable). `npm ci
+    --ignore-scripts` still never runs better-sqlite3's install script, so the locked tree has no addon of its own. The
+    image (apps/n8n/Dockerfile) and this unit environment (packaging/unit.sh) add exactly one file, through
+    packaging/native_addon.mjs from the release asset pinned in packaging/inputs.json: the Node 26 (ABI 147) prebuild
+    of the locked better-sqlite3 version, whose sha256 is pinned. n8n-mcp then opens its FTS5 database with it instead of
+    falling back to sql.js, which has no FTS5 (search_nodes ranked community nodes ahead of the core ones)."""
+    import hashlib
+    import subprocess
+    from pathlib import Path
+    spec = child_spec(store.load(), store.path.parent)
+    app = Path(spec.argv[-1]).parents[4]  # apps/n8n (…/node_modules/n8n-mcp/dist/mcp/index.js)
+    pin = json.loads((app.parent.parent / "packaging/inputs.json").read_text())["native_addons"]["better-sqlite3"]
+    modules = app / "node_modules"
+    assert (app / "package.json").is_file()
+    assert json.loads((modules / "better-sqlite3/package.json").read_text())["version"] == pin["version"]
+    # Exactly one native file in the whole tree, the pinned one, 0644, with nothing else built next to it.
+    found = sorted(str(path.relative_to(modules)) for path in modules.rglob("*.node"))
+    assert found == ["better-sqlite3/" + pin["member"]]
+    addon = modules / found[0]
+    assert hashlib.sha256(addon.read_bytes()).hexdigest() == pin["member_sha256"] and addon.stat().st_size == pin["member_size"]
+    assert stat.S_IMODE(addon.stat().st_mode) == 0o644
+    assert sorted(path.name for path in (modules / "better-sqlite3/build").rglob("*") if path.is_file()) == [addon.name]
+    code = (
+        "const out = { node: process.version };"
+        "try { const db = require('better-sqlite3')(':memory:'); out.native = 'loaded';"
+        " out.sqlite = db.prepare('select sqlite_version() v').get().v; db.exec('create virtual table t using fts5(a)'); out.fts5 = true; }"
+        " catch (e) { out.native = 'unavailable'; out.error = String(e).slice(0, 200); }"
+        # n8n-mcp's own choice, with the child's environment: the adapter class it ends up with and an FTS5 query on its database.
+        f"require({json.dumps(str(modules / 'n8n-mcp/dist/database/database-adapter.js'))})"
+        f".createDatabaseAdapter({json.dumps(str(modules / 'n8n-mcp/data/nodes.db'))}).then(adapter => {{"
+        " out.adapter = adapter.constructor.name;"
+        " out.fts_hits = adapter.prepare(\"select count(*) as c from nodes_fts where nodes_fts match 'webhook'\").get().c > 0;"
+        " process.stdout.write(JSON.stringify(out)); });"
+    )
+    result = subprocess.run([spec.argv[0], "-e", code], env=spec.env, cwd=app, capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stderr
+    found = json.loads(result.stdout)
+    assert found.pop("sqlite").count(".") == 2  # the SQLite inside the addon (3.53.2 for better-sqlite3 12.11.1)
+    assert found == {"node": "v26.12.1", "native": "loaded", "fts5": True, "adapter": "BetterSQLiteAdapter", "fts_hits": True}, found

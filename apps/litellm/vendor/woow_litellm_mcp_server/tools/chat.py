@@ -11,7 +11,7 @@ from ..deps import litellm_client
 from ..errors import ToolError
 from ..gating import ToolGate
 from ..registry import OP_CREATE
-from ._common import prune_none, read_only, writing
+from ._common import prune_none, writing
 
 def _assemble_stream(raw: str) -> dict[str, Any]:
     """Re-assemble an SSE ``chat.completion.chunk`` stream into one response.
@@ -155,7 +155,7 @@ def register(mcp: Any, gate: ToolGate) -> None:
 
         @mcp.tool(
             name="litellm_token_counter",
-            annotations=read_only("Token counter"),
+            annotations=writing("Token counter"),
         )
         async def litellm_token_counter(
             ctx: Context,
@@ -165,9 +165,14 @@ def register(mcp: Any, gate: ToolGate) -> None:
         ) -> dict:
             """Count prompt/message tokens for a model without inference.
 
+            Tokenization can fetch remote images or tokenizer resources.
+            Requires active-operation permission; does not request the optional
+            provider token-count endpoint.
+
             Provide either ``prompt`` (a raw string) or ``messages`` (the chat
             array). Returns the token count and the tokenizer used.
             """
+            gate.require_operation("litellm_token_counter", OP_CREATE)
             body = prune_none(
                 {"model": model, "prompt": prompt, "messages": messages}
             )

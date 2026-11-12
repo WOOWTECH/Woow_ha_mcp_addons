@@ -1,0 +1,5745 @@
+{
+  "format": 1,
+  "scope": "Exact audited output schemas from pinned HA children. No inferred fields or arbitrary child schemas. None/unknown tools remain omitted.",
+  "canonicalization": "UTF-8 JSON; sort_keys=true; separators=comma/colon; ensure_ascii=false; allow_nan=false. binding_sha256 hashes {product,tool,schema}.",
+  "sources": {
+    "litellm": {
+      "ha_commit": "e142a6e43170625fed945bc3eb4a4e45327559bf",
+      "sdk": {
+        "fastmcp": "4.1.3",
+        "mcp": "2.3.0",
+        "mcp-types": "2.3.0"
+      },
+      "files": {
+        "apps/litellm/pyproject.toml": "f2201d8689030d6e6721e636b37dc8117677b97cfe42e1837db5938fddb250e8",
+        "apps/litellm/uv.lock": "350c2d83a5822127167bc852d60165815740190d0923e2807c4b3ec18ea2d85b",
+        "apps/litellm/vendor/woow_litellm_mcp_server/errors.py": "febc2f7b04ac650d1bba13f27e7439e62c6c0f47cc79215ab8c7659cd4b8033d",
+        "apps/litellm/vendor/woow_litellm_mcp_server/gating.py": "d6ad9181d4459400f22b3dd553bc2af082c0c9a8af9888fe14e412045dc0b4a6",
+        "apps/litellm/vendor/woow_litellm_mcp_server/middleware.py": "a019bb77516d924981301c06a933263fc6743380c32488efaba2748bd28a05c5",
+        "apps/litellm/vendor/woow_litellm_mcp_server/server.py": "85c3cb8f6d50bed817279754c16309919bdf419f8193b6291f47f08f80db89f7",
+        "apps/litellm/vendor/woow_litellm_mcp_server/tools/chat.py": "e0afb3b37084c5cd9b79255a953fa02a979da6b34b6b43f9b5021d27c470d6d2",
+        "apps/litellm/vendor/woow_litellm_mcp_server/tools/health.py": "2d2151fe1ce42a0ceaf0d88914d75691764fa9d23bf3f78984ac74e90cf4058d",
+        "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py": "70462f606e9c87172e7693c2356031ecae42c98422d061d4ba312c80b0049e51",
+        "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py": "53183755197a9b4f48dc7420e28ff0550b15771262aac4501ac7fa1ae280aa34",
+        "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py": "64b253925d13be62325331fa5269089ac24ceb661b3a4af6621a5ff5ec0e1046",
+        "apps/litellm/vendor/woow_litellm_mcp_server/tools/spend.py": "87a47df79cc41c4f3ea29c2128bf248a5a865ca11acb0f63f4a1950294fdee3b",
+        "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py": "15fe1783df2740477c0dd222f51c50c6043844fc3c0bf2361050d9c70904ea96",
+        "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py": "19da4359727177e950b4a222633baa179d9a843fae50db6aece3d86ccee87517"
+      }
+    },
+    "nextcloud": {
+      "ha_commit": "9da728e13676264e0ab6c7cab2f79db0a2436eca",
+      "sdk": {
+        "fastmcp": "4.1.3",
+        "mcp": "2.3.0",
+        "mcp-types": "2.3.0"
+      },
+      "files": {
+        "apps/nextcloud/pyproject.toml": "5602d26f9e22c7bed9a08aaecd18dc2699134faace6a817c127b744622e50915",
+        "apps/nextcloud/uv.lock": "e955fb3ecac323fd59af4c7d39bd081ac911de9ebb2a62cda28bc52f61518320",
+        "apps/nextcloud/vendor/nextcloud_mcp_server/errors.py": "67339625603c9b4ed5a5bccf7960e52933e7b65f883e0a529df5e1718597dd04",
+        "apps/nextcloud/vendor/nextcloud_mcp_server/server.py": "eb25088dc4d2158f1583e53b682d753711941bfc2352a2890ef6f6693fd3a108",
+        "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py": "9b22f15816e56e6808a509886d89f52a04152dec99bf9078ccd257e098fb4aa4"
+      }
+    },
+    "odoo": {
+      "ha_commit": "825b2a98bbf60373ccf269b9e2bf9e8eb665312b",
+      "package": "odoo-mcp==1.3.0",
+      "sdk": {
+        "mcp": "2.3.0",
+        "mcp-types": "2.3.0"
+      },
+      "files": {
+        "apps/odoo/pyproject.toml": "c58ac066571355e944d775f84c7b6b0cadcb5abfc817a9be589a25473cd2998d",
+        "apps/odoo/uv.lock": "fe6109498c3143d0b7f25d094a81f7b863984dd791a582c02a9db66e7c49a17a",
+        "apps/odoo/launch.py": "c598000d69da8efaea38318774c53de8703882c8b5496d39eada8ae96c18a6bc",
+        "apps/odoo/odoo_switch_overlay.py": "2404e5e62dea31c4fcf3cb88f6ca5ce24c8672d32dd92436f3802a68cd88b170",
+        "apps/odoo/start_switches.py": "d3c366ee8c392875d0f712efc7bbafb2ab5aec04371018dadfad7827e268d85a"
+      }
+    },
+    "n8n": {
+      "ha_commit": "1cbfcb9ddff30947e11ddfa92fd0b0f3ecdffff8",
+      "package": "n8n-mcp==2.96.2",
+      "sdk": {
+        "@modelcontextprotocol/sdk": "1.32.2"
+      },
+      "files": {
+        "apps/n8n/package.json": "9dfa0c07850b98018ddea8da9491202e950a786779e8dd0fdc5d93fabe1c7a85",
+        "apps/n8n/package-lock.json": "0ac5975bba687fc2a7d5ccfe4204f402b15c2c4e4dd1cdd630fa7194a99c2a89",
+        "apps/n8n/n8n_adapter.py": "9884d76ad7d8b9c3785a15480ea70998dcf6ffe64305492bf2b7048b339417fd",
+        "apps/n8n/run.py": "aefd7498145840c4f6207dc00ce713ae327331ebf405002a346ebc4332f43283",
+        "apps/n8n/backend_policy.cjs": "1dcdb4395bd76b12474e112ac41c04d3dfec9248b6b9290cecf1165b6cc70588",
+        "apps/n8n/Dockerfile": "70113ca28efe54521773720291682811d31d689ced5b685fcf7da9acf63ef26e",
+        "packaging/unit.sh": "88126189f391ef76fa009e29fce247125e567cc33ed6f22dca9f9dfcb2c5e78c",
+        "apps/n8n/patches/fix_tool_result_is_error.py": "10d6018a19a90f2eb88956bd72043f454cbc36ca331c7d2978c55cc3dab5a5c8",
+        "apps/n8n/patches/fix_test_run_error_messages.py": "f2da0babef9db4a3878d211f47b1d83e552d6273d882462fee7607a805630a2a",
+        "apps/n8n/patches/fix_workflow_output_schema.py": "2c7f00d3ac7c28d637621de946f571b963533d64ba564eab79432628c2e9f477"
+      }
+    },
+    "hermes": {
+      "ha_commit": "c7baac6b21ce88a78a077179c3d6e6baa65498f0",
+      "sdk": {
+        "mcp": "2.3.0",
+        "mcp-types": "2.3.0"
+      },
+      "files": {
+        "apps/hermes/pyproject.toml": "9173e975df2cbac2632fe1d3c7daaff9f8ccf76280bad3f844850ad3663fb351",
+        "apps/hermes/uv.lock": "f5c00b593f018f01959c50b0e9d06dcd93a6b8687a0732bb54c00381df3f2dab",
+        "apps/hermes/launch.py": "66567ea7820e005eb4cecc56efce928d084d9921ae09422336bfa0ca24aae5fc",
+        "apps/hermes/vendor/hermes_mcp_server/server.py": "10c05ce8bee9db7044b039ba82c20bfb22dce2fa705e60dc9d92d9c1cb317087"
+      }
+    },
+    "emqx": {
+      "ha_commit": "e142a6e43170625fed945bc3eb4a4e45327559bf",
+      "sdk": {
+        "fastmcp": "4.1.3",
+        "mcp": "2.3.0",
+        "mcp-types": "2.3.0"
+      },
+      "files": {
+        "apps/emqx/pyproject.toml": "3c79a212aada05a143923a2a29fa78f3c318a2dd00041aa71875dca5f45d0053",
+        "apps/emqx/uv.lock": "e3b8b4d14c4a89c320e1c05635a44c4753f72be2c5deadde74164c7aeae94c57",
+        "apps/emqx/vendor/emqx_mcp_server/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "apps/emqx/vendor/emqx_mcp_server/deps.py": "fa949b1f1b3577be7c848af5bb74a5b9d068d39cba265b93cdd4dde4a41529e3",
+        "apps/emqx/vendor/emqx_mcp_server/errors.py": "ac012ba5c20e7bfdc446b3f993bee902051cf6e9bbad5e09259e788716a97c96",
+        "apps/emqx/vendor/emqx_mcp_server/gating.py": "9168feae3231c16df2513f3668a7ad6dacc67072ef5d0cc919bb963e2b6de057",
+        "apps/emqx/vendor/emqx_mcp_server/lifespan.py": "e217a630de2a1d9061441a81dc463aaada787203e3c900890198a5789a0be811",
+        "apps/emqx/vendor/emqx_mcp_server/models.py": "0d247d845738f37d2673fd0e50203cc8c4f3c4cf6a2d3b10db7bd2a0b9740801",
+        "apps/emqx/vendor/emqx_mcp_server/registry.py": "c440d204de9091952ffbd6784d81cd7fd78184e266701f86cf051da332191652",
+        "apps/emqx/vendor/emqx_mcp_server/server.py": "e6ae5c32a62ae8942bdf2701f687dc7d840bc49745fd8b094e886f833c043c22",
+        "apps/emqx/vendor/emqx_mcp_server/settings.py": "7c4ad8c7d6c56c8a9d3ef62634a4a875bbb9ee25992e6ac0aaf972aaf32a3598",
+        "apps/emqx/vendor/emqx_mcp_server/tools/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "apps/emqx/vendor/emqx_mcp_server/tools/_common.py": "dcd2dacb0bd4b046ea7f6a85f39929c07d1491420fb5b1486f0bdcfe46fc4fba",
+        "apps/emqx/vendor/emqx_mcp_server/tools/clients.py": "7972cd71b93a66cf904150296580de1a64a9b706474bc47c3da8242ab1dc8744",
+        "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py": "9b23d5bb1c62a2e3cd40549fbc4d6dc0755246963054d7b9d3a0a4a4dd1aeb4d",
+        "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py": "ef9bb5681af9235ebc1da7b8f836c7be320d6f7ff4e8e70d881466a0d0942cb3",
+        "apps/emqx/vendor/emqx_mcp_server/tools/integration.py": "6a417ac934f8f5d41c1d0439042ffff27dae1825cafe36106a814331c3339101",
+        "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py": "37c6177f9ee207fa497986f975775633505d02fce9f8ac1ad3667c448ab55c33",
+        "apps/emqx/vendor/emqx_mcp_server/tools/security.py": "c18d4c6b191c929cd42a4f817ec46caccab41aa60ef54ef45645456bd53a80f7",
+        "apps/emqx/vendor/emqx_mcp_server/tools/topics.py": "fb95c8cfcf2279e3b8b2545079bda8276a24210440123c5ac38624c372f1e353"
+      }
+    },
+    "headscale": {
+      "ha_commit": "659ad84b158616a3d51bb7de61fccabee17e36f5",
+      "sdk": {
+        "fastmcp": "4.1.3",
+        "mcp": "2.3.0",
+        "mcp-types": "2.3.0"
+      },
+      "files": {
+        "apps/headscale/pyproject.toml": "f830b72b2f880ba76d57400d3c4f7e8134781d5eb660021dfacf86c4a5f30c77",
+        "apps/headscale/uv.lock": "ecf92ace2f644677183e9104e2748fbc7ada4cca3dac3b4cfe42017fb12b0773",
+        "apps/headscale/vendor/headscale_mcp_server/server.py": "c502e31d22a6b614ab55729310cbbc11a941bca729310ed674964346d903d203",
+        "apps/headscale/vendor/headscale_mcp_server/registry.py": "d8e4ff233de26fdabc1aaeff87200e7e22f2893acf115aa798ac95595cb99728",
+        "apps/headscale/vendor/headscale_mcp_server/models.py": "94b2664100fd5fc65f67aa6acdf4faf27612579f51a1d540a47c8338f38f156a"
+      }
+    },
+    "opendesign": {
+      "ha_commit": "659ad84b158616a3d51bb7de61fccabee17e36f5",
+      "sdk": {
+        "mcp": "2.3.0",
+        "mcp-types": "2.3.0"
+      },
+      "files": {
+        "apps/opendesign/pyproject.toml": "78cc2dbcb1429b0db9263ff309b855cd43623f1eaa98e5e193822364409dda24",
+        "apps/opendesign/uv.lock": "b75cc7e818272d82e6608512bbbe8319e9d19816603b9c80a4431c805e624e0c",
+        "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py": "67c21098f7e6b9b2bd3693fc790fce278b57f0f4d999c5728215668c35d3b654"
+      }
+    }
+  },
+  "entries": [
+    {
+      "product": "litellm",
+      "tool": "litellm_list_models",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "bf9163217dba23ea77d65cba113d5a59997bf5afbebbafebd3cfd1560a2434ac",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_model_info",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "480c99df3cff8c3a7137f39e86c50f4a5094bd917e40dd01fa158a6c939db62e",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_model_group_info",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "47d76cd4af4be9899682cf55a824f62ed742f120a380c806a6b8b1853b347800",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_add_model",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "ef8fdc0dd845f0458812e57eb1de16ead31a63b716e7210ca5680b355b31c963",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_update_model",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "98e86bacf65e37258d409391fbc17235b7aec5c37009ab3718c9c3062a5e66aa",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_delete_model",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "2cce7cbde55a178359ae638d17aa428ef711c251fd7ade2394e2d829e8d7544a",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/models.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_chat_completion",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "878e5a3a7d809543728640d5ab9e2d538f5b7b292583ccb3ae0e5f031fdc92e7",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/chat.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_token_counter",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "353b41371d90325215ba26511912260b198ca1a9c594bd55a55e47989fcadd40",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/chat.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_generate_key",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "ccadbba8a5158ec590f8987331e392365facf5d45993f1109dc4a5de34737733",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_list_keys",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "87761d6283e97a7321fef6985fa3ee6b9a74db5b4dfc3c3c53bbe78c529ab74f",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_key_info",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "447ea7113484eba079456a22ebb37417a977883a71695c8a73490c351ef6dcfe",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_update_key",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "a879a3722c0bf2b4186eb6f389b4861fdd0dc99c379cec5656bff0cacbdc2925",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_delete_key",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "2c54b6f02f1571921fd046fdab2445aad3f22b2deecbef7288d694ecc9c0ed53",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_block_key",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "a2d2fee00699eec148196043648921bbb58fba580f284c8061cf64cfc4876717",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_unblock_key",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "13e1629d0b743f9fb2a455424c75fee7f21a02c82f764f2505be7ae08faef9ac",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_regenerate_key",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "5d0dff0968b05746172d0e7ca2405e60f7608c50800953b8867d8f2c0a5bb40f",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/keys.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_create_team",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "c7723e4df6ca8c0d4da452556731b5cb99f62df7221b24a9c2470551c98ba246",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_list_teams",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "c8ec4a338bb6d41bd23db4e90a2167a10272a111d1c29496369e606f95a2ea86",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_team_info",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "a2b2746beb354d2a0e89ed023f1216b18239c85f4173c6dd04d40ec1e69574bc",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_update_team",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "76b8192193d2318c4812237a250a584462a4c48fb1bc7a314e66a01dee7062a6",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_delete_team",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "cf7ce5f98cc4e9c2206f22787f674a96a585040dd6305d5e3c6bfbff1ec9fe02",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_team_member_add",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "90c2488fe3e681c45fd0aaaf87bdd8a7dc9cb8029e5db1ed3949d70f93d488a4",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_team_member_delete",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "cd64b1246105e89f54cd2bd4e41ee6fb75709c8ac7788a142a017a804e4a1c29",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/teams.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_create_user",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "6ff0228e86e6187f39fe8ff3497c1ee3b7362b067338660761d95261a899fabf",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_list_users",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "d28005d0a041ab2caccf5ac9b185a1dc4aac0189bfc3621e5a98a6c8e770470f",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_user_info",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "047a9f5c01dbf539f02669d3084e28cee173e17a9fca6d25a0d430f5ea025bdf",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_update_user",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "b5ea823e8571513b46c831806a7e9b7d488a5ad98bada68b69a822d7af58a848",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_delete_user",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "4f478bc76810e8f83bfc5f3f8625409ef92925de64d7205aece1ef57d7a26ac0",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/users.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_global_spend_report",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "d8e5fecf65375176d3f0572050ce0ec3d89735da3feb4fb1abd7cba721b1c021",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/spend.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_spend_calculate",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "85130e5a906d068db741a059504160f71e5e4013c2f9253902e9fd3db0c0f28b",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/spend.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_health",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "1abeac916f9060083d00ea04a915d7aaffb76525debe4151925b661f450e59ec",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/health.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_health_readiness",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "9b9016cad51b761bf9976f78ee670b015b8a727914f897e0865e965411f9fb27",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/health.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_register_plugin",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "38b3edccb3f32d7aa7d8c092d915bd6358a5e53d9ca9d06cabe60ea9afe8b19e",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_enable_plugin",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "1565ee6b541297704168c328b3e596e660a172177abf5d78f39b29384e5bf4fd",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py"
+    },
+    {
+      "product": "litellm",
+      "tool": "litellm_disable_plugin",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "ab1a1926aa42d77034675cb09985a6966b37f230c459df23bcfb31a1f087b233",
+      "handler_source": "apps/litellm/vendor/woow_litellm_mcp_server/tools/plugins.py"
+    },
+    {
+      "product": "nextcloud",
+      "tool": "get_file_tree",
+      "schema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "entries": {
+            "items": {
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "enum": [
+                    "file",
+                    "folder"
+                  ],
+                  "type": "string"
+                },
+                "size": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "modified": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "etag": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "content_type": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "path",
+                "name",
+                "type",
+                "size",
+                "modified",
+                "etag",
+                "content_type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "entries",
+          "truncated"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "1e8c5b1f9ab97a377ee58baa58ce6c6d862f6ae1a0fc2b82a0d7b2a0b01aa909",
+      "binding_sha256": "9da98bc574482bd7e87c03ea0e7d305bad669c25f3524eda1ea19b895959e241",
+      "handler_source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py"
+    },
+    {
+      "product": "nextcloud",
+      "tool": "read_text_file",
+      "schema": {
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "etag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "etag",
+          "bytes",
+          "content_type",
+          "content"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "09de3300cf3df5dd721ec4d69350d400e45fc7e75d52714241fd9734d1132225",
+      "binding_sha256": "daeedecee953d2bf589e20cf6c45ecaf94f88ff4019d6547d667470144f5cf2f",
+      "handler_source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py"
+    },
+    {
+      "product": "nextcloud",
+      "tool": "list_calendars",
+      "schema": {
+        "properties": {
+          "calendars": {
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "components": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "color": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "writable": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "components",
+                "color",
+                "writable"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "calendars"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "63771620058666cd41c22a4e005d4ffd679b78e1b80afae7e0ec43b0cd7b17da",
+      "binding_sha256": "7411b81baa5dd1dfbe51e14877b5861524555a6b9da427edb3995de604e0ba97",
+      "handler_source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py"
+    },
+    {
+      "product": "nextcloud",
+      "tool": "list_tasks",
+      "schema": {
+        "properties": {
+          "tasks": {
+            "items": {
+              "properties": {
+                "calendar": {
+                  "type": "string"
+                },
+                "uid": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "summary": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "status": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "due": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "start": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "completed": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "percent_complete": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "priority": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "description": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "calendar",
+                "uid",
+                "summary",
+                "status",
+                "due",
+                "start",
+                "completed",
+                "percent_complete",
+                "priority",
+                "description"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "skipped_large_objects": {
+            "type": "integer"
+          },
+          "skipped_calendars": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tasks",
+          "truncated",
+          "skipped_large_objects"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "f38a7ad7b166a8c1d842d43d6131e5c38f2c87c61059838e518c621120b7bc96",
+      "binding_sha256": "8e8508f1eaf66cdeb610d39f7548cfc8da36b6b00bd1bc3a0d27fce405f35519",
+      "handler_source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py"
+    },
+    {
+      "product": "nextcloud",
+      "tool": "create_text_file",
+      "schema": {
+        "properties": {
+          "status": {
+            "const": "created",
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "etag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bytes": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "path",
+          "etag",
+          "bytes"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "215097a312664b05b4d87edf228f9ddebbd16425a1b2daca57d29314ecaa4619",
+      "binding_sha256": "824a9c378d5d28cdb72a92f774512b97771c14110b07bdb8ea7812850a86381b",
+      "handler_source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py"
+    },
+    {
+      "product": "nextcloud",
+      "tool": "update_text_file",
+      "schema": {
+        "properties": {
+          "status": {
+            "const": "updated",
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "previous_etag": {
+            "type": "string"
+          },
+          "etag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "path",
+          "previous_etag",
+          "etag",
+          "bytes"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "949d70b3b3d5007d7f709b21c36e51c7387f4f1d77b3dd41087c748f1145bb3a",
+      "binding_sha256": "49c52fbe2ebb3efce9cccce6ee06856ea306a074da3bf89d22224c21369fbdc5",
+      "handler_source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py"
+    },
+    {
+      "product": "nextcloud",
+      "tool": "upload_file",
+      "schema": {
+        "properties": {
+          "status": {
+            "enum": [
+              "created",
+              "replaced"
+            ],
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "etag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "path",
+          "etag",
+          "bytes"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "5e8c8034bde7a70d92d5f5e67970a47336a9daf05ba23a0d403acecd3558a56f",
+      "binding_sha256": "8158f803f076adf9fde56690c8ac4511529eef3e83e0c54eba2519f54ad9607f",
+      "handler_source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py"
+    },
+    {
+      "product": "nextcloud",
+      "tool": "delete_file_checked",
+      "schema": {
+        "properties": {
+          "status": {
+            "const": "deleted",
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "etag": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "path",
+          "etag",
+          "note"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "a8930a8d5cb32cfd1c3315c7a2e37d0f5e4e4da258926b91da8c21772dc0e32b",
+      "binding_sha256": "35697c1f6f5497690e0d5ca0324f86e23ce277c6db9036aca67141627b085cc9",
+      "handler_source": "apps/nextcloud/vendor/nextcloud_mcp_server/tools.py"
+    },
+    {
+      "product": "odoo",
+      "tool": "accounting_health_across_instances",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "As Of"
+          },
+          "combined_buckets": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Combined Buckets"
+          },
+          "combined_total_outstanding": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Combined Total Outstanding"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Direction"
+          },
+          "elapsed_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Elapsed Ms"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Errors"
+          },
+          "instance_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instance Count"
+          },
+          "instances_queried": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instances Queried"
+          },
+          "results": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Results"
+          },
+          "skipped_opt_out": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Skipped Opt Out"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          },
+          "unknown_instances": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Unknown Instances"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "AccountingHealthAcrossInstancesResponse",
+        "type": "object"
+      },
+      "schema_sha256": "69ddec834cd0d104dafbc516f1529a86ffcdaf3ea9120bb7b24f9bda7fc8478c",
+      "binding_sha256": "b6552ef7cff85b50fc18fb2ca27d392536bc81e1f6288bbe623b5267e7d51238",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "accounting_health_summary",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "draft_invoices": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Draft Invoices"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "open_payable_items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Open Payable Items"
+          },
+          "open_receivable_items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Open Receivable Items"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "AccountingHealthSummaryResponse",
+        "type": "object"
+      },
+      "schema_sha256": "2985d50dcde37a51f204be3cf5280efad3003cdfb9581859e5e6e64bd2f7c5d7",
+      "binding_sha256": "ce156553a8f040ca4ad0b07134d11c5352273312a766f2184beb2112b0c8f99c",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "aggregate_across_instances",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "combined_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Combined Count"
+          },
+          "combined_measures": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Combined Measures"
+          },
+          "elapsed_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Elapsed Ms"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Errors"
+          },
+          "instance_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instance Count"
+          },
+          "instances_queried": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instances Queried"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "results": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Results"
+          },
+          "skipped_opt_out": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Skipped Opt Out"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          },
+          "unknown_instances": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Unknown Instances"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "AggregateAcrossInstancesResponse",
+        "type": "object"
+      },
+      "schema_sha256": "7a6dc607008c0b36a66a903a1a45aa1bc864e409bc9f9fe3922ebf9fca733ac0",
+      "binding_sha256": "01fa523aa8d4689e0713b1e63b047914538cb4a9b4c96687bc01c1bd184516b8",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "aggregate_records",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "fallback_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fallback Reason"
+          },
+          "group_by": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Group By"
+          },
+          "major_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Major Version"
+          },
+          "measures": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Measures"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "formatted_read_group (19+) or read_group.",
+            "title": "Method"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "row_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Row Count"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Aggregated group rows.",
+            "title": "Rows"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "AggregateRecordsResponse",
+        "type": "object"
+      },
+      "schema_sha256": "7335baa5dc3398e4ae97e742a41efdce7e70c34d2eacf6a4c16cdecb36f8b9be",
+      "binding_sha256": "e7a408320fbbba893972a629b697834531f6bfb4a48a23d7698c59bf0741d01a",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "analyze_upgrade_log",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "analyze_upgrade_logOutput",
+        "type": "object"
+      },
+      "schema_sha256": "b79a4767fa0b9b963f5c781264cbb2af43a00cc5d4efa979a94e9d93f2967b6a",
+      "binding_sha256": "debc87fc3a9dea1263bd42de2ef520403ffaf36e4a94f9a54ead07a50a00cbb6",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "build_domain",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "conditions": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {},
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Normalized field/operator/value conditions.",
+            "title": "Conditions"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Validated Odoo domain expression.",
+            "title": "Domain"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "issues": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Validation errors and warnings.",
+            "title": "Issues"
+          },
+          "metadata_used": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Metadata Used"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "BuildDomainResponse",
+        "type": "object"
+      },
+      "schema_sha256": "eb78ec4eeb039bcd5f832e1cb762d62332e83f766176bdafa1d7546a4edac7af",
+      "binding_sha256": "d71bb0852e5e48500e86d01d84ce9f0116e84e6010ff88226c2cb5e183ec170f",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "business_pack_report",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "business_pack_reportOutput",
+        "type": "object"
+      },
+      "schema_sha256": "a2cb2d9dd53eddcf81efdacfa4889935a668e7c847233ad86f989c12d31e7c3e",
+      "binding_sha256": "77f84b19b0a41e06709d9c75a775975389872ba73f9d1b5d0f510e7b6e1d9ff6",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "cancel_async_task",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Created At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Finished At"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Note"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started At"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Task Id"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "AsyncTaskResponse",
+        "type": "object"
+      },
+      "schema_sha256": "74531c20519c932e74876c2c4799dc2213c35ff65dc1d69a88e364a5bae9f54d",
+      "binding_sha256": "6998afae2da6c16bd7c711f7189a6896fb7142719e88a4657a42f7d1ec555d92",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "chatter_post",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "chatter_postOutput",
+        "type": "object"
+      },
+      "schema_sha256": "d442a062d26bb36af301a83ab725eda1ca3b6e54d1b574c3e6f3199e35e75119",
+      "binding_sha256": "ed4913a2ffc3893bdadbd5dcd616652fb7fc0220f8700fa99862db12f908acc3",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "data_quality_report",
+      "schema": {
+        "additionalProperties": true,
+        "description": "Typed envelope for data_quality_report (payload stays permissive).",
+        "properties": {
+          "checks_run": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Checks Run"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "instance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instance"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "results": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Results"
+          },
+          "sample_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Sample Limit"
+          },
+          "skipped_restricted_fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Skipped Restricted Fields"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Summary"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "DataQualityReportResponse",
+        "type": "object"
+      },
+      "schema_sha256": "4111c096267fbcdfa773b9a931799aef1cd18f3d8c45f501c872553e66c3662e",
+      "binding_sha256": "ac578677b3958c5b3e66ba2dc64ee8274da2ccd76ac82f62a5bf019f872be0c0",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "diagnose_access",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "diagnose_accessOutput",
+        "type": "object"
+      },
+      "schema_sha256": "174ce229404b5674b8847110085ac9d6e1d0a64b2d21dfbfcd1b39c33a958122",
+      "binding_sha256": "e9fefcd12f77cb58611d94b6a5905f8c57812c194a8a6c327660a0b124b80e5f",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "diagnose_odoo_call",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "diagnose_odoo_callOutput",
+        "type": "object"
+      },
+      "schema_sha256": "808eca2e58b75517aa03eb035408b01b08e81f07b3dbe8d38889fcded005a33f",
+      "binding_sha256": "4db06d01be2c98c85b33105eeaf969679adb7657c4a087e1af88eecafc4f6f86",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "execute_approved_write",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "execute_approved_write_toolOutput",
+        "type": "object"
+      },
+      "schema_sha256": "6f2ac55cd961ef9ec96f2b3248fd55387d04875af3076ab88f1207b2147aa7ac",
+      "binding_sha256": "9bb734d46c88a962267914c6c13c72c1df1e8798535b4733f11eaacab81f3fc5",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "execute_method",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "execute_methodOutput",
+        "type": "object"
+      },
+      "schema_sha256": "477e19607cc63dbaf21fc5e246e7976e02bc8377b3b00db4322aab7107a6c5bf",
+      "binding_sha256": "48a8d3baf83ab94c4d5878dcec81876ba1016efa9629da421221a047dc9f08c8",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "fit_gap_report",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "fit_gap_reportOutput",
+        "type": "object"
+      },
+      "schema_sha256": "938d4ea320ce6007f97f77719ce84a545313395c8f54f08bc56d7950b7554ac1",
+      "binding_sha256": "fc09ece1762e8861da77200e8c2a47d34ad92f303533e3078e0269ab52ae1f80",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "generate_json2_payload",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "generate_json2_payloadOutput",
+        "type": "object"
+      },
+      "schema_sha256": "bed12501199c4fa6491e7dbb9a2aa2af3348cffb9a4749d1958c2aed09ebf60c",
+      "binding_sha256": "8e47c608384858d3cb9737c677e3a55a58a51d0779960d58af99b4d4d2d64cc1",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "get_async_task",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Created At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Finished At"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Note"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started At"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Task Id"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "AsyncTaskResponse",
+        "type": "object"
+      },
+      "schema_sha256": "74531c20519c932e74876c2c4799dc2213c35ff65dc1d69a88e364a5bae9f54d",
+      "binding_sha256": "014d24f45b7422725df4617ac97c745801efb845b2d27b1bba15d202eed5c9d1",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "get_model_fields",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Count"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "ranking": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Relevance scores when relevance=\"top\".",
+            "title": "Ranking"
+          },
+          "relevance_applied": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Relevance Applied"
+          },
+          "restricted_fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Fields marked restricted by the field ACL.",
+            "title": "Restricted Fields"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Mapping of field name to fields_get metadata.",
+            "title": "Result"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "GetModelFieldsResponse",
+        "type": "object"
+      },
+      "schema_sha256": "8c7d54762e53d87a529794f0e719e43429ddad68e0c3839185a1c641efe0fe5a",
+      "binding_sha256": "fca8590929732e02b9a8498f6de668b2f43481d8e643e55afd255e9160c1582d",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "get_odoo_profile",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "metadata_used": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Metadata Used"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Server, user-context, transport, and module metadata.",
+            "title": "Profile"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "GetOdooProfileResponse",
+        "type": "object"
+      },
+      "schema_sha256": "36c09efd68f44c83dcc0dcc2e264a3c133afd98ebaa05beadb0bee22f7a422b7",
+      "binding_sha256": "9927bcf10807869a4563c310e67237360b758478e15fed5a0bc7cf673caf81ee",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "health_check",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "plugins": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Opt-in plugin load state and tool filtering.",
+            "title": "Plugins"
+          },
+          "rate_limits": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Rate Limits"
+          },
+          "runtime": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Non-secret runtime security posture.",
+            "title": "Runtime"
+          },
+          "server": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Server name, instructions, surface counts.",
+            "title": "Server"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "HealthCheckResponse",
+        "type": "object"
+      },
+      "schema_sha256": "b76b7b7c5292d0fae495bf02e01d6e2a0a6e714d1f9ba02c802eb03b8e2f6d99",
+      "binding_sha256": "c51235e52231a91ea71e1b3426ca127aa3afe83fddcff914b6a0ec6566810f06",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "index_knowledge",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "documents_in_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Documents In Index"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "fetched": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fetched"
+          },
+          "indexed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Indexed"
+          },
+          "indexed_fields": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Explicit field list or 'smart selection'.",
+            "title": "Indexed Fields"
+          },
+          "instance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instance"
+          },
+          "max_documents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Documents"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "redacted_fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Redacted Fields"
+          },
+          "skipped_over_budget": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Skipped Over Budget"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "IndexKnowledgeResponse",
+        "type": "object"
+      },
+      "schema_sha256": "49fcf6982a55ec42abcc1bc1af41daa06165340f95ddeb87271be97dbd3e3053",
+      "binding_sha256": "f3109a96b78121752b6166b7ce82c36dc77f44f28ba8fb5f38834da6b9663d00",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "inspect_model_relationships",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "inspect_model_relationshipsOutput",
+        "type": "object"
+      },
+      "schema_sha256": "556ce8d60777ddcd1b96bc20683c4e4ccc3455fac786bf549fb5c20b7f9e88fc",
+      "binding_sha256": "2c65fe9f8bc1c100b2c2c36be038f11880da21aaf8d39b5764687762b4e8406f",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "knowledge_stats",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "indexes": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Indexes"
+          },
+          "max_documents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Documents"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          },
+          "total_documents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total Documents"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "KnowledgeStatsResponse",
+        "type": "object"
+      },
+      "schema_sha256": "edd9e4d012ac87e10e182bd70bde77f851b16ac15b5f054e45bb7599973abfc7",
+      "binding_sha256": "7bebf4f1049e89ca986a89081c21489ae0611b5a4af660162d41b208e95cec55",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "list_async_tasks",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tasks": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tasks"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ListAsyncTasksResponse",
+        "type": "object"
+      },
+      "schema_sha256": "50720a9eee96cd69558463aca00ef27684fb3d8be0c8d5b73885f1d98957e7fa",
+      "binding_sha256": "d8b29cb8556cc0a79a08c3b42c162d91dfff4ffc7de68b3be0a2df43ab5d1a94",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "list_instances",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "default": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Name of the default instance.",
+            "title": "Default"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "instance_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instance Count"
+          },
+          "instances": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Instance entries (never credentials).",
+            "title": "Instances"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ListInstancesResponse",
+        "type": "object"
+      },
+      "schema_sha256": "f9494ba0fa7b0c80f5750a8ad506d0a55c98e051ae48ec8b4b6521d71bb8b263",
+      "binding_sha256": "e25a49bd5f34bd8a93aa096484f09f9388d174b5c1d30372023c7d52d30ebf0f",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "list_models",
+      "schema": {
+        "$defs": {
+          "ModelSummary": {
+            "additionalProperties": true,
+            "description": "One model entry from list_models / schema_catalog.",
+            "properties": {
+              "model": {
+                "description": "Technical model name, e.g. res.partner.",
+                "title": "Model",
+                "type": "string"
+              },
+              "name": {
+                "default": "",
+                "description": "Human display name.",
+                "title": "Name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "model"
+            ],
+            "title": "ModelSummary",
+            "type": "object"
+          }
+        },
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Count"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/ModelSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ListModelsResponse",
+        "type": "object"
+      },
+      "schema_sha256": "c6679365bf0454dcb3e852cd7426a32a3092e7e33b45e244e57586db80600309",
+      "binding_sha256": "56b5945cd40f7b676c2f822ee6128d4a44a96d0a73a60b6f6999ce142db2c716",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "lookup_model_history",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "lookup_model_historyOutput",
+        "type": "object"
+      },
+      "schema_sha256": "5a3672d1463f146a6e2648ec94defda500d94063765124aa8949b73b469965ac",
+      "binding_sha256": "ec3127bf1d8fad586f8bd689353b376b4900d56d9b5f657c0b5da872fa007469",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "preview_write",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "preview_writeOutput",
+        "type": "object"
+      },
+      "schema_sha256": "84f086531e8f7d65453bbe3612449d19280904bac07a0e4c286da0a1116b3ae8",
+      "binding_sha256": "a33b58aae0625380e5633c330a1ce607e75489018ec9cc11c5aa07e43eff440d",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "read_attachment",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "attachment": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "ir.attachment metadata row.",
+            "title": "Attachment"
+          },
+          "data_base64": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Base64 content when under the size cap.",
+            "title": "Data Base64"
+          },
+          "data_included": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Data Included"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "max_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Bytes"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ReadAttachmentResponse",
+        "type": "object"
+      },
+      "schema_sha256": "1b924098d29b63cd9de80af854e07958192c08ea698d138d0a420739aa5e23cf",
+      "binding_sha256": "c568c77c9698dfc1b1912a6c1eabdec0d408f5302ce44e48d12139a453e7f19b",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "read_record",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "fields_used": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fields Used"
+          },
+          "redacted_fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Redacted Fields"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The record (field-ACL redacted).",
+            "title": "Result"
+          },
+          "smart_fields_applied": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Smart Fields Applied"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ReadRecordResponse",
+        "type": "object"
+      },
+      "schema_sha256": "3a2e7bc75e796550f4c80b0c8d12d6b2471c1086769060eeae39b7a671ea6f71",
+      "binding_sha256": "9e38eb90c2be0461a420f8ee42edf27a3ccf502de547bedc805239640008716e",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "receivable_payable_aging",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "As Of"
+          },
+          "buckets": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Buckets"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Direction"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "line_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Line Count"
+          },
+          "partner_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Partner Count"
+          },
+          "partners": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Partners"
+          },
+          "skipped_lines": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Skipped Lines"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          },
+          "total_outstanding": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total Outstanding"
+          },
+          "truncated": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Truncated"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ReceivablePayableAgingResponse",
+        "type": "object"
+      },
+      "schema_sha256": "0a1265171fbb0285be9ea7b7a826325537307df46d48fa14eacff8d9f5f33f13",
+      "binding_sha256": "659b32197e3853fbe04f7e9c3651a0f02417b9df4f7512e59f1ce8baa942b194",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "scan_addons_source",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "scan_addons_sourceOutput",
+        "type": "object"
+      },
+      "schema_sha256": "1b8bffeb33bab6941f26abb532ab551815c6333342e1292d48f760177d2eb6e1",
+      "binding_sha256": "84a532c22b95fdd17eb28b52995f3b20bafdbb2a91b008bc54d57eb26b43a75b",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "schema_catalog",
+      "schema": {
+        "$defs": {
+          "ModelSummary": {
+            "additionalProperties": true,
+            "description": "One model entry from list_models / schema_catalog.",
+            "properties": {
+              "model": {
+                "description": "Technical model name, e.g. res.partner.",
+                "title": "Model",
+                "type": "string"
+              },
+              "name": {
+                "default": "",
+                "description": "Human display name.",
+                "title": "Name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "model"
+            ],
+            "title": "ModelSummary",
+            "type": "object"
+          }
+        },
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Count"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "metadata_used": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Metadata Used"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/ModelSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Model entries; fields included when requested.",
+            "title": "Result"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "SchemaCatalogResponse",
+        "type": "object"
+      },
+      "schema_sha256": "4f76cb56139123f5263477c52d3d44a1c92261e5a203caffec07cce3d0565bc3",
+      "binding_sha256": "def0f7f8779b9694d8b1c2bdb37f8a68f67c7936245af32e20345b99f6c0cde4",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "search_across_instances",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "elapsed_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Elapsed Ms"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Errors"
+          },
+          "instance_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instance Count"
+          },
+          "instances_queried": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instances Queried"
+          },
+          "merged": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Merged"
+          },
+          "merged_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Merged Count"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "results": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Results"
+          },
+          "skipped_opt_out": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Skipped Opt Out"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          },
+          "unknown_instances": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Unknown Instances"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "SearchAcrossInstancesResponse",
+        "type": "object"
+      },
+      "schema_sha256": "8c067de71e1d60f2fd12afd0ada9ee6141b3562800093eef2a3244dea64ab596",
+      "binding_sha256": "d3279753627050cdd81a7c40d68d8e3264d5c7a37150d464a6501e620c4a3bce",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "search_employee",
+      "schema": {
+        "$defs": {
+          "EmployeeSearchResult": {
+            "description": "Represents a single employee search result.",
+            "properties": {
+              "id": {
+                "description": "Employee ID",
+                "title": "Id",
+                "type": "integer"
+              },
+              "name": {
+                "description": "Employee name",
+                "title": "Name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "title": "EmployeeSearchResult",
+            "type": "object"
+          }
+        },
+        "description": "Response model for the search_employee tool.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Error message, if any",
+            "title": "Error"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/EmployeeSearchResult"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "List of employee search results",
+            "title": "Result"
+          },
+          "success": {
+            "description": "Indicates if the search was successful",
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "SearchEmployeeResponse",
+        "type": "object"
+      },
+      "schema_sha256": "b59fb431924bd355e936d35a3b0c6605ff0f8a475d3fc9c8eb970888373d3fee",
+      "binding_sha256": "3676d13773ebac27af9cc454401d22762b6d0e1992bee428994ea6a8797d9bc2",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "search_holidays",
+      "schema": {
+        "$defs": {
+          "Holiday": {
+            "description": "Represents a single holiday.",
+            "properties": {
+              "display_name": {
+                "description": "Display name of the holiday",
+                "title": "Display Name",
+                "type": "string"
+              },
+              "employee_id": {
+                "description": "Employee ID associated with the holiday",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "title": "Employee Id",
+                "type": "array"
+              },
+              "name": {
+                "description": "Name of the holiday",
+                "title": "Name",
+                "type": "string"
+              },
+              "start_datetime": {
+                "description": "Start date and time of the holiday",
+                "title": "Start Datetime",
+                "type": "string"
+              },
+              "state": {
+                "description": "State of the holiday",
+                "title": "State",
+                "type": "string"
+              },
+              "stop_datetime": {
+                "description": "End date and time of the holiday",
+                "title": "Stop Datetime",
+                "type": "string"
+              }
+            },
+            "required": [
+              "display_name",
+              "start_datetime",
+              "stop_datetime",
+              "employee_id",
+              "name",
+              "state"
+            ],
+            "title": "Holiday",
+            "type": "object"
+          }
+        },
+        "description": "Response model for the search_holidays tool.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Error message, if any",
+            "title": "Error"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/Holiday"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "List of holidays found",
+            "title": "Result"
+          },
+          "success": {
+            "description": "Indicates if the search was successful",
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "SearchHolidaysResponse",
+        "type": "object"
+      },
+      "schema_sha256": "a20c5b83a772acf3c1ed38d7938452f09eb845c2a7a80a659b8d1ac213010a1e",
+      "binding_sha256": "e3b8df92d66602d48d6076405f5ae9282e9baab1db24bb0341d6f684452c8b68",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "search_knowledge",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "instance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instance"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Query"
+          },
+          "results": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "BM25-ranked snippets from the local index.",
+            "title": "Results"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "SearchKnowledgeResponse",
+        "type": "object"
+      },
+      "schema_sha256": "f068c00206591570e554be1468e3d4be66cc3b78a160096fe660115630e7da46",
+      "binding_sha256": "8ab5e707456f7972e0ef7f71382568d14fc336ccf8bb393ec9a1abc638fbb043",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "search_records",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Count"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "fields_used": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fields Used"
+          },
+          "query_fields_used": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Fields matched by the free-text query shortcut.",
+            "title": "Query Fields Used"
+          },
+          "redacted_fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Redacted Fields"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Matched records (field-ACL redacted).",
+            "title": "Result"
+          },
+          "smart_fields_applied": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Smart Fields Applied"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "SearchRecordsResponse",
+        "type": "object"
+      },
+      "schema_sha256": "ba23fd58aea755e600e3b4a55df1149f767ae2582f4c45fecd434adc1b53e9aa",
+      "binding_sha256": "a9fb9c1d1855c0b6202d15ff724dc3cdda0b19bb78bd0456f6afc85917c6d5eb",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "submit_async_task",
+      "schema": {
+        "additionalProperties": true,
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Created At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sanitized error message when success is false.",
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Finished At"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Note"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started At"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "success": {
+            "description": "False when the call failed; see error.",
+            "title": "Success",
+            "type": "boolean"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Task Id"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Reporting tool name.",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "AsyncTaskResponse",
+        "type": "object"
+      },
+      "schema_sha256": "74531c20519c932e74876c2c4799dc2213c35ff65dc1d69a88e364a5bae9f54d",
+      "binding_sha256": "5a4fc7fb97133406f80f37471e07fb801185a18c1dab4ae8a9c9241860816e3c",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "upgrade_risk_report",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "upgrade_risk_reportOutput",
+        "type": "object"
+      },
+      "schema_sha256": "3db452c8ec0285f369ce395fdec359b366e4d1979018066c115103a1123f72ab",
+      "binding_sha256": "634f2c2b656f5ede4ddd1c48cbb9f76b7b2637fac18e3e8ed2ce86c369b01d55",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "odoo",
+      "tool": "validate_write",
+      "schema": {
+        "properties": {
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "validate_writeOutput",
+        "type": "object"
+      },
+      "schema_sha256": "268c9003d500b165da778965deac05c5e39559c0a34e86733abd3340842d1d9d",
+      "binding_sha256": "e3dde286345d23c7c34327c9d0d06b0128d8db0b161b6c2b025413df9797c4c0",
+      "handler_source": "apps/odoo/uv.lock"
+    },
+    {
+      "product": "n8n",
+      "tool": "validate_node",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "nodeType": {
+            "type": "string"
+          },
+          "workflowNodeType": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "valid": {
+            "type": "boolean"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "property": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "fix": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "property": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "suggestion": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "missingRequiredFields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Only present in mode=minimal"
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "hasErrors": {
+                "type": "boolean"
+              },
+              "errorCount": {
+                "type": "number"
+              },
+              "warningCount": {
+                "type": "number"
+              },
+              "suggestionCount": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "required": [
+          "nodeType",
+          "displayName",
+          "valid"
+        ]
+      },
+      "schema_sha256": "4c6df217140940c3fdfe120aa473446bf37b0738d020f4a73057e13c1793dd60",
+      "binding_sha256": "2b77426406456a1a021706d1be34cb520d8fac942070bae4f64307d8419de6c2",
+      "handler_source": "apps/n8n/patches/fix_workflow_output_schema.py"
+    },
+    {
+      "product": "n8n",
+      "tool": "validate_workflow",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "totalNodes": {
+                "type": "number"
+              },
+              "enabledNodes": {
+                "type": "number"
+              },
+              "triggerNodes": {
+                "type": "number"
+              },
+              "validConnections": {
+                "type": "number"
+              },
+              "invalidConnections": {
+                "type": "number"
+              },
+              "expressionsValidated": {
+                "type": "number"
+              },
+              "errorCount": {
+                "type": "number"
+              },
+              "warningCount": {
+                "type": "number"
+              }
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "valid",
+          "summary"
+        ]
+      },
+      "schema_sha256": "48fa34938d91beaa12724562be8c9bd3819021ebf28274ef8a28c4e4661a2729",
+      "binding_sha256": "1cafd6d10b09b676f80a5189427fe488bb96a22c203a4efeb3de21ab7861044d",
+      "handler_source": "apps/n8n/patches/fix_workflow_output_schema.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_inspect",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_inspectOutput",
+        "type": "object"
+      },
+      "schema_sha256": "1a7397448a8d6a37604cb0e91e68e7cad501ee608dc522f5abb062b372b5f3a5",
+      "binding_sha256": "13c901f6463131723cff5e9a2d2697a7ac5c857476b8f5cfa8bbace1b33246f0",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_skill",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_skillOutput",
+        "type": "object"
+      },
+      "schema_sha256": "8a3400cba4e37b2d00fc4dbe74350d3dde5e96b2f0b93f3a6bea2e5cf1a259f8",
+      "binding_sha256": "4c815947408195d1ba6c8c74992d89bead6e80a58123e586fce3b59ceefeddbd",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_mcp",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_mcpOutput",
+        "type": "object"
+      },
+      "schema_sha256": "74e043bd06a1311713a10dfc9e0fb13c38beb1b7e2b161bd695a7e6611d014d5",
+      "binding_sha256": "915301b8cb0388cd3fb6105bf84c6364be650e123aea29b7ced7203b7ae5027f",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_model",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_modelOutput",
+        "type": "object"
+      },
+      "schema_sha256": "2e9dc6151992df6d6014b6e59785b0e6779f119796af51e6576cfbf6f9352711",
+      "binding_sha256": "f7d728104c69724b2085a38f11b468109b2bc7243fe9da54525ac990e9e487e6",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_config",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_configOutput",
+        "type": "object"
+      },
+      "schema_sha256": "be91cdb92c39268127f4fba768d61d507c053d0821e50a731678555235a2378f",
+      "binding_sha256": "e42c8fccd0ce78636cabb9b15a532a9538d2c8d4490bacfc04187db2ee2994d4",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_tools",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_toolsOutput",
+        "type": "object"
+      },
+      "schema_sha256": "f561f0f7142adec1fae5e100e42fdad36b19da797891fc21c024786dce4a3f9b",
+      "binding_sha256": "7558b2d9ac0e0595fa05a545be71be56a3fac4de2178e931c8efa940c3940a21",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_gateway",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_gatewayOutput",
+        "type": "object"
+      },
+      "schema_sha256": "4966ae6e536e8f3722e6ee7a863d1f03f49cb22b8ef87dc06d913b9e0f7cbef7",
+      "binding_sha256": "0d36b962628946c8ac75231e3b5d20cc4ba0000924fcbbf8c55486c526ad98ba",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_chat",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_chatOutput",
+        "type": "object"
+      },
+      "schema_sha256": "6f3e5e4a84325af82fd6e41c4c38d1bb350b642317905f0a661a576e4dcdae3f",
+      "binding_sha256": "abef882e28808eaa02dea2c6987e85d8dfe02697ded98da313c6e51dffe731d9",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_session",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_sessionOutput",
+        "type": "object"
+      },
+      "schema_sha256": "815fc29b1b75bf1e57a55205c9e27ac14842b44bf88efc83b16a6838d1efe12a",
+      "binding_sha256": "5b6ff548cf9979ea56d01ad3bc22a0349c7e61042525e2342b0cb347ae0a389f",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_cron",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_cronOutput",
+        "type": "object"
+      },
+      "schema_sha256": "787b9da3891cfa7627b2c37dd6aa485f1351839ede115cdb1243f95aba7a988e",
+      "binding_sha256": "819e2d7ae5abdd8c3020b22b1f6edefd3f49fc63e2207950ab91e6cfc20f1378",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "hermes",
+      "tool": "hermes_webhook",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "hermes_webhookOutput",
+        "type": "object"
+      },
+      "schema_sha256": "7e140f45c396d4d78a03344ea556f9f5945a09e3b3443b250791875ccaa9b933",
+      "binding_sha256": "717f06b4d3dc790997a1a798dcd86f1b17aaf0acd02d954cca97d59db1fb6bd7",
+      "handler_source": "apps/hermes/vendor/hermes_mcp_server/server.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_authz_settings",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "f59e267ecabcb719a22b11d0a7d38885178e0e4dc2cbd47e96321dcbb995866d",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_ban",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "314a99496e3503e33acfb05b3379e4d28666a76271cea5959eb56aa4bdef1889",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_broker_stats",
+      "schema": {
+        "description": "Live broker counters.",
+        "properties": {
+          "connections": {
+            "description": "Currently connected MQTT clients.",
+            "type": "integer"
+          },
+          "retained": {
+            "default": 0,
+            "description": "Retained messages held by the broker.",
+            "type": "integer"
+          },
+          "sessions": {
+            "description": "Sessions held, including offline ones.",
+            "type": "integer"
+          },
+          "subscriptions": {
+            "description": "Active subscriptions across the cluster.",
+            "type": "integer"
+          },
+          "topics": {
+            "description": "Distinct routed topics.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "connections",
+          "sessions",
+          "subscriptions",
+          "topics"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "e0f33f59a97707bc8b70eef40b4bd0849bf9b2d54216baf855f60f0c09158164",
+      "binding_sha256": "6855ceafd0c66b70aa7dc2e43ff07bdd5e3a4d0d94e122328e993ef96a397169",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_client_subscribe",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "41f795f4172d6a032e14e1d9c326d6db10bcc6fced2951b5eef089650d7fdaa3",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_client_subscriptions",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "10bbbf2367958fc61785911a7e157f45799aa90732f0bce3d6b70f6b6668ae11",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_client_unsubscribe",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "3c5e1206decbe76080d6df217ed4e5aeaa96f47e0054883cf34c56ad78846b96",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_cluster_status",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "9f822deed4e1dc5a8a1a22f9445d3ff4765a55930bedda9f6e12cc633713721e",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_create_trace",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "704391ef4f2c5fc3d793b7ac12bc4f5073777c63133b95eae3bf82b66553aec8",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_delete_retained",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "dc97f14b56f48c422e655acd6594aa10f963d03217f5911c800df45545555bd4",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_delete_trace",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "05de4def2d49cf3290117a21c239460a9378a7278887a0340da2c2eb16ae44d7",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_get_client",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "b5d3189ca9397765bdc7ab56451d8b7e2cf0c9caa4d13572704f8e8c1f661e68",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_get_retained",
+      "schema": {
+        "description": "A retained message, with its payload already decoded.",
+        "properties": {
+          "found": {
+            "description": "False when nothing is retained there.",
+            "type": "boolean"
+          },
+          "lookup": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "How it was located: 'direct' or 'listing'. Hierarchical topics cannot be addressed directly by EMQX's REST API."
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Decoded payload text."
+          },
+          "publish_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "When it was published."
+          },
+          "qos": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "QoS the message was published at."
+          },
+          "topic": {
+            "description": "Topic the message is retained on.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic",
+          "found"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "7c1c608b1d17e5af36502b930712ff6a1f45c1a271f575cca913c713250704bc",
+      "binding_sha256": "ac370331765d3b1499c095a9a5a9ad93d65eea11c721fd0269bcf2528b6d2995",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_get_rule_metrics",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "0868a23d68dff83576870231f7a76969ca8eae8b4487577b8005b1ed68339099",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_get_trace_log",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "1311bc04dcb0aa0a0a43aa31ef66571ce75bfc9d5a97831bc75c3b11b7a6edce",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_kick_client",
+      "schema": {
+        "description": "Outcome of disconnecting a client.",
+        "properties": {
+          "clientid": {
+            "type": "string"
+          },
+          "kicked": {
+            "description": "True when the broker accepted the disconnect.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "clientid",
+          "kicked"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "2c766278099ee735ef221bc951343dbbd4409caa40c41ea1d3fc94eff556fae5",
+      "binding_sha256": "5a69ae08f9099c59eb5bfc4035a9608d10ad1c35d76d4098ff09474014c7cb12",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_actions",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "504b4cdd9fd4c762c63ac9a03c9934fec00895917799eeddaa445b12e6693543",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_alarms",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "110b1b851c68e623cf39f0baf0f4ec163a1d7d5f036405e87f90f022ef414d15",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_authn",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "1dd83076d266e5d0b0936f8580ec518b9fa0112a3dbfe3c2126f1957af8ba1e7",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_authz_sources",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "3b7bf895a00f04d3c59e0df2c65272d6621f79a59a0193cde9e161f9d9b2bd06",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_banned",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "2f655d21b840f515c5db9a564211265e54fa7b5a3f8ae565210c0880c97778b0",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_clients",
+      "schema": {
+        "description": "A page of MQTT clients.",
+        "properties": {
+          "clients": {
+            "items": {
+              "description": "One MQTT client as EMQX reports it.",
+              "properties": {
+                "clientid": {
+                  "description": "MQTT client identifier.",
+                  "type": "string"
+                },
+                "connected": {
+                  "description": "Whether the client is connected right now.",
+                  "type": "boolean"
+                },
+                "connected_at": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "description": "ISO-8601 connection time."
+                },
+                "ip_address": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "description": "Peer IP address."
+                },
+                "proto_ver": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "description": "MQTT version (4 = 3.1.1, 5 = 5.0)."
+                },
+                "username": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "description": "Authenticated username, if any."
+                }
+              },
+              "required": [
+                "clientid",
+                "connected"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "has_more": {
+            "description": "True when further pages exist.",
+            "type": "boolean"
+          },
+          "total": {
+            "description": "Total clients matching the filters.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "clients",
+          "total",
+          "has_more"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "21c80cac02ef2f241253de05b92f9bb2ab8826c43bd664237504167330c2371a",
+      "binding_sha256": "d1c8cee26694dec009430f43925b3d93c8061bca7904cdd9a97cd62b9ed93044",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/clients.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_connectors",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "442d80a85584df098a22d58729d5e122b83fa68201382c2e6b16bf0b33645ff3",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_listeners",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "4ae12e4a3a54311643c94ccba889ea903b576a7d96658f14d5c10f04e4da55c8",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_retained",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "c3f4e975a882dc8e2f699954b6010c2604ec32a2db0ee7d8699dbba0b5a7d351",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_rules",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "5591ee2bf68c8abfbf0db31f4efb7e1445ee8b43ff42bd7f160b554d07c2d272",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_subscriptions",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "64701d0ca5d314d3d59694f1c8f9ea121f1f3812faa63a46d45f81392f696819",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/topics.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_topics",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "63361c799c714325e5c3f5e2ebadc1de99c0faccf490eac3092b8204febe9170",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/topics.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_list_traces",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "18ae5433aab8baee298a3946ec83d329bbc47e8037268984367bde49a52dfeff",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_manage_authn_users",
+      "schema": {
+        "description": "Result of a built-in-database user operation.",
+        "properties": {
+          "operation": {
+            "description": "The operation that was performed.",
+            "type": "string"
+          },
+          "succeeded": {
+            "default": true,
+            "type": "boolean"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Subject of a create or delete."
+          },
+          "users": {
+            "description": "Users returned by a read.",
+            "items": {
+              "description": "An MQTT account in the built-in authentication database.",
+              "properties": {
+                "is_superuser": {
+                  "default": false,
+                  "description": "Whether the account bypasses ACLs.",
+                  "type": "boolean"
+                },
+                "user_id": {
+                  "description": "The MQTT username.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "user_id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "operation"
+        ],
+        "type": "object"
+      },
+      "schema_sha256": "89c0145414fc07cfefa4b24448c31dc919dccc88bb0c959c26413c9691a015aa",
+      "binding_sha256": "f9701a591d5620e4dac37fbc72680af1c01111832c04e8859be4333caf47c5bc",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_manage_authz_rules",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "190ae9eba14c1f1b48573c216220efba535605aacecfdbed39f6ece22a0d388e",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_metrics_current",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "6fed534fb4b4f335105e80e642e2d60b2ccbec07626152857022363a7201853c",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_metrics_history",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "f4083cf54119232d42b227b7ca280e91baa0fbc76573f1a0ca532ddb3d9f7fbb",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_node_detail",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "95549a174684386f8c348214b32adaf10fbcc149f1393a8ac8d0715034479837",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_prometheus_stats",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "ccccd10441da960e05f96bb57d781b26c7ef120f3da40872f18eaaac4ba75e81",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_publish",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "f75f8b8736f0421cdf82c4b69ce89312ac27d54f333f4d1840966b06453bf1a9",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_publish_bulk",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "c473fc45d9dbf23ca77bc2ec05c2073fcd672265499762f19cded67aae62f15d",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_test_rule_sql",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "a8722a7d5850aadebb1f3aab86bc96ab48e4382629204c74a7035cb8dddc7020",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_toggle_rule",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "3d4e6dee9313e58b9cd45bfe823e5b44cc5380778ca3a55a210b334ceed83155",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/integration.py"
+    },
+    {
+      "product": "emqx",
+      "tool": "emqx_unban",
+      "schema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
+      "binding_sha256": "d19500fdcb159ef369c51c6dd3fccdf72d3928c0adc7a57e6128dbf4c56883c3",
+      "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_api_keys",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "d31de539aea8e8f620fc05334b645ba005fdb5dd751d97fa3f589de87ac198b6",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_auth",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "84af64432e73fd8dbc1720a2b081accc7997b983a888ef3597e6aba032d5c322",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_backfill_ips",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "86d4006dd145b80d21ecab084e0f410802d7381971a2aa9633d0ceef610d1c11",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_debug_node",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "01ebf0d6c69c20db5c11f0ea8252601f40593cd7caa37901c3b5f5fd4187071b",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_health",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "c7ef28ff1f420499c9feeefc582dd1e43f0ec48161c8895786c8b71baf6c5446",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_nodes",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "a926d3c01d31698025889e279bc32a737a5234c3d546cdd75b0aa857982969a0",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_policy",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "fa08f32bea3c6249a934bacd68e57f9fd178d94ab01517659162ef8e0411e336",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_preauth_keys",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "9fb6c137161db1512c755057b900e8de94e422d9cf69b15a0a83311ebae08c1b",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_register",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "f4b3952b999e779c04604cc9955036ec08e66d9247f7ad889857d9a74d17729f",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_routes_replace",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "0c9820dd98ce8f8db8271e31576a746ee4f2f40a29386109cebc7389e16b43ba",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_users",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "a3eebdf7143d66d9c7927e02293aaebeddc12511e926d56c43fb59af084e8a83",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "opendesign",
+      "tool": "read_file",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "read_fileOutput",
+        "type": "object"
+      },
+      "schema_sha256": "fb89773eb83f4240f76fad55431c06554b36e4a6b3a6ed3ea7790ccc29fde513",
+      "binding_sha256": "f7f651732e9b9f234e5b75a27bb8c027a0cdf1191bbc8ca91bf410e6688aa6ae",
+      "handler_source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py"
+    }
+  ]
+}

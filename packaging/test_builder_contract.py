@@ -38,7 +38,9 @@ class BuilderContractTests(unittest.TestCase):
             review='MOCK-ONLY', buildx=b.BUILDX_VERSION, client='99.1.0',
             engine='99.2.0', api='1.99', buildkit='v99.3.0',
             runners={'mock-vm': {'engine_id': 'mock-engine', 'daemon_name': 'mock-daemon'}})
-        self.env = {'PATH': str(self.root) + os.pathsep + '/usr/bin:/bin',
+        # Fake Docker has an absolute Python shebang; host PATH entries can
+        # contain credential helpers that the production guard rightly denies.
+        self.env = {'PATH': str(self.root),
             'RUNNER_TEMP': str(self.root), 'RUNNER_NAME': 'mock-vm',
             'RUNNER_OS': 'Linux', 'RUNNER_ARCH': 'X64',
             'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/heads/main',
@@ -104,14 +106,51 @@ class BuilderContractTests(unittest.TestCase):
 
     def test_owned_helper_sentinels_denied_without_execution(self):
         sentinel = self.root / 'helper-executed'
-        for name in ('pass', 'docker-credential-pass', 'docker-credential-secretservice'):
-            helper = self.root / name
-            helper.write_text('#!/bin/sh\ntouch ' + str(sentinel) + '\n')
-            helper.chmod(0o700)
-        with self.assertRaises(b.Denied):
-            b.prepare(self.env)
+        for name in ('docker-credential-pass', 'docker-credential-secretservice',
+                     'docker-credential-invented'):
+            with self.subTest(helper=name):
+                helper = self.root / name
+                helper.write_text('#!' + sys.executable + '\nfrom pathlib import Path\n'
+                    + f'Path({str(sentinel)!r}).write_text("executed")\n')
+                helper.chmod(0o700)
+                try:
+                    with self.assertRaisesRegex(b.Denied, 'credential helper on PATH denied'):
+                        b.prepare(self.env)
+                    self.assertFalse(sentinel.exists())
+                    self.assertFalse(self.log.exists())
+                    self.assertFalse((self.root / 'woow-builder').exists())
+                finally:
+                    helper.unlink()
+
+    def test_external_helpers_do_not_contaminate_owned_fixture(self):
+        host_bin = self.root / 'mock-host-bin'
+        host_bin.mkdir()
+        sentinel = host_bin / 'helper-executed'
+        helper = host_bin / 'docker-credential-invented'
+        helper.write_text('#!' + sys.executable + '\nfrom pathlib import Path\n'
+            + f'Path({str(sentinel)!r}).write_text("executed")\n')
+        helper.chmod(0o700)
+        real_glob = Path.glob
+
+        def owned_glob(path, pattern, *args, **kwargs):
+            # Model helper-bearing host directories with owned files only. The
+            # old /usr/bin:/bin fixture fails the real guard without host reads.
+            if path != self.root:
+                path = host_bin
+            return real_glob(path, pattern, *args, **kwargs)
+
+        with patch.dict(os.environ, {'PATH': str(host_bin)}, clear=True), \
+             patch.object(Path, 'glob', autospec=True, side_effect=owned_glob):
+            contaminated = dict(self.env, PATH=os.pathsep.join((str(self.root), str(host_bin))))
+            with self.assertRaisesRegex(b.Denied, 'credential helper on PATH denied'):
+                b.prepare(contaminated)
+            self.assertFalse(self.log.exists())
+            self.prepare()
+            receipt = b.verify(self.env)
+        self.assertEqual(receipt['engine_id'], 'mock-engine')
+        self.assertEqual(self.env['PATH'], str(self.root))
+        self.assertTrue(self.log.exists())
         self.assertFalse(sentinel.exists())
-        self.assertFalse(self.log.exists())
 
     def test_private_auth_config_is_not_empty_and_exports_whole_environment(self):
         self.env.update(HOME='/invented/ambient', XDG_DATA_HOME='/invented/data',

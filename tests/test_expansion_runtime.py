@@ -1,10 +1,14 @@
-"""Real pinned handlers through the boundary; writes ONLY to this owned fake API."""
+"""Real pinned handlers through the boundary; writes ONLY to this owned fake API.
+
+0.2.0: the products serve the full child surface: arguments go to the child unchanged and outputs are the child's
+own (the 0.1.x output projections are gone); write tools and write operations still need their exact grant.
+"""
 import asyncio
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import threading
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 import xmlrpc.client
 
 import httpx
@@ -16,6 +20,8 @@ from mcp_admin_core.products import ProductStore, TOOLS, child_spec
 from test_real_products import connection, rpc
 from test_expansion_policy import call
 from n8n_adapter import TOOLS as N8N_TOOLS, child_spec as n8n_spec
+import nextcloud_fixtures
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 PID = '12345678-1234-1234-1234-123456789abc'
 READS = {
@@ -30,10 +36,15 @@ READS = {
     'emqx': [('emqx_list_clients', {}), ('emqx_list_topics', {}), ('emqx_list_subscriptions', {}),
              ('emqx_metrics_history', {}), ('emqx_list_alarms', {})],
     'litellm': [('litellm_list_teams', {})],
+    'nextcloud': nextcloud_fixtures.READS,
     'n8n': [('get_node', {'nodeType': 'nodes-base.httpRequest'}), ('n8n_get_workflow', {'id': 'one'}), ('n8n_manage_folders', {'action': 'list', 'projectId': 'project'})],
 }
 WRITES = {
-    'odoo': [('chatter_post', {'model': 'res.partner', 'record_id': 1, 'body': 'Owned test comment'})],
+    'odoo': [('chatter_post', {'model': 'res.partner', 'record_id': 1, 'body': 'Owned test comment'}),
+             # 0.2.0: direct ORM writes through execute_method (ODOO_MCP_ALLOW_DIRECT_WRITES=1, PaaS patch)
+             ('execute_method', {'model': 'res.partner', 'method': 'write', 'args': [[1], {'name': 'Changed'}]}),
+             # 0.2.0: an unreviewed side-effect method too (ODOO_MCP_ALLOW_UNKNOWN_METHODS=1, owner decision 2026-10-15)
+             ('execute_method', {'model': 'res.partner', 'method': 'action_confirm', 'args': [[1]]})],
     'odoo-manage': [('create_record', {'model': 'res.partner', 'values': {'name': 'New'}}),
                     ('update_record', {'model': 'res.partner', 'record_id': 1, 'values': {'name': 'Changed'}}),
                     ('delete_record', {'model': 'res.partner', 'record_id': 1})],
@@ -53,6 +64,7 @@ WRITES = {
                 ('litellm_update_team', {'team_id': 'one', 'team_alias': 'Changed'}),
                 ('litellm_delete_team', {'team_ids': ['one']}),
                 ('litellm_delete_model', {'model_id': 'one'})],
+    'nextcloud': nextcloud_fixtures.WRITES,
     'n8n': [('n8n_manage_folders', {'action': 'create', 'projectId': 'project', 'name': 'New'}),
             ('n8n_manage_folders', {'action': 'rename', 'projectId': 'project', 'folderId': 'one', 'name': 'Changed'})],
 }
@@ -61,6 +73,8 @@ WRITES = {
 @contextmanager
 def fake_api(*, major=18, allow_write=True):
     events, mutations, failures = [], [], []
+    nextcloud = nextcloud_fixtures.NextcloudFake()
+    hermes = {'exists': True, 'receipts': {}}
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args): pass
         def do_GET(self): self.handle_api()
@@ -68,11 +82,58 @@ def fake_api(*, major=18, allow_write=True):
         def do_PUT(self): self.handle_api()
         def do_PATCH(self): self.handle_api()
         def do_DELETE(self): self.handle_api()
+        def do_PROPFIND(self): self.handle_api()
+        def do_REPORT(self): self.handle_api()
         def handle_api(self):
             path = urlsplit(self.path).path
             raw = self.rfile.read(int(self.headers.get('Content-Length', 0)))
             events.append((self.command, path))
             content_type = 'application/json'
+            if path in ('/api/sessions/example/mutation-snapshot', '/api/sessions/example'):
+                # Published Agent contract: authenticated snapshot, exact CAS and a
+                # receipt replay never counted as a second mutation. No bare DELETE.
+                status = 200
+                if self.command == 'GET' and path.endswith('/mutation-snapshot'):
+                    value = {'session_id': 'example', 'exists': hermes['exists'],
+                             'runtime_revision': 7 if hermes['exists'] else 0,
+                             'runtime_generation': 3 if hermes['exists'] else None}
+                elif self.command == 'DELETE' and path == '/api/sessions/example':
+                    identity = parse_qs(urlsplit(self.path).query)
+                    request_id = identity.get('request_id', [None])[0]
+                    if (set(identity) != {'request_id', 'expected_revision', 'expected_generation'}
+                            or not request_id or any(len(v) != 1 for v in identity.values())):
+                        status, value = 409, {'detail': 'client_upgrade_required'}
+                    elif request_id in hermes['receipts']:
+                        if identity == hermes['receipts'][request_id]:
+                            value = {'ok': True, 'deleted_ids': ['example']}
+                        else:
+                            status, value = 409, {'detail': 'admission_conflict'}
+                    elif not hermes['exists']:
+                        value = {'ok': True, 'already_absent': True}
+                    elif identity['expected_revision'] != ['7'] or identity['expected_generation'] != ['3']:
+                        status, value = 409, {'detail': 'revision_conflict'}
+                    else:
+                        hermes['exists'] = False
+                        hermes['receipts'][request_id] = identity
+                        mutations.append((self.command, path, identity))
+                        value = {'ok': True, 'deleted_ids': ['example']}
+                else:
+                    status, value = 405, {'detail': 'Method Not Allowed'}
+                data = json.dumps(value).encode()
+                self.send_response(status)
+                self.send_header('Content-Type', content_type)
+                self.send_header('Content-Length', str(len(data)))
+                self.end_headers(); self.wfile.write(data)
+                return
+            if nextcloud_fixtures.is_nextcloud(self.path):
+                # Owned in-memory Nextcloud: only its successful PUT/DELETE count as mutations.
+                count = len(nextcloud.mutations)
+                try:
+                    answer = nextcloud.handle(self.command, self.path, self.headers, raw)
+                except Exception as exc:
+                    failures.append(repr(exc)); self.send_error(500); return
+                mutations.extend(nextcloud.mutations[count:])
+                return nextcloud_fixtures.respond(self, *answer)
             try:
                 if 'xmlrpc' in path:
                     params, method = xmlrpc.client.loads(raw)
@@ -84,7 +145,7 @@ def fake_api(*, major=18, allow_write=True):
                         model, op = params[3:5]
                         assert model in ('ir.model', 'res.partner')
                         args, kwargs = params[5], params[6] if len(params) > 6 else {}
-                        if op in ('create', 'write', 'unlink', 'message_post'):
+                        if op in ('create', 'write', 'unlink', 'message_post', 'action_confirm'):
                             mutations.append((model, op, args, kwargs))
                             value = 2 if op in ('create', 'message_post') else True
                         elif op in ('read_group', 'formatted_read_group'):
@@ -149,8 +210,11 @@ def fake_api(*, major=18, allow_write=True):
     finally: server.shutdown(); server.server_close(); thread.join()
 
 
-def payload(reply):
+def payload(reply, plain=False):
     assert not reply.get('isError'), reply
+    if plain:  # a text-only tool (Nextcloud get_file_content): no structured content, the text is the file
+        assert reply.get('structuredContent') is None, reply
+        return {'text': next(c['text'] for c in reply['content'] if c['type'] == 'text')}
     value = reply.get('structuredContent')
     if value is None:
         value = json.loads(next(c['text'] for c in reply['content'] if c['type'] == 'text'))
@@ -188,12 +252,11 @@ async def test_real_expanded_reads_and_explicit_writes(tmp_path, product):
                             except ValueError: await asyncio.sleep(.1)
                     headers['MCP-Protocol-Version'] = result['protocolVersion']
                     await rpc(client, '/mcp', headers, {'jsonrpc': '2.0', 'method': 'notifications/initialized'})
-                    store.update(enabled_write_tools=[])
+                    store.update(writes_enabled=False, enabled_write_tools=[])  # 2026-10-15: a new state starts with every write on
                     for name, args in READS[product]:
                         before = len(events)
                         reply = await rpc(client, '/mcp', headers, call(name, args))
-                        payload(reply)
-                        assert 'MUST_NOT_ESCAPE' not in json.dumps(reply)
+                        payload(reply, plain=(product, name) == ('nextcloud', 'get_file_content'))
                         if name == 'get_node':
                             assert 'httpRequest' in json.dumps(reply)
                             assert len(events) == before  # pinned local node database only
@@ -204,21 +267,23 @@ async def test_real_expanded_reads_and_explicit_writes(tmp_path, product):
                         tool = tools[name]
                         grant = name if tool.write else f'{name}:{args[tool.selector]}'
                         before = len(events)
-                        assert (await client.post('/mcp', headers=headers, json=call(name, args))).status_code == 403
+                        assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
                         assert len(events) == before
                         store.update(enabled_write_tools=[grant])
-                        if product == 'odoo':
-                            preview = payload(await rpc(client, '/mcp', headers, call(name, args)))
-                            assert preview.get('mode') == 'preview', preview
-                            args = {**args, 'approval': {'token': preview['approval']['token']}, 'confirm': True}
+                        if (product, name) == ('odoo', 'chatter_post'):
+                            # 0.2.0 (owner decision 2026-10-15): MCP_CHATTER_DIRECT=1 posts at once; a call that still
+                            # carries an approval and confirm=true (the 0.1.x preview flow) posts the same way.
+                            count = len(mutations)
+                            posted = payload(await rpc(client, '/mcp', headers, call(name, args)))
+                            assert posted.get('mode') == 'direct' and len(mutations) == count + 1, posted
+                            args = {**args, 'approval': {'token': 'odoo-write:' + '0' * 32}, 'confirm': True}
                         count = len(mutations)
                         reply = await rpc(client, '/mcp', headers, call(name, args))
                         payload(reply)
-                        if product == 'litellm': assert 'MUST_NOT_ESCAPE' not in json.dumps(reply)
                         assert len(mutations) == count + 1, (product, name, reply, failures)
                         before = len(events)
                         store.update(disabled=[name])
-                        assert (await client.post('/mcp', headers=headers, json=call(name, args))).status_code == 403
+                        assert refused(await client.post('/mcp', headers=headers, json=call(name, args)))
                         assert len(events) == before
                         store.update(disabled=[], enabled_write_tools=[])
                     assert not failures, failures

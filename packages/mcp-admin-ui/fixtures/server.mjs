@@ -7,29 +7,105 @@ if (!process.send || !/^[a-f0-9]{64}$/.test(generation ?? '')) throw Error('owne
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { extname, resolve, sep } from 'node:path';
-import { mountPath, products, backendPayload } from '../src/contracts.js';
+import { mountPath, products, backendPayload, odooSwitchPayload, n8nSessionPayload, odooMethodsPayload } from '../src/contracts.js';
 const dist = process.env.OWNED_UI_ASSET_ROOT ?? fileURLToPath(new URL('../dist/', import.meta.url));
 const prefix = '/api/hassio_ingress/DUMMY';
 const mounts = [prefix, ''];
-let config, state, calls, nonce;
+let config, state, calls, nonce, revision, receipts;
 function reset(next = {}) {
   config = next;
   calls = [];
+  receipts = new Map();
   nonce = 0;
+  revision = 1;
   state = {
     product: next.product ?? 'n8n', endpoint: next.endpoint ?? null,
     backend_url: null, backend_key_set: false, connection_configured: next.configured ?? false,
     token_active: true, writes_enabled: next.legacyWrites ?? false, disabled: [],
-    ...(next.granular !== false ? { policy_contract: 'woow-v3-exact-grants' } : {}), enabled_write_tools: [],
+    ...(Object.hasOwn(next, 'tokenMask') ? {token_masked: next.tokenMask} : {}),
+    ...(Object.hasOwn(next, 'tokenHistory') ? {token_history: structuredClone(next.tokenHistory)} : {}),
+    ...(next.granular !== false ? { policy_contract: 'woow-v3-exact-grants' } : {}), enabled_write_tools: next.grants ?? [],
     tools: {
       read_example: { write: false, legacy_write:false, write_grants:[], operation_parameter:null, inputSchema:{} },
       write_example: { write: true, legacy_write:true, write_grants:['write_example'], operation_parameter:null, inputSchema:{} },
       mixed_example: { write: false, legacy_write:false, write_grants:['mixed_example:create','mixed_example:delete'], operation_parameter:'action', inputSchema:{} },
     },
     health: { management: 'alive', child: { state: 'not_started', transport_ready: false }, backend: next.offline ? 'unreachable' : 'unconfigured' },
+    // 2026-10-27 one-time all-on notice (shape of owner_defaults.view); omitted unless a test supplies it.
+    ...(next.ownerDefaults ? { owner_defaults: structuredClone(next.ownerDefaults) } : {}),
   };
+  if (state.product === 'odoo' && next.odooApi !== false) {
+    state.odoo_write_switches = next.odooSwitches ?? {enable_writes:true, allow_direct_writes:true,
+      allow_unknown_methods:true, chatter_direct:true};
+    state.odoo_write_switches_source = next.odooSource ?? 'legacy_all_on';
+  }
+  if (next.parity046) {
+    state.backend_edit = {contract:'woow-connection-patch-v1',
+      values:Object.fromEntries(products[state.product].fields.filter(([, , type]) => !type.includes('secret')).map(([key]) => [key, next.connection?.[key] ?? null])),
+      secret_set:Object.fromEntries(products[state.product].fields.filter(([, , type]) => type.includes('secret')).map(([key]) => [key, true]))};
+    if (state.product === 'odoo') {state.odoo_allowed_methods = []; state.odoo_allowed_methods_source = 'legacy_empty';}
+    if (state.product === 'n8n') {
+      state.n8n_session = {timeout_seconds:600, max_sessions:20};
+      state.n8n_session_source = 'legacy_default';
+    }
+  }
+  if (next.operations) {
+    state.denied_operations = next.denied_operations ?? {};
+    for (const tool of Object.values(state.tools)) Object.assign(tool, {operations: [], default_operation: null});
+    Object.assign(state.tools.mixed_example, {default_operation: 'list', operations: [
+      {name:'list', write:false}, {name:'get', write:false}, {name:'create', write:true}, {name:'delete', write:true},
+    ]});
+  }
+  if (next.n8nExposure) {
+    // 僅供介面測試；與正式 n8n 三個工具的既有授權形狀相同。
+    state.tools = {
+      n8n_workflow_versions: {write:false, legacy_write:false, operation_parameter:'mode', default_operation:'list',
+        write_grants:['rollback','delete','prune'].map(op => `n8n_workflow_versions:${op}`),
+        operations:['list','get','diff','rollback','delete','prune'].map(name => ({name,write:['rollback','delete','prune'].includes(name)})), inputSchema:{}},
+      n8n_test_workflow: {write:true, legacy_write:false, write_grants:['n8n_test_workflow'], operation_parameter:null, default_operation:null, operations:[], inputSchema:{}},
+      n8n_update_partial_workflow: {write:true, legacy_write:false, write_grants:['n8n_update_partial_workflow'], operation_parameter:null, default_operation:null, operations:[], inputSchema:{}},
+    };
+  }
+}
+function capabilities() {
+  const result = {schema_version:1, deployment:{kind:config.fixed ? 'builtin' : 'ha-addon'}, product:{id:state.product,version:'test'},
+    admin:{authority:config.fixed ? 'paas-password' : 'ha-admin'}, backend:{mode:config.fixed?'fixed':'manual',can_edit:!config.fixed,can_test:true},
+    capabilities:{tool_schema:true,effective_tools:true,operation_policy:true,logs:true,restart_child:true,revoke_token:true},
+    tools:{catalog_count:3,policy_enabled_count:3,effective_count:config.offline?null:3,status:config.offline?'unknown':'observed',
+      items:Object.keys(state.tools).map(name=>({name,description:`Description for ${name}`,inputSchema:{type:'object',properties:{value:{type:'string'}}},schema_source:'child',policy_enabled:true,effective:config.offline?null:true}))}};
+  if (config.operations) {
+    result.capabilities.operation_denies = true;
+    for (const item of result.tools.items) {
+      const tool = state.tools[item.name];
+      const whole = !state.disabled.includes(item.name) && (!tool.write || state.enabled_write_tools.includes(item.name) || tool.legacy_write && state.writes_enabled);
+      item.operations = tool.operations.map(op => ({...op, denied: state.denied_operations[item.name]?.includes(op.name) ?? false,
+        policy_enabled: whole && !state.denied_operations[item.name]?.includes(op.name) && (!op.write || state.enabled_write_tools.includes(`${item.name}:${op.name}`))}));
+      for (const operation of item.operations) operation.effective = operation.policy_enabled ? config.offline ? null : true : false;
+      item.policy_enabled = whole && (item.operations.length ? item.operations.some(op => op.policy_enabled) : !state.denied_operations[item.name]?.length);
+      item.effective = item.policy_enabled ? config.offline ? null : true : false;
+      if (!item.policy_enabled) item.reason = 'operations_not_permitted';
+    }
+    result.tools.policy_enabled_count = result.tools.items.filter(item => item.policy_enabled).length;
+    result.tools.effective_count = config.offline ? null : result.tools.policy_enabled_count;
+    const operations = result.tools.items.flatMap(item => item.operations);
+    result.tools.operation_count = operations.length;
+    result.tools.policy_enabled_operation_count = operations.filter(operation => operation.policy_enabled).length;
+    result.tools.effective_operation_count = config.offline ? null : operations.filter(operation => operation.effective === true).length;
+  }
+  if (config.n8nExposure) {
+    const updater = result.tools.items.find(item => item.name === 'n8n_update_partial_workflow');
+    for (const item of result.tools.items.filter(item => item.name !== updater.name)) {
+      item.conditional_writes = [{parameter:'exposeToMcp', requires_tool:updater.name,
+        policy_enabled:config.unknownExposure ? null : updater.policy_enabled}];
+    }
+  }
+  return result;
 }
 reset();
+const etag = () => `"c1-${revision.toString(16).padStart(64, '0')}"`;
+const configuration = () => ({revision: etag().slice(1, -1), saved_revision: 'launch-fixture',
+  applied_revision: config.applyState === 'pending' || config.applyState === 'failed' ? null : 'launch-fixture',
+  apply_state: config.applyState ?? 'applied', last_error_code: config.applyState === 'failed' ? 'child_start_failed' : null});
 const json = (response, status, value) => { response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); response.end(JSON.stringify(value)); };
 async function body(request) {
   let raw = '';
@@ -42,25 +118,78 @@ const server = http.createServer(async (request, response) => {
     if (path === '/__fixture/ready') return json(response, 200, { fixture: 'LOCAL MOCK — not HA security' });
     if (path === '/__fixture/reset' && request.method === 'POST') { reset(await body(request) ?? {}); return json(response, 200, { reset: true }); }
     if (path === '/__fixture/calls') return json(response, 200, calls);
+    if (path === '/__fixture/configuration' && request.method === 'POST') {
+      const value = await body(request);
+      if (value.changed) revision++;
+      config.applyState = value.applyState;
+      return json(response, 200, {});
+    }
     const mount = mounts.find(candidate => candidate === '' || path.startsWith(`${candidate}/`));
     const local = path.slice(mount.length);
+    if (local === '/api/capabilities') return json(response, 200, capabilities());
+    if (local === '/api/diagnostics') return json(response, 200, {logs:{entries:[{at:'2026-10-23',stream:'stderr',generation:1,text:'token=[REDACTED]'}],redacted:true,bytes:100,dropped:2}});
+    if (local === '/api/configuration') return json(response, 200, {configuration: configuration()});
     if (local === '/api/bootstrap') {
       if (config.deniedBootstrap) return json(response, 403, { error: 'MOCK denied' });
+      // The management server's answer while HA Core advertises a version the add-on has not reviewed.
+      if (config.unreviewedCore) return json(response, 403, { error: 'request denied', detail: { code: 'core_version_unreviewed', ha_version: config.unreviewedCore }, untrusted: 'MOCK PRIVATE_CANARY_MUST_NOT_RENDER' });
       nonce++;
-      return json(response, 200, { ...state, base_path: mount, api_base: `${mount}/api`, csrf: config.missingCsrf ? null : `mock_fresh_csrf_value_${nonce}` });
+      return json(response, 200, { ...state, ...(config.parity === false ? {} : {configuration: configuration()}), operation_contract:{version:1,server_time_ms:Date.now(),retention_ms:86400000}, capabilities:capabilities(), base_path: mount, api_base: `${mount}/api`, csrf: config.missingCsrf ? null : `mock_fresh_csrf_value_${nonce}` });
+    }
+    if (local.startsWith('/api/operations/')) {
+      if (config.deniedSave) return json(response, 403, {});
+      const saved=receipts.get(local.slice('/api/operations/'.length));
+      return saved ? json(response,200,{operation:saved.operation,result:{status:'ok'}}) : json(response,404,{detail:{code:'operation_not_found'}});
     }
     if (local.startsWith('/api/')) {
       const operation = local.slice(5);
       const payload = await body(request);
       const validCsrf = request.headers['x-csrf-token'] === `mock_fresh_csrf_value_${nonce}`;
-      calls.push({ operation, method: request.method, validCsrf, fields: Object.keys(payload ?? {}), ...(operation === 'policy' ? { policy: payload } : {}) });
+      calls.push({ operation, method: request.method, validCsrf, ifMatch: request.headers['if-match'], ...(request.headers['idempotency-key'] ? {operationId:request.headers['idempotency-key']} : {}), fields: Object.keys(payload ?? {}), ...(operation === 'policy' ? { policy: payload } : {}), ...(operation === 'odoo/write-switches' ? {switches:payload} : {}), ...(['backend/patch','n8n/session','odoo/allowed-methods'].includes(operation) ? {changedKeys:Object.keys(payload?.changes ?? {}), session:payload?.n8n_session, methods:payload?.odoo_allowed_methods} : {}) });
       if (!validCsrf || config.deniedSave) return json(response, 403, { error: 'MOCK DENIED PRIVATE_CANARY_MUST_NOT_RENDER' });
       if (config.saveStatus) return json(response, config.saveStatus, { error: 'MOCK PRIVATE_CANARY_MUST_NOT_RENDER' });
+      const kind={'token/rotate':'token.rotate','token/revoke':'token.revoke','child/restart':'mcp.restart'}[operation];
+      const operationId=request.headers['idempotency-key'];
+      if (kind && receipts.has(operationId)) {
+        const prior=receipts.get(operationId);
+        if(prior.operation.kind!==kind)return json(response,409,{detail:{code:'operation_id_conflict'}});
+        return json(response,200,{status:'ok',operation:{...prior.operation,replayed:true}});
+      }
+      if (!['token/reveal','backend/test'].includes(operation) && !request.headers['if-match']) return json(response,428,{detail:{code:'config_revision_required'}});
+      if (request.headers['if-match'] && request.headers['if-match'] !== etag()) return json(response, 409, {detail: {code: 'config_conflict'}, untrusted: 'PRIVATE_CANARY_MUST_NOT_RENDER'});
+      if (operation === 'backend/test') return json(response,200,{tested_configuration:'saved',backend:'reachable',health:state.health});
+      if (operation === 'owner-defaults/restore' || operation === 'owner-defaults/dismiss') {
+        // MOCK of the server rules: POST, no body, If-Match of the reviewed revision, a pending marker.
+        if (request.method !== 'POST' || payload !== null) return json(response, 400, { error: 'MOCK notice contract' });
+        if (!request.headers['if-match']) return json(response, 428, { detail: { code: 'precondition_required' } });
+        if (request.headers['if-match'] !== etag()) return json(response, 409, { detail: { code: 'config_conflict' }, untrusted: 'PRIVATE_CANARY_MUST_NOT_RENDER' });
+        const view = state.owner_defaults;
+        const restoring = operation.endsWith('/restore');
+        if (!view || view.restored_at || (restoring ? !view.restore?.available : view.acknowledged_at)) {
+          return json(response, 409, { detail: { code: 'owner_defaults_unavailable' }, untrusted: 'PRIVATE_CANARY_MUST_NOT_RENDER' });
+        }
+        const at = '2026-10-27T09:30:00+00:00';
+        if (restoring) {
+          state.disabled = [...new Set([...state.disabled, ...view.restore.disabled_added])];
+          state.enabled_write_tools = state.enabled_write_tools.filter(grant => !view.restore.write_grants_removed.includes(grant));
+          Object.assign(view, { restored_at: at, notice: false });
+          view.restore.available = false;
+        } else Object.assign(view, { acknowledged_at: at, notice: false });
+        revision++;
+        return json(response, 200, { saved: true, configuration: configuration(), owner_defaults: view });
+      }
+      let receipt;
+      if(kind){
+        if(!/^[0-9]{13}\.[A-Za-z0-9_-]{16,64}$/.test(operationId??''))return json(response,428,{detail:{code:'operation_id_required'}});
+        receipt={id:operationId,kind,state:'completed',replayed:false};
+        receipts.set(operationId,{operation:receipt});
+      }
+      if (operation === 'child/restart') return json(response,202,{status:'ok',operation:receipt,accepted:true,apply_state:'pending'});
       if (operation.startsWith('token/')) {
         if (request.method !== 'POST' || payload !== null) return json(response, 400, { error: 'MOCK token contract' });
-        if (operation === 'token/revoke') { state.token_active = false; response.writeHead(204); return response.end(); }
-        if (operation === 'token/rotate') state.token_active = true;
-        return json(response, 200, { token: state.token_active ? 'M'.repeat(43) : null });
+        if (operation === 'token/revoke') { state.token_active = false; revision++; return json(response,200,{status:'ok',operation:receipt}); }
+        if (operation === 'token/rotate') {state.token_active = true; revision++;}
+        return json(response, 200, { ...(receipt ? {status:'ok',operation:receipt} : {}), token: state.token_active ? 'M'.repeat(43) : null });
       }
       if (request.method !== 'PUT') return json(response, 405, {});
       if (operation === 'backend') {
@@ -69,11 +198,33 @@ const server = http.createServer(async (request, response) => {
         if (!clear) backendPayload(state.product, 'replace', connection);
         if (JSON.stringify(payload) !== JSON.stringify(clear ? backendPayload(state.product, 'clear') : backendPayload(state.product, 'replace', connection))) return json(response, 400, {});
         state.connection_configured = !clear;
+      } else if (operation === 'backend/patch') {
+        if (!config.parity046 || !state.connection_configured || !request.headers['if-match']) return json(response,400,{});
+        for (const [key, value] of Object.entries(payload.changes)) {
+          if (Object.hasOwn(state.backend_edit.secret_set, key)) state.backend_edit.secret_set[key] = value !== null;
+          else state.backend_edit.values[key] = value;
+        }
+      } else if (operation === 'n8n/session') {
+        n8nSessionPayload(state, Object.fromEntries(Object.entries(payload.n8n_session).map(([k,v]) => [k,String(v)])));
+        state.n8n_session = payload.n8n_session;
+        state.n8n_session_source = 'saved';
       } else if (operation === 'endpoint') state.endpoint = payload.endpoint;
+      else if (operation === 'odoo/write-switches') {
+        if (state.product !== 'odoo' || !state.odoo_write_switches ||
+            JSON.stringify(odooSwitchPayload(state, payload.odoo_write_switches)) !== JSON.stringify(payload)) return json(response, 400, {});
+        state.odoo_write_switches = structuredClone(payload.odoo_write_switches);
+        state.odoo_write_switches_source = 'saved';
+      }
+      else if (operation === 'odoo/allowed-methods') {
+        odooMethodsPayload(state,payload.odoo_allowed_methods.join('\n'));
+        state.odoo_allowed_methods = structuredClone(payload.odoo_allowed_methods);
+        state.odoo_allowed_methods_source = 'saved';
+      }
       else if (operation === 'policy') {
-        if (Object.keys(payload).sort().join() !== 'disabled,enabled_write_tools,writes_enabled') return json(response, 400, {});
+        if (Object.keys(payload).sort().join() !== (config.operations ? 'denied_operations,disabled,enabled_write_tools,writes_enabled' : 'disabled,enabled_write_tools,writes_enabled')) return json(response, 400, {});
         Object.assign(state, payload);
       } else return json(response, 404, {});
+      revision++;
       return json(response, 200, { saved: true });
     }
     if (local.startsWith('/assets/')) {
@@ -83,7 +234,7 @@ const server = http.createServer(async (request, response) => {
       response.writeHead(200, { 'Content-Type': types[extname(filename)] ?? 'application/octet-stream' });
       return response.end(await readFile(filename));
     }
-    if (!['/', '/overview', '/backend', '/tools', '/access'].includes(local)) return json(response, 404, {});
+    if (!['/', '/overview', '/backend', '/tools', '/access', '/diagnostics'].includes(local)) return json(response, 404, {});
     // Same validation required in production AFTER trusted HA role/prefix resolution.
     const html = (await readFile(`${dist}/index.html`, 'utf8')).replaceAll('__MCP_UI_BASE__', mountPath(mount));
     response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'", 'X-Content-Type-Options': 'nosniff' });

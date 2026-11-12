@@ -1,17 +1,36 @@
-# WOOW HA MCP Add-ons（實驗封裝，尚未發佈）
+# WOOW HA MCP Add-ons（已公開發佈）
 
-七個獨立產品：Odoo、Odoo Manage、n8n、Hermes、OpenDesign、EMQX、LiteLLM。
+七個啟用的商店產品：Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud、Headscale。**歷史版本 0.3.3：六支 canonical 映像已完成驗收、掃描與公開發布**，包含 n8n 全部 28 個工具的有效 `output` 參數正規化、六個混合工具的 selector 保護，以及 versions/test 的 `exposeToMcp` 既有 updater 有效權限檢查。新增 `conditional_writes` capability metadata，保持 28 個工具、33 個寫入 grants、schema 4 與完整功能預設；不變更 dependency／child pins 或 UI 原始碼。正常 stable Release／Store 與正式 HAOS 升級分別驗證，不由映像發布推定完成。見 [0.3.3 發布證據與驗收邊界](docs/operations/release-decision-0.3.3.md)、[不可變映像紀錄](docs/provenance/release-0.3.3-images.json)。
+
+Headscale 0.4.17 已有 Stable Release 並進入商店；0.4.18 將 PR #86 已審查的 11 支 Headscale 工具輸出 schema 納入正式映像。映像、商店與 HAOS 驗收各有獨立關卡；其他產品維持各自已發布版號。見 [Headscale 0.4.17 發佈紀錄](docs/operations/release-decision-headscale-0.4.17.md)。
+
+本分支包含 **0.4.13**：整合 PR #73–#75 的網址路徑參數與存檔檢查、Nextcloud ETag 修正及管理畫面提示；六個啟用產品映像已發佈並驗證，見 [0.4.13 發佈決策](docs/operations/release-decision-0.4.13.md)。0.4.12 的內容：在 0.4.11 之上加入 PR #65–#70（Odoo 就緒探測分辨憑證被拒、工具呼叫等候 30 秒、未審查方法關閉時審過的讀取照常執行；n8n 改用釘住的原生 better-sqlite3，搜尋與 PaaS 一致；Hermes 拒絕雲端 metadata 網址的文字與 PaaS 相同；請求路徑可帶字面 `%`），各 add-on 的 DOCS 說明只發佈工具；六個映像已發佈並驗證，見 [0.4.12 發佈決策](docs/operations/release-decision-0.4.12.md)。0.4.11 的內容：在 0.4.10 之上加入 PR #58（Hermes 錯誤統一為 `CODE: text`）、PR #59（拿掉「實驗性」標籤，`stage: stable`）與 `apt`／`libapt-pkg6.0` 2.6.2 安全更新（CVE-2026-109518）；六個映像已發佈並驗證，見 [0.4.11 發佈決策](docs/operations/release-decision-0.4.11.md)。0.4.10 的內容：已合併的 PR #46 讓 Odoo 讀取錯誤不再偽裝成「成功、零筆」，並對 `search_records`／`read_record` 的成功結果加上預設 2 MiB 上限；PR #48、#49、#50 分別補 Odoo 41、n8n 2、Hermes 11 份對外輸出 schema。受保護基底 `fb3f94c`（#56，第一父提交為 #55 的 `4f034246`）包含 #54 的 EMQX 錯誤封裝與 39 份輸出 schema、Hermes dashboard 故障指引、#55 的 Nextcloud 安全錯誤類別與 redirect Location 隱藏，以及 #56 的 Odoo 唯讀 XML-RPC 有限斷線重試與保留的安全錯誤類別；寫入仍只嘗試一次。#57 讓 Hermes Dashboard 錯誤只回固定公開類別、拒絕格式錯誤／過深／非物件的回應，結果不明的 cron 建立只送一次 POST；n8n lockfile 的 `follow-redirects` 升到 1.16.2（GHSA-mrwp-f3q8-3g9p）。總計 136 份精確輸出 schema pin，工具名稱、輸入格式及授權不變。七份版本資訊同步，六個啟用產品（Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud）的精確來源映像（來源 `78a4e69`）已發布，完成 P1–P5、匿名及遠端完整層驗證；Stable Release／Store 同步由正常合併後流程另驗，HAOS 實測另行驗收。OpenDesign 維持停用，僅同步來源版本。見 [0.4.10 發布決策](docs/operations/release-decision-0.4.10.md) 與 [不可變映像紀錄](docs/provenance/release-0.4.10-images.json)。[0.4.9 發布證據](docs/operations/release-decision-0.4.9.md) 保留為歷史紀錄。
+
+**0.4.3（與 PaaS 一致）**：舊版安裝（state schema 1/2/3，0.1.x 寫的）升級後**第一次啟動就一次性全開**，MCP 不再停在 503 等管理員確認；同一次原子寫入加上標記 `owner_defaults_20261025`，舊設定的限制存成 `/data/mcp/owner-defaults-20261025-recovery.json`。管理面板改成事後通知（只在管理面板與 add-on log 的一行，升級後請打開管理面板查看）：顯示「已於 <時間> 自動套用預設全開」與升級前後差異，可選「還原升級前的限制」（忠實還原：舊設定停用的工具再停用；寫入只保留舊設定授權過的，其他寫入連同新版才有的寫入操作都取消，與 0.1.x 實際能做的相同；新版才有的工具不會被停用（讀取照常可用），不再出現「全部停用」）或「保持全開，不再提示」。已是 schema 4 的設定（新安裝、0.2.0 之後、或在 0.3.0–0.4.1 升級頁確認過的）一律不動；讀不到或壞掉的設定照舊 fail-safe（不遷移、不覆寫，add-on 停止並在 log 說明）。0.4.3 的映像與正式發版須通過精確映像及商店閘；細節見 [legacy migration](docs/operations/legacy-migration.md)、[CHANGELOG](CHANGELOG.md) 與 [upgrade-notes.yaml](upgrade-notes.yaml)。
+
+**0.3.4** 六支 canonical 映像已完成驗收與公開發布，六個 stable Release 於 2026-10-24 發布（MCP Python SDK 1.30.0、FastMCP 3.4.11、n8n-mcp 2.96.2、Node 22.23.4、Hermes 拒絕 loopback MCP server 網址）；見 [0.3.4 發布證據](docs/operations/release-decision-0.3.4.md)與[不可變映像紀錄](docs/provenance/release-0.3.4-images.json)。
+
+先前 **0.3.1** 六支 canonical 映像已完成驗收與公開發布；[0.3.1 發布證據](docs/operations/release-decision-0.3.1.md)與[不可變映像紀錄](docs/provenance/release-0.3.1-images.json)保留。各版 stable Release 與 Store 更新仍依正常受保護合併流程驗證，不由映像發布宣稱後續流程已完成。指定正式 Hermes 預計由 0.3.0 直接升級至 0.3.3，屆時建立新備份並驗證實際映像；不宣稱 0.3.1 正式 HAOS 升級。OpenDesign 原始碼保留、商店維持停用，本次不建置或發布它的映像。
+
+**版本隔離：** 0.3.2 已由獨立的 dependency-update [PR17](https://github.com/WOOWTECH/Woow_ha_mcp_addons/pull/17) 保留；本次有限授權修正改用 0.3.3，避免不同 source 共用映像 tag。我們未發布的 0.3.2 候選已被取代，不合併 PR17 的 dependency 更新；0.3.1 歷史證據保持不變。
+
+**Odoo Manage 已於 2026-10-06 下架封存**：0.1.4 是最後一版，0.1.5 起不在商店，也不再建置或發佈。已安裝的仍以 0.1.4 執行，但不會再有更新或安全修正；它的設定保有 Odoo API key，並有 `homeassistant_api` 權限，建議改用 Woow Odoo MCP Server 後移除。Woow Odoo MCP Server 是不同的 MCP server（工具與設定不同，要另設後端、endpoint 與 token）。已發佈的 0.1.0–0.1.4 映像保留，舊備份仍可還原。步驟見[更新、備份與回復](docs/operations/update-backup-rollback.md)；原始碼保留在 `apps/odoo-manage`。
 僅以 **amd64 / Supervisor 2026.09.3** 為封裝目標；不是 Core 最低版本。
+
+**管理面板支援的 Core 版本**：只在該版 add-on 審查過的 HA Core 版本運作（0.1.6–0.1.8：2026.7.2–2026.9.4 與 2026.10.0；0.1.9 起再加 2026.10.1；0.4.2 起再加 2026.10.2–2026.10.4；Headscale 0.4.14 再加 2026.11.0–2026.11.1；0.1.5 及更早只有 2026.7.2）。其他產品的 0.4.13 映像不因這次來源更新而支援 2026.11；
+其他版本（含之後的 patch 與 beta）整個管理面板都回 403；0.4.1 以前看起來和「不是管理員」完全一樣（add-on 紀錄也沒有訊息），0.4.2 起管理面板改顯示「這個 HA Core 版本尚未審核：<版本>」，add-on 紀錄也記一行同樣的說明（不含權杖）；
+MCP 端點（Bearer token）不經這項檢查，不受影響。新的 Core 版本要等 add-on 發新版才支援，升級 Core 前請先對照這份清單。
 Kubernetes MCP 與 Vibe Kanban 不在範圍。
 
-**現在不可當作可用商店產品安裝：**
+**目前狀態與限制：**
 
-- 七個 runtime 已存在，但只有 **184 個來源工具中 71 個有界支援、113 個明列暫不支援**；不是完整功能遷移。逐名對照見 [工具表](docs/tool-surface.md)。
-- 七份 `addons/*/config.yaml` 可被 Supervisor 探索，不代表 GHCR 名稱已取得、映像已存在或可匿名拉取。此批 **未建置映像、未做 HA／真實後端 E2E**。
-- **本地整合 ≠ HA／映像驗收**：僅新 n8n 試點獲准 `homeassistant_api: true`，正式 fixed-WS provider 已實作並經 component review；共用管理 HTML/static/API 與 v3 UI 已本地串接。其餘六類仍 false，正式管理 fail closed。`panel_admin` 不是授權。
+- 七個原始碼產品（其中六個 Store 啟用；見 `packaging/inputs.json`）各有 runtime（封存的 Odoo Manage 原始碼也還在）。**0.2.1 起完整版**（負責人 2026-10-15 決定）：七支開放子程序的全部工具，合計 183 個，與原始 MCP server 及 PaaS woow-mcp-server 一致；全部工具與寫入預設開啟；schema 1/2/3 的升級在 0.3.0–0.4.1 要先由 HA 管理員確認預選 `all_on`（或明確選 `preserve`），下一版起改成第一次啟動自動全開、事後可選還原（見上）；新安裝與 schema 4 的正常啟動不變，管理面板可逐一停用或取消寫入。**網址（權杖）＝完整後端權限**，後端帳號權限要設對，見 [寫入預設開啟](docs/operations/guide.md#寫入預設開啟)。0.2.2 起後端還沒設定或連不上時 client（含 Claude.ai 連接器）照樣能連線並列出全部工具，呼叫工具回錯誤說明原因（[client 文件](docs/operations/clients.md#token-事件與故障)）。逐名對照見 [工具表](docs/tool-surface.md)，轉送規則與保留的安全層見 [工具範圍](docs/tool-expansion.md)。
+- 七支（odoo、n8n、hermes、opendesign、emqx、litellm、nextcloud）的顯示名稱是「Woow ○○ MCP Server」，圖示與所連接的軟體相同（來源見 [圖示來源](docs/provenance/icons.md)）。兩種安裝來源內容相同：本 repository 的 HA 商店，以及 2026-10-09 起的 [WOOW HA App Store](https://github.com/WOOWTECH/Woow_HA_App_Store)（含 ha-rebrand 的 Local Download）。兩個商店的同名 add-on 在 HA 裡是不同的 add-on（slug 前綴不同，設定與資料不互通），同一台 HA 只裝其中一個來源的。映像已公開、可匿名拉取。0.1.1–0.1.7 每版都在測試 HA 回歸（[0.1.7 紀錄](docs/operations/ha-test-0.1.7.md)，含 Nextcloud 第一次實機；之前各版見同目錄 `ha-test-0.1.*.md`）：映像身分、管理面板權限、token、五支真後端的讀取冒煙與拒寫、後端斷線、重啟、升版；LiteLLM 沒有後端，工具未測（只測了未設定後端時的拒絕與錯誤碼，見 [client 文件](docs/operations/clients.md)）。真實 MCP client（同 HA Pi／Omnigent／Hermes、LAN client、AI client）、授權寫入、n8n 以外六支的備份還原、版本回退與 aarch64 尚未驗收。
+- **AI client 相容性**：0.1.5 經 OpenRouter 實測，Claude、GPT 拒收 n8n、Odoo、Hermes 的工具清單（7 個工具的 `inputSchema` 頂層有 `oneOf`／`allOf`，整個請求 HTTP 400）。0.1.6 已修正：這 7 個工具宣告的 schema 頂層改成單純的 object（驗證不變），2026-10-07 以同樣五個模型複驗六支全部接受（30/30；0.1.7 新增的 Nextcloud 沒有做這項測試）；直連 API 與實際 client 仍未測。詳見 [client 文件](docs/operations/clients.md)。
+- **HA 管理權限**：七支都有 `homeassistant_api: true`（n8n 自 0.1.0、其他五支自 0.1.1 起，負責人核准；Nextcloud 於 2026-10-08 核准，0.1.7 起），用來確認管理面板的使用者是 HA owner 或系統管理員；測試 HA 上 owner 可用、一般使用者 403（0.1.1–0.1.6 每版實測；Nextcloud 尚未在 HA 實測）。`panel_admin` 不是授權。
 - 此例外授予**廣泛 Core 管理能力**（含使用者管理及可能間接 Supervisor／host 影響），不是可強制的唯讀角色權限；不代表批准所有 HA 變更。`hassio_api/auth_api` 仍 false、Supervisor role 預設、protection mode 不變，無新增 host 權限。
-- 核准 verifier 契約：固定 `ws://supervisor/core/websocket`／`config/auth/list`，只用 n8n 管理程序 runtime token；敏感操作前 fresh role query、無正向快取，缺失／降權／停權／timeout／錯誤一律 fail closed。本地實際 bootstrap→OS guard→n8n→provider 與 Chromium 已用 owned fake WS／test-only Ingress 模擬驗證；整合獨立規格及新安全審查仍待完成，HA **NOT TESTED**；不可注入 trust bypass。
-- 發佈須經獨立規格、新安全審查、來源／授權／秘密／映像／HA 關卡及 `public-release` 人工批准。`RELEASE-GATES.json` 預設全部 false。
+- 核准 verifier 契約：固定 `ws://supervisor/core/websocket`／`config/auth/list`，只用各支管理程序的 runtime token（child 不繼承）；敏感操作前 fresh role query、無正向快取，缺失／降權／停權／timeout／錯誤一律 fail closed。provider 與 token 傳遞在 0.1.1 經獨立 SPEC＋安全審（[0.1.1 發佈紀錄](docs/operations/release-decision-0.1.1.md)）；登入後即時降權與瀏覽器 UI 只在本地以 owned fake WS／test-only Ingress 驗證，未在真 HA 測；不可注入 trust bypass。
+- 0.1.0 起依負責人的公開決定發佈（[release-decision-2026-10-05](docs/operations/release-decision-2026-10-05.md)）：每版映像在私有 builder 通過 container 與 supply-chain gate 後，推送同一個已測 image ID（不重建），沒有經過 `public-release` workflow。`RELEASE-GATES.json` 的人工 gates 沒有改寫，仍全部 false。
 
 ## 文件
 
@@ -20,22 +39,22 @@ Kubernetes MCP 與 Vibe Kanban 不在範圍。
 - [手動更新、備份、migration、回復](docs/operations/update-backup-rollback.md)
 - [故障驗收與證據格式](docs/operations/acceptance.md)
 - [建置、CI、發佈關卡](docs/operations/release.md)
+- [0.1.9 發佈紀錄](docs/operations/release-decision-0.1.9.md)、[0.1.9 HA 回歸](docs/operations/ha-test-0.1.9.md)（2026-10-11 獨立收斂審查 PASS，依主對話裁定完成原範圍驗收；窗口前根 client 登入 1 筆保留未更動、兩個 u018 probe 屬原 S5/S6 指定 runner 本輪清理範圍，原追加兩 client strict comparison exit=1 保留；推送／HA 交還以 S7/S8 實際回執為準）；[0.1.8 發佈紀錄](docs/operations/release-decision-0.1.8.md)、[0.1.8 HA 回歸](docs/operations/ha-test-0.1.8.md)；[0.1.7 發佈紀錄](docs/operations/release-decision-0.1.7.md)、[0.1.7 HA 回歸](docs/operations/ha-test-0.1.7.md)；[0.1.6 發佈紀錄](docs/operations/release-decision-0.1.6.md)、[0.1.6 HA 回歸](docs/operations/ha-test-0.1.6.md)（之前各版在同目錄）
 - [授權範圍與第三方通知](THIRD_PARTY_NOTICES.md)
 
 各產品 `addons/<product>/DOCS.md`、`CHANGELOG.md`、`translations/zh-Hant.yaml`
-提供獨立工具數、連線欄位、風險與更新狀態。一台 HA 可分別選裝，每個 Add-on
+提供工具數、連線欄位、風險與更新狀態（工具數以[工具表](docs/tool-surface.md)各產品段落為準）。一台 HA 可分別選裝，每個 Add-on
 一組後端、獨立 token／資料／版本；不宣稱多租戶或同產品多 profile。
 
 ## 管理功能與範圍
 
-[共用 UI](packages/mcp-admin-ui/README.md) 提供七類 typed connection 的保留／完整替換／清除、
-三維健康、明確 client endpoint、確認式 token reveal/rotate/revoke。Manage 支援 read/module；
-module 必須已在後端安裝，UI 不安裝 Odoo 模組。工具頁對齊實際 v3 exact grants，
+0.3.1 的管理面板區分設定已保存、等待套用、已套用與套用失敗；「已套用」代表目前子程序完成協定檢查，與後端服務健康分開顯示。修正初次顯示與更新套用狀態時末尾出現字面 `null` 的問題。表單帶入載入時的 revision，過期儲存回 409 並保留草稿；明確重新載入後才可再送出。管理程序重啟也需要重新載入舊表單。既有不帶 `If-Match` 的 API client 保持相容，但沒有這項衝突保護。詳細 API 與已保存但套用失敗的處理見 [runtime configuration](docs/runtime-configuration.md)。
+
+[共用 UI](packages/mcp-admin-ui/README.md) 提供各產品 typed connection 的保留／完整替換／清除、
+三維健康、明確 client endpoint、確認式 token reveal/rotate/revoke。已下架的 Odoo Manage（0.1.4 為止）支援 read/module；
+module 必須已在後端安裝，UI 不安裝 Odoo 模組。工具頁依實際 metadata 顯示每個工具的停用開關與寫入授權（寫入工具一個 grant，混合工具每個寫入 operation 一個），
 保存取代全部 `enabled_write_tools` 並 `writes_enabled:false`，disabled 優先；未知或過期契約拒絕保存。
-原兩個 legacy writers 的有效 global 授權如實顯示，不讓 global false 靜默保留隱藏 writes。
-B1 新增 Odoo 三個純 preview builders 與 partner counts、Manage counts/template metadata/internal note、n8n local validators 與安全 inactive draft create。新 writer `post_message`／`n8n_create_workflow` 必須 exact grant，舊全域開關不授權；詳見 [B1 範圍](docs/tool-expansion.md)。
-B2 增加有界 Odoo metadata/品質統計；B3 增加 n8n tags、execution metadata、service status 與 folder get（操作不另計工具名）。B3 待獨立 SPEC → NEW SECURITY；詳見 [有界契約](docs/tool-expansion.md)。
-113 個延期工具是透明的內部功能／安全設計 backlog，不是已完成完整產品遷移。
+0.2.1 起不再用本地有界模型（0.1.x 的 B1／B2／B3 有界範圍與輸出投影已移除，只剩已下架的 Odoo Manage 使用），見 [工具範圍](docs/tool-expansion.md)。
 
 ## 本地封裝驗證
 
@@ -50,10 +69,10 @@ uv pip install --python "$PACKAGING_ENV/bin/python" --require-hashes --only-bina
 "$PACKAGING_ENV/bin/python" -m unittest discover -s packaging -p 'test_*.py' -v
 # 有 Docker 的隔離 runner 才執行；root context 最後的點不可省略
 # 這不是已執行的成功紀錄：
-docker build --platform linux/amd64 -f apps/n8n/Dockerfile -t local/mcp-n8n:0.1.0 .
-"$PACKAGING_ENV/bin/python" packaging/container_acceptance.py n8n local/mcp-n8n:0.1.0
+docker build --platform linux/amd64 -f apps/n8n/Dockerfile -t local/mcp-n8n:0.4.5 .
+"$PACKAGING_ENV/bin/python" packaging/container_acceptance.py n8n local/mcp-n8n:0.4.5
 ```
 
-PR/main CI 沒有發佈權限；固定七產品 matrix `push: false`。HA 無法以 Add-on
-子目錄重建這些 root-context Dockerfile，必須等待已核准預建映像。預設手動啟動、
+PR/main CI 沒有發佈權限；固定商店產品 matrix（與 `packaging/inputs.json` 相同）`push: false`。HA 無法以 Add-on
+子目錄重建這些 root-context Dockerfile，只能使用已發佈的預建映像。預設手動啟動、
 手動更新、不使用 latest、不開公網，protection mode 保持開啟。

@@ -1,7 +1,8 @@
 import { test, expect } from '../owned-fixture.mjs';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 const prefix = '/api/hassio_ingress/DUMMY';
-const evidence = process.env.UI_EVIDENCE_DIR ?? '/data/pi-agent/home/work/mcp-haos-team-runtime/reports/ui-evidence';
+const evidence = process.env.UI_EVIDENCE_DIR ?? fileURLToPath(new URL('../../test-results/mock-evidence/', import.meta.url));
 const measurements = [];
 async function reset(request, options = {}) { await request.post('/__fixture/reset', { data: options }); }
 async function calls(request) { return (await request.get('/__fixture/calls')).json(); }
@@ -29,6 +30,7 @@ async function fillConnection(page, product) {
     opendesign: { url: 'https://design.example.test' },
     emqx: { url: 'https://emqx.example.test', api_key: 'MOCK_ONLY_INPUT', api_secret: 'MOCK_ONLY_INPUT' },
     litellm: { url: 'https://litellm.example.test', master_key: 'MOCK_ONLY_INPUT' },
+    nextcloud: { url: 'https://cloud.example.test', username: 'mock_user', app_password: 'MOCK_ONLY_INPUT' },
   };
   for (const [field, value] of Object.entries(values[product])) await page.locator(`#${field}`).fill(value);
 }
@@ -101,7 +103,7 @@ for (const width of [1440, 320, 360]) {
     expect(loaded.every(asset => asset.path.startsWith(`${prefix}/assets/`) && asset.status === 200)).toBe(true);
   });
 }
-for (const product of ['odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm']) {
+for (const product of ['odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud']) {
   test(`MOCK ${product} typed replace / preserve / clear`, async ({ page, request }) => {
     await reset(request, { product, configured: true });
     await start(page, '/backend');
@@ -116,7 +118,7 @@ for (const product of ['odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'em
     await page.getByRole('button', { name: '儲存後端設定', exact: true }).click();
     await confirm(page);
     await expect(page.getByRole('status')).toContainText('伺服器已確認儲存');
-    expect((await calls(request))[0]).toMatchObject({ operation: 'backend', method: 'PUT', validCsrf: true, fields: product === 'n8n' ? ['url', 'key'] : ['connection'] });
+    expect((await calls(request))[0]).toMatchObject({ operation: 'backend', method: 'PUT', validCsrf: true, fields: product === 'n8n' ? ['url', 'key', 'mcp_access_token'] : ['connection'] });
     expect(await page.locator('body').textContent()).not.toContain('MOCK_ONLY_INPUT');
     expect(await page.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 });
     await page.getByLabel('這次要如何處理設定？').selectOption('clear');
@@ -130,7 +132,7 @@ test('MOCK denied bootstrap and denied save show truthful permission failure, no
   await reset(request, { deniedBootstrap: true });
   await start(page);
   await expect(page.getByRole('heading', { name: '管理介面無法使用' })).toBeVisible();
-  await expect(page.getByText('此頁只接受 Home Assistant', { exact: false })).toBeVisible();
+  await expect(page.getByText('請從原服務入口確認你的管理權限，再重新開啟此頁。')).toBeVisible();
   await expect(page.locator('form')).toHaveCount(0);
   await reset(request, { deniedSave: true });
   await start(page, '/backend');
@@ -140,6 +142,21 @@ test('MOCK denied bootstrap and denied save show truthful permission failure, no
   await expect(page.getByRole('heading', { name: '管理介面無法使用' })).toBeVisible();
   await expect(page.locator('body')).not.toContainText('PRIVATE_CANARY');
   await expect(page.locator('body')).not.toContainText('已確認儲存');
+});
+test('MOCK unreviewed HA Core: the denied view names the version, nothing else from the answer renders', async ({ page, request }) => {
+  await reset(request, { unreviewedCore: '2026.11.0' });
+  await start(page);
+  await expect(page.getByRole('heading', { name: '管理介面無法使用' })).toBeVisible();
+  await expect(page.getByText('這個 HA Core 版本尚未審核：2026.11.0。', { exact: false })).toBeVisible();
+  await expect(page.getByText('MCP 端點不經過這項檢查，照常服務', { exact: false })).toBeVisible();
+  await expect(page.locator('form')).toHaveCount(0);
+  await expect(page.locator('body')).not.toContainText('PRIVATE_CANARY');
+  await reset(request, { unreviewedCore: '<img src=x onerror="window.coreInjected=1">' });
+  await start(page);
+  await expect(page.getByText('這個 HA Core 版本尚未審核：（版本字串無法辨識）', { exact: false })).toBeVisible();
+  await expect(page.locator('body')).not.toContainText('onerror');
+  expect(await page.evaluate(() => window.coreInjected)).toBeUndefined();
+  expect(await page.locator('#app img').count()).toBe(0);
 });
 test('MOCK missing CSRF prevents any mutation; validation / 503 save failures are sanitized', async ({ page, request }) => {
   for (const options of [{ missingCsrf: true }, { saveStatus: 422 }, { saveStatus: 503 }]) {
@@ -179,6 +196,21 @@ test('MOCK rotation cancellation / reveal / hiding / revoke use deliberate CSRF 
   expect(await page.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 });
   expect(page.url()).not.toContain('MMMM');
 });
+test('MOCK token card renders only masked current and bounded history values', async ({ page, request }) => {
+  const mask = 'Ab12' + '*'.repeat(20) + 'xy_9';
+  await reset(request, { tokenMask: mask, tokenHistory: [{ action: 'rotate',
+    rotated_at: '2026-10-29T00:00:00+00:00', previous_token_masked: mask }] });
+  await start(page, '/access');
+  await expect(page.getByText(`目前權杖（遮罩）：${mask}`)).toBeVisible();
+  await expect(page.locator('#token-history li')).toHaveCount(1);
+  await expect(page.locator('#token-history li')).toContainText(`重新產生 · 2026-10-29T00:00:00+00:00 · ${mask}`);
+  await expect(page.locator('body')).not.toContainText('S'.repeat(43));
+  await reset(request, { tokenMask: 'S'.repeat(43), tokenHistory: [{ action: 'rotate',
+    rotated_at: '2026-10-29T00:00:00+00:00', previous_token_masked: 'S'.repeat(43) }] });
+  await page.reload();
+  await expect(page.getByText('權杖歷史格式不相容；請重新整理或更新附加元件。')).toBeVisible();
+  await expect(page.locator('body')).not.toContainText('S'.repeat(43));
+});
 test('MOCK explicit endpoint and clipboard defaults never guess ingress origin or include token', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await start(page, '/access');
@@ -191,6 +223,39 @@ test('MOCK explicit endpoint and clipboard defaults never guess ingress origin o
   const clip = await page.evaluate(() => navigator.clipboard.readText());
   expect(clip).toContain('https://mcp.example.test:8081/mcp');
   expect(clip).toContain('<YOUR_ADDON_TOKEN>');
+});
+test('MOCK Claude.ai connector URL needs a saved endpoint, a deliberate CSRF reveal, and hides like the token', async ({ page, context, request }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await start(page, '/access');
+  const show = page.getByRole('button', { name: '顯示 Claude.ai 連線網址', exact: true });
+  await expect(show).toBeDisabled();
+  await expect(page.getByText('尚未設定 MCP 用戶端端點：', { exact: false })).toBeVisible();
+  await expect(page.locator('body')).not.toContainText('private_');
+  await page.getByLabel('MCP 用戶端端點').fill('https://mcp.example.test:8443/mcp');
+  await page.getByRole('button', { name: '儲存端點', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('MCP 端點已儲存');
+  await expect(page.locator('#claude-secret')).toBeHidden();
+  await expect(page.locator('body')).not.toContainText('private_');
+  await show.click();
+  await page.getByRole('dialog').getByRole('button', { name: '取消' }).click();
+  expect((await calls(request)).filter(call => call.operation.startsWith('token/'))).toHaveLength(0);
+  await show.click();
+  await confirm(page, '確認繼續');
+  const url = `https://mcp.example.test:8443/private_${'M'.repeat(43)}/mcp`;
+  await expect(page.locator('#claude-secret code')).toHaveText(url);
+  await expect(page.locator('#token-secret')).toBeHidden();
+  await page.getByRole('button', { name: '複製 Claude.ai 連線網址', exact: true }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(url);
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await expect(page.locator('#claude-secret')).toBeHidden();
+  await expect(page.locator('body')).not.toContainText('private_');
+  expect((await calls(request)).filter(call => call.operation.startsWith('token/')).map(call => ({ operation: call.operation, method: call.method, validCsrf: call.validCsrf })))
+    .toEqual([{ operation: 'token/reveal', method: 'POST', validCsrf: true }]);
+  await page.getByRole('button', { name: '撤銷權杖', exact: true }).click();
+  await confirm(page, '確認撤銷');
+  await expect(page.getByRole('status')).toContainText('權杖已撤銷');
+  await expect(show).toBeDisabled();
+  expect(page.url()).not.toContain('MMMM');
 });
 test('MOCK per-tool/per-operation grants and disabled controls; legacy broad writes never enabled', async ({ page, request }) => {
   await reset(request, { granular: true });
@@ -209,11 +274,23 @@ test('MOCK per-tool/per-operation grants and disabled controls; legacy broad wri
   await page.reload();
   await expect(page.getByLabel('明確允許此工具寫入')).toBeChecked();
   await page.getByLabel('明確允許此工具寫入').uncheck();
-  await expect(page.getByText('注意：伺服器回報舊版全域寫入目前開啟。此頁不將它標示為唯讀。')).toBeVisible();
+  await expect(page.getByText('注意：伺服器回報舊版全域寫入目前開啟（新安裝的預設）。此頁不將它標示為唯讀；儲存後改以下方逐項勾選為準，未勾選的寫入即關閉。')).toBeVisible();
   await page.getByRole('button', { name: '儲存工具權限' }).click();
   await confirm(page, '確認套用');
   await expect(page.getByRole('status')).toContainText('伺服器已確認儲存工具權限');
   expect((await calls(request))[0].policy).toEqual({ writes_enabled: false, disabled: [], enabled_write_tools: [] });
+});
+test('MOCK a new install shows every write allowed with a risk note; unticking one saves exactly the rest', async ({ page, request }) => {
+  // What a new state holds since 2026-10-15: the legacy switch and every exact grant on.
+  await reset(request, { legacyWrites: true, grants: ['write_example', 'mixed_example:create', 'mixed_example:delete'] });
+  await start(page, '/tools');
+  await expect(page.getByText('目前已儲存政策：停用 0 個工具，允許 3 / 3 項寫入授權。')).toBeVisible();
+  for (const label of ['明確允許此工具寫入', '允許寫入操作：create', '允許寫入操作：delete']) await expect(page.getByLabel(label, { exact: true })).toBeChecked();
+  await page.getByLabel('允許寫入操作：delete', { exact: true }).uncheck();
+  await page.getByRole('button', { name: '儲存工具權限' }).click();
+  await confirm(page, '確認套用');
+  await expect(page.getByRole('status')).toContainText('伺服器已確認儲存工具權限');
+  expect((await calls(request))[0].policy).toEqual({ writes_enabled: false, disabled: [], enabled_write_tools: ['write_example', 'mixed_example:create'] });
 });
 test('MOCK token expires, and a reveal completing after focus loss stays hidden', async ({ page }) => {
   await start(page, '/access');
@@ -235,16 +312,21 @@ test('MOCK token expires, and a reveal completing after focus loss stays hidden'
 test('MOCK changing grant contract on fresh bootstrap prevents stale writes', async ({ page, request }) => {
   await reset(request, { granular: true });
   await start(page, '/tools');
+  const before = (await (await request.get(`${prefix}/api/configuration`)).json()).configuration.revision;
+  expect(before).toMatch(/^c1-[a-f0-9]{64}$/);
   await page.getByLabel('明確允許此工具寫入').check();
   await reset(request, { granular: false });
+  // Runtime contract drift can occur without a persisted configuration edit.
+  expect((await (await request.get(`${prefix}/api/configuration`)).json()).configuration.revision).toBe(before);
   await page.getByRole('button', { name: '儲存工具權限' }).click();
   await confirm(page, '確認套用');
   await expect(page.getByRole('status')).toContainText('工具授權版本已變更');
+  await expect(page.getByLabel('明確允許此工具寫入')).toBeChecked();
   expect(await calls(request)).toHaveLength(0);
 });
 test('MOCK all product forms fit 320px and dashboard is validated as a triplet', async ({ page, request }) => {
   await page.setViewportSize({ width: 320, height: 860 });
-  for (const product of ['odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm']) {
+  for (const product of ['odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud']) {
     await reset(request, { product });
     await start(page, '/backend');
     await fillConnection(page, product);

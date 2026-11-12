@@ -1,0 +1,301 @@
+# Human-readable declaration required by AGENTS.md rule 3. The centralized upgrade comparison gate (WOOW addon
+# pipeline #89) has not yet defined a machine-readable schema; this follows the format already used by
+# WOOWTECH/Woow_ha_cloudflare_tunnel_webgui. One release per entry, newest first.
+releases:
+  - to_version: "0.4.7"
+    from_version: "0.4.6"
+    addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]
+    summary: Mandatory reviewed revisions and durable token/restart operation receipts.
+    breaking_changes:
+      - id: admin-write-preconditions-and-receipts
+        affects: Direct admin API clients; the bundled UI is updated together.
+        change: >-
+          All persisted admin changes require one exact strong If-Match revision. Token rotate/revoke and
+          child restart also require Idempotency-Key. Missing headers return428; stale revisions return409.
+          Revoke returns200 JSON instead of204. Completed replay/query never returns a historical token.
+        migration: >-
+          Read a fresh bootstrap before reviewing changes, preserve its revision, and use its server_time_ms
+          plus a random suffix for one operation ID. Keep that ID after uncertain responses and query it.
+          Do not create a new ID to repeat an unknown outcome. Use the bundled UI or update custom clients.
+      - id: durable-journal-backup-boundary
+        affects: Backup, restore and downgrade procedures after any token/restart operation.
+        change: >-
+          A private hidden operation journal accompanies the existing schema4 state. Pending receipts mean
+          unknown outcome and never authorize automatic replay. Older binaries do not honor these receipts.
+        migration: >-
+          Back up the entire add-on data directory including hidden files. Restore matching data and binary
+          together, review current tokens and process state, and discard stale client retry intentions only
+          after review. Restoring older data cannot preserve newer receipts; no exactly-once restore claim.
+    behavior_changes:
+      - id: emqx-retained-error-and-delete-contract
+        change: >-
+          Retained reads fall back to listing only after404 or a valid empty result. Other HTTP failures and
+          invalid JSON propagate. Retained deletes make one DELETE request; failures, including404, never
+          dispatch an empty retained publish. Explicit204 remains a successful no-content response.
+        migration: >-
+          Clients must inspect the error and current retained state before a new write. Brokers without the
+          direct DELETE endpoint no longer receive a hidden fallback publish; choose an explicit reviewed
+          publish operation if that is intended. No tool name, input schema or grant default changes.
+      - id: p9-management-client-contract
+        change: P9 uses the shared admin API client for revisions, operation IDs and receipt validation.
+        migration: >-
+          Use the matching kit version. On an unconfirmed operation, preserve the printed non-secret ID,
+          query its receipt and review state before another run; the driver never automatically retries.
+  - to_version: "0.4.6"
+    from_version: "0.4.5"
+    addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]
+    summary: Partial credential edits, native n8n sessions and input compatibility, Odoo exact methods, reviewed output schemas, and LiteLLM URL/active-operation parity.
+    breaking_changes:
+      - id: schema4-optional-session-and-method-settings
+        affects: n8n after saving native sessions; Odoo after saving exact method exceptions.
+        change: >-
+          Saving adds optional n8n_session or odoo_allowed_methods to schema 4. Existing state without these keys
+          keeps its prior defaults and is not rewritten at startup. Older binaries reject the new saved keys.
+        migration: >-
+          Back up before upgrade. Downgrade by restoring the compatible pre-upgrade add-on backup and binary
+          together. Do not remove keys manually or change the schema number. Review restored permissions and
+          reissue tokens because a backup may restore an earlier token.
+      - id: litellm-active-operation-classification
+        affects: litellm_health, litellm_token_counter, litellm_spend_calculate.
+        change: >-
+          Native child policy labels these operations create (active work); readonly exposes 15 rather than 18
+          tools. Health can incur provider charges or save history; token/cost calculations do not run inference
+          but may fetch tokenizer/image resources. Existing HA 25 exact write grants and all-enabled 40 tools
+          remain unchanged. Existing read denies remain effective; no policy is automatically rewritten.
+        migration: >-
+          Review these three tools before explicitly permitting active work. Before downgrading to a child that
+          labels them read, disable each whole tool and retain the policy backup; create-only denies cannot
+          restrict an older read-labelled handler.
+    behavior_changes:
+      - id: partial-connection-edit
+        change: >-
+          A reviewed-revision partial edit preserves omitted values and clears only explicitly nullable fields.
+          Configured credentials embedded in display fields are withheld. Existing whole replacement remains.
+        migration: Review changed destinations because retained credentials will be reused there; provide fresh values for withheld fields only when deliberately replacing them.
+      - id: n8n-native-sessions-and-direct-inputs
+        change: >-
+          Native sessions support 60–86400 seconds (rounded up to minutes) and 1–100 sessions; absent settings
+          retain HA 600 seconds/20. Direct inputs negotiate once only after the exact SDK discriminator failure,
+          cache the successful format per official client, and never retry ambiguous execution failures.
+        migration: Saving session settings restarts the child. Cleanup scheduling can delay idle expiry; this is not a workflow cancellation deadline.
+      - id: odoo-exact-method-exceptions
+        change: An admin editor saves up to 128 exact public model.method exceptions with current-revision checks and child restart.
+        migration: Outer tool grants, write switches, chatter and standard-write restrictions still apply. Broad unknown-method mode remains independent and can permit methods outside this list.
+      - id: reviewed-output-schemas
+        change: 35 LiteLLM and eight Nextcloud tools expose exact reviewed outputSchema contracts; changed or unknown live contracts remain omitted.
+        migration: Clients may now validate structured results. No tool result envelope, input schema or execution permission changes.
+      - id: litellm-root-url
+        change: Only exact origin-root /v1 and trailing slashes are normalized; prefixed mounts such as /proxy/v1 are preserved.
+        migration: Enter the actual gateway root, not an appended OpenAI API endpoint. Verify proxy mount compatibility before downgrading to an older suffix normalizer.
+    backup_and_rollback:
+      - Take a Home Assistant add-on backup before upgrading. Optional state fields and active-operation labels require the rollback steps above.
+      - Saving a setting commits before child restart; saved:true with config_apply_failed requires correcting application, not assuming the old settings were restored.
+      - Isolated acceptance, source checks and published image gates are separate evidence; none implies a full production HAOS restore.
+  - to_version: "0.4.5"
+    from_version: "0.4.4"
+    addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]
+    summary: n8n result-error parity, audited operation denies, and accurate LiteLLM update-model metadata.
+    breaking_changes:
+      - id: n8n-audited-selector-validation
+        affects: n8n_manage_agents.action, n8n_test_workflow.method, n8n_list_catalog.kind.
+        change: >-
+          Unknown, null, malformed or missing required selectors are refused before child dispatch even when no
+          operation deny is saved. Missing or ECMAScript-blank test method keeps native auto. Denying trigger
+          also denies auto/default because auto can invoke trigger. Existing whole-tool grants remain required.
+        migration: >-
+          Send one of the advertised native selector values. Review the 22 operation controls in the Tools panel.
+          Existing known native calls, all 33 write grants and saved state remain unchanged. No state key is added.
+    behavior_changes:
+      - id: n8n-native-tool-iserror
+        change: Native success:false tool results set MCP isError:true while preserving content and structuredContent.
+        migration: Clients can detect failed tools from isError. valid:false validation results remain normal tool results.
+      - id: litellm-update-model-metadata
+        change: Registry now describes the existing PATCH /model/{model_id}/update handler accurately.
+        migration: No URL, input schema, permission or runtime method changes.
+    backup_and_rollback:
+      - Back up the add-on before upgrade. Schema 4 and connection/token/grant storage stay unchanged.
+      - A downgrade to 0.4.4 retains new deny entries but suppresses the entire affected tool, because that binary has no selector metadata for these tools. Restore the pre-upgrade backup if old behavior is required.
+      - Review restored permissions and reissue tokens when restoring a backup; earlier 0.4.3 optional-key restrictions still apply.
+  # 0.4.4 was published through PR34 on 2026-10-29; see docs/provenance/release-0.4.4-images.json.
+  - to_version: "0.4.4"
+    from_version: "0.4.3"
+    addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]
+    summary: >-
+      Released integration: Odoo MCP isError parity, four Odoo child write switches,
+      masked MCP token history, and Nextcloud configured-secret redaction. Seven source manifests target 0.4.4; six enabled products were published. Stable Releases, Store and Local Download were verified after PR34; production installation is a separate operation.
+    breaking_changes:
+      - id: schema4-optional-parity-state-keys
+        affects: >-
+          Odoo schema 4 after saving child write switches, and any product schema 4 after a token rotate or revoke.
+        change: >-
+          Saving Odoo switches adds optional odoo_write_switches to /data/mcp/state.json. A token transition adds
+          optional token_history. Each field is strict and retained by subsequent state updates. The schema number
+          remains 4, but 0.4.3 rejects either unknown key; downgrading only the binary cannot load that state.
+          History contains only an action, UTC time and previous-token mask, never a usable previous token.
+        migration: >-
+          Take a Home Assistant add-on backup before upgrading. After either new field is persisted, downgrade only
+          by restoring the pre-upgrade add-on backup together with its binary. Review restored outer grants and
+          operation denies; reissue the MCP token and update clients as needed because a backup can restore an old
+          token. Do not strip either key or edit state.json by hand. If neither key was written, the pre-existing
+          schema 4 bytes remain readable by 0.4.3. This is not a general claim of downgrade safety to older releases.
+    behavior_changes:
+      - id: odoo-mcp-error-result
+        change: >-
+          success:false Odoo tool results, including child-switch refusals, carry MCP isError:true with the original
+          JSON shape and the outputSchema-compatible structuredContent envelope. Tracebacks become their last line.
+        migration: Clients can now use isError to detect tool failure; successful results and tool names are unchanged.
+      - id: odoo-child-write-switches
+        change: >-
+          Four admin-only boolean switches use CSRF and a required If-Match revision. Saving restarts the child;
+          failed application reports saved:true and config_apply_failed. Absent switches keep the prior all-on
+          behavior. Outer tool permissions remain authoritative, and the reviewed child gates can narrow execution.
+        migration: >-
+          Review switches in the Odoo Tools panel. Exact model.method allowlist editing is not provided by this
+          release; disabling the outer execute_method grant also removes its reviewed reads.
+      - id: ha-masked-token-history-panel
+        change: >-
+          Authenticated Ingress bootstrap includes only the current token mask and at most five masked events.
+          Token and history commit atomically before lease invalidation. Repeated revoke adds no false event.
+        migration: None for clients; events before this upgrade cannot be reconstructed retroactively.
+      - id: nextcloud-error-secret-redaction
+        change: >-
+          Configured password and Basic-auth forms are masked in decoded error detail before whitespace folding
+          and truncation. Literal, URL-quoted, JSON-escaped and standard/URL-safe base64 values are covered;
+          detailed diagnostics, error codes, isError, auth latches and successful replies remain.
+        migration: No client or state migration; unknown backend secrets and arbitrary encodings are outside this contract.
+    preserved:
+      - Seven source manifests share 0.4.4; only six Store products publish. OpenDesign stays disabled and Odoo Manage archived.
+      - Addon options, ports, architectures, image names, MCP token format, and state schema number 4.
+      - Startup bytes of existing schema 4 state, outer grants/denies, and the full-default behavior of absent switches.
+      - Immutable 0.4.3 image receipt and release decision; they are not acceptance evidence for 0.4.4.
+    backup_and_rollback:
+      - Take a Home Assistant add-on backup before upgrading.
+      - Restore it before running 0.4.3 if odoo_write_switches or token_history has been written; never strip the fields.
+      - Review restored permissions and reissue tokens as needed. No live production downgrade is exercised here.
+  # 0.4.3 carries the 2026-10-27 owner decision from merged PR #26. This entry also applies when
+  # a schema 1/2/3 installation upgrades directly from 0.1.x; 0.4.2 did not rewrite those states.
+  - to_version: "0.4.3"
+    from_version: "0.4.2"
+    addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]
+    summary: >-
+      Legacy installations (state schema 1/2/3) switch once to the full defaults at their first start, as on the
+      WOOW PaaS; the upgrade review page becomes a notice with an optional, faithful restore of the pre-upgrade
+      limits. See docs/operations/legacy-migration.md. No option, port, architecture, image name, tool name or state schema
+      change for a schema 4 installation.
+    breaking_changes: []
+    behavior_changes:
+      - id: legacy-upgrade-one-time-all-on
+        affects: Installations whose /data/mcp/state.json is schema 1, 2 or 3 (written by 0.1.x).
+        change: >-
+          0.3.0-0.4.1 kept such an installation in an authenticated review (MCP and readiness answered HTTP 503
+          upgrade_review_required) until an administrator confirmed all_on or preserve. Now its first start applies
+          the same all_on plan automatically before MCP starts (schema 4, writes on, every write grant, no disabled
+          tool, no operation deny; token, child token, endpoint and backend kept), adds the marker
+          owner_defaults_20261025 {applied, at, from_schema} in the same atomic state write, and before that saves
+          the legacy policy once as /data/mcp/owner-defaults-20261025-recovery.json (0600, policy and digests only).
+          MCP serves at once and the add-on log has one line about it.
+        migration: >-
+          None needed. Open the add-on panel after the upgrade: the notice and its differences are shown only there (and
+          in one add-on log line). To keep the old limits, choose "還原升級前的限制" in the add-on panel (offline:
+          python -m mcp_admin_core.migration /data/mcp --product <product> --restore-policy
+          /data/mcp/owner-defaults-20261025-recovery.json). Check the backend accounts' permissions, as for any
+          all-on installation.
+      - id: upgrade-review-page-replaced-by-notice
+        change: >-
+          The pre-start review listeners and page (/api/upgrade/apply, assets/upgrade.js) are removed. The normal panel
+          shows when the defaults were applied and the differences, and offers POST /api/owner-defaults/restore
+          (faithful: disables the tools the legacy state disabled and keeps only the write grants it held, so every
+          other write, one added since 0.1.x included, is revoked as 0.1.x refused it; tools added since 0.1.x stay
+          enabled; restrictive merge, nothing is enabled) and POST
+          /api/owner-defaults/dismiss. Both need CSRF and If-Match, are recorded in the marker and end the notice.
+        migration: Nothing to confirm any more; automation that posted to /api/upgrade/apply is no longer needed.
+      - id: schema4-untouched
+        change: >-
+          A schema 4 state (new installations, 0.2.0 and later, states the review page migrated) is never rewritten at
+          startup. The marker is written only on a migrated state and omitted otherwise, so such states keep exactly
+          the 0.4.1 keys.
+        migration: None needed.
+      - id: legacy-upgrade-fail-safe
+        change: >-
+          An unreadable, invalid, linked or busy state, a recovery record that cannot be saved, or an existing recovery
+          record that is not this state's, is neither migrated nor rewritten; the add-on logs one fixed line saying
+          which and stops ("runtime unavailable; local recovery required"), as it did for a corrupt state before. The
+          record is published only when complete, so a failed or interrupted write leaves no partial record behind.
+        migration: >-
+          Restore the add-on backup taken before the update. When the log says the recovery record could not be saved
+          (disk full or I/O error), free space and restart the add-on instead; the migration then completes.
+    preserved:
+      - Add-on slugs, image names (ghcr.io/woowtech/amd64-mcp-<product>), amd64 only, ports 8081/tcp and Ingress 8099.
+      - Manifest options and privileges; state schema 4, tokens and settings of every schema 4 installation.
+      - Tool names and counts, annotations, write grants and the full-functionality defaults.
+      - The offline migration CLI (preserve, all_on, format 1 recovery records).
+    backup_and_rollback:
+      - Create a Home Assistant add-on backup before upgrading.
+      - >-
+        A migrated state carries the owner_defaults_20261025 key, which 0.4.2 refuses: roll a migrated installation
+        back by restoring the pre-update add-on backup. An installation that was already schema 4 goes back to 0.4.2
+        without conversion. Downgrades are not tested.
+  - to_version: "0.4.0"
+    from_version: "0.3.4"
+    addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]
+    summary: >-
+      MCP SDK 2 migration (MCP Python SDK 2.3.0, FastMCP 4.1.3, odoo-mcp 1.3.0, Node 26.12.1); see
+      docs/operations/release-decision-0.4.0.md. No option, port, architecture, image name, tool name or state
+      schema changes.
+    breaking_changes:
+      - id: odoo-structured-content-unwrapped
+        affects: >-
+          woow_mcp_odoo tools/call results of 13 tools: accounting_health_across_instances,
+          accounting_health_summary, aggregate_across_instances, build_domain, cancel_async_task, get_async_task,
+          index_knowledge, knowledge_stats, list_async_tasks, receivable_payable_aging, search_across_instances,
+          search_knowledge, submit_async_task.
+        change: >-
+          odoo-mcp 1.2.2 and later declare typed output models for these tools, so the MCP SDK sends the result
+          object itself as structuredContent instead of wrapping it as {"result": <object>}. The text content (the
+          same JSON object) and every other tool's result are unchanged; the gateway never lists outputSchema, so no
+          client validates either shape against a schema.
+        migration: >-
+          A client that reads structuredContent.result.<field> for one of these tools reads
+          structuredContent.<field> instead, or keeps parsing the text content, which did not change. LLM clients
+          that read the text are not affected.
+    behavior_changes:
+      - id: fastmcp-cancel-on-session-delete
+        change: >-
+          EMQX, LiteLLM and Nextcloud (FastMCP 4): when a client deletes its MCP session (HTTP DELETE) while one of
+          its async tool calls is still running, that call is now cancelled; FastMCP 3 let it finish. Odoo, Hermes
+          and OpenDesign already behaved like this. The add-on's own readiness probe for Nextcloud is not
+          cancelled, so a slow failed login still stops further logins.
+        migration: >-
+          Do not delete a session with a write still in flight; after such a cancel, read the backend before
+          retrying a write, as after any network interruption.
+      - id: odoo-parameter-descriptions
+        change: >-
+          57 parameters of 10 Odoo tools now carry a description in tools/list (types, required fields and
+          annotations unchanged). Two texts state this add-on's own gating instead of odoo-mcp's defaults:
+          execute_method's method parameter says create, write and unlink run directly (odoo-mcp says they are
+          blocked) and chatter_post says the first call posts at once (odoo-mcp says a preview approval token is
+          needed). The behaviour is that of 0.2.0-0.3.4 (ODOO_MCP_ALLOW_DIRECT_WRITES=1, MCP_CHATTER_DIRECT=1).
+        migration: None needed.
+      - id: odoo-none-result
+        change: >-
+          execute_method reports a call that Odoo executed and committed but whose None return value it cannot
+          send over XML-RPC as success with a warning, instead of an error that invited a retry.
+        migration: None needed.
+      - id: initialize-protocol-header
+        change: >-
+          The gateway no longer forwards a client's MCP-Protocol-Version header with an initialize request (the
+          body's protocolVersion negotiates, as before), so a client that keeps its 2026-07-28 server/discover
+          header still connects to the SDK 2 children. server/discover itself is still answered by the gateway
+          with JSON-RPC -32601.
+        migration: None needed.
+    preserved:
+      - Add-on slugs, image names (ghcr.io/woowtech/amd64-mcp-<product>), amd64 only, ports 8081/tcp and Ingress 8099.
+      - Manifest options and privileges, state schema 4 (no migration, no upgrade review page), tokens and settings.
+      - Tool names and counts, annotations, write grants and the full-functionality defaults.
+      - Error text of failed tools (the MCP SDK 2 children keep the mcp 1.x text).
+      - Session idle limit (30 minutes) and request body limit (16 MiB) of every Python child.
+    backup_and_rollback:
+      - Create a Home Assistant add-on backup before upgrading.
+      - >-
+        Rolling back to 0.3.4 needs no data conversion (both use state schema 4); restore the 0.3.4 add-on backup.
+        Downgrades are not tested.

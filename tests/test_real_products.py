@@ -18,11 +18,15 @@ import xmlrpc.client
 import httpx
 import pytest
 
+from mcp_admin_core import VERSION
 from mcp_admin_core.health import protocol_reply
-from mcp_admin_core.products import PRODUCTS, PROBES, ProductStore, TOOLS, child_spec
+from mcp_admin_core.products import INSTRUCTIONS, ODOO_HEALTH_PROBE, PRODUCTS, PROBES, ProductStore, TOOLS, child_spec
+from mcp_admin_core.policy import policy_enabled
 
 from owned_executable import Executable
 from batch2_owned_port import reserve_port
+import nextcloud_fixtures
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -36,6 +40,8 @@ def connection(product, url):
         'opendesign': dict(url=url),
         'emqx': dict(url=url, api_key='DUMMY', api_secret='DUMMY'),
         'litellm': dict(url=url, master_key='DUMMY'),
+        'nextcloud': dict(url=url, username=nextcloud_fixtures.USER, app_password=nextcloud_fixtures.PASSWORD),
+        'headscale': dict(url=url, api_key='DUMMY'),
     }[product]
 
 
@@ -43,9 +49,20 @@ def connection(product, url):
 def backend(product):
     calls = []
     offline = threading.Event()
+    nextcloud = nextcloud_fixtures.NextcloudFake()
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args): pass
+
+        def nextcloud(self):
+            calls.append((self.command, self.path))
+            if offline.is_set():
+                self.send_error(503); return
+            assert product == 'nextcloud'
+            body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
+            nextcloud_fixtures.respond(self, *nextcloud.handle(self.command, self.path, self.headers, body))
+
+        do_PROPFIND = do_REPORT = nextcloud
 
         def respond(self, value, content_type='application/json'):
             data = value if isinstance(value, bytes) else json.dumps(value).encode()
@@ -56,16 +73,21 @@ def backend(product):
             self.wfile.write(data)
 
         def do_GET(self):
+            if nextcloud_fixtures.is_nextcloud(self.path):
+                return self.nextcloud()
             calls.append(('GET', self.path))
             if offline.is_set():
                 self.send_error(503); return
             if product == 'emqx':
                 assert self.headers.get('Authorization') == 'Basic RFVNTVk6RFVNTVk='
+            if product == 'headscale':
+                assert self.headers.get('Authorization') == 'Bearer DUMMY'
             if product in ('hermes', 'litellm') and self.path in ('/v1/models', '/v1/capabilities'):
                 assert self.headers.get('Authorization') == 'Bearer DUMMY'
             values = {'/v1/capabilities': {'models': []}, '/api/health': {'status': 'ok'},
                       '/api/v5/nodes': [{'node': 'fake@local', 'version': '5.fake'}],
-                      '/v1/models': {'data': [{'id': 'fake-model'}]}}
+                      '/v1/models': {'data': [{'id': 'fake-model'}]},
+                      '/api/v1/health': {'databaseConnectivity': True}}
             if self.path not in values:
                 self.send_error(404); return
             self.respond(values[self.path])
@@ -99,11 +121,15 @@ def backend(product):
                 raise AssertionError(method)
             self.respond(xmlrpc.client.dumps((result,), methodresponse=True, allow_none=True).encode(), 'text/xml')
 
-    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    # The Headscale native transport refuses loopback even for a test server.
+    # Bind only the runner's own private address so the real TCP destination
+    # policy stays in force; all other existing product fixtures use loopback.
+    host = socket.gethostbyname(socket.gethostname()) if product == 'headscale' else '127.0.0.1'
+    server = ThreadingHTTPServer((host, 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        yield f'http://127.0.0.1:{server.server_port}', calls, offline
+        yield f'http://{host}:{server.server_port}', calls, offline
     finally:
         server.shutdown(); server.server_close(); thread.join()
 
@@ -127,7 +153,7 @@ async def rpc(client, url, headers, message):
 async def test_real_child_fake_backend_and_boundary(tmp_path, product):
     with backend(product) as (url, calls, offline):
         store = ProductStore(tmp_path / 'state', product)
-        store.update(connection=connection(product, url))
+        store.update(connection=connection(product, url), writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
         state = store.load()
         spec = child_spec(state, store.directory)
         assert 'SUPERVISOR_TOKEN' not in spec.env and state.token not in spec.env.values()
@@ -164,16 +190,25 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     else:
                         pytest.fail(f'{product}: initialization timed out ({last}); {log_path.read_text()}')
                     assert result['capabilities'] == {'tools': {}}
+                    # 0.1.8 (F6): run_product names the add-on; only Nextcloud carries (reviewed) instructions.
+                    assert result['serverInfo'] == {'name': 'woow-mcp-' + product,
+                                                    'version': '0.4.18' if product == 'headscale' else VERSION}
+                    assert result.get('instructions') == INSTRUCTIONS.get(product)
                     headers['MCP-Protocol-Version'] = result['protocolVersion']
                     await rpc(client, endpoint, headers, {'jsonrpc': '2.0', 'method': 'notifications/initialized'})
                     listed = await rpc(client, endpoint, headers, {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'})
-                    expected = {n for n, t in TOOLS[product].items() if not t.write}
+                    expected = {n for n in TOOLS[product] if policy_enabled(n, TOOLS[product], state)}
                     assert {t['name'] for t in listed['tools']} == expected
                     # Same real child session, bypass ONLY for observing upstream inventory.
                     # Public requests still go through the authenticated boundary above.
                     raw_list = await rpc(client, runner.child_url, headers,
                         {'jsonrpc': '2.0', 'id': 20, 'method': 'tools/list'})
                     upstream_names = {t['name'] for t in raw_list['tools']}
+                    if product in ('odoo', 'odoo-manage', 'nextcloud'):
+                        # The add-on's own private readiness probe (apps/odoo*/launch.py; Nextcloud: the vendored
+                        # nextcloud_mcp_server/server.py), not an upstream tool.
+                        assert ODOO_HEALTH_PROBE in upstream_names and ODOO_HEALTH_PROBE not in TOOLS[product]
+                        upstream_names.remove(ODOO_HEALTH_PROBE)
                     manifest = json.loads((ROOT / 'docs/tool-surface.json').read_text())
                     inventoried = {t['name'] for t in manifest['products'][product]['tools']}
                     assert expected <= upstream_names <= inventoried
@@ -187,12 +222,13 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     assert any(probe_success(product, text) for text in texts), texts
                     assert calls, 'no real backend call'
                     before = len(calls)
-                    for denied in ('resources/list', 'resources/read', 'prompts/list', 'tasks/get'):
+                    for denied in ('resources/list', 'resources/read', 'prompts/list', 'tasks/get', 'server/discover'):
+                        # 0.1.13: the gateway's own JSON-RPC Method not found (was 403); still never forwarded.
                         response = await client.post(endpoint, headers=headers, json={'jsonrpc': '2.0', 'id': 4, 'method': denied})
-                        assert response.status_code == 403
+                        assert response.status_code == 200 and response.json()['error']['code'] == -32601
                     for denied in ('unknown', 'hermes_chat', 'delete_project', 'emqx_publish', 'litellm_chat_completion', 'execute_method'):
                         response = await client.post(endpoint, headers=headers, json={'jsonrpc': '2.0', 'id': 5, 'method': 'tools/call', 'params': {'name': denied, 'arguments': {}}})
-                        assert response.status_code == 403
+                        assert refused(response)
                     for auth in ({}, {'Authorization': 'Bearer wrong'}):
                         response = await client.post(endpoint, headers=auth, json=init)
                         assert response.status_code == 401
@@ -224,3 +260,61 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     process.kill(); await asyncio.to_thread(process.wait)
             assert process.returncode == 0, log_path.read_text()
             assert all(not Path('/proc/' + pid).exists() for pid in child_pids), 'orphan child'
+
+
+async def test_odoo_manage_initialize_without_backend_is_unavailable_then_recovers(tmp_path):
+    # 0.1.1 HA: after a backend change the child restarts against an unreachable Odoo; its per-session lifespan
+    # fails, and clients got initialize 200 without a reply, then 404. 0.1.2: 503 BACKEND_UNAVAILABLE, no session.
+    product = 'odoo-manage'
+    with backend(product) as (url, calls, offline):
+        offline.set()  # unreachable from the first session on: no authenticated connection to reuse
+        store = ProductStore(tmp_path / 'state', product)
+        store.update(connection=connection(product, url))
+        state = store.load()
+        store.close()
+        port, admin_port = free_port(), free_port()
+        endpoint = f'http://127.0.0.1:{port}/mcp'
+        log_path = tmp_path / 'owned-runtime.log'
+        runner = Executable(tmp_path, product, [port, admin_port])
+        code = 'from mcp_admin_core import run_product; ' + runner.code('run_product') + 'run_product.main()'
+        runner.release()
+        init = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {
+            'protocolVersion': '2025-03-26', 'capabilities': {}, 'clientInfo': {'name': 'local-test', 'version': '0'}}}
+        headers = {'Authorization': 'Bearer ' + state.token, 'Accept': 'application/json, text/event-stream'}
+        with log_path.open('wb') as log:
+            process = subprocess.Popen([str(ROOT / '.venv/bin/python'), '-c', code, product,
+                '--data', str(tmp_path / 'state'), '--host', '127.0.0.1', '--mcp-port', str(port), '--admin-port', str(admin_port)],
+                cwd=ROOT, env={'PATH': '/usr/bin:/bin', 'PYTHONPATH': str(ROOT / 'packages/mcp-admin-core'),
+                'PYTHONDONTWRITEBYTECODE': '1'}, stdout=log, stderr=log)
+            try:
+                await runner.ready(process)
+                async with httpx.AsyncClient(trust_env=False, timeout=15, event_hooks={'request': [runner.guard]}) as client:
+                    seen = []
+                    async with asyncio.timeout(30):
+                        while True:  # until the child listens: then every attempt must be a clean 503
+                            assert process.poll() is None, log_path.read_text()
+                            try:
+                                response = await client.post(endpoint, headers=headers, json=init)
+                            except httpx.HTTPError:
+                                await asyncio.sleep(.25); continue
+                            seen.append(response.status_code)
+                            if response.status_code == 503:
+                                break
+                            assert response.status_code == 502, (response.status_code, response.text)  # child not up yet
+                            await asyncio.sleep(.25)
+                    assert response.json() == {'jsonrpc': '2.0', 'id': 1,
+                                               'error': {'code': -32000, 'message': 'BACKEND_UNAVAILABLE'}}
+                    assert response.headers['retry-after'] == '5' and 'mcp-session-id' not in response.headers
+                    assert (await client.post(endpoint, headers=headers, json=init)).status_code == 503
+                    offline.clear()
+                    result = await rpc(client, endpoint, dict(headers), init)
+                    assert result['capabilities'] == {'tools': {}}, result
+                    assert any(c[0] == 'XMLRPC' and c[1] == 'authenticate' for c in calls)
+                    print(f'LOCAL {product}: offline initialize -> 503 x2 ({seen}), recovered -> 200')
+            finally:
+                process.send_signal(signal.SIGTERM)
+                try:
+                    await asyncio.to_thread(process.wait, 10)
+                except subprocess.TimeoutExpired:
+                    process.kill(); await asyncio.to_thread(process.wait)
+            assert process.returncode == 0, log_path.read_text()

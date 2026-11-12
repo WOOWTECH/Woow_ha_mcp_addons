@@ -1,4 +1,5 @@
 """Fresh-challenge proof failures and guarded UID visibility on OWN processes."""
+from admin_write_headers import reviewed_headers
 import asyncio
 import json
 import os
@@ -130,11 +131,11 @@ async def test_callback_is_not_serialized_behind_health(tmp_path, monkeypatch):
             app, _ = module.make_apps(store, TOOLS, child, verify_admin=role, backend_changed=changed)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app, client=('172.30.32.2', 1)),
                 base_url='http://owned', headers={'x-remote-user-id':'owner'}) as admin:
-                csrf = (await admin.get('/api/bootstrap')).json()['csrf']
+                boot = (await admin.get('/api/bootstrap')).json()
                 health_task = asyncio.create_task(monitor.check())
                 tasks.append(health_task)
                 await asyncio.wait_for(health_entered.wait(), 2)
-                save = asyncio.create_task(admin.put('/api/backend', headers={'x-csrf-token':csrf},
+                save = asyncio.create_task(admin.put('/api/backend', headers=reviewed_headers(boot),
                     json={'url':None, 'key':None}))
                 tasks.append(save)
                 await asyncio.wait_for(callback_entered.wait(), 2)

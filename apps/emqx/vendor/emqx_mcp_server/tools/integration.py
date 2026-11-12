@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import Annotated, Any
-from urllib.parse import quote
 
 import httpx
 from fastmcp import FastMCP
@@ -14,7 +13,7 @@ from ..deps import emqx_client
 from ..errors import emqx_request, json_body
 from ..gating import ToolGate
 from ..settings import settings
-from ._common import destructive, page_of, read_only
+from ._common import destructive, page_of, path_segment, read_only, writing
 
 
 def register(mcp: FastMCP, gate: ToolGate) -> None:
@@ -62,7 +61,7 @@ def register(mcp: FastMCP, gate: ToolGate) -> None:
             topic filter does not match what devices actually publish.
             """
             return json_body(await emqx_request(
-                emqx, "GET", f"/rules/{quote(rule_id, safe='')}/metrics"))
+                emqx, "GET", f"/rules/{path_segment(rule_id, 'rule_id')}/metrics"))
 
     if on("emqx_toggle_rule"):
 
@@ -81,14 +80,14 @@ def register(mcp: FastMCP, gate: ToolGate) -> None:
             confirm which downstream system it feeds before turning it off.
             """
             await emqx_request(
-                emqx, "PUT", f"/rules/{quote(rule_id, safe='')}",
+                emqx, "PUT", f"/rules/{path_segment(rule_id, 'rule_id')}",
                 json={"enable": enable})
             return {"rule_id": rule_id, "enabled": enable}
 
     if on("emqx_test_rule_sql"):
 
-        @mcp.tool(name="emqx_test_rule_sql", tags={"emqx", "read", "integration"},
-                  annotations=read_only("Test EMQX Rule SQL"))
+        @mcp.tool(name="emqx_test_rule_sql", tags={"emqx", "write", "integration"},
+                  annotations=writing("Test EMQX Rule SQL (write permission)"))
         async def test_rule_sql(
             sql: Annotated[str, Field(
                 description="Rule SQL to evaluate, e.g. "

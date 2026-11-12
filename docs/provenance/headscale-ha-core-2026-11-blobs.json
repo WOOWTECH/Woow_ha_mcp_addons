@@ -1,0 +1,272 @@
+{
+  "core_tags": {
+    "2026.10.4": "357cae5c598dfcd7a0ea7dc5b1facccd4ec6037b",
+    "2026.11.0": "74cf5a49c63ed8d4d87717844bf14f79c28c9cea",
+    "2026.11.1": "d8a0dc698c8946b44e455d904000db563cfbf1ba"
+  },
+  "supervisor_tags": {
+    "2026.10.4": "d92eb0e373a304c1e6a66dcef66585854a2002d1",
+    "2026.10.5": "fdba115f215c61f7a02c7c0567263785cfcf0034"
+  },
+  "files": [
+    {
+      "repo": "core",
+      "path": "components/websocket_api/auth.py",
+      "versions": {
+        "2026.10.4": "a4b73688a506d046f98d916a33450f3f6c630f52",
+        "2026.11.0": "244484bfa86026fd57fcd2a31eb79d8da9b26f92",
+        "2026.11.1": "244484bfa86026fd57fcd2a31eb79d8da9b26f92"
+      },
+      "changed": true
+    },
+    {
+      "repo": "core",
+      "path": "components/websocket_api/messages.py",
+      "versions": {
+        "2026.10.4": "f1f543e2257720b625774633ecb671864f2d54e8",
+        "2026.11.0": "f1f543e2257720b625774633ecb671864f2d54e8",
+        "2026.11.1": "f1f543e2257720b625774633ecb671864f2d54e8"
+      },
+      "changed": false
+    },
+    {
+      "repo": "core",
+      "path": "components/websocket_api/decorators.py",
+      "versions": {
+        "2026.10.4": "d5df7f88646daf7a4b217500a5192e90aa20c13f",
+        "2026.11.0": "d5df7f88646daf7a4b217500a5192e90aa20c13f",
+        "2026.11.1": "d5df7f88646daf7a4b217500a5192e90aa20c13f"
+      },
+      "changed": false
+    },
+    {
+      "repo": "core",
+      "path": "components/websocket_api/connection.py",
+      "versions": {
+        "2026.10.4": "cd6e0426973039db3b7d86af0a3c1c92649f74b4",
+        "2026.11.0": "e031b7c429bd6348c0a6957b4b0101896f59db5f",
+        "2026.11.1": "e031b7c429bd6348c0a6957b4b0101896f59db5f"
+      },
+      "changed": true
+    },
+    {
+      "repo": "core",
+      "path": "components/websocket_api/http.py",
+      "versions": {
+        "2026.10.4": "9cfca0685c0e48c6f71000beb465b2c7fd57a771",
+        "2026.11.0": "da44d879478d17bafb29f34e2e87359c6ae8a250",
+        "2026.11.1": "da44d879478d17bafb29f34e2e87359c6ae8a250"
+      },
+      "changed": true
+    },
+    {
+      "repo": "core",
+      "path": "components/websocket_api/commands.py",
+      "versions": {
+        "2026.10.4": "d769c7535ba0e1431f880227873a343502399493",
+        "2026.11.0": "03297e0820d912f98f3441476e00c96fdbfe53dc",
+        "2026.11.1": "03297e0820d912f98f3441476e00c96fdbfe53dc"
+      },
+      "changed": true
+    },
+    {
+      "repo": "core",
+      "path": "components/websocket_api/__init__.py",
+      "versions": {
+        "2026.10.4": "3a526e32fc1044e8488820ab1ffe33d58d644ebc",
+        "2026.11.0": "a00ab2af2e6a9805cb99981ea53d5a340f252a56",
+        "2026.11.1": "a00ab2af2e6a9805cb99981ea53d5a340f252a56"
+      },
+      "changed": true
+    },
+    {
+      "repo": "core",
+      "path": "components/websocket_api/const.py",
+      "versions": {
+        "2026.10.4": "f1eb480dd114117779a3abf4ca2e310c338d900e",
+        "2026.11.0": "f1eb480dd114117779a3abf4ca2e310c338d900e",
+        "2026.11.1": "f1eb480dd114117779a3abf4ca2e310c338d900e"
+      },
+      "changed": false
+    },
+    {
+      "repo": "core",
+      "path": "components/config/auth.py",
+      "versions": {
+        "2026.10.4": "75b0c88b916dbc8970afbf4041e1e463690029a8",
+        "2026.11.0": "75b0c88b916dbc8970afbf4041e1e463690029a8",
+        "2026.11.1": "75b0c88b916dbc8970afbf4041e1e463690029a8"
+      },
+      "changed": false
+    },
+    {
+      "repo": "core",
+      "path": "components/config/__init__.py",
+      "versions": {
+        "2026.10.4": "ef7a1147273faf69f3b0bd2f6bdddb7b71acf32e",
+        "2026.11.0": "784ba83b89fbbb51e7b40e8a91a16d17cd93b6cd",
+        "2026.11.1": "784ba83b89fbbb51e7b40e8a91a16d17cd93b6cd"
+      },
+      "changed": true
+    },
+    {
+      "repo": "core",
+      "path": "auth/__init__.py",
+      "versions": {
+        "2026.10.4": "0314c4b749e7722cbc97ae9e6b7a46d3a151f576",
+        "2026.11.0": "851a64b7b32f340b589236d8aebea282814df6bb",
+        "2026.11.1": "851a64b7b32f340b589236d8aebea282814df6bb"
+      },
+      "changed": true
+    },
+    {
+      "repo": "core",
+      "path": "auth/auth_store.py",
+      "versions": {
+        "2026.10.4": "13ecdfc657a2c6ad97e9e59601932df50648c111",
+        "2026.11.0": "13ecdfc657a2c6ad97e9e59601932df50648c111",
+        "2026.11.1": "13ecdfc657a2c6ad97e9e59601932df50648c111"
+      },
+      "changed": false
+    },
+    {
+      "repo": "core",
+      "path": "auth/const.py",
+      "versions": {
+        "2026.10.4": "05b9e6d7ad6f0bdb4db2e0b0ecfb69af42dbbe21",
+        "2026.11.0": "05b9e6d7ad6f0bdb4db2e0b0ecfb69af42dbbe21",
+        "2026.11.1": "05b9e6d7ad6f0bdb4db2e0b0ecfb69af42dbbe21"
+      },
+      "changed": false
+    },
+    {
+      "repo": "core",
+      "path": "auth/models.py",
+      "versions": {
+        "2026.10.4": "7342e9d4b8e9aee392cf112f59f1b718db3feb83",
+        "2026.11.0": "7342e9d4b8e9aee392cf112f59f1b718db3feb83",
+        "2026.11.1": "7342e9d4b8e9aee392cf112f59f1b718db3feb83"
+      },
+      "changed": false
+    },
+    {
+      "repo": "core",
+      "path": "auth/permissions/__init__.py",
+      "versions": {
+        "2026.10.4": "aeab7ff8193d4f343115c9152c020c241a2aff4d",
+        "2026.11.0": "aeab7ff8193d4f343115c9152c020c241a2aff4d",
+        "2026.11.1": "aeab7ff8193d4f343115c9152c020c241a2aff4d"
+      },
+      "changed": false
+    },
+    {
+      "repo": "core",
+      "path": "components/hassio/__init__.py",
+      "versions": {
+        "2026.10.4": "67abae35494782a4f1b881fdee4f13fc39caa8c1",
+        "2026.11.0": "a35b70ef1ad856b0fea9e6141f6296deb40bd4e4",
+        "2026.11.1": "a35b70ef1ad856b0fea9e6141f6296deb40bd4e4"
+      },
+      "changed": true
+    },
+    {
+      "repo": "core",
+      "path": "components/http/auth.py",
+      "versions": {
+        "2026.10.4": "702eb7c8adde26b327dbd6c798364a1bcdbeba85",
+        "2026.11.0": "6188a2be73e2856fa0f652dd5b8ceba67f5ad785",
+        "2026.11.1": "6188a2be73e2856fa0f652dd5b8ceba67f5ad785"
+      },
+      "changed": true
+    },
+    {
+      "repo": "core",
+      "path": "components/http/auth_util.py",
+      "versions": {
+        "2026.10.4": "4eed144347b036d85dc0a74b61b9769c6121e3e6",
+        "2026.11.0": "4eed144347b036d85dc0a74b61b9769c6121e3e6",
+        "2026.11.1": "4eed144347b036d85dc0a74b61b9769c6121e3e6"
+      },
+      "changed": false
+    },
+    {
+      "repo": "core",
+      "path": "helpers/json.py",
+      "versions": {
+        "2026.10.4": "f6a778dd872caaaba5a15fc406e5e425ed4be78b",
+        "2026.11.0": "c0b2468059d8f44aca5f65539f05a6e9d2e1ded7",
+        "2026.11.1": "c0b2468059d8f44aca5f65539f05a6e9d2e1ded7"
+      },
+      "changed": true
+    },
+    {
+      "repo": "core",
+      "path": "util/json.py",
+      "versions": {
+        "2026.10.4": "1f8e6a0e3dcfffd440beab938573720014d3692c",
+        "2026.11.0": "1f8e6a0e3dcfffd440beab938573720014d3692c",
+        "2026.11.1": "1f8e6a0e3dcfffd440beab938573720014d3692c"
+      },
+      "changed": false
+    },
+    {
+      "repo": "core",
+      "path": "components/onboarding/views.py",
+      "versions": {
+        "2026.10.4": "2835631c2fc90c6dd492bce5eecd6a74cd81e607",
+        "2026.11.0": "21eb4a5f0eb9774e87663be06d8f117f05977ab8",
+        "2026.11.1": "21eb4a5f0eb9774e87663be06d8f117f05977ab8"
+      },
+      "changed": true
+    },
+    {
+      "repo": "core",
+      "path": "components/http/const.py",
+      "versions": {
+        "2026.10.4": "a53b45aeb5c09be3468cd3162c8e04fe7b452093",
+        "2026.11.0": "b4d160ab1ac66f7cd0fc64b41393dd5c9d162257",
+        "2026.11.1": "b4d160ab1ac66f7cd0fc64b41393dd5c9d162257"
+      },
+      "changed": true
+    },
+    {
+      "repo": "core",
+      "path": "components/http/__init__.py",
+      "versions": {
+        "2026.10.4": "4f9076ca407fc10de7d9a2b3896aac9650ca1788",
+        "2026.11.0": "4a6e5e214363073f3d508b756f43239055e9d063",
+        "2026.11.1": "4a6e5e214363073f3d508b756f43239055e9d063"
+      },
+      "changed": true
+    },
+    {
+      "repo": "core",
+      "path": "components/hassio/const.py",
+      "versions": {
+        "2026.10.4": "e10fd6d3788ce33845bfbf785c165474e2ed9f3e",
+        "2026.11.0": "006649f53350b668d1aa5eace50ee0290187ed0e",
+        "2026.11.1": "006649f53350b668d1aa5eace50ee0290187ed0e"
+      },
+      "changed": true
+    },
+    {
+      "repo": "core",
+      "path": "components/hassio/auth.py",
+      "versions": {
+        "2026.10.4": "4f728ec81f41c807851d69f298ab45c676f10f7f",
+        "2026.11.0": "4f728ec81f41c807851d69f298ab45c676f10f7f",
+        "2026.11.1": "4f728ec81f41c807851d69f298ab45c676f10f7f"
+      },
+      "changed": false
+    },
+    {
+      "repo": "supervisor",
+      "path": "supervisor/api/proxy.py",
+      "versions": {
+        "2026.10.4": "cab849dccb0f3a5d448166ea1b66f6850a334587",
+        "2026.10.5": "cab849dccb0f3a5d448166ea1b66f6850a334587"
+      },
+      "changed": false
+    }
+  ]
+}

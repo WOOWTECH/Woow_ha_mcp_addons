@@ -11,14 +11,16 @@ PROGRAM = r'''
 import socket, os, asyncio, json, runpy
 attempts=[]
 mode=os.environ['CASE']
+p=os.environ['PRODUCT']
 def resolve(host, port, *a, **k):
     host=host.decode() if isinstance(host,bytes) else host
-    addresses = ['127.0.0.1', '169.254.169.254'] if mode=='mixed' else ['169.254.169.254']
+    # Headscale denies loopback too: use an allowed private answer first so
+    # mixed DNS proves the later forbidden answer is checked before connect.
+    addresses = [('10.0.0.2' if p=='headscale' else '127.0.0.1'), '169.254.169.254'] if mode=='mixed' else ['169.254.169.254']
     return [(socket.AF_INET,socket.SOCK_STREAM,socket.IPPROTO_TCP,'',(ip,int(port))) for ip in addresses]
 def stop(self,address):
     attempts.append(address);raise OSError(111,'intercepted before connect')
 socket.getaddrinfo=resolve;socket.socket.connect=stop;socket.socket.connect_ex=stop
-p=os.environ['PRODUCT']
 async def main():
     outcome=''
     try:
@@ -38,18 +40,38 @@ async def main():
             if mode=='dashboard-login': await _dashboard_login(os.environ['HERMES_DASHBOARD_URL'],'tester','DUMMY')
             elif mode=='dashboard-cookie':
                 async with _dashboard_client(os.environ['HERMES_DASHBOARD_URL'],'DUMMY-COOKIE') as c: await c.get('/api/status')
-            else: outcome = await hermes_inspect(target='capabilities')
+            else:
+                outcome = await hermes_inspect(target='capabilities')
+                # Inspection now reports partial failures as an MCP error result.
+                # Keep both the public error contract and zero-connect proof.
+                from mcp.types import CallToolResult
+                if isinstance(outcome, CallToolResult):
+                    assert outcome.is_error is True  # 0.4.0 (mcp 2.3.0): snake_case fields
+                    outcome = '\n'.join(item.text for item in outcome.content if item.type == 'text')
         elif p=='opendesign':
             from opendesign_mcp_server.od_mcp_server import health
             health()
         elif p=='emqx':
             from emqx_mcp_server.lifespan import make_client
             async with make_client() as c:await c.get('/nodes')
+        elif p=='nextcloud':
+            from nextcloud_mcp_server.client import NextcloudClient
+            from nextcloud_mcp_server.settings import load_settings
+            nc=NextcloudClient(load_settings())
+            try: await nc.probe()
+            finally: await nc.aclose()
+        elif p=='headscale':
+            from headscale_mcp_server.client import HeadscaleClient
+            async with HeadscaleClient(os.environ['HEADSCALE_MCP_BASE_URL'], os.environ['HEADSCALE_MCP_API_KEY']) as client:
+                await client.request('Health')
         else:
             from woow_litellm_mcp_server.lifespan import build_client
             async with build_client() as c:await c.get('/v1/models')
     except Exception as exc: outcome=str(exc)
-    assert 'BACKEND_DESTINATION_DENIED' in outcome, (p, outcome)
+    if p=='headscale':
+        assert outcome == 'HEADSCALE_DESTINATION_DENIED', (p, outcome)
+    else:
+        assert 'BACKEND_DESTINATION_DENIED' in outcome, (p, outcome)
     assert not attempts, (p,mode,attempts)
 asyncio.run(main())
 '''
@@ -70,7 +92,9 @@ def test_hermes_dashboard_denied_before_connect(tmp_path, case):
 def run_case(tmp_path, product, case, url):
     state = ProductState(product=product, token='a'*43, child_token='b'*43, connection=connection(product, url))
     spec = child_spec(state, tmp_path)
-    launcher = spec.argv[1] if product in ('odoo','odoo-manage') and spec.argv[1].endswith('launch.py') else ''
+    # The egress guard lives in launch.py. The Odoo switch entrypoint starts the full server, while this
+    # isolated -c probe imports only the transport guard before constructing an XML-RPC client.
+    launcher = str(Path(spec.argv[1]).with_name('launch.py')) if product in ('odoo', 'odoo-manage') else ''
     result = subprocess.run([spec.argv[0], '-c', PROGRAM], env={**spec.env, 'PRODUCT': product,
         'CASE': case, 'POLICY_LAUNCH': launcher}, cwd=spec.cwd, capture_output=True, text=True, timeout=20)
     assert result.returncode == 0, result.stderr
@@ -82,14 +106,16 @@ def test_cancelled_sdk_call_retains_worker_until_function_finishes(tmp_path):
     spec = child_spec(state, tmp_path)
     program = r'''
 import asyncio, threading
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from bounded_tools import BoundedTools
+from tool_error_text import keep_error_text
 entered, release = threading.Event(), threading.Event()
-mcp=FastMCP('owned-cancel-regression')
+mcp=MCPServer('owned-cancel-regression')
 @mcp.tool()
 def blocked() -> dict:
     entered.set(); release.wait(5); return {'done': True}
 workers=BoundedTools(mcp,1)
+keep_error_text(mcp)  # 0.4.0: as the launchers do; mcp 2 would hide BACKEND_BUSY otherwise
 async def main():
     task=asyncio.create_task(mcp.call_tool('blocked',{}))
     assert await asyncio.to_thread(entered.wait,2)

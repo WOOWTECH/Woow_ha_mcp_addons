@@ -1,53 +1,153 @@
 """Pinned wheel launcher: fail closed on source drift before runtime adaptation."""
 import hashlib
 from pathlib import Path
+import re
 import runpy
 import os
+import xmlrpc.client
 
 from backend_policy import XMLTransport
 
 import odoo_mcp.odoo_client as client
 
-if hashlib.sha256(Path(client.__file__).read_bytes()).hexdigest() != '8bd06a523cb8049f14f54d06d9b73c3d7787108e7e78cf58bfb725ec9a97f74d':
+# 0.4.0 (odoo-mcp 1.3.0): only get_model_fields changed (fields_get asks for a bounded attribute list); the XML-RPC
+# client still builds its ServerProxy transport through RedirectTransport(timeout=, use_https=, verify_ssl=), which the
+# BackendTransport below replaces, and ODOO_TRANSPORT=xmlrpc keeps the urllib JSON-2 path unused.
+if hashlib.sha256(Path(client.__file__).read_bytes()).hexdigest() != '3cb7796965772bbea02fa1fda5c4de1fdcb36055ae1dcf9db396fd22559ff6c7':
     raise RuntimeError('Odoo transport requires source review')
 
+# How long one XML-RPC exchange may wait for Odoo. Unreleased (0.4.12 line): a tool call waits as long as the PaaS server
+# does, 30 s (odoo-mcp's own ODOO_TIMEOUT default, which the PaaS server leaves alone; the child's ODOO_TIMEOUT is 30 in
+# mcp_admin_core/products.py). Up to 0.4.11 every exchange was cut at 5 s, so a read Odoo finishes in 6-30 s (a report, a
+# search_read on a big table, the first login of a cold worker) came back BACKEND_TIMEOUT here and succeeded on PaaS. The
+# cap stays as the ceiling of anything a client asks for. The readiness probe keeps 5 s (PROBE_TIMEOUT, passed as its own
+# client's timeout below): HealthMonitor waits 5 s for it and probes every 15 s, and the probe's one owned thread is free
+# again only when its call returns, so a longer probe would keep a recovered Odoo "unreachable" past those 15 s.
+TOOL_TIMEOUT = 30
+PROBE_TIMEOUT = 5
+
+
 class BackendTransport(XMLTransport):
-    def __init__(self, timeout=5, use_https=True, verify_ssl=True, **kwargs):
+    def __init__(self, timeout=TOOL_TIMEOUT, use_https=True, verify_ssl=True, **kwargs):
         if not verify_ssl:
             raise ValueError('TLS verification required')
-        super().__init__(os.environ['ODOO_URL'], timeout=min(timeout, 5))
+        super().__init__(os.environ['ODOO_URL'], timeout=min(timeout, TOOL_TIMEOUT))
 
 
 # Replace the actual wheel transport before any client construction.
 client.RedirectTransport = BackendTransport
 
+# What the private readiness probe below tells the gateway when the login fails. HealthMonitor keeps the probe's error
+# text as the reason of "Backend unreachable" (-32603, data.reason), so a refused password must not read like a dead
+# server. Unreleased (0.4.12 line). Reviewed against odoo-mcp 1.3.0 (odoo_client.py, digest-checked above):
+# OdooClient.__init__ authenticates and raises ConnectionError for a refused, unresolvable or timed-out connection and
+# ValueError('Failed to authenticate with Odoo: ...') for everything else. That ValueError is built inside its own
+# except block, so the exception it caught is its __context__: ValueError('Authentication failed: Invalid username or
+# password') when Odoo answered authenticate with a false uid (a wrong password or an unknown login: Odoo does not tell
+# them apart), or the xmlrpc Fault Odoo itself sent.
+AUTH_REJECTED = ("BACKEND_AUTH_REJECTED: Odoo 憑證被拒 (credentials rejected); check the database, username and "
+                 "password in the add-on's connection settings.")  # no "admin": a password of that name would be masked in it
+UNAVAILABLE = 'BACKEND_UNAVAILABLE'
+NO_UID = 'Authentication failed: Invalid username or password'  # odoo_client.py: authenticate() answered a false uid
+ACCESS_DENIED_FAULT_CODES = (3, '3', 'AccessDenied')  # Odoo's RPC_FAULT_CODE_ACCESS_DENIED, and its pre-16 string form
+MISSING_DATABASE = re.compile(r'database "[^"\r\n]{1,128}" does not exist')  # PostgreSQL's words inside Odoo's fault
+
+
+def probe_failure(exc):
+    """The probe's fixed reason for a failed login: BACKEND_AUTH_REJECTED when Odoo answered and refused the connection's
+    database, username or password (a false uid, an AccessDenied fault, a database name PostgreSQL does not know: the
+    operator's fix is the same connection fields), BACKEND_UNAVAILABLE for everything else (refused, unresolvable or
+    timed-out connections, redirects, HTTP errors, answers that are not XML-RPC, any other fault, a busy probe worker).
+    Only the class is told, never the exception text: it can hold the URL, the database or the user name."""
+    seen = set()
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        if isinstance(exc, xmlrpc.client.Fault):
+            text = str(exc.faultString)[:8192]
+            last_line = text.rstrip().rsplit('\n', 1)[-1]
+            if (exc.faultCode in ACCESS_DENIED_FAULT_CODES or 'odoo.exceptions.AccessDenied' in last_line
+                    or MISSING_DATABASE.search(text)):
+                return AUTH_REJECTED
+        elif isinstance(exc, ValueError) and str(exc) == NO_UID:
+            return AUTH_REJECTED
+        exc = exc.__cause__ or exc.__context__
+    return UNAVAILABLE
+
 if __name__ == '__main__':
+    import session_idle
+    session_idle.install()  # 0.1.8 (GATEWAY-3): before odoo_mcp builds the session manager
     from odoo_mcp.server import mcp
     from bounded_tools import BoundedTools
-    from batch2_outputs import odoo_counts
-    import functools
-    from odoo_mcp import tools_read, tools_diagnostics, agent_tools, diagnostics
+    from odoo_mcp import tools_read, tools_diagnostics, agent_tools, diagnostics, tools_write, server_core
+    from odoo_mcp.odoo_client import OdooClient, build_odoo_client, load_instances_config
+    # 0.2.0 (owner decision 2026-10-15, the full add-on): the complete odoo-mcp surface as the PaaS
+    # woow-mcp-server serves it. tools_write and server_core carry the two PaaS build patches (apps/odoo/patches:
+    # fix_cross_session_token_store, fix_direct_writes; applied to the venv by the Dockerfile and packaging/unit.sh):
+    # these digests are the patched files, so an unpatched or altered wheel fails closed here. 0.4.0: odoo-mcp 1.3.0
+    # (MCP SDK 2), the PaaS pin since woow-mcp-server #82; both patches apply at their anchors (reviewed in
+    # docs/provenance/runtime-patches.json) and the 41 tools keep their names, annotations and write gating. The HA copy of
+    # fix_direct_writes also makes the descriptions of execute_method's method and of chatter_post follow the switches
+    # this add-on sets (direct writes and direct chatter on): 1.3.0 told the model those calls were blocked or gated.
     for module, digest in (
-        (tools_read, '4c8bf33b35c54757b93f0cc367b4f5027488ca8fbf63f68c1241f1a4be784de0'),
-        (tools_diagnostics, '957f3affa479cb079350de8874064d89594ab0661cfbfd7675b7f26930d32772'),
-        (agent_tools, '5004b28b00e59efd903ae8d48240922a0bdb43fb9b0051e77dbcd919e3c434fd'),
+        (tools_read, 'c477b2a8a6276004b8bd55f51d7a0e5119096a68f0b81fc3dac43a916f906200'),
+        (tools_diagnostics, '1355ad597fbe67cf4222c5c2295e229265c6654ebbfd83cebb62a7f291346bd5'),
+        (agent_tools, '1e467c6e2871ace8ca935b028124630767968cd08c632875f99435434b2795ee'),
         (diagnostics, '1fb1632cc711a7dfa4d5f6700472abeaffb897a094a4c399c21ce045aebb0dc7'),
+        (tools_write, '353fbc5a11497a1b969105d3d58760b8df376df86d30008c875c83477efcad93'),
+        (server_core, '4866870f36f905122f2a6fbdb105591268b51d26848a38b99cf25efb498bee1d'),
     ):
         if hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest() != digest:
-            raise RuntimeError('Odoo B1 handlers require source review')
-    aggregate = mcp._tool_manager.get_tool('aggregate_records')
-    original_aggregate = aggregate.fn
+            raise RuntimeError('Odoo handlers require source review (patched odoo-mcp 1.3.0 expected)')
+    # Upstream swallows failed search_read/read calls into [], turning an Odoo
+    # access or connection error into a false "success, zero records" reply.
+    # Install the reviewed PaaS behavior before any client is constructed.
+    import odoo_read_errors
+    odoo_read_errors.propagate_read_errors(OdooClient)
+    from odoo_read_exists import install as install_read_exists
+    install_read_exists(mcp)  # 0.1.8 (RR-03): a missing record read by 'id' only is not found
+    from bounded_tools import OwnedWorkers
+    # HealthMonitor's private probe: not in TOOLS, so the gateway neither lists nor authorizes it. It only
+    # authenticates a fresh client (as every session does on its first live call), on its own owned thread:
+    # it never takes the single tool worker below (0.1.2 HA: a probe held it while Odoo was slow and user
+    # calls got BACKEND_BUSY), and an account without ir.model access still reads as reachable.
+    probe_worker = OwnedWorkers(1, 'backend-probe')
 
-    @functools.wraps(original_aggregate)
-    def bounded_counts(**kwargs):
-        return odoo_counts(original_aggregate(**kwargs))
+    def probe_client():
+        # get_odoo_client() as odoo_client.py defines it (digest-checked above), but with the probe's own timeout: an
+        # entry's "timeout" wins over the child's ODOO_TIMEOUT, which is the tools' TOOL_TIMEOUT.
+        default_name, instances = load_instances_config()
+        return build_odoo_client({**instances[default_name], 'timeout': PROBE_TIMEOUT}, name=default_name)
 
-    aggregate.fn = bounded_counts
-    from odoo_b2_scope import install as install_b2
-    install_b2(mcp)
-    # The stock client caches an XMLRPC transport: serialize its sync calls.
+    async def woow_backend_probe():
+        try:
+            odoo = await probe_worker.run(probe_client)
+        except Exception as exc:
+            raise ValueError(probe_failure(exc)) from None  # a fixed reason: BACKEND_AUTH_REJECTED or BACKEND_UNAVAILABLE
+        return {'uid': odoo.uid}
+
+    mcp.add_tool(woow_backend_probe, name='woow_backend_probe', description='Add-on readiness probe (private).')
+    if mcp._tool_manager.get_tool('woow_backend_probe').fn is not woow_backend_probe:
+        raise RuntimeError('readiness probe name taken')  # add_tool keeps an existing tool of the same name
+    # Match PaaS's 2 MiB successful-result bound for generic record reads.
+    # An oversized result becomes success:false, then the next wrapper sets MCP isError.
+    import odoo_result_limits
+    odoo_result_limits.install(mcp)
+    # The upstream Odoo tools return {"success": false, "error": ...} as a normal value. Convert those results to
+    # MCP isError=true before the worker wrapper, while preserving each published outputSchema's result envelope.
+    # This is the same source-backed contract as the PaaS Odoo launcher; fake-backend tests cover both shapes.
+    import odoo_tool_errors
+    odoo_tool_errors.install(mcp)
+    # The stock client caches an XMLRPC transport: serialize its sync calls. 0.4.0: mcp 2 runs a sync tool on an anyio
+    # worker thread, in parallel; BoundedTools turns every sync tool (the writes execute_method and chatter_post as
+    # well as the reads) into an async one on its single owned worker, so they still run one at a time.
     workers = BoundedTools(mcp, capacity=1)
+    # 0.4.0: mcp 2 hides an exception's text from the client unless it is a ToolError; keep 1.x's text for every tool
+    # (BACKEND_BUSY above, the probe's BACKEND_UNAVAILABLE / BACKEND_AUTH_REJECTED, odoo-mcp's own errors). Last, around
+    # everything else.
+    from tool_error_text import keep_error_text
+    keep_error_text(mcp)
     try:
         runpy.run_module('odoo_mcp', run_name='__main__')
     finally:
         workers.close()
+        probe_worker.close()

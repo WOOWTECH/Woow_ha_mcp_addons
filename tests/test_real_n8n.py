@@ -16,11 +16,13 @@ from urllib.parse import parse_qs, urlsplit
 import httpx
 import pytest
 
-from mcp_admin_core.config import Store
+from mcp_admin_core import VERSION
+from mcp_admin_core.products import ProductStore
 from mcp_admin_core.health import protocol_reply
 
 from owned_executable import Executable
 from batch2_owned_port import reserve_port
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -64,7 +66,10 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
     if not (ROOT / "apps/n8n/node_modules/n8n-mcp/dist/mcp/index.js").exists():
         pytest.skip("EXTERNAL GATE: run npm ci --ignore-scripts --prefix apps/n8n")
     data = tmp_path / "state"
-    store = Store(data)
+    # This exercises normal runtime startup. A legacy schema 1 state is switched once to the all-on defaults before
+    # the store opens (2026-10-27, covered by test_owner_defaults).
+    store = ProductStore(data, 'n8n')
+    assert store.load().schema_version == 4
     if configured_backend:
         store.update(backend_url=fake_backend[0], backend_key="DUMMY-local-only")
     token = store.load().token
@@ -98,8 +103,8 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
                     except httpx.HTTPError:
                         pass
                     await asyncio.sleep(0.2)
-            assert result["serverInfo"]["name"] == "n8n-documentation-mcp"
-            assert result["serverInfo"]["version"] == "2.91.0"
+            # 0.1.8 (F6): the add-on's identity, not n8n-mcp's ("n8n-documentation-mcp" 2.96.2); no instructions.
+            assert result["serverInfo"] == {"name": "woow-mcp-n8n", "version": VERSION} and "instructions" not in result
             assert result["capabilities"] == {"tools": {}}
             assert session
             headers["Mcp-Session-Id"] = session
@@ -110,13 +115,17 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
                 tools = await protocol_reply(response, 2)
             names = {tool["name"] for tool in tools["tools"]}
             assert {"tools_documentation", "search_nodes"} <= names
-            assert names <= {"tools_documentation", "search_nodes", "n8n_list_workflows",
-                             "get_node", "n8n_get_workflow", "n8n_manage_folders", "validate_node", "validate_workflow",
-                             "n8n_list_catalog", "n8n_executions", "n8n_health_check"}
-            assert 'get_node' in names
+            # 0.2.0: the full n8n-mcp surface, the child's own schemas (provider-safe), every name classified.
             from n8n_adapter import TOOLS
+            from mcp_admin_core.policy import TOP_LEVEL_REFUSED
+            assert names <= set(TOOLS)
+            # 0.2.2: also without a backend (the child then lists only its documentation tools; the gateway answers
+            # tools/list from the packaged snapshot).
+            assert names == set(TOOLS)
+            assert 'get_node' in names
             for tool in tools["tools"]:
-                assert tool["inputSchema"] == TOOLS[tool["name"]].arguments.model_json_schema()
+                schema = tool["inputSchema"]
+                assert schema.get("type") == "object" and not TOP_LEVEL_REFUSED & schema.keys(), tool["name"]
             if configured_backend:
                 # Forged instance headers must not redirect the real Node API path.
                 async with client.stream("POST", url, headers={**headers,
@@ -140,8 +149,9 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
                 if check_defaults == "omission":
                     # The health monitor uses limit=1; assert the *actual* Node API
                     # query for each client call, not the advertised/local model.
-                    for arguments, expected in [({}, {"limit": ["20"], "excludePinnedData": ["true"]}),
-                            ({"active": False}, {"limit": ["20"], "active": ["false"], "excludePinnedData": ["true"]}),
+                    # 0.2.0: the published handler's own default (limit 100; the 0.1.x model sent 20).
+                    for arguments, expected in [({}, {"limit": ["100"], "excludePinnedData": ["true"]}),
+                            ({"active": False}, {"limit": ["100"], "active": ["false"], "excludePinnedData": ["true"]}),
                             ({"active": True, "limit": 7}, {"limit": ["7"], "active": ["true"], "excludePinnedData": ["true"]})]:
                         before = len(fake_backend[1])
                         response = await workflow_call(arguments)
@@ -151,12 +161,13 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
                         queries = workflow_queries()[before:]
                         assert expected in queries, queries
                 else:
+                    # 0.2.0: the arguments reach the child unchanged; the child validates them (a null is its error,
+                    # never a backend query with it).
                     for arguments in ({"active": None}, {"limit": None}):
                         before = len(fake_backend[1])
                         response = await workflow_call(arguments)
-                        assert response.status_code == 403
-                        # Any concurrent automatic health read has its own limit=1.
-                        assert all(query["limit"] == ["1"] for query in workflow_queries()[before:])
+                        assert response.status_code == 200
+                        assert all("null" not in json.dumps(query) for query in workflow_queries()[before:])
                 assert all(call.startswith(b"GET /api/v1/workflows?") for call in fake_backend[1])
             latencies = []
             for name, args in [("tools_documentation", {}), ("search_nodes", {"query": "webhook", "limit": 1})]:
@@ -210,7 +221,7 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
             children = [int(v) for v in Path(f"/proc/{process.pid}/task/{process.pid}/children").read_text().split()]
             assert len(children) == 1
             rss = next(line.split()[1] for line in Path(f"/proc/{children[0]}/status").read_text().splitlines() if line.startswith("VmRSS:"))
-            print(f"REAL LOCAL n8n 2.91.0: elapsed={time.monotonic()-started:.2f}s tool_latency_ms={latencies} child_rss_kib={rss}; fake_backend={configured_backend}, NOT production/HA E2E")
+            print(f"REAL LOCAL n8n-mcp 2.96.2: elapsed={time.monotonic()-started:.2f}s tool_latency_ms={latencies} child_rss_kib={rss}; fake_backend={configured_backend}, NOT production/HA E2E")
     finally:
         if process.returncode is None:
             process.send_signal(signal.SIGTERM)

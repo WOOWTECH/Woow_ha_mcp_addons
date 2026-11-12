@@ -1,7 +1,7 @@
-"""n8n's approved, query-only use of a BROAD Core administrator capability.
+"""Approved query-only use of a BROAD Core admin capability for n8n and six products.
 
 No URL/command/token configuration surface; no authenticated socket or allow cache.
-The private connector seam exists solely for owned-loopback protocol tests.
+The private connector seam exists solely for fake/owned-loopback protocol tests.
 """
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ import asyncio
 import json
 import logging
 import os
+import re
+import sys
 
 import anyio
 from websockets.asyncio.client import connect
@@ -16,10 +18,33 @@ from websockets.asyncio.client import connect
 from .config import strict_json
 
 _URL = "ws://supervisor/core/websocket"
-_HA_VERSION = "2026.7.2"  # Source-reviewed contract; upgrades require review/tests.
+# Core releases whose consumed contract was source-reviewed (0.1.6, docs/ha-role-core-contract.md). Supervisor's
+# WebSocket proxy sends the auth frames and advertises the Core version it has recorded; the Core side consumed here
+# (config/auth/list behind require_admin, its user fields, the result envelope and the system-admin group) is unchanged
+# from 2026.7.2 to 2026.9.4 and in 2026.10.0 (its probatio migration changed 13 of the files; reviewed line by line);
+# 2026.10.1 (0.1.9) has the same 21 files, byte-identical to 2026.10.0.
+# 2026.10.2 (tag commit 8d7fd8b6), 2026.10.3 (1f214b84) and 2026.10.4 (357cae5c), reviewed 2026-10-27: 20 of the 21
+# files and the 4 adjacent ones are byte-identical to 2026.10.1; auth/__init__.py changed from blob a5850978 to 0314c4b7
+# (the same blob in all three tags), one hunk in AuthManager.async_remove_user that revokes a removed user's refresh
+# tokens before deleting the user. config/auth/list, User.is_admin, require_admin and the result envelope are untouched.
+# Supervisor 2026.10.2-2026.10.4 ship api/proxy.py blob cab849dc (2026.10.1: 002174e5): the two proxy loops become
+# background tasks; the auth_required/auth_ok frames and the message filter are unchanged.
+# Core 2026.11.0 and 2026.11.1 were reviewed 2026-11-11 against the 25 contract/adjacent files. The 11.1 files
+# are byte-identical to 11.0. config/auth/list, User.is_admin, require_admin, result_message, and the system-admin
+# group are unchanged. WebSocket token revocation now closes a revoked connection; this verifier queries on a fresh
+# connection and still denies any failed response. Supervisor 2026.10.5 api/proxy.py is byte-identical to 2026.10.4.
+# Any other advertised version, including pre-releases, denies until reviewed and added.
+_HA_VERSIONS = frozenset({"2026.7.2", "2026.7.3", "2026.7.4", "2026.8.0", "2026.8.1", "2026.8.2", "2026.8.3",
+                          "2026.9.0", "2026.9.1", "2026.9.2", "2026.9.3", "2026.9.4", "2026.10.0",
+                          "2026.10.1", "2026.10.2", "2026.10.3", "2026.10.4", "2026.11.0", "2026.11.1"})
 _QUERY_SECONDS = 2.25  # plus <= .2s cleanup, below the gateway's 3s guard
 _MAX_RESPONSE = 1024 * 1024
 _MAX_CONCURRENT = 8
+# An unreviewed version is shown to the administrator and written to the add-on log only in the form of a Core release
+# or pre-release (2026.10.5, 2026.11.0b1, 2026.11.0.dev0); any other advertised string is reported as unrecognized and
+# never echoed. At most this many distinct versions are logged per process (each once).
+_SHOWN_VERSION = re.compile(r"[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,3}(?:(?:a|b|rc)[0-9]{1,3}|\.dev[0-9]{1,14})?")
+_MAX_REPORTED = 32
 
 # A private disabled logger, not a configurable named logger. WS debug logging
 # otherwise prints authentication frames and the complete user directory.
@@ -47,11 +72,49 @@ def _message(raw):
     return value
 
 
-def _auth_message(raw, expected):
+class Unreviewed:
+    """A denial because Supervisor advertised a Core version this release has not reviewed. Falsy like every denial.
+
+    ha_version is the advertised string when it has the form of a Core version (shown_version), else None: safe to
+    show to the administrator. The panel shows it instead of a bare 403 (admin_auth.denial_detail)."""
+    __slots__ = ("ha_version",)
+
+    def __init__(self, ha_version):
+        self.ha_version = ha_version
+
+    def __bool__(self):
+        return False
+
+    def __repr__(self):
+        return f"Unreviewed({self.ha_version!r})"
+
+
+class _UnreviewedVersion(ValueError):
+    def __init__(self, ha_version):
+        super().__init__()
+        self.ha_version = ha_version
+
+
+def shown_version(value):
+    """The advertised version as it may be shown or logged, or None when it is not in the form of a Core version."""
+    return value if isinstance(value, str) and _SHOWN_VERSION.fullmatch(value) else None
+
+
+def _auth_message(raw, expected, version=None):
+    """The advertised Core version: a reviewed one, and the same in auth_required and auth_ok.
+
+    A well-formed auth_required frame that advertises any other version raises _UnreviewedVersion, still a ValueError:
+    the verifier denies before it sends the machine token, with a reason the panel shows."""
     value = _message(raw)
     if (set(value) != {"type", "ha_version"} or value["type"] != expected
-            or value["ha_version"] != _HA_VERSION):
+            or not isinstance(value["ha_version"], str)
+            or (version is not None and value["ha_version"] != version)):
         raise ValueError()
+    if value["ha_version"] not in _HA_VERSIONS:
+        if version is None:
+            raise _UnreviewedVersion(shown_version(value["ha_version"]))
+        raise ValueError()
+    return value["ha_version"]
 
 
 def _allowed(raw, subject):
@@ -110,6 +173,19 @@ class _Verifier:
     def __init__(self, connector):
         self._connector = connector
         self._active = 0
+        self._reported = set()
+
+    def _report_unreviewed(self, version):
+        """One add-on log line per distinct unreviewed version: the advertised version (or that it was unrecognized),
+        never a frame, token or user. An administrator otherwise sees only a refused panel."""
+        if version in self._reported or len(self._reported) >= _MAX_REPORTED:
+            return
+        self._reported.add(version)
+        reviewed = sorted(_HA_VERSIONS, key=lambda v: tuple(int(part) for part in v.split(".")))
+        shown = version if version is not None else "(an unrecognized version string)"
+        print(f"management: Home Assistant Core {shown} has not been reviewed for this add-on release (reviewed:"
+              f" {reviewed[0]} to {reviewed[-1]}); the management panel refuses every request until an add-on"
+              " release reviews it. MCP endpoints do not use this check.", file=sys.stderr, flush=True)
 
     async def __call__(self, subject):
         if not valid_user_id(subject) or self._active >= _MAX_CONCURRENT:
@@ -128,11 +204,15 @@ class _Verifier:
                     max_queue=1, open_timeout=2, close_timeout=.1,
                     ping_interval=None, logger=_LOGGER, user_agent_header=None,
                 )
-                _auth_message(await socket.recv(), "auth_required")
+                version = _auth_message(await socket.recv(), "auth_required")
                 await socket.send(json.dumps({"type": "auth", "access_token": token}))
-                _auth_message(await socket.recv(), "auth_ok")
+                _auth_message(await socket.recv(), "auth_ok", version)
                 await socket.send('{"id":1,"type":"config/auth/list"}')
                 return _allowed(await socket.recv(), subject)
+        except _UnreviewedVersion as error:
+            # Before the machine token is sent. Still a denial, but one the panel can explain (Unreviewed is falsy).
+            self._report_unreviewed(error.ha_version)
+            return Unreviewed(error.ha_version)
         except Exception:
             # No exception text, frames, directory, token or fallback authority.
             return False

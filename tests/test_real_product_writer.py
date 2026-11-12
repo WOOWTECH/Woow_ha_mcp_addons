@@ -8,12 +8,13 @@ from mcp_admin_core.gateway import make_apps
 from owned_runtime import Endpoint
 from mcp_admin_core.products import ProductStore, TOOLS, child_spec
 from test_real_products import backend, connection, rpc
+from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 
 async def test_real_delete_requires_enable_and_disabled_direct_call_still_denied(tmp_path):
     with backend('opendesign') as (url, calls, _):
         store = ProductStore(tmp_path / 'state', 'opendesign')
-        store.update(connection=connection('opendesign', url))
+        store.update(connection=connection('opendesign', url), writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
         endpoint = Endpoint('opendesign')
         process = endpoint.supervisor(child_spec(store.load(), store.directory))
         try:
@@ -35,14 +36,14 @@ async def test_real_delete_requires_enable_and_disabled_direct_call_still_denied
                     await rpc(client, '/mcp', headers, {'jsonrpc': '2.0', 'method': 'notifications/initialized'})
                     message = {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/call', 'params': {
                         'name': 'delete_project', 'arguments': {'project_id': '12345678-1234-1234-1234-123456789abc'}}}
-                    assert (await client.post('/mcp', headers=headers, json=message)).status_code == 403
+                    assert refused(await client.post('/mcp', headers=headers, json=message))
                     assert calls == []
-                    store.update(writes_enabled=True)
+                    store.update(enabled_write_tools=['delete_project'])  # 0.2.0: an exact grant, no legacy switch
                     reply = await rpc(client, '/mcp', headers, message)
                     assert not reply.get('isError')
                     assert calls == [('DELETE', '/api/projects/12345678-1234-1234-1234-123456789abc')]
                     store.update(disabled=['delete_project'])
-                    assert (await client.post('/mcp', headers=headers, json=message)).status_code == 403
+                    assert refused(await client.post('/mcp', headers=headers, json=message))
                     assert len(calls) == 1
                     await client.delete('/mcp', headers=headers)
         finally:

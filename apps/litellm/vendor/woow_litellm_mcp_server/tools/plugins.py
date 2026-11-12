@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import quote
 
 from fastmcp import Context
 
 from ..deps import litellm_client
 from ..gating import ToolGate
 from ..registry import OP_CREATE, OP_DELETE, OP_UPDATE
-from ._common import destructive, prune_none, read_only, writing
+from ._common import destructive, path_segment, prune_none, read_only, writing
 
 
 def _plugin_path(plugin_name: str, suffix: str = "") -> str:
@@ -21,7 +20,7 @@ def _plugin_path(plugin_name: str, suffix: str = "") -> str:
     fragment and the POST landed on ``/claude-code/plugins/p`` instead, giving a
     baffling 405 rather than a clean 404.
     """
-    return f"/claude-code/plugins/{quote(plugin_name, safe='')}{suffix}"
+    return f"/claude-code/plugins/{path_segment(plugin_name, 'plugin_name')}{suffix}"
 
 
 def _coerce_source(source: dict[str, str] | str) -> dict[str, str]:

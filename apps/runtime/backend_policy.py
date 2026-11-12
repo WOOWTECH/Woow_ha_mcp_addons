@@ -11,12 +11,13 @@ import inspect
 import http.client
 from pathlib import Path
 import ipaddress
+import re
 import socket
 import ssl
 import threading
 import time
 import xmlrpc.client
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, unquote_to_bytes, urlsplit
 
 import httpcore
 import httpx
@@ -73,16 +74,18 @@ class BackendDenied(ValueError):
 
 
 class BackendStreamError(httpx.HTTPError):
-    def __init__(self):
-        super().__init__('BACKEND_STREAM_ERROR')
+    def __init__(self, cause=None):
+        super().__init__('BACKEND_STREAM_ERROR' + (f': {cause}' if cause is not None and str(cause) else ''))
 
 
-def public_backend_error(exc):
-    """Type-based public error mapping. Never inspect backend exception text."""
+def error_code(exc):
+    """The type-based class of a backend failure (a stable prefix; the backend's own text follows it)."""
     if isinstance(exc, BackendFailure):
         return exc.code
     if isinstance(exc, BackendHTTPError):
         return f'BACKEND_HTTP_ERROR status={exc.status}'
+    if isinstance(exc, httpx.HTTPStatusError):  # 0.2.1: a child's raise_for_status() (e.g. Hermes 422), by status
+        return f'BACKEND_HTTP_ERROR status={exc.response.status_code}'
     if isinstance(exc, BackendBusy):
         return 'BACKEND_BUSY'
     if isinstance(exc, BackendDenied):
@@ -96,10 +99,55 @@ def public_backend_error(exc):
     return 'BACKEND_UNAVAILABLE'
 
 
+ERROR_BODY_LIMIT = 4096
+
+
+def http_status_detail(exc):
+    """'<status> <reason> for <METHOD> <path>: <response body>' of an httpx.HTTPStatusError; the body is cut to
+    ERROR_BODY_LIMIT characters and left out when it was not read."""
+    response = exc.response
+    try:
+        where = f' for {exc.request.method} {exc.request.url.path}'
+    except Exception:
+        where = ''
+    try:
+        body = response.text.strip()
+    except Exception:  # httpx.ResponseNotRead and decoding failures: the status alone
+        body = ''
+    text = f'{response.status_code} {response.reason_phrase}{where}'
+    return f'{text}: {body[:ERROR_BODY_LIMIT]}' if body else text
+
+
+def public_backend_error(exc):
+    """The class code only (the stable hook other code keys on: Nextcloud's code mode, Odoo Manage)."""
+    return error_code(exc)
+
+
+def backend_error_text(exc):
+    """0.2.0 (owner decision 2026-10-15, as the PaaS servers): the class code AND the backend's own error text, e.g.
+    'BACKEND_UNAVAILABLE: [Errno 111] Connection refused'. The gateway replaces every credential the add-on holds
+    (tokens, backend keys and passwords, their Basic forms) with [REDACTED] in every reply it relays
+    (redact.redact_secrets); child output never reaches a log (the Supervisor discards it)."""
+    if isinstance(exc, BackendFailure):
+        return exc.message
+    code = error_code(exc)
+    if isinstance(exc, httpx.HTTPStatusError):
+        # 0.2.1: the status line, the request path and the backend's own response body (it was only httpx's text).
+        return f'{code}: {http_status_detail(exc)}'
+    try:
+        detail = str(exc).strip()
+    except Exception:
+        detail = ''
+    if not detail:
+        detail = type(exc).__name__
+    return detail if detail == code or detail.startswith(code + ':') else f'{code}: {detail}'
+
+
 class BackendFailure(httpx.HTTPError):
     def __init__(self, exc):
-        self.code = public_backend_error(exc)
-        super().__init__(self.code)
+        self.code = error_code(exc)
+        self.message = backend_error_text(exc)
+        super().__init__(self.message)
 
 
 def backend_errors(function):
@@ -168,10 +216,76 @@ def checked_answers(host, port):
     return result
 
 
-def path_value(path):
-    path = unquote(path)
-    if '%' in path or '\\' in path or any(p in ('.', '..') for p in path.split('/')):
+_DECODE_LAYERS = 8  # a path that still changes after eight further decodes is refused
+_BARE_PERCENT = re.compile(r'%(?![0-9A-Fa-f]{2})')  # on the wire every '%' must start a %XX escape
+# Taken for a hex digit by some decoder: ASCII hex by all; any Unicode decimal digit by Java's Character.digit and
+# Python's int(); fullwidth A-F/a-f by Java; ':;<=>?@`' and U+0010-U+001F by Jetty's
+# (c & 0x1f) + (c >> 6) * 0x19 - 0x10.
+_HEX_LIKE = r'[\d\x10-\x1f:;<=>?@`A-Fa-f\uff21-\uff26\uff41-\uff46]'
+# A '%' that Python's unquote leaves alone but another decoder still decodes: %uXXXX (IIS, .NET, JavaScript's
+# unescape), or two hex-like characters that are not both ASCII hex ('%' + fullwidth '2' + 'e' is '.' to Java's
+# URLDecoder).
+_ODD_ESCAPE = re.compile('%[uU]' + _HEX_LIKE + '{4}|%(?![0-9A-Fa-f]{2})' + _HEX_LIKE + '{2}')
+# nginx's ngx_unescape_uri: valid escapes decoded; '%' + a non-hex character keeps that character; '%' + hex + non-hex,
+# and a dangling '%' or '%X', disappear. So '.%.' and '.%2..' are '..' to it.
+_NGINX_ESCAPE = re.compile(r'%(?:([0-9A-Fa-f]{2})|[0-9A-Fa-f](?:[^0-9A-Fa-f]|\Z)|([^0-9A-Fa-f])|\Z)')
+# Overlong UTF-8, which lax decoders read as ASCII ('%c0%ae' as '.', '%c0%af' as '/'); no real name contains it.
+_OVERLONG = re.compile(rb'[\xc0\xc1]|\xe0[\x80-\x9f]|\xf0[\x80-\x8f]')
+_LINE_BREAKS = '\x00\n\r\x85\u2028\u2029'  # NUL and the line breaks a further decode must not add
+
+
+def _path_shape_ok(path):
+    return '\\' not in path and not any(p in ('.', '..') for p in path.split('/'))
+
+
+def _structure(path):
+    """What a further decode must not add: separators, query and fragment marks, NUL and line breaks."""
+    return path.count('/'), path.count('?'), path.count('#'), sum(path.count(c) for c in _LINE_BREAKS)
+
+
+def _decodes_alike(layer):
+    """No escape left in this layer that another decoder reads where Python's unquote does not: an odd escape, an
+    invalid one that nginx drops into a dot segment, or overlong UTF-8 in what the next decode gives."""
+    if _ODD_ESCAPE.search(layer) or _OVERLONG.search(unquote_to_bytes(layer.encode('utf-8', 'surrogatepass'))):
+        return False
+    return not _BARE_PERCENT.search(layer) or _path_shape_ok(
+        _NGINX_ESCAPE.sub(lambda m: chr(int(m[1], 16)) if m[1] else (m[2] or ''), layer))
+
+
+def path_value(path, literal_percent=False):
+    """The path after one percent-decode. Refused: a backslash, a '.'/'..' segment, and a '%' still present.
+
+    literal_percent (request paths, not the configured base URL): a '%' may remain, because a file or calendar name can
+    contain one ('100%-off.txt' travels as '100%25-off.txt', '%18 KDV.xlsx' as '%2518%20KDV.xlsx'), as long as no
+    decoder in front of or inside the backend can read more into it than the first decode gave:
+    - every '%' on the wire starts a %XX escape (httpx sends a bare '%' as it is);
+    - decoding again with unquote, layer after layer, as a proxy or a backend that decodes twice would, never adds a
+      '/', a backslash, a '.'/'..' segment, a '?', a '#', a NUL or a line break (CR, LF, NEL, U+2028, U+2029), and the
+      path no longer changes after at most eight further decodes;
+    - no layer holds an escape that other decoders read differently (_decodes_alike).
+    So '%252e%252e', '%252f', '%2500' and '%25u002e' stay refused however deeply nested; what the first decode yields is
+    checked exactly as before. Not modelled: a decoder reading a lone byte as Latin-1 (a second-decode '%85' is U+FFFD
+    here, NEL there); a sign or space before one hex digit ('%+0', '% d'), which Java's URLDecoder or int() read as a
+    control character, never as structure; and the byte-wrapping variant of Jetty's hex arithmetic.
+    """
+    raw, path = path, unquote(path)
+    if not _path_shape_ok(path):
         raise BackendDenied()
+    if '%' in path:
+        if not literal_percent or _BARE_PERCENT.search(raw):
+            raise BackendDenied()
+        layer, shape = path, _structure(path)
+        for _ in range(_DECODE_LAYERS + 1):
+            if not _decodes_alike(layer):
+                raise BackendDenied()
+            deeper = unquote(layer)
+            if deeper == layer:
+                break
+            if not _path_shape_ok(deeper) or _structure(deeper) != shape:
+                raise BackendDenied()
+            layer = deeper
+        else:
+            raise BackendDenied()
     return path.rstrip('/') or '/'
 
 
@@ -193,7 +307,7 @@ class Destination:
     def check_url(self, value):
         url = urlsplit(str(value))
         self.check_host(url.hostname or '', url.port or (443 if url.scheme == 'https' else 80))
-        path = path_value(url.path)
+        path = path_value(url.path, literal_percent=True)
         if (url.scheme != self.scheme or url.username or url.password or url.fragment or
                 not (self.path == '/' or path == self.path or path.startswith(self.path + '/'))):
             raise BackendDenied()
@@ -310,16 +424,16 @@ class SyncResponseStream(httpx.SyncByteStream):
             yield from self.stream
         except (httpx.TimeoutException, httpcore.TimeoutException):
             raise httpx.TimeoutException('BACKEND_TIMEOUT') from None
-        except Exception:
-            raise BackendStreamError() from None
+        except Exception as exc:
+            raise BackendStreamError(exc) from None
 
     def close(self):
         try:
             self.stream.close()
         except (httpx.TimeoutException, httpcore.TimeoutException):
             raise httpx.TimeoutException('BACKEND_TIMEOUT') from None
-        except Exception:
-            raise BackendStreamError() from None
+        except Exception as exc:
+            raise BackendStreamError(exc) from None
 
 
 class AsyncResponseStream(httpx.AsyncByteStream):
@@ -332,16 +446,16 @@ class AsyncResponseStream(httpx.AsyncByteStream):
                 yield chunk
         except (httpx.TimeoutException, httpcore.TimeoutException):
             raise httpx.TimeoutException('BACKEND_TIMEOUT') from None
-        except Exception:
-            raise BackendStreamError() from None
+        except Exception as exc:
+            raise BackendStreamError(exc) from None
 
     async def aclose(self):
         try:
             await self.stream.aclose()
         except (httpx.TimeoutException, httpcore.TimeoutException):
             raise httpx.TimeoutException('BACKEND_TIMEOUT') from None
-        except Exception:
-            raise BackendStreamError() from None
+        except Exception as exc:
+            raise BackendStreamError(exc) from None
 
 
 class SyncTransport(httpx.HTTPTransport):
@@ -352,23 +466,20 @@ class SyncTransport(httpx.HTTPTransport):
 
     def handle_request(self, request):
         self.destination.check_url(request.url)
-        if 'sni_hostname' in request.extensions:
+        # httpcore sends extensions['target'] instead of the checked URL's path when it is present.
+        if 'sni_hostname' in request.extensions or 'target' in request.extensions:
             raise BackendDenied()
         try:
             response = super().handle_request(request)
         except (BackendDenied, BackendBusy):
             raise
-        except httpx.TimeoutException:
-            raise httpx.TimeoutException('BACKEND_TIMEOUT') from None
-        except Exception:
-            raise httpx.ConnectError('BACKEND_UNAVAILABLE') from None
+        except httpx.TimeoutException as exc:
+            raise httpx.TimeoutException(f'BACKEND_TIMEOUT: {exc}') from None
+        except Exception as exc:
+            raise httpx.ConnectError(f'BACKEND_UNAVAILABLE: {exc}') from None
+        # 0.2.0: a non-2xx answer goes to the child's own handling, which reports the backend's error body as the
+        # original server does (it was a body-less BackendHTTPError before).
         response.stream = SyncResponseStream(response.stream)
-        if not 200 <= response.status_code < 300:
-            try:
-                response.close()
-            except Exception:
-                pass  # Status is authoritative; cleanup diagnostics are not public.
-            raise BackendHTTPError(response.status_code)
         return response
 
 
@@ -380,36 +491,62 @@ class AsyncTransport(httpx.AsyncHTTPTransport):
 
     async def handle_async_request(self, request):
         self.destination.check_url(request.url)
-        if 'sni_hostname' in request.extensions:
+        # httpcore sends extensions['target'] instead of the checked URL's path when it is present.
+        if 'sni_hostname' in request.extensions or 'target' in request.extensions:
             raise BackendDenied()
         try:
             response = await super().handle_async_request(request)
         except (BackendDenied, BackendBusy):
             raise
-        except httpx.TimeoutException:
-            raise httpx.TimeoutException('BACKEND_TIMEOUT') from None
-        except Exception:
-            raise httpx.ConnectError('BACKEND_UNAVAILABLE') from None
+        except httpx.TimeoutException as exc:
+            raise httpx.TimeoutException(f'BACKEND_TIMEOUT: {exc}') from None
+        except Exception as exc:
+            raise httpx.ConnectError(f'BACKEND_UNAVAILABLE: {exc}') from None
+        # 0.2.0: a non-2xx answer goes to the child's own handling (see SyncTransport).
         response.stream = AsyncResponseStream(response.stream)
-        if not 200 <= response.status_code < 300:
-            try:
-                await response.aclose()
-            except Exception:
-                pass  # Do not swallow cancellation or replace the status error.
-            raise BackendHTTPError(response.status_code)
         return response
+
+
+def no_dot_segments(url):
+    """Refuse a '.' or '..' segment in a request path as the child wrote it. httpx drops them while it builds the URL
+    (RFC 3986), so check_url only sees the result: a tool argument such as '..' or '../../x' spliced into a path would
+    reach another endpoint under the configured base URL with this add-on's credentials."""
+    if isinstance(url, httpx.URL):
+        if not url.is_relative_url:
+            return  # parsed already, its dot segments are gone; the children pass strings
+        url = str(url)
+    if isinstance(url, str):
+        try:
+            parts = urlsplit(url)
+        except ValueError:
+            raise BackendDenied() from None  # httpx may still accept it: '//[/../x' was sent as GET /x
+        # '//host/x' (a network-path reference) is not a path under the base; httpx rewrote '//evil/x' to /x.
+        if (not parts.scheme and url.startswith('//')) or any(segment in ('.', '..') for segment in parts.path.split('/')):
+            raise BackendDenied()
+
+
+class CheckedClient(httpx.Client):
+    def build_request(self, method, url, *args, **kwargs):
+        no_dot_segments(url)
+        return super().build_request(method, url, *args, **kwargs)
+
+
+class CheckedAsyncClient(httpx.AsyncClient):
+    def build_request(self, method, url, *args, **kwargs):
+        no_dot_segments(url)
+        return super().build_request(method, url, *args, **kwargs)
 
 
 def sync_client(*, base_url, **kwargs):
     kwargs.pop('limits', None)
-    return httpx.Client(base_url=base_url, transport=SyncTransport(base_url),
-                        trust_env=False, follow_redirects=False, **kwargs)
+    return CheckedClient(base_url=base_url, transport=SyncTransport(base_url),
+                         trust_env=False, follow_redirects=False, **kwargs)
 
 
 def async_client(*, base_url, **kwargs):
     kwargs.pop('limits', None)
-    return httpx.AsyncClient(base_url=base_url, transport=AsyncTransport(base_url),
-                             trust_env=False, follow_redirects=False, **kwargs)
+    return CheckedAsyncClient(base_url=base_url, transport=AsyncTransport(base_url),
+                              trust_env=False, follow_redirects=False, **kwargs)
 
 
 class PinnedHTTPConnection(http.client.HTTPConnection):
@@ -439,6 +576,10 @@ class XMLTransport(xmlrpc.client.Transport):
         super().__init__()
         self.destination = Destination(base_url)
         self.timeout, self.database = timeout, database
+        # 0.2.1 (B4): one exchange at a time. xmlrpc's Transport caches ONE http.client connection, and odoo-mcp's
+        # async tasks run on their own threads with the session's client while foreground calls use it too: an
+        # overlapping request or the close() below broke the other ("BACKEND_UNAVAILABLE: Idle").
+        self._exchange = threading.Lock()
 
     def make_connection(self, host):
         url = urlsplit(f'{self.destination.scheme}://{host}')
@@ -454,19 +595,26 @@ class XMLTransport(xmlrpc.client.Transport):
             connection.putheader('X-Odoo-Database', self.database)
 
     def request(self, host, handler, request_body, verbose=False):
+        with self._exchange:
+            return self._request(host, handler, request_body, verbose)
+
+    def _request(self, host, handler, request_body, verbose):
         self.destination.check_url(f'{self.destination.scheme}://{host}{handler}')
         # No redirect following (including relative/same origin), no unbounded retry.
         try:
             return self.single_request(host, handler, request_body, verbose)
         except (BackendDenied, BackendBusy):
             raise
-        except TimeoutError:
-            raise ValueError('BACKEND_TIMEOUT') from None
+        except TimeoutError as exc:
+            raise TimeoutError(f'BACKEND_TIMEOUT: {exc}') from None
+        except OSError as exc:
+            # Preserve the safe public category and the type odoo-mcp retries for reviewed reads only.
+            raise ConnectionError(f'BACKEND_UNAVAILABLE: {exc}') from None
         except xmlrpc.client.ProtocolError as exc:
-            raise ValueError(f'BACKEND_HTTP_ERROR status={int(exc.errcode)}') from None
+            raise ValueError(f'BACKEND_HTTP_ERROR status={int(exc.errcode)}: {exc.errmsg}') from None
         except xmlrpc.client.Fault:
-            raise ValueError('BACKEND_RPC_FAULT') from None
-        except Exception:
-            raise ValueError('BACKEND_UNAVAILABLE') from None
+            raise  # 0.2.0: Odoo's own fault (AccessError, ValidationError...) reaches odoo-mcp as the PaaS server sees it
+        except Exception as exc:
+            raise ValueError(f'BACKEND_UNAVAILABLE: {exc}') from None
         finally:
             self.close()

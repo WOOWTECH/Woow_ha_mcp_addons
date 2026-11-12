@@ -42,8 +42,9 @@ Fixture 不連後端、不是正式 verifier，也不進 image/dist。Guard 依�
 | Odoo Manage | `{connection:{url,database,username,api_key,mode:"read"或"module"}}` |
 | Hermes | `{connection:{gateway_url,gateway_api_key,dashboard_url,dashboard_username,dashboard_password}}` |
 | OpenDesign | `{connection:{url}}`，無虛構 token |
-| EMQX | `{connection:{url,api_key,api_secret}}`，URL 不附 `/api/v5` |
+| EMQX | `{connection:{url,api_key,api_secret}}`，URL 填 Broker 的基底網址；貼上帶 `/api/v5` 的網址也可以，存檔時（畫面與伺服器都）會去掉它 |
 | LiteLLM | `{connection:{url,master_key}}` |
+| Nextcloud | `{connection:{url,username,app_password}}`，url 是 Nextcloud 根網址，主機名稱含非 ASCII 字元（IDN）時要填 `xn--` 形式（表單會顯示）；username／app_password 不可空白、前後不可有空白 |
 
 - Manage `module` 要求**後端 MCP module 已存在**，UI 不安裝／變更 Odoo；read 不允許 writer grants。
 - 保留完全不發 PUT；替換是完整 typed connection，必要秘密需重新輸入，不 trim。
@@ -63,11 +64,28 @@ UI 驗證契約並依實際 metadata 產生每工具／每 operation 控制；�
 {"writes_enabled":false,"disabled":[],"enabled_write_tools":["n8n_manage_folders:create"]}
 ```
 
+新安裝的 state 預設所有寫入 grants 與 `writes_enabled` 都開啟（2026-10-15），工具頁一開始全部勾選並顯示風險提醒；管理員取消勾選並儲存後即關閉，既有 state 不被預設改寫。
 PUT 取代**全部** exact grants。disabled 優先並清除該列選擇。原兩個 legacy writers
 在 `writes_enabled:true` 時顯示實際有效授權；儲存轉為明確 grants 並關閉 global。
 未知契約禁止儲存，絕不降到只送 global false 而留下隱藏 grants。每次保存重新
 bootstrap；product/contract/tools/schema/disabled/global/grants 任一變更即停止、要求刷新。
 這不是跨管理員原子 compare-and-swap 保證；server 仍逐次強制 dispatch。UI 不執行工具。
+
+## 舊版升級的一次性全開通知（下一版，2026-10-27）
+
+舊版安裝（state schema 1/2/3）在第一次以新版啟動時已自動全開（`mcp_admin_core/owner_defaults.py`），不再有啟動前的升級確認頁
+（`upgrade.js` 已移除）。Bootstrap 只在被遷移過的設定帶 `owner_defaults`：`at`、`from_schema`、`restored_at`、`acknowledged_at`、
+`notice`、`recovery`（available／missing／invalid）、`upgrade`（升級前後差異）、`restore`（還原會做的變更與 `available`）。
+`notice` 為 true 時每一頁頂端顯示「已自動套用預設全開」；之後在「診斷與維護」頁保留紀錄。兩個動作都是無 body 的 POST，
+需 CSRF 與目前 revision 的 `If-Match`（缺少回 428、過期回 409）：
+
+| 動作 | API | 結果 |
+|---|---|---|
+| 還原升級前的限制 | `POST /api/owner-defaults/restore` | 忠實還原：舊設定停用的工具再停用；寫入只保留舊設定授權過的（新版的寫入也取消）；新版工具不會被停用（讀取照常可用）；記 `restored_at` |
+| 保持全開，不再提示 | `POST /api/owner-defaults/dismiss` | 記 `acknowledged_at`；之後仍可在診斷頁還原 |
+
+格式不符的通知不顯示任何內容（`ownerDefaultsView` 整個拒絕），改在每一頁顯示固定的「升級通知無法顯示」卡片
+（不含伺服器送來的值、沒有動作，請重新整理或更新 add-on），不再整個隱藏。名稱一律以文字節點顯示，時間照伺服器的 UTC 顯示。
 
 ## 正式 listener 與 Ingress
 

@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "token": null,
+  "child_token": "ccccccccccccccccccccccccccccccccccccccccccc",
+  "backend_url": "https://legacy.example.test",
+  "backend_key": "LEGACY_FIXTURE_KEY",
+  "endpoint": "https://public.example.test/mcp",
+  "writes_enabled": false,
+  "disabled": ["n8n_list_workflows"]
+}

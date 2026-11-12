@@ -14,7 +14,7 @@ from ..deps import emqx_client
 from ..errors import EmqxApiError, emqx_request, json_body
 from ..gating import ToolGate
 from ..models import BrokerStats
-from ._common import read_only
+from ._common import path_segment, read_only
 
 
 def register(mcp: FastMCP, gate: ToolGate) -> None:
@@ -70,7 +70,7 @@ def register(mcp: FastMCP, gate: ToolGate) -> None:
             emqx: httpx.AsyncClient = Depends(emqx_client),
         ) -> dict[str, Any]:
             """Everything EMQX knows about one node."""
-            return json_body(await emqx_request(emqx, "GET", f"/nodes/{node}"))
+            return json_body(await emqx_request(emqx, "GET", f"/nodes/{path_segment(node, 'node', safe='@')}"))
 
     if on("emqx_broker_stats"):
 

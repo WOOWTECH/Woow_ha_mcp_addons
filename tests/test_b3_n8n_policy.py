@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 from mcp_admin_core.products import ProductStore
 from mcp_admin_core.policy import authorize, Denied
-from n8n_adapter import TOOLS
+from n8n_adapter import BOUNDED_TOOLS as TOOLS
 from test_batch2_bounds import schema_results
 from test_expansion_policy import call
 

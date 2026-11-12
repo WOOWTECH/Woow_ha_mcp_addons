@@ -1,4 +1,11 @@
-"""n8n-mcp 2.91.0: intentionally narrow, source-audited policy and fixed launcher."""
+"""n8n-mcp 2.96.2 (0.3.4; 2.91.0 before): the full tool surface (0.2.0) and the fixed launcher.
+
+2.96.2 lists the same 28 tools with the same descriptions, schemas and annotations as 2.91.0 (tools.js and
+tools-n8n-manager.js are byte-identical). Of its new switches child_spec sets only N8N_MCP_VERSION_CHECK_DISABLED=true
+(no npm registry query from n8n_health_check, as the PaaS); N8N_MCP_DISABLE_UI_APPS and the per-context
+instanceArgument are not set.
+"""
+import os
 from pathlib import Path
 import shutil
 from typing import Literal
@@ -60,7 +67,54 @@ from mcp_admin_core.batch2 import N8N_TOOLS as BATCH2_TOOLS
 TOOLS.update(BATCH2_TOOLS)
 from mcp_admin_core.n8n_b3 import N8N_TOOLS as B3_TOOLS
 TOOLS.update(B3_TOOLS)
+# The 0.1.x bounded surface above stays importable (its models are still tested); since 0.2.0 the add-on serves the
+# pinned n8n-mcp's complete surface: all 28 tools, the child's own schemas and validation (surface.full_tools).
+BOUNDED_TOOLS = TOOLS
+from mcp_admin_core.surface import full_tools
+TOOLS = full_tools("n8n")
 CHILD_URL = "http://127.0.0.1:3000/mcp"
+
+# Unreleased (0.4.12 line). n8n-mcp keeps its local workflow version history (table workflow_versions: the backups taken before
+# an update or autofix, n8n_workflow_versions) in the same SQLite file as its node catalog, nodes.db. In the image that file is
+# root-owned and the child runs as uid 10001. sql.js loaded it into memory, so writes worked (and were lost with the process; its
+# attempt to save them back failed unseen). Native better-sqlite3 opens an unwritable file read-only, and the first INSERT into
+# workflow_versions fails with "attempt to write a readonly database". So the child gets a private working copy, as the PaaS
+# image does (NODE_DB_PATH): made once when the management process starts (run.py), kept across child restarts, outside /data so
+# it is not part of backups, gone with the container like the in-memory history was, and always the catalog of the running image.
+CATALOG_DIR = Path("/tmp/woow-n8n-mcp")
+_catalog = None
+
+
+def prepare_catalog(directory=CATALOG_DIR, source=None):
+    """Copy the packaged nodes.db to <directory>/nodes.db (directory 0700, file 0600, replaced atomically) and make the next
+    child_spec() hand it to n8n-mcp. Returns the path, or None when the package has no database or the copy cannot be made
+    (the child then reads the packaged file: search works, version history writes fail). Never follows a link."""
+    global _catalog
+    _catalog = None
+    source = Path(source) if source is not None else Path(__file__).parent / "node_modules/n8n-mcp/data/nodes.db"
+    directory = Path(directory)
+    try:
+        if source.is_symlink() or not source.is_file():
+            return None
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        info = os.lstat(directory)
+        if directory.is_symlink() or info.st_uid != os.getuid() or info.st_mode & 0o077:
+            return None  # not our private directory
+        target, temporary = directory / "nodes.db", directory / f".nodes.db.{os.getpid()}.tmp"
+        try:
+            with open(source, "rb") as origin, os.fdopen(os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), "wb") as copy:
+                shutil.copyfileobj(origin, copy, 1024 * 1024)
+                copy.flush()
+                os.fsync(copy.fileno())
+            if temporary.stat().st_size != source.stat().st_size:
+                return None
+            os.replace(temporary, target)
+        finally:
+            temporary.unlink(missing_ok=True)
+    except OSError:
+        return None
+    _catalog = target
+    return target
 
 
 def child_spec(state: State, directory: Path) -> ChildSpec:
@@ -73,10 +127,26 @@ def child_spec(state: State, directory: Path) -> ChildSpec:
         "PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": str(directory),
         "NODE_ENV": "production", "MCP_MODE": "http", "HOST": "127.0.0.1", "PORT": "3000",
         "AUTH_TOKEN": state.child_token, "N8N_MCP_TELEMETRY_DISABLED": "true",
+        # 0.3.4 (n8n-mcp 2.96.2, as the PaaS): n8n_health_check reports the version check as "disabled" instead of querying
+        # the npm registry. The environment is built here, never inherited, so nothing outside can turn it back on.
+        "N8N_MCP_VERSION_CHECK_DISABLED": "true",
         "LOG_LEVEL": "error", "DISABLE_CONSOLE_OUTPUT": "true",
         "N8N_MCP_MAX_SESSIONS": "20", "SESSION_TIMEOUT_MINUTES": "10",
     }
+    if hasattr(state, 'effective_n8n_session'):
+        session = state.effective_n8n_session
+        env.update(N8N_MCP_MAX_SESSIONS=str(session.max_sessions),
+                   SESSION_TIMEOUT_MINUTES=str(session.timeout_minutes))
     if state.backend_url and state.backend_key:
         env.update(N8N_API_URL=state.backend_url, N8N_API_KEY=state.backend_key)
+        # 0.2.1: n8n's instance-level MCP key, optional; without it the official-MCP features are NOT_CONFIGURED.
+        if getattr(state, "mcp_access_token", None):
+            env["N8N_MCP_ACCESS_TOKEN"] = state.mcp_access_token
+    # 0.2.1 (owner decision 2026-10-15): n8n-mcp's widest webhook/URL mode (dist/utils/ssrf-protection.js): any
+    # address, private and loopback included (only cloud metadata names stay blocked), so n8n_test_workflow can reach
+    # an n8n on the HA network. The configured API backend keeps its own DNS-pinned agents (backend_policy.cjs).
+    env["WEBHOOK_SECURITY_MODE"] = "permissive"
+    if _catalog is not None and _catalog.is_file():
+        env["NODE_DB_PATH"] = str(_catalog)  # the private writable copy made by prepare_catalog() at start-up
     policy = Path(__file__).with_name("backend_policy.cjs").resolve()
     return ChildSpec((node, "--require", str(policy), str(entry.resolve())), env, directory)
