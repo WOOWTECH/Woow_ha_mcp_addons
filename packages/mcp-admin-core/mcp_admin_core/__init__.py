@@ -3,7 +3,7 @@
 # The default release version; packaging/validate.py binds the fixed Headscale
 # override to its manifest, Docker label and build/publish tag.
 VERSION = '0.4.13'
-PRODUCT_VERSIONS = {'headscale': '0.4.16'}
+PRODUCT_VERSIONS = {'headscale': '0.4.17'}
 
 
 def version_for_product(product: str) -> str:
