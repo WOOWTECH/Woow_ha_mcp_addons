@@ -53,7 +53,7 @@
     "apps/odoo-manage/.venv/lib/python3.13/site-packages/mcp_server_odoo/uri_schema.py": "2771d8c05d3a93a7b2b0256faf7c63c655f5cd232d22edc462d77c7a171f4af2",
     "apps/hermes/vendor/hermes_mcp_server/errors.py": "481ff5ff12e8069e999c07509ace73d3c9a630c5c2663b7084e805512aceae8b",
     "apps/hermes/vendor/hermes_mcp_server/guards.py": "a3908868dc242ab342e4b70ea2f6fd0544ffd3e03515056a9958da64f7cd62db",
-    "apps/hermes/vendor/hermes_mcp_server/server.py": "10c05ce8bee9db7044b039ba82c20bfb22dce2fa705e60dc9d92d9c1cb317087",
+    "apps/hermes/vendor/hermes_mcp_server/server.py": "922ff27d13a1c67a0b0d6fd8cbd9c764d9697cd26f63b0189d7dbfba95e0d94a",
     "apps/hermes/vendor/hermes_mcp_server/session_mutations.py": "e52a25d72b8da70f2cf4b8b298c760bf1cf34eb158287bbe451f8595c3f61cbb",
     "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py": "67c21098f7e6b9b2bd3693fc790fce278b57f0f4d999c5728215668c35d3b654",
     "apps/emqx/vendor/emqx_mcp_server/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -2466,7 +2466,7 @@
         {
           "name": "hermes_webhook",
           "source": "apps/hermes/vendor/hermes_mcp_server/server.py",
-          "line": 1160,
+          "line": 1161,
           "evidence": "python-decorator-AST",
           "operations": {
             "action": [
