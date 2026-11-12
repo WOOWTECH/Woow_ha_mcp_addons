@@ -43,7 +43,8 @@ def test_audited_schema_is_exact_and_isolated(entry):
 
 def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
     assert {p: sum(e['product'] == p for e in ENTRIES) for p in DATA['sources']} == {
-        'litellm': 35, 'nextcloud': 8, 'odoo': 41, 'n8n': 2, 'hermes': 11, 'emqx': 39}
+        'litellm': 35, 'nextcloud': 8, 'odoo': 41, 'n8n': 2, 'hermes': 11,
+        'emqx': 39, 'headscale': 11, 'opendesign': 1}
     seen_current_pins = set()
     for product, source in DATA['sources'].items():
         assert source['ha_commit'] == {
@@ -53,6 +54,8 @@ def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
             'n8n': '1cbfcb9ddff30947e11ddfa92fd0b0f3ecdffff8',
             'hermes': 'c7baac6b21ce88a78a077179c3d6e6baa65498f0',
             'emqx': 'e142a6e43170625fed945bc3eb4a4e45327559bf',
+            'headscale': '659ad84b158616a3d51bb7de61fccabee17e36f5',
+            'opendesign': '659ad84b158616a3d51bb7de61fccabee17e36f5',
         }[product]
         ancestor = subprocess.run(
             ('git', '-c', f'safe.directory={ROOT}', 'merge-base', '--is-ancestor', source['ha_commit'], 'HEAD'),
@@ -116,6 +119,18 @@ def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
         'ha_gateway_output_present': 0}
     assert {name: row['ha_child_output_sha256'] for name, row in receipt['rows'].items()} == {
         name: entry['schema_sha256'] for name, entry in emqx.items()}
+    headscale = {e['tool']: e for e in ENTRIES if e['product'] == 'headscale'}
+    assert len(headscale) == 11
+    assert all(e['schema'] == {'type': 'object'} for e in headscale.values())
+    assert {e['handler_source'] for e in headscale.values()} == {
+        'apps/headscale/vendor/headscale_mcp_server/server.py'}
+    opendesign = [e for e in ENTRIES if e['product'] == 'opendesign']
+    assert len(opendesign) == 1 and opendesign[0]['tool'] == 'read_file'
+    assert opendesign[0]['schema'] == {
+        'properties': {'result': {'title': 'Result', 'type': 'string'}},
+        'required': ['result'], 'title': 'read_fileOutput', 'type': 'object'}
+    assert opendesign[0]['handler_source'] == (
+        'apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py')
 
 
 def test_n8n_workflow_issue_details_match_reviewed_object_response():
@@ -165,6 +180,17 @@ def test_emqx_changed_child_contract_does_not_leak_through_gateway():
     assert contracts._safe_schema(changed)
     assert contracts.reviewed_output_schema('emqx', 'emqx_broker_stats', changed) is None
     assert contracts.reviewed_output_schema('emqx', 'emqx_broker_stats', schema) == schema
+
+
+def test_headscale_and_opendesign_changed_child_contracts_are_omitted():
+    assert contracts.reviewed_output_schema('headscale', 'headscale_health',
+                                            {'type': 'object', 'additionalProperties': True}) is None
+    read_file = next(e['schema'] for e in ENTRIES if e['product'] == 'opendesign'
+                     and e['tool'] == 'read_file')
+    changed = copy.deepcopy(read_file)
+    changed['properties']['result']['type'] = 'integer'
+    assert contracts.reviewed_output_schema('opendesign', 'read_file', changed) is None
+    assert contracts.reviewed_output_schema('opendesign', 'read_file', read_file) == read_file
 
 
 @pytest.mark.parametrize('candidate', [None, True, [], 'object', {}, {'type': 'array'},

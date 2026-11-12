@@ -118,6 +118,33 @@
         "apps/emqx/vendor/emqx_mcp_server/tools/security.py": "c18d4c6b191c929cd42a4f817ec46caccab41aa60ef54ef45645456bd53a80f7",
         "apps/emqx/vendor/emqx_mcp_server/tools/topics.py": "fb95c8cfcf2279e3b8b2545079bda8276a24210440123c5ac38624c372f1e353"
       }
+    },
+    "headscale": {
+      "ha_commit": "659ad84b158616a3d51bb7de61fccabee17e36f5",
+      "sdk": {
+        "fastmcp": "4.1.3",
+        "mcp": "2.3.0",
+        "mcp-types": "2.3.0"
+      },
+      "files": {
+        "apps/headscale/pyproject.toml": "f830b72b2f880ba76d57400d3c4f7e8134781d5eb660021dfacf86c4a5f30c77",
+        "apps/headscale/uv.lock": "ecf92ace2f644677183e9104e2748fbc7ada4cca3dac3b4cfe42017fb12b0773",
+        "apps/headscale/vendor/headscale_mcp_server/server.py": "c502e31d22a6b614ab55729310cbbc11a941bca729310ed674964346d903d203",
+        "apps/headscale/vendor/headscale_mcp_server/registry.py": "d8e4ff233de26fdabc1aaeff87200e7e22f2893acf115aa798ac95595cb99728",
+        "apps/headscale/vendor/headscale_mcp_server/models.py": "94b2664100fd5fc65f67aa6acdf4faf27612579f51a1d540a47c8338f38f156a"
+      }
+    },
+    "opendesign": {
+      "ha_commit": "659ad84b158616a3d51bb7de61fccabee17e36f5",
+      "sdk": {
+        "mcp": "2.3.0",
+        "mcp-types": "2.3.0"
+      },
+      "files": {
+        "apps/opendesign/pyproject.toml": "78cc2dbcb1429b0db9263ff309b855cd43623f1eaa98e5e193822364409dda24",
+        "apps/opendesign/uv.lock": "b75cc7e818272d82e6608512bbbe8319e9d19816603b9c80a4431c805e624e0c",
+        "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py": "67c21098f7e6b9b2bd3693fc790fce278b57f0f4d999c5728215668c35d3b654"
+      }
     }
   },
   "entries": [
@@ -5583,6 +5610,136 @@
       "schema_sha256": "82ef96cebaf5fbe16269fd18b0240d78f5b9b90a4155a17eb797115b09148ecf",
       "binding_sha256": "d19500fdcb159ef369c51c6dd3fccdf72d3928c0adc7a57e6128dbf4c56883c3",
       "handler_source": "apps/emqx/vendor/emqx_mcp_server/tools/security.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_api_keys",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "d31de539aea8e8f620fc05334b645ba005fdb5dd751d97fa3f589de87ac198b6",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_auth",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "84af64432e73fd8dbc1720a2b081accc7997b983a888ef3597e6aba032d5c322",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_backfill_ips",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "86d4006dd145b80d21ecab084e0f410802d7381971a2aa9633d0ceef610d1c11",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_debug_node",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "01ebf0d6c69c20db5c11f0ea8252601f40593cd7caa37901c3b5f5fd4187071b",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_health",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "c7ef28ff1f420499c9feeefc582dd1e43f0ec48161c8895786c8b71baf6c5446",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_nodes",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "a926d3c01d31698025889e279bc32a737a5234c3d546cdd75b0aa857982969a0",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_policy",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "fa08f32bea3c6249a934bacd68e57f9fd178d94ab01517659162ef8e0411e336",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_preauth_keys",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "9fb6c137161db1512c755057b900e8de94e422d9cf69b15a0a83311ebae08c1b",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_register",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "f4b3952b999e779c04604cc9955036ec08e66d9247f7ad889857d9a74d17729f",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_routes_replace",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "0c9820dd98ce8f8db8271e31576a746ee4f2f40a29386109cebc7389e16b43ba",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "headscale",
+      "tool": "headscale_users",
+      "schema": {
+        "type": "object"
+      },
+      "schema_sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0",
+      "binding_sha256": "a3eebdf7143d66d9c7927e02293aaebeddc12511e926d56c43fb59af084e8a83",
+      "handler_source": "apps/headscale/vendor/headscale_mcp_server/server.py"
+    },
+    {
+      "product": "opendesign",
+      "tool": "read_file",
+      "schema": {
+        "properties": {
+          "result": {
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "read_fileOutput",
+        "type": "object"
+      },
+      "schema_sha256": "fb89773eb83f4240f76fad55431c06554b36e4a6b3a6ed3ea7790ccc29fde513",
+      "binding_sha256": "f7f651732e9b9f234e5b75a27bb8c027a0cdf1191bbc8ca91bf410e6688aa6ae",
+      "handler_source": "apps/opendesign/vendor/opendesign_mcp_server/od_mcp_server.py"
     }
   ]
 }
