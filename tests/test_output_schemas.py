@@ -20,14 +20,15 @@ from test_tool_snapshot import own_listing
 ROOT = Path(__file__).resolve().parents[1]
 DATA = json.loads((ROOT / 'packages/mcp-admin-core/mcp_admin_core/output_schemas.json').read_text())
 ENTRIES = DATA['entries']
-# output_schemas.json records source-commit bytes. The CI harness changed for
-# Headscale after n8n's schema review; pin its current bytes separately while
-# still checking the original n8n commit below.
+# output_schemas.json records source-commit bytes. Later source edits get
+# separate current-byte pins so the historical source commit remains verifiable.
 CURRENT_POST_SOURCE_BYTES = {
-    'packaging/unit.sh': '11f9b98b98c41777c3deeab8d78195c09577d22f0353ece60f994bd34ebefec4',
-    # Only the SQL-test tool's public write hint changed after the reviewed
-    # EMQX output pins; the handler, input and output schema are unchanged.
-    'apps/emqx/vendor/emqx_mcp_server/tools/integration.py': '89c6f167d6b9487a2ae6373ab498dd9eef9911895effe9e6d7c0c61c9ac4841d',
+    'packaging/unit.sh': ('n8n', '11f9b98b98c41777c3deeab8d78195c09577d22f0353ece60f994bd34ebefec4'),
+    # The SQL-test tool's public write hint changed; its output pin did not.
+    'apps/emqx/vendor/emqx_mcp_server/tools/integration.py': (
+        'emqx', '89c6f167d6b9487a2ae6373ab498dd9eef9911895effe9e6d7c0c61c9ac4841d'),
+    'apps/hermes/vendor/hermes_mcp_server/server.py': (
+        'hermes', '922ff27d13a1c67a0b0d6fd8cbd9c764d9697cd26f63b0189d7dbfba95e0d94a'),
 }
 
 
@@ -78,11 +79,11 @@ def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
         )
         for name, expected in source['files'].items():
             if name in CURRENT_POST_SOURCE_BYTES:
-                assert ((product == 'n8n' and name == 'packaging/unit.sh') or
-                        (product == 'emqx' and name == 'apps/emqx/vendor/emqx_mcp_server/tools/integration.py'))
-                assert expected != CURRENT_POST_SOURCE_BYTES[name]
+                assert product == CURRENT_POST_SOURCE_BYTES[name][0]
+                assert expected != CURRENT_POST_SOURCE_BYTES[name][1]
                 seen_current_pins.add(name)
-            assert hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == CURRENT_POST_SOURCE_BYTES.get(name, expected), name
+            current = CURRENT_POST_SOURCE_BYTES[name][1] if name in CURRENT_POST_SOURCE_BYTES else expected
+            assert hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == current, name
             # A commit label must reproduce the recorded bytes, not merely pass a
             # hard-coded string assertion while the current worktree has new files.
             historical = subprocess.run(

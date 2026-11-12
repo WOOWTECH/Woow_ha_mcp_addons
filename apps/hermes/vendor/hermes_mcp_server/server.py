@@ -1072,7 +1072,8 @@ async def hermes_cron(
                 return json.dumps({"error": "name, schedule, and prompt are all required"})
             try:
                 resp = await client.post("/api/cron/jobs", json={
-                    "name": name, "schedule": schedule, "prompt": prompt, "enabled": enabled,
+                    "name": name, "schedule": schedule, "prompt": prompt,
+                    "paused": not enabled, "enabled": enabled,
                 }, extensions={"hermes_no_auth_retry": True})
             except httpx.HTTPError:
                 raise _cron_create_unknown() from None
