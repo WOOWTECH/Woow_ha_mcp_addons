@@ -20,7 +20,7 @@ import pytest
 
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.products import ProductStore, TOOLS, child_spec, health_probe
-from mcp_admin_core.surface import BACKEND_FREE, FULL_PRODUCTS, listing, names
+from mcp_admin_core.surface import BACKEND_FREE, FULL_PRODUCTS, UNCERTAIN, listing, names
 from mcp_admin_core.tool_snapshot import LISTED
 from mcp_admin_core.output_schemas import reviewed_output_schema
 from n8n_adapter import TOOLS as N8N_TOOLS, child_spec as n8n_spec
@@ -84,6 +84,14 @@ def test_snapshot_names_are_the_classified_surface():
         assert {name for name, tool in tools_of(product).items() if not tool.requires_backend} == free, product
     for product in ('odoo', 'nextcloud'):  # their private health probes are child tools, never listed
         assert health_probe(product)[0] not in {t['name'] for t in LISTED[product]}
+
+
+def test_emqx_sql_test_public_hint_matches_write_grant():
+    tool = next(t for t in LISTED['emqx'] if t['name'] == 'emqx_test_rule_sql')
+    assert tool['name'] in UNCERTAIN['emqx'].split()
+    assert tool['title'] == 'Test EMQX Rule SQL (write permission)'
+    assert tool['annotations']['readOnlyHint'] is False
+    assert tool['annotations']['idempotentHint'] is False
 
 
 async def child_listing(store, product, seen=None):
