@@ -36,11 +36,13 @@ N8N_ERROR = {**N8N_WORKFLOW, 'nodes': [N8N_WORKFLOW['nodes'][0],
     {**N8N_WORKFLOW['nodes'][1], 'parameters': {'onError': 'continueErrorOutput'}}]}
 
 
-@pytest.mark.parametrize('product', ['litellm','nextcloud','odoo','n8n','hermes','emqx'])
+@pytest.mark.parametrize('product', ['litellm','nextcloud','odoo','n8n','hermes','emqx',
+                                     'headscale','opendesign'])
 async def test_real_child_live_and_fallback_contracts_match(tmp_path,product):
     with fake_api() as (url,events,mutations,failures), closing(ProductStore(tmp_path/'state',product)) as store:
         if product == 'n8n':store.update(backend_url=url,backend_key='DUMMY')
-        else:store.update(connection=connection(product,url))
+        else:store.update(connection=connection(product,
+            'https://hs.example.test' if product == 'headscale' else url))
         raw,live=await child_listing(store,product)
         pinned={e['tool']:e['schema'] for e in PINNED['entries'] if e['product']==product}
         assert {t['name']:t['outputSchema'] for t in raw['tools'] if t['name'] in pinned}==pinned
