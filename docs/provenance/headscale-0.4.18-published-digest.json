@@ -1,0 +1,4 @@
+{
+  "config_digest": "sha256:a9dc0c528cb3202e5b294319bac1fd8f189a606c9191e610b8ff9ca65520748e",
+  "reference": "ghcr.io/woowtech/amd64-mcp-headscale@sha256:7807b65df2b8a28a2bd982ec7abea01b846b4df41e1986f101c96a12829fd6d1"
+}
