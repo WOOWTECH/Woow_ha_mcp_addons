@@ -13,7 +13,7 @@ from ..deps import emqx_client
 from ..errors import emqx_request, json_body
 from ..gating import ToolGate
 from ..settings import settings
-from ._common import destructive, page_of, path_segment, read_only
+from ._common import destructive, page_of, path_segment, read_only, writing
 
 
 def register(mcp: FastMCP, gate: ToolGate) -> None:
@@ -86,8 +86,8 @@ def register(mcp: FastMCP, gate: ToolGate) -> None:
 
     if on("emqx_test_rule_sql"):
 
-        @mcp.tool(name="emqx_test_rule_sql", tags={"emqx", "read", "integration"},
-                  annotations=read_only("Test EMQX Rule SQL"))
+        @mcp.tool(name="emqx_test_rule_sql", tags={"emqx", "write", "integration"},
+                  annotations=writing("Test EMQX Rule SQL (write permission)"))
         async def test_rule_sql(
             sql: Annotated[str, Field(
                 description="Rule SQL to evaluate, e.g. "

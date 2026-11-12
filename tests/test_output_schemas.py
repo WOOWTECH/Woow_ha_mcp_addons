@@ -23,7 +23,12 @@ ENTRIES = DATA['entries']
 # output_schemas.json records source-commit bytes. The CI harness changed for
 # Headscale after n8n's schema review; pin its current bytes separately while
 # still checking the original n8n commit below.
-CURRENT_POST_SOURCE_BYTES = {'packaging/unit.sh': '11f9b98b98c41777c3deeab8d78195c09577d22f0353ece60f994bd34ebefec4'}
+CURRENT_POST_SOURCE_BYTES = {
+    'packaging/unit.sh': '11f9b98b98c41777c3deeab8d78195c09577d22f0353ece60f994bd34ebefec4',
+    # Only the SQL-test tool's public write hint changed after the reviewed
+    # EMQX output pins; the handler, input and output schema are unchanged.
+    'apps/emqx/vendor/emqx_mcp_server/tools/integration.py': '89c6f167d6b9487a2ae6373ab498dd9eef9911895effe9e6d7c0c61c9ac4841d',
+}
 
 
 @pytest.mark.parametrize('entry', ENTRIES, ids=lambda e: e['product'] + '/' + e['tool'])
@@ -73,7 +78,9 @@ def test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints():
         )
         for name, expected in source['files'].items():
             if name in CURRENT_POST_SOURCE_BYTES:
-                assert product == 'n8n' and expected != CURRENT_POST_SOURCE_BYTES[name]
+                assert ((product == 'n8n' and name == 'packaging/unit.sh') or
+                        (product == 'emqx' and name == 'apps/emqx/vendor/emqx_mcp_server/tools/integration.py'))
+                assert expected != CURRENT_POST_SOURCE_BYTES[name]
                 seen_current_pins.add(name)
             assert hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == CURRENT_POST_SOURCE_BYTES.get(name, expected), name
             # A commit label must reproduce the recorded bytes, not merely pass a
