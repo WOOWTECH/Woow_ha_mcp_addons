@@ -1,3 +1,9 @@
+## Headscale 0.4.18 — reviewed output schemas
+
+- Publish the reviewed output-schema metadata from PR #86 for all 11 Headscale tools. Public `tools/list` now carries each child-declared object schema and continues to omit a schema if its reviewed binding drifts.
+- Keep the 29 native operations, tool inputs, authorization policy, backend handlers, Origin policy and DNS fallback unchanged from 0.4.17.
+- Other products keep their published versions. GHCR publication, Stable Release, Store sync and two-host HAOS acceptance remain separate gates.
+
 ## Headscale 0.4.17 — DNS address fallback release candidate
 
 - Include merged PR #83: after validating every resolved Headscale address, try each numeric address within the existing connection deadline. A failed first address no longer masks a reachable later address; destination validation and redirect denial remain in force.

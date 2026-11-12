@@ -23,9 +23,9 @@ PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud
 RETIRED = ('odoo-manage',)
 URL = 'https://github.com/WOOWTECH/Woow_ha_mcp_addons'
 VERSION = '0.4.13'
-VERSION_OVERRIDES = {'headscale': '0.4.17'}
-CI_VERSION = "${{ matrix.app == 'headscale' && '0.4.17' || '0.4.13' }}"
-RELEASE_VERSION = "${{ inputs.app == 'headscale' && '0.4.17' || '0.4.13' }}"
+VERSION_OVERRIDES = {'headscale': '0.4.18'}
+CI_VERSION = "${{ matrix.app == 'headscale' && '0.4.18' || '0.4.13' }}"
+RELEASE_VERSION = "${{ inputs.app == 'headscale' && '0.4.18' || '0.4.13' }}"
 TITLES = dict(zip(PRODUCTS, ('Odoo', 'n8n', 'Hermes', 'OpenDesign', 'EMQX', 'LiteLLM', 'Nextcloud', 'Headscale')))
 
 
