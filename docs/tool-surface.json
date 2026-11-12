@@ -70,7 +70,7 @@
     "apps/emqx/vendor/emqx_mcp_server/tools/clients.py": "7972cd71b93a66cf904150296580de1a64a9b706474bc47c3da8242ab1dc8744",
     "apps/emqx/vendor/emqx_mcp_server/tools/cluster.py": "9b23d5bb1c62a2e3cd40549fbc4d6dc0755246963054d7b9d3a0a4a4dd1aeb4d",
     "apps/emqx/vendor/emqx_mcp_server/tools/diagnostics.py": "ef9bb5681af9235ebc1da7b8f836c7be320d6f7ff4e8e70d881466a0d0942cb3",
-    "apps/emqx/vendor/emqx_mcp_server/tools/integration.py": "6a417ac934f8f5d41c1d0439042ffff27dae1825cafe36106a814331c3339101",
+    "apps/emqx/vendor/emqx_mcp_server/tools/integration.py": "89c6f167d6b9487a2ae6373ab498dd9eef9911895effe9e6d7c0c61c9ac4841d",
     "apps/emqx/vendor/emqx_mcp_server/tools/messaging.py": "37c6177f9ee207fa497986f975775633505d02fce9f8ac1ad3667c448ab55c33",
     "apps/emqx/vendor/emqx_mcp_server/tools/security.py": "c18d4c6b191c929cd42a4f817ec46caccab41aa60ef54ef45645456bd53a80f7",
     "apps/emqx/vendor/emqx_mcp_server/tools/topics.py": "fb95c8cfcf2279e3b8b2545079bda8276a24210440123c5ac38624c372f1e353",

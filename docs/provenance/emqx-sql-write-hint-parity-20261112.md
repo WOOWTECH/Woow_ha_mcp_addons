@@ -6,6 +6,6 @@
 
 `output_schemas.json` 的 39 個 EMQX 輸出 pin 仍指向原來的受審來源 commit `e142a6e43170625fed945bc3eb4a4e45327559bf`，其 schema 雜湊與每支工具的 binding 均未改。`tests/test_output_schemas.py` 另外釘選新的 `integration.py` 當前 bytes SHA-256 `89c6f167d6b9487a2ae6373ab498dd9eef9911895effe9e6d7c0c61c9ac4841d`，明確區分歷史 schema 證據與這次只更改 metadata 的來源。`runtime-sources.json` 記錄同一當前 SHA 及改動範圍。
 
-本機以真 EMQX 子服務和假後端重新生成清單，沒有後端 mutation／failure；`tests/test_output_schemas.py`、`tests/test_migration_preview.py`、快照名稱檢查及 EMQX 真子服務清單共 **418 passed**。`packaging/validate.py` 通過。首次試跑因新工作樹沒有根目錄 `.venv` 導致三項 CLI 測試無法啟動，安裝鎖定的根目錄環境後，這 417 項在同一工作樹全部通過。其他產品的完整 runtime suite 留給 CI。
+本機以真 EMQX 子服務和假後端重新生成清單，沒有後端 mutation／failure；`tests/test_output_schemas.py`、`tests/test_migration_preview.py`、快照名稱檢查及 EMQX 真子服務清單共 **418 passed**。`packaging/validate.py` 通過。首次試跑因新工作樹沒有根目錄 `.venv` 導致三項 CLI 測試無法啟動，安裝鎖定的根目錄環境後，418 項在同一工作樹全部通過。首輪 CI 在 `scripts/tool_inventory.py` 偵測到 vendored 來源 SHA 變動而停下；已用與原 lock 相同的本機依賴重新生成 `docs/tool-surface.json`，差異只有該檔 SHA，九產品 inventory／policy 檢查再次通過。其他產品的完整 runtime suite 留給新 CI。
 
 這是來源候選；沒有改 add-on 版本、映像或 QA HAOS。正式三方公開 `tools/list` 的對照仍需待 HA 新映像發布後重測。
