@@ -5,16 +5,21 @@
 - 子程式的 loopback port 從寫死的 3000 改成參數，預設仍是 3000。唯一來源是 `lifecycle.CHILD_PORT` 與
   `lifecycle.child_url()`：spec 的 argv（或 n8n 的 `PORT`）、健康檢查、閘道轉送、能力探測都從同一個值組出。
 - 單帳號（預設帳號）行為不變：九個產品、16 種狀態的子程式 argv、env（含順序）、cwd 和 `bb48449` 逐位元相同
-  （快照 `tests/contract/child_spec_default.json`）。HM-01 的黃金回歸、兩個契約凍結與它的替身一個字都沒改，照過。
-- 給別的 port（多帳號計畫的額外帳號，18000 起）時只差 port：`--port` 的值、n8n 的 `PORT`；Hermes、OpenDesign 在尾端加
-  `--port N`，launcher 讀它。`run_product.run`、`apps/n8n/run.py` 給 `child_port=18000` 時，子程式收到的每個請求都打
-  `http://127.0.0.1:18000/mcp`，客戶端拿到的回覆和黃金回歸相同。
-- 新測試 1 檔 163 案（另有快照 1 檔）。先紅後綠：改程式前 39 通過、124 失敗；改完 163 全過、0 skip。
-  18 個臨時突變，18 個都讓新測試失敗（第 4.3 節）。
-- 兩個預檢：秘密預檢對本片 3 個 commit 0 命中（全分支 12 個 commit 與建置機同款的 `--full` 也 0）；帳本預檢 OK（0 漂移）。
-- 本機全套 pytest：3895 案，3872 通過、23 失敗、0 skip。22 個失敗是這個 clone 沒裝 Playwright 的 Chromium
-  （`browserType.launch` 找不到執行檔），照 CI 的 `unit.sh` 補跑 `npm run browser:install` 後，那 3 個檔 52 案重跑全過；
-  剩下 1 個是已知要 root 的 `test_uid10001_nondumpable_self_and_own_child_proof`。
+  （快照 `tests/contract/child_spec_default.json`；`baseline` 固定是 `bb48449`，之後刻意改 spec 的片在 `changes` 記一筆）。
+  HM-01 的黃金回歸、兩個契約凍結與它的替身一個字都沒改，照過。
+- 給別的 port（多帳號計畫的額外帳號，18000 起；低於 3000 也一樣）時只差 port：`--port` 的值、n8n 的 `PORT`；Hermes、
+  OpenDesign 在尾端加 `--port N`，launcher 讀它。`run_product.run`、`apps/n8n/run.py` 給 `child_port=18000` 時，黃金 session
+  的每個請求（健康檢查、能力探測、客戶端），加上 initialize 被拒時收掉 session 的 DELETE，都打 `http://127.0.0.1:18000/mcp`；
+  客戶端拿到的回覆和黃金回歸相同。
+- 新測試：`tests/test_child_port_param.py` 233 案（審查前 163 案、審查後補 70 案；另有快照 1 檔），
+  `tests/test_initialize_cleanup.py` 加 29 案。先紅後綠（審查前的 163 案）：改程式前 39 通過、124 失敗；改完 163 全過、0 skip。
+  作者的 18 個臨時突變都讓新測試失敗（第 4.3 節）；審查找到 2 個沒被擋的突變（R01、R16），補測試後都被擋（第 4.4 節）。
+- 獨立審查判定通過：必修 0 項；建議 3 項（S-1～S-3）都在本片處理；另 1 項（O-1）是 HM-01 的檔，交主對話（第 12 節）。
+- 兩個預檢：秘密預檢對本片 5 個 commit 0 命中（全分支 14 個 commit 與建置機同款的 `--full` 也 0）；帳本預檢 OK（0 漂移）。
+- 本機全套 pytest（審查前的 `79629c9`）：3895 案，3872 通過、23 失敗、0 skip。22 個失敗是這個 clone 沒裝 Playwright 的
+  Chromium（`browserType.launch` 找不到執行檔），照 CI 的 `unit.sh` 補跑 `npm run browser:install` 後，那 3 個檔 52 案重跑全過；
+  剩下 1 個是已知要 root 的 `test_uid10001_nondumpable_self_and_own_child_proof`。審查後只改兩個測試檔與快照的說明欄，
+  重跑這兩個檔、HM-01 守門、突變、packaging 檢查與兩個預檢（第 5.1 節），全套沒有重跑。
 
 ## 1. 範圍與基準
 
@@ -27,6 +32,7 @@
 | 對齊的 PaaS | 本片沒有移植 PaaS 程式或測試，只把 PaaS 額外帳號 port 的起點（`Pc/profiles.py` 的 `FIRST_PROFILE_PORT = 18000`，FM-38）當測試值。HM-00 `paas-test-mapping.md` 指給本片兩案：`test_uvicorn_command_line_port`（不適用：HA 的 port 由 `child_spec` 組出，對應本片 `test_another_port_changes_the_port_only`）、`test_registry_reloads_saved_profiles_and_child_env_uses_their_files`（port 的部分在本片，其餘在 HM-05） |
 | FM | FM-38、FM-86（Hermes launcher 寫死 3000 的部分）、FM-96 |
 | 決策 | 只用到 §13.1 已採用的做法；沒有碰到待定題（DQ-09、DQ-12、DQ-19、DQ-38 等都沒用到） |
+| 審查 | 獨立審查（2026-11-15，審 `79629c9`）判定通過；處理見第 12 節 |
 
 ## 2. 改了什麼、沒改什麼
 
@@ -38,7 +44,8 @@
 | `H:apps/hermes/launch.py`、`H:apps/opendesign/launch.py` | 讀 `--port N`（argparse `parse_known_args`，不加 `-h`）：沒給是 3000；位置參數照舊忽略；不認得的選項、範圍外或不是數字的 port 在 `session_idle.install()` 之前結束（exit 2）。 |
 | `Hc/run_product.py`、`H:apps/n8n/run.py` | `run(args, *, child_port=CHILD_PORT)`：spec、`HealthMonitor`、`make_apps`（閘道與能力探測）的 `child_url` 都從它組出。`main()` 不加 CLI 選項；「監聽 port 不能用 3000」的檢查與訊息逐字不變。計畫寫的 `run.py` 就是 `apps/n8n/run.py`（repo 根目錄沒有 `run.py`）。 |
 | `Hc/health.py`、`Hc/gateway.py` | `HealthMonitor`、`make_apps` 的預設 `child_url` 改用 `lifecycle.CHILD_URL`（同一個 `http://127.0.0.1:3000/mcp`）。 |
-| `tests/test_child_port_param.py`、`tests/contract/child_spec_default.json` | 新測試與快照（第 4 節）。 |
+| `tests/test_child_port_param.py`、`tests/contract/child_spec_default.json` | 新測試與快照（第 4 節）。快照的 `baseline` 固定是 `bb48449`（快照的起點）；`changes` 依序記之後每一次刻意改 spec（`slice`、`change`），目前是空的（審查 S-3）。 |
+| `tests/test_initialize_cleanup.py` | 審查 S-1：`run()` 加 `child_url`（沒給就用 `make_apps` 自己的預設）、`assert_ended()` 加 `url`；新增 `test_the_session_is_ended_on_the_childs_own_port`。既有案例照舊走預設網址。 |
 | `tests/owned_executable.py` | 替身原本斷言 `make_apps` 不收 `child_url`。現在正式程式一律傳，替身改成「只接受正式網址（`http://127.0.0.1:<production_port>/mcp`），再換成私有 endpoint 的」，和 `private_spec` 只換正式 port 同一個原則；沒傳時照舊（`test_owned_executable.py` 的直接呼叫）。 |
 | `tests/test_role_lifecycle.py`、`tests/test_product_ha_role.py`、`tests/test_product_runtime_failure.py`、`tests/integration_runtime_wrapper.py` | 這些替身的簽名寫死（`child_spec(state, directory)`、`Monitor.__init__(self, *args)`），改成也收 `port`、`child_url`；測試內容沒改。 |
 | `tests/test_output_schemas.py` | `CURRENT_POST_SOURCE_BYTES` 補 `apps/n8n/n8n_adapter.py`、`apps/n8n/run.py`、`apps/hermes/launch.py` 的現行摘要（`output_schemas.json` 記的是 schema 審查當時的位元組；工具、schema、handler 都沒變）。 |
@@ -70,6 +77,11 @@
 - **port 先驗、再看有沒有設定後端**：錯的 port 是呼叫端的錯，不管狀態都拒絕。
 - **快照的寫法**：env 存成依序的 `NAME=value`，順序也比（`ChildSpec` 的相等只把 env 當 dict 比）；路徑（checkout、資料目錄、
   n8n 型錄複本、node）與 child token 用佔位字，其他照字面。測試資料用 `DUMMY-port-…` 與 `.invalid`（計畫 §12.0 第 4 點）。
+- **快照的 `baseline` 與 `changes`**（審查 S-3）：`baseline` 是快照的起點，永遠是 `bb48449`。之後刻意改 spec 的片（第一個是
+  HM-06 的 `WOOW_MCP_CHILD_TOKEN`）在同 PR 改案例、在 `changes` 加一筆；測試名與斷言都不用改，和 `bb48449` 差在哪也寫在檔裡。
+  沒有用審查的做法一（`baseline` 改成「最後一次改 spec 的基準 commit」）：每次都要改 `baseline`，要驗它還得在測試裡查 git 歷史。
+- **18000～18099 以外的 port 只比 spec**（審查 S-2）：HM-01 的替身只收 3000 與 18000～18099，所以 1、2999、3001、65535
+  不經 `Endpoint`；選 `child_port_text` 收的兩端與 3000 的鄰居，`port > 3000`、`port >= 18000` 這類寫法都會被抓到。
 
 ## 4. 新測試、先紅後綠、突變
 
@@ -80,23 +92,31 @@
 
 | 測試 | 案數 | 內容 |
 |---|---|---|
-| `test_the_snapshot_covers_every_product` | 1 | 快照涵蓋九個產品（`products.PRODUCTS`＋n8n）的 16 種狀態 |
-| `test_the_default_child_spec_is_bb48449s` | 16 | 預設 port 的 argv、env（含順序）、cwd 和快照逐位元相同；失敗訊息印出目前的（已正規化）spec |
+| `test_the_snapshot_covers_every_product` | 1 | 快照涵蓋九個產品（`products.PRODUCTS`＋n8n）的 16 種狀態；`baseline` 是 `bb48449`；`changes` 是清單，每筆只有 `slice`、`change` 兩個非空字串 |
+| `test_the_default_child_spec_is_the_snapshot` | 16 | 預設 port 的 argv、env（含順序）、cwd 和快照逐位元相同；失敗訊息印出目前的（已正規化）spec，並提醒同 PR 更新案例、加一筆 `changes`（審查前叫 `test_the_default_child_spec_is_bb48449s`，S-3 改名） |
 | `test_port_3000_is_the_default_spec` | 16 | 明確給 3000（關鍵字與位置參數）是同一份 spec |
 | `test_another_port_changes_the_port_only` | 48 | 18000、18042、18099：只差 port；HM-01 的 `Endpoint(production_port=N)` 照收，期望 3000 的 `private_spec` 拒收 |
+| `test_any_other_port_changes_the_port_only` | 64 | 1、2999、3001、65535（`child_port_text` 收的兩端與 3000 的鄰居）：只差 port，只比 spec（審查 S-2） |
 | `test_an_unconfigured_product_has_no_child_on_any_port` | 8 | 沒設定後端：任何 port 都是 `None`，不建 `child/` |
 | `test_a_port_that_is_no_tcp_port_is_refused` | 8 | 0、65536、-1、`True`、`False`、`None`、`'18000'`、`18000.0`：`ValueError`（含沒設定後端的狀態與 `child_url`） |
 | `test_one_value_names_the_default_child` | 1 | `CHILD_PORT`、`CHILD_URL` 與各處預設值是同一個值；`run()` 的 `child_port` 是 keyword-only |
-| `test_the_launcher_runs_on_its_port` | 16 | 兩支 launcher（換掉 SDK 模組、照子程式的方式以 `__main__` 執行）：`run()` 拿到的 port；位置參數照舊忽略 |
+| `test_the_launcher_runs_on_its_port` | 22 | 兩支 launcher（換掉 SDK 模組、照子程式的方式以 `__main__` 執行）：`run()` 拿到的 port（含邊界 1、65535 與 2999，審查後補）；位置參數照舊忽略 |
 | `test_the_launcher_refuses_a_bad_port_or_option` | 22 | 0、65536、-1、`x`、缺值、`--port=`、`--prot`、縮寫 `--p`、多帶 `--host`、`-h`、`--help`：exit 2，什麼都沒做 |
 | `test_the_real_launcher_serves_the_port_its_spec_names` | 4 | 真的 Hermes、OpenDesign 子程式，正式 port 3000 與 18000（`owned_child` 核對 launcher 傳給 `run()` 的 port，再換成私有 port） |
 | `test_one_port_reaches_every_child_request` | 16 | 八個上架產品的正式 runtime（黃金回歸的注入點），預設與 `child_port=18000`：子程式收到的請求（健康檢查、能力探測、客戶端）都打同一個網址；客戶端整段 session 照黃金回歸；Supervisor 拿到的 spec 是預設的或只差 port |
 | `test_the_listeners_still_refuse_the_default_child_port` | 6 | 兩個 `main()`：監聽 port 用 3000 或兩個相同時，錯誤訊息逐字不變 |
 | `test_the_default_child_port_is_outside_the_profile_child_ports` | 1 | 測試用的 port 都在 HM-01 擋的範圍內 |
 
+`tests/test_initialize_cleanup.py`（既有檔，審查 S-1 補一個測試；新測試用 HM-01 的 `log_scan`，看這次的 token 與 child token；
+子程式是 MockTransport，不碰網路）：
+
+| 測試 | 案數 | 內容 |
+|---|---|---|
+| `test_the_session_is_ended_on_the_childs_own_port` | 29 | 29 種 initialize 被拒的情境（`REFUSALS` 全部），閘道的 `child_url` 是 `lifecycle.child_url(18000)`：回覆狀態碼照預期；子程式只收到兩個請求（initialize 的 POST、收 session 的 DELETE），都打 18000；DELETE 的標頭照 `assert_ended()` |
+
 快照的產生方式：在 runtime 檔等於 `bb48449` 的樹上，用測試檔自己的 `case_state()`、`normalized()` 對 16 種狀態各產生一次寫進 JSON
 （產生腳本在暫存區，沒有 commit）。證據是下一節：在只加測試、runtime 等於 `bb48449` 的 commit 上，快照比對 16 案全過；
-改程式之後同一份快照照過。
+改程式之後同一份快照照過。審查後（S-3）只改說明欄 `about`、加 `changes: []`；16 個 spec 一個字都沒變（解析後的 `specs` 和改前相同）。
 
 ### 4.2 先紅後綠
 
@@ -141,7 +161,42 @@
 
 M12、M17 只有一案失敗：兩個 runtime 都明確傳 `child_url`，預設值只剩直接呼叫的地方用，由 `test_one_value_names_the_default_child` 釘成 `CHILD_URL`。M6、M13 只影響 n8n 給 18000 的那一案。
 
-## 5. 本機檢查（2026-11-15，一般使用者；TMPDIR 用 `/tmp/ha-mp-XXXXXX`，每次跑完刪除）
+審查員另外設計了 18 個突變（R01～R18，多數和上表不同），16 個被擋；沒擋住的 R01、R16 見第 4.4 節。
+
+### 4.4 審查後補的測試：用突變證明（2026-11-15）
+
+審查後補的是測試，程式沒改，所以先紅後綠改用突變證明：在 `30163b0`（審查後的測試 commit）上，每個突變單獨套上、跑對應的
+測試檔、`git checkout` 還原。每次還原後執行期檔和 commit 相同，`git status` 只剩當時還沒 commit 的本筆記。
+R01、R16 是審查員找到、審查前的測試擋不住的（審查員的紀錄：R01 下相關的 453 案全過、R16 下 163 案全過；這裡也只有新案失敗，
+既有案例照過）。L1、L2 擋的是審查後補的 launcher 邊界案例（審查前的 launcher 測試沒有 port 1、65535）。沒有突變時，補的測試
+全過（第 5.1 節）。
+
+| 突變 | 跑的檔 | 結果 | 擋下它的測試 |
+|---|---|---|---|
+| R01 `gateway.py` 的 `end_session` 把 DELETE 送到固定的 `CHILD_URL`（3000） | `tests/test_initialize_cleanup.py` | 293 案 29 失敗、0 skip（既有 264 案照過） | `test_the_session_is_ended_on_the_childs_own_port` 29（全部情境） |
+| R16 `products.py`：Hermes、OpenDesign 只在 port 大於 3000 時加 `--port` | `tests/test_child_port_param.py` | 233 案 6 失敗、0 skip（審查前的 163 案照過） | `test_any_other_port_changes_the_port_only` 6（Hermes 兩種狀態、OpenDesign 一種，各配 port 1、2999） |
+| L1 Hermes launcher 不收 port 1 | `tests/test_child_port_param.py` | 233 案 1 失敗、0 skip | `test_the_launcher_runs_on_its_port` 1（`hermes`、`--port 1`） |
+| L2 OpenDesign launcher 不收 port 65535 | `tests/test_child_port_param.py` | 233 案 1 失敗、0 skip | `test_the_launcher_runs_on_its_port` 1（`opendesign`、`--port 65535`） |
+
+## 5. 本機檢查（一般使用者；TMPDIR 用 `/tmp/ha-mp-XXXXXX`，每次跑完刪除）
+
+### 5.1 審查後（2026-11-15，HEAD）
+
+審查後只改了兩個測試檔、快照的說明欄與本筆記，沒有改執行期檔、帳本、`apps/`、`packaging/`。重跑的是受影響的檢查。
+pytest 在 commit 前的工作樹上跑，測試內容和 `30163b0` 相同（之後原樣 commit）；突變在 `30163b0` 上跑；本筆記的 commit 只改本筆記：
+
+| 檢查 | 結果 |
+|---|---|
+| 改到的兩個測試檔與 HM-01 守門（同一次 pytest；junit 經 `packaging/check_results.py` PASS：657 executed, no skips） | 657 案全過、0 skip，約 55 秒：`test_child_port_param.py` 233、`test_initialize_cleanup.py` 293（新增 29）、黃金回歸 17、MCP 契約凍結 9、管理契約凍結 19、`test_owned_ports_bearer.py` 52、`test_log_scan.py` 13、兩個預檢工具的測試 14＋7（HM-01 守門 131 案） |
+| 4 個突變（R01、R16、L1、L2） | 都被擋（第 4.4 節） |
+| `packaging/validate.py`（PyYAML 的 Python） | PASS |
+| packaging unittest（`.venv`，PyYAML 由 `PYTHONPATH` 加進來，不改 `.venv`） | `Ran 184`、`OK (skipped=5)`（同基準） |
+| `scripts/tool_inventory.py`（漂移檢查，CI 同款） | 通過（exit 0） |
+| 兩個預檢 | 第 8 節 |
+| 全套 pytest | 沒重跑。審查後只改兩個測試檔與快照的說明欄；沒有別的測試 import 或讀它們（`test_tool_inventory` 只掃 `apps/`）。以 PR 的 CI 為準 |
+| `git status` | 乾淨；`git diff 79629c9 HEAD` 只有兩個測試檔、快照與本筆記 |
+
+### 5.2 審查前（2026-11-15，`79629c9`）
 
 環境：2026-11-14 21:51 照 `packaging/unit.sh` 的安裝步驟裝好（uv sync 根目錄與 8 個子程式、Odoo／n8n patch、n8n 與 UI 的 `npm ci`、
 UI build）；當時沒跑 `npm run browser:install`，2026-11-15 全套跑完後補裝（見下表）。全套 pytest 與突變在多個 clone 共用的
@@ -172,13 +227,16 @@ UI build）；當時沒跑 `npm run browser:install`，2026-11-15 全套跑完�
 - `tests/integration_runtime_wrapper.py`（本片改了替身簽名）：只有本機 root 明確執行的 `tests/integration_local_runtime.py` 用它，
   CI 與一般 collection 都不跑（`docs/operations/acceptance.md`）；本片沒跑（要 root）。改法只是把 `port` 原樣傳給真的 `child_spec`。
 - packaging 的 5 個 `skipUnless(root)`：CI 那一步也不是 root，同樣 skip（和基準相同）。
+- 審查後補的測試（`test_any_other_port_changes_the_port_only`、launcher 的三個 port、`test_the_session_is_ended_on_the_childs_own_port`）
+  也沒有只能在 CI 跑的：只比 spec、在程序內跑 launcher、子程式是 MockTransport，都不看執行身分。
 
 ## 7. `checks` 秒數
 
 - 前：`bb48449` 的 push run 43222889894 `checks` 1380 秒、同一個 commit 的 pull_request run 43222899526 1834 秒（HM-01 筆記第 7 節）；
   HM-01 的 PR #90（run 43587407864）1434 秒。
 - 後：開 PR 後補。
-- 推估：新測試本機約 9 秒（4 個真子程式＋16 個 runtime），推估 CI 增加不到 30 秒。
+- 推估：新測試本機約 10 秒（`test_child_port_param.py` 233 案合計 9.6 秒，4 個真子程式 7.5 秒、16 個 runtime 1.3 秒佔大部分；
+  `test_initialize_cleanup.py` 新增的 29 案 0.4 秒），推估 CI 增加不到 30 秒。
 
 ## 8. 預檢結果
 
@@ -189,15 +247,19 @@ UI build）；當時沒跑 `npm run browser:install`，2026-11-15 全套跑完�
 
   | 範圍 | 命中 |
   |---|---|
-  | 本片的 commit（`32ecac8..HEAD`，git 模式） | 0（3 個 commit，含本筆記） |
-  | 本分支的 commit（`bb48449..HEAD`，含 HM-01 的 9 個） | 0（12 個 commit） |
+  | 本片的 commit（`32ecac8..HEAD`，git 模式） | 0（5 個 commit，含審查後的 2 個與本筆記） |
+  | 本分支的 commit（`bb48449..HEAD`，含 HM-01 的 9 個） | 0（14 個 commit） |
   | `--full`：`git archive HEAD` 的全部檔（建置機同款） | 0 |
   | `--full`：全歷史 `--all --full-history -m`（建置機同款） | 0 |
 
+  gitleaks 由 `secret_precheck.py install --tarball` 從暫存區既有的釘選壓縮檔安裝（沒有下載；壓縮檔 SHA-256 和
+  `packaging/scanner-pins.json` 相符）。
+
 - **帳本預檢**（`scripts/ledger_precheck.py`）：`runtime-patches.json` 152 個路徑、`runtime-sources.json` 70 個、`tool-surface.json`
-  159 個，都 0 漂移、0 缺檔。對 `origin/claude-delivery`（`bb48449`）改了 37 個檔（含 HM-01 的 17 個）：列管檔 7 個
-  （第 2 節）、帳本 2 個（`runtime-patches.json`、`tool-surface.json`）一起改；新增而沒列管的執行期檔 0 個；改到而沒列管的
-  `health.py`、`lifecycle.py` 列為要人看（第 2 節）。結果 OK。
+  159 個，都 0 漂移、0 缺檔。對 `origin/claude-delivery`（`bb48449`）改了 38 個檔（含 HM-01 的 17 個；審查後多了
+  `tests/test_initialize_cleanup.py`）：列管檔 7 個（第 2 節）、帳本 2 個（`runtime-patches.json`、`tool-surface.json`）一起改；
+  新增而沒列管的執行期檔 0 個；改到而沒列管的 `health.py`、`lifecycle.py` 列為要人看（第 2 節）。結果 OK。審查後的 commit
+  沒有動列管檔與帳本。審查 O-1 的偶發問題只會漏掉還沒 commit 的改動；這次在工作樹乾淨時重跑，不受影響。
 
 ## 9. PaaS 變動（`git log <pin>..origin/main -- <相關檔>`）
 
@@ -208,30 +270,48 @@ UI build）；當時沒跑 `npm run browser:install`，2026-11-15 全套跑完�
 
 | 條件 | 狀態 |
 |---|---|
-| CI 綠 | 待 PR 的 CI（這一波不 push）。本機：新測試 0 skip、`check_results.py` PASS；全套只有已知要 root 的 1 個失敗 |
-| 單帳號子程式 argv／env 與 `bb48449` 位元相同 | 通過：16 種狀態的快照在 `bb48449` 的 runtime 上產生、在 `fcd1b3a` 與 `bd5fc7c` 都全過（含 env 順序）；runtime 測試核對 Supervisor 拿到的就是預設 spec。HM-06 加 env 時同 PR 重定快照（C4-SF-4） |
-| HM-01 照過 | 通過：黃金回歸、兩個契約凍結、替身都沒改，全套裡 HM-01 的 131 案全過（第 5 節） |
-| 給 18000 時 argv、env、健康檢查、child_url 各處一致 | 通過：`test_another_port_changes_the_port_only`、`test_one_port_reaches_every_child_request` |
+| CI 綠 | 待 PR 的 CI（這一波不 push）。本機：新測試 0 skip、`check_results.py` PASS；全套（審查前）只有已知要 root 的 1 個失敗 |
+| 單帳號子程式 argv／env 與 `bb48449` 位元相同 | 通過：16 種狀態的快照在 `bb48449` 的 runtime 上產生、在 `fcd1b3a` 與 `bd5fc7c` 都全過（含 env 順序）；runtime 測試核對 Supervisor 拿到的就是預設 spec。HM-06 加 env 時同 PR 改快照的案例、在 `changes` 記一筆（C4-SF-4；審查 S-3） |
+| HM-01 照過 | 通過：黃金回歸、兩個契約凍結、替身都沒改，全套裡 HM-01 的 131 案全過（第 5.2 節）；審查後重跑也全過（第 5.1 節） |
+| 給 18000 時 argv、env、健康檢查、child_url 各處一致 | 通過：`test_another_port_changes_the_port_only`、`test_one_port_reaches_every_child_request`；initialize 被拒時收 session 的 DELETE 也打同一個 port（`test_the_session_is_ended_on_the_childs_own_port`，審查 S-1）；18000～18099 以外的 port 也只差 port（`test_any_other_port_changes_the_port_only`，審查 S-2） |
 | 照 HM-01 `owned_network` 擋 3000 與 18000～18099 | 通過：autouse 檢查拒絕計數不變；真子程式一律在私有 port |
-| 先寫測試、先紅後綠 | 通過（第 4.2 節） |
-| 新測試沒有條件式 skip、用 log 掃描 | 通過：沒有 `skip`／`skipif`／`importorskip`／`xfail`；`pytestmark` 用 `log_scan` |
+| 先寫測試、先紅後綠 | 通過（第 4.2 節）；審查後補的測試用突變證明（第 4.4 節） |
+| 新測試沒有條件式 skip、用 log 掃描 | 通過：沒有 `skip`／`skipif`／`importorskip`／`xfail`；`test_child_port_param.py` 的 `pytestmark` 用 `log_scan`；`test_initialize_cleanup.py` 的新測試直接用 `log_scan` fixture |
 | 同 PR 更新帳本、重產 tool-surface | 通過：帳本 7 筆；tool-surface 重產；`tool_inventory.py` 漂移檢查通過 |
 | `ledger_precheck` OK | 通過（第 8 節） |
-| `secret_precheck` 對本片 commit 0 命中 | 通過：本片 3 個 commit 0 命中（第 8 節） |
+| `secret_precheck` 對本片 commit 0 命中 | 通過：本片 5 個 commit 0 命中（第 8 節） |
 | 不改版號、不碰 `addons/<x>/`、CHANGELOG | 通過 |
 | 測試資料規則（計畫 §12.0 第 4 點） | 通過：憑證 `DUMMY-port-…`、網址 `.invalid`、token 執行時產生（快照用佔位字）；新增的 64 hex 只有帳本與 `test_output_schemas.py` 的檔案摘要；秘密預檢 0 命中 |
 
 ## 11. 還沒解決、交給後面的片
 
 - `checks` 的「後」秒數：PR 的 CI 跑完後補。
-- **HM-06**：`child_spec` 加 `WOOW_MCP_CHILD_TOKEN` 後，`test_the_default_child_spec_is_bb48449s` 的 Python 產品案例會失敗；同 PR 更新
-  `tests/contract/child_spec_default.json`（child token 已經是 `{child_token}` 佔位字，失敗訊息印出目前的 spec；只該多那一個 env）。
+- **HM-06**：`child_spec` 加 `WOOW_MCP_CHILD_TOKEN` 後，`test_the_default_child_spec_is_the_snapshot` 的 Python 產品案例會失敗；同 PR 更新
+  `tests/contract/child_spec_default.json` 的那些案例（child token 已經是 `{child_token}` 佔位字，失敗訊息印出目前的 spec；只該多那一個 env），
+  並在 `changes` 加一筆（`slice`＝`HM-06`、`change`＝哪些子程式多了什麼 env、放在哪裡）；`baseline` 不改、測試不用改（審查 S-3）。
   `products.py` 的衝突：本片改 `child_spec` 的簽名、四處 `--port`、Hermes／OpenDesign 的 argv；HM-06 改 env。照 §12.2 順序 HM-04 先合，
   HM-06 rebase 後重產帳本與 tool-surface、重跑 CI。
 - **HM-05**：`run()` 的 `child_port` 給每帳號執行套件用；抽出執行套件時，`owned_executable`、`test_role_lifecycle`、`test_product_ha_role`、
   `test_product_runtime_failure` 的替身注入點跟著搬（替身已經收 `port`／`child_url`）。本片的 `test_one_port_reaches_every_child_request`
   用黃金回歸的 `production_runtime`，注入點搬了它跟著動。
+- **HM-08、HM-14**（審查 S-1）：都會改 `gateway.py` 的轉送與 `end_session`。閘道送給子程式的每個請求都要用 `make_apps` 的 `child_url`；
+  寫回固定網址時，`test_one_port_reaches_every_child_request`（黃金 session）與 `test_the_session_is_ended_on_the_childs_own_port`
+  （initialize 被拒時收 session 的 DELETE）會失敗。
 - **HM-09**：配 port（18000 起、避開 3000／8081／8099 與在用的 port）、spawn 前檢查都還沒做。`run(args, child_port=N)` 不擋 N 和
-  監聽 port 相同（`main()` 只擋 3000，而且 `main()` 不傳 `child_port`）；交給 HM-09 的 spawn 前檢查（契約 §7）。
+  監聽 port 相同（`main()` 只擋 3000，而且 `main()` 不傳 `child_port`）；交給 HM-09 的 spawn 前檢查（契約 §7）。索引能存的 port
+  範圍由 HM-07／HM-09 定（PaaS 是 1024～65535）；本片的 `child_spec` 收 1～65535，3000 以外的 port 都只差 port（審查 S-2 的測試）。
+- **HM-01（審查 O-1，不屬本片）**：`scripts/ledger_precheck.py` 的 `changed()` 用 `shutil.copyfile` 複製 git index，複本的 mtime
+  是複製當下，git 的 racy-index 偵測因此失效：同一秒內改成同長度、還沒 commit 的檔會被當成沒改，
+  `tests/test_ledger_precheck.py::test_drift_and_pinned_changes` 會偶發失敗（CI 可能隨機紅）。修法是改用 `shutil.copy2`。這是 HM-01 的檔
+  （PR #90），本片不改；交主對話決定在 #90 合併前修，或合併後馬上補小 PR。已 commit 的改動不受影響，本片的帳本預檢結果仍有效。
 - 兩支 launcher 的 `--port` 解析各寫一份（和 Headscale 的 launcher 一樣自帶）；要共用得在 `apps/runtime/` 新增模組（列管、重產
   tool-surface），本片沒做。
+
+## 12. 審查意見處理（獨立審查 2026-11-15，審 `79629c9`：判定通過；必修 0、建議 3，另 1 項屬 HM-01）
+
+| id | 審查意見 | 處理 |
+|---|---|---|
+| S-1 | initialize 被拒時，閘道送的收 session DELETE（`gateway.py` 的 `end_session`）在非預設 port 沒有測試；把它改成固定 3000（R01），相關的 453 案照樣全過。測試 docstring 與筆記結論第 3 點的「子程式收到的每個請求」說得比驗到的多 | 採用。`tests/test_initialize_cleanup.py`：`run()` 加 `child_url`（沒給就用 `make_apps` 的預設，既有案例不變）、`assert_ended()` 加 `url`；新增 `test_the_session_is_ended_on_the_childs_own_port`，29 種拒絕情境全收（每種情境走到 `end_session` 的路不同，案例便宜：29 案共 0.4 秒；審查說只留一兩個代表也可以），另外斷言回覆狀態碼照預期、子程式只收到兩個請求，並用 `log_scan`（計畫 §12.0 第 3 點）。docstring 與結論第 3 點改成「黃金 session 的每個請求，加上 initialize 被拒時的清理 DELETE」。R01 下新案 29 案全部失敗（第 4.4 節） |
+| S-2 | 3000 以下的 port 沒有測試；`products.py` 的 `port != CHILD_PORT` 改成 `port > CHILD_PORT`（R16）照樣全過 | 採用，範圍比建議大一點：新增 `test_any_other_port_changes_the_port_only`（16 種狀態 × 1、2999、3001、65535＝`child_port_text` 收的兩端與 3000 的鄰居；建議是 1024、2999），只比 spec、不經 HM-01 的 `Endpoint`。launcher 測試同時補 `--port 1`、`2999`、`65535`。R16 下 6 案失敗；launcher 的兩個邊界突變各 1 案失敗（第 4.4 節） |
+| S-3 | 快照把 `bb48449` 寫死在斷言、測試名、說明；HM-06 同 PR 重定快照時，標籤和測試名會變得不實，或三處要一起改 | 採用（審查的做法二，加上改測試名）：`baseline` 定義成快照的起點、永遠是 `bb48449`；快照加 `changes` 清單，之後每次刻意改 spec 的片在同 PR 加一筆（`slice`、`change`），測試檢查每筆的格式；測試改名 `test_the_default_child_spec_is_the_snapshot`，失敗訊息提醒更新案例、加一筆 `changes`。HM-06 rebase 後只要改案例、加一筆，測試不用改。16 個 spec 沒變。沒用做法一的理由見第 3 節 |
+| O-1 | （HM-01 的檔）`scripts/ledger_precheck.py` 用 `shutil.copyfile` 複製 index，racy-index 偵測失效，`test_drift_and_pinned_changes` 偶發失敗 | 本片不改（HM-01 的檔，PR #90；這一波不碰 HM-01）。交主對話決定修的時機（第 11 節）。本片的帳本預檢結果不受影響：改動都已 commit |
