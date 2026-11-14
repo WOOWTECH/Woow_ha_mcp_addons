@@ -419,11 +419,16 @@ def recheck_index(path: Path, view: IndexView) -> IndexView:
     return IndexView(INDEX_MODIFIED, (), current)
 
 
-def write_index(path: Path, entries: Sequence[IndexEntry]) -> IndexView:
-    """Replace the index with *entries*: a new 0600 file in the same directory, fsync, rename over the index, fsync
-    the directory. Returns the view of what was written; its signature is the new baseline (the rename changes the
-    ctime, so it is taken from the written file afterwards). On failure the previous index stays unless the rename
-    already happened (then a recheck against the old baseline answers MODIFIED: fail closed)."""
+def write_index(path: Path, entries: Sequence[IndexEntry], *, expected: IndexView) -> IndexView:
+    """Replace the index with *entries* while it is still the one *expected* describes: the view this process read at
+    startup or wrote last, ABSENT or OK. A CORRUPT or MODIFIED index, or one that changed behind the add-on's back since
+    *expected*, is never written over (ProfileDataError): that would wash away DQ-12's "503 until a restart", which
+    only the index quarantine (HM-10) ends. The write: a new 0600 file in the same directory, fsync, rename over the
+    index, fsync the directory. Returns the view of what was written; its signature is the new baseline (the rename
+    changes the ctime, so it is taken from the written file afterwards). On failure the previous index stays unless the
+    rename already happened (then a recheck against the old baseline answers MODIFIED: fail closed)."""
+    if expected.state not in (INDEX_ABSENT, INDEX_OK) or recheck_index(path, expected) is not expected:
+        raise ProfileDataError('profile index changed')
     raw = encode_index(entries)
     path = Path(path)
     temporary = path.with_name('.' + path.name + '-' + secrets.token_hex(8))

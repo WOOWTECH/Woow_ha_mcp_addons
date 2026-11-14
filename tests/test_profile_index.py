@@ -315,7 +315,7 @@ def next_tick(directory):
 
 def written(tmp_path, entries=None):
     path = tmp_path / 'profiles.json'
-    view = profiles.write_index(path, entries or [IndexEntry(A, '會計', 18000)])
+    view = profiles.write_index(path, entries or [IndexEntry(A, '會計', 18000)], expected=profiles.read_index(path))
     return path, view
 
 
@@ -350,7 +350,7 @@ def test_write_is_atomic_and_durable(tmp_path, monkeypatch):
     real_fsync = os.fsync
     monkeypatch.setattr(profiles.os, 'fsync', lambda fd: (calls.append(stat.S_IFMT(os.fstat(fd).st_mode)),
                                                           real_fsync(fd))[1])
-    after = profiles.write_index(path, [IndexEntry(A, '會計', 18000), IndexEntry(B, 'B', 18001)])
+    after = profiles.write_index(path, [IndexEntry(A, '會計', 18000), IndexEntry(B, 'B', 18001)], expected=before)
     assert calls == [stat.S_IFREG, stat.S_IFDIR]  # the file before the rename, the directory after it
     assert after.signature != before.signature and after.signature.st_ino != before.signature.st_ino
     monkeypatch.undo()
@@ -367,7 +367,7 @@ def test_write_is_atomic_and_durable(tmp_path, monkeypatch):
             else:
                 patch.setattr(profiles.os, 'replace', fail)
             with pytest.raises(profiles.ProfileDataError):
-                profiles.write_index(path, [IndexEntry(C, 'C', 18002)])
+                profiles.write_index(path, [IndexEntry(C, 'C', 18002)], expected=after)
         assert profiles.read_index(path) == after  # the previous index is untouched
         assert sorted(p.name for p in tmp_path.iterdir()) == ['profiles.json'], step
     path.write_bytes(old)
@@ -498,10 +498,44 @@ def test_a_modified_index_stays_modified_until_a_restart_reads_it_again(tmp_path
 
 def test_a_rewrite_by_this_process_is_the_new_baseline(tmp_path):
     path, view = written(tmp_path)
-    renamed = profiles.write_index(path, [IndexEntry(A, 'Renamed', 18000)])
+    renamed = profiles.write_index(path, [IndexEntry(A, 'Renamed', 18000)], expected=view)
     assert profiles.recheck_index(path, view).state == INDEX_MODIFIED  # the old baseline no longer matches
     assert profiles.recheck_index(path, renamed) is renamed
     assert profiles.read_index(path) == renamed
+
+
+def test_a_write_replaces_only_the_index_this_process_vouches_for(tmp_path):
+    # HM-07 review S-07: the write compares before it replaces. Only the view this process read or wrote last, ABSENT
+    # or OK and still matching the file, may be replaced; any other index stays as it is (ProfileDataError), so a
+    # write never washes away DQ-12's "503 until a restart" (only the index quarantine, HM-10, ends it).
+    path, first = written(tmp_path)
+    current = profiles.write_index(path, [IndexEntry(A, '會計', 18000), IndexEntry(B, 'B', 18001)], expected=first)
+    data = path.read_bytes()
+
+    def refused(target, expected):
+        before = sorted(p.name for p in tmp_path.iterdir()), target.read_bytes(), os.lstat(target).st_ino
+        with pytest.raises(profiles.ProfileDataError):
+            profiles.write_index(target, [IndexEntry(C, 'C', 18002)], expected=expected)
+        assert (sorted(p.name for p in tmp_path.iterdir()), target.read_bytes(), os.lstat(target).st_ino) == before
+
+    refused(path, first)  # an older baseline of this process
+    refused(path, profiles.IndexView(INDEX_CORRUPT, (), current.signature))
+    refused(path, profiles.IndexView(INDEX_MODIFIED, (), current.signature))
+    assert profiles.write_index(path, [IndexEntry(A, 'x', 18000)], expected=current).state == INDEX_OK
+    current = profiles.read_index(path)
+    next_tick(tmp_path)
+    path.write_bytes(data)  # changed behind the add-on's back: kept as it is, for the quarantine
+    refused(path, current)
+    assert path.read_bytes() == data
+    other = tmp_path / 'other.json'
+    absent = profiles.read_index(other)
+    other.write_bytes(data)  # appeared where there was none
+    other.chmod(0o600)
+    refused(other, absent)
+    corrupt = tmp_path / 'corrupt.json'
+    corrupt.write_bytes(b'{')
+    corrupt.chmod(0o600)
+    refused(corrupt, profiles.read_index(corrupt))  # read at startup as CORRUPT: never written over
 
 
 def test_verdicts_for_the_mcp_listener_and_the_panel():

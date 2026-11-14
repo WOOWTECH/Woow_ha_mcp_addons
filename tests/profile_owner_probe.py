@@ -46,7 +46,8 @@ def main(config):
     report['created'] = {name: facts(path) for name, path in (
         ('dir', directory), ('lock', directory / '.writer.lock'), ('state', directory / 'state.json'))}
     report['created_names'] = sorted(os.listdir(directory))
-    view = profiles.write_index(layout.index, [profiles.IndexEntry(first, 'probe', profiles.FIRST_PROFILE_PORT)])
+    view = profiles.write_index(layout.index, [profiles.IndexEntry(first, 'probe', profiles.FIRST_PROFILE_PORT)],
+                                expected=profiles.read_index(layout.index))
     report['index'] = facts(layout.index)
     report['index_read'] = profiles.read_index(layout.index).state
     report['index_baseline'] = profiles.recheck_index(layout.index, view).state

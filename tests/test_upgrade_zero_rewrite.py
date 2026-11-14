@@ -282,7 +282,7 @@ def test_profiles_never_write_the_default_state(tmp_path, log_scan):
         ProductStore(layout.profile(profile_id), 'odoo', create=state).close()
         entries.append(profiles.IndexEntry(profile_id, profile_id[:4], profiles.allocate_port(e.port for e in entries)))
         made[profile_id] = state
-    view = profiles.write_index(layout.index, entries)
+    view = profiles.write_index(layout.index, entries, expected=profiles.read_index(layout.index))
     read = {'default': (default.token, default.child_token)}
     for profile_id in made:
         opened = ProductStore(layout.profile(profile_id), 'odoo', existing_only=True)

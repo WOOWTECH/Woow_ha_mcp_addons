@@ -229,7 +229,7 @@ def test_five_profiles_have_private_independent_stores(tmp_path, log_scan):
         entries.append(profiles.IndexEntry(profile_id, label, profiles.allocate_port(e.port for e in entries)))
         made[profile_id] = state
     watch(log_scan, default, *made.values())
-    view = profiles.write_index(layout.index, entries)
+    view = profiles.write_index(layout.index, entries, expected=profiles.read_index(layout.index))
     assert [e.port for e in view.entries] == [18000, 18001, 18002, 18003, 18004]
     assert len(taken) == 12
     for profile_id, state in made.items():
@@ -630,7 +630,7 @@ def test_a_full_multi_profile_tree_fits_the_restore_repair(tmp_path, log_scan):
             (layout.profile(profile_id) / name).write_text('{}')
         layout.child(profile_id).mkdir(mode=0o700)
         entries.append(profiles.IndexEntry(profile_id, profile_id[:1], profiles.allocate_port(e.port for e in entries)))
-    profiles.write_index(layout.index, entries)
+    profiles.write_index(layout.index, entries, expected=profiles.read_index(layout.index))
     from datetime import datetime, timezone
     for number, profile_id in enumerate(('1' * 24, '2' * 24)):
         quarantined = layout.profiles / profiles.quarantine_name(profile_id, datetime(2026, 11, 14, 13, number,
