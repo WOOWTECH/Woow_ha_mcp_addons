@@ -559,7 +559,8 @@ def _owned_directory(fd: int, path: Path) -> os.stat_result:
 
 def ensure_profiles_directory(layout: Layout) -> None:
     """Make /data/mcp/profiles (0700) when missing; refuse one that is a link, not a directory or another uid's, and
-    tighten a widened mode (PaaS ProfileRegistry._directory)."""
+    tighten a widened mode (PaaS ProfileRegistry._directory). Then fsync /data/mcp, so the name profiles is on disk
+    before a profile in it can be listed by the index."""
     try:
         try:
             os.mkdir(layout.profiles, 0o700)
@@ -572,6 +573,11 @@ def ensure_profiles_directory(layout: Layout) -> None:
                 os.fchmod(fd, 0o700)
         finally:
             os.close(fd)
+        root = os.open(layout.root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(root)
+        finally:
+            os.close(root)
     except OSError:
         raise ProfileDataError('profiles directory unavailable') from None
 

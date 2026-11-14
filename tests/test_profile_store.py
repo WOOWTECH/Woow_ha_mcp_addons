@@ -19,6 +19,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 
 import pytest
 
@@ -315,8 +316,8 @@ def open_descriptors():
     return sorted(os.listdir('/proc/self/fd'))
 
 
-STEPS = ['mkdir', 'directory-open', 'directory-fstat', 'lock-open', 'flock', 'temporary-open', 'fsync-file',
-         'replace', 'fsync-directory', 'load']
+STEPS = ['mkdir', 'directory-open', 'directory-fstat', 'fsync-parent', 'lock-open', 'flock', 'temporary-open',
+         'fsync-file', 'replace', 'fsync-directory', 'load']
 
 
 @pytest.mark.parametrize('step', STEPS)
@@ -340,9 +341,14 @@ def test_a_failure_at_any_creation_step_leaves_no_profile_behind(tmp_path, monke
             fail()
         return real_open(path, flags, *args, **kwargs)
 
+    parent = os.lstat(tmp_path)
+
     def synced(fd):
-        kind = stat.S_IFMT(real_fstat(fd).st_mode)
-        if (step == 'fsync-file' and kind == stat.S_IFREG) or (step == 'fsync-directory' and kind == stat.S_IFDIR):
+        info = real_fstat(fd)
+        kind = stat.S_IFMT(info.st_mode)
+        of_parent = (info.st_dev, info.st_ino) == (parent.st_dev, parent.st_ino)
+        if ((step == 'fsync-file' and kind == stat.S_IFREG) or (step == 'fsync-parent' and of_parent)
+                or (step == 'fsync-directory' and kind == stat.S_IFDIR and not of_parent)):
             fail()
         return real_fsync(fd)
 
@@ -372,6 +378,63 @@ def test_a_failure_at_any_creation_step_leaves_no_profile_behind(tmp_path, monke
     assert store.load() == state
     fcntl.flock(store._lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)  # this store holds the only writer lock
     store.close()
+
+
+def synced_inodes(monkeypatch, module):
+    """Record the (st_dev, st_ino) of every fsync *module* makes (its os is the os module: patched for the test)."""
+    synced = []
+    real_fsync, real_fstat = os.fsync, os.fstat
+
+    def fsync(fd):
+        info = real_fstat(fd)
+        synced.append((info.st_dev, info.st_ino))
+        return real_fsync(fd)
+
+    monkeypatch.setattr(module.os, 'fsync', fsync)
+    return synced
+
+
+def inode(path):
+    info = os.lstat(path)
+    return info.st_dev, info.st_ino
+
+
+def test_create_makes_the_new_directory_name_durable(tmp_path, monkeypatch, log_scan):
+    # HM-07 review S-13: the parent (profiles/) is fsynced once the directory exists, before the lock and the state:
+    # after a power loss the fsynced index never lists a profile whose directory entry did not reach the disk.
+    from mcp_admin_core import config
+    state = plain_state()
+    watch(log_scan, state)
+    synced = synced_inodes(monkeypatch, config)
+    store = Store(tmp_path / A, create=state)
+    monkeypatch.undo()
+    directory = tmp_path / A
+    assert synced[0] == inode(tmp_path)  # the parent first, then the state file and the profile directory
+    assert synced[1:] == [inode(directory / 'state.json'), inode(directory)]
+    store.close()
+
+
+def test_the_profiles_directory_name_is_durable(tmp_path, monkeypatch):
+    # HM-07 review S-13: ensure_profiles_directory fsyncs /data/mcp after making profiles/ (and when it already exists:
+    # a creation that failed after the mkdir did not get its fsync); a failed fsync is an error.
+    layout = profiles.Layout(tmp_path)
+    synced = synced_inodes(monkeypatch, profiles)
+    profiles.ensure_profiles_directory(layout)
+    profiles.ensure_profiles_directory(layout)
+    assert synced == [inode(tmp_path), inode(tmp_path)]
+    monkeypatch.undo()
+
+    def fail(fd):
+        raise OSError('injected LOCAL storage fault')
+
+    monkeypatch.setattr(profiles.os, 'fsync', fail)
+    with pytest.raises(profiles.ProfileDataError):
+        profiles.ensure_profiles_directory(profiles.Layout(tmp_path / A))  # missing root: refused, nothing made
+    other = tmp_path / 'other'
+    other.mkdir()
+    with pytest.raises(profiles.ProfileDataError):
+        profiles.ensure_profiles_directory(profiles.Layout(other))
+    assert os.listdir(other) == ['profiles']  # made but not durable: the error says so; the next call fsyncs again
 
 
 def test_a_failed_creation_keeps_what_it_did_not_create(tmp_path, monkeypatch, log_scan):
@@ -471,6 +534,42 @@ def test_existing_only_tightens_widened_modes(tmp_path, log_scan):
     store = Store(directory, existing_only=True)
     assert (mode(directory), mode(directory / '.writer.lock'), mode(directory / 'state.json')) == (0o700, 0o600, 0o600)
     store.close()
+
+
+def next_tick(directory):
+    """Wait until the file-time clock moves on (Linux stamps ctimes with a coarse clock; tests/test_profile_index.py)."""
+    probe = directory / '.tick'
+    probe.write_bytes(b'')
+    first = os.lstat(probe).st_ctime_ns
+    while os.lstat(probe).st_ctime_ns == first:
+        time.sleep(0.002)
+        os.chmod(probe, 0o600)
+    probe.unlink()
+
+
+def test_reading_a_profile_state_changes_nothing(tmp_path, log_scan):
+    # HM-07 review S-09: an additional profile's store reads a 0600 state without fchmod, so its ctime stays and HM-08
+    # can keep a stat signature (with the ctime) of each profile's state; a widened mode is still tightened at the next
+    # read. The default profile's store keeps fchmod'ing at every read (HM-01 freezes its behavior).
+    directory, state = created(tmp_path)
+    watch(log_scan, state)
+    store = Store(directory, existing_only=True)
+    before = os.lstat(directory / 'state.json')
+    for _ in range(3):
+        next_tick(tmp_path)
+        assert store.load() == state
+    after = os.lstat(directory / 'state.json')
+    assert (after.st_ino, after.st_mtime_ns, after.st_ctime_ns) == (before.st_ino, before.st_mtime_ns, before.st_ctime_ns)
+    os.chmod(directory / 'state.json', 0o644)
+    assert store.load() == state and mode(directory / 'state.json') == 0o600
+    store.close()
+    default = Store(tmp_path / 'mcp')
+    watch(log_scan, default.load())
+    before = os.lstat(default.path).st_ctime_ns
+    next_tick(tmp_path)
+    default.load()
+    assert os.lstat(default.path).st_ctime_ns != before
+    default.close()
 
 
 @pytest.mark.parametrize('entry', ['directory', 'lock', 'state'])

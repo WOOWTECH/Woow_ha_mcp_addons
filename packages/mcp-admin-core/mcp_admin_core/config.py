@@ -125,8 +125,10 @@ class Store:
     is opened without O_CREAT, a missing state is an error. create=<state> makes a new one: the directory must not
     exist yet (not even as a dangling link), the lock is created with O_EXCL, *state* is written once as the final
     first value, and a failure removes what this creation made. Both refuse a directory, lock or state file another
-    uid owns, checked before any chmod, and tighten a widened mode to 0700 / 0600. The default profile's store keeps
-    its behavior.
+    uid owns, checked before any chmod, and tighten a widened mode to 0700 / 0600. A creation fsyncs the parent
+    directory, so the new directory's name is on disk before an index can list it. Reading an additional profile's
+    0600 state changes nothing (no fchmod, its ctime stays; only a widened mode is tightened). The default profile's
+    store keeps its behavior.
     """
     _owned = False  # True for an additional profile's store
 
@@ -147,6 +149,7 @@ class Store:
                 os.mkdir(self.directory, 0o700)  # FileExistsError for any existing name
                 made = False
                 made = self._owned_directory()
+                self._sync_parent()
                 self._lock_fd = os.open(self.directory / ".writer.lock", os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
                 self._owned_lock()
                 fcntl.flock(self._lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -188,6 +191,14 @@ class Store:
             if stat.S_IMODE(info.st_mode) != 0o700:
                 os.fchmod(fd, 0o700)
             return info.st_dev, info.st_ino
+        finally:
+            os.close(fd)
+
+    def _sync_parent(self):
+        """Make a new directory's name durable in its parent (profiles/), before anything can list the profile."""
+        fd = os.open(self.directory.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(fd)
         finally:
             os.close(fd)
 
@@ -240,7 +251,8 @@ class Store:
                 if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 65536
                         or (self._owned and info.st_uid != os.geteuid())):
                     raise ValueError("invalid state file")
-                os.fchmod(stream.fileno(), 0o600)
+                if not self._owned or stat.S_IMODE(info.st_mode) != 0o600:
+                    os.fchmod(stream.fileno(), 0o600)
                 value = strict_json(stream.read(65537))
             return self._decode(value)
         except (OSError, ValueError, RecursionError):
