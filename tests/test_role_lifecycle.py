@@ -13,7 +13,7 @@ import httpx
 import pytest
 
 import run as n8n_run
-from mcp_admin_core import run_product
+from mcp_admin_core import profile_runtime, run_product
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.lifecycle import ChildSpec, Supervisor
 from mcp_admin_core.products import PRODUCTS
@@ -65,6 +65,7 @@ async def emergency_cleanup(manager, processes):
 @pytest.mark.parametrize('cancel', ('disconnect', 'direct', 'scope'))
 async def test_committed_runtime_backend_transition_is_joined(tmp_path, monkeypatch, product, cancel):
     module = n8n_run if product == 'n8n' else run_product
+    profile = n8n_run if product == 'n8n' else profile_runtime  # HM-05: run_product's profile is made there
     captured, servers, processes = {}, [], []
     terminating = asyncio.Event()
     roles = {'allow': True, 'calls': 0}
@@ -109,11 +110,11 @@ async def test_committed_runtime_backend_transition_is_joined(tmp_path, monkeypa
         def availability(self): return {'child': 'running', 'ready': False, 'backend': 'unknown', 'reason': None}  # 0.2.2: forward
         async def run(self): await asyncio.Event().wait()
 
-    monkeypatch.setattr(module, 'Supervisor', Manager)
+    monkeypatch.setattr(profile, 'Supervisor', Manager)
     monkeypatch.setattr(module, 'child_spec', child_spec)
-    monkeypatch.setattr(module, 'make_apps', apps)
+    monkeypatch.setattr(profile, 'make_apps', apps)
     monkeypatch.setattr(module, 'Listener', Listener)
-    monkeypatch.setattr(module, 'HealthMonitor', Monitor)
+    monkeypatch.setattr(profile, 'HealthMonitor', Monitor)
     args = SimpleNamespace(data=tmp_path / 'state', product=product,
                            host='127.0.0.1', admin_port=0, mcp_port=0)
     runtime = asyncio.create_task(module.run(args))

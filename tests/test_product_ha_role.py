@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from mcp_admin_core import ha_role, products, run_product
+from mcp_admin_core import ha_role, products, profile_runtime, run_product
 import test_ha_role as original_role_tests
 from test_ha_role import (
     DUMMY, IDENTITY, result, user,
@@ -110,7 +110,7 @@ def fake_ws(monkeypatch):
 async def runtime_apps(tmp_path, monkeypatch, product):
     captured = {}
     ready, finish = asyncio.Event(), asyncio.Event()
-    real_apps = run_product.make_apps
+    real_apps = profile_runtime.make_apps  # HM-05: run_product's profile is made in profile_runtime
 
     def apps(store, tools, child, **kwargs):
         captured.update(store=store, verifier=kwargs.get('verify_admin'))
@@ -146,10 +146,10 @@ async def runtime_apps(tmp_path, monkeypatch, product):
         kwargs.setdefault('transport', httpx.MockTransport(dispatch))
         return real_client(**kwargs)
 
-    monkeypatch.setattr(run_product.httpx, 'AsyncClient', client)
-    monkeypatch.setattr(run_product, 'make_apps', apps)
-    monkeypatch.setattr(run_product, 'Supervisor', Manager)
-    monkeypatch.setattr(run_product, 'HealthMonitor', Monitor)
+    monkeypatch.setattr(profile_runtime.httpx, 'AsyncClient', client)
+    monkeypatch.setattr(profile_runtime, 'make_apps', apps)
+    monkeypatch.setattr(profile_runtime, 'Supervisor', Manager)
+    monkeypatch.setattr(profile_runtime, 'HealthMonitor', Monitor)
     monkeypatch.setattr(run_product, 'Listener', Listener)
     args = SimpleNamespace(data=tmp_path / product, product=product, host='127.0.0.1',
                            admin_port=8099, mcp_port=8081)

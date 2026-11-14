@@ -9,18 +9,15 @@ from contextlib import contextmanager
 from pathlib import Path
 import signal
 
-import httpx
 import uvicorn
 
 from . import redact, version_for_product
 from .config import ConfigError
-from .configuration import ConfigurationState
 from .capabilities import ManagementOptions
-from .gateway import make_apps
 from .ha_role import make_ha_admin_verifier
-from .health import HealthMonitor
-from .lifecycle import CHILD_PORT, Supervisor, child_url
+from .lifecycle import CHILD_PORT, child_port_text
 from .products import INSTRUCTIONS, PRODUCTS, ProductStore, TOOLS, child_spec
+from .profile_runtime import ProfileRuntime
 from .surface import FULL_PRODUCTS, listing
 
 
@@ -33,69 +30,47 @@ class Listener(uvicorn.Server):
 async def run(args, *, child_port=CHILD_PORT):
     # HM-04: one port for the child's spec, the health monitor, the gateway and its capability probe. main() runs the
     # default profile's child on CHILD_PORT; an extra profile's runtime (multi-profile plan 5.4) passes its own.
-    url = child_url(child_port)
+    child_port_text(child_port)  # an invalid port is refused before anything starts
     # Owner decision 2026-10-27: a legacy state is switched to the all-on defaults once, before anything starts
     # (no upgrade review stage); a failure changes nothing and stops the runtime (ConfigError).
     from .owner_defaults import apply_legacy_upgrade
     apply_legacy_upgrade(args.data, args.product)
     store = ProductStore(args.data, args.product)
-    manager = None
     loop = asyncio.get_running_loop()
     stop = asyncio.Event()
     try:
-        manager = Supervisor(None)
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, stop.set)
-        async with httpx.AsyncClient(trust_env=False, follow_redirects=False,
-                                    timeout=httpx.Timeout(10, connect=3),
-                                    limits=httpx.Limits(max_connections=40)) as child:
-            health = HealthMonitor(store, manager, child, child_url=url)
-            configuration = ConfigurationState(store, manager, health)
-
-            async def backend_changed(state):
-                configuration.begin(state)
-                health.backend = 'unknown'
-                try:
-                    # Stop before validating a replacement: old credentials must
-                    # never continue serving newly saved state after a failure.
-                    await manager.stop()
-                    manager.spec = child_spec(state, store.directory, port=child_port)
-                    await manager.start()
-                except Exception:
-                    configuration.failed('child_start_failed')
-                    raise
-
-            admin, mcp = make_apps(store, TOOLS[args.product], child,
-                                  verify_admin=make_ha_admin_verifier(), child_url=url,
-                                  health=health.snapshot, backend_changed=backend_changed, configuration=configuration,
-                                  management=ManagementOptions(kind="ha-addon", authority="ha-admin",
-                                                               product_version=version_for_product(args.product)),
-                                  backend_check=getattr(health, "test_saved", None), restart_child=backend_changed, diagnostics=getattr(manager, "diagnostics", None),
-                                  server_name='woow-mcp-' + args.product, instructions=INSTRUCTIONS.get(args.product),
-                                  # 0.2.2: clients connect without a backend or a running child (Odoo Manage: unchanged)
-                                  listing=listing(args.product) if args.product in FULL_PRODUCTS else None,
-                                  availability=health.availability,
-                                  # Headscale's secret URL is used by Claude.ai; other browser origins must not
-                                  # acquire the Headscale API key's authority through a leaked link.
-                                  secret_path_allowed_origins=(frozenset({"https://claude.ai"})
-                                                               if args.product == "headscale" else None))
+        # HM-05 (multi-profile plan 3.2): the default profile's runtime. It makes the child's Supervisor, client,
+        # HealthMonitor and ConfigurationState and the two apps (make_apps with these product options) as this function
+        # made them, and closes them in the same order (the client, then the child). No shared administration: the apps
+        # make their own AdminAuthority and management slots, as before.
+        profile = ProfileRuntime(store, TOOLS[args.product], child_spec, port=child_port, app_options=dict(
+            verify_admin=make_ha_admin_verifier(),
+            management=ManagementOptions(kind="ha-addon", authority="ha-admin",
+                                         product_version=version_for_product(args.product)),
+            server_name='woow-mcp-' + args.product, instructions=INSTRUCTIONS.get(args.product),
+            # 0.2.2: clients connect without a backend or a running child (Odoo Manage: unchanged)
+            listing=listing(args.product) if args.product in FULL_PRODUCTS else None,
+            # Headscale's secret URL is used by Claude.ai; other browser origins must not
+            # acquire the Headscale API key's authority through a leaked link.
+            secret_path_allowed_origins=(frozenset({"https://claude.ai"})
+                                         if args.product == "headscale" else None)))
+        async with profile:
             servers = [Listener(uvicorn.Config(app, host=args.host, port=port,
                 proxy_headers=False, access_log=False, log_level='warning', server_header=False,
                 lifespan='off', limit_concurrency=64, timeout_keep_alive=5))
-                for app, port in ((admin, args.admin_port), (mcp, args.mcp_port))]
+                for app, port in ((profile.admin_app, args.admin_port), (profile.mcp_app, args.mcp_port))]
             # 0.1.12: /private_<token>/mcp puts the token in the request path. access_log stays False; every record
             # (uvicorn's error log, tracebacks, any library) is scrubbed to /private_[REDACTED]/ when created and
             # again by uvicorn's handlers.
             redact.install()
             redact.guard_handlers(*redact.UVICORN_LOGGERS)
-            try:
-                await backend_changed(store.load())
-            except Exception:
-                # Keep authenticated management available to report/retry a
-                # fixed launch failure; never echo third-party exception text.
-                pass
+            # launch() keeps authenticated management available to report/retry a
+            # fixed launch failure; it never echoes third-party exception text.
+            await profile.launch()
             tasks = [asyncio.create_task(server.serve()) for server in servers]
-            monitor = asyncio.create_task(health.run())
+            monitor = asyncio.create_task(profile.monitor())
             stopping = asyncio.create_task(stop.wait())
             try:
                 done, _ = await asyncio.wait([*tasks, monitor, stopping], return_when=asyncio.FIRST_COMPLETED)
@@ -115,8 +90,6 @@ async def run(args, *, child_port=CHILD_PORT):
                         task.cancel()
                     await asyncio.gather(*tasks, return_exceptions=True)
     finally:
-        if manager is not None:
-            await manager.stop()
         store.close()
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.remove_signal_handler(sig)

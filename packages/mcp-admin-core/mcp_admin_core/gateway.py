@@ -87,6 +87,11 @@ LOCAL_SESSION_LIMIT = 256
 CHILD_WAIT_SECONDS = 10
 CHILD_RETRY_SECONDS = .25
 CHILD_UP = ("running", "starting")
+# HM-05 (multi-profile plan 3.2): the management requests one add-on serves at a time (make_apps admin_slots). The
+# profiles of an add-on share one set (profile_runtime.SharedAdmin); a make_apps without it has its own, as before.
+ADMIN_SLOTS = 16
+# HM-05 (contract 1.1): a profile's id, the default profile's or 24 lowercase hexadecimal characters.
+PROFILE_ID = re.compile(r"default|[0-9a-f]{24}")
 
 
 def sse_frame(frame: bytes):
@@ -167,6 +172,20 @@ def json_reply(value, status, headers):
     return Response(json.dumps(value, separators=(",", ":")).encode(), status_code=status,
                     media_type="application/json", headers=headers)
 RoleVerifier = Callable[[str], Awaitable[bool]]
+# HM-05 (multi-profile plan 5.3): the shared management pipeline make_apps can be given (admin_pipeline): it takes one
+# management request with the profile's action and answers it.
+AdminPipeline = Callable[[Request, Callable[..., Awaitable[Response]]], Awaitable[Response]]
+
+
+def profile_echo(view):
+    """HM-05: a profile's echo as make_apps' profile_view gives it (plan 5.3 item 5, contract 3.4): exactly its id,
+    its label (a non-empty string) and is_default (true for the default profile only). Anything else: ValueError."""
+    if (not isinstance(view, dict) or set(view) != {"id", "label", "is_default"}
+            or not isinstance(view["id"], str) or not PROFILE_ID.fullmatch(view["id"])
+            or not isinstance(view["label"], str) or not view["label"]
+            or view["is_default"] is not (view["id"] == "default")):
+        raise ValueError("invalid profile echo")
+    return {"id": view["id"], "label": view["label"], "is_default": view["is_default"]}
 
 
 class UpstreamOwner:
@@ -336,7 +355,10 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               server_name="woow-mcp", instructions: str | None = None,
               listing=None, availability=None, management: ManagementOptions | None = None,
               backend_check=None, restart_child=None, diagnostics=None, configuration=None,
-              secret_path_allowed_origins: frozenset[str] | None = None):
+              secret_path_allowed_origins: frozenset[str] | None = None,
+              authority: AdminAuthority | None = None, admin_slots: asyncio.Semaphore | None = None,
+              admin_pipeline: AdminPipeline | None = None, token_access: TokenAccess | None = None,
+              mutation_lock: asyncio.Lock | None = None, profile_view: Callable[[], dict] | None = None):
     """listing (0.2.2): the product's tools/list tools as its child lists them (surface.listing). With it, a client
     connects whatever the backend's state: when no child can answer (no backend configured, so no child; a child that is
     not up) the gateway answers initialize, notifications/initialized, ping and tools/list itself, from listing through
@@ -344,10 +366,44 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     requires_backend is refused without a configured backend (-32603 Backend not configured; n8n's child, which runs
     without one, still answers its documentation tools) and while the last health check finds the backend unreachable
     (-32603 Backend unreachable, with the check's reason). availability() is HealthMonitor.availability. Without listing
-    (Odoo Manage, older tests) nothing changes."""
+    (Odoo Manage, older tests) nothing changes.
+
+    HM-05 (multi-profile plan 3.2, 5.3): the apps of one profile (store). Each of these is created here when left out,
+    exactly as before; profile_runtime.ProfileRuntime passes them:
+    - authority: the add-on's AdminAuthority, shared by every profile (one CSRF key; one HA role verifier, so one
+      bound on its concurrent queries). verify_admin, when also given, must be its verifier.
+    - admin_slots: the add-on's management slots (ADMIN_SLOTS), shared by every profile.
+    - admin_pipeline: the shared management pipeline (HM-10). Every management request that passed the page checks
+      goes to admin_pipeline(request, action) instead of admin_api (identity, the slots, the bounded body read, the
+      disconnect watch, all of which it then owns); it lets this profile act by awaiting action(request, user, base,
+      csrf, value, peer_disconnected, committed): this profile's lock, validation on its state, the final role check,
+      If-Match, receipts and commit, unchanged (with the profile echo on its answer, none on the pipeline's own).
+    - token_access: this store's TokenAccess, created by the profile's runtime, which reaches it (a token change of
+      one profile ends only that profile's leases).
+    - mutation_lock: this profile's lock, created by its runtime; every management change of the profile holds it.
+    - profile_view: the profile's echo (DQ-40 point 2), a callable read for every answer: {"id", "label",
+      "is_default"} (profile_echo). The bootstrap then carries it as "profile" with "profiles_supported": true, and
+      every other JSON answer of this profile's action its id ("profile": {"id"}); see echoed() in admin_page."""
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
+    if authority is not None and (not isinstance(authority, AdminAuthority)
+                                  or verify_admin is not None and verify_admin is not authority.verifier):
+        raise ValueError("one administrator authority")
+    if admin_slots is not None and not isinstance(admin_slots, asyncio.Semaphore):
+        raise ValueError("invalid management slots")
+    if admin_pipeline is not None and not callable(admin_pipeline):
+        raise ValueError("invalid management pipeline")
+    if token_access is not None and not isinstance(token_access, TokenAccess):
+        raise ValueError("invalid token access")
+    if token_access is not None and token_access.store is not store:
+        raise ValueError("token access of another store")
+    if mutation_lock is not None and not isinstance(mutation_lock, asyncio.Lock):
+        raise ValueError("invalid mutation lock")
+    if profile_view is not None:
+        if not callable(profile_view):
+            raise ValueError("invalid profile echo")
+        profile_echo(profile_view())
     n8n_request_bounds = getattr(store, "product", None) == "n8n"
     management = management or ManagementOptions()
     if listing is not None:
@@ -359,12 +415,12 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             return {"child": "running", "ready": True, "backend": "unknown", "reason": None}
     local_sessions = OrderedDict()  # 0.2.2: session id -> last use (time.monotonic())
     redact.install()  # 0.1.12: a request path may now carry the token; no log record may show it
-    mutation_lock = asyncio.Lock()
-    token_access = TokenAccess(store)
+    mutation_lock = asyncio.Lock() if mutation_lock is None else mutation_lock
+    token_access = TokenAccess(store) if token_access is None else token_access
     configuration = configuration or ConfigurationState(store)
     operations = OperationJournal(store.path)
     slots = asyncio.Semaphore(32)
-    admin_slots = asyncio.Semaphore(16)
+    admin_slots = asyncio.Semaphore(ADMIN_SLOTS) if admin_slots is None else admin_slots
 
     def snapshot():
         return health() if health else {"management": "alive", "child": {"state": "not_started", "transport_ready": False}, "backend": "unconfigured"}
@@ -373,7 +429,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         return capability_snapshot(management, state, snapshot(), catalog, can_test=backend_check is not None,
                                    can_restart=restart_child is not None, logs=diagnostics is not None)
 
-    authority = AdminAuthority(verify_admin)
+    authority = AdminAuthority(verify_admin) if authority is None else authority
     admin_identity = authority.identity
     final_role = authority.verify
 
@@ -717,7 +773,34 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 raise BadRequest(404)
             request.path_params["operation"] = "__ui__"
             request.state.ui_path = path
-        return await admin_api(request)
+        if admin_pipeline is None:
+            response = await admin_api(request)  # its only answer is the action's (action.result())
+            return response if profile_view is None else echoed(response, request.path_params["operation"])
+        return await admin_pipeline(request, profile_action)  # HM-05: the shared pipeline (see make_apps)
+
+    async def profile_action(request, user, base, csrf, value, peer_disconnected, committed):
+        """HM-05: this profile's action as the shared pipeline gets it: admin_action, its answer with the echo (an answer
+        the pipeline gives itself never carries this profile's echo)."""
+        response = await admin_action(request, user, base, csrf, value, peer_disconnected, committed)
+        return response if profile_view is None else echoed(response, request.path_params["operation"])
+
+    def echoed(response, name):
+        """HM-05: this profile's echo (profile_view) in a JSON object its action answered: the bootstrap gets "profile"
+        (id, label, is_default) and "profiles_supported": true, any other answer "profile": {"id"}. The action answers
+        only after its final role check; a refusal (an exception: 403, 428 ...) gets no echo from error_handler, so a
+        caller who is not an administrator learns nothing about the profile (invariant I10). Status and headers stay."""
+        if not isinstance(response, JSONResponse):
+            return response
+        content = json.loads(response.body)
+        if not isinstance(content, dict):
+            return response
+        view = profile_echo(profile_view())
+        if name == "bootstrap":
+            content.update(profile=view, profiles_supported=True)
+        else:
+            content["profile"] = {"id": view["id"]}
+        headers = {key: value for key, value in response.headers.items() if key not in ("content-length", "content-type")}
+        return JSONResponse(content, status_code=response.status_code, headers=headers)
 
     def still_authorized(token):
         try:
