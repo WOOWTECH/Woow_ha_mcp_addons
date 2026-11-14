@@ -37,10 +37,12 @@ ROOT = Path(__file__).resolve().parents[1]
 RESTORE_OWNER = (0, 0)  # Supervisor restores as root and does not chown
 RUNTIME = (10001, 10001)
 REOWNED = 'bootstrap: re-owned %d restored entries in /data/mcp\n'
+# %s: why the marker could not be saved, an errno name or 'name in use' (nothing else: no path, no value)
 WARNING = ('bootstrap: WARNING: /data/mcp was restored but its restore marker (.restore-detected) could not be '
-           'saved; starting (no profile data)\n')
+           'saved (%s); starting (no profile data)\n')
 REFUSED = ('bootstrap: /data/mcp was restored with profile data but its restore marker (.restore-detected) could '
-           'not be saved; not starting (retried at the next start)\n')
+           'not be saved (%s); not starting (retried at the next start)\n')
+IN_USE = 'name in use'
 
 
 def inode(path):
@@ -433,34 +435,48 @@ def test_an_interrupted_restore_start_is_redone_until_it_completes(tmp_path, cra
 
 
 def marker_failures():
-    def failed(code):
-        return OSError(code, os.strerror(code))
+    """The calls that can fail while the marker is saved, and the reason the log line names."""
+    def failed(code):  # as the kernel reports it, with the file name: the line must name only the errno
+        return OSError(code, os.strerror(code), rd.MARKER)
     return {
-        'no space left': dict(kind='open', subject=rd.MARKER, error=failed(errno.ENOSPC)),
-        'read-only file system': dict(kind='open', subject=rd.MARKER, error=failed(errno.EROFS)),
-        'the marker fsync fails': dict(kind='fsync', nth=1, error=failed(errno.EIO)),
-        'the /data/mcp fsync fails': dict(kind='fsync', nth=2, error=failed(errno.EIO)),
+        'no space left': (dict(kind='open', subject=rd.MARKER, error=failed(errno.ENOSPC)), 'ENOSPC'),
+        'read-only file system': (dict(kind='open', subject=rd.MARKER, error=failed(errno.EROFS)), 'EROFS'),
+        'the marker fsync fails': (dict(kind='fsync', nth=1, error=failed(errno.EIO)), 'EIO'),
+        'the /data/mcp fsync fails': (dict(kind='fsync', nth=2, error=failed(errno.EIO)), 'EIO'),
     }
 
 
+def take_the_markers_name(data, kind):
+    """Something that is not a marker holds its name: a directory, a link, or a file with a second link."""
+    marker = data / rd.MARKER
+    if kind == 'name taken by a directory':
+        marker.mkdir()
+    elif kind == 'name taken by a link':
+        marker.symlink_to('state.json')
+    else:
+        assert kind == 'name taken by a second link', kind
+        os.link(data / 'state.json', marker)
+
+
 @pytest.mark.parametrize('profile_data', ['index', 'directory'])
-@pytest.mark.parametrize('failure', [*marker_failures(), 'name taken by a directory', 'name taken by a link'])
+@pytest.mark.parametrize('failure', [*marker_failures(), 'name taken by a directory', 'name taken by a link',
+                                     'name taken by a second link'])
 def test_with_profile_data_a_restore_without_its_marker_does_not_start(tmp_path, failure, profile_data):
     # PaaS test_marker_detection_fails_closed; plan §8.4: profile data on disk, no durable marker -> refuse the start
     # (bootstrap unavailable) before any change; the next start tries again.
     data = restored_tree(tmp_path, profile_data)
     vroot = VirtualRoot()
     marker = data / rd.MARKER
-    if failure == 'name taken by a directory':
-        marker.mkdir()
-    elif failure == 'name taken by a link':
-        marker.symlink_to('state.json')
+    if failure in marker_failures():
+        fault, reason = marker_failures()[failure]
+        vroot.fault(**fault)
     else:
-        vroot.fault(**marker_failures()[failure])
+        take_the_markers_name(data, failure)
+        reason = IN_USE
     before = snapshot(data)
     with pytest.raises(RuntimeError, match='restore marker unavailable') as refused:
         boot(tmp_path, vroot)
-    assert refused.value.stderr == REFUSED
+    assert refused.value.stderr == REFUSED % reason
     assert not [event for event in vroot.events if event[0] in ('mode', 'owner', 'scandir')] and vroot.owners == {}
     after = snapshot(data)
     made = {rd.MARKER} if 'fsync' in failure else set()  # created, but not known to be durable
@@ -477,37 +493,46 @@ def test_without_profile_data_a_restore_without_its_marker_warns_and_starts(tmp_
     # Plan §8.4: no profile data, nothing to revoke: one WARNING line and the repair goes on as today.
     data = restored_tree(tmp_path)
     vroot = VirtualRoot()
-    if failure == 'name taken by a directory':
-        (data / rd.MARKER).mkdir()
+    if failure in marker_failures():
+        fault, reason = marker_failures()[failure]
+        vroot.fault(**fault)
     else:
-        vroot.fault(**marker_failures()[failure])
+        take_the_markers_name(data, failure)  # a directory: pass 1 approves it like any plain directory
+        reason = IN_USE
     out = boot(tmp_path, vroot)
     entries = [data, *data.rglob('*')]
-    assert out == WARNING + REOWNED % (len(entries) - 1)
+    assert out == WARNING % reason + REOWNED % (len(entries) - 1)
     assert {vroot.owner(path.lstat()) for path in entries} == {RUNTIME}
 
 
-def test_a_link_in_the_markers_name_never_starts(tmp_path):
+@pytest.mark.parametrize('taken', ['name taken by a link', 'name taken by a second link'])
+def test_a_link_in_the_markers_name_never_starts(tmp_path, taken):
+    # Without profile data the WARNING comes first; then pass 1 refuses the link, as it refuses any link and any file
+    # with a second link. Never a marker accepted (review HM-13a E20).
     data = restored_tree(tmp_path)
-    (data / rd.MARKER).symlink_to('state.json')
+    take_the_markers_name(data, taken)
     before = snapshot(data)
     vroot = VirtualRoot()
     with pytest.raises(RuntimeError, match='unsupported restored entry') as refused:
         boot(tmp_path, vroot)
-    assert refused.value.stderr == WARNING  # pass 1 then refuses the link, as it refuses any link
+    assert refused.value.stderr == WARNING % IN_USE
     assert snapshot(data) == before and vroot.owners == {}
 
 
-@pytest.mark.parametrize('code', [pytest.param(errno.EIO, id='EIO'), pytest.param(errno.EACCES, id='EACCES')])
-def test_a_profile_data_check_that_cannot_answer_counts_as_profile_data(tmp_path, code):
-    data = restored_tree(tmp_path)
+@pytest.mark.parametrize('lookup', [pytest.param(errno.EIO, id='EIO'), pytest.param(errno.EACCES, id='EACCES'),
+                                    pytest.param(None, id='a dangling profiles link')])
+def test_a_profile_data_check_that_cannot_rule_it_out_counts_as_profile_data(tmp_path, lookup):
+    # A lookup that cannot answer counts, and the check never follows a link: a profiles link to nowhere is profile
+    # data too (review HM-13a E19).
+    data = restored_tree(tmp_path, 'dangling link' if lookup is None else None)
     vroot = VirtualRoot()
     vroot.fault('open', OSError(errno.ENOSPC, os.strerror(errno.ENOSPC)), subject=rd.MARKER)
-    vroot.fault('stat', OSError(code, os.strerror(code)), subject='profiles.json')
+    if lookup is not None:
+        vroot.fault('stat', OSError(lookup, os.strerror(lookup)), subject='profiles.json')
     before = snapshot(data)
     with pytest.raises(RuntimeError, match='restore marker unavailable') as refused:
         boot(tmp_path, vroot)
-    assert refused.value.stderr == REFUSED and snapshot(data) == before and vroot.owners == {}
+    assert refused.value.stderr == REFUSED % 'ENOSPC' and snapshot(data) == before and vroot.owners == {}
 
 
 def test_a_start_without_a_restore_changes_nothing(tmp_path, log_scan):
@@ -1055,10 +1080,10 @@ def test_root_marker_name_taken_by_a_directory(reachable, profile_data):
     if profile_data:
         with redirect_stderr(log), pytest.raises(RuntimeError, match='restore marker unavailable'):
             entrypoint().prepare_data(reachable)
-        assert log.getvalue() == REFUSED
+        assert log.getvalue() == REFUSED % IN_USE
         assert snapshot(data) == before and owners_of(data) == {RESTORE_OWNER}
     else:
         with redirect_stderr(log):
             entrypoint().prepare_data(reachable)
-        assert log.getvalue() == WARNING + REOWNED % len(list(data.rglob('*')))
+        assert log.getvalue() == WARNING % IN_USE + REOWNED % len(list(data.rglob('*')))
         assert owners_of(data) == {RUNTIME}

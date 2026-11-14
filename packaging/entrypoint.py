@@ -16,6 +16,7 @@ Before pass 1 a restore leaves a durable marker (MARKER) for the management proc
 marker cannot be saved does not start when multi-profile data is on disk.
 """
 import ctypes
+import errno
 import os
 from pathlib import Path
 import resource
@@ -154,6 +155,14 @@ def _mark_restored(child):
     os.fsync(child)
 
 
+def _marker_failure(error):
+    """Why the marker could not be saved, for its one log line: the errno name (ENOSPC, EROFS, EIO...) or 'name in
+    use' (a directory, a link or a file with more than one link holds the name). Never a path or a value."""
+    if isinstance(error, OSError):
+        return errno.errorcode.get(error.errno, 'unknown error')
+    return 'name in use'
+
+
 def _has_profile_data(child):
     """Any entry under a PROFILE_DATA name counts, and so does one the lookup cannot rule out."""
     for name in PROFILE_DATA:
@@ -203,17 +212,19 @@ def prepare_data(parent=Path('/data')):
                     and RESTORE_OWNER != (UID, GID)):
                 try:
                     _mark_restored(child)
-                except (OSError, RuntimeError):
+                except (OSError, RuntimeError) as error:
                     # With profile data a restore never starts unmarked; the next start tries again. Without
-                    # it the restore check revokes no token (multi-profile decision DQ-03), and the instance
-                    # sentinel still sees the restore when the product's switch is on: start, and say so.
+                    # it the restore check revokes no token (multi-profile decision DQ-03): start, and say so
+                    # (pass 1 still refuses a name held by a link or by a file with a second link). The instance
+                    # sentinel sees such a restore too, but only of a backup made while the product's switch was on.
+                    reason = _marker_failure(error)
                     if _has_profile_data(child):
                         print('bootstrap: /data/mcp was restored with profile data but its restore marker '
-                              '(.restore-detected) could not be saved; not starting (retried at the next start)',
-                              file=sys.stderr, flush=True)
+                              '(.restore-detected) could not be saved (%s); not starting (retried at the next start)'
+                              % reason, file=sys.stderr, flush=True)
                         raise RuntimeError('restore marker unavailable') from None
                     print('bootstrap: WARNING: /data/mcp was restored but its restore marker (.restore-detected) '
-                          'could not be saved; starting (no profile data)', file=sys.stderr, flush=True)
+                          'could not be saved (%s); starting (no profile data)' % reason, file=sys.stderr, flush=True)
                 repaired = _repair_restored(child, info)
                 info = os.fstat(child)
             if (info.st_uid, info.st_gid) != (UID, GID) or stat.S_IMODE(info.st_mode) != 0o700:
