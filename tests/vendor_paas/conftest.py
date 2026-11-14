@@ -12,7 +12,10 @@ module, so a PaaS test that times a record or reads the PaaS mask would see the 
 file, two of them fail after tests/test_secret_path.py::test_real_uvicorn_logs_never_show_the_secret). Each test here
 therefore starts from the standard record factory with the PaaS module not installed and without those handler
 filters, and logging is put back afterwards: the record factory, the PaaS module's install flag, every logger's filters
-and every handler's filters. No PaaS factory or PathTokenRedactionFilter stays behind for the HA tests that run later.
+and every handler's filters; also the level, propagate flag and handlers of every logger other than the root, since
+some PaaS tests leave a logger they borrowed (uvicorn.error) at INFO without propagation, and a later uvicorn test then
+writes its traceback to logging.lastResort instead of its handler. No PaaS factory or PathTokenRedactionFilter stays
+behind for the HA tests that run later. The root keeps its handlers: pytest's log capture adds and removes its own there.
 """
 import logging
 
@@ -26,13 +29,18 @@ def _loggers():
                                    if isinstance(logger, logging.Logger))]
 
 
+FRESH = ((), logging.NOTSET, True, False, ())  # a logger the test created goes back to what getLogger() makes
+
+
 @pytest.fixture(autouse=True)
 def paas_logging(monkeypatch):
     monkeypatch.setattr(logging, '_logRecordFactory', logging.LogRecord)
     monkeypatch.setattr(log_redaction, '_factory_installed', False)
-    loggers = {id(logger): (logger, list(logger.filters)) for logger in _loggers()}
+    root = logging.getLogger()
+    loggers = {id(logger): (tuple(logger.filters), logger.level, logger.propagate, logger.disabled,
+                            tuple(logger.handlers)) for logger in _loggers()}
     handlers = {}
-    for logger, _ in loggers.values():
+    for logger in _loggers():
         for handler in logger.handlers:
             if id(handler) not in handlers:
                 handlers[id(handler)] = (handler, list(handler.filters))
@@ -43,8 +51,9 @@ def paas_logging(monkeypatch):
         for handler, filters in handlers.values():
             handler.filters[:] = filters
         for logger in _loggers():
-            if id(logger) in loggers:
-                logger.filters[:] = loggers[id(logger)][1]
-            else:  # a logger the test created: only the PaaS filter install() may have put there goes
-                logger.filters[:] = [f for f in logger.filters
-                                     if not isinstance(f, log_redaction.PathTokenRedactionFilter)]
+            filters, level, propagate, disabled, attached = loggers.get(id(logger), FRESH)
+            logger.filters[:] = filters
+            if logger is not root:
+                logger.setLevel(level)
+                logger.propagate, logger.disabled = propagate, disabled
+                logger.handlers[:] = attached
