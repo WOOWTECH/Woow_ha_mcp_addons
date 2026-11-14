@@ -201,10 +201,13 @@ def test_shared_secrets_compare_every_token_kind_and_ignore_revoked_tokens():
 
 
 def test_port_conflicts_are_part_of_the_check():
-    entries = (IndexEntry(A, 'One', 18000), IndexEntry(B, 'Two', 18000), IndexEntry(C, 'Three', 3000))
-    result = profiles.check_consistency(entries, ProfilesScan((A, B, C), (), 0),
-                                        {A: credentials(state()), B: credentials(state()), C: credentials(state())})
-    assert result.port_conflicts == {18000: (A, B), 3000: (C,)}
+    entries = (IndexEntry(A, 'One', 18000), IndexEntry(B, 'Two', 18000), IndexEntry(C, 'Three', 3000),
+               IndexEntry(D, 'Four', 8099))
+    result = profiles.check_consistency(entries, ProfilesScan((A, B, C, D), (), 0),
+                                        {A: credentials(state()), B: credentials(state()), C: credentials(state()),
+                                         D: credentials(state())})
+    assert result.port_conflicts == {18000: (A, B), 3000: (C,), 8099: (D,)}
+    assert result.unavailable == ()  # a conflicting port stops the child, it does not make the profile unavailable
 
 
 def test_profile_data_presence(tmp_path, monkeypatch):

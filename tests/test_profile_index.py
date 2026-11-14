@@ -65,11 +65,11 @@ PARITY = [
     # Not structural (PaaS test_profile_robustness.py:191, :316): only the profiles involved stop (port_conflicts).
     ('port-duplicate', raw({A: entry('x', 18000), B: entry('y', 18000)}), 'ok', 'ok'),
     ('port-default-child', raw({A: entry('x', 3000)}), 'ok', 'ok'),
-    # HA is stricter. Plan §4.2 / contract §8: "port ... 不是 3000／8081／8099" -- for 8081/8099, the add-on's own
-    # listeners, PaaS only refuses the spawn; the default child's port 3000 follows "撞預設 port 不算結構錯" instead
-    # (see port-default-child and the HM-07 provenance note, section 5).
-    ('port-mcp-listener', raw({A: entry('x', 8081)}), 'ok', 'corrupt'),
-    ('port-admin-listener', raw({A: entry('x', 8099)}), 'ok', 'corrupt'),
+    # The add-on's own listeners, 8081 (MCP) and 8099 (panel), likewise: PaaS _index_entries takes any port of
+    # 1024-65535 and refuses a listener port only at spawn (process.py _port_refusal); design A-port and FM-40 list
+    # 3000, 8081 and 8099 together as "not structural". HM-07 review MF-1; the provenance note, section 3.
+    ('port-mcp-listener', raw({A: entry('x', 8081)}), 'ok', 'ok'),
+    ('port-admin-listener', raw({A: entry('x', 8099)}), 'ok', 'ok'),
     # Contract §9 #35 (DQ-40 ④): label characters and NFKC + casefold uniqueness; '預設帳號' reserved.
     ('label-zero-width', raw({A: entry('Sa\u200bles', 18000)}), 'ok', 'corrupt'),
     ('label-bidi-override', raw({A: entry('\u202eselaS', 18000)}), 'ok', 'corrupt'),
@@ -123,7 +123,8 @@ def test_order_is_the_creation_order_and_survives_a_round_trip():
 
 
 def test_encode_refuses_what_parse_would_refuse():
-    for entries in ([IndexEntry(A, 'x', 8081)], [IndexEntry(A, 'x', 18000), IndexEntry(B, 'X', 18001)],
+    for entries in ([IndexEntry(A, 'x', 1023)], [IndexEntry(A, 'x', True)],
+                    [IndexEntry(A, 'x', 18000), IndexEntry(B, 'X', 18001)],
                     [IndexEntry('A' * 24, 'x', 18000)], [IndexEntry(A, ' x', 18000)],
                     [IndexEntry(k, k, 18000 + i) for i, k in enumerate((A, B, C, D, E, F))]):
         with pytest.raises(IndexCorrupt):
@@ -140,6 +141,27 @@ def test_duplicate_port_and_default_port_are_not_structural_and_name_only_the_pr
     assert profiles.port_conflicts(profiles.parse_index(raw({A: entry('a1', 18000), B: entry('b1', 18001)}))) == {}
     with pytest.raises(IndexCorrupt):
         profiles.parse_index(raw({A: entry('a1', 18000), B: entry('b1', 18000), C: entry('A1', 18002)}))
+
+
+def test_a_listener_port_stops_only_the_profile_holding_it(tmp_path):
+    # HM-07 review MF-1: an index port that is one of the add-on's own listeners (8081 MCP, 8099 panel) keeps the index
+    # usable, so 8081 goes on serving the default profile and every other profile; only the profiles on such a port are
+    # not started (disabled_reason port_conflict), like a duplicate or the default child's port. PaaS takes the port in
+    # its index and refuses the spawn (process.py _port_refusal: "the admin listener uses this port").
+    data = raw({A: entry('a1', 18000), B: entry('b1', 8081), C: entry('c1', 8099), D: entry('d1', 18003),
+                E: entry('e1', 8081)})
+    entries = profiles.parse_index(data)
+    assert [e.port for e in entries] == [18000, 8081, 8099, 18003, 8081]
+    assert profiles.port_conflicts(entries) == {8081: (B, E), 8099: (C,)}
+    assert profiles.disabled_reasons(entries, profiles.capacity('odoo')) == {
+        B: {'disabled_reason': 'port_conflict'}, C: {'disabled_reason': 'port_conflict'},
+        E: {'disabled_reason': 'port_conflict'}}
+    path = tmp_path / 'profiles.json'
+    path.write_bytes(data)
+    path.chmod(0o600)
+    view = profiles.read_index(path)
+    assert view.state == INDEX_OK and view.entries == entries
+    assert view.serves_mcp and not view.offers_quarantine
 
 
 def test_ids():
@@ -379,7 +401,7 @@ def corrupt_files(tmp_path):
     place('too-large', lambda p: (p.write_bytes(good[:-1] + b' ' * 70000 + b'}'), p.chmod(0o600)))
     place('directory', lambda p: p.mkdir(mode=0o700))
     place('fifo', lambda p: os.mkfifo(p, 0o600))
-    place('structure', lambda p: (p.write_bytes(raw({A: entry('x', 8099)})), p.chmod(0o600)))
+    place('structure', lambda p: (p.write_bytes(raw({A: entry('x', 1023)})), p.chmod(0o600)))
     place('empty-file', lambda p: (p.write_bytes(b''), p.chmod(0o600)))
     return cases
 
