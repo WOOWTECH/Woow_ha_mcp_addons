@@ -12,7 +12,7 @@ contents, fsync and the order of the calls are real. The tests named test_root_*
 and check what the runtime user (uid 10001) can do afterwards in a forked child: the CI runs pytest as root
 (packaging/unit.sh); an unprivileged run fails them on purpose, it never skips them.
 """
-from contextlib import redirect_stderr
+from contextlib import contextmanager, redirect_stderr
 import errno
 import importlib.util
 import io
@@ -21,6 +21,7 @@ import os
 from pathlib import Path
 import secrets
 import shutil
+import signal
 import stat
 import tempfile
 import time
@@ -63,6 +64,25 @@ def entrypoint(os_module=None):
 class Crash(BaseException):
     """The boot stops at this call (killed, or the power went once the page cache was written): nothing after it
     runs and what reached the disk stays. Not an OSError or RuntimeError: nothing in the code under test handles it."""
+
+
+class Stuck(BaseException):
+    """A call blocked past its deadline. Not an OSError (TimeoutError is one): the code under test cannot take it for
+    an unreadable file."""
+
+
+@contextmanager
+def deadline(seconds):
+    """Fail the test with Stuck when the block takes longer than seconds, instead of hanging the whole run."""
+    def expire(signum, frame):
+        raise Stuck(f'blocked for more than {seconds} s')
+    previous = signal.signal(signal.SIGALRM, expire)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
 
 
 class Seen:
@@ -760,7 +780,7 @@ def test_a_backup_restored_by_supervisor_shows_both_signals(tmp_path, log_scan):
     assert switch_on == rd.Detection(marker=True, active=True, sentinel=rd.MISMATCH) and switch_on.restored
     assert (data / 'state.json').read_bytes() == restored  # detection reads no state and writes none
     # The boot gate's last step (HM-13b): a new sentinel and record; the marker stays until the gate removes it.
-    rd.rebuild(data)
+    rd.rebuild(data, enabled=True)
     assert rd.detect(data, enabled=True) == rd.Detection(marker=True, active=True, sentinel=rd.CONSISTENT)
 
 
@@ -790,6 +810,8 @@ MALFORMED = {
     'a key missing': lambda real: json.dumps({'version': 1, 'st_ino': real['st_ino']}).encode(),
     'another version': lambda real: json.dumps({**real, 'version': 2}).encode(),
     'a boolean': lambda real: json.dumps({**real, 'version': True}).encode(),
+    'a boolean inode': lambda real: json.dumps({**real, 'st_ino': True}).encode(),
+    'a boolean ctime': lambda real: json.dumps({**real, 'st_ctime_ns': False}).encode(),
     'a float': lambda real: json.dumps({**real, 'st_ctime_ns': float(real['st_ctime_ns'])}).encode(),
     'a string': lambda real: json.dumps({**real, 'st_ino': str(real['st_ino'])}).encode(),
     'a negative number': lambda real: json.dumps({**real, 'st_ino': -1}).encode(),
@@ -813,7 +835,7 @@ def test_a_malformed_record_reads_as_a_restore(tmp_path, log_scan, name):
 
 
 @pytest.mark.parametrize('kind', ['a link to a good copy', 'a second name', 'a directory', 'a FIFO', 'unreadable',
-                                  'another owner'])
+                                  'another owner', 'reported larger than the limit'])
 def test_an_unsafe_record_reads_as_a_restore(tmp_path, log_scan, monkeypatch, kind):
     data = runtime_tree(tmp_path, log_scan)
     establish(data)
@@ -833,18 +855,45 @@ def test_an_unsafe_record_reads_as_a_restore(tmp_path, log_scan, monkeypatch, ki
         calls = Calls()
         calls.fail('open', rd.RECORD, PermissionError(errno.EACCES, os.strerror(errno.EACCES)))
         monkeypatch.setattr(rd, 'os', calls)
-    else:
+    else:  # what fstat says about the record: another owner, or a size past the limit (its bytes still a good record)
         held = inode(record)
 
         def fstat(fd):
             info = os.fstat(fd)
-            return Seen(info, (info.st_uid + 1, info.st_gid)) if (info.st_dev, info.st_ino) == held else info
+            if (info.st_dev, info.st_ino) != held:
+                return info
+            owner = (info.st_uid + 1, info.st_gid) if kind == 'another owner' else (info.st_uid, info.st_gid)
+            seen = Seen(info, owner)
+            if kind == 'reported larger than the limit':
+                seen.st_size = rd.RECORD_LIMIT + 1
+            return seen
         calls = Calls()
         calls.override('fstat', fstat)
         monkeypatch.setattr(rd, 'os', calls)
     before = snapshot(data)
-    assert rd.detect(data, enabled=True) == rd.Detection(marker=False, active=True, sentinel=rd.RECORD_INVALID)
+    with deadline(5):  # a record opened without O_NONBLOCK would block on the FIFO: fail fast, never hang the run
+        detection = rd.detect(data, enabled=True)
+    assert detection == rd.Detection(marker=False, active=True, sentinel=rd.RECORD_INVALID)
     assert snapshot(data) == before
+
+
+@pytest.mark.parametrize('moved', ['st_ino', 'st_ctime_ns'])
+def test_the_record_names_the_sentinel_by_inode_and_ctime_together(tmp_path, log_scan, monkeypatch, moved):
+    # Either number alone differing is another file (review HM-13a X4: the same ctime with another inode too).
+    data = runtime_tree(tmp_path, log_scan)
+    establish(data)
+
+    def stat(name, **kwargs):
+        info = os.stat(name, **kwargs)
+        if name != rd.SENTINEL:
+            return info
+        seen = Seen(info, (info.st_uid, info.st_gid))
+        setattr(seen, moved, getattr(info, moved) + 1)
+        return seen
+    calls = Calls()
+    calls.override('stat', stat)
+    monkeypatch.setattr(rd, 'os', calls)
+    assert rd.detect(data, enabled=True) == rd.Detection(marker=False, active=True, sentinel=rd.MISMATCH)
 
 
 @pytest.mark.parametrize('record', ['kept', 'missing'])
@@ -906,12 +955,12 @@ def test_an_interrupted_or_failed_rebuild_leaves_the_restore_visible(tmp_path, l
     calls.fail(name, subject, Crash(step) if stop == 'crash' else OSError(errno.EIO, os.strerror(errno.EIO)), nth)
     monkeypatch.setattr(rd, 'os', calls)
     with pytest.raises(Crash if stop == 'crash' else ConfigError):
-        rd.rebuild(data)
+        rd.rebuild(data, enabled=True)
     monkeypatch.setattr(rd, 'os', os)
     assert rd.detect(data, enabled=True).sentinel == verdict
     if stop == 'error':
         assert not (data / rd.TEMPORARY).exists()  # a failure cleans up after itself; a crash leaves it to the next
-    rd.rebuild(data)
+    rd.rebuild(data, enabled=True)
     assert rd.detect(data, enabled=True).sentinel == rd.CONSISTENT
     assert not (data / rd.TEMPORARY).exists()
 
@@ -926,8 +975,27 @@ def test_a_rebuild_checks_what_it_wrote(tmp_path, log_scan, monkeypatch):
     calls = Calls()
     calls.override('fstat', lambda fd: Shifted(os.fstat(fd)))
     monkeypatch.setattr(rd, 'os', calls)
-    with pytest.raises(ConfigError):
-        rd.rebuild(data)  # the record names a file that is not the sentinel: refused, not left as consistent
+    with pytest.raises(ConfigError):  # the record names a file that is not the sentinel: refused, not left consistent
+        rd.rebuild(data, enabled=True)
+
+
+@pytest.mark.parametrize('profile_data', [None, 'index'])
+def test_a_rebuild_is_only_for_an_active_product(tmp_path, log_scan, monkeypatch, profile_data):
+    # The boot gate calls rebuild() only when detect() was active; rebuild() also refuses on its own (review HM-13a
+    # SF-10), so a product that is not enabled and has no profile data never gets the two files.
+    data = runtime_tree(tmp_path, log_scan)
+    add_profile_data(data, profile_data)
+    if profile_data is None:
+        before = snapshot(data)
+        calls = Calls()
+        monkeypatch.setattr(rd, 'os', calls)
+        with pytest.raises(ConfigError):
+            rd.rebuild(data, enabled=False)
+        assert calls.made == [('open', str(data)), ('stat', 'profiles.json'), ('stat', 'profiles'), ('close', None)]
+        assert snapshot(data) == before
+    else:  # dormant profiles: the sentinel is on without the switch
+        rd.rebuild(data, enabled=False)
+        assert rd.detect(data, enabled=False) == rd.Detection(marker=False, active=True, sentinel=rd.CONSISTENT)
 
 
 def test_a_sentinel_that_cannot_be_made_stops_the_start(tmp_path, log_scan, monkeypatch):
@@ -949,7 +1017,7 @@ def test_detection_needs_its_directory(tmp_path):
     with pytest.raises(ConfigError):
         rd.detect(tmp_path / 'link', enabled=True)
     with pytest.raises(ConfigError):
-        rd.rebuild(tmp_path / 'absent')
+        rd.rebuild(tmp_path / 'absent', enabled=True)
 
 
 # ---- as root (the CI): real owners, and what the runtime user can do afterwards -----------------------------------
@@ -1000,7 +1068,7 @@ def start_runtime(directory):
 def detect_and_rebuild(directory):
     directory = Path(directory)
     before = rd.detect(directory, enabled=True)
-    rd.rebuild(directory)
+    rd.rebuild(directory, enabled=True)
     after = rd.detect(directory, enabled=True)
     store = ProductStore(directory, 'odoo')
     try:

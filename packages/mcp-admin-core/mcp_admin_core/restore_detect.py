@@ -78,7 +78,7 @@ def detect(directory: Path, *, enabled: bool) -> Detection:
     fd = _open_directory(directory)
     try:
         marker = _present(fd, MARKER)
-        profile_data = any(_present(fd, name) for name in PROFILE_DATA)
+        profile_data = _profile_data(fd)
         if not (enabled or profile_data):
             return Detection(marker, False, INACTIVE)
         verdict = _inspect(fd, profile_data)
@@ -90,14 +90,18 @@ def detect(directory: Path, *, enabled: bool) -> Detection:
         os.close(fd)
 
 
-def rebuild(directory: Path) -> None:
+def rebuild(directory: Path, *, enabled: bool) -> None:
     """A new sentinel and its record, for an active product (the boot gate's last step before the marker goes).
 
-    The old sentinel goes first, the new record last, each step durable: a stop before the new record is in place
-    reads as a restore (a record naming another file, or no sentinel). ConfigError when it could not be done.
+    enabled: the switch, read at this call as for detect(). A product that is not enabled and has no profile data has
+    no sentinel: ConfigError, after looking up the two PROFILE_DATA names and writing nothing. Otherwise the old
+    sentinel goes first, the new record last, each step durable: a stop before the new record is in place reads as a
+    restore (a record naming another file, or no sentinel). ConfigError when it could not be done.
     """
     fd = _open_directory(directory)
     try:
+        if not (enabled or _profile_data(fd)):
+            raise ConfigError('restore sentinel inactive')
         _rebuild(fd)
     finally:
         os.close(fd)
@@ -119,6 +123,10 @@ def _present(fd, name):
     except OSError:
         return True
     return True
+
+
+def _profile_data(fd):
+    return any(_present(fd, name) for name in PROFILE_DATA)
 
 
 def _inspect(fd, profile_data):
