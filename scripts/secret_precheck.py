@@ -86,7 +86,8 @@ def run(command, *, cwd=None, env=None, timeout=900):
 
 
 def git(root, *args):
-    result = run(['git', '-c', f'safe.directory={root}', '-C', str(root), *args], timeout=120)
+    # --no-optional-locks: git status does not refresh the index either (the precheck writes nothing in the checkout).
+    result = run(['git', '--no-optional-locks', '-c', f'safe.directory={root}', '-C', str(root), *args], timeout=120)
     if result.returncode != 0:
         raise Closed('git ' + ' '.join(args[:2]) + ' failed')
     return result.stdout.decode().strip()

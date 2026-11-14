@@ -143,6 +143,15 @@ def test_branch_commits_with_the_builders_allowlist_and_flags(repo, tmp_path, ca
     assert normalized(argv)[:-1] == normalized(gate)[:-1] + ['--exit-code', '0']
 
 
+def test_the_scan_leaves_the_git_index_alone(repo, tmp_path):
+    """Its git status runs without optional locks: a stat-dirty checkout does not get its index refreshed."""
+    os.utime(repo / 'notes/one.txt', ns=(1_000_000_000, 1_000_000_000))
+    index = (repo / '.git/index').read_bytes()
+    assert precheck.main(['--tools', str(stand_in(tmp_path / 'tools')), '--repo', str(repo), '--base', 'main',
+                          '--head', 'feature']) == 0
+    assert (repo / '.git/index').read_bytes() == index
+
+
 def test_no_new_commit_scans_nothing(repo, tmp_path, capsys):
     tools = stand_in(tmp_path / 'tools')
     assert precheck.main(['--tools', str(tools), '--repo', str(repo), '--base', 'feature', '--head', 'feature']) == 0

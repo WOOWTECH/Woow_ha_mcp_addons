@@ -11,19 +11,28 @@
 2. Changes: the files this branch changes against the merge base with --base (default origin/claude-delivery:
    commits, staged, unstaged and untracked files), the ones a ledger pins, and whether a ledger changes too. A pinned
    file changed in a PR has its ledger entry updated in the same PR (docs/tool-surface.json: scripts/tool_inventory.py).
-   Changed runtime files (packages/, apps/) that no ledger lists are named for review, without failing.
+   Runtime files are the image's own code: packages/mcp-admin-core/, packages/mcp-admin-ui/src/ and apps/ (.py, .js,
+   .cjs, .mjs; not tests, not installs) and the two packaging files every Dockerfile copies (entrypoint.py,
+   management_launcher.py). A changed runtime file no ledger lists is named for review, without failing; a new one
+   (added on this branch) fails: the PR that creates a module lists it in runtime-patches.json
+   (docs/multi-profile/ledger-tracking.md, rule 1).
 
-Exit 0: no drift; 1: drift (paths listed); 2: the precheck could not run. It writes nothing and prints paths and counts
-only. A fast local precheck; tests/test_tool_inventory.py stays the gate.
+Exit 0: no drift and no new unlisted runtime file; 1: drift, a missing pinned file or a new unlisted runtime file (paths
+listed); 2: the precheck could not run. It writes nothing in the checkout, not even the git index (git diff refreshes
+the index it reads, so it reads a private copy; git runs with --no-optional-locks) and prints paths and counts only.
+A fast local precheck; tests/test_tool_inventory.py stays the gate.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
+import tempfile
 
 DEFAULT_REPO = Path(__file__).resolve().parents[1]
 PATCHES = 'docs/provenance/runtime-patches.json'
@@ -32,6 +41,7 @@ SURFACE = 'docs/tool-surface.json'
 LEDGERS = (PATCHES, SOURCES, SURFACE, 'docs/tool-surface.md')
 RUNTIME_PREFIXES = ('packages/mcp-admin-core/', 'packages/mcp-admin-ui/src/', 'apps/')
 RUNTIME_SUFFIXES = ('.py', '.js', '.cjs', '.mjs')
+RUNTIME_FILES = ('packaging/entrypoint.py', 'packaging/management_launcher.py')  # COPY'd by every apps/*/Dockerfile
 
 
 class Unavailable(RuntimeError):
@@ -40,6 +50,11 @@ class Unavailable(RuntimeError):
 
 def installed_only(path):
     return '/.venv/' in path or '/node_modules/' in path
+
+
+def runtime_file(path):
+    return path in RUNTIME_FILES or (path.startswith(RUNTIME_PREFIXES) and path.endswith(RUNTIME_SUFFIXES)
+                                     and not installed_only(path) and '/tests/' not in path)
 
 
 def sha256(path):
@@ -86,20 +101,33 @@ def drift(root, pinned):
     return report
 
 
-def git(root, *args):
+def git(root, *args, index=None):
+    """git in root; index: a private index file to read (and refresh) instead of the checkout's own."""
+    env = None if index is None else {**os.environ, 'GIT_INDEX_FILE': str(index)}
     try:
-        result = subprocess.run(['git', '-c', f'safe.directory={root}', '-C', str(root), *args],
-                                capture_output=True, text=True, timeout=60, check=True)
+        result = subprocess.run(['git', '--no-optional-locks', '-c', f'safe.directory={root}', '-C', str(root),
+                                 *args], capture_output=True, text=True, timeout=60, check=True, env=env)
     except (OSError, subprocess.SubprocessError):
         raise Unavailable('git ' + ' '.join(args[:2]) + ' failed') from None
     return result.stdout
 
 
 def changed(root, base):
+    """(merge base, every changed path, the paths added on this branch): commits, staged, unstaged and untracked."""
     merge_base = git(root, 'merge-base', base, 'HEAD').strip()
-    paths = set(git(root, 'diff', '--name-only', '--no-renames', merge_base).split('\n'))
-    paths |= set(git(root, 'ls-files', '--others', '--exclude-standard').split('\n'))
-    return merge_base, sorted(path for path in paths if path)
+    index = Path(git(root, 'rev-parse', '--git-path', 'index').strip())
+    with tempfile.TemporaryDirectory(prefix='ledger-precheck-') as private:
+        copy = Path(private) / 'index'
+        try:
+            shutil.copyfile(index if index.is_absolute() else root / index, copy)
+        except OSError:
+            raise Unavailable('git index unreadable') from None
+        paths = set(git(root, 'diff', '--name-only', '--no-renames', merge_base, index=copy).split('\n'))
+        added = set(git(root, 'diff', '--name-only', '--no-renames', '--diff-filter=A', merge_base,
+                        index=copy).split('\n'))
+    untracked = set(git(root, 'ls-files', '--others', '--exclude-standard').split('\n'))
+    return (merge_base, sorted(path for path in paths | untracked if path),
+            sorted(path for path in added | untracked if path))
 
 
 def precheck(root, base):
@@ -107,17 +135,18 @@ def precheck(root, base):
     pinned = pins(root)
     report = {'repo': str(root), 'drift': drift(root, pinned)}
     if base is not None:
-        merge_base, paths = changed(root, base)
+        merge_base, paths, added = changed(root, base)
         listed = {path for paths_of in pinned.values() for path in paths_of}
+        unlisted = [path for path in paths if path not in listed and runtime_file(path)]
         report['changes'] = {
             'base': base, 'merge_base': merge_base, 'changed_files': len(paths),
             'pinned_changed': sorted(path for path in paths if path in listed),
             'ledgers_changed': sorted(path for path in paths if path in LEDGERS),
-            'unlisted_runtime_changed': sorted(
-                path for path in paths if path not in listed and path.startswith(RUNTIME_PREFIXES)
-                and path.endswith(RUNTIME_SUFFIXES) and not installed_only(path) and '/tests/' not in path),
+            'unlisted_runtime_added': sorted(path for path in unlisted if path in added),
+            'unlisted_runtime_changed': sorted(path for path in unlisted if path not in added),
         }
-    report['ok'] = not any(item['drift'] or item['missing'] for item in report['drift'].values())
+    report['drift_ok'] = not any(item['drift'] or item['missing'] for item in report['drift'].values())
+    report['ok'] = report['drift_ok'] and not report.get('changes', {}).get('unlisted_runtime_added')
     return report
 
 
@@ -132,9 +161,14 @@ def text(report):
         lines.append(f"  changes against {changes['base']} (merge base {changes['merge_base'][:12]}): "
                      f"{changes['changed_files']} file(s)")
         for key, label in (('pinned_changed', 'pinned by a ledger'), ('ledgers_changed', 'ledger changed'),
+                           ('unlisted_runtime_added', 'new runtime file no ledger lists (fails: list it in '
+                                                      'runtime-patches.json in this branch)'),
                            ('unlisted_runtime_changed', 'runtime file no ledger lists (review)')):
             lines += [f'    {label}: {path}' for path in changes[key]] or [f'    {label}: none']
-    lines.append('  result: ' + ('OK' if report['ok'] else 'DRIFT'))
+    problems = [name for name, bad in (('DRIFT', not report['drift_ok']),
+                                       ('UNLISTED', bool(report.get('changes', {}).get('unlisted_runtime_added'))))
+                if bad]
+    lines.append('  result: ' + (', '.join(problems) or 'OK'))
     return '\n'.join(lines)
 
 
