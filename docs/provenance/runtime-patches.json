@@ -447,7 +447,7 @@
     },
     {
       "path": "packages/mcp-admin-core/mcp_admin_core/restore_detect.py",
-      "sha256": "191a4e5d4c68af9230b34f6c5f8ab8ec5b5611bb3730dbf96dfc32bd21f3b7f4",
+      "sha256": "c1665f1da63048c0d321cce2e84f10a8dd5c1b06de25f7bf827f7256b2ce05fb",
       "change": "2026-11-14 multi-profile HM-13a, new and not wired yet (the boot gate HM-13b calls it): restore detection. detect(directory, enabled=switch) reports signal 1, the entrypoint's .restore-detected marker (any kind of entry; a lookup that cannot answer counts), and, only while the product's switch is on or profile data (profiles.json or profiles) is on disk, signal 2: the empty .instance-sentinel's (st_ino, st_ctime_ns) against .instance-record (strict JSON with exactly version 1, st_ino, st_ctime_ns; a single-link regular file of this user, at most 4 KiB, opened without following a link); st_dev is never compared. Otherwise it looks up three names and opens or writes nothing. Neither file, no profile data: both made (the first start with the switch on); a regular sentinel without its record and no profile data: both made again; a sentinel that is not a regular file, profile data without a record, a record without its sentinel, another file or an unsafe or malformed record: a restore, and nothing is written. rebuild(): the old sentinel removed, a new one O_CREAT|O_EXCL|O_NOFOLLOW 0600, fsync of the file and the directory, then the record through a fixed temporary with fsync, replace and a directory fsync, checked again afterwards; a stop before the new record is in place still reads as a restore; failures are ConfigError. Neither file holds a secret; no PaaS counterpart (PaaS marks a restore with its in-place restore tool).",
       "guarded_sources": {}
     },

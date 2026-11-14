@@ -14,8 +14,10 @@ The sentinel and its record are looked at, created or replaced only while the pr
 (PROFILE_DATA) is on disk. Otherwise detect() looks up three names in the directory (MARKER, PROFILE_DATA), opens no
 file in it and writes nothing: a product that is not enabled gets no new file. Neither file holds a secret.
 
-This module only detects. The boot gate (HM-13b) acts on a restore, then calls rebuild() and removes the marker last;
-detect() writes nothing while a restore is detected, so a gate stopped half way is detected again at the next start.
+This module only detects. The boot gate (HM-13b) acts on a restore, then calls rebuild() and removes the marker last,
+so a gate stopped half way is detected again at the next start: detect() writes nothing while the sentinel reads as a
+restore, and the marker stays until the gate removes it. A first start that also finds the marker (a backup from before
+the switch was on) still makes the two files; the marker alone keeps that restore detected.
 Once created, nothing but the entrypoint's restore repair may chmod, chown, write, link or rename the sentinel: each
 changes its ctime (a rename does on ext4) and reads as a restore. One caller at a time: the management process, as it
 starts.

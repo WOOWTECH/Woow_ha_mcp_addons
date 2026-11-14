@@ -739,6 +739,23 @@ def test_a_backup_restored_by_supervisor_shows_both_signals(tmp_path, log_scan):
     assert rd.detect(data, enabled=True) == rd.Detection(marker=True, active=True, sentinel=rd.CONSISTENT)
 
 
+def test_a_first_start_that_finds_the_marker_still_reads_as_a_restore(tmp_path, log_scan):
+    # A backup from before the switch was on (no sentinel yet), restored onto a release with it on: the first start
+    # makes the two files as any first start does, and the marker alone keeps the restore detected, also at the next
+    # start when the boot gate (HM-13b) stopped before it removed the marker.
+    parent = tmp_path / 'data'
+    parent.mkdir()
+    data = runtime_tree(parent, log_scan)
+    backup = tmp_path / 'backup'
+    shutil.copytree(data, backup, symlinks=True)
+    supervisor_restore(backup, data)
+    assert boot(parent, VirtualRoot()) == REOWNED % len(list(data.rglob('*')))
+    first = rd.detect(data, enabled=True)
+    assert first == rd.Detection(marker=True, active=True, sentinel=rd.ESTABLISHED) and first.restored
+    again = rd.detect(data, enabled=True)
+    assert again == rd.Detection(marker=True, active=True, sentinel=rd.CONSISTENT) and again.restored
+
+
 MALFORMED = {
     'not JSON': lambda real: b'{"version": 1',
     'not an object': lambda real: json.dumps([1, real['st_ino'], real['st_ctime_ns']]).encode(),
