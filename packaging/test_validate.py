@@ -1,11 +1,115 @@
 """Packaging-only regression fixtures: never use a config.* fixture basename."""
 import copy
+import os
 from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
 import validate as v
+
+# HM-17: the workflows' version expressions are checked by what GitHub Actions would make of them, with an evaluator of
+# their own, not by re-reading the generator's text.
+TOKEN = re.compile(r"\s*('(?:[^']|'')*'|==|&&|\|\||[A-Za-z_][A-Za-z0-9_.]*)")
+EXPRESSION = re.compile(r'\$\{\{.*?\}\}', re.S)
+
+
+def evaluate(expression, selector, app):
+    """The value GitHub Actions gives `expression` when `selector` (matrix.app or inputs.app) is `app`, for the grammar
+    the version expressions use: string literals, that one property, ==, && and || (&& binds tighter than ||, both
+    return an operand, == compares strings ignoring case). A bare value (no ${{ }}) is itself."""
+    if not expression.startswith('${{'):
+        return expression
+    if not (expression.startswith('${{ ') and expression.endswith(' }}')):
+        raise AssertionError('not one whole expression: ' + expression)
+    body, tokens, position = expression[3:-3], [], 0
+    while body[position:].strip():
+        match = TOKEN.match(body, position)
+        if match is None:
+            raise AssertionError('unexpected text: ' + body[position:])
+        tokens.append(match.group(1))
+        position = match.end()
+    tokens.append(None)
+
+    def truthy(value):
+        return value not in (False, None, '', 0)
+
+    def primary():
+        token = tokens.pop(0)
+        if token is not None and token.startswith("'"):
+            return token[1:-1].replace("''", "'")
+        if token == selector:
+            return app
+        raise AssertionError(f'unexpected token {token!r}')
+
+    def comparison():
+        left = primary()
+        if tokens[0] == '==':
+            tokens.pop(0)
+            right = primary()
+            left = isinstance(left, str) and isinstance(right, str) and left.casefold() == right.casefold()
+        return left
+
+    def conjunction():
+        left = comparison()
+        while tokens[0] == '&&':
+            tokens.pop(0)
+            right = comparison()
+            left = right if truthy(left) else left
+        return left
+
+    def disjunction():
+        left = conjunction()
+        while tokens[0] == '||':
+            tokens.pop(0)
+            right = conjunction()
+            left = left if truthy(left) else right
+        return left
+
+    value = disjunction()
+    if tokens != [None]:
+        raise AssertionError('trailing tokens: ' + repr(tokens))
+    return value
+
+
+def substitute(text, selector, app):
+    """`text` with every expression that reads the app replaced by its value; the others (${{ github.sha }}) stay."""
+    def value(match):
+        if selector not in match.group(0):
+            return match.group(0)
+        result = evaluate(match.group(0), selector, app)
+        if not isinstance(result, str):
+            raise AssertionError('not a string value: ' + match.group(0))
+        return result
+    return EXPRESSION.sub(value, text)
+
+
+def strings(value, path=()):
+    """(path, text) of every string in a loaded workflow."""
+    if isinstance(value, dict):
+        for key, item in value.items():
+            yield from strings(item, path + (key,))
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            yield from strings(item, path + (index,))
+    elif isinstance(value, str):
+        yield path, value
+
+
+def at(document, path):
+    for key in path:
+        document = document[key]
+    return document
+
+
+def replaced(document, path, text):
+    document = copy.deepcopy(document)
+    at(document, path[:-1])[path[-1]] = text
+    return document
 
 
 class PackagingTests(unittest.TestCase):
@@ -237,22 +341,162 @@ class PackagingTests(unittest.TestCase):
         with self.assertRaisesRegex(v.Invalid, 'fixed per-product runtime version'):
             v.runtime_version("VERSION = '%s'\nPRODUCT_VERSIONS = {}\n" % v.VERSION)
 
-    def test_headscale_version_is_independent_and_fixed_at_every_boundary(self):
-        self.assertEqual(v.version_for('headscale'), '0.4.18')
-        self.assertEqual({v.version_for(product) for product in v.PRODUCTS if product != 'headscale'}, {'0.4.13'})
-        with self.assertRaises(v.Invalid):
-            v.version_for('unknown')
-        headscale = v.load(v.ROOT / 'addons/headscale/config.yaml')
-        self.assertEqual(headscale['version'], v.version_for('headscale'))
-        with self.assertRaises(v.Invalid):
-            v.manifest({**headscale, 'version': '0.4.13'}, 'headscale')
-        for workflow in ('ci', 'release'):
+    def test_every_release_version_is_bound_at_every_boundary(self):
+        # HM-17 (C4-SF-2): read from version_for(), so a version bump changes data only (VERSION, VERSION_OVERRIDES and
+        # what validate() binds to them), never this test. Headscale has its own line today; the others ship VERSION.
+        self.assertEqual({product: v.version_for(product) for product in v.PRODUCTS},
+                         {product: v.VERSION_OVERRIDES.get(product, v.VERSION) for product in v.PRODUCTS})
+        for unknown in ('unknown', *v.RETIRED):
+            with self.subTest(product=unknown), self.assertRaises(v.Invalid):
+                v.version_for(unknown)
+        inputs = v.load(v.ROOT / 'packaging/inputs.json')
+        self.assertEqual({product: inputs['version_overrides'].get(product, inputs['version']) for product in v.PRODUCTS},
+                         {product: v.version_for(product) for product in v.PRODUCTS})
+        lines = {v.VERSION, *v.VERSION_OVERRIDES.values(), '99.0.0'}  # 99.0.0: a version no product line uses
+        for product in v.PRODUCTS:
+            own = v.version_for(product)
+            manifest = v.load(v.ROOT / 'addons' / product / 'config.yaml')
+            dockerfile = (v.ROOT / 'apps' / product / 'Dockerfile').read_text()
+            with self.subTest(product=product):
+                self.assertEqual(manifest['version'], own)
+                v.manifest(manifest, product)
+                v.build_version_default(dockerfile, product)
+            for other in sorted(lines - {own}):  # another product line's version, or a new one
+                with self.subTest(product=product, other=other):
+                    with self.assertRaises(v.Invalid):
+                        v.manifest({**manifest, 'version': other}, product)
+                    with self.assertRaisesRegex(v.Invalid, 'build version default'):
+                        v.build_version_default(dockerfile.replace(f'\nARG BUILD_VERSION={own}\n',
+                                                                   f'\nARG BUILD_VERSION={other}\n'), product)
+            # One default, used by the version label: it is the image's version whenever no build-arg sets it, and
+            # container acceptance requires io.hass.version == version_for(app) (container_acceptance.py).
+            for mutated in (dockerfile + f'ARG BUILD_VERSION={own}\n',
+                            dockerfile.replace(f'\nARG BUILD_VERSION={own}\n', '\nARG BUILD_VERSION\n'),
+                            dockerfile.replace('io.hass.version="${BUILD_VERSION}"', f'io.hass.version="{own}"'),
+                            dockerfile + f'LABEL io.hass.version="{own}"\n'):
+                with self.subTest(product=product, mutated=mutated[-80:]), self.assertRaisesRegex(v.Invalid, 'build version default'):
+                    v.build_version_default(mutated, product)
+        with patch.object(v, 'build_version_default', side_effect=v.Invalid('Dockerfile build version default')):
+            with self.assertRaisesRegex(v.Invalid, 'build version default'):
+                v.validate(v.ROOT)
+
+    def test_version_expressions_are_generated_from_the_overrides(self):
+        # HM-17 (plan 11.2, C4-SF-1): one `<selector> == '<product>' && '<version>'` arm per override in PRODUCTS order,
+        # joined by ||, then the default: the two-way form the workflows carry since 0.4.14, chained (no fromJSON).
+        # Without an override it is the bare default, the form before 0.4.14.
+        self.assertEqual(v.CI_VERSION, v.version_expression('matrix.app'))
+        self.assertEqual(v.RELEASE_VERSION, v.version_expression('inputs.app'))
+        self.assertEqual(v.version_expression('matrix.app', {}, '1.2.3'), '1.2.3')
+        self.assertEqual(v.version_expression('matrix.app', {'headscale': '1.2.4'}, '1.2.3'),
+                         "${{ matrix.app == 'headscale' && '1.2.4' || '1.2.3' }}")
+        self.assertEqual(v.version_expression('inputs.app', {'headscale': '1.2.4', 'odoo': '2.0.0'}, '1.2.3'),
+                         "${{ inputs.app == 'odoo' && '2.0.0' || inputs.app == 'headscale' && '1.2.4' || '1.2.3' }}")
+        every = {product: f'2.0.{index}' for index, product in enumerate(v.PRODUCTS)}
+        for overrides in ({}, {'headscale': '1.2.4'}, {'headscale': '1.2.4', 'odoo': '2.0.0'},
+                          {'nextcloud': '2.0.0', 'n8n': '2.0.1', 'emqx': '2.0.0'}, every):
+            for selector in ('matrix.app', 'inputs.app'):
+                expression = v.version_expression(selector, overrides, '1.2.3')
+                for product in (*v.PRODUCTS, *v.RETIRED):  # a product outside the list gets the default
+                    with self.subTest(overrides=overrides, selector=selector, product=product):
+                        self.assertEqual(evaluate(expression, selector, product), overrides.get(product, '1.2.3'))
+        for selector, expression in (('matrix.app', v.CI_VERSION), ('inputs.app', v.RELEASE_VERSION)):
+            for product in v.PRODUCTS:
+                with self.subTest(selector=selector, product=product):
+                    self.assertEqual(evaluate(expression, selector, product), v.version_for(product))
+
+    def test_version_expression_refuses_data_it_cannot_express(self):
+        for selector, overrides, default in (
+                ('github.ref', {}, '1.2.3'), ('matrix.app', {'unknown': '1.2.4'}, '1.2.3'),
+                ('matrix.app', {'odoo-manage': '1.2.4'}, '1.2.3'), ('matrix.app', {'odoo': '1.2.3'}, '1.2.3'),
+                ('matrix.app', {'odoo': "1.2.4' || '9.9.9"}, '1.2.3'), ('matrix.app', {'odoo': ''}, '1.2.3'),
+                ('matrix.app', {'odoo': 1.2}, '1.2.3'), ('matrix.app', {'odoo': '1.2'}, '1.2.3'),
+                ('matrix.app', {'odoo': 'latest'}, '1.2.3'), ('matrix.app', {}, 'latest'), ('matrix.app', {}, ''),
+                ('matrix.app', [('odoo', '1.2.4')], '1.2.3')):
+            with self.subTest(selector=selector, overrides=overrides, default=default), self.assertRaises(v.Invalid):
+                v.version_expression(selector, overrides, default)
+
+    def test_release_data_no_expression_can_carry_stops_every_tool_in_one_line(self):
+        # HM-17: CI_VERSION and RELEASE_VERSION are generated when validate loads, so such data stops the validator and
+        # every packaging tool importing it with the validator's one-line message, not a traceback. Run on a copy.
+        source = (v.ROOT / 'packaging/validate.py').read_text()
+        current = f'VERSION_OVERRIDES = {v.VERSION_OVERRIDES!r}\n'
+        self.assertEqual(source.count(current), 1, 'VERSION_OVERRIDES is written on one line, as repr() prints it')
+        environment = {k: value for k, value in os.environ.items() if k not in ('PYTHONPATH', 'PYTHONSAFEPATH')}
+        with tempfile.TemporaryDirectory() as directory:
+            for name in ('builder_binary.py', 'builder_contract.py'):  # what validate imports from packaging/
+                shutil.copy(v.ROOT / 'packaging' / name, directory)
+            for overrides, message in (({**v.VERSION_OVERRIDES, 'odoo': v.VERSION}, 'version override equal to the default version'),
+                                       ({'odoo-manage': '9.9.9'}, 'version override outside the products')):
+                Path(directory, 'validate.py').write_text(source.replace(current, f'VERSION_OVERRIDES = {overrides!r}\n'))
+                for argv in (['validate.py'], ['-c', 'import validate']):
+                    with self.subTest(overrides=overrides, argv=argv):
+                        result = subprocess.run([sys.executable, '-B', *argv], cwd=directory, env=environment,
+                                                capture_output=True, text=True, timeout=60)
+                        self.assertEqual((result.returncode, result.stdout, result.stderr),
+                                         (1, '', 'packaging validation failed: ' + message + '\n'))
+
+    def test_every_app_dependent_workflow_value_is_the_release_version(self):
+        # HM-17: ci.yaml and release.yaml do not run on a PR; validate.py compares them (C4-SF-1). Evaluated as GitHub
+        # would, for every app they build, each place carries version_for(app).
+        for workflow, selector in (('ci', 'matrix.app'), ('release', 'inputs.app')):
             document = v.load(v.ROOT / '.github/workflows' / (workflow + '.yaml'))
+            v.workflow_versions(document, workflow)  # the repository as it is
             job = document['jobs']['images' if workflow == 'ci' else 'publish']
-            build = next(step for step in job['steps'] if step.get('uses', '').startswith('docker/build-push-action@'))
-            build['with']['build-args'] = 'BUILD_VERSION=0.4.13'
-            with self.assertRaises(v.Invalid):
-                v.builder_workflow(document, workflow)
+            build = next(s for s in job['steps'] if s.get('uses', '').startswith('docker/build-push-action@'))
+            apps = (job['strategy']['matrix']['app'] if workflow == 'ci'
+                    else document['on']['workflow_dispatch']['inputs']['app']['options'])
+            self.assertEqual(apps, list(v.PRODUCTS))
+            for app in apps:
+                version = v.version_for(app)
+                with self.subTest(workflow=workflow, app=app):
+                    self.assertEqual(substitute(build['with']['build-args'], selector, app), 'BUILD_VERSION=' + version)
+                    self.assertEqual(substitute(build['with']['tags'], selector, app), f'local/mcp-{app}:{version}')
+                    if workflow == 'release':
+                        push = next(s for s in job['steps'] if 'docker push' in s.get('run', ''))
+                        self.assertIn(f'IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:{version}"',
+                                      substitute(push['run'], selector, app).splitlines())
+                        upload = next(s for s in job['steps'] if s.get('uses', '').startswith('actions/upload-artifact@'))
+                        self.assertEqual(substitute(upload['with']['name'], selector, app),
+                                         'published-evidence-%s-%s-${{ github.sha }}' % (app, version))
+
+    def test_a_stale_or_hand_written_version_expression_is_refused(self):
+        # A version bump changes VERSION_OVERRIDES; until every place is regenerated the workflow is refused, place by
+        # place (the published evidence name too), and so is a fixed version or any other expression that reads the app.
+        changed = {**v.VERSION_OVERRIDES, v.PRODUCTS[0]: '99.0.0'}
+        bump = {'VERSION_OVERRIDES': changed, 'CI_VERSION': v.version_expression('matrix.app', changed),
+                'RELEASE_VERSION': v.version_expression('inputs.app', changed)}
+        for workflow, selector, key, group in (('ci', 'matrix.app', 'CI_VERSION', 'ci-${{ github.workflow }}-'),
+                                               ('release', 'inputs.app', 'RELEASE_VERSION', 'public-release-')):
+            original = v.load(v.ROOT / '.github/workflows' / (workflow + '.yaml'))
+            current, new = getattr(v, key), bump[key]
+            places = [path for path, text in strings(original) if current in text]
+            self.assertEqual(len(places), 2 if workflow == 'ci' else 4)  # tags, build-args; release: IMAGE, evidence name
+            regenerated = original
+            for path in places:
+                regenerated = replaced(regenerated, path, at(regenerated, path).replace(current, new))
+            with patch.multiple(v, **bump):
+                with self.subTest(workflow=workflow, state='stale'), self.assertRaises(v.Invalid):
+                    v.builder_workflow(original, workflow)
+                v.builder_workflow(regenerated, workflow)  # every place regenerated
+                for path in places:
+                    for text in (at(original, path), at(regenerated, path).replace(new, v.VERSION)):
+                        with self.subTest(workflow=workflow, place=path, text=text), self.assertRaises(v.Invalid):
+                            v.builder_workflow(replaced(regenerated, path, text), workflow)
+            inner = current[4:-3] if current.startswith('${{ ') else f"'{current}'"
+            for hand in (f"${{{{ {selector} == 'odoo-manage' && '99.0.0' || {inner} }}}}",
+                         f"${{{{ fromJSON('{{}}')[{selector}] || {inner} }}}}", f'${{{{  {inner} }}}}'):
+                for path in places:
+                    with self.subTest(workflow=workflow, place=path, hand=hand), self.assertRaises(v.Invalid):
+                        v.builder_workflow(replaced(original, path, at(original, path).replace(current, hand)), workflow)
+            context, name = selector.split('.')
+            for reads in (selector, f"{context}['{name}']", f'github.event.{selector}', selector.upper()):
+                elsewhere = replaced(original, ('concurrency', 'group'), group + f"${{{{ {reads} == 'odoo' && 'a' || 'b' }}}}")
+                with self.subTest(workflow=workflow, place='concurrency', reads=reads), self.assertRaises(v.Invalid):
+                    v.builder_workflow(elsewhere, workflow)
+            for unrelated in (f'${{{{ {selector} }}}}', "${{ github.ref == 'refs/heads/main' && 'a' || 'b' }}",
+                              '${{ github.event.inputs.application }}'):
+                with self.subTest(workflow=workflow, place='concurrency', unrelated=unrelated):
+                    v.builder_workflow(replaced(original, ('concurrency', 'group'), group + unrelated), workflow)
 
     def test_unit_script_installs_headscale_without_workflow_precondition(self):
         unit = (v.ROOT / 'packaging/unit.sh').read_text()

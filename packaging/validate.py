@@ -23,10 +23,22 @@ PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud
 RETIRED = ('odoo-manage',)
 URL = 'https://github.com/WOOWTECH/Woow_ha_mcp_addons'
 VERSION = '0.4.13'
+# Products on a version line of their own; every other product ships VERSION. A version bump changes this data and the
+# files validate() binds to it (manifest, Dockerfile default, inputs.json, core PRODUCT_VERSIONS). The workflows'
+# version expressions are generated from it (version_expression) and compared verbatim (HM-17).
 VERSION_OVERRIDES = {'headscale': '0.4.18'}
-CI_VERSION = "${{ matrix.app == 'headscale' && '0.4.18' || '0.4.13' }}"
-RELEASE_VERSION = "${{ inputs.app == 'headscale' && '0.4.18' || '0.4.13' }}"
 TITLES = dict(zip(PRODUCTS, ('Odoo', 'n8n', 'Hermes', 'OpenDesign', 'EMQX', 'LiteLLM', 'Nextcloud', 'Headscale')))
+# The app a builder workflow builds: ci.yaml's matrix, release.yaml's dispatch input.
+SELECTORS = {'ci': 'matrix.app', 'release': 'inputs.app'}
+
+
+class Invalid(ValueError):
+    pass
+
+
+def require(condition, message):
+    if not condition:
+        raise Invalid(message)
 
 
 def version_for(product):
@@ -34,8 +46,35 @@ def version_for(product):
     return VERSION_OVERRIDES.get(product, VERSION)
 
 
-class Invalid(ValueError):
-    pass
+def version_expression(selector, overrides=None, default=None):
+    """HM-17: the GitHub Actions value of the version that `selector` (SELECTORS) builds, generated from the release data
+    (default: VERSION_OVERRIDES and VERSION). One `<selector> == '<product>' && '<version>'` arm per override, in
+    PRODUCTS order, joined by `||`, then the default: `&&` binds tighter than `||` and a version is never empty, so
+    the product's arm gives its version and every other app falls through to the default. That is the two-way form the
+    workflows carry since 0.4.14, chained; no fromJSON or other syntax these workflows never ran (C4-SF-1). Without an
+    override it is the bare default, the form before 0.4.14."""
+    overrides = VERSION_OVERRIDES if overrides is None else overrides
+    default = VERSION if default is None else default
+    require(selector in SELECTORS.values(), 'unsupported version selector')
+    require(isinstance(overrides, dict) and set(overrides) <= set(PRODUCTS), 'version override outside the products')
+    for version in (default, *overrides.values()):
+        require(isinstance(version, str) and re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version) is not None,
+                'release version is not x.y.z')
+    require(default not in overrides.values(), 'version override equal to the default version')
+    if not overrides:
+        return default
+    arms = [f"{selector} == '{product}' && '{overrides[product]}'" for product in PRODUCTS if product in overrides]
+    return '${{ ' + ' || '.join([*arms, f"'{default}'"]) + ' }}'
+
+
+# Generated when the module loads, so release data a version expression cannot carry stops every packaging tool that
+# imports this module (check_release, supply_chain, registry_gate, container_acceptance, pilot_variant) with the
+# validator's one-line message instead of a traceback.
+try:
+    CI_VERSION = version_expression(SELECTORS['ci'])
+    RELEASE_VERSION = version_expression(SELECTORS['release'])
+except Invalid as error:
+    raise SystemExit('packaging validation failed: ' + str(error)) from None
 
 
 class StrictLoader(yaml.SafeLoader):
@@ -74,11 +113,6 @@ def load(path):
     if not isinstance(result, dict):
         raise Invalid('expected mapping')
     return result
-
-
-def require(condition, message):
-    if not condition:
-        raise Invalid(message)
 
 
 def exact(value, expected, context):
@@ -181,6 +215,16 @@ def image_labels(dockerfile, value):
             'image name/description labels differ from the add-on manifest')
 
 
+def build_version_default(dockerfile, product):
+    """HM-17 (C4-SF-2): one ARG BUILD_VERSION whose default is the product's release version, and one io.hass.version
+    label that uses it. The default is the image's version whenever no build-arg sets it, every release bumps it with
+    the other bindings (release-decision-0.4.4.md), and container acceptance requires io.hass.version ==
+    version_for(app) (container_acceptance.py): a stale default fails here instead of on the out-of-repo builder."""
+    require(dockerfile.count('ARG BUILD_VERSION') == 1 and f'\nARG BUILD_VERSION={version_for(product)}\n' in dockerfile
+            and dockerfile.count('io.hass.version=') == 1 and 'io.hass.version="${BUILD_VERSION}"' in dockerfile,
+            'Dockerfile build version default differs from the release version')
+
+
 def unit_child_sync(text):
     """The standalone source gate must install every isolated Python child."""
     loops = re.findall(r'^for app in ([a-z0-9 -]+); do\n  uv sync --project "apps/\$app" '
@@ -191,8 +235,41 @@ def unit_child_sync(text):
             'unit.sh isolated child scope')
 
 
+def workflow_strings(value):
+    if isinstance(value, dict):
+        for item in value.values():
+            yield from workflow_strings(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from workflow_strings(item)
+    elif isinstance(value, str):
+        yield value
+
+
+def workflow_versions(value, workflow):
+    """HM-17: every expression of a builder workflow that reads the app, other than the app itself, is exactly the
+    version expression generated from VERSION_OVERRIDES, wherever it is (a stale, hand-written or second selection
+    fails), and release.yaml's published evidence is named with it. The other places (candidate tags and build-args,
+    the pushed IMAGE) are part of the fixed recipe below."""
+    selector, wanted = SELECTORS[workflow], CI_VERSION if workflow == 'ci' else RELEASE_VERSION
+    # matrix.app, inputs.app, github.event.inputs.app, and the same with ['app']; GitHub ignores case in names.
+    reads = re.compile(r"(?<![\w.-])(?:github\.event\.)?(?:matrix|inputs)(?:\.app|\[\s*'app'\s*\])(?![\w-])", re.I)
+    for text in workflow_strings(value):
+        for match in re.finditer(r'\$\{\{(.*?)\}\}', text, re.S):
+            if match.group(1).strip() != selector and reads.search(match.group(1)):
+                require(match.group(0) == wanted, workflow + '.yaml: the version expression generated from '
+                        'VERSION_OVERRIDES is ' + wanted)
+    if workflow == 'release':
+        uploads = [step for step in value['jobs']['publish']['steps']
+                   if step.get('uses', '').startswith('actions/upload-artifact@')]
+        require(len(uploads) == 1, 'one published evidence upload')
+        exact(uploads[0]['with']['name'], 'published-evidence-${{ inputs.app }}-' + RELEASE_VERSION + '-${{ github.sha }}',
+              'published evidence named with the release version')
+
+
 def builder_workflow(value, workflow):
     """Strict builder recipe; runner labels/approval markers are not a sandbox."""
+    workflow_versions(value, workflow)
     require('env' not in value and 'defaults' not in value, 'no workflow environment/default injection')
     candidate = value['jobs']['images' if workflow == 'ci' else 'publish']
     exact(candidate['runs-on'], RUNNER, 'dedicated externally approved VM runner')
@@ -390,6 +467,7 @@ def validate(root=ROOT):
         require('COPY apps/ ./apps/' not in dockerfile and 'COPY . .' not in dockerfile, 'broad app copy')
         require('io.hass.type="app"' in dockerfile and 'io.hass.arch="amd64"' in dockerfile, 'HA labels')
         image_labels(dockerfile, value)
+        build_version_default(dockerfile, product)
         require('uv sync --frozen --no-dev' in dockerfile, 'unlocked core')
         if product == 'n8n':
             require('npm ci --ignore-scripts --no-audit --no-fund' in dockerfile, 'unlocked/scripted npm')

@@ -7,8 +7,10 @@
 #              hosted part of ci.yaml; builder admission is not a PR check).
 #   readiness  for every add-on the Store enables: the amd64 image of the manifest
 #              version can be pulled anonymously from GHCR, and a version with no
-#              stable Release yet is named in docs/operations/release-decision-*.md
-#              (the builder VM acceptance, which Actions cannot see).
+#              stable Release yet has the add-on's own record naming its slug and
+#              version, docs/operations/release-decision-<add-on>-<version>.md (the
+#              builder VM acceptance, which Actions cannot see; a shared or another
+#              add-on's record does not count).
 #   release    on claude-delivery only: the Store's shared workflow publishes one
 #              stable Release <slug>-v<version> per enabled add-on whose version
 #              has none. An already released version is left alone, so a push
