@@ -7,21 +7,40 @@ step, make_apps, HealthMonitor, ConfigurationState, child_spec and log redaction
   serves the same runtime on real loopback listeners);
 - the Supervisor starts no process: a configured child is "running" at once (status, starts and readiness as the
   real one reports them);
-- the child's HTTP is MockChild, a stateful MCP server that only answers the gateway's own child bearer;
-- the HA administrator check answers yes (n8n: the node catalog copy is skipped).
+- the child's HTTP is MockChild, a stateful MCP server that only answers the gateway's own child bearer and answers
+  with headers of its own that the gateway must not relay;
+- the HA administrator check answers yes for the golden administrator (ADMIN), no for anyone else (n8n: the node
+  catalog copy is skipped).
+
+These are the only injection points, all in production_runtime (module = run_product, or apps/n8n/run.py for n8n):
+module.Supervisor (NoProcessSupervisor, or the subclass a test passes), module.httpx.AsyncClient (every client built
+while the runtime runs gets MockTransport(MockChild) unless it names a transport; the tests' own clients are
+GENUINE_CLIENT), module.make_ha_admin_verifier, module.Listener (CapturedListener) and, for n8n, module.prepare_catalog.
+tests/test_admin_contract_freeze.py also replaces HealthMonitor.test_saved for one answer shape. HM-05 (the per-profile
+runtime extraction) may move these lines when the names they patch move, and nothing else here.
 
 Two states per product: "fresh" (a new installation, no backend) and "configured" (a backend saved, the child up and
 its readiness check passed). Fixed values below were read in gateway.py, access.py, config.py, health.py and
 configuration.py at bb48449 and confirmed by running them. The multi-profile slices (HM-04 to HM-30) must keep them,
 byte for byte, for the default profile: both connection paths, the error answers (wrong token 401/404, query 400,
-/mcp/ 404), /health/ready, the bootstrap fields, and an unchanged state.json (SHA-256) and data directory across
-start, reads and listings.
+/mcp/ 404), /health/ready, the bootstrap fields, what the child gets (only the gateway's own headers: CHILD_HEADERS)
+and what comes back from it (no child header beyond the four the gateway relays), and a state.json that start, reads
+and listings never write (bytes, inode, mtime, mode, owner, links: stat_signature) in a data directory whose entries
+and modes stay as they were.
+
+tools/list is fixed by two digests per product: LISTING_SHA256, the packaged listing the gateway rewrites
+(surface.listing: tool_snapshot.py, regenerated whenever a product's tool surface changes), and LISTED_SHA256, the
+gateway's whole answer. When the listing changed the change is a deliberate tool-surface change: check the new answer
+and update both digests of that product together. When the listing is unchanged and the answer changed, the gateway's
+own rewrite changed (policy.filter_list, listed_tool, odoo_switch_listing, the product's tool registry): a regression
+unless that change is deliberate.
 """
 import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import secrets
@@ -73,6 +92,14 @@ PROBE_ANSWERS = {
 }
 TOOL_TEXT = 'golden tool result'
 CHECKS = ('local-readiness', 'management-catalog')  # HealthMonitor's and the capabilities catalog's own sessions
+# Headers MockChild adds to its answers. The gateway relays four (gateway.FORWARDED_HEADERS: mcp-session-id,
+# mcp-protocol-version, retry-after, content-type), so a client never sees these. Not Set-Cookie: the gateway's child
+# client would keep the cookie and send it back to the child.
+CHILD_EXTRA = {'Location': 'https://child.invalid/elsewhere', 'WWW-Authenticate': 'Bearer', 'X-Child-Extra': '1'}
+# The only headers the child gets (plan 8.8 #4, FM-29): the gateway's own client headers, its child bearer and the
+# three session headers it forwards; never the client's Origin, Cookie, X-MCP-Profile or any other header.
+CHILD_HEADERS = frozenset({'host', 'accept', 'accept-encoding', 'connection', 'user-agent', 'content-length',
+                           'content-type', 'authorization', 'mcp-session-id', 'mcp-protocol-version', 'last-event-id'})
 
 
 def probe_name(product):
@@ -88,8 +115,21 @@ def sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def stat_signature(path):
+    """What any write alters besides the bytes (invariant I6: the default state is never written): a rewrite of the same
+    bytes (mtime), a replace (inode), a mode, owner or link change."""
+    info = os.stat(path)
+    return {'sha256': sha256(path), 'ino': info.st_ino, 'mtime_ns': info.st_mtime_ns, 'mode': info.st_mode,
+            'uid': info.st_uid, 'nlink': info.st_nlink}
+
+
 def entries(directory):
     return sorted(str(path.relative_to(directory)) for path in Path(directory).rglob('*'))
+
+
+def modes(directory):
+    """Every entry of a directory tree with its mode (file type and permission bits)."""
+    return {str(path.relative_to(directory)): path.lstat().st_mode for path in Path(directory).rglob('*')}
 
 
 def stored(data):
@@ -116,7 +156,7 @@ def configure(data, product):
 class MockChild:
     """The child as the gateway reaches it: only the state's child bearer is answered (an HM-06 child's rule), every
     request is recorded. initialize opens a session; the readiness probe gets the product's success shape; tools/list
-    the packaged listing; any other tools/call a fixed text."""
+    the packaged listing; any other tools/call a fixed text. Every answer it gives also carries CHILD_EXTRA."""
 
     def __init__(self, product, data):
         self.product, self.state = product, Path(data) / 'state.json'
@@ -129,15 +169,15 @@ class MockChild:
                 or request.url.path != '/mcp'):
             return httpx.Response(401)
         if request.method == 'DELETE':
-            return httpx.Response(200)
+            return httpx.Response(200, headers=CHILD_EXTRA)
         message = json.loads(request.content)
         if 'id' not in message:
-            return httpx.Response(202)
+            return httpx.Response(202, headers=CHILD_EXTRA)
         method = message['method']
         if method == 'initialize':
             session = f'golden-child-{len(self.sessions) + 1}'
             self.sessions[session] = message['params']['clientInfo']['name']
-            return httpx.Response(200, headers={'mcp-session-id': session}, json={
+            return httpx.Response(200, headers={**CHILD_EXTRA, 'mcp-session-id': session}, json={
                 'jsonrpc': '2.0', 'id': message['id'], 'result': {
                     'protocolVersion': message['params']['protocolVersion'], 'capabilities': {'tools': {}},
                     'serverInfo': {'name': 'mock-child', 'version': '0'}}})
@@ -151,7 +191,7 @@ class MockChild:
             result = {'content': [{'type': 'text', 'text': text}], 'isError': False}
         else:
             return httpx.Response(400)
-        return httpx.Response(200, json={'jsonrpc': '2.0', 'id': message['id'], 'result': result})
+        return httpx.Response(200, headers=CHILD_EXTRA, json={'jsonrpc': '2.0', 'id': message['id'], 'result': result})
 
     def forwarded(self, since=0):
         """(HTTP method, JSON-RPC method or None) of the requests after index since that the gateway relayed for a
@@ -204,11 +244,12 @@ class Runtime:
 
 
 @asynccontextmanager
-async def production_runtime(product, data, *, sockets=False):
+async def production_runtime(product, data, *, sockets=False, supervisor=None):
     """run() of the product's own runtime module with only the outside replaced (see the module docstring); the
     replacements are undone when the runtime stops.
 
-    sockets=True keeps the real listeners (uvicorn, h11) on ephemeral loopback ports; mcp_port is the MCP one."""
+    sockets=True keeps the real listeners (uvicorn, h11) on ephemeral loopback ports; mcp_port is the MCP one.
+    supervisor: a NoProcessSupervisor subclass to use instead (tests/test_admin_contract_freeze.py: a failing start)."""
     module = n8n_run if product == 'n8n' else run_product
     child = MockChild(product, data)
     listeners = []
@@ -229,10 +270,10 @@ async def production_runtime(product, data, *, sockets=False):
                     await asyncio.sleep(.01)
 
     async def administrator(user):
-        return True
+        return user == ADMIN['X-Remote-User-Id']
 
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(module, 'Supervisor', NoProcessSupervisor)
+        patch.setattr(module, 'Supervisor', supervisor or NoProcessSupervisor)
         patch.setattr(module.httpx, 'AsyncClient', child_client)
         patch.setattr(module, 'make_ha_admin_verifier', lambda: administrator)
         patch.setattr(module, 'Listener', CapturedListener)
@@ -306,9 +347,6 @@ ACCEPTED = (202, [('cache-control', 'no-store'), ('content-length', '0')], b'')
 SESSION_DELETED = (200, [('cache-control', 'no-store'), ('content-length', '0')], b'')
 READY = {True: (200, [('content-length', '14'), ('content-type', 'application/json')], b'{"ready":true}'),
          False: (503, [('content-length', '15'), ('content-type', 'application/json')], b'{"ready":false}')}
-# The packaged listing sizes (as tests/test_tool_inventory.py fixes the upstream counts).
-TOOL_COUNTS = {'odoo': 41, 'n8n': 28, 'hermes': 11, 'opendesign': 15, 'emqx': 39, 'litellm': 40, 'nextcloud': 9,
-               'headscale': 11}
 BOOTSTRAP_COMMON = frozenset({
     'api_base', 'backend_edit', 'backend_key_set', 'backend_url', 'base_path', 'capabilities', 'configuration',
     'connection_configured', 'csrf', 'denied_operations', 'disabled', 'enabled_write_tools', 'endpoint', 'health',
@@ -317,8 +355,20 @@ BOOTSTRAP_COMMON = frozenset({
 BOOTSTRAP_EXTRA = {'odoo': {'odoo_allowed_methods', 'odoo_allowed_methods_source', 'odoo_write_switches',
                             'odoo_write_switches_source'},
                    'n8n': {'n8n_session', 'n8n_session_effective_minutes', 'n8n_session_source'}}
-# The whole tools/list answer, byte for byte: the packaged listing (surface.listing) after the gateway's own rewrite
-# (policy.filter_list, listed_tool; Odoo: odoo_switch_listing). The same in both states and on both paths.
+# tools/list (see the module docstring). LISTING_SHA256: the packaged listing, surface.listing(product) as compact JSON,
+# the input of the gateway's rewrite. LISTED_SHA256: the whole tools/list answer, byte for byte, the packaged listing
+# after the gateway's own rewrite (policy.filter_list, listed_tool; Odoo: odoo_switch_listing); the same in both states
+# and on both paths.
+LISTING_SHA256 = {
+    'odoo': 'a350ca0d63713aff504dc1c500d492252bbcca63b9894fee11ac0c5096077f34',
+    'n8n': 'e59f7ef7f56b205a013a6a6e23f75b6d6f615ef6fceea15f19fe4c40c1573e6a',
+    'hermes': '2430f369faa5b6ff9840af7823b3392a49ef6e5bde0b754b9036051171362bfc',
+    'opendesign': 'f97a2cc4c89a9e1fb6c8a366cd4d42420a4623cb817d909cab7de728bc7e3931',
+    'emqx': '646abdc0232dc9aa704be13adb72ecc0a032219875e5854c4e53b3715eb28ae3',
+    'litellm': 'a0bc6b2a17c444d5d121d8d31e4ae47500c23d30a9926b1ddbba73e809a42c88',
+    'nextcloud': 'b772d6d13efd4ba25e7b8669ee3e3dd5babb57dac1f5cdc85ca037e6417deee7',
+    'headscale': '1c677e914fa988de04674ff15ec19448a02b37b495c06a3ba146b8446cb21974',
+}
 LISTED_SHA256 = {
     'odoo': 'e96e4a87d4d23015dec6f4f03426fd142a3175095764082bda9c2588e6fb0500',
     'n8n': 'b9a68727b86186323186cc3d550efcd2975d9d3f3a10b5438a94903ea8093a98',
@@ -385,11 +435,16 @@ async def connect(runtime, client, path, headers, mode):
     listed = await client.post(path, headers=in_session, json={'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'})
     assert answer(listed)[:2] == json_answer(listed.content)[:2] and set(listed.json()) == {'jsonrpc', 'id', 'result'}
     assert [tool['name'] for tool in listed.json()['result']['tools']] == [tool['name'] for tool in listing(product)]
-    assert len(listed.json()['result']['tools']) == TOOL_COUNTS[product]
+    source = hashlib.sha256(compact(listing(product))).hexdigest()
     digest = hashlib.sha256(listed.content).hexdigest()
+    assert source == LISTING_SHA256[product], (
+        f'{product}: the packaged tool listing changed (surface.listing sha256 {source}): a deliberate tool-surface '
+        f'change (tool_snapshot.py regenerated). Check the new tools/list answer (sha256 {digest}) and update '
+        'LISTING_SHA256 and LISTED_SHA256 of this product together')
     assert digest == LISTED_SHA256[product], (
-        f'{product}: the default profile tools/list answer changed (sha256 {digest}); a deliberate tool-surface '
-        'change (new snapshot, policy text) updates LISTED_SHA256, anything else is a regression')
+        f'{product}: the default profile tools/list answer changed (sha256 {digest}) while the packaged listing did '
+        "not: the gateway's own rewrite changed (policy.filter_list, listed_tool, odoo_switch_listing, the tool "
+        'registry); a regression unless that change is deliberate, which then updates LISTED_SHA256')
     tool, arguments = public_read(product)
     called = await client.post(path, headers=in_session, json={
         'jsonrpc': '2.0', 'id': 3, 'method': 'tools/call', 'params': {'name': tool, 'arguments': arguments}})
@@ -416,17 +471,17 @@ async def test_default_profile_golden(tmp_path, log_scan, product, mode):
     log_scan.watch(*secrets_of(product), kind='secret')
     if mode == 'configured':
         configure(data, product)
-        saved = sha256(data / 'state.json')
+        saved = stat_signature(data / 'state.json')
     # First start of this data directory: a new installation, or a saved backend that the start must not rewrite.
     async with production_runtime(product, data) as runtime:
         await settle(runtime, mode)
     if mode == 'configured':
-        assert sha256(data / 'state.json') == saved
+        assert stat_signature(data / 'state.json') == saved
     assert entries(data) == expected_entries(product, mode)
     state = stored(data)
     token, child_token = state['token'], state['child_token']
     log_scan.watch(token, child_token)
-    before, files = sha256(data / 'state.json'), entries(data)
+    before, files = stat_signature(data / 'state.json'), modes(data)
 
     async with production_runtime(product, data) as runtime:
         await settle(runtime, mode)
@@ -487,10 +542,12 @@ async def test_default_profile_golden(tmp_path, log_scan, product, mode):
             listed = await admin.get('/api/capabilities', headers=ADMIN)
             assert listed.status_code == 200 and set(listed.json()) == CAPABILITIES
         for request in runtime.child.requests:
-            # The child only ever gets the gateway's own bearer (MockChild refuses any other), never the client's.
+            # The child only ever gets the gateway's own bearer (MockChild refuses any other), never the client's, and
+            # only the gateway's own headers.
             assert token not in str(request.url) and token.encode() not in request.content
             assert all(token not in value for value in request.headers.values())
-            assert 'origin' not in request.headers
-    # Starting, reading and listing left the default profile's data as it was.
-    assert sha256(data / 'state.json') == before
-    assert entries(data) == files
+            assert request.headers.get_list('authorization') == ['Bearer ' + child_token]
+            assert set(request.headers) <= CHILD_HEADERS, sorted(set(request.headers) - CHILD_HEADERS)
+    # Starting, reading and listing left the default profile's data as it was: state.json not even rewritten.
+    assert stat_signature(data / 'state.json') == before
+    assert modes(data) == files

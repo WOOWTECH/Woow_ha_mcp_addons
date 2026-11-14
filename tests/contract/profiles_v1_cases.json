@@ -3,7 +3,7 @@
   "contract": "profiles_v1",
   "batch": "HM-01: the MCP listener (8081) of the default profile, column ha",
   "baseline": "bb48449",
-  "conditions": "Each product (packaging/inputs.json) with a configured backend, its child up and its readiness check passed; the production runtime on its real uvicorn listener (h11: %XX decoded once, no dot-segment removal, # kept); every target sent byte for byte with Content-Length and Connection: close; a POST body is the named JSON-RPC message.",
+  "conditions": "Each product (packaging/inputs.json) with a configured backend, its child up and its readiness check passed; the production runtime on its real uvicorn listener (h11: %XX decoded once, no dot-segment removal, # kept); every target sent byte for byte with Content-Length and Connection: close; a POST body is the named JSON-RPC message. A case with \"after\" runs once all the others ran, after the default token was rotated (rotate) and then revoked (revoke) through the panel (POST /api/token/rotate, /api/token/revoke); its {A} is the token that was valid just before that change.",
   "columns": {
     "ha": "bb48449, the default profile: response (key of responses), child (the child got the request) and profile (who served it)",
     "ha_products": "per-product exceptions to ha",
@@ -28,16 +28,24 @@
     "initialized": "notifications/initialized",
     "discover": "server/discover, id 9",
     "malformed": "the single byte {",
-    "none": "no body"
+    "none": "no body",
+    "unknown_notification": "notifications/hm01_unknown, no id",
+    "unknown_tool_call": "tools/call of hm01_no_such_tool, id 3"
   },
   "responses": {
     "initialize": {
-      "meaning": "the child answered; the body is the gateway's own initialize result for the product (tests/test_single_profile_golden.py initialize_body)",
+      "meaning": "the child answered; the body is the gateway's own initialize result for the product (tests/test_single_profile_golden.py initialize_body); none of the child's own headers is relayed (MockChild answers with Location, WWW-Authenticate and X-Child-Extra; the gateway relays four: gateway.FORWARDED_HEADERS)",
       "status": 200,
       "headers": {
         "content-type": "application/json",
         "cache-control": "no-store"
       },
+      "absent": [
+        "location",
+        "www-authenticate",
+        "x-child-extra",
+        "set-cookie"
+      ],
       "body": "<initialize>"
     },
     "not_found": {
@@ -77,7 +85,7 @@
       "body": "{\"error\":\"request denied\"}"
     },
     "denied_403": {
-      "meaning": "BadRequest(403): an Origin the path does not allow",
+      "meaning": "BadRequest(403): an Origin the path does not allow; a tools/call the policy refuses, without a session",
       "status": 403,
       "headers": {
         "content-type": "application/json"
@@ -121,6 +129,18 @@
         "cache-control": "no-store"
       },
       "body": "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32000,\"message\":\"Bad Request\"}}"
+    },
+    "accepted_bare": {
+      "meaning": "a notification the gateway does not know: accepted and dropped (gateway.UnknownMethod)",
+      "status": 202,
+      "headers": {
+        "cache-control": "no-store",
+        "content-length": "0"
+      },
+      "absent": [
+        "content-type"
+      ],
+      "body": ""
     },
     "session_required_bare": {
       "meaning": "a DELETE or a notification without Mcp-Session-Id",
@@ -192,6 +212,24 @@
     {"id": "error-unknown-path", "group": "error", "method": "POST", "target": "/no-such-path", "headers": [], "body": "initialize", "ha": {"response": "not_found", "child": false, "profile": null}},
     {"id": "error-health-ready", "group": "error", "method": "GET", "target": "/health/ready", "headers": [], "body": "none", "note": "configured backend, child up and checked", "ha": {"response": "ready", "child": false, "profile": null}},
     {"id": "error-health-ready-trailing-slash", "group": "error", "method": "GET", "target": "/health/ready/", "headers": [], "body": "none", "ha": {"response": "not_found", "child": false, "profile": null}},
+    {"id": "order-bearer-query-wrong-token", "group": "error", "method": "POST", "target": "/mcp?x=1", "headers": [["Authorization", "Bearer {R43}"]], "body": "initialize", "note": "the token check comes before the query rule", "deviation": "§8.8 #1", "ha": {"response": "bearer_required", "child": false, "profile": null}},
+    {"id": "order-secret-query-wrong-token", "group": "error", "method": "POST", "target": "/private_{R43}/mcp?x=1", "headers": [], "body": "initialize", "note": "a wrong secret gets the unknown-path bytes, never the query rule", "deviation": "§8.8 #1", "ha": {"response": "not_found", "child": false, "profile": null}},
+    {"id": "order-bearer-origin-wrong-token", "group": "error", "method": "POST", "target": "/mcp", "headers": [["Authorization", "Bearer {R43}"], ["Origin", "https://claude.ai"]], "body": "initialize", "note": "the token check comes before the Origin rule", "deviation": "§8.8 #1", "ha": {"response": "bearer_required", "child": false, "profile": null}},
+    {"id": "order-secret-origin-wrong-token", "group": "error", "method": "POST", "target": "/private_{R43}/mcp", "headers": [["Origin", "https://untrusted.invalid"]], "body": "initialize", "note": "Headscale too (its secret path allows only https://claude.ai): a wrong secret never learns the Origin rule", "deviation": "§8.8 #1", "ha": {"response": "not_found", "child": false, "profile": null}},
+    {"id": "order-bearer-put-with-origin", "group": "error", "method": "PUT", "target": "/mcp", "headers": [["Authorization", "Bearer {A}"], ["Origin", "https://claude.ai"]], "body": "none", "note": "the method rule comes before the Origin rule", "ha": {"response": "method_not_allowed", "child": false, "profile": null}},
+    {"id": "order-secret-put-with-origin", "group": "error", "method": "PUT", "target": "/private_{A}/mcp", "headers": [["Origin", "https://untrusted.invalid"]], "body": "none", "note": "the method rule comes before Headscale's secret-path Origin rule", "ha": {"response": "method_not_allowed", "child": false, "profile": null}},
+    {"id": "order-bearer-origin-and-query", "group": "error", "method": "POST", "target": "/mcp?x=1", "headers": [["Authorization", "Bearer {A}"], ["Origin", "https://claude.ai"]], "body": "initialize", "note": "the Origin rule comes before the query rule", "ha": {"response": "denied_403", "child": false, "profile": null}},
+    {"id": "order-secret-origin-and-query", "group": "error", "method": "POST", "target": "/private_{A}/mcp?x=1", "headers": [["Origin", "https://untrusted.invalid"]], "body": "initialize", "note": "Headscale's secret-path Origin rule comes before the query rule; the others allow any Origin there", "ha": {"response": "denied_400", "child": false, "profile": null}, "ha_products": {"headscale": {"response": "denied_403", "child": false, "profile": null}}},
+    {"id": "order-bearer-query-and-content-type", "group": "error", "method": "POST", "target": "/mcp?x=1", "headers": [["Authorization", "Bearer {A}"], ["Content-Type", "text/plain"]], "body": "initialize", "note": "the query rule comes before the media type rule", "ha": {"response": "denied_400", "child": false, "profile": null}},
+    {"id": "order-secret-query-and-malformed-body", "group": "error", "method": "POST", "target": "/private_{A}/mcp?x=1", "headers": [], "body": "malformed", "note": "the query rule comes before reading the body (n8n too: not its parse error)", "ha": {"response": "denied_400", "child": false, "profile": null}},
+    {"id": "order-bearer-malformed-wrong-token", "group": "error", "method": "POST", "target": "/mcp", "headers": [["Authorization", "Bearer {R43}"]], "body": "malformed", "note": "the token check comes before reading the body", "deviation": "§8.8 #1", "ha": {"response": "bearer_required", "child": false, "profile": null}},
+    {"id": "order-secret-content-type-wrong-token", "group": "error", "method": "POST", "target": "/private_{R43}/mcp", "headers": [["Content-Type", "text/plain"]], "body": "initialize", "note": "the token check comes before the media type rule", "deviation": "§8.8 #1", "ha": {"response": "not_found", "child": false, "profile": null}},
+    {"id": "error-bearer-get-with-body", "group": "error", "method": "GET", "target": "/mcp", "headers": [["Authorization", "Bearer {A}"]], "body": "initialize", "note": "a GET or DELETE carries no body", "ha": {"response": "denied_400", "child": false, "profile": null}},
+    {"id": "error-bearer-delete-with-body", "group": "error", "method": "DELETE", "target": "/mcp", "headers": [["Authorization", "Bearer {A}"]], "body": "initialize", "ha": {"response": "denied_400", "child": false, "profile": null}},
+    {"id": "error-bearer-session-header-twice", "group": "error", "method": "POST", "target": "/mcp", "headers": [["Authorization", "Bearer {A}"], ["Mcp-Session-Id", "hm01-session"], ["Mcp-Session-Id", "hm01-session"]], "body": "tools_list", "note": "at most one of each session header", "ha": {"response": "denied_400", "child": false, "profile": null}},
+    {"id": "error-bearer-session-header-malformed", "group": "error", "method": "POST", "target": "/mcp", "headers": [["Authorization", "Bearer {A}"], ["Mcp-Session-Id", "hm01 session"]], "body": "tools_list", "note": "a session header is 1-256 printable characters without a space", "ha": {"response": "denied_400", "child": false, "profile": null}},
+    {"id": "error-bearer-unknown-notification", "group": "error", "method": "POST", "target": "/mcp", "headers": [["Authorization", "Bearer {A}"]], "body": "unknown_notification", "note": "accepted and dropped, before the session check", "ha": {"response": "accepted_bare", "child": false, "profile": null}},
+    {"id": "error-bearer-refused-call-without-session", "group": "error", "method": "POST", "target": "/mcp", "headers": [["Authorization", "Bearer {A}"]], "body": "unknown_tool_call", "note": "a tools/call the policy refuses gets its JSON-RPC reason only inside a session", "ha": {"response": "denied_403", "child": false, "profile": null}},
     {"id": "unknown-random-hex64", "group": "unknown_token", "paas_name": "random_hex64", "paas_observed": 403, "method": "POST", "target": "/private_{R64}/mcp", "headers": [], "body": "initialize", "deviation": "§8.8 #1", "ha": {"response": "not_found", "child": false, "profile": null}},
     {"id": "unknown-random-urlsafe43", "group": "unknown_token", "paas_name": "random_urlsafe43", "paas_observed": 403, "method": "POST", "target": "/private_{R43}/mcp", "headers": [], "body": "initialize", "deviation": "§8.8 #1", "ha": {"response": "not_found", "child": false, "profile": null}},
     {"id": "unknown-random-hex64-with-X-MCP-Profile-B", "group": "unknown_token", "paas_name": "random_hex64_with_X-MCP-Profile_B", "paas_observed": 403, "method": "POST", "target": "/private_{R64}/mcp", "headers": [["X-MCP-Profile", "{P24}"]], "body": "initialize", "deviation": "§8.8 #1", "ha": {"response": "not_found", "child": false, "profile": null}},
@@ -238,6 +276,10 @@
     {"id": "url-28-nul-pct", "group": "url_variant", "paas_name": "nul_pct", "paas_observed": 403, "method": "POST", "target": "/private_{A}%00/mcp", "headers": [], "body": "initialize", "deviation": "§8.8 #1", "ha": {"response": "not_found", "child": false, "profile": null}},
     {"id": "url-29-fragment", "group": "url_variant", "paas_name": "fragment", "paas_observed": 200, "method": "POST", "target": "/private_{A}/mcp#frag", "headers": [], "body": "initialize", "note": "a raw target keeps #frag in the path (HTTP clients never send it)", "ha": {"response": "not_found", "child": false, "profile": null}},
     {"id": "url-30-api-dotdot-prefix", "group": "url_variant", "paas_name": "api_dotdot_prefix", "paas_observed": 401, "method": "POST", "target": "/api/../private_{A}/mcp", "headers": [], "body": "initialize", "note": "no dot-segment removal", "ha": {"response": "not_found", "child": false, "profile": null}},
-    {"id": "url-31-b-token-a-path-suffix", "group": "url_variant", "paas_name": "B_token_A_path_suffix", "paas_observed": 404, "method": "POST", "target": "/private_{B}/private_{A}/mcp", "headers": [], "body": "initialize", "ha": {"response": "not_found", "child": false, "profile": null}}
+    {"id": "url-31-b-token-a-path-suffix", "group": "url_variant", "paas_name": "B_token_A_path_suffix", "paas_observed": 404, "method": "POST", "target": "/private_{B}/private_{A}/mcp", "headers": [], "body": "initialize", "ha": {"response": "not_found", "child": false, "profile": null}},
+    {"id": "token-rotated-bearer-old", "group": "token_change", "after": "rotate", "method": "POST", "target": "/mcp", "headers": [["Authorization", "Bearer {A}"]], "body": "initialize", "note": "the token before the rotation: the same bytes as any wrong token", "deviation": "§8.8 #1", "ha": {"response": "bearer_required", "child": false, "profile": null}},
+    {"id": "token-rotated-secret-old", "group": "token_change", "after": "rotate", "method": "POST", "target": "/private_{A}/mcp", "headers": [], "body": "initialize", "note": "the token before the rotation: the same bytes as an unknown path", "deviation": "§8.8 #1", "ha": {"response": "not_found", "child": false, "profile": null}},
+    {"id": "token-revoked-bearer", "group": "token_change", "after": "revoke", "method": "POST", "target": "/mcp", "headers": [["Authorization", "Bearer {A}"]], "body": "initialize", "note": "the revoked token: the same bytes as any wrong token", "deviation": "§8.8 #1", "ha": {"response": "bearer_required", "child": false, "profile": null}},
+    {"id": "token-revoked-secret", "group": "token_change", "after": "revoke", "method": "POST", "target": "/private_{A}/mcp", "headers": [], "body": "initialize", "note": "the revoked token: the same bytes as an unknown path", "deviation": "§8.8 #1", "ha": {"response": "not_found", "child": false, "profile": null}}
   ]
 }
