@@ -55,6 +55,9 @@ API 回 `detail.code` = `core_version_unreviewed` 與版本，add-on 紀錄記�
    防火牆。各容器內相同 8081/8099 不衝突；主機映射不可重複。
 6. 8099 僅 Ingress（真實 peer `172.30.32.2`）；3000 僅容器 loopback，永不對外。
    不使用 Ingress origin 作 MCP endpoint。[client 文件](clients.md) 必讀。
+   下一版起（未發版，多帳號計畫 HM-06）：3000 上的 Python 子程序只接受 gateway 自己的 child bearer（剛好一個
+   `Authorization: Bearer <child token>`），容器內直連不帶、帶錯或多帶一律 401；沒有有效的 child token 就不啟動。
+   n8n 的子程序本來就只認同一個 child token；已下架的 Odoo Manage 維持原狀。
 
 HA options/schema 目前為空 `{}`：runtime 沒有實作 options 讀取，不提供假的
 log_level 開關。後端 URL、憑證、token、endpoint、工具政策由 GUI/state 擁有，
