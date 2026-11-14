@@ -29,6 +29,7 @@ APP = sys.argv[1]
 ROOT = Path('/opt/woow')
 DATA = Path('/data/mcp')
 ENDPOINT = 'http://127.0.0.1:8081/mcp'
+CHILD = 'http://127.0.0.1:3000/mcp'  # the default profile's child, container loopback only
 CALLS = []
 OFFLINE = threading.Event()
 
@@ -210,6 +211,27 @@ async def rpc(client, headers, message):
         return await protocol_reply(response, message['id'])
 
 
+async def assert_child_bearer(client, child_token, initialize, url=CHILD):
+    """HM-06 (multi-profile plan 3.3 and 11.5: every product release checks it): straight to the child, only the
+    gateway's own child bearer is served (the Python children's gate; n8n-mcp's AUTH_TOKEN, the same child_token).
+    None and another token of the same form get 401 and no session; the own one opens a session, ended at once.
+    Fixed messages only: no token is ever printed."""
+    import secrets
+    accept = {'Accept': 'application/json, text/event-stream'}
+    for auth in ({}, {'Authorization': 'Bearer ' + secrets.token_urlsafe(32)}):
+        response = await client.post(url, headers={**accept, **auth}, json=initialize)
+        assert response.status_code == 401 and 'mcp-session-id' not in response.headers, \
+            'child served without its bearer'
+    own = {**accept, 'Authorization': 'Bearer ' + child_token}
+    async with client.stream('POST', url, headers=own, json=initialize) as response:
+        assert response.status_code == 200 and response.headers.get('mcp-session-id'), 'child refused its own bearer'
+        session = response.headers['mcp-session-id']
+        result = await protocol_reply(response, initialize['id'])
+    response = await client.delete(url, headers={**own, 'Mcp-Session-Id': session,
+                                                  'MCP-Protocol-Version': result['protocolVersion']})
+    assert response.status_code in (200, 204), 'child kept the session it opened'
+
+
 async def run():
     assert APP in ('odoo', 'odoo-manage', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud', 'headscale')
     assert {p.name for p in (ROOT / 'apps').iterdir()} == {APP, 'runtime'}, 'sibling application shipped'
@@ -358,6 +380,8 @@ async def run():
             rows = Path('/proc/net/tcp').read_text().splitlines()[1:]
             listeners = [row.split()[1] for row in rows if row.split()[3] == '0A' and row.split()[1].endswith(':0BB8')]
             assert listeners == ['0100007F:0BB8']
+            # HM-06: and there it serves only the gateway's own child bearer (this fixture's state).
+            await assert_child_bearer(client, state.child_token, initialize)
             async with asyncio.timeout(22):
                 while (await client.get('http://127.0.0.1:8081/health/ready')).status_code != 200:
                     await asyncio.sleep(.25)
