@@ -3,7 +3,7 @@
 - owned_network refuses 3000 (the default profile's child) and 18000-18099 (the extra profiles' children in the
   multi-profile plan) before any socket operation, in this process, in spawned Python and in Node.
 - owned_runtime.private_spec / Endpoint and owned_child replace a given production port (default 3000) with the
-  private one; nothing else in the production spec changes.
+  private one; nothing else in the production spec changes. batch2_owned_port's own checks use the same rule.
 - Endpoint.client() sends the child bearer on every request that names no Authorization itself: the supervised
   spec's own (n8n AUTH_TOKEN; WOOW_MCP_CHILD_TOKEN for the Python children from HM-06), else one synthetic value per
   endpoint. The real children of bb48449 are run with it below: the Python ones ignore the extra header today, n8n
@@ -21,6 +21,7 @@ import types
 import httpx
 import pytest
 
+import batch2_owned_port
 from batch2_owned_port import OwnershipError, reserve_port
 from log_scan import log_scan  # noqa: F401  (fixture)
 from mcp_admin_core.health import protocol_reply
@@ -48,6 +49,41 @@ TOKEN = re.compile(r'[A-Za-z0-9_-]{43}')
 def test_forbidden_ports(port, forbidden):
     """As getaddrinfo reads a port (strtoul: blanks, one '+', leading zeros); a float or hex text is no port there."""
     assert owned_network.forbidden_port(port) is forbidden
+
+
+@pytest.mark.parametrize('port', [3000, 18000, 18042, 18099])
+def test_batch2_helpers_refuse_every_child_port(port, monkeypatch, tmp_path):
+    """batch2_owned_port (B1 tests): no private spec, listener inspection or reservation on a child port."""
+    with closing(ProductStore(tmp_path, 'n8n')) as store:
+        store.update(backend_url='https://n8n.invalid', backend_key='DUMMY-hm01-batch2')
+        spec = n8n_spec(store.load(), store.directory)
+    with pytest.raises(AssertionError):
+        batch2_owned_port.private_spec(spec, 'n8n', port)
+    with pytest.raises(OwnershipError, match='must not be inspected'):
+        batch2_owned_port.owned_listener(types.SimpleNamespace(process=None, status='starting'), port)
+
+    made = []
+
+    class Reserved:  # the kernel handing out this port for an ephemeral bind (Linux gives 32768-60999 by default)
+        def __init__(self, *args):
+            self.closed = False
+            made.append(self)
+
+        def bind(self, address):
+            pass
+
+        def getsockname(self):
+            return ('127.0.0.1', port)
+
+        def close(self):
+            self.closed = True
+
+    with monkeypatch.context() as patch:
+        patch.setattr(batch2_owned_port.socket, 'socket', Reserved)
+        with pytest.raises(OwnershipError, match='must not be used'):
+            reserve_port()
+    assert [reservation.closed for reservation in made] == [True]
+    assert batch2_owned_port.private_spec(spec, 'n8n', 43210).env['PORT'] == '43210'
 
 
 @pytest.mark.parametrize('address', [('127.0.0.1', 18000), ('::1', 18099, 0, 0), ('::ffff:127.0.0.1', '18042'),

@@ -3,6 +3,7 @@ import io
 import logging
 import secrets
 import threading
+import warnings
 
 import pytest
 
@@ -182,6 +183,43 @@ def test_scans_started_inside_each_other_keep_the_chain():
             if scan is not None:
                 scan.stop()
         logging.Logger.handle = handle  # the outer layer, now pass-through, is dropped here
+
+
+def test_a_warning_is_scanned_and_the_warning_hook_comes_back():
+    """warnings.warn() becomes a py.warnings record while a scan runs (nested scans too); the last stop restores it."""
+    token = secrets.token_urlsafe(32)
+    handle = logging.Logger.handle
+    with warnings.catch_warnings():
+        warnings.simplefilter('always')
+        hook = warnings.showwarning
+        outer = LogScan().start().watch(token)
+        inner = LogScan().start().watch(token)
+        try:
+            outer.stop()  # the inner scan still runs: warnings stay routed to it
+            warnings.warn('warned ' + token, UserWarning)
+            assert kinds(inner) == ['token'] and [name for _, name, _, _ in inner.hits()] == ['py.warnings']
+            assert outer.hits() == []
+        finally:
+            inner.stop()
+            outer.stop()
+            logging.Logger.handle = handle  # the outer layer, now pass-through, is dropped here
+        assert warnings.showwarning is hook
+        with warnings.catch_warnings(record=True) as shown:
+            warnings.simplefilter('always')
+            warnings.warn('after the scans', UserWarning)
+        assert [str(item.message) for item in shown] == ['after the scans']
+
+
+def test_a_warning_hook_set_before_the_scan_is_left_alone():
+    with warnings.catch_warnings():
+        logging.captureWarnings(True)
+        try:
+            hook = warnings.showwarning
+            scan = LogScan().start()
+            scan.stop()
+            assert warnings.showwarning is hook  # still captured: it was on before the scan
+        finally:
+            logging.captureWarnings(False)
 
 
 def test_the_fixture_collects_while_the_test_runs(log_scan):

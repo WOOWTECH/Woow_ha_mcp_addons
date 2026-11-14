@@ -15,19 +15,24 @@ logger, the level and the source line, never the value or the message.
 
 What is seen: every LogRecord any logger dispatches while the test runs (Logger.handle is wrapped), whichever logger
 filter, handler, handler filter, level or propagation setting applies after that; meanwhile the root logger is lowered
-to DEBUG so that loggers without their own level create their records too. Each record is rendered at that moment:
+to DEBUG so that loggers without their own level create their records too, and warnings.warn() is routed to the
+py.warnings logger (logging.captureWarnings, undone when the last scan stops). Each record is rendered at that moment:
 message, arguments, exception text, stack and extra attributes. That is after the record factory ran
 (mcp_admin_core.redact's first layer scrubs every record there) and before any handler filter could (its second
 layer): every handler, logging.lastResort included, gets the record as it is then, so a value that only a later
 handler filter would hide still counts. A token also counts when any TOKEN_WINDOW-character piece of it shows (a
 truncated or partly redacted token is still a leak); names also count in any letter case.
 
-Not an output scan: print() and child process output are not log records.
+Not seen: what never becomes a record. print() and child process output are not log records; a logger with a level
+of its own creates no record below it (uvicorn's loggers run at WARNING: their DEBUG and INFO calls create nothing to
+scan); a warning shown inside warnings.catch_warnings(record=True) or pytest.warns() goes to that recorder instead; a
+Logger subclass that overrides handle() is not wrapped.
 """
 from __future__ import annotations
 
 import logging
 import threading
+import warnings
 
 import pytest
 
@@ -36,6 +41,22 @@ MIN_SECRET = 8   # watch_state() skips shorter credentials; too common in ordina
 MIN_NAME = 4
 KINDS = ('token', 'secret', 'name')
 _STANDARD = frozenset(vars(logging.LogRecord('', logging.INFO, '', 0, '', (), None))) | {'message', 'asctime'}
+_warnings = {'scans': 0, 'owned': False}  # running scans; whether they turned logging.captureWarnings on
+
+
+def _capture_warnings(on):
+    """warnings.warn() -> the py.warnings logger while any scan runs; left as found when it was already captured."""
+    if on:
+        if _warnings['scans'] == 0:
+            before = warnings.showwarning
+            logging.captureWarnings(True)
+            _warnings['owned'] = warnings.showwarning is not before
+        _warnings['scans'] += 1
+    else:
+        _warnings['scans'] -= 1
+        if _warnings['scans'] == 0 and _warnings['owned']:
+            logging.captureWarnings(False)
+            _warnings['owned'] = False
 
 
 def render(record: logging.LogRecord) -> str:
@@ -130,6 +151,7 @@ class LogScan:
         root = logging.getLogger()
         self._previous_level = root.level
         root.setLevel(logging.DEBUG)
+        _capture_warnings(True)
         self._active = True
         return self
 
@@ -137,6 +159,7 @@ class LogScan:
         if not self._active:
             return
         self._active = False
+        _capture_warnings(False)
         logging.getLogger().setLevel(self._previous_level)
         if logging.Logger.handle is self._handle:
             logging.Logger.handle = self._previous_handle
