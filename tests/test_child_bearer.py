@@ -13,15 +13,15 @@ not ready, so nothing runs with the other profile's backend identity. n8n's chil
 same child_token (unchanged); the retired Odoo Manage (no image since 0.1.5) gets no bearer and stays as it is.
 
 Real children (each in its pinned venv, from child_spec on an owned private port, fake backends), started as the add-on
-starts them: the direct 401/200 matrix, inside a session too; the gateway's own path and the wrong child token; the
-start refusals (missing, empty, malformed). The real n8n child gets the same matrix: it refuses every wrong and other
-profile's bearer, and takes three more forms of its own one (N8N_ALSO_ACCEPTS). No token shows in the child's own output
-(read before the Supervisor's scrub) or in any log record of this process (HM-01 log_scan). Every token here is
-generated at test time.
+starts them: the direct 401/200 matrix, inside a session too; no other path or method of the port serving without the
+bearer, and no refusal waiting for a body; the gateway's own path and the wrong child token; the start refusals
+(missing, empty, malformed). The real n8n child gets the same matrix: it refuses every wrong and other profile's bearer,
+and takes three more forms of its own one (N8N_ALSO_ACCEPTS). No token shows in the child's own output (read before the
+Supervisor's scrub) or in any log record of this process (HM-01 log_scan). Every token here is generated at test time.
 """
 import asyncio
 import base64
-from contextlib import closing
+from contextlib import closing, suppress
 import importlib.util
 import json
 from pathlib import Path
@@ -32,6 +32,7 @@ import time
 import httpx
 import pytest
 
+from batch2_owned_port import OwnershipError, owned_listener
 from log_scan import TOKEN_WINDOW, log_scan  # noqa: F401  (fixture)
 from mcp_admin_core.diagnostics import ChildLogs
 from mcp_admin_core.gateway import make_apps
@@ -57,6 +58,17 @@ BIG = {'jsonrpc': '2.0', 'id': 4, 'method': 'ping', 'params': {'_meta': {'paddin
 REFUSAL = [{'type': 'http.response.start', 'status': 401,
             'headers': [(b'www-authenticate', b'Bearer'), (b'content-length', b'0')]},
            {'type': 'http.response.body', 'body': b''}]
+READ_SECONDS = 30  # any one direct request: a child that never answers fails the test instead of hanging it
+LIMIT = 16 * 1024 * 1024  # session_idle.BODY_BYTES: the SDK's body limit (413) in every child, behind the gate
+# Requests around the child's one route (/mcp, every method behind the gate): other paths, the SDKs' usual extra routes
+# (SSE, health, OAuth metadata, docs), every method on /mcp, a query, slashes, letter case and percent-encoding.
+ROUTES = (('GET', '/'), ('POST', '/'), ('GET', '/mcp/'), ('POST', '/mcp/'), ('GET', '/sse'), ('GET', '/sse/'),
+          ('POST', '/messages/'), ('POST', '/messages/?session_id=0'), ('GET', '/health'), ('GET', '/healthz'),
+          ('GET', '/.well-known/oauth-protected-resource'), ('GET', '/.well-known/oauth-protected-resource/mcp'),
+          ('GET', '/.well-known/oauth-authorization-server'), ('GET', '/docs'), ('GET', '/openapi.json'),
+          ('OPTIONS', '/mcp'), ('HEAD', '/mcp'), ('PUT', '/mcp'), ('PATCH', '/mcp'), ('GET', '/mcp'),
+          ('DELETE', '/mcp'), ('POST', '/mcp'), ('POST', '/mcp?x=1'), ('POST', '//mcp'), ('POST', '/MCP'),
+          ('POST', '/mcp/x'), ('POST', '/mcp/..'), ('POST', '/%6dcp'), ('POST', '/mcp%2F'))
 
 # Every variable each child gets: bb48449's set (child_spec of a configured state, default policy). HM-06 adds
 # WOOW_MCP_CHILD_TOKEN to the seven Python children and nothing else (the env snapshot, review C4-SF-4).
@@ -311,7 +323,9 @@ def test_install_gates_every_manager_or_refuses_before_patching(venv, flavour):
 
 async def send(client, method, url, authorization, *, message=None, session=None):
     """One request with exactly these Authorization headers (a list; empty: none): the client adds none of its own.
-    (response, result) for a 200 request answer, else (response, body)."""
+    (response, result) for a 200 request answer, else (response, body). A GET answered 200 is an open event stream:
+    it is returned unread (b''), so a child that wrongly serves one fails the 401 check at once instead of hanging the
+    test; and no request takes longer than READ_SECONDS."""
     headers = [('Accept', ACCEPT)]
     if session is not None:
         headers += [('Mcp-Session-Id', session), ('MCP-Protocol-Version', PROTOCOL)]
@@ -320,9 +334,11 @@ async def send(client, method, url, authorization, *, message=None, session=None
         headers.append(('Content-Type', 'application/json'))
         content = json.dumps(message).encode()
     headers += [('Authorization', value) for value in authorization]
-    async with client.stream(method, url, headers=headers, content=content) as response:
+    async with asyncio.timeout(READ_SECONDS), client.stream(method, url, headers=headers, content=content) as response:
         if response.status_code == 200 and message is not None and 'id' in message:
             return response, await protocol_reply(response, message['id'])
+        if method == 'GET' and response.status_code == 200:
+            return response, b''
         return response, await response.aread()
 
 
@@ -330,6 +346,56 @@ def assert_refused(response, body, case):
     assert response.status_code == 401, (case, response.status_code)
     assert body == b'' and response.headers.get('www-authenticate') == 'Bearer', case
     assert 'mcp-session-id' not in response.headers and 'content-type' not in response.headers, case
+
+
+def owned(endpoint):
+    """Raise unless the listener on the endpoint's private port is still its supervised child (owned_runtime's proof),
+    for the requests the shared client does not take (its guard sends to /mcp only)."""
+    if endpoint.proof is None or owned_listener(endpoint.manager, endpoint.port) != endpoint.proof:
+        raise OwnershipError('owned child listener proof no longer valid')
+
+
+async def assert_no_other_route(endpoint):
+    """Without a bearer nothing on the child's port serves (ROUTES): no 2xx, no session. An SDK upgrade that adds a
+    default HTTP route, or moves the route off the gated asgi_app, fails here. No answer's body is read."""
+    async def check(request):
+        assert (request.url.host, request.url.port) == ('127.0.0.1', endpoint.port)
+        assert 'authorization' not in request.headers
+        owned(endpoint)
+
+    content = json.dumps(INIT).encode()
+    async with httpx.AsyncClient(trust_env=False, follow_redirects=False, timeout=15,
+                                 event_hooks={'request': [check]}) as plain:
+        for method, path in ROUTES:
+            async with asyncio.timeout(READ_SECONDS), plain.stream(
+                    method, f'http://127.0.0.1:{endpoint.port}{path}',
+                    headers={'Accept': ACCEPT, 'Content-Type': 'application/json'},
+                    content=content if method in ('POST', 'PUT', 'PATCH') else None) as response:
+                assert not 200 <= response.status_code < 300, (method, path, response.status_code)
+                assert 'mcp-session-id' not in response.headers, (method, path)
+
+
+async def unsent_body_answer(endpoint, authorization, declared):
+    """POST /mcp on a fresh socket with these Authorization values, declaring a body of declared bytes and sending none
+    of it: the answer's status code, or None when none comes within 5 seconds (something is waiting for the body)."""
+    owned(endpoint)
+    reader, writer = await asyncio.open_connection('127.0.0.1', endpoint.port)
+    try:
+        head = [b'POST /mcp HTTP/1.1', b'Host: 127.0.0.1:%d' % endpoint.port, b'Accept: ' + ACCEPT.encode(),
+                b'Content-Type: application/json', b'Content-Length: %d' % declared, b'Connection: close']
+        head += [b'Authorization: ' + value.encode() for value in authorization]
+        writer.write(b'\r\n'.join(head) + b'\r\n\r\n')
+        await writer.drain()
+        try:
+            line = await asyncio.wait_for(reader.readline(), 5)
+        except TimeoutError:
+            return None
+        assert line.startswith(b'HTTP/1.1 ') and line[9:12].isdigit(), line[:12]
+        return int(line[9:12])
+    finally:
+        writer.close()
+        with suppress(OSError, TimeoutError):
+            await asyncio.wait_for(writer.wait_closed(), 2)
 
 
 async def through(app, token, message, session=None):
@@ -378,6 +444,19 @@ async def test_real_child_serves_only_its_own_child_bearer(tmp_path, log_scan, p
                 # The refusal reads no body: a large one (beyond uvicorn's 64 KiB read buffer) is still refused at once
                 # and the next request is served.
                 assert_refused(*await send(client, 'POST', endpoint.url, [], message=BIG), 'large body')
+                # Nothing else on the port serves without the bearer, and a refusal never waits for the body: one that
+                # is declared and never sent is refused at once, beyond the SDK's own limit too (the gate is in front
+                # of that limit, which buffers a body before the SDK reads it); the own bearer then meets the limit.
+                before = len(calls)
+                await assert_no_other_route(endpoint)
+                answers = {}  # by case name only: a failure never shows a token
+                for case, values, declared in (('none, 8 MiB', [], 8 * 1024 * 1024), ('none, over', [], LIMIT + 1),
+                                               ('other profile, over', ['Bearer ' + other], LIMIT + 1),
+                                               ('own, over', [bearer], LIMIT + 1)):
+                    answers[case] = await unsent_body_answer(endpoint, values, declared)
+                assert answers == {'none, 8 MiB': 401, 'none, over': 401, 'other profile, over': 401,
+                                   'own, over': 413}, answers
+                assert len(calls) == before
                 response, _ = await send(client, 'POST', endpoint.url, [bearer], message=INITIALIZED, session=session)
                 assert response.status_code == 202
                 # Inside the session it opened: every method needs the bearer again; a refused DELETE ends nothing.
@@ -436,11 +515,12 @@ async def test_real_child_serves_only_its_own_child_bearer(tmp_path, log_scan, p
         assert not shows(output, token)
 
 
-# n8n's child (n8n-mcp, Node) has always checked AUTH_TOKEN, the same child_token, and HM-06 leaves it as it is. Its
-# check (http-server-single-session.js authenticateRequest) wants "Bearer " and compares the rest trimmed, and Node's
-# http keeps only the first of repeated Authorization headers: so it also takes three forms a Python child refuses.
-# Each of them still needs its own token first; no other profile's or wrong bearer gets through (the HM-06 provenance
-# note reports this against T-23 of the HM-00 acceptance matrix, which expects 401 for two headers).
+# n8n's child (n8n-mcp, Node) has always checked AUTH_TOKEN, the same child_token, and HM-06 leaves it as it is (plan
+# 8.3). Its check (http-server-single-session.js authenticateRequest) wants "Bearer " and compares the rest trimmed, and
+# Node's http keeps only the first of repeated Authorization headers: so it also takes three forms a Python child
+# refuses. Each of them still needs its own token first; no other profile's or wrong bearer gets through, and the
+# gateway never sends two headers. HM-00's T-23 and threat-model I4 say 401 for two headers on n8n too: which one
+# changes (their n8n row, or n8n itself in a slice of its own) is not decided here (HM-06 provenance note, section 12).
 N8N_ALSO_ACCEPTS = ('two blanks', 'twice', 'own then other')
 
 
