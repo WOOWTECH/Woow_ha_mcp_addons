@@ -274,3 +274,16 @@ python3 scripts/ledger_precheck.py                  # 帳本漂移、本分支�
   測試的失敗訊息會分辨「清單變了」與「閘道改寫變了」。`docs/tool-surface.md` 由 `scripts/tool_inventory.py` 產生而且列管，本片
   不改它，說明寫在測試檔頭與失敗訊息。
 - 秘密預檢只掃已 commit 的內容；有未 commit 的改動時工具會提示，要先 commit 再跑。
+
+## 12. 合併前補正（2026-11-15）
+
+- HM-04 的審查（O-1）發現：`scripts/ledger_precheck.py` 用 `shutil.copyfile` 複製 git index。複本的 mtime 變成
+  複製當下，git 的 racy 判斷因此失效：在 index 同一秒內改成同長度、還沒 commit 的檔，會被當成沒改。
+  `tests/test_ledger_precheck.py::test_drift_and_pinned_changes` 的第二段就是這種情況（帳本換一個同長度的摘要），
+  所以會偶發失敗。
+- 改法：改用 `shutil.copy2`，保留 index 的 mtime。
+- 新測試 `test_a_same_size_edit_in_the_index_second_is_seen`：把檔案與 index 的時間固定在過去同一秒、
+  內容改成同長度，並關掉 ctime 比對。這樣一定會落在 racy 情況，不靠運氣。
+  - 修正前：新測試每次都失敗。
+  - 修正後：整個測試檔連跑 20 次，20 次都通過（每次 8 案）。
+  - 本機用 `--noconftest` 跑，因為共用測試鎖被第 1 波的代理佔著；以 CI 為準。

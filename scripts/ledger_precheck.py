@@ -119,7 +119,9 @@ def changed(root, base):
     with tempfile.TemporaryDirectory(prefix='ledger-precheck-') as private:
         copy = Path(private) / 'index'
         try:
-            shutil.copyfile(index if index.is_absolute() else root / index, copy)
+            # copy2 keeps the index mtime. git re-reads an entry stamped in the index's own second ("racy git"); a
+            # copy with a fresh mtime makes that entry look clean and hides a same-size edit.
+            shutil.copy2(index if index.is_absolute() else root / index, copy)
         except OSError:
             raise Unavailable('git index unreadable') from None
         paths = set(git(root, 'diff', '--name-only', '--no-renames', merge_base, index=copy).split('\n'))

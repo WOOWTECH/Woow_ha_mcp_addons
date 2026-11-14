@@ -154,6 +154,20 @@ def test_it_only_reads(repo):
     assert git(repo, 'status', '--porcelain', '--untracked-files=all', '--ignored') == before
 
 
+def test_a_same_size_edit_in_the_index_second_is_seen(repo):
+    """The private index copy keeps the index mtime, so git still re-reads an entry stamped in the index's own
+    second ("racy git"). A copy with a fresh mtime makes that entry look clean and hides a same-size edit; that
+    made test_drift_and_pinned_changes flaky (HM-04 review O-1)."""
+    git(repo, 'config', 'core.trustctime', 'false')  # ctime cannot be set; take it out of the stat check
+    readme, stamp = repo / 'README.md', 1_700_000_000 * 10**9  # in the past: a fresh copy is newer than the entry
+    os.utime(readme, ns=(stamp, stamp))
+    git(repo, 'update-index', '--refresh')
+    readme.write_text('y\n')  # same size, same inode
+    os.utime(readme, ns=(stamp, stamp))
+    os.utime(repo / '.git/index', ns=(stamp, stamp))  # the entry was stamped in the index's own second
+    assert 'README.md' in ledger.changed(repo, 'main')[1]
+
+
 def test_runs_as_a_script(repo):
     result = subprocess.run([sys.executable, '-I', str(ROOT / 'scripts/ledger_precheck.py'), '--repo', str(repo),
                              '--base', 'main', '--json'], capture_output=True, text=True, timeout=60)
