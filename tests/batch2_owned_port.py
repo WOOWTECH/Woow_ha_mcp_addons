@@ -14,11 +14,18 @@ class OwnershipError(RuntimeError):
     pass
 
 
+def forbidden(port):
+    """owned_network's rule (HM-01): 3000 and the extra profiles' child ports 18000-18099. Imported at call time:
+    owned_network imports this module for OwnershipError."""
+    from owned_network import forbidden_port
+    return forbidden_port(port)
+
+
 def reserve_port():
     reservation = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         reservation.bind(('127.0.0.1', 0))
-        if reservation.getsockname()[1] == 3000:
+        if forbidden(reservation.getsockname()[1]):
             raise OwnershipError('production port must not be used')
         return reservation
     except BaseException:
@@ -28,7 +35,7 @@ def reserve_port():
 
 def private_spec(spec, product, port):
     """Replace ONLY the exact port in the actual fixed production ChildSpec."""
-    assert 0 < port <= 65535 and port != 3000
+    assert 0 < port <= 65535 and not forbidden(port)
     if product == 'n8n':
         assert spec.env['PORT'] == '3000' and '--port' not in spec.argv
         return replace(spec, env={**spec.env, 'PORT': str(port)})
@@ -43,7 +50,7 @@ def private_spec(spec, product, port):
 
 def owned_listener(supervisor, port):
     """Return (PID, inode), None while starting; reject any unowned listener."""
-    if port == 3000:
+    if forbidden(port):
         raise OwnershipError('production port must not be inspected')
     process = supervisor.process
     if process is None or process.returncode is not None:

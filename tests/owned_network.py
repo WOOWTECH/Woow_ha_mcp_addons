@@ -1,22 +1,47 @@
 """Test-process-only fail-before-syscall sentinel. Not an OS sandbox."""
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 
 from batch2_owned_port import OwnershipError
 
 HERE = Path(__file__).resolve().parent
+# HM-01: the default profile's child listens on 3000; the multi-profile plan gives the extra profiles' children
+# 18000-18099. No test may bind, connect, resolve or send to any of them.
+PRODUCTION_PORT = 3000
+PROFILE_CHILD_PORTS = range(18000, 18100)
+# getaddrinfo reads a text port with strtoul: leading blanks and one '+' are accepted, so ' +18000' is port 18000.
+_DECIMAL = re.compile(r'\+?[0-9]{1,10}')
 _installed = False
 _spawn_installed = False
 forbidden_operations = 0
+
+
+def port_number(value):
+    """An address's port as bind/connect/getaddrinfo read it (an int, or decimal text or bytes), else None."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, (bytes, bytearray)):
+        value = bytes(value).decode('ascii', 'replace')
+    if isinstance(value, str) and _DECIMAL.fullmatch(value.strip()):
+        return int(value.strip())
+    return None
+
+
+def forbidden_port(value):
+    port = port_number(value)
+    return port is not None and (port == PRODUCTION_PORT or port in PROFILE_CHILD_PORTS)
 
 
 def check_address(address):
     # Port-only denial also covers IPv6, mapped addresses and unresolved names.
     # Unix socket paths do not have a TCP/UDP port.
     global forbidden_operations
-    if isinstance(address, tuple) and len(address) >= 2 and str(address[1]) == '3000':
+    if isinstance(address, tuple) and len(address) >= 2 and forbidden_port(address[1]):
         forbidden_operations += 1
         raise OwnershipError('test network operation on production port forbidden')
 
