@@ -440,6 +440,12 @@
       "guarded_sources": {}
     },
     {
+      "path": "packaging/entrypoint.py",
+      "sha256": "d83831dabb05ba231fd3b97a2f1690c872c3c1f70d02849e8e0eb71d0e29fe08",
+      "change": "2026-11-14 multi-profile HM-13a; first listed here, as the root bootstrap every Dockerfile copies (docs/multi-profile/ledger-tracking.md section 3 had left it unlisted). When /data/mcp comes back root-owned (an HA restore: Supervisor copies the backup back as root, no chown), it saves the restore marker .restore-detected before pass 1 of the bounded repair: created through the /data/mcp descriptor with O_CREAT|O_EXCL|O_NOFOLLOW and 0600, the file and the directory fsynced; a marker already there is kept when it is a single-link regular file. Pass 1 approves it and pass 2 re-owns it with the rest (the re-owned count includes it); /data/mcp is still re-owned last, so a stop before that marks and repairs again at the next start. A marker that cannot be saved refuses the start (one stderr line, then bootstrap unavailable) when profile data is on disk (profiles.json or profiles, any kind of entry; a lookup that cannot answer counts), otherwise one WARNING line and the repair goes on as before. A new installation, a runtime-owned /data/mcp and every other check are unchanged. Signal 1 of mcp_admin_core.restore_detect, which keeps the same names; no PaaS counterpart (PaaS restores with its own in-place tool, which writes its own marker).",
+      "guarded_sources": {}
+    },
+    {
       "path": "apps/emqx/vendor/emqx_mcp_server/errors.py",
       "sha256": "ac012ba5c20e7bfdc446b3f993bee902051cf6e9bbad5e09259e788716a97c96",
       "change": "2026-10-30 HA047: preserve HTTP status_code for retained404 fallback and reject invalid JSON, with uncertain-write warning. 2026-10-31: align errors with PaaS source29fa; reject redirects, hide backend response bodies and request paths, wrap all httpx transport failures into bounded codes. The retained DELETE one-request rule and HA destination policy are unchanged. 2026-11-06 (tool arguments in URL paths): backend_policy's clients refuse a '.' or '..' segment in the path as the child wrote it (httpx drops them while it builds the URL, so check_url never saw them); the admin API refuses at save time a backend URL the policy refuses on every call, for every product (products.backend_destination / check_saved_destinations; the Connection models stay as they were so stored states still load); EMQX tools pass every path argument through tools/_common.path_segment.",

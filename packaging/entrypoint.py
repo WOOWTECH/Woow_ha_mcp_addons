@@ -11,6 +11,9 @@ inode; pass 2 requires the same names to still name those pinned inodes and chan
 inodes after re-checking type, owner and link count. Changes made before an entry's re-check stop
 bootstrap; anything changed after it cannot redirect the repair, which only ever touches pinned,
 approved inodes.
+Before pass 1 a restore leaves a durable marker (MARKER) for the management process's restore check
+(multi-profile HM-13a, signal 1; mcp_admin_core.restore_detect keeps the same names); a restore whose
+marker cannot be saved does not start when multi-profile data is on disk.
 """
 import ctypes
 import os
@@ -26,6 +29,8 @@ RESTORE_OWNER = (0, 0)  # Supervisor extracts a restored app backup as root
 MAX_RESTORED_ENTRIES = 512  # every approved entry holds a descriptor until the repair ends
 MAX_RESTORED_DEPTH = 8
 CHANGED = 'restored state changed during bootstrap'
+MARKER = '.restore-detected'  # read by the management process's restore check, which removes it when done
+PROFILE_DATA = ('profiles.json', 'profiles')  # multi-profile data in /data/mcp: the index, the extra profiles
 
 
 def _owner(info):
@@ -127,6 +132,41 @@ def _reown_restored(dir_fd, approved):
             os.chown(target, UID, GID)
 
 
+def _mark_restored(child):
+    """Before pass 1: save the restore marker, durably, through the /data/mcp descriptor.
+
+    Created without following a link and never over an existing name, owner-only; then the file and the
+    directory are fsynced. A marker already there (a start that stopped before the repair finished, or one
+    the backup carried) is kept as it is when it is a single-link regular file. Pass 1 approves it like any
+    entry and pass 2 re-owns it; /data/mcp itself is still re-owned last, so a stop before that leaves a
+    root-owned /data/mcp that the next start marks (or finds marked) and repairs again.
+    """
+    try:
+        fd = os.open(MARKER, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=child)
+    except FileExistsError:
+        if not _plain(os.stat(MARKER, dir_fd=child, follow_symlinks=False), False):
+            raise RuntimeError('unsupported restore marker') from None
+    else:
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    os.fsync(child)
+
+
+def _has_profile_data(child):
+    """Any entry under a PROFILE_DATA name counts, and so does one the lookup cannot rule out."""
+    for name in PROFILE_DATA:
+        try:
+            os.stat(name, dir_fd=child, follow_symlinks=False)
+        except FileNotFoundError:
+            continue
+        except OSError:
+            pass
+        return True
+    return False
+
+
 def _repair_restored(child, top):
     """Return the number of re-owned entries; the caller reports it once the final ownership check passed."""
     original = _descriptor_budget()
@@ -161,6 +201,19 @@ def prepare_data(parent=Path('/data')):
             repaired = None
             if (not created and os.geteuid() == 0 and (info.st_uid, info.st_gid) == RESTORE_OWNER
                     and RESTORE_OWNER != (UID, GID)):
+                try:
+                    _mark_restored(child)
+                except (OSError, RuntimeError):
+                    # With profile data a restore never starts unmarked; the next start tries again. Without
+                    # it the restore check revokes no token (multi-profile decision DQ-03), and the instance
+                    # sentinel still sees the restore when the product's switch is on: start, and say so.
+                    if _has_profile_data(child):
+                        print('bootstrap: /data/mcp was restored with profile data but its restore marker '
+                              '(.restore-detected) could not be saved; not starting (retried at the next start)',
+                              file=sys.stderr, flush=True)
+                        raise RuntimeError('restore marker unavailable') from None
+                    print('bootstrap: WARNING: /data/mcp was restored but its restore marker (.restore-detected) '
+                          'could not be saved; starting (no profile data)', file=sys.stderr, flush=True)
                 repaired = _repair_restored(child, info)
                 info = os.fstat(child)
             if (info.st_uid, info.st_gid) != (UID, GID) or stat.S_IMODE(info.st_mode) != 0o700:
