@@ -242,10 +242,20 @@ PT_D、PT_E 在正式環境只會碰到 n8n（`run_product` 一定帶版號）�
 - **帳本預檢**（`scripts/ledger_precheck.py --base 32ecac8`）：`runtime-patches.json` 152 個、`runtime-sources.json` 70 個、
   `tool-surface.json` 159 個，0 漂移、0 缺檔；本片改了 11 個檔，列管檔 0 個、帳本 0 個、新增或改到而沒列管的執行期檔 0 個。
   `result: OK`。`packaging/validate.py`、`release_gate.py`、`docs/operations/release.md` 不在任何帳本。
+- **rebase 後重跑**（2026-11-15 07:2x，主對話）：本分支從 `32ecac8` rebase 到 `claude-delivery` `e5e6e74`（HM-00 #89、HM-01 #90、
+  HM-04 #91 都已合併），6 個 commit 都沒有衝突，內容沒變。
+  - `packaging/validate.py`：PASS。
+  - packaging unittest：`Ran 192 tests`、`OK (skipped=5)`（5 個要 root，和基準相同）。
+  - 帳本預檢：OK。
+  - `scripts/tool_inventory.py` 漂移檢查：exit 0。
+  - 秘密預檢：`e5e6e74..HEAD` 的 6 個 commit、`--full`（HEAD 全部檔、全歷史）都 0 命中。
 
 ## 9. PaaS 變動（`git log <pin>..origin/main -- <相關檔>`）
 
-不適用：本片是 HA 自己的發版工具，沒有移植 PaaS 程式或測試。
+- 本片是 HA 自己的發版工具，沒有移植 PaaS 程式或測試；PaaS 以 commit＋digest 釘版，沒有對應的程式。
+- 主對話 2026-11-15 06:2x 在本機 PaaS git 查過：PaaS main 是 `cf3d0d5`。`69ac425..cf3d0d5` 動到核心模組的只有
+  `log_redaction.py`（#149）、`gateway_pool.py`／`proxy.py`（#148 後的註解與文件更正）、`setup_status.py`（移除 VK 的說明文字），
+  都和本片無關。
 
 ## 10. 本片用到的決策
 
