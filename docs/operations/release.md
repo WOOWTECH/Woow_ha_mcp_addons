@@ -62,8 +62,11 @@ WOOW App Store 只出貨本 repo 的正式 Release（Store registry `ref_policy:
 - `checks`：本頁下一節 `ci.yaml` 的第 1–3 項（validator、packaging tests、`packaging/unit.sh`），不含 builder admission。
 - `readiness`：`packaging/release_gate.py` 對 Store registry 啟用的每一支（`woow_mcp_opendesign` 已停用，不檢查）確認：
   - manifest 版本的 amd64 映像可以從 GHCR 匿名拉取；
-  - 還沒有正式 Release（tag `<slug>-v<版本>`）的版本，有 `docs/operations/release-decision-*.md` 寫到這個版本。這份紀錄證明映像已在
-    builder VM 驗收過，GitHub Actions 看不到這一段，所以**升版的 PR 要先推好映像、寫好發佈紀錄**。
+  - 還沒有正式 Release（tag `<slug>-v<版本>`）的版本，有該產品自己的發佈紀錄 `docs/operations/release-decision-<產品>-<版本>.md`
+    （`<產品>` 是 `addons/` 下的目錄名，例如 `release-decision-odoo-0.5.0.md`），內文寫到 `<slug>` 和這個版本。這份紀錄證明映像已在
+    builder VM 驗收過，GitHub Actions 看不到這一段，所以**升版的 PR 要先推好映像、寫好發佈紀錄**。共用紀錄
+    （`release-decision-<版本>.md`）和別的產品的紀錄都不算：各產品的版號線會重複（Headscale 用過 0.4.14～0.4.18；多帳號開通時每個產品
+    各自升到 0.5.0），只比版號字串會讓別的產品的紀錄放行（HM-17）。一個 PR 同時升幾個產品，就每個產品各寫一份。
 - `release`：只在推送 `claude-delivery` 且上面兩項都通過時執行，呼叫 Store 的 `woow-addon-release.yml`，替每支還沒有 Release 的版本發
   `<slug>-v<版本>` 正式 Release。已發過的版本不會重發，所以沒升版號的推送不會發 Release，catalog 也不會前進。
 - `woow-addon-sync.yml` 在這個 workflow 完成後經由 `workflow_run` 執行，通知 Store；不必手動執行。

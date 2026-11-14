@@ -5,9 +5,11 @@ The Store's registry decides which add-ons ship; for each add-on it enables:
   images     the manifest version's amd64 image on GHCR can be pulled anonymously
              (manifest and image config resolve, and the config is linux/amd64).
   decisions  a version that has no stable Release yet (tag <slug>-v<version>, the
-             Store's tag scheme for a multi-add-on repository) is named in a
-             docs/operations/release-decision-*.md record: the record is the evidence
-             that the builder VM accepted the images, which GitHub Actions cannot see.
+             Store's tag scheme for a multi-add-on repository) has the product's own
+             record, docs/operations/release-decision-<add-on>-<version>.md naming the
+             slug and the version: the record is the evidence that the builder VM
+             accepted the image, which GitHub Actions cannot see. A shared record or
+             another product's record never counts (HM-17).
 
 Usage: python packaging/release_gate.py {images,decisions,all} <store registry.json>
 Network: GHCR anonymous token/manifests; GitHub API releases (GITHUB_TOKEN if set).
@@ -125,17 +127,28 @@ def stable_release_exists(tag, fetch=fetch):
     return not release.get('draft') and not release.get('prerelease')
 
 
-def decision_records(version, root=ROOT, *, product=None):
-    """release-decision-*.md files that name this exact version (0.2.2 does not match 0.2.20 or 10.2.2)."""
-    pattern = re.compile(r'(?<![0-9.])' + re.escape(version) + r'(?![0-9]|\.[0-9])')
-    product_pattern = (re.compile(r'(?<![A-Za-z0-9_])' + re.escape(product) + r'(?![A-Za-z0-9_])')
-                       if product else None)
-    records = []
-    for path in (root / 'docs/operations').glob('release-decision-*.md'):
-        content = path.read_text(encoding='utf-8')
-        if pattern.search(content) and (product_pattern is None or product_pattern.search(content)):
-            records.append(path.name)
-    return sorted(records)
+def record_name(slug, version):
+    """The file name of a product's own release record: release-decision-<add-on>-<version>.md, <add-on> being its
+    directory under addons/ (woow_mcp_odoo -> release-decision-odoo-0.5.0.md; Headscale's records have this form)."""
+    product = slug[len('woow_mcp_'):] if slug.startswith('woow_mcp_') else ''
+    if not re.fullmatch(r'[a-z0-9]+(?:_[a-z0-9]+)*', product) or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version):
+        raise Failed(f'{slug} {version}: no release record name for this slug and version (woow_mcp_<add-on>, x.y.z)')
+    return f"release-decision-{product.replace('_', '-')}-{version}.md"
+
+
+def own_record(slug, version, root=ROOT):
+    """The product's own release record, or None: the file record_name(slug, version) when it names the slug and this
+    exact version (0.2.2 does not match 0.2.20 or 10.2.2). Versions repeat across product lines (Headscale's 0.4.14 to
+    0.4.18 beside the shared line; every product moves to 0.5.0 in a release of its own), so a shared record
+    (release-decision-<version>.md) or another product's record never releases a product (R10 RG-12)."""
+    name = record_name(slug, version)
+    path = root / 'docs/operations' / name
+    if not path.is_file():
+        return None
+    content = path.read_text(encoding='utf-8')
+    names_version = re.search(r'(?<![0-9.])' + re.escape(version) + r'(?![0-9]|\.[0-9])', content)
+    names_slug = re.search(r'(?<![A-Za-z0-9_])' + re.escape(slug) + r'(?![A-Za-z0-9_])', content)
+    return name if names_version and names_slug else None
 
 
 def check_decisions(found, root=ROOT, fetch=fetch):
@@ -145,16 +158,17 @@ def check_decisions(found, root=ROOT, fetch=fetch):
         if stable_release_exists(tag, fetch=fetch):
             print(f'{slug} {version}: already released as {tag}')
             continue
-        # Headscale first appears at the same global 0.4.13 version already used
-        # by six published images. Their decision record cannot authorize a
-        # new, independently built image; require an explicit Headscale record.
-        records = decision_records(version, root, product=slug if slug == 'woow_mcp_headscale' else None)
-        if records:
-            print(f'{slug} {version}: release record {", ".join(records)}')
+        try:
+            record = own_record(slug, version, root)
+        except Failed as error:
+            failures.append(str(error))
+            continue
+        if record:
+            print(f'{slug} {version}: release record {record}')
         else:
-            subject = f'{slug} {version}' if slug == 'woow_mcp_headscale' else version
-            failures.append(f'{slug} {version}: no docs/operations/release-decision-*.md names {subject}; '
-                            'record the builder VM acceptance before releasing')
+            failures.append(f'{slug} {version}: no docs/operations/{record_name(slug, version)} names {slug} {version}; '
+                            'record the builder VM acceptance before releasing (a shared or another product\'s record '
+                            'does not count)')
     return failures
 
 
