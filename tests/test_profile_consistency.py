@@ -241,7 +241,9 @@ def test_port_conflicts_are_part_of_the_check():
     result = profiles.check_consistency(entries, ProfilesScan((A, B, C, D), (), 0),
                                         {A: credentials(state()), B: credentials(state()), C: credentials(state()),
                                          D: credentials(state())})
-    assert result.port_conflicts == {18000: (A, B), 3000: (C,), 8099: (D,)}
+    # A lone listener port (8099) is the spawn check's (HM-09, child_port_conflict), as in PaaS _port_collisions
+    # (HM-07 review MF-1, decided 2026-11-15).
+    assert result.port_conflicts == {18000: (A, B), 3000: (C,)}
     assert result.unavailable == ()  # a conflicting port stops the child, it does not make the profile unavailable
 
 

@@ -38,11 +38,13 @@ INDEX_VERSION = 1
 MAX_INDEX_BYTES = 65536
 MAX_EXTRA_PROFILES = 5
 
-# Ports (plan §5.4; contract §7). The default profile's child keeps 3000; additional children get the first free port
-# of 18000-18099 (more than enough for five; tests/owned_network.py keeps the tests off the same range). An index may
-# hold any port of 1024-65535, as in PaaS (_index_entries): a duplicate, the default child's port or one of the
-# add-on's own listeners is no structural error and only stops the profiles holding it (port_conflicts; PaaS
-# _port_collisions, and its spawn check _port_refusal for a listener port; design A-port, FM-40).
+# Ports (plan §5.4; contract §7, §8). The default profile's child keeps 3000 (lifecycle.CHILD_PORT); additional
+# children get the first free port of 18000-18099 (more than enough for five; tests/owned_network.py keeps the tests
+# off the same range), never 3000, 8081 or 8099. The index rules are the PaaS ones, word for word (HM-07 review MF-1,
+# decided 2026-11-15): any port of 1024-65535 is no structural error (_index_entries); a duplicate or the default
+# child's port stops only the profiles holding it (port_conflicts, PaaS _port_collisions); a port of the add-on's own
+# listeners is not checked here either: the spawn check refuses it (HM-09: blocked, child_port_conflict; PaaS
+# _port_refusal).
 DEFAULT_CHILD_PORT = 3000
 LISTENER_PORTS = frozenset({8081, 8099})
 RESERVED_PORTS = frozenset({DEFAULT_CHILD_PORT, *LISTENER_PORTS})
@@ -223,14 +225,15 @@ def encode_index(entries: Sequence[IndexEntry]) -> bytes:
 
 
 def port_conflicts(entries: Sequence[IndexEntry]) -> dict[int, tuple[str, ...]]:
-    """Ports the index does not give to exactly one additional profile, or that are reserved (the default child's
-    3000, the 8081 and 8099 listeners), mapped to the profiles holding them in index order: those are refused at spawn
-    (HM-09, disabled_reason port_conflict); every other profile, and the default profile with its port, keeps running
-    (PaaS _port_collisions; PaaS refuses a listener port at spawn, HA lists it here as well, design A-port)."""
+    """Ports the index gives to more than one additional profile, or that are the default child's 3000, mapped to the
+    profiles holding them in index order (PaaS _port_collisions): those are not started (disabled_reason
+    port_conflict); every other profile, and the default profile with its port, keeps running. A listener port (8081,
+    8099) that one profile holds is not listed, as in PaaS: the spawn check refuses it (HM-09, blocked_reason
+    child_port_conflict)."""
     holders: dict[int, list[str]] = {}
     for entry in entries:
         holders.setdefault(entry.port, []).append(entry.id)
-    return {port: tuple(ids) for port, ids in holders.items() if len(ids) > 1 or port in RESERVED_PORTS}
+    return {port: tuple(ids) for port, ids in holders.items() if len(ids) > 1 or port == DEFAULT_CHILD_PORT}
 
 
 def allocate_port(taken: Iterable[int] = ()) -> int | None:

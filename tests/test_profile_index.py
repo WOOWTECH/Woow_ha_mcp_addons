@@ -14,7 +14,7 @@ import unicodedata
 import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
-from mcp_admin_core import profiles
+from mcp_admin_core import lifecycle, profiles
 from mcp_admin_core.profiles import (
     INDEX_ABSENT, INDEX_CORRUPT, INDEX_MODIFIED, INDEX_OK, IndexCorrupt, IndexEntry, LabelError,
 )
@@ -65,9 +65,10 @@ PARITY = [
     # Not structural (PaaS test_profile_robustness.py:191, :316): only the profiles involved stop (port_conflicts).
     ('port-duplicate', raw({A: entry('x', 18000), B: entry('y', 18000)}), 'ok', 'ok'),
     ('port-default-child', raw({A: entry('x', 3000)}), 'ok', 'ok'),
-    # The add-on's own listeners, 8081 (MCP) and 8099 (panel), likewise: PaaS _index_entries takes any port of
-    # 1024-65535 and refuses a listener port only at spawn (process.py _port_refusal); design A-port and FM-40 list
-    # 3000, 8081 and 8099 together as "not structural". HM-07 review MF-1; the provenance note, section 3.
+    # The add-on's own listeners, 8081 (MCP) and 8099 (panel), are not structural either: PaaS _index_entries takes any
+    # port of 1024-65535, and neither PaaS _port_collisions nor port_conflicts names a listener port; the spawn check
+    # refuses it (PaaS process.py _port_refusal; HA HM-09, child_port_conflict). HM-07 review MF-1, decided 2026-11-15:
+    # as PaaS, word for word; the provenance note, section 3.
     ('port-mcp-listener', raw({A: entry('x', 8081)}), 'ok', 'ok'),
     ('port-admin-listener', raw({A: entry('x', 8099)}), 'ok', 'ok'),
     # Contract §9 #35 (DQ-40 ④): label characters and NFKC + casefold uniqueness; '預設帳號' reserved.
@@ -143,21 +144,28 @@ def test_duplicate_port_and_default_port_are_not_structural_and_name_only_the_pr
     assert profiles.port_conflicts(profiles.parse_index(raw({A: entry('a1', 18000), B: entry('b1', 18001)}))) == {}
     with pytest.raises(IndexCorrupt):
         profiles.parse_index(raw({A: entry('a1', 18000), B: entry('b1', 18000), C: entry('A1', 18002)}))
+    # "The default profile's port" is the default child's: HM-04's lifecycle.CHILD_PORT.
+    assert profiles.DEFAULT_CHILD_PORT == lifecycle.CHILD_PORT == 3000
 
 
-def test_a_listener_port_stops_only_the_profile_holding_it(tmp_path):
-    # HM-07 review MF-1: an index port that is one of the add-on's own listeners (8081 MCP, 8099 panel) keeps the index
-    # usable, so 8081 goes on serving the default profile and every other profile; only the profiles on such a port are
-    # not started (disabled_reason port_conflict), like a duplicate or the default child's port. PaaS takes the port in
-    # its index and refuses the spawn (process.py _port_refusal: "the admin listener uses this port").
+def test_a_listener_port_is_left_to_the_spawn_check(tmp_path):
+    # HM-07 review MF-1, decided 2026-11-15 (as PaaS, word for word): an index port that is one of the add-on's own
+    # listeners (8081 MCP, 8099 panel) is no structural error and no port conflict. The index stays usable, so 8081 goes
+    # on serving the default profile and every other profile, and the index check gives the profile no disabled_reason:
+    # PaaS _port_collisions names only duplicates and the default profile's port, and the spawn refuses a listener port
+    # (PaaS process.py _port_refusal: "the admin listener uses this port"; HA HM-09: blocked, child_port_conflict).
+    # Two profiles on the same listener port are a duplicate like any other.
     data = raw({A: entry('a1', 18000), B: entry('b1', 8081), C: entry('c1', 8099), D: entry('d1', 18003),
                 E: entry('e1', 8081)})
     entries = profiles.parse_index(data)
     assert [e.port for e in entries] == [18000, 8081, 8099, 18003, 8081]
-    assert profiles.port_conflicts(entries) == {8081: (B, E), 8099: (C,)}
+    assert profiles.port_conflicts(entries) == {8081: (B, E)}
     assert profiles.disabled_reasons(entries, profiles.capacity('odoo')) == {
-        B: {'disabled_reason': 'port_conflict'}, C: {'disabled_reason': 'port_conflict'},
-        E: {'disabled_reason': 'port_conflict'}}
+        B: {'disabled_reason': 'port_conflict'}, E: {'disabled_reason': 'port_conflict'}}
+    for port in sorted(profiles.LISTENER_PORTS):
+        alone = profiles.parse_index(raw({A: entry('a1', 18000), B: entry('b1', port)}))
+        assert profiles.port_conflicts(alone) == {}
+        assert profiles.disabled_reasons(alone, profiles.capacity('odoo')) == {}
     path = tmp_path / 'profiles.json'
     path.write_bytes(data)
     path.chmod(0o600)
@@ -307,8 +315,8 @@ def test_a_profile_keeps_its_first_disabled_reason():
     # memory_capacity; the other holder of the port still says port_conflict.
     n8n = profiles.capacity('n8n')  # two additional profiles
     entries = profiles.parse_index(raw({A: entry('a1', 18000), B: entry('b1', 18001), C: entry('c1', 18000),
-                                        D: entry('d1', 8081)}))
-    assert profiles.port_conflicts(entries) == {18000: (A, C), 8081: (D,)}
+                                        D: entry('d1', 3000)}))
+    assert profiles.port_conflicts(entries) == {18000: (A, C), 3000: (D,)}
     assert profiles.disabled_reasons(entries, n8n) == {A: {'disabled_reason': 'port_conflict'},
                                                        C: {'disabled_reason': 'profile_limit'},
                                                        D: {'disabled_reason': 'profile_limit'}}
