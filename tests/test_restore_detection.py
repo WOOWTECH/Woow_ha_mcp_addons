@@ -10,7 +10,8 @@ unprivileged through VirtualRoot: the entrypoint's own os module with geteuid() 
 inode this test user owns reads as root's until it is chowned; chown and fchown only change that map). Modes, names,
 contents, fsync and the order of the calls are real. The tests named test_root_* run the same boots with real owners
 and check what the runtime user (uid 10001) can do afterwards in a forked child: the CI runs pytest as root
-(packaging/unit.sh); an unprivileged run fails them on purpose, it never skips them.
+(packaging/unit.sh); an unprivileged run fails them on purpose, it never skips them. The restore stage every release's
+container acceptance runs (packaging/container_probe.py) is checked here against the same entrypoint, both ways.
 """
 from contextlib import contextmanager, redirect_stderr
 import errno
@@ -23,6 +24,7 @@ import secrets
 import shutil
 import signal
 import stat
+import sys
 import tempfile
 import time
 
@@ -56,6 +58,19 @@ def entrypoint(os_module=None):
     spec = importlib.util.spec_from_file_location('entrypoint_under_test', ROOT / 'packaging/entrypoint.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    if os_module is not None:
+        module.os = os_module
+    return module
+
+
+def container_probe(monkeypatch, data, os_module=None):
+    """packaging/container_probe.py, for its restore stage: its DATA is data and os_module (when given) its os."""
+    monkeypatch.syspath_prepend(str(ROOT / 'packaging'))  # its own import of denial_probe
+    monkeypatch.setattr(sys, 'argv', ['container_probe.py', 'odoo'])
+    spec = importlib.util.spec_from_file_location('container_probe_under_test', ROOT / 'packaging/container_probe.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.DATA = data
     if os_module is not None:
         module.os = os_module
     return module
@@ -154,6 +169,10 @@ class VirtualRoot:
 
     def fstat(self, fd):
         info = os.fstat(fd)
+        return Seen(info, self.owner(info))
+
+    def lstat(self, path):  # for packaging/container_probe.py's restore stage (the entrypoint never calls it)
+        info = os.lstat(path)
         return Seen(info, self.owner(info))
 
     def stat(self, path, *, dir_fd=None, follow_symlinks=True):
@@ -1020,6 +1039,23 @@ def test_detection_needs_its_directory(tmp_path):
         rd.rebuild(tmp_path / 'absent', enabled=True)
 
 
+# ---- the container acceptance's restore stage (packaging/container_probe.py) --------------------------------------
+
+def test_the_container_probes_restore_stage_meets_the_entrypoint(tmp_path, log_scan, monkeypatch):
+    # Every release's container acceptance restores /data/mcp as Supervisor does, starts the real image and checks what
+    # the entrypoint left (review HM-13a MF-1). Its two steps here, with the real entrypoint between them.
+    parent = tmp_path / 'data'
+    parent.mkdir()
+    data = runtime_tree(parent, log_scan)
+    vroot = VirtualRoot()
+    vroot.own(data, RUNTIME)
+    probe = container_probe(monkeypatch, data, vroot)
+    restored, state = probe.restore_as_supervisor()
+    assert {vroot.owner(path.lstat()) for path in [data, *data.rglob('*')]} == {RESTORE_OWNER}
+    assert boot(parent, vroot) == REOWNED % (len(restored) + 1)  # the restored entries and the marker
+    probe.check_restored_start(restored, state)
+
+
 # ---- as root (the CI): real owners, and what the runtime user can do afterwards -----------------------------------
 
 def require_root():
@@ -1155,3 +1191,18 @@ def test_root_marker_name_taken_by_a_directory(reachable, profile_data):
             entrypoint().prepare_data(reachable)
         assert log.getvalue() == WARNING % IN_USE + REOWNED % len(list(data.rglob('*')))
         assert owners_of(data) == {RUNTIME}
+
+
+def test_root_the_container_probes_restore_stage_meets_the_entrypoint(reachable, log_scan, monkeypatch):
+    require_root()
+    data = runtime_tree(reachable, log_scan)
+    for path in [data, *data.rglob('*')]:
+        os.chown(path, *RUNTIME)  # as the runtime keeps it
+    probe = container_probe(monkeypatch, data)
+    restored, state = probe.restore_as_supervisor()
+    assert owners_of(data) == {RESTORE_OWNER}
+    log = io.StringIO()
+    with redirect_stderr(log):
+        entrypoint().prepare_data(reachable)
+    assert log.getvalue() == REOWNED % (len(restored) + 1)
+    probe.check_restored_start(restored, state)
