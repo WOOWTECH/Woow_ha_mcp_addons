@@ -27,7 +27,8 @@ from log_scan import log_scan  # noqa: F401  (fixture)
 from mcp_admin_core import features, products, profiles
 from mcp_admin_core.config import ConfigError, State, Store
 from mcp_admin_core.products import (
-    N8nSession, OdooWriteSwitches, ProductState, ProductStore, TOOLS, profile_initial_state, write_grants,
+    N8nSession, OdooWriteSwitches, OwnerDefaults, ProductState, ProductStore, TOOLS, profile_initial_state,
+    write_grants,
 )
 from mcp_admin_core.surface import full_tools
 
@@ -129,6 +130,23 @@ def test_new_profile_copies_the_current_policy_and_nothing_else(tmp_path, log_sc
     assert (new.n8n_session, new.owner_defaults_20261025, new.token_history) == (None, None, None)
     assert default.token_history and default.endpoint and default.configured
     assert snapshot(store.path) == before  # the default state on disk is untouched
+    store.close()
+
+
+@pytest.mark.parametrize('product', SUPPORTED)
+def test_new_profile_never_carries_the_owner_defaults_marker(tmp_path, log_scan, product):
+    # Plan §4.3 "不帶 owner_defaults_20261025" (HM-07 review S-01): the marker, its recovery record and its panel
+    # notice belong to the default profile's one-time legacy upgrade (owner_defaults.apply_legacy_upgrade). A new
+    # profile of an installation that went through it starts without the marker.
+    store = configured_default(tmp_path / 'mcp', product)
+    marker = OwnerDefaults(applied='migrated', at='2026-10-25T08:00:00+00:00', from_schema=3)
+    default = store.update(owner_defaults_20261025=marker)
+    assert default.owner_defaults_20261025 == marker
+    assert json.loads(store.path.read_text())[products.OWNER_DEFAULTS] == marker.model_dump()
+    new = profile_initial_state(default)
+    watch(log_scan, default, new)
+    assert new.owner_defaults_20261025 is None
+    assert products.OWNER_DEFAULTS not in json.loads(new.model_dump_json())
     store.close()
 
 
@@ -574,31 +592,39 @@ def test_reading_a_profile_state_changes_nothing(tmp_path, log_scan):
 
 @pytest.mark.parametrize('entry', ['directory', 'lock', 'state'])
 def test_existing_only_refuses_an_entry_another_uid_owns_before_touching_it(tmp_path, monkeypatch, log_scan, entry):
-    # The owner is compared with the effective uid before any chmod: a foreign state is refused, not tightened.
+    # The owner is compared with the effective uid before any chmod: a foreign entry is refused, never tightened, and
+    # nothing checked after it is touched; what was checked before it is this uid's own and gets tightened. All three
+    # are widened first, so a chmod before the owner check would show (HM-07 review S-02: the directory and the lock
+    # too, not only the state). The order is the open's: directory, lock, state.
     from mcp_admin_core import config
     directory, state = created(tmp_path)
     watch(log_scan, state)
-    path = {'directory': directory, 'lock': directory / '.writer.lock', 'state': directory / 'state.json'}[entry]
-    os.chmod(directory / 'state.json', 0o644)
+    order = ('directory', 'lock', 'state')
+    paths = dict(zip(order, (directory, directory / '.writer.lock', directory / 'state.json')))
+    widened, private = dict(zip(order, (0o755, 0o644, 0o644))), dict(zip(order, (0o700, 0o600, 0o600)))
+    for name in order:
+        os.chmod(paths[name], widened[name])
+    path = paths[entry]
     owner = os.lstat(path).st_uid
     real_fstat = os.fstat
     real_lstat = os.lstat
 
-    def foreign(result, inode):
-        if (result.st_dev, result.st_ino) != inode:
+    def foreign(result, target):
+        if (result.st_dev, result.st_ino) != target:
             return result
         fields = list(result)
         fields[stat.ST_UID] = owner + 1
         return os.stat_result(fields)
 
-    inode = (os.lstat(path).st_dev, os.lstat(path).st_ino)
-    monkeypatch.setattr(config.os, 'fstat', lambda fd: foreign(real_fstat(fd), inode))
-    monkeypatch.setattr(config.os, 'lstat', lambda p, *a, **k: foreign(real_lstat(p, *a, **k), inode))
+    foreign_inode = (os.lstat(path).st_dev, os.lstat(path).st_ino)
+    monkeypatch.setattr(config.os, 'fstat', lambda fd: foreign(real_fstat(fd), foreign_inode))
+    monkeypatch.setattr(config.os, 'lstat', lambda p, *a, **k: foreign(real_lstat(p, *a, **k), foreign_inode))
     with pytest.raises(ConfigError):
         Store(directory, existing_only=True)
     monkeypatch.undo()
-    assert mode(directory / 'state.json') == 0o644  # refused before the tightening chmod
-    assert mode(directory) == 0o700
+    before = order[:order.index(entry)]
+    assert {name: mode(paths[name]) for name in order} == {
+        name: private[name] if name in before else widened[name] for name in order}
 
 
 def test_the_default_profile_store_keeps_its_behavior(tmp_path, monkeypatch, log_scan):
@@ -807,7 +833,9 @@ def test_mode_and_owner_as_the_add_on_user(log_scan):
         _directory_owned(foreign / 'profiles', 0o700, user, group)
         _directory_owned(rooted / 'profiles', 0o755, 0, 0)  # left by a restore as root
         states = {}
-        # What a restore leaves: root-owned entries the add-on user can still read (so only the owner check refuses).
+        # What a restore leaves: root-owned entries the add-on user can still read. The kernel refuses uid 10001's chmod
+        # of them anyway (EPERM), so a refusal alone does not show the owner check: the probe also lists every chmod
+        # it saw of an entry another uid owns, and that list must be empty (HM-07 review S-03).
         layout = {
             B: {'dir': (0o700, user), 'lock': (0o600, user), 'state': (0o644, 0)},
             C: {'dir': (0o755, 0), 'lock': (0o600, user), 'state': (0o600, user)},
@@ -852,6 +880,7 @@ def test_mode_and_owner_as_the_add_on_user(log_scan):
     assert report['foreign'] == {B: 'refused:ConfigError', C: 'refused:ConfigError', D: 'refused:ConfigError',
                                  E: 'ok'}
     assert report['foreign_state_mode_after'] == {B: '0o644', C: '0o600', D: '0o600', E: '0o600'}
+    assert report['foreign_chmod'] == []  # refused by the owner check, before any chmod
     assert report['foreign_index'] == 'corrupt'
     assert report['foreign_scan'] == [B, C, D, E]
     assert (report['rooted_ensure'], report['rooted_scan']) == ('refused:ProfileDataError', 'refused:ProfileDataError')

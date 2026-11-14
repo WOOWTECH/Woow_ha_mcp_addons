@@ -33,8 +33,34 @@ def outcome(action):
     return 'ok'
 
 
+def watch_chmod():
+    """List every chmod of an entry another uid owns (HM-07 review S-03). The kernel refuses such a chmod anyway
+    (EPERM), so a refusal alone cannot tell the owner check from the kernel: the owner check refuses before any chmod
+    exactly when this list stays empty. Only the kind of call is kept, never a path."""
+    tried = []
+    real_fchmod, real_chmod = os.fchmod, os.chmod
+
+    def fchmod(fd, mode):
+        if os.fstat(fd).st_uid != os.geteuid():
+            tried.append('fchmod')
+        return real_fchmod(fd, mode)
+
+    def chmod(path, mode, *, dir_fd=None, follow_symlinks=True):
+        try:
+            owner = os.stat(path, dir_fd=dir_fd, follow_symlinks=follow_symlinks).st_uid
+        except OSError:
+            owner = None
+        if owner is not None and owner != os.geteuid():
+            tried.append('chmod')
+        return real_chmod(path, mode, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
+
+    os.fchmod, os.chmod = fchmod, chmod
+    return tried
+
+
 def main(config):
     report = {'uid': os.getuid(), 'euid': os.geteuid(), 'gid': os.getgid()}
+    foreign_chmod = watch_chmod()
     layout = profiles.Layout(Path(config['data']))
     first = config['first']
     profiles.ensure_profiles_directory(layout)
@@ -70,6 +96,7 @@ def main(config):
     rooted = profiles.Layout(Path(config['rooted']))
     report['rooted_ensure'] = outcome(lambda: profiles.ensure_profiles_directory(rooted))
     report['rooted_scan'] = outcome(lambda: profiles.scan_profiles(rooted))
+    report['foreign_chmod'] = list(foreign_chmod)
     return report
 
 

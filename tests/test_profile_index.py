@@ -83,6 +83,8 @@ PARITY = [
     ('label-reserved-fullwidth', raw({A: entry('ｄｅｆａｕｌｔ', 18000)}), 'ok', 'corrupt'),
     # A stored label is already normalized (the create and rename paths store the stripped text).
     ('label-outer-space', raw({A: entry(' Sales ', 18000)}), 'ok', 'corrupt'),
+    ('label-outer-ideographic-space', raw({A: entry('\u3000會計\u3000', 18000)}), 'ok', 'corrupt'),
+    ('label-outer-nbsp', raw({A: entry('\u00a0Sales', 18000)}), 'ok', 'corrupt'),
     # HA's own file (contract §9 #44): exact top-level keys and version, strict JSON (duplicate keys refused).
     ('duplicate-id-key', b'{"version":1,"profile_index":{"' + A.encode() + b'":{"label":"x","port":18000},"'
      + A.encode() + b'":{"label":"y","port":18001}}}', 'ok', 'corrupt'),
@@ -180,6 +182,8 @@ def test_ids():
 @pytest.mark.parametrize('value, stored', [
     ('會計', '會計'), ('  Sales team  ', 'Sales team'), ('x' * 80, 'x' * 80), (' ' + 'x' * 80 + ' ', 'x' * 80),
     ('Ünïcödé', 'Ünïcödé'), ('a\u00a0b', 'a\u00a0b'), ('e\u0301', 'e\u0301'), ('中文 + emoji 🙂', '中文 + emoji 🙂'),
+    # Outer whitespace of any kind goes, not only ASCII (HM-07 review S-12): ideographic space, NBSP, em space.
+    ('\u3000會計\u3000', '會計'), ('\u00a0Sales\u00a0', 'Sales'), ('\u2003a\u3000b\u2009', 'a\u3000b'),
 ])
 def test_label_accepted_and_stored_stripped(value, stored):
     assert profiles.normalize_label(value) == stored
@@ -295,6 +299,26 @@ def test_memory_formula_is_the_paas_one():
         A: {'disabled_reason': 'port_conflict'}, B: {'disabled_reason': 'port_conflict'},
         C: {'disabled_reason': 'memory_capacity', 'required_memory_mib': 656},
         D: {'disabled_reason': 'memory_capacity', 'required_memory_mib': 756}}
+
+
+def test_a_profile_keeps_its_first_disabled_reason():
+    # Contract §3.6, PaaS _start_blocks: the product limit first, then memory, then a port conflict (HM-07 review S-04).
+    # A profile past the limit that also holds a conflicting port says profile_limit; one past the memory budget says
+    # memory_capacity; the other holder of the port still says port_conflict.
+    n8n = profiles.capacity('n8n')  # two additional profiles
+    entries = profiles.parse_index(raw({A: entry('a1', 18000), B: entry('b1', 18001), C: entry('c1', 18000),
+                                        D: entry('d1', 8081)}))
+    assert profiles.port_conflicts(entries) == {18000: (A, C), 8081: (D,)}
+    assert profiles.disabled_reasons(entries, n8n) == {A: {'disabled_reason': 'port_conflict'},
+                                                       C: {'disabled_reason': 'profile_limit'},
+                                                       D: {'disabled_reason': 'profile_limit'}}
+    odoo = profiles.capacity('odoo', memory_limit_mib=456)  # (456 - 256) // 100 = 2 children: one additional
+    assert odoo.memory_extra_limit == 1
+    entries = profiles.parse_index(raw({A: entry('a1', 18000), B: entry('b1', 18000), C: entry('c1', 3000)}))
+    assert profiles.disabled_reasons(entries, odoo) == {
+        A: {'disabled_reason': 'port_conflict'},
+        B: {'disabled_reason': 'memory_capacity', 'required_memory_mib': 556},
+        C: {'disabled_reason': 'memory_capacity', 'required_memory_mib': 656}}
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -470,6 +494,44 @@ def test_signature_has_ctime_and_link_count(tmp_path):
     path.chmod(0o600)
     appeared = profiles.recheck_index(path, absent)
     assert appeared.state == INDEX_MODIFIED and appeared.signature is not None
+
+
+def test_a_recheck_that_cannot_stat_the_index_fails_closed(tmp_path, monkeypatch):
+    # HM-07 review S-05: any error of the per-request lstat but "no such file" (EACCES, EIO, ...) answers MODIFIED,
+    # never the view it was given: 8081 answers 503 and the panel offers the quarantine.
+    path, view = written(tmp_path)
+    absent = profiles.read_index(tmp_path / 'none.json')
+
+    def denied(*args, **kwargs):
+        raise PermissionError('injected')
+
+    with monkeypatch.context() as patch:
+        patch.setattr(profiles.os, 'lstat', denied)
+        results = [(before, profiles.recheck_index(path, before)) for before in (view, absent)]
+    for before, after in results:
+        assert after is not before and after.state == INDEX_MODIFIED and after.entries == ()
+        assert not after.serves_mcp and after.offers_quarantine
+    assert profiles.recheck_index(path, view) is view  # the file itself never changed
+
+
+def open_descriptors():
+    return sorted(os.listdir('/proc/self/fd'))
+
+
+def test_read_closes_its_descriptor_whatever_the_file(tmp_path):
+    # HM-07 review S-12: no descriptor stays open on any path of read_index (HM-08 reads at every start and after the
+    # quarantine; a leak per read would add up).
+    path, view = written(tmp_path)
+    (tmp_path / 'shapes').mkdir()
+    cases = [path, tmp_path / 'missing.json', *corrupt_files(tmp_path / 'shapes').values()]
+    bad = tmp_path / 'bad.json'
+    bad.write_bytes(b'{')
+    bad.chmod(0o600)
+    cases.append(bad)
+    before = open_descriptors()
+    states = [profiles.read_index(case).state for case in cases]
+    assert open_descriptors() == before
+    assert states[:2] == [INDEX_OK, INDEX_ABSENT] and set(states[2:]) == {INDEX_CORRUPT}
 
 
 def test_a_modified_index_stays_modified_until_a_restart_reads_it_again(tmp_path):

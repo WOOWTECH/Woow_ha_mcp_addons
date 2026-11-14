@@ -151,6 +151,41 @@ def test_a_missing_or_unreadable_profile_affects_only_itself(tmp_path, log_scan)
     assert read[C] == credentials(values[C])
 
 
+def test_an_indexed_profile_the_scan_did_not_find_is_unavailable_whatever_the_credentials():
+    # HM-07 review S-11: the scan decides as well. A profile the index lists and the scan did not find is unavailable
+    # even when the caller hands over credentials for it (read before its directory went away, or a caller's mistake).
+    entries = (IndexEntry(A, 'One', 18000), IndexEntry(B, 'Two', 18001))
+    result = profiles.check_consistency(entries, ProfilesScan((B,), (), 0),
+                                        {A: credentials(state()), B: credentials(state())})
+    assert result.unavailable == (A,) and result.orphans == ()
+
+
+def open_descriptors():
+    return sorted(os.listdir('/proc/self/fd'))
+
+
+def test_scan_closes_its_descriptor(tmp_path, monkeypatch):
+    # HM-07 review S-12: the scan opens profiles/ once and closes it on every path, a refusal included.
+    layout = profiles.Layout(tmp_path)
+    profiles.ensure_profiles_directory(layout)
+    (layout.profiles / A).mkdir(mode=0o700)
+    before = open_descriptors()
+    assert profiles.scan_profiles(layout) == ProfilesScan((A,), (), 0)
+    assert profiles.scan_profiles(profiles.Layout(tmp_path / 'missing')) == ProfilesScan((), (), 0)
+    real_fstat = os.fstat
+
+    def other_owner(fd):
+        fields = list(real_fstat(fd))
+        fields[4] += 1  # st_uid
+        return os.stat_result(fields)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(profiles.os, 'fstat', other_owner)
+        with pytest.raises(profiles.ProfileDataError):
+            profiles.scan_profiles(layout)
+    assert open_descriptors() == before
+
+
 def test_orphans_quarantine_and_other_entries_are_reported(tmp_path):
     scan = ProfilesScan((A, B, C), (profiles.quarantine_name(D, WHEN),), 2)
     result = profiles.check_consistency((IndexEntry(B, 'Two', 18001),), scan, {B: credentials(state())})
