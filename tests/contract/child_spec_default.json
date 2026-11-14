@@ -1,6 +1,7 @@
 {
   "baseline": "bb48449",
-  "about": "HM-04: the default profile child spec of every product as bb48449 builds it (products.child_spec, n8n_adapter.child_spec) for the states of tests/test_child_port_param.py CASES: argv, env as ordered NAME=value entries, cwd. Placeholders: {ROOT} the checkout, {DATA} the data directory, {CATALOG} n8n's catalog copy, {NODE} the node binary, {child_token} the state's child token. Test data only (DUMMY- credentials, .invalid hosts).",
+  "about": "HM-04: the default profile child spec of every product (products.child_spec, n8n_adapter.child_spec) for the states of tests/test_child_port_param.py CASES: argv, env as ordered NAME=value entries, cwd. Made from bb48449's code (baseline, which stays bb48449). changes lists, in order, every deliberate change of these specs since then (objects with the slice and the change), each made in that slice's PR together with the specs it changes: a spec here is bb48449's with those changes. Placeholders: {ROOT} the checkout, {DATA} the data directory, {CATALOG} n8n's catalog copy, {NODE} the node binary, {child_token} the state's child token. Test data only (DUMMY- credentials, .invalid hosts).",
+  "changes": [],
   "specs": {
     "odoo/plain": {
       "argv": [

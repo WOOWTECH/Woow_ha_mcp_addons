@@ -1,16 +1,21 @@
 """HM-04: the child's loopback port is a parameter; the default profile's child keeps 3000, byte for byte.
 
 - The default port: every product's child spec (argv, environment with its order, working directory), as
-  products.child_spec and n8n_adapter.child_spec build it, is bb48449's: tests/contract/child_spec_default.json, made
-  by normalized() below from bb48449's code (the checkout path, the data directory, n8n's catalog copy and node binary
-  and the child token are placeholders; every other value is the literal one). Asking for port 3000 gives the same
-  spec. A deliberate change of a child's spec (HM-06 adds WOOW_MCP_CHILD_TOKEN to the Python children) updates that
-  file in the same PR: the failure message shows the current normalized spec of the case.
+  products.child_spec and n8n_adapter.child_spec build it, is the snapshot's: tests/contract/child_spec_default.json,
+  made by normalized() below from bb48449's code, its "baseline" (the checkout path, the data directory, n8n's catalog
+  copy and node binary and the child token are placeholders; every other value is the literal one). Asking for port
+  3000 gives the same spec. A deliberate change of a child's spec (HM-06 adds WOOW_MCP_CHILD_TOKEN to the Python
+  children) updates that file in the same PR: the specs it changes (the failure message shows the current normalized
+  spec of the case) and an entry in "changes" (the slice and what it changed). "baseline" stays bb48449, so every
+  difference from bb48449's spec stays named there.
 - Another port (an extra profile's child; multi-profile plan 5.4: 18000 and up): the spec differs from the default
   one in the port only: the --port value; n8n's PORT; Hermes and OpenDesign get --port N appended (their launchers read
-  it, and their default argv stays the former one). run_product.run and apps/n8n/run.py run with child_port=N give
-  that one port to the child spec, the health monitor, the gateway and the capability probe: every request the child
-  gets goes to http://127.0.0.1:N/mcp, and the clients get the same answers as on 3000 (the HM-01 golden session).
+  it, and their default argv stays the former one). That holds for any port but 3000, below it too (the index's port
+  range is HM-07's and HM-09's). run_product.run and apps/n8n/run.py run with child_port=N give that one port to the
+  child spec, the health monitor, the gateway and the capability probe: every request of the HM-01 golden session
+  (the health check's, the capability probe's and the client's) goes to http://127.0.0.1:N/mcp, and the clients get
+  the same answers as on 3000. So does the DELETE that ends the session of a refused initialize
+  (tests/test_initialize_cleanup.py, test_the_session_is_ended_on_the_childs_own_port).
 - The HM-01 port rule holds: no test here binds, connects to or resolves 3000 or 18000-18099 (owned_network refuses
   and counts any attempt in this process; the children get the same guard). The runtime test's child is
   MockTransport; the real children listen on private ports (owned_runtime replaces the production port and
@@ -45,6 +50,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SNAPSHOT = ROOT / 'tests/contract/child_spec_default.json'
 DEFAULT = 3000
 PORTS = (18000, 18042, 18099)  # an extra profile's child (owned_network.PROFILE_CHILD_PORTS)
+# The other ports child_port_text takes, outside the ones the HM-01 doubles take (3000, 18000-18099): its two ends and
+# 3000's neighbours. The index's port range is HM-07's and HM-09's (PaaS: 1024-65535).
+OTHER_PORTS = (1, 2999, 3001, 65535)
 ON_PORT_ARGUMENT = ('odoo', 'odoo-manage', 'emqx', 'litellm', 'nextcloud', 'headscale')  # argv '--port', N
 LAUNCHERS = ('hermes', 'opendesign')  # no --port at 3000 (bb48449's argv); --port N appended otherwise
 
@@ -169,19 +177,24 @@ def same(spec, expected):
 
 def test_the_snapshot_covers_every_product():
     snapshot = json.loads(SNAPSHOT.read_text())
-    assert snapshot['baseline'] == 'bb48449'
+    assert snapshot['baseline'] == 'bb48449'  # where the specs started; a deliberate change is a "changes" entry
+    changes = snapshot['changes']
+    assert isinstance(changes, list)
+    for change in changes:
+        assert set(change) == {'slice', 'change'} and all(isinstance(text, str) and text for text in change.values())
     assert set(snapshot['specs']) == set(CASES)
     assert {product for product, _ in CASES.values()} == {*PRODUCTS, 'n8n'}
 
 
 @pytest.mark.parametrize('case', CASES)
-def test_the_default_child_spec_is_bb48449s(tmp_path, log_scan, case):
+def test_the_default_child_spec_is_the_snapshot(tmp_path, log_scan, case):
     expected = json.loads(SNAPSHOT.read_text())['specs'][case]
     with case_state(case, tmp_path, log_scan) as (product, state, data, build):
         current = normalized(build(state, data), state, data, tmp_path / 'catalog/nodes.db')
     assert current == expected, (
-        f'{case}: the default profile child spec is not bb48449\'s; if the change is deliberate (reviewed), the '
-        f'current one is {json.dumps(current, ensure_ascii=False)}')
+        f'{case}: the default profile child spec is not the snapshot\'s (bb48449\'s, with the changes it lists); if '
+        f'the change is deliberate (reviewed), update the case and add a "changes" entry; the current one is '
+        f'{json.dumps(current, ensure_ascii=False)}')
 
 
 @pytest.mark.parametrize('case', CASES)
@@ -214,6 +227,15 @@ def test_another_port_changes_the_port_only(tmp_path, case, port):
                     owned_runtime.private_spec(moved, product, private.port)  # it expects the spec on 3000
         finally:
             private.close()
+
+
+@pytest.mark.parametrize('port', OTHER_PORTS)
+@pytest.mark.parametrize('case', CASES)
+def test_any_other_port_changes_the_port_only(tmp_path, case, port):
+    """Below 3000 too, not only above it: any port but 3000 is another profile's child (spec only: the HM-01 doubles
+    take 3000 and 18000-18099 only)."""
+    with case_state(case, tmp_path) as (product, state, data, build):
+        assert same(build(state, data, port=port), on_port(build(state, data), product, port))
 
 
 @pytest.mark.parametrize('product', PRODUCTS)
@@ -317,7 +339,7 @@ def runs_on(calls, port):
 
 @pytest.mark.parametrize('argv, port', [
     ([], 3000), (['--port', '3000'], 3000), (['--port', '18000'], 18000), (['--port=18099'], 18099),
-    (['--port', '43210'], 43210),
+    (['--port', '43210'], 43210), (['--port', '1'], 1), (['--port', '2999'], 2999), (['--port', '65535'], 65535),
     # Positional arguments are ignored, as the launchers always ignored their arguments (tests/test_resolver_regressions
     # and tests/test_stream_error_redaction run the actual launcher behind wrappers that leave theirs in sys.argv).
     (['read', 'gateway'], 3000), (['43210', '/elsewhere/apps/hermes/launch.py'], 3000),
