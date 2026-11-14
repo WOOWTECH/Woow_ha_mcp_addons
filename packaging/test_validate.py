@@ -1,7 +1,11 @@
 """Packaging-only regression fixtures: never use a config.* fixture basename."""
 import copy
+import os
 from pathlib import Path
 import re
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -410,6 +414,26 @@ class PackagingTests(unittest.TestCase):
                 ('matrix.app', [('odoo', '1.2.4')], '1.2.3')):
             with self.subTest(selector=selector, overrides=overrides, default=default), self.assertRaises(v.Invalid):
                 v.version_expression(selector, overrides, default)
+
+    def test_release_data_no_expression_can_carry_stops_every_tool_in_one_line(self):
+        # HM-17: CI_VERSION and RELEASE_VERSION are generated when validate loads, so such data stops the validator and
+        # every packaging tool importing it with the validator's one-line message, not a traceback. Run on a copy.
+        source = (v.ROOT / 'packaging/validate.py').read_text()
+        current = f'VERSION_OVERRIDES = {v.VERSION_OVERRIDES!r}\n'
+        self.assertEqual(source.count(current), 1, 'VERSION_OVERRIDES is written on one line, as repr() prints it')
+        environment = {k: value for k, value in os.environ.items() if k not in ('PYTHONPATH', 'PYTHONSAFEPATH')}
+        with tempfile.TemporaryDirectory() as directory:
+            for name in ('builder_binary.py', 'builder_contract.py'):  # what validate imports from packaging/
+                shutil.copy(v.ROOT / 'packaging' / name, directory)
+            for overrides, message in (({**v.VERSION_OVERRIDES, 'odoo': v.VERSION}, 'version override equal to the default version'),
+                                       ({'odoo-manage': '9.9.9'}, 'version override outside the products')):
+                Path(directory, 'validate.py').write_text(source.replace(current, f'VERSION_OVERRIDES = {overrides!r}\n'))
+                for argv in (['validate.py'], ['-c', 'import validate']):
+                    with self.subTest(overrides=overrides, argv=argv):
+                        result = subprocess.run([sys.executable, '-B', *argv], cwd=directory, env=environment,
+                                                capture_output=True, text=True, timeout=60)
+                        self.assertEqual((result.returncode, result.stdout, result.stderr),
+                                         (1, '', 'packaging validation failed: ' + message + '\n'))
 
     def test_every_app_dependent_workflow_value_is_the_release_version(self):
         # HM-17: ci.yaml and release.yaml do not run on a PR; validate.py compares them (C4-SF-1). Evaluated as GitHub

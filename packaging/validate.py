@@ -67,8 +67,14 @@ def version_expression(selector, overrides=None, default=None):
     return '${{ ' + ' || '.join([*arms, f"'{default}'"]) + ' }}'
 
 
-CI_VERSION = version_expression(SELECTORS['ci'])
-RELEASE_VERSION = version_expression(SELECTORS['release'])
+# Generated when the module loads, so release data a version expression cannot carry stops every packaging tool that
+# imports this module (check_release, supply_chain, registry_gate, container_acceptance, pilot_variant) with the
+# validator's one-line message instead of a traceback.
+try:
+    CI_VERSION = version_expression(SELECTORS['ci'])
+    RELEASE_VERSION = version_expression(SELECTORS['release'])
+except Invalid as error:
+    raise SystemExit('packaging validation failed: ' + str(error)) from None
 
 
 class StrictLoader(yaml.SafeLoader):
