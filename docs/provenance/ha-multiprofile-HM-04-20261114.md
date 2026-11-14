@@ -261,10 +261,21 @@ UI build）；當時沒跑 `npm run browser:install`，2026-11-15 全套跑完�
   新增而沒列管的執行期檔 0 個；改到而沒列管的 `health.py`、`lifecycle.py` 列為要人看（第 2 節）。結果 OK。審查後的 commit
   沒有動列管檔與帳本。審查 O-1 的偶發問題只會漏掉還沒 commit 的改動；這次在工作樹乾淨時重跑，不受影響。
 
+- **rebase 後重跑**（2026-11-15 06:3x，主對話）：本分支從 `32ecac8` rebase 到 `claude-delivery` `65727a1`（HM-00 #89、HM-01 #90 都已合併），
+  5 個 commit 都沒有衝突，內容沒變。
+  - 秘密預檢：`65727a1..HEAD` 的 5 個 commit、`--full`（HEAD 全部檔、全歷史）都 0 命中。
+  - 帳本預檢：OK。列管檔 `run_product.py` 與帳本 `runtime-patches.json`、`tool-surface.json` 一起改；要人看的仍是 `health.py`、`lifecycle.py`。
+  - `scripts/tool_inventory.py` 漂移檢查：exit 0。
+
 ## 9. PaaS 變動（`git log <pin>..origin/main -- <相關檔>`）
 
-不適用：本片沒有移植 PaaS 程式或測試，只用了 PaaS 額外帳號 port 的起點（18000）當測試值。這一波規定不連遠端，沒有在 PaaS repo
-跑 `git log`。
+- 本片沒有移植 PaaS 程式或測試，只用了 PaaS 額外帳號 port 的起點（18000）當測試值。
+- 主對話 2026-11-15 06:2x 在本機 PaaS git fetch 後查：PaaS main 是 `cf3d0d5`。`69ac425..cf3d0d5` 動到核心模組
+  （`packages/mcp-admin-core/mcp_admin_core/`）的只有四個檔：
+  - `log_redaction.py`：#149，交給 HM-02。
+  - `gateway_pool.py`、`proxy.py`：#148 合併後的註解與文件更正（`19f36e2`），交給 HM-14。
+  - `setup_status.py`：移除 VK 時改的說明文字（`8bfb12e`）。
+- 子程式 port 與啟動相關的 PaaS 檔沒有行為改動，本片不受影響。
 
 ## 10. 驗收條件（計畫 §12.3 HM-04）
 
