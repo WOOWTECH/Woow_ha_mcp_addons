@@ -156,7 +156,8 @@ def test_new_tokens_avoid_the_taken_values(monkeypatch, log_scan):
 
 def test_only_products_with_profiles_get_a_first_state(log_scan):
     # DQ-28 (2026-11-14): OpenDesign and Odoo Manage are not opened (profiles.capacity 0; HM-10 answers 409
-    # profile_product_unsupported). The data layer refuses them as well, so no code path can make one.
+    # profile_product_unsupported). The data layer refuses them as well: no first state here, and no creation in
+    # ProductStore (test_the_store_creates_no_profile_of_a_product_without_profiles).
     assert products.NO_PROFILE_PRODUCTS == {p for p in features.KNOWN_PRODUCTS if not profiles.supports_profiles(p)}
     for product in sorted(features.KNOWN_PRODUCTS):
         default = ProductState(product=product, token='T' * 43, child_token='C' * 43)
@@ -167,6 +168,26 @@ def test_only_products_with_profiles_get_a_first_state(log_scan):
         else:
             with pytest.raises(ValueError, match='no additional profiles'):
                 profile_initial_state(default)
+
+
+def test_the_store_creates_no_profile_of_a_product_without_profiles(tmp_path, log_scan):
+    # HM-07 review S-06: ProductStore(create=...) refuses OpenDesign and Odoo Manage before it makes anything, whatever
+    # state it is given. Opening an existing directory stays possible: HM-13b revokes what a restore may have left.
+    for product in sorted(products.NO_PROFILE_PRODUCTS):
+        state = ProductState(product=product, token='T' * 43, child_token='C' * 43)
+        log_scan.watch_state(state)
+        root = tmp_path / product
+        root.mkdir()
+        with pytest.raises(ValueError, match='no additional profiles'):
+            ProductStore(root / A, product, create=state)
+        assert os.listdir(root) == []
+        legacy_tree(root / B, state.model_dump_json().encode())
+        store = ProductStore(root / B, product, existing_only=True)
+        assert store.load() == state
+        store.close()
+    for product in SUPPORTED:  # the products with profiles still create theirs
+        ProductStore(tmp_path / ('ok-' + product), product,
+                     create=ProductState(product=product, token='T' * 43, child_token='C' * 43)).close()
 
 
 def test_the_first_state_is_written_once_and_reopens_equal(tmp_path, monkeypatch, log_scan):

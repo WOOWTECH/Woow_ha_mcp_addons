@@ -424,6 +424,11 @@ def fresh_write_grants(product):
     return sorted(write_grants(product))
 
 
+# DQ-28 (2026-11-14): OpenDesign and Odoo Manage get no additional profiles (profiles.EXTRA_PROFILE_LIMITS gives them
+# 0; tests/test_profile_store.py keeps the two in step).
+NO_PROFILE_PRODUCTS = frozenset({'opendesign', 'odoo-manage'})
+
+
 class ProductStore(Store):
     """Explicit v1 n8n / v2 product -> v3 grants -> v4 full-surface migration; never downgrade.
 
@@ -446,11 +451,15 @@ class ProductStore(Store):
 
     An additional profile (existing_only / create, config.Store) is born complete at
     schema 4 (profile_initial_state) and is never migrated: any other state is refused
-    as it is, never rewritten.
+    as it is, never rewritten. A product without additional profiles (NO_PROFILE_PRODUCTS)
+    cannot create one; opening an existing one stays possible, for HM-13b to revoke what a
+    restore may have left.
     """
     def __init__(self, directory, product, *, existing_only=False, create=None):
         if product not in (*PRODUCTS, 'n8n'):
             raise ValueError('unknown product')
+        if create is not None and product in NO_PROFILE_PRODUCTS:
+            raise ValueError('product has no additional profiles')
         self.product = product
         self._migrate = not (existing_only or create is not None)
         self._migrated = False
@@ -540,11 +549,6 @@ class ProductStore(Store):
                 or value.get('product') != self.product):
             raise ValueError('wrong product or incomplete schema')
         return ProductState.model_validate(value)
-
-
-# DQ-28 (2026-11-14): OpenDesign and Odoo Manage get no additional profiles (profiles.EXTRA_PROFILE_LIMITS gives them
-# 0; tests/test_profile_store.py keeps the two in step).
-NO_PROFILE_PRODUCTS = frozenset({'opendesign', 'odoo-manage'})
 
 
 def profile_initial_state(default: ProductState, *, taken=()) -> ProductState:
