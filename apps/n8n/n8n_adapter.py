@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.json_schema import SkipJsonSchema
 
 from mcp_admin_core.config import State
-from mcp_admin_core.lifecycle import ChildSpec
+from mcp_admin_core.lifecycle import CHILD_PORT, ChildSpec, child_port_text, child_url
 from mcp_admin_core.policy import Tool
 
 
@@ -72,7 +72,7 @@ TOOLS.update(B3_TOOLS)
 BOUNDED_TOOLS = TOOLS
 from mcp_admin_core.surface import full_tools
 TOOLS = full_tools("n8n")
-CHILD_URL = "http://127.0.0.1:3000/mcp"
+CHILD_URL = child_url()  # HM-04: the default profile's child; child_url(port) is another profile's
 
 # Unreleased (0.4.12 line). n8n-mcp keeps its local workflow version history (table workflow_versions: the backups taken before
 # an update or autofix, n8n_workflow_versions) in the same SQLite file as its node catalog, nodes.db. In the image that file is
@@ -117,7 +117,9 @@ def prepare_catalog(directory=CATALOG_DIR, source=None):
     return target
 
 
-def child_spec(state: State, directory: Path) -> ChildSpec:
+def child_spec(state: State, directory: Path, port: int = CHILD_PORT) -> ChildSpec:
+    # HM-04: port is the child's loopback port, its PORT (the default profile's child: CHILD_PORT, the former spec).
+    listen = child_port_text(port)
     entry = Path(__file__).parent / "node_modules/n8n-mcp/dist/mcp/index.js"
     node = shutil.which("node")
     if node is None or not entry.is_file():
@@ -125,7 +127,7 @@ def child_spec(state: State, directory: Path) -> ChildSpec:
     # Never inherit parent secrets/proxy variables/NODE_OPTIONS or user env.
     env = {
         "PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": str(directory),
-        "NODE_ENV": "production", "MCP_MODE": "http", "HOST": "127.0.0.1", "PORT": "3000",
+        "NODE_ENV": "production", "MCP_MODE": "http", "HOST": "127.0.0.1", "PORT": listen,
         "AUTH_TOKEN": state.child_token, "N8N_MCP_TELEMETRY_DISABLED": "true",
         # 0.3.4 (n8n-mcp 2.96.2, as the PaaS): n8n_health_check reports the version check as "disabled" instead of querying
         # the npm registry. The environment is built here, never inherited, so nothing outside can turn it back on.

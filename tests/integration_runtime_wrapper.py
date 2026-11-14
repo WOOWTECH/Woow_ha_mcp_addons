@@ -74,8 +74,8 @@ def actual_app(path, **kwargs):
     import n8n_adapter
     from mcp_admin_core.lifecycle import ChildSpec
     child_spec = n8n_adapter.child_spec
-    def checked_child(state, directory):
-        value = child_spec(state, directory)
+    def checked_child(state, directory, port=3000):  # HM-04: run.py names its child's port
+        value = child_spec(state, directory, port=port)
         assert 'SUPERVISOR_TOKEN' not in value.env
         return ChildSpec((value.argv[0], '--require', str(ROOT/'child-check.cjs'), *value.argv[1:]), value.env, value.cwd)
     n8n_adapter.child_spec = checked_child

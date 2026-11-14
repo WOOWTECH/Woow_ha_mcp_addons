@@ -7,6 +7,7 @@ import httpx
 
 from . import redact
 from .config import ConfigError, strict_json
+from .lifecycle import CHILD_URL
 
 SESSION_ID = re.compile(r"[\x21-\x7e]{1,256}")  # as the gateway accepts from clients
 REASON_LIMIT = 1000  # characters of a failed health check's own text kept as the reason
@@ -69,7 +70,7 @@ async def protocol_reply(response: httpx.Response, expected_id):
 
 
 class HealthMonitor:
-    def __init__(self, store, process, client, child_url="http://127.0.0.1:3000/mcp"):
+    def __init__(self, store, process, client, child_url=CHILD_URL):
         self.store, self.process, self.client, self.child_url = store, process, client, child_url
         self.backend = "unconfigured"
         self.management = "alive"

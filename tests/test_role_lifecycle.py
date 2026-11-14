@@ -70,7 +70,7 @@ async def test_committed_runtime_backend_transition_is_joined(tmp_path, monkeypa
     roles = {'allow': True, 'calls': 0}
     before = set(asyncio.all_tasks())
 
-    def child_spec(state, directory):
+    def child_spec(state, directory, port=3000):  # HM-04: the runtime names its child's port
         return owned_spec(tmp_path, 'replacement' if state.configured else 'original')
 
     class Manager(Supervisor):
@@ -104,7 +104,7 @@ async def test_committed_runtime_backend_transition_is_joined(tmp_path, monkeypa
             servers.append(self)
 
     class Monitor:
-        def __init__(self, *args): pass
+        def __init__(self, *args, child_url=None): pass  # HM-04: the runtime names its child's URL
         def snapshot(self): return {}
         def availability(self): return {'child': 'running', 'ready': False, 'backend': 'unknown', 'reason': None}  # 0.2.2: forward
         async def run(self): await asyncio.Event().wait()

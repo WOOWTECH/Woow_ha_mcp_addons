@@ -123,7 +123,7 @@ async def runtime_apps(tmp_path, monkeypatch, product):
         async def stop(self): pass
 
     class Monitor:
-        def __init__(self, *args): pass
+        def __init__(self, *args, child_url=None): pass  # HM-04: the runtime names its child's URL
         def snapshot(self): return {}
         def availability(self): return {'child': 'running', 'ready': False, 'backend': 'unknown', 'reason': None}  # 0.2.2: forward
         async def run(self): await asyncio.Event().wait()
