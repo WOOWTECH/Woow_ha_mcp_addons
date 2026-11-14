@@ -119,31 +119,111 @@ class Store:
 
     Dedicated 0700 subdirectory (normally /data/mcp) is owned by the runtime user.
     No migration exists before v1; missing keys are rejected, not silently seeded.
+
+    An additional profile's store (multi-profile plan §4.3; HM-07, nothing opens one yet) never takes the first-boot
+    path that seeds a fresh state. existing_only=True opens an existing directory only: no directory is made, the lock
+    is opened without O_CREAT, a missing state is an error. create=<state> makes a new one: the directory must not
+    exist yet (not even as a dangling link), the lock is created with O_EXCL, *state* is written once as the final
+    first value, and a failure removes what this creation made. Both refuse a directory, lock or state file another
+    uid owns, checked before any chmod, and tighten a widened mode to 0700 / 0600. The default profile's store keeps
+    its behavior.
     """
-    def __init__(self, directory: Path):
+    _owned = False  # True for an additional profile's store
+
+    def __init__(self, directory: Path, *, existing_only: bool = False, create: State | None = None):
+        if existing_only and create is not None:
+            raise ValueError("existing_only and create exclude each other")
         self._lock_fd = None
         self._poisoned = False
+        self._owned = existing_only or create is not None
         self.directory = Path(os.path.abspath(directory))
         self.path = self.directory / "state.json"
+        made = None  # creation only: False once the directory exists, then its (st_dev, st_ino)
         try:
             for parent in [*reversed(self.directory.parents), self.directory]:
                 if parent.is_symlink():
                     raise ConfigError("symlink state directory refused")
-            self.directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-            os.chmod(self.directory, 0o700)
-            try:
+            if create is not None:
+                os.mkdir(self.directory, 0o700)  # FileExistsError for any existing name
+                made = False
+                made = self._owned_directory()
                 self._lock_fd = os.open(self.directory / ".writer.lock", os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-                first_boot = True
-            except FileExistsError:
+                self._owned_lock()
+                fcntl.flock(self._lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                self._write(self._decode(strict_json(create.model_dump_json())))
+            elif existing_only:
+                self._owned_directory()
                 self._lock_fd = os.open(self.directory / ".writer.lock", os.O_RDWR | os.O_NOFOLLOW)
-                first_boot = False
-            fcntl.flock(self._lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            if first_boot and not self.path.exists() and not self.path.is_symlink():
-                self._write(self._initial_state())
+                self._owned_lock()
+                fcntl.flock(self._lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            else:
+                self.directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+                os.chmod(self.directory, 0o700)
+                try:
+                    self._lock_fd = os.open(self.directory / ".writer.lock", os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                    first_boot = True
+                except FileExistsError:
+                    self._lock_fd = os.open(self.directory / ".writer.lock", os.O_RDWR | os.O_NOFOLLOW)
+                    first_boot = False
+                fcntl.flock(self._lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                if first_boot and not self.path.exists() and not self.path.is_symlink():
+                    self._write(self._initial_state())
             self.load()
         except Exception:
             self.close()
+            if made is not None:
+                self._discard_created(made)
             raise ConfigError("state unavailable or incompatible; manual recovery required") from None
+
+    def _owned_directory(self):
+        """An additional profile's directory: a real directory (not a link) of this uid; a widened mode becomes 0700.
+        Returns its (st_dev, st_ino)."""
+        fd = os.open(self.directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            info = os.fstat(fd)
+            current = os.lstat(self.directory)
+            if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid()
+                    or (current.st_dev, current.st_ino) != (info.st_dev, info.st_ino)):
+                raise ConfigError("state directory refused")
+            if stat.S_IMODE(info.st_mode) != 0o700:
+                os.fchmod(fd, 0o700)
+            return info.st_dev, info.st_ino
+        finally:
+            os.close(fd)
+
+    def _owned_lock(self):
+        """An additional profile's writer lock: a single-link regular file of this uid; a widened mode becomes 0600."""
+        info = os.fstat(self._lock_fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.geteuid():
+            raise ConfigError("writer lock refused")
+        if stat.S_IMODE(info.st_mode) != 0o600:
+            os.fchmod(self._lock_fd, 0o600)
+
+    def _discard_created(self, made):
+        """Undo a failed creation: the two files it makes, through the descriptor of the directory it made (never
+        through a name swapped in since), then the directory. Anything else in it stays, and with it the directory:
+        profile data the index does not list is an orphan, never opened or routed. *made*: False when the directory's
+        identity was not established yet (nothing was created in it)."""
+        if made:
+            try:
+                fd = os.open(self.directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            except OSError:
+                return
+            try:
+                info = os.fstat(fd)
+                if (info.st_dev, info.st_ino) != made:
+                    return
+                for name in ("state.json", ".writer.lock"):
+                    try:
+                        os.unlink(name, dir_fd=fd)
+                    except OSError:
+                        pass
+            finally:
+                os.close(fd)
+        try:
+            os.rmdir(self.directory)
+        except OSError:
+            pass
 
     def close(self):
         if self._lock_fd is not None:
@@ -157,7 +237,8 @@ class Store:
             fd = os.open(self.path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
             with os.fdopen(fd, "rb") as stream:
                 info = os.fstat(stream.fileno())
-                if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 65536:
+                if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 65536
+                        or (self._owned and info.st_uid != os.geteuid())):
                     raise ValueError("invalid state file")
                 os.fchmod(stream.fileno(), 0o600)
                 value = strict_json(stream.read(65537))

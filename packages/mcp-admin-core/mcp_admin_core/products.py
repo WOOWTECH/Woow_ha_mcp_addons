@@ -443,14 +443,18 @@ class ProductStore(Store):
     before constructing this store, which writes the same all-on policy together with
     the owner-defaults marker and a faithful recovery record; this construction-time
     migration therefore only ever sees schema 4 there (it remains for the offline tools).
+
+    An additional profile (existing_only / create, config.Store) is born complete at
+    schema 4 (profile_initial_state) and is never migrated: any other state is refused
+    as it is, never rewritten.
     """
-    def __init__(self, directory, product):
+    def __init__(self, directory, product, *, existing_only=False, create=None):
         if product not in (*PRODUCTS, 'n8n'):
             raise ValueError('unknown product')
         self.product = product
-        self._migrate = True
+        self._migrate = not (existing_only or create is not None)
         self._migrated = False
-        super().__init__(directory)
+        super().__init__(directory, existing_only=existing_only, create=create)
         try:
             if self._migrated:
                 self._write(self.load())
@@ -536,6 +540,42 @@ class ProductStore(Store):
                 or value.get('product') != self.product):
             raise ValueError('wrong product or incomplete schema')
         return ProductState.model_validate(value)
+
+
+# DQ-28 (2026-11-14): OpenDesign and Odoo Manage get no additional profiles (profiles.EXTRA_PROFILE_LIMITS gives them
+# 0; tests/test_profile_store.py keeps the two in step).
+NO_PROFILE_PRODUCTS = frozenset({'opendesign', 'odoo-manage'})
+
+
+def profile_initial_state(default: ProductState, *, taken=()) -> ProductState:
+    """The complete first state of a new additional profile, written once by ProductStore(create=...) (multi-profile
+    plan §4.3; DQ-02 (a), 2026-11-14). HM-07: nothing calls it yet (HM-10 creates profiles).
+
+    New MCP and child tokens, never the default profile's or one of *taken* (the other profiles' tokens and child
+    tokens; I2). No backend connection or credential, no endpoint (I5). The default profile's policy as it is now:
+    writes_enabled, disabled, enabled_write_tools, denied_operations, Odoo's allowed methods as stored (absent stays
+    absent) and its four child switches as a saved value (the legacy absence means all four on). Never the n8n
+    session settings, the owner-defaults marker or a token history entry: creating a profile is no token change.
+    identity_fields.STATE_FIELDS classifies every field. A product without additional profiles (NO_PROFILE_PRODUCTS,
+    DQ-28) is refused here too; HM-10 refuses it first (409 profile_product_unsupported).
+    """
+    if default.product in NO_PROFILE_PRODUCTS:
+        raise ValueError('product has no additional profiles')
+    avoid = {*taken, default.token, default.child_token}
+    token = _new_token(avoid)
+    child_token = _new_token(avoid | {token})
+    return ProductState(
+        product=default.product, token=token, child_token=child_token, writes_enabled=default.writes_enabled,
+        disabled=list(default.disabled), enabled_write_tools=list(default.enabled_write_tools),
+        denied_operations={name: list(operations) for name, operations in default.denied_operations.items()},
+        odoo_write_switches=default.effective_odoo_write_switches if default.product == 'odoo' else None,
+        odoo_allowed_methods=None if default.odoo_allowed_methods is None else list(default.odoo_allowed_methods))
+
+
+def _new_token(avoid):
+    while (value := secrets.token_urlsafe(32)) in avoid:
+        pass
+    return value
 
 
 class Arguments(BaseModel):
