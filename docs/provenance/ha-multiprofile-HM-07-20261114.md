@@ -7,17 +7,21 @@
 - **未接線**：沒有任何入口 import 這三個新模組（測試鎖住）；預設帳號的 `Store` 行為不變；8081、8099 的回應不變
   （HM-01 的黃金回歸與兩個契約凍結照過）。
 - **獨立安全審查（2026-11-15）判定「修正後通過」**，程式沒有找到安全缺陷。審查意見逐條處理，見第 13 節：
-  - 必修 MF-1（索引 port 3000／8081／8099）：改成和 PaaS 一致，三個 port 都不算結構錯，只停相關帳號。依據是契約開頭
-    「沒列的就要相同」、FM-40、設計稿 A-port，不新增差異。**要主對話確認**：要改回「8081／8099 整份壞」，就 revert 第 13 節的 C3，
-    並在契約第 9 節補一列。
-  - 必修 MF-2（PaaS 變動清單）：這一波不連遠端，沒跑。開 PR 前由主對話在連得到 Gitea 的地方補（第 9 節）。
+  - 必修 MF-1（索引 port 3000／8081／8099）：主對話 2026-11-15 07:1x 定案「照 PaaS 逐字一致」。1024～65535 都不算結構錯；
+    port 重複與 3000 只停持有它的帳號（`port_conflict`）；8081、8099 不進 `port_conflicts`，起子程式時由 HM-09 擋成
+    `child_port_conflict`。計畫 §4.2、HM-09 段落與契約第 8 節跟著改；和 PaaS 相同，契約第 9 節不加列（第 3 節）。
+  - 必修 MF-2（PaaS 變動清單）：主對話在本機 PaaS git 查好：main `cf3d0d5`；帳號索引、port、名稱規則所在的 `profiles.py`、
+    `launch_policy.py` 沒有改動，本片不受影響（第 9 節）。
   - 建議 16 項：採用 13 項（S-01～S-07、S-09～S-13、S-16）；3 項留給接線的片（S-08、S-14、S-15），理由見第 13 節。
+- **已 rebase 到 `claude-delivery` `e5e6e74`**（HM-00 #89、HM-01 #90、HM-04 #91 都已合併）。HM-04 也改了 `products.py` 與帳本：
+  `products.py` 自動合併，兩邊的改動都在；帳本照資料重建，`products.py` 的 SHA-256 用合併後的內容重算（第 8 節）。
+- 決策同步：本 PR 在 `docs/multi-profile/decisions.md` 記下 DQ-09、DQ-12、DQ-19、DQ-38 已定，DQ-36 補合併授權（第 10 節）。
 - 新測試 5 檔 250 案（審查前 226 案）：本機 249 通過；1 案要 root（uid 10001 的 mode／owner 證明），本機照預期失敗，只在 CI 驗（第 6 節）。
-- 先寫測試：審查前三輪、審查修正一輪，先紅後綠都有紀錄（第 4.1 節）。突變：審查前 61 個擋到 59 個（2 個等價）；審查的 59 個裡沒擋到的
-  9 個，現在都擋到；修正本身另做 14 個，全部擋到（第 4.3 節）。
-- 兩個預檢：秘密預檢對本分支 17 個 commit（HM-01 的 9 個＋本片 8 個）0 命中，建置機同款的 HEAD 與全歷史掃描也 0 命中；
+- 先寫測試：審查前三輪、審查修正一輪、MF-1 定案一輪，先紅後綠都有紀錄（第 4.1 節）。突變：審查前 61 個擋到 59 個（2 個等價）；
+  審查的 59 個裡沒擋到的 9 個，審查修正後都擋到；修正本身另做 14 個、MF-1 定案後再做 4 個（含第 4.1 節第 5 輪的紅燈），全部擋到（第 4.3 節）。
+- 兩個預檢（rebase 與 MF-1 定案後）：秘密預檢對本片 11 個 commit 0 命中，建置機同款的 HEAD 與全歷史掃描也 0 命中；
   帳本預檢 OK（列管 5 檔，`config.py` 從本片起列管，第 8 節）。
-- 全套 pytest（審查修正後，正式 conftest）：3982 案、0 skip、28 分 24 秒：3980 通過、2 失敗，都是已知要 root 的（基準的 `test_uid10001_nondumpable_self_and_own_child_proof`＋本片的 `test_mode_and_owner_as_the_add_on_user`）。22 個瀏覽器測試這次都過（這個 clone 已補裝 Chromium）。
+- 全套 pytest（審查修正後、rebase 前，正式 conftest）：3982 案、0 skip、28 分 24 秒：3980 通過、2 失敗，都是已知要 root 的（基準的 `test_uid10001_nondumpable_self_and_own_child_proof`＋本片的 `test_mode_and_owner_as_the_add_on_user`）。22 個瀏覽器測試這次都過（這個 clone 已補裝 Chromium）。rebase 後沒有重跑全套（以 CI 為準），重跑的是本片、HM-01 守門與 HM-04 的目標測試（第 5 節）。
 
 ## 1. 範圍與基準
 
@@ -25,47 +29,51 @@
 |---|---|
 | 切片 | HM-07（計畫 §12.3；風險高、工作量 M） |
 | 分支 | `feat/ha-multiprofile-hm07-20261114` |
-| 基準 | HM-01 分支 head `32ecac8`（＝`claude-delivery` `bb48449`＋HM-01；PR #90 待合併） |
+| 基準 | `claude-delivery` `e5e6e74`（HM-00 #89、HM-01 #90、HM-04 #91 都已合併）。原本在 HM-01 分支 head `32ecac8` 上開發，2026-11-15 rebase（第 8 節） |
 | 依據 | 計畫 §3.3、§4.1～§4.4、§5.2、§5.4、§7.1、§7.3、§8.2（I2、I5、I6、I7）、§10.1、§10.3；HM-00 契約（PR #89）§1.2、§2.3、§3.6、§5、§7、§8、§9；`threat-model.md`；獨立安全審查報告 `artifacts/ha-multiprofile-parity-20261114/wave1/review-HM-07.md`（repo 外） |
 | FM | FM-01、03、04、05、09、10、13、16、19、20、21、23、30、40、80、83、97、106 |
-| 對齊的 PaaS | 沒有移植 PaaS 程式。索引規則（含 MF-1 之後的 port 規則：PaaS `_index_entries` 收 1024～65535、`_port_collisions` 只停相關帳號）、容量公式、新帳號初值照 PaaS `woow-mcp-server` `packages/mcp-admin-core/mcp_admin_core/profiles.py` @`69ac425`（經研究報告 R03 §4、G1 與契約）；身分欄位照 PaaS #147 還原手冊的 `IDENTITY` 清單（R12、G5）。測試裡的 PaaS 欄只是對照，本 repo 不跑 PaaS 程式 |
+| 對齊的 PaaS | 沒有移植 PaaS 程式。索引規則（含 MF-1 定案的 port 規則：PaaS `_index_entries` 收 1024～65535；`_port_collisions` 只列重複與預設帳號的 port，只停相關帳號；listener port 由 spawn 前的 `_port_refusal` 擋）、容量公式、新帳號初值照 PaaS `woow-mcp-server` `packages/mcp-admin-core/mcp_admin_core/profiles.py` @`69ac425`（經研究報告 R03 §4、G1 與契約；到 main `cf3d0d5` 都沒改，第 9 節）；身分欄位照 PaaS #147 還原手冊的 `IDENTITY` 清單（R12、G5）。測試裡的 PaaS 欄只是對照，本 repo 不跑 PaaS 程式 |
 
 ## 2. 改了什麼、沒改什麼
 
 | 檔 | 內容 |
 |---|---|
 | `Hc/features.py`（新） | `MULTI_PROFILE_PRODUCTS: frozenset[str] = frozenset()`（全部關）；`enabled(product)` 每次呼叫才讀集合，未知產品丟 `ValueError`（不默默當成關） |
-| `Hc/profiles.py`（新） | 帳號索引 `profiles.json`（`{"version":1,"profile_index":{id:{label,port}}}`）的解析與編碼、讀（不 chmod）與原子寫（暫存檔＋fsync＋replace＋目錄 fsync，0600；**寫入先比對**：只蓋掉本程序最後讀到或寫入、狀態 absent／ok、而且沒被外改的索引）、簽章（`st_dev`、`st_ino`、`st_mtime_ns`、`st_ctime_ns`、`st_size`、`st_nlink`）、DQ-12 判定（`IndexView.serves_mcp`、`offers_quarantine`）；索引 port 1024～65535（同 PaaS；重複、3000、8081、8099 都只停相關帳號）；布局 `Layout`（索引、收據、`profiles/`、帳號目錄與 `child/`、還原用的 5 個檔名）、隔離目錄與索引隔離的命名、`has_profile_data`；`profiles/` 的建立（建好後 fsync `/data/mcp`）與掃描（不跟隨連結）；一致性報告；容量常數與 PaaS 公式、停用原因順序、每帳號名額、8081 外框；名稱規則；id 與 port 配發 |
+| `Hc/profiles.py`（新） | 帳號索引 `profiles.json`（`{"version":1,"profile_index":{id:{label,port}}}`）的解析與編碼、讀（不 chmod）與原子寫（暫存檔＋fsync＋replace＋目錄 fsync，0600；**寫入先比對**：只蓋掉本程序最後讀到或寫入、狀態 absent／ok、而且沒被外改的索引）、簽章（`st_dev`、`st_ino`、`st_mtime_ns`、`st_ctime_ns`、`st_size`、`st_nlink`）、DQ-12 判定（`IndexView.serves_mcp`、`offers_quarantine`）；索引 port 1024～65535（同 PaaS；重複與 3000 只停相關帳號；8081、8099 不列，交 HM-09 的 spawn 前檢查）；布局 `Layout`（索引、收據、`profiles/`、帳號目錄與 `child/`、還原用的 5 個檔名）、隔離目錄與索引隔離的命名、`has_profile_data`；`profiles/` 的建立（建好後 fsync `/data/mcp`）與掃描（不跟隨連結）；一致性報告；容量常數與 PaaS 公式、停用原因順序、每帳號名額、8081 外框；名稱規則；id 與 port 配發 |
 | `Hc/identity_fields.py`（新） | 九個產品每個存檔後端欄位的類別（`identity`／`secret`／`option`）；改了要換 token 的身分欄位；`ProductState` 每個欄位的類別（`credential`、`backend`、`policy`、`session`、`endpoint`、`record`） |
 | `Hc/config.py` | `Store(directory, existing_only=True)`：不建目錄、lock 不帶 `O_CREAT`、缺 state 就 `ConfigError`；`Store(directory, create=<state>)`：目錄必須原本不存在（連懸空連結也不行）、建好先 fsync 上一層、lock 用 `O_EXCL`、一次寫入最終初值、失敗只清掉自己建的兩個檔與目錄。兩種模式都在任何 chmod 之前檢查目錄、lock、state 的擁有者是本 uid，並把放寬的權限收回 0700／0600；額外帳號讀 0600 的 state 不 fchmod（ctime 不變）。預設帳號（不帶參數）的建構路徑和原本相同（只多一層縮排），`load()` 照樣每次 fchmod |
 | `Hc/products.py` | `ProductStore(..., existing_only=, create=)` 傳給 `Store`，這兩種模式不遷移（舊 schema 原樣拒絕、不改寫）；`create=` 遇到 OpenDesign、Odoo Manage 先丟 `ValueError`、什麼都不建（`existing_only` 照常能開）；`profile_initial_state(default, taken=())`；`NO_PROFILE_PRODUCTS`（DQ-28） |
-| `tests/test_profile_index.py` | 索引規則 53 案（每案有 PaaS 對照欄：13 案 HA 比 PaaS 嚴、各寫明依據；9 案是 HA 自己檔案格式的規則。MF-1 讓兩個 listener port 案例和 PaaS 相同，S-12 多兩個外圍空白案例）、順序、編碼、port 衝突（含 listener port 只停那個帳號）、停用原因順序、id、名稱（含非 ASCII 外圍空白）、port 配發、容量常數與公式、讀寫（含寫入先比對、每條路徑都關 fd）、簽章、複查出錯判 modified、DQ-12 判定 |
+| `tests/test_profile_index.py` | 索引規則 53 案（每案有 PaaS 對照欄：13 案 HA 比 PaaS 嚴、各寫明依據；9 案是 HA 自己檔案格式的規則。MF-1 讓兩個 listener port 案例和 PaaS 相同，S-12 多兩個外圍空白案例）、順序、編碼、port 衝突（MF-1 定案：listener port 不算衝突、交 spawn 前檢查，兩個帳號同一個 listener port 照樣算重複；預設子程式的 port 和 HM-04 的 `lifecycle.CHILD_PORT` 相同）、停用原因順序、id、名稱（含非 ASCII 外圍空白）、port 配發、容量常數與公式、讀寫（含寫入先比對、每條路徑都關 fd）、簽章、複查出錯判 modified、DQ-12 判定 |
 | `tests/test_profile_store.py` | 新帳號初值（DQ-02，7 個可開的產品；不帶 owner-defaults 標記）、Store 層拒絕不開放的產品、只開既有、建立的每一步故障注入（11 步，含 fsync 上一層）、建立與 `profiles/` 的 fsync、讀 state 不改 ctime、擁有者與權限（目錄、lock、state 三者都先放寬再驗順序）、不遷移、`profiles/` 目錄、整棵樹在 entrypoint 還原修復的上限內、uid 10001 證明（root） |
 | `tests/profile_owner_probe.py` | 上一列 uid 10001 證明的探針：降權前 import 好所有模組，降權後只回報 JSON（不含 token）；記下每一次對別的 uid 擁有的項目做的 chmod |
 | `tests/test_profile_consistency.py` | 布局、隔離命名、掃描（每條路徑都關 fd）、缺目錄或讀不到的帳號（掃描沒找到的就算給了 credentials 也是 unavailable）、孤兒、撞號（含 token 與 child token 交叉）、`has_profile_data` |
 | `tests/test_identity_fields.py` | 每個欄位都有類別（新欄位沒分類就失敗）、和模型的 `repr=False`、`backend_edit.FIELDS`、面板 `contracts.js` 對得上、FM-80 的表、換 token 的欄位 |
 | `tests/test_upgrade_zero_rewrite.py` | 入口沒有 import 新模組（靜態掃描＋實際載入 4 個入口）；開關全部關、呼叫時才讀、子程序前置碼能打開；`bb48449` 寫出的 state 啟動正式 runtime 後一個位元組都沒變；單帳號安裝讀資料層什麼都不改；建帳號不寫預設 `state.json` |
 | `tests/fixtures/upgrade_zero_rewrite/`（8 份＋README） | `bb48449` 的程式為已設定的 add-on 寫出的 `state.json`（照 owner_defaults README 正規化；做法見該 README） |
-| `docs/provenance/runtime-patches.json` | 新增 `features.py`、`profiles.py`、`identity_fields.py`、`config.py` 四筆（`config.py` 是審查 S-10 後才列）；`products.py` 更新摘要並補 HM-07 說明 |
+| `docs/provenance/runtime-patches.json` | 新增 `features.py`、`profiles.py`、`identity_fields.py`、`config.py` 四筆（`config.py` 是審查 S-10 後才列）；`products.py` 更新摘要並補 HM-07 說明（接在 HM-04 的說明之後；rebase 後摘要用合併後的內容重算）；MF-1 定案後 `profiles.py` 的摘要與說明跟著改 |
+| `docs/multi-profile/contract.md` | 第 8 節的索引 port 規則照 PaaS（MF-1 定案）；DQ-09、DQ-12、DQ-19 的「待定」改成已定（5 處）；第 10 節變更紀錄一列。第 9 節不加列 |
+| `docs/multi-profile/decisions.md` | DQ-09、DQ-12、DQ-19、DQ-38 移到「已定」；DQ-36 補 2026-11-15 06:1x 的合併授權；DQ-38 的待辦改成 HM-02 要做的前提；變更紀錄一列 |
 | 本筆記 | — |
 
 沒改：入口（`run_product.py`、`apps/n8n/run.py`、`packaging/management_launcher.py`、`packaging/entrypoint.py`）、`gateway.py`、
 `lifecycle.py`、`health.py`、`apps/`、`packaging/`、`addons/<x>/`、版號、CHANGELOG、`upgrade-notes.yaml`、`docs/tool-surface.*`
 （沒動 `apps/runtime/*.py` 與 `apps/*/launch.py`，不用重產）、`docs/provenance/runtime-sources.json`（沒有 vendored 檔）、workflow、
-既有測試與替身。本分支沒有 `docs/multi-profile/`，也沒加。
+既有測試與替身。`docs/multi-profile/` 只改 `contract.md`、`decisions.md`（上表）；產生器輸出（`deviation-trace.md`、`paas-test-mapping.md`）沒動（第 12 節）。
 
 ## 3. 設計重點與解讀
 
-- **索引的 port 規則（審查 MF-1 後）**：port 只要是 int、不是 bool、1024～65535，就不算結構錯（同 PaaS `_index_entries`）。
-  port 重複、3000（預設子程式）、8081、8099（add-on 自己的 listener）都只停持有它的帳號：`port_conflicts` 列出這些帳號，
-  `disabled_reason=port_conflict`；索引照常可用，8081 照常服務預設帳號和其他帳號。
-  - 依據：契約開頭「沒列的就要相同」（契約第 9 節沒有這一列）；FM-40 的 HA 差異欄是「—」；設計稿 A-port 把 3000、8081、8099 都列成
-    不算結構錯。
-  - 計畫 §4.2 與契約第 8 節同時寫了「不是 3000／8081／8099 → 整份壞」和「撞預設 port 不算結構錯」，兩句矛盾。審查前本片讓 8081／8099
-    整份壞，比 PaaS 嚴，契約第 9 節卻沒有這一列（審查 MF-1）。現在照後一句和 PaaS；前一句的文字由主對話改（第 12 節待辦 1）。
-  - 和 PaaS 的細微差別：PaaS 的 `_port_collisions` 只列重複和預設帳號的 port；listener port 是 spawn 時才由 `_port_refusal`
-    拒絕（`child_port_conflict`）。本片照審查 MF-1 的修法 (b) 與設計稿 A-port，listener port 也列進 `port_conflicts`。兩邊都只停那個帳號、
-    都不起它的子程式。要逐字照 PaaS，就把 `port_conflicts` 裡的 listener port 拿掉、交給 HM-09 的 spawn 檢查；主對話確認 MF-1 時一起定。
+- **索引的 port 規則（審查 MF-1；主對話 2026-11-15 07:1x 定案：照 PaaS 逐字一致）**：
+  - port 只要是 int、不是 bool、1024～65535，就不算結構錯（同 PaaS `_index_entries`）。
+  - port 重複，或等於預設帳號子程式的 3000（HM-04 的 `lifecycle.CHILD_PORT`，測試鎖住兩者相同）：只停持有它的帳號。
+    `port_conflicts` 列出這些帳號，`disabled_reason=port_conflict`（同 PaaS `_port_collisions`）；索引照常可用，8081 照常服務預設帳號
+    和其他帳號。
+  - port 是 add-on 自己的 listener（8081、8099）：`port_conflicts` 不列，索引階段不檢查，和 PaaS `_port_collisions` 一樣。起子程式前
+    才擋：`status=blocked`、`blocked_reason=child_port_conflict`（交 HM-09；PaaS `_port_refusal`）。兩個帳號用同一個 listener port
+    是「重複」，照樣進 `port_conflicts`。
+  - 配 port（`allocate_port`）照樣避開 3000、8081、8099。
+  - 經過：審查前本片讓 8081／8099 整份壞（比 PaaS 嚴，契約第 9 節卻沒有這一列）；審查修正 C3 改成三個 port 都不算結構錯、都進
+    `port_conflicts`（比 PaaS 早一步擋 listener port）；定案後 C9 把 listener port 從 `port_conflicts` 拿掉，和 PaaS 逐字一致。
+    計畫 §4.2 與契約第 8 節的「不是 3000／8081／8099」一起拿掉，計畫 HM-09 段落補一句；和 PaaS 相同，契約第 9 節不加列。
 - **DQ-12 的判定**：`read_index` 回 `absent`／`ok`／`corrupt`；`recheck_index` 每個請求一次 lstat，簽章不符就 `modified`，lstat 出錯（不是
   ENOENT）也是 `modified`；`modified` 一直維持到重啟重讀（呼叫端保留回傳的 view）。`corrupt` 與 `modified` 都是 `serves_mcp=False`
   （8081 全部 503，含預設帳號）、`offers_quarantine=True`（面板照開、提供「隔離帳號索引」）。本片只做判定，HM-08、HM-10 接線。
@@ -122,9 +130,15 @@
 | 2 | 加了三個新模組與 `profile_initial_state`，`config.py`／`ProductStore` 還沒改 | 60 失敗、154 通過。絕大多數是 `existing_only`／`create` 參數還不存在；另外 3 個：要 root 的證明（本機照預期）、撞號群組重疊（(A,B)＋(A,B,C)）→ 實作改成把相連的群組合併、測試自己的錯（umask 設在建立測試目錄之前）→ 修測試 |
 | 3 | 審查前自查時再加 4 個測試，改程式前先跑 | 4 個失敗：`modified` 沒有維持（回了新的 view）、OpenDesign／Odoo Manage 拿得到初值、探針在降權後才 import、入口掃描漏掉 `import_module(".profiles", "mcp_admin_core")` 又把單純的字串 `"profiles"`／`"features"` 當成 import → 改完全過 |
 | 4 | 獨立審查後（2026-11-15），每項先改測試、跑一次，再改程式 | MF-1：4 個失敗（兩個 listener port 的 PARITY 案例、`test_a_listener_port_stops_only_the_profile_holding_it`、一致性報告的 port 衝突）；S-06：1 個；S-07：1 個；S-13＋S-09：4 個（另 1 個是要 root 的）→ 改完全過。S-01～S-05、S-11、S-12 補的是缺口測試：程式本來就對，寫好就過；有效與否由第 4.3 節的突變證明 |
+| 5 | MF-1 定案（2026-11-15 07:1x）、rebase 到 `e5e6e74` 之後，先改測試、跑一次，再改程式 | 改測試後（程式還是 C3 的「listener port 進 `port_conflicts`」）跑 HM-07 5 檔：2 個失敗（`test_a_listener_port_is_left_to_the_spawn_check` 與一致性報告的 `test_port_conflicts_are_part_of_the_check`：`port_conflicts` 都多列了 8099）＋要 root 的 1 個，247 通過 → 改 `port_conflicts` 後 250 案：249 通過、1 失敗（要 root） |
 
 第 4 輪的紅綠在 clone 裡跑，用 conftest 的網路與子程序守門、不拿使用者鎖（當時別的代理的全套佔著鎖；這 5 檔不綁固定 port）。
-修正後的正式結果見第 5 節（正式 conftest）。
+第 5 輪用正式 conftest（等測試鎖空出來才跑）。修正後的正式結果見第 5 節（正式 conftest）。
+
+第 5 輪改的測試：`test_a_listener_port_stops_only_the_profile_holding_it` 改名 `test_a_listener_port_is_left_to_the_spawn_check`
+（單獨一個帳號在 8081 或 8099：不算衝突、沒有 `disabled_reason`；兩個帳號同在 8081：算重複）；一致性報告的 port 衝突不再列 8099；
+`test_a_profile_keeps_its_first_disabled_reason` 的衝突 port 從 8081 換成 3000（審查 S-04 的意思不變）；PARITY 的兩個 listener port 案例
+只改註解（仍是 ok／ok）；另加 `profiles.DEFAULT_CHILD_PORT == lifecycle.CHILD_PORT`（HM-04）。
 
 ### 4.2 臨時突變（審查前）
 
@@ -199,8 +213,8 @@
 - M26：bool 只有 0 和 1，本來就在 1024～65535 之外，範圍檢查一樣拒絕。
 - M39：18000～18099 裡沒有保留 port（`test_port_allocation_is_the_first_free_port_of_18000_to_18099` 釘住常數），拿掉排除也配不到保留 port。
 
-M25 改的「索引接受 8081／8099」是審查前的規則被改壞。MF-1 之後這就是正確行為，反方向（listener port 讓整份壞、listener port 不算
-衝突）由第 4.3 節的 N01、N02 守門。
+M25 改的「索引接受 8081／8099」是審查前的規則被改壞。MF-1 之後這就是正確行為，反方向（listener port 讓整份壞）由第 4.3 節的 N01
+守門；listener port 進不進 `port_conflicts` 見第 4.3 節表後的說明（MF-1 定案後改了方向）。
 
 同一份清單的 M01～M45 在審查前跑過一次（當時 M43 的比對字串寫錯沒套用，改正後重跑擋到）；上表是審查前本片最後的程式。
 
@@ -223,7 +237,7 @@ R 開頭是審查報告裡沒擋到的 9 個（同樣的改法）；N 開頭是�
 | R60 | lock 先 chmod 再查擁有者 | 1 個失敗 |
 | R61 | `read_index` 不關 fd | 1 個失敗 |
 | N01 | MF-1 改回去：listener port 讓整份壞 | 4 個失敗 |
-| N02 | listener port 不算 port 衝突 | 3 個失敗 |
+| N02 | listener port 不算 port 衝突（C3 當時的判準；MF-1 定案後這就是正確行為，見表後） | 3 個失敗（定案前） |
 | N03 | S-06 拿掉：`ProductStore(create=…)` 建得出 OpenDesign／Odoo Manage | 1 個失敗 |
 | N04 | S-06 過頭：這兩個產品既有的也開不了 | 9 個失敗 |
 | N05 | S-07 拿掉：`write_index` 不管索引狀態都寫 | 1 個失敗 |
@@ -239,7 +253,33 @@ R 開頭是審查報告裡沒擋到的 9 個（同樣的改法）；N 開頭是�
 
 23 個全部擋到。S-03 的探針改動只在 root 下跑，改用第 3 節的本機模擬證明（拿掉擁有者檢查後清單有 3 筆）。
 
+MF-1 定案後（C9 的程式；基準是 249 通過、1 失敗，那 1 個要 root），在 clone 裡一次只改一處、跑 HM-07 的 5 個測試檔、用 `git checkout`
+改回（每次確認 `git status` 乾淨；正式 conftest）。下表的失敗數不含要 root 的那 1 個：
+
+| 突變 | 改壞的行為 | 新測試的結果 |
+|---|---|---|
+| N01 | 改回審查前：listener port 讓整份索引壞 | 3 個失敗（兩個 listener port 的 PARITY 案例、`test_a_listener_port_is_left_to_the_spawn_check`） |
+| N15 | listener port 照 C3 列進 `port_conflicts`（定案前的程式） | 2 個失敗（就是第 4.1 節第 5 輪的紅燈） |
+| N16 | `port_conflicts` 不看預設子程式的 3000 | 3 個失敗 |
+| N17 | `DEFAULT_CHILD_PORT` 和 HM-04 的 `lifecycle.CHILD_PORT` 不同（改成 3001） | 4 個失敗 |
+
+N15 沒有另跑：C3 的程式配上新測試，就是第 4.1 節第 5 輪的紅燈。
+
 ## 5. 本機檢查（2026-11-15，一般使用者；TMPDIR 用 `/tmp/ha-mp-XXXXXX`，每次跑完刪除）
+
+rebase 與 MF-1 定案後（最終程式＝第 13 節的 C9；之後的 C10、C11 只改文件）：
+
+| 檢查 | 結果 |
+|---|---|
+| HM-07 新測試 5 檔（正式 conftest） | 250 案：249 通過、1 失敗（要 root，第 6 節）、0 skip |
+| HM-04 `tests/test_child_port_param.py`（正式 conftest） | 233 通過 |
+| HM-01 守門 6 檔（黃金回歸、MCP 與管理 API 契約凍結、log 掃描、兩個預檢工具的測試；正式 conftest） | 80 通過（比 rebase 前多 1 案：#90 的 `1281abe` 在 `test_ledger_precheck.py` 加了 1 案） |
+| 上面三組一起跑（2026-11-15 07:35，一次 pytest，HEAD `31ab5d7`） | 563 案、30 秒：562 通過、1 失敗（就是要 root 的那個） |
+| `packaging/validate.py`（ci-venv 的 Python，PyYAML 6.0.3） | PASS |
+| packaging unittest（同 CI：暫存 venv＝`uv sync --frozen --no-dev`＋`requirements-ci`，`--offline` 只用快取，跑完刪除） | `Ran 184`、`OK (skipped=5)`（5 個 `skipUnless(root)`，和基準相同） |
+| `scripts/tool_inventory.py`（不帶參數，CI 同款） | exit 0；工具面沒變 |
+| 全套 pytest | rebase 後沒重跑（以 CI 為準）；rebase 前的結果在下一個表 |
+| 兩個預檢 | 第 8 節 |
 
 審查修正後（rebase 前的 HEAD `28c3fd9`＝第 13 節的 C7；之後的 C8 只改本筆記）：
 
@@ -276,50 +316,57 @@ R 開頭是審查報告裡沒擋到的 9 個（同樣的改法）；N 開頭是�
 
 ## 7. `checks` 秒數
 
-開 PR 後補（前：HM-01 PR 的 `checks`；後：本片 PR 的 `checks`）。推估：新測試本機約 5 秒，CI 增加不到 1 分鐘。
+CI 跑完再補（前：#91 合併前最後一次 `checks`；後：本片 PR 的 `checks`）。推估：新測試本機約 5 秒，CI 增加不到 1 分鐘。
 
 ## 8. 預檢結果
 
-指令同 HM-01 筆記第 8 節。數字是審查修正後、含本筆記的 commit。
+指令同 HM-01 筆記第 8 節。數字是 rebase 與 MF-1 定案後的最終 HEAD，含本筆記這一版的 commit（本筆記 commit 之後重掃，結果相同）。
 
+- **rebase**（2026-11-15 07:1x）：`git rebase --onto origin/claude-delivery 32ecac8`，`origin/claude-delivery` 是 `e5e6e74`
+  （HM-00 #89、HM-01 #90、HM-04 #91 都已合併）。之後 `git log origin/claude-delivery..HEAD` 只剩本片的 commit。
+  - 衝突只有兩個 commit 的 `docs/provenance/runtime-patches.json`（C1、C4：HM-04 和本片都改了 `products.py` 那一筆）。
+    `products.py` 本身兩次都自動合併：本片的 `+`／`-` 行和 rebase 前逐行相同，HM-04 的 `child_spec(..., port=)` 原樣保留。
+  - 帳本不從衝突文字解，而是照資料重建：以 rebase 後上一個 commit 的帳本為底，套上本片該 commit 對原本上一版的改動（新增的筆照原順序
+    接在最後；`products.py` 的說明把本片那段接在 HM-04 那段之後），再把本片碰到的每一筆的 SHA-256 用合併後工作樹的實際內容重算。
+    `products.py`：C1 `b199c6b5…`、C4 `ecffa712…`（rebase 前是 `20e3d1f6…`、`5630510f…`）；三個新模組的摘要和 rebase 前相同。
+  - 核對：rebase 後每個 commit 帳本裡每一筆的摘要，都等於該 commit 裡那個檔的 SHA-256（8 個 commit 全部 0 不符）；`git range-diff`
+    只有 C1、C4 不同，而且只差 `products.py` 那一筆的摘要與說明；`scripts/tool_inventory.py` exit 0，工具面沒變，不用重產 tool-surface。
 - **秘密預檢**：gitleaks 8.28.0（`packaging/scanner-pins.json` 釘選；本機已有的壓縮檔 SHA-256 相符才裝，執行檔摘要相符）；設定是本 repo 的
   `gitleaks_config()`。
 
   | 範圍 | 命中 |
   |---|---|
-  | 本分支的 commit（`bb48449..HEAD`，git 模式；HM-01 的 9 個＋本片 8 個，含本筆記） | 0（17 個 commit） |
+  | 本片的 commit（`e5e6e74..HEAD`，git 模式，含本筆記） | 0（11 個 commit） |
   | `--full`：`git archive HEAD` 的全部檔（建置機同款） | 0 |
   | `--full`：全歷史 `--all --full-history -m`（建置機同款） | 0 |
 
   審查前第一次掃本片的 commit 時有 1 個 `generic-api-key`：`tests/test_identity_fields.py` 的一個集合字面值裡，token 歷史的欄位名後面
   緊接著 owner-defaults 標記的欄位名（都不是秘密；規則把 token 字樣後面接逗號與一長串字當成金鑰）。改用 `products` 的兩個欄位名常數，
   改在同一個還沒 push 的 commit 裡，歷史裡沒有留下；重掃 0 命中。本筆記第一版照抄了那組字面值，又被掃到一次，改成上面的寫法。
-- **帳本預檢**：`runtime-patches.json` 156 個路徑（54 個補丁檔＋guarded sources；本片多 4 個：三個新模組與 `config.py`）、`runtime-sources.json` 70 個、`tool-surface.json` 159 個摘要，都 0 漂移、0 缺檔；對 `origin/claude-delivery` 改了 39 個檔（含 HM-01 的 17 個），列管檔 5 個（`config.py`、`features.py`、`identity_fields.py`、`products.py`、`profiles.py`）、帳本 1 個（`runtime-patches.json`），新增而沒列管的執行期檔 0 個，沒列管、要人看的 0 個（審查前「待人看」的 `config.py` 已列管）。結果 OK。
+- **帳本預檢**（最終 HEAD，工作樹乾淨）：`runtime-patches.json` 156 個路徑、`runtime-sources.json` 70 個、`tool-surface.json` 159 個摘要，都 0 漂移、0 缺檔；對 `origin/claude-delivery`（`e5e6e74`）改了 24 個檔：列管檔 5 個（`config.py`、`features.py`、`identity_fields.py`、`products.py`、`profiles.py`）、帳本 1 個（`runtime-patches.json`），新增而沒列管的執行期檔 0 個，沒列管、要人看的 0 個。結果 OK。
+
+  rebase 前（`4e3ae7c`）：`runtime-patches.json` 156 個路徑、`runtime-sources.json` 70 個、`tool-surface.json` 159 個摘要，都 0 漂移；
+  對當時的 `origin/claude-delivery`（`bb48449`）改了 39 個檔（含 HM-01 的 17 個）；結果 OK。
 
 ## 9. PaaS 變動（`git log <pin>..origin/main -- <相關檔>`）
 
-**還沒跑（審查必修 MF-2）。** 這一波不連任何遠端（Gitea 也不連），也不碰其他 clone；沒有 fetch 過的 `origin/main` 也不能當結果。
-開 PR 前由主對話在連得到 Gitea 的地方跑：
+主對話代查（審查必修 MF-2；本片這一波不連任何遠端，Gitea 也不連）：
 
-```sh
-git fetch origin
-git log --format='%h %ad %s' --date=iso 69ac425..origin/main -- \
-  packages/mcp-admin-core/mcp_admin_core/profiles.py \
-  packages/mcp-admin-core/mcp_admin_core/launch_policy.py \
-  packages/mcp-admin-core/tests/test_profiles.py \
-  packages/mcp-admin-core/tests/test_profile_robustness.py
-```
-
-- 要看的規則：索引規則（`_index_entries`）、`_port_collisions`、容量公式（`ProfileCapacity`、`_memory_limit_mib`）、每產品上限與每子程式 MiB、
-  新帳號初值（`create`）；本片照抄的就是這些。
-- 結果寫在這裡：查詢時間、`origin/main` 的 SHA、有沒有變動。沒有變動也要寫「無變動」。
-- 規則有變，就回本片對齊並補測試，重跑兩個預檢。
+- 主對話 2026-11-15 06:2x 在本機 PaaS git fetch 後查：PaaS main 是 `cf3d0d5`。`69ac425..cf3d0d5` 動到核心模組
+  （`packages/mcp-admin-core/mcp_admin_core/`）的只有：
+  - `log_redaction.py`：#149，交給 HM-02。
+  - `gateway_pool.py`、`proxy.py`：#148 合併後的註解與文件更正（`19f36e2`），交給 HM-14。
+  - `setup_status.py`：移除 VK 時改的說明文字（`8bfb12e`）。
+- 本片照抄的規則所在的 `profiles.py`、`launch_policy.py`（索引規則 `_index_entries`、`_port_collisions`、容量公式 `ProfileCapacity`、
+  `_memory_limit_mib`、每產品上限與每子程式 MiB、新帳號初值 `create`）**沒有改動**，本片不受影響，不用回頭對齊。
+- 審查另外建議看的 PaaS 測試檔（`packages/mcp-admin-core/tests/test_profiles.py`、`test_profile_robustness.py`）這次沒有另外列出；
+  規則所在的兩個模組沒變，測試裡的 PaaS 對照欄（`@69ac425`）仍然成立。
 
 | 查詢時間 | `origin/main` | 結果 |
 |---|---|---|
-| （待主對話補） | — | — |
+| 2026-11-15 06:2x（主對話，本機 PaaS git fetch 後） | `cf3d0d5` | `profiles.py`、`launch_policy.py` 無變動；核心模組只動 `log_redaction.py`、`gateway_pool.py`、`proxy.py`、`setup_status.py`（都不是本片的規則） |
 
-## 10. 本片用到的決策（主對話之後同步到 `docs/multi-profile/decisions.md`）
+## 10. 本片用到的決策（本 PR 同步到 `docs/multi-profile/decisions.md`）
 
 | 決策 | 內容 | 本片哪裡用到 |
 |---|---|---|
@@ -332,41 +379,49 @@ git log --format='%h %ad %s' --date=iso 69ac425..origin/main -- \
 | DQ-37 (a)（同上） | 同 uid 是同一個信任邊界 | 簽章只防誤改，寫明不是安全邊界；S-08（已開的 store 沒釘住目錄）留給 HM-08 |
 | DQ-40 (a)（同上）④、⑩ | 名稱擋控制與零寬字元、NFKC 判重；換使用者欄位換 token 擴到 Nextcloud、Hermes | 名稱規則；`identity_fields.TOKEN_ROTATING` |
 | DQ-16（§13.2，DQ-40 一次確認後照計畫做） | 名稱規則的細節 | 照契約 §3.6 的暫定值；HM-10、HM-11 定案時若改，改 `profiles.py` 的常數與測試。讀檔時要不要也擋 Cn（S-14）一起定 |
-| DQ-33 (a)、DQ-36（同上） | 本機用短 TMPDIR；commit 不加 AI 署名 | 本機檢查；本片 commit |
+| DQ-33 (a)、DQ-36（同上；DQ-36 在 2026-11-15 06:1x 補合併授權） | 本機用短 TMPDIR；commit 不加 AI 署名；不改版號的多帳號功能 PR 由主對話在 CI 全綠後依序合併（不改版號、不碰 `addons/`），升版 PR 仍要使用者逐次批准 | 本機檢查；本片 commit；本 PR 不由本片合併 |
+| DQ-19（2026-11-14 21:5x，照建議） | `/health/ready` 只代表預設帳號；逐帳號狀態放 `/api/profiles` 的 `status` | 沒用到；本 PR 只同步決策紀錄（HM-08、HM-10） |
+| DQ-38（2026-11-14 21:5x，選 (a)） | 原樣 vendor PaaS `log_redaction.py`（#149 合併版）與純測試，使用者確認可以公開放進 HA 的公開 repo | 沒用到；本 PR 只同步決策紀錄（HM-02） |
 | DQ-14（§13.2，還沒問） | 刪除細節 | 沒用到：本片什麼都不刪，只回報孤兒 |
 
 另外兩條是既有的規則，不是新決策：
 
 | 規則 | 內容 | 本片哪裡用到 |
 |---|---|---|
-| 契約開頭（HM-00，PR #89） | HA 和 PaaS 不同的地方都列在第 9 節，沒列的就要相同 | MF-1：索引 port 規則改成和 PaaS 一致（待主對話確認，第 12 節待辦 1） |
+| 契約開頭（HM-00，PR #89） | HA 和 PaaS 不同的地方都列在第 9 節，沒列的就要相同 | MF-1：索引 port 規則照 PaaS 逐字一致（2026-11-15 定案），所以第 9 節不加列 |
 | `ledger-tracking.md` 第 3 節（HM-00） | 新檔以外的執行期檔要不要列管，由審查決定 | S-10：審查建議列管，`config.py` 從本片起列進 `runtime-patches.json`（`guarded_sources` 是 `{}`） |
 
 ## 11. 驗收條件（計畫 §12.3 HM-07）
 
 | 條件 | 狀態 |
 |---|---|
-| 全綠 | 本機：新測試 249／250（1 個要 root）；全套 3982 案 3980 通過，2 個失敗都是要 root 的。CI 待 PR |
+| 全綠 | 本機（rebase 與 MF-1 定案後）：新測試 249／250（1 個要 root）；HM-01 守門與 HM-04 的 port 測試全過（第 5 節）。rebase 前的全套 3982 案 3980 通過，2 個失敗都是要 root 的。CI 待 PR |
 | 入口沒有 import `profiles.py` | 通過：`test_no_runtime_file_imports_the_unwired_modules`（靜態）、`test_no_entry_point_imports_the_unwired_modules`（實際載入 `run_product`、`apps/n8n/run.py`、`management_launcher.py`、`entrypoint.py`）；`features.py`、`identity_fields.py` 也一樣 |
 | HTTP 面沒有變化 | 通過（本機）：HM-01 的黃金回歸、MCP 與管理 API 契約凍結照過；預設帳號 `Store` 行為不變；`bb48449` 樣本啟動後零改寫 |
 | mode／owner 在 uid 10001 子程序驗 | 只在 CI：`test_mode_and_owner_as_the_add_on_user`（第 6 節），含「沒有對外來項目 chmod」；本機用模擬跑過探針 |
 | 新測試沒有條件式 skip | 通過：沒有 `skip`／`skipif`／`importorskip`／`xfail` |
 | 測試資料規則（計畫 §12.0 第 4 點） | 通過：token 用 `T`×43、`C`×43 或執行時產生（`test_new_tokens_avoid_the_taken_values` 另用 `X`／`Y`／`Z`×43 的低熵假值），憑證 `DUMMY-…`，網址 `.invalid`；秘密預檢見第 8 節 |
-| 同 PR 更新帳本 | 通過：4 個新列管檔（3 個新模組＋`config.py`）、`products.py` 摘要更新；帳本預檢 OK |
+| 同 PR 更新帳本 | 通過：4 個新列管檔（3 個新模組＋`config.py`）、`products.py` 摘要更新（rebase 後用合併後的內容重算）；帳本預檢 OK |
+| 開工前讀計畫、跑 PaaS 變動清單（計畫 §12.0 第 2 點） | 通過：PaaS 變動清單由主對話代查（第 9 節） |
 | 不改版號、不碰 `addons/<x>/`、不改 CHANGELOG | 通過 |
 
 ## 12. 還沒解決、交給後面的片
 
-1. **MF-1 待主對話確認**：本片照契約開頭規則改成和 PaaS 一致（第 3 節）。
-   - 確認後：計畫 §4.2「每筆」列與契約第 8 節要拿掉「不是 3000／8081／8099」半句（只剩「1024～65535」）。
-   - listener port 的 `disabled_reason` 和 PaaS 有細微差別（第 3 節），一起定。
-   - 要改回「8081／8099 整份壞」：revert 第 13 節的 C3，在契約第 9 節補一列（PaaS：spawn 時才拒；HA：整份壞；附理由），decisions 與本筆記各記一行。
-2. **和同一波其他片的 rebase**：HM-04、HM-06 也改 `products.py`（帳本的 `products.py` 摘要要在 rebase 後重產）；HM-13a 可能在 entrypoint 或
-   `restore_detect.py` 自己定義 `.restore-detected`、`.instance-sentinel` 等檔名，和本片 `Layout` 的同名常數要收斂成一個來源。
+1. **MF-1 已定案（2026-11-15），交給 HM-09 的部分**：索引裡 port 是 8081／8099 的帳號，本片不擋（`port_conflicts` 照 PaaS 不列，
+   沒有 `disabled_reason`）；HM-09 的 spawn 前檢查要把它擋成 `blocked`＋`child_port_conflict`（計畫 HM-09 段落已補一句；PaaS `_port_refusal`）。
+   `test_a_listener_port_is_left_to_the_spawn_check` 記著這個交接。
+2. **和同一波其他片的 rebase**：HM-04 的衝突已在本片 rebase 時處理（第 8 節）。HM-06 也改 `products.py`：後合的一方 rebase 後照資料重算帳本的
+   `products.py` 摘要；HM-13a 可能在 entrypoint 或 `restore_detect.py` 自己定義 `.restore-detected`、`.instance-sentinel` 等檔名，和本片 `Layout`
+   的同名常數要收斂成一個來源。
 3. **HM-08 起接線時要改的測試**：`tests/test_upgrade_zero_rewrite.py` 的 `UNWIRED`（HM-08 接 `features.py`、`profiles.py`，HM-13b 讓入口 import
    `profiles.py` 做存在檢查）；同檔的零改寫測試在 HM-13a／b 要加「開通後只多 sentinel 兩檔」。
-4. **PaaS 變動清單**（MF-2，第 9 節）：開 PR 前在連得到 Gitea 的地方補跑。
-5. **決策同步**：第 10 節的決策由主對話寫進 `docs/multi-profile/decisions.md`；DQ-16 的細節目前照契約暫定值。
+4. **PaaS 變動清單**（MF-2，第 9 節）：主對話已代查，本片的規則沒變。審查另外建議看的兩個 PaaS 測試檔這次沒有另外列出（規則所在的模組沒變）。
+5. **決策同步的尾巴**（本 PR 已改 `decisions.md` 與 `contract.md`）：
+   - `docs/multi-profile/deviation-trace.md` 的 FM-05、FM-30 說明欄仍寫 DQ-12、DQ-09「待定」。這個檔是 HM-00 產生器（repo 外的
+     `wave0/hm00-check/gen_trace.py`）的輸出，本片不手改；產生器的字串改了再重產（HM-18 定稿時或主對話另排）。
+   - HM-00 的對照腳本 `check_hm00.py` 的 C8 只認「§13.1 已採用、其他待定」，重跑會把 DQ-09、DQ-12、DQ-19、DQ-38 報成問題；
+     腳本在 repo 外，要跟著決策更新。
+   - `paas-test-mapping.md`、`ledger-tracking.md` 寫的「DQ-38 選 vendor 時…」在選了 (a) 之後仍然成立，交 HM-02 一起改。
 6. **S-08（HM-08、HM-10）**：已開的額外帳號 store 之後的讀寫走路徑，沒有釘住建構時驗過的目錄。收據（`operations.py` 的
    `OperationJournal(store.path)`）、owner-defaults、`child_spec` 也都走路徑，只改 `Store` 的讀寫補不齊。HM-08 做每帳號執行套件與 state
    簽章快取時，一起改成留住驗過的目錄 fd（`dir_fd=`）或每次比對目錄的 `(st_dev, st_ino)`。同 uid 才做得到（DQ-37）。
@@ -377,9 +432,9 @@ git log --format='%h %ad %s' --date=iso 69ac425..origin/main -- \
 9. **HM-10 檢查清單**：寫索引一律傳 `expected=`：啟動時（或「隔離帳號索引」之後）讀到的 view，或上一次寫入回傳的 view。不能為了寫而重新
    `read_index` 拿新的基準：那等於替外改過的檔背書，會洗掉 DQ-12 的「503 到重啟」。`ProfileDataError` 之後用手上的 view 複查，照結果維持
    503 與隔離。
-10. `checks` 秒數開 PR 後補。
-11. 本機曾有一次組合執行時 `tests/test_ledger_precheck.py::test_drift_and_pinned_changes` 失敗（HM-01 的既有測試，用自己的臨時 repo）；單獨重跑 8 次、
-    組合重跑 2 次、全套 1 次都通過，原因沒找到，請在 CI 留意。
+10. `checks` 秒數：CI 跑完再補（第 7 節）。
+11. 本機曾有一次組合執行時 `tests/test_ledger_precheck.py::test_drift_and_pinned_changes` 失敗（HM-01 的既有測試，用自己的臨時 repo）。
+    原因是預檢工具複製 git index 時沒保留 mtime（HM-04 審查 O-1），已由 `1281abe`（#90）修好；rebase 後本分支帶著這個修正。
 12. 本機環境：`setup_repo_env.sh` 的 UI `npm ci` 之後沒有 `npm run browser:install`，全套 pytest 會多 22 個瀏覽器測試失敗（找不到 Chromium）；
     本片的 clone 已補裝（不進 git）。其他片的 clone 若看到同樣的 22 個，是環境不是退步。
 13. uid 10001 證明的探針改成降權前 import，是因為 CI runner 的家目錄可能不開放給別的使用者；這點只有 CI 跑過才知道（第 6 節）。
@@ -388,23 +443,26 @@ git log --format='%h %ad %s' --date=iso 69ac425..origin/main -- \
 
 審查報告：`artifacts/ha-multiprofile-parity-20261114/wave1/review-HM-07.md`（repo 外，2026-11-15；判定「修正後通過」）。
 
-本片的 commit（rebase 後 SHA 會變，照標題對；括號是 rebase 前的短 SHA）：
+本片的 commit（照標題對；括號是 rebase 後／rebase 前的短 SHA。C9～C11 是 rebase 後才加的）：
 
 | 代號 | commit 標題 |
 |---|---|
-| C1 | `feat(multi-profile): add the profile data layer, the product switch and identity field classes, not wired (HM-07)`（`a278f83`） |
-| C2 | `docs(provenance): add HM-07 multi-profile provenance note`（`6b39558`） |
-| C3 | `fix(multi-profile): let an index port on the add-on's own listeners stop only its profile, as PaaS does (HM-07)`（`40f9899`） |
-| C4 | `fix(multi-profile): refuse to create a profile of OpenDesign or Odoo Manage in ProductStore (HM-07)`（`d66e278`） |
-| C5 | `fix(multi-profile): write the profile index only over the view this process vouches for (HM-07)`（`b1ce38d`） |
-| C6 | `fix(multi-profile): fsync the parent of a new profile directory and keep a profile state's ctime on reads (HM-07)`（`73d6cdb`） |
-| C7 | `test(multi-profile): close the HM-07 review's test gaps`（`28c3fd9`） |
-| C8 | `docs(provenance): record the HM-07 review fixes and rechecks`（本筆記這一版） |
+| C1 | `feat(multi-profile): add the profile data layer, the product switch and identity field classes, not wired (HM-07)`（`381d295`／`a278f83`） |
+| C2 | `docs(provenance): add HM-07 multi-profile provenance note`（`fb72379`／`6b39558`） |
+| C3 | `fix(multi-profile): let an index port on the add-on's own listeners stop only its profile, as PaaS does (HM-07)`（`04ef36b`／`40f9899`） |
+| C4 | `fix(multi-profile): refuse to create a profile of OpenDesign or Odoo Manage in ProductStore (HM-07)`（`b5a32d1`／`d66e278`） |
+| C5 | `fix(multi-profile): write the profile index only over the view this process vouches for (HM-07)`（`361ac7e`／`b1ce38d`） |
+| C6 | `fix(multi-profile): fsync the parent of a new profile directory and keep a profile state's ctime on reads (HM-07)`（`f1eacc0`／`73d6cdb`） |
+| C7 | `test(multi-profile): close the HM-07 review's test gaps`（`8ee2a2e`／`28c3fd9`） |
+| C8 | `docs(provenance): record the HM-07 review fixes and rechecks`（`efe5315`／`4e3ae7c`） |
+| C9 | `fix(multi-profile): leave a lone listener port in the profile index to the spawn check, as PaaS does (HM-07)`（`2d1fe29`） |
+| C10 | `docs(multi-profile): align the index port rule with PaaS and record DQ-09, DQ-12, DQ-19, DQ-36 and DQ-38`（`31ab5d7`） |
+| C11 | `docs(provenance): record the HM-07 rebase, the MF-1 decision and the PaaS change list`（本筆記這一版） |
 
 | 編號 | 意見（摘要） | 處理 | commit | 證據 |
 |---|---|---|---|---|
-| MF-1 | 索引 port 3000／8081／8099 的規則，計畫與契約自相矛盾；8081／8099 整份壞比 PaaS 嚴，契約第 9 節沒有這一列 | 採 (b)：照 PaaS 與設計稿 A-port，三個都不算結構錯，只停相關帳號。**待主對話確認**（第 12 節待辦 1） | C3 | 兩個 PARITY 案例改成 ok／ok；`test_a_listener_port_stops_only_the_profile_holding_it`；N01、N02 |
-| MF-2 | PaaS 變動清單沒跑 | 沒跑：這一波不連遠端。第 9 節寫好指令與要看的規則，開 PR 前由主對話補 | — | 第 9 節 |
+| MF-1 | 索引 port 3000／8081／8099 的規則，計畫與契約自相矛盾；8081／8099 整份壞比 PaaS 嚴，契約第 9 節沒有這一列 | 主對話 2026-11-15 07:1x 定案：照 PaaS 逐字一致。C3 先讓三個 port 都不算結構錯；C9 再把 8081／8099 從 `port_conflicts` 拿掉、交 HM-09 的 spawn 前檢查（`child_port_conflict`）。計畫 §4.2、HM-09 段落與契約第 8 節同步改（C10 與 repo 外的計畫檔）；契約第 9 節不加列 | C3、C9、C10 | 兩個 PARITY 案例 ok／ok；`test_a_listener_port_is_left_to_the_spawn_check`；第 4.1 節第 5 輪；第 4.3 節 N01、N15～N17 |
+| MF-2 | PaaS 變動清單沒跑 | 主對話代查（main `cf3d0d5`）：本片的規則所在的 `profiles.py`、`launch_policy.py` 沒改，不用回頭對齊 | C11 | 第 9 節 |
 | S-01 | 「新帳號不帶 owner-defaults 標記」沒有測試 | 採用 | C7 | `test_new_profile_never_carries_the_owner_defaults_marker`（7 個產品）；R46 |
 | S-02 | 「先查擁有者再 chmod」只測了 state | 採用：目錄、lock、state 三者都先放寬；外來的那一項被拒且權限沒變 | C7 | `test_existing_only_refuses_an_entry_another_uid_owns_before_touching_it`；R34、R60、N14 |
 | S-03 | uid 10001 證明分不出擁有者檢查與核心的 EPERM | 採用修法 1：探針記下對外來項目的 chmod，測試要求清單是空的；註解改準 | C7 | 第 3 節本機模擬：正式程式 0 筆，拿掉擁有者檢查 3 筆 |
@@ -422,5 +480,5 @@ git log --format='%h %ad %s' --date=iso 69ac425..origin/main -- \
 | S-15 | 隔離名只到秒，同一秒會撞名 | 留給 HM-10、HM-13b：改名是那兩片做；格式是本片暫定，用到時可改 | — | 第 12 節待辦 8 |
 | S-16 | 測試註解寫「section 5」 | 採用：改成 section 3（本筆記第 3 節的編號維持不變） | C3 | `tests/test_profile_index.py` 的 listener port 案例註解 |
 
-審查報告第 8 節列的作者待辦（rebase 後重產 `products.py` 摘要、`Layout` 檔名收斂、`UNWIRED` 清單、決策同步、DQ-16、`checks` 秒數、
-`test_ledger_precheck` 偶發失敗、環境沒裝 Chromium）都還在第 12 節。
+審查報告第 8 節列的作者待辦：rebase 後重算 `products.py` 摘要（第 8 節）、決策同步（C10）、`test_ledger_precheck` 偶發失敗（`1281abe`
+已修）都做完了；`Layout` 檔名收斂、`UNWIRED` 清單、DQ-16、`checks` 秒數、環境沒裝 Chromium 還在第 12 節。
