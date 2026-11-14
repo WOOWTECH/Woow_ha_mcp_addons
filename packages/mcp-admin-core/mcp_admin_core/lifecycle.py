@@ -35,6 +35,26 @@ class ChildSpec:
     cwd: Path
 
 
+# HM-04 (multi-profile plan 5.4): a child's loopback port is a parameter. The default profile's child keeps 3000, its
+# argv, environment and URL exactly as before; an extra profile's child gets a port of its own (18000 and up).
+CHILD_PORT = 3000
+
+
+def child_port_text(port: int) -> str:
+    """A child's port as its argv or environment carries it; anything but an int 1-65535 (a bool too) is refused."""
+    if type(port) is not int or not 1 <= port <= 65535:
+        raise ValueError('invalid child port')
+    return str(port)
+
+
+def child_url(port: int = CHILD_PORT) -> str:
+    """Where the gateway, the health monitor and the capability probe reach the child listening on port."""
+    return f'http://127.0.0.1:{child_port_text(port)}/mcp'
+
+
+CHILD_URL = child_url()  # the default profile's child
+
+
 class Supervisor:
     def __init__(self, spec: ChildSpec | None, *, retries=3, backoff=1.0, grace=3.0):
         # Linux/HA runtime: adopt orphan grandchildren, then reap only OUR group.

@@ -1,0 +1,444 @@
+{
+  "baseline": "bb48449",
+  "about": "HM-04: the default profile child spec of every product (products.child_spec, n8n_adapter.child_spec) for the states of tests/test_child_port_param.py CASES: argv, env as ordered NAME=value entries, cwd. Made from bb48449's code (baseline, which stays bb48449). changes lists, in order, every deliberate change of these specs since then (objects with the slice and the change), each made in that slice's PR together with the specs it changes: a spec here is bb48449's with those changes. Placeholders: {ROOT} the checkout, {DATA} the data directory, {CATALOG} n8n's catalog copy, {NODE} the node binary, {child_token} the state's child token. Test data only (DUMMY- credentials, .invalid hosts).",
+  "changes": [],
+  "specs": {
+    "odoo/plain": {
+      "argv": [
+        "{ROOT}/apps/odoo/.venv/bin/python",
+        "{ROOT}/apps/odoo/start_switches.py",
+        "--transport",
+        "streamable-http",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "3000",
+        "--path",
+        "/mcp"
+      ],
+      "env": [
+        "PATH=/usr/bin:/bin",
+        "HOME={DATA}/child",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONUNBUFFERED=1",
+        "PYTHONPATH={ROOT}/apps/odoo/vendor:{ROOT}/apps/runtime:{ROOT}/packages/mcp-admin-core",
+        "ODOO_URL=https://odoo.invalid",
+        "ODOO_DB=DUMMY-port-db",
+        "ODOO_USERNAME=DUMMY-port-user",
+        "ODOO_PASSWORD=DUMMY-port-odoo-password",
+        "ODOO_TRANSPORT=xmlrpc",
+        "ODOO_VERIFY_SSL=1",
+        "ODOO_TIMEOUT=30",
+        "ODOO_MCP_ENABLE_WRITES=1",
+        "ODOO_MCP_ALLOW_DIRECT_WRITES=1",
+        "ODOO_MCP_ALLOW_UNKNOWN_METHODS=1",
+        "ODOO_MCP_ALLOWED_SIDE_EFFECT_METHODS=",
+        "MCP_CHATTER_DIRECT=1"
+      ],
+      "cwd": "{DATA}/child"
+    },
+    "odoo/switches": {
+      "argv": [
+        "{ROOT}/apps/odoo/.venv/bin/python",
+        "{ROOT}/apps/odoo/start_switches.py",
+        "--transport",
+        "streamable-http",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "3000",
+        "--path",
+        "/mcp"
+      ],
+      "env": [
+        "PATH=/usr/bin:/bin",
+        "HOME={DATA}/child",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONUNBUFFERED=1",
+        "PYTHONPATH={ROOT}/apps/odoo/vendor:{ROOT}/apps/runtime:{ROOT}/packages/mcp-admin-core",
+        "ODOO_URL=https://odoo.invalid",
+        "ODOO_DB=DUMMY-port-db",
+        "ODOO_USERNAME=DUMMY-port-user",
+        "ODOO_PASSWORD=DUMMY-port-odoo-password",
+        "ODOO_TRANSPORT=xmlrpc",
+        "ODOO_VERIFY_SSL=1",
+        "ODOO_TIMEOUT=30",
+        "ODOO_MCP_ENABLE_WRITES=1",
+        "ODOO_MCP_ALLOW_DIRECT_WRITES=0",
+        "ODOO_MCP_ALLOW_UNKNOWN_METHODS=0",
+        "ODOO_MCP_ALLOWED_SIDE_EFFECT_METHODS=res.partner.message_subscribe,sale.order.action_confirm",
+        "MCP_CHATTER_DIRECT=1"
+      ],
+      "cwd": "{DATA}/child"
+    },
+    "odoo-manage/read": {
+      "argv": [
+        "{ROOT}/apps/odoo-manage/.venv/bin/python",
+        "{ROOT}/apps/odoo-manage/launch.py",
+        "--transport",
+        "streamable-http",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "3000"
+      ],
+      "env": [
+        "PATH=/usr/bin:/bin",
+        "HOME={DATA}/child",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONUNBUFFERED=1",
+        "PYTHONPATH={ROOT}/apps/odoo-manage/vendor:{ROOT}/apps/runtime",
+        "ODOO_URL=https://odoo-manage.invalid",
+        "ODOO_DB=DUMMY-port-db",
+        "ODOO_USER=DUMMY-port-user",
+        "ODOO_API_KEY=DUMMY-port-manage-key",
+        "ODOO_YOLO=read",
+        "ODOO_MCP_ENABLE_METHOD_CALLS=false",
+        "ODOO_MCP_TRANSPORT=streamable-http"
+      ],
+      "cwd": "{DATA}/child"
+    },
+    "odoo-manage/module": {
+      "argv": [
+        "{ROOT}/apps/odoo-manage/.venv/bin/python",
+        "{ROOT}/apps/odoo-manage/launch.py",
+        "--transport",
+        "streamable-http",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "3000"
+      ],
+      "env": [
+        "PATH=/usr/bin:/bin",
+        "HOME={DATA}/child",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONUNBUFFERED=1",
+        "PYTHONPATH={ROOT}/apps/odoo-manage/vendor:{ROOT}/apps/runtime",
+        "ODOO_URL=https://odoo-manage.invalid",
+        "ODOO_DB=DUMMY-port-db",
+        "ODOO_USER=DUMMY-port-user",
+        "ODOO_API_KEY=DUMMY-port-manage-key",
+        "ODOO_YOLO=off",
+        "ODOO_MCP_ENABLE_METHOD_CALLS=false",
+        "ODOO_MCP_TRANSPORT=streamable-http"
+      ],
+      "cwd": "{DATA}/child"
+    },
+    "hermes/gateway": {
+      "argv": [
+        "{ROOT}/apps/hermes/.venv/bin/python",
+        "{ROOT}/apps/hermes/launch.py"
+      ],
+      "env": [
+        "PATH=/usr/bin:/bin",
+        "HOME={DATA}/child",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONUNBUFFERED=1",
+        "PYTHONPATH={ROOT}/apps/hermes/vendor:{ROOT}/apps/runtime",
+        "HERMES_GATEWAY_URL=https://hermes.invalid",
+        "HERMES_GATEWAY_API_KEY=DUMMY-port-hermes-key"
+      ],
+      "cwd": "{DATA}/child"
+    },
+    "hermes/dashboard": {
+      "argv": [
+        "{ROOT}/apps/hermes/.venv/bin/python",
+        "{ROOT}/apps/hermes/launch.py"
+      ],
+      "env": [
+        "PATH=/usr/bin:/bin",
+        "HOME={DATA}/child",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONUNBUFFERED=1",
+        "PYTHONPATH={ROOT}/apps/hermes/vendor:{ROOT}/apps/runtime",
+        "HERMES_GATEWAY_URL=https://hermes.invalid",
+        "HERMES_GATEWAY_API_KEY=DUMMY-port-hermes-key",
+        "HERMES_DASHBOARD_URL=https://hermes-dashboard.invalid",
+        "HERMES_DASHBOARD_USERNAME=DUMMY-port-user",
+        "HERMES_DASHBOARD_PASSWORD=DUMMY-port-dashboard-password"
+      ],
+      "cwd": "{DATA}/child"
+    },
+    "opendesign/plain": {
+      "argv": [
+        "{ROOT}/apps/opendesign/.venv/bin/python",
+        "{ROOT}/apps/opendesign/launch.py"
+      ],
+      "env": [
+        "PATH=/usr/bin:/bin",
+        "HOME={DATA}/child",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONUNBUFFERED=1",
+        "PYTHONPATH={ROOT}/apps/opendesign/vendor:{ROOT}/apps/runtime",
+        "OD_API_BASE=https://opendesign.invalid"
+      ],
+      "cwd": "{DATA}/child"
+    },
+    "emqx/plain": {
+      "argv": [
+        "{ROOT}/apps/emqx/.venv/bin/python",
+        "-m",
+        "run_child",
+        "emqx_mcp_server.server",
+        "--transport",
+        "http",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "3000",
+        "--path",
+        "/mcp"
+      ],
+      "env": [
+        "PATH=/usr/bin:/bin",
+        "HOME={DATA}/child",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONUNBUFFERED=1",
+        "PYTHONPATH={ROOT}/apps/emqx/vendor:{ROOT}/apps/runtime",
+        "EMQX_MCP_BASE_URL=https://emqx.invalid",
+        "EMQX_MCP_API_KEY=DUMMY-port-emqx-key",
+        "EMQX_MCP_API_SECRET=DUMMY-port-emqx-secret",
+        "EMQX_MCP_READONLY=false",
+        "FASTMCP_CHECK_FOR_UPDATES=off",
+        "FASTMCP_SHOW_SERVER_BANNER=false",
+        "EMQX_MCP_DISABLED_TOOLS="
+      ],
+      "cwd": "{DATA}/child"
+    },
+    "emqx/restricted": {
+      "argv": [
+        "{ROOT}/apps/emqx/.venv/bin/python",
+        "-m",
+        "run_child",
+        "emqx_mcp_server.server",
+        "--transport",
+        "http",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "3000",
+        "--path",
+        "/mcp"
+      ],
+      "env": [
+        "PATH=/usr/bin:/bin",
+        "HOME={DATA}/child",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONUNBUFFERED=1",
+        "PYTHONPATH={ROOT}/apps/emqx/vendor:{ROOT}/apps/runtime",
+        "EMQX_MCP_BASE_URL=https://emqx.invalid",
+        "EMQX_MCP_API_KEY=DUMMY-port-emqx-key",
+        "EMQX_MCP_API_SECRET=DUMMY-port-emqx-secret",
+        "EMQX_MCP_READONLY=false",
+        "FASTMCP_CHECK_FOR_UPDATES=off",
+        "FASTMCP_SHOW_SERVER_BANNER=false",
+        "EMQX_MCP_DISABLED_TOOLS=emqx_ban,emqx_broker_stats,emqx_client_subscribe,emqx_client_unsubscribe,emqx_create_trace,emqx_delete_retained,emqx_delete_trace,emqx_kick_client,emqx_publish,emqx_publish_bulk,emqx_test_rule_sql,emqx_toggle_rule,emqx_unban"
+      ],
+      "cwd": "{DATA}/child"
+    },
+    "litellm/plain": {
+      "argv": [
+        "{ROOT}/apps/litellm/.venv/bin/python",
+        "-m",
+        "run_child",
+        "woow_litellm_mcp_server.server",
+        "--transport",
+        "http",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "3000",
+        "--path",
+        "/mcp"
+      ],
+      "env": [
+        "PATH=/usr/bin:/bin",
+        "HOME={DATA}/child",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONUNBUFFERED=1",
+        "PYTHONPATH={ROOT}/apps/litellm/vendor:{ROOT}/apps/runtime",
+        "LITELLM_MCP_BASE_URL=https://litellm.invalid",
+        "LITELLM_MCP_MASTER_KEY=DUMMY-port-litellm-key",
+        "LITELLM_MCP_READONLY=false",
+        "FASTMCP_CHECK_FOR_UPDATES=off",
+        "FASTMCP_SHOW_SERVER_BANNER=false",
+        "LITELLM_MCP_DISABLED_TOOLS="
+      ],
+      "cwd": "{DATA}/child"
+    },
+    "litellm/restricted": {
+      "argv": [
+        "{ROOT}/apps/litellm/.venv/bin/python",
+        "-m",
+        "run_child",
+        "woow_litellm_mcp_server.server",
+        "--transport",
+        "http",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "3000",
+        "--path",
+        "/mcp"
+      ],
+      "env": [
+        "PATH=/usr/bin:/bin",
+        "HOME={DATA}/child",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONUNBUFFERED=1",
+        "PYTHONPATH={ROOT}/apps/litellm/vendor:{ROOT}/apps/runtime",
+        "LITELLM_MCP_BASE_URL=https://litellm.invalid",
+        "LITELLM_MCP_MASTER_KEY=DUMMY-port-litellm-key",
+        "LITELLM_MCP_READONLY=true",
+        "FASTMCP_CHECK_FOR_UPDATES=off",
+        "FASTMCP_SHOW_SERVER_BANNER=false",
+        "LITELLM_MCP_DISABLED_TOOLS=litellm_add_model,litellm_block_key,litellm_chat_completion,litellm_create_team,litellm_create_user,litellm_delete_key,litellm_delete_model,litellm_delete_plugin,litellm_delete_team,litellm_delete_user,litellm_disable_plugin,litellm_enable_plugin,litellm_generate_key,litellm_health,litellm_regenerate_key,litellm_register_plugin,litellm_spend_calculate,litellm_team_member_add,litellm_team_member_delete,litellm_token_counter,litellm_unblock_key,litellm_update_key,litellm_update_model,litellm_update_team,litellm_update_user"
+      ],
+      "cwd": "{DATA}/child"
+    },
+    "nextcloud/plain": {
+      "argv": [
+        "{ROOT}/apps/nextcloud/.venv/bin/python",
+        "-m",
+        "run_child",
+        "nextcloud_mcp_server.server",
+        "--transport",
+        "http",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "3000",
+        "--path",
+        "/mcp"
+      ],
+      "env": [
+        "PATH=/usr/bin:/bin",
+        "HOME={DATA}/child",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONUNBUFFERED=1",
+        "PYTHONPATH={ROOT}/apps/nextcloud/vendor:{ROOT}/apps/runtime",
+        "NEXTCLOUD_MCP_BASE_URL=https://nextcloud.invalid",
+        "NEXTCLOUD_MCP_USERNAME=DUMMY-port-user",
+        "NEXTCLOUD_MCP_APP_PASSWORD=DUMMY-port-nextcloud-password",
+        "NEXTCLOUD_MCP_READONLY=false",
+        "NEXTCLOUD_MCP_ERROR_CODES=true",
+        "FASTMCP_CHECK_FOR_UPDATES=off",
+        "FASTMCP_SHOW_SERVER_BANNER=false",
+        "NEXTCLOUD_MCP_ALLOW_DELETE=true",
+        "NEXTCLOUD_MCP_DISABLED_TOOLS="
+      ],
+      "cwd": "{DATA}/child"
+    },
+    "nextcloud/restricted": {
+      "argv": [
+        "{ROOT}/apps/nextcloud/.venv/bin/python",
+        "-m",
+        "run_child",
+        "nextcloud_mcp_server.server",
+        "--transport",
+        "http",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "3000",
+        "--path",
+        "/mcp"
+      ],
+      "env": [
+        "PATH=/usr/bin:/bin",
+        "HOME={DATA}/child",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONUNBUFFERED=1",
+        "PYTHONPATH={ROOT}/apps/nextcloud/vendor:{ROOT}/apps/runtime",
+        "NEXTCLOUD_MCP_BASE_URL=https://nextcloud.invalid",
+        "NEXTCLOUD_MCP_USERNAME=DUMMY-port-user",
+        "NEXTCLOUD_MCP_APP_PASSWORD=DUMMY-port-nextcloud-password",
+        "NEXTCLOUD_MCP_READONLY=true",
+        "NEXTCLOUD_MCP_ERROR_CODES=true",
+        "FASTMCP_CHECK_FOR_UPDATES=off",
+        "FASTMCP_SHOW_SERVER_BANNER=false",
+        "NEXTCLOUD_MCP_ALLOW_DELETE=false",
+        "NEXTCLOUD_MCP_DISABLED_TOOLS=create_text_file,delete_file_checked,list_tasks,update_text_file,upload_file"
+      ],
+      "cwd": "{DATA}/child"
+    },
+    "headscale/plain": {
+      "argv": [
+        "{ROOT}/apps/headscale/.venv/bin/python",
+        "{ROOT}/apps/headscale/launch.py",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "3000"
+      ],
+      "env": [
+        "PATH=/usr/bin:/bin",
+        "HOME={DATA}/child",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONUNBUFFERED=1",
+        "PYTHONPATH={ROOT}/apps/headscale/vendor:{ROOT}/apps/runtime:{ROOT}/packages/mcp-admin-core",
+        "HEADSCALE_MCP_BASE_URL=https://headscale.invalid",
+        "HEADSCALE_MCP_API_KEY=DUMMY-port-headscale-key",
+        "HEADSCALE_MCP_STATE_PATH={DATA}/state.json",
+        "FASTMCP_CHECK_FOR_UPDATES=off",
+        "FASTMCP_SHOW_SERVER_BANNER=false"
+      ],
+      "cwd": "{DATA}/child"
+    },
+    "n8n/documentation": {
+      "argv": [
+        "{NODE}",
+        "--require",
+        "{ROOT}/apps/n8n/backend_policy.cjs",
+        "{ROOT}/apps/n8n/node_modules/n8n-mcp/dist/mcp/index.js"
+      ],
+      "env": [
+        "PATH=/usr/local/bin:/usr/bin:/bin",
+        "HOME={DATA}",
+        "NODE_ENV=production",
+        "MCP_MODE=http",
+        "HOST=127.0.0.1",
+        "PORT=3000",
+        "AUTH_TOKEN={child_token}",
+        "N8N_MCP_TELEMETRY_DISABLED=true",
+        "N8N_MCP_VERSION_CHECK_DISABLED=true",
+        "LOG_LEVEL=error",
+        "DISABLE_CONSOLE_OUTPUT=true",
+        "N8N_MCP_MAX_SESSIONS=20",
+        "SESSION_TIMEOUT_MINUTES=10",
+        "WEBHOOK_SECURITY_MODE=permissive"
+      ],
+      "cwd": "{DATA}"
+    },
+    "n8n/configured": {
+      "argv": [
+        "{NODE}",
+        "--require",
+        "{ROOT}/apps/n8n/backend_policy.cjs",
+        "{ROOT}/apps/n8n/node_modules/n8n-mcp/dist/mcp/index.js"
+      ],
+      "env": [
+        "PATH=/usr/local/bin:/usr/bin:/bin",
+        "HOME={DATA}",
+        "NODE_ENV=production",
+        "MCP_MODE=http",
+        "HOST=127.0.0.1",
+        "PORT=3000",
+        "AUTH_TOKEN={child_token}",
+        "N8N_MCP_TELEMETRY_DISABLED=true",
+        "N8N_MCP_VERSION_CHECK_DISABLED=true",
+        "LOG_LEVEL=error",
+        "DISABLE_CONSOLE_OUTPUT=true",
+        "N8N_MCP_MAX_SESSIONS=5",
+        "SESSION_TIMEOUT_MINUTES=15",
+        "N8N_API_URL=https://n8n.invalid",
+        "N8N_API_KEY=DUMMY-port-workflow-key",
+        "N8N_MCP_ACCESS_TOKEN=DUMMY-port-workflow-access",
+        "WEBHOOK_SECURITY_MODE=permissive",
+        "NODE_DB_PATH={CATALOG}"
+      ],
+      "cwd": "{DATA}"
+    }
+  }
+}

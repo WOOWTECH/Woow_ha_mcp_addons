@@ -157,10 +157,10 @@
     "apps/runtime/session_idle.py": "79ecbaffb832a00354ae659b56dc264361c6a6299d2d0a9a16ad41c958489493",
     "apps/runtime/tool_error_text.py": "c21dd6b51e9ac2a7de457280b1f2bf3ab6a432c7b0115745f1d7363e98fadf59",
     "apps/headscale/launch.py": "99ae5ced3129c9f9999761ac8409f0c31a88aeab3a7e9c8300bd5142a2ae9b74",
-    "apps/hermes/launch.py": "66567ea7820e005eb4cecc56efce928d084d9921ae09422336bfa0ca24aae5fc",
+    "apps/hermes/launch.py": "68ebc3f2b72d59001fb9e26d7836fb47cd4c82d68676b15babe4d1f5ac9f8903",
     "apps/odoo/launch.py": "c598000d69da8efaea38318774c53de8703882c8b5496d39eada8ae96c18a6bc",
     "apps/odoo-manage/launch.py": "7e2adc8ce3ece9240ce54d1c7429ceed3bd61d95e6a700ef00094816f9cca515",
-    "apps/opendesign/launch.py": "6a3d5e2c42537903d7509807facf699b9e680573f4f7bd04ccc9965c9e4f9723"
+    "apps/opendesign/launch.py": "9059a34b22ba287d9f3038635956a07ed2b58a5bfd5c8a3307e438b9282d64af"
   },
   "products": {
     "odoo": {

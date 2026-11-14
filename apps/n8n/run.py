@@ -21,7 +21,7 @@ from mcp_admin_core.products import ProductStore
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.ha_role import make_ha_admin_verifier
 from mcp_admin_core.health import HealthMonitor
-from mcp_admin_core.lifecycle import Supervisor
+from mcp_admin_core.lifecycle import CHILD_PORT, Supervisor, child_url
 from mcp_admin_core.surface import listing
 from n8n_adapter import TOOLS, child_spec, prepare_catalog
 
@@ -33,7 +33,10 @@ class Listener(uvicorn.Server):
         yield
 
 
-async def run(args):
+async def run(args, *, child_port=CHILD_PORT):
+    # HM-04: one port for the child's spec (PORT), the health monitor, the gateway and its capability probe. main()
+    # runs the default profile's child on CHILD_PORT; an extra profile's runtime (multi-profile plan 5.4) passes its own.
+    url = child_url(child_port)
     # Owner decision 2026-10-27: a legacy state is switched to the all-on defaults once, before anything starts
     # (no upgrade review stage); a failure changes nothing and stops the runtime (ConfigError).
     from mcp_admin_core.owner_defaults import apply_legacy_upgrade
@@ -51,19 +54,19 @@ async def run(args):
     try:
         async with httpx.AsyncClient(trust_env=False, follow_redirects=False,
             timeout=httpx.Timeout(10, connect=3), limits=httpx.Limits(max_connections=40)) as child:
-            health = HealthMonitor(store, manager, child)
+            health = HealthMonitor(store, manager, child, child_url=url)
             configuration = ConfigurationState(store, manager, health)
             async def backend_changed(state):
                 configuration.begin(state)
                 health.backend = "unknown"
                 try:
                     await manager.stop()
-                    manager.spec = child_spec(state, store.directory)
+                    manager.spec = child_spec(state, store.directory, port=child_port)
                     await manager.start()
                 except Exception:
                     configuration.failed('child_start_failed')
                     raise
-            admin, mcp = make_apps(store, TOOLS, child, health=health.snapshot,
+            admin, mcp = make_apps(store, TOOLS, child, child_url=url, health=health.snapshot,
                                    backend_changed=backend_changed, configuration=configuration,
                                    management=ManagementOptions(kind="ha-addon", authority="ha-admin"),
                                    backend_check=getattr(health, "test_saved", None), restart_child=backend_changed, diagnostics=getattr(manager, "diagnostics", None),
@@ -120,8 +123,8 @@ def main():
     parser.add_argument("--admin-port", type=int, default=8099)
     parser.add_argument("--mcp-port", type=int, default=8081)
     args = parser.parse_args()
-    if args.admin_port == args.mcp_port or 3000 in (args.admin_port, args.mcp_port):
-        parser.error("listeners must be distinct and cannot use child port 3000")
+    if args.admin_port == args.mcp_port or CHILD_PORT in (args.admin_port, args.mcp_port):
+        parser.error(f"listeners must be distinct and cannot use child port {CHILD_PORT}")
     try:
         asyncio.run(run(args))
     except (ConfigError, RuntimeError):

@@ -20,6 +20,8 @@ import httpx
 import pytest
 
 import mcp_admin_core.gateway as gateway
+from log_scan import log_scan  # noqa: F401  (fixture)
+from mcp_admin_core import lifecycle
 from mcp_admin_core.config import Store
 from mcp_admin_core.gateway import make_apps
 from n8n_adapter import TOOLS
@@ -257,13 +259,16 @@ class Outcome:
         return self.response.status_code, self.response.headers.multi_items(), self.response.content
 
 
-async def run(tmp_path, scenario, session=SESSION, delete="ok", message=INITIALIZE, client_headers=None, follow=False):
+async def run(tmp_path, scenario, session=SESSION, delete="ok", message=INITIALIZE, client_headers=None, follow=False,
+              child_url=None):
+    """child_url None: make_apps's own default (the default profile's child on 3000)."""
     store = Store(tmp_path / secrets.token_hex(8))
     try:
         state = store.load()
         child = Child(store, scenario, session, delete)
         async with Spy(transport=httpx.MockTransport(child), follow_redirects=follow) as to_child:
-            _, app = make_apps(store, TOOLS, to_child)
+            options = {} if child_url is None else {"child_url": child_url}
+            _, app = make_apps(store, TOOLS, to_child, **options)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
                                          base_url="http://mcp") as client:
                 headers = {"Authorization": "Bearer " + state.token, **(client_headers or {})}
@@ -280,11 +285,11 @@ def assert_requests(outcome, *methods):
     assert outcome.attempts == list(methods) and outcome.methods == list(methods)
 
 
-def assert_ended(outcome, session=SESSION):
+def assert_ended(outcome, session=SESSION, url=CHILD_URL):
     """Exactly one DELETE for that session, with the gateway's own headers and none of the client's."""
     assert_requests(outcome, "POST", "DELETE")
     delete = outcome.child.requests[1]
-    assert delete.url == CHILD_URL and delete.content == b""
+    assert delete.url == url and delete.content == b""
     assert delete.headers.get_list("mcp-session-id") == [session]
     assert delete.headers.get_list("authorization") == ["Bearer " + outcome.child_token]
     assert delete.headers["accept"] == "application/json, text/event-stream"
@@ -580,3 +585,18 @@ async def test_the_session_id_and_child_text_are_never_logged(tmp_path, caplog, 
     captured = capsys.readouterr()
     for text in (caplog.text, captured.out, captured.err):
         assert SESSION not in text and CANARY not in text
+
+
+@pytest.mark.parametrize("name", REFUSALS)
+async def test_the_session_is_ended_on_the_childs_own_port(tmp_path, monkeypatch, log_scan, name):
+    """HM-04 (multi-profile plan 5.4): a gateway whose child listens on another port (an extra profile's child, 18000
+    and up) sends the initialize and the DELETE that ends the refused session to that port only. A DELETE on 3000
+    would go to the default profile's child, with this child's Bearer, and leave this session open."""
+    scenario, status, patches = REFUSALS[name]
+    patch(monkeypatch, patches)
+    url = lifecycle.child_url(18000)
+    outcome = await run(tmp_path, scenario, child_url=url)
+    log_scan.watch(outcome.client_token, outcome.child_token)  # the HM-01 log scan, as every new test
+    assert outcome.response.status_code == status
+    assert [str(request.url) for request in outcome.child.requests] == [url, url]
+    assert_ended(outcome, url=url)

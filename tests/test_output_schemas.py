@@ -29,6 +29,10 @@ CURRENT_POST_SOURCE_BYTES = {
         'emqx', '89c6f167d6b9487a2ae6373ab498dd9eef9911895effe9e6d7c0c61c9ac4841d'),
     'apps/hermes/vendor/hermes_mcp_server/server.py': (
         'hermes', '922ff27d13a1c67a0b0d6fd8cbd9c764d9697cd26f63b0189d7dbfba95e0d94a'),
+    # HM-04: the child port is a parameter (3000 by default); no tool, schema or handler change.
+    'apps/n8n/n8n_adapter.py': ('n8n', 'eb0b8e64dd43434afa8539e7e1f18e49f989324daf137c9c21e864069542adfd'),
+    'apps/n8n/run.py': ('n8n', '96861eee084fb955a8f2af56be30ae149e564d2a6fbdea05fb214ae71d7b1a64'),
+    'apps/hermes/launch.py': ('hermes', '68ebc3f2b72d59001fb9e26d7836fb47cd4c82d68676b15babe4d1f5ac9f8903'),
 }
 
 

@@ -34,6 +34,7 @@ from .access import AccessChanged, LeasedResponse, TokenAccess, masked_token
 from . import VERSION
 from .config import ConfigError, State, Store, strict_json
 from .configuration import ConfigurationState
+from .lifecycle import CHILD_URL
 from .policy import Denied, ToolCallRefused, UnknownMethod, authorize, filter_list, validate_operation_denies
 from .admin_auth import AdminAuthority, BadRequest, prefix
 from .capabilities import ManagementOptions, capability_snapshot, observe_tools, tool_catalog
@@ -331,7 +332,7 @@ async def error_handler(request, exc):
 
 def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               verify_admin: RoleVerifier | None = None,
-              child_url="http://127.0.0.1:3000/mcp", health=None, backend_changed=None,
+              child_url=CHILD_URL, health=None, backend_changed=None,
               server_name="woow-mcp", instructions: str | None = None,
               listing=None, availability=None, management: ManagementOptions | None = None,
               backend_check=None, restart_child=None, diagnostics=None, configuration=None,

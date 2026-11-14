@@ -19,7 +19,7 @@ async def test_invalid_replacement_spec_stops_previous_child_first(tmp_path, mon
         async def start(self): events.append('start')
         async def stop(self): events.append('stop')
 
-    def child_spec(state, directory):
+    def child_spec(state, directory, port=3000):  # HM-04: the runtime names its child's port
         nonlocal spec_calls
         spec_calls += 1
         if spec_calls == 1:
@@ -33,7 +33,7 @@ async def test_invalid_replacement_spec_stops_previous_child_first(tmp_path, mon
         return object(), object()
 
     class Monitor:
-        def __init__(self, *args): pass
+        def __init__(self, *args, child_url=None): pass  # HM-04: the runtime names its child's URL
         def snapshot(self): return {}
         def availability(self): return {'child': 'running', 'ready': False, 'backend': 'unknown', 'reason': None}  # 0.2.2: forward
         async def run(self): await asyncio.Event().wait()
@@ -85,14 +85,14 @@ async def test_initial_launch_failure_keeps_management_alive_and_retry_observabl
         async def stop(self): self.status='stopped'
         async def start(self): self.starts+=1; self.status='running'
 
-    def spec(state, directory):
+    def spec(state, directory, port=3000):  # HM-04: the runtime names its child's port
         nonlocal calls
         calls += 1
         if calls == 1: raise RuntimeError('SYNTHETIC_PRIVATE_FAILURE')
         return object()
 
     class Monitor:
-        def __init__(self, *args): self.settled=None; captured['health']=self
+        def __init__(self, *args, child_url=None): self.settled=None; captured['health']=self  # HM-04: child_url
         def snapshot(self): return {}
         def availability(self): return {}
         async def run(self): await asyncio.Event().wait()

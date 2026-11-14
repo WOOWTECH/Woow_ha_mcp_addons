@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, AfterValidator, field_validat
 
 from .access import masked_token
 from .config import FRESH_WRITES_ENABLED, State, Store, http_url
-from .lifecycle import ChildSpec
+from .lifecycle import CHILD_PORT, ChildSpec, child_port_text
 from .odoo_methods import AllowedMethods, FIELD as ODOO_ALLOWED_METHODS
 from .policy import Tool
 from .surface import FULL_PRODUCTS, full_tools
@@ -783,7 +783,10 @@ def health_probe_success(product, payload):
     return probe_success(product, payload)
 
 
-def child_spec(state: ProductState, directory: Path) -> ChildSpec | None:
+def child_spec(state: ProductState, directory: Path, port: int = CHILD_PORT) -> ChildSpec | None:
+    """HM-04: port is the child's loopback port (lifecycle.child_url). On CHILD_PORT, the default profile's child, the
+    spec is exactly the former one; another port changes only the --port value (Hermes, OpenDesign: --port added)."""
+    listen = child_port_text(port)
     if not state.configured:
         return None  # no fabricated runtime / fallback credentials / restart loops
     product = state.product
@@ -814,11 +817,11 @@ def child_spec(state: ProductState, directory: Path) -> ChildSpec | None:
                    ODOO_MCP_ALLOW_UNKNOWN_METHODS='1' if switches.allow_unknown_methods else '0',
                    ODOO_MCP_ALLOWED_SIDE_EFFECT_METHODS=','.join(state.odoo_allowed_methods or []),
                    MCP_CHATTER_DIRECT='1' if switches.chatter_direct else '0')
-        argv = (str(python), str(app / 'start_switches.py'), '--transport', 'streamable-http', '--host', '127.0.0.1', '--port', '3000', '--path', '/mcp')
+        argv = (str(python), str(app / 'start_switches.py'), '--transport', 'streamable-http', '--host', '127.0.0.1', '--port', listen, '--path', '/mcp')
     elif product == 'odoo-manage':
         env.update(ODOO_URL=c.url, ODOO_DB=c.database, ODOO_USER=c.username, ODOO_API_KEY=c.api_key,
                    ODOO_YOLO='off' if c.mode == 'module' else 'read', ODOO_MCP_ENABLE_METHOD_CALLS='false', ODOO_MCP_TRANSPORT='streamable-http')
-        argv = (str(python), str(app / 'launch.py'), '--transport', 'streamable-http', '--host', '127.0.0.1', '--port', '3000')
+        argv = (str(python), str(app / 'launch.py'), '--transport', 'streamable-http', '--host', '127.0.0.1', '--port', listen)
     elif product in ('hermes', 'opendesign'):
         if product == 'hermes':
             env.update(HERMES_GATEWAY_URL=c.gateway_url, HERMES_GATEWAY_API_KEY=c.gateway_api_key)
@@ -828,13 +831,15 @@ def child_spec(state: ProductState, directory: Path) -> ChildSpec | None:
         else:
             env['OD_API_BASE'] = c.url
         argv = (str(python), str(app / 'launch.py'))
+        if port != CHILD_PORT:
+            argv += ('--port', listen)  # the launcher's own default is CHILD_PORT: the default child's argv is unchanged
     else:
         if product == 'headscale':
             env['PYTHONPATH'] += ':' + str(ROOT / 'packages/mcp-admin-core')
             env.update(HEADSCALE_MCP_BASE_URL=c.url, HEADSCALE_MCP_API_KEY=c.api_key,
                        HEADSCALE_MCP_STATE_PATH=str(directory / 'state.json'),
                        FASTMCP_CHECK_FOR_UPDATES='off', FASTMCP_SHOW_SERVER_BANNER='false')
-            argv = (str(python), str(app / 'launch.py'), '--host', '127.0.0.1', '--port', '3000')
+            argv = (str(python), str(app / 'launch.py'), '--host', '127.0.0.1', '--port', listen)
             return ChildSpec(argv, env, cwd)
         if product == 'emqx':
             env.update(EMQX_MCP_BASE_URL=c.url, EMQX_MCP_API_KEY=c.api_key, EMQX_MCP_API_SECRET=c.api_secret, EMQX_MCP_READONLY='true')
@@ -874,6 +879,6 @@ def child_spec(state: ProductState, directory: Path) -> ChildSpec | None:
             env[prefix + 'ALLOW_DELETE'] = 'true' if 'delete_file_checked' in public_allowed else 'false'
         env[prefix + 'DISABLED_TOOLS'] = ','.join(sorted(set(NAMES[product]) - native_allowed))
         # 0.1.8 (GATEWAY-3): run_child installs the session idle limit before the module builds its server.
-        argv = (str(python), '-m', 'run_child', module, '--transport', 'http', '--host', '127.0.0.1', '--port', '3000',
+        argv = (str(python), '-m', 'run_child', module, '--transport', 'http', '--host', '127.0.0.1', '--port', listen,
                 '--path', '/mcp')
     return ChildSpec(argv, env, cwd)

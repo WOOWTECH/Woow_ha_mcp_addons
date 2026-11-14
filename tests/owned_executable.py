@@ -83,6 +83,9 @@ def install_runner(module, config):
     install()
     install_subprocess_guard()
     endpoint = Endpoint(config['product'], port=config['child_port'])
+    # HM-04: the runtime names its child's URL (built from the port of its child spec). Only that production URL is
+    # replaced by the private endpoint's, as private_spec replaces only the spec's production port.
+    production_url = f'http://127.0.0.1:{endpoint.production_port}/mcp'
     original_spec, original_monitor, original_apps = module.child_spec, module.HealthMonitor, module.make_apps
     def trace(operation, phase, reason=None):
         if 'trace' not in config:
@@ -101,7 +104,8 @@ def install_runner(module, config):
         assert not kwargs
         return endpoint.supervisor(value, prepared=True)
     class Monitor(original_monitor):
-        def __init__(self, store, manager, client):
+        def __init__(self, store, manager, client, child_url=production_url):
+            assert child_url == production_url
             super().__init__(store, manager, endpoint.attach(client), child_url=endpoint.url)
 
         async def check(self):
@@ -114,7 +118,7 @@ def install_runner(module, config):
                 trace('health', 'finished')
 
     def apps(store, tools, client, **kwargs):
-        assert 'child_url' not in kwargs
+        assert kwargs.pop('child_url', production_url) == production_url
         changed = kwargs['backend_changed']
         async def joined_change(state):
             trace('callback', 'entered')
