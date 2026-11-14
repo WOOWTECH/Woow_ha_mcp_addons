@@ -74,6 +74,28 @@ WOOW App Store 只出貨本 repo 的正式 Release（Store registry `ref_policy:
 舊的整個 repo 一個 `v<版本>` tag（`v0.1.0`…`v0.2.2`）保留不動；`v0.2.2` 是改制時的種子正式 Release。
 改制後第一次推送 `claude-delivery`（`17b6ebd`，run 39558332683）替 6 支啟用的 add-on 各發了 `<slug>-v0.2.2`，`woow_mcp_opendesign` 沒有發。
 
+### 升版時要改的版號資料
+
+版號只寫在下面這些資料裡，`packaging/validate.py` 把它們綁在一起，漏改一處就失敗（HM-17）：
+
+1. `packaging/validate.py` 的 `VERSION_OVERRIDES`（只升某幾個產品，例如 `{'odoo': '0.5.0', 'headscale': '0.4.18'}`，寫在一行、
+   和這個例子同樣的寫法：`packaging/test_validate.py` 照這個寫法找它）或 `VERSION`（預設版號線）。
+2. `packaging/inputs.json` 的 `version_overrides`／`version`，和第 1 項相同。
+3. `packages/mcp-admin-core/mcp_admin_core/__init__.py` 的 `PRODUCT_VERSIONS`／`VERSION`（`initialize` 回報的版號）。這個檔列在
+   `docs/provenance/runtime-patches.json`，同一個 PR 要更新它的摘要（`scripts/ledger_precheck.py` 會查）。
+4. `addons/<產品>/config.yaml` 的 `version`。
+5. `apps/<產品>/Dockerfile` 的 `ARG BUILD_VERSION=<版號>` 預設值。
+6. `.github/workflows/ci.yaml`（tags、build-args，共 2 處）與 `release.yaml`（tags、build-args、推送的 `IMAGE`、證據名稱，共 4 處）
+   的版號運算式。改完前 5 項後跑 `python packaging/validate.py`：失敗訊息會印出由 `VERSION_OVERRIDES` 產生的運算式
+   （`<app> == '<產品>' && '<版號>' || … || '<預設版號>'`），照著逐字換掉這 6 處。
+7. 那個產品自己的發佈紀錄 `docs/operations/release-decision-<產品>-<版號>.md`（見上面的 `readiness`）；一個 PR 升幾個產品就寫幾份。
+
+這兩個 workflow 在 PR 不跑，builder 也不用它們（builder 用 `version_for()` 與 Dockerfile 的預設值），所以運算式只由 `validate.py`
+逐字比對、`packaging/test_validate.py` 照 GitHub Actions 文件的運算規則（`&&` 先於 `||`）求值。今天只有 Headscale 一個 override，
+多個 override 串接的寫法還沒在這兩個 workflow 裡被 GitHub 實際算過：第一次開 `release.yaml` 前，先用拋棄式 workflow 只印出
+運算式的值確認（不建置）。
+本節只列版號資料；CHANGELOG、`upgrade-notes.yaml`（見 `AGENTS.md`）等其他升版要改的檔不在這裡。
+
 ## PR/main CI（只讀）
 
 `.github/workflows/ci.yaml`（推送 `main` 或手動執行；PR 改由上一節的 `checks` 檢查，因為 builder admission 依設計會拒絕每個 PR）：contents read、checkout 不保留 credentials、hosted
