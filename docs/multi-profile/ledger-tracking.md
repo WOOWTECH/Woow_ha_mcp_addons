@@ -21,7 +21,7 @@
 | `packages/mcp-admin-core/mcp_admin_core/profile_admin.py` | HM-10 | HM-13c → HM-27 | 列管 | — | 帳號增刪改查、索引隔離、全部撤銷、還原核對 |
 | `packages/mcp-admin-core/mcp_admin_core/restore_detect.py` | HM-13a | HM-13b | 列管 | — | sentinel 與 record 的建立、比對、重建 |
 | `packages/mcp-admin-core/mcp_admin_core/restore_lock.py` | HM-13b | HM-13c | 列管 | — | 開機守門 A～F 步、休眠處理、`.revoke-all-pending` |
-| `packages/mcp-admin-core/mcp_admin_core/log_redaction.py` | HM-02 | #149 合併後的同步 PR | 列管；DQ-38 選 vendor 時另記進 `docs/provenance/runtime-sources.json`（PaaS commit、上游與本地摘要） | — | 紀錄遮罩（PaaS 規則先、HA 規則後） |
+| `packages/mcp-admin-core/mcp_admin_core/log_redaction.py` | HM-02 | PaaS 遮罩之後再變時的同步 PR（#149 已在 `7d111b1` 合併，HM-02 直接用合併版） | 列管；DQ-38 選 vendor 時另記進 `docs/provenance/runtime-sources.json`（PaaS commit、上游與本地摘要） | — | 紀錄遮罩（PaaS 規則先、HA 規則後） |
 | 回覆工作執行緒模組（暫定名 `reply_worker.py`） | HM-30 | — | 列管 | — | 回覆處理的工作執行緒與依帳號輪流的佇列 |
 | `packages/mcp-admin-core/mcp_admin_core/origin_policy.py` | HM-27 | — | 列管 | — | 密鑰網址的服務層級 Origin 清單（report-only） |
 | `packages/mcp-admin-core/mcp_admin_core/child_identity.py` | HM-15（條件式） | — | 列管 | — | listener 身分檢查 |
