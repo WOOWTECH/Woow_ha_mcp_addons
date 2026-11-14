@@ -64,7 +64,9 @@ print(json.dumps(out))
 
 
 def unit(venv, flavour, idle=None):
-    env = {'PATH': '/usr/bin:/bin', 'PYTHONPATH': str(ROOT / 'apps/runtime'), 'PYTHONDONTWRITEBYTECODE': '1'}
+    # HM-06: install() refuses to start without a child token (tests/test_child_bearer.py); C x 43 has its format.
+    env = {'PATH': '/usr/bin:/bin', 'PYTHONPATH': str(ROOT / 'apps/runtime'), 'PYTHONDONTWRITEBYTECODE': '1',
+           'WOOW_MCP_CHILD_TOKEN': 'C' * 43}
     if idle is not None:
         env['WOOW_MCP_SESSION_IDLE_SECONDS'] = idle
     done = subprocess.run([str(ROOT / 'apps' / venv / '.venv/bin/python'), '-c', UNIT, flavour], env=env,

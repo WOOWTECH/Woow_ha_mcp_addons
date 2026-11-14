@@ -33,15 +33,40 @@ cancelling its serve loop; a request in flight or an open GET stream still keeps
 MCP-Protocol-Version header is not an initialize-handshake revision goes to the SDK's 2026-07-28 handling instead;
 through the gateway none succeeds there, as such a header failed in mcp 1.x (it answers server/discover itself, forwards
 no such header with an initialize and removes params._meta, the 2026-07-28 envelope, from every request).
+
+HM-06 (multi-profile plan 8.3; unreleased, in every product version, not behind a product switch): a Python child serves
+only the gateway's own child bearer. The gateway, its health check and its catalog probe have always sent
+Authorization: Bearer <child_token> (the state's child_token, mcp_admin_core.config.State); until now only n8n's child
+checked it (AUTH_TOKEN). products.child_spec gives the seven Python children (Odoo, Hermes, OpenDesign, EMQX, LiteLLM,
+Nextcloud, Headscale) the same value as WOOW_MCP_CHILD_TOKEN, and the same __init__ wrapper puts ChildBearer in front of
+every manager's asgi_app, stateless or not (mcp 2.3.0 sets asgi_app in __init__; MCPServer's route calls it directly,
+FastMCP 4.1.3's through handle_request):
+
+- bearer() reads the variable once, first in install(), before anything is patched: missing, empty or not the
+  child_token format ([A-Za-z0-9_-]{43}) is RuntimeError(REFUSED), a fixed message: the child does not start. The value
+  is never part of a message, a repr or a log.
+- ChildBearer: an HTTP request with exactly one Authorization header whose value is "Bearer <token>" (compared with
+  hmac.compare_digest) reaches the SDK; any other gets 401 with no body and no detail (the gateway turns a child's 401
+  into its own 502, gateway.py). Anything that is not an HTTP request never reaches it.
+- The variable stays in the environment: the same uid reads /proc/<pid>/environ and the state file anyway (plan 8.3,
+  DQ-37). A new child token takes effect with a restart (a new process).
+The retired Odoo Manage (no image since 0.1.5) runs no session_idle and gets no bearer: unchanged.
 """
 import functools
+import hmac
 import inspect
 import os
+import re
 
 ENV = 'WOOW_MCP_SESSION_IDLE_SECONDS'
 DEFAULT_SECONDS = 1800.0  # 30 minutes (n8n-mcp, the n8n child, reaps after 10)
 BOUNDS = (1.0, 86400.0)
 BODY_BYTES = 16 * 1024 * 1024  # 0.3.4: = mcp_admin_core.gateway.MAX_REQUEST, the largest body the gateway forwards
+BEARER_ENV = 'WOOW_MCP_CHILD_TOKEN'  # HM-06
+CHILD_TOKEN = re.compile(r'[A-Za-z0-9_-]{43}')  # config.State's child_token: secrets.token_urlsafe(32)
+SCHEME = b'Bearer '
+REFUSED = 'child bearer: WOOW_MCP_CHILD_TOKEN is missing or not a child token'
+_UNAUTHORIZED = ((b'www-authenticate', b'Bearer'), (b'content-length', b'0'))
 
 
 def seconds():
@@ -55,12 +80,49 @@ def seconds():
     return number
 
 
+def bearer():
+    """HM-06: b'Bearer <token>' from WOOW_MCP_CHILD_TOKEN, or RuntimeError(REFUSED): the child refuses to start."""
+    value = os.environ.get(BEARER_ENV)
+    if value is None or not CHILD_TOKEN.fullmatch(value):
+        raise RuntimeError(REFUSED)
+    return SCHEME + value.encode('ascii')
+
+
+class ChildBearer:
+    """HM-06, ASGI: only an HTTP request with exactly one Authorization: Bearer <child token> reaches app."""
+    __slots__ = ('app', '_expected')
+
+    def __init__(self, app, expected):
+        if type(expected) is not bytes or not expected.startswith(SCHEME) or not CHILD_TOKEN.fullmatch(
+                expected[len(SCHEME):].decode('ascii', 'replace')):
+            raise ValueError(REFUSED)
+        self.app = app
+        self._expected = expected
+
+    def __repr__(self):
+        return '<ChildBearer>'
+
+    def allowed(self, scope):
+        if scope.get('type') != 'http':
+            return False
+        values = [value for name, value in scope.get('headers') or () if name.lower() == b'authorization']
+        return len(values) == 1 and hmac.compare_digest(values[0], self._expected)
+
+    async def __call__(self, scope, receive, send):
+        if self.allowed(scope):
+            await self.app(scope, receive, send)
+        elif scope.get('type') == 'http':
+            await send({'type': 'http.response.start', 'status': 401, 'headers': list(_UNAUTHORIZED)})
+            await send({'type': 'http.response.body', 'body': b''})
+
+
 def install():
     from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 
     original = StreamableHTTPSessionManager.__init__
     if getattr(original, 'woow_idle_seconds', None) is not None:
         return original.woow_idle_seconds
+    expected = bearer()  # HM-06: RuntimeError without a valid WOOW_MCP_CHILD_TOKEN; nothing is patched yet
     limit = seconds()
     signature = inspect.signature(original)
     if 'session_idle_timeout' not in signature.parameters:
@@ -77,6 +139,7 @@ def install():
         if body is not None and bound.arguments.get('max_request_body_size', body.default) == body.default:
             bound.arguments['max_request_body_size'] = BODY_BYTES
         original(*bound.args, **bound.kwargs)
+        self.asgi_app = ChildBearer(self.asgi_app, expected)  # HM-06: every manager, stateless or not
 
     __init__.woow_idle_seconds = limit
     StreamableHTTPSessionManager.__init__ = __init__
