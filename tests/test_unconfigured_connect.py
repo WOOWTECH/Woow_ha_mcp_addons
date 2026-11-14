@@ -24,18 +24,19 @@ import sys
 import httpx
 import pytest
 
-from mcp_admin_core import VERSION, gateway, version_for_product
+from mcp_admin_core import gateway, version_for_product
 from mcp_admin_core.capabilities import ManagementOptions
 from mcp_admin_core.gateway import PROTOCOL_VERSIONS, make_apps
 from mcp_admin_core.health import HealthMonitor, probe_reason, protocol_reply
-from mcp_admin_core.products import ProductStore, TOOLS
+from mcp_admin_core.products import PRODUCTS, ProductStore, TOOLS
 from mcp_admin_core.surface import BACKEND_FREE, FULL_PRODUCTS, listing
+from log_scan import log_scan  # noqa: F401  (fixture)
 from n8n_adapter import TOOLS as N8N_TOOLS
 from owned_executable import Executable
 from test_expansion_policy import call
 from test_expansion_runtime import fake_api
 from test_full_surface import COUNTS
-from test_real_products import ROOT, connection, free_port, rpc
+from test_real_products import ROOT, connection, free_port, release_version, rpc
 from tool_refusal import refusal
 
 ACCEPT = {'Accept': 'application/json, text/event-stream'}
@@ -55,6 +56,17 @@ PROBE = {'emqx': 'emqx_list_clients', 'odoo': 'search_records', 'n8n': 'n8n_list
 
 def tools_of(product):
     return N8N_TOOLS if product == 'n8n' else TOOLS[product]
+
+
+def released(product):
+    """The management options the add-on's launcher gives the gateway (HM-17). run_product passes the add-on's own
+    release version, version_for_product(product); apps/n8n/run.py passes none, so the gateway's default VERSION
+    answers for n8n, its own initialize answer included (no child) as well as the rebuilt child answer. The expected
+    versions are the release data's (release_version), never the runtime's; when apps/n8n/run.py passes a version, this
+    passes it too (test_unconfigured_connect_runtime runs the real launchers)."""
+    if product == 'n8n':
+        return ManagementOptions(kind='ha-addon', authority='ha-admin')
+    return ManagementOptions(kind='ha-addon', authority='ha-admin', product_version=version_for_product(product))
 
 
 class Child:
@@ -134,10 +146,10 @@ def store_for(tmp_path, product, url=None):
 async def test_unconfigured_client_connects_lists_everything_and_gets_backend_not_configured(tmp_path, product, path):
     available = NO_CHILD if product != 'n8n' else UP  # n8n's child runs without a backend
     with closing(store_for(tmp_path, product)) as store:
-        async with Boundary(store, product, available, path=path) as boundary:
+        async with Boundary(store, product, available, path=path, management=released(product)) as boundary:
             response, tools = await boundary.connect()
             result = response.json()['result']
-            assert result['serverInfo'] == {'name': 'woow-mcp-' + product, 'version': VERSION}
+            assert result['serverInfo'] == {'name': 'woow-mcp-' + product, 'version': release_version(product)}
             assert result['capabilities'] == {'tools': {}} and result['protocolVersion'] == '2025-06-18'
             assert len(tools) == COUNTS[product] and {t['name'] for t in tools} == set(tools_of(product))
             name = PROBE[product]
@@ -155,19 +167,26 @@ async def test_unconfigured_client_connects_lists_everything_and_gets_backend_no
                 assert boundary.child.seen == []  # no child exists: none is asked
 
 
+@pytest.mark.parametrize('product', FULL_PRODUCTS)
 @pytest.mark.parametrize('configured', [False, True])
-async def test_headscale_release_version_is_reported_by_both_initialize_paths(tmp_path, configured):
-    assert version_for_product('headscale') == '0.4.18'
-    assert version_for_product('emqx') == VERSION == '0.4.13'
-    url = 'https://headscale.example.test' if configured else None
-    with closing(store_for(tmp_path, 'headscale', url)) as store:
-        management = ManagementOptions(kind='ha-addon', authority='ha-admin',
-                                       product_version=version_for_product('headscale'))
-        async with Boundary(store, 'headscale', UP if configured else NO_CHILD,
-                            management=management) as boundary:
+async def test_the_release_version_is_reported_by_both_initialize_paths(tmp_path, product, configured, log_scan):
+    # Each add-on reports the release data's version, whether the child answers (the rebuilt answer) or not (the
+    # gateway's own answer): Headscale its own line, the others the default version, n8n through the gateway's default
+    # (its launcher passes no version).
+    url = 'https://' + product + '.invalid' if configured else None
+    with closing(store_for(tmp_path, product, url)) as store:
+        log_scan.watch_state(store.load())
+        async with Boundary(store, product, UP if configured else NO_CHILD, management=released(product)) as boundary:
             response, _ = await boundary.connect()
             assert response.json()['result']['serverInfo'] == {
-                'name': 'woow-mcp-headscale', 'version': '0.4.18'}
+                'name': 'woow-mcp-' + product, 'version': release_version(product)}
+
+
+def test_each_add_on_is_given_the_version_of_the_release_data(log_scan):
+    # HM-17: the version run_product gives the gateway, product by product, is the release data's. packaging/validate.py
+    # checks the core's VERSION and PRODUCT_VERSIONS literals only, not this mapping.
+    products = sorted({*FULL_PRODUCTS, *PRODUCTS})
+    assert {p: version_for_product(p) for p in products} == {p: release_version(p) for p in products}
 
 
 async def test_the_own_answers_follow_the_policy_and_the_session_rules(tmp_path):
@@ -412,7 +431,7 @@ async def test_unconfigured_connect_runtime(tmp_path, product):
         async with httpx.AsyncClient(trust_env=False, timeout=20, event_hooks={'request': [runner.guard]}) as client:
             headers = {'Authorization': 'Bearer ' + token, **ACCEPT}
             result = await rpc(client, url, headers, INIT)
-            assert result['serverInfo'] == {'name': 'woow-mcp-' + product, 'version': version_for_product(product)}
+            assert result['serverInfo'] == {'name': 'woow-mcp-' + product, 'version': release_version(product)}
             await rpc(client, url, headers, INITIALIZED)
             tools = (await rpc(client, url, headers, LIST))['tools']
             assert {t['name'] for t in tools} == set(tools_of(product)) and len(tools) == COUNTS[product]

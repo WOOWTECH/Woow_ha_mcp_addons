@@ -18,7 +18,6 @@ import xmlrpc.client
 import httpx
 import pytest
 
-from mcp_admin_core import VERSION
 from mcp_admin_core.health import protocol_reply
 from mcp_admin_core.products import INSTRUCTIONS, ODOO_HEALTH_PROBE, PRODUCTS, PROBES, ProductStore, TOOLS, child_spec
 from mcp_admin_core.policy import policy_enabled
@@ -29,6 +28,15 @@ import nextcloud_fixtures
 from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def release_version(product):
+    """The add-on's release version from the release data, not from the runtime under test (HM-17): packaging/inputs.json,
+    which packaging/validate.py binds to VERSION, VERSION_OVERRIDES, the manifests, the Dockerfile defaults, the workflows
+    and the core's VERSION and PRODUCT_VERSIONS, so a version bump changes data only. JSON, not validate.py: the pytest
+    environment has no PyYAML. A product outside the release list (the archived Odoo Manage) gets the default version."""
+    inputs = json.loads((ROOT / 'packaging/inputs.json').read_text())
+    return inputs['version_overrides'].get(product, inputs['version'])
 
 
 def connection(product, url):
@@ -190,9 +198,10 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     else:
                         pytest.fail(f'{product}: initialization timed out ({last}); {log_path.read_text()}')
                     assert result['capabilities'] == {'tools': {}}
-                    # 0.1.8 (F6): run_product names the add-on; only Nextcloud carries (reviewed) instructions.
+                    # 0.1.8 (F6): run_product names the add-on and its own release version (HM-17: the release data's,
+                    # so a version bump changes data only); only Nextcloud carries (reviewed) instructions.
                     assert result['serverInfo'] == {'name': 'woow-mcp-' + product,
-                                                    'version': '0.4.18' if product == 'headscale' else VERSION}
+                                                    'version': release_version(product)}
                     assert result.get('instructions') == INSTRUCTIONS.get(product)
                     headers['MCP-Protocol-Version'] = result['protocolVersion']
                     await rpc(client, endpoint, headers, {'jsonrpc': '2.0', 'method': 'notifications/initialized'})
