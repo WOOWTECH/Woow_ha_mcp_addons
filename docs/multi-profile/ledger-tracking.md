@@ -13,7 +13,7 @@
 
 | 模組 | 建立的片 | 之後會改的片（照合併順序） | 帳本 | tool-surface | 用途 |
 |---|---|---|---|---|---|
-| `packages/mcp-admin-core/mcp_admin_core/features.py` | HM-07 | 每個產品的升版片（加產品；受發版鎖） | 列管 | — | 產品開關 `MULTI_PROFILE_PRODUCTS`；`enabled(product)` 呼叫時讀 |
+| `packages/mcp-admin-core/mcp_admin_core/features.py` | HM-07 | HM-17（先）→ 每個產品的升版片（加產品；受發版鎖） | 列管 | — | 產品開關 `MULTI_PROFILE_PRODUCTS`；`enabled(product)` 呼叫時讀 |
 | `packages/mcp-admin-core/mcp_admin_core/profiles.py` | HM-07 | HM-09 → HM-10 → HM-25 | 列管 | — | 索引、簽章、布局、一致性、容量常數、名稱規則、port 配發 |
 | `packages/mcp-admin-core/mcp_admin_core/identity_fields.py` | HM-07 | HM-12、HM-13b | 列管 | — | 八個產品的身分欄位與秘密欄位分類 |
 | `packages/mcp-admin-core/mcp_admin_core/profile_runtime.py` | HM-05 | HM-08 → HM-09 → HM-13b → HM-30 → HM-25 | 列管 | — | 每帳號執行套件（store、Supervisor、監看、收據） |

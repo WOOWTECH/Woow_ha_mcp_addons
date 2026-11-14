@@ -16,7 +16,7 @@
 | 名稱 | commit | 時間（UTC） | 內容 | 狀態 |
 |---|---|---|---|---|
 | PaaS pin | `69ac425cd28b`（全長 `69ac425cd28ba4665319939b33ae6eefc8e67281`） | 2026-11-14 02:32 | `443e95a`（正式站）＋#147 `e85f21e`（還原手冊後續）＋#148（閘道排隊、通知保留名額、`-32004` 依原因、子程式長行） | 對齊基準 |
-| PaaS 正式站 | `443e95a942c7` | — | 24 台正式站跑的版本；和 pin 的正式碼只差 `gateway_pool.py`、`initialize_fence.py`、`process.py`、`proxy.py` | 參考 |
+| PaaS 正式站 | `443e95a942c7` | — | PaaS 正式站跑的版本；和 pin 的正式碼只差 `gateway_pool.py`、`initialize_fence.py`、`process.py`、`proxy.py` | 參考 |
 | #150 合併 | `5a06d533eb43` | 2026-11-14 04:47 | `docs/gateway-148-followups-20261114`（`19f36e2`、`82c6929`、`091dfbc`） | pin 之後（第 3 節） |
 | #149 合併 | `7d111b175fbb` | 2026-11-14 06:19 | `fix/log-redaction-query-credentials-20261113`，head `3d33bc5`（計畫定稿時是 `72066b6`，之後只多 `3d33bc5`，只改 `CLAUDE.md`） | pin 之後（第 3 節）；目前的 `origin/main` |
 | HA 基準 | `bb48449` | 2026-11-12 | `claude-delivery`（#88 Headscale 0.4.18 合併） | 實作起點 |
@@ -110,3 +110,4 @@ git -C "$P" diff --name-only 69ac425 origin/main -- '*test*'
 |---|---|---|
 | 2026-11-14 13:39（HM-00 開工） | `5a06d53` | #150 的 3 個 commit；可執行碼和 pin 相同；#149 未合併（head `3d33bc5`） |
 | 2026-11-14 14:20（HM-00 commit 前重查） | `7d111b1` | 多了 #149 合併；正式碼只動 `log_redaction.py`；已照第 3 節更新本檔與 `paas-test-mapping.md` |
+| 2026-11-14 16:07（HM-00 審查修正後、開 PR 前重查，`ls-remote`） | `7d111b1` | 無變動；HA `claude-delivery` 仍是 `bb48449`；不用重產對照表 |

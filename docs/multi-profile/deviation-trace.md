@@ -1,14 +1,17 @@
 # 差異來源對照（FEATURE-MATRIX、G6 §5 → 刻意差異表或測試）
 
-> HM-00 產出（2026-11-14）。表由 repo 外的產生器寫出，「原文」欄逐字取自計畫產物（repo 外）：
+> HM-00 產出（2026-11-14）。表由 repo 外的產生器寫出（腳本與輸入的 SHA-256、重產指令見
+> `docs/provenance/ha-multiprofile-HM-00-20261114.md` 第 8 節），「原文」欄逐字取自計畫產物（repo 外）：
 > `FEATURE-MATRIX-zh-TW.md` 第 2 節的「HA 平台差異」欄、`gaps/G6-delivery.md` 第 5 節的「HA 期望值與差異」欄。
-> 對照腳本會重讀來源逐列比對；原文變了、或某列對不到差異表或測試，就不過。
+> 對照腳本會重讀來源逐列比對；原文變了、某列對不到差異表或測試、或「—」的列少了結論，就不過。
+> 腳本只驗結構與引用存在；「對到的列說的是不是同一件事」靠人工抽查。
 
 ## 結論
 
-- FEATURE-MATRIX 153 列裡，109 列有「HA 平台差異」，每列都對到 `contract.md` 第 9 節（§8.8）的列或某個測試；其餘 44 列寫「—」（沒有平台差異），不用對。
+- FEATURE-MATRIX 153 列裡，109 列有「HA 平台差異」，每列都對到 `contract.md` 第 9 節（§8.8）的列或某個測試。
+- 其餘 44 列寫「—」（沒有平台差異），但「—」不等於行為相同：每列都人工看過、寫了結論（文末一節）。23 列有差異、對到差異表；19 列照 PaaS（有的另指差異表裡相關的列）；2 列是流程或文件。
 - G6 §5 的 T-01～T-29 共 29 列，每列都對到 §8.8 的列或某個測試。
-- 對不上的已經補成差異表第 44～79 列（HM-00 補列）；只對到測試的列，說明欄寫了為什麼不是差異。
+- 對不上的已經補成差異表第 44～79 列（HM-00 補列）；看「—」列時找到的差異補成第 80～86 列（審查後補列）。只對到測試的列，說明欄寫了為什麼不是差異。
 - 「對到」欄的測試：「既有」是 bb48449 已有的檔；「HM-xx」是計畫中的新測試（`acceptance-matrix.md` 的測試檔登記表）。
 
 ## FEATURE-MATRIX「HA 平台差異」欄
@@ -125,8 +128,6 @@
 | FM-150 | 讀 body 前准入 | §8.8 #16；`tests/test_profile_quotas.py`（HM-08） | — |
 | FM-151 | 一個 add-on 持有多個帳號的 token | §8.8 #38；`tests/test_reply_mask_union.py`（HM-08） | — |
 
-沒有平台差異（原文是「—」）的列：FM-06、FM-07、FM-21、FM-31、FM-32、FM-40、FM-43、FM-50、FM-52、FM-54、FM-59、FM-62、FM-63、FM-64、FM-66、FM-72、FM-74、FM-76、FM-78、FM-85、FM-93、FM-96、FM-97、FM-100、FM-101、FM-103、FM-104、FM-107、FM-108、FM-113、FM-116、FM-120、FM-121、FM-122、FM-123、FM-128、FM-130、FM-134、FM-137、FM-138、FM-145、FM-146、FM-152、FM-153。
-
 ## G6 §5「HA 期望值與差異」欄
 
 | T | 原文（HA 期望值與差異） | 對到 | 說明 |
@@ -138,7 +139,7 @@
 | T-05 | 錯 token：密鑰網址 404、Bearer 401（PaaS 403）；帶 query 400；密鑰網址上的 Authorization 忽略；跨帳號 session 和亂數 session 同樣處理 | §8.8 #1、#3；`tests/test_profile_routing.py`（HM-08） | — |
 | T-06 | 沒有 Ingress 身分 403、非管理員 403；錯誤帳號 id 依設計 404／400；MCP token 不能當管理憑證 | §8.8 #11、#31、#32；`tests/test_admin_pipeline_matrix.py`（HM-10） | — |
 | T-07 | 存政策若會重啟子程式（EMQX、LiteLLM、Nextcloud、Headscale），只重啟該帳號 | §8.8 #54；`tests/test_profile_admin_api.py`（HM-10） | — |
-| T-08 | 舊 token 404／401；HA 沒有手動指定 token，撞號只會來自還原或複製，要 fail closed | §8.8 #1；`tests/test_profile_routing.py`（HM-08） | — |
+| T-08 | 舊 token 404／401；HA 沒有手動指定 token，撞號只會來自還原或複製，要 fail closed | §8.8 #1、#80；`tests/test_profile_routing.py`（HM-08） | 沒有手動指定 token 見 #80 |
 | T-09 | 刪除後舊 token 立即失效、子程式停、port 釋放、目錄刪除；重建拿新 id 與新 token | §8.8 #34；`tests/test_profile_admin_api.py`（HM-10） | — |
 | T-10 | 全被後端擋；寫入前要有暫時 record rule | `tests/test_odoo_multi_profile.py`（HM-12） | 真後端在 HAOS（HM-19b），要有暫時 record rule |
 | T-11 | 0 串號、0 個 5xx；HA 轉送名額現在全域 32 | §8.8 #15；`tests/test_profile_quotas.py`（HM-08） | — |
@@ -160,3 +161,54 @@
 | T-27 | 每種接法各一；真 Claude.ai 兩帳號同時用 | §8.8 #2 | 真實用戶端與公開網址在 HAOS（HM-19b、HM-29） |
 | T-28 | PaaS workspace API 專屬；HA 對應「商店安裝→加第二帳號」，併入 T-20 與 HAOS | §8.8 #70 | — |
 | T-29 | 合成憑證清單掃描 0 命中；清理證明 | §8.8 #78；`tests/log_scan.py`（HM-01） | — |
+
+## FEATURE-MATRIX「HA 平台差異」欄是「—」的列（人工逐列結論）
+
+「HA 平台差異」欄寫「—」只表示「不是平台造成的」，不表示行為相同（HA 沒有、延後、HA 新增的都可能寫「—」）。下表每列寫結論：「照 PaaS」＝行為和 PaaS 相同；「§8.8 #n」＝有不同，期望值看差異表該列；「不是執行期行為：…」＝流程或文件。「項目」欄是 FEATURE-MATRIX 功能欄的摘要。
+
+| FM | 項目 | 結論 | 說明 |
+|---|---|---|---|
+| FM-06 | 每帳號 ETag 與 409 | 照 PaaS；§8.8 #86；`tests/test_profile_runtime.py`（HM-05） | 每帳號一個 ConfigurationState、HMAC domain 加帳號 id，拿 A 的 ETag 寫 B 409 `config_conflict`；ETag 格式是 HA 既有的（#86） |
+| FM-07 | 收據每帳號一份、還原後舊 id 410 | §8.8 #67、#34；`tests/test_restore_lock.py`（HM-13b） | 每帳號一份收據照 PaaS；封存只留 1 份、代碼 `operation_restored` 見 #67；帳號增刪也走收據見 #34 |
+| FM-21 | 帳號 id 與名稱規則 | §8.8 #35；`tests/test_profile_admin_api.py`（HM-10） | id 24 hex、預設列名稱 `Default`、名稱不進 log 照 PaaS；名稱規則加嚴見 #35 |
+| FM-31 | 手動指定 token | §8.8 #80 | HA 不新增這個 API（FM-31 對齊作法）；對應的 PaaS 測試 4 案改指 #80 |
+| FM-32 | 跨帳號 session 404 | 照 PaaS；§8.8 #68；`tests/test_profile_routing.py`（HM-08） | 每帳號一份 app，跨帳號 session 404；HA 另補單元測試；子程式未就緒時的自答 session 見 #68 |
+| FM-40 | 索引 port 重複只停相關帳號 | 照 PaaS；§8.8 #51、#20；`tests/test_profile_ports.py`（HM-09） | `disabled_reason=port_conflict`、預設帳號保留 port 照 PaaS；清單多 `status`、`blocked_reason` 見 #51；還原檢查做法不同見 #20 |
+| FM-43 | initialize 世代 | 照 PaaS；§8.8 #1、#68；`tests/test_initialize_generation.py`（HM-14） | initialize 只送到目前、已驗證的世代，換代就不交出 session；標頭前 token 被換掉的回應碼見 #1；自答見 #68 |
+| FM-50 | 名額滿的回應形狀 | 照 PaaS；§8.8 #15、#6；`tests/test_gateway_busy_shapes.py`（HM-14） | 有 id 200＋`-32003`、沒 id 503、串流 429、`Retry-After` 與節流 WARNING 照 PaaS（契約第 2.4 節）；等 1 秒與串流上限見 #15；legacy SSE 見 #6 |
+| FM-52 | 請求內容超過上限 | §8.8 #81 | 一超過就 413、不再讀；FM-52 延後（HM-14 選做） |
+| FM-54 | 一組管理身分管全部帳號 | §8.8 #11、#12；`tests/test_profile_runtime.py`（HM-05） | 一組身分管全部帳號和 PaaS 相同（共用 CSRF 金鑰、角色查詢、16 個管理名額）；身分來源與管線順序的不同見 #11、#12 |
+| FM-59 | 清單載入失敗與帳號在別處被刪 | §8.8 #84；`packages/mcp-admin-ui/tests/browser/profiles.spec.mjs`（HM-11） | 清單讀不到擋整頁＋重試照 PaaS；收到 `profile_not_found` 立刻切回預設並清掉收據見 #84 |
+| FM-62 | 待確認操作（收據）分帳號 | 照 PaaS；`packages/mcp-admin-ui/tests/profiles.test.mjs`（HM-11） | 預設帳號沿用舊 key、額外帳號 key 帶 id、查收據帶標頭；key 字串是 HA 既有格式（`woow-admin-operation-v1:`） |
+| FM-63 | 用戶端範例 | §8.8 #2、#85 | Bearer 範例見 #2；範例名稱帶 id 前 8 碼見 #85（DQ-31 待定） |
+| FM-64 | 每帳號工具權限 | 照 PaaS；§8.8 #54；`packages/mcp-admin-ui/tests/profiles.test.mjs`（HM-11） | 頁面讀目前帳號、MCP 依 token 套用該帳號政策；存政策時重啟的範圍見 #54 |
+| FM-66 | 總覽與套用狀態看目前帳號 | 照 PaaS；`packages/mcp-admin-ui/tests/browser/profiles.spec.mjs`（HM-11） | 不做跨帳號總覽（DQ-31 待定，建議不做） |
+| FM-72 | 帳號管理 API 的契約文件 | 不是執行期行為：本契約（HM-00）就是兩邊共用的中立契約；PaaS 沒有對應文件 | HA 加嚴的地方都標在第 9 節 |
+| FM-74 | CORS | §8.8 #42 | HA 不加任何 CORS、OPTIONS 在 token 之後回 405；PaaS report-only 會反射來源，見 #42 |
+| FM-76 | MCP 回覆遮罩 | §8.8 #38；`tests/test_reply_mask_union.py`（HM-08） | FEATURE-MATRIX 的對齊作法寫「不要用所有帳號聯集」，已被 DQ-40 ⑧ 推翻（採用聯集）；健康原因只取該帳號、回覆不帶帳號名稱或 id 照 PaaS |
+| FM-78 | 備份含全部帳號的秘密 | 照 PaaS | 文件寫明並建議加密備份；token 不進備份是後續選項（DQ-46） |
+| FM-85 | n8n session 自動回收 | 照 PaaS；§8.8 #62 | 閘道不自動回收（PaaS 也寫死關閉）；n8n session 的名額、逾時與 429 見 #62 |
+| FM-93 | OpenDesign、Odoo Manage | §8.8 #43 | DQ-28 採不開放 |
+| FM-96 | 多帳號測試替身 | 照 PaaS；`tests/test_profile_ports.py`（HM-09） | 額外帳號 port 從 18000 起；替身與網路守門由 HM-01 參數化（`tests/owned_runtime.py` 等） |
+| FM-97 | CI 以 root 跑時的權限測試 | §8.8 #75 | 權限與身分檢查在 uid 10001 子程序裡驗（計畫 §12.0 第 3 點） |
+| FM-100 | 本機測試環境 | 不是執行期行為：本機只算預檢、以 GitHub CI 為準（DQ-33 採 (a)）；§8.8 #75 | CI 的不同見 #75 |
+| FM-101 | 映像 smoke 與多帳號實測 | §8.8 #73；`packaging/test_container_probe.py`（HM-16 擴充） | 容器驗收加多帳號階段（HM-16）；發佈流程的不同見 #73 |
+| FM-103 | 升版宣告 | §8.8 #72 | Store 升版比對與 `upgrade-notes.yaml` 見 #72 |
+| FM-104 | 釘版與版號 | §8.8 #73 | 版號 0.5.0 與發版鎖（DQ-32 採用）見 #73 |
+| FM-107 | 沙盒與正式站實測工具 | 照 PaaS；`packaging/test_ha_p9_probe.py`（HM-16 擴充） | 暫時第二帳號、交叉檢查、刪除後舊網址失效、結果不明就停照 PaaS；工具是 HA 的 P9 kit |
+| FM-108 | 29 類驗收情境 | 照 PaaS | 同一套 T-01～T-29、門檻不放寬；HA 期望值不同的地方逐列指到差異表（`acceptance-matrix.md`） |
+| FM-113 | 公開網址與真實用戶端 | 照 PaaS | 每種接法各測兩個帳號；HA 的對外接法由使用者自備（T-27，HM-19b、HM-29） |
+| FM-116 | 人工合併、標題前綴、不加 AI 署名 | 照 PaaS | DQ-36 採用 |
+| FM-120 | 全部撤銷 | §8.8 #82；`tests/test_revoke_all.py`（HM-13b） | PaaS 沒有；HA 新增見 #82 |
+| FM-121 | 同 uid 信任邊界 | 照 PaaS | DQ-37 採 (a)；HA 另寫事故處理（`threat-model.md` 第 4 節，文件） |
+| FM-122 | serverInfo 不帶帳號 | 照 PaaS | DQ-45 待定，建議不改 |
+| FM-123 | Claude.ai 的 Origin | §8.8 #10 | Bearer 帶 Origin 403；DQ-11 第二問等 S14 實測 |
+| FM-128 | Core 白名單維護節奏 | §8.8 #30 | DQ-35 待定 |
+| FM-130 | 健康檢查連兩次失敗才判壞 | §8.8 #18；`tests/test_health_tolerance.py`（HM-30） | PaaS 沒有定期後端監看 |
+| FM-134 | FD 上限 | §8.8 #15；`tests/test_extra_child_resources.py`（HM-09） | 開通後把 soft `RLIMIT_NOFILE` 提到需要量＋25%（契約第 5 節）；名額模型的不同見 #15 |
+| FM-137 | 看門狗退避 | §8.8 #14；`tests/test_profile_lifecycle.py`（HM-09） | DQ-20 採 (b) |
+| FM-138 | 生命週期 log | 照 PaaS；§8.8 #29；`tests/test_profile_lifecycle.py`（HM-09） | 事件、`[profile= port= pid=]` 格式、每帳號每情況 60 秒一行照 PaaS；HA 只寫 id 前 8 碼、紀錄在 add-on log，見 #29 |
+| FM-145 | 預設帳號的收據 key 不變 | 照 PaaS；`packages/mcp-admin-ui/tests/browser/profiles.spec.mjs`（HM-11） | `get()` 兩種格式都收 |
+| FM-146 | Store 發佈前的非 PR run | §8.8 #73 | 升版步驟加確認（HM-17、升版片） |
+| FM-152 | 改來源要重填秘密 | §8.8 #41；`tests/test_new_origin_secret.py`（HM-12） | DQ-40 ⑨ |
+| FM-153 | 換身分換 token | §8.8 #40；`tests/test_odoo_identity_rotation.py`（HM-12） | DQ-40 ⑩ |

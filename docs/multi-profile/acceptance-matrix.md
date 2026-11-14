@@ -24,7 +24,7 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | T-05 | 只由 token 決定帳號 | 錯 token：密鑰網址 404、Bearer 401（PaaS 403）；query 400；密鑰網址上的 `Authorization` 忽略；跨帳號 session 404；31 種網址變形 0 次跨帳號 | `tests/test_profile_routing.py`、`tests/test_mcp_contract_freeze.py` | 容器、HAOS | HM-01、HM-08、HM-16 | 是 | #1、#3 |
 | T-06 | 管理 API 授權與帳號 id | 非 Ingress、非管理員一律 403（任何帳號狀態下逐位元相同）；管理員：缺標頭 400、格式錯 400（PaaS 404）、未知 404；MCP token 不能當管理憑證 | `tests/test_admin_pipeline_matrix.py`、`tests/test_profile_admin_api.py` | HAOS | HM-10、HM-16 | 是 | #11、#31、#32 |
 | T-07 | 每帳號工具政策 | 存政策只重啟該帳號（HA 收緊也重啟） | `tests/test_profile_admin_api.py` | HAOS | HM-10、HM-11、HM-22 | 是 | #54 |
-| T-08 | 輪替、撤銷、撞號 | 舊 token 404／401；撞號（只會來自複製或還原）503、不導向任何帳號 | `tests/test_profile_routing.py` | — | HM-08、HM-10 | 是 | #1 |
+| T-08 | 輪替、撤銷、撞號 | 舊 token 404／401；撞號（只會來自複製或還原）503、不導向任何帳號 | `tests/test_profile_routing.py` | — | HM-08、HM-10 | 是 | #1、#80 |
 | T-09 | 改名、刪除、重建 | 刪除後舊 token 立即失效、子程式停、port 釋放、目錄刪除、`blocked` 帳號立刻重評；重建拿新 id 新 token；刪除 200＋收據 | `tests/test_profile_admin_api.py` | HAOS | HM-10、HM-19b | 是 | #34 |
 | T-10 | 跨帳號寫入 | 全被後端擋（寫入前加只允許測試資料的暫時 record rule）；A 的寫入審批 token 在 B 被拒 | `tests/test_odoo_multi_profile.py`（假後端） | HAOS | HM-12、HM-19b | 是 | — |
 | T-11 | 並行 0 串號 | 0 串號、0 個非預期 5xx | `tests/test_profile_quotas.py`、`tests/test_profile_routing.py` | HAOS | HM-08、HM-19b | 是 | #15 |

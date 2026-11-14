@@ -2,10 +2,13 @@
 
 - 狀態：HM-00 起草（2026-11-14）。HM-10 依實作補細節，HM-18 定稿；合併順序 HM-00 → HM-10 → HM-18。
 - 「中立」：PaaS `WOOWTECH/woow-mcp-server` 的行為（pin `69ac425`）是期望值；HA 和它不同的地方，每一條都列在第 9 節的刻意差異表
-  （計畫 §8.8，下稱「§8.8 #n」），沒列的就要相同。
+  （計畫 §8.8，下稱「§8.8 #n」），沒列的就要相同。FEATURE-MATRIX 每一列（含「HA 平台差異」欄是「—」的列）對到哪一列、
+  或為什麼相同，見 `deviation-trace.md`。
 - 來源：計畫 `PLAN-zh-TW.md` §2～§8（repo 外，`artifacts/ha-multiprofile-parity-20261114/`）。決策見 `decisions.md`；
   驗收見 `acceptance-matrix.md`；威脅模型見 `threat-model.md`。
 - 標「暫定」的細節：計畫沒寫死、本檔先定一個做法，由括號裡的切片實作時定案；改了要同時改本檔。
+- 路徑縮寫：`Hc/`＝HA `packages/mcp-admin-core/mcp_admin_core/`（bb48449）；`Hui/`＝HA `packages/mcp-admin-ui/src/`；
+  `Pc/`＝PaaS `packages/mcp-admin-core/mcp_admin_core/`（@69ac425）；其他 PaaS 路徑相對 PaaS repo 根目錄。
 
 ## 0. 先講結論
 
@@ -14,7 +17,8 @@
 3. 管理 API 開通後，帳號範圍路徑**一定要剛好一個** `X-MCP-Profile`；缺了 400、格式錯 400、不存在 404，絕不退回預設帳號。
 4. 管理 API 全部走一條共用管線：先驗 HA 管理員，才看任何帳號狀態；非管理員在任何帳號狀態下拿到逐位元相同的 403。
 5. 每個帳號（含預設帳號）讀 body 前有准入、讀 body 時有位元組額度；一個帳號用不到別的帳號的名額。
-6. 錯誤代碼一律放在 `detail.code`，不帶伺服器文字；每個代碼的狀態碼、時機、欄位與 PaaS 對應見第 4 節。
+6. 新增的錯誤代碼放在 `detail.code`，不帶伺服器文字；既有回應的本體形狀照今天（第 4.1 節開頭列了五種）。
+   每個代碼的狀態碼、時機、欄位與 PaaS 對應見第 4 節。
 
 ## 1. 範圍、名詞與開關
 
@@ -24,12 +28,12 @@
 |---|---|
 | 帳號（profile） | 一組後端連線與憑證、一把 MCP token、一份工具政策、一個子程式；帳號之間隔離 |
 | 預設帳號 | id `default`，就是今天的 `/data/mcp/state.json`；升級後 token、網址、設定都不變 |
-| 額外帳號 | id 是 24 位小寫 hex，目錄 `/data/mcp/profiles/<id>/`；最多 min(5、產品上限、記憶體條件) 個 |
+| 額外帳號 | id 是 24 位小寫 hex，目錄 `/data/mcp/profiles/<id>/`；最多 min(5、產品上限、記憶體條件) 個（各產品見第 5 節） |
 | 帳號範圍路徑 | `{base}/api/*` 裡第 3.1 節全域路徑以外的路徑 |
 | 開通 | 產品在 `features.MULTI_PROFILE_PRODUCTS` 裡；判斷一律呼叫 `features.enabled(product)`，呼叫時才讀 |
 | 休眠帳號 | 產品沒開通、磁碟上卻有帳號資料時的額外帳號；開機在任何 listener 前撤銷 token |
 | 孤兒 | `profiles/` 底下有、索引沒有的 24 hex 目錄；不開、不路由、只能刪 |
-| 隔離目錄 | `profiles/.quarantine-<id>-<UTC>/`；還原守門讀不到的帳號改名放這裡；不路由、只能刪 |
+| 隔離目錄 | `profiles/.quarantine-<id>-<UTC>/`；還原守門讀不到的帳號改名放這裡；不路由、只能刪（刪除路由暫定，HM-13c 定案；第 3.1 節） |
 
 ### 1.2 開關與「不受開關管」
 
@@ -64,7 +68,8 @@
 2. 候選 token 先 sha256 一次，再和每個帳號的摘要 `hmac.compare_digest`：預設帳號＋索引內讀得到、沒休眠、沒隔離的帳號；
    撤銷的略過。**全部比完、不提早結束。**
 3. 快取：每帳號只存 state 的 stat 簽章與 token 摘要；簽章變了才重讀。
-4. 命中後、讀 body **之前**做該帳號的准入；讀 body **時**算該帳號的位元組額度（第 2.4 節）。
+4. 命中後、讀 body **之前**做該帳號的准入；讀 body **時**逐塊扣該帳號的位元組額度，帶 `Content-Length` 時讀之前先比一次
+   （暫定，HM-08 定案；第 2.4 節）。
 5. 帳號 app 裡是今天的流程：再驗 token → 租約 → 方法 → Origin → query 400 → 讀 body → 政策 → session →
    轉送名額 → 重驗 → 轉發。只轉閘道自己的 child bearer 與 3 個 session 標頭（`mcp-session-id`、`mcp-protocol-version`、
    `last-event-id`）；只轉回 4 個標頭（`mcp-session-id`、`mcp-protocol-version`、`retry-after`、`content-type`）。
@@ -86,8 +91,9 @@
 
 | 情況 | HTTP | 內容 | 附註 |
 |---|---|---|---|
-| 准入或位元組額度不夠（讀 body 前），`Content-Length` ≤64 KiB（或沒帶，但 2 秒內讀完且 ≤64 KiB），解析得出 JSON-RPC id | 200，`Retry-After: 5` | 每個 id 一則 `-32003` | 用全 add-on 共用的「拒絕小額度」讀：同時 8 個、合計 512 KiB |
+| 讀 body 前就知道不夠（准入滿，或宣告的 `Content-Length` 超過剩餘的位元組額度），`Content-Length` ≤64 KiB（或沒帶，但 2 秒內讀完且 ≤64 KiB），解析得出 JSON-RPC id | 200，`Retry-After: 5` | 每個 id 一則 `-32003` | 用全 add-on 共用的「拒絕小額度」讀：同時 8 個、合計 512 KiB |
 | 同上，但沒有 id、太大、讀不完或不是 JSON | 503，`Retry-After: 5` | `-32003`，`id: null` | 大於 64 KiB 的帶 id 請求拿 503（PaaS 200）：§8.8 #16 |
+| 讀 body 途中位元組額度用完（沒帶 `Content-Length`，或實際內容比宣告的多） | 503，`Retry-After: 5` | `-32003`，`id: null` | 立刻停讀、釋放已讀的部分，不改用拒絕小額度（暫定，HM-08 定案） |
 | 轉送名額等 1 秒逾時（body 已讀），有 id | 200，`Retry-After: 5` | 每個 id 一則 `-32003` | #148 形狀（HM-14） |
 | 轉送名額等 1 秒逾時，沒有 id（GET、DELETE、保留名額也用完的通知） | 503，`Retry-After: 5` | `-32003`，`id: null` | 同上 |
 | 排隊已達上限（每個佇列各自計數） | 有 id 200、沒有 id 503，都帶 `Retry-After: 5` | `-32003` | 不等；WARNING 每帳號每情況 60 秒一行 |
@@ -135,11 +141,12 @@
 | `{base}/api/profiles` | GET | 帳號清單 | — | 200 `{"profiles":[列…]}`；`ETag: "p1-<64 hex>"`（索引 ETag） |
 | `{base}/api/profiles` | POST | 建立 `{"label":…}` | If-Match（索引）＋Idempotency-Key | 201 該列（**不含 token**）＋`operation`；同一 key 重送回同一列（200） |
 | `{base}/api/profiles/<id>` | PATCH | 改名 `{"label":…}` | If-Match（索引） | 200 該列 |
-| `{base}/api/profiles/<id>` | DELETE | 刪除（含孤兒） | If-Match（索引）＋Idempotency-Key | 200 `{"deleted":"<id>","operation":…}`（暫定，HM-10） |
+| `{base}/api/profiles/<id>` | DELETE | 刪除（含孤兒；DQ-14 待定，照計畫建議：先撤銷並抹憑證再刪、孤兒不自動刪、不做軟刪除、面板兩段確認；負責片 HM-10） | If-Match（索引）＋Idempotency-Key | 200 `{"deleted":"<id>","operation":…}`（暫定，HM-10） |
 | `{base}/api/profiles/revoke-all` | POST | 全部撤銷（含預設） | If-Match（索引）＋Idempotency-Key | 200 逐帳號 `results:[{id,result:"revoked"}]`；有失敗見第 4.1 節 `operation_outcome_unknown` |
 | `{base}/api/profiles/restore-record` | GET | 還原與休眠核對紀錄（不含秘密） | — | 200（欄位第 3.6 節） |
 | `{base}/api/profiles/<id>/restore-review` | POST | 標記「已核對」 | If-Match（索引）＋Idempotency-Key | 200 `{"profile":{"id"},"reviewed_at":…,"operation":…}`（暫定，HM-13c） |
 | `{base}/api/profiles/index/quarantine` | POST | 隔離壞掉的帳號索引 | If-Match（原始位元組算的 ETag）＋Idempotency-Key | 200（暫定，HM-10） |
+| `{base}/api/profiles/quarantine/<名稱>/delete` | POST | 刪除一個隔離目錄（`<名稱>`＝目錄名去掉 `.quarantine-` 的 `<id>-<UTC>`；同一個 id 可能有多個） | If-Match（索引）＋Idempotency-Key | 200 `{"deleted":"<名稱>","operation":…}`（暫定：路徑、名稱格式與回應都由 HM-13c 定案） |
 | 頁面與靜態檔 | GET、HEAD | 面板 | — | 同今天 |
 
 **帳號範圍路徑**（其他 `{base}/api/*`；開通後一定要剛好一個 `X-MCP-Profile`）：
@@ -150,10 +157,10 @@
 | `configuration`、`capabilities` | GET | 回應帶 `profile:{id}` |
 | `diagnostics` | GET | 只回選定帳號的子程式緩衝 |
 | `operations/<id>` | GET | 收據依帳號 |
-| `backend`、`backend/patch` | PUT | Odoo 換 url／database／username 換 token、回 `token_rotated:true`（HM-12）；改 url 來源沒帶新秘密 422（DQ-40 ⑨） |
+| `backend`、`backend/patch` | PUT | Odoo 換 url／database／username 換 token、回 `token_rotated:true`（HM-12；DQ-05 細節待定）；改 url 來源沒帶新秘密 422（DQ-40 ⑨） |
 | `backend/test` | POST | 測選定帳號已存的設定 |
 | `policy`、`odoo/write-switches`、`odoo/allowed-methods`、`n8n/session` | PUT | 只重啟選定帳號的子程式 |
-| `endpoint` | PUT | 額外帳號 409 `endpoint_global`（全域設定只存在預設 state） |
+| `endpoint` | PUT | 額外帳號 409 `endpoint_global`（全域設定只存在預設 state；DQ-13 待定，照計畫建議） |
 | `token/reveal`、`token/revoke` | POST | 只動選定帳號 |
 | `token/rotate` | POST | 還原或休眠後未核對前 409 `restore_review_required` |
 | `child/restart` | POST | 回應帶 `blocked_reason` |
@@ -167,9 +174,9 @@
 
 | 步 | 做什麼 | 失敗回應 | 看不看帳號狀態 |
 |---|---|---|---|
-| ① | identity：來源 172.30.32.2、剛好一個 `X-Remote-User-Id`、非 GET 要 CSRF、不是 cross-site | 403 | 不看 |
+| ① | identity：來源 172.30.32.2、剛好一個 `X-Remote-User-Id`、非 GET 要 CSRF、不是 cross-site；`X-Ingress-Path` 格式 | 403（沒有 detail）；`X-Ingress-Path` 不只一個或格式錯 400 | 不看 |
 | ② | 管理名額 16（全 add-on 共用） | 503 | 不看 |
-| ③ | 有界讀 body（同今天） | 400／408／413 | 不看 |
+| ③ | 有界讀 body（同今天） | 400／403（讀到一半斷線）／408／413／415（要 JSON 的路徑 `Content-Type` 不是 `application/json`） | 不看 |
 | ④ | 斷線監看 | 403 | 不看 |
 | ⑤ | 方法表與**不讀任何 state** 的格式檢查（JSON 形狀、鍵集合）；未知的 `/api/*` 操作照今天在角色檢查之後才回 404 | 固定 400／405，沒有細節 | 不看 |
 | ⑥ | **角色檢查一**（`final_role`） | 403（Core 未審帶 `core_version_unreviewed`） | 不看 |
@@ -183,12 +190,13 @@
 - 沒開通（且沒有帳號資料）的產品維持今天的順序；開通後預設帳號只多一次 Core 角色查詢、角色檢查提早，回應位元組不變。
 - 新增路由沒進「路由表自動產生的否定矩陣」就測試失敗（HM-10 `tests/test_admin_pipeline_matrix.py`）。
 
-### 3.3 `X-MCP-Profile` 規則
+### 3.3 `X-MCP-Profile` 規則（DQ-17 細節待定，照計畫建議；負責片 HM-10）
 
 | 情況 | 開通後的回應 |
 |---|---|
 | 帳號範圍路徑、沒帶 | 400 `profile_id_required`（§8.8 #31；PaaS 當 `default`） |
-| 帶兩個以上，或值不是 `default`、24 位小寫 hex | 400 `profile_id_invalid`（§8.8 #32；PaaS 404） |
+| 帶兩個以上 | 400 `profile_id_invalid`（§8.8 #83；PaaS 取第一個值，第一個值存在就照常服務） |
+| 值不是 `default`、24 位小寫 hex | 400 `profile_id_invalid`（§8.8 #32；PaaS 404） |
 | 格式對、不存在（含隔離目錄） | 404 `profile_not_found`；絕不退回預設帳號 |
 | 存在但讀不到（`profile_unavailable`） | 503 `{"error":"state unavailable"}`；仍可刪除 |
 | 全域路徑 | 不看這個標頭；路徑裡的 `<id>` 格式錯在第 ⑤ 步回固定 400（沒有細節），格式對但不存在在第 ⑪ 步回 404 `profile_not_found` |
@@ -205,7 +213,7 @@
   提示並重抓（I12；HM-11）。
 - 任何帳號範圍請求回 `profile_not_found`：面板立刻重抓清單、切回預設帳號並提示。
 
-### 3.5 寫入保護（DQ-15；§8.8 #34）
+### 3.5 寫入保護（DQ-15 細節待定，照計畫建議；負責片 HM-10；§8.8 #34）
 
 | 對象 | If-Match | Idempotency-Key | 收據放哪 |
 |---|---|---|---|
@@ -214,6 +222,7 @@
 | 索引隔離 | 壞索引的原始位元組算出的 ETag（格式同 `"p1-…"`，暫定，HM-10） | 要 | 同上 |
 | 改名 | 索引 ETag | 不要 | — |
 | 還原核對（restore-review） | 索引 ETag | 要 | 全域收據 |
+| 刪除隔離目錄（暫定，HM-13c） | 索引 ETag | 要 | 全域收據 |
 
 - 缺 If-Match 428 `config_revision_required`；不只一個或過期 409 `config_conflict`。
 - 缺 Idempotency-Key 428 `operation_id_required`；不只一個 400 `operation_id_invalid`；同一個 key 還沒完成就重送 409
@@ -239,7 +248,7 @@
 `corrupt` 時另帶一個由原始位元組算出的 ETag，給「隔離帳號索引」用）、還原與休眠通知（欄位名 HM-13c 定案）。
 沒開通但有帳號資料時只多 `dormant_profiles`（數字）。
 
-**請求本體**：建立與改名都是剛好一個鍵 `{"label": <字串>}`。名稱規則（DQ-16；§8.8 #35）：去頭尾空白後 1～80 個 code point；
+**請求本體**：建立與改名都是剛好一個鍵 `{"label": <字串>}`。名稱規則（DQ-16 細節待定，照計畫建議；負責片 HM-10、HM-11；§8.8 #35）：去頭尾空白後 1～80 個 code point；
 拒絕 Cc、Cf（含 bidi、零寬）、Zl、Zp、Cs、Co、未指派；NFKC＋casefold 判重；`default` 與「預設帳號」保留。名稱只存在索引，
 不進目錄名、log、MCP 回覆。
 
@@ -261,25 +270,38 @@
 
 ### 4.1 管理 API（8099）
 
-回應本體：`{"error":"request denied","detail":{"code":"<代碼>", …欄位}}`；`config_conflict` 維持今天的
-`{"detail":{"code":"config_conflict"}}`。PaaS 另帶 `message` 文字，HA 不帶（面板只認代碼，§8.8 #49）。
+回應本體：**新增的代碼**一律是 `{"error":"request denied","detail":{"code":"<代碼>", …欄位}}`。**既有回應**的本體照今天
+（bb48449）有五種形狀；HM-01 的契約凍結照這裡凍結，HM-10 不把它們改成新形狀（否則沒開通時就不再逐位元相同）：
+
+- 形狀 A：`{"error":"request denied","detail":{"code":…}}`。`config_revision_required`、`operation_id_required`、`operation_id_invalid`、
+  `operation_id_expired`、`operation_id_conflict`、`operation_not_found`、`operation_journal_full`、`operation_journal_unavailable`、
+  `operation_outcome_unknown`（可另帶 `operation`）、`core_version_unreviewed`（另帶 `ha_version`）。來源：`Hc/gateway.py:328`、
+  `Hc/operations.py:35-36`、`Hc/admin_auth.py:18-22`。
+- 形狀 B：`{"detail":{"code":"config_conflict"}}`，沒有 `error`（`Hc/gateway.py:466`、`:484`）。
+- 形狀 C：`{"error":"owner_defaults_unavailable","detail":{"code":"owner_defaults_unavailable"}}`（`Hc/gateway.py:613-614`）。
+- 形狀 D：`{"saved":true,"detail":{"code":"config_apply_failed"},"configuration":…}`，沒有 `error`；`owner-defaults/restore` 另帶
+  `owner_defaults`（`Hc/gateway.py:624`、`:639`）。
+- 形狀 E：只有 `{"error":"<字串>"}`、沒有 `detail`：`unsupported`、`backend_check_failed`、`backend_fixed`。面板不認得這些字串，
+  只顯示狀態碼的通用文字（`Hc/gateway.py:558`、`:563`、`:568`、`:580`、`:629`；`Hui/api.js:48-61`）。
+
+PaaS 另帶 `message` 文字，HA 不帶（面板只認代碼，§8.8 #49）。
 
 | 代碼 | HTTP | 什麼時候 | `detail` 欄位 | 管線步驟 | 沒開通時 | PaaS（@69ac425） | 差異 | 新舊 | 負責片／測試 |
 |---|---|---|---|---|---|---|---|---|---|
 | `profile_id_required` | 400 | 帳號範圍路徑沒帶 `X-MCP-Profile` | `code` | ⑦ | 不出現 | 沒帶當 `default` | §8.8 #31 | 新 | HM-10；`tests/test_profile_admin_api.py`、`tests/test_admin_pipeline_matrix.py` |
-| `profile_id_invalid` | 400 | 帶兩個以上，或值不是 `default`、24 位小寫 hex | `code` | ⑦ | 不出現 | 404 `{"detail":"Profile not found"}` | §8.8 #32 | 新 | HM-10；同上 |
-| `profile_not_found` | 404 | 格式對但帳號不存在（含隔離目錄）；全域路徑的 `<id>` 不存在 | `code` | ⑦（標頭）／⑪（全域路徑） | 不出現（整條路由 404） | 404 `"Profile not found"`（字串） | 本體多 `code` | 新 | HM-10；面板收到就切回預設（HM-11） |
+| `profile_id_invalid` | 400 | 帶兩個以上，或值不是 `default`、24 位小寫 hex | `code` | ⑦ | 不出現 | 格式錯 404 `{"detail":"Profile not found"}`；帶兩個以上時取第一個值（`Pc/profiles.py:612`），第一個值存在就照常服務 | §8.8 #32、#83 | 新 | HM-10；同上 |
+| `profile_not_found` | 404 | 格式對但帳號不存在（含隔離目錄）；全域路徑的 `<id>` 不存在；要刪的隔離目錄不存在（暫定，HM-13c） | `code` | ⑦（標頭）／⑪（全域路徑） | 不出現（整條路由 404） | 404 `"Profile not found"`（字串） | 本體多 `code` | 新 | HM-10；面板收到就切回預設（HM-11） |
 | `profile_label_invalid` | 422 | 名稱違反第 3.6 節規則 | `code` | ⑪ | 不出現 | 422 字串（只檢長度 1～80） | §8.8 #35 | 新 | HM-10、HM-11 |
 | `profile_default_immutable` | 422 | 改名或刪除預設帳號 | `code` | ⑪ | 不出現 | 422 字串 | 本體多 `code` | 新 | HM-10 |
 | `profile_label_conflict` | 409 | NFKC＋casefold 後和既有名稱或保留名稱相同 | `code` | ⑪ | 不出現 | 409 `"Profile label already exists"` | §8.8 #35（判重較嚴） | 新 | HM-10 |
-| `profile_limit_reached` | 409 | 已到 min(5、產品上限) | `code`、`limit` | ⑪ | 不出現 | 409，同欄位＋`message` | 同（少 `message`） | 新 | HM-10；`tests/test_profile_admin_api.py` |
+| `profile_limit_reached` | 409 | 已到 min(5、產品上限)（各產品見第 5 節） | `code`、`limit` | ⑪ | 不出現 | 409，同欄位＋`message` | 同（少 `message`） | 新 | HM-10；`tests/test_profile_admin_api.py` |
 | `profile_memory_insufficient` | 409 | 記憶體條件不夠再開一個 | `code`、`limit`、`required_memory_mib`、`memory_limit_mib`（讀得到 cgroup 才有）、`available_memory_mib`（HA 另帶） | ⑪ | 不出現 | 409，`limit`、`memory_limit_mib`、`required_memory_mib`＋`message` | §8.8 #19 | 新 | HM-09、HM-10 |
 | `profile_port_unavailable` | 409 | 18000～65535 找不到空 port | `code` | ⑪ | 不出現 | 409 `"No child port available"` | 本體多 `code` | 新 | HM-09、HM-10 |
 | `profile_product_unsupported` | 409 | 產品不在七產品（OpenDesign、Odoo Manage）卻收到建立；正常不會開通，屬防呆 | `code` | ⑪ | 不出現 | OpenDesign 可開 3 個 | §8.8 #43 | 新 | HM-07、HM-10 |
 | `endpoint_global` | 409 | 對額外帳號 `PUT endpoint` | `code` | ⑪ | 不出現 | 不存 endpoint | §8.8 #27 | 新 | HM-10 |
 | `restore_review_required` | 409 | 還原或休眠後、該帳號還沒「已核對」就 `token/rotate` | `code` | ⑪ | 不出現 | 手冊步驟 9 核對後才發 | §8.8 #58 | 新 | HM-13c；`tests/test_restore_review.py` |
 | `profile_index_corrupt` | 503 | 帳號索引結構壞：清單、建立、改名、刪除、額外帳號範圍路徑（預設帳號的 bootstrap 照回，帶 `profile_index_state:"corrupt"`；全部撤銷、還原紀錄、索引隔離照常可用，暫定，HM-10） | `code` | ⑦／⑪ | 不出現 | 整台 503（含管理 API） | §8.8 #25 | 新 | HM-07、HM-10 |
-| `config_conflict` | 409 | If-Match 過期或不只一個；拿 A 的 ETag 寫 B；索引 ETag 不符 | `code` | ⑪ | 照今天 | 帳號設定有；帳號 CRUD 不收 If-Match | §8.8 #34 | 既有（擴大） | HM-05、HM-10 |
+| `config_conflict` | 409 | If-Match 過期或不只一個；拿 A 的 ETag 寫 B；索引 ETag 不符 | `code`（形狀 B：本體只有 `detail`） | ⑪ | 照今天 | 帳號設定有；帳號 CRUD 不收 If-Match | §8.8 #34 | 既有（擴大） | HM-05、HM-10 |
 | `config_revision_required` | 428 | 該帶 If-Match 卻沒帶（含帳號增刪改、核對、索引隔離） | `code` | ⑪ | 照今天 | 帳號 CRUD 沒有 | §8.8 #34 | 既有（擴大） | HM-10 |
 | `operation_id_required` | 428 | 建立、刪除、全部撤銷、索引隔離、核對沒帶 Idempotency-Key | `code` | ⑪ | 照今天 | 帳號 CRUD 沒有 | §8.8 #34 | 既有（擴大） | HM-10 |
 | `operation_id_invalid` | 400 | Idempotency-Key 不只一個、格式錯或時間在未來 | `code` | ⑪ | 照今天 | 同義代碼 | 同 | 既有 | HM-10 |
@@ -290,13 +312,24 @@
 | `operation_journal_unavailable` | 503 | 收據檔讀不到或寫不了 | `code` | ⑪ | 照今天 | 同義代碼 | 同 | 既有 | HM-10、HM-13b |
 | `operation_outcome_unknown` | 409 | 同一個 key 還沒完成就重送；提交後失敗；全部撤銷有帳號失敗（另帶逐帳號 `results`） | `code`；可帶 `operation`、`results` | ⑪／提交 | 照今天 | 同義代碼 | 全部撤銷的逐帳號結果是 HA 加的 | 既有（擴大） | HM-10、HM-13b、HM-13c；`tests/test_revoke_all.py` |
 | `operation_restored` | 410 | 還原後重送還原前的操作 id（舊收據封存成 `.restored`） | `code` | ⑪ | 不出現 | 410 `operation_id_expired`（新 journal 的保留期下限設在還原當下） | 代碼名不同；§8.8 #67（封存只留 1 份） | 新 | HM-13b；`tests/test_restore_lock.py` |
-| `CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN` | 422 | 開通的產品改 url 的 scheme、host 或 port，卻沒帶新秘密 | `code` | ⑪ | 不出現（Headscale 除外，HM-26 前照今天） | 只有 Headscale，422 字串 | §8.8 #41（DQ-40 ⑨） | 新 | HM-12、HM-26；`tests/test_new_origin_secret.py` |
-| `owner_defaults_unavailable` | 409 | 額外帳號的 owner-defaults 操作（暫定）；沒有標記的 state | `code` | ⑪ | 照今天 | 沒有同名代碼（owner-defaults 只在預設帳號） | HA 既有 | 既有 | HM-10 |
-| `config_apply_failed` | 503 | 已存檔，但重啟該帳號子程式失敗 | `code`；回應另帶 `saved:true` | 提交後 | 照今天 | 沒有同名代碼 | HA 既有 | 既有 | HM-09、HM-10 |
-| `core_version_unreviewed` | 403 | HA Core 版本不在白名單 | `code`、`ha_version` | ①／⑥ | 照今天 | 沒有平台門檻 | §8.8 #30 | 既有 | HM-19a（每次升版補審） |
+| `CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN` | 422 | 開通的產品改 url 的 scheme、host 或 port，卻沒帶新秘密 | `code` | ⑪ | 不出現（HA 今天任何產品都沒有這條檢查；`Hc/backend_edit.py:1-5` 刻意允許換網址沿用已存的秘密） | 只有 Headscale，422 `{"detail":"CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN"}`（字串） | §8.8 #41（DQ-40 ⑨） | 新 | HM-12、HM-26；`tests/test_new_origin_secret.py` |
+| `owner_defaults_unavailable` | 409 | 額外帳號的 owner-defaults 操作（暫定）；沒有標記的 state | `code`（形狀 C：本體另帶 `error:"owner_defaults_unavailable"`） | ⑪ | 照今天 | 沒有同名代碼（owner-defaults 只在預設帳號） | HA 既有 | 既有 | HM-10 |
+| `config_apply_failed` | 503 | 已存檔，但重啟該帳號子程式失敗 | `code`（形狀 D：`saved:true`＋`detail`＋`configuration`，沒有 `error`） | 提交後 | 照今天 | 沒有同名代碼 | HA 既有 | 既有 | HM-09、HM-10 |
+| `core_version_unreviewed` | 403 | HA Core 版本不在白名單（只有角色檢查會帶；identity 的 403 沒有 detail） | `code`、`ha_version` | ⑥／⑩ | 照今天 | 沒有平台門檻 | §8.8 #30 | 既有 | HM-19a（每次升版補審） |
+| `unsupported` | 409 | 產品沒提供 `backend/test`、`child/restart` 或 `diagnostics`（`child/restart` 在 If-Match、Idempotency-Key 檢查之後才判斷） | 沒有 `detail`（形狀 E：`{"error":"unsupported"}`） | ⑪ | 照今天 | 沒有同名回應 | HA 既有 | 既有 | HM-10（帳號範圍照今天）；HM-01 凍結 |
+| `backend_check_failed` | 503 | `backend/test` 20 秒內沒做完或丟出例外 | 沒有 `detail`（形狀 E：`{"error":"backend_check_failed"}`） | ⑪（執行測試時） | 照今天 | 各產品的連線測試失敗回 200 `{"success":false,"message":<文字>}`（例如 `apps/odoo/odoo_mcp_admin/routers/config.py:143-166`） | HA 既有（不回伺服器文字，同 §8.8 #49） | 既有 | HM-10（測選定帳號）；HM-01 凍結 |
+| `backend_fixed` | 409 | 產品不允許從面板改後端（`backend_can_edit` 為否）時 `PUT backend`、`backend/patch`（在 If-Match 檢查之後） | 沒有 `detail`（形狀 E：`{"error":"backend_fixed"}`） | ⑪ | 照今天 | 沒有同名回應 | HA 既有 | 既有 | HM-10；HM-01 凍結 |
 
-沒有代碼的固定回應（同今天）：403（identity、CSRF、cross-site、非管理員、斷線）、503（管理名額、拿鎖逾時、`state unavailable`）、
-400（格式、query、`%`）、405（方法）、408、413、404（未知操作，在角色檢查之後）。
+沒有代碼的固定回應（同今天；本體是 `{"error":"request denied"}`，另有註明的除外）：
+
+- 403：identity（來源、`X-Remote-User-Id`）、CSRF、cross-site、非管理員、斷線。
+- 400：第 ① 步 `X-Ingress-Path` 不只一個或格式錯（`Hc/admin_auth.py:25-32`）；格式驗證不過、帶 query、`raw_path` 含 `%` 或 `\\`、
+  不該有 body 卻有。
+- 415：要 JSON 的路徑 `Content-Type` 不是 `application/json`（`Hc/gateway.py:280-281`）。
+- 503：管理名額滿、拿鎖逾時；state 讀不到時本體是 `{"error":"state unavailable"}`。
+- 408、413：讀 body 超過 60 秒、超過 16 MiB。
+- 405：路由層回 Starlette 的純文字與 `Allow`（8099 只收 GET、HEAD、PUT、POST）。
+- 404：未知的 `/api/*` 操作在角色檢查之後回、本體是空的；頁面路徑用 PUT、POST 在第 ① 步之後就回（`Hc/gateway.py:714-716`）。
 
 ### 4.2 MCP（8081）
 
@@ -314,6 +347,22 @@
 | `backend_unreachable`（`-32603`） | 200 | 最近的健康檢查說後端連不上 | 帶檢查的原因 | 照今天 | 沒有定期監看 | §8.8 #18 | 既有 | HM-09、HM-30 |
 | 429 GET 串流 | 429 | GET 串流已達上限 | `-32003`、`id: null`、`Retry-After: 30` | 不設上限 | 同（32 條） | §8.8 #15 | 新 | HM-08 |
 
+上表只列多帳號會新增或改變的回應。**其他既有回應照今天**（開通後每個帳號 app 照舊；HM-01 的契約凍結逐位元凍結）：
+
+- 405＋`Allow: GET, POST, DELETE`：MCP 路徑用其他方法（token 檢查之後；`Hc/gateway.py:1021-1022`）。自答 session 的 GET 是 405＋`Allow: POST, DELETE`。
+- 400：GET、DELETE 帶 body；session 標頭不只一個或格式錯；initialize 以外沒帶 `mcp-session-id`（有 id 的 POST 回 `-32000`「Bad Request」）。
+- 403：讀 body 時斷線；政策拒絕的 tools/call 沒帶 session；其他政策拒絕（`Denied`）。
+- 408（讀 body 超過 60 秒）、413（超過 16 MiB）、415（`Content-Type` 不是 `application/json`）；n8n 另有 4 MiB、10,000 元素、深度 64 的
+  上限，超過時回 JSON-RPC 錯誤本體（`Hc/request_limits.py`、`Hc/gateway.py:1034-1055`）。
+- 政策拒絕、帶 session 的 tools/call：200＋`-32602`（`Unknown tool`、`Invalid params`、`Operation not permitted`；`Hc/policy.py:42-68`）。
+- 未知方法：有 id 200＋`-32601`「Method not found」；通知 202。
+- 子程式未就緒時閘道自答 initialize、ping、tools/list（§8.8 #68）；就緒後自答 session 回 404（有 id 的 POST 帶 `-32000`「Not Found」）。
+- 子程式回 4xx、5xx（401、403 除外）：照原狀態碼，本體換成 `-32000`＋狀態片語（`Hc/gateway.py:153-160`；§8.8 #62 的 429 就是這樣來的）。
+- initialize 等不到子程式的回覆：503＋`-32000`「BACKEND_UNAVAILABLE」＋`Retry-After: 5`（`Hc/gateway.py:119-122`）。
+- 502 `{"error":"request denied"}`：連不上子程式、子程式回 3xx／401／403、回覆格式不對或超過 8 MiB、協定版本不在審過的清單
+  （`Hc/gateway.py:1204-1206`、`:1230`、`:1258`、`:1288-1291`、`:1301`）。
+- 轉送名額等 1 秒逾時：503 `{"error":"request denied"}`（開通後改成第 2.4 節的 `-32003`）。
+
 ## 5. 名額與記憶體數值（DQ-07＋DQ-29 採 (a)；暫定，HM-19c 量測後定案）
 
 | 項目 | 預設帳號（開通後） | 每個額外帳號 | 今天（沒開通） |
@@ -326,7 +375,7 @@
 | 待送回覆位元組（已處理、還沒送完） | 32 MiB | 32 MiB | 無（最壞 64×8 MiB） |
 | httpx 子程式連線（自己的 client） | 40 | 24 | 40（全 add-on 共用） |
 | 單一請求／單一回應 | 16 MiB／8 MiB | 16 MiB／8 MiB | 16 MiB／8 MiB（n8n 請求 4 MiB） |
-| uvicorn `limit_concurrency`（8081 外框） | 64＋32×產品額外帳號上限 | （全 add-on 一個外框） | 64 |
+| uvicorn `limit_concurrency`（8081 外框） | 64＋32×產品額外帳號上限（各產品見下表） | （全 add-on 一個外框） | 64 |
 | 回覆處理 | 一條工作執行緒、依帳號輪流 | 同左 | 事件迴圈內同步 |
 | 管理名額（8099） | 16（全 add-on 共用） | （共用） | 16 |
 | HA Core 角色查詢並行 | 8（全 add-on 共用） | （共用） | 8 |
@@ -342,12 +391,29 @@
   建立回 409 `profile_memory_insufficient`，存後端照存但子程式不起（`blocked`＋`memory_capacity`）。開機時不擋。讀得到 cgroup
   `memory.max` 時照 PaaS 公式。
 
-## 6. 回覆處理公平排程的門檻（HM-30；暫定，只可收緊，HM-19c 重量後定案）
+**各產品的額外帳號上限與每子程式記憶體**（暫定照 PaaS；HM-07 定常數，HM-19c 在目標硬體量測後定案，改了要同時改本表）：
 
-只在開通的產品生效；沒開通照今天在事件迴圈內處理。
+| 產品 | 額外帳號上限 | 每子程式 MiB | 8081 外框（64＋32×上限） | PaaS（@69ac425） |
+|---|---|---|---|---|
+| Odoo | 5 | 100 | 224 | 5／100 MiB（`apps/odoo/odoo_mcp_admin/main.py:47-48`） |
+| n8n | 2 | 300 | 128 | 2／300 MiB（`apps/n8n/n8n_mcp_admin/main.py:35-36`） |
+| Hermes | 3 | 160（HM-24 在 HAOS 至少 60 分鐘負載量測後定） | 160 | 預設 3／160 MiB |
+| EMQX、LiteLLM、Nextcloud、Headscale | 3 | 160 | 160 | 預設 3／160 MiB（`Pc/launch_policy.py:152-154`） |
+| OpenDesign、Odoo Manage | 0（不開放，DQ-28） | — | 64（不掛分派器） | OpenDesign 預設 3／160 MiB |
 
-**單元測試（可控延遲注入，不靠 runner 速度）**：每筆回覆的處理時間用注入的延遲 d 模擬（測試用 d＝0.25 秒，
-對照 EPYC 7713 上 8 MiB 回覆 0.28～0.47 秒）。A 並行 16 個 8 MiB 與 16 個 2 MiB 回覆時：
+- 保留量 256 MiB（照 PaaS `PROFILE_MEMORY_RESERVE_MIB`，`Pc/profiles.py:47`）；上限另受總上限 5 限制（`Pc/profiles.py:45`）。
+- 讀得到 cgroup `memory.max` 時照 PaaS 公式：額外帳號上限＝min(產品上限, max(1, ⌊(memory.max－256)÷每子程式 MiB⌋)－1)；
+  `required_memory_mib`＝256＋(額外帳號數＋1)×每子程式 MiB（`Pc/profiles.py:170-174`、`:309-314`）。
+- 這張表的數字也用在 FD 預算（上一段）與 T-02（第 6 個額外帳號 409）；計畫的暫定上限也是 Odoo 5、n8n 2、其他 3（計畫 §8.4 DQ-03 的說明）。
+
+## 6. 回覆處理公平排程的門檻（HM-30；暫定：HM-30 實作、HM-19c 在目標硬體量測後定案；要放寬須使用者同意）
+
+只在開通的產品生效；沒開通照今天在事件迴圈內處理。下面的數字是本片先訂的、還沒量過。
+
+**單元測試（可控注入，不靠 runner 速度）**：每筆回覆的處理時間用注入的工作 d 模擬（測試用 d＝0.25 秒，
+對照 EPYC 7713 上 8 MiB 回覆 0.28～0.47 秒）。**注入的工作要像真的回覆處理一樣佔住 GIL**（例如一次對大字串 `json.loads`）：
+`sleep` 會放掉 GIL、純 Python 迴圈每 5 ms 讓出一次，放在工作執行緒都量不到真正的停頓。另加一個用真實 8 MiB 回覆
+（`strict_json`→`redact_secrets`→`filter_list`→`json.dumps`）量迴圈停頓的案例。A 並行 16 個 8 MiB 與 16 個 2 MiB 回覆時：
 
 | 指標 | 門檻 |
 |---|---|
@@ -356,6 +422,9 @@
 | B 的 tools/call 額外延遲 p99 | ≤2d＋0.2 秒（依帳號輪流：B 最多等 A 正在處理的一筆，再加自己的一筆） |
 | 輸出位元組 | 和今天相同（golden） |
 | 每帳號同時在處理的回覆 | ≤1 筆 |
+
+注意：C 層的 `json.loads`（掃描一個大字串時）、`json.dumps`、`re.sub` 一次呼叫期間不放 GIL，一條工作執行緒處理一筆 8 MiB 回覆時，
+事件迴圈的單次停頓可能超過 50 ms。HM-30 用真實回覆量到做不到時，回報使用者再定（例如分段處理或改用子程序），不自行放寬。
 
 **慢讀用戶端**：A 的用戶端不讀回應時，管理程序 RSS 增量 ≤ A 的待送回覆上限 32 MiB＋一筆處理放大 200 MiB＋餘裕 64 MiB＝296 MiB；
 A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
@@ -373,7 +442,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | 錯開啟動 | 預設帳號先起；額外帳號依序起、同時最多 2 個，前一個健康檢查通過或 30 秒逾時才起下一個 |
 | 啟動順序 | legacy 遷移（只對預設）→ 還原偵測、守門、休眠處理 → 預設帳號 → 錯開起額外帳號（壞的標記、不擋其他） |
 | 關閉 | 所有 `Supervisor.stop()` 並行，在 HA 停止上限 30 秒內收完 |
-| 健康監看 | 每帳號一個、自己的 httpx client、起點錯開；認證被拒 15→30→60→120→300 秒退避；開通後連兩次失敗才判 unreachable |
+| 健康監看 | 每帳號一個、自己的 httpx client、起點錯開；認證被拒 15→30→60→120→300 秒退避；開通後連兩次失敗才判 unreachable（DQ-25 待定，照計畫建議；負責片 HM-09、HM-30） |
 | 監看失敗 | 額外帳號只標記 `failed`；預設帳號維持今天「任何元件停止就退出」（DQ-21 待定） |
 | 資源 | 額外帳號子程式 exec 前寫 `/proc/self/oom_score_adj`＝500（絕對值）與 `setpriority(+5)` |
 | 子程式 bearer（HM-06，不受開關管） | 剛好一個 `Authorization`、`hmac.compare_digest` 比對 `Bearer <WOOW_MCP_CHILD_TOKEN>`；不符 401（不寫細節）；環境變數缺、空或不符 `[A-Za-z0-9_-]{43}` 就拒絕啟動 |
@@ -399,9 +468,10 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 
 ## 9. 刻意差異表（§8.8）
 
-類型：**既有**＝HA 今天就不同、不是多帳號造成；**部署**＝平台差異；**加嚴**＝HA 比 PaaS 嚴（DQ-40 已一次確認，列入給 PaaS 的回補建議）；
-**待決**＝看還沒定的決策。第 1～43 列是計畫 §8.8 原表（2026-11-14 的決策已套用）；第 44～79 列是 HM-00 對照腳本把
-FEATURE-MATRIX「HA 平台差異」欄與 G6 §5「HA 期望值與差異」欄逐列對照後補的列，來源見 `deviation-trace.md`。
+類型：**既有**＝HA 今天就不同、不是多帳號造成；**部署**＝平台差異；**加嚴**＝HA 比 PaaS 嚴（DQ-40 的 10 項已一次確認；
+其餘加嚴的列和它們一起列入給 PaaS 的回補建議，HM-29）；**待決**＝看還沒定的決策。第 1～43 列是計畫 §8.8 原表（2026-11-14 的決策已套用）；
+第 44～79 列是 HM-00 對照腳本把 FEATURE-MATRIX「HA 平台差異」欄與 G6 §5「HA 期望值與差異」欄逐列對照後補的列；第 80～86 列是
+審查後把 FEATURE-MATRIX「HA 平台差異」欄是「—」的 44 列人工逐列看過後補的列。逐列的來源與結論見 `deviation-trace.md`。
 
 | # | 項目 | PaaS（@69ac425） | HA | 理由 | 類型 |
 |---|---|---|---|---|---|
@@ -447,7 +517,7 @@ FEATURE-MATRIX「HA 平台差異」欄與 G6 §5「HA 期望值與差異」欄�
 | 40 | 換身分換 token | 只有 Odoo（#131） | Odoo；加 Nextcloud url／username、Hermes gateway_url／dashboard_url／dashboard_username | 使用者原則「每條網址永久綁一個後端身分」（R01:85；DQ-40 ⑩） | 加嚴 |
 | 41 | 新來源要重填秘密 | 只有 Headscale（FM-89） | 開通後全部產品改 url 的 scheme／host／port 沒帶新秘密 → 422 | 防把存好的密碼送到新伺服器（DQ-40 ⑨） | 加嚴 |
 | 42 | 密鑰路徑 Origin | 清單＋report-only（記 would_deny）、反射 CORS | 清單（預設 `https://claude.ai`）＋report-only 記 would_deny、不加 CORS | 不放寬（FM-74；DQ-11 採 (a)） | 加嚴 |
-| 43 | 不開放的產品 | OpenDesign 可開 3 個（R06 §3.8） | 409 `profile_product_unsupported`；不顯示新增按鈕 | 不在七產品、已下架（DQ-28 採不開放） | 既有 |
+| 43 | 不開放的產品 | OpenDesign 可開 3 個（R06 §3.8） | 409 `profile_product_unsupported`；不顯示新增按鈕 | 不在七產品：OpenDesign 商店停用、Odoo Manage 已下架（DQ-28 採不開放） | 部署 |
 | 44 | 帳號索引的位置與建立時點 | 預設帳號 `config.json` 內的 `profile_index`；下次寫入就多一個空索引 | 獨立檔 `/data/mcp/profiles.json`，第一次建立額外帳號才產生；預設 `state.json` 一個鍵都不加 | HA state 鍵集合精確比對，舊映像讀不了新鍵（Hc/products.py:529-538） | 部署 |
 | 45 | 部署層設定入口 | 名額、排隊、Origin 等用 chart 或環境變數調 | 全部是程式常數；add-on options 維持 `{}`；改數值要回功能 PR、發版 | Store 第 1 類比對與 validate.py 的精確 manifest | 部署 |
 | 46 | 手改帳號 state | 讀一次就快取，手改要重啟管理程序 | 每請求重讀，手改立即生效、壞檔立即 fail closed（索引另見 #26） | HA 既有每請求重讀與租約 | 既有 |
@@ -471,7 +541,7 @@ FEATURE-MATRIX「HA 平台差異」欄與 G6 §5「HA 期望值與差異」欄�
 | 64 | LiteLLM 寫入權限 | `LITELLM_MCP_READONLY` 一個開關 | 逐支工具授權 | HA 既有政策模型 | 既有 |
 | 65 | EMQX 子程式端政策 | 子程式每次呼叫讀自己帳號的設定再擋一次 | 只在閘道擋；子程式只收 READONLY 與 DISABLED_TOOLS | 閘道政策＋每帳號子程式＋bearer（DQ-27 待定，建議不做） | 待決 |
 | 66 | 還原的舊 schema 預設 state | restore guard 設 `RESTORE_POLICY_HOLD`，保留還原回來的舊政策 | 照 2026-10-27 決定做全開遷移，留復原紀錄與面板通知；額外帳號一出生就是 schema 4 | HA owner-defaults 規則；只在還原拉不到舊映像時發生（UC-24） | 既有 |
-| 67 | 還原收據封存 | 封存 bundle、可壓縮，重複還原保留每一份 | 每帳號只留最近 1 份 `.restored`；舊操作 id 回 410 | entrypoint 修復項目上限（512 項、8 層） | 部署 |
+| 67 | 還原收據封存 | 封存 bundle、可壓縮，重複還原保留每一份；還原前的舊操作 id 回 410 `operation_id_expired` | 每帳號只留最近 1 份 `.restored`；舊操作 id 回 410 `operation_restored` | entrypoint 修復項目上限（512 項、8 層）；代碼分開，看得出是還原造成（FM-07） | 部署 |
 | 68 | 子程式未就緒時的回應 | 503「MCP child is not ready」，或只有一支 setup_status 工具的佔位伺服器 | 閘道自答 initialize、ping、tools/list（內附清單），tools/call 回 JSON-RPC 錯誤；就緒後自答 session 404、要求重連 | HA 既有（0.2.2） | 既有 |
 | 69 | 還原涵蓋範圍 | 手冊涵蓋任何備份 | 只涵蓋各產品第一個含 HM-13 的版本以後做的備份；更早的備份還原後升到最新版並按「全部撤銷」 | 還原會換回備份當時的映像，舊 entrypoint 不建標記 | 部署 |
 | 70 | 平台建立路徑 | workspace API 建服務 | 商店安裝 add-on → 面板加帳號（併入 T-20） | 平台不同 | 部署 |
@@ -484,9 +554,17 @@ FEATURE-MATRIX「HA 平台差異」欄與 G6 §5「HA 期望值與差異」欄�
 | 77 | 帳本 | 沒有 | `docs/provenance/runtime-patches.json`、tool-surface 摘要；新模組全部列管（`ledger-tracking.md`） | HA 既有供應鏈規則 | 既有 |
 | 78 | 秘密掃描與測試資料 | 沒有 builder 全歷史掃描 | builder 用 gitleaks 掃原始碼與全歷史、零容忍；`claude-delivery` 禁止 force push → 測試資料正規化、每片預檢 | 歷史改不掉 | 部署 |
 | 79 | 上線後監看 | watch_fleet 唯讀監看全部服務 | 看不到客戶主機；只能對自營 HAOS 做唯讀檢查（範圍 HM-29 定） | 客戶自己更新 | 部署 |
+| 80 | 手動指定 token | `PUT /api/tokens`（`set_token`）；撞號 409 `token_in_use`，不回顯值、不說是哪個帳號（Pc/routers/tokens.py:141-142；Pc/profiles.py:488-503） | 沒有這個 API：token 只由伺服器隨機產生，只能輪替與撤銷（Hc/gateway.py:582-606）；撞號只會來自還原或複製，回 503（第 2.3 節） | FM-31「不新增」；將來要加就照 PaaS 回 409，並同時擋目前與歷史 token | 既有 |
+| 81 | 請求內容超過上限 | 最多再讀 128 MiB 丟掉才回錯誤，讓經反向代理的用戶端看得到錯誤、不是 RST（Pc/request_limits.py:16） | 一超過就 413（n8n 是 JSON-RPC 錯誤本體）、不再讀後面的內容（Hc/gateway.py:270-271；Hc/request_limits.py:51-70） | FM-52 延後：只在前面有 Cloudflare Tunnel 或反向代理時有感（HM-14 選做） | 既有 |
+| 82 | 全部撤銷 | 沒有面板或 API；還原時照手冊撤銷全部（docs/paas-config-restore-runbook.md） | `POST {base}/api/profiles/revoke-all`（含預設帳號）＋`.revoke-all-pending`；逐帳號結果，寫入失敗的帳號 503、重啟時守門重做（第 2.3、3.1 節） | HA 沒有 shell 跑手冊；事故止血第一步、回退後再升級都要靠它（threat-model.md 第 4 節；§8.8 #69）；FM-120 | 加嚴（建議回補） |
+| 83 | 管理請求帶兩個以上 `X-MCP-Profile` | 取第一個值（`request.headers.get`，Pc/profiles.py:612）；第一個值存在就照常服務 | 開通後 400 `profile_id_invalid`（在角色檢查後；第 3.3 節） | 一個請求只能對一個帳號，哪個值生效不該看中介層實作；fail closed（同 #31、#32；DQ-40 ①，DQ-17 細節待定） | 加嚴 |
+| 84 | 帳號在別處被刪時的面板 | 等清單下次重抓才回 default，期間帳號範圍請求 404（依程式推論，R05 §6） | 任何帳號範圍請求回 `profile_not_found` 就立刻重抓清單、切回預設帳號並提示；被刪帳號的待確認收據明說並清掉（第 3.4 節） | 不讓下一個操作落到別的帳號、不留無法確認的收據（I12；FM-59） | 加嚴 |
+| 85 | 用戶端範例的名稱 | 只給網址與 `claude mcp add --transport http my-<app>-mcp "<網址>"`；名稱不含帳號，同產品兩帳號照抄會撞名 | 今天是 `mcpServers` JSON、名稱固定 `woow`、帶 Bearer（Hui/contracts.js:319-321；§8.8 #2）；開通後名稱帶帳號 id 前 8 碼（例如 `woow-<產品>-<id 前 8 碼>`，暫定） | 同產品兩個帳號照抄不撞名；建議 PaaS 一起改（FM-63） | 待決（DQ-31） |
+| 86 | 帳號範圍的管理操作與本體 | FastAPI 路由（`/api/settings/<section>`、`/api/tokens`、`/api/tools` 等），各自的本體與 ETag（Pc/config/store.py:276-289） | HA 既有管理契約的操作：`bootstrap`、`backend`、`policy`、`token/rotate`…（docs/management-capabilities-v1.md）、ETag `"c1-<64 hex>"`；開通後只加 `X-MCP-Profile`、回聲與帳號範圍（第 3.1、3.4 節）。帳號增刪改查的路徑、方法與欄位照 PaaS（FM-18、FM-19、FM-22） | HA 既有的單帳號契約，不因多帳號改寫；面板與 P9 kit 都照它 | 既有 |
 
 ## 10. 變更紀錄
 
 | 版本 | 日期 | 片 | 內容 |
 |---|---|---|---|
 | v1 草案 | 2026-11-14 | HM-00 | 依計畫 §5、§6、§8.8 起草；套用 2026-11-14 的 §13.1 決策；差異表由 43 列補到 79 列 |
+| v1 草案（審查修正） | 2026-11-14 | HM-00 | 依獨立審查修正：錯誤代碼表對齊 bb48449 與 PaaS pin（既有回應的五種本體形狀；補 `unsupported`、`backend_check_failed`、`backend_fixed` 三列與 415、第 ① 步的 400；`core_version_unreviewed` 在 ⑥／⑩；重複 `X-MCP-Profile` 的 PaaS 行為）；差異表補第 80～86 列；第 4.2 節補既有回應範圍；第 5 節加各產品上限；待定題目標示；隔離目錄刪除路由與讀 body 途中額度用完的回應（暫定）；第 6 節門檻寫法 |

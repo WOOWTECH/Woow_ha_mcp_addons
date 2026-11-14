@@ -1,12 +1,13 @@
 # PaaS 多帳號測試逐案對照（pin `69ac425`）
 
 > HM-00 產出（2026-11-14）。全表由 repo 外的產生器從 PaaS git 物件庫重算後寫出；改歸屬時改產生器的規格再重產，
-> 不要手改表格。對照腳本會重新列出 PaaS 案例，和本檔逐檔逐案比對（見 `docs/provenance/ha-multiprofile-HM-00-20261114.md`）。
+> 不要手改表格。對照腳本會重新列出 PaaS 案例，和本檔逐檔逐案比對；腳本與輸入的 SHA-256、重產指令見
+> `docs/provenance/ha-multiprofile-HM-00-20261114.md` 第 8 節。歸屬的語意（對到的測試或差異列說的是不是同一件事）靠人工抽查。
 
 ## 結論
 
 - 範圍：56 個檔、606 個案例，每檔每案都有歸屬。其中 pin `69ac425` 的範圍是 53 檔、541 案；pin 之後合併進來的 D 組 3 檔、65 案。
-- 歸屬（一案可以同時有兩種）：對到 HA 測試 435 案；對到刻意差異表（契約第 9 節，下稱 §8.8）275 案；只能標「不適用」40 案。
+- 歸屬（一案可以同時有兩種）：對到 HA 測試 435 案；對到刻意差異表（契約第 9 節，下稱 §8.8）279 案；只能標「不適用」36 案。
 - pin 之後：`origin/main` 到 `7d111b1`。#148 後續（`091dfbc`，#150）只改文件、測試與註解，`test_gateway_queue.py` 沒有新增或刪除案例；#149（head `3d33bc5`）已在 2026-11-14 14:19（台北）合併，它的 query 憑證測試照計畫 §10.5 併進 D 組，對到 HM-02（見文末）。
 
 ## 範圍怎麼來
@@ -343,8 +344,8 @@
 
 | # | 行 | 案例 | 歸屬 |
 |---|---|---|---|
-| 1 | 81 | `test_manual_token_used_by_another_profile_is_refused_with_its_reason` | 不適用：HA 沒有手動指定 token 的 API（FEATURE-MATRIX FM-31） |
-| 2 | 115 | `test_refusal_inside_a_journaled_operation_drops_only_its_own_receipt` | 不適用：HA 沒有手動指定 token 的 API（FEATURE-MATRIX FM-31） |
+| 1 | 81 | `test_manual_token_used_by_another_profile_is_refused_with_its_reason` | §8.8 #80（HA 沒有手動指定 token 的 API，FEATURE-MATRIX FM-31 不新增） |
+| 2 | 115 | `test_refusal_inside_a_journaled_operation_drops_only_its_own_receipt` | §8.8 #80（HA 沒有手動指定 token 的 API，FEATURE-MATRIX FM-31 不新增） |
 | 3 | 143 | `test_token_duplicated_in_two_profile_files_is_refused_and_logged_once_without_the_token` | HA：`tests/test_profile_routing.py`（HM-08），撞號 503、每組 60 秒一行、不含 token |
 | 4 | 191 | `test_duplicate_index_port_keeps_the_service_and_other_profiles_available` | HA：`tests/test_profile_index.py`（HM-07），port 重複不算結構錯；HA：`tests/test_profile_ports.py`（HM-09） |
 | 5 | 211 | `test_duplicate_index_port_starts_every_other_profile_and_logs_the_conflict` | HA：`tests/test_profile_ports.py`（HM-09），只停相關帳號 |
@@ -365,8 +366,8 @@
 | 1 | 28 | `test_five_profiles_have_private_independent_configs_and_urls` | HA：`tests/test_profile_store.py`（HM-07）；HA：`tests/test_profile_routing.py`（HM-08） |
 | 2 | 89 | `test_profile_token_revocation_is_local` | HA：`tests/test_profile_routing.py`（HM-08），撤銷只影響該帳號（I3） |
 | 3 | 104 | `test_token_cannot_be_assigned_to_two_profiles` | HA：`tests/test_profile_consistency.py`（HM-07），HA 沒有手動指定 token，建立一律新 token（I2） |
-| 4 | 120 | `test_concurrent_manual_token_claims_have_one_owner` | 不適用：HA 沒有手動指定 token 的 API（FEATURE-MATRIX FM-31） |
-| 5 | 151 | `test_damaged_profile_reserves_unknown_token_against_manual_claim` | 不適用：HA 沒有手動指定 token 的 API（FEATURE-MATRIX FM-31） |
+| 4 | 120 | `test_concurrent_manual_token_claims_have_one_owner` | §8.8 #80（HA 沒有手動指定 token 的 API，FEATURE-MATRIX FM-31 不新增） |
+| 5 | 151 | `test_damaged_profile_reserves_unknown_token_against_manual_claim` | §8.8 #80（HA 沒有手動指定 token 的 API，FEATURE-MATRIX FM-31 不新增） |
 | 6 | 175 | `test_deleting_profile_removes_child_database_directory` | HA：`tests/test_n8n_multi_profile.py`（HM-25，暫定名），刪帳號一起刪 nodes.db；§8.8 #47 |
 | 7 | 192 | `test_missing_extra_profile_does_not_disable_other_tokens_or_startup` | HA：`tests/test_profile_consistency.py`（HM-07），缺的標 `profile_unavailable`、不補建 |
 | 8 | 226 | `test_fs_group_widened_profile_directories_are_tightened_on_reload` | HA：`tests/test_profile_store.py`（HM-07），mode／owner 在 uid 10001 子程序驗 |

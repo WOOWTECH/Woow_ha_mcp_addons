@@ -9,8 +9,8 @@
 | `decisions.md` | DQ-01～DQ-46 的結論、日期或「待定＋負責片」 | 每次有決定就改 |
 | `threat-model.md` | 角色與信任邊界、安全不變式 I1～I13、已知限制、事故處理 | HM-00、HM-18 |
 | `acceptance-matrix.md` | T-01～T-29 的 HA 期望值、Odoo 首發標準、測試檔登記表 | HM-00 → HM-16 |
-| `paas-test-mapping.md` | PaaS 多帳號測試逐檔逐案對照（pin 的 53 檔 541 案，加 pin 之後併進來的 3 檔 65 案） | 由 repo 外的產生器重產 |
-| `deviation-trace.md` | FEATURE-MATRIX 與 G6 §5 的差異欄逐列對到差異表或測試 | 由 repo 外的產生器重產 |
+| `paas-test-mapping.md` | PaaS 多帳號測試逐檔逐案對照（pin 的 53 檔 541 案，加 pin 之後併進來的 3 檔 65 案） | 由 repo 外的產生器重產（腳本與輸入的 SHA-256、重產指令見 HM-00 provenance 筆記第 8 節） |
+| `deviation-trace.md` | FEATURE-MATRIX 每一列（含「HA 平台差異」欄是「—」的列）與 G6 §5 逐列對到差異表、測試，或寫明為什麼相同 | 同上 |
 | `ledger-tracking.md` | 新模組的帳本列管清單與規則 | HM-00 定案 |
 
 相關：`docs/provenance/multi-profile-parity-baseline.md`（PaaS pin 與變動檢查）、各片的
