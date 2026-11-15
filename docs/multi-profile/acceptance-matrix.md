@@ -1,6 +1,6 @@
 # 多帳號驗收矩陣（PaaS T-01～T-29 的 HA 版）
 
-- 狀態：HM-00 起草（2026-11-14）；HM-06 依 n8n 的實際行為改 T-23 的 n8n 期望值（2026-11-15，審查 MF-1 選 (a)）。HM-16 把它寫進 `docs/operations/acceptance.md` 與 P9 kit；HM-19b 照它做 Odoo 首發的 HAOS 驗收。
+- 狀態：HM-00 起草（2026-11-14）；HM-06 依 n8n 的實際行為改 T-23 的 n8n 期望值（2026-11-15，審查 MF-1 選 (a)）；HM-20 登記兩個測試檔（2026-11-15）。HM-16 把它寫進 `docs/operations/acceptance.md` 與 P9 kit；HM-19b 照它做 Odoo 首發的 HAOS 驗收。
 - 來源：計畫 §10.4、§10.6（repo 外）；HA 期望值沿用 `gaps/G6-delivery.md` 第 5 節，依 2026-11-14 的決策更新（`decisions.md`）。
 - 契約與差異：`contract.md`（第 9 節刻意差異表，下稱 §8.8）；G6 §5 每一列怎麼對到差異表或測試見 `deviation-trace.md`。
 
@@ -118,7 +118,8 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `packaging/test_ha_p9_probe.py` | HM-16 | 既有，擴充 | P9 kit 帳號參數、交叉矩陣 |
 | `packaging/test_validate.py` | HM-17 | 既有，擴充 | 多產品版號運算式 |
 | `packaging/test_release_gate.py` | HM-17 | 既有，擴充 | release_gate 只認產品自己的紀錄 |
-| `tests/test_saved_destinations.py` | HM-20 | 既有，擴充 | 開通後存檔與執行期都拒 loopback |
+| `tests/test_saved_destinations.py` | HM-20 | 既有，擴充 | 開通後存檔拒 loopback（全部產品，含 n8n；各種寫法）；區網照放；沒開通與替身開關照今天 |
+| `tests/test_backend_loopback.py` | HM-20 | 新增 | 開通後子程式環境多 `WOOW_MCP_DENY_LOOPBACK=1`，執行期字面與解析後的 loopback 都拒（每個產品；n8n 的 API 與官方 MCP 端點）；webhook 維持 permissive；替身開關只在測試 |
 | `tests/test_litellm_multi_profile.py` | HM-21 | 暫定名 | 兩把假 virtual key、bearer 401 矩陣、政策各自 |
 | `tests/test_nextcloud_multi_profile.py` | HM-22 | 暫定名 | 兩個使用者、存政策只重啟該帳號、換 url／username 換 token |
 | `tests/test_emqx_multi_profile.py` | HM-23 | 暫定名 | 兩帳號政策各自 |
