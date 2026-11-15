@@ -261,7 +261,7 @@ class Profiles:
         return sum(len(child.requests) for child in self.children.values())
 
     async def open(self, name, product=PRODUCT, *, port, profile_id='default', configured=True, shared=None,
-                   view=None, lifecycle=None, options=None):
+                   view=None, lifecycle=None, options=None, child_connections=None):
         directory = self.tmp_path / name
         if configured:
             store = ProductStore(directory, product)
@@ -278,8 +278,9 @@ class Profiles:
         app_options = {**product_options(product), **(options or {})}
         if shared is None:
             app_options.setdefault('verify_admin', self.verify)
+        quota = {} if child_connections is None else {'child_connections': child_connections}  # HM-08
         runtime = self.module.ProfileRuntime(store, tools, spec, port=port, profile_id=profile_id, lifecycle=lifecycle,
-                                             shared=shared, profile_view=view, app_options=app_options)
+                                             shared=shared, profile_view=view, app_options=app_options, **quota)
         await self.stack.enter_async_context(runtime)
         sent = self.sent.setdefault(name, set())
 
@@ -336,7 +337,8 @@ def tool_call(ident, product=PRODUCT):
 def test_make_apps_takes_the_shared_and_external_objects_as_keyword_only_options():
     parameters = inspect.signature(make_apps).parameters
     assert list(parameters)[:3] == ['store', 'tools', 'child']
-    for name in ('authority', 'admin_slots', 'admin_pipeline', 'token_access', 'mutation_lock', 'profile_view'):
+    for name in ('authority', 'admin_slots', 'admin_pipeline', 'token_access', 'mutation_lock', 'profile_view',
+                 'forward_slots', 'slot_busy', 'reply_secrets'):  # the last three: HM-08 (plan 5.1 point 8, 5.2)
         assert parameters[name].kind is inspect.Parameter.KEYWORD_ONLY and parameters[name].default is None, name
     module = runtime_module()
     parameters = inspect.signature(module.ProfileRuntime).parameters
@@ -380,7 +382,7 @@ async def test_a_runtime_refuses_what_is_not_its_own(tmp_path):
                 build(port=port)
         for name in ('child_url', 'health', 'backend_changed', 'configuration', 'backend_check', 'restart_child',
                      'diagnostics', 'availability', 'token_access', 'mutation_lock', 'authority', 'admin_slots',
-                     'admin_pipeline', 'profile_view'):
+                     'admin_pipeline', 'profile_view', 'forward_slots', 'slot_busy', 'reply_secrets'):
             with pytest.raises(ValueError, match='the runtime passes'):
                 build(app_options={name: None})
         with pytest.raises(ValueError, match='not a shared administration'):
@@ -620,8 +622,8 @@ async def test_each_profile_redacts_its_replies_with_its_own_secrets(tmp_path, m
 async def test_each_runtime_makes_its_child_client_as_run_product_did(tmp_path, monkeypatch, log_scan):
     """The child client of every runtime has the options run_product.run gave it before HM-05 (plan 3.2, 5.2): no proxy
     or .netrc from the environment (trust_env=False: a child bearer never goes through HTTP(S)_PROXY), no redirect
-    followed, 10 s per request (3 s to connect) and 40 connections (the default profile's number; HM-08 sets the extra
-    profiles' own)."""
+    followed, 10 s per request (3 s to connect) and 40 connections, the default profile's number, unless the runtime
+    is given its own (HM-08: the ProfileManager gives an additional profile 24, plan 5.2; HM-05 review S-1)."""
     made = []
     async with Profiles(tmp_path, monkeypatch, log_scan) as profiles:
         build = profiles.client
@@ -631,10 +633,11 @@ async def test_each_runtime_makes_its_child_client_as_run_product_did(tmp_path, 
             return build(*args, **kwargs)
         monkeypatch.setattr(profiles.module.httpx, 'AsyncClient', recording)
         await profiles.open('default', port=DEFAULT_PORT)
-        await profiles.open('extra', port=EXTRA_PORT, profile_id=EXTRA_ID)
+        await profiles.open('extra', port=EXTRA_PORT, profile_id=EXTRA_ID, child_connections=24)
+        assert profiles.module.CHILD_CONNECTIONS == 40
     expected = dict(trust_env=False, follow_redirects=False, timeout=httpx.Timeout(10, connect=3),
                     limits=httpx.Limits(max_connections=40))
-    assert made == [expected, expected]
+    assert made == [expected, {**expected, 'limits': httpx.Limits(max_connections=24)}]
 
 
 async def test_each_profile_keeps_its_own_receipts(tmp_path, monkeypatch, log_scan):
