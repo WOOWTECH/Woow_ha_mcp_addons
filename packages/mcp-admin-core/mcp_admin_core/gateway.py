@@ -107,6 +107,11 @@ READY_ROUTE = "/health/ready"
 GATEWAY_BUSY = -32003
 BUSY_RETRY_AFTER = 5
 STREAM_RETRY_AFTER = 30
+# HM-08 review MF-1, S-1 (contract 2.2 point 4): the request state's name for a switched-on product's charge of the body
+# a request forwards (profile_router.ProfileGate puts it there; a switched-off product's requests never have it). Once
+# a POST's body is re-serialized for the child, serve() calls it with the message and the forwarded size: None sends
+# the body, anything else is the answer instead (the profile's byte budget cannot hold it).
+FORWARDED_BODY = "forwarded_body"
 
 
 def request_id(message):
@@ -438,8 +443,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
       profile's WARNING). Left out: 503 {"error":"request denied"}, as before.
     - reply_secrets: every token and child token the add-on holds (every profile's, every orphan's; a callable read
       for every reply). Every answer that carries a child's or a backend's text (a relayed reply, an SSE event, the
-      gateway's own tools/list, a refused tools/call's health reason, backend/test, diagnostics) is masked with this
-      profile's own secrets (redact.secret_values, as before) and these (DQ-40 (a) ⑧)."""
+      gateway's own tools/list, a refused tools/call's health reason, a child's initialize error, backend/test,
+      diagnostics) is masked with this profile's own secrets (redact.secret_values, as before) and these (DQ-40 (a) ⑧).
+      Left out, an initialize error stays unmasked, as before (HM-08 review S-4: an existing gap, HM-14's).
+    A switched-on product's dispatcher also charges the body a POST forwards to the profile's byte budget, through the
+    request's state (FORWARDED_BODY; profile_router.ProfileGate): no make_apps option."""
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
@@ -1319,6 +1327,14 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     # child must not expect any, whatever the real client declared.
                     forwarded = {**message, "params": {**message["params"], "capabilities": {}}}
                 content = json.dumps(forwarded, separators=(",", ":")).encode()
+                charge = getattr(request.state, FORWARDED_BODY, None)
+                if charge is not None:
+                    # HM-08 review MF-1, S-1: a switched-on product's dispatcher charges what the child is sent until
+                    # the request ends (this serialization can be larger than what was read: ASCII escapes make a CJK
+                    # character 6 bytes and an emoji 12, and a number is written in Python's own form).
+                    refusal = charge(message, len(content))
+                    if refusal is not None:
+                        return refusal  # the slot is released below; the child never gets the request
             waited = time.monotonic() + CHILD_WAIT_SECONDS
             call_seconds = CALL_SECONDS if method == "tools/call" else None  # 0.2.2: see CALL_SECONDS
             async with asyncio.timeout(call_seconds + 5 if call_seconds else 35):
@@ -1419,6 +1435,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                                            **({"instructions": instructions} if instructions else {})}
                 except ValueError:
                     raise BadRequest(502) from None
+                if "error" in value and reply_secrets is not None:
+                    # HM-08 review S-4 (a): switched on, a child's initialize error (its message and data are the
+                    # child's text) is masked as every other relayed text. Switched off it is relayed as before: an
+                    # existing gap (not even this profile's own credentials are masked there), left to HM-14.
+                    value = redact.redact_secrets(value, masks(store.load()))
                 if frame is None or json_only(request):
                     # 0.1.13: a client that accepts only application/json gets the initialize answer as JSON even when
                     # the child framed it as an SSE event (the gateway holds the parsed reply either way).

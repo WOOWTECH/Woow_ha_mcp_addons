@@ -32,19 +32,32 @@ Which profile (plan 5.1; I1, I2; DQ-01 (a), DQ-09, DQ-12):
 
 Every profile's own limits (ProfileGate; plan 5.2; contract 5; I8; DQ-07 (a)): before a request's body is read, its
 profile's admission (64 for the default profile, 32 for an additional one; a request with no candidate or no match
-takes none); while it is read, the profile's byte budget (64 MiB each, the default profile's included: C1-M5), charged
-max(the declared Content-Length up to gateway.MAX_REQUEST, the bytes read so far) from admission until the profile's
-app starts its answer (the body is no longer held then: serve() returned); a GET (an event stream) takes one of the
-profile's stream places (24, 8). No pool is shared. A request refused before its body is read (admission full, or a
-declared length over what is left of the budget) is read with the add-on's refusal allowance (RefusalAllowance: 8 at
-once, 512 KiB in all, at most 64 KiB and 2 s each) only to find its JSON-RPC id: with one, 200 and a -32003 error under
-it; otherwise 503, id null; both Retry-After 5 (gateway.busy_reply; the PaaS table, with HA's one deviation: a body over
-64 KiB gets 503, plan 8.8 #16). A body that grows past the budget while it is read is cut off at once: the profile's
-app sees the client leave, its answer is replaced by 503 + -32003 id null, nothing of it reaches the child and its
-bytes are given back. A GET past the stream cap: 429 + -32003 id null + Retry-After 30, at once. The profile's app
-answers a forwarding slot that stays busy for a second the same way (ProfileGate.slot_busy, make_apps slot_busy).
-Each limit writes one WARNING per profile and situation a minute (Reports: id's first 8 characters, suppressed=N),
-never a token, URL, label or request content. The -32003 texts are fixed and provisional (HM-14 settles them).
+takes none); while it is read and until it ends, the profile's byte budget (64 MiB each, the default profile's
+included: C1-M5). A request is charged max(the declared Content-Length up to gateway.MAX_REQUEST, the bytes read so far,
+the size of the body its app forwards to the child) from admission until it ends (its answer sent or its client gone),
+not only until its answer starts (HM-08 review MF-1): a child answers a request with an event stream whose headers come
+before its tool runs (mcp 2.3.0 and FastMCP 4.1.3 do by default), and the gateway's forwarded copy of the body stays
+referenced by the child's response (httpx keeps the request on it) until that stream ends. The forwarded size is the
+gateway's own re-serialization (ASCII escapes: a 4-byte UTF-8 character is forwarded as 12 bytes, a CJK one as 6;
+review S-1): the app reports it before sending (gateway.FORWARDED_BODY in the request's state), and a body the budget
+cannot hold then is not sent: 200 + -32003 under its id (503, id null, without one). A GET (an event stream) takes one
+of the profile's stream places (24, 8). No pool is shared. A request refused before its body is read (admission full,
+or a declared length over what is left of the budget) is read with the add-on's refusal allowance (RefusalAllowance: 8
+at once, 512 KiB in all, at most 64 KiB and 2 s each; the add-on's one shared pool) only to find its JSON-RPC id: with
+one, 200 and a -32003 error under it; otherwise 503, id null; both Retry-After 5 (gateway.busy_reply; the PaaS table,
+with HA's one deviation: a body over 64 KiB, or one the allowance has no room for, gets 503, plan 8.8 #16). A body that
+grows past the budget while it is read is cut off at once: the profile's app sees the client leave, its answer is
+replaced by 503 + -32003 id null, nothing of it reaches the child and its bytes are given back. A GET past the stream
+cap: 429 + -32003 id null + Retry-After 30, at once. The profile's app answers a forwarding slot that stays busy for a
+second the same way (ProfileGate.slot_busy, make_apps slot_busy). Each limit writes one WARNING per profile and
+situation a minute (Reports: id's first 8 characters, suppressed=N), never a token, URL, label or request content. The
+-32003 texts are fixed and provisional (HM-14 settles them).
+
+What the budget bounds is the bytes of a profile's requests, not every byte they cost: parsing a body costs more than
+its size (many small objects or arrays: about 24 times, contract 5), and the 8081 listener's connections are one bound
+of the whole add-on (uvicorn's limit_concurrency counts idle keep-alive connections and those of clients without a
+token too: when it is full, a new connection gets uvicorn's plain-text 503 whatever its profile; HM-08 review S-5,
+known since G2 S7). The isolation of one profile from another holds per request.
 
 The reply mask (plan 5.1 point 8, DQ-40 (a) ⑧): the manager's reply_secrets() gives every profile's app every token
 and child token the add-on holds (make_apps reply_secrets). Not here: queue limits, the notification reserve and the
@@ -92,9 +105,9 @@ def admission_text(limit: int) -> str:
 
 def bytes_text(limit: int) -> str:
     size = f'{limit / MiB:g} MiB'
-    return (f"The requests of this MCP URL being read already hold {size}, the limit of its profile, so this request was "
-            "not sent. Retry shortly. "
-            f"(這個 MCP 網址讀取中的請求內容已達這個帳號的上限 {size}，這個請求沒有送出，請稍後再試。)")
+    return (f"The requests of this MCP URL in progress already hold {size}, the limit of its profile, so this request "
+            "was not sent. Retry shortly. "
+            f"(這個 MCP 網址進行中的請求內容已達這個帳號的上限 {size}，這個請求沒有送出，請稍後再試。)")
 
 
 def forward_text(slots: int, wait: float) -> str:
@@ -245,13 +258,14 @@ class ProfileGate:
                                      f'{quota.admission} requests were in progress, its limit; requests were answered '
                                      'busy (-32003) without being read', scope, receive, send, length)
         if self.body_bytes + reserved > quota.body_bytes:
-            return await self.refuse('bytes', bytes_text(quota.body_bytes),
-                                     f'its requests being read held {quota.body_bytes / MiB:g} MiB, its limit; '
-                                     'requests were answered busy (-32003)', scope, receive, send, length)
+            return await self.refuse('bytes', bytes_text(quota.body_bytes), self.bytes_note(), scope, receive, send,
+                                     length)
         self.active += 1
         self.streams += stream
         self.body_bytes += reserved
-        charged, read = reserved, 0  # what this request holds of the budget, and what was read of it
+        # What this request holds of the budget (max of the three below, from admission until it ends), what was read
+        # of its body, and the size its app forwards to the child (0 until it reports it).
+        charged, read, forwarded = reserved, 0, 0
         cut = started = replaced = False
 
         def give_back():
@@ -266,17 +280,30 @@ class ProfileGate:
             message = await receive()
             size = len(message.get('body', b'')) if message['type'] == 'http.request' and not started else 0
             if size:
-                grown = max(reserved, read + size) - charged
-                if self.body_bytes + grown > quota.body_bytes:
+                needed = max(reserved, read + size, forwarded)
+                if self.body_bytes + needed - charged > quota.body_bytes:
                     cut = True  # this chunk is not handed on; the app sees the client leave
                     give_back()
-                    self.warn('bytes', f'its requests being read held {quota.body_bytes / MiB:g} MiB, its limit; '
-                                       'requests were answered busy (-32003)')
+                    self.warn('bytes', self.bytes_note())
                     return {'type': 'http.disconnect'}
                 read += size
-                charged += grown
-                self.body_bytes += grown
+                self.body_bytes += needed - charged
+                charged = needed
             return message
+
+        def forwarding(message, size):
+            """gateway.FORWARDED_BODY: the app re-serialized the request's body for its child as size bytes. Charged
+            when it is more than this request holds; None to send it, or the busy answer when the budget cannot hold it
+            (200 + -32003 under its id; the child never gets it)."""
+            nonlocal charged, forwarded
+            needed = max(charged, size)
+            if self.body_bytes + needed - charged > quota.body_bytes:
+                self.warn('bytes', self.bytes_note())
+                return gateway.busy_reply(message, bytes_text(quota.body_bytes))
+            forwarded = size
+            self.body_bytes += needed - charged
+            charged = needed
+            return None
 
         async def busy_instead():
             nonlocal replaced
@@ -290,10 +317,14 @@ class ProfileGate:
                     await busy_instead()
                 return
             if message['type'] == 'http.response.start':
+                # The bytes stay charged until the request ends (the finally below): an event stream's headers come
+                # before its tool runs, and the forwarded body stays referenced until the stream ends (review MF-1).
                 started = True
-                give_back()  # serve() has returned: the body is no longer held
             await send(message)
 
+        # The app reaches forwarding through its request's state (Starlette's request.state is scope['state']); a copy,
+        # so nothing is written into the server's own dict.
+        scope = {**scope, 'state': {**scope.get('state', {}), gateway.FORWARDED_BODY: forwarding}}
         try:
             await app(scope, counted_receive, counted_send)
             if cut and not started and not replaced:
@@ -302,6 +333,10 @@ class ProfileGate:
             self.active -= 1
             self.streams -= stream
             give_back()
+
+    def bytes_note(self):
+        return (f'its requests in progress held {self.quota.body_bytes / MiB:g} MiB, its limit; requests were answered '
+                'busy (-32003)')
 
 
 class Credentials:
