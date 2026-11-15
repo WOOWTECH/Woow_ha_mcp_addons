@@ -1,10 +1,11 @@
 """Additional connection profiles: the index, the directory layout, consistency, capacity and naming rules.
 
 Multi-profile plan §4 (data), §5.2 (quotas), §5.4 (ports); docs/multi-profile/contract.md §3.6, §5 and §8 (HM-00).
-HM-07: a library, not wired yet. No entry point imports it (tests/test_upgrade_zero_rewrite.py): HM-08 routes MCP
-requests with it, HM-09 starts the children, HM-10 lists and creates profiles, HM-13b's boot guard checks whether
-profile data exists. restore_detect (HM-13a, not wired either) takes its file names from here. It never writes the
-default profile's files (invariant I6).
+HM-07 made it a library; HM-08 wires it: the gateway takes PROFILE_ID from here, and a switched-on product's
+ProfileManager (profile_runtime) reads the index, opens the profiles it lists and routes MCP requests with them
+(profile_router); a switched-off product reads none of it (tests/test_router_passthrough.py). HM-09 starts the
+children, HM-10 lists and creates profiles, HM-13b's boot guard checks whether profile data exists. restore_detect
+(HM-13a, not wired yet) takes its file names from here. It never writes the default profile's files (invariant I6).
 
 Layout (plan §4.1)::
 
@@ -93,6 +94,9 @@ INDEX_ABSENT, INDEX_OK, INDEX_CORRUPT, INDEX_MODIFIED = 'absent', 'ok', 'corrupt
 _STATES = (INDEX_ABSENT, INDEX_OK, INDEX_CORRUPT, INDEX_MODIFIED)
 
 _PROFILE_ID = re.compile(r'[0-9a-f]{24}')
+# Any profile's id (contract 1.1): the default profile's or an additional one's. HM-08: the one source of the grammar;
+# gateway (the profile echo) and profile_runtime take it from here (HM-05 review, other observations 4).
+PROFILE_ID = re.compile(DEFAULT_PROFILE + '|' + _PROFILE_ID.pattern)
 _UTC = '%Y%m%dT%H%M%SZ'
 QUARANTINE_PREFIX = '.quarantine-'
 _QUARANTINE = re.compile(re.escape(QUARANTINE_PREFIX) + r'([0-9a-f]{24})-([0-9]{8}T[0-9]{6}Z)')
