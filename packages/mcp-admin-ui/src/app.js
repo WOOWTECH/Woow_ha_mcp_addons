@@ -117,10 +117,15 @@ async function show(target, message, error = false, recovering = false) {
     const list = api.profile === null ? null : await readProfiles(fresh);
     if (list && !list.rows.some(row => row.id === api.profile)) throw new ApiError(404, 'profile_not_found');
     if (view !== views) return;
+    // The profile left behind is no longer in a list the panel can trust (deleted elsewhere): it cannot be gone back
+    // to, so its unconfirmed receipt is cleared and said so (review S-1). A corrupt index's list is not such a list.
+    const leftGone = Boolean(list) && !list.corrupt && isExtraProfile(left) && left !== api.profile && !list.rows.some(row => row.id === left);
+    const cleared = leftGone && forget(left);
     state = fresh; profiles = list; product = fresh.product;
     render();
     const texts = [message ?? (target === null ? null : `已切換到帳號${named(currentRow(), api.profile)}。`),
-      unconfirmed ? `前一個帳號${named(leftRow, left)}有尚未確認的操作；請切回該帳號查詢結果，再決定是否重試。` : null].filter(Boolean);
+      cleared ? `前一個帳號${named(leftRow, left)}已不存在，可能已在其他分頁或由其他管理員刪除；它尚未確認的操作紀錄已一併清除：帳號刪除時它的權杖已撤銷。`
+        : unconfirmed && !leftGone ? `前一個帳號${named(leftRow, left)}有尚未確認的操作；請切回該帳號查詢結果，再決定是否重試。` : null].filter(Boolean);
     if (texts.length) notice(texts.join(' '), error || unconfirmed);
   } catch (problem) {
     if (view !== views || problem instanceof StaleProfileError) return;
@@ -231,9 +236,16 @@ function pendingProfileOperationCard() {
     el('div', { class: 'actions' }, button('重送帳號操作', async () => {
       if (!await confirmAction('以原識別碼重送帳號操作？', `${what}。已完成的操作只回傳收據；結果未知的操作不會再次執行。`)) return;
       let result = null;
-      await task(async () => { result = await api.retryProfileOperation(); });
+      await task(async () => {
+        try { result = await api.retryProfileOperation(); } catch (error) {
+          // The profile to delete is already gone (deleted elsewhere): nothing is left to delete, and it is that profile
+          // that is gone, not the one shown (review S-1). The identity was released with the refusal.
+          if (creating || !(error instanceof ApiError) || error.code !== 'profile_not_found') throw error;
+          result = { deleted: pending.profile, missing: true };
+        }
+      });
       if (result) await show(creating ? result.id : DEFAULT_PROFILE, creating ? `已確認建立帳號「${result.label}」，並切換到這個帳號。`
-        : `已確認刪除帳號；已切回預設帳號。${forget(result.deleted) ? '該帳號尚未確認的操作紀錄已一併清除。' : ''}`);
+        : `${result.missing ? `帳號（${shortId(result.deleted)}）已不存在，不需要再刪除` : '已確認刪除帳號'}；已切回預設帳號。${forget(result.deleted) ? '該帳號尚未確認的操作紀錄已一併清除。' : ''}`);
     }), button('已核對帳號清單', async () => {
       if (!await confirmAction('結束這筆帳號操作的追蹤？', '請先核對帳號清單。這只清除此分頁的識別紀錄，不會復原或證明先前操作未執行。')) return;
       await task(async () => { api.acknowledgeProfileOperation(); await reload('已結束此分頁的帳號操作追蹤。'); });
