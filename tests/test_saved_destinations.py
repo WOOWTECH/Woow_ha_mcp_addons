@@ -166,9 +166,10 @@ def test_the_address_rule_is_the_policy_rule():
 
 # ---------------------------------------------------------------------------------------------------------------------
 # HM-20 (multi-profile plan 8.7, DQ-10, DQ-40 (7); docs/multi-profile/contract.md section 9 #39): once a product is
-# switched on, a backend URL whose host is this add-on itself is refused when saved, for every product, n8n's backend
-# URL included (n8n then gets the whole check above, which it never had). The add-on runs on Supervisor's bridge
-# network, so a loopback address reaches only its own listeners: 8081, 8099, the children on 3000 and 18000 and up.
+# switched on, a backend URL whose host is loopback (127.0.0.0/8, ::1, a localhost name) is refused when saved, for
+# every product, n8n's backend URL included (n8n then gets the whole check above, which it never had). The add-on runs
+# on Supervisor's bridge network, so a loopback address reaches only its own listeners: 8081, 8099, the children on
+# 3000 and 18000 and up. Its own bridge address and host name are not covered (DQ-10's scope; HM-20 review S-4).
 # Switched off, every answer is the one above, byte for byte. The run-time half: tests/test_backend_loopback.py.
 # ---------------------------------------------------------------------------------------------------------------------
 from contextlib import nullcontext  # noqa: E402
@@ -206,12 +207,12 @@ SWITCHABLE = {
     'headscale': {'url': 'http://headscale.invalid:8080', 'api_key': 'DUMMY-loopback-headscale-key'},
 }
 URL_NAMES = {product: ['gateway_url', 'dashboard_url'] if product == 'hermes' else ['url'] for product in SWITCHABLE}
-# This add-on's own host in the spellings a resolver or a URL parser reads (FM-77: at least 8081, 8099, 3000 and the
-# children's ports). IPv4 127.0.0.0/8 dotted, short, decimal, octal and hexadecimal, with a trailing dot (glibc's
-# getaddrinfo reads a numeric host as inet_aton(3) does; n8n's Node child parses URLs as the WHATWG URL standard says);
-# IPv6 ::1 in any form; localhost, localhost.localdomain and *.localhost in any case, with a trailing dot (the PaaS
-# strict SSRF names, Pc/util/ssrf.py, and the Hermes MCP server guard's); 0.0.0.0, which also reaches this host, in its
-# numeric spellings; IPv4-mapped forms.
+# Loopback, which reaches this add-on's own listeners, in the spellings a resolver or a URL parser reads (FM-77: at
+# least 8081, 8099, 3000 and the children's ports). IPv4 127.0.0.0/8 dotted, short, decimal, octal and hexadecimal,
+# with a trailing dot (glibc's getaddrinfo reads a numeric host as inet_aton(3) does; n8n's Node child parses URLs as
+# the WHATWG URL standard says); IPv6 ::1 in any form; localhost, localhost.localdomain and *.localhost in any case,
+# with a trailing dot (the PaaS strict SSRF names, Pc/util/ssrf.py, and the Hermes MCP server guard's); 0.0.0.0, which
+# also reaches this host, in its numeric spellings; IPv4-mapped forms.
 LOOPBACK = ['http://127.0.0.1:8099', 'http://127.0.0.1:8081', 'https://127.0.0.1:3000', 'http://127.0.0.1:18000',
             'http://127.1.2.3', 'http://127.255.255.254:8069',
             'http://[::1]:8081', 'http://[0:0:0:0:0:0:0:1]:3000', 'http://[0000::0001]',
@@ -380,7 +381,9 @@ async def test_the_admin_api_refuses_a_loopback_url_once_switched_on(switchable_
             response = await _put(client, route, backend_body(product, route, field, url))
             assert response.status_code == 400, (field, url, response.text)
             assert response.content == b'{"error":"request denied"}'
-            assert store.path.read_bytes() == raw and not applied
+            # The state's bytes hold its tokens: compared first, so a failure never prints them (HM-20 review S-6).
+            unchanged = store.path.read_bytes() == raw
+            assert unchanged and not applied, (field, url)
         response = await _put(client, route, backend_body(product, route, field, 'http://10.1.2.3:8069'))
         assert response.status_code == 200, response.text  # the LAN stays allowed
         assert len(applied) == 1

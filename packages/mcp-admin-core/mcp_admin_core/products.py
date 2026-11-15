@@ -196,14 +196,16 @@ def allowed_address(value):
 
 
 # HM-20 (multi-profile plan 8.7, DQ-10, DQ-40 (7); docs/multi-profile/contract.md section 9 #39; unreleased): once a
-# product is switched on, none of its backend URLs may be this add-on itself. Every add-on runs on Supervisor's bridge
-# network (host_network: false), so a loopback address reaches only the add-on's own listeners: the gateway (8081),
-# the panel (8099) and the children (3000; 18000 and up for additional profiles), never a backend. It is refused when
-# saved (check_saved_destinations, n8n's URL included) and when a child connects: child_spec and n8n_adapter.child_spec
-# give a switched-on product's child DENY_LOOPBACK_ENV=1, and apps/runtime/backend_policy.py and
-# apps/n8n/backend_policy.cjs then refuse 127.0.0.0/8 and ::1 for every address they connect the backend on, numeric or
-# resolved. Switched off, nothing changes: every URL saved before is saved as before, and no child gets the variable
-# (tests/contract/child_spec_default.json).
+# product is switched on, none of its backend URLs may be loopback: 127.0.0.0/8, ::1 or a localhost name. Every add-on
+# runs on Supervisor's bridge network (host_network: false), so a loopback address reaches only the add-on's own
+# listeners: the gateway (8081), the panel (8099) and the children (3000; 18000 and up for additional profiles), never a
+# backend. The add-on's own bridge address and host name are not covered (DQ-10's scope; a known limitation,
+# docs/multi-profile/threat-model.md section 3): only 8081 and 8099 answer there, as the children listen on 127.0.0.1
+# only. It is refused when saved (check_saved_destinations, n8n's URL included) and when a child connects: child_spec
+# and n8n_adapter.child_spec give a switched-on product's child DENY_LOOPBACK_ENV=1 on every port, and
+# apps/runtime/backend_policy.py and apps/n8n/backend_policy.cjs then refuse 127.0.0.0/8 and ::1 for every address they
+# connect the backend on, numeric or resolved. Switched off, nothing changes: every URL saved before is saved as before,
+# and no child gets the variable (tests/contract/child_spec_default.json).
 DENY_LOOPBACK_ENV = 'WOOW_MCP_DENY_LOOPBACK'
 # The names the PaaS strict SSRF check (Pc/util/ssrf.py LOCALHOST_NAMES) and the Hermes MCP server guard
 # (apps/hermes/vendor/hermes_mcp_server/guards.py) refuse, and *.localhost below them (RFC 6761).
@@ -249,8 +251,8 @@ def numeric_host(host):
 
 
 def loopback_host(host):
-    """Whether a URL host is this add-on itself: localhost, localhost.localdomain or a name under .localhost (any case,
-    trailing dots), or 127.0.0.0/8 or ::1 in any spelling numeric_host reads, IPv4-mapped included."""
+    """Whether a URL host is loopback: localhost, localhost.localdomain or a name under .localhost (any case, trailing
+    dots), or 127.0.0.0/8 or ::1 in any spelling numeric_host reads, IPv4-mapped included."""
     name = host.lower().rstrip('.')
     if name in LOOPBACK_NAMES or name.endswith('.localhost'):
         return True
@@ -267,9 +269,9 @@ def saved_destination(value, *, loopback=False):
     outside the allowed addresses (169.254.169.254, a 100.64.0.0/10 address, a documentation range, an IPv4-mapped
     IPv6 address...), an IPv6 zone id, port 0.
 
-    loopback (HM-20: the product is switched on): also a host that is this add-on itself (loopback_host), and a host a
-    resolver reads as a number outside the allowed addresses in another spelling ('0' and '0x0' are 0.0.0.0, which
-    reaches this host too). A name is checked once resolved, when the child connects."""
+    loopback (HM-20: the product is switched on): also a loopback host (loopback_host), and a host a resolver reads as
+    a number outside the allowed addresses in another spelling ('0' and '0x0' are 0.0.0.0, which reaches this host
+    too). A name is checked once resolved, when the child connects."""
     backend_destination(value)
     parts = urlsplit(value)
     host = parts.hostname or ''
@@ -292,8 +294,8 @@ def check_saved_destinations(state, previous=None):
     path rule from the start): a state saved before this check still loads after an upgrade, and a URL it holds does
     not block editing the other fields, so its administrator can open the page and correct it.
 
-    HM-20: once the product is switched on (loopback_refused), a URL this save changes is also refused when it is this
-    add-on itself (saved_destination(loopback=True)), and n8n's backend URL, which had no check, gets that whole one.
+    HM-20: once the product is switched on (loopback_refused), a URL this save changes is also refused when its host is
+    loopback (saved_destination(loopback=True)), and n8n's backend URL, which had no check, gets that whole one.
     The refusal is the one every refused save gets (gateway.admin_action: 400, {"error":"request denied"}). A stored
     loopback URL still loads, as above; the child refuses it when it connects."""
     product = getattr(state, 'product', 'n8n')  # a state without one is n8n's, as gateway.admin_action reads it
@@ -942,7 +944,8 @@ def child_spec(state: ProductState, directory: Path, port: int = CHILD_PORT) -> 
         env['WOOW_MCP_CHILD_TOKEN'] = state.child_token
     if loopback_refused(product):
         # HM-20 (unreleased, behind the product switch): apps/runtime/backend_policy.py refuses every loopback answer
-        # for this child's backend. Only this environment, which the child never inherits, can set it.
+        # for this child's backend. Only this environment, which the child never inherits, can set it; every port's
+        # child gets it, an additional profile's too (tests/test_backend_loopback.py).
         env[DENY_LOOPBACK_ENV] = '1'
     c = state.connection
     if product == 'odoo':

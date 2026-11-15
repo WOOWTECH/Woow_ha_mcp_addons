@@ -66,6 +66,22 @@ class HeadscaleBackendTests(unittest.TestCase):
         self.assertEqual(probe.mock_bind_host('emqx'), '127.0.0.1')
 
 
+class SwitchedOnMockBackendTests(unittest.TestCase):
+    """Multi-profile HM-20 (plan 8.7): the child of a switched-on product (features.MULTI_PROFILE_PRODUCTS) refuses a
+    loopback backend (WOOW_MCP_DENY_LOOPBACK=1), as Headscale's always does, so its mock backend listens where
+    Headscale's does: on this container's private address on container_acceptance's one-use internal bridge
+    (packaging/test_container_acceptance.py), never on 127.0.0.1; the test double tests/loopback_backends.py is in no
+    image. The set is empty today, so this checks Headscale; switching a product on fails here until mock_bind_host
+    gives it that address."""
+
+    def test_every_product_whose_child_refuses_loopback_gets_a_private_mock_address(self):
+        from mcp_admin_core import features
+        for app in sorted({'headscale', *features.MULTI_PROFILE_PRODUCTS}):
+            with self.subTest(app=app), patch.object(probe.socket, 'gethostname', return_value='candidate'), \
+                    patch.object(probe.socket, 'gethostbyname', return_value='172.18.0.2'):
+                self.assertEqual(probe.mock_bind_host(app), '172.18.0.2')
+
+
 CHILD_TOKEN = 'C' * 43  # tests/fixtures/owner_defaults/README.md: a child token in test data
 INITIALIZE = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {
     'protocolVersion': '2025-03-26', 'capabilities': {}, 'clientInfo': {'name': 'container-mock', 'version': '1'}}}

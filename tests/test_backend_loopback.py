@@ -2,7 +2,9 @@
 
 The management process decides: products.loopback_refused(product) is features.enabled(product) and nothing else. For a
 switched-on product, products.child_spec and n8n_adapter.child_spec add WOOW_MCP_DENY_LOOPBACK=1 to the environment
-they build (never inherited); the child's policy reads it once, when it loads:
+they build (never inherited), on every port: the default profile's child (3000) and each additional profile's (18000
+and up). No child code between that environment and the policy names the variable or removes it (checked by source);
+the child's policy reads it once, when it loads:
 
 - apps/runtime/backend_policy.py (the seven Python children and the retired Odoo Manage): every connection to the
   configured backend (httpx sync and async, XML-RPC over HTTP and HTTPS) refuses an answer in 127.0.0.0/8 or ::1, for
@@ -16,6 +18,9 @@ they build (never inherited); the child's policy reads it once, when it loads:
 Switched off, the variable is absent and every spec is the snapshot's (tests/contract/child_spec_default.json); any
 value but 1 makes the child refuse to start. The test double tests/loopback_backends.py turns the rule off inside a
 test's own process only. The save-time half: tests/test_saved_destinations.py.
+
+A child's environment holds this test's tokens and keys: an assertion compares first and drops the spec or the
+environment before it asserts, so that a failure never prints one (HM-20 review S-6).
 """
 import ast
 import asyncio
@@ -41,7 +46,7 @@ import n8n_adapter
 from log_scan import log_scan  # noqa: F401  (fixture)
 from mcp_admin_core import features, products
 from mcp_admin_core.products import PRODUCTS, ProductState, ProductStore, child_spec
-from test_child_port_param import CASES, SNAPSHOT, case_state, normalized
+from test_child_port_param import CASES, PORTS, SNAPSHOT, case_state, normalized
 from test_real_products import connection
 from test_upgrade_zero_rewrite import references, runtime_sources
 
@@ -85,6 +90,34 @@ def test_a_switched_on_product_s_child_gets_the_variable_and_nothing_else_change
     assert on['argv'] == expected['argv'] and on['cwd'] == expected['cwd']
     assert [entry for entry in on['env'] if entry.startswith(ENV + '=')] == [ENV + '=1']
     assert [entry for entry in on['env'] if entry != ENV + '=1'] == expected['env']
+
+
+@pytest.mark.parametrize('port', PORTS)
+@pytest.mark.parametrize('case', CASES)
+def test_an_additional_profile_s_child_gets_the_variable_too(tmp_path, log_scan, switch, case, port):
+    """An additional profile's child (18000 and up: the multi-profile plan 5.4) is the one the rule protects most: on
+    its port, switched on, the spec is the switched-off one plus WOOW_MCP_DENY_LOOPBACK=1 (argv, cwd and every other
+    variable in its order the same); switched off, or with the test double, it has no such variable (HM-20 review
+    MF-1). The specs hold this test's tokens and keys: compared first, dropped before any assertion."""
+    with case_state(case, tmp_path, log_scan) as (product, state, data, build):
+        switch()
+        off = build(state, data, port=port)
+        switch(product)
+        on = build(state, data, port=port)
+        with loopback_backends.allowed():
+            double = build(state, data, port=port)
+    built = all(spec is not None for spec in (off, on, double))
+    off_has = built and ENV in off.env
+    value = on.env.get(ENV) if built else None
+    rest = built and [item for item in on.env.items() if item[0] != ENV] == list(off.env.items())
+    same = built and (on.argv, on.cwd) == (off.argv, off.cwd)
+    as_off = built and (list(double.env.items()), double.argv, double.cwd) == (list(off.env.items()), off.argv, off.cwd)
+    del off, on, double
+    assert built, 'every case has a child'
+    assert not off_has, 'switched off: the child must not get the variable'
+    assert value == '1', value
+    assert rest and same, 'switched on: everything but the variable must be the switched-off spec'
+    assert as_off, 'with the test double: the switched-off spec'
 
 
 def test_the_rule_is_the_product_switch_alone():
@@ -134,6 +167,70 @@ def test_no_variable_of_the_management_process_turns_the_rule_off(tmp_path):
     assert result.returncode == 0, result.stderr[-2000:]
     assert json.loads(result.stdout.splitlines()[-1]) == {'odoo/saved': False, 'odoo/variable': '1',
                                                           'n8n/saved': False, 'n8n/variable': '1'}
+
+
+# Between the environment child_spec builds and the policy that reads it runs only code of apps/: the launchers
+# (run_child.py, session_idle.py, each app's launch.py and Odoo's start_switches.py) and the vendored servers. Only
+# the end-to-end test below starts a real entry point (Odoo's), so the others are pinned by their source.
+NAMES_THE_VARIABLE = {'apps/runtime/backend_policy.py', 'apps/n8n/backend_policy.cjs',  # the two policies read it
+                      'apps/n8n/n8n_adapter.py'}  # the management process's n8n spec sets it
+REMOVES = {'pop', 'popitem', 'clear'}  # os.environ's methods that take a variable away
+OTHER_ENVIRONMENT = {'execve', 'execle', 'execlpe', 'execvpe', 'spawnve', 'spawnle', 'spawnlpe', 'spawnvpe',
+                     'posix_spawn', 'posix_spawnp'}  # start a program with an environment of their own
+STARTS = {'Popen', 'run', 'call', 'check_call', 'check_output', 'create_subprocess_exec', 'create_subprocess_shell'}
+
+
+def child_sources():
+    """The program files under apps/, its dependencies (node_modules, .venv) and tests aside."""
+    for directory, names, files in os.walk(ROOT / 'apps'):
+        names[:] = sorted(name for name in names if name not in ('node_modules', '.venv', '__pycache__', 'tests'))
+        for name in sorted(files):
+            if name.endswith(('.py', '.cjs', '.js', '.mjs')):
+                yield Path(directory) / name
+
+
+def environment_changes(tree):
+    """The lines where a Python module takes a variable out of its own environment, empties or replaces it, or starts
+    another program with an environment of its own."""
+    def environ(node):
+        return (isinstance(node, ast.Attribute) and node.attr == 'environ') or (isinstance(node, ast.Name)
+                                                                                and node.id == 'environ')
+    lines = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            name = getattr(node.func, 'attr', getattr(node.func, 'id', None))
+            if ((name in REMOVES and environ(getattr(node.func, 'value', None))) or name == 'unsetenv'
+                    or name in OTHER_ENVIRONMENT or (name in STARTS and any(k.arg == 'env' for k in node.keywords))):
+                lines.append(node.lineno)
+        elif isinstance(node, ast.Delete):
+            lines += [node.lineno for target in node.targets
+                      if isinstance(target, ast.Subscript) and environ(target.value)]
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+            lines += [node.lineno for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
+                      if environ(target)]
+    return lines
+
+
+def test_no_child_code_names_or_removes_the_variable():
+    """HM-20 review S-3: no file of apps/ but the two policies and the n8n spec names WOOW_MCP_DENY_LOOPBACK (nor the
+    Python policy's DENY_LOOPBACK, which a launcher could reset), and none takes a variable out of its own environment,
+    empties or replaces it, or starts another program with an environment of its own (a launcher that did would turn
+    the rule off for every product it starts: EMQX, LiteLLM and Nextcloud through run_child.py, Hermes, OpenDesign and
+    Headscale through their launch.py). A new finding needs review, and then a reason here."""
+    sources = list(child_sources())
+    assert {'apps/runtime/run_child.py', 'apps/runtime/session_idle.py', 'apps/hermes/launch.py',
+            'apps/odoo/start_switches.py', 'apps/runtime/backend_policy.py',
+            'apps/n8n/backend_policy.cjs'} <= {str(path.relative_to(ROOT)) for path in sources}
+    findings = []
+    for path in sources:
+        relative, text = str(path.relative_to(ROOT)), path.read_text(errors='replace')
+        if 'DENY_LOOPBACK' in text and relative not in NAMES_THE_VARIABLE:
+            findings.append((relative, 'names the variable'))
+        if path.suffix == '.py':
+            findings += [(relative, line) for line in environment_changes(ast.parse(text, relative))]
+        elif re.search(r'process\.env\s*=(?!=)|delete\s+process\.env|deleteProperty\(\s*process\.env', text):
+            findings.append((relative, 'removes from its environment'))
+    assert findings == []
 
 
 # --- the Python policy (apps/runtime/backend_policy.py), in this process -----------------------------------------
@@ -392,7 +489,9 @@ def test_the_child_refuses_a_loopback_backend_when_it_connects(tmp_path, switch,
     on, host, answers = CHILD_CASES[case]
     switch(product) if on else switch()
     spec, result = run_child_client(tmp_path, product, f'http://{host}:8069', answers)
-    assert (spec.env.get(ENV) == '1') is on
+    variable = spec.env.get(ENV)
+    del spec  # its environment holds this test's tokens and keys: never in a failing assertion
+    assert (variable == '1') is on, variable
     denied = 'HEADSCALE_DESTINATION_DENIED' if product == 'headscale' else DENIED
     if case == 'on-lan':
         assert ['10.0.0.2', 8069] in result['attempts'], result  # the LAN stays reachable
@@ -464,7 +563,8 @@ async def pinned_agents(spec, urls, **extra):
 async def test_n8n_refuses_a_loopback_backend_once_switched_on(tmp_path, switch):
     switch('n8n')
     spec = n8n_spec(tmp_path)
-    assert spec.env[ENV] == '1' and spec.env['WEBHOOK_SECURITY_MODE'] == 'permissive'
+    variables = spec.env.get(ENV), spec.env.get('WEBHOOK_SECURITY_MODE')  # never spec.env itself in an assertion
+    assert variables == ('1', 'permissive'), variables
     result = await pinned_agents(spec, LOOPBACK_URLS + LAN_URLS, **LOOKALIKES)
     assert {url: result[url] for url in LOOPBACK_URLS} == {url: NODE_DENIED for url in LOOPBACK_URLS}
     assert {url: result[url] for url in LAN_URLS} == {url: True for url in LAN_URLS}
@@ -473,7 +573,8 @@ async def test_n8n_refuses_a_loopback_backend_once_switched_on(tmp_path, switch)
 async def test_n8n_switched_off_connects_to_loopback_as_before(tmp_path, switch):
     switch()
     spec = n8n_spec(tmp_path)
-    assert ENV not in spec.env
+    variable = spec.env.get(ENV)  # never spec.env itself in an assertion
+    assert variable is None, variable
     urls = ['http://127.0.0.1:5678', 'http://[::1]:5678', 'http://localhost:5678', 'http://rebind.invalid:5678']
     assert await pinned_agents(spec, urls) == {url: True for url in urls}
 
@@ -550,6 +651,29 @@ async def test_n8n_webhooks_stay_permissive_with_the_variable(tmp_path, switch):
     assert result['fetches'] == {'10.0.0.2': True, 'fd12::1': True, '127.0.0.1': NODE_DENIED, '127.9.9.9': NODE_DENIED,
                                  '::1': NODE_DENIED, '0.0.0.0': NODE_DENIED, '::': NODE_DENIED,
                                  '::ffff:127.0.0.1': NODE_DENIED, '::ffff:0.0.0.0': NODE_DENIED}
+
+
+async def test_the_official_mcp_pinned_fetch_refuses_a_mixed_answer(tmp_path, switch):
+    """A name the official MCP client resolves to a LAN address and a loopback one, in either order, is refused as a
+    whole, as the API client's answers are (HM-20 review S-2); all LAN answers still pass."""
+    switch('n8n')
+    spec = n8n_spec(tmp_path)
+    code = IMPORT + '''
+(async () => {
+    const out = {};
+    for (const set of [[['10.0.0.2', 4], ['127.0.0.1', 4]], [['127.0.0.1', 4], ['10.0.0.2', 4]],
+                       [['fd12::1', 6], ['::1', 6]], [['10.0.0.2', 4], ['fd12::1', 6]]]) {
+        const key = set.map(([address]) => address).join(',');
+        try { await SSRFProtection.createPinnedFetch(set.map(([address, family]) => ({address, family}))).close();
+              out[key] = true; } catch (error) { out[key] = error.message; }
+    }
+    console.log(JSON.stringify(out));
+})();
+'''
+    status, out, err = await node(spec, code)
+    assert status == 0, err[-3000:]
+    assert json.loads(out.splitlines()[-1]) == {'10.0.0.2,127.0.0.1': NODE_DENIED, '127.0.0.1,10.0.0.2': NODE_DENIED,
+                                                 'fd12::1,::1': NODE_DENIED, '10.0.0.2,fd12::1': True}
 
 
 @pytest.mark.parametrize('value', [None, '1', '0', '', 'true', 'yes', ' 1', '1 ', '01', 'deny', 'ON'])
@@ -728,8 +852,11 @@ async def test_a_switched_on_odoo_refuses_its_loopback_fake_backend_end_to_end(t
                     # The child answered (refused calls come only once it is up), so it runs its own program now.
                     [child] = Path(f'/proc/{process.pid}/task/{process.pid}/children').read_text().split()
                     environment = Path(f'/proc/{child}/environ').read_bytes().split(b'\0')
-                    assert (b'WOOW_MCP_DENY_LOOPBACK=1' in environment) is (not double), 'the child variable is wrong'
-                    del environment  # it holds the child's credentials: never printed
+                    has_variable = b'WOOW_MCP_DENY_LOOPBACK=1' in environment
+                    # It holds the child's credentials and this test's tokens: dropped before the assertion, which
+                    # would print it when it fails (HM-20 review S-6).
+                    del environment
+                    assert has_variable is (not double), 'the child variable is wrong'
                     if double:
                         assert answered(answers[-1]) and calls, (answers, calls)
                     else:
