@@ -11,13 +11,13 @@ import signal
 
 import uvicorn
 
-from . import redact, version_for_product
+from . import features, redact, version_for_product
 from .config import ConfigError
 from .capabilities import ManagementOptions
 from .ha_role import make_ha_admin_verifier
 from .lifecycle import CHILD_PORT, child_port_text
 from .products import INSTRUCTIONS, PRODUCTS, ProductStore, TOOLS, child_spec
-from .profile_runtime import ProfileRuntime
+from .profile_runtime import ProfileManager, ProfileRuntime
 from .surface import FULL_PRODUCTS, listing
 
 
@@ -41,11 +41,7 @@ async def run(args, *, child_port=CHILD_PORT):
     try:
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, stop.set)
-        # HM-05 (multi-profile plan 3.2): the default profile's runtime. It makes the child's Supervisor, client,
-        # HealthMonitor and ConfigurationState and the two apps (make_apps with these product options) as this function
-        # made them, and closes them in the same order (the client, then the child). No shared administration: the apps
-        # make their own AdminAuthority and management slots, as before.
-        profile = ProfileRuntime(store, TOOLS[args.product], child_spec, port=child_port, app_options=dict(
+        options = dict(
             verify_admin=make_ha_admin_verifier(),
             management=ManagementOptions(kind="ha-addon", authority="ha-admin",
                                          product_version=version_for_product(args.product)),
@@ -55,12 +51,27 @@ async def run(args, *, child_port=CHILD_PORT):
             # Headscale's secret URL is used by Claude.ai; other browser origins must not
             # acquire the Headscale API key's authority through a leaked link.
             secret_path_allowed_origins=(frozenset({"https://claude.ai"})
-                                         if args.product == "headscale" else None)))
+                                         if args.product == "headscale" else None))
+        if features.enabled(args.product):
+            # HM-08 (multi-profile plan 3.1, 5.1, 5.2; read at every start): every profile of the add-on. 8081 is the
+            # token dispatcher (each profile's admission, byte budget, stream cap; 64 + 32 x the product's limit as
+            # the outer bound when the open-file limit allows it), 8099 the default profile's management app with the
+            # add-on's shared administration (HM-10 routes the others). The additional profiles' children start in
+            # HM-09 (ProfileManager.start_all); until then launch() and monitor() are the default profile's.
+            profile = ProfileManager(store, args.product, TOOLS[args.product], child_spec, port=child_port,
+                                     app_options=options)
+        else:
+            # HM-05 (multi-profile plan 3.2): the default profile's runtime. It makes the child's Supervisor, client,
+            # HealthMonitor and ConfigurationState and the two apps (make_apps with these product options) as this
+            # function made them, and closes them in the same order (the client, then the child). No shared
+            # administration: the apps make their own AdminAuthority and management slots, as before.
+            profile = ProfileRuntime(store, TOOLS[args.product], child_spec, port=child_port, app_options=options)
         async with profile:
             servers = [Listener(uvicorn.Config(app, host=args.host, port=port,
                 proxy_headers=False, access_log=False, log_level='warning', server_header=False,
-                lifespan='off', limit_concurrency=64, timeout_keep_alive=5))
-                for app, port in ((profile.admin_app, args.admin_port), (profile.mcp_app, args.mcp_port))]
+                lifespan='off', limit_concurrency=limit, timeout_keep_alive=5))
+                for app, port, limit in ((profile.admin_app, args.admin_port, 64),
+                                         (profile.mcp_app, args.mcp_port, profile.mcp_listener_limit))]
             # 0.1.12: /private_<token>/mcp puts the token in the request path. access_log stays False; every record
             # (uvicorn's error log, tracebacks, any library) is scrubbed to /private_[REDACTED]/ when created and
             # again by uvicorn's handlers.

@@ -17,7 +17,7 @@ import json
 import re
 import secrets
 import time
-from typing import Awaitable, Callable
+from typing import Awaitable, Callable, Iterable
 
 import anyio
 import httpx
@@ -40,6 +40,9 @@ from .admin_auth import AdminAuthority, BadRequest, prefix
 from .capabilities import ManagementOptions, capability_snapshot, observe_tools, tool_catalog
 from .request_limits import McpRequestLimits, RequestLimitError
 from .operations import OperationJournal, KINDS as OPERATION_KINDS, RESULTS as OPERATION_RESULTS, TTL_MS
+# HM-05 (contract 1.1): a profile's id, the default profile's or 24 lowercase hexadecimal characters; HM-08: the one
+# grammar, profiles.PROFILE_ID.
+from .profiles import PROFILE_ID
 
 # 0.2.0: 16 MiB (was 256 KiB). The full Nextcloud surface uploads up to 10 MiB as base64 (about 13.4 MiB of JSON) and
 # writes text files up to 1 MiB; a body is read only after the token check. BODY_SECONDS bounds the read.
@@ -90,8 +93,48 @@ CHILD_UP = ("running", "starting")
 # HM-05 (multi-profile plan 3.2): the management requests one add-on serves at a time (make_apps admin_slots). The
 # profiles of an add-on share one set (profile_runtime.SharedAdmin); a make_apps without it has its own, as before.
 ADMIN_SLOTS = 16
-# HM-05 (contract 1.1): a profile's id, the default profile's or 24 lowercase hexadecimal characters.
-PROFILE_ID = re.compile(r"default|[0-9a-f]{24}")
+# HM-08: the requests one profile forwards to its child at once, and how long a request waits for one (make_apps
+# forward_slots; plan 5.2: 32 for the default profile, 16 for an additional one; 1 s each, as before).
+FORWARD_SLOTS = 32
+FORWARD_WAIT_SECONDS = 1
+# HM-08 (plan 5.1 point 1): the MCP listener's routes. profile_router's dispatcher matches a request against these same
+# templates with Starlette's own Route, so both always agree which path segment is the token.
+MCP_ROUTE = "/mcp"
+SECRET_ROUTE = "/private_{secret}/mcp"
+READY_ROUTE = "/health/ready"
+# HM-08 (contract 2.4; the PaaS gateway's GATEWAY_BUSY_ERROR_CODE and Retry-After values, woow-mcp-server 69ac425
+# proxy.py): a profile's limit refused the request before its child got it.
+GATEWAY_BUSY = -32003
+BUSY_RETRY_AFTER = 5
+STREAM_RETRY_AFTER = 30
+
+
+def request_id(message):
+    """HM-08: the id of message when it is a JSON-RPC request this gateway would answer under that id (an object of
+    jsonrpc 2.0 with a string method and a string or integer id: authorize's rule), else None. A batch, a notification,
+    a response, a boolean or other id are None: this gateway never answers a batch or another id type."""
+    if (isinstance(message, dict) and message.get("jsonrpc") == "2.0" and isinstance(message.get("method"), str)
+            and type(message.get("id")) in (str, int)):
+        return message["id"]
+    return None
+
+
+def busy_reply(message, text):
+    """HM-08 (contract 2.4, the PaaS table): a request a profile's limit refused before its child got it. A request
+    with an id: HTTP 200 with a -32003 error under that id (MCP Python SDK 1.x ends the whole session on any other
+    status); anything else (no id, a GET, a DELETE, a body that was not read): 503 with the error under id null. Both
+    with Retry-After 5 and Cache-Control no-store. text is fixed text: never a token, a URL or a label."""
+    ident = request_id(message)
+    return json_reply({"jsonrpc": "2.0", "id": ident, "error": {"code": GATEWAY_BUSY, "message": text}},
+                      503 if ident is None else 200,
+                      {"Retry-After": str(BUSY_RETRY_AFTER), "Cache-Control": "no-store"})
+
+
+def stream_busy_reply(text):
+    """HM-08 (contract 2.4): a GET while the profile's event streams are at their cap: 429, Retry-After 30, a -32003
+    error under id null, at once (a stream is never queued)."""
+    return json_reply({"jsonrpc": "2.0", "id": None, "error": {"code": GATEWAY_BUSY, "message": text}}, 429,
+                      {"Retry-After": str(STREAM_RETRY_AFTER), "Cache-Control": "no-store"})
 
 
 def sse_frame(frame: bytes):
@@ -358,7 +401,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               secret_path_allowed_origins: frozenset[str] | None = None,
               authority: AdminAuthority | None = None, admin_slots: asyncio.Semaphore | None = None,
               admin_pipeline: AdminPipeline | None = None, token_access: TokenAccess | None = None,
-              mutation_lock: asyncio.Lock | None = None, profile_view: Callable[[], dict] | None = None):
+              mutation_lock: asyncio.Lock | None = None, profile_view: Callable[[], dict] | None = None,
+              forward_slots: int | None = None, slot_busy: Callable[[object], Response] | None = None,
+              reply_secrets: Callable[[], Iterable[str]] | None = None):
     """listing (0.2.2): the product's tools/list tools as its child lists them (surface.listing). With it, a client
     connects whatever the backend's state: when no child can answer (no backend configured, so no child; a child that is
     not up) the gateway answers initialize, notifications/initialized, ping and tools/list itself, from listing through
@@ -383,7 +428,18 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     - mutation_lock: this profile's lock, created by its runtime; every management change of the profile holds it.
     - profile_view: the profile's echo (DQ-40 point 2), a callable read for every answer: {"id", "label",
       "is_default"} (profile_echo). The bootstrap then carries it as "profile" with "profiles_supported": true, and
-      every other JSON answer of this profile's action its id ("profile": {"id"}); see echoed() in admin_page."""
+      every other JSON answer of this profile's action its id ("profile": {"id"}); see echoed() in admin_page.
+
+    HM-08 (multi-profile plan 5.1, 5.2; contract 2.4, 2.7), given only for a switched-on product (profile_runtime's
+    ProfileManager); left out, everything stays as before:
+    - forward_slots: this profile's forwarding slots (FORWARD_SLOTS when left out; an additional profile has 16).
+    - slot_busy: what a request that waited FORWARD_WAIT_SECONDS for a slot in vain gets: slot_busy(message) (the
+      JSON-RPC message of a POST, else None) returns the answer (profile_router: busy_reply's PaaS shape, with the
+      profile's WARNING). Left out: 503 {"error":"request denied"}, as before.
+    - reply_secrets: every token and child token the add-on holds (every profile's, every orphan's; a callable read
+      for every reply). Every answer that carries a child's or a backend's text (a relayed reply, an SSE event, the
+      gateway's own tools/list, a refused tools/call's health reason, backend/test, diagnostics) is masked with this
+      profile's own secrets (redact.secret_values, as before) and these (DQ-40 (a) ⑧)."""
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
@@ -404,6 +460,12 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         if not callable(profile_view):
             raise ValueError("invalid profile echo")
         profile_echo(profile_view())
+    if forward_slots is not None and (type(forward_slots) is not int or forward_slots < 1):
+        raise ValueError("invalid forwarding slots")
+    if slot_busy is not None and not callable(slot_busy):
+        raise ValueError("invalid busy answer")
+    if reply_secrets is not None and not callable(reply_secrets):
+        raise ValueError("invalid reply secrets")
     n8n_request_bounds = getattr(store, "product", None) == "n8n"
     management = management or ManagementOptions()
     if listing is not None:
@@ -419,8 +481,19 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     token_access = TokenAccess(store) if token_access is None else token_access
     configuration = configuration or ConfigurationState(store)
     operations = OperationJournal(store.path)
-    slots = asyncio.Semaphore(32)
+    slots = asyncio.Semaphore(FORWARD_SLOTS if forward_slots is None else forward_slots)
     admin_slots = asyncio.Semaphore(ADMIN_SLOTS) if admin_slots is None else admin_slots
+
+    def masks(state):
+        """The credentials no answer of this profile may carry: its own (redact.secret_values) and, once a product is
+        switched on, every token and child token the add-on holds (reply_secrets; HM-08). Longest first."""
+        own = redact.secret_values(state)
+        if reply_secrets is None:
+            return own
+        return tuple(sorted(set(own) | others(), key=len, reverse=True))
+
+    def others():
+        return {value for value in reply_secrets() if isinstance(value, str) and len(value) >= redact.MIN_SECRET}
 
     def snapshot():
         return health() if health else {"management": "alive", "child": {"state": "not_started", "transport_ready": False}, "backend": "unconfigured"}
@@ -619,7 +692,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 except Exception:
                     return JSONResponse({"error": "backend_check_failed"}, status_code=503, headers=headers)
                 await final_role(user)
-                return JSONResponse(redact.redact_secrets(result, redact.secret_values(state)), headers=headers)
+                return JSONResponse(redact.redact_secrets(result, masks(state)), headers=headers)
             if name == "child/restart" and request.method == "POST":
                 if restart_child is None:
                     return JSONResponse({"error": "unsupported"}, status_code=409, headers=headers)
@@ -635,7 +708,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             if name == "diagnostics" and request.method == "GET":
                 if diagnostics is None:
                     return JSONResponse({"error": "unsupported"}, status_code=409, headers=headers)
-                return JSONResponse(redact.redact_secrets(diagnostics(), redact.secret_values(state)), headers=headers)
+                return JSONResponse(redact.redact_secrets(diagnostics(), masks(state)), headers=headers)
             if name == "token/reveal" and request.method == "POST":
                 return JSONResponse({"token": store.load().token}, headers=headers)
             if name == "token/rotate" and request.method == "POST":
@@ -946,8 +1019,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                             continue
                         else:
                             # 0.2.0: backend errors carry their own text; no credential the add-on holds leaves
-                            checked = redact.redact_secrets(gateway_reply(value, request[1]),
-                                                            redact.secret_values(store.load()))
+                            checked = redact.redact_secrets(gateway_reply(value, request[1]), masks(store.load()))
                             if (isinstance(checked.get("result"), dict)
                                     and {"tools", "capabilities"} & checked["result"].keys()):
                                 checked = filter_list(checked, tools, store.load())
@@ -992,7 +1064,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         """0.2.2: tools/list answered from listing, filtered exactly as a child's answer (redact, then filter_list)."""
         from .odoo_switch_listing import for_state as listing_for_state
         value = {"jsonrpc": "2.0", "id": ident, "result": {"tools": listing_for_state(listing, state)}}
-        value = filter_list(redact.redact_secrets(value, redact.secret_values(state)), tools, state)
+        value = filter_list(redact.redact_secrets(value, masks(state)), tools, state)
         return json_reply(value, 200, {"Cache-Control": "no-store"})
 
     async def mcp(request):
@@ -1036,8 +1108,13 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             return Response(status_code=401, headers={"WWW-Authenticate": "Bearer"})
 
         def tool_refusal(ident, refusal):
-            """0.1.14: a refused well-formed tools/call is answered as JSON-RPC (ToolCallRefused.error()), not 403."""
-            return json_reply({"jsonrpc": "2.0", "id": ident, "error": refusal.error()}, 200, {"Cache-Control": "no-store"})
+            """0.1.14: a refused well-formed tools/call is answered as JSON-RPC (ToolCallRefused.error()), not 403. HM-08:
+            switched on, a health check's reason in it is masked with every token the add-on holds as well (the health
+            monitor masks it with this profile's own credentials)."""
+            error = refusal.error()
+            if reply_secrets is not None:
+                error = redact.redact_secrets(error, tuple(sorted(others(), key=len, reverse=True)))
+            return json_reply({"jsonrpc": "2.0", "id": ident, "error": error}, 200, {"Cache-Control": "no-store"})
 
         def session_gone():
             """0.2.2: the session is no longer served (its child stopped, or the gateway's own session ends because the
@@ -1213,9 +1290,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             if answer is not None:
                 return answer
         try:
-            async with asyncio.timeout(1):
+            async with asyncio.timeout(FORWARD_WAIT_SECONDS):
                 await slots.acquire()
         except TimeoutError:
+            if slot_busy is not None:  # HM-08: switched on, the PaaS busy shape (contract 2.4)
+                return slot_busy(message if request.method == "POST" else None)
             raise BadRequest(503) from None
         upstream = None
         owner = UpstreamOwner(slots)
@@ -1366,8 +1445,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         raise ValueError("not this request's reply")
                     current = store.load()
                     # 0.2.0: backend errors carry their own text; no credential the add-on holds leaves
-                    value = filter_list(redact.redact_secrets(gateway_reply(value, method), redact.secret_values(current)),
-                                        tools, current)
+                    value = filter_list(redact.redact_secrets(gateway_reply(value, method), masks(current)), tools,
+                                        current)
                 except (ValueError, RecursionError):
                     raise BadRequest(502) from None
                 return json_reply(value, 200, response_headers)
@@ -1402,8 +1481,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     exceptions = {BadRequest: error_handler, ConfigError: error_handler}
     admin = Starlette(routes=[Route("/{path:path}", admin_page, methods=["GET", "HEAD", "PUT", "POST"])],
                       middleware=[Middleware(ui.SecurityHeaders)], exception_handlers=exceptions)
-    mcp_app = Starlette(routes=[Route("/mcp", AnyMethod(mcp)), Route("/private_{secret}/mcp", AnyMethod(private_mcp)),
-                                Route("/health/ready", readiness)],
+    mcp_app = Starlette(routes=[Route(MCP_ROUTE, AnyMethod(mcp)), Route(SECRET_ROUTE, AnyMethod(private_mcp)),
+                                Route(READY_ROUTE, readiness)],
                         exception_handlers=exceptions)
     admin.router.redirect_slashes = False
     mcp_app.router.redirect_slashes = False
