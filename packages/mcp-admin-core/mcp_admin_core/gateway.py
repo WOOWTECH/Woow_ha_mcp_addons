@@ -408,7 +408,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               admin_pipeline: AdminPipeline | None = None, token_access: TokenAccess | None = None,
               mutation_lock: asyncio.Lock | None = None, profile_view: Callable[[], dict] | None = None,
               forward_slots: int | None = None, slot_busy: Callable[[object], Response] | None = None,
-              reply_secrets: Callable[[], Iterable[str]] | None = None):
+              reply_secrets: Callable[[], Iterable[str]] | None = None,
+              child_blocked: Callable[[], str | None] | None = None):
     """listing (0.2.2): the product's tools/list tools as its child lists them (surface.listing). With it, a client
     connects whatever the backend's state: when no child can answer (no backend configured, so no child; a child that is
     not up) the gateway answers initialize, notifications/initialized, ping and tools/list itself, from listing through
@@ -447,7 +448,12 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
       diagnostics) is masked with this profile's own secrets (redact.secret_values, as before) and these (DQ-40 (a) ⑧).
       Left out, an initialize error stays unmasked, as before (HM-08 review S-4: an existing gap, HM-14's).
     A switched-on product's dispatcher also charges the body a POST forwards to the profile's byte budget, through the
-    request's state (FORWARDED_BODY; profile_router.ProfileGate): no make_apps option."""
+    request's state (FORWARDED_BODY; profile_router.ProfileGate): no make_apps option.
+
+    HM-09 (multi-profile plan 5.4; contract 3.1, 3.6), likewise only for a switched-on product:
+    - child_blocked: why the profile's child is not started now (lifecycle.Supervisor.blocked_reason: None,
+      child_port_conflict, child_port_in_use, memory_capacity), read after a child/restart; its 202 answer then
+      carries it as "blocked_reason" (PaaS B-22: a refused restart looked like a success). Left out: as before."""
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
@@ -474,6 +480,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         raise ValueError("invalid busy answer")
     if reply_secrets is not None and not callable(reply_secrets):
         raise ValueError("invalid reply secrets")
+    if child_blocked is not None and not callable(child_blocked):
+        raise ValueError("invalid blocked reason")
     n8n_request_bounds = getattr(store, "product", None) == "n8n"
     management = management or ManagementOptions()
     if listing is not None:
@@ -711,8 +719,10 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     await restart_child(state)
                 except Exception:
                     raise BadRequest(409, {'code': 'operation_outcome_unknown'}) from None
-                return JSONResponse({**finish_operation(state), "accepted": True, "health": snapshot()},
-                                    status_code=202, headers=headers)
+                answer = {**finish_operation(state), "accepted": True, "health": snapshot()}
+                if child_blocked is not None:
+                    answer["blocked_reason"] = child_blocked()  # HM-09
+                return JSONResponse(answer, status_code=202, headers=headers)
             if name == "diagnostics" and request.method == "GET":
                 if diagnostics is None:
                     return JSONResponse({"error": "unsupported"}, status_code=409, headers=headers)

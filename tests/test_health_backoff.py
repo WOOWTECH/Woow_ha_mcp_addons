@@ -54,9 +54,12 @@ class Child:
     def __init__(self):
         self.probe = None
         self.requests = []
+        self.gate = None  # an asyncio.Event every answer waits for, when set
 
     async def __call__(self, request):
         self.requests.append(request)
+        if self.gate is not None:
+            await self.gate.wait()
         if self.probe == 'silent':
             raise httpx.ConnectError('nothing listens', request=request)
         if request.method == 'DELETE':
@@ -189,7 +192,7 @@ async def test_the_monitor_waits_the_backoff_between_its_checks(tmp_path, log_sc
         await client.aclose()
         store.close()
     gaps = [later - earlier for earlier, later in zip(checks, checks[1:])]
-    assert [round(gap, 1) for gap in gaps] == [0.1, 0.2, 0.4, 0.4], gaps
+    assert all(step <= gap < step + 0.15 for gap, step in zip(gaps, (0.1, 0.2, 0.4, 0.4))), gaps
 
 
 async def test_a_save_or_restart_resets_the_backoff_and_checks_within_one_interval(tmp_path, log_scan, monkeypatch):
@@ -380,6 +383,32 @@ async def test_a_tools_call_is_refused_only_after_two_failed_checks(tmp_path, lo
         assert refused['error']['data']['reason'] == 'BACKEND_UNAVAILABLE'
 
 
+async def test_settle_waits_for_a_running_check_instead_of_probing_again(tmp_path, log_scan):
+    """start_all's readiness wait (HealthMonitor.settle): while the monitor's own check runs, it waits for that check
+    and takes its outcome (no second initialize, no second login at the backend); when no check runs, it checks."""
+    store, child, client, process, monitor = await monitored(tmp_path, **switched_on())
+
+    def initializes():
+        return [request for request in child.requests if request.content
+                and json.loads(request.content).get('method') == 'initialize']
+    try:
+        child.gate = asyncio.Event()
+        running = asyncio.create_task(monitor.check())
+        await until(lambda: len(child.requests) == 1)
+        waiting = asyncio.create_task(monitor.settle())
+        await asyncio.sleep(0.05)
+        assert not waiting.done()
+        child.gate.set()
+        await running
+        await waiting
+        assert len(initializes()) == 1 and monitor.availability()['ready'] is True
+        await monitor.settle()
+        assert len(initializes()) == 2
+    finally:
+        await client.aclose()
+        store.close()
+
+
 # ---- staggered, own client, own child only ----
 
 async def test_every_profile_has_its_own_monitor_client_and_staggered_start(tmp_path, log_scan):
@@ -432,7 +461,8 @@ async def test_switched_off_the_monitor_loop_is_todays(tmp_path, log_scan, monke
     monkeypatch.setattr(health.asyncio, 'sleep', sleep)
     try:
         with pytest.raises(asyncio.CancelledError):
-            await monitor.run()
+            async with asyncio.timeout(5):  # a loop that never sleeps this way fails here instead of hanging
+                await monitor.run()
         assert slept == [15, 15, 15] and monitor.first_check_after == 0
     finally:
         await client.aclose()

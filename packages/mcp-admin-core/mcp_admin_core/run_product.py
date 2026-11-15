@@ -56,8 +56,10 @@ async def run(args, *, child_port=CHILD_PORT):
             # HM-08 (multi-profile plan 3.1, 5.1, 5.2; read at every start): every profile of the add-on. 8081 is the
             # token dispatcher (each profile's admission, byte budget, stream cap; 64 + 32 x the product's limit as
             # the outer bound when the open-file limit allows it), 8099 the default profile's management app with the
-            # add-on's shared administration (HM-10 routes the others). The additional profiles' children start in
-            # HM-09 (ProfileManager.start_all); until then launch() and monitor() are the default profile's.
+            # add-on's shared administration (HM-10 routes the others). HM-09 (plan 5.4): launch() below starts the
+            # default profile's child as before; monitor() also starts the others (staggered) and runs every profile's
+            # monitor, and only the default profile's ending stops the add-on (DQ-21); closing it stops every child at
+            # once (HA's 30 s).
             profile = ProfileManager(store, args.product, TOOLS[args.product], child_spec, port=child_port,
                                      app_options=options)
         else:

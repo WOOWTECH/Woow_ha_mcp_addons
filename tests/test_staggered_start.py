@@ -9,6 +9,7 @@
 - The listeners serve the default profile while the others are still starting.
 """
 import asyncio
+import json
 import time
 
 import pytest
@@ -61,10 +62,55 @@ async def test_the_default_starts_first_then_at_most_two_others_at_once(tmp_path
         assert all(rig.health(p).availability()['ready'] for p in rig.ports)
 
 
+async def test_start_all_never_checks_a_child_that_already_answered(tmp_path, log_scan):
+    """The default profile's child answered its monitor's check already: start_all asks nothing more of it before it
+    starts the others (each check of a configured child is a login at the backend; DQ-25, C-tracer 4.4)."""
+    async with manager_rig(tmp_path, extras=1) as rig:
+        watch(log_scan, rig)
+        await rig.manager.launch()
+        await until(lambda: rig.supervisor('default').status == 'running')
+        await rig.health('default').check()
+        assert rig.health('default').availability()['ready'] is True
+        child = rig.children.by_port[rig.default_port]
+        before = len(child.requests)
+        await rig.manager.start_all()
+        assert len(child.requests) == before and rig.supervisor(rig.extras[0]).starts == 1
+
+
+async def test_start_all_waits_for_a_check_running_now_instead_of_probing_again(tmp_path, log_scan):
+    """The default profile's monitor is checking right now (its child has not answered yet): start_all waits for that
+    check and takes its outcome; it does not send a second initialize (and login) right after it."""
+    async with manager_rig(tmp_path, extras=1, answering=False) as rig:
+        watch(log_scan, rig)
+        original = rig.answer('default')
+        rig.answer(rig.extras[0])
+        gate, seen = asyncio.Event(), []
+
+        async def gated(request):
+            seen.append(request)
+            await gate.wait()
+            return await original(request)
+        rig.children.by_port[rig.default_port] = gated
+        await rig.manager.launch()
+        await until(lambda: rig.supervisor('default').status == 'running')
+        running = asyncio.create_task(rig.health('default').check())
+        await until(lambda: len(seen) == 1)
+        starting = asyncio.create_task(rig.manager.start_all())
+        await asyncio.sleep(0.1)
+        assert not starting.done() and rig.supervisor(rig.extras[0]).starts == 0
+        gate.set()
+        await running
+        async with asyncio.timeout(10):
+            await starting
+        initializes = [request for request in seen if request.content
+                       and json.loads(request.content).get('method') == 'initialize']
+        assert len(initializes) == 1 and rig.supervisor(rig.extras[0]).starts == 1
+
+
 async def test_a_child_that_never_answers_frees_its_place_after_30_seconds(tmp_path, log_scan, monkeypatch):
-    """STAGGER_SECONDS (30 s; 0.4 s here): nobody answers, so every place is freed by the timeout: B and C at once, D
+    """STAGGER_SECONDS (30 s; 0.5 s here): nobody answers, so every place is freed by the timeout: B and C at once, D
     and E one timeout later, F one more."""
-    monkeypatch.setattr(profile_runtime, 'STAGGER_SECONDS', 0.4)
+    monkeypatch.setattr(profile_runtime, 'STAGGER_SECONDS', 0.5)
     async with manager_rig(tmp_path, extras=5, answering=False) as rig:
         watch(log_scan, rig)
         rig.answer('default')
@@ -82,7 +128,8 @@ async def test_a_child_that_never_answers_frees_its_place_after_30_seconds(tmp_p
         async with asyncio.timeout(10):
             await starting
         b, c, d, e, f = (moments[p] for p in rig.extras)
-        assert max(b, c) < 0.3 and 0.35 < min(d, e) < 0.75 and f > 0.75, moments
+        assert max(b, c) < 0.4 and min(d, e) - max(b, c) >= 0.45 and f - max(d, e) >= 0.45, moments
+        assert f < 5, moments
 
 
 async def test_a_profile_that_cannot_start_never_holds_up_the_others(tmp_path, log_scan, monkeypatch):

@@ -254,7 +254,7 @@ async def test_every_lifecycle_event_names_the_profile_port_and_pid(tmp_path, lo
     await supervisor.start()
     await until(lambda: supervisor.status == 'failed')
     lines = lifecycle_lines(log_scan)
-    pid_lines = [line for line in lines if 'started' in line or 'exited' in line]
+    pid_lines = [line for line in lines if line.endswith(']: started') or ']: exited' in line]
     assert len(pid_lines) == 2 and pid_lines[0].startswith('MCP child [profile=aaaaaaaa port=18000 pid=')
     assert pid_lines[0].endswith(']: started') and pid_lines[1].endswith(']: exited with code 7')
     assert 'MCP child [profile=aaaaaaaa port=18000]: next start in 0.01 s (attempt 1)' in lines
@@ -272,6 +272,19 @@ async def test_every_lifecycle_event_names_the_profile_port_and_pid(tmp_path, lo
         'MCP child [profile=aaaaaaaa port=18000]: not started (child_port_in_use): another socket is bound to this port',
         'MCP child [profile=default port=3000]: not started (child_port_in_use): another socket is bound to this port'
         ' suppressed=2']
+
+
+async def test_a_profile_without_a_connection_names_the_missing_fields(tmp_path, log_scan):
+    """Contract 7 ("缺哪些連線鍵（只列鍵名）"): an additional profile with no connection saved is not started (status
+    unconfigured, as today's default profile without one) and its line names the fields, never a value."""
+    async with manager_rig(tmp_path, extras=1, configured=False) as rig:
+        watch(log_scan, rig)
+        b, = rig.extras
+        await rig.manager.launch()
+        await rig.manager.start_all()
+        assert rig.supervisor(b).status == 'unconfigured' and rig.pid(b) is None
+        assert (f'MCP child [profile={profiles.log_id(b)} port={rig.ports[b]}]: not started: no connection is saved '
+                'yet (url, database, username, password); it starts once one is saved') in lifecycle_lines(log_scan)
 
 
 async def test_the_lifecycle_log_keeps_a_bounded_memory():
