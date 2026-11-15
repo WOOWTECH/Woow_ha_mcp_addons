@@ -95,9 +95,12 @@ REFUSAL_READ_SECONDS = 2
 REFUSAL_SLOTS = 8
 REFUSAL_BYTES = 512 * 1024
 # One WARNING per profile and situation this often (the PaaS gateway_pool.REPORT_INTERVAL_SECONDS), remembering at most
-# this many situations.
+# this many situations. HM-14 review S-4: every situation of every profile an add-on can have must fit, or the oldest is
+# forgotten before it comes round again and every line is written: a profile has 11 since HM-14, Odoo's 6 profiles 66
+# (PaaS remembers 64), and the shared-token groups count too (at most 57 for 6 profiles). 256 leaves room for the
+# situations later slices add.
 REPORT_SECONDS = 60
-MAX_REPORT_KEYS = 64
+MAX_REPORT_KEYS = 256
 MiB = 1024 * 1024
 
 

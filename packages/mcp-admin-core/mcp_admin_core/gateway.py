@@ -428,12 +428,13 @@ class UpstreamOwner:
         self.end_session = None  # 0.1.6 (R2): set while the child's new session id is withheld from the client
         # HM-14 (switched on; contract 2.5): the error that broke the child's connection while chunks() read its reply
         # (interrupted), the child generation the request went to (its Supervisor's start count, when there is a health
-        # monitor), the POST's id an event stream answers ((id,), None for a GET) and whether that reply was delivered.
+        # monitor), the POST's id an event stream answers ((id,), None for a GET) and whether its answer was delivered:
+        # the child's reply or, once the child's connection broke, the gateway's own -32004 event (review S-1).
         self.interrupted = None
         self.generation = None
         self.reply = None
         self.answered = False
-        self.reply_event = None  # the reply's event as the stream yields it (an Ending compares what the server took)
+        self.reply_event = None  # the answer's event as the stream yields it (an Ending compares what the server took)
 
     async def close(self):
         if self.closed:
@@ -524,8 +525,9 @@ class Ending:
 
     - its headers were not taken by the server (the client was not reading: backpressure): refusal, the bytes a changed
       token gets before an answer starts (Bearer 401 {"error":"request denied"}, secret path 404 Not Found);
-    - its headers went out on an event stream: one -32005 event under the POST's id when its reply was not delivered (a
-      GET stream gets none), then the end of the stream; never another byte of the child's;
+    - its headers went out on an event stream: one -32005 event under the POST's id when its answer was not delivered
+      (its answer: the child's reply, or the gateway's own -32004 event once the child's connection broke; a GET stream
+      gets none), then the end of the stream; never another byte of the child's;
     - its headers went out on a buffered answer: its Content-Length is fixed (HM-01's golden bytes), so nothing more can
       be sent; the gateway returns and the server closes the connection (uvicorn logs one line without a traceback,
       "ASGI callable returned without completing response.");
@@ -546,8 +548,9 @@ class Ending:
                 if not isinstance(self.response, OwnedStreamingResponse):
                     return
                 owner = self.response.owner
-                # the reply is delivered once the server took its event: the generator resumed after it (answered), or
-                # the token changed as the server took it (the last body the server took is that event)
+                # the answer is delivered once the server took its event (the child's reply or the gateway's -32004):
+                # the generator resumed after it (answered), or the token changed as the server took it (the last body
+                # the server took is that event)
                 answered = owner.answered or (owner.reply_event is not None and delivery.last_body is owner.reply_event)
                 if owner.reply is not None and not answered:
                     await send({"type": "http.response.body", "more_body": True,
@@ -644,7 +647,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               authority: AdminAuthority | None = None, admin_slots: asyncio.Semaphore | None = None,
               admin_pipeline: AdminPipeline | None = None, token_access: TokenAccess | None = None,
               mutation_lock: asyncio.Lock | None = None, profile_view: Callable[[], dict] | None = None,
-              forward_slots: int | None = None, slot_busy: Callable[[object], Response] | None = None,
+              forward_slots: int | None = None, slot_busy: SlotBusy | None = None,
               reply_secrets: Callable[[], Iterable[str]] | None = None,
               child_blocked: Callable[[], str | None] | None = None):
     """listing (0.2.2): the product's tools/list tools as its child lists them (surface.listing). With it, a client
@@ -1368,7 +1371,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             stopped = await child_stopped(owner.generation)
             slot_busy.interrupted("POST" if request is not None else "GET", type(owner.interrupted).__name__, stopped)
             if request is not None:
-                yield gateway_event(request[0], CHILD_INTERRUPTED, CHILD_STOPPED_TEXT if stopped else CHILD_CONNECTION_TEXT)
+                event = gateway_event(request[0], CHILD_INTERRUPTED,
+                                      CHILD_STOPPED_TEXT if stopped else CHILD_CONNECTION_TEXT)
+                owner.reply_event = event  # HM-14 review S-1: this event answers the POST, as a reply does
+                yield event
+                owner.answered = True  # the server took it: an Ending adds no -32005 under the same id
 
     def local_session(session):
         """0.2.2: whether session is a live session the gateway opened itself (its last use is renewed)."""
