@@ -87,6 +87,21 @@ bootstrap；product/contract/tools/schema/disabled/global/grants 任一變更即
 格式不符的通知不顯示任何內容（`ownerDefaultsView` 整個拒絕），改在每一頁顯示固定的「升級通知無法顯示」卡片
 （不含伺服器送來的值、沒有動作，請重新整理或更新 add-on），不再整個隱藏。名稱一律以文字節點顯示，時間照伺服器的 UTC 顯示。
 
+## 多帳號（HM-11；還沒有產品開通）
+
+伺服器沒開通多帳號時，面板的畫面、請求與收據和以前完全一樣。開通後（bootstrap 帶 `profiles_supported`）：
+
+- 頂列多一個帳號選單（`<select aria-label="帳號">`）與「新增帳號」「改名」「刪除帳號」；預設帳號不能改名或刪除，刪除要確認兩次。
+  標題下固定顯示目前帳號名稱與 id 前 8 碼；名稱一律以文字節點顯示。
+- 帳號選擇只放在頁面記憶體（DQ-18），重新整理回到預設帳號。第一次 bootstrap 不帶帳號；伺服器回 400 `profile_id_required`
+  就改成每個帳號範圍請求都帶 `X-MCP-Profile`（含明確的 `default`）；`/api/profiles*` 永遠不帶。
+- 每次變更先鎖定帳號：取 CSRF 的 bootstrap 與變更本身帶同一個標頭，兩個回應的帳號回聲都要符合，否則不顯示結果、藏起權杖並重新讀取。
+- 切換帳號：藏起已顯示的權杖、清掉密碼欄與未存的草稿、整頁重畫；切換中只剩帳號選單可用，再選一次會取代前一次，前一次晚到的回應丟掉。
+  其他操作進行中選單停用。帳號在別處被刪：切回預設帳號並說明，該帳號未確認的收據一併清除。
+- 額外帳號的 MCP 端點唯讀（全 add-on 共用，只在預設帳號修改）；手動範例的名稱是 `woow-<產品>-<id 前 8 碼>`。
+- 收據：預設帳號的 key 與 4 鍵紀錄不變；額外帳號另一個 key、多一個 `profile` 鍵；帳號增刪用 `…:profiles`（見 `docs/admin-write-contracts.md`）。
+- fixture 以 `profiles` 選項開關多帳號；Playwright 的 `profiles-on` 專案讓四個既有 spec 在開關開時原封不動再跑一次。
+
 ## 正式 listener 與 Ingress
 
 - 只有 admin listener。每頁、asset、license、API 都走實際 socket peer172.30.32.2、
