@@ -14,13 +14,20 @@
 - 既有測試只改替身的注入點：5 個檔的 `Supervisor`、`HealthMonitor`、`make_apps`、子程式 client 從 `run_product` 改到
   `profile_runtime`，替身本身與斷言沒改。
 - 啟動預設帳號前後 `/data/mcp` 不新增任何檔：寫了測試鎖住（八個產品×新裝與已設定，16 案；改之前就成立，改完照過）。
-- 新測試 `tests/test_profile_runtime.py` 63 案。先紅後綠：改程式前 20 通過（兩個「今天就成立」的鎖）、43 失敗；改完 63 全過、
-  0 skip。31 個臨時突變：先寫的測試擋下 29 個；沒擋下的 2 個（P14、R2）補測試後都擋下（第 4.3 節）。
-- 兩個預檢：秘密預檢 0 命中（本片 3 個 commit，含本筆記；全分支 17 個 commit 與 `--full` 也 0）；帳本預檢 OK（0 漂移）。
+- 新測試 `tests/test_profile_runtime.py` 65 案（審查前 63 案、審查後補 2 案）。先紅後綠（審查前的 63 案）：改程式前 20 通過
+  （兩個「今天就成立」的鎖）、43 失敗；改完 63 全過、0 skip。31 個臨時突變：先寫的測試擋下 29 個；沒擋下的 2 個（P14、R2）
+  補測試後都擋下（第 4.3 節）。審查的 15 個突變有 5 個沒被擋：補的 2 案擋下其中 3 個（ME2、ME3、ME7）；另 2 個（ME6、MD2）
+  照審查建議交給 HM-08、HM-10（第 4.4 節）。
+- 獨立審查判定通過：必修 0 項；建議 5 項都處理了（第 13 節）。S-1、S-2(a) 補測試；S-2(b)、S-3、S-5 改說明，交給 HM-08、
+  HM-10、HM-25；S-4 補上計畫 §11.5 的發版規定。
+- **合併後的發版（計畫 §11.5）**：本片合併後，任何產品的發版都要走完整既有流程，不能只看單帳號黃金回歸（第 11 節）。
+- 兩個預檢：秘密預檢 0 命中（本片 5 個 commit，含本筆記；全分支 19 個 commit 與 `--full` 也 0）；帳本預檢 OK（0 漂移）。
 - 本機全套 pytest：4057 案：4034 通過、23 失敗、0 skip，28 分 19 秒（`e089210`）。22 個失敗是這個 clone 沒有 Playwright 的 Chromium
   （`browserType.launch` 找不到執行檔；HM-04 同一批）：把本機既有、同版（Playwright 1.61.1、chromium-headless-shell 1228）的
   瀏覽器複製進 clone 的 `node_modules`（git 忽略；沒有下載）後，這 3 個檔重跑 52 案全過、`check_results.py` PASS；
-  剩下 1 個是已知要 root 的 `test_uid10001_nondumpable_self_and_own_child_proof`。
+  剩下 1 個是已知要 root 的 `test_uid10001_nondumpable_self_and_own_child_proof`。審查員在 `161cb04` 重跑全套：4057 案，
+  4056 通過、只剩同一個要 root 的案例、0 skip。審查後只改 `tests/test_profile_runtime.py` 與本筆記，重跑受影響的檢查
+  （第 5.1 節），全套沒有重跑。
 
 ## 1. 範圍與基準
 
@@ -33,7 +40,7 @@
 | 對齊的 PaaS | pin `69ac425`。本片沒有移植 PaaS 程式或測試；對應的是 PaaS 的每帳號 `McpProcessManager` 與 `ProfileRegistry`（`Pc/profiles.py`、`Pc/process.py`），HA 用自己的 `make_apps`、`Supervisor`、`HealthMonitor` |
 | FM | FM-06、32、33、37、47、54、65、76 |
 | 決策 | 第 12 節 |
-| 審查 | 還沒（下一個階段由獨立審查員看本片的 commit） |
+| 審查 | 獨立審查 2026-11-15（審 `161cb04`）：判定通過；必修 0、建議 5（S-1～S-5），處理見第 13 節 |
 
 ## 2. 改了什麼、沒改什麼
 
@@ -62,7 +69,8 @@
 
 - 照計畫 §3.2「每帳號一份」：ProductStore（借用）、Supervisor 與子程式輸出緩衝、HealthMonitor 與自己的 httpx client、
   ConfigurationState（ETag 金鑰與套用狀態）、TokenAccess、mutation lock、自答 session、轉送名額、收據（後三者仍在
-  `make_apps` 裡，每份一套）。「全 add-on 共用」的 AdminAuthority、CSRF 金鑰、角色查詢器、管理名額、共用管線從外面給（`SharedAdmin`）。
+  `make_apps` 裡，每份一套；收據每帳號一份有測試，轉送名額每帳號一份還沒有，交 HM-08，第 11 節）。「全 add-on 共用」的
+  AdminAuthority、CSRF 金鑰、角色查詢器、管理名額、共用管線從外面給（`SharedAdmin`）。
 - **TokenAccess 與 mutation lock 由執行套件建、傳給 `make_apps`**（計畫寫「外部建立」）：之後的片要拿得到它們
   （HM-10 刪帳號先撤銷再 `committed()`、拿目標帳號的鎖；HM-13b 全部撤銷），不必再改 `make_apps`。預設帳號也照這樣傳，
   兩個物件的行為和 `make_apps` 自己建的一樣。
@@ -101,8 +109,10 @@
   理由：帳號動作的回答全都在最後一次角色檢查之後（`admin_action` 先 `final_role` 才回任何 JSON），所以非管理員拿不到
   帳號 id（I10）；管線的回答可能在角色檢查之前，所以一律不加（`profile_action` 只包帳號動作）。
 - **HMAC domain 加帳號 id 不在本片**：契約 §3.5 寫「HMAC domain 加帳號 id」，屬 DQ-15 的細節（待定，負責片 HM-10）；計畫 HM-10
-  的「做法」也列了 `Hc/configuration.py`。本片的「跨帳號 ETag 409」來自每帳號自己的 `ConfigurationState`（各自的隨機金鑰），
-  沒有改 `configuration.py`。
+  的「做法」也列了 `Hc/configuration.py`。本片沒有改 `configuration.py`。跨帳號 ETag 409 目前由兩邊 state 內容不同保證：
+  兩個帳號的 token、child_token 各自隨機，所以 revision 不同。每帳號自己的 `ConfigurationState` 各有一把隨機金鑰，是第二層，
+  測試沒有單獨證明（審查 S-3：突變 MD2 把金鑰改成全程序一把，測試照過）。HM-10 補「兩個帳號 state 內容完全相同」的
+  對照案例（第 11 節）。
 
 ### 3.4 `run()` 的順序與失敗語意
 
@@ -119,12 +129,13 @@
 
 - `PROFILE_ID` 放在 `gateway.py`（`profile_echo` 要用，`profile_runtime` 匯入它；放 `profile_runtime` 會循環匯入）。
   HM-07 的 `profiles.py` 也會定帳號 id 格式；兩邊合併後可改成同一個來源（第 11 節）。
-- `CHILD_CONNECTIONS`＝40 是預設帳號原本的值（計畫 §5.2：預設帳號 40、額外帳號 24 由 HM-08／HM-09 設）。
+- `CHILD_CONNECTIONS`＝40 是預設帳號原本的值（計畫 §5.2：預設帳號 40、額外帳號 24 由 HM-08／HM-09 設）。子程式 client 的
+  四個選項（含它）由 `test_each_runtime_makes_its_child_client_as_run_product_did` 鎖住（審查 S-1）。
 - 測試在執行時才匯入 `mcp_admin_core.profile_runtime`：改程式前每案各自失敗（先紅後綠表才有逐案數字），而不是整個檔收集失敗。
 
 ## 4. 新測試、先紅後綠、突變
 
-### 4.1 新測試（`tests/test_profile_runtime.py`，63 案；全部在 HM-01 的 `log_scan` 下，另有 autouse 檢查 `owned_network` 的拒絕計數不能增加）
+### 4.1 新測試（`tests/test_profile_runtime.py`，65 案，其中 2 案審查後補；全部在 HM-01 的 `log_scan` 下，另有 autouse 檢查 `owned_network` 的拒絕計數不能增加）
 
 子程式都是 MockTransport（照 port 分給各帳號的假子程式，不開 socket），Supervisor 是真的但不起程序（`NoProcessSupervisor`）。
 
@@ -134,7 +145,7 @@
 | `test_a_runtime_carries_its_profile_id_port_and_store` | 1 | 預設帳號 `default`／3000、額外帳號 24 hex／18000；各自的 store、`TokenAccess`、鎖、Supervisor、client、監看、設定狀態、兩個 app 都不是同一個物件 | PaaS `test_default_manager_and_registry_managers_carry_their_profile_id` |
 | `test_a_runtime_refuses_what_is_not_its_own` | 1 | 不合法的 id（大小寫、空白、換行、長度、非 hex、非字串）、port、`app_options` 用了執行套件自己的參數、`shared` 型別、不可呼叫的 `profile_view` → `ValueError` | — |
 | `test_lifecycle_options_reach_the_profiles_supervisor` | 1 | `lifecycle` 原樣到 Supervisor | — |
-| `test_two_runtimes_keep_their_tokens_and_children_apart` | 8 | 八個產品各兩套：自己的 token 兩條入口都通（session 由自己的子程式開、tools/list 和黃金回歸同一份摘要）；拿去別帳號拿到的位元組和錯 token 相同、沒有任何子程式被問；各自的 client 只打自己的 `child_url` | FM-37；計畫風險 19 |
+| `test_two_runtimes_keep_their_tokens_and_children_apart` | 8 | 八個產品各兩套：自己的 token 兩條入口都通（session 由自己的子程式開、tools/list 和黃金回歸同一份摘要）；拿去別帳號拿到的位元組和錯 token 相同、沒有任何子程式被問；各自的 client 只打自己的 `child_url`。n8n 的 nodes.db 副本（`prepare_catalog`）是行程全域，這裡沒做（說明已寫明；DQ-04、HM-25；審查 S-5） | FM-37；計畫風險 19 |
 | `test_each_child_is_started_on_its_own_state_directory_and_port` | 8 | 每個 Supervisor 拿到的 spec＝用自己的 state、目錄、port 組出的 spec；cwd 在自己的目錄；env 只有自己的憑證與網址 | PaaS `test_registry_reloads_saved_profiles_and_child_env_uses_their_files` |
 | `test_child_sessions_stay_with_their_profile` | 1 | A 的子程式 session＋B 的 token：B 的子程式回 404、刪不掉；A 的子程式沒被問；A 的 session 之後照用 | FM-32 |
 | `test_the_gateways_own_sessions_stay_with_their_profile` | 1 | 沒有後端時閘道自答的 `woow-local-*` session 只屬於那個帳號（別帳號 404、刪不掉） | FM-32 |
@@ -142,7 +153,9 @@
 | `test_a_save_restarts_only_its_own_child` | 1 | A 存後端只重啟 A 的子程式（新密碼）；B 的子程式沒停、套用狀態仍是 applied、state.json 沒動 | FM-47、T-16 |
 | `test_each_profile_keeps_its_own_child_output` | 1 | 6 個帳號：塞爆 5 個的子程式輸出，安靜帳號的診斷頁不變；每個保留自己最新的行、各自不超過 200 筆／128 KiB，合計不超過 6 份 | FM-65、T-18；PaaS logs 緩衝 4 案 |
 | `test_each_profile_redacts_its_replies_with_its_own_secrets` | 1 | 每個帳號用自己 state 的憑證遮罩子程式回覆 | FM-76 |
-| `test_one_shared_authority_one_csrf_and_another_profiles_etag_is_a_conflict` | 1 | 共用 `SharedAdmin`：兩個帳號 CSRF 相同、互通；拿 A 的 ETag 寫 B → 409 `{"detail":{"code":"config_conflict"}}`、兩邊 state.json 都沒動；拿 B 的 ETag → 200；一個角色驗證器服務兩個帳號。不共用時 CSRF 不同、A 的 CSRF 在 B 403 | FM-54、FM-06；PaaS `test_admin_logout_uses_global_store_across_profiles`；A-port P2 |
+| `test_each_runtime_makes_its_child_client_as_run_product_did`（審查後補，S-1） | 1 | 兩套執行套件的子程式 client 都用 `run_product` 原本的四個選項：`trust_env=False`（子程式 bearer 不經環境變數的 proxy 或 `.netrc`）、`follow_redirects=False`、`Timeout(10, connect=3)`、`Limits(max_connections=40)`；比對建 client 時收到的全部 keyword 參數 | 計畫 §3.2、§5.2 |
+| `test_each_profile_keeps_its_own_receipts`（審查後補，S-2(a)） | 1 | 兩個帳號輪流輪替 token（額外帳號、預設帳號各一次）：收據只寫在自己目錄的 `.state.json.operations.json`；另一個帳號的目錄樹不變，查這個 operation id 回 404 `operation_not_found` | 計畫 §3.2；契約 §3.5 |
+| `test_one_shared_authority_one_csrf_and_another_profiles_etag_is_a_conflict` | 1 | 共用 `SharedAdmin`：兩個帳號 CSRF 相同、互通；拿 A 的 ETag 寫 B → 409 `{"detail":{"code":"config_conflict"}}`、兩邊 state.json 都沒動；拿 B 的 ETag → 200；一個角色驗證器服務兩個帳號。不共用時 CSRF 不同、A 的 CSRF 在 B 403。409 由兩邊 state 內容不同保證；金鑰共不共用這裡分不出來（第 3.3 節） | FM-54、FM-06；PaaS `test_admin_logout_uses_global_store_across_profiles`；A-port P2 |
 | `test_shared_management_slots_are_one_budget_for_every_profile` | 1 | 共用名額：兩個帳號各 8 個請求卡在讀 body，第 17 個不論哪個帳號都 503；不共用時第 17 個照常 200 | FM-54 |
 | `test_a_shared_authority_is_the_one_role_verifier` | 1 | `verify_admin` 和 `authority` 的 verifier 不同、或 `authority` 型別錯 → `ValueError` | — |
 | `test_external_objects_must_be_this_profiles` | 1 | 別的 store 的 `TokenAccess`、錯型別的 5 個參數、8 種形狀錯的回聲 → `ValueError` | — |
@@ -155,7 +168,8 @@
 | `test_closing_a_runtime_stops_only_its_child_and_lets_the_store_close` | 1 | 關一套：client 先關、再停子程式（同 `run()` 原本的順序）；另一套照常服務；store 關掉後 writer lock 可以再拿；額外帳號不寫預設帳號的目錄 | — |
 | `test_a_runtime_that_cannot_open_leaves_nothing_running` | 2 | `open()` 失敗（伺服器名稱不合法、回聲指到別的帳號）時 Supervisor 停掉、client 關掉、沒有殘留 task；store 仍開著（借用） | — |
 
-本機一般使用者：63 案 5.2 秒（`test_two_runtimes_keep_their_tokens_and_children_apart` 0.9 秒、token 變動 1.1 秒、不新增檔 1.1 秒最多）。
+本機一般使用者：63 案 5.2 秒（`test_two_runtimes_keep_their_tokens_and_children_apart` 0.9 秒、token 變動 1.1 秒、不新增檔 1.1 秒最多）；
+審查後 65 案 5.8 秒。
 
 ### 4.2 先紅後綠
 
@@ -171,6 +185,8 @@
 | 參數簽名（1 案） | 失敗：`KeyError: 'authority'` | 通過 |
 | 共用名額（1 案） | 失敗：沒有 `gateway.ADMIN_SLOTS` | 通過 |
 | 合計 | 20 通過、43 失敗 | 63 通過、0 skip |
+
+審查後補的 2 案沒有對應的程式改動，改用突變證明（第 4.4 節）。
 
 ### 4.3 突變（暫時改一處、跑測試、`git checkout` 還原；每次還原後 `git status` 乾淨，沒有 commit）
 
@@ -213,7 +229,44 @@ P14 與 R2 沒被擋。把 `test_a_runtime_that_cannot_open_leaves_nothing_runni
 | R2 子程式 port 改在遷移與開 store 之後才驗 | 第一輪沒擋；補測試後：不合法 port（4） |
 | R3 `run_product` 不傳 `child_port` | `test_one_port_reaches_every_child_request`（7，HM-04） |
 
+### 4.4 審查後補的測試：用突變證明（2026-11-15）
+
+審查後補的是測試與測試說明，程式沒改，所以先紅後綠改用突變證明：在 `a58555e`（審查後的測試 commit）上，每個突變單獨
+套上，跑 `tests/test_profile_runtime.py`（65 案），再 `git checkout` 還原；每次還原後 `git status` 乾淨，沒有 commit。
+突變照審查報告的定義；審查員的紀錄是這 5 個在審查前的測試下都存活（ME2、ME3 跑 1258 案、ME7 與 MD2 跑 155 案、ME6 跑 108 案，
+全過）。突變腳本放暫存區。
+
+| 突變 | 結果 | 擋下它的測試 |
+|---|---|---|
+| ME2 子程式 client：`trust_env=True`、`follow_redirects=True`、`Timeout(30, connect=10)`、`CHILD_CONNECTIONS`＝24 | 65 案 1 失敗 | `test_each_runtime_makes_its_child_client_as_run_product_did` |
+| ME3 只改 `trust_env=True` | 65 案 1 失敗 | 同上 |
+| ME7 收據改成同產品共用第一個帳號的 `OperationJournal`（同一個事件迴圈） | 65 案 1 失敗 | `test_each_profile_keeps_its_own_receipts` |
+| ME6 轉送名額（32）改成所有帳號共用一份 | 65 案全過（照審查建議交 HM-08，第 11 節） | — |
+| MD2 `ConfigurationState` 的 HMAC 金鑰改成全程序一把 | 65 案全過（照審查建議交 HM-10，第 11 節） | — |
+
+收據測試兩個方向都測（額外帳號、預設帳號各輪替一次），比審查建議的單向多一個方向：預設帳號的收據也只在預設帳號的目錄。
+
 ## 5. 本機檢查（一般使用者；TMPDIR 用 `/tmp/ha-mp-XXXXXX`，每次跑完刪除）
+
+### 5.1 審查後（2026-11-15，HEAD）
+
+審查後只改了 `tests/test_profile_runtime.py`（補 2 案、改 2 段說明）與本筆記，沒有改執行期檔、帳本、`apps/`、`packaging/`。
+重跑受影響的檢查。pytest 在 `a58555e`（或 commit 前內容相同的工作樹）上跑；本筆記的 commit 只改本筆記。全部排在全套測試鎖裡，
+每次用新的 `/tmp/ha-mp-*`，跑完刪除：
+
+| 檢查 | 結果 |
+|---|---|
+| 新測試檔（commit 前的工作樹；junit 經 `packaging/check_results.py` PASS：65 executed, no skips） | 65 通過、0 skip，5.8 秒；下一列的目標批次（`a58555e`）裡再跑一次，65 全過 |
+| 目標批次（和審查員同一組 23 個檔：新測試檔、HM-01 守門、改到替身的檔、設定狀態、租約、收據、角色查詢、兩個預檢工具的測試等） | 1317 案：1316 通過、1 失敗（已知要 root 的 `test_uid10001_nondumpable_self_and_own_child_proof`）、0 skip，85 秒。其中黃金回歸 17、MCP 契約凍結 9、管理契約凍結 19、`test_owned_ports_bearer` 52、`test_log_scan` 13、兩個預檢工具的測試 14＋7 全過 |
+| 5 個突變 | 第 4.4 節 |
+| `packaging/validate.py`（PyYAML 的 Python） | PASS |
+| packaging unittest（`.venv`，PyYAML 由 `PYTHONPATH` 加進來，不改 `.venv`） | `Ran 184`、`OK (skipped=5)`（同基準） |
+| `scripts/tool_inventory.py`（漂移檢查，CI 同款） | 通過（exit 0） |
+| 兩個預檢 | 第 8 節 |
+| 全套 pytest、起真子程式的 5 個檔 | 沒重跑：審查後只改這一個測試檔，沒有別的測試 import 或讀它（`test_tool_inventory` 只掃 `apps/`）。審查員在 `161cb04` 跑過全套（4057 案，4056 通過、只剩同一個要 root 的案例、0 skip，瀏覽器測試也過）與起真子程式的 5 個檔（97 全過）。以 PR 的 CI 為準 |
+| `git status` | 乾淨；`git diff 161cb04 HEAD` 只有 `tests/test_profile_runtime.py` 與本筆記 |
+
+### 5.2 審查前（2026-11-15，`e089210`）
 
 環境：`setup_repo_env.sh` 照 `packaging/unit.sh` 第 5～25 行裝好（uv sync 根目錄與 8 個子程式、Odoo／n8n patch、n8n 與 UI 的 `npm ci`、
 UI build）。全套 pytest 在多個 clone 共用的全套測試鎖（`wave1-pytest.lock`）裡跑；小範圍的 pytest 在 `tests/conftest.py` 的本機測試鎖空著時跑。
@@ -243,13 +296,15 @@ UI build）。全套 pytest 在多個 clone 共用的全套測試鎖（`wave1-py
 - `tests/integration_runtime_wrapper.py`：只給本機 root 明確執行的 `tests/integration_local_runtime.py` 用，而且只跑 n8n 的 `apps/n8n/run.py`
   （本片沒動）；它呼叫的 `install_runner(app, ...)` 對 n8n 模組照舊 patch 模組本身。本片沒跑（要 root）。
 - packaging 的 5 個 `skipUnless(root)`：CI 那一步也不是 root，同樣 skip（和基準相同）。
+- 審查後補的 2 案也沒有只能在 CI 跑的：子程式是 MockTransport、Supervisor 不起程序，只比對 client 的參數、收據檔的位置與
+  目錄樹前後是否相同，不看執行身分。
 
 ## 7. `checks` 秒數
 
 - 前：`bb48449` 的 push run 43222889894 `checks` 1380 秒、同一個 commit 的 pull_request run 43222899526 1834 秒（HM-01 筆記第 7 節）；
   HM-01 的 PR #90（run 43587407864）1434 秒。
 - 後：開 PR 後補。
-- 推估：新測試本機 5.2 秒（63 案），推估 CI 增加不到 30 秒；改到替身的既有測試只換 patch 的位置，耗時不變。
+- 推估：新測試本機約 6 秒（65 案；審查前 63 案 5.2 秒），推估 CI 增加不到 30 秒；改到替身的既有測試只換 patch 的位置，耗時不變。
 
 ## 8. 預檢結果
 
@@ -260,14 +315,17 @@ SHA-256 `a65b5253…40eb` 和 `packaging/scanner-pins.json` 相符；每次掃�
 
   | 範圍 | 命中 |
   |---|---|
-  | 本片的 commit（`9f1e35e..HEAD`，git 模式） | 0（3 個 commit，含本筆記） |
-  | 本分支的 commit（`bb48449..HEAD`，含 HM-01 的 9 個、HM-04 的 5 個） | 0（17 個 commit） |
+  | 本片的 commit（`9f1e35e..HEAD`，git 模式） | 0（5 個 commit：審查前 3 個，加審查後的測試與本筆記各 1 個） |
+  | 本分支的 commit（`bb48449..HEAD`，含 HM-01 的 9 個、HM-04 的 5 個） | 0（19 個 commit） |
   | `--full`：`git archive HEAD` 的全部檔與全歷史 `--all --full-history -m`（建置機同款） | 0 |
+
+  審查後的測試 commit `a58555e` 上也先掃過一次：本片 4 個 commit、全分支 18 個 commit，都 0 命中。
 
 - **帳本預檢**（`scripts/ledger_precheck.py --base 9f1e35e`）：`runtime-patches.json` 153 個路徑（多了 `profile_runtime.py`）、
   `runtime-sources.json` 70 個、`tool-surface.json` 159 個，都 0 漂移、0 缺檔。對 `9f1e35e` 改了 11 個檔：列管檔 3 個（`gateway.py`、
   `run_product.py`、新的 `profile_runtime.py`）與帳本 `runtime-patches.json` 一起改；新增而沒列管的執行期檔 0 個；改到而沒列管的
   執行期檔 0 個。結果 OK。對 `origin/claude-delivery`（`bb48449`）也 OK（HM-04 的 `health.py`、`lifecycle.py` 照舊列為要人看）。
+  審查後重跑，兩個都 OK、數字相同（審查後改的測試檔與本筆記都不在帳本裡）。
 
 ## 9. PaaS 變動（`git log <pin>..origin/main -- <相關檔>`）
 
@@ -280,15 +338,15 @@ SHA-256 `a65b5253…40eb` 和 `packaging/scanner-pins.json` 相符；每次掃�
 
 | 條件 | 狀態 |
 |---|---|
-| 既有測試全綠 | 本機：全套 4057 案只剩已知要 root 的 1 個失敗（22 個瀏覽器測試補上瀏覽器後重跑全過）。以 PR 的 CI（root、0 skip）為準（這一波不 push） |
+| 既有測試全綠 | 本機：全套 4057 案只剩已知要 root 的 1 個失敗（22 個瀏覽器測試補上瀏覽器後重跑全過）；審查員在 `161cb04` 跑全套也一樣。以 PR 的 CI（root、0 skip）為準（這一波不 push） |
 | 既有測試只改替身注入點 | 通過：5 個檔只換 patch 的位置（`run_product` → `profile_runtime`），黃金回歸的檔頭只改說明這兩個注入點的文字；斷言、替身、常數沒改（第 2 節） |
 | HM-01 逐位元 | 通過：黃金回歸 17、MCP 契約凍結 9、管理契約凍結 19 全過，期望值一個字都沒改（第 5 節） |
 | `/data/mcp` 不新增任何檔 | 通過：`test_starting_the_default_profile_adds_no_file` 16 案（改之前就成立、改完照過）；突變 P10（執行套件寫一個檔）被它與黃金回歸擋下 |
 | `make_apps` 只加 keyword-only 參數，不給時逐位元相同 | 通過：簽名測試；預設路徑由 HM-01 守門與全部既有測試驗；`admin_api` 一行未改 |
 | `run_product.py` 改用 `profile_runtime` 建預設帳號 | 通過：`test_run_product_serves_the_default_profiles_runtime` 7 案 |
-| 同一個程序兩套 runtime 互不相通（token、session、子程式網址） | 通過：第 4.1 節的 8 個測試（22 案：token 與子程式、spec、兩種 session、token 變動、存檔、輸出緩衝、回覆遮罩） |
-| 共用 AdminAuthority 時 CSRF 共用、跨帳號 ETag 409 | 通過：`test_one_shared_authority_one_csrf_and_another_profiles_etag_is_a_conflict` |
-| 先寫測試、先紅後綠 | 通過（第 4.2 節）；突變第 4.3 節 |
+| 同一個程序兩套 runtime 互不相通（token、session、子程式網址） | 通過：第 4.1 節的 10 個測試（24 案：token 與子程式、spec、兩種 session、token 變動、存檔、子程式 client 的選項、收據、輸出緩衝、回覆遮罩）。轉送名額交 HM-08、n8n 的 nodes.db 副本交 HM-25（第 11 節） |
+| 共用 AdminAuthority 時 CSRF 共用、跨帳號 ETag 409 | 通過：`test_one_shared_authority_one_csrf_and_another_profiles_etag_is_a_conflict`（409 的成因見第 3.3 節） |
+| 先寫測試、先紅後綠 | 通過（第 4.2 節）；突變第 4.3 節；審查後補的 2 案用突變證明（第 4.4 節） |
 | 新測試沒有條件式 skip、用 log 掃描 | 通過：沒有 `skip`／`skipif`／`importorskip`／`xfail`；`pytestmark` 用 `log_scan`，並監看每個帳號的 token、憑證與帳號名稱 |
 | 同 PR 更新帳本（新模組列管） | 通過：`profile_runtime.py` 新增；`gateway.py`、`run_product.py` 更新；沒動 `apps/`，tool-surface 不用重產 |
 | `ledger_precheck` OK、`secret_precheck` 0 命中 | 通過（第 8 節） |
@@ -297,16 +355,33 @@ SHA-256 `a65b5253…40eb` 和 `packaging/scanner-pins.json` 相符；每次掃�
 
 ## 11. 還沒解決、交給後面的片
 
+- **開 PR 前**：HM-04 合併後 rebase 到 `claude-delivery`；重算 `runtime-patches.json` 的摘要（衝突不能只解文字），跑
+  `scripts/tool_inventory.py` 漂移檢查；重跑兩個預檢（commit 數會變，改第 8 節）；在連得到 Gitea 的地方重查 PaaS 變動（第 9 節）。
 - `checks` 的「後」秒數：PR 的 CI 跑完後補。
+- **合併後的發版（計畫 §11.5；審查 S-4）**：本片合併後，任何產品（含 Headscale）的發版都走完整既有流程，不能只看單帳號
+  黃金回歸：該產品 HAOS P9 回歸、子程式 bearer 的直連 401 檢查、HM-13a 合併後加容器驗收的 root 還原樹；CHANGELOG 寫明帶出去的
+  不受開關管變更（計畫 §3.3 表的 HM-05 列：對未開通產品可見的變化「無」）。理由：每個產品映像整包複製 `packages/mcp-admin-core`，
+  新的 `profile_runtime.py` 與改過的 `gateway.py`、`run_product.py` 會隨下一個發版的任何產品出去。
 - **合併順序**（計畫 §12.2）：`gateway.py`、`run_product.py` 照 HM-04 → HM-05 → HM-08；`profile_runtime.py` 照 HM-05 → HM-08 → HM-09 → HM-13b → HM-30 → HM-25；
   `runtime-patches.json` 一次送審一片，後合的 rebase 後重產摘要、重跑 CI。本片在 HM-04 之上（HM-04 合併後 rebase 到 `claude-delivery`）。
 - **HM-08**：建 ProfileManager 時用 `ProfileRuntime` 建額外帳號（store 用 HM-07 的「只開既有」）、用一份 `SharedAdmin` 給所有帳號；
   額外帳號的子程式 client 上限 24（計畫 §5.2，本片只有 `CHILD_CONNECTIONS`＝40）。`PROFILE_ID` 和 HM-07 `profiles.py` 的帳號 id 格式統一成一個來源。
+  上限改 24 時，`test_each_runtime_makes_its_child_client_as_run_product_did` 改成依帳號斷言（預設 40、額外 24），其他三個選項不變
+  （審查 S-1）。轉送名額（`make_apps` 的 32）每帳號一份目前沒有測試（審查 S-2(b)：突變 ME6 讓所有帳號共用一份，測試照過）：
+  `test_profile_quotas.py` 的「轉送名額逾時」（計畫 §10.3）要補跨帳號案例：一個帳號的轉送名額滿時，別的帳號照常轉送。
 - **HM-09**：看門狗參數經 `lifecycle` 傳給 Supervisor；`start_all`、`stop_all`、錯開啟動在 `profile_runtime.py`。
 - **HM-10**：(1) 從 `admin_api`／`admin_action` 抽出共用管線，經 `admin_pipeline` 給每個帳號（本片只開注入點）；(2) 帳號回聲的範圍定案
   （本片暫定：帳號動作的 JSON 回答都帶，例外拒絕與管線自己的回答不帶；契約 §3.4 的逐條測試）；(3) `ConfigurationState` 的 HMAC domain 加帳號 id
-  （契約 §3.5，DQ-15 細節待定）；(4) 刪帳號用執行套件的 `token_access.committed()` 與 `mutation_lock`。
+  （契約 §3.5，DQ-15 細節待定）；(4) 刪帳號用執行套件的 `token_access.committed()` 與 `mutation_lock`；(5) 做 (3) 時補「兩個帳號
+  state 內容完全相同」的對照案例：拿 A 的 ETag 寫 B 仍要 409（審查 S-3：今天的測試分不出金鑰共不共用，突變 MD2 照過）；
+  (6) 審查提醒（本片正式程式沒有傳回聲）：`echoed()` 只處理 `JSONResponse`；它用 dict 重組標頭，同名多值標頭（例如多個
+  Set-Cookie）會合併；`profile_view()` 丟例外會變 500。
+- **HM-16**：`acceptance/real_backends/ha_runtime.py` 仍 patch `run_product.make_apps`。它跑釘在 0.4.6 的已發佈映像，今天不受影響；
+  拿含本片的映像重跑時會在 import 時 `AttributeError`（明顯失敗，不會默默失效）。改驗收工具時要跟著改注入點（審查的其他觀察）。
 - **HM-25**：`apps/n8n/run.py` 改用 `ProfileRuntime`（本片測試已用 n8n 的 `child_spec` 建過兩套，介面可用）；FM-37「兩個入口合成一個」在那時完成。
+  `n8n_adapter._catalog`（`prepare_catalog` 做的 nodes.db 副本，子程式的 `NODE_DB_PATH`）是行程全域：兩個 n8n 帳號的子程式會拿到
+  同一份可寫 nodes.db（審查 S-5）。額外帳號的副本放哪裡等 DQ-04（計畫 §13.3，還沒問），HM-25 開工前問使用者。本片沒改 n8n，
+  正式程式不受影響。
 - **HM-01（O-1，本分支沒有）**：`ledger_precheck.py` 改用 `shutil.copy2` 的修正在 #90 合併前補進，本分支沒有；本片的帳本預檢都在工作樹乾淨時跑，不受影響。
 
 ## 12. 本片用到的決策
@@ -317,3 +392,16 @@ SHA-256 `a65b5253…40eb` 和 `packaging/scanner-pins.json` 相符；每次掃�
 - **DQ-19（2026-11-14 21:5x 照建議）**：`/health/ready` 只代表預設帳號。本片沒改它：`run_product` 的 MCP listener 掛的仍是預設帳號的 app，
   每套執行套件的 `/health/ready` 只看自己的帳號。
 - 沒有用到、也沒有自己定任何 §13.2、§13.3 的待定題：DQ-15（HMAC domain 加帳號 id）、DQ-17（`X-MCP-Profile`）都留給 HM-10；DQ-09、DQ-12、DQ-38 本片沒用到。
+- 審查後的處理也沒有用到或自己定待定題：S-3 的對照案例留給 HM-10（DQ-15），S-5 的 nodes.db 位置留給 HM-25（DQ-04，§13.3）。
+
+## 13. 審查意見處理（獨立審查 2026-11-15，審 `161cb04`：判定通過；必修 0、建議 5）
+
+| id | 審查意見 | 處理 |
+|---|---|---|
+| 必修 | 無 | — |
+| S-1 | 子程式 client 的四個選項（`trust_env=False`、`follow_redirects=False`、`Timeout(10, connect=3)`、`max_connections=40`）搬進 `profile_runtime.py` 後沒有測試。`trust_env=False` 是安全性質：子程式 bearer 每個請求都帶，改成 `True` 會照環境變數的 proxy 與 `.netrc` 走。突變 ME2、ME3 下相關的 1258 案全過 | 採用。新增 `test_each_runtime_makes_its_child_client_as_run_product_did`：攔下 `profile_runtime.httpx.AsyncClient` 收到的全部 keyword 參數，兩套都必須剛好是這四個。ME2、ME3 下這個測試紅（第 4.4 節）。HM-08 給額外帳號 24 連線時改成依帳號斷言（第 11 節） |
+| S-2 | 計畫 §3.2 每帳號一份的收據與轉送名額沒有測試；突變 ME7（收據併到第一個帳號的檔）、ME6（轉送名額共用）照過 | (a) 收據：採用，範圍比建議大一點。新增 `test_each_profile_keeps_its_own_receipts`，兩個方向都測（額外帳號、預設帳號各輪替一次）：收據只在自己目錄的 `.state.json.operations.json`，另一個帳號的目錄樹不變，查這個 operation id 回 404 `operation_not_found`。ME7 下這個測試紅。(b) 轉送名額：照建議留給 HM-08。理由：HM-08 會把額外帳號的轉送名額改成 16（計畫 §5.2），計畫 §10.3 已把「轉送名額逾時」排進它的 `test_profile_quotas.py`；現在寫的數字會在 HM-08 改掉。第 11 節的 HM-08 項寫明要補跨帳號案例；ME6 仍存活（第 4.4 節） |
+| S-3 | 筆記第 3.3 節說「跨帳號 409 來自每帳號自己的金鑰」，比測試證明的多；突變 MD2（全程序一把金鑰）照過 | 採用（只改說明）。第 3.3 節改成：409 目前由兩邊 state 內容不同保證，每帳號金鑰是第二層，測試沒有單獨證明；測試檔頭的同一句也改了。第 11 節的 HM-10 項加：做 ETag 綁帳號時補「兩個帳號 state 內容完全相同」的對照案例。沒有在本片補這個案例：它驗的是 ETag 綁帳號的那一層，契約 §3.5 把這一層的做法列為 DQ-15 細節（待定、負責片 HM-10），照審查建議跟 HM-10 一起補；今天每個 `ConfigurationState` 各有隨機金鑰，實際沒有風險 |
+| S-4 | 筆記與 PR 描述沒寫計畫 §11.5：本片合併後，任何產品的發版都要走完整既有流程 | 採用（只改文件）。第 11 節加一條，結論也提一句；PR 說明也寫了 |
+| S-5 | n8n 的 nodes.db 副本（`n8n_adapter._catalog`）是行程全域，兩個 n8n 帳號的子程式會拿到同一份可寫 nodes.db；`test_two_runtimes_keep_their_tokens_and_children_apart` 說「每個產品的 child_spec 都適用」，但沒跑 `prepare_catalog`，看不到這一點 | 採用（只改說明，不決定）。第 11 節的 HM-25 項記下；放哪裡等 DQ-04（計畫 §13.3，還沒問），HM-25 開工前問使用者。測試說明與檔頭也寫明這裡沒做 nodes.db 副本。本片沒改 n8n |
+| 其他觀察 | (1) golden 檔頭換行後留了一行很短的字（純排版，可不改）；(2) `acceptance/real_backends/ha_runtime.py` 仍 patch `run_product.make_apps`；(3) 給 HM-10 的三個提醒（`echoed()` 只處理 `JSONResponse`、同名多值標頭會合併、`profile_view()` 丟例外變 500）；(4) `PROFILE_ID` 要和 HM-07 統一 | (1) 不改：HM-01 的守門檔只動注入點，不為排版再改一次。(2) 第 11 節加 HM-16 項。(3) 第 11 節的 HM-10 項記下。(4) 原本就記在第 11 節的 HM-08 項 |
