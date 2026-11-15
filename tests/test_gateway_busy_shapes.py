@@ -131,6 +131,37 @@ async def test_busy_texts_and_warnings_name_the_limit_of_their_own_lane(log_scan
     assert len([r for r in log_scan.records if r.name == 'mcp_admin_core.profile_router']) == 2  # one a minute
 
 
+def test_every_situation_of_every_profile_stays_one_warning_a_minute(log_scan):
+    """HM-14 review S-4: a profile's WARNINGs have 11 situations since HM-14 (HM-08's admission, bytes, forward and
+    streams; the reserved lane's wait, both lanes' queue and abandoned, both causes of -32004), so the largest add-on
+    (the default profile and Odoo's 5 more) has 66. Each of them raised through the gates' own answers 3 times within
+    one minute writes one line, 66 in all: with 64 remembered (PaaS's _MAX_REPORT_KEYS), the oldest was forgotten just
+    before it came round again and every one of the 198 was written. Far more situations than remembered (other
+    profiles, the shared-token groups) keep what is remembered bounded."""
+    reports = profile_router.Reports()
+    reports.clock = lambda: 1000.0  # one instant: every situation stays inside its minute
+    count = 1 + max(profiles.EXTRA_PROFILE_LIMITS.values())
+    gates = [profile_router.ProfileGate(profile_id, profiles.DEFAULT_PROFILE_QUOTA if profile_id == 'default'
+                                        else profiles.EXTRA_PROFILE_QUOTA, profile_router.RefusalAllowance(), reports)
+             for profile_id in ['default'] + ['%024x' % number for number in range(1, count)]]
+    for _ in range(3):
+        for gate in gates:
+            for situation in ('admission', 'bytes', 'streams'):  # ProfileGate.serve's own
+                gate.warn(situation, f'{situation} line')
+            for lane in (ORDINARY, RESERVED):
+                gate.slot_busy.answer(call(1), 'wait', lane)
+                gate.slot_busy.answer(None, 'queue', lane)
+                gate.slot_busy.abandoned(lane)
+            for stopped in (True, False):
+                gate.slot_busy.interrupted('POST', 'ReadError', stopped)
+    lines = [r for r in log_scan.records if r.name == 'mcp_admin_core.profile_router']
+    assert count == 6 and len(reports.state) == len(lines) == 11 * count, len(lines)
+    assert not [r for r in lines if 'suppressed=' in r.getMessage()]
+    for number in range(3 * profile_router.MAX_REPORT_KEYS):
+        reports.warn('%024x' % (100 + number), 'admission', 'line')
+    assert len(reports.state) <= profile_router.MAX_REPORT_KEYS
+
+
 @pytest.mark.parametrize('queue', [1, 0])
 async def test_an_initialize_waiting_for_a_slot_gets_the_normal_busy_answer(tmp_path, log_scan, monkeypatch, queue):
     """PaaS case 17: an initialize that finds B's slots busy waits like any request (queue 0: refused at once) and

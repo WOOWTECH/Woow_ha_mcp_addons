@@ -42,7 +42,7 @@ from log_scan import log_scan  # noqa: F401  (fixture)
 from multi_profile_runtime import Children, RealChild, create_profile, multi_profile_runtime
 from mcp_admin_core import access, gateway, profiles
 from mcp_admin_core.access import AccessChanged
-from switched_gateway import (B, FAILURES, LABELS, PRODUCT, Exchange, GatewayChild, bearer, call, json_body,
+from switched_gateway import (B, FAILURES, LABELS, PRODUCT, Broken, Exchange, GatewayChild, bearer, call, json_body,
                               session_of, setup, sse_messages, supervisor, until, watch)
 from test_single_profile_golden import (ACCEPT, NOT_FOUND, answer, configure, initialize_message, settle)
 
@@ -162,6 +162,34 @@ async def test_a_get_stream_and_a_buffered_answer_follow_the_same_rule(tmp_path,
             interrupted(await client.post('/mcp', headers=headers, json=call(4)), 4, STOPPED)
             batch = await client.post('/mcp', headers=headers, json=[call(5), call(6)])
             assert answer(batch)[0] == 403
+
+
+@pytest.mark.parametrize('stopped', [False, True], ids=['still running', 'stopped'])
+async def test_an_initialize_answer_broken_mid_body_gets_minus_32004_and_no_session(tmp_path, log_scan, stopped):
+    """Contract 2.5 (HM-14 review S-2: R05, R06): the child's initialize answer breaks after its first bytes: 502 + the
+    gateway's -32004 under the initialize's id, its text by the cause, and no session id. The session the child opened
+    for it gets the gateway's one DELETE only while the child still runs; a stopped child took it with it (a DELETE
+    would reach the next generation). The DELETE is done before the answer goes out (UpstreamOwner.close)."""
+    data, children, child = child_runtime(tmp_path)
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data, B)
+        token, child_supervisor = runtime.token(B), supervisor(runtime, B)
+
+        def on_break():
+            if stopped:
+                child_supervisor.status = 'backoff'
+        child.initialize_answer = lambda message: httpx.Response(
+            200, headers={'content-type': 'application/json', 'mcp-session-id': 'broken-session-1'},
+            stream=Broken([b'{"jsonrpc":"2.0","id":1,"res'], on_break))
+        async with runtime.mcp() as client:
+            response = await client.post('/mcp', headers=bearer(token), json=initialize_message())
+        interrupted(response, 1, STOPPED if stopped else CONNECTION)
+        assert 'mcp-session-id' not in response.headers
+        deletes = [request for request in child.requests
+                   if request.method == 'DELETE' and request.headers.get('mcp-session-id') == 'broken-session-1']
+        assert len(deletes) == (0 if stopped else 1)
+        lines = [record.getMessage() for record in warnings_of(log_scan)]
+        assert len(lines) == 1 and 'a POST request' in lines[0] and 'answered -32004' in lines[0], lines
 
 
 # ---- -32004 on an event stream (PaaS cases 5, 6) ----
@@ -346,6 +374,90 @@ async def test_a_reply_delivered_before_the_token_changed_gets_no_minus_32005(tm
         assert rotated and exchange.task.exception() is None and exchange.ended
         assert [message['id'] for message in sse_messages(exchange.content)] == [7]
         assert sse_messages(exchange.content)[0]['result']['content'][0]['text'] == 'streamed'
+
+
+async def test_the_minus_32004_event_is_the_answer_and_no_minus_32005_follows_it(tmp_path, log_scan):
+    """HM-14 review S-1 (plan 8.8 #95): the gateway's own -32004 event answers the POST as a reply does. The child's
+    stream broke, the server took the -32004 event, then the token changed before the stream's last message: no
+    -32005 follows under the same id (JSON-RPC: one answer per request) and the stream ends normally, nothing raised.
+    (PaaS adds the -32005 there: its _Interruption knows only the child's replies.)"""
+    data, children, child = child_runtime(tmp_path)
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data, B)
+        token = runtime.token(B)
+        async with runtime.mcp() as client:
+            session = await session_of(client, token)
+        child.broken = 'sse'
+        rotated = []
+
+        class Rotating(Exchange):
+            async def send(self, message):
+                await super().send(message)
+                if message['type'] == 'http.response.body' and b'-32004' in message.get('body', b''):
+                    rotated.append(rotate(runtime, B))  # the server took the -32004 event, then the token changed
+        exchange = Rotating(runtime.mcp_app, 'POST', '/mcp', *json_body(token, call(7), session)).start()
+        await asyncio.wait_for(exchange.task, 10)
+        log_scan.watch(*rotated)
+        assert rotated and exchange.task.exception() is None and exchange.ended
+        assert [(event['id'], event['error']['code']) for event in sse_messages(exchange.content)] == [(7, -32004)]
+
+
+async def test_a_reply_the_server_had_not_taken_when_the_token_changed_gets_minus_32005(tmp_path, log_scan):
+    """HM-14 review S-2 (R22): the reply's event waits for the server (its client does not read) when the token
+    changes; the cancelled send took nothing, so the reply was not delivered: the stream gets one -32005 under its id
+    and none of the child's reply, then ends normally."""
+    data, children, child = child_runtime(tmp_path)
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data, B)
+        token = runtime.token(B)
+        async with runtime.mcp() as client:
+            session = await session_of(client, token)
+        child.streaming = True
+        child.free.set()  # the child answers at once
+        held = asyncio.Event()
+
+        class Stuck(Exchange):
+            async def send(self, message):
+                if (message['type'] == 'http.response.body' and b'"result"' in message.get('body', b'')
+                        and not held.is_set()):
+                    held.set()
+                    await asyncio.Event().wait()  # the server never takes the reply (a cancelled send took nothing)
+                await super().send(message)
+        exchange = Stuck(runtime.mcp_app, 'POST', '/mcp', *json_body(token, call(7), session)).start()
+        await asyncio.wait_for(held.wait(), 5)
+        log_scan.watch(rotate(runtime, B))
+        await asyncio.wait_for(exchange.task, 5)
+        assert exchange.task.exception() is None and exchange.ended and b'"result"' not in exchange.content
+        assert [(event['id'], event['error']['code']) for event in sse_messages(exchange.content)] == [(7, -32005)]
+
+
+async def test_a_token_changed_as_the_last_message_is_taken_adds_nothing_after_it(tmp_path, log_scan):
+    """HM-14 review S-2 (R12): the token changes in the very instant the server takes the stream's last message: the
+    answer is complete, so the gateway sends nothing after it (one last message; uvicorn raises on a message after a
+    complete response, with a traceback)."""
+    data, children, child = child_runtime(tmp_path)
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data, B)
+        token = runtime.token(B)
+        async with runtime.mcp() as client:
+            session = await session_of(client, token)
+        child.streaming = True
+        child.free.set()
+        rotated = []
+
+        class Rotating(Exchange):
+            async def send(self, message):
+                await super().send(message)
+                if (message['type'] == 'http.response.body' and not message.get('more_body', False)
+                        and not rotated):
+                    rotated.append(rotate(runtime, B))  # the last message was taken, then the token changed
+        exchange = Rotating(runtime.mcp_app, 'POST', '/mcp', *json_body(token, call(7), session)).start()
+        await asyncio.wait_for(exchange.task, 5)
+        log_scan.watch(*rotated)
+        assert rotated and exchange.task.exception() is None
+        lasts = [m for m in exchange.sent if m['type'] == 'http.response.body' and not m.get('more_body', False)]
+        assert len(lasts) == 1, exchange.sent
+        assert [message['id'] for message in sse_messages(exchange.content)] == [7]
 
 
 @pytest.mark.parametrize('path', ['bearer', 'secret'])

@@ -465,6 +465,83 @@ async def test_the_queue_is_capped_per_profile_and_the_overflow_gets_a_clean_bus
         assert all(json.dumps(token) not in line for line in lines)
 
 
+@pytest.mark.parametrize('full', [B, 'default'], ids=["B's queue full", "the default profile's queue full"])
+async def test_one_profiles_full_queue_never_refuses_another_profiles_waiting_request(tmp_path, log_scan, monkeypatch,
+                                                                                     full):
+    """Plan 5.2 point 2, threat-model I8 (HM-14 review MF-1): a profile's queues are its own, as its slots are. Both
+    profiles' only slot is held and one profile's queue (cap 1) is full: that profile's next request is refused at once
+    with its queue's text, while the other profile's next request still waits in its own queue (it is not refused) and
+    is served once its slot comes free. Both ways round. The other profile's request finds its own slot busy, so it
+    reaches its queue cap check (a free slot would be taken at once, before any queue is looked at)."""
+    quota(monkeypatch, 'extra', forward_slots=1, forward_wait_seconds=30, queue=1)
+    quota(monkeypatch, 'default', forward_slots=1, forward_wait_seconds=30, queue=1)
+    data = setup(tmp_path)
+    children = Children()
+    kids = {'default': children.add(3000, GatewayChild('default', PRODUCT, data)),
+            B: children.add(18000, GatewayChild('p' + B[:4], PRODUCT, profiles.Layout(data).profile(B)))}
+    other = 'default' if full == B else B
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data, B)
+        async with runtime.mcp() as client:
+            headers = {}
+            for profile in (B, 'default'):
+                token = runtime.token(profile)
+                headers[profile] = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
+            for kid in kids.values():
+                kid.hold_calls = True
+            held = [asyncio.create_task(client.post('/mcp', headers=headers[profile], json=call(ident)))
+                    for ident, profile in ((1, full), (2, other))]
+            await until(lambda: all(kid.waiting == 1 for kid in kids.values()))
+            lanes = {profile: lanes_of(runtime, profile)[0] for profile in (B, 'default')}
+            queued = asyncio.create_task(client.post('/mcp', headers=headers[full], json=call(3)))
+            await until(lambda: lanes[full].waiting == 1)  # the full profile's queue (cap 1) is full now
+            refused = await client.post('/mcp', headers=headers[full], json=call(4))
+            assert refused.status_code == 200 and refused.json() == {'jsonrpc': '2.0', 'id': 4, 'error': {
+                'code': -32003, 'message': profile_router.queue_text(1, 1)}}
+            waiting = asyncio.create_task(client.post('/mcp', headers=headers[other], json=call(5)))
+            await until(lambda: lanes[other].waiting == 1 or waiting.done(), 5)
+            assert not waiting.done(), "another profile's full queue refused this request"
+            for kid in kids.values():
+                kid.free.set()
+            answers = [response.json() for response in await asyncio.gather(*held, queued, waiting)]
+        assert [answer['id'] for answer in answers] == [1, 2, 3, 5] and all('result' in a for a in answers), answers
+        assert 4 not in kids[full].client_calls() and 5 in kids[other].client_calls()
+
+
+async def test_get_streams_hold_ordinary_slots_for_their_whole_life(tmp_path, log_scan, monkeypatch):
+    """UC-31 (plan 16; HM-14 review S-3): an event stream (GET) holds one of its profile's ordinary forwarding slots,
+    and a place in its admission, for as long as it is open. An additional profile's real numbers (16 slots, 8 streams;
+    only the wait made 0.3 s): with its 8 streams open, 8 POSTs run at once, the 9th waits and gets 200 + -32003 under
+    its id with the slots' text, and a 9th stream gets 429 at once. So POSTs keep 8 slots while the streams are at their
+    cap (the default profile: 32 - 24 = 8), as PaaS sets its stream cap under its connection cap."""
+    data, children, child = holding_runtime(tmp_path, monkeypatch, forward_wait_seconds=.3)
+    numbers = profiles.EXTRA_PROFILE_QUOTA
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data, B)
+        token = runtime.token(B)
+        async with runtime.mcp() as client:
+            session = await session_of(client, token)
+            headers = {**bearer(token), 'Mcp-Session-Id': session}
+            stream_headers = [(k, v) for k, v in bearer(token).items()] + [('mcp-session-id', session)]
+            streams = [Exchange(runtime.mcp_app, 'GET', '/mcp', stream_headers).start()
+                       for _ in range(numbers.get_streams)]
+            await until(lambda: all(b': open' in stream.content for stream in streams))
+            room = numbers.forward_slots - numbers.get_streams
+            assert (numbers.forward_slots, numbers.get_streams, room) == (16, 8, 8)
+            held = [asyncio.create_task(client.post('/mcp', headers=headers, json=call(100 + n))) for n in range(room)]
+            await until(lambda: child.waiting == room)
+            assert lanes_of(runtime, B)[0].semaphore.locked() and runtime.gate(B).active == numbers.forward_slots
+            busy = await client.post('/mcp', headers=headers, json=call(999))
+            assert busy.status_code == 200 and busy.json() == {'jsonrpc': '2.0', 'id': 999, 'error': {
+                'code': -32003, 'message': profile_router.forward_text(numbers.forward_slots, .3)}}
+            stream = await client.get('/mcp', headers=headers)
+            assert stream.status_code == 429 and stream.headers['retry-after'] == '30'
+            child.free.set()
+            assert [response.status_code for response in await asyncio.gather(*held)] == [200] * room
+            await asyncio.wait_for(asyncio.gather(*(exchange.task for exchange in streams)), 5)
+        assert 999 not in child.client_calls()
+
+
 def test_every_profiles_own_client_has_room_for_its_slots_and_its_reserve():
     """PaaS cases 16 and 19 pin its one shared httpx pool's size; HA has none (plan 8.8 #15): each profile has its own
     client (40 connections for the default profile, 24 for an additional one). Its forwarding slots and its reserve

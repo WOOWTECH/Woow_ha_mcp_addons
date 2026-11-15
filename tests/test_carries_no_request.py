@@ -226,6 +226,54 @@ async def test_the_reserve_carries_notifications_initialized_while_every_ordinar
                    for line in lines), lines
 
 
+@pytest.mark.parametrize('queued', [15, 16], ids=['queue 15 of 16', 'queue full'])
+async def test_the_reserve_is_reached_only_while_the_profiles_admission_has_room(tmp_path, log_scan, monkeypatch,
+                                                                                queued):
+    """Contract 2.4, plan 8.8 #94 (HM-14 review MF-2; a known limitation, pinned as it is until the user decides).
+    An additional profile's real numbers (admission 32 = its 16 ordinary slots + their queue of 16; reserve 4; only the
+    wait made 30 s so that the queued requests stay queued). Its 16 slots held and 15 requests queued, the admission
+    has room (31 of 32): notifications/initialized is read and reaches the child through the reserve (202). With 16
+    queued the admission is full first: the notification is refused before its body is read (503, -32003 id null, the
+    admission's text) and never gets near the reserve (PaaS reads the body first and has no admission: its reserve
+    still carries it). Whether HA's admission should leave room for the reserve (DQ-07's numbers) or a refused small
+    request should be read to find a notification (HM-08's dispatcher) is the user's to decide; either changes this."""
+    quota(monkeypatch, 'extra', forward_wait_seconds=30)
+    data = setup(tmp_path)
+    children = Children()
+    children.add(3000, GatewayChild('default', PRODUCT, data))
+    child = children.add(18000, GatewayChild('p' + B[:4], PRODUCT, profiles.Layout(data).profile(B)))
+    numbers = profiles.EXTRA_PROFILE_QUOTA
+    assert (numbers.admission, numbers.forward_slots, numbers.queue, numbers.reserved_notifications) == (32, 16, 16, 4)
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data, B)
+        token = runtime.token(B)
+        async with runtime.mcp(timeout=60) as client:
+            headers = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
+            child.hold_calls = True
+            held = [asyncio.create_task(client.post('/mcp', headers=headers, json=call(100 + n)))
+                    for n in range(numbers.forward_slots)]
+            await until(lambda: child.waiting == numbers.forward_slots)
+            ordinary = runtime.manager.get(B).runtime.mcp_app.state.lanes['ordinary']
+            waiting = [asyncio.create_task(client.post('/mcp', headers=headers, json=call(200 + n)))
+                       for n in range(queued)]
+            await until(lambda: ordinary.waiting == queued)
+            assert runtime.gate(B).active == numbers.forward_slots + queued
+            before = len(child.seen)
+            note = await client.post('/mcp', headers=headers, json=INITIALIZED)
+            if queued < numbers.queue:
+                assert note.status_code == 202 and note.content == b''
+                assert child.seen[before:] == [('POST', 'notifications/initialized', None)]
+                assert child.waiting == numbers.forward_slots  # the ordinary slots stayed held: it took the reserve
+            else:
+                assert note.status_code == 503 and note.headers['retry-after'] == '5'
+                assert note.json() == {'jsonrpc': '2.0', 'id': None, 'error': {
+                    'code': -32003, 'message': profile_router.admission_text(numbers.admission)}}
+                assert child.seen[before:] == [], 'refused before its body was read: the child never got it'
+            child.free.set()
+            assert [response.status_code for response in await asyncio.gather(*held, *waiting)] == \
+                [200] * (numbers.forward_slots + queued)
+
+
 async def test_without_a_reserve_a_notification_takes_an_ordinary_slot(tmp_path, log_scan, monkeypatch):
     """reserved_notifications 0 (the mechanism; HA's quota is 4): notifications/initialized then waits for an ordinary
     slot like any request and, none coming free, gets 503 + -32003 id null (PaaS: notification_reserve 0 is the
