@@ -80,7 +80,9 @@ commit 順序：
 | `4f86a8f` | 審查：帳本重新釘 app.js |
 | `038de6f` | 審查：README 與寫入契約文件列出全部得知路徑 |
 | `155022e` | 審查：索引壞的替代清單不算刪除（守新條件，突變證明） |
-| 本筆記 | 審查意見處理（第 15 節） |
+| `fbb8b7f` | 本筆記：審查意見處理（第 15 節） |
+| `87afe99` | 審查：README 與寫入契約文件寫明索引壞的替代清單不算刪除 |
+| 本筆記 | 補本機檢查與預檢的結果 |
 
 沒改：任何 Python（`packages/mcp-admin-core/`、`apps/`、`tests/*.py`）、`tests/owned_ui.mjs` 等 repo 根目錄的測試工具、`conftest.py`、
 `addons/<x>/`、版號、CHANGELOG、`upgrade-notes.yaml`、workflow、`docs/tool-surface.*`（沒動 `apps/runtime/*.py`、`launch.py`）、
@@ -219,9 +221,8 @@ commit 順序：
   `test_single_profile_golden`、`test_mcp_contract_freeze`、`test_admin_contract_freeze`、`test_tool_inventory`、`test_ledger_precheck`、`test_owned_ui`、
   `test_owned_browser`、`test_owned_browser_ipc`、`test_owned_browser_redirect`、`test_admin_ui`、`test_identity_fields`、`test_batch2_admin`、
   `test_n8n_selectors`、`test_b2_odoo_policy`、`test_writes_default_on`、`test_owned_ports_bearer`（審查員的 17 個檔，去掉要 root 的 `test_owned_executable`）。
-- 結果：見本節末（`155022e`，正式 conftest，在共用鎖排隊）。
 - 先前的兩次：作者在 `507314d` 跑 12 個檔，151 案全過、0 skip、44.8 秒；審查員在 `3a9feed` 跑 17 個檔，250 過、1 失敗（`test_owned_executable.py`，要 root，本機預期）、0 skip、72.2 秒。
-- 本次：（待填）
+- 本次（程式與測試同 `155022e`，正式 conftest，在共用鎖排隊）：16 個檔 248 案全過、0 skip、71.8 秒（排隊約 65 分鐘，00:19 取得鎖；執行時 HEAD 是 `87afe99`，之後只多文件）。比審查員少 `test_owned_executable.py` 的 3 案：250＋1−3＝248，數字對得上。
 
 ## 6. 只在 CI 跑的測試
 
@@ -242,8 +243,8 @@ commit 順序：
 
 | 預檢 | 指令 | 結果 |
 |---|---|---|
-| 秘密預檢 | `.venv/bin/python -I scripts/secret_precheck.py --tools SP:hm01/gitleaks-tools --repo . --base origin/claude-delivery --head HEAD --full` | （待填） |
-| 帳本預檢 | `.venv/bin/python -I scripts/ledger_precheck.py --repo . --base origin/claude-delivery` | （待填） |
+| 秘密預檢 | `.venv/bin/python -I scripts/secret_precheck.py --tools SP:hm01/gitleaks-tools --repo . --base origin/claude-delivery --head HEAD --full` | gitleaks 8.28.0（釘版、已驗），設定是 `packaging/supply_chain.py` 的 `gitleaks_config()`；本筆記最後一個 commit 為 HEAD 時，本片全部 commit（`b5d10c5..HEAD`，20 個）＋HEAD 整棵樹＋整個歷史：**0 命中** |
+| 帳本預檢 | `.venv/bin/python -I scripts/ledger_precheck.py --repo . --base origin/claude-delivery` | 本筆記最後一個 commit 為 HEAD 時：`runtime-patches.json` 173 檔、`runtime-sources.json` 70 檔、`tool-surface.json` 159 檔：0 漂移、0 缺；改到的 5 個列管檔（app.js、api.js、contracts.js、operation-identity.js、profiles.js）都有帳本更新；沒有沒列管的新執行檔：**OK** |
 
 測試資料：沒有 commit 任何隨機 token。固定的 token 形字串只有每個帳號一個字母重複 43 次（`M`、`T`、`U`…，低熵、沒人持有）與
 既有的 `S`×43；遮罩 `TTTT`＋`*`×20＋`TTTT`；網址 `.test`、`.example`（同既有 spec）；操作識別碼在執行時由瀏覽器產生。
