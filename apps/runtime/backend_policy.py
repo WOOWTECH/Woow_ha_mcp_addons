@@ -11,6 +11,7 @@ import inspect
 import http.client
 from pathlib import Path
 import ipaddress
+import os
 import re
 import socket
 import ssl
@@ -192,6 +193,42 @@ def allowed_address(value):
         return not any(ip in network for network in _V4_DENY)
     return (ip == ipaddress.ip_address('::1') or ip in ipaddress.ip_network('fc00::/7') or
             ip in ipaddress.ip_network('2000::/3')) and not any(ip in network for network in _V6_DENY)
+
+
+# HM-20 (multi-profile plan 8.7, DQ-10; unreleased, behind the product switch): with WOOW_MCP_DENY_LOOPBACK=1 this child
+# connects its configured backend to no loopback address, 127.0.0.0/8 or ::1 (allowed_address already refuses every
+# other spelling of them, IPv4-mapped included): not when the URL names one, not when a name resolves to one, not when
+# any answer of a mixed set is one. The add-on runs on Supervisor's bridge network, so loopback reaches only its own
+# listeners (the gateway, the panel, the children), never a backend. Who sets it: mcp_admin_core.products.child_spec,
+# only for a product that is switched on; the environment it builds is the child's whole environment (never
+# inherited), so neither the add-on options, the parent's environment nor a request adds or removes it. It is read
+# once, here, when this module loads, before any of the child's code connects, and nothing else turns the refusal off.
+# Unset, every rule is the former one; any other value refuses to start (a fixed message). The resolver itself
+# (checked_answers, resolve_sync, resolve_async) is unchanged: the Hermes MCP server guard resolves a URL Hermes will
+# connect to, not this child's backend, and keeps its own loopback answer.
+DENY_LOOPBACK_ENV = 'WOOW_MCP_DENY_LOOPBACK'
+_LOOPBACK = (ipaddress.ip_network('127.0.0.0/8'), ipaddress.ip_network('::1/128'))
+
+
+def loopback_denied():
+    value = os.environ.get(DENY_LOOPBACK_ENV)
+    if value is None:
+        return False
+    if value != '1':
+        raise RuntimeError('backend policy: WOOW_MCP_DENY_LOOPBACK must be 1 when set')
+    return True
+
+
+DENY_LOOPBACK = loopback_denied()
+
+
+def connectable(answers):
+    """checked_answers' answers for a connection to the configured backend: all of them, or BackendDenied when
+    DENY_LOOPBACK and any one is loopback (every answer is checked before the first connect, as checked_answers does)."""
+    if DENY_LOOPBACK and any(ipaddress.ip_address(address[0]) in network for _, address in answers
+                             for network in _LOOPBACK):
+        raise BackendDenied()
+    return answers
 
 
 def checked_answers(host, port):
@@ -385,7 +422,7 @@ class PinnedSyncBackend(httpcore.NetworkBackend):
         self.destination.check_host(host, port)
         deadline = connection_deadline(timeout)
         try:
-            answers = resolve_sync(host, port, deadline)
+            answers = connectable(resolve_sync(host, port, deadline))
             return SyncStream(connect_socket(answers, timeout, deadline))
         except TimeoutError:
             raise httpcore.ConnectTimeout('BACKEND_TIMEOUT') from None
@@ -401,7 +438,7 @@ class PinnedAsyncBackend(AnyIOBackend):
         self.destination.check_host(host, port)
         deadline = connection_deadline(timeout)
         try:
-            answers = await resolve_async(host, port, deadline)
+            answers = connectable(await resolve_async(host, port, deadline))
             for index, (_, address) in enumerate(answers):
                 budget = remaining(deadline) / (len(answers) - index)
                 try:
@@ -554,7 +591,7 @@ class PinnedHTTPConnection(http.client.HTTPConnection):
         if self._tunnel_host:
             raise BackendDenied()
         deadline = connection_deadline(self.timeout)
-        self.sock = connect_socket(resolve_sync(self.host, self.port, deadline), self.timeout, deadline)
+        self.sock = connect_socket(connectable(resolve_sync(self.host, self.port, deadline)), self.timeout, deadline)
 
 
 class PinnedHTTPSConnection(http.client.HTTPSConnection):
@@ -562,7 +599,7 @@ class PinnedHTTPSConnection(http.client.HTTPSConnection):
         if self._tunnel_host or not self._context.check_hostname or self._context.verify_mode != ssl.CERT_REQUIRED:
             raise BackendDenied()
         deadline = connection_deadline(self.timeout)
-        sock = connect_socket(resolve_sync(self.host, self.port, deadline), self.timeout, deadline)
+        sock = connect_socket(connectable(resolve_sync(self.host, self.port, deadline)), self.timeout, deadline)
         try:
             # Original hostname, never the pinned address: SNI + certificate identity.
             self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
