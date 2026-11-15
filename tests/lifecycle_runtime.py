@@ -9,7 +9,8 @@ every profile's MCP answers behind one MockTransport.
   No test opens a socket on 3000 or 18000-18099 (tests/owned_network.py): every port here is an ephemeral one that a
   test may bind itself, to occupy it (the spawn check's test bind then fails: child_port_in_use).
 - The ProfileManager is built as run_product builds it (the default profile's store, the product's TOOLS and make_apps
-  options), opened, and closed again by the rig; the default profile's child port is ephemeral too.
+  options), opened, and closed again by the rig within HA's stop limit (multi_profile_runtime.CLOSE_SECONDS: a close
+  that hangs fails the test, HM-09 review S-3); the default profile's child port is ephemeral too.
 """
 from __future__ import annotations
 
@@ -27,7 +28,7 @@ import pytest
 from mcp_admin_core import features, lifecycle, profile_runtime, profiles
 from mcp_admin_core.lifecycle import ChildSpec
 from mcp_admin_core.products import TOOLS, ProductStore
-from multi_profile_runtime import Children, create_profile, free_port, ids, stored
+from multi_profile_runtime import CLOSE_SECONDS, Children, create_profile, free_port, ids, stored
 from test_profile_runtime import product_options
 from test_single_profile_golden import ADMIN, GENUINE_CLIENT, INGRESS, configure
 
@@ -156,8 +157,12 @@ async def manager_rig(tmp_path, *, product=PRODUCT, extras=2, ports=None, answer
                     rig.answer(profile_id)
             if before_open is not None:
                 before_open(rig)
-            async with manager:
+            await manager.open()
+            try:
                 yield rig
+            finally:
+                async with asyncio.timeout(CLOSE_SECONDS):  # every child stopped (stop_all) within HA's 30 s
+                    await manager.aclose()
         finally:
             store.close()
 

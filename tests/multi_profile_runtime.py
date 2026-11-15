@@ -177,6 +177,11 @@ async def switched_on(*products):
         yield
 
 
+# HM-09 review S-3: how long a switched-on add-on's shutdown (the manager's close: stop_all first) may take in a test,
+# HA's stop limit (contract 7). A close that takes longer fails the test instead of holding the whole run.
+CLOSE_SECONDS = 30
+
+
 @asynccontextmanager
 async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None, real_children=False,
                                 default_port=None, launch_extras=True, switch=True, children=None, resources=None,
@@ -255,7 +260,8 @@ async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None
                           children, listeners)
         finally:
             task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
+            async with asyncio.timeout(CLOSE_SECONDS):
+                await asyncio.gather(task, return_exceptions=True)
         assert task.cancelled(), 'the runtime stopped by itself while serving'
 
 

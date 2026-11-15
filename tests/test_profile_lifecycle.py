@@ -325,25 +325,22 @@ async def test_stop_all_stops_every_child_at_once_within_haos_30_seconds(tmp_pat
     """Six children (the default and five additional profiles) that all ignore SIGTERM, so each Supervisor waits its
     grace (3 s) and SIGKILLs: stopped in parallel, about one grace period in all (one after the other: 18 s or more);
     every process and process group gone; the manager's close stops them the same way. A stop that hangs fails the
-    test within 15 s, and so does the rig's close after it (it calls stop_all again): never the whole run (HM-09 review
-    S-3)."""
-    async with asyncio.timeout(None) as limit:
-        async with manager_rig(tmp_path, extras=5) as rig:
-            watch(log_scan, rig)
-            rig.sleepers.ignore_term.update(rig.ports.values())
-            await rig.manager.launch()
-            await rig.manager.start_all()
-            await until(lambda: all(rig.pid(p) for p in rig.ports))
-            pids = [rig.pid(p) for p in rig.ports]
-            assert all(rig.supervisor(p).grace == 3.0 for p in rig.ports)
-            began = time.monotonic()
-            limit.reschedule(asyncio.get_running_loop().time() + 30)  # this stop and the rig's close after it
-            async with asyncio.timeout(15):
-                await rig.manager.stop_all()
-            took = time.monotonic() - began
-            assert 3.0 <= took < 6.0, took
-            assert all(rig.supervisor(p).status == 'stopped' and rig.pid(p) is None for p in rig.ports)
-            assert not any(os.path.exists(f'/proc/{pid}') for pid in pids)
+    test within 15 s (HM-09 review S-3); the rig's own close after it is bounded by HA's 30 s (lifecycle_runtime)."""
+    async with manager_rig(tmp_path, extras=5) as rig:
+        watch(log_scan, rig)
+        rig.sleepers.ignore_term.update(rig.ports.values())
+        await rig.manager.launch()
+        await rig.manager.start_all()
+        await until(lambda: all(rig.pid(p) for p in rig.ports))
+        pids = [rig.pid(p) for p in rig.ports]
+        assert all(rig.supervisor(p).grace == 3.0 for p in rig.ports)
+        began = time.monotonic()
+        async with asyncio.timeout(15):
+            await rig.manager.stop_all()
+        took = time.monotonic() - began
+        assert 3.0 <= took < 6.0, took
+        assert all(rig.supervisor(p).status == 'stopped' and rig.pid(p) is None for p in rig.ports)
+        assert not any(os.path.exists(f'/proc/{pid}') for pid in pids)
 
 
 async def test_closing_the_manager_stops_the_children_in_parallel_too(tmp_path, log_scan):
