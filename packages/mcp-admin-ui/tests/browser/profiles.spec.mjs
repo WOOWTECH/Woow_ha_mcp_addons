@@ -382,7 +382,7 @@ test('a profile whose state cannot be read offers going back and deleting it, st
   expect(deleted).toMatchObject({operation: `profiles/${B}`, validCsrf: true});
 });
 
-test('a list that cannot be read blocks the page with a retry; a corrupt index leaves the default profile alone in the menu', async ({page, request}) => {
+test('a list that cannot be read blocks the page with a retry; a corrupt index leaves the default profile alone in the menu and clears no receipt', async ({page, request}) => {
   await reset(request, {product: 'n8n', profiles: {listStatus: 503, extra: [{id: B, label: '會計'}]}});
   await page.goto(`${prefix}/overview`);
   await expect(page.getByRole('heading', {name: '管理介面無法使用'})).toBeVisible();
@@ -393,6 +393,23 @@ test('a list that cannot be read blocks the page with a retry; a corrupt index l
   await expect(menu(page).locator('option')).toHaveCount(1);
   await expect(page.getByRole('button', {name: '新增帳號', exact: true})).toHaveCount(0);
   await expect(page.getByRole('button', {name: '刪除帳號', exact: true})).toBeDisabled();
+  // A corrupt index's list is no evidence of a deletion (review S-1): switching away from a profile with an unconfirmed
+  // receipt into a corrupt index keeps the receipt (it may be queried once the index is back) and claims no deletion.
+  await reset(request, {product: 'n8n', profiles: {extra: [{id: B, label: '會計'}]}});
+  await page.getByRole('button', {name: '重新整理狀態', exact: true}).click();
+  await idle(page);
+  await choose(page, B, '會計');
+  await page.getByRole('navigation').getByRole('link', {name: '連線與權杖', exact: true}).click();
+  await page.route('**/api/token/rotate', async route => { await route.fetch(); await route.abort(); });
+  await page.getByRole('button', {name: '重新產生', exact: true}).click();
+  await confirm(page, '確認繼續');
+  await expect(page.getByRole('heading', {name: '待確認操作'})).toBeVisible();
+  await reset(request, {product: 'n8n', profiles: {indexCorrupt: true, extra: [{id: B, label: '會計'}]}});
+  await choose(page, 'default', '預設帳號');
+  await expect(page.locator('#profile-index-corrupt')).toBeVisible();
+  await expect(page.locator('#notice')).toContainText('前一個帳號「會計」（01234567）有尚未確認的操作');
+  await expect(page.locator('#notice')).not.toContainText('已不存在');
+  expect(await page.evaluate(name => sessionStorage.getItem(name), `woow-admin-operation-v1:${prefix}:${B}`)).not.toBeNull();
 });
 
 // HM-11 review MF-1 (plan 6: switched off, the DOM is today's): the single-profile specs never look for the profile
