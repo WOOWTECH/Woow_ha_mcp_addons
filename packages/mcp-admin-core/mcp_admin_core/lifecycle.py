@@ -340,8 +340,16 @@ class Supervisor:
         if self.resources is None:
             return self.spec.argv, {}, None
         program = _resolve(self.spec.argv[0] if self.spec.argv else '', self.spec.env)
-        if program is None or not sys.executable:
+        if program is None:
             return self.spec.argv, {}, None  # spawned as before: a missing program fails as before
+        if not sys.executable:
+            # HM-09 review S-12: no interpreter to run the wrapper: the child starts as before, without its resources,
+            # and says so (never assumed applied).
+            self.resource_state = {'oom_score_adj': False, 'nice': False}
+            self._event('resources', f'child resources not applied (oom_score_adj {self.resources.oom_score_adj}, '
+                                     f'nice {self.resources.nice:+d}: no interpreter for the wrapper); it runs '
+                                     'without them')
+            return self.spec.argv, {}, None
         read, write = os.pipe()
         lc_ctype = '=' + self.spec.env['LC_CTYPE'] if 'LC_CTYPE' in self.spec.env else '-'
         argv = (sys.executable, '-I', '-S', '-c', EXEC_WRAPPER, str(write), str(self.resources.oom_score_adj),

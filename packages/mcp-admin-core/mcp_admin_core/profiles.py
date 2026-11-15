@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import errno
 import json
+import logging
 import os
 from pathlib import Path
 import re
@@ -38,6 +39,7 @@ import unicodedata
 
 from .config import strict_json
 
+logger = logging.getLogger(__name__)
 DEFAULT_PROFILE = 'default'
 DEFAULT_LABEL = 'Default'  # the default profile's row in the profile list (the panel shows 預設帳號)
 INDEX_VERSION = 1
@@ -260,6 +262,11 @@ def allocate_port(taken: Iterable[int] = (), *, occupied: Callable[[int], str | 
 # HM-09: the spawn check's test bind (plan 5.4; PaaS child_identity.port_occupied @69ac425, unchanged at cf3d0d5).
 TEST_BIND_ADDRESSES = ((socket.AF_INET, '127.0.0.1'), (socket.AF_INET, '0.0.0.0'), (socket.AF_INET6, '::1'),
                        (socket.AF_INET6, '::'))
+# HM-09 review S-6: an IPv6 test bind the platform refuses (AppArmor, seccomp: EACCES, EPERM) is skipped, not taken for
+# an occupied port (PaaS takes it so, and a switched-on product's default child would then never start); each
+# (address, errno) is reported once a process.
+REFUSED_IPV6_BINDS = (errno.EACCES, errno.EPERM)
+_reported_binds: set = set()
 
 
 def port_occupied(port: int) -> str | None:
@@ -268,7 +275,10 @@ def port_occupied(port: int) -> str | None:
     only): any listening socket, or a bound one without SO_REUSEADDR, on any of them (a wildcard included) makes one
     fail; a reusable one (TIME_WAIT) does not, as for uvicorn, Node and Go listeners. On Linux the wildcard test covers
     the specific addresses; BSD and macOS let SO_REUSEADDR stack a wildcard on a specific address, hence all four. No
-    socket is kept, listened on or connected. A missing IPv6 is skipped."""
+    socket is kept, listened on or connected. A missing IPv6 is skipped, and so is an IPv6 bind the platform refuses
+    (EACCES, EPERM: no program of the add-on binds IPv6 then, the child binds 127.0.0.1, and a dual-stack socket of
+    another program still fails the IPv4 wildcard test), with one WARNING per address and errno; any IPv4 failure is
+    an occupied port."""
     for family, address in TEST_BIND_ADDRESSES:
         try:
             probe = socket.socket(family, socket.SOCK_STREAM)
@@ -283,6 +293,12 @@ def port_occupied(port: int) -> str | None:
             if family == socket.AF_INET6 and exc.errno in (errno.EADDRNOTAVAIL, errno.EAFNOSUPPORT):
                 continue
             name = errno.errorcode.get(exc.errno or 0, str(exc.errno))
+            if family == socket.AF_INET6 and exc.errno in REFUSED_IPV6_BINDS:
+                if (address, name) not in _reported_binds:
+                    _reported_binds.add((address, name))
+                    logger.warning('multi-profile: the IPv6 test bind on %s is refused (%s); the spawn check skips '
+                                   'that address', address, name)
+                continue
             return f"{'IPv6' if family == socket.AF_INET6 else 'IPv4'} test bind failed ({name})"
         finally:
             probe.close()

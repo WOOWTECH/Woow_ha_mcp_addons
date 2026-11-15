@@ -464,11 +464,15 @@ class ProfileManager:
         launch() did), then, once it answered a health check or STAGGER_SECONDS went by, the additional ones in index
         order, at most STAGGER_SLOTS starting at once; a place is freed when its child answered a health check, is not
         starting any more (blocked, unconfigured, a failed spec: marked, never in the others' way) or after
-        STAGGER_SECONDS. Sets started when done."""
+        STAGGER_SECONDS. Sets started when done. A profile whose start or wait fails (HM-09 review S-12: no such path
+        is known) is named in one line and frees its place; the others start anyway."""
         default = self.get(DEFAULT_PROFILE)
         if DEFAULT_PROFILE not in self._launched:
             await self.launch()
-        await self._started(default)
+        try:
+            await self._started(default)
+        except Exception as error:
+            self._start_failed(default, error)
         slots = asyncio.Semaphore(STAGGER_SLOTS)
         tasks = []
 
@@ -476,10 +480,12 @@ class ProfileManager:
             try:
                 await entry.runtime.launch()
                 await self._started(entry)
-                if self._serving and self._entries.get(entry.profile_id) is entry:
-                    self._watch(entry)
+            except Exception as error:
+                self._start_failed(entry, error)
             finally:
                 slots.release()
+            if self._serving and self._entries.get(entry.profile_id) is entry:
+                self._watch(entry)
         try:
             for entry in self.profiles():
                 if entry.profile_id in self._launched:
@@ -496,6 +502,12 @@ class ProfileManager:
                 task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
         self.started.set()
+
+    def _start_failed(self, entry, error):
+        """One line for a profile whose staggered start failed (its exception's class only); start_all goes on."""
+        log = self._logs.get(entry.profile_id)
+        if log is not None:
+            log('start failed', f'its staggered start failed ({type(error).__name__}); the other profiles start anyway')
 
     async def _started(self, entry):
         """Until entry's child answered a health check (availability ready), it is not starting or running any more,
