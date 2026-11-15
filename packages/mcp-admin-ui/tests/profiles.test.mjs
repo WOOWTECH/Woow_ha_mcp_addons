@@ -150,6 +150,23 @@ test('an answer for a profile nobody asked for is never used (contract 3.4, I12)
   await assert.rejects(() => single.configuration(), ProfileEchoError);
 });
 
+// HM-11 review S-4: an answer without a body cannot name its profile, so with profiles a profile-scoped 204 is refused
+// like any other answer without the echo; switched off a 204 is read as before (no value).
+test('with profiles a profile-scoped answer without a body (204) is not used; switched off it is as before', async () => {
+  const empty = () => new Response(null, {status: 204});
+  const on = server({answer: {'/api/configuration': empty, '/api/token/reveal': empty}});
+  const api = new AdminApi(mount, on.fetcher, memoryStorage());
+  await api.bootstrap();
+  await assert.rejects(() => api.configuration(), ProfileEchoError);
+  api.select(B);
+  await assert.rejects(() => api.configuration(), ProfileEchoError);
+  await assert.rejects(() => api.mutate('token/reveal', undefined, undefined, B), ProfileEchoError);
+  const off = server({switched: false, answer: {'/api/configuration': empty}});
+  const single = new AdminApi(mount, off.fetcher, memoryStorage());
+  await single.bootstrap();
+  assert.equal(await single.configuration(), null);
+});
+
 test('mutate(profile) fixes the profile: both requests carry it; a caller whose profile is no longer selected sends nothing', async () => {
   const {fetcher, calls} = server();
   const api = new AdminApi(mount, fetcher, memoryStorage());

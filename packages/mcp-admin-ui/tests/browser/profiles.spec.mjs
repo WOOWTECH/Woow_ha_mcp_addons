@@ -129,6 +129,8 @@ test('switching hides a revealed token, drops drafts and typed secrets; tokens, 
   await page.locator('#url').fill('https://draft.example.test');
   await page.locator('#key').fill('SYNTHETIC_DRAFT_SECRET');
   await choose(page, B, '會計');
+  // FM-60: the backend page says it edits this profile's own connection.
+  await expect(page.locator('.profile-scope')).toHaveText('帳號「會計」（01234567）：這是這個帳號自己的後端連線與憑證；儲存、清除與測試都只用這個帳號的設定，其他帳號不受影響。');
   await expect(page.getByLabel('這次要如何處理設定？')).toHaveValue('preserve');
   await expect(page.locator('#url')).toHaveValue('');
   await choose(page, 'default', '預設帳號');
@@ -170,10 +172,17 @@ test('a slow switch can be replaced: its late answer is dropped; during any othe
   await expect(menu(page)).toHaveValue('default');
 });
 
-test('deleting asks twice and returns to the default profile; a profile deleted elsewhere does too, its unconfirmed receipt cleared', async ({page, request}) => {
+test('deleting asks twice and returns to the default profile, clearing its unconfirmed receipt; a profile deleted elsewhere does too', async ({page, request}) => {
   await reset(request, {product: 'n8n', parity: true, profiles: {extra: [{id: B, label: '會計'}, {id: C, label: '出納'}]}});
   await open(page, '/access');
+  // Every rotation in this test loses its answer: the profile it ran on keeps an unconfirmed receipt.
+  await page.route('**/api/token/rotate', async route => { await route.fetch(); await route.abort(); });
+  const receiptOf = id => page.evaluate(name => sessionStorage.getItem(name), `woow-admin-operation-v1:${prefix}:${id}`);
   await choose(page, B, '會計');
+  await page.getByRole('button', {name: '重新產生', exact: true}).click();
+  await confirm(page, '確認繼續');
+  await expect(page.getByRole('heading', {name: '待確認操作'})).toBeVisible();
+  expect(await receiptOf(B)).not.toBeNull();
   const remove = () => page.getByRole('button', {name: '刪除帳號', exact: true}).click();
   await remove();
   await expect(page.getByRole('dialog')).toContainText('MCP 權杖會立即撤銷');
@@ -189,13 +198,16 @@ test('deleting asks twice and returns to the default profile; a profile deleted 
   await confirm(page, '確認刪除');
   await expect(current(page)).toHaveText('目前帳號：預設帳號（default）');
   await expect(page.locator('#notice')).toContainText('已刪除帳號「會計」（01234567）');
+  // B's receipt can never be queried again (§8.8 #84, FM-59): cleared and said so; nothing asks to go back to B.
+  await expect(page.locator('#notice')).toContainText('尚未確認的操作紀錄已一併清除');
+  await expect(page.locator('#notice')).not.toContainText('請切回該帳號');
+  expect(await receiptOf(B)).toBeNull();
   await expect(menu(page).locator(`option[value="${B}"]`)).toHaveCount(0);
   const [deleted] = await calls(request, call => call.method === 'DELETE');
   expect(deleted).toMatchObject({operation: `profiles/${B}`, validCsrf: true, ifMatch: `"p1-${'1'.padStart(64, '0')}"`, fields: []});
   expect(deleted.operationId).toMatch(/^[0-9]{13}\./);
   // C loses a rotation's answer, then is deleted elsewhere: the next request finds it gone.
   await choose(page, C, '出納');
-  await page.route('**/api/token/rotate', async route => { await route.fetch(); await route.abort(); });
   await page.getByRole('button', {name: '重新產生', exact: true}).click();
   await confirm(page, '確認繼續');
   await expect(page.getByRole('heading', {name: '待確認操作'})).toBeVisible();
@@ -244,7 +256,7 @@ test('a receipt kept across the upgrade (four keys, the old key) is queried once
   expect(await calls(request, call => call.operation === 'token/rotate')).toHaveLength(1);
 });
 
-test('a lost create answer keeps its identity across a reload; the resend creates nothing twice and switches to the profile', async ({page, request}) => {
+test('a lost create or delete answer keeps its identity (across a reload); the resend does nothing twice, switches, and clears a deleted profile\'s receipt', async ({page, request}) => {
   await reset(request, {product: 'n8n', profiles: {}, createToken: true});
   await open(page, '/overview');
   let first = true;
@@ -271,6 +283,35 @@ test('a lost create answer keeps its identity across a reload; the resend create
   expect(Object.keys(await fixtureProfiles(request))).toEqual(['default', 'e0000001ffffffffffffffff']);
   // The create answer carried a token (a contract violation); the panel never shows one it was not asked to reveal.
   await expect(page.locator('body')).not.toContainText('T'.repeat(43));
+  // A lost delete answer, of a profile with an unconfirmed receipt: the resend confirms the delete, and the deleted
+  // profile's receipt, which can never be queried again, is cleared and said so (review S-1).
+  const E = 'e0000001ffffffffffffffff';
+  await page.getByRole('navigation').getByRole('link', {name: '連線與權杖', exact: true}).click();
+  await idle(page);
+  await page.route('**/api/token/rotate', async route => { await route.fetch(); await route.abort(); });
+  await page.getByRole('button', {name: '重新產生', exact: true}).click();
+  await confirm(page, '確認繼續');
+  await expect(page.getByRole('heading', {name: '待確認操作'})).toBeVisible();
+  let lose = true;
+  await page.route(`**/api/profiles/${E}`, async route => {
+    if (route.request().method() === 'DELETE' && lose) { lose = false; await route.fetch(); await route.abort(); }
+    else await route.fallback();
+  });
+  await page.getByRole('button', {name: '刪除帳號', exact: true}).click();
+  await confirm(page, '繼續');
+  await confirm(page, '確認刪除');
+  await expect(page.locator('#pending-profile-operation')).toContainText('刪除帳號（e0000001）尚未取得完成確認');
+  await page.getByRole('button', {name: '重送帳號操作', exact: true}).click();
+  await confirm(page, '確認繼續');
+  await expect(current(page)).toHaveText('目前帳號：預設帳號（default）');
+  await expect(page.locator('#notice')).toContainText('已確認刪除帳號');
+  await expect(page.locator('#notice')).toContainText('尚未確認的操作紀錄已一併清除');
+  await expect(page.locator('#notice')).not.toContainText('請切回該帳號');
+  await expect(page.locator('#pending-profile-operation')).toHaveCount(0);
+  expect(await page.evaluate(name => sessionStorage.getItem(name), `woow-admin-operation-v1:${prefix}:${E}`)).toBeNull();
+  const deletes = await calls(request, call => call.method === 'DELETE');
+  expect(deletes.map(call => call.operationId)).toEqual([deletes[0].operationId, deletes[0].operationId]);
+  expect(Object.keys(await fixtureProfiles(request))).toEqual(['default']);
 });
 
 test('a profile whose state cannot be read offers going back and deleting it, still with two confirmations', async ({page, request}) => {
@@ -285,6 +326,7 @@ test('a profile whose state cannot be read offers going back and deleting it, st
   await confirm(page, '確認刪除');
   await expect(current(page)).toHaveText('目前帳號：預設帳號（default）');
   await expect(page.locator('#notice')).toContainText('已刪除帳號「會計」（01234567）');
+  await expect(page.locator('#notice')).not.toContainText('尚未確認的操作紀錄');   // nothing was pending: nothing claimed
   const [deleted] = await calls(request, call => call.method === 'DELETE');
   expect(deleted).toMatchObject({operation: `profiles/${B}`, validCsrf: true});
 });
@@ -300,4 +342,46 @@ test('a list that cannot be read blocks the page with a retry; a corrupt index l
   await expect(menu(page).locator('option')).toHaveCount(1);
   await expect(page.getByRole('button', {name: '新增帳號', exact: true})).toHaveCount(0);
   await expect(page.getByRole('button', {name: '刪除帳號', exact: true})).toBeDisabled();
+});
+
+// HM-11 review MF-1 (plan 6: switched off, the DOM is today's): the single-profile specs never look for the profile
+// parts, so this one does. Every page, a confirmation and a refresh: no profile menu, heading, note, card or dialog line,
+// no profile wording, the restart notice for the whole child, the example named woow; no request names a profile or
+// reads the profile list.
+test('switched off: no profile menu, line, note or request on any page, in a dialog or after a refresh (the panel as before)', async ({page, request}) => {
+  await reset(request, {product: 'emqx', endpoint: 'https://mcp.example.test/mcp'});
+  const seen = recordRequests(page);
+  const profileUi = page.locator('#profile-select, .profile-bar, .profile-current, .profile-scope, .profile-note, .dialog-profile, #pending-profile-operation, #profile-index-corrupt');
+  const absent = async () => {
+    await expect(profileUi).toHaveCount(0);
+    await expect(page.locator('body')).not.toContainText(/目前帳號|這個帳號|這是帳號|帳號「|帳號：/);
+  };
+  const go = async name => {
+    await page.getByRole('navigation').getByRole('link', {name, exact: true}).click();
+    await idle(page);
+    await expect(page.getByRole('heading', {level: 1})).toHaveText(name);
+  };
+  await open(page, '/overview');
+  await absent();
+  for (const name of ['後端連線', '工具權限', '連線與權杖', '診斷與維護']) { await go(name); await absent(); }
+  await go('連線與權杖');
+  await expect(page.locator('main')).toContainText('每個 MCP 服務共用一把 Bearer 權杖');
+  await expect(page.locator('pre')).toContainText('"woow"');
+  await page.getByRole('button', {name: '顯示權杖', exact: true}).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await absent();
+  await confirm(page, '取消');
+  await go('工具權限');
+  await page.getByRole('button', {name: '儲存工具權限', exact: true}).click();
+  await expect(page.getByRole('dialog')).toContainText('儲存後會重新啟動 MCP 子行程，現有連線可能中斷。');
+  await absent();
+  await confirm(page, '取消');
+  await page.getByRole('button', {name: '重新整理狀態', exact: true}).click();
+  await idle(page);
+  await expect(page.locator('#notice')).toContainText('已取得最新管理狀態');
+  await absent();
+  // The requests as before: bootstrap and capabilities on load and again on refresh (pages draw without asking), none
+  // naming a profile, no probe and no profile list.
+  expect(seen).toEqual([0, 1].flatMap(() => ['bootstrap', 'capabilities'].map(name => ({path: `${prefix}/api/${name}`, method: 'GET', profile: undefined}))));
+  expect(await calls(request)).toEqual([]);   // both dialogs were cancelled: nothing was sent
 });
