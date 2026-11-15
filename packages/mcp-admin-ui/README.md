@@ -97,10 +97,11 @@ bootstrap；product/contract/tools/schema/disabled/global/grants 任一變更即
   就改成每個帳號範圍請求都帶 `X-MCP-Profile`（含明確的 `default`）；`/api/profiles*` 永遠不帶。
 - 每次變更先鎖定帳號：取 CSRF 的 bootstrap 與變更本身帶同一個標頭，兩個回應的帳號回聲都要符合，否則不顯示結果、藏起權杖並重新讀取。
 - 切換帳號：藏起已顯示的權杖、清掉密碼欄與未存的草稿、整頁重畫；切換中只剩帳號選單可用，再選一次會取代前一次，前一次晚到的回應丟掉。
-  其他操作進行中選單停用。帳號在別處被刪：切回預設帳號並說明，該帳號未確認的收據一併清除。
+  其他操作進行中選單停用。帳號被刪（在面板刪除、重送確認刪除或在別處刪除）：切回預設帳號並說明，該帳號未確認的收據一併清除。
 - 額外帳號的 MCP 端點唯讀（全 add-on 共用，只在預設帳號修改）；手動範例的名稱是 `woow-<產品>-<id 前 8 碼>`。
 - 收據：預設帳號的 key 與 4 鍵紀錄不變；額外帳號另一個 key、多一個 `profile` 鍵；帳號增刪用 `…:profiles`（見 `docs/admin-write-contracts.md`）。
-- fixture 以 `profiles` 選項開關多帳號；Playwright 的 `profiles-on` 專案讓四個既有 spec 在開關開時原封不動再跑一次。
+- fixture 以 `profiles` 選項開關多帳號；Playwright 的 `profiles-on` 專案讓四個既有 spec 在開關開時原封不動再跑一次；
+  `profiles.spec.mjs` 另有一案在開關關時逐頁確認沒有任何帳號介面、帳號字樣與帳號標頭。
 
 ## 正式 listener 與 Ingress
 
