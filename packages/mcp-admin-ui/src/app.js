@@ -1,9 +1,13 @@
-import { AdminApi, ApiError } from './api.js';
+import { AdminApi, ApiError, ProfileEchoError, StaleProfileError } from './api.js';
 import { products, connectionHelp, policyRestartsChild, policyRestartNotice, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl, ownerDefaultsView, noticeTime, odooSwitches, odooSwitchKeys, odooSwitchPayload, maskedCurrentToken, tokenHistory, backendEdit, backendPatchPayload, n8nSession, n8nSessionPayload, odooMethods, odooMethodsPayload } from './contracts.js';
+import { DEFAULT_PROFILE, clientName, isExtraProfile, labelDialog, profileMenu, profileName, shortId } from './profiles.js';
 import './styles.css';
 
 const root = document.querySelector('#app');
 let api, state, busy = false, revealed = null, revealTimer, dialog, revealEpoch = 0;
+// HM-11 (plan 6): with profiles, the profile list ({rows, revision, corrupt}) and the newest page load of a profile
+// (views; loading while it runs). Without profiles (api.profile === null) none of this is used and the page is as before.
+let profiles = null, views = 0, loading = false, product = null;
 const routes = { overview: '總覽', backend: '後端連線', tools: '工具權限', access: '連線與權杖', diagnostics: '診斷與維護' };
 const icons = { overview: 'view-grid', backend: 'server-network', tools: 'shield-check', access: 'tune-variant', diagnostics: 'text-box-search' };
 function el(tag, attrs = {}, ...children) {
@@ -58,8 +62,139 @@ async function task(action) {
   root.setAttribute('aria-busy', 'true');
   const controls = [...root.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled)')];
   controls.forEach(node => node.disabled = true);
-  try { await action(); } catch (error) { fail(error); }
+  let next = null;
+  try { await action(); } catch (error) { next = followUp(error); if (!next) fail(error); }
   finally { busy = false; root.removeAttribute('aria-busy'); controls.forEach(node => node.disabled = node.dataset.conflict === 'true'); refreshOperation(); }
+  if (next) await next();
+}
+// HM-11: what a refusal about the profile leads to, once the task's lock is released (null: shown as before by fail).
+// - an answer for another profile than asked (echo, I12): hide every token, show nothing of it and read again;
+// - the selected profile is gone (deleted elsewhere): back to the default profile, its unconfirmed receipt cleared;
+// - an answer that came after the panel moved on: dropped unseen.
+function followUp(error, recovering = false) {
+  if (error instanceof StaleProfileError) return () => {};
+  if (error instanceof ProfileEchoError || error instanceof ApiError && error.code === 'profile_id_required') {
+    hideToken();
+    return recovering ? null : () => show(null, error.message, true, true);
+  }
+  if (api.profile === null || !(error instanceof ApiError) || recovering) return null;
+  if (error.code === 'profile_not_found') return () => gone(api.profile);
+  if (error.code === 'profile_index_corrupt' && api.profile !== DEFAULT_PROFILE) return () => show(DEFAULT_PROFILE, error.message, true, true);
+  return null;
+}
+const profileOf = view => view?.profile?.id ?? null;
+const currentRow = () => profiles?.rows.find(row => row.id === api.profile) ?? null;
+const named = (row, id) => `「${row ? profileName(row) : shortId(id)}」（${shortId(id)}）`;
+function pendingFor(id) { try { return Boolean(api.pendingOperation(id)); } catch { return true; } }
+async function readProfiles(fresh) {
+  try {
+    const list = await api.profileList();
+    return fresh?.profile_index_state === 'corrupt' ? { ...list, corrupt: true } : list;
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.code !== 'profile_index_corrupt') throw error;
+    // DQ-12: the index cannot be used; the default profile stays usable, alone in the menu.
+    return { rows: [{ id: DEFAULT_PROFILE, label: fresh?.profile?.label ?? 'Default', port: 3000, is_default: true, disabled_reason: null }], revision: null, corrupt: true };
+  }
+}
+// HM-11 (plan 6): show another profile (target: its id; null: find the server's profile mode again). The page is
+// replaced first: the token hidden, every typed secret and draft gone, only the profile menu left. Choosing again while
+// it loads replaces this load; whatever answer this one still gets is dropped (api.epoch).
+async function show(target, message, error = false, recovering = false) {
+  const view = ++views, left = api.profile, leftRow = currentRow();
+  const unconfirmed = target !== null && left !== null && left !== target && pendingFor(left);
+  hideToken();
+  document.querySelectorAll('input[type=password]').forEach(input => { input.value = ''; });
+  busy = true; loading = true; root.setAttribute('aria-busy', 'true');
+  state = null;
+  let next = null;
+  try {
+    if (target !== null) api.select(target);
+    renderLoading(target);
+    const fresh = target === null ? await api.open() : await api.bootstrap();
+    if (fresh.capabilities?.schema_version === 1) fresh.capabilities = await api.capabilities();
+    const list = api.profile === null ? null : await readProfiles(fresh);
+    if (list && !list.rows.some(row => row.id === api.profile)) throw new ApiError(404, 'profile_not_found');
+    if (view !== views) return;
+    state = fresh; profiles = list; product = fresh.product;
+    render();
+    const texts = [message ?? (target === null ? null : `已切換到帳號${named(currentRow(), api.profile)}。`),
+      unconfirmed ? `前一個帳號${named(leftRow, left)}有尚未確認的操作；請切回該帳號查詢結果，再決定是否重試。` : null].filter(Boolean);
+    if (texts.length) notice(texts.join(' '), error || unconfirmed);
+  } catch (problem) {
+    if (view !== views || problem instanceof StaleProfileError) return;
+    next = followUp(problem, recovering);
+    if (!next) loadFailed(target, problem);
+  } finally {
+    if (view === views) { busy = false; loading = false; root.removeAttribute('aria-busy'); refreshOperation(); }
+  }
+  if (next) await next();
+}
+// The selected profile no longer exists (contract 3.4; §8.8 #84): the default profile again, said plainly; an
+// unconfirmed receipt of the deleted profile is cleared (its token was revoked with it).
+async function gone(id) {
+  const row = profiles?.rows.find(item => item.id === id) ?? null;
+  let cleared = false;
+  if (isExtraProfile(id)) {
+    try { cleared = pendingFor(id); api.acknowledgeOperation(id); } catch { cleared = false; }
+  }
+  await show(DEFAULT_PROFILE, `帳號${named(row, id)}已不存在，可能已在其他分頁或由其他管理員刪除；已切回預設帳號。${cleared ? '它尚未確認的操作紀錄已一併清除：帳號刪除時它的權杖已撤銷。' : ''}`, true, true);
+}
+function loadFailed(target, problem) {
+  hideToken();
+  if (problem instanceof ApiError && [401, 403].includes(problem.status)) { state = null; renderDenied(problem.message); return; }
+  const actions = [button('重新嘗試', () => show(target))];
+  if (isExtraProfile(target)) actions.push(button('回到預設帳號', () => show(DEFAULT_PROFILE)));
+  // A profile whose state cannot be read is still deletable (contract 3.3), from here.
+  if (isExtraProfile(target) && currentRow()?.disabled_reason === 'profile_unavailable') actions.push(button('刪除帳號', deleteProfile));
+  root.replaceChildren(el('main', { class: 'blocked' }, icon('account-alert'), el('h1', {}, target === null ? '管理狀態無法讀取' : `無法載入帳號${named(profiles?.rows.find(row => row.id === target), target)}`),
+    p(problem instanceof UiError ? problem.message : '管理服務無法使用。'), el('div', { class: 'actions' }, ...actions)));
+}
+function renderLoading(target) {
+  const menu = profiles && target !== null && api.profile !== null
+    ? profileMenu({ el, button }, { rows: profiles.rows, current: target, loading: true, product }, profileActions) : null;
+  root.replaceChildren(el('header', { class: 'topbar' }, brandCaption(), product ? el('div', { class: 'product-label' }, products[product].name) : null, menu),
+    el('main', { class: 'blocked', role: 'status' }, p(target === null ? '正在重新讀取管理狀態…' : `正在切換到帳號${named(profiles?.rows.find(row => row.id === target), target)}…`)));
+}
+const profileActions = { select: onProfileChange, create: createProfile, rename: renameProfile, remove: deleteProfile };
+function onProfileChange(select) {
+  if (busy && !loading) { select.value = api.profile; notice('請等目前的操作完成後再切換帳號。', true); return; }
+  if (!loading && select.value === api.profile) return;
+  show(select.value);
+}
+async function createProfile() {
+  if (busy || !profiles || profiles.corrupt) return;
+  const label = await labelDialog({ el, button }, { title: '新增帳號', submit: '建立帳號',
+    description: '新帳號會複製預設帳號目前的工具權限與寫入設定，之後各自獨立；後端連線是空的，要另外設定。建立後會自動切換到新帳號；它有自己的 MCP 權杖與網址，需要時到「連線與權杖」按「顯示權杖」。' });
+  if (label === null) return;
+  const revision = profiles.revision;
+  let created = null;
+  await task(async () => { created = await api.createProfile(label, revision); });
+  if (created) await show(created.id, `已建立帳號「${created.label}」（${shortId(created.id)}），並切換到這個帳號。請到「後端連線」設定它自己的後端。`);
+}
+async function renameProfile() {
+  const row = currentRow();
+  if (busy || !row || !isExtraProfile(row.id) || profiles.corrupt) return;
+  const label = await labelDialog({ el, button }, { title: `改名帳號${named(row, row.id)}`, initial: row.label, submit: '儲存名稱',
+    description: '只改顯示名稱；這個帳號的權杖、MCP 網址與設定都不變。' });
+  if (label === null) return;
+  if (label === row.label) { notice('名稱沒有變更，未送出。'); return; }
+  const revision = profiles.revision;
+  await task(async () => {
+    await api.renameProfile(row.id, label, revision);
+    await reload(`已把帳號改名為「${label}」；權杖與網址都沒有變。`);
+  });
+}
+// DQ-14: two confirmations that say what happens; the server revokes the token and wipes the credentials first.
+async function deleteProfile() {
+  const row = currentRow();
+  if (busy || !row || !isExtraProfile(row.id) || profiles.corrupt) return;
+  const name = named(row, row.id);
+  if (!await confirmAction(`刪除帳號${name}？`, '這個帳號的 MCP 權杖會立即撤銷，用它連線的用戶端都會斷線；子行程會停止，後端連線與憑證會先抹除，再刪除這個帳號全部的設定與工具權限。面板無法復原；只有還原刪除前的備份，帳號才會連同憑證一起回來。其他帳號不受影響。', '繼續')) return;
+  if (!await confirmAction(`最後確認：刪除帳號${name}`, '確認後立即刪除，無法在面板復原。', '確認刪除')) return;
+  const revision = profiles.revision;
+  let deleted = null;
+  await task(async () => { deleted = await api.deleteProfile(row.id, revision); });
+  if (deleted) await show(DEFAULT_PROFILE, `已刪除帳號${name}，它的權杖已失效；已切回預設帳號。`);
 }
 function pendingOperationCard() {
   const pending = api.pendingOperation();
@@ -79,23 +214,56 @@ function pendingOperationCard() {
       await task(async () => { api.acknowledgeOperation(); await reload('已結束此分頁的操作追蹤。'); });
     })));
 }
+// HM-11: profile create and delete keep their own identity (the profiles scope); its card shows on every page.
+function pendingProfileOperationCard() {
+  const pending = api.pendingProfileOperation();
+  if (!pending) return null;
+  const creating = pending.route === 'profiles/create';
+  const what = creating ? `建立帳號「${pending.label}」` : `刪除帳號（${shortId(pending.profile)}）`;
+  return el('section', { class: 'card', id: 'pending-profile-operation' }, el('h2', {}, '帳號操作尚未確認'),
+    p(`${what}尚未取得完成確認。此分頁已保留原操作識別碼，重新載入也不會自動重送。`),
+    p('請先看帳號選單：建立成功時清單裡會有這個帳號，刪除成功時它會消失。以原識別碼重送時，已完成的操作只回傳收據，不會再做一次。'),
+    el('div', { class: 'actions' }, button('重送帳號操作', async () => {
+      if (!await confirmAction('以原識別碼重送帳號操作？', `${what}。已完成的操作只回傳收據；結果未知的操作不會再次執行。`)) return;
+      let result = null;
+      await task(async () => { result = await api.retryProfileOperation(); });
+      if (result) await show(creating ? result.id : DEFAULT_PROFILE, creating ? `已確認建立帳號「${result.label}」，並切換到這個帳號。` : '已確認刪除帳號；已切回預設帳號。');
+    }), button('已核對帳號清單', async () => {
+      if (!await confirmAction('結束這筆帳號操作的追蹤？', '請先核對帳號清單。這只清除此分頁的識別紀錄，不會復原或證明先前操作未執行。')) return;
+      await task(async () => { api.acknowledgeProfileOperation(); await reload('已結束此分頁的帳號操作追蹤。'); });
+    })));
+}
 function refreshOperation() {
   const holder = document.querySelector('#pending-operation');
   if (!holder || !state) return;
-  try { const panel = pendingOperationCard(); holder.replaceChildren(...(panel ? [panel] : [])); }
-  catch (error) { notice(error instanceof UiError ? error.message : '操作紀錄無法讀取；請核對服務狀態。', true); }
+  if (api.profile === null) {
+    try { const panel = pendingOperationCard(); holder.replaceChildren(...(panel ? [panel] : [])); }
+    catch (error) { notice(error instanceof UiError ? error.message : '操作紀錄無法讀取；請核對服務狀態。', true); }
+    return;
+  }
+  const panels = [];
+  for (const [card, fallback] of [[pendingOperationCard, '操作紀錄無法讀取；請核對服務狀態。'], [pendingProfileOperationCard, '帳號操作紀錄無法讀取；請核對帳號清單。']]) {
+    try { const panel = card(); if (panel) panels.push(panel); }
+    catch (error) { notice(error instanceof UiError ? error.message : fallback, true); }
+  }
+  holder.replaceChildren(...panels);
 }
 async function reload(message) {
   hideToken();
   state = await api.bootstrap();
   // Older servers remain usable; capability-aware servers provide the observed catalog.
   if (state.capabilities?.schema_version === 1) state.capabilities = await api.capabilities();
+  product = state.product;
+  if (api.profile !== null) {
+    profiles = await readProfiles(state);
+    if (!profiles.rows.some(row => row.id === api.profile)) throw new ApiError(404, 'profile_not_found');
+  }
   render();
   if (message) notice(message);
 }
-async function saveForm(form, operation, payload, revision) {
+async function saveForm(form, operation, payload, revision, profile = profileOf(state)) {
   if (form.dataset.conflict === 'true') throw new UiError('草稿與伺服器版本不同。請先重新整理狀態、檢查新設定，再重新編輯。');
-  try { return await api.mutate(operation, payload, revision); }
+  try { return await api.mutate(operation, payload, revision, profile); }
   catch (error) {
     if (error instanceof ApiError && error.code === 'config_conflict') {
       form.dataset.conflict = 'true';
@@ -131,11 +299,16 @@ function configurationCard(initial) {
     if (summary.isConnected) update(result.configuration);
   })));
 }
+// HM-11 (FM-58): with profiles every confirmation says which profile it acts on.
+function profileLine() {
+  if (!api || api.profile === null || !profiles) return null;
+  return el('p', { class: 'dialog-profile' }, `帳號：${named(currentRow(), api.profile)}`);
+}
 function confirmAction(title, description, label = '確認繼續') {
   return new Promise(resolve => {
     const previous = document.activeElement;
     dialog = el('dialog', { 'aria-labelledby': 'confirm-title', 'aria-describedby': 'confirm-description' },
-      el('h2', { id: 'confirm-title' }, title), el('p', { id: 'confirm-description' }, description));
+      el('h2', { id: 'confirm-title' }, title), el('p', { id: 'confirm-description' }, description), profileLine());
     const finish = answer => { dialog.close(); dialog.remove(); dialog = null; previous?.focus(); resolve(answer); };
     dialog.append(el('div', { class: 'actions' }, button('取消', () => finish(false), { autofocus: true }), button(label, () => finish(true), { class: 'primary' })));
     dialog.addEventListener('cancel', event => { event.preventDefault(); finish(false); });
@@ -204,7 +377,7 @@ async function ownerDefaultsAction(action, revision, view) {
       : `全部工具與寫入維持開啟，此通知不再顯示。${later}`,
     restoring ? '確認還原' : '確認保持全開')) return;
   await task(async () => {
-    await api.mutate(`owner-defaults/${action}`, undefined, revision);
+    await api.mutate(`owner-defaults/${action}`, undefined, revision, profileOf(state));
     await reload(restoring ? '已還原升級前的限制。目前的設定請看「工具權限」頁。' : '已保持全開，此通知不再顯示。');
   });
 }
@@ -228,7 +401,7 @@ function overview() {
 }
 function backendTest() {
   return state.capabilities?.backend?.can_test ? button('測試已儲存的後端', () => task(async () => {
-    const result = await api.mutate('backend/test');
+    const result = await api.mutate('backend/test', undefined, undefined, profileOf(state));
     state.health = result.health;
     notice(`已測試伺服器儲存的設定：${statusText(result.backend)}。未儲存的表單未參與測試。${result.reason ? ` ${result.reason}` : ''}`,
       result.backend !== 'reachable');
@@ -423,7 +596,7 @@ function tools() {
     const data = new FormData(form);
     const denies = operationControls ? data.getAll('deny-operation').map(v => JSON.parse(v)) : undefined;
     try { policyPayload(snapshot, data.getAll('disabled'), data.getAll('grant').map(v => JSON.parse(v)), denies); } catch (error) { fail(error); return; }
-    if (!await confirmAction('套用工具權限？', '寫入可能變更後端資料。只授權你確實需要的工具或操作；伺服器仍必須強制檢查每次呼叫。' + policyRestartNotice(state.product), '確認套用')) return;
+    if (!await confirmAction('套用工具權限？', '寫入可能變更後端資料。只授權你確實需要的工具或操作；伺服器仍必須強制檢查每次呼叫。' + policyRestartNotice(state.product, api.profile !== null), '確認套用')) return;
     const expectedPolicy = policyFingerprint(snapshot);
     await task(async () => {
       await saveForm(form, 'policy', fresh => {
@@ -511,12 +684,13 @@ async function tokenAction(action) {
     rotate: ['重新產生權杖？', '舊權杖立即失效，使用舊權杖的進行中連線將關閉，所有用戶端都需更新。已送出的後端工作不會因此復原。新權杖僅短暫顯示。'],
     revoke: ['撤銷權杖？', '用戶端將無法使用此權杖連線，進行中連線也會關閉。已送出的工作不會回復；需重新產生權杖才能恢復存取。'],
   };
+  const profile = profileOf(state);
   hideToken();
   if (!await confirmAction(...descriptions[action], action === 'revoke' ? '確認撤銷' : '確認繼續')) return;
   const epoch = revealEpoch;
   await task(async () => {
     const result = await api.mutate(`token/${action === 'claude' ? 'reveal' : action}`, undefined,
-      ['rotate', 'revoke'].includes(action) ? revision : undefined);
+      ['rotate', 'revoke'].includes(action) ? revision : undefined, profile);
     if (result?.operation?.replayed) { await reload('已確認先前操作完成，沒有再次執行。需要時請另按「顯示權杖」取得目前權杖。'); return; }
     if (action === 'revoke') { await reload('權杖已撤銷。舊權杖不可再使用，進行中連線已收到關閉通知；已送出的後端工作不會回復。'); return; }
     state = await api.bootstrap();
@@ -537,7 +711,7 @@ async function tokenAction(action) {
     const area = document.querySelector('#token-secret');
     area.hidden = false;
     area.replaceChildren(p('60 秒後自動隱藏；剪貼簿不會自動清除。'), el('code', { class: 'secret' }, revealed), el('div', { class: 'actions' }, button('複製權杖', () => revealed && copy(revealed)), button('複製含權杖範例', async () => {
-      if (await confirmAction('複製含權杖範例？', '這份範例會包含真實權杖。不要貼到聊天、Git 或公開文件。') && revealed) await copy(clientExample(safeEndpoint(), revealed));
+      if (await confirmAction('複製含權杖範例？', '這份範例會包含真實權杖。不要貼到聊天、Git 或公開文件。') && revealed) await copy(clientExample(safeEndpoint(), revealed, clientName(state.product, api.profile)));
     }), button('立即隱藏', hideToken)));
     revealTimer = setTimeout(hideToken, 60000);
   });
@@ -547,6 +721,7 @@ function access() {
   const endpoint = safeEndpoint();
   const history = tokenHistory(state);
   const currentMask = maskedCurrentToken(state);
+  const name = clientName(state.product, api.profile);
   const input = el('input', { id: 'endpoint', name: 'endpoint', type: 'url', value: endpoint ?? '', placeholder: 'https://YOUR-MCP-HOST:PORT/mcp', autocomplete: 'off', required: true, 'aria-describedby': 'endpoint-help' });
   const form = el('form', {}, el('div', { class: 'field' }, el('label', { for: 'endpoint' }, 'MCP 用戶端端點'), input), el('p', { id: 'endpoint-help', class: 'hint' }, '明確填寫用戶端可到達的 /mcp URL，不是 Ingress 網址。不會由此頁的網域推測；這裡不要放權杖（Claude.ai 用的含權杖網址由下方另外產生）。'), el('div', { class: 'actions' }, el('button', { type: 'submit', class: 'primary' }, '儲存端點'), button('清除端點', async () => {
     if (await confirmAction('清除 MCP 端點？', '只清除用戶端連線範例的端點設定，不會撤銷權杖。')) await task(async () => { await saveForm(form, 'endpoint', { endpoint: null }, revision); await reload('已清除端點。'); });
@@ -557,8 +732,14 @@ function access() {
     try { value = explicitUrl(input.value, true); } catch (error) { fail(error); return; }
     task(async () => { await saveForm(form, 'endpoint', { endpoint: value }, revision); await reload('MCP 端點已儲存。這不代表網路可達性已驗證。'); });
   });
-  return el('div', { class: 'stack' }, card('明確設定你的連線端點', chip(endpoint ? '已設定端點' : '尚未設定'), form),
-    card('MCP 權杖', chip(state.token_active ? '有效 · 預設隱藏' : '已撤銷 / 未啟用'), p('每個 MCP 服務共用一把 Bearer 權杖。權杖不是管理員密碼，也不會授予管理介面權限。'),
+  // HM-11 (DQ-13; FM-12): the endpoint is the add-on's, kept by the default profile; an additional profile shows it.
+  const endpointCard = isExtraProfile(api.profile) ? card('連線端點（全 add-on 共用）', chip(endpoint ? '已設定端點' : '尚未設定'),
+    endpoint ? el('p', {}, el('code', {}, endpoint)) : p('尚未設定端點。'),
+    p('端點是整個 add-on 共用的設定，只能在預設帳號修改。這個帳號的 MCP 網址＝共用端點＋這個帳號自己的權杖。'))
+    : card('明確設定你的連線端點', chip(endpoint ? '已設定端點' : '尚未設定'), form);
+  return el('div', { class: 'stack' }, endpointCard,
+    card('MCP 權杖', chip(state.token_active ? '有效 · 預設隱藏' : '已撤銷 / 未啟用'), p(api.profile === null ? '每個 MCP 服務共用一把 Bearer 權杖。權杖不是管理員密碼，也不會授予管理介面權限。'
+      : '這個帳號有自己的一把 Bearer 權杖；顯示、重新產生或撤銷只影響這個帳號。權杖不是管理員密碼，也不會授予管理介面權限。'),
       currentMask && state.token_active ? p(`目前權杖（遮罩）：${currentMask}`) : null,
       el('div', { class: 'actions' }, button('顯示權杖', () => tokenAction('reveal'), { disabled: !state.token_active }), button('重新產生', () => tokenAction('rotate')), button('撤銷權杖', () => tokenAction('revoke'), { disabled: !state.token_active })), el('div', { id: 'token-secret', class: 'secret-box', hidden: true, 'aria-live': 'polite' })),
     card('最近權杖變更', history === null ? p('權杖歷史格式不相容；請重新整理或更新附加元件。') :
@@ -568,24 +749,27 @@ function access() {
         el('code', {}, item.previous_token_masked || '先前沒有權杖')))) : p('尚無記錄；舊版操作不會補記。')),
     card('Claude.ai 自訂連接器', chip(endpoint && state.token_active ? '可產生 · 預設隱藏' : '尚無法產生'),
       p('Claude.ai 網頁版的自訂連接器無法帶 Authorization header，改用含權杖的專屬網址：在 Claude.ai 新增自訂連接器時貼進伺服器網址欄位，OAuth 進階設定留空。Claude.ai 從網際網路連線，上方端點必須是它連得到的 HTTPS 網址。'),
-      p('這個網址等同密碼：任何拿到網址的人都能以本 MCP 服務的權限呼叫工具。只貼進 Claude.ai，不要分享、截圖或貼到聊天、Git；外洩或不再使用時請按上方「重新產生」或「撤銷權杖」，舊網址立即失效。'),
-      endpoint ? null : p('尚未設定 MCP 用戶端端點：請先在上方填寫 Claude.ai 可從網際網路連到的 https://…/mcp 網址並儲存，才能產生連線網址。'),
+      p(`這個網址等同密碼：任何拿到網址的人都能以${api.profile === null ? '本 MCP 服務' : '這個帳號'}的權限呼叫工具。只貼進 Claude.ai，不要分享、截圖或貼到聊天、Git；外洩或不再使用時請按上方「重新產生」或「撤銷權杖」，舊網址立即失效。`),
+      endpoint ? null : p(isExtraProfile(api.profile) ? '尚未設定 MCP 用戶端端點：端點是全 add-on 共用的設定，請切到預設帳號，填寫 Claude.ai 可從網際網路連到的 https://…/mcp 網址並儲存，才能產生連線網址。'
+        : '尚未設定 MCP 用戶端端點：請先在上方填寫 Claude.ai 可從網際網路連到的 https://…/mcp 網址並儲存，才能產生連線網址。'),
       endpoint && !state.token_active ? p('權杖已撤銷或未啟用：請先按「重新產生」。') : null,
       el('div', { class: 'actions' }, button('顯示 Claude.ai 連線網址', () => tokenAction('claude'), { disabled: !endpoint || !state.token_active })),
       el('div', { id: 'claude-secret', class: 'secret-box', hidden: true, 'aria-live': 'polite' })),
     card('手動加入 MCP 用戶端', p('適用支援 Streamable HTTP 的用戶端；欄位名稱依用戶端而異。先填端點，再於用戶端安全地填入 Bearer。未驗證所有用戶端相容性。'),
-      endpoint ? null : p('以下端點只是佔位文字，不能直接連線。'), el('pre', { tabindex: '0', 'aria-label': '不含真實權杖的連線範例' }, el('code', {}, clientExample(endpoint))), button('複製佔位範例', () => copy(clientExample(endpoint))), p('一般複製永遠使用 <YOUR_ADDON_TOKEN> 佔位文字，不含真實權杖。建議跨主機連線使用 HTTPS。')));
+      endpoint ? null : p('以下端點只是佔位文字，不能直接連線。'), el('pre', { tabindex: '0', 'aria-label': '不含真實權杖的連線範例' }, el('code', {}, clientExample(endpoint, null, name))), button('複製佔位範例', () => copy(clientExample(endpoint, null, name))), p('一般複製永遠使用 <YOUR_ADDON_TOKEN> 佔位文字，不含真實權杖。建議跨主機連線使用 HTTPS。')));
 }
 function diagnostics() {
   const revision = state.configuration?.revision;
   const features = state.capabilities?.capabilities ?? {};
   const viewer = el('div', { 'aria-live': 'polite' }, p('按下讀取，取得目前保留的日誌。'));
   const history = ownerDefaults();
-  return el('div', { class: 'stack' }, history && !history.notice && !history.malformed ? ownerDefaultsCard(history) : null, card('子行程維護', p(`目前狀態：${statusText(state.health?.child?.state)}`),
+  const row = currentRow();
+  return el('div', { class: 'stack' }, history && !history.notice && !history.malformed ? ownerDefaultsCard(history) : null, card('子行程維護', api.profile === null ? null
+    : p(`這是帳號${named(row, api.profile)}的子行程${row?.port ? `（port ${row.port}）` : ''}；重新啟動與日誌都只看這個帳號。`), p(`目前狀態：${statusText(state.health?.child?.state)}`),
     p('重新啟動會中斷子行程的現有連線；後端、政策與權杖設定會保留。'),
     features.restart_child ? button('重新啟動子行程', async () => {
       if (!await confirmAction('重新啟動 MCP 子行程？', '現有連線可能中斷。啟動請求完成後仍需等候協定與後端探測。', '確認重新啟動')) return;
-      await task(async () => { await api.mutate('child/restart', undefined, revision); await reload('已接受重新啟動請求。請重新整理健康狀態，確認子行程是否就緒。'); });
+      await task(async () => { await api.mutate('child/restart', undefined, revision, profileOf(state)); await reload('已接受重新啟動請求。請重新整理健康狀態，確認子行程是否就緒。'); });
     }) : p('此部署未提供子行程重新啟動。')),
   card('子行程日誌', p('僅保留記憶體內最近 200 筆、最多 128 KiB；過長行會捨棄，憑證在保留前遮蔽。此處不包含完整歷史或後端服務日誌。'),
     features.logs ? button('讀取診斷日誌', () => task(async () => {
@@ -597,13 +781,26 @@ function diagnostics() {
           logs.entries.map(entry => `${entry.at} [${entry.stream} / ${entry.generation}] ${entry.text}`).join('\n') || '尚無日誌。')));
     })) : p('此部署未提供子行程日誌。'), viewer));
 }
+const brandCaption = () => el('div', { class: 'brand-caption' }, icon('home-automation'), el('div', {}, el('strong', {}, 'Woow MCP'), el('span', {}, '智慧空間 · 服務管理'), el('span', { class: 'brand-accent', lang: 'en' }, 'Welcome')));
+// HM-11 (plan 6): with profiles, the menu sits in the top bar and the heading always names the shown profile.
+function profileView() {
+  if (api.profile === null || !profiles) return {};
+  const row = currentRow();
+  return {
+    menu: profileMenu({ el, button }, { rows: profiles.rows, current: api.profile, loading: false, product: state.product, corrupt: profiles.corrupt }, profileActions),
+    heading: el('p', { class: 'profile-current' }, '目前帳號：', el('strong', {}, row ? profileName(row) : shortId(api.profile)), `（${shortId(api.profile)}）`),
+    corrupt: profiles.corrupt ? el('section', { class: 'card', id: 'profile-index-corrupt' }, el('h2', {}, '帳號索引無法使用'),
+      p('帳號索引無法讀取：MCP 端點暫停服務所有帳號（含預設帳號），額外帳號暫時無法選擇；預設帳號的設定仍可在這裡檢查。還原備份可以恢復。')) : null,
+  };
+}
 function render() {
   const current = route();
+  const view = profileView();
   root.replaceChildren(el('a', { href: '#main', class: 'skip' }, '跳至主要內容'),
-    el('header', { class: 'topbar' }, el('div', { class: 'brand-caption' }, icon('home-automation'), el('div', {}, el('strong', {}, 'Woow MCP'), el('span', {}, '智慧空間 · 服務管理'), el('span', { class: 'brand-accent', lang: 'en' }, 'Welcome'))), el('div', { class: 'product-label' }, products[state.product].name, chip(environmentLabels(state.capabilities).deployment))),
+    el('header', { class: 'topbar' }, brandCaption(), el('div', { class: 'product-label' }, products[state.product].name, chip(environmentLabels(state.capabilities).deployment)), view.menu),
     el('div', { class: 'shell' }, el('aside', {}, el('p', { class: 'nav-caption' }, '工作空間'), el('nav', { 'aria-label': '管理導覽' }, ...Object.entries(routes).map(([key, label]) => el('a', { href: `${api.mount}/${key}`, 'aria-current': current === key ? 'page' : null, onclick: event => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey && event.button === 0) { event.preventDefault(); if (!busy) navigate(key); } } }, icon(icons[key]), label))), el('div', { class: 'sidebar-note' }, p('設定由你掌握'), p('後端憑證只在明確更新時送出。權限由伺服器驗證。'))),
-      el('main', { id: 'main' }, el('div', { class: 'page-heading' }, el('div', {}, el('p', { class: 'eyebrow' }, `${products[state.product].name} / MANAGEMENT`), el('h1', { tabindex: '-1' }, routes[current]), p({ overview: '一眼看清連線，安心管理你的服務。', backend: '把連線留在這裡，把秘密留在伺服器。', tools: '只開啟需要的能力，每次寫入都有明確授權。', access: '給用戶端正確的入口，不混用管理網址。', diagnostics: '查看受限日誌與行程狀態，必要時重新啟動。' }[current])), button('重新整理狀態', () => task(() => reload('已取得最新管理狀態。')))), el('div', { id: 'notice', role: 'status', tabindex: '-1', hidden: true }),
-        ownerDefaults()?.malformed ? ownerDefaultsUnavailable() : ownerDefaults()?.notice ? ownerDefaultsCard(ownerDefaults()) : null,
+      el('main', { id: 'main' }, el('div', { class: 'page-heading' }, el('div', {}, el('p', { class: 'eyebrow' }, `${products[state.product].name} / MANAGEMENT`), view.heading, el('h1', { tabindex: '-1' }, routes[current]), p({ overview: '一眼看清連線，安心管理你的服務。', backend: '把連線留在這裡，把秘密留在伺服器。', tools: '只開啟需要的能力，每次寫入都有明確授權。', access: '給用戶端正確的入口，不混用管理網址。', diagnostics: '查看受限日誌與行程狀態，必要時重新啟動。' }[current])), button('重新整理狀態', () => task(() => reload('已取得最新管理狀態。')))), el('div', { id: 'notice', role: 'status', tabindex: '-1', hidden: true }),
+        view.corrupt, ownerDefaults()?.malformed ? ownerDefaultsUnavailable() : ownerDefaults()?.notice ? ownerDefaultsCard(ownerDefaults()) : null,
         el('div', { id: 'pending-operation' }), configurationCard(state.configuration), ({ overview, backend, tools, access, diagnostics })[current](),
         current === 'backend' ? partialBackendCard() : null,
         current === 'backend' && state.product === 'n8n' ? n8nSessionCard() : null,
@@ -612,6 +809,7 @@ function render() {
         el('footer', {}, `GUI 管理設定 · ${environmentLabels(state.capabilities).authority} · Streamable HTTP`))));
   refreshOperation();
 }
+// HM-11: while a profile loads there is no state to draw (show sets it to null); the loading page stays.
 window.addEventListener('popstate', () => { hideToken(); if (state) render(); });
 window.addEventListener('pagehide', () => {
   hideToken();
