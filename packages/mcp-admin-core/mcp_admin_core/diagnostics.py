@@ -15,9 +15,27 @@ ANSI = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|$))")
 AUTH = re.compile(r"(?i)\b(Bearer|Basic)\s+[^\s\"'<>]+")
 ASSIGNMENT = re.compile(r'''(?ix)(\b[\w-]{0,64}(?:token|password|passwd|secret|api[_-]?key|authorization|cookie)[\w-]{0,64}["']?\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;&]+)''')
 USERINFO = re.compile(r"(?i)(https?://)[^/\s@]+@")
+# HM-02 (FM-75): the value of the word key, alone or as the last word of a name (key=, "key":, virtual_key=,
+# x-master-key:), not of keys, key_id, monkey or keyword. It runs after the rules above, so that it only hides more:
+# taken into ASSIGNMENT it would hide key=...@ first and leave the userinfo in front of it (http://user:pw&key=@host).
+KEY = re.compile(r'''(?ix)(\b(?:[\w-]{0,64}[_-])?key["']?\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;&]+)''')
+# The HA rules of a line: bb48449's four in its order (the secret path, authorization, assignments, URL userinfo),
+# then key=.
+RULES = ((redact.PRIVATE_SEGMENT, redact.REDACTED), (AUTH, r"\1 [REDACTED]"), (ASSIGNMENT, r"\1[REDACTED]"),
+         (USERINFO, r"\1[REDACTED]@"), (KEY, r"\1[REDACTED]"))
 
 
 def scrub_line(text, secrets=()):
+    # HM-02 review (SF-1): never raise. Child output is scrubbed on the supervisor's event loop, one ChildLogs.collect
+    # task per pipe, and an exception would end that task and leave the pipe unread (the child then blocks once it
+    # fills); a record that fails to scrub is withheld the same way (redact.scrub).
+    try:
+        return _scrub_line(text, secrets)
+    except Exception:
+        return redact.LINE_WITHHELD
+
+
+def _scrub_line(text, secrets):
     # Scrub before bounding the display: truncating first can expose half a secret.
     text = ANSI.sub("", text)
     variants = set()
@@ -31,10 +49,8 @@ def scrub_line(text, secrets=()):
         # letters in the mask emitted for a previous credential.
         pattern = "|".join(re.escape(value) for value in sorted(variants, key=len, reverse=True))
         text = re.sub(pattern, lambda _: redact.SECRET_MASK, text)
-    text = redact.redact(text)
-    text = AUTH.sub(r"\1 [REDACTED]", text)
-    text = ASSIGNMENT.sub(r"\1[REDACTED]", text)
-    text = USERINFO.sub(r"\1[REDACTED]@", text)
+    # HM-02: the PaaS rules first (query credentials such as ?key=, the secret path in any spelling), then the HA rules
+    text = redact.scrub_text(text, RULES)
     return "".join(c for c in text if c == "\t" or c.isprintable())[:MAX_LINE]
 
 
