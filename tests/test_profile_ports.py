@@ -19,6 +19,8 @@ PaaS child_identity.port_occupied, process._port_refusal, profiles.port_conflict
 - child/restart answers with blocked_reason once the product is switched on (PaaS B-22); switched off, its answer is
   today's.
 """
+import asyncio
+import collections
 import dataclasses
 import errno
 import os
@@ -31,6 +33,7 @@ from admin_write_headers import reviewed_headers
 from lifecycle_runtime import lifecycle_lines, manager_rig, until, watch
 from log_scan import log_scan  # noqa: F401  (fixture)
 from mcp_admin_core import profiles
+import multi_profile_runtime
 from multi_profile_runtime import free_port, stored
 from test_single_profile_golden import (ACCEPT, ADMIN, configure, initialize_message, production_runtime, settle)
 
@@ -93,6 +96,26 @@ async def test_the_manager_allocates_around_indexed_running_and_occupied_ports(t
         watch(log_scan, rig)
         assert rig.manager.free_port() == 18002
         assert 18000 not in tested and 3000 not in tested
+
+
+async def test_a_rig_never_gives_two_profiles_one_port(tmp_path, log_scan, monkeypatch):
+    """The test rig itself (HM-09 recheck): two binds of port 0 in a row can draw the same port, and two profiles of one
+    rig on one port answer each other's checks (the default profile's readiness check reached B's mock child: 401,
+    and start_all waited its 30 s for the default). free_port never hands out one of its last ports again: a draw
+    that repeats B's port gives the default the next one, and the staggered start completes at once."""
+    first, second, third = free_port(), free_port(), free_port()
+    drawn = iter([first, second, first, third])  # B, C, then B's port again for the default
+    monkeypatch.setattr(multi_profile_runtime, 'HANDED_OUT', collections.deque(maxlen=256))
+    monkeypatch.setattr(multi_profile_runtime, '_draw', lambda: next(drawn))
+    async with manager_rig(tmp_path, extras=2) as rig:
+        watch(log_scan, rig)
+        b, c = rig.extras
+        assert (rig.ports[b], rig.ports[c], rig.ports['default']) == (first, second, third)
+        await rig.manager.launch()
+        async with asyncio.timeout(10):
+            await rig.manager.start_all()
+        assert rig.children.by_port[third].name == 'default' and rig.children.by_port[third].requests
+        assert all(rig.supervisor(p).status == 'running' for p in rig.ports)
 
 
 # ---- the test bind (PaaS port_occupied) ----

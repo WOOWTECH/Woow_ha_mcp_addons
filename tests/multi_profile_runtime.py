@@ -23,6 +23,7 @@ on ephemeral ports.
 from __future__ import annotations
 
 import asyncio
+import collections
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 import inspect
@@ -357,11 +358,24 @@ class RealChild:
         self.sock.close()
 
 
+# The ports free_port handed out last (HM-09 recheck): two binds of port 0 in a row can draw the same port (5 times in
+# 20,000 draws of three here), and two profiles of one rig on one port answer each other's checks: the default
+# profile's readiness check reached another profile's mock child (401) and start_all waited its 30 s for the default.
+HANDED_OUT = collections.deque(maxlen=256)
+
+
 def free_port():
-    """An ephemeral loopback port nobody listens on (never 3000 or 18000-18099)."""
+    """An ephemeral loopback port nobody listens on (never 3000 or 18000-18099), and none of the last ones it handed
+    out, so the ports of one rig are distinct."""
     while True:
-        with socket.socket() as sock:
-            sock.bind(('127.0.0.1', 0))
-            port = sock.getsockname()[1]
-        if port != 3000 and port not in range(18000, 18100):
+        port = _draw()
+        if port != 3000 and port not in range(18000, 18100) and port not in HANDED_OUT:
+            HANDED_OUT.append(port)
             return port
+
+
+def _draw():
+    """The port a bind of port 0 on 127.0.0.1 gets (the socket closed again)."""
+    with socket.socket() as sock:
+        sock.bind(('127.0.0.1', 0))
+        return sock.getsockname()[1]
