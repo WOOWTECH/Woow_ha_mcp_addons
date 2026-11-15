@@ -648,6 +648,131 @@ async def error_handler(request, exc):
     return JSONResponse({"error": "request denied"}, status_code=exc.status)
 
 
+# ---- HM-10 (multi-profile plan 5.3; contract 3.1, 3.2): the shared management pipeline ----
+# Extracted from make_apps' admin_page and admin_api, so that a switched-on product's 8099 dispatcher
+# (profile_router.AdminDispatcher) runs exactly the steps make_apps runs before it chooses a profile. make_apps serves a
+# switched-off product with them as before, byte for byte (HM-01's management contract freeze).
+
+# The profile-scoped operations that take a JSON body, every one a PUT (step 3); any other management request has none.
+JSON_OPERATIONS = frozenset({"backend", "backend/patch", "policy", "endpoint", "odoo/write-switches", "n8n/session",
+                             odoo_methods.ROUTE})
+# Every profile-scoped operation a profile's action answers, with its method (contract 3.1). The refusal matrix
+# (tests/test_admin_pipeline_matrix.py) is generated from this table and fails when admin_action answers an operation
+# that is not in it.
+PROFILE_OPERATIONS = (
+    ("bootstrap", "GET"), ("configuration", "GET"), ("capabilities", "GET"), ("diagnostics", "GET"),
+    ("operations/{id}", "GET"), ("backend", "PUT"), ("backend/patch", "PUT"), ("policy", "PUT"), ("endpoint", "PUT"),
+    ("odoo/write-switches", "PUT"), ("n8n/session", "PUT"), (odoo_methods.ROUTE, "PUT"), ("backend/test", "POST"),
+    ("child/restart", "POST"), ("token/reveal", "POST"), ("token/rotate", "POST"), ("token/revoke", "POST"),
+    ("owner-defaults/restore", "POST"), ("owner-defaults/dismiss", "POST"))
+# The methods 8099 routes (Starlette answers any other with its 405 before the identity check); a switched-on product's
+# dispatcher routes PATCH and DELETE too and keeps that 405 for every path but its own (contract 3.1).
+MANAGEMENT_METHODS = ("GET", "HEAD", "POST", "PUT")
+
+
+def management_app(endpoint, methods=MANAGEMENT_METHODS):
+    """The management listener's application: every path to endpoint, ui.SecurityHeaders on every answer, BadRequest and
+    ConfigError answered by error_handler, no slash redirect."""
+    app = Starlette(routes=[Route("/{path:path}", endpoint, methods=list(methods))],
+                    middleware=[Middleware(ui.SecurityHeaders)],
+                    exception_handlers={BadRequest: error_handler, ConfigError: error_handler})
+    app.router.redirect_slashes = False
+    return app
+
+
+def method_not_allowed(methods):
+    """The bytes Starlette's routing answers a method it does not route with (405, text/plain, Allow), for the
+    dispatcher's method table (contract 3.1: fixed, no detail); Allow in this fixed order."""
+    return Response("Method Not Allowed", status_code=405, media_type="text/plain",
+                    headers={"Allow": ", ".join(methods)})
+
+
+def management_operation(request, identity):
+    """The page checks every management request passes first (admin_page's, unchanged): the caller's identity (here only
+    for its mount base; 403 or 400), no '%' and no backslash pair in the raw path and no query (400), and the operation:
+    the path after {base}/api/, or "__ui__" for any other path (a page or an asset, request.state.ui_path). The caller
+    refuses a page written to (404)."""
+    _, base, _ = identity(request)
+    raw = request.scope.get("raw_path", b"")
+    if b"%" in raw or b"\\\\" in raw or request.url.query:
+        raise BadRequest()
+    path = request.url.path
+    if base and (path == base or path.startswith(base + "/")):
+        path = path[len(base):] or "/"
+    if path.startswith("/api/"):
+        request.path_params["operation"] = path[5:]
+    else:
+        request.path_params["operation"] = "__ui__"
+        request.state.ui_path = path
+    return base, request.path_params["operation"]
+
+
+async def management_value(request, takes_json):
+    """Step 3, the bounded body read: the JSON value of an operation that takes one (415, 400, 403, 408, 413), else no
+    body at all (400)."""
+    if takes_json:
+        return await json_body(request)
+    if await body(request):
+        raise BadRequest()
+    return None
+
+
+async def management_exchange(request, identity, slots, read, step):
+    """Steps 1 to 4 of every management request (admin_api's, extracted by HM-10): identity(request) gives (user, base,
+    csrf) or refuses (403; 400 for X-Ingress-Path); one of slots (the add-on's management slots: 503 at once when all
+    are taken); await read(request), the request's value (step 3); then step(request, user, base, csrf, value,
+    peer_disconnected, committed) runs while a watcher waits for the client to leave (step 4: a client gone first is
+    403 and the step is cancelled with zero effects; once the step set committed it runs to its end, never cancelled,
+    and keeps whatever lock it holds until then). Its answer is the step's."""
+    user, base, csrf = identity(request)
+    # Reject saturation rather than accumulating unbounded body/lock waiters.
+    if slots.locked():
+        raise BadRequest(503)
+    await slots.acquire()
+    tasks = []
+    action = None
+    committed = asyncio.Event()
+    try:
+        value = await read(request)
+        peer_disconnected = asyncio.Event()
+
+        async def disconnected():
+            # Body is fully consumed: this task exclusively owns receive now.
+            while (await request.receive())["type"] != "http.disconnect":
+                pass
+            # Deny even when role completion and disconnect wake together,
+            # before the outer waiter has had a chance to cancel the action.
+            peer_disconnected.set()
+
+        watcher = asyncio.create_task(disconnected())
+        action = asyncio.create_task(step(request, user, base, csrf, value, peer_disconnected, committed))
+        tasks = [watcher, action]
+        done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        if watcher in done:
+            raise BadRequest(403)
+        return action.result()
+    finally:
+        for task in tasks:
+            if task is not action or not committed.is_set():
+                task.cancel()
+        # Before commit: cancel/join role cleanup with zero effects. After
+        # commit: join the lifecycle callback without cancelling it; action
+        # retains mutation_lock until stop/reap/restart finishes. Neither
+        # ASGI nor repeated direct cancellation may detach that ownership.
+        cancelled = False
+        with anyio.CancelScope(shield=True):
+            if tasks:
+                joined = asyncio.gather(*tasks, return_exceptions=True)
+                while not joined.done():
+                    try:
+                        await asyncio.shield(joined)
+                    except asyncio.CancelledError:
+                        cancelled = True
+        slots.release()
+        if cancelled:
+            raise asyncio.CancelledError
+
+
 def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               verify_admin: RoleVerifier | None = None,
               child_url=CHILD_URL, health=None, backend_changed=None,
@@ -660,7 +785,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               mutation_lock: asyncio.Lock | None = None, profile_view: Callable[[], dict] | None = None,
               forward_slots: int | None = None, slot_busy: SlotBusy | None = None,
               reply_secrets: Callable[[], Iterable[str]] | None = None,
-              child_blocked: Callable[[], str | None] | None = None):
+              child_blocked: Callable[[], str | None] | None = None,
+              default_endpoint: Callable[[], str | None] | None = None,
+              bootstrap_fields: Callable[[], dict] | None = None):
     """listing (0.2.2): the product's tools/list tools as its child lists them (surface.listing). With it, a client
     connects whatever the backend's state: when no child can answer (no backend configured, so no child; a child that is
     not up) the gateway answers initialize, notifications/initialized, ping and tools/list itself, from listing through
@@ -723,7 +850,17 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
 
     HM-14 (contract 1.2, not gated): a child's initialize error (its message and data are the child's text) is masked as
     every other relayed text, whether or not the product is switched on (HM-08 review S-4 (a): it was relayed unmasked,
-    with not even this profile's own credentials masked)."""
+    with not even this profile's own credentials masked).
+
+    HM-10 (multi-profile plan 5.3; contract 3.1, 3.4), only for a switched-on product, as HM-08's and HM-09's:
+    - default_endpoint: given for an additional profile only: the add-on's one endpoint (DQ-13: stored in the default
+      profile's state), read for its bootstrap; its PUT endpoint answers 409 endpoint_global (shape A) and its
+      owner-defaults actions 409 owner_defaults_unavailable (shape C): only the default profile has the one-time
+      migration's notice (FM-08), whatever its directory holds.
+    - bootstrap_fields: what the bootstrap carries after the echo (profiles_supported; the default profile's
+      profile_index_state): a callable read for every bootstrap, only with profile_view.
+    The admin app's state.profile_action is this profile's action (admin_action and its echo), for the dispatcher:
+    profile_router.AdminDispatcher runs the shared pipeline itself and calls it once it has chosen this profile."""
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
@@ -752,6 +889,10 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         raise ValueError("invalid reply secrets")
     if child_blocked is not None and not callable(child_blocked):
         raise ValueError("invalid blocked reason")
+    if default_endpoint is not None and not callable(default_endpoint):
+        raise ValueError("invalid default endpoint")
+    if bootstrap_fields is not None and (not callable(bootstrap_fields) or profile_view is None):
+        raise ValueError("invalid bootstrap fields")
     n8n_request_bounds = getattr(store, "product", None) == "n8n"
     management = management or ManagementOptions()
     if listing is not None:
@@ -982,8 +1123,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 from .odoo_switch_listing import for_state as listing_for_state
                 catalog = tool_catalog(tools, listing_for_state(listing, state), None, state)
                 schemas = {item["name"]: item.get("inputSchema") for item in catalog["items"]}
-                # Owner decision 2026-10-27: the one-time all-on migration's notice (only on a state it wrote).
-                notice = owner_defaults.view(state, store.directory)
+                # Owner decision 2026-10-27: the one-time all-on migration's notice (only on a state it wrote). HM-10
+                # (FM-08): never an additional profile's, whatever its directory holds.
+                notice = owner_defaults.view(state, store.directory) if default_endpoint is None else None
                 from .backend_edit import view as connection_view
                 edit_view = connection_view(state) if hasattr(state, 'product') else None
                 return JSONResponse({"base_path": base, "api_base": base + "/api", "csrf": csrf,
@@ -992,7 +1134,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     **({"owner_defaults": notice} if notice is not None else {}),
                     **odoo_methods.bootstrap(state),
                     "configuration": configuration.snapshot(state),
-                    "endpoint": state.endpoint, "backend_url": edit_view['values']['url']
+                    # HM-10 (DQ-13): an additional profile shows the add-on's one endpoint, the default profile's.
+                    "endpoint": state.endpoint if default_endpoint is None else default_endpoint(),
+                    "backend_url": edit_view['values']['url']
                     if edit_view and getattr(state, 'product', None) == 'n8n' else state.backend_url,
                     "backend_key_set": state.backend_key is not None, "token_active": state.token is not None,
                     "token_masked": masked_token(state.token),
@@ -1086,6 +1230,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 # Owner decision 2026-10-27: restore the faithful pre-upgrade limits, or keep the defaults (dismiss).
                 restoring = name == 'owner-defaults/restore'
                 try:
+                    if default_endpoint is not None:
+                        raise owner_defaults.Unavailable()  # HM-10 (FM-08): an additional profile has no notice
                     updated = (owner_defaults.restore if restoring else owner_defaults.dismiss)(store)
                 except owner_defaults.Unavailable:
                     return JSONResponse({'error': 'owner_defaults_unavailable',
@@ -1105,6 +1251,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             if changes is not None:
                 if name in ("backend", "backend/patch") and not management.backend_can_edit:
                     return JSONResponse({"error": "backend_fixed"}, status_code=409, headers=headers)
+                if name == "endpoint" and default_endpoint is not None:
+                    # HM-10 (DQ-13): the add-on has one endpoint, stored in the default profile's state.
+                    raise BadRequest(409, {"code": "endpoint_global"})
                 updated = store.update(**changes)
                 # No yield between durable commit and lifecycle ownership transfer.
                 # An authorized mutation is not undone by losing its HTTP caller.
@@ -1122,94 +1271,38 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             mutation_lock.release()
 
     async def admin_api(request):
-        user, base, csrf = admin_identity(request)
-        # Reject saturation rather than accumulating unbounded body/lock waiters.
-        if admin_slots.locked():
-            raise BadRequest(503)
-        await admin_slots.acquire()
-        tasks = []
-        action = None
-        committed = asyncio.Event()
-        try:
-            name = request.path_params["operation"]
-            if name in ("backend", "backend/patch", "policy", "endpoint", "odoo/write-switches", "n8n/session", odoo_methods.ROUTE) and request.method == "PUT":
-                value = await json_body(request)
-            else:
-                if await body(request):
-                    raise BadRequest()
-                value = None
-
-            peer_disconnected = asyncio.Event()
-
-            async def disconnected():
-                # Body is fully consumed: this task exclusively owns receive now.
-                while (await request.receive())["type"] != "http.disconnect":
-                    pass
-                # Deny even when role completion and disconnect wake together,
-                # before the outer waiter has had a chance to cancel the action.
-                peer_disconnected.set()
-
-            watcher = asyncio.create_task(disconnected())
-            action = asyncio.create_task(admin_action(request, user, base, csrf, value, peer_disconnected, committed))
-            tasks = [watcher, action]
-            done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-            if watcher in done:
-                raise BadRequest(403)
-            return action.result()
-        finally:
-            for task in tasks:
-                if task is not action or not committed.is_set():
-                    task.cancel()
-            # Before commit: cancel/join role cleanup with zero effects. After
-            # commit: join the lifecycle callback without cancelling it; action
-            # retains mutation_lock until stop/reap/restart finishes. Neither
-            # ASGI nor repeated direct cancellation may detach that ownership.
-            cancelled = False
-            with anyio.CancelScope(shield=True):
-                if tasks:
-                    joined = asyncio.gather(*tasks, return_exceptions=True)
-                    while not joined.done():
-                        try:
-                            await asyncio.shield(joined)
-                        except asyncio.CancelledError:
-                            cancelled = True
-            admin_slots.release()
-            if cancelled:
-                raise asyncio.CancelledError
+        # HM-10: steps 1 to 4 are management_exchange (extracted from here, unchanged); its step: this profile's action.
+        name = request.path_params["operation"]
+        return await management_exchange(
+            request, admin_identity, admin_slots,
+            lambda request: management_value(request, name in JSON_OPERATIONS and request.method == "PUT"),
+            admin_action)
 
     async def admin_page(request):
         # The same admission, bounded body, lock, fresh role and disconnect
         # ownership as the API apply to every asset; no unbounded WS fan-out.
-        _, base, _ = admin_identity(request)
-        raw = request.scope.get("raw_path", b"")
-        if b"%" in raw or b"\\\\" in raw or request.url.query:
-            raise BadRequest()
-        path = request.url.path
-        if base and (path == base or path.startswith(base + "/")):
-            path = path[len(base):] or "/"
-        if path.startswith("/api/"):
-            request.path_params["operation"] = path[5:]
-        else:
-            if request.method not in ("GET", "HEAD"):
-                raise BadRequest(404)
-            request.path_params["operation"] = "__ui__"
-            request.state.ui_path = path
+        _, operation = management_operation(request, admin_identity)  # HM-10: extracted, unchanged
+        if operation == "__ui__" and request.method not in ("GET", "HEAD"):
+            raise BadRequest(404)
         if admin_pipeline is None:
             response = await admin_api(request)  # its only answer is the action's (action.result())
-            return response if profile_view is None else echoed(response, request.path_params["operation"])
+            return response if profile_view is None else echoed(response, operation)
         return await admin_pipeline(request, profile_action)  # HM-05: the shared pipeline (see make_apps)
 
     async def profile_action(request, user, base, csrf, value, peer_disconnected, committed):
         """HM-05: this profile's action as the shared pipeline gets it: admin_action, its answer with the echo (an answer
-        the pipeline gives itself never carries this profile's echo)."""
+        the pipeline gives itself never carries this profile's echo). HM-10: the switched-on dispatcher calls it
+        (admin.state.profile_action) once it has chosen this profile."""
         response = await admin_action(request, user, base, csrf, value, peer_disconnected, committed)
         return response if profile_view is None else echoed(response, request.path_params["operation"])
 
     def echoed(response, name):
         """HM-05: this profile's echo (profile_view) in a JSON object its action answered: the bootstrap gets "profile"
-        (id, label, is_default) and "profiles_supported": true, any other answer "profile": {"id"}. The action answers
-        only after its final role check; a refusal (an exception: 403, 428 ...) gets no echo from error_handler, so a
-        caller who is not an administrator learns nothing about the profile (invariant I10). Status and headers stay."""
+        (id, label, is_default) and "profiles_supported": true (HM-10: then bootstrap_fields()), any other answer
+        "profile": {"id"}. The action answers only after its final role check; a refusal (an exception: 403, 428 ...)
+        gets no echo from error_handler, so a caller who is not an administrator learns nothing about the profile
+        (invariant I10). Status and headers stay: HM-10 (HM-05 review) keeps every header the action set, in its order
+        and with a repeated name repeated (a dict merged them), then the new body's length and type."""
         if not isinstance(response, JSONResponse):
             return response
         content = json.loads(response.body)
@@ -1218,10 +1311,14 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         view = profile_echo(profile_view())
         if name == "bootstrap":
             content.update(profile=view, profiles_supported=True)
+            if bootstrap_fields is not None:
+                content.update(bootstrap_fields())
         else:
             content["profile"] = {"id": view["id"]}
-        headers = {key: value for key, value in response.headers.items() if key not in ("content-length", "content-type")}
-        return JSONResponse(content, status_code=response.status_code, headers=headers)
+        result = JSONResponse(content, status_code=response.status_code)
+        result.raw_headers = [pair for pair in response.raw_headers
+                              if pair[0] not in (b"content-length", b"content-type")] + result.raw_headers
+        return result
 
     def still_authorized(token):
         try:
@@ -1896,12 +1993,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         return JSONResponse({"ready": ready}, status_code=200 if ready else 503)
 
     exceptions = {BadRequest: error_handler, ConfigError: error_handler}
-    admin = Starlette(routes=[Route("/{path:path}", admin_page, methods=["GET", "HEAD", "PUT", "POST"])],
-                      middleware=[Middleware(ui.SecurityHeaders)], exception_handlers=exceptions)
+    admin = management_app(admin_page)  # HM-10: the same application as before, built by the shared helper
+    admin.state.profile_action = profile_action  # HM-10: for the switched-on dispatcher (see the docstring)
     mcp_app = Starlette(routes=[Route(MCP_ROUTE, AnyMethod(mcp)), Route(SECRET_ROUTE, AnyMethod(private_mcp)),
                                 Route(READY_ROUTE, readiness)],
                         exception_handlers=exceptions)
-    admin.router.redirect_slashes = False
     mcp_app.router.redirect_slashes = False
     mcp_app.state.lanes = lanes  # HM-14: a switched-on profile's lanes (slots, waiting), for diagnostics and tests
     return admin, mcp_app

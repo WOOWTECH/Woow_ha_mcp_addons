@@ -5,8 +5,10 @@ HM-07 made it a library; HM-08 wires it: the gateway takes PROFILE_ID from here,
 ProfileManager (profile_runtime) reads the index, opens the profiles it lists and routes MCP requests with them
 (profile_router); a switched-off product reads none of it (tests/test_router_passthrough.py). HM-09 starts the
 children: the spawn check's test bind (port_occupied), allocation around what is held (allocate_port occupied=) and
-the memory readings (memory_limit_mib, available_memory_mib). HM-10 lists and creates profiles, HM-13b's boot guard
-checks whether profile data exists. restore_detect (HM-13a, not wired yet) takes its file names from here. It never
+the memory readings (memory_limit_mib, available_memory_mib). HM-10 (profile_admin) lists, creates, renames and
+deletes profiles and quarantines an unusable index with these rules and the file helpers below
+(free_index_quarantine_name, move_index_aside, index_bytes, remove_profile_directory); HM-13b's boot guard checks
+whether profile data exists. restore_detect (HM-13a, not wired yet) takes its file names from here. It never
 writes the default profile's files (invariant I6).
 
 Layout (plan §4.1)::
@@ -32,6 +34,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import shutil
 import socket
 import stat
 from typing import Callable, Iterable, Mapping, Sequence
@@ -656,6 +659,96 @@ def parse_quarantine_name(name: str) -> tuple[str, str] | None:
 def index_quarantine_name(when: datetime) -> str:
     """What "quarantine the profile index" renames profiles.json to (contract §3.6; HM-10)."""
     return INDEX_NAME + '.quarantine-' + _utc(when)
+
+
+# HM-10 (HM-07 review S-15): the second quarantine within one second gets a number, never the first one's name.
+MAX_QUARANTINE_NUMBER = 999
+
+
+def free_index_quarantine_name(layout: Layout, when: datetime) -> str:
+    """index_quarantine_name(when), or with -2, -3 ... appended when that name is taken (anything at it, a link or a
+    dangling one included). ProfileDataError when none is free. The caller holds the add-on's profile lock, so no
+    other quarantine of this process picks the same name before it is used (same uid is no boundary, DQ-37)."""
+    base = index_quarantine_name(when)
+    for number in range(1, MAX_QUARANTINE_NUMBER + 1):
+        name = base if number == 1 else f'{base}-{number}'
+        try:
+            os.lstat(layout.root / name)
+        except FileNotFoundError:
+            return name
+        except OSError:
+            break
+    raise ProfileDataError('no quarantine name is free')
+
+
+def move_index_aside(layout: Layout, name: str) -> None:
+    """"Quarantine the profile index" (DQ-12; contract §3.6): rename profiles.json, whatever it is (a file, a link, a
+    directory: the rename never follows a link), to *name* (free_index_quarantine_name) in the same directory, then
+    fsync the directory so the new name is on disk. ProfileDataError when the rename fails (nothing moved)."""
+    try:
+        os.rename(layout.index, layout.root / name)
+    except OSError:
+        raise ProfileDataError('profile index not moved') from None
+    try:
+        root = os.open(layout.root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(root)
+        finally:
+            os.close(root)
+    except OSError:
+        pass  # moved; only its durability across a power loss is in doubt (the next start reads what is there)
+
+
+def index_bytes(path: Path) -> tuple[IndexSignature | None, bytes]:
+    """The index entry's signature and up to MAX_INDEX_BYTES + 1 of its bytes, read without following a link (empty
+    when it is not a readable regular file): what an unusable index is identified by (HM-10: the quarantine's If-Match,
+    contract §3.5)."""
+    signature = signature_of_or_none(path)
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return signature, b''
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return signature, b''
+        chunks, size = [], 0
+        while size <= MAX_INDEX_BYTES and (chunk := os.read(fd, MAX_INDEX_BYTES + 1 - size)):
+            chunks.append(chunk)
+            size += len(chunk)
+        return signature, b''.join(chunks)
+    except OSError:
+        return signature, b''
+    finally:
+        os.close(fd)
+
+
+def remove_profile_directory(layout: Layout, profile_id: str) -> bool:
+    """Delete an additional profile's directory and all it holds (plan §4.4, the last step of a deletion; DQ-14), never
+    following a link: from /data/mcp/profiles opened without following a link and checked as this uid's directory
+    (scan_profiles' rule), shutil.rmtree's descriptor-based walk below it (a link at the profile's own name, or a
+    profiles entry that is a link, is refused). False when anything could not be removed: what is left is an orphan,
+    listed and deletable, never opened or routed."""
+    name = layout.profile(profile_id).name  # ValueError for anything but a profile id
+    try:
+        fd = os.open(layout.profiles, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return True  # no profiles directory: nothing of the profile is left
+    except OSError:
+        return False
+    try:
+        _owned_directory(fd, layout.profiles)
+        try:
+            info = os.lstat(name, dir_fd=fd)
+        except FileNotFoundError:
+            return True
+        if not stat.S_ISDIR(info.st_mode) or not shutil.rmtree.avoids_symlink_attacks:
+            return False
+        shutil.rmtree(name, dir_fd=fd)
+        return True
+    except (OSError, ProfileDataError):
+        return False
+    finally:
+        os.close(fd)
 
 
 def has_profile_data(root: Path) -> bool:

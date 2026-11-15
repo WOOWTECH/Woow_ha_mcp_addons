@@ -40,6 +40,15 @@ staggered) and every profile's monitor (DQ-21: an additional profile's monitor e
 manager's close stops every child at once (stop_all). A ProfileRuntime takes hold, monitor_options and
 report_blocked as keyword-only options; left out (run_product's default profile of a product not switched on), it
 is built as before.
+
+HM-10 (plan 5.3; contract 3; DQ-13, DQ-15, DQ-40 (a) ②): 8099 of a switched-on add-on is the manager's management
+dispatcher (profile_router.AdminDispatcher; admin_app), which runs the shared pipeline and then a global path
+(profile_admin.ProfileAdmin: list, create, rename, delete, the index quarantine) or a profile's own action
+(ProfileRuntime.admin_action). Every profile's answers carry its echo (profile_view; the bootstrap also
+bootstrap_fields); an additional profile shows the add-on's one endpoint, the default profile's (default_endpoint).
+A ProfileRuntime binds its revisions (ETags) to its profile id in every mode (ConfigurationState profile_id: opaque,
+process-local values, so nothing a client sees changes for a product not switched on) and takes default_endpoint and
+bootstrap_fields as keyword-only options, given by the manager only.
 """
 from __future__ import annotations
 
@@ -66,7 +75,9 @@ from .health import AUTH_BACKOFF, HealthMonitor
 from .lifecycle import (CHILD_PORT, CHILD_PORT_CONFLICT, CHILD_PORT_IN_USE, EXTRA_CHILD_RESOURCES, MEMORY_CAPACITY,
                         WATCHDOG, ChildLog, LifecycleLog, Supervisor, child_url)
 from .products import CONNECTIONS, ProductStore
-from .profile_router import Credentials, McpDispatcher, ProfileGate, RefusalAllowance, Reports, Unavailable
+from .profile_admin import ProfileAdmin
+from .profile_router import (AdminDispatcher, Credentials, McpDispatcher, ProfileGate, RefusalAllowance, Reports,
+                             Unavailable)
 from .profiles import PROFILE_ID
 
 logger = logging.getLogger(__name__)
@@ -76,7 +87,7 @@ CHILD_CONNECTIONS = 40  # the child client's connection limit, as before (plan 5
 RUNTIME_OPTIONS = frozenset({'child_url', 'health', 'backend_changed', 'configuration', 'backend_check',
                              'restart_child', 'diagnostics', 'availability', 'token_access', 'mutation_lock',
                              'authority', 'admin_slots', 'admin_pipeline', 'profile_view', 'forward_slots',
-                             'slot_busy', 'reply_secrets', 'child_blocked'})
+                             'slot_busy', 'reply_secrets', 'child_blocked', 'default_endpoint', 'bootstrap_fields'})
 MANAGEMENT_LISTENER_LIMIT = 64  # 8099's limit_concurrency (run_product), switched on or off
 # HM-09 (plan 5.4; C2-SF-4): after the default profile's child, at most STAGGER_SLOTS additional children start at
 # once; a place is freed when its child answered a health check, could not start, or after STAGGER_SECONDS.
@@ -99,8 +110,10 @@ DISABLED_HOLDS = {
 @dataclass(frozen=True)
 class SharedAdmin:
     """What every profile of one add-on shares on the management listener (plan 3.2, FM-54): one AdminAuthority (one
-    CSRF key; one HA role verifier, so one bound on its concurrent queries), one set of management slots and, from
-    HM-10, the shared management pipeline (gateway.make_apps admin_pipeline)."""
+    CSRF key; one HA role verifier, so one bound on its concurrent queries), one set of management slots and,
+    optionally, a pipeline each profile's app hands its requests to (gateway.make_apps admin_pipeline, HM-05's
+    injection point). HM-10's 8099 dispatcher does not use one: it runs the shared pipeline itself, with this authority
+    and these slots, and calls each profile's action once it has chosen the profile (profile_router.AdminDispatcher)."""
     authority: AdminAuthority
     slots: asyncio.Semaphore = field(default_factory=lambda: asyncio.Semaphore(ADMIN_SLOTS))
     pipeline: AdminPipeline | None = None
@@ -129,13 +142,16 @@ class ProfileRuntime:
     (launch) asks memory False only. monitor_options: the HealthMonitor's keyword options (staggered start, auth
     backoff, tolerance). report_blocked: child/restart answers with blocked_reason (make_apps child_blocked).
 
+    HM-10 (likewise): default_endpoint, bootstrap_fields: make_apps' options of the same names, passed only when given.
+    admin_action (after open()) is the profile's action for the management dispatcher (make_apps' admin app state).
+
     mcp_listener_limit: 8081's limit_concurrency when this runtime serves the add-on alone: 64, as before."""
     mcp_listener_limit = 64
 
     def __init__(self, store, tools, child_spec, *, port=CHILD_PORT, profile_id=DEFAULT_PROFILE, lifecycle=None,
                  shared=None, profile_view=None, app_options=None, child_connections=CHILD_CONNECTIONS,
                  forward_slots=None, slot_busy=None, reply_secrets=None, hold=None, monitor_options=None,
-                 report_blocked=False):
+                 report_blocked=False, default_endpoint=None, bootstrap_fields=None):
         if not isinstance(profile_id, str) or not PROFILE_ID.fullmatch(profile_id):
             raise ValueError('invalid profile id')
         if type(child_connections) is not int or child_connections < 1:
@@ -152,7 +168,8 @@ class ProfileRuntime:
         self.port, self.profile_id = port, profile_id
         self.child_connections = child_connections
         self.gateway_options = {name: value for name, value in (
-            ('forward_slots', forward_slots), ('slot_busy', slot_busy), ('reply_secrets', reply_secrets))
+            ('forward_slots', forward_slots), ('slot_busy', slot_busy), ('reply_secrets', reply_secrets),
+            ('default_endpoint', default_endpoint), ('bootstrap_fields', bootstrap_fields))
             if value is not None}
         if hold is not None and not callable(hold):
             raise ValueError('invalid start hold')
@@ -164,7 +181,7 @@ class ProfileRuntime:
         self.shared, self.profile_view = shared, profile_view
         self.supervisor = self.child = self.health = self.configuration = None
         self.token_access = self.mutation_lock = None
-        self.admin_app = self.mcp_app = None
+        self.admin_app = self.mcp_app = self.admin_action = None
         self._stack = None
 
     async def open(self):
@@ -182,7 +199,9 @@ class ProfileRuntime:
                 limits=httpx.Limits(max_connections=self.child_connections)))
             self.health = health = HealthMonitor(self.store, manager, child, child_url=self.child_url,
                                                  **self.monitor_options)
-            self.configuration = configuration = ConfigurationState(self.store, manager, health)
+            # HM-10 (DQ-15): the profile's ETags are bound to its id.
+            self.configuration = configuration = ConfigurationState(self.store, manager, health,
+                                                                    profile_id=self.profile_id)
             self.token_access, self.mutation_lock = TokenAccess(self.store), asyncio.Lock()
             if self.profile_view is not None and profile_echo(self.profile_view())['id'] != self.profile_id:
                 raise ValueError('invalid profile echo')
@@ -193,6 +212,10 @@ class ProfileRuntime:
                 diagnostics=getattr(manager, 'diagnostics', None), availability=health.availability,
                 token_access=self.token_access, mutation_lock=self.mutation_lock, **self._shared_options(),
                 **self.gateway_options, **self.app_options)
+            # HM-10: the profile's action, for the switched-on management dispatcher (make_apps keeps it on its admin
+            # app's state). An admin app without one (a stand-in some tests pass for make_apps' apps) leaves it None:
+            # only the switched-on dispatcher calls it, and run_product serves any admin app it is given as before.
+            self.admin_action = getattr(getattr(self.admin_app, 'state', None), 'profile_action', None)
         except BaseException:
             await self.aclose()
             raise
@@ -412,11 +435,14 @@ class ProfileManager:
     ends it (DQ-21: an additional profile's monitor that stops marks that profile failed, its child stopped, until the
     panel restarts it). stop_all() (the manager's close too) stops every child at once, within HA's 30 s.
 
-    For HM-10: add(profile_id, store, ...) and remove(profile_id) register and drop a profile at run time (an index
-    entry written with profiles.write_index(expected=manager.index) is adopted with adopt_index(view), then
-    reevaluate()); start_profile(profile_id) starts a profile added while the add-on runs; free_port() allocates the
-    port of a new profile; shared.pipeline the shared management pipeline; get(profile_id).runtime.admin_app each
-    profile's management app."""
+    HM-10 (plan 5.3; contract 3): admin_app, 8099, is the management dispatcher (profile_router.AdminDispatcher) with
+    the add-on's profile management (admin: profile_admin.ProfileAdmin), which registers and drops profiles at run
+    time: add(profile_id, store, ...) and remove(profile_id); an index it wrote (profiles.write_index(expected=
+    manager.index)) is adopted with adopt_index(view), then reevaluate(); start_profile(profile_id) starts a profile
+    added while the add-on runs; free_port() allocates the port of a new profile; relabel() renames one's echo. Every
+    profile's runtime gets its echo (echo(): id, label, is_default; DQ-40 (a) ②), its bootstrap fields and, for an
+    additional profile, the default profile's endpoint (DQ-13); get(profile_id).runtime.admin_action is each
+    profile's action."""
 
     def __init__(self, store, product, tools, child_spec, *, port=CHILD_PORT, app_options=None):
         self.store, self.product, self.tools, self.child_spec = store, product, tools, child_spec
@@ -430,6 +456,8 @@ class ProfileManager:
         self.orphan_secrets = frozenset()
         self.unusable = False  # the profiles directory could not be listed at startup
         self.events = LifecycleLog()  # HM-09: the children's lifecycle events, every profile's
+        self.admin = self.dispatcher = None  # HM-10: the profile management and the 8099 dispatcher (open())
+        self._labels = {DEFAULT_PROFILE: profiles.DEFAULT_LABEL}  # HM-10: every echo's label (kept after removal)
         self.memory_limit = None  # HM-09: the cgroup memory limit read at open (None: none, MemAvailable decides)
         self.capacity = profiles.capacity(product)
         self.started = asyncio.Event()  # HM-09: start_all() finished
@@ -445,7 +473,23 @@ class ProfileManager:
 
     @property
     def admin_app(self):
-        return self.get(DEFAULT_PROFILE).runtime.admin_app
+        """8099: the management dispatcher (HM-10; before it, the default profile's management app)."""
+        return self.dispatcher
+
+    def echo(self, profile_id):
+        """A profile's echo (make_apps profile_view; contract 3.4): its id, its label now, whether it is the default."""
+        return {'id': profile_id, 'label': self._labels[profile_id], 'is_default': profile_id == DEFAULT_PROFILE}
+
+    def relabel(self, profile_id, label):
+        """HM-10: a rename the index committed; the profile's echo shows it from now on."""
+        self._labels[profile_id] = label
+        entry = self.get(profile_id)
+        if entry is not None:
+            entry.label = label
+
+    def default_endpoint(self):
+        """The add-on's one endpoint (DQ-13): the default profile's, read from its state when asked."""
+        return self.store.load().endpoint
 
     def profiles(self):
         """The registered profiles: the default profile first, then the index's order."""
@@ -747,12 +791,16 @@ class ProfileManager:
             lifecycle['resources'] = EXTRA_CHILD_RESOURCES
         monitor = dict(first_check_after=self._first_check(len(self._entries)), tolerance=2, auth_backoff=AUTH_BACKOFF,
                        own_child_only=True, log=log)
+        if not default:
+            self._labels[profile_id] = label  # HM-10: the echo's label (the index's)
         runtime = ProfileRuntime(store, self.tools, self.child_spec, port=port, profile_id=profile_id,
                                  shared=self.shared, app_options=self.app_options,
                                  child_connections=quota.child_connections, forward_slots=quota.forward_slots,
                                  slot_busy=gate.slot_busy, reply_secrets=self.reply_secrets, lifecycle=lifecycle,
                                  hold=None if default else partial(self._hold, profile_id), monitor_options=monitor,
-                                 report_blocked=True)
+                                 report_blocked=True, profile_view=partial(self.echo, profile_id),
+                                 bootstrap_fields=partial(self.admin.bootstrap_fields, profile_id),
+                                 default_endpoint=None if default else self.default_endpoint)
         await runtime.open()
         entry = RegisteredProfile(profile_id, port, label, runtime, store, gate, credentials, disabled)
         self._entries[profile_id] = entry
@@ -790,6 +838,9 @@ class ProfileManager:
         self._stack = AsyncExitStack()
         try:
             self.shared = SharedAdmin(AdminAuthority(self.app_options.get('verify_admin')))
+            # HM-10: the profile management and 8099's dispatcher (the second role check is the shared authority's).
+            self.admin = ProfileAdmin(self, self.shared.authority.verify)
+            self.dispatcher = AdminDispatcher(self, self.admin)
             default = await self.add(DEFAULT_PROFILE, self.store, port=self.port)
             self._stack.push_async_callback(default.runtime.aclose)
             self.mcp_app = McpDispatcher(self, self.reports)
