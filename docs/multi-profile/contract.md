@@ -55,7 +55,7 @@
 |---|---|---|---|
 | `/mcp` | GET、POST、DELETE；其他方法在 token 檢查之後回 405（`Allow: GET, POST, DELETE`） | Bearer 對預設帳號 | 剛好一個 `Authorization`、字面 `Bearer <token>`，依 token 選帳號 |
 | `/private_<token>/mcp` | 同上 | 密鑰網址對預設帳號 | 依路徑裡的 token 選帳號；路徑上的 `Authorization` 一律不看 |
-| `/health/ready` | GET | `{"ready":bool}`，200／503，只看預設帳號 | 不變（DQ-19 待定，計畫建議維持只看預設帳號） |
+| `/health/ready` | GET | `{"ready":bool}`，200／503，只看預設帳號 | 不變（DQ-19 已定：只看預設帳號） |
 | 其他路徑（含 `/mcp/`、裸 `/private_<token>`） | — | 404 | 404（交預設 app） |
 
 - MCP 路徑帶 query：400（在 token 檢查之後，同今天）。
@@ -80,7 +80,7 @@
 |---|---|---|
 | 剛好一個帳號 | 交該帳號 app，用自己的 store 再驗一次 | 路由錯只會被拒 |
 | 零個 | 交預設 app：密鑰網址 404、Bearer 401＋`WWW-Authenticate: Bearer` | 與今天逐位元相同；不佔准入、不讀 body |
-| 兩個以上（撞號） | 503 `{"error":"state unavailable"}`，不轉任何帳號 | WARNING 每組 60 秒一行（id 前 8 碼）；DQ-09 待定，計畫建議 503 |
+| 兩個以上（撞號） | 503 `{"error":"state unavailable"}`，不轉任何帳號 | WARNING 每組 60 秒一行（id 前 8 碼）；DQ-09 已定：503 |
 | 預設 state 讀不到、索引結構壞 | 503 `{"error":"state unavailable"}`（含預設帳號） | 索引壞的處理見第 3.6 節 `profile_index_state` |
 | 索引被面板以外改動（簽章不符） | 503 `{"error":"state unavailable"}`，直到重啟 | 簽章含 st_dev、st_ino、st_mtime_ns、st_ctime_ns、st_size、st_nlink；同 uid 下不是安全邊界 |
 | 全部撤銷時寫入失敗的帳號 | 該帳號 503，直到重試成功 | 重啟時 `.revoke-all-pending` 讓守門在 listener 前重做 |
@@ -340,7 +340,7 @@ PaaS 另帶 `message` 文字，HA 不帶（面板只認代碼，§8.8 #49）。
 |---|---|---|---|---|---|---|---|---|
 | 錯 token：密鑰網址 | 404 | 零命中、撤銷、沒設 | Starlette 預設 404，沒有 `WWW-Authenticate` | 同 | 403 | §8.8 #1 | 既有 | HM-01、HM-08；`tests/test_profile_routing.py` |
 | 錯 token：Bearer | 401 | 零命中、撤銷、沒設 | 空本體＋`WWW-Authenticate: Bearer` | 同 | （沒有 Bearer） | §8.8 #1、#2 | 既有 | 同上 |
-| `{"error":"state unavailable"}` | 503 | 撞號、預設 state 或索引讀不到、索引外改、全部撤銷失敗的帳號 | 固定本體 | 只有預設 state 讀不到 | 503 | DQ-09 待定 | 既有（擴大） | HM-08 |
+| `{"error":"state unavailable"}` | 503 | 撞號、預設 state 或索引讀不到、索引外改、全部撤銷失敗的帳號 | 固定本體 | 只有預設 state 讀不到 | 503 | DQ-09 已定（同 PaaS 503） | 既有（擴大） | HM-08 |
 | `{"error":"request denied"}` | 400 | MCP 路徑帶 query | 固定本體 | 同 | 原樣轉發 | §8.8 #3 | 既有 | HM-01 |
 | `{"error":"request denied"}` | 403 | Bearer 帶 Origin；Headscale 密鑰網址的來源不在清單 | 固定本體 | 同 | Origin 清單 403 `ORIGIN_DENIED` | §8.8 #9、#10 | 既有 | HM-27 |
 | JSON-RPC `-32003` | 200／503／429 | 准入、位元組額度、轉送名額逾時、排隊上限、GET 串流上限、待送回覆上限 | 第 2.4 節 | 沒有（uvicorn 503、名額逾時 503） | 200／503／429（先讀 body） | §8.8 #15、#16 | 新 | HM-08、HM-14、HM-30；`tests/test_profile_quotas.py`、`tests/test_gateway_busy_shapes.py` |
@@ -465,8 +465,13 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
   ```
 
   0600、擁有者 10001、單一連結、≤64 KiB、`O_NOFOLLOW`、`strict_json`（拒絕重複鍵）；頂層鍵剛好 `version`、`profile_index`；
-  每筆鍵剛好 `label`、`port`；id 24 位小寫 hex；port 是 int 不是 bool、1024～65535、不是 3000／8081／8099；≤5 筆；
-  物件順序＝建立順序。port 重複或撞預設 port 不算結構錯（只停相關帳號）。
+  每筆鍵剛好 `label`、`port`；id 24 位小寫 hex；port 是 int 不是 bool、1024～65535；≤5 筆；物件順序＝建立順序。
+- 索引裡的 port 照 PaaS 逐字一致（HM-07 審查 MF-1，2026-11-15 定案）：
+  - 1024～65535 都不算結構錯（PaaS `_index_entries`）。
+  - port 重複，或等於預設帳號子程式的 3000：只停持有它的額外帳號（`disabled_reason=port_conflict`；PaaS `_port_collisions`）。
+  - port 是 add-on 自己的 listener（8081、8099）：索引階段不檢查（PaaS `_port_collisions` 也不列），起子程式前才擋：
+    `status=blocked`、`blocked_reason=child_port_conflict`（HM-09；PaaS `_port_refusal`）。
+  - 和 PaaS 相同，所以第 9 節沒有這一列。配 port 照樣避開 3000、8081、8099（第 7 節）。
 - 額外帳號 store 只開既有（`existing_only`）：缺 state 不補建、檢查擁有者 uid；建立一次寫入最終初值（新 token、新 child_token、
   連線全空、`endpoint=None`、政策照 DQ-02 複製預設帳號當下的值、`n8n_session` 不複製、建立不記 history）。
 - 項目預算：5 個帳號加隔離與封存約 50 項、最深 4 層，在 entrypoint 還原修復上限（512 項、8 層）內；超過 400 項時面板警示。
@@ -486,7 +491,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | 4 | 轉送的用戶端標頭 | 大部分（含 `x-n8n-*`） | 只有 3 個 session 標頭；回程只轉 4 個固定標頭（不含 Location） | n8n-mcp 會依 `x-n8n-*` 換後端（G5-13） | 既有 |
 | 5 | 工具呼叫逾時 | 110 秒回 `-32001`（Pc/proxy.py:44-46） | 330 秒（Hermes chat 300 秒） | HA 既有（R07 X-20；DQ-24 待定） | 既有 |
 | 6 | legacy SSE | 轉送 `/sse`、`/messages/` | 不支援 | HA 子程式只開 Streamable HTTP（DQ-23 待定，建議不支援） | 既有 |
-| 7 | readiness | `/healthz` 恆 200 | `/health/ready` 200／503，只代表預設 | FM-67；DQ-19 待定 | 既有 |
+| 7 | readiness | `/healthz` 恆 200 | `/health/ready` 200／503，只代表預設 | FM-67；DQ-19 已定 | 既有 |
 | 8 | 新帳號 token 歷史 | 記一筆 `auto_issue`（R03 §1.4） | 不記 | HA history 只收 rotate／revoke（Hc/products.py:264-268）；DQ-02 採 (a) | 既有 |
 | 9 | Headscale Origin 清單 | 只放自己的管理網址（claude.ai 403；R07 X-17） | 只放 `https://claude.ai` | 使用者對 HA Headscale 的決定（R01 H-08） | 既有 |
 | 10 | Bearer 帶 Origin | （沒有 Bearer） | 一律 403；DQ-11 第二問（S14 實測後）再定要不要精確放行 `https://claude.ai` | 瀏覽器不在 Bearer 契約 | 既有／待決 |
@@ -504,7 +509,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | 22 | 還原後 token 歷史 | 清空（R04 S-15） | 保留，加一筆 revoke | 不改 schema | 部署 |
 | 23 | 孤兒 | 讓還原停機（Pc/restore_guard.py:443-446） | 只隔離、不擋開機 | 不讓含孤兒的備份永遠起不來（G1:435） | 加嚴（建議回補） |
 | 24 | 休眠帳號 | 沒有（沒有產品開關） | 沒開通的版本撤銷休眠帳號 token | 開關＝發版（第 1.2 節） | 部署 |
-| 25 | 索引壞 | 整台 503（含管理 API；R03 §1.6） | 8081 503、面板照開、「隔離帳號索引」 | HA 沒有手動修復途徑（DQ-12 待定） | 部署 |
+| 25 | 索引壞 | 整台 503（含管理 API；R03 §1.6） | 8081 503、面板照開、「隔離帳號索引」 | HA 沒有手動修復途徑（DQ-12 已定） | 部署 |
 | 26 | 手改索引 | 重啟才生效（R03 §4.12） | 503 到重啟 | 外改＝繞過鎖 | 加嚴 |
 | 27 | endpoint | 不存，用瀏覽器 origin | 存在預設 state、全域 | Ingress 和 MCP 不同源（FM-12）；DQ-13 待定 | 部署 |
 | 28 | 沒填連線的子程式 | 5 個產品照起；n8n 額外帳號起文件模式（R06 PR-n8n-01） | 都不起；n8n 預設照起；n8n 額外帳號沒後端時所有工具回 `backend_not_configured`（DQ-22 待定） | 省記憶體（FM-45） | 部署 |
@@ -573,3 +578,4 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 |---|---|---|---|
 | v1 草案 | 2026-11-14 | HM-00 | 依計畫 §5、§6、§8.8 起草；套用 2026-11-14 的 §13.1 決策；差異表由 43 列補到 79 列 |
 | v1 草案（審查修正） | 2026-11-14 | HM-00 | 依獨立審查修正：錯誤代碼表對齊 bb48449 與 PaaS pin（既有回應的五種本體形狀；補 `unsupported`、`backend_check_failed`、`backend_fixed` 三列與 415、第 ① 步的 400；`core_version_unreviewed` 在 ⑥／⑩；重複 `X-MCP-Profile` 的 PaaS 行為）；差異表補第 80～86 列；第 4.2 節補既有回應範圍；第 5 節加各產品上限；待定題目標示；隔離目錄刪除路由與讀 body 途中額度用完的回應（暫定）；第 6 節門檻寫法 |
+| v1 草案（HM-07） | 2026-11-15 | HM-07 | 第 8 節索引 port 規則照 PaaS 逐字一致（審查 MF-1 定案）：拿掉「不是 3000／8081／8099」；重複與 3000 只停相關帳號；listener port 交 HM-09 的 spawn 前檢查（`child_port_conflict`）；第 9 節不加列。DQ-09、DQ-12、DQ-19 改標已定（`decisions.md`） |
