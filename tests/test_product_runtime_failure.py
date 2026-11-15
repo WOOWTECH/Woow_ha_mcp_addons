@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from mcp_admin_core import run_product
+from mcp_admin_core import profile_runtime, run_product
 
 
 async def test_invalid_replacement_spec_stops_previous_child_first(tmp_path, monkeypatch):
@@ -53,10 +53,10 @@ async def test_invalid_replacement_spec_stops_previous_child_first(tmp_path, mon
             while not self.should_exit:
                 await asyncio.sleep(.01)
 
-    monkeypatch.setattr(run_product, 'Supervisor', Manager)
+    monkeypatch.setattr(profile_runtime, 'Supervisor', Manager)  # HM-05: run_product's profile is made there
     monkeypatch.setattr(run_product, 'child_spec', child_spec)
-    monkeypatch.setattr(run_product, 'make_apps', apps)
-    monkeypatch.setattr(run_product, 'HealthMonitor', Monitor)
+    monkeypatch.setattr(profile_runtime, 'make_apps', apps)
+    monkeypatch.setattr(profile_runtime, 'HealthMonitor', Monitor)
     monkeypatch.setattr(run_product, 'Listener', Listener)
     args = SimpleNamespace(data=tmp_path / 'state', product='emqx', host='127.0.0.1', admin_port=8099, mcp_port=8081)
     with pytest.raises(RuntimeError, match='runtime component stopped'):
@@ -70,6 +70,7 @@ async def test_initial_launch_failure_keeps_management_alive_and_retry_observabl
     import run as n8n_run
     from mcp_admin_core.products import ProductStore
     module = n8n_run if product == 'n8n' else run_product
+    profile = n8n_run if product == 'n8n' else profile_runtime  # HM-05: run_product's profile is made there
     directory = tmp_path/'configured'
     store = ProductStore(directory, product)
     if product == 'n8n':
@@ -119,8 +120,8 @@ async def test_initial_launch_failure_keeps_management_alive_and_retry_observabl
                 return
             while not self.should_exit: await asyncio.sleep(.01)
 
-    for name,value in [('Supervisor',Manager),('child_spec',spec),('HealthMonitor',Monitor),('make_apps',apps),('Listener',Listener)]:
-        monkeypatch.setattr(module,name,value)
+    for owner,name,value in [(profile,'Supervisor',Manager),(module,'child_spec',spec),(profile,'HealthMonitor',Monitor),(profile,'make_apps',apps),(module,'Listener',Listener)]:
+        monkeypatch.setattr(owner,name,value)
     args=SimpleNamespace(data=directory,product=product,host='127.0.0.1',admin_port=8099,mcp_port=8081)
     with pytest.raises(RuntimeError, match='runtime component stopped'):
         await asyncio.wait_for(module.run(args), 3)

@@ -86,7 +86,11 @@ def install_runner(module, config):
     # HM-04: the runtime names its child's URL (built from the port of its child spec). Only that production URL is
     # replaced by the private endpoint's, as private_spec replaces only the spec's production port.
     production_url = f'http://127.0.0.1:{endpoint.production_port}/mcp'
-    original_spec, original_monitor, original_apps = module.child_spec, module.HealthMonitor, module.make_apps
+    # HM-05: run_product makes its profile's Supervisor, HealthMonitor and apps in profile_runtime (child_spec stays
+    # run_product's); apps/n8n/run.py still makes its own.
+    from mcp_admin_core import profile_runtime, run_product
+    profile = profile_runtime if module is run_product else module
+    original_spec, original_monitor, original_apps = module.child_spec, profile.HealthMonitor, profile.make_apps
     def trace(operation, phase, reason=None):
         if 'trace' not in config:
             return
@@ -131,8 +135,8 @@ def install_runner(module, config):
                 trace('callback', 'finished')
         kwargs['backend_changed'] = joined_change
         return original_apps(store, tools, endpoint.attach(client), child_url=endpoint.url, **kwargs)
-    module.child_spec, module.Supervisor = spec, supervisor
-    module.HealthMonitor, module.make_apps = Monitor, apps
+    module.child_spec, profile.Supervisor = spec, supervisor
+    profile.HealthMonitor, profile.make_apps = Monitor, apps
     module._owned_test_endpoint = endpoint
     module._owned_test_ipc = serve_proofs(config, endpoint)
     return endpoint

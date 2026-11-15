@@ -12,9 +12,11 @@ step, make_apps, HealthMonitor, ConfigurationState, child_spec and log redaction
 - the HA administrator check answers yes for the golden administrator (ADMIN), no for anyone else (n8n: the node
   catalog copy is skipped).
 
-These are the only injection points, all in production_runtime (module = run_product, or apps/n8n/run.py for n8n):
-module.Supervisor (NoProcessSupervisor, or the subclass a test passes), module.httpx.AsyncClient (every client built
-while the runtime runs gets MockTransport(MockChild) unless it names a transport; the tests' own clients are
+These are the only injection points, all in production_runtime (module = run_product, or apps/n8n/run.py for n8n;
+profile = where that runtime makes its profile's child: mcp_admin_core.profile_runtime for run_product since HM-05,
+apps/n8n/run.py for n8n): profile.Supervisor (NoProcessSupervisor, or the subclass a test passes),
+profile.httpx.AsyncClient (every client built while the runtime runs gets MockTransport(MockChild) unless it names a
+transport; the tests' own clients are
 GENUINE_CLIENT), module.make_ha_admin_verifier, module.Listener (CapturedListener) and, for n8n, module.prepare_catalog.
 tests/test_admin_contract_freeze.py also replaces HealthMonitor.test_saved for one answer shape. HM-05 (the per-profile
 runtime extraction) may move these lines when the names they patch move, and nothing else here.
@@ -51,7 +53,7 @@ import pytest
 
 import run as n8n_run
 from log_scan import log_scan  # noqa: F401  (fixture)
-from mcp_admin_core import VERSION, run_product, version_for_product
+from mcp_admin_core import VERSION, profile_runtime, run_product, version_for_product
 from mcp_admin_core.lifecycle import Supervisor
 from mcp_admin_core.products import INSTRUCTIONS, PROBES, ProductStore, health_probe
 from mcp_admin_core.surface import listing
@@ -251,6 +253,7 @@ async def production_runtime(product, data, *, sockets=False, supervisor=None):
     sockets=True keeps the real listeners (uvicorn, h11) on ephemeral loopback ports; mcp_port is the MCP one.
     supervisor: a NoProcessSupervisor subclass to use instead (tests/test_admin_contract_freeze.py: a failing start)."""
     module = n8n_run if product == 'n8n' else run_product
+    profile = n8n_run if product == 'n8n' else profile_runtime  # HM-05: run_product's profile is made there
     child = MockChild(product, data)
     listeners = []
 
@@ -273,8 +276,8 @@ async def production_runtime(product, data, *, sockets=False, supervisor=None):
         return user == ADMIN['X-Remote-User-Id']
 
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(module, 'Supervisor', supervisor or NoProcessSupervisor)
-        patch.setattr(module.httpx, 'AsyncClient', child_client)
+        patch.setattr(profile, 'Supervisor', supervisor or NoProcessSupervisor)
+        patch.setattr(profile.httpx, 'AsyncClient', child_client)
         patch.setattr(module, 'make_ha_admin_verifier', lambda: administrator)
         patch.setattr(module, 'Listener', CapturedListener)
         if product == 'n8n':
