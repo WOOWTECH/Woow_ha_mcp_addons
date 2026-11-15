@@ -16,7 +16,10 @@ byte for byte from woow-mcp-server 7d111b1, then through the HA rules, so a secr
   corpus, does not meet the threshold;
 - no regression against bb48449's own redaction (redact.py and diagnostics.py, frozen byte for byte in
   tests/fixtures/): whatever it hid stays hidden, on the corpora, on the counterexamples that need redact.shows_hidden
-  and in a differential fuzz;
+  and in a differential fuzz; also for values of short runs between symbols (a password, user:pw: HM-02 review
+  MF-1), counted by three characters in a row as the review counts them;
+- the guard decodes with the PaaS module's own decoder and stays within a few times the PaaS module's own cost
+  (HM-02 review MF-2);
 - key= in child output (FM-75: bb48449 left ?key= and key=), without masking keys=, key_id=, monkey= or keyword=.
 
 A value shows when any MIN_FRAGMENT characters of it in a row are in the output (as the PaaS tests count it).
@@ -31,6 +34,7 @@ import json
 import logging
 from pathlib import Path
 import random
+import re
 import sys
 import time
 import types
@@ -645,23 +649,116 @@ def test_shows_hidden_compares_with_the_ha_rules_alone():
     assert redact.apply_rules(child, diagnostics.RULES) == ('http://[REDACTED]@h.invalid/x', [f'http://user:{VALUE}&key=@'])
 
 
+def _best_of_3(scrub, text: str) -> float:
+    best = float('inf')
+    for _ in range(3):
+        started = time.perf_counter()
+        scrub(text)
+        best = min(best, time.perf_counter() - started)
+    return best
+
+
 def test_the_guard_is_bounded_on_pathological_lines():
-    """shows_hidden keeps only the pieces of what is shown and reads the original up to the PaaS module's own limit;
-    every shape here stays far below the bound (each takes milliseconds; an unbounded check took seconds)."""
+    """shows_hidden keeps only the pieces of what is shown and reads the original up to the PaaS module's own limit.
+    The bound is the PaaS module's own time on the same text, measured now: at most 3 times it, plus 30 ms (HM-02
+    review MF-2: decoding with urllib.parse.unquote made a 128 KiB record of a deep escape chain and lone % take 4 times
+    the PaaS module's time, and an 8 KiB child line 6.5 times; an unbounded check took seconds)."""
     rng = random.Random(20261115)
     alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
     noise = ''.join(rng.choice(alphabet) for _ in range(512 * 1024))
+    deep = '%' + '25' * 13 + '4B'  # 14 rounds of decoding to reach a letter
     shapes = {
         'long text with an escape': noise + '%20',
         'many secret paths': ''.join(f'/private_{noise[i:i + 40]}%20x&token=%2Fv ' for i in range(0, 96000, 40)),
         'one long secret path': '/private_' + noise[:131000] + '?a=1%20b&token=%2Fv',
         'longer than the PaaS limit': '/private_' + noise + '?a=1%20b&token=%2Fv',
+        'a deep escape, ?token= and lone %': '/private_x ' + deep + ' ?token=abc ' + '%' * 140000,
+        'a deep escape, ?sig= and lone %': '/private_x ' + deep + ' ?sig=abc ' + '%' * 140000,
+        'password=, a deep escape and lone %z': 'password=Kx ' + deep + ' ?sig=abc ' + '%z' * 70000,
     }
     for name, text in shapes.items():
-        started = time.perf_counter()
-        redact.scrub(_message_record(text))
-        diagnostics.scrub_line(text[:diagnostics.MAX_LINE])
-        assert time.perf_counter() - started < 1.5, name
+        record, line = text[:log_redaction.MAX_REDACT_CHARS], text[:diagnostics.MAX_LINE]
+        for place, ha, paas, sample in (('record', PLACES['message'][0], PLACES['message'][1], record),
+                                        ('child', diagnostics.scrub_line, _paas_child, line)):
+            bound = 3 * _best_of_3(paas, sample) + .03
+            took = _best_of_3(ha, sample)
+            assert took <= bound, f'{name} ({place}): {took * 1000:.1f} ms, bound {bound * 1000:.1f} ms'
+
+
+def test_the_guard_decodes_with_the_paas_module_decoder(monkeypatch):
+    """MF-2: _forms decodes with log_redaction._unquote, as many rounds as the PaaS module decodes."""
+    calls = []
+
+    def counted(text):
+        calls.append(text)
+        return unquote(text, errors='replace')
+
+    monkeypatch.setattr(log_redaction, '_unquote', counted)
+    assert redact._forms('/x%2541') == ['/x%2541', '/xA']
+    assert calls == ['/x%2541', '/x%41']  # two rounds, then no escape is left
+    assert redact._forms('/x?y=1') == ['/x?y=1'] and len(calls) == 2
+
+
+def test_the_paas_decoder_gives_what_unquote_gives():
+    """The guard relies on log_redaction._unquote giving urllib.parse.unquote(errors='replace')'s text (it takes no
+    errors argument): checked on generated texts of escapes, broken escapes, backslashes, non-ASCII and surrogates."""
+    rng = random.Random(20261115)
+    atoms = ('%', '%2', '%25', '%41', '%zz', '%e3%80', '%80', '%C3%A9', '%ff', '\\', '\\x41', 'a', 'Z', ' ', '/', '?',
+             '&', '\u00e9', '\u3000', '\ufffd', '%%', '%5C', '%5c%78', '\ud800', '%0a', '%00', '%E0%80%AF', '\x00')
+    texts = [''.join(rng.choice(atoms) for _ in range(rng.randint(0, 24))) for _ in range(20000)]
+    assert [text for text in texts if log_redaction._unquote(text) != unquote(text, errors='replace')] == []
+
+
+def test_a_run_of_PIECE_characters_counts_where_its_windows_show_elsewhere():
+    """A shown run of PIECE characters counts even when each shorter window of it shows elsewhere (here the hidden
+    token GHJK: GHJ and HJK show in GHJX and YHJK)."""
+    original = '/private_GHJK q GHJX YHJK '
+    assert redact.apply_rules(original) == ('/private_[REDACTED] q GHJX YHJK ', ['/private_GHJK'])
+    assert redact.shows_hidden(original, '/private_[REDACTED] GHJK q GHJX YHJK ')
+    assert not redact.shows_hidden(original, '/private_[REDACTED] q GHJX YHJK GHJX')
+
+
+def test_a_window_of_three_counts_where_its_pairs_show_elsewhere():
+    """A shown window of 3 characters counts even when each pair in it shows elsewhere (the hidden token GHJ: GH and
+    HJ show in GHX and YHJ), and a run that short has no piece of PIECE characters."""
+    original = '/private_GHJ q GHX YHJ '
+    assert redact.apply_rules(original) == ('/private_[REDACTED] q GHX YHJ ', ['/private_GHJ'])
+    assert redact.shows_hidden(original, '/private_[REDACTED] GHJ q GHX YHJ ')
+    assert not redact.shows_hidden(original, '/private_[REDACTED] q GHX YHJ GHX')
+
+
+def test_the_guard_checks_the_stack_too():
+    """A stack (stack_info) that would show what the HA rule alone hides in it becomes the placeholder, as the message
+    and the exception do. A stack has several lines, and the PaaS module answers a decoded text with a line break
+    with its placeholder, so this stack needs no escape: its query value ends at the # inside the secret path."""
+    after = _letters('after hash')
+    hashed = _counterexamples(TOKENS['urlsafe'])['secret path inside a token value, then #']
+    stack = 'Stack (most recent call last):\n  ' + hashed
+
+    def stacked():
+        return logging.LogRecord('hm02.matrix', logging.WARNING, __file__, 1, 'with a stack', (), None, sinfo=stack)
+
+    plain, old, record = stacked(), stacked(), stacked()
+    _plain_composition(plain)
+    OLD_REDACT.scrub(old)
+    redact.scrub(record)
+    assert _fragment(plain.stack_info, after) is not None and _fragment(old.stack_info, after) is None
+    assert record.stack_info == log_redaction.AMBIGUOUS and record.getMessage() == 'with a stack'
+
+
+def test_the_guard_decodes_every_round_the_paas_module_decodes():
+    """A token spelled in two layers of escapes, inside what the HA rule takes as one secret path, shows only after two
+    rounds of decoding, as the PaaS module answers it once it masked the &token= after it: the guard compares the
+    hidden value decoded as many rounds. The rest the composition shows of that path (?a=1, &token=) shows before it
+    as well, so only the token tells."""
+    token = TOKENS['urlsafe']
+    twice = ''.join('%25' + format(ord(char), '02X') for char in token)
+    text = f'?a=1&token=x /private_abc?a=1%2520{twice}&token=%2Fv'
+    plain = {place for place in PLACES if _fragment(PLAIN[place](text), token) is not None}
+    assert plain >= {'message', 'argument', 'access', 'child'}, plain  # the composition alone shows it there
+    for place, (ha, _, old) in PLACES.items():
+        assert _fragment(old(text), token) is None and _fragment(ha(text), token) is None, place
+    assert PLACES['message'][0](text) == log_redaction.AMBIGUOUS == diagnostics.scrub_line(text)
 
 
 def test_composition_is_stable_on_the_corpora():
@@ -696,6 +793,136 @@ def test_composition_is_stable_on_the_corpora():
             assert all(first or _fragment(result, value) is None for result in results[1:]), (text, results)
             changed[results[1] != results[0]] += 1
     assert changed[False] > 10 * changed[True], changed  # almost every text is final after the first pass
+
+
+# ---------------------------------------------------------------------------
+# values of short runs between symbols (HM-02 review MF-1): what bb48449 hid stays hidden at any run length
+# ---------------------------------------------------------------------------
+
+_MASK_TEXT = re.compile(r'\[REDACTED\]|\*\*\*|' + re.escape(log_redaction.AMBIGUOUS))
+
+
+def _visible(text: str) -> str:
+    """What a result shows between its masks, as written and decoded."""
+    shown = '\n'.join(_MASK_TEXT.split(text))
+    return '\n'.join(dict.fromkeys((shown, unquote(shown), unquote(unquote(shown)))))
+
+
+def _short_windows(value: str) -> set:
+    """Three characters in a row of value, as written or decoded, two of them letters of the value: what the review
+    counts as a shown part of a short value (the values use LETTERS, which the templates use only in GET and HTTP)."""
+    windows = set()
+    for form in dict.fromkeys((value, unquote(value), unquote(unquote(value)))):
+        windows.update(window for window in (form[i:i + 3] for i in range(len(form) - 2))
+                       if sum(char in LETTERS for char in window) >= 2)
+    return windows
+
+
+def _short_shown(result: str, reference: str, value: str) -> set:
+    """The windows of value that result shows and reference does not show (as written or decoded)."""
+    shown, before = '\n'.join(_MASK_TEXT.split(result)), _visible(reference)
+    return {window for window in _short_windows(value) if window in shown and window not in before}
+
+
+def _letters_shown(result: str, reference: str, value: str) -> set:
+    """The letters of value that result shows and reference does not show anywhere (for one-letter cases)."""
+    shown, before = set(_visible(result)), set(_visible(reference))
+    return {char for char in unquote(value) if char in LETTERS and char in shown and char not in before}
+
+
+SHORT_COUNTEREXAMPLES = {  # child lines, (template, value): the composition without the review's fix showed a part
+    'decoded @ and / in a userinfo': ('fetch https://admin:{v}@db.invalid/x?token=%2Fv', 'GH%40J%2FKL'),
+    'decoded spaces in a userinfo': ('url http://u:{v}@h.invalid/?token=%2Fv', 'GH%20JK%20LM'),
+    'a decoded space in a password': ('password={v} /x?token=%2Fv', 'GH%20JK%21LM'),
+    'decoded spaces after Bearer': ('Bearer {v} /x?token=%2Fv', 'GH%20JK%20LM'),
+    'a PaaS mask takes the word Basic': (';access_token=Basic {v}', 'GH#J%26K%3FL'),
+    'a PaaS mask takes the word cookie': ('&key=cookie: {v};H', 'G'),
+    'one letter after a decoded space': ('password={v}&M& then /x?a=1&token=%2F1', 'G%3FHJK%20L'),
+}
+
+
+@pytest.mark.parametrize('name', list(SHORT_COUNTEREXAMPLES))
+def test_short_values_fail_closed_where_bb48449_hid_them(name):
+    """The review's four lines (decoded escapes end a rule's match: the PaaS module answers decoded once it masked
+    ?token=%2Fv) and three more of the same fuzz (a PaaS mask takes the word a rule needs; one letter): bb48449 hid the
+    value, the composition alone shows a part of it, the guard puts the placeholder in. Log records keep the value
+    as bb48449 did."""
+    template, value = SHORT_COUNTEREXAMPLES[name]
+    text = template.format(v=value)
+    old = OLD_DIAGNOSTICS.scrub_line(text)
+    assert not any(window in _visible(old) for window in _short_windows(value)), old
+    assert not {char for char in unquote(value) if char in LETTERS} & set(_visible(old)), old
+    plain = PLAIN['child'](text)
+    assert _short_shown(plain, old, value) or _letters_shown(plain, old, value), plain
+    assert diagnostics.scrub_line(text) == log_redaction.AMBIGUOUS
+    for place, (ha, paas, before) in PLACES.items():
+        shown = ha(text)
+        assert not _short_shown(shown, before(text), value) and not _letters_shown(shown, before(text), value), place
+        assert not _short_shown(shown, paas(text), value), place
+
+
+@pytest.mark.parametrize('line, expected', [
+    ('GET /a%2Fxy?token=%2Fxy', 'GET /a/xy?token=[REDACTED]'),
+    ('GET /api/x?q=a%20b&token=%2Fv', 'GET /api/x?q=a b&token=[REDACTED]'),
+    ('POST /x?redirect=%2Fhome%2Fxy&access_token=%2Fxy 200', 'POST /x?redirect=/home/xy&access_token=[REDACTED] 200'),
+    ('url http://u:pw@h.invalid/a%2Fb?token=%2F1', 'url http://[REDACTED]@h.invalid/a/b?token=[REDACTED]'),
+])
+def test_child_lines_the_paas_module_answers_decoded_stay_readable(line, expected):
+    """The PaaS module answers these decoded (it masked a value only decoding shows), and the decoded text has what a
+    hidden value has (/x, /xy): the rules alone show that text too once decoded, so the guard keeps the line."""
+    assert diagnostics.scrub_line(line) == expected
+
+
+_SHORT_SEPARATORS = ('!', '*', '~', '.', '$', ':', '@', '&', '#', '?', ';', '=', '/', '+', ',', "'", '"', '%20',
+                     '%2C', '%3B', '%26', '%40', '%2F', '%3A', '%23', '%2B', '%22', '%27', '%3F', '%3D', '%5C', '%2520')
+_SHORT_TEMPLATES = ('password={v}', 'password: {v}', '"password": "{v}"', 'Bearer {v}', 'Basic {v}',
+                    'url http://user:{v}@h.invalid/x', 'url http://{v}@h.invalid/x', 'api_key={v}', 'secret={v}',
+                    'token={v}', 'key={v}', 'cookie: {v}', 'db_password = {v}', 'Authorization: Bearer {v}',
+                    'x-api-key: {v}', '/private_{v}/mcp', 'GET /private_{v} HTTP/1.1', 'url /x/private_{v}',
+                    '"/private_{v}"', "'/private_{v}'")
+# what makes the PaaS module answer decoded, and what it masks next to (or inside) a value
+_SHORT_TRIGGERS = ('', ' /x?token=%2Fv', ' ?access_token=ya29.a0Af%2Fxyz', ' then /x?a=1&token=%2F1', ' /x?sig=a%2Fb',
+                   '&key=', '&key=@h.invalid/x', '?token=abc', '?token=a%2Fb', ';access_token=', '#', '&', '?',
+                   '/x?key=%2F', ' GET /private_abc%2Fdef/mcp', '&password=%2Fz', '?token=', '%20?token=%2Fv')
+
+
+def _short_line(rng: random.Random) -> tuple:
+    parts = []
+    for _ in range(rng.randint(2, 5)):
+        parts += [''.join(rng.choice(LETTERS) for _ in range(rng.randint(1, 3))), rng.choice(_SHORT_SEPARATORS)]
+    value = ''.join(parts[:-1])
+    template, trigger, where = rng.choice(_SHORT_TEMPLATES), rng.choice(_SHORT_TRIGGERS), rng.random()
+    if where < .4:
+        return value, template.format(v=value) + rng.choice((' ', '', '/', '?', '&')) + trigger
+    if where < .8:
+        return value, trigger + rng.choice((' ', '', '/', '?', '&')) + template.format(v=value)
+    cut = rng.randint(0, len(value))  # the trigger inside the value
+    return value, template.format(v=value[:cut] + trigger + value[cut:])
+
+
+@pytest.mark.parametrize('seed', [20261115, 20261116])
+def test_short_values_never_show_what_bb48449_or_the_pinned_paas_module_hides(seed):
+    """A value of 1 to 3 letter runs between literal and encoded separators, in bb48449's rule shapes, next to (or
+    around) what makes the PaaS module decode or mask: where bb48449 hid every window of it, no window shows in any
+    place; nor more than the pinned PaaS module shows. The composition without the guard shows some (bite)."""
+    rng = random.Random(seed)
+    hidden, plain_shown, regressed, worse = Counter(), Counter(), [], []
+    for _ in range(1500):
+        value, text = _short_line(rng)
+        for place, (ha, paas, old) in PLACES.items():
+            before = old(text)
+            if any(window in _visible(before) for window in _short_windows(value)):
+                continue  # bb48449 shows a part of it here
+            hidden[place] += 1
+            shown = ha(text)
+            if _short_shown(shown, before, value):
+                regressed.append((place, text))
+            if _short_shown(shown, paas(text), value):
+                worse.append((place, text))
+            plain_shown[place] += bool(_short_shown(PLAIN[place](text), before, value))
+    assert not regressed, regressed[:5]
+    assert not worse, worse[:5]
+    assert min(hidden.values()) >= 200 and plain_shown['child'] >= 20, (hidden, plain_shown)
 
 
 # ---------------------------------------------------------------------------

@@ -22,13 +22,14 @@ The composition never shows more than the PaaS module alone (the HA rule only re
 HA rule alone hides: the PaaS module answers with the decoded text once a decoded-text rule masked something, and
 the HA rule then stops at a space or quote that the text spelled as an escape; its query value can also end at a # or
 & inside what the HA rule takes as one secret path. shows_hidden() checks every result against the HA rule alone on
-the same text, and such a result becomes log_redaction.AMBIGUOUS (fail closed) instead.
+the same text, and such a result becomes log_redaction.AMBIGUOUS (fail closed) instead. It compares runs of letters
+and digits and, since the HM-02 review, windows of 2 or 3 characters of any kind, which a short value between
+symbols needs (a password, user:pw).
 """
 from __future__ import annotations
 
 import logging
 import re
-from urllib.parse import unquote
 
 from . import log_redaction
 
@@ -54,10 +55,17 @@ def leaks(text: str) -> bool:
 # that redact_secrets() still replaces (MIN_SECRET below).
 PIECE = 4
 _RUN = re.compile(r"[A-Za-z0-9_-]{%d,}" % PIECE)
+# HM-02 review (MF-1): a value of short runs between symbols (x7!Kq!9z, u:p q r) has no run of PIECE characters. The
+# finer pieces are windows of any characters, 2 or 3 in a row, all but one of them letters or digits.
+WINDOWS = (2, 3)
 _ESCAPE = re.compile(r"%[0-9A-Fa-f]{2}")
-_SCAN_BUDGET = 1 << 22  # characters of substring search; above it, one pass over the pieces of what was hidden
+_SCAN_BUDGET = 1 << 22  # characters of substring search; above it, the set of every piece instead
 # the PaaS module's own words, not shown pieces of anything
 _PLACEHOLDERS = re.compile(re.escape(log_redaction.AMBIGUOUS) + r"| \u2026\[truncated \d+ chars\]")
+# what a mask puts in place of a value (the HA rules' [REDACTED], the PaaS module's *** and its own words): the text
+# between two masks is what a result shows
+_MASKS = re.compile(r"\[REDACTED\]|\*\*\*|" + _PLACEHOLDERS.pattern)
+_VALUE_CHAR = re.compile(r"[^\W_]")  # a letter or a digit
 
 
 def apply_rules(text: str, rules=PATH_RULES):
@@ -70,12 +78,14 @@ def apply_rules(text: str, rules=PATH_RULES):
 
 
 def _forms(text: str) -> list:
-    """text as written and, if it has a percent escape, decoded as many rounds as the PaaS module decodes."""
+    """text as written and, if it has a percent escape, decoded as many rounds as the PaaS module decodes, with its
+    own decoder: log_redaction._unquote gives the text urllib.parse.unquote(errors="replace") gives, in C (the stdlib
+    one made the guard 4 to 6.5 times slower than the PaaS module on a line of deep escapes and many lone %)."""
     decoded = text
     for _ in range(log_redaction.MAX_DECODE_ROUNDS):
         if _ESCAPE.search(decoded) is None:
             break
-        decoded = unquote(decoded, errors="replace")
+        decoded = log_redaction._unquote(decoded)
     return [text] if decoded == text else [text, decoded]
 
 
@@ -86,22 +96,60 @@ def _pieces(texts):
                 yield run[start:start + PIECE]
 
 
+def _windows(texts, size: int) -> set:
+    """Every ``size`` characters in a row of texts."""
+    found = set()
+    for text in texts:
+        found.update([text[start:start + size] for start in range(len(text) - size + 1)])
+    return found
+
+
+def _parts(texts) -> set:
+    """The parts of texts between their masks: what they show."""
+    return {part for text in texts for part in _MASKS.split(text) if part}
+
+
+def _not_shown(found: set, parts: set, joined: str, every) -> set:
+    """found without what parts (joined: the parts with a line break between them) show: a substring search for each
+    within _SCAN_BUDGET, else taking away every(parts)."""
+    if len(found) * len(joined) > _SCAN_BUDGET:
+        return found - set(every(parts))
+    return {item for item in found
+            if ((not any(item in part for part in parts)) if "\n" in item else (item not in joined))}
+
+
 def shows_hidden(original: str, shown: str, rules=PATH_RULES) -> bool:
-    """True when shown has PIECE characters in a row (as written or decoded) of a value that ``rules`` alone, applied
-    to original, replace and do not show anywhere else. Linear in the length of the texts, keeping only the pieces of
-    shown: original counts up to the PaaS module's own limit (log_redaction.MAX_REDACT_CHARS), which also bounds
-    what the PaaS module shows of it."""
+    """True when shown (as written or decoded) has a piece of a value that ``rules`` alone, applied to original,
+    replace and do not show anywhere else (as written or decoded): PIECE letters, digits, _ or - in a row, or (HM-02
+    review MF-1) a window of WINDOWS characters of any kind, all but one of them letters or digits, which a value of
+    short runs between symbols needs (x7!Kq!9z next to ?token=%2Fv, which the PaaS module answers decoded, shows Kq!9z
+    once the password rule stops at the decoded space; in &key=cookie: H;L the PaaS module masks key=cookie:, and the
+    assignment rule no longer sees cookie:). The composition only takes text away (masks) or decodes it, so such a
+    piece is text the rules alone hide; only the parts of shown (between its masks) that the rules alone do not show
+    as they are have pieces to check. Linear in the length of the texts: original counts up to the PaaS module's own
+    limit (log_redaction.MAX_REDACT_CHARS), which also bounds what the PaaS module shows of it."""
     alone, replaced = apply_rules(original[:log_redaction.MAX_REDACT_CHARS], rules)
     if shown == alone or not replaced:
         return False
-    candidates = set(_pieces(_forms(_PLACEHOLDERS.sub(" ", shown))))
-    candidates.difference_update(_pieces(_forms(alone)))  # what rules alone show too may stay
-    if not candidates:
+    alone_parts = _parts(_forms(alone))
+    new = _parts(_forms(shown)) - alone_parts  # a part the rules alone show as it is shows nothing they hide
+    if not new:
         return False
-    hidden = "\n".join(form for value in replaced for form in _forms(value))  # a newline ends every run
-    if len(candidates) * len(hidden) <= _SCAN_BUDGET:
-        return any(piece in hidden for piece in candidates)
-    return any(piece in candidates for piece in _pieces((hidden,)))
+    joined, hidden = "\n".join(alone_parts), None
+    kinds = [(_pieces, 0)] + [(lambda texts, size=size: _windows(texts, size), size - 1) for size in WINDOWS]
+    for every, letters in kinds:
+        found = _not_shown(set(every(new)), alone_parts, joined, every)
+        found = {item for item in found if len(_VALUE_CHAR.findall(item)) >= letters}
+        if not found:
+            continue
+        if hidden is None:  # a line break ends every run
+            hidden = "\n".join(_parts(form for value in replaced for form in _forms(value)))
+        if len(found) * len(hidden) <= _SCAN_BUDGET:
+            if any(item in hidden for item in found):
+                return True
+        elif not found.isdisjoint(every((hidden,))):
+            return True
+    return False
 
 
 def scrub_text(text: str, rules=PATH_RULES) -> str:
