@@ -1,7 +1,8 @@
 # 差異來源對照（FEATURE-MATRIX、G6 §5 → 刻意差異表或測試）
 
-> HM-00 產出（2026-11-14）。表由 repo 外的產生器寫出（腳本與輸入的 SHA-256、重產指令見
-> `docs/provenance/ha-multiprofile-HM-00-20261114.md` 第 8 節），「原文」欄逐字取自計畫產物（repo 外）：
+> HM-00 產出（2026-11-14）；2026-11-15 文件同步重產（說明欄的決策狀態、FM-146 的負責片）。表由 repo 外的產生器寫出
+> （重產指令見 `docs/provenance/ha-multiprofile-HM-00-20261114.md` 第 8 節；腳本與輸入的 SHA-256 以 repo 外的
+> `wave0/hm00-check/SHA256SUMS` 為準），「原文」欄逐字取自計畫產物（repo 外）：
 > `FEATURE-MATRIX-zh-TW.md` 第 2 節的「HA 平台差異」欄、`gaps/G6-delivery.md` 第 5 節的「HA 期望值與差異」欄。
 > 對照腳本會重讀來源逐列比對；原文變了、某列對不到差異表或測試、或「—」的列少了結論，就不過。
 > 腳本只驗結構與引用存在；「對到的列說的是不是同一件事」靠人工抽查。
@@ -22,7 +23,7 @@
 | FM-02 | HA 不在預設 state 寫任何鍵（PaaS 會寫空索引） | §8.8 #44；`tests/test_upgrade_zero_rewrite.py`（HM-07） | — |
 | FM-03 | HA Store.load 不檢查擁有者（Hc/config.py:157-162），建議補 uid 檢查（小強化） | `tests/test_profile_store.py`（HM-07） | 補擁有者 uid 檢查是和 PaaS 對齊，不是差異 |
 | FM-04 | Supervisor 還原中途失敗不回滾、finally 仍可能啟動（G3 讀 Supervisor 原始碼） | §8.8 #20；`tests/test_restore_lock.py`（HM-13b） | 守門每一步冪等，中途當掉下次開機重做 |
-| FM-05 | 錯 token 碼 PaaS 403、HA 401／404；索引壞時 HA 拒絕啟動或照跑 503：待決（DQ-12） | §8.8 #1、#25；`tests/test_profile_routing.py`（HM-08） | 索引壞的處理 DQ-12 待定（計畫建議 8081 全部 503、面板照開） |
+| FM-05 | 錯 token 碼 PaaS 403、HA 401／404；索引壞時 HA 拒絕啟動或照跑 503：待決（DQ-12） | §8.8 #1、#25；`tests/test_profile_routing.py`（HM-08） | 索引壞的處理 DQ-12 已定（2026-11-14 21:5x 採用計畫建議）：8081 全部 503（含預設帳號）、面板照開並提供「隔離帳號索引」 |
 | FM-08 | PaaS restore guard 另設 `RESTORE_POLICY_HOLD`（本表補充，見 UC-24）；HA 額外帳號一出生就是 schema 4，不會觸發遷移 | §8.8 #66；`tests/test_owner_defaults.py`（既有） | — |
 | FM-09 | HA 舊映像讀不了新鍵，只能靠「不寫預設 state」達到同樣效果 | §8.8 #44；`tests/test_upgrade_zero_rewrite.py`（HM-07） | — |
 | FM-10 | HA 沒有 `mcp_auth_revoked`／generation，靠 TokenAccess 事件＋重讀，不需補；建立時要不要記歷史：待決（DQ-02） | §8.8 #8；`tests/test_token_history.py`（既有） | DQ-02 採 (a)：建立不記歷史 |
@@ -38,13 +39,13 @@
 | FM-20 | 與負責人 2026-10-15「新安裝全開」衝突，要使用者決定（DQ-02）；`n8n_session` 要不要複製三份報告不一致（CF-05） | `tests/test_profile_store.py`（HM-07）；`tests/test_profile_admin_api.py`（HM-10） | DQ-02 採 (a) 複製預設帳號當下的政策、`n8n_session` 不複製，和 PaaS 相同，不是差異 |
 | FM-22 | PATCH 經 Ingress 要 HAOS 實測（UC-10） | §8.8 #50；`tests/test_profile_admin_api.py`（HM-10） | — |
 | FM-23 | profile_deleted 回呼在 HA 不需要（CF-18）；Supervisor 還原會帶回已刪帳號（FM-79）；停一個子程式約 4 秒、面板請求逾時 25 秒（Hui/api.js:46） | §8.8 #34、#20；`tests/test_profile_admin_api.py`（HM-10） | 每帳號資源都在自己的物件裡，不需要 profile_deleted 回呼；停一個子程式約 4 秒，在面板 25 秒逾時內 |
-| FM-24 | 刻意比 PaaS 嚴；PaaS 要不要回補另議（DQ-15） | §8.8 #34 | — |
+| FM-24 | 刻意比 PaaS 嚴；PaaS 要不要回補另議（DQ-15） | §8.8 #34 | DQ-15 已定（依 DQ-40 (a)，照計畫 §5.3 第 7 點）；給 PaaS 的回補建議由 HM-29 整理 |
 | FM-25 | HA 多半沒有 cgroup 與 CPU 上限、和 HA Core 共用主機；OOM 時整個 add-on 被殺、所有帳號一起斷（未實機確認，UC-15） | §8.8 #19、#15 | OOM 可能先殺管理程序，寫進已知限制（threat-model.md） |
 | FM-26 | 原因集合依 HA 容量設計（FM-25） | §8.8 #19、#51 | — |
 | FM-27 | 錯 token 維持 HA 404（PaaS 403），驗收期望值要改；HA 每請求重讀 N 份 state（FM-14） | §8.8 #1、#46 | — |
 | FM-28 | PaaS 沒有這條路，文件要寫明是 HA 差異；HA 文件「Claude.ai 無法帶 Authorization」已過時（R07 X-06） | §8.8 #2 | 過時的「Claude.ai 不能帶標頭」由 HM-18 更正 `docs/operations/clients.md` |
 | FM-29 | PaaS 轉送用戶端其他標頭（含 `x-n8n-*`，上游可能據此換後端，G5-13，PaaS 側未實測 UC-16）；HA 白名單應保留 | §8.8 #4 | — |
-| FM-30 | 回應碼待決（DQ-09）：G2 建議 503 `{"error":"state unavailable"}`，G3 認為也可維持 404／401 | `tests/test_profile_routing.py`（HM-08） | 撞號 503 和 PaaS 相同；DQ-09 待定（計畫建議 503） |
+| FM-30 | 回應碼待決（DQ-09）：G2 建議 503 `{"error":"state unavailable"}`，G3 認為也可維持 404／401 | `tests/test_profile_routing.py`（HM-08） | 撞號 503 和 PaaS 相同；DQ-09 已定（2026-11-14 21:5x 採用計畫建議） |
 | FM-33 | 錯 token 碼 HA 404／401（PaaS 403） | §8.8 #1 | — |
 | FM-34 | 正式映像是否同樣留 traceback：未確認（UC-05） | `tests/test_gateway_stream_endings.py`（HM-14） | 標頭後補 `-32005`、不把例外丟給 uvicorn；UC-05 由這個測試在映像外證明 |
 | FM-35 | n8n MCP Client Tool 是否支援 Streamable HTTP：未確認（UC-07） | §8.8 #6 | — |
@@ -79,7 +80,7 @@
 | FM-77 | 這是「HA 加強」不是 PaaS 對齊（CF-06）；HA bridge 網路下 loopback 只會連到 add-on 自己；目前只有 HA 管理員能改後端網址（設定錯誤與縱深防禦，不是越權） | §8.8 #39 | — |
 | FM-79 | A 依賴 Supervisor 以 root copytree 的實作細節（失效時退回復活；誤判只會多撤銷）；用舊映像的備份還原時無法保護；整機遷移後全部網址要重發 | §8.8 #20、#21、#69；`tests/test_restore_detection.py`（HM-13a） | — |
 | FM-80 | HA 看不到還原前狀態，只能事前匯出或事後核對 | §8.8 #58；`tests/test_restore_review.py`（HM-13c） | — |
-| FM-81 | 新動作名會改 schema、影響降版（FM-09），所以用 rotate；Nextcloud 是否比照：PaaS 沒做、待決（DQ-05）；「先提交再停」之間新 token 會不會打到舊子程式：未確認（UC-21） | §8.8 #40、#59；`tests/test_odoo_identity_rotation.py`（HM-12） | UC-21 由這個測試確認（先停再提交） |
+| FM-81 | 新動作名會改 schema、影響降版（FM-09），所以用 rotate；Nextcloud 是否比照：PaaS 沒做、待決（DQ-05）；「先提交再停」之間新 token 會不會打到舊子程式：未確認（UC-21） | §8.8 #40、#59；`tests/test_odoo_identity_rotation.py`（HM-12） | UC-21 由這個測試確認（先停再提交）；DQ-05 已定（依 DQ-40 (a)，照計畫 §9）：Nextcloud 換 url／username、Hermes 換 gateway_url／dashboard_url／dashboard_username 也換 token |
 | FM-82 | 同庫多帳號時 Odoo 端負載＝帳號數×每帳號並行；主機 CPU 共用 | §8.8 #60；`tests/test_odoo_multi_profile.py`（HM-12） | — |
 | FM-83 | PaaS「沒存 methods 時全帳號共用容器 env」在 HA 不適用（隔離更好） | §8.8 #61 | — |
 | FM-84 | PaaS「兩種 429」只適用 PaaS；HA 監控要用閘道自己的訊號 | §8.8 #62 | — |
@@ -209,6 +210,6 @@
 | FM-137 | 看門狗退避 | §8.8 #14；`tests/test_profile_lifecycle.py`（HM-09） | DQ-20 採 (b) |
 | FM-138 | 生命週期 log | 照 PaaS；§8.8 #29；`tests/test_profile_lifecycle.py`（HM-09） | 事件、`[profile= port= pid=]` 格式、每帳號每情況 60 秒一行照 PaaS；HA 只寫 id 前 8 碼、紀錄在 add-on log，見 #29 |
 | FM-145 | 預設帳號的收據 key 不變 | 照 PaaS；`packages/mcp-admin-ui/tests/browser/profiles.spec.mjs`（HM-11） | `get()` 兩種格式都收 |
-| FM-146 | Store 發佈前的非 PR run | §8.8 #73 | 升版步驟加確認（HM-17、升版片） |
+| FM-146 | Store 發佈前的非 PR run | §8.8 #73 | 升版步驟加確認（計畫 §11.3 第 9、11 步）：Odoo 由 HM-19a、HM-19b 做（計畫 §17），其他產品由各自的升版 PR 做；HM-17 只做發版基礎（FM-104），沒有對應的程式 |
 | FM-152 | 改來源要重填秘密 | §8.8 #41；`tests/test_new_origin_secret.py`（HM-12） | DQ-40 ⑨ |
 | FM-153 | 換身分換 token | §8.8 #40；`tests/test_odoo_identity_rotation.py`（HM-12） | DQ-40 ⑩ |
