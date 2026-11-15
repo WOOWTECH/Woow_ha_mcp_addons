@@ -76,12 +76,14 @@ manifest `backup: cold`：HA 會停止**這個新 Add-on**來取得一致狀態�
 | 項目 | 行為 |
 |---|---|
 | 觸發條件 | 既有 `/data/mcp` 本身屬 root（0:0），且 bootstrap 以 root 執行；其他擁有者照舊拒絕 |
+| 還原標記（多帳號 HM-13a 起） | 觸發條件成立時，第一遍檢查之前先建空檔 `/data/mcp/.restore-detected`（0600）並寫入磁碟；已存在、而且是單一連結的一般檔就保留原樣。修復時它和其他項目一起改成 10001／0600。之後的版本會讀它、處理完再刪；在那之前它會一直留著，之後的備份也會帶著它 |
+| 建不出標記 | log 一行，括號裡是原因：errno 名稱（例如 `ENOSPC`、`EROFS`、`EIO`），或 `name in use`（名稱被目錄、連結或有第二個連結的檔占用），不含檔案內容或秘密。`/data/mcp` 有帳號資料（`profiles.json` 或 `profiles`）時印 `bootstrap: /data/mcp was restored with profile data but its restore marker (.restore-detected) could not be saved (<原因>); not starting (retried at the next start)`，接著 `bootstrap unavailable; ...`，不改任何項目，下次啟動重試。沒有帳號資料時印 `bootstrap: WARNING: /data/mcp was restored but its restore marker (.restore-detected) could not be saved (<原因>); starting (no profile data)`，照常修復；名稱被連結或有第二個連結的檔占用時，第一遍檢查接著照「拒絕」列拒絕 |
 | 接受的內容 | 只有一般資料夾與單一連結的一般檔，擁有者為 root 或 10001，與 `/data/mcp` 在同一檔案系統 |
-| 上限 | 最多 512 個項目、8 層；列目錄時邊讀邊數，超過立即拒絕 |
+| 上限 | 最多 512 個項目、8 層；列目錄時邊讀邊數，超過立即拒絕。多帳號 HM-13a 起，512 項包含還原標記（新建標記時，還原樹本身最多 511 項） |
 | 描述子 | 修復期間每個核准項目各占一個 descriptor；soft `RLIMIT_NOFILE` 低於 576 時拉到 576（只在修復那次開機；0.1.1 的管理程序會沿用，0.1.2 起修完即還原原值）；hard 低於 576 則拒絕 |
 | 依賴 | 需要容器內的 `/proc`（一般檔經 `/proc/self/fd` 改 owner／mode）；沒有 `/proc` 時拒絕 |
 | 不處理 | ACL、xattr 不檢查也不保留 |
-| 成功 | log 一行 `bootstrap: re-owned N restored entries in /data/mcp`，之後一般啟動（0.1.2 起在 `/data/mcp` 通過最後檢查後才印） |
+| 成功 | log 一行 `bootstrap: re-owned N restored entries in /data/mcp`，之後一般啟動（0.1.2 起在 `/data/mcp` 通過最後檢查後才印；多帳號 HM-13a 起 N 含還原標記） |
 | 中斷 | 每項先改 mode 再改 owner；修到一半中斷時，未完成的項目仍屬 root，下次啟動會再修 |
 | 拒絕 | log `bootstrap unavailable; ...`、app 停在 error。第一遍檢查拒絕時不改任何項目；第二遍途中發現變動時，之前已改的只會是核准過的項目。回報負責人，比對 `/data/mcp` 內容與上表後人工處理，不要放寬權限或手動 chmod 繞過 |
 

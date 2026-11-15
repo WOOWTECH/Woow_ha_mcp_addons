@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import threading
@@ -24,6 +25,7 @@ import httpx
 from denial_probe import assert_denials, WRITE_CASES
 from mcp_admin_core.health import protocol_reply
 from mcp_admin_core.products import ProductStore, PROBES, TOOLS, allowed_address, fresh_write_grants, probe_success
+from mcp_admin_core.profiles import RESTORE_MARKER_NAME as MARKER  # what packaging/entrypoint.py saves (HM-13a)
 
 APP = sys.argv[1]
 ROOT = Path('/opt/woow')
@@ -189,6 +191,52 @@ def fixture_update(**updates):
     return state
 
 
+def restore_as_supervisor():
+    """While stopped: /data/mcp as a Supervisor restore leaves it (multi-profile HM-13a). Supervisor copies the backup's
+    copy in as root and chowns nothing back, so every entry is root's; the 2026-10-05 HA pilot saw files 0644 and the
+    directories below /data/mcp 0755. Only plain directories and single-link files are expected, and no marker yet.
+    Returns the restored names and the state's bytes, for check_restored_start."""
+    entries = [DATA, *sorted(DATA.rglob('*'))]
+    for path in entries:
+        info = os.lstat(path)
+        assert stat.S_ISDIR(info.st_mode) or (stat.S_ISREG(info.st_mode) and info.st_nlink == 1), 'unexpected entry'
+    assert not os.path.lexists(DATA / MARKER), 'restore marker before the restore'
+    for path in entries:
+        os.chown(path, 0, 0)
+        if path != DATA:
+            os.chmod(path, 0o755 if path.is_dir() else 0o644)
+    return [str(path.relative_to(DATA)) for path in entries[1:]], (DATA / 'state.json').read_bytes()
+
+
+def check_restored_start(restored, state):
+    """The start after restore_as_supervisor (ready_listener has checked /data/mcp and state.json): the entrypoint saved
+    its restore marker, and its ownership repair gave the marker and every restored entry back to the runtime user
+    (directories 0700, files 0600); the state is the backup's, byte for byte. The marker stays until the boot gate
+    (multi-profile HM-13b) handles it."""
+    assert os.path.lexists(DATA / MARKER), 'restore marker missing'
+    marker = os.lstat(DATA / MARKER)
+    assert stat.S_ISREG(marker.st_mode) and marker.st_nlink == 1 and marker.st_size == 0, 'restore marker not a marker'
+    assert (marker.st_uid, marker.st_gid, stat.S_IMODE(marker.st_mode)) == (10001, 10001, 0o600), 'marker not private'
+    for name in restored:
+        info = os.lstat(DATA / name)
+        mode = 0o700 if stat.S_ISDIR(info.st_mode) else 0o600
+        assert (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) == (10001, 10001, mode), 'restore not repaired'
+    assert (DATA / 'state.json').read_bytes() == state, 'restored state rewritten'
+
+
+async def restored_start(client):
+    """Multi-profile HM-13a: the real image's first start after a Supervisor restore (entrypoint as root, ownership
+    repair, privilege drop, management process), checked, then stopped again."""
+    restored, state = restore_as_supervisor()
+    process = start()
+    try:
+        await ready_listener(client, process)
+        check_restored_start(restored, state)
+    finally:
+        if process.poll() is None:
+            stop(process)
+
+
 def mock_bind_host(app):
     if app != 'headscale':
         return '127.0.0.1'
@@ -259,6 +307,7 @@ async def run():
                 assert not children(process), 'unconfigured child launched'
             stop(process)
             process = None
+            await restored_start(client)  # multi-profile HM-13a: the start after a Supervisor-style restore
             if APP == 'n8n':
                 state = fixture_update(backend_url=url, backend_key='DUMMY')
                 from n8n_adapter import TOOLS as public_tools

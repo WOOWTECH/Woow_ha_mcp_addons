@@ -209,7 +209,10 @@ class RestoredStateTests(unittest.TestCase):
             with patch.object(e, 'UID', 10001), patch.object(e, 'GID', 10001):
                 with contextlib.redirect_stderr(log):
                     e.prepare_data(root)
-                self.assertEqual(log.getvalue(), 'bootstrap: re-owned 4 restored entries in /data/mcp\n')
+                # The four restored entries and the restore marker saved before pass 1 (multi-profile HM-13a;
+                # its own tests are tests/test_restore_detection.py, run as root by the CI).
+                self.assertEqual(log.getvalue(), 'bootstrap: re-owned 5 restored entries in /data/mcp\n')
+                self.assertTrue((child / e.MARKER).is_file())
                 for path in [child, *child.rglob('*')]:
                     info = path.lstat()
                     self.assertEqual((info.st_uid, info.st_gid), (10001, 10001), path)

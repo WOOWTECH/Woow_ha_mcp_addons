@@ -1,12 +1,17 @@
-"""Headscale's owned backend fixture and bind-address guard; the direct child bearer check (HM-06). Without Docker."""
+"""Headscale's owned backend fixture and bind-address guard; the direct child bearer check (HM-06); the restore stage
+(multi-profile HM-13a). Without Docker or root."""
+import ast
 import asyncio
 import json
+import os
+import stat
 import sys
+import tempfile
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import httpx
 
@@ -14,6 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'packages/mcp-admin-core'), str(ROOT / 'apps/n8n')]
 with patch.object(sys, 'argv', ['container_probe.py', 'headscale']):
     import container_probe as probe
+
+RUNTIME = (10001, 10001)
 
 
 class HeadscaleBackendTests(unittest.TestCase):
@@ -149,6 +156,174 @@ class ChildBearerCheckTests(unittest.TestCase):
                 with self.assertRaises(AssertionError) as failed:
                     self.check()
                 self.assertEqual(str(failed.exception), message)  # a fixed message: never a token
+
+
+class Seen:
+    """A stat result with the owner Owners records."""
+
+    def __init__(self, info, owner):
+        self._info = info
+        self.st_uid, self.st_gid = owner
+
+    def __getattr__(self, name):
+        return getattr(self._info, name)
+
+
+class Owners:
+    """container_probe's os module without root: chown only changes this map, (st_dev, st_ino) -> owner, and lstat
+    reports it; an inode not in it is the runtime user's, as the probe's fixture leaves every entry."""
+
+    def __init__(self):
+        self.owners = {}
+
+    def __getattr__(self, name):
+        return getattr(os, name)
+
+    def chown(self, path, uid, gid):
+        info = os.lstat(path)
+        self.owners[(info.st_dev, info.st_ino)] = (uid, gid)
+
+    def lstat(self, path):
+        info = os.lstat(path)
+        return Seen(info, self.owners.get((info.st_dev, info.st_ino), RUNTIME))
+
+
+class RestoreStageTests(unittest.TestCase):
+    """The restore stage that runs in every release's container acceptance. tests/test_restore_detection.py runs it
+    against the real entrypoint as well (unprivileged, and as root in the CI)."""
+
+    def fixture(self):
+        """/data/mcp as the first, unconfigured start leaves it: the runtime user's state.json and .writer.lock."""
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        data = Path(temporary.name) / 'mcp'
+        data.mkdir(mode=0o700)
+        data.chmod(0o700)  # no setgid bit from a setgid TMPDIR
+        for name, content in (('state.json', b'{"fixture": true}'), ('.writer.lock', b'')):
+            (data / name).write_bytes(content)
+            (data / name).chmod(0o600)
+        return data
+
+    def setUp(self):
+        self.data = self.fixture()
+        self.os = Owners()
+        for patcher in (patch.object(probe, 'DATA', self.data), patch.object(probe, 'os', self.os)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def owner(self, path):
+        info = path.lstat()
+        return self.os.owners.get((info.st_dev, info.st_ino), RUNTIME)
+
+    def test_a_restore_gives_every_entry_to_root_while_stopped(self):
+        (self.data / 'child').mkdir(mode=0o700)
+        (self.data / 'child' / 'leftover').write_bytes(b'')
+        restored, state = probe.restore_as_supervisor()
+        self.assertEqual(restored, ['.writer.lock', 'child', 'child/leftover', 'state.json'])
+        self.assertEqual(state, b'{"fixture": true}')
+        entries = [self.data, *self.data.rglob('*')]
+        self.assertEqual({self.owner(path) for path in entries}, {(0, 0)})
+        self.assertEqual({str(path.relative_to(self.data)): stat.S_IMODE(path.lstat().st_mode) for path in entries},
+                         {'.': 0o700, '.writer.lock': 0o644, 'child': 0o755, 'child/leftover': 0o644,
+                          'state.json': 0o644})
+
+    def test_a_restore_refuses_what_the_fixture_never_holds_before_changing_anything(self):
+        for unexpected in ('a link', 'a second link', 'a marker'):
+            with self.subTest(unexpected=unexpected):
+                path = self.data / (probe.MARKER if unexpected == 'a marker' else 'extra')
+                if unexpected == 'a link':
+                    path.symlink_to('state.json')
+                elif unexpected == 'a second link':
+                    os.link(self.data / 'state.json', path)
+                else:
+                    path.write_bytes(b'')
+                with self.assertRaises(AssertionError):
+                    probe.restore_as_supervisor()
+                self.assertEqual(self.os.owners, {})
+                self.assertEqual(stat.S_IMODE((self.data / 'state.json').lstat().st_mode), 0o600)
+                path.unlink()
+
+    def repaired(self, data):
+        """data restored, then as the entrypoint leaves it: every entry the runtime user's again, and the marker."""
+        restored, state = probe.restore_as_supervisor()
+        self.os.owners.clear()
+        for name in restored:
+            (data / name).chmod(0o600)
+        (data / probe.MARKER).write_bytes(b'')
+        (data / probe.MARKER).chmod(0o600)
+        return restored, state
+
+    def test_the_check_after_the_restore_start_passes_a_repaired_restore(self):
+        probe.check_restored_start(*self.repaired(self.data))
+
+    def test_the_check_after_the_restore_start_needs_the_marker_and_the_repair(self):
+        marker = probe.MARKER
+        changes = {
+            'no marker': lambda data: (data / marker).unlink(),
+            'a root-owned marker': lambda data: self.os.chown(data / marker, 0, 0),
+            'a readable marker': lambda data: (data / marker).chmod(0o644),
+            'a marker with content': lambda data: (data / marker).write_bytes(b'x'),
+            'a marker with a second link': lambda data: os.link(data / marker, data / 'marker-copy'),
+            'a restored entry still root-owned': lambda data: self.os.chown(data / '.writer.lock', 0, 0),
+            'a restored entry still 0644': lambda data: (data / 'state.json').chmod(0o644),
+            'a rewritten state': lambda data: (data / 'state.json').write_bytes(b'{"fixture": false}'),
+        }
+        for label, change in changes.items():
+            with self.subTest(label=label), patch.object(probe, 'DATA', self.fixture()) as data:
+                restored, state = self.repaired(data)
+                change(data)
+                with self.assertRaises(AssertionError):
+                    probe.check_restored_start(restored, state)
+
+    def stage(self, check=None, exited=False):
+        events = []
+        process = Mock(**{'poll.return_value': 1 if exited else None})
+
+        async def ready(client, running):
+            events.append(('ready', client, running))
+
+        def restore():
+            events.append('restore')
+            return ['state.json'], b'S'
+
+        def checked(*args):
+            events.append(('check', *args))
+            if check:
+                raise check
+        with patch.object(probe, 'restore_as_supervisor', restore), \
+             patch.object(probe, 'start', lambda: events.append('start') or process), \
+             patch.object(probe, 'ready_listener', ready), patch.object(probe, 'check_restored_start', checked), \
+             patch.object(probe, 'stop', lambda running: events.append(('stop', running))):
+            try:
+                asyncio.run(probe.restored_start('client'))
+            except AssertionError:
+                events.append('failed')
+        return events, process
+
+    def test_the_restore_happens_while_stopped_then_the_start_is_checked_and_stopped(self):
+        events, process = self.stage()
+        self.assertEqual(events, ['restore', 'start', ('ready', 'client', process), ('check', ['state.json'], b'S'),
+                                  ('stop', process)])
+
+    def test_a_failed_check_still_stops_the_runtime_and_fails(self):
+        events, process = self.stage(check=AssertionError('restore marker missing'))
+        self.assertEqual(events[-2:], [('stop', process), 'failed'])
+        events, process = self.stage(check=AssertionError('restore marker missing'), exited=True)
+        self.assertNotIn(('stop', process), events)  # an exited runtime has nothing to stop
+        self.assertEqual(events[-1], 'failed')
+
+    def test_every_container_acceptance_runs_the_restore_stage_before_configuring(self):
+        # The probe is only run for real by the builder: pin where run() takes the stage, by its source.
+        run = next(node for node in ast.parse(Path(probe.__file__).read_text()).body
+                   if isinstance(node, ast.AsyncFunctionDef) and node.name == 'run')
+        named = (node for node in ast.walk(run) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name))
+        calls = sorted(named, key=lambda node: (node.lineno, node.col_offset))
+        names = [node.func.id for node in calls]
+        self.assertEqual(names.count('restored_start'), 1)
+        self.assertLess(names.index('stop'), names.index('restored_start'))
+        self.assertLess(names.index('restored_start'), names.index('fixture_update'))
+        awaited = [node.value for node in ast.walk(run) if isinstance(node, ast.Await)]
+        self.assertIn(calls[names.index('restored_start')], awaited)
 
 
 if __name__ == '__main__':
