@@ -37,7 +37,8 @@ jobs:
     name: checks
     runs-on: ubuntu-24.04
     # The full browser + Python source gate reached 95% at the old 30 minute limit on PR #76.
-    timeout-minutes: 40
+    # 2026-11-15 (DQ-43): PR #99 took 2079 s of the 40 minute limit; raised to 60 until the job is split.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
