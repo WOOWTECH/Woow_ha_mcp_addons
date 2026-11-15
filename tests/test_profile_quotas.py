@@ -3,11 +3,13 @@ profile's included (multi-profile plan 5.2; contract 2.4, 4.2, 5; invariant I8; 
 FM-49, 50, 149, 150).
 
 Once a product is switched on, the dispatcher admits a request of a profile before its body is read (64 for the
-default profile, 32 for each additional one), charges what is read of it to the profile's byte budget (64 MiB each:
-max(the declared Content-Length, at most MAX_REQUEST, and the bytes read so far)) until the profile's app starts its
-answer, and caps the profile's open GET streams (24, 8). Each profile's app has its own forwarding slots (32, 16; one
-second's wait) and its own child client (40, 24 connections). No pool is shared: one profile's requests never take
-another profile's slots or bytes.
+default profile, 32 for each additional one), charges it to the profile's byte budget (64 MiB each: max(the declared
+Content-Length, at most MAX_REQUEST, the bytes read so far, the size its app forwards to the child)) until the request
+ends (HM-08 review MF-1, S-1: an event stream's headers come before the tool runs, and the gateway's forwarded copy of
+the body, re-serialized with ASCII escapes, stays referenced until the stream ends), and caps the profile's open GET
+streams (24, 8). Each profile's app has its own forwarding slots (32, 16; one second's wait) and its own child client
+(40, 24 connections). No pool is shared (the refusal allowance aside): one profile's requests never take another
+profile's slots or bytes.
 
 The busy answers follow the PaaS table (docs/mcp-gateway-limits.md "超過上限時用戶端拿到什麼", woow-mcp-server 69ac425,
 unchanged at cf3d0d5) with HA's one deviation (plan 8.8 #16): a request refused before its body is read is read with the
@@ -22,7 +24,9 @@ time; the default profile's attack (C1-M5) and the real-socket starvation cases 
 """
 import asyncio
 from dataclasses import replace
+import gc
 import json
+import secrets
 
 import httpx
 import pytest
@@ -32,8 +36,8 @@ from multi_profile_runtime import (Children, RealChild, create_profile, ids, mul
 from mcp_admin_core import gateway, profiles
 from mcp_admin_core.products import PROBES
 from test_profile_runtime import ProfileChild
-from test_single_profile_golden import (ACCEPT, GENUINE_CLIENT, answer, configure, initialize_message, probe_name,
-                                        settle)
+from test_single_profile_golden import (ACCEPT, BEARER_REQUIRED, GENUINE_CLIENT, NOT_FOUND, answer, configure,
+                                        initialize_message, probe_name, settle)
 
 pytestmark = pytest.mark.usefixtures('log_scan')
 PRODUCT = 'odoo'
@@ -486,8 +490,11 @@ async def test_a_saturated_profile_does_not_starve_an_idle_one_on_real_sockets(t
     """G2's S5 and S6 on the real listener (uvicorn, h11) with real loopback children and every profile's own real
     httpx client: the default profile holds its 32 forwarding slots and B its 16 (S5: one shared pool of 40 left C
     waiting 3 s for a 502) and then the default profile fills its admission with 64 slow bodies (S6: 63 of the 64
-    listener places left C a 503): C is answered at once, and the default profile's next request gets its own busy
-    answer."""
+    listener places left C a 503): C gets its result at once (not a busy answer: one with an id is 200 too), and the
+    default profile's next request gets its own busy answer. This proves the isolation per request: the listener's
+    connections (64 + 32 x the product's limit, idle keep-alive ones and those of clients without a token included) are
+    one bound of the whole add-on, and a full listener answers uvicorn's plain-text 503 to anyone (HM-08 review S-5;
+    known since G2 S7, out of the plan's scope)."""
     data = tmp_path / 'data'
     configure(data, PRODUCT)
     layout = profiles.Layout(data)
@@ -538,7 +545,9 @@ async def test_a_saturated_profile_does_not_starve_an_idle_one_on_real_sockets(t
                      retry_after=5, ident=201)
                 started = loop.time()
                 response = await client.post('/mcp', headers=headers(C), json=call(202))
-                assert response.status_code == 200 and loop.time() - started < 1, 'S6: the idle profile waited'
+                # A busy answer with an id is 200 too: C must get its result, not -32003 (HM-08 review MF-2).
+                assert response.status_code == 200 and 'result' in response.json(), 'S6: the idle profile was refused'
+                assert loop.time() - started < 1, 'S6: the idle profile waited'
                 for child in real.values():
                     child.release()
                 assert all(response.status_code == 200 for response in await drain(held))
@@ -552,6 +561,141 @@ async def test_a_saturated_profile_does_not_starve_an_idle_one_on_real_sockets(t
             writer.close()
         for child in real.values():
             await child.stop()
+
+
+# ---- what the gateway holds while an answer streams (HM-08 review MF-1, S-1) ----
+
+class StreamingChild(ProfileChild):
+    """A ProfileChild that answers a large POST (over 64 KiB: the tests' long tools/list cursors) as an mcp 2.3.0 child
+    answers a request by default (is_json_response_enabled=False; FastMCP 4.1.3's json_response=False): the event
+    stream's headers at once, the reply only once free is set. It keeps nothing of those requests but their sizes (the
+    test double must hold no reference to them)."""
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.free = asyncio.Event()
+        self.sizes = []
+
+    async def __call__(self, request):
+        if request.method != 'POST' or len(request.content) <= 64 * 1024:
+            return await super().__call__(request)
+        token = json.loads(self.state.read_text())['child_token']
+        assert request.headers.get_list('authorization') == ['Bearer ' + token]
+        ident, free = json.loads(request.content)['id'], self.free
+        self.sizes.append(len(request.content))
+
+        async def reply():
+            yield b': working\n\n'
+            await free.wait()
+            yield b'data: ' + json.dumps({'jsonrpc': '2.0', 'id': ident, 'result': {'tools': []}}).encode() + b'\n\n'
+        return httpx.Response(200, headers={'content-type': 'text/event-stream'}, content=reply())
+
+
+def forwarded_bodies(port):
+    """The bodies over 64 KiB the gateway built for the child on port that are still referenced (an httpx.Request keeps
+    its content, and the child's response keeps its request): (how many, their bytes). The test client's own requests
+    (to http://mcp) are not counted."""
+    gc.collect()
+    sizes = [len(item._content) for item in gc.get_objects()
+             if isinstance(item, httpx.Request) and item.url.host == '127.0.0.1' and item.url.port == port
+             and len(getattr(item, '_content', None) or b'') > 64 * 1024]
+    return len(sizes), sum(sizes)
+
+
+@pytest.mark.parametrize('text,streams,refused', [('x', 4, 503), ('中', 2, 503), ('\U0001F600', 1, 200)],
+                         ids=['ascii', 'cjk', 'emoji'])
+async def test_an_event_stream_keeps_its_bytes_charged_until_it_ends(tmp_path, log_scan, monkeypatch, text, streams,
+                                                                     refused):
+    """A child answers a request with an event stream whose headers come before its tool runs, and the gateway's
+    forwarded copy of the body stays referenced until the stream ends (HM-08 review MF-1: E1 found 192 MiB held for an
+    additional profile and 480 MiB for the default one while the dispatcher counted 0). So a request stays charged until
+    it ends, and it is charged the larger of what was read and what is forwarded: the gateway re-serializes the body
+    with ASCII escapes, a CJK character (3 UTF-8 bytes) as 6 bytes, an emoji (4) as 12 (review S-1).
+
+    B's budget is 4 MiB here (64 MiB in the add-on). Its token holder sends 1 MiB requests one after another, each once
+    the previous one's stream has started: whatever the text, the forwarded bodies the gateway still holds never pass
+    the budget, and the charge always covers them. ASCII: 4 streams, the fifth is refused before a byte is read (503:
+    over 64 KiB). CJK, forwarded as 2 MiB: 2 streams. Emoji, forwarded as 3 MiB: 1 stream; the next one fits as read but
+    not as forwarded, so it is refused once read: 200 + -32003 under its id, never sent to the child. When the streams
+    end, every byte is given back and no forwarded body is left."""
+    budget = 4 * MiB
+    monkeypatch.setattr(profiles, 'EXTRA_PROFILE_QUOTA', replace(profiles.EXTRA_PROFILE_QUOTA, body_bytes=budget))
+    data = setup(tmp_path, extras=(B,))
+    children = Children()
+    children.add(3000, StreamingChild('default', PRODUCT, data))
+    child = children.add(18000, StreamingChild('pbeta', PRODUCT, profiles.Layout(data).profile(B)))
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data)
+        gate = runtime.gate(B)
+        assert gate.quota.body_bytes == budget
+        token = runtime.token(B)
+        text_bytes = len(text.encode())
+        async with runtime.mcp(timeout=60) as client:
+            headers = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token),
+                       'Content-Type': 'application/json'}
+
+            def body(ident):  # about 1 MiB as received (UTF-8)
+                cursor = text * ((MiB - 100) // text_bytes)
+                return json.dumps({'jsonrpc': '2.0', 'id': ident, 'method': 'tools/list', 'params': {'cursor': cursor}},
+                                  ensure_ascii=False).encode()
+            tasks, answers = [], {}
+            for ident in range(1, 9):
+                task = asyncio.create_task(client.post('/mcp', headers=headers, content=body(ident)))
+                tasks.append(task)
+                before = len(child.sizes)
+                await until(lambda: len(child.sizes) == before + 1 or task.done(), 30)
+                if task.done():
+                    answers[ident] = task.result()
+                held, held_bytes = forwarded_bodies(18000)
+                assert held_bytes <= gate.body_bytes <= budget, (ident, held_bytes, gate.body_bytes)
+            assert len(child.sizes) == streams and sorted(answers) == list(range(streams + 1, 9))
+            held, held_bytes = forwarded_bodies(18000)
+            assert held == streams and held_bytes == sum(child.sizes)  # every open stream still holds its body
+            factor = {1: 1, 3: 2, 4: 3}[text_bytes]  # forwarded size / received size
+            assert all(factor * (MiB - 200) < size <= factor * MiB for size in child.sizes), child.sizes
+            for ident, response in answers.items():
+                busy(response, status=refused, retry_after=5, ident=ident if refused == 200 else None,
+                     text=router().bytes_text(budget))
+            child.free.set()
+            for task in tasks[:streams]:
+                response = await task
+                assert response.status_code == 200 and 'result' in response.text
+            await until(lambda: gate.active == 0 and gate.body_bytes == 0)
+        del tasks, answers, task
+        assert forwarded_bodies(18000) == (0, 0)
+        assert len(child.sizes) == streams  # a refused body never reached the child
+
+
+async def test_a_wrong_token_takes_no_admission_and_gets_todays_answer(tmp_path, log_scan):
+    """A token no profile holds (no match) takes no admission and reads no body: its request goes to the default
+    profile's app untouched, so even while all 64 of the default profile's admission places are taken its answer is
+    today's 404 (secret path) or 401 (Bearer), byte for byte, never a busy answer (contract 2.3; HM-08 review S-3,
+    mutation R01)."""
+    data = setup(tmp_path, extras=(B,))
+    children = holding_children(data, extras=(B,))
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data)
+        gate = runtime.gate('default')
+        limit = gate.quota.admission
+        assert limit == profiles.DEFAULT_PROFILE_QUOTA.admission == 64
+        token = runtime.token('default')
+        unknown = secrets.token_urlsafe(32)  # held by nobody (made at run time)
+        log_scan.watch(unknown)
+        opened = asyncio.Event()
+        async with runtime.mcp() as client:
+            held = [asyncio.create_task(client.post('/mcp', headers={**bearer(token), 'Content-Type': 'application/json'},
+                                                    content=slow_body(b'{"jsonrpc":"2.0",', opened,
+                                                                      b'"id":1,"method":"ping"}')))
+                    for _ in range(limit)]
+            await until(lambda: gate.active == limit)
+            for path, headers in (('/mcp', bearer(unknown)), (f'/private_{unknown}/mcp', dict(ACCEPT))):
+                response = await client.post(path, headers=headers, json=initialize_message())
+                assert answer(response) == (NOT_FOUND if path.startswith('/private_') else BEARER_REQUIRED)
+            assert gate.active == limit
+            opened.set()
+            await drain(held)
+            await until(lambda: gate.active == 0 and gate.body_bytes == 0)
+        assert not [line for line in warnings_of(log_scan) if 'profile=default' in line]  # nothing was refused
 
 
 # ---- what each profile gets, what is given back ----
@@ -582,9 +726,10 @@ async def test_every_profile_has_its_own_child_client(tmp_path, log_scan):
 
 async def test_admission_bytes_and_streams_are_given_back_however_a_request_ends(tmp_path, log_scan):
     """Every way a request ends gives back what it held (PaaS test_slots_are_returned_on_transport_errors_and_
-    cancellation, test_already_read_response_returns_its_slot_at_once): an answer, an answer of the gateway's own
-    (502 when the child cannot be reached), a refusal of the app (400, 403, 405, 415), a client that is cancelled
-    while its body is read or while its call waits, a stream that ends."""
+    cancellation): an answer, an answer of the gateway's own (502 when the child cannot be reached), a refusal of the
+    app (400, 403, 405, 415), a client that is cancelled while its body is read or while its call waits, a stream that
+    ends. A request's bytes are given back when it ends, not when its answer starts (HM-08 review MF-1: PaaS
+    test_already_read_response_returns_its_slot_at_once is about connection slots; PaaS has no byte budget)."""
     data = setup(tmp_path, extras=(B,))
     children = holding_children(data, extras=(B,))
     async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
@@ -624,14 +769,16 @@ async def test_admission_bytes_and_streams_are_given_back_however_a_request_ends
             child.holding_all = False
             stream = asyncio.create_task(client.get('/mcp', headers=headers))
             await until(lambda: gate.streams == 1)
-            # A tools/call answered as an event stream: its bytes are given back once the answer starts (the body is no
-            # longer held: PaaS test_already_read_response_returns_its_slot_at_once), its admission when it ends.
+            # A tools/call answered as an event stream: its bytes stay charged, as its admission, until the stream ends
+            # (HM-08 review MF-1: the answer's headers come before the tool runs, and the gateway's forwarded copy of the
+            # body stays referenced until the end), the larger of what was read and what was forwarded.
             child.streaming = True
             body = json.dumps(call(5)).encode()
             answered = asyncio.create_task(client.post('/mcp', headers={**headers, 'Content-Type': 'application/json'},
                                                        content=body))
-            await until(lambda: gate.active == 2 and gate.body_bytes == 0 and child.requests
-                        and child.requests[-1].method == 'POST')
+            await until(lambda: gate.active == 2 and child.requests and child.requests[-1].method == 'POST')
+            await asyncio.sleep(.05)  # the stream has started: nothing is given back before it ends
+            assert gate.body_bytes == max(len(body), len(child.requests[-1].content)) > 0
             assert gate.streams == 1
             child.free.set()
             assert (await stream).status_code == 200

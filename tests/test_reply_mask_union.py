@@ -32,16 +32,22 @@ UNHELD = 'U' * 21 + 'n' * 22  # token-shaped, 43 characters, held by nobody: nev
 
 
 class EchoChild(ProfileChild):
-    """A ProfileChild whose tools/calls answer `text` (as JSON, or as one SSE event when sse is set), and whose
-    readiness probe, when probe_error is set, fails with that text as the backend's error."""
+    """A ProfileChild whose tools/calls answer `text` (as JSON, or as one SSE event when sse is set), whose readiness
+    probe, when probe_error is set, fails with that text as the backend's error, and whose initialize, when
+    initialize_error is set, answers a JSON-RPC error carrying that text (its message and data)."""
 
     def __init__(self, *args):
         super().__init__(*args)
         self.sse = False
         self.probe_error = None
+        self.initialize_error = None
 
     async def __call__(self, request):
         message = json.loads(request.content) if request.content else {}
+        if self.initialize_error is not None and message.get('method') == 'initialize':
+            self.requests.append(request)
+            return httpx.Response(200, json={'jsonrpc': '2.0', 'id': message['id'], 'error': {
+                'code': -32603, 'message': self.initialize_error, 'data': {'detail': self.initialize_error}}})
         response = await super().__call__(request)
         if message.get('method') != 'tools/call' or response.status_code != 200:
             return response
@@ -205,6 +211,45 @@ async def test_the_management_answers_carry_no_token_either(tmp_path, log_scan):
             response = await admin.post('/api/backend/test', headers=reviewed_headers(boot, ADMIN))
         assert response.status_code == 200
         assert response.json()['reason'] == 'login refused for [REDACTED] and [REDACTED]'
+
+
+async def test_a_childs_initialize_error_is_masked_once_switched_on(tmp_path, log_scan):
+    """B's child answers initialize with a JSON-RPC error whose message and data carry its backend's text (every token
+    the add-on holds, C's secret URL, both backend passwords, a value nobody holds): switched on, the gateway masks it
+    as every other relayed text (HM-08 review S-4 (a)): every token and B's own password [REDACTED], C's password and
+    the value nobody holds shown. Switched off the error is relayed as before (an existing gap, left to HM-14)."""
+    data = setup(tmp_path)
+    children = children_of(data)
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        child = children.by_port[18000]
+        child.initialize_error = echo_text(data)
+        async with runtime.mcp() as client:
+            response = await client.post('/mcp', headers=bearer(runtime.token(B)), json=initialize_message())
+        assert response.status_code == 200 and 'mcp-session-id' not in response.headers
+        layout = profiles.Layout(data)
+        expected = masked(child.initialize_error, [*held_tokens(data), *redact.secret_values(state_of(layout.profile(B)))])
+        assert response.json() == {'jsonrpc': '2.0', 'id': 1, 'error': {'code': -32603, 'message': expected,
+                                                                         'data': {'detail': expected}}}
+        assert all(token not in response.text for token in held_tokens(data))
+        assert state_of(layout.profile(C)).connection.password in expected and UNHELD in expected
+
+
+async def test_diagnostics_carry_no_token_either(tmp_path, log_scan):
+    """B's child output holds C's token and the default profile's: B's diagnostics answer (its child's output, from
+    B's own management app) masks them with the union too (HM-08 review S-4 (b), mutation K06)."""
+    data = setup(tmp_path)
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data)) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        line = f'upstream said {runtime.token(C)} and {runtime.token("default")} and {UNHELD}'
+        runtime.manager.get(B).runtime.supervisor.logs.append('stdout', line, 1)
+        async with runtime.admin(B) as admin:
+            response = await admin.get('/api/diagnostics', headers=ADMIN)
+        assert response.status_code == 200
+        assert [entry['text'] for entry in response.json()['logs']['entries']] == [
+            f'upstream said [REDACTED] and [REDACTED] and {UNHELD}']
 
 
 async def test_switched_off_the_mask_is_the_profiles_own(tmp_path, log_scan):

@@ -15,6 +15,7 @@ Every case runs the production runtime (tests/multi_profile_runtime.py) with the
 every test runs under the HM-01 log scan (tokens, child tokens, credentials and profile labels watched).
 """
 import asyncio
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -572,6 +573,31 @@ async def test_every_routable_profile_is_compared_for_every_candidate(tmp_path, 
                     async with runtime.mcp() as client:
                         await client.post(path, headers=headers, json=initialize_message())
                     assert len(calls) == holders, (path.replace(token, '<token>'), len(calls))
+
+
+async def test_a_stale_digest_is_refused_by_the_profiles_own_app(tmp_path, log_scan):
+    """The profile's own app checks the token again with its own store (contract 2.3: a wrong route can only be
+    refused). B's token is rotated, but the dispatcher still believes B holds the old one (a stale digest: a signature
+    that did not change within one clock tick, or a later slice's cache): the old token is handed to B's app, which
+    answers today's wrong-token bytes on both paths, and B's child gets nothing (HM-08 review S-3, mutation R03)."""
+    data = setup_profiles(tmp_path, extras=(B,))
+    children = golden_children(data, PRODUCT, extras=(B,))
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        old = runtime.token(B)
+        new = await change_token(runtime, B, 'rotate')
+        log_scan.watch(new)
+        entry = runtime.manager.get(B)
+        stale = hashlib.sha256(old.encode()).digest()
+        entry.credentials.refresh = lambda: stale  # the dispatcher keeps routing the old token to B
+        since = {port: len(mock.requests) for port, mock in children.by_port.items()}
+        async with runtime.mcp() as client:
+            for path, headers in paths(old):
+                response = await client.post(path, headers=headers, json=initialize_message())
+                assert answer(response) == (NOT_FOUND if path.startswith('/private_') else BEARER_REQUIRED)
+        assert all(mock.forwarded(since[port]) == [] for port, mock in children.by_port.items())
+        assert entry.gate.active == 0 and entry.gate.body_bytes == 0
 
 
 async def test_resolving_a_token_among_six_profiles_is_cheap(tmp_path, log_scan, capsys):

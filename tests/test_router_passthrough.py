@@ -65,13 +65,18 @@ class FakeResource:
 
 
 class Forbidden:
-    """Anything a switched-off start must never call."""
+    """Anything a switched-off start must never call or look into: calling it or reading any attribute of it (the
+    resource module's getrlimit, say) fails the test. An AttributeError would not: raise_open_file_limit catches it as
+    a module without RLIMIT_NOFILE (HM-08 review S-2, mutation O01)."""
 
     def __init__(self, name):
         self.name = name
 
     def __call__(self, *args, **kwargs):
         raise AssertionError(f'{self.name} called while the product is switched off')
+
+    def __getattr__(self, attribute):
+        raise AssertionError(f'{self.name}.{attribute} used while the product is switched off')
 
 
 # ---- switched off: nothing changes ----
