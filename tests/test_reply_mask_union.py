@@ -191,6 +191,7 @@ async def test_a_health_reason_with_another_profiles_token_is_masked_in_the_refu
         children.by_port[18000].probe_error = f'login refused for {c_token}'
         profile = runtime.manager.get(B).runtime
         await profile.health.check()
+        await profile.health.check()  # HM-09 (DQ-25): two failed checks in a row judge the backend unreachable
         assert profile.health.availability()['backend'] == 'unreachable'
         async with runtime.mcp() as client:
             body = await tool_text(client, runtime.token(B))

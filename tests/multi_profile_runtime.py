@@ -12,8 +12,10 @@ only the outside replaced), except that:
   additional profile's on its index port), answering only that profile's child bearer; or, with real_children, the
   runtime's clients are real and reach loopback child servers (RealChild) on ephemeral ports the index names;
 - the ProfileManager run_product made is kept (Runtime.manager), so a test reaches every profile's runtime; the
-  additional profiles' children are started here once the listeners serve (launch_extras). HM-09 adds
-  ProfileManager.start_all for that; until then run_product starts the default profile's child only.
+  additional profiles' children are started by the manager itself once the listeners serve (HM-09: monitor() runs
+  start_all), and the harness waits until it is done (launch_extras). Unless a test asks for the planned 30 s
+  (stagger), an additional child that does not answer its first health check frees its place at once
+  (STAGGER_SECONDS 0.05): these tests start every profile as soon as they can, as the harness did before HM-09.
 
 No socket is opened on 3000 or 18000-18099 (tests/owned_network.py): MockTransport opens none, and real children listen
 on ephemeral ports.
@@ -177,13 +179,15 @@ async def switched_on(*products):
 
 @asynccontextmanager
 async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None, real_children=False,
-                                default_port=None, launch_extras=True, switch=True, children=None, resources=None):
+                                default_port=None, launch_extras=True, switch=True, children=None, resources=None,
+                                stagger=None):
     """run_product.run of *product* on *data* with the switch on (switch=False: off), the outside replaced as
     production_runtime replaces it. children: a Children for MockTransport (left out: the default profile's golden
     MockChild on 3000, nobody else's); real_children:
     no MockTransport, the runtime's clients reach real loopback servers (default_port: the default profile's child
-    port then). launch_extras: start every additional profile's child once the listeners serve. resources: a stand-in
-    for the resource module (the file limit)."""
+    port then). launch_extras: wait until the manager started every additional profile's child (start_all) once the
+    listeners serve. resources: a stand-in for the resource module (the file limit). stagger: STAGGER_SECONDS for the
+    test (left out: 0.05)."""
     if children is None:
         children = Children()
         children.add(3000, MockChild(product, data))
@@ -223,6 +227,7 @@ async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None
         patch.setattr(run_product, 'ProfileManager', RecordedManager)
         if resources is not None:
             patch.setattr(profile_runtime, 'resource', resources)
+        patch.setattr(profile_runtime, 'STAGGER_SECONDS', 0.05 if stagger is None else stagger)
         args = SimpleNamespace(data=Path(data), product=product, host='127.0.0.1',
                                admin_port=0 if sockets else 8099, mcp_port=0 if sockets else 8081)
         task = asyncio.create_task(run_product.run(args, **({} if default_port is None
@@ -244,9 +249,8 @@ async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None
             admin_listener, = [listener for listener in listeners if listener is not mcp_listener]
             port = mcp_listener.servers[0].sockets[0].getsockname()[1] if sockets else None
             if manager is not None and launch_extras:
-                for entry in manager.profiles():
-                    if entry.profile_id != 'default':
-                        await entry.runtime.launch()
+                async with asyncio.timeout(15):
+                    await manager.started.wait()
             yield Runtime(product, Path(data), manager, admin_listener.config.app, mcp_listener.config.app, port,
                           children, listeners)
         finally:

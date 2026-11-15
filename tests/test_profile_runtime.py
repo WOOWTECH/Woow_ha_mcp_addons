@@ -338,7 +338,8 @@ def test_make_apps_takes_the_shared_and_external_objects_as_keyword_only_options
     parameters = inspect.signature(make_apps).parameters
     assert list(parameters)[:3] == ['store', 'tools', 'child']
     for name in ('authority', 'admin_slots', 'admin_pipeline', 'token_access', 'mutation_lock', 'profile_view',
-                 'forward_slots', 'slot_busy', 'reply_secrets'):  # the last three: HM-08 (plan 5.1 point 8, 5.2)
+                 'forward_slots', 'slot_busy', 'reply_secrets',  # these three: HM-08 (plan 5.1 point 8, 5.2)
+                 'child_blocked'):  # HM-09 (plan 5.4: child/restart answers with blocked_reason)
         assert parameters[name].kind is inspect.Parameter.KEYWORD_ONLY and parameters[name].default is None, name
     module = runtime_module()
     parameters = inspect.signature(module.ProfileRuntime).parameters
@@ -382,7 +383,8 @@ async def test_a_runtime_refuses_what_is_not_its_own(tmp_path):
                 build(port=port)
         for name in ('child_url', 'health', 'backend_changed', 'configuration', 'backend_check', 'restart_child',
                      'diagnostics', 'availability', 'token_access', 'mutation_lock', 'authority', 'admin_slots',
-                     'admin_pipeline', 'profile_view', 'forward_slots', 'slot_busy', 'reply_secrets'):
+                     'admin_pipeline', 'profile_view', 'forward_slots', 'slot_busy', 'reply_secrets',
+                     'child_blocked'):
             with pytest.raises(ValueError, match='the runtime passes'):
                 build(app_options={name: None})
         with pytest.raises(ValueError, match='not a shared administration'):
