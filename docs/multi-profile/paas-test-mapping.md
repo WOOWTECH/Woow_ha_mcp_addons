@@ -1,8 +1,9 @@
 # PaaS 多帳號測試逐案對照（pin `69ac425`）
 
-> HM-00 產出（2026-11-14）。全表由 repo 外的產生器從 PaaS git 物件庫重算後寫出；改歸屬時改產生器的規格再重產，
-> 不要手改表格。對照腳本會重新列出 PaaS 案例，和本檔逐檔逐案比對；腳本與輸入的 SHA-256、重產指令見
-> `docs/provenance/ha-multiprofile-HM-00-20261114.md` 第 8 節。歸屬的語意（對到的測試或差異列說的是不是同一件事）靠人工抽查。
+> HM-00 產出（2026-11-14）；2026-11-15 文件同步重產（DQ-38 的狀態）。全表由 repo 外的產生器從 PaaS git 物件庫重算後寫出；
+> 改歸屬時改產生器的規格再重產，不要手改表格。對照腳本會重新列出 PaaS 案例，和本檔逐檔逐案比對。重產指令見
+> `docs/provenance/ha-multiprofile-HM-00-20261114.md` 第 8 節，產生器另加 `--main 7d111b1`（本表的 PaaS 基準）；
+> 腳本與輸入的 SHA-256 以 repo 外的 `wave0/hm00-check/SHA256SUMS` 為準。歸屬的語意（對到的測試或差異列說的是不是同一件事）靠人工抽查。
 
 ## 結論
 
@@ -38,7 +39,7 @@
 - `HA：<檔>（<切片>）`：HA 對應的測試。「既有」是 bb48449 已有的測試；「HM-xx」是計畫中的新測試，檔名照計畫 §10.3（登記在 `acceptance-matrix.md` 的測試檔登記表）；「暫定名」是產品片的檔名，由該片定案。
 - `§8.8 #n`：HA 刻意和 PaaS 不同，HA 的期望值看 `contract.md` 第 9 節（刻意差異表）第 n 列，PaaS 案例的期望值不直接適用。
 - `不適用：<理由>`：PaaS 專屬機制，HA 沒有可對照的東西。
-- 不搬 PaaS 測試檔（DQ-38 選 vendor 時，只有遮罩的純測試例外）。
+- 不搬 PaaS 測試檔；例外是遮罩的純測試（DQ-38 選 (a)：`log_redaction.py` 與純測試原樣 vendor，HM-02）。
 
 ## 全表
 
@@ -866,75 +867,75 @@
 
 | # | 行 | 案例 | 歸屬 |
 |---|---|---|---|
-| 1 | 102 | `test_query_value_matrix_is_the_reviewed_97_cases` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 2 | 142 | `test_query_value_forms_are_masked_in_stdout_and_ring_buffer` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 3 | 163 | `test_query_value_forms_are_masked_in_app_log_lines` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 4 | 181 | `test_query_value_forms_redaction_is_idempotent` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 5 | 205 | `test_query_value_forms_with_credential_param_names_are_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 6 | 232 | `test_review_examples_keep_a_readable_access_line` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
+| 1 | 102 | `test_query_value_matrix_is_the_reviewed_97_cases` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 2 | 142 | `test_query_value_forms_are_masked_in_stdout_and_ring_buffer` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 3 | 163 | `test_query_value_forms_are_masked_in_app_log_lines` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 4 | 181 | `test_query_value_forms_redaction_is_idempotent` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 5 | 205 | `test_query_value_forms_with_credential_param_names_are_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 6 | 232 | `test_review_examples_keep_a_readable_access_line` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
 | 7 | 240 | `test_real_uvicorn_access_log_masks_query_value_forms` | HA：`tests/test_redaction_matrix.py`（HM-02），HA 關閉 uvicorn access log，只驗遮罩函式本身；DQ-38 選 vendor 時隨模組帶入 |
-| 8 | 318 | `test_credential_param_name_list_matches_the_module` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 9 | 326 | `test_credential_param_values_are_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 10 | 357 | `test_encoded_credential_param_names_are_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 11 | 379 | `test_ordinary_params_are_not_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
+| 8 | 318 | `test_credential_param_name_list_matches_the_module` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 9 | 326 | `test_credential_param_values_are_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 10 | 357 | `test_encoded_credential_param_names_are_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 11 | 379 | `test_ordinary_params_are_not_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
 | 12 | 392 | `test_credential_params_in_access_log_both_sinks` | HA：`tests/test_redaction_matrix.py`（HM-02），HA 關閉 uvicorn access log，只驗遮罩函式本身；DQ-38 選 vendor 時隨模組帶入 |
-| 13 | 399 | `test_credential_params_in_child_output_both_sinks` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 14 | 421 | `test_masked_credentials_do_not_hide_a_bare_query` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 15 | 434 | `test_decoded_only_prefix_keeps_later_key_leads` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 16 | 454 | `test_cascading_credential_masks_are_idempotent` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 17 | 560 | `test_pathological_shape_single_redaction_time_is_bounded` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 18 | 569 | `test_pathological_shape_cost_grows_linearly` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 19 | 580 | `test_pathological_shape_has_no_per_segment_python_work` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 20 | 589 | `test_pathological_shape_access_record_cost_is_bounded` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 21 | 603 | `test_truncation_does_not_cut_inside_a_multi_layer_escape` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
+| 13 | 399 | `test_credential_params_in_child_output_both_sinks` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 14 | 421 | `test_masked_credentials_do_not_hide_a_bare_query` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 15 | 434 | `test_decoded_only_prefix_keeps_later_key_leads` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 16 | 454 | `test_cascading_credential_masks_are_idempotent` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 17 | 560 | `test_pathological_shape_single_redaction_time_is_bounded` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 18 | 569 | `test_pathological_shape_cost_grows_linearly` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 19 | 580 | `test_pathological_shape_has_no_per_segment_python_work` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 20 | 589 | `test_pathological_shape_access_record_cost_is_bounded` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 21 | 603 | `test_truncation_does_not_cut_inside_a_multi_layer_escape` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
 | 22 | 630 | `test_frozen_module_is_443e95a_verbatim` | 不適用：PaaS 凍結自己的 443e95a 模組做差分；HA：`tests/test_redaction_matrix.py`（HM-02），對照 bb48449 自己的遮罩 |
-| 23 | 764 | `test_differential_fuzz_never_shows_what_443e95a_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
+| 23 | 764 | `test_differential_fuzz_never_shows_what_443e95a_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
 
 #### `packages/mcp-admin-core/tests/test_log_redaction_query_credentials_review.py`（41 案，`7d111b1`）
 
 | # | 行 | 案例 | 歸屬 |
 |---|---|---|---|
-| 1 | 106 | `test_report_counterexamples_are_masked_like_443e95a` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 2 | 113 | `test_report_counterexamples_keep_the_readable_shape_of_443e95a` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 3 | 226 | `test_reviewers_101_minimal_counterexamples_are_masked_like_443e95a` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 4 | 328 | `test_fuzz_found_counterexamples_are_masked_like_443e95a` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 5 | 406 | `test_family_differential_fuzz_never_shows_what_443e95a_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 6 | 433 | `test_line_with_a_token_key_still_masks_values_of_ampersand_led_credentials` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 7 | 440 | `test_line_with_a_token_key_leaves_unclean_values_of_question_and_semicolon_led_credentials_to_443e95a` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 8 | 449 | `test_line_with_a_private_prefix_keeps_the_clean_prefix_rule` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 9 | 457 | `test_two_decoded_only_prefixes_with_a_masked_value_between_them_stay_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 10 | 480 | `test_quoted_credential_before_a_bare_param_in_a_private_url_is_masked_in_one_pass` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 11 | 491 | `test_bare_query_is_judged_again_after_the_key_rules_masked_a_value` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 12 | 500 | `test_bare_query_is_judged_again_after_a_value_rule_masked_something` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 13 | 646 | `test_bare_param_masked_after_an_empty_value_can_become_the_lead_of_a_loose_key` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 14 | 658 | `test_token_key_swallowed_by_another_value_leaves_a_line_that_masks_the_same_again` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 15 | 678 | `test_prefix_that_only_the_spelled_form_recognises_is_judged_the_same_in_both_passes` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 16 | 725 | `test_premask_does_not_expose_a_prefix_that_the_decoded_rules_could_not_see` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 17 | 743 | `test_known_non_idempotent_inputs_are_idempotent_now` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 18 | 750 | `test_redaction_is_idempotent_on_every_corpus` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 19 | 801 | `test_plain_lines_mask_the_whole_value_through_encoded_delimiters` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 20 | 807 | `test_plain_lines_mask_token_values_that_start_with_an_encoded_delimiter` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 21 | 813 | `test_plain_lines_do_not_swallow_the_next_parameter` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 22 | 819 | `test_private_key_parameter_name_is_not_a_prefix` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 23 | 829 | `test_token_key_that_a_later_mask_swallows_does_not_change_the_second_pass` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 24 | 837 | `test_token_value_that_starts_with_a_delimiter_is_masked_through_the_next_delimiter_in_plain_lines` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 25 | 850 | `test_truncation_does_not_cut_the_last_parameter_in_half` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 26 | 863 | `test_dangling_param_helper_backs_off_to_the_last_lead` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 27 | 880 | `test_oauth_session_and_app_key_names_are_credentials` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 28 | 893 | `test_only_complete_names_count` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 29 | 899 | `test_empty_value_followed_by_a_bare_param_is_masked_as_the_pasted_token` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 30 | 910 | `test_install_compiles_every_lazy_pattern_before_the_first_request` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 31 | 920 | `test_fragment_with_ampersand_or_semicolon_and_equals_is_a_candidate` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 32 | 941 | `test_encoded_name_forms_with_a_value_that_starts_with_an_encoded_space_are_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 33 | 953 | `test_encoded_leads_with_a_value_that_starts_with_an_encoded_space_are_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 34 | 959 | `test_encoded_equals_with_a_value_that_starts_with_an_encoded_space_is_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 35 | 967 | `test_name_that_is_only_recognised_after_decoding_masks_a_value_that_starts_with_x` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 36 | 982 | `test_lenient_clean_prefix_stops_at_every_unclean_character` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 37 | 988 | `test_strict_and_token_values_need_a_whole_clean_value` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 38 | 997 | `test_clean_value_rules_in_detail` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 39 | 1009 | `test_wide_value_runs_to_the_next_literal_delimiter` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 40 | 1032 | `test_prefix_detection_is_linear_on_noise_heavy_input` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
-| 41 | 1064 | `test_decoded_only_prefix_still_masks_question_mark_led_values_that_start_with_an_encoded_space` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 決定 vendor 或移植 |
+| 1 | 106 | `test_report_counterexamples_are_masked_like_443e95a` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 2 | 113 | `test_report_counterexamples_keep_the_readable_shape_of_443e95a` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 3 | 226 | `test_reviewers_101_minimal_counterexamples_are_masked_like_443e95a` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 4 | 328 | `test_fuzz_found_counterexamples_are_masked_like_443e95a` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 5 | 406 | `test_family_differential_fuzz_never_shows_what_443e95a_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 6 | 433 | `test_line_with_a_token_key_still_masks_values_of_ampersand_led_credentials` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 7 | 440 | `test_line_with_a_token_key_leaves_unclean_values_of_question_and_semicolon_led_credentials_to_443e95a` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 8 | 449 | `test_line_with_a_private_prefix_keeps_the_clean_prefix_rule` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 9 | 457 | `test_two_decoded_only_prefixes_with_a_masked_value_between_them_stay_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 10 | 480 | `test_quoted_credential_before_a_bare_param_in_a_private_url_is_masked_in_one_pass` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 11 | 491 | `test_bare_query_is_judged_again_after_the_key_rules_masked_a_value` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 12 | 500 | `test_bare_query_is_judged_again_after_a_value_rule_masked_something` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 13 | 646 | `test_bare_param_masked_after_an_empty_value_can_become_the_lead_of_a_loose_key` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 14 | 658 | `test_token_key_swallowed_by_another_value_leaves_a_line_that_masks_the_same_again` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 15 | 678 | `test_prefix_that_only_the_spelled_form_recognises_is_judged_the_same_in_both_passes` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 16 | 725 | `test_premask_does_not_expose_a_prefix_that_the_decoded_rules_could_not_see` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 17 | 743 | `test_known_non_idempotent_inputs_are_idempotent_now` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 18 | 750 | `test_redaction_is_idempotent_on_every_corpus` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 19 | 801 | `test_plain_lines_mask_the_whole_value_through_encoded_delimiters` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 20 | 807 | `test_plain_lines_mask_token_values_that_start_with_an_encoded_delimiter` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 21 | 813 | `test_plain_lines_do_not_swallow_the_next_parameter` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 22 | 819 | `test_private_key_parameter_name_is_not_a_prefix` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 23 | 829 | `test_token_key_that_a_later_mask_swallows_does_not_change_the_second_pass` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 24 | 837 | `test_token_value_that_starts_with_a_delimiter_is_masked_through_the_next_delimiter_in_plain_lines` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 25 | 850 | `test_truncation_does_not_cut_the_last_parameter_in_half` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 26 | 863 | `test_dangling_param_helper_backs_off_to_the_last_lead` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 27 | 880 | `test_oauth_session_and_app_key_names_are_credentials` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 28 | 893 | `test_only_complete_names_count` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 29 | 899 | `test_empty_value_followed_by_a_bare_param_is_masked_as_the_pasted_token` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 30 | 910 | `test_install_compiles_every_lazy_pattern_before_the_first_request` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 31 | 920 | `test_fragment_with_ampersand_or_semicolon_and_equals_is_a_candidate` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 32 | 941 | `test_encoded_name_forms_with_a_value_that_starts_with_an_encoded_space_are_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 33 | 953 | `test_encoded_leads_with_a_value_that_starts_with_an_encoded_space_are_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 34 | 959 | `test_encoded_equals_with_a_value_that_starts_with_an_encoded_space_is_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 35 | 967 | `test_name_that_is_only_recognised_after_decoding_masks_a_value_that_starts_with_x` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 36 | 982 | `test_lenient_clean_prefix_stops_at_every_unclean_character` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 37 | 988 | `test_strict_and_token_values_need_a_whole_clean_value` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 38 | 997 | `test_clean_value_rules_in_detail` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 39 | 1009 | `test_wide_value_runs_to_the_next_literal_delimiter` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 40 | 1032 | `test_prefix_detection_is_linear_on_noise_heavy_input` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
+| 41 | 1064 | `test_decoded_only_prefix_still_masks_question_mark_led_values_that_start_with_an_encoded_space` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
 
 ## pin 之後的變動（`69ac425..7d111b1` 的測試檔）
 

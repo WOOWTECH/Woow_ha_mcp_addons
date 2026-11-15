@@ -1,7 +1,7 @@
 # 多帳號（multi-profile）文件
 
 同一個 add-on 開「預設帳號＋最多 5 個額外帳號」、對齊 PaaS `woow-mcp-server` 的設計文件。**目前沒有任何產品開通**
-（`MULTI_PROFILE_PRODUCTS` 還不存在）；這裡的行為要等該產品的升版 PR 合併才生效，README 與 `addons/<x>/` 底下的文件到那時才改。
+（HM-07 起 `features.py` 有 `MULTI_PROFILE_PRODUCTS`，內容是空的）；這裡的行為要等該產品的升版 PR 合併才生效，README 與 `addons/<x>/` 底下的文件到那時才改。
 
 | 檔 | 內容 | 誰維護 |
 |---|---|---|
@@ -9,7 +9,7 @@
 | `decisions.md` | DQ-01～DQ-46 的結論、日期或「待定＋負責片」 | 每次有決定就改 |
 | `threat-model.md` | 角色與信任邊界、安全不變式 I1～I13、已知限制、事故處理 | HM-00、HM-18 |
 | `acceptance-matrix.md` | T-01～T-29 的 HA 期望值、Odoo 首發標準、測試檔登記表 | HM-00 → HM-16 |
-| `paas-test-mapping.md` | PaaS 多帳號測試逐檔逐案對照（pin 的 53 檔 541 案，加 pin 之後併進來的 3 檔 65 案） | 由 repo 外的產生器重產（腳本與輸入的 SHA-256、重產指令見 HM-00 provenance 筆記第 8 節） |
+| `paas-test-mapping.md` | PaaS 多帳號測試逐檔逐案對照（pin 的 53 檔 541 案，加 pin 之後併進來的 3 檔 65 案） | 由 repo 外的產生器重產（重產指令見 HM-00 provenance 筆記第 8 節，2026-11-15 起 `gen_paas_mapping.py` 另加 `--main 7d111b1`；腳本與輸入的 SHA-256 以 repo 外的 `wave0/hm00-check/SHA256SUMS` 為準） |
 | `deviation-trace.md` | FEATURE-MATRIX 每一列（含「HA 平台差異」欄是「—」的列）與 G6 §5 逐列對到差異表、測試，或寫明為什麼相同 | 同上 |
 | `ledger-tracking.md` | 新模組的帳本列管清單與規則 | HM-00 定案 |
 

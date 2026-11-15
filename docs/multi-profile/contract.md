@@ -157,7 +157,7 @@
 | `configuration`、`capabilities` | GET | 回應帶 `profile:{id}` |
 | `diagnostics` | GET | 只回選定帳號的子程式緩衝 |
 | `operations/<id>` | GET | 收據依帳號 |
-| `backend`、`backend/patch` | PUT | Odoo 換 url／database／username 換 token、回 `token_rotated:true`（HM-12；DQ-05 細節待定）；改 url 來源沒帶新秘密 422（DQ-40 ⑨） |
+| `backend`、`backend/patch` | PUT | Odoo 換 url／database／username 換 token、回 `token_rotated:true`（HM-12；DQ-05 已定，照計畫 §9）；改 url 來源沒帶新秘密 422（DQ-40 ⑨） |
 | `backend/test` | POST | 測選定帳號已存的設定 |
 | `policy`、`odoo/write-switches`、`odoo/allowed-methods`、`n8n/session` | PUT | 只重啟選定帳號的子程式 |
 | `endpoint` | PUT | 額外帳號 409 `endpoint_global`（全域設定只存在預設 state；DQ-13 待定，照計畫建議） |
@@ -190,7 +190,7 @@
 - 沒開通（且沒有帳號資料）的產品維持今天的順序；開通後預設帳號只多一次 Core 角色查詢、角色檢查提早，回應位元組不變。
 - 新增路由沒進「路由表自動產生的否定矩陣」就測試失敗（HM-10 `tests/test_admin_pipeline_matrix.py`）。
 
-### 3.3 `X-MCP-Profile` 規則（DQ-17 細節待定，照計畫建議；負責片 HM-10）
+### 3.3 `X-MCP-Profile` 規則（DQ-17 已定，照計畫 §5.3；負責片 HM-10）
 
 | 情況 | 開通後的回應 |
 |---|---|
@@ -213,7 +213,7 @@
   提示並重抓（I12；HM-11）。
 - 任何帳號範圍請求回 `profile_not_found`：面板立刻重抓清單、切回預設帳號並提示。
 
-### 3.5 寫入保護（DQ-15 細節待定，照計畫建議；負責片 HM-10；§8.8 #34）
+### 3.5 寫入保護（DQ-15 已定，照計畫 §5.3 第 7 點；負責片 HM-10；§8.8 #34）
 
 | 對象 | If-Match | Idempotency-Key | 收據放哪 |
 |---|---|---|---|
@@ -248,7 +248,7 @@
 `corrupt` 時另帶一個由原始位元組算出的 ETag，給「隔離帳號索引」用）、還原與休眠通知（欄位名 HM-13c 定案）。
 沒開通但有帳號資料時只多 `dormant_profiles`（數字）。
 
-**請求本體**：建立與改名都是剛好一個鍵 `{"label": <字串>}`。名稱規則（DQ-16 細節待定，照計畫建議；負責片 HM-10、HM-11；§8.8 #35）：去頭尾空白後 1～80 個 code point；
+**請求本體**：建立與改名都是剛好一個鍵 `{"label": <字串>}`。名稱規則（DQ-16 已定，照計畫 §8.5；負責片 HM-10、HM-11；§8.8 #35）：去頭尾空白後 1～80 個 code point；
 拒絕 Cc、Cf（含 bidi、零寬）、Zl、Zp、Cs、Co、未指派；NFKC＋casefold 判重；`default` 與「預設帳號」保留。名稱只存在索引，
 不進目錄名、log、MCP 回覆。
 
@@ -567,7 +567,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | 80 | 手動指定 token | `PUT /api/tokens`（`set_token`）；撞號 409 `token_in_use`，不回顯值、不說是哪個帳號（Pc/routers/tokens.py:141-142；Pc/profiles.py:488-503） | 沒有這個 API：token 只由伺服器隨機產生，只能輪替與撤銷（Hc/gateway.py:582-606）；撞號只會來自還原或複製，回 503（第 2.3 節） | FM-31「不新增」；將來要加就照 PaaS 回 409，並同時擋目前與歷史 token | 既有 |
 | 81 | 請求內容超過上限 | 最多再讀 128 MiB 丟掉才回錯誤，讓經反向代理的用戶端看得到錯誤、不是 RST（Pc/request_limits.py:16） | 一超過就 413（n8n 是 JSON-RPC 錯誤本體）、不再讀後面的內容（Hc/gateway.py:270-271；Hc/request_limits.py:51-70） | FM-52 延後：只在前面有 Cloudflare Tunnel 或反向代理時有感（HM-14 選做） | 既有 |
 | 82 | 全部撤銷 | 沒有面板或 API；還原時照手冊撤銷全部（docs/paas-config-restore-runbook.md） | `POST {base}/api/profiles/revoke-all`（含預設帳號）＋`.revoke-all-pending`；逐帳號結果，寫入失敗的帳號 503、重啟時守門重做（第 2.3、3.1 節） | HA 沒有 shell 跑手冊；事故止血第一步、回退後再升級都要靠它（threat-model.md 第 4 節；§8.8 #69）；FM-120 | 加嚴（建議回補） |
-| 83 | 管理請求帶兩個以上 `X-MCP-Profile` | 取第一個值（`request.headers.get`，Pc/profiles.py:612）；第一個值存在就照常服務 | 開通後 400 `profile_id_invalid`（在角色檢查後；第 3.3 節） | 一個請求只能對一個帳號，哪個值生效不該看中介層實作；fail closed（同 #31、#32；DQ-40 ①，DQ-17 細節待定） | 加嚴 |
+| 83 | 管理請求帶兩個以上 `X-MCP-Profile` | 取第一個值（`request.headers.get`，Pc/profiles.py:612）；第一個值存在就照常服務 | 開通後 400 `profile_id_invalid`（在角色檢查後；第 3.3 節） | 一個請求只能對一個帳號，哪個值生效不該看中介層實作；fail closed（同 #31、#32；DQ-40 ①；DQ-17 已定） | 加嚴 |
 | 84 | 帳號在別處被刪時的面板 | 等清單下次重抓才回 default，期間帳號範圍請求 404（依程式推論，R05 §6） | 任何帳號範圍請求回 `profile_not_found` 就立刻重抓清單、切回預設帳號並提示；被刪帳號的待確認收據明說並清掉（第 3.4 節） | 不讓下一個操作落到別的帳號、不留無法確認的收據（I12；FM-59） | 加嚴 |
 | 85 | 用戶端範例的名稱 | 只給網址與 `claude mcp add --transport http my-<app>-mcp "<網址>"`；名稱不含帳號，同產品兩帳號照抄會撞名 | 今天是 `mcpServers` JSON、名稱固定 `woow`、帶 Bearer（Hui/contracts.js:319-321；§8.8 #2）；開通後名稱帶帳號 id 前 8 碼（例如 `woow-<產品>-<id 前 8 碼>`，暫定） | 同產品兩個帳號照抄不撞名；建議 PaaS 一起改（FM-63） | 待決（DQ-31） |
 | 86 | 帳號範圍的管理操作與本體 | FastAPI 路由（`/api/settings/<section>`、`/api/tokens`、`/api/tools` 等），各自的本體與 ETag（Pc/config/store.py:276-289） | HA 既有管理契約的操作：`bootstrap`、`backend`、`policy`、`token/rotate`…（docs/management-capabilities-v1.md）、ETag `"c1-<64 hex>"`；開通後只加 `X-MCP-Profile`、回聲與帳號範圍（第 3.1、3.4 節）。帳號增刪改查的路徑、方法與欄位照 PaaS（FM-18、FM-19、FM-22） | HA 既有的單帳號契約，不因多帳號改寫；面板與 P9 kit 都照它 | 既有 |
@@ -580,3 +580,4 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | v1 草案（審查修正） | 2026-11-14 | HM-00 | 依獨立審查修正：錯誤代碼表對齊 bb48449 與 PaaS pin（既有回應的五種本體形狀；補 `unsupported`、`backend_check_failed`、`backend_fixed` 三列與 415、第 ① 步的 400；`core_version_unreviewed` 在 ⑥／⑩；重複 `X-MCP-Profile` 的 PaaS 行為）；差異表補第 80～86 列；第 4.2 節補既有回應範圍；第 5 節加各產品上限；待定題目標示；隔離目錄刪除路由與讀 body 途中額度用完的回應（暫定）；第 6 節門檻寫法 |
 | v1 草案（HM-07） | 2026-11-15 | HM-07 | 第 8 節索引 port 規則照 PaaS 逐字一致（審查 MF-1 定案）：拿掉「不是 3000／8081／8099」；重複與 3000 只停相關帳號；listener port 交 HM-09 的 spawn 前檢查（`child_port_conflict`）；第 9 節不加列。DQ-09、DQ-12、DQ-19 改標已定（`decisions.md`） |
 | v1 草案（HM-06） | 2026-11-15 | HM-06 | 第 9 節 #37 加註：n8n 維持 n8n-mcp 現狀，另外收下三種都要先有自己 child token 的寫法（審查 MF-1 選 (a)，主對話 2026-11-15 08:0x 定案）；同步 `acceptance-matrix.md` T-23 與 `threat-model.md` I4。第 7 節「子程式 bearer」列不變（DQ-08 的 HM-06 部分照它，`decisions.md`） |
+| v1 草案（文件同步） | 2026-11-15 | HM-00 補正 | DQ-05、DQ-15、DQ-16、DQ-17 的「細節待定」改標已定（依 DQ-40 (a)，照計畫 §9、§5.3 第 7 點、§8.5、§5.3；`decisions.md`）：第 3.1 節 `backend` 列、第 3.3 節、第 3.5 節、第 3.6 節的名稱規則、第 9 節 #83。規則內容不變；DQ-10、DQ-18 在本檔沒有標待定的地方 |
