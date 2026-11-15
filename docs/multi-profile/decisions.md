@@ -99,7 +99,7 @@
 | DQ-11 | 第二問：HM-03b 或 HM-19b 實測 Claude.ai 送的 Origin 後再問 | 代理問、使用者定 | HM-27 合併前 |
 | DQ-06 | #149（`7d111b1`）由 HM-02 依合併版對照；#150（`091dfbc`）由 HM-14 開工時對照；之後的 PaaS 變動照基準文件第 4 節每片列出 | 代理 | 各片開工前 |
 | DQ-38 | 選了 (a)：先過秘密預檢；Release train 會不會比對 vendored 檔，以 HM-02 PR 上的 `Release train / wvt check` 為準；vendored 檔記在 `docs/provenance/runtime-patches.json`，不另記 `runtime-sources.json`（2026-11-15 08:2x 定案，見第 1 節） | 代理（HM-02） | HM-02 合併前 |
-| DQ-10 | 子題已定（2026-11-15 15:3x，第 1 節）：n8n 的 `WEBHOOK_SECURITY_MODE=permissive` 維持。帶出的待辦：HM-25 開工前的獨立安全審查評估「多帳號時 n8n webhook 要不要收緊」，結果交使用者定。審查要看的事實（HM-20 記下）：開通後 n8n 子程式連設定的 n8n（API 與官方 MCP 端點）拒 loopback，但 webhook、chat、form 的網址照 permissive 驗證，仍可指到 loopback（也就是 add-on 自己的 listener） | 審查代理評估、使用者定 | HM-25 開工前 |
+| DQ-10 | 子題已定（2026-11-15 15:3x，第 1 節）：n8n 的 `WEBHOOK_SECURITY_MODE=permissive` 維持。帶出的待辦：HM-25 開工前的獨立安全審查評估「多帳號時 n8n webhook 要不要收緊」，結果交使用者定。審查要看的事實（HM-20 記下）：① 開通後 n8n 子程式連設定的 n8n（API 與官方 MCP 端點）拒 loopback，但 webhook、chat、form 的網址照 permissive 驗證，仍可指到 loopback（也就是 add-on 自己的 listener）。② `n8n_test_workflow` 的 webhook、form、chat 網址是「設定的 n8n 來源＋路徑」（n8n-mcp 2.96.2 `dist/triggers/handlers/base-handler.js` 的 `getBaseUrl`、`webhook-handler.js`），路徑與標頭由 MCP 呼叫者決定，走 permissive 的 `validateWebhookUrl` 與 `createPinnedAgents`（HM-20 沒包）。③ 所以設定的名稱解析到 127.0.0.1 時，同一個 host:port 的 API 與官方 MCP 端點被擋、webhook 照連，而且帶呼叫者決定的標頭（HM-20 審查 S-7）；n8n 的 API key 不會跟著送（`services/n8n-api-client.js` 的 `triggerWebhook` 把 `X-N8N-API-KEY` 設成 undefined）。可以任意指定網址的舊工具 `n8n_trigger_webhook_workflow` 不在 28 個工具裡（`docs/tool-surface.json`） | 審查代理評估、使用者定 | HM-25 開工前 |
 
 ## 5. 變更紀錄
 
@@ -111,4 +111,4 @@
 | 2026-11-15 | 文件同步 PR（HM-00 補正）：DQ-05、DQ-10（loopback 部分）、DQ-15、DQ-16、DQ-17、DQ-18 依 DQ-40 (a)（2026-11-14 13:4x 採用）移到第 1 節，各題照計畫 §9、§8.7、§5.3 第 7 點、§8.5、§5.3 第 2 點 ⑦與第 4、11 點、§6；DQ-10 的 `WEBHOOK_SECURITY_MODE=permissive` 計畫沒寫，記成第 4 節的待辦。DQ-38 補 HM-02 審查 MF-3、MF-4 的定案（2026-11-15 08:2x），第 4 節的 DQ-38 待辦同步改寫。結論的題數改成 27 題已定、19 題待定 |
 | 2026-11-15 | HM-08 補正 PR：DQ-13、DQ-14、DQ-30、DQ-31（17:4x 採用計畫建議）與 DQ-43（18:1x 選「先把 `checks` 上限調到 60 分鐘」）移到第 1 節；結論改成 32 題已定 |
 | 2026-11-15 | HM-09 PR：DQ-21、DQ-25（2026-11-15 11:2x 使用者採用計畫 §13.2 的建議）從第 2 節移到第 1 節，做法寫在 `contract.md` 第 7 節。結論的題數改成 34 題已定、12 題待定 |
-| 2026-11-15 | HM-20 PR：DQ-10 子題記成已定（2026-11-15 15:3x 使用者：n8n 的 `WEBHOOK_SECURITY_MODE=permissive` 維持不動；HM-20 只管設定的後端網址；多帳號時要不要收緊 webhook，交 HM-25 前的獨立安全審查再決定），第 1 節的 DQ-10 列、標題與結論同步；第 4 節的 DQ-10 待辦改成 HM-25 前的審查項目。DQ-17 補 UC-10 的做法（同時定：HM-10 先照 PaaS 用 `X-MCP-Profile` 標頭，探針實測不通再補網址路徑備案）。題數不變（34 題已定、12 題待定） |
+| 2026-11-15 | HM-20 PR：DQ-10 子題記成已定（2026-11-15 15:3x 使用者：n8n 的 `WEBHOOK_SECURITY_MODE=permissive` 維持不動；HM-20 只管設定的後端網址；多帳號時要不要收緊 webhook，交 HM-25 前的獨立安全審查再決定），第 1 節的 DQ-10 列、標題與結論同步；第 4 節的 DQ-10 待辦改成 HM-25 前的審查項目，並依 HM-20 安全審查 S-7 補上審查要看的事實（webhook 網址＝設定的 n8n 來源＋路徑、標頭由呼叫者決定；同一來源 API 擋、webhook 不擋）。DQ-17 補 UC-10 的做法（同時定：HM-10 先照 PaaS 用 `X-MCP-Profile` 標頭，探針實測不通再補網址路徑備案）。題數不變（34 題已定、12 題待定） |
