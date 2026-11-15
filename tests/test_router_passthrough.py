@@ -7,7 +7,11 @@ read, no file limit touched; profile data on disk changes nothing (its tokens ar
 them). HM-01's golden regression and both contract freezes keep proving the bytes.
 
 Switched on, the default profile alone answers every HM-01 golden, MCP-contract and management-contract case byte for
-byte through the dispatcher (those tests run again here with the switch on; plan 7.3). The 8081 listener's outer
+byte through the dispatcher (those tests run again here with the switch on; plan 7.3). HM-10: on 8099 a switched-on
+product's panel names the profile on every profile-scoped request (X-MCP-Profile) and its answers carry the profile echo
+(plan 7.2 points 1 and 2): the management client of these runs sends the header and takes the echo out again
+(Unechoed), so every other byte is still HM-01's; tests/test_profile_admin_api.py checks the echo itself. The 8081
+listener's outer
 bound becomes 64 + 32 x the product's additional-profile limit, 8099 keeps 64, and the soft RLIMIT_NOFILE is raised to
 what that needs plus 25% when it is lower (never above the hard limit, no privilege needed). When the limit cannot be
 read or raised enough, the add-on degrades instead of guessing: no additional profile is served, the outer bound stays
@@ -16,6 +20,11 @@ read or raised enough, the add-on degrades instead of guessing: no additional pr
 n8n keeps its own runtime (apps/n8n/run.py) until HM-25; OpenDesign and Odoo Manage have no additional profiles
 (DQ-28) and are never switched on.
 """
+import hashlib
+import hmac
+import json
+
+import httpx
 import pytest
 
 import test_admin_contract_freeze as admin_freeze
@@ -24,8 +33,8 @@ import test_single_profile_golden as golden
 from log_scan import log_scan  # noqa: F401  (fixture)
 from multi_profile_runtime import (SWITCHABLE, Children, create_profile, multi_profile_runtime, stored, switched_on)
 from mcp_admin_core import profile_runtime, profiles
-from test_single_profile_golden import (ACCEPT, BEARER_REQUIRED, NOT_FOUND, answer, configure, initialize_message,
-                                        production_runtime, settle)
+from test_single_profile_golden import (ACCEPT, BEARER_REQUIRED, GENUINE_CLIENT, INGRESS, NOT_FOUND, answer, configure,
+                                        initialize_message, production_runtime, settle)
 from test_upgrade_zero_rewrite import tree_facts
 
 pytestmark = pytest.mark.usefixtures('log_scan')
@@ -62,6 +71,45 @@ class FakeResource:
                                                              and soft > self.limits[1]):
             raise ValueError('not allowed')
         self.limits = (soft, hard)
+
+
+class Unechoed(httpx.AsyncBaseTransport):
+    """HM-10: a management answer as HM-01 froze it, from a switched-on product: the profile echo's keys (profile; the
+    bootstrap's profiles_supported, profile_index_state, profile_index_etag) are taken out of a JSON object that has
+    one, and the body is serialized again as Starlette's JSONResponse serializes it (the echo is added the same way,
+    gateway.make_apps echoed), with its new Content-Length; every other byte and header is the answer's own. A PATCH
+    or DELETE without a CSRF token gets the caller's (the panel always sends it): switched on, the method table comes
+    after the identity check (contract 3.1), so HM-01's 405 case needs a request that passes it."""
+    ECHO = ('profile', 'profiles_supported', 'profile_index_state', 'profile_index_etag')
+
+    def __init__(self, inner, authority):
+        self.inner, self.authority = inner, authority
+
+    async def handle_async_request(self, request):
+        user = request.headers.get('x-remote-user-id')
+        if request.method in ('PATCH', 'DELETE') and 'x-csrf-token' not in request.headers and user:
+            base = request.headers.get('x-ingress-path', '')
+            request.headers['X-CSRF-Token'] = hmac.new(self.authority.csrf_key, (user + '\0' + base).encode(),
+                                                       hashlib.sha256).hexdigest()
+        response = await self.inner.handle_async_request(request)
+        body = await response.aread()
+        if response.headers.get('content-type') == 'application/json':
+            value = json.loads(body)
+            if isinstance(value, dict) and 'profile' in value:
+                for key in self.ECHO:
+                    value.pop(key, None)
+                body = json.dumps(value, ensure_ascii=False, allow_nan=False, indent=None,
+                                  separators=(',', ':')).encode('utf-8')
+        headers = [(name, value) for name, value in response.headers.raw if name.lower() != b'content-length']
+        return httpx.Response(response.status_code, headers=[*headers, (b'content-length', str(len(body)).encode())],
+                              content=body, request=request)
+
+
+def panel(runtime):
+    """HM-10: HM-01's management client of a switched-on product: X-MCP-Profile: default, the echo taken out."""
+    authority = runtime.admin_app.manager.shared.authority  # 8099 is the management dispatcher
+    return GENUINE_CLIENT(transport=Unechoed(httpx.ASGITransport(app=runtime.admin_app, client=INGRESS), authority),
+                          base_url='http://admin', headers={'X-MCP-Profile': 'default'})
 
 
 class Forbidden:
@@ -129,35 +177,41 @@ async def test_switched_off_profile_data_on_disk_changes_nothing(tmp_path, log_s
 
 @pytest.mark.parametrize('mode', golden.MODES)
 @pytest.mark.parametrize('product', SWITCHABLE)
-async def test_switched_on_the_default_profile_keeps_its_golden_answers(tmp_path, log_scan, product, mode):
+async def test_switched_on_the_default_profile_keeps_its_golden_answers(tmp_path, log_scan, monkeypatch, product,
+                                                                        mode):
     """HM-01's golden regression with the product switched on and no additional profile: both connection paths, the
     error answers, /health/ready, the bootstrap fields, what the child gets and what comes back, and a state.json that
-    nothing rewrites, through the dispatcher (plan 7.3: both modes)."""
+    nothing rewrites, through the dispatchers (plan 7.3: both modes; the panel's header and echo: Unechoed)."""
+    monkeypatch.setattr(golden.Runtime, 'admin', panel)
     async with switched_on(product):
         await golden.test_default_profile_golden(tmp_path, log_scan, product, mode)
 
 
 @pytest.mark.parametrize('product', SWITCHABLE)
-async def test_switched_on_the_mcp_contract_freeze_holds(tmp_path, log_scan, product):
+async def test_switched_on_the_mcp_contract_freeze_holds(tmp_path, log_scan, monkeypatch, product):
+    monkeypatch.setattr(golden.Runtime, 'admin', panel)
     async with switched_on(product):
         await mcp_freeze.test_mcp_contract_freeze(tmp_path, log_scan, product)
 
 
 @pytest.mark.parametrize('product', SWITCHABLE)
-async def test_switched_on_the_management_contract_freeze_holds(tmp_path, log_scan, product):
-    """8099 is the default profile's management app with the add-on's shared administration (one AdminAuthority, one
-    set of management slots); every frozen answer shape stays (HM-10 brings the profile routes and X-MCP-Profile)."""
+async def test_switched_on_the_management_contract_freeze_holds(tmp_path, log_scan, monkeypatch, product):
+    """8099 is the management dispatcher (HM-10) with the add-on's shared administration (one AdminAuthority, one set
+    of management slots): every frozen answer shape of the default profile stays, the panel's header sent and its echo
+    taken out (Unechoed); the dispatcher's own answers (the profile routes, X-MCP-Profile) are HM-10's tests."""
+    monkeypatch.setattr(golden.Runtime, 'admin', panel)
     async with switched_on(product):
         await admin_freeze.test_management_answer_shapes(tmp_path / 'shapes', log_scan, product)
         await admin_freeze.test_builtin_only_answer_shapes(tmp_path / 'builtin', log_scan, product)
 
 
-async def test_switched_on_the_runtime_is_the_profile_manager(tmp_path, log_scan):
+async def test_switched_on_the_runtime_is_the_profile_manager(tmp_path, log_scan, monkeypatch):
     """Switched on, run_product builds a ProfileManager on the default store: 8081 is its dispatcher (whose routes are
-    the default app's, for whoever looks), 8099 the default profile's management app, every profile shares one
-    administration (SharedAdmin), and production_runtime of HM-01 finds both listeners unchanged."""
+    the default app's, for whoever looks), 8099 its management dispatcher (HM-10), every profile shares one
+    administration (SharedAdmin) and has its echo, and production_runtime of HM-01 finds both listeners."""
     data = tmp_path / 'data'
     configure(data, 'odoo')
+    monkeypatch.setattr(golden.Runtime, 'admin', panel)
     async with switched_on('odoo'):
         async with production_runtime('odoo', data) as runtime:
             await settle(runtime, 'configured')
@@ -166,8 +220,10 @@ async def test_switched_on_the_runtime_is_the_profile_manager(tmp_path, log_scan
             assert isinstance(dispatcher, router().McpDispatcher)
             manager = dispatcher.manager
             default = manager.get('default')
-            assert runtime.admin_app is default.runtime.admin_app is manager.admin_app
-            assert default.runtime.shared is manager.shared and default.runtime.profile_view is None
+            assert runtime.admin_app is manager.admin_app is manager.dispatcher
+            assert isinstance(manager.admin_app, router().AdminDispatcher)
+            assert default.runtime.shared is manager.shared and default.runtime.profile_view() == {
+                'id': 'default', 'label': 'Default', 'is_default': True}
             assert dispatcher.routes == default.runtime.mcp_app.routes
             assert [entry.profile_id for entry in manager.profiles()] == ['default']
 

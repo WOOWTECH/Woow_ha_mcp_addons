@@ -15,7 +15,10 @@ only the outside replaced), except that:
   additional profiles' children are started by the manager itself once the listeners serve (HM-09: monitor() runs
   start_all), and the harness waits until it is done (launch_extras). Unless a test asks for the planned 30 s
   (stagger), an additional child that does not answer its first health check frees its place at once
-  (STAGGER_SECONDS 0.05): these tests start every profile as soon as they can, as the harness did before HM-09.
+  (STAGGER_SECONDS 0.05): these tests start every profile as soon as they can, as the harness did before HM-09;
+- HM-10: the management client (Runtime.admin) is the panel's: 8099 itself (the management dispatcher once switched
+  on), every request naming its profile (X-MCP-Profile) as the panel does; verifier replaces the HA administrator
+  check (the default: yes for the golden administrator, no for anyone else).
 
 No socket is opened on 3000 or 18000-18099 (tests/owned_network.py): MockTransport opens none, and real children listen
 on ephemeral ports.
@@ -150,9 +153,13 @@ class Runtime:
         return GENUINE_CLIENT(transport=httpx.ASGITransport(app=self.mcp_app), base_url='http://mcp', **kwargs)
 
     def admin(self, profile_id='default'):
-        """One profile's management app (8099 serves the default profile's until HM-10 dispatches it)."""
-        app = self.admin_app if profile_id == 'default' else self.manager.get(profile_id).runtime.admin_app
-        return GENUINE_CLIENT(transport=httpx.ASGITransport(app=app, client=INGRESS), base_url='http://admin')
+        """The panel's client of one profile: 8099 (HM-10: switched on, the management dispatcher), every request with
+        X-MCP-Profile: profile_id (switched off: none, as the panel of today; the default profile only)."""
+        headers = {} if self.manager is None else {'X-MCP-Profile': profile_id}
+        if self.manager is None and profile_id != 'default':
+            raise AssertionError('a switched-off product serves the default profile only')
+        return GENUINE_CLIENT(transport=httpx.ASGITransport(app=self.admin_app, client=INGRESS),
+                              base_url='http://admin', headers=headers)
 
     def directory(self, profile_id):
         return self.data if profile_id == 'default' else profiles.Layout(self.data).profile(profile_id)
@@ -186,14 +193,14 @@ CLOSE_SECONDS = 30
 @asynccontextmanager
 async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None, real_children=False,
                                 default_port=None, launch_extras=True, switch=True, children=None, resources=None,
-                                stagger=None):
+                                stagger=None, verifier=None):
     """run_product.run of *product* on *data* with the switch on (switch=False: off), the outside replaced as
     production_runtime replaces it. children: a Children for MockTransport (left out: the default profile's golden
     MockChild on 3000, nobody else's); real_children:
     no MockTransport, the runtime's clients reach real loopback servers (default_port: the default profile's child
     port then). launch_extras: wait until the manager started every additional profile's child (start_all) once the
     listeners serve. resources: a stand-in for the resource module (the file limit). stagger: STAGGER_SECONDS for the
-    test (left out: 0.05)."""
+    test (left out: 0.05). verifier: the HA administrator check (HM-10; left out: administrator below)."""
     if children is None:
         children = Children()
         children.add(3000, MockChild(product, data))
@@ -228,7 +235,7 @@ async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None
             patch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset({product}))
         patch.setattr(profile_runtime, 'Supervisor', supervisor or NoProcessSupervisor)
         patch.setattr(profile_runtime.httpx, 'AsyncClient', child_client)
-        patch.setattr(run_product, 'make_ha_admin_verifier', lambda: administrator)
+        patch.setattr(run_product, 'make_ha_admin_verifier', lambda: verifier or administrator)
         patch.setattr(run_product, 'Listener', CapturedListener)
         patch.setattr(run_product, 'ProfileManager', RecordedManager)
         if resources is not None:
