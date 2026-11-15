@@ -67,9 +67,12 @@
    `/mcp` 要剛好一個 `Authorization`、字面 `Bearer <token>`；其他路徑交預設 app。
 2. 候選 token 先 sha256 一次，再和每個帳號的摘要 `hmac.compare_digest`：預設帳號＋索引內讀得到、沒休眠、沒隔離的帳號；
    撤銷的略過。**全部比完、不提早結束。**
-3. 快取：每帳號只存 state 的 stat 簽章與 token 摘要；簽章變了才重讀。
-4. 命中後、讀 body **之前**做該帳號的准入；讀 body **時**逐塊扣該帳號的位元組額度，帶 `Content-Length` 時讀之前先比一次
-   （暫定，HM-08 定案；第 2.4 節）。
+3. 快取：每帳號只存 state 的 stat 簽章與 token 摘要（回覆遮罩另記目前的 token 與 child_token，只拿來遮）；簽章變了才重讀。
+   簽章：st_dev、st_ino、st_mtime_ns、st_size、st_nlink、st_mode，額外帳號再加 st_ctime_ns（它的讀取不 chmod；預設帳號的 store
+   每次讀都 fchmod，ctime 一直變）。額外帳號的目錄還要是開啟時那一個（st_dev、st_ino；HM-07 審查 S-08），不是就不路由。
+4. 命中後、讀 body **之前**做該帳號的准入；讀 body **時**逐塊扣該帳號的位元組額度（HM-08 定案）：每個請求扣
+   max(宣告的 `Content-Length`（最多算到單一請求上限 16 MiB）, 已讀的位元組)，從准入起扣到帳號 app 送出回應標頭為止（那時
+   請求內容已不在記憶體）；准入時就先扣宣告的長度，所以宣告的長度超過剩餘額度時，讀之前就拒絕（第 2.4 節）。
 5. 帳號 app 裡是今天的流程：再驗 token → 租約 → 方法 → Origin → query 400 → 讀 body → 政策 → session →
    轉送名額 → 重驗 → 轉發。只轉閘道自己的 child bearer 與 3 個 session 標頭（`mcp-session-id`、`mcp-protocol-version`、
    `last-event-id`）；只轉回 4 個標頭（`mcp-session-id`、`mcp-protocol-version`、`retry-after`、`content-type`）。
@@ -81,7 +84,7 @@
 | 剛好一個帳號 | 交該帳號 app，用自己的 store 再驗一次 | 路由錯只會被拒 |
 | 零個 | 交預設 app：密鑰網址 404、Bearer 401＋`WWW-Authenticate: Bearer` | 與今天逐位元相同；不佔准入、不讀 body |
 | 兩個以上（撞號） | 503 `{"error":"state unavailable"}`，不轉任何帳號 | WARNING 每組 60 秒一行（id 前 8 碼）；DQ-09 已定：503 |
-| 預設 state 讀不到、索引結構壞 | 503 `{"error":"state unavailable"}`（含預設帳號） | 索引壞的處理見第 3.6 節 `profile_index_state` |
+| 預設 state 讀不到、索引結構壞 | 503 `{"error":"state unavailable"}`（含預設帳號） | 索引壞的處理見第 3.6 節 `profile_index_state`；`/health/ready` 這時回 503 `{"ready":false}`（它只代表預設帳號，DQ-19，而預設帳號這時不服務）；其他非 MCP 路徑照預設 app（404） |
 | 索引被面板以外改動（簽章不符） | 503 `{"error":"state unavailable"}`，直到重啟 | 簽章含 st_dev、st_ino、st_mtime_ns、st_ctime_ns、st_size、st_nlink；同 uid 下不是安全邊界 |
 | 全部撤銷時寫入失敗的帳號 | 該帳號 503，直到重試成功 | 重啟時 `.revoke-all-pending` 讓守門在 listener 前重做 |
 
@@ -93,8 +96,8 @@
 |---|---|---|---|
 | 讀 body 前就知道不夠（准入滿，或宣告的 `Content-Length` 超過剩餘的位元組額度），`Content-Length` ≤64 KiB（或沒帶，但 2 秒內讀完且 ≤64 KiB），解析得出 JSON-RPC id | 200，`Retry-After: 5` | 每個 id 一則 `-32003` | 用全 add-on 共用的「拒絕小額度」讀：同時 8 個、合計 512 KiB |
 | 同上，但沒有 id、太大、讀不完或不是 JSON | 503，`Retry-After: 5` | `-32003`，`id: null` | 大於 64 KiB 的帶 id 請求拿 503（PaaS 200）：§8.8 #16 |
-| 讀 body 途中位元組額度用完（沒帶 `Content-Length`，或實際內容比宣告的多） | 503，`Retry-After: 5` | `-32003`，`id: null` | 立刻停讀、釋放已讀的部分，不改用拒絕小額度（暫定，HM-08 定案） |
-| 轉送名額等 1 秒逾時（body 已讀），有 id | 200，`Retry-After: 5` | 每個 id 一則 `-32003` | #148 形狀（HM-14） |
+| 讀 body 途中位元組額度用完（沒帶 `Content-Length`，或實際內容比宣告的多） | 503，`Retry-After: 5` | `-32003`，`id: null` | 立刻停讀、釋放已讀的部分，不改用拒絕小額度（HM-08 定案：帳號 app 看到的是用戶端斷線，它的回應換成這一個，子程式收不到任何東西） |
+| 轉送名額等 1 秒逾時（body 已讀），有 id | 200，`Retry-After: 5` | 每個 id 一則 `-32003` | #148 形狀（開通的產品 HM-08 起；排隊上限、保留名額與文字定稿 HM-14） |
 | 轉送名額等 1 秒逾時，沒有 id（GET、DELETE、保留名額也用完的通知） | 503，`Retry-After: 5` | `-32003`，`id: null` | 同上 |
 | 排隊已達上限（每個佇列各自計數） | 有 id 200、沒有 id 503，都帶 `Retry-After: 5` | `-32003` | 不等；WARNING 每帳號每情況 60 秒一行 |
 | 排隊時用戶端關閉連線 | （沒有人收得到） | — | 請求從排隊移除、絕不送出；只記 WARNING |
@@ -104,6 +107,9 @@
 - 只有通知或回應、沒有任何請求的 POST 走保留名額（每帳號 4 條）；判斷照 PaaS `_carries_no_request`：POST、可解析、
   物件或非空陣列、裡面沒有任何請求、每則都是通知或回應（HM-14）。
 - `-32003` 的訊息是固定文字（HM-14 定稿）：寫出是哪一種上限與「稍後重試」，不含 token、網址或帳號名稱。
+- 「解析得出 JSON-RPC id」＝`Content-Type: application/json`、strict JSON、單一物件、`jsonrpc` 是 `"2.0"`、`method` 是字串、
+  `id` 是字串或整數（閘道 `authorize` 收的請求）。batch、通知、回應、布林或小數 id 都算「沒有 id」：HA 閘道從不回 batch
+  （HM-08 定案）。GET、DELETE 沒有 body，一律 `id: null`。
 - 沒開通的產品照今天：8081 外框 `limit_concurrency=64`，超過時是 uvicorn 純文字 503；開通後改成上表的 JSON-RPC 忙碌回應（計畫 §7.2 第 3 點）。
 
 ### 2.5 回應途中與子程式斷線（HM-14）
@@ -391,6 +397,8 @@ PaaS 另帶 `message` 文字，HA 不帶（面板只認代碼，§8.8 #49）。
   加上共用的一筆放大。HM-19c 在 J6412（可以的話 J1900）量 MemAvailable；超過「MemAvailable－保留量」就把額外帳號的位元組額度往下調，
   不調就不能發版。
 - FD：開通後啟動時把 soft `RLIMIT_NOFILE` 提到「需要量＋25%」（最壞約 500，推估），不超過 hard；hard 不夠就不開額外帳號、記一行 WARNING。
+  HM-08 定案：需要量＝8081 外框＋8099 的 64＋預設帳號 40＋每個額外帳號 24（照產品上限算）＋角色查詢 8＋每個子程式 4＋基本 64
+  （Odoo 544，＋25% 是 680）；讀不到或設不上也算不夠（不假設，HM-03a 實測 HAOS 的值）。不夠時 8081 外框維持 64、只服務預設帳號。
 - 零命中的請求（錯 token）不佔准入。未帶 token 的半開連線撐滿 listener 是既有問題，不在範圍。
 - 記憶體檢查：建立帳號、存後端（子程式第一次要起）、手動重啟時讀 `/proc/meminfo` 的 MemAvailable；不足「產品每子程式 MiB＋保留量」時，
   建立回 409 `profile_memory_insufficient`，存後端照存但子程式不起（`blocked`＋`memory_capacity`）。開機時不擋。讀得到 cgroup
@@ -581,3 +589,4 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | v1 草案（HM-07） | 2026-11-15 | HM-07 | 第 8 節索引 port 規則照 PaaS 逐字一致（審查 MF-1 定案）：拿掉「不是 3000／8081／8099」；重複與 3000 只停相關帳號；listener port 交 HM-09 的 spawn 前檢查（`child_port_conflict`）；第 9 節不加列。DQ-09、DQ-12、DQ-19 改標已定（`decisions.md`） |
 | v1 草案（HM-06） | 2026-11-15 | HM-06 | 第 9 節 #37 加註：n8n 維持 n8n-mcp 現狀，另外收下三種都要先有自己 child token 的寫法（審查 MF-1 選 (a)，主對話 2026-11-15 08:0x 定案）；同步 `acceptance-matrix.md` T-23 與 `threat-model.md` I4。第 7 節「子程式 bearer」列不變（DQ-08 的 HM-06 部分照它，`decisions.md`） |
 | v1 草案（文件同步） | 2026-11-15 | HM-00 補正 | DQ-05、DQ-15、DQ-16、DQ-17 的「細節待定」改標已定（依 DQ-40 (a)，照計畫 §9、§5.3 第 7 點、§8.5、§5.3；`decisions.md`）：第 3.1 節 `backend` 列、第 3.3 節、第 3.5 節、第 3.6 節的名稱規則、第 9 節 #83。規則內容不變；DQ-10、DQ-18 在本檔沒有標待定的地方 |
+| v1 草案（HM-08） | 2026-11-15 | HM-08 | 第 2.2 節第 3、4 點：簽章欄位、額外帳號目錄比對、位元組額度怎麼扣（宣告長度先扣、讀到的超過再扣、送出回應標頭就還）定案；第 2.3 節：索引不能用時 `/health/ready` 回 not ready；第 2.4 節：讀途中額度用完的做法定案、轉送名額逾時的 `-32003` 在開通的產品由 HM-08 先做、「解析得出 id」的定義（batch 算沒有）；第 5 節：FD 需要量的算法與不夠時的降級 |
