@@ -557,6 +557,30 @@ async def test_a_product_without_profiles_refuses_to_create_one(tmp_path, log_sc
     assert not profiles.has_profile_data(data)
 
 
+async def test_no_profile_is_created_while_only_the_default_profile_is_served(tmp_path, log_scan):
+    """HM-08's file budget: when the open file limit cannot be raised to what additional profiles need, the add-on
+    serves the default profile only (B is listed as profile_unavailable). A creation then is 409 profile_limit_reached
+    with limit 0 and writes nothing: no directory, no index entry, no receipt; the new profile would not be served
+    after a restart either."""
+    from test_router_passthrough import FakeResource
+    from mcp_admin_core import profile_runtime
+    data = setup(tmp_path, extras=(B,))
+    needed, _ = profile_runtime.open_file_budget(PRODUCT)
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data),
+                                     resources=FakeResource(256, needed - 1)) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        assert runtime.manager.get(B) is None
+        panel = Panel(runtime, await csrf_of(runtime))
+        listed = (await panel.list())[0]['profiles']
+        assert [(row['id'], row['disabled_reason'], row['status']) for row in listed] == [
+            ('default', None, 'running'), (B, 'profile_unavailable', 'failed')]
+        before = tree_of(data)
+        response = await panel.create(NEW_LABELS[0])
+        assert (response.status_code, response.json()['detail']) == (409, {'code': 'profile_limit_reached', 'limit': 0})
+        assert tree_of(data) == before and not (data / '.profiles.json.operations.json').exists()
+
+
 # ---- write protection (contract 3.5; DQ-15; §8.8 #34; FM-06, FM-07, FM-24) ----
 
 async def test_every_profile_write_needs_the_index_etag_and_its_operation_id(tmp_path, log_scan):
@@ -914,6 +938,40 @@ async def test_a_deletion_waits_for_the_profiles_lock_and_the_add_ons(tmp_path, 
         assert tree_of(data) == before
 
 
+async def test_a_start_after_an_index_change_waits_for_the_profiles_own_lock(tmp_path, log_scan):
+    """HM-09 review S-12 (2), wired here: the start a reevaluation makes after an index change (and the boot's start,
+    start_all: both ProfileRuntime.launch) holds the profile's own lock, as a save and the panel's restart do, so the
+    two never interleave. C and D share a port (both disabled); while a save of C holds C's lock, deleting D frees the
+    port: the deletion is committed (D unindexed, its directory gone) but C's child is not started before C's lock is
+    released; then it starts once and the deletion answers."""
+    ports = {C: 18001, D: 18001}
+    data = setup(tmp_path, extras=(C, D), ports=ports)
+    layout = profiles.Layout(data)
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data, (C, D), ports)) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        panel = Panel(runtime, await csrf_of(runtime))
+        entry = runtime.manager.get(C)
+        supervisor, lock = entry.runtime.supervisor, entry.runtime.mutation_lock
+        assert supervisor.status == 'blocked' and entry.disabled == {'disabled_reason': 'port_conflict'}
+        starts = supervisor.starts
+        etag = await panel.etag()
+        await lock.acquire()  # a save of C is under way
+        try:
+            deleting = asyncio.create_task(panel.delete(D, etag=etag))
+            async with asyncio.timeout(5):
+                while runtime.manager.get(D) is not None or layout.profile(D).exists():
+                    await asyncio.sleep(.01)
+            await asyncio.sleep(.2)
+            assert [item.id for item in profiles.read_index(layout.index).entries] == [C]
+            assert supervisor.status == 'blocked' and supervisor.starts == starts and not deleting.done()
+        finally:
+            lock.release()
+        deleted = await asyncio.wait_for(deleting, 5)
+        assert deleted.status_code == 200, deleted.content
+        assert entry.disabled is None and supervisor.status == 'running' and supervisor.starts == starts + 1
+
+
 # ---- the index quarantine (contract 3.6; DQ-12; FM-131) ----
 
 @pytest.mark.parametrize('damage', ['corrupt', 'replaced'])
@@ -993,6 +1051,29 @@ def test_a_second_quarantine_in_the_same_second_gets_its_own_name(tmp_path):
     assert second == first + '-2'
     os.symlink('/nonexistent', tmp_path / second)  # a dangling link takes a name too
     assert profiles.free_index_quarantine_name(layout, when) == first + '-3'
+
+
+async def test_there_is_nothing_to_quarantine_without_an_index_file(tmp_path, log_scan):
+    """A profiles entry that could not be listed at the start (here a file) makes the index unusable without any index
+    file (HM-08: every token 503 until a restart; the bootstrap says corrupt). Quarantining then is 409
+    config_conflict before anything is revoked or recorded, even once the directory can be listed again: there is no
+    index to move aside, so the add-on is restarted instead."""
+    data = tmp_path / 'data'
+    configure(data, PRODUCT)
+    layout = profiles.Layout(data)
+    layout.profiles.write_text('not a directory')
+    async with multi_profile_runtime(PRODUCT, data) as runtime:
+        await settle(runtime, 'configured')
+        log_scan.watch(stored(data)['token'], stored(data)['child_token'])
+        async with runtime.admin() as admin:
+            boot = (await admin.get('/api/bootstrap', headers=ADMIN)).json()
+        assert boot['profile_index_state'] == 'corrupt' and admin_module().ETAG.fullmatch(boot['profile_index_etag'])
+        layout.profiles.unlink()
+        profiles.ensure_profiles_directory(layout)
+        before = tree_of(data)
+        response = await Panel(runtime, boot['csrf']).quarantine(boot['profile_index_etag'])
+        assert (response.status_code, response.content) == (409, b'{"detail":{"code":"config_conflict"}}')
+        assert tree_of(data) == before and not (data / '.profiles.json.operations.json').exists()
 
 
 def test_a_profile_directory_is_removed_without_following_a_link(tmp_path):
