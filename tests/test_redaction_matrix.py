@@ -19,7 +19,7 @@ byte for byte from woow-mcp-server 7d111b1, then through the HA rules, so a secr
   and in a differential fuzz; also for values of short runs between symbols (a password, user:pw: HM-02 review
   MF-1), counted by three characters in a row as the review counts them;
 - the guard decodes with the PaaS module's own decoder and stays within a few times the PaaS module's own cost
-  (HM-02 review MF-2);
+  (HM-02 review MF-2), and child output never raises out of the scrub (SF-1);
 - key= in child output (FM-75: bb48449 left ?key= and key=), without masking keys=, key_id=, monkey= or keyword=.
 
 A value shows when any MIN_FRAGMENT characters of it in a row are in the output (as the PaaS tests count it).
@@ -27,6 +27,7 @@ A value shows when any MIN_FRAGMENT characters of it in a row are in the output 
 from __future__ import annotations
 
 import ast
+import asyncio
 from collections import Counter
 import hashlib
 import importlib.util
@@ -707,6 +708,36 @@ def test_the_paas_decoder_gives_what_unquote_gives():
              '&', '\u00e9', '\u3000', '\ufffd', '%%', '%5C', '%5c%78', '\ud800', '%0a', '%00', '%E0%80%AF', '\x00')
     texts = [''.join(rng.choice(atoms) for _ in range(rng.randint(0, 24))) for _ in range(20000)]
     assert [text for text in texts if log_redaction._unquote(text) != unquote(text, errors='replace')] == []
+
+
+def _raise(text):
+    raise RuntimeError('synthetic failure inside the vendored module')
+
+
+def test_child_output_fails_closed_when_the_scrub_raises(monkeypatch):
+    """SF-1: child output never raises out of the scrub; the line is withheld, as a record is (redact.scrub). A
+    secret that cannot be encoded made bb48449's line scrub raise too."""
+    surrogate_secret = '\udcff' + 'S' * 8
+    with pytest.raises(UnicodeEncodeError):
+        OLD_DIAGNOSTICS.scrub_line('login ok', (surrogate_secret,))
+    assert diagnostics.scrub_line('login ok', (surrogate_secret,)) == redact.LINE_WITHHELD
+    monkeypatch.setattr(log_redaction, 'redact', _raise)
+    text = f'password={VALUE} /x?token=%2Fv'
+    assert redact.scrub_text(text) == redact.LINE_WITHHELD
+    assert diagnostics.scrub_line(text) == redact.LINE_WITHHELD
+    assert VALUE not in redact.LINE_WITHHELD
+
+
+async def test_child_logs_keep_reading_when_a_line_fails_to_scrub(monkeypatch):
+    """SF-1: ChildLogs.collect (one task per pipe on the supervisor's event loop) reads every line to the end when
+    the scrub fails, instead of ending with the exception and leaving the pipe unread."""
+    monkeypatch.setattr(log_redaction, 'redact', _raise)
+    reader = asyncio.StreamReader()
+    reader.feed_data(f'password={VALUE}\nsecond line\nlast'.encode())
+    reader.feed_eof()
+    logs = diagnostics.ChildLogs()
+    await logs.collect(reader, 'stdout', 1)
+    assert [entry['text'] for entry in logs.snapshot()['entries']] == [redact.LINE_WITHHELD] * 3
 
 
 def test_a_run_of_PIECE_characters_counts_where_its_windows_show_elsewhere():

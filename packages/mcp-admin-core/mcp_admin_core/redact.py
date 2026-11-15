@@ -66,6 +66,7 @@ _PLACEHOLDERS = re.compile(re.escape(log_redaction.AMBIGUOUS) + r"| \u2026\[trun
 # between two masks is what a result shows
 _MASKS = re.compile(r"\[REDACTED\]|\*\*\*|" + _PLACEHOLDERS.pattern)
 _VALUE_CHAR = re.compile(r"[^\W_]")  # a letter or a digit
+LINE_WITHHELD = "line withheld (redaction failed)"  # scrub_text() when it fails (scrub() withholds a record)
 
 
 def apply_rules(text: str, rules=PATH_RULES):
@@ -154,9 +155,14 @@ def shows_hidden(original: str, shown: str, rules=PATH_RULES) -> bool:
 
 def scrub_text(text: str, rules=PATH_RULES) -> str:
     """HM-02: text as a log may show it: the PaaS rules first, then ``rules`` (the HA rule, or a caller's rules that
-    include it); the PaaS placeholder instead when that would show what ``rules`` alone hide."""
-    shown, _ = apply_rules(log_redaction.redact(text), rules)
-    return log_redaction.AMBIGUOUS if shows_hidden(text, shown, rules) else shown
+    include it); the PaaS placeholder instead when that would show what ``rules`` alone hide. It never raises: child
+    output is scrubbed on the supervisor's event loop (diagnostics.ChildLogs.collect, one task per pipe), and an
+    exception there would stop reading that pipe; a failure gives LINE_WITHHELD instead."""
+    try:
+        shown, _ = apply_rules(log_redaction.redact(text), rules)
+        return log_redaction.AMBIGUOUS if shows_hidden(text, shown, rules) else shown
+    except Exception:
+        return LINE_WITHHELD
 
 
 def _scrub_value(value):

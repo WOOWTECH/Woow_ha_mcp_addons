@@ -26,6 +26,16 @@ RULES = ((redact.PRIVATE_SEGMENT, redact.REDACTED), (AUTH, r"\1 [REDACTED]"), (A
 
 
 def scrub_line(text, secrets=()):
+    # HM-02 review (SF-1): never raise. Child output is scrubbed on the supervisor's event loop, one ChildLogs.collect
+    # task per pipe, and an exception would end that task and leave the pipe unread (the child then blocks once it
+    # fills); a record that fails to scrub is withheld the same way (redact.scrub).
+    try:
+        return _scrub_line(text, secrets)
+    except Exception:
+        return redact.LINE_WITHHELD
+
+
+def _scrub_line(text, secrets):
     # Scrub before bounding the display: truncating first can expose half a secret.
     text = ANSI.sub("", text)
     variants = set()
