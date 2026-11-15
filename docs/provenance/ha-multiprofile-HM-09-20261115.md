@@ -3,10 +3,12 @@
 ## 結論
 
 - **獨立審查判定「修正後通過」（必修 2 項、建議 12 項），都處理了**（處理表在第 15 節；沒有碰到待定題）：
-  - MF-1 基準過時：本片 rebase 到 HM-08 的最終 head `adfc4bf`（HM-08 已在 18:05 以 #99 合併，`claude-delivery` `b5d10c5` 的 tree 和它
-    相同），只重放本片的 5 個 commit；3 處衝突照審查的三點解（第 14.1 節），帳本照實際內容重算；全套 pytest、兩個預檢、`validate.py`、
-    packaging unittest、突變 M34 都重跑了。`claude-delivery` 之後又合併 #100（`51bc4b7`，19:10），開 PR 前要再 rebase 一次：只有
-    `decisions.md` 衝突，題數改成 34 題已定、12 題待定（第 14.2 節在暫存複本試過）。
+  - MF-1 基準過時：本片先 rebase 到 HM-08 的最終 head `adfc4bf`（HM-08 已在 18:05 以 #99 合併，`claude-delivery` `b5d10c5` 的 tree 和它
+    相同），只重放本片的 5 個 commit；3 處衝突照審查的三點解（第 14.1 節），帳本照實際內容重算。`claude-delivery` 之後又合併 #100
+    （`51bc4b7`，19:10），開 PR 前再 rebase 到 `51bc4b7`（第 14.2 節）：只有 `decisions.md` 衝突，以 `claude-delivery` 的版本為底改成
+    34 題已定、12 題待定。第一次 rebase 後重跑全套 pytest、兩個預檢、`validate.py`、packaging unittest、突變 M34；第二次只帶進 #100 的
+    workflow 與 `decisions.md`（`tests/` 裡沒有測試讀這兩個檔），之後照實際內容核對帳本，重跑兩個預檢、`validate.py`、packaging unittest
+    與 tool-surface，全套以 CI 為準。
   - MF-2 三個執行面沒有測試擋得住：收進審查的 E8、E9、E10（E9 另加面板的 `child/restart`），DQ-21 測試改成比對新的子程式世代；
     `acceptance-matrix.md` 的 HM-09 列照實際涵蓋範圍改寫。突變 R40、R19、R41 現在都擋下。
   - 建議：S-1～S-7、S-10、S-12 的 (1)(3)(4) 改了程式或測試；S-8、S-11、S-12 (2) 寫進第 13.2 節的交接；S-9 的五個解讀與 S-1、S-6 的兩個
@@ -38,24 +40,24 @@
   - **log 事件**（契約第 7 節）：`MCP child [profile=<id 前 8 碼> port=<p> pid=<n>]: …`，每帳號每情況 60 秒一行（`suppressed=N`）。
   - `child/restart` 的 202 回應多 `blocked_reason`（修 PaaS B-22）。
 - 新測試 5 檔 119 案（實作時 107 案，審查後加 11 案、改 6 案，複查時再加 1 案）＋測試工具 2 檔；改 3 個既有測試檔。**先寫測試**：實作前新 5 檔 103 案裡
-  100 失敗、3 通過；審查後的測試先 commit（`e8055f0`），在修正前的程式上 118 案 4 失敗、114 通過（失敗的正是程式修正要擋的 4 案）（第 4.3 節）。臨時突變：實作時 46 個全部擋下
+  100 失敗、3 通過；審查後的測試先 commit（`1f4193a`），在修正前的程式上 118 案 4 失敗、114 通過（失敗的正是程式修正要擋的 4 案）（第 4.3 節）。臨時突變：實作時 46 個全部擋下
   （第 4.2 節）；審查後 18 個，17 個擋下；R03b 第一次卡住（第 10 案，不是停機測試），在兩個測試工具的關閉加上 30 秒上限後重跑擋下（32.8 秒；改跑 HM-08 的 `test_profile_routing.py` 也擋下，32.3 秒）（第 4.4 節）。
 - **複查時找到並修好測試工具的一個偶發失敗**（第 4.5 節）：`free_port()` 連續兩次可能拿到同一個 port（本機 2 萬次「連抽三個」有 5 次重複），
   同一個 rig 的兩個帳號就同 port：預設帳號的就緒檢查打到 B 的替身子程式（401），`start_all` 等滿 30 秒，
   `test_removing_a_profile_stops_its_monitor_and_its_child` 在 10 秒逾時。強制同 port 重現後，`free_port()` 改成不再發最近發過的 port，
   補 `test_a_rig_never_gives_two_profiles_one_port`（舊寫法紅、新寫法綠）。只改 `tests/`，沒動正式程式。
-- 兩個預檢（base `adfc4bf`）：秘密預檢 0 命中、帳本預檢 OK（第 8 節）。全套 pytest：5395 案、0 skip、31 分 08 秒（1,869 秒）：5388 通過，7 個失敗都是已知要 root 的既有案例（第 5、6 節）。
-- `decisions.md` 記 DQ-21、DQ-25（這個基準上是 29 題已定、17 題待定）；契約第 7 節的「待定」改成已定並寫明本片的做法（第 3.10 節）。
+- 兩個預檢（base `origin/claude-delivery`＝`51bc4b7`）：秘密預檢 0 命中、帳本預檢 OK（第 8 節）。全套 pytest（rebase 前的 `62b5186`，程式與帳本和最後的 head 相同）：5395 案、0 skip、31 分 08 秒（1,869 秒）：5388 通過，7 個失敗都是已知要 root 的既有案例；之後只改兩個測試工具（用到它們的 9 個檔連跑兩次全過）與文件（第 5、6 節）。
+- `decisions.md` 記 DQ-21、DQ-25（rebase 到 `claude-delivery` 後是 34 題已定、12 題待定）；契約第 7 節的「待定」改成已定並寫明本片的做法（第 3.10 節）。
 - 平台事實都在執行時讀，做不到就降級並記一行 WARNING；HM-03a 要確認的項目在第 11 節（審查後補了試綁的 errno 與 `oom_score_adj` 基準）。
-  這個階段只 commit，不 push、不開 PR。
+  rebase 到 `claude-delivery` 之後 push 並開 PR（不合併；主對話在 CI 全綠後合併）。
 
 ## 1. 範圍與基準
 
 | 項目 | 值 |
 |---|---|
 | 切片 | HM-09（計畫 §12.3；風險中、工作量 L；不是「審查」片） |
-| 分支 | `feat/ha-multiprofile-hm09-20261115`（一般 clone）。修正階段 rebase 到 HM-08 的最終 head `adfc4bf`（只重放本片的 5 個 commit），再加審查修正與複查的 7 個 commit（第 15.2 節） |
-| 基準 | `adfc4bf`＝HM-08 的最終 head；#99 在 2026-11-15 18:05 把它合併成 `claude-delivery` `b5d10c5`（兩者 tree 都是 `f9f4e6e`）：HM-00、01、02、04、05、06、07、08、13a、17 都已合併。`claude-delivery` 之後又合併 #100（`51bc4b7`，19:10：`checks` 上限 40→60 分鐘、`decisions.md` 記 DQ-13／14／30／31／43），本片還沒疊上去（開 PR 前要做，第 14.2 節） |
+| 分支 | `feat/ha-multiprofile-hm09-20261115`（一般 clone）。修正階段先 rebase 到 HM-08 的最終 head `adfc4bf`（只重放本片的 5 個 commit），加審查修正與複查的 7 個 commit（第 15.2 節），開 PR 前再 rebase 到 `claude-delivery` `51bc4b7`（第 14.2 節）；加上本筆記最後一個 commit 共 13 個 |
+| 基準 | `claude-delivery` `51bc4b7`：#100 在 2026-11-15 19:10 合併（`checks` 上限 40→60 分鐘、`decisions.md` 記 DQ-13／14／30／31／43）；它的前一個是 #99 在 18:05 把 HM-08 的最終 head `adfc4bf` 合併成的 `b5d10c5`（兩者 tree 都是 `f9f4e6e`）：HM-00、01、02、04、05、06、07、08、13a、17 都已合併。2026-11-16 開 PR 前 `git fetch` 時 `claude-delivery` 仍是 `51bc4b7` |
 | 依據 | 計畫 §5.4、§3.3、§7.1、§7.2 第 5 點、§10.1、§10.3 的 HM-09 列、§12.0、§12.3 HM-09；契約 §1.2、§3.1、§3.6、§5、§7、§9 #14、#18、#19、#29、#53；驗收矩陣 T-13、T-14、T-15、T-17、T-18；FM-13、25、37、38、39、40、45、46、68、69、133、134、137、138；C2-SF-3、SF-4、SF-5、SF-10、C2-MF-4 第 3 點、C3-MF-1、C3-SF-3、C4-SF-6；HM-04～HM-08 的 provenance 筆記交給 HM-09 的事項（第 13.1 節） |
 | 對齊的 PaaS | 沒有移植 PaaS 程式。期望值來自 `woow-mcp-server` @`69ac425`：`process.py`（`AUTO_RESTART_DELAYS`、`STABLE_SECONDS`、`_schedule_auto_restart`、`_port_refusal`、`CHILD_PORT_CONFLICT`、`CHILD_PORT_IN_USE`、`_tag`）、`child_identity.py`（`port_occupied`、exec 包裝器的寫法）、`profiles.py`（`port_conflict`、`start_all`、`_memory_limit_mib`、容量公式）。到 `cf3d0d5` 這幾個檔都沒變（第 9 節） |
 | 獨立審查 | `artifacts/ha-multiprofile-parity-20261114/wave3/review-HM-09.md`（repo 外；證據在同層的 `evidence-review-HM-09/`）：修正後通過，必修 2、建議 12（第 15 節） |
@@ -324,16 +326,16 @@
 | M45 | start_all 不等執行中的檢查、自己再探（`profile_runtime.py`） | 擋下 | `tests/test_staggered_start.py::test_start_all_waits_for_a_check_running_now_instead_of_probing_again` |
 | M46 | settle 不等執行中的檢查（`health.py`） | 擋下 | `tests/test_health_backoff.py::test_settle_waits_for_a_running_check_instead_of_probing_again` |
 
-### 4.3 審查後補的測試：先紅後綠（審查修正的 commit：`e8055f0` 測試先、`f89f6ce` 程式後）
+### 4.3 審查後補的測試：先紅後綠（審查修正的 commit：`1f4193a` 測試先、`f6b7fea` 程式後）
 
 | 輪 | 範圍 | 結果 |
 |---|---|---|
-| 修正前的程式（`f89f6ce^`，和 rebase 後的 `57ec5c0` 相同）＋審查後的測試（`ca2dba2`） | 新 5 檔 118 案 | 4 失敗、114 通過。失敗的正是程式修正要擋的 4 案：S-6 的 `test_an_ipv6_test_bind_the_platform_refuses_is_skipped_with_one_warning[EACCES]`、`[EPERM]`（舊程式連 `_reported_binds` 都沒有，在 monkeypatch 那一步就失敗；行為本身由突變 N1、N2 證明擋得住）；S-12 的 `test_a_start_that_fails_is_named_and_never_stops_the_others`（`start_all` 把 `RuntimeError: the wait broke` 丟出來）與 `test_without_an_interpreter_for_the_wrapper_the_child_starts_and_says_so`（`resource_state` 是 None、沒有那一行）。其餘 7 個新案例與 6 個改過的案例測的是本來就對的行為（E2、E3、E8、E9、E10、S-3、S-4、S-5、S-7、S-12 (4)），由第 4.4 節的突變證明擋得住 |
-| 修正後（`ca2dba2`） | 同上，連跑兩次 | 118 案全過兩次（23.9、23.4 秒），看偶發 |
-| 測試工具的關閉上限之後（`07634b3`） | 用到兩個測試工具的 9 個測試檔 | 214 案：213 過、1 失敗：`test_removing_a_profile_stops_its_monitor_and_its_child` 逾時，原因是測試工具的 port 相撞（第 4.5 節），不是關閉上限 |
-| `free_port()` 修正之後（複查，`0144625`） | 同上 9 個檔（多了新的 1 案），連跑兩次 | 215 案全過兩次（45.6、45.3 秒）；新案在舊的 `free_port()` 上是紅的（預設帳號拿到 B 的 port） |
+| 修正前的程式（`f6b7fea^`，和 `5eeb470` 相同）＋審查後的測試（`62b5186`） | 新 5 檔 118 案 | 4 失敗、114 通過。失敗的正是程式修正要擋的 4 案：S-6 的 `test_an_ipv6_test_bind_the_platform_refuses_is_skipped_with_one_warning[EACCES]`、`[EPERM]`（舊程式連 `_reported_binds` 都沒有，在 monkeypatch 那一步就失敗；行為本身由突變 N1、N2 證明擋得住）；S-12 的 `test_a_start_that_fails_is_named_and_never_stops_the_others`（`start_all` 把 `RuntimeError: the wait broke` 丟出來）與 `test_without_an_interpreter_for_the_wrapper_the_child_starts_and_says_so`（`resource_state` 是 None、沒有那一行）。其餘 7 個新案例與 6 個改過的案例測的是本來就對的行為（E2、E3、E8、E9、E10、S-3、S-4、S-5、S-7、S-12 (4)），由第 4.4 節的突變證明擋得住 |
+| 修正後（`62b5186`） | 同上，連跑兩次 | 118 案全過兩次（23.9、23.4 秒），看偶發 |
+| 測試工具的關閉上限之後（`1fc1913`） | 用到兩個測試工具的 9 個測試檔 | 214 案：213 過、1 失敗：`test_removing_a_profile_stops_its_monitor_and_its_child` 逾時，原因是測試工具的 port 相撞（第 4.5 節），不是關閉上限 |
+| `free_port()` 修正之後（複查，`2334bcd`） | 同上 9 個檔（多了新的 1 案），連跑兩次 | 215 案全過兩次（45.6、45.3 秒）；新案在舊的 `free_port()` 上是紅的（預設帳號拿到 B 的 port） |
 
-這些測試都寫在 `e8055f0`，在 `f89f6ce`（程式）之前 commit；測試工具的關閉上限（`07634b3`）是跑突變時才發現要加的（第 4.4 節的 R03b）。
+這些測試都寫在 `1f4193a`，在 `f6b7fea`（程式）之前 commit；測試工具的關閉上限（`1fc1913`）是跑突變時才發現要加的（第 4.4 節的 R03b）。
 
 ### 4.4 審查後的臨時突變（`SP:hm09-fix/mutate.py`；一次拿共用鎖，`SP:hm09-fix/batch.sh`）
 
@@ -362,7 +364,7 @@ R 開頭的是審查的突變（第一輪存活的 9 個與卡住的 R03b；R30 
 | N4 | 預設帳號的就緒等待丟例外時不攔（`profile_runtime.py`；S-12） | 擋下 | `tests/test_staggered_start.py::test_a_start_that_fails_is_named_and_never_stops_the_others` | 21.7 |
 | N5 | `sys.executable` 是空的時照舊不記（`lifecycle.py`；S-12） | 擋下 | `tests/test_extra_child_resources.py::test_without_an_interpreter_for_the_wrapper_the_child_starts_and_says_so` | 22.1 |
 | N6 | `run()` 被拒後一律等退避表的最後一格（`health.py`；S-7） | 擋下 | `tests/test_health_backoff.py::test_the_monitor_waits_the_backoff_between_its_checks` | 16.8 |
-| R03b（重跑） | 同上，加上兩個測試工具的關閉上限之後（`07634b3`；同一批 8 檔） | 擋下 | `tests/test_profile_lifecycle.py::test_switched_on_every_profile_gets_the_watchdog_and_the_spawn_check`（第 10 案；測試工具關閉的 30 秒上限讓它失敗，不再卡住） | 32.8 |
+| R03b（重跑） | 同上，加上兩個測試工具的關閉上限之後（`1fc1913`；同一批 8 檔） | 擋下 | `tests/test_profile_lifecycle.py::test_switched_on_every_profile_gets_the_watchdog_and_the_spawn_check`（第 10 案；測試工具關閉的 30 秒上限讓它失敗，不再卡住） | 32.8 |
 | R03b（HM-08 的測試工具） | 同上，改跑 `tests/test_profile_routing.py`（經 `multi_profile_runtime` 的 run_product 停機） | 擋下 | `tests/test_profile_routing.py::test_the_contract_cases_route_by_token_alone[odoo]`（停機的 30 秒上限讓它失敗） | 32.3 |
 
 - R03b 第一次卡在第 10 案 `test_switched_on_every_profile_gets_the_watchdog_and_the_spawn_check`，不是停機測試：每個測試的測試工具關閉時都會
@@ -383,34 +385,38 @@ R 開頭的是審查的突變（第一輪存活的 9 個與卡住的 R03b；R30 
   用強制的抽號順序（B、C、再抽到 B 的 port）重現：B 的替身收到預設帳號的檢查（暫時的測試檔，在共用鎖下跑完就刪，沒進 repo）。
 - 影響：只在測試工具。正式程式不會這樣配 port（額外帳號的 port 由索引決定，預設帳號是 3000；同 port 由 spawn 前檢查擋）。每個 rig
   3～7 個 port、全套約 70 個 rig，CI 每跑一次都有一點機會撞到（不一定每種相撞都讓測試失敗）。
-- 修法（`0144625`，只改 `tests/`）：`tests/multi_profile_runtime.py` 的 `free_port()` 記住最近發過的 256 個 port（`HANDED_OUT`），不再發
+- 修法（`2334bcd`，只改 `tests/`）：`tests/multi_profile_runtime.py` 的 `free_port()` 記住最近發過的 256 個 port（`HANDED_OUT`），不再發
   同一個；抽號抽成 `_draw()`。新測試 `test_a_rig_never_gives_two_profiles_one_port`：抽號照「B、C、再抽到 B 的 port」時，預設帳號拿到
   下一個 port，錯開啟動馬上完成。拿掉 `HANDED_OUT` 的檢查（舊寫法）時它是紅的：`assert (36751, 51083, 36751) == (36751, 51083, 56531)`；
   修正後 9 個檔 215 案連跑兩次全過。
 
-## 5. 本機檢查（2026-11-15，一般使用者 uid 1000；TMPDIR 用 `/tmp/ha-mp-XXXXXX`，每次跑完用完整路徑刪除）
+## 5. 本機檢查（一般使用者 uid 1000；TMPDIR 用 `/tmp/ha-mp-XXXXXX`，每次跑完用完整路徑刪除）
 
-審查修正後。全套 pytest 在 HEAD `ca2dba2`（程式與帳本和最後的 head 相同）；之後改了測試工具的關閉上限（`07634b3`，只改 `tests/` 的
-3 個檔，受影響的 9 個測試檔重跑）與文件。實作時（rebase 前）的數字留在第 4.1、4.2 節。
+rebase 到 `claude-delivery` `51bc4b7` 之後（2026-11-16，`1d42c2a`：程式、測試、帳本和最後的 head 相同，之後只改本筆記）重跑的是表的前
+4 列。這次 rebase 只帶進 #100 的 `.github/workflows/woow-addon-release.yml` 與 `decisions.md`：`tests/` 裡沒有測試讀這兩個檔（`grep` 核對），
+讀 workflow 的是 packaging 的檢查，所以 rebase 後沒有重跑 pytest（共用鎖當時排著 HM-14 審查的突變與 HM-10 的全套，估計要等兩小時以上）；
+全套以 CI 為準。rebase 前（基準 `adfc4bf`）的結果在表的後半，SHA 都換成 rebase 後對應的 commit（程式與測試逐位元相同，對照在第 14.2 節）。
+實作時（第一次 rebase 前）的數字留在第 4.1、4.2 節。
 
 | 檢查 | 結果 |
 |---|---|
-| 全套 pytest（HEAD `ca2dba2`；正式 conftest，排隊在共用鎖；`SP:hm09-fix/batch.sh`；Chromium 照 CI 的 `npm run browser:install` 裝在 `node_modules`） | 5395 案、0 skip、31 分 08 秒（1,869 秒）：5388 通過，7 個失敗都是已知要 root 的既有案例（`test_owned_executable.py` 1、HM-07 `test_profile_store.py` 1、HM-13a `test_restore_detection.py` 5；第 6 節）。瀏覽器測試與帳本測試（`test_tool_inventory.py`、`test_ledger_precheck.py`）都過 |
-| 測試工具的關閉上限之後（HEAD `07634b3`，只改 `tests/` 的 3 個檔） | 用到兩個測試工具的 9 個測試檔（本片 5 檔＋HM-08 的 4 檔）：214 案 213 過；1 個逾時是測試工具的 port 相撞（第 4.5 節）。其他測試檔不 import 這兩個工具，不受影響 |
-| `free_port()` 修正之後（HEAD `0144625`） | 同上 9 個檔：215 案連跑兩次全過（45.6、45.3 秒）；新案在舊寫法上是紅的 |
-| 新 5 檔連跑兩次（`ca2dba2`） | 118 案×2 全過（23.9、23.4 秒） |
-| 先紅後綠（第 4.3 節） | 修正前的程式上 118 案 4 失敗、114 通過（失敗的正是程式修正要擋的 4 案） |
-| 突變（第 4.4 節） | 18 個：17 個擋下；R03b 第一次卡住（第 10 案，不是停機測試），在兩個測試工具的關閉加上 30 秒上限後重跑擋下（32.8 秒；改跑 HM-08 的 `test_profile_routing.py` 也擋下，32.3 秒） |
-| `packaging/validate.py`（ci-venv 的 Python） | PASS |
-| packaging unittest（同 CI：暫存 venv＝`uv sync --frozen --no-dev --offline`＋`requirements-ci`；`discover -s packaging`；短 TMPDIR） | `Ran 201`、`OK (skipped=5)`（5 個 `skipUnless(root)`，同基準；本片沒動 `packaging/`） |
-| `scripts/tool_inventory.py` 漂移檢查 | exit 0（沒動 `apps/runtime/*.py`、`apps/*/launch.py`） |
-| 暫存複本試 rebase 到 `51bc4b7`（第 14.2 節） | 只有 `decisions.md` 衝突 4 處；解完帳本預檢（`--base 51bc4b7`）OK |
-| commit 署名 | 本片 12 個 commit 都沒有 `Co-Authored-By`、`Generated with`；身分照 clone 的 git config（`woowtech`） |
+| `packaging/validate.py`（rebase 後；ci-venv 的 Python） | PASS |
+| packaging unittest（rebase 後；同 CI：暫存 venv＝`uv sync --frozen --no-dev --offline`＋`requirements-ci`；`discover -s packaging`；短 TMPDIR） | `Ran 201`、`OK (skipped=5)`（5 個 `skipUnless(root)`，同基準；本片沒動 `packaging/`） |
+| `scripts/tool_inventory.py` 漂移檢查（rebase 後） | exit 0（沒動 `apps/runtime/*.py`、`apps/*/launch.py`） |
+| 兩個預檢（rebase 後，base `origin/claude-delivery`） | 秘密預檢 0 命中、帳本預檢 OK（第 8 節） |
+| rebase 前：全套 pytest（`62b5186`，當時是 `ca2dba2`；正式 conftest，排隊在共用鎖；`SP:hm09-fix/batch.sh`；Chromium 照 CI 的 `npm run browser:install` 裝在 `node_modules`） | 5395 案、0 skip、31 分 08 秒（1,869 秒）：5388 通過，7 個失敗都是已知要 root 的既有案例（`test_owned_executable.py` 1、HM-07 `test_profile_store.py` 1、HM-13a `test_restore_detection.py` 5；第 6 節）。本片新 5 檔當時 118 案全過；瀏覽器測試與帳本測試（`test_tool_inventory.py`、`test_ledger_precheck.py`）都過 |
+| rebase 前：測試工具的關閉上限之後（`1fc1913`，只改 `tests/` 的 3 個檔） | 用到兩個測試工具的 9 個測試檔（本片 5 檔＋HM-08 的 4 檔）：214 案 213 過；1 個逾時是測試工具的 port 相撞（第 4.5 節）。其他測試檔不 import 這兩個工具 |
+| rebase 前：`free_port()` 修正之後（`2334bcd`） | 同上 9 個檔：215 案連跑兩次全過（45.6、45.3 秒），本片新 5 檔 119 案都在裡面；新案在舊寫法上是紅的 |
+| rebase 前：新 5 檔連跑兩次（`62b5186`） | 118 案×2 全過（23.9、23.4 秒） |
+| rebase 前：先紅後綠（第 4.3 節） | 修正前的程式上 118 案 4 失敗、114 通過（失敗的正是程式修正要擋的 4 案） |
+| rebase 前：突變（第 4.4 節） | 18 個：17 個擋下；R03b 第一次卡住（第 10 案，不是停機測試），在兩個測試工具的關閉加上 30 秒上限後重跑擋下（32.8 秒；改跑 HM-08 的 `test_profile_routing.py` 也擋下，32.3 秒） |
+| rebase 前：`validate.py`、packaging unittest、tool-surface | PASS；`Ran 201`、`OK (skipped=5)`；exit 0 |
+| commit 署名 | 本片 13 個 commit 都沒有 `Co-Authored-By`、`Generated with`；身分照 clone 的 git config（`woowtech`） |
 | `git status` | 乾淨（未追蹤檔 0）；用過的 `/tmp/ha-mp-*` 都已用完整路徑刪除 |
 
 ## 6. 只在 CI 跑的測試
 
-本片的 118 案在本機都跑過且全過，沒有只在 CI 跑的新測試。CI（root、0 skip）才是準：
+本片的 119 案在本機都跑過且全過，沒有只在 CI 跑的新測試。CI（root、0 skip）才是準：
 
 - `tests/test_extra_child_resources.py` 的兩個探針案例在 root 下才是 uid 10001（探針先把自己的 `oom_score_adj` 寫成 200 再降權；直譯器與 venv
   複製到 `/tmp` 底下 0755 的目錄，同 HM-07、`test_owned_executable.py` 的做法）；本機以 uid 1000 跑同一個探針、同樣的斷言。root 下的這兩案
@@ -425,16 +431,17 @@ R 開頭的是審查的突變（第一輪存活的 9 個與卡住的 R03b；R30 
 
 ## 7. `checks` 秒數
 
-開 PR 後補（前：`claude-delivery` 最近一個 PR run 的 `checks`；後：本片 PR 的 `checks`）。本片新測試 5 檔在本機約 22 秒（全套 junit 的案例時間：
-lifecycle 11.3、ports 1.5、health 2.9、stagger 4.0、resources 2.6 秒）；root 時的探針另要複製一次直譯器與 venv，CI 會多幾秒（計畫 §10.1：每片增量 ≤1.5 分鐘）。#99 的 `checks` 是 2,079 秒；#100 已把上限
+開 PR 後補（後：本片 PR 的 `checks`）。前：`claude-delivery` 最近一個 PR（#100，`cf62c8f`，run 43705008744）的 `checks` 是 1,899 秒。
+本片新測試 5 檔在本機約 22 秒（rebase 前全套 junit 的案例時間：lifecycle 11.3、ports 1.5、health 2.9、stagger 4.0、resources 2.6 秒）；root 時的探針另要複製一次直譯器與 venv，CI 會多幾秒（計畫 §10.1：每片增量 ≤1.5 分鐘）。#99 的 `checks` 是 2,079 秒；#100 已把上限
 調到 60 分鐘。
 
-## 8. 預檢結果（審查修正後；base 是 HM-08 的最終 head `adfc4bf`）
+## 8. 預檢結果（rebase 後；base 是 `origin/claude-delivery`＝`51bc4b7`）
 
 | 預檢 | 指令 | 結果 |
 |---|---|---|
-| 秘密預檢 | `.venv/bin/python -I scripts/secret_precheck.py --tools SP:hm01/gitleaks-tools --repo . --base adfc4bfb38724945096c27267bd9fa0aebf7c9db --head HEAD --full` | gitleaks 8.28.0（釘版、已驗），設定是 `packaging/supply_chain.py` 的 `gitleaks_config()`；`adfc4bf..HEAD` 的 12 個 commit（本片 5 個＋審查修正與複查 7 個，含本筆記的 commit）＋HEAD 整棵樹＋整個歷史：**0 命中** |
-| 帳本預檢 | `.venv/bin/python -I scripts/ledger_precheck.py --repo . --base adfc4bfb38724945096c27267bd9fa0aebf7c9db` | `runtime-patches.json` 173 檔（`lifecycle.py` 加進來了）、`runtime-sources.json` 70 檔、`tool-surface.json` 159 檔：0 漂移、0 缺；改到的列管檔 5 個（`gateway.py`、`lifecycle.py`、`profile_runtime.py`、`profiles.py`、`run_product.py`）都有帳本更新；沒有沒列管的新執行檔；`health.py` 列為「沒列管、要看」（`ledger-tracking.md` 第 3 節）：**OK** |
+| 秘密預檢 | `.venv/bin/python -I scripts/secret_precheck.py --tools SP:hm01/gitleaks-tools --repo . --base origin/claude-delivery --head HEAD --full` | gitleaks 8.28.0（釘版、已驗），設定是 `packaging/supply_chain.py` 的 `gitleaks_config()`；`51bc4b7..HEAD` 的 13 個 commit（本片 5 個＋審查修正與複查 7 個＋本筆記最後一個）＋HEAD 整棵樹＋整個歷史：**0 命中** |
+| 帳本預檢 | `.venv/bin/python -I scripts/ledger_precheck.py --repo . --base origin/claude-delivery` | `runtime-patches.json` 173 檔（`lifecycle.py` 加進來了）、`runtime-sources.json` 70 檔、`tool-surface.json` 159 檔：0 漂移、0 缺；改到的列管檔 5 個（`gateway.py`、`lifecycle.py`、`profile_runtime.py`、`profiles.py`、`run_product.py`）都有帳本更新；沒有沒列管的新執行檔；`health.py` 列為「沒列管、要看」（`ledger-tracking.md` 第 3 節）：**OK** |
+| rebase 前（base `adfc4bf`，HEAD 當時是 `b0259b4`＝現在的 `1d42c2a`） | 同上兩個，`--base adfc4bfb38724945096c27267bd9fa0aebf7c9db` | 秘密預檢 12 個 commit＋整棵樹＋整個歷史 0 命中；帳本預檢 173／70／159 檔 0 漂移，OK |
 
 測試資料：沒有 commit 任何隨機 token；token 都在測試執行時產生（沿用 HM-01、HM-08 的工具與 `create_profile`）；憑證 `DUMMY-…`、網址 `.invalid`。
 
@@ -461,8 +468,8 @@ lifecycle 11.3、ports 1.5、health 2.9、stagger 4.0、resources 2.6 秒）；r
 | DQ-19 | `/health/ready` 只代表預設帳號 | 不變 |
 | DQ-33、DQ-36 | 本機短 TMPDIR、以 CI 為準；commit 不加 AI 署名 | 第 5 節；commit |
 
-沒有碰到待定題（審查也確認）。計畫沒寫死、本片定的實作細節列在第 3.10 節。#100（DQ-13、14、30、31、43 記成已定）在 `adfc4bf` 之後才合併，
-本片的基準沒有它：開 PR 前 rebase 到 `claude-delivery` 時，`decisions.md` 照第 14.2 節改成 34 題已定、12 題待定。
+沒有碰到待定題（審查也確認）。計畫沒寫死、本片定的實作細節列在第 3.10 節。#100（DQ-13、14、30、31、43 記成已定）在 `adfc4bf` 之後合併；
+本片 rebase 到 `claude-delivery` 時以它的 `decisions.md` 為底，改成 34 題已定、12 題待定（第 14.2 節）。
 
 ## 11. 待 HM-03a 確認
 
@@ -486,13 +493,13 @@ lifecycle 11.3、ports 1.5、health 2.9、stagger 4.0、resources 2.6 秒）；r
 
 | 條件 | 結果 |
 |---|---|
-| 全綠 | 本機：5395 案、0 skip、31 分 08 秒（1,869 秒）：5388 通過，7 個失敗都是已知要 root 的既有案例；本片 118 案全過。CI（root、0 skip）開 PR 後才知道 |
+| 全綠 | 本機：rebase 前的 `62b5186` 全套 5395 案、0 skip、31 分 08 秒（1,869 秒）：5388 通過，7 個失敗都是已知要 root 的既有案例；之後的兩個測試工具改動，用到它們的 9 個檔（本片 119 案在內）連跑兩次全過；rebase 後重跑 packaging 檢查與兩個預檢（第 5 節）。CI（root、0 skip）開 PR 後才知道 |
 | 未開通的 `Supervisor` 仍「4 次後 failed」 | 通過：`test_a_switched_off_supervisor_still_fails_after_four_starts`（直接建 Supervisor：4 次、跑 200 秒也不歸零、之後 failed）、`test_switched_off_run_product_gives_the_default_profile_todays_supervisor`（7 個產品的 run_product 給預設帳號的 Supervisor 沒有任何新選項）；既有 `tests/test_lifecycle.py`、`test_quality_core_regressions.py`（4 次後 failed 的舊案例）照過；突變 M40、R02、R02b 擋下 |
 | T-13 的 HA 期望值照 PaaS（其他帳號 PID 不變；看門狗 2→300 秒、不限次數、120 秒歸零） | 通過：`test_one_child_killed_five_times_keeps_restarting_and_the_others_keep_their_pids`、`test_the_watchdog_backs_off_through_the_paas_table_and_never_gives_up`、`test_a_run_of_120_seconds_starts_the_table_again`；spawn 失敗也重試（#14 的 HA 差異）由 `test_a_spawn_failure_backs_off_and_retries_under_the_watchdog` 鎖住；處理中那筆的 502＋`-32004` 是 HM-14 |
 | T-15 的 HA 期望值照 PaaS（衝突只停相關帳號；被佔時照看門狗退避，放開後自動恢復） | 通過：PaaS 的四種做法在 HA 對應三種（HA 的 port 只在索引裡，沒有「改帳號設定檔讓兩帳號同 port」）：執行中當掉時被搶（`test_a_crashed_childs_port_taken_by_another_program_gets_it_nothing`：搶的程式收到 0 筆）、開機前就被佔（`test_an_occupied_port_backs_off_and_recovers_after_the_eighth_backoff`）、索引同 port（`test_an_index_port_conflict_stops_only_the_profiles_holding_it`），再加 listener port、別帳號在跑的子程式、檢查本身出錯（fail closed）與 IPv6 被平台擋（#89） |
 | 測試照 §10.3（配 port；四類衝突不 spawn；第 8 次退避之後放開仍恢復；SIGKILL 5 次仍重試且 log 有紀錄；穩定 120 秒歸零；未開通 4 次後 failed；錯開啟動；`oom_score_adj`＝500、`nice` 在 uid 10001 子程序驗；FD soft limit；log 事件清單） | 通過（第 2 節的五個測試檔）；uid 10001 的部分在 root 時才是 uid 10001（CI），本機以本機使用者跑同一個探針 |
 | DQ-21、DQ-25 的執行面（審查 MF-2） | 通過：起點錯開（`run()` 真的等）、存檔與面板重啟歸零退避、DQ-21 監看停止後恢復並檢查新世代，各有測試；突變 R40、R19、R41 擋下 |
-| `decisions.md` 寫入 DQ-21、DQ-25，變更紀錄一列；契約的「待定」改已定 | 通過（這個基準上 29／17；#100 合併後的題數見第 14.2 節） |
+| `decisions.md` 寫入 DQ-21、DQ-25，變更紀錄一列；契約的「待定」改已定 | 通過（rebase 到 `claude-delivery` 後 34 題已定、12 題待定；第 14.2 節） |
 | 同 PR 更新帳本 | 通過（第 8 節；`lifecycle.py` 也列管了） |
 | 不改版號、不碰 `addons/<x>/`、不改 CHANGELOG；`MULTI_PROFILE_PRODUCTS` 維持空集合；commit 沒有 AI 署名 | 通過 |
 | 測試資料規則（計畫 §12.0 第 4 點） | 通過：token 都在執行時產生（沿用 HM-01、HM-08 的工具）；憑證 `DUMMY-…`、網址 `.invalid`；沒有 commit 任何像金鑰的字串 |
@@ -538,8 +545,8 @@ lifecycle 11.3、ports 1.5、health 2.9、stagger 4.0、resources 2.6 秒）；r
   照看門狗重試；(3) `child/restart` 的 202 回應多 `blocked_reason`；(4) add-on log 多生命週期 WARNING（含 IPv6 試綁被擋的一行）；
   (5) spawn 失敗也照退避重試；(6) 子程式不在 `running` 時監看不探測（`backend/test` 回 `unknown`、沒有原因）。要寫進該產品的 CHANGELOG、
   DOCS、`upgrade-notes.yaml`。
-- **合併順序**（審查 S-11）：HM-08 已合併，本片已 rebase 到它的最終 head（第 14.1 節）。開 PR 前再 rebase 到 `claude-delivery`（#100，
-  第 14.2 節）。本片要在 HM-10 之前合（計畫 §12.2）。HM-14（第 4 波，基準 `b5d10c5`）也改 `gateway.py`：本片和 HM-14 誰後合，誰就
+- **合併順序**（審查 S-11）：HM-08（#99）與 #100 都已合併，本片已 rebase 到 `claude-delivery` `51bc4b7`（第 14.1、14.2 節）。
+  本片要在 HM-10 之前合（計畫 §12.2）。HM-14（第 4 波，基準 `b5d10c5`）也改 `gateway.py`：本片和 HM-14 誰後合，誰就
   rebase 並照實際內容重算 `gateway.py` 的摘要。計畫 §12.2 衝突表的 `Hc/gateway.py` 列要補 HM-09，`docs/multi-profile/contract.md` 列要補
   HM-08、HM-09（計畫在 repo 外，交主對話）。
 
@@ -549,7 +556,8 @@ lifecycle 11.3、ports 1.5、health 2.9、stagger 4.0、resources 2.6 秒）；r
 
 - 指令：`git fetch <HM-08 clone> feat/ha-multiprofile-hm08-20261115`，再 `git rebase --onto adfc4bfb38724945096c27267bd9fa0aebf7c9db
   cfdc4876bc70578875af690390275a28a1a6085f`：只重放本片的 5 個 commit（`8d090af`→`5012f11`、`195977c`→`b69fbbc`、`d389939`→`a6042d6`、
-  `4387dfe`→`657d831`、`24d72cc`→`57ec5c0`）。這一步是本工作前一次執行時做的（reflog 有紀錄），這次逐點核對結果。
+  `4387dfe`→`657d831`、`24d72cc`→`57ec5c0`；第二次 rebase 後又換了，見第 14.2 節）。這一步是本工作前一次執行時做的（reflog 有紀錄），
+  這次逐點核對結果。
 - 3 處衝突，照審查的三點解：
   1. `Hc/gateway.py` 的 `make_apps` 說明：HM-08 修正加的「initialize 錯誤遮罩」與 `FORWARDED_BODY` 兩段、本片的 `child_blocked` 一段都留。
   2. `runtime-patches.json` 的 `gateway.py`：摘要照合併後的內容重算＝`466b0f2a97601fa317b718d1caa070cb92ed7cec44b1425c0f6cb94a0068c130`
@@ -558,20 +566,31 @@ lifecycle 11.3、ports 1.5、health 2.9、stagger 4.0、resources 2.6 秒）；r
 - 解完之後其他 3 個列管檔（`run_product.py`、`profile_runtime.py`、`profiles.py`）也照實際內容重算過；`tests/test_reply_mask_union.py` 自動合併
   （本片只加一行第二次檢查）。
 
-### 14.2 開 PR 前：rebase 到 `claude-delivery`（#100 已合併；在暫存複本試過）
+### 14.2 開 PR 前：rebase 到 `claude-delivery`（#100 已合併；2026-11-16）
 
-- 試法：暫存區複本（`git clone --no-hardlinks` 本 clone，用完以完整路徑刪除），`git rebase --onto 51bc4b7 adfc4bf`。試的時候是前 8 個 commit
-  （本片 5 個＋審查修正的前 3 個）：只有 `657d831`（決策與契約）在 `docs/multi-profile/decisions.md` 衝突 4 處，其他都乾淨套上（之後的 3 個
-  commit 只改測試工具、契約、驗收矩陣與本筆記，不碰 `decisions.md`）；解完之後帳本預檢（`--base 51bc4b7`）OK、
-  0 漂移（#100 只改 `decisions.md` 與 workflow，沒有列管檔）。
-- `decisions.md` 的解法（題數 34 題已定、12 題待定；46 題一題不少，表格逐列數過）：
+- 指令：`git fetch origin claude-delivery`（`51bc4b7`，和 2026-11-15 19:10 #100 合併時相同，之後沒有新的合併），再
+  `git rebase --onto origin/claude-delivery adfc4bfb38724945096c27267bd9fa0aebf7c9db`：只重放本片的 12 個 commit（本片 5 個＋審查修正與
+  複查 7 個）。`git log origin/claude-delivery..HEAD` 只有本片的 commit。
+- 衝突只在第 4 個 commit（決策與契約）的 `docs/multi-profile/decisions.md`，和之前在暫存複本試的一樣。解法（以 `claude-delivery` 的版本
+  為底；46 題一題不少，表格逐列數過：第 1 節 34 列、第 2 節 2 列、第 3 節 10 列）：
   1. 結論第一行改「46 題裡 34 題已定」。
   2. 結論的時間序：本片的「2026-11-15 11:2x：DQ-21、DQ-25 採用計畫建議…」放在 17:4x 那點之前；#100 的「另外 11:2x … 15:3x …」那點改成
      只講 DQ-10 子題（「另外 2026-11-15 15:3x 使用者定了 DQ-10 子題（…），由 HM-20 的 PR 移到第 1 節；這裡先不動」）。
-  3. 「其餘」那行改成「其餘 12 題（§13.2 的 2 題、§13.3 的 10 題）維持「待定」…」，拿掉「（其中 DQ-21、DQ-25 已定、待 HM-09 的 PR 移列）」。
-  4. 第 1 節標題用 #100 的，加上 DQ-21、DQ-25；第 2 節表格兩邊拿掉的列都拿掉（剩 DQ-35、DQ-42）；變更紀錄本片那列排在 #100 那列之後，
-     題數寫「34 題已定、12 題待定」。
-- 之後照規則重算帳本（摘要不會變，但要照實際內容跑 `ledger_precheck.py --base origin/claude-delivery`）、重跑兩個預檢與 CI，更新本筆記第 1、8 節的基準。
+  3. 「其餘」那行改成「其餘 12 題（§13.2 的 2 題、§13.3 的 10 題）維持「待定」（DQ-21、DQ-25 已由 HM-09 的 PR 移到第 1 節）…」：#100 寫的
+     「待 HM-09 的 PR 移列」改成已移列。
+  4. 第 1 節標題用 #100 的，加上 DQ-21、DQ-25；第 2 節兩邊拿掉的列都拿掉（剩 DQ-35、DQ-42）；變更紀錄兩邊的列都留，本片那列排在 #100
+     那列之後，題數寫「34 題已定、12 題待定」。
+  5. 那個 commit 的說明同步改成 34／12（原本寫 29／17）。
+- 其他 11 個 commit 都乾淨套上：`git range-diff` 只有決策那個 commit 不同；rebase 前後的 tree 只差 #100 帶進來的
+  `.github/workflows/woow-addon-release.yml`（`checks` 上限 60 分鐘）與 `decisions.md`。
+- 帳本：#100 沒有改列管檔。本片 5 個列管檔照實際內容核對，SHA-256 都沒變（`gateway.py` `466b0f2a…c130`、`lifecycle.py` `758cdc35…ddc9`、
+  `profile_runtime.py` `b8ebbad0…9820`、`profiles.py` `d17bfc3f…f901`、`run_product.py` `59d281b1…f72b`），`ledger_precheck.py --base
+  origin/claude-delivery` OK。沒動 `apps/runtime/*.py`、`apps/*/launch.py`，tool-surface 不用重產（漂移檢查 exit 0）。
+- SHA 對照（rebase 前 → 後）：`5012f11`→`c03cd4d`、`b69fbbc`→`c08ff0f`、`a6042d6`→`2f88b58`、`657d831`→`20117cf`、`57ec5c0`→`5eeb470`、
+  `e8055f0`→`1f4193a`、`f89f6ce`→`f6b7fea`、`ca2dba2`→`62b5186`、`07634b3`→`1fc1913`、`dbf3c8c`→`56c5a90`、`0144625`→`2334bcd`、
+  `b0259b4`→`1d42c2a`。第 4、5、15 節的 SHA 都換成 rebase 後的；rebase 前跑的檢查，程式與測試和對應的 commit 逐位元相同。
+- rebase 後重跑：`validate.py`、packaging unittest、tool-surface、兩個預檢（第 5、8 節）。沒有重跑 pytest：這次 rebase 只帶進 #100 的
+  workflow 與 `decisions.md`，`tests/` 裡沒有測試讀這兩個檔；共用鎖當時排著 HM-14 審查的突變與 HM-10 的全套。全套以 CI 為準。
 
 ## 15. 獨立安全審查意見處理（2026-11-15）
 
@@ -582,11 +601,11 @@ lifecycle 11.3、ports 1.5、health 2.9、stagger 4.0、resources 2.6 秒）；r
 
 | # | 意見 | 核對 | 處理 | 證據 |
 |---|---|---|---|---|
-| MF-1 | 基準過時：HM-08 已以 #99 合併，本片還疊在審查前的 `cfdc487`；#100 也改 `decisions.md` | 成立：`b5d10c5^{tree}`＝`adfc4bf^{tree}`；#100 在 19:10 合併成 `51bc4b7` | **採用**：rebase 到 `adfc4bf`（本工作指定的基準，tree 和 `b5d10c5` 相同），3 處衝突照審查三點解；帳本照實際內容重算；全套 pytest、兩個預檢、`validate.py`、packaging unittest、M34 重跑；筆記第 1、5、8、12 節更新。#100 的 `decisions.md` 留到開 PR 前的 rebase（第 14.2 節已試，34／12） | 第 5、8、14 節；M34 擋下（第 4.4 節） |
+| MF-1 | 基準過時：HM-08 已以 #99 合併，本片還疊在審查前的 `cfdc487`；#100 也改 `decisions.md` | 成立：`b5d10c5^{tree}`＝`adfc4bf^{tree}`；#100 在 19:10 合併成 `51bc4b7` | **採用**：先 rebase 到 `adfc4bf`（本工作指定的基準，tree 和 `b5d10c5` 相同），3 處衝突照審查三點解；開 PR 前再 rebase 到 `claude-delivery` `51bc4b7`，`decisions.md` 以它為底改成 34／12；兩次都照實際內容核對帳本；第一次後重跑全套 pytest、兩個預檢、`validate.py`、packaging unittest、M34，第二次後重跑兩個預檢與 packaging 檢查（理由見第 14.2 節）；筆記第 1、5、8、12、14 節更新 | 第 5、8、14 節；M34 擋下（第 4.4 節；`gateway.py` 第二次 rebase 沒變） |
 | MF-2 | DQ-21、DQ-25 三個執行面沒有測試（R40、R19、R41 存活）；驗收矩陣寫了「起點錯開」已測 | 成立：舊測試只驗 `first_check_after` 屬性、直接呼叫 `reset()`、DQ-21 讀到重啟前的 `settled` | **採用**：收 E8（`test_the_monitor_waits_its_start_point_before_the_first_check`）、E9（`test_the_panels_save_and_restart_reset_the_backoff`，存檔之外也測 `child/restart`）、E10（DQ-21 測試改成等 `settled[0]`＝新的 `starts`，並斷言舊結果不是新世代）；驗收矩陣 HM-09 五列照實改寫 | R40、R19、R41 擋下 |
 | S-1 | spawn 失敗也重試是自訂的 PaaS 差異，沒有測試（R09 存活） | 成立：PaaS `process.py` @cf3d0d5 停住等手動 | **採用**：收 E2（`test_a_spawn_failure_backs_off_and_retries_under_the_watchdog`，帶與不帶資源包裝，加 log 斷言）；PR 說明的刻意差異段點名 #14，請使用者看過（要回到 PaaS 行為只改 `_watch` 一處） | R09 擋下 |
 | S-2 | spawn 前檢查丟例外時 fail closed 沒有測試（R08 存活） | 成立 | **採用**：收 E3（`test_a_spawn_check_that_fails_refuses_the_start`，加「照退避再查仍被擋」與 log 斷言） | R08 擋下 |
-| S-3 | 停機測試沒有逾時（R03b 卡住） | 成立，而且範圍更大：突變 R03b 卡在第 10 案，不是停機測試——每個測試的測試工具關閉時都會呼叫 `stop_all` | **採用並擴大**：`test_stop_all_…` 的 `stop_all` 限 15 秒、`test_closing_…` 的關閉限 15 秒；兩個測試工具的關閉都限 HA 的 30 秒（`CLOSE_SECONDS`；`07634b3`） | R03b 重跑擋下（32.8 秒；HM-08 的測試工具也擋下，32.3 秒） |
+| S-3 | 停機測試沒有逾時（R03b 卡住） | 成立，而且範圍更大：突變 R03b 卡在第 10 案，不是停機測試——每個測試的測試工具關閉時都會呼叫 `stop_all` | **採用並擴大**：`test_stop_all_…` 的 `stop_all` 限 15 秒、`test_closing_…` 的關閉限 15 秒；兩個測試工具的關閉都限 HA 的 30 秒（`CLOSE_SECONDS`；`1fc1913`） | R03b 重跑擋下（32.8 秒；HM-08 的測試工具也擋下，32.3 秒） |
 | S-4 | `reevaluate()` 新變 disabled 的要停、`remove()` 要停監看，沒有測試（R16、R17 存活） | 成立 | **採用（本片補測試）**：`test_reevaluating_stops_a_profile_the_new_index_disables`、`test_removing_a_profile_stops_its_monitor_and_its_child`；HM-10 接線後經 API 再測（第 13.2 節） | R16、R17 擋下 |
 | S-5 | 探針分不出「加 5」和「設成 5」（R23 存活） | 成立 | **採用**：探針起 Supervisor 前先 `os.nice(2)`，斷言子程式是探針的值＋5，而且不是 5 | R23 擋下 |
 | S-6 | 試綁遇到 EADDRINUSE 以外的 errno 一律當被佔；擋 IPv6 bind 的平台上預設帳號永遠不起 | 成立：PaaS 同樣寫法（第 9 節） | **採用**：IPv6 的 EACCES、EPERM 跳過那個位址、每個位址與 errno 每個程序一行 WARNING；IPv4 維持當被佔；契約 §7、§9 #89；HM-03a 清單補試綁 errno（第 11 節）；PR 說明點名這個新差異 | `test_an_ipv6_test_bind_the_platform_refuses_is_skipped_with_one_warning`（EACCES、EPERM）；N1、N2 擋下 |
@@ -604,10 +623,11 @@ lifecycle 11.3、ports 1.5、health 2.9、stagger 4.0、resources 2.6 秒）；r
 
 | commit | 內容 |
 |---|---|
-| `e8055f0` | 測試（先紅：在修正前的程式上 118 案 4 失敗） |
-| `f89f6ce` | 程式：S-6（`profiles.py`）、S-12（`profile_runtime.py`、`lifecycle.py`） |
-| `ca2dba2` | 帳本：`profile_runtime.py`、`profiles.py` 重算 SHA-256 並補說明；`lifecycle.py` 列管；`ledger-tracking.md` |
-| `07634b3` | 測試工具：兩個工具的關閉限 30 秒（S-3；R03b 第一次跑才發現只包停機測試不夠） |
-| `dbf3c8c` | 契約（§7、§9 #89、§10）與驗收矩陣 |
-| `0144625` | 測試工具：`free_port()` 不再發最近發過的 port（複查找到的偶發失敗，第 4.5 節） |
-| 本筆記的 commit | 本筆記的結論與第 1～8、10～15 節 |
+| `1f4193a` | 測試（先紅：在修正前的程式上 118 案 4 失敗） |
+| `f6b7fea` | 程式：S-6（`profiles.py`）、S-12（`profile_runtime.py`、`lifecycle.py`） |
+| `62b5186` | 帳本：`profile_runtime.py`、`profiles.py` 重算 SHA-256 並補說明；`lifecycle.py` 列管；`ledger-tracking.md` |
+| `1fc1913` | 測試工具：兩個工具的關閉限 30 秒（S-3；R03b 第一次跑才發現只包停機測試不夠） |
+| `56c5a90` | 契約（§7、§9 #89、§10）與驗收矩陣 |
+| `2334bcd` | 測試工具：`free_port()` 不再發最近發過的 port（複查找到的偶發失敗，第 4.5 節） |
+| `1d42c2a` | 本筆記：審查修正、複查與 rebase 前的檢查（第 1～8、10～15 節） |
+| 本筆記最後一個 commit | rebase 到 `claude-delivery` 之後的基準、SHA 對照與重跑的結果（結論、第 1、5、7、8、10、12～15 節） |
