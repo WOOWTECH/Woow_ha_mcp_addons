@@ -33,20 +33,22 @@
 ## 2. 已列管、多帳號會改到的檔
 
 每片改到就更新 `sha256` 與 `change`（照計畫 §12.2 的衝突表一次只送審一片）：`products.py`、`gateway.py`、`run_product.py`、
-`configuration.py`、`operations.py`、`admin_auth.py`、`access.py`、`request_limits.py`、`backend_edit.py`、`__init__.py`、`config.py`（HM-07 起；以上在
-`packages/mcp-admin-core/mcp_admin_core/`）、`apps/runtime/session_idle.py`、`apps/runtime/run_child.py`、`apps/runtime/backend_policy.py`、
+`configuration.py`、`operations.py`、`admin_auth.py`、`access.py`、`request_limits.py`、`backend_edit.py`、`__init__.py`、`config.py`（HM-07 起）、
+`lifecycle.py`（HM-09 起；以上在 `packages/mcp-admin-core/mcp_admin_core/`）、`apps/runtime/session_idle.py`、`apps/runtime/run_child.py`、`apps/runtime/backend_policy.py`、
 `apps/n8n/n8n_adapter.py`、`apps/n8n/backend_policy.cjs`、`apps/n8n/run.py`、`apps/hermes/launch.py`、`apps/opendesign/launch.py`、
 `packages/mcp-admin-ui/src/app.js`、`api.js`、`contracts.js`、`operation-identity.js`。
 
 ## 3. 沒列管、多帳號會改到的檔
 
-`packages/mcp-admin-core/mcp_admin_core/lifecycle.py`、`health.py`、`redact.py`、`diagnostics.py`、`ha_role.py`、
+`packages/mcp-admin-core/mcp_admin_core/health.py`、`redact.py`、`diagnostics.py`、`ha_role.py`、
 `packages/mcp-admin-ui/src/styles.css`：維持現狀不列管；該片審查要求列管時才加，決定寫進該片的 provenance 筆記。
 
 原本在這一節、後來改成列管的：
 
 - `packages/mcp-admin-core/mcp_admin_core/config.py`：HM-07 起列管（HM-07 審查 S-10），已移到第 2 節。
 - `packaging/entrypoint.py`：HM-13a 起列管（HM-13a 還沒合併；合併前帳本裡沒有它）。
+- `packages/mcp-admin-core/mcp_admin_core/lifecycle.py`：HM-09 起列管（HM-09 審查 S-10：`EXEC_WRAPPER` 在每個額外帳號子程式
+  fork 之後、exec 之前執行），已移到第 2 節。`health.py` 審查沒有要求，維持不列管。
 
 ## 4. 規則
 
