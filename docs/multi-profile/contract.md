@@ -45,7 +45,21 @@
 
 不受開關管（任何產品下一次發版都會帶出去；保證方式見計畫 §3.3）：紀錄遮罩（HM-02）、port 參數化（HM-04）、
 執行套件抽出（HM-05）、子程式 bearer（HM-06）、資料層函式庫（HM-07）、收據格式（HM-11）、entrypoint 還原標記（HM-13a）、
-開機守門的存在檢查與休眠處理（HM-13b）、驗收與發版工具（HM-16、HM-17）。
+開機守門的存在檢查與休眠處理（HM-13b）、子程式 initialize 錯誤的遮罩（HM-14，見下）、驗收與發版工具（HM-16、HM-17）。
+
+**HM-14 的不受開關管變更：子程式 initialize 錯誤遮本帳號憑證**（2026-11-15；HM-08 審查 S-4 (a) 交給 HM-14）
+
+- 缺口：子程式對 initialize 回 JSON-RPC 錯誤時，錯誤的 `message` 與 `data` 是子程式自己的文字。其他每一條轉回子程式或後端文字的路徑
+  （JSON 回覆、SSE 事件、閘道自答的 tools/list、被拒 tools/call 的健康原因、`backend/test`、`diagnostics`）今天都用本帳號的憑證遮
+  （`redact.secret_values`）；只有這一條原樣轉回，連本帳號的 token、child token、後端密碼都沒遮。子程式把收到的設定原樣寫進錯誤
+  （例如「用這組密碼登入失敗」）時，持有這把 token 的 MCP 用戶端就看得到 child token 與後端密碼（用戶端本來不該知道這兩樣）。
+- 為什麼開關關時也改：這是今天就有、和多帳號無關的缺口。放在開關後面，每個產品在開通之前的每一版都會繼續帶著它；改了只會把憑證換成
+  `[REDACTED]`，不會讓任何請求變得可行或不可行，也不改任何狀態碼或標頭。
+- 改了什麼回應：只有「子程式回的 initialize 錯誤」這一種回應，而且只有錯誤文字裡出現本帳號的憑證（`redact.secret_values`：token、
+  child token、後端秘密欄位與它們的 Basic 形式）時，那幾段換成 `[REDACTED]`（`Content-Length` 跟著變）；狀態碼、其他標頭、其他文字
+  逐位元不變。錯誤裡沒有憑證時，和今天逐位元相同。開通的產品照 HM-08 另外遮全 add-on 每個帳號的 token（第 2.7 節）。
+- HM-01 的契約凍結不用改：凍結的案例沒有 initialize 錯誤（`tests/contract/profiles_v1_cases.json`、黃金回歸都照過）。
+- 測試：`tests/test_initialize_generation.py`（開關關：本帳號三種憑證都遮、沒有憑證時逐位元相同；開關開：照 HM-08 的聯集）。
 
 ## 2. MCP（8081）
 
@@ -104,16 +118,28 @@
 | 同上，但沒有 id、太大、讀不完、不是 JSON，或拒絕小額度正被占滿（同時 8 個或合計 512 KiB 已在讀） | 503，`Retry-After: 5` | `-32003`，`id: null` | 大於 64 KiB 的帶 id 請求拿 503（PaaS 200）：§8.8 #16。拒絕小額度是全 add-on 唯一的共用池：被占滿時 ≤64 KiB 帶 id 的請求也拿 503（只發生在有帳號正被大量拒絕時；§8.8 #15 的註） |
 | 讀 body 途中位元組額度用完（沒帶 `Content-Length`，或實際內容比宣告的多） | 503，`Retry-After: 5` | `-32003`，`id: null` | 立刻停讀、釋放已讀的部分，不改用拒絕小額度（HM-08 定案：帳號 app 看到的是用戶端斷線，它的回應換成這一個，子程式收不到任何東西） |
 | body 已讀完，閘道重新序列化後要轉送的大小放不下剩餘額度（非 ASCII 內容；第 2.2 節第 4 點） | 有 id 200、沒有 id 503，都帶 `Retry-After: 5` | `-32003` | HM-08 審查 S-1 起；子程式收不到這個請求；WARNING 和「位元組額度」同一種情況 |
-| 轉送名額等 1 秒逾時（body 已讀），有 id | 200，`Retry-After: 5` | 每個 id 一則 `-32003` | #148 形狀（開通的產品 HM-08 起；排隊上限、保留名額與文字定稿 HM-14） |
+| 轉送名額等 1 秒逾時（body 已讀），有 id | 200，`Retry-After: 5` | 每個 id 一則 `-32003` | #148 形狀（開通的產品 HM-08 起；HM-14 定案：一般名額與保留名額各自計時、文字寫那一組自己的條數） |
 | 轉送名額等 1 秒逾時，沒有 id（GET、DELETE、保留名額也用完的通知） | 503，`Retry-After: 5` | `-32003`，`id: null` | 同上 |
-| 排隊已達上限（每個佇列各自計數） | 有 id 200、沒有 id 503，都帶 `Retry-After: 5` | `-32003` | 不等；WARNING 每帳號每情況 60 秒一行 |
-| 排隊時用戶端關閉連線 | （沒有人收得到） | — | 請求從排隊移除、絕不送出；只記 WARNING |
+| 排隊已達上限（每個佇列各自計數：一般名額 32／16 個、保留名額另 32／16 個） | 有 id 200、沒有 id 503，都帶 `Retry-After: 5` | `-32003`（排隊的文字） | 不等、不排隊、不送出；WARNING 每帳號每情況 60 秒一行（HM-14） |
+| 排隊時用戶端關閉連線（那個請求的連線被關掉） | （沒有人收得到：程式內部回 499，伺服器不送給已離開的用戶端） | — | 請求從排隊移除、絕不送出；名額剛好同一刻空出時也還回去、不送；只記 WARNING（HM-14） |
 | GET 串流已達上限 | 429，`Retry-After: 30` | `-32003`，`id: null` | 預設帳號 24 條、額外帳號 8 條 |
 | 該帳號待送回覆位元組超過上限 | 200 | 新的 tools/call 在轉送前回 `-32003` | 只在開通的產品（第 6 節） |
 
-- 只有通知或回應、沒有任何請求的 POST 走保留名額（每帳號 4 條）；判斷照 PaaS `_carries_no_request`：POST、可解析、
-  物件或非空陣列、裡面沒有任何請求、每則都是通知或回應（HM-14）。
-- `-32003` 的訊息是固定文字（HM-14 定稿）：寫出是哪一種上限與「稍後重試」，不含 token、網址或帳號名稱。
+- 只有通知或回應、沒有任何請求的 POST 走保留名額（每帳號 4 條，有自己的佇列）；判斷照 PaaS `_carries_no_request`
+  （`gateway.carries_no_request`，HM-14）：POST、可解析、物件或非空陣列、裡面沒有任何請求（有字串 method、id 不是 null）、每則都是
+  通知或回應；看不懂的一律走一般名額。HA 的政策只收單一訊息（`policy.authorize`：batch、對伺服器請求的回應、沒有 id 的工具呼叫在任何
+  名額之前就 403；`notifications/initialized` 以外的通知由閘道自己回 202、從不轉送），所以實際走保留名額的只有
+  `notifications/initialized`（§8.8 #91）。GET 串流、DELETE 一律走一般名額。
+- 等名額的期間閘道看用戶端在不在：只認「那個請求的連線被關掉」（HTTP 層逾時、斷線、關閉 transport）。下面兩種看不到，不在保護範圍
+  （PaaS `docs/mcp-gateway-limits.md` 的已知限制，19f36e2、`091dfbc`；HA 同樣適用，寫進威脅模型第 3 節，HM-18 寫進 DOCS）：
+  - MCP SDK 層級的請求逾時（例如 `read_timeout_seconds`）與取消只送 `notifications/cancelled`，不關閉那個 POST 的連線；
+  - MCP Python SDK 2.3.0 預設的關閉路徑：`terminate_on_close=True`（預設）時，離開 transport 會先送 DELETE 並等回應，才取消 POST。
+    名額被佔滿時那個 DELETE（沒有 JSON-RPC 內容，走一般名額）排在 POST 後面，POST 的連線一直開著，**排隊中的寫入在名額空出後照樣被
+    執行**。`terminate_on_close=False` 時 transport 立刻關閉，寫入被丟掉。
+  這兩種請求最多等 1 秒（HA 的等候；PaaS 10 秒），等不到就回 `-32003`、不送出。
+- `-32003` 的訊息是固定文字（HM-14 定稿）：寫出是哪一種上限與「稍後重試」，不含 token、網址或帳號名稱。HM-08 的四種（准入、位元組
+  額度、轉送名額、GET 串流）照原文定稿；HM-14 加保留名額與排隊兩種，每種都寫那一組自己的條數（`profile_router.forward_text`、
+  `queue_text`；PaaS 審查 N8）。WARNING 每帳號每情況 60 秒一行（`suppressed=N`），帳號只寫 id 前 8 碼。
 - 「解析得出 JSON-RPC id」＝`Content-Type: application/json`、strict JSON、單一物件、`jsonrpc` 是 `"2.0"`、`method` 是字串、
   `id` 是字串或整數（閘道 `authorize` 收的請求）。batch、通知、回應、布林或小數 id 都算「沒有 id」：HA 閘道從不回 batch
   （HM-08 定案）。GET、DELETE 沒有 body，一律 `id: null`。
@@ -124,13 +150,33 @@
 
 ### 2.5 回應途中與子程式斷線（HM-14）
 
-| 情況 | 標頭送出前 | 標頭送出後（SSE） |
-|---|---|---|
-| token 被輪替、撤銷或帳號被刪 | 密鑰網址 404、Bearer 401（PaaS 403：§8.8 #1） | 每個還沒回應的 id 補一則 `-32005`，正常結束、不把例外丟給 uvicorn |
-| 子程式中途斷線 | 502＋`-32004`（帶得出 id 就帶） | 補一則同 id 的 `-32004` 事件後結束 |
+只在開通的產品（`make_apps` 給了 `slot_busy`）；沒開通照今天（第 4.2 節：502 `{"error":"request denied"}`、SSE 安靜結束、
+token 換掉時 `ClientDisconnect` 丟給 uvicorn）。HM-14 定案：
 
-`-32004` 依原因用兩種固定文字：「子程式停止了（會自動重新啟動）」或「連線中斷，子程式仍在執行」，都寫「操作可能已完成也可能沒有，
-請先確認再重試」；看當下那個世代的 `Supervisor.status`，最多等 0.25 秒下結論。log 只記一行 WARNING，不帶 traceback。
+| 情況 | 標頭送出前 | 標頭送出後（SSE） | 標頭送出後（一次送完的 JSON） |
+|---|---|---|---|
+| token 被輪替、撤銷或帳號被刪 | 密鑰網址 404、Bearer 401（PaaS 403：§8.8 #1）；標頭卡在背壓、伺服器還沒收下時也一樣（閘道自己送這個拒絕，逐位元同） | 還沒送到的回覆補一則同 id 的 `-32005`（GET 串流不補），正常結束 | 不能再送（`Content-Length` 已定）：閘道直接返回、伺服器關掉連線（§8.8 #92） |
+| 子程式中途斷線 | 502＋`-32004`（帶得出 id 就帶，通知、GET、DELETE 是 `id: null`） | 補一則同 id 的 `-32004` 事件後正常結束（GET 串流不補） | （JSON 回覆是讀完才送：算「標頭送出前」） |
+
+- 「子程式中途斷線」＝連上之後的讀、寫或協定錯誤（`httpx.ReadError`、`RemoteProtocolError`、`WriteError`…）。連不上（`ConnectError`）照今天
+  （有內附清單的產品由閘道自答 initialize 或回 session 已結束的 404，其他 502）；逾時、子程式回錯的東西（3xx、401、403、格式錯、超過 8 MiB、
+  協定版本不在清單）照今天 502 `{"error":"request denied"}`。initialize 的回覆讀到一半斷線也是 `-32004`；子程式正常結束串流卻沒有回覆，
+  照今天 503 `BACKEND_UNAVAILABLE`。
+- `-32004` 依原因用兩種固定文字：「子程式停止了（會自動重新啟動）」或「連線中斷，子程式仍在執行」，都寫「操作可能已完成也可能沒有，
+  請先確認再重試」（`gateway.CHILD_STOPPED_TEXT`、`CHILD_CONNECTION_TEXT`）。看的是轉送那一刻的世代（`Supervisor.starts`，健康監看的
+  子程式欄位）：之後 start 數變了、或狀態不是 `running`，就是停止了；看起來還在跑時最多再等 0.25 秒（`CHILD_EXIT_GRACE_SECONDS`）。
+  子程式停止時，它為 initialize 開的 session 不再 DELETE（跟著子程式結束）。
+- log：帳號的 WARNING 一行（id 前 8 碼、HTTP 方法、httpx 錯誤的類別名、哪一種原因），每帳號每種原因 60 秒一行，不帶 traceback、路徑、
+  token 或內容（PaaS 每次一行：§8.8 #93）。
+- `-32005` 的文字固定（`gateway.ACCESS_CHANGED_TEXT`）：token 被輪替或撤銷、閘道已停止這個回應、請用目前的網址或權杖重新連線。閘道的
+  結尾（拒絕、`-32005`、結束訊息）最多送 2 秒（`ENDING_SECONDS`，同 PaaS 的 2 秒）；用戶端完全不讀時放棄、不丟例外（之後 uvicorn
+  記一行 `ASGI callable returned without starting response.`，用戶端恢復讀取時拿到純文字 500；PaaS 同樣的取捨）。
+- **initialize 世代**（FM-43）：閘道記下 initialize 送去的世代（`Supervisor.starts`），子程式的 session 只在那個世代仍是執行中的那一個
+  時才交給用戶端（標頭送出前一刻檢查）。換代、結束或被停時用戶端拿 503 `BACKEND_UNAVAILABLE`＋`Retry-After: 5`、沒有 session id
+  （§8.8 #94），那個 session 不 DELETE（會打到下一個世代）。標頭已經在送的 session 收不回來：用戶端之後在那個 session 的請求拿到新子程式的
+  404，照 MCP 重新 initialize。HA 沒有 PaaS 的 drain（重啟不等閘道送完）。listener 是不是同一個程序屬 HM-15（FM-41，條件式）。
+- 不把例外丟給 uvicorn：上面每一種結尾都由閘道自己送完並返回。唯一的例外是「一次送完的 JSON 標頭已出去」：返回後 uvicorn 記一行
+  `ASGI callable returned without completing response.`（沒有 traceback）並關掉連線。
 
 ### 2.6 Origin（DQ-11 採 (a)，HM-27）
 
@@ -360,15 +406,15 @@ PaaS 另帶 `message` 文字，HA 不帶（面板只認代碼，§8.8 #49）。
 | `{"error":"request denied"}` | 400 | MCP 路徑帶 query | 固定本體 | 同 | 原樣轉發 | §8.8 #3 | 既有 | HM-01 |
 | `{"error":"request denied"}` | 403 | Bearer 帶 Origin；Headscale 密鑰網址的來源不在清單 | 固定本體 | 同 | Origin 清單 403 `ORIGIN_DENIED` | §8.8 #9、#10 | 既有 | HM-27 |
 | JSON-RPC `-32003` | 200／503／429 | 准入、位元組額度、轉送名額逾時、排隊上限、GET 串流上限、待送回覆上限 | 第 2.4 節 | 沒有（uvicorn 503、名額逾時 503） | 200／503／429（先讀 body） | §8.8 #15、#16 | 新 | HM-08、HM-14、HM-30；`tests/test_profile_quotas.py`、`tests/test_gateway_busy_shapes.py` |
-| JSON-RPC `-32004` | 502／SSE 事件 | 子程式在處理途中斷線 | 依原因兩種文字（第 2.5 節） | 502 `{"error":"request denied"}`、SSE 安靜結束 | 同（#148） | 同 | 新 | HM-14；`tests/test_gateway_stream_endings.py` |
-| JSON-RPC `-32005` | SSE 事件 | 標頭送出後 token 被換掉 | 每個未回應 id 一則 | 直接斷線 | 同 | 同 | 新 | HM-14 |
+| JSON-RPC `-32004` | 502／SSE 事件 | 子程式在處理途中斷線 | 依原因兩種文字（第 2.5 節） | 502 `{"error":"request denied"}`、SSE 安靜結束 | 同（#148） | §8.8 #93（WARNING 節流） | 新 | HM-14；`tests/test_gateway_stream_endings.py` |
+| JSON-RPC `-32005` | SSE 事件 | 標頭送出後 token 被換掉 | 每個未回應 id 一則（第 2.5 節） | 直接斷線（`ClientDisconnect` 丟給 uvicorn） | 同（JSON 回覆也補：它不帶 `Content-Length`） | §8.8 #92 | 新 | HM-14；`tests/test_gateway_stream_endings.py` |
 | `backend_not_configured`（`-32603`） | 200 | 帳號沒填後端、工具需要後端；n8n 額外帳號沒後端時所有工具（含文件工具） | `ToolCallRefused` 形狀 | 照今天 | n8n 額外帳號起文件模式 | §8.8 #28（DQ-22 待定） | 既有（擴大） | HM-25 |
 | `backend_unreachable`（`-32603`） | 200 | 最近的健康檢查說後端連不上 | 帶檢查的原因 | 照今天 | 沒有定期監看 | §8.8 #18 | 既有 | HM-09、HM-30 |
 | 429 GET 串流 | 429 | GET 串流已達上限 | `-32003`、`id: null`、`Retry-After: 30` | 不設上限 | 同（32 條） | §8.8 #15 | 新 | HM-08 |
 
 上表只列多帳號會新增或改變的回應。**其他既有回應照今天**（開通後每個帳號 app 照舊）。這些回應由 HM-01 的契約凍結與既有測試鎖住；
 其中讀 body 時斷線的 403 與其他 `Denied`（交 HM-08）、502 與轉送名額等候逾時的 503（交 HM-14）今天只驗狀態碼或沒有測試，
-由負責片補未開通時的逐位元案例（逐項對照見 HM-01 的 provenance 筆記第 4 節）：
+由負責片補未開通時的逐位元案例（逐項對照見 HM-01 的 provenance 筆記第 4 節；HM-14 補的 502 見 `tests/test_gateway_stream_endings.py` 的 `test_a_childs_wrong_answer_keeps_todays_502`、`test_switched_off_a_broken_connection_keeps_todays_answers`，轉送名額逾時的 503 由 HM-08 的 `tests/test_profile_quotas.py::test_switched_off_a_busy_slot_and_a_client_leaving_answer_as_before` 鎖住）：
 
 - 405＋`Allow: GET, POST, DELETE`：MCP 路徑用其他方法（token 檢查之後；`Hc/gateway.py:1021-1022`）。自答 session 的 GET 是 405＋`Allow: POST, DELETE`。
 - 400：GET、DELETE 帶 body；session 標頭不只一個或格式錯；initialize 以外沒帶 `mcp-session-id`（有 id 的 POST 回 `-32000`「Bad Request」）。
@@ -382,7 +428,7 @@ PaaS 另帶 `message` 文字，HA 不帶（面板只認代碼，§8.8 #49）。
 - initialize 等不到子程式的回覆：503＋`-32000`「BACKEND_UNAVAILABLE」＋`Retry-After: 5`（`Hc/gateway.py:119-122`）。
 - 502 `{"error":"request denied"}`：連不上子程式、子程式回 3xx／401／403、回覆格式不對或超過 8 MiB、協定版本不在審過的清單
   （`Hc/gateway.py:1204-1206`、`:1230`、`:1258`、`:1288-1291`、`:1301`）。
-- 轉送名額等 1 秒逾時：503 `{"error":"request denied"}`（開通後改成第 2.4 節的 `-32003`）。
+- 轉送名額等 1 秒逾時：503 `{"error":"request denied"}`（開通後改成第 2.4 節的 `-32003`；沒開通時也沒有排隊上限、保留名額與排隊中斷線監看）。
 
 ## 5. 名額與記憶體數值（DQ-07＋DQ-29 採 (a)；暫定，HM-19c 量測後定案）
 
@@ -521,6 +567,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 #15、#16 的附註也是；#14 的附註是 HM-09 的實作補的，第 89 列是 HM-09 獨立審查（S-6）補的列。逐列的來源與結論見
 `deviation-trace.md`（第 87～89 列與三個附註出自 HM-08、HM-09 的實作，不是 FEATURE-MATRIX 的列）。
 第 90 列是 HM-20 補的列（DQ-10 子題 2026-11-15 定案；FM-84 的對齊作法欄；`deviation-trace.md` 沒有這一列）。
+第 91～95 列出自 HM-14 的實作（不是 FEATURE-MATRIX 的列；`deviation-trace.md` 由 repo 外的產生器重產，沒有這幾列）。
 
 | # | 項目 | PaaS（@69ac425） | HA | 理由 | 類型 |
 |---|---|---|---|---|---|
@@ -604,7 +651,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | 78 | 秘密掃描與測試資料 | 沒有 builder 全歷史掃描 | builder 用 gitleaks 掃原始碼與全歷史、零容忍；`claude-delivery` 禁止 force push → 測試資料正規化、每片預檢 | 歷史改不掉 | 部署 |
 | 79 | 上線後監看 | watch_fleet 唯讀監看全部服務 | 看不到客戶主機；只能對自營 HAOS 做唯讀檢查（範圍 HM-29 定） | 客戶自己更新 | 部署 |
 | 80 | 手動指定 token | `PUT /api/tokens`（`set_token`）；撞號 409 `token_in_use`，不回顯值、不說是哪個帳號（Pc/routers/tokens.py:141-142；Pc/profiles.py:488-503） | 沒有這個 API：token 只由伺服器隨機產生，只能輪替與撤銷（Hc/gateway.py:582-606）；撞號只會來自還原或複製，回 503（第 2.3 節） | FM-31「不新增」；將來要加就照 PaaS 回 409，並同時擋目前與歷史 token | 既有 |
-| 81 | 請求內容超過上限 | 最多再讀 128 MiB 丟掉才回錯誤，讓經反向代理的用戶端看得到錯誤、不是 RST（Pc/request_limits.py:16） | 一超過就 413（n8n 是 JSON-RPC 錯誤本體）、不再讀後面的內容（Hc/gateway.py:270-271；Hc/request_limits.py:51-70） | FM-52 延後：只在前面有 Cloudflare Tunnel 或反向代理時有感（HM-14 選做） | 既有 |
+| 81 | 請求內容超過上限 | 最多再讀 128 MiB 丟掉才回錯誤，讓經反向代理的用戶端看得到錯誤、不是 RST（Pc/request_limits.py:16） | 一超過就 413（n8n 是 JSON-RPC 錯誤本體）、不再讀後面的內容（Hc/gateway.py:270-271；Hc/request_limits.py:51-70） | FM-52 延後：只在前面有 Cloudflare Tunnel 或反向代理時有感（HM-14 選做；HM-14 沒做，仍延後） | 既有 |
 | 82 | 全部撤銷 | 沒有面板或 API；還原時照手冊撤銷全部（docs/paas-config-restore-runbook.md） | `POST {base}/api/profiles/revoke-all`（含預設帳號）＋`.revoke-all-pending`；逐帳號結果，寫入失敗的帳號 503、重啟時守門重做（第 2.3、3.1 節） | HA 沒有 shell 跑手冊；事故止血第一步、回退後再升級都要靠它（threat-model.md 第 4 節；§8.8 #69）；FM-120 | 加嚴（建議回補） |
 | 83 | 管理請求帶兩個以上 `X-MCP-Profile` | 取第一個值（`request.headers.get`，Pc/profiles.py:612）；第一個值存在就照常服務 | 開通後 400 `profile_id_invalid`（在角色檢查後；第 3.3 節） | 一個請求只能對一個帳號，哪個值生效不該看中介層實作；fail closed（同 #31、#32；DQ-40 ①；DQ-17 已定） | 加嚴 |
 | 84 | 帳號在別處被刪時的面板 | 等清單下次重抓才回 default，期間帳號範圍請求 404（依程式推論，R05 §6） | 任何帳號範圍請求回 `profile_not_found` 就立刻重抓清單、切回預設帳號並提示；被刪帳號的待確認收據明說並清掉（第 3.4 節） | 不讓下一個操作落到別的帳號、不留無法確認的收據（I12；FM-59） | 加嚴 |
@@ -614,6 +661,11 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | 88 | 額外帳號目錄被換掉 | 只在開啟當下比對 fd 與路徑是同一個目錄（`Pc/profiles.py:212-218`），之後快取 store、不再比對 | 開啟時記下目錄的 (st_dev, st_ino)，之後不同就不路由，它的 token 變成未知 token（第 2.2 節第 3 點；HM-07 審查 S-08） | 防誤拷與誤改；同 uid 下不是安全邊界（DQ-37） | 加嚴 |
 | 89 | 試綁被平台擋 | IPv6 試綁除了 EADDRNOTAVAIL、EAFNOSUPPORT 之外的失敗都當成 port 被佔（`child_identity.port_occupied`） | IPv6 試綁遇到 EACCES、EPERM 時跳過那個位址，每個位址與 errno 每個程序記一行 WARNING；IPv4 任何失敗仍當被佔（第 7 節） | 平台事實不假設（HAOS 的 AppArmor、seccomp 可能擋 IPv6 bind，待 HM-03a 實測）；照 PaaS 的話，開通後預設帳號的子程式會因此永遠起不來。子程式只綁 127.0.0.1，別的程式的雙棧 socket 仍會讓 IPv4 萬用位址的試綁失敗，跳過不會漏掉佔用者 | 部署 |
 | 90 | n8n webhook、chat、form 網址的 SSRF 模式 | 子程式讀部署端的 `WEBHOOK_SECURITY_MODE`，預設 strict（擋 loopback、私網；和存檔檢查同一個模式，Pc/util/ssrf.py） | 固定 `permissive`（只擋雲端 metadata 與隧道內嵌的位址，可以指到區網與 loopback；H:apps/n8n/n8n_adapter.py）。開通後只有設定的 n8n 本身（API 與官方 MCP 端點）拒 loopback（#39），webhook 照舊 | 負責人 2026-10-15 的決定（`n8n_test_workflow` 要打 HA 網路上的 n8n）；2026-11-15 使用者定維持不動（DQ-10 子題），多帳號時要不要收緊交 HM-25 前的獨立安全審查 | 既有（HM-25 前再評估） |
+| 91 | 保留名額載的東西 | 通知與對伺服器請求的回應都轉送（`notifications/cancelled`、roots、progress…），走每帳號另外 8 條保留名額 | 每帳號 4 條、有自己的佇列；判斷函式照 PaaS 原樣（`gateway.carries_no_request`）。HA 的政策只轉送 `notifications/initialized`：其他通知閘道自己回 202、不轉送；對伺服器請求的回應、batch、沒有 id 的工具呼叫在任何名額之前 403；重複鍵 400（strict JSON），所以實際走保留名額的只有 `notifications/initialized` | HA 從不把子程式對用戶端的請求（elicitation、sampling、roots）轉給用戶端，沒有要回的回應；HA 既有政策（0.1.13、0.1.14） | 既有 |
+| 92 | token 換掉時標頭已送出的 JSON 回覆 | 回覆不帶 `Content-Length`（chunked），一個位元組都還沒送時改送 `-32005` 本體 | 帶 `Content-Length`（HM-01 黃金回歸逐位元），標頭已送出就不能改：閘道返回、伺服器關掉連線（uvicorn 記一行，沒有 traceback）；SSE 照 PaaS 補 `-32005` | HM-01 的逐位元契約；token 換掉之後子程式的位元組一律不送 | 既有 |
+| 93 | `-32004` 的 log | 每次一行（方法、token 之後的路徑、錯誤類別、原因） | 每帳號每種原因 60 秒一行（`suppressed=N`）：帳號 id 前 8 碼、HTTP 方法、錯誤類別、原因；不寫路徑（密鑰網址的路徑就是 token） | 子程式當掉時同時在跑的請求一起斷；HA 的 WARNING 規則（第 2.4 節） | 部署 |
+| 94 | initialize 換代的回應 | 503 `{"detail":"MCP child is not ready; reconnect after checking its status"}`；送出前登記在途派送，生命週期轉換最多等數秒（drain） | 503 `BACKEND_UNAVAILABLE`＋`Retry-After: 5`（HA 既有「initialize 等不到回覆」的回應）、沒有 session id、不 DELETE；沒有 drain：重啟不等閘道，標頭已在送的 session 收不回來（下一個請求拿新子程式的 404，用戶端重新 initialize） | HA 既有回應形狀；Supervisor 不經過閘道、沒有派送登記的介面 | 既有 |
+| 95 | 標頭卡在背壓時換 token | initialize 在最外層 fence 最多等 0.25 秒送 403；其他回應最多 2 秒 | 一律最多 2 秒送 401／404（只有一層 `LeasedResponse`）；送不出去就放棄、不丟例外 | HA 的 MCP app 沒有 BaseHTTPMiddleware，不需要另一層 fence | 部署 |
 
 ## 10. 變更紀錄
 
@@ -629,3 +681,4 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | v1 草案（HM-09） | 2026-11-15 | HM-09 | 第 7 節：DQ-21、DQ-25 改標已定（2026-11-15 11:2x 使用者採用建議；`decisions.md`），並寫明 HM-09 定案的做法：spawn 前檢查四類與重試、看門狗把 spawn 失敗與拒絕也算一次、錯開啟動的名額規則、並行停、監看起點與認證被拒的判斷、「連兩次失敗」的算法、監看失敗時停該帳號子程式、資源包裝與降級、被擋的狀態與 `child/restart` 的 `blocked_reason`、log 事件的文字與層級；第 5 節：記憶體檢查的時機與讀不到時的做法 |
 | v1 草案（HM-09 審查） | 2026-11-15 | HM-09 | 依獨立安全審查（修正後通過）：第 7 節 port 列加 IPv6 試綁被平台擋時跳過並記一行（S-6）、錯開啟動列加「某個帳號的啟動丟例外時記一行、其他照起」（S-12）、資源列加「沒有直譯器可跑包裝器時照起並記一行」（S-12）、log 事件列補這三種文字；第 9 節加第 89 列（S-6）並在說明寫明 #14 的附註出自 HM-09（spawn 失敗也重試，審查 S-1 要使用者看過） |
 | v1 草案（HM-20） | 2026-11-15 | HM-20 | 後端網址拒絕 loopback 照實作寫明（DQ-10；DQ-40 ⑦）：第 3.1 節 `backend` 列加存檔的 400；第 7 節加「後端 loopback」列（`WOOW_MCP_DENY_LOOPBACK=1`、整組拒絕、值不是 1 就不啟動）；第 9 節 #39 的 PaaS 欄與 HA 欄寫明兩邊的範圍、存檔時查不查 DNS、回應本體與區網；補 #90（n8n webhook 模式維持 permissive，DQ-10 子題 2026-11-15 使用者定，HM-25 前再評估）。安全審查後（S-1、S-4、S-8）：#39 補「n8n 開通後套上整套既有存檔檢查」與和 PaaS n8n 的差異、範圍只有 loopback（bridge 位址不在規則裡）；第 3.1 節同步、改說「是 loopback」；第 7 節補「額外帳號的子程式也帶變數」與 Headscale 的代碼。rebase 到 HM-09 之後（2026-11-16）：HM-08 補了 #87、#88、HM-09 補了 #89，本片的列改成 #90（原稿 #87），第 7 節與本列的引用同步；#39 的 PaaS 欄照 #152 的實際合併（`671d2e7`）改寫，HA 欄補 Nextcloud 的存檔與測試連線對照。沒開通時的行為不變 |
+| v1 草案（HM-14） | 2026-11-15 | HM-14 | 第 1.2 節：不受開關管多一項（子程式 initialize 錯誤遮本帳號憑證；理由、改了什麼、HM-01 凍結不用改）；第 2.4 節：排隊上限每個佇列各自計數、排隊中斷線不送（含同一刻拿到名額）、保留名額的判斷照 PaaS `_carries_no_request` 且 HA 實際只有 `notifications/initialized` 會用到、SDK 層級逾時與 `terminate_on_close=True` 看不到斷線的已知限制、`-32003` 文字定稿；第 2.5 節：哪些錯誤算子程式中途斷線、`-32004` 的世代判斷與 0.25 秒、`-32005` 與標頭卡在背壓時的乾淨拒絕、一次送完的 JSON 標頭已出去時的處理、結尾最多 2 秒、initialize 世代；第 4.2 節：`-32004`、`-32005` 兩列與「其他既有回應」的 502 測試；第 9 節補第 91～95 列、#81 註明 HM-14 沒做 FM-52 |
