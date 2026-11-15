@@ -89,11 +89,11 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_router_passthrough.py` | HM-08 | 計畫 | 開關關時分派器不掛、回應逐位元相同 |
 | `tests/test_profile_quotas.py` | HM-08 | 計畫 | 真 socket S5、S6；預設帳號當攻擊方；位元組額度；三種過載情況對照 PaaS 表 |
 | `tests/test_reply_mask_union.py` | HM-08 | 計畫 | 回覆遮罩含別帳號 token 與 child_token |
-| `tests/test_profile_ports.py` | HM-09 | 計畫 | 配 port；四類衝突不 spawn；被佔時照看門狗退避、放開後恢復，搶 port 的程式收到 0 筆（T-15）；索引變更後立刻重評；`child/restart` 帶 `blocked_reason` |
-| `tests/test_profile_lifecycle.py` | HM-09 | 計畫 | 看門狗（T-13）、並行停 <30 秒、log 事件清單；額外帳號的監看停止只標記該帳號（DQ-21） |
-| `tests/test_health_backoff.py` | HM-09 | 計畫 | 監看認證退避 15→300 秒；開通後連兩次失敗才判 unreachable；起點錯開、自己的 client；不探測不是自己在跑的子程式（DQ-25） |
-| `tests/test_extra_child_resources.py` | HM-09 | 計畫 | 記憶體檢查、`oom_score_adj`＝500、`nice`、FD soft limit（uid 10001 子程序） |
-| `tests/test_staggered_start.py` | HM-09 | 計畫 | 錯開啟動，同時最多 2 個 |
+| `tests/test_profile_ports.py` | HM-09 | 計畫 | 配 port；四類衝突不 spawn；被佔時照看門狗退避、放開後恢復，搶 port 的程式收到 0 筆（T-15）；spawn 前檢查本身出錯時不起（fail closed）；IPv6 試綁被平台擋（EACCES、EPERM）時跳過並記一行；索引變更後立刻重評（不再衝突的立刻起、新變 disabled 的立刻停、被擋的立刻再查）；`child/restart` 帶 `blocked_reason` |
+| `tests/test_profile_lifecycle.py` | HM-09 | 計畫 | 看門狗（T-13；spawn 失敗也照退避重試）、並行停 <30 秒（停機與關閉各有 15 秒上限，卡住時變紅）、log 事件清單；額外帳號的監看停止只標記該帳號，面板重啟後監看恢復並檢查新的子程式世代（DQ-21）；`remove()` 停掉該帳號的監看與子程式 |
+| `tests/test_health_backoff.py` | HM-09 | 計畫 | 監看認證退避 15→300 秒（子程式沒回的檢查不動它）、`run()` 照退避等；面板存檔與 `child/restart` 把退避歸零；開通後連兩次失敗才判 unreachable；起點錯開：每帳號的起點值，以及 `run()` 真的等到起點才做第一次檢查；自己的 client；不探測不是自己在跑的子程式（DQ-25） |
+| `tests/test_extra_child_resources.py` | HM-09 | 計畫 | 記憶體檢查、`oom_score_adj`＝500、`nice` 是「加 5」不是「設成 5」（uid 10001 子程序）；寫不進去或沒有直譯器可跑包裝器時照起並記一行；FD soft limit |
+| `tests/test_staggered_start.py` | HM-09 | 計畫 | 錯開啟動，同時最多 2 個；某個帳號的啟動或就緒等待丟例外時記一行、其他照起 |
 | `tests/test_profile_admin_api.py` | HM-10 | 計畫 | 契約第 3 節全部情況；建立與重送不回 token；索引隔離；開關關時照舊 |
 | `tests/test_admin_pipeline_matrix.py` | HM-10 | 計畫 | 路由表自動產生的否定矩陣；非管理員逐位元相同 |
 | `packages/mcp-admin-ui/tests/profiles.test.mjs` | HM-11 | 計畫 | 標頭規則、`mutate(profile)` 回聲比對、收據帶帳號、N15 新舊斷言 |
