@@ -8,12 +8,15 @@ byte for byte). What is new is reachable from code only, and only the tests here
   (lifecycle: the Supervisor's own options) on the spec the product builds from the profile's state and directory, on
   the profile's port (HM-04); the child's httpx client, HealthMonitor and ConfigurationState; its TokenAccess and
   mutation lock, created by the runtime so that the add-on can reach them. Two runtimes in one process share none of
-  it: a token, a session (the child's or the gateway's own), a child URL and spec, a token change, a save and its
-  restart, the apply status, the child's output and the reply redaction all stay with their profile.
+  it: a token, a session (the child's or the gateway's own), a child URL and spec, the child client (with the options
+  run_product gave it), a token change, a save and its restart, the apply status, the receipts, the child's output and
+  the reply redaction all stay with their profile. Not proven here: the forwarding slots (32 in every make_apps; HM-08's
+  quota tests take them across profiles) and n8n's catalog copy (one per process; DQ-04, HM-25).
 - SharedAdmin: what the whole add-on shares on 8099 (plan 3.2, FM-54), given to every profile: one AdminAuthority (one
   CSRF key, one HA role verifier), one set of 16 management slots and, for HM-10, the shared management pipeline. One
-  CSRF token then works for every profile, and another profile's ETag is a conflict (409 config_conflict; FM-06: each
-  profile has its own ConfigurationState key).
+  CSRF token then works for every profile, and another profile's ETag is a conflict (409 config_conflict; FM-06): the
+  two profiles' states differ (their tokens), so their revisions do. Each profile's ConfigurationState also has a
+  random key of its own, a second layer these tests do not prove on its own (HM-10: contract 3.5, DQ-15).
 - make_apps' keyword-only parameters for them (authority, admin_slots, admin_pipeline, token_access, mutation_lock,
   profile_view: the profile echo of plan 5.3 item 5); left out, each is created as before.
 - run_product builds the default profile with it, and starting the default profile adds no file to its data directory
@@ -402,7 +405,9 @@ async def test_lifecycle_options_reach_the_profiles_supervisor(tmp_path, monkeyp
 @pytest.mark.parametrize('product', PRODUCTS)
 async def test_two_runtimes_keep_their_tokens_and_children_apart(tmp_path, monkeypatch, log_scan, product):
     """Every shipped product's child_spec(state, directory, port) fits the runtime (plan risk 19): two profiles of it
-    in one process, each answering its own token only, each child reached on its own port with its own bearer."""
+    in one process, each answering its own token only, each child reached on its own port with its own bearer. n8n's
+    catalog copy (n8n_adapter.prepare_catalog's nodes.db, the child's NODE_DB_PATH) is not made here: it is one per
+    process, and where an extra profile's copy goes is DQ-04 (HM-25)."""
     async with Profiles(tmp_path, monkeypatch, log_scan) as profiles:
         default = await profiles.open('default', product, port=DEFAULT_PORT)
         extra = await profiles.open('extra', product, port=EXTRA_PORT, profile_id=EXTRA_ID)
@@ -610,6 +615,50 @@ async def test_each_profile_redacts_its_replies_with_its_own_secrets(tmp_path, m
                                            headers={**bearer(profile.token), 'Mcp-Session-Id': session})
             assert called.status_code == 200 and password.encode() not in called.content
             assert called.json()['result']['content'][0]['text'] == 'the backend said: [REDACTED]'
+
+
+async def test_each_runtime_makes_its_child_client_as_run_product_did(tmp_path, monkeypatch, log_scan):
+    """The child client of every runtime has the options run_product.run gave it before HM-05 (plan 3.2, 5.2): no proxy
+    or .netrc from the environment (trust_env=False: a child bearer never goes through HTTP(S)_PROXY), no redirect
+    followed, 10 s per request (3 s to connect) and 40 connections (the default profile's number; HM-08 sets the extra
+    profiles' own)."""
+    made = []
+    async with Profiles(tmp_path, monkeypatch, log_scan) as profiles:
+        build = profiles.client
+
+        def recording(*args, **kwargs):
+            made.append(dict(kwargs))
+            return build(*args, **kwargs)
+        monkeypatch.setattr(profiles.module.httpx, 'AsyncClient', recording)
+        await profiles.open('default', port=DEFAULT_PORT)
+        await profiles.open('extra', port=EXTRA_PORT, profile_id=EXTRA_ID)
+    expected = dict(trust_env=False, follow_redirects=False, timeout=httpx.Timeout(10, connect=3),
+                    limits=httpx.Limits(max_connections=40))
+    assert made == [expected, expected]
+
+
+async def test_each_profile_keeps_its_own_receipts(tmp_path, monkeypatch, log_scan):
+    """Plan 3.2 (receipts are per profile; contract 3.5: the profile directory's .state.json.operations.json): a token
+    rotation on either profile writes its receipt in that profile's directory only, and only that profile knows the
+    operation (the other answers 404 operation_not_found); the other profile's directory is unchanged."""
+    async with Profiles(tmp_path, monkeypatch, log_scan) as profiles:
+        default = await profiles.open('default', port=DEFAULT_PORT)
+        extra = await profiles.open('extra', port=EXTRA_PORT, profile_id=EXTRA_ID)
+        for own, other in ((extra, default), (default, extra)):
+            before = tree(other.directory)
+            async with own.admin() as admin:
+                boot = (await admin.get('/api/bootstrap', headers=ADMIN)).json()
+                rotated = await admin.post('/api/token/rotate', headers=reviewed_headers(boot, ADMIN))
+                assert rotated.status_code == 200
+                log_scan.watch(rotated.json()['token'])
+                operation = rotated.json()['operation']['id']
+                assert (await admin.get('/api/operations/' + operation, headers=ADMIN)).status_code == 200
+            assert (own.directory / '.state.json.operations.json').is_file()
+            assert tree(other.directory) == before
+            async with other.admin() as admin:
+                unknown = await admin.get('/api/operations/' + operation, headers=ADMIN)
+            assert unknown.status_code == 404 and unknown.json() == {
+                'error': 'request denied', 'detail': {'code': 'operation_not_found'}}
 
 
 # ---- what the add-on shares: one administration ----
