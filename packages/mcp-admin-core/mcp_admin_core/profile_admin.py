@@ -119,6 +119,10 @@ class Registry:
     def capacity(self):
         return self.manager.capacity
 
+    def files_for_extras(self):
+        """Whether the open file limit holds additional profiles (HM-08's file budget; False: the default only)."""
+        return self.manager.files_for_extras
+
     def memory_limit(self):
         return self.manager.memory_limit
 
@@ -411,6 +415,10 @@ class ProfileAdmin:
                 return self._replay(prior, key, {'quarantined': prior['subject']}, etag)
             if usable or given != etag:
                 return self._conflict(etag)  # a usable index is never quarantined: no ETag of it matches
+            if profiles.signature_of_or_none(self.registry.layout.index) is None:
+                # Unusable without an index file (the profiles directory could not be listed at the start): nothing
+                # to move aside; the add-on is restarted instead. Refused before anything is revoked or recorded.
+                return self._conflict(etag)
             try:
                 name = profiles.free_index_quarantine_name(self.registry.layout, datetime.now(timezone.utc))
             except profiles.ProfileDataError:
@@ -547,8 +555,11 @@ class ProfileAdmin:
     def _capacity_check(self, extras):
         """profile_limit_reached, then profile_memory_insufficient (PaaS order; contract 4.1, 5): with a cgroup memory
         limit the PaaS formula decides; without one MemAvailable must hold one more child (its MiB + 256; HM-09's
-        rule for a start), and when it cannot be read the profile is created (one WARNING: never assumed enough)."""
+        rule for a start), and when it cannot be read the profile is created (one WARNING: never assumed enough). An
+        add-on whose open file limit does not hold additional profiles serves none (HM-08): its limit is 0 now."""
         capacity = self.registry.capacity()
+        if not self.registry.files_for_extras():
+            raise refused(409, 'profile_limit_reached', limit=0)
         if extras >= capacity.policy_limit:
             raise refused(409, 'profile_limit_reached', limit=capacity.policy_limit)
         if capacity.memory_extra_limit is not None:

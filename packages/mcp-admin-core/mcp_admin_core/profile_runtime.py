@@ -53,7 +53,7 @@ bootstrap_fields as keyword-only options, given by the manager only.
 from __future__ import annotations
 
 import asyncio
-from contextlib import AsyncExitStack
+from contextlib import AsyncExitStack, nullcontext
 from dataclasses import dataclass, field
 from functools import partial
 import logging
@@ -259,9 +259,14 @@ class ProfileRuntime:
     async def launch(self):
         """Start the child on the saved state, before the listeners serve. A failure is not raised: management stays
         available to report it (configuration: child_start_failed) and to retry; no third-party exception text shows.
-        HM-09: the boot, so no memory check (hold memory=False only)."""
+        HM-09: the boot, so no memory check (hold memory=False only). HM-10 (HM-09 review S-12): under the profile's
+        mutation_lock, which a save and the panel's restart hold while they relaunch it, so the boot's start
+        (start_all) and the start after an index change (ProfileManager.reevaluate) never interleave with them; it
+        waits for a change under way to finish (bounded: an action holds the lock until its relaunch is done)."""
+        lock = self.mutation_lock if self.mutation_lock is not None else nullcontext()
         try:
-            await self._relaunch(self.store.load(), asked=False)
+            async with lock:
+                await self._relaunch(self.store.load(), asked=False)
         except Exception:
             pass
 
@@ -455,6 +460,9 @@ class ProfileManager:
         self.mcp_listener_limit = 64
         self.orphan_secrets = frozenset()
         self.unusable = False  # the profiles directory could not be listed at startup
+        # HM-10: whether the open file limit holds additional profiles (raise_open_file_limit at open): when it does not,
+        # none is served and none can be created (409 profile_limit_reached, limit 0).
+        self.files_for_extras = False
         self.events = LifecycleLog()  # HM-09: the children's lifecycle events, every profile's
         self.admin = self.dispatcher = None  # HM-10: the profile management and the 8099 dispatcher (open())
         self._labels = {DEFAULT_PROFILE: profiles.DEFAULT_LABEL}  # HM-10: every echo's label (kept after removal)
@@ -855,7 +863,7 @@ class ProfileManager:
                 logger.warning('multi-profile: the profiles directory cannot be listed; MCP requests are refused (503) '
                                'for every token')
             needed, target = open_file_budget(self.product)
-            served = raise_open_file_limit(needed, target)
+            served = self.files_for_extras = raise_open_file_limit(needed, target)
             if served:
                 self.mcp_listener_limit = profiles.mcp_listener_limit(self.product)
             self.memory_limit = profiles.memory_limit_mib()
