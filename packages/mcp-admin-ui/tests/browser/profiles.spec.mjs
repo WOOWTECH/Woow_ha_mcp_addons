@@ -314,6 +314,57 @@ test('a lost create or delete answer keeps its identity (across a reload); the r
   expect(Object.keys(await fixtureProfiles(request))).toEqual(['default']);
 });
 
+// HM-11 review S-1, the other two ways the panel learns that a profile was deleted elsewhere: switching away from it
+// (the new list no longer has it) and resending its delete from another profile (profile_not_found is about the profile
+// being deleted, not the one shown). Its unconfirmed receipt can never be queried again: cleared and said so, and
+// nothing asks to go back to it.
+test('deleted elsewhere, learnt when switching away or resending its delete: that profile is named, its receipt cleared', async ({page, request}) => {
+  await reset(request, {product: 'n8n', profiles: {extra: [{id: B, label: '會計'}, {id: C, label: '出納'}]}});
+  await open(page, '/access');
+  const receiptOf = id => page.evaluate(name => sessionStorage.getItem(name), `woow-admin-operation-v1:${prefix}:${id}`);
+  const rotationLost = async () => {
+    await page.getByRole('button', {name: '重新產生', exact: true}).click();
+    await confirm(page, '確認繼續');
+    await expect(page.getByRole('heading', {name: '待確認操作'})).toBeVisible();
+  };
+  await page.route('**/api/token/rotate', async route => { await route.fetch(); await route.abort(); });
+  // C loses a rotation's answer; then its delete never reaches the server.
+  await choose(page, C, '出納');
+  await rotationLost();
+  let lose = true;
+  await page.route(`**/api/profiles/${C}`, async route => {
+    if (route.request().method() === 'DELETE' && lose) { lose = false; await route.abort(); }
+    else await route.fallback();
+  });
+  await page.getByRole('button', {name: '刪除帳號', exact: true}).click();
+  await confirm(page, '繼續');
+  await confirm(page, '確認刪除');
+  await expect(page.locator('#pending-profile-operation')).toContainText('刪除帳號（fedcba98）尚未取得完成確認');
+  // B loses a rotation's answer; then B and C are deleted elsewhere.
+  await choose(page, B, '會計');
+  await rotationLost();
+  for (const id of [B, C]) await request.post('/__fixture/profile', {data: {action: 'delete', id}});
+  // Switching away from B: the list read for the default profile no longer has B.
+  await choose(page, 'default', '預設帳號');
+  await expect(page.locator('#notice')).toContainText('前一個帳號「會計」（01234567）已不存在');
+  await expect(page.locator('#notice')).toContainText('它尚未確認的操作紀錄已一併清除');
+  await expect(page.locator('#notice')).not.toContainText('請切回該帳號');
+  expect(await receiptOf(B)).toBeNull();
+  expect(await receiptOf(C)).not.toBeNull();   // only the profile left behind is checked on a switch
+  // Resending C's delete from the default profile: it is C that is gone, not the default profile.
+  await page.getByRole('button', {name: '重送帳號操作', exact: true}).click();
+  await confirm(page, '確認繼續');
+  await idle(page);
+  await expect(page.locator('#notice')).toContainText('帳號（fedcba98）已不存在，不需要再刪除');
+  await expect(page.locator('#notice')).toContainText('該帳號尚未確認的操作紀錄已一併清除');
+  await expect(page.locator('#notice')).not.toContainText('（default）已不存在');
+  await expect(current(page)).toHaveText('目前帳號：預設帳號（default）');
+  await expect(page.locator('#pending-profile-operation')).toHaveCount(0);
+  expect(await receiptOf(C)).toBeNull();
+  // The first delete never arrived; the resend found C gone and deleted nothing.
+  expect((await calls(request, call => call.method === 'DELETE')).map(call => call.operation)).toEqual([`profiles/${C}`]);
+});
+
 test('a profile whose state cannot be read offers going back and deleting it, still with two confirmations', async ({page, request}) => {
   await reset(request, {product: 'n8n', profiles: {extra: [{id: B, label: '會計', disabled_reason: 'profile_unavailable', unavailable: true}]}});
   await open(page, '/overview');
