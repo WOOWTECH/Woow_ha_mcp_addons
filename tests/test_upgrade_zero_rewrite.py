@@ -11,6 +11,8 @@
   starts the production runtime without a single changed byte and without any new multi-profile file (plan §7.3);
   on a single-profile installation every read of the data layer leaves /data/mcp exactly as it was; creating profiles
   never writes the default profile's state.json (SHA-256, inode, mtime, mode, ctime).
+- The restore check (HM-13a) on the same bytes: nothing changes while the product is switched off; once it is on, the
+  first check adds the instance sentinel and its record and nothing else.
 """
 import ast
 import hashlib
@@ -25,8 +27,9 @@ import typing
 import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
-from mcp_admin_core import features, products, profiles
+from mcp_admin_core import features, products, profiles, restore_detect
 from mcp_admin_core.products import ProductState, ProductStore, profile_initial_state
+from test_restore_detection import after_tick
 from test_single_profile_golden import PRODUCTS as GOLDEN_PRODUCTS, production_runtime, settle
 
 pytestmark = pytest.mark.usefixtures('log_scan')  # every new test runs under the HM-01 log scan
@@ -218,16 +221,8 @@ def test_the_samples_are_the_bytes_the_store_writes():
         assert ProductState.model_validate_json(raw).model_dump_json().encode() == raw, product
 
 
-@pytest.mark.parametrize('product', GOLDEN_PRODUCTS)
-async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_scan, product):
-    # Plan §7.1, §7.3: an installed add-on of today upgrades to this code with no product switched on. The state is
-    # the bytes bb48449 wrote (tests/fixtures/upgrade_zero_rewrite/README.md); the runtime is the production one with
-    # only its outside replaced (tests/test_single_profile_golden.py: production_runtime). HM-13a and HM-13b extend
-    # this test (sentinel files once a product is switched on); every slice keeps it passing.
-    raw = (ZERO_REWRITE / f'{product}.json').read_bytes()
-    state = ProductState.model_validate_json(raw)
-    assert state.product == product and state.configured and state.token_history
-    log_scan.watch_state(state)
+def installed(tmp_path, raw):
+    """/data/mcp of an installed add-on of today: the runtime's lock and the state bytes bb48449 wrote, both 0600."""
     data = tmp_path / 'mcp'
     data.mkdir(mode=0o700)
     for name, content in (('.writer.lock', b''), ('state.json', raw)):
@@ -236,6 +231,22 @@ async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_sc
             os.write(fd, content)
         finally:
             os.close(fd)
+    return data
+
+
+@pytest.mark.parametrize('product', GOLDEN_PRODUCTS)
+async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_scan, product):
+    # Plan §7.1, §7.3: an installed add-on of today upgrades to this code with no product switched on. The state is
+    # the bytes bb48449 wrote (tests/fixtures/upgrade_zero_rewrite/README.md); the runtime is the production one with
+    # only its outside replaced (tests/test_single_profile_golden.py: production_runtime). HM-13a pins the restore
+    # check on these bytes (test_the_restore_check_on_a_state_bb48449_wrote_adds_only_the_sentinel); HM-13b, which
+    # runs that check at every start, extends this test: with the product switched on, the only new entries are the
+    # sentinel and its record. Every slice keeps it passing.
+    raw = (ZERO_REWRITE / f'{product}.json').read_bytes()
+    state = ProductState.model_validate_json(raw)
+    assert state.product == product and state.configured and state.token_history
+    log_scan.watch_state(state)
+    data = installed(tmp_path, raw)
     before = start_facts(data)
     async with production_runtime(product, data) as runtime:
         await settle(runtime, 'configured')
@@ -245,6 +256,34 @@ async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_sc
     # The only new entry is the child's own working directory, as today (products.child_spec; n8n works in /data/mcp).
     assert set(after) - set(before) == (set() if product == 'n8n' else {'child'})
     assert not profiles.has_profile_data(data)
+
+
+@pytest.mark.parametrize('product', GOLDEN_PRODUCTS)
+def test_the_restore_check_on_a_state_bb48449_wrote_adds_only_the_sentinel(tmp_path, log_scan, product):
+    # HM-13a (plan §7.1, §7.2, §8.4): the same installed add-on before and after its product is switched on. The
+    # check is not wired yet (HM-13b runs it at every start, before any listener). Switched off, it changes nothing,
+    # not even a ctime. The first check switched on adds the instance sentinel and its record and nothing else; later
+    # checks, switched on or off, change nothing. Before each look the file clock moves past every ctime in /data/mcp
+    # (after_tick, outside it): a chmod or a new file in the same coarse tick would keep the old ctime.
+    Detection, raw = restore_detect.Detection, (ZERO_REWRITE / f'{product}.json').read_bytes()
+    log_scan.watch_state(ProductState.model_validate_json(raw))
+    data = installed(tmp_path, raw)
+    after_tick(tmp_path, max(facts[6] for facts in tree_facts(data).values()))
+    before = tree_facts(data)
+    for _ in range(2):
+        assert restore_detect.detect(data, enabled=False) == Detection(False, False, restore_detect.INACTIVE)
+    assert tree_facts(data) == before
+    first = restore_detect.detect(data, enabled=True)
+    assert first == Detection(False, True, restore_detect.ESTABLISHED) and not first.restored
+    after = tree_facts(data)
+    assert set(after) - set(before) == {profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME}
+    assert {name: after[name] for name in before if name != '.'} == {n: f for n, f in before.items() if n != '.'}
+    after_tick(tmp_path, max(facts[6] for facts in after.values()))
+    for enabled, verdict in ((True, restore_detect.CONSISTENT), (False, restore_detect.INACTIVE),
+                             (True, restore_detect.CONSISTENT)):
+        assert restore_detect.detect(data, enabled=enabled) == Detection(False, enabled, verdict)
+    assert tree_facts(data) == after
+    assert (data / 'state.json').read_bytes() == raw and not profiles.has_profile_data(data)
 
 
 @pytest.mark.parametrize('product', sorted(features.KNOWN_PRODUCTS))
