@@ -85,25 +85,52 @@ class TokenLease:
                 raise asyncio.CancelledError
 
 
+class Delivery:
+    """HM-14: how far a response got: its start was attempted (started), the server took its headers (accepted: the
+    send returned; a send cancelled while the server waited for the client to read took nothing), the last body the
+    server took (last_body: the very object sent) and whether that was the response's last message (completed)."""
+    __slots__ = ('started', 'accepted', 'completed', 'last_body')
+
+    def __init__(self):
+        self.started = self.accepted = self.completed = False
+        self.last_body = None
+
+    async def forward(self, send, message):
+        await send(message)
+        if message['type'] == 'http.response.start':
+            self.accepted = True
+        elif message['type'] == 'http.response.body':
+            self.last_body = message.get('body', b'')
+            if not message.get('more_body', False):
+                self.completed = True
+
+
 class LeasedResponse:
-    """Guard the whole response and each actual ASGI send, including backpressure."""
-    def __init__(self, response, lease, refused):
-        self.response, self.lease, self.refused = response, lease, refused
+    """Guard the whole response and each actual ASGI send, including backpressure.
+
+    HM-14 (multi-profile contract 2.5): ending, given for a switched-on product only (gateway.make_apps: gateway.Ending),
+    ends a response whose token changed after its start was attempted: ending(scope, receive, send, delivery) sends the
+    gateway's own ending and returns instead of the ClientDisconnect below (which the server logs with a traceback, and
+    answers 500 when the headers had not gone out). Left out, nothing changes."""
+    def __init__(self, response, lease, refused, ending=None):
+        self.response, self.lease, self.refused, self.ending = response, lease, refused, ending
 
     async def __call__(self, scope, receive, send):
-        started = False
+        delivery = Delivery()
 
         async def guarded_send(message):
-            nonlocal started
             self.lease.check()
             if message['type'] == 'http.response.start':
-                started = True
-            await self.lease.run(lambda: send(message))
+                delivery.started = True
+            await self.lease.run(lambda: delivery.forward(send, message))
 
         try:
             await self.lease.run(lambda: self.response(scope, receive, guarded_send))
         except AccessChanged:
-            if started:
+            if delivery.started and self.ending is not None:
+                await self.ending(scope, receive, send, delivery)
+                return
+            if delivery.started:
                 # An already-started HTTP response cannot be changed into a 401/404.
                 raise ClientDisconnect() from None
             raise self.refused() from None
