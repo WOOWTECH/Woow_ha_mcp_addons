@@ -32,12 +32,12 @@ from pathlib import Path
 import stat
 
 from .config import ConfigError, strict_json
+# The file names are the layout's (profiles.py, plan §4.1), written down there only. packaging/entrypoint.py saves
+# MARKER and checks PROFILE_DATA with a copy of its own (the standard library only; tests/test_restore_detection.py).
+# TEMPORARY: the next record before it replaces RECORD; a leftover is removed first.
+from .profiles import (INSTANCE_RECORD_NAME as RECORD, INSTANCE_RECORD_TEMPORARY_NAME as TEMPORARY,
+                       PROFILE_DATA_NAMES as PROFILE_DATA, RESTORE_MARKER_NAME as MARKER, SENTINEL_NAME as SENTINEL)
 
-MARKER = '.restore-detected'  # written by packaging/entrypoint.py, which keeps the same name
-SENTINEL = '.instance-sentinel'
-RECORD = '.instance-record'
-TEMPORARY = '.instance-record.tmp'  # the next record before it replaces RECORD; a leftover is removed first
-PROFILE_DATA = ('profiles.json', 'profiles')  # the profile index and the extra profiles' directory (entrypoint too)
 RECORD_LIMIT = 4096
 RECORD_KEYS = frozenset({'version', 'st_ino', 'st_ctime_ns'})
 

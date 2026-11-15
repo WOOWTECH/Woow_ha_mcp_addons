@@ -13,6 +13,7 @@ and check what the runtime user (uid 10001) can do afterwards in a forked child:
 (packaging/unit.sh); an unprivileged run fails them on purpose, it never skips them. The restore stage every release's
 container acceptance runs (packaging/container_probe.py) is checked here against the same entrypoint, both ways.
 """
+import ast
 from contextlib import contextmanager, redirect_stderr
 import errno
 import importlib.util
@@ -31,7 +32,7 @@ import time
 import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
-from mcp_admin_core import restore_detect as rd
+from mcp_admin_core import profiles, restore_detect as rd
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.products import ProductStore
 
@@ -341,8 +342,20 @@ def record_of(data):
 
 # ---- signal 1: the restore marker (packaging/entrypoint.py) ----------------------------------------------------
 
-def test_the_entrypoint_and_the_detection_use_the_same_names():
-    # The entrypoint runs as root with the standard library only, so it keeps its own copy of the names.
+def test_the_entrypoint_and_the_detection_use_the_same_names(tmp_path, monkeypatch):
+    # One source (HM-13a review SF-1): HM-07's layout in profiles.py writes the names down; restore_detect and the
+    # container probe import them and hold none of them as a literal. The entrypoint runs as root with the standard
+    # library only, before the package and its venv can be imported, so it keeps a copy: pinned here.
+    layout = profiles.Layout(tmp_path)
+    assert (layout.restore_marker, layout.sentinel, layout.instance_record) == (
+        tmp_path / rd.MARKER, tmp_path / rd.SENTINEL, tmp_path / rd.RECORD)
+    assert (layout.index, layout.profiles) == tuple(tmp_path / name for name in rd.PROFILE_DATA)
+    assert rd.TEMPORARY == profiles.INSTANCE_RECORD_TEMPORARY_NAME == rd.RECORD + '.tmp'
+    assert container_probe(monkeypatch, tmp_path).MARKER == rd.MARKER
+    names = {rd.MARKER, rd.SENTINEL, rd.RECORD, rd.TEMPORARY, *rd.PROFILE_DATA}
+    for path in ('packages/mcp-admin-core/mcp_admin_core/restore_detect.py', 'packaging/container_probe.py'):
+        tree = ast.parse((ROOT / path).read_text(), path)
+        assert [node.lineno for node in ast.walk(tree) if isinstance(node, ast.Constant) and node.value in names] == []
     module = entrypoint()
     assert module.MARKER == rd.MARKER == '.restore-detected'
     assert module.PROFILE_DATA == rd.PROFILE_DATA == ('profiles.json', 'profiles')

@@ -25,11 +25,11 @@ import httpx
 from denial_probe import assert_denials, WRITE_CASES
 from mcp_admin_core.health import protocol_reply
 from mcp_admin_core.products import ProductStore, PROBES, TOOLS, allowed_address, fresh_write_grants, probe_success
+from mcp_admin_core.profiles import RESTORE_MARKER_NAME as MARKER  # what packaging/entrypoint.py saves (HM-13a)
 
 APP = sys.argv[1]
 ROOT = Path('/opt/woow')
 DATA = Path('/data/mcp')
-MARKER = '.restore-detected'  # the restore marker packaging/entrypoint.py saves (multi-profile HM-13a)
 ENDPOINT = 'http://127.0.0.1:8081/mcp'
 CHILD = 'http://127.0.0.1:3000/mcp'  # the default profile's child, container loopback only
 CALLS = []

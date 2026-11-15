@@ -12,8 +12,10 @@ inodes after re-checking type, owner and link count. Changes made before an entr
 bootstrap; anything changed after it cannot redirect the repair, which only ever touches pinned,
 approved inodes.
 Before pass 1 a restore leaves a durable marker (MARKER) for the management process's restore check
-(multi-profile HM-13a, signal 1; mcp_admin_core.restore_detect keeps the same names); a restore whose
-marker cannot be saved does not start when multi-profile data is on disk.
+(multi-profile HM-13a, signal 1); a restore whose marker cannot be saved does not start when
+multi-profile data (PROFILE_DATA) is on disk. Both names are copies of the layout names in
+mcp_admin_core.profiles, which mcp_admin_core.restore_detect uses: this file runs before that package
+and its venv can be imported (tests/test_restore_detection.py pins the copies).
 """
 import ctypes
 import errno
@@ -30,6 +32,7 @@ RESTORE_OWNER = (0, 0)  # Supervisor extracts a restored app backup as root
 MAX_RESTORED_ENTRIES = 512  # every approved entry holds a descriptor until the repair ends
 MAX_RESTORED_DEPTH = 8
 CHANGED = 'restored state changed during bootstrap'
+# Copies of mcp_admin_core.profiles.RESTORE_MARKER_NAME and PROFILE_DATA_NAMES (see the docstring).
 MARKER = '.restore-detected'  # read by the management process's restore check, which removes it when done
 PROFILE_DATA = ('profiles.json', 'profiles')  # multi-profile data in /data/mcp: the index, the extra profiles
 

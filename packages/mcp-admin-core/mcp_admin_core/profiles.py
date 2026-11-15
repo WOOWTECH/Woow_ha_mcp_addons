@@ -3,7 +3,8 @@
 Multi-profile plan §4 (data), §5.2 (quotas), §5.4 (ports); docs/multi-profile/contract.md §3.6, §5 and §8 (HM-00).
 HM-07: a library, not wired yet. No entry point imports it (tests/test_upgrade_zero_rewrite.py): HM-08 routes MCP
 requests with it, HM-09 starts the children, HM-10 lists and creates profiles, HM-13b's boot guard checks whether
-profile data exists. It never writes the default profile's files (invariant I6).
+profile data exists. restore_detect (HM-13a, not wired either) takes its file names from here. It never writes the
+default profile's files (invariant I6).
 
 Layout (plan §4.1)::
 
@@ -466,6 +467,23 @@ def write_index(path: Path, entries: Sequence[IndexEntry], *, expected: IndexVie
 # Layout, the profiles directory and what it holds
 # ---------------------------------------------------------------------------------------------------------------
 
+# The names in the default profile's store directory (plan §4.1), written here and nowhere else in the package: Layout
+# builds its paths from them and restore_detect (HM-13a) looks them up through its directory descriptor.
+# packaging/entrypoint.py runs as root with the standard library only, before this package and its venv are on the
+# path, so it keeps a copy of RESTORE_MARKER_NAME and PROFILE_DATA_NAMES; tests/test_restore_detection.py pins that
+# copy to these. None of these files holds a secret.
+INDEX_NAME = 'profiles.json'
+INDEX_OPERATIONS_NAME = '.profiles.json.operations.json'
+PROFILES_NAME = 'profiles'
+PROFILE_DATA_NAMES = (INDEX_NAME, PROFILES_NAME)  # "profile data on disk" (plan §3.3): either name, any kind of entry
+SENTINEL_NAME = '.instance-sentinel'  # restore detection, signal 2 (HM-13a)
+INSTANCE_RECORD_NAME = '.instance-record'  # the sentinel's (st_ino, st_ctime_ns)
+INSTANCE_RECORD_TEMPORARY_NAME = '.instance-record.tmp'  # the next record, before it replaces the record
+RESTORE_MARKER_NAME = '.restore-detected'  # restore detection, signal 1: saved by packaging/entrypoint.py
+REVOKE_ALL_MARKER_NAME = '.revoke-all-pending'  # the boot guard (HM-13b)
+RESTORE_RECORD_NAME = 'restore-record.json'  # the boot guard (HM-13b)
+
+
 @dataclass(frozen=True)
 class Layout:
     """The paths of the multi-profile data under the default profile's store directory (normally /data/mcp)."""
@@ -473,15 +491,15 @@ class Layout:
 
     @property
     def index(self) -> Path:
-        return self.root / 'profiles.json'
+        return self.root / INDEX_NAME
 
     @property
     def index_operations(self) -> Path:
-        return self.root / '.profiles.json.operations.json'
+        return self.root / INDEX_OPERATIONS_NAME
 
     @property
     def profiles(self) -> Path:
-        return self.root / 'profiles'
+        return self.root / PROFILES_NAME
 
     def profile(self, profile_id: str) -> Path:
         if not is_profile_id(profile_id):
@@ -495,23 +513,23 @@ class Layout:
     # Restore detection and the boot guard (HM-13a, HM-13b); none of them holds a secret.
     @property
     def sentinel(self) -> Path:
-        return self.root / '.instance-sentinel'
+        return self.root / SENTINEL_NAME
 
     @property
     def instance_record(self) -> Path:
-        return self.root / '.instance-record'
+        return self.root / INSTANCE_RECORD_NAME
 
     @property
     def restore_marker(self) -> Path:
-        return self.root / '.restore-detected'
+        return self.root / RESTORE_MARKER_NAME
 
     @property
     def revoke_all_marker(self) -> Path:
-        return self.root / '.revoke-all-pending'
+        return self.root / REVOKE_ALL_MARKER_NAME
 
     @property
     def restore_record(self) -> Path:
-        return self.root / 'restore-record.json'
+        return self.root / RESTORE_RECORD_NAME
 
 
 def _utc(when: datetime) -> str:
@@ -534,13 +552,13 @@ def parse_quarantine_name(name: str) -> tuple[str, str] | None:
 
 def index_quarantine_name(when: datetime) -> str:
     """What "quarantine the profile index" renames profiles.json to (contract §3.6; HM-10)."""
-    return 'profiles.json.quarantine-' + _utc(when)
+    return INDEX_NAME + '.quarantine-' + _utc(when)
 
 
 def has_profile_data(root: Path) -> bool:
     """Plan §3.3: whether profile data exists (profiles.json or profiles/, any kind of entry, a link included). When
     that cannot be told, the answer is yes: that direction only revokes more or refuses a start."""
-    for name in ('profiles.json', 'profiles'):
+    for name in PROFILE_DATA_NAMES:
         try:
             os.lstat(Path(root) / name)
         except (FileNotFoundError, NotADirectoryError):
