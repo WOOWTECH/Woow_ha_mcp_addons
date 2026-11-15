@@ -1,4 +1,23 @@
-"""Protocol readiness and separate read-only backend reachability (not E2E)."""
+"""Protocol readiness and separate read-only backend reachability (not E2E).
+
+HM-09 (multi-profile plan 5.4; contract 7; DQ-25, decided 2026-11-15 11:2x: the plan's recommendation): a switched-on
+product's ProfileManager gives every profile's monitor its options; left out, the monitor is the one before HM-09
+(a check at once, then every 15 s; one failed check is unreachable; it probes whatever the child's state).
+
+- first_check_after: the start point (the default profile at once; an additional one later, staggered); the interval
+  stays HEALTH_INTERVAL.
+- auth_backoff: while the backend refuses the credentials (auth_refused: the probes' fixed texts of this repository's
+  children), the next check waits the table's next step (AUTH_BACKOFF: 15, 30, 60, 120, 300 s; Odoo 18 counts failed
+  logins per source address, C-tracer 4.4); any other answer of the child resets it, and so does reset() (a save or
+  the panel's restart: new credentials).
+- tolerance 2: the verdict unreachable (what makes the gateway refuse a tools/call: the child answered and the backend
+  did not) needs two such checks in a row of the same child (C2-MF-4 point 3: a check that another profile's load
+  delayed refuses nothing); until then the previous verdict stays (reachable, or unknown after a start). A check the
+  child did not answer is recorded as before (not ready; it refuses nothing) and neither counts nor breaks the row.
+  test_saved (the panel's backend test) still answers with what it found.
+- own_child_only: nothing is sent while the profile's own child is not running (blocked, backing off, failed, stopped):
+  the port may be another program's (T-15).
+"""
 import asyncio
 import re
 from datetime import datetime, timezone
@@ -12,6 +31,21 @@ from .lifecycle import CHILD_URL
 SESSION_ID = re.compile(r"[\x21-\x7e]{1,256}")  # as the gateway accepts from clients
 REASON_LIMIT = 1000  # characters of a failed health check's own text kept as the reason
 TOOL_ERROR_PREFIX = re.compile(r"^Error executing tool [A-Za-z0-9_.-]{1,128}: ")  # the SDK's wrapping of a tool error
+HEALTH_INTERVAL = 15  # seconds between two checks (DQ-25: unchanged)
+AUTH_BACKOFF = (15, 30, 60, 120, 300)  # DQ-25: the next check after 1, 2, 3, 4, 5 or more refused logins in a row
+# A refusal of the credentials, as the readiness probes of this repository's children word it (the start of the
+# probe's reason; tests/test_health_backoff.py pins each text to its child's source): Odoo and Hermes
+# BACKEND_AUTH_REJECTED, Headscale HEADSCALE_INVALID_CREDENTIAL, Nextcloud's public code for a 401 and for its
+# brute-force throttle (a 429 after failed logins: the same back-off), EMQX's and LiteLLM's 401 texts.
+AUTH_REFUSED = re.compile(r"(?:BACKEND_AUTH_REJECTED|HEADSCALE_INVALID_CREDENTIAL)(?![A-Za-z0-9_])"
+                          r"|BACKEND_HTTP_ERROR status=(?:401|429)(?![0-9])"
+                          r"|EMQX rejected the API credentials \(401\)"
+                          r"|LiteLLM rejected the credentials \(401 ")
+
+
+def auth_refused(reason):
+    """Whether a health check's reason says the backend refused the credentials (DQ-25)."""
+    return isinstance(reason, str) and AUTH_REFUSED.match(reason) is not None
 
 
 def probe_reason(reply):
@@ -70,7 +104,8 @@ async def protocol_reply(response: httpx.Response, expected_id):
 
 
 class HealthMonitor:
-    def __init__(self, store, process, client, child_url=CHILD_URL):
+    def __init__(self, store, process, client, child_url=CHILD_URL, *, first_check_after=0, tolerance=1,
+                 auth_backoff=None, own_child_only=False, log=None):
         self.store, self.process, self.client, self.child_url = store, process, client, child_url
         self.backend = "unconfigured"
         self.management = "alive"
@@ -78,6 +113,20 @@ class HealthMonitor:
         # (readiness, the panel) is unchanged and still shows a check in progress; availability() never does.
         self.settled = None
         self._check_lock = asyncio.Lock()
+        # HM-09 (see the module docstring); all left out: the monitor before HM-09.
+        if type(tolerance) is not int or tolerance < 1:
+            raise ValueError('invalid tolerance')
+        if auth_backoff is not None and (not auth_backoff or any(not step > 0 for step in auth_backoff)):
+            raise ValueError('invalid backoff')
+        self.first_check_after, self.tolerance = first_check_after, tolerance
+        self.auth_backoff = None if auth_backoff is None else tuple(auth_backoff)
+        self.own_child_only, self.log = own_child_only, log
+        self.paced = (first_check_after, tolerance, auth_backoff, own_child_only, log) != (0, 1, None, False, None)
+        self.auth_refusals = 0  # refused logins in a row
+        self.refusals = 0  # checks in a row of the current child that got its answer and found the backend unreachable
+        self._generation = None
+        self._reachable = None  # the child start whose last answered check found the backend reachable
+        self._wake = asyncio.Event()
 
     def snapshot(self):
         return {"management": self.management, "child": self.process.health(), "backend": self.backend}
@@ -96,19 +145,31 @@ class HealthMonitor:
         async with self._check_lock:
             await self._check_saved()
 
+    async def settle(self):
+        """HM-09 (ProfileManager.start_all waits for a starting child with it): the outcome of the check running now when
+        one is (waited for, not followed by a second probe at the backend), else a check of its own."""
+        if self._check_lock.locked():
+            async with self._check_lock:
+                return
+        await self.check()
+
     async def test_saved(self, state):
         """Explicit read-only check of the saved config, serialized with monitoring.
 
         The gateway holds its mutation lock throughout. This callback never saves,
-        replaces credentials, changes policy or restarts a child.
+        replaces credentials, changes policy or restarts a child. HM-09: it answers with what this check found, also
+        while the monitor's verdict still waits for a second failure (tolerance).
         """
         async with self._check_lock:
-            await self._check_saved()
+            found = await self._check_saved()
+            backend, reason = ((found[2], found[3]) if found is not None else
+                               (self.backend, self.settled[3] if self.settled else None))
             return {"tested_configuration": "saved", "checked_at": datetime.now(timezone.utc).isoformat(),
-                    "health": self.snapshot(), "backend": self.backend,
-                    "reason": self.settled[3] if self.settled else None}
+                    "health": self.snapshot(), "backend": backend, "reason": reason}
 
     async def _check_saved(self):
+        """One check; returns what it found (child start count, child answered, backend, reason), None when the state
+        cannot be read. settled is what the monitor makes of it (the same, unless tolerance keeps a verdict)."""
         generation = getattr(self.process, "starts", 0)
         try:
             state = self.store.load()
@@ -117,7 +178,7 @@ class HealthMonitor:
             self.process.ready = False
             self.backend = "unknown"
             self.settled = None
-            return
+            return None
         self.management = "alive"
         self.process.ready = False
         configured = getattr(state, 'configured', bool(state.backend_url and state.backend_key))
@@ -125,8 +186,15 @@ class HealthMonitor:
         product = getattr(state, 'product', 'n8n')
         if product != 'n8n' and not configured:
             self.settled = (generation, False, self.backend, None)
-            return
+            self.auth_refusals = self.refusals = 0
+            return self.settled
+        if self.own_child_only and getattr(self.process, 'status', 'running') != 'running':
+            # HM-09 (T-15): nothing is sent to a port this profile's own child does not hold now.
+            self.backend = 'unknown'
+            self.settled = (generation, False, 'unknown', None)
+            return self.settled
         reason = None
+        found = None
         try:
             reason = await self._check(state, configured, product)
         finally:
@@ -138,7 +206,61 @@ class HealthMonitor:
             else:
                 reason = redact.redact_secrets(reason or "BACKEND_UNAVAILABLE: the health check failed",
                                                redact.secret_values(state))
-            self.settled = (generation, answered, self.backend, reason)
+            found = (generation, answered, self.backend, reason)
+            self.settled = self._verdict(found)
+            self.backend = self.settled[2]
+        return found
+
+    def _verdict(self, found):
+        """settled for what a check found: itself, unless tolerance keeps the previous verdict (module docstring); the
+        refused logins in a row counted for auth_backoff."""
+        generation, answered, backend, reason = found
+        if self.auth_backoff is not None:
+            if backend == 'unreachable' and auth_refused(reason):
+                self.auth_refusals += 1
+                if self.log is not None:
+                    self.log('auth backoff', 'the backend refused the credentials; next health check in '
+                                             f'{self.next_interval():g} s')
+            elif answered:
+                self.auth_refusals = 0
+        if generation != self._generation:
+            self._generation, self.refusals = generation, 0
+        if not answered:
+            return found
+        if backend != 'unreachable':
+            self.refusals = 0
+            if backend == 'reachable':
+                self._reachable = generation
+            return found
+        self.refusals += 1
+        if self.refusals >= self.tolerance:
+            if self._reachable == generation:
+                self._reachable = None
+            return found
+        return (generation, answered, 'reachable' if self._reachable == generation else 'unknown', None)
+
+    def next_interval(self):
+        """Seconds until the next check: HEALTH_INTERVAL, or the backoff after refused logins (auth_backoff)."""
+        if self.auth_backoff is not None and self.auth_refusals:
+            return self.auth_backoff[min(self.auth_refusals - 1, len(self.auth_backoff) - 1)]
+        return HEALTH_INTERVAL
+
+    def reset(self):
+        """New credentials (a save, the panel's restart): no backoff any more, and the next check within one
+        interval."""
+        self.auth_refusals = self.refusals = 0
+        self._wake.set()
+
+    async def _pause(self, seconds):
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + seconds
+        while (left := deadline - loop.time()) > 0:
+            self._wake.clear()
+            try:
+                await asyncio.wait_for(self._wake.wait(), left)
+            except TimeoutError:
+                return
+            deadline = min(deadline, loop.time() + HEALTH_INTERVAL)
 
     async def _check(self, state, configured, product):
         """One readiness check; returns why the backend was not proven reachable (None when it was or nothing says)."""
@@ -215,6 +337,12 @@ class HealthMonitor:
         return reason
 
     async def run(self):
+        if not self.paced:
+            while True:
+                await self.check()
+                await asyncio.sleep(15)
+        if self.first_check_after:
+            await self._pause(self.first_check_after)
         while True:
             await self.check()
-            await asyncio.sleep(15)
+            await self._pause(self.next_interval())

@@ -4,8 +4,10 @@ Multi-profile plan §4 (data), §5.2 (quotas), §5.4 (ports); docs/multi-profile
 HM-07 made it a library; HM-08 wires it: the gateway takes PROFILE_ID from here, and a switched-on product's
 ProfileManager (profile_runtime) reads the index, opens the profiles it lists and routes MCP requests with them
 (profile_router); a switched-off product reads none of it (tests/test_router_passthrough.py). HM-09 starts the
-children, HM-10 lists and creates profiles, HM-13b's boot guard checks whether profile data exists. restore_detect
-(HM-13a, not wired yet) takes its file names from here. It never writes the default profile's files (invariant I6).
+children: the spawn check's test bind (port_occupied), allocation around what is held (allocate_port occupied=) and
+the memory readings (memory_limit_mib, available_memory_mib). HM-10 lists and creates profiles, HM-13b's boot guard
+checks whether profile data exists. restore_detect (HM-13a, not wired yet) takes its file names from here. It never
+writes the default profile's files (invariant I6).
 
 Layout (plan §4.1)::
 
@@ -23,17 +25,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import errno
 import json
+import logging
 import os
 from pathlib import Path
 import re
 import secrets
+import socket
 import stat
-from typing import Iterable, Mapping, Sequence
+from typing import Callable, Iterable, Mapping, Sequence
 import unicodedata
 
 from .config import strict_json
 
+logger = logging.getLogger(__name__)
 DEFAULT_PROFILE = 'default'
 DEFAULT_LABEL = 'Default'  # the default profile's row in the profile list (the panel shows 預設帳號)
 INDEX_VERSION = 1
@@ -241,11 +247,62 @@ def port_conflicts(entries: Sequence[IndexEntry]) -> dict[int, tuple[str, ...]]:
     return {port: tuple(ids) for port, ids in holders.items() if len(ids) > 1 or port == DEFAULT_CHILD_PORT}
 
 
-def allocate_port(taken: Iterable[int] = ()) -> int | None:
+def allocate_port(taken: Iterable[int] = (), *, occupied: Callable[[int], str | None] | None = None) -> int | None:
     """The first port of 18000-18099 that is not reserved or in *taken* (the index's ports and those of running
-    children), or None (409 profile_port_unavailable). Whether a socket is bound there is HM-09's check."""
+    children), or None (409 profile_port_unavailable). occupied (HM-09: port_occupied, the test bind of plan 5.4):
+    a port it names a reason for is skipped too; left out, nothing is bound (the pure rule of HM-07)."""
     used = set(taken) | RESERVED_PORTS
-    return next((port for port in range(FIRST_PROFILE_PORT, LAST_PROFILE_PORT + 1) if port not in used), None)
+    for port in range(FIRST_PROFILE_PORT, LAST_PROFILE_PORT + 1):
+        if port in used or (occupied is not None and occupied(port) is not None):
+            continue
+        return port
+    return None
+
+
+# HM-09: the spawn check's test bind (plan 5.4; PaaS child_identity.port_occupied @69ac425, unchanged at cf3d0d5).
+TEST_BIND_ADDRESSES = ((socket.AF_INET, '127.0.0.1'), (socket.AF_INET, '0.0.0.0'), (socket.AF_INET6, '::1'),
+                       (socket.AF_INET6, '::'))
+# HM-09 review S-6: an IPv6 test bind the platform refuses (AppArmor, seccomp: EACCES, EPERM) is skipped, not taken for
+# an occupied port (PaaS takes it so, and a switched-on product's default child would then never start); each
+# (address, errno) is reported once a process.
+REFUSED_IPV6_BINDS = (errno.EACCES, errno.EPERM)
+_reported_binds: set = set()
+
+
+def port_occupied(port: int) -> str | None:
+    """Whether a child binding 127.0.0.1:port would run into a socket already there: the reason for the log (the
+    address family and errno name only), or None. Test binds with SO_REUSEADDR on 127.0.0.1, 0.0.0.0, ::1 and :: (v6
+    only): any listening socket, or a bound one without SO_REUSEADDR, on any of them (a wildcard included) makes one
+    fail; a reusable one (TIME_WAIT) does not, as for uvicorn, Node and Go listeners. On Linux the wildcard test covers
+    the specific addresses; BSD and macOS let SO_REUSEADDR stack a wildcard on a specific address, hence all four. No
+    socket is kept, listened on or connected. A missing IPv6 is skipped, and so is an IPv6 bind the platform refuses
+    (EACCES, EPERM: no program of the add-on binds IPv6 then, the child binds 127.0.0.1, and a dual-stack socket of
+    another program still fails the IPv4 wildcard test), with one WARNING per address and errno; any IPv4 failure is
+    an occupied port."""
+    for family, address in TEST_BIND_ADDRESSES:
+        try:
+            probe = socket.socket(family, socket.SOCK_STREAM)
+        except OSError:
+            continue  # no such address family (IPv6 switched off)
+        try:
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if family == socket.AF_INET6:
+                probe.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+            probe.bind((address, port))
+        except OSError as exc:
+            if family == socket.AF_INET6 and exc.errno in (errno.EADDRNOTAVAIL, errno.EAFNOSUPPORT):
+                continue
+            name = errno.errorcode.get(exc.errno or 0, str(exc.errno))
+            if family == socket.AF_INET6 and exc.errno in REFUSED_IPV6_BINDS:
+                if (address, name) not in _reported_binds:
+                    _reported_binds.add((address, name))
+                    logger.warning('multi-profile: the IPv6 test bind on %s is refused (%s); the spawn check skips '
+                                   'that address', address, name)
+                continue
+            return f"{'IPv6' if family == socket.AF_INET6 else 'IPv4'} test bind failed ({name})"
+        finally:
+            probe.close()
+    return None
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -280,13 +337,55 @@ class ProfileCapacity:
         return None
 
 
+# HM-09: what the memory checks read (contract 5; PaaS profiles._memory_limit_mib @69ac425). Read when called.
+CGROUP_MEMORY_LIMITS = (Path('/sys/fs/cgroup/memory.max'), Path('/sys/fs/cgroup/memory/memory.limit_in_bytes'))
+MEMINFO = Path('/proc/meminfo')
+
+
+def memory_limit_mib() -> int | None:
+    """The container's memory ceiling in MiB (cgroup v2 memory.max, else v1 memory.limit_in_bytes), as PaaS reads it;
+    None for no usable limit: "max", a v1 "no limit" (more than 1 TiB), nothing readable. An HA add-on normally has
+    none (Supervisor sets no memory limit; HM-03a confirms on HAOS)."""
+    for path in CGROUP_MEMORY_LIMITS:
+        try:
+            raw = path.read_text().strip()
+        except OSError:
+            continue
+        if raw == 'max':
+            return None
+        try:
+            mib = int(raw) // MiB
+        except ValueError:
+            continue
+        return None if mib > 1024 * 1024 else mib
+    return None
+
+
+def available_memory_mib() -> int | None:
+    """MemAvailable of /proc/meminfo in MiB (the host's, without lxcfs); None when it cannot be read (the caller then
+    starts the child without the check and says so: never assumed)."""
+    try:
+        with open(MEMINFO, 'rb') as handle:
+            text = handle.read(65536).decode('ascii', 'replace')
+    except OSError:
+        return None
+    for line in text.splitlines():
+        if line.startswith('MemAvailable:'):
+            parts = line.split()
+            if len(parts) == 3 and parts[2] == 'kB' and parts[1].isdigit():
+                return int(parts[1]) // 1024
+            return None
+    return None
+
+
 def supports_profiles(product: str) -> bool:
     return capacity(product).policy_limit > 0
 
 
 def capacity(product: str, memory_limit_mib: int | None = None) -> ProfileCapacity:
     """The product's capacity; with a readable memory limit (cgroup memory.max, MiB) the PaaS formula: additional
-    profiles = min(limit, max(1, (memory - 256) // child MiB) - 1). HM-09 reads the limit and MemAvailable."""
+    profiles = min(limit, max(1, (memory - 256) // child MiB) - 1). HM-09 reads the limit (memory_limit_mib) when the
+    ProfileManager opens, and MemAvailable when the panel starts an additional child (profile_runtime)."""
     if product not in EXTRA_PROFILE_LIMITS:
         raise ValueError('unknown product')
     limit = min(MAX_EXTRA_PROFILES, EXTRA_PROFILE_LIMITS[product])

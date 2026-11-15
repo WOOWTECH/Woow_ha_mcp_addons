@@ -425,7 +425,9 @@ PaaS 另帶 `message` 文字，HA 不帶（面板只認代碼，§8.8 #49）。
   留給後續。
 - 記憶體檢查：建立帳號、存後端（子程式第一次要起）、手動重啟時讀 `/proc/meminfo` 的 MemAvailable；不足「產品每子程式 MiB＋保留量」時，
   建立回 409 `profile_memory_insufficient`，存後端照存但子程式不起（`blocked`＋`memory_capacity`）。開機時不擋。讀得到 cgroup
-  `memory.max` 時照 PaaS 公式。
+  `memory.max` 時照 PaaS 公式。HM-09 定案（建立的 409 是 HM-10）：只檢查額外帳號；面板要起子程式的時候（存後端、存政策等會重起子程式的存檔、
+  `child/restart`）在舊子程式停下之後讀；開機（`start_all`）與看門狗重啟不讀；讀不到就照起並記一行 WARNING（不假設夠）。讀得到 cgroup
+  `memory.max` 時改由 ProfileManager 開啟時的 PaaS 公式決定（超出的帳號 `disabled_reason=memory_capacity`），不再讀 MemAvailable。
 
 **各產品的額外帳號上限與每子程式記憶體**（暫定照 PaaS；HM-07 定常數，HM-19c 在目標硬體量測後定案，改了要同時改本表）：
 
@@ -472,17 +474,19 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 
 | 項目 | 規則 |
 |---|---|
-| port | 預設帳號 3000；額外帳號 18000 起找第一個空號，避開 3000、8081、8099、索引內 port、執行中子程式的 port；試綁四種位址確認沒人佔 |
-| spawn 前檢查 | port 衝突或被佔就不 spawn，`status=blocked`＋`blocked_reason` |
-| 看門狗（DQ-20 採 (b)） | 開通的產品所有帳號（含預設）：退避 2、5、15、30、60、120、300 秒，不限次數，連續跑 120 秒歸零；OOM 殺掉也照退避。沒開通維持今天「同一次啟動最多 4 次、不歸零、之後 failed」 |
-| 錯開啟動 | 預設帳號先起；額外帳號依序起、同時最多 2 個，前一個健康檢查通過或 30 秒逾時才起下一個 |
+| port | 預設帳號 3000；額外帳號 18000 起找第一個空號，避開 3000、8081、8099、索引內 port、執行中子程式的 port；試綁四種位址確認沒人佔（HM-09：`profiles.allocate_port(occupied=profiles.port_occupied)`、`ProfileManager.free_port()`；試綁照 PaaS `port_occupied`：127.0.0.1、0.0.0.0、::1、::（v6only），都帶 SO_REUSEADDR）。HM-09 審查（S-6）：IPv6 試綁被平台擋（EACCES、EPERM：AppArmor、seccomp）時跳過那個位址，每個位址與 errno 每個程序記一行 WARNING（PaaS 當成被佔；第 9 節 #89）；IPv4 任何失敗仍當被佔 |
+| spawn 前檢查 | port 衝突或被佔就不 spawn，`status=blocked`＋`blocked_reason`。HM-09 定案的四類：add-on 自己的 listener port（8081、8099）、別的帳號執行中的子程式在用 → `child_port_conflict`；試綁失敗 → `child_port_in_use`；這三種照看門狗退避重試（同 PaaS 每次拒絕都重試）。索引內重複或等於 3000 的帳號開啟時就 `disabled_reason=port_conflict`，起子程式時 `blocked`＋`child_port_conflict`、不重試、也不試綁，索引變了（HM-10 寫入後 `adopt_index`＋`reevaluate()`）才重評。被擋的子程式不 spawn，健康監看也不送任何東西到那個 port |
+| 看門狗（DQ-20 採 (b)） | 開通的產品所有帳號（含預設）：退避 2、5、15、30、60、120、300 秒，不限次數，連續跑 120 秒歸零；OOM 殺掉也照退避。沒開通維持今天「同一次啟動最多 4 次、不歸零、之後 failed」。HM-09：spawn 失敗（`OSError`）與 spawn 前檢查的拒絕也算一次失敗、照退避重試（PaaS 的 spawn 失敗會停在 failed；HA 的子程式指令固定在映像裡，spawn 失敗多半是暫時的，例如 fork 時記憶體不夠）；退避期間 `status=backoff`，被擋時維持 `blocked` |
+| 錯開啟動 | 預設帳號先起；額外帳號依序起、同時最多 2 個，前一個健康檢查通過或 30 秒逾時才起下一個。HM-09 定案：預設帳號在 listener 之前起（同今天，`launch()`）；額外帳號等預設帳號第一次健康檢查通過或 30 秒後才開始，依索引順序、同時最多 2 個在起，一個名額在「子程式回了健康檢查」「不在起了（被擋、沒設定、spec 失敗、子程式結束）」或 30 秒時讓出（壞的標記、不擋其他）。等的時候每 0.5 秒檢查一次（子程式還沒聽 port 時只是連線被拒，後端看不到）。HM-09 審查（S-12）：某個帳號的啟動或就緒等待丟例外時（目前找不到會丟的路），記一行、讓出名額，其他帳號照起；預設帳號的等待也一樣 |
 | 啟動順序 | legacy 遷移（只對預設）→ 還原偵測、守門、休眠處理 → 預設帳號 → 錯開起額外帳號（壞的標記、不擋其他） |
-| 關閉 | 所有 `Supervisor.stop()` 並行，在 HA 停止上限 30 秒內收完 |
-| 健康監看 | 每帳號一個、自己的 httpx client、起點錯開；認證被拒 15→30→60→120→300 秒退避；開通後連兩次失敗才判 unreachable（DQ-25 待定，照計畫建議；負責片 HM-09、HM-30） |
-| 監看失敗 | 額外帳號只標記 `failed`；預設帳號維持今天「任何元件停止就退出」（DQ-21 待定） |
-| 資源 | 額外帳號子程式 exec 前寫 `/proc/self/oom_score_adj`＝500（絕對值）與 `setpriority(+5)` |
+| 關閉 | 所有 `Supervisor.stop()` 並行，在 HA 停止上限 30 秒內收完（HM-09：`ProfileManager.stop_all()`，關閉時先停額外帳號的監看再並行停子程式；6 個都要 SIGKILL 的子程式約一個寬限期 3 秒收完） |
+| 健康監看 | 每帳號一個、自己的 httpx client、起點錯開；認證被拒 15→30→60→120→300 秒退避；開通後連兩次失敗才判 unreachable（DQ-25 已定：2026-11-15 11:2x 使用者採用建議；負責片 HM-09、HM-30）。HM-09 定案：起點＝預設帳號開機就查（同今天）、第 k 個額外帳號在自己的子程式起好後 15×(1＋k÷(產品額外帳號上限＋1)) 秒（Odoo：17.5、20、22.5…秒），之後每 15 秒；「認證被拒」＝健康探測原因開頭是各子程式固定的認證失敗文字（Odoo、Hermes `BACKEND_AUTH_REJECTED`；Headscale `HEADSCALE_INVALID_CREDENTIAL`；Nextcloud `BACKEND_HTTP_ERROR status=401`，以及登入失敗後的節流 `status=429`；EMQX、LiteLLM 的 401 文字），子程式回了其他答案就歸零，存檔與面板重啟（新的憑證）也歸零並在 15 秒內再查；「連兩次失敗」＝同一個子程式世代連續兩次「子程式有回、後端不通」才判 unreachable（才拒絕 tools/call），第一次維持前一次的判定（之前通就 reachable，剛起還沒判定就 unknown）；子程式沒回的檢查照今天記成未就緒（本來就不拒絕 tools/call），不算一次也不打斷連續；面板的 `backend/test` 照實回這一次的結果。子程式不在 running 時不送任何東西（port 可能是別的程式的，T-15）。沒開通照今天（每 15 秒、一次就判、不退避） |
+| 監看失敗 | 額外帳號只標記 `failed`；預設帳號維持今天「任何元件停止就退出」（DQ-21 已定：2026-11-15 11:2x 使用者採用建議）。HM-09 定案：額外帳號的健康監看停止時，記一行 WARNING、停掉它的子程式並標成 `failed`（監看停了，那個帳號的可用性判斷就不再更新，不能照舊轉送）；其他帳號與 add-on 照常；面板存檔或 `child/restart` 讓子程式再起時，監看也一起恢復 |
+| 資源 | 額外帳號子程式 exec 前寫 `/proc/self/oom_score_adj`＝500（絕對值）與 `setpriority(+5)`。HM-09 定案：由一個全新的單執行緒直譯器（`python -I -S -c`，同 PaaS `child_identity` 的包裝）在 fork 之後、exec 真正的指令之前寫，經管線回報結果；真正的指令拿到原本的 argv、環境（還原 PEP 538 加的 `LC_CTYPE`）、工作目錄與訊號處置。寫不進去（平台不准）就照起、`resource_state` 記下、每帳號每 60 秒一行 WARNING，不假設寫成功；沒有直譯器可跑包裝器（`sys.executable` 是空的）時也一樣照直接起、記一行（HM-09 審查 S-12）。預設帳號的子程式照今天直接 spawn |
+| 記憶體 | 見第 5 節（HM-09 定案的部分） |
+| 被擋的狀態 | HM-09 定案：`disabled_reason` 有值的帳號不起（開機、看門狗、面板重啟都不起）：`status=blocked`，`blocked_reason` 是 `port_conflict`→`child_port_conflict`、`memory_capacity`→`memory_capacity`、`profile_limit`→`null`（沒有對應的原因碼，看清單的 `disabled_reason`）。開通後 `child/restart` 的 202 回應多 `blocked_reason`（沒被擋是 `null`）；沒開通照今天 |
 | 子程式 bearer（HM-06，不受開關管） | 剛好一個 `Authorization`、`hmac.compare_digest` 比對 `Bearer <WOOW_MCP_CHILD_TOKEN>`；不符 401（不寫細節）；環境變數缺、空或不符 `[A-Za-z0-9_-]{43}` 就拒絕啟動 |
-| log 事件 | 子程式啟動、結束（結束碼）、退避（下次秒數）、`failed`、`blocked`（原因碼）、監看認證退避、撞號、孤兒、隔離、還原守門逐帳號動作、休眠撤銷、缺哪些連線鍵（只列鍵名）；格式 `[profile=<id 前 8 碼> port=<p> pid=<n>]`；每帳號每情況 60 秒一行（`suppressed=N`） |
+| log 事件 | 子程式啟動、結束（結束碼）、退避（下次秒數）、`failed`、`blocked`（原因碼）、監看認證退避、撞號、孤兒、隔離、還原守門逐帳號動作、休眠撤銷、缺哪些連線鍵（只列鍵名）；格式 `[profile=<id 前 8 碼> port=<p> pid=<n>]`；每帳號每情況 60 秒一行（`suppressed=N`）。HM-09 寫的（開通的產品才寫，logger `mcp_admin_core.lifecycle`，一律 WARNING，因為 add-on log 只顯示 WARNING 以上）：`MCP child [profile=… port=… pid=…]: started`／`exited with code N`／`next start in N s (attempt n)`／`failed after n starts; …`／`not started (<原因碼>): <固定說明>`／`child resources not applied (…)`／`could not be started (<例外類別>)`／`not started: no connection is saved yet (<欄位名>); …`／`the backend refused the credentials; next health check in N s`／`its health monitor stopped; …`／`MemAvailable cannot be read; …`／`its staggered start failed (<例外類別>); the other profiles start anyway`（HM-09 審查 S-12）；`child resources not applied (…: no interpreter for the wrapper); …` 也是同一行的一種。另外 logger `mcp_admin_core.profiles` 的 `multi-profile: the IPv6 test bind on <位址> is refused (<errno 名稱>); the spawn check skips that address`（HM-09 審查 S-6；每個位址與 errno 每個程序一行，不帶帳號）。撞號、孤兒、讀不到的帳號是 HM-08 寫的（logger `mcp_admin_core.profile_runtime`、`profile_router`）；隔離、還原守門逐帳號動作、休眠撤銷是 HM-13b |
 
 ## 8. 資料（摘要）
 
@@ -513,7 +517,8 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 其餘加嚴的列和它們一起列入給 PaaS 的回補建議，HM-29）；**待決**＝看還沒定的決策。第 1～43 列是計畫 §8.8 原表（2026-11-14 的決策已套用）；
 第 44～79 列是 HM-00 對照腳本把 FEATURE-MATRIX「HA 平台差異」欄與 G6 §5「HA 期望值與差異」欄逐列對照後補的列；第 80～86 列是
 審查後把 FEATURE-MATRIX「HA 平台差異」欄是「—」的 44 列人工逐列看過後補的列；第 87、88 列是 HM-08 獨立審查（S-6）補的列，
-#15、#16 的附註也是。逐列的來源與結論見 `deviation-trace.md`（第 87、88 列與兩個附註出自 HM-08 的實作，不是 FEATURE-MATRIX 的列）。
+#15、#16 的附註也是；#14 的附註是 HM-09 的實作補的，第 89 列是 HM-09 獨立審查（S-6）補的列。逐列的來源與結論見
+`deviation-trace.md`（第 87～89 列與三個附註出自 HM-08、HM-09 的實作，不是 FEATURE-MATRIX 的列）。
 
 | # | 項目 | PaaS（@69ac425） | HA | 理由 | 類型 |
 |---|---|---|---|---|---|
@@ -530,7 +535,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | 11 | 管理身分 | 密碼＋JWT | Ingress＋HA 角色，每請求查 | 平台不同 | 部署 |
 | 12 | 管理管線 | 中介層先驗登入 | 看狀態前先驗角色、提交前再驗一次（第 3.2 節） | I10；HA 角色每請求查 | 部署 |
 | 13 | listener 身分檢查 | 轉發前必過 | 讀得到才做，讀不到降級（HM-15，條件式） | HA AppArmor 未確認；不讓整台停擺 | 部署 |
-| 14 | 子程式重啟 | 2→300 秒、不限次數、120 秒歸零 | 開通的產品相同（DQ-20 採 (b)）；沒開通維持 4 次後 failed | 沒開通維持今天 | 部署 |
+| 14 | 子程式重啟 | 2→300 秒、不限次數、120 秒歸零；spawn 失敗（指令找不到等）就停住，等手動重啟 | 開通的產品相同（DQ-20 採 (b)），spawn 失敗也照退避重試（HM-09）；沒開通維持 4 次後 failed | 沒開通維持今天；HA 的子程式指令固定在映像裡，spawn 失敗多半是暫時的（fork 時記憶體不夠等） | 部署 |
 | 15 | 名額 | 每帳號連線 64、串流 32、等 10 秒、排隊 32＋保留 8；共用池 | 讀 body 前准入（64／32）、位元組額度（扣到請求結束、含轉送大小）、轉送 32／16 等 1 秒、串流 24／8、排隊 32／16＋保留 4、待送回覆額度；沒有共用池。附註（HM-08 審查 S-5、S-6）：例外只有兩個全 add-on 共用的東西：(1) 讀被拒請求 id 的拒絕小額度（同時 8 個、合計 512 KiB），被占滿時 ≤64 KiB 帶 id 的請求也拿 503（PaaS 200），只發生在有帳號正被大量拒絕時；(2) 8081 外框的連線數（閒置 keep-alive、沒帶 token 的連線也算），滿了任何人都拿 uvicorn 純文字 503（既有，G2 S7）。每帳號隔離在請求層 | HA 沒有 cgroup、硬體小（G3-24）；DQ-07 採 (a) | 部署 |
 | 16 | 讀 body 前拒絕的回應碼 | 先讀 body，帶 id 一律 200＋`-32003` | ≤64 KiB 讀出 id 回 200＋`-32003`；更大的 503。附註（HM-08 審查 S-6）：batch 算沒有 id。HA 閘道平常就不收 batch（`policy.authorize` 的 `single JSON-RPC request required` → 403；PaaS 會轉送），過載時 HA 回 503＋`id: null`，PaaS 每個 id 一則 200 | 讀 body 前准入防單一帳號吃光 listener（C3-MF-2） | 部署 |
 | 17 | 回覆處理 | 事件迴圈內 | 一條工作執行緒、依帳號輪流 | HA 硬體慢、單一迴圈（第 6 節） | 部署 |
@@ -605,6 +610,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | 86 | 帳號範圍的管理操作與本體 | FastAPI 路由（`/api/settings/<section>`、`/api/tokens`、`/api/tools` 等），各自的本體與 ETag（Pc/config/store.py:276-289） | HA 既有管理契約的操作：`bootstrap`、`backend`、`policy`、`token/rotate`…（docs/management-capabilities-v1.md）、ETag `"c1-<64 hex>"`；開通後只加 `X-MCP-Profile`、回聲與帳號範圍（第 3.1、3.4 節）。帳號增刪改查的路徑、方法與欄位照 PaaS（FM-18、FM-19、FM-22） | HA 既有的單帳號契約，不因多帳號改寫；面板與 P9 kit 都照它 | 既有 |
 | 87 | FD 上限不夠 | 沒有這條降級（程式不讀也不調 `RLIMIT_NOFILE`） | 開通後啟動時讀 soft／hard `RLIMIT_NOFILE`；讀不到、hard 不夠或設不上：只服務預設帳號、8081 外框維持 64、記一行 WARNING（第 5 節） | HA 不能假設 HAOS 容器的上限（待 HM-03a 實測）；不夠時寧可不開額外帳號 | 部署 |
 | 88 | 額外帳號目錄被換掉 | 只在開啟當下比對 fd 與路徑是同一個目錄（`Pc/profiles.py:212-218`），之後快取 store、不再比對 | 開啟時記下目錄的 (st_dev, st_ino)，之後不同就不路由，它的 token 變成未知 token（第 2.2 節第 3 點；HM-07 審查 S-08） | 防誤拷與誤改；同 uid 下不是安全邊界（DQ-37） | 加嚴 |
+| 89 | 試綁被平台擋 | IPv6 試綁除了 EADDRNOTAVAIL、EAFNOSUPPORT 之外的失敗都當成 port 被佔（`child_identity.port_occupied`） | IPv6 試綁遇到 EACCES、EPERM 時跳過那個位址，每個位址與 errno 每個程序記一行 WARNING；IPv4 任何失敗仍當被佔（第 7 節） | 平台事實不假設（HAOS 的 AppArmor、seccomp 可能擋 IPv6 bind，待 HM-03a 實測）；照 PaaS 的話，開通後預設帳號的子程式會因此永遠起不來。子程式只綁 127.0.0.1，別的程式的雙棧 socket 仍會讓 IPv4 萬用位址的試綁失敗，跳過不會漏掉佔用者 | 部署 |
 
 ## 10. 變更紀錄
 
@@ -617,3 +623,5 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | v1 草案（文件同步） | 2026-11-15 | HM-00 補正 | DQ-05、DQ-15、DQ-16、DQ-17 的「細節待定」改標已定（依 DQ-40 (a)，照計畫 §9、§5.3 第 7 點、§8.5、§5.3；`decisions.md`）：第 3.1 節 `backend` 列、第 3.3 節、第 3.5 節、第 3.6 節的名稱規則、第 9 節 #83。規則內容不變；DQ-10、DQ-18 在本檔沒有標待定的地方 |
 | v1 草案（HM-08） | 2026-11-15 | HM-08 | 第 2.2 節第 3、4 點：簽章欄位、額外帳號目錄比對、位元組額度怎麼扣（宣告長度先扣、讀到的超過再扣、送出回應標頭就還）定案；第 2.3 節：索引不能用時 `/health/ready` 回 not ready；第 2.4 節：讀途中額度用完的做法定案、轉送名額逾時的 `-32003` 在開通的產品由 HM-08 先做、「解析得出 id」的定義（batch 算沒有）；第 5 節：FD 需要量的算法與不夠時的降級 |
 | v1 草案（HM-08 審查） | 2026-11-15 | HM-08 | 依獨立安全審查修正：第 2.2 節第 4 點位元組額度改成扣到請求結束、並扣轉送給子程式的大小（MF-1、S-1；原本「送出回應標頭就還、那時請求內容已不在記憶體」與事實不符）；第 2.4 節加「轉送大小放不下」一列、第 2 列補「拒絕小額度正被占滿」、最後一點寫明 8081 外框是全 add-on 共用的連線數（S-5）；第 5 節位元組額度的定義、「單一帳號有界」改寫成看內容的倍數（字串約 3 倍、大量小物件約 24 倍；元素數上限待定）、零命中與外框兩點、OpenDesign／Odoo Manage 列改成「不會開通」（S-7）；第 9 節 #15、#16 加附註、補第 87、88 列（S-6） |
+| v1 草案（HM-09） | 2026-11-15 | HM-09 | 第 7 節：DQ-21、DQ-25 改標已定（2026-11-15 11:2x 使用者採用建議；`decisions.md`），並寫明 HM-09 定案的做法：spawn 前檢查四類與重試、看門狗把 spawn 失敗與拒絕也算一次、錯開啟動的名額規則、並行停、監看起點與認證被拒的判斷、「連兩次失敗」的算法、監看失敗時停該帳號子程式、資源包裝與降級、被擋的狀態與 `child/restart` 的 `blocked_reason`、log 事件的文字與層級；第 5 節：記憶體檢查的時機與讀不到時的做法 |
+| v1 草案（HM-09 審查） | 2026-11-15 | HM-09 | 依獨立安全審查（修正後通過）：第 7 節 port 列加 IPv6 試綁被平台擋時跳過並記一行（S-6）、錯開啟動列加「某個帳號的啟動丟例外時記一行、其他照起」（S-12）、資源列加「沒有直譯器可跑包裝器時照起並記一行」（S-12）、log 事件列補這三種文字；第 9 節加第 89 列（S-6）並在說明寫明 #14 的附註出自 HM-09（spawn 失敗也重試，審查 S-1 要使用者看過） |
