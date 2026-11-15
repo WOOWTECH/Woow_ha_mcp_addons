@@ -131,14 +131,17 @@ async function show(target, message, error = false, recovering = false) {
   }
   if (next) await next();
 }
-// The selected profile no longer exists (contract 3.4; §8.8 #84): the default profile again, said plainly; an
-// unconfirmed receipt of the deleted profile is cleared (its token was revoked with it).
+// A deleted profile's unconfirmed receipt can never be queried again (§8.8 #84, FM-59): it is cleared, whichever way
+// the profile went (deleted here, a resent delete confirmed, or deleted elsewhere), and the caller says so when there
+// was one. It runs before show(), so the switch never asks to go back to the deleted profile.
+function forget(id) {
+  if (!isExtraProfile(id)) return false;
+  try { const pending = pendingFor(id); api.acknowledgeOperation(id); return pending; } catch { return false; }
+}
+// The selected profile no longer exists (contract 3.4; §8.8 #84): the default profile again, said plainly.
 async function gone(id) {
   const row = profiles?.rows.find(item => item.id === id) ?? null;
-  let cleared = false;
-  if (isExtraProfile(id)) {
-    try { cleared = pendingFor(id); api.acknowledgeOperation(id); } catch { cleared = false; }
-  }
+  const cleared = forget(id);
   await show(DEFAULT_PROFILE, `帳號${named(row, id)}已不存在，可能已在其他分頁或由其他管理員刪除；已切回預設帳號。${cleared ? '它尚未確認的操作紀錄已一併清除：帳號刪除時它的權杖已撤銷。' : ''}`, true, true);
 }
 function loadFailed(target, problem) {
@@ -196,7 +199,7 @@ async function deleteProfile() {
   const revision = profiles.revision;
   let deleted = null;
   await task(async () => { deleted = await api.deleteProfile(row.id, revision); });
-  if (deleted) await show(DEFAULT_PROFILE, `已刪除帳號${name}，它的權杖已失效；已切回預設帳號。`);
+  if (deleted) await show(DEFAULT_PROFILE, `已刪除帳號${name}，它的權杖已失效；已切回預設帳號。${forget(row.id) ? '它尚未確認的操作紀錄已一併清除。' : ''}`);
 }
 function pendingOperationCard() {
   const pending = api.pendingOperation();
@@ -229,7 +232,8 @@ function pendingProfileOperationCard() {
       if (!await confirmAction('以原識別碼重送帳號操作？', `${what}。已完成的操作只回傳收據；結果未知的操作不會再次執行。`)) return;
       let result = null;
       await task(async () => { result = await api.retryProfileOperation(); });
-      if (result) await show(creating ? result.id : DEFAULT_PROFILE, creating ? `已確認建立帳號「${result.label}」，並切換到這個帳號。` : '已確認刪除帳號；已切回預設帳號。');
+      if (result) await show(creating ? result.id : DEFAULT_PROFILE, creating ? `已確認建立帳號「${result.label}」，並切換到這個帳號。`
+        : `已確認刪除帳號；已切回預設帳號。${forget(result.deleted) ? '該帳號尚未確認的操作紀錄已一併清除。' : ''}`);
     }), button('已核對帳號清單', async () => {
       if (!await confirmAction('結束這筆帳號操作的追蹤？', '請先核對帳號清單。這只清除此分頁的識別紀錄，不會復原或證明先前操作未執行。')) return;
       await task(async () => { api.acknowledgeProfileOperation(); await reload('已結束此分頁的帳號操作追蹤。'); });

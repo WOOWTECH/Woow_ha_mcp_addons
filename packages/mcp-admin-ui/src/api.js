@@ -115,7 +115,11 @@ export class AdminApi {
         || (Object.hasOwn(PROFILE_CODES, code ?? '') && PROFILE_CODES[code] === response.status);
       throw new ApiError(response.status, known ? code : null, haVersion, known && detail && typeof detail === 'object' ? detail : {});
     }
-    if (response.status === 204) return { response, value: null };
+    if (response.status === 204) {
+      // HM-11 review S-4: with profiles a profile-scoped answer without a body cannot echo its profile (I12): not used.
+      if (!global && profile !== null) throw new ProfileEchoError();
+      return { response, value: null };
+    }
     let value;
     try { value = await response.json(); } catch {
       if (epoch !== this.epoch) throw new StaleProfileError();
