@@ -1,4 +1,4 @@
-# HA 多帳號 HM-05 provenance：每帳號執行套件（行為不變）（2026-11-15）
+# HA 多帳號 HM-05 provenance：每帳號執行套件（行為不變）（2026-11-15；審查後、rebase 後更新）
 
 ## 結論
 
@@ -21,8 +21,20 @@
 - 獨立審查判定通過：必修 0 項；建議 5 項都處理了（第 13 節）。S-1、S-2(a) 補測試；S-2(b)、S-3、S-5 改說明，交給 HM-08、
   HM-10、HM-25；S-4 補上計畫 §11.5 的發版規定。
 - **合併後的發版（計畫 §11.5）**：本片合併後，任何產品的發版都要走完整既有流程，不能只看單帳號黃金回歸（第 11 節）。
-- 兩個預檢：秘密預檢 0 命中（本片 5 個 commit，含本筆記；全分支 19 個 commit 與 `--full` 也 0）；帳本預檢 OK（0 漂移）。
-- 本機全套 pytest：4057 案：4034 通過、23 失敗、0 skip，28 分 19 秒（`e089210`）。22 個失敗是這個 clone 沒有 Playwright 的 Chromium
+- rebase（2026-11-15，第 14 節）：從舊 HM-04 分支 head `9f1e35e` 移到 `claude-delivery` `9c5dd88`（含 HM-00 #89、HM-01 #90、
+  HM-04 #91、HM-17 #92、HM-07 #93、HM-06 #94）。本片 5 個 commit 重放，**沒有衝突**：`claude-delivery` 在 `9f1e35e` 之後沒有動
+  `gateway.py`、`run_product.py` 與本片改的 5 個既有測試檔，本片的檔 rebase 前後內容逐位元相同。帳本沒有只信自動合併：以
+  `claude-delivery` 的帳本為底，加回本片 3 筆（`gateway.py`、`run_product.py` 的說明，新的 `profile_runtime.py`），55 個列管檔的
+  SHA-256 全部用合併後的實際內容重算，結果和自動合併的帳本逐筆相同。tool-surface 重產 0 差異。`test_upgrade_zero_rewrite.py`
+  的 `UNWIRED` 清單不用改（`profile_runtime.py` 沒有 import `profiles`、`features`、`identity_fields`）。
+- 本機檢查（rebase 後，第 5.3 節）：目標 35 檔 1720 案、0 skip：1718 通過，2 個失敗都是已知要 root 的案例（HM-01 前就有的 1 個、
+  HM-07 的 1 個；只在 CI 驗）。其中本片 65 案、HM-01 守門 97 案、本片改過注入點的 4 檔、HM-04 的 `test_child_port_param.py` 233 案、
+  HM-06 的 `test_child_bearer.py` 28 案、HM-07 的 250 案（要 root 的 1 案除外）都過；起真子程式的 `test_role_lifecycle.py`、
+  `test_real_products.py`、`test_unconfigured_connect.py`、`test_runtime_failure.py`、`test_real_n8n.py` 也都過。packaging unittest
+  `Ran 194`、`OK (skipped=5)`；`validate.py` PASS。全套 pytest 以 CI 為準。
+- 兩個預檢（rebase 後的最終 HEAD，含本筆記這一版）：秘密預檢 0 命中（本片 6 個 commit；`--full` 的 HEAD 全檔與全歷史也 0）；
+  帳本預檢 OK（168／70／159 個摘要 0 漂移、0 缺檔；改 11 個檔，列管檔 3 個與帳本同步；沒有新增而沒列管的執行期檔）（第 8 節）。
+- rebase 前（開發與審查時）的本機全套 pytest：4057 案：4034 通過、23 失敗、0 skip，28 分 19 秒（`e089210`）。22 個失敗是這個 clone 沒有 Playwright 的 Chromium
   （`browserType.launch` 找不到執行檔；HM-04 同一批）：把本機既有、同版（Playwright 1.61.1、chromium-headless-shell 1228）的
   瀏覽器複製進 clone 的 `node_modules`（git 忽略；沒有下載）後，這 3 個檔重跑 52 案全過、`check_results.py` PASS；
   剩下 1 個是已知要 root 的 `test_uid10001_nondumpable_self_and_own_child_proof`。審查員在 `161cb04` 重跑全套：4057 案，
@@ -34,13 +46,13 @@
 | 項目 | 值 |
 |---|---|
 | 切片 | HM-05（計畫 §3.2、§5.3、§12.3；風險高、工作量 M）。不受開關管（契約 §1.2；計畫 §3.3 的保證方式是「HM-01 逐位元」） |
-| 分支 | `feat/ha-multiprofile-hm05-20261114`（只 commit；還沒 push、沒開 PR） |
-| 基準 | `9f1e35e`＝`bb48449`＋HM-01（PR #90，還沒合併）＋HM-04（還沒合併）。#90 合併前補的 `ledger_precheck.py` 改用 `shutil.copy2` 那個 commit 不在本分支，不影響本片 |
+| 分支 | `feat/ha-multiprofile-hm05-20261114`（rebase 後 push、開 PR；本片不合併） |
+| 基準 | `claude-delivery` `9c5dd88`（#94 HM-06 的合併；含 #89 HM-00、#90 HM-01、#91 HM-04、#92 HM-17、#93 HM-07）。開發與審查時的基準是舊 HM-04 分支 head `9f1e35e`（`bb48449`＋HM-01＋HM-04，當時都還沒合併）；2026-11-15 rebase（第 14 節）。rebase 後本分支也含 #90 合併前補的 `ledger_precheck.py` 修正 `1281abe` |
 | 依據 | 計畫 §3.2、§5.3、§12.0、§12.2 衝突表、§12.3 HM-05；HM-00 契約 §1.2、§3.2、§3.4、§3.5；`ledger-tracking.md`；`acceptance-matrix.md`（`tests/test_profile_runtime.py` 一列）；`paas-test-mapping.md` 指給本片的 7 案；`deviation-trace.md` 的 FM-06、FM-37、FM-54、T-16、T-18 |
-| 對齊的 PaaS | pin `69ac425`。本片沒有移植 PaaS 程式或測試；對應的是 PaaS 的每帳號 `McpProcessManager` 與 `ProfileRegistry`（`Pc/profiles.py`、`Pc/process.py`），HA 用自己的 `make_apps`、`Supervisor`、`HealthMonitor` |
+| 對齊的 PaaS | pin `69ac425`。本片沒有移植 PaaS 程式或測試；對應的是 PaaS 的每帳號 `McpProcessManager` 與 `ProfileRegistry`（`Pc/profiles.py`、`Pc/process.py`），HA 用自己的 `make_apps`、`Supervisor`、`HealthMonitor`。到 main `cf3d0d5` 的變動見第 9 節（本片相關的 PaaS 檔沒有改動） |
 | FM | FM-06、32、33、37、47、54、65、76 |
 | 決策 | 第 12 節 |
-| 審查 | 獨立審查 2026-11-15（審 `161cb04`）：判定通過；必修 0、建議 5（S-1～S-5），處理見第 13 節 |
+| 審查 | 獨立審查 2026-11-15（審 `161cb04`，rebase 後是 `49705fd`）：判定通過；必修 0、建議 5（S-1～S-5），處理見第 13 節 |
 
 ## 2. 改了什麼、沒改什麼
 
@@ -52,14 +64,15 @@
 | `tests/test_profile_runtime.py`（新） | 第 4 節 |
 | `tests/test_single_profile_golden.py` | 只改 `production_runtime` 的注入點：`Supervisor` 與 `httpx.AsyncClient` 改 patch 在 `profile_runtime`（n8n 照舊在 `apps/n8n/run.py`）；檔頭說明這兩個注入點的文字跟著改（HM-01 的檔頭本來就寫「HM-05 may move these lines when the names they patch move」）。斷言、常數、摘要一個字都沒改 |
 | `tests/test_product_ha_role.py`、`tests/test_product_runtime_failure.py`、`tests/test_role_lifecycle.py`、`tests/owned_executable.py` | 只改替身的注入點：`Supervisor`、`HealthMonitor`、`make_apps`、`httpx.AsyncClient` 改 patch 在 `profile_runtime`；`child_spec`、`Listener`、`ProductStore`、`make_ha_admin_verifier` 仍在 `run_product`。`owned_executable.install_runner` 對 `run_product` 改 patch `profile_runtime`，對 n8n 與 `SimpleNamespace` 照舊 |
-| `docs/provenance/runtime-patches.json` | 新增 `profile_runtime.py`（照 `ledger-tracking.md` 由建立它的片列管，放在 `run_product.py` 後面）；`gateway.py`、`run_product.py` 更新 `sha256` 並在 `change` 補 HM-05 的說明 |
+| `docs/provenance/runtime-patches.json` | 新增 `profile_runtime.py`（照 `ledger-tracking.md` 由建立它的片列管，放在 `run_product.py` 後面）；`gateway.py`、`run_product.py` 更新 `sha256` 並在 `change` 補 HM-05 的說明。rebase 後以 `claude-delivery` 的帳本為底，只加回這 3 筆，摘要全部用合併後的內容重算（第 14 節） |
 | `docs/provenance/ha-multiprofile-HM-05-20261114.md` | 本筆記 |
 
 沒改：版號、`addons/<x>/`、CHANGELOG、`upgrade-notes.yaml`、`packaging/`、workflow、UI、`apps/`（含 `apps/n8n/run.py`）、
 `tests/conftest.py`、`docs/tool-surface.*`（沒動 `apps/runtime/*.py`、`apps/*/launch.py`，`scripts/tool_inventory.py` 漂移檢查照過）、
-`docs/multi-profile/`（本分支沒有，也沒新增）。HM-01 的守門檔除了 `test_single_profile_golden.py` 的注入點以外都沒動
+`docs/multi-profile/`（開發時本分支沒有；rebase 後有 HM-00 起的這些文件，本片沒改）。HM-01 的守門檔除了 `test_single_profile_golden.py` 的注入點以外都沒動
 （`test_mcp_contract_freeze.py`、`test_admin_contract_freeze.py`、`tests/contract/*.json`、`log_scan.py`、`owned_runtime.py`、
-`owned_child.py`、`owned_network.py`、兩個預檢腳本與它們的測試：`git diff 9f1e35e HEAD` 對這些檔是空的）。
+`owned_child.py`、`owned_network.py`、兩個預檢腳本與它們的測試：rebase 前 `git diff 9f1e35e HEAD`、rebase 後
+`git diff origin/claude-delivery HEAD` 對這些檔都是空的；`tests/test_owned_ports_bearer.py`、`tests/conftest.py` 也是）。
 `acceptance/real_backends/ha_runtime.py` 也 patch `run_product.make_apps`，但它跑的是釘在 `28b8317`（0.4.6）的已發佈映像
 （README：source proof 對的是凍結的 commit），本片不影響也不改它。
 
@@ -248,7 +261,7 @@ P14 與 R2 沒被擋。把 `test_a_runtime_that_cannot_open_leaves_nothing_runni
 
 ## 5. 本機檢查（一般使用者；TMPDIR 用 `/tmp/ha-mp-XXXXXX`，每次跑完刪除）
 
-### 5.1 審查後（2026-11-15，HEAD）
+### 5.1 審查後（2026-11-15，rebase 前的 HEAD `975528c`）
 
 審查後只改了 `tests/test_profile_runtime.py`（補 2 案、改 2 段說明）與本筆記，沒有改執行期檔、帳本、`apps/`、`packaging/`。
 重跑受影響的檢查。pytest 在 `a58555e`（或 commit 前內容相同的工作樹）上跑；本筆記的 commit 只改本筆記。全部排在全套測試鎖裡，
@@ -264,7 +277,7 @@ P14 與 R2 沒被擋。把 `test_a_runtime_that_cannot_open_leaves_nothing_runni
 | `scripts/tool_inventory.py`（漂移檢查，CI 同款） | 通過（exit 0） |
 | 兩個預檢 | 第 8 節 |
 | 全套 pytest、起真子程式的 5 個檔 | 沒重跑：審查後只改這一個測試檔，沒有別的測試 import 或讀它（`test_tool_inventory` 只掃 `apps/`）。審查員在 `161cb04` 跑過全套（4057 案，4056 通過、只剩同一個要 root 的案例、0 skip，瀏覽器測試也過）與起真子程式的 5 個檔（97 全過）。以 PR 的 CI 為準 |
-| `git status` | 乾淨；`git diff 161cb04 HEAD` 只有 `tests/test_profile_runtime.py` 與本筆記 |
+| `git status` | 乾淨；`git diff 161cb04 975528c` 只有 `tests/test_profile_runtime.py` 與本筆記 |
 
 ### 5.2 審查前（2026-11-15，`e089210`）
 
@@ -283,7 +296,30 @@ UI build）。全套 pytest 在多個 clone 共用的全套測試鎖（`wave1-py
 | `scripts/tool_inventory.py`（漂移檢查，CI 同款） | 通過（exit 0） |
 | UI `npm test`、Playwright（`npm run test:browser`） | 沒跑：本片沒改 UI；全套 pytest 裡的 3 個瀏覽器測試檔補上瀏覽器後重跑全過（上一列） |
 | 兩個預檢 | 第 8 節 |
-| `git status` | 乾淨；`git diff 9f1e35e HEAD -- addons packaging .github apps CHANGELOG.md upgrade-notes.yaml` 空白 |
+| `git status` | 乾淨；`git diff 9f1e35e e089210 -- addons packaging .github apps CHANGELOG.md upgrade-notes.yaml` 空白 |
+
+### 5.3 rebase 後（2026-11-15；`claude-delivery` `9c5dd88` 之上）
+
+pytest 在 rebase 後的 `58d2aa4` 跑（工作樹乾淨），之後只加本筆記這一版。全部排在共用測試鎖後才跑，用正式的 `tests/conftest.py`；
+每次用新的 `/tmp/ha-mp-*`，跑完刪除。
+
+| 檢查 | 結果 |
+|---|---|
+| 目標 35 檔，一次 pytest（同 CI 的 `-q -p no:cacheprovider`） | 1720 案、0 skip、347 秒：1718 通過、2 失敗＝兩個已知要 root 的案例：`tests/test_owned_executable.py::test_uid10001_nondumpable_self_and_own_child_proof` 與 HM-07 的 `tests/test_profile_store.py::test_mode_and_owner_as_the_add_on_user`（`assert os.geteuid() == 0`；只在 CI 驗，第 6 節） |
+| 其中本片：`tests/test_profile_runtime.py` | 65 案全過（5.6 秒），和 rebase 前相同 |
+| 其中 HM-01 守門：黃金回歸、MCP 契約凍結、管理契約凍結、`test_owned_ports_bearer.py` | 17＋9＋19＋52＝97 案全過，期望值與案例檔沒改 |
+| 其中本片改過替身注入點的既有測試：`test_product_ha_role.py`、`test_product_runtime_failure.py`、`test_role_lifecycle.py`（黃金回歸在上一列） | 122＋3＋36 案全過（`test_role_lifecycle.py` 起真子程式） |
+| 其中用到 `tests/owned_executable.py`（本片改了 `install_runner`）的檔：`test_owned_executable.py`、`test_real_products.py`、`test_unconfigured_connect.py`、`test_runtime_failure.py`、`test_real_n8n.py`、`test_ha_role.py` | 3＋9＋61＋3＋3＋197 案：只有上面那個要 root 的 1 案失敗。`test_real_products.py`、`test_unconfigured_connect.py` 是 HM-06 改過的檔：真子程式要 child bearer，經本片改的注入點跑，全過 |
+| 其中 HM-04：`test_child_port_param.py`（HM-06 同步過的快照）、`test_initialize_cleanup.py` | 233＋293 案全過 |
+| 其中 HM-06：`test_child_bearer.py` | 28 案全過（38.4 秒） |
+| 其中 HM-07：`test_profile_consistency.py`、`test_profile_index.py`、`test_profile_store.py`、`test_identity_fields.py`、`test_upgrade_zero_rewrite.py` | 14＋111＋81＋15＋29＝250 案：249 通過、1 失敗（上面那個要 root 的）。`test_upgrade_zero_rewrite.py` 用的是本片改過注入點的 `production_runtime`，29 案全過；`UNWIRED` 清單不用改（第 14 節） |
+| 其中其他 13 檔（原始碼字串、預檢工具、設定狀態、租約、收據、角色查詢、能力探測）：`test_initialize_identity.py`、`test_secret_path.py`、`test_owner_defaults.py`、`test_log_scan.py`、`test_secret_precheck.py`、`test_ledger_precheck.py`、`test_tool_inventory.py`、`test_review_regressions.py`、`test_configuration_status.py`、`test_active_token_leases.py`、`test_admin_operations.py`、`test_admin_ui.py`、`test_management_capabilities.py` | 317 案全過 |
+| `scripts/tool_inventory.py --write`／檢查模式 | 重產 0 差異；檢查通過 |
+| `packaging/validate.py`（ci-venv 的 PyYAML） | PASS |
+| packaging unittest | 照 CI 的步驟用暫存 venv：`UV_PROJECT_ENVIRONMENT=<暫存區> uv sync --frozen --no-dev --offline`＋`uv pip install --offline --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt`（離線、沒有下載；不動 clone 的 `.venv`），再 `-m unittest discover -s packaging -p 'test_*.py' -v`：`Ran 194`、`OK (skipped=5)`（5 個 `skipUnless(root)`；比 rebase 前的 184 多 10 案：HM-17 的 8 案、HM-06 的 2 案）。第一次照 rebase 前的做法用 `PYTHONPATH` 加 PyYAML：HM-17 的 `test_release_data_no_expression_can_carry_stops_every_tool_in_one_line` 在子程序裡拿掉 `PYTHONPATH`，4 個子案例 `No module named 'yaml'`。這是本機環境的做法不同，不是程式問題；改用同 CI 的暫存 venv 後全過 |
+| 兩個預檢 | 第 8 節 |
+| 全套 pytest | 沒有跑（以 CI 為準）。本片的檔 rebase 前後內容逐位元相同（帳本除外，第 14 節） |
+| `git status` | 乾淨（commit 之後）；用過的 TMPDIR 都已刪除 |
 
 ## 6. 只在 CI 跑的測試
 
@@ -293,6 +329,8 @@ UI build）。全套 pytest 在多個 clone 共用的全套測試鎖（`wave1-py
   它經 `tests/owned_uid_probe.py` 用 `Endpoint(port=...)`，不經本片改的 `install_runner`；`install_runner` 對 `run_product` 的新路徑在本機
   由 `test_real_products.py`、`test_unconfigured_connect.py` 跑過，n8n 與 `SimpleNamespace` 的舊路徑由 `test_real_n8n.py`、
   `test_runtime_failure.py`、`test_ha_role.py`、`test_callback_is_not_serialized_behind_health` 跑過。
+- rebase 後多一個 HM-07 的同類案例：`tests/test_profile_store.py::test_mode_and_owner_as_the_add_on_user`（uid 10001 的 mode／owner 證明，
+  本機 `geteuid() != 0` 照預期失敗）。它經 `tests/profile_owner_probe.py` 只用 `profiles`、`config`，不經本片改的檔，本片不影響它。
 - `tests/integration_runtime_wrapper.py`：只給本機 root 明確執行的 `tests/integration_local_runtime.py` 用，而且只跑 n8n 的 `apps/n8n/run.py`
   （本片沒動）；它呼叫的 `install_runner(app, ...)` 對 n8n 模組照舊 patch 模組本身。本片沒跑（要 root）。
 - packaging 的 5 個 `skipUnless(root)`：CI 那一步也不是 root，同樣 skip（和基準相同）。
@@ -301,12 +339,40 @@ UI build）。全套 pytest 在多個 clone 共用的全套測試鎖（`wave1-py
 
 ## 7. `checks` 秒數
 
-- 前：`bb48449` 的 push run 43222889894 `checks` 1380 秒、同一個 commit 的 pull_request run 43222899526 1834 秒（HM-01 筆記第 7 節）；
+- 前：rebase 後的基準是 #94（HM-06）：合併前最後一次 `checks`（head `dc0dcbb`，run 43661578061）1634 秒。開發時的參考：
+  `bb48449` 的 push run 43222889894 `checks` 1380 秒、同一個 commit 的 pull_request run 43222899526 1834 秒（HM-01 筆記第 7 節）；
   HM-01 的 PR #90（run 43587407864）1434 秒。
-- 後：開 PR 後補。
+- 後：CI 跑完再補。
 - 推估：新測試本機約 6 秒（65 案；審查前 63 案 5.2 秒），推估 CI 增加不到 30 秒；改到替身的既有測試只換 patch 的位置，耗時不變。
 
 ## 8. 預檢結果
+
+### 8.1 rebase 後（2026-11-15）
+
+數字是 rebase 後的最終 HEAD（含本筆記這一版的 commit；本筆記 commit 之後重掃，結果相同）。指令：
+
+```text
+.venv/bin/python -I scripts/secret_precheck.py --tools <暫存區的 gitleaks-tools> --repo . --base origin/claude-delivery --head HEAD --full
+.venv/bin/python -I scripts/ledger_precheck.py --repo . --base origin/claude-delivery
+```
+
+- **秘密預檢**：gitleaks 8.28.0（釘選、執行檔摘要相符；用暫存區既有的執行檔，沒有下載）；設定是本 repo 的 `gitleaks_config()`。
+
+  | 範圍 | 命中 |
+  |---|---|
+  | 本片的 commit（`9c5dd88..HEAD`，git 模式；rebase 後的 5 個＋本筆記這一版，共 6 個） | 0 |
+  | `--full`：`git archive HEAD` 的全部檔（建置機同款） | 0 |
+  | `--full`：全歷史（建置機同款） | 0 |
+
+  本筆記這一版 commit 之前，rebase 後的 5 個 commit（`9c5dd88..58d2aa4`）與 `--full` 也先掃過，都 0 命中。
+
+- **帳本預檢**：`runtime-patches.json` 168 個路徑（rebase 前 153；多的 15 個是 HM-07 新列管的 `config.py`、`features.py`、
+  `identity_fields.py`、`profiles.py` 4 個，加 HM-06 在 `session_idle.py` 多列的 11 個 guarded sources）、`runtime-sources.json` 70 個、
+  `tool-surface.json` 159 個，都 0 漂移、0 缺檔、0 個要 CI 安裝才有的檔。對 `origin/claude-delivery`（merge base `9c5dd88`）改 11 個檔：
+  列管檔 3 個（`gateway.py`、`run_product.py`、新的 `profile_runtime.py`）與帳本 `runtime-patches.json` 一起改；新增而沒列管的執行期檔
+  0 個、改到而沒列管的執行期檔 0 個。結果 OK。
+
+### 8.2 rebase 前（`9f1e35e` 之上；下面的 HEAD 是當時的 `975528c`）
 
 gitleaks 由 `secret_precheck.py install --tarball` 從暫存區既有的釘選壓縮檔安裝到本片自己的工具目錄（沒有下載；壓縮檔
 SHA-256 `a65b5253…40eb` 和 `packaging/scanner-pins.json` 相符；每次掃描前核對執行檔摘要與版本，輸出 `gitleaks 8.28.0 (pinned, verified)`）。
@@ -315,8 +381,8 @@ SHA-256 `a65b5253…40eb` 和 `packaging/scanner-pins.json` 相符；每次掃�
 
   | 範圍 | 命中 |
   |---|---|
-  | 本片的 commit（`9f1e35e..HEAD`，git 模式） | 0（5 個 commit：審查前 3 個，加審查後的測試與本筆記各 1 個） |
-  | 本分支的 commit（`bb48449..HEAD`，含 HM-01 的 9 個、HM-04 的 5 個） | 0（19 個 commit） |
+  | 本片的 commit（`9f1e35e..975528c`，git 模式） | 0（5 個 commit：審查前 3 個，加審查後的測試與本筆記各 1 個） |
+  | 當時本分支的 commit（`bb48449..975528c`，含 HM-01 的 9 個、HM-04 的 5 個） | 0（19 個 commit） |
   | `--full`：`git archive HEAD` 的全部檔與全歷史 `--all --full-history -m`（建置機同款） | 0 |
 
   審查後的測試 commit `a58555e` 上也先掃過一次：本片 4 個 commit、全分支 18 個 commit，都 0 命中。
@@ -329,16 +395,27 @@ SHA-256 `a65b5253…40eb` 和 `packaging/scanner-pins.json` 相符；每次掃�
 
 ## 9. PaaS 變動（`git log <pin>..origin/main -- <相關檔>`）
 
-這一波規定不連遠端，沒有重新 fetch。用本機 PaaS clone 既有的 `origin/main`（`cf3d0d5`，2026-11-14 14:30 UTC 的 ref）查：
-`git log 69ac425..origin/main -- packages/mcp-admin-core/mcp_admin_core/{profiles.py,process.py,app.py,auth/}` 是 0 個 commit
-（對應本片的每帳號 registry、process manager 與共用管理身分）。這段期間 `mcp_admin_core` 只動了紀錄遮罩（#149，HM-02）
-與一個只改註解的 commit（`8bfb12e`，移除 VK 的說明文字）。開 PR 前在連得到 Gitea 的地方重查一次。
+- 作者開發時：這一波規定不連遠端，沒有重新 fetch。用本機 PaaS clone 既有的 `origin/main`（`cf3d0d5`，2026-11-14 14:30 UTC 的 ref）查：
+  `git log 69ac425..origin/main -- packages/mcp-admin-core/mcp_admin_core/{profiles.py,process.py,app.py,auth/}` 是 0 個 commit
+  （對應本片的每帳號 registry、process manager 與共用管理身分）。這段期間 `mcp_admin_core` 只動了紀錄遮罩（#149，HM-02）
+  與一個只改註解的 commit（`8bfb12e`，移除 VK 的說明文字）。
+- **主對話代查（本片不連 Gitea）**：主對話 2026-11-15 06:2x 在本機 PaaS git fetch 後查，PaaS main 是 `cf3d0d5`。
+  `69ac425..cf3d0d5` 動到核心模組（`packages/mcp-admin-core/mcp_admin_core/`）的只有：
+  - `log_redaction.py`（#149，交給 HM-02）。
+  - `gateway_pool.py` 與 `proxy.py`（#148 合併後的註解與文件更正 `19f36e2`，交給 HM-14）。
+  - `setup_status.py`（移除 VK 的說明文字 `8bfb12e`）。
+- 本片相關的 PaaS 檔（`profiles`、`process`、`app`、`auth`）沒有改動，和作者開發時查的結果一致。本片不用回頭對齊。
+
+| 查詢時間 | `origin/main` | 結果 |
+|---|---|---|
+| 作者開發時（本機唯讀；那份 `origin/main` 是 2026-11-14 14:30 UTC fetch 的） | `cf3d0d5` | `profiles.py`、`process.py`、`app.py`、`auth/` 0 個 commit |
+| 2026-11-15 06:2x（主對話，本機 PaaS git fetch 後） | `cf3d0d5` | 核心模組只動 `log_redaction.py`、`gateway_pool.py`、`proxy.py`、`setup_status.py`；本片相關的檔沒有改動 |
 
 ## 10. 驗收條件（計畫 §12.3 HM-05）
 
 | 條件 | 狀態 |
 |---|---|
-| 既有測試全綠 | 本機：全套 4057 案只剩已知要 root 的 1 個失敗（22 個瀏覽器測試補上瀏覽器後重跑全過）；審查員在 `161cb04` 跑全套也一樣。以 PR 的 CI（root、0 skip）為準（這一波不 push） |
+| 既有測試全綠 | 本機 rebase 前：全套 4057 案只剩已知要 root 的 1 個失敗（22 個瀏覽器測試補上瀏覽器後重跑全過）；審查員在 `161cb04` 跑全套也一樣。rebase 後：目標 35 檔 1720 案只剩 2 個已知要 root 的案例失敗、0 skip（第 5.3 節）。以 PR 的 CI（root、0 skip）為準 |
 | 既有測試只改替身注入點 | 通過：5 個檔只換 patch 的位置（`run_product` → `profile_runtime`），黃金回歸的檔頭只改說明這兩個注入點的文字；斷言、替身、常數沒改（第 2 節） |
 | HM-01 逐位元 | 通過：黃金回歸 17、MCP 契約凍結 9、管理契約凍結 19 全過，期望值一個字都沒改（第 5 節） |
 | `/data/mcp` 不新增任何檔 | 通過：`test_starting_the_default_profile_adds_no_file` 16 案（改之前就成立、改完照過）；突變 P10（執行套件寫一個檔）被它與黃金回歸擋下 |
@@ -348,22 +425,24 @@ SHA-256 `a65b5253…40eb` 和 `packaging/scanner-pins.json` 相符；每次掃�
 | 共用 AdminAuthority 時 CSRF 共用、跨帳號 ETag 409 | 通過：`test_one_shared_authority_one_csrf_and_another_profiles_etag_is_a_conflict`（409 的成因見第 3.3 節） |
 | 先寫測試、先紅後綠 | 通過（第 4.2 節）；突變第 4.3 節；審查後補的 2 案用突變證明（第 4.4 節） |
 | 新測試沒有條件式 skip、用 log 掃描 | 通過：沒有 `skip`／`skipif`／`importorskip`／`xfail`；`pytestmark` 用 `log_scan`，並監看每個帳號的 token、憑證與帳號名稱 |
-| 同 PR 更新帳本（新模組列管） | 通過：`profile_runtime.py` 新增；`gateway.py`、`run_product.py` 更新；沒動 `apps/`，tool-surface 不用重產 |
+| 同 PR 更新帳本（新模組列管） | 通過：`profile_runtime.py` 新增；`gateway.py`、`run_product.py` 更新；rebase 後以 `claude-delivery` 的帳本為底、摘要全部重算（第 14 節）；沒動 `apps/`，tool-surface 重產 0 差異 |
 | `ledger_precheck` OK、`secret_precheck` 0 命中 | 通過（第 8 節） |
 | 不改版號、不碰 `addons/<x>/`、CHANGELOG | 通過 |
 | 測試資料規則（計畫 §12.0 第 4 點） | 通過：憑證 `DUMMY-<帳號>-…`、網址 `.invalid`、token 執行時產生；沒有新增 64 hex（除了帳本摘要）；秘密預檢 0 命中 |
 
 ## 11. 還沒解決、交給後面的片
 
-- **開 PR 前**：HM-04 合併後 rebase 到 `claude-delivery`；重算 `runtime-patches.json` 的摘要（衝突不能只解文字），跑
-  `scripts/tool_inventory.py` 漂移檢查；重跑兩個預檢（commit 數會變，改第 8 節）；在連得到 Gitea 的地方重查 PaaS 變動（第 9 節）。
+- **開 PR 前（已做，2026-11-15）**：rebase 到 `claude-delivery` `9c5dd88`；帳本以 `claude-delivery` 為底加回本片 3 筆、摘要全部重算；
+  `scripts/tool_inventory.py --write` 0 差異、檢查模式通過；本機檢查（第 5.3 節）；兩個預檢（第 8 節）；PaaS 變動由主對話代查（第 9 節）。
+  做法見第 14 節。
 - `checks` 的「後」秒數：PR 的 CI 跑完後補。
 - **合併後的發版（計畫 §11.5；審查 S-4）**：本片合併後，任何產品（含 Headscale）的發版都走完整既有流程，不能只看單帳號
   黃金回歸：該產品 HAOS P9 回歸、子程式 bearer 的直連 401 檢查、HM-13a 合併後加容器驗收的 root 還原樹；CHANGELOG 寫明帶出去的
   不受開關管變更（計畫 §3.3 表的 HM-05 列：對未開通產品可見的變化「無」）。理由：每個產品映像整包複製 `packages/mcp-admin-core`，
   新的 `profile_runtime.py` 與改過的 `gateway.py`、`run_product.py` 會隨下一個發版的任何產品出去。
 - **合併順序**（計畫 §12.2）：`gateway.py`、`run_product.py` 照 HM-04 → HM-05 → HM-08；`profile_runtime.py` 照 HM-05 → HM-08 → HM-09 → HM-13b → HM-30 → HM-25；
-  `runtime-patches.json` 一次送審一片，後合的 rebase 後重產摘要、重跑 CI。本片在 HM-04 之上（HM-04 合併後 rebase 到 `claude-delivery`）。
+  `runtime-patches.json` 一次送審一片，後合的 rebase 後重產摘要、重跑 CI。本片已 rebase 到 `claude-delivery` `9c5dd88`（HM-04 #91 與
+  HM-06 #94 之後；`gateway.py`、`run_product.py` 照 HM-04 → HM-05 的順序）。
 - **HM-08**：建 ProfileManager 時用 `ProfileRuntime` 建額外帳號（store 用 HM-07 的「只開既有」）、用一份 `SharedAdmin` 給所有帳號；
   額外帳號的子程式 client 上限 24（計畫 §5.2，本片只有 `CHILD_CONNECTIONS`＝40）。`PROFILE_ID` 和 HM-07 `profiles.py` 的帳號 id 格式統一成一個來源。
   上限改 24 時，`test_each_runtime_makes_its_child_client_as_run_product_did` 改成依帳號斷言（預設 40、額外 24），其他三個選項不變
@@ -382,12 +461,15 @@ SHA-256 `a65b5253…40eb` 和 `packaging/scanner-pins.json` 相符；每次掃�
   `n8n_adapter._catalog`（`prepare_catalog` 做的 nodes.db 副本，子程式的 `NODE_DB_PATH`）是行程全域：兩個 n8n 帳號的子程式會拿到
   同一份可寫 nodes.db（審查 S-5）。額外帳號的副本放哪裡等 DQ-04（計畫 §13.3，還沒問），HM-25 開工前問使用者。本片沒改 n8n，
   正式程式不受影響。
-- **HM-01（O-1，本分支沒有）**：`ledger_precheck.py` 改用 `shutil.copy2` 的修正在 #90 合併前補進，本分支沒有；本片的帳本預檢都在工作樹乾淨時跑，不受影響。
+- **HM-01（O-1）**：`ledger_precheck.py` 改用 `shutil.copy2` 的修正（`1281abe`）在 #90 合併前補進。開發時本分支沒有它；rebase 後有了，
+  第 8 節 rebase 後的帳本預檢用的就是它。rebase 前的帳本預檢都在工作樹乾淨時跑，不受影響。
 
 ## 12. 本片用到的決策
 
 - **DQ-33（已定，§13.1）**：本機測試用短的 `/tmp/ha-mp-<隨機>` 當 TMPDIR，跑完刪；以 GitHub CI 為準。
-- **DQ-36（已定，§13.1）**：commit 不加 AI 署名；之後的 PR 由使用者合併，標題加「⛔ 勿代 merge｜待覆核 — HM-05 …」。
+- **DQ-36（已定，§13.1；2026-11-15 06:1x 補合併授權）**：commit 與 PR 說明不加 AI 署名；標題加「⛔ 勿代 merge｜待覆核 — HM-05 …」。
+  不改版號的多帳號功能 PR 由使用者授權本工作的主對話在 CI 全綠後依序合併，其他人或代理不合併（`docs/multi-profile/decisions.md`
+  的 DQ-36）；本片不改版號、不碰 `addons/`。本片作者不合併。
 - **DQ-40 ②（已定，§13.1）**：管理回應帶帳號回聲。本片只開 `profile_view` 參數（正式程式沒有傳），回聲的範圍是暫定，由 HM-10 定案。
 - **DQ-19（2026-11-14 21:5x 照建議）**：`/health/ready` 只代表預設帳號。本片沒改它：`run_product` 的 MCP listener 掛的仍是預設帳號的 app，
   每套執行套件的 `/health/ready` 只看自己的帳號。
@@ -395,6 +477,10 @@ SHA-256 `a65b5253…40eb` 和 `packaging/scanner-pins.json` 相符；每次掃�
 - 審查後的處理也沒有用到或自己定待定題：S-3 的對照案例留給 HM-10（DQ-15），S-5 的 nodes.db 位置留給 HM-25（DQ-04，§13.3）。
 
 ## 13. 審查意見處理（獨立審查 2026-11-15，審 `161cb04`：判定通過；必修 0、建議 5）
+
+審查報告在 repo 外：`artifacts/ha-multiprofile-parity-20261114/wave2/review-HM-05.md`。rebase 後的 commit：審查的 `161cb04` 是
+`49705fd`；S-1、S-2(a) 補的測試與 S-3、S-5 在測試說明裡的文字（`a58555e`）是 `a5ef01a`；本筆記的處理（`975528c`）是 `58d2aa4`
+（第 14 節）。
 
 | id | 審查意見 | 處理 |
 |---|---|---|
@@ -405,3 +491,53 @@ SHA-256 `a65b5253…40eb` 和 `packaging/scanner-pins.json` 相符；每次掃�
 | S-4 | 筆記與 PR 描述沒寫計畫 §11.5：本片合併後，任何產品的發版都要走完整既有流程 | 採用（只改文件）。第 11 節加一條，結論也提一句；PR 說明也寫了 |
 | S-5 | n8n 的 nodes.db 副本（`n8n_adapter._catalog`）是行程全域，兩個 n8n 帳號的子程式會拿到同一份可寫 nodes.db；`test_two_runtimes_keep_their_tokens_and_children_apart` 說「每個產品的 child_spec 都適用」，但沒跑 `prepare_catalog`，看不到這一點 | 採用（只改說明，不決定）。第 11 節的 HM-25 項記下；放哪裡等 DQ-04（計畫 §13.3，還沒問），HM-25 開工前問使用者。測試說明與檔頭也寫明這裡沒做 nodes.db 副本。本片沒改 n8n |
 | 其他觀察 | (1) golden 檔頭換行後留了一行很短的字（純排版，可不改）；(2) `acceptance/real_backends/ha_runtime.py` 仍 patch `run_product.make_apps`；(3) 給 HM-10 的三個提醒（`echoed()` 只處理 `JSONResponse`、同名多值標頭會合併、`profile_view()` 丟例外變 500）；(4) `PROFILE_ID` 要和 HM-07 統一 | (1) 不改：HM-01 的守門檔只動注入點，不為排版再改一次。(2) 第 11 節加 HM-16 項。(3) 第 11 節的 HM-10 項記下。(4) 原本就記在第 11 節的 HM-08 項 |
+
+## 14. rebase（2026-11-15）
+
+1. `git fetch origin claude-delivery`（`9c5dd88`），`git rebase --onto origin/claude-delivery 9f1e35e`：本片 5 個 commit 依序重放，
+   **沒有衝突**。
+   - `claude-delivery` 在 `9f1e35e` 之後（HM-00、HM-01 的合併，與 rebase 過的 HM-04、HM-17、HM-07、HM-06）沒有動 `gateway.py`、
+     `run_product.py`、`tests/test_single_profile_golden.py`、`tests/test_product_ha_role.py`、`tests/test_product_runtime_failure.py`、
+     `tests/test_role_lifecycle.py`、`tests/owned_executable.py`（`git diff 9f1e35e origin/claude-delivery` 對這 7 個檔是空的）。
+     HM-04 的 `child_port` 原樣在，本片的 `profile_runtime` 疊在它上面；HM-06、HM-07 沒改這兩個執行期檔，沒有要合併的改動。
+   - HM-06、HM-07 和本片相關的地方逐一看過：
+     - HM-06 讓 `products.child_spec` 給 7 支 Python 子程式 `WOOW_MCP_CHILD_TOKEN`：執行套件照舊用產品給的
+       `child_spec(state, directory, port=...)`，不看 env 的內容。`test_two_runtimes_keep_their_tokens_and_children_apart`、
+       `test_each_child_is_started_on_its_own_state_directory_and_port`（各 8 案）用的就是新的 spec，全過。
+     - HM-06 改過的 `tests/test_real_products.py`、`tests/test_unconfigured_connect.py` 經 `owned_executable.install_runner` 起真子程式；
+       本片改的是 `install_runner` 對 `run_product` 的注入點（改 patch `profile_runtime`）。兩邊的改動不重疊、都保留，rebase 後全過。
+     - HM-06、HM-07 新增或改的測試，沒有一個 patch 本片從 `run_product` 搬走的名字（`Supervisor`、`HealthMonitor`、`make_apps`、
+       `httpx`）。rebase 後 `git grep` `tests/`、`packaging/`、`acceptance/`、`apps/`、`scripts/`：只剩
+       `acceptance/real_backends/ha_runtime.py` patch `run_product.make_apps`（釘在已發佈映像，第 11 節的 HM-16 項）。
+     - HM-07 的 `tests/test_upgrade_zero_rewrite.py` 用黃金回歸的 `production_runtime`（本片改過它的兩個注入點），29 案全過。
+       它的 `UNWIRED = ('profiles', 'features', 'identity_fields')` 不用改：`profile_runtime.py` 只 import `access`、`admin_auth`、
+       `configuration`、`gateway`、`health`、`lifecycle`，`gateway.py`、`run_product.py` 也沒有 import 這三個模組；
+       `test_no_runtime_file_imports_the_unwired_modules` 與 `test_no_entry_point_imports_the_unwired_modules`（4 個入口）照過。
+     - HM-07 的 `profiles.py` 也定了帳號 id 格式；本片的 `PROFILE_ID` 照計畫暫放 `gateway.py`，由 HM-08 統一成一個來源（第 11 節）。
+   - 核對：本片 11 個檔的增刪行（`git diff -U0`，`9f1e35e..975528c` 對 `9c5dd88..58d2aa4`）逐行相同；帳本以外的 10 個檔，
+     內容（blob）也和 rebase 前相同。
+2. 帳本（`docs/provenance/runtime-patches.json`）沒有只看文字合併。git 自動合併沒有衝突：`claude-delivery` 改的是 `scope`、
+   `products.py`、`session_idle.py` 三筆與檔尾新增的 4 筆，本片改的是 `gateway.py`、`run_product.py` 兩筆與插在 `run_product.py`
+   後面的 1 筆。另外用暫存區的一次性腳本（不進 repo）照規則重建一份來比：
+   - 以 `claude-delivery` 的帳本（54 筆）為底；`scope` 照 `claude-delivery`（本片沒改）。
+   - 加回本片的 3 筆：`gateway.py`、`run_product.py` 的 `change` 換成本片的（原文＋本片的 HM-05 那段；`claude-delivery` 在 `9f1e35e`
+     之後沒改這兩筆）；`profile_runtime.py` 插在 `run_product.py` 後面。其他 52 筆（含 HM-07 新增的 `config.py`、`features.py`、
+     `identity_fields.py`、`profiles.py`，與 HM-06 改的 `products.py`、`session_idle.py`）照 `claude-delivery`，順序也照它。
+   - 55 筆列管檔的 SHA-256 全部用工作目錄裡合併後的檔重算，有安裝的 guarded sources 也重算。和 `claude-delivery` 比，只有本片的
+     兩筆變：`gateway.py` `a07fb0e9…` → `1c489f0d…`、`run_product.py` `6bd89482…` → `f6540f3d…`；新的 `profile_runtime.py` 是
+     `a92cbfa1…`。三個都和 rebase 前相同。
+   - 重建的帳本和自動合併的結果逐筆相同（JSON 內容相同；格式照原檔：`indent=2`、`ensure_ascii=False`、結尾換行），所以帳本不用再改。
+   - `scripts/ledger_precheck.py`：0 漂移、0 缺檔（第 8.1 節）。
+3. `scripts/tool_inventory.py --write`：0 差異；檢查模式通過。本片沒動 `apps/runtime/*.py`、`apps/*/launch.py`。
+4. `git log origin/claude-delivery..HEAD` 只剩本片的 6 個 commit：
+
+   | rebase 後 | 原本 | 標題 |
+   |---|---|---|
+   | `c35448d` | `e94ae87` | test(multi-profile): pin the per-profile runtime and the default profile built with it (HM-05) |
+   | `dbe9c44` | `e089210` | feat(runtime): build one profile's runtime in profile_runtime, the default profile first (HM-05) |
+   | `49705fd` | `161cb04` | docs(provenance): add HM-05 multi-profile provenance note |
+   | `a5ef01a` | `a58555e` | test(multi-profile): pin the child client options and per-profile receipts (HM-05) |
+   | `58d2aa4` | `975528c` | docs(provenance): record the HM-05 review fixes and rechecks |
+   | 本筆記這一版 | （新） | docs(provenance): record the HM-05 rebase onto claude-delivery and the PaaS change list |
+
+5. 本機檢查見第 5.3 節，兩個預檢見第 8.1 節，PaaS 變動見第 9 節。
