@@ -156,3 +156,4 @@ dialog form { margin-top:16px; }
   .profile-bar { flex-basis:100%; max-width:none; }
   .profile-choose button { flex:1 1 auto; }
 }
+.profile-scope { color:var(--text-primary); overflow-wrap:anywhere; }

@@ -110,6 +110,19 @@ test('switching hides a revealed token, drops drafts and typed secrets; tokens, 
   expect(state[B].revision).toBe(2);
   const tokens = await calls(request, call => call.operation.startsWith('token/'));
   expect(tokens.map(call => [call.operation, call.profileHeader])).toEqual([['token/reveal', 'default'], ['token/reveal', B], ['token/rotate', B]]);
+  // Tool policy is per profile: B's saved policy names B and leaves the default profile's alone.
+  await choose(page, B, '會計');
+  await page.getByRole('navigation').getByRole('link', {name: '工具權限', exact: true}).click();
+  await expect(page.locator('main')).toContainText('帳號「會計」（01234567）：這裡的停用、寫入授權與操作禁止只套用到這個帳號的權杖');
+  await page.locator('.tool-row').filter({has: page.getByRole('heading', {name: 'read_example', exact: true})}).getByLabel('停用此工具', {exact: true}).check();
+  await page.getByRole('button', {name: '儲存工具權限', exact: true}).click();
+  await confirm(page, '確認套用');
+  await expect(page.locator('#notice')).toContainText('伺服器已確認儲存工具權限');
+  const [policy] = await calls(request, call => call.operation === 'policy');
+  expect([policy.profileHeader, policy.policy.disabled]).toEqual([B, ['read_example']]);
+  const after = await fixtureProfiles(request);
+  expect([after[B].disabled, after.default.disabled]).toEqual([['read_example'], []]);
+  await choose(page, 'default', '預設帳號');
   // A draft and a typed secret do not survive a switch, in either direction.
   await page.getByRole('navigation').getByRole('link', {name: '後端連線', exact: true}).click();
   await page.getByLabel('這次要如何處理設定？').selectOption('replace');

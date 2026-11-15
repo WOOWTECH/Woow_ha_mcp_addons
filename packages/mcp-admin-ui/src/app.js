@@ -83,6 +83,8 @@ function followUp(error, recovering = false) {
   return null;
 }
 const profileOf = view => view?.profile?.id ?? null;
+// HM-11 (FM-60, FM-64): with profiles, a page that edits one profile's settings says so (nothing without profiles).
+const scopeNote = text => api.profile === null ? null : el('p', { class: 'profile-scope' }, `帳號${named(currentRow(), api.profile)}：${text}`);
 const currentRow = () => profiles?.rows.find(row => row.id === api.profile) ?? null;
 const named = (row, id) => `「${row ? profileName(row) : shortId(id)}」（${shortId(id)}）`;
 function pendingFor(id) { try { return Boolean(api.pendingOperation(id)); } catch { return true; } }
@@ -450,7 +452,7 @@ function backend() {
       await reload('伺服器已確認儲存。請等待健康探測更新，這不代表後端已連線成功。');
     });
   });
-  return card('後端連線設定', chip(state.connection_configured ? '已設定 · 憑證隱藏' : '尚未設定'), p('URL 與憑證由管理介面管理。測試只使用已儲存的設定，不會送出下方表單。'), state.product === 'litellm' ? p('請填 LiteLLM 閘道根網址。根路徑的 /v1 會移除；/proxy/v1 等代理掛載路徑會保留。健康探測可能產生供應商費用；token 與費用估算可能抓取圖片或分詞資源，三者都需要明確的操作權限。') : null, backendTest(), form);
+  return card('後端連線設定', chip(state.connection_configured ? '已設定 · 憑證隱藏' : '尚未設定'), scopeNote('這是這個帳號自己的後端連線與憑證；儲存、清除與測試都只用這個帳號的設定，其他帳號不受影響。'), p('URL 與憑證由管理介面管理。測試只使用已儲存的設定，不會送出下方表單。'), state.product === 'litellm' ? p('請填 LiteLLM 閘道根網址。根路徑的 /v1 會移除；/proxy/v1 等代理掛載路徑會保留。健康探測可能產生供應商費用；token 與費用估算可能抓取圖片或分詞資源，三者都需要明確的操作權限。') : null, backendTest(), form);
 }
 function partialBackendCard() {
   const snapshot = state;
@@ -608,7 +610,7 @@ function tools() {
       await reload('伺服器已確認儲存工具權限。此頁未執行任何工具。');
     });
   });
-  return card('工具與寫入授權', p(catalog ? catalogSummary(catalog) : `${rows.length} 個管理登錄工具`), form);
+  return card('工具與寫入授權', scopeNote('這裡的停用、寫入授權與操作禁止只套用到這個帳號的權杖；其他帳號各自設定。'), p(catalog ? catalogSummary(catalog) : `${rows.length} 個管理登錄工具`), form);
 }
 function odooSwitchCard() {
   const snapshot = state;
