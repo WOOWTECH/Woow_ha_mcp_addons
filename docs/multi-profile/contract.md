@@ -130,6 +130,19 @@
   通知或回應；看不懂的一律走一般名額。HA 的政策只收單一訊息（`policy.authorize`：batch、對伺服器請求的回應、沒有 id 的工具呼叫在任何
   名額之前就 403；`notifications/initialized` 以外的通知由閘道自己回 202、從不轉送），所以實際走保留名額的只有
   `notifications/initialized`（§8.8 #91）。GET 串流、DELETE 一律走一般名額。
+- **保留名額只在准入還有空位時有用**（HM-14 審查 MF-2；§8.8 #96，待決）：
+  - 准入在讀 body 前算，進行中的每個請求（讀 body 中、排隊中、轉送中）與開著的 GET 串流都各佔一個。照第 5 節的數值，准入剛好是轉送名額＋排隊上限
+    （預設 64＝32＋32，額外 32＝16＋16）。所以一般名額和它的佇列都滿時，准入也滿。
+  - 這時 `notifications/initialized` 在讀 body 前就拿 503（`-32003`、`id: null`、准入的文字），到不了保留名額。PaaS（@69ac425）讀 body
+    前沒有准入，一般佇列滿時通知照樣經保留名額送到。後果照 PaaS 文件：MCP Python SDK 1.x 的 session 結束、TS SDK 的 `connect()` 失敗、
+    SDK 2.x 丟掉這則通知。只影響同一個帳號自己，不影響別的帳號。
+  - 要不要讓准入留出保留名額的空間（改 DQ-07 的數值，例如預設 68、額外 36），或准入滿時先讀小請求、是通知就放行（改 HM-08 的分派器），
+    待使用者決定（HM-19c 前）。`tests/test_carries_no_request.py::test_the_reserve_is_reached_only_while_the_profiles_admission_has_room`
+    先釘住現況：額外帳號排 15 個時通知 202，排滿 16 個時 503。
+- GET 串流整段佔住一條一般名額和一個准入（UC-31，HM-14 審查 S-3）：額外帳號開滿 8 條串流時 POST 剩 8 條名額，預設帳號開滿 24 條時
+  剩 8 條（`tests/test_gateway_queue_ha.py::test_get_streams_hold_ordinary_slots_for_their_whole_life`）。
+- 排隊中 token 被輪替或撤銷：請求拿到名額或等滿 1 秒後重驗時被拒（Bearer 401、密鑰網址 404），子程式收不到；最多多佔 1 秒的排隊位置
+  （PaaS 把排隊包在 token 租約裡、立刻取消：§8.8 #98；HM-14 審查 S-7）。
 - 等名額的期間閘道看用戶端在不在：只認「那個請求的連線被關掉」（HTTP 層逾時、斷線、關閉 transport）。下面兩種看不到，不在保護範圍
   （PaaS `docs/mcp-gateway-limits.md` 的已知限制，19f36e2、`091dfbc`；HA 同樣適用，寫進威脅模型第 3 節，HM-18 寫進 DOCS）：
   - MCP SDK 層級的請求逾時（例如 `read_timeout_seconds`）與取消只送 `notifications/cancelled`，不關閉那個 POST 的連線；
@@ -171,12 +184,17 @@ token 換掉時 `ClientDisconnect` 丟給 uvicorn）。HM-14 定案：
 - `-32005` 的文字固定（`gateway.ACCESS_CHANGED_TEXT`）：token 被輪替或撤銷、閘道已停止這個回應、請用目前的網址或權杖重新連線。閘道的
   結尾（拒絕、`-32005`、結束訊息）最多送 2 秒（`ENDING_SECONDS`，同 PaaS 的 2 秒）；用戶端完全不讀時放棄、不丟例外（之後 uvicorn
   記一行 `ASGI callable returned without starting response.`，用戶端恢復讀取時拿到純文字 500；PaaS 同樣的取捨）。
+- 「回覆已送到」＝伺服器收下了那個請求的回答：子程式的回覆，或閘道自己補的 `-32004` 事件（HM-14 審查 S-1）。收下之後 token 才換掉，
+  不再補 `-32005`（JSON-RPC 一個請求只回一則）。PaaS 的 `_Interruption` 只看子程式的回覆、而且只在產生器續跑時記「已送到」：回覆在
+  token 換掉那一刻被收下，或 `-32004` 已送出後 token 才換掉，都會再補一則同 id 的錯誤（§8.8 #97）。回應已完整送出（最後一則訊息已被收下）
+  時，閘道什麼都不再送。
 - **initialize 世代**（FM-43）：閘道記下 initialize 送去的世代（`Supervisor.starts`），子程式的 session 只在那個世代仍是執行中的那一個
   時才交給用戶端（標頭送出前一刻檢查）。換代、結束或被停時用戶端拿 503 `BACKEND_UNAVAILABLE`＋`Retry-After: 5`、沒有 session id
   （§8.8 #94），那個 session 不 DELETE（會打到下一個世代）。標頭已經在送的 session 收不回來：用戶端之後在那個 session 的請求拿到新子程式的
   404，照 MCP 重新 initialize。HA 沒有 PaaS 的 drain（重啟不等閘道送完）。listener 是不是同一個程序屬 HM-15（FM-41，條件式）。
-- 不把例外丟給 uvicorn：上面每一種結尾都由閘道自己送完並返回。唯一的例外是「一次送完的 JSON 標頭已出去」：返回後 uvicorn 記一行
-  `ASGI callable returned without completing response.`（沒有 traceback）並關掉連線。
+- 不把例外丟給 uvicorn：上面每一種結尾都由閘道自己送完並返回。有兩個例外會讓 uvicorn 記一行（都沒有 traceback）：
+  - 「一次送完的 JSON 標頭已出去」：閘道返回，uvicorn 記 `ASGI callable returned without completing response.` 並關掉連線；
+  - 用戶端完全不讀、結尾 2 秒內送不出去（上面 `-32005` 那一點）：uvicorn 記 `ASGI callable returned without starting response.`。
 
 ### 2.6 Origin（DQ-11 採 (a)，HM-27）
 
@@ -405,9 +423,9 @@ PaaS 另帶 `message` 文字，HA 不帶（面板只認代碼，§8.8 #49）。
 | `{"error":"state unavailable"}` | 503 | 撞號、預設 state 或索引讀不到、索引外改、全部撤銷失敗的帳號 | 固定本體 | 只有預設 state 讀不到 | 503 | DQ-09 已定（同 PaaS 503） | 既有（擴大） | HM-08 |
 | `{"error":"request denied"}` | 400 | MCP 路徑帶 query | 固定本體 | 同 | 原樣轉發 | §8.8 #3 | 既有 | HM-01 |
 | `{"error":"request denied"}` | 403 | Bearer 帶 Origin；Headscale 密鑰網址的來源不在清單 | 固定本體 | 同 | Origin 清單 403 `ORIGIN_DENIED` | §8.8 #9、#10 | 既有 | HM-27 |
-| JSON-RPC `-32003` | 200／503／429 | 准入、位元組額度、轉送名額逾時、排隊上限、GET 串流上限、待送回覆上限 | 第 2.4 節 | 沒有（uvicorn 503、名額逾時 503） | 200／503／429（先讀 body） | §8.8 #15、#16 | 新 | HM-08、HM-14、HM-30；`tests/test_profile_quotas.py`、`tests/test_gateway_busy_shapes.py` |
+| JSON-RPC `-32003` | 200／503／429 | 准入、位元組額度、轉送名額逾時、排隊上限、GET 串流上限、待送回覆上限 | 第 2.4 節 | 沒有（uvicorn 503、名額逾時 503） | 200／503／429（先讀 body） | §8.8 #15、#16、#96 | 新 | HM-08、HM-14、HM-30；`tests/test_profile_quotas.py`、`tests/test_gateway_busy_shapes.py` |
 | JSON-RPC `-32004` | 502／SSE 事件 | 子程式在處理途中斷線 | 依原因兩種文字（第 2.5 節） | 502 `{"error":"request denied"}`、SSE 安靜結束 | 同（#148） | §8.8 #93（WARNING 節流） | 新 | HM-14；`tests/test_gateway_stream_endings.py` |
-| JSON-RPC `-32005` | SSE 事件 | 標頭送出後 token 被換掉 | 每個未回應 id 一則（第 2.5 節） | 直接斷線（`ClientDisconnect` 丟給 uvicorn） | 同（JSON 回覆也補：它不帶 `Content-Length`） | §8.8 #92 | 新 | HM-14；`tests/test_gateway_stream_endings.py` |
+| JSON-RPC `-32005` | SSE 事件 | 標頭送出後 token 被換掉 | 每個未回應 id 一則（第 2.5 節） | 直接斷線（`ClientDisconnect` 丟給 uvicorn） | 同（JSON 回覆也補：它不帶 `Content-Length`） | §8.8 #92、#97 | 新 | HM-14；`tests/test_gateway_stream_endings.py` |
 | `backend_not_configured`（`-32603`） | 200 | 帳號沒填後端、工具需要後端；n8n 額外帳號沒後端時所有工具（含文件工具） | `ToolCallRefused` 形狀 | 照今天 | n8n 額外帳號起文件模式 | §8.8 #28（DQ-22 待定） | 既有（擴大） | HM-25 |
 | `backend_unreachable`（`-32603`） | 200 | 最近的健康檢查說後端連不上 | 帶檢查的原因 | 照今天 | 沒有定期監看 | §8.8 #18 | 既有 | HM-09、HM-30 |
 | 429 GET 串流 | 429 | GET 串流已達上限 | `-32003`、`id: null`、`Retry-After: 30` | 不設上限 | 同（32 條） | §8.8 #15 | 新 | HM-08 |
@@ -426,7 +444,7 @@ PaaS 另帶 `message` 文字，HA 不帶（面板只認代碼，§8.8 #49）。
 - 子程式未就緒時閘道自答 initialize、ping、tools/list（§8.8 #68）；就緒後自答 session 回 404（有 id 的 POST 帶 `-32000`「Not Found」）。
 - 子程式回 4xx、5xx（401、403 除外）：照原狀態碼，本體換成 `-32000`＋狀態片語（`Hc/gateway.py:153-160`；§8.8 #62 的 429 就是這樣來的）。
 - initialize 等不到子程式的回覆：503＋`-32000`「BACKEND_UNAVAILABLE」＋`Retry-After: 5`（`Hc/gateway.py:119-122`）。
-- 502 `{"error":"request denied"}`：連不上子程式、子程式回 3xx／401／403、回覆格式不對或超過 8 MiB、協定版本不在審過的清單
+- 502 `{"error":"request denied"}`：連不上子程式、子程式逾時（PaaS 504：§8.8 #99）、子程式回 3xx／401／403、回覆格式不對或超過 8 MiB、協定版本不在審過的清單
   （`Hc/gateway.py:1204-1206`、`:1230`、`:1258`、`:1288-1291`、`:1301`）。
 - 轉送名額等 1 秒逾時：503 `{"error":"request denied"}`（開通後改成第 2.4 節的 `-32003`；沒開通時也沒有排隊上限、保留名額與排隊中斷線監看）。
 
@@ -449,6 +467,8 @@ PaaS 另帶 `message` 文字，HA 不帶（面板只認代碼，§8.8 #49）。
 
 - 原則：每個帳號（含預設）讀 body 前受准入、讀 body 起到請求結束受位元組額度；一個帳號用不到別的帳號的名額或額度。共用的只有
   兩樣：讀被拒請求 id 用的拒絕小額度（第 2.4 節），和 8081 外框的連線數（第 2.4 節最後一點）。
+- 准入＝轉送名額＋排隊上限（預設 64＝32＋32、額外 32＝16＋16）：一般名額和它的佇列都滿時准入也滿，`notifications/initialized` 到不了
+  保留名額（第 2.4 節；§8.8 #96）。要不要給准入留出保留名額的空間待使用者決定（HM-19c 前；HM-14 審查 MF-2）。
 - 全域最壞記憶體（推算，全部帳號同時被打滿）＝Σ每帳號（位元組額度×請求放大＋待送回覆上限）＋工作執行緒一筆的解析放大
   （8 MiB×25）＋子程式。請求放大用 PaaS 沙盒實測的 2.5 時，Odoo 6 個帳號約 6×(64×2.5＋32)＋200＝1,352 MiB（推算）。
 - **單一帳號有界，倍數看內容**（HM-08 審查 MF-1、S-1 修正後）：
@@ -567,7 +587,8 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 #15、#16 的附註也是；#14 的附註是 HM-09 的實作補的，第 89 列是 HM-09 獨立審查（S-6）補的列。逐列的來源與結論見
 `deviation-trace.md`（第 87～89 列與三個附註出自 HM-08、HM-09 的實作，不是 FEATURE-MATRIX 的列）。
 第 90 列是 HM-20 補的列（DQ-10 子題 2026-11-15 定案；FM-84 的對齊作法欄；`deviation-trace.md` 沒有這一列）。
-第 91～95 列出自 HM-14 的實作（不是 FEATURE-MATRIX 的列；`deviation-trace.md` 由 repo 外的產生器重產，沒有這幾列）。
+第 91～95 列出自 HM-14 的實作，第 96～99 列是 HM-14 獨立審查（MF-2、S-1、S-7、S-5）補的列（都不是 FEATURE-MATRIX 的列；
+`deviation-trace.md` 由 repo 外的產生器重產，沒有這幾列）。
 
 | # | 項目 | PaaS（@69ac425） | HA | 理由 | 類型 |
 |---|---|---|---|---|---|
@@ -666,6 +687,10 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | 93 | `-32004` 的 log | 每次一行（方法、token 之後的路徑、錯誤類別、原因） | 每帳號每種原因 60 秒一行（`suppressed=N`）：帳號 id 前 8 碼、HTTP 方法、錯誤類別、原因；不寫路徑（密鑰網址的路徑就是 token） | 子程式當掉時同時在跑的請求一起斷；HA 的 WARNING 規則（第 2.4 節） | 部署 |
 | 94 | initialize 換代的回應 | 503 `{"detail":"MCP child is not ready; reconnect after checking its status"}`；送出前登記在途派送，生命週期轉換最多等數秒（drain） | 503 `BACKEND_UNAVAILABLE`＋`Retry-After: 5`（HA 既有「initialize 等不到回覆」的回應）、沒有 session id、不 DELETE；沒有 drain：重啟不等閘道，標頭已在送的 session 收不回來（下一個請求拿新子程式的 404，用戶端重新 initialize） | HA 既有回應形狀；Supervisor 不經過閘道、沒有派送登記的介面 | 既有 |
 | 95 | 標頭卡在背壓時換 token | initialize 在最外層 fence 最多等 0.25 秒送 403；其他回應最多 2 秒 | 一律最多 2 秒送 401／404（只有一層 `LeasedResponse`）；送不出去就放棄、不丟例外 | HA 的 MCP app 沒有 BaseHTTPMiddleware，不需要另一層 fence | 部署 |
+| 96 | 保留名額與准入 | 讀 body 前沒有准入；一般名額的佇列滿時，通知照樣走保留名額送到（`P:docs/mcp-gateway-limits.md:39-40`） | 讀 body 前的准入＝轉送名額＋排隊上限（64＝32＋32、32＝16＋16；轉送中、排隊中、GET 串流都算）：一般名額和它的佇列都滿時准入也滿，`notifications/initialized` 在讀 body 前拿 503（`-32003`、`id: null`），到不了保留名額；只在准入還有空位時送到（第 2.4 節） | 准入在讀 body 前，看不出是不是通知（防單一帳號吃光 listener，C3-MF-2）；數值是 DQ-07 (a)。要不要給准入留保留名額的空間或改分派器，待使用者決定（HM-19c 前；HM-14 審查 MF-2） | 待決 |
+| 97 | 一個請求只回一則（SSE 的 `-32005`） | `_Interruption` 只看子程式的回覆、而且只在產生器續跑時記「已送到」：回覆在 token 換掉那一刻被收下，或閘道補的 `-32004` 已送出後 token 才換掉，同一個 id 會再補一則 `-32005`（`Pc/proxy.py:487-516`、`:1192-1194`） | 伺服器收下的那個請求的回答（子程式的回覆或閘道的 `-32004` 事件）之後不再補 `-32005`（第 2.5 節） | JSON-RPC 一個請求只回一則；MCP Python 與 TS SDK 對多出來的那則只記錯誤 | 加嚴（建議回補） |
+| 98 | 排隊中換 token | 排隊包在 token 租約裡（`Pc/proxy.py:986`），token 一換就取消、回 403 | 排隊不在租約裡：拿到名額或等滿 1 秒後重驗才拒（Bearer 401、密鑰網址 404），子程式收不到；最多多佔 1 秒的排隊位置（第 2.4 節） | 把 `take_slot` 放進 `lease.run` 時，「拿到名額」與「token 換掉」同一刻會漏掉名額，要另寫歸還與測試；結果相同（一定被拒、子程式收不到），HM-14 審查 S-7 列為可選 | 部署 |
+| 99 | 子程式逾時（回應標頭前） | 504 `{"detail":"MCP server timed out"}`（`Pc/proxy.py:1078-1079`）；工具呼叫的逾時另見 #5 | 502 `{"error":"request denied"}`，開通前後都一樣（第 2.5 節、第 4.2 節「其他既有回應」） | HA 既有回應形狀（HM-01 黃金回歸） | 既有 |
 
 ## 10. 變更紀錄
 
@@ -682,3 +707,4 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | v1 草案（HM-09 審查） | 2026-11-15 | HM-09 | 依獨立安全審查（修正後通過）：第 7 節 port 列加 IPv6 試綁被平台擋時跳過並記一行（S-6）、錯開啟動列加「某個帳號的啟動丟例外時記一行、其他照起」（S-12）、資源列加「沒有直譯器可跑包裝器時照起並記一行」（S-12）、log 事件列補這三種文字；第 9 節加第 89 列（S-6）並在說明寫明 #14 的附註出自 HM-09（spawn 失敗也重試，審查 S-1 要使用者看過） |
 | v1 草案（HM-20） | 2026-11-15 | HM-20 | 後端網址拒絕 loopback 照實作寫明（DQ-10；DQ-40 ⑦）：第 3.1 節 `backend` 列加存檔的 400；第 7 節加「後端 loopback」列（`WOOW_MCP_DENY_LOOPBACK=1`、整組拒絕、值不是 1 就不啟動）；第 9 節 #39 的 PaaS 欄與 HA 欄寫明兩邊的範圍、存檔時查不查 DNS、回應本體與區網；補 #90（n8n webhook 模式維持 permissive，DQ-10 子題 2026-11-15 使用者定，HM-25 前再評估）。安全審查後（S-1、S-4、S-8）：#39 補「n8n 開通後套上整套既有存檔檢查」與和 PaaS n8n 的差異、範圍只有 loopback（bridge 位址不在規則裡）；第 3.1 節同步、改說「是 loopback」；第 7 節補「額外帳號的子程式也帶變數」與 Headscale 的代碼。rebase 到 HM-09 之後（2026-11-16）：HM-08 補了 #87、#88、HM-09 補了 #89，本片的列改成 #90（原稿 #87），第 7 節與本列的引用同步；#39 的 PaaS 欄照 #152 的實際合併（`671d2e7`）改寫，HA 欄補 Nextcloud 的存檔與測試連線對照。沒開通時的行為不變 |
 | v1 草案（HM-14） | 2026-11-15 | HM-14 | 第 1.2 節：不受開關管多一項（子程式 initialize 錯誤遮本帳號憑證；理由、改了什麼、HM-01 凍結不用改）；第 2.4 節：排隊上限每個佇列各自計數、排隊中斷線不送（含同一刻拿到名額）、保留名額的判斷照 PaaS `_carries_no_request` 且 HA 實際只有 `notifications/initialized` 會用到、SDK 層級逾時與 `terminate_on_close=True` 看不到斷線的已知限制、`-32003` 文字定稿；第 2.5 節：哪些錯誤算子程式中途斷線、`-32004` 的世代判斷與 0.25 秒、`-32005` 與標頭卡在背壓時的乾淨拒絕、一次送完的 JSON 標頭已出去時的處理、結尾最多 2 秒、initialize 世代；第 4.2 節：`-32004`、`-32005` 兩列與「其他既有回應」的 502 測試；第 9 節補第 91～95 列、#81 註明 HM-14 沒做 FM-52 |
+| v1 草案（HM-14 審查） | 2026-11-16 | HM-14 | 依獨立安全審查補寫（程式改 S-1、S-4 與一個型別註記，見 HM-14 筆記第 15 節）：第 2.4 節加三點（保留名額只在准入還有空位時有用，MF-2，待使用者決定；GET 串流整段佔住一般名額與准入，UC-31；排隊中換 token 最多多佔 1 秒，S-7）；第 2.5 節：閘道補的 `-32004` 事件也算那個請求的回答、之後不再補 `-32005`（S-1），uvicorn 記一行的情況改成「兩個例外」（S-5）；第 4.2 節：`-32003`、`-32005` 兩列補差異列號，502 的既有回應補「逾時」；第 5 節加准入＝轉送＋排隊一點；第 9 節補第 96～99 列 |
