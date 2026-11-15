@@ -521,7 +521,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | 34 | 帳號 CRUD 寫入保護 | 不收 If-Match、不走收據；刪除 204 | 全部 If-Match；建立、刪除、全部撤銷、索引隔離要 Idempotency-Key；刪除 200＋收據 | HA 既有規則（Hc/gateway.py:456-484；DQ-40 ③） | 加嚴 |
 | 35 | 帳號名稱 | 接受控制、bidi、零寬字元 | 拒絕；NFKC 判重 | 防管理員誤認（DQ-16；DQ-40 ④） | 加嚴 |
 | 36 | 帳號選擇保存 | sessionStorage | 只放記憶體 | 保留 HA 儲存不變式（DQ-18；DQ-40 ⑤） | 加嚴 |
-| 37 | 子程式 bearer | 只有 n8n 驗 | 7 支 Python 子程式也驗、驗格式 | port 錯置時不跨帳號執行（DQ-40 ⑥） | 加嚴 |
+| 37 | 子程式 bearer | 只有 n8n 驗 | 7 支 Python 子程式也驗、驗格式（第 7 節）。註：n8n 維持現狀（n8n-mcp 驗 `AUTH_TOKEN`＝同一個 child_token）：只看值是不是 `Bearer ` 開頭、比對前去掉前後空白，重複的 `Authorization` 只看第一個，所以另外收下三種寫法：`Bearer` 後兩個空白、兩個標頭都是自己的、第一個是自己的＋第二個是別帳號的。三種都要先有自己的 child token，沒有越權 | port 錯置時不跨帳號執行（DQ-40 ⑥）。n8n 不另外擋那三種（審查 MF-1 選 (a)，2026-11-15）：閘道只轉送自己的 child bearer、只送一個標頭（HM-01 黃金回歸鎖住，用戶端塞不進第二個）；能直連子程式 port 的只有 add-on 容器內同 uid 的程序，在 DQ-37 接受的信任邊界內 | 加嚴 |
 | 38 | 回覆遮罩 | 子程式只知道自己帳號的憑證（FM-76） | 本帳號秘密＋所有帳號 token／child_token | 一個 add-on 持有多個帳號的 token（DQ-40 ⑧） | 加嚴 |
 | 39 | 後端網址 loopback | 只有 n8n、EMQX 存檔過 SSRF | 開通後全部產品存檔與執行期都拒 | 縱深防禦（DQ-10；DQ-40 ⑦） | 加嚴 |
 | 40 | 換身分換 token | 只有 Odoo（#131） | Odoo；加 Nextcloud url／username、Hermes gateway_url／dashboard_url／dashboard_username | 使用者原則「每條網址永久綁一個後端身分」（R01:85；DQ-40 ⑩） | 加嚴 |
@@ -579,3 +579,4 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | v1 草案 | 2026-11-14 | HM-00 | 依計畫 §5、§6、§8.8 起草；套用 2026-11-14 的 §13.1 決策；差異表由 43 列補到 79 列 |
 | v1 草案（審查修正） | 2026-11-14 | HM-00 | 依獨立審查修正：錯誤代碼表對齊 bb48449 與 PaaS pin（既有回應的五種本體形狀；補 `unsupported`、`backend_check_failed`、`backend_fixed` 三列與 415、第 ① 步的 400；`core_version_unreviewed` 在 ⑥／⑩；重複 `X-MCP-Profile` 的 PaaS 行為）；差異表補第 80～86 列；第 4.2 節補既有回應範圍；第 5 節加各產品上限；待定題目標示；隔離目錄刪除路由與讀 body 途中額度用完的回應（暫定）；第 6 節門檻寫法 |
 | v1 草案（HM-07） | 2026-11-15 | HM-07 | 第 8 節索引 port 規則照 PaaS 逐字一致（審查 MF-1 定案）：拿掉「不是 3000／8081／8099」；重複與 3000 只停相關帳號；listener port 交 HM-09 的 spawn 前檢查（`child_port_conflict`）；第 9 節不加列。DQ-09、DQ-12、DQ-19 改標已定（`decisions.md`） |
+| v1 草案（HM-06） | 2026-11-15 | HM-06 | 第 9 節 #37 加註：n8n 維持 n8n-mcp 現狀，另外收下三種都要先有自己 child token 的寫法（審查 MF-1 選 (a)，主對話 2026-11-15 08:0x 定案）；同步 `acceptance-matrix.md` T-23 與 `threat-model.md` I4。第 7 節「子程式 bearer」列不變（DQ-08 的 HM-06 部分照它，`decisions.md`） |

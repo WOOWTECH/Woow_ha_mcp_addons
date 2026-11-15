@@ -518,9 +518,11 @@ async def test_real_child_serves_only_its_own_child_bearer(tmp_path, log_scan, p
 # n8n's child (n8n-mcp, Node) has always checked AUTH_TOKEN, the same child_token, and HM-06 leaves it as it is (plan
 # 8.3). Its check (http-server-single-session.js authenticateRequest) wants "Bearer " and compares the rest trimmed, and
 # Node's http keeps only the first of repeated Authorization headers: so it also takes three forms a Python child
-# refuses. Each of them still needs its own token first; no other profile's or wrong bearer gets through, and the
-# gateway never sends two headers. HM-00's T-23 and threat-model I4 say 401 for two headers on n8n too: which one
-# changes (their n8n row, or n8n itself in a slice of its own) is not decided here (HM-06 provenance note, section 12).
+# refuses. Each of them still needs its own token first; no other profile's or wrong bearer gets through. Decided
+# 2026-11-15 (HM-06 review MF-1, option (a); HM-06 provenance note, section 12.1): n8n stays as it is, and HM-00's
+# T-23 (acceptance-matrix.md), threat-model I4 and contract 9 #37 say what it takes. The gateway only ever sends its
+# own child bearer, in one header (the HM-01 golden regression pins it: a client cannot add a second one), and only
+# processes in the add-on's container, the same uid (DQ-37's accepted trust boundary), reach the child's port directly.
 N8N_ALSO_ACCEPTS = ('two blanks', 'twice', 'own then other')
 
 
