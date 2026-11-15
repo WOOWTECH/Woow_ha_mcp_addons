@@ -89,9 +89,9 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_router_passthrough.py` | HM-08 | 計畫 | 開關關時分派器不掛、回應逐位元相同 |
 | `tests/test_profile_quotas.py` | HM-08 | 計畫 | 真 socket S5、S6；預設帳號當攻擊方；位元組額度；三種過載情況對照 PaaS 表 |
 | `tests/test_reply_mask_union.py` | HM-08 | 計畫 | 回覆遮罩含別帳號 token 與 child_token |
-| `tests/test_profile_ports.py` | HM-09 | 計畫 | 配 port；四類衝突不 spawn |
-| `tests/test_profile_lifecycle.py` | HM-09 | 計畫 | 看門狗、並行停 <30 秒、log 事件清單 |
-| `tests/test_health_backoff.py` | HM-09 | 計畫 | 監看認證退避 15→300 秒 |
+| `tests/test_profile_ports.py` | HM-09 | 計畫 | 配 port；四類衝突不 spawn；被佔時照看門狗退避、放開後恢復，搶 port 的程式收到 0 筆（T-15）；索引變更後立刻重評；`child/restart` 帶 `blocked_reason` |
+| `tests/test_profile_lifecycle.py` | HM-09 | 計畫 | 看門狗（T-13）、並行停 <30 秒、log 事件清單；額外帳號的監看停止只標記該帳號（DQ-21） |
+| `tests/test_health_backoff.py` | HM-09 | 計畫 | 監看認證退避 15→300 秒；開通後連兩次失敗才判 unreachable；起點錯開、自己的 client；不探測不是自己在跑的子程式（DQ-25） |
 | `tests/test_extra_child_resources.py` | HM-09 | 計畫 | 記憶體檢查、`oom_score_adj`＝500、`nice`、FD soft limit（uid 10001 子程序） |
 | `tests/test_staggered_start.py` | HM-09 | 計畫 | 錯開啟動，同時最多 2 個 |
 | `tests/test_profile_admin_api.py` | HM-10 | 計畫 | 契約第 3 節全部情況；建立與重送不回 token；索引隔離；開關關時照舊 |
@@ -127,4 +127,4 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_headscale_multi_profile.py` | HM-26 | 暫定名 | 同網址同 key、不同政策的兩帳號各照自己的政策 |
 | `tests/test_origin_policy.py` | HM-27 | 暫定名 | report-only 不改回應位元組；would_deny 記錄與節流 |
 | `tests/test_reply_worker.py` | HM-30 | 計畫 | 輸出位元組相同、依帳號輪流、CPU 飢餓、慢讀 RSS（`contract.md` 第 6 節門檻） |
-| `tests/test_health_tolerance.py` | HM-30 | 計畫 | 健康檢查連兩次失敗才判壞 |
+| `tests/test_health_tolerance.py` | HM-30 | 計畫 | CPU 飢餓下閒置帳號的健康檢查不判壞（連兩次失敗的規則本身 HM-09 已做，測試在 `tests/test_health_backoff.py`） |
