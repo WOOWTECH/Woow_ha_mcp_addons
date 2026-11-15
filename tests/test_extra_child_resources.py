@@ -86,6 +86,27 @@ async def test_the_wrapper_hands_the_child_its_argv_environment_directory_and_si
     assert seen['plain']['args'] == 'one\ntwo words\n' and 'LC_CTYPE' not in seen['plain']['env']
 
 
+async def test_without_an_interpreter_for_the_wrapper_the_child_starts_and_says_so(tmp_path, log_scan, monkeypatch):
+    """HM-09 review S-12: sys.executable empty (Python cannot tell its own interpreter): the child is spawned directly,
+    as the default profile's is, its resources are recorded as not applied and one WARNING says so (never assumed)."""
+    python = sys.executable
+    monkeypatch.setattr(lifecycle.sys, 'executable', '')
+    log = lifecycle.ChildLog(lifecycle.LifecycleLog(), 'a' * 24, 'aaaaaaaa', 18000)
+    supervisor = Supervisor(ChildSpec((python, '-c', 'import time\nwhile True:\n    time.sleep(1)\n'),
+                                      {'PATH': '/usr/bin:/bin'}, tmp_path), grace=0.05, delays=(30,),
+                            resources=lifecycle.ChildResources(), log=log)
+    await supervisor.start()
+    try:
+        await until(lambda: supervisor.status == 'running' and supervisor.process is not None)
+        assert proc_cmdline(supervisor.process.pid) == [python, '-c', 'import time\nwhile True:\n    time.sleep(1)\n']
+        assert supervisor.resource_state == {'oom_score_adj': False, 'nice': False}
+        assert [line for line in lifecycle_lines(log_scan) if 'not applied' in line] == [
+            'MCP child [profile=aaaaaaaa port=18000]: child resources not applied (oom_score_adj 500, nice +5: no '
+            'interpreter for the wrapper); it runs without them']
+    finally:
+        await supervisor.stop()
+
+
 def test_child_resources_are_bounded():
     assert lifecycle.ChildResources() == lifecycle.EXTRA_CHILD_RESOURCES == lifecycle.ChildResources(500, 5)
     for bad in (dict(oom_score_adj=1001), dict(oom_score_adj=-1001), dict(oom_score_adj=True), dict(nice=40),
@@ -117,9 +138,10 @@ def probe_python():
         yield str(temp / '.venv/bin/python')
 
 
-def probe(python, resources, baseline=200):
+def probe(python, resources, baseline=200, raise_nice=2):
     """Run tests/child_resources_probe.py in a fresh directory of the system's temporary directory (pytest's own is
-    private to its user: uid 10001 could not reach a child's working directory there)."""
+    private to its user: uid 10001 could not reach a child's working directory there). The probe first raises its own
+    nice value by raise_nice (HM-09 review S-5: from 0, the child must then be at 7, not at 5)."""
     with tempfile.TemporaryDirectory(prefix='hm09-probe-') as directory:
         temp = Path(directory)
         work = temp / 'work'
@@ -127,7 +149,7 @@ def probe(python, resources, baseline=200):
         if os.geteuid() == 0:
             temp.chmod(0o755)
             os.chown(work, 10001, 10001)
-        config = {'baseline': baseline, 'resources': resources, 'work': str(work)}
+        config = {'baseline': baseline, 'resources': resources, 'work': str(work), 'raise_nice': raise_nice}
         result = subprocess.run([python, str(ROOT / 'tests/child_resources_probe.py'), json.dumps(config)],
                                 capture_output=True, text=True, timeout=90, cwd=temp,
                                 env={'PATH': '/usr/bin:/bin', 'PYTHONPATH': str(ROOT / 'packages/mcp-admin-core'),
@@ -143,7 +165,9 @@ def test_an_unprivileged_child_gets_oom_score_adj_500_and_nice_5(probe_python):
     if os.geteuid() == 0:
         assert report['probe']['oom_score_adj'] == 200  # the add-on's baseline, as Docker sets it
     assert report['child']['oom_score_adj'] == 500
-    assert report['child']['nice'] == min(19, report['probe']['nice'] + 5)
+    # +5 on the management process's own value, never "set to 5" (S-5): the probe raised its own by 2 first.
+    assert report['probe']['nice'] == min(19, report['probe']['nice_before'] + 2) and report['probe']['nice'] >= 2
+    assert report['child']['nice'] == min(19, report['probe']['nice'] + 5) != 5
     assert report['resource_state'] == {'oom_score_adj': True, 'nice': True} and report['status'] == 'running'
     assert not [line for line in report['warnings'] if 'not applied' in line]
 

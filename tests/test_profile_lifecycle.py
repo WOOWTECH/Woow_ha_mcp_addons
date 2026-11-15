@@ -31,7 +31,7 @@ import pytest
 
 from lifecycle_runtime import PRODUCT, lifecycle_lines, manager_rig, until, watch
 from log_scan import log_scan  # noqa: F401  (fixture)
-from mcp_admin_core import lifecycle, profile_runtime, profiles
+from mcp_admin_core import health as health_module, lifecycle, profile_runtime, profiles
 from mcp_admin_core.lifecycle import ChildSpec, Supervisor
 from multi_profile_runtime import stored
 from test_single_profile_golden import (ACCEPT, NoProcessSupervisor, configure, initialize_message, production_runtime,
@@ -191,6 +191,29 @@ async def test_a_stop_during_a_backoff_ends_it_at_once(tmp_path):
     assert time.monotonic() - began < 1 and supervisor.status == 'stopped' and supervisor.task is None
 
 
+@pytest.mark.parametrize('resources', [None, lifecycle.ChildResources()], ids=['plain', 'wrapped'])
+async def test_a_spawn_failure_backs_off_and_retries_under_the_watchdog(tmp_path, log_scan, resources):
+    """HM-09 review S-1 (E2; contract 9 #14, a difference from PaaS, whose watchdog stops at a spawn failure until a
+    manual start): a child that cannot be spawned (its program is missing; with resources too, which then spawn it
+    directly) counts as a failed attempt: backoff 2 s, then 5 s, never failed; each time one line names the error's
+    class only."""
+    log = lifecycle.ChildLog(lifecycle.LifecycleLog(), 'a' * 24, 'aaaaaaaa', 18000)
+    missing = tmp_path / 'no-such-program'
+    supervisor = Supervisor(ChildSpec((str(missing),), {'PATH': '/usr/bin:/bin'}, tmp_path), grace=0.05,
+                            resources=resources, log=log, **lifecycle.WATCHDOG)
+    await supervisor.start()
+    await until(lambda: supervisor.retry_in is not None)
+    assert (supervisor.status, supervisor.last_exit, supervisor.starts, supervisor.retry_in) == ('backoff', None, 1, 2)
+    assert supervisor.process is None and supervisor.resource_state is None
+    supervisor.retry_now()
+    await until(lambda: supervisor.starts == 2 and supervisor.retry_in == 5)
+    assert supervisor.status == 'backoff'
+    assert 'MCP child [profile=aaaaaaaa port=18000]: could not be started (FileNotFoundError)' in (
+        lifecycle_lines(log_scan))
+    await supervisor.stop()
+    assert supervisor.status == 'stopped'
+
+
 # ---- T-13: one child crashing ----
 
 async def test_one_child_killed_five_times_keeps_restarting_and_the_others_keep_their_pids(tmp_path, log_scan):
@@ -301,33 +324,42 @@ async def test_the_lifecycle_log_keeps_a_bounded_memory():
 async def test_stop_all_stops_every_child_at_once_within_haos_30_seconds(tmp_path, log_scan):
     """Six children (the default and five additional profiles) that all ignore SIGTERM, so each Supervisor waits its
     grace (3 s) and SIGKILLs: stopped in parallel, about one grace period in all (one after the other: 18 s or more);
-    every process and process group gone; the manager's close stops them the same way."""
-    async with manager_rig(tmp_path, extras=5) as rig:
-        watch(log_scan, rig)
-        rig.sleepers.ignore_term.update(rig.ports.values())
-        await rig.manager.launch()
-        await rig.manager.start_all()
-        await until(lambda: all(rig.pid(p) for p in rig.ports))
-        pids = [rig.pid(p) for p in rig.ports]
-        assert all(rig.supervisor(p).grace == 3.0 for p in rig.ports)
-        began = time.monotonic()
-        await rig.manager.stop_all()
-        took = time.monotonic() - began
-        assert 3.0 <= took < 6.0, took
-        assert all(rig.supervisor(p).status == 'stopped' and rig.pid(p) is None for p in rig.ports)
-        assert not any(os.path.exists(f'/proc/{pid}') for pid in pids)
+    every process and process group gone; the manager's close stops them the same way. A stop that hangs fails the
+    test within 15 s, and so does the rig's close after it (it calls stop_all again): never the whole run (HM-09 review
+    S-3)."""
+    async with asyncio.timeout(None) as limit:
+        async with manager_rig(tmp_path, extras=5) as rig:
+            watch(log_scan, rig)
+            rig.sleepers.ignore_term.update(rig.ports.values())
+            await rig.manager.launch()
+            await rig.manager.start_all()
+            await until(lambda: all(rig.pid(p) for p in rig.ports))
+            pids = [rig.pid(p) for p in rig.ports]
+            assert all(rig.supervisor(p).grace == 3.0 for p in rig.ports)
+            began = time.monotonic()
+            limit.reschedule(asyncio.get_running_loop().time() + 30)  # this stop and the rig's close after it
+            async with asyncio.timeout(15):
+                await rig.manager.stop_all()
+            took = time.monotonic() - began
+            assert 3.0 <= took < 6.0, took
+            assert all(rig.supervisor(p).status == 'stopped' and rig.pid(p) is None for p in rig.ports)
+            assert not any(os.path.exists(f'/proc/{pid}') for pid in pids)
 
 
 async def test_closing_the_manager_stops_the_children_in_parallel_too(tmp_path, log_scan):
+    """The manager's close (run_product's shutdown) stops the children in parallel too; a close that hangs fails the
+    test within 15 s (HM-09 review S-3)."""
     began = None
-    async with manager_rig(tmp_path, extras=3) as rig:
-        watch(log_scan, rig)
-        rig.sleepers.ignore_term.update(rig.ports.values())
-        await rig.manager.launch()
-        await rig.manager.start_all()
-        await until(lambda: all(rig.pid(p) for p in rig.ports))
-        pids = [rig.pid(p) for p in rig.ports]
-        began = time.monotonic()
+    async with asyncio.timeout(None) as limit:  # set to 15 s for the close below
+        async with manager_rig(tmp_path, extras=3) as rig:
+            watch(log_scan, rig)
+            rig.sleepers.ignore_term.update(rig.ports.values())
+            await rig.manager.launch()
+            await rig.manager.start_all()
+            await until(lambda: all(rig.pid(p) for p in rig.ports))
+            pids = [rig.pid(p) for p in rig.ports]
+            began = time.monotonic()
+            limit.reschedule(asyncio.get_running_loop().time() + 15)
     took = time.monotonic() - began
     assert took < 6.0, took
     assert not any(os.path.exists(f'/proc/{pid}') for pid in pids)
@@ -335,24 +367,27 @@ async def test_closing_the_manager_stops_the_children_in_parallel_too(tmp_path, 
 
 # ---- DQ-21: a monitor that stops ----
 
-async def test_an_additional_profiles_monitor_stopping_marks_only_that_profile(tmp_path, log_scan):
+async def test_an_additional_profiles_monitor_stopping_marks_only_that_profile(tmp_path, log_scan, monkeypatch):
     """DQ-21: B's health monitor ends with an error: B is marked failed (its child stopped, one WARNING naming B), the
     default profile and C keep their children and monitors, and the add-on's monitoring goes on (monitor() still
-    runs). The panel's restart of B (its backend_changed) starts B's child and its monitor again."""
+    runs). The panel's restart of B (its backend_changed) starts B's child and its monitor again: the revived monitor
+    checks the new child (HM-09 review MF-2, E10: the outcome kept from before the restart is the old child's, so
+    only a check of the new one counts). The interval is scaled to 0.2 s (B's start point with it)."""
+    monkeypatch.setattr(health_module, 'HEALTH_INTERVAL', 0.2)
     broken = {'times': 1}
 
     async with manager_rig(tmp_path, extras=2) as rig:
         watch(log_scan, rig)
         b, c = rig.extras
-        health = rig.health(b)
-        working = health.run
+        monitor = rig.health(b)
+        working = monitor.run
 
         async def run():
             if broken['times']:
                 broken['times'] -= 1
                 raise RuntimeError('monitor broke')
             await working()
-        health.run = run
+        monitor.run = run
         await rig.manager.launch()
         monitoring = asyncio.create_task(rig.manager.monitor())
         try:
@@ -362,10 +397,14 @@ async def test_an_additional_profiles_monitor_stopping_marks_only_that_profile(t
             assert any(f'[profile={profiles.log_id(b)} port={rig.ports[b]}]: its health monitor stopped' in line
                        for line in lifecycle_lines(log_scan))
             pids = {p: rig.pid(p) for p in ('default', c)}
+            stale = monitor.settled
             runtime = rig.entry(b).runtime
             await runtime.backend_changed(runtime.store.load())  # the panel's restart
             await until(lambda: rig.supervisor(b).status == 'running' and rig.pid(b) is not None)
-            await until(lambda: health.settled is not None and health.settled[1] is True)
+            generation = rig.supervisor(b).starts
+            assert stale is None or stale[0] != generation
+            await until(lambda: monitor.settled is not None and monitor.settled[0] == generation
+                        and monitor.settled[1] is True)
             assert {p: rig.pid(p) for p in ('default', c)} == pids and not monitoring.done()
         finally:
             monitoring.cancel()
@@ -385,6 +424,26 @@ async def test_the_default_profiles_monitor_stopping_ends_the_add_ons_monitoring
         with pytest.raises(RuntimeError, match='monitor broke'):
             async with asyncio.timeout(10):
                 await rig.manager.monitor()
+
+
+async def test_removing_a_profile_stops_its_monitor_and_its_child(tmp_path, log_scan):
+    """HM-10 deletes a profile with remove() (HM-09 review S-4): its monitor is stopped (cancelled, not left to fail on
+    the closed store), its child stopped and reaped, and the add-on's monitoring goes on for the others."""
+    async with manager_rig(tmp_path, extras=2) as rig:
+        watch(log_scan, rig)
+        b, c = rig.extras
+        await rig.manager.launch()
+        monitoring = asyncio.create_task(rig.manager.monitor())
+        try:
+            await until(lambda: rig.manager.started.is_set() and {b, c} <= rig.manager._monitors.keys())
+            watched, pid = rig.manager._monitors[b], rig.pid(b)
+            await rig.manager.remove(b)
+            assert watched.cancelled() and b not in rig.manager._monitors and rig.manager.get(b) is None
+            assert pid is not None and not os.path.exists(f'/proc/{pid}')
+            assert not rig.manager._monitors[c].done() and rig.pid(c) is not None and not monitoring.done()
+        finally:
+            monitoring.cancel()
+            await asyncio.gather(monitoring, return_exceptions=True)
 
 
 async def test_monitor_starts_the_additional_profiles_behind_the_default_one(tmp_path, log_scan):

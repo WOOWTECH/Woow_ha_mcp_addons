@@ -14,9 +14,9 @@ import time
 
 import pytest
 
-from lifecycle_runtime import manager_rig, until, watch
+from lifecycle_runtime import lifecycle_lines, manager_rig, until, watch
 from log_scan import log_scan  # noqa: F401  (fixture)
-from mcp_admin_core import profile_runtime
+from mcp_admin_core import profile_runtime, profiles
 from multi_profile_runtime import Children, multi_profile_runtime, stored
 from test_single_profile_golden import ACCEPT, MockChild, configure, initialize_message, settle
 
@@ -160,6 +160,29 @@ async def test_a_profile_that_cannot_start_never_holds_up_the_others(tmp_path, l
         finally:
             starting.cancel()
             await asyncio.gather(starting, return_exceptions=True)
+
+
+async def test_a_start_that_fails_is_named_and_never_stops_the_others(tmp_path, log_scan):
+    """HM-09 review S-12: when waiting for one profile's start fails (an error no known path raises: forced here on
+    C's readiness wait), that profile is named in one line, its place is freed, and the others start; start_all
+    finishes (started is set). The same holds for the default profile's wait."""
+    async with manager_rig(tmp_path, extras=3) as rig:
+        watch(log_scan, rig)
+        b, c, d = rig.extras
+
+        async def broken():
+            raise RuntimeError('the wait broke')
+        rig.health(c).settle = broken
+        rig.health('default').settle = broken
+        await rig.manager.launch()
+        async with asyncio.timeout(20):
+            await rig.manager.start_all()
+        assert rig.manager.started.is_set()
+        assert all(rig.supervisor(p).starts == 1 for p in (b, c, d))
+        lines = [line for line in lifecycle_lines(log_scan) if 'staggered start failed' in line]
+        assert sorted(lines) == sorted(f'MCP child [profile={profiles.log_id(p)} port={rig.ports[p]}]: its staggered '
+                                       'start failed (RuntimeError); the other profiles start anyway'
+                                       for p in ('default', c))
 
 
 async def test_disabled_profiles_are_not_started(tmp_path, log_scan):

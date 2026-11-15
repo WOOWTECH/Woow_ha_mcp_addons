@@ -163,6 +163,14 @@ async def test_refused_credentials_back_off_15_30_60_120_300_and_any_other_answe
         await monitor.check()
         await monitor.check()
         assert monitor.next_interval() == 30
+        # A check the child did not answer leaves the backoff as it is (contract 7; HM-09 review S-12): the refused
+        # logins before and after it are still in a row.
+        child.probe = 'silent'
+        await monitor.check()
+        assert monitor.next_interval() == 30 and monitor.auth_refusals == 2
+        child.probe = ODOO_REFUSED
+        await monitor.check()
+        assert monitor.next_interval() == 60
         child.probe = None
         await monitor.check()
         assert monitor.next_interval() == 15 and monitor.availability()['backend'] == 'reachable'
@@ -172,17 +180,23 @@ async def test_refused_credentials_back_off_15_30_60_120_300_and_any_other_answe
 
 
 async def test_the_monitor_waits_the_backoff_between_its_checks(tmp_path, log_scan):
-    """run() uses next_interval(): with a scaled table (0.1, 0.2, 0.4) every refused check waits the next step."""
+    """run() uses next_interval(): with a scaled table (0.1, 0.2, 0.4) every refused check waits the next step. The
+    pauses run() asks for are compared exactly; the time that really went by only from below, with a loose upper bound
+    (plan 10.1; HM-09 review S-7: the CI runner is about 1.4 times slower and its clock jumps)."""
     store, child, client, process, monitor = await monitored(tmp_path, tolerance=2, auth_backoff=(0.1, 0.2, 0.4),
                                                              own_child_only=True)
     child.probe = ODOO_REFUSED
-    checks = []
-    original = monitor.check
+    checks, pauses = [], []
+    original, pause = monitor.check, monitor._pause
 
     async def timed():
         checks.append(time.monotonic())
         await original()
-    monitor.check = timed
+
+    async def asked(seconds):
+        pauses.append(seconds)
+        await pause(seconds)
+    monitor.check, monitor._pause = timed, asked
     task = asyncio.create_task(monitor.run())
     try:
         await until(lambda: len(checks) == 5, timeout=10)
@@ -191,8 +205,9 @@ async def test_the_monitor_waits_the_backoff_between_its_checks(tmp_path, log_sc
         await asyncio.gather(task, return_exceptions=True)
         await client.aclose()
         store.close()
+    assert pauses[:4] == [0.1, 0.2, 0.4, 0.4], pauses
     gaps = [later - earlier for earlier, later in zip(checks, checks[1:])]
-    assert all(step <= gap < step + 0.15 for gap, step in zip(gaps, (0.1, 0.2, 0.4, 0.4))), gaps
+    assert all(step <= gap < step + 0.5 for gap, step in zip(gaps, (0.1, 0.2, 0.4, 0.4))), gaps
 
 
 async def test_a_save_or_restart_resets_the_backoff_and_checks_within_one_interval(tmp_path, log_scan, monkeypatch):
@@ -224,6 +239,48 @@ async def test_a_save_or_restart_resets_the_backoff_and_checks_within_one_interv
         await asyncio.gather(task, return_exceptions=True)
         await client.aclose()
         store.close()
+
+
+def refusing_probe(rig, profile_id):
+    """From now on profile_id's child answers the health probe with Odoo's refused login (everything else as before);
+    returns the child as it was, to put back."""
+    port = rig.ports[profile_id]
+    original = rig.children.by_port[port]
+
+    async def refusing(request):
+        message = json.loads(request.content) if request.content else {}
+        if message.get('method') == 'tools/call' and message['params']['name'] == 'woow_backend_probe':
+            return httpx.Response(200, json={'jsonrpc': '2.0', 'id': message['id'], 'result': {
+                'content': [{'type': 'text', 'text': 'Error executing tool woow_backend_probe: ' + ODOO_REFUSED}],
+                'isError': True}})
+        return await original(request)
+    rig.children.by_port[port] = refusing
+    return original
+
+
+async def test_the_panels_save_and_restart_reset_the_backoff(tmp_path, log_scan):
+    """HM-09 review MF-2 (E9): the reset of a save and of the panel's restart is wired, not only reset() itself. B's
+    login is refused three times (the next check in 60 s); the panel saves B's connection (backend/patch): no refusal
+    counted any more, the next check within one interval; refused three times again, the panel's child/restart
+    resets it the same way."""
+    from test_extra_child_resources import restart, save
+    async with manager_rig(tmp_path, extras=1) as rig:
+        watch(log_scan, rig)
+        b, = rig.extras
+        await rig.manager.launch()
+        await rig.manager.start_all()
+        await until(lambda: rig.pid(b) is not None)
+        monitor = rig.health(b)
+        for panel in (save, restart):
+            original = refusing_probe(rig, b)
+            for _ in range(3):
+                await monitor.check()
+            assert (monitor.auth_refusals, monitor.next_interval()) == (3, 60)
+            rig.children.by_port[rig.ports[b]] = original
+            answered = await panel(rig, b)
+            assert answered.status_code in (200, 202), answered.text
+            assert (monitor.auth_refusals, monitor.next_interval()) == (0, health.HEALTH_INTERVAL)
+            await until(lambda: rig.supervisor(b).status == 'running' and rig.pid(b) is not None)
 
 
 async def test_a_refused_login_is_reported_once_a_minute(tmp_path, log_scan):
@@ -422,6 +479,29 @@ async def test_every_profile_has_its_own_monitor_client_and_staggered_start(tmp_
         assert len({id(monitor.client) for monitor in monitors}) == 4
         assert all((monitor.tolerance, monitor.auth_backoff, monitor.own_child_only) == (2, health.AUTH_BACKOFF, True)
                    for monitor in monitors)
+
+
+async def test_the_monitor_waits_its_start_point_before_the_first_check(tmp_path, log_scan):
+    """HM-09 review MF-2 (E8): the staggered start point is kept when the monitor runs, not only set: with
+    first_check_after 0.6 s (scaled) run() checks first no sooner than 0.6 s after it began."""
+    store, child, client, process, monitor = await monitored(tmp_path, first_check_after=0.6, **switched_on())
+    checks = []
+    original = monitor.check
+
+    async def timed():
+        checks.append(time.monotonic())
+        await original()
+    monitor.check = timed
+    began = time.monotonic()
+    task = asyncio.create_task(monitor.run())
+    try:
+        await until(lambda: checks, timeout=5)
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await client.aclose()
+        store.close()
+    assert checks[0] - began >= 0.6, checks[0] - began
 
 
 @pytest.mark.parametrize('status', ['blocked', 'backoff', 'failed', 'stopped', 'starting'])
