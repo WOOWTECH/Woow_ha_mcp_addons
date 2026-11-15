@@ -174,7 +174,10 @@ async def test_policy_disable_keeps_private_probe_and_public_denial(tmp_path, pr
                     headers = await initialize()
                     listed = await rpc(client, '/mcp', headers, {'jsonrpc': '2.0', 'id': 3, 'method': 'tools/list'})
                     assert {t['name'] for t in listed['tools']} == public_names
-                    raw = await rpc(child, endpoint.url, headers,
+                    # HM-06: straight to the child in the same session, with its child bearer (the add-on token is the
+                    # gateway's only).
+                    direct = {**headers, 'Authorization': 'Bearer ' + store.load().child_token}
+                    raw = await rpc(child, endpoint.url, direct,
                                     {'jsonrpc': '2.0', 'id': 4, 'method': 'tools/list'})
                     assert {t['name'] for t in raw['tools']} == public_names | {probe}
                     if disable_all:
@@ -183,7 +186,7 @@ async def test_policy_disable_keeps_private_probe_and_public_denial(tmp_path, pr
                     # Native registration itself denies every other blocked tool.
                     before = len(events)
                     for name in set(NAMES[product]) - public_names - {probe}:
-                        result = await rpc(child, endpoint.url, headers,
+                        result = await rpc(child, endpoint.url, direct,
                                            call(name, dict(WRITES[product]).get(name, {})))
                         assert result.get('isError'), name
                     assert len(events) == before
@@ -346,14 +349,17 @@ async def test_nextcloud_private_probe_survives_public_disable(tmp_path, grant_w
                     assert events[before:] == [probe_event], 'the private probe must make an actual backend read'
                     assert health.backend == 'reachable' and manager.ready
                     headers = await initialize()
-                    raw = await rpc(child, endpoint.url, headers, {'jsonrpc': '2.0', 'id': 4, 'method': 'tools/list'})
+                    # HM-06: straight to the child in the same session, with its child bearer (the add-on token is the
+                    # gateway's only).
+                    direct = {**headers, 'Authorization': 'Bearer ' + store.load().child_token}
+                    raw = await rpc(child, endpoint.url, direct, {'jsonrpc': '2.0', 'id': 4, 'method': 'tools/list'})
                     assert {t['name'] for t in raw['tools']} == public_names | {ODOO_HEALTH_PROBE}
                     listed = await rpc(client, '/mcp', headers, {'jsonrpc': '2.0', 'id': 3, 'method': 'tools/list'})
                     assert {t['name'] for t in listed['tools']} == public_names
                     # Native registration itself refuses every tool that is not public (the child never has it).
                     before = len(events)
                     for name in set(NAMES[product]) - public_names:
-                        result = await rpc(child, endpoint.url, headers, call(name, dict(WRITES[product]).get(name, {})))
+                        result = await rpc(child, endpoint.url, direct, call(name, dict(WRITES[product]).get(name, {})))
                         assert result.get('isError'), name
                     assert len(events) == before
                     pid, starts = manager.process.pid, manager.starts

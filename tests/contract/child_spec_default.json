@@ -1,7 +1,12 @@
 {
   "baseline": "bb48449",
   "about": "HM-04: the default profile child spec of every product (products.child_spec, n8n_adapter.child_spec) for the states of tests/test_child_port_param.py CASES: argv, env as ordered NAME=value entries, cwd. Made from bb48449's code (baseline, which stays bb48449). changes lists, in order, every deliberate change of these specs since then (objects with the slice and the change), each made in that slice's PR together with the specs it changes: a spec here is bb48449's with those changes. Placeholders: {ROOT} the checkout, {DATA} the data directory, {CATALOG} n8n's catalog copy, {NODE} the node binary, {child_token} the state's child token. Test data only (DUMMY- credentials, .invalid hosts).",
-  "changes": [],
+  "changes": [
+    {
+      "slice": "HM-06",
+      "change": "the seven Python children (odoo, hermes, opendesign, emqx, litellm, nextcloud, headscale: the twelve cases but odoo-manage's and n8n's) get WOOW_MCP_CHILD_TOKEN={child_token}, the state's child token, right after PYTHONPATH: the child bearer each requires (apps/runtime/session_idle.py). argv, cwd and every other variable are unchanged; odoo-manage and n8n (AUTH_TOKEN, the same child token) are unchanged."
+    }
+  ],
   "specs": {
     "odoo/plain": {
       "argv": [
@@ -22,6 +27,7 @@
         "PYTHONDONTWRITEBYTECODE=1",
         "PYTHONUNBUFFERED=1",
         "PYTHONPATH={ROOT}/apps/odoo/vendor:{ROOT}/apps/runtime:{ROOT}/packages/mcp-admin-core",
+        "WOOW_MCP_CHILD_TOKEN={child_token}",
         "ODOO_URL=https://odoo.invalid",
         "ODOO_DB=DUMMY-port-db",
         "ODOO_USERNAME=DUMMY-port-user",
@@ -56,6 +62,7 @@
         "PYTHONDONTWRITEBYTECODE=1",
         "PYTHONUNBUFFERED=1",
         "PYTHONPATH={ROOT}/apps/odoo/vendor:{ROOT}/apps/runtime:{ROOT}/packages/mcp-admin-core",
+        "WOOW_MCP_CHILD_TOKEN={child_token}",
         "ODOO_URL=https://odoo.invalid",
         "ODOO_DB=DUMMY-port-db",
         "ODOO_USERNAME=DUMMY-port-user",
@@ -136,6 +143,7 @@
         "PYTHONDONTWRITEBYTECODE=1",
         "PYTHONUNBUFFERED=1",
         "PYTHONPATH={ROOT}/apps/hermes/vendor:{ROOT}/apps/runtime",
+        "WOOW_MCP_CHILD_TOKEN={child_token}",
         "HERMES_GATEWAY_URL=https://hermes.invalid",
         "HERMES_GATEWAY_API_KEY=DUMMY-port-hermes-key"
       ],
@@ -152,6 +160,7 @@
         "PYTHONDONTWRITEBYTECODE=1",
         "PYTHONUNBUFFERED=1",
         "PYTHONPATH={ROOT}/apps/hermes/vendor:{ROOT}/apps/runtime",
+        "WOOW_MCP_CHILD_TOKEN={child_token}",
         "HERMES_GATEWAY_URL=https://hermes.invalid",
         "HERMES_GATEWAY_API_KEY=DUMMY-port-hermes-key",
         "HERMES_DASHBOARD_URL=https://hermes-dashboard.invalid",
@@ -171,6 +180,7 @@
         "PYTHONDONTWRITEBYTECODE=1",
         "PYTHONUNBUFFERED=1",
         "PYTHONPATH={ROOT}/apps/opendesign/vendor:{ROOT}/apps/runtime",
+        "WOOW_MCP_CHILD_TOKEN={child_token}",
         "OD_API_BASE=https://opendesign.invalid"
       ],
       "cwd": "{DATA}/child"
@@ -196,6 +206,7 @@
         "PYTHONDONTWRITEBYTECODE=1",
         "PYTHONUNBUFFERED=1",
         "PYTHONPATH={ROOT}/apps/emqx/vendor:{ROOT}/apps/runtime",
+        "WOOW_MCP_CHILD_TOKEN={child_token}",
         "EMQX_MCP_BASE_URL=https://emqx.invalid",
         "EMQX_MCP_API_KEY=DUMMY-port-emqx-key",
         "EMQX_MCP_API_SECRET=DUMMY-port-emqx-secret",
@@ -227,6 +238,7 @@
         "PYTHONDONTWRITEBYTECODE=1",
         "PYTHONUNBUFFERED=1",
         "PYTHONPATH={ROOT}/apps/emqx/vendor:{ROOT}/apps/runtime",
+        "WOOW_MCP_CHILD_TOKEN={child_token}",
         "EMQX_MCP_BASE_URL=https://emqx.invalid",
         "EMQX_MCP_API_KEY=DUMMY-port-emqx-key",
         "EMQX_MCP_API_SECRET=DUMMY-port-emqx-secret",
@@ -258,6 +270,7 @@
         "PYTHONDONTWRITEBYTECODE=1",
         "PYTHONUNBUFFERED=1",
         "PYTHONPATH={ROOT}/apps/litellm/vendor:{ROOT}/apps/runtime",
+        "WOOW_MCP_CHILD_TOKEN={child_token}",
         "LITELLM_MCP_BASE_URL=https://litellm.invalid",
         "LITELLM_MCP_MASTER_KEY=DUMMY-port-litellm-key",
         "LITELLM_MCP_READONLY=false",
@@ -288,6 +301,7 @@
         "PYTHONDONTWRITEBYTECODE=1",
         "PYTHONUNBUFFERED=1",
         "PYTHONPATH={ROOT}/apps/litellm/vendor:{ROOT}/apps/runtime",
+        "WOOW_MCP_CHILD_TOKEN={child_token}",
         "LITELLM_MCP_BASE_URL=https://litellm.invalid",
         "LITELLM_MCP_MASTER_KEY=DUMMY-port-litellm-key",
         "LITELLM_MCP_READONLY=true",
@@ -318,6 +332,7 @@
         "PYTHONDONTWRITEBYTECODE=1",
         "PYTHONUNBUFFERED=1",
         "PYTHONPATH={ROOT}/apps/nextcloud/vendor:{ROOT}/apps/runtime",
+        "WOOW_MCP_CHILD_TOKEN={child_token}",
         "NEXTCLOUD_MCP_BASE_URL=https://nextcloud.invalid",
         "NEXTCLOUD_MCP_USERNAME=DUMMY-port-user",
         "NEXTCLOUD_MCP_APP_PASSWORD=DUMMY-port-nextcloud-password",
@@ -351,6 +366,7 @@
         "PYTHONDONTWRITEBYTECODE=1",
         "PYTHONUNBUFFERED=1",
         "PYTHONPATH={ROOT}/apps/nextcloud/vendor:{ROOT}/apps/runtime",
+        "WOOW_MCP_CHILD_TOKEN={child_token}",
         "NEXTCLOUD_MCP_BASE_URL=https://nextcloud.invalid",
         "NEXTCLOUD_MCP_USERNAME=DUMMY-port-user",
         "NEXTCLOUD_MCP_APP_PASSWORD=DUMMY-port-nextcloud-password",
@@ -378,6 +394,7 @@
         "PYTHONDONTWRITEBYTECODE=1",
         "PYTHONUNBUFFERED=1",
         "PYTHONPATH={ROOT}/apps/headscale/vendor:{ROOT}/apps/runtime:{ROOT}/packages/mcp-admin-core",
+        "WOOW_MCP_CHILD_TOKEN={child_token}",
         "HEADSCALE_MCP_BASE_URL=https://headscale.invalid",
         "HEADSCALE_MCP_API_KEY=DUMMY-port-headscale-key",
         "HEADSCALE_MCP_STATE_PATH={DATA}/state.json",

@@ -210,7 +210,9 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     assert {t['name'] for t in listed['tools']} == expected
                     # Same real child session, bypass ONLY for observing upstream inventory.
                     # Public requests still go through the authenticated boundary above.
-                    raw_list = await rpc(client, runner.child_url, headers,
+                    # HM-06: with the child's own bearer (the add-on token is the gateway's only).
+                    raw_list = await rpc(client, runner.child_url,
+                        {**headers, 'Authorization': 'Bearer ' + state.child_token},
                         {'jsonrpc': '2.0', 'id': 20, 'method': 'tools/list'})
                     upstream_names = {t['name'] for t in raw_list['tools']}
                     if product in ('odoo', 'odoo-manage', 'nextcloud'):

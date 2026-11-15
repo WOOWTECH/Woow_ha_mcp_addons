@@ -65,6 +65,7 @@ def test_child_spec_is_exact_and_grant_driven(tmp_path):
     assert spec.env == {
         'PATH': '/usr/bin:/bin', 'HOME': str(tmp_path / 'child'), 'PYTHONDONTWRITEBYTECODE': '1', 'PYTHONUNBUFFERED': '1',
         'PYTHONPATH': f'{app / "vendor"}:{ROOT / "apps/runtime"}',
+        'WOOW_MCP_CHILD_TOKEN': 'b' * 43,  # HM-06: the state's child_token, the only bearer the child serves
         'NEXTCLOUD_MCP_BASE_URL': 'https://cloud.example.test', 'NEXTCLOUD_MCP_USERNAME': 'tester',
         'NEXTCLOUD_MCP_APP_PASSWORD': 'DUMMY', 'NEXTCLOUD_MCP_READONLY': 'true', 'NEXTCLOUD_MCP_ALLOW_DELETE': 'false',
         'NEXTCLOUD_MCP_DISABLED_TOOLS': ','.join(sorted(WRITERS)), 'NEXTCLOUD_MCP_ERROR_CODES': 'true',
@@ -802,7 +803,9 @@ async def test_account_lookup_body_failures_before_the_first_lookup_are_public_c
                 response = await client.post('/mcp', headers=headers, json=call(name, args))
                 assert len(seen) == before + 1, (name, seen[before:])
                 assert CANARY not in response.text and code in response.text, (name, failure, response.text)
-            raw = await rpc(child, manager.endpoint.url, headers, call(ODOO_HEALTH_PROBE, {}, id=9))
+            # HM-06: straight to the child with its child bearer (the add-on token is the gateway's only).
+            direct = {**headers, 'Authorization': 'Bearer ' + store.load().child_token}
+            raw = await rpc(child, manager.endpoint.url, direct, call(ODOO_HEALTH_PROBE, {}, id=9))
             assert raw.get('isError') and CANARY not in json.dumps(raw) and code in json.dumps(raw), raw
 
 
@@ -991,7 +994,9 @@ async def test_malformed_answers_are_handled_through_the_real_child(tmp_path):
                 reply = await rpc(client, '/mcp', headers, call('get_file_tree', {}))
                 text = reply['content'][0]['text']
                 assert reply.get('isError') and text.startswith('BACKEND_INVALID_RESPONSE: '), (case, reply)
-                raw = await rpc(child, manager.endpoint.url, headers, call(ODOO_HEALTH_PROBE, {}, id=9))
+                # HM-06: straight to the child with its child bearer (the add-on token is the gateway's only).
+                direct = {**headers, 'Authorization': 'Bearer ' + store.load().child_token}
+                raw = await rpc(child, manager.endpoint.url, direct, call(ODOO_HEALTH_PROBE, {}, id=9))
                 assert raw.get('isError') and 'BACKEND_INVALID_RESPONSE' in json.dumps(raw), (case, raw)
                 assert CANARY not in json.dumps(reply) + json.dumps(raw) and 'Error calling tool' not in json.dumps(raw)
                 monitor = HealthMonitor(store, manager, child, child_url=manager.endpoint.url)

@@ -1,6 +1,6 @@
 # 多帳號驗收矩陣（PaaS T-01～T-29 的 HA 版）
 
-- 狀態：HM-00 起草（2026-11-14）。HM-16 把它寫進 `docs/operations/acceptance.md` 與 P9 kit；HM-19b 照它做 Odoo 首發的 HAOS 驗收。
+- 狀態：HM-00 起草（2026-11-14）；HM-06 依 n8n 的實際行為改 T-23 的 n8n 期望值（2026-11-15，審查 MF-1 選 (a)）。HM-16 把它寫進 `docs/operations/acceptance.md` 與 P9 kit；HM-19b 照它做 Odoo 首發的 HAOS 驗收。
 - 來源：計畫 §10.4、§10.6（repo 外）；HA 期望值沿用 `gaps/G6-delivery.md` 第 5 節，依 2026-11-14 的決策更新（`decisions.md`）。
 - 契約與差異：`contract.md`（第 9 節刻意差異表，下稱 §8.8）；G6 §5 每一列怎麼對到差異表或測試見 `deviation-trace.md`。
 
@@ -39,7 +39,7 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | T-20 | 升級、回退、再升級 | 回退＝還原升級前備份：預設 token＝備份當時的值、額外帳號消失、沒有任何撤銷；再升級後額外帳號不存在、預設不變；文件要求再升級後按「全部撤銷」 | `tests/test_upgrade_zero_rewrite.py` | Store、HAOS | HM-19b、HM-29 | 是 | #71 |
 | T-21 | 備份還原 | 預設帳號依 DQ-03（採 (b) A2）；兩個偵測訊號；讀不到的帳號隔離；獨立驗證；核對後才重發；舊收據 410；C1-M1 攻擊序；版本混搭 | `tests/test_restore_detection.py`、`tests/test_restore_lock.py`、`tests/test_restore_review.py` | 容器（root 還原樹）、HAOS | HM-13a、HM-13b、HM-13c、HM-19b | 是 | #20、#21、#69 |
 | T-22 | n8n 名額與逾時 | `n8n_session` 每帳號一份；沒後端的額外帳號所有工具回 `backend_not_configured` | `tests/test_n8n_multi_profile.py` | HAOS | HM-25 | 否（n8n） | #28、#62 |
-| T-23 | 子程式 bearer 隔離 | 7 支 Python 子程式＋n8n：不帶、帶錯、帶別帳號、兩個標頭、空字串都 401，自己的 200 | `tests/test_child_bearer.py` | 容器 | HM-06、HM-16；各產品升版 | 是（Odoo） | #37 |
+| T-23 | 子程式 bearer 隔離 | 7 支 Python 子程式：不帶、帶錯、帶別帳號、兩個標頭、空字串都 401，自己的 200。n8n（n8n-mcp 維持現狀）：不帶、帶錯、帶別帳號、空字串都 401，自己的 200；另外收下三種寫法（`Bearer` 後兩個空白、兩個標頭都是自己的、第一個是自己的＋第二個是別帳號的），都要先有自己的 child token，沒有越權（§8.8 #37 的註） | `tests/test_child_bearer.py` | 容器 | HM-06、HM-16；各產品升版 | 是（Odoo） | #37 |
 | T-24 | 來源檢查 | DQ-11 採 (a)：密鑰網址清單外記一行 would_deny（帶 id 前 8 碼、每帳號節流）、不擋、不加 CORS；Bearer 帶 Origin 403；Headscale 只放 claude.ai | `tests/test_origin_policy.py` | HAOS（記下 Claude.ai 送的 Origin） | HM-08、HM-27 | 是 | #9、#10、#42 |
 | T-25 | 紀錄稽核 97 種寫法 | 不比 pin 版 PaaS 差（測試即時算） | `tests/test_redaction_matrix.py` | HAOS | HM-02、HM-19b | 是 | — |
 | T-26 | 名稱輸入與顯示 | HA 加嚴的名稱規則；顯示一律跳脫、不執行 | `packages/mcp-admin-ui/tests/browser/profiles.spec.mjs` | — | HM-11 | 是 | #35 |

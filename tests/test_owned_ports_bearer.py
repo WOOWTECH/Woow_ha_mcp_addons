@@ -6,8 +6,8 @@
   private one; nothing else in the production spec changes. batch2_owned_port's own checks use the same rule.
 - Endpoint.client() sends the child bearer on every request that names no Authorization itself: the supervised
   spec's own (n8n AUTH_TOKEN; WOOW_MCP_CHILD_TOKEN for the Python children from HM-06), else one synthetic value per
-  endpoint. The real children of bb48449 are run with it below: the Python ones ignore the extra header today, n8n
-  requires exactly this value.
+  endpoint. The real children are run with it below: at bb48449 the Python ones ignored the extra header and n8n
+  required exactly this value; since HM-06 every one of them requires it.
 """
 import asyncio
 from contextlib import closing, nullcontext
@@ -266,16 +266,19 @@ async def sent_authorization(endpoint, client, **kwargs):
 async def test_endpoint_client_sends_the_child_bearer_by_default(tmp_path):
     n8n = production_spec('n8n', tmp_path / 'n8n')
     hm06 = ChildSpec(('python3', '-c', 'pass'), {'PATH': '/usr/bin:/bin', 'WOOW_MCP_CHILD_TOKEN': 'C' * 43}, tmp_path)
-    current = production_spec('odoo', tmp_path / 'odoo')
-    endpoints = [owned_runtime.Endpoint('n8n'), owned_runtime.Endpoint('odoo'), owned_runtime.Endpoint('odoo'),
-                 owned_runtime.Endpoint('odoo'), owned_runtime.Endpoint(port=43210)]
+    odoo = production_spec('odoo', tmp_path / 'odoo')  # HM-06: a Python child's production spec carries its bearer
+    retired = production_spec('odoo-manage', tmp_path / 'odoo-manage')  # the retired Odoo Manage has none
+    endpoints = [owned_runtime.Endpoint('n8n'), owned_runtime.Endpoint('odoo'), owned_runtime.Endpoint('odoo-manage'),
+                 owned_runtime.Endpoint('odoo-manage'), owned_runtime.Endpoint(port=43210), owned_runtime.Endpoint('odoo')]
     try:
         endpoints[0].supervisor(n8n)
         endpoints[1].supervisor(hm06, prepared=True)
-        endpoints[2].supervisor(current)
-        endpoints[3].supervisor(current)
+        endpoints[2].supervisor(retired)
+        endpoints[3].supervisor(retired)
+        endpoints[5].supervisor(odoo)
         assert endpoints[0].bearer() == n8n.env['AUTH_TOKEN']
         assert endpoints[1].bearer() == 'C' * 43
+        assert endpoints[5].bearer() == odoo.env['WOOW_MCP_CHILD_TOKEN']
         synthetic = endpoints[2].bearer()
         assert TOKEN.fullmatch(synthetic) and endpoints[2].bearer() == synthetic != endpoints[3].bearer()
         assert TOKEN.fullmatch(endpoints[4].bearer())  # no supervisor (owned_uid_probe's Endpoint(port=...))
@@ -330,8 +333,10 @@ async def direct_session(client, url):
 
 @pytest.mark.parametrize('product', PRODUCTS)
 async def test_real_children_accept_the_default_bearer(tmp_path, log_scan, product):
-    """bb48449's real children with the shared client's default bearer: every direct request carries it and the child
-    answers; n8n (which checks its AUTH_TOKEN) refuses the same client without it."""
+    """The real children with the shared client's default bearer: every direct request carries it and the child
+    answers. Since HM-06 that bearer is the state's child token for every child (n8n's AUTH_TOKEN, the Python
+    children's WOOW_MCP_CHILD_TOKEN) and each of them refuses the same client without it (tests/test_child_bearer.py
+    has the whole matrix)."""
     with (nullcontext((None, None, None)) if product == 'n8n' else backend(product)) as (url, _calls, _offline):
         store = ProductStore(tmp_path / 'state', product)
         try:
@@ -356,11 +361,10 @@ async def test_real_children_accept_the_default_bearer(tmp_path, log_scan, produ
                 client.event_hooks['request'].append(record)
                 await direct_session(client, endpoint.url)
             assert sent and all(value == ['Bearer ' + endpoint.bearer()] for value in sent)
-            if product == 'n8n':
-                assert endpoint.bearer() == state.child_token
-                async with endpoint.client(bearer=False, timeout=15) as client:
-                    refused = await client.post(endpoint.url, headers=ACCEPT, json=INIT)
-                    assert refused.status_code == 401
+            assert endpoint.bearer() == state.child_token
+            async with endpoint.client(bearer=False, timeout=15) as client:
+                refused = await client.post(endpoint.url, headers=ACCEPT, json=INIT)
+                assert refused.status_code == 401
         finally:
             await manager.stop()
             endpoint.close()

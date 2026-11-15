@@ -847,6 +847,12 @@ def child_spec(state: ProductState, directory: Path, port: int = CHILD_PORT) -> 
         raise RuntimeError('child working directory must be empty and non-symlink')
     env = {'PATH': '/usr/bin:/bin', 'HOME': str(cwd), 'PYTHONDONTWRITEBYTECODE': '1',
            'PYTHONUNBUFFERED': '1', 'PYTHONPATH': str(app / 'vendor') + ':' + str(ROOT / 'apps/runtime')}
+    if product != 'odoo-manage':
+        # HM-06 (multi-profile plan 8.3; unreleased): the child bearer the gateway, the health check and the catalog
+        # probe send. Each of the seven Python children refuses to start without it and serves nothing else
+        # (apps/runtime/session_idle.py, install). The retired Odoo Manage (no image since 0.1.5) runs no session_idle
+        # and stays as it was.
+        env['WOOW_MCP_CHILD_TOKEN'] = state.child_token
     c = state.connection
     if product == 'odoo':
         # The reviewed pure decision module is shared by management's fallback listing and the child overlay.
