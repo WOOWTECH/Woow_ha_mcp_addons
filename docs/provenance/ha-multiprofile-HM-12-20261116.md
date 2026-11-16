@@ -2,7 +2,7 @@
 
 ## 結論
 
-- **本片只做後端與 API 測試；面板部分待 HM-11 合併後補**（第 11 節：後端給面板的回應形狀與待補清單）。
+- **本片只做後端與 API 測試；面板部分另開 PR，疊在本 PR 上**（主對話 2026-11-17 決定；第 11 節：後端給面板的回應形狀與待補清單 ①～⑦）。
   `MULTI_PROFILE_PRODUCTS` 在 repo 裡維持空集合，**今天任何產品都沒有新行為**；測試裡用 monkeypatch 開。
 - **開通的 Odoo，token 綁一個後端身分**（DQ-05，照計畫 §9；契約第 3.1 節、§8.8 #40、I11）。token 有效、已存的連線完整，而這次存檔
   （`backend` 或 `backend/patch`，經 8099 分派器）讓 url、database、username 任一改變（含 `{"connection":null}` 清空）時，依序：
@@ -36,8 +36,8 @@
   - 新子程式起不來：token 已換、舊子程式不再起，503 形狀 D 另帶 `token_rotated:true`（也帶新 state 的 `ETag`）；面板的 `child/restart`
     會在新身分上起。
   - 每種失敗各記一行 WARNING（帳號 id 前 8 碼、子程式有沒有重起；不含 token、網址、名稱）。
-  - DQ-05 原文是「提交失敗用舊 state 重起」；「結果不明不重起」是本片的細分（審查 S-1 同意安全上正確），已記進 `decisions.md` DQ-05 列，
-    **待主對話在合併前向使用者說明**。
+  - DQ-05 原文是「提交失敗用舊 state 重起」；「結果不明不重起」是本片的細分（審查 S-1 同意安全上正確），已記進 `decisions.md` DQ-05 列；
+    主對話 2026-11-17 已在合併前向使用者說明（`decisions.md` 跟著改，第 18 節）。
 - **審批不跨帳號**（HM-10 交來的待辦；FM-82、T-10）：兩個真的 Odoo 子程式（預設帳號與一個額外帳號，同一個假 XML-RPC 後端，兩帳號
   state 除了 token 與 child token 完全相同）。預設帳號 `validate_write` 拿到的審批，在額外帳號的子程式被拒（「沒在這個 server session
   驗過」），後端 0 次寫入；預設帳號自己執行得了。對照：額外帳號自己驗同一筆寫入，拿到的審批 token **字串完全一樣**（odoo-mcp 的審批
@@ -60,21 +60,25 @@
   `stop_child` 選項測試補跑：183 案全過。所以本機只剩 7 個要 root 的既有案例沒過（只在 CI 跑）。packaging unittest Ran 203、OK（skipped=5）；
   validate 過。以 CI 為準。審查修正後（2026-11-17）在這個 clone 重跑受影響的 7 組 1,886 案：只有同一個要 root 的既有案例沒過；
   packaging 照過（第 8 節）。
-- **兩個預檢**（審查修正後重跑）：秘密預檢 0 命中、帳本預檢 OK（第 13 節）。
+- **兩個預檢**（審查修正後重跑）：秘密預檢 0 命中、帳本預檢 OK（第 13 節）。rebase 後 base 改成 `origin/claude-delivery` 重跑：0 命中、OK（第 18.8 節）。
+- **rebase 到 `claude-delivery` `f4c7718`**（2026-11-17，第 18 節）：衝突在 2 個 commit（契約 3 塊、`decisions.md` 1 塊），兩邊的行都照原文；契約第 9 節本片的列改成
+  #113～#115（HM-11 已用掉 #109～#112）；帳本照 JSON 重建、63 列照檔案重算 0 漂移；HM-11 的真後端形狀比對照過，沒有語意衝突。本機：全套 6,062 案（7 案失敗、0 skip）、
+  pytest 子集 2,229 案、node 81、Playwright 117；失敗的只有要 root 的既有案例。
 - **獨立安全審查**（2026-11-16 23:00～23:45，審查者不是作者）：**通過**，必修 0 項、建議 9 項（報告
   `artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-12.md`）。9 項都採用並處理（第 17 節）。
-- **還沒做**：`checks` 秒數開 PR 後補；面板部分（第 11 節）；rebase 到 `claude-delivery` 時重編契約第 9 節本片的列號（HM-11 已在
-  PR #107 用掉 #109～#112，第 15 節）；DQ-05 的細分向使用者說明（S-1，主對話）。
+- **還沒做**：`checks` 秒數開 PR 後補；面板部分（第 11 節，另開 PR 疊在本 PR 上）。rebase 與重編列號（第 18 節）、DQ-05 的細分
+  向使用者說明（S-1，主對話 2026-11-17）都已做。
 - 接手說明：本片的 clone 開工時有同一個工作流前一次中斷時留下的草稿（三個新測試檔、幾個文件與測試的修改，沒有程式；最後修改 19:30）。
   開工前備份到 repo 外，逐條核對後保留，改了寫入失敗的設計（分成「取代之前」與「取代途中」）與對應的測試，並補了 store 層與
   `stop_child` 選項的測試。
 
 ## 1. 範圍與基準
 
-- 基準：`claude-delivery` `df686dd`（已合併 HM-00～HM-10、HM-13a、HM-14（#103）、HM-17、HM-02、HM-20、#100、HM-31（#105）、HM-09 追補（#106））。
-- 分支：`feat/ha-multiprofile-hm12-20261116`（一般 clone，沒有 push、沒有 PR）。
-- 審查修正時（2026-11-17）`claude-delivery` 已前進到 `f4c7718`（HM-11 的 PR #107 合併，佔用契約第 9 節 #109～#112）。本片仍疊在
-  `df686dd` 上；rebase、重編列號、帳本照資料重算、重跑預檢都是開 PR 前的步驟（第 15 節）。
+- 基準：`claude-delivery` `f4c7718`（2026-11-17 rebase 後；已合併 HM-00～HM-10、HM-13a、HM-14（#103）、HM-17、HM-02、HM-20、#100、
+  HM-31（#105）、HM-09 追補（#106）、HM-11（#107））。rebase 前是 `df686dd`：第 1～17 節照當時寫，rebase 見第 18 節。
+- 分支：`feat/ha-multiprofile-hm12-20261116`（一般 clone；rebase 後才 push、開 PR，第 18.12 節）。
+- 審查修正時（2026-11-17）`claude-delivery` 已前進到 `f4c7718`（HM-11 的 PR #107 合併，佔用契約第 9 節 #109～#112）。開 PR 前
+  rebase 到 `f4c7718`、重編列號、帳本照資料重算、重跑預檢與測試（第 18 節）。
 - 對齊的 PaaS：pin `69ac425`（DQ-06）。本機唯讀 PaaS repo 的 `origin/main` 是 `7087280`（任務說 `d7f5849`；本機另有 #135、#139、#138 三個
   合併，只動 EMQX、LiteLLM、Hermes 的 app，和本片無關；本片沒有 fetch、沒有 checkout）。
 - 範圍（計畫 §12.3 HM-12「做法」與 DQ-05、DQ-40 ⑨）：`Hc/gateway.py`（`backend`、`backend/patch` 先停、再提交、再起；新來源 422）、
@@ -101,10 +105,10 @@
 | `tests/test_identity_fields.py` | 說明一行（「HM-12 接線」） |
 | `tests/test_profile_runtime.py` | keyword-only 參數清單多 `stop_child` |
 | `tests/test_request_budget_gateway.py` | HM-31 釘住的 `make_apps` 參數順序最後多 `stop_child`（全套 pytest 時發現，第 8 節） |
-| `docs/multi-profile/contract.md` | 第 3.1 節 `backend` 列、第 4.1 節兩列與沒有代碼的 503、第 9 節說明段與 #113～#115（rebase 前是 #109～#111）、第 10 節一列。審查後改 `backend` 列、#114、#115，第 10 節再加一列（S-2～S-5、S-8） |
-| `docs/multi-profile/threat-model.md` | I11 的做法與測試欄；第 3 節兩條（取代途中失敗、chatter 預覽確認）；狀態列。審查後改寫取代途中失敗那一條（S-2、S-5、S-7）、加同一來源換路徑一條（S-8） |
+| `docs/multi-profile/contract.md` | 第 3.1 節 `backend` 列、第 4.1 節兩列與沒有代碼的 503、第 9 節說明段與 #113～#115（rebase 前是 #109～#111）、第 10 節一列。審查後改 `backend` 列、#114、#115，第 10 節再加一列（S-2～S-5、S-8）。rebase 後：本片的列改成 #113～#115、引用跟著改，第 10 節再加一列（第 18 節） |
+| `docs/multi-profile/threat-model.md` | I11 的做法與測試欄；第 3 節兩條（取代途中失敗、chatter 預覽確認）；狀態列。審查後改寫取代途中失敗那一條（S-2、S-5、S-7）、加同一來源換路徑一條（S-8）。rebase 後：兩處列號改成 #114、#115 |
 | `docs/multi-profile/acceptance-matrix.md` | 三個新測試檔「計畫」→「新增」並寫實際內容；`test_saved_destinations.py` 補 HM-12；審查後補案例 |
-| `docs/multi-profile/decisions.md` | 審查後：DQ-05 列補記本片的實作細分（結果不明不重起），寫明待主對話在合併前向使用者說明；變更紀錄一列（S-1）。不是新題目 |
+| `docs/multi-profile/decisions.md` | 審查後：DQ-05 列補記本片的實作細分（結果不明不重起），寫明待主對話在合併前向使用者說明；變更紀錄一列（S-1）。rebase 後：兩處改成「主對話 2026-11-17 已在合併前向使用者說明」（第 18 節）。不是新題目 |
 | 本筆記 | 新增 |
 
 沒改：`addons/`、版號、CHANGELOG、`MULTI_PROFILE_PRODUCTS`（維持空集合）、面板（`packages/mcp-admin-ui/`）、`apps/`（沒有動 `apps/runtime/*.py`
@@ -343,14 +347,14 @@
 
 | DQ | 結論（使用者已定） | 本片怎麼用 |
 |---|---|---|
-| DQ-05 | 照計畫 §9：Odoo 換 url／database／username 時先停舊子程式 → 一次寫新連線＋新 token＋history（`rotate`）→ `TokenAccess.committed()` → 起新子程式；提交失敗用舊 state 重起；回 `token_rotated:true`；只換密碼或初次設定不換 | 全部照做。「提交失敗用舊 state 重起」再細分：磁碟上還是舊 token（store 拒絕、取代之前失敗、寫之前丟出例外）→ 重起；取代途中失敗（結果不明）或新 token 已在磁碟上 → 不重起（第 3.2 節，契約 #114）。審查 S-1：細分已記進 `decisions.md` DQ-05 列，**待主對話在合併前向使用者說明**。Nextcloud、Hermes 的比照不在本片 |
+| DQ-05 | 照計畫 §9：Odoo 換 url／database／username 時先停舊子程式 → 一次寫新連線＋新 token＋history（`rotate`）→ `TokenAccess.committed()` → 起新子程式；提交失敗用舊 state 重起；回 `token_rotated:true`；只換密碼或初次設定不換 | 全部照做。「提交失敗用舊 state 重起」再細分：磁碟上還是舊 token（store 拒絕、取代之前失敗、寫之前丟出例外）→ 重起；取代途中失敗（結果不明）或新 token 已在磁碟上 → 不重起（第 3.2 節，契約 #114）。審查 S-1：細分已記進 `decisions.md` DQ-05 列；主對話 2026-11-17 已在合併前向使用者說明。Nextcloud、Hermes 的比照不在本片 |
 | DQ-40 (a) ⑨ | 改 url 來源要重填秘密：全部產品，產品開通後才生效 | `backend_edit.new_origin_refused`；九個產品都測；沒開通照今天 |
 | DQ-40 (a) ⑩ | 換使用者欄位換 token 擴到 Nextcloud、Hermes | 不在本片（HM-22、HM-24）；`products.IDENTITY_BOUND` 只放 Odoo，`identity_fields.TOKEN_ROTATING` 已有它們的欄位 |
 | DQ-30 | Odoo 讀取並行首發維持 1 | 沒改 `apps/odoo/launch.py`；`test_every_odoo_tool_still_runs_on_the_childs_one_worker` 釘住 `BoundedTools(capacity=1)` |
 | DQ-02 (a) | 新帳號不記 history | 不受影響：建立帳號不是換身分（第一筆連線是初次設定，不換） |
 | DQ-09 | 撞號 503 | 新 token 照 `token/rotate` 用 `secrets.token_urlsafe(32)`，不另外避開別的帳號的 token（機率可忽略；真的撞了照 DQ-09 回 503） |
 | DQ-15、DQ-17 | 帳號 ETag 帶 id；`X-MCP-Profile` | 換身分後 ETag 照新 state 算；API 測試全部經 8099 分派器、帶 `X-MCP-Profile` |
-| DQ-36 | 署名、不合併 | commit 不加署名；不 push、不開 PR |
+| DQ-36 | 署名、不合併 | commit 不加署名；本片不合併（rebase 後 push、開 PR；合併由主對話在 CI 全綠後做） |
 | DQ-37 (a) | 同 uid＝同一信任邊界 | chatter 預覽確認那一條的理由（威脅模型第 3 節） |
 
 沒有碰到待定題（DQ-35、DQ-42、第 3 節各題都和本片無關）。
@@ -372,7 +376,7 @@
 | 威脅模型 I11 | 測試欄 | 做了 |
 | HM-06、HM-08 | 沒有交給 HM-12 的事項 | 沿用 HM-08 的路由摘要與 lease、HM-14 的結尾，沒有改它們 |
 
-## 11. 面板部分（待 HM-11 合併後補；本片不改 `Hui/`）
+## 11. 面板部分（另開 PR，疊在本 PR 上；本片不改 `Hui/`）
 
 後端給面板的回應（開通後；沒開通照今天，面板不用分支）：
 
@@ -399,7 +403,7 @@
 ## 13. 預檢結果
 
 審查修正後（2026-11-17）在 `dc837c5`（最後一個改程式與文件的 commit；工作樹乾淨）重跑；本筆記的 commit 只加這份筆記的文字，開 PR 前
-rebase 後在最後的 HEAD 再跑一次（第 15 節）。
+rebase 後在最後的 HEAD 再跑一次（第 18.8 節）。
 
 - 秘密預檢（`dc837c5`）：`--base df686dd --head HEAD --full`，gitleaks 8.28.0（pin、驗過），10 個 commit＋HEAD 樹＋整段歷史，**0 命中**。
 - 帳本預檢（`dc837c5`）：`--base df686dd`：`runtime-patches.json` 175、`runtime-sources.json` 70、`tool-surface.json` 159 個摘要都 0 漂移、
@@ -419,13 +423,14 @@ rebase 後在最後的 HEAD 再跑一次（第 15 節）。
 
 | 條件 | 狀態 |
 |---|---|
-| 全綠 | 本機：除了 7 個要 root 的既有案例（只在 CI 跑），全部通過（全套 6,047 案；全套之後改的與補跑的 183 案；審查修正後受影響的 7 組 1,886 案只剩其中 1 案）；CI（root、0 skip）開 PR 後才知道 |
+| 全綠 | 本機：除了 7 個要 root 的既有案例（只在 CI 跑），全部通過（全套 6,047 案；全套之後改的與補跑的 183 案；審查修正後受影響的 7 組 1,886 案只剩其中 1 案；rebase 後見第 18.7 節）；CI（root、0 skip）開 PR 後才知道 |
 | 非 Odoo 產品與開關關時行為不變（DQ-40 ⑨ 只在開通後） | 本機通過：沒開通的 Odoo 換身分照今天（`test_switched_off_an_identity_change_keeps_todays_answer_order_and_token`）、九個產品沒開通時新來源照今天存（`test_switched_off_a_url_moved_to_another_origin_keeps_todays_save`）、開通的 Hermes／Nextcloud／EMQX／LiteLLM／Headscale 不換 token（`test_switched_on_the_other_products_keep_their_token_on_a_changed_backend`）；HM-01 黃金回歸與兩個契約凍結（含開通重跑）照過（第 7 節） |
-| 獨立安全審查 | **通過**（2026-11-16 23:00～23:45，審查者不是作者；報告 `artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-12.md`）：必修 0 項、建議 9 項，都採用並處理（第 17 節）。S-1 的細分待主對話在合併前向使用者說明 |
+| 獨立安全審查 | **通過**（2026-11-16 23:00～23:45，審查者不是作者；報告 `artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-12.md`）：必修 0 項、建議 9 項，都採用並處理（第 17 節）。S-1 的細分主對話 2026-11-17 已在合併前向使用者說明 |
 
 ## 15. 還沒解決、交給後面的片
 
-- **面板（HM-11 合併後，本片的第二部分）**：第 11 節的待補清單。
+- **面板（另開 PR，疊在本 PR 上；主對話 2026-11-17 決定）**：第 11 節的待補清單 ①～⑦。開關關時面板與回應逐位元照今天，
+  所以分兩個 PR 合併不影響已發版的產品。
 - **HM-22（Nextcloud 開通）**：換 url／username 換 token（DQ-40 ⑩，PaaS #154 `0f94aa4`）：把 `nextcloud` 加進 `products.IDENTITY_BOUND`，
   沿用本片的 `rebind_identity`、`ProductStore.rebind`、`stop_child`，補它自己的測試；PaaS #152 的存檔 SSRF 對照 HM-20。
 - **HM-24（Hermes 開通）**：換 gateway_url／dashboard_url／dashboard_username 換 token，同上。注意 Hermes 的 dashboard 可以整組清空
@@ -442,7 +447,8 @@ rebase 後在最後的 HEAD 再跑一次（第 15 節）。
 - **HM-29（回補 PaaS 的建議）**：① 新來源要重填秘密擴到全部產品（PaaS 只有 Headscale）；② PaaS 的寫入在 replace 之後失敗時，快取留舊值、
   磁碟可能已是新值（兩邊不一致；HA 毒化到重啟）；③ 新來源只比來源、同一來源換路徑不算（HA 的已知限制；PaaS Headscale 比整條網址），
   兩邊要不要一致一起說明（審查 S-8）。
-- **開 PR 前（rebase 到 `claude-delivery`）**：HM-11 已合併（PR #107，`f4c7718`），佔用契約第 9 節 #109～#112。本片的三列改成接在當時的
+- **開 PR 前（rebase 到 `claude-delivery`）**：2026-11-17 已做（第 18 節；本片的三列是 #113～#115）。以下是當時寫的待辦：
+  HM-11 已合併（PR #107，`f4c7718`），佔用契約第 9 節 #109～#112。本片的三列改成接在當時的
   最後一列後面（若中間沒有別的片合併，是 #113～#115），一次改完：契約第 3.1 節 `backend` 列（「§8.8 #110」）、第 4.1 節
   `CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN` 列（「#111」）、第 9 節說明段與三列、第 10 節本片兩列；威脅模型第 3 節（#110、#111）；
   本筆記；PR 說明。程式、測試、帳本的 `change` 文字已經不寫這三個列號（審查 S-6），rebase 不用為列號重算帳本；但 `runtime-patches.json`、
@@ -464,7 +470,9 @@ rebase 後在最後的 HEAD 再跑一次（第 15 節）。
 | `3f22c39` | fix(core)：寫入失敗一律 503、是否重起看磁碟上的 token（S-5）；程式說明拿掉列號（S-6）、補同來源換路徑的已知限制（S-8） |
 | `0302ad1` | chore(provenance)：審查修正改到的 3 個列管檔的帳本重算（`change` 拿掉列號） |
 | `dc837c5` | docs(multi-profile)：契約、威脅模型、`decisions.md`（DQ-05 細分）、驗收矩陣（S-1～S-5、S-7、S-8） |
-| （本次） | docs(provenance)：本筆記補審查意見處理表與重跑結果 |
+| `d8d9ecf` | docs(provenance)：本筆記補審查意見處理表與重跑結果 |
+
+rebase 後的編號與之後新加的 commit 見第 18.10 節。
 
 ## 17. 獨立安全審查與意見處理（2026-11-16 審查；2026-11-17 處理）
 
@@ -477,7 +485,7 @@ rebase 後在最後的 HEAD 再跑一次（第 15 節）。
 
 | # | 意見 | 決定 | 怎麼處理 | 證據 |
 |---|---|---|---|---|
-| S-1 | DQ-05「提交失敗用舊 state 重起」被細分成「結果不明不重起」，只寫在契約與 provenance | 採用 | `decisions.md` DQ-05 列補記細分（不是新題目），狀態欄與變更紀錄寫明**待主對話在合併前向使用者說明**；本筆記結論、第 9 節同步。向使用者說明要由主對話做（本片不能代答） | `dc837c5` |
+| S-1 | DQ-05「提交失敗用舊 state 重起」被細分成「結果不明不重起」，只寫在契約與 provenance | 採用 | `decisions.md` DQ-05 列補記細分（不是新題目），狀態欄與變更紀錄寫明**待主對話在合併前向使用者說明**；本筆記結論、第 9 節同步。向使用者說明要由主對話做（本片不能代答）。主對話 2026-11-17 已說明，兩處改成「已在合併前向使用者說明」 | `dc837c5`、`87af4cd` |
 | S-2 | 預設帳號的新 state 檔已換上時 8081 所有帳號都 503，契約沒寫 | 採用 | 契約第 3.1 節 `backend` 列與 #114 補這句，另寫明預設帳號 `os.replace` 失敗只關預設帳號；威脅模型那一條同步；新測試 `test_the_default_profiles_write_of_unknown_outcome_closes_what_reads_its_state`（兩個時點）把兩種情況都釘住 | `2b09336`、`dc837c5`；M6 擋下 |
 | S-3 | 換身分回應的 `ETag` 沒有測試（X12 存活） | 採用 | `test_a_changed_identity_…`（7 案）、預設帳號那案、`test_a_new_child_that_cannot_start_…` 都斷言回應的 `ETag` 等於下一次 bootstrap 的 `ETag`（也就是新 state 的 revision） | `2b09336`；M1（＝X12）擋下 |
 | S-4 | 「分派器不再把舊 token 對到任何帳號」沒有測試（X18 存活） | 採用 | 換身分後斷言 `McpDispatcher.resolve(舊 token)` 是空的、`resolve(新 token)` 只有該帳號（額外帳號與預設帳號）；契約與第 3.3 節寫明兩層都拒絕 | `2b09336`；M2（＝X18）擋下 |
@@ -488,3 +496,186 @@ rebase 後在最後的 HEAD 再跑一次（第 15 節）。
 | S-9 | 測試說明寫了不存在的函式名 | 採用 | `tests/test_upgrade_zero_rewrite.py` 改成 `backend_edit.new_origin_refused` | `2b09336` |
 
 - 沒處理的：無。審查第 4 節的觀察也照寫進來：HM-13c 不用另擋換身分（第 15 節）、開關關的兩個測試要保留（第 7 節）、兩道防線（第 3.3 節）。
+
+## 18. rebase 到 claude-delivery（2026-11-17）
+
+第 1～17 節照 rebase 前寫，裡面的 commit 編號是 rebase 前的（對照在第 18.10 節）；列號已照 rebase 後的改（第 18.4 節）。
+證據在 `artifacts/ha-multiprofile-parity-20261114/wave4/evidence-rebase-HM-12/`（`tools/` 是用到的腳本，副檔名多加 `.txt`；`logs/` 是 log
+與 junit；`conflicts/` 是兩個衝突 commit 解衝突前的檔，含衝突標記）。
+
+### 18.0 結論
+
+- 基準換成 `claude-delivery` `f4c7718`（HM-11 的 PR #107 合併後）。11 個 commit 照原順序重放，衝突在 2 個 commit，都是文件
+  （契約 3 塊、`decisions.md` 1 塊）。每塊都是兩邊各自加的行：新基準的行照原文放前面，本片的行照原文接在後面。
+  程式、測試、帳本的 patch 和 rebase 前相同。
+- 契約第 9 節本片的三列從 #109～#111 改成 #113～#115（HM-11 已用掉 #109～#112）。契約第 3.1、4.1、9、10 節與威脅模型第 3 節
+  的引用一次改完，第 10 節加一列記這次改號（`6377159`）；本筆記另一個 commit 改（`77e8f96`）。
+- `decisions.md` DQ-05 列與第 5 節本片那列改成「主對話 2026-11-17 已在合併前向使用者說明（審查判定安全上正確）」（`87af4cd`）。
+- 帳本：git 自動合併。再以新基準的帳本為底照 JSON 重建（加回本片 6 列的說明、SHA-256 照 rebase 後的檔案重算），和合併結果
+  逐位元相同；63 列全部照檔案重算，0 漂移。
+- 語意衝突：沒有。HM-11 的真後端形狀比對沒有 `backend`、`backend/patch` 的案例，在新基準 10 個情境（94 個案例）照過；
+  面板今天遇到本片的新回應也不會壞（第 18.6 節）。
+- 本機：pytest 子集 10 組 2,229 案、全套 6,062 案（7 案失敗、0 skip），失敗的只有要 root 的既有案例；node 81、build-closure PASS、
+  Playwright 117；`validate.py` PASS、packaging unittest Ran 203 OK（skipped=5）、`tool_inventory.py` exit 0。
+- 兩個預檢 OK；`origin/claude-delivery..HEAD` 每個 commit 都沒有原始雙向控制字元（第 18.8、18.9 節）。
+
+### 18.1 範圍
+
+- `git fetch origin`：`origin/claude-delivery`＝`f4c7718`。先開本機備份分支 `backup/hm12-before-rebase-20261117`（指向 `d8d9ecf`，
+  不 push）。開始時 clone 乾淨。
+- `git log --oneline df686dd..d8d9ecf` 是 11 個。`df686dd` 是 `f4c7718` 的祖先（#107 用 merge commit 合併），所以直接
+  `git rebase origin/claude-delivery`，只重放這 11 個。
+- 新基準帶進來的（`df686dd..f4c7718`，39 個 commit）：HM-11（PR #107）。改了 22 個檔：面板（`packages/mcp-admin-ui/` 的
+  `src/`、fixture、測試、README、Playwright 設定）、`packaging/ha_p9_admin.mjs`、`tests/test_panel_profile_api_shapes.py`、
+  `docs/admin-write-contracts.md`、契約、`decisions.md`、HM-11 筆記、帳本。
+- 和本片重疊的只有 3 個檔：契約、`decisions.md`、帳本。威脅模型、驗收矩陣、`gateway.py` 等新基準沒有改，沒有衝突。
+- 依賴：`df686dd..f4c7718` 沒有動 `uv.lock`、`package.json`、`package-lock.json`、`pyproject.toml`、`requirements*`、
+  `packaging/inputs.json` 與 patch 檔，沒有重跑 `setup_repo_env.sh`。
+
+### 18.2 衝突與處理
+
+解衝突用 repo 外的 `resolve_keep_both.py`：逐塊先斷言兩邊的行數與每行的開頭，再確認新基準那一側是 rebase 中 HEAD 的原文、
+本片那一側是重放中 commit 的原文，最後寫成「新基準的行在前、本片的行在後」，兩邊都不改字。列號不在這一步改（第 18.4 節）。
+兩邊改到同一列的情況沒有發生（各自只加列，或改不同的列）。
+
+| rebase 後（原本） | 衝突 | 處理 |
+|---|---|---|
+| `aad73b1`（`c855d2f`） | 契約 3 塊：第 9 節說明段最後一行（HM-11 一行／本片一行）；表尾的列（HM-11 的 #109～#112／本片的 #109～#111）；第 10 節表尾（HM-11 三列／本片一列） | 每塊 HM-11 的行在前、本片的行在後，都照原文。威脅模型、驗收矩陣由 git 自動合併（新基準沒有改） |
+| `6130ef3`（`dc837c5`） | `decisions.md` 1 塊：第 5 節表尾（HM-11 一列／本片一列） | HM-11 那列在前、本片那列在後。DQ-05 列由 git 自動合併（新基準改的是 DQ-12、DQ-14、DQ-31）；契約本片的 §3.1 `backend` 列、#110、#111 與第 10 節一列也自動合併 |
+| 帳本 2 個（`9db93f5`（`4cb0cac`）、`2b868cc`（`0302ad1`）） | 沒有：新基準改的是 5 個面板檔的列，本片改的是 6 個核心檔的列 | git 自動合併；之後照 JSON 重建核對（第 18.5 節） |
+| 其他 7 個 | 沒有 | 照原樣重放。`bb9226e`（`18141e9`）改的契約列只是上下文多了 HM-11 的列 |
+
+### 18.3 核對
+
+- `git range-diff df686dd..d8d9ecf origin/claude-delivery..ceb9aed`：8 個「=」（patch 相同，含帳本 2 個）；3 個「!」（`aad73b1`、
+  `bb9226e`、`6130ef3`）差的只是上下文行（HM-11 的列），增刪行相同。
+- 逐 commit（`same_change.py`，增刪行當多重集合比）：`c855d2f` 的契約 +9 −4、威脅模型 +10 −1、驗收矩陣 +4 −4；`dc837c5` 的契約
+  +4 −3、威脅模型 +11 −4、驗收矩陣 +1 −1、`decisions.md` +2 −1：重放的都和原 commit 相同。
+- 整段（`git diff origin/claude-delivery ceb9aed` 對 `git diff df686dd d8d9ecf`）：契約 +10 −4、`decisions.md` +2 −1、帳本 +12 −12
+  逐行相同。本片其他 17 個檔和 `d8d9ecf` 逐位元相同；新基準改的 22 個檔，除了重疊的 3 個，和 `f4c7718` 逐位元相同；兩邊都沒碰的
+  900 個檔和 `df686dd` 相同（`blob-compare.txt`）。
+
+### 18.4 列號對照（契約第 9 節；新基準最後是第 112 列）
+
+| rebase 前（`df686dd` 基準） | rebase 後（`f4c7718` 基準） | 項目 |
+|---|---|---|
+| #109 | #113 | 換身分存檔的回應 |
+| #110 | #114 | 換身分途中失敗 |
+| #111 | #115 | 新來源要重填秘密的判定 |
+
+- 新基準的 #109～#112 是 HM-11 的面板列，本片沒有引用。#1～#108 沒有移動，本片引用的 #39、#40、#41、#49、#59、#60、#86 不變。
+- 改了的地方（`6377159`，`renumber_docs.py`：每處先斷言原文剛好出現一次，HM-11 的列與引用斷言一字不變）：契約第 3.1 節 `backend`
+  列（#110 → #114）、第 4.1 節 `CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN` 列（#111 → #115）、第 9 節說明段本片那行（寫明原稿
+  列號與往後重編的原因）與三列、第 10 節本片的兩列；第 10 節另加一列記這次改號；威脅模型第 3 節兩處（#110 → #114、#111 → #115）。
+  本筆記 12 處（`77e8f96`，`notes_renumber.py`；其中兩處順便寫明 rebase 前的列號）；PR 說明（repo 外的草稿）。
+- 不用改的地方：程式、測試、帳本 `change` 文字（審查 S-6 已拿掉本片的列號；`git diff` 逐行查過，只剩沒有移動的 #40、#41、#59、
+  #60 與「HM-12's row(s)」的描述）；驗收矩陣與 `decisions.md` 沒有寫這幾個列號（`git grep` 核對）。
+- 本筆記第 15 節「開 PR 前」那段與 S-6 那列講的是當時的舊號，照原文（S-6 那列加一句指到新號）。
+- commit 訊息照寫的當時，不改寫（舊號就是上表左欄）：`917d70d`（原 `1abf02f`）寫 #109、#110、#111；`aad73b1`（原 `c855d2f`）
+  寫 #109～#111；`bb9226e`（原 `18141e9`）寫 #110；`6130ef3`（原 `dc837c5`）寫 #110、#111。`c72e172`、`9049bae`、`ceb9aed` 寫的
+  #109～#112 是 HM-11 的列號。審查報告 `wave4/review-HM-12.md` 與之前的證據目錄也是舊列號、舊 commit 編號。
+
+### 18.5 帳本（`docs/provenance/runtime-patches.json`）
+
+不只看文字合併：用 `rebuild_ledger.py` 以新基準的帳本為底照 JSON 重建，再和 git 合併的結果逐位元比。
+
+- 新基準 63 列，rebase 後 63 列（本片沒有新列）。57 列和新基準逐欄相同（含 HM-11 改的 5 個面板檔）。
+- 本片改的 6 列：`change` 是新基準的文字接本片在列尾加的那段（腳本確認本片只在列尾追加）；`sha256` 照 rebase 後的實際內容重算：
+
+| 列管檔 | 新基準 | rebase 前（`d8d9ecf`） | rebase 後 |
+|---|---|---|---|
+| `products.py` | `7fdf98c9d0e7` | `6ad274b238f3` | `6ad274b238f3` |
+| `gateway.py` | `1f954cf11cde` | `84e331a9006f` | `84e331a9006f` |
+| `profile_runtime.py` | `048e73896820` | `198afd436a3b` | `198afd436a3b` |
+| `backend_edit.py` | `af3495130746` | `c926ace49e5b` | `c926ace49e5b` |
+| `identity_fields.py` | `af6e130ceb36` | `2dbd605c1834` | `2dbd605c1834` |
+| `config.py` | `78a2f79d76fd` | `c00cae167d7e` | `c00cae167d7e` |
+
+- 重算的值和 rebase 前相同：新基準沒有動這 6 個檔。
+- 63 列全部照 HEAD 的檔案重算 SHA-256：0 漂移。重建的帳本和 HEAD 的逐位元相同；兩個帳本 commit（`9db93f5`、`2b868cc`）各自
+  照它們那時的檔案重建，也和 git 合併的結果逐位元相同。JSON 照 repo 的寫法（`indent=2`、`ensure_ascii=False`、結尾換行）。
+- 沒有動 `apps/runtime/*.py`、`apps/*/launch.py`：不用 `tool_inventory.py --write`；檢查模式 exit 0。帳本預檢也 OK（第 18.8 節）。
+
+### 18.6 語意衝突（HM-11 的面板、真後端形狀比對）
+
+- `tests/test_panel_profile_api_shapes.py` 在新基準的真後端照過：10 個情境（94 個案例）全過，2.2 秒。`profile-api-cases.json`
+  沒有 `backend`、`backend/patch` 的案例（錄的是帳號路由、bootstrap、token、policy、endpoint、收據、重啟），本片改的回應形狀
+  不在裡面；`expect` 與 fixture 都不用改。fixture 對同一份案例的 `profile-api-parity.spec` 也 10 案全過。
+- HM-11 的面板遇到本片的新回應（只在開通後出現；開關關時逐位元照今天）：
+  - 換身分存檔 200：本體有 `profile:{id}` 回聲與 `saved:true`，`AdminApi.mutate` 照常接受；面板還不看 `token_rotated`，沒有提示。
+  - 換身分、新子程式起不來（形狀 D＋`token_rotated`）：`config_apply_failed` 是面板認得的代碼，照今天的文字。
+  - 422 `CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN`：錯誤回應不比回聲；代碼不在面板的已知表，顯示 422 的通用文字
+    「欄位驗證未通過。請確認 URL、必要欄位與憑證格式。」
+  - 503 `request denied`／`state unavailable`：照今天 503 的通用文字。
+  - 所以不改面板也不會壞，只是沒有本片的專屬提示。這些放面板 PR（第 11 節待補 ①～⑦），疊在本 PR 上另開。`packages/mcp-admin-ui/`
+    本片一個字都沒改。
+
+### 18.7 本機檢查（一般使用者；`ha_env.sh` 的 TMPDIR，跑完用完整路徑刪掉；pytest 都排在共用鎖後面）
+
+程式在 `87af4cd` 之後沒有再改：之後的 commit 只改本筆記（測試不讀筆記），表裡的結果在最後的 HEAD 也成立。
+
+| 檢查 | 結果 |
+|---|---|
+| `npm test --prefix packages/mcp-admin-ui` | 81 案全過、0.24 秒（`87af4cd`） |
+| `npm run build`＋`node tests/build-closure.mjs` | PASS |
+| Playwright 全套（`single`＋`profiles-on`；`--output` 與 `UI_EVIDENCE_DIR` 放 TMPDIR） | 117 案全過（`single` 97、`profiles-on` 20），3.8 分鐘（`87af4cd`，01:33～01:37，開始與結束時工作樹都乾淨）；其中 `profiles.spec` 16 案、`profile-api-parity.spec` 10 案 |
+| pytest 子集 10 組（`87af4cd`，00:36 取得鎖、00:41 跑完） | 2,229 案，1 案失敗、0 skip：本片與相關 321（新 3 檔 77 案約 6.1 秒）、HM-10 管理 API 64、HM-08／HM-14 路由與佇列 239（含 `test_router_passthrough`）、HM-01 黃金回歸與兩個契約凍結 45、其他相關 18 檔 698（含 `test_monitor_cancel`）、讀帳本 3 檔 123、讀原始碼與 log 遮罩 7 檔 396、HM-11 形狀比對 10、HM-31 預算與結構 144（`test_request_budget`、`test_request_structure`；`test_request_budget_gateway` 在第一組）、`test_output_schemas` 189。失敗的 1 案是 `test_profile_store.py::test_mode_and_owner_as_the_add_on_user`（既有、要 root） |
+| pytest 全套（`tests`，CI 的指令加 `-rfEs --durations=30`，正式 conftest） | 6,062 案：6,055 過、7 案失敗、0 skip，32 分 34 秒（`87af4cd`；01:33 取得鎖、02:05 跑完，開始與結束時工作樹都乾淨、HEAD 都是 `87af4cd`）。失敗的 7 案就是要 root 的既有案例（`test_owned_executable` 1、`test_profile_store` 1、`test_restore_detection` 5，都停在 uid 是不是 0 的那一行斷言）。2 個 DeprecationWarning（websockets.legacy，既有）。比 HM-11 rebase 時的全套（5,985 案）多 77 案，就是本片新 3 檔的案數 |
+| `packaging/validate.py`（ci-venv 的 Python 3.13.15） | PASS（`87af4cd`） |
+| packaging unittest（CI 的做法：離線暫存 venv，`uv sync --frozen --no-dev` 再裝 `requirements-ci.txt`） | Ran 203、OK（skipped=5） |
+| `scripts/tool_inventory.py` | exit 0 |
+| 規則核對 | `addons/`、CHANGELOG、`upgrade-notes.yaml`、`.github/`、`tests/conftest.py`、`packages/mcp-admin-ui/`、`apps/`、`packaging/` 對新基準 0 行差異；沒有改任何版號；`MULTI_PROFILE_PRODUCTS` 是空集合；commit 身分都是 woowtech、沒有 AI 署名 |
+
+### 18.8 預檢（base 都是 `origin/claude-delivery`）
+
+| 預檢 | 指令 | 結果 |
+|---|---|---|
+| 秘密 | `.venv/bin/python -I scripts/secret_precheck.py --tools SP:hm01/gitleaks-tools --repo . --base origin/claude-delivery --head HEAD --full` | OK，0 命中（gitleaks 8.28.0，pin、驗過；`f4c7718..77e8f96` 14 個 commit，另掃 HEAD 的樹與整段歷史） |
+| 帳本 | `.venv/bin/python -I scripts/ledger_precheck.py --repo . --base origin/claude-delivery` | OK：`runtime-patches.json` 176 項、`runtime-sources.json` 70 項、`docs/tool-surface.json` 159 項，0 漂移、0 缺；改過的 20 個檔裡 6 個核心檔由帳本釘住、帳本本身有改；沒有帳本沒列的執行檔（`77e8f96`） |
+
+本筆記 commit 之後再跑一次，結果記在 PR 說明。
+
+### 18.9 雙向控制字元
+
+`bidi_scan.py` 逐 commit 查 `origin/claude-delivery..HEAD`：那個 commit 的樹裡、這段範圍碰過的每個文字檔的全文；那個 commit
+自己新增的行；commit 訊息（標題與內文）。`77e8f96`（本筆記之前的 14 個 commit）上：U+202A～202E、U+2066～2069 合計 0 個；
+U+200E、U+200F、U+061C 也是 0 個。這段範圍碰過的 20 個檔都是文字檔，沒有跳過的檔。本筆記 commit 之後再跑一次，結果記在 PR 說明。
+
+### 18.10 commit 對照
+
+「相同」＝`git range-diff` 的「=」（patch 相同）。
+
+| # | rebase 前 | rebase 後 | 說明 |
+|---|---|---|---|
+| 1 | `82a0323` | `a5740d8` | 相同 |
+| 2 | `1abf02f` | `917d70d` | 相同 |
+| 3 | `4cb0cac` | `9db93f5` | 相同（帳本，自動合併；照 JSON 重建核對） |
+| 4 | `c855d2f` | `aad73b1` | 衝突（契約 3 塊）；兩邊照原文 |
+| 5 | `18141e9` | `bb9226e` | 增刪行相同（上下文多了 HM-11 的列） |
+| 6 | `8b56b70` | `50924ff` | 相同 |
+| 7 | `2b09336` | `c72e172` | 相同 |
+| 8 | `3f22c39` | `9049bae` | 相同 |
+| 9 | `0302ad1` | `2b868cc` | 相同（帳本，自動合併；照 JSON 重建核對） |
+| 10 | `dc837c5` | `6130ef3` | 衝突（`decisions.md` 1 塊）；兩邊照原文 |
+| 11 | `d8d9ecf` | `ceb9aed` | 相同 |
+
+rebase 之後新加的 commit：
+
+| commit | 內容 |
+|---|---|
+| `6377159` | 契約與威脅模型：本片的列改成 #113～#115，第 10 節加一列 |
+| `87af4cd` | `decisions.md`：DQ-05 的細分主對話 2026-11-17 已在合併前向使用者說明 |
+| `77e8f96` | 本筆記改列號（12 處；第 18.4 節） |
+| 本筆記 | 第 18 節；結論、第 1、2、9、11、13～17 節的狀態 |
+
+### 18.11 只在 CI 跑的測試、CI 時間
+
+- 這次沒有新增或改動任何測試。照第 8.1 節：沒有只在 CI 跑的新測試；要 root 的 7 個既有案例本機一定失敗。
+- 新 3 檔本機約 6.1 秒（第 18.7 節），和第 8.2 節的推估一樣；`checks` 實際秒數 CI 跑完再補。
+
+### 18.12 交給主對話與後面的片
+
+- push：`git push -u origin feat/ha-multiprofile-hm12-20261116`（push 前查過遠端沒有這個分支）。備份分支只在本機。PR 只開一個、不合併。
+- 面板：另開 PR，疊在本 PR 上（第 11 節待補 ①～⑦）。開關關時面板與回應逐位元照今天，所以分兩個 PR 合併不影響已發版的產品。
+- 列號：HM-13b（PR #108）的分支也在契約第 9 節加列（它那邊是 #113～#116）。先合併的拿號，後合併的一方 rebase 後接在當時最後一列後面重排。
+- 其餘照第 15 節（HM-22、HM-24、HM-13c、HM-26、HM-18、HM-19b、HM-29）。
