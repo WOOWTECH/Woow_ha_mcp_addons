@@ -29,6 +29,9 @@ CURRENT_POST_SOURCE_BYTES = {
         'emqx', '89c6f167d6b9487a2ae6373ab498dd9eef9911895effe9e6d7c0c61c9ac4841d'),
     'apps/hermes/vendor/hermes_mcp_server/server.py': (
         'hermes', '922ff27d13a1c67a0b0d6fd8cbd9c764d9697cd26f63b0189d7dbfba95e0d94a'),
+    # HM-32: the EMQX client asks for no idle backend connection (PaaS #135); no tool, schema or handler change.
+    'apps/emqx/vendor/emqx_mcp_server/lifespan.py': (
+        'emqx', 'acf72dc8655d6b702a600e4e936b4bfddfdb137824747de91022085f21e9d44b'),
     # HM-04: the child port is a parameter (3000 by default); HM-20: WOOW_MCP_DENY_LOOPBACK once n8n is switched on.
     # No tool, schema or handler change.
     'apps/n8n/n8n_adapter.py': ('n8n', 'e3df8d0f88233051e1b399f45ed1e42e4c3fb621324117f77e0b386f3277309c'),

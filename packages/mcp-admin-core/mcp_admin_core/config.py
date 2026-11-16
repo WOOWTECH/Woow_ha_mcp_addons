@@ -93,7 +93,19 @@ class State(BaseModel):
         return value
 
 
-def strict_json(raw: bytes):
+# HM-30 review 2 MF-1: with a checkpoint, strict_json also calls it once every NUMBERS_A_CHECKPOINT numbers it parses.
+NUMBERS_A_CHECKPOINT = 1024
+
+
+def strict_json(raw: bytes, *, checkpoint=None):
+    """HM-30: checkpoint, when given, is called once for every JSON object the parser builds, before it builds it
+    (reply_worker.breathe: the reply worker lets the event loop have the GIL there); the value and every error stay the
+    same. Left out, as before.
+
+    HM-30 review 2 MF-1: with a checkpoint, it is also called once every NUMBERS_A_CHECKPOINT numbers: json's C scanner
+    builds a flat array of numbers (record ids, a time series) in one call otherwise, with no object to stop at, and it
+    calls parse_int and parse_float for each number (int itself gives the same value and raises the same ValueError past
+    the digits limit). A flat array of strings, true, false, null or empty arrays has no such hook: still one call."""
     def pairs(items):
         result = {}
         for key, value in items:
@@ -101,6 +113,10 @@ def strict_json(raw: bytes):
                 raise ValueError("duplicate key")
             result[key] = value
         return result
+
+    def checked(items):
+        checkpoint()
+        return pairs(items)
 
     def constant(_):
         raise ValueError("nonfinite number")
@@ -111,7 +127,28 @@ def strict_json(raw: bytes):
             raise ValueError("nonfinite number")  # e.g. 1e400 would re-serialize as Infinity
         return value
 
-    return json.loads(raw, object_pairs_hook=pairs, parse_constant=constant, parse_float=number)
+    if checkpoint is None:
+        return json.loads(raw, object_pairs_hook=pairs, parse_constant=constant, parse_float=number)
+    count = 0
+
+    def counted_float(text):
+        nonlocal count
+        count += 1
+        if count >= NUMBERS_A_CHECKPOINT:
+            count = 0
+            checkpoint()
+        return number(text)
+
+    def counted_int(text):
+        nonlocal count
+        count += 1
+        if count >= NUMBERS_A_CHECKPOINT:
+            count = 0
+            checkpoint()
+        return int(text)
+
+    return json.loads(raw, object_pairs_hook=checked, parse_constant=constant, parse_float=counted_float,
+                      parse_int=counted_int)
 
 
 class Store:
@@ -276,14 +313,22 @@ class Store:
         self._write(updated)
         return updated
 
-    def _write(self, value: State):
+    def _write(self, value: State, *, poison_before_replace: bool = True):
+        """Replace the state file with value durably: a new file written and synced, renamed over it, the directory
+        synced. A failure poisons the store (no read or write until a restart: its outcome is unknown) and raises.
+
+        poison_before_replace=False (HM-12: ProductStore.rebind, a switched-on backend identity change): a failure
+        before the rename (the new file could not be made, written or synced) leaves the store usable, since the state
+        file is then certainly the one before; from the rename on, every failure still poisons it."""
         temporary = self.directory / (".state-" + secrets.token_hex(16))
+        replacing = False
         try:
             fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
             with os.fdopen(fd, "w") as stream:
                 stream.write(value.model_dump_json())
                 stream.flush()
                 os.fsync(stream.fileno())
+            replacing = True
             os.replace(temporary, self.path)
             directory_fd = os.open(self.directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
             try:
@@ -291,7 +336,8 @@ class Store:
             finally:
                 os.close(directory_fd)
         except OSError:
-            self._poisoned = True
+            if replacing or poison_before_replace:
+                self._poisoned = True
             raise ConfigError("durable state write failed; manual recovery required") from None
         finally:
             temporary.unlink(missing_ok=True)

@@ -43,20 +43,23 @@ async function observed(item, response, context) {
   return seen;
 }
 
-// The fixture's state for a scenario (the cases file's setup).
+// The fixture's state for a scenario (the cases file's setup). HM-12: backend_edit (parity046), an extra's saved
+// connection and the identity change's failure (rebindFault).
 function fixtureSetup(setup) {
   const ids = RULES.ids;
   if (setup.switched_off) return {product: setup.product};
   const extra = spec => ({id: ids[spec.role], label: spec.label, configured: true, status: spec.status ?? 'unconfigured',
     ...(spec.disabled_reason ? {disabled_reason: spec.disabled_reason} : {}), ...(spec.blocked_reason ? {blocked_reason: spec.blocked_reason} : {}),
-    ...(spec.required_memory_mib ? {required_memory_mib: spec.required_memory_mib} : {}), ...(spec.unavailable ? {unavailable: true} : {})});
-  return {product: setup.product, profiles: {
+    ...(spec.required_memory_mib ? {required_memory_mib: spec.required_memory_mib} : {}), ...(spec.unavailable ? {unavailable: true} : {}),
+    ...(spec.connection ? {connection: spec.connection} : {})});
+  return {product: setup.product, ...(setup.backend_edit ? {parity046: true} : {}), profiles: {
     extra: [...setup.extras.map(extra), ...(setup.unavailable ?? []).map(spec => ({...extra(spec), disabled_reason: 'profile_unavailable', status: 'failed', unavailable: true}))],
     orphans: (setup.orphans ?? []).map(role => ids[role]),
     ...(setup.limit !== undefined ? {limit: setup.limit} : {}), ...(setup.file_budget === 'short' ? {limit: 0} : {}),
     ...(setup.available_memory_mib !== undefined ? {memory: {available_memory_mib: setup.available_memory_mib}} : {}),
     ...(setup.no_port ? {noPort: true} : {}), ...(setup.corrupt ? {indexCorrupt: true} : {}),
     ...(setup.no_index_file ? {indexCorrupt: true, noIndexFile: true} : {}),
+    ...(setup.fault ? {rebindFault: setup.fault} : {}),
   }};
 }
 const operationKey = () => `${Date.now() - 1000}.${Array.from(crypto.getRandomValues(new Uint8Array(16)), n => n.toString(16).padStart(2, '0')).join('')}`;

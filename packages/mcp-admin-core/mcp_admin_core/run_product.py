@@ -18,6 +18,7 @@ from .ha_role import make_ha_admin_verifier
 from .lifecycle import CHILD_PORT, child_port_text
 from .products import INSTRUCTIONS, PRODUCTS, ProductStore, TOOLS, child_spec
 from .profile_runtime import ProfileManager, ProfileRuntime
+from .reply_worker import ReplyWorker
 from .surface import FULL_PRODUCTS, listing
 
 
@@ -59,6 +60,7 @@ async def run(args, *, child_port=CHILD_PORT):
             # acquire the Headscale API key's authority through a leaked link.
             secret_path_allowed_origins=(frozenset({"https://claude.ai"})
                                          if args.product == "headscale" else None))
+        worker = None
         if enabled:
             # HM-08 (multi-profile plan 3.1, 5.1, 5.2; read at every start): every profile of the add-on. 8081 is the
             # token dispatcher (each profile's admission, byte budget, stream cap; 64 + 32 x the product's limit as
@@ -66,9 +68,14 @@ async def run(args, *, child_port=CHILD_PORT):
             # add-on's shared administration (HM-10 routes the others). HM-09 (plan 5.4): launch() below starts the
             # default profile's child as before; monitor() also starts the others (staggered) and runs every profile's
             # monitor, and only the default profile's ending stops the add-on (DQ-21); closing it stops every child at
-            # once (HA's 30 s).
+            # once (HA's 30 s). HM-30 (plan 5.5): one reply worker processes every profile's replies, the profiles
+            # taking turns; it starts before the listeners serve and stops after they stopped (the replies still queued
+            # are answered at once, the one in process is waited for at most reply_worker.STOP_SECONDS), and should its
+            # thread end while the add-on serves, the add-on stops, as for any other component (the Supervisor restarts
+            # it).
+            worker = ReplyWorker()
             profile = ProfileManager(store, args.product, TOOLS[args.product], child_spec, port=child_port,
-                                     app_options=options)
+                                     app_options=options, reply_worker=worker)
         else:
             # HM-05 (multi-profile plan 3.2): the default profile's runtime. It makes the child's Supervisor, client,
             # HealthMonitor and ConfigurationState and the two apps (make_apps with these product options) as this
@@ -88,29 +95,40 @@ async def run(args, *, child_port=CHILD_PORT):
             # again by uvicorn's handlers.
             redact.install()
             redact.guard_handlers(*redact.UVICORN_LOGGERS)
-            # launch() keeps authenticated management available to report/retry a
-            # fixed launch failure; it never echoes third-party exception text.
-            await profile.launch()
-            tasks = [asyncio.create_task(server.serve()) for server in servers]
-            monitor = asyncio.create_task(profile.monitor())
-            stopping = asyncio.create_task(stop.wait())
+            if worker is not None:
+                worker.start()
             try:
-                done, _ = await asyncio.wait([*tasks, monitor, stopping], return_when=asyncio.FIRST_COMPLETED)
-                if monitor in done or any(t in done for t in tasks):
-                    raise RuntimeError('runtime component stopped') from None
-            finally:
-                for server in servers:
-                    server.should_exit = True
-                monitor.cancel()
-                stopping.cancel()
-                await asyncio.gather(monitor, stopping, return_exceptions=True)
+                # launch() keeps authenticated management available to report/retry a
+                # fixed launch failure; it never echoes third-party exception text.
+                await profile.launch()
+                tasks = [asyncio.create_task(server.serve()) for server in servers]
+                monitor = asyncio.create_task(profile.monitor())
+                stopping = asyncio.create_task(stop.wait())
+                ended = None if worker is None else asyncio.create_task(worker.ended.wait())
                 try:
-                    async with asyncio.timeout(5):
-                        await asyncio.gather(*tasks)
-                except TimeoutError:
-                    for task in tasks:
-                        task.cancel()
-                    await asyncio.gather(*tasks, return_exceptions=True)
+                    done, _ = await asyncio.wait([*tasks, monitor, stopping, *([ended] if ended else [])],
+                                                 return_when=asyncio.FIRST_COMPLETED)
+                    if monitor in done or any(t in done for t in tasks) or ended in done:
+                        raise RuntimeError('runtime component stopped') from None
+                finally:
+                    for server in servers:
+                        server.should_exit = True
+                    monitor.cancel()
+                    stopping.cancel()
+                    await asyncio.gather(monitor, stopping, return_exceptions=True)
+                    try:
+                        async with asyncio.timeout(5):
+                            await asyncio.gather(*tasks)
+                    except TimeoutError:
+                        for task in tasks:
+                            task.cancel()
+                        await asyncio.gather(*tasks, return_exceptions=True)
+                    if ended is not None:
+                        ended.cancel()
+                        await asyncio.gather(ended, return_exceptions=True)
+            finally:
+                if worker is not None:
+                    await worker.stop()
     finally:
         store.close()
         for sig in (signal.SIGINT, signal.SIGTERM):

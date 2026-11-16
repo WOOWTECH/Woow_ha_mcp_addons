@@ -546,7 +546,7 @@
 
 | # | 行 | 案例 | 歸屬 |
 |---|---|---|---|
-| 1 | 1 | （整個檔） | HA：`packages/mcp-admin-ui/tests/browser/partial-settings.spec.mjs`（既有），單帳號既有測試；HM-11 開關開與關都要照過 |
+| 1 | 1 | （整個檔） | HA：`packages/mcp-admin-ui/tests/browser/partial-settings.spec.mjs`（既有），單帳號既有測試；HM-11 開關開與關都要照過，HM-12 起 `profiles-on` 略過前兩案（網址改到別台卻保留已存金鑰，開通後要重填，DQ-40 ⑨）；HA：`packages/mcp-admin-ui/tests/browser/backend-identity.spec.mjs`（HM-12），開通的版本：重填金鑰、清掉 MCP token 後讀回，衝突時保留草稿 |
 
 #### `packages/mcp-admin-ui/tests/profile_browser.py`（1 案）
 

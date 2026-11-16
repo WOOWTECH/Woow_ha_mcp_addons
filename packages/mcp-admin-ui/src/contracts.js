@@ -170,7 +170,72 @@ export function backendEdit(bootstrap) {
   return value;
 }
 
-export function backendPatchPayload(bootstrap, selections, values) {
+// HM-12 (DQ-40 ⑨ (a); contract 4.1 CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN, section 9 #115 and HM-12's panel rows): the secrets
+// each backend URL takes to its server, in this form's (the admin API's) names: the add-on's identity_fields.URL_SECRETS
+// as backend_edit.url_secrets names them. Hermes' gateway and dashboard are two servers with a secret each; n8n's API
+// key and MCP access token both go to its one server; OpenDesign sends none. tests/test_identity_fields.py fails when
+// this table and the add-on's differ.
+export const urlSecrets = {
+  odoo: { url: ['password'] },
+  'odoo-manage': { url: ['api_key'] },
+  n8n: { url: ['key', 'mcp_access_token'] },
+  hermes: { gateway_url: ['gateway_api_key'], dashboard_url: ['dashboard_password'] },
+  opendesign: { url: [] },
+  emqx: { url: ['api_key', 'api_secret'] },
+  litellm: { url: ['master_key'] },
+  nextcloud: { url: ['app_password'] },
+  headscale: { url: ['api_key'] },
+};
+// HM-12 (DQ-05; contract 3.1, section 9 #113 and HM-12's panel rows): the products whose MCP token is bound to the backend identity once
+// switched on (the add-on's products.IDENTITY_BOUND; tests/test_identity_fields.py fails when they differ).
+export const identityBound = ['odoo'];
+// Where a backend URL's requests go, as the add-on compares it (backend_edit.origin, which reads a URL as Python's
+// urlsplit does): [scheme, host, port], the scheme and the host in lower case (an IPv6 literal without its brackets, a
+// zone as written) and the port, the scheme's own (80, 443) when none is written. Nothing else is normalized: spellings
+// of one host a browser would make equal (a trailing dot, an IPv4 address in another notation, a non-ASCII host and its
+// xn-- form) stay different, as on the add-on (the safe direction). null: not such a URL, or a port the add-on refuses.
+// tests/test_identity_fields.py compares it with the add-on's for each case it lists.
+export function urlOrigin(value) {
+  const found = typeof value === 'string' ? /^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^/?#]*)/.exec(value) : null;
+  if (!found || found[2].includes('[') !== found[2].includes(']')) return null;
+  const scheme = found[1].toLowerCase(), info = found[2].slice(found[2].lastIndexOf('@') + 1);
+  let host = info, port = '';
+  if (info.includes('[')) {
+    const bracketed = info.slice(info.indexOf('[') + 1), close = bracketed.indexOf(']');
+    host = close < 0 ? bracketed : bracketed.slice(0, close);
+    const rest = close < 0 ? '' : bracketed.slice(close + 1);
+    port = rest.includes(':') ? rest.slice(rest.indexOf(':') + 1) : '';
+  } else if (info.includes(':')) [host, port] = [info.slice(0, info.indexOf(':')), info.slice(info.indexOf(':') + 1)];
+  if (!host) return null;
+  const zone = host.indexOf('%');
+  host = zone < 0 ? host.toLowerCase() : host.slice(0, zone).toLowerCase() + host.slice(zone);
+  if (port === '') return [scheme, host, { http: 80, https: 443 }[scheme] ?? null];
+  return /^[0-9]+$/.test(port) && Number(port) <= 65535 ? [scheme, host, Number(port)] : null;
+}
+const sameOrigin = (a, b) => a !== null && b !== null && a.every((part, index) => part === b[index]);
+// HM-12 (DQ-40 ⑨ (a)): the stored secrets a partial edit of a switched-on product must bring again: for each URL set to
+// a value on another origin than the stored one, the secrets that URL takes to its server and that are stored now. A
+// URL the add-on withholds (its stored value unknown here) counts as moved (the safe direction); a URL kept, cleared,
+// set for the first time or not yet a valid URL needs nothing, and so does another path on the same origin (DQ-40 ⑨'s
+// scope: a known limit, threat model section 3).
+export function newOriginSecrets(bootstrap, selections, values) {
+  const current = backendEdit(bootstrap);
+  if (!current) return [];
+  const needed = [];
+  for (const [url, carried] of Object.entries(urlSecrets[bootstrap.product] ?? {})) {
+    const withheld = current.withheld_fields?.includes(url) === true;
+    if (selections[url] !== 'set' || current.values[url] === null && !withheld) continue;
+    let next;
+    try { next = urlOrigin(explicitUrl(values[url])); } catch { continue; }
+    if (next === null || !withheld && sameOrigin(urlOrigin(current.values[url]), next)) continue;
+    needed.push(...carried.filter(secret => current.secret_set[secret] === true));
+  }
+  return needed;
+}
+
+// switchedOn (HM-12): the product is switched on, so a URL moved to another origin takes none of its stored secrets
+// (newOriginSecrets; the add-on refuses it with 422). Switched off, as before: the administrator may reuse them.
+export function backendPatchPayload(bootstrap, selections, values, switchedOn = false) {
   if (!bootstrap.connection_configured || !backendEdit(bootstrap)) throw new UiError('此伺服器尚未提供個別欄位修改。');
   const changes = {};
   for (const [key, label, type] of products[bootstrap.product].fields) {
@@ -190,6 +255,13 @@ export function backendPatchPayload(bootstrap, selections, values) {
     } else {
       if (!/^[A-Za-z0-9_@. -]{1,256}$/.test(value)) throw new UiError(`${label}格式不符。`);
       changes[key] = value;
+    }
+  }
+  if (switchedOn) {
+    for (const secret of newOriginSecrets(bootstrap, selections, values)) {
+      if (selections[secret] !== 'keep') continue;
+      const [, label, type] = products[bootstrap.product].fields.find(([key]) => key === secret);
+      throw new UiError(`網址改到另一台伺服器時不會沿用已儲存的憑證：請重新輸入${label}${type.startsWith('optional') ? '或明確清除' : ''}。`);
     }
   }
   return Object.keys(changes).length ? {changes} : null;
