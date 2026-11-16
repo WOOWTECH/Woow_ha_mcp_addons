@@ -142,13 +142,16 @@ Hermes 排程工具 `hermes_cron` 的說明補兩句（HM-33，見下；只改�
 - 改了什麼回應：只有 `hermes_cron` 的 `description` 多這兩句：8081 的 tools/list（子程式自己的回答、閘道轉回的回答、閘道自答的回答都一樣；
   整個回答多 187 個位元組，`Content-Length` 跟著變），以及 8099 `/api/capabilities` 工具目錄的同一個欄位（管理面板的工具頁顯示它）。
   工具名稱、輸入與輸出 schema、annotations、寫入權限、tools/call 的請求與回應都逐位元不變。程式行為不變：去掉 docstring 後的語法樹和
-  改之前相同，編譯後也只有這段說明的常數不同。
-- 說明和程式一致：create 本來就在同一個 POST 同時送 `paused`（`not enabled`）與 `enabled`（PaaS #138，HA 已有；
-  `tests/test_hermes_cron_paused_contract.py`）；trigger 是一個 `POST /api/cron/jobs/<id>/trigger`，子程式不會自己再停用。
+  改之前相同，編譯後也只有這段說明的常數不同。這些只說本片；同一個 Hermes 下一版另帶 PR #85 的 create 請求改變（見下一點）。
+- 說明和程式一致：`claude-delivery` 的 create 在同一個 POST 同時送 `paused`（`not enabled`）與 `enabled`（PaaS #138；
+  `tests/test_hermes_cron_paused_contract.py`）。這是 PR #85（`b50f1c7`，2026-11-12 合併）的行為，**還沒發版**：發行的 Hermes 0.4.13 只送
+  `enabled`，跟著 Hermes 下一版出去（HM-33 審查 MF-1、S-2）。trigger 是一個 `POST /api/cron/jobs/<id>/trigger`，子程式不會自己再 pause、
+  resume 或再 trigger 一次（`tests/test_hermes_cron_description.py` 的 trigger 一案；HM-33 審查 S-1）。
 - 為什麼不受開關管：和多帳號無關；只改 Hermes 自己的說明，跟著 Hermes 的下一版出去。
 - HM-01：黃金回歸的 Hermes 兩個 tools/list 摘要（`LISTING_SHA256`、`LISTED_SHA256`）照測試檔頭的規則一起更新（刻意的工具表面變更：
   `tool_snapshot.py` 改了）；新的回答就是舊的回答只換掉這段說明（逐位元核對過）。兩個契約凍結不用改，照過。
-- 測試：`tests/test_hermes_cron_description.py`（子程式自己的 tools/list 與閘道內附的清單都逐字是 PaaS 的說明；拿掉這兩句就是原本的說明）。
+- 測試：`tests/test_hermes_cron_description.py`（子程式自己的 tools/list 與閘道內附的清單都逐字是 PaaS 的說明；拿掉這兩句就是原本的說明；
+  trigger 只送一個 POST，自己不會再 pause 或 resume）。
 
 ## 2. MCP（8081）
 
@@ -1121,3 +1124,4 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 | v1 草案（HM-12 面板） | 2026-11-17 | HM-12 | 第 9 節加第 116 列（換身分存檔後的面板：依 `token_rotated` 提示、藏起權杖、重新讀取，形狀 D 也一樣；開通、會換 token 的產品的後端存檔回 503 state unavailable 時提示重啟後到「連線與權杖」確認網址，HM-12 審查 S-7）與第 117 列（新來源要重填秘密的表單：開通後部分編輯在網址的來源改了時，那條網址的已存秘密改成必填；422 的固定文字），說明段加一行。第 3、4 節的管理 API 與回應沒有改 |
 | v1 草案（HM-12 面板審查修正） | 2026-11-17 | HM-12 | 依 HM-12 面板的獨立審查（報告 `artifacts/…/wave4/review-HM-12-panel.md`）：第 9 節 #116、#117 的 HA 欄把面板檔改成 `Hui/contracts.js`（原稿誤寫成 PaaS 面板的 `Pui/`；S-1）；#116 補換了 token 之後重新讀取失敗仍說明、伺服器文字不顯示（S-2、S-5）；#117 補改回同一個來源時已打的值留著、withheld 網址的原因、說明只在網址帶秘密的產品出現（S-4、S-7）。第 3、4 節的管理 API 與回應沒有改 |
 | v1 草案（HM-33） | 2026-11-17 | HM-33 | 對齊 PaaS #156（`34769c2`，合併 `48f394d`；使用者 2026-11-17 06:3x 決定現在就補，`decisions.md` 第 1.1 節）：第 1.2 節不受開關管多一項：Hermes `hermes_cron` 的工具說明照 PaaS 逐字補兩句（create 帶 `enabled=false` 建成停用的排程，resume 之前不會跑；Hermes v0.22.x 對停用的排程 trigger 會一併改回啟用，要維持停用之後再呼叫 pause）。只改文字：去掉 docstring 後的語法樹相同，程式行為不變；tools/list 的 `hermes_cron` 說明多兩句，HM-01 黃金回歸的 Hermes 兩個 tools/list 摘要照測試檔頭的規則一起更新（刻意的工具表面變更）。第 9 節不加列：說明和 PaaS 一致 |
+| v1 草案（HM-33 審查修正） | 2026-11-17 | HM-33 | 依 HM-33 的獨立審查（報告 `artifacts/…/wave4/review-HM-33.md`，修正後通過）：第 1.2 節 HM-33 那段寫明 create 送 `paused` 是 PR #85（`b50f1c7`，2026-11-12 合併）的行為、發行的 Hermes 0.4.13 還沒有，下一版才出去（MF-1、S-2），「逐位元不變」只說本片；trigger 不會自己再 pause 或 resume 改由測試守（S-1）。規則內容不變 |

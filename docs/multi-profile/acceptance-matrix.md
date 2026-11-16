@@ -118,7 +118,7 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_request_structure.py` | HM-31 | 計畫 | JSON 結構守門（深度、元素、UTF-8、閉括號、邊界、放大語料）與拒收形狀；n8n 先跑同一道守門 |
 | `tests/test_request_budget_gateway.py` | HM-31 | 計畫 | 開關關與開：預算拒絕讀完丟掉回 id、沒帶長度中途切斷、讀取閒置 408、整體 60 秒照舊、份額不跨帳號、全 add-on 預算共用；HM-31 審查：`Content-Length`＋`Transfer-Encoding` 照實際收到的位元組（含真的 h11 socket）、宣告超過 16 MiB 讀之前 413、讀完丟掉的閒置與整體界線、只留頭尾、從尾端找 id |
 | `tests/test_fresh_backend_connections.py` | HM-32 | 新增 | LiteLLM、EMQX 不保留閒置的後端連線（對齊 PaaS #135、#139；不受開關管）：子程式實際建的連線池與照產品要的 `limits` 建的連線池都測；每個請求各解析一次、各開一條連線，名稱改指被拒的位址後下一個請求在連線前就被拒；恢復後第一個工具呼叫不碰舊連線、不等逾時；不重送（恢復後只到後端一次；沒有回應的寫入、讀取都只送一次）；連線數上限照舊（子程式的連線池 4 條；產品要的 LiteLLM 50、EMQX 20，被 `backend_policy` 丟掉）（HM-32 審查 S-2、S-3） |
-| `tests/test_hermes_cron_description.py` | HM-33 | 新增 | Hermes `hermes_cron` 的工具說明逐字是 PaaS #156 的（不受開關管；create 帶 `enabled=false` 建成停用的排程，resume 之前不會跑；Hermes v0.22.x 對停用的排程 trigger 會一併改回啟用，要維持停用之後再呼叫 pause）：子程式自己的 tools/list（在 Hermes 釘版的 venv 裡）與閘道內附的清單（`tool_snapshot.py`）都一樣；拿掉這兩句就是原本的說明；`enabled` 參數照舊是預設 true 的布林 |
+| `tests/test_hermes_cron_description.py` | HM-33 | 新增 | Hermes `hermes_cron` 的工具說明逐字是 PaaS #156 的（不受開關管；create 帶 `enabled=false` 建成停用的排程，resume 之前不會跑；Hermes v0.22.x 對停用的排程 trigger 會一併改回啟用，要維持停用之後再呼叫 pause）：子程式自己的 tools/list（在 Hermes 釘版的 venv 裡）與閘道內附的清單（`tool_snapshot.py`）都一樣；拿掉這兩句就是原本的說明；`enabled` 參數照舊是預設 true 的布林；trigger 只送一個 `POST /api/cron/jobs/<id>/trigger`，自己不會再 pause、resume 或再 trigger（真子程式、假 dashboard；HM-33 審查 S-1） |
 | `tests/test_child_identity.py` | HM-15 | 計畫（條件式） | 別的程序先綁 port → 不轉發；uid 10001 子程序驗降級 |
 | `tests/test_upgrade_hooks.py` | HM-16 | 計畫 | Store hook 只讀、與版本無關 |
 | `packaging/test_container_probe.py` | HM-16 | 既有，擴充 | 多帳號探針、`/data/mcp` 修復規則與項目預算 |
