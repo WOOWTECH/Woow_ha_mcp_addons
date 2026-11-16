@@ -2,6 +2,14 @@
 
 ## 結論
 
+- **獨立安全審查（2026-11-17，判定「修正後通過」）已處理**（第 18 節）：
+  - 必修 MF-1 修好：休眠開機（例如緊急關閉版）改寫還原紀錄時，不再丟掉還在等的核對；修好前，還原後沒核對預設帳號，發緊急關閉版再開通，
+    預設帳號不必核對就能重發。上一份紀錄讀不到時休眠開機不改它。
+  - 建議 S-1（三個測試缺口）、S-2（紀錄讀不到時全部撤銷會重建，格式要向後相容）、S-4（全部撤銷遇到意外的例外也 fail closed）、
+    S-5（隔離目錄超過 64 個時清單照常可用）都改了程式或補了測試；S-6 補文件，全部撤銷的耗時交 HM-19c 量；S-3（待核對不一定是已撤銷，
+    HM-12 依賴）寫進契約與威脅模型，交主對話協調 HM-12。
+  - 待確認 Q-1（面板「知道了」只藏到重新整理）照現狀，等主對話確認或轉問使用者（第 17 節）。
+  - 這一輪 4 個 commit（測試、核心、面板、文件）＋本筆記；沒有新決策，沒有碰到待定題；沒有 push、沒有開 PR。
 - **疊在 HM-13b 的 PR #108 head `ebab019` 上**（`claude-delivery` `f4c7718`＋HM-13b 的 26 個 commit）。HM-13b 要等 HM-03a 的實機結果才合併；
   之後由主對話把本片 rebase 到 `claude-delivery`。本片只 commit，沒有 push、沒有開 PR。
 - **單帳號還原後的面板提示（使用者 2026-11-16 21:xx 對 HM-13b 審查 Q-1 的定案，不受開關管）**：
@@ -46,7 +54,7 @@
 ## 1. 範圍與基準
 
 證據：`artifacts/ha-multiprofile-parity-20261114/wave4/evidence-HM-13c/`（`logs-first/`：第一段的紅；`logs/`：第二段；`tools/`：用到的
-腳本，副檔名多加 `.txt`）。log 先掃過像 token 的字串（43 個 URL 安全字元、不是同一個字母重複），0 個；全套的 junit 只留每個模組的摘要（`logs/full-junit-per-module.txt`）。
+腳本，副檔名多加 `.txt`）。審查處理這一輪：`wave4/evidence-fix-HM-13c/`（`logs/`、`mutations/`、`tools/`，第 18 節）。log 先掃過像 token 的字串（43 個 URL 安全字元、不是同一個字母重複），0 個；全套的 junit 只留每個模組的摘要（`logs/full-junit-per-module.txt`）。
 `SP:`＝本機的 scratchpad。
 
 | 項目 | 值 |
@@ -212,6 +220,8 @@
 
 ## 7. 本機檢查（一般使用者 uid 1000；TMPDIR `/tmp/ha-mp-5YExOX`，跑完用完整路徑刪掉；pytest 都排在共用鎖後面）
 
+第二段的結果；審查處理這一輪的本機檢查見第 18.3 節。
+
 | 檢查 | 結果 |
 |---|---|
 | 面板 node（`npm test`） | 87 案全過 |
@@ -234,12 +244,15 @@
   （`restore` 情境等 1.1 秒讓操作識別碼晚於還原）；Playwright `restore-review.spec.mjs` 9 案約 25 秒；node 不到 1 秒。
 - CI 推估：`checks` 多約 40 秒到 1 分鐘（HM-13b 的 PR 為基準）；開 PR 後照實補。
 - 容器探針的還原階段只在 HM-19a 前的 builder 乾跑與各產品發版的容器驗收時真的跑。
+- 審查處理這一輪新增的測試與時間見第 18.4 節（沒有新的 root 案例、沒有起真子程式）。
 
 ## 9. `checks` 秒數
 
 開 PR 後補。
 
 ## 10. 預檢結果
+
+第二段的結果；審查處理這一輪見第 18.5 節。
 
 | 預檢 | 指令 | 結果 |
 |---|---|---|
@@ -262,6 +275,9 @@
 
 - `restore_guard.py`、`restore_inplace.py` 在這段範圍沒變。本片對齊的地方：每份設定都換新收據檔（`Pc/restore_guard.py:513-516`）、手冊步驟 1
   （事前盤點，不含憑證）＝匯出帳號清單、步驟 9（核對）＋步驟 10（核對後才發 token）＝核對卡與 `restore_review_required`。
+- 審查處理這一輪（2026-11-17 04:3x）再唯讀查一次：本機 PaaS repo 的 `origin/main` 已是 `48f394d`（有別的代理 fetch 過；本片沒有 fetch），
+  比 `7087280` 多一個 #156：只改 `apps/hermes/` 的 CHANGELOG、README 與 `hermes_mcp_server/server.py` 的排程工具說明（3 檔），和多帳號、還原、
+  撤銷無關。`restore_guard.py`、`restore_inplace.py` 在 `69ac425..48f394d` 仍然沒變。
 - PaaS 沒有全部撤銷的 API（`git grep -n -i "revoke_all\|revoke-all" 7087280 -- '*.py'` 沒有結果；契約 #82）：HA 的全部撤銷是加嚴（建議回補）。
 
 ## 12. 本片用到的決策
@@ -311,6 +327,7 @@
 | HM-05 第 3.1 節 | 全部撤銷用執行套件的 `TokenAccess` 與 `mutation_lock` | 做了 |
 | HM-06 第 12.3 節（審查 S-07） | 重產 child token 之後要重啟子程式 | 做了：全部撤銷撤銷了的帳號都重起（開機補完時子程式還沒起，不用） |
 | HM-13a 第 11 節 | 過渡期留下的舊標記，HM-13b、HM-13c 的通知文字要涵蓋 | 做了：提示寫「偵測到還原的時間（add-on 啟動時發現的時間）」；`update-backup-rollback.md` 寫明舊標記要到新版第一次啟動才提示 |
+| HM-12 審查第 4 節（給 HM-13c 的觀察；HM-13c 審查 S-3 指出第二段沒有接） | 維持「待核對＝已撤銷」：HM-12 的換身分換 token 要求 token 有效，待核對的帳號 token 已撤銷，所以換身分不會在核對前發新 token | 有例外，不改程式（HM-12 在別的 clone）：開關關時沒有關卡，還原撤銷的預設帳號可以直接重新產生，重新開通後那一列仍待核對、權杖卻有效（審查實驗 X7）。契約 §3.1、§4.1、威脅模型第 3 節寫明；交主對話：HM-12 與本片後合併的那一片，在換身分換 token 的路徑也檢查 `review_required`（有就 409 `restore_review_required`，同 rotate），或在契約 §4.1 改寫成允許（第 15 節） |
 
 ## 15. 交給後面的片
 
@@ -330,6 +347,18 @@
   HM-13b 交的 stderr 兩行（`re-owned N`、`KEPT_NOTICE`／`REVOKED_NOTICE`）照舊交 HM-16。
 - **主對話**（計畫在 repo 外）：計畫 §3.3 的「不受開關管」表與 §7.1「新檔：一個都不產生」那一列，要加 HM-13c 的例外（還原後多 `restore-notice.json`、
   bootstrap 多 `restore_notice`，到權杖變了為止）；契約第 8 節已寫。
+- **主對話／HM-12（審查 S-3）**：「待核對＝已撤銷」有例外（上一列）。HM-12 與本片後合併的那一片，在 Odoo 換 url／database／username 換 token 的
+  路徑也檢查 `ProfileAdmin.review_required`（有就 409 `restore_review_required`、什麼都不寫，同 `token/rotate`），或在契約 §4.1 寫明允許；
+  兩片的假設要一致。本片沒有 HM-12 的程式可改（不在基準上）。
+- **主對話（審查 Q-1）**：面板「知道了」只藏到重新整理，計畫的例子是「只在這個瀏覽器藏起來」。本片照現狀（審查建議 (a)），沒有自己定；
+  要改成 (b)（放寬 N15、用 `localStorage` 記住這次還原已看過）或 (c)（加一條「關掉提示」的管理路由，超出使用者 2026-11-16 只核准的代價）
+  都要另外決定（第 17 節）。
+- **HM-19c（審查 S-6 (d)）**：全部撤銷在所有鎖裡逐一重起撤銷了的子程式，每個最多約 4 秒；在目標硬體量 Odoo 6 個帳號的全部撤銷時間
+  （含 SD 卡上的 fsync），太長就改成平行重起（同 `stop_all`）或放開鎖後再重起。
+- **HM-18（DOCS；審查 S-2、S-6）**：還原紀錄讀不到時的出路（按全部撤銷、之後逐帳號核對）；開關關、有帳號資料時還原（沒有核對卡與關卡，
+  重新開通後仍要核對）；隔離區超過 64 筆時面板只列前 64 筆。`update-backup-rollback.md` 已寫，DOCS 照抄。
+- **之後改還原紀錄格式的片（審查 S-2）**：`restore-record.json` 的格式（`RECORD_KEYS`、`RECORD_VERSION`、列的鍵）要向後相容，舊版寫的紀錄
+  要照樣讀得懂（契約 §3.6、`ledger-tracking.md`）。
 - **HM-03a**：第 13 節。
 - **HM-25**：n8n 開通時，`apps/n8n/run.py` 已讀提示並交給 `make_apps`；接 `ProfileManager` 時把提示交給 manager（同 `run_product`）。
 - **HM-29**：回補 PaaS 的題目照舊（#82 全部撤銷）；#117 是 HA 專屬（PaaS 還原一律撤銷）。
@@ -340,18 +369,107 @@
 
 | 條件 | 狀態 |
 |---|---|
-| 全綠 | 本機：pytest 全套只剩 7 個要 root 的既有案例、0 skip；Playwright 128、node 87、packaging 205 全過。CI（root、0 skip）待開 PR |
-| 核對前不能重發 | 通過：還原（預設帳號與額外帳號）與重新開通後的休眠帳號，rotate 409 `restore_review_required`、什麼都不寫；紀錄讀不到 503；核對後 200、8081 服務新權杖 |
+| 全綠 | 本機（審查處理後，第 18.3 節）：pytest 全套只剩 7 個要 root 的既有案例、0 skip；Playwright 130、node 87、packaging 205 全過。CI（root、0 skip）待開 PR |
+| 核對前不能重發 | 通過：還原（預設帳號與額外帳號）與重新開通後的休眠帳號（含休眠前就撤銷的），rotate 409 `restore_review_required`、什麼都不寫；紀錄讀不到 503（出路：全部撤銷重建）；核對後 200、8081 服務新權杖。審查 MF-1 修好：還原後沒核對的帳號，經過休眠開機改寫紀錄、再開通，仍要核對（第 18 節）。例外：開關關時沒有關卡（S-3，交主對話） |
 | 全部撤銷第 k 個失敗時的回應與 8081 行為 | 通過：k＝預設帳號、B、C 各一案：409＋逐帳號 `results`、收據結果未知、標記留著；失敗帳號撤銷前的權杖在 8081 兩種接法都 503，其他 401／404；做完的全部撤銷解除。另有連開始都沒有、沒收尾兩案 |
 | 單帳號還原提示照使用者定案 | 通過：9 個產品存提示、8 個產品的正式 runtime bootstrap 只多 `restore_notice`、權杖兩種接法照用；輪替或撤銷後消失；沒還原的安裝什麼都不多（連 ctime）；開關關時新路由都是 404；面板「知道了」不用瀏覽器儲存 |
 | 不受開關管的例外寫進契約、凍結測試逐案理由、CHANGELOG 一行 | 契約 §1.2、§8、#117；HM-01 凍結沒有要改的案例（第 5 節）；CHANGELOG 原文交 HM-19a（第 15 節） |
 | 同 PR 更新帳本；契約第 9 節接在 #116 後面、變更紀錄 | 通過：帳本 12 列重算、新增 `restore.js`；#117、#118；第 10 節一列 |
 | 測試資料規則 | 通過：token 都在執行時產生或用 `T`／`M`×43，憑證 `DUMMY-…`、網址 `.invalid` |
-| 獨立安全審查 | **還沒做**（本片只 commit；審查由主對話另開） |
+| 獨立安全審查 | 做了（`wave4/review-HM-13c.md`，修正後通過）；必修與建議的處理見第 18 節 |
 
 ## 17. 碰到而沒有自己定的事
 
 - 「知道了」要不要在這個瀏覽器記住：要放寬面板的儲存不變式（N15、DQ-18；`build-closure.mjs` 擋 `localStorage`），本片沒做。現在的最小方案
   （重新產生或撤銷權杖、頁面記憶體裡隱藏）不需要新路由，所以沒停下來問；使用者覺得提示太常出現時再定。
+  - 獨立審查把它列成 Q-1（請主對話確認或轉問使用者），選項：(a) 維持現狀（審查建議）；(b) 放寬 N15，只為這則提示用 `localStorage` 記住
+    「這次還原（以 `at` 為鍵）已看過」，要改 `build-closure.mjs` 與 N15 的文件；(c) 加一條「關掉提示」的管理路由，開關關時多一條路由，超出使用者
+    2026-11-16 只核准的代價。審查處理這一輪照計畫最保守的做法**維持現狀**，不改程式，寫進回報的待決事項。
 - 索引不能用時，核對預設帳號也要先隔離索引（核對要能用的索引 ETag）。這是本片照「建立、刪除同規則」定的實作細節，不是決策題；若要讓預設帳號
   在索引壞時也能核對，可以改成收壞索引的 ETag（同全部撤銷），交審查時一併看。
+
+## 18. 獨立安全審查的處理（2026-11-17 04:1x 起）
+
+審查報告：`artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-13c.md`（審查對象 `8ee89f4`；證據 `wave4/evidence-review-HM-13c/`）。
+判定「修正後通過」：必修 1 項、建議 6 項、請主對話確認 1 題。先核對每一項（審查實驗 X1、X6 的情境在本線重寫成測試；X7、S-6 (c) 對照程式），
+再改。本輪的腳本與 log：`wave4/evidence-fix-HM-13c/`（log 先遮掉像 token 的字串，掃描 0 命中）。
+
+### 18.1 處理表
+
+| # | 意見（摘要） | 處理 | commit | 測試／證據 |
+|---|---|---|---|---|
+| MF-1 | 休眠開機用只有休眠段落的紀錄蓋掉還原紀錄，預設帳號那列變 `kept`：沒核對就能重發 | 修。照審查草稿，另外兩點不同：(1) 上一份紀錄讀不到時**不改它**（記一行 `RECORD_KEPT`），新權杖照舊一律 503，出路是全部撤銷重建（S-2）；草稿是當成沒有、整份重寫，會丟掉預設帳號那列。(2) 還原段落只在上一份還有列「這次仍在等」時保留；草稿是上一份有任何待核對列就保留。預設帳號那列照上一份原樣（`_carried`）。(1) 的代價：若只是那次開機一時讀不到，之後讀到的是舊紀錄，這次休眠撤銷的帳號不在裡面（權杖已撤銷，重新開通後不必核對）；選這個方向是為了不丟掉還原的核對（威脅模型第 3 節寫明） | `df9d8fc`（測試）、`ba2fe54` | X1 重寫成 `test_after_a_dormant_start_the_default_profile_still_waits_for_its_review`；`test_a_dormant_start_never_drops_a_review_the_last_record_waits_for`（三種核對情況）；`test_a_dormant_start_leaves_a_record_it_cannot_read_as_it_is`。舊程式上 4 案紅；突變 F04～F08 都被擋 |
+| S-1 | M05、M22、M32 存活：三個行為沒有測試 | 採用：補三個測試（M19 照審查，等價、不補） | `df9d8fc` | M05：`test_a_profile_revoked_before_the_dormant_start_waits_for_its_review_too`（F01 被擋）；M22：`test_a_quarantine_directory_whose_state_opens_is_revoked_and_wiped_before_it_goes`（隔離目錄是改名的正常帳號目錄、刪除被 monkeypatch 成刪不掉；F02 被擋）；M32：`test_a_start_stopped_anywhere_on_the_way_saves_the_notice_at_the_next` 加 `enabled=True`（F03 被擋）。三個測的都是既有行為，舊程式上照過 |
+| S-2 | 紀錄讀不到時每個 rotate 永遠 503、面板沒有出路；格式日後要向後相容 | 採用 (a)＋(c)：全部撤銷做完時紀錄若讀不到，重寫一份（每個帳號 `revoked`、`reviewed_at: null`，沒有還原與休眠段落；讀得到就不改；`record_usable()`）；面板說明出路，重建的紀錄有自己的標題；契約 §3.6、`ledger-tracking.md`、`restore_lock.py` docstring 寫明格式要向後相容。沒採 (b)（核對完就刪紀錄）：會丟掉核對紀錄，已刪帳號的列也讓「沒有待核對」不好判斷；(a) 已涵蓋格式改壞的出路 | `ba2fe54`、`48a8ef9`、`c6f99c6` | `test_revoke_all_rebuilds_a_record_that_cannot_be_read`（含讀得到時不改）；Playwright 一案；突變 F09、F10、F12、G03、G04 都被擋 |
+| S-3 | 「待核對＝已撤銷」有例外，HM-12 的換身分換 token 依賴這個前提 | 本片不改程式（HM-12 的路徑不在本片基準上，也不能動別的 clone）：契約 §3.1 `token/rotate`、§4.1 `restore_review_required`、威脅模型第 3 節寫明例外；交主對話（第 15 節）；第 14 節補 HM-12 審查那一列 | `c6f99c6` | 審查實驗 X7（`evidence-review-HM-13c/logs/x-experiments-3.txt`） |
+| S-4 | 全部撤銷碰到 `ConfigError`、`OSError`、`ValueError` 以外的例外時回 500、沒有 fail closed | 採用：其他例外也當成沒有結果：409 `operation_outcome_unknown`、收據未知、每個已登錄帳號 `committed()`、撤銷前的權杖全進 503 名單；log 一行固定文字，只寫例外的類別（`REVOKE_ALL_STOPPED`） | `ba2fe54` | `test_revoke_all_stopped_by_an_unexpected_error_fails_closed`：半途停（預設帳號已撤銷、B 還沒），B 留在磁碟上的舊權杖兩條接法都 503；例外的文字故意含 B 的權杖，log 掃描確認沒外露；之後做完的全部撤銷解除。舊程式上紅；突變 F11 被擋 |
+| S-5 | 隔離目錄超過 64 個時整份帳號清單讀不到，也刪不掉 | 採用：清單不因數量拒絕（每一筆照舊驗格式）；面板只列前 64 筆（`QUARANTINE_SHOWN`）並說還有幾筆，刪掉上面的之後其餘依序出現 | `48a8ef9` | node 斷言（70 筆照收）；Playwright 一案（70 筆：列 64、說另有 6 筆、選單是真的清單、全部撤銷可按；刪一筆後剩 5 筆沒列）；突變 G01、G02 都被擋 |
+| S-6 | 文件與量測落差 | (a) `update-backup-rollback.md` 分開寫開關關、有帳號資料的還原，契約 §3.1 `token/rotate` 補「開關關時沒有關卡」；(b) 契約 §4.1 `operation_outcome_unknown` 寫 `results` 空的兩種意思；(c) 照程式核對後改寫：轉送名額是在建 token lease **之後**才等（`gateway.py` 的 `take_slot`），已建 lease 的請求都由 `committed()` 結束（之後 `lease.run` 一檢查就停），所以視窗只是「分派器比對過、還沒建 lease」的請求（例如准入滿時正在讀的小通知，最多 2 秒），不是審查寫的「准入、名額」排隊；契約 §4.2、威脅模型第 3 節、`profile_admin.py` docstring 照這個寫；(d) 交 HM-19c（第 15 節），威脅模型第 3 節記一條 | `ba2fe54`（docstring）、`c6f99c6` | — |
+| Q-1 | 面板「知道了」只藏到重新整理 | 不自己定：照計畫最保守的做法維持現狀（審查建議 (a)），寫進第 17 節、第 15 節與回報 | — | — |
+
+### 18.2 先紅後綠與突變
+
+- 先寫測試（`df9d8fc`），在舊程式上跑：伺服器新測試 11 案，**6 案紅**（MF-1 四案：三種核對情況的前兩種、X1、讀不到的紀錄不改；S-2 一案；
+  S-4 一案），5 案綠（S-1 的三個測試共 4 案與 MF-1 第三種情況：測的是既有行為或修正前後相同的情況）。面板：舊的 `restore.js`、`app.js`
+  上 node 1 檔紅（缺 `QUARANTINE_SHOWN`）、Playwright 新的 2 案紅。log：`logs/red-server-old-source.txt`、`logs/red-ui-old-source.txt`。
+  `df9d8fc` 的 commit 訊息把綠的 5 案都算成 S-1，實際是 S-1 的 4 案加 MF-1 第三種情況 1 案；照寫的當時，不改寫歷史。
+- 新程式上：`tests/test_restore_review.py` 60 案全過（`logs/green-server-new-tests.txt`，開發用的無 session 鎖跑法：只選 in-process 的測試；
+  正式 conftest 的結果在第 18.3 節）；`restore-review.spec.mjs` 11 案全過。
+- 突變（`tools/mutate.py.txt`、`tools/mutate_ui.py.txt`；每次改一處、跑選定的測試、從複本放回並核對 SHA-256，不用 git 還原）：伺服器 12 次、面板 4 次，
+  **16 次全被擋**；基準 F00 60 案全過。總表 `mutations/summary.json`、`mutations/summary-ui.json`。
+- 審查的 7 個實驗（`evidence-review-HM-13c/scripts/test_review_hm13c_experiments.py`，不 commit，從 scratchpad 跑）在修正後重跑：7 案全過；
+  X1 轉綠（預設帳號 rotate 409 `restore_review_required`），X6 的請求都結束、503 名單 2 個，X7 照舊（S-3 的例外，寫進文件）
+  （`logs/review-experiments-after-fix.txt`）。
+
+  | # | 突變 | 擋下的測試 |
+  |---|---|---|
+  | F01 | `REVIEWED_TOKENS` 拿掉 `already_revoked`（審查 M05） | 休眠前就撤銷的帳號 |
+  | F02 | 刪隔離目錄前不撤銷、不抹憑證（審查 M22） | 讀得到的隔離目錄 |
+  | F03 | 開通、沒有帳號資料時刪標記之後才存提示（審查 M32） | 逐步中斷 `[True]` |
+  | F04 | 休眠紀錄什麼都不保留（回到審查前） | 三種核對情況的兩種、X1 |
+  | F05 | 只保留預設帳號那列、丟掉還原段落 | 同上 |
+  | F06 | 上一份有還原段落就一律保留 | 三種核對情況的第三種 |
+  | F07 | 已核對的預設帳號那列也保留 | 三種核對情況的兩種 |
+  | F08 | 上一份讀不到時照樣整份重寫（審查草稿的做法） | 讀不到的紀錄不改 |
+  | F09 | 全部撤銷不重建讀不到的紀錄 | 重建 |
+  | F10 | 重建時也走「讀不到就不改」 | 重建 |
+  | F11 | 拿掉 `except Exception` | 意外的例外 |
+  | F12 | 重建的紀錄把預設帳號寫成 `kept` | 重建 |
+  | G01 | 面板拿回 64 筆上限 | node＋Playwright |
+  | G02 | 面板不切前 64 筆 | Playwright |
+  | G03 | 讀不到的紀錄用舊說明 | Playwright |
+  | G04 | 不認重建的紀錄 | Playwright |
+
+### 18.3 本機檢查（一般使用者 uid 1000；TMPDIR 都是 `ha_env.sh` 給的，跑完用完整路徑刪掉）
+
+| 檢查 | 結果 |
+|---|---|
+| 面板 node（`npm test`） | 87 案全過（`logs/t2-ui-node-build.txt`） |
+| `npm run build`＋`build-closure.mjs` | PASS |
+| Playwright 全套（面板檔＝`48a8ef9`；之後的 commit 只改文件） | **130 案全過**（4.2 分；第二段的 128 案＋本輪 2 案；`logs/t3-ui-browser-full.txt`） |
+| pytest 相關 22 檔（本片與 HM-13b 三檔、HM-13a、HM-10 兩檔、HM-11 形狀比對、HM-01 黃金回歸與兩個契約凍結、零改寫、`test_output_schemas`、HM-31 的參數順序、路由、passthrough、log 掃描、執行套件、生命週期、store、兩個帳本測試） | 取自全套的 junit（`logs/t5-full-suite.summary.txt`）：936 案，930 過，6 個失敗都是要 root 的（`test_restore_detection` 5、`test_profile_store` 1），86.3 秒。先排的子集跑法有引號錯誤（檔名清單的換行把指令拆開），只跑到前 4 檔（157 案全過，`logs/t1-related.txt`），所以改從全套的 junit 取這 22 檔 |
+| pytest 全套（`tests`，CI 的指令加 `-rfEs --durations=30`、junit；正式 conftest、排在共用 wave1 鎖後面；`logs/t5-full-suite.txt`） | `c6f99c6`（工作樹只多本筆記的草稿；05:13～05:46）：**6,152 案、0 skip，6,145 過**，7 個失敗都是要 root 的既有案例（`test_restore_detection` 5、`test_profile_store` 1、`test_owned_executable` 1，都停在要求 root 的那一行）；1,977.6 秒（32 分 58 秒）；2 個 warnings 是既有的 websockets 棄用警告。比第二段多 10 案（本輪新增） |
+| packaging unittest（照 CI 的離線暫存 venv，不用 PYTHONPATH；本輪沒動 `packaging/`） | `Ran 205`、`OK (skipped=5)`（`logs/t4-packaging*.txt`） |
+| `packaging/validate.py`（ci-venv） | PASS |
+| `scripts/tool_inventory.py` | exit 0（沒動 `apps/runtime/*.py`、`apps/*/launch.py`，不用 `--write`） |
+| 雙向控制字元（U+202A～202E、U+2066～2069；另查 U+200E、U+200F、U+061C） | `ebab019..HEAD` 12 個 commit 的訊息與每個改到的檔的全文（含本筆記的 commit）：0 個（`tools/bidi_scan.py.txt`、`logs/bidi-scan.txt`）；PR 說明草稿另掃也是 0 個 |
+
+### 18.4 只在 CI 跑的測試與 CI 時間
+
+- 只在 CI 跑的照第 8 節（要 root 的既有 7 案）；本輪沒有新的 root 案例、沒有起真子程式的新案例（都在暫存目錄的守門或 `NoProcessSupervisor`＋MockTransport）。
+- 新測試的本機時間（全套的 junit）：`tests/test_restore_review.py` 60 案 5.4 秒，其中本輪新增的 10 案 1.6 秒（最慢的是開通時的逐步中斷，約 0.6 秒）；Playwright 新的 2 案約 3.4 秒；node 不到 1 秒。
+- CI 推估：`checks` 比第二段多不到 10 秒；開 PR 後照實補。
+
+### 18.5 預檢（本筆記 commit 之後再跑一次，結果記在回報與 PR 說明）
+
+| 預檢 | 指令 | 結果 |
+|---|---|---|
+| 秘密 | `.venv/bin/python -I scripts/secret_precheck.py --tools SP:hm01/gitleaks-tools --repo . --base ebab019 --head HEAD --full` | `c6f99c6`：OK，0 命中（gitleaks 8.28.0；`ebab019..c6f99c6` 11 個 commit，另掃 HEAD 的樹與整段歷史；`logs/secret-precheck-c6f99c6.txt`） |
+| 帳本 | `.venv/bin/python -I scripts/ledger_precheck.py --repo . --base ebab019` | `c6f99c6`：OK：`runtime-patches.json` 178 項、`runtime-sources.json` 70 項、`docs/tool-surface.json` 159 項，0 漂移、0 缺；改過的檔裡列管的都由帳本釘住、帳本本身有改；沒有帳本沒列的執行檔（`logs/ledger-precheck-c6f99c6.txt`） |
+
+### 18.6 本輪用到的決策、待 HM-03a 確認、PaaS
+
+- 決策照第 12 節（DQ-03 (b)、DQ-13、DQ-14、DQ-37、DQ-39 (a)、DQ-40 (a)、使用者 2026-11-16 的定案）；本輪沒有新決策、沒有碰到待定題。
+  S-2 選 (a)＋(c) 是審查列的實作選項，不是決策題。
+- 待 HM-03a 確認的項目照第 13 節，本輪沒有新增（S-6 (d) 的耗時是 HM-19c 的量測，不是 HM-03a）。
+- PaaS：第 11 節（`69ac425..7087280` 的 10 個 PR 與本片無關；本機 `origin/main` 已到 `48f394d`，多的 #156 只改 Hermes，也無關）。
