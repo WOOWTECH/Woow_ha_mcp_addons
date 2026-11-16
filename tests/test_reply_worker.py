@@ -907,6 +907,71 @@ async def test_another_profiles_large_replies_leave_the_loop_and_this_profile_th
     assert percentile(latencies, 0.99) <= 2 * D + 0.2, latencies
 
 
+# ---- D3: the loop's own work while A's replies arrive (the user's decision of 2026-11-16, D3 (a); contract 6) ----
+
+class CountingStore:
+    """A Store whose loads are counted (the token checks read the state file: five system calls and a parse each)."""
+
+    def __init__(self, store):
+        self.store, self.loads = store, 0
+
+    def __getattr__(self, name):
+        return getattr(self.store, name)
+
+    def load(self):
+        self.loads += 1
+        return self.store.load()
+
+
+async def test_a_lease_checked_just_before_runs_without_reading_the_state_again_first(store):
+    """D3: TokenLease.run(checked=True) (a piece of a reply read right after the check that ended the previous one)
+    does not read the state before its operation starts, and its watcher's first look comes after its first wait; the
+    check after the operation stays, and a token changed through the admin API (TokenAccess.committed) still ends the
+    operation at once. Left out (every other lease), as before: a check first, the watcher's at once, one after."""
+    from mcp_admin_core.access import AccessChanged, TokenAccess
+    counting = CountingStore(store)
+    access = TokenAccess(counting)
+    lease = access.lease(store.load().token)
+    held = []
+
+    async def operation():
+        held.append(counting.loads)
+        await asyncio.sleep(0.05)
+        return 'done'
+    assert await lease.run(operation) == 'done'
+    assert held == [1] and counting.loads == 3  # before it, then the watcher's at once (it starts second), after it
+    counting.loads, held = 0, []
+    assert await lease.run(operation, checked=True) == 'done'
+    assert held == [0] and counting.loads == 1  # after it only (the watcher waits 0.2 s before its first look)
+
+    async def long_operation():
+        await asyncio.sleep(10)
+    task = asyncio.create_task(lease.run(long_operation, checked=True))
+    await asyncio.sleep(0.05)
+    begun = time.perf_counter()
+    access.committed()  # the admin API changed the token
+    with pytest.raises(AccessChanged):
+        await asyncio.wait_for(task, 2)
+    assert time.perf_counter() - begun < 0.1
+
+
+@pytest.mark.parametrize('switched_on', [False, True], ids=['switched-off', 'switched-on'])
+async def test_a_switched_on_reply_is_read_with_one_state_read_a_piece(store, worker, switched_on):
+    """D3: the gateway reads a child's reply in pieces, each under the token lease. Switched on (reply_worker given) a
+    piece reads the state once (the check after it, which is the check before the next one); switched off three times,
+    as before. The answer is the same."""
+    counting = CountingStore(store)
+    raw = reply(text_result('piece ' * 300))  # about 1.9 KiB: 270 or so pieces of 7 bytes
+    pieces = -(-len(raw) // 7)
+    answer = await relayed(counting, raw, lane=worker.lane('a') if switched_on else None, chunked=True)
+    assert answer[0] == 200 and json.loads(answer[2])['result']['content'][0]['text'] == 'piece ' * 300
+    print(f'HM-30 D3 state reads: {counting.loads} for {pieces} pieces ({"on" if switched_on else "off"})')
+    if switched_on:
+        assert pieces <= counting.loads <= pieces + 30
+    else:
+        assert counting.loads >= 3 * pieces
+
+
 # ---- D1: the worker serializes in pieces (the user's decision of 2026-11-16, D1 (a); contract 6) ----
 
 def mixed_reply(limit=8 * MiB - 4096):
