@@ -59,11 +59,15 @@ async def test_an_initialize_whose_generation_changed_is_not_handed_out(tmp_path
             else:
                 child_supervisor.status = 'backoff' if how == 'exited' else 'stopped'
         child.on_initialize = change
+        # HM-09's staggered start already had B's child answer a health check (its readiness session counts too)
+        opened = child.opened
         async with runtime.mcp() as client:
             response = await client.post('/mcp', headers=bearer(token), json=initialize_message())
         assert answer(response) == FENCED and 'mcp-session-id' not in response.headers
-        assert child.opened == 1, 'the child did open a session'
-        assert [request.method for request in child.requests if request.method == 'DELETE'] == []
+        assert child.opened == opened + 1, 'the child did open a session'
+        # no DELETE for the client's session (the readiness check ends its own session with one: not counted)
+        assert [request.method for request in child.requests if request.method == 'DELETE'
+                and request.headers.get('mcp-session-id') not in child.checks] == []
 
 
 async def test_an_initialize_to_the_running_generation_is_handed_out_as_before(tmp_path, log_scan):
@@ -76,7 +80,8 @@ async def test_an_initialize_to_the_running_generation_is_handed_out_as_before(t
             response = await client.post('/mcp', headers=bearer(token), json=initialize_message())
             assert response.status_code == 200 and response.content == initialize_body(PRODUCT)
             session = response.headers['mcp-session-id']
-            assert session == f'p{B[:4]}-session-1'
+            # the session B's child opened for this client (not its readiness check's: HM-09's staggered start checks)
+            assert session == f'p{B[:4]}-session-{child.opened}' and session not in child.checks
             served = await client.post('/mcp', headers={**bearer(token), 'Mcp-Session-Id': session}, json=call(2))
             assert served.json()['result']['content'][0]['text'] == child.text
 
