@@ -10,11 +10,14 @@
 - **程式行為不變**（第 5 節）：去掉 docstring 後，`server.py` 的語法樹和基準 `7646f0f` 相同；編譯後 58 個 code object 只有 `hermes_cron` 的
   第一個常數（說明本身）不同。改過的說明和 PaaS `34769c2` 的逐字相同。PaaS 自己的說法（`7087280` → `34769c2` 去掉 docstring 後語法樹相同）
   用同一支腳本重算也成立。反向對照：把 `"paused": not enabled` 改成 `"paused": enabled`，腳本會抓到（exit 1）。
-- **說明和程式一致**（第 7 節）：create 本來就在同一個 POST 同時送 `paused`（`not enabled`）與 `enabled`（PaaS #138，HA 已有）；trigger 只送
-  一個 `POST /api/cron/jobs/<id>/trigger`，子程式不會自己再停用，所以「要維持停用，之後要再呼叫 pause」對 HA 也成立。
+- **說明和程式一致**（第 7 節）：`claude-delivery` 的 create 在同一個 POST 同時送 `paused`（`not enabled`）與 `enabled`（PaaS #138）。
+  這是 PR #85（`b50f1c7`，2026-11-12 合併）的行為，**還沒發版**：發行的 Hermes 0.4.13 只送 `enabled`，下一版才出去（審查 MF-1、S-2）。
+  trigger 只送一個 `POST /api/cron/jobs/<id>/trigger`，子程式不會自己再 pause 或 resume，所以「要維持停用，之後要再呼叫 pause」對 HA 也成立；
+  審查後由新測試守（S-1）。
 - **用戶端看到的變化**（第 6 節）：只有 `hermes_cron` 的 `description` 多這兩句：8081 的 tools/list（子程式自己的、閘道轉回的、閘道自答的都一樣；
   整個回答多 187 個位元組），以及 8099 `/api/capabilities` 工具目錄的同一個欄位（管理面板的工具頁）。工具名稱、輸入與輸出 schema、
-  annotations、寫入權限、tools/call 都逐位元不變。這就是使用者選項說明寫的代價。
+  annotations、寫入權限、tools/call 都逐位元不變。這就是使用者選項說明寫的代價。這些只說本片：同一個 Hermes 下一版另帶 PR #85 的
+  create 請求改變（多送 `paused`），CHANGELOG 另記一行（第 13 節）。
 - **跟著改的工具表面、帳本與釘選**（第 4、6 節；都照檔手改、照檔重算 SHA-256，沒用 `tool_inventory.py --write`，也沒用
   `WOOW_WRITE_TOOL_SNAPSHOT=1` 重產）。任務列的三處：`runtime-sources.json`、`tool-surface.json`、`test_output_schemas.py`。照規則另外要改的四處：
   - `tool_snapshot.py`：閘道內附的工具清單。`tests/test_tool_snapshot.py` 要它等於真子程式。
@@ -22,13 +25,20 @@
   - `tool-surface.json`：`hermes_webhook` 的行號 1161 → 1164（說明多 3 行）。
   - `tests/test_single_profile_golden.py`：HM-01 黃金回歸的 Hermes `LISTING_SHA256`、`LISTED_SHA256`。測試檔頭的規則是：刻意的工具表面變更
     時兩個一起更新。新的回答就是舊的回答只換掉這段說明（逐位元核對過）。
-- **測試**（第 8 節）：新 `tests/test_hermes_cron_description.py`（2 案，跑在 HM-01 的 log 掃描下）。先紅（`67530b9`＝基準＋新測試：2 案都紅在
-  `description == PAAS`），後綠（`2952ebe` 起 2 案過）。
+- **測試**（第 8 節）：新 `tests/test_hermes_cron_description.py`（3 案，跑在 HM-01 的 log 掃描下）。
+  - 說明的 2 案：先紅（`67530b9`＝基準＋新測試：2 案都紅在 `description == PAAS`），後綠（`2952ebe` 起 2 案過）。
+  - 審查 S-1 加的 trigger 一案（`80ab565`）：真子程式、假 dashboard，trigger 只送一個 POST。在拋棄式複本做 5 個突變（trigger 後自己再 pause、
+    再 resume、送兩次、trigger 前先 pause、trigger 後讀一次排程），每個都讓它紅；沒突變的對照組與 clone 本身都過。
 - **檢查**（第 9、11 節）：相關 38 個檔 1,158 案全過、0 skip、0 失敗（新檔、工具表面、output schema、Hermes 13 檔、expansion 6 檔、HM-01 黃金回歸
-  與兩個契約凍結、真子程式）。`tool_inventory.py` exit 0、`validate.py` PASS、兩個預檢 OK、雙向控制字元 0 個。
-- **交發版片**（第 13 節）：Hermes 下一版 `addons/hermes/CHANGELOG.md` 的一行英文原文；PaaS README 安裝前提那句的英文原文。HA 的
-  `apps/hermes/` 底下沒有 README，`addons/hermes/` 的 README 也沒有安裝前提段落，所以本片沒有可補的 README。
-- **還沒做**（第 15 節）：獨立審查（計畫驗收條件）、開 PR 後補 `checks` 秒數、和 HM-32 誰後合誰 rebase。
+  與兩個契約凍結、真子程式）。審查後的修正輪再跑 27 個檔 551 案全過（第 9.1 節）。`tool_inventory.py` exit 0、`validate.py` PASS、兩個預檢 OK、
+  雙向控制字元 0 個。
+- **交發版片**（第 13 節）：Hermes 下一版 `addons/hermes/CHANGELOG.md` 的兩行英文建議稿（HM-33 一行；PR #85 一行，審查 MF-1），
+  以及 PaaS README 安裝前提那句的英文原文。HA 的 `apps/hermes/` 底下沒有 README，`addons/hermes/` 的 README 也沒有安裝前提段落，
+  所以本片沒有可補的 README。
+- **獨立審查：修正後通過**（`artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-33.md`；必修 2、建議 4，沒有要使用者決定的題）。
+  每項怎麼處理見第 17 節。
+- **還沒做**（第 15 節）：開 PR 後補 `checks` 秒數。HM-32（#113）已合併；HM-12 面板（#114）會先合，之後由主對話把本片 rebase 到當時的
+  `claude-delivery` 再開 PR。
 
 ## 1. 範圍與基準
 
@@ -42,7 +52,7 @@
 | 對齊的 PaaS | `woow-mcp-server` main `48f394d`（本機唯讀 repo，沒 fetch、沒 checkout、沒寫入）：#156 `34769c2`（合併 `48f394d`，`34769c2` 的父 commit 是 `7087280`） |
 | 套件（都沒動，`uv.lock` 未改） | Hermes venv：mcp 2.3.0、pydantic 2.14.1、httpx 0.28.1；根目錄 pytest 8.4.2；CPython 3.13.15（本機）／3.13.16（CI） |
 | 證據目錄（repo 外） | `artifacts/ha-multiprofile-parity-20261114/wave4/evidence-HM-33/`（腳本 `tools/`、比對輸入 `inputs/`、結果 `logs/`） |
-| 獨立審查 | 還沒做（第 15 節） |
+| 獨立審查 | 修正後通過（`artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-33.md`，審查 head `5f2db2b`；必修 2、建議 4，沒有要使用者決定的題）。處理表在第 17 節；修正輪的證據在 `evidence-HM-33/fix/` |
 
 ## 2. 使用者的決定（原文）
 
@@ -60,7 +70,7 @@
 | 帳本與工具表面的摘要照規則重算 | 第 4、6 節：七個檔、十處摘要或行號，都照檔重算 |
 | CI 綠就合併 | 交主對話（本片只 commit） |
 | Hermes 下一版帶出去 | 不受開關管，跟著 Hermes 下一版的映像出去 |
-| CHANGELOG 記一行 | 第 13 節英文原文，交發版片（CHANGELOG 在 `addons/` 底下） |
+| CHANGELOG 記一行 | 第 13 節 HM-33 一行的英文建議稿，交發版片（CHANGELOG 在 `addons/` 底下）。審查 MF-1 後另附 PR #85 一行：同一個 Hermes 下一版的 create 請求會變，照既有規則（單帳號行為改變寫進該產品下一版 CHANGELOG）補記，不是新題目 |
 | 代價：用戶端看到的文字多兩句 | 第 6 節：8081 tools/list 與 8099 工具目錄的 `hermes_cron` 說明 |
 | 程式行為不變 | 第 5 節語法樹與編譯結果的比對 |
 
@@ -107,7 +117,7 @@ PaaS CHANGELOG 那段原文（參考；HA 的 CHANGELOG 用英文，第 13 節�
 | `docs/tool-surface.json` | `source_digests` 裡 `server.py` 的摘要；`hermes_webhook` 的 `line` 1161 → 1164 | `scripts/tool_inventory.py` 記每個工具 `def` 的行號，說明多 3 行，排在後面的 `hermes_webhook` 跟著移；`hermes_cron` 自己的 `def` 在 1016 行沒動 |
 | `tests/test_output_schemas.py` | `CURRENT_POST_SOURCE_BYTES` 裡 `server.py` 的目前位元組，加一行註解 | `output_schemas.json` 記的是來源 commit `c7baac6` 的位元組，之後改過的檔另釘目前位元組（輸入、輸出 schema 與 handler 都沒變） |
 | `tests/test_single_profile_golden.py` | Hermes 的 `LISTING_SHA256` `2430f369…` → `326ec974c2abbe8fc59c95975f38de6c11354f0e1e74a085525b7cfc66428111`、`LISTED_SHA256` `8461b58e…` → `a8f5083fe3e19d8583513cffca632b602755eece9c8ee0e087caeeb255bc09d9`，加註解 | HM-01 的規則：刻意的工具表面變更，兩個一起更新（第 6.2 節） |
-| `tests/test_hermes_cron_description.py`（新） | 2 案（第 8 節） | 計畫 §12.3 HM-33 的測試 |
+| `tests/test_hermes_cron_description.py`（新） | 3 案（第 8 節；第 3 案是審查 S-1 加的 trigger） | 計畫 §12.3 HM-33 的測試；審查 S-1 |
 | `docs/multi-profile/contract.md` | 第 1.2 節「不受開關管」清單加一項，另加一段（照 HM-32、HM-09 追補的寫法）；第 10 節一列。第 9 節不加列：說明和 PaaS 一致 | 契約 |
 | `docs/multi-profile/decisions.md` | 第 1.1 節一列（使用者 2026-11-17 06:3x，選項說明原文）；第 5 節一列；DQ 題數不變 | 決策紀錄 |
 | `docs/multi-profile/acceptance-matrix.md` | 測試檔登記表在 HM-31 的列後面加新檔 | 驗收矩陣 |
@@ -183,11 +193,17 @@ PaaS CHANGELOG 那段原文（參考；HA 的 CHANGELOG 用英文，第 13 節�
 ## 7. 說明和程式一致（#138 與 trigger）
 
 - create（`server.py` 1077～1080 行）：`client.post("/api/cron/jobs", json={..., "paused": not enabled, "enabled": enabled}, ...)`，一個 POST，
-  `enabled=false` 就送 `paused: true`。`tests/test_hermes_cron_paused_contract.py`（真的 Hermes 子程式、假 dashboard；HA 從 `b50f1c7` 起就有）
-  4 案全過：停用、啟用、預設啟用三種 create 送的內容，以及嚴格後端回 422 時不拿掉 `paused` 重送。
+  `enabled=false` 就送 `paused: true`。`tests/test_hermes_cron_paused_contract.py`（真的 Hermes 子程式、假 dashboard）4 案全過：停用、啟用、
+  預設啟用三種 create 送的內容，以及嚴格後端回 422 時不拿掉 `paused` 重送。
+  - **這是 PR #85 的行為，還沒發版**（審查 MF-1、S-2）：#85（`b50f1c7`，合併 `b68e437`，2026-11-12）不在 0.4.13 裡。0.4.13 的升版 commit
+    `1cbfcb9` 與映像來源 `4966f40`（`docs/provenance/release-0.4.13-images.json`）都不含 `b50f1c7`，那時的 `server.py` 只送 `"enabled": enabled`。
+    照 PaaS #138 的說明，現在的 Hermes 只看 `paused`，所以 0.4.13 帶 `enabled=false` 建的排程其實是啟用的，下一版才修好。
+    `addons/hermes/CHANGELOG.md` 也還沒有 #85 的一行，第 13 節補一行交發版片。
 - `enabled` 參數：輸入 schema 照舊是 `{"default": true, "title": "Enabled", "type": "boolean"}`（新測試也釘住），排程預設會跑，帶 `false` 才停用。
-- trigger（`server.py` 1134～1138 行）：只送一個 `POST /api/cron/jobs/<id>/trigger`，回 `{"ok": true, "triggered": <id>}`；子程式不會在 trigger 之後
-  自己呼叫 pause。所以「要維持停用，之後要再呼叫 pause」對 HA 也成立。
+- trigger（`server.py` 1134～1138 行）：只送一個 `POST /api/cron/jobs/<id>/trigger`，回 `{"ok": true, "triggered": <id>}`；子程式不會在 trigger 前後
+  自己呼叫 pause 或 resume。所以「要維持停用，之後要再呼叫 pause」對 HA 也成立。審查前只靠讀程式；審查 S-1 後由新測試的第 3 案守（第 8 節）。
+  - 補充（審查第 3.3 節）：dashboard 回 401 時，`_relogin_on_401` 重新登入後把同一個 POST 再送一次；第一次已被拒、沒執行，實際生效的 trigger
+    仍是一次，和 PaaS 相同。
 - trigger 會把停用的排程改回啟用，是 Hermes v0.22.x 的上游行為（PaaS 2026-11-16 用真 Hermes Agent v0.22.5 實測，直接呼叫 Agent API 也一樣）。
   本片照規則不連任何實機，HA 這邊沒有另外實測（第 15 節）。說明寫的是「v0.22.x」，接其他版本 Hermes 的用戶看得出適用範圍。
 
@@ -200,14 +216,16 @@ PaaS CHANGELOG 那段原文（參考；HA 的 CHANGELOG 用英文，第 13 節�
 |---|---|
 | `test_the_child_lists_the_paas_text` | 在 `apps/hermes/.venv`（CI 由 `packaging/unit.sh` 裝）裡 import 釘版的子程式（`PYTHONPATH` 照 `products.child_spec`），取 `mcp.list_tools()` 裡 `hermes_cron` 的說明與輸入 schema；import 不發任何請求 |
 | `test_the_gateways_packaged_listing_carries_the_same_text` | 閘道內附的清單 `LISTED['hermes']` 的同一個工具 |
+| `test_trigger_is_one_post_and_never_pauses_or_resumes_by_itself`（審查 S-1，`80ab565`） | 照 `tests/test_hermes_cron_paused_contract.py` 的寫法：真的 Hermes 子程式、假 dashboard 記下收到的每個請求（不分方法）。trigger 一次，回 `{"ok": true, "triggered": "synthetic-job"}`；dashboard 只收到 `POST /auth/password-login` 與 `POST /api/cron/jobs/synthetic-job/trigger` |
 
-兩案都斷言：說明逐字等於 PaaS `34769c2` 的（`PAAS`，含換行）；兩句（去掉換行後）各出現一次；把兩句的補充拿掉就等於原本的說明（`BEFORE`，
+說明的兩案都斷言：說明逐字等於 PaaS `34769c2` 的（`PAAS`，含換行）；兩句（去掉換行後）各出現一次；把兩句的補充拿掉就等於原本的說明（`BEFORE`，
 `7646f0f`；其他字都沒變）；`enabled` 照舊是預設 true 的布林。
 
 | 輪 | 程式 | 結果 | 證據 |
 |---|---|---|---|
 | 紅（`67530b9`＝`7646f0f`＋新測試） | 修正前 | 2 failed（1.36 秒），兩案都紅在 `assert description == PAAS`（子程式與內附清單都還是原本的說明） | `logs/red-tests-only-7646f0f.txt` |
 | 綠（`2952ebe` 起） | 修正後 | 2 passed（子程式那案約 1.3 秒，清單那案 1 ms 以內） | `logs/related.txt`、`logs/related.junit.xml` |
+| trigger 那案（`80ab565`；程式本來就對，所以用突變證明它會紅） | 拋棄式複本（`git clone --no-hardlinks` 自本 clone，連到 clone 的 venv；只改複本的 `server.py`，每次 `git checkout` 還原並確認乾淨） | 沒突變的對照組 1 passed；5 個突變都 1 failed，每個都紅在 `events ==`：trigger 後自己再 pause（多一個 `/pause`）、再 resume（多一個 `/resume`）、送兩次 trigger、trigger 前先 pause（第 2 個請求變成 `/pause`）、trigger 後讀一次排程（多一個 GET）。clone 本身 3 passed | `fix/trigger-mutations.json`（`tools/trigger_mutations.py`）、`fix/new-tests-clone.txt` |
 
 ## 9. 本機檢查（2026-11-17，一般使用者 uid 1000；AMD EPYC 7713、CPython 3.13.15；TMPDIR 用 `ha_env.sh` 給的 `/tmp/ha-mp-XXXXXX`，每次跑完用完整路徑刪除；pytest 排在共用鎖後面）
 
@@ -224,6 +242,20 @@ PaaS CHANGELOG 那段原文（參考；HA 的 CHANGELOG 用英文，第 13 節�
 本機一定失敗的既有 7 案（要 root：`test_owned_executable` 的 uid10001、`test_profile_store::test_mode_and_owner_as_the_add_on_user`、
 `test_restore_detection` 的 `test_root_*` ×5）不在上面這些檔裡，本片沒跑全套。
 
+### 9.1 審查後的修正輪（2026-11-17 07:3x～07:4x；證據在 `evidence-HM-33/fix/`）
+
+本輪只加 trigger 一案、改測試檔頭與文件（`apps/`、帳本、其他測試都沒動），所以重跑新測試、Hermes 相關、工具表面、output schema、
+黃金回歸與兩個契約凍結；第 9 節那次的 38 個檔涵蓋其他部分，CI 照常全跑。
+
+| 檢查 | 結果 | 證據 |
+|---|---|---|
+| 新測試（clone，`80ab565` 的內容） | 3 passed（3.9 秒） | `fix/new-tests-clone.txt` |
+| trigger 那案的突變（拋棄式複本，用完以完整路徑刪除） | 對照組過；5 個突變都紅（第 8 節） | `fix/trigger-mutations.json` |
+| 相關測試（工作樹＝`c3d5bcf` 的內容；正式 conftest、排在共用鎖後面） | **27 個檔 551 案全過**、0 失敗、0 skip，372 秒：新檔 3；Hermes 13 檔 99；`test_tool_error_text` 5；`test_tool_snapshot` 11（8 個真子程式）、`test_tool_inventory` 8、`test_full_surface` 28、`test_tool_metadata` 17、`test_declared_schemas` 57、`test_unconfigured_connect` 61；`test_output_schemas` 189、`test_output_schema_runtime` 20；HM-01 黃金回歸 17、MCP 契約凍結 9、管理契約凍結 19；`test_ledger_precheck` 8 | `fix/related-fix.txt`、`fix/related-fix.junit.xml` |
+| `scripts/tool_inventory.py` | exit 0 | `fix/validate-inventory-c3d5bcf.txt` |
+| `packaging/validate.py`（ci-venv 的 Python） | PASS | 同上 |
+| 雙向控制字元 | 改到的檔、本輪之前的 commit 訊息：0 個（本 commit 另掃，結果在交回主對話的回報與 PR 說明草稿） | 交回的回報 |
+
 ## 10. 只在 CI 跑的測試、`checks` 秒數
 
 - 全套 pytest 交 CI（root、0 skip；任務規則：本機只跑相關的）。要 root 的 7 案、瀏覽器測試只在 CI 跑；本片沒動它們測的東西。
@@ -237,6 +269,11 @@ PaaS CHANGELOG 那段原文（參考；HA 的 CHANGELOG 用英文，第 13 節�
 | 秘密預檢 | `.venv/bin/python -I scripts/secret_precheck.py --tools SP:hm01/gitleaks-tools --repo . --base 7646f0f --head HEAD --full` | `c22cc88`（前 3 個 commit＋HEAD 整棵樹＋整個歷史；gitleaks 8.28.0 釘版已驗）：`result: OK, 0 findings`。加上本筆記的 commit 後重跑的結果寫在交回主對話的回報與 PR 說明草稿（筆記記不到自己那個 commit） |
 | 帳本預檢 | `.venv/bin/python -I scripts/ledger_precheck.py --repo . --base 7646f0f` | `c22cc88`：`result: OK`。`runtime-patches.json` 176 檔、`runtime-sources.json` 70 檔、`tool-surface.json` 159 檔，0 漂移、0 缺；改到的 2 個列管檔（`server.py`、`tool_snapshot.py`）都有帳本更新；沒有未列管的執行期檔 |
 | `packaging/validate.py` | ci-venv 的 Python | PASS |
+| 秘密預檢（修正輪） | 同第一列 | `c3d5bcf`（6 個 commit＋HEAD 整棵樹＋整個歷史）：`result: OK, 0 findings`。加上本 commit 後重跑的結果寫在交回的回報與 PR 說明草稿 |
+| 帳本預檢（修正輪） | 同第二列 | `c3d5bcf`：`result: OK`（176／70／159，0 漂移、0 缺；本輪沒動列管檔與帳本） |
+
+帳本預檢的一個盲點（審查 S-4）：`n8n_arguments.py` 那筆 `guarded_sources` 裡的 `tool_snapshot.py` 摘要，預檢看不到（被 `tool_snapshot.py` 自己那筆
+蓋掉），只有 `tests/test_tool_inventory.py` 會擋；本片兩處都改對了，`test_tool_inventory` 8 案本機兩輪都過。工具修正交 HM-29（第 15 節）。
 
 `SP:`＝`/data/pi-agent/tmp/claude-1000/-data-pi-agent-home-woow-sec-sweep/9a04e4b3-b708-497b-b300-75c6a25db75e/scratchpad/`。
 
@@ -252,10 +289,18 @@ PaaS CHANGELOG 那段原文（參考；HA 的 CHANGELOG 用英文，第 13 節�
 
 ## 13. 交給後面的片（發版片）
 
-本片不改 `addons/`。Hermes 下一次發版時：
+本片不改 `addons/`。Hermes 下一次發版時，`addons/hermes/CHANGELOG.md` 記兩行（英文，照既有 CHANGELOG 的寫法；PaaS 的 PR 號寫成
+`woow-mcp-server #…`，免得和本 repo 的 PR 號混淆）。下面是審查 MF-1 附的建議稿，最後的英文由發版片定：
 
-- `addons/hermes/CHANGELOG.md` 記一行（英文，照既有 CHANGELOG 的寫法；PaaS 的 PR 號寫成 `woow-mcp-server #156`，免得和本 repo 的 PR 號混淆）：
-  "- The `hermes_cron` tool description now says what Hermes does with a paused job, as the PaaS server does (woow-mcp-server #156): `enabled=false` on create makes the job paused, so it does not run until resumed (the add-on already sends `paused` together with `enabled`), and Hermes v0.22.x also resumes a paused job when it is triggered, so call `pause` afterwards if it should stay paused. Only the description text changes; tool names, inputs, grants and requests do not."
+- HM-33（本片）：
+  "- The `hermes_cron` description now says two things Hermes does, as the PaaS server's description does (woow-mcp-server #156): `create` with `enabled=false` makes the job paused, so it does not run until resumed; and Hermes v0.22.x also resumes a paused job when it is triggered (Hermes's own behaviour, which PaaS measured on Hermes Agent v0.22.5), so call `pause` afterwards if it should stay paused. Text only: this change alone changes no tool name, input or output schema, grant, request or reply."
+- PR #85（`b50f1c7`，2026-11-12 合併；發行的 0.4.13 沒有，CHANGELOG 也還沒記；第 7 節）：
+  "- `hermes_cron` `create` with `enabled=false` now also sends `paused: true` in the same request, as the PaaS server does (woow-mcp-server #138; PR #85). Per PaaS, current Hermes reads only `paused`, so such a job used to be created enabled. If a backend refuses the extra field (HTTP 422), the add-on reports that error and does not send a second request without it."
+- 原稿只有一行，已作廢（審查 MF-1）。它寫「(the add-on already sends `paused` together with `enabled`)」，對發行版不成立；寫「Only the description
+  text changes; tool names, inputs, grants and requests do not」，和 #85 放在同一版時不成立（create 的請求會變）；也沒寫明 trigger 那句是 Hermes
+  自己的行為。
+- 計畫 §11.5 主對話已加一條：每個產品升版前，核對上一版以來合併、但 CHANGELOG 沒記的修正（例子就是 #85）。
+- 可以順便告訴使用者（審查第 4 節）：Hermes 下一版其實含一個真的行為修正：#85 之後，`enabled=false` 建的排程在現在的 Hermes 上才真的是停用的。
 - PaaS README 安裝前提那句（英文原文，`apps/hermes/README.md`）：
   - 改之前："- **Hermes Agent v0.17.0** running with Gateway API (:8642) and Dashboard API (:9119) accessible"
   - 改之後："- **Hermes Agent v0.17.0 or v0.22.x** (production runs v0.22.5) running with Gateway API (:8642) and Dashboard API (:9119) accessible"
@@ -269,31 +314,42 @@ PaaS CHANGELOG 那段原文（參考；HA 的 CHANGELOG 用英文，第 13 節�
 
 | 條件 | 狀態 |
 |---|---|
-| 全綠 | **本機能跑的都綠**：相關 38 個檔 1,158 案、`tool_inventory.py`、`validate.py`、兩個預檢都過；全套等 CI（root、0 skip） |
+| 全綠 | **本機能跑的都綠**：相關 38 個檔 1,158 案（修正輪再跑 27 個檔 551 案）、`tool_inventory.py`、`validate.py`、兩個預檢都過；全套等 CI（root、0 skip） |
 | 只改 `hermes_cron` 的說明，文字照 PaaS；程式行為不變（去掉說明後語法樹和基準相同） | 通過：第 5 節（HA 與 PaaS 兩邊都比；反向對照會抓到） |
 | 帳本、工具表面摘要、output schema 釘選照規則重算 | 通過：第 4、6 節（另含 `tool_snapshot.py`、`runtime-patches.json` 兩處、HM-01 兩個摘要、`hermes_webhook` 行號） |
 | HA 的 README 有對應的安裝前提段落才補版本那句 | 沒有對應段落，不補；原文交發版片（第 13 節） |
-| 測試：釘住工具說明有這兩句；去掉說明後語法樹和基準相同 | 第 8 節（先紅後綠）；第 5 節（實際比對） |
+| 測試：釘住工具說明有這兩句；去掉說明後語法樹和基準相同 | 第 8 節（先紅後綠）；第 5 節（實際比對）；審查 S-1 另加 trigger 只送一個 POST（第 8 節，突變證明） |
 | 不改版號、不碰 `addons/` | 通過 |
-| Hermes 下一版的 CHANGELOG 記一行（交發版片） | 第 13 節（原文） |
-| 獨立審查 | **還沒做**（第 15 節） |
+| Hermes 下一版的 CHANGELOG 記一行（交發版片） | 第 13 節：HM-33 一行；審查 MF-1 後另附 PR #85 一行 |
+| 獨立審查 | **修正後通過**（`artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-33.md`）；必修 2、建議 4 都已處理（第 17 節） |
 
 ## 15. 還沒解決、交給後面的片
 
-- **獨立審查**：計畫的驗收條件，交主對話安排。
 - **`checks` 秒數**：開 PR 後補（第 10 節）。
-- **和 HM-32 的合併順序**：兩片都從 `7646f0f` 開、都改帳本與工具表面，誰後合誰 rebase，再跑兩個預檢、`tool_inventory.py` 與 CI。
-  - git 自動合得起來的：`runtime-sources.json`（HM-32 改 EMQX、LiteLLM 的 `lifespan.py` 那兩筆，本片改 Hermes `server.py` 那筆）、`tool-surface.json`
-    （`source_digests` 不同行，本片另改 `hermes_webhook` 的行號）。
-  - 會衝突、兩邊都留的：`tests/test_output_schemas.py` 的 `CURRENT_POST_SOURCE_BYTES`（本片改 Hermes 那筆並在上面加註解，HM-32 在它下面加 EMQX
-    `lifespan.py` 一筆，相鄰）、契約第 1.2 節的清單那一行與各自的一段、第 10 節表尾、`decisions.md` 第 1.1 節與第 5 節表尾、驗收矩陣 HM-31 列之後。
-  - 摘要不用重算：兩片改的檔不重疊（HM-32 沒動 `server.py`、`tool_snapshot.py`、`runtime-patches.json`、黃金回歸）。
-  - 同時在做的 HM-30（#111）、HM-13b（#108）、HM-13c（#112）也改契約與 `decisions.md`；比本片先合的，本片 rebase 時一樣兩邊都留。
-- **發版片**：第 13 節的 CHANGELOG 一行；README（或 DOCS）要不要補 Hermes 版本那句。
+- **合併順序**（審查 MF-2；2026-11-17 07:3x 的現況）：
+  - HM-32（#113）07:0x 已合併，`claude-delivery` 是 `a709b97`。HM-12 面板是 PR #114（head `48e04eb`），CI 跑中，會比本片先合。
+  - 本片等 #114 合併後，由主對話 rebase 到當時的 `claude-delivery` 再開 PR（本分支沒 push 過，可以 rebase；本修正輪照指示沒 rebase）。
+    rebase 後重跑兩個預檢、`tool_inventory.py` 與 CI。
+  - 審查的試做（`evidence-review-HM-33/logs/rebase-trials.md`）：疊到面板之後，衝突在 `tests/test_output_schemas.py`（`CURRENT_POST_SOURCE_BYTES`
+    相鄰兩筆）、驗收矩陣（HM-31 列之後）、契約第 1.2 節兩處（清單那行與段落）與第 10 節表尾、`decisions.md` 第 1.1、5 節兩個表尾。都是兩邊各加
+    的行，兩邊都留。`runtime-sources.json`、`tool-surface.json` 和 HM-32 自動合併；`runtime-patches.json` 和 HM-30（#111）、面板的改動自動合併。
+    摘要不用重算（改的檔不重疊）；契約第 9 節不用重排（本片不加列）。
+  - 本修正輪改的文件都在上面那幾處（契約第 1.2 節那段、第 10 節表尾多一列，`decisions.md` 本片兩列，驗收矩陣本片那列），不會多出新的衝突處。
+  - 還沒合的 HM-13b（#108）、HM-13c（#112）也改契約與 `decisions.md`；比本片先合的，本片 rebase 時一樣兩邊都留。本片沒用契約第 9 節的列號，
+    它們重排列號時不受影響。
+- **發版片**：第 13 節的兩行 CHANGELOG；README（或 DOCS）要不要補 Hermes 版本那句。
 - **trigger 的上游行為 HA 沒有實測**：本片照規則不連任何實機或 HA 主機。說明照 PaaS 寫（PaaS 用 v0.22.5 實測）；HA 的 QA 或展示機若之後接
   Hermes 做驗收，可順便確認 v0.22.x 的 trigger 會把停用的排程改回啟用。
-- **repo 外（給主對話）**：計畫 §12.3 HM-33 的「做法」寫「帳本、工具表面摘要、output schema 釘選照規則重算」，實際另外還有閘道內附的工具清單
-  （`tool_snapshot.py`）、`runtime-patches.json` 的兩個摘要與 HM-01 黃金回歸的兩個摘要（第 4 節），可在計畫或 FEATURE-MATRIX FM-156 補一句。
+- **帳本預檢看不到的一個摘要**（審查 S-4，交 HM-29）：`scripts/ledger_precheck.py` 把各筆摘要用路徑當 key 合併。`tool_snapshot.py` 同時是自己那筆的
+  `sha256`，也在 `n8n_arguments.py` 那筆的 `guarded_sources` 裡；後面那筆（`tool_snapshot.py` 自己那筆）蓋掉前面那筆，所以 `n8n_arguments.py`
+  那筆的 guarded 摘要改錯時預檢照樣 OK，只有 `tests/test_tool_inventory.py::test_runtime_patch_ledger_and_guarded_wheel_sources` 會擋（本機已跑過，
+  第 9 節）。這是既有工具的限制，本片兩處都改對了。改成每筆 entry 的每個摘要分開檢查，交 HM-29（或 HM-01 的維護）。
+- **repo 外（給主對話）**：
+  - 計畫 §12.3 HM-33 的「做法」寫「帳本、工具表面摘要、output schema 釘選照規則重算」，實際另外還有閘道內附的工具清單（`tool_snapshot.py`）、
+    `runtime-patches.json` 的兩個摘要與 HM-01 黃金回歸的兩個摘要（第 4 節），可在計畫或 FEATURE-MATRIX FM-156 補一句。
+  - 審查 S-2：計畫 §12.3 HM-32 寫「#138（Hermes 建停用排程時同時送 `paused` 與 `enabled`）HA 已經有，不用動」，可加註「PR #85，0.4.13 還沒有，
+    下一版才出去」。
+  - 審查 S-3：計畫 §3.3 的 HM-33 列「保證方式」可補「黃金回歸的兩個 tools/list 摘要照 HM-01 檔頭的規則一起更新」。
 
 ## 16. commit（`7646f0f` 之後）
 
@@ -302,4 +358,22 @@ PaaS CHANGELOG 那段原文（參考；HA 的 CHANGELOG 用英文，第 13 節�
 | `67530b9` | 測試（先紅：2 案都紅） |
 | `2952ebe` | 說明照 PaaS 補兩句；閘道內附的工具清單；帳本（`runtime-sources.json`、`runtime-patches.json`、`tool-surface.json`）；`test_output_schemas.py` 與 HM-01 黃金回歸的釘選 |
 | `c22cc88` | 文件：契約第 1.2、10 節，`decisions.md` 第 1.1、5 節，驗收矩陣的測試檔登記表 |
-| （本 commit） | 本筆記 |
+| `5f2db2b` | 本筆記（獨立審查的對象） |
+| `80ab565` | 審查 S-1：新測試的 trigger 一案；測試檔頭補 S-2（#85 還沒發版） |
+| `c3d5bcf` | 審查 MF-1、S-1～S-3 的文件：契約第 1.2 節那段與第 10 節一列，`decisions.md` 本片兩列（實作註），驗收矩陣本片那列 |
+| （本 commit） | 審查 MF-1、MF-2、S-1～S-4 的筆記修正與處理表（第 17 節） |
+
+## 17. 獨立審查意見處理表
+
+審查：`artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-33.md`（審查 head `5f2db2b`；判定修正後通過：必修 2、建議 4，沒有要使用者
+決定的題）。先核對再改：MF-1 的 #85 與 0.4.13 的關係自己重查過（下表）；S-1 的測試先用突變證明會紅。本修正輪照指示只 commit，不 push、
+不開 PR、不 rebase。
+
+| 編號 | 審查意見 | 處理 | commit | 證據 |
+|---|---|---|---|---|
+| MF-1 | 交發版片的 CHANGELOG 一行不準：發行的 0.4.13 沒送 `paused`（#85 還沒發版）；「requests do not」和 #85 同一版時不成立；沒寫明 trigger 那句是 Hermes 自己的行為 | **已修**：第 13 節改成兩行建議稿（HM-33 一行、#85 一行），原稿作廢；結論、第 2、7 節與契約第 1.2 節同步；PR 草稿同步（repo 外） | `c3d5bcf`（契約）、本 commit（筆記） | 自己重查：`git merge-base --is-ancestor b50f1c7 1cbfcb9` 與 `… b50f1c7 4966f40` 都是「不是祖先」（`1cbfcb9`＝0.4.13 的升版 commit、`4966f40`＝`release-0.4.13-images.json` 記的映像來源）；`git show 4966f40:apps/hermes/vendor/hermes_mcp_server/server.py` 沒有 `"paused": not enabled`；`addons/hermes/CHANGELOG.md` 沒有 `paused`、`#85` |
+| MF-2 | 合併順序過時，也漏了 HM-12 面板；「`runtime-patches.json` 和 HM-32 自動合併」不對（HM-32 沒動這個檔，自動合併的是 HM-30 的改動） | **已修**：第 15 節照現況重寫（#113 已合併、#114 先合、之後主對話 rebase 再開 PR、審查試做的衝突處）；PR 草稿同步（repo 外） | 本 commit | 審查 `evidence-review-HM-33/logs/rebase-trials.md`。本修正輪沒 rebase |
+| S-1 | 沒有測試守「trigger 只送一個 POST、子程式不會自己再停用」 | **採用**：新測試第 3 案（真子程式、假 dashboard 記下每個請求）。程式本來就對，所以在拋棄式複本做 5 個突變證明它會紅；對照組與 clone 本身都過 | `80ab565` | `evidence-HM-33/fix/trigger-mutations.json`（`tools/trigger_mutations.py`）、`fix/new-tests-clone.txt`；第 8 節 |
+| S-2 | 「PaaS #138，HA 已有」沒說還沒發版 | **採用**：契約第 1.2 節、測試檔頭、筆記結論與第 7 節、PR 草稿都補「PR #85，2026-11-12 合併；0.4.13 還沒有，下一版才出去」。前兩個 commit（`67530b9`、`2952ebe`）的訊息照舊寫「HA 已有」：照指示不 rebase、不改寫歷史，以這裡與契約的說法為準 | `80ab565`（測試檔頭）、`c3d5bcf`（契約）、本 commit（筆記） | — |
+| S-3 | `decisions.md` 第 1.1 節本片那列，決定欄混了實作的解讀（黃金回歸摘要算在「帳本與工具表面的摘要」裡） | **採用**：那句標成「實作註」，和使用者的原話分開；誰定欄寫「使用者（實作註：HM-33）」；第 5 節本片那列補一句 | `c3d5bcf` | — |
+| S-4 | 帳本預檢看不到 `n8n_arguments.py` 那筆的 guarded 摘要 | **不改程式**：第 11、15 節記下，只有 `test_tool_inventory` 會擋（本機已跑過）；工具修正交 HM-29 | 本 commit | 審查的突變 N1（預檢 OK、`test_tool_inventory` 紅） |
