@@ -755,10 +755,6 @@ async def test_a_real_8_mib_reply_stops_the_loop_for_its_longest_c_call_only(sto
 
 # ---- each profile's answers not received yet (contract 2.4, 5, 6) ----
 
-
-
-# ---- each profile's answers not received yet (contract 2.4, 5, 6) ----
-
 def asgi_request(app, headers, body, *, hold=None):
     """One HTTP/1.1 POST /mcp handed to an ASGI app as uvicorn hands it over. hold: an asyncio.Event the server waits
     for before it takes each body message (a client that does not read: h11 waits for its buffer to drain before it
