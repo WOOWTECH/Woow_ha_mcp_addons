@@ -276,6 +276,22 @@ test('a rotated token is said even when the new state cannot be read again (200 
   await expect(page.locator('#notice')).toHaveClass(/error/);
 });
 
+test('switched off, or a save that rotated nothing: a reload that fails after the save shows its error alone, as today', async ({page, request}) => {
+  await reset(request, ODOO);
+  await open(page, '/backend');
+  await loseTheNextReading(page);
+  await savePartial(page, {username: 'DUMMY-user-two'});
+  await expect(page.locator('#notice')).toHaveText(LOST);
+  await expect(page.locator('#notice')).toHaveClass(/error/);
+  await page.unrouteAll({behavior: 'wait'});
+  // Switched on, a password alone rotates nothing: the same.
+  await reset(request, {...ODOO, profiles: {}});
+  await open(page, '/backend');
+  await loseTheNextReading(page);
+  await savePartial(page, {password: 'DUMMY-odoo-password-two'});
+  await expect(page.locator('#notice')).toHaveText(LOST);
+});
+
 test('server text in an answer that says token_rotated is never shown, only the panel\'s own copy (200 and shape D)', async ({page, request}) => {
   await reset(request, {...ODOO, profiles: {}});
   await open(page, '/backend');
