@@ -599,6 +599,13 @@ class AnyMethod:
 
 
 async def body(request: Request):
+    # HM-31 review MF-3: a body that declares more than MAX_REQUEST (request_budget.declared_length: one Content-Length
+    # and no Transfer-Encoding) can never be served: today's 413 before a byte of it is read, never charged to the
+    # request body budget nor answered with its retryable -32003 (PaaS: not charged, 413; n8n's read_body does the same).
+    # The response is the one a body read past MAX_REQUEST gets; 8099's management API reads through here too.
+    declared = request_budget.declared_length(request.headers.raw)
+    if declared is not None and declared > MAX_REQUEST:
+        raise BadRequest(413)
     content = bytearray()
     try:
         async with asyncio.timeout(BODY_SECONDS):
@@ -900,10 +907,13 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     - body_budget: this profile's request_budget.Share of the add-on's budget (profile_runtime.ProfileManager gives
       every profile of a switched-on add-on its share of one budget). Left out: a budget of this add-on's own, made now
       (request_budget.own_share: derived from the memory at startup, the default profile's share).
-    - once the token is checked, a large body (declared over 64 KiB, or without Content-Length) is charged: a declared
-      length that does not fit is refused before a byte is read, its body drained (only its head and tail kept, to
-      find its id: 200 + -32003 under it, else 503; Retry-After 5); one without a length is cut off once it does not
-      fit (its id from its head); one that sends nothing for request_budget.BODY_IDLE_SECONDS gets 408 (idle_reply).
+    - once the token is checked, a large body (declared over 64 KiB, or without Content-Length; a Content-Length
+      beside a Transfer-Encoding declares nothing, review MF-1) is charged: a declared length that does not fit is
+      refused before a byte is read, its body drained (only its head and tail kept, to find its id: 200 + -32003
+      under it, else 503; Retry-After 5); the bytes that arrive are charged too, whatever was declared, and a body is
+      cut off once they do not fit (its id from its head); one that sends nothing for
+      request_budget.BODY_IDLE_SECONDS gets 408 (idle_reply). A body that declares more than MAX_REQUEST gets today's
+      413 before a byte is read (body(); review MF-3).
       The body as forwarded to the child is charged too (re-serialized: up to 3 times as large); one that does not fit
       then is not sent (200 + -32003 under its id). Small requests (64 KiB at most, read and forwarded) are never
       charged nor refused. What a request holds goes back when it ends (AnyMethod).

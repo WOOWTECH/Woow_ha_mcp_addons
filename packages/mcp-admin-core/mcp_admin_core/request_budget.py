@@ -16,7 +16,8 @@ One budget of the add-on (RequestBudget), two layers, both must hold (PaaS):
   hold the whole budget.
 
 What is charged (Reservation): a request's body bytes, from the moment its body is read (a declared Content-Length
-before a byte is read: refused then, nothing read into memory; without one, as it arrives) until the request ends (its
+before a byte is read: refused then, nothing read into memory; and every byte as it arrives, whatever was declared: a
+Content-Length beside a Transfer-Encoding declares nothing, HM-31 review MF-1) until the request ends (its
 answer sent in full, an event stream's last byte included, or its client gone: the gateway's forwarded copy of the body
 stays referenced until then, HM-08 review MF-1). HA re-serializes a body before forwarding it (ASCII escapes: a CJK
 character 6 bytes, an emoji 12; a number in Python's own form), so the larger of what was read and what is forwarded is
@@ -313,12 +314,23 @@ class Reservation:
 
 # ---- reading a body under the budget ----
 
-def declared_length(values) -> int | None:
-    """The Content-Length a request states when it states exactly one (h11 refuses a malformed one), else None (its
-    body is then counted as it arrives)."""
-    if len(values) != 1:
+def declared_length(headers) -> int | None:
+    """The body length a request declares, from its ASGI scope's headers ((name, value) bytes pairs): its one
+    Content-Length, a plain number; None (its body is then counted as it arrives) when it states none, more than one, a
+    malformed one, or has a Transfer-Encoding. RFC 9112 6.3: the Transfer-Encoding frames the body and the
+    Content-Length is ignored. h11 0.16.0, the add-on's parser (no httptools in its environment), reads a request with
+    both as chunked and hands content-length on as sent (HM-31 review MF-1). The one rule of the gateway's watch and
+    body and of the dispatcher's admission-full read (review S-6)."""
+    lengths = []
+    for name, value in headers:
+        name = name.lower()
+        if name == b'transfer-encoding':
+            return None
+        if name == b'content-length':
+            lengths.append(value)
+    if len(lengths) != 1:
         return None
-    value = values[0].strip() if isinstance(values[0], str) else values[0].decode('latin-1').strip()
+    value = lengths[0].decode('latin-1').strip()
     if not value.isascii() or not value.isdigit() or len(value) > 19:
         return None
     return int(value)
@@ -332,21 +344,25 @@ def registered(declared: int | None) -> bool:
 
 def watch(request, reservation: Reservation, *, cap: int, idle_seconds: float = BODY_IDLE_SECONDS):
     """Make request.stream charge reservation and watch for idleness (PaaS proxy._count_stream and _watch_idle), and
-    return the stream it replaced (a refused body is drained with it). Nothing changes for a small request.
+    return the stream it replaced (a refused body is drained with it). Nothing changes for a small request: one that
+    declares at most SMALL_REQUEST_BYTES (declared_length: a Content-Length beside a Transfer-Encoding declares
+    nothing, so a body framed chunked is a large request whatever its Content-Length says; HM-31 review MF-1).
 
     - a declared Content-Length over SMALL_REQUEST_BYTES and at most cap is charged when the body's read begins, before
       a byte is read: BudgetExceeded (read False) if it does not fit;
-    - without one (or over cap), the bytes are charged as they arrive: BudgetExceeded (read True, the head kept) once
-      they do not fit; over cap they are no longer charged (the reader refuses the body as too large);
+    - the bytes that arrive are charged as they arrive, whatever was declared (review MF-1: the declared length is no
+      bound on them; a Reservation only grows, so a body framed by its length adds nothing): BudgetExceeded (read True,
+      the head kept) once they do not fit; over cap they are no longer charged (the reader refuses the body as too
+      large; gateway.body refuses a declared one over its ceiling before a byte is read, review MF-3);
     - BodyIdleTimeout when no new byte came for idle_seconds (between two chunks, or before the first)."""
     original = request.stream
-    declared = declared_length(request.headers.getlist('content-length'))
+    declared = declared_length(request.headers.raw)
     if not registered(declared):
         return original
-    counted = declared is None or declared > cap
+    precharged = declared is not None and declared <= cap
 
     async def stream():
-        if not counted:
+        if precharged:
             reservation.grow(declared, cap=cap)
         chunks = original().__aiter__()
         total, head = 0, b''
@@ -358,7 +374,7 @@ def watch(request, reservation: Reservation, *, cap: int, idle_seconds: float = 
                     return
                 except TimeoutError:
                     raise BodyIdleTimeout(idle_seconds) from None
-                if counted and chunk:
+                if chunk:
                     total += len(chunk)
                     if len(head) < ID_WINDOW:
                         head += chunk[:ID_WINDOW - len(head)]

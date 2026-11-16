@@ -47,7 +47,8 @@ length that does not fit is refused before a byte is read (drained, its id from 
 is gone with it.
 
 Admission full (HM-14 review MF-2 (b), settled 2026-11-16 by the main session as the PaaS semantics; DQ-07's numbers
-unchanged): a POST of at most 64 KiB (REFUSAL_BODY_LIMIT; declared, or without a length and ending within it) is still
+unchanged): a POST of at most 64 KiB (REFUSAL_BODY_LIMIT; declared, or without a length and ending within it: the
+gateway's request_budget.declared_length, so a Content-Length beside a Transfer-Encoding declares nothing) is still
 read, within REFUSAL_READ_SECONDS and with no bound on how many are read at once (PaaS: small requests are not charged
 and their reads not counted; the 8081 listener's bound holds them). One that carries no request (gateway.
 carries_no_request: a notification or a response) goes on to the profile's app beyond its admission, so the reserve
@@ -167,14 +168,6 @@ def _header(scope, name):
     return [value for key, value in scope['headers'] if key == name]
 
 
-def declared_length(scope) -> int | None:
-    """The request's Content-Length when it states exactly one (h11 refuses a malformed one), else None."""
-    values = _header(scope, b'content-length')
-    if len(values) != 1 or not values[0].isdigit() or len(values[0]) > 19:
-        return None
-    return int(values[0])
-
-
 def json_content(scope) -> bool:
     """gateway.json_body's rule: the first Content-Type names application/json (parameters aside)."""
     values = _header(scope, b'content-type')
@@ -259,7 +252,8 @@ class ProfileGate:
         text = admission_text(quota.admission)
         message = None
         if scope['method'] == 'POST' and json_content(scope):
-            length = declared_length(scope)
+            # the gateway's one rule (HM-31 review S-6): none beside a Transfer-Encoding; read_small counts what arrives
+            length = request_budget.declared_length(scope['headers'])
             body = None if length is not None and length > REFUSAL_BODY_LIMIT else await read_small(receive)
             if body is not None:
                 message = small_message(body)
