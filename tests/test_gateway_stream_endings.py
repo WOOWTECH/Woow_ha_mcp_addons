@@ -12,8 +12,10 @@ The child's connection breaks while it handles a request (a read, write or proto
 
 Its text says whether the child generation the request went to has stopped (exited, stopped or replaced; looked at for
 up to 0.25 s, since the broken connection may come a moment before the Supervisor sees the exit) or still runs, and
-both say the operation may or may not have completed. The profile's WARNING names the HTTP method and the error's class,
-with no traceback, path, token or body. A connection that could not be made, a slow child and a child's wrong answer
+every text says the operation may or may not have completed. A stopped child is said to restart automatically (the
+PaaS text) only while it comes back by itself (HM-09's watchdog backing off, a start under way, a new generation); one
+that is blocked, failed, stopped or not configured is said not to be restarting now. The profile's WARNING names the
+HTTP method and the error's class, with no traceback, path, token or body. A connection that could not be made, a slow child and a child's wrong answer
 (3xx, 401, 403, a malformed or oversize reply, an unreviewed protocol version) keep their 502 {"error":"request denied"}.
 
 The token is rotated or revoked once the answer began to go out (gateway.Ending, access.LeasedResponse):
@@ -40,7 +42,7 @@ from starlette.responses import Response
 
 from log_scan import log_scan  # noqa: F401  (fixture)
 from multi_profile_runtime import Children, RealChild, create_profile, multi_profile_runtime
-from mcp_admin_core import access, gateway, profiles
+from mcp_admin_core import access, gateway, lifecycle, profiles
 from mcp_admin_core.access import AccessChanged
 from switched_gateway import (B, FAILURES, LABELS, PRODUCT, Broken, Exchange, GatewayChild, bearer, call, json_body,
                               session_of, setup, sse_messages, supervisor, until, watch)
@@ -50,6 +52,7 @@ pytestmark = pytest.mark.usefixtures('log_scan')
 # read when the module loads (None without HM-14: each test then fails on its own, the red half)
 STOPPED = getattr(gateway, 'CHILD_STOPPED_TEXT', None)
 CONNECTION = getattr(gateway, 'CHILD_CONNECTION_TEXT', None)
+HALTED = getattr(gateway, 'CHILD_HALTED_TEXT', None)
 DENIED_502 = (502, [('content-length', '26'), ('content-type', 'application/json')], b'{"error":"request denied"}')
 DENIED_401 = (401, [('content-length', '26'), ('content-type', 'application/json')], b'{"error":"request denied"}')
 
@@ -216,6 +219,59 @@ async def test_an_event_stream_broken_mid_reply_gets_one_minus_32004_event_and_e
             child_supervisor.status = 'running'  # (restarted) so that the GET below reaches it
             stream = await client.get('/mcp', headers=headers)  # a GET stream answers no request: it just ends
             assert stream.status_code == 200 and sse_messages(stream.content) == []
+
+
+# ---- the stopped text and HM-09's states (contract 2.5, 7) ----
+
+# What HM-09's Supervisor shows once the child generation a request went to stopped (lifecycle.Supervisor.status):
+# it comes back by itself in the first three, nothing restarts it now in the others.
+COMES_BACK = ('backoff', 'starting', 'replaced')
+NOT_RESTARTING = ('blocked', 'failed', 'stopped', 'unconfigured')
+
+
+def stop_into(child_supervisor, state):
+    """The Supervisor as HM-09 leaves it once the generation a request went to stopped (the tests' NoProcessSupervisor
+    has no process): backoff (the watchdog waits to start it again), starting (a start under way), replaced (a new
+    generation runs), blocked (Supervisor.block: a disabled profile, too little memory; nothing retries it), failed
+    (DQ-21: its monitor stopped), stopped (the profile deleted, the add-on stopping), unconfigured (no connection)."""
+    if state == 'replaced':
+        child_supervisor.starts += 1
+    elif state == 'blocked':
+        child_supervisor.block(lifecycle.MEMORY_CAPACITY, 'too little memory for this test')
+    else:
+        child_supervisor.status = state
+
+
+@pytest.mark.parametrize('state', COMES_BACK + NOT_RESTARTING)
+async def test_a_stopped_child_is_said_to_restart_only_while_it_comes_back_by_itself(tmp_path, log_scan, state):
+    """HM-14 after HM-09 (contract 2.5): once the child generation a request went to has stopped, the -32004 text says
+    it restarts automatically (the PaaS text) only while it does: the watchdog backing off, a start under way, a new
+    generation running. A child HM-09 left blocked, failed, stopped or not configured is not restarting now and is
+    not said to (CHILD_HALTED_TEXT): before the answer's headers (502) and as the event of a started stream alike.
+    Every text says the operation may or may not have completed; the WARNING says the MCP server stopped."""
+    data, children, child = child_runtime(tmp_path)
+    expected = STOPPED if state in COMES_BACK else HALTED
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data, B)
+        token, child_supervisor = runtime.token(B), supervisor(runtime, B)
+        async with runtime.mcp() as client:
+            headers = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
+            child.fail, child.on_break = httpx.ReadError, lambda: stop_into(child_supervisor, state)
+            interrupted(await client.post('/mcp', headers=headers, json=call(7)), 7, expected)
+            # started again (a new generation), so that the stream below reaches the child; it stops the same way
+            child_supervisor.starts += 1
+            child_supervisor.status, child_supervisor.blocked_reason = 'running', None
+            child.fail, child.broken = None, 'sse'
+            response = await client.post('/mcp', headers=headers, json=call(8))
+            assert response.status_code == 200 and response.headers['content-type'] == 'text/event-stream'
+            assert sse_messages(response.content) == [
+                {'jsonrpc': '2.0', 'id': 8, 'error': {'code': -32004, 'message': expected}}]
+    assert expected is not None and expected != CONNECTION
+    assert ('restarts automatically' in expected) == ('會自動重新啟動' in expected) == (state in COMES_BACK)
+    assert ('not restarting now' in expected) == ('目前沒有在重新啟動' in expected) == (state in NOT_RESTARTING)
+    assert 'may or may not have completed' in expected and '可能已完成也可能沒有' in expected
+    lines = [record.getMessage() for record in warnings_of(log_scan)]
+    assert lines and all('the MCP server stopped' in line and 'answered -32004' in line for line in lines), lines
 
 
 async def test_the_log_line_names_the_cause_without_a_traceback_or_token(tmp_path, log_scan):
