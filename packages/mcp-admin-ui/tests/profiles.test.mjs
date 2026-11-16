@@ -483,6 +483,11 @@ test('a created profile deleted since is replayed as its id alone: confirmed, go
   await other.bootstrap();
   await assert.rejects(() => other.createProfile('出納', indexRevision), /帳號清單格式不符|預期的帳號確認/);
   assert.notEqual(other.pendingProfileOperation(), null);
+  // A created row whose label this browser cannot show is confirmed, but its label is not passed on (review S-2).
+  const hidden = server({answer: {'/api/profiles': options => Response.json({...row(C, 'a\u202eb'), operation: {id: options.headers['Idempotency-Key'], kind: 'profile.create', state: 'completed', replayed: false}}, {status: 201})}});
+  const third = new AdminApi(mount, hidden.fetcher, memoryStorage());
+  await third.bootstrap();
+  assert.deepEqual(await third.createProfile('出納', indexRevision), {id: C, label: null, replayed: false});
 });
 
 test('the index quarantine: a POST without a body, the unusable index\'s ETag as given, an identity, CSRF, no X-MCP-Profile', async () => {
