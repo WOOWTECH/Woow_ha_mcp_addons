@@ -2,10 +2,19 @@
 
 ## 結論
 
+- **獨立安全審查（`artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-13b.md`）：修正後通過；本輪處理完（第 17 節）。**
+  - MF-1：新測試的固定時鐘寫死 2026-11-16T09:30:15Z，今天 09:30Z 以後 CI 一定紅。改成每案取「現在的下一個整秒」（`aa8ef57`，只改測試）。
+  - MF-2：`profiles/` 一時列不出來（EMFILE、EIO、ENOMEM、權限）時，守門與全部撤銷都當成「沒有額外帳號」（fail open）。改成停下：
+    標記留著、什麼都不服務、下次開機重做；全部撤銷照樣撤銷呼叫端拿著的 store、`finished=false`（`f3b8fa1`）。只有 `profiles` 確定不是
+    目錄才照 #102 照常啟動。
+  - 建議 8 項：S-1、S-2、S-5、S-6、S-7、S-8 採用；S-3 部分採用（開通的候選映像要有還原檔；stderr 兩行交 HM-16）；S-4 寫進文件、
+    分辨暫時性錯誤交 HM-18／HM-13c。Q-1（沒開通的產品只有 log 提示）請主對話確認，本片沒有改。
+  - 這一輪在 19:4x 也因額度中斷過一次（修正的 5 個 commit 已在，全套跑到約 80% 就斷）。20:3x 接續：核對 commit 與草稿、刪掉留下的
+    `/tmp/ha-mp-*`、全套重跑、威脅模型 I9／I13 的測試欄補上審查的新案（`27eeb16`）、預檢重跑（第 17 節）。
 - **新模組 `restore_lock.py`：開機守門。** `run_product` 與 `apps/n8n/run.py` 每次開機在 legacy 遷移與預設帳號的 store 之後、任何子程式與
   listener 之前跑 `restore_lock.guard`。沒做完一律 `ConfigError`：什麼都不服務（`runtime unavailable`）、標記都保留，下次開機重跑。
   不受產品開關管：任何產品下一次發版都會帶出去。
-- **今天的安裝（沒開通、沒有帳號資料）逐位元不變。** 沒有還原時只多查四個名稱，什麼都不寫、不記 log（連 ctime 都不變，8 個產品各一案）。
+- **今天的安裝（沒開通、沒有帳號資料）逐位元不變。** 沒有還原時只多查四個名稱，什麼都不寫、不記 log（連 ctime 都不變，9 個產品各一案：審查 S-8 加了 Odoo Manage）。
   有還原時（DQ-03 (b)）：記一行 WARNING「權杖已回到備份當時的值」、刪掉 entrypoint 的標記，state、收據與其他每一項都照還原的原樣。
   標記刪不掉也照常啟動（沒有帳號資料，沒有東西要撤銷），多記一行、下次再試。
 - **有帳號資料或已開通時，還原照計畫 §8.4 A～F。** 快照 → 預設帳號（DQ-03 (b)：有帳號資料才撤銷並重產 child token）→ `profiles/` 底下
@@ -31,12 +40,13 @@
   - 另補兩個記錄行為的測試：沒有額外帳號的產品（OpenDesign、Odoo Manage）磁碟上的帳號目錄照樣被撤銷（HM-07 審查 S-06 交下的）；
     全部撤銷時 store 回報失敗、磁碟卻已撤銷，標記照樣留著。契約第 7 節的 log 清單補漏掉的一行（`7d237f6`）。
 - 先寫測試：新 3 檔在實作前收集就失敗；實作後、測試替身還沒跟上時 128 案失敗（重建核對，第 4.1 節）。臨時突變在最終程式上 32 個，
-  31 個被抓到，1 個等價（第 4.2 節）。
-- 本機：新 3 檔 81 案全過（約 8 秒）；全套 pytest（`1f8c29f`）5869 案、0 skip、32 分 23 秒：5861 過，失敗的 8 案＝7 個要 root 的既有案例
-  ＋上面那筆釘選（`96c4d3b` 修好，該檔 189 案全過）；packaging unittest `Ran 204`、`OK (skipped=5)`；`validate.py` PASS；
-  `scripts/tool_inventory.py` 通過。已知會偶發逾時的 `test_backend_loopback` 那案這次沒出現（0／1 次）。
+  31 個被抓到，1 個等價（第 4.2 節）。審查後的修正也先紅後綠：新案在 `551d210` 的程式上 11 案紅、修好後全綠；13 個突變全部被擋
+  （第 4.1、4.2 節）。
+- 本機（審查修正後，第 5 節）：新 3 檔 97 案全過（約 9 秒）；全套 pytest（`89a7e02`，之後只改文件）5,885 案、0 skip、32 分 32 秒：
+  只有 7 個要 root 的既有案例失敗；packaging unittest `Ran 205`、`OK (skipped=5)`；`validate.py` PASS；`scripts/tool_inventory.py` 通過。
+  已知會偶發逾時的 `test_backend_loopback` 那案：0 次（這次全套 4.5 秒通過）。
 - 兩個預檢（最終 HEAD、基準 `684a2dd`）：秘密預檢 0 命中；帳本預檢 OK（第 8 節）。
-- 這條線只 commit，不 push、不開 PR。計畫 §12.1 標 HM-13b 是「審查」片：合併前要獨立安全審查（還沒做），也要 HM-03a 的結果。
+- 這條線只 commit，不 push、不開 PR。獨立安全審查做過了（第 17 節）；合併前還要 HM-03a 的結果（第 11 節，DQ-39 (a)）。
 
 ## 1. 範圍與基準
 
@@ -44,29 +54,29 @@
 |---|---|
 | 切片 | HM-13b（計畫 §8.4「開機守門」、休眠處理、全部撤銷；§10.3；§12.3；風險高、工作量 L） |
 | 分支 | `feat/ha-multiprofile-hm13b-20261116`（一般 clone，不是 worktree） |
-| HA 基準 | `684a2dd`：HM-10 的 PR #104 head（`claude-delivery` `7c6f80c` 加 HM-10 的 18 個 commit）。HM-10 先合併；之後由主對話 rebase 到 `claude-delivery` |
-| 本片 commit | 15 個：接續前 7 個（`3c90b6c`～`0028169`）；接續後 8 個（`cc5adb0`、`9c29b4f`、`360836e`、`5b596cd`、`7d237f6`、本筆記 `1f8c29f`、`96c4d3b`，以及補全套與預檢結果的最後一個筆記 commit；第 16 節） |
+| HA 基準 | `684a2dd`：HM-10 的 PR #104 head（`claude-delivery` `7c6f80c` 加 HM-10 的 18 個 commit）。HM-10 先合併；之後由主對話 rebase 到 `claude-delivery`。2026-11-16 19:0x 查（只 fetch `claude-delivery`）：已是 `df686dd`（合了 #104 HM-10、#105 HM-31、#106 HM-09 監看 cancel 修正）；`git merge-tree` 預估 rebase 時要解 6 個檔：`contract.md`、`ledger-tracking.md`、`threat-model.md`、`runtime-patches.json`、`gateway.py`、`profile_runtime.py`。20:4x 再查：已是 `f4c7718`（再合了 #107 HM-11），要解的仍是這 6 個檔 |
+| 本片 commit | 22 個：接續前 7 個（`3c90b6c`～`0028169`）；接續後 8 個（`cc5adb0`、`9c29b4f`、`360836e`、`5b596cd`、`7d237f6`、本筆記 `1f8c29f`、`96c4d3b`、`551d210`；第 16 節）；審查修正 7 個（`aa8ef57`、`77394fc`、`f3b8fa1`、`895119b`、`89a7e02`、`27eeb16`，以及記錄審查處理的這個筆記 commit；第 17 節） |
 | 依據 | 計畫 §3.3、§4.1、§8.4、§8.8、§8.10、§10.3、§12.3 HM-13a／b／c；契約 §1.2、§3.5、§3.6、§4.1、§7、§8、§9；`threat-model.md`；HM-13a 的筆記與審查（`wave1/review-HM-13a.md`）；FM-04、07、13、16、78、79、80、118、119、120 |
 | PaaS | 沒有搬程式。對照 `Pc/restore_guard.py`（`prepare`、`_write_config`、`_write_journal`、`_archive_journal`、`_read_journal_floor`）、`Pc/restore_inplace.py`（`_verify`）、`Pc/restore_marker.py`（任何項目都算存在）；pin `69ac425`，到 `d7f5849` 這幾檔沒變（第 9 節） |
 | 決策 | DQ-03 (b)、DQ-39 (a)、DQ-13、DQ-14、DQ-21、DQ-40 (a)（第 10 節）；沒有碰到待定題 |
-| 安全審查 | 還沒做（計畫 §12.1：本片要審查） |
+| 安全審查 | 做了：`artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-13b.md`（判定「修正後通過」；證據 `wave4/evidence-review-HM-13b/`）；處理見第 17 節 |
 
 ## 2. 改了什麼、沒改什麼
 
 | 檔 | 內容 |
 |---|---|
-| `packages/mcp-admin-core/mcp_admin_core/restore_lock.py`（新） | `guard()`、`revoke_all()`、`mark_revoke_all()`、`revoke_all_pending()`、`read_record()`、`read_tokens()`、`facts()`；log 文字常數；`DEFAULT_REVOKED_WHEN_SWITCHED_ON`（DQ-03 的 (a)／(b)，現在 `False`＝(b)）；`RECORD_LIMIT` 1 MiB |
+| `packages/mcp-admin-core/mcp_admin_core/restore_lock.py`（新） | `guard()`、`revoke_all()`、`mark_revoke_all()`、`revoke_all_pending()`、`read_record()`、`read_tokens()`、`facts()`；log 文字常數；`DEFAULT_REVOKED_WHEN_SWITCHED_ON`（DQ-03 的 (a)／(b)，現在 `False`＝(b)）；`RECORD_LIMIT` 1 MiB。審查後：`profiles/` 列不出來時停（MF-2）；`revoke_all()` 撤銷呼叫端的每個 store、E 一定跑、`stores` 只收額外帳號；還原紀錄與收據封存的名稱上的目錄移開（S-1）；log 多 `SET_ASIDE_IN_PROFILE` 一行 |
 | `operations.py` | 收據檔可多 `restored_before_ms`（其他值讓收據檔 503）；`_load` 在 24 小時保留期之前先判 410 `operation_restored`；`archive_for_restore()`、`journal_path()` |
-| `profiles.py` | `free_quarantine_name()`、`free_aside_name()`（不覆蓋、同一秒加 `-2`…）；隔離名的正規式收 `-n` |
+| `profiles.py` | `free_quarantine_name()`、`free_aside_name()`（不覆蓋、同一秒加 `-2`…）；隔離名的正規式收 `-n`。審查後：`RECEIPT_ARCHIVE_NAMES`、`ASIDE_NAMES`（`free_aside_name` 多收還原紀錄與兩種收據封存的名稱，S-1） |
 | `run_product.py` | 開關每次開機只讀一次；守門在 `ProfileManager`／單帳號 runtime 之前；休眠數給 bootstrap |
 | `apps/n8n/run.py` | 同上（n8n 到 HM-25 才有帳號；守門只會刪還原標記或補完全部撤銷） |
 | `gateway.py` | `make_apps(dormant_profiles=n)`：bootstrap 多 `dormant_profiles`；沒給時逐位元同今天；和 `profile_view` 不能同時給 |
 | `profile_runtime.py` | `ProfileRuntime(dormant_profiles=…)` 轉給 `make_apps`；模組說明 |
-| `packaging/container_probe.py` | 容器驗收還原階段的檢查：標記已被守門刪掉、沒開通的產品沒有 sentinel／record／還原紀錄、還原項目都修好、state 位元不變 |
+| `packaging/container_probe.py` | 容器驗收還原階段的檢查：標記已被守門刪掉、沒開通的產品沒有 sentinel／record／還原紀錄、還原項目都修好、state 位元不變。審查後：開通的候選映像三個還原檔都要在（10001 的單一連結一般檔、0600；S-3） |
 | `docs/provenance/runtime-patches.json` | 新增 `restore_lock.py`；6 個改到的列管檔重算摘要並補說明；`restore_detect.py`、`identity_fields.py` 只補「已接線」的說明 |
-| 測試（新） | `tests/restore_guard_disk.py`、`tests/test_restore_lock.py`（59 案）、`tests/test_dormant_profiles.py`（7）、`tests/test_revoke_all.py`（15） |
+| 測試（新） | `tests/restore_guard_disk.py`、`tests/test_restore_lock.py`（71 案）、`tests/test_dormant_profiles.py`（8）、`tests/test_revoke_all.py`（18）；審查前是 59、7、15 |
 | 測試（改） | 見第 3.10 節（含 `tests/test_output_schemas.py` 的一筆釘選） |
-| 文件 | 契約（第 1.1、1.2、1.3（新）、3.5、3.6、7、8、9、10 節）、`threat-model.md`（I9、I13、第 3 節兩條）、`acceptance-matrix.md`（T-21）、`ledger-tracking.md`（`profiles.py` 那列）、`docs/operations/update-backup-rollback.md`（還原標記那列）、`docs/operations/acceptance.md`（容器驗收還原階段） |
+| 文件 | 契約（第 1.1、1.2、1.3（新）、3.5、3.6、7、8、9、10 節）、`threat-model.md`（I9、I13、第 3 節；審查後的改動見第 17 節）、`acceptance-matrix.md`（T-21）、`ledger-tracking.md`（`profiles.py` 那列）、`docs/operations/update-backup-rollback.md`（還原標記那列）、`docs/operations/acceptance.md`（容器驗收還原階段） |
 
 沒改：`addons/<x>/`、版號、CHANGELOG、`upgrade-notes.yaml`、`MULTI_PROFILE_PRODUCTS`（仍是空集合）、`packaging/entrypoint.py`、
 `restore_detect.py`、`identity_fields.py`、`apps/runtime/*.py`、`apps/*/launch.py`（tool-surface 不用重產；`scripts/tool_inventory.py` 檢查通過）、
@@ -91,7 +101,7 @@
 
 | 步 | 做法 | 失敗時 |
 |---|---|---|
-| A 快照 | 預設帳號從 store 讀；每個目錄的 `state.json` 用 `read_tokens` 原始讀（不拿鎖、不 chmod），讀得到的 token 與 child token 放進記憶體 | 預設帳號讀不到：`ConfigError` |
+| A 快照 | 預設帳號從 store 讀；每個目錄的 `state.json` 用 `read_tokens` 原始讀（不拿鎖、不 chmod），讀得到的 token 與 child token 放進記憶體 | 預設帳號讀不到：`ConfigError`。`profiles` 是目錄（或查不出是什麼）卻列不出來：記成失敗，B 照做後停（審查 MF-2）；`profiles` 確定不是目錄：記一行、繼續（#102） |
 | B 預設帳號 | 有帳號資料（或有全部撤銷標記）時：`change_token(None,'revoke')`、新的 child token（不和快照裡任何值相同）、封存收據。沒有帳號資料：原樣不動 | 記一行、繼續撤銷其他帳號，最後停 |
 | C 帳號目錄 | `existing_only` 開得了：撤銷、新的 child token、封存收據。開不了（任何原因）：改名 `profiles/.quarantine-<id>-<UTC>[-n]`、fsync `profiles/`；writer lock 被別人拿著的只算失敗、不搬。最後封存索引旁的收據 | 同上 |
 | D 紀錄 | `restore-record.json`（第 3.6 節） | 停 |
@@ -136,6 +146,9 @@
   `failed`、標記留著（`test_a_failure_the_store_reports_keeps_the_marker_even_when_the_disk_shows_it_done`）。
 - 執行中的管理器拿著已登錄帳號的 store（writer lock）：HM-13c 要把它們放進 `stores`。沒放的話那個目錄開不了，但守門看得出 lock 被別人拿著，
   只算失敗、不會把它搬去隔離（`test_revoke_all_uses_the_stores_its_caller_holds`）。
+- `profiles/` 列不出來時（審查 MF-2）：照樣撤銷預設帳號與 `stores` 裡的每個帳號（results 逐一列出），但 `finished=False`、標記留著，
+  下次開機補完（列不到的目錄裡可能有還有效的 token，例如孤兒）。E 不管前面有沒有失敗都跑：store 說撤銷了、磁碟沒變的也算 `failed`
+  （HM-13c 據此在 8081 回 503）。`stores` 只收額外帳號的 id，其他 `ValueError`、什麼都不做。
 - 開機看到標記（任何種類的項目，內容不看）：不看開關都補完，包括沒開通、沒有帳號資料的預設帳號（管理員要求過）。
 - 8081 上失敗帳號回 503、`TokenAccess.committed()`、重起子程式（新的 child token 要重起才生效，HM-06 審查 S-07）是 HM-13c 的路由要做的；
   開機補完時子程式還沒起，不用重起。
@@ -154,15 +167,22 @@
 ### 3.7 守門自己的名稱（HM-13a 審查 SF-7；契約 #103）
 
 sentinel、record、record 暫存檔、還原標記、全部撤銷標記的名稱若是目錄（偽造的備份；修復接受目錄），改名放到 `<名稱>.quarantine-<UTC>[-n]`，
-從不刪。不處理的話 `rebuild()` 每次失敗、add-on 再也起不來。`profiles` 不是目錄時記一行、照撤銷預設帳號後啟動（契約 #102；裡面什麼都不會被
-開或路由，開通後 HM-08 對每個 token 回 503）。
+從不刪。不處理的話 `rebuild()` 每次失敗、add-on 再也起不來。審查 S-1 後，`restore-record.json` 與收據封存（`.state.json.operations.json.restored`、
+`.profiles.json.operations.json.restored`）的名稱也一樣（`profiles.ASIDE_NAMES`；帳號目錄裡的那一行帶 `[profile=<id 前 8 碼>]`）。
+
+`profiles` 確定不是目錄（一般檔、連結）時記一行、照撤銷預設帳號後啟動（契約 #102；裡面什麼都不會被開或路由，開通後 HM-08 對每個 token
+回 503）。`profiles` 是目錄、或查不出是什麼，卻一時列不出來時，守門停下（審查 MF-2；同 PaaS）。
+
+仍會讓守門每次開機都停下的偽造備份（`threat-model.md` 第 3 節）：還原紀錄超過 1 MiB；收據檔本身是目錄、旁邊已有封存檔（目錄改不了名
+到檔案上）。後者審查沒提，本輪用實驗確認後寫進文件、不另外處理（要 HA 管理員上傳偽造備份；脫困是還原別份備份）。
 
 ### 3.8 開機順序與 fail closed
 
 - `run_product.run`：legacy 遷移 → 預設帳號的 store → **守門** → `ProfileManager`（開通）或單帳號 `ProfileRuntime` → listener → 子程式。
   測試記錄事件順序：守門結束前沒有任何 Supervisor、子程式或 listener（開關開與關、n8n 各一次）。
 - 守門沒做完：`run()` 丟 `ConfigError`，`main()` 印 `runtime unavailable; local recovery required`；沒有任何 listener 或 Supervisor 被建立
-  （`test_a_guard_that_does_not_finish_serves_nothing`）。Supervisor 會再起 add-on，下次開機守門重跑。
+  （`test_a_guard_that_does_not_finish_serves_nothing`）。下次啟動時守門重跑：使用者重新啟動、主機重開，或 HA 介面的 Watchdog 開著時
+  Supervisor 自動再起。`addons/*/config.yaml` 沒有 `watchdog` 鍵，會不會自動再起沒確認（`research/R08-ha-arch.md:122`；第 11 節；審查 S-6）。
 
 ### 3.9 sentinel 不變式
 
@@ -207,6 +227,9 @@ sentinel、record、record 暫存檔、還原標記、全部撤銷標記的名�
 | 補新檔也守下限（`cc5adb0`，接續後） | `test_an_archive_left_without_its_new_journal_keeps_the_floor_of_a_slow_clock` 在 `0028169` 的程式上紅（`restored_before_ms` 是慢一小時的時鐘），改完綠 |
 | 還原紀錄上限（`9c29b4f`，接續後） | `test_a_restore_of_states_as_large_as_the_store_takes_still_finishes` 在 256 KiB 上限紅（`not finished (the restore record could not be saved)`），1 MiB 綠（紀錄 > 256 KiB） |
 | 記錄行為的兩案（`360836e`、`5b596cd`，接續後） | 沒有額外帳號的產品 2 案、store 回報失敗 1 案：程式本來就這樣，寫上就過（不是先紅後綠）。新 3 檔 81 案 |
+| 審查 MF-1（`aa8ef57`） | 舊測試檔在 `551d210` 的程式上 10:45Z 跑：`test_a_restore_with_profile_data_revokes_every_profile` 兩案紅（`assert 'new' == (410, 'operation_restored')`）；只換時鐘後 81 案全過 |
+| 審查的新案（`77394fc`，程式仍是 `551d210`） | 11 案紅：MF-2 守門 3 案 `DID NOT RAISE ConfigError`（守門照樣做完）、全部撤銷 1 案 `finished=True`、E 一定跑 1 案（說謊的撤銷算 `revoked`）、`stores` 驗證 1 案；S-1 4 案 `ConfigError: restore guard unfinished`（每次開機都停）；名稱常數 1 案 `AttributeError` |
+| 審查修正（`f3b8fa1`） | 新 3 檔 97 案全過 |
 
 ### 4.2 臨時突變（`SP:hm13b/mutate2.py`：在 repo 外的匯出樹一次改一處，跑相關測試，跑完還原；`-k "not test_root_"`）
 
@@ -248,6 +271,24 @@ sentinel、record、record 暫存檔、還原標記、全部撤銷標記的名�
 | M31 遠未來的 id 不設上限 | 被擋 |
 | M32 新收據檔的時間低於被封存的最新 id | 被擋 |
 
+審查後（`artifacts/ha-multiprofile-parity-20261114/wave4/evidence-fix-HM-13b/scripts/mutate.py`：`551d210` 匯出加上修正後的檔，一次改一處，只跑新 3 檔、不拿鎖；基準 N00 0 個失敗；結果在同目錄 `mutations/mutations.json`）：
+
+| 突變 | 結果 |
+|---|---|
+| N01 E 拿掉「每個帳號目錄、每個撤銷的 token 是 None」（審查 R21） | 被擋（休眠時說謊的撤銷那案） |
+| N02 E 不比保留的預設帳號（R22） | 被擋（檢查前被改的預設帳號那案） |
+| N03 E 不要求隔離目錄還是隔離目錄（R23） | 被擋（檢查前不見的隔離目錄那案） |
+| N04 列不出來的 `profiles` 目錄不算失敗（審查前的程式） | 被擋（3 案） |
+| N05 查不出 `profiles` 是什麼時當成「不是目錄」 | 被擋 |
+| N06 `revoke_all` 不看原因就算做完 | 被擋 |
+| N07 `revoke_all` 只撤銷掃到的、不撤銷給的 store | 被擋 |
+| N08 `revoke_all` 只在沒有失敗時跑 E | 被擋 |
+| N09 E 不讀沒列到的 store | 被擋 |
+| N10 不清還原紀錄的名稱 | 被擋 |
+| N11 不清收據封存的名稱 | 被擋（2 案） |
+| N12 清名稱時直接刪掉 | 被擋（2 案） |
+| N13 `stores` 收任何 id | 被擋 |
+
 ## 5. 本機檢查（2026-11-16，一般使用者 uid 1000；TMPDIR 用 `ha_env.sh` 給的 `/tmp/ha-mp-XXXXXX`，每次跑完用完整路徑刪除）
 
 開發中的反覆執行用 `--noconftest` 加一個裝同樣網路與子程序守門、只是不拿全機測試鎖的外掛（同 HM-13a 的做法；只跑不開固定 port、不起真子程式
@@ -255,6 +296,11 @@ sentinel、record、record 暫存檔、還原標記、全部撤銷標記的名�
 
 | 檢查 | 結果 |
 |---|---|
+| **審查修正後**：新 3 檔（`test_restore_lock.py` 71、`test_dormant_profiles.py` 8、`test_revoke_all.py` 18；`f3b8fa1`） | 97 案全過，9.0 秒（最慢的是中途停下那案 4.4 秒） |
+| **審查修正後**：影響到的 18 檔（不拿鎖；新 3 檔、`test_restore_detection`、`test_upgrade_zero_rewrite`、`test_router_passthrough`、黃金回歸、`test_profile_admin_api`、`test_tool_inventory`、`test_ledger_precheck`、`test_output_schemas`、`test_profile_routing`、`test_profile_store`、`test_log_scan`、兩個契約凍結、`test_admin_pipeline_matrix`、`test_profile_index`） | 845 案：839 過；6 個失敗都是要 root 的（`test_restore_detection.py` 的 5 案 `test_root_*`、`test_profile_store.py` 的 1 案），46.9 秒 |
+| **審查修正後**：新 3 檔（正式 conftest、第二次接續時；`89a7e02`） | 97 案全過，9.0 秒 |
+| **審查修正後**：全套 pytest（正式 conftest、wave1 鎖；`89a7e02`，之後只改文件；Chromium 用 clone 裡已裝的） | 5,885 案（審查前 5,869 加新的 16 案）、0 skip、1,952.1 秒（32 分 32 秒）：5,878 過；7 個失敗都是要 root 的既有案例（第 6 節），沒有別的失敗。新 3 檔 97 案（junit 7.6 秒）、`test_restore_detection` 139、`test_upgrade_zero_rewrite` 45、黃金回歸 17、MCP 契約凍結 9、管理契約凍結 19、`test_router_passthrough` 49、`test_output_schemas` 189 案都過 |
+| **審查修正後**：packaging unittest（同 CI 的離線暫存 venv）、`validate.py`、`scripts/tool_inventory.py`（`27eeb16`；程式同 `89a7e02`） | `Ran 205`、`OK (skipped=5)`（多的 1 案是 S-3）；PASS；通過（tool-surface 不用重產） |
 | 新 3 檔（`test_restore_lock.py` 59、`test_dormant_profiles.py` 7、`test_revoke_all.py` 15；`5b596cd`） | 81 案全過，8.1 秒（最慢的是中途停下那案 3.9 秒：128 次停下） |
 | 影響到的 32 檔（不拿鎖、`1f8c29f`；HM-01 黃金回歸與兩個契約凍結、HM-07～HM-10、HM-13a、HM-14 的檔、新 3 檔、`test_tool_inventory`、`test_ledger_precheck`、`test_log_scan`） | 1,012 案：1,006 過；6 個失敗都是要 root 的（`test_restore_detection.py` 的 5 案 `test_root_*`、HM-07 的 1 案），101.8 秒 |
 | 全套 pytest（正式 conftest、wave1 鎖；`1f8c29f`；Chromium 照 CI 的 `npm run browser:install` 裝在 `node_modules`） | 5869 案、0 skip、1,943.5 秒（32 分 23 秒）：5861 過；8 個失敗＝7 個要 root 的既有案例（第 6 節）＋`test_output_schemas.py::test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints`（`apps/n8n/run.py` 的位元組釘選沒跟上）。新 3 檔 81、`test_restore_detection` 139、`test_upgrade_zero_rewrite` 45、黃金回歸 17、MCP 契約凍結 9、管理契約凍結 19、`test_router_passthrough` 49 案都在裡面 |
@@ -273,6 +319,8 @@ sentinel、record、record 暫存檔、還原標記、全部撤銷標記的名�
 - 本片新測試都在 in-process 或暫存目錄跑：不起真子程式、不開固定 port（開通的 runtime 用 `NoProcessSupervisor` 與 MockTransport）。
 - 時間（全套的 junit，`1f8c29f`）：新 3 檔 7.8 秒（中途停下那案 3.9 秒最久）；新增或改過的既有案例（零改寫開通 8 案、休眠 6 案、探針 1 案）
   合計 0.5 秒。CI（root、runner 較慢）推估多 15～25 秒，在每片 1.5 分鐘內。
+- 審查修正後（全套的 junit，`89a7e02`）：新 3 檔 7.6 秒（`test_restore_lock` 71 案 6.6 秒、`test_dormant_profiles` 8 案 0.5 秒、
+  `test_revoke_all` 18 案 0.5 秒；多 16 案，都在程序內、不起真子程式）；CI 推估本片合計多 20～30 秒。
 
 ## 7. `checks` 秒數
 
@@ -287,8 +335,9 @@ sentinel、record、record 暫存檔、還原標記、全部撤銷標記的名�
 .venv/bin/python -I scripts/ledger_precheck.py --repo . --base 684a2dd
 ```
 
-- 秘密預檢：gitleaks 8.28.0（釘選、已核對）；本片 15 個 commit（`684a2dd..HEAD`）、`--full` 的 HEAD 全部檔與全歷史：0 命中。測試的 token 都在
-  執行時產生；憑證用 `DUMMY-…`、網址 `.invalid`（照 `tests/fixtures/owner_defaults/README.md`）。
+- 秘密預檢：gitleaks 8.28.0（釘選、已核對）；本片 22 個 commit（`684a2dd..HEAD`，審查修正後）、`--full` 的 HEAD 全部檔與全歷史：0 命中
+  （本筆記 commit 前在 `27eeb16` 先跑一次：21 個 commit、0 命中）。
+  測試的 token 都在執行時產生；憑證用 `DUMMY-…`、網址 `.invalid`（照 `tests/fixtures/owner_defaults/README.md`）。
 - 帳本預檢：`runtime-patches.json` 175 個路徑、`runtime-sources.json` 70、`tool-surface.json` 159，都 0 漂移、0 缺檔；對 `684a2dd` 改了
   28 個檔，列管檔 7 個（`apps/n8n/run.py`、`gateway.py`、`operations.py`、`profile_runtime.py`、`profiles.py`、`restore_lock.py`、`run_product.py`），
   帳本 1 個；新增或改到而沒列管的執行期檔 0 個。結果 OK。
@@ -302,6 +351,9 @@ sentinel、record、record 暫存檔、還原標記、全部撤銷標記的名�
   `url()` 沒變；HA 存的網址本來就不能帶帳密（第 3.6 節）。
 - 結論：本片照用的 PaaS 規則（任何項目都算標記存在、獨立驗證「備份裡能認證的東西現在都不能認證」、新收據檔讓舊 id 410、新收據檔的時間不早於
   舊收據檔最新的 id）沒有變。
+- 審查後補查：本機 PaaS 的 `origin/main` 已被別的工作 fetch 到 `7087280`（本線沒有 fetch）。`d7f5849..7087280` 是 Hermes cron、LiteLLM 與 EMQX
+  不保留閒置連線三個修正，還原相關檔 0 變動，上面的結論不變。PaaS 收據下限 `max(cutoff_ms, journal_floors[...])` 沒有上限
+  （`Pc/restore_guard.py:513-516`，pin `69ac425`）；HA 的 24 小時上限記在契約 #67（審查 S-6）。
 
 ## 10. 本片用到的決策
 
@@ -326,6 +378,8 @@ sentinel、record、record 暫存檔、還原標記、全部撤銷標記的名�
 | 還原樹裡不會有硬連結（`copytree` 一個一個複製） | 是 | 第二個連結的 state 會讓那個帳號被隔離（方向安全） |
 | UC-24 (ii)：拉不到舊映像時 Supervisor 沿用目前映像 | 是（`suppress(DockerError)`） | 新映像＋舊資料仍有訊號 1，守門照跑；不影響本片 |
 | HAOS 開機時主機時鐘不會遠快於實際時間 | 是 | 收據的還原時間點可能偏後（`threat-model.md` 第 3 節） |
+| HAOS 開機時主機時鐘不會比備份裡的收據慢超過 24 小時（審查 S-6） | 是（有 NTP） | 備份裡較新的操作 id 在時鐘校正後可能被當成新操作（`threat-model.md` 第 3 節） |
+| add-on 以非零結束（守門沒做完）後，Supervisor 會不會自動再起：Watchdog 開關與它的預設值（審查 S-6、7.8） | 不假設 | 不會自動再起時，要使用者重新啟動或主機重開才會重做守門；HM-18 的 DOCS 要寫 |
 
 HM-03a 的結果出來後，寫回本筆記這一節（或 HM-13a 的筆記第 11 節），並在 PR 說明列出。
 
@@ -340,8 +394,8 @@ HM-03a 的結果出來後，寫回本筆記這一節（或 HM-13a 的筆記第 1
 | 同上 | 把 `profiles`、`restore_detect` 移出 `UNWIRED` | 做了；`identity_fields` 也移出（還原紀錄用它）；`UNWIRED` 現在是空的 |
 | 同上 | 守門的檔名一律取 `profiles.py` 的常數，不另寫字串 | 做了（`restore_lock.py` 只用 `profiles` 的常數；`state.json`、`.writer.lock` 是 store 自己的名稱） |
 | 同上 | `container_probe.check_restored_start()` 改成新行為 | 做了（第 2 節；探針的 mock 測試與 `tests/` 的兩案跟著改） |
-| HM-13a 審查 SF-7 | sentinel 或 `.instance-record.tmp` 被目錄占用時 `rebuild()` 一直失敗 | 做了：移開到 `<名稱>.quarantine-<UTC>[-n]`，兩個標記也一樣（第 3.7 節）；契約布局補 `.instance-record.tmp`（原本交 HM-18，本片動到第 8 節就一起補） |
-| HM-13a 審查 SF-10 | 沒開通、沒有帳號資料時不能呼叫 `rebuild()`（會多兩個檔） | 守門只在 `detection.active` 時重建；單帳號還原的 8 案確認不多 sentinel、record 或還原紀錄 |
+| HM-13a 審查 SF-7 | sentinel 或 `.instance-record.tmp` 被目錄占用時 `rebuild()` 一直失敗 | 做了：移開到 `<名稱>.quarantine-<UTC>[-n]`，兩個標記也一樣（第 3.7 節）；審查 S-1 後還原紀錄與收據封存的名稱也一樣；契約布局補 `.instance-record.tmp`（原本交 HM-18，本片動到第 8 節就一起補） |
+| HM-13a 審查 SF-10 | 沒開通、沒有帳號資料時不能呼叫 `rebuild()`（會多兩個檔） | 守門只在 `detection.active` 時重建；單帳號還原的 9 案（審查前 8 案）確認不多 sentinel、record 或還原紀錄 |
 | HM-13a 第 11 節 | HM-13a 先發、HM-13b 還沒發的期間留下的舊標記；HM-13b、HM-13c 的通知要涵蓋 | 沒開通：照單帳號還原處理（一行、刪標記）；開通後第一次開機：當成還原、沒有帳號資料不撤銷、寫還原紀錄。通知文字「資料是從備份還原的」對舊標記也成立。面板的文字交 HM-13c |
 | HM-07 第 12 節第 3 點 | `UNWIRED` | 同上 |
 | HM-07 第 12 節第 8 點（S-15） | 隔離目錄名同一秒撞名 | 做了：`free_quarantine_name` 檢查後再改名、需要時加 `-2`…；`parse_quarantine_name` 認得 `-n`（守門開機時單一程序；同 uid 不是邊界，DQ-37） |
@@ -359,6 +413,13 @@ HM-03a 的結果出來後，寫回本筆記這一節（或 HM-13a 的筆記第 1
 ## 13. 交給後面的片
 
 - **HM-13c**：
+  - 本輪看到、審查沒提（沒改，請 HM-13c 定）：備份時某個帳號還沒有自己的收據檔（從沒輪替、撤銷或重啟過），備份後才做的操作 id 隨還原消失，
+    守門照契約 §3.5「兩個都沒有就不寫」不寫新收據檔，之後重送那個 id 會被當成新操作、不是 410。核對關卡（`restore_review_required`）在核對前
+    擋住重發；要不要對範圍 S 的每個帳號都寫新收據檔（同 PaaS「每份設定都換新收據檔」），和核對流程一起定。
+  - 審查 S-5：`revoke_all()` 要在 `ProfileAdmin.lock`（建立、刪除、索引隔離都拿的 add-on 帳號鎖）裡呼叫，不只拿各已登錄帳號的鎖；建立做到
+    一半（只有目錄）時呼叫，那個目錄會被當成讀不到而隔離（審查 X11）。它是同步的、每帳號兩次 state 寫入加 fsync，要用 `asyncio.to_thread`
+    之類在執行緒裡跑，不卡 8081、8099 與健康檢查（HM-30 的公平排程）。results 已列出 `stores` 的每個帳號；`finished=False` 的回應與
+    8081 的 503 名單照 results。
   - `POST profiles/revoke-all`：照索引隔離的寫法先依 id 順序拿每個已登錄帳號的鎖，呼叫 `restore_lock.revoke_all(store, product, stores=<已登錄的>)`；
     每個撤銷的帳號 `TokenAccess.committed()`、重起子程式（新 child token）；`finished=False` 時回 409 `operation_outcome_unknown`＋逐帳號
     `results`，失敗的帳號在 8081 回 503 直到重試成功（可用 `revoke_all_pending()` 加失敗名單）；收據「結果未知」。寫入失敗的 store 會中毒
@@ -368,6 +429,13 @@ HM-03a 的結果出來後，寫回本筆記這一節（或 HM-13a 的筆記第 1
   - 刪除隔離目錄的路由：名稱格式現在是 `<id>-<UTC>[-n]`（`parse_quarantine_name` 的第二組）。
   - `docs/operations/update-backup-rollback.md`：開通後的還原行為、涵蓋範圍、回退後按全部撤銷（本片只改了還原標記那一列）。
 - **HM-16**：容器探針的多帳號階段：開通的候選映像還原後要看到還原紀錄、sentinel 重建、每個帳號都撤銷；`docker run` 180 秒上限。
+  審查 S-3 交下（要在 HM-19a 前的 builder 乾跑之前做好）：還原階段的 `start()` 把 stdout、stderr 丟到 DEVNULL，分不出「守門刪了標記」與
+  「entrypoint 根本沒建標記」。要把還原階段的 stderr 收下來，斷言 entrypoint 的 `bootstrap: re-owned N restored entries in /data/mcp`
+  （N＝還原項目＋標記）與守門的 `KEPT_NOTICE`（沒開通）或 `REVOKED_NOTICE`（有帳號資料）各一行。本片只補了開通時三個還原檔的檢查。
+- **HM-18**（審查 S-4、S-6 交下）：還原時開帳號目錄遇到暫時性錯誤（EMFILE、EIO…）也會把好的帳號改名隔離、之後只能刪；DOCS 寫「同一份備份再還原
+  一次就會重做」。要不要讓 `Store` 帶出原因、暫時性錯誤改成「這次開機停下、下次重做」，和 HM-13c 一起定（動到 `config.py`）。
+  DOCS 也寫：守門沒做完時 add-on 會不會自己再起看 Watchdog 開關；`profiles` 列不出來時（`not finished (the profiles directory cannot be
+  listed)`）要修好磁碟或權限再重啟。
 - **HM-18**：DOCS 寫守門每一行 log 的意思與怎麼處理（`not finished (…)`：磁碟滿就清空間、其他原因還原別份備份）；偽造備份的項目被移開
   （`<名稱>.quarantine-<UTC>`）可以刪；`profiles` 不是目錄時要修好再重啟；還原紀錄超過 1 MiB（只有手工拼的備份）時守門停下；時鐘依賴；
   計畫 §7.2「預設帳號會變的事」補：開通的產品第一次開機多 sentinel 兩檔、還原後多 `restore-record.json`、有帳號資料時還原會撤銷預設帳號；
@@ -380,11 +448,11 @@ HM-03a 的結果出來後，寫回本筆記這一節（或 HM-13a 的筆記第 1
 
 | 條件 | 狀態 |
 |---|---|
-| §10.3 的守門測試全綠 | 本機：新 3 檔 81 案全過；全套只剩 7 個要 root 的既有案例（另一案是位元組釘選，`96c4d3b` 已修；第 5 節）；CI（root、0 skip）待 PR。§10.3 的每一項都有測試：全部撤銷、child token 重產、舊收據 410、孤兒撤銷、讀不到的 state 改名隔離且之後任何開機都不被路由、改名失敗保留標記、獨立驗證不過保留標記且不開 listener、DQ-03 兩種模式、開關關＋帳號資料＋標記全撤銷才刪標記、C1-M1 攻擊序、UC-24 三情境、全部撤銷第 k 個失敗、sentinel 不被任何 chmod／chown 碰到；另有每一步中途中斷、標記寫一半、磁碟滿 |
+| §10.3 的守門測試全綠 | 本機（審查修正後）：新 3 檔 97 案全過；全套 5,885 案只剩 7 個要 root 的既有案例（第 5 節）；CI（root、0 skip）待 PR。§10.3 的每一項都有測試：全部撤銷、child token 重產、舊收據 410、孤兒撤銷、讀不到的 state 改名隔離且之後任何開機都不被路由、改名失敗保留標記、獨立驗證不過保留標記且不開 listener、DQ-03 兩種模式、開關關＋帳號資料＋標記全撤銷才刪標記、C1-M1 攻擊序、UC-24 三情境、全部撤銷第 k 個失敗、sentinel 不被任何 chmod／chown 碰到；另有每一步中途中斷、標記寫一半、磁碟滿 |
 | sentinel 不被任何 chmod／chown 碰到 | 通過（第 3.9 節） |
 | HM-03a 的 UC-08 與 sentinel 結果寫進 provenance | **待 HM-03a**（第 11 節）；合併前要補，不可靠就照 DQ-39 (a) |
-| 獨立安全審查 | 還沒做 |
-| 單帳號（開關關、沒有帳號資料）逐位元不變 | 通過：沒有還原時連 ctime 都不變（8 個產品）；有還原時只刪標記、一行 log；HM-01 黃金回歸與兩個契約凍結照過 |
+| 獨立安全審查 | 做了：判定「修正後通過」；2 必修修好、建議逐項處理（第 17 節）；Q-1 待主對話確認 |
+| 單帳號（開關關、沒有帳號資料）逐位元不變 | 通過：沒有還原時連 ctime 都不變（9 個產品，審查 S-8 加了 Odoo Manage）；有還原時只刪標記、一行 log；HM-01 黃金回歸與兩個契約凍結照過 |
 | 同 PR 更新帳本；契約「待定」同步；第 9 節與變更紀錄 | 通過（第 2 節；契約 #101～#104 接在 #100 後面，第 10 節一列） |
 | 測試資料規則（計畫 §12.0 第 4 點） | 通過：token 都在執行時產生；憑證 `DUMMY-…`、網址 `.invalid`；秘密預檢 0 命中 |
 | 不改版號、不碰 `addons/<x>/`、不改 CHANGELOG；開關維持空集合 | 通過 |
@@ -393,6 +461,8 @@ HM-03a 的結果出來後，寫回本筆記這一節（或 HM-13a 的筆記第 1
 
 `tests/test_backend_loopback.py::test_every_profile_s_real_child_refuses_its_loopback_fake_backend_end_to_end[False]` 關閉時逾時
 （HM-09 額外帳號監看沒照 cancel 停，另一條線在修）：0 次。全套跑了 1 次（`1f8c29f`），`[False]` 4.5 秒、`[True]` 2.3 秒都過；不拿鎖的反覆執行沒有跑這個檔（它起真子程式）。
+審查修正後的全套（`89a7e02`）：`[False]` 4.5 秒、`[True]` 2.3 秒都過，逾時 0 次。本片的全套共跑 2 次（`1f8c29f`、`89a7e02`），審查另跑 2 次，
+都沒有逾時。
 
 ## 16. 接續紀錄（2026-11-16 15:2x 之後）
 
@@ -409,3 +479,48 @@ HM-03a 的結果出來後，寫回本筆記這一節（或 HM-13a 的筆記第 1
 - 全套 pytest（`1f8c29f`，正式 conftest、排在 wave1 鎖後面）抓到 `tests/test_output_schemas.py` 對 `apps/n8n/run.py` 的位元組釘選沒跟上
   `e91fc6f`（CI 一定紅）：`96c4d3b` 修好。契約第 7 節 log 清單漏的 `INDEX_NOT_ARCHIVED` 那一行在 `7d237f6` 補上。
 - Chromium 照 CI 的 `npm run browser:install` 裝進 clone 的 `node_modules`（只動被忽略的檔），全套的瀏覽器案例才跑得起來。
+
+## 17. 獨立安全審查的處理（2026-11-16 18:3x 起）
+
+審查報告：`artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-13b.md`（審查對象 `551d210`；證據 `wave4/evidence-review-HM-13b/`）。
+本輪的腳本與 log（先紅後綠、突變、影響到的檔、packaging、全套）：`artifacts/ha-multiprofile-parity-20261114/wave4/evidence-fix-HM-13b/`
+（log 先遮掉像 token 的字串，掃描 0 命中）。
+判定「修正後通過」：必修 2 項、建議 8 項、請主對話確認 1 題。先核對每一項（審查實驗的情境在本線重寫成測試或實驗重現），再改。
+
+| # | 意見（摘要） | 處理 | commit | 測試／證據 |
+|---|---|---|---|---|
+| MF-1 | 新測試的固定時鐘寫死 09:30:15Z，CI 一定紅 | 修：`guard_clock()` 每案取「現在的下一個整秒」，紀錄的 `at`、隔離名稱、時間戳由它推；既有隔離目錄名用固定的過去日期（只是名稱） | `aa8ef57` | `551d210` 上 10:45Z 跑 2 紅 → 81 綠（第 4.1 節） |
+| MF-2 | `profiles/` 一時列不出來時 fail open（全部撤銷回成功、還原讓舊 token 復活） | 修：照審查的草稿判斷「是目錄或查不出」，再多做三件：給的 `stores` 都撤銷並列進 results（不只算失敗）、E 不管前面有沒有失敗都跑、E 直接讀沒列到的 store；`stores` 只收額外帳號 | `77394fc`（測試）、`f3b8fa1`、`27eeb16` | 守門 3 案（還原、休眠、查不出是什麼）、全部撤銷 3 案；突變 N04～N09、N13 都被擋；契約 #102、第 1.3 節、`threat-model.md` 第 3 節與 I9、I13 的測試欄 |
+| S-1 | 偽造備份的 `restore-record.json`、收據封存是目錄時每次開機都停 | 採用：寫紀錄、封存前把目錄移開到 `<名稱>.quarantine-<UTC>[-n]`（`profiles.ASIDE_NAMES`） | `77394fc`、`f3b8fa1` | 4 個名稱各一案＋名稱常數一案；N10～N12。實驗另確認「收據檔本身是目錄、旁邊已有封存檔」仍會停：寫進 `threat-model.md` 第 3 節，不另外處理 |
+| S-2 | 第 E 步三個防禦檢查沒有測試（R21～R23 存活） | 採用：休眠時說謊的撤銷、檢查前被改的保留預設帳號、檢查前不見的隔離目錄各一案 | `77394fc`、`27eeb16`（威脅模型 I13 的測試欄） | N01～N03 都被擋 |
+| S-3 | 容器探針還原階段證據變弱 | 部分採用：開通的候選映像三個還原檔都要在、10001、0600（docstring 說了卻沒檢查）。stderr 兩行要改 `start()` 的輸出處理、只能在真映像上驗：交 HM-16（第 13 節），HM-19a 前的 builder 乾跑之前做好 | `895119b` | packaging unittest `Ran 205`、`OK (skipped=5)` |
+| S-4 | 暫時性錯誤讓好的帳號被永久隔離 | 不改程式：計畫 §8.4 C 寫「任何原因」；分辨原因要讓 `Store` 帶出例外原因（`config.py`，所有產品共用）；結果是安全方向（隔離的永遠不服務），同一份備份再還原一次就會重做。寫進 `threat-model.md` 第 3 節，交 HM-18／HM-13c | `89a7e02` | — |
+| S-5 | 交 HM-13c 要補拿 `ProfileAdmin.lock`、在執行緒裡跑、results 列出每個 store | 採用：`revoke_all()` 的 docstring、契約第 1.3 節、本筆記第 13 節 | `f3b8fa1`、`89a7e02`、本 commit | results 列出 store：MF-2 的全部撤銷那案 |
+| S-6 | 契約、威脅模型與筆記的小落差 | 採用：#67 補 24 小時上限（PaaS 沒有上限）；第 3.5 節「時鐘慢」限 24 小時；`threat-model.md` 補「慢超過 24 小時」；第 3.8 節改成「下次啟動（使用者、主機重開或 Watchdog）」並加進第 11 節；`update-backup-rollback.md` 那列改字；第 9 節補 `7087280` | `89a7e02`、本 commit | PaaS 唯讀查：`git -C <paas> show 69ac425:…/restore_guard.py`、`log d7f5849..origin/main` |
+| S-7 | `96c4d3b` 之後沒重跑全套 | 採用：修正後重跑全套（第 5 節） | — | `89a7e02`：5,885 案、0 skip，只有 7 個要 root 的既有案例失敗 |
+| S-8 | 單帳號「什麼都不變」的測試沒涵蓋 Odoo Manage | 採用：兩案參數改成 9 個產品（`EVERY_PRODUCT`） | `77394fc` | 多 2 案 |
+| Q-1 | DQ-03 (b) 的「面板提示」對沒開通的單帳號安裝 | 不是本片能定：照計畫 §3.3、§8.4 沒開通又沒有帳號資料時只 log 一行、刪標記、不寫紀錄，所以今天的安裝還原後只有 log。要面板也提示，得留一個不含秘密的通知來源（會動到「逐位元不變」的範圍）。請主對話確認「沒開通的產品只有 log」可以接受，或在 HM-13c 前另定。建議：沒開通只有 log（今天的面板逐位元不變）；開通的產品由 HM-13c 依還原紀錄（預設帳號那列 `token: kept`）在面板提示 | — | — |
+
+本輪沒有新決策，也沒有碰到待定題。
+
+`evidence-fix-HM-13b/logs/red-367edde.txt` 是 `77394fc` 改 commit 訊息之前的同一棵樹（`367edde`，tree 相同）跑的。
+
+第二次接續（2026-11-16 20:3x 起）：這一輪在 19:4x 因額度中斷。當時 5 個修正 commit（`aa8ef57`～`89a7e02`）已在，本筆記是沒 commit 的草稿
+（數字留空），全套 pytest（`895119b`）跑到約 80% 就斷，留下一個 `/tmp/ha-mp-*`。接續時：
+
+- 讀過每個 commit 的 diff、草稿、證據 log（先紅後綠、突變 N00～N13、影響到的 18 檔），和審查報告逐條對照，沒有發現要改的程式；
+  先刪掉上一段留下的 `/tmp/ha-mp-*`（用完整路徑）。
+- 正式 conftest 重跑新 3 檔：97 案全過，9.0 秒（`89a7e02`）。
+- 全套 pytest 重跑（`89a7e02`；之後只改文件），結果見第 5 節。
+- 威脅模型 I9、I13 的測試欄補上審查的新案，開頭的狀態照實寫第 3 節改了哪些（`27eeb16`）。
+- `tool_inventory.py`、packaging、兩個預檢在新的 HEAD 重跑（第 5、8 節）。
+- 再 fetch 一次 `claude-delivery`（只動 `origin/claude-delivery`）：`f4c7718`，多合了 #107 HM-11，它用掉契約第 9 節 #109～#112。
+
+rebase 到 `claude-delivery` 時的提醒（主對話做；本線沒有 rebase）：
+
+- HM-31（#105）用掉契約第 9 節 #101～#108，HM-11（#107）用掉 #109～#112（20:4x 查）。本片的 #101～#104 要接在當時最後一列後面
+  （照 20:4x 是 #113～#116），引用一起改：契約（第 1.3、3.5、3.6、9、10 節）、`acceptance-matrix.md` T-21、`threat-model.md` 第 3 節、
+  本筆記、`runtime-patches.json` 的 `restore_lock.py` 說明、`restore_lock.py` 的 docstring（2 處 #102）、`tests/test_restore_lock.py`
+  （4 處）、`tests/test_revoke_all.py`（1 處 #103）。本片加的每一處都在 `git diff 684a2dd..HEAD` 的新增行裡（`grep '#10[1-4]'`）；
+  `claude-delivery` 本來就有的 #101～#104 是 HM-31 的，不要改。改了 `restore_lock.py` 就要重算它的 SHA-256。
+- `git merge-tree` 預估要解的 6 個檔見第 1 節；HM-09 監看 cancel 的修正（#106）合進去之後，已知的 `test_backend_loopback` 逾時應該不再出現。
