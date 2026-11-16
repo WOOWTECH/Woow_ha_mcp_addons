@@ -3,6 +3,14 @@
 Management stays nondumpable/UID10001. The parent authenticates the Unix peer's
 kernel PID against its exact launched handle; only the owner inspects child fds.
 No production route, token, environment/memory discovery, or port override flag.
+
+Multi-profile HM-16 (HM-20's handoff: from HM-08 on, a switched-on product's run_product builds a ProfileManager, and
+its Supervisor and health monitor take options this installer refused): for a product switched on in the subprocess
+preamble (features.MULTI_PROFILE_PRODUCTS, as tests/test_upgrade_zero_rewrite.py does), the default profile runs here
+with those options, its spawn check binding the private port its child gets (the production 3000 is no test's:
+tests/owned_network.py). This installer serves one profile: an additional profile's runtime is refused and not served
+(ProfileManager logs it); tests of additional profiles use tests/multi_profile_runtime.py. A product not switched on is
+installed exactly as before.
 """
 import asyncio
 import json
@@ -88,8 +96,11 @@ def install_runner(module, config):
     production_url = f'http://127.0.0.1:{endpoint.production_port}/mcp'
     # HM-05: run_product makes its profile's Supervisor, HealthMonitor and apps in profile_runtime (child_spec stays
     # run_product's); apps/n8n/run.py still makes its own.
-    from mcp_admin_core import profile_runtime, run_product
+    from mcp_admin_core import features, lifecycle, profile_runtime, profiles, run_product
     profile = profile_runtime if module is run_product else module
+
+    def switched():
+        return module is run_product and features.enabled(config['product'])  # read when called, as production does
     original_spec, original_monitor, original_apps = module.child_spec, profile.HealthMonitor, profile.make_apps
     def trace(operation, phase, reason=None):
         if 'trace' not in config:
@@ -104,13 +115,24 @@ def install_runner(module, config):
             output.write(json.dumps(event)+'\n')
     def spec(*args, **kwargs):
         return endpoint.prepare(original_spec(*args, **kwargs))
+    def private_preflight():
+        # HM-16: ProfileManager.spawn_refusal test-binds the production port; the owned child listens on the private
+        # one, so that is the port to find free (profiles.port_occupied, the same test bind).
+        occupied = profiles.port_occupied(endpoint.port)
+        return None if occupied is None else (lifecycle.CHILD_PORT_IN_USE,
+                                              'another socket is bound to this port: ' + occupied)
     def supervisor(value, **kwargs):
-        assert not kwargs
-        return endpoint.supervisor(value, prepared=True)
+        if not switched():
+            assert not kwargs
+            return endpoint.supervisor(value, prepared=True)
+        if endpoint.manager is not None:
+            raise OwnershipError('the owned executable runs the default profile only (tests/multi_profile_runtime.py)')
+        return endpoint.supervisor(value, prepared=True, **{**kwargs, 'preflight': private_preflight})
     class Monitor(original_monitor):
-        def __init__(self, store, manager, client, child_url=production_url):
+        def __init__(self, store, manager, client, child_url=production_url, **options):
             assert child_url == production_url
-            super().__init__(store, manager, endpoint.attach(client), child_url=endpoint.url)
+            assert not options or switched()  # HM-09's monitor options: a switched-on product's only
+            super().__init__(store, manager, endpoint.attach(client), child_url=endpoint.url, **options)
 
         async def check(self):
             # Do not serialize production health and callback scheduling. An
