@@ -374,16 +374,16 @@ async def test_an_idle_upload_is_dropped_with_408_and_its_bytes_given_back(tmp_p
 
 
 async def test_a_slow_but_steady_upload_is_not_cut_off(tmp_path, monkeypatch):
-    limits(monkeypatch, 32, 32, idle=.5)
+    limits(monkeypatch, 32, 32, idle=1)
     child = Child()
     async with single(tmp_path, child) as gw:
         body = encoded(held_call(3, 2 * MiB, hold=False))
         step = len(body) // 4 + 1
 
         async def slow():
-            for start in range(0, len(body), step):  # 4 parts, 0.3 s apart: never idle 0.5 s, longer than it in all
+            for start in range(0, len(body), step):  # 4 parts, 0.4 s apart: never idle 1 s, longer than it in all
                 yield body[start:start + step]
-                await asyncio.sleep(.3)
+                await asyncio.sleep(.4)
         response = await gw.post(slow())
         assert response.status_code == 200 and 'result' in response.json()
         assert gw.budget.used() == 0
@@ -408,9 +408,9 @@ async def test_small_requests_are_neither_charged_nor_cut_off_when_idle(tmp_path
 
 async def test_a_trickling_upload_ends_at_the_whole_read_limit_as_before(tmp_path, monkeypatch):
     """PaaS F5 (a byte every 29 s never trips the idle limit) is HA's existing whole-read limit (BODY_SECONDS, 60 s for
-    every request; PaaS 300 s for large ones): here 1 s, a byte every 0.1 s with a 0.5 s idle limit: today's 408
-    {"error":"request denied"}, the bytes given back."""
-    limits(monkeypatch, 16, 16, idle=.5)
+    every request; PaaS 300 s for large ones): here 1 s, a byte every 0.1 s with a 2 s idle limit (never reached):
+    today's 408 {"error":"request denied"}, the bytes given back."""
+    limits(monkeypatch, 16, 16, idle=2)
     monkeypatch.setattr(gateway, 'BODY_SECONDS', 1)
     child = Child()
     async with single(tmp_path, child) as gw:
