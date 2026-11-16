@@ -560,7 +560,7 @@ def pieces_of(body, size=256 * 1024):
 
 
 @pytest.mark.parametrize('stated', [b'10', b'70000'], ids=['small', 'large'])
-async def test_a_declared_length_beside_a_chunked_framing_is_not_the_body_s(tmp_path, monkeypatch, stated):
+async def test_a_content_length_beside_a_chunked_framing_declares_nothing(tmp_path, monkeypatch, stated):
     """Review MF-1 (RFC 9112 6.3: Transfer-Encoding frames the body, Content-Length is then ignored): a body that states
     10 (or 70,000) bytes and sends 10 MiB chunked is charged as it arrives, as one without Content-Length is, so it is
     cut off once it does not fit (200 + -32003 under the id its head shows; never forwarded). Before the fix the
