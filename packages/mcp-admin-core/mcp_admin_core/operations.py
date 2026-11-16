@@ -4,6 +4,12 @@ Persist intent before the effect. A crash leaves an unknown outcome, never an
 instruction to repeat. No token, user id, backend value or raw error is stored.
 The journal must travel with the data directory in backups; restoring older data
 cannot preserve receipts for operations performed after that backup.
+
+HM-13b (multi-profile plan 4.1, 8.4 C; contract 3.5, 4.1, 9 #67; FM-07): the boot
+guard archives a restored journal (archive_for_restore): it becomes
+<journal>.restored (one archive kept) and a new journal refuses every operation id
+from before the restore with 410 operation_restored (restored_before_ms), the ids
+of operations made after that backup and lost with it included.
 """
 from __future__ import annotations
 
@@ -40,6 +46,12 @@ PROFILE_RESULTS = {
     'profile.index_quarantine': {'status': 'ok', 'profile_index_state': 'quarantined'},
 }
 SUBJECT = re.compile(r'[0-9a-f]{24}|profiles\.json\.quarantine-[0-9]{8}T[0-9]{6}Z(?:-[0-9]{1,3})?')
+# HM-13b: a journal the boot guard wrote after a restore has one more key: every operation id at or before it (ms) was
+# made before the restore and answers 410 operation_restored. Only journals the guard writes carry it (an image before
+# HM-13b never reads one: a restore brings back its own image with the backup's data).
+KEYS = frozenset({'version', 'key', 'expired_before_ms', 'receipts'})
+RESTORED_KEY = 'restored_before_ms'
+RESTORED_SUFFIX = '.restored'  # the archived journal of a restore (<journal>.restored; one kept per journal)
 
 
 def fail(status, code):
@@ -75,7 +87,8 @@ class OperationJournal:
             os.fchmod(fd, 0o600)
             with os.fdopen(fd, 'rb', closefd=False) as stream:
                 data = strict_json(stream.read(MAX_BYTES + 1))
-            if (not isinstance(data, dict) or set(data) != {'version', 'key', 'expired_before_ms', 'receipts'}
+            if (not isinstance(data, dict) or set(data) not in (KEYS, KEYS | {RESTORED_KEY})
+                    or RESTORED_KEY in data and (type(data[RESTORED_KEY]) is not int or data[RESTORED_KEY] < 0)
                     or type(data['version']) is not int or data['version'] != 1
                     or not isinstance(data['key'], str) or not re.fullmatch(r'[0-9a-f]{64}', data['key'])
                     or type(data['expired_before_ms']) is not int or data['expired_before_ms'] < 0
@@ -131,6 +144,8 @@ class OperationJournal:
             data = self._read()
         except (OSError, ValueError, KeyError, TypeError):
             fail(503, 'operation_journal_unavailable')
+        if RESTORED_KEY in data and timestamp <= data[RESTORED_KEY]:
+            fail(410, 'operation_restored')  # HM-13b: made before a restore (its receipt is in the archive, or lost)
         floor = max(data['expired_before_ms'], now - TTL_MS)
         if timestamp <= floor:
             fail(410, 'operation_id_expired')
@@ -189,3 +204,93 @@ class OperationJournal:
             fail(404, 'operation_not_found')
         return {'operation': self.public(operation_id, item),
                 'result': dict(self.results[item['kind']]) if item['state'] == 'completed' else {}}
+
+
+def journal_path(config_path: Path) -> Path:
+    """The journal of a state file (or of the index): .<name>.operations.json beside it."""
+    config_path = Path(config_path)
+    return config_path.with_name('.' + config_path.name + '.operations.json')
+
+
+def archive_for_restore(config_path: Path, cutoff_ms: int) -> str:
+    """HM-13b: the receipts of a restored profile (config_path: its state.json; or the index, for the receipts beside
+    it). The journal the restore brought back becomes <journal>.restored (the one archive kept: it replaces an older
+    one) and a new, empty journal refuses every operation id at or before cutoff_ms (the restore's time) with 410
+    operation_restored. The new journal is written first (a temporary, fsynced), then the old one moved, then the new one
+    put in place and the directory fsynced: a full disk leaves the journal as it was. Idempotent, for a guard stopped
+    half way and run again: a journal without receipts (the one this wrote, or one emptied) is not archived again, so
+    the archive keeps the receipts it holds; only its cutoff moves forward. A missing journal next to an archive
+    (stopped between the two moves) gets its new one; with neither, nothing is written (no operation was ever made).
+    A journal that cannot be read is archived as it is. Returns 'archived', 'renewed' or 'none'; OSError when it was not
+    done (the next start does it again)."""
+    if type(cutoff_ms) is not int or cutoff_ms < 0:
+        raise ValueError('invalid cutoff')
+    path = journal_path(config_path)
+    archive = path.with_name(path.name + RESTORED_SUFFIX)
+    found = _receipts(path)
+    if found is None:
+        if not os.path.lexists(archive):
+            return 'none'
+        _new_journal(path, cutoff_ms, archive=None)
+        return 'renewed'
+    count, previous = found
+    if count == 0:
+        _new_journal(path, max(cutoff_ms, previous or 0), archive=None)
+        return 'renewed'
+    _new_journal(path, cutoff_ms, archive=archive)
+    return 'archived'
+
+
+def _receipts(path):
+    """(receipt count, restored_before_ms or None) of the journal at path; (-1, None) for one that cannot be read as a
+    journal (any kind of entry, unsafe or malformed); None when there is none."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return -1, None
+    try:
+        info = os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.geteuid()
+                or info.st_size > MAX_BYTES):
+            return -1, None
+        with os.fdopen(fd, 'rb', closefd=False) as stream:
+            data = strict_json(stream.read(MAX_BYTES + 1))
+    except (OSError, ValueError, RecursionError):
+        return -1, None
+    finally:
+        os.close(fd)
+    if not isinstance(data, dict) or not isinstance(data.get('receipts'), dict):
+        return -1, None
+    previous = data.get(RESTORED_KEY)
+    return len(data['receipts']), previous if type(previous) is int and previous >= 0 else None
+
+
+def _new_journal(path, cutoff_ms, *, archive):
+    data = {'version': 1, 'key': secrets.token_hex(32), 'expired_before_ms': 0, 'receipts': {},
+            RESTORED_KEY: cutoff_ms}
+    raw = json.dumps(data, sort_keys=True, separators=(',', ':')).encode()
+    temporary = path.with_name(path.name + '.tmp.' + secrets.token_hex(8))
+    try:
+        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        try:
+            view = memoryview(raw)
+            while view:
+                view = view[os.write(fd, view):]
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        if archive is not None:
+            os.replace(path, archive)
+        os.replace(temporary, path)
+        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        try:
+            os.unlink(temporary)  # gone after the move; left only by a failure
+        except OSError:
+            pass
