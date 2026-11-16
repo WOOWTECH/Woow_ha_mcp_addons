@@ -253,6 +253,7 @@ class ProfilesMCP(ThreadingHTTPServer):
     def __init__(self, tokens, faults=()):
         super().__init__(('127.0.0.1', 0), ProfilesHandler)
         self.tokens, self.faults, self.sessions, self.lock = set(tokens), set(faults), {}, threading.Lock()
+        self.default = tokens[0]  # the default profile's token (the test lists it first)
         threading.Thread(target=self.serve_forever, daemon=True).start()
 
     @property
@@ -270,6 +271,9 @@ class ProfilesHandler(Handler):
             token = match.group(1) if match else None
         if token is not None and 'serves any token' in self.server.faults:
             return token
+        if token in self.server.tokens and 'switches by header' in self.server.faults \
+                and self.headers.get('X-MCP-Profile') == 'default':
+            return self.server.default  # as if the MCP port chose the profile by the management header
         return token if token in self.server.tokens else None
 
     def do_POST(self):
@@ -349,8 +353,8 @@ class CrossMatrixTests(unittest.TestCase):
             self.cross(self.serve(self.tokens), stdin)
         self.assertEqual(failed.exception.code, 1)
 
-    def test_a_crossing_session_or_a_served_unknown_token_fails(self):
-        for fault in ('crosses sessions', 'serves any token'):
+    def test_a_crossing_session_a_header_chosen_profile_or_a_served_unknown_token_fails(self):
+        for fault in ('crosses sessions', 'switches by header', 'serves any token'):
             with self.subTest(fault=fault):
                 server = self.serve(self.tokens, {fault})
                 with self.assertRaises(SystemExit) as failed:
