@@ -515,6 +515,19 @@ def test_each_restore_keeps_one_archive_and_old_ids_answer_410(tmp_path, log_sca
     assert json.loads(journal.read_text())['restored_before_ms'] > before
 
 
+def test_a_slow_clock_never_lets_a_restored_id_through(tmp_path, log_scan):
+    """The new journal's cutoff is never below the archived journal's newest operation id (as PaaS
+    _read_journal_floor): a host clock behind the backup's receipts still refuses every one of them."""
+    disk = with_profiles(tmp_path, log_scan, orphan=False, quarantine=False)
+    operation = disk.receipt(A)
+    disk.restore(disk.backup())
+    behind = datetime.fromtimestamp(int(operation.split('.')[0]) / 1000 - 3600, timezone.utc)
+    assert disk.start(enabled=True, now=lambda: behind).restored
+    journal = json.loads((disk.layout.profile(A) / '.state.json.operations.json').read_text())
+    assert journal['restored_before_ms'] == int(operation.split('.')[0])
+    assert disk.replay(operation, A) == RESTORED
+
+
 def test_an_archive_left_without_its_new_journal_gets_one(tmp_path, log_scan):
     """operations.archive_for_restore stopped between moving the journal and writing the new one: the next call writes
     the new one (old ids 410), and with neither a journal nor an archive it writes nothing."""

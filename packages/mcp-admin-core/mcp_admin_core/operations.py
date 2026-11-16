@@ -233,16 +233,19 @@ def archive_for_restore(config_path: Path, cutoff_ms: int) -> str:
             return 'none'
         _new_journal(path, cutoff_ms, archive=None)
         return 'renewed'
-    count, previous = found
+    count, floor = found
+    # As PaaS restore_guard (_read_journal_floor): never below the journal's own newest id or floor, whatever the clock.
+    cutoff_ms = max(cutoff_ms, floor or 0)
     if count == 0:
-        _new_journal(path, max(cutoff_ms, previous or 0), archive=None)
+        _new_journal(path, cutoff_ms, archive=None)
         return 'renewed'
     _new_journal(path, cutoff_ms, archive=archive)
     return 'archived'
 
 
 def _receipts(path):
-    """(receipt count, restored_before_ms or None) of the journal at path; (-1, None) for one that cannot be read as a
+    """(receipt count, floor) of the journal at path, the floor being the newest of its expired_before_ms,
+    restored_before_ms and receipt id times (None when there is none); (-1, None) for one that cannot be read as a
     journal (any kind of entry, unsafe or malformed); None when there is none."""
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
@@ -263,8 +266,10 @@ def _receipts(path):
         os.close(fd)
     if not isinstance(data, dict) or not isinstance(data.get('receipts'), dict):
         return -1, None
-    previous = data.get(RESTORED_KEY)
-    return len(data['receipts']), previous if type(previous) is int and previous >= 0 else None
+    times = [value for value in (data.get('expired_before_ms'), data.get(RESTORED_KEY))
+             if type(value) is int and value >= 0]
+    times += [int(key.split('.', 1)[0]) for key in data['receipts'] if isinstance(key, str) and ID_PATTERN.fullmatch(key)]
+    return len(data['receipts']), max(times) if times else None
 
 
 def _new_journal(path, cutoff_ms, *, archive):
