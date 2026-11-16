@@ -1,10 +1,12 @@
 """Headscale's owned backend fixture and bind-address guard; the direct child bearer check (HM-06); the restore stage
-(multi-profile HM-13a). Without Docker or root."""
+(multi-profile HM-13a); the mock address of a switched-on product and the single-profile path every candidate runs
+unchanged (multi-profile HM-16). Without Docker or root."""
 import ast
 import asyncio
 import json
 import os
 import stat
+import subprocess
 import sys
 import tempfile
 import threading
@@ -19,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'packages/mcp-admin-core'), str(ROOT / 'apps/n8n')]
 with patch.object(sys, 'argv', ['container_probe.py', 'headscale']):
     import container_probe as probe
+from mcp_admin_core import features  # noqa: E402  (HM-16: the products whose child refuses a loopback backend)
 
 RUNTIME = (10001, 10001)
 
@@ -66,20 +69,145 @@ class HeadscaleBackendTests(unittest.TestCase):
         self.assertEqual(probe.mock_bind_host('emqx'), '127.0.0.1')
 
 
-class SwitchedOnMockBackendTests(unittest.TestCase):
-    """Multi-profile HM-20 (plan 8.7): the child of a switched-on product (features.MULTI_PROFILE_PRODUCTS) refuses a
-    loopback backend (WOOW_MCP_DENY_LOOPBACK=1), as Headscale's always does, so its mock backend listens where
-    Headscale's does: on this container's private address on container_acceptance's one-use internal bridge
-    (packaging/test_container_acceptance.py), never on 127.0.0.1; the test double tests/loopback_backends.py is in no
-    image. The set is empty today, so this checks Headscale; switching a product on fails here until mock_bind_host
-    gives it that address."""
+def switched(*products):
+    """The product switch as an upgrade PR sets it (the repository keeps it empty), for this test only."""
+    return patch.object(features, 'MULTI_PROFILE_PRODUCTS', frozenset(products))
 
-    def test_every_product_whose_child_refuses_loopback_gets_a_private_mock_address(self):
-        from mcp_admin_core import features
-        for app in sorted({'headscale', *features.MULTI_PROFILE_PRODUCTS}):
-            with self.subTest(app=app), patch.object(probe.socket, 'gethostname', return_value='candidate'), \
+
+class SwitchedOnMockBackendTests(unittest.TestCase):
+    """Multi-profile HM-16 (HM-20 review MF-2; HM-20 left a tripwire here, now the rule itself): every child of a
+    switched-on product (features.MULTI_PROFILE_PRODUCTS) refuses a loopback backend (WOOW_MCP_DENY_LOOPBACK=1), as
+    Headscale's always does, so its mock backend listens where Headscale's does: on this container's private address on
+    container_acceptance's one-use internal bridge (packaging/test_container_acceptance.py), never on 127.0.0.1; the
+    test double tests/loopback_backends.py is in no image. Every product is checked switched on and off."""
+
+    def test_a_switched_on_product_s_mock_listens_on_the_container_s_private_address(self):
+        for app in sorted(features.KNOWN_PRODUCTS):
+            with self.subTest(app=app), switched(app), patch.object(probe.socket, 'gethostname', return_value='candidate'), \
                     patch.object(probe.socket, 'gethostbyname', return_value='172.18.0.2'):
                 self.assertEqual(probe.mock_bind_host(app), '172.18.0.2')
+            for address in ('127.0.0.1', '169.254.1.2', '100.64.0.1', '192.0.2.1', '8.8.8.8'):
+                with self.subTest(app=app, address=address), switched(app), \
+                        patch.object(probe.socket, 'gethostbyname', return_value=address):
+                    with self.assertRaises(AssertionError):
+                        probe.mock_bind_host(app)
+
+    def test_a_product_not_switched_on_keeps_its_mock_on_loopback_and_headscale_its_bridge(self):
+        with switched(), patch.object(probe.socket, 'gethostname', return_value='candidate'), \
+                patch.object(probe.socket, 'gethostbyname', return_value='172.18.0.2'):
+            for app in sorted(features.KNOWN_PRODUCTS):
+                with self.subTest(app=app):
+                    self.assertEqual(probe.mock_bind_host(app), '172.18.0.2' if app == 'headscale' else '127.0.0.1')
+
+    def test_the_repository_switch_decides_it(self):
+        """What HM-20's tripwire guarded: a product an upgrade PR switches on gets the private address at once."""
+        with patch.object(probe.socket, 'gethostname', return_value='candidate'), \
+                patch.object(probe.socket, 'gethostbyname', return_value='172.18.0.2'):
+            for app in sorted(features.KNOWN_PRODUCTS):
+                with self.subTest(app=app):
+                    private = app == 'headscale' or app in features.MULTI_PROFILE_PRODUCTS
+                    self.assertEqual(probe.mock_bind_host(app), '172.18.0.2' if private else '127.0.0.1')
+
+
+# The single-profile probe as reviewed before HM-16 (claude-delivery f4c7718). A slice that changes that path on purpose
+# moves BASE to the commit its change is reviewed against, and says why in its provenance note.
+BASE = 'f4c7718'
+# What HM-16 added for a switched-on product: two imports and three statements `if ... features.enabled(...)`.
+SWITCHED_ON_ADDITIONS = 5
+
+
+def is_switched_on_branch(node):
+    return isinstance(node, ast.If) and any(
+        isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute) and call.func.attr == 'enabled'
+        and isinstance(call.func.value, ast.Name) and call.func.value.id == 'features' for call in ast.walk(node.test))
+
+
+class WithoutSwitchedOnAdditions(ast.NodeTransformer):
+    """The probe module without HM-16's additions: the imports of features and container_profiles, and every `if`
+    statement whose test calls features.enabled, wherever it stands."""
+
+    def __init__(self):
+        self.removed = 0
+
+    def drop(self):
+        self.removed += 1
+
+    def visit_If(self, node):
+        if is_switched_on_branch(node):
+            return self.drop()
+        return self.generic_visit(node)
+
+    def visit_Import(self, node):
+        return self.drop() if [alias.name for alias in node.names] == ['container_profiles'] else node
+
+    def visit_ImportFrom(self, node):
+        if node.module == 'mcp_admin_core' and [alias.name for alias in node.names] == ['features']:
+            return self.drop()
+        return node
+
+
+class SingleProfilePathTests(unittest.TestCase):
+    """Multi-profile HM-16 (plan 12.3 HM-16 acceptance: the single-profile probe path does not change): a product that
+    is not switched on runs f4c7718's probe statement for statement; the switched-on additions are only guarded
+    branches, the stage call last."""
+
+    def test_without_the_switched_on_branches_the_probe_is_the_reviewed_one(self):
+        base = subprocess.run(['git', '-c', f'safe.directory={ROOT}', '-C', str(ROOT), 'show',
+                               f'{BASE}:packaging/container_probe.py'], capture_output=True, text=True, check=True).stdout
+        tree = ast.parse(Path(probe.__file__).read_text())
+        stripped = WithoutSwitchedOnAdditions()
+        stripped.visit(tree)
+        self.assertEqual(stripped.removed, SWITCHED_ON_ADDITIONS)
+        self.assertEqual(ast.dump(tree), ast.dump(ast.parse(base)))
+
+    def test_the_stage_runs_last_and_only_switched_on(self):
+        run = next(node for node in ast.parse(Path(probe.__file__).read_text()).body
+                   if isinstance(node, ast.AsyncFunctionDef) and node.name == 'run')
+        branches = [node for node in ast.walk(run) if is_switched_on_branch(node)]
+        self.assertEqual(len(branches), 1)
+        branch = branches[0]
+        self.assertEqual(ast.unparse(branch.test), 'features.enabled(APP)')
+        self.assertEqual([ast.unparse(statement) for statement in branch.body],
+                         ['await container_profiles.stage(sys.modules[__name__], client)'])
+        client = next(node for node in ast.walk(run) if isinstance(node, ast.AsyncWith)
+                      and ast.unparse(node.items[0].context_expr).startswith('httpx.AsyncClient'))
+        self.assertIs(client.body[-1], branch)  # after the last stop of the single-profile path
+
+
+class FixtureSnapshotTests(unittest.TestCase):
+    """fixture_snapshot (C4-SF-5): only a switched-on product's /data/mcp may hold the multi-profile layout."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.data = Path(temporary.name) / 'mcp'
+        self.data.mkdir(mode=0o700)
+        self.data.chmod(0o700)
+        for name in ('state.json', '.writer.lock'):
+            (self.data / name).write_bytes(b'{"fixture": true}')
+            (self.data / name).chmod(0o600)
+        patcher = patch.object(probe, 'DATA', self.data)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_a_product_not_switched_on_keeps_today_s_bounded_regular_files(self):
+        with switched():
+            found = probe.fixture_snapshot()
+            self.assertEqual(sorted(found), ['.writer.lock', 'state.json'])
+            self.assertEqual(len(found['state.json']), 8)
+            (self.data / 'profiles').mkdir()
+            with self.assertRaises(AssertionError):
+                probe.fixture_snapshot()
+            (self.data / 'profiles').rmdir()
+            for number in range(15):
+                (self.data / f'extra-{number}').write_bytes(b'')
+            with self.assertRaises(AssertionError):
+                probe.fixture_snapshot()
+
+    def test_a_switched_on_product_s_is_the_layout_s_tree(self):
+        with switched(probe.APP), patch.object(probe.container_profiles, 'tree_snapshot', return_value={'x': 1}) as tree:
+            self.assertEqual(probe.fixture_snapshot(), {'x': 1})
+        tree.assert_called_once_with(self.data)
 
 
 CHILD_TOKEN = 'C' * 43  # tests/fixtures/owner_defaults/README.md: a child token in test data
