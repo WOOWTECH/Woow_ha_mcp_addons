@@ -649,6 +649,13 @@ test('HM-12: shape D with token_rotated (saved, the new child not started) is co
   await api.bootstrap();
   await assert.rejects(() => api.mutate('backend/patch', usernameChange, revisionOf(DEFAULT_PROFILE)), error => error instanceof ApiError
     && error.status === 503 && error.code === 'config_apply_failed' && error.tokenRotated === true && error.message === `${APPLY_FAILED} ${ROTATED}`);
+  // Said of another profile than the one asked (I12): nothing of it is taken, today's copy (an error's echo decides
+  // nothing else; this one would say whose token changed).
+  const elsewhere = new AdminApi(mount, saving('odoo', shapeD, {echo: (operation, id) => operation === 'backend/patch' ? DEFAULT_PROFILE : id}).fetcher, memoryStorage());
+  await elsewhere.bootstrap();
+  elsewhere.select(B);
+  await assert.rejects(() => elsewhere.mutate('backend/patch', usernameChange, revisionOf(B), B),
+    error => error instanceof ApiError && error.code === 'config_apply_failed' && error.tokenRotated !== true && error.message === APPLY_FAILED);
   // Anything else is today's answer: no flag, today's copy.
   for (const [status, body] of [[503, {saved: true, detail: {code: 'config_apply_failed'}}], [503, {saved: true, token_rotated: 'true', detail: {code: 'config_apply_failed'}}],
     [503, {token_rotated: true, detail: {code: 'config_apply_failed'}}], [409, {saved: true, token_rotated: true, detail: {code: 'config_conflict'}}],
