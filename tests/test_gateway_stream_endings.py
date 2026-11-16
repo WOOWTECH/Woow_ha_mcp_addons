@@ -377,7 +377,7 @@ async def test_a_reply_delivered_before_the_token_changed_gets_no_minus_32005(tm
 
 
 async def test_the_minus_32004_event_is_the_answer_and_no_minus_32005_follows_it(tmp_path, log_scan):
-    """HM-14 review S-1 (plan 8.8 #95): the gateway's own -32004 event answers the POST as a reply does. The child's
+    """HM-14 review S-1 (plan 8.8 #96): the gateway's own -32004 event answers the POST as a reply does. The child's
     stream broke, the server took the -32004 event, then the token changed before the stream's last message: no
     -32005 follows under the same id (JSON-RPC: one answer per request) and the stream ends normally, nothing raised.
     (PaaS adds the -32005 there: its _Interruption knows only the child's replies.)"""
