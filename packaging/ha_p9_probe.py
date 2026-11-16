@@ -82,15 +82,17 @@ def run(args, timeout=300):
 
 
 class Client:
-    def __init__(self, port, token, host='127.0.0.1', timeout=30, secret=False):
+    def __init__(self, port, token, host='127.0.0.1', timeout=30, secret=False, extra=None):
         # secret (multi-profile HM-16): the token's secret URL /private_<token>/mcp, without an Authorization header.
+        # extra: more request headers (HM-16: an X-MCP-Profile that the MCP port must never read).
         self.url = ('http://%s:%d/private_%s/mcp' % (host, port, token)) if secret else 'http://%s:%d/mcp' % (host, port)
         self.token = token
         self.timeout = timeout
         self.secret = secret
+        self.extra = dict(extra or {})
 
     def request(self, method, body=None, sid=None, timeout=None):
-        headers = {'Authorization': 'Bearer ' + self.token, 'MCP-Protocol-Version': PROTOCOL}
+        headers = {'Authorization': 'Bearer ' + self.token, 'MCP-Protocol-Version': PROTOCOL, **self.extra}
         if self.secret:
             del headers['Authorization']
         if body is not None:
@@ -343,7 +345,9 @@ def mode_cross(opts, stdin, out):
     """Multi-profile HM-16 (FM-107; T-05): every live token opens a session on both connection methods (Bearer, and
     its secret URL) and lists the tools; each of those sessions is unknown (404) with every other live token on both
     methods; a gone token (a deleted or revoked profile's) and an unknown one made here are refused (Bearer 401,
-    secret URL 404). Every session opened is ended. Tokens are never printed; a profile is named by its log id."""
+    secret URL 404). Every session is opened with X-MCP-Profile: default, which the MCP port never reads (contract
+    2.2): had it chosen the default profile, that session would be the default token's. Every session opened is
+    ended. Tokens are never printed; a profile is named by its log id."""
     rows = cross_rows(stdin)
     checks, sessions = [], []
 
@@ -355,7 +359,7 @@ def mode_cross(opts, stdin, out):
             if kind != 'live':
                 continue
             for method in ('bearer', 'secret'):
-                client = Client(opts.port, token, secret=method == 'secret')
+                client = Client(opts.port, token, secret=method == 'secret', extra={'X-MCP-Profile': 'default'})
                 status, _, sid = client.open()
                 if sid:
                     sessions.append((label, method, client, sid))

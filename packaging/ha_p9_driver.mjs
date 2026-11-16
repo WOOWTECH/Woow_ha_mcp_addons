@@ -58,6 +58,7 @@ const CROSS = argv.includes('--cross'), TEMP = argv.includes('--temp-profile');
 if (TEMP && (opt('--profile') !== undefined || argv.includes('--tokens') || modes.length || OUTAGE)) {
   throw new Error('--temp-profile makes its own profile: only --backend-file, --plan and --cross go with it');
 }
+if (TEMP && PLAN && !BACKEND) throw new Error('--temp-profile --plan needs --backend-file (the plan reads its backend)');
 
 const ssh = (command, input) => spawnSync('ssh', [...SSH, command], { input, encoding: 'utf8', timeout: 900000 });
 const failed = [];  // the driver exits non-zero when any probe failed, so wrappers cannot report a pass
@@ -197,6 +198,11 @@ try {
       gone = token;
       remote('cross', crossLine('default', 'live', own) + crossLine(id, 'live', token));
       if (PLAN) remote('plan', token + '\n' + JSON.stringify(PLAN));
+      else if (!BACKEND && process.env.PROBE_TOOL) {
+        // No backend of its own: its tool call is refused (Backend not configured), never answered with the default
+        // profile's backend (PaaS public_probe.py --temp-profile checks the same).
+        remote('plan', token + '\n' + JSON.stringify({ denials: [[process.env.PROBE_TOOL, JSON.parse(env('PROBE_TOOL_ARGS', '{}'))]] }));
+      }
       return id;
     }, { report: console.log }).then(({ id }) => {
       console.log('temporary profile deleted:', logId(id));
