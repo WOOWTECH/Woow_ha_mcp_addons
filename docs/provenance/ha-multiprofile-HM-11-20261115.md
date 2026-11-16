@@ -2,6 +2,9 @@
 
 ## 結論
 
+- **2026-11-16 已 rebase 到 HM-10（`684a2dd`）並對齊真後端**（第 16 節）：HM-10 交給 HM-11 的待辦逐條處理；fixture 與真的 8099
+  管理 app 對同一份 93 個案例逐案一致（`packages/mcp-admin-ui/tests/profile-api-cases.json`，Python 對真後端、Playwright 對 fixture）；
+  審查 S-2（清單不能用時鎖住整個面板）在這一輪做完。下面第 1～15 節是對 fixture 那一階段的紀錄，數字以第 16 節為準。
 - **產品沒開通時，面板畫出來的東西與送出的請求都不變**：DOM、送出的請求（方法、路徑、標頭集合）、fixture 收到的紀錄，和 `b5d10c5` 的面板逐項相同
   （第 5.3 節：6 種設定、5 頁、幾種動作，72 個比較 0 差異；審查修正後在 `155022e` 重跑仍是 0 差異）。
   **CI 也守得住**：`profiles.spec` 有一案在開關關時逐頁確認沒有帳號介面、帳號字樣與帳號標頭（審查 MF-1）。
@@ -275,6 +278,8 @@ commit 順序：
 
 ## 11. 照契約假設、要等 HM-10 對齊的地方（「收尾」做）
 
+2026-11-16 逐點對 HM-10 真後端的核對結果在第 16.3 節。
+
 1. 開通的產品對不帶標頭的 bootstrap 回 400 `profile_id_required`（角色檢查之後）；面板靠它探測開關。
 2. 回聲照 HM-05 的 `gateway.echoed()`：bootstrap `profile:{id,label,is_default}`＋`profiles_supported:true`，其他成功回應 `profile:{id}`；錯誤回應的回聲面板不看。
 3. `GET /api/profiles`：`{"profiles":[列…]}`，索引 ETag 在 `ETag` 標頭（`"p1-<64 hex>"`）；最多 6 列、剛好一列預設帳號（label `Default`）；列的欄位照契約 §3.6。
@@ -354,7 +359,7 @@ commit 順序：
 |---|---|---|---|
 | MF-1（必修） | 「開關關時 DOM 不變」沒有 CI 守門（突變 M14、M15 存活） | **已修**。`profiles.spec` 加「switched off」案例（EMQX）：逐頁走過總覽、後端連線、工具權限、連線與權杖、診斷與維護；開「顯示權杖」與「套用工具權限？」兩個確認框；按「重新整理狀態」。斷言帳號介面（`#profile-select`、`.profile-bar`、`.profile-current`、`.profile-scope`、`.profile-note`、`.dialog-profile`、兩張帳號卡）數量 0、沒有帳號字樣、重啟說明是整個子行程、範例名稱 `woow`、請求剛好是兩輪 bootstrap＋capabilities 且不帶標頭、fixture 沒收到變更。比審查員的版本多查字樣、請求清單與 fixture 紀錄。突變 N01（＝M14）、N02（＝M15）與 N03～N08 都被擋（第 4 節）。CI 約多 1.7 秒 | `3e32c2f` |
 | S-1 | 面板刪除有待確認收據的帳號後，收據留著、提示叫人切回 | **已修並補完**。抽出 `forget(id)`：面板刪除、重送確認刪除、別處刪除三條路徑（`a6871c2`）。核對時另找到兩條：切換時新清單已沒有剛離開的帳號；重送刪除回 `profile_not_found`（原本說「帳號「預設帳號」（default）已不存在」，要刪的帳號的收據也沒清）（`ded9d01` 先紅、`842dfed`）。索引壞的替代清單不算刪除（`155022e`）。文件與帳本用字跟著改（`4f86a8f`、`038de6f`） | `3e32c2f`、`a6871c2`、`ded9d01`、`842dfed`、`155022e` |
-| S-2 | 一列名稱不合規或清單少 ETag，整個面板（含預設帳號）無法使用 | **留到收尾**（HM-10 合併後、任何產品開通前；第 13 節寫了做法）。理由：(1) 清單形狀（列數、id 唯一、隔離或孤兒列，S-5 第 3 點）與索引版本放 `ETag` 還是本體，都是 HM-10 定，現在對 fixture 做可能要重做；(2) 替代清單要有標記，不能被當成「帳號已刪除」而清掉收據（本片 `842dfed` 的檢查已依賴這個），要和真後端的狀態一起設計；(3) 開關是空的，單帳號面板根本不讀清單（MF-1 案例守住），開通前不會有客戶碰到；(4) CI 時間。第 12 節把 `ETag` 與 WebView Unicode 列為開通前必量，並補一個推論：反向代理壓縮可能把 ETag 改成 `W/"…"` | — |
+| S-2 | 一列名稱不合規或清單少 ETag，整個面板（含預設帳號）無法使用 | **2026-11-16 對齊時已做**（第 16.2 節第 15 點）。原本的處理：**留到收尾**（HM-10 合併後、任何產品開通前；第 13 節寫了做法）。理由：(1) 清單形狀（列數、id 唯一、隔離或孤兒列，S-5 第 3 點）與索引版本放 `ETag` 還是本體，都是 HM-10 定，現在對 fixture 做可能要重做；(2) 替代清單要有標記，不能被當成「帳號已刪除」而清掉收據（本片 `842dfed` 的檢查已依賴這個），要和真後端的狀態一起設計；(3) 開關是空的，單帳號面板根本不讀清單（MF-1 案例守住），開通前不會有客戶碰到；(4) CI 時間。第 12 節把 `ETag` 與 WebView Unicode 列為開通前必量，並補一個推論：反向代理壓縮可能把 ETag 改成 `W/"…"` | — |
 | S-3 | 契約要補三個和 PaaS 的差異 | **已處理**：寫進第 13 節的交接清單（刪除兩段確認、探測例外、#55），另加 #84 的收據路徑 | 本筆記 |
 | S-4 | 開通後帳號範圍的 204 不經回聲比對 | **已修**：開通後帳號範圍 204 一律當回聲不符；開關關與全域路徑照舊。node 加一案（先紅） | `3e32c2f`、`a6871c2` |
 | S-5 | 交給 HM-10 的三點 | **已處理**：第 11 節第 19～21 點。第 1 點已核對 `gateway.py:612-621`（先 replay，後比 ETag）。面板這邊先補一層：重送刪除回 `profile_not_found` 時說的是要刪的帳號 | 本筆記、`842dfed` |
@@ -364,3 +369,166 @@ commit 順序：
 | S-9 | DQ-14「孤兒在面板列出可刪」沒有負責片 | **已處理**：API 由 HM-10 定，面板由本片收尾做（計畫 §17 的 FM-23）；隔離目錄是另一件事，仍是 HM-13c（第 11 節第 17 點、第 13 節） | 本筆記 |
 
 審查第 8 節的其他觀察：分支的上游設成 `origin/claude-delivery`、`push.default` 沒設，開 PR 時要明確 `git push -u origin feat/ha-multiprofile-hm11-20261115`（列在 PR 說明的「開 PR 前要做」）。
+
+## 16. rebase 到 HM-10 並對齊真後端（2026-11-16）
+
+### 16.1 rebase
+
+| 項目 | 結果 |
+|---|---|
+| 備份 | 先開本機分支 `backup/hm11-before-rebase-20261116`（指向 rebase 前的 `c251fbe`，沒有 push） |
+| 新基準 | `git fetch origin feat/ha-multiprofile-hm10-20261115`，`FETCH_HEAD` 是 `684a2dd4f3d8931c0de85e1786ae502951078698`（HM-10 PR #104 的 head）；`b5d10c5` 是它的祖先，`git log 684a2dd..HEAD` 剛好是本片的 20 個 commit |
+| 指令 | `git rebase 684a2dd`。重放 20 個，衝突 2 個，都在 `docs/multi-profile/decisions.md`；其餘 18 個 `git range-diff` 逐一相同 |
+| `b567f68`（DQ-31） | 新基準的 #100（HM-08 補正 PR）已把 DQ-13、DQ-14、DQ-30、DQ-31 記成已定、題數 34／12。以新基準為底，只加回本片的變更：DQ-31 的結論寫成面板實際的做法（`woow-<產品>-<id 前 8 碼>`、預設帳號維持 `woow`、不做跨帳號總覽與帳號層級權限），變更紀錄加一列（2026-11-16）。commit 訊息照實際內容改寫（`e058882`） |
+| `0eed62a`（變更紀錄順序） | 跳過（`git rebase --skip`）：它只把 HM-11 那列移到最後，上面的解法已經把新列放在最後 |
+| 帳本 | 三個帳本 commit 自動合併。核對方式：新基準的 `runtime-patches.json` 與 rebase 後的只差 5 個面板檔（app.js、api.js、contracts.js、operation-identity.js、profiles.js），其他 56 列與 `scope` 逐字相同；5 列的 SHA-256 照檔案實際內容重算全部一致（新基準沒有動面板檔，說明就是新基準的說明加本片的句子）。對齊後再釘一次（`2491f88`） |
+| 依賴 | `b5d10c5..684a2dd` 沒有動 `uv.lock`、`package-lock.json`、`pyproject.toml`、`requirements-ci.txt`：沒有重跑 `setup_repo_env.sh` |
+| 其他衝突 | 沒有：HM-10 沒有碰 `packages/mcp-admin-ui/`、`packaging/ha_p9_admin.mjs`、`docs/admin-write-contracts.md` |
+
+### 16.2 HM-10 交給 HM-11 的待辦（HM-10 筆記 §13.2）逐條
+
+| # | 待辦 | 處理 |
+|---|---|---|
+| 1 | 每個帳號範圍請求都帶 `X-MCP-Profile`（含 `default`），比對回聲 | 早已做了（`26c7ec4`）。這一輪用案例核對：node「every management request the panel sends…」逐一比對面板送出的方法、路徑與標頭和案例（案例已對真後端錄過）；回聲的形狀由案例的 `profile` 欄位比對 |
+| 2 | bootstrap 與變更兩個回應的回聲都比對 | 早已做了。調整兩點：`profiles_supported` 可以是 `false`（真後端對 OpenDesign、Odoo Manage 就是 false；原本會被當成回聲不符）；回聲的名稱只檢查形狀（不顯示，S-2） |
+| 3 | 清單的 `orphans`（列出可刪） | 做了：「診斷與維護」列出、逐筆刪除（兩段確認），選單下方提示筆數；刪除時清掉它在這個分頁的待確認收據 |
+| 4 | `profile_index_state:"corrupt"` 時「隔離帳號索引」，送 `profile_index_etag` | 做了：預設帳號的「帳號索引無法使用」卡片多一個按鈕；`If-Match` 原樣送 bootstrap 的值（含引號）、`Idempotency-Key`、CSRF，沒有本體、沒有 `X-MCP-Profile`；收據放帳號增刪的範圍（`profiles/quarantine`，4 鍵） |
+| 5 | 刪除與隔離的兩段確認（DQ-14） | 刪除早已做了；隔離與孤兒刪除這一輪做（兩段，第一段寫明後果） |
+| 6 | `profiles_supported:false` 不顯示新增 | 做了：新增按鈕改看 bootstrap 的 `profiles_supported`（原本看產品名稱），拿掉 `canCreateProfiles` |
+| 7 | PATCH、DELETE 一定帶 CSRF | 早已做了。案例 `rename-without-csrf`、`delete-without-csrf` 錄下真後端 403；node 的請求比對確認面板有帶 |
+| 8 | 建立的回應沒有 token，要另外 reveal | 早已做了（面板從不讀建立回應裡的 token；`createToken` 案例） |
+| 9 | 建立重送回目前那一列；帳號已刪時只有 id | 做了：只有 `{id, operation}` 的重送算「已確認建立、但已被刪除」，識別碼清掉、說明、回預設帳號；其他形狀不算確認（識別碼保留） |
+| 10 | `status`、`blocked_reason`、`disabled_reason` 的文字 | 早已做了，值和 HM-10 的一致（案例 `rows`）。HM-09 提到的「看門狗一直重試（`backoff`）要不要另外提示」：不另加，選單已顯示「退避等待」，總覽有子行程狀態 |
+| 11 | fixture 照 HM-10 的回應形狀 | 做了（`35dfbdd`），並用案例證明一致（第 16.4 節） |
+| 12 | `profile_limit_reached` 的 `limit` 可能是 0 | 做了：另一段文案（只服務預設帳號、刪除帳號也不會改變、請回報），不再說「最多 0 個」 |
+| 13 | 隔離回 409 `config_conflict` 而索引仍是 `corrupt`：沒有索引檔可隔離，提示修好後重啟 | 做了：409 後重讀狀態，分三種說明：索引已可用；索引檔又變了（ETag 不同）；ETag 相同而仍是 corrupt＝沒有索引檔可隔離，請修好 `/data/mcp/profiles` 後重啟 add-on |
+| 14 | 隔離拿不到某個帳號的鎖而 503（什麼都沒做） | 做了：說明另一個帳號的操作正在進行；識別碼保留（沒有代碼的 503 不能確定沒記下意圖），用「重送帳號操作」或重新整理後再試 |
+| 15 | 清單的索引 ETag 只在回應標頭；拿不到時照審查 S-2 | 做了（S-2 一起）：清單沒帶格式正確的 `ETag` 照列但唯讀（新增、改名、刪除停用、說明）；清單讀不到或格式不合（除了 401／403、回聲不符與晚到的回應）不再鎖住整個面板，預設帳號照常可用、選單只剩預設帳號（與目前帳號）；這兩種替代清單都不當成「帳號已刪除」的證據；瀏覽器顯示不了的名稱只藏那一列的名稱。`index_etag` 本體欄位照 HM-10 的決定先不做（HM-03a 實測拿不到才補） |
+
+另外對齊時才發現、HM-10 筆記沒列的一點：**刪除的重送在帳號已被別處刪除時，真後端回 409 `config_conflict`、不是 404**（HM-10 先比索引
+ETag 再找帳號；別處刪除一定改了索引）。面板原本只在 404 時說「帳號已不存在、不需要再刪除」並清掉它的收據（`368a53a`），對真後端會改成
+說「設定已被其他操作更新」而收據留著。修法：重送刪除遇到 `config_conflict` 或 `profile_not_found` 時重讀清單，清單（不是替代清單）裡
+已沒有這個帳號、也不是孤兒，才照「已不存在」處理；否則說清單已更新、沒有刪除。
+
+### 16.3 照契約假設的 21 點（第 11 節）對 HM-10 的核對
+
+| 點 | 結果 |
+|---|---|
+| 1 探測的 400 `profile_id_required` | 成立（案例 `bootstrap-without-header`）；HM-10 說 ⑦ 的 400 不寫 log（第 20 點） |
+| 2 回聲形狀 | 成立；另外：帳號動作「回傳」的錯誤 JSON（409 `config_conflict`、409 `owner_defaults_unavailable` 等）也帶 `profile:{id}`，「丟出」的拒絕（428、404 `operation_not_found`、409 `endpoint_global`、⑦ 的 400／404／503）不帶。面板不看錯誤回應的回聲，行為不變；fixture 照改 |
+| 3 清單 | 成立，另有 `orphans`；ETag 在標頭 |
+| 4～6 建立、改名、刪除 | 成立；成功與重送都另帶索引 `ETag` 標頭（面板沒用到）；建立的重送在帳號已刪時只回 id（第 16.2 節第 9 點） |
+| 7 收據種類名 | 成立（`profile.create`、`profile.delete`），另有 `profile.index_quarantine` |
+| 8 全域收據沒有查詢路徑 | 成立（HM-10 沒有開），待確認卡維持只能重送或結束追蹤 |
+| 9 記下意圖之前的拒絕 | 成立：HM-10 的順序是索引不能用（503）→ If-Match（428；格式錯 409）→ Idempotency-Key（428、400、409 `operation_id_conflict`）→ 重送 → ETag 409 → 各路由的判斷，都在 `journal.begin` 之前。面板多釋放 `profile_index_corrupt` |
+| 10 CSRF 取自預設帳號的 bootstrap | 成立（共用的 AdminAuthority） |
+| 11 額外帳號的 endpoint | 成立（案例 `endpoint-B`、`bootstrap-B-shows-the-endpoint`） |
+| 12 索引狀態 | 成立，另帶 `profile_index_etag`；索引不能用時任何額外帳號 id（含不存在的）都先 503，再看存不存在（fixture 原本先 404，已改） |
+| 13 讀不到的帳號 | 成立（案例 `rows`：清單列 `profile_unavailable`／`failed`，bootstrap 503 `state unavailable`，刪除 200） |
+| 14 代碼只在契約的狀態碼下認 | 成立（`PROFILE_CODES` 和契約第 4.1 節一致） |
+| 15 列的值 | 成立 |
+| 16 `profile` 鍵只在回聲 | 成立 |
+| 17 孤兒清單 | 做了（第 16.2 節第 3 點） |
+| 18 `dormant_profiles` | 仍是 HM-13b／c；面板沒開通時不看 |
+| 19 先重送再比 If-Match | 成立（HM-10 審查核對過） |
+| 20 探測的 400 不記 WARNING | 成立（HM-10 審查核對過）；DOCS 說明交 HM-18 |
+| 21 清單 ≤6 列、id 不重複 | 成立：索引最多 5 個額外帳號（`profiles.MAX_EXTRA_PROFILES`），孤兒在另一個鍵 |
+
+### 16.4 fixture 和真後端一致的證明
+
+- `packages/mcp-admin-ui/tests/profile-api-cases.json`：10 個情境、93 個案例，涵蓋面板開通後用到的每條管理路由（清單、建立、改名、
+  刪除、索引隔離、bootstrap、configuration、capabilities、diagnostics、收據查詢、token reveal／rotate（含重送）、child/restart、
+  endpoint、policy、owner-defaults）與面板要處理的每種拒絕（`X-MCP-Profile` 沒帶、兩個值、格式錯、不存在、孤兒、讀不到、索引壞；
+  CSRF、If-Match、Idempotency-Key 缺或過期；名稱不合規、保留名稱、重名、本體格式錯；預設帳號不可改；上限（含 `limit` 0）、記憶體、
+  port、產品不支援；同 key 不同請求；隔離時索引能用、ETag 不符、沒有索引檔；開關關）。每案記狀態碼、`ETag` 標頭的類別、本體的欄位名與
+  型別（規則列的鍵比字面值：代碼、種類、狀態、名稱…；id 依角色；Idempotency-Key 依送出它的案例；ETag 與 revision 依類別）。
+  帳號範圍的成功回應只比面板會讀的鍵（回聲、`csrf`、`endpoint`、`operation`、`token`…；單帳號那一大塊不在多帳號的範圍）。
+- `tests/test_panel_profile_api_shapes.py`（pytest，`tests/multi_profile_runtime.py` 的正式 runtime、開關用 monkeypatch 開、HM-01 log
+  掃描）逐案要求 `expect`：10 案（每個情境一案）2.3 秒。`expect` 就是從它錄的：第一次在 repo 外用同一份程式跑出形狀（`SP:hm11-align/
+  gen_shapes.py`，不 commit），寫進案例檔，再在共用鎖下用 pytest 正式跑一次全綠（`SP:hm11-align/gen1.log`，13:39）。
+- `tests/browser/profile-api-parity.spec.mjs`（Playwright，只用 request、不開瀏覽器頁面）讓 fixture 跑同一份案例、比同一份 `expect`：
+  10 案約 2.3 秒。兩個測試的比對規則一樣（都讀案例檔的 `rules`）。
+- 面板那一側：node「every management request the panel sends…」確認面板送出的 14 種請求和案例的方法、路徑、標頭集合、本體鍵一致；
+  Playwright 讓面板對已對齊的 fixture 跑（`profiles.spec` 15 案、四個既有 spec 的 `profiles-on`）。所以「面板 → fixture → 真後端」
+  兩段都有測試守住。
+- 真後端以後變了：Python 測試會紅並印出新的形狀；照它改 `expect`，Playwright 那一案會紅，再改 fixture 與面板。
+
+### 16.5 先紅後綠
+
+| 檢查 | 紅 | 綠 |
+|---|---|---|
+| `profile-api-parity.spec`（`c8216d1` 的測試）對對齊前的 fixture（`959591d` 的 `fixtures/server.mjs`） | 10 個情境 8 個紅（`limit`、`memory` 兩個本來就一致）；差在：沒有 `orphans`、沒有索引 ETag 與 `profile_index_etag`、沒有隔離路由、建立改名刪除的檢查順序、索引壞時先 404、錯誤的形狀與回聲、開關關時 `/api/profiles` 不是 404、回應沒有 `ETag` | `35dfbdd` 起 10 案全過 |
+| `test_panel_profile_api_shapes.py` 對真後端 | 不會紅：`expect` 就是真後端的形狀（它是基準） | 10 案全過 |
+| node `profiles.test.mjs`（`c8216d1`）對對齊前的面板 | 新加的 `indexState`、`orphanIds` 還沒有，整檔載入失敗（59 案：58 過、1 檔失敗）；在拋棄式複本補兩個空的 export 再跑：22 案 7 紅（回聲名稱形狀、隱藏名稱與孤兒與沒有 ETag、`profiles_supported` false、建立重送只回 id、索引隔離、limit 0、請求和案例一致） | `5ea7850` 起 22 案全過 |
+| Playwright `profiles.spec`（`c8216d1`）對對齊前的面板與 fixture | 15 案 5 紅（S-2 那案、孤兒、索引隔離、沒有 ETag／不支援的產品／limit 0、建立重送時帳號已刪） | `5ea7850` 起 15 案全過 |
+| 對齊前的面板對對齊後的 fixture（全套 Playwright） | 116 案 6 紅：上面 5 案，加上「deleted elsewhere…resending its delete」（真後端的順序回 409，面板說「設定已被其他操作更新」、收據留著） | `5ea7850` 起 116 案全過 |
+
+紅的紀錄都在拋棄式複本（`git archive` 出 `959591d` 的樹，只蓋上新測試）跑，跑完刪掉；log 在 `wave4/evidence-align-HM-11/`。
+
+### 16.6 本機檢查（一般使用者；`ha_env.sh` 給的 TMPDIR，跑完用完整路徑刪除；pytest 都排在共用鎖後面）
+
+| 檢查 | 結果 |
+|---|---|
+| `npm test --prefix packages/mcp-admin-ui` | 80 案全過（rebase 前 74 案；新 6 案約 20 毫秒） |
+| `npm run build` ＋ `node tests/build-closure.mjs` | PASS |
+| Playwright 全套（`single`＋`profiles-on`） | 116 案全過，3.5 分鐘（rebase 前 102 案、3.6 分鐘）；既有 9 個 spec 一個字沒改，`single` 照過、四個在 `profiles-on` 照過 |
+| 新 Playwright 案 | `profile-api-parity.spec` 10 案約 2.3 秒；`profiles.spec` 新 4 案 7.9 秒（孤兒 1.8、隔離 1.8、唯讀／不支援／limit 0 2.9、建立重送 1.4） |
+| pytest 子集 | 見第 16.6.1 節 |
+| `packaging/validate.py`（ci-venv 的 Python） | PASS |
+| 兩個預檢 | 見第 16.8 節 |
+
+#### 16.6.1 pytest 子集
+
+- 指令：`flock SP:wave1-pytest.lock env -u SUPERVISOR_TOKEN PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider -rfEs`
+  加 20 個檔：本片新的 `test_panel_profile_api_shapes`；HM-10 的 3 檔 `test_profile_admin_api`、`test_admin_pipeline_matrix`、
+  `test_router_passthrough`；HM-01 黃金回歸與兩個契約凍結 `test_single_profile_golden`、`test_mcp_contract_freeze`、`test_admin_contract_freeze`；
+  第 5.4 節的其餘 13 檔（`test_tool_inventory`、`test_ledger_precheck`、`test_owned_ui`、`test_owned_browser`、`test_owned_browser_ipc`、
+  `test_owned_browser_redirect`、`test_admin_ui`、`test_identity_fields`、`test_batch2_admin`、`test_n8n_selectors`、`test_b2_odoo_policy`、
+  `test_writes_default_on`、`test_owned_ports_bearer`）。
+- 結果（程式與測試同 `5ea7850`，正式 conftest，2026-11-16 13:56 取得鎖）：**344 案全過、0 skip、93.5 秒**。其中本片新測試 10 案、
+  HM-10 的 3 檔 86 案（32＋5＋49，和 HM-10 筆記一致）、HM-01 的 3 檔 45 案（17＋9＋19）。
+- 本片新測試另在 13:39 單獨正式跑過一次：10 案全過、2.3 秒。
+
+### 16.7 CI 時間
+
+新測試本機合計約 12.5 秒（Playwright 約 10 秒，pytest 2.3 秒，node 不到 0.1 秒），推估 `checks` 多不到 0.3 分鐘（Playwright 共用同一個
+worker 與 fixture，沒有多開瀏覽器）。rebase 前推估本片多約 1.0 分鐘，合計約 1.3 分鐘；`checks` 目前約 28～35 分鐘、上限 60 分鐘。
+
+### 16.8 預檢
+
+（跑完補）
+
+### 16.9 只在 CI 跑的測試
+
+- 這一輪新增與改過的測試都在本機跑過、全過，沒有只在 CI 跑的新測試。
+- 已知要 root、本機一定失敗的既有案例（同第 6 節）：`test_owned_executable.py` 1、`test_profile_store.py` 1、`test_restore_detection.py` 5。
+
+### 16.10 待 HM-03a／b 確認（第 12 節照舊，這一輪的變化）
+
+- 瀏覽器拿不到清單的 `ETag`：原本整個面板無法使用，現在照列但唯讀，預設帳號與各帳號設定照常可用；仍要量（拿不到就不能新增、改名、刪除）。
+- HA App WebView 的 Unicode 版本：原本整份清單被拒，現在只藏那一列的名稱；仍要量。
+- 隔離帳號索引的 `If-Match` 是 bootstrap 本體裡的值（含引號）原樣送：和其他 `If-Match` 一樣靠 Ingress 原樣轉送請求標頭（UC-10 那一組）。
+- UC-10（`X-MCP-Profile`、PATCH、DELETE）、iframe 裡的 `<select>`、`<dialog>`、`\p{…}`、UC-14（重新整理後的落點）照第 12 節。
+
+### 16.11 交給後面的片
+
+- **HM-12**：`token_rotated` 提示與 422 文案（`Hui/app.js`），照計畫疊在本片上。
+- **HM-13c**：還原與休眠核對卡、全部撤銷、隔離目錄（`.quarantine-*`）的刪除；隔離目錄可以放在本片的「孤兒帳號資料」卡片旁邊。索引隔離之後，原本帳號的
+  待確認收據留到刪除那筆孤兒資料時才清（孤兒不能切換、看不到它的收據；本片沒有在隔離成功時一起清）。
+- **HM-18**：契約第 3.3 節「面板每個帳號範圍請求都帶」改寫成有探測例外（本片補了 #102）；#55、#56、#84、#85 的用字；DOCS 寫探測的 400、
+  孤兒、索引隔離、清單唯讀與隱藏名稱。要不要把管理面的資料案例做成正式的契約檔時，可以從 `profile-api-cases.json` 開始。
+- **HM-16**：P9 driver 的帳號參數與交叉矩陣（`createP9AdminClient(…, {profile})` 已就緒，這一輪沒改）。
+- **主對話**：契約第 9 節的新列是 #101～#104（接在 #100 後面）；HM-13b、HM-30、HM-31 若也在 #100 後面加列，合併時要重排列號。
+
+### 16.12 commit（`684a2dd` 之後）
+
+| commit | 內容 |
+|---|---|
+| `d4a0d4b`～`959591d`（19 個） | rebase 前的 20 個 commit 重放：18 個逐一相同；`b567f68` 以新基準為底改寫成 `e058882`（DQ-31 的結論寫成面板實際的做法）；`0eed62a` 跳過（第 16.1 節） |
+| `c8216d1` | 測試：案例檔、真後端的 Python 測試、fixture 的 Playwright 比對、node 新 6 案、`profiles.spec` 新 4 案與 S-2 那案（先紅） |
+| `35dfbdd` | fixture 照 HM-10 改 |
+| `5ea7850` | 面板：孤兒、索引隔離、清單不能用時不鎖、`profiles_supported` false、建立重送只回 id、limit 0、刪除重送的 409 |
+| `2491f88` | 帳本重新釘 app.js、api.js、profiles.js、operation-identity.js |
+| `653c02d` | 契約第 9 節 #101～#104 與變更紀錄；decisions.md 的 DQ-12、DQ-14 負責片 |
+| `bca1883` | README 與寫入契約文件 |
+| 本筆記 | 第 16 節 |
