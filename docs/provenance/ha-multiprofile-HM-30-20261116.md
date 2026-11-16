@@ -1397,7 +1397,8 @@ Q3（MF-2 選 (b) 時才問）不用問：本片選 (a)，契約原本的數字�
 - **量停頓的測試**（rebase 後的 head，各單獨跑 5 次；門檻與次數照舊，沒有重試；第 18.8 節）：D1 真實 8 MiB 回覆 70 案次全綠，最高 42.7 ms；
   D3 整段 5 次 29.3～36.9 ms 全綠（本片 4 檔整檔那次 39.5 ms）。這次本機沒有紅（上一輪 D3 11 次紅 1 次、D1 98 案次紅 1 次，第 17.6 節）。
   **CI 紅了先由主對話回報使用者，不放寬門檻、不加重試**。
-- 還沒解決：`reply_worker.py` 與 `tests/test_reply_worker.py` 幾處說明仍寫 Q1「待使用者決定」，這次沒改（第 18.6 節）；`checks` 秒數 CI 跑完再補。
+- 還沒解決：`checks` 秒數 CI 跑完再補。`reply_worker.py` 與 `tests/test_reply_worker.py` 幾處說明原本仍寫 Q1「待使用者決定」，
+  PR 開了之後主對話補了一個 commit 改成定案（第 18.11 節）。
 
 ### 18.1 範圍與做法
 
@@ -1629,15 +1630,16 @@ rebase 之後加的：
 | commit | 內容 |
 |---|---|
 | `f27c7dd` | 文件：契約、威脅模型、`decisions.md`、驗收表（使用者對 Q1、Q2、Q4 的定案；量測表補 rebase 後的數字；契約第 10 節、`decisions.md` 變更紀錄各一列） |
-| 最後一個 | 本筆記：第 18 節，與結論、第 1、17.0、17.10 節的更新 |
+| `3a93083` | 本筆記：第 18 節，與結論、第 1、17.0、17.10 節的更新 |
+| 主對話補的（PR #111 開了之後） | 說明字串：`reply_worker.py` 模組說明、`tests/test_reply_worker.py` 三處、帳本 `reply_worker.py` 那列改成 Q1 的定案，帳本 SHA-256 照檔重算；本筆記第 18.0、18.9、18.10、18.11 節 |
 
 ### 18.10 交給後面的片與主對話
 
 - **主對話**：
   - CI 紅了先看是不是量停頓的兩個測試（D1 真實回覆、D3 整段）。照使用者 2026-11-17 的定案先回報使用者，不放寬門檻、不加重試。
   - `checks` 秒數：CI 跑完再補（PR 說明最後一行）。
-  - `reply_worker.py` 模組說明第 57 行與 `tests/test_reply_worker.py` 幾處說明仍寫 Q1「待使用者決定」（第 18.6 節）。行為就是使用者定的
-    「只印不斷言、HM-19c 實測再定」；要不要之後順手改說明字串（要重算 `reply_worker.py` 的帳本），由主對話決定。
+  - （已處理）`reply_worker.py` 模組說明第 57 行與 `tests/test_reply_worker.py` 幾處說明原本仍寫 Q1「待使用者決定」。主對話決定在合併前
+    就改，已補 commit 改成定案（第 18.11 節）。
   - 開 PR 時 `claude-delivery` 是 `7646f0f`。之後若別的片先合併（HM-12 面板、HM-13c、HM-32 等），後合的那片 rebase 時和本片會碰到的地方：
     契約第 9 節說明段與第 10 節、`decisions.md` 第 1.1 節與變更紀錄、威脅模型狀態行、帳本（`gateway.py`、`profile_runtime.py`、`config.py`
     的說明尾端）、`make_apps` 參數順序的兩個測試（`test_request_budget_gateway.py`、`test_profile_runtime.py`；本片的 `reply_worker` 現在
@@ -1646,3 +1648,21 @@ rebase 之後加的：
   停頓（Q1）、真實回覆時 B 的 p95（Q2）、請求端一個大請求的停頓（Q4）。超標時的選項寫在第 18.6 節與 `decisions.md` 第 1.1 節。
 - **HM-18**：照第 16.14、17.10 節。
 - **HM-12 交來的事**：換身分與工作執行緒、待送回覆額度、名額之間沒有要後面的片處理的事（第 18.4 節）。
+
+### 18.11 主對話補的說明修正（2026-11-17，PR #111 開了之後）
+
+- 原因：第 18.10 節交回主對話的那件事。程式的說明字串和使用者 2026-11-17 的定案不一致；PR 剛開、`checks` 才跑 3 分鐘，
+  所以合併前就補，不另開片。
+- 改了什麼（commit `22e6a43`；只改說明，斷言、印出的標籤與程式行為都沒變）：
+  - `reply_worker.py` 模組說明第 57～58 行：「HM-30 review 2 Q1, the user's to decide」改成「accepted by the user on
+    2026-11-17 until HM-19c measures it on real hardware」。
+  - `tests/test_reply_worker.py` 三處：檔頭說明、`ONE_CALL_SHAPES` 上的註解、
+    `test_a_flat_array_of_strings_is_the_loops_bytes_and_its_one_parse_call_is_printed` 的說明。
+  - 帳本 `reply_worker.py` 那列：SHA-256 照檔重算（`00b7f14a1365…` → `a801507aa11a…`），說明裡「the user's to decide」
+    那句改成定案；其他 63 列沒動。
+- 本機檢查（一般使用者 uid 1000；TMPDIR `/tmp/ha-mp-HmWUat`，跑完用完整路徑刪除；排在共用 pytest 鎖後面）：
+  - `test_reply_worker.py`、`test_ledger_precheck.py`、`test_redaction_matrix.py`、`test_tool_inventory.py`：270 案全過
+    （92 秒）。量停頓的 D1 真實回覆與 D3 整段都在 `test_reply_worker.py` 裡，這次也沒紅。
+  - 帳本預檢（`--base origin/claude-delivery`，`22e6a43`）：OK。
+  - 秘密預檢（`--base origin/claude-delivery --head HEAD --full`，`22e6a43`）：37 個 commit＋整棵樹＋整個歷史，0 命中。
+    最後的 head 另跑一次，結果寫在 PR 說明。
