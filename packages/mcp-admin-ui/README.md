@@ -110,7 +110,7 @@ bootstrap；product/contract/tools/schema/disabled/global/grants 任一變更即
   `profile_index_etag`）。隔離後預設帳號立刻恢復 MCP 服務，原本的帳號都變成孤兒。409 時重讀狀態並說明原因
   （索引已可用、索引檔又變了、或沒有索引檔可隔離：要修好後重啟 add-on）；503（別的帳號拿著鎖）保留識別碼，可重送。
 - 清單不能用時不鎖面板（審查 S-2）：清單讀不到或格式不合，選單只剩預設帳號（與目前帳號），新增改名刪除停用並說明；
-  清單沒帶 `ETag` 時照列但唯讀；這個瀏覽器顯示不了的名稱只藏那一列的名稱（以 id 前 8 碼稱呼）。
+  清單沒帶 `ETag` 時照列但唯讀；這個瀏覽器顯示不了的名稱只藏那一列的名稱（以 id 前 8 碼稱呼；建立後的提示也一樣）。
 - `profiles_supported` 是 false 的產品（OpenDesign、Odoo Manage，DQ-28）沒有「新增帳號」；`limit` 0（可開的檔案數不夠，
   只服務預設帳號）另有說明。
 - fixture 以 `profiles` 選項開關多帳號；Playwright 的 `profiles-on` 專案讓四個既有 spec 在開關開時原封不動再跑一次；
