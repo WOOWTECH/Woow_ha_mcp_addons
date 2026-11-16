@@ -2,10 +2,23 @@
 
 ## 結論
 
+- **rebase 到 `claude-delivery` 與 D1～D3（2026-11-16，第 16 節）**：第 1～15 節照 rebase 前寫，commit 編號是 rebase 前的（對照在
+  第 16.13 節）。
+  - rebase：基準換成 `df686dd`（HM-31 #105、HM-09 追補 #106 等都已合併）。11 個 commit 照原順序重放；衝突兩邊都留，順序照交辦；
+    待送回覆檢查放在 HM-14 的排隊之前；帳本以新基準為底重算。兩個合併點用突變確認過。
+  - 使用者 2026-11-16 14:0x 對 D1～D3 都選 (a)，本片都做了，門檻沒放寬：
+    - D1：工作執行緒分段序列化（和 `json.dumps` 逐位元相同）。七種形狀與兩種事件的真實 8 MiB 回覆，迴圈最長停頓本機 7.3～46.3 ms
+      （D1 之前 9 案裡 6 案超過 50 ms，最高 125.9 ms）。
+    - D3：CPU 飢餓改量整段。修了測試工具的錯，開通時每段只查一次 token。本機整段最長停頓 34.4～45.9 ms（6 次）。
+    - D2：契約與威脅模型寫明軟上限與一次湧入的最壞值（預設帳號 800 MiB、額外帳號 416 MiB）。
+  - **餘裕只有約 4 ms**（D1 跳脫字元多的長字串、D3 的 32 個請求同時開始那一下）：CI 或目標硬體可能紅，紅了照定案回報使用者
+    （第 16.14 節）。
+  - 還沒解決、交主對話：請求端（本片審查 S-5；結構守門那部分是 HM-31 審查 S-3）一個大請求本機仍讓迴圈停 0.09～0.25 秒（第 16.14 節）。
+  - D1、D3 的程式是審查之後加的，還沒有獨立審查。
 - **獨立安全審查（2026-11-16）判定「修正後通過」**（報告在 repo 外：`artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-30.md`）。
   必修 3 項都處理了：MF-1 不穩的測試改成先等執行緒結束；MF-2 預設帳號的待送回覆額度補測試；MF-3 待使用者決定的數字照實更正、新增 D3。
   建議 7 項：S-1～S-5、S-7 採用，S-6 留到之後（理由見第 15 節）。審查修正只改測試、文件與 `reply_worker.py` 兩處說明文字，門檻與行為都沒改。
-  **合併前要有使用者對 D1～D3 的答案**（第 14 節）。
+  **合併前要有使用者對 D1～D3 的答案**（第 14 節；使用者已定，做法見第 16 節）。審查看的是 rebase 前的 `5b6d4a5`；D1、D3 的程式是審查之後加的。
 - **產品沒開通時，行為一行都不變**：`run_product` 不建工作執行緒，`make_apps` 沒拿到 `reply_worker`，每個回覆照今天在事件迴圈裡
   處理。處理步驟抽成 `relayed_reply`、`relayed_event` 兩個函式，迴圈內那條路跑的就是今天那幾行（讀 state 的次數、順序、例外都一樣；
   `strict_json` 不帶檢查點）。HM-01 的黃金回歸與兩個契約凍結照過（開關關與開兩種都跑），斷言一個字都沒改。repo 裡的
@@ -29,7 +42,8 @@
   p99 0.36～0.44 秒（≤0.7；開工前在迴圈內處理是 4.47 秒）、B 與 C 的健康檢查 0 次逾時（每次在該做之後最晚 31～50 ms 做完；開工前
   4.4 秒）、每帳號同時 1 筆。慢讀 RSS 增量 121 MiB（≤296）。審查修正後重跑：處理期間 11.1～28.0 ms、B 的 p99 0.31～0.44 秒、
   健康檢查最晚 26～54 ms、慢讀 RSS 增量 ASCII 116～120 MiB、emoji 116 MiB（第 11 節）。
-- **三項待使用者決定，照契約第 6 節回報（第 14 節），門檻沒放寬**（數字是審查 MF-3 更正後的）：
+- **三項回報使用者，照契約第 6 節（第 14 節），門檻沒放寬**。使用者 14:0x 都選 (a)，做法與重量的數字在第 16 節。下面是回報時的數字
+  （審查 MF-3 更正後的）：
   1. D1 真實大回覆的迴圈停頓：mixed 形狀 42～49 ms；單一長字串一次 `json.dumps` emoji 66～69 ms（審查）／46～48 ms（本片重量）、
      CJK 43～45／32～33 ms；J6412／J1900 慢數倍，一定超過。
   2. D2 待送回覆額度是軟上限，扣的是跳脫後的大小：預設帳號一次湧入 32 個不讀的 8 MiB 回覆，ASCII 時 RSS 增量 469 MiB、emoji 時
@@ -41,7 +55,7 @@
 - 臨時突變 24 個全部抓到（第一輪 22 個裡 1 個沒抓到、1 個寫錯測試名稱，補了測試與 2 個突變後重跑；第 4.2 節）。審查存活的 7 個突變
   用審查自己的改法重跑，另加 4 個（F01、M27、M04、M26），審查修正的新測試都抓到（第 4.3 節）。
 - 兩個預檢：秘密預檢 0 命中、帳本預檢 OK（第 8 節）。全套 pytest：5,471 案、0 skip、31 分 35 秒，5,464 通過；7 個失敗都是已知要 root
-  的既有案例（第 5 節）。
+  的既有案例（第 5 節）。以上是 rebase 前的；rebase 後的在第 16.11 節。
 - 這個階段只 commit，不 push、不開 PR。獨立安全審查已做（本片標「審查」）：修正後通過（第 15 節）。
 
 ## 1. 範圍與基準
@@ -51,11 +65,11 @@
 | 項目 | 值 |
 |---|---|
 | 切片 | HM-30（計畫 §12.3；風險中、工作量 M；標「審查」：合併前要獨立安全審查） |
-| 分支 | `feat/ha-multiprofile-hm30-20261116`（一般 clone），疊在 HM-09 的修正 head `dbf3c8c` 上 |
-| 基準 | `dbf3c8c`＝HM-08 最終 head `adfc4bf`＋HM-09 的實作與審查修正。`claude-delivery` 已合併 HM-00～HM-08、HM-13a、HM-17、HM-02 與 #100；本分支沒有 #100，rebase 時處理 |
+| 分支 | `feat/ha-multiprofile-hm30-20261116`（一般 clone），疊在 HM-09 的修正 head `dbf3c8c` 上；2026-11-16 rebase 到 `claude-delivery` `df686dd`（第 16 節） |
+| 基準 | `dbf3c8c`＝HM-08 最終 head `adfc4bf`＋HM-09 的實作與審查修正。`claude-delivery` 已合併 HM-00～HM-08、HM-13a、HM-17、HM-02 與 #100；本分支沒有 #100，rebase 時處理。rebase 後的基準是 `df686dd`（第 16.1 節） |
 | 依據 | 計畫 §5.5（全部）、§5.2、§5.4、§10.3 的 HM-30 列、§12.0、§12.3 HM-30；契約 §2.4、§5、§6、§7、§9 #15、#17、#18；`threat-model.md` I8；FM-129、FM-130、FM-149；C2-MF-4、C1-M5；DQ-07 (a)、DQ-21、DQ-25；HM-06、HM-08、HM-09 的 provenance 筆記交給 HM-30 的事項（第 13.1 節） |
 | 對齊的 PaaS | 沒有。PaaS 在事件迴圈內處理回覆（§8.8 #17 是 HA 的部署差異）；第 9 節列出 pin 之後的 PaaS 變動 |
-| commit（`dbf3c8c` 之後 11 個） | `092b827` 測試先寫；`8a2703e` 工作執行緒；`73d6cfd` 待送回覆額度；`2552106` 契約、威脅模型、帳本；`33798ad` 兩個測試改寫（第 4.1、4.2 節）；`c43eefd` 只刪測試檔裡重複的區段標題（AST 相同）；`5b6d4a5` 契約第 6 節量測數字、第 9 節 #17 附註、第 10 節一列與本筆記。審查修正（第 15 節）：`503fb3d` 測試（MF-1、MF-2、S-1～S-4、S-7，與驗證時找到的另一個競態）；`6e073c3` `reply_worker.py` 兩處說明與帳本；`e84bd8f` 契約、威脅模型、驗收表；最後一個是本筆記 |
+| commit（`dbf3c8c` 之後 11 個） | `092b827` 測試先寫；`8a2703e` 工作執行緒；`73d6cfd` 待送回覆額度；`2552106` 契約、威脅模型、帳本；`33798ad` 兩個測試改寫（第 4.1、4.2 節）；`c43eefd` 只刪測試檔裡重複的區段標題（AST 相同）；`5b6d4a5` 契約第 6 節量測數字、第 9 節 #17 附註、第 10 節一列與本筆記。審查修正（第 15 節）：`503fb3d` 測試（MF-1、MF-2、S-1～S-4、S-7，與驗證時找到的另一個競態）；`6e073c3` `reply_worker.py` 兩處說明與帳本；`e84bd8f` 契約、威脅模型、驗收表；最後一個是本筆記。這些是 rebase 前的編號；rebase 後的編號與之後加的 commit 見第 16.13 節 |
 
 ## 2. 改了什麼、沒改什麼
 
@@ -436,15 +450,18 @@ loopback 上每條連線核心先吃掉約 4 MiB（`SO_SNDBUF` 自動長到 4 Mi
 
 ### 11.5 待 HM-19c 量測的門檻（契約第 5、6 節；都還是暫定）
 
+rebase 與 D1～D3 之後的數字在第 16.7、16.8 節；本表的「本片的結果」欄已照它們改。
+
 | 門檻 | 本片的結果 | HM-19c 要量的 |
 |---|---|---|
-| 迴圈單次停頓 ≤50 ms（可控注入） | 處理期間 11.1～28.0 ms；讀取期間 48.5～60.6 ms（D3 待決） | J6412（可以的話 J1900）同情境，讀取期間也量；真實回覆（mixed、大量小物件、CJK 與 emoji 的長字串）的停頓（D1） |
-| B 的 tools/call p99 ≤2d＋0.2 秒（單元）；HAOS 上 p95 增量 ≤1 秒 | 0.31～0.44 秒 | HAOS 上的 p95 增量 |
+| 迴圈單次停頓 ≤50 ms（可控注入） | rebase 前：處理期間 11.1～28.0 ms、讀取期間 48.5～60.6 ms。D3 定 (a) 之後量整段：34.4～45.9 ms（pytest 6 次）（第 16.8 節） | J6412（可以的話 J1900）同情境，量整段（D3） |
+| 迴圈單次停頓 ≤50 ms（真實 8 MiB 回覆，D1） | 七種形狀與兩種事件 7.3～46.3 ms（pytest 4 輪）（第 16.7 節） | 真實回覆的停頓：mixed、CJK、emoji 三種一定要量，另量大量小物件、長字串、跳脫字元、100 層加 emoji 的巢狀；過不了回報、考慮子程序（D1） |
+| B 的 tools/call p99 ≤2d＋0.2 秒（單元）；HAOS 上 p95 增量 ≤1 秒 | rebase 前 0.31～0.44 秒；rebase 與 D1、D3 之後 0.29～0.31 秒（第 16.8 節） | HAOS 上的 p95 增量 |
 | B、C 健康檢查 0 次逾時（8＋5 秒） | 0 | HAOS 上同情境 |
-| 慢讀 RSS ≤296 MiB | ASCII 121 MiB；emoji 116 MiB（pytest 4 次） | 目標硬體的 RSS 與 MemAvailable（ASCII、CJK、emoji）；一次湧入的 RSS（D2 的決定之後；用非 ASCII 的值） |
-| 待送回覆 32 MiB（每帳號） | 照契約 | 對 MemAvailable 比對全域最壞值時一起看（含轉送中的回覆） |
-| 喘息參數（5 ms／2 ms／10 ms） | 本機量的 | J6412／J1900 上 B 的延遲與工作執行緒的吞吐（A 的回覆要多久做完） |
-| 請求端的迴圈停頓（審查 S-5；本片範圍外） | 審查 X4：一個 16 MiB 請求 0.36～1.9 秒 | 目標硬體上請求的解析與重新序列化的停頓（HM-31 的元素上限之後） |
+| 慢讀 RSS ≤296 MiB | ASCII 121 MiB；emoji 116 MiB（pytest 4 次）；rebase 與 D1 之後 ASCII 96～116 MiB、emoji 76～112 MiB（pytest 2 次） | 目標硬體的 RSS 與 MemAvailable（ASCII、CJK、emoji）；一次湧入的 RSS（D2 定 (a) 接受；用非 ASCII 的值） |
+| 待送回覆 32 MiB（每帳號） | 照契約；一次湧入的最壞值預設帳號約 800 MiB、額外帳號約 416 MiB（D2，契約第 5 節） | 對 MemAvailable 比對全域最壞值時一起看，每個帳號算進「轉送名額×跳脫後最多 24 MiB」（D2） |
+| 喘息參數（5 ms／2 ms／10 ms） | 本機量的；D3 沒改 | J6412／J1900 上 B 的延遲與工作執行緒的吞吐（A 的回覆要多久做完；D1 的分段讓大量小物件的一筆多花約 2.7～2.9 倍時間，第 16.7 節） |
+| 請求端的迴圈停頓（審查 S-5；結構守門那部分是 HM-31 審查 S-3；本片範圍外） | 審查 X4：一個 16 MiB 請求 0.36～1.9 秒；HM-31 合併後重量 0.09～0.25 秒（第 16.8 節） | 目標硬體上請求的結構守門、解析與重新序列化的停頓 |
 | SSE 通知多的串流（審查 S-6） | 每個事件都在迴圈讀一次 state | 目標硬體上通知多的 POST 串流對迴圈與 B 的延遲的影響；量到問題再改成需要時才讀 |
 | 真 socket 分段寫出（審查 S-7） | CPU 飢餓測試用程序內的 ASGI client | 真機上 64 KiB 一段的 `send` 在工作執行緒忙時的成本 |
 
@@ -453,11 +470,11 @@ loopback 上每條連線核心先吃掉約 4 MiB（`SO_SNDBUF` 自動長到 4 Mi
 | 條件 | 結果 |
 |---|---|
 | 輸出位元組不變 | 通過：同一個 `make_apps` 兩條路逐案對照（JSON 24、SSE 14×2、GET 1）全部相同；HM-01 黃金回歸與兩個契約凍結開關開與關都照過、斷言沒改 |
-| CPU 飢餓測試達契約門檻 | 通過（第 11.1 節：處理期間的停頓、B 的 p99、健康檢查、每帳號 1 筆）。另：讀取期間的停頓算不算進門檻待使用者決定（D3）；真實 8 MiB 回覆的停頓本機 42～50 ms、長字串 emoji 一次 `json.dumps` 46～69 ms，目標硬體一定超過 50 ms，照契約回報（第 11.3、14 節 D1） |
-| 慢讀測試達契約門檻 | 依序慢讀通過（第 11.4 節）；一次湧入時預設帳號超過（軟上限），回報（第 14 節） |
-| 開關關時完全照今天 | 通過（第 3.6 節） |
-| 獨立安全審查 | 做了：修正後通過；必修 3 項都處理、建議 7 項處理或寫明理由（第 15 節）。D1～D3 合併前要有使用者的答案 |
-| 同 PR 更新帳本；契約「暫定」細節同步並在變更紀錄加一列 | 通過（第 8 節；契約第 6 節「HM-30 定案」與量測、第 9 節 #17 附註、第 10 節一列） |
+| CPU 飢餓測試達契約門檻 | 通過（第 11.1 節：處理期間的停頓、B 的 p99、健康檢查、每帳號 1 筆）。D3 定 (a) 之後量整段：34.4～45.9 ms（pytest 6 次），通過（第 16.8 節）。D1 定 (a) 之後真實 8 MiB 回覆（七種形狀與兩種事件）7.3～46.3 ms（pytest 4 輪），通過（第 16.7 節）。目標硬體由 HM-19c 量 |
+| 慢讀測試達契約門檻 | 依序慢讀通過（第 11.4 節）；一次湧入時預設帳號超過（軟上限），回報（第 14 節）；使用者定 D2 (a) 接受並寫進文件（第 16.9 節） |
+| 開關關時完全照今天 | 通過（第 3.6 節；D1、D3 也只在開通的產品，第 16.7、16.8 節） |
+| 獨立安全審查 | 做了：修正後通過；必修 3 項都處理、建議 7 項處理或寫明理由（第 15 節）。D1～D3 使用者已定（第 16 節）。D1、D3 的程式（`reply_worker.py`、`gateway.py`、`redact.py`、`access.py`）是審查之後加的，沒有審查過（第 16.14 節） |
+| 同 PR 更新帳本；契約「暫定」細節同步並在變更紀錄加一列 | 通過（第 8 節；契約第 6 節「HM-30 定案」與量測、第 9 節 #17 附註、第 10 節一列）。rebase 與 D1～D3：帳本重算（第 16.5 節）、契約第 2.4、5、6 節與 #17、變更紀錄一列（第 16.9 節） |
 | 不改版號、不碰 `addons/<x>/`、不改 CHANGELOG；`MULTI_PROFILE_PRODUCTS` 維持空集合；commit 沒有 AI 署名 | 通過 |
 | 測試資料規則（計畫 §12.0 第 4 點） | 通過 |
 
@@ -480,26 +497,34 @@ loopback 上每條連線核心先吃掉約 4 MiB（`SO_SNDBUF` 自動長到 4 Mi
 
 ### 13.2 交給後面的片與主對話
 
+2026-11-16 rebase 之後，本節各點的現況寫在每點的最後；rebase 之後才有的交辦在第 16.14 節。
+
 - **rebase**（主對話）：`gateway.py` 照 HM-10 → HM-14 → HM-30 合併；`profile_runtime.py` 照 HM-09 → HM-13b → HM-30；`run_product.py` 照
   HM-09 → HM-13b → HM-30。rebase 後一律重算帳本（`runtime-patches.json` 的 6 列，含新的 `reply_worker.py`）、重跑兩個預檢與 CI；契約第 2.4、5、6、10 節和 HM-10、HM-14
   可能改的地方相鄰。本分支沒有 #100（checks 上限 60 分鐘、`decisions.md` 的 DQ-13／14／30／31／43），rebase 時一起進來。
+  現況：做了（第 16 節；HM-31 也在新基準裡，順序照交辦的 HM-10 → HM-14 → HM-31 → HM-30、HM-09 → HM-10 → HM-31 → HM-30）。HM-13b 還沒合併，
+  它之後 rebase 的那一片照順序處理 `profile_runtime.py`、`run_product.py`。
 - **HM-09 介面若小改**：本片用到 HM-09 的地方集中在兩處：`HealthMonitor.check()`／`availability()`（`tests/test_health_tolerance.py`）與
   `ProfileManager.add()` 建 `ProfileRuntime` 的那一行（`reply_worker=` 參數）；`multi_profile_runtime` 的 `Runtime.task`／`may_stop` 是新加的。
 - **HM-14**：排隊上限與通知保留名額放在轉送名額那裡；本片的待送回覆檢查在轉送名額**之前**（`serve()` 的 `PENDING_REPLIES`），rebase 時要維持
   在排隊之前（被擋的 tools/call 不該先排隊再被擋）。`-32003` 文字定稿時一起看 `profile_router.pending_text()`。開關關時子程式 initialize 錯誤
-  沒遮罩（HM-08 審查 S-4）仍是 HM-14 的事；本片的 initialize 回覆照舊在迴圈內處理。
+  沒遮罩（HM-08 審查 S-4）仍是 HM-14 的事；本片的 initialize 回覆照舊在迴圈內處理。現況：HM-14 已合併；rebase 後待送回覆檢查在 HM-14 的
+  `if lanes is None:` 之前，`pending_text()` 照 HM-14 定稿的寫法補說明、文字不變（第 16.2 節）。
 - **HM-19c**：在 J6412（可以的話 J1900）重量契約第 6 節：B 的 tools/call p95 增量 ≤1 秒、健康檢查 0 次逾時；也量真實回覆（第 11.3 節的
   mixed 形狀、大量小物件、CJK 與 emoji 的長字串）的迴圈停頓、讀取期間的停頓（D3）與一次湧入時的 RSS（第 11.4 節，用非 ASCII 的值），對
   MemAvailable 比對；另量請求端的迴圈停頓（審查 S-5）、通知多的 SSE 串流（S-6）、真 socket 分段寫出的成本（S-7），見第 11.5 節。
+  現況：D1～D3 定案後的量測清單在第 16.14 節。
 - **HM-18**：文件寫明待送回覆額度是軟上限、工作執行緒停了 add-on 會重啟、真實大回覆仍會讓迴圈停一次 C 呼叫那麼久；請求端的 CPU 仍在
-  迴圈裡（威脅模型第 3 節，審查 S-5）。
+  迴圈裡（威脅模型第 3 節，審查 S-5）。現況：D2 定案後要寫的句子在第 16.14 節。
 - **HM-31**（審查 S-5）：驗收加「請求的解析與重新序列化在迴圈內的停頓」：PaaS #155 的元素上限下約 0.1～0.15 秒；契約第 6 節與威脅模型
-  第 3 節的那一條，HM-31 做完後改寫。
-- **使用者**：D1～D3（第 14 節），合併前要有答案。
+  第 3 節的那一條，HM-31 做完後改寫。現況：HM-31 已合併；本片在它之上重量（0.09～0.25 秒，第 16.8 節）、改寫了那兩處，超過 50 ms 的部分交主對話（第 16.14 節）。
+- **使用者**：D1～D3（第 14 節），合併前要有答案。現況：2026-11-16 14:0x 都選 (a)（`decisions.md` 第 1.1 節），本片做了（第 16.7～16.9 節）。
 - **獨立安全審查**（計畫 §12.0 第 9 點；本片標「審查」）：已做，報告在 `artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-30.md`；
   處理見第 15 節。
 
 ## 14. 待使用者決定（照契約第 6 節回報，門檻都沒放寬；數字以審查報告第 2、3 節為準）
+
+**已定（2026-11-16 14:0x，`decisions.md` 第 1.1 節）**：D1、D2、D3 都選 (a)，都照建議。做法與結果在第 16.7～16.9 節；下面保留回報時的內容。
 
 獨立審查（MF-3）指出原本這一節數字偏低、也漏了一項。下面是更正後的三題（D1～D3），合併前要有使用者的答案。
 
@@ -570,3 +595,409 @@ loopback 上每條連線核心先吃掉約 4 MiB（`SO_SNDBUF` 自動長到 4 Mi
 | 驗證時另外找到（不在審查裡） | 既有的 `test_a_worker_that_stops_by_itself_stops_the_add_on_and_no_request_waits` 第一次跑就紅了一次：第一個回覆在送到用戶端前被 add-on 停機截斷（`ClientDisconnect`）。測試用的是程序內的 ASGI client，繞過 listener，停機時沒有東西等它；正式環境的 uvicorn 會等進行中的回應送完（`run_product` 給 listener 5 秒） | 已修（只改測試）：讓執行緒等第一個回覆送到用戶端之後才停；說明寫明原因。斷言沒有放寬：第一個 200、排隊的 502、add-on 結束都照舊 | 修正後同一個測試 50 次全過；突變 M04（排隊的不結束）、M26（不看 `ended`）照樣讓它紅（第 4.3 節） |
 
 審查第 8 節「前面各片交給 HM-30 的待辦」核對：除了 HM-08 審查第 9 節那一項（S-1，已做），其他都和第 13.1 節一致；第 13.1 節的兩列已照實更新。
+
+## 16. rebase 到 claude-delivery 與 D1～D3（2026-11-16）
+
+第 1～15 節照 rebase 前寫，裡面的 commit 編號是 rebase 前的（對照在第 16.13 節）。數字以本節為準。
+
+### 16.0 結論
+
+- **rebase 做完**：基準換成 `claude-delivery` `df686dd`。本片 11 個 commit 照原順序重放，6 個有衝突，兩邊的意圖都留（第 16.2 節）。
+  - 順序照交辦：`gateway.py` HM-10 → HM-14 → HM-31 → HM-30；`profile_runtime.py` HM-09 → HM-10 → HM-31 → HM-30。
+  - 待送回覆檢查放在 HM-14 的排隊**之前**（既有的 S-2 測試守這個順序）。
+  - HM-31 重寫了 `ProfileGate.serve`，本片的計數改疊在它上面，有一行不是文字衝突、但一定要改（第 16.2 節）。
+  - 帳本以新基準為底重算（第 16.5 節）。
+- **D1 做了（分段轉換）**：工作執行緒那條路分段序列化，長字串也切段，和 `json.dumps` 一次做完逐位元相同（第 16.7 節）。
+  - 七種形狀的真實 8 MiB 回覆（JSON 七案、SSE 兩案），工作執行緒那條路的迴圈單次停頓本機 7.3～46.3 ms（pytest 單獨 3 次加整檔 1 次，
+    門檻 50 ms）；最高的是跳脫字元多的長字串（解析端那一次 C 呼叫），離門檻約 4 ms。
+  - D1 之前同一組測試：9 案裡 6 案超過 50 ms（紅：大量小物件 125.9、巢狀 72.8、emoji 事件 60.6、長 ASCII 字串 55.7、emoji 52.8、
+    mixed 50.5 ms）。
+- **D3 做了（讀取期間也算）**：CPU 飢餓測試改量整段（第 16.8 節）。門檻沒放寬，喘息參數沒動。
+  - 改之前（rebase 後）貼著門檻：前一段一次整檔跑 60.9 ms（紅）；後一段同一組 6 次都在門檻內（38.5～47.4 ms）。紅不穩定。
+  - 找到兩處、都改了：測試工具的錯（A 的健康檢查拿到 8 MiB 的填充回覆、在迴圈上解析），與讀取期間每段 3 次的 token 檢查
+    （開通時改成每段 1 次）。後者讓讀取期間從約 3 秒縮到約 1.3 秒；前者在 pytest 量不出差別，是讓測試照實的修正。
+  - 改完：整段最長 34.4～45.9 ms（pytest 單獨 6 次）、整檔 41.1 ms。剩下最長的停頓多半在 A 的 32 個請求同時開始那一下，
+    注入成本設 0 也有（38.1、50.5 ms），不是工作執行緒造成的。**餘裕只有約 4 ms**，CI 與目標硬體可能超過（第 16.14 節）。
+- **D2 做了（接受並寫進文件）**：契約第 5、6 節寫明軟上限與一次湧入的最壞值（ASCII、emoji 兩組實測，理論上限預設帳號 800 MiB、
+  額外帳號 416 MiB）；威脅模型第 3 節加一條；交 HM-18、HM-19c 的事在第 16.14 節。
+- **`decisions.md`** 第 1.1 節補 4 列：13:4x HM-09 追補全部產品都修（#106）；14:0x D1、D2、D3（第 16.10 節）。
+- **這一階段分兩段做**：前一段做到 `85324e8`（rebase、D1／D3 的測試與程式、帳本）就中斷了，沒有跑驗證，文件也沒寫完。後一段接著做：
+  逐項核對前一段的改動、補兩個測試（D1：每種串流在工作執行緒切框；D3：磁碟上換 token）與兩處說明（第 16.7、16.8 節）、
+  跑全部檢查、寫完文件。
+- **還沒解決、交主對話**（第 16.14 節）：請求端一個大請求本機仍讓迴圈停 0.09～0.25 秒，不在契約第 6 節的情境裡，本片沒改。
+
+### 16.1 範圍與做法
+
+- 先開本機備份分支 `backup/hm30-before-rebase-20261116`（＝`8b015d5`，不 push）。`git fetch origin` 後 `origin/claude-delivery`＝`df686dd`。
+- `dbf3c8c` 不是 `claude-delivery` 的祖先（HM-09 rebase 前的修正 head）。`git log --oneline dbf3c8c..feat/ha-multiprofile-hm30-20261116`
+  只有本片 11 個 commit，所以用 `git rebase --onto origin/claude-delivery dbf3c8c feat/ha-multiprofile-hm30-20261116`。
+- 新基準和本片 11 個 commit 重疊的檔：`gateway.py`、`profile_router.py`、`profile_runtime.py`、`tests/multi_profile_runtime.py`、契約、
+  威脅模型、驗收表、`ledger-tracking.md`、帳本。D3 改的 `access.py` 是 rebase 之後才改的，疊在新基準 HM-14 改過的版本上。
+- `config.py`、`run_product.py`、`redact.py` 在 `dbf3c8c` 與新基準之間沒變，所以 `run_product.py` 照 HM-09 → HM-10 → HM-31 → HM-30
+  的順序也沒有衝突。
+- 依賴（`uv.lock`、`package-lock.json`）沒變，沒有重跑 `setup_repo_env.sh`。
+- 解衝突與核對的腳本與紀錄都在 repo 外（`SP:hm30r/bin/`、`SP:hm30r/logs/rebase-log.md`；HM-31 rebase 的 `merge_ledger.py`、`compare.py` 照用）。
+- PaaS（本機唯讀 repo，沒有 fetch、沒有 checkout）：`origin/main` 現在是 `7087280`。`d7f5849` 之後只多 #135（EMQX）、#139（LiteLLM）
+  不保留閒置連線與 #138（Hermes cron 的 paused），`packages/mcp-admin-core/` 與 `docs/mcp-gateway-limits.md` 都沒動，對本片沒影響。
+
+### 16.2 衝突與處理
+
+| rebase 後（原本） | 衝突 | 處理 |
+|---|---|---|
+| `15bc2a3`（`092b827`） | `tests/multi_profile_runtime.py` 的簽名與說明 | HM-10 的 `verifier` 在前、本片的 `may_stop` 在後；說明兩句都留 |
+| `e83889d`（`8a2703e`） | `profile_runtime.py` 七處 | 模組說明：HM-10、HM-31 兩段之後接本片那段。`RUNTIME_OPTIONS`、`ProfileRuntime` 的參數與 `gateway_options`：HM-10 的 `default_endpoint`、`bootstrap_fields`、HM-31 的 `body_budget` 之後加 `reply_worker`。`ProfileRuntime` 說明：HM-10 那段之後接本片那段。`ProfileManager` 說明：用新基準 HM-10 改寫過的那段，之後接本片那段。`add()`：HM-10、HM-31 的參數之後加 `reply_worker=…lane(profile_id)` |
+| 同上 | `gateway.py` 六處 | 常數：新基準的全留（HM-31 的 `BODY_RESERVATION`、HM-14 的 `SlotBusy`、`Lane`、`take_slot` 等）；HM-08 的 `FORWARDED_BODY`（HM-31 拿掉了）不加回；`PENDING_REPLIES` 放在 `BODY_RESERVATION` 後面。`make_apps` 簽名：`body_budget` 之後接 `reply_worker`。說明：HM-14、HM-10、HM-31 三段之後接本片那段。參數檢查：HM-09、HM-10、HM-31 的之後接本片的。`serve()`：待送回覆檢查放在 HM-14 的 `if lanes is None:` **之前**（被擋的 tools/call 不先排隊）；本片原本那段 HM-08 的 `slots.acquire`＋`slot_busy(message)` 不加回（HM-14 取代了）。JSON 回覆：HM-14 的 `interrupted_answer` 在前，再來是迴圈內那條路與工作執行緒那條路（自動合併）。SSE：自動合併（本片的 `relayed_event`、HM-14 的 `reply_event`／`answered` 都在） |
+| `c2c764d`（`73d6cfd`） | `profile_router.py` 六處 | HM-31 重寫了 `ProfileGate.serve`（位元組預算改在帳號 app 扣，沒有 `counted_receive`、`forwarding`、`refuse`、拒絕小額度）。本片只留自己的：`reply_bytes`、`pending_reply`、`counted_send`／`hand_over`、把 `PENDING_REPLIES` 放進請求 state 的副本、`finally` 還 `held`；HM-14 的回呼與 HM-31 的 `budget_share` 都留。**不是文字衝突、但一定要改**：HM-31 把那一行改成 `await app(scope, receive, send)`，diff3 取了它；本片改成 `await app(scope, receive, counted_send)`，否則待送回覆額度完全不扣（突變 M-R1 證實：改回去之後待送回覆的測試紅，第 16.6 節）。`beyond_admission`（HM-31 審查 MF-2 (b)）不動：它只服務不帶請求的 POST，閘道回 202、沒有本體。`pending_text` 補說明（照 HM-14 定稿的 `-32003` 文字寫法），文字不變 |
+| `307f998`（`2552106`） | 契約、威脅模型、帳本 | 契約第 5 節：新基準 HM-31 改寫的各段都留，本片的「HM-30 補：軟上限」接在 HM-31 的全域最壞記憶體例子後面；第 2.4、5、6 節本片的其他改動自動合併；變更紀錄：新基準的列在前、本片的在後。威脅模型：狀態行與 I8 測試欄都是新基準的文字加本片那句。帳本：第 16.5 節 |
+| `4382ac8`（`5b6d4a5`） | 契約三處 | 第 9 節說明段：新基準各行照原文，另加一行「#17 的附註出自 HM-30 的實作」。#15、#16 用新基準（HM-31 改寫）的，#17 用本片加附註的。變更紀錄：新基準的列、本片那列 |
+| `d5f2e03`（`e84bd8f`） | 契約一處、威脅模型三處 | 契約第 5 節：新基準的文字＋本片審查 S-7 那段（「位元組額度」改成 HM-31 的「請求內容位元組預算的份額」）。威脅模型：新基準的文字＋本片審查的三處插入；第 3 節的請求端 CPU 一條放在 HM-31 的結構守門 CPU 一條後面（D3 時再改寫，第 16.8 節） |
+| 其他 4 個 | 沒有衝突 | `b6a2c85`、`2dc496e`、`bcd0628`（測試）、`22409db`（`reply_worker.py` 說明與帳本） |
+
+### 16.3 rebase 剛做完時的核對
+
+- `git range-diff dbf3c8c..8b015d5 origin/claude-delivery..dfd0766`：5 個完全相同、5 個有改（上表），`73d6cfd` 改得多到 range-diff 當成另一個
+  commit（`profile_router.py` 疊在 HM-31 重寫的 `serve` 上）。
+- `compare.py`（逐檔比兩個 diff 的增刪行；`SP:hm30r/logs/compare-*.txt`）：本片的改動在 `config.py`、`reply_worker.py`、`run_product.py` 與
+  4 個測試檔逐行相同，其他檔只差第 16.2 節那幾處；反方向，新基準的程式（HM-09、HM-10、HM-14、HM-31、#106）一行都沒少。
+- 帳本預檢（還沒加新 commit 時）：`runtime-patches.json` 176、`runtime-sources.json` 70、`tool-surface.json` 159 檔，0 漂移、0 缺，OK。
+
+### 16.4 契約第 9 節的列號
+
+- 本片在第 9 節**沒有自己的列**：本片的差異都寫在 #17 的附註裡（rebase 前就是這樣）。`claude-delivery` 最後是第 108 列，不用接、不用重編，
+  D1～D3 也只補 #17 的附註（它們都是「回覆處理」這一列的做法，PaaS 沒有對應的機制）。
+- 本片引用的列號在新基準都沒動，舊 commit 訊息裡的「contract 9 #17」照原文：
+
+| 本片寫的 | 新基準 | 內容 |
+|---|---|---|
+| #15、#16 | #15、#16（HM-31 改寫了內容） | 名額、讀 body 前拒絕的回應碼 |
+| #17 | #17（本片的附註照留，D1～D3 各補一句） | 回覆處理 |
+| #18 | #18 | 健康檢查 |
+| 第 89 列（HM-09 審查 S-6） | 第 89 列 | 試綁被平台擋 |
+
+- 第 9 節說明段改成新基準的一片一行。變更紀錄加一列（「HM-30 rebase 與 D1～D3」）。
+
+### 16.5 帳本（`docs/provenance/runtime-patches.json`）
+
+- 重放 `2552106` 時以當下 HEAD 的帳本為底（HM-31 的 `merge_ledger.py`：先確認底的帳本能逐位元重現；原 commit 只在列尾追加，把那段接到
+  底的文字後面；新列照原位置；SHA-256 照當下的檔重算；`SP:hm30r/logs/ledger-2552106.txt`）。`reply_worker.py` 是新列，放在
+  `profile_runtime.py` 後面。
+- `85324e8`：rebase 的說明（`gateway.py`、`profile_router.py`）、D1（`gateway.py`、`reply_worker.py`）、D3（`gateway.py`、`access.py`）各接一段。
+- `5f61a94`：`access.py` 那句 D3 說明改成精確的寫法（本分支自己的、還沒合併的文字，第 16.8 節），`access.py`、`gateway.py` 重算。
+- `9f1facc`：`reply_worker.py` 的兩處量測數字照 pytest 改（只改註解與說明字串），重算。
+- SHA-256（前 12 碼）：
+
+| 列管檔 | `claude-delivery` `df686dd` | rebase 前 `8b015d5` | `85324e8` | 現在（`5f61a94`、`9f1facc` 之後） |
+|---|---|---|---|---|
+| `gateway.py` | `1f954cf11cde` | `8c378a028908` | `a5699b344fb0` | `077f024fdaae` |
+| `profile_router.py` | `bb6b6feb79f3` | `2f6b7e9e0483` | `76bcc814f3dc` | 同左 |
+| `profile_runtime.py` | `048e73896820` | `324d0aa27afe` | `60f27add408c` | 同左 |
+| `reply_worker.py`（新列） | — | `d156c6d0657d` | `4743482fb64b` | `2ccdc2c37127` |
+| `run_product.py` | `59d281b17549` | `78d511c9b82e` | `78d511c9b82e` | 同左 |
+| `config.py` | `78a2f79d76fd` | `c42173d17815` | `c42173d17815` | 同左 |
+| `access.py` | `5d78bcea515e` | （本片沒改） | `b1bd935dd60d` | `0a830599e82d` |
+
+- `redact.py` 本來就沒列管（`ledger-tracking.md`）。D1 加了 `checkpoint` 參數，帳本預檢照預期把它列成「沒列管、要人看」（同 #106 的
+  `health.py`），結果 OK。
+
+### 16.6 rebase 後的測試配合
+
+| commit | 改了什麼 | 為什麼 |
+|---|---|---|
+| `a4c42a5` | 待送回覆額度與慢讀的 4 處 `gate.body_bytes` 改成 `body_bytes(gate)`（帳號在全 add-on 請求內容預算的份額） | HM-31 拿掉了 HM-08 的每帳號計數；斷言的數值不變 |
+| `52926ae` | HM-31 的 `test_make_apps_takes_only_a_share_of_a_budget_beside_hm09s_and_hm10s_options` 比 `make_apps` 最後 5 個參數 | 本片的 `reply_worker` 接在 HM-31 的 `body_budget` 後面；原本比最後 4 個（rebase 後第一次跑紅，`SP:hm30r/s1/f-related.log`） |
+
+`test_a_profile_past_its_pending_reply_budget_is_answered_before_it_waits_for_a_slot`（審查 S-2）在 rebase 後照過。
+
+兩個合併點用突變確認（`SP:hm30r2/bin/mutate_order.py`，在 `cb93e08` 的複本跑；每個只跑該抓住它的測試）：
+
+| # | 突變 | 抓住它的測試 | 結果 |
+|---|---|---|---|
+| M-R1 | 帳號 app 改回 HM-31 那一行的 `send`（diff3 取的那行） | `test_answers_not_received_yet_past_the_budget_refuse_the_profiles_next_tools_call[additional-profile]` | 抓到（一直等不到 `-32003`、逾時；1 failed in 11.07s） |
+| M-R2 | 待送回覆檢查移到 HM-14 的排隊之後 | `test_a_profile_past_its_pending_reply_budget_is_answered_before_it_waits_for_a_slot` | 抓到（先排隊、等滿名額的 1 秒才回答；1 failed in 2.19s） |
+
+### 16.7 D1：分段轉換
+
+**做法**（`reply_worker.py`、`gateway.py`、`redact.py`；只在工作執行緒那條路，沒開通的產品一行不變）：
+
+| 原本一次 C 呼叫（或一段不喘息的 Python） | 現在 |
+|---|---|
+| `json.dumps` 整個值（mixed 45～50 ms、大量小物件 0.1 秒以上、emoji 長字串 46～69 ms） | `reply_worker.encoded`：一次後序走訪（`_plan`，不遞迴）算出每個 list／dict 最多編成幾個位元組（字串每個碼位以最長的跳脫 12 位元組算，數字 24，大整數照位數），超過 `PIECE_BYTES`（64 KiB）的才拆：成員照順序分段，每段一次 json 的 C 編碼器；長字串一次 `STRING_PIECE`（8,192）個碼位；呼叫之間有檢查點。json.dumps 自己會轉換的值（非字串鍵、tuple、子類別）照它一次做 |
+| 全代回收（工作執行緒配置大量物件時觸發，一次走過整個 add-on 的物件：59～75 ms） | 處理一筆工作時 `gc.disable()`，工作結束一律恢復（例外也是；本來就關著的不動）。回覆沒有參照循環，答完就放掉 |
+| 一次放掉解析出的值與遮罩後的值（大量小物件各 15～35 ms） | 編碼完 `released()`：大的容器一段段清空（只放掉參照），解析出的值同形狀的容器一起清；`filter_list` 重建過工具清單的回覆不分段放（裡面有政策自己的 schema：`releasable`） |
+| `redact_secrets` 走過整個回覆（Python、不喘息：迴圈每次系統呼叫都要再等 GIL） | `redact_secrets(…, checkpoint)`：每個 list／dict 一次、長字串的每個秘密之間一次；`_plan` 每個容器一次 |
+| 大的 SSE 事件在迴圈上切框（複製、`LONE_CR`、`split`、`sse_data`、組成事件：8 MiB 一次 35～50 ms） | 大於 `WORKER_FRAME_BYTES`（64 KiB）的事件整個交給工作執行緒（`relayed_frame`：迴圈原本那幾步、同樣順序）；回覆事件在 `encoded` 裡一次組成 |
+| 解析前 `bytes(raw)`（8 MiB 一次複製約 10 ms） | 工作執行緒直接解析 bytearray（`json.loads` 兩種都收，結果與錯誤都相同） |
+
+**還是一次 C 呼叫的**：`json.loads` 掃一個長字串（8 MiB：ASCII 約 20 ms、跳脫字元多的 25～46 ms）、bytes 解碼成 str（5～20 ms）、
+最後把各段接起來（一次複製）。D1 的定案接受解析端這一次（「過不了再考慮子程序」），交 HM-19c 在 J1900 量。
+
+**核對（後一段做的）**：
+
+- 逐位元相同的理由：json 的字串跳脫一次只看一個碼位（astral 碼位寫成一對 `\uXXXX`，單獨代理字元寫成自己的 `\uXXXX`），所以長字串切開
+  接回位元組相同；list／dict 的一段是「同一個 C 編碼器編同一批成員」再去掉括號、段與段之間補逗號；`_encode` 就是 `json.dumps(…,
+  separators=(",", ":"))` 用的同一個 `JSONEncoder.encode`。`_plan` 的成本只決定在哪裡切，不影響位元組。
+- `released()` 只放掉參照：外面還拿著的物件不動；解析出的值和遮罩後的值鍵的順序不同時，對不上的 twin 就不清（只是放得慢），不會錯。
+- 回收器關著會不會讓循環垃圾一直收不掉（暫存區實驗 `SP:hm30r2/exp/gc_starve.py`：4 個帳號接連交工作、每筆約 40 ms 配置 15 萬個
+  物件，迴圈同時每 1 ms 做 100 個互相參照的物件，每次 15 秒，關著、不關各 3 次）：關著時回收照樣在工作之間跑（第 0 代 125～127 次、
+  第 1 代 11 次、第 2 代 1 次），還活著的循環物件最多 2,018～2,132 個，沒有一直長；不關時第 0 代 36,230～38,481 次、最多 114 個。
+  工作做完的筆數：關著 813～855、不關 531～564。迴圈最長停頓（後兩次量）：關著 14.8、18.7 ms，不關 13.8、38.5 ms。
+
+**測試**（`773014a`、`dd1098f` 先寫；實作 `086159f`）：
+
+- `test_in_pieces_the_bytes_are_json_dumps_own`［4 組分段大小］：隨機值 300 個（ASCII、控制字元、引號與反斜線、Latin-1、U+2028、CJK、U+FFFD、
+  單獨代理字元、astral、很長的整數、各種浮點數、巢狀、長鍵）加邊界值；分段大小調到 1～16，每個值在能切的地方都被切到，和 `json.dumps`
+  逐位元相同；json.dumps 自己轉換的值照它的轉法。
+- `test_long_strings_and_large_values_go_out_between_checkpoints`：長字串一次最多 `STRING_PIECE` 個碼位、大的 list／dict 一段最多
+  `PIECE_BYTES`、呼叫之間有檢查點；小值一次 C 呼叫。
+- `test_a_real_8_mib_reply_is_the_loops_bytes_and_stops_the_loop_briefly`［9 案］：七種形狀（C2 的 mixed、大量小物件、CJK、emoji、單一長
+  ASCII 字串、跳脫字元、64 層的巢狀樹）的 JSON 回覆，加 mixed、emoji 的 SSE 事件。子程式以 64 KiB 一段送，直接經 ASGI 收：迴圈內處理
+  與工作執行緒處理的回應逐位元相同，工作執行緒那條路的迴圈單次停頓 ≤50 ms，印出分佈。
+- `test_a_job_runs_with_the_cyclic_collector_held_off`、`test_a_large_value_is_let_go_of_in_pieces_and_nothing_it_does_not_own_is_touched`、
+  `test_a_large_tool_list_is_relayed_the_same_twice_on_the_worker`。
+- 既有的逐位元對照（JSON 24 案、SSE 14×2 案、GET 1 案）照過。
+- `test_an_event_framed_on_the_worker_is_byte_for_byte_what_the_loop_answered`［28 案，後一段補的，`cb93e08`］：前一段只有兩個真實
+  8 MiB 事件（一行 data）走到工作執行緒切框那條路，其他框（註解、id／event／retry、priming、略過的通知與請求、別的 id、batch、壞的
+  JSON、兩個都有、單獨的 CR、多行 data、帶秘密的工具清單、截斷）只在迴圈上切框的那條路測過。這一案把 `WORKER_FRAME_BYTES` 設成 0，
+  14 種串流×整段與 7 位元組一段都走工作執行緒切框：回應和迴圈內處理逐位元相同，切過的框一樣多、都在工作執行緒上。
+
+**先紅後綠**（pytest；紅＝`6601e9b`：D1、D3 的測試都在、核心還沒改；綠＝`cb93e08`）：
+
+| 案例 | D1 之前（`6601e9b`） | D1 之後（`cb93e08`） |
+|---|---|---|
+| 逐位元 4 組、長字串與大值分段 | 紅（5 案）：`encoded` 不存在 | 綠 |
+| 回收器關著 | 紅：工作期間回收器開著 | 綠 |
+| 分段放掉、工具清單不分段放 | 紅（2 案）：`released` 不存在 | 綠 |
+| 真實 8 MiB 回覆（工作執行緒那條路的迴圈最長停頓） | 9 案裡 6 案紅：大量小物件 125.9、巢狀 72.8、emoji 事件 60.6、長 ASCII 字串 55.7、emoji 52.8、mixed 50.5 ms；在門檻內的 3 案：mixed 事件 49.5、跳脫字元 39.4、CJK 39.2 ms | 9 案全綠（下表） |
+
+同一輪（`-k` 選 D1、D3 的新測試，20 案）：16 紅、4 綠。綠的 4 案是 D3 沒開通那一案（釘住今天的每段 3 次）與上表在門檻內的 3 案。
+
+**本機最大值與分佈**（綠，每次一個 pytest 程序、3 次；迴圈延遲探針每 2 ms 取樣；單位 ms）：
+
+| 形狀 | 迴圈內處理：迴圈最長停頓 | 工作執行緒：最長停頓（3 次） | 工作執行緒：p99 | 一筆的時間：工作執行緒（D1 之前） |
+|---|---|---|---|---|
+| mixed | 258～266 | 25.1、30.0、32.1 | 5.6～11.6 | 656～672 ms（401 ms） |
+| 大量小物件 | 886～895 | 16.5、19.6、44.1 | 5.5～5.7 | 3,301～3,523 ms（1,214 ms） |
+| CJK | 70～92 | 14.2、20.3、21.4 | 14.2～21.4 | 130～145 ms（157 ms） |
+| emoji | 86～116 | 10.7、14.0、19.0 | 10.7～19.0 | 143～150 ms（169 ms） |
+| 長 ASCII 字串 | 65～71 | 13.7、17.4、28.4 | 13.7～28.4 | 95～125 ms（160 ms） |
+| 跳脫字元 | 60～63 | 23.3、30.3、45.5 | 23.3～45.5 | 100～123 ms（134 ms） |
+| 64 層巢狀 | 585～622 | 7.3、7.6、8.4 | 5.4～5.5 | 1,469～1,592 ms（773 ms） |
+| mixed（事件） | 293～316 | 16.7、25.8、29.0 | 5.5～8.2 | 757～777 ms（520 ms） |
+| emoji（事件） | 140～156 | 11.7、31.3、40.6 | 11.7～40.6 | 256～273 ms（326 ms） |
+
+- 本片的檔整檔跑一次（`g1`）：同一組最長 8.6～46.3 ms，最高也是跳脫字元（46.3 ms）。四輪合計 7.3～46.3 ms，都在 50 ms 內。
+- p50 約 5 ms 的是要切很多段的形狀：迴圈要等工作執行緒跑完一個 5 ms 的切片（`SLICE_SECONDS`）才拿回 GIL，照設計。
+- 最高的停頓都是解析端拆不開的那一次 C 呼叫：跳脫字元多的長字串 `json.loads` 一次掃完（本機最高約 46 ms），離門檻只剩約 4 ms。
+- 處理時間：大量小物件約 2.7～2.9 倍、巢狀約 2 倍、mixed 約 1.7 倍（分段編碼、分段放掉與喘息）；長字串的幾種不變或更快（不再整段複製）。
+
+巢狀語料是 64 層（結構守門允許請求的最深）、中文註記（`dd1098f`）。100 層加 emoji 的版本另外量過（前一段的獨立腳本：解碼成 UCS-4 的
+字串一次就約 20 ms，加上放掉整棵樹 31～65 ms），交 HM-19c 一起看。
+
+**突變**（各改 `5f61a94` 的一處，在暫存區的複本跑該抓住它的測試；`SP:hm30r2/bin/mutate.py`）：
+
+| # | 突變（`cb93e08` 的複本） | 抓住它的測試 | 結果 |
+|---|---|---|---|
+| M-D1a | 處理工作時不關回收器 | `test_a_job_runs_with_the_cyclic_collector_held_off` | 抓到（工作裡回收器開著；1 failed in 1.11s） |
+| M-D1b | 長字串的切段迴圈壞掉（步長改成整個字串長，只交出第一段） | `test_long_strings_and_large_values_go_out_between_checkpoints` | 抓到（位元組不同；1 failed in 0.95s） |
+| M-D1c | 重建過的工具清單也分段放掉 | `test_a_large_tool_list_is_relayed_the_same_twice_on_the_worker` | 抓到（`released` 被呼叫；1 failed in 1.03s） |
+| M-D1d | 工作執行緒切框時丟掉事件的其他行（`id:` 等） | `test_an_event_framed_on_the_worker_is_byte_for_byte_what_the_loop_answered[priming-comments-fields-whole]` | 抓到（位元組不同；1 failed in 1.03s） |
+
+### 16.8 D3：讀取期間也算
+
+**測試改量整段**（`360efd0`）：`test_another_profiles_large_replies_leave_the_loop_and_this_profile_their_pace` 斷言
+`max(讀取期間, 處理期間) ≤ 50 ms`，兩段都印分佈；`tests/reply_load.py` 的 `Starved` 說明改寫。
+
+**原因與處理**：
+
+1. **測試工具的錯**（`6481f7f`）：A 的假子程式（`LargeChild`）以 JSON-RPC id 判斷要不要回大回覆。預設帳號健康檢查的 tools/call 用 id 3，
+   正好是 A 的請求 id 之一，所以 A 的每次健康檢查都拿到 8 MiB 的填充回覆，在迴圈上讀進來並解析（`health.protocol_reply`）。真的
+   子程式對健康檢查回的是小回覆（`products.health_probe`：Odoo、Nextcloud 是私有的認證探針，其他是小的公開讀取）。改成只對 A 的工具
+   （`search_records`）回大回覆；A 的 32 個請求、160 MiB、注入成本與門檻都不變。前一段的獨立腳本量到它是讀取期間最長停頓的主因；
+   後一段用 pytest 拆（下表）量不出差別，所以只當成「讓測試照實」的修正。
+2. **讀取期間的 token 檢查**（`6601e9b` 測試、`ebc15a2` 實作）：讀取期間迴圈的 CPU 大半在 `store.load`（前一段用 cProfile 量：9,215 次、
+   累計 3.1 秒）。子程式的回覆以 64 KiB 一段讀，每段 3 次（開始前、watcher 立刻一次、結束後）。開通的產品改成每段 1 次
+   （`TokenLease.run(checked=True)`）；沒開通照舊。讀取期間從約 3 秒縮到約 1.3 秒，B 的 p99 也降一些。
+3. 喘息參數（5 ms／2 ms／10 ms）沒改，門檻沒放寬。
+4. **剩下的**：最長的停頓多半落在 A 的 32 個請求同時開始那一下（第 0.03 秒），四種設定都一樣，連注入成本設 0（工作執行緒幾乎不搶
+   GIL）也有。那一下是測試裡用戶端、閘道與假子程式都在同一個迴圈上處理 32 個請求；正式環境裡用戶端與子程式不在 add-on 的迴圈上。
+   要再壓低，得動請求端（每個請求的 `store.load`、授權、HM-31 的守門、轉送）或改測試的用戶端，都不是小改動，本片沒做（第 16.14 節）。
+
+**後一段的核對與修正**（`179a080`、`5f61a94`）：
+
+- `checked` 的說明原本寫「呼叫者剛查過、之後沒有 await」，不成立：上一段的檢查之後，`run` 的 finally 會等 watcher 結束，閘道也會把那一段
+  交給用戶端或工作執行緒。安全性靠的是另外兩件事，說明改成照實寫：透過管理 API 換 token 會設租約的 event，watcher 立刻醒；其他改變
+  （state 損壞或被換掉）由操作結束後的那次檢查擋下。所以換了之後讀到的東西都不會交出。只改說明（去掉說明字串後兩版 AST 相同）。
+- 補測試：`test_a_lease_checked_just_before_runs_without_reading_the_state_again_first` 加一段，`checked=True` 的操作裡在磁碟上換掉
+  token（不經管理 API、沒有 event）→ `AccessChanged`，操作讀到的沒有交回。
+
+**改前改後**（pytest，每次一個程序；整段＝讀取期間與處理期間的最大值。後一段在改之前跑的 6 次都沒紅，紅的只有前一段那一次，見表末）：
+
+| 版本（pytest，每次一個程序） | 跑法 | 整段最長（ms） | 讀取期間的取樣數 | B 的 p99（ms） |
+|---|---|---|---|---|
+| `52926ae`：量整段；測試工具沒修；每段 3 次檢查 | 單獨 5 次 | 38.5、39.1、41.3、43.9、47.4 | 202～225 | 313～434 |
+| 同上 | 兩檔整檔 1 次 | 39.3 | 197 | 331 |
+| `6601e9b`：測試工具修了；每段 3 次檢查 | 單獨 3 次 | 37.0、46.0、47.8 | 198～217 | 385～397 |
+| `cb93e08`：兩個都改（最後的程式） | 單獨 6 次 | 34.4、35.7、37.1、37.8、43.9、45.9 | 114～131 | 288～308 |
+| 同上 | 本片 4 檔整檔 1 次（`g1`） | 41.1 | 122 | 304 |
+| 前一段（`360efd0`＝`52926ae` 的測試、少 HM-31 一個測試的配合） | 本片整檔 1 次（`SP:hm30r/s1/a-red-slice.log`） | **60.9（紅）** | 206 | 418 |
+
+拆解（暫存區實驗 `test_zz_d3_whole_scratch.py`，在 `cb93e08` 的複本跑同一個情境，把修正各關回一個；各 3 次；`SP:hm30r2/sb/`）：
+
+| 設定 | 整段最長（ms） | 讀取期間 | 最長停頓落在 | B 的 p99（ms） |
+|---|---|---|---|---|
+| 兩個都改 | 34.5、36.2、38.3 | 1.24～1.45 秒 | 0.03 秒（兩次）、1.42 秒 | 289～312 |
+| 租約改回每段 3 次 | 35.8、39.8、45.0 | 2.87～3.03 秒 | 0.03 秒（兩次）、0.69 秒 | 312～385 |
+| 測試工具改回（健康檢查拿 8 MiB） | 37.6、38.5、38.6 | 1.23～1.37 秒 | 0.03 秒（三次） | 292～296 |
+| 兩個都改回 | 37.9、38.3、44.2 | 2.88～3.10 秒 | 0.03、0.91、2.46 秒 | 333～383 |
+| 兩個都改、注入成本 0 | 38.1、50.5 | 0.83～0.88 秒 | 0.03、0.35 秒 | 80～142 |
+
+- 單看最長停頓，四種設定差不多（34.5～45.0 ms）；租約檢查的修正讓讀取期間短一半、B 的 p99 低一些。
+- 注入成本 0 時一次到 50.5 ms（在第 0.35 秒），工作執行緒那時幾乎沒在搶 GIL：這一段的停頓來自迴圈自己的工作。
+
+**突變**：
+
+| # | 突變（`cb93e08` 的複本） | 抓住它的測試 | 結果 |
+|---|---|---|---|
+| M-D3a | `checked` 的操作連結束後的檢查也跳過 | `test_a_lease_checked_just_before_runs_without_reading_the_state_again_first` | 抓到（state 讀取次數；1 failed in 0.98s） |
+| M-D3b | 開通時每段照舊查 3 次（不帶 `checked`） | `test_a_switched_on_reply_is_read_with_one_state_read_a_piece[switched-on]` | 抓到（846 次讀取／272 段；1 failed in 1.09s） |
+
+**請求端一起量**（HM-30 審查 S-5 交給 HM-31 的「請求的解析與重新序列化在迴圈內的停頓」；結構守門那部分是 HM-31 審查 S-3。交辦寫成
+「HM-31 審查 S-5」，但那一項是 MemAvailable 重複計算，這裡照內容量）。一個請求、沒有別的負載、開關關的 `make_apps`，HM-31 的結構守門與
+預算都在（暫存區實驗 `test_zz_request_side_scratch.py`，在複本裡跑、沒有進 repo；每種 2 次）：
+
+| 請求 | 迴圈最長停頓（2 次） | 結構守門 | `strict_json` | 前一段量的（同一個實驗） |
+|---|---|---|---|---|
+| 16 MiB ASCII 字串 | 157、160 ms | 18～19 ms | 46～47 ms | 150～170 ms |
+| 16 MiB 中文字串 | 134、190 ms | 30～44 ms | 37～55 ms | 139～140 ms |
+| 16 MiB emoji 字串 | 216、222 ms | 45～46 ms | 55～57 ms | 150～157 ms |
+| 19.9 萬個浮點數（0.9 MiB） | 91、124 ms | 2 ms | 56～73 ms | 88～89 ms |
+| 99,990 個 `{"a":1}`（1 MiB） | 183、245 ms | 129～132 ms（慢路徑） | 31～96 ms | 212～216 ms |
+| 同上再補到 16 MiB | 0 ms（宣告超過 16 MiB，讀之前就 413） | — | — | — |
+
+其餘是單獨代理字元的檢查（`json.dumps(ensure_ascii=False)` 一份）與轉送前的重新序列化（`json.dumps`）。
+
+HM-31 把審查 X4 的 0.36～1.9 秒壓到 0.09～0.25 秒，但都還超過 50 ms。這不在契約第 6 節的情境裡（D3 的整段量測裡 A 的請求都是小請求）。
+要把請求端也交給工作執行緒是另一件事（守門、解析、授權與重新序列化都要搬，回應要逐位元相同），本片沒做，交主對話（第 16.14 節）。
+
+### 16.9 D2：寫進文件
+
+- 契約第 5 節「HM-30 補」之後加「一次湧入的最壞值」：帳上扣的是跳脫後的大小，一個帳號最多持有「待送上限 32 MiB＋轉送名額×跳脫後最多
+  24 MiB」，預設帳號 800 MiB、額外帳號 416 MiB（理論上限）；本機實測 ASCII 與 emoji 兩組；HM-19c 用非 ASCII 的數字。
+- 契約第 6 節：使用者定案一段（D1～D3）；「慢讀用戶端」補一句（296 MiB 是依序慢讀的門檻，一次湧入的最壞值由使用者接受）；量測表的
+  「一次湧入」列改成「使用者接受（D2 (a)）」；第 2.4 節的列補「軟上限，最壞值見第 5 節」。
+- 威脅模型：第 3 節加一條（一個 token 持有人最多可以讓管理程序多用的記憶體）；I8 的測試欄寫明跳脫後最多 24 MiB。
+- 交 HM-18 的 DOCS 句子、HM-19c 的量測清單：第 16.14 節。
+
+### 16.10 `decisions.md`
+
+第 1.1 節（2026-11-16 07:1x PaaS #155 那一列所在的表）補 4 列，標題補「HM-30 補」，變更紀錄加一列；DQ 的題數不變：
+
+| 日期 | 題目 | 結論（選項、理由） | 負責片 |
+|---|---|---|---|
+| 13:4x | HM-09 追補：監看的取消被 HTTP 堆疊吞掉 | 全部產品都修（不受開關管）；只改關閉 | HM-09 追補（#106） |
+| 14:0x | D1 真實大回覆的迴圈停頓 | (a) 分段轉換；(b) 子程序成本高、(c) 等於放寬；HM-19c 在 J1900 量三種內容，過不了再考慮 (b) | HM-30、HM-19c |
+| 14:0x | D2 待送回覆額度是軟上限 | (a) 接受並寫進文件；(d) 扣住回覆會卡死照順序讀的用戶端、(b)(c) 擋到正常並行；HM-19c 用非 ASCII 的數字並算進轉送名額×24 MiB | HM-30、HM-18、HM-19c |
+| 14:0x | D3 讀取期間的停頓算不算 | (a) 也算；正式環境沒有只處理的時段；HM-19c 超標就回功能片改；請求端一起量 | HM-30、HM-19c |
+
+### 16.11 本機檢查（2026-11-16，一般使用者 uid 1000；TMPDIR 用 `ha_env.sh` 給的 `/tmp/ha-mp-XXXXXX`，跑完用完整路徑刪除；pytest 都排在共用鎖後面）
+
+pytest 都在 repo 外的複本跑（`git archive` 該 commit 的樹，`.venv`、`apps/`、`packages/mcp-admin-ui` 連回 clone；`SP:hm30r2/bin/snap.sh`），
+只有全套在 clone 裡跑。每次 pytest 一個程序，排在共用鎖後面（`SP:hm30r2/bin/sessionA.sh`、`sessionB.sh`、`sessionC.sh`）。
+
+| 檢查 | 範圍 | 結果 |
+|---|---|---|
+| 先紅：D1、D3 的新測試（`6601e9b`：測試都在、核心還沒 D1／D3） | `test_reply_worker.py -k "<D1、D3 的新測試>"`，20 案 | 16 紅、4 綠（第 16.7 節）；紅的原因都是缺函式、缺參數、停頓超過 50 ms 或讀 state 太多次 |
+| 先紅：D3 整段（`52926ae`） | CPU 飢餓一案單獨 5 次；兩檔整檔 1 次 | 都綠（38.5～47.4 ms；整檔 39.3 ms），整檔那次的 10 紅是 D1 的新測試（核心還沒 D1）。前一段同一組測試整檔 60.9 ms 紅（第 16.8 節） |
+| 中間：只修測試工具（`6601e9b`） | CPU 飢餓一案單獨 3 次 | 都綠（37.0～47.8 ms） |
+| 綠：本片的檔＋HM-31 的 `test_request_budget_gateway.py`（`cb93e08`） | `test_reply_worker.py`、`test_health_tolerance.py`、`test_profile_runtime.py`、`test_request_budget_gateway.py` | **237 案全過**、0 skip，68.2 秒（`test_reply_worker.py` 133 案 33.7 秒、`test_health_tolerance.py` 2 案 16.1 秒） |
+| 綠：D3 整段 | CPU 飢餓一案單獨 6 次 | 都綠：34.4～45.9 ms（第 16.8 節） |
+| 綠：D1 真實 8 MiB 回覆 | 9 案 × 3 次 | 27 案全過：7.3～45.5 ms（第 16.7 節） |
+| 拆解 D3（暫存區實驗） | 5 種設定 × 2～3 次 | 第 16.8 節 |
+| 相關的檔 | HM-31 的預算與結構（`test_request_budget.py`、`test_request_structure.py`、`test_n8n_request_bounds.py`）；HM-14 的 5 檔（`test_carries_no_request.py`、`test_gateway_queue_ha.py`、`test_gateway_stream_endings.py`、`test_gateway_busy_shapes.py`、`test_initialize_generation.py`）＋`test_reply_mask_union.py`；HM-10 的 3 檔（`test_profile_admin_api.py`、`test_admin_pipeline_matrix.py`、`test_router_passthrough.py`）；`test_monitor_cancel.py`；HM-01 黃金回歸與兩個契約凍結（開關關時逐位元；`test_single_profile_golden.py`、`test_mcp_contract_freeze.py`、`test_admin_contract_freeze.py`）；另 11 檔用到改過的程式路徑的（額度、路由、生命週期、健康、租約、遮罩、後端錯誤、錯開啟動、port、子程式資源、HM-20 的 loopback） | 927 案：**925 過**、2 紅。紅的 2 案是 HM-20 的 `test_backend_loopback.py::test_a_switched_on_product_s_child_gets_the_variable_and_nothing_else_changes[n8n/documentation]`、`[n8n/configured]`：複本的 `apps/` 是連回 clone 的連結，n8n 子程式的路徑解析成 clone 的路徑，和快照比對的正規化對不上；全套在 clone 裡跑時這 2 案過（下面全套那列） |
+| 突變 8 個 | 第 16.6～16.8 節 | 8 個都抓到（每個都是 1 failed） |
+| 請求端重量（暫存區實驗） | 6 種請求 × 2 次 | 第 16.8 節 |
+| 全套 pytest（clone，`packaging/unit.sh` 的同一組 pytest 指令，一般使用者；瀏覽器測試照 CI 先 `npm run browser:install` 裝 Chromium） | `pytest tests` | （跑完在下一個 commit 補） |
+| `packaging/validate.py`（CI 的 venv） | | （跑完在下一個 commit 補） |
+| packaging unittest（離線暫存 venv：`uv sync --frozen --no-dev --offline`＋`requirements-ci.txt` 雜湊安裝） | `unittest discover -s packaging` | （跑完在下一個 commit 補） |
+| `scripts/tool_inventory.py` | | （跑完在下一個 commit 補） |
+| 秘密預檢 | `.venv/bin/python -I scripts/secret_precheck.py --tools SP:hm01/gitleaks-tools --repo . --base origin/claude-delivery --head HEAD --full` | （跑完在下一個 commit 補） |
+| 帳本預檢 | `.venv/bin/python -I scripts/ledger_precheck.py --repo . --base origin/claude-delivery` | （跑完在下一個 commit 補） |
+| commit 署名、雙向控制字元 | `git log --format=%B`、diff 掃 U+202A～202E、U+2066～2069 | 都沒有；身分照 clone 的 git config（woowtech） |
+| `git status`、暫存目錄 | | （跑完在下一個 commit 補） |
+
+### 16.12 只在 CI 跑的測試、CI 時間
+
+- 本片新增的案例在本機都跑過、都過，沒有只在 CI 跑的新測試。CI（root、0 skip）才是準。
+- 已知要 root、本機一定失敗的既有案例（不是本片造成）：`test_owned_executable.py::test_uid10001_nondumpable_self_and_own_child_proof`、
+  `test_profile_store.py::test_mode_and_owner_as_the_add_on_user`、`test_restore_detection.py` 的 5 個 `test_root_*`。
+- D1、D3 的新測試本機（`g1` 的 junit）：48 案約 15.5 秒，大宗是真實 8 MiB 回覆 9 案 12.5 秒（每案也跑一次迴圈內處理當基準）；
+  `test_reply_worker.py` 合計 133 案 33.7 秒（rebase 前 86 案 22.5 秒）。CI 推估：本片這一段多約 15～20 秒；本片合計（rebase 前的推估
+  45～65 秒）約 60～85 秒，在每片 1.5 分鐘內，也在交辦的 2 分鐘內。每個量停頓的測試都是固定次數、固定上限（50 ms），沒有重試。
+- CI 風險（照實記）：D3 整段本機最高 45.9 ms、D1 跳脫字元那案最高 46.3 ms，離 50 ms 約 4 ms。CI 的 runner 較慢或較忙時可能紅；紅了就是
+  那台機器上的實際資訊，照 D1、D3 的定案回報使用者，不放寬門檻（第 16.14 節）。
+- `checks` 秒數：開 PR 後補（前：`claude-delivery` 最近的 #106 `checks` 1,639 秒；後：本片 PR 的 `checks`）。
+
+### 16.13 commit 對照
+
+rebase 過來的 11 個（第 1～15 節寫的是左欄的編號）：
+
+| rebase 前 | rebase 後 | 內容 |
+|---|---|---|
+| `092b827` | `15bc2a3` | 測試先寫 |
+| `8a2703e` | `e83889d` | 工作執行緒 |
+| `73d6cfd` | `c2c764d` | 待送回覆額度 |
+| `2552106` | `307f998` | 契約、威脅模型、帳本 |
+| `33798ad` | `b6a2c85` | 兩個測試改寫 |
+| `c43eefd` | `2dc496e` | 刪重複的區段標題 |
+| `5b6d4a5` | `4382ac8` | 本筆記、契約 #17 附註 |
+| `503fb3d` | `bcd0628` | 審查修正的測試 |
+| `6e073c3` | `22409db` | `reply_worker.py` 說明、帳本 |
+| `e84bd8f` | `d5f2e03` | 審查修正的文件 |
+| `8b015d5` | `dfd0766` | 本筆記（審查修正） |
+
+rebase 後加的：
+
+| commit | 內容 |
+|---|---|
+| `a4c42a5` | 測試：HM-31 的預算（rebase 配合） |
+| `773014a` | 測試：D1（逐位元、分段、真實 8 MiB 回覆、回收器） |
+| `360efd0` | 測試：D3（量整段） |
+| `52926ae` | 測試：`make_apps` 最後的參數（rebase 配合，HM-31 的測試） |
+| `dd1098f` | 測試：D1（分段放掉、工具清單、巢狀語料） |
+| `6481f7f` | 測試工具：A 的健康檢查照子程式的回法（D3） |
+| `6601e9b` | 測試：D3（租約、每段一次 token 檢查） |
+| `086159f` | 程式：D1 |
+| `ebc15a2` | 程式：D3 |
+| `85324e8` | 帳本 |
+| `179a080` | 測試：D3（checked 的租約在磁碟上換 token 照樣擋下） |
+| `5f61a94` | 說明：checked 的租約靠什麼；帳本 |
+| `cb93e08` | 測試：D1（每種串流在工作執行緒切框也逐位元相同） |
+| `9f1facc` | 說明：`reply_worker.py` 的兩處量測數字照 pytest 改；帳本 |
+| `f548912` | 文件：契約、威脅模型、`decisions.md`、驗收表 |
+| 最後兩個 | 本筆記：第 16 節，與結論、第 1、11.5、12、13.2、14 節的更新；最後一個補全套 pytest、packaging 與兩個預檢的結果 |
+
+### 16.14 交給後面的片與主對話
+
+- **主對話**：
+  - 請求端一個大請求本機仍讓迴圈停 0.09～0.25 秒（第 16.8 節），超過 50 ms，但不在契約第 6 節的情境裡（契約已寫明 CPU 飢餓保證只對回覆
+    成立）。選項：(a) 開通的產品把請求端（結構守門、解析、單獨代理字元的檢查、轉送前的重新序列化）也交給工作執行緒；(b) 開通時降低單一
+    請求的上限或元素上限；(c) 維持現狀，HM-19c 在目標硬體量，超標再定。建議 (c)，數字不好再做 (a)。
+  - 交辦裡「HM-31 審查 S-5」的名稱對不上（HM-31 的 S-5 是 MemAvailable 重複計算）；本片照括號裡的內容量了請求端（上一點）。
+  - CI：D1 的真實回覆停頓測試本機最高 46.3 ms（跳脫字元多的長字串：解析端那一次 C 呼叫）。CI 的 runner 若慢很多可能逼近 50 ms；真的紅了是
+    實際的資訊（那個形狀在那台機器做不到），照 D1 的定案回報使用者，不放寬。
+  - HM-11（#107）用了第 9 節第 109～112 列；本片沒有第 9 節的列，不會撞號。兩片都在契約第 10 節與 `decisions.md` 的變更紀錄最後加列，
+    後合的那片 rebase 時只有這兩處的文件衝突。
+- **HM-18（DOCS 要寫的句子，D2 定案）**：
+  - 「開通多帳號後，每個帳號『已處理、還沒被用戶端收完』的回覆上限是 32 MiB。這是軟上限：達到上限時已經轉送給 MCP 子程式的請求，回覆
+    照樣交出。一個帳號的用戶端一次送滿轉送名額、又都不讀回應時，add-on 最多多用約 800 MiB（預設帳號）或 416 MiB（每個額外帳號）的記憶體。」
+  - 「回覆在一條工作執行緒上依帳號輪流處理，大回覆分段處理；單一長字串的解析仍會讓 add-on 停一下（本機約 20～40 ms，小主機數倍）。」
+  - 「請求（送給 MCP 的內容）仍在 add-on 的主迴圈裡檢查與解析：一個很大的請求會讓所有帳號短暫變慢。」
+  - 「工作執行緒停了，add-on 會結束並由 Supervisor 重新啟動。」（第 13.2 節原有的）
+- **HM-19c（量測清單補）**：
+  - 比對 MemAvailable 時，全域最壞值用非 ASCII（emoji）的數字，每個帳號算進「轉送名額×跳脫後最多 24 MiB」（D2）。
+  - J1900 上量 mixed、CJK、emoji 三種真實 8 MiB 回覆的迴圈停頓（D1），另量大量小物件、長字串、跳脫字元與 100 層加 emoji 的巢狀；
+    過不了回報、考慮子程序。
+  - 整段（讀取＋處理）的停頓、B 的 p95 增量、健康檢查（D3）；請求端一個大請求的停頓（上面第一點）。
+  - 處理時間變長：分段處理與分段放掉讓一筆大回覆在工作執行緒上多花時間（大量小物件最多，第 16.7 節），量 A 的回覆在目標硬體要多久做完。
+- **獨立審查**：D1、D3 的程式（`reply_worker.py` 的 `encoded`／`_plan`／`released`／回收器、`gateway.py` 的大事件與 `releasable`、
+  `redact.py` 的 `checkpoint`、`access.py` 的 `checked`）是審查之後加的，還沒審查過。
