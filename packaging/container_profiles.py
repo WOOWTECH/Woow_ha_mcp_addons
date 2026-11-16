@@ -308,14 +308,21 @@ async def profiles_up(probe, process, ports, *, timeout=UP_SECONDS, proc=Path('/
     """Wait until exactly the children of *ports* run, each listening on its own port on IPv4 loopback only (as the
     default child's 3000, container_probe); {port: PID}."""
     wanted = sorted(ports)
-    async with asyncio.timeout(timeout):
-        while True:
-            assert process.poll() is None, 'packaged entrypoint exited'
-            found = child_ports(probe, process, proc)
-            listening = listeners(proc)
-            if sorted(found) == wanted and all(listening.get(port) == ['0100007F'] for port in wanted):
-                return found
-            await asyncio.sleep(pause)
+    found, listening = {}, {}
+    try:
+        async with asyncio.timeout(timeout):
+            while True:
+                assert process.poll() is None, 'packaged entrypoint exited'
+                found = child_ports(probe, process, proc)
+                listening = listeners(proc)
+                if sorted(found) == wanted and all(listening.get(port) == ['0100007F'] for port in wanted):
+                    return found
+                await asyncio.sleep(pause)
+    except TimeoutError:
+        # Ports only (a profile's child that never starts: e.g. an open file limit below open_file_budget's, or a
+        # child that refuses its backend). The runtime's own lines are not shown: the probe never prints them.
+        up = [port for port in wanted if found.get(port) and listening.get(port) == ['0100007F']]
+        raise AssertionError(f'children up on {up} of {wanted}') from None
 
 
 def stat_fields(pid, proc=Path('/proc')):
@@ -343,16 +350,19 @@ async def kill_one(probe, process, port, *, timeout=RESTART_SECONDS, proc=Path('
     before = child_ports(probe, process, proc)
     target = before[port]
     kill(target, signal.SIGKILL)
-    async with asyncio.timeout(timeout):
-        while True:
-            assert process.poll() is None, 'packaged entrypoint exited'
-            now = child_ports(probe, process, proc)
-            assert all(now.get(other) in (None, pid) for other, pid in before.items() if other != port), \
-                "another profile's child was restarted"
-            if now.get(port) not in (None, target) and listeners(proc).get(port) == ['0100007F'] \
-                    and all(now.get(other) == pid for other, pid in before.items() if other != port):
-                return now
-            await asyncio.sleep(pause)
+    try:
+        async with asyncio.timeout(timeout):
+            while True:
+                assert process.poll() is None, 'packaged entrypoint exited'
+                now = child_ports(probe, process, proc)
+                assert all(now.get(other) in (None, pid) for other, pid in before.items() if other != port), \
+                    "another profile's child was restarted"
+                if now.get(port) not in (None, target) and listeners(proc).get(port) == ['0100007F'] \
+                        and all(now.get(other) == pid for other, pid in before.items() if other != port):
+                    return now
+                await asyncio.sleep(pause)
+    except TimeoutError:
+        raise AssertionError(f'the child on {port} did not start again') from None
 
 
 def stop_within(probe, process, *, seconds=STOP_SECONDS, clock=time.monotonic, proc=Path('/proc')):

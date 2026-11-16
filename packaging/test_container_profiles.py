@@ -372,10 +372,10 @@ class RunningChildrenTests(unittest.TestCase):
         async def up(timeout=.25):
             return await stage.profiles_up(self.probe, self.process, [3000, 18000], timeout=timeout,
                                            proc=self.proc.root, pause=.01)
-        with self.assertRaises(TimeoutError):
+        with self.assertRaisesRegex(AssertionError, r'^children up on \[3000\] of \[3000, 18000\]$'):
             asyncio.run(up())
         self.proc.listen(18000, '00000000')  # a child on every address is not up
-        with self.assertRaises(TimeoutError):
+        with self.assertRaisesRegex(AssertionError, r'^children up on \[3000\] of \[3000, 18000\]$'):
             asyncio.run(up())
         self.proc.listen(18000)
         self.assertEqual(asyncio.run(up()), {3000: 10, 18000: 11})
@@ -448,7 +448,7 @@ class KillTests(unittest.TestCase):
             self.pids.remove(11)
             self.proc.gone(11)
             self.proc.close(18000)
-        with self.assertRaises(TimeoutError):
+        with self.assertRaisesRegex(AssertionError, '^the child on 18000 did not start again$'):
             self.run_kill(self.kill(gone))
 
 
