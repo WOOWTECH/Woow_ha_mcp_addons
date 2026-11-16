@@ -87,13 +87,22 @@ async def test_a_busy_lane_answers_as_the_paas_table_and_the_session_goes_on(tmp
         assert sorted(child.client_calls()) == [10, 60, 61]
 
 
+
+def add_on_budget():
+    """An add-on's request body budget for a gate made by hand (HM-31: the third argument, before it the refusal
+    allowance HM-31 removed)."""
+    from mcp_admin_core import request_budget  # imported when a test runs (the red half of red-green)
+
+    return request_budget.RequestBudget(request_budget.BudgetLimits(total=128 * 1024 * 1024,
+                                                                    per_profile=64 * 1024 * 1024))
+
 @pytest.mark.parametrize('lane', [ORDINARY, RESERVED])
 async def test_busy_texts_and_warnings_name_the_limit_of_their_own_lane(log_scan, lane):
     """PaaS review N8 (its cases 21 and 22) and 82c6929 (the WARNING's full text): the wait and queue texts and the
     WARNING name the lane's own number of slots, here 9 ordinary and 3 reserved on purpose; the reserved lane's WARNING
     names no setting to change (there is none) but says the MCP server may be stuck."""
     quota_ = profiles.ProfileQuota(32, 64 * 1024 * 1024, 9, .05, 8, 2, 3, 32 * 1024 * 1024, 24)
-    gate = profile_router.ProfileGate(B, quota_, profile_router.RefusalAllowance(), profile_router.Reports())
+    gate = profile_router.ProfileGate(B, quota_, add_on_budget(), profile_router.Reports())
     waited = gate.slot_busy.answer(call(7), 'wait', lane)
     full = gate.slot_busy.answer(call(8), 'queue', lane)
     texts = [json.loads(response.body)['error']['message'] for response in (waited, full)]
@@ -142,7 +151,7 @@ def test_every_situation_of_every_profile_stays_one_warning_a_minute(log_scan):
     reports.clock = lambda: 1000.0  # one instant: every situation stays inside its minute
     count = 1 + max(profiles.EXTRA_PROFILE_LIMITS.values())
     gates = [profile_router.ProfileGate(profile_id, profiles.DEFAULT_PROFILE_QUOTA if profile_id == 'default'
-                                        else profiles.EXTRA_PROFILE_QUOTA, profile_router.RefusalAllowance(), reports)
+                                        else profiles.EXTRA_PROFILE_QUOTA, add_on_budget(), reports)
              for profile_id in ['default'] + ['%024x' % number for number in range(1, count)]]
     for _ in range(3):
         for gate in gates:

@@ -49,6 +49,11 @@ bootstrap_fields); an additional profile shows the add-on's one endpoint, the de
 A ProfileRuntime binds its revisions (ETags) to its profile id in every mode (ConfigurationState profile_id: opaque,
 process-local values, so nothing a client sees changes for a product not switched on) and takes default_endpoint and
 bootstrap_fields as keyword-only options, given by the manager only.
+
+HM-31 (plan 12.3 HM-31; contract 2.4, 5; PaaS #155): the manager holds the add-on's one request body budget
+(request_budget.RequestBudget, derived when the manager is made: at startup, with every profile the product may run
+counted); each profile's app charges its share (ProfileGate.budget_share, make_apps body_budget). A switched-off
+add-on's only profile has a budget of its own (make_apps makes it).
 """
 from __future__ import annotations
 
@@ -65,7 +70,7 @@ import stat
 
 import httpx
 
-from . import health as health_module, profiles
+from . import health as health_module, profiles, request_budget
 from .access import TokenAccess
 from .admin_auth import AdminAuthority
 from .config import ConfigError, strict_json
@@ -76,8 +81,7 @@ from .lifecycle import (CHILD_PORT, CHILD_PORT_CONFLICT, CHILD_PORT_IN_USE, EXTR
                         WATCHDOG, ChildLog, LifecycleLog, Supervisor, child_url)
 from .products import CONNECTIONS, ProductStore
 from .profile_admin import ProfileAdmin
-from .profile_router import (AdminDispatcher, Credentials, McpDispatcher, ProfileGate, RefusalAllowance, Reports,
-                             Unavailable)
+from .profile_router import AdminDispatcher, Credentials, McpDispatcher, ProfileGate, Reports, Unavailable
 from .profiles import PROFILE_ID
 
 logger = logging.getLogger(__name__)
@@ -87,7 +91,8 @@ CHILD_CONNECTIONS = 40  # the child client's connection limit, as before (plan 5
 RUNTIME_OPTIONS = frozenset({'child_url', 'health', 'backend_changed', 'configuration', 'backend_check',
                              'restart_child', 'diagnostics', 'availability', 'token_access', 'mutation_lock',
                              'authority', 'admin_slots', 'admin_pipeline', 'profile_view', 'forward_slots',
-                             'slot_busy', 'reply_secrets', 'child_blocked', 'default_endpoint', 'bootstrap_fields'})
+                             'slot_busy', 'reply_secrets', 'child_blocked', 'default_endpoint', 'bootstrap_fields',
+                             'body_budget'})
 MANAGEMENT_LISTENER_LIMIT = 64  # 8099's limit_concurrency (run_product), switched on or off
 # HM-09 (plan 5.4; C2-SF-4): after the default profile's child, at most STAGGER_SLOTS additional children start at
 # once; a place is freed when its child answered a health check, could not start, or after STAGGER_SECONDS.
@@ -134,7 +139,8 @@ class ProfileRuntime:
     HM-08 (ProfileManager passes them for a switched-on product; left out, the runtime is built as before):
     child_connections: the child client's connection limit (CHILD_CONNECTIONS; an additional profile has 24).
     forward_slots, slot_busy, reply_secrets: make_apps' options of the same names (the profile's forwarding slots,
-    the answer when one stays busy, the add-on's reply mask), passed only when given.
+    the answer when one stays busy, the add-on's reply mask), passed only when given. HM-31: body_budget likewise (the
+    profile's share of the add-on's request body budget; left out, make_apps makes a budget of its own).
 
     HM-09 (likewise): hold(memory=...): why the child must not start now ((reason, detail) for Supervisor.block, or
     None), asked at every start before the spec is built (memory False: the profile's own verdict, e.g. disabled) and,
@@ -151,7 +157,7 @@ class ProfileRuntime:
     def __init__(self, store, tools, child_spec, *, port=CHILD_PORT, profile_id=DEFAULT_PROFILE, lifecycle=None,
                  shared=None, profile_view=None, app_options=None, child_connections=CHILD_CONNECTIONS,
                  forward_slots=None, slot_busy=None, reply_secrets=None, hold=None, monitor_options=None,
-                 report_blocked=False, default_endpoint=None, bootstrap_fields=None):
+                 report_blocked=False, default_endpoint=None, bootstrap_fields=None, body_budget=None):
         if not isinstance(profile_id, str) or not PROFILE_ID.fullmatch(profile_id):
             raise ValueError('invalid profile id')
         if type(child_connections) is not int or child_connections < 1:
@@ -169,8 +175,8 @@ class ProfileRuntime:
         self.child_connections = child_connections
         self.gateway_options = {name: value for name, value in (
             ('forward_slots', forward_slots), ('slot_busy', slot_busy), ('reply_secrets', reply_secrets),
-            ('default_endpoint', default_endpoint), ('bootstrap_fields', bootstrap_fields))
-            if value is not None}
+            ('default_endpoint', default_endpoint), ('bootstrap_fields', bootstrap_fields),
+            ('body_budget', body_budget)) if value is not None}
         if hold is not None and not callable(hold):
             raise ValueError('invalid start hold')
         self.hold = hold
@@ -420,7 +426,9 @@ class ProfileManager:
       never opened: its token and child token are read once, for the reply mask only; profiles sharing a token or child
       token are named once (DQ-09: the dispatcher answers 503 for a shared token);
     - the 8081 dispatcher (profile_router.McpDispatcher).
-    Every runtime gets the busy answer of its gate (make_apps slot_busy) and the add-on's reply mask (reply_secrets).
+    Every runtime gets the busy answer of its gate (make_apps slot_busy), the add-on's reply mask (reply_secrets) and
+    its share of the add-on's request body budget (body_budget: budget, one RequestBudget derived when the manager is
+    made, with 1 + the product's additional-profile capacity as the accounts; HM-31).
 
     HM-09 (plan 5.4; contract 7): every profile's runtime, the default profile's included, gets
     - the PaaS watchdog (lifecycle.WATCHDOG, DQ-20 (b)) and the spawn check (spawn_refusal: an add-on listener port
@@ -455,7 +463,8 @@ class ProfileManager:
         self.app_options = dict(app_options or {})
         self.layout = profiles.Layout(Path(store.directory))
         self.reports = Reports()
-        self.allowance = RefusalAllowance()
+        # HM-31: the add-on's request body budget, every profile's share of it (derived now: at startup)
+        self.budget = request_budget.RequestBudget(request_budget.BudgetLimits.derive(product, switched_on=True))
         self.shared = self.index = self.mcp_app = None
         self.mcp_listener_limit = 64
         self.orphan_secrets = frozenset()
@@ -791,7 +800,7 @@ class ProfileManager:
             raise ValueError('profile already registered')
         default = profile_id == DEFAULT_PROFILE
         quota = profiles.DEFAULT_PROFILE_QUOTA if default else profiles.EXTRA_PROFILE_QUOTA
-        gate = ProfileGate(profile_id, quota, self.allowance, self.reports)
+        gate = ProfileGate(profile_id, quota, self.budget, self.reports)
         credentials = Credentials(store, owned=not default)
         log = ChildLog(self.events, profile_id, profiles.log_id(profile_id), port)
         lifecycle = dict(WATCHDOG, preflight=partial(self.spawn_refusal, profile_id), log=log)
@@ -808,7 +817,8 @@ class ProfileManager:
                                  hold=None if default else partial(self._hold, profile_id), monitor_options=monitor,
                                  report_blocked=True, profile_view=partial(self.echo, profile_id),
                                  bootstrap_fields=partial(self.admin.bootstrap_fields, profile_id),
-                                 default_endpoint=None if default else self.default_endpoint)
+                                 default_endpoint=None if default else self.default_endpoint,
+                                 body_budget=gate.budget_share)
         await runtime.open()
         entry = RegisteredProfile(profile_id, port, label, runtime, store, gate, credentials, disabled)
         self._entries[profile_id] = entry
