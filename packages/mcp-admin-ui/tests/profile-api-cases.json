@@ -3,7 +3,8 @@
     "HM-11 (multi-profile plan 6; contract 3, 4.1): every management call the panel makes once a product is switched on, and every refusal it handles, as one list of cases.",
     "tests/test_panel_profile_api_shapes.py runs every case against the real 8099 management app (in process, the switch monkeypatched on) and tests/browser/profile-api-parity.spec.mjs against the LOCAL MOCK (fixtures/server.mjs); both must observe exactly the expect of every case. So the mock answers as the add-on does: status, field names and types, the echo, the ETag.",
     "A request: method, path ({B} an id of rules.ids or a learnt one, {key:CASE} the Idempotency-Key a case sent), profile (X-MCP-Profile: a role, a literal, or none), csrf (a fresh one), if_match (index: the list's ETag; raw: the default bootstrap's profile_index_etag; config:R: profile R's configuration revision; stale-index, stale-config: well formed, never current), key (new, or same:CASE), body (JSON).",
-    "What is compared: the status, the class of the ETag header (p1, c1, other or null), the body as rules say (keys: every top-level key, or only the listed ones that are present). Strings are compared by value for the rules.literal keys; ids by role (default, a rules.ids name, a learnt name, <hex24>); an Idempotency-Key of a case as <key:CASE>; ETags and revisions by class; anything else as <str>. Numbers are <int>, booleans and null as they are. A body that is not JSON is <empty> or <text>."
+    "What is compared: the status, the class of the ETag header (p1, c1, other or null), the body as rules say (keys: every top-level key, or only the listed ones that are present). Strings are compared by value for the rules.literal keys; ids by role (default, a rules.ids name, a learnt name, <hex24>); an Idempotency-Key of a case as <key:CASE>; ETags and revisions by class; anything else as <str>. Numbers are <int>, booleans and null as they are. A body that is not JSON is <empty> or <text>.",
+    "HM-12 (DQ-05, DQ-40 ⑨ (a); contract 3.1, 4.1, section 9 #113-#115): a backend save of a switched-on Odoo profile as the panel sends it, and the answers the panel handles: token_rotated (200, and shape D when the new child does not start), the new-origin 422 and the two 503s. setup.backend_edit: the mock serves backend_edit (the add-on always does). An extra's connection: its saved url, database and username (the add-on saves the golden connection with the profile's name; the Python test requires these values). setup.fault: one failure of the identity change, armed on B as tests/test_odoo_identity_rotation.py arms it (stop: the old child does not stop; write: the store refuses the write; start: the new child does not start)."
   ],
   "rules": {
     "literal": ["code", "error", "kind", "state", "status", "disabled_reason", "blocked_reason", "profile_index_state", "label", "tested_configuration", "token_state", "apply_state"],
@@ -177,6 +178,44 @@
         {"name": "list", "request": {"method": "GET", "path": "/api/profiles"}, "keys": "*", "expect": {"status": 404, "etag": null, "body": "<empty>"}},
         {"name": "bootstrap", "request": {"method": "GET", "path": "/api/bootstrap"}, "keys": "bootstrap-profile", "expect": {"status": 200, "etag": "c1", "body": {}}},
         {"name": "bootstrap-with-header", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "B"}, "keys": "bootstrap-profile", "expect": {"status": 200, "etag": "c1", "body": {}}}
+      ]
+    },
+    {
+      "name": "identity",
+      "about": "HM-12: B's backend saved anew: a password alone keeps the token; a URL moved to another origin without its password is refused (DQ-40 ⑨); a changed username, URL (its path too) or database, or a cleared connection, rotates the token (DQ-05)",
+      "setup": {"product": "odoo", "backend_edit": true, "extras": [{"role": "B", "label": "Beta Ops", "status": "running", "connection": {"url": "https://pbbbb.odoo.invalid", "database": "DUMMY-db", "username": "DUMMY-user"}}]},
+      "cases": [
+        {"name": "patch-password", "request": {"method": "PUT", "path": "/api/backend/patch", "profile": "B", "csrf": true, "if_match": "config:B", "body": {"changes": {"password": "DUMMY-pbbbb-odoo-password-two"}}}, "keys": ["error", "saved", "token_rotated", "detail", "profile"], "expect": {"status": 200, "etag": "c1", "body": {"saved": true, "profile": {"id": "<B>"}}}},
+        {"name": "patch-new-origin", "request": {"method": "PUT", "path": "/api/backend/patch", "profile": "B", "csrf": true, "if_match": "config:B", "body": {"changes": {"url": "https://elsewhere.odoo.invalid"}}}, "keys": ["error", "saved", "token_rotated", "detail", "profile"], "expect": {"status": 422, "etag": null, "body": {"error": "request denied", "detail": {"code": "CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN"}}}},
+        {"name": "patch-username", "request": {"method": "PUT", "path": "/api/backend/patch", "profile": "B", "csrf": true, "if_match": "config:B", "body": {"changes": {"username": "DUMMY-user-two"}}}, "keys": ["error", "saved", "token_rotated", "detail", "profile"], "expect": {"status": 200, "etag": "c1", "body": {"saved": true, "token_rotated": true, "profile": {"id": "<B>"}}}},
+        {"name": "patch-url-path", "request": {"method": "PUT", "path": "/api/backend/patch", "profile": "B", "csrf": true, "if_match": "config:B", "body": {"changes": {"url": "https://pbbbb.odoo.invalid/odoo"}}}, "keys": ["error", "saved", "token_rotated", "detail", "profile"], "expect": {"status": 200, "etag": "c1", "body": {"saved": true, "token_rotated": true, "profile": {"id": "<B>"}}}},
+        {"name": "replace-password", "request": {"method": "PUT", "path": "/api/backend", "profile": "B", "csrf": true, "if_match": "config:B", "body": {"connection": {"url": "https://pbbbb.odoo.invalid/odoo", "database": "DUMMY-db", "username": "DUMMY-user-two", "password": "DUMMY-pbbbb-odoo-password-three"}}}, "keys": ["error", "saved", "token_rotated", "detail", "profile"], "expect": {"status": 200, "etag": "c1", "body": {"saved": true, "profile": {"id": "<B>"}}}},
+        {"name": "replace-database", "request": {"method": "PUT", "path": "/api/backend", "profile": "B", "csrf": true, "if_match": "config:B", "body": {"connection": {"url": "https://pbbbb.odoo.invalid/odoo", "database": "DUMMY-db-two", "username": "DUMMY-user-two", "password": "DUMMY-pbbbb-odoo-password-three"}}}, "keys": ["error", "saved", "token_rotated", "detail", "profile"], "expect": {"status": 200, "etag": "c1", "body": {"saved": true, "token_rotated": true, "profile": {"id": "<B>"}}}},
+        {"name": "clear", "request": {"method": "PUT", "path": "/api/backend", "profile": "B", "csrf": true, "if_match": "config:B", "body": {"connection": null}}, "keys": ["error", "saved", "token_rotated", "detail", "profile"], "expect": {"status": 200, "etag": "c1", "body": {"saved": true, "token_rotated": true, "profile": {"id": "<B>"}}}}
+      ]
+    },
+    {
+      "name": "identity-stop-fails",
+      "about": "HM-12: B's old child does not stop: nothing saved",
+      "setup": {"product": "odoo", "backend_edit": true, "fault": "stop", "extras": [{"role": "B", "label": "Beta Ops", "status": "running", "connection": {"url": "https://pbbbb.odoo.invalid", "database": "DUMMY-db", "username": "DUMMY-user"}}]},
+      "cases": [
+        {"name": "patch-username", "request": {"method": "PUT", "path": "/api/backend/patch", "profile": "B", "csrf": true, "if_match": "config:B", "body": {"changes": {"username": "DUMMY-user-two"}}}, "keys": ["error", "saved", "token_rotated", "detail", "profile"], "expect": {"status": 503, "etag": null, "body": {"error": "request denied"}}}
+      ]
+    },
+    {
+      "name": "identity-write-fails",
+      "about": "HM-12: the store refuses B's write: nothing saved",
+      "setup": {"product": "odoo", "backend_edit": true, "fault": "write", "extras": [{"role": "B", "label": "Beta Ops", "status": "running", "connection": {"url": "https://pbbbb.odoo.invalid", "database": "DUMMY-db", "username": "DUMMY-user"}}]},
+      "cases": [
+        {"name": "patch-username", "request": {"method": "PUT", "path": "/api/backend/patch", "profile": "B", "csrf": true, "if_match": "config:B", "body": {"changes": {"username": "DUMMY-user-two"}}}, "keys": ["error", "saved", "token_rotated", "detail", "profile"], "expect": {"status": 503, "etag": null, "body": {"error": "state unavailable"}}}
+      ]
+    },
+    {
+      "name": "identity-start-fails",
+      "about": "HM-12: B's new child does not start: saved, the token rotated (shape D)",
+      "setup": {"product": "odoo", "backend_edit": true, "fault": "start", "extras": [{"role": "B", "label": "Beta Ops", "status": "running", "connection": {"url": "https://pbbbb.odoo.invalid", "database": "DUMMY-db", "username": "DUMMY-user"}}]},
+      "cases": [
+        {"name": "patch-username", "request": {"method": "PUT", "path": "/api/backend/patch", "profile": "B", "csrf": true, "if_match": "config:B", "body": {"changes": {"username": "DUMMY-user-two"}}}, "keys": ["error", "saved", "token_rotated", "detail", "profile"], "expect": {"status": 503, "etag": "c1", "body": {"saved": true, "token_rotated": true, "detail": {"code": "config_apply_failed"}, "profile": {"id": "<B>"}}}}
       ]
     }
   ]

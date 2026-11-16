@@ -10,6 +10,10 @@ export default defineConfig({
     // Every spec as it is: the product switched off unless a test switches profiles on itself (profiles.spec).
     { name: 'single' },
     // HM-11 (docs/multi-profile/paas-test-mapping.md): these single-profile specs must also pass switched on, unchanged.
-    { name: 'profiles-on', testMatch: /\/(conditional-writes|configuration|partial-settings|write-contracts)\.spec\.mjs$/, use: { profilesOn: true } },
+    // HM-12 (DQ-40 ⑨ (a)): except the two partial edits that move n8n's URL to another server keeping its stored key:
+    // switched on, the panel asks for the key again and the add-on refuses such a save (422). backend-identity.spec.mjs
+    // runs both switched on; the single project runs them switched off, unchanged.
+    { name: 'profiles-on', testMatch: /\/(conditional-writes|configuration|partial-settings|write-contracts)\.spec\.mjs$/,
+      grepInvert: /partial URL edit sends only URL|partial edit conflict retains draft/, use: { profilesOn: true } },
   ],
 });
