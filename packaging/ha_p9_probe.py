@@ -4,10 +4,14 @@ Runs on the Home Assistant host (SSH app shell) with the python3 standard librar
 stdin and are never printed. Every MCP session the probe opens is closed with DELETE, so the shared session
 cap of the app is not consumed. Modes that change state touch only the named app: `restart` restarts it
 through the `ha` CLI, and `childkill` SIGKILLs the MCP child processes of its management launcher inside
-its container. See docs/operations/ha-p9-kit.md.
+its container (with --child-port, multi-profile HM-16: only the child of the profile on that port). `cross`
+(multi-profile HM-16) checks that the profiles of a switched-on app never serve each other's sessions.
+See docs/operations/ha-p9-kit.md.
 """
 import argparse
 import json
+import re
+import secrets
 import statistics
 import subprocess
 import sys
@@ -39,6 +43,38 @@ launchers = {pid for pid, (cmd, _) in procs.items() if any(arg.endswith(b"manage
 print(" ".join(str(pid) for pid, (_, ppid) in sorted(procs.items()) if ppid in launchers))
 '''
 KILL_SCRIPT = 'import os, sys\nfor pid in sys.argv[1:]: os.kill(int(pid), 9)'
+# Multi-profile HM-16: each MCP child of the management launcher with the port its command line names ("-": none; the
+# default profile's child of Hermes and OpenDesign runs on its launcher's own default, 3000). A child that exited and
+# is not reaped yet has an empty command line and is left out.
+CHILD_PORT_SCRIPT = r'''
+import os, sys
+root = sys.argv[1] if len(sys.argv) > 1 else "/proc"
+procs = {}
+for name in os.listdir(root):
+    if not name.isdigit():
+        continue
+    try:
+        with open(os.path.join(root, name, "cmdline"), "rb") as f:
+            cmd = f.read().split(b"\0")
+        with open(os.path.join(root, name, "stat")) as f:
+            ppid = int(f.read().rsplit(")", 1)[1].split()[1])
+    except (OSError, IndexError, ValueError):
+        continue
+    procs[int(name)] = (cmd, ppid)
+launchers = {pid for pid, (cmd, _) in procs.items() if any(arg.endswith(b"management_launcher.py") for arg in cmd)}
+for pid, (cmd, ppid) in sorted(procs.items()):
+    if ppid not in launchers or cmd == [b""]:
+        continue
+    port = "-"
+    for index, arg in enumerate(cmd):
+        if arg == b"--port" and index + 1 < len(cmd) and cmd[index + 1].isdigit():
+            port = cmd[index + 1].decode()
+        elif arg.startswith(b"--port=") and arg[7:].isdigit():
+            port = arg[7:].decode()
+    print(pid, port)
+'''
+DEFAULT_CHILD_PORT = 3000
+CROSS_LABEL = re.compile(r'default|[0-9a-f]{8}')  # a profile's log id: never its name
 
 
 def run(args, timeout=300):
@@ -46,13 +82,17 @@ def run(args, timeout=300):
 
 
 class Client:
-    def __init__(self, port, token, host='127.0.0.1', timeout=30):
-        self.url = 'http://%s:%d/mcp' % (host, port)
+    def __init__(self, port, token, host='127.0.0.1', timeout=30, secret=False):
+        # secret (multi-profile HM-16): the token's secret URL /private_<token>/mcp, without an Authorization header.
+        self.url = ('http://%s:%d/private_%s/mcp' % (host, port, token)) if secret else 'http://%s:%d/mcp' % (host, port)
         self.token = token
         self.timeout = timeout
+        self.secret = secret
 
     def request(self, method, body=None, sid=None, timeout=None):
         headers = {'Authorization': 'Bearer ' + self.token, 'MCP-Protocol-Version': PROTOCOL}
+        if self.secret:
+            del headers['Authorization']
         if body is not None:
             headers.update({'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream'})
         if sid:
@@ -177,6 +217,20 @@ def child_pids(container):
     return run(['docker', 'exec', container, 'python', '-c', CHILD_SCRIPT]).stdout.split()
 
 
+def child_ports(container):
+    """Multi-profile HM-16: [(pid, port or None)] of the MCP children (CHILD_PORT_SCRIPT)."""
+    pairs = []
+    for line in run(['docker', 'exec', container, 'python', '-c', CHILD_PORT_SCRIPT]).stdout.splitlines():
+        pid, _, port = line.partition(' ')
+        pairs.append((pid, None if port == '-' else int(port)))
+    return pairs
+
+
+def serving(pairs, port):
+    """The PIDs of the children serving *port*: the one naming it, or for 3000 the one naming no port."""
+    return [pid for pid, named in pairs if named == port or (named is None and port == DEFAULT_CHILD_PORT)]
+
+
 def percentile(values, q):
     ordered = sorted(values)
     return ordered[min(len(ordered) - 1, int(round(q * (len(ordered) - 1))))]
@@ -219,6 +273,8 @@ def mode_restart(opts, client, out):
 
 def mode_childkill(opts, client, out):
     container = container_name(opts.slug)
+    if opts.child_port is not None:
+        return profile_childkill(opts, client, out, container)
     pids, before = child_pids(container), container_state(container)
     if not pids:
         raise SystemExit('no MCP child found under the management launcher')
@@ -234,6 +290,101 @@ def mode_childkill(opts, client, out):
                                        ready.get('first_call_http'), result['child_pids_after']))
     out.write('container before=%s after=%s\n' % (before, result['after']))
     return {'childkill': result}
+
+
+def profile_childkill(opts, client, out, container):
+    """Multi-profile HM-16 (FM-107; T-13): SIGKILL only the child of the profile on --child-port (its token is the
+    client's); it must start again, and every other profile's child keep its PID. A port no single child names kills
+    nothing."""
+    pairs, before = child_ports(container), container_state(container)
+    targets = serving(pairs, opts.child_port)
+    if len(targets) != 1:
+        raise SystemExit('cannot tell which MCP child serves port %d' % opts.child_port)
+    target = targets[0]
+    others = sorted((pid for pid, _ in pairs if pid != target), key=int)
+    status, _, old = client.open()
+    kill = run(['docker', 'exec', container, 'python', '-c', KILL_SCRIPT, target])
+    old_status = client.tools(old)[0]
+    ready = wait_ready(client, opts)
+    after = child_ports(container)
+    now = serving(after, opts.child_port)
+    others_after = sorted((pid for pid, _ in after if pid not in now), key=int)
+    unchanged = others_after == others
+    back = len(now) == 1 and now[0] != target and ready.get('ready_s') is not None
+    result = {'child_port': opts.child_port, 'initialize_before': status, 'child_pid_before': target,
+              'kill_rc': kill.returncode, 'old_session_after_kill': old_status, **ready,
+              'child_pid_after': now[0] if len(now) == 1 else None, 'others_before': others,
+              'others_after': others_after, 'others_unchanged': unchanged, 'pass': unchanged and back,
+              'before': before, 'after': container_state(container)}
+    out.write('child on port %d: pid %s killed rc=%s; old session tools/list=%s; recovered in %ss (first call http=%s); '
+              'child pid now %s; other children %s -> %s (%s)\n' % (
+                  opts.child_port, target, kill.returncode, old_status, ready.get('ready_s'),
+                  ready.get('first_call_http'), result['child_pid_after'], others, others_after,
+                  'unchanged' if unchanged else 'CHANGED'))
+    out.write('container before=%s after=%s\n' % (before, result['after']))
+    return {'childkill': result}
+
+
+def cross_rows(stdin):
+    """The cross mode's lines: label TAB live|gone TAB token, one per profile (label: its log id)."""
+    rows = []
+    for line in stdin:
+        parts = line.rstrip('\n').split('\t')
+        if (len(parts) != 3 or not CROSS_LABEL.fullmatch(parts[0]) or parts[1] not in ('live', 'gone')
+                or not parts[2]):
+            raise SystemExit('cross: each line is: profile log id TAB live|gone TAB token')
+        rows.append(tuple(parts))
+    if not rows or len({row[0] for row in rows}) != len(rows):
+        raise SystemExit('cross: one line for each profile')
+    return rows
+
+
+def mode_cross(opts, stdin, out):
+    """Multi-profile HM-16 (FM-107; T-05): every live token opens a session on both connection methods (Bearer, and
+    its secret URL) and lists the tools; each of those sessions is unknown (404) with every other live token on both
+    methods; a gone token (a deleted or revoked profile's) and an unknown one made here are refused (Bearer 401,
+    secret URL 404). Every session opened is ended. Tokens are never printed; a profile is named by its log id."""
+    rows = cross_rows(stdin)
+    checks, sessions = [], []
+
+    def check(name, ok, detail):
+        checks.append({'check': name, 'pass': bool(ok), 'detail': detail})
+        out.write('%-4s %s: %s\n' % ('PASS' if ok else 'FAIL', name, detail))
+    try:
+        for label, kind, token in rows:
+            if kind != 'live':
+                continue
+            for method in ('bearer', 'secret'):
+                client = Client(opts.port, token, secret=method == 'secret')
+                status, _, sid = client.open()
+                if sid:
+                    sessions.append((label, method, client, sid))
+                listed = client.tools(sid)[0] if status == 200 and sid else None
+                check('%s %s' % (label, method), status == 200 and sid and listed == 200,
+                      'initialize=%s tools/list=%s' % (status, listed))
+        for label, method, _, sid in list(sessions):
+            for other, kind, token in rows:
+                if kind != 'live' or other == label:
+                    continue
+                for other_method in ('bearer', 'secret'):
+                    status = Client(opts.port, token, secret=other_method == 'secret').tools(sid)[0]
+                    check('%s session with %s %s' % (label, other, other_method), status == 404, 'tools/list=%s' % status)
+        refused = [('unknown', secrets.token_urlsafe(32))] + [(label, token) for label, kind, token in rows if kind == 'gone']
+        for label, token in refused:
+            answers = []
+            for method in ('bearer', 'secret'):
+                client = Client(opts.port, token, secret=method == 'secret')
+                status, _, sid = client.open()
+                if sid:
+                    sessions.append((label, method, client, sid))
+                answers.append(status)
+            check('%s refused' % label, answers == [401, 404], 'bearer=%s secret=%s' % tuple(answers))
+    finally:
+        for _, _, client, sid in sessions:
+            client.close(sid)
+    passed = sum(item['pass'] for item in checks)
+    out.write('cross: %d/%d pass\n' % (passed, len(checks)))
+    return {'cross': {'pass': passed == len(checks), 'checks': checks}}
 
 
 def mode_bench(opts, client, out):
@@ -359,7 +510,7 @@ def mode_plan(opts, client, out, plan):
 
 def main(argv=None, stdin=sys.stdin, out=sys.stdout):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument('mode', choices=('check', 'restart', 'childkill', 'bench', 'cycle', 'plan'))
+    parser.add_argument('mode', choices=('check', 'restart', 'childkill', 'bench', 'cycle', 'plan', 'cross'))
     parser.add_argument('--port', type=int, required=True, help='host port mapped to the app MCP port 8081')
     parser.add_argument('--slug', help='installed app slug (restart/childkill)')
     parser.add_argument('--tool', help='read-only tool for first-call and bench timing')
@@ -369,6 +520,8 @@ def main(argv=None, stdin=sys.stdin, out=sys.stdout):
     parser.add_argument('--cycles', type=int, default=25)
     parser.add_argument('--width', type=int, default=120, help='characters of tool output shown per plan row')
     parser.add_argument('--expect-backend-down', action='store_true', help='plan: reads must fail in a structured way')
+    parser.add_argument('--child-port', type=int,
+                        help='childkill (multi-profile): only the MCP child of the profile on this child port')
     parser.add_argument('--allow-initialize-refusal', action='store_true',
                         help='plan with --expect-backend-down: a 503 BACKEND_UNAVAILABLE initialize without a session id '
                              'is the structured failure (only for a child that needs its backend per session)')
@@ -378,6 +531,8 @@ def main(argv=None, stdin=sys.stdin, out=sys.stdout):
         parser.error('--slug is required for %s' % opts.mode)
     if opts.mode == 'check':
         summary = mode_check(opts, stdin, out)
+    elif opts.mode == 'cross':
+        summary = mode_cross(opts, stdin, out)
     elif opts.mode == 'plan':
         client = Client(opts.port, stdin.readline().strip())
         summary = mode_plan(opts, client, out, json.loads(stdin.read()))
@@ -387,6 +542,10 @@ def main(argv=None, stdin=sys.stdin, out=sys.stdout):
                    'cycle': mode_cycle}[opts.mode](opts, client, out)
     out.write('SUMMARY ' + json.dumps(summary, sort_keys=True) + '\n')
     if opts.mode == 'plan' and summary['plan']['passed'] != summary['plan']['total']:
+        raise SystemExit(1)
+    if opts.mode == 'cross' and not summary['cross']['pass']:
+        raise SystemExit(1)
+    if opts.mode == 'childkill' and summary['childkill'].get('pass') is False:
         raise SystemExit(1)
     return summary
 
