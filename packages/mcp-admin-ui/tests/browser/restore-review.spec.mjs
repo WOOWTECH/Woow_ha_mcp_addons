@@ -32,7 +32,8 @@ test('single profile: the restore notice says the token is the backup\'s, on eve
   const card = page.locator('#restore-notice');
   await expect(card.getByRole('heading', {name: '偵測到還原', exact: true})).toBeVisible();
   await expect(card).toContainText(NOTICE);
-  await expect(card).toContainText('還原時間：2026-11-16 09:30（UTC）');
+  // The time the start found it (an image without the guard may have left the marker of an older restore: HM-13a).
+  await expect(card).toContainText('偵測到還原的時間：2026-11-16 09:30（UTC）（add-on 啟動時發現的時間）');
   for (const name of ['工具權限', '診斷與維護']) {
     await go(page, name);
     await expect(page.locator('#restore-notice')).toContainText(NOTICE);
@@ -135,6 +136,42 @@ test('the review card: every restored profile as text, its gate on a new token, 
   expect(alerts).toBe(0);
 });
 
+test('while the index cannot be used the card offers nothing it cannot do and says why; after the index quarantine the default profile is reviewed', async ({page, request}) => {
+  const spec = restored();
+  spec.profiles.indexCorrupt = true;
+  await reset(request, spec);
+  await open(page, '/overview');
+  const card = page.locator('#restore-review');
+  // An unusable index lists no profile: only the default profile counts, and the others' state is not known.
+  await expect(card).toContainText('1 個帳號的權杖已撤銷，等你核對');
+  await expect(card).toContainText('帳號清單目前不能變更（例如帳號索引無法使用），暫時無法核對或刪除帳號');
+  const other = card.locator(`li[data-profile="${B}"]`);
+  await expect(other).toContainText('帳號清單目前讀不到，狀態不明');
+  await expect(other).not.toContainText('已刪除');
+  await expect(other.getByRole('button')).toHaveCount(0);
+  const review = () => card.getByRole('button', {name: '已核對帳號「預設帳號」（default）', exact: true});
+  await expect(review()).toBeDisabled();
+  expect(await calls(request)).toEqual([]);
+  // The index quarantine (HM-10, HM-11): B and C become orphans (on disk, delete only); the default profile is reviewed.
+  await page.getByRole('button', {name: '隔離帳號索引', exact: true}).click();
+  await confirm(page, '繼續');
+  await confirm(page, '確認隔離');
+  await idle(page);
+  await expect(page.locator('#notice')).toContainText('已隔離帳號索引');
+  await expect(other).toContainText('帳號索引沒有列它（孤兒帳號資料，只能在「診斷與維護」刪除）');
+  await expect(card).not.toContainText('帳號清單目前不能變更');
+  await review().click();
+  await confirm(page, '確認已核對');
+  await expect(page.locator('#notice')).toContainText('已核對帳號「預設帳號」（default）');
+  const sent = await calls(request, call => call.operation.endsWith('/restore-review'));
+  expect(sent.map(call => call.operation)).toEqual(['profiles/default/restore-review']);
+  // Nothing waits any more: the card is gone; the default profile's new token is open (its gate lifted).
+  await expect(card).toHaveCount(0);
+  await go(page, '連線與權杖');
+  await expect(page.locator('#restore-review-required')).toHaveCount(0);
+  await expect(page.getByRole('button', {name: '重新產生', exact: true})).toBeEnabled();
+});
+
 test('a quarantine directory can only be deleted, after two confirmations; a listed profile can be deleted from the card', async ({page, request}) => {
   await reset(request, restored());
   await open(page, '/diagnostics');
@@ -191,6 +228,35 @@ test('"revoke all" asks twice; when a profile fails it says which, keeps the ope
   expect(sent[1].operationId).toBe(sent[0].operationId);
   expect(sent[2].operationId).not.toBe(sent[0].operationId);
   const state = await fixtureProfiles(request);
+  expect([state.default.token_active, state[B].token_active]).toEqual([false, false]);
+});
+
+test('"revoke all" that never began, or whose end was not done, says what each means for the tokens and a restart', async ({page, request}) => {
+  const revokeAll = async () => {
+    await page.getByRole('button', {name: '全部撤銷', exact: true}).click();
+    await confirm(page, '繼續');
+    await confirm(page, '確認全部撤銷');
+  };
+  // Its marker could not be saved (a full disk): no result; nothing revoked, so a restart would bring nothing back.
+  await reset(request, {product: 'odoo', configured: true, profiles: {extra: [{id: B, label: '會計', configured: true}], revokeOutcome: 'unstarted'}});
+  await open(page, '/diagnostics');
+  await revokeAll();
+  await expect(page.locator('#notice')).toContainText('全部撤銷沒有完成，也沒有回報任何帳號的結果');
+  await expect(page.locator('#notice')).toContainText('若連開始都沒有，重新啟動後原本的權杖會恢復有效');
+  let state = await fixtureProfiles(request);
+  expect([state.default.token_active, state[B].token_active]).toEqual([true, true]);
+  await page.getByRole('button', {name: '已核對帳號清單', exact: true}).click();
+  await confirm(page, '確認繼續');
+  await expect(page.locator('#pending-profile-operation')).toHaveCount(0);
+  // Every profile revoked, its end not done (the check after it did not pass): no 503, and a restart does it again.
+  await reset(request, {product: 'odoo', configured: true, profiles: {extra: [{id: B, label: '會計', configured: true}], revokeOutcome: 'unfinished'}});
+  await page.reload();
+  await idle(page);
+  await revokeAll();
+  await expect(page.locator('#notice')).toContainText('全部撤銷沒有完成：每個帳號的權杖都已撤銷，但收尾沒有完成');
+  await expect(page.locator('#notice')).toContainText('之後才產生的新權杖也會一起撤銷');
+  await expect(page.locator('#notice')).not.toContainText('503');
+  state = await fixtureProfiles(request);
   expect([state.default.token_active, state[B].token_active]).toEqual([false, false]);
 });
 

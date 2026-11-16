@@ -536,6 +536,90 @@ async def test_a_record_that_cannot_be_read_holds_every_new_token(tmp_path, log_
                                                                    'dormant_at': None}
 
 
+async def test_a_dormant_profile_switched_on_again_waits_for_its_review(tmp_path, log_scan):
+    """I13 (plan 3.3, 8.4 休眠處理: "重新開通後照核對卡流程重發"): a start of a release that does not switch the product on
+    revoked B and C (profile data on disk) and recorded it; switched on again, without a restore, the default
+    bootstrap's restore_review counts them (dormant_at, no restore_at), each one's token/rotate answers 409
+    restore_review_required until it was reviewed, then its new token is served. The default profile was not revoked
+    (no restore: DQ-03 is not involved), so its own new token needs no review."""
+    data = setup(tmp_path, extras=(B, C))
+    for value in tokens_now(data, (DEFAULT, B, C)).values():
+        log_scan.watch(value['token'], value['child_token'])
+    store = ProductStore(data, PRODUCT)  # run_product's guard of a release that does not switch the product on
+    try:
+        outcome = restore_lock.guard(store, PRODUCT, enabled=False)
+    finally:
+        store.close()
+    assert outcome.dormant == 2 and set(outcome.revoked) == {B, C} and not outcome.default_revoked
+    record = restore_lock.read_record(data)
+    assert record['restore'] is None and record['dormant'] is not None
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data, (B, C))) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        default = await bootstrap_of(runtime)
+        assert default['restore_review'] == {'pending': 2, 'restore_at': None, 'dormant_at': record['dormant']['at']}
+        assert 'restore_review_required' not in default
+        assert (await bootstrap_of(runtime, B))['restore_review_required'] is True
+        for profile_id in (B, C):
+            refused = await rotate(runtime, profile_id)
+            assert (refused.status_code, code_of(refused)) == (409, 'restore_review_required')
+        own = await rotate(runtime, DEFAULT)
+        assert own.status_code == 200
+        log_scan.watch(own.json()['token'])
+        panel = Admin(runtime, await csrf_of(runtime))
+        assert (await panel.review(C)).status_code == 200
+        rotated = await rotate(runtime, C)
+        assert rotated.status_code == 200
+        token = rotated.json()['token']
+        log_scan.watch(token)
+        async with runtime.mcp() as client:
+            served = await client.post('/mcp', headers={**ACCEPT, 'Authorization': 'Bearer ' + token},
+                                       json=initialize_message())
+            assert served.status_code == 200
+        refused = await rotate(runtime, B)
+        assert (refused.status_code, code_of(refused)) == (409, 'restore_review_required')
+        assert (await bootstrap_of(runtime))['restore_review']['pending'] == 1
+
+
+async def test_while_the_index_cannot_be_used_the_record_reads_and_a_review_waits_for_its_quarantine(tmp_path, log_scan):
+    """Contract 4.1 profile_index_corrupt (HM-13c): an index changed behind the add-on's back after a restore (DQ-12)
+    leaves the record readable (its ETag: the unusable index's own) and every gate shut; a review and a quarantine
+    directory's deletion answer 503 profile_index_corrupt with nothing written; the default bootstrap counts only the
+    default profile (an unusable index lists none). Once the index is quarantined (HM-10), B is an orphan (never
+    counted again) and the default profile is reviewed, then its new token issued."""
+    from test_profile_admin_api import replace_index
+    data = restored_profiles(tmp_path, extras=(B,), broken=(D,))
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data, (B,))) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        panel = Admin(runtime, await csrf_of(runtime))
+        etag = await panel.etag()
+        directory, = [name for name in os.listdir(profiles.Layout(data).profiles)
+                      if profiles.parse_quarantine_name(name)]
+        name = directory[len(profiles.QUARANTINE_PREFIX):]
+        replace_index(data)
+        boot = await bootstrap_of(runtime)
+        raw = boot['profile_index_etag']
+        assert boot['restore_review']['pending'] == 1 and boot['restore_review_required'] is True
+        shown = await panel.record()
+        assert shown.status_code == 200 and shown.headers['etag'] == raw
+        assert [row['id'] for row in shown.json()['record']['profiles']] == [DEFAULT, B]
+        before = tree_of(data)
+        for response in (await panel.review(DEFAULT, etag=etag), await panel.delete_quarantined(name, etag=etag),
+                         await panel.review(DEFAULT, etag=raw)):
+            assert (response.status_code, code_of(response)) == (503, 'profile_index_corrupt')
+        refused = await rotate(runtime, DEFAULT)
+        assert (refused.status_code, code_of(refused)) == (409, 'restore_review_required')
+        assert tree_of(data) == before
+        assert (await panel.quarantine(raw)).status_code == 200
+        assert (await panel.list())[0]['orphans'] == [{'id': B}]
+        assert (await panel.review(DEFAULT)).status_code == 200
+        assert 'restore_review' not in await bootstrap_of(runtime)  # B is an orphan now: nothing else waits
+        rotated = await rotate(runtime, DEFAULT)
+        assert rotated.status_code == 200
+        log_scan.watch(rotated.json()['token'])
+
+
 # ---- the quarantine directories: listed, deleted only (contract 1.1, 3.1) ----
 
 async def test_a_quarantine_directory_is_listed_and_can_only_be_deleted(tmp_path, log_scan):
@@ -674,6 +758,58 @@ async def test_revoke_all_whose_kth_profile_fails(tmp_path, log_scan, monkeypatc
             old = before[failing]['token']
             assert answer(await client.post('/mcp', headers={**ACCEPT, 'Authorization': 'Bearer ' + old},
                                             json=initialize_message())) == BEARER_REQUIRED
+
+
+@pytest.mark.parametrize('how', ['its marker cannot be saved', 'its end is not done'])
+async def test_revoke_all_that_never_began_or_did_not_end(tmp_path, log_scan, monkeypatch, how):
+    """Both answer 409 operation_outcome_unknown with the receipt left unknown (contract 4.1). Its marker cannot be
+    saved (restore_lock.mark_revoke_all; a full disk): nothing is revoked and there is no result; every registered
+    profile's token is refused on 8081 (503) for the rest of this run (fail closed: the administrator asked for all of
+    them to stop), and no marker is left, so a restart would not finish it (the panel says so). Its end is not done
+    (here: the marker could not be removed): every profile is revoked and its result says so, nothing is fenced, the
+    marker stays (the next start does it all again). A "revoke all" that finishes afterwards ends both."""
+    data = setup(tmp_path, extras=(B,))
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data, (B,))) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        before = tokens_now(data, (DEFAULT, B))
+        panel = Admin(runtime, await csrf_of(runtime))
+        with monkeypatch.context() as patch:
+            if how == 'its marker cannot be saved':
+                def unsaved(root):
+                    raise ConfigError('revoke all not started')
+                patch.setattr(restore_lock, 'mark_revoke_all', unsaved)
+            else:
+                def unfinished(root, now, **kwargs):
+                    raise restore_lock.Unfinished('a marker could not be removed')
+                patch.setattr(restore_lock, '_finish', unfinished)
+            done = await panel.revoke_all()
+        assert (done.status_code, code_of(done)) == (409, 'operation_outcome_unknown')
+        detail = done.json()['detail']
+        assert detail['operation']['state'] == 'unknown'
+        after = tokens_now(data, (DEFAULT, B))
+        watch(log_scan, data)
+        if how == 'its marker cannot be saved':
+            assert detail['results'] == [] and after == before and PENDING not in os.listdir(data)
+            expected = {'/mcp': STATE_UNAVAILABLE, 'private': STATE_UNAVAILABLE}
+        else:
+            assert detail['results'] == [{'id': DEFAULT, 'result': 'revoked'}, {'id': B, 'result': 'revoked'}]
+            assert all(value['token'] is None for value in after.values()) and PENDING in os.listdir(data)
+            expected = {'/mcp': BEARER_REQUIRED[::2], 'private': NOT_FOUND[::2]}
+        async with runtime.mcp() as client:
+            for where in (DEFAULT, B):
+                old = before[where]['token']
+                bearer = await client.post('/mcp', headers={**ACCEPT, 'Authorization': 'Bearer ' + old},
+                                           json=initialize_message())
+                secret = await client.post(f'/private_{old}/mcp', headers=ACCEPT, json=initialize_message())
+                assert (answer(bearer)[::2], answer(secret)[::2]) == (expected['/mcp'], expected['private']), where
+        retried = await panel.revoke_all()
+        assert retried.status_code == 200 and PENDING not in os.listdir(data)
+        async with runtime.mcp() as client:
+            for where in (DEFAULT, B):
+                old = before[where]['token']
+                assert answer(await client.post('/mcp', headers={**ACCEPT, 'Authorization': 'Bearer ' + old},
+                                                json=initialize_message())) == BEARER_REQUIRED
 
 
 async def test_revoke_all_is_the_emergency_stop_while_the_index_cannot_be_used(tmp_path, log_scan):

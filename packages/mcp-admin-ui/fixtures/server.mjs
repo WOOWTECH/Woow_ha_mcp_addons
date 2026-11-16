@@ -26,14 +26,16 @@ const mounts = [prefix, ''];
 // broken}: the guard's record, GET profiles/restore-record, POST profiles/<id>/restore-review, the bootstrap's
 // restore_review and restore_review_required, the token/rotate gate), config.profiles.quarantined (names: the list's
 // "quarantined", POST profiles/quarantine/<name>/delete) and POST profiles/revoke-all (config.profiles.revokeFail: ids
-// whose revocation fails once: 409 operation_outcome_unknown with the results).
+// whose revocation fails once: 409 operation_outcome_unknown with the results; config.profiles.revokeOutcome, once:
+// 'unstarted' (its marker could not be saved: nothing revoked, no result) or 'unfinished' (every profile revoked, its
+// end not done), both 409 operation_outcome_unknown, as tests/test_restore_review.py has the add-on answer them).
 const DEFAULT = 'default';
 const PROFILE = /^(?:default|[0-9a-f]{24})$/;
 const OPERATION = /^[0-9]{13}\.[A-Za-z0-9_-]{16,64}$/;
 // Synthetic low-entropy tokens, one letter per profile (test data rule, plan 12.0 item 4).
 const TOKEN_LETTERS = ['T', 'U', 'V', 'W', 'X', 'Y'];
 let config, calls, reads, nonce, profiles, index, orphans, defaults = {};
-let restoreRows, quarantined, revokeFail;
+let restoreRows, quarantined, revokeFail, revokeOutcome;
 const QUARANTINE = /^([0-9a-f]{24})-[0-9]{8}T[0-9]{6}Z(?:-[0-9]{1,3})?$/;
 const REVIEWED_AT = '2026-11-16T10:00:00+00:00';
 function profileState(next) {
@@ -103,6 +105,7 @@ function reset(next = {}) {
   restoreRows = structuredClone(profileConfig().restore?.rows ?? []);
   quarantined = new Set(profileConfig().quarantined ?? []);
   revokeFail = new Set(profileConfig().revokeFail ?? []);
+  revokeOutcome = profileConfig().revokeOutcome ?? null;
   for (const row of restoreRows) { const profile = profiles.get(row.id); if (profile && ['revoked', 'already_revoked'].includes(row.token)) profile.state.token_active = false; }
 }
 // The guard's record (contract 3.6), as the add-on reads it back.
@@ -121,8 +124,9 @@ function reviewSummary() {
   const spec = profileConfig().restore;
   if (!spec) return null;
   if (spec.broken) return {pending: null, restore_at: null, dormant_at: null};
+  // The profiles that still exist: an index the add-on cannot use lists none (only the default profile counts then).
   const pending = restoreRows.filter(row => ['revoked', 'already_revoked'].includes(row.token) && !row.reviewed_at
-    && (row.id === DEFAULT || profiles.has(row.id))).length;
+    && (row.id === DEFAULT || !indexCorrupt() && profiles.has(row.id))).length;
   return pending ? {pending, restore_at: spec.at ?? null, dormant_at: spec.dormantAt ?? null} : null;
 }
 // DQ-12: an index the add-on cannot use (corrupt, or replaced behind its back) until it is quarantined.
@@ -316,11 +320,13 @@ async function profileRoutes(request, response, local) {
     // Every profile (the default one first, then the profile directories by id): failed ones once (revokeFail), the
     // others revoked; the default profile's restore notice goes with its token.
     const ids = [DEFAULT, ...[...[...profiles.keys()].filter(item => item !== DEFAULT), ...orphans].sort()];
-    const results = ids.map(item => ({id: item, result: revokeFail.has(item) ? 'failed' : 'revoked'}));
+    const results = revokeOutcome === 'unstarted' ? []
+      : ids.map(item => ({id: item, result: revokeFail.has(item) ? 'failed' : 'revoked'}));
     for (const item of results) if (item.result === 'revoked' && profiles.has(item.id)) { profiles.get(item.id).state.token_active = false; profiles.get(item.id).revision++; }
-    if (results[0].result === 'revoked') config.restoreNotice = undefined;
-    const failed = revokeFail.size > 0;
+    if (results[0]?.result === 'revoked') config.restoreNotice = undefined;
+    const failed = revokeFail.size > 0 || revokeOutcome !== null;
     revokeFail = new Set();
+    revokeOutcome = null;
     const operation = {...receiptOf(operationId, kind), ...(failed ? {state: 'unknown'} : {})};
     index.receipts.set(operationId, {kind, request: null, target: 'all', operation});
     if (failed) return refuse(response, 409, 'operation_outcome_unknown', {operation, results});
