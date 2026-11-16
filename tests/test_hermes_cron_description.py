@@ -5,12 +5,14 @@ PaaS added two sentences to the tool's description and changed nothing else (tex
 of server.py is the one before):
 
 - create: enabled=false creates the job paused, so it does not run until resumed. The child sends paused=not enabled
-  together with enabled in its one POST (PaaS #138, already in the add-on; tests/test_hermes_cron_paused_contract.py
-  checks the request).
+  together with enabled in its one POST (PaaS #138; in the add-on since PR #85, merged 2026-11-12, which the released
+  Hermes 0.4.13 does not have yet: it ships with the next release. tests/test_hermes_cron_paused_contract.py checks
+  the request).
 - trigger: Hermes v0.22.x also resumes a paused job when it is triggered, so a caller that wants it to stay paused
   calls pause afterwards. PaaS measured it on 2026-11-16 against the real Hermes Agent v0.22.5 (the image PaaS
   production runs); calling the Agent API directly does the same, so it is upstream behaviour. The child's trigger is
-  one POST .../trigger, as before; it does not pause the job again by itself.
+  one POST .../trigger, as before; it does not pause or resume the job by itself (the last test here; HM-33 review
+  S-1).
 
 The add-on lists PaaS's text character for character, in both places a client gets it from: the vendored child's own
 tools/list (in its pinned venv, as CI installs it) and the gateway's packaged listing (tool_snapshot.py, the answer when
@@ -25,6 +27,8 @@ import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
 from mcp_admin_core.tool_snapshot import LISTED
+from test_hermes_safe_public_errors import _direct_call
+from test_six_hardening import Quiet, runtime, serve
 
 pytestmark = pytest.mark.usefixtures('log_scan')  # rule 3 of the slice rules: every new test runs under the log scan
 ROOT = Path(__file__).resolve().parents[1]
@@ -108,3 +112,42 @@ def test_the_gateways_packaged_listing_carries_the_same_text():
     [tool] = [tool for tool in LISTED['hermes'] if tool['name'] == 'hermes_cron']
     assert_paas_text(tool['description'])
     assert tool['inputSchema']['properties']['enabled'] == {'default': True, 'title': 'Enabled', 'type': 'boolean'}
+
+
+async def test_trigger_is_one_post_and_never_pauses_or_resumes_by_itself(tmp_path):
+    """The second sentence's advice (call pause afterwards to keep the job paused) holds only while the child's trigger
+    is exactly one POST /api/cron/jobs/<id>/trigger: no pause, resume or second trigger of its own, before or after
+    (HM-33 review S-1). Real Hermes child, fake dashboard that records every request it gets."""
+    events = []
+
+    class Dashboard(Quiet):
+        def record(self):
+            events.append((self.command, self.path))
+
+        def do_POST(self):
+            self.record()
+            if self.path == '/auth/password-login':
+                self.send_response(200)
+                self.send_header('Set-Cookie', 'hermes_session_at=synthetic-cookie')
+                self.send_header('Content-Length', '2')
+                self.end_headers()
+                self.wfile.write(b'{}')
+                return
+            self.reply({'ok': True})
+
+        def do_GET(self):
+            self.record()
+            self.reply({})
+
+        do_PUT = do_DELETE = do_PATCH = do_GET
+
+    with serve(Dashboard) as base:
+        async with runtime(tmp_path, 'hermes', base, write_grants=('hermes_cron:trigger',)) as (
+            _client, _headers, _store, manager, child
+        ):
+            reply = await _direct_call(child, manager.endpoint, 'hermes_cron',
+                                       {'action': 'trigger', 'job_id': 'synthetic-job'}, 103)
+
+    assert reply['isError'] is False
+    assert json.loads(reply['content'][0]['text']) == {'ok': True, 'triggered': 'synthetic-job'}
+    assert events == [('POST', '/auth/password-login'), ('POST', '/api/cron/jobs/synthetic-job/trigger')]
