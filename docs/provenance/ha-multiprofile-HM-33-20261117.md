@@ -377,3 +377,33 @@ PaaS CHANGELOG 那段原文（參考；HA 的 CHANGELOG 用英文，第 13 節�
 | S-2 | 「PaaS #138，HA 已有」沒說還沒發版 | **採用**：契約第 1.2 節、測試檔頭、筆記結論與第 7 節、PR 草稿都補「PR #85，2026-11-12 合併；0.4.13 還沒有，下一版才出去」。前兩個 commit（`67530b9`、`2952ebe`）的訊息照舊寫「HA 已有」：照指示不 rebase、不改寫歷史，以這裡與契約的說法為準 | `80ab565`（測試檔頭）、`c3d5bcf`（契約）、本 commit（筆記） | — |
 | S-3 | `decisions.md` 第 1.1 節本片那列，決定欄混了實作的解讀（黃金回歸摘要算在「帳本與工具表面的摘要」裡） | **採用**：那句標成「實作註」，和使用者的原話分開；誰定欄寫「使用者（實作註：HM-33）」；第 5 節本片那列補一句 | `c3d5bcf` | — |
 | S-4 | 帳本預檢看不到 `n8n_arguments.py` 那筆的 guarded 摘要 | **不改程式**：第 11、15 節記下，只有 `test_tool_inventory` 會擋（本機已跑過）；工具修正交 HM-29 | 本 commit | 審查的突變 N1（預檢 OK、`test_tool_inventory` 紅） |
+
+## 18. rebase 到 claude-delivery `165dbaf`（2026-11-17 07:5x，主對話；HM-32 的 #113、HM-12 面板的 #114 合併後）
+
+- 分支沒 push 過，所以用 rebase。本機備份分支 `backup/hm33-before-rebase-20261117`＝`26de028`，沒 push。
+- `2952ebe` 的 `tests/test_output_schemas.py`：兩邊改到相鄰的兩筆，照語意合，不是單純接在後面。
+  - Hermes `server.py` 那筆換成本片的新摘要 `e21dbca5…`，和合併後的實際檔相同。
+  - HM-32 新加的 EMQX `lifespan.py` 那筆照基準留著。
+- `c22cc88`：
+  - 契約第 1.2 節「不受開關管」那句，基準（HM-32）已先拆成兩行，本片的一項接成第二行。
+  - HM-32、HM-33 兩段說明照順序都留，中間補一個空行。
+  - 契約第 10 節、`decisions.md` 兩個表尾、驗收矩陣表尾：新基準的列在前、本片的在後。
+- `c3d5bcf`：本片改自己的列（審查修正），在新基準上換掉本片舊版的那一列。
+- 本片對新基準的差異：12 個檔，587 行加、15 行刪。和 rebase 前比只有契約少 2 行：基準已先拆那句，本片只要加一行，內容相同。
+- 帳本與摘要不用重算。HM-32 改的是 `runtime-sources.json`、`tool-surface.json` 的 LiteLLM、EMQX 列，HM-12 面板改的是 `runtime-patches.json` 的面板列，都和本片不同列。
+
+| rebase 前 | 現在 | range-diff |
+|---|---|---|
+| `67530b9` | `e3052eb` | 相同 |
+| `2952ebe` | `61af33b` | 有衝突（`test_output_schemas.py`） |
+| `c22cc88` | `c3b5494` | 有衝突（契約、`decisions.md`、驗收矩陣） |
+| `5f2db2b` | `16d5525` | 相同 |
+| `80ab565` | `aa12997` | 相同 |
+| `c3d5bcf` | `3b4130e` | 有衝突（`decisions.md`、驗收矩陣） |
+| `26de028` | `2926a87` | 相同 |
+
+- 本機檢查（rebase 後的 head `2926a87`；一般使用者 uid 1000；TMPDIR `/tmp/ha-mp-iqfkAu`，跑完用完整路徑刪除；排在共用 pytest 鎖後面）：
+  - 修正輪的相關 27 檔加 HM-32 的 `test_fresh_backend_connections.py`：571 案全過（384.5 秒）。
+  - 帳本預檢（`--base origin/claude-delivery`）：OK，177／70／159，0 漂移、0 缺。
+  - `tool_inventory.py` exit 0；`validate.py` PASS。
+  - 秘密預檢在最後的 head 跑，結果寫在 PR 說明。
