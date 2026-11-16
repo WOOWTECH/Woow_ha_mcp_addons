@@ -281,6 +281,23 @@ class RestoreStageTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             probe.check_restored_start(restored, state)
 
+    def test_a_switched_on_candidate_needs_each_of_them_private(self):
+        names = (probe.SENTINEL_NAME, probe.INSTANCE_RECORD_NAME, probe.RESTORE_RECORD_NAME)
+        changes = {'missing': lambda path: path.unlink(), 'readable': lambda path: path.chmod(0o644),
+                   'root-owned': lambda path: self.os.chown(path, 0, 0), 'a directory': lambda path: (
+                       path.unlink(), path.mkdir(mode=0o700))}
+        for name in names:
+            for label, change in changes.items():
+                with self.subTest(name=name, change=label), patch.object(probe, 'DATA', self.fixture()) as data:
+                    restored, state = self.repaired(data)
+                    for each in names:
+                        (data / each).write_bytes(b'')
+                        (data / each).chmod(0o600)
+                    change(data / name)
+                    with patch.object(probe.features, 'MULTI_PROFILE_PRODUCTS', frozenset({probe.APP})):
+                        with self.assertRaises(AssertionError):
+                            probe.check_restored_start(restored, state)
+
     def test_the_check_after_the_restore_start_needs_the_repair_and_the_guard(self):
         def made(name):
             return lambda data: ((data / name).write_bytes(b''), (data / name).chmod(0o600))

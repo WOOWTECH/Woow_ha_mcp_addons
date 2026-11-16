@@ -217,15 +217,25 @@ def check_restored_start(restored, state):
     listener, the management process's boot guard (multi-profile HM-13b) handled the restore the entrypoint's marker
     showed and removed the marker. For a product that is not switched on and has no profile data that is all it does
     (DQ-03 (b): nothing revoked; no sentinel, record or restore record); the state is the backup's, byte for byte. A
-    switched-on candidate keeps the sentinel and its record (rebuilt, the runtime user's) and gets a restore record."""
+    switched-on candidate keeps the sentinel and its record (rebuilt) and gets a restore record: single-link files of
+    the runtime user, 0600. (The log lines of the start, the entrypoint's "re-owned N" and the guard's notice, are not
+    read here: the stage's process writes to DEVNULL; HM-16.)"""
     assert not os.path.lexists(DATA / MARKER), 'restore marker left: the boot guard did not handle the restore'
     for name in restored:
         info = os.lstat(DATA / name)
         mode = 0o700 if stat.S_ISDIR(info.st_mode) else 0o600
         assert (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) == (10001, 10001, mode), 'restore not repaired'
+    names = (SENTINEL_NAME, INSTANCE_RECORD_NAME, RESTORE_RECORD_NAME)
     if not features.enabled(APP):
-        made = [name for name in (SENTINEL_NAME, INSTANCE_RECORD_NAME, RESTORE_RECORD_NAME) if os.path.lexists(DATA / name)]
+        made = [name for name in names if os.path.lexists(DATA / name)]
         assert not made, 'restore files of a product that is not switched on'
+    else:
+        for name in names:
+            assert os.path.lexists(DATA / name), 'restore files of a switched-on product missing'
+            info = os.lstat(DATA / name)
+            assert stat.S_ISREG(info.st_mode) and info.st_nlink == 1, 'restore files of a switched-on product not files'
+            assert (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) == (10001, 10001, 0o600), \
+                'restore files of a switched-on product not private'
     assert (DATA / 'state.json').read_bytes() == state, 'restored state rewritten'
 
 
