@@ -37,18 +37,25 @@
   root 案例）、0 skip，1,841.6 秒；之後只多一個測試案例（`47d03dd`），本片＋相關 9 檔 228 案重跑全過（第 5 節）。
 - 契約第 3、4.1、5、7 節標「暫定／待定」而本片定下的細節都已同步，變更紀錄一列（第 3.9 節）；驗收矩陣 T-12 補上本片的刪除測試。`decisions.md` 沒改：DQ-13、DQ-14 已由 #100
   記進 `claude-delivery`，本分支沒有它，rebase 時會一起進來。
-- 這條線只 commit，不 push、不開 PR（計畫 §12.1：HM-10 是「審查」片，獨立安全審查已做，第 14 節）。
+- 這條線只 commit，不 push、不開 PR（計畫 §12.1：HM-10 是「審查」片，獨立安全審查已做，第 14 節）。2026-11-16 rebase 到 HM-14 之後才 push、
+  開 PR（第 15 節）。
 - 工作分四個工作階段：第一個寫測試與實作（2026-11-15 21:29 撞到用量上限）；第二個補鎖與刪目錄的斷言、修全套抓到的退步、commit 4 個
   （2026-11-16 00:41 主程序結束中斷，紅的那一段跑到一半）；第三個（06:3x 起）重跑全部檢查、補 3 個缺口（開機與重評起子程式的鎖、FD 預算、
   沒有索引檔的隔離）與筆記；第四個（09:4x 起）處理獨立安全審查的意見（第 14 節）。第 1～13 節的數字是第三個工作階段驗證的，
   審查修正改到的地方另外標明；審查修正的數字在第 4.3、5、7、14 節。
+- **2026-11-16 rebase 到 HM-14（PR #103）之後**（第 15 節）：16 個 commit 用 `git rebase --onto 8ff259b 24d72cc` 重放，HM-14 合併後再
+  rebase 到 `claude-delivery` `7c6f80c`（樹和 `8ff259b` 相同、沒有衝突）。衝突 5 個 commit，都是說明文字、契約與帳本；程式的改動 git 自動合併、
+  逐行等於原本。兩邊的行為都留：HM-08 審查修正、HM-09 最終版、HM-20、HM-14 的程式一行沒被本片蓋掉。本片在契約第 9 節沒有自己的列
+  （差異併在 #19、#27、#34、#51），列號不用改；#19、第 3.3 節補指到 HM-08 審查的 #87、#88，#75 改成上限 60 分鐘。帳本 7 列照實際內容
+  重算。rebase 後本機：本片 3 檔 86 案、HM-01 45 案、HM-14 143 案、HM-20 243 案、HM-09 119 案、相關其他 24 檔 1,027 案全過；全套
+  5,780 案只有 7 個要 root 的失敗、0 skip；突變 6 個全部抓到；兩個預檢 OK。
 
 ## 1. 範圍與基準
 
 | 項目 | 值 |
 |---|---|
 | 切片 | HM-10（計畫 §12.3；風險高、工作量 L；「審查」片） |
-| 分支 | `feat/ha-multiprofile-hm10-20261115`（一般 clone），疊在 HM-09 的實作 head `24d72cc` 上 |
+| 分支 | `feat/ha-multiprofile-hm10-20261115`（一般 clone），疊在 HM-09 的實作 head `24d72cc` 上；2026-11-16 rebase 到 `claude-delivery` `7c6f80c`（HM-14 PR #103 合併後；第 15 節） |
 | 基準 | `claude-delivery` 的 HM-00～HM-08（HM-08 是審查前的 `cfdc487`）、HM-13a、HM-17、HM-02，加上 HM-09 的 5 個 commit（HM-09 在別的工作線審查與修正中）。`claude-delivery` 之後又合了 #99（HM-08 審查修正：`gateway.py`、`profile_router.py`、契約）與 #100（`checks` 上限 60 分鐘、`decisions.md` 記 DQ-13／14／30／31／43），本分支都沒有，rebase 時處理（第 13.3 節） |
 | 依據 | 計畫 §4.3、§4.4、§5.3（全部）、§7.2 第 1、2 點、§8.5、§8.8、§10.3 的 HM-10 列、§12.0、§12.3 HM-10；契約 §1、§3、§4.1、§9；`threat-model.md`（I3、I5、I6、I10、I12）；FM-01、05、06、07、08、12、18、19、21、22、23、24、25、26、33、47、53、54、93、131、139、148；驗收矩陣 T-02、T-06、T-07、T-09、T-12；HM-00～HM-09 的 provenance 筆記交給 HM-10 的事項（第 13.1 節） |
 | 對齊的 PaaS | 沒有移植 PaaS 程式。期望值來自 `woow-mcp-server` @`69ac425`：`profiles.py`（`ProfileRegistry.create`／`rename`／`delete`／`list`、`ProfileCapacity`、`ProfileContextMiddleware`）、`routers/profiles.py`、`routers/tokens.py`（`set_token` 撞號，HA 沒有這個 API：§8.8 #80）、`tests/test_profiles.py`；HA 加嚴的地方都在契約第 9 節（#31～#35、#83） |
@@ -460,9 +467,12 @@ HM-01 三組）。
   「等 0.2～0.3 秒、確認某件事沒發生」（刪除途中只斷 B 的呼叫、開機與重評起子程式要等帳號的鎖）：runner 慢只會讓它們少抓到錯，不會讓對的程式
   失敗。審查修正的 `test_the_index_quarantine_holds_every_profiles_own_lock` 讓 C 的輪替停在最後一次角色檢查（`AdminAuthority.verify` 自己的
   3 秒上限內），中間只做幾個程序內請求與一次 0.1 秒的拿鎖逾時，本機不到 0.3 秒；退步時每個等待都有上限，測試失敗、不會卡住。
-- `checks` 秒數：前＝#100 合併時 1,899 秒（31 分 39 秒；上限已是 60 分鐘；README 進度紀錄）；本片：開 PR 後補。
+- `checks` 秒數：前＝#100 合併時 1,899 秒（31 分 39 秒；上限已是 60 分鐘；README 進度紀錄）；本片：開 PR 後補。rebase 後的「前」：
+  PR #103（HM-14）合併時 1,650 秒（27 分 30 秒；第一次跑因 HM-09 監看的關閉逾時失敗、重跑全綠，README 進度紀錄）。
 
 ## 8. 預檢結果
+
+rebase 到 HM-14 之後的兩個預檢在第 15.8 節（以 `claude-delivery` 為基準）；本節是 rebase 前的紀錄。
 
 審查修正後（第四個工作階段，2026-11-16 11:2x）：兩個都在 commit 本筆記之前、對 HEAD `bbb24bc`（審查修正的 4 個 commit 之後）跑：
 
@@ -602,6 +612,8 @@ commit 本筆記之後，對最終 HEAD 再跑一次兩個預檢；結果寫在 
 
 ### 13.3 rebase 時要注意
 
+2026-11-16 已照下面各點 rebase（結果在第 15 節）。
+
 - `claude-delivery` 的 #99（HM-08 審查修正）改了 `gateway.py` 的 `make_apps` 說明與轉送一段、`profile_router.py` 的模組說明與
   `ProfileGate`、契約第 2、5 節；本片改的是管理那一段與檔尾，預期能自動合；`make_apps` 說明文字的尾段（HM-08、HM-09、HM-10 三段相鄰）要手動看。
 - HM-09 的修正若改了 `ProfileManager` 的 `add`／`remove`／`reevaluate`／`start_profile`／`free_port`／`relabel` 用到的欄位，只要改
@@ -650,3 +662,169 @@ commit 本筆記之後，對最終 HEAD 再跑一次兩個預檢；結果寫在 
 
 - 給主對話的交接（審查第 8 節）也照做了：rebase（第 13.3 節，多記審查修正碰到 HM-09 內部的地方）、HM-11（第 13.2 節）、HM-13c（全部撤銷
   照隔離拿鎖、每條新路由的 ⑩ 各一輪降權測試）、HM-18（S-5、S-6、DOCS）、HM-03a（第 11 節）。
+
+## 15. rebase 到 HM-14（2026-11-16）
+
+第 1～14 節照 rebase 前寫，裡面的 commit 編號是 rebase 前的（對照見第 15.9 節）；列號沒有變（第 15.3 節）。
+
+### 15.1 範圍
+
+- 第一段：`git fetch origin`（`origin/feat/ha-multiprofile-hm14-20261115`＝`8ff259b`，HM-14 的 PR #103），先開備份分支
+  `backup/hm10-before-rebase-20261116`（`c2d22e9`，不 push），`git log --oneline 24d72cc..c2d22e9` 是 16 個，再
+  `git rebase --onto 8ff259b 24d72cc feat/ha-multiprofile-hm10-20261115`：只重放本片的 16 個 commit。`24d72cc` 是 HM-09 rebase 之前的實作
+  head，不是 `claude-delivery` 的祖先（HM-09 合併前 rebase 過），所以用 `--onto`。
+- 新基準帶進來的（`24d72cc..8ff259b`）：HM-08 審查修正（PR #99）、PR #100（`checks` 上限 60 分鐘、`decisions.md` 記 DQ-13／14／30／31／43）、
+  HM-09 的最終版（PR #101，含審查修正）、HM-20（PR #102）、HM-14（PR #103，疊在 `269f5a5` 上）。和本片重疊的檔：`Hc/gateway.py`、
+  `Hc/profile_router.py`、`Hc/profile_runtime.py`、`Hc/profiles.py`、`tests/multi_profile_runtime.py`、`tests/test_router_passthrough.py`、
+  契約、驗收矩陣、帳本。`decisions.md`、`threat-model.md` 本片沒改，就是基準的版本（`decisions.md` 與 `claude-delivery` 逐位元相同）。
+- 第二段：主對話 2026-11-16 11:5x 通知 HM-14 已以 PR #103 合併（`claude-delivery`＝`7c6f80c`，merge commit，第二個 parent 是 `8ff259b`）。
+  `git diff 8ff259b origin/claude-delivery` 是空的（兩邊的樹都是 `a6f19cf`），`git rebase origin/claude-delivery` 沒有衝突，前後的樹相同
+  （`6b3d8a2`）。所以第 15.6～15.8 節的檢查（在第二段之後跑）就是對要 push 的樹跑的。
+- `git log origin/claude-delivery..HEAD`：本片 16 個＋rebase 後加的 2 個（契約、本筆記）。
+
+### 15.2 衝突與處理
+
+| rebase 後的 commit（原本） | 衝突 | 處理 |
+|---|---|---|
+| `7632eaf`（`ad60cd7`） | `gateway.py` 的 `make_apps` 說明尾段：HM-14 加的兩段（閘道收尾；不受開關管的 initialize 錯誤遮罩）與本片加的 HM-10 段 | 兩邊都留，照合併順序 HM-08 → HM-09 → HM-14 → HM-10（說明的結尾 `"""` 移到本片那段之後）。本片那段開頭的「likewise only for a switched-on product」改成「only for a switched-on product, as HM-08's and HM-09's」：前一段現在是 HM-14「not gated」的那段，照原文讀會變成「同樣不受開關管」。簽名 git 自動合併（`slot_busy: SlotBusy \| None`、`child_blocked`、`default_endpoint`、`bootstrap_fields` 都在） |
+| 同上 | `profile_router.py` 模組說明「Not here」那句：HM-14 改寫成「the lanes, the -32004/-32005 endings and the initialize generation fence themselves (…; HM-14)」；本片拿掉「the management dispatcher (HM-10)」、加 8099 一段 | 用 HM-14 的句子，拿掉「the management dispatcher (HM-10)」（現在就是本片做的），8099 那段照本片 |
+| `53e58a4`（`a18bc73`）、`13bc8a6`（`e707837`） | 帳本 `gateway.py`、`profile_router.py`、`profile_runtime.py`、`profiles.py` 的 `change` 與 `sha256` | 不只解文字：以 HEAD（新基準）的帳本為底，本片每個改到的列，`change` 是新基準的文字接本片原本加的那段（本片只在列尾追加，原文的前段改了也不影響；HM-08 審查、HM-09、HM-14 的說明在前，本片的在後），新列 `profile_admin.py` 照原 commit 放在 HM-09 的 `lifecycle.py` 之後；每個改到的列 `sha256` 照當下的檔案重算（腳本 `SP:hm10-rebase-20261116/bin/merge_ledger.py`；第 15.5 節） |
+| `b6542e6`（`537f5bc`） | 契約第 10 節變更紀錄 | 基準的 6 列（HM-09 審查、HM-20、HM-14 四列）在前，本片的列在後 |
+| `1906f4a`（`14a08b0`） | 契約三處：第 5 節 FD 一點（HM-08 審查改了下一點）、第 7 節錯開啟動列（HM-09 審查 S-12 在列尾加了一句）、第 10 節本片那列 | FD：本片的句尾（「HM-10：這時建立帳號回 409 `profile_limit_reached`（`limit` 0），什麼都不寫」）接 HM-08 審查改寫的兩點；錯開啟動：HM-09 審查那句在前、本片「每個帳號起子程式時拿它自己的 `mutation_lock`」在後；第 10 節：基準的列不動、本片那列換成新版 |
+| 其他 11 個 | 沒有衝突 | 測試 4 個（`a721623`、`fee3ca7`、`7b3c544`、`280803c`）、程式 2 個（`d74b774`、`a673365`）、帳本 1 個（`3b91fdc`：只動 `profile_admin.py` 那列；`profile_admin.py` 只有本片改，摘要和原本相同，照實際內容核對過）、契約與驗收矩陣 2 個（`824e560`、`1517ed5`）、筆記 2 個（`fbb58b0`、`16526b2`） |
+
+核對（`SP:hm10-rebase-20261116/logs/`；第 15.4 節的契約 commit 之前）：15 個檔逐一比「本片的改動」（`git diff 24d72cc c2d22e9` 對 `git diff 8ff259b HEAD` 的增刪行）：11 個逐行相同；
+`gateway.py` 只差說明結尾那兩行（`"""` 的位置、likewise）、`profile_router.py` 只差「Not here」那句、契約只差錯開啟動那一列（多了 HM-09 審查那句）、
+帳本只差上面說的文字與摘要。程式的改動（含 `launch()` 拿鎖、`open()` 的 `files_for_extras`）全部是 git 自動合併、逐行等於原本；
+`profile_admin.Registry` 用到的 `ProfileManager` 介面在 HM-09 最終版都還在、簽名沒變，不用改。
+
+### 15.3 列號
+
+- **本片在契約第 9 節沒有新列**：審查 S-2 時刻意把 PaaS 差異併進既有的 #19、#34、#51（#27 是 DQ-13 定案的更新），不另開列號（第 14 節）。
+  rebase 前是 86 列（本片沒加），rebase 後是 100 列：第 87～88 列（HM-08 審查）、第 89 列（HM-09 審查）、第 90 列（HM-20）、第 91～100 列
+  （HM-14）都接在 HM-00 的 86 列之後，本片引用的列沒有移動，所以列號與引用都不用改，commit 訊息裡的列號也都還對。
+- 新舊對照（本片改到或引用的第 9 節列）：
+
+| 列 | rebase 前 | rebase 後 | 內容 | 本片怎麼用 |
+|---|---|---|---|---|
+| #19 | #19 | #19 | 容量檢查 | 改：FD 預算、`available_memory_mib`（rebase 後補「（#87）」，見第 15.4 節） |
+| #27 | #27 | #27 | endpoint | 改：DQ-13 已定、額外帳號 409 `endpoint_global` |
+| #34 | #34 | #34 | 帳號 CRUD 寫入保護 | 改：刪除範圍、先抹後端欄位、格式錯 400 |
+| #51 | #51 | #51 | 帳號清單欄位 | 改：`orphans` |
+| #11、#12、#25、#29、#31、#32、#35、#80、#83 | 同 | 同 | 管理身分、管理管線、索引壞、日誌、沒帶帳號、格式錯、名稱、`set_token`、兩個標頭 | 只引用 |
+| #75 | #75 | #75 | CI | rebase 後順手改：上限 60 分鐘（第 15.4 節） |
+
+- 「#99」「#100」在本筆記第 1～14 節是 PR 編號（HM-08 審查修正、`checks` 上限）；rebase 後契約第 9 節也有第 99、100 列（HM-14），
+  所以本節與契約新寫的地方都寫成「PR #99」「PR #100」。
+
+### 15.4 rebase 後補的修正（`b51cf8c`，只改契約）
+
+- 第 10 節加一列（rebase 到 HM-14 之後）。
+- #19：FD 預算指到 #87（HM-08 審查補的「FD 上限不夠」列；本片寫 #19 時基準還沒有這一列，兩列說的是同一條降級，本片那句只多「建立回 409、`limit` 0」）。
+- 第 3.3 節：「目錄已不是開啟時那一個」指到 #88（同一個 HM-08 審查補的 8081 那一側）。
+- #75：「上限 40 分鐘」「DQ-43 待定」改成「上限 60 分鐘（DQ-43，2026-11-15 定案，PR #100）」與「DQ-43：先調上限，拆 job 等真的太慢再議」
+  （`decisions.md` 的 DQ-43；`.github/workflows/woow-addon-release.yml` 的 `checks` 是 `timeout-minutes: 60`）。
+- 第 10 節 HM-10 列的「`decisions.md` 由 #100 記」寫明是 PR #100。
+
+### 15.5 帳本（`docs/provenance/runtime-patches.json`）
+
+以新基準的帳本為底（60 列）加回本片：61 列。每列的 `sha256` 照 rebase 後的實際內容重算；`change` 是新基準的文字接本片的那段；JSON 照 repo
+的寫法（`indent=2`、`ensure_ascii=False`）逐位元可重現；其他 54 列和新基準逐位元相同（`SP:hm10-rebase-20261116/logs/ledger-verify.log`）。
+
+| 列管檔 | 本片 rebase 前（`c2d22e9`） | 新基準（`8ff259b`） | rebase 後 | 說明 |
+|---|---|---|---|---|
+| `gateway.py` | `103957dc3a6c` | `9111302d86f2` | `f6cf0fda2611` | 新的值（兩邊都改了）；`change` 19,154＋970 字 |
+| `profile_router.py` | `1f5b1656f8f2` | `6eaa597f53d3` | `97ec58644e93` | 新的值；4,371＋662 字 |
+| `profile_runtime.py` | `06fab115f81a` | `b8ebbad0e2cb` | `c449a991c1d7` | 新的值；4,877＋720 字 |
+| `profiles.py` | `39a44531ca5a` | `d17bfc3fa32f` | `55dcc665fa28` | 新的值；3,947＋391 字 |
+| `configuration.py` | `678fbc3dff18` | `5e1ee5bde771` | `678fbc3dff18` | 只有本片改，和 rebase 前相同；677＋309 字 |
+| `operations.py` | `85456d10615f` | `7bc5c0c6cc4c` | `85456d10615f` | 只有本片改，和 rebase 前相同；448＋348 字 |
+| `profile_admin.py`（新列） | `f3ef30819da3` | — | `f3ef30819da3` | 只有本片改；原 commit 的列，放在 `lifecycle.py` 之後 |
+
+本片沒動 `apps/runtime/*.py`、`apps/*/launch.py`，tool-surface 不用重產（`scripts/tool_inventory.py` exit 0，第 15.6 節）。
+
+### 15.6 本機檢查（2026-11-16，一般使用者 uid 1000；TMPDIR 用 ha_env.sh 給的 `/tmp/ha-mp-XXXXXX`，跑完用完整路徑刪除；pytest 都排在共用鎖後面）
+
+證據在 repo 外：`SP:hm10-rebase-20261116/`（`bin/` 腳本、`logs/` 的 pytest log 與 junit、突變結果、SHA-256 核對），副本（遮掉測試時產生的
+token）在 `artifacts/ha-multiprofile-parity-20261114/wave4/evidence-rebase-HM-10/`。全部在一次共用鎖裡跑（`bin/batch1.sh`，12:17～12:57），
+head 是第二段之後的 `b51cf8c`（樹和第一段的 `5999d24` 相同）。
+
+| 檢查 | 指令（摘要） | 結果 |
+|---|---|---|
+| 環境 | clone 的依賴、patch、UI 已由前面的工作階段照 `setup_repo_env.sh` 裝好；`24d72cc..7c6f80c` 沒有動任何 `uv.lock`、`package-lock.json`、`pyproject.toml`、`packaging/inputs.json`、`packages/mcp-admin-ui/`，所以沒有重跑（不連 npm）；Playwright 的 Chromium（`chromium-1228`）在 clone 裡，瀏覽器測試照跑 | — |
+| 本片 3 檔 | `pytest tests/test_profile_admin_api.py tests/test_admin_pipeline_matrix.py tests/test_router_passthrough.py` | **86 案全過**、0 skip，17.4 秒（A 32、M 5、P 49） |
+| HM-01 黃金回歸＋兩個契約凍結（開關關） | `test_single_profile_golden.py`、`test_mcp_contract_freeze.py`、`test_admin_contract_freeze.py` | **45 案全過**（17＋9＋19），6.9 秒；三檔與 `tests/contract/` 本片沒動 |
+| HM-14 新 5 檔＋`test_reply_mask_union.py` | `test_carries_no_request.py`、`test_gateway_busy_shapes.py`、`test_gateway_queue_ha.py`、`test_gateway_stream_endings.py`、`test_initialize_generation.py` | **143 案全過**（61＋7＋23＋35＋9＋8），18.8 秒 |
+| HM-20 兩檔 | `test_backend_loopback.py`、`test_saved_destinations.py` | **243 案全過**（153＋90），65.6 秒 |
+| HM-09 五檔 | `test_profile_lifecycle.py`、`test_staggered_start.py`、`test_profile_ports.py`、`test_health_backoff.py`、`test_extra_child_resources.py` | **119 案全過**（28＋9＋29＋41＋12），27.3 秒 |
+| 審查用的相關 29 檔裡其他 24 檔 | `evidence-review-HM-10/scripts/batch_a.sh` A3 的清單去掉上一列的 5 檔（含讀帳本的 `test_tool_inventory.py`、`test_ledger_precheck.py`） | **1,027 案全過**，86.0 秒（29 檔合計 1,146 案；審查時在舊基準上是 1,127 案） |
+| `packaging/validate.py` | `SP:ha-baseline/ci-venv/bin/python packaging/validate.py` | PASS |
+| packaging unittest | 照 CI：離線暫存 venv（`uv sync --frozen --no-dev --offline`＋`requirements-ci`）→ `unittest discover -s packaging` | `Ran 203`、`OK (skipped=5)`（5 個 `skipUnless(root)`；HM-20 多 2 案） |
+| tool-surface 漂移 | `.venv/bin/python scripts/tool_inventory.py` | exit 0 |
+| 全套 pytest | `.venv/bin/python -m pytest -q -p no:cacheprovider tests`（同 `packaging/unit.sh`，只是不用 root） | **5,780 案：5,773 過、7 失敗、0 skip**，1,937.8 秒（32 分 17 秒）。7 個失敗正是第 7 節那 7 個要 root 的；HM-14 筆記寫的 22 個瀏覽器測試（`test_owned_browser_redirect.py` 16、`test_owned_browser_ipc.py` 的 browser=True 5、`test_owned_ui.py` 1）都過；2 個 warning 是既有的 `websockets` 棄用提示 |
+| 已知的 HM-09 關閉逾時 | `test_backend_loopback.py::test_every_profile_s_real_child_refuses_its_loopback_fake_backend_end_to_end[False]` | 本機跑 2 次（HM-20 兩檔一次、全套一次），**2 次都過**（約 4.5 秒），沒有碰到 CLOSE_SECONDS 逾時。本片不修（另一條工作線在修） |
+| 實驗（不 commit） | `SP:hm10-rebase-20261116/bin/test_zz_hm10_rebase_experiment.py`：經 `POST /api/profiles` 建的帳號，它的 `SlotBusy`（佇列上限 16、保留 4、等 1 秒）、兩條 lane（16＋4，不是預設帳號或 B 的）、佇列滿的回答（200＋`-32003`＋自己的文字）與 WARNING 都是它自己的 | 第一次跑（B0）失敗，是實驗自己的錯：斷言「只有一行 WARNING」太嚴，同一個帳號另有 HM-09 生命週期的「not started: no connection is saved yet」那一行。改成只數閘道的 WARNING 後，在乾淨的樹上通過（突變 X0），X3 下失敗。只為了突變 X3 跑，跑完就從 `tests/` 刪掉 |
+| 正式程式的 SHA-256 | `sha256sum packages/mcp-admin-core/mcp_admin_core/*.py`：跑前、全套後、突變後 | 三次相同（`logs/core-sha256-*.txt`） |
+| 暫存目錄 | ha_env.sh 給的 `/tmp/ha-mp-MrWgMu` | 跑完用完整路徑刪除（`logs/tmpdirs.txt`）；`git status` 只有還沒 commit 的本筆記 |
+
+### 15.7 突變（rebase 後）
+
+腳本 `SP:hm10-rebase-20261116/bin/mutate.py`：每個只改正式程式一處（原字串剛好出現一次、改完可編譯），在工作樹原地改，跑指定的測試檔
+（`--maxfail=25`），跑完從先存的位元組還原；還原後的 SHA-256 要同時等於改之前與 HEAD 的 blob，不等就停。挑的是 rebase 時手動合或緊鄰手動合
+的地方。**6 個全部抓到**，還原全部 OK。
+
+| id | 位置 | 突變 | 結果 | 抓到它的測試 |
+|---|---|---|---|---|
+| X0 | — | 沒改（實驗在乾淨的樹上） | 通過（對照） | — |
+| X1 | `profile_runtime.py` `ProfileRuntime.launch()`：本片的帳號鎖，緊鄰 HM-09 最終版 `start_all` 的 S-12 修正 | 開機與重評起子程式不拿帳號的 `mutation_lock` | 抓到 | A `test_a_start_after_an_index_change_waits_for_the_profiles_own_lock` |
+| X2 | `profile_router.py` `AdminDispatcher.profile`：8099 的必帶標頭（這個檔的模組說明在 rebase 時手動合） | 沒帶 `X-MCP-Profile` 退回預設帳號 | 抓到 | A `test_a_profile_scoped_request_names_exactly_one_known_profile` |
+| X3 | `profile_runtime.py` `ProfileManager.add`：本片的回聲、bootstrap 欄位、`default_endpoint` 與 HM-14 的 `slot_busy=gate.slot_busy` 在同一個呼叫；開機登錄與經 profiles 路由建的帳號都走它 | 額外帳號不給 `SlotBusy`（沒有 HM-14 的 lane 與佇列） | 抓到（10 案） | 實驗；`test_gateway_queue_ha.py` 6 案（例如 `test_the_queue_is_capped_per_profile_and_the_overflow_gets_a_clean_busy_answer`、`test_one_profiles_full_queue_never_refuses_another_profiles_waiting_request` 兩種）；`test_gateway_busy_shapes.py` 3 案。本片的 A 32 案都過：本片沒有「經 API 建帳號後測佇列」的測試，這一點靠 HM-14 的測試守（同一個 `add()`），實驗補的是經 API 建的帳號那一側 |
+| X4 | `profile_runtime.py` `start_all` 的 `one()`：HM-09 最終版審查 S-12（它呼叫的 `launch()` 本片加了鎖） | 拿掉每個帳號各自攔例外（起不來的帳號不記一行、監看不起） | 抓到 | `test_staggered_start.py::test_a_start_that_fails_is_named_and_never_stops_the_others` |
+| X5 | `profiles.py` `port_occupied`：HM-09 最終版審查 S-6（兩邊都改了這個檔，git 自動合併） | IPv6 試綁被平台擋（EACCES、EPERM）又算 port 被佔（PaaS 的做法） | 抓到 | `test_profile_ports.py::test_an_ipv6_test_bind_the_platform_refuses_is_skipped_with_one_warning`［EACCES］［EPERM］ |
+| X6 | `gateway.py` `make_apps` 的 `endpoint_global`：本片（`make_apps` 的說明在 rebase 時手動合；參數和 HM-09 的 `child_blocked`、HM-14 的 `slot_busy` 一起） | 額外帳號的 `PUT endpoint` 照存 | 抓到 | A `test_the_endpoint_and_the_owner_defaults_notice_are_the_default_profiles` |
+
+還原後的 SHA-256（= HEAD 的 blob = 帳本第 15.5 節）：
+
+- `profile_runtime.py`（X0、X1、X3、X4）：`c449a991c1d725f41435a5d14f68f1568a2888edd9c3671f36601549c543e0f5`
+- `profile_router.py`（X2）：`97ec58644e938ea2b0536969d424940968f512dc8c09efe2511a4edecc9c6be1`
+- `profiles.py`（X5）：`55dcc665fa28c3b7591c848a7de334a89af0983ced95e6d4742d068bb784e797`
+- `gateway.py`（X6）：`f6cf0fda2611977f937756a339ca47cbf5c13fbdf9380996c49574cad76d2831`
+
+結果檔：`SP:hm10-rebase-20261116/logs/mutations.json`、每個突變的 `mut-<id>.log`／`.xml`。
+
+### 15.8 預檢
+
+| 預檢 | 指令 | 結果 |
+|---|---|---|
+| 秘密預檢（第一段） | `.venv/bin/python -I scripts/secret_precheck.py --tools SP:hm01/gitleaks-tools --repo . --base 8ff259b --head 5999d24 --full` | gitleaks 8.28.0（釘版、已驗）；`8ff259b..5999d24` 17 個 commit，另掃 HEAD 樹與全部歷史：**0 命中** |
+| 帳本預檢（第一段） | `.venv/bin/python -I scripts/ledger_precheck.py --repo . --base 8ff259b` | `runtime-patches.json` 174、`runtime-sources.json` 70、`tool-surface.json` 159 筆：0 漂移、0 缺；改到的 7 個列管檔都在帳本；沒有沒列管的新執行檔：**OK** |
+| 秘密預檢（第二段，commit 本筆記之前） | 同上，`--base origin/claude-delivery --head HEAD`（`b51cf8c`） | `7c6f80c..b51cf8c` 17 個 commit＋HEAD 樹＋全部歷史：**0 命中** |
+| 帳本預檢（第二段，commit 本筆記之前） | 同上，`--base origin/claude-delivery` | 同第一段：**OK** |
+
+另用 sha256 逐一核對帳本 61 列的實際內容（`logs/ledger-verify.log`）：全部一致。commit 本筆記之後，對最終 head 再跑一次兩個預檢；結果寫在 PR 描述
+（`artifacts/ha-multiprofile-parity-20261114/wave4/pr-HM-10.md`）。
+
+### 15.9 commit 對照
+
+| 原本 | 第一段（基準 `8ff259b`） | 第二段（基準 `7c6f80c`） | 內容 |
+|---|---|---|---|
+| `c265941` | `fec73ed` | `a721623` | 測試（新 2 檔、測試工具） |
+| `ad60cd7` | `013a7f7` | `7632eaf` | 程式 |
+| `a18bc73` | `4da1562` | `53e58a4` | 帳本 |
+| `537f5bc` | `eba9710` | `b6542e6` | 契約 |
+| `eec12f7` | `6415a6f` | `fee3ca7` | 測試（帳號鎖、FD 預算、沒有索引檔） |
+| `ae590e8` | `f1621ed` | `d74b774` | 程式（同上） |
+| `e707837` | `12434c7` | `13bc8a6` | 帳本 |
+| `14a08b0` | `7f57dfb` | `1906f4a` | 契約 |
+| `bc37ac7` | `b7b3fcf` | `824e560` | 驗收矩陣 T-12 |
+| `47d03dd` | `b33db1a` | `7b3c544` | 測試（刪不乾淨的孤兒） |
+| `c094e63` | `c9b0ccb` | `fbb58b0` | 本筆記（審查對象） |
+| `c26e9dd` | `0ee5514` | `280803c` | 審查修正的測試 |
+| `56dd5fc` | `f0205a9` | `a673365` | 審查修正的程式（S-1） |
+| `30473de` | `6cc7995` | `3b91fdc` | 審查修正的帳本 |
+| `bbb24bc` | `5d764b3` | `1517ed5` | 審查修正的契約 |
+| `c2d22e9` | `a810ec7` | `16526b2` | 本筆記（審查修正） |
+| — | `5999d24` | `b51cf8c` | rebase 後：契約（第 15.4 節） |
+| — | — | 本筆記的 commit | 第 15 節；結論、第 1 節、第 7、8、13.3 節的指引 |
+
+備份分支 `backup/hm10-before-rebase-20261116` 留在本機（`c2d22e9`），沒有 push。
