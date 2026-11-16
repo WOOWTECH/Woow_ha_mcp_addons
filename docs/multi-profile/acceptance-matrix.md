@@ -28,7 +28,7 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | T-09 | 改名、刪除、重建 | 刪除後舊 token 立即失效、子程式停、port 釋放、目錄刪除、`blocked` 帳號立刻重評；重建拿新 id 新 token；刪除 200＋收據 | `tests/test_profile_admin_api.py` | HAOS | HM-10、HM-19b | 是 | #34 |
 | T-10 | 跨帳號寫入 | 全被後端擋（寫入前加只允許測試資料的暫時 record rule）；A 的寫入審批 token 在 B 被拒 | `tests/test_odoo_multi_profile.py`（假後端） | HAOS | HM-12、HM-19b | 是 | — |
 | T-11 | 並行 0 串號 | 0 串號、0 個非預期 5xx | `tests/test_profile_quotas.py`、`tests/test_profile_routing.py` | HAOS | HM-08、HM-19b | 是 | #15 |
-| T-12 | 負載中輪替、刪除 | 只切斷該帳號的 lease，別帳號的串流不斷 | `tests/test_profile_routing.py`、`tests/test_active_token_leases.py` | — | HM-08、HM-10 | 是 | — |
+| T-12 | 負載中輪替、刪除 | 只切斷該帳號的 lease，別帳號的串流不斷 | `tests/test_profile_routing.py`、`tests/test_active_token_leases.py`、`tests/test_profile_admin_api.py`（刪除：HM-10） | — | HM-08、HM-10 | 是 | — |
 | T-13 | 單一子程式當掉 | 其他帳號 PID 不變；看門狗照 PaaS（2→300 秒、不限次數、120 秒歸零；DQ-20 採 (b)） | `tests/test_profile_lifecycle.py` | 容器、HAOS | HM-09、HM-16、HM-19b | 是 | #14 |
 | T-14 | 冷啟動與重啟 | 子程式未就緒時閘道自答 initialize（自答 session），就緒後要求重連；之後每帳號 initialize 200；錯開啟動下「全部就緒」時間有數字 | `tests/test_staggered_start.py`、`tests/test_unconfigured_connect.py` | 容器、HAOS | HM-09、HM-16、HM-19b | 是 | #53、#68 |
 | T-15 | port 被佔與同 port | 衝突只停相關帳號；被佔時照看門狗退避，放開後自動恢復 | `tests/test_profile_ports.py` | 容器 | HM-09、HM-16 | 是 | #14 |

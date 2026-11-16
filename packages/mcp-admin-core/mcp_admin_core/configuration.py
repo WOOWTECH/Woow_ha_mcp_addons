@@ -2,6 +2,11 @@
 
 All metadata is runtime-only. Public tokens/endpoints do not change the child
 launch identity. Backend reachability is deliberately separate from application.
+
+HM-10 (multi-profile plan 5.3 point 7; contract 3.5; DQ-15): a profile's revisions are bound to its id (the HMAC
+domain carries it), so one profile's ETag is never another's, even for two states with the same content under one key
+(each ConfigurationState still has its own random key: the id is the second layer). profile_runtime.ProfileRuntime
+passes its profile's id; without one (apps/n8n/run.py until HM-25, tests) the domains are as before.
 """
 from __future__ import annotations
 
@@ -10,10 +15,15 @@ import hmac
 import json
 import secrets
 
+from .profiles import PROFILE_ID
+
 
 class ConfigurationState:
-    def __init__(self, store, process=None, health=None):
+    def __init__(self, store, process=None, health=None, *, profile_id=None):
+        if profile_id is not None and (not isinstance(profile_id, str) or not PROFILE_ID.fullmatch(profile_id)):
+            raise ValueError('invalid profile id')
         self.store, self.process, self.health = store, process, health
+        self.profile_id = profile_id
         self._key = secrets.token_bytes(32)
         self._attempted = None
         self._minimum_generation = None
@@ -22,6 +32,8 @@ class ConfigurationState:
         self._error = None
 
     def _revision(self, value, domain):
+        if self.profile_id is not None:
+            domain += ':' + self.profile_id  # HM-10 (DQ-15): 'edit:<id>', 'launch:<id>'; ':' is in no profile id
         raw = json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode()
         return 'c1-' + hmac.new(self._key, domain.encode() + b'\0' + raw, hashlib.sha256).hexdigest()
 

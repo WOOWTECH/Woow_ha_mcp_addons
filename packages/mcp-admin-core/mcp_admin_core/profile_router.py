@@ -68,7 +68,10 @@ known since G2 S7). The isolation of one profile from another holds per request.
 The reply mask (plan 5.1 point 8, DQ-40 (a) ⑧): the manager's reply_secrets() gives every profile's app every token
 and child token the add-on holds (make_apps reply_secrets). Not here: the lanes, the -32004/-32005 endings and the
 initialize generation fence themselves (gateway.make_apps, given slot_busy; HM-14), the pending-reply budget and the
-reply worker (HM-30), the management dispatcher (HM-10), Origin reporting (HM-27).
+reply worker (HM-30), Origin reporting (HM-27).
+
+8099 of a switched-on product (AdminDispatcher, HM-10; plan 5.3; contract 3.1-3.3, 3.7; DQ-17, UC-10): the shared
+management pipeline for every path, then the profile. See AdminDispatcher.
 """
 from __future__ import annotations
 
@@ -81,11 +84,15 @@ import logging
 import os
 import time
 
-from starlette.responses import JSONResponse
+from dataclasses import dataclass
+
+from starlette.responses import JSONResponse, Response
 from starlette.routing import Match, Route
 
 from . import gateway, profiles
+from .admin_auth import BadRequest
 from .config import ConfigError, strict_json
+from .profile_admin import Call
 
 logger = logging.getLogger(__name__)
 
@@ -507,3 +514,149 @@ class McpDispatcher:
             return await JSONResponse({'error': 'state unavailable'}, status_code=503)(scope, receive, send)
         entry, = found
         await entry.gate.serve(entry.runtime.mcp_app, scope, receive, send)
+
+
+# ---- 8099 of a switched-on product: the management dispatcher (HM-10) ----
+
+PROFILE_HEADER = 'x-mcp-profile'
+ALL_METHODS = ('GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE')
+GLOBAL_PREFIX = 'profiles'
+
+
+@dataclass(frozen=True)
+class GlobalRoute:
+    """One global management path (contract 3.1: X-MCP-Profile is never read there): each method's ProfileAdmin
+    handler and whether it takes a JSON body (exactly {"label": <string>}); "{id}" is one path segment, a profile id
+    (the default profile's or 24 lowercase hexadecimal characters: anything else is a fixed 400 at step 5)."""
+    template: str
+    methods: dict
+
+    def allows(self):
+        return tuple(method for method in ALL_METHODS if method in self.methods)
+
+
+# The global paths (contract 3.1), matched in this order (an exact path before "profiles/{id}"); every other path under
+# profiles/ is an unknown operation (404 after the role check, as today). tests/test_admin_pipeline_matrix.py generates
+# its refusal matrix from this table and gateway.PROFILE_OPERATIONS. HM-13c adds revoke-all, restore-record,
+# restore-review and the quarantine directories' deletion here.
+GLOBAL_ROUTES = (
+    GlobalRoute('profiles', {'GET': ('list', False), 'POST': ('create', True)}),
+    GlobalRoute('profiles/index/quarantine', {'POST': ('quarantine', False)}),
+    GlobalRoute('profiles/{id}', {'PATCH': ('rename', True), 'DELETE': ('delete', False)}),
+)
+
+
+def global_route(operation):
+    """(route, the path's profile id or None) of a global operation; (None, None) for an unknown one under profiles/."""
+    for route in GLOBAL_ROUTES:
+        if '{id}' not in route.template:
+            if operation == route.template:
+                return route, None
+            continue
+        prefix = route.template[:-len('{id}')]
+        segment = operation[len(prefix):] if operation.startswith(prefix) else None
+        if segment and '/' not in segment:
+            return route, segment
+    return None, None
+
+
+def is_global(operation):
+    return operation == GLOBAL_PREFIX or operation.startswith(GLOBAL_PREFIX + '/')
+
+
+class AdminDispatcher:
+    """The 8099 application of a switched-on product (multi-profile plan 5.3; contract 3.1-3.3; FM-53, FM-54, FM-148;
+    invariants I10, I12), built by profile_runtime.ProfileManager: one shared management pipeline for every path,
+    global or profile-scoped, a page or an asset, with the add-on's one AdminAuthority and 16 management slots:
+
+    - the page checks (gateway.management_operation, as a switched-off product runs them): identity, no '%', backslash
+      pair or query; a page written to: PUT, POST 404 and PATCH, DELETE Starlette's 405 (as before, after the identity
+      check now);
+    - steps 1 to 4 (gateway.management_exchange, as admin_api runs them): identity, a management slot, the bounded body
+      read (a JSON body only for an operation that takes one), the disconnect watch;
+    - step 5: the method table (PATCH and DELETE only on profiles/{id}: anywhere else Starlette's 405 with the path's
+      methods; a global path's other methods the same) and the request's shape where no state is read (a global
+      path's {"label": <string>} and its profile id: a fixed 400);
+    - step 6: the first role check (AdminAuthority.verify: 403, core_version_unreviewed for an unreviewed Core). A
+      caller who is not an administrator gets no further: every answer that depends on any profile's state comes
+      after it, so every such caller gets the same bytes whatever exists (I10);
+    - then a global path: ProfileAdmin (steps 8 to 11, its own second role check; never X-MCP-Profile); a page or an
+      asset: the default profile's action (its lock, its final role check, the asset, as before);
+    - a profile-scoped path (every other {base}/api/ path): step 7, exactly one X-MCP-Profile, "default" or 24
+      lowercase hexadecimal characters (missing: 400 profile_id_required; two or more, or another value: 400
+      profile_id_invalid; an id the index does not list: 404 profile_not_found, never the default profile instead;
+      an unusable index: 503 profile_index_corrupt), then that profile's own action (steps 8 to 11: its lock, the
+      validation on its state, its final role check, If-Match, receipts, the commit) with its echo (I12).
+
+    The profile is chosen after the first role check, so no profile's app can be the entry: each one's action is
+    called directly (ProfileRuntime.admin_action). There is no path fallback (contract 3.7): the user kept the header
+    (UC-10, 2026-11-15 15:3x) until HM-03a proves the Ingress drops it; {base}/api/p/<id>/... is an unknown operation."""
+
+    def __init__(self, manager, admin):
+        self.manager, self.admin = manager, admin  # profile_runtime.ProfileManager, profile_admin.ProfileAdmin
+        self.app = gateway.management_app(self.serve, ALL_METHODS)
+
+    async def __call__(self, scope, receive, send):
+        await self.app(scope, receive, send)
+
+    @property
+    def routes(self):
+        """Its application's one route (every path), as an admin app's, for whoever looks (the MCP dispatcher too)."""
+        return self.app.routes
+
+    async def serve(self, request):
+        authority, slots = self.manager.shared.authority, self.manager.shared.slots
+        _, operation = gateway.management_operation(request, authority.identity)
+        method = request.method
+        route = profile_id = None
+        if operation == '__ui__':
+            if method in ('PATCH', 'DELETE'):
+                return gateway.method_not_allowed(gateway.MANAGEMENT_METHODS)
+            if method not in ('GET', 'HEAD'):
+                raise BadRequest(404)
+            takes_json = False
+        elif is_global(operation):
+            route, profile_id = global_route(operation)
+            takes_json = route is not None and route.methods.get(method, (None, False))[1]
+        else:
+            takes_json = operation in gateway.JSON_OPERATIONS and method == 'PUT'
+
+        async def step(request, user, base, csrf, value, peer_disconnected, committed):
+            # Step 5: the method table and the request's shape; no state is read.
+            if is_global(operation) and route is not None:
+                if method not in route.methods:
+                    return gateway.method_not_allowed(route.allows())
+                if takes_json and (not isinstance(value, dict) or set(value) != {'label'}
+                                   or not isinstance(value['label'], str)):
+                    raise BadRequest()
+                if profile_id is not None and not profiles.PROFILE_ID.fullmatch(profile_id):
+                    raise BadRequest()
+            elif operation != '__ui__' and not is_global(operation) and method in ('PATCH', 'DELETE'):
+                return gateway.method_not_allowed(gateway.MANAGEMENT_METHODS)
+            # Step 6: the first role check.
+            await authority.verify(user)
+            if peer_disconnected.is_set():
+                raise BadRequest(403)
+            if is_global(operation):
+                if route is None:
+                    return Response(status_code=404)  # an unknown operation, as a profile's action answers it
+                handler = getattr(self.admin, route.methods[method][0])
+                call = Call(request, user, value, peer_disconnected, committed)
+                return await (handler(call) if profile_id is None else handler(call, profile_id))
+            entry = (self.manager.get(profiles.DEFAULT_PROFILE) if operation == '__ui__'
+                     else self.profile(request))  # step 7
+            return await entry.runtime.admin_action(request, user, base, csrf, value, peer_disconnected, committed)
+
+        return await gateway.management_exchange(request, authority.identity, slots,
+                                                 lambda request: gateway.management_value(request, takes_json), step)
+
+    def profile(self, request):
+        """Step 7: the profile a profile-scoped request names (see the class docstring)."""
+        values = request.headers.getlist(PROFILE_HEADER)
+        if not values:
+            raise BadRequest(400, {'code': 'profile_id_required'})
+        if len(values) != 1 or not profiles.PROFILE_ID.fullmatch(values[0]):
+            raise BadRequest(400, {'code': 'profile_id_invalid'})
+        if values[0] == profiles.DEFAULT_PROFILE:
+            return self.manager.get(profiles.DEFAULT_PROFILE)
+        return self.admin.profile_entry(values[0])

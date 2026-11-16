@@ -30,6 +30,16 @@ RESULTS = {
     'token.revoke': {'status': 'ok', 'token_state': 'revoked'},
     'mcp.restart': {'status': 'ok', 'child_state': 'accepted', 'apply_state': 'pending'},
 }
+# HM-10 (multi-profile plan 4.1, 5.3 point 7; contract 3.5): the receipts of creating and deleting a profile and of the
+# profile index quarantine, kept beside the index (/data/mcp/.profiles.json.operations.json: OperationJournal(index
+# path, results=PROFILE_RESULTS, subjects=True); profile_admin). Each carries its subject: the profile's id, or the
+# name the quarantined index was given; neither is a secret. A profile's own journal (RESULTS, no subject) is as before.
+PROFILE_RESULTS = {
+    'profile.create': {'status': 'ok', 'profile_state': 'created'},
+    'profile.delete': {'status': 'ok', 'profile_state': 'deleted'},
+    'profile.index_quarantine': {'status': 'ok', 'profile_index_state': 'quarantined'},
+}
+SUBJECT = re.compile(r'[0-9a-f]{24}|profiles\.json\.quarantine-[0-9]{8}T[0-9]{6}Z(?:-[0-9]{1,3})?')
 
 
 def fail(status, code):
@@ -37,8 +47,11 @@ def fail(status, code):
 
 
 class OperationJournal:
-    def __init__(self, config_path: Path):
+    def __init__(self, config_path: Path, *, results=RESULTS, subjects=False):
         self.path = config_path.with_name('.' + config_path.name + '.operations.json')
+        self.results = results  # the kinds this journal keeps (HM-10: PROFILE_RESULTS beside the index)
+        self.subjects = subjects  # HM-10: every receipt names its subject (SUBJECT)
+        self._fields = {'kind', 'state', 'fingerprint', 'actor', *(('subject',) if subjects else ())}
         self._seen = self.path.exists()
         self._poisoned = False
 
@@ -70,10 +83,12 @@ class OperationJournal:
                 raise ValueError('Invalid operation journal')
             for key, item in data['receipts'].items():
                 if (not ID_PATTERN.fullmatch(key) or not isinstance(item, dict)
-                        or set(item) != {'kind', 'state', 'fingerprint', 'actor'}
-                        or item['kind'] not in RESULTS or item['state'] not in {'pending', 'completed'}
+                        or set(item) != self._fields
+                        or item['kind'] not in self.results or item['state'] not in {'pending', 'completed'}
                         or any(not isinstance(item[field], str) or not re.fullmatch(r'[0-9a-f]{64}', item[field])
-                               for field in ('fingerprint', 'actor'))):
+                               for field in ('fingerprint', 'actor'))
+                        or self.subjects and (not isinstance(item['subject'], str)
+                                              or not SUBJECT.fullmatch(item['subject']))):
                     raise ValueError('Invalid operation receipt')
             return data
         finally:
@@ -147,13 +162,15 @@ class OperationJournal:
             fail(409, 'operation_id_conflict')
         return data, item, fingerprint
 
-    def begin(self, operation_id, data, kind, actor, fingerprint):
-        if kind not in RESULTS:
+    def begin(self, operation_id, data, kind, actor, fingerprint, subject=None):
+        if kind not in self.results or (subject is not None) != self.subjects or (
+                subject is not None and not SUBJECT.fullmatch(subject)):
             raise ValueError('Unsupported operation')
         if len(data['receipts']) >= MAX_RECEIPTS:
             fail(503, 'operation_journal_full')
         data['receipts'][operation_id] = {'kind': kind, 'state': 'pending', 'fingerprint': fingerprint,
-                                        'actor': self._digest(data, ['actor', actor])}
+                                        'actor': self._digest(data, ['actor', actor]),
+                                        **({'subject': subject} if self.subjects else {})}
         try:
             self._write(data)
         except (OSError, ValueError):
@@ -171,4 +188,4 @@ class OperationJournal:
         if not item:
             fail(404, 'operation_not_found')
         return {'operation': self.public(operation_id, item),
-                'result': dict(RESULTS[item['kind']]) if item['state'] == 'completed' else {}}
+                'result': dict(self.results[item['kind']]) if item['state'] == 'completed' else {}}
