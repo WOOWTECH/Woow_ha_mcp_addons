@@ -42,7 +42,7 @@ from .admin_auth import AdminAuthority, BadRequest, prefix
 from .capabilities import ManagementOptions, capability_snapshot, observe_tools, tool_catalog
 from .request_limits import DEFAULT_MAX_TOTAL_ELEMENTS, McpRequestLimits, RequestLimitError
 from .operations import OperationJournal, KINDS as OPERATION_KINDS, RESULTS as OPERATION_RESULTS, TTL_MS
-from .reply_worker import WorkerStopped, breathe
+from .reply_worker import WorkerStopped, breathe, encoded
 # HM-05 (contract 1.1): a profile's id, the default profile's or 24 lowercase hexadecimal characters; HM-08: the one
 # grammar, profiles.PROFILE_ID.
 from .profiles import PROFILE_ID, log_id
@@ -92,6 +92,10 @@ SSE_COMMENT = re.compile(rb":[\x20-\x7e]{0,1024}")
 LIST_CHANGED = b'data: {"jsonrpc":"2.0","method":"notifications/tools/list_changed"}'
 # HM-30: what make_apps' relayed_event makes of an event besides a line to relay: not relayed, or the stream ends.
 SKIP_EVENT, END_STREAM = "skip", "end"
+# HM-30 D1: an event whose frame is larger than this is framed (sse_frame, sse_data), processed and built into the
+# bytes it is relayed as on the reply worker, not on the loop (each of those steps copies or scans the whole frame:
+# 35 to 50 ms for an 8 MiB event on the EPYC 7713); a smaller one is framed on the loop, as before.
+WORKER_FRAME_BYTES = 64 * 1024
 # 0.1.5 (R1 #6): the pinned TS client puts an unsupported protocolVersion into an error, so no child text may pass.
 # 0.1.8 (review 6b): only the reviewed MCP revisions, not any date. The pinned children negotiate within this set,
 # except n8n-mcp, which echoes "2024-06-25" to a client that asks for it: that initialize is now refused (502).
@@ -972,7 +976,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
       of the store (the state, the masks) is read on the loop when it is handed over, the worker runs only the pure
       steps (strict_json, the reply checks, redact_secrets, filter_list, json.dumps: relayed_reply and relayed_event,
       the very functions the loop runs when it is left out, with the worker's checkpoints, reply_worker.breathe, in the
-      parser and between the steps), and the answer is byte for byte the same. A job the worker can no longer take
+      parser and between the steps; D1: json.dumps in pieces, reply_worker.encoded, the values let go of in pieces,
+      redact_secrets breathing too; an event larger than WORKER_FRAME_BYTES is framed there as well, relayed_frame),
+      and the answer is byte for byte the same. A job the worker can no longer take
       (WorkerStopped) is answered as a reply the gateway cannot process (502; an event stream ends). Left out: every
       reply is processed on the loop, as before (no checkpoint).
     A switched-on product's dispatcher also gives a tools/call the check of the profile's answers not received yet,
@@ -1052,25 +1058,35 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     def others():
         return {value for value in reply_secrets() if isinstance(value, str) and len(value) >= redact.MIN_SECRET}
 
-    def relayed_reply(raw, ident, method, state_of, masks_of, checkpoint=None):
+    def relayed_reply(raw, ident, method, state_of, masks_of, checkpoint=None, parsed=None):
         """A relayed JSON reply (HM-30: the same steps on the loop and on the reply worker): raw parsed (strict JSON),
         the reply to this request (exactly one of result and error, under the request's id: else ValueError), masked
         with masks_of(state) and filtered on state, state_of()'s answer (read after the parse, as before). checkpoint
-        (the reply worker's breathe) is called in the parser and between the steps; on the loop there is none."""
-        value = strict_json(bytes(raw)) if checkpoint is None else strict_json(bytes(raw), checkpoint=checkpoint)
+        (the reply worker's breathe) is called in the parser and between the steps; on the loop there is none. parsed
+        (D1, the worker's): a list the parsed value is put in, for the worker to let go of it in pieces (released)."""
+        # D1: the worker parses the bytes it was handed as they are (json.loads takes a bytearray as it takes bytes): no
+        # copy of an 8 MiB reply in one call first
+        value = strict_json(bytes(raw)) if checkpoint is None else strict_json(raw, checkpoint=checkpoint)
+        if parsed is not None:
+            parsed.append(value)
         if not (one_reply(value) and same_id(value.get("id"), ident)):
             raise ValueError("not this request's reply")
         current = state_of()
         if checkpoint is not None:
             checkpoint()
         # 0.2.0: backend errors carry their own text; no credential the add-on holds leaves
-        return filter_list(redact.redact_secrets(gateway_reply(value, method), masks_of(current)), tools, current)
+        if checkpoint is None:
+            return filter_list(redact.redact_secrets(gateway_reply(value, method), masks_of(current)), tools, current)
+        return filter_list(redact.redact_secrets(gateway_reply(value, method), masks_of(current), checkpoint), tools,
+                           current)  # D1: the worker breathes while it masks
 
-    def relayed_event(payload, request, state_of, masks_of, checkpoint=None):
+    def relayed_event(payload, request, state_of, masks_of, checkpoint=None, head=None):
         """One SSE event's data as a stream relays it (HM-30: the same steps on the loop and on the reply worker).
         request is the (id, method) of the POST the stream answers, None for a GET stream. SKIP_EVENT: not relayed;
         END_STREAM: the stream ends there; else (the data line, whether it is the reply, which ends the stream).
-        ValueError, ConfigError (state_of), RecursionError: the stream ends there too. checkpoint: as relayed_reply."""
+        ValueError, ConfigError (state_of), RecursionError: the stream ends there too. checkpoint: as relayed_reply.
+        head (D1, the worker's for a large event, relayed_frame): the event's lines before its data line; the reply's
+        line is then the whole event (head, the data line, its end), made in one copy."""
         value = strict_json(payload) if checkpoint is None else strict_json(payload, checkpoint=checkpoint)
         if not isinstance(value, dict):
             return END_STREAM  # a batch: never sent by the gateway, never filtered element by element
@@ -1090,12 +1106,18 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         if checkpoint is not None:
             checkpoint()
         # 0.2.0: backend errors carry their own text; no credential the add-on holds leaves
-        checked = redact.redact_secrets(gateway_reply(value, request[1]), masks_of(state_of()))
+        if checkpoint is None:
+            checked = redact.redact_secrets(gateway_reply(value, request[1]), masks_of(state_of()))
+        else:
+            checked = redact.redact_secrets(gateway_reply(value, request[1]), masks_of(state_of()), checkpoint)
         if isinstance(checked.get("result"), dict) and {"tools", "capabilities"} & checked["result"].keys():
             checked = filter_list(checked, tools, state_of())
-        if checkpoint is not None:
-            checkpoint()
-        return b"data: " + json.dumps(checked, separators=(",", ":")).encode(), True
+        if checkpoint is None:
+            return b"data: " + json.dumps(checked, separators=(",", ":")).encode(), True
+        checkpoint()
+        # D1: the same bytes, in pieces; the parsed and the masked value let go of in pieces once encoded
+        return encoded(checked, checkpoint, prefix=(head or b"") + b"data: ",
+                       suffix=b"\n\n" if head is not None else b"", release=releasable(checked), twin=value), True
 
     def prepared():
         """HM-30: what a job of the reply worker needs of the store, read on the loop when the job is handed over (the
@@ -1118,15 +1140,56 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             return found[1]
         return state_of, masks_of
 
+    def releasable(value):
+        """D1: whether the worker may let go of a reply's value in pieces: everything in it is the gateway's own copy
+        (strict_json's and redact_secrets' objects), unless filter_list rebuilt a tool list in it (its tools hold the
+        policy's own schemas)."""
+        result = value.get("result")
+        return not (isinstance(result, dict) and "tools" in result)
+
     def worker_reply(raw, ident, method, found):
-        """HM-30, on the reply worker: relayed_reply (with the worker's checkpoints), then json_reply's serialization."""
-        value = relayed_reply(raw, ident, method, *prepared_reads(found), checkpoint=breathe)
+        """HM-30, on the reply worker: relayed_reply (with the worker's checkpoints), then json_reply's serialization
+        (D1: reply_worker.encoded, the same bytes in pieces; the parsed and the masked value let go of in pieces)."""
+        parsed = []
+        value = relayed_reply(raw, ident, method, *prepared_reads(found), checkpoint=breathe, parsed=parsed)
         breathe()
-        return json.dumps(value, separators=(",", ":")).encode()
+        return encoded(value, breathe, release=releasable(value), twin=parsed[0])
 
     def worker_event(payload, request, found):
         """HM-30, on the reply worker: relayed_event (with the worker's checkpoints)."""
         return relayed_event(payload, request, *prepared_reads(found), checkpoint=breathe)
+
+    def relayed_frame(frame, request, state_of, masks_of, checkpoint=None):
+        """HM-30 D1, on the reply worker: one SSE event from its frame (the boundary removed) to the bytes it is relayed
+        as, the steps stream() takes on the loop, in their order (sse_frame, sse_data, an empty event kept empty,
+        relayed_event, the kept lines and the data line joined): END_STREAM, SKIP_EVENT, or (the event, None when it
+        has no line; whether it is the reply). ValueError, ConfigError, RecursionError: as relayed_event's."""
+        parsed = sse_frame(frame)
+        if parsed is None:
+            return END_STREAM
+        kept, data_lines = parsed
+        payload = sse_data(data_lines)
+        final = False
+        if data_lines and not payload.strip():
+            data_lines = [b"data:"]  # an empty (priming) event stays empty
+        elif data_lines:
+            head = b"\n".join(kept) + b"\n" if kept else b""
+            outcome = relayed_event(payload, request, state_of, masks_of, checkpoint, head=head)
+            if outcome == END_STREAM or outcome == SKIP_EVENT:
+                return outcome
+            line, final = outcome
+            if final:
+                return line, final  # the whole event already (relayed_event head): the same bytes, one copy
+            data_lines = [line]
+        lines = kept + data_lines
+        return (b"\n".join(lines) + b"\n\n" if lines else None), final
+
+    def worker_frame(pending, end, request, found):
+        """HM-30 D1, on the reply worker: a large event, its frame pending's first `end` bytes (the loop leaves pending
+        alone until the job ended), copied out and relayed here (relayed_frame, with the worker's checkpoints)."""
+        frame = bytes(memoryview(pending)[:end])
+        breathe()
+        return relayed_frame(frame, request, *prepared_reads(found), checkpoint=breathe)
 
     def snapshot():
         return health() if health else {"management": "alive", "child": {"state": "not_started", "transport_ready": False}, "backend": "unconfigured"}
@@ -1706,36 +1769,56 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             start = max(0, len(pending) - 3)  # only new bytes, plus a boundary split across chunks
             pending.extend(chunk)
             while match := EVENT_BOUNDARY.search(pending, start):
-                parsed = sse_frame(bytes(pending[:match.start()]))
-                del pending[:match.end()]
-                start = 0
-                if parsed is None:
-                    return
-                kept, data_lines = parsed
-                payload = sse_data(data_lines)
-                final = False
-                if data_lines and not payload.strip():
-                    data_lines = [b"data:"]  # an empty (priming) event stays empty
-                elif data_lines:
+                if reply_worker is not None and match.start() > WORKER_FRAME_BYTES:
+                    # HM-30 D1: a large event is framed, processed and built on the reply worker, in this profile's
+                    # turn (relayed_frame: the steps below, the same bytes); the state for a POST stream's reply is read
+                    # here, on the loop. pending stays as it is until the job ended.
+                    end = match.start()
+                    found = None if request is None else prepared()
                     try:
-                        if reply_worker is None:
-                            outcome = relayed_event(payload, request, store.load, masks)
-                        else:
-                            # HM-30: processed on the add-on's reply worker, in this profile's turn; the state for a
-                            # POST stream's reply is read here, on the loop (a GET stream relays no reply).
-                            found = None if request is None else prepared()
-                            outcome = await lease.run(lambda: reply_worker.run(worker_event, payload, request, found))
+                        outcome = await lease.run(lambda: reply_worker.run(worker_frame, pending, end, request, found))
                     except (ValueError, ConfigError, RecursionError, WorkerStopped):
                         return
+                    del pending[:match.end()]
+                    start = 0
                     if outcome == END_STREAM:
                         return
                     if outcome == SKIP_EVENT:
                         continue
-                    line, final = outcome  # final, R1 #1: the reply ends the stream (MCP: the server SHOULD close it)
-                    data_lines = [line]
-                lines = kept + data_lines
-                if lines:
-                    event = b"\n".join(lines) + b"\n\n"
+                    event, final = outcome
+                else:
+                    parsed = sse_frame(bytes(pending[:match.start()]))
+                    del pending[:match.end()]
+                    start = 0
+                    if parsed is None:
+                        return
+                    kept, data_lines = parsed
+                    payload = sse_data(data_lines)
+                    final = False
+                    if data_lines and not payload.strip():
+                        data_lines = [b"data:"]  # an empty (priming) event stays empty
+                    elif data_lines:
+                        try:
+                            if reply_worker is None:
+                                outcome = relayed_event(payload, request, store.load, masks)
+                            else:
+                                # HM-30: processed on the add-on's reply worker, in this profile's turn; the state for
+                                # a POST stream's reply is read here, on the loop (a GET stream relays no reply).
+                                found = None if request is None else prepared()
+                                outcome = await lease.run(lambda: reply_worker.run(worker_event, payload, request,
+                                                                                   found))
+                        except (ValueError, ConfigError, RecursionError, WorkerStopped):
+                            return
+                        if outcome == END_STREAM:
+                            return
+                        if outcome == SKIP_EVENT:
+                            continue
+                        # final, R1 #1: the reply ends the stream (MCP: the server SHOULD close it)
+                        line, final = outcome
+                        data_lines = [line]
+                    lines = kept + data_lines
+                    event = b"\n".join(lines) + b"\n\n" if lines else None
+                if event is not None:
                     if final:
                         owner.reply_event = event  # HM-14: an Ending knows the reply by it (delivered or not)
                     yield event

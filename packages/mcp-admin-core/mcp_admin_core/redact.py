@@ -308,17 +308,36 @@ def secret_values(state):
     return tuple(sorted((v for v in found if isinstance(v, str) and len(v) >= MIN_SECRET), key=len, reverse=True))
 
 
-def redact_secrets(value, secrets):
-    """value with every occurrence of each secret replaced by [REDACTED], in every string (keys too) of a JSON value."""
+# HM-30 D1: a string this long (code points) gets a checkpoint between the secrets looked for in it (redact_secrets).
+LONG_TEXT = 64 * 1024
+
+
+def redact_secrets(value, secrets, checkpoint=None):
+    """value with every occurrence of each secret replaced by [REDACTED], in every string (keys too) of a JSON value.
+
+    HM-30 D1: checkpoint, when given (the reply worker's breathe), is called once for every list and dict, before its
+    members, and between the secrets looked for in a long string (each search of it is one C call): the worker lets the
+    event loop have the GIL while it masks a large reply (one walk of its every object in Python; without a breath,
+    every system call the loop makes meanwhile waits for the GIL again). The value is the same. Left out, as before."""
     if not secrets:
         return value
     if isinstance(value, str):
+        long = checkpoint is not None and len(value) > LONG_TEXT
         for secret in secrets:
+            if long:
+                checkpoint()
             if secret in value:
                 value = value.replace(secret, SECRET_MASK)
         return value
     if isinstance(value, list):
+        if checkpoint is not None:
+            checkpoint()
+            return [redact_secrets(item, secrets, checkpoint) for item in value]
         return [redact_secrets(item, secrets) for item in value]
     if isinstance(value, dict):
+        if checkpoint is not None:
+            checkpoint()
+            return {redact_secrets(key, secrets): redact_secrets(item, secrets, checkpoint)
+                    for key, item in value.items()}
         return {redact_secrets(key, secrets): redact_secrets(item, secrets) for key, item in value.items()}
     return value

@@ -27,9 +27,25 @@ config.strict_json checkpoint), once it has run SLICE_SECONDS since its last bre
 on sleeping in short steps while the loop is busy (callbacks ready to run in asyncio's own queue, or its thread
 anywhere but waiting in its selector), up to YIELD_SECONDS: the loop has the GIL to itself meanwhile (the same file
 reads: 0.03 to 0.05 ms at the median). Busy without a pause, the worker gives up about a third of its time to it; idle,
-nothing. What no checkpoint can split is one C call (json.loads scanning one long string, json.dumps of a whole value,
-str.replace on a long string): the loop waits until it returns, so its longest stop is a reply's longest single C
-call, not its whole processing (contract 6 has the thresholds; the provenance note has what a real 8 MiB reply costs).
+nothing. What no checkpoint can split is one C call: the loop waits until it returns, so its longest stop is a reply's
+longest single C call, not its whole processing (contract 6 has the thresholds; the provenance note has what real 8 MiB
+replies cost).
+
+In pieces (D1, the user's decision of 2026-11-16, D1 (a); contract 6). One json.dumps of a whole 8 MiB value was such a
+call (45 to 70 ms on the EPYC 7713, 0.1 s and more for many small objects), so the worker serializes in pieces
+(encoded): byte for byte json.dumps(value, separators=(",", ":")).encode(), the bytes the loop writes, but no C call of
+it encodes more than about PIECE_BYTES: a long string goes out STRING_PIECE code points at a time (json escapes each
+code point on its own, so the pieces join into the same bytes) and a large list or dict member by member, in runs
+whose most bytes fit PIECE_BYTES, with a checkpoint between the calls. The other long stops a large reply made on the
+worker went the same way: it holds the cyclic collector off while it processes a job (gc.disable, given back when the
+job ends, however it ends; left off when something else had it off: a full collection walks every object of the add-on,
+the reply's hundreds of thousands among them, in one C call, 50 to 75 ms measured on an add-on's heap, and a reply
+makes no reference cycle, so its objects go as soon as it is answered and push no collection after it; collections
+resume between the jobs); it lets go of a reply's parsed and masked values in pieces once it is encoded (released:
+freeing hundreds of thousands of objects at once is one C call, 15 to 35 ms); it breathes while it masks one
+(redact.redact_secrets checkpoint) and while it costs one (_plan). Still one C call each: json.loads scanning one long
+string (20 to 40 ms for 8 MiB, the most with many escapes), its decoding of the bytes (5 to 20 ms) and the final join of
+the pieces (a copy).
 
 Failures. A job's exception (any BaseException) is its caller's: it is re-raised on the loop, where the gateway
 answers it as before; its frames are cleared first (nothing the job held stays alive with it), and the thread goes on.
@@ -49,8 +65,11 @@ Nothing here logs a job's content or a profile's name: the WARNING carries the e
 """
 from __future__ import annotations
 
+from array import array
 import asyncio
 from collections import Counter, deque
+import gc
+import json
 import logging
 import sys
 import threading
@@ -109,6 +128,217 @@ def _loop_busy():
     frame = sys._current_frames().get(ident) if ident is not None else None
     return frame is not None and not (frame.f_code.co_name == 'select'
                                       and frame.f_code.co_filename.endswith('selectors.py'))
+
+
+# In pieces (D1; the module docstring): the most code points of a long string one C call encodes (at most 12 bytes each
+# once escaped: 96 KiB), and the most bytes (counted as the most they can encode to) one call encodes of a large list
+# or dict. Measured (provenance note): the loop's longest stop on the worker's 8 MiB replies of seven shapes 7 to 31 ms.
+STRING_PIECE = 8 * 1024
+PIECE_BYTES = 64 * 1024
+_encode = json.JSONEncoder(separators=(",", ":")).encode  # json.dumps(value, separators=(",", ":")), the loop's
+_SMALL_INT = 10 ** 18
+
+
+def _scalar_cost(value):
+    """The most bytes a scalar encodes to: 24 (a float's repr, a small int, true, false, null), a larger int its
+    digits."""
+    if type(value) is int and not -_SMALL_INT < value < _SMALL_INT:
+        return 24 + value.bit_length() // 3
+    return 24
+
+
+def _plan(value, limit, checkpoint=None):
+    """{id(container): its members' costs} for every list and dict of value that may encode to more than limit bytes
+    (large). A member's cost is the most bytes it can encode to: a string 12 bytes a code point (the longest escape json
+    writes) and its quotes, a scalar _scalar_cost, a container its members' and a separator each, 2 brackets (a member
+    over limit counts as limit + 1), a dict member its key as a string and a colon too. One pass, post-order and
+    iterative: every container is costed once, however deep; checkpoint is called after every container."""
+    plans = {}
+    kind = type(value)
+    if kind is not list and kind is not dict:
+        return plans
+    # a frame: [container, its members, keyed, their costs, its cost so far, the key cost of the member costed below]
+    stack = [[value, iter(value.items()) if kind is dict else iter(value), kind is dict, array('q'), 2 + len(value), 0]]
+    while stack:
+        frame = stack[-1]
+        members, keyed, costs = frame[1], frame[2], frame[3]
+        below = False
+        for member in members:
+            if keyed:
+                key, item = member
+                extra = 12 * len(key) + 3 if type(key) is str else 24
+            else:
+                item, extra = member, 0
+            kind = type(item)
+            if kind is str:
+                cost = 12 * len(item) + 2 + extra
+            elif kind is list or kind is dict:
+                frame[5] = extra
+                stack.append([item, iter(item.items()) if kind is dict else iter(item), kind is dict, array('q'),
+                              2 + len(item), 0])
+                below = True
+                break
+            else:
+                cost = _scalar_cost(item) + extra
+            costs.append(cost)
+            frame[4] += cost
+        if below:
+            continue
+        stack.pop()
+        if checkpoint is not None:
+            checkpoint()
+        total = frame[4]
+        if total > limit:
+            plans[id(frame[0])] = frame[3]
+            total = limit + 1
+        if stack:
+            parent = stack[-1]
+            cost = total + parent[5]
+            parent[3].append(cost)
+            parent[4] += cost
+    return plans
+
+
+def encoded(value, checkpoint=None, *, prefix=b'', suffix=b'', release=False, twin=None):
+    """json.dumps(value, separators=(",", ":")).encode(), byte for byte, in pieces (the module docstring): a large list
+    or dict (_plan) is opened and its members written in runs that fit PIECE_BYTES, each one C call (json's own encoder
+    on a list or dict of them, the brackets cut off), a member that does not fit alone (a large container opened in
+    turn; a long string, or key, STRING_PIECE code points at a time); checkpoint is called between the calls. A value
+    json.dumps converts in ways of its own (a dict with keys that are not strings, a tuple, a subclass) is
+    encoded in one call, as json.dumps encodes it. A JSON value has no reference cycle (the gateway's values come from
+    strict_json through redact_secrets, which would recurse forever on one first). prefix and suffix: bytes the answer
+    starts and ends with, joined in the same one copy (an event's other lines and its end). release: once encoded,
+    value (and twin) are let go of in pieces (released): only for a value whose containers nothing else holds."""
+    plans = _plan(value, PIECE_BYTES, checkpoint)
+    if not plans and not (type(value) is str and len(value) > STRING_PIECE):
+        return prefix + _encode(value).encode() + suffix
+    out = [prefix]
+    put = out.append
+    frames = []  # the large containers open now: [members, their costs, next member, closing, keyed, members written]
+
+    def step():
+        if checkpoint is not None:
+            checkpoint()
+
+    def string(text):
+        put(b'"')
+        for start in range(0, len(text), STRING_PIECE):
+            put(_encode(text[start:start + STRING_PIECE])[1:-1].encode())
+            step()
+        put(b'"')
+
+    def write(item):
+        """A member that fits no run, or the value: a large list or dict opened (True), anything else written."""
+        kind = type(item)
+        if (kind is list or kind is dict) and id(item) in plans and (
+                kind is list or all(type(key) is str for key in item)):
+            if kind is dict:
+                put(b'{')
+                frames.append([iter(item.items()), plans[id(item)], 0, b'}', True, 0])
+            else:
+                put(b'[')
+                frames.append([iter(item), plans[id(item)], 0, b']', False, 0])
+            return True
+        if kind is str and len(item) > STRING_PIECE:
+            string(item)
+        else:
+            put(_encode(item).encode())
+            step()
+        return False
+
+    def flush(frame, run):
+        text = _encode(dict(run) if frame[4] else run)
+        put((b',' if frame[5] else b'') + text[1:-1].encode())
+        frame[5] += len(run)
+        step()
+
+    write(value)
+    while frames:
+        frame = frames[-1]
+        members, costs, keyed = frame[0], frame[1], frame[4]
+        run, size, opened = [], 2, False  # a run's bytes: its brackets, its members and a separator each
+        for member in members:
+            cost = costs[frame[2]] + 1
+            frame[2] += 1
+            if cost < PIECE_BYTES - 1:
+                if size + cost > PIECE_BYTES:
+                    flush(frame, run)
+                    run, size = [], 2
+                run.append(member)
+                size += cost
+                continue
+            if run:
+                flush(frame, run)
+                run, size = [], 2
+            put(b',' if frame[5] else b'')
+            frame[5] += 1
+            if keyed:
+                key, member = member
+                if type(key) is str and len(key) > STRING_PIECE:
+                    string(key)
+                    put(b':')
+                else:
+                    put(_encode(key).encode() + b':')
+            if write(member):
+                opened = True
+                break
+        if run:
+            flush(frame, run)
+        if opened:
+            continue
+        put(frame[3])
+        frames.pop()
+    put(suffix)
+    body = b''.join(out)
+    out = None
+    if release:
+        released(value, plans, checkpoint, twin)
+    return body
+
+
+def released(value, plans, checkpoint=None, twin=None):
+    """Lets go of value in pieces once the worker is done with it (D1; the module docstring), and of twin with it, a
+    tree of value's shape (what value was copied from: strict_json's parse, copied by redact_secrets). Every large list
+    or dict of value (plans: _plan's) is emptied, its members dropped in runs whose costs fit PIECE_BYTES (each run's
+    objects freed together; a checkpoint between the runs), its large members first set apart and emptied the same way
+    after it; twin's container of the same place, when it has the same type and length, with it, member for member
+    (its members dropped with value's). Dropping references only: an object something else still holds stays. Only for
+    a value whose large containers nothing else holds (a reply the gateway made: strict_json's and redact_secrets'
+    objects, never one filter_list rebuilt a tool list in, whose tools hold the policy's own schemas)."""
+    if type(value) is not list and type(value) is not dict or id(value) not in plans:
+        return
+    stack = [(value, twin)]
+    while stack:
+        node, other = stack.pop()
+        costs = plans[id(node)]
+        keyed = type(node) is dict
+        members = list(node.items()) if keyed else node[:]
+        others = None
+        if type(other) is type(node) and len(other) == len(node):
+            others = list(other.items()) if keyed else other[:]
+            other.clear()
+        node.clear()
+        node = other = None
+        start = size = 0
+        for index in range(len(members)):
+            item = members[index][1] if keyed else members[index]
+            if (type(item) is list or type(item) is dict) and id(item) in plans:
+                twin_item = None
+                if others is not None:
+                    twin_item = others[index][1] if keyed else others[index]
+                stack.append((item, twin_item))  # emptied after this one: held here until then
+                continue
+            size += costs[index]
+            if size > PIECE_BYTES:
+                members[start:index] = [None] * (index - start)
+                if others is not None:
+                    others[start:index] = [None] * (index - start)
+                start, size = index, costs[index]
+                if checkpoint is not None:
+                    checkpoint()
+        members = others = None
+        if checkpoint is not None:
+            checkpoint()
 
 
 class WorkerStopped(Exception):
@@ -274,11 +504,19 @@ class ReplyWorker:
         try:
             while (job := self._next()) is not None:
                 result = error = None
+                # D1: the cyclic collector held off while the job runs (the module docstring), given back however it
+                # ends; left as it is when something else had it off.
+                held = gc.isenabled()
+                if held:
+                    gc.disable()
                 try:
                     result = job.function(*job.args)
                 except BaseException as caught:  # the caller's, never the thread's
                     error = caught
                     traceback.clear_frames(caught.__traceback__)
+                finally:
+                    if held:
+                        gc.enable()
                 job.function = job.args = None
                 self._done(job)  # before the caller can see the outcome: processed and the turns are up to date
                 self._deliver(job, result, error)
