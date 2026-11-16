@@ -6,7 +6,7 @@
   every start, the gateway takes the profile id grammar from profiles.py, and only a switched-on product's dispatcher
   reads the index (tests/test_router_passthrough.py: switched off, no index or profile directory is read). HM-20's
   loopback rule reads features.enabled() too (products.loopback_refused; switched off, it changes no answer). HM-12
-  wired identity_fields.py (products.identity_rebound, backend_edit.stored_secret_to_new_origin: data the gateway
+  wired identity_fields.py (products.identity_rebound, backend_edit.new_origin_refused: data the gateway
   reads only for a switched-on product; switched off, it changes no answer). HM-13b wires the existence check of
   profiles.py and the restore check: that slice changes the list below on purpose.
 - The switch: MULTI_PROFILE_PRODUCTS is empty; features.enabled() reads it at every call (never bound at import), so

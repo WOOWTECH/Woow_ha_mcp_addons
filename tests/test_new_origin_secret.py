@@ -1,6 +1,6 @@
 """HM-12: once a product is switched on, a backend URL moved to another origin takes no stored secret along (DQ-40 ⑨
-(a), 2026-11-14; multi-profile plan 8.8 #41, 12.3 HM-12; contract 3.1, 4.1, section 9 #41, #111; FM-89, FM-152;
-plan review C1-S13).
+(a), 2026-11-14; multi-profile plan 8.8 #41, 12.3 HM-12; contract 3.1, 4.1, section 9 #41 and HM-12's row on the
+new-origin rule; FM-89, FM-152; plan review C1-S13).
 
 A partial connection edit (PUT backend/patch) of a switched-on product (features.enabled, read at every save) that
 moves one of its URLs to another origin (scheme, host or port; a missing port is the scheme's own: 80, 443) must bring

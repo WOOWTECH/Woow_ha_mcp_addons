@@ -1,5 +1,5 @@
 """HM-12: a switched-on Odoo profile's MCP token stays bound to one backend identity (multi-profile plan 9 Odoo row,
-12.3 HM-12, 10.3; DQ-05; contract 3.1, 4.1, section 9 #40, #59, #109, #110; invariant I11; FM-81; UC-21).
+12.3 HM-12, 10.3; DQ-05; contract 2.3, 3.1, 4.1, section 9 #40, #59 and HM-12's rows; invariant I11; FM-81; UC-21).
 
 Once Odoo is switched on (features.enabled), a save of the backend (PUT backend or backend/patch, through the 8099
 dispatcher) that changes url, database or username, a cleared connection included, while the token is active and the
@@ -7,17 +7,21 @@ saved connection is complete, does in this order: the profile's old child is sto
 credentials once a new token exists anywhere: UC-21), then one durable write holds the new connection, the new token and
 its masked history entry (action rotate, as a token rotation: no new action name, section 9 #59), then the token change
 is published (TokenAccess: every request of the old token ends, on both connection paths; the 8081 dispatcher routes
-the old token nowhere), then the child starts on the committed state. The answer says token_rotated: true and never
-carries the token. A password change alone and the first setup keep the token; a revoked token stays revoked.
+the old token to no profile, and the profile's own app refuses it too), then the child starts on the committed state.
+The answer says token_rotated: true, carries the new state's ETag (the panel's next If-Match) and never the token. A
+password change alone and the first setup keep the token; a revoked token stays revoked.
 
-A stop that fails writes nothing (503, the old child relaunched, the old token still served); a write the store refuses,
-or one that fails before the state file is replaced (the new file cannot be written), writes nothing (today's 503 state
-unavailable, the old child relaunched, the old token still served); a write that fails once the state file is being
+A stop that fails writes nothing (503, the old child relaunched, the old token still served). A write that fails answers
+today's 503 state unavailable whatever it raises, and the token on disk decides the rest: still the old one (the store
+refused the write, it failed before the state file was replaced, or it raised something unexpected first), nothing was
+written, so the old child is relaunched and the old token still served; a write that fails once the state file is being
 replaced has an unknown outcome and poisons the store as every such failure does today (503 until the add-on restarts,
-which serves what is on disk, token and identity together; the old child stays stopped); a new child that cannot start
-leaves the new token and never the old child (config_apply_failed with token_rotated). Switched off, nothing changes
-(plan 3.3): the save commits first and restarts the child, the token stays, the answer is today's. The other
-switched-on products keep their token (Nextcloud HM-22, Hermes HM-24).
+which serves what is on disk, token and identity together; every profile's 503 once the default profile's new state
+file is in place, as when the default state cannot be read); a new token on disk although the write raised (a failure
+after the rename that leaves the store usable) is served with no child. The old child stays stopped in both. A new child
+that cannot start leaves the new token and never the old child (config_apply_failed with token_rotated). Switched off,
+nothing changes (plan 3.3): the save commits first and restarts the child, the token stays, the answer is today's. The
+other switched-on products keep their token (Nextcloud HM-22, Hermes HM-24).
 
 PaaS (woow-mcp-server 69ac425): packages/mcp-admin-core/mcp_admin_core/config/store.py:502-533 patch_connection_bound
 and its tests packages/mcp-admin-core/tests/test_config_store.py:102-170 (test_bound_connection_rotation_is_atomic_and_
@@ -158,17 +162,18 @@ class Journal:
         return Recorded
 
 
-def record_writes(monkeypatch, journal, *, refuse=False):
+def record_writes(monkeypatch, journal, *, refuse=None):
     """Each identity write (ProductStore.rebind) and each published token change (TokenAccess.committed) of the
-    journal's profile, in its journal; refuse: the write is refused before anything is written (the store's own
-    ConfigError for an update it cannot take)."""
+    journal's profile, in its journal; refuse: (exception class, message) the write raises before anything is written
+    (the store's own ConfigError for an update it cannot take, or anything else it might raise)."""
     rebind = ProductStore.rebind
 
     def recorded_rebind(store, changes, token):
         if Path(store.directory) == journal.directory:
             journal.events.append(('write', journal.instance.status))
-            if refuse:
-                raise ConfigError('invalid state update')
+            if refuse is not None:
+                kind, message = refuse
+                raise kind(message)
         return rebind(store, changes, token)
     monkeypatch.setattr(ProductStore, 'rebind', recorded_rebind)
     committed = TokenAccess.committed
@@ -213,6 +218,21 @@ async def save(runtime, profile_id, route, body):
         return await admin.put('/api/' + route, json=body, headers=reviewed_headers(boot, ADMIN))
 
 
+async def next_etag(runtime, profile_id):
+    """The ETag of the profile's next bootstrap, the quoted revision of its state (the If-Match the panel's next save
+    sends): what a save's answer must carry once it changed the state (HM-12 review S-3)."""
+    async with runtime.admin(profile_id) as admin:
+        fresh = await admin.get('/api/bootstrap', headers=ADMIN)
+    assert fresh.headers['etag'] == '"' + fresh.json()['configuration']['revision'] + '"'
+    return fresh.headers['etag']
+
+
+def routed_to(runtime, token):
+    """The profiles the 8081 dispatcher routes token to (profile_router.McpDispatcher.resolve), before any profile's
+    own app checks it again (HM-12 review S-4: the dispatcher itself drops a rotated token)."""
+    return [entry.profile_id for entry in runtime.mcp_app.resolve(token.encode())]
+
+
 def identity_body(route, field, value, connection, password=None):
     """A save of one identity field: the whole connection (PUT backend) or the field alone (backend/patch; with the
     password when one is brought)."""
@@ -253,11 +273,12 @@ async def test_a_changed_identity_stops_the_old_child_then_rotates_the_token_in_
     """B's url, database or username saved anew (a url on another origin brings its password, DQ-40 ⑨; a path on the
     same origin does not need it): the old child stops while the old token is still the one on disk; the write comes
     with no child running; then the token change is published; then the new child starts on the new identity. 200
-    {"saved", "token_rotated": true, "configuration"} with B's echo, no token in it. The state has the new connection
-    (the other fields and, unless brought, the password as they were), a new 43-character token and one history entry
-    (rotate, the old token masked), all of it in one write of the state file. The old token is refused on both paths
-    (8081 routes it to no profile); the new one opens a session with B's child on both; the default profile's state and
-    token are untouched (invariant I6)."""
+    {"saved", "token_rotated": true, "configuration"} with B's echo, no token in it, and the new state's ETag (the one
+    B's next bootstrap carries). The state has the new connection (the other fields and, unless brought, the password
+    as they were), a new 43-character token and one history entry (rotate, the old token masked), all of it in one
+    write of the state file. The 8081 dispatcher routes the old token to no profile and the new one to B; the old token
+    is refused on both paths; the new one opens a session with B's child on both; the default profile's state and token
+    are untouched (invariant I6)."""
     data, children = setup(tmp_path)
     journal = Journal()
     record_writes(monkeypatch, journal)
@@ -290,6 +311,8 @@ async def test_a_changed_identity_stops_the_old_child_then_rotates_the_token_in_
         username = after['connection']['username']
         assert journal.events == [('stop', old, before['connection']['username']), ('write', 'stopped'),
                                   ('publish',), ('start', username)]
+        assert saved.headers['etag'] == await next_etag(runtime, B)
+        assert routed_to(runtime, old) == [] and routed_to(runtime, new) == [B]
         assert await refused_everywhere(runtime, old)
         assert await opened_by(runtime, new, children.by_port[PORTS[B]])
         assert (data / 'state.json').read_bytes() == default_state
@@ -298,8 +321,9 @@ async def test_a_changed_identity_stops_the_old_child_then_rotates_the_token_in_
 
 async def test_the_default_profile_is_bound_to_its_identity_too_once_switched_on(tmp_path, log_scan, monkeypatch):
     """Switched on, the default profile is a profile like the others (plan 7.2 point 7): its username saved anew
-    rotates its token in the same order; its old token is refused on both paths by its own app (no profile holds it),
-    the new one opens a session with its child; B's state and token stay as they were."""
+    rotates its token in the same order, the answer carrying its new ETag; the dispatcher routes its old token to no
+    profile, which its own app then refuses on both paths (no profile holds it), and the new one to it, which opens a
+    session with its child; B's state and token stay as they were."""
     data, children = setup(tmp_path)
     journal = Journal()
     record_writes(monkeypatch, journal)
@@ -314,6 +338,8 @@ async def test_the_default_profile_is_bound_to_its_identity_too_once_switched_on
         log_scan.watch(new)
         assert new != old and journal.events == [('stop', old, 'DUMMY-user'), ('write', 'stopped'), ('publish',),
                                                  ('start', REBOUND['username'])]
+        assert saved.headers['etag'] == await next_etag(runtime, 'default')
+        assert routed_to(runtime, old) == [] and routed_to(runtime, new) == ['default']
         assert await refused_everywhere(runtime, old)
         assert await opened_by(runtime, new, children.by_port[3000])
         assert directory(data, B).joinpath('state.json').read_bytes() == extra_state
@@ -391,9 +417,16 @@ async def test_a_cleared_connection_rotates_the_token(tmp_path, log_scan, monkey
 
 # ---- what fails (PaaS test_failed_account_rebind_restores_old_child_and_url; conftest.py:157, the one line) ----
 
-FAILURES = ('stop', 'refused', 'refused and no restart', 'write')
+FAILURES = ('stop', 'refused', 'refused and no restart', 'unexpected', 'write')
+# What the write raises before anything is written: the store's own refusal, or anything else ProductStore.rebind
+# raises (its ValueError for a call that is no rebind; HM-12 review S-5: still the fixed 503, never a 500)
+REFUSED = (ConfigError, 'invalid state update')
+REFUSALS = {'refused': REFUSED, 'refused and no restart': REFUSED,
+            'unexpected': (ValueError, 'invalid identity rebind')}
 RELAUNCHED = 'its child was relaunched on the saved connection'
 NOT_RELAUNCHED = 'its child could not be relaunched'
+UNKNOWN = ' failed while its state file was being replaced: whether it was saved is unknown, so its child stays ' \
+          'stopped until the add-on restarts and reads the state on disk'
 
 
 def disk_full(monkeypatch, directory):
@@ -416,13 +449,14 @@ async def test_a_failed_identity_change_keeps_the_old_identity_its_token_and_its
     does not stop: nothing is written (503 {"error":"request denied"}), the child is relaunched (the stop is tried
     again first). refused: the store refuses the write before writing (its ConfigError: today's 503 state
     unavailable). refused and no restart: the same, and the child does not come back either (apply_state failed).
-    write: the new state file cannot be written (the disk is full): the state file was never replaced, so the store
-    stays usable (unlike a failure once the replace began, below) and the answer is today's 503 state unavailable.
-    Each writes one WARNING naming B's id's first 8 characters (never a token, URL or label) and whether the child
-    was relaunched."""
+    unexpected: the write raises something that is no ConfigError before writing (HM-12 review S-5): the same fixed
+    503 state unavailable, never a 500. write: the new state file cannot be written (the disk is full): the state file
+    was never replaced, so the store stays usable (unlike a failure once the replace began, below) and the answer is
+    today's 503 state unavailable. Each writes one WARNING naming B's id's first 8 characters (never a token, URL or
+    label) and whether the child was relaunched."""
     data, children = setup(tmp_path)
     journal = Journal()
-    record_writes(monkeypatch, journal, refuse=failure.startswith('refused'))
+    record_writes(monkeypatch, journal, refuse=REFUSALS.get(failure))
     state_path = directory(data, B) / 'state.json'
     async with multi_profile_runtime(PRODUCT, data, children=children, supervisor=journal.supervisor()) as runtime:
         await settle(runtime, 'configured')
@@ -520,9 +554,7 @@ async def test_a_write_whose_outcome_is_unknown_leaves_the_profile_closed_until_
             new = on_disk['token']
             log_scan.watch(new)
             lines = warnings_of(log_scan)
-            assert lines == [WARNING_PREFIX + B[:8] + ' failed while its state file was being replaced: whether it '
-                             'was saved is unknown, so the profile answers 503 and its child stays stopped until the '
-                             'add-on restarts and reads the state on disk'], lines
+            assert lines == [WARNING_PREFIX + B[:8] + UNKNOWN], lines
             if stage == 'replace':
                 assert new == old
                 async with runtime.mcp() as client:
@@ -543,6 +575,111 @@ async def test_a_write_whose_outcome_is_unknown_leaves_the_profile_closed_until_
         assert await opened_by(runtime, new, children.by_port[PORTS[B]])
         if new != old:
             assert await refused_everywhere(runtime, old)
+
+
+def cleanup_refused(monkeypatch, directory):
+    """Removing the temporary state file fails (EROFS: the file system went read-only) once state.json is replaced and
+    the directory synced: Store._write raises that OSError from its cleanup, not its own ConfigError, and the store
+    stays usable with the new state on disk (no poisoning: the rename and its sync succeeded)."""
+    real_unlink = Path.unlink
+
+    def refusing(path, *args, **kwargs):
+        if Path(path).parent == directory and Path(path).name.startswith('.state-'):
+            raise OSError(errno.EROFS, 'HM-12 test: the file system is read-only now')
+        return real_unlink(path, *args, **kwargs)
+    monkeypatch.setattr(Path, 'unlink', refusing)
+
+
+async def test_a_write_that_raises_with_its_new_token_on_disk_never_relaunches_the_old_child(tmp_path, log_scan,
+                                                                                             monkeypatch):
+    """The write raises although its new state reached the disk and the store is still usable (its cleanup failed
+    after the rename): what is on disk decides, not what was raised (HM-12 review S-5). A new token is on disk, so the
+    old child is not relaunched (no child runs on the old credentials while a new token exists: UC-21); the answer is
+    today's fixed 503 state unavailable and one WARNING says the outcome is unknown. Until the add-on restarts the old
+    token is refused on both paths and the new one gets the gateway's own answers, reaching no child; once it
+    restarts, the new token and the new identity are served together."""
+    data, children = setup(tmp_path)
+    journal = Journal()
+    record_writes(monkeypatch, journal)
+    state_path = directory(data, B) / 'state.json'
+    with pytest.MonkeyPatch.context() as disk:
+        async with multi_profile_runtime(PRODUCT, data, children=children,
+                                         supervisor=journal.supervisor()) as runtime:
+            await settle(runtime, 'configured')
+            watch(log_scan, data)
+            journal.watch(data, B, runtime.manager.get(B).runtime.supervisor)
+            old = runtime.token(B)
+            cleanup_refused(disk, state_path.parent)
+            saved = await save(runtime, B, 'backend/patch', {'changes': {'username': REBOUND['username']}})
+            new = runtime.token(B)
+            log_scan.watch(new)
+            assert (saved.status_code, saved.content) == (503, b'{"error":"state unavailable"}')
+            assert new != old and stored(directory(data, B))['connection']['username'] == REBOUND['username']
+            assert journal.events == [('stop', old, 'DUMMY-user'), ('write', 'stopped')]
+            stopped = runtime.manager.get(B).runtime.supervisor
+            assert stopped.status == 'stopped' and stopped.spec is None
+            assert warnings_of(log_scan) == [WARNING_PREFIX + B[:8] + UNKNOWN]
+            assert await refused_everywhere(runtime, old)
+            reached = len(children.by_port[PORTS[B]].requests)
+            async with runtime.mcp() as client:
+                local = await client.post('/mcp', headers=bearer(new), json=initialize_message())
+            assert local.status_code == 200 and local.headers['mcp-session-id'].startswith('woow-local-')
+            assert len(children.by_port[PORTS[B]].requests) == reached, 'a request reached a stopped child'
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        await settle(runtime, 'configured')
+        assert runtime.token(B) == new
+        assert runtime.manager.get(B).runtime.supervisor.spec.env['ODOO_USERNAME'] == REBOUND['username']
+        assert await opened_by(runtime, new, children.by_port[PORTS[B]])
+        assert await refused_everywhere(runtime, old)
+
+
+@pytest.mark.parametrize('stage', ['replace', 'directory sync'])
+async def test_the_default_profiles_write_of_unknown_outcome_closes_what_reads_its_state(tmp_path, log_scan,
+                                                                                         monkeypatch, stage):
+    """The default profile's identity write fails once its state file is being replaced (HM-12 review S-2; contract
+    2.3, 3.1). replace (its state file is the old one, so the dispatcher's digest of it holds): only the default
+    profile is closed (its old token 503 on both paths) and B is served as before. directory sync (another state file
+    at its name now, which the dispatcher must read to route any token and cannot through the poisoned store): every
+    request that names a token gets 503 state unavailable on both paths, B's included, as when the default state
+    cannot be read today. Its child is not relaunched; one WARNING ('default'). Once the add-on restarts, what is on
+    disk is served and B is served again."""
+    data, children = setup(tmp_path)
+    journal = Journal()
+    record_writes(monkeypatch, journal)
+    state_path = data / 'state.json'
+    with pytest.MonkeyPatch.context() as disk:
+        async with multi_profile_runtime(PRODUCT, data, children=children,
+                                         supervisor=journal.supervisor()) as runtime:
+            await settle(runtime, 'configured')
+            watch(log_scan, data)
+            journal.watch(data, 'default', runtime.manager.get('default').runtime.supervisor)
+            old, other = runtime.token('default'), runtime.token(B)
+            if stage == 'replace':
+                replace_refused(disk, state_path)
+            else:
+                directory_sync_refused(disk, data)
+            saved = await save(runtime, 'default', 'backend/patch', {'changes': {'username': REBOUND['username']}})
+            new = stored(data)['token']
+            log_scan.watch(new)
+            assert (saved.status_code, saved.content) == (503, b'{"error":"state unavailable"}')
+            assert (new == old) is (stage == 'replace')
+            assert journal.events == [('stop', old, 'DUMMY-user'), ('write', 'stopped')]
+            assert warnings_of(log_scan) == [WARNING_PREFIX + 'default' + UNKNOWN]
+            closed = [old] if stage == 'replace' else [old, new, other]
+            async with runtime.mcp() as client:
+                for token in closed:
+                    for path, headers in paths(token):
+                        reply = await client.post(path, headers=headers, json=initialize_message())
+                        assert (reply.status_code, reply.content) == (503, b'{"error":"state unavailable"}')
+            if stage == 'replace':
+                assert await opened_by(runtime, other, children.by_port[PORTS[B]])
+            assert ('start', REBOUND['username']) not in journal.events
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        await settle(runtime, 'configured')
+        assert runtime.token('default') == new
+        assert stored(data)['connection']['username'] == ('DUMMY-user' if stage == 'replace' else REBOUND['username'])
+        assert await opened_by(runtime, new, children.by_port[3000])
+        assert await opened_by(runtime, other, children.by_port[PORTS[B]])
 
 
 async def test_make_apps_takes_a_child_stop_it_can_call(tmp_path):
@@ -623,9 +760,10 @@ def test_the_store_writes_the_identity_and_its_token_at_once_and_fails_closed_on
 async def test_a_new_child_that_cannot_start_leaves_the_new_token_and_never_the_old_child(tmp_path, log_scan,
                                                                                         monkeypatch):
     """The write and the token change are done when the new child does not start: 503 shape D (saved, the
-    config_apply_failed code) with token_rotated: true and B's echo; the old token is refused on both paths, the old
-    child is not started again (its credentials no longer serve anyone); the new token gets the gateway's own answers
-    until the panel's restart starts the child on the new identity."""
+    config_apply_failed code) with token_rotated: true, B's echo and the new state's ETag (the panel's restart sends
+    it); the old token is refused on both paths, the old child is not started again (its credentials no longer serve
+    anyone); the new token gets the gateway's own answers until the panel's restart starts the child on the new
+    identity."""
     data, children = setup(tmp_path)
     journal = Journal()
     record_writes(monkeypatch, journal)
@@ -644,6 +782,7 @@ async def test_a_new_child_that_cannot_start_leaves_the_new_token_and_never_the_
         log_scan.watch(new)
         assert new != old and journal.events == [('stop', old, 'DUMMY-user'), ('write', 'stopped'), ('publish',),
                                                  ('start refused', REBOUND['username'])]
+        assert saved.headers['etag'] == await next_etag(runtime, B)
         assert await refused_everywhere(runtime, old)
         reached = len(children.by_port[PORTS[B]].requests)
         async with runtime.mcp() as client:
