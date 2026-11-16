@@ -4,10 +4,11 @@ Only administrators see nonsecret fields and presence flags. Omission keeps byte
 null clears only nullable fields. Existing credentials may be reused at a deliberately
 changed destination, so clients must present that choice and bind the saved revision.
 
-HM-12 (DQ-40 ⑨ (a), 2026-11-14; multi-profile plan 8.8 #41; contract 3.1, 4.1, section 9 #41, #111; unreleased): once
-the product is switched on (features.enabled), a stored credential no longer follows a URL to another origin (scheme,
-host or port): new_origin_refused, which gateway.admin_action answers with 422
+HM-12 (DQ-40 ⑨ (a), 2026-11-14; multi-profile plan 8.8 #41; contract 3.1, 4.1, section 9 #41 and HM-12's row on the
+new-origin rule; unreleased): once the product is switched on (features.enabled), a stored credential no longer follows
+a URL to another origin (scheme, host or port): new_origin_refused, which gateway.admin_action answers with 422
 CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN (the PaaS Headscale code). Switched off, the reuse above is unchanged.
+The same origin under another path is not a new origin (DQ-40 ⑨'s scope; a known limit, threat model section 3).
 """
 from urllib.parse import unquote, urlsplit
 

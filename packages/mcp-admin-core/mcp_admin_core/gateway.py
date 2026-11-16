@@ -932,8 +932,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     - each refusal writes one WARNING per profile and situation a minute (body_budget's warn), never content or a
       token.
 
-    HM-12 (multi-profile plan 9 Odoo row, 12.3 HM-12; DQ-05, DQ-40 ⑨ (a); contract 3.1, 4.1, section 9 #40, #41,
-    #109-#111; I11), only once the product is switched on; switched off, every answer stays as before:
+    HM-12 (multi-profile plan 9 Odoo row, 12.3 HM-12; DQ-05, DQ-40 ⑨ (a); contract 3.1, 4.1, section 9 #40, #41 and
+    HM-12's rows; I11), only once the product is switched on; switched off, every answer stays as before:
     - stop_child: stops this profile's child, from then on until backend_changed relaunches it
       (ProfileRuntime.stop_child); a failure raises. Left out (no child of its own), nothing is stopped.
     - backend, backend/patch of an identity-bound product (products.identity_rebound: Odoo's url, database or username
@@ -941,13 +941,14 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
       in this order: the old child is stopped (stop_child), one durable write holds the new connection, a new token
       and its history entry (ProductStore.rebind), the token change is published (token_access.committed(): every
       request of the old token ends, on both paths), then the child is started on what was written (backend_changed).
-      200 {"saved": true, "token_rotated": true, "configuration": ...}, never the token. A stop that fails writes
-      nothing (503 request denied); a write refused or failing before the state file is replaced writes nothing
-      (today's 503 state unavailable); after either the child is relaunched on the saved state and the old token is
-      still served. A write that fails once the state file is being replaced poisons the store (outcome unknown: 503
-      until the add-on restarts) and relaunches nothing. A new child that does not start: shape D with
-      "token_rotated": true. Each failure writes one WARNING (REBIND_WARNING). A first setup, a password change alone
-      or a revoked token: as before (no token_rotated).
+      200 {"saved": true, "token_rotated": true, "configuration": ...} with the new state's ETag, never the token. A
+      stop that fails writes nothing (503 request denied). A write that fails, whatever it raises, answers today's 503
+      state unavailable, and what is on disk decides the rest: the old token still there (the store refused the write,
+      or it failed before the state file was replaced), nothing was written, the child is relaunched on the saved
+      state and the old token is still served; else (the store poisoned once the state file was being replaced: 503
+      until the add-on restarts; or a new token on disk) nothing is relaunched, since a new token may be on disk. A new
+      child that does not start: shape D with "token_rotated": true. Each failure writes one WARNING (REBIND_WARNING).
+      A first setup, a password change alone or a revoked token: as before (no token_rotated).
     - backend/patch that moves a stored URL to another origin without bringing the secrets that URL takes there (every
       product; backend_edit.new_origin_refused): 422 {"error":"request denied","detail":{"code":
       "CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN"}}, after If-Match and backend_fixed, nothing written."""
@@ -1116,19 +1117,25 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         try:
             updated = store.rebind(changes, secrets.token_urlsafe(32))
         except Exception:
+            # Whatever was raised, what is on disk decides (HM-12 review S-5). The old token still on disk: nothing was
+            # written (the store refused it, the new file could not be made, or it raised before writing), so the old
+            # child is relaunched on the saved state and the old token is still served. A store poisoned once the state
+            # file was being replaced, or a new token on disk although the write raised (a failure after the rename
+            # that left the store usable): a new token may be on disk, so no child runs on the old credentials (UC-21);
+            # the store stays as it is (a poisoned one fails closed) and the add-on's restart reads what is on disk.
             try:
-                store.load()
+                kept = store.load().token == state.token
             except ConfigError:
-                # Failed once the state file was being replaced: what is on disk is unknown. The store stays poisoned
-                # (fail closed) and no child runs on the old credentials, since a new token may be on disk.
+                kept = False
+            if kept:
+                outcome = await relaunch_saved(state)
+                logger.warning("%s%s was not saved: the new state could not be written; %s", REBIND_WARNING,
+                               profile_name(), outcome)
+            else:
                 logger.warning("%s%s failed while its state file was being replaced: whether it was saved is unknown, "
-                               "so the profile answers 503 and its child stays stopped until the add-on restarts and "
-                               "reads the state on disk", REBIND_WARNING, profile_name())
-                raise
-            outcome = await relaunch_saved(state)  # nothing was written: the old token is still the profile's
-            logger.warning("%s%s was not saved: the new state could not be written; %s", REBIND_WARNING,
-                           profile_name(), outcome)
-            raise
+                               "so its child stays stopped until the add-on restarts and reads the state on disk",
+                               REBIND_WARNING, profile_name())
+            raise ConfigError("state unavailable") from None  # today's fixed 503, whatever was raised
         token_access.committed()
         headers['ETag'] = configuration.etag(updated)
         body = {"saved": True, "token_rotated": True}

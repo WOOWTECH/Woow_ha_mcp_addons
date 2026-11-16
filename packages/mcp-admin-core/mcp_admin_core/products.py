@@ -608,15 +608,16 @@ class ProductStore(Store):
         return updated, True
 
     def rebind(self, changes, token):
-        """HM-12 (plan 9 Odoo row; DQ-05; contract 3.1, section 9 #59, #110): one durable write of a changed backend
-        identity (identity_rebound) under this store's writer lock: changes (the new connection), the new MCP token and
-        its masked history entry, action rotate (the history keeps rotate and revoke only: no new action name, no schema
-        change; PaaS writes backend_identity_change). Returns the state written.
+        """HM-12 (plan 9 Odoo row; DQ-05; contract 3.1, section 9 #59 and HM-12's row on a failed identity change): one
+        durable write of a changed backend identity (identity_rebound) under this store's writer lock: changes (the new
+        connection), the new MCP token and its masked history entry, action rotate (the history keeps rotate and revoke
+        only: no new action name, no schema change; PaaS writes backend_identity_change). Returns the state written.
 
         ConfigError, nothing written, when the store refuses it (an invalid update, the state unreadable) or the new
         state file cannot be written: the store stays usable then, so the old token is still served (PaaS
         test_failed_account_rebind_restores_old_child_and_url). A failure once the state file is being replaced poisons
-        the store as every such failure does (config.Store._write: its outcome is unknown)."""
+        the store as every such failure does (config.Store._write: its outcome is unknown). gateway's rebind_identity
+        reads the token on disk after any failure to decide whether the old child may run again."""
         before = self.load()
         if before.token is None or not isinstance(token, str) or token == before.token:
             raise ValueError('invalid identity rebind')
