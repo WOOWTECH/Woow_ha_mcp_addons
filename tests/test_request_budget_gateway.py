@@ -27,7 +27,8 @@ from multi_profile_runtime import Children, multi_profile_runtime
 from mcp_admin_core import gateway, profiles
 from mcp_admin_core.products import ProductStore, TOOLS
 from switched_gateway import B, PRODUCT, GatewayChild, bearer, call, session_of, setup, until, watch
-from test_single_profile_golden import configure
+import test_single_profile_golden as golden
+from test_single_profile_golden import configure, production_runtime, stored
 
 pytestmark = pytest.mark.usefixtures('log_scan')
 MiB = 1024 * 1024
@@ -475,6 +476,41 @@ async def test_the_budget_is_made_with_the_apps(tmp_path, monkeypatch):
     finally:
         store.close()
 
+
+
+@pytest.mark.parametrize('product', golden.PRODUCTS)
+async def test_every_products_runtime_reads_under_the_budget_and_the_guard(tmp_path, log_scan, monkeypatch, product):
+    """Not gated (contract 1.2; PaaS #155's apps/<product>/tests/test_request_structure_guard.py): every product's
+    production runtime (run_product; apps/n8n/run.py for n8n), switched off, serves its MCP listener with the add-on's
+    own budget (one account of the product's child estimate; here a 2 GiB cgroup ceiling, the default profile's share
+    capped at 64 MiB) and the structure guard: a body nested 70 deep is refused 200 + -32602 under its id, a UTF-16 one
+    413, and the child gets neither."""
+    monkeypatch.setattr(rb(), 'memory_ceiling', lambda: (2048, 'cgroup'))
+    data = tmp_path / 'data'
+    configure(data, product)
+    async with production_runtime(product, data) as runtime:
+        token = stored(data)['token']
+        log_scan.watch(token, stored(data)['child_token'])
+        share = runtime.mcp_app.state.body_budget
+        _, child_mib = rb().runtime_inputs(product, switched_on=False)
+        assert share.profile_id == 'default'
+        assert share.budget.limits.total == rb().default_total_bytes(2048, accounts=1, child_memory_mib=child_mib)
+        assert share.limit == min(64 * MiB, rb().default_per_profile_bytes(share.budget.limits.total))
+        deep = {}
+        nested = deep
+        for _ in range(70):
+            nested['hm31-deep'] = {}
+            nested = nested['hm31-deep']
+        message = {'jsonrpc': '2.0', 'id': 7, 'method': 'tools/call', 'params': {'name': 'x', 'arguments': deep}}
+        headers = {'Authorization': 'Bearer ' + token, 'Accept': ACCEPT, 'Content-Type': 'application/json'}
+        async with runtime.mcp() as client:
+            refused = await client.post('/mcp', headers=headers, content=encoded(message))
+            assert refused.status_code == 200 and refused.json()['id'] == 7, refused.content[:200]
+            assert refused.json()['error']['code'] == -32602 and 'levels of nesting' in refused.text
+            utf16 = await client.post('/mcp', headers=headers,
+                                      content=json.dumps({**message, 'params': {}}).encode('utf-16'))
+            assert utf16.status_code == 413 and 'not UTF-8' in utf16.json()['error']['message']
+        assert not any(b'hm31-deep' in (request.content or b'') for request in runtime.child.requests)
 
 # ---- switched on: every profile's share of one budget ----
 
