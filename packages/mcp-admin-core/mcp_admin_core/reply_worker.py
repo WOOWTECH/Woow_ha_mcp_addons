@@ -44,7 +44,7 @@ makes no reference cycle, so its objects go as soon as it is answered and push n
 resume between the jobs); it lets go of a reply's parsed and masked values in pieces once it is encoded (released:
 freeing hundreds of thousands of objects at once is one C call, 15 to 35 ms); it breathes while it masks one
 (redact.redact_secrets checkpoint) and while it costs one (_plan). Still one C call each: json.loads scanning one long
-string (20 to 40 ms for 8 MiB, the most with many escapes), its decoding of the bytes (5 to 20 ms) and the final join of
+string (20 to 46 ms for 8 MiB, the most with many escapes), its decoding of the bytes (5 to 20 ms) and the final join of
 the pieces (a copy).
 
 Failures. A job's exception (any BaseException) is its caller's: it is re-raised on the loop, where the gateway
@@ -132,7 +132,8 @@ def _loop_busy():
 
 # In pieces (D1; the module docstring): the most code points of a long string one C call encodes (at most 12 bytes each
 # once escaped: 96 KiB), and the most bytes (counted as the most they can encode to) one call encodes of a large list
-# or dict. Measured (provenance note): the loop's longest stop on the worker's 8 MiB replies of seven shapes 7 to 31 ms.
+# or dict. Measured (provenance note; pytest on the EPYC 7713): the loop's longest stop on the worker's 8 MiB replies of
+# seven shapes and two events 7 to 46 ms, the most where json.loads scans one long string of escapes (one C call).
 STRING_PIECE = 8 * 1024
 PIECE_BYTES = 64 * 1024
 _encode = json.JSONEncoder(separators=(",", ":")).encode  # json.dumps(value, separators=(",", ":")), the loop's
