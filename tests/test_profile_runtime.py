@@ -339,7 +339,8 @@ def test_make_apps_takes_the_shared_and_external_objects_as_keyword_only_options
     assert list(parameters)[:3] == ['store', 'tools', 'child']
     for name in ('authority', 'admin_slots', 'admin_pipeline', 'token_access', 'mutation_lock', 'profile_view',
                  'forward_slots', 'slot_busy', 'reply_secrets',  # these three: HM-08 (plan 5.1 point 8, 5.2)
-                 'child_blocked'):  # HM-09 (plan 5.4: child/restart answers with blocked_reason)
+                 'child_blocked',  # HM-09 (plan 5.4: child/restart answers with blocked_reason)
+                 'stop_child'):  # HM-12 (a switched-on backend identity change stops the old child first)
         assert parameters[name].kind is inspect.Parameter.KEYWORD_ONLY and parameters[name].default is None, name
     module = runtime_module()
     parameters = inspect.signature(module.ProfileRuntime).parameters
