@@ -54,6 +54,10 @@ HM-31 (plan 12.3 HM-31; contract 2.4, 5; PaaS #155): the manager holds the add-o
 (request_budget.RequestBudget, derived when the manager is made: at startup, with every profile the product may run
 counted); each profile's app charges its share (ProfileGate.budget_share, make_apps body_budget). A switched-off
 add-on's only profile has a budget of its own (make_apps makes it).
+
+HM-12 (plan 9 Odoo row, 12.3 HM-12; contract 3.1; DQ-05): every ProfileRuntime gives its apps stop_child (make_apps
+stop_child), which stops the child and drops its spec. Only a switched-on product's backend identity change uses it
+(gateway.make_apps: stop, one write of the connection and a new token, publish, start); switched off, nothing calls it.
 """
 from __future__ import annotations
 
@@ -92,7 +96,7 @@ RUNTIME_OPTIONS = frozenset({'child_url', 'health', 'backend_changed', 'configur
                              'restart_child', 'diagnostics', 'availability', 'token_access', 'mutation_lock',
                              'authority', 'admin_slots', 'admin_pipeline', 'profile_view', 'forward_slots',
                              'slot_busy', 'reply_secrets', 'child_blocked', 'default_endpoint', 'bootstrap_fields',
-                             'body_budget'})
+                             'body_budget', 'stop_child'})
 MANAGEMENT_LISTENER_LIMIT = 64  # 8099's limit_concurrency (run_product), switched on or off
 # HM-09 (plan 5.4; C2-SF-4): after the default profile's child, at most STAGGER_SLOTS additional children start at
 # once; a place is freed when its child answered a health check, could not start, or after STAGGER_SECONDS.
@@ -215,6 +219,7 @@ class ProfileRuntime:
                 self.store, self.tools, child, child_url=self.child_url, health=health.snapshot,
                 backend_changed=self.backend_changed, configuration=configuration,
                 backend_check=getattr(health, 'test_saved', None), restart_child=self.backend_changed,
+                stop_child=self.stop_child,
                 diagnostics=getattr(manager, 'diagnostics', None), availability=health.availability,
                 token_access=self.token_access, mutation_lock=self.mutation_lock, **self._shared_options(),
                 **self.gateway_options, **self.app_options)
@@ -261,6 +266,15 @@ class ProfileRuntime:
         A failure is recorded (configuration: child_start_failed) and raised. HM-09: a save or the panel's restart,
         so the hold's memory check applies (hold memory=True), and the health monitor's backoff starts again."""
         await self._relaunch(state, asked=True)
+
+    async def stop_child(self):
+        """HM-12 (contract 3.1; DQ-05; make_apps stop_child): stop the child before its backend identity changes, so
+        that no child runs on the old credentials once a new token exists (UC-21). Its spec is dropped: until a relaunch
+        on a given state (backend_changed: the new state, or the saved one when the change failed) nothing can start it
+        again on the old credentials. Called holding the profile's mutation_lock (the change's). A stop that fails is
+        raised (the child may still run; the caller writes nothing)."""
+        await self.supervisor.stop()
+        self.supervisor.spec = None
 
     async def launch(self):
         """Start the child on the saved state, before the listeners serve. A failure is not raised: management stays

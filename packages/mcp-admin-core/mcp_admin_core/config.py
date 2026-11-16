@@ -276,14 +276,22 @@ class Store:
         self._write(updated)
         return updated
 
-    def _write(self, value: State):
+    def _write(self, value: State, *, poison_before_replace: bool = True):
+        """Replace the state file with value durably: a new file written and synced, renamed over it, the directory
+        synced. A failure poisons the store (no read or write until a restart: its outcome is unknown) and raises.
+
+        poison_before_replace=False (HM-12: ProductStore.rebind, a switched-on backend identity change): a failure
+        before the rename (the new file could not be made, written or synced) leaves the store usable, since the state
+        file is then certainly the one before; from the rename on, every failure still poisons it."""
         temporary = self.directory / (".state-" + secrets.token_hex(16))
+        replacing = False
         try:
             fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
             with os.fdopen(fd, "w") as stream:
                 stream.write(value.model_dump_json())
                 stream.flush()
                 os.fsync(stream.fileno())
+            replacing = True
             os.replace(temporary, self.path)
             directory_fd = os.open(self.directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
             try:
@@ -291,7 +299,8 @@ class Store:
             finally:
                 os.close(directory_fd)
         except OSError:
-            self._poisoned = True
+            if replacing or poison_before_replace:
+                self._poisoned = True
             raise ConfigError("durable state write failed; manual recovery required") from None
         finally:
             temporary.unlink(missing_ok=True)

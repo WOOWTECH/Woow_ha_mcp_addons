@@ -15,6 +15,7 @@ import hashlib
 import hmac
 from http import HTTPStatus
 import json
+import logging
 import re
 import secrets
 import time
@@ -43,7 +44,15 @@ from .request_limits import DEFAULT_MAX_TOTAL_ELEMENTS, McpRequestLimits, Reques
 from .operations import OperationJournal, KINDS as OPERATION_KINDS, RESULTS as OPERATION_RESULTS, TTL_MS
 # HM-05 (contract 1.1): a profile's id, the default profile's or 24 lowercase hexadecimal characters; HM-08: the one
 # grammar, profiles.PROFILE_ID.
-from .profiles import PROFILE_ID
+from .profiles import PROFILE_ID, log_id
+
+logger = logging.getLogger(__name__)
+# HM-12 (DQ-40 ⑨; contract 4.1): a switched-on product's backend/patch that moves a URL to another origin without the
+# secrets it takes there (backend_edit.new_origin_refused). The PaaS Headscale code, in HA's shape for a new code.
+NEW_ORIGIN_SECRET = "CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN"
+# HM-12: what the add-on log says when a switched-on backend identity change fails (one line per failure; the profile
+# by profiles.log_id, never a token, URL, label or credential).
+REBIND_WARNING = "multi-profile: the backend identity change of profile "
 
 # 0.2.0: 16 MiB (was 256 KiB). The full Nextcloud surface uploads up to 10 MiB as base64 (about 13.4 MiB of JSON) and
 # writes text files up to 1 MiB; a body is read only after the token check. BODY_SECONDS bounds the read.
@@ -828,7 +837,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               child_blocked: Callable[[], str | None] | None = None,
               default_endpoint: Callable[[], str | None] | None = None,
               bootstrap_fields: Callable[[], dict] | None = None,
-              body_budget: request_budget.Share | None = None):
+              body_budget: request_budget.Share | None = None,
+              stop_child: Callable[[], Awaitable] | None = None):
     """listing (0.2.2): the product's tools/list tools as its child lists them (surface.listing). With it, a client
     connects whatever the backend's state: when no child can answer (no backend configured, so no child; a child that is
     not up) the gateway answers initialize, notifications/initialized, ping and tools/list itself, from listing through
@@ -920,7 +930,27 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     - a POST body too deep (over 64 levels), with too many elements (over 200,000) or not UTF-8 is refused before it
       is parsed (request_limits.too_complex: 200 + -32602 under its id when its head or tail shows it, else 413).
     - each refusal writes one WARNING per profile and situation a minute (body_budget's warn), never content or a
-      token."""
+      token.
+
+    HM-12 (multi-profile plan 9 Odoo row, 12.3 HM-12; DQ-05, DQ-40 ⑨ (a); contract 3.1, 4.1, section 9 #40, #41,
+    #109-#111; I11), only once the product is switched on; switched off, every answer stays as before:
+    - stop_child: stops this profile's child, from then on until backend_changed relaunches it
+      (ProfileRuntime.stop_child); a failure raises. Left out (no child of its own), nothing is stopped.
+    - backend, backend/patch of an identity-bound product (products.identity_rebound: Odoo's url, database or username
+      changed, a cleared connection included, while the token is active and a complete connection is saved) are done
+      in this order: the old child is stopped (stop_child), one durable write holds the new connection, a new token
+      and its history entry (ProductStore.rebind), the token change is published (token_access.committed(): every
+      request of the old token ends, on both paths), then the child is started on what was written (backend_changed).
+      200 {"saved": true, "token_rotated": true, "configuration": ...}, never the token. A stop that fails writes
+      nothing (503 request denied); a write refused or failing before the state file is replaced writes nothing
+      (today's 503 state unavailable); after either the child is relaunched on the saved state and the old token is
+      still served. A write that fails once the state file is being replaced poisons the store (outcome unknown: 503
+      until the add-on restarts) and relaunches nothing. A new child that does not start: shape D with
+      "token_rotated": true. Each failure writes one WARNING (REBIND_WARNING). A first setup, a password change alone
+      or a revoked token: as before (no token_rotated).
+    - backend/patch that moves a stored URL to another origin without bringing the secrets that URL takes there (every
+      product; backend_edit.new_origin_refused): 422 {"error":"request denied","detail":{"code":
+      "CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN"}}, after If-Match and backend_fixed, nothing written."""
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
@@ -955,6 +985,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         raise ValueError("invalid bootstrap fields")
     if body_budget is not None and not isinstance(body_budget, request_budget.Share):
         raise ValueError("invalid request budget")
+    if stop_child is not None and not callable(stop_child):
+        raise ValueError("invalid child stop")
     n8n_request_bounds = getattr(store, "product", None) == "n8n"
     # HM-31: the add-on's request body budget (this profile's share) and the single-request ceiling it is charged up to
     budget_share = request_budget.own_share(getattr(store, "product", None)) if body_budget is None else body_budget
@@ -1054,6 +1086,61 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     def capabilities(state, catalog):
         return capability_snapshot(management, state, snapshot(), catalog, can_test=backend_check is not None,
                                    can_restart=restart_child is not None, logs=diagnostics is not None)
+
+    def profile_name():
+        """How this profile's log lines name it (profiles.log_id): the echo's id, 'default' without an echo."""
+        return log_id(profile_echo(profile_view())["id"] if profile_view is not None else "default")
+
+    async def relaunch_saved(state):
+        """HM-12: the child relaunched on the saved state after a failed identity change: the outcome's words."""
+        if backend_changed is None:
+            return "it has no child to relaunch"
+        try:
+            await backend_changed(state)
+        except Exception:
+            return "its child could not be relaunched"
+        return "its child was relaunched on the saved connection"
+
+    async def rebind_identity(state, changes, headers, committed):
+        """HM-12 (see make_apps): a switched-on profile's backend saved under another identity: stop, one write,
+        publish, start. Called after every check of step 11 and holding the profile's mutation_lock throughout."""
+        committed.set()  # the transition is owned from here: a client gone cancels none of its steps
+        try:
+            if stop_child is not None:
+                await stop_child()
+        except Exception:
+            outcome = await relaunch_saved(state)
+            logger.warning("%s%s was not saved: its child could not be stopped; %s", REBIND_WARNING, profile_name(),
+                           outcome)
+            raise BadRequest(503) from None
+        try:
+            updated = store.rebind(changes, secrets.token_urlsafe(32))
+        except Exception:
+            try:
+                store.load()
+            except ConfigError:
+                # Failed once the state file was being replaced: what is on disk is unknown. The store stays poisoned
+                # (fail closed) and no child runs on the old credentials, since a new token may be on disk.
+                logger.warning("%s%s failed while its state file was being replaced: whether it was saved is unknown, "
+                               "so the profile answers 503 and its child stays stopped until the add-on restarts and "
+                               "reads the state on disk", REBIND_WARNING, profile_name())
+                raise
+            outcome = await relaunch_saved(state)  # nothing was written: the old token is still the profile's
+            logger.warning("%s%s was not saved: the new state could not be written; %s", REBIND_WARNING,
+                           profile_name(), outcome)
+            raise
+        token_access.committed()
+        headers['ETag'] = configuration.etag(updated)
+        body = {"saved": True, "token_rotated": True}
+        if backend_changed:
+            try:
+                await backend_changed(updated)
+            except Exception:
+                # Saved: the new token is the profile's; the old child (old credentials) is never started again.
+                return JSONResponse({**body, 'detail': {'code': 'config_apply_failed'},
+                                     'configuration': configuration.snapshot(updated)}, status_code=503,
+                                    headers=headers)
+        return JSONResponse({**body, 'configuration': configuration.snapshot(updated)}, headers=headers)
 
     authority = AdminAuthority(verify_admin) if authority is None else authority
     admin_identity = authority.identity
@@ -1320,6 +1407,14 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 if name == "endpoint" and default_endpoint is not None:
                     # HM-10 (DQ-13): the add-on has one endpoint, stored in the default profile's state.
                     raise BadRequest(409, {"code": "endpoint_global"})
+                if name in ("backend", "backend/patch"):
+                    from .backend_edit import new_origin_refused
+                    from .products import identity_rebound
+                    if name == "backend/patch" and new_origin_refused(state, candidate, value):
+                        # HM-12 (DQ-40 ⑨): a stored credential never follows a URL to another server unasked
+                        raise BadRequest(422, {"code": NEW_ORIGIN_SECRET})
+                    if identity_rebound(state, candidate):
+                        return await rebind_identity(state, changes, headers, committed)
                 updated = store.update(**changes)
                 # No yield between durable commit and lifecycle ownership transfer.
                 # An authorized mutation is not undone by losing its HTTP caller.
