@@ -469,7 +469,7 @@ HM-10）、還原與休眠通知（欄位名 HM-13c 定案）。
 不進目錄名、log、MCP 回覆。
 
 **還原紀錄**（`restore-record`，HM-13b 寫、HM-13c 讀；HM-13b 定案寫入的格式，HM-13c 讀的時候可以再定顯示與核對的欄位）：
-`/data/mcp/restore-record.json`（0600，暫存檔＋fsync＋replace＋目錄 fsync，最多 256 KiB），最近一次還原或休眠撤銷的紀錄：
+`/data/mcp/restore-record.json`（0600，暫存檔＋fsync＋replace＋目錄 fsync，最多 1 MiB：每列是 state 的一部分，state 最多 64 KiB；預設帳號、索引裡的 5 個加 10 個孤兒的 state 都到上限也放得下，超過只會是手工拼的備份，守門停下），最近一次還原或休眠撤銷的紀錄：
 `{"version":1,"restore":null|{"at","marker","sentinel"},"dormant":null|{"at"},"index":"absent"|"ok"|"corrupt","profiles":[列…],`
 `"quarantined":[{"name","id","new"}…],"profiles_directory":"absent"|"present"|"unlistable","other_entries":<數字>}`；每列鍵照這個順序：
 `id`、`label`（預設帳號 `Default`；索引讀不到或孤兒是 `null`）、`is_default`、`token`（`revoked`、`kept`（DQ-03 (b) 沒撤銷的預設帳號）、

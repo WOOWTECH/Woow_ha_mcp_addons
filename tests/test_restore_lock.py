@@ -648,6 +648,36 @@ def test_an_unlistable_profiles_entry_is_reported_and_nothing_in_it_is_served(tm
     assert ('WARNING', restore_lock.UNLISTABLE) in guard_lines(log_scan)
 
 
+def test_a_restore_of_states_as_large_as_the_store_takes_still_finishes(tmp_path, log_scan):
+    """The record shows each profile's policy as stored, and the store takes a state of up to 64 KiB. The default
+    profile, five indexed profiles and two orphans (a deletion's rmtree that failed) with policies that large (each
+    policy validator at its bound) make a record far over 256 KiB: it fits RECORD_LIMIT (1 MiB), so their restore
+    finishes instead of stopping at every start."""
+    disk = Disk(tmp_path, log_scan)
+    assert disk.start(enabled=True) == restore_lock.Outcome()
+    store = disk.store()
+    try:
+        store.update(disabled=[f'tool_{n:03d}_' + 't' * 119 for n in range(250)],
+                     denied_operations={f'tool_{n:03d}': ['op_' + f'{n:03d}' + 'o' * 121] for n in range(100)},
+                     odoo_allowed_methods=[f'model_{n:03d}.method_' + 'm' * 234 for n in range(60)])
+    finally:
+        store.close()
+    indexed = [letter * 24 for letter in 'abcde']
+    orphans = ['f' * 24, '0' * 24]
+    for profile_id in indexed:
+        disk.add(profile_id)  # a new profile copies the default profile's policy (DQ-02)
+    for profile_id, label in zip(orphans, ('Ledger Foxtrot', 'Ledger Zulu')):
+        disk.add(profile_id, indexed=False, label=label)
+    disk.restore(disk.backup())
+    assert disk.start(enabled=True, now=fixed_now).restored
+    for where in (DEFAULT, *indexed, *orphans):
+        assert disk.tokens(where)[0] is None
+        assert 60_000 < (disk.directory(where) / 'state.json').stat().st_size < 65_536
+    assert 262_144 < (disk.data / profiles.RESTORE_RECORD_NAME).stat().st_size <= restore_lock.RECORD_LIMIT
+    assert [row['id'] for row in record_of(disk)['profiles']] == [DEFAULT, *sorted(indexed + orphans)]
+    assert MARKER not in disk.names()
+
+
 # ---- HM-10's interrupted deletion and index quarantine meet the guard ----
 
 def test_the_guard_meets_an_interrupted_deletion_and_index_quarantine(tmp_path, log_scan):

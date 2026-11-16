@@ -89,7 +89,9 @@ REVOKE_ALL = profiles.REVOKE_ALL_MARKER_NAME
 RECORD = profiles.RESTORE_RECORD_NAME
 SENTINEL_NAMES = (profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME, profiles.INSTANCE_RECORD_TEMPORARY_NAME)
 RECORD_VERSION = 1
-RECORD_LIMIT = 262144
+# A state is at most 64 KiB (Store) and a row shows a part of one: 1 MiB holds the default profile, the index's five
+# and ten orphans with states that large; a record over it (only a backup put together by hand) stops the guard.
+RECORD_LIMIT = 1048576
 STATE_LIMIT = 65536  # a state.json, as Store reads it
 SHOWN = (identity_fields.POLICY, identity_fields.SESSION)  # the state fields the record shows besides the identity
 _TOKEN = re.compile(r'[A-Za-z0-9_-]{43}')
