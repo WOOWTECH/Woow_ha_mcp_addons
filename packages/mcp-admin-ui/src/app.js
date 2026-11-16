@@ -1,5 +1,5 @@
 import { AdminApi, ApiError, ProfileEchoError, StaleProfileError, TOKEN_ROTATED } from './api.js';
-import { products, connectionHelp, policyRestartsChild, policyRestartNotice, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl, ownerDefaultsView, noticeTime, odooSwitches, odooSwitchKeys, odooSwitchPayload, maskedCurrentToken, tokenHistory, backendEdit, backendPatchPayload, newOriginSecrets, n8nSession, n8nSessionPayload, odooMethods, odooMethodsPayload } from './contracts.js';
+import { products, connectionHelp, policyRestartsChild, policyRestartNotice, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl, ownerDefaultsView, noticeTime, odooSwitches, odooSwitchKeys, odooSwitchPayload, maskedCurrentToken, tokenHistory, backendEdit, backendPatchPayload, newOriginSecrets, urlSecrets, n8nSession, n8nSessionPayload, odooMethods, odooMethodsPayload } from './contracts.js';
 import { DEFAULT_PROFILE, clientName, indexState, isExtraProfile, labelDialog, profileMenu, profileName, shortId } from './profiles.js';
 import './styles.css';
 
@@ -75,8 +75,9 @@ async function task(action) {
 function followUp(error, recovering = false) {
   if (error instanceof StaleProfileError) return () => {};
   // HM-12 (contract 3.1, section 9 #113): a backend save that rotated the token although its new child did not start
-  // (shape D with token_rotated): the new state is read again (every shown token hidden), then its notice.
-  if (error instanceof ApiError && error.tokenRotated) return () => task(() => reload(error.message, true));
+  // (shape D with token_rotated): the new state is read again (every shown token hidden), then its notice; said even
+  // when it cannot be read again (reloadRotated, review S-2).
+  if (error instanceof ApiError && error.tokenRotated) return () => task(() => reloadRotated(error.message, true));
   if (error instanceof ProfileEchoError || error instanceof ApiError && error.code === 'profile_id_required') {
     hideToken();
     return recovering ? null : () => show(null, error.message, true, true);
@@ -350,9 +351,22 @@ async function reload(message, error = false) {
   render();
   if (message) notice(message, error);
 }
-// HM-12 (DQ-05; contract 3.1, section 9 #113): a backend save whose answer says token_rotated also says where the new
-// token is (reload has hidden every shown token and read the new state). Switched off the add-on never says so.
-const savedNotice = (text, result) => result?.token_rotated === true ? `${text} ${TOKEN_ROTATED}` : text;
+// HM-12 (DQ-05; contract 3.1, section 9 #113): after a backend save the state is read again (reload hides every shown
+// token first). An answer that says token_rotated also says where the new token is; switched off the add-on never says
+// so, and this is reload(text) as before.
+const reloadSaved = (text, result) => result?.token_rotated === true ? reloadRotated(`${text} ${TOKEN_ROTATED}`) : reload(text);
+// HM-12 review S-2: once a save rotated the token, that is said even when the new state cannot be read again (a lost
+// connection, a refusal): the notice, then why the page was not read again, as an error. reload hid every shown token
+// before it read anything; the error keeps its kind, so fail and followUp handle it as before (a refused session is
+// still shown as one, an answer for another profile still reads again).
+async function reloadRotated(message, error = false) {
+  try { await reload(message, error); }
+  catch (problem) {
+    if (!(problem instanceof UiError)) throw new UiError(`${message} 操作未完成。請重新整理狀態後再試。`);
+    problem.message = `${message} ${problem.message}`;
+    throw problem;
+  }
+}
 async function saveForm(form, operation, payload, revision, profile = profileOf(state)) {
   if (form.dataset.conflict === 'true') throw new UiError('草稿與伺服器版本不同。請先重新整理狀態、檢查新設定，再重新編輯。');
   try { return await api.mutate(operation, payload, revision, profile); }
@@ -540,7 +554,7 @@ function backend() {
         payload = null;
         if (form.dataset.conflict !== 'true') fields.querySelectorAll('input[type=password]').forEach(input => input.value = '');
       }
-      await reload(savedNotice('伺服器已確認儲存。請等待健康探測更新，這不代表後端已連線成功。', result));
+      await reloadSaved('伺服器已確認儲存。請等待健康探測更新，這不代表後端已連線成功。', result);
     });
   });
   return card('後端連線設定', chip(state.connection_configured ? '已設定 · 憑證隱藏' : '尚未設定'), scopeNote('這是這個帳號自己的後端連線與憑證；儲存、清除與測試都只用這個帳號的設定，其他帳號不受影響。'), p('URL 與憑證由管理介面管理。測試只使用已儲存的設定，不會送出下方表單。'), state.product === 'litellm' ? p('請填 LiteLLM 閘道根網址。根路徑的 /v1 會移除；/proxy/v1 等代理掛載路徑會保留。健康探測可能產生供應商費用；token 與費用估算可能抓取圖片或分詞資源，三者都需要明確的操作權限。') : null, backendTest(), form);
@@ -553,8 +567,9 @@ function partialBackendCard() {
   const controls = new Map();
   form.append(p('只送出你選擇修改的欄位，其餘設定與憑證保留。修改網址或帳號後，保留的憑證會用於新的連線，請先確認目的地。'));
   // HM-12 (DQ-40 ⑨ (a)): switched on, a URL moved to another server takes none of its stored secrets (requireMovedSecrets).
-  const switchedOn = api.profile !== null;
-  if (switchedOn) form.append(p('網址改到另一台伺服器（scheme、主機或 port 不同）時，不會沿用已儲存的密碼或金鑰：請在同一次儲存中重新輸入（選填的可以明確清除）。只改路徑時沿用已儲存的憑證。'));
+  // Review S-7 (a): said only where a URL of this product takes a secret (OpenDesign's takes none).
+  const switchedOn = api.profile !== null, carriers = Object.entries(urlSecrets[snapshot.product] ?? {});
+  if (switchedOn && carriers.some(([, carried]) => carried.length)) form.append(p('網址改到另一台伺服器（scheme、主機或 port 不同）時，不會沿用已儲存的密碼或金鑰：請在同一次儲存中重新輸入（選填的可以明確清除）。只改路徑時沿用已儲存的憑證。'));
   for (const [key, label, type] of products[snapshot.product].fields) {
     const secret = type.includes('secret');
     const select = el('select', {id: `patch-${key}-action`, name: `${key}-action`},
@@ -569,9 +584,11 @@ function partialBackendCard() {
     input.value = secret ? '' : current.values[key] ?? '';
     if (current.withheld_fields?.includes(key)) form.append(p(`${label}包含已知憑證，完整值不顯示；選「保留目前值」會保留伺服器原值。`));
     select.addEventListener('change', () => { input.disabled = select.value !== 'set'; input.required = !input.disabled; if (secret && input.disabled) input.value = ''; });
-    // HM-12: (switched on) shown while this secret must be typed again because its URL moved to another server.
+    // HM-12: (switched on) shown while this secret must be typed again because its URL moved to another server. Review
+    // S-7 (b): the server withholds that URL's stored value, so any new value counts as moved: the note says so.
+    const unknown = current.withheld_fields?.includes(carriers.find(([, carried]) => carried.includes(key))?.[0]) === true;
     const note = switchedOn && secret ? el('p', {id: `patch-${key}-origin`, class: 'hint', hidden: true},
-      `網址改到另一台伺服器：請重新輸入${type.startsWith('optional') ? '或明確清除' : ''}，不會沿用已儲存的憑證。`) : null;
+      `${unknown ? '伺服器不顯示原網址，無法確認是同一台伺服器' : '網址改到另一台伺服器'}：請重新輸入${type.startsWith('optional') ? '或明確清除' : ''}，不會沿用已儲存的憑證。`) : null;
     controls.set(key, {select, input, note});
     form.append(el('div', {class:'field'}, el('label', {for:`patch-${key}-action`}, `${label}的處理方式`), select,
       el('label', {for:`patch-${key}`}, `${label}新值`), input, note));
@@ -596,7 +613,7 @@ function partialBackendCard() {
       let result;
       try { result = await saveForm(form, 'backend/patch', payload, snapshot.configuration?.revision); }
       finally { payload = null; if (form.dataset.conflict !== 'true') form.querySelectorAll('input[type=password]').forEach(input => input.value = ''); }
-      await reload(savedNotice('已儲存選定欄位，其餘設定保持不變。請查看子行程套用狀態。', result));
+      await reloadSaved('已儲存選定欄位，其餘設定保持不變。請查看子行程套用狀態。', result);
     });
   });
   return card('修改個別欄位，保留其餘憑證', form);
