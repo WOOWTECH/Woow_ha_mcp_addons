@@ -4,11 +4,13 @@
 
 - **2026-11-16 已 rebase 到 HM-10（`684a2dd`）並對齊真後端**（第 16 節）：HM-10 交給 HM-11 的待辦逐條處理；fixture 與真的 8099
   管理 app 對同一份 93 個案例逐案一致（`packages/mcp-admin-ui/tests/profile-api-cases.json`，Python 對真後端、Playwright 對 fixture）；
-  審查 S-2（清單不能用時鎖住整個面板）在這一輪做完。下面第 1～15 節是對 fixture 那一階段的紀錄，數字以第 16 節為準。
+  審查 S-2（清單不能用時鎖住整個面板）在這一輪做完。最後的程式與測試（`f204761`，之後只改本筆記）：node 80 案、Playwright 116 案、
+  pytest 全套除了 7 個要 root 的既有案例都過、兩個預檢 OK（第 16.6、16.8 節）。**對齊這一輪還沒有獨立安全審查**（第 16.13 節）。
+  下面第 1～15 節是對 fixture 那一階段的紀錄，數字以第 16 節為準。
 - **產品沒開通時，面板畫出來的東西與送出的請求都不變**：DOM、送出的請求（方法、路徑、標頭集合）、fixture 收到的紀錄，和 `b5d10c5` 的面板逐項相同
   （第 5.3 節：6 種設定、5 頁、幾種動作，72 個比較 0 差異；審查修正後在 `155022e` 重跑仍是 0 差異）。
   **CI 也守得住**：`profiles.spec` 有一案在開關關時逐頁確認沒有帳號介面、帳號字樣與帳號標頭（審查 MF-1）。
-  既有 9 個 Playwright spec 一個字都沒改照過。repo 裡的 `MULTI_PROFILE_PRODUCTS` 維持空集合；這一片只動面板、fixture、P9 kit 的 client 與文件，沒有動任何 Python。
+  既有 9 個 Playwright spec 一個字都沒改照過。repo 裡的 `MULTI_PROFILE_PRODUCTS` 維持空集合；這一片只動面板、fixture、P9 kit 的 client 與文件，沒有動任何正式的 Python（對齊時只新增 pytest 測試 `tests/test_panel_profile_api_shapes.py`，第 16.4 節）。
 - **開通後**（目前只有 fixture 會開；真後端是 HM-10）：
   - 頂列有帳號選單（`<select aria-label="帳號">`）與「新增帳號」「改名」「刪除帳號」；標題列固定顯示目前帳號與 id 前 8 碼；
     每個確認對話框寫出帳號。預設帳號不能改名、刪除；刪除要確認兩次並寫明後果（DQ-14）。名稱一律以文字節點顯示。
@@ -381,7 +383,7 @@ commit 順序：
 | 指令 | `git rebase 684a2dd`。重放 20 個，衝突 2 個，都在 `docs/multi-profile/decisions.md`；其餘 18 個 `git range-diff` 逐一相同 |
 | `b567f68`（DQ-31） | 新基準的 #100（HM-08 補正 PR）已把 DQ-13、DQ-14、DQ-30、DQ-31 記成已定、題數 34／12。以新基準為底，只加回本片的變更：DQ-31 的結論寫成面板實際的做法（`woow-<產品>-<id 前 8 碼>`、預設帳號維持 `woow`、不做跨帳號總覽與帳號層級權限），變更紀錄加一列（2026-11-16）。commit 訊息照實際內容改寫（`e058882`） |
 | `0eed62a`（變更紀錄順序） | 跳過（`git rebase --skip`）：它只把 HM-11 那列移到最後，上面的解法已經把新列放在最後 |
-| 帳本 | 三個帳本 commit 自動合併。核對方式：新基準的 `runtime-patches.json` 與 rebase 後的只差 5 個面板檔（app.js、api.js、contracts.js、operation-identity.js、profiles.js），其他 56 列與 `scope` 逐字相同；5 列的 SHA-256 照檔案實際內容重算全部一致（新基準沒有動面板檔，說明就是新基準的說明加本片的句子）。對齊後再釘一次（`2491f88`） |
+| 帳本 | 三個帳本 commit 自動合併。核對方式：新基準的 `runtime-patches.json` 與 rebase 後的只差 5 個面板檔（app.js、api.js、contracts.js、operation-identity.js、profiles.js），其他 57 列與 `scope` 逐字相同（收尾時重數：原本寫的 56 是算錯）；5 列的 SHA-256 照檔案實際內容重算全部一致（新基準沒有動面板檔，說明就是新基準的說明加本片的句子）。對齊後再釘一次（`2491f88`），建立名稱的修正後又釘一次（`04b4bce`） |
 | 依賴 | `b5d10c5..684a2dd` 沒有動 `uv.lock`、`package-lock.json`、`pyproject.toml`、`requirements-ci.txt`：沒有重跑 `setup_repo_env.sh` |
 | 其他衝突 | 沒有：HM-10 沒有碰 `packages/mcp-admin-ui/`、`packaging/ha_p9_admin.mjs`、`docs/admin-write-contracts.md` |
 
@@ -409,6 +411,17 @@ commit 順序：
 ETag 再找帳號；別處刪除一定改了索引）。面板原本只在 404 時說「帳號已不存在、不需要再刪除」並清掉它的收據（`368a53a`），對真後端會改成
 說「設定已被其他操作更新」而收據留著。修法：重送刪除遇到 `config_conflict` 或 `profile_not_found` 時重讀清單，清單（不是替代清單）裡
 已沒有這個帳號、也不是孤兒，才照「已不存在」處理；否則說清單已更新、沒有刪除。
+
+收尾的自我檢查又找到兩點，都已修：
+
+- **建立的回應也照清單規則讀名稱**（`39183dd` 先紅；`13bb1c8`、`04b4bce`、`4694e18`）：第 15 點把名稱規則放寬成「只藏那一列的名稱」
+  之後，`createProfile()` 仍回傳回應裡的原始名稱，建立後的提示會把這個瀏覽器顯示不了的名稱顯示出來（放寬前這種回應會被當成沒有確認）。
+  改成用清單規則讀過的那一列：顯示不了的名稱是 null，建立後與重送確認建立後的提示以 id 前 8 碼稱呼；帳本重新釘 app.js、api.js；README 補一句。
+- **測試字串裡的原始雙向控制字元**（`f204761`）：`c8216d1` 與 `39183dd` 在 `profiles.test.mjs`、`browser/profiles.spec.mjs` 的字串裡
+  各直接放了 2 個 U+202E（由右至左覆寫）。原始的雙向控制字元會讓編輯器與 GitHub 把那一行後面的程式顯示成另一種順序（Trojan Source），
+  GitHub 的 diff 也會出警告；repo 其他測試都用跳脫寫法。四處改成跳脫寫法，字串值相同、測試內容不變。`684a2dd` 與最後 HEAD 的樹裡
+  都沒有含雙向控制字元的文字檔（`git grep -P` 只碰到幾個 PNG 的位元組）。`39183dd` 的 commit 訊息也有一個 U+202E（只影響顯示）；
+  要清掉得改寫它之後的 5 個 commit，本片沒有改（第 16.11 節）。
 
 ### 16.3 照契約假設的 21 點（第 11 節）對 HM-10 的核對
 
@@ -444,10 +457,10 @@ ETag 再找帳號；別處刪除一定改了索引）。面板原本只在 404 �
   型別（規則列的鍵比字面值：代碼、種類、狀態、名稱…；id 依角色；Idempotency-Key 依送出它的案例；ETag 與 revision 依類別）。
   帳號範圍的成功回應只比面板會讀的鍵（回聲、`csrf`、`endpoint`、`operation`、`token`…；單帳號那一大塊不在多帳號的範圍）。
 - `tests/test_panel_profile_api_shapes.py`（pytest，`tests/multi_profile_runtime.py` 的正式 runtime、開關用 monkeypatch 開、HM-01 log
-  掃描）逐案要求 `expect`：10 案（每個情境一案）2.3 秒。`expect` 就是從它錄的：第一次在 repo 外用同一份程式跑出形狀（`SP:hm11-align/
+  掃描）逐案要求 `expect`：10 案（每個情境一案），最後 HEAD 的全套 pytest 裡合計 1.5 秒。`expect` 就是從它錄的：第一次在 repo 外用同一份程式跑出形狀（`SP:hm11-align/
   gen_shapes.py`，不 commit），寫進案例檔，再在共用鎖下用 pytest 正式跑一次全綠（`SP:hm11-align/gen1.log`，13:39）。
 - `tests/browser/profile-api-parity.spec.mjs`（Playwright，只用 request、不開瀏覽器頁面）讓 fixture 跑同一份案例、比同一份 `expect`：
-  10 案約 2.3 秒。兩個測試的比對規則一樣（都讀案例檔的 `rules`）。
+  10 案約 2.7 秒（最後 HEAD）。兩個測試的比對規則一樣（都讀案例檔的 `rules`）。
 - 面板那一側：node「every management request the panel sends…」確認面板送出的 14 種請求和案例的方法、路徑、標頭集合、本體鍵一致；
   Playwright 讓面板對已對齊的 fixture 跑（`profiles.spec` 15 案、四個既有 spec 的 `profiles-on`）。所以「面板 → fixture → 真後端」
   兩段都有測試守住。
@@ -462,22 +475,27 @@ ETag 再找帳號；別處刪除一定改了索引）。面板原本只在 404 �
 | node `profiles.test.mjs`（`c8216d1`）對對齊前的面板 | 新加的 `indexState`、`orphanIds` 還沒有，整檔載入失敗（59 案：58 過、1 檔失敗）；在拋棄式複本補兩個空的 export 再跑：22 案 7 紅（回聲名稱形狀、隱藏名稱與孤兒與沒有 ETag、`profiles_supported` false、建立重送只回 id、索引隔離、limit 0、請求和案例一致） | `5ea7850` 起 22 案全過 |
 | Playwright `profiles.spec`（`c8216d1`）對對齊前的面板與 fixture | 15 案 5 紅（S-2 那案、孤兒、索引隔離、沒有 ETag／不支援的產品／limit 0、建立重送時帳號已刪） | `5ea7850` 起 15 案全過 |
 | 對齊前的面板對對齊後的 fixture（全套 Playwright） | 116 案 6 紅：上面 5 案，加上「deleted elsewhere…resending its delete」（真後端的順序回 409，面板說「設定已被其他操作更新」、收據留著） | `5ea7850` 起 116 案全過 |
+| node `profiles.test.mjs`（`39183dd` 的測試）對 `405643f` 的面板（建立的名稱） | 22 案 1 紅：建立回應的名稱這個瀏覽器顯示不了時，回傳的 label 應是 null，實際是原字串（`red-node-created-label.log`） | `13bb1c8` 起 22 案全過 |
 
-紅的紀錄都在拋棄式複本（`git archive` 出 `959591d` 的樹，只蓋上新測試）跑，跑完刪掉；log 在 `wave4/evidence-align-HM-11/`。
+紅的紀錄都在拋棄式複本（`git archive` 出 `959591d` 的樹，只蓋上新測試）跑，跑完刪掉；log 在 `wave4/evidence-align-HM-11/`。建立名稱那一列例外：在 clone 裡的 `39183dd`（測試已 commit、面板還沒改）直接跑。`f204761` 只改字串的寫法、不改行為，沒有先紅；改完重跑 node 80 案、Playwright 116 案全過。
 
 ### 16.6 本機檢查（一般使用者；`ha_env.sh` 給的 TMPDIR，跑完用完整路徑刪除；pytest 都排在共用鎖後面）
 
+數字都在最後的程式與測試（`f204761`；之後的 commit 只改本筆記）上重跑過。node、build、build-closure、Playwright：2026-11-16
+15:52～15:56，開始與結束時工作樹都乾淨、HEAD 都是 `f204761`（`04b4bce` 上 15:45～15:49 也全過一次，Playwright 3.7 分鐘）。
+
 | 檢查 | 結果 |
 |---|---|
-| `npm test --prefix packages/mcp-admin-ui` | 80 案全過（rebase 前 74 案；新 6 案約 20 毫秒） |
+| `npm test --prefix packages/mcp-admin-ui` | 80 案全過、0.2 秒（rebase 前 74 案；新 6 案合計約 17 毫秒） |
 | `npm run build` ＋ `node tests/build-closure.mjs` | PASS |
-| Playwright 全套（`single`＋`profiles-on`） | 116 案全過，3.5 分鐘（rebase 前 102 案、3.6 分鐘）；既有 9 個 spec 一個字沒改，`single` 照過、四個在 `profiles-on` 照過 |
-| 新 Playwright 案 | `profile-api-parity.spec` 10 案約 2.3 秒；`profiles.spec` 新 4 案 7.9 秒（孤兒 1.8、隔離 1.8、唯讀／不支援／limit 0 2.9、建立重送 1.4） |
-| pytest 子集 | 見第 16.6.1 節 |
-| `packaging/validate.py`（ci-venv 的 Python） | PASS |
+| Playwright 全套（`single`＋`profiles-on`） | 116 案全過，3.9 分鐘（rebase 前 102 案、3.6 分鐘）；既有 9 個 spec 一個字沒改（對 `684a2dd`、`b5d10c5` 都是），`single` 71 案照過、四個在 `profiles-on` 20 案照過 |
+| 新 Playwright 案 | `profile-api-parity.spec` 10 案 2.7 秒；`profiles.spec` 新 4 案 8.9 秒（孤兒 1.9、隔離 2.2、唯讀／不支援／limit 0 3.2、建立重送 1.6）；改過的 S-2 那案 2.1 秒 |
+| 舊格式收據 | node「a record the previous panel left (4 keys)…」與 Playwright「a receipt kept across the upgrade (four keys, the old key)…」（2.4 秒）都過 |
+| pytest（子集與全套） | 見第 16.6.1 節 |
+| `packaging/validate.py`（ci-venv 的 Python） | PASS（最後 HEAD） |
 | 兩個預檢 | 見第 16.8 節 |
 
-#### 16.6.1 pytest 子集
+#### 16.6.1 pytest（子集與全套）
 
 - 指令：`flock SP:wave1-pytest.lock env -u SUPERVISOR_TOKEN PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider -rfEs`
   加 20 個檔：本片新的 `test_panel_profile_api_shapes`；HM-10 的 3 檔 `test_profile_admin_api`、`test_admin_pipeline_matrix`、
@@ -485,18 +503,28 @@ ETag 再找帳號；別處刪除一定改了索引）。面板原本只在 404 �
   第 5.4 節的其餘 13 檔（`test_tool_inventory`、`test_ledger_precheck`、`test_owned_ui`、`test_owned_browser`、`test_owned_browser_ipc`、
   `test_owned_browser_redirect`、`test_admin_ui`、`test_identity_fields`、`test_batch2_admin`、`test_n8n_selectors`、`test_b2_odoo_policy`、
   `test_writes_default_on`、`test_owned_ports_bearer`）。
-- 結果（程式與測試同 `5ea7850`，正式 conftest，2026-11-16 13:56 取得鎖）：**344 案全過、0 skip、93.5 秒**。其中本片新測試 10 案、
-  HM-10 的 3 檔 86 案（32＋5＋49，和 HM-10 筆記一致）、HM-01 的 3 檔 45 案（17＋9＋19）。
+- 子集結果：`5ea7850` 上 344 案全過、0 skip、93.5 秒（13:56 取得鎖）。最後的程式（`04b4bce`；和 `f204761` 只差 README 與兩個測試檔的
+  字串寫法，pytest 都不讀）上 15:15 取得鎖再跑一次：**344 案全過、0 skip、88.4 秒**。其中本片新測試 10 案、HM-10 的 3 檔 86 案
+  （32＋5＋49，和 HM-10 筆記一致）、HM-01 的 3 檔 45 案（17＋9＋19）。
 - 本片新測試另在 13:39 單獨正式跑過一次：10 案全過、2.3 秒。
+- 全套（`tests`，CI 的同一個指令加 `-rfEs --durations=30`，正式 conftest）：`f204761` 上 16:14 取得鎖、16:47 跑完，
+  開始與結束時工作樹都乾淨、HEAD 都是 `f204761`。**5,783 案過、7 案失敗、0 skip，32 分 25 秒**。失敗的 7 案就是第 16.9 節要 root 的既有案例（`test_owned_executable` 1、`test_profile_store` 1、`test_restore_detection` 5）。
+  上面子集的 20 個檔在全套裡也全過（344 案）。
+- 14:00～14:33 另跑過一次全套（5,783 過、7 失敗，同樣是那 7 案），但那時工作樹正在改建立名稱的修正，不算最後 HEAD 的證據。
 
 ### 16.7 CI 時間
 
-新測試本機合計約 12.5 秒（Playwright 約 10 秒，pytest 2.3 秒，node 不到 0.1 秒），推估 `checks` 多不到 0.3 分鐘（Playwright 共用同一個
-worker 與 fixture，沒有多開瀏覽器）。rebase 前推估本片多約 1.0 分鐘，合計約 1.3 分鐘；`checks` 目前約 28～35 分鐘、上限 60 分鐘。
+新測試本機合計約 13 秒（最後 HEAD：Playwright 11.6 秒＝`profile-api-parity.spec` 2.7＋`profiles.spec` 新 4 案 8.9；pytest 1.5 秒；
+node 約 0.02 秒），推估 `checks` 多不到 0.3 分鐘（Playwright 共用同一個 worker 與 fixture，沒有多開瀏覽器）。rebase 前推估本片多約 1.0 分鐘，合計約 1.3 分鐘；`checks` 目前約 28～35 分鐘、上限 60 分鐘。
 
 ### 16.8 預檢
 
-（跑完補）
+| 預檢 | 指令 | 結果（最後 HEAD） |
+|---|---|---|
+| 秘密 | `.venv/bin/python -I scripts/secret_precheck.py --tools SP:hm01/gitleaks-tools --repo . --base 684a2dd --head HEAD --full` | OK，0 命中（gitleaks 8.28.0；`684a2dd..HEAD` 32 個 commit，另掃 HEAD 的樹與整段歷史） |
+| 帳本 | `.venv/bin/python -I scripts/ledger_precheck.py --repo . --base 684a2dd` | OK：`runtime-patches.json` 175 項、`runtime-sources.json` 70 項、`docs/tool-surface.json` 159 項，0 漂移、0 缺；改過的 22 個檔裡 5 個由帳本釘住（app.js、api.js、contracts.js、operation-identity.js、profiles.js）、帳本本身有改；沒有帳本沒列的新執行檔 |
+
+`04b4bce` 上也各跑過一次，結果相同（秘密預檢那時是 29 個 commit）。
 
 ### 16.9 只在 CI 跑的測試
 
@@ -519,6 +547,8 @@ worker 與 fixture，沒有多開瀏覽器）。rebase 前推估本片多約 1.0
   孤兒、索引隔離、清單唯讀與隱藏名稱。要不要把管理面的資料案例做成正式的契約檔時，可以從 `profile-api-cases.json` 開始。
 - **HM-16**：P9 driver 的帳號參數與交叉矩陣（`createP9AdminClient(…, {profile})` 已就緒，這一輪沒改）。
 - **主對話**：契約第 9 節的新列是 #101～#104（接在 #100 後面）；HM-13b、HM-30、HM-31 若也在 #100 後面加列，合併時要重排列號。
+- **主對話（開 PR 前）**：對齊這一輪（`c8216d1`～`f204761`）還沒有獨立安全審查（第 16.13 節）；`39183dd` 的 commit 訊息含一個
+  U+202E（第 16.2 節），要不要在 push 前改寫由主對話決定。
 
 ### 16.12 commit（`684a2dd` 之後）
 
@@ -531,4 +561,26 @@ worker 與 fixture，沒有多開瀏覽器）。rebase 前推估本片多約 1.0
 | `2491f88` | 帳本重新釘 app.js、api.js、profiles.js、operation-identity.js |
 | `653c02d` | 契約第 9 節 #101～#104 與變更紀錄；decisions.md 的 DQ-12、DQ-14 負責片 |
 | `bca1883` | README 與寫入契約文件 |
-| 本筆記 | 第 16 節 |
+| `405643f` | 本筆記第 16 節（初版） |
+| `39183dd` | 測試：建立回應的名稱這個瀏覽器顯示不了時不往下傳（先紅） |
+| `13bb1c8` | 面板：建立的那一列照清單規則讀，提示以 id 前 8 碼稱呼 |
+| `04b4bce` | 帳本重新釘 app.js、api.js |
+| `4694e18` | README：建立後的提示也只以 id 前 8 碼稱呼 |
+| `f204761` | 測試：四處原始 U+202E 改成跳脫寫法 |
+| 本筆記 | 第 16 節補最後 HEAD 的檢查、預檢、驗收狀態與上面兩點修正 |
+
+第 2 節「沒改」清單在對齊後的變化：新增 pytest 測試 `tests/test_panel_profile_api_shapes.py`（不是正式程式）；`docs/multi-profile/contract.md`
+加了第 9 節 #101～#104 與一列變更紀錄（接在 #100 後面）。其他照舊：沒有動 `packages/mcp-admin-core/`、`apps/`、`conftest.py`、`addons/<x>/`、
+版號、CHANGELOG；`MULTI_PROFILE_PRODUCTS` 仍是空集合。
+
+### 16.13 驗收條件（計畫 §12.3 HM-11，對齊後）
+
+| 條件 | 結果 |
+|---|---|
+| `unit.sh` 的 node＋Playwright 綠 | 本機通過（最後 HEAD）：node 80 案、build-closure、Playwright 116 案。CI 待 PR |
+| 開關關時既有 9 個 spec 不改照過 | 通過：9 個 spec 檔對 `684a2dd` 沒有改；`single` 專案 71 案全過；四個另在 `profiles-on` 原封不動照過（20 案）；`profiles.spec` 有開關關的逐頁案例（MF-1） |
+| 舊格式收據案例過 | 通過：node 一案、Playwright 一案（第 16.6 節） |
+| fixture 和真後端一致（任務第 4 點） | 通過：第 16.4 節（93 個案例；Python 對真後端、Playwright 對 fixture、node 對面板送出的請求） |
+| 獨立安全審查 | **部分**：fixture 階段已審（修正後通過，第 15 節）；對齊這一輪（`c8216d1`～`f204761`）還沒有獨立審查，待主對話另派 |
+| 不改版號、不碰 `addons/<x>/`、不改 CHANGELOG；開關維持空集合 | 通過 |
+| 測試資料規則（計畫 §12.0 第 4 點）、兩個預檢 | 通過：案例檔的 id 是重複字母、過期 ETag 全 0、端點是 `.invalid`，Idempotency-Key 在執行時產生；秘密預檢 0 命中、帳本預檢 OK（第 16.8 節） |
