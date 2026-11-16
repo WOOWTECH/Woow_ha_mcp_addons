@@ -313,7 +313,7 @@ token 換掉時 `ClientDisconnect` 丟給 uvicorn）。HM-14 定案：
 | 帶兩個以上 | 400 `profile_id_invalid`（§8.8 #83；PaaS 取第一個值，第一個值存在就照常服務） |
 | 值不是 `default`、24 位小寫 hex | 400 `profile_id_invalid`（§8.8 #32；PaaS 404） |
 | 格式對、不存在（含孤兒、隔離目錄、已刪除的帳號） | 404 `profile_not_found`；絕不退回預設帳號 |
-| 存在但讀不到（`profile_unavailable`），或目錄已不是開啟時那一個（HM-07 審查 S-08 的管理面） | 503 `{"error":"state unavailable"}`；仍可刪除 |
+| 存在但讀不到（`profile_unavailable`），或目錄已不是開啟時那一個（HM-07 審查 S-08 的管理面；8081 那一側見 §8.8 #88） | 503 `{"error":"state unavailable"}`；仍可刪除 |
 | 額外帳號而索引不能用（壞掉或被外改） | 503 `profile_index_corrupt`；`default` 照常 |
 | 全域路徑 | 不看這個標頭；路徑裡的 `<id>` 格式錯在第 ⑤ 步回固定 400（沒有細節），格式對但不存在在第 ⑪ 步回 404 `profile_not_found` |
 | 沒開通的產品 | 不要求、不看（同今天） |
@@ -685,7 +685,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | 16 | 讀 body 前拒絕的回應碼 | 先讀 body，帶 id 一律 200＋`-32003` | ≤64 KiB 讀出 id 回 200＋`-32003`；更大的 503。附註（HM-08 審查 S-6）：batch 算沒有 id。HA 閘道平常就不收 batch（`policy.authorize` 的 `single JSON-RPC request required` → 403；PaaS 會轉送），過載時 HA 回 503＋`id: null`，PaaS 每個 id 一則 200 | 讀 body 前准入防單一帳號吃光 listener（C3-MF-2） | 部署 |
 | 17 | 回覆處理 | 事件迴圈內 | 一條工作執行緒、依帳號輪流 | HA 硬體慢、單一迴圈（第 6 節） | 部署 |
 | 18 | 健康檢查 | 沒有定期後端監看（FM-68） | 每帳號監看、連兩次失敗才判壞、認證退避 | HA 既有監看；Odoo 以來源 IP 冷卻 | 部署 |
-| 19 | 容量檢查 | cgroup 公式（建立時）；沒有 FD 預算 | MemAvailable（建立、存後端、起子程式時）；讀得到 cgroup 才用公式；錯誤多帶 `available_memory_mib`。另有 FD 預算：開機時 FD 上限提不到額外帳號要的量，就只服務預設帳號（HM-08），這時建立回 409 `profile_limit_reached`、`limit` 0、什麼都不寫（HM-10） | HA 沒有 cgroup；add-on 容器的 FD 上限由容器決定（第 5 節；HM-03a 實測） | 部署 |
+| 19 | 容量檢查 | cgroup 公式（建立時）；沒有 FD 預算 | MemAvailable（建立、存後端、起子程式時）；讀得到 cgroup 才用公式；錯誤多帶 `available_memory_mib`。另有 FD 預算（#87）：開機時 FD 上限提不到額外帳號要的量，就只服務預設帳號（HM-08），這時建立回 409 `profile_limit_reached`、`limit` 0、什麼都不寫（HM-10） | HA 沒有 cgroup；add-on 容器的 FD 上限由容器決定（第 5 節；HM-03a 實測） | 部署 |
 | 20 | 還原 | 手冊＋restore_guard（k8s Job） | entrypoint＋sentinel 偵測、開機守門、讀不到就隔離 | Supervisor 沒有 hook | 部署 |
 | 21 | 還原時預設帳號 | 一律撤銷 | DQ-03 採 (b) A2：只有磁碟上有帳號資料的還原才撤銷預設帳號 | 白名單落後＋還原換回舊版 | 部署 |
 | 22 | 還原後 token 歷史 | 清空（R04 S-15） | 保留，加一筆 revoke | 不改 schema | 部署 |
@@ -741,7 +741,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | 72 | 升級驗證 | helm 升級與回退實測 | Store 升版比對 hook（`seed`／`verify`，只讀、與版本無關）＋HAOS 驗收；`upgrade-notes.yaml` 條目 | Store 規則 | 部署 |
 | 73 | 發佈與版號 | main CI 映像 → 沙盒 → 釘版 PR → tag → /approve → CD | 功能 PR 不改版號；版號 PR 合併＝上架 WOOW App Store；repo 外 builder 建映像（要批准）→ 容器驗收 → 推 GHCR（燒版號）；`addons/<x>/` 底下的文件只在升版 PR；發版鎖 | Store 同步規則；版號 PR 合併＝發佈 | 部署 |
 | 74 | 產品開關 | 沒有（靠釘版隔離） | `MULTI_PROFILE_PRODUCTS` 逐產品，開關＝發版；不受開關管的切片隨任何產品出貨（第 1.2 節） | 每個映像整包複製核心 | 部署 |
-| 75 | CI | Gitea Actions | GitHub Actions `checks`（root、0 skip、Python 3.13.16、上限 40 分鐘）；拆 job 要保留 `checks` 名稱 | Store 必要檢查名稱（DQ-43 待定） | 部署 |
+| 75 | CI | Gitea Actions | GitHub Actions `checks`（root、0 skip、Python 3.13.16、上限 60 分鐘（DQ-43，2026-11-15 定案，PR #100））；拆 job 要保留 `checks` 名稱 | Store 必要檢查名稱（DQ-43：先調上限，拆 job 等真的太慢再議） | 部署 |
 | 76 | 面板測試 | 只有 `node --test` 進 CI，瀏覽器測試手動跑 | node 與 Playwright 都進 CI | HA 既有 | 加嚴（建議回補） |
 | 77 | 帳本 | 沒有 | `docs/provenance/runtime-patches.json`、tool-surface 摘要；新模組全部列管（`ledger-tracking.md`） | HA 既有供應鏈規則 | 既有 |
 | 78 | 秘密掃描與測試資料 | 沒有 builder 全歷史掃描 | builder 用 gitleaks 掃原始碼與全歷史、零容忍；`claude-delivery` 禁止 force push → 測試資料正規化、每片預檢 | 歷史改不掉 | 部署 |
@@ -786,5 +786,6 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | v1 草案（HM-14 審查） | 2026-11-16 | HM-14 | 依獨立安全審查補寫（程式改 S-1、S-4 與一個型別註記，見 HM-14 筆記第 15 節）：第 2.4 節加三點（保留名額只在准入還有空位時有用，MF-2，待使用者決定；GET 串流整段佔住一般名額與准入，UC-31；排隊中換 token 最多多佔 1 秒，S-7）；第 2.5 節：閘道補的 `-32004` 事件也算那個請求的回答、之後不再補 `-32005`（S-1），uvicorn 記一行的情況改成「兩個例外」（S-5）；第 4.2 節：`-32003`、`-32005` 兩列補差異列號，502 的既有回應補「逾時」；第 5 節加准入＝轉送＋排隊一點；第 9 節補第 96～99 列 |
 | v1 草案（HM-14 rebase） | 2026-11-16 | HM-14 | rebase 到 `claude-delivery`（HM-09 合併後，`c523474`）：HM-14 的差異列往後移一列（HM-09 已用第 89 列），引用一起改；第 2.5 節 `-32004` 停止了的文字依停止之後的狀態分兩種（HM-09 的 `blocked`、`failed` 等不會自動重新啟動），第 4.2 節 `-32004` 列跟著改，第 9 節補第 100 列；第 2.4、5 節與 #96 寫明 MF-2 (b) 的定案（主對話 2026-11-16：不改 DQ-07 的數值，交 HM-31 改分派器讀小請求；#96 的類型維持「待決」） |
 | v1 草案（HM-14 rebase 到 HM-20 之後） | 2026-11-16 | HM-14 | rebase 到 `claude-delivery`（HM-20 #102 合併後，`269f5a5`）：HM-14 的差異列再往後移一列，成為第 91～100 列（HM-20 用了第 90 列），第 2.4、2.5、4.2、5 節與第 10 節的引用一起改；第 9 節說明段把 HM-14 的列另寫一行（HM-09、HM-20 的說明照原文）。規則內容不變 |
-| v1 草案（HM-10） | 2026-11-15 | HM-10 | 第 3 節：DQ-13、DQ-14 改標已定（2026-11-15 17:4x 使用者採用建議，`decisions.md` 由 #100 記）；UC-10 照使用者 15:3x 的決定用標頭、不做路徑備案（第 3.7 節）；HM-10 定案的做法：分派器與抽出的共用管線、⑤ 的內容、⑪ 的順序、鎖、405 的位元組、`profiles/` 底下未知路徑、清單的 `orphans` 與 `status` 對應、`profile_unavailable`、建立的重送、刪除與索引隔離的回應與步驟、壞索引的 ETag 與 `profile_index_etag`、索引 ETag 的算法、收據的 `subject`、提交後失敗的處理、回聲的範圍與標頭、`profiles_supported`、額外帳號的 endpoint 與 owner-defaults、帳號 ETag 的 domain、建立後在新帳號自己的鎖裡起子程式、開機與重評起子程式也拿該帳號的鎖（HM-09 審查 S-12 第 2 點）、刪目錄從驗過的 `profiles/` 往下走、`profiles/` 列不出來又沒有索引檔時的隔離；第 4.1 節：`profile_not_found`、`profile_limit_reached`（FD 預算不夠時 `limit` 0）、`profile_memory_insufficient`（兩種記憶體算法的欄位）、`profile_port_unavailable`（18000～18099）、`endpoint_global`、`profile_index_corrupt`、`config_conflict`、`owner_defaults_unavailable` 的細節，固定回應的 405 與 HM-01 交下的逐位元案例；第 9 節 #27 |
+| v1 草案（HM-10） | 2026-11-15 | HM-10 | 第 3 節：DQ-13、DQ-14 改標已定（2026-11-15 17:4x 使用者採用建議，`decisions.md` 由 PR #100 記）；UC-10 照使用者 15:3x 的決定用標頭、不做路徑備案（第 3.7 節）；HM-10 定案的做法：分派器與抽出的共用管線、⑤ 的內容、⑪ 的順序、鎖、405 的位元組、`profiles/` 底下未知路徑、清單的 `orphans` 與 `status` 對應、`profile_unavailable`、建立的重送、刪除與索引隔離的回應與步驟、壞索引的 ETag 與 `profile_index_etag`、索引 ETag 的算法、收據的 `subject`、提交後失敗的處理、回聲的範圍與標頭、`profiles_supported`、額外帳號的 endpoint 與 owner-defaults、帳號 ETag 的 domain、建立後在新帳號自己的鎖裡起子程式、開機與重評起子程式也拿該帳號的鎖（HM-09 審查 S-12 第 2 點）、刪目錄從驗過的 `profiles/` 往下走、`profiles/` 列不出來又沒有索引檔時的隔離；第 4.1 節：`profile_not_found`、`profile_limit_reached`（FD 預算不夠時 `limit` 0）、`profile_memory_insufficient`（兩種記憶體算法的欄位）、`profile_port_unavailable`（18000～18099）、`endpoint_global`、`profile_index_corrupt`、`config_conflict`、`owner_defaults_unavailable` 的細節，固定回應的 405 與 HM-01 交下的逐位元案例；第 9 節 #27 |
 | v1 草案（HM-10 審查修正） | 2026-11-16 | HM-10 | 依 HM-10 的獨立安全審查（報告路徑見 PR 描述）：第 3.2 節，索引隔離依 id 順序拿每個已登錄額外帳號的 `mutation_lock`，⑩ 在拿完所有鎖之後，拿到該帳號移除登錄為止（S-1）；第 3.6 節，索引隔離因此只撤銷一次；第 3.1 節，開通後預設帳號看得到的兩個位元組變化（PATCH／DELETE 沒帶 CSRF 從 405 變 403、表外方法的 `Allow` 從 4 個方法變 6 個；S-6，交 HM-18 或升版片寫進計畫 §7.2、CHANGELOG、`upgrade-notes.yaml`）；第 9 節 #19（FD 預算）、#34（刪除也收孤兒與讀不到的帳號、刪目錄前先抹後端欄位、本體格式錯固定 400）、#51（清單的 `orphans`）補上和 PaaS 的差異（S-2） |
+| v1 草案（HM-10 rebase 到 HM-14 之後） | 2026-11-16 | HM-10 | rebase 到 HM-14（PR #103，`8ff259b`；它之前已合併 HM-08 審查修正、HM-09、HM-20 與 PR #100）之上：本片在第 9 節沒有自己的列（差異併在既有的 #19、#27、#34、#51），列號不用改；#19 的 FD 預算指到 HM-08 審查補的 #87；第 3.3 節「目錄已不是開啟時那一個」指到 8081 那一側的 #88；第 7 節錯開啟動列 HM-09 審查（S-12）與本片（帳號的鎖）兩段都留；#75 改成上限 60 分鐘（DQ-43，2026-11-15 定案，PR #100）；HM-10 列的「由 #100 記」寫明是 PR #100（第 9 節現在有第 100 列）。規則內容不變 |
