@@ -176,3 +176,25 @@ def test_a_revoke_all_whose_check_does_not_pass_keeps_its_marker(tmp_path, log_s
         done = revoke_all(disk)
     assert not done.finished and restore_lock.Revocation(A, 'failed') in done.results
     assert PENDING in disk.names() and disk.tokens(A)[0] is not None
+
+
+def test_a_failure_the_store_reports_keeps_the_marker_even_when_the_disk_shows_it_done(tmp_path, log_scan, monkeypatch):
+    """A store write that fails after its new state was put in place (the directory's fsync, say) leaves the disk
+    revoked but the outcome unknown: that profile is failed and the marker stays although the independent check passes;
+    the next start does it again and removes the marker."""
+    disk = disk_with_profiles(tmp_path, log_scan)
+    before = disk.held()
+    real = ProductStore.update
+
+    def update(self, **changes):
+        updated = real(self, **changes)
+        if self.directory.name == A and 'child_token' in changes:
+            raise ConfigError('durable state write failed; manual recovery required')
+        return updated
+    with monkeypatch.context() as patch:
+        patch.setattr(ProductStore, 'update', update)
+        done = revoke_all(disk)
+    assert not done.finished and restore_lock.Revocation(A, 'failed') in done.results
+    assert disk.tokens(A)[0] is None and disk.tokens(A)[1] not in before and PENDING in disk.names()
+    assert disk.start(enabled=True).revoke_all and PENDING not in disk.names()
+    all_revoked(disk, before)
