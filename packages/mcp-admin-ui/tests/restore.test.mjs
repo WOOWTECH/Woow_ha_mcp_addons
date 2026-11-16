@@ -5,8 +5,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ApiError } from '../src/api.js';
 import { OperationIdentity, PROFILES_SCOPE } from '../src/operation-identity.js';
-import { RecordError, dormantProfiles, exportDocument, exportEntry, policyLine, quarantineTime, quarantinedEntries,
-  recordView, restoreNotice, restoreReview, revocationResults, tokenText, waitsForReview } from '../src/restore.js';
+import { QUARANTINE_SHOWN, RecordError, dormantProfiles, exportDocument, exportEntry, policyLine, quarantineTime,
+  quarantinedEntries, recordView, restoreNotice, restoreReview, revocationResults, tokenText, waitsForReview } from '../src/restore.js';
 
 function memoryStorage() {
   const data = new Map();
@@ -69,6 +69,10 @@ test('the quarantine directories: a name and its id, the time from the name; any
     [{name, id: B}, {name, id: B}], 'all', [{name: `${B}-2026`, id: B}]]) {
     assert.throws(() => quarantinedEntries({quarantined: entries}), /帳號清單格式不符/, JSON.stringify(entries));
   }
+  // HM-13c review S-5: never refused for their number (the panel shows QUARANTINE_SHOWN and says how many more).
+  const many = Array.from({length: QUARANTINE_SHOWN + 6}, (_, n) => ({name: `${name}-${n + 2}`, id: B}));
+  assert.deepEqual(quarantinedEntries({quarantined: many}), many);
+  assert.equal(QUARANTINE_SHOWN, 64);
 });
 
 test('"revoke all" results: only the contract\'s ids and results; an unknown outcome keeps them in its error', () => {

@@ -33,7 +33,7 @@ import pytest
 
 from admin_write_headers import reviewed_headers
 from log_scan import log_scan  # noqa: F401  (fixture)
-from mcp_admin_core import operations, profiles, restore_detect as rd, restore_lock
+from mcp_admin_core import operations, profile_admin, profiles, restore_detect as rd, restore_lock
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.products import ProductStore
 from multi_profile_runtime import create_profile, multi_profile_runtime, stored
@@ -52,6 +52,7 @@ MARKER = profiles.RESTORE_MARKER_NAME
 NOTICE = profiles.RESTORE_NOTICE_NAME
 PENDING = profiles.REVOKE_ALL_MARKER_NAME
 LOGGER = 'mcp_admin_core.restore_lock'
+ADMIN_LOGGER = 'mcp_admin_core.profile_admin'
 STATE_UNAVAILABLE = (503, b'{"error":"state unavailable"}')
 REFUSED = (403, b'{"error":"request denied"}')
 # Every product run_product or apps/n8n/run.py starts (the golden regression's eight and Odoo Manage).
@@ -155,22 +156,27 @@ def test_a_notice_that_cannot_be_saved_keeps_the_marker_and_still_starts(tmp_pat
     assert MARKER not in disk.names() and restore_lock.read_notice(disk.data) is not None
 
 
-def test_a_start_stopped_anywhere_on_the_way_saves_the_notice_at_the_next(tmp_path, log_scan):
+@pytest.mark.parametrize('enabled', [False, True])
+def test_a_start_stopped_anywhere_on_the_way_saves_the_notice_at_the_next(tmp_path, log_scan, enabled):
     """The notice is saved before the marker goes, each step durable: a start stopped before or after any call that
-    changes the disk leaves either the marker (the next start saves the notice again) or both; never neither."""
+    changes the disk leaves either the marker (the next start saves the notice again) or both; never neither. Switched
+    on without profile data too (HM-13c review S-1): there the sentinel is rebuilt before the marker goes, so a start
+    that removed the marker without the notice would never see the restore again."""
     disk = Disk(tmp_path, log_scan)
+    if enabled:
+        assert disk.start(enabled=True) == restore_lock.Outcome()  # the first switched-on start's sentinel
     backup = disk.backup()
     counting = StopAt()
     disk.restore(backup)
-    disk.start_under(counting, enabled=False)
+    disk.start_under(counting, enabled=enabled)
     assert counting.count >= 4
     for nth in range(1, counting.count + 1):
         for after in (False, True):
             disk.restore(backup)
             with pytest.raises(Crash):
-                disk.start_under(StopAt(nth, after=after), enabled=False)
+                disk.start_under(StopAt(nth, after=after), enabled=enabled)
             assert MARKER in disk.names() or restore_lock.read_notice(disk.data) is not None, (nth, after)
-            disk.start(enabled=False)
+            disk.start(enabled=enabled)
             assert MARKER not in disk.names() and restore_lock.read_notice(disk.data) is not None, (nth, after)
             # A temporary a stop left behind is never read (contract 8, as the record's).
 
@@ -536,6 +542,40 @@ async def test_a_record_that_cannot_be_read_holds_every_new_token(tmp_path, log_
                                                                    'dormant_at': None}
 
 
+async def test_revoke_all_rebuilds_a_record_that_cannot_be_read(tmp_path, log_scan):
+    """HM-13c review S-2: a record that cannot be used holds every new token (503) and nothing else in the panel could
+    write it again. A "revoke all" that finishes writes a new one: every profile revoked and waiting for its review,
+    neither a restore nor a dormant part. From then on the gate works again, a profile at a time. A "revoke all" over a
+    record that can be used leaves it as it is."""
+    data = restored_profiles(tmp_path, extras=(B,))
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data, (B,))) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        path = profiles.Layout(data).restore_record
+        value = json.loads(path.read_text())
+        value['profiles'][1]['token'] = 'whatever'
+        path.write_text(json.dumps(value))
+        assert answer(await rotate(runtime, B))[::2] == STATE_UNAVAILABLE
+        panel = Admin(runtime, await csrf_of(runtime))
+        done = await panel.revoke_all()
+        assert done.status_code == 200, done.content
+        record = restore_lock.read_record(data)
+        assert restore_lock.check_record(record) == record and (record['restore'], record['dormant']) == (None, None)
+        assert [(row['id'], row['token'], row['reviewed_at']) for row in record['profiles']] == [
+            (DEFAULT, 'revoked', None), (B, 'revoked', None)]
+        assert (await bootstrap_of(runtime))['restore_review'] == {'pending': 2, 'restore_at': None, 'dormant_at': None}
+        for profile_id in (DEFAULT, B):
+            refused = await rotate(runtime, profile_id)
+            assert (refused.status_code, code_of(refused)) == (409, 'restore_review_required'), profile_id
+        assert (await panel.review(B)).status_code == 200
+        rotated = await rotate(runtime, B)
+        assert rotated.status_code == 200
+        log_scan.watch(rotated.json()['token'])
+        kept = path.read_bytes()
+        assert (await panel.revoke_all()).status_code == 200
+        assert path.read_bytes() == kept
+
+
 async def test_a_dormant_profile_switched_on_again_waits_for_its_review(tmp_path, log_scan):
     """I13 (plan 3.3, 8.4 休眠處理: "重新開通後照核對卡流程重發"): a start of a release that does not switch the product on
     revoked B and C (profile data on disk) and recorded it; switched on again, without a restore, the default
@@ -579,6 +619,130 @@ async def test_a_dormant_profile_switched_on_again_waits_for_its_review(tmp_path
         refused = await rotate(runtime, B)
         assert (refused.status_code, code_of(refused)) == (409, 'restore_review_required')
         assert (await bootstrap_of(runtime))['restore_review']['pending'] == 1
+
+
+async def test_a_profile_revoked_before_the_dormant_start_waits_for_its_review_too(tmp_path, log_scan):
+    """I13 (HM-13c review S-1): C's token was revoked before the release that does not switch the product on started
+    (its token/revoke): the dormant start leaves it as it is and records it already_revoked. Switched on again, C's new
+    token waits for its review as B's does (revoked by that start); once reviewed, it is issued."""
+    data = setup(tmp_path, extras=(B, C))
+    for value in tokens_now(data, (DEFAULT, B, C)).values():
+        log_scan.watch(value['token'], value['child_token'])
+    store = ProductStore(profiles.Layout(data).profile(C), PRODUCT, existing_only=True)
+    try:
+        store.change_token(None, action='revoke')
+    finally:
+        store.close()
+    store = ProductStore(data, PRODUCT)  # run_product's guard of a release that does not switch the product on
+    try:
+        assert restore_lock.guard(store, PRODUCT, enabled=False) == restore_lock.Outcome(dormant=2, revoked=(B,))
+    finally:
+        store.close()
+    assert [(row['id'], row['token']) for row in restore_lock.read_record(data)['profiles']] == [
+        (DEFAULT, 'kept'), (B, 'revoked'), (C, 'already_revoked')]
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data, (B, C))) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        assert (await bootstrap_of(runtime, C))['restore_review_required'] is True
+        refused = await rotate(runtime, C)
+        assert (refused.status_code, code_of(refused)) == (409, 'restore_review_required')
+        panel = Admin(runtime, await csrf_of(runtime))
+        assert (await panel.review(C)).status_code == 200
+        rotated = await rotate(runtime, C)
+        assert rotated.status_code == 200
+        log_scan.watch(rotated.json()['token'])
+
+
+@pytest.mark.parametrize('reviewed', [(B,), (B, DEFAULT), (B, DEFAULT, C)])
+def test_a_dormant_start_never_drops_a_review_the_last_record_waits_for(tmp_path, log_scan, reviewed):
+    """HM-13c review MF-1: a restore with profile data revoked the default profile, B and C (record R1, none reviewed);
+    then the profiles in reviewed were reviewed and B got its new token. A start of a release that does not switch the
+    product on (dormant: B revoked again) writes its record over R1 without dropping a review R1 still waits for: the
+    default profile's row stays R1's, as it was (revoked, not reviewed), while nobody reviewed it (that start keeps the
+    default profile: its own row would say kept and open the gate), and R1's restore part stays while one of R1's rows
+    still waits. B (revoked again) and C (already revoked) wait in any case."""
+    disk = Disk(tmp_path, log_scan)
+    assert disk.start(enabled=True) == restore_lock.Outcome()  # the sentinel, before any profile data
+    for profile_id in (B, C):
+        disk.add(profile_id)
+    disk.restore(disk.backup())
+    assert disk.start(enabled=True) == restore_lock.Outcome(restored=True, default_revoked=True, revoked=(B, C))
+    first = restore_lock.read_record(disk.data)
+    for profile_id in reviewed:
+        restore_lock.review(disk.data, profile_id)
+    disk.rotate(B)  # its new token, after its review
+    assert disk.start(enabled=False) == restore_lock.Outcome(dormant=2, revoked=(B,))
+    record = restore_lock.read_record(disk.data)
+    assert restore_lock.check_record(record) == record and record['dormant'] is not None
+    waits = DEFAULT not in reviewed
+    assert [(row['id'], row['token'], row['reviewed_at']) for row in record['profiles']] == [
+        (DEFAULT, 'revoked' if waits else 'kept', None), (B, 'revoked', None), (C, 'already_revoked', None)]
+    if waits:
+        assert record['profiles'][0] == first['profiles'][0]
+    assert record['restore'] == (None if C in reviewed else first['restore'])
+    assert disk.tokens()[0] is None  # the default profile's token is still the one the restore revoked
+
+
+async def test_after_a_dormant_start_the_default_profile_still_waits_for_its_review(tmp_path, log_scan):
+    """HM-13c review MF-1 (its experiment X1): after a restore with profile data, B is reviewed and gets its new token;
+    the default profile and C are not reviewed. A release that does not switch the product on starts (an emergency
+    stop, plan 3.3, 7.4: B revoked again). Switched on again, the default profile's new token still waits for its review
+    (409 restore_review_required, nothing written), as B's and C's do, and the card still names the restore (its time
+    and the dormant one's). Once reviewed, the default profile's new token is issued."""
+    data = restored_profiles(tmp_path)  # default, B, C; restored (marker)
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data, (B, C))) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        panel = Admin(runtime, await csrf_of(runtime))
+        assert (await panel.review(B)).status_code == 200
+        rotated = await rotate(runtime, B)
+        assert rotated.status_code == 200
+        log_scan.watch(rotated.json()['token'])
+    first = restore_lock.read_record(data)
+    store = ProductStore(data, PRODUCT)  # the emergency release's start
+    try:
+        assert restore_lock.guard(store, PRODUCT, enabled=False) == restore_lock.Outcome(dormant=2, revoked=(B,))
+    finally:
+        store.close()
+    record = restore_lock.read_record(data)
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data, (B, C))) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        default = await bootstrap_of(runtime)
+        assert default['restore_review'] == {'pending': 3, 'restore_at': first['restore']['at'],
+                                             'dormant_at': record['dormant']['at']}
+        assert default['restore_review_required'] is True
+        before = tree_of(data)
+        for profile_id in (DEFAULT, B, C):
+            refused = await rotate(runtime, profile_id)
+            assert (refused.status_code, code_of(refused)) == (409, 'restore_review_required'), profile_id
+        assert tree_of(data) == before
+        panel = Admin(runtime, await csrf_of(runtime))
+        assert (await panel.review(DEFAULT)).status_code == 200
+        rotated = await rotate(runtime, DEFAULT)
+        assert rotated.status_code == 200
+        log_scan.watch(rotated.json()['token'])
+
+
+def test_a_dormant_start_leaves_a_record_it_cannot_read_as_it_is(tmp_path, log_scan):
+    """HM-13c review MF-1, the other half: a dormant start cannot tell what a record it cannot use (not the guard's
+    shape here) still waits for, so it leaves it as it is and says so: switched on again, every new token keeps waiting
+    (503) until a "revoke all" rebuilds it. B is revoked all the same."""
+    disk = Disk(tmp_path, log_scan)
+    assert disk.start(enabled=True) == restore_lock.Outcome()
+    disk.add(B)
+    disk.restore(disk.backup())
+    assert disk.start(enabled=True).default_revoked
+    path = disk.data / profiles.RESTORE_RECORD_NAME
+    value = json.loads(path.read_text())
+    value['profiles'][1]['token'] = 'whatever'
+    path.write_text(json.dumps(value))
+    unusable = path.read_bytes()
+    disk.rotate(B)
+    assert disk.start(enabled=False) == restore_lock.Outcome(dormant=1, revoked=(B,))
+    assert path.read_bytes() == unusable and not restore_lock.record_usable(disk.data)
+    assert disk.tokens(B)[0] is None
+    assert ('WARNING', restore_lock.RECORD_KEPT) in guard_lines(log_scan)
 
 
 async def test_while_the_index_cannot_be_used_the_record_reads_and_a_review_waits_for_its_quarantine(tmp_path, log_scan):
@@ -659,6 +823,38 @@ async def test_a_quarantine_directory_is_listed_and_can_only_be_deleted(tmp_path
         assert again.status_code == 200 and again.json()['operation']['replayed'] is True
         gone = await panel.delete_quarantined(name)
         assert (gone.status_code, code_of(gone)) == (404, 'profile_not_found')
+
+
+async def test_a_quarantine_directory_whose_state_opens_is_revoked_and_wiped_before_it_goes(tmp_path, log_scan,
+                                                                                            monkeypatch):
+    """DQ-14 for a quarantine directory (contract 3.1, 9 #118; HM-13c review S-1): one whose state opens now (its
+    quarantine may have come from an error that went away) has its token revoked and its backend credentials wiped
+    before its directory goes. Here the removal leaves the directory behind (one line says so; it is listed again and
+    can be deleted again), so what was written before it can be seen."""
+    data = setup(tmp_path, extras=(B,))
+    create_profile(data, PRODUCT, D, label='Orphan Ops', port=18090, indexed=False)
+    layout = profiles.Layout(data)
+    name = f'{D}-20261116T093015Z'
+    directory = layout.profiles / (profiles.QUARANTINE_PREFIX + name)
+    os.rename(layout.profile(D), directory)
+    before = stored(directory)
+    assert before['token'] is not None and before['connection'] is not None
+    log_scan.watch(before['token'], before['child_token'], before['connection']['password'])
+    monkeypatch.setattr(profiles, 'remove_quarantine_directory', lambda layout, entry: False)
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data, (B,))) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        panel = Admin(runtime, await csrf_of(runtime))
+        assert (await panel.list())[0]['quarantined'] == [{'name': name, 'id': D}]
+        deleted = await panel.delete_quarantined(name)
+        assert deleted.status_code == 200, deleted.content
+        assert (await panel.list())[0]['quarantined'] == [{'name': name, 'id': D}]
+    after = stored(directory)
+    assert after['token'] is None and after['connection'] is None
+    assert after['child_token'] == before['child_token']  # never served: only what DQ-14 asks is changed
+    lines = [record.getMessage() for record in log_scan.records if record.name == ADMIN_LOGGER]
+    assert any(line.startswith(f'multi-profile: a quarantine directory of profile {D[:8]} could not be removed')
+               for line in lines), lines
 
 
 # ---- "revoke all" (plan 8.4 全部撤銷; contract 1.3, 3.1, 4.1, 4.2; FM-120) ----
@@ -810,6 +1006,50 @@ async def test_revoke_all_that_never_began_or_did_not_end(tmp_path, log_scan, mo
                 old = before[where]['token']
                 assert answer(await client.post('/mcp', headers={**ACCEPT, 'Authorization': 'Bearer ' + old},
                                                 json=initialize_message())) == BEARER_REQUIRED
+
+
+async def test_revoke_all_stopped_by_an_unexpected_error_fails_closed(tmp_path, log_scan, monkeypatch):
+    """HM-13c review S-4 (its experiment X6): an exception "revoke all" does not expect, half way (here: the default
+    profile revoked, B not yet), is answered as an outcome nobody knows: 409 operation_outcome_unknown without results
+    and the receipt unknown; the requests that carry an old token end, and every registered profile's old token is
+    refused on 8081 (503; B's is still on disk and is not served); one fixed line in the log names the exception's
+    class, never its text. The marker stays (a restart finishes it); a "revoke all" that finishes lifts the fence."""
+    data = setup(tmp_path, extras=(B,))
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data, (B,))) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        before = tokens_now(data, (DEFAULT, B))
+        changed = {where: runtime.manager.get(where).runtime.token_access.changed for where in (DEFAULT, B)}
+        panel = Admin(runtime, await csrf_of(runtime))
+
+        def stopped(self, **kwargs):
+            raise RuntimeError('unexpected, with a secret in its text: ' + before[B]['token'])
+        with monkeypatch.context() as patch:
+            patch.setattr(restore_lock._Sweep, 'directories_pass', stopped)
+            done = await panel.revoke_all()
+        assert (done.status_code, code_of(done)) == (409, 'operation_outcome_unknown'), done.content
+        detail = done.json()['detail']
+        assert detail['results'] == [] and detail['operation']['state'] == 'unknown'
+        after = tokens_now(data, (DEFAULT, B))
+        watch(log_scan, data)
+        assert after[DEFAULT]['token'] is None and after[B]['token'] == before[B]['token']
+        assert PENDING in os.listdir(data) and all(event.is_set() for event in changed.values())
+        lines = [record.getMessage() for record in log_scan.records if record.name == ADMIN_LOGGER]
+        assert profile_admin.REVOKE_ALL_STOPPED % 'RuntimeError' in lines
+        async with runtime.mcp() as client:
+            for where in (DEFAULT, B):
+                old = before[where]['token']
+                for path, headers in (('/mcp', {**ACCEPT, 'Authorization': 'Bearer ' + old}),
+                                      (f'/private_{old}/mcp', ACCEPT)):
+                    response = await client.post(path, headers=headers, json=initialize_message())
+                    assert answer(response)[::2] == STATE_UNAVAILABLE, where
+        retried = await panel.revoke_all()
+        assert retried.status_code == 200 and PENDING not in os.listdir(data)
+        async with runtime.mcp() as client:
+            for where in (DEFAULT, B):
+                old = before[where]['token']
+                assert answer(await client.post('/mcp', headers={**ACCEPT, 'Authorization': 'Bearer ' + old},
+                                                json=initialize_message())) == BEARER_REQUIRED, where
 
 
 async def test_revoke_all_is_the_emergency_stop_while_the_index_cannot_be_used(tmp_path, log_scan):

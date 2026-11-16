@@ -196,6 +196,40 @@ test('a quarantine directory can only be deleted, after two confirmations; a lis
   await expect(page.locator('#restore-review')).toContainText('2 個帳號的權杖已撤銷，等你核對');
 });
 
+test('more quarantine directories than the panel lists: the list stays usable, the first 64 are shown with how many more, and they can be deleted', async ({page, request}) => {
+  // HM-13c review S-5: a forged backup or many restores may leave any number of them; the list is never refused for it.
+  const names = Array.from({length: 70}, (_, n) => `${Q}-20261116T093015Z${n ? `-${n + 1}` : ''}`);
+  await reset(request, {product: 'odoo', configured: true, profiles: {extra: [{id: B, label: '會計', configured: true}], quarantined: names}});
+  await open(page, '/diagnostics');
+  const listed = page.locator('#profile-quarantined');
+  await expect(listed.locator('li')).toHaveCount(64);
+  await expect(listed.locator('.quarantine-more')).toHaveText('另有 6 筆隔離的帳號資料沒有列出（這裡最多列 64 筆）；刪除上面的之後，其餘的會依序出現。');
+  await expect(menu(page).locator(`option[value="${B}"]`)).toHaveCount(1);  // the real list, not the substitute
+  await expect(page.getByRole('button', {name: '全部撤銷', exact: true})).toBeEnabled();
+  await listed.locator('li').first().getByRole('button').click();
+  await confirm(page, '繼續');
+  await confirm(page, '確認刪除');
+  await expect(page.locator('#notice')).toContainText('已刪除隔離的帳號資料（abcdefab');
+  await expect(listed.locator('li')).toHaveCount(64);
+  await expect(listed.locator('.quarantine-more')).toContainText('另有 5 筆');
+});
+
+test('a restore record that cannot be read names the way out; the one "revoke all" rebuilt says so and waits for every review', async ({page, request}) => {
+  // HM-13c review S-2: every new token waits (503) while the record cannot be read; "revoke all" writes a new one.
+  await reset(request, {product: 'odoo', configured: true, profiles: {extra: [{id: B, label: '會計', configured: true}], restore: {broken: true}}});
+  await open(page, '/overview');
+  const card = page.locator('#restore-review');
+  await expect(card.getByRole('heading', {level: 2})).toHaveText('核對卡：還原紀錄');
+  await expect(card).toContainText('還原紀錄讀不到或格式不符：所有帳號的「重新產生權杖」暫停。到「診斷與維護」按「全部撤銷」，會撤銷每個帳號的權杖並重建紀錄');
+  await reset(request, {product: 'odoo', configured: true, profiles: {extra: [{id: B, label: '會計', configured: true}],
+    restore: {rows: [{id: 'default', label: 'Default', token: 'revoked', identity: {}, policy}, {id: B, label: '會計', token: 'revoked', identity: {}, policy}]}}});
+  await page.reload();
+  await idle(page);
+  await expect(card.getByRole('heading', {level: 2})).toHaveText('核對卡：全部撤銷時重建的紀錄');
+  await expect(card).toContainText('還原紀錄先前讀不到，全部撤銷時已重建。2 個帳號的權杖已撤銷，等你核對');
+  await expect(card.getByRole('button', {name: '已核對帳號「會計」（01234567）', exact: true})).toBeEnabled();
+});
+
 test('"revoke all" asks twice; when a profile fails it says which, keeps the operation open, and a new one after acknowledging finishes', async ({page, request}) => {
   await reset(request, {product: 'odoo', configured: true, restoreNotice: {at: AT}, profiles: {extra: [{id: B, label: '會計', configured: true}], revokeFail: [B]}});
   await open(page, '/diagnostics');
