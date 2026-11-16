@@ -113,12 +113,34 @@ bootstrap；product/contract/tools/schema/disabled/global/grants 任一變更即
   清單沒帶 `ETag` 時照列但唯讀；這個瀏覽器顯示不了的名稱只藏那一列的名稱（以 id 前 8 碼稱呼；建立後的提示也一樣）。
 - `profiles_supported` 是 false 的產品（OpenDesign、Odoo Manage，DQ-28）沒有「新增帳號」；`limit` 0（可開的檔案數不夠，
   只服務預設帳號）另有說明。
-- fixture 以 `profiles` 選項開關多帳號；Playwright 的 `profiles-on` 專案讓四個既有 spec 在開關開時原封不動再跑一次；
+- fixture 以 `profiles` 選項開關多帳號；Playwright 的 `profiles-on` 專案讓四個既有 spec 在開關開時原封不動再跑一次
+  （HM-12 起略過 `partial-settings.spec.mjs` 的兩案：它們把 n8n 網址改到別台卻保留已存金鑰，開通後面板要求重填、
+  add-on 回 422；這兩案在 `single` 專案照跑，開通的版本在 `backend-identity.spec.mjs`）；
   `profiles.spec.mjs` 另有一案在開關關時逐頁確認沒有任何帳號介面、帳號字樣與帳號標頭。
 - fixture 和真後端一致的證明：`tests/profile-api-cases.json` 列出面板開通後用到的每條管理路由與要處理的每種拒絕，
   每案的 `expect` 錄自真的 8099 管理 app（repo 根目錄 `tests/test_panel_profile_api_shapes.py`，pytest）；
   `tests/browser/profile-api-parity.spec.mjs` 讓 fixture 跑同一份案例、比同一份 `expect`。改了任何一邊，兩個測試之一會紅；
   真後端變了，先重錄 `expect`（照 Python 測試失敗時印出的形狀改），再改 fixture 與面板。
+
+## 換後端身分與新來源（HM-12；還沒有產品開通）
+
+伺服器沒開通時，這些回應不會出現，面板的畫面與請求照舊。開通後：
+
+- **換身分換 token**（DQ-05；只有 Odoo）：存檔改了 url、database 或 username（含清空），伺服器回 `token_rotated: true`
+  （不帶 token、不帶文字）。面板在存檔提示後面加一句「後端身分已變更…請到「連線與權杖」顯示並複製新的權杖」，藏起已顯示的權杖、
+  重新讀取狀態（遮罩與權杖歷史都變了）；下一次存檔用重新讀到的設定版本（等於回應的 `ETag`）。新子程式起不來時
+  （503 `config_apply_failed`＋`token_rotated`）同樣重新讀取，錯誤提示把兩件事都說出來。
+- **新來源要重填秘密**（DQ-40 ⑨；全部產品）：「修改個別欄位」把網址改到另一台伺服器（scheme、主機或 port 不同）時，
+  這個網址會送去、而且已存的秘密（`contracts.js` 的 `urlSecrets`，和後端 `identity_fields.URL_SECRETS` 由
+  `tests/test_identity_fields.py` 核對）不能再選「保留已儲存憑證」：改成必填（選填的可以明確清除），旁邊寫明原因；
+  改回同一台伺服器就恢復「保留」。來源照後端的算法比（`urlOrigin`，同一個測試逐案核對）：只改路徑、大小寫、寫出預設
+  port 不算；結尾的點、IPv4 的其他寫法算不同。伺服器的值不顯示（withheld）的網址，一律當成換了。伺服器仍回 422
+  `CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN` 時，面板只顯示固定文字（回應沒有回聲，不顯示送出的值），打過的秘密清掉。
+- **換身分失敗的 503**：`request denied`（舊子程式停不下來，什麼都沒存）照今天的 503 文字；`state unavailable`
+  的後端存檔（開通、會換 token 的產品）另加「存檔結果不明時請重新啟動 add-on，之後到「連線與權杖」確認 MCP 網址」
+  （HM-12 審查 S-7：結果不明時重啟後 token 可能已換，這次的回應不會說）。
+- fixture 在開通模式照 HM-12 的回應表回答（`profiles.rebindFault` 布置三種失敗）；`tests/profile-api-cases.json` 的
+  `identity` 等 4 個情境錄自真後端。
 
 ## 正式 listener 與 Ingress
 
