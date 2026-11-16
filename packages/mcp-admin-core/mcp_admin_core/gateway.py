@@ -1666,9 +1666,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         """Bound total bytes/time (seconds, default STREAM_SECONDS); poll revocation even while upstream is idle.
 
         HM-30 D3 (contract 6), only for a switched-on product (reply_worker given): each piece is read under the lease
-        without checking it again first (TokenLease.run checked): the caller checked it just before the first piece,
-        and the check after each piece is the one before the next (one state read a piece, not three). Left out, as
-        before."""
+        without checking it again first (TokenLease.run checked): the check that ended the lease's previous operation
+        (the child's headers, then each piece) is the one before the next piece, and whatever changed since stops the
+        piece before it is used (one state read a piece, not three). Left out, as before."""
         iterator = owner.iterator = owner.response.aiter_bytes()
         total = 0
         try:
