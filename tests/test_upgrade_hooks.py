@@ -220,6 +220,15 @@ def test_seed_fails_on_another_owner_an_unreadable_state_or_an_unreachable_add_o
     assert report(upgrade, 'seed')['default token in state.json']['result'] == 'fail'
 
 
+def test_the_hooks_go_straight_to_the_add_on_whatever_proxy_their_container_has(upgrade, monkeypatch):
+    for name in ('http_proxy', 'HTTP_PROXY', 'all_proxy', 'ALL_PROXY'):
+        monkeypatch.setenv(name, 'http://127.0.0.1:9')  # a proxy nothing answers on (loopback: no name to resolve)
+    for name in ('no_proxy', 'NO_PROXY'):
+        monkeypatch.delenv(name, raising=False)
+    assert run(seed, upgrade) == 0
+    assert run(verify, upgrade, PHASE='new') == 0
+
+
 def test_the_hooks_assert_nothing_that_depends_on_a_version(upgrade):
     assert run(seed, upgrade) == 0
     results = []
