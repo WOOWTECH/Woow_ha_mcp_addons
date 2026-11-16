@@ -504,12 +504,16 @@ class StopTests(unittest.TestCase):
 
 class Gateway(ThreadingHTTPServer):
     """8081 of a switched-on add-on, as the routing check sees it: a token chooses the profile on both connection
-    methods; a session belongs to the profile whose token opened it (the child's own session id); faults break one
-    rule each."""
+    methods and that profile's child opens the session (the gateway hands out the child's own session id); a session
+    belongs to the profile whose token opened it; faults break one rule each ('swaps children': the two additional
+    profiles are served by each other's child, every other rule kept)."""
 
     def __init__(self, tokens, faults=()):
         super().__init__(('127.0.0.1', 0), GatewayHandler)
         self.tokens, self.faults, self.sessions, self.lock = dict(tokens), set(faults), {}, threading.Lock()
+        self.route = {label: label for label in self.tokens.values()}  # profile -> the child its requests reach
+        if 'swaps children' in self.faults:
+            self.route[A[:8]], self.route[B[:8]] = B[:8], A[:8]
         threading.Thread(target=self.serve_forever, args=(.05,), daemon=True).start()  # a quick shutdown
 
     @property
@@ -553,7 +557,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
     def owned(self, token):
         session = self.headers.get('Mcp-Session-Id')
         owner = self.server.sessions.get(session)
-        return owner is not None and (owner == token or 'crosses sessions' in self.server.faults), session
+        return owner is not None and (owner[0] == token or 'crosses sessions' in self.server.faults), session
 
     def do_POST(self):
         message = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
@@ -563,8 +567,9 @@ class GatewayHandler(BaseHTTPRequestHandler):
         if message['method'] == 'initialize':
             prefix = 'woow-local-' if 'answers itself' in self.server.faults else 'child-'
             session = prefix + secrets.token_hex(8)
+            child = self.server.route.get(self.server.tokens.get(token))  # None: an unknown token served by a fault
             with self.server.lock:
-                self.server.sessions[session] = token
+                self.server.sessions[session] = (token, child)
             return self.answer(200, {'jsonrpc': '2.0', 'id': message['id'], 'result': {
                 'protocolVersion': '2025-03-26', 'capabilities': {'tools': {}}, 'serverInfo': {'name': 'fake'}}},
                 [('Mcp-Session-Id', session)])
@@ -590,26 +595,71 @@ class GatewayHandler(BaseHTTPRequestHandler):
         self.answer(200)
 
 
+class ProfileChild(ThreadingHTTPServer):
+    """A profile's child, asked straight by the routing check: it serves its own child bearer only, and knows only the
+    sessions the gateway opened with it (any other session id: 404, as the MCP SDK answers an unknown session)."""
+
+    def __init__(self, gateway, label, child_token):
+        super().__init__(('127.0.0.1', 0), ProfileChildHandler)
+        self.gateway, self.label, self.child_token = gateway, label, child_token
+        threading.Thread(target=self.serve_forever, args=(.05,), daemon=True).start()  # a quick shutdown
+
+    @property
+    def port(self):
+        return self.server_address[1]
+
+
+class ProfileChildHandler(BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
+
+    def do_POST(self):
+        message = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+        child, body = self.server, None
+        if self.headers.get('Authorization') != 'Bearer ' + child.child_token:
+            status = 401
+        else:
+            owner = child.gateway.sessions.get(self.headers.get('Mcp-Session-Id'))
+            known = owner is not None and (owner[1] == child.label or 'a child knows every session' in child.gateway.faults)
+            status = 200 if known else 404
+            body = {'jsonrpc': '2.0', 'id': message['id'], 'result': {}} if known else None
+        raw = b'' if body is None else json.dumps(body).encode()
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+
 class RoutingTests(unittest.TestCase):
-    """check_routing (T-05): each token its own profile on both connection methods, sessions never cross profiles,
-    an unknown token refused; every session it opened is ended, also when it fails."""
+    """check_routing (T-05): each token its own profile on both connection methods and its session its own child's,
+    sessions never cross profiles, an unknown token refused; every session it opened is ended, also when it fails."""
 
     def setUp(self):
-        self.tokens = {secrets.token_urlsafe(32): label for label in ('default', A[:8], B[:8])}
+        self.labels = ('default', A[:8], B[:8])
+        self.tokens = {secrets.token_urlsafe(32): label for label in self.labels}
+        self.child_tokens = {label: secrets.token_urlsafe(32) for label in self.labels}
 
     def check(self, faults=()):
         gateway = Gateway(self.tokens, faults)
         self.addCleanup(gateway.server_close)
         self.addCleanup(gateway.shutdown)
+        children = {label: ProfileChild(gateway, label, self.child_tokens[label]) for label in self.labels}
+        for child in children.values():
+            self.addCleanup(child.server_close)
+            self.addCleanup(child.shutdown)
+        found = [(label, children[label].port, token, self.child_tokens[label]) for token, label in self.tokens.items()]
 
         async def run():
             async with httpx.AsyncClient(trust_env=False, timeout=10) as client:
-                await stage.check_routing(client, [(label, token) for token, label in self.tokens.items()],
-                                          stage.initialize_message(), base=gateway.base)
+                await stage.check_routing(client, found, stage.initialize_message(), base=gateway.base)
         try:
             asyncio.run(run())
         finally:
             self.left = dict(gateway.sessions)
+
+    def secrets_in(self, text):
+        return any(value in text for value in [*self.tokens, *self.child_tokens.values()])
 
     def test_isolated_profiles_pass_and_every_session_is_ended(self):
         self.check()
@@ -618,6 +668,8 @@ class RoutingTests(unittest.TestCase):
     def test_each_broken_rule_fails_without_naming_a_token(self):
         for fault, message in (('crosses sessions', 'session served with the token of'),
                                ('answers itself', 'no child answered its initialize'),
+                               ('swaps children', "its session is not its own child's"),
+                               ('a child knows every session', 'knows its session'),
                                ('serves an unknown bearer', 'unknown Bearer token served'),
                                ('serves an unknown secret url', 'unknown secret URL served'),
                                ('refuses the secret url', 'its token opened no session'),
@@ -626,9 +678,15 @@ class RoutingTests(unittest.TestCase):
             with self.subTest(fault=fault):
                 with self.assertRaisesRegex(AssertionError, message) as failed:
                     self.check({fault})
-                self.assertFalse(any(token in str(failed.exception) for token in self.tokens))
+                self.assertFalse(self.secrets_in(str(failed.exception)))
                 if fault != 'keeps sessions':
                     self.assertEqual(self.left, {})  # ended, also on a failure
+
+    def test_a_swap_names_the_profile_whose_session_another_child_holds(self):
+        """Review SF-1 (experiment X1): B and C served by each other's child keep every other rule; only asking each
+        child straight sees it."""
+        with self.assertRaisesRegex(AssertionError, f"^{A[:8]}: its session is not its own child's$"):
+            self.check({'swaps children'})
 
 
 class ChildHandler(BaseHTTPRequestHandler):
@@ -690,20 +748,35 @@ class ChildBearerTests(unittest.TestCase):
         self.assertFalse(any(token in str(failed.exception) for token in tokens))
 
 
-class StageTests(unittest.TestCase):
-    """stage(): the order of its steps (the module docstring), with every step replaced; a failure still stops the
-    runtime it started."""
+class Each:
+    """A replaced step's results, one for each call in turn."""
 
-    def run_stage(self, fail=None):
-        events = []
+    def __init__(self, *values):
+        self.values = list(values)
+
+
+ESTABLISHED = stage.detected(False, restore_detect.ESTABLISHED)
+CONSISTENT = stage.detected(False, restore_detect.CONSISTENT)
+RESTORED = stage.detected(True, restore_detect.MISMATCH)  # both restore signals: the marker and the sentinel
+
+
+class StageTests(unittest.TestCase):
+    """stage(): the order of its steps (the module docstring) with every step replaced, what each step is given, and
+    the stage's own verdicts (HM-16 review MF-1: the sentinel established by the fixture and untouched by the runtime,
+    the restored bytes kept, both restore signals seen); a failure still stops the runtime it started."""
+
+    def run_stage(self, fail=None, verdicts=(ESTABLISHED, CONSISTENT, RESTORED), kept=None, app='odoo'):
+        """(events, the replaced steps' calls {name: [(args, kwargs)]}, failure messages, the stage's inputs)."""
+        events, calls, failures = [], {}, []
         process = Mock(**{'poll.return_value': None})
 
         def record(name, result=None):
             def step(*args, **kwargs):
                 events.append(name)
+                calls.setdefault(name, []).append((args, kwargs))
                 if name == fail:
                     raise AssertionError(name + ' failed')
-                return result
+                return result.values.pop(0) if isinstance(result, Each) else result
             return step
 
         def arecord(name, result=None):
@@ -712,45 +785,116 @@ class StageTests(unittest.TestCase):
             async def step(*args, **kwargs):
                 return sync(*args, **kwargs)
             return step
-        verdicts = iter([stage.detected(False, restore_detect.ESTABLISHED), stage.detected(False, restore_detect.CONSISTENT),
-                         stage.detected(True, restore_detect.MISMATCH)])
-
-        def detect(data):
-            events.append('detect')
-            return next(verdicts)
         found = [(label, port, secrets.token_urlsafe(32), secrets.token_urlsafe(32))
                  for label, port in (('default', 3000), (A[:8], 18000), (B[:8], 18001))]
-        fake = SimpleNamespace(DATA=Path('/data/mcp'), start=record('start', process),
+        created, pids = [(A, 18000), (B, 18001)], {3000: 10, 18000: 11, 18001: 12}
+        fake = SimpleNamespace(APP=app, DATA=Path('/data/mcp'), start=record('start', process),
                                ready_listener=arecord('ready'), stop=record('stop'),
                                restore_as_supervisor=record('restore', (['state.json'], b'S')),
                                check_restored_start=record('repaired'))
-        replaced = {'end_restore_marker': record('end marker'), 'detect_as_runtime': detect,
-                    'create_profiles': record('create', [(A, 18000), (B, 18001)]),
-                    'credentials': record('credentials', found), 'profiles_up': arecord('up', {3000: 1}),
+        replaced = {'end_restore_marker': record('end marker'), 'detect_as_runtime': record('detect', Each(*verdicts)),
+                    'create_profiles': record('create', created),
+                    'credentials': record('credentials', found), 'profiles_up': arecord('up', pids),
                     'check_routing': arecord('routing'), 'check_child_bearers': arecord('child bearers'),
                     'check_resources': record('resources'), 'kill_one': arecord('kill'),
                     'initialize_on': arecord('served again', (200, 'child-1', '2025-03-26')),
                     'end_session': arecord('ended', 200), 'stop_within': record('stop within 30 s', 1.5),
-                    'tree_snapshot': record('tree', {'state.json': ()}), 'kept_bytes': record('kept', {'x': b''})}
+                    'tree_snapshot': record('tree', {'state.json': ()}),
+                    'kept_bytes': record('kept', Each(*(kept or ({'state.json': b'S'}, {'state.json': b'S'}))))}
         with patch.multiple(stage, **replaced), patch('builtins.print'):
             try:
                 asyncio.run(stage.stage(fake, 'client'))
-            except AssertionError:
+            except AssertionError as error:
                 events.append('failed')
-        return events
+                failures.append(str(error))
+        inputs = SimpleNamespace(fake=fake, process=process, found=found, created=created, pids=pids)
+        return events, calls, failures, inputs
+
+    def assert_every_start_stopped(self, events):
+        self.assertEqual(events.count('start'), events.count('stop') + events.count('stop within 30 s'))
 
     def test_the_steps_run_in_order(self):
-        self.assertEqual(self.run_stage(), [
+        events, _, failures, _ = self.run_stage()
+        self.assertEqual(failures, [])
+        self.assertEqual(events, [
             'end marker', 'detect', 'create', 'credentials', 'start', 'ready', 'up', 'routing', 'child bearers',
             'resources', 'kill', 'served again', 'ended', 'stop within 30 s', 'detect', 'tree', 'kept', 'restore',
             'start', 'ready', 'repaired', 'kept', 'up', 'stop within 30 s', 'detect'])
 
+    def test_every_step_is_given_all_three_profiles_and_the_kill_an_additional_one(self):
+        _, calls, failures, given = self.run_stage()
+        self.assertEqual(failures, [])
+        data, ports = Path('/data/mcp'), [3000, 18000, 18001]
+
+        def args(name):
+            return [arguments for arguments, _ in calls[name]]
+        self.assertEqual(args('detect'), [(data,)] * 3)
+        self.assertEqual(args('create'), [(given.fake,)])
+        self.assertEqual(args('credentials'), [(data, given.created)])
+        self.assertEqual(args('up'), [(given.fake, given.process, ports)] * 2)  # every child, both starts
+        self.assertEqual(args('routing'), [('client', given.found, stage.initialize_message())])
+        self.assertEqual(args('child bearers'), [(given.fake, 'client',
+                                                  [(label, port, child) for label, port, _, child in given.found],
+                                                  stage.initialize_message())])
+        self.assertEqual(args('resources'), [(given.process, given.pids)])
+        token = given.found[1][2]
+        self.assertEqual(args('kill'), [(given.fake, given.process, 18000)])  # an additional profile's child, not 3000
+        bearer = {'Authorization': 'Bearer ' + token}
+        self.assertEqual(args('served again'), [('client', stage.MCP + '/mcp', bearer, stage.initialize_message())])
+        self.assertEqual(args('ended'), [('client', stage.MCP + '/mcp', bearer, 'child-1', '2025-03-26')])
+        self.assertEqual(args('stop within 30 s'), [(given.fake, given.process)] * 2)
+        self.assertEqual(args('kept'), [(data, given.created)] * 2)
+        self.assertEqual(args('repaired'), [(['state.json'], b'S')])
+
+    def test_a_sentinel_the_fixture_did_not_establish_fails_before_anything_starts(self):
+        for first in (CONSISTENT, RESTORED, stage.detected(False, restore_detect.MISMATCH),
+                      stage.detected(False, restore_detect.RECORD_MISSING)):
+            with self.subTest(first=first):
+                events, _, failures, _ = self.run_stage(verdicts=(first, CONSISTENT, RESTORED))
+                self.assertEqual(failures, ['sentinel not established'])
+                self.assertEqual(events, ['end marker', 'detect', 'failed'])  # no profile data, no start
+
+    def test_a_sentinel_the_runtime_touched_fails_once_it_stopped(self):
+        """A chmod of the sentinel (mismatch: its ctime), or a marker, after the first start: no restore follows."""
+        for second in (stage.detected(False, restore_detect.MISMATCH), stage.detected(True, restore_detect.CONSISTENT),
+                       RESTORED):
+            with self.subTest(second=second):
+                events, _, failures, _ = self.run_stage(verdicts=(ESTABLISHED, second, RESTORED))
+                self.assertEqual(failures, ['sentinel touched by the runtime'])
+                self.assertEqual(events[-3:], ['stop within 30 s', 'detect', 'failed'])
+                self.assertNotIn('restore', events)
+                self.assert_every_start_stopped(events)
+
+    def test_a_restore_not_seen_by_both_signals_fails(self):
+        for third in (stage.detected(False, restore_detect.MISMATCH), stage.detected(True, restore_detect.CONSISTENT),
+                      CONSISTENT):
+            with self.subTest(third=third):
+                events, _, failures, _ = self.run_stage(verdicts=(ESTABLISHED, CONSISTENT, third))
+                self.assertEqual(failures, ['restore not seen by both signals'])
+                self.assertEqual(events.count('start'), 2)
+                self.assert_every_start_stopped(events)
+
+    def test_restored_profile_data_rewritten_fails_and_stops_the_runtime(self):
+        events, _, failures, _ = self.run_stage(kept=({'state.json': b'S'}, {'state.json': b'T'}))
+        self.assertEqual(failures, ['restored profile data rewritten'])
+        self.assertEqual(events[-3:], ['kept', 'stop', 'failed'])
+        self.assertEqual(events.count('up'), 1)  # the restored start's children are never waited for
+        self.assert_every_start_stopped(events)
+
     def test_a_failed_step_stops_the_runtime_it_started(self):
-        events = self.run_stage(fail='routing')
+        events, _, _, _ = self.run_stage(fail='routing')
         self.assertEqual(events[-2:], ['stop', 'failed'])
-        events = self.run_stage(fail='repaired')
+        self.assert_every_start_stopped(events)
+        events, _, _, _ = self.run_stage(fail='repaired')
         self.assertEqual(events[-2:], ['stop', 'failed'])
         self.assertEqual(events.count('restore'), 1)
+        self.assert_every_start_stopped(events)
+
+    def test_n8n_is_refused_before_anything_changes(self):
+        """Review SF-2: n8n's children name their port in their environment only (HM-25)."""
+        events, _, failures, _ = self.run_stage(app='n8n')
+        self.assertEqual((events, failures), (['failed'], ["n8n's children name their port in their environment only "
+                                                           '(HM-25)']))
 
 
 if __name__ == '__main__':

@@ -20,10 +20,12 @@ loopback rule):
    container has no trusted Ingress and no HA role verifier, and the probe never bypasses them (the management API is
    tests/test_profile_admin_api.py's and, on HAOS, the P9 kit's temporary-profile mode's).
 2. One start: every profile's child runs and listens on its own port (3000, 18000, 18001), on IPv4 loopback only.
-3. Routing (T-05): each profile's token opens a session with its own child (a child's session, not the gateway's own)
-   on both connection methods, and lists the same tools (the policy a creation copies, DQ-02); a session of one
-   profile is unknown (404) with any other profile's token, on both methods; an unknown token gets 401 (Bearer) and 404
-   (secret URL).
+3. Routing (T-05): each profile's token opens a session with its own child on both connection methods: a child's
+   session, not the gateway's own, and asked straight with each child's own child token, only that profile's child
+   knows it (the gateway hands out the child's own session id; every other child answers 404: a consistent swap of two
+   profiles' children is seen, HM-16 review SF-1). Both methods list the same tools, and so do the three profiles (the
+   policy a creation copies, DQ-02); a session of one profile is unknown (404) with any other profile's token, on both
+   methods; an unknown token gets 401 (Bearer) and 404 (secret URL).
 4. Child bearer (T-23, HM-06): each child serves its own child token only; none, a random one and every other
    profile's get 401 and no session.
 5. Child resources (HM-09): an additional child's oom_score_adj is 500 and its nice value 5 above the management
@@ -41,6 +43,12 @@ loopback rule):
 What HM-13b's boot gate changes in steps 1 and 9 (it removes the marker itself, makes the sentinel itself, and revokes
 on the start after a restore) is listed in docs/provenance/ha-multiprofile-HM-16-20261116.md. Fixed messages only: no
 token, child token, label, state or backend value is ever printed; a profile is named by its log id (profiles.log_id).
+
+Not for n8n yet (HM-25, review SF-2): its child names its port only in its environment (PORT, beside its tokens), never
+on its command line, so the children cannot be told apart by their command lines; stage() refuses n8n before it
+changes anything. Reading another user's /proc/<pid>/fd links as root takes CAP_SYS_PTRACE, which docker gives no
+container by default (not measured here). n8n's switch-on slice gives its child a port the probe can read without its
+environment, and checks tree_snapshot's names against what n8n-mcp leaves in its directory (its HOME).
 """
 import asyncio
 import hashlib
@@ -260,7 +268,8 @@ def kept_bytes(data, created):
 def child_port(argv):
     """The port a child's command line names (--port N or --port=N), or None (the default child of Hermes and
     OpenDesign runs on its launcher's own default, CHILD_PORT; an additional child's exec wrapper carries the real
-    command line, so it names the port too)."""
+    command line, so it names the port too). n8n's child names none (its port is in its environment: module
+    docstring)."""
     for index, value in enumerate(argv):
         if value == '--port' and index + 1 < len(argv) and argv[index + 1].isdigit():
             return int(argv[index + 1])
@@ -424,14 +433,29 @@ async def end_session(client, url, headers, session, version):
     return response.status_code
 
 
-async def check_routing(client, profiles_tokens, message, base=MCP):
-    """T-05 on the real 8081 (see the module docstring). profiles_tokens: [(log id, token)]. Every session it opens is
-    ended, also when a check fails. Fixed messages only, a profile named by its log id."""
+async def ping_child(client, port, child_token, session, version):
+    """ping straight to the child on *port* in *session*, with that child's own child bearer: its status (the reply read
+    and dropped). A child knows only the sessions it opened: any other id is 404 (the MCP SDK's unknown session)."""
+    message = {'jsonrpc': '2.0', 'id': 3, 'method': 'ping'}
+    headers = {**ACCEPT, 'Authorization': 'Bearer ' + child_token, 'Mcp-Session-Id': session,
+               'MCP-Protocol-Version': version}
+    async with client.stream('POST', f'http://127.0.0.1:{port}/mcp', headers=headers, json=message) as response:
+        if response.status_code == 200:
+            await protocol_reply(response, message['id'])
+        else:
+            await response.aread()
+        return response.status_code
+
+
+async def check_routing(client, found, message, base=MCP):
+    """T-05 on the real 8081 (see the module docstring). found: [(log id, child port, token, child token)], as
+    credentials() returns them. Every session it opens is ended, also when a check fails. Fixed messages only, a profile
+    named by its log id."""
     def methods(token):
         return ((base + '/mcp', {'Authorization': 'Bearer ' + token}), (f'{base}/private_{token}/mcp', {}))
     opened, listings, ended = [], {}, []
     try:
-        for label, token in profiles_tokens:
+        for label, _, token, _ in found:
             for url, headers in methods(token):
                 status, session, version = await initialize_on(client, url, headers, message)
                 assert status == 200 and session, f'{label}: its token opened no session'
@@ -441,10 +465,19 @@ async def check_routing(client, profiles_tokens, message, base=MCP):
                 assert status == 200 and names, f'{label}: tools/list unanswered'
                 listings.setdefault(label, names)
                 assert listings[label] == names, f'{label}: its two connection methods list differently'
-        first = listings[profiles_tokens[0][0]]
+        first = listings[found[0][0]]
         assert all(names == first for names in listings.values()), "a profile's policy differs from the default's"
         for label, _, _, _, session, version in opened:
-            for other, token in profiles_tokens:
+            # The gateway hands out the child's own session id: only the child of the profile whose token opened the
+            # session knows it (review SF-1: a consistent swap of two profiles' children passes every check above).
+            for other, port, _, child_token in found:
+                status = await ping_child(client, port, child_token, session, version)
+                if other == label:
+                    assert status == 200, f"{label}: its session is not its own child's"
+                else:
+                    assert status == 404, f'{label}: the child of {other} knows its session'
+        for label, _, _, _, session, version in opened:
+            for other, _, token, _ in found:
                 if other == label:
                     continue
                 for url, headers in methods(token):
@@ -481,6 +514,7 @@ async def check_child_bearers(probe, client, children, message):
 
 async def stage(probe, client):
     """The multi-profile stage (the module docstring's steps 1 to 9); prints one line of numbers, no secret."""
+    assert probe.APP != 'n8n', "n8n's children name their port in their environment only (HM-25)"
     data = Path(probe.DATA)
     message = initialize_message()
     end_restore_marker(data)
@@ -494,7 +528,7 @@ async def stage(probe, client):
         began = time.monotonic()
         pids = await profiles_up(probe, process, ports)
         up = time.monotonic() - began
-        await check_routing(client, [(label, token) for label, _, token, _ in found], message)
+        await check_routing(client, found, message)
         await check_child_bearers(probe, client, [(label, port, child) for label, port, _, child in found], message)
         check_resources(process, pids)
         label, port, token, _ = found[1]
