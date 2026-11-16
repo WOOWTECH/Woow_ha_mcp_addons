@@ -45,7 +45,8 @@ print(" ".join(str(pid) for pid, (_, ppid) in sorted(procs.items()) if ppid in l
 KILL_SCRIPT = 'import os, sys\nfor pid in sys.argv[1:]: os.kill(int(pid), 9)'
 # Multi-profile HM-16: each MCP child of the management launcher with the port its command line names ("-": none; the
 # default profile's child of Hermes and OpenDesign runs on its launcher's own default, 3000). A child that exited and
-# is not reaped yet has an empty command line and is left out.
+# is not reaped yet has an empty command line and is left out. n8n's child names its port only in its environment, so
+# its children cannot be told apart here (until HM-25): childkill --child-port then kills nothing and fails.
 CHILD_PORT_SCRIPT = r'''
 import os, sys
 root = sys.argv[1] if len(sys.argv) > 1 else "/proc"
@@ -75,6 +76,16 @@ for pid, (cmd, ppid) in sorted(procs.items()):
 '''
 DEFAULT_CHILD_PORT = 3000
 CROSS_LABEL = re.compile(r'default|[0-9a-f]{8}')  # a profile's log id: never its name
+# childkill --child-port (HM-16 review MF-2): the watchdog starts a killed child again after 2 s at first
+# (lifecycle.AUTO_RESTART_DELAYS), and meanwhile the gateway answers initialize itself with a session of its own
+# (gateway.local_initialize: "woow-local-"), so the killed child is looked for until it is back, then a session of its
+# own is waited for.
+CHILD_BACK_SECONDS = 60
+CHILD_LOOK_SECONDS = 0.5
+LOCAL_SESSION = 'woow-local-'
+# Straight to the app's mapped MCP port: no proxy from the HA host shell's environment (review SF-5: a secret URL
+# carries its token in its path).
+OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
 def run(args, timeout=300):
@@ -101,8 +112,8 @@ class Client:
             headers['Mcp-Session-Id'] = sid
         data = None if body is None else json.dumps(body).encode()
         try:
-            response = urllib.request.urlopen(urllib.request.Request(self.url, data=data, headers=headers,
-                                                                     method=method), timeout=timeout or self.timeout)
+            response = OPENER.open(urllib.request.Request(self.url, data=data, headers=headers, method=method),
+                                   timeout=timeout or self.timeout)
         except urllib.error.HTTPError as error:
             try:  # keep a short error body for the report (a JSON-RPC error or plain text)
                 raw = error.read(2048).decode('utf-8', 'replace').strip()
@@ -202,6 +213,28 @@ def wait_ready(client, opts, limit=240.0, sleep=time.sleep):
     return {'ready_s': None}
 
 
+def wait_child_session(client, opts, limit, sleep=time.sleep):
+    """Multi-profile HM-16 (review MF-2): wait_ready, counting only a session the child opened. Until the child serves
+    again the gateway answers initialize itself, with a session of its own (LOCAL_SESSION): those are ended and
+    counted, never taken for the child's."""
+    start, local = time.monotonic(), 0
+    while time.monotonic() - start < limit:
+        status, _, sid = client.open()
+        if status == 200 and sid and not sid.startswith(LOCAL_SESSION):
+            ready = time.monotonic() - start
+            begin = time.monotonic()
+            call_status, is_error = first_call(client, sid, opts)
+            elapsed = time.monotonic() - begin
+            client.close(sid)
+            return {'ready_s': round(ready, 2), 'gateway_sessions': local, 'first_call_http': call_status,
+                    'first_call_isError': is_error, 'first_call_s': round(elapsed, 3)}
+        if sid:
+            local += 1
+            client.close(sid)
+        sleep(CHILD_LOOK_SECONDS)
+    return {'ready_s': None, 'gateway_sessions': local}
+
+
 def container_name(slug):
     names = set(run(['docker', 'ps', '-a', '--format', '{{.Names}}']).stdout.split())
     for name in ('app_' + slug, 'addon_' + slug):
@@ -294,10 +327,15 @@ def mode_childkill(opts, client, out):
     return {'childkill': result}
 
 
-def profile_childkill(opts, client, out, container):
+def profile_childkill(opts, client, out, container, sleep=time.sleep):
     """Multi-profile HM-16 (FM-107; T-13): SIGKILL only the child of the profile on --child-port (its token is the
     client's); it must start again, and every other profile's child keep its PID. A port no single child names kills
-    nothing."""
+    nothing.
+
+    Review MF-2: the watchdog starts the killed child after its first delay (2 s) and meanwhile the gateway answers
+    initialize itself, so the children are looked at every CHILD_LOOK_SECONDS until exactly one new PID serves the port
+    (at most CHILD_BACK_SECONDS; another child's PID changing ends it at once, failed), and the profile is back only
+    once its token opens a session of the child's own (wait_child_session), not one the gateway opened."""
     pairs, before = child_ports(container), container_state(container)
     targets = serving(pairs, opts.child_port)
     if len(targets) != 1:
@@ -306,23 +344,40 @@ def profile_childkill(opts, client, out, container):
     others = sorted((pid for pid, _ in pairs if pid != target), key=int)
     status, _, old = client.open()
     kill = run(['docker', 'exec', container, 'python', '-c', KILL_SCRIPT, target])
+    killed = time.monotonic()
     old_status = client.tools(old)[0]
-    ready = wait_ready(client, opts)
-    after = child_ports(container)
-    now = serving(after, opts.child_port)
-    others_after = sorted((pid for pid, _ in after if pid not in now), key=int)
+    client.close(old)  # it ended with the child; ended here all the same, as every session the probe opens
+    looks, now, others_after = 0, [], others
+    while True:
+        after = child_ports(container)
+        looks += 1
+        now = serving(after, opts.child_port)
+        others_after = sorted((pid for pid, _ in after if pid not in now), key=int)
+        if any(pid not in others for pid in others_after):
+            break  # another profile's child started again: no wait helps
+        if len(now) == 1 and now[0] != target and others_after == others:
+            break
+        if time.monotonic() - killed >= CHILD_BACK_SECONDS:
+            break
+        sleep(CHILD_LOOK_SECONDS)
+    child_s = round(time.monotonic() - killed, 2)
     unchanged = others_after == others
-    back = len(now) == 1 and now[0] != target and ready.get('ready_s') is not None
+    started = len(now) == 1 and now[0] != target
+    ready = (wait_child_session(client, opts, CHILD_BACK_SECONDS, sleep) if started and unchanged
+             else {'ready_s': None, 'gateway_sessions': 0})
+    back = started and ready.get('ready_s') is not None
     result = {'child_port': opts.child_port, 'initialize_before': status, 'child_pid_before': target,
-              'kill_rc': kill.returncode, 'old_session_after_kill': old_status, **ready,
+              'kill_rc': kill.returncode, 'old_session_after_kill': old_status, 'looks': looks,
+              'child_back_s': child_s if started else None, **ready,
               'child_pid_after': now[0] if len(now) == 1 else None, 'others_before': others,
               'others_after': others_after, 'others_unchanged': unchanged, 'pass': unchanged and back,
               'before': before, 'after': container_state(container)}
-    out.write('child on port %d: pid %s killed rc=%s; old session tools/list=%s; recovered in %ss (first call http=%s); '
-              'child pid now %s; other children %s -> %s (%s)\n' % (
-                  opts.child_port, target, kill.returncode, old_status, ready.get('ready_s'),
-                  ready.get('first_call_http'), result['child_pid_after'], others, others_after,
-                  'unchanged' if unchanged else 'CHANGED'))
+    out.write('child on port %d: pid %s killed rc=%s; old session tools/list=%s; new pid %s after %ss (%d looks); '
+              "child's session after %ss more (%d gateway sessions before it; first call http=%s); "
+              'other children %s -> %s (%s)\n' % (
+                  opts.child_port, target, kill.returncode, old_status, result['child_pid_after'],
+                  result['child_back_s'], looks, ready.get('ready_s'), ready.get('gateway_sessions'),
+                  ready.get('first_call_http'), others, others_after, 'unchanged' if unchanged else 'CHANGED'))
     out.write('container before=%s after=%s\n' % (before, result['after']))
     return {'childkill': result}
 

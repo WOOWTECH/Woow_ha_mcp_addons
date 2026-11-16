@@ -33,8 +33,11 @@ class FakeMCP(ThreadingHTTPServer):
         self.outage = False
         self.refuse_initialize = False  # 0.1.2 gateway: a child that cannot open a session without its backend
         self.refusal_session = None
+        # HM-16 (review MF-2): this many more initializes are answered by the gateway itself (0.2.2: a woow-local-
+        # session, while the child is not running), as while a killed child waits for the watchdog's restart.
+        self.local_initializes = 0
         self.calls = []
-        threading.Thread(target=self.serve_forever, daemon=True).start()
+        threading.Thread(target=self.serve_forever, args=(.05,), daemon=True).start()  # a quick shutdown
 
     @property
     def port(self):
@@ -84,6 +87,9 @@ class Handler(BaseHTTPRequestHandler):
                 if len(self.server.sessions) >= self.server.cap:
                     return self.reply(429, {'error': 'Session limit reached'})
                 sid = uuid.uuid4().hex
+                if self.server.local_initializes > 0:
+                    self.server.local_initializes -= 1
+                    sid = probe.LOCAL_SESSION + sid
                 self.server.sessions.add(sid)
             return self.reply(200, {'jsonrpc': '2.0', 'id': body['id'], 'result': {'serverInfo': {'name': 'fake'}}},
                               {'Mcp-Session-Id': sid})
@@ -245,6 +251,21 @@ class ProbeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.main('bench', '--args', '{not json', stdin=TOKEN + '\n')
 
+    def test_the_probe_goes_straight_to_the_app_whatever_proxy_the_host_shell_has(self):
+        """HM-16 review SF-5: a proxy set in the HA host's shell is never used (a secret URL carries its token in its
+        path). Run as on the HA host: python3 and the file, in a process of its own with that environment (an opener
+        built at import, or urllib's own, reads the environment then)."""
+        proxies = {name: 'http://127.0.0.1:9' for name in ('http_proxy', 'HTTP_PROXY', 'https_proxy', 'HTTPS_PROXY',
+                                                            'all_proxy', 'ALL_PROXY')}  # nothing answers on port 9
+        done = subprocess.run([sys.executable, '-I', str(Path(probe.__file__).resolve()), '--port', str(self.server.port),
+                               'check'], input='valid\t%s\n' % TOKEN, capture_output=True, text=True, timeout=60,
+                              env={'PATH': '/usr/bin:/bin', **proxies}, cwd='/')
+        self.assertNotIn(TOKEN, done.stdout + done.stderr)
+        self.assertEqual(done.returncode, 0)
+        summary = json.loads(done.stdout.split('SUMMARY ', 1)[1])
+        self.assertEqual([(row['initialize'], row['delete']) for row in summary['check']], [(200, 204)])
+        self.assertEqual(self.server.sessions, set())
+
 
 class ProfilesMCP(ThreadingHTTPServer):
     """8081 of a switched-on add-on (multi-profile HM-16): a token chooses its profile on /mcp (Bearer) and on its secret
@@ -375,7 +396,8 @@ class CrossMatrixTests(unittest.TestCase):
 
 class ProfileChildKillTests(unittest.TestCase):
     """childkill --child-port (multi-profile HM-16; FM-107, T-13): only the child of the named profile's port is
-    killed; it must come back, and every other child keep its PID."""
+    killed; it must come back with a new PID, its profile must open a session of the child's own again (not one the
+    gateway answers itself while the watchdog waits: review MF-2), and every other child keep its PID throughout."""
 
     def setUp(self):
         self.server = FakeMCP(cap=3)
@@ -383,8 +405,18 @@ class ProfileChildKillTests(unittest.TestCase):
         self.addCleanup(self.server.shutdown)
         self.children = '8 3000\n9 18000\n10 18001\n'
         self.commands = []
+        self.looks = 0  # looks at the children after the kill
+        for name, value in (('CHILD_BACK_SECONDS', 0.5), ('CHILD_LOOK_SECONDS', 0.01)):  # the real ones: 60 s, 0.5 s
+            patcher = patch.object(probe, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
-    def fake_run(self, after):
+    def fake_run(self, after, local=0):
+        """after: the children each look after the kill sees (a list: one per look, the last one from then on);
+        local: how many initializes the gateway answers itself after the kill."""
+        after = [after] if isinstance(after, str) else list(after)
+        state = {'killed': False}
+
         def run(args, timeout=300):
             self.commands.append(args)
             out = ''
@@ -393,25 +425,34 @@ class ProfileChildKillTests(unittest.TestCase):
             elif args[:2] == ['docker', 'inspect']:
                 out = '0 2026-11-16T08:06:11Z'
             elif args[:2] == ['docker', 'exec'] and probe.CHILD_PORT_SCRIPT in args:
-                out = self.children
+                if state['killed']:
+                    out = after[min(self.looks, len(after) - 1)]
+                    self.looks += 1
+                else:
+                    out = self.children
             elif args[:2] == ['docker', 'exec'] and probe.KILL_SCRIPT in args:
-                self.children = after
+                state['killed'] = True
+                self.server.local_initializes = local
             return subprocess.CompletedProcess(args, 0, out, '')
         return run
 
-    def childkill(self, port, after):
+    def childkill(self, port, after, local=0):
         out = io.StringIO()
-        with patch.object(probe, 'run', self.fake_run(after)):
+        with patch.object(probe, 'run', self.fake_run(after, local)):
             try:
                 return probe.main(['--port', str(self.server.port), 'childkill', '--slug', 'repo_woow_mcp_odoo',
                                    '--child-port', str(port)], io.StringIO(TOKEN + '\n'), out)
             finally:
-                self.assertNotIn(TOKEN, out.getvalue())
+                self.output = out.getvalue()
+                self.assertNotIn(TOKEN, self.output)
+
+    def kills(self):
+        return [command for command in self.commands if probe.KILL_SCRIPT in command]
 
     def test_only_the_profile_s_child_is_killed_and_the_others_keep_their_pids(self):
         summary = self.childkill(18000, '8 3000\n19 18000\n10 18001\n')['childkill']
-        kills = [command for command in self.commands if probe.KILL_SCRIPT in command]
-        self.assertEqual(kills, [['docker', 'exec', 'app_repo_woow_mcp_odoo', 'python', '-c', probe.KILL_SCRIPT, '9']])
+        self.assertEqual(self.kills(), [['docker', 'exec', 'app_repo_woow_mcp_odoo', 'python', '-c', probe.KILL_SCRIPT,
+                                         '9']])
         self.assertEqual((summary['child_pid_before'], summary['child_pid_after']), ('9', '19'))
         self.assertEqual((summary['others_before'], summary['others_after']), (['8', '10'], ['8', '10']))
         self.assertTrue(summary['others_unchanged'] and summary['pass'])
@@ -422,9 +463,37 @@ class ProfileChildKillTests(unittest.TestCase):
         self.assertEqual((summary['child_pid_before'], summary['others_before']), ('8', ['9']))
         self.assertTrue(summary['pass'])
 
+    def test_a_child_back_after_the_watchdog_s_delay_passes_once_its_profile_has_the_child_s_session(self):
+        """As on a real add-on (review experiment X4): the restarted child shows only from the third look, and the
+        gateway answers the profile's first three initializes itself (woow-local-), each session ended."""
+        gone, back = '8 3000\n10 18001\n', '8 3000\n19 18000\n10 18001\n'
+        summary = self.childkill(18000, [gone, gone, back], local=3)['childkill']
+        self.assertTrue(summary['pass'])
+        self.assertEqual((summary['looks'], summary['child_pid_after'], summary['gateway_sessions']), (3, '19', 3))
+        self.assertIsNotNone(summary['ready_s'])
+        self.assertEqual(self.server.sessions, set())  # the gateway's sessions and the child's were all ended
+        self.assertEqual(len(self.kills()), 1)
+        self.assertIn('new pid 19 after ', self.output)
+
+    def test_a_child_that_never_comes_back_fails_and_nothing_else_is_killed(self):
+        with self.assertRaises(SystemExit) as failed:
+            self.childkill(18000, '8 3000\n10 18001\n')
+        self.assertEqual(failed.exception.code, 1)
+        self.assertGreater(self.looks, 1)  # looked again until the limit, not once
+        self.assertEqual(len(self.kills()), 1)
+        self.assertEqual(self.server.calls.count('initialize'), 1)  # only the session before the kill: no wait for one
+
+    def test_a_profile_the_gateway_still_answers_itself_is_not_back(self):
+        with self.assertRaises(SystemExit) as failed:
+            self.childkill(18000, '8 3000\n19 18000\n10 18001\n', local=10 ** 6)
+        self.assertEqual(failed.exception.code, 1)
+        self.assertEqual(self.server.sessions, set())  # each of the gateway's own sessions ended
+        self.assertEqual(len(self.kills()), 1)
+
     def test_another_child_restarted_or_the_child_not_back_fails(self):
-        for after in ('8 3000\n19 18000\n20 18001\n', '8 3000\n10 18001\n'):
+        for after in ('8 3000\n19 18000\n20 18001\n', '8 3000\n10 18001\n', ['8 3000\n10 18001\n', '8 3000\n20 18001\n']):
             with self.subTest(after=after), self.assertRaises(SystemExit) as failed:
+                self.looks = 0
                 self.childkill(18000, after)
             self.assertEqual(failed.exception.code, 1)
 
