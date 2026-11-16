@@ -16,13 +16,14 @@
 | 模組 | 建立的片 | 之後會改的片（照合併順序） | 帳本 | tool-surface | 用途 |
 |---|---|---|---|---|---|
 | `packages/mcp-admin-core/mcp_admin_core/features.py` | HM-07 | 每個產品的升版片（加產品；受發版鎖）。HM-17 沒改它：HM-17 先合併，那時這個檔還不存在 | 列管（HM-07 起） | — | 產品開關 `MULTI_PROFILE_PRODUCTS`；`enabled(product)` 呼叫時讀 |
-| `packages/mcp-admin-core/mcp_admin_core/profiles.py` | HM-07 | HM-13a（還原標記的檔名常數；還沒合併）→ HM-09 → HM-10 → HM-25 | 列管（HM-07 起） | — | 索引、簽章、布局、一致性、容量常數、名稱規則、port 配發 |
+| `packages/mcp-admin-core/mcp_admin_core/profiles.py` | HM-07 | HM-13a（還原標記的檔名常數；還沒合併）→ HM-09 → HM-10 → HM-31（只改註解）→ HM-25 | 列管（HM-07 起） | — | 索引、簽章、布局、一致性、容量常數、名稱規則、port 配發 |
 | `packages/mcp-admin-core/mcp_admin_core/identity_fields.py` | HM-07 | HM-12、HM-13b | 列管（HM-07 起） | — | 八個產品的身分欄位與秘密欄位分類 |
-| `packages/mcp-admin-core/mcp_admin_core/profile_runtime.py` | HM-05 | HM-08 → HM-09 → HM-13b → HM-30 → HM-25 | 列管 | — | 每帳號執行套件（store、Supervisor、監看、收據） |
-| `packages/mcp-admin-core/mcp_admin_core/profile_router.py` | HM-08 | HM-10 → HM-14 → HM-27 | 列管 | — | 8081 token 分派器；8099 分派、方法表、Ingress 備援改寫 |
+| `packages/mcp-admin-core/mcp_admin_core/profile_runtime.py` | HM-05 | HM-08 → HM-09 → HM-13b → HM-30 → HM-31 → HM-25 | 列管 | — | 每帳號執行套件（store、Supervisor、監看、收據） |
+| `packages/mcp-admin-core/mcp_admin_core/profile_router.py` | HM-08 | HM-10 → HM-14 → HM-31 → HM-27 | 列管 | — | 8081 token 分派器；8099 分派、方法表、Ingress 備援改寫 |
 | `packages/mcp-admin-core/mcp_admin_core/profile_admin.py` | HM-10 | HM-13c → HM-27 | 列管 | — | 帳號增刪改查、索引隔離、全部撤銷、還原核對 |
 | `packages/mcp-admin-core/mcp_admin_core/restore_detect.py` | HM-13a | HM-13b | 列管 | — | sentinel 與 record 的建立、比對、重建 |
 | `packages/mcp-admin-core/mcp_admin_core/restore_lock.py` | HM-13b | HM-13c | 列管 | — | 開機守門 A～F 步、休眠處理、`.revoke-all-pending` |
+| `packages/mcp-admin-core/mcp_admin_core/request_budget.py` | HM-31 | HM-30（如果回覆額度要共用它）；HM-19c 量測後改常數的功能 PR | 列管（HM-31 起） | — | 閘道的請求內容位元組預算（全 add-on＋每帳號份額，對齊 PaaS #155）、讀取閒置、讀完丟掉的拒絕、每帳號每情況 60 秒一行的 WARNING（`Reports`，從 `profile_router.py` 移來）；不受開關管 |
 | `packages/mcp-admin-core/mcp_admin_core/log_redaction.py` | HM-02 | PaaS 遮罩之後再變時的同步 PR（#149 已在 `7d111b1` 合併，HM-02 直接用合併版） | 列管（記在 `runtime-patches.json`；不另記 `runtime-sources.json`，那本只收 `apps/<產品>/vendor/`。DQ-38 的補充，HM-02 審查 MF-3，2026-11-15 08:2x 定案） | — | 紀錄遮罩（PaaS 規則先、HA 規則後） |
 | 回覆工作執行緒模組（暫定名 `reply_worker.py`） | HM-30 | — | 列管 | — | 回覆處理的工作執行緒與依帳號輪流的佇列 |
 | `packages/mcp-admin-core/mcp_admin_core/origin_policy.py` | HM-27 | — | 列管 | — | 密鑰網址的服務層級 Origin 清單（report-only） |
