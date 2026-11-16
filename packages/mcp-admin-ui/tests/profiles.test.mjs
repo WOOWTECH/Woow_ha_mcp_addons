@@ -625,6 +625,8 @@ function saving(product, save, options = {}) {
     '/api/backend/patch': save, '/api/backend': save, '/api/policy': save}});
 }
 const usernameChange = {changes: {username: 'DUMMY-user-two'}};
+// HM-12 review S-5: server text an answer may carry; the panel never shows it.
+const CANARY = 'PRIVATE_CANARY_MUST_NOT_RENDER';
 
 test('HM-12: a save that rotated the token says token_rotated (200): passed on with its echo checked, never a token', async () => {
   const etag = `"c1-${'c'.repeat(64)}"`;
@@ -645,11 +647,13 @@ test('HM-12: a save that rotated the token says token_rotated (200): passed on w
 });
 
 test('HM-12: shape D with token_rotated (saved, the new child not started) is config_apply_failed that also says the token changed; only that shape', async () => {
-  const shapeD = (_options, named) => Response.json({saved: true, token_rotated: true, detail: {code: 'config_apply_failed'}, configuration: {}, ...named}, {status: 503});
+  const shapeD = (_options, named) => Response.json({saved: true, token_rotated: true, message: CANARY, detail: {code: 'config_apply_failed', message: CANARY},
+    configuration: {}, ...named}, {status: 503});
   const api = new AdminApi(mount, saving('odoo', shapeD).fetcher, memoryStorage());
   await api.bootstrap();
   await assert.rejects(() => api.mutate('backend/patch', usernameChange, revisionOf(DEFAULT_PROFILE)), error => error instanceof ApiError
-    && error.status === 503 && error.code === 'config_apply_failed' && error.tokenRotated === true && error.message === `${APPLY_FAILED} ${ROTATED}`);
+    && error.status === 503 && error.code === 'config_apply_failed' && error.tokenRotated === true && error.message === `${APPLY_FAILED} ${ROTATED}`
+    && !error.message.includes(CANARY));
   // Said of another profile than the one asked (I12): nothing of it is taken, today's copy (an error's echo decides
   // nothing else; this one would say whose token changed).
   const elsewhere = new AdminApi(mount, saving('odoo', shapeD, {echo: (operation, id) => operation === 'backend/patch' ? DEFAULT_PROFILE : id}).fetcher, memoryStorage());
@@ -764,11 +768,11 @@ test('HM-12 (DQ-40 ⑨): switched on, a URL moved to another origin needs its st
   const withheld = {...odoo, backend_edit: {...ODOO_EDIT, values: {...ODOO_EDIT.values, url: null}, withheld_fields: ['url']}};
   assert.deepEqual(newOriginSecrets(withheld, moved, {url: 'https://odoo.invalid/odoo'}), ['password']);
   // n8n: its API key and MCP access token both go to its one server; one never stored is not asked for, a cleared one is brought.
-  const n8n = {product: 'n8n', connection_configured: true, backend_edit: {contract: 'woow-connection-patch-v1', values: {url: 'http://old.test'}, secret_set: {key: true, mcp_access_token: true}}};
-  const n8nMoved = {url: 'set', key: 'keep', mcp_access_token: 'keep'}, n8nElsewhere = {url: 'http://new.test'};
+  const n8n = {product: 'n8n', connection_configured: true, backend_edit: {contract: 'woow-connection-patch-v1', values: {url: 'http://old.n8n.invalid'}, secret_set: {key: true, mcp_access_token: true}}};
+  const n8nMoved = {url: 'set', key: 'keep', mcp_access_token: 'keep'}, n8nElsewhere = {url: 'http://new.n8n.invalid'};
   assert.deepEqual(newOriginSecrets(n8n, n8nMoved, n8nElsewhere), ['key', 'mcp_access_token']);
   assert.deepEqual(backendPatchPayload(n8n, {...n8nMoved, key: 'set', mcp_access_token: 'clear'}, {...n8nElsewhere, key: 'DUMMY-new-key'}, true),
-    {changes: {url: 'http://new.test', key: 'DUMMY-new-key', mcp_access_token: null}});
+    {changes: {url: 'http://new.n8n.invalid', key: 'DUMMY-new-key', mcp_access_token: null}});
   assert.throws(() => backendPatchPayload(n8n, {...n8nMoved, key: 'set'}, {...n8nElsewhere, key: 'DUMMY-new-key'}, true), /MCP Access Token.*或明確清除。$/);
   assert.deepEqual(newOriginSecrets({...n8n, backend_edit: {...n8n.backend_edit, secret_set: {key: true, mcp_access_token: false}}}, n8nMoved, n8nElsewhere), ['key']);
   // Hermes: each URL its own server's secret; a dashboard set for the first time brings nothing; OpenDesign sends none.
