@@ -22,7 +22,9 @@ import time
 import xmlrpc.client
 
 import httpx
+import container_profiles  # multi-profile HM-16: the stage of a switched-on candidate (container_profiles.stage)
 from denial_probe import assert_denials, WRITE_CASES
+from mcp_admin_core import features
 from mcp_admin_core.health import protocol_reply
 from mcp_admin_core.products import ProductStore, PROBES, TOOLS, allowed_address, fresh_write_grants, probe_success
 from mcp_admin_core.profiles import RESTORE_MARKER_NAME as MARKER  # what packaging/entrypoint.py saves (HM-13a)
@@ -167,6 +169,10 @@ async def ready_listener(client, process):
 
 
 def fixture_snapshot():
+    if features.enabled(APP):
+        # Multi-profile HM-16 (C4-SF-5): only a switched-on product's /data/mcp may hold the multi-profile layout
+        # (profiles/, the index, the restore files), within the restore repair's rules and budget.
+        return container_profiles.tree_snapshot(DATA)
     # Bounded, private synthetic fixture only; never log its contents or hashes.
     entries = list(islice(DATA.iterdir(), 17))
     assert len(entries) <= 16
@@ -238,6 +244,11 @@ async def restored_start(client):
 
 
 def mock_bind_host(app):
+    if app != 'headscale' and features.enabled(app):
+        # Multi-profile HM-16 (HM-20 review MF-2): every child of a switched-on product refuses a loopback backend, as
+        # Headscale's child does: container_acceptance gives it the same one-use internal bridge, and its mock listens
+        # on this container's private address.
+        return container_profiles.private_mock_host()
     if app != 'headscale':
         return '127.0.0.1'
     # container_acceptance gives Headscale a disposable internal bridge. Its
@@ -463,6 +474,10 @@ async def run():
             assert (await client.post(ENDPOINT, headers={'Authorization': 'Bearer ' + token}, json=message)).status_code == 403
             stop(process)
             process = None
+            if features.enabled(APP):
+                # Multi-profile HM-16 (plan 12.3 HM-16; FM-101, FM-147): a switched-on candidate only, after the
+                # single-profile path above, which every candidate runs as before (packaging/container_profiles.py).
+                await container_profiles.stage(sys.modules[__name__], client)
         print('PASS: actual packaged runtime + owned mock; no HA/backend E2E claim')
     finally:
         if process is not None and process.poll() is None:
