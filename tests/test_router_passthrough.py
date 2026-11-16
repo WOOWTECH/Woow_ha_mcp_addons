@@ -3,8 +3,8 @@
 
 Switched off (the repository: MULTI_PROFILE_PRODUCTS is empty), run_product serves what it served before HM-08: the
 default profile's own apps on both listeners, limit_concurrency 64 on each, no profile index or profile directory
-read, no file limit touched; profile data on disk changes nothing (its tokens are unknown tokens; HM-13b revokes
-them). HM-01's golden regression and both contract freezes keep proving the bytes.
+read, no file limit touched; profile data on disk is dormant: its tokens are unknown tokens, and HM-13b's boot guard
+revokes them before anything is served. HM-01's golden regression and both contract freezes keep proving the bytes.
 
 Switched on, the default profile alone answers every HM-01 golden, MCP-contract and management-contract case byte for
 byte through the dispatcher (those tests run again here with the switch on; plan 7.3). HM-10: on 8099 a switched-on
@@ -148,17 +148,18 @@ async def test_switched_off_run_product_serves_the_default_profile_alone(tmp_pat
 
 
 @pytest.mark.parametrize('product', [product for product in RUN_PRODUCTS if product in SWITCHABLE])
-async def test_switched_off_profile_data_on_disk_changes_nothing(tmp_path, log_scan, product):
+async def test_switched_off_profile_data_on_disk_is_revoked_and_nothing_else_changes(tmp_path, log_scan, product):
     """Profile data on disk (an index and a profile directory) while the product is switched off: its token is an
-    unknown token on both paths (the dormant-profile revocation is HM-13b's, plan 3.3), and the start leaves every
-    entry under /data/mcp as it was, the index and the profile directory included (ctime aside: the default state is
-    re-chmod'ed at every read, test_upgrade_zero_rewrite.start_facts)."""
+    unknown token on both paths, and HM-13b's boot guard revoked it before anything was served (dormant profiles, plan
+    3.3: the token None, a new child token, the restore record's dormant part); every other entry under /data/mcp stays
+    as it was, the index included (ctime aside: the default state is re-chmod'ed at every read,
+    test_upgrade_zero_rewrite.start_facts)."""
     data = tmp_path / 'data'
     configure(data, product)
     create_profile(data, product, B, label='Beta Ops', port=18000)
     log_scan.watch('Beta Ops', kind='name')
-    token = stored(profiles.Layout(data).profile(B))['token']
-    log_scan.watch(token, stored(profiles.Layout(data).profile(B))['child_token'])
+    token, child = stored(profiles.Layout(data).profile(B))['token'], stored(profiles.Layout(data).profile(B))['child_token']
+    log_scan.watch(token, child)
     before = {name: facts[:6] + facts[7:] for name, facts in tree_facts(data).items() if name != 'child'}
     async with multi_profile_runtime(product, data, switch=False) as runtime:
         await settle(runtime, 'configured')
@@ -170,7 +171,12 @@ async def test_switched_off_profile_data_on_disk_changes_nothing(tmp_path, log_s
                 assert answer(response) == (NOT_FOUND if path.startswith('/private_') else BEARER_REQUIRED)
     after = {name: facts[:6] + facts[7:] for name, facts in tree_facts(data).items()
              if name != 'child' and not name.startswith('child/')}
-    assert {name: after[name] for name in before if name != '.'} == {n: f for n, f in before.items() if n != '.'}
+    revoked = ('.', f'profiles/{B}', f'profiles/{B}/state.json')
+    assert {name: after[name] for name in before if name not in revoked} == {
+        name: facts for name, facts in before.items() if name not in revoked}
+    assert set(after) - set(before) == {profiles.RESTORE_RECORD_NAME}
+    state = stored(profiles.Layout(data).profile(B))
+    assert state['token'] is None and state['child_token'] != child
 
 
 # ---- switched on, the default profile alone: HM-01 byte for byte ----
