@@ -84,7 +84,7 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_profile_store.py` | HM-07 | 計畫 | 只開既有、建立每一步故障注入、mode／owner 在 uid 10001 子程序驗 |
 | `tests/test_profile_consistency.py` | HM-07 | 計畫 | 孤兒、撞號、`profile_unavailable` |
 | `tests/test_upgrade_zero_rewrite.py` | HM-07 | 計畫 | bb48449 寫出的 schema 4 state 零改寫 |
-| `tests/test_identity_fields.py` | HM-07 | 計畫 | 身分欄位與秘密欄位分類；新欄位沒分類就失敗 |
+| `tests/test_identity_fields.py` | HM-07 | 計畫 | 身分欄位與秘密欄位分類；新欄位沒分類就失敗。HM-12 面板：面板的網址↔秘密表（`urlSecrets`）、`identityBound` 與來源的算法（`urlOrigin`，逐案）要和後端一致 |
 | `tests/test_profile_routing.py` | HM-08 | 計畫 | 路由矩陣、零命中逐位元、撞號 503、兩個交叉案例 |
 | `tests/test_router_passthrough.py` | HM-08 | 計畫 | 開關關時分派器不掛、回應逐位元相同 |
 | `tests/test_profile_quotas.py` | HM-08 | 計畫 | 真 socket S5、S6；預設帳號當攻擊方；位元組額度；三種過載情況對照 PaaS 表 |
@@ -99,6 +99,7 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_admin_pipeline_matrix.py` | HM-10 | 計畫 | 路由表自動產生的否定矩陣；非管理員逐位元相同 |
 | `packages/mcp-admin-ui/tests/profiles.test.mjs` | HM-11 | 計畫 | 標頭規則、`mutate(profile)` 回聲比對、收據帶帳號、N15 新舊斷言 |
 | `packages/mcp-admin-ui/tests/browser/profiles.spec.mjs` | HM-11 | 計畫 | 選單、切換藏 token、晚到回應丟棄、XSS 名稱、建立後自動切換、舊格式收據 |
+| `packages/mcp-admin-ui/tests/browser/backend-identity.spec.mjs` | HM-12 | 新增 | 開通後（fixture）：換身分換 token 的提示、藏權杖、重新讀取、下一次存檔用新版本，額外帳號只換自己的；形狀 D 兩件事都說、重新讀取；503 request denied 照今天、state unavailable 加重啟提示；網址改到另一台伺服器時已存秘密改成必填、改回恢復；衝突保留草稿；422 固定文字；開關關時表單照今天。HM-12 面板審查補：換了 token 之後重新讀取失敗仍說明（200、形狀 D），沒換 token 的存檔照今天；伺服器文字不顯示；額外帳號的表單規則；改回同一台伺服器時已打的秘密留著；把「保留」強制打開送出時前端擋下、0 個請求；清掉的秘密不再要求；OpenDesign 沒有秘密說明；withheld 網址的原因 |
 | `tests/test_odoo_identity_rotation.py` | HM-12 | 新增 | 開通的 Odoo 換 url／database／username（含清空）換 token：先停舊子程式、一次寫入、發布、再起新子程式（兩種路由、預設帳號也是）；回應帶新 state 的 `ETag`；8081 分派器不再把舊 token 對到任何帳號、新 token 對到該帳號；舊 token 兩條入口都失效、進行中與排隊中的請求結束；新 token 在新子程式起來前碰不到任何子程式；只換密碼、初次設定、已撤銷不換；停不下、store 拒絕（含舊子程式起不回來）、丟出非預期的例外（固定 503、不是 500）、新檔寫不出來、取代 state 檔途中失敗（`os.replace`、目錄 fsync；額外帳號與預設帳號：預設帳號的新檔已換上時 8081 全部 503）、寫入丟出例外但新 token 已在磁碟上（不重起舊子程式）、新子程式起不來的故障注入；store 的一次寫入與只在結果不明時毒化；沒開通照今天；其他產品開通後不換 |
 | `tests/test_odoo_multi_profile.py` | HM-12 | 新增 | 同庫五個帳號各自固定綁定（PaaS 對照）、換其中一個只換它的 token；真的 Odoo 子程式：A 的審批 token 在 B 被拒、A 自己執行得了，兩帳號 state 相同的對照；DQ-30 讀取並行維持 1 |
 | `tests/test_new_origin_secret.py` | HM-12 | 新增 | 開通後全部產品改網址來源（scheme、host、port）沒帶那條網址的已存秘密 422（DQ-40 ⑨），少帶一個也 422、全帶就存；同來源、帶 null、整份取代不檢查；在 If-Match 之後；沒開通照今天；經分派器只檢查選定帳號 |

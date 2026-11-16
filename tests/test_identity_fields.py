@@ -4,7 +4,9 @@ Multi-profile plan §4.4 ("身分欄位分類"), §8.8 #40; FEATURE-MATRIX FM-80
 identity rotates the token), HM-13b (restore records: identity and policy, never secrets) and DQ-40 ⑨ (a new
 origin needs its secret again) use these tables. A field added to a connection model or to ProductState without a
 class fails here (PaaS tests/test_restore_runbook.py:1210-1456 and tests/test_launch_policy.py:92-379 do the same for
-the PaaS inventory and launch policies).
+the PaaS inventory and launch policies). HM-12's panel keeps two of these tables too (packages/mcp-admin-ui/src/
+contracts.js: the secrets each URL takes to its server, and the products whose token is bound to the backend identity)
+and compares origins as backend_edit does: a difference fails here.
 """
 import json
 import subprocess
@@ -18,7 +20,8 @@ from mcp_admin_core import backend_edit, features, identity_fields, profiles
 from mcp_admin_core.config import State
 from mcp_admin_core.identity_fields import IDENTITY, OPTION, SECRET
 from mcp_admin_core.products import (
-    CONNECTIONS, OWNER_DEFAULTS, TOKEN_HISTORY, URL_FIELDS, Product, ProductState, profile_initial_state,
+    CONNECTIONS, IDENTITY_BOUND, OWNER_DEFAULTS, TOKEN_HISTORY, URL_FIELDS, Product, ProductState,
+    profile_initial_state,
 )
 
 pytestmark = pytest.mark.usefixtures('log_scan')  # every new test runs under the HM-01 log scan
@@ -112,6 +115,57 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(products).map(([k, 
         secret = {N8N_API_NAMES.get(name, name) if product == 'n8n' else name for name, kind in rows
                   if kind in ('secret', 'optional-secret')}
         assert secret == set(identity_fields.fields(product, SECRET)), product
+
+
+def panel_module(script):
+    """What a node script prints (JSON) after importing the panel's packages/mcp-admin-ui/src/contracts.js."""
+    probe = subprocess.run(['node', '--input-type=module', '-e', script], capture_output=True, encoding='utf-8',
+                           cwd=ROOT, timeout=20, env={'PATH': '/usr/bin:/bin'})
+    assert probe.returncode == 0, probe.stderr
+    return json.loads(probe.stdout)
+
+
+def test_the_panels_url_secrets_and_identity_bound_products_are_the_servers():
+    # HM-12 (DQ-40 ⑨ (a); DQ-05): switched on, the panel's partial edit asks again for the secrets a URL moved to
+    # another origin takes there (contracts.js urlSecrets, in the admin API's names: backend_edit.url_secrets of
+    # URL_SECRETS), and a 503 state unavailable of a backend save hints at a rotated token for the products whose
+    # token is bound to the backend identity (identityBound: products.IDENTITY_BOUND).
+    panel = panel_module("""
+import {urlSecrets, identityBound} from './packages/mcp-admin-ui/src/contracts.js';
+console.log(JSON.stringify({urlSecrets, identityBound}));
+""")
+    assert panel['urlSecrets'] == {
+        product: {url: list(carried) for url, carried in backend_edit.url_secrets(product).items()}
+        for product in identity_fields.URL_SECRETS}
+    assert sorted(panel['identityBound']) == sorted(IDENTITY_BOUND)
+
+
+# What another origin is: scheme and host case, the default port written out or not, a leading zero, an empty port,
+# IPv6 (its case, a zone), spellings of one host the server keeps apart (a trailing dot, IPv4 notations, a non-ASCII
+# host and its xn-- form), and ports the server refuses.
+ORIGIN_CASES = (
+    'https://odoo.invalid', 'HTTPS://Odoo.INVALID:443/x/y', 'http://odoo.invalid:80', 'http://odoo.invalid:0443',
+    'http://odoo.invalid:', 'https://odoo.invalid:8443', 'https://odoo.invalid.', 'http://[2001:DB8::1]:8080/p',
+    'http://[2001:db8::1]', 'HTTP://[FE80::1%25ETH0]:81', 'http://0x7f.1', 'http://2130706433', 'http://127.1',
+    'http://bücher.invalid', 'http://BÜCHER.invalid', 'http://xn--bcher-kva.invalid', 'http://odoo.invalid:x',
+    'http://odoo.invalid:99999', 'http://odoo.invalid:65535')
+
+
+def test_the_panels_origin_is_the_servers():
+    # HM-12 (DQ-40 ⑨ (a)): the panel requires a moved URL's secrets where the server would refuse the save
+    # without them (backend_edit.origin, on urlsplit), and nowhere else: contracts.js urlOrigin gives the same
+    # origin for each case (null where the server cannot read a port).
+    panel = panel_module(f"""
+import {{urlOrigin}} from './packages/mcp-admin-ui/src/contracts.js';
+console.log(JSON.stringify({json.dumps(ORIGIN_CASES)}.map(urlOrigin)));
+""")
+
+    def server(url):
+        try:
+            return list(backend_edit.origin(url))
+        except ValueError:
+            return None
+    assert panel == [server(url) for url in ORIGIN_CASES]
 
 
 def test_every_state_field_has_a_class():

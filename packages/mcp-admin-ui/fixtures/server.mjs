@@ -25,7 +25,24 @@ const PROFILE = /^(?:default|[0-9a-f]{24})$/;
 const OPERATION = /^[0-9]{13}\.[A-Za-z0-9_-]{16,64}$/;
 // Synthetic low-entropy tokens, one letter per profile (test data rule, plan 12.0 item 4).
 const TOKEN_LETTERS = ['T', 'U', 'V', 'W', 'X', 'Y'];
-let config, calls, reads, nonce, profiles, index, orphans, defaults = {};
+// HM-12 (DQ-05, DQ-40 ⑨ (a); contract 3.1, 4.1), switched on only: a backend save as the add-on answers it.
+// - backend/patch moving a URL to another origin (scheme, host, effective port) without the stored secrets that URL takes
+//   there: 422 CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN after If-Match, nothing saved (every product; the table and
+//   the origin are written here independently of the panel's urlSecrets and urlOrigin).
+// - Odoo, the product whose token is bound to its backend identity: a save that changes url, database or username of a
+//   complete saved connection (a cleared one too) while the token is active rotates the token in the same save (the
+//   next letter of ROTATION_LETTERS; its mask and a rotate entry in the history where the state has them) and answers
+//   {saved, token_rotated: true, configuration} with the echo and the new ETag. config.profiles.rebindFault ('stop',
+//   'write' or 'start'; for the next such save only) answers as the add-on's failed identity change: 503 {"error":
+//   "request denied"} or {"error":"state unavailable"} with nothing saved, or shape D with token_rotated (saved, the new
+//   child not started: apply_state failed).
+// - config.saveCode with config.saveStatus: the refusal says that code (the add-on's refusals carry no echo).
+const URL_SECRETS = {odoo: {url: ['password']}, 'odoo-manage': {url: ['api_key']}, n8n: {url: ['key', 'mcp_access_token']},
+  hermes: {gateway_url: ['gateway_api_key'], dashboard_url: ['dashboard_password']}, opendesign: {url: []},
+  emqx: {url: ['api_key', 'api_secret']}, litellm: {url: ['master_key']}, nextcloud: {url: ['app_password']}, headscale: {url: ['api_key']}};
+const IDENTITY = ['url', 'database', 'username'];
+const ROTATION_LETTERS = ['N', 'P', 'Q', 'R'];
+let config, calls, reads, nonce, profiles, index, orphans, rotations, defaults = {};
 function profileState(next) {
   const state = {
     product: next.product ?? 'n8n', endpoint: next.endpoint ?? null,
@@ -77,6 +94,37 @@ function profileState(next) {
   }
   return state;
 }
+// HM-12: where a URL's requests go (scheme, host, effective port), as urlsplit reads the URL; another spelling of a host
+// is another origin.
+function originOf(url) {
+  const found = /^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^/?#]*)/.exec(url);
+  if (!found) return null;
+  const scheme = found[1].toLowerCase(), hostinfo = found[2].split('@').at(-1);
+  const bracketed = /^\[([^\]]*)\](?::(.*))?$/.exec(hostinfo);
+  const [host, port] = bracketed ? [bracketed[1], bracketed[2] ?? ''] : [hostinfo.split(':')[0], hostinfo.split(':').slice(1).join(':')];
+  return `${scheme} ${host.toLowerCase()} ${port === '' ? {http: 80, https: 443}[scheme] : Number(port)}`;
+}
+// Whether a backend/patch moves a stored URL to another origin without a stored secret that URL takes there.
+function newOriginRefused(state, changes) {
+  for (const [url, secrets] of Object.entries(URL_SECRETS[state.product] ?? {})) {
+    const before = state.backend_edit.values[url];
+    if (typeof before !== 'string' || typeof changes[url] !== 'string' || originOf(before) === originOf(changes[url])) continue;
+    if (secrets.some(secret => state.backend_edit.secret_set[secret] && !Object.hasOwn(changes, secret))) return true;
+  }
+  return false;
+}
+// A saved Odoo identity (url, database, username), or null when the saved connection is not complete.
+const identityOf = (configured, connection) => configured && IDENTITY.every(key => typeof connection?.[key] === 'string')
+  ? Object.fromEntries(IDENTITY.map(key => [key, connection[key]])) : null;
+const masked = letter => `${letter.repeat(4)}${'*'.repeat(20)}${letter.repeat(4)}`;
+function rotate(profile) {
+  const state = profile.state, previous = profile.token;
+  profile.token = ROTATION_LETTERS[rotations++ % ROTATION_LETTERS.length];
+  if (Object.hasOwn(state, 'token_masked')) state.token_masked = masked(profile.token);
+  if (Object.hasOwn(state, 'token_history')) {
+    state.token_history = [{action: 'rotate', rotated_at: '2026-11-17T00:00:00+00:00', previous_token_masked: masked(previous)}, ...state.token_history].slice(0, 5);
+  }
+}
 const switchedOn = () => Boolean(config.profiles);
 const profileConfig = () => typeof config.profiles === 'object' && config.profiles !== null ? config.profiles : {};
 function reset(next = {}) {
@@ -84,8 +132,10 @@ function reset(next = {}) {
   calls = [];
   reads = [];
   nonce = 0;
+  rotations = 0;
   profiles = new Map([[DEFAULT, {id: DEFAULT, label: 'Default', port: 3000, token: 'M', state: profileState(config),
-    revision: 1, receipts: new Map(), status: 'running', disabled_reason: null, blocked_reason: null}]]);
+    revision: 1, receipts: new Map(), status: 'running', disabled_reason: null, blocked_reason: null,
+    identity: identityOf(config.configured, config.connection)}]]);
   index = {revision: 1, receipts: new Map(), created: 0, quarantined: 0};
   orphans = new Set(profileConfig().orphans ?? []);  // profile directories the index does not list (DQ-14)
   for (const spec of profileConfig().extra ?? []) addProfile(spec);
@@ -98,7 +148,7 @@ const supportsProfiles = () => !['opendesign', 'odoo-manage'].includes(profiles.
 function addProfile(spec = {}) {
   const base = profiles.get(DEFAULT).state;
   const id = spec.id ?? `e${(++index.created).toString(16).padStart(7, '0')}${'f'.repeat(16)}`;
-  const next = {...config, ownerDefaults: undefined, endpoint: null, connection: undefined, configured: spec.configured ?? false};
+  const next = {...config, ownerDefaults: undefined, endpoint: null, connection: spec.connection, configured: spec.configured ?? false};
   delete next.tokenMask;
   delete next.tokenHistory;
   for (const field of ['tokenMask', 'tokenHistory']) if (Object.hasOwn(spec, field)) next[field] = spec[field];
@@ -114,7 +164,7 @@ function addProfile(spec = {}) {
   while (taken.has(port)) port++;
   const profile = {id, label: spec.label ?? `帳號 ${profiles.size}`, port: spec.port ?? port, token: spec.token ?? TOKEN_LETTERS[(profiles.size - 1) % TOKEN_LETTERS.length],
     state, revision: 1, receipts: new Map(), status: spec.status ?? 'unconfigured', disabled_reason: spec.disabled_reason ?? null,
-    blocked_reason: spec.blocked_reason ?? null, unavailable: spec.unavailable === true,
+    blocked_reason: spec.blocked_reason ?? null, unavailable: spec.unavailable === true, identity: identityOf(spec.configured, spec.connection),
     ...(Object.hasOwn(spec, 'required_memory_mib') ? {required_memory_mib: spec.required_memory_mib} : {})};
   profiles.set(id, profile);
   return profile;
@@ -382,7 +432,8 @@ const server = http.createServer(async (request, response) => {
       const profile = scoped(request, response);
       if (!profile) return;
       const state = profile.state, receipts = profile.receipts;
-      if (config.saveStatus) return json(response, config.saveStatus, { error: 'MOCK PRIVATE_CANARY_MUST_NOT_RENDER' });
+      if (config.saveStatus) return json(response, config.saveStatus, switchedOn() && config.saveCode
+        ? {error: 'request denied', detail: {code: config.saveCode}, untrusted: 'MOCK PRIVATE_CANARY_MUST_NOT_RENDER'} : { error: 'MOCK PRIVATE_CANARY_MUST_NOT_RENDER' });
       const kind={'token/rotate':'token.rotate','token/revoke':'token.revoke','child/restart':'mcp.restart'}[operation];
       const operationId=request.headers['idempotency-key'];
       if (kind && receipts.has(operationId)) {
@@ -429,14 +480,36 @@ const server = http.createServer(async (request, response) => {
         return reply(response, 200, { ...(receipt ? {status:'ok',operation:receipt} : {}), token: state.token_active ? profile.token.repeat(43) : null }, profile, operation);
       }
       if (request.method !== 'PUT') return json(response, 405, {});
+      // HM-12: the identity a backend save leaves (null: cleared), when it moves a switched-on Odoo token, and the
+      // failure armed for it.
+      let rebound = false, fault;
+      const rebinds = next => {
+        rebound = switchedOn() && state.product === 'odoo' && state.token_active && profile.identity !== null
+          && (next === null || IDENTITY.some(key => next[key] !== profile.identity[key]));
+        fault = rebound ? profileConfig().rebindFault : undefined;
+        if (fault) delete config.profiles.rebindFault;
+        return fault === 'stop' ? {error: 'request denied'} : fault === 'write' ? {error: 'state unavailable'} : null;
+      };
       if (operation === 'backend') {
         const connection = state.product === 'n8n' ? payload : payload.connection;
         const clear = state.product === 'n8n' ? connection?.url === null && connection?.key === null : connection === null;
         if (!clear) backendPayload(state.product, 'replace', connection);
         if (JSON.stringify(payload) !== JSON.stringify(clear ? backendPayload(state.product, 'clear') : backendPayload(state.product, 'replace', connection))) return json(response, 400, {});
+        if (switchedOn()) {
+          const next = clear ? null : identityOf(true, connection), failed = rebinds(next);
+          if (failed) return json(response, 503, failed);
+          profile.identity = next;
+        }
         state.connection_configured = !clear;
       } else if (operation === 'backend/patch') {
         if (!config.parity046 || !state.connection_configured || !request.headers['if-match']) return json(response,400,{});
+        if (switchedOn()) {
+          if (newOriginRefused(state, payload.changes)) return refuse(response, 422, 'CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN');
+          const next = profile.identity && {...profile.identity, ...Object.fromEntries(IDENTITY.filter(key => Object.hasOwn(payload.changes, key)).map(key => [key, payload.changes[key]]))};
+          const failed = next ? rebinds(next) : null;
+          if (failed) return json(response, 503, failed);
+          if (next) profile.identity = next;
+        }
         for (const [key, value] of Object.entries(payload.changes)) {
           if (Object.hasOwn(state.backend_edit.secret_set, key)) state.backend_edit.secret_set[key] = value !== null;
           else state.backend_edit.values[key] = value;
@@ -466,6 +539,14 @@ const server = http.createServer(async (request, response) => {
         Object.assign(state, payload);
       } else return json(response, 404, {});
       profile.revision++;
+      if (rebound) {
+        rotate(profile);
+        if (fault === 'start') {
+          config.applyState = 'failed';
+          return reply(response, 503, {saved: true, token_rotated: true, detail: {code: 'config_apply_failed'}, configuration: configuration(profile)}, profile, operation);
+        }
+        return reply(response, 200, {saved: true, token_rotated: true, configuration: configuration(profile)}, profile, operation);
+      }
       return reply(response, 200, { saved: true }, profile, operation);
     }
     if (local.startsWith('/assets/')) {
