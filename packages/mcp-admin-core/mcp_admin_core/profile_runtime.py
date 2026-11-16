@@ -58,6 +58,12 @@ add-on's only profile has a budget of its own (make_apps makes it).
 HM-12 (plan 9 Odoo row, 12.3 HM-12; contract 3.1; DQ-05): every ProfileRuntime gives its apps stop_child (make_apps
 stop_child), which stops the child and drops its spec. Only a switched-on product's backend identity change uses it
 (gateway.make_apps: stop, one write of the connection and a new token, publish, start); switched off, nothing calls it.
+
+HM-30 (plan 5.5; contract 6): run_product gives the manager the add-on's one reply worker (reply_worker.ReplyWorker)
+and the manager gives every profile's runtime its own turn on it (a Lane, make_apps reply_worker): every profile's
+replies are processed there, the profiles taking turns. Each gate also bounds its profile's answers not received yet
+(profiles.ProfileQuota.pending_reply_bytes; profile_router). A ProfileRuntime takes reply_worker as a keyword-only
+option; left out, its replies are processed on the event loop, as before.
 """
 from __future__ import annotations
 
@@ -96,7 +102,7 @@ RUNTIME_OPTIONS = frozenset({'child_url', 'health', 'backend_changed', 'configur
                              'restart_child', 'diagnostics', 'availability', 'token_access', 'mutation_lock',
                              'authority', 'admin_slots', 'admin_pipeline', 'profile_view', 'forward_slots',
                              'slot_busy', 'reply_secrets', 'child_blocked', 'default_endpoint', 'bootstrap_fields',
-                             'body_budget', 'stop_child'})
+                             'body_budget', 'stop_child', 'reply_worker'})
 MANAGEMENT_LISTENER_LIMIT = 64  # 8099's limit_concurrency (run_product), switched on or off
 # HM-09 (plan 5.4; C2-SF-4): after the default profile's child, at most STAGGER_SLOTS additional children start at
 # once; a place is freed when its child answered a health check, could not start, or after STAGGER_SECONDS.
@@ -155,13 +161,17 @@ class ProfileRuntime:
     HM-10 (likewise): default_endpoint, bootstrap_fields: make_apps' options of the same names, passed only when given.
     admin_action (after open()) is the profile's action for the management dispatcher (make_apps' admin app state).
 
+    HM-30 (likewise): reply_worker: the profile's turn on the add-on's reply worker (reply_worker.Lane; make_apps
+    reply_worker).
+
     mcp_listener_limit: 8081's limit_concurrency when this runtime serves the add-on alone: 64, as before."""
     mcp_listener_limit = 64
 
     def __init__(self, store, tools, child_spec, *, port=CHILD_PORT, profile_id=DEFAULT_PROFILE, lifecycle=None,
                  shared=None, profile_view=None, app_options=None, child_connections=CHILD_CONNECTIONS,
                  forward_slots=None, slot_busy=None, reply_secrets=None, hold=None, monitor_options=None,
-                 report_blocked=False, default_endpoint=None, bootstrap_fields=None, body_budget=None):
+                 report_blocked=False, default_endpoint=None, bootstrap_fields=None, body_budget=None,
+                 reply_worker=None):
         if not isinstance(profile_id, str) or not PROFILE_ID.fullmatch(profile_id):
             raise ValueError('invalid profile id')
         if type(child_connections) is not int or child_connections < 1:
@@ -177,10 +187,11 @@ class ProfileRuntime:
         self.store, self.tools, self.child_spec = store, tools, child_spec
         self.port, self.profile_id = port, profile_id
         self.child_connections = child_connections
+        self.reply_worker = reply_worker
         self.gateway_options = {name: value for name, value in (
             ('forward_slots', forward_slots), ('slot_busy', slot_busy), ('reply_secrets', reply_secrets),
             ('default_endpoint', default_endpoint), ('bootstrap_fields', bootstrap_fields),
-            ('body_budget', body_budget)) if value is not None}
+            ('body_budget', body_budget), ('reply_worker', reply_worker)) if value is not None}
         if hold is not None and not callable(hold):
             raise ValueError('invalid start hold')
         self.hold = hold
@@ -469,11 +480,16 @@ class ProfileManager:
     added while the add-on runs; free_port() allocates the port of a new profile; relabel() renames one's echo. Every
     profile's runtime gets its echo (echo(): id, label, is_default; DQ-40 (a) ②), its bootstrap fields and, for an
     additional profile, the default profile's endpoint (DQ-13); get(profile_id).runtime.admin_action is each
-    profile's action."""
+    profile's action.
 
-    def __init__(self, store, product, tools, child_spec, *, port=CHILD_PORT, app_options=None):
+    HM-30 (plan 5.5): reply_worker is the add-on's one reply worker (run_product starts and stops it); every runtime
+    gets its own turn on it (reply_worker.lane(profile_id)), the default profile's included. Left out (tests that
+    build a manager alone), every profile's replies are processed on the event loop."""
+
+    def __init__(self, store, product, tools, child_spec, *, port=CHILD_PORT, app_options=None, reply_worker=None):
         self.store, self.product, self.tools, self.child_spec = store, product, tools, child_spec
         self.port = port
+        self.reply_worker = reply_worker
         self.app_options = dict(app_options or {})
         self.layout = profiles.Layout(Path(store.directory))
         self.reports = Reports()
@@ -832,7 +848,8 @@ class ProfileManager:
                                  report_blocked=True, profile_view=partial(self.echo, profile_id),
                                  bootstrap_fields=partial(self.admin.bootstrap_fields, profile_id),
                                  default_endpoint=None if default else self.default_endpoint,
-                                 body_budget=gate.budget_share)
+                                 body_budget=gate.budget_share,
+                                 reply_worker=None if self.reply_worker is None else self.reply_worker.lane(profile_id))
         await runtime.open()
         entry = RegisteredProfile(profile_id, port, label, runtime, store, gate, credentials, disabled)
         self._entries[profile_id] = entry
