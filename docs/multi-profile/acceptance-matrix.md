@@ -133,4 +133,4 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_headscale_multi_profile.py` | HM-26 | 暫定名 | 同網址同 key、不同政策的兩帳號各照自己的政策 |
 | `tests/test_origin_policy.py` | HM-27 | 暫定名 | report-only 不改回應位元組；would_deny 記錄與節流 |
 | `tests/test_reply_worker.py` | HM-30 | 計畫 | 一條執行緒、依帳號輪流、每帳號同時 1 筆；工作例外照今天、被取消的撤回、執行緒自己停時立刻回 502 且 add-on 結束、停機時排隊的立刻結束；自己的堆疊（深巢狀回覆 502、不當掉）；JSON 與 SSE 輸出位元組和迴圈內處理相同（逐案對照）；開關關時沒有執行緒、照迴圈處理；CPU 飢餓（可控注入：迴圈停頓、B 的 p99）；真實 8 MiB 回覆的迴圈停頓（量測）；待送回覆上限（tools/call 200＋`-32003`、64 KiB 分段、怎麼還）；慢讀 RSS（含 SSE 期間的轉送內容；`contract.md` 第 6 節門檻） |
-| `tests/test_health_tolerance.py` | HM-30 | 計畫 | CPU 飢餓下閒置帳號（B、C）的健康檢查不逾時、每次 1 秒內、判定一直是 reachable；飢餓中 B 的後端失敗一次不擋、連兩次才擋、C 不受影響（連兩次失敗的規則本身 HM-09 已做，測試在 `tests/test_health_backoff.py`） |
+| `tests/test_health_tolerance.py` | HM-30 | 計畫 | CPU 飢餓下閒置帳號（B、C）的健康檢查不逾時、每次在該做之後 d（0.25 秒）內做完、判定一直是 reachable；飢餓中 B 的後端失敗一次不擋、連兩次才擋、C 不受影響（連兩次失敗的規則本身 HM-09 已做，測試在 `tests/test_health_backoff.py`） |

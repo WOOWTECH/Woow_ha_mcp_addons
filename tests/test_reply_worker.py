@@ -275,15 +275,18 @@ async def test_a_busy_worker_lets_the_loop_have_the_gil_at_its_checkpoints(worke
 
 def test_the_worker_thread_has_a_stack_of_its_own_for_deeply_nested_replies():
     """A reply nested just inside CPython's C recursion limit is parsed on the worker, one nested past it raises
-    RecursionError (the gateway's 502), even where threads get a small stack by default (here 256 KiB, set before the
-    worker starts; glibc gives 2 MiB when RLIMIT_STACK is unlimited, and 1 MiB already crashes json.loads 9,000 levels
-    deep): the worker starts its thread with STACK_BYTES and gives the process's default back. In a child interpreter,
-    where a crash cannot take the test run with it."""
+    RecursionError (the gateway's 502), even where threads get a small stack by default. Here both defaults are small:
+    the platform's, 512 KiB (glibc sizes a thread's stack by the RLIMIT_STACK soft limit the process started with, 2 MiB
+    when it is unlimited; the child starts under 512 KiB), and the process's own setting, 256 KiB (threading.stack_size
+    before the worker starts); either one crashes json.loads 9,000 levels deep (measured: 1 MiB already does). The
+    worker starts its thread with STACK_BYTES and gives the process's setting back. In a child interpreter, where a
+    crash cannot take the test run with it."""
     code = textwrap.dedent("""
-        import asyncio, json, sys, threading
+        import asyncio, json, resource, sys, threading
         sys.path.insert(0, sys.argv[1])
         from mcp_admin_core import reply_worker
-        threading.stack_size(256 * 1024)
+        assert resource.getrlimit(resource.RLIMIT_STACK)[0] == 512 * 1024  # the platform's default for threads
+        threading.stack_size(256 * 1024)  # the process's own setting
 
         def parse(depth):
             try:
@@ -300,8 +303,10 @@ def test_the_worker_thread_has_a_stack_of_its_own_for_deeply_nested_replies():
         asyncio.run(main())
     """)
     package = Path(gateway.__file__).resolve().parents[1]  # the mcp_admin_core this test run imports
-    result = subprocess.run([sys.executable, '-I', '-c', code, str(package)], capture_output=True, text=True,
-                            timeout=60)
+    # The soft limit is lowered (always allowed) by the shell that then becomes the child interpreter: glibc reads it
+    # when the process starts.
+    result = subprocess.run(['/bin/sh', '-c', 'ulimit -S -s 512 && exec "$@"', 'sh', sys.executable, '-I', '-c', code,
+                             str(package)], capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, (result.returncode, result.stderr[-2000:])
     assert result.stdout.split() == ['parsed', 'RecursionError']
 

@@ -7,7 +7,8 @@ rule: a backend is judged unreachable only after two failed checks in a row of t
   health check exceed its limits (8 + 5 s; health.py), so its tools/calls were refused with backend_unreachable until
   the next check. With the reply worker the loop no longer waits for any reply's processing: while A's 16 replies of
   8 MiB and 16 of 2 MiB cost 0.25 s each per 8 MiB of GIL-holding work (tests/reply_load.py), B's and C's checks keep
-  their pace, none times out or fails and each one completes within a second.
+  their pace: none times out or fails, and each one is done within d (0.25 s) of when it was due (processed on the
+  loop, before HM-30, the same checks were done up to 4.4 s after they were due).
 - Should a check still fail while A starves the CPU (here B's backend really fails), one failure refuses nothing, the
   second in a row does, and C stays untouched; a check that passes again ends it.
 """
@@ -18,12 +19,14 @@ import httpx
 import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
-from reply_load import B, C, bearer, call, session_of, starved
+from reply_load import B, C, D, bearer, call, session_of, starved
 from test_profile_runtime import ProfileChild
 from test_single_profile_golden import probe_name
 
 pytestmark = pytest.mark.usefixtures('log_scan')
-CHECK_SECONDS = 1.0  # far within the check's own limits (8 + 5 s)
+# How long after it is due a check may finish: one reply's processing (d), far within the check's own limits (8 + 5 s).
+# Processed on the loop (before HM-30), a check due while replies are processed waits for every one in its way.
+CHECK_SECONDS = D
 
 
 class FlakyBackend(ProfileChild):
@@ -51,8 +54,8 @@ class FlakyBackend(ProfileChild):
 async def test_idle_profiles_health_checks_keep_their_pace_while_another_profile_starves_the_cpu(tmp_path, log_scan,
                                                                                                 monkeypatch):
     """B's and C's monitors check again and again while A's replies are processed: every check gets the child's answer
-    and finds the backend reachable (none times out: 0 against contract 6's threshold), each within a second, and the
-    checks really reached B's and C's children."""
+    and finds the backend reachable (none times out: 0 against contract 6's threshold), each one done within d of when it
+    was due (the loop never waits for a reply's processing), and the checks really reached B's and C's children."""
     loop = asyncio.get_running_loop()
     durations, verdicts = {B: [], C: []}, {B: [], C: []}
     async with starved(tmp_path, log_scan, monkeypatch, child=FlakyBackend) as run:
@@ -63,11 +66,11 @@ async def test_idle_profiles_health_checks_keep_their_pace_while_another_profile
         async def checking(profile_id):
             monitor = runtime.manager.get(profile_id).runtime.health
             while not all(task.done() for task in run.a_tasks):
-                begun = loop.time()
-                await monitor.check()
-                durations[profile_id].append(loop.time() - begun)
-                verdicts[profile_id].append(monitor.availability())
+                due = loop.time() + 0.1
                 await asyncio.sleep(0.1)
+                await monitor.check()
+                durations[profile_id].append(loop.time() - due)  # from when it was due to when it was done
+                verdicts[profile_id].append(monitor.availability())
         await asyncio.gather(checking(B), checking(C))
         token = runtime.token(B)
         async with runtime.mcp() as client:
@@ -76,7 +79,8 @@ async def test_idle_profiles_health_checks_keep_their_pace_while_another_profile
             assert response.status_code == 200 and response.json()['result']['content'][0]['text'] == (
                 'profile tool result')
     print('HM-30 health under starvation: ' + ', '.join(
-        f'{profile_id[:4]} {len(durations[profile_id])} checks, slowest {max(durations[profile_id]) * 1000:.0f} ms'
+        f'{profile_id[:4]} {len(durations[profile_id])} checks, latest done {max(durations[profile_id]) * 1000:.0f} ms '
+        'after it was due'
         for profile_id in (B, C)))
     for profile_id in (B, C):
         assert len(durations[profile_id]) >= 10, durations
