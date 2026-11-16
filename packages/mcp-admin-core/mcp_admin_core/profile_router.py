@@ -82,7 +82,11 @@ it. While the profile's charge is at or over its budget, its next tools/call is 
 before it is forwarded (gateway.PENDING_REPLIES; pending_text), one WARNING a minute. The answers already forwarded are
 always processed and handed over (a client that reads its answers in order must never wait for an answer held back),
 so a profile can hold up to its budget plus the answers in flight when it was reached: at most its forwarding slots of
-replies of up to gateway.MAX_RESPONSE as read (contract 6).
+replies of up to gateway.MAX_RESPONSE as read, charged as the gateway serializes them (ASCII escapes: up to about
+three times as many bytes; contract 5, 6). HM-30 review 2 MF-2: that bound holds because a tools/call is checked
+again once it took its slot (it may have waited in HM-14's queue after the first check), and a relayed JSON reply is
+charged (gateway.PENDING_CHARGE) before it releases its slot, not only once its app hands it over: a call that waited
+for that slot sees it charged. An event stream holds its slot until it ends, so its reply is charged while it does.
 
 The reply mask (plan 5.1 point 8, DQ-40 (a) ⑧): the manager's reply_secrets() gives every profile's app every token
 and child token the add-on holds (make_apps reply_secrets). Not here: the lanes, the -32004/-32005 endings and the
@@ -277,9 +281,18 @@ class ProfileGate:
         self.active += 1
         self.streams += stream
         # HM-30: whether the answer declares its length (pieces then change no byte on the wire), and its bytes handed to
-        # the server and not known to be taken by it yet (charged to reply_bytes).
+        # the server and not known to be taken by it yet (charged to reply_bytes). HM-30 review 2 MF-2: early, the bytes
+        # the app charged before it handed them over (gateway.PENDING_CHARGE: charged to reply_bytes too, until they
+        # are handed over or the request ends).
         started = framed = False
-        held = 0
+        held = early = 0
+
+        def charge(size):
+            """gateway.PENDING_CHARGE (HM-30 review 2 MF-2): an answer of size bytes the app is about to hand over,
+            charged from now on (before the request's forwarding slot is released)."""
+            nonlocal early
+            early += size
+            self.reply_bytes += size
 
         async def counted_send(message):
             nonlocal started, framed
@@ -292,12 +305,15 @@ class ProfileGate:
 
         async def hand_over(message):
             """HM-30: an answer's body, charged to the profile's answers not received yet until the server took it (the
-            module docstring): what was handed over before it is taken once the server took this message."""
-            nonlocal held
+            module docstring): what was handed over before it is taken once the server took this message. What the app
+            charged early (charge) covers it as far as it goes."""
+            nonlocal held, early
             body = message.get('body', b'')
             earlier = held
             held += len(body)
-            self.reply_bytes += len(body)
+            covered = min(early, len(body))
+            early -= covered
+            self.reply_bytes += len(body) - covered
             if framed and len(body) > REPLY_PIECE:
                 for start in range(0, len(body), REPLY_PIECE):
                     await send({'type': 'http.response.body', 'body': body[start:start + REPLY_PIECE],
@@ -309,15 +325,16 @@ class ProfileGate:
             held -= earlier
             self.reply_bytes -= earlier
 
-        # The app reaches pending_reply through its request's state (Starlette's request.state is scope['state']); a
-        # copy, so nothing is written into the server's own dict.
-        scope = {**scope, 'state': {**scope.get('state', {}), gateway.PENDING_REPLIES: self.pending_reply}}
+        # The app reaches pending_reply and charge through its request's state (Starlette's request.state is
+        # scope['state']); a copy, so nothing is written into the server's own dict.
+        scope = {**scope, 'state': {**scope.get('state', {}), gateway.PENDING_REPLIES: self.pending_reply,
+                                    gateway.PENDING_CHARGE: charge}}
         try:
             await app(scope, receive, counted_send)
         finally:
             self.active -= 1
             self.streams -= stream
-            self.reply_bytes -= held
+            self.reply_bytes -= held + early
 
     async def beyond_admission(self, app, scope, receive, send):
         """The profile's admission is full (HM-31: HM-14 review MF-2 (b), the PaaS semantics; see the module docstring).

@@ -138,8 +138,15 @@ BODY_RESERVATION = "body_reservation"
 # HM-30 (contract 2.4, 6): the request state's name for a switched-on product's check of the profile's answers not
 # received yet (profile_router.ProfileGate puts it there). Before a tools/call is forwarded (before it takes or waits
 # for a forwarding slot), serve() calls it with the message: None forwards it, anything else is the answer instead
-# (the profile's pending-reply budget is used up: 200 + -32003 under its id).
+# (the profile's pending-reply budget is used up: 200 + -32003 under its id). HM-30 review 2 MF-2: called again once the
+# tools/call took its slot (it may have waited in HM-14's queue meanwhile), right before it is forwarded.
 PENDING_REPLIES = "pending_replies"
+# HM-30 review 2 MF-2 (contract 2.4, 5): the request state's name for a switched-on product's early charge of a relayed
+# JSON reply (profile_router.ProfileGate puts it there): serve() calls it with the bytes of the answer the reply worker
+# made, before the request's forwarding slot is released (the slot goes as the reply is handed back, before the
+# server took a byte of it); the profile's gate counts them as its answers not received yet from then on, and against
+# what its app hands the server later. A tools/call that waited for that slot is then refused by the check above.
+PENDING_CHARGE = "pending_charge"
 # HM-14 (contract 2.4, 2.5; the PaaS gateway's codes, texts and timings, woow-mcp-server 69ac425 proxy.py, mcp_access.py,
 # gateway_pool.py), for a switched-on product only (make_apps slot_busy given): a child whose connection broke while it
 # handled a request (-32004) and a token rotated or revoked after an answer began to go out (-32005).
@@ -983,7 +990,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
       (WorkerStopped) is answered as a reply the gateway cannot process (502; an event stream ends). Left out: every
       reply is processed on the loop, as before (no checkpoint).
     A switched-on product's dispatcher also gives a tools/call the check of the profile's answers not received yet,
-    through the request's state (PENDING_REPLIES; profile_router.ProfileGate): no make_apps option."""
+    through the request's state (PENDING_REPLIES; profile_router.ProfileGate): no make_apps option. HM-30 review 2
+    MF-2: the check runs before the slot and again once the call holds it, and a relayed JSON reply is charged
+    (PENDING_CHARGE) before its slot is released."""
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
@@ -2150,6 +2159,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             answer = without_child()
             if answer is not None:
                 return answer
+        pending = None
         if request.method == "POST" and method == "tools/call":
             pending = getattr(request.state, PENDING_REPLIES, None)
             if pending is not None:
@@ -2195,6 +2205,14 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     return tool_refusal(message["id"], refused_call)
                 except Denied:
                     raise BadRequest(403) from None
+                if pending is not None:
+                    # HM-30 review 2 MF-2 (contract 2.4, 5): checked again now that the call holds its slot. It passed
+                    # the check above before it waited for the slot; meanwhile the replies of the calls that held the
+                    # slots were charged (PENDING_CHARGE) as they released them. Refused here, it is never forwarded
+                    # (the slot is released by the finally below).
+                    answer = pending(message)
+                    if answer is not None:
+                        return answer
                 forwarded = message
                 if method == "initialize" and isinstance(message.get("params"), dict):
                     # The gateway answers no server-to-client requests (sampling, elicitation, roots): the
@@ -2360,11 +2378,16 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     if owner.overflowed:
                         raise ValueError("oversize reply")
                     found = prepared()
-                    encoded = await lease.run(lambda: reply_worker.run(worker_reply, result, message.get("id"), method,
-                                                                       found))
+                    # HM-30 review 2 S-6: not named encoded (the module's function) nor body (make_apps' reader of
+                    # the request body, which a lambda above reads from this scope)
+                    serialized = await lease.run(lambda: reply_worker.run(worker_reply, result, message.get("id"),
+                                                                          method, found))
                 except (ValueError, RecursionError, WorkerStopped):
                     raise BadRequest(502) from None
-                return encoded_reply(encoded, 200, response_headers)
+                charge = getattr(request.state, PENDING_CHARGE, None)
+                if charge is not None:
+                    charge(len(serialized))  # HM-30 review 2 MF-2: before the finally below releases the slot
+                return encoded_reply(serialized, 200, response_headers)
             if not (is_sse and upstream.status_code == 200):
                 raise BadRequest(502)  # unreachable (R1 #8): every other success body was answered or refused above
             if request_id:
