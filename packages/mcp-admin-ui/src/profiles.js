@@ -11,9 +11,6 @@ export const isProfileId = value => typeof value === 'string' && PROFILE_ID.test
 export const isExtraProfile = value => typeof value === 'string' && EXTRA_ID.test(value);
 // How the panel names a profile next to its label: "default" or the first 8 characters of its id (as the logs do).
 export const shortId = id => id === DEFAULT_PROFILE ? DEFAULT_PROFILE : id.slice(0, 8);
-// OpenDesign and Odoo Manage never get additional profiles (DQ-28): no create button.
-const NO_EXTRA_PROFILES = ['opendesign', 'odoo-manage'];
-export const canCreateProfiles = product => !NO_EXTRA_PROFILES.includes(product);
 
 // Labels (DQ-16; contract 3.6): 1-80 code points once trimmed; no control, format (bidi, zero-width), line or paragraph
 // separator, surrogate, private-use or unassigned character; "default" and 預設帳號 are reserved. The server decides
@@ -29,13 +26,19 @@ export function labelProblem(value) {
   if (['default', '預設帳號'].includes(label.normalize('NFKC').toLowerCase())) return '「default」與「預設帳號」是保留名稱，請換一個名稱。';
   return null;
 }
-// A label as the server stored it: shown only when it still follows the rules (a list that breaks them is refused).
+// A label as the server stored it is shown only when it also follows the rules as this browser knows them (review S-2:
+// a browser with an older Unicode table sees a newer character the server took as unassigned). One that does not is
+// never shown, and only its row is affected: it stays, named by its id (hidden), and can be switched to, renamed or
+// deleted. A label that is not a string of 1-80 code points is no label at all: the list is refused.
 const storedLabel = value => typeof value === 'string' && value === value.trim() && codePoints(value) >= 1
   && codePoints(value) <= LABEL_MAX && !REFUSED.test(value);
+const labelShaped = value => typeof value === 'string' && codePoints(value) >= 1 && codePoints(value) <= LABEL_MAX;
 
-// The echo (contract 3.4; HM-05's gateway): with profiles, the bootstrap carries profile {id, label, is_default} and
-// profiles_supported: true, every other answer of a profile-scoped action profile {id}. A single-profile server sends
-// neither. Anything else means the answer is not the asked profile's: the panel shows nothing of it (I12).
+// The echo (contract 3.4; HM-10's gateway.echoed): with profiles, the bootstrap carries profile {id, label, is_default}
+// and profiles_supported (false for a product without additional profiles, DQ-28), every other answer of a
+// profile-scoped action profile {id}. A single-profile server sends neither. Anything else means the answer is not the
+// asked profile's: the panel shows nothing of it (I12). The echo's label is never shown (the list's row is), so it only
+// has to be a label's shape (review S-2).
 export function echoMatches(value, profile, bootstrap = false) {
   const object = value !== null && typeof value === 'object' && !Array.isArray(value);
   if (profile === null) return !object || !Object.hasOwn(value, 'profile') && !Object.hasOwn(value, 'profiles_supported');
@@ -43,8 +46,14 @@ export function echoMatches(value, profile, bootstrap = false) {
   const echo = value.profile;
   if (!echo || typeof echo !== 'object' || Array.isArray(echo) || echo.id !== profile) return false;
   if (!bootstrap) return Object.keys(echo).join() === 'id' && !Object.hasOwn(value, 'profiles_supported');
-  return value.profiles_supported === true && Object.keys(echo).sort().join() === 'id,is_default,label'
-    && echo.is_default === (profile === DEFAULT_PROFILE) && storedLabel(echo.label);
+  return typeof value.profiles_supported === 'boolean' && Object.keys(echo).sort().join() === 'id,is_default,label'
+    && echo.is_default === (profile === DEFAULT_PROFILE) && labelShaped(echo.label);
+}
+// The default bootstrap's index state (contract 3.6): ok, or corrupt with the ETag the index quarantine takes.
+export const INDEX_ETAG = /^"p1-[0-9a-f]{64}"$/;
+export function indexState(bootstrap) {
+  if (bootstrap?.profile_index_state !== 'corrupt') return {corrupt: false, etag: null};
+  return {corrupt: true, etag: typeof bootstrap.profile_index_etag === 'string' && INDEX_ETAG.test(bootstrap.profile_index_etag) ? bootstrap.profile_index_etag : null};
 }
 
 // List rows (contract 3.6; §8.8 #51). Unknown status or reason values are shown as unknown, never as text the server sent.
@@ -56,23 +65,42 @@ const BLOCKED = { child_port_conflict: '子行程的 port 和 add-on 自己的 p
   memory_capacity: '可用記憶體不足' };
 const WORD = /^[a-z_]{1,40}$/;
 const word = value => value === null || value === undefined || typeof value === 'string' && WORD.test(value);
+export class ProfileListError extends UiError {
+  constructor() { super('帳號清單格式不符，無法顯示。'); }
+}
+// A row the list refuses as a whole: its id, port, is_default, words or count are not the contract's (one id twice,
+// not exactly one default row). A label this browser cannot show only hides that label (hidden: true, label null).
 export function profileRows(value) {
   const rows = value?.profiles;
-  const invalid = () => { throw new UiError('帳號清單格式不符，無法顯示；請重新整理。'); };
+  const invalid = () => { throw new ProfileListError(); };
   if (!Array.isArray(rows) || rows.length < 1 || rows.length > 6) invalid();
   const seen = new Set();
+  const result = [];
   for (const row of rows) {
     if (!row || typeof row !== 'object' || Array.isArray(row) || !isProfileId(row.id) || seen.has(row.id)
-        || row.is_default !== (row.id === DEFAULT_PROFILE) || !storedLabel(row.label)
+        || row.is_default !== (row.id === DEFAULT_PROFILE) || !labelShaped(row.label)
         || !Number.isInteger(row.port) || row.port < 1024 || row.port > 65535 || !word(row.disabled_reason)
         || !word(row.status) || !word(row.blocked_reason)
         || row.required_memory_mib !== undefined && !(Number.isSafeInteger(row.required_memory_mib) && row.required_memory_mib > 0)) invalid();
     seen.add(row.id);
+    result.push(storedLabel(row.label) ? row : {...row, label: null, hidden: true});
   }
   if (!seen.has(DEFAULT_PROFILE)) invalid();
-  return rows;
+  return result;
 }
-export const profileName = row => row?.is_default || row?.id === DEFAULT_PROFILE ? '預設帳號' : row?.label ?? '';
+// The orphans (contract 3.1, DQ-14): profile directories the index does not list, never served, deletable one by one.
+export function orphanIds(value, rows) {
+  const orphans = value?.orphans ?? [];
+  const listed = new Set(rows.map(row => row.id)), seen = new Set();
+  if (!Array.isArray(orphans) || orphans.length > 64) throw new ProfileListError();
+  for (const orphan of orphans) {
+    if (!orphan || typeof orphan !== 'object' || Object.keys(orphan).join() !== 'id' || !isExtraProfile(orphan.id)
+        || seen.has(orphan.id) || listed.has(orphan.id)) throw new ProfileListError();
+    seen.add(orphan.id);
+  }
+  return [...seen];
+}
+export const profileName = row => row?.is_default || row?.id === DEFAULT_PROFILE ? '預設帳號' : row?.hidden ? '名稱無法顯示的帳號' : row?.label ?? '';
 export const statusLabel = row => row?.status ? STATUS[row.status] ?? '未知狀態' : '狀態未知';
 export function optionLabel(row) {
   const parts = [`${profileName(row)}（${shortId(row.id)}）`, statusLabel(row)];
@@ -103,7 +131,9 @@ export const clientName = (product, profile) => isExtraProfile(profile) ? `woow-
 
 // The menu in the top bar (plan 6): only when the server serves profiles. ui = {el, button}; on = {select, create,
 // rename, remove}. While a profile loads (loading), the menu is the page's only control: choosing again replaces the load.
-export function profileMenu(ui, { rows, current, loading, product, corrupt }, on) {
+// supported: the bootstrap's profiles_supported (DQ-28: no create button without it); writable: the list has its index
+// revision (an unusable or unreadable list, or one without its ETag, changes nothing); orphans: their count.
+export function profileMenu(ui, { rows, current, loading, supported, writable, orphans = 0 }, on) {
   const { el, button } = ui;
   // A profile just created is not in the list read before it yet: it gets a plain option while it loads.
   const listed = rows.some(row => row.id === current);
@@ -115,12 +145,13 @@ export function profileMenu(ui, { rows, current, loading, product, corrupt }, on
   const row = rows.find(item => item.id === current);
   const extra = isExtraProfile(current);
   const controls = loading ? [] : [
-    canCreateProfiles(product) && !corrupt ? button('新增帳號', on.create, { id: 'profile-create' }) : null,
-    button('改名', on.rename, { id: 'profile-rename', disabled: !extra || corrupt }),
-    button('刪除帳號', on.remove, { id: 'profile-delete', disabled: !extra || corrupt }),
+    supported && writable ? button('新增帳號', on.create, { id: 'profile-create' }) : null,
+    button('改名', on.rename, { id: 'profile-rename', disabled: !extra || !writable || !listed }),
+    button('刪除帳號', on.remove, { id: 'profile-delete', disabled: !extra || !writable || !listed }),
   ];
-  const notes = loading ? [] : [disabledNotice(row), blockedNotice(row)].filter(Boolean)
-    .map(text => el('p', { class: 'profile-note' }, text));
+  const notes = loading ? [] : [disabledNotice(row), blockedNotice(row),
+    orphans ? `有 ${orphans} 筆不在帳號索引裡的帳號資料（孤兒），不會服務 MCP 請求；可到「診斷與維護」逐一刪除。` : '']
+    .filter(Boolean).map(text => el('p', { class: 'profile-note' }, text));
   return el('div', { class: 'profile-bar' },
     el('div', { class: 'profile-choose' }, el('span', { class: 'profile-caption', 'aria-hidden': 'true' }, '帳號'), select, ...controls),
     ...notes);

@@ -1,12 +1,13 @@
 import { AdminApi, ApiError, ProfileEchoError, StaleProfileError } from './api.js';
 import { products, connectionHelp, policyRestartsChild, policyRestartNotice, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl, ownerDefaultsView, noticeTime, odooSwitches, odooSwitchKeys, odooSwitchPayload, maskedCurrentToken, tokenHistory, backendEdit, backendPatchPayload, n8nSession, n8nSessionPayload, odooMethods, odooMethodsPayload } from './contracts.js';
-import { DEFAULT_PROFILE, clientName, isExtraProfile, labelDialog, profileMenu, profileName, shortId } from './profiles.js';
+import { DEFAULT_PROFILE, clientName, indexState, isExtraProfile, labelDialog, profileMenu, profileName, shortId } from './profiles.js';
 import './styles.css';
 
 const root = document.querySelector('#app');
 let api, state, busy = false, revealed = null, revealTimer, dialog, revealEpoch = 0;
-// HM-11 (plan 6): with profiles, the profile list ({rows, revision, corrupt}) and the newest page load of a profile
-// (views; loading while it runs). Without profiles (api.profile === null) none of this is used and the page is as before.
+// HM-11 (plan 6): with profiles, the profile list ({rows, orphans, revision}; substitute: corrupt or unreadable, see
+// readProfiles) and the newest page load of a profile (views; loading while it runs). Without profiles (api.profile ===
+// null) none of this is used and the page is as before.
 let profiles = null, views = 0, loading = false, product = null;
 const routes = { overview: '總覽', backend: '後端連線', tools: '工具權限', access: '連線與權杖', diagnostics: '診斷與維護' };
 const icons = { overview: 'view-grid', backend: 'server-network', tools: 'shield-check', access: 'tune-variant', diagnostics: 'text-box-search' };
@@ -88,14 +89,22 @@ const scopeNote = text => api.profile === null ? null : el('p', { class: 'profil
 const currentRow = () => profiles?.rows.find(row => row.id === api.profile) ?? null;
 const named = (row, id) => `「${row ? profileName(row) : shortId(id)}」（${shortId(id)}）`;
 function pendingFor(id) { try { return Boolean(api.pendingOperation(id)); } catch { return true; } }
+// The list as the menu uses it. A list the panel cannot use never locks the page (review S-2): the default profile stays
+// usable, alone in the menu (with the profile shown, when it is another), nothing about profiles can be changed, and it
+// is no evidence that a profile was deleted (substitute). corrupt: the index cannot be used (DQ-12; the bootstrap says
+// so, or the list answers profile_index_corrupt); unreadable: the list failed or does not follow the contract. A list
+// without its ETag is shown, but read-only (revision null).
 async function readProfiles(fresh) {
+  const corrupt = indexState(fresh).corrupt;
   try {
     const list = await api.profileList();
-    return fresh?.profile_index_state === 'corrupt' ? { ...list, corrupt: true } : list;
+    return corrupt ? { ...list, revision: null, corrupt: true } : list;
   } catch (error) {
-    if (!(error instanceof ApiError) || error.code !== 'profile_index_corrupt') throw error;
-    // DQ-12: the index cannot be used; the default profile stays usable, alone in the menu.
-    return { rows: [{ id: DEFAULT_PROFILE, label: fresh?.profile?.label ?? 'Default', port: 3000, is_default: true, disabled_reason: null }], revision: null, corrupt: true };
+    if (error instanceof StaleProfileError || error instanceof ProfileEchoError || error instanceof ApiError && [401, 403].includes(error.status)) throw error;
+    const rows = [{ id: DEFAULT_PROFILE, label: 'Default', port: 3000, is_default: true, disabled_reason: null }];
+    return corrupt || error instanceof ApiError && error.code === 'profile_index_corrupt'
+      ? { rows, orphans: [], revision: null, substitute: true, corrupt: true }
+      : { rows, orphans: [], revision: null, substitute: true, unreadable: true };
   }
 }
 // HM-11 (plan 6): show another profile (target: its id; null: find the server's profile mode again). The page is
@@ -115,11 +124,11 @@ async function show(target, message, error = false, recovering = false) {
     const fresh = target === null ? await api.open() : await api.bootstrap();
     if (fresh.capabilities?.schema_version === 1) fresh.capabilities = await api.capabilities();
     const list = api.profile === null ? null : await readProfiles(fresh);
-    if (list && !list.rows.some(row => row.id === api.profile)) throw new ApiError(404, 'profile_not_found');
+    if (list && !list.substitute && !list.rows.some(row => row.id === api.profile)) throw new ApiError(404, 'profile_not_found');
     if (view !== views) return;
     // The profile left behind is no longer in a list the panel can trust (deleted elsewhere): it cannot be gone back
-    // to, so its unconfirmed receipt is cleared and said so (review S-1). A corrupt index's list is not such a list.
-    const leftGone = Boolean(list) && !list.corrupt && isExtraProfile(left) && left !== api.profile && !list.rows.some(row => row.id === left);
+    // to, so its unconfirmed receipt is cleared and said so (review S-1). A substitute list is not such a list.
+    const leftGone = Boolean(list) && !list.substitute && isExtraProfile(left) && left !== api.profile && !list.rows.some(row => row.id === left);
     const cleared = leftGone && forget(left);
     state = fresh; profiles = list; product = fresh.product;
     render();
@@ -161,7 +170,7 @@ function loadFailed(target, problem) {
 }
 function renderLoading(target) {
   const menu = profiles && target !== null && api.profile !== null
-    ? profileMenu({ el, button }, { rows: profiles.rows, current: target, loading: true, product }, profileActions) : null;
+    ? profileMenu({ el, button }, { rows: profiles.rows, current: target, loading: true }, profileActions) : null;
   root.replaceChildren(el('header', { class: 'topbar' }, brandCaption(), product ? el('div', { class: 'product-label' }, products[product].name) : null, menu),
     el('main', { class: 'blocked', role: 'status' }, p(target === null ? '正在重新讀取管理狀態…' : `正在切換到帳號${named(profiles?.rows.find(row => row.id === target), target)}…`)));
 }
@@ -172,7 +181,7 @@ function onProfileChange(select) {
   show(select.value);
 }
 async function createProfile() {
-  if (busy || !profiles || profiles.corrupt) return;
+  if (busy || !profiles || profiles.revision === null) return;
   const label = await labelDialog({ el, button }, { title: '新增帳號', submit: '建立帳號',
     description: '新帳號會複製預設帳號目前的工具權限與寫入設定，之後各自獨立；後端連線是空的，要另外設定。建立後會自動切換到新帳號；它有自己的 MCP 權杖與網址，需要時到「連線與權杖」按「顯示權杖」。' });
   if (label === null) return;
@@ -183,8 +192,8 @@ async function createProfile() {
 }
 async function renameProfile() {
   const row = currentRow();
-  if (busy || !row || !isExtraProfile(row.id) || profiles.corrupt) return;
-  const label = await labelDialog({ el, button }, { title: `改名帳號${named(row, row.id)}`, initial: row.label, submit: '儲存名稱',
+  if (busy || !row || !isExtraProfile(row.id) || profiles.revision === null) return;
+  const label = await labelDialog({ el, button }, { title: `改名帳號${named(row, row.id)}`, initial: row.label ?? '', submit: '儲存名稱',
     description: '只改顯示名稱；這個帳號的權杖、MCP 網址與設定都不變。' });
   if (label === null) return;
   if (label === row.label) { notice('名稱沒有變更，未送出。'); return; }
@@ -197,7 +206,7 @@ async function renameProfile() {
 // DQ-14: two confirmations that say what happens; the server revokes the token and wipes the credentials first.
 async function deleteProfile() {
   const row = currentRow();
-  if (busy || !row || !isExtraProfile(row.id) || profiles.corrupt) return;
+  if (busy || !row || !isExtraProfile(row.id) || profiles.revision === null) return;
   const name = named(row, row.id);
   if (!await confirmAction(`刪除帳號${name}？`, '這個帳號的 MCP 權杖會立即撤銷，用它連線的用戶端都會斷線；子行程會停止，後端連線與憑證會先抹除，再刪除這個帳號全部的設定與工具權限。面板無法復原；只有還原刪除前的備份，帳號才會連同憑證一起回來。其他帳號不受影響。', '繼續')) return;
   if (!await confirmAction(`最後確認：刪除帳號${name}`, '確認後立即刪除，無法在面板復原。', '確認刪除')) return;
@@ -206,6 +215,51 @@ async function deleteProfile() {
   await task(async () => { deleted = await api.deleteProfile(row.id, revision); });
   if (deleted) await show(DEFAULT_PROFILE, `已刪除帳號${name}，它的權杖已失效；已切回預設帳號。${forget(row.id) ? '它尚未確認的操作紀錄已一併清除。' : ''}`);
 }
+// DQ-14 (contract 3.1): an orphan (a profile directory the index does not list) is never deleted on its own; the panel
+// lists it and deletes it on request, with the same two confirmations (its token is revoked, its credentials wiped).
+async function deleteOrphan(id) {
+  if (busy || !profiles || profiles.revision === null || !profiles.orphans.includes(id)) return;
+  const name = `孤兒帳號資料（${shortId(id)}）`;
+  if (!await confirmAction(`刪除${name}？`, '這份帳號資料不在帳號索引裡，不會服務 MCP 請求。刪除時會先撤銷它的權杖、抹除後端連線與憑證，再刪除它的資料夾；面板無法復原，只有還原刪除前的備份才會回來。其他帳號不受影響。', '繼續')) return;
+  if (!await confirmAction(`最後確認：刪除${name}`, '確認後立即刪除，無法在面板復原。', '確認刪除')) return;
+  const revision = profiles.revision;
+  await task(async () => {
+    await api.deleteProfile(id, revision);
+    const cleared = forget(id);
+    await reload(`已刪除${name}。${cleared ? '它尚未確認的操作紀錄已一併清除。' : ''}`);
+  });
+}
+// DQ-12 (contract 3.6): an index the add-on cannot use (corrupt, or changed behind its back) is moved aside on request:
+// every additional profile's token revoked, the default profile served again at once, every profile directory an
+// orphan. Two confirmations, as a deletion (DQ-14). The add-on refuses with 409 config_conflict when the index is usable
+// again, when it changed again (another ETag), or when there is no index file to move (the profiles directory could
+// not be listed at the start: only a restart of the add-on helps); with 503 when another change of a profile holds its
+// lock (nothing was done; the identity is kept for a resend).
+async function quarantineIndex() {
+  const { corrupt, etag } = indexState(state);
+  if (busy || !profiles?.corrupt || !corrupt || api.profile !== DEFAULT_PROFILE) return;
+  if (!etag) { notice('帳號索引的版本資訊格式不符，無法隔離；請重新整理狀態。', true); return; }
+  if (!await confirmAction('隔離帳號索引？', '會撤銷所有額外帳號的 MCP 權杖（用它們連線的用戶端都會斷線），把帳號索引檔改名保存，預設帳號立刻恢復 MCP 服務。額外帳號的資料會留下來變成孤兒帳號資料，之後可以在「診斷與維護」逐一刪除；面板無法把它們加回索引，只有還原備份才能恢復。', '繼續')) return;
+  if (!await confirmAction('最後確認：隔離帳號索引', '確認後立即撤銷所有額外帳號的權杖並改名索引檔，無法在面板復原。', '確認隔離')) return;
+  let done = null, conflict = false;
+  await task(async () => {
+    try { done = await api.quarantineIndex(etag); }
+    catch (error) {
+      if (error instanceof ApiError && error.code === 'config_conflict') { conflict = true; return; }
+      if (error instanceof ApiError && error.status === 503 && !error.code) throw new UiError('沒有執行隔離：另一個帳號的操作正在進行。請稍後按「帳號操作尚未確認」裡的「重送帳號操作」，或重新整理後再試。');
+      throw error;
+    }
+  });
+  if (done) await show(DEFAULT_PROFILE, quarantined(done));
+  else if (conflict) await task(async () => {
+    await reload();
+    const now = indexState(state);
+    notice(!now.corrupt ? '帳號索引已經可以使用，沒有執行隔離。'
+      : now.etag !== etag ? '帳號索引檔剛又改變了，沒有執行隔離；請確認後再試一次。'
+        : '沒有可以隔離的帳號索引檔：帳號資料夾在 add-on 啟動時就無法讀取。請修好 /data/mcp/profiles 之後重新啟動 add-on；隔離解決不了這種情況。', true);
+  });
+}
+const quarantined = done => `已隔離帳號索引（改名保存為 ${done.quarantined}）：所有額外帳號的權杖已撤銷，預設帳號已恢復 MCP 服務。原本的帳號資料已變成孤兒帳號資料，需要時可以在「診斷與維護」逐一刪除。`;
 function pendingOperationCard() {
   const pending = api.pendingOperation();
   if (!pending) return null;
@@ -224,27 +278,39 @@ function pendingOperationCard() {
       await task(async () => { api.acknowledgeOperation(); await reload('已結束此分頁的操作追蹤。'); });
     })));
 }
-// HM-11: profile create and delete keep their own identity (the profiles scope); its card shows on every page.
+// HM-11: profile create and delete and the index quarantine keep their own identity (the profiles scope); its card
+// shows on every page.
 function pendingProfileOperationCard() {
   const pending = api.pendingProfileOperation();
   if (!pending) return null;
-  const creating = pending.route === 'profiles/create';
-  const what = creating ? `建立帳號「${pending.label}」` : `刪除帳號（${shortId(pending.profile)}）`;
+  const creating = pending.route === 'profiles/create', quarantining = pending.route === 'profiles/quarantine';
+  const what = creating ? `建立帳號「${pending.label}」` : quarantining ? '隔離帳號索引' : `刪除帳號（${shortId(pending.profile)}）`;
   return el('section', { class: 'card', id: 'pending-profile-operation' }, el('h2', {}, '帳號操作尚未確認'),
     p(`${what}尚未取得完成確認。此分頁已保留原操作識別碼，重新載入也不會自動重送。`),
-    p('請先看帳號選單：建立成功時清單裡會有這個帳號，刪除成功時它會消失。以原識別碼重送時，已完成的操作只回傳收據，不會再做一次。'),
+    p(quarantining ? '請先看帳號索引的狀態：隔離成功時「帳號索引無法使用」的說明會消失。以原識別碼重送時，已完成的操作只回傳收據，不會再做一次。'
+      : '請先看帳號選單：建立成功時清單裡會有這個帳號，刪除成功時它會消失。以原識別碼重送時，已完成的操作只回傳收據，不會再做一次。'),
     el('div', { class: 'actions' }, button('重送帳號操作', async () => {
       if (!await confirmAction('以原識別碼重送帳號操作？', `${what}。已完成的操作只回傳收據；結果未知的操作不會再次執行。`)) return;
       let result = null;
       await task(async () => {
         try { result = await api.retryProfileOperation(); } catch (error) {
-          // The profile to delete is already gone (deleted elsewhere): nothing is left to delete, and it is that profile
-          // that is gone, not the one shown (review S-1). The identity was released with the refusal.
-          if (creating || !(error instanceof ApiError) || error.code !== 'profile_not_found') throw error;
+          // A resent delete refused before its intent (the identity is released): config_conflict, as HM-10 compares the
+          // index ETag before it looks for the profile, or profile_not_found. When a list the panel can trust has the
+          // profile no more (nor as an orphan), it was deleted elsewhere: nothing is left to delete, and it is that
+          // profile that is gone, not the one shown (review S-1).
+          if (pending.route !== 'profiles/delete' || !(error instanceof ApiError) || !['profile_not_found', 'config_conflict'].includes(error.code)) throw error;
+          const list = await api.profileList().catch(() => null);
+          if (!list || list.rows.some(row => row.id === pending.profile) || list.orphans.includes(pending.profile)) {
+            if (error.code === 'config_conflict') throw new UiError('帳號清單已被其他操作更新，這次沒有刪除任何帳號；請確認帳號清單後再刪除一次。');
+            throw error;
+          }
           result = { deleted: pending.profile, missing: true };
         }
       });
-      if (result) await show(creating ? result.id : DEFAULT_PROFILE, creating ? `已確認建立帳號「${result.label}」，並切換到這個帳號。`
+      // A created profile deleted since (HM-10 replays it as its id alone): confirmed, but there is nothing to switch to.
+      if (result && creating && result.gone) await show(DEFAULT_PROFILE, `已確認先前建立帳號「${pending.label}」已完成，但這個帳號（${shortId(result.id)}）之後已被刪除（可能在其他分頁或由其他管理員刪除）；已切回預設帳號。${forget(result.id) ? '它尚未確認的操作紀錄已一併清除。' : ''}`);
+      else if (result && quarantining) await show(DEFAULT_PROFILE, quarantined(result));
+      else if (result) await show(creating ? result.id : DEFAULT_PROFILE, creating ? `已確認建立帳號「${result.label}」，並切換到這個帳號。`
         : `${result.missing ? `帳號（${shortId(result.deleted)}）已不存在，不需要再刪除` : '已確認刪除帳號'}；已切回預設帳號。${forget(result.deleted) ? '該帳號尚未確認的操作紀錄已一併清除。' : ''}`);
     }), button('已核對帳號清單', async () => {
       if (!await confirmAction('結束這筆帳號操作的追蹤？', '請先核對帳號清單。這只清除此分頁的識別紀錄，不會復原或證明先前操作未執行。')) return;
@@ -274,7 +340,7 @@ async function reload(message) {
   product = state.product;
   if (api.profile !== null) {
     profiles = await readProfiles(state);
-    if (!profiles.rows.some(row => row.id === api.profile)) throw new ApiError(404, 'profile_not_found');
+    if (!profiles.substitute && !profiles.rows.some(row => row.id === api.profile)) throw new ApiError(404, 'profile_not_found');
   }
   render();
   if (message) notice(message);
@@ -776,13 +842,23 @@ function access() {
     card('手動加入 MCP 用戶端', p('適用支援 Streamable HTTP 的用戶端；欄位名稱依用戶端而異。先填端點，再於用戶端安全地填入 Bearer。未驗證所有用戶端相容性。'),
       endpoint ? null : p('以下端點只是佔位文字，不能直接連線。'), el('pre', { tabindex: '0', 'aria-label': '不含真實權杖的連線範例' }, el('code', {}, clientExample(endpoint, null, name))), button('複製佔位範例', () => copy(clientExample(endpoint, null, name))), p('一般複製永遠使用 <YOUR_ADDON_TOKEN> 佔位文字，不含真實權杖。建議跨主機連線使用 HTTPS。')));
 }
+// DQ-14: the orphans, listed for deletion (on this page whichever profile is shown: they are the add-on's).
+function orphansCard() {
+  const ids = api.profile === null ? [] : profiles?.orphans ?? [];
+  if (!ids.length) return null;
+  return el('section', { class: 'card', id: 'profile-orphans' }, el('h2', {}, '孤兒帳號資料'),
+    p('這些帳號資料不在帳號索引裡（例如隔離帳號索引後留下的，或刪除時沒有刪乾淨的）：不會服務 MCP 請求，也不會自動刪除。確認不再需要後可以逐一刪除；刪除前會先撤銷它的權杖並抹除後端憑證。'),
+    profiles.revision === null ? p('帳號清單目前不能變更，暫時無法刪除。') : null,
+    el('ul', { class: 'orphan-list' }, ...ids.map(id => el('li', {}, el('span', {}, `帳號資料（${shortId(id)}）`),
+      button('刪除', () => deleteOrphan(id), { disabled: profiles.revision === null, 'aria-label': `刪除孤兒帳號資料（${shortId(id)}）` })))));
+}
 function diagnostics() {
   const revision = state.configuration?.revision;
   const features = state.capabilities?.capabilities ?? {};
   const viewer = el('div', { 'aria-live': 'polite' }, p('按下讀取，取得目前保留的日誌。'));
   const history = ownerDefaults();
   const row = currentRow();
-  return el('div', { class: 'stack' }, history && !history.notice && !history.malformed ? ownerDefaultsCard(history) : null, card('子行程維護', api.profile === null ? null
+  return el('div', { class: 'stack' }, history && !history.notice && !history.malformed ? ownerDefaultsCard(history) : null, orphansCard(), card('子行程維護', api.profile === null ? null
     : p(`這是帳號${named(row, api.profile)}的子行程${row?.port ? `（port ${row.port}）` : ''}；重新啟動與日誌都只看這個帳號。`), p(`目前狀態：${statusText(state.health?.child?.state)}`),
     p('重新啟動會中斷子行程的現有連線；後端、政策與權杖設定會保留。'),
     features.restart_child ? button('重新啟動子行程', async () => {
@@ -804,11 +880,23 @@ const brandCaption = () => el('div', { class: 'brand-caption' }, icon('home-auto
 function profileView() {
   if (api.profile === null || !profiles) return {};
   const row = currentRow();
+  const quarantinable = profiles.corrupt && api.profile === DEFAULT_PROFILE && indexState(state).etag !== null;
   return {
-    menu: profileMenu({ el, button }, { rows: profiles.rows, current: api.profile, loading: false, product: state.product, corrupt: profiles.corrupt }, profileActions),
+    menu: profileMenu({ el, button }, { rows: profiles.rows, current: api.profile, loading: false, supported: state.profiles_supported === true,
+      writable: profiles.revision !== null, orphans: profiles.orphans.length }, profileActions),
     heading: el('p', { class: 'profile-current' }, '目前帳號：', el('strong', {}, row ? profileName(row) : shortId(api.profile)), `（${shortId(api.profile)}）`),
+    // DQ-12: the panel stays open; the one way out on HA is this action (or restoring a backup).
     corrupt: profiles.corrupt ? el('section', { class: 'card', id: 'profile-index-corrupt' }, el('h2', {}, '帳號索引無法使用'),
-      p('帳號索引無法讀取：MCP 端點暫停服務所有帳號（含預設帳號），額外帳號暫時無法選擇；預設帳號的設定仍可在這裡檢查。還原備份可以恢復。')) : null,
+      p('帳號索引無法讀取或已在 add-on 之外被修改：MCP 端點暫停服務所有帳號（含預設帳號），額外帳號暫時無法選擇；預設帳號的設定仍可在這裡檢查。'),
+      p('「隔離帳號索引」會撤銷所有額外帳號的權杖、把索引檔改名保存，預設帳號立刻恢復 MCP 服務；額外帳號的資料會變成孤兒帳號資料，可以之後逐一刪除。也可以改為還原備份。'),
+      quarantinable ? el('div', { class: 'actions' }, button('隔離帳號索引', quarantineIndex, { id: 'profile-index-quarantine' }))
+        : p(api.profile === DEFAULT_PROFILE ? '帳號索引的版本資訊無法使用，暫時不能隔離；請重新整理狀態。' : '請切回預設帳號再隔離帳號索引。'))
+      // Review S-2: a list the panel cannot use, or one without its ETag, never locks the page.
+      : profiles.unreadable ? el('section', { class: 'card', id: 'profile-list-unavailable' }, el('h2', {}, '帳號清單無法讀取'),
+        p('這次讀不到帳號清單，或清單的格式與這個管理介面不相容，所以選單只列出預設帳號（與目前顯示的帳號）；新增、改名、刪除帳號暫停。目前帳號的設定照常可以管理。請重新整理狀態；一再出現時請更新 add-on 或回報。'))
+      : profiles.revision === null ? el('section', { class: 'card', id: 'profile-list-readonly' }, el('h2', {}, '帳號清單缺少版本資訊'),
+        p('帳號清單的回應沒有帶版本資訊（ETag 標頭），所以新增、改名、刪除帳號暫停，避免覆蓋其他人的變更。切換帳號與各帳號的設定照常可以使用。一再出現時，可能是 Home Assistant 或前面的反向代理拿掉了這個標頭，請回報。'))
+      : null,
   };
 }
 function render() {

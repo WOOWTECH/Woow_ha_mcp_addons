@@ -1,6 +1,6 @@
 import { mountPath, products, UiError } from './contracts.js';
 import { OperationIdentity, operationKinds, operationReceipt, PROFILES_SCOPE } from './operation-identity.js';
-import { DEFAULT_PROFILE, INDEX_REVISION, echoMatches, isExtraProfile, isProfileId, labelProblem, profileRows } from './profiles.js';
+import { DEFAULT_PROFILE, INDEX_ETAG, INDEX_REVISION, echoMatches, isExtraProfile, isProfileId, labelProblem, orphanIds, profileRows } from './profiles.js';
 
 // A Core release or pre-release string (the server sends only this form, ha_role.shown_version); anything else is not shown.
 const CORE_VERSION = /^[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,3}(?:(?:a|b|rc)[0-9]{1,3}|\.dev[0-9]{1,14})?$/;
@@ -47,7 +47,9 @@ export class ApiError extends UiError {
       profile_label_invalid: '帳號名稱不符合規則：去掉前後空白後要 1–80 個字，不能含控制字元、零寬字元或雙向控制字元。',
       profile_default_immutable: '預設帳號不能改名或刪除。',
       profile_label_conflict: '已有同名的帳號（不分大小寫與全形半形），或用了保留名稱「default」「預設帳號」。請換一個名稱。',
-      profile_limit_reached: `已達這個產品的帳號上限${limit === null ? '' : `（最多 ${limit} 個額外帳號）`}；請先刪除不用的帳號。`,
+      // HM-10: limit 0 is an add-on whose open file limit holds no additional profile (it serves the default one only).
+      profile_limit_reached: limit === 0 ? '這個 add-on 目前只能服務預設帳號（可同時開啟的檔案數不足以再執行額外帳號），所以無法新增帳號；刪除帳號也不會改變這一點。請回報這個情況。'
+        : `已達這個產品的帳號上限${limit === null ? '' : `（最多 ${limit} 個額外帳號）`}；請先刪除不用的帳號。`,
       profile_memory_insufficient: `可用記憶體不足，無法再新增帳號${need === null ? '' : `（需要約 ${need} MiB${free === null ? '' : `，目前可用 ${free} MiB`}）`}。`,
       profile_port_unavailable: '找不到可用的子行程 port，無法新增帳號。',
       profile_product_unsupported: '這個產品不支援額外帳號。',
@@ -70,7 +72,14 @@ const PRE_INTENT = ['config_conflict', 'config_revision_required', 'operation_id
 // Refused before the server records the intent (contract 3.2 step 11), so the next try may take a new identity.
 const PROFILE_REFUSALS = [...PRE_INTENT, 'profile_label_invalid', 'profile_label_conflict', 'profile_limit_reached',
   'profile_memory_insufficient', 'profile_port_unavailable', 'profile_product_unsupported', 'profile_default_immutable',
-  'profile_not_found'];
+  'profile_not_found', 'profile_index_corrupt'];
+// The global writes (contract 3.1; HM-10): their path, method and body. Each keeps an identity under the profiles scope.
+const PROFILE_WRITES = {
+  'profiles/create': { method: 'POST', path: () => 'profiles', body: pending => ({ label: pending.label }) },
+  'profiles/delete': { method: 'DELETE', path: pending => `profiles/${pending.profile}` },
+  'profiles/quarantine': { method: 'POST', path: () => 'profiles/index/quarantine' },
+};
+const QUARANTINE_NAME = /^profiles\.json\.quarantine-[0-9]{8}T[0-9]{6}Z(?:-[0-9]{1,3})?$/;
 
 // HM-11 (plan 6; contract 3.3): with profiles, every profile-scoped request names its profile in X-MCP-Profile, the
 // default profile too; the profile routes (/api/profiles...) never do. this.profile is null for a single-profile server
@@ -233,13 +242,15 @@ export class AdminApi {
   }
   acknowledgeOperation(profile = this.profile) { this.operations.clear(profile); }
 
-  // HM-11 (contract 3.1, 3.6): the profile list and its index revision (the ETag header). A profile route never carries
-  // X-MCP-Profile and has no echo.
+  // HM-11 (contract 3.1, 3.6): the profile list, its orphans and its index revision (the ETag header). A profile route
+  // never carries X-MCP-Profile and has no echo. A list without a well-formed ETag is still shown, but nothing can be
+  // changed with it (revision null; review S-2: HM-03a measures whether the Ingress keeps the header).
   async profileList() {
     const { response, value } = await this.exchange(`${this.mount}/api/profiles`, {}, { profile: null, global: true });
+    const rows = profileRows(value);
+    const orphans = orphanIds(value, rows);
     const etag = response.headers.get('ETag');
-    if (typeof etag !== 'string' || !/^"p1-[0-9a-f]{64}"$/.test(etag)) throw new UiError('帳號清單的版本格式不符，無法顯示；請重新整理。');
-    return { rows: profileRows(value), revision: etag.slice(1, -1) };
+    return { rows, orphans, revision: typeof etag === 'string' && INDEX_ETAG.test(etag) ? etag.slice(1, -1) : null };
   }
   // A fresh bootstrap (its echo checked) for the CSRF value and the operation clock. It is the default profile's: the
   // profile routes are the add-on's, the CSRF value is shared, and a profile whose state cannot be read must stay
@@ -249,9 +260,11 @@ export class AdminApi {
     if (typeof fresh.csrf !== 'string' || !/^[A-Za-z0-9_-]{16,256}$/.test(fresh.csrf)) throw new UiError('缺少有效安全驗證；未送出變更。請重新開啟管理介面。');
     return fresh;
   }
-  // Create (POST {label}) or delete (DELETE) a profile: If-Match of the index the administrator saw, an Idempotency-Key
-  // kept for this tab under the profiles scope, CSRF. The answer is the new row, or {deleted, operation}; never a token
-  // (a new profile's token is only ever shown by token/reveal, with its own X-MCP-Profile and echo).
+  // Create (POST {label}) or delete (DELETE) a profile, or quarantine an unusable index (POST, no body): If-Match of the
+  // index the administrator saw (the quarantine: the unusable index file's own ETag), an Idempotency-Key kept for this
+  // tab under the profiles scope, CSRF. The answer is the new row, {deleted, operation} or {quarantined, operation};
+  // never a token (a new profile's token is only ever shown by token/reveal, with its own X-MCP-Profile and echo). A
+  // created profile deleted since its creation is replayed as its id alone (HM-10): gone, nothing to switch to.
   async changeProfiles(route, revision, detail = {}) {
     if (this.profile === null) throw new UiError('這個管理服務沒有開通多帳號。');
     if (route === 'profiles/create' && detail.label !== undefined) {
@@ -264,14 +277,16 @@ export class AdminApi {
     const epoch = this.epoch;
     const fresh = await this.profileFresh(epoch);
     const pending = this.operations.start(route, revision, fresh, PROFILES_SCOPE, detail);
-    const create = route === 'profiles/create';
+    const write = PROFILE_WRITES[route];
+    if (!write) throw new UiError('不支援的帳號操作。');
+    const body = write.body?.(pending);
     let result;
     try {
-      result = await this.request(create ? `${fresh.api_base}/profiles` : `${fresh.api_base}/profiles/${pending.profile}`, {
-        method: create ? 'POST' : 'DELETE',
-        headers: { 'X-CSRF-Token': fresh.csrf, ...(create ? { 'Content-Type': 'application/json' } : {}),
+      result = await this.request(`${fresh.api_base}/${write.path(pending)}`, {
+        method: write.method,
+        headers: { 'X-CSRF-Token': fresh.csrf, ...(body ? { 'Content-Type': 'application/json' } : {}),
           'If-Match': `"${pending.revision}"`, 'Idempotency-Key': pending.id },
-        ...(create ? { body: JSON.stringify({ label: pending.label }) } : {}),
+        ...(body ? { body: JSON.stringify(body) } : {}),
       }, { profile: null, epoch, global: true });
     } catch (error) {
       if (error instanceof ApiError && PROFILE_REFUSALS.includes(error.code)) this.operations.clear(PROFILES_SCOPE);
@@ -279,13 +294,23 @@ export class AdminApi {
     }
     const receipt = operationReceipt(result?.operation, pending);
     if (receipt.state !== 'completed') throw new UiError('帳號操作結果尚未確認；原識別碼已保留，請重送或核對帳號清單。');
-    if (create ? !isExtraProfile(result?.id) || profileRows({ profiles: [{ ...result, operation: undefined }, defaultRow] }).length !== 2
-      : result?.deleted !== pending.profile) throw new UiError('伺服器未回傳預期的帳號確認；請重新整理帳號清單。');
+    const keys = result && typeof result === 'object' ? Object.keys(result).sort().join() : '';
+    const gone = route === 'profiles/create' && receipt.replayed && keys === 'id,operation' && isExtraProfile(result.id);
+    const confirmed = route === 'profiles/create' ? gone || isExtraProfile(result?.id) && profileRows({ profiles: [{ ...result, operation: undefined }, defaultRow] }).length === 2
+      : route === 'profiles/delete' ? result?.deleted === pending.profile
+        : typeof result?.quarantined === 'string' && QUARANTINE_NAME.test(result.quarantined);
+    if (!confirmed) throw new UiError('伺服器未回傳預期的帳號確認；請重新整理帳號清單。');
     this.operations.clear(PROFILES_SCOPE);
-    return create ? { id: result.id, label: result.label, replayed: receipt.replayed } : { deleted: result.deleted, replayed: receipt.replayed };
+    if (route === 'profiles/create') return gone ? { id: result.id, label: null, replayed: true, gone: true } : { id: result.id, label: result.label, replayed: receipt.replayed };
+    return route === 'profiles/delete' ? { deleted: result.deleted, replayed: receipt.replayed } : { quarantined: result.quarantined, replayed: receipt.replayed };
   }
   createProfile(label, revision) { return this.changeProfiles('profiles/create', revision, { label }); }
   deleteProfile(profile, revision) { return this.changeProfiles('profiles/delete', revision, { profile }); }
+  // DQ-12 (contract 3.6): quarantine the unusable index; etag is the default bootstrap's profile_index_etag, as given.
+  quarantineIndex(etag) {
+    if (typeof etag !== 'string' || !INDEX_ETAG.test(etag)) throw new UiError('帳號索引的版本格式不符；請重新整理後再試，未送出變更。');
+    return this.changeProfiles('profiles/quarantine', etag.slice(1, -1));
+  }
   // Rename (PATCH {label}): If-Match of the index; no identity (contract 3.5).
   async renameProfile(profile, label, revision) {
     if (this.profile === null) throw new UiError('這個管理服務沒有開通多帳號。');
