@@ -10,7 +10,8 @@ readers and checks, and only reads, the same for every version (see seed). What 
 - state.json is byte for byte what the old version left: an upgrade rewrites nothing of the default profile (invariant
   I6; tests/test_upgrade_zero_rewrite.py), so the old token and both old URLs keep working;
 - the index and the profiles directory as they were: absent stays absent (only the first profile a panel creates
-  writes the index, never an upgrade), and a present index keeps its bytes;
+  writes the index, never an upgrade), and a present index keeps its bytes (a regular file, read both times without
+  following a link);
 - no restore marker: an upgrade is no restore (packaging/entrypoint.py marks only a root-owned /data/mcp).
 
 Report: $REPORT_DIR/verify.json in the Store's format; exit 0 only when every check passed.
@@ -56,10 +57,12 @@ def main(environ=os.environ, *, mcp_port=seed.MCP_PORT, runtime=seed.RUNTIME, wa
     names, index = seed.layout(data)
     for name in (seed.INDEX, seed.PROFILES):
         before = seeded['names'][name] if seeded is not None else None
-        kept = before == names[name] and (name != seed.INDEX or seeded['index_sha256'] == index)
+        # a present index must be a regular file read both times (never followed through a link) with the same bytes
+        kept = before == names[name] and (name != seed.INDEX or seeded['index_sha256'] == index != 'unreadable')
         report.check(f'{name} as before the upgrade', kept,
                      ('present' if names[name] else 'absent') + (', same bytes' if kept and names[name]
-                                                                 and name == seed.INDEX else ''))
+                                                                 and name == seed.INDEX else '')
+                     + (', unreadable' if name == seed.INDEX and index == 'unreadable' else ''))
     report.check('no restore marker', not names[seed.MARKER], 'present' if names[seed.MARKER] else 'absent')
     report.write(environ['REPORT_DIR'], 'verify')
     return 0 if report.passed else 1

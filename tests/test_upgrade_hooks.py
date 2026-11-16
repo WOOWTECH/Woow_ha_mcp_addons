@@ -4,7 +4,10 @@ packaging/hooks/seed and verify, which HM-19a moves into addons/odoo/upgrade-che
 Both run here as the Store runs them (python3, the standard library, the add-on's /data and its 8081), against a mock
 add-on on loopback: they only read the add-on's data (every entry's bytes, owner, mode, size, mtime and ctime are
 unchanged), they assert nothing that depends on a version, and verify fails for each thing an upgrade must not do.
-Every token is made when a test runs; none appears in a report, the hook state or the output (the HM-01 log scan).
+Then against the real runtime (HM-16 review SF-6): run_product through the owned executable, the old version not
+switched on and the new one switched on (the 0.5.0 upgrade's shape) or neither, so what the hooks assume of today's
+gateway is tested, not only of the mock. Every token is made when a test runs; none appears in a report, the hook
+state or the output (the HM-01 log scan).
 """
 import ast
 import hashlib
@@ -15,14 +18,18 @@ import os
 from pathlib import Path
 import re
 import secrets
+import signal
 import stat
+import subprocess
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
+from batch2_owned_port import reserve_port
 from log_scan import log_scan  # noqa: F401  (fixture)
+from owned_executable import Executable
 
 pytestmark = pytest.mark.usefixtures('log_scan')
 ROOT = Path(__file__).resolve().parents[1]
@@ -220,13 +227,43 @@ def test_seed_fails_on_another_owner_an_unreadable_state_or_an_unreachable_add_o
     assert report(upgrade, 'seed')['default token in state.json']['result'] == 'fail'
 
 
-def test_the_hooks_go_straight_to_the_add_on_whatever_proxy_their_container_has(upgrade, monkeypatch):
-    for name in ('http_proxy', 'HTTP_PROXY', 'all_proxy', 'ALL_PROXY'):
-        monkeypatch.setenv(name, 'http://127.0.0.1:9')  # a proxy nothing answers on (loopback: no name to resolve)
-    for name in ('no_proxy', 'NO_PROXY'):
-        monkeypatch.delenv(name, raising=False)
+# A hook in a process of its own, as the Store starts it, against the mock add-on's port (the hook's 8081 is fixed).
+HOOK_PROCESS = '''import importlib.machinery, importlib.util, json, sys
+path, port, uid, gid = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])
+loader = importlib.machinery.SourceFileLoader('hook', path)
+module = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+loader.exec_module(module)
+sys.exit(module.main(json.loads(sys.stdin.read()), mcp_port=port, runtime=(uid, gid), wait=0))
+'''
+
+
+def test_the_hooks_go_straight_to_the_add_on_whatever_proxy_their_container_has(upgrade):
+    """The hook container's proxy settings are never used. Each hook runs in a process of its own started with them
+    (review SF-9: an opener built at import, or urllib's own, reads the environment then, so setting it in this
+    process after the hooks were loaded proved nothing)."""
+    proxies = {name: 'http://127.0.0.1:9' for name in ('http_proxy', 'HTTP_PROXY', 'https_proxy', 'HTTPS_PROXY',
+                                                        'all_proxy', 'ALL_PROXY')}  # nothing answers (no name to resolve)
+    for hook, phase in (('seed', 'old'), ('verify', 'new')):
+        done = subprocess.run([sys.executable, '-I', '-c', HOOK_PROCESS, str(HOOKS / hook), str(upgrade['addon'].port),
+                               str(os.getuid()), str(os.getgid())], input=json.dumps({**upgrade['environ'], 'PHASE': phase}),
+                              env={'PATH': '/usr/bin:/bin', **proxies}, cwd='/', capture_output=True, text=True, timeout=120)
+        assert upgrade['token'] not in done.stdout + done.stderr
+        assert done.returncode == 0, report(upgrade, hook)
+        assert {item['result'] for item in report(upgrade, hook).values()} == {'pass'}
+    assert upgrade['addon'].sessions == set()
+
+
+def test_an_index_that_is_a_link_is_never_read_through(upgrade, tmp_path):
+    """Review SF-8: the hooks run as root, so a link at the index is never followed (what it points to is not the
+    index's bytes), and verify cannot confirm such an index unchanged."""
+    elsewhere = tmp_path / 'elsewhere.json'
+    elsewhere.write_text('{"version":1,"profile_index":{}}')
+    (upgrade['data'] / 'mcp/profiles.json').symlink_to(elsewhere)
     assert run(seed, upgrade) == 0
-    assert run(verify, upgrade, PHASE='new') == 0
+    assert json.loads((upgrade['hook_state'] / seed.HOOK_STATE).read_text())['index_sha256'] == 'unreadable'
+    assert run(verify, upgrade, PHASE='new') == 1
+    assert report(upgrade, 'verify')['profiles.json as before the upgrade'] == {
+        'name': 'profiles.json as before the upgrade', 'result': 'fail', 'detail': 'present, unreadable'}
 
 
 def test_the_hooks_assert_nothing_that_depends_on_a_version(upgrade):
@@ -257,3 +294,105 @@ def test_the_hook_files_are_what_the_store_runs():
         assert imported <= set(sys.stdlib_module_names), imported - set(sys.stdlib_module_names)
     # verify reuses seed's readers: one set of rules for both phases
     assert verify.seed.read_state.__code__.co_code == seed.read_state.__code__.co_code
+
+
+# ---- the real runtime (HM-16 review SF-6; the reviewer's experiment E1) ----
+
+def free_port():
+    with reserve_port() as sock:
+        return sock.getsockname()[1]
+
+
+def entries(root):
+    """Every entry under /data as the hooks must leave it: kind, mode, owner, inode and a file's bytes (not its times:
+    the runtime's own reads of state.json change its ctime meanwhile)."""
+    found = {}
+    for path in [root, *sorted(root.rglob('*'))]:
+        info = os.lstat(path)
+        found[str(path.relative_to(root))] = (stat.S_IFMT(info.st_mode), stat.S_IMODE(info.st_mode), info.st_uid,
+                                              info.st_gid, info.st_ino,
+                                              path.read_bytes() if stat.S_ISREG(info.st_mode) else None)
+    return found
+
+
+class Runtime:
+    """run_product of one product on a /data/mcp, through the owned executable; switched on in its preamble or not."""
+
+    def __init__(self, home, product, data, switched_on):
+        self.port, admin_port = free_port(), free_port()
+        home.mkdir()
+        self.runner = Executable(home, product, [self.port, admin_port])
+        preamble = (f'from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = frozenset({{{product!r}}}); '
+                    if switched_on else '')
+        code = preamble + 'from mcp_admin_core import run_product; ' + self.runner.code('run_product') + 'run_product.main()'
+        self.runner.release()
+        self.log = (home / 'runtime.log').open('wb')
+        self.process = subprocess.Popen(
+            [str(ROOT / '.venv/bin/python'), '-c', code, product, '--data', str(data), '--host', '127.0.0.1',
+             '--mcp-port', str(self.port), '--admin-port', str(admin_port)], cwd=ROOT,
+            env={'PATH': '/usr/bin:/bin', 'PYTHONDONTWRITEBYTECODE': '1', 'PYTHONPATH': str(ROOT / 'packages/mcp-admin-core')},
+            stdout=self.log, stderr=self.log)
+
+    async def ready(self):
+        await self.runner.ready(self.process)
+        await self.runner.guard_url(f'http://127.0.0.1:{self.port}/mcp')  # this runtime's own listener, proved
+
+    def stop(self):
+        self.process.send_signal(signal.SIGTERM)
+        try:
+            self.process.wait(15)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.wait()
+            pytest.fail('runtime did not stop')
+        finally:
+            self.log.close()
+        assert self.process.returncode == 0
+
+
+@pytest.mark.parametrize('product', ['odoo', 'emqx'])
+@pytest.mark.parametrize('switched_on', [True, False], ids=['old-off-new-on', 'off-both'])
+async def test_the_hooks_pass_an_upgrade_of_the_real_runtime_and_only_read(tmp_path, log_scan, product, switched_on):
+    """As the Store's upgrade test runs them: seed once the old version started on an empty /data (unconfigured, as the
+    Store leaves it), verify once the new version started on the same /data. The old version is not switched on; the
+    new one is (the 0.5.0 upgrade's shape), or is not either. Both run this checkout's code: what is tested is what the
+    hooks assume of the gateway (a session the gateway answers itself can be ended; a random token is refused; a start
+    rewrites nothing), not 0.4.13. The hooks pass and change nothing under /data; a first switched-on start writes no
+    index and no profiles directory (verify's 'as before the upgrade')."""
+    data_root = tmp_path / 'data'
+    data = data_root / 'mcp'
+    data.mkdir(parents=True)
+    data.chmod(0o700)  # as packaging/entrypoint.py prepares it
+    for name in ('hook-state', 'reports'):
+        (tmp_path / name).mkdir()
+    environ = {'DATA_DIR_DATA': str(data_root), 'HOOK_STATE_DIR': str(tmp_path / 'hook-state'),
+               'REPORT_DIR': str(tmp_path / 'reports'), 'ADDON_HOST': '127.0.0.1', 'ADDON_URL': 'http://127.0.0.1:8099',
+               'ADDON_VERSION': '0.0.0', 'PHASE': 'old', 'ADDON_IMAGE': 'local/upgrade-hooks',
+               'SUPERVISOR_URL': 'http://supervisor.invalid', 'SUPERVISOR_TOKEN': 'DUMMY-supervisor'}
+    owner = (os.getuid(), os.getgid())  # the runtime runs as this test's user (the add-on's is 10001)
+
+    def checks(hook):
+        return {item['name']: item['result'] for item in
+                json.loads((tmp_path / 'reports' / (hook + '.json')).read_text())['checks']}
+    old = Runtime(tmp_path / 'old', product, data, False)
+    try:
+        await old.ready()
+        state = json.loads((data / 'state.json').read_text())
+        log_scan.watch(state['token'], state['child_token'])
+        before = entries(data_root)
+        seeded = seed.main(environ, mcp_port=old.port, runtime=owner, wait=10)
+        assert entries(data_root) == before, 'seed changed /data'
+    finally:
+        old.stop()
+    assert seeded == 0, checks('seed')
+    new = Runtime(tmp_path / 'new', product, data, switched_on)
+    try:
+        await new.ready()
+        before = entries(data_root)
+        verified = verify.main({**environ, 'PHASE': 'new'}, mcp_port=new.port, runtime=owner, wait=10)
+        assert entries(data_root) == before, 'verify changed /data'
+    finally:
+        new.stop()
+    assert verified == 0, checks('verify')
+    assert set(checks('verify').values()) == {'pass'}
+    assert not os.path.lexists(data / 'profiles.json') and not os.path.lexists(data / 'profiles')
