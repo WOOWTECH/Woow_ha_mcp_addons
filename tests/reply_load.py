@@ -114,9 +114,11 @@ def padded_reply(ident, size):
 
 
 class LargeChild(ProfileChild):
-    """A's child: a tools/call whose id is in sizes gets a padded reply of that many bytes (JSON, sent in pieces), any
-    other request as ProfileChild answers it. started is set when the first large reply was asked for; answered counts
-    them."""
+    """A's child: a tools/call of TOOL whose id is in sizes gets a padded reply of that many bytes (JSON, sent in
+    pieces), any other request as ProfileChild answers it: the readiness probe of A's own health monitor too, whatever
+    its id (its tools/call has id 3, one of A's ids: before D3 it got an 8 MiB padded reply as well, read and parsed on
+    the loop by health.protocol_reply, which no real child sends a probe). started is set when the first large reply
+    was asked for; answered counts them."""
 
     def __init__(self, *args, sizes=None):
         super().__init__(*args)
@@ -126,7 +128,8 @@ class LargeChild(ProfileChild):
 
     async def __call__(self, request):
         message = json.loads(request.content) if request.content else {}
-        if message.get('method') == 'tools/call' and message.get('id') in self.sizes:
+        if (message.get('method') == 'tools/call' and message.get('id') in self.sizes
+                and message['params'].get('name') == TOOL):
             token = json.loads(self.state.read_text())['child_token']
             assert request.headers.get_list('authorization') == ['Bearer ' + token]
             self.started.set()
