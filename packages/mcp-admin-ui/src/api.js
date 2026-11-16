@@ -136,8 +136,10 @@ export class AdminApi {
         || (Object.hasOwn(SAVE_CODES, code ?? '') && SAVE_CODES[code] === response.status);
       const error = new ApiError(response.status, known ? code : null, haVersion, known && detail && typeof detail === 'object' ? detail : {});
       // HM-12 (contract 3.1, section 9 #113): saved, the token rotated, the new child not started (shape D with
-      // token_rotated; only this shape counts): the copy also says where the new token is (app.js reads the state again).
-      if (response.status === 503 && error.code === 'config_apply_failed' && body?.saved === true && body?.token_rotated === true) {
+      // token_rotated; only this shape counts, and only when it names the profile asked, I12): the copy also says where
+      // the new token is (app.js reads the state again).
+      if (response.status === 503 && error.code === 'config_apply_failed' && body?.saved === true && body?.token_rotated === true
+          && echoMatches(body, profile)) {
         error.tokenRotated = true;
         error.message = `${error.message} ${TOKEN_ROTATED}`;
       }
