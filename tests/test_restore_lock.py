@@ -558,6 +558,21 @@ def test_an_archive_left_without_its_new_journal_gets_one(tmp_path, log_scan):
     assert operations.archive_for_restore(other, 2 ** 41) == 'none' and not list(disk.data.glob('.other.json*'))
 
 
+def test_an_archive_left_without_its_new_journal_keeps_the_floor_of_a_slow_clock(tmp_path, log_scan):
+    """Stopped between the two moves, then run again with a host clock behind the backup's receipts: the new journal's
+    cutoff is still not below the archive's newest operation id (as for a journal not yet moved, c5999ed), so that id
+    answers 410 operation_restored, never a new operation."""
+    disk = Disk(tmp_path, log_scan)
+    config = disk.data / 'state.json'
+    operation = disk.receipt()
+    journal = config.with_name('.state.json.operations.json')
+    os.replace(journal, journal.with_name(journal.name + '.restored'))
+    made = int(operation.split('.')[0])
+    assert operations.archive_for_restore(config, made - 3_600_000) == 'renewed'
+    assert json.loads(journal.read_text())['restored_before_ms'] == made
+    assert disk.replay(operation) == RESTORED
+
+
 def test_a_journal_from_before_this_slice_still_reads(tmp_path, log_scan):
     """The new optional key restored_before_ms only appears in journals the guard wrote: every journal written before
     keeps reading as before, and a malformed value refuses the journal (503)."""

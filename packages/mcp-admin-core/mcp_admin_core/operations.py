@@ -222,9 +222,9 @@ def archive_for_restore(config_path: Path, cutoff_ms: int) -> str:
     cutoff_ms (a forged far-future id). Idempotent, for a guard stopped
     half way and run again: a journal without receipts (the one this wrote, or one emptied) is not archived again, so
     the archive keeps the receipts it holds; only its cutoff moves forward. A missing journal next to an archive
-    (stopped between the two moves) gets its new one; with neither, nothing is written (no operation was ever made).
-    A journal that cannot be read is archived as it is. Returns 'archived', 'renewed' or 'none'; OSError when it was not
-    done (the next start does it again)."""
+    (stopped between the two moves) gets its new one, its cutoff not below the archive's newest id either; with
+    neither, nothing is written (no operation was ever made). A journal that cannot be read is archived as it is.
+    Returns 'archived', 'renewed' or 'none'; OSError when it was not done (the next start does it again)."""
     if type(cutoff_ms) is not int or cutoff_ms < 0:
         raise ValueError('invalid cutoff')
     path = journal_path(config_path)
@@ -233,8 +233,8 @@ def archive_for_restore(config_path: Path, cutoff_ms: int) -> str:
     if found is None:
         if not os.path.lexists(archive):
             return 'none'
-        _new_journal(path, cutoff_ms, archive=None)
-        return 'renewed'
+        # Stopped between the two moves: the archive holds the restored receipts, so its floor counts as theirs did.
+        found = 0, (_receipts(archive) or (0, None))[1]
     count, floor = found
     # As PaaS restore_guard (_read_journal_floor): never below the journal's own newest id or floor, whatever the clock;
     # but at most a retention period ahead of it, so that a forged far-future id cannot refuse every new id for years.
