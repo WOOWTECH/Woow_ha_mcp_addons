@@ -93,10 +93,19 @@ class State(BaseModel):
         return value
 
 
+# HM-30 review 2 MF-1: with a checkpoint, strict_json also calls it once every NUMBERS_A_CHECKPOINT numbers it parses.
+NUMBERS_A_CHECKPOINT = 1024
+
+
 def strict_json(raw: bytes, *, checkpoint=None):
     """HM-30: checkpoint, when given, is called once for every JSON object the parser builds, before it builds it
     (reply_worker.breathe: the reply worker lets the event loop have the GIL there); the value and every error stay the
-    same. Left out, as before."""
+    same. Left out, as before.
+
+    HM-30 review 2 MF-1: with a checkpoint, it is also called once every NUMBERS_A_CHECKPOINT numbers: json's C scanner
+    builds a flat array of numbers (record ids, a time series) in one call otherwise, with no object to stop at, and it
+    calls parse_int and parse_float for each number (int itself gives the same value and raises the same ValueError past
+    the digits limit). A flat array of strings, true, false, null or empty arrays has no such hook: still one call."""
     def pairs(items):
         result = {}
         for key, value in items:
@@ -118,8 +127,28 @@ def strict_json(raw: bytes, *, checkpoint=None):
             raise ValueError("nonfinite number")  # e.g. 1e400 would re-serialize as Infinity
         return value
 
-    return json.loads(raw, object_pairs_hook=pairs if checkpoint is None else checked, parse_constant=constant,
-                      parse_float=number)
+    if checkpoint is None:
+        return json.loads(raw, object_pairs_hook=pairs, parse_constant=constant, parse_float=number)
+    count = 0
+
+    def counted_float(text):
+        nonlocal count
+        count += 1
+        if count >= NUMBERS_A_CHECKPOINT:
+            count = 0
+            checkpoint()
+        return number(text)
+
+    def counted_int(text):
+        nonlocal count
+        count += 1
+        if count >= NUMBERS_A_CHECKPOINT:
+            count = 0
+            checkpoint()
+        return int(text)
+
+    return json.loads(raw, object_pairs_hook=checked, parse_constant=constant, parse_float=counted_float,
+                      parse_int=counted_int)
 
 
 class Store:

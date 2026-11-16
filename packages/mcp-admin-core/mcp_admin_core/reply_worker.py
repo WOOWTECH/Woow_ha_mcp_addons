@@ -14,7 +14,9 @@ and values (gateway.make_apps reply_worker: a Lane, one profile's turn); the res
 the loop that asked. Jobs wait in one queue per profile and the profiles take turns (round robin): a profile with a job
 in process is out of turn until that job is done, so at most one job per profile is in process, and with one thread
 at most one in all, as on the loop before: one reply is parsed (amplified in memory) at a time. A profile that sends
-many large replies makes another profile's reply wait for at most the one job in process.
+many large replies makes another profile's reply wait for at most the one job in process; in pieces and with its
+breaths (below) such a job takes longer than one json.dumps would: an 8 MiB reply of many small objects about 3.4 s
+on the EPYC 7713, of small integers about 4 s, of empty arrays about 7 s (HM-30 review 2 MF-4; contract 6).
 
 The GIL, and why the worker breathes. The thread holds the GIL while it runs. CPython hands the GIL to a waiting thread
 after its switch interval (sys.getswitchinterval(), 5 ms), but only between bytecodes, and the event loop's thread lets
@@ -41,10 +43,18 @@ worker went the same way: it holds the cyclic collector off while it processes a
 job ends, however it ends; left off when something else had it off: a full collection walks every object of the add-on,
 the reply's hundreds of thousands among them, in one C call, 50 to 75 ms measured on an add-on's heap, and a reply
 makes no reference cycle, so its objects go as soon as it is answered and push no collection after it; collections
-resume between the jobs); it lets go of a reply's parsed and masked values in pieces once it is encoded (released:
-freeing hundreds of thousands of objects at once is one C call, 15 to 35 ms); it breathes while it masks one
-(redact.redact_secrets checkpoint) and while it costs one (_plan). Still one C call each: json.loads scanning one long
-string (20 to 46 ms for 8 MiB, the most with many escapes), its decoding of the bytes (5 to 20 ms) and the final join of
+resume between the jobs; the collector is the whole process's, so the event loop's thread allocates without one
+meanwhile too: a profile that sends large replies back to back keeps it off most of the time, and what the loop
+allocated meanwhile is collected between the jobs, HM-30 review 2 S-5); it lets go of a reply's parsed and masked
+values in pieces once it is encoded (released: freeing hundreds of thousands of objects at once is one C call, 15 to
+35 ms); it breathes while it masks one (redact.redact_secrets checkpoint) and while it costs one (_plan). HM-30 review
+2 MF-1: in a large list or dict too, every MEMBERS_A_CHECKPOINT members (a flat array of millions of numbers or short
+strings is one container: walking it was a Python loop of up to a second, and while the worker runs one without a
+breath, every system call of the loop waits for the GIL again), and the parser at every NUMBERS_A_CHECKPOINT numbers
+(config.strict_json). Still one C call each: json.loads scanning one long string (20 to 50 ms for 8 MiB, the most with
+many escapes) or an array with neither an object nor a number in it, at any depth (short strings, true, false, null,
+empty arrays: nothing calls back into Python there; 8 MiB of them 0.03 to 0.19 s on the EPYC 7713, of short names
+about 0.1 s; HM-30 review 2 Q1, the user's to decide), its decoding of the bytes (5 to 20 ms) and the final join of
 the pieces (a copy).
 
 Failures. A job's exception (any BaseException) is its caller's: it is re-raised on the loop, where the gateway
@@ -133,9 +143,13 @@ def _loop_busy():
 # In pieces (D1; the module docstring): the most code points of a long string one C call encodes (at most 12 bytes each
 # once escaped: 96 KiB), and the most bytes (counted as the most they can encode to) one call encodes of a large list
 # or dict. Measured (provenance note; pytest on the EPYC 7713): the loop's longest stop on the worker's 8 MiB replies of
-# seven shapes and two events 7 to 46 ms, the most where json.loads scans one long string of escapes (one C call).
+# twelve shapes and two events 5 to 50 ms, the most where json.loads scans one long string of escapes (one C call); a
+# flat array of short strings, one C call of the parser, about 0.1 s (HM-30 review 2 Q1).
 STRING_PIECE = 8 * 1024
 PIECE_BYTES = 64 * 1024
+# HM-30 review 2 MF-1: the most members of one list or dict a Python loop of the worker goes through between two
+# checkpoints (_plan; redact.MEMBERS_A_CHECKPOINT, config.NUMBERS_A_CHECKPOINT are the same for masking and parsing).
+MEMBERS_A_CHECKPOINT = 1024
 _encode = json.JSONEncoder(separators=(",", ":")).encode  # json.dumps(value, separators=(",", ":")), the loop's
 _SMALL_INT = 10 ** 18
 
@@ -153,7 +167,9 @@ def _plan(value, limit, checkpoint=None):
     (large). A member's cost is the most bytes it can encode to: a string 12 bytes a code point (the longest escape json
     writes) and its quotes, a scalar _scalar_cost, a container its members' and a separator each, 2 brackets (a member
     over limit counts as limit + 1), a dict member its key as a string and a colon too. One pass, post-order and
-    iterative: every container is costed once, however deep; checkpoint is called after every container."""
+    iterative: every container is costed once, however deep; checkpoint is called after every container, and once
+    every MEMBERS_A_CHECKPOINT members of one (HM-30 review 2 MF-1: a flat list of millions of scalars is one Python
+    loop of a second otherwise)."""
     plans = {}
     kind = type(value)
     if kind is not list and kind is not dict:
@@ -183,6 +199,8 @@ def _plan(value, limit, checkpoint=None):
                 cost = _scalar_cost(item) + extra
             costs.append(cost)
             frame[4] += cost
+            if checkpoint is not None and not len(costs) % MEMBERS_A_CHECKPOINT:
+                checkpoint()
         if below:
             continue
         stack.pop()
@@ -305,39 +323,59 @@ def released(value, plans, checkpoint=None, twin=None):
     after it; twin's container of the same place, when it has the same type and length, with it, member for member
     (its members dropped with value's). Dropping references only: an object something else still holds stays. Only for
     a value whose large containers nothing else holds (a reply the gateway made: strict_json's and redact_secrets'
-    objects, never one filter_list rebuilt a tool list in, whose tools hold the policy's own schemas)."""
+    objects, never one filter_list rebuilt a tool list in, whose tools hold the policy's own schemas).
+
+    HM-30 review 2 MF-1: a container is emptied from its end, never copied or cleared whole first (a list of millions of
+    members copied and cleared at once, its twin too, was one stop of 40 to 70 ms): a list loses each run as a slice
+    off its end, a dict its members one by one (popitem, its twin's with them: the same order). A twin's container that
+    is the very container of value (no secret to mask: redact_secrets gives its input back) is no twin: it is emptied
+    once, as value's."""
     if type(value) is not list and type(value) is not dict or id(value) not in plans:
         return
     stack = [(value, twin)]
     while stack:
         node, other = stack.pop()
         costs = plans[id(node)]
-        keyed = type(node) is dict
-        members = list(node.items()) if keyed else node[:]
-        others = None
-        if type(other) is type(node) and len(other) == len(node):
-            others = list(other.items()) if keyed else other[:]
-            other.clear()
-        node.clear()
+        if other is node or type(other) is not type(node) or len(other) != len(node):
+            other = None
+        if type(node) is list:
+            end = index = len(node)  # node[index:end] is the run being gathered; node[end:] is let go of already
+            size = 0
+            while index:
+                index -= 1
+                item = node[index]
+                if (type(item) is list or type(item) is dict) and id(item) in plans:
+                    stack.append((item, None if other is None else other[index]))  # emptied after this one
+                    continue
+                size += costs[index]
+                if size > PIECE_BYTES:
+                    del node[index + 1:end]
+                    if other is not None:
+                        del other[index + 1:end]
+                    end, size = index + 1, costs[index]
+                    if checkpoint is not None:
+                        checkpoint()
+            item = None
+            del node[:end]
+            if other is not None:
+                del other[:end]
+        else:
+            index = len(node)
+            size = 0
+            while node:
+                index -= 1
+                item = node.popitem()[1]
+                twin_item = None if other is None else other.popitem()[1]
+                if (type(item) is list or type(item) is dict) and id(item) in plans:
+                    stack.append((item, twin_item))  # emptied after this one
+                else:
+                    size += costs[index]
+                    if size > PIECE_BYTES:
+                        size = 0
+                        if checkpoint is not None:
+                            checkpoint()
+                item = twin_item = None
         node = other = None
-        start = size = 0
-        for index in range(len(members)):
-            item = members[index][1] if keyed else members[index]
-            if (type(item) is list or type(item) is dict) and id(item) in plans:
-                twin_item = None
-                if others is not None:
-                    twin_item = others[index][1] if keyed else others[index]
-                stack.append((item, twin_item))  # emptied after this one: held here until then
-                continue
-            size += costs[index]
-            if size > PIECE_BYTES:
-                members[start:index] = [None] * (index - start)
-                if others is not None:
-                    others[start:index] = [None] * (index - start)
-                start, size = index, costs[index]
-                if checkpoint is not None:
-                    checkpoint()
-        members = others = None
         if checkpoint is not None:
             checkpoint()
 
