@@ -42,6 +42,7 @@ from .admin_auth import AdminAuthority, BadRequest, prefix
 from .capabilities import ManagementOptions, capability_snapshot, observe_tools, tool_catalog
 from .request_limits import DEFAULT_MAX_TOTAL_ELEMENTS, McpRequestLimits, RequestLimitError
 from .operations import OperationJournal, KINDS as OPERATION_KINDS, RESULTS as OPERATION_RESULTS, TTL_MS
+from .reply_worker import WorkerStopped, breathe
 # HM-05 (contract 1.1): a profile's id, the default profile's or 24 lowercase hexadecimal characters; HM-08: the one
 # grammar, profiles.PROFILE_ID.
 from .profiles import PROFILE_ID, log_id
@@ -89,6 +90,8 @@ SSE_COMMENT = re.compile(rb":[\x20-\x7e]{0,1024}")
 # it and any progress event is unsolicited child text (the pinned TS client puts unknown-token progress into an error
 # message); log messages and resource updates carry child text or name surfaces the gateway never exposes.
 LIST_CHANGED = b'data: {"jsonrpc":"2.0","method":"notifications/tools/list_changed"}'
+# HM-30: what make_apps' relayed_event makes of an event besides a line to relay: not relayed, or the stream ends.
+SKIP_EVENT, END_STREAM = "skip", "end"
 # 0.1.5 (R1 #6): the pinned TS client puts an unsupported protocolVersion into an error, so no child text may pass.
 # 0.1.8 (review 6b): only the reviewed MCP revisions, not any date. The pinned children negotiate within this set,
 # except n8n-mcp, which echoes "2024-06-25" to a client that asks for it: that initialize is now refused (502).
@@ -128,6 +131,11 @@ STREAM_RETRY_AFTER = 30
 # the body as read (a declared Content-Length before a byte is read) and as forwarded to the child (HM-08 review MF-1,
 # S-1). It replaces HM-08's FORWARDED_BODY: one budget, switched on or off.
 BODY_RESERVATION = "body_reservation"
+# HM-30 (contract 2.4, 6): the request state's name for a switched-on product's check of the profile's answers not
+# received yet (profile_router.ProfileGate puts it there). Before a tools/call is forwarded (before it takes or waits
+# for a forwarding slot), serve() calls it with the message: None forwards it, anything else is the answer instead
+# (the profile's pending-reply budget is used up: 200 + -32003 under its id).
+PENDING_REPLIES = "pending_replies"
 # HM-14 (contract 2.4, 2.5; the PaaS gateway's codes, texts and timings, woow-mcp-server 69ac425 proxy.py, mcp_access.py,
 # gateway_pool.py), for a switched-on product only (make_apps slot_busy given): a child whose connection broke while it
 # handled a request (-32004) and a token rotated or revoked after an answer began to go out (-32005).
@@ -421,9 +429,13 @@ def child_status_reply(ident, status, headers):
 
 def json_reply(value, status, headers):
     """Re-serialized JSON with ASCII escapes, so a lone surrogate from a child cannot make the reply unencodable."""
+    return encoded_reply(json.dumps(value, separators=(",", ":")).encode(), status, headers)
+
+
+def encoded_reply(body, status, headers):
+    """HM-30: json_reply's answer for a body already serialized as json_reply serializes it (the reply worker's)."""
     headers = {k: v for k, v in headers.items() if k != "content-type"}
-    return Response(json.dumps(value, separators=(",", ":")).encode(), status_code=status,
-                    media_type="application/json", headers=headers)
+    return Response(body, status_code=status, media_type="application/json", headers=headers)
 RoleVerifier = Callable[[str], Awaitable[bool]]
 # HM-05 (multi-profile plan 5.3): the shared management pipeline make_apps can be given (admin_pipeline): it takes one
 # management request with the profile's action and answers it.
@@ -838,7 +850,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               default_endpoint: Callable[[], str | None] | None = None,
               bootstrap_fields: Callable[[], dict] | None = None,
               body_budget: request_budget.Share | None = None,
-              stop_child: Callable[[], Awaitable] | None = None):
+              stop_child: Callable[[], Awaitable] | None = None,
+              reply_worker=None):
     """listing (0.2.2): the product's tools/list tools as its child lists them (surface.listing). With it, a client
     connects whatever the backend's state: when no child can answer (no backend configured, so no child; a child that is
     not up) the gateway answers initialize, notifications/initialized, ping and tools/list itself, from listing through
@@ -951,7 +964,19 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
       A first setup, a password change alone or a revoked token: as before (no token_rotated).
     - backend/patch that moves a stored URL to another origin without bringing the secrets that URL takes there (every
       product; backend_edit.new_origin_refused): 422 {"error":"request denied","detail":{"code":
-      "CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN"}}, after If-Match and backend_fixed, nothing written."""
+      "CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN"}}, after If-Match and backend_fixed, nothing written.
+
+    HM-30 (multi-profile plan 5.5; contract 6; §8.8 #17), likewise only for a switched-on product:
+    - reply_worker: this profile's turn on the add-on's reply worker (reply_worker.Lane). Every relayed JSON reply and
+      every event with data of a relayed event stream is then processed there, not on the event loop: what it needs
+      of the store (the state, the masks) is read on the loop when it is handed over, the worker runs only the pure
+      steps (strict_json, the reply checks, redact_secrets, filter_list, json.dumps: relayed_reply and relayed_event,
+      the very functions the loop runs when it is left out, with the worker's checkpoints, reply_worker.breathe, in the
+      parser and between the steps), and the answer is byte for byte the same. A job the worker can no longer take
+      (WorkerStopped) is answered as a reply the gateway cannot process (502; an event stream ends). Left out: every
+      reply is processed on the loop, as before (no checkpoint).
+    A switched-on product's dispatcher also gives a tools/call the check of the profile's answers not received yet,
+    through the request's state (PENDING_REPLIES; profile_router.ProfileGate): no make_apps option."""
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
@@ -988,6 +1013,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         raise ValueError("invalid request budget")
     if stop_child is not None and not callable(stop_child):
         raise ValueError("invalid child stop")
+    if reply_worker is not None and not callable(getattr(reply_worker, "run", None)):
+        raise ValueError("invalid reply worker")
     n8n_request_bounds = getattr(store, "product", None) == "n8n"
     # HM-31: the add-on's request body budget (this profile's share) and the single-request ceiling it is charged up to
     budget_share = request_budget.own_share(getattr(store, "product", None)) if body_budget is None else body_budget
@@ -1024,6 +1051,82 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
 
     def others():
         return {value for value in reply_secrets() if isinstance(value, str) and len(value) >= redact.MIN_SECRET}
+
+    def relayed_reply(raw, ident, method, state_of, masks_of, checkpoint=None):
+        """A relayed JSON reply (HM-30: the same steps on the loop and on the reply worker): raw parsed (strict JSON),
+        the reply to this request (exactly one of result and error, under the request's id: else ValueError), masked
+        with masks_of(state) and filtered on state, state_of()'s answer (read after the parse, as before). checkpoint
+        (the reply worker's breathe) is called in the parser and between the steps; on the loop there is none."""
+        value = strict_json(bytes(raw)) if checkpoint is None else strict_json(bytes(raw), checkpoint=checkpoint)
+        if not (one_reply(value) and same_id(value.get("id"), ident)):
+            raise ValueError("not this request's reply")
+        current = state_of()
+        if checkpoint is not None:
+            checkpoint()
+        # 0.2.0: backend errors carry their own text; no credential the add-on holds leaves
+        return filter_list(redact.redact_secrets(gateway_reply(value, method), masks_of(current)), tools, current)
+
+    def relayed_event(payload, request, state_of, masks_of, checkpoint=None):
+        """One SSE event's data as a stream relays it (HM-30: the same steps on the loop and on the reply worker).
+        request is the (id, method) of the POST the stream answers, None for a GET stream. SKIP_EVENT: not relayed;
+        END_STREAM: the stream ends there; else (the data line, whether it is the reply, which ends the stream).
+        ValueError, ConfigError (state_of), RecursionError: the stream ends there too. checkpoint: as relayed_reply."""
+        value = strict_json(payload) if checkpoint is None else strict_json(payload, checkpoint=checkpoint)
+        if not isinstance(value, dict):
+            return END_STREAM  # a batch: never sent by the gateway, never filtered element by element
+        if "method" in value:
+            if "id" in value or value["method"] != "notifications/tools/list_changed":
+                return SKIP_EVENT  # a server-to-client request (elicitation, sampling, roots: the client could not
+                # answer it through the gateway) or a notification other than 0.1.4's one
+            return LIST_CHANGED, False
+        if "result" not in value and "error" not in value:
+            return SKIP_EVENT  # not a reply: never relayed as one
+        if not one_reply(value):
+            return END_STREAM  # both result and error: malformed, never relayed, never guessed
+        if request is None or not same_id(value.get("id"), request[0]):
+            # 0.1.5: a reply to another request (the TS client reports it with its text). A GET stream carries no
+            # reply at all (R1 #2): MCP allows one only when resuming a stream, and no pinned child keeps an event store.
+            return SKIP_EVENT
+        if checkpoint is not None:
+            checkpoint()
+        # 0.2.0: backend errors carry their own text; no credential the add-on holds leaves
+        checked = redact.redact_secrets(gateway_reply(value, request[1]), masks_of(state_of()))
+        if isinstance(checked.get("result"), dict) and {"tools", "capabilities"} & checked["result"].keys():
+            checked = filter_list(checked, tools, state_of())
+        if checkpoint is not None:
+            checkpoint()
+        return b"data: " + json.dumps(checked, separators=(",", ":")).encode(), True
+
+    def prepared():
+        """HM-30: what a job of the reply worker needs of the store, read on the loop when the job is handed over (the
+        worker never reads it): the state and its masks, or the ConfigError the job raises where the loop's own read
+        of the state would have raised it (after the reply's checks)."""
+        try:
+            current = store.load()
+        except ConfigError as error:
+            return error
+        return current, masks(current)
+
+    def prepared_reads(found):
+        """state_of and masks_of for what prepared() found."""
+        def state_of():
+            if isinstance(found, ConfigError):
+                raise found
+            return found[0]
+
+        def masks_of(_):
+            return found[1]
+        return state_of, masks_of
+
+    def worker_reply(raw, ident, method, found):
+        """HM-30, on the reply worker: relayed_reply (with the worker's checkpoints), then json_reply's serialization."""
+        value = relayed_reply(raw, ident, method, *prepared_reads(found), checkpoint=breathe)
+        breathe()
+        return json.dumps(value, separators=(",", ":")).encode()
+
+    def worker_event(payload, request, found):
+        """HM-30, on the reply worker: relayed_event (with the worker's checkpoints)."""
+        return relayed_event(payload, request, *prepared_reads(found), checkpoint=breathe)
 
     def snapshot():
         return health() if health else {"management": "alive", "child": {"state": "not_started", "transport_ready": False}, "backend": "unconfigured"}
@@ -1615,33 +1718,21 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     data_lines = [b"data:"]  # an empty (priming) event stays empty
                 elif data_lines:
                     try:
-                        value = strict_json(payload)
-                        if not isinstance(value, dict):
-                            return  # a batch: never sent by the gateway, never filtered element by element
-                        if "method" in value:
-                            if "id" in value or value["method"] != "notifications/tools/list_changed":
-                                continue  # a server-to-client request (elicitation, sampling, roots: the client
-                                # could not answer it through the gateway) or a notification other than 0.1.4's one
-                            data_lines = [LIST_CHANGED]
-                        elif "result" not in value and "error" not in value:
-                            continue  # not a reply: never relayed as one
-                        elif not one_reply(value):
-                            return  # both result and error: malformed, never relayed, never guessed
-                        elif request is None or not same_id(value.get("id"), request[0]):
-                            # 0.1.5: a reply to another request (the TS client reports it with its text). A GET
-                            # stream carries no reply at all (R1 #2): MCP allows one only when resuming a stream,
-                            # and no pinned child keeps an event store.
-                            continue
+                        if reply_worker is None:
+                            outcome = relayed_event(payload, request, store.load, masks)
                         else:
-                            # 0.2.0: backend errors carry their own text; no credential the add-on holds leaves
-                            checked = redact.redact_secrets(gateway_reply(value, request[1]), masks(store.load()))
-                            if (isinstance(checked.get("result"), dict)
-                                    and {"tools", "capabilities"} & checked["result"].keys()):
-                                checked = filter_list(checked, tools, store.load())
-                            data_lines = [b"data: " + json.dumps(checked, separators=(",", ":")).encode()]
-                            final = True  # R1 #1: the reply ends the stream (MCP: the server SHOULD close it)
-                    except (ValueError, ConfigError, RecursionError):
+                            # HM-30: processed on the add-on's reply worker, in this profile's turn; the state for a
+                            # POST stream's reply is read here, on the loop (a GET stream relays no reply).
+                            found = None if request is None else prepared()
+                            outcome = await lease.run(lambda: reply_worker.run(worker_event, payload, request, found))
+                    except (ValueError, ConfigError, RecursionError, WorkerStopped):
                         return
+                    if outcome == END_STREAM:
+                        return
+                    if outcome == SKIP_EVENT:
+                        continue
+                    line, final = outcome  # final, R1 #1: the reply ends the stream (MCP: the server SHOULD close it)
+                    data_lines = [line]
                 lines = kept + data_lines
                 if lines:
                     event = b"\n".join(lines) + b"\n\n"
@@ -1969,6 +2060,15 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             answer = without_child()
             if answer is not None:
                 return answer
+        if request.method == "POST" and method == "tools/call":
+            pending = getattr(request.state, PENDING_REPLIES, None)
+            if pending is not None:
+                # HM-30 (contract 2.4, 6): switched on, a profile whose answers not received yet hold its pending-reply
+                # budget gets its next tools/call answered busy by its gate, before a slot or the child (before HM-14's
+                # lanes too: a tools/call refused for its pending replies never queues for a slot first).
+                answer = pending(message)
+                if answer is not None:
+                    return answer
         if lanes is None:
             try:
                 async with asyncio.timeout(FORWARD_WAIT_SECONDS):
@@ -2156,19 +2256,25 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     raise refused()
                 if lanes is not None and owner.interrupted is not None:
                     return await interrupted_answer(owner, request, message, owner.interrupted)  # HM-14
+                if reply_worker is None:
+                    try:
+                        if owner.overflowed:
+                            raise ValueError("oversize reply")
+                        value = relayed_reply(result, message.get("id"), method, store.load, masks)
+                    except (ValueError, RecursionError):
+                        raise BadRequest(502) from None
+                    return json_reply(value, 200, response_headers)
+                # HM-30: processed on the add-on's reply worker, in this profile's turn (the state and masks read here,
+                # on the loop); the same steps, so the same bytes. A job it can no longer take is a 502 as well.
                 try:
                     if owner.overflowed:
                         raise ValueError("oversize reply")
-                    value = strict_json(bytes(result))
-                    if not (one_reply(value) and same_id(value.get("id"), message.get("id"))):
-                        raise ValueError("not this request's reply")
-                    current = store.load()
-                    # 0.2.0: backend errors carry their own text; no credential the add-on holds leaves
-                    value = filter_list(redact.redact_secrets(gateway_reply(value, method), masks(current)), tools,
-                                        current)
-                except (ValueError, RecursionError):
+                    found = prepared()
+                    encoded = await lease.run(lambda: reply_worker.run(worker_reply, result, message.get("id"), method,
+                                                                       found))
+                except (ValueError, RecursionError, WorkerStopped):
                     raise BadRequest(502) from None
-                return json_reply(value, 200, response_headers)
+                return encoded_reply(encoded, 200, response_headers)
             if not (is_sse and upstream.status_code == 200):
                 raise BadRequest(502)  # unreachable (R1 #8): every other success body was answered or refused above
             if request_id:

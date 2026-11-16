@@ -93,7 +93,10 @@ class State(BaseModel):
         return value
 
 
-def strict_json(raw: bytes):
+def strict_json(raw: bytes, *, checkpoint=None):
+    """HM-30: checkpoint, when given, is called once for every JSON object the parser builds, before it builds it
+    (reply_worker.breathe: the reply worker lets the event loop have the GIL there); the value and every error stay the
+    same. Left out, as before."""
     def pairs(items):
         result = {}
         for key, value in items:
@@ -101,6 +104,10 @@ def strict_json(raw: bytes):
                 raise ValueError("duplicate key")
             result[key] = value
         return result
+
+    def checked(items):
+        checkpoint()
+        return pairs(items)
 
     def constant(_):
         raise ValueError("nonfinite number")
@@ -111,7 +118,8 @@ def strict_json(raw: bytes):
             raise ValueError("nonfinite number")  # e.g. 1e400 would re-serialize as Infinity
         return value
 
-    return json.loads(raw, object_pairs_hook=pairs, parse_constant=constant, parse_float=number)
+    return json.loads(raw, object_pairs_hook=pairs if checkpoint is None else checked, parse_constant=constant,
+                      parse_float=number)
 
 
 class Store:
