@@ -492,3 +492,42 @@ commit 之後的結果。
   記在第 13 節，交主對話問使用者；要做的話放之後的片或 HM-18。
 - 審查第 6 節的觀察也照記：預設帳號結果不明時 8081 全部帳號 503 到重啟，面板只提示重啟與確認網址（交 HM-18 的 DOCS，第 13 節）；
   HM-22、HM-24 加產品到 `products.IDENTITY_BOUND` 時同步測試會紅（第 13 節）；HM-13c 也改 `Hui/app.js`，後合併的一方重釘帳本。
+
+## 16. rebase 到 claude-delivery（2026-11-17 06:4x～07:1x，主對話）
+
+- 分支沒 push 過，所以用 rebase。兩次：
+  1. 06:4x 到 `ebefebe`（HM-30 的 PR #111 合併後）。衝突在 `b5b5b29`：契約第 9 節說明段的最後一行與第 10 節表尾，都是兩邊各加的行，
+     新基準（HM-30 的 #17 附註、HM-30 的第 10 節列）在前、本片的在後。`5e0f04f` 只差上下文。
+  2. 07:0x 到 `a709b97`（HM-32 的 PR #113 合併後）。衝突在同一個 commit 的第 10 節表尾（HM-32 的列在前、本片的在後）。
+- 第 9 節的 #116、#117 不用重編：HM-30、HM-32 都沒在第 9 節加列。
+- `runtime-patches.json`、`acceptance-matrix.md` 兩次都自動合併；帳本預檢 OK（177／70／159，0 漂移、0 缺）。
+- 本片對新基準的差異和 rebase 前一樣：17 個檔，1534 行加、42 行刪；逐檔的增刪行數都相同。HM-30、HM-32 都沒改
+  `packages/mcp-admin-ui/` 與 `packages/mcp-admin-core/`。
+- 本機檢查（一般使用者 uid 1000；每一步的 TMPDIR 印在 log 第一行，跑完用完整路徑刪除；證據在
+  `artifacts/ha-multiprofile-parity-20261114/wave4/evidence-rebase-HM-12-panel/`）：
+  - 在 `ebefebe` 上（head `ece4f08`）：node 88 案、build＋build-closure PASS；Playwright 兩個專案 135 案全過（4.1 分）；pytest 子集
+    23 檔 468 案全過（97.5 秒）；packaging（validate PASS、unittest Ran 203 OK（skipped=5）、tool_inventory exit 0）。
+  - 在 `a709b97` 上：pytest 子集 23 檔重跑（結果寫在 PR 說明）。面板與核心在兩次基準之間都沒變，node、Playwright 沒重跑。
+  - 開關關的比對沒重跑：基準的面板在 `7646f0f..a709b97` 沒變，本片的差異也沒變，第 7 節的 216 個比較 0 差異照舊成立。
+- commit 對照（第 1～15 節寫的是左欄的編號）：
+
+| rebase 前 | 現在 | range-diff |
+|---|---|---|
+| `7c418f2` | `ee843bb` | 相同 |
+| `805c77b` | `d931caa` | 相同 |
+| `3c0f539` | `6c52c89` | 相同 |
+| `79e0b0e` | `aacb7bb` | 相同 |
+| `b5b5b29` | `193a193` | 有衝突（契約各加的行） |
+| `f5ebdb3` | `8094250` | 相同 |
+| `61357e3` | `9f186be` | 相同 |
+| `8ac163f` | `c62ba36` | 相同 |
+| `aab9b12` | `f8e5d48` | 相同 |
+| `c928058` | `46e1bc2` | 相同 |
+| `dd61760` | `008a5ba` | 相同 |
+| `4fbf530` | `0796552` | 相同 |
+| `325f862` | `2093a27` | 相同 |
+| `04f0654` | `0f329af` | 相同 |
+| `567ae35` | `547d13e` | 相同 |
+| `19dcc52` | `42b2d67` | 相同 |
+| `5e0f04f` | `80803e5` | 有衝突（契約各加的行） |
+| `054edaa` | `ade66b9` | 相同 |
