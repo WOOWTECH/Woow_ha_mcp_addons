@@ -978,7 +978,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
       the very functions the loop runs when it is left out, with the worker's checkpoints, reply_worker.breathe, in the
       parser and between the steps; D1: json.dumps in pieces, reply_worker.encoded, the values let go of in pieces,
       redact_secrets breathing too; an event larger than WORKER_FRAME_BYTES is framed there as well, relayed_frame),
-      and the answer is byte for byte the same. A job the worker can no longer take
+      and the answer is byte for byte the same. D3: each piece of the child's reply is read with one state read
+      (chunks, TokenLease.run checked). A job the worker can no longer take
       (WorkerStopped) is answered as a reply the gateway cannot process (502; an event stream ends). Left out: every
       reply is processed on the loop, as before (no checkpoint).
     A switched-on product's dispatcher also gives a tools/call the check of the profile's answers not received yet,
@@ -1662,7 +1663,12 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             return False
 
     async def chunks(owner, lease, seconds=None):
-        """Bound total bytes/time (seconds, default STREAM_SECONDS); poll revocation even while upstream is idle."""
+        """Bound total bytes/time (seconds, default STREAM_SECONDS); poll revocation even while upstream is idle.
+
+        HM-30 D3 (contract 6), only for a switched-on product (reply_worker given): each piece is read under the lease
+        without checking it again first (TokenLease.run checked): the caller checked it just before the first piece,
+        and the check after each piece is the one before the next (one state read a piece, not three). Left out, as
+        before."""
         iterator = owner.iterator = owner.response.aiter_bytes()
         total = 0
         try:
@@ -1672,7 +1678,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         owner.reader = asyncio.create_task(anext(iterator))
                         return await owner.reader
                     try:
-                        chunk = await lease.run(read_one)
+                        chunk = await (lease.run(read_one) if reply_worker is None else
+                                       lease.run(read_one, checked=True))
                     except StopAsyncIteration:
                         return
                     total += len(chunk)

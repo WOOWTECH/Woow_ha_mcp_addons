@@ -47,23 +47,32 @@ class TokenLease:
         if not valid:
             raise AccessChanged()
 
-    async def invalidated(self):
+    async def invalidated(self, checked=False):
         while True:
-            try:
-                self.check()
-            except AccessChanged:
-                return
+            if not checked:
+                try:
+                    self.check()
+                except AccessChanged:
+                    return
+            checked = False
             # Keep fail-closed detection for damaged/replaced state outside the admin API.
             try:
                 await asyncio.wait_for(self.changed.wait(), .2)
             except TimeoutError:
                 continue
 
-    async def run(self, operation: Callable[[], Awaitable]):
-        """Cancel and join pending I/O; its caller still owns acquired resources."""
-        self.check()
+    async def run(self, operation: Callable[[], Awaitable], *, checked=False):
+        """Cancel and join pending I/O; its caller still owns acquired resources.
+
+        HM-30 D3 (contract 6): checked, the caller has just checked this lease itself, with nothing awaited since (the
+        check after the previous piece it read): the token is not checked again before the operation starts, and the
+        watcher's first look comes after its first wait (0.2 s, or at once when the token changes through the admin
+        API); the check after the operation stays. Each check reads the state file (store.load: five system calls and
+        a parse), and the gateway reads a reply in pieces of 64 KiB. Left out, as before."""
+        if not checked:
+            self.check()
         work = asyncio.create_task(operation())
-        changed = asyncio.create_task(self.invalidated())
+        changed = asyncio.create_task(self.invalidated(checked))
         try:
             await asyncio.wait((work, changed), return_when=asyncio.FIRST_COMPLETED)
             self.check()
