@@ -22,17 +22,20 @@
   另外在執行時記錄每一次呼叫的 inode，跑過開通的 runtime、帳號增刪、全部撤銷、還原與守門、休眠開機。
 - **HM-10 交來的四件都做了**：`dormant_profiles`、索引旁收據封存與 410、帳號目錄隔離名不覆蓋（同一秒加 `-2`）、守門遇到刪除或索引隔離
   做到一半的殘留（第 12 節）。
-- **接續（15:2x 起，上一段在 14:3x 因額度中斷）**：草稿裡的數字全部重跑或重建核對過（第 16 節）。另外找到並修了兩個缺陷，各自先紅後綠：
-  - `cc5adb0`：收據檔「停在兩次改名之間」那條補新檔的路，沒有套用 `c5999ed` 的時鐘下限（時鐘慢時備份裡的 id 之後會被當成新操作）。
-  - `9c29b4f`：還原紀錄上限 256 KiB 放不下「8 個帳號的政策都用到 state 上限」的紀錄，守門會每次開機都停在寫紀錄、add-on 再也起不來。
-    改成 1 MiB。
-  - 另補兩個測試：沒有額外帳號的產品（OpenDesign、Odoo Manage）磁碟上的帳號目錄照樣被撤銷（HM-07 審查 S-06 交下的）；全部撤銷時
-    store 回報失敗、磁碟卻已撤銷，標記照樣留著。
+- **接續（15:2x 起，上一段在 14:3x 因額度中斷）**：草稿裡的數字全部重跑或重建核對過（第 16 節）。另外找到並修了三個缺陷：
+  - `cc5adb0`（先紅後綠）：收據檔「停在兩次改名之間」那條補新檔的路，沒有套用 `c5999ed` 的時鐘下限（時鐘慢時備份裡的 id 之後會被當成新操作）。
+  - `9c29b4f`（先紅後綠）：還原紀錄上限 256 KiB 放不下「8 個帳號的政策都用到 state 上限」的紀錄，守門會每次開機都停在寫紀錄、add-on
+    再也起不來。改成 1 MiB。
+  - `96c4d3b`（全套 pytest 抓到）：`e91fc6f` 改了 `apps/n8n/run.py` 卻沒更新 `tests/test_output_schemas.py` 對它的位元組釘選（CI 會紅）；
+    換成現在的摘要。
+  - 另補兩個記錄行為的測試：沒有額外帳號的產品（OpenDesign、Odoo Manage）磁碟上的帳號目錄照樣被撤銷（HM-07 審查 S-06 交下的）；
+    全部撤銷時 store 回報失敗、磁碟卻已撤銷，標記照樣留著。契約第 7 節的 log 清單補漏掉的一行（`7d237f6`）。
 - 先寫測試：新 3 檔在實作前收集就失敗；實作後、測試替身還沒跟上時 128 案失敗（重建核對，第 4.1 節）。臨時突變在最終程式上 32 個，
   31 個被抓到，1 個等價（第 4.2 節）。
-- 本機：新 3 檔 81 案全過（約 8 秒）；全套 pytest 跑完後補（第 5 節）；packaging unittest `Ran 204`、`OK (skipped=5)`；`validate.py` PASS；
-  `scripts/tool_inventory.py` 通過。
-- 兩個預檢：本筆記 commit 之後跑，結果補在第 8 節。
+- 本機：新 3 檔 81 案全過（約 8 秒）；全套 pytest（`1f8c29f`）5869 案、0 skip、32 分 23 秒：5861 過，失敗的 8 案＝7 個要 root 的既有案例
+  ＋上面那筆釘選（`96c4d3b` 修好，該檔 189 案全過）；packaging unittest `Ran 204`、`OK (skipped=5)`；`validate.py` PASS；
+  `scripts/tool_inventory.py` 通過。已知會偶發逾時的 `test_backend_loopback` 那案這次沒出現（0／1 次）。
+- 兩個預檢（最終 HEAD、基準 `684a2dd`）：秘密預檢 0 命中；帳本預檢 OK（第 8 節）。
 - 這條線只 commit，不 push、不開 PR。計畫 §12.1 標 HM-13b 是「審查」片：合併前要獨立安全審查（還沒做），也要 HM-03a 的結果。
 
 ## 1. 範圍與基準
@@ -42,7 +45,7 @@
 | 切片 | HM-13b（計畫 §8.4「開機守門」、休眠處理、全部撤銷；§10.3；§12.3；風險高、工作量 L） |
 | 分支 | `feat/ha-multiprofile-hm13b-20261116`（一般 clone，不是 worktree） |
 | HA 基準 | `684a2dd`：HM-10 的 PR #104 head（`claude-delivery` `7c6f80c` 加 HM-10 的 18 個 commit）。HM-10 先合併；之後由主對話 rebase 到 `claude-delivery` |
-| 本片 commit | `3c90b6c`～`5b596cd`（11 個）加本筆記；接續前 7 個、接續後 4 個（第 16 節） |
+| 本片 commit | 15 個：接續前 7 個（`3c90b6c`～`0028169`）；接續後 8 個（`cc5adb0`、`9c29b4f`、`360836e`、`5b596cd`、`7d237f6`、本筆記 `1f8c29f`、`96c4d3b`，以及補全套與預檢結果的最後一個筆記 commit；第 16 節） |
 | 依據 | 計畫 §3.3、§4.1、§8.4、§8.8、§8.10、§10.3、§12.3 HM-13a／b／c；契約 §1.2、§3.5、§3.6、§4.1、§7、§8、§9；`threat-model.md`；HM-13a 的筆記與審查（`wave1/review-HM-13a.md`）；FM-04、07、13、16、78、79、80、118、119、120 |
 | PaaS | 沒有搬程式。對照 `Pc/restore_guard.py`（`prepare`、`_write_config`、`_write_journal`、`_archive_journal`、`_read_journal_floor`）、`Pc/restore_inplace.py`（`_verify`）、`Pc/restore_marker.py`（任何項目都算存在）；pin `69ac425`，到 `d7f5849` 這幾檔沒變（第 9 節） |
 | 決策 | DQ-03 (b)、DQ-39 (a)、DQ-13、DQ-14、DQ-21、DQ-40 (a)（第 10 節）；沒有碰到待定題 |
@@ -62,8 +65,8 @@
 | `packaging/container_probe.py` | 容器驗收還原階段的檢查：標記已被守門刪掉、沒開通的產品沒有 sentinel／record／還原紀錄、還原項目都修好、state 位元不變 |
 | `docs/provenance/runtime-patches.json` | 新增 `restore_lock.py`；6 個改到的列管檔重算摘要並補說明；`restore_detect.py`、`identity_fields.py` 只補「已接線」的說明 |
 | 測試（新） | `tests/restore_guard_disk.py`、`tests/test_restore_lock.py`（59 案）、`tests/test_dormant_profiles.py`（7）、`tests/test_revoke_all.py`（15） |
-| 測試（改） | 見第 3.10 節 |
-| 文件 | 契約（第 1.1、1.2、1.3（新）、3.5、3.6、7、8、9、10 節）、`threat-model.md`（I9、I13、第 3 節三條）、`acceptance-matrix.md`（T-21）、`ledger-tracking.md`（`profiles.py` 那列）、`docs/operations/update-backup-rollback.md`（還原標記那列）、`docs/operations/acceptance.md`（容器驗收還原階段） |
+| 測試（改） | 見第 3.10 節（含 `tests/test_output_schemas.py` 的一筆釘選） |
+| 文件 | 契約（第 1.1、1.2、1.3（新）、3.5、3.6、7、8、9、10 節）、`threat-model.md`（I9、I13、第 3 節兩條）、`acceptance-matrix.md`（T-21）、`ledger-tracking.md`（`profiles.py` 那列）、`docs/operations/update-backup-rollback.md`（還原標記那列）、`docs/operations/acceptance.md`（容器驗收還原階段） |
 
 沒改：`addons/<x>/`、版號、CHANGELOG、`upgrade-notes.yaml`、`MULTI_PROFILE_PRODUCTS`（仍是空集合）、`packaging/entrypoint.py`、
 `restore_detect.py`、`identity_fields.py`、`apps/runtime/*.py`、`apps/*/launch.py`（tool-surface 不用重產；`scripts/tool_inventory.py` 檢查通過）、
@@ -184,13 +187,14 @@ sentinel、record、record 暫存檔、還原標記、全部撤銷標記的名�
 | `tests/test_upgrade_zero_rewrite.py`（HM-07） | `UNWIRED` 清空（HM-13b 接上 `restore_detect` 與 `identity_fields`）；入口實際載入 `restore_lock`；`bb48449` 樣本開通後正式開機只多 child 與 sentinel 兩檔（HM-13a 交下的另一半） |
 | `tests/test_restore_detection.py`（HM-13a） | 容器探針還原階段的兩案（一般使用者與 root）在 entrypoint 之後跑管理程序的守門，再做探針的檢查 |
 | `packaging/test_container_probe.py`（HM-13a） | 探針檢查的新期望（標記已刪、沒開通沒有還原檔）與開通候選映像那一案 |
+| `tests/test_output_schemas.py` | `CURRENT_POST_SOURCE_BYTES` 裡 `apps/n8n/run.py` 的 SHA-256 換成現在的（開機守門與 `dormant_profiles`，沒有工具、schema 或 handler 的變動；`96c4d3b`，同 HM-04、HM-20 的做法） |
 
 ## 4. 守門有效的證據
 
 ### 4.1 先紅後綠
 
-接續時（15:2x 之後）每一列都重新核對：前兩列用 `git archive` 匯出當時的樹到 repo 外重建（venv 與 `node_modules` 用符號連結指回 clone、
-UI 的 `dist` 複製一份），不靠上一段的 log。
+接續時（15:2x 之後）每一列都重新核對，不靠上一段的 log：用 `git archive` 把當時的樹匯出到 repo 外，需要時把個別檔換回前一版再跑
+（venv 與 `node_modules` 用符號連結指回 clone，UI 的 `dist` 複製一份：`ui.py` 用 `O_NOFOLLOW` 開它，連結會被拒）。
 
 | 階段 | 結果 |
 |---|---|
@@ -204,7 +208,7 @@ UI 的 `dist` 複製一份），不靠上一段的 log。
 | 還原紀錄上限（`9c29b4f`，接續後） | `test_a_restore_of_states_as_large_as_the_store_takes_still_finishes` 在 256 KiB 上限紅（`not finished (the restore record could not be saved)`），1 MiB 綠（紀錄 > 256 KiB） |
 | 記錄行為的兩案（`360836e`、`5b596cd`，接續後） | 沒有額外帳號的產品 2 案、store 回報失敗 1 案：程式本來就這樣，寫上就過（不是先紅後綠）。新 3 檔 81 案 |
 
-### 4.2 臨時突變（`mutate2.py`：在 repo 外的匯出樹一次改一處，跑相關測試，跑完還原；`-k "not test_root_"`）
+### 4.2 臨時突變（`SP:hm13b/mutate2.py`：在 repo 外的匯出樹一次改一處，跑相關測試，跑完還原；`-k "not test_root_"`）
 
 在 `360836e` 的程式上重跑（上一段在 `e91fc6f` 上跑過 M01～M28，結果相同；接續時 M20 照改過的 `operations.py` 換寫法，並加 M29～M32）。
 未修改的匯出樹 259 案全過、5 案 deselected。
@@ -252,7 +256,9 @@ UI 的 `dist` 複製一份），不靠上一段的 log。
 | 檢查 | 結果 |
 |---|---|
 | 新 3 檔（`test_restore_lock.py` 59、`test_dormant_profiles.py` 7、`test_revoke_all.py` 15；`5b596cd`） | 81 案全過，8.1 秒（最慢的是中途停下那案 3.9 秒：128 次停下） |
-| 全套 pytest（正式 conftest、wave1 鎖；Chromium 照 CI 的 `npm run browser:install` 裝在 `node_modules`） | 跑完後補 |
+| 影響到的 32 檔（不拿鎖、`1f8c29f`；HM-01 黃金回歸與兩個契約凍結、HM-07～HM-10、HM-13a、HM-14 的檔、新 3 檔、`test_tool_inventory`、`test_ledger_precheck`、`test_log_scan`） | 1,012 案：1,006 過；6 個失敗都是要 root 的（`test_restore_detection.py` 的 5 案 `test_root_*`、HM-07 的 1 案），101.8 秒 |
+| 全套 pytest（正式 conftest、wave1 鎖；`1f8c29f`；Chromium 照 CI 的 `npm run browser:install` 裝在 `node_modules`） | 5869 案、0 skip、1,943.5 秒（32 分 23 秒）：5861 過；8 個失敗＝7 個要 root 的既有案例（第 6 節）＋`test_output_schemas.py::test_exact_source_bytes_are_reviewed_not_guessed_from_type_hints`（`apps/n8n/run.py` 的位元組釘選沒跟上）。新 3 檔 81、`test_restore_detection` 139、`test_upgrade_zero_rewrite` 45、黃金回歸 17、MCP 契約凍結 9、管理契約凍結 19、`test_router_passthrough` 49 案都在裡面 |
+| 修好釘選之後（`96c4d3b`）：`tests/test_output_schemas.py` | 189 案全過。全套沒有重跑：只改這個檔的一筆 SHA-256，沒有別的測試 import 它；共用鎖當時還排著 3 個（約要等 1～2 小時）。全套以 CI 為準 |
 | packaging unittest（同 CI：暫存 venv＝`uv sync --frozen --no-dev --offline`＋`requirements-ci`，不用 PYTHONPATH） | `Ran 204`、`OK (skipped=5)`（5 個 `skipUnless(root)` 同基準） |
 | `packaging/validate.py`（ci-venv 的 Python） | PASS |
 | `scripts/tool_inventory.py` | 通過（沒動 tool-surface 的來源） |
@@ -265,7 +271,8 @@ UI 的 `dist` 複製一份），不靠上一段的 log。
   `test_root_the_container_probes_restore_stage_meets_the_entrypoint` 是本片改的（entrypoint 之後以 uid 10001 跑守門）；HM-07 的
   `test_profile_store.py::test_mode_and_owner_as_the_add_on_user`；`test_owned_executable.py::test_uid10001_nondumpable_self_and_own_child_proof`。
 - 本片新測試都在 in-process 或暫存目錄跑：不起真子程式、不開固定 port（開通的 runtime 用 `NoProcessSupervisor` 與 MockTransport）。
-- 時間：新測試本機約 8 秒、改過的既有測試多約 4 秒；CI（root、runner 較慢）推估多 15～25 秒，在每片 1.5 分鐘內。
+- 時間（全套的 junit，`1f8c29f`）：新 3 檔 7.8 秒（中途停下那案 3.9 秒最久）；新增或改過的既有案例（零改寫開通 8 案、休眠 6 案、探針 1 案）
+  合計 0.5 秒。CI（root、runner 較慢）推估多 15～25 秒，在每片 1.5 分鐘內。
 
 ## 7. `checks` 秒數
 
@@ -280,7 +287,11 @@ UI 的 `dist` 複製一份），不靠上一段的 log。
 .venv/bin/python -I scripts/ledger_precheck.py --repo . --base 684a2dd
 ```
 
-跑完後補。
+- 秘密預檢：gitleaks 8.28.0（釘選、已核對）；本片 15 個 commit（`684a2dd..HEAD`）、`--full` 的 HEAD 全部檔與全歷史：0 命中。測試的 token 都在
+  執行時產生；憑證用 `DUMMY-…`、網址 `.invalid`（照 `tests/fixtures/owner_defaults/README.md`）。
+- 帳本預檢：`runtime-patches.json` 175 個路徑、`runtime-sources.json` 70、`tool-surface.json` 159，都 0 漂移、0 缺檔；對 `684a2dd` 改了
+  28 個檔，列管檔 7 個（`apps/n8n/run.py`、`gateway.py`、`operations.py`、`profile_runtime.py`、`profiles.py`、`restore_lock.py`、`run_product.py`），
+  帳本 1 個；新增或改到而沒列管的執行期檔 0 個。結果 OK。
 
 ## 9. PaaS 變動（本機唯讀 PaaS repo，`git log/diff 69ac425..d7f5849`；沒有 fetch、沒有 checkout）
 
@@ -369,7 +380,7 @@ HM-03a 的結果出來後，寫回本筆記這一節（或 HM-13a 的筆記第 1
 
 | 條件 | 狀態 |
 |---|---|
-| §10.3 的守門測試全綠 | 本機全過（第 5 節）；CI（root、0 skip）待 PR。§10.3 的每一項都有測試：全部撤銷、child token 重產、舊收據 410、孤兒撤銷、讀不到的 state 改名隔離且之後任何開機都不被路由、改名失敗保留標記、獨立驗證不過保留標記且不開 listener、DQ-03 兩種模式、開關關＋帳號資料＋標記全撤銷才刪標記、C1-M1 攻擊序、UC-24 三情境、全部撤銷第 k 個失敗、sentinel 不被任何 chmod／chown 碰到；另有每一步中途中斷、標記寫一半、磁碟滿 |
+| §10.3 的守門測試全綠 | 本機：新 3 檔 81 案全過；全套只剩 7 個要 root 的既有案例（另一案是位元組釘選，`96c4d3b` 已修；第 5 節）；CI（root、0 skip）待 PR。§10.3 的每一項都有測試：全部撤銷、child token 重產、舊收據 410、孤兒撤銷、讀不到的 state 改名隔離且之後任何開機都不被路由、改名失敗保留標記、獨立驗證不過保留標記且不開 listener、DQ-03 兩種模式、開關關＋帳號資料＋標記全撤銷才刪標記、C1-M1 攻擊序、UC-24 三情境、全部撤銷第 k 個失敗、sentinel 不被任何 chmod／chown 碰到；另有每一步中途中斷、標記寫一半、磁碟滿 |
 | sentinel 不被任何 chmod／chown 碰到 | 通過（第 3.9 節） |
 | HM-03a 的 UC-08 與 sentinel 結果寫進 provenance | **待 HM-03a**（第 11 節）；合併前要補，不可靠就照 DQ-39 (a) |
 | 獨立安全審查 | 還沒做 |
@@ -381,7 +392,7 @@ HM-03a 的結果出來後，寫回本筆記這一節（或 HM-13a 的筆記第 1
 ## 15. 已知 bug 的出現次數
 
 `tests/test_backend_loopback.py::test_every_profile_s_real_child_refuses_its_loopback_fake_backend_end_to_end[False]` 關閉時逾時
-（HM-09 額外帳號監看沒照 cancel 停，另一條線在修）：全套跑完後補。
+（HM-09 額外帳號監看沒照 cancel 停，另一條線在修）：0 次。全套跑了 1 次（`1f8c29f`），`[False]` 4.5 秒、`[True]` 2.3 秒都過；不拿鎖的反覆執行沒有跑這個檔（它起真子程式）。
 
 ## 16. 接續紀錄（2026-11-16 15:2x 之後）
 
@@ -395,4 +406,6 @@ HM-03a 的結果出來後，寫回本筆記這一節（或 HM-13a 的筆記第 1
 - 草稿的數字逐一核對：64 個改磁碟的呼叫（重算）、17 個呼叫點（測試的清單）、新 3 檔各階段的案數（每個 commit 匯出後收集：74、75、76、81）、
   先紅後綠的四列（重建）、突變（在最終程式上重跑）、PaaS 變動（重查）、packaging unittest、`validate.py`、`tool_inventory.py`、兩個預檢、全套。
   上一段草稿裡「替身沒跟上時 58 案失敗」對不上重建的結果（用替身的 18 檔裡 128 案），改成重建的數字；其他照實寫。
+- 全套 pytest（`1f8c29f`，正式 conftest、排在 wave1 鎖後面）抓到 `tests/test_output_schemas.py` 對 `apps/n8n/run.py` 的位元組釘選沒跟上
+  `e91fc6f`（CI 一定紅）：`96c4d3b` 修好。契約第 7 節 log 清單漏的 `INDEX_NOT_ARCHIVED` 那一行在 `7d237f6` 補上。
 - Chromium 照 CI 的 `npm run browser:install` 裝進 clone 的 `node_modules`（只動被忽略的檔），全套的瀏覽器案例才跑得起來。
