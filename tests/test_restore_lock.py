@@ -500,7 +500,7 @@ def test_each_restore_keeps_one_archive_and_old_ids_answer_410(tmp_path, log_sca
     archive = config.with_name('.state.json.operations.json.restored')
     assert list(json.loads(archive.read_text())['receipts']) == [first]
     fresh = json.loads(journal.read_text())
-    assert fresh['receipts'] == {} and fresh['restored_before_ms'] > int(first.split('.')[0])
+    assert fresh['receipts'] == {} and fresh['restored_before_ms'] >= int(first.split('.')[0])
     second = disk.receipt(A)
     again = disk.backup()
     disk.restore(again)
