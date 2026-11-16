@@ -14,6 +14,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, AfterValidator, field_validator, model_validator
 
+from . import features
 from .access import masked_token
 from .config import FRESH_WRITES_ENABLED, State, Store, http_url
 from .lifecycle import CHILD_PORT, ChildSpec, child_port_text
@@ -194,10 +195,83 @@ def allowed_address(value):
             ip in ipaddress.ip_network('2000::/3')) and not any(ip in network for network in _V6_DENY)
 
 
-def saved_destination(value):
+# HM-20 (multi-profile plan 8.7, DQ-10, DQ-40 (7); docs/multi-profile/contract.md section 9 #39; unreleased): once a
+# product is switched on, none of its backend URLs may be loopback: 127.0.0.0/8, ::1 or a localhost name. Every add-on
+# runs on Supervisor's bridge network (host_network: false), so a loopback address reaches only the add-on's own
+# listeners: the gateway (8081), the panel (8099) and the children (3000; 18000 and up for additional profiles), never a
+# backend. The add-on's own bridge address and host name are not covered (DQ-10's scope; a known limitation,
+# docs/multi-profile/threat-model.md section 3): only 8081 and 8099 answer there, as the children listen on 127.0.0.1
+# only. It is refused when saved (check_saved_destinations, n8n's URL included) and when a child connects: child_spec
+# and n8n_adapter.child_spec give a switched-on product's child DENY_LOOPBACK_ENV=1 on every port, and
+# apps/runtime/backend_policy.py and apps/n8n/backend_policy.cjs then refuse 127.0.0.0/8 and ::1 for every address they
+# connect the backend on, numeric or resolved. Switched off, nothing changes: every URL saved before is saved as before,
+# and no child gets the variable (tests/contract/child_spec_default.json).
+DENY_LOOPBACK_ENV = 'WOOW_MCP_DENY_LOOPBACK'
+# The names the PaaS strict SSRF check (Pc/util/ssrf.py LOCALHOST_NAMES) and the Hermes MCP server guard
+# (apps/hermes/vendor/hermes_mcp_server/guards.py) refuse, and *.localhost below them (RFC 6761).
+LOOPBACK_NAMES = ('localhost', 'localhost.localdomain')
+_LOOPBACK_V4, _LOOPBACK_V6 = ipaddress.ip_network('127.0.0.0/8'), ipaddress.ip_address('::1')
+_IPV4_PART = re.compile(r'0[xX][0-9A-Fa-f]*|0[0-7]*|[1-9][0-9]*')
+
+
+def loopback_refused(product) -> bool:
+    """Whether *product*'s backend URLs may not be loopback: once it is switched on (features.enabled, read at this
+    call). Nothing else decides it: no option, request, file or environment variable. A test that needs a loopback fake
+    backend for a switched-on product replaces this function inside its own process (tests/loopback_backends.py, which
+    no image carries); every caller looks it up here at each call, so that one replacement covers all of them."""
+    return features.enabled(product)
+
+
+def _ipv4_number(text):
+    """The IPv4 address a resolver or a URL parser reads from *text* when it is not a plain dotted quad, or None: what
+    inet_aton(3) accepts (glibc's getaddrinfo reads a numeric host the same way) and what the WHATWG URL standard's IPv4
+    parser accepts (n8n's Node child parses its URL so): one to four parts and one trailing dot, each part decimal,
+    octal (a leading 0) or hexadecimal (0x; alone, 0), the last part filling the remaining bytes: '127.1',
+    '0x7f000001', '2130706433', '0177.0.0.1', '127.0.0.1.'."""
+    parts = text.split('.')
+    if len(parts) > 1 and parts[-1] == '':
+        parts.pop()
+    if not 1 <= len(parts) <= 4 or not all(_IPV4_PART.fullmatch(part) for part in parts):
+        return None
+    numbers = [int(part[2:] or '0', 16) if part[:2] in ('0x', '0X') else int(part, 8 if part[0] == '0' else 10)
+               for part in parts]
+    *head, last = numbers
+    if any(number > 255 for number in head) or last >= 256 ** (5 - len(numbers)):
+        return None
+    return ipaddress.IPv4Address(sum(number << (24 - 8 * index) for index, number in enumerate(head)) + last)
+
+
+def numeric_host(host):
+    """The address a URL host (urlsplit's hostname: lower case, no brackets) is as a number, or None for a name: an IP
+    literal, or an IPv4 address in another spelling (_ipv4_number)."""
+    try:
+        return ipaddress.ip_address(host)
+    except ValueError:
+        return _ipv4_number(host)
+
+
+def loopback_host(host):
+    """Whether a URL host is loopback: localhost, localhost.localdomain or a name under .localhost (any case, trailing
+    dots), or 127.0.0.0/8 or ::1 in any spelling numeric_host reads, IPv4-mapped included."""
+    name = host.lower().rstrip('.')
+    if name in LOOPBACK_NAMES or name.endswith('.localhost'):
+        return True
+    address = numeric_host(host.lower())
+    if address is None:
+        return False
+    if address.version == 6 and address.ipv4_mapped is not None:
+        address = address.ipv4_mapped
+    return address in _LOOPBACK_V4 or address == _LOOPBACK_V6
+
+
+def saved_destination(value, *, loopback=False):
     """backend_destination, plus what the policy refuses once it connects and a saved URL already shows: a numeric host
     outside the allowed addresses (169.254.169.254, a 100.64.0.0/10 address, a documentation range, an IPv4-mapped
-    IPv6 address...), an IPv6 zone id, port 0."""
+    IPv6 address...), an IPv6 zone id, port 0.
+
+    loopback (HM-20: the product is switched on): also a loopback host (loopback_host), and a host a resolver reads as
+    a number outside the allowed addresses in another spelling ('0' and '0x0' are 0.0.0.0, which reaches this host
+    too). A name is checked once resolved, when the child connects."""
     backend_destination(value)
     parts = urlsplit(value)
     host = parts.hostname or ''
@@ -207,6 +281,10 @@ def saved_destination(value):
         numeric = None
     if '%' in parts.netloc or parts.port == 0 or (numeric is not None and not allowed_address(host)):
         raise ValueError('URL refused by the backend policy')
+    if loopback:
+        number = numeric_host(host)
+        if loopback_host(host) or (number is not None and not allowed_address(str(number))):
+            raise ValueError('URL refused by the backend policy')
     return value
 
 
@@ -214,13 +292,24 @@ def check_saved_destinations(state, previous=None):
     """Refuse, when a connection is saved through the admin API, a URL backend_policy would refuse on every call. Only
     the URLs this save changes are checked, and the check is kept out of the Connection models (Nextcloud's had the
     path rule from the start): a state saved before this check still loads after an upgrade, and a URL it holds does
-    not block editing the other fields, so its administrator can open the page and correct it."""
+    not block editing the other fields, so its administrator can open the page and correct it.
+
+    HM-20: once the product is switched on (loopback_refused), a URL this save changes is also refused when its host is
+    loopback (saved_destination(loopback=True)), and n8n's backend URL, which had no check, gets that whole one.
+    The refusal is the one every refused save gets (gateway.admin_action: 400, {"error":"request denied"}). A stored
+    loopback URL still loads, as above; the child refuses it when it connects."""
+    product = getattr(state, 'product', 'n8n')  # a state without one is n8n's, as gateway.admin_action reads it
+    refused = loopback_refused(product)
     connection = getattr(state, 'connection', None)
     before = getattr(previous, 'connection', None)
-    for name in URL_FIELDS.get(getattr(state, 'product', None), ()):
+    for name in URL_FIELDS.get(product, ()):
         value = getattr(connection, name, None)
         if value is not None and value != getattr(before, name, None):
-            saved_destination(value)
+            saved_destination(value, loopback=refused)
+    if refused and product == 'n8n':
+        value = getattr(state, 'backend_url', None)
+        if value is not None and value != getattr(previous, 'backend_url', None):
+            saved_destination(value, loopback=True)
 
 # Owner decision 2026-10-27 (the PaaS woow-mcp-server owner_defaults of 2026-10-25, for the HA add-ons): the state
 # field that marks the one-time all-on migration of a legacy (schema 1/2/3) state. Same name as the PaaS marker.
@@ -853,6 +942,11 @@ def child_spec(state: ProductState, directory: Path, port: int = CHILD_PORT) -> 
         # (apps/runtime/session_idle.py, install). The retired Odoo Manage (no image since 0.1.5) runs no session_idle
         # and stays as it was.
         env['WOOW_MCP_CHILD_TOKEN'] = state.child_token
+    if loopback_refused(product):
+        # HM-20 (unreleased, behind the product switch): apps/runtime/backend_policy.py refuses every loopback answer
+        # for this child's backend. Only this environment, which the child never inherits, can set it; every port's
+        # child gets it, an additional profile's too (tests/test_backend_loopback.py).
+        env[DENY_LOOPBACK_ENV] = '1'
     c = state.connection
     if product == 'odoo':
         # The reviewed pure decision module is shared by management's fallback listing and the child overlay.

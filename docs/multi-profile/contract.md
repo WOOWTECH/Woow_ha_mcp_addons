@@ -173,7 +173,7 @@
 | `configuration`、`capabilities` | GET | 回應帶 `profile:{id}` |
 | `diagnostics` | GET | 只回選定帳號的子程式緩衝 |
 | `operations/<id>` | GET | 收據依帳號 |
-| `backend`、`backend/patch` | PUT | Odoo 換 url／database／username 換 token、回 `token_rotated:true`（HM-12；DQ-05 已定，照計畫 §9）；改 url 來源沒帶新秘密 422（DQ-40 ⑨） |
+| `backend`、`backend/patch` | PUT | Odoo 換 url／database／username 換 token、回 `token_rotated:true`（HM-12；DQ-05 已定，照計畫 §9）；改 url 來源沒帶新秘密 422（DQ-40 ⑨）；這次存檔改到的後端網址是 loopback（127.0.0.0/8、::1 的各種寫法、`localhost`）或是不允許位址的數字寫法，一律 400 `{"error":"request denied"}`；n8n 也一樣，而且開通後另外套上既有的整套存檔檢查（同其他產品，HM-20；§8.8 #39） |
 | `backend/test` | POST | 測選定帳號已存的設定 |
 | `policy`、`odoo/write-switches`、`odoo/allowed-methods`、`n8n/session` | PUT | 只重啟選定帳號的子程式 |
 | `endpoint` | PUT | 額外帳號 409 `endpoint_global`（全域設定只存在預設 state；DQ-13 待定，照計畫建議） |
@@ -486,6 +486,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | 記憶體 | 見第 5 節（HM-09 定案的部分） |
 | 被擋的狀態 | HM-09 定案：`disabled_reason` 有值的帳號不起（開機、看門狗、面板重啟都不起）：`status=blocked`，`blocked_reason` 是 `port_conflict`→`child_port_conflict`、`memory_capacity`→`memory_capacity`、`profile_limit`→`null`（沒有對應的原因碼，看清單的 `disabled_reason`）。開通後 `child/restart` 的 202 回應多 `blocked_reason`（沒被擋是 `null`）；沒開通照今天 |
 | 子程式 bearer（HM-06，不受開關管） | 剛好一個 `Authorization`、`hmac.compare_digest` 比對 `Bearer <WOOW_MCP_CHILD_TOKEN>`；不符 401（不寫細節）；環境變數缺、空或不符 `[A-Za-z0-9_-]{43}` 就拒絕啟動 |
+| 後端 loopback（HM-20，受開關管） | 開通的產品的子程式環境多一個 `WOOW_MCP_DENY_LOOPBACK=1`，預設帳號與每個額外帳號的子程式都有（沒開通就沒有這個變數，spec 逐位元同今天）；子程式連設定的後端時，網址的字面位址或名稱解析出的任何一個位址是 127.0.0.0/8 或 ::1，整組拒絕、不連線（Python 子程式 `BACKEND_DESTINATION_DENIED`；Headscale 的子程式本來就一律拒 loopback、不看這個變數，回 `HEADSCALE_DESTINATION_DENIED`；n8n 另擋 0.0.0.0 與 IPv4-mapped，API 與官方 MCP 端點都擋）；變數的值不是 `1` 就拒絕啟動。n8n 的 webhook、chat、form 網址不受這條管（§8.8 #90） |
 | log 事件 | 子程式啟動、結束（結束碼）、退避（下次秒數）、`failed`、`blocked`（原因碼）、監看認證退避、撞號、孤兒、隔離、還原守門逐帳號動作、休眠撤銷、缺哪些連線鍵（只列鍵名）；格式 `[profile=<id 前 8 碼> port=<p> pid=<n>]`；每帳號每情況 60 秒一行（`suppressed=N`）。HM-09 寫的（開通的產品才寫，logger `mcp_admin_core.lifecycle`，一律 WARNING，因為 add-on log 只顯示 WARNING 以上）：`MCP child [profile=… port=… pid=…]: started`／`exited with code N`／`next start in N s (attempt n)`／`failed after n starts; …`／`not started (<原因碼>): <固定說明>`／`child resources not applied (…)`／`could not be started (<例外類別>)`／`not started: no connection is saved yet (<欄位名>); …`／`the backend refused the credentials; next health check in N s`／`its health monitor stopped; …`／`MemAvailable cannot be read; …`／`its staggered start failed (<例外類別>); the other profiles start anyway`（HM-09 審查 S-12）；`child resources not applied (…: no interpreter for the wrapper); …` 也是同一行的一種。另外 logger `mcp_admin_core.profiles` 的 `multi-profile: the IPv6 test bind on <位址> is refused (<errno 名稱>); the spawn check skips that address`（HM-09 審查 S-6；每個位址與 errno 每個程序一行，不帶帳號）。撞號、孤兒、讀不到的帳號是 HM-08 寫的（logger `mcp_admin_core.profile_runtime`、`profile_router`）；隔離、還原守門逐帳號動作、休眠撤銷是 HM-13b |
 
 ## 8. 資料（摘要）
@@ -519,6 +520,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 審查後把 FEATURE-MATRIX「HA 平台差異」欄是「—」的 44 列人工逐列看過後補的列；第 87、88 列是 HM-08 獨立審查（S-6）補的列，
 #15、#16 的附註也是；#14 的附註是 HM-09 的實作補的，第 89 列是 HM-09 獨立審查（S-6）補的列。逐列的來源與結論見
 `deviation-trace.md`（第 87～89 列與三個附註出自 HM-08、HM-09 的實作，不是 FEATURE-MATRIX 的列）。
+第 90 列是 HM-20 補的列（DQ-10 子題 2026-11-15 定案；FM-84 的對齊作法欄；`deviation-trace.md` 沒有這一列）。
 
 | # | 項目 | PaaS（@69ac425） | HA | 理由 | 類型 |
 |---|---|---|---|---|---|
@@ -560,7 +562,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | 36 | 帳號選擇保存 | sessionStorage | 只放記憶體 | 保留 HA 儲存不變式（DQ-18；DQ-40 ⑤） | 加嚴 |
 | 37 | 子程式 bearer | 只有 n8n 驗 | 7 支 Python 子程式也驗、驗格式（第 7 節）。註：n8n 維持現狀（n8n-mcp 驗 `AUTH_TOKEN`＝同一個 child_token）：只看值是不是 `Bearer ` 開頭、比對前去掉前後空白，重複的 `Authorization` 只看第一個，所以另外收下三種寫法：`Bearer` 後兩個空白、兩個標頭都是自己的、第一個是自己的＋第二個是別帳號的。三種都要先有自己的 child token，沒有越權 | port 錯置時不跨帳號執行（DQ-40 ⑥）。n8n 不另外擋那三種（審查 MF-1 選 (a)，2026-11-15）：閘道只轉送自己的 child bearer、只送一個標頭（HM-01 黃金回歸鎖住，用戶端塞不進第二個）；能直連子程式 port 的只有 add-on 容器內同 uid 的程序，在 DQ-37 接受的信任邊界內 | 加嚴 |
 | 38 | 回覆遮罩 | 子程式只知道自己帳號的憑證（FM-76） | 本帳號秘密＋所有帳號 token／child_token | 一個 add-on 持有多個帳號的 token（DQ-40 ⑧） | 加嚴 |
-| 39 | 後端網址 loopback | 只有 n8n、EMQX 存檔過 SSRF | 開通後全部產品存檔與執行期都拒 | 縱深防禦（DQ-10；DQ-40 ⑦） | 加嚴 |
+| 39 | 後端網址 loopback | 只有 n8n、EMQX 存檔過核心 SSRF（宣告 `url_connection_keys`，Pc/connection_apply.py:69-87）：部署端預設 strict，存檔時解析 DNS，擋 loopback、私網、metadata、帶帳密，400 `detail.code=ssrf_blocked`（另帶 `field`、`reason`、`message`）；n8n 子程式的上游客戶端連線時再驗一次（同一模式），其他產品子程式不再檢查。#152（main `671d2e7` 合併，2026-11-15）起 Nextcloud 的 `base_url` 也照這套在存檔時檢查，「測試連線」與健康探測也在管理程序連線前先檢查（被擋的一個請求都不送，訊息只有原因）；Nextcloud 子程式本身連線時仍不檢查（PaaS 自己寫明） | 開通後全部產品（含 n8n）存檔與執行期都拒。存檔（HM-20）：不解析 DNS；擋 `localhost`、`localhost.localdomain`、`*.localhost`（大小寫、結尾點）與 127.0.0.0/8、::1 的各種寫法（十進位、八進位、十六進位、省略段、結尾點、IPv4-mapped），數字寫法落在不允許位址也擋（`0` 是 0.0.0.0）；只檢查這次改到的網址；回 400 `{"error":"request denied"}`，同既有的存檔檢查（第 4.1 節）。n8n 開通後另外套上既有的整套存檔檢查（同其他產品；計畫 §8.7「n8n 也納入存檔檢查」、FM-77）：除了 loopback，也擋 `.`／`..` 路徑段、解碼後的 `%`、反斜線、`?`、`#`、`@`、metadata 名稱、非 ASCII 主機（要改填 `xn--`）、zone id、port 0 與不允許位址的 IP 字面。位址那部分和 n8n 執行期的 `allowedAddress`（H:apps/n8n/backend_policy.cjs）是同一組，帶帳密、非空的 `?`／`#` 執行期本來就拒，所以今天連得上的位址開通後照樣連得上；真正新擋的是網址的寫法（例如 `.`／`..` 路徑段、反斜線、空的 `?`／`#`、空帳密的 `@`、非 ASCII 主機），這些今天經 WHATWG 正規化後照連，開通後要改填正規的寫法（非 ASCII 主機改填 `xn--`）。和 PaaS n8n 的差異：PaaS 擋私網、不看路徑寫法；HA 放私網、擋路徑寫法。執行期：子程式（`WOOW_MCP_DENY_LOOPBACK=1`，第 7 節）對字面與解析後的每個位址都拒，名稱指到 127.0.0.1 也擋。區網照放；沒開通完全照今天。Nextcloud（對照 PaaS #152）：`url` 存檔一直走既有的存檔檢查（metadata 名稱、不允許位址的 IP 字面、路徑寫法，HM-20 前就有），開通後加 loopback；「測試連線」（`backend/test`）測已存的設定、經子程式連線，子程式連線前對每個解析出的位址檢查（metadata 與 link-local 位址一律擋；開通後含 loopback），被擋的一個請求都不送。範圍只有 loopback：add-on 自己的 bridge 位址與主機名不在規則裡（`threat-model.md` 第 3 節） | 縱深防禦（DQ-10；DQ-40 ⑦）：HA bridge 網路下 loopback 只連到 add-on 自己（8081、8099、子程式 port）；HA 後端多在區網，所以不擋私網；存檔不查 DNS，名稱留到連線時解析後擋 | 加嚴 |
 | 40 | 換身分換 token | 只有 Odoo（#131） | Odoo；加 Nextcloud url／username、Hermes gateway_url／dashboard_url／dashboard_username | 使用者原則「每條網址永久綁一個後端身分」（R01:85；DQ-40 ⑩） | 加嚴 |
 | 41 | 新來源要重填秘密 | 只有 Headscale（FM-89） | 開通後全部產品改 url 的 scheme／host／port 沒帶新秘密 → 422 | 防把存好的密碼送到新伺服器（DQ-40 ⑨） | 加嚴 |
 | 42 | 密鑰路徑 Origin | 清單＋report-only（記 would_deny）、反射 CORS | 清單（預設 `https://claude.ai`）＋report-only 記 would_deny、不加 CORS | 不放寬（FM-74；DQ-11 採 (a)） | 加嚴 |
@@ -611,6 +613,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | 87 | FD 上限不夠 | 沒有這條降級（程式不讀也不調 `RLIMIT_NOFILE`） | 開通後啟動時讀 soft／hard `RLIMIT_NOFILE`；讀不到、hard 不夠或設不上：只服務預設帳號、8081 外框維持 64、記一行 WARNING（第 5 節） | HA 不能假設 HAOS 容器的上限（待 HM-03a 實測）；不夠時寧可不開額外帳號 | 部署 |
 | 88 | 額外帳號目錄被換掉 | 只在開啟當下比對 fd 與路徑是同一個目錄（`Pc/profiles.py:212-218`），之後快取 store、不再比對 | 開啟時記下目錄的 (st_dev, st_ino)，之後不同就不路由，它的 token 變成未知 token（第 2.2 節第 3 點；HM-07 審查 S-08） | 防誤拷與誤改；同 uid 下不是安全邊界（DQ-37） | 加嚴 |
 | 89 | 試綁被平台擋 | IPv6 試綁除了 EADDRNOTAVAIL、EAFNOSUPPORT 之外的失敗都當成 port 被佔（`child_identity.port_occupied`） | IPv6 試綁遇到 EACCES、EPERM 時跳過那個位址，每個位址與 errno 每個程序記一行 WARNING；IPv4 任何失敗仍當被佔（第 7 節） | 平台事實不假設（HAOS 的 AppArmor、seccomp 可能擋 IPv6 bind，待 HM-03a 實測）；照 PaaS 的話，開通後預設帳號的子程式會因此永遠起不來。子程式只綁 127.0.0.1，別的程式的雙棧 socket 仍會讓 IPv4 萬用位址的試綁失敗，跳過不會漏掉佔用者 | 部署 |
+| 90 | n8n webhook、chat、form 網址的 SSRF 模式 | 子程式讀部署端的 `WEBHOOK_SECURITY_MODE`，預設 strict（擋 loopback、私網；和存檔檢查同一個模式，Pc/util/ssrf.py） | 固定 `permissive`（只擋雲端 metadata 與隧道內嵌的位址，可以指到區網與 loopback；H:apps/n8n/n8n_adapter.py）。開通後只有設定的 n8n 本身（API 與官方 MCP 端點）拒 loopback（#39），webhook 照舊 | 負責人 2026-10-15 的決定（`n8n_test_workflow` 要打 HA 網路上的 n8n）；2026-11-15 使用者定維持不動（DQ-10 子題），多帳號時要不要收緊交 HM-25 前的獨立安全審查 | 既有（HM-25 前再評估） |
 
 ## 10. 變更紀錄
 
@@ -625,3 +628,4 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | v1 草案（HM-08 審查） | 2026-11-15 | HM-08 | 依獨立安全審查修正：第 2.2 節第 4 點位元組額度改成扣到請求結束、並扣轉送給子程式的大小（MF-1、S-1；原本「送出回應標頭就還、那時請求內容已不在記憶體」與事實不符）；第 2.4 節加「轉送大小放不下」一列、第 2 列補「拒絕小額度正被占滿」、最後一點寫明 8081 外框是全 add-on 共用的連線數（S-5）；第 5 節位元組額度的定義、「單一帳號有界」改寫成看內容的倍數（字串約 3 倍、大量小物件約 24 倍；元素數上限待定）、零命中與外框兩點、OpenDesign／Odoo Manage 列改成「不會開通」（S-7）；第 9 節 #15、#16 加附註、補第 87、88 列（S-6） |
 | v1 草案（HM-09） | 2026-11-15 | HM-09 | 第 7 節：DQ-21、DQ-25 改標已定（2026-11-15 11:2x 使用者採用建議；`decisions.md`），並寫明 HM-09 定案的做法：spawn 前檢查四類與重試、看門狗把 spawn 失敗與拒絕也算一次、錯開啟動的名額規則、並行停、監看起點與認證被拒的判斷、「連兩次失敗」的算法、監看失敗時停該帳號子程式、資源包裝與降級、被擋的狀態與 `child/restart` 的 `blocked_reason`、log 事件的文字與層級；第 5 節：記憶體檢查的時機與讀不到時的做法 |
 | v1 草案（HM-09 審查） | 2026-11-15 | HM-09 | 依獨立安全審查（修正後通過）：第 7 節 port 列加 IPv6 試綁被平台擋時跳過並記一行（S-6）、錯開啟動列加「某個帳號的啟動丟例外時記一行、其他照起」（S-12）、資源列加「沒有直譯器可跑包裝器時照起並記一行」（S-12）、log 事件列補這三種文字；第 9 節加第 89 列（S-6）並在說明寫明 #14 的附註出自 HM-09（spawn 失敗也重試，審查 S-1 要使用者看過） |
+| v1 草案（HM-20） | 2026-11-15 | HM-20 | 後端網址拒絕 loopback 照實作寫明（DQ-10；DQ-40 ⑦）：第 3.1 節 `backend` 列加存檔的 400；第 7 節加「後端 loopback」列（`WOOW_MCP_DENY_LOOPBACK=1`、整組拒絕、值不是 1 就不啟動）；第 9 節 #39 的 PaaS 欄與 HA 欄寫明兩邊的範圍、存檔時查不查 DNS、回應本體與區網；補 #90（n8n webhook 模式維持 permissive，DQ-10 子題 2026-11-15 使用者定，HM-25 前再評估）。安全審查後（S-1、S-4、S-8）：#39 補「n8n 開通後套上整套既有存檔檢查」與和 PaaS n8n 的差異、範圍只有 loopback（bridge 位址不在規則裡）；第 3.1 節同步、改說「是 loopback」；第 7 節補「額外帳號的子程式也帶變數」與 Headscale 的代碼。rebase 到 HM-09 之後（2026-11-16）：HM-08 補了 #87、#88、HM-09 補了 #89，本片的列改成 #90（原稿 #87），第 7 節與本列的引用同步；#39 的 PaaS 欄照 #152 的實際合併（`671d2e7`）改寫，HA 欄補 Nextcloud 的存檔與測試連線對照。沒開通時的行為不變 |

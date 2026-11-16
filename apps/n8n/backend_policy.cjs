@@ -2,7 +2,9 @@
 // New local adapter code, not copied upstream. Loaded only by our fixed launcher.
 // The pinned API client's base backend is trusted configuration, NOT a webhook.
 // 0.2.1: the child runs with WEBHOOK_SECURITY_MODE=permissive (owner decision 2026-10-15, set by n8n_adapter);
-// the global SSRFProtection validators are not patched here.
+// the global SSRFProtection validators are not patched here. HM-20: with WOOW_MCP_DENY_LOOPBACK=1 (n8n switched on),
+// SSRFProtection.createPinnedFetch, which only the official MCP client of the configured instance calls, refuses this
+// add-on's own addresses (below); the validators and createPinnedAgents are still not patched.
 const dns = require("node:dns");
 const net = require("node:net");
 const crypto = require("node:crypto");
@@ -82,6 +84,36 @@ function allowedAddress(address) {
         "168.63.129.16", "fd00:ec2::254"].includes(parsed.toString());
 }
 
+// HM-20 (multi-profile plan 8.7, DQ-10; unreleased, behind the product switch): with WOOW_MCP_DENY_LOOPBACK=1 the
+// configured instance's own clients connect to no address that is this add-on itself: 127.0.0.0/8, ::1 or 0.0.0.0,
+// IPv4-mapped forms included, whether the URL names it or a name resolves to it (the add-on runs on Supervisor's
+// bridge network: loopback reaches only its own listeners). Both clients: the API client's pinned agents
+// (getPinnedAgents below) and the official MCP client's pinned fetch (services/n8n-official-mcp-client.js: the
+// instance's <origin>/mcp-server/http with N8N_MCP_ACCESS_TOKEN, after the webhook validation; it is the only caller of
+// createPinnedFetch, tests/test_backend_loopback.py). Who sets it: n8n_adapter.child_spec, only once n8n is switched on,
+// in the environment it builds (never inherited). Read once, when this file loads, before n8n-mcp's own code runs;
+// unset, nothing changes; any other value refuses to start. WEBHOOK_SECURITY_MODE=permissive and the webhook, chat and
+// form clients (createPinnedAgents) stay as they are (owner decision 2026-10-15, kept 2026-11-15; HM-25 reviews it).
+const denyLoopback = (() => {
+    const value = process.env.WOOW_MCP_DENY_LOOPBACK;
+    if (value === undefined) return false;
+    if (value !== "1") throw new Error("backend loopback policy requires WOOW_MCP_DENY_LOOPBACK=1 or unset");
+    return true;
+})();
+function thisHost(address) {
+    if (!net.isIP(address)) return true;
+    let parsed = ipaddr.parse(address);
+    if (parsed.kind() === "ipv6" && parsed.isIPv4MappedAddress()) parsed = parsed.toIPv4Address();
+    return ["loopback", "unspecified"].includes(parsed.range());
+}
+if (denyLoopback) {
+    const createPinnedFetch = SSRFProtection.createPinnedFetch;
+    SSRFProtection.createPinnedFetch = function (addresses) {
+        if (!Array.isArray(addresses) || addresses.some(entry => !entry || thisHost(String(entry.address)))) denied();
+        return createPinnedFetch.apply(this, arguments);
+    };
+}
+
 N8nApiClient.prototype.getPinnedAgents = async function () {
     if (!process.env.N8N_API_URL) denied();
     const configured = backend(process.env.N8N_API_URL);
@@ -92,7 +124,8 @@ N8nApiClient.prototype.getPinnedAgents = async function () {
     if (["metadata", "metadata.google.internal", "instance-data"].includes(host.replace(/\.$/, ""))) denied();
     const addresses = net.isIP(host) ? [{address: host, family: net.isIP(host)}] :
         await dns.promises.lookup(host, {all: true});
-    if (!addresses.length || addresses.some(a => !allowedAddress(a.address) || net.isIP(a.address) !== a.family)) denied();
+    if (!addresses.length || addresses.some(a => !allowedAddress(a.address) || net.isIP(a.address) !== a.family ||
+        (denyLoopback && thisHost(a.address)))) denied();
     // Re-resolve on each API request; check EVERY answer, then pin precisely those
     // answers through the socket connect. No TOCTOU second lookup or DNS cache.
     const agents = SSRFProtection.createPinnedAgents(addresses);

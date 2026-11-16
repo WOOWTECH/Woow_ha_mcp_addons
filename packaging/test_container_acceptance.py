@@ -1,10 +1,15 @@
 """Candidate Docker invocation contract; all Docker calls are mocked."""
 import json
+from pathlib import Path
 import subprocess
+import sys
 import unittest
 from unittest.mock import patch
 
 import container_acceptance as acceptance
+
+sys.path[:0] = [str(Path(__file__).resolve().parents[1] / 'packages/mcp-admin-core')]
+from mcp_admin_core import features  # noqa: E402  (HM-20: the products whose child refuses a loopback backend)
 
 
 IMAGE_ID = 'sha256:' + 'a' * 64
@@ -72,6 +77,20 @@ class CandidateInvocationTests(unittest.TestCase):
         commands = self.invoke('emqx')
         self.assertEqual(len(commands), 2)
         self.assertEqual(commands[1][:7], ['docker', 'run', '--rm', '--init', '--network', 'none', '--read-only'])
+
+    def test_every_product_whose_child_refuses_loopback_gets_the_one_use_bridge(self):
+        """Multi-profile HM-20 (plan 8.7): the child of a switched-on product (features.MULTI_PROFILE_PRODUCTS) gets
+        WOOW_MCP_DENY_LOOPBACK=1 and refuses a loopback backend, as Headscale's child always does, so the probe's mock
+        backend cannot be on 127.0.0.1 for it either: it needs this one-use internal bridge, and a private address
+        (container_probe.mock_bind_host, packaging/test_container_probe.py). The test double tests/loopback_backends.py
+        is in no image. The set is empty today, so this checks Headscale; the release PR that switches a product on
+        (HM-19a, HM-21 to HM-26) fails here until its candidate gets the bridge."""
+        for app in sorted({'headscale', *features.MULTI_PROFILE_PRODUCTS}):
+            with self.subTest(app=app):
+                commands = self.invoke(app)
+                self.assertEqual(commands[1][:4], ['docker', 'network', 'create', '--internal'])
+                self.assertEqual(commands[3][:6], ['docker', 'run', '--rm', '--init', '--network', NETWORK_ID])
+                self.assertEqual(commands[-1], ['docker', 'network', 'rm', NETWORK_ID])
 
 
 if __name__ == '__main__':

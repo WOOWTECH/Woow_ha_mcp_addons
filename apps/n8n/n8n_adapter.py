@@ -13,6 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.json_schema import SkipJsonSchema
 
+from mcp_admin_core import products
 from mcp_admin_core.config import State
 from mcp_admin_core.lifecycle import CHILD_PORT, ChildSpec, child_port_text, child_url
 from mcp_admin_core.policy import Tool
@@ -144,9 +145,16 @@ def child_spec(state: State, directory: Path, port: int = CHILD_PORT) -> ChildSp
         # 0.2.1: n8n's instance-level MCP key, optional; without it the official-MCP features are NOT_CONFIGURED.
         if getattr(state, "mcp_access_token", None):
             env["N8N_MCP_ACCESS_TOKEN"] = state.mcp_access_token
+    if products.loopback_refused("n8n"):
+        # HM-20 (multi-profile plan 8.7, DQ-10; unreleased, behind the product switch): backend_policy.cjs refuses
+        # every loopback answer for the configured instance (its API and its official MCP endpoint). Webhooks are not
+        # the configured instance's clients: they keep the mode below.
+        env[products.DENY_LOOPBACK_ENV] = "1"
     # 0.2.1 (owner decision 2026-10-15): n8n-mcp's widest webhook/URL mode (dist/utils/ssrf-protection.js): any
     # address, private and loopback included (only cloud metadata names stay blocked), so n8n_test_workflow can reach
     # an n8n on the HA network. The configured API backend keeps its own DNS-pinned agents (backend_policy.cjs).
+    # Kept as it is by the owner on 2026-11-15 (DQ-10): whether to tighten it with additional profiles is decided by the
+    # independent security review before n8n is switched on (HM-25).
     env["WEBHOOK_SECURITY_MODE"] = "permissive"
     if _catalog is not None and _catalog.is_file():
         env["NODE_DB_PATH"] = str(_catalog)  # the private writable copy made by prepare_catalog() at start-up
