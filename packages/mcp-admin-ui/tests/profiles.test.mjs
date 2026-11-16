@@ -335,6 +335,24 @@ test('a lost create answer keeps its identity; the resend is the same request; a
   assert.equal(reopened.pendingProfileOperation(), null);
 });
 
+// Align review S-2: HM-10 answers a failure after the commit (a directory not made, the index or the receipt not
+// written) with 409 operation_outcome_unknown, and the same key keeps getting it. That is no refusal before the
+// intent: the identity is kept, so a resend stays the same request and never a second creation or deletion.
+test('an unknown outcome of a profile create or delete (409 operation_outcome_unknown) keeps its identity', async () => {
+  const unknown = () => Response.json({error: 'request denied', detail: {code: 'operation_outcome_unknown'}}, {status: 409});
+  for (const [route, attempt] of [['profiles/create', api => api.createProfile('出納', indexRevision)], ['profiles/delete', api => api.deleteProfile(B, indexRevision)]]) {
+    const base = server({answer: {'/api/profiles': unknown, [`/api/profiles/${B}`]: unknown}});
+    const api = new AdminApi(mount, base.fetcher, memoryStorage());
+    await api.bootstrap();
+    await assert.rejects(() => attempt(api), error => error instanceof ApiError && error.code === 'operation_outcome_unknown', route);
+    const pending = api.pendingProfileOperation();
+    assert.equal(pending?.route, route);
+    const sent = base.calls.filter(call => call.method !== 'GET' && call.path.includes('/api/profiles'));
+    assert.equal(sent.length, 1, route);
+    assert.equal(sent[0].headers['Idempotency-Key'], pending.id, route);
+  }
+});
+
 test('list rows and what the menu says about them (PaaS profileStatus.test; §8.8 #51)', () => {
   assert.equal(optionLabel(row(DEFAULT_PROFILE, 'Default')), '預設帳號（default） · 執行中');
   assert.equal(optionLabel(row(B, '會計')), '會計（01234567） · 執行中');
