@@ -99,9 +99,9 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_admin_pipeline_matrix.py` | HM-10 | 計畫 | 路由表自動產生的否定矩陣；非管理員逐位元相同 |
 | `packages/mcp-admin-ui/tests/profiles.test.mjs` | HM-11 | 計畫 | 標頭規則、`mutate(profile)` 回聲比對、收據帶帳號、N15 新舊斷言 |
 | `packages/mcp-admin-ui/tests/browser/profiles.spec.mjs` | HM-11 | 計畫 | 選單、切換藏 token、晚到回應丟棄、XSS 名稱、建立後自動切換、舊格式收據 |
-| `tests/test_odoo_identity_rotation.py` | HM-12 | 計畫 | 換身分換 token、先停再提交、新 token 碰不到舊子程式 |
-| `tests/test_odoo_multi_profile.py` | HM-12 | 計畫 | 同庫多帳號；A 的審批 token 在 B 被拒 |
-| `tests/test_new_origin_secret.py` | HM-12 | 計畫 | 改 url 來源沒帶新秘密 422（DQ-40 ⑨） |
+| `tests/test_odoo_identity_rotation.py` | HM-12 | 新增 | 開通的 Odoo 換 url／database／username（含清空）換 token：先停舊子程式、一次寫入、發布、再起新子程式（兩種路由、預設帳號也是）；舊 token 兩條入口都失效、進行中與排隊中的請求結束；新 token 在新子程式起來前碰不到任何子程式；只換密碼、初次設定、已撤銷不換；停不下、store 拒絕（含舊子程式起不回來）、新檔寫不出來、取代 state 檔途中失敗（`os.replace`、目錄 fsync）、新子程式起不來的故障注入；store 的一次寫入與只在結果不明時毒化；沒開通照今天；其他產品開通後不換 |
+| `tests/test_odoo_multi_profile.py` | HM-12 | 新增 | 同庫五個帳號各自固定綁定（PaaS 對照）、換其中一個只換它的 token；真的 Odoo 子程式：A 的審批 token 在 B 被拒、A 自己執行得了，兩帳號 state 相同的對照；DQ-30 讀取並行維持 1 |
+| `tests/test_new_origin_secret.py` | HM-12 | 新增 | 開通後全部產品改網址來源（scheme、host、port）沒帶那條網址的已存秘密 422（DQ-40 ⑨），少帶一個也 422、全帶就存；同來源、帶 null、整份取代不檢查；在 If-Match 之後；沒開通照今天；經分派器只檢查選定帳號 |
 | `tests/test_restore_detection.py` | HM-13a | 計畫（root） | root 擁有的還原樹、標記在 pass 1 前落盤、sentinel 各情況 |
 | `tests/test_restore_lock.py` | HM-13b | 計畫 | 守門 A～F 步、隔離、獨立驗證、DQ-03 兩種模式、UC-24 三情境 |
 | `tests/test_dormant_profiles.py` | HM-13b | 計畫 | 開關關＋帳號資料 → 全撤銷；重新開通未核對前不能重發 |
@@ -122,7 +122,7 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `packaging/test_ha_p9_probe.py` | HM-16 | 既有，擴充 | P9 kit 帳號參數、交叉矩陣 |
 | `packaging/test_validate.py` | HM-17 | 既有，擴充 | 多產品版號運算式 |
 | `packaging/test_release_gate.py` | HM-17 | 既有，擴充 | release_gate 只認產品自己的紀錄 |
-| `tests/test_saved_destinations.py` | HM-20 | 既有，擴充 | 開通後存檔拒 loopback（全部產品，含 n8n；各種寫法）；區網照放；沒開通與替身開關照今天 |
+| `tests/test_saved_destinations.py` | HM-20 | 既有，擴充 | 開通後存檔拒 loopback（全部產品，含 n8n；各種寫法）；區網照放；沒開通與替身開關照今天。HM-12：開通後改到另一個來源的 `backend/patch` 一起帶那條網址的秘密（DQ-40 ⑨） |
 | `tests/test_backend_loopback.py` | HM-20 | 新增 | 開通後子程式環境多 `WOOW_MCP_DENY_LOOPBACK=1`（預設帳號與額外帳號的 port 都有），執行期字面與解析後的 loopback 都拒（每個產品；n8n 的 API 與官方 MCP 端點，含混合答案）；`apps/` 的子程式程式碼不拿掉這個變數（看原始碼）；HM-09 的 exec 包裝器原樣交給額外帳號的子程式（看原始碼；端到端：`run_product` 的 ProfileManager 起真的預設帳號與額外帳號 Odoo 子程式，各自的 loopback 假後端收到 0 個請求）；webhook 維持 permissive；替身開關只在測試 |
 | `packaging/test_container_acceptance.py`、`packaging/test_container_probe.py` | HM-20 | 既有，擴充 | 開通的產品（`MULTI_PROFILE_PRODUCTS`）的容器驗收要照 Headscale 開一次性 internal bridge、假後端綁容器私有位址；今天集合是空的，只驗 Headscale，產品一開通就逼升版 PR 補上 |
 | `tests/test_litellm_multi_profile.py` | HM-21 | 暫定名 | 兩把假 virtual key、bearer 401 矩陣、政策各自 |
