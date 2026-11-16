@@ -907,6 +907,8 @@ async def test_another_profiles_large_replies_leave_the_loop_and_this_profile_th
     assert percentile(latencies, 0.99) <= 2 * D + 0.2, latencies
 
 
+# ---- D1: the worker serializes in pieces (the user's decision of 2026-11-16, D1 (a); contract 6) ----
+
 def mixed_reply(limit=8 * MiB - 4096):
     """C2's "mixed" shape (loop_block_bench.py): records as a JSON text and the same records as structuredContent,
     as many as fit in limit bytes."""
@@ -926,35 +928,232 @@ def mixed_reply(limit=8 * MiB - 4096):
     return raw
 
 
-async def test_a_real_8_mib_reply_stops_the_loop_for_its_longest_c_call_only(store, worker):
-    """A real reply (C2's mixed shape, about 8 MiB; no injected cost): on the loop it stops every profile for its whole
-    processing; on the worker the loop stops only while one C call of it holds the GIL (json.dumps of the whole value
-    is the longest: one call). Measured here, against the processing on the loop: the provenance note gives the
-    numbers of contract 6's 50 ms threshold, which a real reply of this shape does not meet on the EPYC 7713 (HM-30
-    reports it: the user decides on processing in pieces or a subprocess)."""
-    raw = mixed_reply()
-    assert 7 * MiB < len(raw) <= gateway.MAX_RESPONSE
-    value = gateway.strict_json(raw)
-    begun = time.perf_counter()
-    json.dumps(value, separators=(',', ':'))
-    dumps = time.perf_counter() - begun
+REAL_LIMIT = 8 * MiB - 4096  # an 8 MiB reply as a child sends it (UTF-8), within MAX_RESPONSE with an event's framing
+
+
+def filled(build, limit=REAL_LIMIT):
+    """build(n) for the largest n that fits limit, for a build whose size grows by the same bytes with every n."""
+    one, two = len(build(1)), len(build(2))
+    count = (limit - one) // (two - one) + 1
+    raw = build(count)
+    assert len(raw) <= limit < len(build(count + 1)), (len(raw), limit)
+    return raw
+
+
+def nested_tree(depth=100):
+    """A tree as deep as some backends nest records (a level: a few scalars, a short CJK and emoji note, a list of the
+    level below and a small dict)."""
+    tree = {'leaf': True}
+    for level in range(depth):
+        tree = {'level': level, 'name': f'node {level:03d}', 'children': [tree, {f'k{n}': 'v' * 12 for n in range(4)}],
+                'note': '中文說明 \U0001F600'}
+    return tree
+
+
+REAL_SHAPES = {
+    # C2's mixed shape: a long JSON text and many records with lists in them
+    'mixed': mixed_reply,
+    # many small objects (8 MiB of two-member records): json.dumps of the whole value is one C call of 0.1 s or more
+    'small-objects': lambda: filled(lambda n: reply({'structuredContent': {'rows': [{'a': 5, 'b': 'x'}] * n},
+                                                     **text_result('rows')})),
+    # one long string each: Odoo CJK fields, an emoji text (escaped 2 and 3 times as long), plain ASCII
+    'cjk': lambda: filled(lambda n: reply(text_result('中文字' * n))),
+    'emoji': lambda: filled(lambda n: reply(text_result('\U0001F600' * n))),
+    'ascii-string': lambda: filled(lambda n: reply(text_result('a' * n))),
+    # a string of what json escapes: controls (6 bytes each), quotes, backslashes, newlines, tabs
+    'escapes': lambda: filled(lambda n: reply(text_result('\x01"\\\n\t' * n))),
+    # deep trees, one after another
+    'nested': lambda: filled(lambda n: reply({'structuredContent': {'trees': [nested_tree()] * n},
+                                              **text_result('nested')})),
+}
+_REAL = {}
+
+
+def real_reply(shape):
+    if shape not in _REAL:
+        _REAL[shape] = REAL_SHAPES[shape]()
+    return _REAL[shape]
+
+
+# Every code point json escapes in its own way: ASCII, controls, the two it backslashes, DEL, Latin-1, a line
+# separator, BMP CJK, the replacement character, lone surrogates (strict_json keeps them: \ud800), astral ones.
+ALPHABET = 'a Z0"\\/\n\t\r\x00\x1f\x7f\xe9\xff\u2028\u4e2d\ufffd\ud800\udfff\U000103ff\U0001F600\U0010FFFF'
+
+
+def random_json(rng, depth=0):
+    """A random JSON value as strict_json gives one (str keys), with long strings and keys now and then."""
+    choice = rng.random()
+    if depth < 6 and choice < 0.3:
+        return [random_json(rng, depth + 1) for _ in range(rng.randrange(0, 7))]
+    if depth < 6 and choice < 0.55:
+        return {random_text(rng): random_json(rng, depth + 1) for _ in range(rng.randrange(0, 7))}
+    if choice < 0.75:
+        return random_text(rng)
+    return rng.choice([0, -1, 7, 2 ** 63, -(10 ** 40), 10 ** 300, 0.1, -0.0, 1.5e-7, 1e308, 5e-324, 123.456,
+                       True, False, None])
+
+
+def random_text(rng):
+    length = rng.choice([0, 1, 2, 5, 9, 40, 300])
+    return ''.join(rng.choice(ALPHABET) for _ in range(length))
+
+
+def one_shot(value):
+    return json.dumps(value, separators=(',', ':')).encode()
+
+
+@pytest.mark.parametrize(('piece', 'batch'), [(1, 1), (2, 7), (3, 64), (16, 1000)])
+def test_in_pieces_the_bytes_are_json_dumps_own(monkeypatch, piece, batch):
+    """D1: the worker's serialization (reply_worker.encoded) is byte for byte json.dumps(value, separators=(",", ":"))
+    .encode(), the loop's: random values with every kind of code point, number and nesting, and the edge cases, with
+    pieces this small (STRING_PIECE code points, PIECE_BYTES bytes) that every value is split at every place it can
+    be."""
+    module = worker_module()
+    monkeypatch.setattr(module, 'STRING_PIECE', piece)
+    monkeypatch.setattr(module, 'PIECE_BYTES', batch)
+    import random
+    rng = random.Random(30 + piece)
+    values = [random_json(rng) for _ in range(300)]
+    values += ['', [], {}, [[]], {'': {}}, 'x' * 50, ['x' * 50, 'y'], {'k' * 50: 'v' * 50, 'z': ['w' * 50]},
+               ALPHABET * 3, [ALPHABET] * 3, {ALPHABET: ALPHABET}, list(range(200)), {str(n): n for n in range(200)},
+               [[[[[ALPHABET]]]]], 10 ** 4000, [10 ** 4000, -(10 ** 4000)],
+               # what json.dumps converts itself: kept as it does (keys that are not strings, tuples, non-finite)
+               {1: 'one', True: 'yes', None: 'none', 1.5: 'half'}, (1, 'two', (3,)), [float('nan'), float('inf')]]
+    for value in values:
+        assert module.encoded(value) == one_shot(value), value
+
+
+def test_long_strings_and_large_values_go_out_between_checkpoints(monkeypatch):
+    """D1: a long string goes out STRING_PIECE code points at a time and a large list or dict in runs of members of at
+    most PIECE_BYTES (counted as the most they can encode to), the checkpoint called between them: one C call never
+    encodes a whole large value. A small value is one call."""
+    module = worker_module()
+    calls = []
+    real = module._encode
+
+    def recorded(value):
+        text = real(value)
+        calls.append(len(text))
+        return text
+    monkeypatch.setattr(module, '_encode', recorded)
+    checkpoints = []
+    text = '\U0001F600' * (3 * module.STRING_PIECE + 5)  # each code point 12 bytes once escaped
+    assert module.encoded(text, lambda: checkpoints.append(1)) == one_shot(text)
+    assert len(calls) == 4 and max(calls) <= 12 * module.STRING_PIECE + 2 and len(checkpoints) == 4
+    calls.clear(), checkpoints.clear()
+    rows = [{'id': n, 'name': f'Partner {n}', 'tags': [1, 2]} for n in range(20_000)]  # about 0.8 MiB once encoded
+    assert module.encoded({'rows': rows}, lambda: checkpoints.append(1)) == one_shot({'rows': rows})
+    assert len(calls) >= len(one_shot(rows)) // module.PIECE_BYTES and max(calls) <= module.PIECE_BYTES
+    assert len(checkpoints) >= len(calls) - 1
+    calls.clear(), checkpoints.clear()
+    assert module.encoded({'small': [1, 2]}, lambda: checkpoints.append(1)) == b'{"small":[1,2]}'
+    assert len(calls) == 1  # one C call (the checkpoints are the costing pass's, one a container)
+
+
+async def served_at_once(store, child, *, lane=None, sse=False, piece=64 * 1024):
+    """One tools/call answered by make_apps, as relayed() asks it, but straight through ASGI and with the child's bytes
+    in pieces of `piece`, the loop running between them (a socket's way; an in-process child handing the gateway 8 MiB
+    at one instant would make the loop copy it all in one go, which no network does), and the answer's pieces only
+    kept (an in-process HTTP client would join them on the loop: its work, not the gateway's). (status, the headers
+    as make_apps sends them, the body's pieces)."""
+    async def pieces():
+        for start in range(0, len(child), piece):
+            yield child[start:start + piece]
+            await asyncio.sleep(0)
+
+    def answer(request):
+        return httpx.Response(200, headers={'content-type': 'text/event-stream' if sse else 'application/json'},
+                              content=pieces())
+    options = {'reply_secrets': lambda: set(SECRETS)}
+    if lane is not None:
+        options['reply_worker'] = lane
+    body = json.dumps({'jsonrpc': '2.0', 'id': 7, 'method': 'tools/call',
+                       'params': {'name': list(N8N_TOOLS)[0], 'arguments': {}}}).encode()
+    headers = {**bearer(store.load().token), 'Mcp-Session-Id': 's'}
+    async with httpx.AsyncClient(transport=httpx.MockTransport(answer)) as client:
+        _, app = make_apps(store, N8N_TOOLS, client, **options)
+        task, taken = asgi_request(app, headers, body)
+        await asyncio.wait_for(task, 120)
+    start = next(message for message in taken if message['type'] == 'http.response.start')
+    return start['status'], sorted(start['headers']), [message.get('body', b'') for message in taken
+                                                       if message['type'] == 'http.response.body']
+
+
+@pytest.mark.parametrize(('shape', 'sse'), [(shape, False) for shape in REAL_SHAPES] + [('mixed', True),
+                                                                                        ('emoji', True)])
+async def test_a_real_8_mib_reply_is_the_loops_bytes_and_stops_the_loop_briefly(store, worker, shape, sse):
+    """D1 (contract 6: the loop's single stop at most 50 ms; no injected cost): a real reply of about 8 MiB in each
+    shape, as JSON and two as an event: on the loop it stops every profile for its whole processing; on the worker,
+    which serializes in pieces (long strings too) and holds the cyclic collector off while it processes a job, the loop
+    stops at most for one short C call (what is left: json.loads scanning one long string, the final join). The answer
+    is byte for byte the loop's. The lag's distribution and the request's time are printed (the provenance note)."""
+    raw = real_reply(shape)
+    child = b'data: ' + raw + b'\n\n' if sse else raw
+    assert 7 * MiB < len(child) <= gateway.MAX_RESPONSE
 
     async def measured(lane):
-        gc.collect()  # the test process's own full collection is not due during the measurement (reply_load.starved)
+        gc.collect()  # a full collection of the test process's own objects is not due during the measurement
         lag = LoopLag(0.002).start()
         begun = time.perf_counter()
-        answer = await relayed(store, raw, lane=lane)
+        status, headers, pieces = await served_at_once(store, child, lane=lane, sse=sse)
         total = time.perf_counter() - begun
         await lag.stop()
-        return answer, total, lag.worst
-    inline, inline_total, inline_worst = await measured(None)
-    answer, total, worst = await measured(worker.lane('a'))
-    assert answer == inline and inline[0] == 200
-    print(f'HM-30 real 8 MiB reply ({len(raw) / MiB:.2f} MiB): on the loop worst stop {inline_worst * 1000:.0f} ms '
-          f'(request {inline_total * 1000:.0f} ms); on the worker worst stop {worst * 1000:.1f} ms (request '
-          f'{total * 1000:.0f} ms); one json.dumps of it {dumps * 1000:.1f} ms; contract 6 threshold '
-          f'{STALL_LIMIT * 1000:.0f} ms')
-    assert worst < inline_worst / 2
+        return (status, headers, b''.join(pieces)), total, lag
+    inline, inline_total, inline_lag = await measured(None)
+    answer, total, lag = await measured(worker.lane('a'))
+    assert inline[0] == 200 and answer == inline
+    print(f'HM-30 D1 real reply {shape}{" (event)" if sse else ""} ({len(raw) / MiB:.2f} MiB, '
+          f'{len(inline[2]) / MiB:.2f} MiB out): on the loop worst stop {inline_lag.worst * 1000:.0f} ms (request '
+          f'{inline_total * 1000:.0f} ms); on the worker {lag.distribution()}, request {total * 1000:.0f} ms; '
+          f'threshold {STALL_LIMIT * 1000:.0f} ms')
+    assert lag.worst <= STALL_LIMIT, lag.distribution()
+
+
+async def test_a_job_runs_with_the_cyclic_collector_held_off(worker, store, monkeypatch):
+    """D1: while the worker processes a job the cyclic collector does not run (a full collection walks every object of
+    the add-on, the reply's own among them: one stop of the loop of 50 to 75 ms measured on an add-on's heap); it is on
+    again once the job ended, however it ended, and stays off when it was off before. The loop's own processing (a
+    product not switched on) never touches it."""
+    collected = []
+    inside = threading.Event()
+
+    def note(phase, info):
+        if phase == 'start' and inside.is_set():
+            collected.append(info['generation'])
+    tracked = 3 * gc.get_threshold()[0]
+
+    def job(fail=False):
+        inside.set()
+        try:
+            enabled = gc.isenabled()
+            junk = [[n] for n in range(tracked)]  # tracked objects enough for several collections
+            if fail:
+                raise ValueError('a failed job')
+            return enabled, len(junk)
+        finally:
+            inside.clear()
+    gc.callbacks.append(note)
+    try:
+        assert gc.isenabled()
+        assert await worker.run('a', job) == (False, tracked)
+        assert collected == [] and gc.isenabled()
+        with pytest.raises(ValueError):
+            await worker.run('a', job, True)
+        assert collected == [] and gc.isenabled()
+        gc.disable()
+        try:
+            assert await worker.run('a', job) == (False, tracked)
+            assert not gc.isenabled()
+        finally:
+            gc.enable()
+        seen = []
+        real = gateway.strict_json
+        monkeypatch.setattr(gateway, 'strict_json', lambda raw, **options: seen.append(gc.isenabled()) or real(
+            raw, **options))
+        assert (await relayed(store, reply(text_result('on the loop'))))[0] == 200
+        assert seen and all(seen)  # the request's body and the reply, both parsed on the loop with it on
+    finally:
+        gc.callbacks.remove(note)
 
 
 # ---- each profile's answers not received yet (contract 2.4, 5, 6) ----

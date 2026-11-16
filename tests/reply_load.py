@@ -137,10 +137,12 @@ class LargeChild(ProfileChild):
 
 
 class LoopLag:
-    """The event loop's lateness, sampled every `step` seconds while it runs: worst is its longest stop seen."""
+    """The event loop's lateness, sampled every `step` seconds while it runs: worst is its longest stop seen; lags every
+    sample (HM-30 D1: the distribution the tests print, distribution())."""
 
     def __init__(self, step=0.005):
         self.step, self.worst, self.samples = step, 0.0, 0
+        self.lags = []
         self._task = None
 
     async def _run(self):
@@ -148,8 +150,17 @@ class LoopLag:
         while True:
             before = loop.time()
             await asyncio.sleep(self.step)
-            self.worst = max(self.worst, loop.time() - before - self.step)
+            lag = loop.time() - before - self.step
+            self.worst = max(self.worst, lag)
             self.samples += 1
+            self.lags.append(lag)
+
+    def distribution(self):
+        """p50, p90, p99 and the worst of the samples, in ms (text for a test's print)."""
+        if not self.lags:
+            return 'no samples'
+        return (f'p50 {percentile(self.lags, 0.5) * 1000:.2f} p90 {percentile(self.lags, 0.9) * 1000:.2f} '
+                f'p99 {percentile(self.lags, 0.99) * 1000:.2f} max {self.worst * 1000:.2f} ms ({self.samples} samples)')
 
     def start(self):
         self._task = asyncio.create_task(self._run())
