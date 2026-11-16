@@ -76,7 +76,7 @@ manifest `backup: cold`：HA 會停止**這個新 Add-on**來取得一致狀態�
 | 項目 | 行為 |
 |---|---|
 | 觸發條件 | 既有 `/data/mcp` 本身屬 root（0:0），且 bootstrap 以 root 執行；其他擁有者照舊拒絕 |
-| 還原標記（多帳號 HM-13a 起） | 觸發條件成立時，第一遍檢查之前先建空檔 `/data/mcp/.restore-detected`（0600）並寫入磁碟；已存在、而且是單一連結的一般檔就保留原樣。修復時它和其他項目一起改成 10001／0600。之後的版本會讀它、處理完再刪；在那之前它會一直留著，之後的備份也會帶著它 |
+| 還原標記（多帳號 HM-13a 起） | 觸發條件成立時，第一遍檢查之前先建空檔 `/data/mcp/.restore-detected`（0600）並寫入磁碟；已存在、而且是單一連結的一般檔就保留原樣。修復時它和其他項目一起改成 10001／0600。多帳號 HM-13b 起，管理程序開機時在任何子程式與 listener 之前讀它（開機守門）：產品沒開通、也沒有帳號資料時，log 一行 `restore guard: the data was restored from a backup; the MCP token is back to its value at the time of that backup (nothing was revoked: no profile data). Rotate it in the panel if it may have leaked since` 後刪除，不改任何 state（還原後請在面板輪替 token，同下面的說明）；有帳號資料或產品已開通時跑完整守門（撤銷 token、隔離讀不到的帳號、驗證）後才刪，沒做完就不啟動、下次開機重做（多帳號契約 `docs/multi-profile/contract.md` 第 1.3 節） |
 | 建不出標記 | log 一行，括號裡是原因：errno 名稱（例如 `ENOSPC`、`EROFS`、`EIO`），或 `name in use`（名稱被目錄、連結或有第二個連結的檔占用），不含檔案內容或秘密。`/data/mcp` 有帳號資料（`profiles.json` 或 `profiles`）時印 `bootstrap: /data/mcp was restored with profile data but its restore marker (.restore-detected) could not be saved (<原因>); not starting (retried at the next start)`，接著 `bootstrap unavailable; ...`，不改任何項目，下次啟動重試。沒有帳號資料時印 `bootstrap: WARNING: /data/mcp was restored but its restore marker (.restore-detected) could not be saved (<原因>); starting (no profile data)`，照常修復；名稱被連結或有第二個連結的檔占用時，第一遍檢查接著照「拒絕」列拒絕 |
 | 接受的內容 | 只有一般資料夾與單一連結的一般檔，擁有者為 root 或 10001，與 `/data/mcp` 在同一檔案系統 |
 | 上限 | 最多 512 個項目、8 層；列目錄時邊讀邊數，超過立即拒絕。多帳號 HM-13a 起，512 項包含還原標記（新建標記時，還原樹本身最多 511 項） |
