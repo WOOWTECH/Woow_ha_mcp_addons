@@ -2,13 +2,19 @@
 
 ## 結論
 
+- **rebase 到 `claude-delivery` `f4c7718`（2026-11-16 21:4x；第 18 節）。** 22 個 commit 照原順序重放；衝突在 5 個 commit、6 個檔，兩邊的行為都留
+  （HM-31 的 `body_budget` 和本片的 `dormant_profiles` 在 `make_apps`、`ProfileRuntime` 並存）。契約第 9 節本片的列改成 #113～#116，引用一起改。
+  帳本照 rebase 後的實際內容重算，每個重放的 commit 都 0 漂移。本機子集另外抓到 HM-31 一案釘住 `make_apps` 的參數順序，改測試（`ebcb771`）。
+  rebase 後本機：pytest 子集 900 案 895 過（5 個要 root 的失敗）、全套 6,090 案 6,083 過（7 個要 root 的既有案例失敗，0 skip）；
+  packaging `Ran 205`、`validate.py` PASS、`tool_inventory.py` exit 0。兩個預檢 OK、雙向控制字元 0 個。
 - **獨立安全審查（`artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-13b.md`）：修正後通過；本輪處理完（第 17 節）。**
   - MF-1：新測試的固定時鐘寫死 2026-11-16T09:30:15Z，今天 09:30Z 以後 CI 一定紅。改成每案取「現在的下一個整秒」（`aa8ef57`，只改測試）。
   - MF-2：`profiles/` 一時列不出來（EMFILE、EIO、ENOMEM、權限）時，守門與全部撤銷都當成「沒有額外帳號」（fail open）。改成停下：
     標記留著、什麼都不服務、下次開機重做；全部撤銷照樣撤銷呼叫端拿著的 store、`finished=false`（`f3b8fa1`）。只有 `profiles` 確定不是
     目錄才照 #114 照常啟動。
   - 建議 8 項：S-1、S-2、S-5、S-6、S-7、S-8 採用；S-3 部分採用（開通的候選映像要有還原檔；stderr 兩行交 HM-16）；S-4 寫進文件、
-    分辨暫時性錯誤交 HM-18／HM-13c。Q-1（沒開通的產品只有 log 提示）請主對話確認，本片沒有改。
+    分辨暫時性錯誤交 HM-18／HM-13c。Q-1（沒開通的產品只有 log 提示）：使用者 2026-11-16 定案照 DQ-03 (b) 原文，
+    單帳號還原後也要有面板提示，交 HM-13c 做，本片不改（第 18.12 節）。
   - 這一輪在 19:4x 也因額度中斷過一次（修正的 5 個 commit 已在，全套跑到約 80% 就斷）。20:3x 接續：核對 commit 與草稿、刪掉留下的
     `/tmp/ha-mp-*`、全套重跑、威脅模型 I9／I13 的測試欄補上審查的新案（`27eeb16`）、預檢重跑（第 17 節）。
 - **新模組 `restore_lock.py`：開機守門。** `run_product` 與 `apps/n8n/run.py` 每次開機在 legacy 遷移與預設帳號的 store 之後、任何子程式與
@@ -46,7 +52,8 @@
   只有 7 個要 root 的既有案例失敗；packaging unittest `Ran 205`、`OK (skipped=5)`；`validate.py` PASS；`scripts/tool_inventory.py` 通過。
   已知會偶發逾時的 `test_backend_loopback` 那案：0 次（這次全套 4.5 秒通過）。
 - 兩個預檢（最終 HEAD、基準 `684a2dd`）：秘密預檢 0 命中；帳本預檢 OK（第 8 節）。
-- 這條線只 commit，不 push、不開 PR。獨立安全審查做過了（第 17 節）；合併前還要 HM-03a 的結果（第 11 節，DQ-39 (a)）。
+- rebase 後由這條線 push、開 PR，不合併。獨立安全審查做過了（第 17 節）；合併前還要 HM-03a 的結果（第 11 節，DQ-39 (a)），
+  HM-03a 也要量守門沒做完時 Supervisor 會不會用 Watchdog 自動再起。
 
 ## 1. 範圍與基準
 
@@ -54,8 +61,8 @@
 |---|---|
 | 切片 | HM-13b（計畫 §8.4「開機守門」、休眠處理、全部撤銷；§10.3；§12.3；風險高、工作量 L） |
 | 分支 | `feat/ha-multiprofile-hm13b-20261116`（一般 clone，不是 worktree） |
-| HA 基準 | `684a2dd`：HM-10 的 PR #104 head（`claude-delivery` `7c6f80c` 加 HM-10 的 18 個 commit）。HM-10 先合併；之後由主對話 rebase 到 `claude-delivery`。2026-11-16 19:0x 查（只 fetch `claude-delivery`）：已是 `df686dd`（合了 #104 HM-10、#105 HM-31、#106 HM-09 監看 cancel 修正）；`git merge-tree` 預估 rebase 時要解 6 個檔：`contract.md`、`ledger-tracking.md`、`threat-model.md`、`runtime-patches.json`、`gateway.py`、`profile_runtime.py`。20:4x 再查：已是 `f4c7718`（再合了 #107 HM-11），要解的仍是這 6 個檔 |
-| 本片 commit | 22 個：接續前 7 個（`3c90b6c`～`0028169`）；接續後 8 個（`cc5adb0`、`9c29b4f`、`360836e`、`5b596cd`、`7d237f6`、本筆記 `1f8c29f`、`96c4d3b`、`551d210`；第 16 節）；審查修正 7 個（`aa8ef57`、`77394fc`、`f3b8fa1`、`895119b`、`89a7e02`、`27eeb16`，以及記錄審查處理的這個筆記 commit；第 17 節） |
+| HA 基準 | **rebase 後：`claude-delivery` `f4c7718`**（2026-11-16 21:4x；第 18 節）。rebase 前：`684a2dd`：HM-10 的 PR #104 head（`claude-delivery` `7c6f80c` 加 HM-10 的 18 個 commit）。HM-10 先合併；之後由主對話 rebase 到 `claude-delivery`。2026-11-16 19:0x 查（只 fetch `claude-delivery`）：已是 `df686dd`（合了 #104 HM-10、#105 HM-31、#106 HM-09 監看 cancel 修正）；`git merge-tree` 預估 rebase 時要解 6 個檔：`contract.md`、`ledger-tracking.md`、`threat-model.md`、`runtime-patches.json`、`gateway.py`、`profile_runtime.py`。20:4x 再查：已是 `f4c7718`（再合了 #107 HM-11），要解的仍是這 6 個檔 |
+| 本片 commit | 22 個：接續前 7 個（`3c90b6c`～`0028169`）；接續後 8 個（`cc5adb0`、`9c29b4f`、`360836e`、`5b596cd`、`7d237f6`、本筆記 `1f8c29f`、`96c4d3b`、`551d210`；第 16 節）；審查修正 7 個（`aa8ef57`、`77394fc`、`f3b8fa1`、`895119b`、`89a7e02`、`27eeb16`，以及記錄審查處理的這個筆記 commit；第 17 節）。rebase 後：這 22 個重放（新的 commit 編號見第 18.11 節），再加 4 個（`7a85928` 改列號、`ebcb771` HM-31 測試的參數順序、`df63d79` 筆記改列號、本筆記第 18 節），共 26 個 |
 | 依據 | 計畫 §3.3、§4.1、§8.4、§8.8、§8.10、§10.3、§12.3 HM-13a／b／c；契約 §1.2、§3.5、§3.6、§4.1、§7、§8、§9；`threat-model.md`；HM-13a 的筆記與審查（`wave1/review-HM-13a.md`）；FM-04、07、13、16、78、79、80、118、119、120 |
 | PaaS | 沒有搬程式。對照 `Pc/restore_guard.py`（`prepare`、`_write_config`、`_write_journal`、`_archive_journal`、`_read_journal_floor`）、`Pc/restore_inplace.py`（`_verify`）、`Pc/restore_marker.py`（任何項目都算存在）；pin `69ac425`，到 `d7f5849` 這幾檔沒變（第 9 節） |
 | 決策 | DQ-03 (b)、DQ-39 (a)、DQ-13、DQ-14、DQ-21、DQ-40 (a)（第 10 節）；沒有碰到待定題 |
@@ -291,6 +298,8 @@ sentinel、record、record 暫存檔、還原標記、全部撤銷標記的名�
 
 ## 5. 本機檢查（2026-11-16，一般使用者 uid 1000；TMPDIR 用 `ha_env.sh` 給的 `/tmp/ha-mp-XXXXXX`，每次跑完用完整路徑刪除）
 
+本節是 rebase 前的結果；rebase 到 `claude-delivery` `f4c7718` 之後重跑的在第 18.7 節。
+
 開發中的反覆執行用 `--noconftest` 加一個裝同樣網路與子程序守門、只是不拿全機測試鎖的外掛（同 HM-13a 的做法；只跑不開固定 port、不起真子程式
 的檔）。全套用正式的 `tests/conftest.py`，排在 wave1 鎖後面。
 
@@ -327,6 +336,8 @@ sentinel、record、record 暫存檔、還原標記、全部撤銷標記的名�
 開 PR 後補（前、後兩個 run 的 `checks` 秒數）。
 
 ## 8. 預檢結果
+
+本節是 rebase 前的結果；rebase 後（base `origin/claude-delivery`）的在第 18.8 節。
 
 在本筆記的 commit 之後、以最終的 HEAD 跑（基準 `684a2dd`）：
 
@@ -413,6 +424,8 @@ HM-03a 的結果出來後，寫回本筆記這一節（或 HM-13a 的筆記第 1
 ## 13. 交給後面的片
 
 - **HM-13c**：
+  - 審查 Q-1 的使用者定案（2026-11-16）：照 DQ-03 (b) 原文，沒開通的單帳號安裝還原後也要有面板提示，由 HM-13c 做（第 18.12 節；
+    計畫 §12.3 HM-13c 已加註）。本片的守門在這種情況只記一行 WARNING、刪標記、不寫紀錄；HM-13c 要接在守門上另留一筆提示紀錄。
   - 本輪看到、審查沒提（沒改，請 HM-13c 定）：備份時某個帳號還沒有自己的收據檔（從沒輪替、撤銷或重啟過），備份後才做的操作 id 隨還原消失，
     守門照契約 §3.5「兩個都沒有就不寫」不寫新收據檔，之後重送那個 id 會被當成新操作、不是 410。核對關卡（`restore_review_required`）在核對前
     擋住重發；要不要對範圍 S 的每個帳號都寫新收據檔（同 PaaS「每份設定都換新收據檔」），和核對流程一起定。
@@ -448,10 +461,10 @@ HM-03a 的結果出來後，寫回本筆記這一節（或 HM-13a 的筆記第 1
 
 | 條件 | 狀態 |
 |---|---|
-| §10.3 的守門測試全綠 | 本機（審查修正後）：新 3 檔 97 案全過；全套 5,885 案只剩 7 個要 root 的既有案例（第 5 節）；CI（root、0 skip）待 PR。§10.3 的每一項都有測試：全部撤銷、child token 重產、舊收據 410、孤兒撤銷、讀不到的 state 改名隔離且之後任何開機都不被路由、改名失敗保留標記、獨立驗證不過保留標記且不開 listener、DQ-03 兩種模式、開關關＋帳號資料＋標記全撤銷才刪標記、C1-M1 攻擊序、UC-24 三情境、全部撤銷第 k 個失敗、sentinel 不被任何 chmod／chown 碰到；另有每一步中途中斷、標記寫一半、磁碟滿 |
+| §10.3 的守門測試全綠 | 本機（rebase 後，第 18.7 節）：新 3 檔 97 案全過；子集 900 案只剩 5 個要 root 的 `test_root_*`；全套 6,090 案、0 skip，只剩 7 個要 root 的既有案例（rebase 前：新 3 檔 97 案全過；全套 5,885 案只剩 7 個要 root 的既有案例，第 5 節）；CI（root、0 skip）待 PR。§10.3 的每一項都有測試：全部撤銷、child token 重產、舊收據 410、孤兒撤銷、讀不到的 state 改名隔離且之後任何開機都不被路由、改名失敗保留標記、獨立驗證不過保留標記且不開 listener、DQ-03 兩種模式、開關關＋帳號資料＋標記全撤銷才刪標記、C1-M1 攻擊序、UC-24 三情境、全部撤銷第 k 個失敗、sentinel 不被任何 chmod／chown 碰到；另有每一步中途中斷、標記寫一半、磁碟滿 |
 | sentinel 不被任何 chmod／chown 碰到 | 通過（第 3.9 節） |
 | HM-03a 的 UC-08 與 sentinel 結果寫進 provenance | **待 HM-03a**（第 11 節）；合併前要補，不可靠就照 DQ-39 (a) |
-| 獨立安全審查 | 做了：判定「修正後通過」；2 必修修好、建議逐項處理（第 17 節）；Q-1 待主對話確認 |
+| 獨立安全審查 | 做了：判定「修正後通過」；2 必修修好、建議逐項處理（第 17 節）；Q-1 使用者已定案，交 HM-13c（第 18.12 節） |
 | 單帳號（開關關、沒有帳號資料）逐位元不變 | 通過：沒有還原時連 ctime 都不變（9 個產品，審查 S-8 加了 Odoo Manage）；有還原時只刪標記、一行 log；HM-01 黃金回歸與兩個契約凍結照過 |
 | 同 PR 更新帳本；契約「待定」同步；第 9 節與變更紀錄 | 通過（第 2 節；契約 #113～#116 接在 #112 後面（rebase 前是 #101～#104，接在 #100 後面），第 10 節三列） |
 | 測試資料規則（計畫 §12.0 第 4 點） | 通過：token 都在執行時產生；憑證 `DUMMY-…`、網址 `.invalid`；秘密預檢 0 命中 |
@@ -499,7 +512,7 @@ HM-03a 的結果出來後，寫回本筆記這一節（或 HM-13a 的筆記第 1
 | S-6 | 契約、威脅模型與筆記的小落差 | 採用：#67 補 24 小時上限（PaaS 沒有上限）；第 3.5 節「時鐘慢」限 24 小時；`threat-model.md` 補「慢超過 24 小時」；第 3.8 節改成「下次啟動（使用者、主機重開或 Watchdog）」並加進第 11 節；`update-backup-rollback.md` 那列改字；第 9 節補 `7087280` | `89a7e02`、本 commit | PaaS 唯讀查：`git -C <paas> show 69ac425:…/restore_guard.py`、`log d7f5849..origin/main` |
 | S-7 | `96c4d3b` 之後沒重跑全套 | 採用：修正後重跑全套（第 5 節） | — | `89a7e02`：5,885 案、0 skip，只有 7 個要 root 的既有案例失敗 |
 | S-8 | 單帳號「什麼都不變」的測試沒涵蓋 Odoo Manage | 採用：兩案參數改成 9 個產品（`EVERY_PRODUCT`） | `77394fc` | 多 2 案 |
-| Q-1 | DQ-03 (b) 的「面板提示」對沒開通的單帳號安裝 | 不是本片能定：照計畫 §3.3、§8.4 沒開通又沒有帳號資料時只 log 一行、刪標記、不寫紀錄，所以今天的安裝還原後只有 log。要面板也提示，得留一個不含秘密的通知來源（會動到「逐位元不變」的範圍）。請主對話確認「沒開通的產品只有 log」可以接受，或在 HM-13c 前另定。建議：沒開通只有 log（今天的面板逐位元不變）；開通的產品由 HM-13c 依還原紀錄（預設帳號那列 `token: kept`）在面板提示 | — | — |
+| Q-1 | DQ-03 (b) 的「面板提示」對沒開通的單帳號安裝 | 不是本片能定：照計畫 §3.3、§8.4 沒開通又沒有帳號資料時只 log 一行、刪標記、不寫紀錄，所以今天的安裝還原後只有 log。要面板也提示，得留一個不含秘密的通知來源（會動到「逐位元不變」的範圍）。請主對話確認「沒開通的產品只有 log」可以接受，或在 HM-13c 前另定。建議：沒開通只有 log（今天的面板逐位元不變）；開通的產品由 HM-13c 依還原紀錄（預設帳號那列 `token: kept`）在面板提示。**2026-11-16 使用者定案**：照 DQ-03 (b) 原文，單帳號還原後也要有面板提示，交 HM-13c 做，本片不改（第 18.12 節） | — | — |
 
 本輪沒有新決策，也沒有碰到待定題。
 
@@ -516,7 +529,7 @@ HM-03a 的結果出來後，寫回本筆記這一節（或 HM-13a 的筆記第 1
 - `tool_inventory.py`、packaging、兩個預檢在新的 HEAD 重跑（第 5、8 節）。
 - 再 fetch 一次 `claude-delivery`（只動 `origin/claude-delivery`）：`f4c7718`，多合了 #107 HM-11，它用掉契約第 9 節 #109～#112。
 
-rebase 到 `claude-delivery` 時的提醒（主對話做；本線沒有 rebase）：
+rebase 到 `claude-delivery` 時的提醒（寫在 rebase 之前；已照做，見第 18 節）：
 
 - HM-31（#105）用掉契約第 9 節 #101～#108，HM-11（#107）用掉 #109～#112（20:4x 查）。本片的 #101～#104 要接在當時最後一列後面
   （照 20:4x 是 #113～#116），引用一起改：契約（第 1.3、3.5、3.6、9、10 節）、`acceptance-matrix.md` T-21、`threat-model.md` 第 3 節、
@@ -524,3 +537,220 @@ rebase 到 `claude-delivery` 時的提醒（主對話做；本線沒有 rebase�
   （4 處）、`tests/test_revoke_all.py`（1 處 #103）。本片加的每一處都在 `git diff 684a2dd..HEAD` 的新增行裡（`grep '#10[1-4]'`）；
   `claude-delivery` 本來就有的 #101～#104 是 HM-31 的，不要改。改了 `restore_lock.py` 就要重算它的 SHA-256。
 - `git merge-tree` 預估要解的 6 個檔見第 1 節；HM-09 監看 cancel 的修正（#106）合進去之後，已知的 `test_backend_loopback` 逾時應該不再出現。
+
+## 18. rebase 到 claude-delivery（2026-11-16）
+
+第 1～17 節照 rebase 前寫，裡面的 commit 編號是 rebase 前的（對照在第 18.11 節）；契約列號已照 rebase 後的改（第 18.4 節）。
+證據在 `artifacts/ha-multiprofile-parity-20261114/wave4/evidence-rebase-HM-13b/`（`tools/` 是用到的腳本，副檔名多加 `.txt`；`logs/` 是 log；
+`conflicts/` 是 5 個衝突 commit 解衝突前的檔，含衝突標記）。
+
+### 18.0 結論
+
+- 基準換成 `claude-delivery` `f4c7718`（HM-10 的 PR #104、HM-31 的 PR #105、HM-09 追補的 PR #106、HM-11 的 PR #107 合併後）。
+  22 個 commit 照原順序重放。衝突在 5 個 commit、6 個檔（契約、`ledger-tracking.md`、`threat-model.md`、帳本、`gateway.py`、
+  `profile_runtime.py`），兩邊的行為都留。
+- 程式的衝突只有一種：HM-31 加 `body_budget` 的地方，就是本片加 `dormant_profiles` 的地方（`make_apps` 與 `ProfileRuntime`）。
+  兩個參數都留，各自的檢查與說明都在。其他 17 個 commit 的 patch 和 rebase 前逐行相同。
+- 本機子集另外抓到一個語意衝突（不是文字衝突）：HM-31 的測試釘住 `make_apps` 參數的最後四個，本片的 `dormant_profiles` 接在後面就不對了。
+  改成釘住最後五個、並確認 `dormant_profiles` 也是 keyword-only、預設 None（`ebcb771`，只改測試；第 18.2 節）。
+- 契約第 9 節本片的四列從 #101～#104 改成 #113～#116（HM-31 用掉 #101～#108、HM-11 用掉 #109～#112）。所有引用一起改，
+  第 10 節加一列（`7a85928`）。本筆記的引用另一個 commit 改（`df63d79`）。
+- 帳本 64 列：55 列和新基準逐欄相同；本片碰過的 9 列，說明是新基準的文字接本片的、SHA-256 照 rebase 後的檔重算。
+  重放的 22 個 commit 每個都 0 漂移。
+- 本機：pytest 子集（任務列的各檔與 HM-01 守門，共 22 檔）900 案 895 過，只有 5 個要 root 的 `test_root_*` 失敗；
+  全套 6,090 案、0 skip，6,083 過，只有 7 個要 root 的既有案例失敗（33 分 38 秒）。子集第一次另外抓到 HM-31 一案的參數順序
+  斷言（語意衝突），改測試後重跑（`ebcb771`，第 18.2 節）。packaging unittest `Ran 205`、`OK (skipped=5)`；`validate.py` PASS；
+  `tool_inventory.py` exit 0。
+- 兩個預檢 OK（base 是 `origin/claude-delivery`）；`origin/claude-delivery..HEAD` 每個 commit 都沒有原始雙向控制字元。
+- 使用者 2026-11-16 對審查 Q-1 的定案寫進第 18.12 節：照 DQ-03 (b) 原文，單帳號還原後也要有面板提示，交 HM-13c 做，本片不改。
+
+### 18.1 範圍
+
+- `git fetch origin`（21:4x）：`origin/claude-delivery`＝`f4c7718`。先開本機備份分支 `backup/hm13b-before-rebase-20261116`（指向 `37cb6f4`，不 push）。
+- `git log --oneline 684a2dd..37cb6f4` 是 22 個。#104 用 merge commit 合併（`d00a338`，第二個 parent 是 `684a2dd`，兩者的樹相同），
+  所以直接 `git rebase origin/claude-delivery`，只重放這 22 個。
+- 新基準帶進來的（`684a2dd..f4c7718`，69 個 commit，含 5 個合併 commit）：HM-10 的合併 `d00a338`、HM-31（PR #105）、
+  HM-09 監看修正（PR #106）、HM-11（PR #107），共改 43 個檔。
+- 和本片重疊的 8 個檔：契約、`acceptance-matrix.md`、`ledger-tracking.md`、`threat-model.md`、帳本、`gateway.py`、`profile_runtime.py`、
+  `profiles.py`。`acceptance-matrix.md` 與 `profiles.py`（HM-31 只改註解）git 自動合併，其餘 6 個有衝突。
+- 依賴：`684a2dd..f4c7718` 沒有動 `uv.lock`、`package-lock.json`、`package.json`、`pyproject.toml`、`requirements*`、`packaging/inputs.json`、
+  patch 檔與 Dockerfile，沒有重跑 `setup_repo_env.sh`。面板原始碼有變（HM-11），照 CI 先 `npm run build` 再 `node tests/build-closure.mjs`
+  （PASS；`dist/` 是忽略的檔，`git status` 仍乾淨）。
+
+### 18.2 衝突與處理
+
+解衝突用 repo 外的腳本：`blocks.py`（逐塊先斷言兩邊的內容，再組合）、`resolve_e91fc6f.py`、`resolve_6d30ef1.py`、`resolve_threat_header.py`
+（各 commit 的規則）、`merge_ledger.py`（帳本不解文字，照 JSON 重組）。原則：新基準那一側照原文、放在前面；本片的行接在後面、照原文
+（列號在 rebase 之後一起改，第 18.4 節）。兩邊改同一列時，各留自己改的部分，先確認另一邊那一列還是原 parent 的樣子。
+
+| rebase 後（原本） | 衝突 | 處理 |
+|---|---|---|
+| `9c92cbd`（`e91fc6f`） | `gateway.py` 3 塊、`profile_runtime.py` 4 塊、帳本 3 列 | `make_apps` 的參數：`body_budget`（HM-31）在前、`dormant_profiles` 在後。docstring：HM-31 那段在前，空一行接本片那段（三引號移到本片那段結尾）。參數檢查：HM-31 的 `invalid request budget` 在前、本片的 `invalid dormant profiles` 在後。bootstrap 多 `dormant_profiles` 那行由 git 自動合併。`profile_runtime.py`：模組說明 HM-31 段在前、空一行接本片段；`RUNTIME_OPTIONS` 兩個名稱都加；`__init__` 兩個關鍵字都收（超過一行就換行）；`gateway_options` 兩個都轉給 `make_apps`。帳本：`merge_ledger.py` 重組（第 18.5 節） |
+| `3106367`（`6d30ef1`） | 契約 6 塊、`ledger-tracking.md` 1 塊、`threat-model.md` 2 塊 | 契約：第 1.2 節尾 HM-31 與 HM-09 追補的兩段在前，空一行接本片的第 1.3 節；第 7 節「啟動順序」列用本片的、「關閉」列用 HM-09 追補的；第 9 節說明段 HM-31、HM-11 兩行在前、本片一行在後；#81 用 HM-31 審查改的、#82 用本片加附註的；表尾 #101～#112 在前、本片四列在後；第 10 節新基準七列在前、本片一列在後。`ledger-tracking.md` 的 `profiles.py` 列：負責片寫成 `HM-10 → HM-31（只改註解）→ HM-13b（隔離名稱不覆蓋、守門的移開名稱）→ HM-25`。`threat-model.md`：開頭狀態的本片那句原本接在 HM-09 那行尾；新基準在那行後面多了 HM-31 三行，所以本片那句改成放在最後、自成一行（字不變）；I8 用 HM-31 的、I9 用本片的 |
+| `86bff5a`（`f3b8fa1`） | 帳本 1 列（`profiles.py`） | `merge_ledger.py` 重組 |
+| `0346543`（`89a7e02`） | `threat-model.md` 1 塊（開頭狀態） | 新基準四行照原文；本片那句換成這個 commit 的寫法（補「依獨立審查改寫這兩條（MF-2、S-1、S-6；同日）」） |
+| `509542b`（`27eeb16`） | `threat-model.md` 2 塊（開頭狀態、I8／I9） | 開頭狀態同上（這個 commit 的寫法）；I8 用 HM-31 的、I9 用這個 commit 的 |
+| `ebcb771`（rebase 後新加） | 沒有文字衝突；本機子集抓到的語意衝突 | HM-31 的 `test_make_apps_takes_only_a_share_of_a_budget_beside_hm09s_and_hm10s_options` 釘住 `make_apps` 參數的最後四個是 `child_blocked`、`default_endpoint`、`bootstrap_fields`、`body_budget`（合併順序的檢查）。本片的 `dormant_profiles` 照合併順序接在 `body_budget` 後面，最後一個就變了。改成釘最後五個，並照 `body_budget` 的寫法確認 `dormant_profiles` 是 keyword-only、預設 None；`body_budget` 原有的檢查一個字沒改。程式沒改 |
+| 其他 17 個 | 沒有 | 照原樣重放。帳本 4 個 commit（`dac66f2`、`6ebfbf0`、`7fe4417`、`23f138e`）自動合併：改的是 `operations.py`、`restore_lock.py` 兩列，新基準沒動 |
+
+合計 5 個 commit：文件與程式 19 塊，帳本 4 塊（`9c92cbd` 3 塊、`86bff5a` 1 塊；帳本不解文字，整份重組）。
+
+### 18.3 核對
+
+- `git range-diff 684a2dd..37cb6f4 origin/claude-delivery..ed76963`：17 個「=」（patch 相同），5 個「!」就是上表的衝突 commit。
+- 逐 commit（`same_change.py`：每個檔增刪的行當成多重集合比）：17 個逐行相同；5 個衝突 commit 只差在解衝突合起來的那幾行
+  （帳本的 SHA-256 與說明、上表的程式行、`ledger-tracking.md` 一列、`threat-model.md` 開頭狀態）。
+- 整段（`blob_compare.py`、`whole_change.py`，在 `ed76963`）：本片改、新基準沒改的 20 個檔和 `37cb6f4` 逐位元相同；其他檔（913 個）和 `f4c7718`
+  逐位元相同；兩邊都改的 8 個檔裡，契約、`acceptance-matrix.md`、`profiles.py` 的增刪行和 rebase 前相同，其餘 5 個只差在解衝突的行。
+- 每個重放的 commit，帳本的每一列都和那個 commit 的檔相符（`ledger_drift_per_commit.py`：22 個 commit 都 0 漂移、0 缺檔）。
+
+### 18.4 列號對照（契約第 9 節；新基準最後是第 112 列）
+
+| rebase 前（`684a2dd` 基準） | rebase 後（`f4c7718` 基準） | 項目 |
+|---|---|---|
+| #101 | #113 | 還原後獨立驗證比對的基準 |
+| #102 | #114 | 還原樹裡 `profiles` 不是目錄 |
+| #103 | #115 | 守門自己的名稱被目錄占用（列裡的「同 #102」→「同 #114」） |
+| #104 | #116 | 沒有帳號資料時預設帳號的收據 |
+
+- 新基準的 #101～#108 是 HM-31 的列、#109～#112 是 HM-11 的列，本片沒有引用。#1～#100 沒有移動，本片引用的 #20～#24、#67、#69、#82 不變。
+- 解衝突時不改號（本片的行照原文重放）。改號在 rebase 後的一個 commit（`7a85928`，`renumber.py`）：每處是精確字串、次數固定，而且一定在本片
+  自己加的行上，所以 HM-31、HM-11 的 #101～#112 與 PR 編號（#104～#107）改不到；改完再確認本片加的行沒有舊號。
+- `7a85928` 改的：契約 13 處（開頭的狀態、第 1.3 節兩處、第 3.5、3.6 節、第 9 節說明段、四列的列號、#115 裡的「同 #114」、第 10 節本片的兩列），
+  第 10 節加一列、開頭的狀態加一句；`threat-model.md` 第 3 節 1 處；`acceptance-matrix.md` T-21 1 處；`restore_lock.py` docstring 2 處；
+  `tests/test_restore_lock.py` 4 處；`tests/test_revoke_all.py` 1 處（都只是說明文字）；帳本 `restore_lock.py` 那列的說明 2 處，SHA-256 重算。
+- 本筆記 8 處另一個 commit（`df63d79`：結論、第 3.2、3.3、3.7 節、第 14、17 節）。第 1 節的 PR 編號（#104～#107）、第 5 節的「101.8 秒」、
+  第 17 節最後 rebase 前寫的提醒照原文。PR 說明（repo 外的草稿）也改了。
+- 不用改的地方：本片加的行只有上面 8 個檔寫了這幾個列號（掃 `git diff origin/claude-delivery HEAD` 的新增行）；`decisions.md`、
+  `docs/operations/*.md`、面板與其他測試都沒有。
+- commit 訊息照寫的當時，不改寫：`3106367`（原 `6d30ef1`）寫「接在 #100 後面補 #101～#104」與 T-21 的 #101～#104，`86bff5a`（原 `f3b8fa1`）寫
+  「契約 #102」，`0346543`（原 `89a7e02`）寫「#102 分成…」「#103 補兩種名稱」，就是上表左欄。審查報告（`wave4/review-HM-13b.md`）與之前的
+  證據目錄也是舊列號、舊 commit 編號。
+
+### 18.5 帳本（`docs/provenance/runtime-patches.json`）
+
+不只看文字合併：衝突的 commit 用 `merge_ledger.py` 照 JSON 重組（新基準的每一列照原文、原順序；本片碰過的列：說明是新基準的文字接本片在
+列尾加的那段，先確認兩邊都只在列尾追加；新列照本片放在 `restore_detect.py` 後面；SHA-256 一律照工作樹的檔重算），再全列核對漂移。
+
+- 新基準 63 列，rebase 前 62 列，現在 64 列（多了本片的 `restore_lock.py`）。
+- 55 列和新基準逐欄相同（含 HM-31、HM-11 改的那些列）。
+- 本片碰過的 9 列（`ledger_final.py` 在最後的 HEAD 核對）：
+
+| 列管檔 | 新基準 | rebase 前（`37cb6f4`） | rebase 後 |
+|---|---|---|---|
+| `gateway.py` | `1f954cf11cde` | `24c1feb6a28b` | `fd31659f2e86` |
+| `profile_runtime.py` | `048e73896820` | `43fb41e975ed` | `39b23230a042` |
+| `profiles.py` | `cd74d45a0abe` | `15cbcab36617` | `1b6ebb49d005` |
+| `restore_lock.py`（新列） | — | `807a6a54755d` | `182282ed7ac9`（重放後是 `807a6a54755d`；`7a85928` 改了 docstring 兩處） |
+| `run_product.py` | `59d281b17549` | `7d9c3dc8e237` | `7d9c3dc8e237` |
+| `operations.py` | `85456d10615f` | `f26275cbe5be` | `f26275cbe5be` |
+| `apps/n8n/run.py` | `96861eee084f` | `6b92b9c7c2a6` | `6b92b9c7c2a6` |
+| `restore_detect.py`（只補說明） | `4dc72563dc2b` | `4dc72563dc2b` | `4dc72563dc2b` |
+| `identity_fields.py`（只補說明） | `af6e130ceb36` | `af6e130ceb36` | `af6e130ceb36` |
+
+- 兩邊都改的 3 個檔，值是新的：檔的內容本來就是兩邊合起來的。只有本片改的 3 個檔（`run_product.py`、`operations.py`、`apps/n8n/run.py`）
+  和 rebase 前相同（檔逐位元相同）；`restore_detect.py`、`identity_fields.py` 本片只補說明，檔沒變。
+- 說明文字：只有 `restore_lock.py` 那列和 rebase 前不同（列號兩處）；其他 8 列都是新基準的文字接本片原本加的那段。
+- JSON 照 repo 的寫法（`indent=2`、`ensure_ascii=False`、結尾換行），每個 commit 重新序列化都逐位元相同。
+- 沒動 `apps/runtime/*.py`、`apps/*/launch.py`：tool-surface 不用重產，`scripts/tool_inventory.py` exit 0（第 18.7 節）。
+
+### 18.6 和新基準的互動
+
+- HM-31（請求內容位元組預算、結構守門）：守門在 `ProfileManager`（開通時在建構時推導全 add-on 的預算）與單帳號 runtime（`make_apps`
+  自己建份額）之前跑；守門不讀 body、不開 listener，不扣預算，也碰不到結構守門。`make_apps` 同時收 `body_budget` 與 `dormant_profiles`；
+  休眠時 `run_product` 只給 `dormant_profiles`，份額照 HM-31 由 `make_apps` 自己建。HM-31 的 3 檔 181 案（`test_request_budget` 61、
+  `test_request_structure` 83、`test_request_budget_gateway` 37）在 `ebcb771` 全過；`test_every_products_runtime_reads_under_the_budget_and_the_guard`
+  跑每個產品的正式 runtime，也經過守門。唯一的語意衝突是參數順序那案（第 18.2 節）。
+- HM-09 追補（監看一定照停止要求停下）：`test_monitor_cancel.py` 13 案全過。它直接跑 `run_product.run`（開通與沒開通兩種），帳號由
+  `multi_profile_runtime.create_profile` 建（本片讓它先建 sentinel），所以開通時守門看不到還原；沒開通的那案磁碟上有帳號資料，依程式
+  B 會先被守門當成休眠帳號撤銷。這幾案只量關閉的時間，都在 HA 的 30 秒內停下。
+- HM-11（面板）：本片沒動面板。真後端形狀比對 `tests/test_panel_profile_api_shapes.py` 10 案全過，`expect` 不用重錄：開通的 bootstrap
+  不會有 `dormant_profiles`（`make_apps` 拒絕和 `profile_view` 一起給），沒開通又沒有帳號資料時逐位元同今天。面板原始碼有變，照 CI 重建了 `dist/`。
+- HM-10：`test_profile_admin_api` 32、`test_admin_pipeline_matrix` 5、`test_router_passthrough` 49 案全過。
+- `tests/test_output_schemas.py` 對 `apps/n8n/run.py` 的位元組釘選（原 `96c4d3b`，現 `0ac439f`）仍對：新基準沒動這個檔，189 案全過。
+- HM-01 守門 7 檔（log 掃描、owned ports bearer、黃金回歸、兩個契約凍結、兩個預檢工具）132 案全過：開關關的回應逐位元不變。
+
+### 18.7 本機檢查（一般使用者；`ha_env.sh` 的 TMPDIR，跑完用完整路徑刪掉；pytest 都排在共用鎖後面）
+
+| 檢查 | 結果 |
+|---|---|
+| `npm run build`＋`node packages/mcp-admin-ui/tests/build-closure.mjs`（面板原始碼有變，照 CI 先建；`7a85928` 之前、21:52） | PASS（`dist/` 是忽略的檔，`git status` 乾淨） |
+| pytest 子集第 1 次（`7a85928`；22:33 取得鎖，正式 conftest） | 900 案：894 過、6 失敗＝5 個要 root 的 `test_root_*`＋HM-31 的 `test_make_apps_takes_only_a_share_of_a_budget_beside_hm09s_and_hm10s_options`（參數順序，語意衝突；`ebcb771` 修，第 18.2 節）。全套因此沒跑 |
+| pytest 子集第 2 次（`ebcb771`；22:36 取得鎖） | 900 案、0 skip：895 過，5 個失敗都是要 root 的 `test_root_*`，82.1 秒 |
+| 子集的各檔（第 2 次） | 新 3 檔：`test_restore_lock` 71、`test_dormant_profiles` 8、`test_revoke_all` 18 全過；HM-13a `test_restore_detection` 139（134 過，5 個 root）；HM-10 3 檔 86；HM-31 3 檔 181；`test_monitor_cancel` 13；`test_panel_profile_api_shapes` 10；`test_output_schemas` 189；HM-01 守門 7 檔 132；`test_upgrade_zero_rewrite` 45；`test_tool_inventory` 8（`logs/subset-2-by-file.txt`） |
+| pytest 全套（`tests`，CI 的指令加 `-rfEs --durations=30`，正式 conftest；`ebcb771`） | 6,090 案、0 skip，6,083 過、7 個失敗，2,018.4 秒（33 分 38 秒；22:38 開始、23:11 跑完，開始與結束時工作樹都乾淨、HEAD 都是 `ebcb771`）。失敗的 7 案就是要 root 的既有案例（`test_restore_detection` 5、`test_profile_store` 1、`test_owned_executable` 1，都停在要求 root 的那一行斷言：`os.geteuid() == 0`，`test_owned_executable` 是 `os.getuid() == 0`）。新 3 檔 97 案（junit 8.0 秒）。子集的 22 檔在全套裡也全過（root 的除外） |
+| packaging unittest（照 CI 的離線暫存 venv：`uv sync --frozen --no-dev --offline`＋`requirements-ci`，不用 PYTHONPATH） | `Ran 205`、`OK (skipped=5)`（5 個 `skipUnless(root)` 同基準；`7a85928`，之後沒改 `packaging/`） |
+| `packaging/validate.py`（ci-venv 的 Python 3.13.15） | PASS（`7a85928`） |
+| `scripts/tool_inventory.py` | exit 0（`7a85928`；沒動 tool-surface 的來源） |
+| 規則核對 | `addons/`、CHANGELOG、`upgrade-notes.yaml`、`.github/`、`tests/conftest.py`、`features.py` 對新基準 0 行差異；沒有改任何版號；`MULTI_PROFILE_PRODUCTS` 是空集合；commit 身分都是 woowtech、沒有 AI 署名 |
+| 已知的 HM-09 關閉逾時（`test_backend_loopback.py::…end_to_end[False]`） | 0 次（#106 已在新基準裡） |
+
+### 18.8 預檢（base 都是 `origin/claude-delivery`）
+
+| 預檢 | 指令 | 結果 |
+|---|---|---|
+| 秘密 | `.venv/bin/python -I scripts/secret_precheck.py --tools SP:hm01/gitleaks-tools --repo . --base origin/claude-delivery --head HEAD --full` | OK，0 命中（gitleaks 8.28.0；`f4c7718..ebcb771` 24 個 commit，另掃 HEAD 的樹與整段歷史；`7a85928` 上也跑過一次：23 個 commit、0 命中） |
+| 帳本 | `.venv/bin/python -I scripts/ledger_precheck.py --repo . --base origin/claude-delivery` | OK：`runtime-patches.json` 177 項、`runtime-sources.json` 70 項、`docs/tool-surface.json` 159 項，0 漂移、0 缺；改過的 29 個檔裡 7 個列管檔由帳本釘住、帳本本身有改；沒有帳本沒列的執行檔（`ebcb771`） |
+
+本筆記 commit 之後再跑一次，結果記在 PR 說明。
+
+### 18.9 雙向控制字元
+
+`bidi_scan.py`（HM-11 的同一支）逐 commit 查 `origin/claude-delivery..HEAD`：那個 commit 的樹裡、這段範圍碰過的每個文字檔的全文；那個 commit
+自己新增的行；commit 訊息（標題與內文）。`ebcb771`（本筆記之前的 24 個 commit）上：U+202A～202E、U+2066～2069 合計 0 個；U+200E、U+200F、U+061C 也是 0 個。
+這段範圍碰過的 29 個檔都是文字檔，沒有跳過的檔。本筆記的兩個 commit 之後再跑一次，結果記在 PR 說明。
+
+### 18.10 只在 CI 跑的測試、CI 時間
+
+- rebase 只改了一個測試的斷言：HM-31 的 `make_apps` 參數順序那案多釘一個參數（`ebcb771`，第 18.2 節）；`7a85928` 只改兩個測試檔的說明文字。
+  沒有只在 CI 跑的新測試；要 root 的 7 個既有案例本機一定失敗（第 6 節）。
+- `checks` 推估照第 6 節（本片多約 20～30 秒）。實際秒數 CI 跑完再補。
+
+### 18.11 commit 對照
+
+「相同」＝`git range-diff` 的「=」（patch 相同）。
+
+| # | rebase 前 | rebase 後 | 說明 |
+|---|---|---|---|
+| 1 | `3c90b6c` | `42b558c` | 相同 |
+| 2 | `e91fc6f` | `9c92cbd` | 衝突（`gateway.py`、`profile_runtime.py`、帳本） |
+| 3 | `6d30ef1` | `3106367` | 衝突（契約、`ledger-tracking.md`、`threat-model.md`） |
+| 4 | `c5999ed` | `dac66f2` | 相同（帳本，自動合併） |
+| 5 | `2c4de0f` | `2b324e8` | 相同 |
+| 6 | `338a8bf` | `bc28a55` | 相同 |
+| 7 | `0028169` | `6ebfbf0` | 相同（帳本，自動合併） |
+| 8 | `cc5adb0` | `7fe4417` | 相同（帳本，自動合併） |
+| 9 | `9c29b4f` | `23f138e` | 相同（帳本，自動合併） |
+| 10 | `360836e` | `7fe239d` | 相同 |
+| 11 | `5b596cd` | `320a3d4` | 相同 |
+| 12 | `7d237f6` | `127f630` | 相同 |
+| 13 | `1f8c29f` | `e0dd3d5` | 相同 |
+| 14 | `96c4d3b` | `0ac439f` | 相同 |
+| 15 | `551d210` | `85b571b` | 相同 |
+| 16 | `aa8ef57` | `e25cd2e` | 相同 |
+| 17 | `77394fc` | `5036dab` | 相同 |
+| 18 | `f3b8fa1` | `86bff5a` | 衝突（帳本） |
+| 19 | `895119b` | `aeb44bb` | 相同 |
+| 20 | `89a7e02` | `0346543` | 衝突（`threat-model.md`） |
+| 21 | `27eeb16` | `509542b` | 衝突（`threat-model.md`） |
+| 22 | `37cb6f4` | `ed76963` | 相同 |
+
+rebase 之後新加的 commit：
+
+| commit | 內容 |
+|---|---|
+| `7a85928` | 契約第 9 節本片的列改成 #113～#116，所有引用一起改；第 10 節加一列；帳本 `restore_lock.py` 那列重算 |
+| `ebcb771` | HM-31 的 `make_apps` 參數順序測試多釘 `dormant_profiles`（本機子集抓到的語意衝突） |
+| `df63d79` | 本筆記改列號（8 處；第 18.4 節） |
+| 本筆記 | 第 18 節；結論、第 1 節的基準與 commit、第 5、8、13、14、17 節的狀態 |
+
+### 18.12 使用者定案與交接
+
+- **審查 Q-1，使用者 2026-11-16 21:xx 定案**：照 DQ-03 (b) 原文，沒開通的單帳號安裝還原後也要有面板提示「權杖已回到備份當時的值」，
+  不只 log。由 HM-13c 做（計畫 §12.3 HM-13c 已加註）：開機守門偵測到還原時留一筆提示紀錄、接在本片的守門上；bootstrap 多一個欄位、
+  面板顯示、管理員可以關掉；這是不受開關管的改變（契約 §1.2 記例外、HM-01 管理契約凍結逐案改並寫理由、各產品 CHANGELOG 記一行，交發版片）；
+  還原時權杖的行為仍和今天一樣，不撤銷。**本片不改**：沒開通又沒有帳號資料時仍只記一行 WARNING、刪標記，什麼都不寫（第 3.1 節）。
+- HM-03a 的探針多一項（README 的交接已加）：守門沒做完時，Supervisor 會不會用 Watchdog 自動再起（第 11 節最後一列）。
+- push：先查遠端沒有這個分支，再 `git push -u origin feat/ha-multiprofile-hm13b-20261116`（分支原本沒有上游）。備份分支只在本機。
+- 合併條件不變：HM-03a 的 UC-08 與 sentinel 實機結果寫進第 11 節（不可靠就照 DQ-39 (a)）；CI 全綠。
+- 列號：之後還有片在契約第 9 節 #116 後面加列時，後合併的接在當時最後一列後面重排。
