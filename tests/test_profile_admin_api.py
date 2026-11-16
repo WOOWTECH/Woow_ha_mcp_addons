@@ -853,12 +853,21 @@ async def test_deleting_a_profile_under_load_ends_only_its_own_requests(tmp_path
                 default_child.text)
 
 
-async def test_a_save_waiting_for_a_deleted_profiles_lock_changes_nothing(tmp_path, log_scan, monkeypatch):
+@pytest.mark.parametrize('removed', [True, False], ids=['removed', 'left as an orphan'])
+async def test_a_save_waiting_for_a_deleted_profiles_lock_changes_nothing(tmp_path, log_scan, monkeypatch, removed):
     """A save for B that comes in while B is being deleted waits for B's lock; it gets the lock only once B is no
     longer served and its store is closed: 503 state unavailable, nothing written, no child started again for the
-    deleted profile, its directory gone."""
+    deleted profile, its directory gone. When the directory cannot be removed (left as an orphan: one WARNING with the
+    id's first 8 characters only, listed, deletable again), the waiting save still finds the store closed: 503, the
+    revoked and wiped state.json not written again."""
     data = setup(tmp_path, extras=(B,))
     layout = profiles.Layout(data)
+    left = {}
+    if not removed:
+        def leave(layout_, profile_id):
+            left['state'] = (layout_.profile(profile_id) / 'state.json').read_bytes()  # revoked and wiped by now
+            return False  # as if rmtree failed: what is left is an orphan
+        monkeypatch.setattr(profiles, 'remove_profile_directory', leave)
     async with multi_profile_runtime(PRODUCT, data, children=children_of(data)) as runtime:
         await settle(runtime, 'configured')
         watch(log_scan, data)
@@ -890,8 +899,17 @@ async def test_a_save_waiting_for_a_deleted_profiles_lock_changes_nothing(tmp_pa
         finally:
             await save['client'].aclose()
         assert (response.status_code, response.content) == STATE_UNAVAILABLE
-        assert supervisor.status == 'stopped' and supervisor.starts == starts
-        assert not layout.profile(B).exists() and manager.get(B) is None
+        assert supervisor.status == 'stopped' and supervisor.starts == starts and manager.get(B) is None
+        if removed:
+            assert not layout.profile(B).exists()
+            return
+        assert (layout.profile(B) / 'state.json').read_bytes() == left['state']
+        assert (stored(layout.profile(B))['token'], stored(layout.profile(B))['connection']) == (None, None)
+        warnings = [record.getMessage() for record in log_scan.records
+                    if record.levelname == 'WARNING' and 'could not be removed completely' in record.getMessage()]
+        assert len(warnings) == 1 and profiles.log_id(B) in warnings[0] and B not in warnings[0], warnings
+        listed = (await Panel(runtime, boot['csrf']).list())[0]
+        assert listed['orphans'] == [{'id': B}] and [row['id'] for row in listed['profiles']] == ['default']
 
 
 async def test_an_orphan_and_an_unavailable_profile_can_be_deleted(tmp_path, log_scan):
