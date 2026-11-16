@@ -229,7 +229,7 @@ async def test_the_reserve_carries_notifications_initialized_while_every_ordinar
 @pytest.mark.parametrize('queued', [15, 16], ids=['queue 15 of 16', 'queue full'])
 async def test_the_reserve_is_reached_only_while_the_profiles_admission_has_room(tmp_path, log_scan, monkeypatch,
                                                                                 queued):
-    """Contract 2.4, plan 8.8 #95 (HM-14 review MF-2; a known limitation, pinned as it is until HM-31 changes it).
+    """Contract 2.4, plan 8.8 #96 (HM-14 review MF-2; a known limitation, pinned as it is until HM-31 changes it).
     An additional profile's real numbers (admission 32 = its 16 ordinary slots + their queue of 16; reserve 4; only the
     wait made 30 s so that the queued requests stay queued). Its 16 slots held and 15 requests queued, the admission
     has room (31 of 32): notifications/initialized is read and reaches the child through the reserve (202). With 16
