@@ -927,7 +927,9 @@ async def test_a_lease_checked_just_before_runs_without_reading_the_state_again_
     """D3: TokenLease.run(checked=True) (a piece of a reply read right after the check that ended the previous one)
     does not read the state before its operation starts, and its watcher's first look comes after its first wait; the
     check after the operation stays, and a token changed through the admin API (TokenAccess.committed) still ends the
-    operation at once. Left out (every other lease), as before: a check first, the watcher's at once, one after."""
+    operation at once. A state replaced on disk meanwhile (no event) is caught by the check after it: what the
+    operation read is never handed back. Left out (every other lease), as before: a check first, the watcher's at once,
+    one after."""
     from mcp_admin_core.access import AccessChanged, TokenAccess
     counting = CountingStore(store)
     access = TokenAccess(counting)
@@ -953,6 +955,19 @@ async def test_a_lease_checked_just_before_runs_without_reading_the_state_again_
     with pytest.raises(AccessChanged):
         await asyncio.wait_for(task, 2)
     assert time.perf_counter() - begun < 0.1
+
+    # A change outside the admin API (the state replaced on disk: no event) between the check that ended the previous
+    # operation and this one is caught by the check after it: what the operation read is never handed back.
+    lease = access.lease(store.load().token)
+    read = []
+
+    async def read_after_a_change():
+        store.update(token='T' * 43)
+        read.append('a piece read after the change')
+        return read[-1]
+    with pytest.raises(AccessChanged):
+        await lease.run(read_after_a_change, checked=True)
+    assert read == ['a piece read after the change']
 
 
 @pytest.mark.parametrize('switched_on', [False, True], ids=['switched-off', 'switched-on'])
