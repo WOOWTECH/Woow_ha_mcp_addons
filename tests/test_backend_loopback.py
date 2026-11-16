@@ -3,8 +3,10 @@
 The management process decides: products.loopback_refused(product) is features.enabled(product) and nothing else. For a
 switched-on product, products.child_spec and n8n_adapter.child_spec add WOOW_MCP_DENY_LOOPBACK=1 to the environment
 they build (never inherited), on every port: the default profile's child (3000) and each additional profile's (18000
-and up). No child code between that environment and the policy names the variable or removes it (checked by source);
-the child's policy reads it once, when it loads:
+and up). No child code between that environment and the policy names the variable or removes it, nor does HM-09's exec
+wrapper, which starts an additional profile's child (both checked by source; end to end, run_product's ProfileManager
+starts real Odoo children for the default profile and an additional one); the child's policy reads it once, when it
+loads:
 
 - apps/runtime/backend_policy.py (the seven Python children and the retired Odoo Manage): every connection to the
   configured backend (httpx sync and async, XML-RPC over HTTP and HTTPS) refuses an answer in 127.0.0.0/8 or ::1, for
@@ -24,14 +26,13 @@ environment before it asserts, so that a failure never prints one (HM-20 review 
 """
 import ast
 import asyncio
-from contextlib import closing, contextmanager
+from contextlib import closing, contextmanager, nullcontext
 import importlib.util
 import itertools
 import json
 import os
 from pathlib import Path
 import re
-import signal
 import socket
 import subprocess
 import textwrap
@@ -231,6 +232,24 @@ def test_no_child_code_names_or_removes_the_variable():
         elif re.search(r'process\.env\s*=(?!=)|delete\s+process\.env|deleteProperty\(\s*process\.env', text):
             findings.append((relative, 'removes from its environment'))
     assert findings == []
+
+
+def test_the_exec_wrapper_hands_the_variable_on():
+    """HM-09's exec wrapper (lifecycle.EXEC_WRAPPER, packages/mcp-admin-core: not under apps/, so not seen above) runs
+    between the fork and an additional profile's real command. It takes only LC_CTYPE out of its environment (what its
+    own interpreter's start added, PEP 538; set back to the spec's value when the spec has one), never names the
+    variable, and execs with os.execv, which hands the real command that environment. The static half of
+    test_every_profile_s_real_child_refuses_its_loopback_fake_backend_end_to_end (the rebase onto HM-09)."""
+    from mcp_admin_core import lifecycle
+    tree = ast.parse(lifecycle.EXEC_WRAPPER)
+    removals = [node for node in ast.walk(tree)
+                if isinstance(node, ast.Call) and getattr(node.func, 'attr', None) in REMOVES]
+    execs = [node.func.attr for node in ast.walk(tree) if isinstance(node, ast.Call)
+             and getattr(node.func, 'attr', '').startswith(('exec', 'spawn', 'posix_spawn'))]
+    assert 'DENY_LOOPBACK' not in lifecycle.EXEC_WRAPPER
+    assert [ast.literal_eval(node.args[0]) for node in removals] == ['LC_CTYPE']
+    assert environment_changes(tree) == [node.lineno for node in removals]
+    assert execs == ['execv']
 
 
 # --- the Python policy (apps/runtime/backend_policy.py), in this process -----------------------------------------
@@ -766,7 +785,7 @@ def test_the_double_in_a_subprocess_preamble(tmp_path):
         assert json.loads(result.stdout.splitlines()[-1]) == expected, mode
 
 
-# --- end to end: the real management process and the real Odoo child ----------------------------------------------
+# --- end to end: run_product's ProfileManager, real children, the default profile and an additional one ---------
 
 
 def reply_text(response, ident):
@@ -789,87 +808,108 @@ def answered(text):
     return 'result' in message and not message['result'].get('isError')
 
 
+def running_its_program(supervisor):
+    """Whether the child of *supervisor* runs its spec's own program now: an additional profile's child is spawned
+    through HM-09's exec wrapper (lifecycle.EXEC_WRAPPER, a fresh interpreter between the fork and the real command),
+    whose /proc entry shows the wrapper until it execs."""
+    from lifecycle_runtime import proc_cmdline
+    process, spec = supervisor.process, supervisor.spec
+    if process is None or spec is None:
+        return False
+    try:
+        return proc_cmdline(process.pid) == list(spec.argv)
+    except OSError:
+        return False
+
+
+def environment_facts(supervisor):
+    """(WOOW_MCP_DENY_LOOPBACK in the /proc environment of the child of *supervisor*, or None; whether that
+    environment is exactly the one its spec was spawned with: the spec's own, plus what this test process's spawn
+    guard adds to every child, tests/owned_network.guarded_env). The environment holds the child's credentials and
+    this test's tokens: only these two facts leave this function (HM-20 review S-6)."""
+    from owned_network import guarded_env
+    entries = Path(f'/proc/{supervisor.process.pid}/environ').read_bytes().split(b'\0')
+    environment = dict(entry.split(b'=', 1) for entry in entries if entry)
+    expected = {name.encode(): value.encode() for name, value in guarded_env(supervisor.spec.env).items()}
+    facts = environment.get(ENV.encode()), environment == expected
+    del entries, environment, expected
+    return facts
+
+
+async def probe_reply(client, token, double):
+    """The tools/call of Odoo's probe tool (list_models) through 8081 with *token*, once the gateway forwards or
+    refuses it (not the not-ready answer of a child that has not answered its health check yet), as text."""
+    from test_real_products import PROBES, rpc
+    headers = {'Authorization': 'Bearer ' + token, 'Accept': 'application/json, text/event-stream'}
+    result = await rpc(client, '/mcp', headers, {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {
+        'protocolVersion': '2025-03-26', 'capabilities': {}, 'clientInfo': {'name': 'local-test', 'version': '0'}}})
+    headers['MCP-Protocol-Version'] = result['protocolVersion']
+    await rpc(client, '/mcp', headers, {'jsonrpc': '2.0', 'method': 'notifications/initialized'})
+    name, arguments = PROBES['odoo']
+    call = {'jsonrpc': '2.0', 'id': 3, 'method': 'tools/call', 'params': {'name': name, 'arguments': arguments}}
+    try:
+        async with asyncio.timeout(30):
+            while True:
+                text = reply_text(await client.post('/mcp', headers=headers, json=call), 3)
+                if answered(text) or (not double and 'MCP_SERVER_NOT_READY' not in text):
+                    return text
+                await asyncio.sleep(.25)
+    finally:
+        await client.delete('/mcp', headers=headers)
+
+
 @pytest.mark.parametrize('double', [False, True])
-async def test_a_switched_on_odoo_refuses_its_loopback_fake_backend_end_to_end(tmp_path, double):
-    """run_product with Odoo switched on in its preamble: the real Odoo child runs with WOOW_MCP_DENY_LOOPBACK=1 (its
-    /proc environment; only that entry is looked at) and the loopback fake backend, which is up, never gets a request;
-    the client's tools/call is refused ("Backend unreachable" once the health check has run: Odoo's private probe tells
-    only BACKEND_UNAVAILABLE, apps/odoo/launch.py probe_failure; the tool's own error before that). With the test double
-    in the same preamble the child has no such variable and the same call reaches the same fake, as switched off
-    (tests/test_real_products.py)."""
-    import httpx
-    from owned_executable import Executable
-    from test_real_products import PROBES, backend, free_port, rpc
-    with backend('odoo') as (url, calls, offline):
-        store = ProductStore(tmp_path / 'state', 'odoo')
-        store.update(connection=connection('odoo', url), writes_enabled=False, enabled_write_tools=[])
-        state = store.load()
+async def test_every_profile_s_real_child_refuses_its_loopback_fake_backend_end_to_end(tmp_path, log_scan,
+                                                                                       monkeypatch, double):
+    """HM-20 after HM-08 and HM-09: run_product.run with Odoo switched on builds the ProfileManager
+    (tests/multi_profile_runtime.py, here with the real Supervisor and real clients), which starts the default
+    profile's real Odoo child directly and an additional profile's through HM-09's exec wrapper
+    (lifecycle.EXEC_WRAPPER: a fresh interpreter between the fork and the real command writes the child's resources
+    and execs it with the environment it was given). Each child runs its own program with WOOW_MCP_DENY_LOOPBACK=1:
+    its /proc environment is exactly the one its spec was spawned with (only that, and the variable's value, is looked
+    at). Each profile has its own loopback fake backend, up all along: neither ever gets a request, and each profile's
+    tools/call through 8081 is refused. With the test double around the same run, neither child has the variable and
+    the same calls reach the same fakes, as switched off (HM-20 rebase: the wrapper passes the variable through)."""
+    from lifecycle_runtime import until
+    from mcp_admin_core import health as health_module, lifecycle
+    from multi_profile_runtime import all_tokens, create_profile, free_port, multi_profile_runtime, update_profile
+    from test_real_products import backend
+    monkeypatch.setattr(health_module, 'HEALTH_INTERVAL', 0.5)  # every profile's first health check within a second
+    extra, label = 'b' * 24, 'Loopback fake B'
+    data = tmp_path / 'data'
+    with backend('odoo') as (default_url, default_calls, _), backend('odoo') as (extra_url, extra_calls, _):
+        store = ProductStore(data, 'odoo')
+        store.update(connection=connection('odoo', default_url), writes_enabled=False, enabled_write_tools=[])
         store.close()
-        port, admin_port = free_port(), free_port()
-        endpoint = f'http://127.0.0.1:{port}/mcp'
-        log_path = tmp_path / 'owned-runtime.log'
-        runner = Executable(tmp_path, 'odoo', [port, admin_port])
-        preamble = 'from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = frozenset({"odoo"}); '
+        create_profile(data, 'odoo', extra, label=label, port=free_port(), configured=False)
+        update_profile(data, 'odoo', extra, connection=connection('odoo', extra_url))
+        log_scan.watch(*all_tokens(data))
+        log_scan.watch(label, kind='name')
+        with loopback_backends.allowed() if double else nullcontext():
+            async with multi_profile_runtime('odoo', data, supervisor=lifecycle.Supervisor, real_children=True,
+                                             default_port=free_port()) as runtime:
+                supervisors = {profile_id: runtime.manager.get(profile_id).runtime.supervisor
+                               for profile_id in ('default', extra)}
+                healths = [runtime.manager.get(profile_id).runtime.health for profile_id in supervisors]
+                await until(lambda: all(map(running_its_program, supervisors.values()))
+                            and all(health.availability()['ready'] for health in healths), timeout=60)
+                wrapped = {profile_id: supervisor.resources is not None
+                           for profile_id, supervisor in supervisors.items()}
+                facts = {profile_id: environment_facts(supervisor) for profile_id, supervisor in supervisors.items()}
+                replies = {}
+                async with runtime.mcp() as client:
+                    for profile_id in supervisors:
+                        replies[profile_id] = await probe_reply(client, runtime.token(profile_id), double)
+                if not double:
+                    await asyncio.sleep(2)  # a request that was on its way would have arrived by now
+                calls = {'default': list(default_calls), extra: list(extra_calls)}
+    assert wrapped == {'default': False, extra: True}, 'only the additional profile goes through the wrapper'
+    variable = None if double else b'1'
+    assert facts == {'default': (variable, True), extra: (variable, True)}, 'the child environment is wrong'
+    for profile_id, text in replies.items():
         if double:
-            preamble += 'import loopback_backends; loopback_backends.install(); '
-        code = preamble + 'from mcp_admin_core import run_product; ' + runner.code('run_product') + 'run_product.main()'
-        runner.release()
-        with log_path.open('wb') as log:
-            process = subprocess.Popen([str(ROOT / '.venv/bin/python'), '-c', code, 'odoo', '--data', str(tmp_path / 'state'),
-                                        '--host', '127.0.0.1', '--mcp-port', str(port), '--admin-port', str(admin_port)],
-                                       cwd=ROOT, env={'PATH': '/usr/bin:/bin', 'PYTHONDONTWRITEBYTECODE': '1',
-                                                      'PYTHONPATH': str(ROOT / 'packages/mcp-admin-core')},
-                                       stdout=log, stderr=log)
-            try:
-                await runner.ready(process)
-                async with httpx.AsyncClient(trust_env=False, timeout=15, event_hooks={'request': [runner.guard]}) as client:
-                    headers = {'Authorization': 'Bearer ' + state.token, 'Accept': 'application/json, text/event-stream'}
-                    init = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {
-                        'protocolVersion': '2025-03-26', 'capabilities': {}, 'clientInfo': {'name': 'local-test', 'version': '0'}}}
-                    async with asyncio.timeout(30):
-                        while True:
-                            assert process.poll() is None, log_path.read_text()
-                            try:
-                                result = await rpc(client, endpoint, headers, init)
-                                break
-                            except (httpx.HTTPError, ValueError):
-                                await asyncio.sleep(.25)
-                    headers['MCP-Protocol-Version'] = result['protocolVersion']
-                    await rpc(client, endpoint, headers, {'jsonrpc': '2.0', 'method': 'notifications/initialized'})
-                    name, arguments = PROBES['odoo']
-                    answers = []
-                    async with asyncio.timeout(40):
-                        while True:  # until the child's backend answers, or the call is refused once the child is up
-                            response = await client.post(endpoint, headers=headers, json={
-                                'jsonrpc': '2.0', 'id': 3, 'method': 'tools/call',
-                                'params': {'name': name, 'arguments': arguments}})
-                            answers.append(reply_text(response, 3))
-                            if answered(answers[-1]) or (not double and 'MCP_SERVER_NOT_READY' not in answers[-1]
-                                                         and ('Backend unreachable' in answers[-1]
-                                                              or '"isError": true' in answers[-1])):
-                                break
-                            await asyncio.sleep(.5)
-                    # The child answered (refused calls come only once it is up), so it runs its own program now.
-                    [child] = Path(f'/proc/{process.pid}/task/{process.pid}/children').read_text().split()
-                    environment = Path(f'/proc/{child}/environ').read_bytes().split(b'\0')
-                    has_variable = b'WOOW_MCP_DENY_LOOPBACK=1' in environment
-                    # It holds the child's credentials and this test's tokens: dropped before the assertion, which
-                    # would print it when it fails (HM-20 review S-6).
-                    del environment
-                    assert has_variable is (not double), 'the child variable is wrong'
-                    if double:
-                        assert answered(answers[-1]) and calls, (answers, calls)
-                    else:
-                        assert not answered(answers[-1]), answers
-                        assert DENIED in answers[-1] or 'Backend unreachable' in answers[-1], answers
-                        await asyncio.sleep(2)
-                        assert calls == [], calls  # nothing ever reached the fake, which was up all along
-                    await client.delete(endpoint, headers=headers)
-            finally:
-                process.send_signal(signal.SIGTERM)
-                try:
-                    await asyncio.to_thread(process.wait, 10)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    await asyncio.to_thread(process.wait)
-        assert process.returncode == 0, log_path.read_text()
+            assert answered(text) and calls[profile_id], (profile_id, text, calls[profile_id])
+        else:
+            assert not answered(text), (profile_id, text)
+            assert DENIED in text or 'Backend unreachable' in text, (profile_id, text)
+            assert calls[profile_id] == [], (profile_id, calls[profile_id])  # never reached the fake
