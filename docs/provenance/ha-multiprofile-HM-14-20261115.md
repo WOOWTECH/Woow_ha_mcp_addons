@@ -1,4 +1,4 @@
-# HA 多帳號 HM-14 provenance：閘道收尾對齊 PaaS #148（2026-11-15；審查修正 2026-11-16）
+# HA 多帳號 HM-14 provenance：閘道收尾對齊 PaaS #148（2026-11-15；審查修正、rebase 2026-11-16）
 
 ## 結論
 
@@ -13,21 +13,26 @@
   - **排隊中用戶端關閉連線就移除、絕不送出**；名額剛好同一刻空出也還回去、不送（PaaS Q6 的寫入不會在名額空出後被執行）。
   - **保留名額的判斷照 PaaS `_carries_no_request`**（`Pc/proxy.py:336`）與它的 51 個正反例；HA 的政策只轉送 `notifications/initialized`，
     所以實際走保留名額的只有它（§8.8 #90）。
-  - **子程式中途斷線改 `-32004`，依原因兩種文字**（停止了／仍在執行；看轉送那一刻的世代，最多等 0.25 秒）：標頭前 502＋`-32004`，
-    SSE 補一則同 id 的事件後正常結束；帳號 WARNING 一行，不帶 traceback。
+  - **子程式中途斷線改 `-32004`，依原因三種文字**（仍在執行／停止了、會自動重新啟動／停止了、目前沒有在重新啟動；看轉送那一刻的世代，
+    最多等 0.25 秒；停止了的兩種看 HM-09 的 `Supervisor.status`，rebase 後加，第 16 節）：標頭前 502＋`-32004`，SSE 補一則同 id 的事件後
+    正常結束；帳號 WARNING 一行，不帶 traceback。
   - **標頭後換 token**：SSE 補 `-32005`、正常結束；標頭卡在背壓還沒送出時改送乾淨的 401／404（逐位元同今天的拒絕）；
     **不把 `ClientDisconnect` 丟給 uvicorn**。一次送完的 JSON 標頭已送出時不能改內容（`Content-Length`），閘道返回、連線關掉（§8.8 #91）。
   - **initialize 世代**：session 只在 initialize 送去的世代仍在執行時才交給用戶端，否則 503 `BACKEND_UNAVAILABLE`、不 DELETE。
   - `-32003` 文字定稿：HM-08 的四種照原文，加保留名額與排隊兩種，每種寫那一組自己的條數。
 - 已知限制照 PaaS 文件後續（19f36e2、`091dfbc`）寫進契約第 2.4 節與威脅模型第 3 節：SDK 層級的逾時與取消、MCP Python SDK 2.3.0 預設
   `terminate_on_close=True` 的關閉路徑看不到斷線，排隊中的寫入在名額空出後照樣被執行（HA 最多等 1 秒）。審查後再加一條：
-  保留名額只在准入還有空位時有用（准入＝轉送＋排隊；MF-2，數值交使用者決定）。
+  保留名額只在准入還有空位時有用（准入＝轉送＋排隊；MF-2。主對話 2026-11-16 定案：不改 DQ-07 的數值，交 HM-31 改分派器）。
 - 測試：新 5 檔 117 案＋1 個測試工具模組，本機 15.5 秒；PaaS 四個測試檔 43 個案例逐案對照（第 4 節）。**先寫測試**：新測試在
   `b5d10c5` 的程式上 117 案 106 失敗（第 6.1 節），程式 commit 之後全過。臨時突變 28 個全部擋下（第 6.2 節）。審查修正再加 11 案
-  （4 檔，合計 128 案），先紅後綠與突變見第 15 節。
-- 兩個預檢：秘密預檢 0 命中、帳本預檢 OK（第 9 節）。全套 pytest 5394 案只剩 7 個要 root 的既有案例（第 7 節）。
-- **獨立安全審查（2026-11-16）判定「修正後通過」**（第 15 節）：必修 MF-1 加測試；MF-2 寫明並先釘住現況，**要不要給准入留出保留名額的
-  空間交使用者決定**（會改 DQ-07 的數值，HM-19c 前；第 11 節）；建議 S-1～S-6 採用（S-1、S-4 改程式），S-7 只寫明、不改程式。
+  （4 檔，合計 128 案），先紅後綠與突變見第 15 節。rebase 到 HM-09 之後再加 7 案（合計 135 案），先紅後綠、突變與全套見第 16 節。
+- 兩個預檢：秘密預檢 0 命中、帳本預檢 OK（第 9 節）。全套 pytest 5394 案只剩 7 個要 root 的既有案例（第 7 節）。rebase 後：全套 5531 案只剩 7 個要 root 的既有案例與 22 個這個 clone 沒有 Chromium 跑不了的瀏覽器測試（第 16.7 節），兩個預檢見第 16.9 節。
+- **獨立安全審查（2026-11-16）判定「修正後通過」**（第 15 節）：必修 MF-1 加測試；MF-2 寫明並先釘住現況，(b) 由主對話 2026-11-16 定案
+  （不改 DQ-07 的數值；准入滿時讓通知走保留名額交 HM-31 改分派器；第 11 節）；建議 S-1～S-6 採用（S-1、S-4 改程式），S-7 只寫明、不改程式。
+- **rebase 到 `claude-delivery` `c523474`（HM-09 合併後，2026-11-16；第 16 節）**：`gateway.py` 的 `make_apps` 參數與說明、帳本、契約
+  第 9 節與變更紀錄照兩邊意圖合併，三個列管檔的帳本摘要照合併後的內容重算；HM-14 的差異列改成第 90～98 列（HM-09 用了第 89 列），
+  引用一起改，再補第 99 列；`-32004` 的「會自動重新啟動」只在 HM-09 的看門狗會再起子程式時說（`blocked`、`failed`、`stopped`、
+  `unconfigured` 說目前沒有在重新啟動），加 1 個測試（7 種狀態）。
 
 ## 1. 範圍與基準
 
@@ -35,10 +40,10 @@
 |---|---|
 | 切片 | HM-14（計畫 §12.3；風險中、工作量 L；要獨立安全審查） |
 | 分支 | `feat/ha-multiprofile-hm14-20261115`（一般 clone，不是 worktree） |
-| 基準 | `claude-delivery` `b5d10c5`（HM-00、01、02、04、05、06、07、08、13a、17 已合併） |
+| 基準 | `claude-delivery` `c523474`（HM-00～HM-09、13a、17、#100 已合併）；原本是 `b5d10c5`，2026-11-16 rebase（第 16 節） |
 | 依據 | 計畫 §5.1、§5.2、§10.3、§12.3 HM-14；契約 §1.2、§2.4、§2.5、§4.2（含「其他既有回應」）、§5、§9；HM-08 審查報告（`artifacts/…/wave3/review-HM-08.md`，S-4 (a)）與 HM-08 筆記第 14.2 節；FM-34、43、44、50、51、52 |
 | 對齊的 PaaS | 沒有移植 PaaS 程式。行為與期望值：`Pc/gateway_pool.py`（排隊、保留名額、`_hand_back`、`_watch_client`）、`Pc/proxy.py`（`_carries_no_request`、`_busy_message`、`_child_stopped`、`_Interruption`、`CHILD_*_MESSAGE`、`ACCESS_CHANGED_MESSAGE`）、`Pc/mcp_access.py`（`_finish_interrupted`、`INTERRUPTED_FINISH_TIMEOUT`）、`Pc/initialize_fence.py`（標頭卡在背壓時的拒絕）、`P:docs/mcp-gateway-limits.md`（@`69ac425`，與 main 上 19f36e2、`091dfbc` 的已知限制）；四個測試檔 @`69ac425`（含 main 上 `82c6929` 的測試補強） |
-| PaaS clone | 本機唯讀（沒 fetch、沒 checkout）；`origin/main` 寫筆記時是 `5b84b5d`，審查修正時是 `d7f5849`（都是別的流程 fetch 的；見第 10 節） |
+| PaaS clone | 本機唯讀（沒 fetch、沒 checkout）；`origin/main` 寫筆記時是 `5b84b5d`，審查修正與 rebase 時是 `d7f5849`（都是別的流程 fetch 的；見第 10 節） |
 
 ## 2. 改了什麼、沒改什麼
 
@@ -47,6 +52,7 @@
 | `Hc/gateway.py` | `SlotBusy`（`make_apps slot_busy` 的型別：排隊上限、保留名額、等候、回答與 WARNING）；`carries_no_request`（PaaS 規則原樣）；`Lane`、`take_slot`（排隊、上限、斷線監看、同一刻的還回）；`client_gone`、`interrupted`、`gateway_event`；`Ending`（token 換掉時閘道自己的結尾）；`OwnedInitializeResponse` 的世代 fence；`make_apps`：開通時兩組名額、`-32004`（標頭前、JSON 讀到一半、SSE 補事件）、`-32005`、initialize 世代、`mcp_app.state.lanes`（給診斷與測試）；initialize 錯誤不論開關都遮（不受開關管） |
 | `Hc/access.py` | `Delivery`（回應走到哪：開始送、伺服器收下標頭、最後收下的本體、整個送完）；`LeasedResponse` 多一個 `ending`（沒給時行為不變） |
 | `Hc/gateway.py`（審查修正） | 閘道補的 `-32004` 事件記成那個請求的回答（`owner.reply_event`，伺服器收下後 `owner.answered`）：之後換 token 不再補 `-32005`（S-1）；`make_apps slot_busy` 的型別註記改成 `SlotBusy \| None`（S-5） |
+| `Hc/gateway.py`（rebase 後） | `CHILD_RESTARTING_STATES`、`CHILD_HALTED_TEXT`、`make_apps` 的 `interruption_text`：子程式停止了時，`-32004` 只在 HM-09 的看門狗會再起它時說會自動重新啟動（第 16.4 節）；rebase 時 `make_apps` 的參數照兩邊合併（`slot_busy: SlotBusy \| None`、HM-09 的 `child_blocked`） |
 | `Hc/profile_router.py` | `ProfileGate.slot_busy` 改成 `gateway.SlotBusy`（從帳號的名額組成）；`forward_busy`、`forward_abandoned`、`child_interrupted`（帳號的回答與 WARNING）；`forward_text` 多保留名額、新 `queue_text`；模組說明。審查修正：`MAX_REPORT_KEYS` 64→256（S-4） |
 | `tests/switched_gateway.py`（新，測試工具） | 開通的帳號閘道從頭到尾驅動：可操控的子程式替身 `GatewayChild`、手動驅動 ASGI 的 `Exchange`（用戶端離開、不讀）、`quota()`、`supervisor()` |
 | `tests/test_carries_no_request.py`（新） | PaaS 的 51 個本體逐一照 HA 的解析分類；只限 POST；端到端：保留名額只載 `notifications/initialized`、其他都在名額前被擋或自答；保留名額滿；保留名額 0 |
@@ -56,9 +62,10 @@
 | `tests/test_initialize_generation.py`（新） | 換代、結束、被停時不交出 session、不 DELETE；正常時逐位元；重啟不等卡住的回應；開關關照舊；initialize 錯誤遮罩（開關關兩案、開關開一案） |
 | `tests/test_reply_mask_union.py` | 只改一個說明字串（HM-08 寫「開關關時原樣轉回，留給 HM-14」） |
 | 審查修正的測試（4 檔，11 案） | Q：佇列不跨帳號［B 滿｜預設滿］（MF-1）、GET 串流整段佔住一般名額（UC-31，S-3）；C：保留名額只在准入還有空位時有用［15｜16］（MF-2，釘住現況）；E：initialize 回覆讀到一半斷線［仍在執行｜停止了］、`-32004` 之後換 token 不再補 `-32005`、回覆還沒被收下就換 token 要補 `-32005`、最後一則被收下那一刻換 token 之後不再送（S-1、S-2）；B：每帳號每情況 60 秒一行在 6 個帳號、11 種情況下仍成立（S-4） |
-| `docs/multi-profile/contract.md` | 第 1.2 節（不受開關管的 initialize 錯誤遮罩）、第 2.4、2.5 節（HM-14 定案）、第 4.2 節、第 9 節第 90～94 列與 #81、第 10 節。審查修正：第 2.4 節三點（MF-2、UC-31、S-7）、第 2.5 節兩點（S-1、S-5）、第 4.2 節、第 5 節一點、第 9 節第 95～98 列、第 10 節一列 |
-| `docs/multi-profile/threat-model.md` | 第 3 節補兩條已知限制。審查修正：I8 測試欄補佇列不跨帳號（MF-1）、第 3 節補保留名額與准入（MF-2） |
-| `docs/provenance/runtime-patches.json` | `gateway.py`、`access.py`、`profile_router.py` 重算 SHA-256、補說明 |
+| rebase 後的測試（1 檔，7 案） | E：`test_a_stopped_child_is_said_to_restart_only_while_it_comes_back_by_itself`［backoff｜starting｜replaced｜blocked｜failed｜stopped｜unconfigured］：標頭前的 502 與 SSE 事件都驗（第 16.4 節） |
+| `docs/multi-profile/contract.md` | 第 1.2 節（不受開關管的 initialize 錯誤遮罩）、第 2.4、2.5 節（HM-14 定案）、第 4.2 節、第 9 節第 90～94 列與 #81、第 10 節。審查修正：第 2.4 節三點（MF-2、UC-31、S-7）、第 2.5 節兩點（S-1、S-5）、第 4.2 節、第 5 節一點、第 9 節第 95～98 列、第 10 節一列。rebase 後：HM-14 的列從第 89～97 列改成第 90～98 列（HM-09 用了第 89 列）、第 2.5 節 `-32004` 三種文字、第 4.2 節 `-32004` 列、第 9 節第 99 列、第 2.4、5 節與 #95 寫明 MF-2 (b) 的定案、第 10 節一列 |
+| `docs/multi-profile/threat-model.md` | 第 3 節補兩條已知限制。審查修正：I8 測試欄補佇列不跨帳號（MF-1）、第 3 節補保留名額與准入（MF-2）。rebase 後：第 3 節寫明 MF-2 (b) 的定案與 `-32004` 依子程式狀態的文字 |
+| `docs/provenance/runtime-patches.json` | `gateway.py`、`access.py`、`profile_router.py` 重算 SHA-256、補說明。rebase 時以 `claude-delivery` 的帳本為底、照合併後的內容重算；rebase 後 `gateway.py` 再重算一次 |
 | 本筆記 | — |
 
 沒改：`profile_runtime.py`、`run_product.py`、`lifecycle.py`、`health.py`、`profiles.py`（`ProfileManager.add` 照舊傳
@@ -103,9 +110,10 @@ FM-52（超過上限先讀完 128 MiB 再回錯誤）是「HM-14 選做」，沒
 - **保留名額只在准入還有空位時有用**（審查 MF-2；契約 §2.4、§5、§9 #95；威脅模型第 3 節）：准入（HM-08）在讀 body 前算，讀 body 中、
   排隊中、轉送中的請求與開著的 GET 串流都算；准入＝轉送＋排隊（64＝32＋32、32＝16＋16）。一般名額與它的佇列都滿時准入也滿，`notifications/initialized`
   在讀 body 前就拿 503（`-32003`、`id: null`、准入的文字），到不了保留名額。PaaS（@69ac425）讀 body 前沒有准入，所以照樣送到。
-  只影響同一個帳號自己。要不要給准入留出空間（改 DQ-07 的數值）或准入滿時先讀小請求（改 HM-08 的分派器）交使用者決定，本片沒有自己定；
+  只影響同一個帳號自己。主對話 2026-11-16 定案（MF-2 (b)；第 11 節）：不改 DQ-07 的數值；交 HM-31（對齊 PaaS #155）改分派器，准入滿時
+  仍讀 ≤64 KiB 的小請求，是通知或回應就走保留名額。本片照現況寫明，
   `tests/test_carries_no_request.py::test_the_reserve_is_reached_only_while_the_profiles_admission_has_room` 先釘住現況（排 15 個 202、
-  排滿 16 個 503）。
+  排滿 16 個 503），HM-31 再改。
 
 ### 3.4 子程式中途斷線 `-32004`（契約 §2.5；FM-44）
 
@@ -116,6 +124,9 @@ FM-52（超過上限先讀完 128 MiB 再回錯誤）是「HM-14 選做」，沒
 - 原因：轉送那一刻記下世代＝健康監看快照裡子程式的 `starts`（每次 spawn 加一）；斷線後 start 數變了或狀態不是 `running` 就是停止了，
   看起來還在跑時每 20 ms 看一次、最多 0.25 秒（`CHILD_EXIT_GRACE_SECONDS`，同 PaaS）。沒有健康監看（測試替身）時一律說停止了（PaaS 同）。
   子程式停止時，它為 initialize 開的 session 不 DELETE。
+- 停止了的兩種文字（rebase 到 HM-09 之後加；第 16.4 節）：判定停止的那一刻（`interruption_text`，和 `child_stopped` 之間沒有 await）看
+  `Supervisor.status`：`backoff`、`starting` 或新世代的 `running`（`CHILD_RESTARTING_STATES`）用 PaaS 的「會自動重新啟動」
+  （`CHILD_STOPPED_TEXT`）；`blocked`、`failed`、`stopped`、`unconfigured` 用「目前沒有在重新啟動」（`CHILD_HALTED_TEXT`；§8.8 #99）。
 - WARNING：帳號的 `child_interrupted`，每帳號每種原因 60 秒一行（§8.8 #92），只有 HTTP 方法與錯誤類別名，不帶路徑（密鑰網址的路徑就是
   token）、traceback 或內容。
 
@@ -335,7 +346,7 @@ MockTransport）；`hold_start` 只擋第一個標頭（閘道自己的拒絕要
 
 ## 8. 只在 CI 跑的測試、`checks` 秒數
 
-- 本片新增的 117 案（審查修正後 128 案）都在本機跑過、全部通過，**沒有只在 CI 跑的新測試**。CI（root、0 skip）才是準：
+- 本片新增的 117 案（審查修正後 128 案，rebase 後 135 案）都在本機跑過、全部通過，**沒有只在 CI 跑的新測試**。CI（root、0 skip）才是準：
   - 已知要 root、本機一定失敗的既有案例（不是本片造成）：`tests/test_owned_executable.py::test_uid10001_nondumpable_self_and_own_child_proof`、
     `tests/test_profile_store.py::test_mode_and_owner_as_the_add_on_user`、`tests/test_restore_detection.py` 的 5 個 `test_root_*`。
   - 本片的測試在 root 下：不看 uid、檔案權限或 `str()` 的格式；真 socket 只綁 127.0.0.1 的隨機 port（`tests/owned_network.py` 擋 3000 與
@@ -384,7 +395,7 @@ Nextcloud 與 EMQX，HM-08 審查已記；`5b84b5d..d7f5849` 是 #155；都是�
 |---|---|---|
 | DQ-06 (a) | 對齊基準 `69ac425`，之後的變動每片列出；#150（`091dfbc`）由 HM-14 對照 | 第 10 節 |
 | DQ-07 (a)＋DQ-29 | 名額規則與數值（契約第 5 節：轉送 32／16、等 1 秒、排隊 32／16、保留 4） | 第 3.2 節 |
-| DQ-20 (b) | 開通的產品看門狗照 PaaS、不限次數重啟（HM-09） | `-32004` 的「會自動重新啟動」文字以 HM-09 合併為前提（HM-14 在 HM-09 之後合併） |
+| DQ-20 (b) | 開通的產品看門狗照 PaaS、不限次數重啟（HM-09） | HM-09 已合併（rebase 到 `c523474`）：子程式停止了時，看門狗退避中、正在起或新世代在跑才說「會自動重新啟動」；`blocked`、`failed`、`stopped`、`unconfigured` 說目前沒有在重新啟動（第 16.4 節） |
 | DQ-33、DQ-36 | 本機短 TMPDIR、以 CI 為準；commit 不加 AI 署名 | 第 7 節；commit |
 | DQ-37 (a) | 同 uid 是同一個信任邊界 | listener 身分留給 HM-15（第 3.6 節） |
 | DQ-40 (a) ⑧ | 回覆遮罩含所有帳號的 token | initialize 錯誤在開通時照 HM-08 的聯集遮（第 3.7 節） |
@@ -392,12 +403,12 @@ Nextcloud 與 EMQX，HM-08 審查已記；`5b84b5d..d7f5849` 是 #155；都是�
 沒用到：DQ-13、14、21、25、30、31（使用者已定，HM-09～HM-12 記進 `decisions.md`）；UC-10、DQ-10 子題（HM-10、HM-20）。legacy SSE：HA 今天就沒有（§8.8 #6；DQ-23 待定、屬 HM-18），PaaS legacy SSE 的那幾列不適用，本片不需要它的決定。
 實作時沒有碰到待定題。
 
-**審查帶出一題新的待使用者決定（MF-2 (b)；本片沒有自己定）**：保留名額要不要在准入滿時也有效。做法二選一或都不做：
-(1) 准入留出保留名額的空間（准入＝轉送＋排隊＋保留，例如預設 68、額外 36；位元組額度不變），會改 DQ-07 (a) 的數值；
-(2) 准入滿時，對宣告 ≤64 KiB 的請求先用拒絕小額度讀完，`carries_no_request` 成立就放行到保留名額，要改 HM-08 的分派器。
-最晚 HM-19c 前定（數值量測前）。在定之前：契約 §2.4、§5、§9 #95（類型「待決」）與威脅模型第 3 節寫明現況，
-`test_the_reserve_is_reached_only_while_the_profiles_admission_has_room` 釘住現況，選定後照選的做法改這個測試。
-`decisions.md` 沒有改（HM-09、HM-10 也在改它，避免 rebase 衝突）：請主對話記成新的待定題。
+**審查帶出的 MF-2 (b) 已定（主對話 2026-11-16 07:5x）**：保留名額要不要在准入滿時也有效。審查列的兩個做法：
+(1) 准入留出保留名額的空間（准入＝轉送＋排隊＋保留，例如預設 68、額外 36；會改 DQ-07 (a) 的數值）——**不採用**，DQ-07 的數值不改；
+(2) 准入滿時，對宣告 ≤64 KiB 的請求先讀完，是通知或回應（`carries_no_request`）就放行到保留名額（改 HM-08 的分派器）——**採用，交 HM-31**
+（對齊 PaaS #155 一起做，照 PaaS 的語意）。本片照現在的寫法：契約 §2.4、§5、§9 #95（類型維持「待決」，說明改成交 HM-31 與這個定案）與
+威脅模型第 3 節寫明現況與定案；`test_the_reserve_is_reached_only_while_the_profiles_admission_has_room` 先釘住現況，HM-31 再照定案改。
+`decisions.md` 不加新題。
 
 ## 12. 待 HM-03a 確認
 
@@ -414,7 +425,7 @@ HM-03a／b 的實機探針還沒做。本片的行為不依賴 HAOS 特有的平
 
 | 條件 | 結果 |
 |---|---|
-| 全綠 | 本機：新 117 案、相關 1217 案全過；全套 5394 案只剩 7 個要 root 的既有案例（第 7 節）。CI（root、0 skip）待開 PR |
+| 全綠 | 本機：新 117 案、相關 1217 案全過；全套 5394 案只剩 7 個要 root 的既有案例（第 7 節）。rebase 後（第 16.7 節）：新 5 檔 135 案、相關 33 檔 1424 案全過；全套 5531 案只剩 7 個要 root 的既有案例與 22 個本機沒有 Chromium 的瀏覽器測試。CI（root、0 skip）待開 PR |
 | 開關關時形狀與今天相同（initialize 錯誤遮罩除外） | 通過：第 5 節；HM-01 黃金回歸與兩個契約凍結斷言沒改、照過；突變 E05 擋下 |
 | PaaS 四個測試檔逐案對照 | 通過：第 4 節，43 案每案都有 HA 測試或不適用的理由；`_carries_no_request` 的 51 個本體逐字相同 |
 | 獨立安全審查 | **已做**（2026-11-16，`artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-14.md`）：修正後通過；必修 2 項、建議 7 項的處理見第 15 節 |
@@ -429,11 +440,11 @@ HM-03a／b 的實機探針還沒做。本片的行為不依賴 HAOS 特有的平
 
 ## 14. 還沒解決、交給後面的片
 
-- **待使用者決定（審查 MF-2 (b)）**：保留名額要不要在准入滿時也有效（第 11 節）；最晚 HM-19c 前。請主對話記進 `decisions.md`。
-- **HM-09 合併後重看**：HM-09 加的 `blocked` 狀態會被 `child_runs` 判成「停止了」（判斷沒問題），但 `-32004` 文字的「會自動重新啟動」
-  對 `blocked` 的子程式不成立（審查第 9 節的觀察）。rebase 時看要不要改文字。
+- **MF-2 (b) 交 HM-31**（主對話 2026-11-16 定案；第 11 節）：准入滿時仍讀 ≤64 KiB 的小請求，是通知或回應就走保留名額；HM-31 改分派器、
+  改釘住現況的那個測試，契約 §9 #95 那時再改類型與說明。DQ-07 的數值不改。
+- **HM-09 合併後重看**：已做（第 16.4 節）。`blocked` 被 `child_runs` 判成「停止了」沒問題；`-32004` 停止了的文字改成看狀態分兩種。
 - **給 PaaS 的回補建議（HM-29）**：一個請求只回一則（§8.8 #96：回覆在換 token 那一刻被收下、`-32004` 之後換 token）；`_MAX_REPORT_KEYS`
-  64 不夠（#155 又多了 `body-*` 情況；審查 S-4）。
+  64 不夠（#155 又多了 `body-*` 情況；審查 S-4）；子程式停止後不會自己再起時，`-32004` 不說會自動重新啟動（§8.8 #99）。
 - **HM-31**（PaaS #155 對齊，使用者已定）：排在本片之後；它的位元組預算要和 HM-08 的額度整合，准入與保留名額的關係（第 3.3 節）一起看。
 - **HM-18**：把契約第 2.4、2.5 節本片定案的文字與威脅模型第 3 節本片加的三條已知限制（審查後加了保留名額與准入）寫進產品 DOCS；
   `acceptance-matrix.md` 測試檔登記表的「計畫」狀態一起更新（HM-08 也留給 HM-18）。
@@ -441,9 +452,10 @@ HM-03a／b 的實機探針還沒做。本片的行為不依賴 HAOS 特有的平
 - **HM-19b**：第 12 節三項的實機確認；T-19 照第 3.2 節的數值驗。
 - **後續可做（PaaS 文件也列為後續，不在 HM-14）**：同一個 session 的 `notifications/cancelled` 或 DELETE 到達時丟掉它排隊中的請求
   （補 SDK 層級逾時與 `terminate_on_close=True` 的缺口）；FM-52（超過上限先讀完再回錯誤）。
-- **rebase 注意**：本片改 `gateway.py`、`profile_router.py`、`access.py` 與帳本；照計畫 §12.2 的順序在 HM-09、HM-10 之後合併，rebase 後
-  重算三個檔的帳本摘要、重跑 CI，並重跑第 15.4 節的突變（尤其 T03、R05、R06、R12、R22、S1R、S4R）。`profile_runtime.py` 沒改
-  （HM-09 會改 `ProfileManager.add`）。HM-10 若改了 `make_apps` 的參數或 `ProfileGate`，`slot_busy` 的型別要跟著（`gateway.SlotBusy`）。
+- **rebase 注意**：HM-09 之後的 rebase 已做（第 16 節）。開 PR 前還要再 rebase 一次：HM-20（後端網址擋 loopback）會先合併，它也改帳本、
+  契約第 9 節（會補列）與 `decisions.md`。到時候帳本照實際內容重算 `gateway.py`、`access.py`、`profile_router.py`，契約列號若又衝突就再重編
+  （連同本筆記、測試說明、PR 草稿的引用），重跑受影響的測試與兩個預檢。HM-10 若比本片先合併、改了 `make_apps` 的參數或 `ProfileGate`，
+  `slot_busy` 的型別要跟著（`gateway.SlotBusy`）。`profile_runtime.py` 本片沒改。
 
 ## 15. 獨立安全審查意見處理（2026-11-16）
 
@@ -457,7 +469,7 @@ HM-03a／b 的實機探針還沒做。本片的行為不依賴 HAOS 特有的平
 | # | 意見 | 核對 | 處理 | 證據 |
 |---|---|---|---|---|
 | MF-1 | 「一個帳號的佇列滿了，別的帳號照樣排隊」沒有測試；突變 T03（排隊數跨帳號合計）存活 | 成立。程式本身對：每次 `make_apps` 各建一組 `Lane`，`take_slot` 只看自己的 `lane.waiting`。但唯一用到兩個帳號的佇列測試裡，預設帳號的名額是空的、走快速路徑，碰不到排隊上限。本機重跑 T03：作者的測試照過，存活（156 案全過：新 5 檔＋`test_profile_quotas.py`、`test_profile_routing.py`，本次新增的 11 案 deselect） | **採用**：`tests/test_gateway_queue_ha.py::test_one_profiles_full_queue_never_refuses_another_profiles_waiting_request`［B 滿｜預設滿］：兩個帳號唯一的名額都佔住、一方的佇列（上限 1）滿：那一方的下一個立刻拿佇列文字的 `-32003`；另一方的下一個照樣排在自己的佇列，名額空出後拿到結果。威脅模型 I8 的測試欄補上；第 15.4 節列 T03 | T03：加測試前存活、加測試後擋下（第 15.4 節） |
-| MF-2 | 正式數值下，保留名額在准入滿時到不了；契約與 §9 沒寫 | 成立。准入（HM-08）在讀 body 前算，讀 body 中、排隊中、轉送中與開著的 GET 串流都算；准入＝轉送＋排隊（64＝32＋32、32＝16＋16）。本機重現：額外帳號排 15 個時通知 202，排滿 16 個時 503＋准入的文字 | **(a) 採用（寫明）**：契約 §2.4 一點、§5 一點、§9 #95（類型「待決」）；威脅模型第 3 節一條；本筆記第 3.3、11 節。審查的 E9 收成 `tests/test_carries_no_request.py::test_the_reserve_is_reached_only_while_the_profiles_admission_has_room`［15｜16］，**先釘住現況**，使用者選定做法後照選的改。**(b) 沒有自己定**：給准入留出保留名額的空間（例如預設 68、額外 36，改 DQ-07 的數值），或准入滿時先讀小請求、是通知就放行（改 HM-08 的分派器），交使用者在 HM-19c 前決定（第 11 節） | 新測試在修正前後都過（釘住現況） |
+| MF-2 | 正式數值下，保留名額在准入滿時到不了；契約與 §9 沒寫 | 成立。准入（HM-08）在讀 body 前算，讀 body 中、排隊中、轉送中與開著的 GET 串流都算；准入＝轉送＋排隊（64＝32＋32、32＝16＋16）。本機重現：額外帳號排 15 個時通知 202，排滿 16 個時 503＋准入的文字 | **(a) 採用（寫明）**：契約 §2.4 一點、§5 一點、§9 #95（類型「待決」）；威脅模型第 3 節一條；本筆記第 3.3、11 節。審查的 E9 收成 `tests/test_carries_no_request.py::test_the_reserve_is_reached_only_while_the_profiles_admission_has_room`［15｜16］，**先釘住現況**，使用者選定做法後照選的改。**(b) 沒有自己定**：給准入留出保留名額的空間（例如預設 68、額外 36，改 DQ-07 的數值），或准入滿時先讀小請求、是通知就放行（改 HM-08 的分派器），交使用者在 HM-19c 前決定（第 11 節）。→ 2026-11-16 主對話定案：不改 DQ-07 的數值，交 HM-31 改分派器讀小請求（第 11、16.5 節） | 新測試在修正前後都過（釘住現況） |
 | S-1 | SSE 已補 `-32004`，token 才在伺服器收下之後換掉：同一個 id 再補一則 `-32005` | 成立。`stream()` 補的 `-32004` 事件沒記成 `owner.reply_event`，yield 後也沒設 `owner.answered`，`Ending` 判斷回答沒送到。PaaS 同樣：`Pc/proxy.py:1192-1194` yield tail 之後直接 return、沒有 `delivered`。新測試在修正前紅：`[(7, -32004), (7, -32005)] == [(7, -32004)]` | **採用**：`gateway.py` 照審查的修法（事件設成 `owner.reply_event`，yield 後 `owner.answered = True`）；`UpstreamOwner`、`Ending` 的說明跟著改。契約 §2.5 一點、§9 #96（加嚴，建議回補；和第 3.5 節作者找到的同類競態放同一列）；列入給 PaaS 的回補建議（HM-29） | `tests/test_gateway_stream_endings.py::test_the_minus_32004_event_is_the_answer_and_no_minus_32005_follows_it`：修正前紅、修正後綠；突變 S1R（拿掉修法）擋下 |
 | S-2 | 契約寫了、卻沒有測試擋住的四個行為（R05、R06、R12、R22 存活） | 成立。本機重跑四個突變，作者的測試都過：R05 117 案、R06 117 案、R12 124 案、R22 117 案全過（本次新增的 11 案 deselect） | **採用**：審查的 E2 收成 `test_an_initialize_answer_broken_mid_body_gets_minus_32004_and_no_session`［仍在執行｜停止了］（拿掉審查原本的 0.3 秒等待：`interrupted_answer` 先 `await owner.close()`，DELETE 在回應送出前就做完）；P2、P3 收成 `test_a_reply_the_server_had_not_taken_when_the_token_changed_gets_minus_32005`、`test_a_token_changed_as_the_last_message_is_taken_adds_nothing_after_it`（都在 `tests/test_gateway_stream_endings.py`） | 四個突變加測試後都擋下（第 15.4 節） |
 | S-3 | 計畫 §16 的 UC-31 沒回答 | 成立 | **採用**：審查的 E6 收成 `tests/test_gateway_queue_ha.py::test_get_streams_hold_ordinary_slots_for_their_whole_life`（額外帳號的正式數值：8 條串流開著時同時只能跑 8 個 POST，第 9 個等 0.3 秒後拿 `-32003`，第 9 條串流立刻 429）；契約 §2.4 一點；UC-31 的答案見第 15.2 節 | 新測試 |
@@ -471,7 +483,7 @@ HM-03a／b 的實機探針還沒做。本片的行為不依賴 HAOS 特有的平
 - **UC-31（計畫 §16）：是。** GET 串流整段佔住一條一般名額與一個准入（新測試；審查 E6）。額外帳號開滿 8 條串流時 POST 剩 8 條名額，
   預設帳號開滿 24 條時剩 8 條；這和 PaaS「串流上限小於連線上限，POST 仍有名額」的設計一致。這個事實也是 MF-2 的一部分。
 - HM-09 合併後重看：HM-09 加的 `blocked` 狀態（預檢失敗就不再自動重啟）會被 `child_runs` 判成「停止了」，判斷沒問題；但 `-32004`
-  文字的「會自動重新啟動」對 `blocked` 的子程式不成立。rebase 時看要不要改文字（第 14 節）。
+  文字的「會自動重新啟動」對 `blocked` 的子程式不成立。rebase 時看要不要改文字（第 14 節）。→ rebase 後已改（第 16.4 節）。
 - `-32005` 的文字讓舊 token 的持有人知道「token 被輪替或撤銷」：和密鑰網址「錯 token 一律 404、不說原因」不同，但只發生在已經連上的串流，
   PaaS 同樣；審查認為可以接受，照舊。
 - 計畫 §5.2 的表格（repo 外）建議補一句准入與保留名額的關係：交主對話。
@@ -532,3 +544,182 @@ HM-03a／b 的實機探針還沒做。本片的行為不依賴 HAOS 特有的平
 | `f6d2f8d` | 帳本：`gateway.py`、`profile_router.py` 重算 SHA-256、補說明 |
 | `bbf6480` | 契約與威脅模型 |
 | 本筆記的 commit | 本筆記的結論與第 1～3、6～15 節 |
+
+## 16. rebase 到 `claude-delivery` `c523474`（HM-09 合併後，2026-11-16）
+
+### 16.1 範圍
+
+- 基準從 `b5d10c5` 換成 `c523474`（`git rebase --onto origin/claude-delivery b5d10c5`；`git fetch origin claude-delivery` 之後）。中間合併的是
+  #100（`cf62c8f`：`checks` 上限 40→60 分鐘）與 HM-09（#101：`c03cd4d`～`7085bf7`，14 個 commit）。
+- 和本片重疊的檔：`Hc/gateway.py`（HM-09：`make_apps` 多 `child_blocked`、說明多一段、`child/restart` 的 202 帶 `blocked_reason`）、
+  `docs/multi-profile/contract.md`（HM-09：第 5、7 節、第 9 節第 89 列與 #14 的附註、說明段、第 10 節兩列）、`docs/provenance/runtime-patches.json`
+  （HM-09：`gateway.py`、`lifecycle.py`（新列管）、`profile_runtime.py`、`profiles.py`、`run_product.py`）、`tests/test_reply_mask_union.py`
+  （HM-09 在別的測試加一行）。`decisions.md`、`profile_router.py`、`access.py` 本片改、HM-09 沒改（或反之），沒有衝突。
+- `git log origin/claude-delivery..HEAD` 只剩本片的 commit（rebase 過來的 10 個，加上 rebase 後的 7 個；第 16.11 節）。
+
+### 16.2 衝突與處理
+
+| rebase 後的 commit（原本） | 衝突 | 處理 |
+|---|---|---|
+| `7b49885`（`c06eb43`） | `gateway.py` 的 `make_apps` 說明：HM-09 加的那段與本片加的兩段 | 兩邊都留，照合併順序 HM-08 → HM-09 → HM-14；簽名由 git 自動合併（HM-09 的 `child_blocked` 在） |
+| `d479ab0`（`148626d`）、`63b77e3`（`f6d2f8d`） | 帳本 `gateway.py` 的 `change` 與 `sha256` | 不只解文字：以 `claude-delivery` 的帳本為底，加回原 commit 在 `change` 後面補的那段（HM-09 的說明在前、本片的在後），三個列管檔的 `sha256` 用合併後的實際內容重算（腳本 `SP:hm14-rebase-20261116/bin/merge_ledger.py`；`access.py`、`profile_router.py` 兩邊只有本片改，摘要和原本相同；`gateway.py` 是新的值）。JSON 照 repo 的格式（`indent=2`、`ensure_ascii=False`）寫回，逐位元可重現 |
+| `310229c`（`3366d9b`）、`28869c8`（`bbf6480`） | 契約第 9 節說明段、表格最後、第 10 節變更紀錄 | 說明段合寫（第 89 列是 HM-09 的、第 90～94 列出自 HM-14 的實作、第 95～98 列出自 HM-14 的審查）；表格留 HM-09 的第 89 列，本片的列改成第 90～98 列；變更紀錄兩邊的列都留（HM-09 的兩列在前）。本片加的行裡對這些列的引用一起加一（腳本 `SP:hm14-rebase-20261116/bin/renumber.py`：只改原 commit 加的行、而且不是 `claude-delivery` 本來就有的行；第 16.3 節） |
+| `db89f24`（`064a226`） | `make_apps` 的簽名 | `slot_busy: SlotBusy \| None`（本片 S-5）與 HM-09 的 `child_blocked` 都留 |
+| 其他 4 個 | 沒有衝突 | 測試 `3c12b71`、`d662684`；筆記 `288e1ab`、`69e132a`（筆記裡的列號在 `8b93111` 跟著改） |
+
+核對：程式與 `test_reply_mask_union.py` 的「rebase 後減 rebase 前」逐行等於 HM-09 與 #100 帶進來的改動（`git diff b5d10c5 origin/claude-delivery`
+對 `git diff 351666f HEAD`；`gateway.py` 只差說明段接在哪一行）；契約與威脅模型「本片的改動」rebase 前後只差列號加一與合寫的說明段。
+
+### 16.3 列號重編（HM-09 用了第 89 列）
+
+| 原本 | rebase 後 | 項目 |
+|---|---|---|
+| #89 | #90 | 保留名額載的東西 |
+| #90 | #91 | token 換掉時標頭已送出的 JSON 回覆 |
+| #91 | #92 | `-32004` 的 log |
+| #92 | #93 | initialize 換代的回應 |
+| #93 | #94 | 標頭卡在背壓時換 token |
+| #94 | #95 | 保留名額與准入（待決；MF-2 (b) 交 HM-31） |
+| #95 | #96 | 一個請求只回一則（SSE 的 `-32005`） |
+| #96 | #97 | 排隊中換 token |
+| #97 | #98 | 子程式逾時（回應標頭前） |
+| — | #99 | 子程式停止後 `-32004` 的文字（rebase 後新加；第 16.4 節） |
+
+引用改了：契約第 2.4、2.5、4.2、5 節、第 9 節說明段與表格、第 10 節；威脅模型第 3 節兩處（以上在 rebase 解衝突時）；本筆記 24 行與兩個測試說明
+（`tests/test_carries_no_request.py`、`tests/test_gateway_stream_endings.py`；`8b93111`，只改數字）。PR 草稿（repo 外）照新列號寫。
+本筆記第 1～15 節的文字照 rebase 前寫的，只有列號跟著改；commit 編號是 rebase 前的（對照見第 16.11 節）。HM-20 若先合併又補了第 9 節的列，
+開 PR 前再照同樣的做法重編一次。
+
+### 16.4 HM-09 合併後的重看：`blocked` 與 `-32004` 的文字
+
+- 判斷沒問題：HM-09 加的 `blocked`（還有 `failed`、`backoff`）都不是 `running`，`child_runs` 判成「停止了」；停止時 initialize 的 session 照舊不 DELETE。
+- 文字要改：PaaS 的「會自動重新啟動」（`CHILD_STOPPED_TEXT`）只在 HM-09 的看門狗會再起子程式時成立。照 HM-09 的語意（契約第 7 節）：
+
+  | 停止那一刻的 `Supervisor.status` | 誰讓它再起 | `-32004` 的文字 |
+  |---|---|---|
+  | `backoff` | 看門狗等退避（2→300 秒）後自己再起 | 會自動重新啟動（PaaS 原文） |
+  | `starting`、新世代的 `running` | 已經在起、已經起好（面板重啟、存檔、看門狗） | 會自動重新啟動 |
+  | `blocked` | `Supervisor.block`（停用的帳號、記憶體不夠、索引內撞號）：沒有人自動再起，要存檔、面板重啟或索引改了；spawn 前檢查拒絕（port 衝突或被佔）：看門狗退避後再查，port 空出來才起 | 目前沒有在重新啟動（`CHILD_HALTED_TEXT`） |
+  | `failed` | 監看停止（DQ-21）：存檔或面板重啟才再起 | 目前沒有在重新啟動 |
+  | `stopped` | 帳號被刪、add-on 在停：不會再起 | 目前沒有在重新啟動 |
+  | `unconfigured` | 沒有存連線：存了才起 | 目前沒有在重新啟動 |
+
+  spawn 前檢查拒絕的 `blocked` 之後可能被看門狗再起，所以新文字只說「目前沒有在重新啟動」，不說永遠不會；原因寫在 add-on log（HM-09 的
+  `not started (<原因碼>)` 等 WARNING）。
+- 做法（`64105d4`）：`gateway.CHILD_RESTARTING_STATES`（`backoff`、`starting`、`running`）、`CHILD_HALTED_TEXT`（英文加繁中，同其他固定文字），
+  `make_apps` 的 `interruption_text`：在 `child_stopped` 判定之後、沒有 await 之前讀狀態（`interrupted_answer` 在 `await owner.close()` 之前），
+  標頭前的 502 與 SSE 事件共用。沒有健康監看可比（沒有世代）時照原本的說法。WARNING 照舊只分「停止了」與「仍在執行」（帳號的情況數不變，
+  `MAX_REPORT_KEYS` 的算法不用改）。開關關的產品不受影響（`-32004` 只在開通時用）。
+- 契約第 2.5 節（三種文字與狀態）、第 4.2 節 `-32004` 列、第 9 節第 99 列（加嚴，建議回補 PaaS：PaaS 的註解把「被擋下」也算進
+  「會自動重新啟動」那一種；HM-29）；威脅模型第 3 節一句。
+- 測試（`2333eca`）：`tests/test_gateway_stream_endings.py::test_a_stopped_child_is_said_to_restart_only_while_it_comes_back_by_itself`
+  ［backoff｜starting｜replaced｜blocked｜failed｜stopped｜unconfigured］：子程式斷線那一刻把 `Supervisor` 放到那個狀態（`blocked` 用真的
+  `Supervisor.block`），標頭前的 502 與已開始的 SSE 事件都驗文字；每種文字都有「操作可能已完成也可能沒有」；WARNING 說 the MCP server stopped。
+
+### 16.5 MF-2 (b) 的定案（主對話 2026-11-16 07:5x）
+
+不改 DQ-07 的數值；「保留名額在准入滿時也有效」交 HM-31（對齊 PaaS #155）一起做：照 PaaS 的語意，准入滿時仍讀 ≤64 KiB 的小請求，
+是通知或回應就走保留名額。本片照現在的寫法：契約 §9 #95 類型維持「待決」、說明改成「交 HM-31，主對話 2026-11-16 定案：不改 DQ-07 數值，
+改分派器讀小請求」；第 2.4、5 節與威脅模型第 3 節同步；`test_the_reserve_is_reached_only_while_the_profiles_admission_has_room` 照舊釘住現況
+（只改說明）。`decisions.md` 不加新題（`61aee83`）。
+
+### 16.6 HM-09 的錯開啟動與 initialize 世代的兩個測試
+
+rebase 後第一輪跑新 5 檔，`tests/test_initialize_generation.py` 有 4 案紅（`test_an_initialize_whose_generation_changed_is_not_handed_out`
+［restarted｜exited｜stopped］、`test_an_initialize_to_the_running_generation_is_handed_out_as_before`）：B 的子程式替身多開了一個 session
+（`opened` 是 2、session 名稱是 `-session-2`）。原因在測試的假設，不在程式：HM-09 的錯開啟動（`ProfileManager.start_all` 的 `_started` →
+`HealthMonitor.settle`）在測試開始前就讓 B 的子程式回一次健康檢查，那次檢查的 initialize（clientInfo `local-readiness`）也算進替身的
+`opened`，結束時還送一個清理用的 DELETE（`health.py`）。HM-09 之前 `ProfileManager.monitor()` 只跑預設帳號的監看，額外帳號的子程式不會被
+檢查。`915f9e6` 改成只看為用戶端開的 session：`opened` 和送出前比（多 1）、session 名稱照當下的 `opened` 而且不是健康檢查的 session
+（`GatewayChild.checks`）、「沒有 DELETE」只算用戶端的 session。測試要證明的事沒變；其他 139 案在第一輪就全過。
+
+### 16.7 本機檢查（2026-11-16，一般使用者；TMPDIR 用 ha_env.sh 給的 `/tmp/ha-mp-XXXXXX`，每次跑完用完整路徑刪除；pytest 都排隊在共用鎖）
+
+證據在 repo 外：`SP:hm14-rebase-20261116/`（`bin/` 腳本、`logs/` 的 pytest log 與 junit、`evidence/` 的突變結果與 SHA-256 核對）。
+
+| 檢查 | 結果 |
+|---|---|
+| 先紅（`gateway.py` 換成 `2333eca` 的內容＝只有新測試、程式還沒改；跑完逐位元還原並核對 SHA-256，3 個 OK） | 新測試 7 案：**4 失敗、3 通過**，1.75 秒。失敗的正是 blocked、failed、stopped、unconfigured（還說「會自動重新啟動」）；通過的 backoff、starting、replaced 釘住今天就成立的行為 |
+| 第一輪新 5 檔＋`test_reply_mask_union.py`（程式＝`64105d4` 之後） | 143 案 **4 失敗**、139 通過：`test_initialize_generation.py` 的 4 案，原因是 HM-09 的錯開啟動先檢查了子程式（第 16.6 節）；`915f9e6` 改測試 |
+| 第二輪新 5 檔＋`test_reply_mask_union.py`（head `915f9e6`） | **143 案全過、0 skip**，19.06 秒（新 5 檔 135 案：審查修正後 128 案＋rebase 後 7 案；新的 7 案合計 0.58 秒） |
+| 相關既有 33 檔（第 15.3 節同一組） | **1424 案全過、0 skip**，388.1 秒 |
+| 突變 | 第 16.8 節 |
+| 全套 pytest（`tests/`；head `915f9e6`） | 5531 案、0 skip、31 分 52 秒：**5502 通過**；29 失敗＝7 個要 root 的既有案例（`test_owned_executable.py` 1、`test_profile_store.py` 1、`test_restore_detection.py` 5，同第 7 節）＋22 個瀏覽器測試（`test_owned_browser_redirect.py` 16、`test_owned_browser_ipc.py` 5（只有 browser=True 的那幾個）、`test_owned_ui.py` 1）：這個 clone 沒有 Chromium（`packages/mcp-admin-ui/node_modules/playwright-core/.local-browsers` 不在：node_modules 在 2026-11-16 07:25 重裝過，之後沒裝瀏覽器；17 案直接寫 `Executable doesn't exist`，IPC 的 5 案是瀏覽器起不來、沒有回覆）。裝 Chromium 要從 Playwright 的下載站下載，任務規則不准連 GitHub 以外的網路，所以沒裝；CI 的 `packaging/unit.sh` 會先 `npm run browser:install` 再跑。這 22 案只測管理面板的瀏覽器擁有權，本片沒有動到它們或它們測的程式。沒有別的失敗；2 個 warning 是既有的 websockets DeprecationWarning |
+| `packaging/validate.py`（ci-venv 的 Python） | PASS（head `61aee83`；之後只動 `tests/` 與筆記） |
+| packaging unittest（照 CI：離線暫存 venv＝`uv sync --frozen --no-dev --offline`＋`requirements-ci`） | `Ran 201`、`OK (skipped=5)`（5 個 `skipUnless(root)`，同基準） |
+| `scripts/tool_inventory.py`（漂移檢查，同 unit.sh） | exit 0（沒動 `apps/runtime`、`launch.py`） |
+| 暫存目錄 | 每個 `/tmp/ha-mp-*` 都已用完整路徑刪除（`logs/tmpdirs.txt`）；`git status` 只有本筆記沒 commit |
+
+### 16.8 突變（rebase 後）
+
+腳本 `SP:hm14-rebase-20261116/bin/mutate.py`（第 15.4 節的 18 個，錨點照 rebase 後的程式核對過；加 H01～H05）。每個只改正式程式一處、改完可編譯、
+`pytest -x`（全部測試，沒有 deselect），跑完逐位元還原並以 SHA-256 核對：**23 個都還原 OK**。結果：**21 個擋下**；W04、ICE 照審查的判斷是等價突變（存活）。
+
+| # | 突變 | 結果（擋下的第一個測試） |
+|---|---|---|
+| T01 | 名額等候逾時、帶 id 的請求回 503 | 擋下（`test_a_busy_lane_answers_as_the_paas_table_and_the_session_goes_on`） |
+| T02 | GET 串流滿不回 429 | 擋下（`test_the_stream_cap_answers_429_at_once_and_posts_still_work[default]`） |
+| T03 | 排隊上限跨帳號共用 | 擋下（`test_one_profiles_full_queue_never_refuses_another_profiles_waiting_request[B's queue full]`） |
+| T03b | 名額與佇列全帳號共用一個 | 擋下（`test_request_abandoned_while_queued_never_reaches_the_child_on_a_real_listener`） |
+| T04 | 排隊中斷線照樣送出 | 擋下（`test_queued_request_is_dropped_when_its_client_goes_away_and_is_never_sent`） |
+| T05 | 保留名額接受夾帶請求的 batch | 擋下（`test_anything_that_could_be_a_request_or_cannot_be_read_uses_the_ordinary_lane[batch of a notification and a request]`） |
+| T06 | 開通時仍把 ClientDisconnect 丟給 uvicorn | 擋下（`test_a_token_rotated_mid_stream_ends_it_with_one_minus_32005_event`） |
+| T07 | 開關關時 initialize 錯誤原樣轉回 | 擋下（`test_switched_off_a_childs_initialize_error_is_masked_with_the_profiles_own_credentials`） |
+| R05 | 子程式停止時仍 DELETE initialize 的 session | 擋下（`test_an_initialize_answer_broken_mid_body_gets_minus_32004_and_no_session[stopped]`） |
+| R06 | initialize 讀到一半斷線不回 -32004 | 擋下（`test_an_initialize_answer_broken_mid_body_gets_minus_32004_and_no_session[still running]`） |
+| R12 | Ending 不看 delivery.completed | 擋下（`test_a_token_changed_as_the_last_message_is_taken_adds_nothing_after_it`） |
+| R22 | 回覆被收下之前就算已送到 | 擋下（`test_a_reply_the_server_had_not_taken_when_the_token_changed_gets_minus_32005`） |
+| W04 | 密鑰網址 -32004 的 WARNING 帶出路徑 | 存活（135 passed；等價：HM-02 的 record factory 已遮） |
+| WL1 | 拿到名額不把排隊數減回去 | 擋下（`test_a_request_that_waited_for_a_slot_keeps_holding_it_until_its_response_closes[ordinary]`） |
+| ICE | ConnectError 也算中途斷線 | 存活（174 passed；等價：可開通的產品都有 listing） |
+| GEV | GET 串流斷線也補 -32004 事件 | 擋下（`test_an_event_stream_broken_mid_reply_gets_one_minus_32004_event_and_ends[still running]`） |
+| S1R | 拿掉 S-1 修法 | 擋下（`test_the_minus_32004_event_is_the_answer_and_no_minus_32005_follows_it`） |
+| S4R | MAX_REPORT_KEYS 改回 64 | 擋下（`test_every_situation_of_every_profile_stays_one_warning_a_minute`） |
+| H01 | `blocked` 也算會自己再起 | 擋下（`test_a_stopped_child_is_said_to_restart_only_while_it_comes_back_by_itself[blocked]`） |
+| H02 | 停止了一律說會自動重新啟動（rebase 前的行為） | 擋下（同上［blocked］） |
+| H03 | 停止了一律說目前沒有在重新啟動 | 擋下（`test_a_child_that_stopped_during_the_request_is_reported_stopped[exited]`） |
+| H04 | SSE 的 -32004 事件不看狀態 | 擋下（新測試［blocked］的 SSE 那一半） |
+| H05 | 標頭前的 502 不看狀態 | 擋下（新測試［blocked］的 502 那一半） |
+
+### 16.9 預檢
+
+| 預檢 | 指令 | 結果 |
+|---|---|---|
+| 秘密預檢 | `.venv/bin/python -I scripts/secret_precheck.py --tools SP:hm01/gitleaks-tools --repo . --base origin/claude-delivery --head HEAD --full` | gitleaks 8.28.0（釘版、已驗）；`c523474..HEAD` 17 個 commit（含本筆記）＋HEAD 整棵樹＋整個歷史：**0 命中** |
+| 帳本預檢 | `.venv/bin/python -I scripts/ledger_precheck.py --repo . --base origin/claude-delivery` | `runtime-patches.json` 173 檔（HM-09 起多列管 `lifecycle.py`）、`runtime-sources.json` 70 檔、`tool-surface.json` 159 檔：0 漂移、0 缺；改到的 3 個列管檔都有帳本更新；沒有沒列管的新執行檔：**OK** |
+
+兩個預檢跑的時候 `origin/claude-delivery` 已 fetch 到 `269f5a5`（HM-20 合併後）；兩個腳本都以 merge base（`c523474`）起算。
+
+### 16.10 PaaS 變動
+
+本機 PaaS clone（唯讀，沒 fetch、沒 checkout）的 `origin/main` 仍是 `d7f5849`，和第 10 節寫的相同；#155 由 HM-31 對齊，本片不做。
+新的第 99 列引用的 `Pc/proxy.py:57-62`（`CHILD_INTERRUPTED_MESSAGE` 與它的註解）是 pin `69ac425` 的行號；`d7f5849` 上是第 59～64 行，文字相同。
+
+### 16.11 commit（rebase 後）
+
+rebase 過來的 10 個（第 1～15 節寫的是左欄的編號）：
+
+| rebase 前 | rebase 後 | 內容 |
+|---|---|---|
+| `543eabc` | `3c12b71` | 測試（新 5 檔＋測試工具） |
+| `c06eb43` | `7b49885` | 程式（`gateway.py`、`access.py`、`profile_router.py`） |
+| `148626d` | `d479ab0` | 帳本（三個列管檔） |
+| `3366d9b` | `310229c` | 契約與威脅模型 |
+| `7df3138` | `288e1ab` | 本筆記 |
+| `1ec350a` | `d662684` | 審查修正的測試 |
+| `064a226` | `db89f24` | 審查修正的程式 |
+| `f6d2f8d` | `63b77e3` | 審查修正的帳本 |
+| `bbf6480` | `28869c8` | 審查修正的契約與威脅模型 |
+| `351666f` | `69e132a` | 本筆記（審查修正） |
+
+rebase 後加的 7 個：
+
+| commit | 內容 |
+|---|---|
+| `8b93111` | 本筆記與兩個測試說明的列號跟著加一（只改數字） |
+| `2333eca` | 測試：停止了的 `-32004` 文字看 HM-09 的狀態（7 案；先紅：4 失敗、3 通過） |
+| `64105d4` | 程式：`CHILD_RESTARTING_STATES`、`CHILD_HALTED_TEXT`、`interruption_text` |
+| `9232c77` | 帳本：`gateway.py` 重算 SHA-256、補說明 |
+| `61aee83` | 契約與威脅模型：`-32004` 三種文字與第 99 列、MF-2 (b) 的定案；釘住現況的那個測試說明 |
+| `915f9e6` | 測試：HM-09 的錯開啟動之後只看為用戶端開的 session（第 16.6 節） |
+| 本筆記的 commit | 第 16 節與第 1～3、11、14、15 節的更新 |
