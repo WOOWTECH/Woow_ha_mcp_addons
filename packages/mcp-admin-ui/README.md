@@ -129,18 +129,23 @@ bootstrap；product/contract/tools/schema/disabled/global/grants 任一變更即
 - **換身分換 token**（DQ-05；只有 Odoo）：存檔改了 url、database 或 username（含清空），伺服器回 `token_rotated: true`
   （不帶 token、不帶文字）。面板在存檔提示後面加一句「後端身分已變更…請到「連線與權杖」顯示並複製新的權杖」，藏起已顯示的權杖、
   重新讀取狀態（遮罩與權杖歷史都變了）；下一次存檔用重新讀到的設定版本（等於回應的 `ETag`）。新子程式起不來時
-  （503 `config_apply_failed`＋`token_rotated`）同樣重新讀取，錯誤提示把兩件事都說出來。
+  （503 `config_apply_failed`＋`token_rotated`）同樣重新讀取，錯誤提示把兩件事都說出來。重新讀取失敗時（例如連線中斷），
+  提示仍先說換了 token，再接失敗的原因（錯誤樣式；HM-12 面板審查 S-2）。回應裡伺服器的文字一律不顯示。
 - **新來源要重填秘密**（DQ-40 ⑨；全部產品）：「修改個別欄位」把網址改到另一台伺服器（scheme、主機或 port 不同）時，
   這個網址會送去、而且已存的秘密（`contracts.js` 的 `urlSecrets`，和後端 `identity_fields.URL_SECRETS` 由
   `tests/test_identity_fields.py` 核對）不能再選「保留已儲存憑證」：改成必填（選填的可以明確清除），旁邊寫明原因；
-  改回同一台伺服器就恢復「保留」。來源照後端的算法比（`urlOrigin`，同一個測試逐案核對）：只改路徑、大小寫、寫出預設
-  port 不算；結尾的點、IPv4 的其他寫法算不同。伺服器的值不顯示（withheld）的網址，一律當成換了。伺服器仍回 422
+  改回同一台伺服器就恢復「保留」（已經打的值留著）。沒存過的秘密（例如清掉的 n8n MCP token）不用帶。來源照後端的算法比
+  （`urlOrigin`，同一個測試逐案核對）：只改路徑、大小寫、寫出預設 port 不算；結尾的點、IPv4 的其他寫法算不同。
+  伺服器的值不顯示（withheld）的網址，一律當成換了，原因寫「伺服器不顯示原網址，無法確認是同一台伺服器」。網址不帶
+  秘密的產品（OpenDesign）不顯示這段說明。送出時 `backendPatchPayload(…, switchedOn)` 再擋一次。伺服器仍回 422
   `CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN` 時，面板只顯示固定文字（回應沒有回聲，不顯示送出的值），打過的秘密清掉。
 - **換身分失敗的 503**：`request denied`（舊子程式停不下來，什麼都沒存）照今天的 503 文字；`state unavailable`
   的後端存檔（開通、會換 token 的產品）另加「存檔結果不明時請重新啟動 add-on，之後到「連線與權杖」確認 MCP 網址」
   （HM-12 審查 S-7：結果不明時重啟後 token 可能已換，這次的回應不會說）。
 - fixture 在開通模式照 HM-12 的回應表回答（`profiles.rebindFault` 布置三種失敗）；`tests/profile-api-cases.json` 的
-  `identity` 等 4 個情境錄自真後端。
+  `identity` 等 4 個情境錄自真後端。「沒存過的秘密不用帶」只有 n8n 碰得到（其他產品網址有值時秘密一定有值），而 n8n 要到
+  HM-25 才上帳號 runtime，真後端形狀比對跑不了：fixture 這邊由 `backend-identity.spec.mjs` 守，add-on 這邊由
+  `tests/test_new_origin_secret.py` 守（HM-12 面板審查 S-6）。
 
 ## 正式 listener 與 Ingress
 
