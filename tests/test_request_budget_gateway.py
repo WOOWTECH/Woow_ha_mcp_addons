@@ -483,14 +483,16 @@ async def test_the_budget_is_made_with_the_apps(tmp_path, monkeypatch):
 
 async def test_make_apps_takes_only_a_share_of_a_budget_beside_hm09s_and_hm10s_options(tmp_path, monkeypatch):
     """make_apps' body_budget (HM-31), merged after HM-09's child_blocked and HM-10's default_endpoint and
-    bootstrap_fields: a keyword-only option, None by default (a budget of the add-on's own), and anything but a
-    request_budget.Share is refused before an app is made, as each of those three refuses what is not its own."""
+    bootstrap_fields (and before HM-30's reply_worker, merged after HM-31): a keyword-only option, None by default (a
+    budget of the add-on's own), and anything but a request_budget.Share is refused before an app is made, as each of
+    those three refuses what is not its own."""
     import inspect
 
     parameters = inspect.signature(gateway.make_apps).parameters
-    # HM-12's stop_child comes after it (tests/test_odoo_identity_rotation.py checks that option)
-    assert list(parameters)[-5:] == ['child_blocked', 'default_endpoint', 'bootstrap_fields', 'body_budget',
-                                     'stop_child']
+    # HM-12's stop_child comes after it (tests/test_odoo_identity_rotation.py checks that option),
+    # then HM-30's reply_worker (HM-30 rebased after HM-12)
+    assert list(parameters)[-6:] == ['child_blocked', 'default_endpoint', 'bootstrap_fields', 'body_budget',
+                                     'stop_child', 'reply_worker']
     assert parameters['body_budget'].kind is inspect.Parameter.KEYWORD_ONLY and parameters['body_budget'].default is None
     limits(monkeypatch, 16, 16)
     configure(tmp_path / 'odoo', 'odoo')
