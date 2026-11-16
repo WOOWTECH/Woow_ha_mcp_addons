@@ -252,7 +252,8 @@ async def test_an_unknown_token_gets_the_default_apps_own_bytes(tmp_path, log_sc
                                             json=initialize_message()))
             assert got == BEARER_REQUIRED
         assert all(mock.forwarded(since[port]) == [] for port, mock in children.by_port.items())
-        assert all(entry.gate.active == 0 and entry.gate.body_bytes == 0 for entry in runtime.manager.profiles())
+        assert all(entry.gate.active == 0 and runtime.manager.budget.used(entry.profile_id) == 0
+                   for entry in runtime.manager.profiles())  # HM-31: the bytes are the add-on's budget's
 
 
 # ---- two profiles, one token (I2, DQ-09) ----
@@ -597,7 +598,7 @@ async def test_a_stale_digest_is_refused_by_the_profiles_own_app(tmp_path, log_s
                 response = await client.post(path, headers=headers, json=initialize_message())
                 assert answer(response) == (NOT_FOUND if path.startswith('/private_') else BEARER_REQUIRED)
         assert all(mock.forwarded(since[port]) == [] for port, mock in children.by_port.items())
-        assert entry.gate.active == 0 and entry.gate.body_bytes == 0
+        assert entry.gate.active == 0 and runtime.manager.budget.used(entry.profile_id) == 0
 
 
 async def test_resolving_a_token_among_six_profiles_is_cheap(tmp_path, log_scan, capsys):

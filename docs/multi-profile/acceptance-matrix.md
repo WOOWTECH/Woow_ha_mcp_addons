@@ -35,7 +35,7 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | T-16 | 子程式晚驗證 | HA 閘道自答（不是 PaaS 的 503「MCP child is not ready」）；套用狀態每帳號一份 | `tests/test_profile_runtime.py` | — | HM-09、HM-10 | 是 | #68 |
 | T-17 | 記憶體與 CPU | J6412（可以的話 J1900）1～6 個帳號的 RSS／PSS、CPU 數字；停機 <30 秒；全域最壞值對 MemAvailable | `tests/test_profile_lifecycle.py`（並行停） | HAOS（HM-19c） | HM-19c；各產品升版 | 是 | #19、#53 |
 | T-18 | 互相影響與日誌保留 | 每帳號子程式輸出緩衝不被別帳號擠掉；生命週期 log 帶 id 前 8 碼 | `tests/test_profile_runtime.py`、`tests/test_profile_lifecycle.py` | HAOS | HM-08、HM-09、HM-19b | 是 | #29 |
-| T-19 | 背壓與每帳號名額 | 轉送名額等 1 秒；帶 id 的 POST 在名額逾時、准入滿（≤64 KiB）、位元組額度滿時 200＋`-32003`＋`Retry-After: 5`，更大的 503；GET 串流滿 429＋`Retry-After: 30`（預設 24、額外 8）；CPU 飢餓下閒置帳號健康不逾時 | `tests/test_profile_quotas.py`、`tests/test_gateway_busy_shapes.py`、`tests/test_reply_worker.py` | — | HM-08、HM-14、HM-30 | 是 | #15、#16、#17 |
+| T-19 | 背壓與每帳號名額 | 轉送名額等 1 秒；帶 id 的 POST 在名額逾時、准入滿（≤64 KiB）時 200＋`-32003`＋`Retry-After: 5`，更大的 503；位元組預算放不下時讀完丟掉、從頭尾找 id（200 或 503；HM-31，開關關也生效）；GET 串流滿 429＋`Retry-After: 30`（預設 24、額外 8）；CPU 飢餓下閒置帳號健康不逾時 | `tests/test_profile_quotas.py`、`tests/test_gateway_busy_shapes.py`、`tests/test_request_budget_gateway.py`、`tests/test_reply_worker.py` | — | HM-08、HM-14、HM-30、HM-31 | 是 | #15、#16、#17、#101～#105、#108 |
 | T-20 | 升級、回退、再升級 | 回退＝還原升級前備份：預設 token＝備份當時的值、額外帳號消失、沒有任何撤銷；再升級後額外帳號不存在、預設不變；文件要求再升級後按「全部撤銷」 | `tests/test_upgrade_zero_rewrite.py` | Store、HAOS | HM-19b、HM-29 | 是 | #71 |
 | T-21 | 備份還原 | 預設帳號依 DQ-03（採 (b) A2）；兩個偵測訊號；讀不到的帳號隔離；獨立驗證；核對後才重發；舊收據 410；C1-M1 攻擊序；版本混搭 | `tests/test_restore_detection.py`、`tests/test_restore_lock.py`、`tests/test_restore_review.py` | 容器（root 還原樹）、HAOS | HM-13a、HM-13b、HM-13c、HM-19b | 是 | #20、#21、#69 |
 | T-22 | n8n 名額與逾時 | `n8n_session` 每帳號一份；沒後端的額外帳號所有工具回 `backend_not_configured` | `tests/test_n8n_multi_profile.py` | HAOS | HM-25 | 否（n8n） | #28、#62 |
@@ -112,7 +112,10 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_gateway_busy_shapes.py` | HM-14 | 計畫 | `-32003` 形狀與文字 |
 | `tests/test_gateway_queue_ha.py` | HM-14 | 計畫 | 排隊上限、排隊中斷線不送 |
 | `tests/test_initialize_generation.py` | HM-14 | 計畫 | initialize 世代 |
-| `tests/test_carries_no_request.py` | HM-14 | 計畫 | 通知保留名額照 PaaS `_carries_no_request` 規則與反例 |
+| `tests/test_carries_no_request.py` | HM-14 | 計畫 | 通知保留名額照 PaaS `_carries_no_request` 規則與反例；HM-31：准入滿時通知照樣送到 |
+| `tests/test_request_budget.py` | HM-31 | 計畫 | 請求內容位元組預算的推導（cgroup、MemAvailable−256、固定 32 MiB）、兩層、份額上限 64 MiB、小請求不扣、轉送大小、歸還、頭尾找 id |
+| `tests/test_request_structure.py` | HM-31 | 計畫 | JSON 結構守門（深度、元素、UTF-8、閉括號、邊界、放大語料）與拒收形狀；n8n 先跑同一道守門 |
+| `tests/test_request_budget_gateway.py` | HM-31 | 計畫 | 開關關與開：預算拒絕讀完丟掉回 id、沒帶長度中途切斷、讀取閒置 408、整體 60 秒照舊、份額不跨帳號、全 add-on 預算共用；HM-31 審查：`Content-Length`＋`Transfer-Encoding` 照實際收到的位元組（含真的 h11 socket）、宣告超過 16 MiB 讀之前 413、讀完丟掉的閒置與整體界線、只留頭尾、從尾端找 id |
 | `tests/test_child_identity.py` | HM-15 | 計畫（條件式） | 別的程序先綁 port → 不轉發；uid 10001 子程序驗降級 |
 | `tests/test_upgrade_hooks.py` | HM-16 | 計畫 | Store hook 只讀、與版本無關 |
 | `packaging/test_container_probe.py` | HM-16 | 既有，擴充 | 多帳號探針、`/data/mcp` 修復規則與項目預算 |
