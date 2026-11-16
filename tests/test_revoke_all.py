@@ -1,4 +1,4 @@
-"""HM-13b: "revoke all" (multi-profile plan 8.4 全部撤銷, C1-S6, 10.3; contract 3.1, 4.1, 9 #82, #103; FM-120).
+"""HM-13b: "revoke all" (multi-profile plan 8.4 全部撤銷, C1-S6, 10.3; contract 3.1, 4.1, 9 #82, #115; FM-120).
 
 restore_lock.revoke_all() is what HM-13c's route POST profiles/revoke-all runs: .revoke-all-pending saved durably
 before any token is touched; every profile revoked (the default profile's included) with a new child token, in a fixed

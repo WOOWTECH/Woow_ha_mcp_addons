@@ -19,7 +19,7 @@ written.
 Scope S (plan 8.4): the default profile, every 24 hex directory under profiles/ (indexed, an orphan, or behind an
 unusable index: the index never decides; only its labels are shown in the record), the existing quarantine directories
 (read for the snapshot only, never opened as a profile); other names are counted. A profiles entry that is not a
-directory holds nothing that can be opened or served (contract 9 #102: the guard goes on); a profiles directory that
+directory holds nothing that can be opened or served (contract 9 #114: the guard goes on); a profiles directory that
 cannot be listed now (EMFILE, EIO, ENOMEM, no permission, another uid's: HM-13b review MF-2) may hold the backup's
 tokens, so nothing finishes until it can be listed. A restore runs:
 A  the snapshot: every readable state's token and child token, in memory only.
@@ -378,7 +378,7 @@ class _Sweep:
 
     def look(self):
         """A: the snapshot (in memory; never logged). A profiles entry that is not a directory holds nothing that can
-        be opened or served (contract 9 #102); one that is a directory, or that a lookup cannot tell, and cannot be
+        be opened or served (contract 9 #114); one that is a directory, or that a lookup cannot tell, and cannot be
         listed now may hold the backup's tokens: a failure, so that nothing finishes and every marker stays until it
         can be listed (I9; HM-13b review MF-2)."""
         state = self.store.load()  # its store was opened a moment ago: ConfigError stops the start
