@@ -427,7 +427,7 @@ token 換掉時 `ClientDisconnect` 丟給 uvicorn）。HM-14 定案：
 
 - 缺 If-Match 428 `config_revision_required`；不只一個或過期 409 `config_conflict`。
 - 缺 Idempotency-Key 428 `operation_id_required`；不只一個 400 `operation_id_invalid`；同一個 key 還沒完成就重送 409
-  `operation_outcome_unknown`；還原前的舊操作 id 410 `operation_restored`。HM-13b 定案：守門把還原帶回的收據檔改名成 `<收據檔>.restored`（每個收據檔只留 1 份，新的蓋舊的），換上一份空的新收據檔，多一個鍵 `restored_before_ms`（還原當下的毫秒，但不早於被封存的收據檔裡最新的 id 或下限：主機時鐘慢也一樣，同 PaaS `_read_journal_floor`）：id 的時間不晚於它就回 410 `operation_restored`（在 24 小時保留期的 `operation_id_expired` 之前判斷），備份之後才做、隨還原消失的操作也算。只有守門寫的收據檔有這個鍵，其他收據檔逐位元照舊。沒有收據的收據檔不再封存（重做時不會用空檔蓋掉封存），只把時間往後推；收據檔不見但旁邊有封存（中途停掉）就補新檔；兩個都沒有就不寫。預設帳號沒被撤銷時（DQ-03 (b)，沒有帳號資料）它的收據照原樣（第 9 節 #104）。全部撤銷不封存收據（不是還原）。
+  `operation_outcome_unknown`；還原前的舊操作 id 410 `operation_restored`。HM-13b 定案：守門把還原帶回的收據檔改名成 `<收據檔>.restored`（每個收據檔只留 1 份，新的蓋舊的），換上一份空的新收據檔，多一個鍵 `restored_before_ms`（還原當下的毫秒，但不早於被封存的收據檔裡最新的 id 或下限：主機時鐘慢也一樣，同 PaaS `_read_journal_floor`；最多比還原當下晚 24 小時：偽造的遠未來 id 不會讓新操作好幾年都 410）：id 的時間不晚於它就回 410 `operation_restored`（在 24 小時保留期的 `operation_id_expired` 之前判斷），備份之後才做、隨還原消失的操作也算。只有守門寫的收據檔有這個鍵，其他收據檔逐位元照舊。沒有收據的收據檔不再封存（重做時不會用空檔蓋掉封存），只把時間往後推；收據檔不見但旁邊有封存（中途停掉）就補新檔；兩個都沒有就不寫。預設帳號沒被撤銷時（DQ-03 (b)，沒有帳號資料）它的收據照原樣（第 9 節 #104）。全部撤銷不封存收據（不是還原）。
 - 建立的回應與同一個 key 的重送**都不回 token**；token 只經 `token/reveal`＋`X-MCP-Profile: <新 id>`＋回聲比對取得。
 - HM-10 定案：
   - 帳號 ETag 的 HMAC domain 是 `edit:<帳號 id>`（套用狀態的 `launch:<帳號 id>` 同理）：`ProfileRuntime` 建的每個帳號都帶，沒開通時的

@@ -217,7 +217,9 @@ def archive_for_restore(config_path: Path, cutoff_ms: int) -> str:
     it). The journal the restore brought back becomes <journal>.restored (the one archive kept: it replaces an older
     one) and a new, empty journal refuses every operation id at or before cutoff_ms (the restore's time) with 410
     operation_restored. The new journal is written first (a temporary, fsynced), then the old one moved, then the new one
-    put in place and the directory fsynced: a full disk leaves the journal as it was. Idempotent, for a guard stopped
+    put in place and the directory fsynced: a full disk leaves the journal as it was. The cutoff is never below the
+    restored journal's newest operation id or floor (a host clock behind the backup's), but at most TTL_MS ahead of
+    cutoff_ms (a forged far-future id). Idempotent, for a guard stopped
     half way and run again: a journal without receipts (the one this wrote, or one emptied) is not archived again, so
     the archive keeps the receipts it holds; only its cutoff moves forward. A missing journal next to an archive
     (stopped between the two moves) gets its new one; with neither, nothing is written (no operation was ever made).
@@ -234,8 +236,9 @@ def archive_for_restore(config_path: Path, cutoff_ms: int) -> str:
         _new_journal(path, cutoff_ms, archive=None)
         return 'renewed'
     count, floor = found
-    # As PaaS restore_guard (_read_journal_floor): never below the journal's own newest id or floor, whatever the clock.
-    cutoff_ms = max(cutoff_ms, floor or 0)
+    # As PaaS restore_guard (_read_journal_floor): never below the journal's own newest id or floor, whatever the clock;
+    # but at most a retention period ahead of it, so that a forged far-future id cannot refuse every new id for years.
+    cutoff_ms = max(cutoff_ms, min(floor or 0, cutoff_ms + TTL_MS))
     if count == 0:
         _new_journal(path, cutoff_ms, archive=None)
         return 'renewed'

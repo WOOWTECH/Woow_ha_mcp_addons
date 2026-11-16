@@ -528,6 +528,22 @@ def test_a_slow_clock_never_lets_a_restored_id_through(tmp_path, log_scan):
     assert disk.replay(operation, A) == RESTORED
 
 
+def test_a_far_future_id_in_a_restored_journal_moves_the_cutoff_one_retention_period_at_most(tmp_path, log_scan):
+    """A forged backup whose journal holds an id years ahead cannot make every new id 410 for years: the cutoff follows
+    the journal's newest id only up to one retention period (24 h) past the restore."""
+    disk = Disk(tmp_path, log_scan)
+    disk.receipt()
+    journal = disk.data / '.state.json.operations.json'
+    value = json.loads(journal.read_text())
+    (key, item), = value['receipts'].items()
+    value['receipts'] = {'9' * 13 + key[13:]: item}
+    journal.write_text(json.dumps(value))
+    journal.chmod(0o600)
+    now = int(datetime.now(timezone.utc).timestamp() * 1000)
+    assert operations.archive_for_restore(disk.data / 'state.json', now) == 'archived'
+    assert json.loads(journal.read_text())['restored_before_ms'] == now + operations.TTL_MS
+
+
 def test_an_archive_left_without_its_new_journal_gets_one(tmp_path, log_scan):
     """operations.archive_for_restore stopped between moving the journal and writing the new one: the next call writes
     the new one (old ids 410), and with neither a journal nor an archive it writes nothing."""
