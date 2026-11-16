@@ -46,6 +46,9 @@ async def run(args, *, child_port=CHILD_PORT):
         # HM-13b (multi-profile plan 8.4; not gated): the boot guard before the child and the listeners (a restore, an
         # unfinished "revoke all", dormant profiles); ConfigError: nothing is served, the next start runs it again.
         guarded = restore_lock.guard(store, 'n8n', enabled=features.enabled('n8n'))
+        # HM-13c (DQ-03 (b); not gated): the restore notice for the panel until the token changes; none: as before.
+        found = restore_lock.read_notice(store.directory)
+        notice = None if found is None else restore_lock.Notice(store.directory, found)
     except BaseException:
         store.close()
         raise
@@ -82,7 +85,8 @@ async def run(args, *, child_port=CHILD_PORT):
                                    # 0.2.2: the full list and clean refusals without a backend or a running child
                                    listing=listing("n8n"), availability=health.availability,
                                    # HM-13b: profile data on disk while n8n is not switched on: its number
-                                   dormant_profiles=guarded.dormant)
+                                   dormant_profiles=guarded.dormant,
+                                   restore_notice=notice)
             servers = [Listener(uvicorn.Config(app, host=args.host, port=port,
                 proxy_headers=False, access_log=False, log_level="warning", server_header=False,
                 lifespan="off",  # this function, not ASGI lifespan, owns runtime resources

@@ -10,13 +10,16 @@ deletes profiles and quarantines an unusable index with these rules and the file
 (free_index_quarantine_name, move_index_aside, index_bytes, remove_profile_directory). restore_detect (HM-13a) and the
 boot guard (HM-13b, restore_lock) take their file names from here, and the guard its quarantine names
 (free_quarantine_name: never over anything, numbered within one second, HM-07 review S-15; free_aside_name for an
-entry at one of its own names that is a directory). It never writes the default profile's files (invariant I6).
+entry at one of its own names that is a directory). HM-13c lists and deletes the quarantine directories by the name
+the management API shows (quarantine_entry_name, quarantine_directory_name, remove_quarantine_directory) and names the
+panel's restore notice (RESTORE_NOTICE_NAME). It never writes the default profile's files (invariant I6).
 
 Layout (plan §4.1)::
 
     /data/mcp/                         the default profile: today's state.json, .writer.lock, journal, child/
     ├── profiles.json                  the index; written when the first profile is created, kept when empty
-    ├── .profiles.json.operations.json the receipts of profile creation, deletion and index quarantine (HM-10)
+    ├── .profiles.json.operations.json the receipts of profile creation, deletion and index quarantine (HM-10), of
+    │                                  "revoke all", restore reviews and quarantine deletions (HM-13c)
     └── profiles/                      0700
         ├── <24 lowercase hex>/        one additional profile: state.json, .writer.lock, journal, child/
         └── .quarantine-<id>-<UTC>/    a profile the boot guard could not prove revoked (HM-13b): delete only
@@ -591,13 +594,16 @@ INSTANCE_RECORD_TEMPORARY_NAME = '.instance-record.tmp'  # the next record, befo
 RESTORE_MARKER_NAME = '.restore-detected'  # restore detection, signal 1: saved by packaging/entrypoint.py
 REVOKE_ALL_MARKER_NAME = '.revoke-all-pending'  # the boot guard (HM-13b)
 RESTORE_RECORD_NAME = 'restore-record.json'  # the boot guard (HM-13b)
+# HM-13c (DQ-03 (b); the owner's decision of 2026-11-16 on the HM-13b review's Q-1): a restore that kept the default
+# profile's token leaves this notice for the panel (only its time); the default profile's next token change removes it.
+RESTORE_NOTICE_NAME = 'restore-notice.json'
 # The receipts a restore archived (operations.archive_for_restore, HM-13b): <journal>.restored beside a profile's
 # state.json (the default profile's too) and beside the index.
 RECEIPT_ARCHIVE_NAMES = ('.state.json.operations.json.restored', INDEX_OPERATIONS_NAME + '.restored')
 # The names whose entry the boot guard moves aside when it is a directory (a forged backup; HM-13a review SF-7, HM-13b
 # review S-1): what the guard writes, renames or removes there, never something else.
 ASIDE_NAMES = (SENTINEL_NAME, INSTANCE_RECORD_NAME, INSTANCE_RECORD_TEMPORARY_NAME, RESTORE_MARKER_NAME,
-               REVOKE_ALL_MARKER_NAME, RESTORE_RECORD_NAME, *RECEIPT_ARCHIVE_NAMES)
+               REVOKE_ALL_MARKER_NAME, RESTORE_RECORD_NAME, *RECEIPT_ARCHIVE_NAMES, RESTORE_NOTICE_NAME)
 
 
 @dataclass(frozen=True)
@@ -647,6 +653,10 @@ class Layout:
     def restore_record(self) -> Path:
         return self.root / RESTORE_RECORD_NAME
 
+    @property
+    def restore_notice(self) -> Path:
+        return self.root / RESTORE_NOTICE_NAME
+
 
 def _utc(when: datetime) -> str:
     if when.tzinfo is None or when.utcoffset() is None:
@@ -665,6 +675,23 @@ def parse_quarantine_name(name: str) -> tuple[str, str] | None:
     """(profile id, '<UTC>' or '<UTC>-<n>') of a quarantine directory's name, or None."""
     match = _QUARANTINE.fullmatch(name) if isinstance(name, str) else None
     return (match.group(1), match.group(2)) if match else None
+
+
+def quarantine_entry_name(directory_name: str) -> str | None:
+    """The name the management API shows for a quarantine directory (HM-13c; contract 3.1): '<id>-<UTC>[-n]', its
+    directory name without the '.quarantine-' prefix (a path segment that never starts with a dot). None for a name
+    that is not a quarantine directory's."""
+    if parse_quarantine_name(directory_name) is None:
+        return None
+    return directory_name[len(QUARANTINE_PREFIX):]
+
+
+def quarantine_directory_name(entry_name: str) -> str | None:
+    """The quarantine directory's name for the management API's '<id>-<UTC>[-n]', or None when that is not one."""
+    if not isinstance(entry_name, str):
+        return None
+    name = QUARANTINE_PREFIX + entry_name
+    return name if parse_quarantine_name(name) is not None else None
 
 
 def free_quarantine_name(layout: Layout, profile_id: str, when: datetime) -> str:
@@ -770,7 +797,19 @@ def remove_profile_directory(layout: Layout, profile_id: str) -> bool:
     (scan_profiles' rule), shutil.rmtree's descriptor-based walk below it (a link at the profile's own name, or a
     profiles entry that is a link, is refused). False when anything could not be removed: what is left is an orphan,
     listed and deletable, never opened or routed."""
-    name = layout.profile(profile_id).name  # ValueError for anything but a profile id
+    return _remove_directory(layout, layout.profile(profile_id).name)  # ValueError for anything but a profile id
+
+
+def remove_quarantine_directory(layout: Layout, directory_name: str) -> bool:
+    """Delete a quarantine directory of profiles/ and all it holds (HM-13c: the management API's deletion), as
+    remove_profile_directory deletes a profile's: never following a link. ValueError for a name that is not a
+    quarantine directory's; False when anything could not be removed (what is left is still listed, deletable)."""
+    if parse_quarantine_name(directory_name) is None:
+        raise ValueError('not a quarantine directory')
+    return _remove_directory(layout, directory_name)
+
+
+def _remove_directory(layout, name):
     try:
         fd = os.open(layout.profiles, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     except FileNotFoundError:

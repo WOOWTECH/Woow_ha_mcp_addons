@@ -36,9 +36,34 @@ A caller who is not an administrator never gets here (step 6), so nothing below 
   one of them runs in between (a token written after the revocation would be routed until its profile is
   unregistered, past its If-Match).
 - Locks are taken in one order: the add-on's profile lock first, then profiles' own locks (a deletion its target's, the
-  quarantine every registered one's in id order). A profile's action takes only its own lock, and the starts of
-  reevaluate (ProfileRuntime.launch) take only theirs, after every profile lock taken here is released: no wait ever
-  closes a circle.
+  quarantine every registered one's in id order; "revoke all" the default profile's, then every registered one's in id
+  order). A profile's action takes only its own lock, and the starts of reevaluate (ProfileRuntime.launch) take only
+  theirs, after every profile lock taken here is released: no wait ever closes a circle.
+
+HM-13c (multi-profile plan 6, 8.4 全部撤銷 / 核對後才重發, 10.3; contract 1.3, 3.1, 3.5, 3.6, 4.1, 4.2; FM-79, 80, 120):
+- "Revoke all" (POST profiles/revoke-all; If-Match: the index ETag, or the unusable index's own ETag: it works while
+  the index cannot be used, the emergency stop; Idempotency-Key): under the add-on's profile lock, the default
+  profile's lock and every registered profile's lock (id order), after the final role check, the receipt begun, then
+  restore_lock.revoke_all in a worker thread (synchronous: two state writes and their fsyncs a profile; 8081, 8099
+  and the health checks go on meanwhile) with every registered profile's own store. Then every registered profile's
+  requests that carry its old token end (TokenAccess.committed), every revoked one's child starts again on its new
+  child token (as the panel's restart), and the default profile's restore notice is gone. Every profile revoked and the
+  check passed: 200 {"revoked": "all", "results": [...]} and the receipt completed. Otherwise 409
+  operation_outcome_unknown with the results: the receipt stays unknown, .revoke-all-pending stays (the next start
+  finishes the job before anything is served), and the old token of every registered profile that failed is fenced on
+  8081 (503 state unavailable, profile_runtime.ProfileManager.revoke_fence) until a "revoke all" finishes.
+- The restore record (GET profiles/restore-record): {"record": <the guard's record, restore_lock.check_record>|null};
+  usable whatever the index.
+- A restore review (POST profiles/<id>/restore-review; the index ETag; Idempotency-Key): the record's row of a profile
+  that still exists gets its reviewed_at; until then a token/rotate of a profile whose token the guard revoked answers
+  409 restore_review_required (review_required, make_apps' option of the same name).
+- The quarantine directories (contract 1.1): listed with the profile list ("quarantined", only when there is one) and
+  deleted one by one (POST profiles/quarantine/<id>-<UTC>[-n]/delete; the index ETag; Idempotency-Key), as an orphan
+  is: its token revoked and its credentials wiped first when its state can be opened now, then its directory removed
+  without following a link. Never served; never deleted on their own.
+- The default profile's bootstrap says what waits for a review (restore_review: pending, restore_at, dormant_at; the
+  record unreadable: pending null), and every profile's bootstrap whether its new token waits for one
+  (restore_review_required: true).
 
 What this module uses of profile_runtime.ProfileManager (HM-08's registry, HM-09's lifecycle) is in one class,
 Registry, so that a change of that interface is made in one place.
@@ -53,12 +78,13 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import re
 import secrets
 
 from starlette.responses import JSONResponse
 
-from . import profiles
+from . import profiles, restore_lock
 from .admin_auth import BadRequest
 from .config import ConfigError
 from .operations import PROFILE_RESULTS, OperationJournal
@@ -70,6 +96,8 @@ LOCK_SECONDS = 2  # every lock of a management request is waited for at most thi
 HEADERS = {'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'}  # as admin_action's answers
 ETAG = re.compile(r'"p1-[0-9a-f]{64}"')
 CREATE, DELETE, QUARANTINE = 'profile.create', 'profile.delete', 'profile.index_quarantine'
+# HM-13c: "revoke all", a restore review, a quarantine directory's deletion (their receipts beside the index too).
+REVOKE_ALL, REVIEW, QUARANTINE_DELETE = 'profile.revoke_all', 'profile.restore_review', 'profile.quarantine_delete'
 # A profile's Supervisor status as the list shows it (contract 3.6): "stopped" is a child not started yet (start_all
 # has not reached it) or between the stop and the start of a relaunch.
 STATUS = {'stopped': 'starting', 'starting': 'starting', 'running': 'running', 'backoff': 'backoff',
@@ -112,8 +140,37 @@ class Registry:
     def default_port(self):
         return self.manager.port
 
+    def default_store(self):
+        return self.manager.store
+
     def default_state(self):
         return self.manager.store.load()
+
+    def restore_notice(self):
+        """HM-13c: the default profile's restore notice (restore_lock.Notice), or None."""
+        return self.manager.restore_notice
+
+    def fence(self, digests):
+        """HM-13c: sha256 digests of tokens a "revoke all" could not revoke: 503 on 8081 until one finishes."""
+        self.manager.revoke_fence.update(digests)
+
+    def unfence(self):
+        self.manager.revoke_fence.clear()
+
+    @staticmethod
+    def token_digest(entry):
+        """The digest of the profile's token now (its credentials' refresh; the last one read when its state cannot be
+        read now), or None when it has none."""
+        try:
+            return entry.credentials.refresh()
+        except ConfigError:
+            return entry.credentials.digest
+
+    @staticmethod
+    async def restart(entry):
+        """Start the profile's child again on its state now (a new child token: HM-06 review S-07), as the panel's
+        restart does (make_apps restart_child)."""
+        await entry.runtime.backend_changed(entry.store.load())
 
     def view(self):
         """The index view the manager holds after its per-request recheck (sticky MODIFIED; DQ-12), and whether it can
@@ -211,6 +268,7 @@ class ProfileAdmin:
         self.lock = asyncio.Lock()  # creation, rename, deletion and the index quarantine, one at a time
         self._key = secrets.token_bytes(32)
         self.journal = OperationJournal(self.registry.layout.index, results=PROFILE_RESULTS, subjects=True)
+        self._record_seen = (None, None)  # HM-13c: (the restore record's signature, its value) last read
 
     # ---- what the dispatcher and the profiles' apps read ----
 
@@ -231,11 +289,72 @@ class ProfileAdmin:
         (corrupt, or changed behind the add-on's back: DQ-12) with the ETag the quarantine takes."""
         fields = {'profiles_supported': profiles.supports_profiles(self.registry.product)}
         if profile_id == profiles.DEFAULT_PROFILE:
-            _, usable = self.registry.view()
+            view, usable = self.registry.view()
             fields['profile_index_state'] = 'ok' if usable else 'corrupt'
             if not usable:
                 fields['profile_index_etag'] = self.raw_etag()
+            review = self._review_summary(view)
+            if review is not None:
+                fields['restore_review'] = review  # HM-13c
+        try:
+            gated = self.review_required(profile_id)
+        except ConfigError:
+            gated = False  # the record cannot be read: the default profile's restore_review says so (pending null)
+        if gated:
+            fields['restore_review_required'] = True  # HM-13c
         return fields
+
+    # ---- HM-13c: the restore record and the review gate ----
+
+    def _record(self):
+        """The guard's restore record (restore_lock.read_record, check_record), or None when there is none: read again
+        only when its file changed. ConfigError when it cannot be used."""
+        path = self.registry.layout.restore_record
+        try:
+            info = os.lstat(path)
+            signature = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        except FileNotFoundError:
+            self._record_seen = (None, None)
+            return None
+        except OSError:
+            raise ConfigError('restore record unavailable') from None
+        seen, value = self._record_seen
+        if seen != signature:
+            value = restore_lock.read_record(self.registry.layout.root)
+            value = None if value is None else restore_lock.check_record(value)
+            self._record_seen = (signature, value)
+        return value
+
+    def review_required(self, profile_id):
+        """Whether a new token for profile_id waits for its restore review (contract 4.1 restore_review_required): the
+        record's row of it says the guard revoked its token and nobody reviewed it yet. ConfigError when the record
+        cannot be used (the gate fails closed)."""
+        record = self._record()
+        if record is None:
+            return False
+        row = next((row for row in record['profiles'] if row['id'] == profile_id), None)
+        return row is not None and row['token'] in restore_lock.REVIEWED_TOKENS and row['reviewed_at'] is None
+
+    def _pending(self, record, view):
+        listed = {item.id for item in view.entries}
+        return [row for row in record['profiles']
+                if row['token'] in restore_lock.REVIEWED_TOKENS and row['reviewed_at'] is None
+                and (row['id'] == profiles.DEFAULT_PROFILE or row['id'] in listed)]
+
+    def _review_summary(self, view):
+        """The default bootstrap's restore_review: how many profiles that still exist wait for a review, and when the
+        restore or the dormant revocation was; None when none waits. The record unreadable: pending null."""
+        try:
+            record = self._record()
+        except ConfigError:
+            return {'pending': None, 'restore_at': None, 'dormant_at': None}
+        if record is None:
+            return None
+        pending = len(self._pending(record, view))
+        if not pending:
+            return None
+        return {'pending': pending, 'restore_at': (record['restore'] or {}).get('at'),
+                'dormant_at': (record['dormant'] or {}).get('at')}
 
     def profile_entry(self, profile_id):
         """Step 7 for an additional profile's id (X-MCP-Profile, well formed): its registered entry. 503
@@ -258,8 +377,13 @@ class ProfileAdmin:
     async def list(self, call):
         await self._final(call)
         view = self._usable_view()
-        return self._answer({'profiles': self._rows(view), 'orphans': self._orphans(view)},
-                            etag=self.etag(view.entries))
+        scan = self._scan()
+        body = {'profiles': self._rows(view), 'orphans': self._orphans(view, scan)}
+        quarantined = [{'name': profiles.quarantine_entry_name(name), 'id': profiles.parse_quarantine_name(name)[0]}
+                       for name in scan.quarantined]
+        if quarantined:
+            body['quarantined'] = quarantined  # HM-13c: only when there is one
+        return self._answer(body, etag=self.etag(view.entries))
 
     async def create(self, call):
         async with self._locked(self.lock):
@@ -476,6 +600,150 @@ class ProfileAdmin:
             operation = self._complete(key, data)
             return self._answer({'quarantined': name, 'operation': operation}, etag=self.etag(written.entries))
 
+    # ---- HM-13c: "revoke all", the restore record and its review, the quarantine directories ----
+
+    async def revoke_all(self, call):
+        default = self.registry.entry(profiles.DEFAULT_PROFILE)
+        async with self._locked(self.lock):
+            # The default profile's own lock, then every registered profile's (id order), as the index quarantine
+            # holds them: a token change, save or restart under way is done first; one that comes in meanwhile waits
+            # and then finds the token revoked. Only then the final role check.
+            async with self._locked(None if default is None else Registry.mutation_lock(default)):
+                async with self._registered_profiles_locked() as registered:
+                    await self._final(call)
+                    view, usable = self.registry.view()
+                    etag = self.etag(view.entries) if usable else self.raw_etag()
+                    given = self._if_match(call)
+                    if given is None:
+                        return self._conflict(etag)
+                    key, data, prior, fingerprint = self._idempotency(call, REVOKE_ALL, None)
+                    if prior is not None:
+                        return self._replay(prior, key, {'revoked': 'all'}, etag)
+                    if given != etag:
+                        return self._conflict(etag)
+                    entries = {profile_id: self.registry.entry(profile_id) for profile_id in registered}
+                    entries = {profile_id: entry for profile_id, entry in entries.items() if entry is not None}
+                    held = {profiles.DEFAULT_PROFILE: default, **entries} if default is not None else dict(entries)
+                    before = {profile_id: Registry.token_digest(entry) for profile_id, entry in held.items()}
+                    self.journal.begin(key, data, REVOKE_ALL, call.user, fingerprint, subject='all')
+                    call.committed.set()  # the receipt is begun: it runs to its end whatever the client does
+                    try:
+                        done = await asyncio.to_thread(
+                            restore_lock.revoke_all, self.registry.default_store(), self.registry.product,
+                            stores={profile_id: Registry.store(entry) for profile_id, entry in entries.items()})
+                    except (ConfigError, OSError, ValueError):
+                        done = None  # not even begun (.revoke-all-pending could not be saved), or no answer: unknown
+                    results = [] if done is None else [{'id': item.profile_id, 'result': item.result}
+                                                       for item in done.results]
+                    outcome = {item['id']: item['result'] for item in results}
+                    for profile_id, entry in held.items():
+                        Registry.token_access(entry).committed()  # requests that carry the old token end now
+                    if done is not None and done.finished:
+                        self.registry.unfence()
+                    else:
+                        self.registry.fence(digest for profile_id, digest in before.items()
+                                            if digest is not None and outcome.get(profile_id) != 'revoked')
+                    if outcome.get(profiles.DEFAULT_PROFILE) == 'revoked':
+                        notice = self.registry.restore_notice()
+                        if notice is not None:
+                            notice.clear()  # the default profile's token is not the backup's any more
+                    for profile_id, entry in held.items():
+                        if outcome.get(profile_id) == 'revoked':
+                            try:
+                                await Registry.restart(entry)
+                            except Exception:
+                                logger.warning('multi-profile: the child of profile %s did not start again after '
+                                               '"revoke all" (its new child token waits for a restart)',
+                                               profiles.log_id(profile_id))
+                    self._refresh_orphan_secrets(view)
+                    if done is None or not done.finished:
+                        public = self.journal.public(key, data['receipts'][key])
+                        raise refused(409, 'operation_outcome_unknown', operation=public, results=results)
+                    operation = self._complete(key, data)
+                    return self._answer({'revoked': 'all', 'results': results, 'operation': operation}, etag=etag)
+
+    async def restore_record(self, call):
+        await self._final(call)
+        view, usable = self.registry.view()
+        return self._answer({'record': self._record()}, etag=self.etag(view.entries) if usable else self.raw_etag())
+
+    async def restore_review(self, call, profile_id):
+        async with self._locked(self.lock):
+            await self._final(call)
+            view = self._usable_view()
+            etag = self.etag(view.entries)
+            given = self._if_match(call)
+            if given is None:
+                return self._conflict(etag)
+            key, data, prior, fingerprint = self._idempotency(call, REVIEW, profile_id)
+            if prior is not None:
+                return self._replay(prior, key, {'reviewed': profile_id, 'reviewed_at': self._reviewed_at(profile_id)},
+                                    etag)
+            if given != etag:
+                return self._conflict(etag)
+            record = self._record()
+            listed = profile_id == profiles.DEFAULT_PROFILE or profile_id in {item.id for item in view.entries}
+            if record is None or not listed or not any(row['id'] == profile_id for row in record['profiles']):
+                raise refused(404, 'profile_not_found')
+            self.journal.begin(key, data, REVIEW, call.user, fingerprint, subject=profile_id)
+            call.committed.set()
+            try:
+                reviewed_at = restore_lock.review(self.registry.layout.root, profile_id)
+            except (ConfigError, LookupError, OSError, ValueError):
+                raise refused(409, 'operation_outcome_unknown') from None
+            operation = self._complete(key, data)
+            return self._answer({'reviewed': profile_id, 'reviewed_at': reviewed_at, 'operation': operation},
+                                etag=etag)
+
+    def _reviewed_at(self, profile_id):
+        try:
+            record = self._record()
+        except ConfigError:
+            return None
+        row = None if record is None else next((row for row in record['profiles'] if row['id'] == profile_id), None)
+        return None if row is None else row['reviewed_at']
+
+    async def delete_quarantined(self, call, name):
+        directory = profiles.quarantine_directory_name(name)  # step 5 checked the name
+        async with self._locked(self.lock):
+            await self._final(call)
+            view = self._usable_view()
+            etag = self.etag(view.entries)
+            given = self._if_match(call)
+            if given is None:
+                return self._conflict(etag)
+            key, data, prior, fingerprint = self._idempotency(call, QUARANTINE_DELETE, name)
+            if prior is not None:
+                return self._replay(prior, key, {'deleted': name}, etag)
+            if given != etag:
+                return self._conflict(etag)
+            if directory not in self._scan().quarantined:
+                raise refused(404, 'profile_not_found')
+            self.journal.begin(key, data, QUARANTINE_DELETE, call.user, fingerprint, subject=name)
+            call.committed.set()
+            self._wipe(self.registry.layout.profiles / directory, name)
+            if not profiles.remove_quarantine_directory(self.registry.layout, directory):
+                logger.warning('multi-profile: a quarantine directory of profile %s could not be removed completely; '
+                               'it is still listed and can be deleted again', profiles.log_id(name[:24]))
+            operation = self._complete(key, data)
+            return self._answer({'deleted': name, 'operation': operation}, etag=etag)
+
+    def _wipe(self, directory, name):
+        """DQ-14 for a quarantine directory: when its state can be opened now (its quarantine may have come from an
+        error that went away), its token is revoked and its backend credentials wiped before it goes."""
+        try:
+            store = ProductStore(directory, self.registry.product, existing_only=True)
+        except (ConfigError, ValueError):
+            return  # its state cannot be read: nothing in it is ever served
+        try:
+            store.change_token(None, action='revoke')
+            store.update(**WIPED)
+        except ConfigError:
+            logger.warning('multi-profile: the credentials of a quarantine directory of profile %s could not be '
+                           'wiped before its deletion', profiles.log_id(name[:24]))
+        finally:
+            store.close()
+
     # ---- the steps ----
 
     @asynccontextmanager
@@ -675,8 +943,8 @@ class ProfileAdmin:
         status = STATUS.get(getattr(supervisor, 'status', None), 'failed')
         return {'status': status, 'blocked_reason': supervisor.blocked_reason if status == 'blocked' else None}
 
-    def _orphans(self, view):
+    def _orphans(self, view, scan):
         """Profile directories the index does not list (plan 4.4: never opened or routed, listed for deletion;
         DQ-14: never deleted on their own)."""
         listed = {item.id for item in view.entries}
-        return [{'id': profile_id} for profile_id in self._scan().profiles if profile_id not in listed]
+        return [{'id': profile_id} for profile_id in scan.profiles if profile_id not in listed]

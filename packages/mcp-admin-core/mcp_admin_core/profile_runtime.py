@@ -60,6 +60,13 @@ the manager or the default profile's lone runtime: no child starts and no listen
 unfinished "revoke all" and dormant profiles are handled. A product that is not switched on but has profile data gets a
 ProfileRuntime with dormant_profiles (the number the guard left revoked, for the bootstrap; make_apps' option of the
 same name); left out, the runtime is built as before.
+
+HM-13c (plan 6, 8.4; contract 1.2, 3.6, 4.1, 4.2): run_product hands the restore notice a start found
+(restore_lock.Notice; DQ-03 (b): the default profile's token is the backup's) to the default profile's runtime
+(restore_notice, make_apps' option of the same name), switched on (the manager's restore_notice) or not; left out (no
+notice: every installation that was never restored), the runtime is built as before. A switched-on profile's runtime
+also gets review_required (its token/rotate waits for its restore review: ProfileAdmin.review_required), and the
+manager keeps revoke_fence: the digests of tokens a "revoke all" could not revoke, which 8081 refuses (503).
 """
 from __future__ import annotations
 
@@ -98,7 +105,7 @@ RUNTIME_OPTIONS = frozenset({'child_url', 'health', 'backend_changed', 'configur
                              'restart_child', 'diagnostics', 'availability', 'token_access', 'mutation_lock',
                              'authority', 'admin_slots', 'admin_pipeline', 'profile_view', 'forward_slots',
                              'slot_busy', 'reply_secrets', 'child_blocked', 'default_endpoint', 'bootstrap_fields',
-                             'body_budget', 'dormant_profiles'})
+                             'body_budget', 'dormant_profiles', 'restore_notice', 'review_required'})
 MANAGEMENT_LISTENER_LIMIT = 64  # 8099's limit_concurrency (run_product), switched on or off
 # HM-09 (plan 5.4; C2-SF-4): after the default profile's child, at most STAGGER_SLOTS additional children start at
 # once; a place is freed when its child answered a health check, could not start, or after STAGGER_SECONDS.
@@ -160,6 +167,9 @@ class ProfileRuntime:
     HM-13b (run_product, for a product not switched on that has profile data): dormant_profiles, make_apps' option of
     the same name, passed only when given.
 
+    HM-13c: restore_notice (the default profile's, from run_product or the manager) and review_required (a switched-on
+    profile's, from the manager), make_apps' options of the same names, passed only when given.
+
     mcp_listener_limit: 8081's limit_concurrency when this runtime serves the add-on alone: 64, as before."""
     mcp_listener_limit = 64
 
@@ -167,7 +177,7 @@ class ProfileRuntime:
                  shared=None, profile_view=None, app_options=None, child_connections=CHILD_CONNECTIONS,
                  forward_slots=None, slot_busy=None, reply_secrets=None, hold=None, monitor_options=None,
                  report_blocked=False, default_endpoint=None, bootstrap_fields=None, body_budget=None,
-                 dormant_profiles=None):
+                 dormant_profiles=None, restore_notice=None, review_required=None):
         if not isinstance(profile_id, str) or not PROFILE_ID.fullmatch(profile_id):
             raise ValueError('invalid profile id')
         if type(child_connections) is not int or child_connections < 1:
@@ -186,7 +196,8 @@ class ProfileRuntime:
         self.gateway_options = {name: value for name, value in (
             ('forward_slots', forward_slots), ('slot_busy', slot_busy), ('reply_secrets', reply_secrets),
             ('default_endpoint', default_endpoint), ('bootstrap_fields', bootstrap_fields),
-            ('body_budget', body_budget), ('dormant_profiles', dormant_profiles)) if value is not None}
+            ('body_budget', body_budget), ('dormant_profiles', dormant_profiles), ('restore_notice', restore_notice),
+            ('review_required', review_required)) if value is not None}
         if hold is not None and not callable(hold):
             raise ValueError('invalid start hold')
         self.hold = hold
@@ -467,9 +478,13 @@ class ProfileManager:
     additional profile, the default profile's endpoint (DQ-13); get(profile_id).runtime.admin_action is each
     profile's action."""
 
-    def __init__(self, store, product, tools, child_spec, *, port=CHILD_PORT, app_options=None):
+    def __init__(self, store, product, tools, child_spec, *, port=CHILD_PORT, app_options=None, restore_notice=None):
         self.store, self.product, self.tools, self.child_spec = store, product, tools, child_spec
         self.port = port
+        # HM-13c: the default profile's restore notice (restore_lock.Notice, or None) and the digests of tokens a
+        # "revoke all" could not revoke (8081 refuses them: profile_router.McpDispatcher.resolve).
+        self.restore_notice = restore_notice
+        self.revoke_fence = set()
         self.app_options = dict(app_options or {})
         self.layout = profiles.Layout(Path(store.directory))
         self.reports = Reports()
@@ -828,7 +843,9 @@ class ProfileManager:
                                  report_blocked=True, profile_view=partial(self.echo, profile_id),
                                  bootstrap_fields=partial(self.admin.bootstrap_fields, profile_id),
                                  default_endpoint=None if default else self.default_endpoint,
-                                 body_budget=gate.budget_share)
+                                 body_budget=gate.budget_share,
+                                 restore_notice=self.restore_notice if default else None,
+                                 review_required=partial(self.admin.review_required, profile_id))
         await runtime.open()
         entry = RegisteredProfile(profile_id, port, label, runtime, store, gate, credentials, disabled)
         self._entries[profile_id] = entry

@@ -46,6 +46,11 @@ async def run(args, *, child_port=CHILD_PORT):
         # profile data is left alone (a restore's marker only gets its notice). ConfigError: nothing is served, the
         # next start runs it again.
         guarded = restore_lock.guard(store, args.product, enabled=enabled)
+        # HM-13c (DQ-03 (b); not gated): the restore notice the guard left when a restore kept the default profile's
+        # token, for the panel until the token changes. None (no notice: every installation never restored): nothing
+        # below changes.
+        found = restore_lock.read_notice(store.directory)
+        notice = None if found is None else restore_lock.Notice(store.directory, found)
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, stop.set)
         options = dict(
@@ -68,7 +73,7 @@ async def run(args, *, child_port=CHILD_PORT):
             # monitor, and only the default profile's ending stops the add-on (DQ-21); closing it stops every child at
             # once (HA's 30 s).
             profile = ProfileManager(store, args.product, TOOLS[args.product], child_spec, port=child_port,
-                                     app_options=options)
+                                     app_options=options, restore_notice=notice)
         else:
             # HM-05 (multi-profile plan 3.2): the default profile's runtime. It makes the child's Supervisor, client,
             # HealthMonitor and ConfigurationState and the two apps (make_apps with these product options) as this
@@ -76,7 +81,7 @@ async def run(args, *, child_port=CHILD_PORT):
             # administration: the apps make their own AdminAuthority and management slots, as before. HM-13b: dormant
             # profiles (profile data on disk) add their number to the bootstrap; without profile data, nothing changes.
             profile = ProfileRuntime(store, TOOLS[args.product], child_spec, port=child_port, app_options=options,
-                                     dormant_profiles=guarded.dormant)
+                                     dormant_profiles=guarded.dormant, restore_notice=notice)
         async with profile:
             servers = [Listener(uvicorn.Config(app, host=args.host, port=port,
                 proxy_headers=False, access_log=False, log_level='warning', server_header=False,

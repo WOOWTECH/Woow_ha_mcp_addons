@@ -63,6 +63,22 @@ rebuild, the markers' removal, the record and the archives can work.
 
 Log lines (logger mcp_admin_core.restore_lock, WARNING: the add-on log shows WARNING and above): fixed text; a profile is
 named by its id's first 8 characters (I7); never a token, a label, a value or an exception's text.
+
+HM-13c (the owner's decision of 2026-11-16 on the HM-13b review's Q-1: DQ-03 (b) as written, "面板與 log 提示"):
+- The panel's restore notice. A restore that keeps the default profile's token (no profile data: a single-profile
+  installation, switched on or not) saves restore-notice.json (NOTICE: {"version": 1, "at": <UTC seconds>}, nothing
+  else, never a secret; atomically, fsynced, 0600, this process's uid as every file here) before the marker goes, so a
+  start stopped in between saves it again. Not switched on and without profile data, a notice that cannot be saved
+  stops nothing (the marker stays and the next start tries again, as a marker that cannot be removed); otherwise it
+  stops the start as any other write of the guard does. A restore or a "revoke all" that revokes the default profile
+  removes a notice there (the backup's, or an earlier start's: it would not be true). read_notice() is what a start
+  shows (run_product, apps/n8n/run.py: make_apps restore_notice, a Notice); the default profile's next token change
+  removes it (Notice.clear). Without a notice nothing of this is read again, so an installation that was never
+  restored answers as before, byte for byte.
+- Every journal the guard handles in a restore gets a new one, also where the backup had none (operations
+  renew_missing; contract 3.5): the default profile's while it is kept stays as restored (contract 9 #116).
+- The restore record's readers: check_record() (what the management API and the review gate rely on, validated),
+  review() (a row's reviewed_at, written once; the record is otherwise left as the guard wrote it).
 """
 from __future__ import annotations
 
@@ -93,8 +109,22 @@ DEFAULT = profiles.DEFAULT_PROFILE
 MARKER = profiles.RESTORE_MARKER_NAME
 REVOKE_ALL = profiles.REVOKE_ALL_MARKER_NAME
 RECORD = profiles.RESTORE_RECORD_NAME
+NOTICE = profiles.RESTORE_NOTICE_NAME
 SENTINEL_NAMES = (profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME, profiles.INSTANCE_RECORD_TEMPORARY_NAME)
 RECORD_VERSION = 1
+NOTICE_VERSION = 1
+NOTICE_LIMIT = 4096
+# The record's rows whose token the guard revoked (a restore's or a dormant start's): a new token for one of them waits
+# for its review (HM-13c; contract 4.1 restore_review_required). A kept token (DQ-03 (b)) needs none.
+REVIEWED_TOKENS = ('revoked', 'already_revoked')
+RECORD_KEYS = ('version', 'restore', 'dormant', 'index', 'profiles', 'quarantined', 'profiles_directory',
+               'other_entries')
+RECORD_ROW_KEYS = ('id', 'label', 'is_default', 'token', 'identity', 'policy', 'reviewed_at')
+_TIME = re.compile(r'[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+00:00')
+# What a record's restore and index parts may say (restore_detect's verdicts; profiles' index states).
+SENTINEL_VERDICTS = frozenset({restore_detect.INACTIVE, restore_detect.ESTABLISHED, restore_detect.REBUILT,
+                               restore_detect.CONSISTENT, *restore_detect.RESTORED})
+INDEX_STATES = (profiles.INDEX_ABSENT, profiles.INDEX_OK, profiles.INDEX_CORRUPT, profiles.INDEX_MODIFIED)
 # A state is at most 64 KiB (Store) and a row shows a part of one: 1 MiB holds the default profile, the index's five
 # and ten orphans with states that large; a record over it (only a backup put together by hand) stops the guard.
 RECORD_LIMIT = 1048576
@@ -129,6 +159,8 @@ SET_ASIDE_IN_PROFILE = 'restore guard [profile=%s]: %s was not a plain file; it 
 UNFINISHED = ('restore guard: not finished (%s); nothing is served and no child is started. The guard runs again at '
               'the next start')
 MARKER_LEFT = 'restore guard: %s; starting (no profile data: nothing to revoke), the next start tries again'
+NOTICE_NOT_REMOVED = ('restore guard: the panel notice of the restore could not be removed after the token changed; it '
+                      'shows again after a restart until the next token change')
 
 
 def _utc_now():
@@ -184,6 +216,7 @@ def guard(store, product, *, enabled, now=None) -> Outcome:
         if detection.restored:
             logger.warning(KEPT_NOTICE)
             try:
+                _save_notice(root, now)  # HM-13c: the panel's notice, before the marker goes
                 _finish(root, now, markers=(MARKER,))
             except Unfinished as stop:
                 logger.warning(MARKER_LEFT, stop.args[0])
@@ -207,7 +240,10 @@ def guard(store, product, *, enabled, now=None) -> Outcome:
             sweep.record(detection if restored else None, dormant=dormant, default_revoked=revoke_default)
         if sweep.check(strict=restored or pending, default_kept=not revoke_default):
             raise Unfinished('the check after revoking did not pass')
-        markers = (REVOKE_ALL,) * pending + (MARKER,) * restored
+        if restored and not revoke_default:
+            _save_notice(root, now)  # HM-13c: DQ-03 (b), the default profile's token is the backup's
+        # HM-13c: a notice the backup or an earlier start left is not true once the default profile is revoked.
+        markers = (NOTICE,) * revoke_default + (REVOKE_ALL,) * pending + (MARKER,) * restored
         _finish(root, now, rebuild=restored and detection.active, enabled=enabled, markers=markers)
     except Unfinished as stop:
         logger.warning(UNFINISHED, stop.args[0])
@@ -313,6 +349,131 @@ def read_record(root) -> dict | None:
     if not isinstance(value, dict) or value.get('version') != RECORD_VERSION:
         raise ConfigError('restore record unavailable')
     return value
+
+
+def check_record(value) -> dict:
+    """value (read_record's) as the guard writes it (contract 3.6): every key and type the management API and the
+    review gate rely on (HM-13c). ConfigError for anything else (fails closed: a new token waits, contract 4.1)."""
+    def time(item, required=False):
+        return (item is None and not required) or (isinstance(item, str) and _TIME.fullmatch(item) is not None)
+
+    def text(item):
+        return item is None or isinstance(item, str) and len(item) <= 2048
+
+    try:
+        if not isinstance(value, dict) or tuple(value) != RECORD_KEYS or value['version'] != RECORD_VERSION:
+            raise ValueError()
+        restore, dormant = value['restore'], value['dormant']
+        if restore is not None and (not isinstance(restore, dict) or tuple(restore) != ('at', 'marker', 'sentinel')
+                                    or not time(restore['at'], True) or type(restore['marker']) is not bool
+                                    or restore['sentinel'] not in SENTINEL_VERDICTS):
+            raise ValueError()
+        if dormant is not None and (not isinstance(dormant, dict) or tuple(dormant) != ('at',)
+                                    or not time(dormant['at'], True)):
+            raise ValueError()
+        if value['index'] not in INDEX_STATES or value['profiles_directory'] not in ('absent', 'present', 'unlistable'):
+            raise ValueError()
+        if type(value['other_entries']) is not int or value['other_entries'] < 0:
+            raise ValueError()
+        rows, seen = value['profiles'], set()
+        if not isinstance(rows, list):  # RECORD_LIMIT bounds how many (a hand-made backup may hold many orphans)
+            raise ValueError()
+        for row in rows:
+            if (not isinstance(row, dict) or tuple(row) != RECORD_ROW_KEYS or not isinstance(row['id'], str)
+                    or not profiles.PROFILE_ID.fullmatch(row['id']) or row['id'] in seen
+                    or row['is_default'] is not (row['id'] == DEFAULT) or not text(row['label'])
+                    or row['token'] not in ('revoked', 'kept', 'already_revoked')
+                    or not isinstance(row['identity'], dict) or not isinstance(row['policy'], dict)
+                    or not all(isinstance(key, str) and text(item) for key, item in row['identity'].items())
+                    or not time(row['reviewed_at'])):
+                raise ValueError()
+            seen.add(row['id'])
+        quarantined = value['quarantined']
+        if not isinstance(quarantined, list):
+            raise ValueError()
+        for item in quarantined:
+            if (not isinstance(item, dict) or tuple(item) != ('name', 'id', 'new')
+                    or profiles.parse_quarantine_name(item['name']) is None
+                    or profiles.parse_quarantine_name(item['name'])[0] != item['id'] or type(item['new']) is not bool):
+                raise ValueError()
+    except (ValueError, KeyError, TypeError):
+        raise ConfigError('restore record unavailable') from None
+    return value
+
+
+def review(root, profile_id, now=None) -> str:
+    """HM-13c (POST profiles/<id>/restore-review): the record's row of profile_id reviewed now (UTC seconds), unless it
+    was already (the first time stays); every other byte of the record as it was. Returns the row's reviewed_at.
+    LookupError when the record has no row of it; ConfigError when the record cannot be used; OSError or ValueError
+    when the new record could not be saved (the old one stays)."""
+    now = now or _utc_now
+    value = read_record(root)
+    if value is None:
+        raise LookupError('no restore record')
+    check_record(value)
+    row = next((row for row in value['profiles'] if row['id'] == profile_id), None)
+    if row is None:
+        raise LookupError('no row of this profile')
+    if row['reviewed_at'] is None:
+        row['reviewed_at'] = now().astimezone(timezone.utc).isoformat(timespec='seconds')
+        _write_record(Path(root), value)
+    return row['reviewed_at']
+
+
+def read_notice(root) -> dict | None:
+    """restore-notice.json as the guard saves it (HM-13c): {"at": <UTC seconds>}, or None when there is none or it is
+    not a single-link regular file of this uid within NOTICE_LIMIT holding exactly that (it is only shown, never acted
+    on: anything else is no notice)."""
+    try:
+        fd = os.open(Path(root) / NOTICE, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return None
+    try:
+        raw = _read_bounded(fd, NOTICE_LIMIT)
+    finally:
+        os.close(fd)
+    try:
+        value = strict_json(raw) if raw is not None else None
+    except (ValueError, RecursionError):
+        return None
+    if (not isinstance(value, dict) or tuple(value) != ('version', 'at') or value['version'] != NOTICE_VERSION
+            or not isinstance(value['at'], str) or not _TIME.fullmatch(value['at'])):
+        return None
+    return {'at': value['at']}
+
+
+class Notice:
+    """The restore notice a start found (read_notice), for the default profile's bootstrap (gateway.make_apps
+    restore_notice): view() until the default profile's token changes (its token/rotate or token/revoke, a "revoke
+    all"), then clear(): restore-notice.json removed (fsynced) and the notice not shown again by this process. A file
+    that cannot be removed is said once (it shows again after a restart, until the next token change)."""
+
+    def __init__(self, root, value):
+        self.root, self.value = Path(root), None if value is None else dict(value)
+
+    def view(self):
+        return None if self.value is None else dict(self.value)
+
+    def clear(self):
+        if self.value is None:
+            return
+        self.value = None
+        try:
+            fd = _open_directory(self.root)
+        except OSError:
+            logger.warning(NOTICE_NOT_REMOVED)
+            return
+        try:
+            try:
+                if stat.S_ISREG(os.stat(NOTICE, dir_fd=fd, follow_symlinks=False).st_mode):
+                    os.unlink(NOTICE, dir_fd=fd)
+                    os.fsync(fd)
+            except FileNotFoundError:
+                pass
+        except OSError:
+            logger.warning(NOTICE_NOT_REMOVED)
+        finally:
+            os.close(fd)
 
 
 def read_tokens(directory):
@@ -483,7 +644,8 @@ class _Sweep:
         try:
             _clear(journal.parent, journal.name + operations.RESTORED_SUFFIX, self.now,
                    None if where in (None, DEFAULT) else where)
-            operations.archive_for_restore(config_path, cutoff)
+            # HM-13c: a new journal also where the backup had none (an operation lost with the restore answers 410)
+            operations.archive_for_restore(config_path, cutoff, renew_missing=True)
         except (OSError, ValueError, Unfinished):
             if where is None:
                 self._fail(None, 'receipts could not be archived', INDEX_NOT_ARCHIVED)
@@ -654,12 +816,29 @@ def _maybe_directory(path):
         return True
 
 
+def _save_notice(root, now):
+    """HM-13c: restore-notice.json for the panel (the time of the restore only), atomically; a directory at its name (a
+    forged backup) is moved aside first. Unfinished when it could not be saved."""
+    at = now().astimezone(timezone.utc).isoformat(timespec='seconds')
+    _clear(root, NOTICE, now)
+    try:
+        _write_json(Path(root), NOTICE, {'version': NOTICE_VERSION, 'at': at}, NOTICE_LIMIT)
+    except (OSError, ValueError):
+        raise Unfinished('the panel notice could not be saved') from None
+
+
 def _write_record(root, value):
+    _write_json(root, RECORD, value, RECORD_LIMIT)
+
+
+def _write_json(root, name, value, limit):
+    """value as name in root: a temporary of this uid (0600), written and fsynced, then put in place and the directory
+    fsynced; ValueError when it is larger than limit."""
     raw = json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
-    if len(raw) > RECORD_LIMIT:
-        raise ValueError('restore record too large')
+    if len(raw) > limit:
+        raise ValueError('too large')
     fd = _open_directory(root)
-    temporary = '.' + RECORD + '.tmp-' + secrets.token_hex(8)
+    temporary = '.' + name + '.tmp-' + secrets.token_hex(8)
     try:
         out = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=fd)
         try:
@@ -669,7 +848,7 @@ def _write_record(root, value):
             os.fsync(out)
         finally:
             os.close(out)
-        os.replace(temporary, RECORD, src_dir_fd=fd, dst_dir_fd=fd)
+        os.replace(temporary, name, src_dir_fd=fd, dst_dir_fd=fd)
         os.fsync(fd)
     except OSError:
         try:
