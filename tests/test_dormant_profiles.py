@@ -1,4 +1,4 @@
-"""HM-13b: dormant profiles (multi-profile plan 3.3, 8.4 休眠處理, 10.3; contract 1.2, 9 #24, #105; FM-119; I13).
+"""HM-13b: dormant profiles (multi-profile plan 3.3, 8.4 休眠處理, 10.3; contract 1.2, 1.3, 9 #24; FM-119; I13).
 
 A product that is not switched on but has profile data on disk (a version that switched the product off again, or a
 restored backup of such a time) serves the default profile only. At every start, before anything is served, the boot

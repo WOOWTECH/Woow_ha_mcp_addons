@@ -16,14 +16,15 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import secrets
 from types import SimpleNamespace
 
 import httpx
 import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
-from mcp_admin_core import features, operations, profile_runtime, profiles, restore_detect as rd, restore_lock, \
-    run_product
+from mcp_admin_core import features, operations, products, profile_runtime, profiles, restore_detect as rd, \
+    restore_lock, run_product
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.products import ProductStore
 from multi_profile_runtime import Children, multi_profile_runtime
@@ -676,6 +677,30 @@ def test_a_restore_of_states_as_large_as_the_store_takes_still_finishes(tmp_path
     assert 262_144 < (disk.data / profiles.RESTORE_RECORD_NAME).stat().st_size <= restore_lock.RECORD_LIMIT
     assert [row['id'] for row in record_of(disk)['profiles']] == [DEFAULT, *sorted(indexed + orphans)]
     assert MARKER not in disk.names()
+
+
+@pytest.mark.parametrize('product', sorted(products.NO_PROFILE_PRODUCTS))
+def test_a_profile_directory_of_a_product_without_profiles_is_revoked(tmp_path, log_scan, product):
+    """HM-07 review S-06 (handed to HM-13b): OpenDesign and Odoo Manage never create a profile, but existing_only still
+    opens a profile directory that came back with a restore (a backup put together by hand): profile data without the
+    sentinel's record reads as a restore, so the guard revokes it and, with profile data on disk, the default profile
+    (DQ-03 (b)); the next start finds both revoked and does nothing more."""
+    disk = Disk(tmp_path, log_scan, product)
+    default = disk.state()
+    state = {**default, 'token': secrets.token_urlsafe(32), 'child_token': secrets.token_urlsafe(32)}
+    log_scan.watch(state['token'], state['child_token'])
+    os.mkdir(disk.layout.profiles, 0o700)
+    os.mkdir(disk.layout.profile(B), 0o700)
+    for name, raw in (('.writer.lock', b''), ('state.json', json.dumps(state).encode())):
+        fd = os.open(disk.layout.profile(B) / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            os.write(fd, raw)
+        finally:
+            os.close(fd)
+    outcome = disk.start(enabled=False)
+    assert outcome == restore_lock.Outcome(restored=True, dormant=1, default_revoked=True, revoked=(B,))
+    assert disk.tokens(B)[0] is None and disk.tokens(B)[1] != state['child_token'] and disk.tokens()[0] is None
+    assert disk.start(enabled=False) == restore_lock.Outcome(dormant=1)
 
 
 # ---- HM-10's interrupted deletion and index quarantine meet the guard ----
