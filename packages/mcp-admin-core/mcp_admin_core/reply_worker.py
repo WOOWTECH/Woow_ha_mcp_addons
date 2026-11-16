@@ -54,8 +54,8 @@ breath, every system call of the loop waits for the GIL again), and the parser a
 (config.strict_json). Still one C call each: json.loads scanning one long string (20 to 50 ms for 8 MiB, the most with
 many escapes) or an array with neither an object nor a number in it, at any depth (short strings, true, false, null,
 empty arrays: nothing calls back into Python there; 8 MiB of them 0.03 to 0.19 s on the EPYC 7713, of short names
-about 0.1 s; HM-30 review 2 Q1, the user's to decide), its decoding of the bytes (5 to 20 ms) and the final join of
-the pieces (a copy).
+about 0.1 s; HM-30 review 2 Q1: accepted by the user on 2026-11-17 until HM-19c measures it on real hardware), its
+decoding of the bytes (5 to 20 ms) and the final join of the pieces (a copy).
 
 Failures. A job's exception (any BaseException) is its caller's: it is re-raised on the loop, where the gateway
 answers it as before; its frames are cleared first (nothing the job held stays alive with it), and the thread goes on.

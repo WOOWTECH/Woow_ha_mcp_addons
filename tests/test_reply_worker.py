@@ -21,9 +21,9 @@ invariant I8; DQ-07 (a); C2-MF-4, C1-M5; FM-129, FM-149).
   (RSS, with an event stream's forwarded body included).
 - Switched off: no worker, no gate; every reply is processed on the loop as before.
 - HM-30 review 2: flat arrays of numbers breathe in every step (MF-1; a flat array of strings is one parse call still,
-  printed for the user's decision Q1); the reply mask holds wherever the worker cuts and breathes (MF-3); answers that
-  arrive at once hold no more than the budget and one reply a slot (MF-2); the costs bound every run of the encoder
-  (S-4).
+  printed only: accepted by the user on 2026-11-17 until HM-19c measures it, Q1); the reply mask holds wherever the
+  worker cuts and breathes (MF-3); answers that arrive at once hold no more than the budget and one reply a slot
+  (MF-2); the costs bound every run of the encoder (S-4).
 """
 import asyncio
 from dataclasses import replace
@@ -1087,7 +1087,8 @@ REAL_SHAPES = {
 }
 # HM-30 review 2 MF-1, Q1: a flat array of strings has neither an object nor a number in it, so json's C scanner parses
 # it in one call with nothing to stop at (8 MiB of short names: about 0.1 s on the EPYC 7713). Not held to contract 6's
-# 50 ms until the user decides (HM-30 review 2 Q1); its bytes are held to the loop's as every reply's are.
+# 50 ms: accepted by the user on 2026-11-17 until HM-19c measures it (HM-30 review 2 Q1); its bytes are held to the
+# loop's as every reply's are.
 ONE_CALL_SHAPES = {
     'short-strings': lambda: filled(lambda n: reply({'structuredContent': {'names': ['ab'] * n},
                                                      **text_result('names')})),
@@ -1300,8 +1301,9 @@ async def test_a_flat_array_of_strings_is_the_loops_bytes_and_its_one_parse_call
     """HM-30 review 2 MF-1, Q1: a real 8 MiB reply whose structuredContent is a flat array of short strings. The worker
     masks, costs, encodes and lets go of it with its checkpoints (every MEMBERS_A_CHECKPOINT members), but json's C
     scanner parses the array in one call: the loop stops for that call (about 0.1 s on the EPYC 7713, over contract 6's
-    50 ms). Its answer is held to the loop's bytes; its stop is printed, not held to the threshold, until the user
-    decides (HM-30 review 2 Q1: accept it and let HM-19c measure it, cap a reply's elements, or a child process)."""
+    50 ms). Its answer is held to the loop's bytes; its stop is printed, not held to the threshold: accepted by the
+    user on 2026-11-17 until HM-19c measures it (HM-30 review 2 Q1; the other choices were to cap a reply's elements
+    or to use a child process)."""
     lag = await on_the_loop_and_on_the_worker(store, worker, real_reply(shape), False,
                                               f'{shape} (one parse call; HM-30 review 2 Q1, not held to the threshold)')
     assert lag.samples > 0
