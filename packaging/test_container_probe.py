@@ -110,10 +110,14 @@ class SwitchedOnMockBackendTests(unittest.TestCase):
 
 
 # The single-profile probe as reviewed before HM-16 (claude-delivery f4c7718). A slice that changes that path on purpose
-# moves BASE to the commit its change is reviewed against, and says why in its provenance note.
+# moves BASE to the commit its change is reviewed against, and says why in its provenance note. Both sides are compared
+# without their switched-on parts (review MF-3): a base that has switched-on parts of its own (HM-13b's restore check,
+# its features import) needs nothing but BASE moved.
 BASE = 'f4c7718'
-# What HM-16 added for a switched-on product: two imports and three statements `if ... features.enabled(...)`.
-SWITCHED_ON_ADDITIONS = 5
+# What HM-16 adds for a switched-on product, beyond what BASE has: `import container_profiles`, three statements
+# `if ... features.enabled(...)` that each hand over to container_profiles (mock_bind_host, fixture_snapshot, run), and
+# the import of features unless BASE has it already.
+SWITCHED_ON_BRANCHES = 3
 
 
 def is_switched_on_branch(node):
@@ -123,42 +127,68 @@ def is_switched_on_branch(node):
 
 
 class WithoutSwitchedOnAdditions(ast.NodeTransformer):
-    """The probe module without HM-16's additions: the imports of features and container_profiles, and every `if`
-    statement whose test calls features.enabled, wherever it stands."""
+    """The probe module without its switched-on parts: the imports of features and container_profiles, and every `if`
+    statement whose test calls features.enabled, wherever it stands. removed: [(kind, the node)] of each."""
 
     def __init__(self):
-        self.removed = 0
+        self.removed = []
 
-    def drop(self):
-        self.removed += 1
+    def drop(self, kind, node):
+        self.removed.append((kind, node))
 
     def visit_If(self, node):
         if is_switched_on_branch(node):
-            return self.drop()
+            return self.drop('branch', node)
         return self.generic_visit(node)
 
     def visit_Import(self, node):
-        return self.drop() if [alias.name for alias in node.names] == ['container_profiles'] else node
+        if [alias.name for alias in node.names] == ['container_profiles']:
+            return self.drop('container_profiles', node)
+        return node
 
     def visit_ImportFrom(self, node):
         if node.module == 'mcp_admin_core' and [alias.name for alias in node.names] == ['features']:
-            return self.drop()
+            return self.drop('features', node)
         return node
+
+
+def without_switched_on_parts(source):
+    """(the module's AST without its switched-on parts, {ast.dump of a removed part: (kind, node, how many)})."""
+    tree = ast.parse(source)
+    stripping = WithoutSwitchedOnAdditions()
+    stripping.visit(tree)
+    parts = {}
+    for kind, node in stripping.removed:
+        dump = ast.dump(node)
+        parts[dump] = (kind, node, parts.get(dump, (None, None, 0))[2] + 1)
+    return tree, parts
+
+
+def hands_over_to_container_profiles(node):
+    return any(isinstance(name, ast.Name) and name.id == 'container_profiles' for name in ast.walk(node))
 
 
 class SingleProfilePathTests(unittest.TestCase):
     """Multi-profile HM-16 (plan 12.3 HM-16 acceptance: the single-profile probe path does not change): a product that
-    is not switched on runs f4c7718's probe statement for statement; the switched-on additions are only guarded
+    is not switched on runs BASE's probe statement for statement; the switched-on additions are only guarded
     branches, the stage call last."""
 
     def test_without_the_switched_on_branches_the_probe_is_the_reviewed_one(self):
         base = subprocess.run(['git', '-c', f'safe.directory={ROOT}', '-C', str(ROOT), 'show',
                                f'{BASE}:packaging/container_probe.py'], capture_output=True, text=True, check=True).stdout
-        tree = ast.parse(Path(probe.__file__).read_text())
-        stripped = WithoutSwitchedOnAdditions()
-        stripped.visit(tree)
-        self.assertEqual(stripped.removed, SWITCHED_ON_ADDITIONS)
-        self.assertEqual(ast.dump(tree), ast.dump(ast.parse(base)))
+        base_tree, base_parts = without_switched_on_parts(base)
+        tree, parts = without_switched_on_parts(Path(probe.__file__).read_text())
+        self.assertEqual(ast.dump(tree), ast.dump(base_tree))  # every other statement as BASE has it
+        # every switched-on part BASE has is still here, unchanged
+        self.assertEqual({dump: count for dump, (_, _, count) in base_parts.items()
+                          if parts.get(dump, (None, None, 0))[2] < count}, {})
+        added = [(kind, node) for dump, (kind, node, count) in parts.items()
+                 for _ in range(count - base_parts.get(dump, (None, None, 0))[2])]
+        kinds = sorted(kind for kind, _ in added)
+        has_features = any(kind == 'features' for kind, _, _ in base_parts.values())
+        self.assertEqual(kinds, sorted(['container_profiles', *['branch'] * SWITCHED_ON_BRANCHES,
+                                        *([] if has_features else ['features'])]))
+        self.assertTrue(all(hands_over_to_container_profiles(node) for kind, node in added if kind == 'branch'))
 
     def test_the_stage_runs_last_and_only_switched_on(self):
         run = next(node for node in ast.parse(Path(probe.__file__).read_text()).body
