@@ -29,9 +29,9 @@
 - 兩個預檢：秘密預檢 0 命中、帳本預檢 OK（第 9 節）。全套 pytest 5394 案只剩 7 個要 root 的既有案例（第 7 節）。rebase 後：全套 5531 案只剩 7 個要 root 的既有案例與 22 個這個 clone 沒有 Chromium 跑不了的瀏覽器測試（第 16.7 節），兩個預檢見第 16.9 節。
 - **獨立安全審查（2026-11-16）判定「修正後通過」**（第 15 節）：必修 MF-1 加測試；MF-2 寫明並先釘住現況，(b) 由主對話 2026-11-16 定案
   （不改 DQ-07 的數值；准入滿時讓通知走保留名額交 HM-31 改分派器；第 11 節）；建議 S-1～S-6 採用（S-1、S-4 改程式），S-7 只寫明、不改程式。
-- **rebase 到 `claude-delivery` `c523474`（HM-09 合併後，2026-11-16；第 16 節）**：`gateway.py` 的 `make_apps` 參數與說明、帳本、契約
-  第 9 節與變更紀錄照兩邊意圖合併，三個列管檔的帳本摘要照合併後的內容重算；HM-14 的差異列改成第 91～99 列（HM-09 用了第 89 列），
-  引用一起改，再補第 100 列；`-32004` 的「會自動重新啟動」只在 HM-09 的看門狗會再起子程式時說（`blocked`、`failed`、`stopped`、
+- **rebase 到 `claude-delivery`（2026-11-16 兩次：HM-09 合併後的 `c523474`，第 16 節；HM-20 合併後的 `269f5a5`，第 17 節）**：
+  `gateway.py` 的 `make_apps` 參數與說明、帳本、契約第 9 節與變更紀錄、威脅模型的狀態行照兩邊意圖合併，三個列管檔的帳本摘要照合併後的內容
+  重算；HM-14 的差異列改成第 91～99 列（HM-09、HM-20 各用了第 89、90 列），引用一起改，再補第 100 列；`-32004` 的「會自動重新啟動」只在 HM-09 的看門狗會再起子程式時說（`blocked`、`failed`、`stopped`、
   `unconfigured` 說目前沒有在重新啟動），加 1 個測試（7 種狀態）。
 
 ## 1. 範圍與基準
@@ -40,7 +40,7 @@
 |---|---|
 | 切片 | HM-14（計畫 §12.3；風險中、工作量 L；要獨立安全審查） |
 | 分支 | `feat/ha-multiprofile-hm14-20261115`（一般 clone，不是 worktree） |
-| 基準 | `claude-delivery` `c523474`（HM-00～HM-09、13a、17、#100 已合併）；原本是 `b5d10c5`，2026-11-16 rebase（第 16 節） |
+| 基準 | `claude-delivery` `269f5a5`（HM-00～HM-09、13a、17、20、#100 已合併）；原本是 `b5d10c5`，2026-11-16 rebase 兩次（`c523474`：第 16 節；`269f5a5`：第 17 節） |
 | 依據 | 計畫 §5.1、§5.2、§10.3、§12.3 HM-14；契約 §1.2、§2.4、§2.5、§4.2（含「其他既有回應」）、§5、§9；HM-08 審查報告（`artifacts/…/wave3/review-HM-08.md`，S-4 (a)）與 HM-08 筆記第 14.2 節；FM-34、43、44、50、51、52 |
 | 對齊的 PaaS | 沒有移植 PaaS 程式。行為與期望值：`Pc/gateway_pool.py`（排隊、保留名額、`_hand_back`、`_watch_client`）、`Pc/proxy.py`（`_carries_no_request`、`_busy_message`、`_child_stopped`、`_Interruption`、`CHILD_*_MESSAGE`、`ACCESS_CHANGED_MESSAGE`）、`Pc/mcp_access.py`（`_finish_interrupted`、`INTERRUPTED_FINISH_TIMEOUT`）、`Pc/initialize_fence.py`（標頭卡在背壓時的拒絕）、`P:docs/mcp-gateway-limits.md`（@`69ac425`，與 main 上 19f36e2、`091dfbc` 的已知限制）；四個測試檔 @`69ac425`（含 main 上 `82c6929` 的測試補強） |
 | PaaS clone | 本機唯讀（沒 fetch、沒 checkout）；`origin/main` 寫筆記時是 `5b84b5d`，審查修正與 rebase 時是 `d7f5849`（都是別的流程 fetch 的；見第 10 節） |
@@ -63,7 +63,7 @@
 | `tests/test_reply_mask_union.py` | 只改一個說明字串（HM-08 寫「開關關時原樣轉回，留給 HM-14」） |
 | 審查修正的測試（4 檔，11 案） | Q：佇列不跨帳號［B 滿｜預設滿］（MF-1）、GET 串流整段佔住一般名額（UC-31，S-3）；C：保留名額只在准入還有空位時有用［15｜16］（MF-2，釘住現況）；E：initialize 回覆讀到一半斷線［仍在執行｜停止了］、`-32004` 之後換 token 不再補 `-32005`、回覆還沒被收下就換 token 要補 `-32005`、最後一則被收下那一刻換 token 之後不再送（S-1、S-2）；B：每帳號每情況 60 秒一行在 6 個帳號、11 種情況下仍成立（S-4） |
 | rebase 後的測試（1 檔，7 案） | E：`test_a_stopped_child_is_said_to_restart_only_while_it_comes_back_by_itself`［backoff｜starting｜replaced｜blocked｜failed｜stopped｜unconfigured］：標頭前的 502 與 SSE 事件都驗（第 16.4 節） |
-| `docs/multi-profile/contract.md` | 第 1.2 節（不受開關管的 initialize 錯誤遮罩）、第 2.4、2.5 節（HM-14 定案）、第 4.2 節、第 9 節第 91～95 列與 #81、第 10 節。審查修正：第 2.4 節三點（MF-2、UC-31、S-7）、第 2.5 節兩點（S-1、S-5）、第 4.2 節、第 5 節一點、第 9 節第 96～99 列、第 10 節一列。rebase 後：HM-14 的列從第 89～97 列改成第 91～99 列（HM-09 用了第 89 列）、第 2.5 節 `-32004` 三種文字、第 4.2 節 `-32004` 列、第 9 節第 100 列、第 2.4、5 節與 #96 寫明 MF-2 (b) 的定案、第 10 節一列 |
+| `docs/multi-profile/contract.md` | 第 1.2 節（不受開關管的 initialize 錯誤遮罩）、第 2.4、2.5 節（HM-14 定案）、第 4.2 節、第 9 節第 91～95 列與 #81、第 10 節。審查修正：第 2.4 節三點（MF-2、UC-31、S-7）、第 2.5 節兩點（S-1、S-5）、第 4.2 節、第 5 節一點、第 9 節第 96～99 列、第 10 節一列。rebase 後：HM-14 的列從第 89～97 列改成第 91～99 列（HM-09、HM-20 各用了第 89、90 列）、第 2.5 節 `-32004` 三種文字、第 4.2 節 `-32004` 列、第 9 節第 100 列、第 2.4、5 節與 #96 寫明 MF-2 (b) 的定案、第 10 節一列 |
 | `docs/multi-profile/threat-model.md` | 第 3 節補兩條已知限制。審查修正：I8 測試欄補佇列不跨帳號（MF-1）、第 3 節補保留名額與准入（MF-2）。rebase 後：第 3 節寫明 MF-2 (b) 的定案與 `-32004` 依子程式狀態的文字 |
 | `docs/provenance/runtime-patches.json` | `gateway.py`、`access.py`、`profile_router.py` 重算 SHA-256、補說明。rebase 時以 `claude-delivery` 的帳本為底、照合併後的內容重算；rebase 後 `gateway.py` 再重算一次 |
 | 本筆記 | — |
@@ -723,3 +723,83 @@ rebase 後加的 7 個：
 | `61aee83` | 契約與威脅模型：`-32004` 三種文字與第 99 列、MF-2 (b) 的定案；釘住現況的那個測試說明 |
 | `915f9e6` | 測試：HM-09 的錯開啟動之後只看為用戶端開的 session（第 16.6 節） |
 | 本筆記的 commit | 第 16 節與第 1～3、11、14、15 節的更新 |
+
+## 17. rebase 到 `claude-delivery` `269f5a5`（HM-20 合併後，2026-11-16）
+
+主對話 09:3x 通知 HM-20 已以 #102 合併（`269f5a5`），第一段做完後直接接第二段。第一段的 head 是 `fbc0097`（基準 `c523474`，17 個 commit；
+第 16 節）。第 16 節是第一次 rebase 的紀錄，裡面的列號與 commit 編號照當時寫，不改；現在的列號與 commit 見本節。
+
+### 17.1 範圍
+
+- `git fetch origin claude-delivery`（`269f5a5`），`git rebase --onto origin/claude-delivery c523474`。中間合併的是 HM-20（#102：`468fdf5`～`0a32771`，
+  9 個 commit）：後端網址開通後擋 loopback（`products.py`、`apps/runtime/backend_policy.py`、`apps/n8n/*`），契約第 3.1、7 節、第 9 節 #39 與
+  新的第 90 列、第 10 節一列，威脅模型的狀態行與第 3 節一條，`decisions.md`、`acceptance-matrix.md`、帳本 5 列、`tool-surface.json`。
+- 和本片重疊的只有契約與威脅模型；`gateway.py`、`access.py`、`profile_router.py`、本片的測試與帳本的三列 HM-20 都沒動（本片在這些檔的改動，
+  rebase 前後逐字相同）。`decisions.md` 本片沒改。
+
+### 17.2 衝突與處理
+
+| rebase 後的 commit（第一段） | 衝突 | 處理 |
+|---|---|---|
+| `c9373b5`（`310229c`）、`0f4904a`（`28869c8`）、`cd283d9`（`61aee83`） | 契約第 9 節說明段、表格最後、第 10 節變更紀錄；威脅模型的狀態行 | 不在 git 給的衝突上逐一改：以 `c523474` 為底、`269f5a5` 為一邊、第一段的版本為另一邊重做三方合併（`git merge-file`），再解已知的四種衝突（腳本 `SP:hm14-rebase-20261116/bin/resolve2.py`）：說明段 HM-09、HM-20 的兩行照原文，HM-14 的列另寫一行；表格與變更紀錄 HM-20 的列在前、本片的在後；威脅模型的狀態行在本片的那句前面放進 HM-20 那句。之後把本片加的行裡的列號加一（`renumber.py`，只改第一段加的、`269f5a5` 沒有的行）。`cd283d9` 的變更紀錄「HM-14 rebase」那一列改寫成「往後移一列（HM-09 已用第 89 列）」，不寫會再變的列號 |
+| 其他 14 個 | 沒有衝突 | 帳本三個 commit 沒有衝突（HM-20 改的是另外 5 列） |
+
+核對：契約與威脅模型「本片的改動」rebase 前後，除了列號加一、說明段那一行與威脅模型狀態行的合寫，逐行相同（`SP:hm14-rebase-20261116/bin/compare2.sh`）；
+程式、測試、筆記的改動 rebase 前後逐字相同。帳本照實際內容重算：三個列管檔的 `sha256` 等於檔案內容、`change` 是 `claude-delivery` 的文字接本片的，
+和第一段相同；HM-20 改的 5 列照 `claude-delivery`；JSON 格式逐位元可重現。本片沒有 tool-surface 變動（`scripts/tool_inventory.py` exit 0），不用重產。
+
+### 17.3 列號重編（HM-20 用了第 90 列）
+
+| 原本（`b5d10c5` 基準） | 第一次 rebase 後（`c523474`） | 現在（`269f5a5`） | 項目 |
+|---|---|---|---|
+| #89 | #90 | #91 | 保留名額載的東西 |
+| #90 | #91 | #92 | token 換掉時標頭已送出的 JSON 回覆 |
+| #91 | #92 | #93 | `-32004` 的 log |
+| #92 | #93 | #94 | initialize 換代的回應 |
+| #93 | #94 | #95 | 標頭卡在背壓時換 token |
+| #94 | #95 | #96 | 保留名額與准入（待決；MF-2 (b) 交 HM-31） |
+| #95 | #96 | #97 | 一個請求只回一則（SSE 的 `-32005`） |
+| #96 | #97 | #98 | 排隊中換 token |
+| #97 | #98 | #99 | 子程式逾時（回應標頭前） |
+| — | #99 | #100 | 子程式停止後 `-32004` 的文字 |
+
+引用改了：契約第 2.4、2.5、4.2、5 節、第 9 節說明段與表格、第 10 節；威脅模型第 3 節三處（以上在 rebase 解衝突時）；本筆記第 1～15 節 29 行與
+兩個測試說明（`6b1ba6d`，只改數字）；結論、第 1 節基準、第 2 節契約列寫明兩次 rebase（本節的 commit）。契約第 10 節加一列（`c52e0f7`）。
+PR 說明照現在的列號寫。commit 訊息裡的列號是寫的當時的編號。
+
+### 17.4 本機檢查（第二段；TMPDIR 照舊；pytest 排在共用鎖）
+
+程式、測試與帳本的三列在第二段沒有變（第 17.2 節），所以只重跑受影響的測試；全套與突變以第 16.7、16.8 節（第一段）為準，CI 以 root 全跑。
+證據在 `SP:hm14-rebase-20261116/logs/`（`p2-*`、`packaging-p2.log`）。
+
+| 檢查 | 結果 |
+|---|---|
+| 新 5 檔＋`test_reply_mask_union.py`（head `c52e0f7`） | **143 案全過、0 skip**，18.91 秒 |
+| 相關既有 33 檔（第 16.7 節同一組，含 `test_tool_inventory.py`）＋HM-20 的 `test_backend_loopback.py`、`test_saved_destinations.py` | **1667 案全過、0 skip**，475.0 秒（33 檔 1424 案、`test_backend_loopback.py` 153 案、`test_saved_destinations.py` 90 案） |
+| `packaging/validate.py`（ci-venv 的 Python） | PASS |
+| packaging unittest（照 CI：離線暫存 venv） | `Ran 203`、`OK (skipped=5)`（HM-20 多 2 案；5 個 `skipUnless(root)`） |
+| `scripts/tool_inventory.py`（漂移檢查） | exit 0 |
+| 正式程式三檔的 SHA-256（跑前跑後） | 相同（`evidence/after-p2.check`） |
+| 暫存目錄 | 每個 `/tmp/ha-mp-*` 都已用完整路徑刪除（`logs/tmpdirs.txt`） |
+
+### 17.5 預檢
+
+| 預檢 | 指令 | 結果 |
+|---|---|---|
+| 秘密預檢 | `.venv/bin/python -I scripts/secret_precheck.py --tools SP:hm01/gitleaks-tools --repo . --base origin/claude-delivery --head HEAD --full` | gitleaks 8.28.0（釘版、已驗）；`269f5a5..HEAD` 20 個 commit（含本筆記）＋HEAD 整棵樹＋整個歷史：**0 命中** |
+| 帳本預檢 | `.venv/bin/python -I scripts/ledger_precheck.py --repo . --base origin/claude-delivery` | 173／70／159 檔：0 漂移、0 缺；改到的 3 個列管檔都有帳本更新；沒有沒列管的新執行檔：**OK** |
+
+兩個預檢都以 `origin/claude-delivery`＝`269f5a5` 為基準（跑之前再 fetch 一次，沒有更新）。
+
+### 17.6 commit（第二段）
+
+rebase 過來的 17 個（第一段的 commit → 現在）：`3c12b71`→`804732c`、`7b49885`→`d637294`、`d479ab0`→`5a3c112`、`310229c`→`c9373b5`、
+`288e1ab`→`b69085e`、`d662684`→`f20a537`、`db89f24`→`b41ea25`、`63b77e3`→`7a38a9d`、`28869c8`→`0f4904a`、`69e132a`→`9856686`、
+`8b93111`→`00eab4a`、`2333eca`→`20cc989`、`64105d4`→`29f0085`、`9232c77`→`057d9e6`、`61aee83`→`cd283d9`、`915f9e6`→`8d47261`、
+`fbc0097`→`750b9c3`。第二段加的：
+
+| commit | 內容 |
+|---|---|
+| `6b1ba6d` | 本筆記（第 16 節以外）與兩個測試說明的列號跟著加一（只改數字） |
+| `c52e0f7` | 契約第 10 節加一列（rebase 到 HM-20 之後） |
+| 本筆記的 commit | 第 17 節；結論、第 1 節基準、第 2 節契約列寫明兩次 rebase |
