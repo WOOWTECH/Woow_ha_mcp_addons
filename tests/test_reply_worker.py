@@ -872,12 +872,12 @@ async def test_stopping_the_add_on_ends_the_queued_replies_at_once(tmp_path, log
 async def test_another_profiles_large_replies_leave_the_loop_and_this_profile_their_pace(tmp_path, log_scan,
                                                                                          monkeypatch):
     """The default profile (A) sends 16 tools/calls answered with 8 MiB and 16 with 2 MiB at once; each costs 0.25 s
-    of GIL-holding processing per 8 MiB (d). Meanwhile B calls a tool again and again: while A's replies are processed
-    the event loop never stops for more than 50 ms, B's tools/call p99 is at most 2d + 0.2 s (B waits for at most A's one
-    reply in process, plus its own), every reply is processed on the worker, one at a time. The loop's lag while A's
-    160 MiB still arrive (the loop reads them in 64 KiB pieces, each under the token lease, while the worker already
-    processes the first ones) is printed and not asserted: whether contract 6's 50 ms holds for that phase too is for
-    the user to decide (D3 of the HM-30 review; the provenance note has the numbers). It is not settled as excluded."""
+    of GIL-holding processing per 8 MiB (d). Meanwhile B calls a tool again and again: over the whole run the event
+    loop never stops for more than 50 ms, B's tools/call p99 is at most 2d + 0.2 s (B waits for at most A's one reply
+    in process, plus its own), every reply is processed on the worker, one at a time. The whole run (D3 of the HM-30
+    review, the user's decision of 2026-11-16: reading counts too): while A's 160 MiB still arrive (A's 32 requests
+    start at once, the loop reads the replies in 64 KiB pieces, each under the token lease, while the worker already
+    processes the first ones) and while they are processed; both phases are printed."""
     loop = asyncio.get_running_loop()
     latencies = []
     async with starved(tmp_path, log_scan, monkeypatch) as run:
@@ -897,13 +897,13 @@ async def test_another_profiles_large_replies_leave_the_loop_and_this_profile_th
         worker = runtime.manager.reply_worker
         assert worker.peak == 1
     assert len(latencies) >= 8, latencies
-    print(f'HM-30 starvation: d={D} unit={run.work.unit * 1000:.1f} ms paid={run.work.paid:.2f} s; loop worst '
-          f'while A\'s replies arrived {run.reading.worst * 1000:.1f} ms ({run.reading.samples} samples), while they '
-          f'were processed {run.lag.worst * 1000:.1f} ms ({run.lag.samples} samples); B calls={len(latencies)} '
+    print(f'HM-30 starvation: d={D} unit={run.work.unit * 1000:.1f} ms paid={run.work.paid:.2f} s; whole run worst '
+          f'{max(run.reading.worst, run.lag.worst) * 1000:.1f} ms; while A\'s replies arrived '
+          f'{run.reading.distribution()}; while they were processed {run.lag.distribution()}; B calls={len(latencies)} '
           f'p50={percentile(latencies, 0.5) * 1000:.0f} ms p99={percentile(latencies, 0.99) * 1000:.0f} ms')
     assert run.work.threads == {worker_module().THREAD_NAME}
     assert run.work.paid >= 16 * D * LARGE / (8 * MiB) + 16 * D / 4 - 0.1  # every reply paid its cost
-    assert run.lag.worst <= STALL_LIMIT, run.lag.worst
+    assert max(run.reading.worst, run.lag.worst) <= STALL_LIMIT, (run.reading.distribution(), run.lag.distribution())
     assert percentile(latencies, 0.99) <= 2 * D + 0.2, latencies
 
 
