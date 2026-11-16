@@ -532,6 +532,30 @@ async def test_an_event_stream_is_byte_for_byte_what_the_loop_answered(store, wo
     assert state.token.encode() not in inline[2]
 
 
+@pytest.mark.parametrize('chunked', [False, True], ids=['whole', 'pieces'])
+@pytest.mark.parametrize('case', list(sse_cases('T' * 43)))
+async def test_an_event_framed_on_the_worker_is_byte_for_byte_what_the_loop_answered(store, worker, monkeypatch, case,
+                                                                                     chunked):
+    """D1: an event larger than WORKER_FRAME_BYTES is framed, processed and built on the worker (relayed_frame: the
+    loop's steps in their order). With that size 0, every event of every stream case takes that path (comments,
+    id/event/retry lines, a priming event, skipped notifications and requests, another id, a batch, malformed JSON,
+    both members, a lone CR, data on several lines, a tool list with secrets, a truncated stream), whole and in pieces
+    of 7 bytes: the answer is byte for byte the loop's, and the same frames were cut, on the worker."""
+    state = store.load()
+    child = sse_cases(state.token)[case]
+    method = 'tools/list' if case == 'secrets-and-tools' else 'tools/call'
+    framing = Recording(gateway.sse_frame)
+    monkeypatch.setattr(gateway, 'sse_frame', framing)
+    inline = await relayed(store, child, method=method, chunked=chunked, sse=True)
+    on_loop = list(framing.threads)
+    assert set(on_loop) <= {'MainThread'}
+    framing.threads.clear()
+    monkeypatch.setattr(gateway, 'WORKER_FRAME_BYTES', 0)
+    assert await relayed(store, child, lane=worker.lane('a'), method=method, chunked=chunked, sse=True) == inline
+    assert framing.threads == [worker_module().THREAD_NAME] * len(on_loop)
+    assert state.token.encode() not in inline[2]
+
+
 async def test_a_get_streams_events_are_byte_for_byte_what_the_loop_answered(store, worker):
     child = (b'data: {"jsonrpc":"2.0","method":"notifications/tools/list_changed"}\n\n'
              b'data: ' + reply(text_result('no reply on a GET stream')) + b'\n\n'
