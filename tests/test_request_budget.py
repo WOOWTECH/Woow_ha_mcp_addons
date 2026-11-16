@@ -31,6 +31,19 @@ def rb():
     return module
 
 
+@pytest.fixture
+def kernel_files(tmp_path, monkeypatch):
+    """The cgroup limit files (v2, v1) and /proc/meminfo, as test files the memory readers read: profiles' readers
+    (HM-09), which the budget reads through (HM-31 review S-6), and the budget's own copy of them while it still has
+    one (before that change). Absent until a test writes them."""
+    v2, v1, meminfo = tmp_path / 'memory.max', tmp_path / 'memory.limit_in_bytes', tmp_path / 'meminfo'
+    for module in (profiles, rb()):
+        if hasattr(module, 'CGROUP_MEMORY_LIMITS'):
+            monkeypatch.setattr(module, 'CGROUP_MEMORY_LIMITS', (v2, v1))
+            monkeypatch.setattr(module, 'MEMINFO', meminfo)
+    return v2, v1, meminfo
+
+
 def ceiling(monkeypatch, mib, source='cgroup'):
     """The memory the defaults are derived from, as memory_ceiling() would read it."""
     module = rb()
@@ -71,13 +84,11 @@ def test_without_any_memory_reading_the_budget_is_fixed_and_small_ceilings_are_c
     assert small.total == 16 * MiB and small.per_profile == 16 * MiB
 
 
-def test_without_a_cgroup_limit_memavailable_less_the_reserve_is_the_ceiling(monkeypatch, tmp_path):
+def test_without_a_cgroup_limit_memavailable_less_the_reserve_is_the_ceiling(kernel_files):
     """HA (plan 5.2's memory check; an add-on has no Pod limit): no cgroup limit ("max", or v1's no-limit value), so
     MemAvailable of /proc/meminfo less the plan's reserve (256 MiB) is the ceiling, read when the budget is made."""
     module = rb()
-    v2, v1, meminfo = tmp_path / 'memory.max', tmp_path / 'memory.limit_in_bytes', tmp_path / 'meminfo'
-    monkeypatch.setattr(module, 'CGROUP_MEMORY_LIMITS', (v2, v1))
-    monkeypatch.setattr(module, 'MEMINFO', meminfo)
+    v2, v1, meminfo = kernel_files
     meminfo.write_text('MemTotal:        8000000 kB\nMemFree:         1000000 kB\nMemAvailable:    3145728 kB\n')
     for limit in ('max\n', None):
         if limit is None:
@@ -85,7 +96,7 @@ def test_without_a_cgroup_limit_memavailable_less_the_reserve_is_the_ceiling(mon
             v1.write_text(str(2 ** 63 - 4096))  # cgroup v1's "no limit"
         else:
             v2.write_text(limit)
-        assert module.memory_limit_mib() is None
+        assert profiles.memory_limit_mib() is None
         assert module.memory_ceiling() == (3072 - module.HOST_RESERVE_MIB, 'meminfo')
     assert module.HOST_RESERVE_MIB == profiles.PROFILE_MEMORY_RESERVE_MIB == 256
     limits = module.BudgetLimits.derive('odoo')
@@ -98,10 +109,73 @@ def test_without_a_cgroup_limit_memavailable_less_the_reserve_is_the_ceiling(mon
     meminfo.write_text('MemTotal: 8000000 kB\n')  # no MemAvailable line
     assert module.memory_ceiling() == (None, 'none')
     meminfo.unlink()
-    assert module.available_memory_mib() is None
+    assert profiles.available_memory_mib() is None
     meminfo.write_text('MemAvailable:   100 kB\n')  # less than the reserve: 0, the floor decides
     assert module.memory_ceiling() == (0, 'meminfo')
     assert module.BudgetLimits.derive(None).total == 16 * MiB
+
+
+GIB3 = 'MemTotal:        8000000 kB\nMemFree:         1000000 kB\nMemAvailable:    3145728 kB\n'  # 3,072 MiB
+V1_NO_LIMIT = str(2 ** 63 - 4096)
+DIRECTORY = object()
+# (memory.max, memory.limit_in_bytes, /proc/meminfo; None: the file is absent) and the ceiling the budget derives from
+CEILING_CASES = {
+    'v2 max: MemAvailable less the reserve': ('max\n', None, GIB3, (3072 - 256, 'meminfo')),
+    'v1 no limit': (None, V1_NO_LIMIT, GIB3, (3072 - 256, 'meminfo')),
+    'v2 limit wins over MemAvailable': ('2147483648\n', None, GIB3, (2048, 'cgroup')),
+    'v2 limit with spaces': (' 1073741824 ', None, None, (1024, 'cgroup')),
+    'v2 under one MiB': ('1048575', None, GIB3, (0, 'cgroup')),
+    'v2 one TiB is still a limit': (str(1024 ** 4), None, GIB3, (1024 * 1024, 'cgroup')),
+    'v2 over one TiB is none': (str(1024 ** 4 + 1024 * 1024), None, GIB3, (3072 - 256, 'meminfo')),
+    'v2 not a number, v1 read': ('abc', '536870912\n', GIB3, (512, 'cgroup')),
+    'v2 empty, no v1': ('', None, GIB3, (3072 - 256, 'meminfo')),
+    'v2 a directory, v1 read': (DIRECTORY, '536870912', None, (512, 'cgroup')),
+    'v2 negative': ('-1048576', None, GIB3, (-1, 'cgroup')),
+    'nothing readable': (None, None, None, (None, 'none')),
+    'no MemAvailable line': (None, None, 'MemTotal: 8000000 kB\n', (None, 'none')),
+    'MemAvailable not in kB': (None, None, 'MemAvailable: 3072 MB\n', (None, 'none')),
+    'MemAvailable below the reserve': (None, None, 'MemAvailable:   100 kB\n', (0, 'meminfo')),
+    'the first MemAvailable line decides': (None, None, 'MemAvailable: 5.5 kB\nMemAvailable: 3145728 kB\n',
+                                            (None, 'none')),
+    'MemAvailable past the first 64 KiB': (None, None, 'x' * 70000 + '\n' + GIB3, (None, 'none')),
+}
+
+
+@pytest.mark.parametrize('v2_text, v1_text, meminfo_text, expected', CEILING_CASES.values(), ids=CEILING_CASES)
+def test_the_ceiling_is_read_from_the_kernel_files_case_by_case(kernel_files, v2_text, v1_text, meminfo_text,
+                                                                expected):
+    """HM-31 review S-6 (part 2): the ceiling the budget derives from for each state of the kernel files, pinned before
+    the budget's own copy of the memory readers gave way to profiles' (HM-09) and unchanged after it (the two copies
+    read the same way: the provenance note's rebase section)."""
+    for path, value in zip(kernel_files, (v2_text, v1_text, meminfo_text)):
+        if value is DIRECTORY:
+            path.mkdir()
+        elif value is not None:
+            path.write_text(value)
+    assert rb().memory_ceiling() == expected
+
+
+def test_the_budget_reads_the_memory_with_the_profile_capacitys_readers(monkeypatch):
+    """HM-31 review S-6 (part 2): one copy of the memory readers, HM-09's (profiles.memory_limit_mib,
+    available_memory_mib), which the profile capacity and the memory check use: the budget has none of its own, and its
+    ceiling follows them, the cgroup limit first (MemAvailable is not read then), MemAvailable less the reserve without
+    one, nothing readable: none."""
+    module = rb()
+    for name in ('memory_limit_mib', 'available_memory_mib', 'CGROUP_MEMORY_LIMITS', 'MEMINFO'):
+        assert not hasattr(module, name), f'request_budget keeps a copy: {name}'
+
+    def forbidden():
+        raise AssertionError('MemAvailable read although the cgroup limit decides')
+    monkeypatch.setattr(profiles, 'memory_limit_mib', lambda: 777)
+    monkeypatch.setattr(profiles, 'available_memory_mib', forbidden)
+    assert module.memory_ceiling() == (777, 'cgroup')
+    assert module.BudgetLimits.derive('odoo', switched_on=True).source == 'cgroup'
+    monkeypatch.setattr(profiles, 'memory_limit_mib', lambda: None)
+    monkeypatch.setattr(profiles, 'available_memory_mib', lambda: 1000)
+    assert module.memory_ceiling() == (1000 - module.HOST_RESERVE_MIB, 'meminfo')
+    assert module.BudgetLimits.derive('odoo').source == 'meminfo'
+    monkeypatch.setattr(profiles, 'available_memory_mib', lambda: None)
+    assert module.memory_ceiling() == (None, 'none')
 
 
 def test_the_add_on_reads_no_environment_variable(monkeypatch):
