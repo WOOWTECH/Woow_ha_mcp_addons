@@ -148,6 +148,7 @@ class Runtime:
     mcp_port: int | None
     children: Children
     listeners: list = field(default_factory=list)
+    task: object = None  # run_product.run's task (HM-30: a test that lets the runtime stop by itself reads it)
 
     def mcp(self, **kwargs):
         return GENUINE_CLIENT(transport=httpx.ASGITransport(app=self.mcp_app), base_url='http://mcp', **kwargs)
@@ -193,14 +194,16 @@ CLOSE_SECONDS = 30
 @asynccontextmanager
 async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None, real_children=False,
                                 default_port=None, launch_extras=True, switch=True, children=None, resources=None,
-                                stagger=None, verifier=None):
+                                stagger=None, verifier=None, may_stop=False):
     """run_product.run of *product* on *data* with the switch on (switch=False: off), the outside replaced as
     production_runtime replaces it. children: a Children for MockTransport (left out: the default profile's golden
     MockChild on 3000, nobody else's); real_children:
     no MockTransport, the runtime's clients reach real loopback servers (default_port: the default profile's child
     port then). launch_extras: wait until the manager started every additional profile's child (start_all) once the
     listeners serve. resources: a stand-in for the resource module (the file limit). stagger: STAGGER_SECONDS for the
-    test (left out: 0.05). verifier: the HA administrator check (HM-10; left out: administrator below)."""
+    test (left out: 0.05). verifier: the HA administrator check (HM-10; left out: administrator below). may_stop
+    (HM-30): the runtime may end by itself while the test runs (the test reads Runtime.task); otherwise that fails the
+    test."""
     if children is None:
         children = Children()
         children.add(3000, MockChild(product, data))
@@ -265,12 +268,13 @@ async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None
                 async with asyncio.timeout(15):
                     await manager.started.wait()
             yield Runtime(product, Path(data), manager, admin_listener.config.app, mcp_listener.config.app, port,
-                          children, listeners)
+                          children, listeners, task)
         finally:
             task.cancel()
             async with asyncio.timeout(CLOSE_SECONDS):
                 await asyncio.gather(task, return_exceptions=True)
-        assert task.cancelled(), 'the runtime stopped by itself while serving'
+        if not may_stop:
+            assert task.cancelled(), 'the runtime stopped by itself while serving'
 
 
 # ---- real loopback children (the quota tests' S5 and S6: every profile's own real httpx pool) ----
