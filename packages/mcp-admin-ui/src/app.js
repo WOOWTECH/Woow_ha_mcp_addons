@@ -601,10 +601,10 @@ function partialBackendCard() {
   });
   return card('修改個別欄位，保留其餘憑證', form);
 }
-// HM-12 (DQ-40 ⑨ (a); contract 4.1, section 9 #117): while a URL is set to another server than the stored one, each
-// stored secret it takes there must be typed again (or cleared, where it may be): its keep choice is turned off, the
-// field required and a note says why. Back on the stored server, keep is offered again, and chosen again where this rule
-// chose for it and nothing was typed. Switched on only (the add-on refuses such a save with 422 then).
+// HM-12 (DQ-40 ⑨ (a); contract 4.1 and section 9, HM-12's panel rows): while a URL is set to another server than the
+// stored one, each stored secret it takes there must be typed again (or cleared, where it may be): its keep choice is
+// turned off, the field required and a note says why. Back on the stored server, keep is offered again, and chosen again
+// where this rule chose for it and nothing was typed. Switched on only (the add-on refuses such a save with 422 then).
 function requireMovedSecrets(snapshot, controls) {
   const needed = newOriginSecrets(snapshot, Object.fromEntries([...controls].map(([key, c]) => [key, c.select.value])),
     Object.fromEntries([...controls].map(([key, c]) => [key, c.input.value])));

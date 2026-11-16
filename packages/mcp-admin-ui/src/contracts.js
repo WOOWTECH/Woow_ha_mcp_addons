@@ -170,7 +170,7 @@ export function backendEdit(bootstrap) {
   return value;
 }
 
-// HM-12 (DQ-40 ⑨ (a); contract 4.1 CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN, section 9 #115, #117): the secrets
+// HM-12 (DQ-40 ⑨ (a); contract 4.1 CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN, section 9 #115 and HM-12's panel rows): the secrets
 // each backend URL takes to its server, in this form's (the admin API's) names: the add-on's identity_fields.URL_SECRETS
 // as backend_edit.url_secrets names them. Hermes' gateway and dashboard are two servers with a secret each; n8n's API
 // key and MCP access token both go to its one server; OpenDesign sends none. tests/test_identity_fields.py fails when
@@ -186,7 +186,7 @@ export const urlSecrets = {
   nextcloud: { url: ['app_password'] },
   headscale: { url: ['api_key'] },
 };
-// HM-12 (DQ-05; contract 3.1, section 9 #113, #116): the products whose MCP token is bound to the backend identity once
+// HM-12 (DQ-05; contract 3.1, section 9 #113 and HM-12's panel rows): the products whose MCP token is bound to the backend identity once
 // switched on (the add-on's products.IDENTITY_BOUND; tests/test_identity_fields.py fails when they differ).
 export const identityBound = ['odoo'];
 // Where a backend URL's requests go, as the add-on compares it (backend_edit.origin, which reads a URL as Python's

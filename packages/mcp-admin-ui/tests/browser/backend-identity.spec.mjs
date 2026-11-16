@@ -1,4 +1,4 @@
-// HM-12 (DQ-05, DQ-40 ⑨ (a); contract 3.1, 4.1, section 9 #113-#117): the backend saves of a switched-on product
+// HM-12 (DQ-05, DQ-40 ⑨ (a); contract 3.1, 4.1, section 9 #113-#115 and HM-12's panel rows): the backend saves of a switched-on product
 // against the LOCAL MOCK (fixtures/server.mjs; not HA security or E2E). A changed Odoo identity rotates the profile's
 // MCP token (token_rotated: 200, or shape D when its new child does not start): the panel says where the new one is,
 // hides every shown token and reads the new state. A URL moved to another origin needs its stored secrets again: the

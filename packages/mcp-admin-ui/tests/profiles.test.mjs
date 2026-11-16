@@ -607,7 +607,8 @@ test('every management request the panel sends with profiles is the case the add
   });
 });
 
-// ---- HM-12 (DQ-05, DQ-40 ⑨ (a); contract 3.1, 4.1, section 9 #113-#117): a backend save once the product is switched on.
+// ---- HM-12 (DQ-05, DQ-40 ⑨ (a); contract 3.1, 4.1, section 9 #113-#115 and HM-12's panel rows): a backend save once the
+// product is switched on.
 // The copy is the panel's own (the server sends codes and flags only, #113); these are the texts the panel shows.
 const ROTATED = '後端身分已變更，這個帳號的 MCP 權杖已換新：舊權杖與含舊權杖的連線網址已撤銷。請到「連線與權杖」顯示並複製新的權杖（或 Claude.ai 連線網址），更新所有用戶端。';
 const APPLY_FAILED = '設定已儲存，但子行程尚未套用成功。請重新整理套用狀態，檢查後再重試啟動。';
