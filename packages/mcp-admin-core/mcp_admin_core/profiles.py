@@ -591,6 +591,13 @@ INSTANCE_RECORD_TEMPORARY_NAME = '.instance-record.tmp'  # the next record, befo
 RESTORE_MARKER_NAME = '.restore-detected'  # restore detection, signal 1: saved by packaging/entrypoint.py
 REVOKE_ALL_MARKER_NAME = '.revoke-all-pending'  # the boot guard (HM-13b)
 RESTORE_RECORD_NAME = 'restore-record.json'  # the boot guard (HM-13b)
+# The receipts a restore archived (operations.archive_for_restore, HM-13b): <journal>.restored beside a profile's
+# state.json (the default profile's too) and beside the index.
+RECEIPT_ARCHIVE_NAMES = ('.state.json.operations.json.restored', INDEX_OPERATIONS_NAME + '.restored')
+# The names whose entry the boot guard moves aside when it is a directory (a forged backup; HM-13a review SF-7, HM-13b
+# review S-1): what the guard writes, renames or removes there, never something else.
+ASIDE_NAMES = (SENTINEL_NAME, INSTANCE_RECORD_NAME, INSTANCE_RECORD_TEMPORARY_NAME, RESTORE_MARKER_NAME,
+               REVOKE_ALL_MARKER_NAME, RESTORE_RECORD_NAME, *RECEIPT_ARCHIVE_NAMES)
 
 
 @dataclass(frozen=True)
@@ -671,10 +678,10 @@ def free_quarantine_name(layout: Layout, profile_id: str, when: datetime) -> str
 
 def free_aside_name(directory: Path, name: str, when: datetime) -> str:
     """'<name>.quarantine-<UTC>', or with -2, -3 ... when taken, in directory: where the boot guard (HM-13b) moves an
-    entry at one of its own names that is not a plain file (a directory a forged backup put at the sentinel's name made
-    every rebuild fail: HM-13a review SF-7), never deleting it. ProfileDataError when none is free."""
-    if name not in (SENTINEL_NAME, INSTANCE_RECORD_NAME, INSTANCE_RECORD_TEMPORARY_NAME, RESTORE_MARKER_NAME,
-                    REVOKE_ALL_MARKER_NAME):
+    entry at one of its own names (ASIDE_NAMES) that is not a plain file (a directory a forged backup put at the
+    sentinel's name made every rebuild fail: HM-13a review SF-7; at the restore record's or a receipts archive's name,
+    every start stopped: HM-13b review S-1), never deleting it. ProfileDataError when none is free."""
+    if name not in ASIDE_NAMES:
         raise ValueError('not one of the boot guard\'s names')
     base = name + '.quarantine-' + _utc(when)
     return _free_name(Path(directory), [base] + [f'{base}-{number}' for number in range(2, MAX_QUARANTINE_NUMBER + 1)])

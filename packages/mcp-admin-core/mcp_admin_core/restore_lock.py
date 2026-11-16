@@ -18,7 +18,10 @@ written.
 
 Scope S (plan 8.4): the default profile, every 24 hex directory under profiles/ (indexed, an orphan, or behind an
 unusable index: the index never decides; only its labels are shown in the record), the existing quarantine directories
-(read for the snapshot only, never opened as a profile); other names are counted. A restore runs:
+(read for the snapshot only, never opened as a profile); other names are counted. A profiles entry that is not a
+directory holds nothing that can be opened or served (contract 9 #102: the guard goes on); a profiles directory that
+cannot be listed now (EMFILE, EIO, ENOMEM, no permission, another uid's: HM-13b review MF-2) may hold the backup's
+tokens, so nothing finishes until it can be listed. A restore runs:
 A  the snapshot: every readable state's token and child token, in memory only.
 B  the default profile (DQ-03 (b) A2; DEFAULT_REVOKED_WHEN_SWITCHED_ON): with profile data on disk revoked (token None,
    one history entry), a new child token and its receipts archived; without, left exactly as restored: a notice.
@@ -47,13 +50,16 @@ profile is left as it is unless a restore is seen at the same start. When anythi
 so (its "dormant" part). Outcome.dormant is the number of profile directories: the bootstrap's dormant_profiles.
 
 "Revoke all": revoke_all() saves .revoke-all-pending first (mark_revoke_all), revokes every profile (the default
-profile's included) with a new child token, runs E, and removes the marker only when every profile was revoked and the
-check passed; otherwise the marker stays and the next start finishes it, whatever the switch.
+profile's included, and every store its caller holds even when profiles/ cannot be listed) with a new child token, runs
+E, and removes the marker only when every profile was revoked and the check passed; otherwise the marker stays and the
+next start finishes it, whatever the switch.
 
 The sentinel: nothing here chmods, chowns, writes, links or renames it, except restore_detect.rebuild() in F (HM-13a's
 invariant; tests/test_restore_lock.py reviews every call that sets a mode, an owner or a time). An entry at one of the
-guard's own names that is a directory (a forged backup: the restore repair accepts directories; HM-13a review SF-7) is
-moved aside to <name>.quarantine-<UTC>[-n], never deleted, so that the rebuild and the markers' removal can work.
+guard's own names (profiles.ASIDE_NAMES: the sentinel's, its record's and the record's temporary, the two markers', the
+restore record's, a receipts archive's) that is a directory (a forged backup: the restore repair accepts directories;
+HM-13a review SF-7, HM-13b review S-1) is moved aside to <name>.quarantine-<UTC>[-n], never deleted, so that the
+rebuild, the markers' removal, the record and the archives can work.
 
 Log lines (logger mcp_admin_core.restore_lock, WARNING: the add-on log shows WARNING and above): fixed text; a profile is
 named by its id's first 8 characters (I7); never a token, a label, a value or an exception's text.
@@ -119,6 +125,7 @@ NOT_ARCHIVED = 'restore guard [profile=%s]: its operation receipts could not be 
 INDEX_NOT_ARCHIVED = 'restore guard: the operation receipts beside the profile index could not be archived'
 UNLISTABLE = 'restore guard: the profiles directory cannot be listed; nothing in it is served'
 SET_ASIDE = 'restore guard: %s was not a plain file; it was moved aside to %s'
+SET_ASIDE_IN_PROFILE = 'restore guard [profile=%s]: %s was not a plain file; it was moved aside to %s'
 UNFINISHED = ('restore guard: not finished (%s); nothing is served and no child is started. The guard runs again at '
               'the next start')
 MARKER_LEFT = 'restore guard: %s; starting (no profile data: nothing to revoke), the next start tries again'
@@ -248,11 +255,22 @@ def revoke_all_pending(root) -> bool:
 
 def revoke_all(store, product, *, stores=None, now=None) -> RevokeAll:
     """'Revoke all' (plan 8.4 全部撤銷, C1-S6; contract 3.1; HM-13c's route): mark_revoke_all(), then every profile
-    revoked with a new child token, the default profile first, then the profile directories by id (a directory that
-    cannot be opened is quarantined, one whose writer lock is held elsewhere failed); then step E; the marker is removed
-    only when nothing failed and the check passed. store: the default profile's open store. stores: {profile id: open
-    store} the caller holds (the running manager's registered profiles; their writer locks are held): used instead of
-    opening those directories. ConfigError when the marker cannot be saved (nothing was revoked)."""
+    revoked with a new child token, the default profile first, then the profile directories and the stores the caller
+    holds, by id (a directory that cannot be opened is quarantined, one whose writer lock is held elsewhere failed);
+    then step E, whatever failed (a revocation that never reached the disk is failed too); the marker is removed only
+    when nothing failed, profiles/ could be listed and the check passed. store: the default profile's open store.
+    stores: {additional profile id: open store} the caller holds (the running manager's registered profiles; their
+    writer locks are held): used instead of opening those directories, and revoked even when profiles/ cannot be listed
+    (HM-13b review MF-2). results: the default profile, then every profile directory found and every store given.
+    ConfigError when the marker cannot be saved (nothing was revoked); ValueError for a store that is not an additional
+    profile's (nothing was done).
+
+    The caller (HM-13c) holds the add-on's profile lock (ProfileAdmin.lock: what a creation, a deletion and the index
+    quarantine take) and every registered profile's own lock, so that no profile is half created or half deleted meanwhile
+    (a directory being created would read as one that cannot be opened and be quarantined); and it runs this in a worker
+    thread (asyncio.to_thread): it is synchronous, with two state writes and their fsyncs per profile."""
+    if any(not profiles.is_profile_id(profile_id) for profile_id in stores or {}):
+        raise ValueError('stores: additional profiles only')
     now = now or _utc_now
     root = Path(store.directory)
     mark_revoke_all(root)
@@ -260,8 +278,8 @@ def revoke_all(store, product, *, stores=None, now=None) -> RevokeAll:
     sweep.look()
     sweep.revoke(DEFAULT, store)
     sweep.directories_pass(skip_revoked=False, cutoff=None)
-    finished = not sweep.failed
-    if finished and sweep.check(strict=True, default_kept=False):
+    finished = not (sweep.failed or sweep.reasons)
+    if sweep.check(strict=True, default_kept=False):
         finished = False
     if finished:
         try:
@@ -271,7 +289,7 @@ def revoke_all(store, product, *, stores=None, now=None) -> RevokeAll:
     moved = {profile_id for profile_id, _ in sweep.quarantined}
     results = [Revocation(DEFAULT, sweep.result(DEFAULT))]
     results += [Revocation(profile_id, 'quarantined' if profile_id in moved else sweep.result(profile_id))
-                for profile_id in sweep.directories or ()]
+                for profile_id in sweep.targets()]
     return RevokeAll(tuple(results), finished)
 
 
@@ -359,15 +377,21 @@ class _Sweep:
         self.reasons = []        # why it cannot finish (the first one is logged)
 
     def look(self):
-        """A: the snapshot (in memory; never logged)."""
+        """A: the snapshot (in memory; never logged). A profiles entry that is not a directory holds nothing that can
+        be opened or served (contract 9 #102); one that is a directory, or that a lookup cannot tell, and cannot be
+        listed now may hold the backup's tokens: a failure, so that nothing finishes and every marker stays until it
+        can be listed (I9; HM-13b review MF-2)."""
         state = self.store.load()  # its store was opened a moment ago: ConfigError stops the start
         self.found[DEFAULT] = (state.token, state.child_token)
         self.shown[DEFAULT] = facts(state)
         try:
             scan = profiles.scan_profiles(self.layout)
         except profiles.ProfileDataError:
-            logger.warning(UNLISTABLE)
             scan = None
+            if _maybe_directory(self.layout.profiles):
+                self._fail(None, 'the profiles directory cannot be listed', UNLISTABLE)
+            else:
+                logger.warning(UNLISTABLE)
         if scan is not None:
             self.directories, self.quarantines, self.other = scan.profiles, scan.quarantined, scan.other
             for profile_id in scan.profiles:
@@ -396,9 +420,14 @@ class _Sweep:
         self.issued.add(value)
         return value
 
+    def targets(self):
+        """C's profiles, by id: every profile directory A found and every store the caller holds (a "revoke all"
+        revokes those even when profiles/ cannot be listed)."""
+        return sorted({*(self.directories or ()), *self.stores})
+
     def directories_pass(self, *, skip_revoked, cutoff):
-        """C, for every profile directory A found; skip_revoked (dormant only): one already revoked is not touched."""
-        for profile_id in self.directories or ():
+        """C, for every one of targets(); skip_revoked (dormant only): one already revoked is not touched."""
+        for profile_id in self.targets():
             store, opened = self._store(profile_id)
             if store is None:
                 self._quarantine(profile_id)
@@ -448,10 +477,14 @@ class _Sweep:
         logger.warning(QUARANTINED, profiles.log_id(profile_id))
 
     def archive(self, where, config_path, cutoff):
-        """C: the receipts of a restore (where None: the journal beside the index)."""
+        """C: the receipts of a restore (where None: the journal beside the index). A directory at the archive's name
+        (a forged backup: the journal could never be moved there) is moved aside first."""
+        journal = operations.journal_path(config_path)
         try:
+            _clear(journal.parent, journal.name + operations.RESTORED_SUFFIX, self.now,
+                   None if where in (None, DEFAULT) else where)
             operations.archive_for_restore(config_path, cutoff)
-        except (OSError, ValueError):
+        except (OSError, ValueError, Unfinished):
             if where is None:
                 self._fail(None, 'receipts could not be archived', INDEX_NOT_ARCHIVED)
             else:
@@ -496,6 +529,7 @@ class _Sweep:
                  'dormant': {'at': at} if dormant else None,
                  'index': index.state, 'profiles': rows, 'quarantined': quarantine,
                  'profiles_directory': directory, 'other_entries': self.other}
+        _clear(self.root, RECORD, self.now)  # a directory at its name (a forged backup) is moved aside first
         try:
             _write_record(self.root, value)
         except (OSError, ValueError):
@@ -523,6 +557,8 @@ class _Sweep:
                 now[profile_id] = read_tokens(self.layout.profile(profile_id))
                 if now[profile_id] is None or now[profile_id][0] is not None:  # every profile directory: revoked
                     self.failed.append(profile_id)
+        for where in sorted({*self.revoked, *self.renewed} - set(now)):  # a store held by the caller, not listed
+            now[where] = read_tokens(self.layout.profile(where))
         for where in self.revoked:
             if now.get(where) is None or now[where][0] is not None:
                 self.failed.append(where)
@@ -576,14 +612,46 @@ def _finish(root, now, *, rebuild=False, enabled=False, markers=()):
         os.close(fd)
 
 
-def _set_aside(root, fd, name, now):
-    """Move what is at name (not a plain file) to a free <name>.quarantine-<UTC>[-n] in the same directory."""
+def _set_aside(root, fd, name, now, profile_id=None):
+    """Move what is at name (not a plain file) to a free <name>.quarantine-<UTC>[-n] in the same directory (root, or
+    profile_id's directory)."""
     try:
         aside = profiles.free_aside_name(Path(root), name, now())
         os.rename(name, aside, src_dir_fd=fd, dst_dir_fd=fd)
     except (OSError, profiles.ProfileDataError):
         raise Unfinished('an entry at one of its names could not be moved aside') from None
-    logger.warning(SET_ASIDE, name, aside)
+    if profile_id is None:
+        logger.warning(SET_ASIDE, name, aside)
+    else:
+        logger.warning(SET_ASIDE_IN_PROFILE, profiles.log_id(profile_id), name, aside)
+
+
+def _clear(directory, name, now, profile_id=None):
+    """A directory at name (one of profiles.ASIDE_NAMES) in directory, where the guard puts a file, is moved aside
+    (_set_aside; a forged backup: the restore repair accepts directories); anything else is left to the write."""
+    try:
+        if not stat.S_ISDIR(os.lstat(Path(directory) / name).st_mode):
+            return
+    except OSError:
+        return  # nothing there, or a lookup that fails: the write that follows tells
+    try:
+        fd = _open_directory(directory)
+    except OSError:
+        raise Unfinished('an entry at one of its names could not be moved aside') from None
+    try:
+        _set_aside(directory, fd, name, now, profile_id)
+    finally:
+        os.close(fd)
+
+
+def _maybe_directory(path):
+    """Whether path is a directory, or what it is cannot be told (a link is not followed)."""
+    try:
+        return stat.S_ISDIR(os.lstat(path).st_mode)
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
 
 
 def _write_record(root, value):
