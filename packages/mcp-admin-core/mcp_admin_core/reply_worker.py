@@ -149,9 +149,10 @@ class Lane:
 
 class ReplyWorker:
     """The add-on's reply worker (see the module docstring). start() on the loop that will use it, run() or a lane's
-    run() for each job, stop() when the listeners stopped. ended (an asyncio.Event of that loop) is set when the thread
-    ended; failure is what ended it when that was not stop(). processed and peak count the jobs done and the most in
-    process at once (never more than one); handed counts the jobs each profile handed over."""
+    run() for each job, stop() when the listeners stopped. ended (an asyncio.Event of that loop) is set as the thread
+    ends: the thread may still be returning then (alive turns False just after it; stop() waits for that); failure is
+    what ended it when that was not stop(). processed and peak count the jobs done and the most in process at once
+    (never more than one); handed counts the jobs each profile handed over."""
 
     def __init__(self):
         self._lock = threading.Lock()
@@ -166,7 +167,7 @@ class ReplyWorker:
         self.failure = None
         self.processed = 0
         self.peak = 0
-        self.handed = Counter()  # jobs each profile handed over so far (for the panel's diagnostics and the tests)
+        self.handed = Counter()  # jobs each profile handed over so far (the tests read it; nothing else does yet)
 
     @property
     def alive(self):
