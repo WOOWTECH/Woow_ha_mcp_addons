@@ -15,8 +15,9 @@ import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
 from mcp_admin_core import profiles, restore_detect as rd, restore_lock
+from mcp_admin_core.config import ConfigError
 from multi_profile_runtime import Children, multi_profile_runtime
-from restore_guard_disk import DEFAULT, Disk, StopAt, break_state, tree
+from restore_guard_disk import DEFAULT, Disk, StopAt, break_state, lying_revocation, tree
 from test_profile_routing import paths
 from test_restore_detection import Crash
 from test_single_profile_golden import (ACCEPT, ADMIN, BEARER_REQUIRED, BOOTSTRAP_COMMON, BOOTSTRAP_EXTRA, NOT_FOUND,
@@ -84,6 +85,23 @@ def test_an_unreadable_dormant_profile_is_quarantined(tmp_path, log_scan):
     assert outcome.dormant == 2 and outcome.revoked == (A, C)
     assert [profiles.parse_quarantine_name(name)[0] for name in outcome.quarantined] == [B]
     assert profiles.scan_profiles(disk.layout).profiles == (A, C)
+
+
+def test_a_dormant_revocation_that_never_reached_the_disk_stops_the_start(tmp_path, log_scan, monkeypatch):
+    """Plan 8.4 E for the dormant handling (I13; HM-13b review S-2): the check reads every profile directory again from
+    disk, not through the stores that wrote; a revocation its store reported done but never wrote (the old token still
+    on disk) stops the start, as for a restore, although the dormant check is not the strict one. The next start
+    revokes it."""
+    disk = dormant_disk(tmp_path, log_scan)
+    token = disk.tokens(A)[0]
+    with monkeypatch.context() as patch:
+        lying_revocation(patch, A)
+        with pytest.raises(ConfigError):
+            disk.start(enabled=False)
+    assert disk.tokens(A)[0] == token is not None
+    assert guard_lines(log_scan)[-1] == restore_lock.UNFINISHED % 'the check after revoking did not pass'
+    assert disk.start(enabled=False) == restore_lock.Outcome(dormant=3, revoked=(A,))
+    assert disk.tokens(A)[0] is None
 
 
 def test_profile_data_without_a_profile_directory_is_dormant_with_none(tmp_path, log_scan):

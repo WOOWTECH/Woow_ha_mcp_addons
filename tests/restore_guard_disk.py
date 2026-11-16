@@ -282,3 +282,42 @@ def guard_os(proxy):
 
 
 DISK_FULL = OSError(errno.ENOSPC, 'No space left on device')
+
+
+def lying_revocation(monkeypatch, profile_id):
+    """A store of profile_id whose token revocation reports success and writes nothing (a write that never reached
+    the disk): what the independent check (E) is there for."""
+    real = ProductStore.change_token
+
+    def change_token(self, token, *, action):
+        if self.directory.name == profile_id:
+            return self.load(), True
+        return real(self, token, action=action)
+    monkeypatch.setattr(ProductStore, 'change_token', change_token)
+
+
+def unlistable_once(monkeypatch, failures=1):
+    """profiles.scan_profiles fails as it does for any OSError on opening or listing profiles/ (EMFILE, ENFILE, ENOMEM,
+    EIO, EACCES) for its first *failures* calls, then lists again: a profiles directory that cannot be listed for a
+    while (HM-13b review MF-2). A mode of 000 would not do: root, as the CI runs, lists it all the same. Returns the
+    calls made."""
+    real, calls = profiles.scan_profiles, []
+
+    def scan(layout):
+        calls.append(layout)
+        if len(calls) <= failures:
+            raise profiles.ProfileDataError('profiles directory unavailable')
+        return real(layout)
+    monkeypatch.setattr(profiles, 'scan_profiles', scan)
+    return calls
+
+
+def during_the_record(monkeypatch, change):
+    """change() runs right before the guard saves restore-record.json (step D), between what it did (B, C) and its
+    independent check (E): a stray change on disk that E has to see."""
+    real = restore_lock._write_record
+
+    def write_record(root, value):
+        change()
+        return real(root, value)
+    monkeypatch.setattr(restore_lock, '_write_record', write_record)

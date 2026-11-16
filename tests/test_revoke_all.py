@@ -19,7 +19,7 @@ from log_scan import log_scan  # noqa: F401  (fixture)
 from mcp_admin_core import profiles, restore_detect as rd, restore_lock
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.products import ProductStore
-from restore_guard_disk import DEFAULT, Disk, StopAt, guard_os
+from restore_guard_disk import DEFAULT, Disk, StopAt, guard_os, unlistable_once
 from test_restore_detection import Crash
 
 pytestmark = pytest.mark.usefixtures('log_scan')
@@ -159,6 +159,66 @@ def test_revoke_all_uses_the_stores_its_caller_holds(tmp_path, log_scan):
         held.close()
     assert not done.finished and restore_lock.Revocation(B, 'failed') in done.results
     assert profiles.scan_profiles(disk.layout).profiles == (A, B) and PENDING in disk.names()
+
+
+def test_a_profiles_directory_that_cannot_be_listed_keeps_the_marker(tmp_path, log_scan, monkeypatch):
+    """HM-13b review MF-2: profiles/ cannot be listed for a while (EMFILE, EIO, ENOMEM ...). "Revoke all" still revokes
+    the default profile and every store its caller holds (each one in results), but it has not finished: the marker
+    stays (what it could not list may hold a valid token: here the orphan B), and the next start finishes the job
+    before anything is served."""
+    disk = disk_with_profiles(tmp_path, log_scan)
+    before = disk.held()
+    token = disk.tokens(B)[0]
+    held = disk.store(A)
+    try:
+        with monkeypatch.context() as patch:
+            unlistable_once(patch)
+            done = revoke_all(disk, stores={A: held})
+    finally:
+        held.close()
+    assert done == restore_lock.RevokeAll((restore_lock.Revocation(DEFAULT, 'revoked'),
+                                           restore_lock.Revocation(A, 'revoked')), False)
+    assert disk.tokens()[0] is None and disk.tokens(A)[0] is None and disk.tokens(B)[0] == token is not None
+    assert PENDING in disk.names() and restore_lock.revoke_all_pending(disk.data)
+    assert disk.start(enabled=True) == restore_lock.Outcome(revoke_all=True, default_revoked=True, revoked=(A, B))
+    all_revoked(disk, before)
+    assert PENDING not in disk.names()
+
+
+def test_a_revocation_that_never_reached_the_disk_is_failed_whatever_else_failed(tmp_path, log_scan, monkeypatch):
+    """Step E runs whatever failed before it: A's store reports its revocation done but never wrote it while B's write
+    fails; both are failed in results (HM-13c answers 503 for each until a retry succeeds), not A revoked."""
+    disk = disk_with_profiles(tmp_path, log_scan)
+    lying = disk.tokens(A)[0]
+    real = ProductStore.change_token
+
+    def change_token(self, token, *, action):
+        if self.directory.name == A:
+            return self.load(), True
+        if self.directory.name == B:
+            raise ConfigError('durable state write failed; manual recovery required')
+        return real(self, token, action=action)
+    with monkeypatch.context() as patch:
+        patch.setattr(ProductStore, 'change_token', change_token)
+        done = revoke_all(disk)
+    assert done == restore_lock.RevokeAll((restore_lock.Revocation(DEFAULT, 'revoked'),
+                                           restore_lock.Revocation(A, 'failed'),
+                                           restore_lock.Revocation(B, 'failed')), False)
+    assert disk.tokens(A)[0] == lying and PENDING in disk.names()
+
+
+def test_revoke_all_refuses_a_store_that_is_not_an_additional_profiles(tmp_path, log_scan):
+    """stores holds additional profiles only (the default profile's store is its own argument): anything else is
+    refused before the marker or any token is touched."""
+    disk = disk_with_profiles(tmp_path, log_scan)
+    held = disk.store(A)
+    try:
+        for stores in ({DEFAULT: held}, {'A' * 24: held}):
+            with pytest.raises(ValueError):
+                revoke_all(disk, stores=stores)
+    finally:
+        held.close()
+    assert PENDING not in disk.names() and disk.tokens()[0] is not None and disk.tokens(A)[0] is not None
 
 
 def test_a_revoke_all_whose_check_does_not_pass_keeps_its_marker(tmp_path, log_scan, monkeypatch):

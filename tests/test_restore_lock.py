@@ -13,6 +13,7 @@ Every test runs under the HM-01 log scan (every token, child token, credential a
 import ast
 import asyncio
 from datetime import datetime, timedelta, timezone
+import errno
 import json
 import os
 from pathlib import Path
@@ -28,7 +29,8 @@ from mcp_admin_core import features, operations, products, profile_runtime, prof
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.products import ProductStore
 from multi_profile_runtime import Children, multi_profile_runtime
-from restore_guard_disk import DEFAULT, DISK_FULL, Disk, StopAt, break_state, newest_ctime, tree
+from restore_guard_disk import (DEFAULT, DISK_FULL, Disk, StopAt, break_state, during_the_record, lying_revocation,
+                               newest_ctime, tree, unlistable_once)
 from test_profile_routing import paths
 from test_restore_detection import Crash, after_tick
 from test_single_profile_golden import (ADMIN, BEARER_REQUIRED, GENUINE_CLIENT, NOT_FOUND, PRODUCTS as GOLDEN_PRODUCTS,
@@ -46,6 +48,9 @@ LOGGER = 'mcp_admin_core.restore_lock'
 RECORD_ROW = ['id', 'label', 'is_default', 'token', 'identity', 'policy', 'reviewed_at']
 POLICY_KEYS = ['writes_enabled', 'disabled', 'enabled_write_tools', 'denied_operations', 'odoo_write_switches',
                'odoo_allowed_methods', 'n8n_session']
+# Every product run_product or apps/n8n/run.py starts (the golden regression's eight and Odoo Manage): the guard runs for
+# each (HM-13b review S-8).
+EVERY_PRODUCT = (*GOLDEN_PRODUCTS, 'odoo-manage')
 
 
 def guard_clock():
@@ -97,7 +102,7 @@ def with_profiles(tmp_path, log_scan, *, orphan=True, quarantine=True):
 
 # ---- a single-profile installation: today's, byte for byte ----
 
-@pytest.mark.parametrize('product', GOLDEN_PRODUCTS)
+@pytest.mark.parametrize('product', EVERY_PRODUCT)
 def test_a_single_profile_installation_without_a_restore_is_left_alone(tmp_path, log_scan, product):
     """Not switched on, no profile data, no marker (every installation today): the guard looks up four names and
     changes nothing, not even a ctime, and logs nothing (plan 3.3: "沒有帳號資料時只多一次存在檢查")."""
@@ -113,7 +118,7 @@ def test_a_single_profile_installation_without_a_restore_is_left_alone(tmp_path,
     assert guard_lines(log_scan) == []
 
 
-@pytest.mark.parametrize('product', GOLDEN_PRODUCTS)
+@pytest.mark.parametrize('product', EVERY_PRODUCT)
 def test_a_single_profile_restore_only_removes_the_marker(tmp_path, log_scan, product):
     """DQ-03 (b): a restore of an installation without profile data revokes nothing and leaves its state, receipts and
     every other entry exactly as restored; one WARNING says the token is back at its backup value; the marker goes. No
@@ -354,18 +359,6 @@ def test_a_quarantine_that_cannot_be_made_keeps_the_restore_and_stops(tmp_path, 
     assert MARKER not in disk.names()
 
 
-def lying_revocation(monkeypatch, profile_id):
-    """A store of profile_id whose token revocation reports success and writes nothing (a write that never reached
-    the disk): what the independent check (E) is there for."""
-    real = ProductStore.change_token
-
-    def change_token(self, token, *, action):
-        if self.directory.name == profile_id:
-            return self.load(), True
-        return real(self, token, action=action)
-    monkeypatch.setattr(ProductStore, 'change_token', change_token)
-
-
 def test_a_check_that_does_not_pass_keeps_the_restore_and_stops(tmp_path, log_scan, monkeypatch):
     """Plan 8.4 E: the guard reads every directory again from disk, not through the stores that wrote; a token that is
     not None there keeps the marker and stops the start."""
@@ -380,6 +373,53 @@ def test_a_check_that_does_not_pass_keeps_the_restore_and_stops(tmp_path, log_sc
     assert MARKER in disk.names() and disk.detection(True).restored and disk.tokens(A)[0] == token
     assert guard_lines(log_scan)[-1] == ('WARNING', restore_lock.UNFINISHED % 'the check after revoking did not pass')
     assert disk.start(enabled=True).restored and disk.tokens(A)[0] is None
+
+
+def stray_token(disk, log_scan):
+    """A write the guard never makes: another token in the default profile's state.json (atomically, as a store
+    writes)."""
+    path = disk.data / 'state.json'
+    value = json.loads(path.read_text())
+    value['token'] = secrets.token_urlsafe(32)
+    log_scan.watch(value['token'])
+    stray = disk.data / '.stray.json'
+    fd = os.open(stray, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        os.write(fd, json.dumps(value).encode())
+    finally:
+        os.close(fd)
+    os.replace(stray, path)
+
+
+def test_a_kept_default_profile_that_changes_before_the_check_stops_the_start(tmp_path, log_scan, monkeypatch):
+    """Plan 8.4 E (DQ-03 (b); HM-13b review S-2): the default profile the guard keeps must still be exactly as restored
+    when the check reads it again (nothing else compares it: its own values are left out of the strict comparison); a
+    stray write meanwhile keeps the marker and stops the start. The next start keeps it as it is then."""
+    disk = Disk(tmp_path, log_scan)
+    assert disk.start(enabled=True) == restore_lock.Outcome()
+    disk.restore(disk.backup())
+    with monkeypatch.context() as patch:
+        during_the_record(patch, lambda: stray_token(disk, log_scan))
+        with pytest.raises(ConfigError):
+            disk.start(enabled=True)
+    assert MARKER in disk.names() and disk.detection(True).restored
+    assert guard_lines(log_scan)[-1] == ('WARNING', restore_lock.UNFINISHED % 'the check after revoking did not pass')
+    assert disk.start(enabled=True) == restore_lock.Outcome(restored=True) and MARKER not in disk.names()
+
+
+def test_a_quarantine_directory_that_does_not_stay_one_stops_the_start(tmp_path, log_scan, monkeypatch):
+    """Plan 8.4 E (.quarantine-* 不會被當帳號載入; HM-13b review S-2): every quarantine directory the guard found or made
+    must still be one when the check lists profiles/ again; one gone meanwhile (here moved to another name right
+    before the record) keeps the marker and stops the start."""
+    disk = with_profiles(tmp_path, log_scan, orphan=False)
+    old = disk.layout.profiles / profiles.quarantine_name(Q, OLD_QUARANTINE)
+    disk.restore(disk.backup())
+    with monkeypatch.context() as patch:
+        during_the_record(patch, lambda: os.rename(old, old.with_name('moved-away')))
+        with pytest.raises(ConfigError):
+            disk.start(enabled=True)
+    assert MARKER in disk.names() and disk.detection(True).restored
+    assert guard_lines(log_scan)[-1] == ('WARNING', restore_lock.UNFINISHED % 'the check after revoking did not pass')
 
 
 def test_a_default_profile_that_cannot_be_written_keeps_the_restore_and_stops(tmp_path, log_scan, monkeypatch):
@@ -643,6 +683,48 @@ def test_a_directory_at_one_of_the_guards_names_is_moved_aside(tmp_path, log_sca
     assert disk.start(enabled=True) == restore_lock.Outcome()
 
 
+@pytest.mark.parametrize('where', ['the restore record', "the default profile's receipts archive",
+                                   "a profile's receipts archive", "the index's receipts archive"])
+def test_a_directory_at_a_name_the_guard_writes_is_moved_aside(tmp_path, log_scan, where):
+    """HM-13b review S-1 (SF-7 for the guard's other names): a restored directory where the guard saves the restore
+    record, or where it moves a journal to its archive (a forged backup), is moved aside to <name>.quarantine-<UTC>,
+    never deleted; the record and every archive are saved and every old receipt answers 410 (without it, every start
+    stopped there)."""
+    disk = with_profiles(tmp_path, log_scan, orphan=False, quarantine=False)
+    receipts = {key: disk.receipt(key) for key in (DEFAULT, A, 'index')}
+    backup = disk.backup()
+    state, index = (operations.journal_path(Path(name)).name + operations.RESTORED_SUFFIX
+                    for name in ('state.json', profiles.INDEX_NAME))
+    directory, name = {'the restore record': ('.', profiles.RESTORE_RECORD_NAME),
+                       "the default profile's receipts archive": ('.', state),
+                       "a profile's receipts archive": (f'profiles/{A}', state),
+                       "the index's receipts archive": ('.', index)}[where]
+    (backup / directory / name).mkdir()
+    (backup / directory / name / 'kept').write_bytes(b'')
+    disk.restore(backup)
+    _, clock, stamp = guard_clock()
+    aside = name + '.quarantine-' + stamp
+    assert disk.start(enabled=True, now=clock) == restore_lock.Outcome(restored=True, default_revoked=True,
+                                                                       revoked=(A,))
+    assert (disk.data / directory / aside / 'kept').exists() and (disk.data / directory / name).is_file()
+    for key, operation in receipts.items():
+        assert disk.replay(operation, key) == RESTORED
+    assert ('WARNING', restore_lock.SET_ASIDE % (name, aside) if directory == '.' else
+            restore_lock.SET_ASIDE_IN_PROFILE % ('aaaaaaaa', name, aside)) in guard_lines(log_scan)
+    assert disk.start(enabled=True) == restore_lock.Outcome()
+
+
+def test_the_names_set_aside_are_the_ones_the_guard_writes():
+    """profiles.ASIDE_NAMES (what the guard may move aside) are its own names, the receipts archives as operations
+    names them."""
+    assert profiles.RECEIPT_ARCHIVE_NAMES == tuple(operations.journal_path(Path(name)).name + operations.RESTORED_SUFFIX
+                                                   for name in ('state.json', profiles.INDEX_NAME))
+    assert set(profiles.ASIDE_NAMES) == {profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME,
+                                         profiles.INSTANCE_RECORD_TEMPORARY_NAME, MARKER,
+                                         profiles.REVOKE_ALL_MARKER_NAME, profiles.RESTORE_RECORD_NAME,
+                                         *profiles.RECEIPT_ARCHIVE_NAMES}
+
+
 def test_an_unlistable_profiles_entry_is_reported_and_nothing_in_it_is_served(tmp_path, log_scan):
     """A restored profiles entry that is not a directory (contract 9 #102): nothing in it can be listed or opened (and
     HM-08 serves no token while profiles/ cannot be listed); the guard says so, revokes the default profile (profile
@@ -655,6 +737,40 @@ def test_an_unlistable_profiles_entry_is_reported_and_nothing_in_it_is_served(tm
     assert disk.start(enabled=True) == restore_lock.Outcome(restored=True, default_revoked=True)
     assert record_of(disk)['profiles_directory'] == 'unlistable'
     assert ('WARNING', restore_lock.UNLISTABLE) in guard_lines(log_scan)
+
+
+@pytest.mark.parametrize('case', ['a restore', 'dormant profiles', 'a restore, its profiles entry not even known'])
+def test_a_profiles_directory_that_cannot_be_listed_stops_the_start(tmp_path, log_scan, monkeypatch, case):
+    """HM-13b review MF-2 (I9, I13; plan 8.4 E: 不過 → 保留標記、不開 listener): profiles/ is a directory the guard cannot
+    list for a while (EMFILE, EIO, ENOMEM, no permission: anything but "not a directory", contract 9 #102), or what it
+    is cannot even be looked up. What is in it may hold the backup's tokens, so nothing in it is revoked or served: the
+    start stops with every marker kept (only the default profile is revoked first, as its profile data asks). The next
+    start that lists it finishes."""
+    disk = with_profiles(tmp_path, log_scan, quarantine=False)
+    restore = case != 'dormant profiles'
+    tokens = {where: disk.tokens(where)[0] for where in (A, B)}
+    if restore:
+        disk.restore(disk.backup())
+    with monkeypatch.context() as patch:
+        unlistable_once(patch)
+        if case.endswith('not even known'):
+            real = os.lstat
+
+            def lstat(path, *args, **kwargs):
+                if os.fspath(path) == os.fspath(disk.layout.profiles):
+                    raise OSError(errno.EIO, 'Input/output error')
+                return real(path, *args, **kwargs)
+            patch.setattr(os, 'lstat', lstat)
+        with pytest.raises(ConfigError):
+            disk.start(enabled=restore)
+    assert {where: disk.tokens(where)[0] for where in (A, B)} == tokens and None not in tokens.values()
+    assert (MARKER in disk.names()) is restore and not (disk.data / profiles.RESTORE_RECORD_NAME).exists()
+    assert guard_lines(log_scan)[0] == ('WARNING', restore_lock.UNLISTABLE)
+    assert guard_lines(log_scan)[-1] == ('WARNING', restore_lock.UNFINISHED % 'the profiles directory cannot be listed')
+    assert disk.start(enabled=restore) == (
+        restore_lock.Outcome(restored=True, default_revoked=True, revoked=(A, B)) if restore
+        else restore_lock.Outcome(dormant=2, revoked=(A, B)))
+    assert all(disk.tokens(where)[0] is None for where in (A, B)) and MARKER not in disk.names()
 
 
 def test_a_restore_of_states_as_large_as_the_store_takes_still_finishes(tmp_path, log_scan):
