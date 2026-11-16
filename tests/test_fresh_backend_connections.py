@@ -5,12 +5,14 @@ After a brief outage a pooled connection can look alive while the backend no lon
 first request after the backend is reachable again wait for the read timeout (PaaS saw it with EMQX emqx_cluster_status
 and LiteLLM litellm_key_info). So every request opens a fresh connection: it resolves the configured name again and
 passes the destination checks again (apps/runtime/backend_policy.py: Destination.check_host, checked_answers,
-connectable), and nothing is retried, so an ambiguous write is never sent twice.
+connectable), and nothing is retried (PaaS #135: no retry at all): an ambiguous write is never sent twice, and a read
+the backend drops is not sent again either.
 
 Each scenario runs on two pools:
 - child: the client exactly as the child builds it (lifespan.build_client / make_client through
-  backend_policy.async_client, whose transport builds its own pool, max_keepalive_connections=0, and drops the limits
-  the product passes). It kept no idle connection before HM-32 either.
+  backend_policy.async_client, whose transport builds its own pool, max_connections=4, max_keepalive_connections=0, and
+  drops the limits the product passes). It kept no idle connection before HM-32 either, and HM-32 leaves its cap of 4
+  as it was.
 - asked: the same transport (pinned network backend, destination checks) with its pool built from the limits the
   product's lifespan passes. HM-32 makes both products ask for no idle connection (as PaaS), so they stay right if
   backend_policy ever takes the caller's limits. Red before HM-32: LiteLLM asked for 20 idle connections kept 30 s,
@@ -91,7 +93,7 @@ class Backend(ThreadingHTTPServer):
     def reset(self):
         with self.lock:
             self.requests, self.served, self.stale = [], set(), set()
-            self.available, self.blackhole, self.drop_writes = True, False, False
+            self.available, self.blackhole, self.drop_writes, self.drop_reads = True, False, False, False
             self.release = threading.Event()
 
 
@@ -122,13 +124,13 @@ class Handler(BaseHTTPRequestHandler):
         with server.lock:
             server.requests.append({'method': self.command, 'path': path, 'connection': self.number})
             stale = server.blackhole and self.number in server.stale
-            drop = self.command == 'POST' and server.drop_writes
+            drop = (self.command == 'POST' and server.drop_writes) or (self.command == 'GET' and server.drop_reads)
             available, release = server.available, server.release
             if not (stale or drop):
                 server.served.add(self.number)  # recorded before the answer leaves
         if stale or drop:
             # stale: the old pooled connection after the outage, open but answering nothing.
-            # drop: an ambiguous write, received in full; the connection is gone before any answer.
+            # drop: an ambiguous write (or a read), received in full; the connection is gone before any answer.
             if stale:
                 release.wait(30)
             self.close_connection = True
@@ -174,6 +176,9 @@ if PRODUCT == 'litellm':
 
     async def write(client):
         await litellm_request(client, 'POST', '/key/generate', json_data={'key_alias': 'hm32'})
+
+    async def read(client):
+        await litellm_request(client, 'GET', '/v1/models')
 else:
     from emqx_mcp_server import lifespan as product
     from emqx_mcp_server.errors import emqx_request
@@ -183,6 +188,9 @@ else:
 
     async def write(client):
         await emqx_request(client, 'POST', '/mqtt/publish', json={'topic': 'hm32/fresh', 'payload': 'x'})
+
+    async def read(client):
+        await emqx_request(client, 'GET', '/nodes')
 
 DEFAULT_LIMITS = httpx.Limits(max_connections=100, max_keepalive_connections=20)  # httpx's own default
 asked = []
@@ -294,12 +302,27 @@ async def ambiguous_write():
     return {'posts': sum(r['method'] == 'POST' for r in backend.requests), 'outcome': outcome[:500]}
 
 
+async def dropped_read():
+    """The backend reads a GET in full and drops the connection before answering: a read is not sent again either."""
+    backend.reset()
+    answer[0] = '127.0.0.1'
+    with backend.lock:
+        backend.drop_reads = True
+    async with make() as client:
+        try:
+            await read(client)
+            outcome = 'answered'
+        except Exception as exc:
+            outcome = '%s: %s' % (type(exc).__name__, exc)
+    return {'gets': sum(r['method'] == 'GET' for r in backend.requests), 'outcome': outcome[:500]}
+
+
 async def main():
     pool, row = await in_a_row()
     observed = {'product': PRODUCT, 'pool_kind': POOL, 'pool': pool, 'in_a_row': row, 'recovery': await recovery(),
-                'write': await ambiguous_write()}
+                'write': await ambiguous_write(), 'read': await dropped_read()}
     observed['asked'] = described(asked[0])
-    observed['asked_all_same'] = len(asked) == 3 and all(described(limits) == observed['asked'] for limits in asked)
+    observed['asked_all_same'] = len(asked) == 4 and all(described(limits) == observed['asked'] for limits in asked)
     observed['unexpected_connects'] = [c for c in connects if c != ['127.0.0.1', backend.server_port]]
     return observed
 
@@ -335,11 +358,16 @@ def observed(request, tmp_path_factory):
 
 def test_the_pool_keeps_no_idle_connection(observed):
     """child: backend_policy's own pool. asked: the pool built from the limits the product's lifespan passes (HM-32 asks
-    for none, as PaaS: LiteLLM 20 kept 30 s -> 0 with keepalive_expiry dropped, PaaS #139; EMQX 10 -> 0, PaaS #135)."""
+    for none, as PaaS: LiteLLM 20 kept 30 s -> 0 with keepalive_expiry dropped, PaaS #139; EMQX 10 -> 0, PaaS #135).
+    HM-32 changes no cap on concurrent connections: the child's pool still allows 4 (backend_policy), and the products
+    still ask for 50 (LiteLLM) and 20 (EMQX), which backend_policy drops. Changing a cap is a decision of its own."""
     pool, asked = observed['pool'], observed['asked']
     assert observed['asked_all_same'], 'every client the product builds asks for the same pool'
     if observed['pool_kind'] == 'asked':
         assert pool == asked, (pool, asked)
+        assert asked['max_connections'] == {'litellm': 50, 'emqx': 20}[observed['product']], asked
+    else:
+        assert (pool['max_connections'], pool['max_keepalive_connections']) == (4, 0), pool
     assert pool['max_keepalive_connections'] == 0, pool
 
 
@@ -377,9 +405,12 @@ def test_the_first_call_after_a_recovery_uses_a_fresh_connection(observed):
 
 
 def test_nothing_is_sent_twice(observed):
-    """No retry (PaaS #135, #139): the first call after the recovery reaches the backend once, and a write the backend
-    received but never answered is reported as the product's unavailable error, never sent again."""
-    row, write = observed['recovery'], observed['write']
+    """No retry (PaaS #135: none at all; #139): the first call after the recovery reaches the backend once, and a write
+    the backend received but never answered is reported as the product's unavailable error, never sent again. A read
+    the backend dropped the same way is not sent again either (through the product's own request function)."""
+    row, write, read = observed['recovery'], observed['write'], observed['read']
     assert row['sent_after_recovery'] == 1
     assert write['posts'] == 1, write
     assert write['outcome'] != 'answered' and UNAVAILABLE[observed['product']] in write['outcome'], write['outcome']
+    assert read['gets'] == 1, read
+    assert read['outcome'] != 'answered' and UNAVAILABLE[observed['product']] in read['outcome'], read['outcome']
