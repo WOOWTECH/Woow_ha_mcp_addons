@@ -621,6 +621,8 @@ rebase 與 D1～D3 之後的數字在第 16.7、16.8 節；本表的「本片的
 - **D2 做了（接受並寫進文件）**：契約第 5、6 節寫明軟上限與一次湧入的最壞值（ASCII、emoji 兩組實測，理論上限預設帳號 800 MiB、
   額外帳號 416 MiB）；威脅模型第 3 節加一條；交 HM-18、HM-19c 的事在第 16.14 節。
 - **`decisions.md`** 第 1.1 節補 4 列：13:4x HM-09 追補全部產品都修（#106）；14:0x D1、D2、D3（第 16.10 節）。
+- **本機檢查都過**（第 16.11 節）：全套 6,110 案只有 7 個要 root 的既有案例紅、0 skip；`validate.py`、packaging unittest、工具表面、
+  兩個預檢都過；突變 8 個都抓到。
 - **這一階段分兩段做**：前一段做到 `85324e8`（rebase、D1／D3 的測試與程式、帳本）就中斷了，沒有跑驗證，文件也沒寫完。後一段接著做：
   逐項核對前一段的改動、補兩個測試（D1：每種串流在工作執行緒切框；D3：磁碟上換 token）與兩處說明（第 16.7、16.8 節）、
   跑全部檢查、寫完文件。
@@ -907,23 +909,23 @@ pytest 都在 repo 外的複本跑（`git archive` 該 commit 的樹，`.venv`�
 | 檢查 | 範圍 | 結果 |
 |---|---|---|
 | 先紅：D1、D3 的新測試（`6601e9b`：測試都在、核心還沒 D1／D3） | `test_reply_worker.py -k "<D1、D3 的新測試>"`，20 案 | 16 紅、4 綠（第 16.7 節）；紅的原因都是缺函式、缺參數、停頓超過 50 ms 或讀 state 太多次 |
-| 先紅：D3 整段（`52926ae`） | CPU 飢餓一案單獨 5 次；兩檔整檔 1 次 | 都綠（38.5～47.4 ms；整檔 39.3 ms），整檔那次的 10 紅是 D1 的新測試（核心還沒 D1）。前一段同一組測試整檔 60.9 ms 紅（第 16.8 節） |
+| 改前：D3 整段（`52926ae`） | CPU 飢餓一案單獨 5 次；兩檔整檔 1 次 | 都綠（38.5～47.4 ms；整檔 39.3 ms），整檔那次的 10 紅是 D1 的新測試（核心還沒 D1）。前一段同一組測試整檔 60.9 ms 紅（第 16.8 節） |
 | 中間：只修測試工具（`6601e9b`） | CPU 飢餓一案單獨 3 次 | 都綠（37.0～47.8 ms） |
 | 綠：本片的檔＋HM-31 的 `test_request_budget_gateway.py`（`cb93e08`） | `test_reply_worker.py`、`test_health_tolerance.py`、`test_profile_runtime.py`、`test_request_budget_gateway.py` | **237 案全過**、0 skip，68.2 秒（`test_reply_worker.py` 133 案 33.7 秒、`test_health_tolerance.py` 2 案 16.1 秒） |
 | 綠：D3 整段 | CPU 飢餓一案單獨 6 次 | 都綠：34.4～45.9 ms（第 16.8 節） |
 | 綠：D1 真實 8 MiB 回覆 | 9 案 × 3 次 | 27 案全過：7.3～45.5 ms（第 16.7 節） |
 | 拆解 D3（暫存區實驗） | 5 種設定 × 2～3 次 | 第 16.8 節 |
-| 相關的檔 | HM-31 的預算與結構（`test_request_budget.py`、`test_request_structure.py`、`test_n8n_request_bounds.py`）；HM-14 的 5 檔（`test_carries_no_request.py`、`test_gateway_queue_ha.py`、`test_gateway_stream_endings.py`、`test_gateway_busy_shapes.py`、`test_initialize_generation.py`）＋`test_reply_mask_union.py`；HM-10 的 3 檔（`test_profile_admin_api.py`、`test_admin_pipeline_matrix.py`、`test_router_passthrough.py`）；`test_monitor_cancel.py`；HM-01 黃金回歸與兩個契約凍結（開關關時逐位元；`test_single_profile_golden.py`、`test_mcp_contract_freeze.py`、`test_admin_contract_freeze.py`）；另 11 檔用到改過的程式路徑的（額度、路由、生命週期、健康、租約、遮罩、後端錯誤、錯開啟動、port、子程式資源、HM-20 的 loopback） | 927 案：**925 過**、2 紅。紅的 2 案是 HM-20 的 `test_backend_loopback.py::test_a_switched_on_product_s_child_gets_the_variable_and_nothing_else_changes[n8n/documentation]`、`[n8n/configured]`：複本的 `apps/` 是連回 clone 的連結，n8n 子程式的路徑解析成 clone 的路徑，和快照比對的正規化對不上；全套在 clone 裡跑時這 2 案過（下面全套那列） |
+| 相關的檔 | HM-31 的預算與結構（`test_request_budget.py`、`test_request_structure.py`、`test_n8n_request_bounds.py`）；HM-14 的 5 檔（`test_carries_no_request.py`、`test_gateway_queue_ha.py`、`test_gateway_stream_endings.py`、`test_gateway_busy_shapes.py`、`test_initialize_generation.py`）＋`test_reply_mask_union.py`；HM-10 的 3 檔（`test_profile_admin_api.py`、`test_admin_pipeline_matrix.py`、`test_router_passthrough.py`）；`test_monitor_cancel.py`；HM-01 黃金回歸與兩個契約凍結（開關關時逐位元；`test_single_profile_golden.py`、`test_mcp_contract_freeze.py`、`test_admin_contract_freeze.py`）；另 11 檔用到改過的程式路徑的（額度、路由、生命週期、健康、租約、遮罩、後端錯誤、錯開啟動、port、子程式資源、HM-20 的 loopback） | 927 案：**925 過**、2 紅（HM-31 的 206 案、HM-14 的 5 檔＋遮罩 144 案、HM-10 的 86 案、`test_monitor_cancel.py` 13 案、HM-01 的 45 案都過；0 skip）。紅的 2 案是 HM-20 的 `test_backend_loopback.py::test_a_switched_on_product_s_child_gets_the_variable_and_nothing_else_changes[n8n/documentation]`、`[n8n/configured]`：複本的 `apps/` 是連回 clone 的連結，n8n 子程式的路徑解析成 clone 的路徑，和快照比對的正規化對不上；全套在 clone 裡跑時這 2 案過（下面全套那列） |
 | 突變 8 個 | 第 16.6～16.8 節 | 8 個都抓到（每個都是 1 failed） |
 | 請求端重量（暫存區實驗） | 6 種請求 × 2 次 | 第 16.8 節 |
-| 全套 pytest（clone，`packaging/unit.sh` 的同一組 pytest 指令，一般使用者；瀏覽器測試照 CI 先 `npm run browser:install` 裝 Chromium） | `pytest tests` | （跑完在下一個 commit 補） |
-| `packaging/validate.py`（CI 的 venv） | | （跑完在下一個 commit 補） |
-| packaging unittest（離線暫存 venv：`uv sync --frozen --no-dev --offline`＋`requirements-ci.txt` 雜湊安裝） | `unittest discover -s packaging` | （跑完在下一個 commit 補） |
-| `scripts/tool_inventory.py` | | （跑完在下一個 commit 補） |
-| 秘密預檢 | `.venv/bin/python -I scripts/secret_precheck.py --tools SP:hm01/gitleaks-tools --repo . --base origin/claude-delivery --head HEAD --full` | （跑完在下一個 commit 補） |
-| 帳本預檢 | `.venv/bin/python -I scripts/ledger_precheck.py --repo . --base origin/claude-delivery` | （跑完在下一個 commit 補） |
+| 全套 pytest（clone，`packaging/unit.sh` 的同一組 pytest 指令，一般使用者；瀏覽器測試照 CI 先 `npm run browser:install` 裝 Chromium） | `pytest tests` | HEAD `d853c3e`：**6,110 案：6,103 過、7 紅、0 skip**，33 分 38 秒。7 紅＝已知要 root 的既有案例（`test_owned_executable.py` 1、`test_profile_store.py` 1、`test_restore_detection.py` 的 5 個 `test_root_*`）；`packaging/check_results.py` 因這 7 案照預期 exit 1。複本裡紅的 HM-20 loopback 2 案在這裡過。2 個警告是既有的 websockets 棄用警告。本片的檔在大程序裡也都過（量停頓的案例都在 50 ms 內）：`test_reply_worker.py` 38.7 秒、`test_health_tolerance.py` 15.5 秒 |
+| `packaging/validate.py`（CI 的 venv） | | `PASS: 8 strict Supervisor-subset manifests, translations, pins, workflow policy and clearance shape` |
+| packaging unittest（離線暫存 venv：`uv sync --frozen --no-dev --offline`＋`requirements-ci.txt` 雜湊安裝） | `unittest discover -s packaging` | `Ran 203 tests`、`OK (skipped=5)`（5 個 `skipUnless(root)`，同基準） |
+| `scripts/tool_inventory.py` | | exit 0（沒動 `apps/runtime/*.py`、`apps/*/launch.py`，工具表面不用重產） |
+| 秘密預檢 | `.venv/bin/python -I scripts/secret_precheck.py --tools SP:hm01/gitleaks-tools --repo . --base origin/claude-delivery --head HEAD --full` | HEAD `d853c3e`：gitleaks 8.28.0（釘版、已驗）；`df686dd..d853c3e` 27 個 commit＋HEAD 整棵樹＋整個歷史：**0 命中**。之後只有本 commit（只改本筆記） |
+| 帳本預檢 | `.venv/bin/python -I scripts/ledger_precheck.py --repo . --base origin/claude-delivery` | HEAD `d853c3e`：`runtime-patches.json` 176、`runtime-sources.json` 70、`tool-surface.json` 159 檔，0 漂移、0 缺；改到的列管檔 7 個（`access.py`、`config.py`、`gateway.py`、`profile_router.py`、`profile_runtime.py`、`reply_worker.py`、`run_product.py`）都有帳本更新；沒有沒列管的新執行檔；`redact.py` 照預期列成「沒列管、要人看」：**OK** |
 | commit 署名、雙向控制字元 | `git log --format=%B`、diff 掃 U+202A～202E、U+2066～2069 | 都沒有；身分照 clone 的 git config（woowtech） |
-| `git status`、暫存目錄 | | （跑完在下一個 commit 補） |
+| `git status`、暫存目錄 | | 乾淨（未追蹤檔 0）。本段用過的 60 個與前一段留下的 7 個 `/tmp/ha-mp-*` 都已用完整路徑刪除（`SP:hm30r2/tmpdirs.txt`、`SP:hm30r/tmpdirs.txt`）；別的代理的暫存目錄沒動 |
 
 ### 16.12 只在 CI 跑的測試、CI 時間
 
@@ -935,7 +937,7 @@ pytest 都在 repo 外的複本跑（`git archive` 該 commit 的樹，`.venv`�
   45～65 秒）約 60～85 秒，在每片 1.5 分鐘內，也在交辦的 2 分鐘內。每個量停頓的測試都是固定次數、固定上限（50 ms），沒有重試。
 - CI 風險（照實記）：D3 整段本機最高 45.9 ms、D1 跳脫字元那案最高 46.3 ms，離 50 ms 約 4 ms。CI 的 runner 較慢或較忙時可能紅；紅了就是
   那台機器上的實際資訊，照 D1、D3 的定案回報使用者，不放寬門檻（第 16.14 節）。
-- `checks` 秒數：開 PR 後補（前：`claude-delivery` 最近的 #106 `checks` 1,639 秒；後：本片 PR 的 `checks`）。
+- 全套本機 6,110 案 33 分 38 秒（一般使用者、Chromium 照 CI 裝）。`checks` 秒數：開 PR 後補（前：`claude-delivery` 最近的 #106 `checks` 1,639 秒；後：本片 PR 的 `checks`）。
 
 ### 16.13 commit 對照
 
