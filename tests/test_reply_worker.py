@@ -35,15 +35,17 @@ import weakref
 
 import httpx
 import pytest
+import uvicorn
 
 from log_scan import log_scan  # noqa: F401  (fixture)
 from multi_profile_runtime import Children, create_profile, multi_profile_runtime, stored
-from mcp_admin_core import gateway, profiles
-from mcp_admin_core.config import Store
+from mcp_admin_core import gateway, profiles, run_product
+from mcp_admin_core.config import ConfigError, Store
 from mcp_admin_core.gateway import make_apps
 from n8n_adapter import TOOLS as N8N_TOOLS
 from reply_load import (ARGUMENTS, B, C, D, LABELS, LARGE, PRODUCT, STALL_LIMIT, TOOL, LoopLag, bearer, call,
                         percentile, session_of, starved, until, watch)
+from test_profile_routing import change_token
 from test_profile_runtime import ProfileChild
 from test_single_profile_golden import ACCEPT, GENUINE_CLIENT, configure, header_pairs
 
@@ -225,7 +227,10 @@ async def test_a_worker_whose_thread_ended_answers_every_job_at_once(monkeypatch
         with pytest.raises(module.WorkerStopped):
             await asyncio.wait_for(queued, 5)
         await asyncio.wait_for(worker.ended.wait(), 5)
-        assert isinstance(worker.failure, RuntimeError) and not worker.alive
+        # ended is set as the thread ends, from the thread itself (call_soon_threadsafe): the loop may see it before
+        # the thread has returned (HM-30 review MF-1: asserting `not alive` at once failed 16% of 200 runs).
+        await until(lambda: not worker.alive, 5)
+        assert isinstance(worker.failure, RuntimeError)
         with pytest.raises(module.WorkerStopped):
             await worker.run('a', lambda: 'late')
     finally:
@@ -271,6 +276,56 @@ async def test_a_busy_worker_lets_the_loop_have_the_gil_at_its_checkpoints(worke
           f'with checkpoints {len(breathing)} reads, median {breathing[len(breathing) // 2] * 1000:.3f} ms')
     assert breathing[len(breathing) // 2] < 0.001
     assert len(breathing) >= 5 * len(convoy)
+
+
+CHECKPOINT_THREAD = 'checkpoint-test'
+
+
+class Sleeps:
+    """reply_worker's time module for a test: the real clock; the sleeps of the checkpoint thread are only recorded
+    (none is slept), any other thread's are slept as before."""
+    perf_counter = staticmethod(time.perf_counter)
+
+    def __init__(self):
+        self.slept = []
+
+    def sleep(self, seconds):
+        if threading.current_thread().name == CHECKPOINT_THREAD:
+            self.slept.append(seconds)
+        else:
+            time.sleep(seconds)
+
+
+def one_checkpoint(module, ran):
+    """The sleeps of one checkpoint (breathe) on a thread of its own whose run began `ran` seconds before (the
+    worker's _breath is per thread)."""
+    def checkpoint():
+        module._breath.since = time.perf_counter() - ran
+        module.breathe()
+    thread = threading.Thread(target=checkpoint, name=CHECKPOINT_THREAD)
+    thread.start()
+    thread.join(10)
+    assert not thread.is_alive()
+    return module.time.slept
+
+
+@pytest.mark.parametrize('busy', [True, False], ids=['loop-busy', 'loop-idle'])
+def test_a_checkpoint_gives_way_for_as_long_as_the_loop_is_busy(monkeypatch, busy):
+    """Counted, not timed (HM-30 review S-4: a timed test of this missed it): a run past SLICE_SECONDS breathes
+    BREATH_SECONDS, then goes on giving way in YIELD_STEP_SECONDS steps while the loop is busy, YIELD_SECONDS in all;
+    an idle loop gets the breath only; a run within its slice does not stop at all."""
+    module = worker_module()
+    monkeypatch.setattr(module, 'time', Sleeps())
+    monkeypatch.setattr(module, '_loop_busy', lambda: busy)
+    slept = one_checkpoint(module, 1.0)
+    assert slept[0] == module.BREATH_SECONDS
+    if busy:
+        assert set(slept[1:]) == {module.YIELD_STEP_SECONDS}
+        assert module.YIELD_SECONDS - 1e-9 <= sum(slept) < module.YIELD_SECONDS + module.YIELD_STEP_SECONDS
+    else:
+        assert slept == [module.BREATH_SECONDS]
+    monkeypatch.setattr(module, 'time', Sleeps())
+    assert one_checkpoint(module, 0.0) == []
 
 
 def test_the_worker_thread_has_a_stack_of_its_own_for_deeply_nested_replies():
@@ -528,6 +583,65 @@ async def test_the_state_is_read_on_the_loop_never_on_the_worker(store, worker, 
     assert loads and set(loads) == {'MainThread'}
 
 
+def json_objects(raw):
+    """How many JSON objects raw holds (the parser builds each one: object_pairs_hook)."""
+    built = []
+    json.loads(raw, object_pairs_hook=lambda pairs: built.append(1) or dict(pairs))
+    return len(built)
+
+
+@pytest.mark.parametrize('sse', [False, True], ids=['json', 'event-stream'])
+async def test_the_parser_gives_the_worker_a_checkpoint_at_every_object(store, worker, monkeypatch, sse):
+    """Counted, not timed (HM-30 review S-4: the injected cost of tests/reply_load.py breathes by itself, so a test of
+    the loop's stops cannot see a parser without checkpoints): on the worker the parser calls the checkpoint once for
+    every JSON object it builds, the steps once more each; on the loop nothing calls it."""
+    calls = []
+    real = gateway.breathe
+
+    def counted():
+        calls.append(threading.current_thread().name)
+        real()
+    monkeypatch.setattr(gateway, 'breathe', counted)
+    raw = json_cases('T' * 43, 'C' * 43)['records']  # 300 records: over 300 objects
+    child = b'data: ' + raw + b'\n\n' if sse else raw
+    inline = await relayed(store, child, sse=sse)
+    assert calls == []
+    assert await relayed(store, child, lane=worker.lane('a'), sse=sse) == inline and inline[0] == 200
+    assert set(calls) == {worker_module().THREAD_NAME}
+    assert len(calls) >= json_objects(raw) + 2 > 300
+
+
+# The functions in which the gateway reads the state a reply's processing needs (its masks, the policy): on the loop,
+# relayed_reply and relayed_event; for the worker, prepared (gateway.make_apps). The token checks read it elsewhere.
+REPLY_STATE_READS = frozenset({'relayed_reply', 'relayed_event', 'prepared'})
+
+
+@pytest.mark.parametrize('case', ['not-this-requests-reply', 'this-requests-reply', 'list-changed-then-reply'])
+async def test_a_state_that_cannot_be_read_fails_the_worker_where_it_fails_the_loop(store, worker, monkeypatch, case):
+    """The state cannot be read when a reply is processed (contract 6; HM-30 review S-2): the worker's job raises the
+    ConfigError where the loop's own read raises it, after the reply's checks, so both paths answer alike. A reply that
+    is not this request's is still the 502 of a reply the gateway does not relay (not the 503 of the state), this
+    request's reply is the 503, and an event stream still relays a list_changed event (which needs no state) before it
+    ends at the reply. Only the reads for a reply's processing fail here (REPLY_STATE_READS), not the token checks."""
+    real = Store.load
+
+    def load(self):
+        if sys._getframe(1).f_code.co_name in REPLY_STATE_READS:
+            raise ConfigError('state unreadable (test)')
+        return real(self)
+    monkeypatch.setattr(Store, 'load', load)
+    list_changed = b'data: {"jsonrpc":"2.0","method":"notifications/tools/list_changed","params":{}}\n\n'
+    child, sse, expected = {
+        'not-this-requests-reply': (reply(text_result('answer'), ident=8), False, (502, b'{"error":"request denied"}')),
+        'this-requests-reply': (reply(text_result('answer')), False, (503, b'{"error":"state unavailable"}')),
+        'list-changed-then-reply': (list_changed + b'data: ' + reply(text_result('answer')) + b'\n\n', True,
+                                    (200, gateway.LIST_CHANGED + b'\n\n')),
+    }[case]
+    inline = await relayed(store, child, sse=sse)
+    assert (inline[0], inline[2]) == expected
+    assert await relayed(store, child, lane=worker.lane('a'), sse=sse) == inline
+
+
 # ---- switched on and off: the runtime ----
 
 def worker_threads():
@@ -581,10 +695,94 @@ async def test_switched_off_there_is_no_worker_and_replies_are_processed_on_the_
     assert recording.threads == ['MainThread']
 
 
+async def test_the_worker_starts_before_the_listeners_serve_and_stops_once_they_stopped(tmp_path, log_scan,
+                                                                                         monkeypatch):
+    """contract 6 (HM-30 review S-7): run_product starts the reply worker before either listener serves (a reply
+    that comes first never finds no worker, which would be a 502), and stops it only once both listeners stopped."""
+    module = worker_module()
+    servers, seen = [], {'start': [], 'stop': []}
+
+    def made(self, config):
+        uvicorn.Server.__init__(self, config)
+        servers.append(self)
+    monkeypatch.setattr(run_product.Listener, '__init__', made)
+    start, stop = module.ReplyWorker.start, module.ReplyWorker.stop
+
+    def starting(self):
+        seen['start'].append([server.started for server in servers])
+        return start(self)
+
+    async def stopping(self):
+        # Every call: the listeners' serve() still running then (asyncio.all_tasks: the tasks not done yet).
+        names = [getattr(task.get_coro(), '__qualname__', '') for task in asyncio.all_tasks()]
+        seen['stop'].append([name for name in names if name.endswith('Listener.serve')])
+        await stop(self)
+    monkeypatch.setattr(module.ReplyWorker, 'start', starting)
+    monkeypatch.setattr(module.ReplyWorker, 'stop', stopping)
+    data = tmp_path / 'data'
+    configure(data, PRODUCT)
+    async with multi_profile_runtime(PRODUCT, data) as runtime:
+        log_scan.watch(stored(data)['token'], stored(data)['child_token'])
+        assert runtime.manager.reply_worker.alive and len(servers) == 2
+        assert all(server.started for server in servers)
+    assert len(seen['start']) == 1 and not any(seen['start'][0])  # no listener served yet when the worker started
+    assert seen['stop'] and all(running == [] for running in seen['stop'])  # nor ran when it was stopped
+
+
+async def test_a_queued_reply_whose_token_changes_is_withdrawn_at_once(tmp_path, log_scan, monkeypatch):
+    """The gateway waits for the worker under the token lease, as for every other wait of a request (HM-30 review
+    S-3): while the default profile's reply holds the worker, B's reply waits in B's queue; B's token is rotated: B's
+    request is answered 401 at once, not once the worker is free, and B's job is withdrawn, never run (a revoked token
+    holds neither the worker nor a slot). The default profile's reply is still answered."""
+    data = tmp_path / 'data'
+    configure(data, PRODUCT)
+    children = Children()
+    children.add(3000, ProfileChild('default', PRODUCT, data))
+    for number, profile_id in enumerate((B, C)):
+        create_profile(data, PRODUCT, profile_id, label=LABELS[profile_id], port=18000 + number)
+        children.add(18000 + number, ProfileChild('p' + profile_id[:4], PRODUCT,
+                                                  profiles.Layout(data).profile(profile_id)))
+    gate, started = threading.Event(), threading.Event()
+    real = gateway.strict_json
+
+    def held(raw, **options):
+        if b'"id":81,"result"' in bytes(raw):  # the default profile's reply (the request has "method" there)
+            started.set()
+            gate.wait(20)
+        return real(raw, **options)
+    monkeypatch.setattr(gateway, 'strict_json', held)
+    try:
+        async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+            watch(log_scan, data)
+            worker = runtime.manager.reply_worker
+            async with runtime.mcp(timeout=30) as client:
+                a_token, b_token = runtime.token('default'), runtime.token(B)
+                a = {**bearer(a_token), 'Mcp-Session-Id': await session_of(client, a_token)}
+                b = {**bearer(b_token), 'Mcp-Session-Id': await session_of(client, b_token)}
+                first = asyncio.create_task(client.post('/mcp', headers=a, json=call(81)))
+                await until(started.is_set)
+                queued = asyncio.create_task(client.post('/mcp', headers=b, json=call(82)))
+                await until(lambda: worker.handed[B] >= 1)
+                processed = worker.processed
+                log_scan.watch(await change_token(runtime, B, 'rotate'))
+                done, _ = await asyncio.wait({queued}, timeout=3)
+                assert queued in done, "a rotated token's reply still waits for the worker"
+                assert queued.result().status_code == 401 and not first.done()
+                gate.set()
+                assert (await asyncio.wait_for(first, 10)).status_code == 200
+                await asyncio.sleep(0.1)
+                assert worker.processed == processed + 1  # the default profile's job only: B's never ran
+    finally:
+        gate.set()
+
+
 async def test_a_worker_that_stops_by_itself_stops_the_add_on_and_no_request_waits(tmp_path, log_scan, monkeypatch):
     """The worker's thread ends while the add-on serves (a fault of the worker, not of a job): the reply in process is
-    still answered, the one queued behind it is answered 502 at once, and run_product stops the add-on ('runtime
-    component stopped'), so that the Supervisor restarts it."""
+    still answered (the worker hands it back before it takes the next job), the one queued behind it is answered 502
+    at once, and run_product stops the add-on ('runtime component stopped'), so that the Supervisor restarts it.
+    The fault waits until the first answer reached its client: the in-process client here bypasses the listener, so
+    nothing holds the add-on's stop for it (uvicorn lets a response in progress finish first; HM-30 review fixes: the
+    test raced the stop under load)."""
     data = tmp_path / 'data'
     configure(data, PRODUCT)
     gate, started = threading.Event(), threading.Event()
@@ -606,14 +804,19 @@ async def test_a_worker_that_stops_by_itself_stops_the_add_on_and_no_request_wai
             await until(started.is_set)
             queued = asyncio.create_task(client.post('/mcp', headers=headers, json=call(62)))
             await asyncio.sleep(0.05)
+            answered = threading.Event()
 
             def fault():
+                answered.wait(10)  # the first answer reached its client: now the thread ends
                 raise RuntimeError('DUMMY-fault-text')
             monkeypatch.setattr(worker, '_next', fault)
             gate.set()
+            try:
+                assert (await asyncio.wait_for(first, 5)).status_code == 200
+            finally:
+                answered.set()
             second = await asyncio.wait_for(queued, 5)
             assert (second.status_code, second.content) == (502, b'{"error":"request denied"}')
-            assert (await asyncio.wait_for(first, 5)).status_code == 200
         done, _ = await asyncio.wait({runtime.task}, timeout=10)
         assert runtime.task in done
     error = runtime.task.exception()
@@ -672,8 +875,9 @@ async def test_another_profiles_large_replies_leave_the_loop_and_this_profile_th
     of GIL-holding processing per 8 MiB (d). Meanwhile B calls a tool again and again: while A's replies are processed
     the event loop never stops for more than 50 ms, B's tools/call p99 is at most 2d + 0.2 s (B waits for at most A's one
     reply in process, plus its own), every reply is processed on the worker, one at a time. The loop's lag while A's
-    160 MiB still arrive (its own work of reading them in 64 KiB pieces, each under the token lease: no processing) is
-    printed, not held to the threshold (the provenance note compares it with the loop's processing before HM-30)."""
+    160 MiB still arrive (the loop reads them in 64 KiB pieces, each under the token lease, while the worker already
+    processes the first ones) is printed and not asserted: whether contract 6's 50 ms holds for that phase too is for
+    the user to decide (D3 of the HM-30 review; the provenance note has the numbers). It is not settled as excluded."""
     loop = asyncio.get_running_loop()
     latencies = []
     async with starved(tmp_path, log_scan, monkeypatch) as run:
@@ -785,30 +989,47 @@ def answer_of(taken):
     return status, b''.join(message.get('body', b'') for message in taken if message['type'] == 'http.response.body')
 
 
-def exact_reply(ident, size):
-    """A compact tools/call reply of exactly size bytes (an ASCII text): the gateway's own serialization of it is the
-    same bytes, so what it hands over is size bytes too."""
+EMOJI = '\U0001F600'  # 4 bytes as UTF-8; the gateway's json.dumps writes it as a 12-byte escape (\ud83d\ude00)
+
+
+def exact_reply(ident, size, fill='s'):
+    """A compact tools/call reply of exactly size bytes whose text is fill again and again (then 's' up to the size).
+    ASCII: the gateway's own serialization of it is the same bytes, so what it hands over is size bytes too; an emoji
+    fill: about three times as many (served)."""
     head = b'{"jsonrpc":"2.0","id":%d,"result":{"content":[{"type":"text","text":"' % ident
     tail = b'"}],"isError":false}}'
-    return head + b's' * (size - len(head) - len(tail)) + tail
+    room, unit = size - len(head) - len(tail), fill.encode()
+    text = unit * (room // len(unit))
+    return head + text + b's' * (room - len(text)) + tail
+
+
+def served(raw):
+    """What the gateway hands over for a child's tools/call reply raw that it relays unchanged: its own serialization
+    (json.dumps, ASCII escapes, compact)."""
+    return json.dumps(json.loads(raw), separators=(',', ':')).encode()
 
 
 class SizedChild(ProfileChild):
-    """B's child: a tools/call whose id is in sizes gets an exact_reply of that many bytes, as JSON, or as an event
-    stream (its headers, then the reply event) for an id in streams; tool_calls counts the tools/calls of TOOL it got
-    (the readiness probe is another tool)."""
+    """One profile's child: a tools/call whose id is in sizes gets an exact_reply of that many bytes (its text fill), as
+    JSON, or as an event stream (its headers, then the reply event) for an id in streams; tool_calls counts the
+    tools/calls of TOOL it got (the readiness probe is another tool). A request whose id is in held, whatever its
+    method, waits until release_held is set (waiting counts them)."""
 
-    def __init__(self, *args, sizes, streams=()):
+    def __init__(self, *args, sizes, streams=(), fill='s', held=()):
         super().__init__(*args)
-        self.sizes, self.streams, self.tool_calls = dict(sizes), set(streams), 0
+        self.sizes, self.streams, self.fill, self.tool_calls = dict(sizes), set(streams), fill, 0
+        self.held, self.waiting, self.release_held = set(held), 0, asyncio.Event()
 
     async def __call__(self, request):
         message = json.loads(request.content) if request.content else {}
+        if message.get('id') in self.held:
+            self.waiting += 1
+            await self.release_held.wait()
         if message.get('method') == 'tools/call' and message['params']['name'] == TOOL:
             self.tool_calls += 1
             ident = message['id']
             if ident in self.sizes:
-                body = exact_reply(ident, self.sizes[ident])
+                body = exact_reply(ident, self.sizes[ident], self.fill)
                 if ident not in self.streams:
                     return httpx.Response(200, headers={'content-type': 'application/json'}, content=body)
 
@@ -818,36 +1039,49 @@ class SizedChild(ProfileChild):
         return await super().__call__(request)
 
 
-def budget_setup(tmp_path, b_child):
+def budget_setup(tmp_path, sized_child, owner=B):
+    """The add-on on disk (the default profile, B and C) and its children: owner's is sized_child(its name, its
+    directory), the others' a ProfileChild. Returns the data directory, the children and owner's child."""
     data = tmp_path / 'data'
     configure(data, PRODUCT)
-    children = Children()
-    children.add(3000, ProfileChild('default', PRODUCT, data))
     for number, profile_id in enumerate((B, C)):
         create_profile(data, PRODUCT, profile_id, label=LABELS[profile_id], port=18000 + number)
-    child = children.add(18000, b_child(profiles.Layout(data).profile(B)))
-    children.add(18001, ProfileChild('pcccc', PRODUCT, profiles.Layout(data).profile(C)))
-    return data, children, child
+    children, sized = Children(), None
+    for port, profile_id in ((3000, 'default'), (18000, B), (18001, C)):
+        name = 'default' if profile_id == 'default' else 'p' + profile_id[:4]
+        directory = data if profile_id == 'default' else profiles.Layout(data).profile(profile_id)
+        if profile_id == owner:
+            sized = children.add(port, sized_child(name, directory))
+        else:
+            children.add(port, ProfileChild(name, PRODUCT, directory))
+    return data, children, sized
 
 
+def quota_name(profile_id):
+    return 'DEFAULT_PROFILE_QUOTA' if profile_id == 'default' else 'EXTRA_PROFILE_QUOTA'
+
+
+@pytest.mark.parametrize('owner', ['default', B], ids=['default-profile', 'additional-profile'])
 async def test_answers_not_received_yet_past_the_budget_refuse_the_profiles_next_tools_call(tmp_path, log_scan,
-                                                                                            monkeypatch):
-    """B's pending-reply budget is 1 MiB here (32 MiB in the add-on). Two of B's answers of 600 KiB stay with a client
-    that does not read: they are charged from the moment B's app hands them over (in pieces of 64 KiB, the bytes on the
-    wire unchanged) until the server took them. B's next tools/call is answered at once, 200 + -32003 under its id,
-    and never forwarded; a tools/list is still forwarded; the default profile and C are served as before; one WARNING
-    a minute. Once the client reads, everything is given back and B's tools/call is forwarded again."""
+                                                                                            monkeypatch, owner):
+    """The profile's pending-reply budget is 1 MiB here (32 MiB in the add-on), the default profile's as an additional
+    profile's (C1-M5: the default profile's holder may be the attacker too; HM-30 review MF-2). Two of its answers of
+    600 KiB stay with a client that does not read: they are charged from the moment its app hands them over (in pieces
+    of 64 KiB, the bytes on the wire unchanged) until the server took them. Its next tools/call is answered at once,
+    200 + -32003 under its id, and never forwarded; a tools/list is still forwarded; the two other profiles are served
+    as before; one WARNING a minute. Once the client reads, everything is given back and its tools/call is forwarded
+    again."""
     budget = 1 * MiB
-    monkeypatch.setattr(profiles, 'EXTRA_PROFILE_QUOTA', replace(profiles.EXTRA_PROFILE_QUOTA,
-                                                                 pending_reply_bytes=budget))
+    name = quota_name(owner)
+    monkeypatch.setattr(profiles, name, replace(getattr(profiles, name), pending_reply_bytes=budget))
     size = 600 * 1024
-    data, children, child = budget_setup(tmp_path, lambda directory: SizedChild(
-        'pbbbb', PRODUCT, directory, sizes={21: size, 22: size, 23: size}))
+    data, children, child = budget_setup(tmp_path, lambda child_name, directory: SizedChild(
+        child_name, PRODUCT, directory, sizes={21: size, 22: size, 23: size}), owner)
     async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
         watch(log_scan, data)
-        gate = runtime.gate(B)
+        gate = runtime.gate(owner)
         assert gate.quota.pending_reply_bytes == budget and gate.reply_bytes == 0
-        token = runtime.token(B)
+        token = runtime.token(owner)
         async with runtime.mcp() as client:
             headers = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
             reading = asyncio.Event()
@@ -868,7 +1102,9 @@ async def test_answers_not_received_yet_past_the_budget_refuse_the_profiles_next
             assert child.tool_calls == sent  # never forwarded
             listed = await client.post('/mcp', headers=headers, json={'jsonrpc': '2.0', 'id': 24, 'method': 'tools/list'})
             assert listed.status_code == 200 and 'tools' in listed.json()['result']
-            for profile_id in ('default', C):
+            for profile_id in ('default', B, C):
+                if profile_id == owner:
+                    continue
                 other = runtime.token(profile_id)
                 response = await client.post('/mcp', headers={**bearer(other), 'Mcp-Session-Id': await session_of(
                     client, other)}, json=call(25))
@@ -877,8 +1113,8 @@ async def test_answers_not_received_yet_past_the_budget_refuse_the_profiles_next
             assert (await client.post('/mcp', headers=headers, json=call(26))).json()['error']['code'] == -32003
             warnings = [record.getMessage() for record in log_scan.records
                         if record.name == 'mcp_admin_core.profile_router' and 'not received' in record.getMessage()]
-            assert warnings == [f'MCP gateway [profile={B[:8]}]: its answers not received yet held 1 MiB, its limit; '
-                                'new tools/call requests were answered busy (-32003) and not sent']
+            assert warnings == [f'MCP gateway [profile={profiles.log_id(owner)}]: its answers not received yet held '
+                                '1 MiB, its limit; new tools/call requests were answered busy (-32003) and not sent']
             reading.set()
             for task, taken in held:
                 await asyncio.wait_for(task, 10)
@@ -893,11 +1129,56 @@ async def test_answers_not_received_yet_past_the_budget_refuse_the_profiles_next
             assert again.status_code == 200 and again.content == exact_reply(23, size)
 
 
+async def test_a_profile_past_its_pending_reply_budget_is_answered_before_it_waits_for_a_slot(tmp_path, log_scan,
+                                                                                              monkeypatch):
+    """contract 2.4: the pending-reply check comes before the forwarding slots (HM-30 review S-2). Every one of B's
+    slots is taken (its child holds as many pings) and B's answers not received yet hold its budget: B's next
+    tools/call is answered 200 + -32003 with the pending-reply text at once, not with the slots' text after waiting
+    FORWARD_WAIT_SECONDS for one. (HM-14 puts its queue at the slots: the check stays before it.)"""
+    budget = 1 * MiB
+    monkeypatch.setattr(profiles, 'EXTRA_PROFILE_QUOTA', replace(profiles.EXTRA_PROFILE_QUOTA,
+                                                                 pending_reply_bytes=budget))
+    slots = profiles.EXTRA_PROFILE_QUOTA.forward_slots
+    size, pings = 600 * 1024, range(60, 60 + slots)
+    data, children, child = budget_setup(tmp_path, lambda name, directory: SizedChild(
+        name, PRODUCT, directory, sizes={21: size, 22: size}, held=pings))
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data)
+        gate = runtime.gate(B)
+        token = runtime.token(B)
+        async with runtime.mcp() as client:
+            headers = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
+            reading = asyncio.Event()
+            held = []
+            for number, ident in enumerate((21, 22), 1):
+                held.append(asgi_request(runtime.mcp_app, headers, json.dumps(call(ident)).encode(), hold=reading))
+                await until(lambda: gate.reply_bytes >= number * size, 10)
+            waiting = [asyncio.create_task(client.post('/mcp', headers=headers, json={
+                'jsonrpc': '2.0', 'id': ident, 'method': 'ping'})) for ident in pings]
+            try:
+                await until(lambda: child.waiting == slots, 10)  # B's slots are all taken now
+                loop = asyncio.get_running_loop()
+                begun = loop.time()
+                refused = await client.post('/mcp', headers=headers, json=call(23))
+                assert loop.time() - begun < gateway.FORWARD_WAIT_SECONDS
+                assert refused.json() == {'jsonrpc': '2.0', 'id': 23, 'error': {
+                    'code': -32003, 'message': router().pending_text(budget)}}
+            finally:
+                child.release_held.set()
+                reading.set()
+            for task in waiting:
+                response = await asyncio.wait_for(task, 10)
+                assert response.status_code == 200 and response.json()['result'] == {}
+            for task, _ in held:
+                await asyncio.wait_for(task, 10)
+            assert gate.reply_bytes == 0
+
+
 async def test_the_charge_is_given_back_however_a_request_ends(tmp_path, log_scan):
     """An answer handed over and then cut (the client leaves while the server waits: the task is cancelled) gives its
     charge back; a small answer is handed over whole (one message) and charged only until the server took it."""
-    data, children, child = budget_setup(tmp_path, lambda directory: SizedChild(
-        'pbbbb', PRODUCT, directory, sizes={31: 300 * 1024, 33: 300 * 1024}, streams={33}))
+    data, children, child = budget_setup(tmp_path, lambda name, directory: SizedChild(
+        name, PRODUCT, directory, sizes={31: 300 * 1024, 33: 300 * 1024}, streams={33}))
     async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
         watch(log_scan, data)
         gate = runtime.gate(B)
@@ -950,18 +1231,38 @@ def raw_post(port, token, session, message):
             f'Content-Length: {len(message)}\r\n\r\n').encode() + message
 
 
-async def test_a_slow_reader_holds_no_more_than_its_pending_reply_budget(tmp_path, log_scan):
-    """contract 6 (慢讀用戶端), on the real listener (uvicorn, h11): B's client asks for four 8 MiB answers and never
-    reads them, two as JSON and two as event streams whose requests carry 4 MiB of arguments (an open stream keeps its
-    forwarded body: charged to B's byte budget, HM-08). They fill B's 32 MiB; B's next tools/call is answered
-    200 + -32003 at once and never forwarded; the default profile and C are served as before. The management process's
-    RSS grows by at most B's pending replies 32 MiB + one processing's amplification 200 MiB + 64 MiB = 296 MiB. When
-    the client leaves, every byte is given back and B is served again."""
+# What a slow reader asks for, by content: the answers' text, the answers in turn (an id; whether it is an event stream
+# whose request carries 4 MiB of that text as arguments, else a JSON answer), and the least of the byte budget the open
+# streams still hold (their forwarded bodies). Emoji (HM-08 review section 9, HM-30 review S-1): the gateway serializes
+# with ASCII escapes, so an emoji answer of 8 MiB is charged as about 24 MiB, and 4 MiB of emoji arguments are
+# forwarded as about 12 MiB; two answers then pass the 32 MiB (the soft limit: the second one is handed over whole).
+SLOW_READS = {
+    'ascii': ('s', ((41, False), (42, False), (43, True), (44, True)), 2 * 4 * MiB),
+    'emoji': (EMOJI, ((41, False), (43, True)), 3 * 4 * MiB),
+}
+
+
+@pytest.mark.parametrize('content', list(SLOW_READS))
+async def test_a_slow_reader_holds_no_more_than_its_pending_reply_budget(tmp_path, log_scan, content):
+    """contract 6 (慢讀用戶端), on the real listener (uvicorn, h11): B's client asks for 8 MiB answers one after another
+    and never reads them, JSON answers and event streams whose requests carry 4 MiB of arguments (an open stream keeps
+    its forwarded body: charged to B's byte budget, HM-08): ASCII, four of them; emoji, two (each charged as the gateway
+    serializes it). Once they hold B's 32 MiB, B's next tools/call is answered 200 + -32003 at once and never forwarded;
+    the default profile and C are served as before. The management process's RSS grows by at most B's pending replies
+    32 MiB + one processing's amplification 200 MiB + 64 MiB = 296 MiB. When the client leaves, every byte is given back
+    and B is served again."""
+    fill, asked, forwarded = SLOW_READS[content]
+    streams = {ident for ident, stream in asked if stream}
     eight = 8 * MiB
     # An event stream's reply: 8 MiB with its framing (data: and the blank line), the most a child may send (MAX_RESPONSE).
-    sizes = {ident: eight - (8 if ident in (43, 44) else 0) for ident in range(41, 50)}
-    data, children, child = budget_setup(tmp_path, lambda directory: SizedChild(
-        'pbbbb', PRODUCT, directory, sizes=sizes, streams={43, 44}))
+    sizes = {ident: eight - (8 if ident in streams else 0) for ident in range(41, 50)}
+
+    def charge(ident):
+        """What B's gate holds for the answer to ident: the gateway's own bytes for it, framed as an event or not."""
+        answer = served(exact_reply(ident, sizes[ident], fill))
+        return len(b'data: ' + answer + b'\n\n') if ident in streams else len(answer)
+    data, children, child = budget_setup(tmp_path, lambda name, directory: SizedChild(
+        name, PRODUCT, directory, sizes=sizes, streams=streams, fill=fill))
     writers = []
     try:
         async with multi_profile_runtime(PRODUCT, data, sockets=True, children=children) as runtime:
@@ -973,25 +1274,33 @@ async def test_a_slow_reader_holds_no_more_than_its_pending_reply_budget(tmp_pat
                 session = await session_of(client, token)
                 headers = {**bearer(token), 'Mcp-Session-Id': session}
                 warm = await client.post('/mcp', headers=headers, json=call(49))  # read whole: warms the allocator
-                assert warm.status_code == 200 and warm.content == exact_reply(49, eight)
+                assert warm.status_code == 200 and warm.content == served(exact_reply(49, eight, fill))
                 del warm
+                # The requests (an event stream's with 4 MiB of the text as arguments, sent as UTF-8) and what each
+                # answer will hold, made before the RSS baseline: the test's own objects are not the gateway's.
+                text = fill * (4 * MiB // len(fill.encode()))
+                messages = {ident: json.dumps(call(ident, {**ARGUMENTS, 'filter': text} if stream else None),
+                                              ensure_ascii=False).encode() for ident, stream in asked}
+                charges = {ident: charge(ident) for ident, _ in asked}
+                del text
                 gc.collect()
                 baseline = rss_bytes()
+                charged = 0
                 with RssPeak() as rss:
-                    for number, ident in enumerate((41, 42, 43, 44), 1):
-                        arguments = {**ARGUMENTS, 'filter': 'f' * (4 * MiB)} if ident in (43, 44) else None
-                        message = json.dumps(call(ident, arguments)).encode()
+                    for number, (ident, _) in enumerate(asked, 1):
+                        assert gate.reply_bytes < 32 * MiB  # B's tools/call is still forwarded
                         _, writer = await asyncio.open_connection('127.0.0.1', port)
-                        writer.write(raw_post(port, token, session, message))
+                        writer.write(raw_post(port, token, session, messages[ident]))
                         await writer.drain()
                         writers.append(writer)
+                        charged += charges[ident]
                         try:
-                            await until(lambda: gate.reply_bytes >= number * eight, 30)
+                            await until(lambda: gate.reply_bytes >= charged, 30)
                         except TimeoutError:
                             raise AssertionError(('answer', number, 'charged', gate.reply_bytes, 'calls', child.tool_calls,
                                                   'active', gate.active)) from None
-                    assert 32 * MiB <= gate.reply_bytes < 32 * MiB + 64
-                    assert gate.body_bytes >= 8 * MiB  # the two open streams still hold their forwarded bodies
+                    assert gate.reply_bytes == charged and charged >= 32 * MiB
+                    assert gate.body_bytes >= forwarded  # the open streams still hold their forwarded bodies
                     sent = child.tool_calls
                     loop = asyncio.get_running_loop()
                     begun = loop.time()
@@ -1006,14 +1315,14 @@ async def test_a_slow_reader_holds_no_more_than_its_pending_reply_budget(tmp_pat
                         assert response.status_code == 200 and 'result' in response.json()
                     await asyncio.sleep(0.2)
                 growth = rss.peak - baseline
-                print(f'HM-30 slow reader: B pending {gate.reply_bytes / MiB:.1f} MiB, byte budget '
+                print(f'HM-30 slow reader ({content}): B pending {gate.reply_bytes / MiB:.1f} MiB, byte budget '
                       f'{gate.body_bytes / MiB:.1f} MiB, RSS growth {growth / MiB:.0f} MiB (contract 6: 296)')
                 assert growth <= (32 + 200 + 64) * MiB, growth / MiB
                 for writer in writers:
                     writer.close()
                 await until(lambda: gate.reply_bytes == 0 and gate.body_bytes == 0 and gate.active == 0, 20)
                 again = await client.post('/mcp', headers=headers, json=call(49))
-                assert again.status_code == 200 and again.content == exact_reply(49, eight)
+                assert again.status_code == 200 and again.content == served(exact_reply(49, eight, fill))
     finally:
         for writer in writers:
             writer.close()

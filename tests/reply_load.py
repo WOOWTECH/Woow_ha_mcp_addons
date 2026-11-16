@@ -220,9 +220,10 @@ def watch(log_scan, data):
 @dataclass
 class Starved:
     """What a starvation run saw: the injected cost; the loop's lag while A's replies were still arriving (reading: the
-    loop's own work of taking 160 MiB in 64 KiB pieces, each read under the token lease) and once every one of them was
-    read and handed to the worker (lag: while they are processed; contract 6's threshold is about this one); the tasks of
-    A's requests."""
+    loop takes 160 MiB in 64 KiB pieces, each read under the token lease, while the worker processes the first ones)
+    and once every one of them was read and handed to the worker (lag: while they are processed). The tests hold lag to
+    contract 6's threshold; whether reading is held to it too is the user's decision (HM-30 review D3), so they print
+    it. The tasks of A's requests."""
     runtime: object
     work: GilWork
     reading: LoopLag
