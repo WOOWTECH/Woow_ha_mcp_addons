@@ -1,11 +1,15 @@
 import { UiError } from './contracts.js';
-import { DEFAULT_PROFILE, INDEX_REVISION, isExtraProfile, labelProblem } from './profiles.js';
+import { DEFAULT_PROFILE, INDEX_REVISION, isExtraProfile, isProfileId, labelProblem } from './profiles.js';
+import { QUARANTINE_NAME } from './restore.js';
 
 export const operationKinds = Object.freeze({ 'token/rotate': 'token.rotate', 'token/revoke': 'token.revoke', 'child/restart': 'mcp.restart' });
 // HM-11 (contract 3.5): creating and deleting a profile and quarantining an unusable index keep their identity too;
 // their receipts are the add-on's, beside the profile index (HM-10's kinds, operations.PROFILE_RESULTS).
 export const profileOperationKinds = Object.freeze({ 'profiles/create': 'profile.create', 'profiles/delete': 'profile.delete',
-  'profiles/quarantine': 'profile.index_quarantine' });
+  'profiles/quarantine': 'profile.index_quarantine',
+  // HM-13c (contract 3.5): "revoke all", a restore review, a quarantine directory's deletion.
+  'profiles/revoke-all': 'profile.revoke_all', 'profiles/restore-review': 'profile.restore_review',
+  'profiles/quarantine-delete': 'profile.quarantine_delete' });
 // The scope of the profile create/delete identity (never a profile id: those are default or 24 hex).
 export const PROFILES_SCOPE = 'profiles';
 const ID = /^[0-9]{13}\.[A-Za-z0-9_-]{16,64}$/;
@@ -26,7 +30,8 @@ export function operationReceipt(value, pending) {
 // - an additional profile: woow-admin-operation-v1:<mount>:<id>, the same four keys and its profile;
 // - creating or deleting a profile, or quarantining the index: woow-admin-operation-v1:<mount>:profiles, with the label
 //   to create or the profile to delete (the quarantine: the unusable index's ETag as its revision), so a resend is the
-//   same request.
+//   same request. HM-13c: "revoke all" (nothing more; its revision may be the unusable index's ETag too), a restore
+//   review (the profile, the default one too) and a quarantine directory's deletion (its name) under the same key.
 export class OperationIdentity {
   constructor(mount, storage) {
     this.key = `woow-admin-operation-v1:${mount}`;
@@ -55,7 +60,9 @@ export class OperationIdentity {
       } else if (!INDEX_REVISION.test(value.revision) || !(value.route === 'profiles/create'
           ? keys === 'id,label,product,revision,route' && labelProblem(value.label) === null && value.label === value.label.trim()
           : value.route === 'profiles/delete' ? keys === 'id,product,profile,revision,route' && isExtraProfile(value.profile)
-            : value.route === 'profiles/quarantine' && keys === 'id,product,revision,route')) throw new Error();
+            : value.route === 'profiles/restore-review' ? keys === 'id,product,profile,revision,route' && isProfileId(value.profile)
+              : value.route === 'profiles/quarantine-delete' ? keys === 'id,name,product,revision,route' && QUARANTINE_NAME.test(value.name)
+                : ['profiles/quarantine', 'profiles/revoke-all'].includes(value.route) && keys === 'id,product,revision,route')) throw new Error();
       return value;
     } catch { throw new UiError('此分頁的操作識別紀錄不相容；請先核對伺服器狀態，不會自動重送。'); }
   }
@@ -65,9 +72,10 @@ export class OperationIdentity {
     const pending = this.get(scope);
     if (pending) {
       const same = pending.route === route && pending.product === fresh.product
-        && (!crud || detail.label === undefined && detail.profile === undefined
-          || (route === 'profiles/create' ? pending.label === detail.label : pending.profile === detail.profile))
-        && (route !== 'profiles/quarantine' || pending.revision === revision);
+        && (!crud || detail.label === undefined && detail.profile === undefined && detail.name === undefined
+          || (route === 'profiles/create' ? pending.label === detail.label
+            : route === 'profiles/quarantine-delete' ? pending.name === detail.name : pending.profile === detail.profile))
+        && (!['profiles/quarantine', 'profiles/revoke-all'].includes(route) || pending.revision === revision);
       if (!same) throw new UiError(crud ? '另一筆帳號操作尚未核對結果；請先使用「帳號操作尚未確認」查詢。' : '另一筆操作尚未核對結果；請先使用「待確認操作」查詢。');
       return pending;
     }
@@ -84,10 +92,13 @@ export class OperationIdentity {
     if (!crud && this.keyFor(scope) === this.key) record = { id, route, revision, product: fresh.product };
     else if (!crud) record = { id, route, revision, product: fresh.product, profile: scope };
     else if (route === 'profiles/create') record = { id, route, revision, product: fresh.product, label: detail.label };
-    else if (route === 'profiles/delete') record = { id, route, revision, product: fresh.product, profile: detail.profile };
+    else if (route === 'profiles/delete' || route === 'profiles/restore-review') record = { id, route, revision, product: fresh.product, profile: detail.profile };
+    else if (route === 'profiles/quarantine-delete') record = { id, route, revision, product: fresh.product, name: detail.name };
     else record = { id, route, revision, product: fresh.product };
     if (crud && (route === 'profiles/create' ? labelProblem(record.label) !== null || record.label !== record.label.trim()
-        : route === 'profiles/delete' && !isExtraProfile(record.profile))) throw new UiError('帳號操作內容不符；未送出變更。');
+        : route === 'profiles/delete' ? !isExtraProfile(record.profile)
+          : route === 'profiles/restore-review' ? !isProfileId(record.profile)
+            : route === 'profiles/quarantine-delete' && !QUARANTINE_NAME.test(record.name ?? ''))) throw new UiError('帳號操作內容不符；未送出變更。');
     try {
       this.storage.setItem(this.keyFor(scope), JSON.stringify(record));
       if (this.storage.getItem(this.keyFor(scope)) !== JSON.stringify(record)) throw new Error();
