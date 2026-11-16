@@ -485,15 +485,16 @@ async def test_make_apps_takes_only_a_share_of_a_budget_beside_hm09s_and_hm10s_o
     """make_apps' body_budget (HM-31), merged after HM-09's child_blocked and HM-10's default_endpoint and
     bootstrap_fields: a keyword-only option, None by default (a budget of the add-on's own), and anything but a
     request_budget.Share is refused before an app is made, as each of those three refuses what is not its own.
-    HM-13b's dormant_profiles, merged after HM-31, follows it (keyword-only, None by default, as each of these)."""
+    HM-13b's dormant_profiles, merged after HM-31, follows it (keyword-only, None by default, as each of these), and
+    HM-13c's restore_notice and review_required follow that one (the same)."""
     import inspect
 
     parameters = inspect.signature(gateway.make_apps).parameters
-    assert list(parameters)[-5:] == ['child_blocked', 'default_endpoint', 'bootstrap_fields', 'body_budget',
-                                     'dormant_profiles']
+    assert list(parameters)[-7:] == ['child_blocked', 'default_endpoint', 'bootstrap_fields', 'body_budget',
+                                     'dormant_profiles', 'restore_notice', 'review_required']
     assert parameters['body_budget'].kind is inspect.Parameter.KEYWORD_ONLY and parameters['body_budget'].default is None
-    assert (parameters['dormant_profiles'].kind is inspect.Parameter.KEYWORD_ONLY
-            and parameters['dormant_profiles'].default is None)
+    for name in ('dormant_profiles', 'restore_notice', 'review_required'):
+        assert parameters[name].kind is inspect.Parameter.KEYWORD_ONLY and parameters[name].default is None
     limits(monkeypatch, 16, 16)
     configure(tmp_path / 'odoo', 'odoo')
     store = ProductStore(tmp_path / 'odoo', 'odoo')

@@ -1080,6 +1080,9 @@ def test_the_container_probes_restore_stage_meets_the_entrypoint(tmp_path, log_s
     with pytest.raises(AssertionError, match='restore marker left'):
         probe.check_restored_start(restored, state)  # the entrypoint alone: the marker is there
     assert guard_start(data) == [True, False]
+    # HM-13c: the guard's restore notice is the management process's file (uid 10001: the root case below runs the
+    # guard as that user); this test user stands in for it.
+    vroot.owners[inode(data / profiles.RESTORE_NOTICE_NAME)] = RUNTIME
     probe.check_restored_start(restored, state)
 
 

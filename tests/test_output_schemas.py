@@ -35,8 +35,9 @@ CURRENT_POST_SOURCE_BYTES = {
     # HM-20: loopback refusal for the configured instance behind WOOW_MCP_DENY_LOOPBACK; no tool, schema or handler change.
     'apps/n8n/backend_policy.cjs': ('n8n', '055ca90a23c5d401d742fb165ffab2e6efcc5ca6a41a96a51293a4a8943f1826'),
     # HM-13b: the boot guard (restore_lock.guard) before the child and the listeners, and the bootstrap's
-    # dormant_profiles; no tool, schema or handler change.
-    'apps/n8n/run.py': ('n8n', '6b92b9c7c2a67978159c8f7b129afc613c9c1548685552fdcd3b207974387573'),
+    # dormant_profiles; HM-13c: the restore notice (restore_lock.read_notice) for the bootstrap; no tool, schema or
+    # handler change.
+    'apps/n8n/run.py': ('n8n', '2eab88d9f1090d02092b8ec36d454bfd5a966fe3b2448909ee6fa65fc0192c88'),
     'apps/hermes/launch.py': ('hermes', '68ebc3f2b72d59001fb9e26d7836fb47cd4c82d68676b15babe4d1f5ac9f8903'),
 }
 

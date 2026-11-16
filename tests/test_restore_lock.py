@@ -119,10 +119,12 @@ def test_a_single_profile_installation_without_a_restore_is_left_alone(tmp_path,
 
 
 @pytest.mark.parametrize('product', EVERY_PRODUCT)
-def test_a_single_profile_restore_only_removes_the_marker(tmp_path, log_scan, product):
+def test_a_single_profile_restore_removes_the_marker_and_only_adds_the_notice(tmp_path, log_scan, product):
     """DQ-03 (b): a restore of an installation without profile data revokes nothing and leaves its state, receipts and
     every other entry exactly as restored; one WARNING says the token is back at its backup value; the marker goes. No
-    sentinel, record or restore record is made (the product is not switched on)."""
+    sentinel, record or restore record is made (the product is not switched on). HM-13c (the owner's decision of
+    2026-11-16 on the HM-13b review's Q-1: "面板與 log 提示"): the panel's restore notice is the one entry more
+    (tests/test_restore_review.py)."""
     disk = Disk(tmp_path, log_scan, product)
     receipt = disk.receipt()
     disk.restore(disk.backup())
@@ -134,8 +136,8 @@ def test_a_single_profile_restore_only_removes_the_marker(tmp_path, log_scan, pr
         after = tree(disk.data)
     finally:
         store.close()
-    assert set(before) - set(after) == {MARKER} and set(after) <= set(before)
-    assert {name: facts for name, facts in after.items() if name != '.'} == {
+    assert set(before) - set(after) == {MARKER} and set(after) - set(before) == {profiles.RESTORE_NOTICE_NAME}
+    assert {name: facts for name, facts in after.items() if name not in ('.', profiles.RESTORE_NOTICE_NAME)} == {
         name: facts for name, facts in before.items() if name not in ('.', MARKER)}
     assert disk.replay(receipt) == 'completed'
     assert guard_lines(log_scan) == [('WARNING', restore_lock.KEPT_NOTICE)]
@@ -247,7 +249,11 @@ def test_a_restore_with_profile_data_revokes_every_profile(tmp_path, log_scan, s
     for config in (disk.data / 'state.json', disk.layout.profile(A) / 'state.json', disk.layout.index):
         archived = json.loads(config.with_name('.' + config.name + '.operations.json.restored').read_text())
         assert len(archived['receipts']) == 1
-    assert not (disk.layout.profile(B) / '.state.json.operations.json').exists()  # it never had receipts
+    # HM-13c: B never had a receipt, so its backup had no journal: it gets a new one all the same (an operation made
+    # after the backup and lost with the restore answers 410), with nothing to archive.
+    fresh = json.loads((disk.layout.profile(B) / '.state.json.operations.json').read_text())
+    assert fresh['receipts'] == {} and fresh['restored_before_ms'] == int(when.timestamp() * 1000)
+    assert not (disk.layout.profile(B) / '.state.json.operations.json.restored').exists()
     assert MARKER not in disk.names() and disk.detection(True) == rd.Detection(False, True, rd.CONSISTENT)
     record = record_of(disk)
     assert record['restore'] == {'at': when.isoformat(timespec='seconds'), 'marker': signals == 'both',
@@ -722,7 +728,8 @@ def test_the_names_set_aside_are_the_ones_the_guard_writes():
     assert set(profiles.ASIDE_NAMES) == {profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME,
                                          profiles.INSTANCE_RECORD_TEMPORARY_NAME, MARKER,
                                          profiles.REVOKE_ALL_MARKER_NAME, profiles.RESTORE_RECORD_NAME,
-                                         *profiles.RECEIPT_ARCHIVE_NAMES}
+                                         *profiles.RECEIPT_ARCHIVE_NAMES,
+                                         profiles.RESTORE_NOTICE_NAME}  # HM-13c: the panel's restore notice
 
 
 def test_an_unlistable_profiles_entry_is_reported_and_nothing_in_it_is_served(tmp_path, log_scan):
