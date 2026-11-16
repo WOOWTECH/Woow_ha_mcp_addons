@@ -258,6 +258,10 @@ token 換掉時 `ClientDisconnect` 丟給 uvicorn）。HM-14 定案：
   （純文字 `Method Not Allowed`、`Allow` 列這個路徑收的方法：帳號範圍路徑與頁面 `GET, HEAD, POST, PUT`，`profiles` `GET, POST`，
   `profiles/<id>` `PATCH, DELETE`，`profiles/index/quarantine` `POST`）；全域路徑用表外的方法也是 405。`profiles/` 底下其他路徑是
   未知操作：角色檢查之後回空本體的 404（同今天的未知操作），不看 `X-MCP-Profile`。
+- 開通後預設帳號看得到的兩個位元組變化（HM-10 審查 S-6；不影響安全，要寫進計畫 §7.2 的清單、該產品的 CHANGELOG 與
+  `upgrade-notes.yaml`，交 HM-18 或升版片）：(1) PATCH、DELETE 沒帶 CSRF：沒開通是路由層的 405（identity 之前），開通後是 identity 的
+  403；(2) 8099 收到這六個方法以外的方法（OPTIONS 等）：開通前後都是路由層的 405（identity 之前），但 `Allow` 列的方法從
+  `GET`、`HEAD`、`POST`、`PUT` 四個變成六個（多 `PATCH`、`DELETE`）。列的順序是 Starlette 的集合順序，開通前後都不固定。
 - 管理請求帶 query、`raw_path` 含 `%` 或 `\\`：400（同今天，§8.8 #48）。
 
 ### 3.2 共用管線（開通後**所有**路由都走，含全域路徑）
@@ -288,7 +292,10 @@ token 換掉時 `ClientDisconnect` 丟給 uvicorn）。HM-14 定案：
   - 帳號是在 ⑥ 之後才選的，所以入口不能是任何一個帳號的 app：分派器自己跑管線，再呼叫選定帳號的動作（⑧～⑪，今天的
     `admin_action`）。頁面與靜態檔交預設帳號的動作（照今天：拿鎖、角色檢查、回檔案）。
   - 全域路徑的 ⑧～⑪（`profile_admin.ProfileAdmin`）：清單是讀取，不拿鎖；建立、改名、刪除、索引隔離拿全 add-on 的帳號鎖，
-    刪除再拿目標帳號的 `mutation_lock`（先全域、再帳號，不會互鎖），各最多等 2 秒（503）。⑩ 之後到提交（寫索引）之間不 await。
+    刪除再拿目標帳號的 `mutation_lock`，索引隔離再依 id 順序拿每個已登錄額外帳號的 `mutation_lock`（HM-10 審查 S-1）；一律先全域、
+    再帳號，不會互鎖；每把最多等 2 秒（503，已拿到的鎖放掉、什麼都不做）。⑩ 在拿完所有鎖之後。刪除拿著目標帳號的鎖到它移除登錄為止，
+    索引隔離拿著每個帳號的鎖到它移除登錄為止：該帳號進行中的 token 變更、存檔、重啟先做完再被撤銷；途中才來的請求拿到鎖時 store 已關
+    （503）。⑩ 之後到提交（寫索引）之間不 await。
     建立提交後，在新帳號自己的 `mutation_lock` 裡起它的子程式（和存檔起子程式一樣；這段時間有人對新帳號發的請求會等這把鎖，
     不會同時重起它；HM-09 審查 S-12）。開機的錯開啟動（`start_all`）與索引變更後的重評（`reevaluate()`）起子程式時
     （`ProfileRuntime.launch()`）也拿該帳號的 `mutation_lock`（HM-09 審查 S-12 第 2 點，HM-10 接線時做）：存檔或面板重啟正在
@@ -387,7 +394,10 @@ HM-10）、還原與休眠通知（欄位名 HM-13c 定案）。
 **索引隔離**：先撤銷 `profiles/` 底下每個帳號目錄（與每個已登錄的額外帳號）的 token，再把 `profiles.json` 改名成
 `profiles.json.quarantine-<UTC>`（同一秒已有這個名稱就加 `-2`、`-3`…，不覆蓋；HM-07 審查 S-15）；預設帳號立刻恢復（8081 不用重啟），
 已登錄的額外帳號停掉、不再路由，帳號目錄都變孤兒、可逐一刪除。讀不到 state 而撤銷不了的目錄只記一行 WARNING（數量）：它本來就不會被
-路由。面板 403（Core 未審）時這個動作也用不了。HM-10 定案：開機時 `profiles/` 列不出來（不是目錄、是連結或別的 uid 的）也算索引不能用
+路由。HM-10 審查 S-1：撤銷之前先依 id 順序拿每個已登錄額外帳號自己的鎖（第 3.2 節 ⑧；任一把 2 秒拿不到就 503，什麼都不撤銷、不改名、
+不留收據），一直拿到該帳號移除登錄為止，所以撤銷只做一次：索引改名之後，8081 不再路由任何帳號目錄的 token（含隔離開始時正在輪替的
+新 token），隔離前拿的 If-Match 也寫不進被撤銷的 state。
+面板 403（Core 未審）時這個動作也用不了。HM-10 定案：開機時 `profiles/` 列不出來（不是目錄、是連結或別的 uid 的）也算索引不能用
 （8081 全部 503、bootstrap 是 `corrupt`，HM-08）；這時若沒有索引檔可隔離，隔離回 409 `config_conflict`，什麼都不撤銷、不留收據：
 修好 `profiles/` 之後重啟 add-on 才恢復（隔離解決不了）。
 
@@ -675,7 +685,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | 16 | 讀 body 前拒絕的回應碼 | 先讀 body，帶 id 一律 200＋`-32003` | ≤64 KiB 讀出 id 回 200＋`-32003`；更大的 503。附註（HM-08 審查 S-6）：batch 算沒有 id。HA 閘道平常就不收 batch（`policy.authorize` 的 `single JSON-RPC request required` → 403；PaaS 會轉送），過載時 HA 回 503＋`id: null`，PaaS 每個 id 一則 200 | 讀 body 前准入防單一帳號吃光 listener（C3-MF-2） | 部署 |
 | 17 | 回覆處理 | 事件迴圈內 | 一條工作執行緒、依帳號輪流 | HA 硬體慢、單一迴圈（第 6 節） | 部署 |
 | 18 | 健康檢查 | 沒有定期後端監看（FM-68） | 每帳號監看、連兩次失敗才判壞、認證退避 | HA 既有監看；Odoo 以來源 IP 冷卻 | 部署 |
-| 19 | 容量檢查 | cgroup 公式（建立時） | MemAvailable（建立、存後端、起子程式時）；讀得到 cgroup 才用公式；錯誤多帶 `available_memory_mib` | HA 沒有 cgroup | 部署 |
+| 19 | 容量檢查 | cgroup 公式（建立時）；沒有 FD 預算 | MemAvailable（建立、存後端、起子程式時）；讀得到 cgroup 才用公式；錯誤多帶 `available_memory_mib`。另有 FD 預算：開機時 FD 上限提不到額外帳號要的量，就只服務預設帳號（HM-08），這時建立回 409 `profile_limit_reached`、`limit` 0、什麼都不寫（HM-10） | HA 沒有 cgroup；add-on 容器的 FD 上限由容器決定（第 5 節；HM-03a 實測） | 部署 |
 | 20 | 還原 | 手冊＋restore_guard（k8s Job） | entrypoint＋sentinel 偵測、開機守門、讀不到就隔離 | Supervisor 沒有 hook | 部署 |
 | 21 | 還原時預設帳號 | 一律撤銷 | DQ-03 採 (b) A2：只有磁碟上有帳號資料的還原才撤銷預設帳號 | 白名單落後＋還原換回舊版 | 部署 |
 | 22 | 還原後 token 歷史 | 清空（R04 S-15） | 保留，加一筆 revoke | 不改 schema | 部署 |
@@ -690,7 +700,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | 31 | 管理 API 沒帶帳號 | 當 default | 開通後 400 `profile_id_required` | fail closed（I12；DQ-40 ①） | 加嚴 |
 | 32 | `X-MCP-Profile` 格式錯 | 404（Pc/profiles.py:611-614） | 400 `profile_id_invalid`（在角色檢查後） | 分清「格式錯」與「不存在」 | 加嚴 |
 | 33 | 管理回應帶帳號回聲 | 沒有 | 有，面板比對 | fail closed（DQ-40 ②） | 加嚴 |
-| 34 | 帳號 CRUD 寫入保護 | 不收 If-Match、不走收據；刪除 204 | 全部 If-Match；建立、刪除、全部撤銷、索引隔離要 Idempotency-Key；刪除 200＋收據 | HA 既有規則（Hc/gateway.py:456-484；DQ-40 ③） | 加嚴 |
+| 34 | 帳號 CRUD 寫入保護 | 不收 If-Match、不走收據；刪除 204；只刪索引裡的帳號（其他 404），撤銷 token 後直接刪目錄（Pc/profiles.py:428-460）；本體格式錯是 pydantic 的 422（Pc/routers/profiles.py 的 `ProfileInput`） | 全部 If-Match；建立、刪除、全部撤銷、索引隔離要 Idempotency-Key；刪除 200＋收據。HM-10：刪除也收孤兒與讀不到的帳號；刪目錄前先抹後端欄位（`connection`、`backend_url`、`backend_key`、`mcp_access_token`）；建立、改名的本體不是剛好 `{"label": <字串>}` 時固定 400、沒有細節 | HA 既有規則（Hc/gateway.py:456-484；DQ-40 ③）；孤兒不自動刪、列出可刪，先撤銷並抹憑證再刪（DQ-14）；格式錯照 HA 管理 API 既有的固定 400（第 4.1 節） | 加嚴 |
 | 35 | 帳號名稱 | 接受控制、bidi、零寬字元 | 拒絕；NFKC 判重 | 防管理員誤認（DQ-16；DQ-40 ④） | 加嚴 |
 | 36 | 帳號選擇保存 | sessionStorage | 只放記憶體 | 保留 HA 儲存不變式（DQ-18；DQ-40 ⑤） | 加嚴 |
 | 37 | 子程式 bearer | 只有 n8n 驗 | 7 支 Python 子程式也驗、驗格式（第 7 節）。註：n8n 維持現狀（n8n-mcp 驗 `AUTH_TOKEN`＝同一個 child_token）：只看值是不是 `Bearer ` 開頭、比對前去掉前後空白，重複的 `Authorization` 只看第一個，所以另外收下三種寫法：`Bearer` 後兩個空白、兩個標頭都是自己的、第一個是自己的＋第二個是別帳號的。三種都要先有自己的 child token，沒有越權 | port 錯置時不跨帳號執行（DQ-40 ⑥）。n8n 不另外擋那三種（審查 MF-1 選 (a)，2026-11-15）：閘道只轉送自己的 child bearer、只送一個標頭（HM-01 黃金回歸鎖住，用戶端塞不進第二個）；能直連子程式 port 的只有 add-on 容器內同 uid 的程序，在 DQ-37 接受的信任邊界內 | 加嚴 |
@@ -707,7 +717,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | 48 | 管理請求的網址規則 | 沒有這條限制 | 帶 query、`raw_path` 含 `%` 或 `\\` 一律 400（Hc/gateway.py:706-711） | HA 既有 | 既有 |
 | 49 | 錯誤的顯示 | 面板顯示伺服器回的 `detail`／`message` 文字 | 面板只認固定代碼，文字由面板對照（Hui/api.js:48-61）；伺服器不回文字 | HA 既有 | 既有 |
 | 50 | 帳號範圍的選擇方式 | `X-MCP-Profile` 標頭 | 標頭；UC-10 證實 Ingress 不轉時改路徑 `{base}/api/p/<id>/…`，PATCH／DELETE 改 POST（第 3.7 節） | 看 HM-03a 的 UC-10 結果 | 待決 |
-| 51 | 帳號清單欄位 | `id`、`label`、`port`、`is_default`、`disabled_reason`（3 種）、`required_memory_mib` | 另加 `status`、`blocked_reason`；`disabled_reason` 多 `profile_unavailable`、`quarantined`、`dormant` | 沒有 operator 監看，補 PaaS 只有預設帳號有健康的缺口（K-02） | 部署 |
+| 51 | 帳號清單欄位 | 清單只有 `{"profiles":[…]}`；列有 `id`、`label`、`port`、`is_default`、`disabled_reason`（3 種）、`required_memory_mib` | 另加 `status`、`blocked_reason`；`disabled_reason` 多 `profile_unavailable`、`quarantined`、`dormant`；清單另回 `orphans`（`[{"id"}…]`：索引沒有的帳號目錄；HM-10） | 沒有 operator 監看，補 PaaS 只有預設帳號有健康的缺口（K-02）；孤兒不自動刪、面板列出可刪（DQ-14） | 部署 |
 | 52 | 子程式預設 port | 多數 8000（n8n 3000） | 3000；額外帳號同 PaaS 從 18000 起 | HA 既有；容器網路私有，不影響外部 | 既有 |
 | 53 | 啟動與關閉順序 | 先起預設、再逐一 activate＋start；關閉先 stop_all 再停預設 | 預設先起，額外帳號錯開（同時最多 2 個，等健康或 30 秒）；關閉全部並行、30 秒內收完 | HA 停止上限 30 秒；J1900 低速；冷備份每次停再起 | 部署 |
 | 54 | 存政策重啟子程式 | Nextcloud 收緊工具不重啟 | 收緊也重啟（只重啟該帳號） | HA 子程式環境由 state 組（既有），不影響隔離 | 既有 |
@@ -777,3 +787,4 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。
 | v1 草案（HM-14 rebase） | 2026-11-16 | HM-14 | rebase 到 `claude-delivery`（HM-09 合併後，`c523474`）：HM-14 的差異列往後移一列（HM-09 已用第 89 列），引用一起改；第 2.5 節 `-32004` 停止了的文字依停止之後的狀態分兩種（HM-09 的 `blocked`、`failed` 等不會自動重新啟動），第 4.2 節 `-32004` 列跟著改，第 9 節補第 100 列；第 2.4、5 節與 #96 寫明 MF-2 (b) 的定案（主對話 2026-11-16：不改 DQ-07 的數值，交 HM-31 改分派器讀小請求；#96 的類型維持「待決」） |
 | v1 草案（HM-14 rebase 到 HM-20 之後） | 2026-11-16 | HM-14 | rebase 到 `claude-delivery`（HM-20 #102 合併後，`269f5a5`）：HM-14 的差異列再往後移一列，成為第 91～100 列（HM-20 用了第 90 列），第 2.4、2.5、4.2、5 節與第 10 節的引用一起改；第 9 節說明段把 HM-14 的列另寫一行（HM-09、HM-20 的說明照原文）。規則內容不變 |
 | v1 草案（HM-10） | 2026-11-15 | HM-10 | 第 3 節：DQ-13、DQ-14 改標已定（2026-11-15 17:4x 使用者採用建議，`decisions.md` 由 #100 記）；UC-10 照使用者 15:3x 的決定用標頭、不做路徑備案（第 3.7 節）；HM-10 定案的做法：分派器與抽出的共用管線、⑤ 的內容、⑪ 的順序、鎖、405 的位元組、`profiles/` 底下未知路徑、清單的 `orphans` 與 `status` 對應、`profile_unavailable`、建立的重送、刪除與索引隔離的回應與步驟、壞索引的 ETag 與 `profile_index_etag`、索引 ETag 的算法、收據的 `subject`、提交後失敗的處理、回聲的範圍與標頭、`profiles_supported`、額外帳號的 endpoint 與 owner-defaults、帳號 ETag 的 domain、建立後在新帳號自己的鎖裡起子程式、開機與重評起子程式也拿該帳號的鎖（HM-09 審查 S-12 第 2 點）、刪目錄從驗過的 `profiles/` 往下走、`profiles/` 列不出來又沒有索引檔時的隔離；第 4.1 節：`profile_not_found`、`profile_limit_reached`（FD 預算不夠時 `limit` 0）、`profile_memory_insufficient`（兩種記憶體算法的欄位）、`profile_port_unavailable`（18000～18099）、`endpoint_global`、`profile_index_corrupt`、`config_conflict`、`owner_defaults_unavailable` 的細節，固定回應的 405 與 HM-01 交下的逐位元案例；第 9 節 #27 |
+| v1 草案（HM-10 審查修正） | 2026-11-16 | HM-10 | 依 HM-10 的獨立安全審查（報告路徑見 PR 描述）：第 3.2 節，索引隔離依 id 順序拿每個已登錄額外帳號的 `mutation_lock`，⑩ 在拿完所有鎖之後，拿到該帳號移除登錄為止（S-1）；第 3.6 節，索引隔離因此只撤銷一次；第 3.1 節，開通後預設帳號看得到的兩個位元組變化（PATCH／DELETE 沒帶 CSRF 從 405 變 403、表外方法的 `Allow` 從 4 個方法變 6 個；S-6，交 HM-18 或升版片寫進計畫 §7.2、CHANGELOG、`upgrade-notes.yaml`）；第 9 節 #19（FD 預算）、#34（刪除也收孤兒與讀不到的帳號、刪目錄前先抹後端欄位、本體格式錯固定 400）、#51（清單的 `orphans`）補上和 PaaS 的差異（S-2） |
