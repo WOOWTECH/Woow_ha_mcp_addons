@@ -126,12 +126,12 @@
   失敗）舊 token 回 503；已換上時（目錄 fsync 失敗）分派器讀不到它的 state、不路由，兩把 token 都是未知 token（401／404）。預設帳號的
   `os.replace` 失敗只關預設帳號；預設帳號的新 state 檔已換上時，8081 所有帶 token 的請求（其他帳號的也是）都 503 到重啟（同今天預設
   帳號 state 讀不到的規則，`contract.md` 第 2.3 節）。重啟後照磁碟上的 state，token 與身分一起；重啟後 token 可能已是新的，舊網址失效，
-  而使用者沒收到 `token_rotated`（面板與 DOCS 要提示到 Tokens 確認網址）。PaaS 這時快取留舊值、磁碟可能已是新值（`contract.md` §8.8 #110）。
+  而使用者沒收到 `token_rotated`（面板與 DOCS 要提示到 Tokens 確認網址）。PaaS 這時快取留舊值、磁碟可能已是新值（`contract.md` §8.8 #114）。
   是否重起舊子程式只看磁碟上的 token、不看丟出哪種例外：還是舊的（store 拒絕寫入、新檔在取代之前寫不出來）才重起，照 PaaS 舊 token 照舊可用；
   寫入丟出例外但新 token 已在磁碟上（取代之後的清理失敗，store 沒毒化）也不重起，新 token 只拿到閘道自己的回答，到重啟或面板重啟子程式。
 - 開通後的新來源規則（DQ-40 ⑨）只比網址的來源（scheme、host、有效 port）。同一來源只換路徑不要求重填秘密：如果同一台反向代理依路徑
   分流到不同後端，已存的秘密會跟著送到新路徑後面的那台（DQ-40 ⑨ 定的範圍；PaaS Headscale 比整條網址）。管理員換路徑前要自己確認
-  兩條路徑後面是同一個服務；要比整條網址是另一個決定，HM-29 回補 PaaS 時一起說明（`contract.md` §8.8 #111）。
+  兩條路徑後面是同一個服務；要比整條網址是另一個決定，HM-29 回補 PaaS 時一起說明（`contract.md` §8.8 #115）。
 - Odoo 的 `chatter_post` 的 approval 只是預覽確認：token 是內容的摘要、子程式每次重算比對，沒有伺服器端紀錄，所以 A 帳號預覽拿到的 approval
   在 B 帳號也執行得了。這不是跨帳號授權：持有 B 的 MCP token 的用戶端本來就能自己預覽、拿到同一個 token，執行時用的是 B 的憑證與 B 的政策
   （上游 odoo-mcp 1.3.0 `tools_write.py:608,650`、`agent_tools.py:111-114`；Direct Chatter Post 開著時根本沒有預覽）。有子程式行程內紀錄的
