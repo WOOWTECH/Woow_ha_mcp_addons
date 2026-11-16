@@ -1,7 +1,7 @@
 import { AdminApi, ApiError, ProfileEchoError, StaleProfileError } from './api.js';
 import { products, connectionHelp, policyRestartsChild, policyRestartNotice, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl, ownerDefaultsView, noticeTime, odooSwitches, odooSwitchKeys, odooSwitchPayload, maskedCurrentToken, tokenHistory, backendEdit, backendPatchPayload, n8nSession, n8nSessionPayload, odooMethods, odooMethodsPayload } from './contracts.js';
 import { DEFAULT_PROFILE, clientName, indexState, isExtraProfile, labelDialog, profileMenu, profileName, shortId, statusLabel } from './profiles.js';
-import { dormantProfiles, exportDocument, exportEntry, policyLine, quarantineTime, restoreNotice, restoreReview, tokenText, waitsForReview } from './restore.js';
+import { QUARANTINE_SHOWN, dormantProfiles, exportDocument, exportEntry, policyLine, quarantineTime, restoreNotice, restoreReview, tokenText, waitsForReview } from './restore.js';
 import './styles.css';
 
 const root = document.querySelector('#app');
@@ -954,10 +954,13 @@ const fieldLabel = key => products[product]?.fields.find(([name]) => name === ke
 function reviewCard() {
   const review = restoreReview(state);
   if (api.profile !== DEFAULT_PROFILE || !review) return null;
-  const when = review.restoreAt ? `偵測到還原（${noticeTime(review.restoreAt)}）` : review.dormantAt ? `休眠帳號的權杖已撤銷（${noticeTime(review.dormantAt)}）` : '還原紀錄';
+  // HM-13c review S-2: the record "revoke all" writes over one that could not be read names neither a restore nor a
+  // dormant revocation; one that cannot be read has a way out in the panel ("revoke all" rebuilds it).
+  const rebuilt = review.pending !== null && !review.restoreAt && !review.dormantAt;
+  const when = review.restoreAt ? `偵測到還原（${noticeTime(review.restoreAt)}）` : review.dormantAt ? `休眠帳號的權杖已撤銷（${noticeTime(review.dormantAt)}）` : rebuilt ? '全部撤銷時重建的紀錄' : '還原紀錄';
   const parts = [review.pending === null
-    ? p('還原紀錄讀不到或格式不符：所有帳號的「重新產生權杖」暫停。仍可以全部撤銷或刪除帳號；請重新整理狀態，一再出現時請回報。')
-    : p(`${review.pending} 個帳號的權杖已撤銷，等你核對：逐一確認下面的名稱、後端身分與政策摘要是你要的（它們是備份當時的值），按「已核對」後才能到那個帳號重新產生權杖。設定不對的帳號可以直接刪除。`)];
+    ? p('還原紀錄讀不到或格式不符：所有帳號的「重新產生權杖」暫停。到「診斷與維護」按「全部撤銷」，會撤銷每個帳號的權杖並重建紀錄，之後逐帳號核對就能重新產生；也可以直接刪除帳號。請先重新整理狀態，一再出現時請回報。')
+    : p(`${rebuilt ? '還原紀錄先前讀不到，全部撤銷時已重建。' : ''}${review.pending} 個帳號的權杖已撤銷，等你核對：逐一確認下面的名稱、後端身分與政策摘要是你要的（它們是還原或撤銷當時記下的值），按「已核對」後才能到那個帳號重新產生權杖。設定不對的帳號可以直接刪除。`)];
   // A list without its revision (the index cannot be used, or the list cannot be read) changes nothing: say so rather
   // than offer a button that cannot act (HM-11 review observation 4's lesson).
   if (profiles?.revision === null) parts.push(p('帳號清單目前不能變更（例如帳號索引無法使用），暫時無法核對或刪除帳號。帳號索引無法使用時，請先「隔離帳號索引」，再回來核對；其他情況請重新整理狀態。'));
@@ -991,7 +994,7 @@ function reviewRows(view) {
 }
 async function reviewProfile(row, name) {
   if (busy || !profiles || profiles.revision === null) return;
-  if (!await confirmAction(`已核對帳號「${name}」（${shortId(row.id)}）？`, '請先確認卡片上的名稱、後端身分欄位與政策摘要都是你要的（它們是備份當時的值）。核對後就能到這個帳號重新產生權杖；不對的話請改按「刪除」，或先到該帳號修改設定。', '確認已核對', { scoped: false })) return;
+  if (!await confirmAction(`已核對帳號「${name}」（${shortId(row.id)}）？`, '請先確認卡片上的名稱、後端身分欄位與政策摘要都是你要的（它們是還原或撤銷當時記下的值）。核對後就能到這個帳號重新產生權杖；不對的話請改按「刪除」，或先到該帳號修改設定。', '確認已核對', { scoped: false })) return;
   const revision = profiles.revision;
   await task(async () => {
     await api.reviewProfile(row.id, revision);
@@ -1005,11 +1008,14 @@ async function goRotate(id) {
   await show(id);
 }
 function quarantineList(entries) {
+  // HM-13c review S-5: the first QUARANTINE_SHOWN only (the list keeps them all); the rest come up as these are deleted.
+  const more = entries.length - QUARANTINE_SHOWN;
   return el('div', { class: 'stack', id: 'quarantined-profiles' }, el('h3', {}, '隔離的帳號資料'),
     p('還原時讀不到設定、被移到隔離區的帳號資料：不會服務 MCP 請求，不能選擇或重新產生權杖，只能刪除。確認不需要後逐一刪除；刪除前會先撤銷讀得到的權杖並抹除憑證。'),
     profiles.revision === null ? p('帳號清單目前不能變更，暫時無法刪除。') : null,
-    el('ul', { class: 'orphan-list' }, ...entries.map(entry => el('li', {}, el('span', {}, `帳號資料（${shortId(entry.id)}，隔離於 ${quarantineTime(entry.name)}）`),
-      button('刪除', () => deleteQuarantined(entry), { disabled: profiles.revision === null, 'aria-label': `刪除隔離的帳號資料（${shortId(entry.id)}，${quarantineTime(entry.name)}）` })))));
+    el('ul', { class: 'orphan-list' }, ...entries.slice(0, QUARANTINE_SHOWN).map(entry => el('li', {}, el('span', {}, `帳號資料（${shortId(entry.id)}，隔離於 ${quarantineTime(entry.name)}）`),
+      button('刪除', () => deleteQuarantined(entry), { disabled: profiles.revision === null, 'aria-label': `刪除隔離的帳號資料（${shortId(entry.id)}，${quarantineTime(entry.name)}）` })))),
+    more > 0 ? el('p', { class: 'quarantine-more' }, `另有 ${more} 筆隔離的帳號資料沒有列出（這裡最多列 ${QUARANTINE_SHOWN} 筆）；刪除上面的之後，其餘的會依序出現。`) : null);
 }
 // The quarantine directories, on the diagnostics page whichever profile is shown (they are the add-on's, as orphans).
 function quarantinedCard() {

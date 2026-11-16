@@ -106,11 +106,14 @@ export const tokenText = token => ({ revoked: '權杖已撤銷', already_revoked
 export const waitsForReview = row => ['revoked', 'already_revoked'].includes(row.token) && row.reviewedAt === null;
 
 // The profile list's quarantine directories ("quarantined", only when there is one): [{name, id}], their id the
-// name's. Anything else refuses the list (as its orphans do).
+// name's. Anything else refuses the list (as its orphans do). Every one is kept, however many (HM-13c review S-5: a
+// forged backup or many restores may leave more than the panel shows; refusing the list would leave none of them
+// deletable): the panel shows the first QUARANTINE_SHOWN and says how many more there are.
+export const QUARANTINE_SHOWN = 64;
 export function quarantinedEntries(value) {
   const entries = value?.quarantined;
   if (entries === undefined) return [];
-  if (!Array.isArray(entries) || entries.length > 64) throw new UiError('帳號清單格式不符，無法顯示。');
+  if (!Array.isArray(entries)) throw new UiError('帳號清單格式不符，無法顯示。');
   const seen = new Set();
   return entries.map(entry => {
     const match = entry && typeof entry === 'object' && !Array.isArray(entry) && Object.keys(entry).sort().join() === 'id,name'
