@@ -296,12 +296,15 @@ export class AdminApi {
     if (receipt.state !== 'completed') throw new UiError('帳號操作結果尚未確認；原識別碼已保留，請重送或核對帳號清單。');
     const keys = result && typeof result === 'object' ? Object.keys(result).sort().join() : '';
     const gone = route === 'profiles/create' && receipt.replayed && keys === 'id,operation' && isExtraProfile(result.id);
-    const confirmed = route === 'profiles/create' ? gone || isExtraProfile(result?.id) && profileRows({ profiles: [{ ...result, operation: undefined }, defaultRow] }).length === 2
+    // The created row as the list rules read it: a label this browser cannot show is not passed on (review S-2).
+    const created = route === 'profiles/create' && !gone && isExtraProfile(result?.id)
+      ? profileRows({ profiles: [{ ...result, operation: undefined }, defaultRow] })[0] : null;
+    const confirmed = route === 'profiles/create' ? gone || created !== null
       : route === 'profiles/delete' ? result?.deleted === pending.profile
         : typeof result?.quarantined === 'string' && QUARANTINE_NAME.test(result.quarantined);
     if (!confirmed) throw new UiError('伺服器未回傳預期的帳號確認；請重新整理帳號清單。');
     this.operations.clear(PROFILES_SCOPE);
-    if (route === 'profiles/create') return gone ? { id: result.id, label: null, replayed: true, gone: true } : { id: result.id, label: result.label, replayed: receipt.replayed };
+    if (route === 'profiles/create') return gone ? { id: result.id, label: null, replayed: true, gone: true } : { id: result.id, label: created.label, replayed: receipt.replayed };
     return route === 'profiles/delete' ? { deleted: result.deleted, replayed: receipt.replayed } : { quarantined: result.quarantined, replayed: receipt.replayed };
   }
   createProfile(label, revision) { return this.changeProfiles('profiles/create', revision, { label }); }

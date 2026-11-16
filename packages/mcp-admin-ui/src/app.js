@@ -188,8 +188,10 @@ async function createProfile() {
   const revision = profiles.revision;
   let created = null;
   await task(async () => { created = await api.createProfile(label, revision); });
-  if (created) await show(created.id, `已建立帳號「${created.label}」（${shortId(created.id)}），並切換到這個帳號。請到「後端連線」設定它自己的後端。`);
+  if (created) await show(created.id, `已建立${createdName(created)}，並切換到這個帳號。請到「後端連線」設定它自己的後端。`);
 }
+// A created profile named in a notice: its label, unless this browser cannot show it (review S-2).
+const createdName = created => created.label === null ? `帳號（${shortId(created.id)}）` : `帳號「${created.label}」（${shortId(created.id)}）`;
 async function renameProfile() {
   const row = currentRow();
   if (busy || !row || !isExtraProfile(row.id) || profiles.revision === null) return;
@@ -310,7 +312,7 @@ function pendingProfileOperationCard() {
       // A created profile deleted since (HM-10 replays it as its id alone): confirmed, but there is nothing to switch to.
       if (result && creating && result.gone) await show(DEFAULT_PROFILE, `已確認先前建立帳號「${pending.label}」已完成，但這個帳號（${shortId(result.id)}）之後已被刪除（可能在其他分頁或由其他管理員刪除）；已切回預設帳號。${forget(result.id) ? '它尚未確認的操作紀錄已一併清除。' : ''}`);
       else if (result && quarantining) await show(DEFAULT_PROFILE, quarantined(result));
-      else if (result) await show(creating ? result.id : DEFAULT_PROFILE, creating ? `已確認建立帳號「${result.label}」，並切換到這個帳號。`
+      else if (result) await show(creating ? result.id : DEFAULT_PROFILE, creating ? `已確認建立${createdName(result)}，並切換到這個帳號。`
         : `${result.missing ? `帳號（${shortId(result.deleted)}）已不存在，不需要再刪除` : '已確認刪除帳號'}；已切回預設帳號。${forget(result.deleted) ? '該帳號尚未確認的操作紀錄已一併清除。' : ''}`);
     }), button('已核對帳號清單', async () => {
       if (!await confirmAction('結束這筆帳號操作的追蹤？', '請先核對帳號清單。這只清除此分頁的識別紀錄，不會復原或證明先前操作未執行。')) return;
