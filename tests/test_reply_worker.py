@@ -1061,6 +1061,12 @@ def quota_name(profile_id):
     return 'DEFAULT_PROFILE_QUOTA' if profile_id == 'default' else 'EXTRA_PROFILE_QUOTA'
 
 
+def body_bytes(gate):
+    """What the profile's requests hold of the add-on's request body budget now (HM-31: its share of one budget, charged
+    by its app; HM-08's own per-profile count is gone)."""
+    return gate.budget_share.budget.used(gate.profile_id)
+
+
 @pytest.mark.parametrize('owner', ['default', B], ids=['default-profile', 'additional-profile'])
 async def test_answers_not_received_yet_past_the_budget_refuse_the_profiles_next_tools_call(tmp_path, log_scan,
                                                                                             monkeypatch, owner):
@@ -1191,7 +1197,7 @@ async def test_the_charge_is_given_back_however_a_request_ends(tmp_path, log_sca
                 await until(lambda: gate.reply_bytes >= 300 * 1024, 10)
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
-                assert (gate.reply_bytes, gate.active, gate.body_bytes) == (0, 0, 0)
+                assert (gate.reply_bytes, gate.active, body_bytes(gate)) == (0, 0, 0)
             small, small_taken = asgi_request(runtime.mcp_app, headers, json.dumps(call(32)).encode())
             await asyncio.wait_for(small, 10)
             assert gate.reply_bytes == 0
@@ -1246,8 +1252,8 @@ SLOW_READS = {
 async def test_a_slow_reader_holds_no_more_than_its_pending_reply_budget(tmp_path, log_scan, content):
     """contract 6 (慢讀用戶端), on the real listener (uvicorn, h11): B's client asks for 8 MiB answers one after another
     and never reads them, JSON answers and event streams whose requests carry 4 MiB of arguments (an open stream keeps
-    its forwarded body: charged to B's byte budget, HM-08): ASCII, four of them; emoji, two (each charged as the gateway
-    serializes it). Once they hold B's 32 MiB, B's next tools/call is answered 200 + -32003 at once and never forwarded;
+    its forwarded body: charged to B's share of the request body budget, HM-08, HM-31): ASCII, four of them; emoji, two
+    (each charged as the gateway serializes it). Once they hold B's 32 MiB, B's next tools/call is answered 200 + -32003 at once and never forwarded;
     the default profile and C are served as before. The management process's RSS grows by at most B's pending replies
     32 MiB + one processing's amplification 200 MiB + 64 MiB = 296 MiB. When the client leaves, every byte is given back
     and B is served again."""
@@ -1300,7 +1306,7 @@ async def test_a_slow_reader_holds_no_more_than_its_pending_reply_budget(tmp_pat
                             raise AssertionError(('answer', number, 'charged', gate.reply_bytes, 'calls', child.tool_calls,
                                                   'active', gate.active)) from None
                     assert gate.reply_bytes == charged and charged >= 32 * MiB
-                    assert gate.body_bytes >= forwarded  # the open streams still hold their forwarded bodies
+                    assert body_bytes(gate) >= forwarded  # the open streams still hold their forwarded bodies
                     sent = child.tool_calls
                     loop = asyncio.get_running_loop()
                     begun = loop.time()
@@ -1316,11 +1322,11 @@ async def test_a_slow_reader_holds_no_more_than_its_pending_reply_budget(tmp_pat
                     await asyncio.sleep(0.2)
                 growth = rss.peak - baseline
                 print(f'HM-30 slow reader ({content}): B pending {gate.reply_bytes / MiB:.1f} MiB, byte budget '
-                      f'{gate.body_bytes / MiB:.1f} MiB, RSS growth {growth / MiB:.0f} MiB (contract 6: 296)')
+                      f'{body_bytes(gate) / MiB:.1f} MiB, RSS growth {growth / MiB:.0f} MiB (contract 6: 296)')
                 assert growth <= (32 + 200 + 64) * MiB, growth / MiB
                 for writer in writers:
                     writer.close()
-                await until(lambda: gate.reply_bytes == 0 and gate.body_bytes == 0 and gate.active == 0, 20)
+                await until(lambda: gate.reply_bytes == 0 and body_bytes(gate) == 0 and gate.active == 0, 20)
                 again = await client.post('/mcp', headers=headers, json=call(49))
                 assert again.status_code == 200 and again.content == served(exact_reply(49, eight, fill))
     finally:
