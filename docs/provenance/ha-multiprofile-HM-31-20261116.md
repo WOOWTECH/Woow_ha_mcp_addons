@@ -14,8 +14,8 @@
   請求回應改變（第 8 節逐項）；上限內的請求逐位元照舊，HM-01 的黃金回歸與兩個契約凍結斷言一個字都沒改（第 7 節逐組核對）。
   repo 裡的 `MULTI_PROFILE_PRODUCTS` 維持空集合。
 - **HM-08 的每帳號位元組額度併成一套**：新模組 `request_budget.py`，全 add-on 一份預算、每帳號一個份額，兩層都放得下才放行（PaaS）。
-  HM-08 和 PaaS 不同的地方逐項取 PaaS 的做法；HA 較嚴而保留的寫進契約第 9 節（加嚴 #98 份額上限 64 MiB、#99 轉送的大小也扣），
-  平台差異寫成部署或既有（#100～#104；審查後加 #105：h11 的 `Content-Length`＋`Transfer-Encoding`）。HM-08 的拒絕小額度（同時 8 個、合計 512 KiB）拿掉。
+  HM-08 和 PaaS 不同的地方逐項取 PaaS 的做法；HA 較嚴而保留的寫進契約第 9 節（加嚴 #101 份額上限 64 MiB、#102 轉送的大小也扣），
+  平台差異寫成部署或既有（#103～#107；審查後加 #108：h11 的 `Content-Length`＋`Transfer-Encoding`）。HM-08 的拒絕小額度（同時 8 個、合計 512 KiB）拿掉。
 - **常數的推導**：PaaS 公式 (上限−76−帳號數×子程式 MiB−150)÷20（16 MiB～16 GiB）。上限取 cgroup 記憶體上限；HA 的 add-on 通常沒有，
   改取 MemAvailable 減 256 MiB（計畫 §5.2 的「MemAvailable－保留量」）；都讀不到固定 32 MiB。每帳號份額＝min(64 MiB, max(16 MiB, 全 add-on÷2))。
   啟動時讀一次。全部暫定，待 HM-19c 量測（第 11 節）。
@@ -59,10 +59,10 @@
 | `tests/test_profile_quotas.py` | HM-08 的位元組額度測試改成一套預算的份額：PaaS 表、准入滿的小請求、攻擊方（12 條 16 MiB，4 條扣、8 條讀完丟掉回 503）、SSE 期間的持有量（被拒的改成 200＋id）、歸還；拒絕小額度的測試換成 `beyond_admission` 的讀取工具 |
 | `tests/test_gateway_busy_shapes.py`、`tests/test_profile_routing.py` | `ProfileGate` 的第三個參數、歸還的檢查改看 `manager.budget` |
 | `tests/test_n8n_request_bounds.py` | 深度超過 64 一案改成結構守門的回應（200＋id 7） |
-| `docs/multi-profile/contract.md` | 第 0、1.2、2.2、2.4、4.2、5、9、10 節（第 3 節表）；審查後改第 1.2、2.2、2.4、4.2、5 節，第 9 節 #81、#98 與新的 #105，第 10 節一列 |
+| `docs/multi-profile/contract.md` | 第 0、1.2、2.2、2.4、4.2、5、9、10 節（第 3 節表）；審查後改第 1.2、2.2、2.4、4.2、5 節，第 9 節 #81、#101 與新的 #108，第 10 節一列 |
 | `docs/multi-profile/threat-model.md` | I8 的做法與測試欄；第 3 節改兩條、加四條；審查後 I8 的測試欄、第 3 節改三條（位元組、共用預算、推導）、加兩條（結構守門的 CPU、`Content-Length`＋`Transfer-Encoding`） |
 | `docs/multi-profile/decisions.md` | 第 1.1 節（兩項計畫外的決定）、變更紀錄一列 |
-| `docs/multi-profile/acceptance-matrix.md` | T-19；測試檔登記表加三個新檔；審查後 RG 一列與 T-19 的差異列號（#105） |
+| `docs/multi-profile/acceptance-matrix.md` | T-19；測試檔登記表加三個新檔；審查後 RG 一列與 T-19 的差異列號（#108） |
 | `docs/multi-profile/ledger-tracking.md` | 新模組表加 `request_budget.py`；三個既有列補 HM-31 |
 | `docs/provenance/runtime-patches.json` | 新增 `request_budget.py`；更新 `gateway.py`、`profile_router.py`、`profile_runtime.py`、`request_limits.py`、`profiles.py`；審查後重算 `request_budget.py`、`gateway.py`、`profile_router.py` |
 | 本筆記 | — |
@@ -70,7 +70,7 @@
 沒改：`run_product.py`、`apps/`（含 `apps/n8n/run.py`：n8n 經 `make_apps` 自動拿到預算與守門）、`lifecycle.py`、`health.py`、`config.py`、
 `packaging/`、`addons/<x>/`、版號、CHANGELOG、`upgrade-notes.yaml`、`docs/tool-surface.*`（沒動 `apps/runtime/*.py`、`apps/*/launch.py`）、
 `tests/conftest.py`、`tests/contract/profiles_v1_cases.json`（第 7 節）、`paas-test-mapping.md`、`deviation-trace.md`（兩份由 repo 外的產生器重產，
-不手改；本片的對照在第 5 節、差異在契約第 9 節 #98～#105）。
+不手改；本片的對照在第 5 節、差異在契約第 9 節 #101～#108）。
 
 ## 3. 設計重點
 
@@ -79,24 +79,24 @@
 | 項目 | HM-08（`351666f`） | PaaS #155（`d7f5849`） | HM-31 |
 |---|---|---|---|
 | 預算的層 | 每帳號 64 MiB，沒有全 add-on 的池 | 全域＋每帳號份額，兩層都過才放行 | **照 PaaS**（共用的只有全 add-on 預算與 8081 外框；契約第 5 節、§9 #15） |
-| 每帳號份額 | 64 MiB | 全域÷2，至少 16 MiB，沒有上限 | min(64 MiB, max(16 MiB, 全域÷2))：**加嚴**（§9 #98，DQ-07 的 64 MiB 保留成上限、沒改數值） |
-| 預設值 | 固定 64 MiB | 依容器記憶體上限推導（公式、放大 20） | 照 PaaS 公式；HA 沒有 Pod 上限，上限改取 MemAvailable−256 MiB（**部署**，§9 #100） |
+| 每帳號份額 | 64 MiB | 全域÷2，至少 16 MiB，沒有上限 | min(64 MiB, max(16 MiB, 全域÷2))：**加嚴**（§9 #101，DQ-07 的 64 MiB 保留成上限、沒改數值） |
+| 預設值 | 固定 64 MiB | 依容器記憶體上限推導（公式、放大 20） | 照 PaaS 公式；HA 沒有 Pod 上限，上限改取 MemAvailable−256 MiB（**部署**，§9 #103） |
 | 誰生效 | 只有開通的產品 | 全部（PaaS 沒有開關） | **全部，不受開關管**（使用者決定；契約第 1.2 節） |
 | 什麼時候開始扣 | 准入時（讀 body 前、token 只比過摘要） | proxy 驗過 token 之後、讀 body 之前 | **照 PaaS**：帳號 app 驗過 token（與方法、Origin、query）之後；沒驗過 token 的請求一個位元組都不扣（防沒有 token 的人佔滿預算） |
 | 扣到什麼時候 | 請求結束（MF-1） | 送往子行程的回應結束（transport detach） | 請求結束（`AnyMethod` 的 finally；SSE 串流結束才還）：兩者等價 |
 | 小請求 | 每個請求都扣 | ≤64 KiB 不扣、不拒 | **照 PaaS**（收到與轉送都 ≤64 KiB 才算小） |
-| 扣的大小 | max(宣告, 已讀, 轉送) | 宣告或已讀（原樣轉送） | 收到的與轉送的兩者較大的：**加嚴**（§9 #99；HA 重新序列化，HM-08 審查 S-1） |
+| 扣的大小 | max(宣告, 已讀, 轉送) | 宣告或已讀（原樣轉送） | 收到的與轉送的兩者較大的：**加嚴**（§9 #102；HA 重新序列化，HM-08 審查 S-1） |
 | 超過單筆上限 | 宣告的扣到 16 MiB 為止 | 不扣（之後回 413） | 照 PaaS 不扣：宣告超過的在讀第一個位元組之前就回今天的 413（審查 MF-3；n8n 的 4 MiB 本來就這樣）；沒宣告、讀超過的邊讀邊扣，超過上限那一刻全部還回去，回今天的 413。審查前寫「照 PaaS」，其實宣告超過的會邊讀邊扣、預算放不下時回可重試的 `-32003`（審查 E5），已改 |
-| 宣告長度與 `Transfer-Encoding` | 分派器照實際讀到的位元組扣 | 宣告了就只扣宣告值；PaaS 的 httptools 拒收 CL＋TE（未實測） | HA 是 h11：帶 `Transfer-Encoding` 時 `Content-Length` 不算宣告（RFC 9112 §6.3），收到的位元組一律照數（審查 MF-1；§9 #105） |
+| 宣告長度與 `Transfer-Encoding` | 分派器照實際讀到的位元組扣 | 宣告了就只扣宣告值；PaaS 的 httptools 拒收 CL＋TE（未實測） | HA 是 h11：帶 `Transfer-Encoding` 時 `Content-Length` 不算宣告（RFC 9112 §6.3），收到的位元組一律照數（審查 MF-1；§9 #108） |
 | 宣告長度放不下 | 讀之前拒絕；≤64 KiB 用拒絕小額度讀出 id，更大的 503 不讀 | 讀之前拒絕，內容讀完丟掉，只留頭尾找 id（200 或 503） | **照 PaaS**（丟的時候閒置 30 秒、整體 60 秒就不再等；用戶端離開回 499） |
 | 讀到一半放不下 | 停讀，app 看到斷線，換成 503 id null | 停讀，id 從已讀的開頭找（200 或 503） | **照 PaaS** |
-| 轉送的大小放不下 | 200＋id（不送） | （沒有） | 保留（#99 的一部分） |
+| 轉送的大小放不下 | 200＋id（不送） | （沒有） | 保留（#102 的一部分） |
 | 讀取閒置 | 沒有 | 已登記的大請求 30 秒，408＋`-32003`＋`Connection: close` | **照 PaaS** |
-| 整體讀取期限 | 60 秒（`BODY_SECONDS`，每個請求），408 `{"error":"request denied"}` | 已登記的大請求 300 秒，408＋`-32003` | 保留 HA 的 60 秒與今天的回應形狀（**既有**，§9 #102：比 PaaS 嚴，而且不改單帳號既有的 408） |
+| 整體讀取期限 | 60 秒（`BODY_SECONDS`，每個請求），408 `{"error":"request denied"}` | 已登記的大請求 300 秒，408＋`-32003` | 保留 HA 的 60 秒與今天的回應形狀（**既有**，§9 #105：比 PaaS 嚴，而且不改單帳號既有的 408） |
 | 拒絕小額度 | 全 add-on 共用：同時 8 個、合計 512 KiB | （沒有） | **拿掉**：准入滿時的讀取照 MF-2 (b) 不限數量；預算拒絕改成讀完丟掉，不需要額度 |
-| 准入滿時的小請求 | 用拒絕小額度讀出 id；通知 503 | （沒有准入） | MF-2 (b)：讀進來，通知或回應照常處理，其他回忙碌（§9 #94 改成部署） |
-| 結構守門 | 只有 n8n（深度 64、工具參數 10,000） | 每個產品：深度 64、整個請求 20 萬個元素、只收 UTF-8 | **照 PaaS**（Headscale 照 HA 的預設，§9 #103；不是 JSON 照今天 400，§9 #104） |
-| 設定入口 | 程式常數 | 4 個環境變數 | 程式常數（**部署**，§9 #101、#45） |
+| 准入滿時的小請求 | 用拒絕小額度讀出 id；通知 503 | （沒有准入） | MF-2 (b)：讀進來，通知或回應照常處理，其他回忙碌（§9 #96 改成部署） |
+| 結構守門 | 只有 n8n（深度 64、工具參數 10,000） | 每個產品：深度 64、整個請求 20 萬個元素、只收 UTF-8 | **照 PaaS**（Headscale 照 HA 的預設，§9 #106；不是 JSON 照今天 400，§9 #107） |
+| 設定入口 | 程式常數 | 4 個環境變數 | 程式常數（**部署**，§9 #104、#45） |
 | WARNING | 每帳號每情況 60 秒一行 | 每帳號每情況 60 秒一行（P2-D：預算、閒置、結構、編碼、超過單筆上限） | 照 PaaS；沒開通的產品寫 `profile=default` |
 | `-32003` 文字 | 「這個 MCP 網址進行中的請求內容已達這個帳號的上限」 | 分「這個 MCP 網址」與「這台 MCP 伺服器（所有網址合計）」 | **照 PaaS 原文**（`budget_text`） |
 
@@ -148,7 +148,7 @@ token 檢查 → 租約 → 方法 405 → Origin 403 → query 400 →（HM-31�
 |---|---|---|
 | 1 | `test_defaults_derive_from_the_cgroup_memory_limit` | RB `test_defaults_follow_the_paas_formula_on_a_cgroup_limit` |
 | 2 | `test_defaults_without_a_cgroup_limit_and_clamps` | RB `test_without_any_memory_reading_the_budget_is_fixed_and_small_ceilings_are_clamped`；HA 另加 `test_without_a_cgroup_limit_memavailable_less_the_reserve_is_the_ceiling`（沒有 cgroup 上限時用 MemAvailable−256） |
-| 3 | `test_environment_overrides_and_invalid_values_warn` | **不適用**：HA 不讀環境變數（契約 §9 #101、#45）；RB `test_the_add_on_reads_no_environment_variable` 釘住設了也不生效 |
+| 3 | `test_environment_overrides_and_invalid_values_warn` | **不適用**：HA 不讀環境變數（契約 §9 #104、#45）；RB `test_the_add_on_reads_no_environment_variable` 釘住設了也不生效 |
 | 4 | `test_small_requests_are_never_charged_or_refused` | RB 同名（另含轉送 ≤64 KiB） |
 | 5 | `test_profile_and_global_limits_are_independent` | RB 同名 |
 | 6 | `test_every_profile_can_always_send_one_maximum_size_request` | RB 同名 |
@@ -187,7 +187,7 @@ token 檢查 → 租約 → 方法 405 → Origin 403 → query 400 →（HM-31�
 | 14 | `test_too_deep_body_is_refused_and_the_message_has_no_content` | RS `test_a_too_deep_body_is_refused_and_the_message_has_no_content` |
 | 15 | `test_batch_without_a_recoverable_id_is_refused_with_413` | RS `test_a_body_without_a_recoverable_id_is_refused_with_413` |
 | 16 | `test_legitimate_large_calls_still_forward` | RS `test_legitimate_large_calls_still_forward`（另加中文與 emoji 原樣轉送） |
-| 17 | `test_non_json_and_non_post_behave_as_before` | RS `test_not_json_and_bodiless_requests_answer_as_before`（HA 不是 JSON 照今天 400；PaaS 轉送：§9 #104） |
+| 17 | `test_non_json_and_non_post_behave_as_before` | RS `test_not_json_and_bodiless_requests_answer_as_before`（HA 不是 JSON 照今天 400；PaaS 轉送：§9 #107） |
 
 ### 5.3 `test_gateway_budget_defaults.py`（7 個函式）
 
@@ -198,7 +198,7 @@ token 檢查 → 租約 → 方法 405 → Origin 403 → query 400 →（HM-31�
 | 3 | `test_more_accounts_or_heavier_children_shrink_the_budget` | RB 同名；帳號數依開關：`test_switched_off_counts_one_account_and_switched_on_the_products_capacity` |
 | 4 | `test_formula_matches_the_documented_arithmetic` | RB 同名 |
 | 5 | `test_small_pod_is_clamped_to_the_single_request_ceiling` | RB `test_a_small_ceiling_is_clamped_to_the_single_request_ceiling` |
-| 6 | `test_environment_variables_still_win` | **不適用**：HA 不讀環境變數（§9 #101）；RB `test_the_add_on_reads_no_environment_variable` |
+| 6 | `test_environment_variables_still_win` | **不適用**：HA 不讀環境變數（§9 #104）；RB `test_the_add_on_reads_no_environment_variable` |
 | 7 | `test_amplification_covers_the_measured_worst_case_under_the_structure_guard` | RB `test_the_amplification_covers_the_measured_worst_cases` |
 
 ### 5.4 `test_gateway_budget_round2.py`（10 個函式）
@@ -248,7 +248,7 @@ token 檢查 → 租約 → 方法 405 → Origin 403 → query 400 →（HM-31�
 | 26 | `test_utf16_pathological_body_is_refused_and_json_loads_is_never_called` | RS `test_utf16_bodies_are_refused_and_never_parsed`（把閘道的 `strict_json` 換成一呼叫就失敗的替身） |
 | 27 | `test_valid_utf8_cjk_and_emoji_is_forwarded_and_parsed` | RS `test_legitimate_large_calls_still_forward`（第三個 body，子程式收到的參數逐字相同） |
 | 28 | `test_structure_refusals_log_one_throttled_warning_per_profile` | RS `test_structure_refusals_log_one_throttled_warning_per_profile_and_kind` |
-| 29 | `test_total_upload_deadline_env_is_validated` | **不適用**：不讀環境變數；整體期限是 HA 既有的 `BODY_SECONDS` 60 秒（§9 #102） |
+| 29 | `test_total_upload_deadline_env_is_validated` | **不適用**：不讀環境變數；整體期限是 HA 既有的 `BODY_SECONDS` 60 秒（§9 #105） |
 | 30 | `test_a_trickling_upload_is_dropped_at_the_total_deadline_even_if_it_never_goes_idle` | RG `test_a_trickling_upload_ends_at_the_whole_read_limit_as_before`（HA：60 秒、今天的 408 形狀） |
 
 合計 84 個函式（參數化的算一案）：78 個有 HA 對應（其中 5.2 #13 的 `messages/` 與 5.4 #1 的環境變數 WARNING 兩部分不適用），6 個整案不適用
@@ -521,9 +521,9 @@ PQ 的 SSE 三案）；份額上限 64 MiB（RB `test_each_profiles_share_is_cap
 |---|---|---|
 | 2026-11-16 07:1x 使用者 | 對齊 PaaS #155、所有產品都生效（不受開關管） | 全片；`decisions.md` 第 1.1 節記下 |
 | 2026-11-16 07:5x 主對話（HM-14 審查 MF-2 (b)） | 不改 DQ-07 的數值；准入滿時仍讀 ≤64 KiB 的小請求，是通知或回應就走保留名額 | 第 3.3 節；`decisions.md` 第 1.1 節記下 |
-| DQ-07 (a)＋DQ-29 | 名額與記憶體規則；數值暫定、HM-19c 定案 | 數值都沒改；64 MiB 當份額的上限（§9 #98） |
+| DQ-07 (a)＋DQ-29 | 名額與記憶體規則；數值暫定、HM-19c 定案 | 數值都沒改；64 MiB 當份額的上限（§9 #101） |
 | DQ-33、DQ-36 | 本機短 TMPDIR、以 CI 為準；commit 不加 AI 署名 | 第 9 節；commit |
-| §8.8 #45（契約第 9 節） | 程式常數、不讀部署層設定 | 不讀 PaaS 的環境變數（§9 #101） |
+| §8.8 #45（契約第 9 節） | 程式常數、不讀部署層設定 | 不讀 PaaS 的環境變數（§9 #104） |
 
 沒有碰到別的待定題。下面兩點是本片的判斷，請主對話確認（不是使用者定過的數值，也不是 DQ）：(1) 每帳號份額保留 DQ-07 的 64 MiB 當上限
 （不改數值，只限制 PaaS 的「全域÷2」不超過它）；(2) 整體讀取上限保留 HA 既有的 60 秒與今天的 408 形狀（PaaS 300 秒、-32003），只加 PaaS 的
@@ -586,9 +586,9 @@ PQ 的 SSE 三案）；份額上限 64 MiB（RB `test_each_profiles_share_is_cap
   MemAvailable 推導要不要只取一部分、同機多個 add-on 要不要分攤（S-5）；下限時的份額（S-1）；守門慢路徑的 CPU（S-3）。
 - **HM-18**：把契約第 1.2、2.4、5 節本片的文字與威脅模型第 3 節本片加的五條寫進產品 DOCS。
 - **發版片**：第 8 節的 CHANGELOG 句子。
-- **HM-29（給 PaaS 的回補建議）**：收到的位元組不管宣告都照數（§9 #105）；結構守門慢路徑的優化（S-3）；閘道內副本數（審查 MF-2 (4)）。
+- **HM-29（給 PaaS 的回補建議）**：收到的位元組不管宣告都照數（§9 #108）；結構守門慢路徑的優化（S-3）；閘道內副本數（審查 MF-2 (4)）。
 - **repo 外**：FEATURE-MATRIX 補 FM-154；計畫 §5.2 的表格（位元組額度那一列）與 §12.3 HM-31 的「做法」可補一句「准入滿時讀小請求」；
-  `paas-test-mapping.md`、`deviation-trace.md` 由產生器重產（#98～#105）。
+  `paas-test-mapping.md`、`deviation-trace.md` 由產生器重產（#101～#108）。
 
 ## 16. 安全審查意見處理（2026-11-16；報告 `artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-31.md`，證據 `wave4/evidence-review-HM-31/`）
 
@@ -598,8 +598,8 @@ MF-2 的數字用審查的 E2（第 10.4 節）。審查的修法原型（`fix-p
 
 | 意見 | 結論 | 怎麼處理 | 測試／證據 | commit |
 |---|---|---|---|---|
-| MF-1（必修）：CL＋TE 繞過位元組預算與 30 秒閒置 | 成立；改程式（審查修法 (1)～(3)） | `request_budget.declared_length` 改讀 ASGI 標頭，帶 `Transfer-Encoding` 就當成沒宣告（RFC 9112 §6.3）；`watch` 照舊先扣宣告值，收到的位元組也一律照數；分派器准入滿時的讀取用同一條規則。(4) CL＋TE 直接回 400 **沒做**：會改單帳號回應，留給主對話（第 12 節）。契約第 1.2、2.2、2.4 節、§9 #105，威脅模型第 3 節 | RG 5 案、RB 2 案（第 6.3 節，7ee84eb 上先紅）；突變 N1、N2 | `725e7b1`、`3f21356` |
-| MF-2（必修）：記憶體上界與實測不符 | 成立；只改文件與測試名稱（審查修法 (1)～(3)；(4) 交 HM-19c） | 契約第 5 節「單一帳號有界」改成 HA 閘道的實測倍數、「全域最壞記憶體」改用本片的公式並算例、加 HM-19c 放行條件；§9 #98 的理由改寫；威脅模型第 3 節寫明「不含子程式」；RB 的 2 GiB 測試改名、說明它驗的是 PaaS 的 15.2 倍 | 審查 E2（第 10.4 節） | `725e7b1`（改名）、文件 commit |
+| MF-1（必修）：CL＋TE 繞過位元組預算與 30 秒閒置 | 成立；改程式（審查修法 (1)～(3)） | `request_budget.declared_length` 改讀 ASGI 標頭，帶 `Transfer-Encoding` 就當成沒宣告（RFC 9112 §6.3）；`watch` 照舊先扣宣告值，收到的位元組也一律照數；分派器准入滿時的讀取用同一條規則。(4) CL＋TE 直接回 400 **沒做**：會改單帳號回應，留給主對話（第 12 節）。契約第 1.2、2.2、2.4 節、§9 #108，威脅模型第 3 節 | RG 5 案、RB 2 案（第 6.3 節，7ee84eb 上先紅）；突變 N1、N2 | `725e7b1`、`3f21356` |
+| MF-2（必修）：記憶體上界與實測不符 | 成立；只改文件與測試名稱（審查修法 (1)～(3)；(4) 交 HM-19c） | 契約第 5 節「單一帳號有界」改成 HA 閘道的實測倍數、「全域最壞記憶體」改用本片的公式並算例、加 HM-19c 放行條件；§9 #101 的理由改寫；威脅模型第 3 節寫明「不含子程式」；RB 的 2 GiB 測試改名、說明它驗的是 PaaS 的 15.2 倍 | 審查 E2（第 10.4 節） | `725e7b1`（改名）、文件 commit |
 | MF-3（必修）：宣告超過 16 MiB 變成可重試的 `-32003` | 成立；改程式（審查建議的做法 1） | `gateway.body()` 讀之前，宣告值超過 `MAX_REQUEST`（沒有 `Transfer-Encoding`）就回今天的 413；回應位元組不變；8099 也經過 `body()`，同樣不變。第 3.1 節「超過單筆上限」一列更正（以前寫「照 PaaS」不對） | RG 1 案（含不讀任何位元組、帶 TE 的對照）；突變 N3、N4 | `725e7b1`、`3f21356` |
 | S-1：預算在下限時一個帳號就能讓所有帳號的大請求被拒 | 成立；先改寫法（採用），公式要不要改交主對話或 HM-19c | 契約第 5 節已知限制、威脅模型第 3 節改寫（以前「兩個帳號才能一起用光」在下限時不對） | 審查 r7 的算式（契約第 5 節的數字）；RB 既有的下限測試已釘住 16 MiB | 文件 commit |
 | S-2：drain 的閒置與整體界線、只留頭尾、尾端找 id、BOM 開頭的守門沒有測試 | 成立；採用：審查的 r2～r6 收進正式測試 | RG 4 案、RS 1 案（寫法照 RG、RS 既有的工具） | 突變 M01～M04、M15 全部擋下 | `725e7b1` |
