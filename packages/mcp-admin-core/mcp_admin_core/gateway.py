@@ -138,6 +138,17 @@ CHILD_CONNECTION_TEXT = (
     "The connection to the MCP server was interrupted while handling this request, but the MCP server process is still "
     "running. The operation may or may not have completed; check before retrying. (閘道與 MCP 子程式之間的連線在處理這個"
     "請求時中斷，但子程式仍在執行；這個操作可能已完成也可能沒有，請先確認再重試。)")
+# HM-14 after HM-09 (contract 2.5, 7): CHILD_STOPPED_TEXT, the PaaS text, says the child restarts automatically. It does
+# only in these Supervisor states (lifecycle.Supervisor.status) once the generation a request went to stopped: the
+# watchdog waits out its backoff, a start is under way, a new generation runs. In any other nothing restarts it now
+# (blocked: a disabled profile, too little memory, a refused start; failed: its monitor stopped, DQ-21; stopped: the
+# profile deleted or the add-on stopping; unconfigured: no connection saved), and the text says so instead.
+CHILD_RESTARTING_STATES = frozenset({"backoff", "starting", "running"})
+CHILD_HALTED_TEXT = (
+    "The MCP server process stopped while handling this request and is not restarting now (blocked, failed, stopped or "
+    "not configured; the add-on log says why). The operation may or may not have completed; check before retrying. "
+    "(MCP 子程式在處理這個請求時停止了，目前沒有在重新啟動（被擋下、失敗、已停止或沒有設定，原因見 add-on 的 log），"
+    "這個操作可能已完成也可能沒有，請先確認再重試。)")
 ACCESS_CHANGED_TEXT = (
     "The MCP token was rotated or revoked while this request was running, so the gateway stopped the response. "
     "Reconnect with the current MCP URL or token. (處理這個請求時 MCP 權杖已被輪替或撤銷，閘道已停止這個回應；請用目前的 "
@@ -704,7 +715,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     - the child's connection breaks while it handles a request (interrupted): before the answer's headers, 502 with the
       gateway's own -32004 error (under the request's id when it has one); on an event stream, one -32004 event under the
       POST's id, then the end. Its text says whether the child generation the request went to has stopped (looked at for
-      up to CHILD_EXIT_GRACE_SECONDS) or still runs; slot_busy.interrupted writes the profile's WARNING.
+      up to CHILD_EXIT_GRACE_SECONDS) or still runs, and of a stopped one whether it comes back by itself
+      (interruption_text: HM-09's Supervisor states); slot_busy.interrupted writes the profile's WARNING.
     - the token changes after the answer began to go out: the gateway's own ending (Ending), no exception for the server.
     - an initialize answer is handed to the client only while the child generation it went to still runs
       (OwnedInitializeResponse fence); otherwise backend_unavailable, no session.
@@ -804,19 +816,32 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             await asyncio.sleep(.02)
         return True
 
+    def interruption_text(stopped, generation):
+        """HM-14 (contract 2.5), read right after child_stopped, with no await between (the state the stop left): the
+        -32004 text. The child still runs: CHILD_CONNECTION_TEXT. It stopped: CHILD_STOPPED_TEXT ("it restarts
+        automatically", PaaS's) only while it comes back by itself (CHILD_RESTARTING_STATES, HM-09's watchdog), else
+        CHILD_HALTED_TEXT (blocked, failed, stopped or not configured: nothing restarts it now). No generation to
+        compare: the established wording."""
+        if not stopped:
+            return CHILD_CONNECTION_TEXT
+        if generation is None:
+            return CHILD_STOPPED_TEXT
+        state = (snapshot().get("child") or {}).get("state")
+        return CHILD_STOPPED_TEXT if state in CHILD_RESTARTING_STATES else CHILD_HALTED_TEXT
+
     async def interrupted_answer(owner, request, message, error):
         """HM-14 (switched on; contract 2.5): the child's connection broke before the answer's headers: 502 with the
         gateway's own -32004 error, under the request's id when it has one (null for a notification, a GET, a DELETE),
         its text by the cause, and the profile's WARNING (the HTTP method and the error's class, never a path, token or
         body). A session the child opened for an initialize is ended only while the child still runs."""
         stopped = await child_stopped(owner.generation)
+        text = interruption_text(stopped, owner.generation)
         if stopped:
             owner.end_session = None  # the session ended with its child
         await owner.close()
         slot_busy.interrupted(request.method, type(error).__name__, stopped)
         ident = request_id(message) if request.method == "POST" else None
-        return json_reply({"jsonrpc": "2.0", "id": ident, "error": {
-            "code": CHILD_INTERRUPTED, "message": CHILD_STOPPED_TEXT if stopped else CHILD_CONNECTION_TEXT}},
+        return json_reply({"jsonrpc": "2.0", "id": ident, "error": {"code": CHILD_INTERRUPTED, "message": text}},
                           502, {"Cache-Control": "no-store"})
 
     def capabilities(state, catalog):
@@ -1369,10 +1394,10 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             # come gets the gateway's own -32004 event under its id (a GET stream answers no request: it just ends);
             # the stream then ends normally, no exception for the server.
             stopped = await child_stopped(owner.generation)
+            text = interruption_text(stopped, owner.generation)
             slot_busy.interrupted("POST" if request is not None else "GET", type(owner.interrupted).__name__, stopped)
             if request is not None:
-                event = gateway_event(request[0], CHILD_INTERRUPTED,
-                                      CHILD_STOPPED_TEXT if stopped else CHILD_CONNECTION_TEXT)
+                event = gateway_event(request[0], CHILD_INTERRUPTED, text)
                 owner.reply_event = event  # HM-14 review S-1: this event answers the POST, as a reply does
                 yield event
                 owner.answered = True  # the server took it: an Ending adds no -32005 under the same id
