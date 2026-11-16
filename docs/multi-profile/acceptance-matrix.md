@@ -119,7 +119,7 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `packaging/test_validate.py` | HM-17 | 既有，擴充 | 多產品版號運算式 |
 | `packaging/test_release_gate.py` | HM-17 | 既有，擴充 | release_gate 只認產品自己的紀錄 |
 | `tests/test_saved_destinations.py` | HM-20 | 既有，擴充 | 開通後存檔拒 loopback（全部產品，含 n8n；各種寫法）；區網照放；沒開通與替身開關照今天 |
-| `tests/test_backend_loopback.py` | HM-20 | 新增 | 開通後子程式環境多 `WOOW_MCP_DENY_LOOPBACK=1`（預設帳號與額外帳號的 port 都有），執行期字面與解析後的 loopback 都拒（每個產品；n8n 的 API 與官方 MCP 端點，含混合答案）；`apps/` 的子程式程式碼不拿掉這個變數（看原始碼）；webhook 維持 permissive；替身開關只在測試 |
+| `tests/test_backend_loopback.py` | HM-20 | 新增 | 開通後子程式環境多 `WOOW_MCP_DENY_LOOPBACK=1`（預設帳號與額外帳號的 port 都有），執行期字面與解析後的 loopback 都拒（每個產品；n8n 的 API 與官方 MCP 端點，含混合答案）；`apps/` 的子程式程式碼不拿掉這個變數（看原始碼）；HM-09 的 exec 包裝器原樣交給額外帳號的子程式（看原始碼；端到端：`run_product` 的 ProfileManager 起真的預設帳號與額外帳號 Odoo 子程式，各自的 loopback 假後端收到 0 個請求）；webhook 維持 permissive；替身開關只在測試 |
 | `packaging/test_container_acceptance.py`、`packaging/test_container_probe.py` | HM-20 | 既有，擴充 | 開通的產品（`MULTI_PROFILE_PRODUCTS`）的容器驗收要照 Headscale 開一次性 internal bridge、假後端綁容器私有位址；今天集合是空的，只驗 Headscale，產品一開通就逼升版 PR 補上 |
 | `tests/test_litellm_multi_profile.py` | HM-21 | 暫定名 | 兩把假 virtual key、bearer 401 矩陣、政策各自 |
 | `tests/test_nextcloud_multi_profile.py` | HM-22 | 暫定名 | 兩個使用者、存政策只重啟該帳號、換 url／username 換 token |
