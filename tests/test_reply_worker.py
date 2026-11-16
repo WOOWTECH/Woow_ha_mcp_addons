@@ -20,6 +20,10 @@ invariant I8; DQ-07 (a); C2-MF-4, C1-M5; FM-129, FM-149).
   tools/call is answered 200 + -32003 before it is forwarded. A slow reader then holds no more than contract 6 allows
   (RSS, with an event stream's forwarded body included).
 - Switched off: no worker, no gate; every reply is processed on the loop as before.
+- HM-30 review 2: flat arrays of numbers breathe in every step (MF-1; a flat array of strings is one parse call still,
+  printed for the user's decision Q1); the reply mask holds wherever the worker cuts and breathes (MF-3); answers that
+  arrive at once hold no more than the budget and one reply a slot (MF-2); the costs bound every run of the encoder
+  (S-4).
 """
 import asyncio
 from dataclasses import replace
@@ -31,6 +35,7 @@ import sys
 import textwrap
 import threading
 import time
+import tracemalloc
 import weakref
 
 import httpx
@@ -1069,13 +1074,30 @@ REAL_SHAPES = {
     # deep trees (64 levels), one after another: hundreds of thousands of objects with lists in them
     'nested': lambda: filled(lambda n: reply({'structuredContent': {'trees': [nested_tree()] * n},
                                               **text_result('nested')})),
+    # HM-30 review 2 MF-1: flat arrays of numbers, with no object for the parser to stop at: Odoo's record ids, small
+    # integers (the most members 8 MiB holds), a time series of integers and of floats, a list of floats
+    'flat-ids': lambda: filled(lambda n: reply({'structuredContent': {'ids': list(range(10 ** 6, 10 ** 6 + n))},
+                                                **text_result('ids')})),
+    'small-ints': lambda: filled(lambda n: reply({'structuredContent': {'ids': [7] * n}, **text_result('ids')})),
+    'pairs-int': lambda: filled(lambda n: reply({'structuredContent': {'points': [[1700000000, 215]] * n},
+                                                 **text_result('points')})),
+    'pairs-float': lambda: filled(lambda n: reply({'structuredContent': {'points': [[1700000000, 21.5]] * n},
+                                                   **text_result('points')})),
+    'floats': lambda: filled(lambda n: reply({'structuredContent': {'v': [1.5] * n}, **text_result('v')})),
+}
+# HM-30 review 2 MF-1, Q1: a flat array of strings has neither an object nor a number in it, so json's C scanner parses
+# it in one call with nothing to stop at (8 MiB of short names: about 0.1 s on the EPYC 7713). Not held to contract 6's
+# 50 ms until the user decides (HM-30 review 2 Q1); its bytes are held to the loop's as every reply's are.
+ONE_CALL_SHAPES = {
+    'short-strings': lambda: filled(lambda n: reply({'structuredContent': {'names': ['ab'] * n},
+                                                     **text_result('names')})),
 }
 _REAL = {}
 
 
 def real_reply(shape):
     if shape not in _REAL:
-        _REAL[shape] = REAL_SHAPES[shape]()
+        _REAL[shape] = {**REAL_SHAPES, **ONE_CALL_SHAPES}[shape]()
     return _REAL[shape]
 
 
@@ -1150,8 +1172,59 @@ def test_long_strings_and_large_values_go_out_between_checkpoints(monkeypatch):
     assert len(calls) >= len(one_shot(rows)) // module.PIECE_BYTES and max(calls) <= module.PIECE_BYTES
     assert len(checkpoints) >= len(calls) - 1
     calls.clear(), checkpoints.clear()
+    # HM-30 review 2 S-4: the costs are the most bytes a member can encode to (12 a code point for a string: an emoji is
+    # two 6-byte escapes), so no run of short non-ASCII strings encodes past PIECE_BYTES either (ASCII ones above are
+    # far below their cost: a cost that counted a code point as one byte would pass there and not here)
+    names = ['\U0001F600' * 3, '中文字', 'x'] * 20_000
+    assert module.encoded(names, lambda: checkpoints.append(1)) == one_shot(names)
+    assert len(calls) > len(one_shot(names)) // module.PIECE_BYTES and max(calls) <= module.PIECE_BYTES
+    calls.clear(), checkpoints.clear()
     assert module.encoded({'small': [1, 2]}, lambda: checkpoints.append(1)) == b'{"small":[1,2]}'
     assert len(calls) == 1  # one C call (the checkpoints are the costing pass's, one a container)
+
+
+FLAT = 32 * 1024  # members of the flat arrays below: 32 checkpoints' worth, each array large (HM-30 review 2 MF-1)
+
+
+def test_a_long_flat_array_gets_a_checkpoint_every_so_many_members_in_every_step():
+    """HM-30 review 2 MF-1 (counted, not timed): a flat array of scalars builds no object for the parser to stop at, and
+    it is one container to the steps after the parser, so each step also calls the checkpoint once every
+    MEMBERS_A_CHECKPOINT members: the parser at its numbers (json's C scanner calls parse_int and parse_float for each),
+    the masking (redact_secrets) and the costing (_plan) at the members of a list or dict of anything. Before, each
+    walked such an array in one go (the parser in one C call; the others in a Python loop of up to a second on an 8 MiB
+    reply, during which every system call of the loop waited for the GIL again). The values are the same. A flat array
+    of strings is still one call of the parser (json's C scanner calls nothing there): HM-30 review 2 Q1."""
+    module = worker_module()
+    from mcp_admin_core import config, redact
+    every = config.NUMBERS_A_CHECKPOINT
+    assert every == redact.MEMBERS_A_CHECKPOINT == module.MEMBERS_A_CHECKPOINT == 1024
+
+    def counted(step, *args):
+        calls = []
+        return step(*args, checkpoint=lambda: calls.append(1)), len(calls)
+    for array in (list(range(10 ** 6, 10 ** 6 + FLAT)), [7] * FLAT, [-21.5] * FLAT, [[1700000000, 215]] * (FLAT // 2),
+                  [[1700000000, 0.25]] * (FLAT // 2)):
+        raw = json.dumps({'v': array}).encode()
+        value, calls = counted(config.strict_json, raw)
+        assert value == config.strict_json(raw) == {'v': array} and one_shot(value) == one_shot({'v': array})
+        assert calls >= FLAT // every
+    for error in (b'[' + b'1,' * FLAT + b'1e400]', b'[' + b'1,' * FLAT + b'1' * 5000 + b']'):
+        with pytest.raises(ValueError):  # the same errors: a number json.dumps cannot write, past the digits limit
+            config.strict_json(error)
+        with pytest.raises(ValueError):
+            config.strict_json(error, checkpoint=lambda: None)
+    secrets = ('T' * 43, 'C' * 43)
+    # the last: two keys that mask to the same one, FLAT // 2 times (the later value at the earlier key's place, as the
+    # dict comprehension masks them)
+    for value in (['ab'] * FLAT, list(range(FLAT)), [{}] * FLAT, {f'k{n}': n for n in range(FLAT)},
+                  {f'{secrets[n % 2]}{n}': f'v {secrets[0]}' for n in range(FLAT)},
+                  {f'{secrets[n % 2]}{n // 2}': n for n in range(FLAT)}):
+        masked, calls = counted(redact.redact_secrets, value, secrets)
+        assert masked == redact.redact_secrets(value, secrets) and one_shot(masked) == one_shot(
+            redact.redact_secrets(value, secrets))
+        assert calls >= FLAT // every
+        plans, calls = counted(module._plan, value, module.PIECE_BYTES)
+        assert id(value) in plans and calls >= FLAT // every
 
 
 async def served_at_once(store, child, *, lane=None, sse=False, piece=64 * 1024):
@@ -1190,8 +1263,17 @@ async def test_a_real_8_mib_reply_is_the_loops_bytes_and_stops_the_loop_briefly(
     shape, as JSON and two as an event: on the loop it stops every profile for its whole processing; on the worker,
     which serializes in pieces (long strings too) and holds the cyclic collector off while it processes a job, the loop
     stops at most for one short C call (what is left: json.loads scanning one long string, the final join). The answer
-    is byte for byte the loop's. The lag's distribution and the request's time are printed (the provenance note)."""
+    is byte for byte the loop's. The lag's distribution and the request's time are printed (the provenance note).
+    HM-30 review 2 MF-1: flat arrays of numbers too (the parser, the masking, the costing and the letting go breathe
+    every so many members); a flat array of strings is apart (the next test)."""
     raw = real_reply(shape)
+    lag = await on_the_loop_and_on_the_worker(store, worker, raw, sse, f'{shape}{" (event)" if sse else ""}')
+    assert lag.worst <= STALL_LIMIT, lag.distribution()
+
+
+async def on_the_loop_and_on_the_worker(store, worker, raw, sse, name):
+    """raw (a child's tools/call reply) answered on the loop and on the worker, the loop's lag measured meanwhile: the
+    answers must be the same bytes; their times and lags are printed (the provenance note). The worker's lag."""
     child = b'data: ' + raw + b'\n\n' if sse else raw
     assert 7 * MiB < len(child) <= gateway.MAX_RESPONSE
 
@@ -1206,11 +1288,23 @@ async def test_a_real_8_mib_reply_is_the_loops_bytes_and_stops_the_loop_briefly(
     inline, inline_total, inline_lag = await measured(None)
     answer, total, lag = await measured(worker.lane('a'))
     assert inline[0] == 200 and answer == inline
-    print(f'HM-30 D1 real reply {shape}{" (event)" if sse else ""} ({len(raw) / MiB:.2f} MiB, '
+    print(f'HM-30 D1 real reply {name} ({len(raw) / MiB:.2f} MiB, '
           f'{len(inline[2]) / MiB:.2f} MiB out): on the loop worst stop {inline_lag.worst * 1000:.0f} ms (request '
           f'{inline_total * 1000:.0f} ms); on the worker {lag.distribution()}, request {total * 1000:.0f} ms; '
           f'threshold {STALL_LIMIT * 1000:.0f} ms')
-    assert lag.worst <= STALL_LIMIT, lag.distribution()
+    return lag
+
+
+@pytest.mark.parametrize('shape', list(ONE_CALL_SHAPES))
+async def test_a_flat_array_of_strings_is_the_loops_bytes_and_its_one_parse_call_is_printed(store, worker, shape):
+    """HM-30 review 2 MF-1, Q1: a real 8 MiB reply whose structuredContent is a flat array of short strings. The worker
+    masks, costs, encodes and lets go of it with its checkpoints (every MEMBERS_A_CHECKPOINT members), but json's C
+    scanner parses the array in one call: the loop stops for that call (about 0.1 s on the EPYC 7713, over contract 6's
+    50 ms). Its answer is held to the loop's bytes; its stop is printed, not held to the threshold, until the user
+    decides (HM-30 review 2 Q1: accept it and let HM-19c measure it, cap a reply's elements, or a child process)."""
+    lag = await on_the_loop_and_on_the_worker(store, worker, real_reply(shape), False,
+                                              f'{shape} (one parse call; HM-30 review 2 Q1, not held to the threshold)')
+    assert lag.samples > 0
 
 
 def test_a_large_value_is_let_go_of_in_pieces_and_nothing_it_does_not_own_is_touched(monkeypatch):
@@ -1233,6 +1327,30 @@ def test_a_large_value_is_let_go_of_in_pieces_and_nothing_it_does_not_own_is_tou
     assert len(checkpoints) >= 2000 * 30 // 4096  # a run at a time
     module.released({'rows': list(range(5000))}, module._plan({'rows': list(range(5000))}, 4096), None, other)
     assert other == [1, 2, 3]
+    # HM-30 review 2 (MF-1's emptying from the end): with no secret to mask, redact_secrets gives its input back, so a
+    # twin's containers can be value's own: each is emptied once (a dict that lost two members a step, its own and its
+    # "twin's", ran out mid-way: KeyError), and the bytes encoded before are json.dumps' own
+    for same in ({'rows': {f'k{n}': [n] for n in range(3001)}}, {'rows': [{'n': n} for n in range(3001)]}):
+        expected = one_shot(same)
+        assert module.encoded(same, lambda: checkpoints.append(1), release=True, twin=same) == expected
+        assert same == {}
+    # HM-30 review 2 MF-1: a container is emptied from its end, never copied whole first (before: a copy of each list and
+    # of its twin, 8 bytes a member each, and a list of a dict's items; a copy of millions of members was one stop of 40 to
+    # 70 ms). Counted in what released() allocates: for a list and its twin less than one more copy of their pointers
+    # (only the list shrinking from its end; before about two), for a dict and its twin nearly nothing (before 30 MiB)
+    count = 200_000
+    for value, twin, most in (({'v': [float(n) for n in range(count)]}, {'v': [float(n) for n in range(count)]},
+                               12 * count), ({'v': {f'k{n}': n for n in range(count // 4)}},
+                                             {'v': {f'k{n}': n for n in range(count // 4)}}, 64 * 1024)):
+        plans = module._plan(value, module.PIECE_BYTES)
+        tracemalloc.start()
+        try:
+            module.released(value, plans, None, twin)
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+        assert value == {} and twin == {}
+        assert peak < most, (type(value), peak)
 
 
 async def test_a_large_tool_list_is_relayed_the_same_twice_on_the_worker(store, worker, monkeypatch):
@@ -1303,6 +1421,51 @@ async def test_a_job_runs_with_the_cyclic_collector_held_off(worker, store, monk
         assert seen and all(seen)  # the request's body and the reply, both parsed on the loop with it on
     finally:
         gc.callbacks.remove(note)
+
+
+def secret_reply(token, child_token, at_cuts):
+    """HM-30 review 2 MF-3: a large tools/call reply with every kind of secret the reply mask replaces (this profile's
+    token and child token, its backend key, other profiles' tokens: SECRETS) where the worker cuts and breathes: 40 of
+    them in a text longer than redact.LONG_TEXT (masked with a checkpoint between the secrets), each across a multiple of
+    STRING_PIECE (at_cuts) or away from one, and one in each of 30,000 rows of a list and 5,000 keys of a dict (past
+    many a MEMBERS_A_CHECKPOINT). The reply, and its secrets."""
+    module = worker_module()
+    from mcp_admin_core import redact
+    secrets = [value for value in (token, child_token, 'DUMMY-reply-worker-key', *SECRETS) if value]
+    assert len(secrets) == 5
+    text, position = [], 0
+    for n in range(40):
+        secret = secrets[n % len(secrets)]
+        cut = (n + 1) * module.STRING_PIECE if at_cuts else (n + 1) * 7919
+        filler = 'a' * max(0, cut - position - len(secret) // 2)
+        text.append(filler + secret)
+        position += len(filler) + len(secret)
+    text = ''.join(text) + EMOJI * (redact.LONG_TEXT + 10)
+    rows = [f'row {n} {secrets[n % len(secrets)]}' for n in range(30_000)]
+    keyed = {f'{secrets[n % len(secrets)]}-{n}': n for n in range(5_000)}
+    return reply({'content': [{'type': 'text', 'text': text}], 'structuredContent': {'rows': rows, 'keyed': keyed},
+                  'isError': False}), secrets
+
+
+@pytest.mark.parametrize('sse', [False, True], ids=['json', 'event-stream'])
+@pytest.mark.parametrize('at_cuts', [True, False], ids=['at-cuts', 'elsewhere'])
+async def test_every_secret_is_masked_on_the_worker_wherever_it_cuts_and_breathes(store, worker, sse, at_cuts):
+    """HM-30 review 2 MF-3 (the reply mask, DQ-40 ⑧; contract 2.7): on the worker, redact_secrets masks a long string
+    with a checkpoint between the secrets it looks for, a large list or dict with one every MEMBERS_A_CHECKPOINT
+    members, and encoded then cuts long strings every STRING_PIECE code points. A reply with secrets in all those
+    places (secret_reply), as JSON and as an event larger than WORKER_FRAME_BYTES (framed on the worker too): the
+    worker's answer is the loop's byte for byte, and none of the secrets is left in it."""
+    state = store.load()
+    raw, secrets = secret_reply(state.token, state.child_token, at_cuts)
+    child = b'id: 9\ndata: ' + raw + b'\n\n' if sse else raw
+    assert len(child) > 2 * gateway.WORKER_FRAME_BYTES
+    inline = await relayed(store, child, sse=sse)
+    answer = await relayed(store, child, lane=worker.lane('a'), sse=sse)
+    assert inline[0] == 200 and answer == inline
+    body = answer[2]
+    for secret in secrets:
+        assert secret.encode() not in body
+    assert body.count(b'[REDACTED]') >= 40 + 30_000 + 5_000
 
 
 # ---- each profile's answers not received yet (contract 2.4, 5, 6) ----
@@ -1526,6 +1689,113 @@ async def test_a_profile_past_its_pending_reply_budget_is_answered_before_it_wai
             for task, _ in held:
                 await asyncio.wait_for(task, 10)
             assert gate.reply_bytes == 0
+
+
+@pytest.mark.parametrize('stream', [False, True], ids=['json', 'event-stream'])
+async def test_answers_that_arrive_at_once_hold_no_more_than_the_budget_and_a_reply_a_slot(tmp_path, log_scan,
+                                                                                          monkeypatch, stream):
+    """HM-30 review 2 MF-2 (contract 2.4, 5; D2): however a profile's calls arrive, its answers not received yet stay
+    within its pending-reply budget plus one reply for each of its forwarding slots (contract 5's worst case of a
+    flood). B's quota scaled down (admission 8, slots 2, queue 6, budget 1 MiB): eight tools/calls answered 600 KiB each
+    arrive at once and are never read. Two take the slots (their child holds them) and six wait in HM-14's queue, all
+    eight past the check before the slots (nothing is charged yet); then the child answers. A JSON reply is charged
+    when the worker made it, before its slot is released, and a call that waited for that slot is checked again once
+    it holds it: so the third goes out (600 KiB < 1 MiB when it was checked) and the rest are answered 200 + -32003
+    with the pending-reply text, never forwarded. (Each slot is released with a pause after it, as closing a real
+    connection may take a moment: the call that waited for it runs its check meanwhile.) Before, all eight went out:
+    4.8 MiB held. An event stream holds its slot until it ends, so the six time out in the queue (-32003, the queue's
+    text). Once the client reads, everything is given back."""
+    budget, size, slots = 1 * MiB, 600 * 1024, 2
+    monkeypatch.setattr(profiles, 'EXTRA_PROFILE_QUOTA', replace(
+        profiles.EXTRA_PROFILE_QUOTA, admission=8, forward_slots=slots, queue=6, pending_reply_bytes=budget))
+    real_close = gateway.UpstreamOwner.close
+
+    async def close(self):
+        await real_close(self)
+        await asyncio.sleep(0.05)
+    monkeypatch.setattr(gateway.UpstreamOwner, 'close', close)
+    idents = list(range(21, 29))
+    data, children, child = budget_setup(tmp_path, lambda name, directory: SizedChild(
+        name, PRODUCT, directory, sizes={ident: size - (8 if stream else 0) for ident in idents},
+        streams=set(idents) if stream else (), held=idents[:slots]))
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data)
+        gate = runtime.gate(B)
+        assert (gate.quota.admission, gate.quota.forward_slots, gate.quota.queue) == (8, slots, 6)
+        token = runtime.token(B)
+        async with runtime.mcp() as client:
+            headers = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
+            reading = asyncio.Event()
+            held = [asgi_request(runtime.mcp_app, headers, json.dumps(call(ident)).encode(), hold=reading)
+                    for ident in idents[:slots]]
+            await until(lambda: child.waiting == slots, 10)
+            held += [asgi_request(runtime.mcp_app, headers, json.dumps(call(ident)).encode(), hold=reading)
+                     for ident in idents[slots:]]
+            await until(lambda: gate.active == len(idents), 10)
+            await asyncio.sleep(0.05)  # the six wait in the queue now
+            assert child.waiting == slots  # the child holds the two (it counts a tool call once it answers it)
+            child.release_held.set()
+            # every call answered: its answer started (the bodies wait for a client that does not read)
+            await until(lambda: all(any(message['type'] == 'http.response.start' for message in taken)
+                                    for _, taken in held), 10)
+            forwarded = child.tool_calls
+            print(f'HM-30 review 2 MF-2 {"event stream" if stream else "JSON"}: {forwarded} of {len(idents)} forwarded, '
+                  f'{gate.reply_bytes / 1024:.0f} KiB held (at most {(budget + slots * size) / 1024:.0f} KiB)')
+            assert slots <= forwarded <= (slots if stream else slots + 1)
+            # the forwarded answers, and the small busy answers the client does not read either
+            assert forwarded * size <= gate.reply_bytes <= forwarded * size + 8 * 1024 <= budget + slots * size
+            reading.set()
+            answered = 0
+            for task, taken in held:
+                await asyncio.wait_for(task, 10)
+                status, answer = answer_of(taken)
+                assert status == 200
+                if stream and answer.startswith(b'data: '):
+                    answer = answer.removeprefix(b'data: ').removesuffix(b'\n\n')
+                value = json.loads(answer)
+                if 'result' in value:
+                    answered += 1
+                    assert answer == exact_reply(value['id'], size - (8 if stream else 0))
+                else:
+                    assert value['error']['code'] == -32003
+                    if not stream:
+                        assert value['error']['message'] == router().pending_text(budget)
+            assert answered == forwarded and (gate.reply_bytes, gate.active) == (0, 0)
+
+
+async def test_an_answer_charged_before_it_is_handed_over_gives_the_charge_back_when_it_never_is(tmp_path, log_scan,
+                                                                                                monkeypatch):
+    """HM-30 review 2 MF-2: a relayed JSON reply is charged to the profile's answers not received yet as soon as the
+    worker made it, before its slot is released and before its app hands it to the server; a request that ends in
+    between (its client left while the slot was being released) gives that charge back, as one that ends after."""
+    size = 300 * 1024
+    data, children, child = budget_setup(tmp_path, lambda name, directory: SizedChild(
+        name, PRODUCT, directory, sizes={31: size}))
+    armed, closing, go_on = False, asyncio.Event(), asyncio.Event()
+    real_close = gateway.UpstreamOwner.close
+
+    async def close(self):
+        await real_close(self)
+        if armed and not closing.is_set():
+            closing.set()
+            await go_on.wait()  # the slot is released; the answer is not handed over yet
+    monkeypatch.setattr(gateway.UpstreamOwner, 'close', close)
+    try:
+        async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+            watch(log_scan, data)
+            gate = runtime.gate(B)
+            token = runtime.token(B)
+            async with runtime.mcp() as client:
+                headers = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
+                armed = True
+                task, taken = asgi_request(runtime.mcp_app, headers, json.dumps(call(31)).encode())
+                await until(closing.is_set, 10)
+                assert gate.reply_bytes == size and not taken  # charged; nothing handed to the server
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+                assert (gate.reply_bytes, gate.active) == (0, 0)
+    finally:
+        go_on.set()
 
 
 async def test_the_charge_is_given_back_however_a_request_ends(tmp_path, log_scan):
