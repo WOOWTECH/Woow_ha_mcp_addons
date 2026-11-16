@@ -99,3 +99,55 @@ export async function childPortOf(admin, profile) {
   if (!row) throw new Error(`profile ${logId(profile)} is not in the profile list`);
   return row.port;
 }
+
+// HM-16 review SF-3: what the driver runs for childkill, --cross and --temp-profile, with the probe passed in as
+// remote(mode, input, extra) (the driver's: ha_p9_probe.py on the HA host over SSH), so that their order and arguments
+// are tested; the driver itself logs in to HA first and has no test of its own.
+
+// childkill's extra probe arguments: on a switched-on app (profiles) only that profile's child, by its port; on one that
+// is not switched on none (the probe then kills the launcher's children, as before profiles).
+export async function childkillArguments(admin, profiles, profile) {
+  return profiles ? ['--child-port', String(await childPortOf(admin, profile))] : [];
+}
+
+// --cross: every listed profile's token, each revealed under its own profile, into the probe's cross mode.
+export async function runCross(admin, clientFor, remote, report = () => {}) {
+  const { rows } = await admin.profileList();
+  remote('cross', await crossLines(clientFor, rows.map(row => row.id), report));
+}
+
+// --temp-profile (PaaS public_probe.py --temp-profile): the default profile's token (it must have one); a temporary
+// profile (withTemporaryProfile) given the backend (then settle: the app starts its child) and its own token; that
+// token cross-checked with the default profile's, then the plan run with it, or without a backend of its own a call of
+// probeTool that must be refused (never answered with the default profile's backend); once it is deleted, its token
+// must be refused (the cross mode's "gone"). Returns the temporary profile's id.
+export async function runTemporaryProfile(admin, clientFor, remote, { backend, plan, probeTool, probeToolArgs = '{}',
+  report = () => {}, label, settle = () => new Promise(resolve => setTimeout(resolve, 5000)) } = {}) {
+  const own = await revealToken(clientFor('default'));
+  if (own === null) throw new Error('the default profile has no active token');
+  let gone;
+  const { id } = await withTemporaryProfile(admin, clientFor, async (created, temporary) => {
+    report(`temporary profile created: ${logId(created)}`);
+    if (backend) {
+      const fresh = await temporary.bootstrap();
+      try { await temporary.mutate('backend', backend, fresh.configuration?.revision); }
+      catch (error) {
+        const pending = temporary.pendingOperation();
+        if (pending) report(`unconfirmed operation; inspect receipt before another run: ${pending.id} ${pending.route}`);
+        throw error;
+      }
+      report('PUT api/backend (temporary profile): confirmed');
+      await settle();
+    }
+    const token = await revealToken(temporary);
+    if (token === null) throw new Error('the temporary profile has no active token');
+    gone = token;
+    remote('cross', crossLine('default', 'live', own) + crossLine(created, 'live', token));
+    if (plan) remote('plan', token + '\n' + JSON.stringify(plan));
+    else if (!backend && probeTool) remote('plan', token + '\n' + JSON.stringify({ denials: [[probeTool, JSON.parse(probeToolArgs)]] }));
+    return created;
+  }, { report, label });
+  report(`temporary profile deleted: ${logId(id)}`);
+  remote('cross', crossLine('default', 'live', own) + crossLine(id, 'gone', gone));
+  return id;
+}

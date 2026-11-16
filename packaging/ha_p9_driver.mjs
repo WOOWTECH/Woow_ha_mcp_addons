@@ -20,7 +20,7 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { childPortOf, createP9AdminClient, crossLine, crossLines, logId, revealToken, withTemporaryProfile } from './ha_p9_admin.mjs';
+import { childkillArguments, createP9AdminClient, logId, runCross, runTemporaryProfile } from './ha_p9_admin.mjs';
 
 const env = (name, fallback) => {
   const value = process.env[name] ?? fallback;
@@ -164,7 +164,7 @@ try {
     console.log('---', mode);
     const current = await act('reveal');
     // HM-16: on a switched-on app, childkill kills only this profile's child (the probe tells them apart by port).
-    remote(mode, current + '\n', mode === 'childkill' && profiles ? ['--child-port', String(await childPortOf(admin, PROFILE))] : []);
+    remote(mode, current + '\n', mode === 'childkill' ? await childkillArguments(admin, profiles, PROFILE) : []);
     if (mode === 'restart') {
       b = await boot();  // the app restarted: fresh CSRF
       console.log('token unchanged across restart:', (await act('reveal')) === current);
@@ -172,42 +172,14 @@ try {
   }
   if (CROSS) {
     console.log('--- cross');
-    const { rows } = await admin.profileList();
-    remote('cross', await crossLines(clientFor, rows.map(row => row.id), console.log));
+    await runCross(admin, clientFor, remote, console.log);
   }
   if (TEMP) {
     console.log('--- temporary profile');
-    const own = await revealToken(clientFor('default'));
-    if (own === null) throw new Error('the default profile has no active token');
-    let gone;
-    await withTemporaryProfile(admin, clientFor, async (id, temporary) => {
-      console.log('temporary profile created:', logId(id));
-      if (BACKEND) {
-        const fresh = await temporary.bootstrap();
-        try { await temporary.mutate('backend', BACKEND, fresh.configuration?.revision); }
-        catch (error) {
-          const pending = temporary.pendingOperation();
-          if (pending) console.log('unconfirmed operation; inspect receipt before another run:', pending.id, pending.route);
-          throw error;
-        }
-        console.log('PUT api/backend (temporary profile): confirmed');
-        await new Promise((resolve) => setTimeout(resolve, 5000));  // the app starts the profile's child
-      }
-      const token = await revealToken(temporary);
-      if (token === null) throw new Error('the temporary profile has no active token');
-      gone = token;
-      remote('cross', crossLine('default', 'live', own) + crossLine(id, 'live', token));
-      if (PLAN) remote('plan', token + '\n' + JSON.stringify(PLAN));
-      else if (!BACKEND && process.env.PROBE_TOOL) {
-        // No backend of its own: its tool call is refused (Backend not configured), never answered with the default
-        // profile's backend (PaaS public_probe.py --temp-profile checks the same).
-        remote('plan', token + '\n' + JSON.stringify({ denials: [[process.env.PROBE_TOOL, JSON.parse(env('PROBE_TOOL_ARGS', '{}'))]] }));
-      }
-      return id;
-    }, { report: console.log }).then(({ id }) => {
-      console.log('temporary profile deleted:', logId(id));
-      remote('cross', crossLine('default', 'live', own) + crossLine(id, 'gone', gone));
-    });
+    // ha_p9_admin.runTemporaryProfile: create, use (the backend file, the plan, or a refused PROBE_TOOL call without a
+    // backend of its own), cross with the default profile, delete, then its token must be refused.
+    await runTemporaryProfile(admin, clientFor, remote, { backend: BACKEND, plan: PLAN, probeTool: process.env.PROBE_TOOL,
+      probeToolArgs: env('PROBE_TOOL_ARGS', '{}'), report: console.log });
   }
 } finally {
   ws?.close();

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { childPortOf, createP9AdminClient, crossLine, crossLines, logId, revealToken, temporaryLabel, withTemporaryProfile } from '../../../packaging/ha_p9_admin.mjs';
+import { childkillArguments, childPortOf, createP9AdminClient, crossLine, crossLines, logId, revealToken, runCross,
+  runTemporaryProfile, temporaryLabel, withTemporaryProfile } from '../../../packaging/ha_p9_admin.mjs';
 
 const mount = '/api/hassio_ingress/p9-fixture';
 const revision = 'c1-' + 'a'.repeat(64);
@@ -75,34 +76,44 @@ test('P9 stale backend save and mismatched token receipt cannot be reported as s
 // ---- HM-16 (FM-107; plan 12.3 HM-16): the kit's profile flows against a switched-on add-on ----
 
 const extra = 'b'.repeat(24), temporary = 'c'.repeat(24);
-const indexRevision = 'p1-' + '1'.repeat(64);
+const revisionOf = n => 'p1-' + String(n).repeat(64);  // the index's ETag after n - 1 changes
+const indexRevision = revisionOf(1);
 // A switched-on add-on: the profile routes (list with its ETag, create, delete) and each profile's bootstrap, token and
-// backend, every answer echoing the profile its request named. lose: the response of 'create' or 'delete' is lost.
+// backend, every answer echoing the profile its request named. Each create or delete changes the index's ETag, and a
+// write with another If-Match than the current one is refused (409 config_conflict, contract 3): a deletion must read
+// the list again (review SF-3). lose: the response of 'create' or 'delete' is lost.
 function switchedServer({ lose = null, revoked = [], etag = true } = {}) {
   const calls = [];
   const ports = new Map([['default', 3000], [extra, 18000]]);
   const tokens = new Map([['default', 'T'.repeat(43)], [extra, 'C'.repeat(43)]]);
+  let changes = 1;
   const row = id => ({ id, label: id === 'default' ? 'Default' : 'Probe', port: ports.get(id), is_default: id === 'default',
     disabled_reason: null, status: 'running', blocked_reason: null });
+  const stale = options => options.headers?.['If-Match'] !== `"${revisionOf(changes)}"`;
   const fetcher = async (url, options = {}) => {
     const path = url.pathname.slice(mount.length), method = options.method ?? 'GET';
     const profile = options.headers?.['X-MCP-Profile'];
-    calls.push({ path, method, profile, ifMatch: options.headers?.['If-Match'], key: options.headers?.['Idempotency-Key'] });
+    calls.push({ path, method, profile, ifMatch: options.headers?.['If-Match'], key: options.headers?.['Idempotency-Key'],
+      body: options.body });
     if (path === '/api/profiles' && method === 'GET') {
-      return Response.json({ profiles: [...ports.keys()].map(row) }, { headers: etag ? { ETag: `"${indexRevision}"` } : {} });
+      return Response.json({ profiles: [...ports.keys()].map(row) }, { headers: etag ? { ETag: `"${revisionOf(changes)}"` } : {} });
     }
     if (path === '/api/profiles' && method === 'POST') {
       if (lose === 'create') throw new Error('synthetic lost response');
+      if (stale(options)) return json({ detail: { code: 'config_conflict' } }, 409);
       ports.set(temporary, 18001);
       tokens.set(temporary, 'S'.repeat(43));
+      changes++;
       return Response.json({ ...row(temporary), operation: { id: options.headers['Idempotency-Key'], kind: 'profile.create',
         state: 'completed', replayed: false } }, { status: 201 });
     }
     if (path.startsWith('/api/profiles/') && method === 'DELETE') {
       if (lose === 'delete') throw new Error('synthetic lost response');
+      if (stale(options)) return json({ detail: { code: 'config_conflict' } }, 409);
       const id = path.slice('/api/profiles/'.length);
       ports.delete(id);
       tokens.delete(id);
+      changes++;
       return Response.json({ deleted: id, operation: { id: options.headers['Idempotency-Key'], kind: 'profile.delete',
         state: 'completed', replayed: false } });
     }
@@ -162,7 +173,7 @@ test('P9 temporary profile: created with the list\'s revision, used under its ow
   const writes = server.calls.filter(call => call.method === 'POST' && call.path === '/api/profiles' || call.method === 'DELETE');
   assert.deepEqual(writes.map(call => [call.method, call.path, call.ifMatch, call.profile]), [
     ['POST', '/api/profiles', `"${indexRevision}"`, undefined],
-    ['DELETE', `/api/profiles/${temporary}`, `"${indexRevision}"`, undefined]]);
+    ['DELETE', `/api/profiles/${temporary}`, `"${revisionOf(2)}"`, undefined]]);  // the list read again after the create
   assert.match(writes[0].key, /^1793334000000\.[0-9a-f]{32}$/);
   assert.notEqual(writes[0].key, writes[1].key);
   assert.equal(admin.pendingProfileOperation(), null);
@@ -208,4 +219,78 @@ test('P9 childkill takes the named profile\'s child port from the profile list',
   assert.equal(await childPortOf(admin, 'default'), 3000);
   assert.equal(await childPortOf(admin, extra), 18000);
   await assert.rejects(childPortOf(admin, temporary), /cccccccc is not in the profile list/);
+});
+
+// ---- HM-16 review SF-3: what the driver runs, with the probe recorded instead of run over SSH ----
+
+function probeRecorder() {
+  const runs = [];
+  return { runs, remote: (mode, input, extra = []) => { runs.push([mode, input, extra]); } };
+}
+
+test('P9 childkill of a switched-on app names its profile\'s child port; an app not switched on is killed as before', async () => {
+  const server = switchedServer();
+  const { admin } = kit(server);
+  await admin.bootstrap();
+  assert.deepEqual(await childkillArguments(admin, true, extra), ['--child-port', '18000']);
+  assert.deepEqual(await childkillArguments(admin, true, 'default'), ['--child-port', '3000']);
+  const listed = server.calls.filter(call => call.path === '/api/profiles').length;
+  assert.deepEqual(await childkillArguments(admin, false, 'default'), []);
+  assert.equal(server.calls.filter(call => call.path === '/api/profiles').length, listed);  // no list read for it
+});
+
+test('P9 --cross sends every listed profile\'s own token to the probe\'s cross mode', async () => {
+  const server = switchedServer();
+  const { admin, clientFor } = kit(server);
+  const { runs, remote } = probeRecorder();
+  await admin.bootstrap();
+  await runCross(admin, clientFor, remote);
+  assert.deepEqual(runs, [['cross', `default\tlive\t${'T'.repeat(43)}\nbbbbbbbb\tlive\t${'C'.repeat(43)}\n`, []]]);
+});
+
+test('P9 --temp-profile: its backend, then the cross with the default profile and the plan on its token, deleted, then its token gone', async () => {
+  const server = switchedServer();
+  const { admin, clientFor } = kit(server);
+  const { runs, remote } = probeRecorder();
+  const reports = [];
+  let settled = 0;
+  const plan = { reads: [['search_nodes', { query: 'x' }]] };
+  const id = await runTemporaryProfile(admin, clientFor, remote, { backend: { url: 'https://backend.invalid' }, plan,
+    report: line => reports.push(line), label: 'p9-temp-01234567', settle: async () => { settled++; } });
+  assert.equal(id, temporary);
+  const own = 'T'.repeat(43), its = 'S'.repeat(43);
+  assert.deepEqual(runs, [
+    ['cross', `default\tlive\t${own}\ncccccccc\tlive\t${its}\n`, []],
+    ['plan', its + '\n' + JSON.stringify(plan), []],
+    ['cross', `default\tlive\t${own}\ncccccccc\tgone\t${its}\n`, []]]);  // after the deletion: its token refused
+  const saved = server.calls.filter(call => call.path === '/api/backend' && call.method === 'PUT');
+  assert.deepEqual(saved.map(call => [call.profile, JSON.parse(call.body)]), [[temporary, { url: 'https://backend.invalid' }]]);
+  assert.equal(settled, 1);
+  assert.equal(server.ports.has(temporary), false);
+  assert.deepEqual(reports, ['temporary profile created: cccccccc', 'PUT api/backend (temporary profile): confirmed',
+    'temporary profile deleted: cccccccc']);
+});
+
+test('P9 --temp-profile without a backend of its own: its PROBE_TOOL call must be refused, never answered', async () => {
+  const server = switchedServer();
+  const { admin, clientFor } = kit(server);
+  const { runs, remote } = probeRecorder();
+  await runTemporaryProfile(admin, clientFor, remote, { probeTool: 'search_nodes', probeToolArgs: '{"query":"x"}',
+    settle: async () => { throw new Error('no backend: nothing to wait for'); } });
+  assert.deepEqual(runs.map(([mode]) => mode), ['cross', 'plan', 'cross']);
+  assert.equal(runs[1][1], 'S'.repeat(43) + '\n' + JSON.stringify({ denials: [['search_nodes', { query: 'x' }]] }));
+  assert.equal(server.calls.some(call => call.path === '/api/backend'), false);
+});
+
+test('P9 --temp-profile: when its use fails it is deleted all the same, and its token is not reported gone', async () => {
+  const server = switchedServer();
+  const { admin, clientFor } = kit(server);
+  const runs = [];
+  const remote = (mode, input) => {
+    runs.push(mode);
+    if (mode === 'cross') throw new Error('probe failed');
+  };
+  await assert.rejects(runTemporaryProfile(admin, clientFor, remote, {}), /probe failed/);
+  assert.equal(server.ports.has(temporary), false);
+  assert.deepEqual(runs, ['cross']);
 });
