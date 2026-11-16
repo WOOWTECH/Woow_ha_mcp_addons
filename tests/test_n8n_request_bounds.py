@@ -131,6 +131,11 @@ async def test_n8n_argument_element_budget_is_json_rpc_413_before_child(n8n_stor
 
 @pytest.mark.parametrize("route", ["bearer", "private"])
 async def test_n8n_argument_depth_over_64_is_parse_error_before_child(n8n_store, route):
+    """HM-31 (PaaS #155 round 3 F7; contract 1.2, not gated): the structure guard runs first and answers as the other
+    products' guard does: the request's id is in its head, so 200 + -32602 under it (an MCP SDK client then fails this
+    call only), the structure's message. Before HM-31: 413, id null, "MCP JSON exceeds 64 levels of nesting"."""
+    from mcp_admin_core.request_limits import too_complex
+
     arguments = {}
     nested = arguments
     for _ in range(65):
@@ -138,7 +143,8 @@ async def test_n8n_argument_depth_over_64_is_parse_error_before_child(n8n_store,
         nested = nested["next"]
     child = Child()
     response = await send(n8n_store, N8N_TOOLS, child, encoded(tool_call(arguments)), route)
-    assert_rpc_error(response, 413, None, -32602, "MCP JSON exceeds 64 levels of nesting")
+    assert_rpc_error(response, 200, 7, -32602,
+                     too_complex(b"", "more than 64 levels of nesting").payload["error"]["message"])
     assert child.seen == []
 
 

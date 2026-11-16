@@ -26,6 +26,7 @@ from mcp_admin_core import gateway, profile_router, profiles
 from mcp_admin_core.config import strict_json
 from switched_gateway import (B, INITIALIZED, PRODUCT, GatewayChild, bearer, call, quota, session_of, setup, until,
                               watch)
+from test_single_profile_golden import initialize_message
 
 pytestmark = pytest.mark.usefixtures('log_scan')
 
@@ -227,17 +228,15 @@ async def test_the_reserve_carries_notifications_initialized_while_every_ordinar
 
 
 @pytest.mark.parametrize('queued', [15, 16], ids=['queue 15 of 16', 'queue full'])
-async def test_the_reserve_is_reached_only_while_the_profiles_admission_has_room(tmp_path, log_scan, monkeypatch,
-                                                                                queued):
-    """Contract 2.4, plan 8.8 #96 (HM-14 review MF-2; a known limitation, pinned as it is until HM-31 changes it).
-    An additional profile's real numbers (admission 32 = its 16 ordinary slots + their queue of 16; reserve 4; only the
-    wait made 30 s so that the queued requests stay queued). Its 16 slots held and 15 requests queued, the admission
-    has room (31 of 32): notifications/initialized is read and reaches the child through the reserve (202). With 16
-    queued the admission is full first: the notification is refused before its body is read (503, -32003 id null, the
-    admission's text) and never gets near the reserve (PaaS reads the body first and has no admission: its reserve
-    still carries it). Settled on 2026-11-16 (MF-2 (b), the main conversation): DQ-07's numbers stay, and HM-31
-    (aligned with PaaS #155) makes the dispatcher read a small request (64 KiB at most) when the admission is full and
-    let a notification or a response through to the reserve, as PaaS does; HM-31 changes this test then."""
+async def test_the_reserve_is_reached_even_once_the_profiles_admission_is_full(tmp_path, log_scan, monkeypatch,
+                                                                              queued):
+    """Contract 2.4, plan 8.8 #96 (HM-14 review MF-2; HM-31: MF-2 (b), settled 2026-11-16 by the main session as the
+    PaaS semantics, DQ-07's numbers unchanged). An additional profile's real numbers (admission 32 = its 16 ordinary
+    slots + their queue of 16; reserve 4; only the wait made 30 s so that the queued requests stay queued). Its 16 slots
+    held and 15 requests queued (the admission has room, 31 of 32) or 16 (the admission full: before HM-31 the
+    notification was refused unread, 503): notifications/initialized is read and reaches the child through the reserve
+    (202) either way, the ordinary slots still held. With the admission full a small request is read, served beyond it
+    (gate.beyond), never counted in it."""
     quota(monkeypatch, 'extra', forward_wait_seconds=30)
     data = setup(tmp_path)
     children = Children()
@@ -248,6 +247,7 @@ async def test_the_reserve_is_reached_only_while_the_profiles_admission_has_room
     async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
         watch(log_scan, data, B)
         token = runtime.token(B)
+        gate = runtime.gate(B)
         async with runtime.mcp(timeout=60) as client:
             headers = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
             child.hold_calls = True
@@ -258,21 +258,68 @@ async def test_the_reserve_is_reached_only_while_the_profiles_admission_has_room
             waiting = [asyncio.create_task(client.post('/mcp', headers=headers, json=call(200 + n)))
                        for n in range(queued)]
             await until(lambda: ordinary.waiting == queued)
-            assert runtime.gate(B).active == numbers.forward_slots + queued
+            assert gate.active == numbers.forward_slots + queued
             before = len(child.seen)
             note = await client.post('/mcp', headers=headers, json=INITIALIZED)
-            if queued < numbers.queue:
-                assert note.status_code == 202 and note.content == b''
-                assert child.seen[before:] == [('POST', 'notifications/initialized', None)]
-                assert child.waiting == numbers.forward_slots  # the ordinary slots stayed held: it took the reserve
-            else:
-                assert note.status_code == 503 and note.headers['retry-after'] == '5'
-                assert note.json() == {'jsonrpc': '2.0', 'id': None, 'error': {
-                    'code': -32003, 'message': profile_router.admission_text(numbers.admission)}}
-                assert child.seen[before:] == [], 'refused before its body was read: the child never got it'
+            assert note.status_code == 202 and note.content == b''
+            assert child.seen[before:] == [('POST', 'notifications/initialized', None)]
+            assert child.waiting == numbers.forward_slots  # the ordinary slots stayed held: it took the reserve
+            assert gate.active == numbers.forward_slots + queued and gate.beyond == 0
             child.free.set()
             assert [response.status_code for response in await asyncio.gather(*held, *waiting)] == \
                 [200] * (numbers.forward_slots + queued)
+
+
+async def test_a_newly_connected_clients_initialized_reaches_the_child_with_the_queue_and_admission_full(
+        tmp_path, log_scan, monkeypatch):
+    """The decided case (HM-31, MF-2 (b)): B's ordinary slots, their queue and so its admission are full (32 of 32).
+    A client that has just connected (its initialize answered a moment before) sends notifications/initialized: it is
+    read and reaches the child through the reserve (202), so MCP SDK 1.x keeps its session and the TS SDK connects.
+    Beyond the admission only what carries no request goes on: an initialize or a small tools/call is read and answered
+    busy under its id (200 + -32003, the admission's text); a GET and a POST over 64 KiB get 503 + -32003 id null at
+    once, unread (plan 8.8 #16). One WARNING a minute for the refusals."""
+    quota(monkeypatch, 'extra', forward_wait_seconds=30)
+    data = setup(tmp_path)
+    children = Children()
+    children.add(3000, GatewayChild('default', PRODUCT, data))
+    child = children.add(18000, GatewayChild('p' + B[:4], PRODUCT, profiles.Layout(data).profile(B)))
+    numbers = profiles.EXTRA_PROFILE_QUOTA
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data, B)
+        token = runtime.token(B)
+        gate = runtime.gate(B)
+        text = profile_router.admission_text(numbers.admission)
+        async with runtime.mcp(timeout=60) as client:
+            flood = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
+            newcomer = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
+            child.hold_calls = True
+            held = [asyncio.create_task(client.post('/mcp', headers=flood, json=call(100 + n)))
+                    for n in range(numbers.forward_slots + numbers.queue)]
+            ordinary = runtime.manager.get(B).runtime.mcp_app.state.lanes['ordinary']
+            await until(lambda: child.waiting == numbers.forward_slots and ordinary.waiting == numbers.queue)
+            assert gate.active == numbers.admission
+            before = len(child.seen)
+            note = await client.post('/mcp', headers=newcomer, json=INITIALIZED)
+            assert note.status_code == 202 and note.content == b''
+            assert child.seen[before:] == [('POST', 'notifications/initialized', None)]
+            assert gate.active == numbers.admission and gate.beyond == 0
+            for message in ({**initialize_message(), 'id': 299}, call(300)):
+                answer = await client.post('/mcp', headers=bearer(token) if 'params' in message and
+                                           message['method'] == 'initialize' else newcomer, json=message)
+                assert answer.status_code == 200 and answer.headers['retry-after'] == '5'
+                assert answer.json() == {'jsonrpc': '2.0', 'id': message['id'],
+                                         'error': {'code': -32003, 'message': text}}
+            large = {**call(301), 'params': {**call(301)['params'], 'arguments': {'pad': 'x' * (65 * 1024)}}}
+            for response in (await client.get('/mcp', headers=newcomer),
+                             await client.post('/mcp', headers=newcomer, json=large)):
+                assert response.status_code == 503 and response.json() == {
+                    'jsonrpc': '2.0', 'id': None, 'error': {'code': -32003, 'message': text}}
+            assert child.seen[before + 1:] == []
+            child.free.set()
+            assert [response.status_code for response in await asyncio.gather(*held)] == [200] * numbers.admission
+        lines = [r.getMessage() for r in log_scan.records if r.name == 'mcp_admin_core.profile_router'
+                 and f'{numbers.admission} requests were in progress' in r.getMessage()]
+        assert len(lines) == 1 and 'profile=' + B[:8] in lines[0], lines
 
 
 async def test_without_a_reserve_a_notification_takes_an_ordinary_slot(tmp_path, log_scan, monkeypatch):

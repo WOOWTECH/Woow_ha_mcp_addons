@@ -1,26 +1,27 @@
 """HM-08: every profile's own admission, byte budget, forwarding slots, GET streams and child client, the default
 profile's included (multi-profile plan 5.2; contract 2.4, 4.2, 5; invariant I8; DQ-07 (a); C1-M5, C3-MF-2, C3-SF-1;
-FM-49, 50, 149, 150).
+FM-49, 50, 149, 150). HM-31 merged the byte budget with the PaaS #155 one (contract 2.4, 5; woow-mcp-server d7f5849).
 
 Once a product is switched on, the dispatcher admits a request of a profile before its body is read (64 for the
-default profile, 32 for each additional one), charges it to the profile's byte budget (64 MiB each: max(the declared
-Content-Length, at most MAX_REQUEST, the bytes read so far, the size its app forwards to the child)) until the request
-ends (HM-08 review MF-1, S-1: an event stream's headers come before the tool runs, and the gateway's forwarded copy of
-the body, re-serialized with ASCII escapes, stays referenced until the stream ends), and caps the profile's open GET
-streams (24, 8). Each profile's app has its own forwarding slots (32, 16; one second's wait) and its own child client
-(40, 24 connections). No pool is shared (the refusal allowance aside): one profile's requests never take another
-profile's slots or bytes.
+default profile, 32 for each additional one) and caps the profile's open GET streams (24, 8). Each profile's app has its
+own forwarding slots (32, 16; one second's wait) and its own child client (40, 24 connections), and charges the
+profile's share of the add-on's one request body budget (HM-31: min(the profile's quota, 64 MiB, half the add-on's
+budget, at least 16 MiB)) with a large request's body (over 64 KiB: the larger of what was read and what is forwarded,
+re-serialized with ASCII escapes) until the request ends (HM-08 review MF-1, S-1: an event stream's headers come before
+the tool runs, and the gateway's forwarded copy of the body stays referenced until the stream ends). One profile's
+requests never take another profile's slots or share; the add-on's budget is the one pool they share (PaaS).
 
-The busy answers follow the PaaS table (docs/mcp-gateway-limits.md "超過上限時用戶端拿到什麼", woow-mcp-server 69ac425,
-unchanged at cf3d0d5) with HA's one deviation (plan 8.8 #16): a request refused before its body is read is read with the
-add-on's small refusal allowance (8 at once, 512 KiB in all, at most 64 KiB and 2 s each) only to find its JSON-RPC id;
-with an id: 200, Retry-After 5 and a -32003 error under that id; without one, larger, unreadable in time or not JSON:
-503, Retry-After 5, id null. A forwarding slot that stays busy for a second: the same shapes (#148). A full GET stream
-cap: 429, Retry-After 30. Each comes with one WARNING per profile and situation a minute (id's first 8 characters,
-suppressed=N), never a token, URL or label.
+The busy answers follow the PaaS table (docs/mcp-gateway-limits.md "超過上限時用戶端拿到什麼" and the budget's,
+woow-mcp-server d7f5849) with HA's one deviation (plan 8.8 #16): beyond the profile's admission, a POST of at most 64 KiB
+is read (HM-31, MF-2 (b)): one that carries no request goes on (the reserve), any other gets 200, Retry-After 5 and a
+-32003 error under its id; a larger one, a GET or a DELETE gets 503, Retry-After 5, id null, unread. A large body the
+budget cannot hold is refused before it is read and drained, its id from its head and tail (200 + -32003 under it, else
+503). A forwarding slot that stays busy for a second: the same shapes (#148). A full GET stream cap: 429, Retry-After
+30. Each comes with one WARNING per profile and situation a minute (id's first 8 characters, suppressed=N), never a
+token, URL or label.
 
-The quotas of the mechanism tests are made small (monkeypatched ProfileQuota) where the real 64 MiB would only cost
-time; the default profile's attack (C1-M5) and the real-socket starvation cases (G2 S5, S6) use the real values.
+The budgets of the mechanism tests are made small (a monkeypatched ProfileQuota caps a profile's share; a monkeypatched
+BudgetLimits.derive the add-on's budget) where the real 64 MiB would only cost time.
 """
 import asyncio
 from dataclasses import replace
@@ -58,6 +59,28 @@ def bearer(token):
 
 def call(ident):
     return {'jsonrpc': '2.0', 'id': ident, 'method': 'tools/call', 'params': {'name': TOOL, 'arguments': ARGUMENTS}}
+
+
+def charged(runtime, profile_id):
+    """What the profile's requests hold of the add-on's request body budget now (HM-31: the gate holds no bytes)."""
+    return runtime.manager.budget.used(profile_id)
+
+
+def request_budget():
+    import mcp_admin_core.request_budget as module  # imported when a test runs (the red half of red-green)
+    return module
+
+
+def add_on_budget(monkeypatch, total_mib, per_mib):
+    """The add-on's request body budget a ProfileManager derives from now on (HM-31)."""
+    def derive(cls, product=None, *, switched_on=False):
+        return cls(total=int(total_mib * MiB), per_profile=int(per_mib * MiB))
+    monkeypatch.setattr(request_budget().BudgetLimits, 'derive', classmethod(derive))
+
+
+def budget_text(scope, limit):
+    module = request_budget()
+    return module.budget_text(module.BudgetExceeded(scope, limit))
 
 
 def warnings_of(log_scan):
@@ -186,10 +209,11 @@ async def drain(tasks):
 
 async def test_admission_full_answers_as_the_paas_table(tmp_path, log_scan, monkeypatch):
     """Admission full (all 32 of B's requests in flight, here held reading their bodies): a POST with an id of at most
-    64 KiB is read with the refusal allowance and gets 200 + -32003 under its id + Retry-After 5 (PaaS row "排隊已達上限
-    /等名額逾時，請求有 JSON-RPC id"); a notification, a GET and a POST over 64 KiB get 503 + -32003 id null + Retry-After
-    5 (the last one is HA's deviation, plan 8.8 #16: PaaS reads every body first). The default profile and C are
-    unaffected; B's own answers resume when its requests end."""
+    64 KiB is read and gets 200 + -32003 under its id + Retry-After 5 (PaaS row "排隊已達上限/等名額逾時，請求有
+    JSON-RPC id"); notifications/initialized is read and goes on beyond the admission (HM-31, MF-2 (b): 202 from the
+    child through the reserve); a GET and a POST over 64 KiB get 503 + -32003 id null + Retry-After 5, unread (the last
+    one is HA's deviation, plan 8.8 #16: PaaS reads every body first). The default profile and C are unaffected; B's
+    own answers resume when its requests end."""
     data = setup(tmp_path)
     children = holding_children(data)
     async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
@@ -201,20 +225,20 @@ async def test_admission_full_answers_as_the_paas_table(tmp_path, log_scan, monk
         opened = asyncio.Event()
         async with runtime.mcp() as client:
             session = await session_of(client, runtime.token(B))
-            held = [asyncio.create_task(client.post('/mcp', headers={**bearer(runtime.token(B)),
-                                                                     'Content-Type': 'application/json'},
-                                                    content=slow_body(b'{"jsonrpc":"2.0",', opened,
-                                                                      b'"id":1,"method":"ping"}')))
-                    for _ in range(limit)]
+            held_reads = [asyncio.create_task(client.post('/mcp', headers={**bearer(runtime.token(B)),
+                                                                           'Content-Type': 'application/json'},
+                                                          content=slow_body(b'{"jsonrpc":"2.0",', opened,
+                                                                            b'"id":1,"method":"ping"}')))
+                          for _ in range(limit)]
             await until(lambda: gate.active == limit)
             in_session = {**bearer(runtime.token(B)), 'Mcp-Session-Id': session}
             busy(await client.post('/mcp', headers=in_session, json=call(41)), status=200, retry_after=5, ident=41,
                  text=text)
             busy(await client.post(f'/private_{runtime.token(B)}/mcp', headers={**ACCEPT, 'Mcp-Session-Id': session},
                                    json=call('forty-two')), status=200, retry_after=5, ident='forty-two')
-            busy(await client.post('/mcp', headers=in_session,
-                                   json={'jsonrpc': '2.0', 'method': 'notifications/initialized'}),
-                 status=503, retry_after=5, ident=None, text=text)
+            note = await client.post('/mcp', headers=in_session,
+                                     json={'jsonrpc': '2.0', 'method': 'notifications/initialized'})
+            assert note.status_code == 202 and gate.beyond == 0  # HM-31: read and served beyond the admission
             busy(await client.get('/mcp', headers=in_session), status=503, retry_after=5, ident=None)
             large = {**call(43), 'params': {'name': TOOL, 'arguments': {**ARGUMENTS, 'pad': 'x' * (65 * 1024)}}}
             busy(await client.post('/mcp', headers=in_session, json=large), status=503, retry_after=5, ident=None)
@@ -226,8 +250,8 @@ async def test_admission_full_answers_as_the_paas_table(tmp_path, log_scan, monk
                 assert response.status_code == 200 and 'result' in response.json()
             assert gate.active == limit
             opened.set()
-            await drain(held)
-            await until(lambda: gate.active == 0 and gate.body_bytes == 0)
+            await drain(held_reads)
+            await until(lambda: gate.active == 0 and charged(runtime, B) == 0)
             response = await client.post('/mcp', headers=in_session, json=call(45))
             assert response.status_code == 200 and 'result' in response.json()
         lines = [line for line in warnings_of(log_scan) if 'profile=' + B[:8] in line]
@@ -235,54 +259,58 @@ async def test_admission_full_answers_as_the_paas_table(tmp_path, log_scan, monk
 
 
 async def test_the_byte_budget_answers_as_the_paas_table(tmp_path, log_scan, monkeypatch):
-    """The byte budget (here 1 MiB, monkeypatched; 64 MiB in the add-on): a declared Content-Length over what is left
-    refuses the request before its body is read (at most 64 KiB with an id: 200 + -32003 under its id; otherwise 503,
-    id null); a body without Content-Length that grows past the budget is cut off at once: 503 + -32003 id null +
-    Retry-After 5, nothing of it forwarded, its bytes given back (contract 2.4 row 3)."""
+    """B's share of the add-on's budget (here 1 MiB: its quota caps it; 64 MiB in the add-on), the PaaS budget rows
+    (d7f5849, HM-31): a large declared body that does not fit what is left is refused before it is read, drained, its id
+    from its head: 200 + -32003 under its id (503, id null, without one); a large body without Content-Length that grows
+    past the share is cut off at once (503 + -32003 id null + Retry-After 5), nothing of it forwarded; a small request
+    (64 KiB at most) is never charged nor refused. Every byte goes back; the default profile's share is its own."""
     monkeypatch.setattr(profiles, 'EXTRA_PROFILE_QUOTA', replace(profiles.EXTRA_PROFILE_QUOTA, body_bytes=MiB))
     data = setup(tmp_path)
     children = holding_children(data)
     async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
         watch(log_scan, data)
         gate = runtime.gate(B)
-        assert gate.quota.body_bytes == MiB
-        text = router().bytes_text(MiB)
+        assert gate.quota.body_bytes == MiB and gate.budget_share.limit == MiB
+        text = budget_text('profile', MiB)
         opened = asyncio.Event()
         async with runtime.mcp() as client:
             session = await session_of(client, runtime.token(B))
             headers = {**bearer(runtime.token(B)), 'Mcp-Session-Id': session, 'Content-Type': 'application/json'}
-            # One request declares the whole budget and sends a little of it.
-            held = asyncio.create_task(client.post('/mcp', headers={**headers, 'Content-Length': str(MiB)},
-                                                   content=slow_body(b'{', opened)))
-            await until(lambda: gate.body_bytes == MiB)
-            busy(await client.post('/mcp', headers=headers, content=json.dumps(call(51)).encode()),
-                 status=200, retry_after=5, ident=51, text=text)
-            busy(await client.post('/mcp', headers=headers,
-                                   content=json.dumps({'jsonrpc': '2.0', 'method': 'notifications/initialized'})),
-                 status=503, retry_after=5, ident=None, text=text)
-            # A body without Content-Length: refused once it would pass the budget.
+            # One request declares the whole share and sends a little of it.
+            reading = asyncio.create_task(client.post('/mcp', headers={**headers, 'Content-Length': str(MiB)},
+                                                      content=slow_body(b'{', opened)))
+            await until(lambda: charged(runtime, B) == MiB)
+            large = json.dumps({**call(51), 'params': {'name': TOOL, 'arguments': {
+                **ARGUMENTS, 'pad': 'x' * (100 * 1024)}}}).encode()
+            busy(await client.post('/mcp', headers=headers, content=large), status=200, retry_after=5, ident=51,
+                 text=text)
+            note = json.dumps({'jsonrpc': '2.0', 'method': 'notifications/initialized',
+                               'params': {'pad': 'x' * (100 * 1024)}}).encode()
+            busy(await client.post('/mcp', headers=headers, content=note), status=503, retry_after=5, ident=None,
+                 text=text)
+            small = await client.post('/mcp', headers=headers, content=json.dumps(call(52)).encode())
+            assert small.status_code == 200 and 'result' in small.json()  # never charged nor refused
             since = len(children.by_port[18000].requests)
-            busy(await client.post('/mcp', headers=headers, content=slow_body(b'{"jsonrpc":', asyncio.Event())),
-                 status=503, retry_after=5, ident=None, text=text)
-            assert len(children.by_port[18000].requests) == since
-            opened.set()
-            await drain([held])
-            await until(lambda: gate.body_bytes == 0 and gate.active == 0)
 
-            # One request alone past the budget: 512 KiB chunks, the third is not read.
-            async def growing():
+            async def growing():  # a body without Content-Length: refused once it would pass the share
                 for _ in range(3):
                     yield b' ' * (512 * 1024)
             busy(await client.post('/mcp', headers=headers, content=growing()), status=503, retry_after=5,
                  ident=None, text=text)
-            await until(lambda: gate.body_bytes == 0 and gate.active == 0)
-            response = await client.post('/mcp', headers=headers, content=json.dumps(call(52)).encode())
-            assert response.status_code == 200 and 'result' in response.json()
-            # The default profile's budget is its own.
+            assert len(children.by_port[18000].requests) == since
+            opened.set()
+            await drain([reading])
+            await until(lambda: charged(runtime, B) == 0 and gate.active == 0)
+            busy(await client.post('/mcp', headers=headers, content=growing()), status=503, retry_after=5,
+                 ident=None, text=text)  # alone past its share
+            await until(lambda: charged(runtime, B) == 0 and gate.active == 0)
+            # The default profile's share is its own.
             token = runtime.token('default')
             response = await client.post('/mcp', headers={**bearer(token), 'Mcp-Session-Id': await session_of(
-                client, token)}, json=call(53))
-            assert response.status_code == 200
+                client, token), 'Content-Type': 'application/json'}, content=large)
+            assert response.status_code == 200 and 'result' in response.json()
+        lines = [line for line in warnings_of(log_scan) if 'profile=' + B[:8] in line and 'byte budget' in line]
+        assert len(lines) == 1, lines  # one line a minute for this profile and situation
 
 
 async def test_a_busy_forwarding_slot_answers_as_the_paas_table(tmp_path, log_scan):
@@ -352,24 +380,18 @@ async def test_the_stream_cap_answers_429_at_once_and_posts_still_work(tmp_path,
             await until(lambda: gate.streams == 0 and gate.active == 0)
 
 
-# ---- the refusal allowance ----
+# ---- beyond the admission: a small body read once (HM-31, MF-2 (b); HM-08's refusal allowance is gone) ----
 
-async def test_the_refusal_allowance_reads_little_and_few(monkeypatch):
-    """The add-on's refusal allowance (contract 2.4: 8 at once, 512 KiB in all, at most 64 KiB and 2 s each) finds the
-    JSON-RPC id of a refused request: a single request object of a JSON body with a string or integer id; nothing for a
-    notification, a batch, a boolean or float id, a body that is not JSON or not application/json, a lone surrogate, a
-    body over 64 KiB (declared or read), one that does not end in time, a client that leaves; and nothing read at all
-    while 8 refusals are being read or their bytes would pass 512 KiB."""
+async def test_beyond_the_admission_a_small_body_is_read_once_and_handed_on(monkeypatch):
+    """What the gate reads of a POST beyond its profile's admission (contract 2.4): at most 64 KiB within 2 s, and no
+    bound on how many at once (PaaS: small requests' reads are not counted; the 8081 listener's bound holds them). Its
+    value as the gateway would read it: a JSON-RPC request with a string or integer id gets its busy answer under it;
+    a notification or a response is handed on with the body replayed once, then the server's own receive. Nothing for
+    a body over 64 KiB, one that does not end in time, a client that leaves, one that is not UTF-8, not strict JSON or
+    has a lone surrogate."""
     module = router()
-    allowance = module.RefusalAllowance()
-    assert (module.REFUSAL_SLOTS, module.REFUSAL_BYTES, module.REFUSAL_BODY_LIMIT, module.REFUSAL_READ_SECONDS) == \
-        (8, 512 * 1024, 64 * 1024, 2)
-
-    def scope(body=None, content_type='application/json', length=True):
-        headers = [(b'content-type', content_type.encode())] if content_type else []
-        if length and body is not None:
-            headers.append((b'content-length', str(len(body)).encode()))
-        return {'type': 'http', 'method': 'POST', 'headers': headers}
+    assert (module.REFUSAL_BODY_LIMIT, module.REFUSAL_READ_SECONDS) == (64 * 1024, 2)
+    assert not hasattr(module, 'RefusalAllowance')  # HM-31: no shared allowance any more
 
     def receiving(*chunks, stall=False):
         queue = list(chunks)
@@ -383,107 +405,88 @@ async def test_the_refusal_allowance_reads_little_and_few(monkeypatch):
             return {'type': 'http.disconnect'}
         return receive
 
-    async def read(body, **kwargs):
-        length = len(body) if kwargs.pop('declared', True) else None
-        return await allowance.read_message(scope(body, **kwargs), receiving(body), length)
-
     for value, expected in (({'jsonrpc': '2.0', 'id': 7, 'method': 'tools/call'}, 7),
                             ({'jsonrpc': '2.0', 'id': 'x', 'method': 'ping'}, 'x'),
                             ({'jsonrpc': '2.0', 'method': 'notifications/initialized'}, None),
                             ([{'jsonrpc': '2.0', 'id': 1, 'method': 'ping'}], None),
                             ({'jsonrpc': '2.0', 'id': True, 'method': 'ping'}, None),
                             ({'jsonrpc': '2.0', 'id': 1.0, 'method': 'ping'}, None),
-                            ({'jsonrpc': '2.0', 'id': 1, 'result': {}}, None),
-                            ({'id': 1, 'method': 'ping'}, None)):
-        assert gateway.request_id(await read(json.dumps(value).encode())) == expected, value
-    assert await read(b'{"jsonrpc":"2.0","id":1,"method":"ping"') is None
-    assert await read(b'{"jsonrpc":"2.0","id":"\\ud800","method":"ping"}') is None
-    assert await read(b'{"jsonrpc":"2.0","id":1,"method":"ping"}', content_type='text/plain') is None
-    assert await read(b'{"jsonrpc":"2.0","id":1,"method":"ping","pad":"' + b'x' * 65536 + b'"}',
-                      declared=False) is None
-    assert allowance.active == 0 and allowance.reserved == 0
-    # Too slow: nothing after 2 s (shortened here).
+                            ({'jsonrpc': '2.0', 'id': 1, 'result': {}}, None)):
+        body = await module.read_small(receiving(json.dumps(value).encode()))
+        assert gateway.request_id(module.small_message(body)) == expected, value
+    assert gateway.carries_no_request('POST', module.small_message(json.dumps(
+        {'jsonrpc': '2.0', 'method': 'notifications/initialized'}).encode()))
+    for body in (b'{"jsonrpc":"2.0","id":1,"method":"ping"', b'{"jsonrpc":"2.0","id":"\\ud800","method":"ping"}',
+                 '{"jsonrpc":"2.0","id":1,"method":"ping"}'.encode('utf-16'), b'{"a":1,"a":2}'):
+        assert module.small_message(body) is None, body
+    pieces = [b'{"jsonrpc":"2.0",', b'"id":9,', b'"method":"ping"}']
+    assert await module.read_small(receiving(*pieces)) == b''.join(pieces)
+    assert await module.read_small(receiving(b'x' * 40_000, b'x' * 30_000)) is None  # over 64 KiB once read
+    assert await module.read_small(receiving(b'{')) == b'{'  # a short body that ends: parsing decides
     monkeypatch.setattr(module, 'REFUSAL_READ_SECONDS', .05)
-    assert await allowance.read_message(scope(b'{}'), receiving(b'{', stall=True), 2) is None
-    assert allowance.active == 0 and allowance.reserved == 0
+    assert await module.read_small(receiving(b'{', stall=True)) is None  # too slow
     monkeypatch.setattr(module, 'REFUSAL_READ_SECONDS', 2)
-    # 8 at once, then nothing is read; the bytes: 512 KiB in all (an unknown length reserves 64 KiB).
-    stalled = [asyncio.create_task(allowance.read_message(scope(None, length=False), receiving(b'{', stall=True),
-                                                          None)) for _ in range(8)]
-    await until(lambda: allowance.active == 8)
-    assert allowance.reserved == 8 * 64 * 1024
-    untouched = []
 
-    async def never():
-        untouched.append(1)
-        return {'type': 'http.request', 'body': b'{}', 'more_body': False}
-    assert await allowance.read_message(scope(b'{}'), never, 2) is None and untouched == []
-    for task in stalled:
-        task.cancel()
-    await asyncio.gather(*stalled, return_exceptions=True)
-    assert allowance.active == 0 and allowance.reserved == 0
-    # The bytes (512 KiB in all) bite on their own once more than 8 could be read at once.
-    wider = module.RefusalAllowance(slots=9)
-    full = [asyncio.create_task(wider.read_message(scope(None, length=False), receiving(b'{', stall=True), None))
-            for _ in range(8)]
-    await until(lambda: wider.active == 8 and wider.reserved == 512 * 1024)
-    assert await wider.read_message(scope(b'{}'), never, 2) is None and untouched == []
-    for task in full:
-        task.cancel()
-    await asyncio.gather(*full, return_exceptions=True)
-    assert wider.active == 0 and wider.reserved == 0
-    # Larger than 64 KiB declared: nothing read.
-    assert await allowance.read_message(scope(b'x' * 65537), never, 65537) is None and untouched == []
+    async def left():
+        return {'type': 'http.disconnect'}
+    assert await module.read_small(left) is None  # the client left
+    # many at once: none waits for another (no shared allowance)
+    reads = [asyncio.create_task(module.read_small(receiving(b'{"jsonrpc":"2.0","id":1,"method":"ping"}')))
+             for _ in range(64)]
+    assert all(body is not None for body in await asyncio.gather(*reads))
+    replay = module.replayed(b'{}', left)
+    assert await replay() == {'type': 'http.request', 'body': b'{}', 'more_body': False}
+    assert await replay() == {'type': 'http.disconnect'}
 
 
 # ---- the default profile as the attacker (C1-M5, I8) and the starvation cases (G2 S5, S6) ----
 
-async def test_the_default_profiles_token_holder_cannot_exhaust_memory(tmp_path, log_scan):
-    """The default profile's token holder sends 64 slow 16 MiB bodies at once (C1-M5): the default profile's byte
-    budget (64 MiB, as every profile's) admits four, which may read their 16 MiB each; the other 60 are refused before a
-    byte is read (503, Retry-After 5: over 64 KiB, so no id is looked for). What the gateway holds for the default
-    profile never passes 64 MiB, and an idle additional profile is answered at once all along (I8)."""
+async def test_the_default_profiles_token_holder_cannot_exhaust_memory(tmp_path, log_scan, monkeypatch):
+    """The default profile's token holder sends 12 slow 16 MiB bodies at once (C1-M5): its share of the add-on's budget
+    (64 MiB, its quota's, as every profile's; HM-31) holds four, charged before a byte is read, which may read their
+    16 MiB each; the other 8 do not fit and are drained, nothing of them kept but their head and tail (PaaS: the client
+    that sends its whole body first gets an answer, not a reset), then answered 503 + Retry-After 5 (no id in their
+    head). What the gateway holds for the default profile never passes 64 MiB, and an idle additional profile is
+    answered at once all along (I8)."""
+    add_on_budget(monkeypatch, 1024, 512)
     data = setup(tmp_path, extras=(B,))
     children = holding_children(data, extras=(B,))
     async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
         watch(log_scan, data)
         gate = runtime.gate('default')
-        assert gate.quota.body_bytes == 64 * MiB and gate.quota.admission == 64
+        assert gate.quota.body_bytes == 64 * MiB and gate.budget_share.limit == 64 * MiB and gate.quota.admission == 64
         opened = asyncio.Event()
-        peak = [0]
         token = runtime.token('default')
-        async with runtime.mcp() as client:
+        async with runtime.mcp(timeout=60) as client:
             session = await session_of(client, token)
             headers = {**bearer(token), 'Mcp-Session-Id': session, 'Content-Type': 'application/json',
                        'Content-Length': str(16 * MiB)}
+            chunk = b' ' * MiB
 
             def sixteen():
                 async def chunks():
                     for _ in range(15):
-                        yield b' ' * MiB
-                        peak[0] = max(peak[0], gate.body_bytes)
+                        yield chunk
                     await opened.wait()
                     yield b' ' * (MiB - 1) + b'{'
                 return chunks()
-            attack = [asyncio.create_task(client.post('/mcp', headers=headers, content=sixteen())) for _ in range(64)]
-            refused = []
-            async with asyncio.timeout(30):
-                while len(refused) < 60:
-                    await asyncio.sleep(.01)
-                    refused = [task for task in attack if task.done()]
-            for task in refused:
-                busy(task.result(), status=503, retry_after=5, ident=None)
-            assert gate.body_bytes == 64 * MiB and gate.active == 4 + 0
+            attack = [asyncio.create_task(client.post('/mcp', headers=headers, content=sixteen())) for _ in range(12)]
+            await until(lambda: charged(runtime, 'default') == 64 * MiB and gate.active == 12, 30)
             b_token = runtime.token(B)
             loop = asyncio.get_running_loop()
             started = loop.time()
             response = await client.post('/mcp', headers={**bearer(b_token), 'Mcp-Session-Id': await session_of(
                 client, b_token)}, json=call(100))
             assert response.status_code == 200 and 'result' in response.json() and loop.time() - started < 2
+            assert charged(runtime, 'default') == 64 * MiB
             opened.set()
-            await drain(attack)
-            await until(lambda: gate.body_bytes == 0 and gate.active == 0)
-        assert peak[0] <= 64 * MiB
+            results = await drain(attack)
+            refused = [r for r in results if r.status_code == 503]
+            assert len(refused) == 8 and len([r for r in results if r.status_code == 400]) == 4  # '{': not JSON
+            for result in refused:
+                busy(result, status=503, retry_after=5, ident=None, text=budget_text('profile', 64 * MiB))
+            await until(lambda: charged(runtime, 'default') == 0 and gate.active == 0)
+        assert runtime.manager.budget.peak <= 64 * MiB
 
 
 async def test_a_saturated_profile_does_not_starve_an_idle_one_on_real_sockets(tmp_path, log_scan):
@@ -555,7 +558,7 @@ async def test_a_saturated_profile_does_not_starve_an_idle_one_on_real_sockets(t
                 assert real[B].peak <= profiles.EXTRA_PROFILE_QUOTA.forward_slots
                 for writer in sockets:  # the slow bodies' clients leave: their requests end, and so does the admission
                     writer.close()
-                await until(lambda: gate.active == 0 and gate.body_bytes == 0, 15)
+                await until(lambda: gate.active == 0 and charged(runtime, 'default') == 0, 15)
     finally:
         for writer in sockets:
             writer.close()
@@ -602,22 +605,21 @@ def forwarded_bodies(port):
     return len(sizes), sum(sizes)
 
 
-@pytest.mark.parametrize('text,streams,refused', [('x', 4, 503), ('中', 2, 503), ('\U0001F600', 1, 200)],
-                         ids=['ascii', 'cjk', 'emoji'])
-async def test_an_event_stream_keeps_its_bytes_charged_until_it_ends(tmp_path, log_scan, monkeypatch, text, streams,
-                                                                     refused):
+@pytest.mark.parametrize('text,streams', [('x', 4), ('中', 2), ('\U0001F600', 1)], ids=['ascii', 'cjk', 'emoji'])
+async def test_an_event_stream_keeps_its_bytes_charged_until_it_ends(tmp_path, log_scan, monkeypatch, text, streams):
     """A child answers a request with an event stream whose headers come before its tool runs, and the gateway's
     forwarded copy of the body stays referenced until the stream ends (HM-08 review MF-1: E1 found 192 MiB held for an
     additional profile and 480 MiB for the default one while the dispatcher counted 0). So a request stays charged until
     it ends, and it is charged the larger of what was read and what is forwarded: the gateway re-serializes the body
     with ASCII escapes, a CJK character (3 UTF-8 bytes) as 6 bytes, an emoji (4) as 12 (review S-1).
 
-    B's budget is 4 MiB here (64 MiB in the add-on). Its token holder sends 1 MiB requests one after another, each once
-    the previous one's stream has started: whatever the text, the forwarded bodies the gateway still holds never pass
-    the budget, and the charge always covers them. ASCII: 4 streams, the fifth is refused before a byte is read (503:
-    over 64 KiB). CJK, forwarded as 2 MiB: 2 streams. Emoji, forwarded as 3 MiB: 1 stream; the next one fits as read but
-    not as forwarded, so it is refused once read: 200 + -32003 under its id, never sent to the child. When the streams
-    end, every byte is given back and no forwarded body is left."""
+    B's share is 4 MiB here (its quota caps it; 64 MiB in the add-on). Its token holder sends 1 MiB requests one after
+    another, each once the previous one's stream has started: whatever the text, the forwarded bodies the gateway still
+    holds never pass the share, and the charge always covers them. ASCII: 4 streams, the fifth is refused before a byte
+    is read and drained, its id from its head (HM-31, PaaS: 200 + -32003 under its id). CJK, forwarded as 2 MiB: 2
+    streams. Emoji, forwarded as 3 MiB: 1 stream; the next one fits as read but not as forwarded, so it is refused once
+    read: 200 + -32003 under its id, never sent to the child. When the streams end, every byte is given back and no
+    forwarded body is left."""
     budget = 4 * MiB
     monkeypatch.setattr(profiles, 'EXTRA_PROFILE_QUOTA', replace(profiles.EXTRA_PROFILE_QUOTA, body_bytes=budget))
     data = setup(tmp_path, extras=(B,))
@@ -646,21 +648,20 @@ async def test_an_event_stream_keeps_its_bytes_charged_until_it_ends(tmp_path, l
                 await until(lambda: len(child.sizes) == before + 1 or task.done(), 30)
                 if task.done():
                     answers[ident] = task.result()
-                held, held_bytes = forwarded_bodies(18000)
-                assert held_bytes <= gate.body_bytes <= budget, (ident, held_bytes, gate.body_bytes)
+                count, held_bytes = forwarded_bodies(18000)
+                assert held_bytes <= charged(runtime, B) <= budget, (ident, held_bytes, charged(runtime, B))
             assert len(child.sizes) == streams and sorted(answers) == list(range(streams + 1, 9))
-            held, held_bytes = forwarded_bodies(18000)
-            assert held == streams and held_bytes == sum(child.sizes)  # every open stream still holds its body
+            count, held_bytes = forwarded_bodies(18000)
+            assert count == streams and held_bytes == sum(child.sizes)  # every open stream still holds its body
             factor = {1: 1, 3: 2, 4: 3}[text_bytes]  # forwarded size / received size
             assert all(factor * (MiB - 200) < size <= factor * MiB for size in child.sizes), child.sizes
             for ident, response in answers.items():
-                busy(response, status=refused, retry_after=5, ident=ident if refused == 200 else None,
-                     text=router().bytes_text(budget))
+                busy(response, status=200, retry_after=5, ident=ident, text=budget_text('profile', budget))
             child.free.set()
             for task in tasks[:streams]:
                 response = await task
                 assert response.status_code == 200 and 'result' in response.text
-            await until(lambda: gate.active == 0 and gate.body_bytes == 0)
+            await until(lambda: gate.active == 0 and charged(runtime, B) == 0)
         del tasks, answers, task
         assert forwarded_bodies(18000) == (0, 0)
         assert len(child.sizes) == streams  # a refused body never reached the child
@@ -683,18 +684,17 @@ async def test_a_wrong_token_takes_no_admission_and_gets_todays_answer(tmp_path,
         log_scan.watch(unknown)
         opened = asyncio.Event()
         async with runtime.mcp() as client:
-            held = [asyncio.create_task(client.post('/mcp', headers={**bearer(token), 'Content-Type': 'application/json'},
-                                                    content=slow_body(b'{"jsonrpc":"2.0",', opened,
-                                                                      b'"id":1,"method":"ping"}')))
-                    for _ in range(limit)]
+            held_reads = [asyncio.create_task(client.post(
+                '/mcp', headers={**bearer(token), 'Content-Type': 'application/json'},
+                content=slow_body(b'{"jsonrpc":"2.0",', opened, b'"id":1,"method":"ping"}'))) for _ in range(limit)]
             await until(lambda: gate.active == limit)
             for path, headers in (('/mcp', bearer(unknown)), (f'/private_{unknown}/mcp', dict(ACCEPT))):
                 response = await client.post(path, headers=headers, json=initialize_message())
                 assert answer(response) == (NOT_FOUND if path.startswith('/private_') else BEARER_REQUIRED)
             assert gate.active == limit
             opened.set()
-            await drain(held)
-            await until(lambda: gate.active == 0 and gate.body_bytes == 0)
+            await drain(held_reads)
+            await until(lambda: gate.active == 0 and charged(runtime, 'default') == 0)
         assert not [line for line in warnings_of(log_scan) if 'profile=default' in line]  # nothing was refused
 
 
@@ -729,7 +729,8 @@ async def test_admission_bytes_and_streams_are_given_back_however_a_request_ends
     cancellation): an answer, an answer of the gateway's own (502 when the child cannot be reached), a refusal of the
     app (400, 403, 405, 415), a client that is cancelled while its body is read or while its call waits, a stream that
     ends. A request's bytes are given back when it ends, not when its answer starts (HM-08 review MF-1: PaaS
-    test_already_read_response_returns_its_slot_at_once is about connection slots; PaaS has no byte budget)."""
+    test_already_read_response_returns_its_slot_at_once is about connection slots). HM-31: only a large body (over 64
+    KiB) is charged, so the bodies that must show their charge here are larger than that."""
     data = setup(tmp_path, extras=(B,))
     children = holding_children(data, extras=(B,))
     async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
@@ -738,7 +739,7 @@ async def test_admission_bytes_and_streams_are_given_back_however_a_request_ends
         token = runtime.token(B)
 
         def clear():
-            return gate.active == 0 and gate.body_bytes == 0 and gate.streams == 0
+            return gate.active == 0 and charged(runtime, B) == 0 and gate.streams == 0
         async with runtime.mcp() as client:
             session = await session_of(client, token)
             headers = {**bearer(token), 'Mcp-Session-Id': session}
@@ -754,8 +755,8 @@ async def test_admission_bytes_and_streams_are_given_back_however_a_request_ends
                 assert clear()
             opened = asyncio.Event()
             reading = asyncio.create_task(client.post('/mcp', headers={**headers, 'Content-Type': 'application/json'},
-                                                      content=slow_body(b'{"a":', opened)))
-            await until(lambda: gate.active == 1 and gate.body_bytes > 0)
+                                                      content=slow_body(b'{"a":"' + b'x' * (100 * 1024), opened)))
+            await until(lambda: gate.active == 1 and charged(runtime, B) > 0)
             reading.cancel()
             await asyncio.gather(reading, return_exceptions=True)
             await until(clear)
@@ -773,12 +774,13 @@ async def test_admission_bytes_and_streams_are_given_back_however_a_request_ends
             # (HM-08 review MF-1: the answer's headers come before the tool runs, and the gateway's forwarded copy of the
             # body stays referenced until the end), the larger of what was read and what was forwarded.
             child.streaming = True
-            body = json.dumps(call(5)).encode()
+            body = json.dumps({**call(5), 'params': {'name': TOOL, 'arguments': {
+                **ARGUMENTS, 'pad': 'x' * (100 * 1024)}}}).encode()
             answered = asyncio.create_task(client.post('/mcp', headers={**headers, 'Content-Type': 'application/json'},
                                                        content=body))
             await until(lambda: gate.active == 2 and child.requests and child.requests[-1].method == 'POST')
             await asyncio.sleep(.05)  # the stream has started: nothing is given back before it ends
-            assert gate.body_bytes == max(len(body), len(child.requests[-1].content)) > 0
+            assert charged(runtime, B) == max(len(body), len(child.requests[-1].content)) > 64 * 1024
             assert gate.streams == 1
             child.free.set()
             assert (await stream).status_code == 200
@@ -820,7 +822,8 @@ async def test_switched_off_a_busy_slot_and_a_client_leaving_answer_as_before(tm
     """With the product switched off (the repository), the answers HM-08 changes only once a product is switched on stay
     those of bb48449, byte for byte (HM-01 provenance note 4.2; contract 4.2): a forwarding slot busy for a second
     answers 503 {"error":"request denied"}; a client that leaves while its body is read, 403 {"error":"request
-    denied"} (the gateway's own answer for ClientDisconnect); and no admission or byte budget applies (no dispatcher)."""
+    denied"} (the gateway's own answer for ClientDisconnect); and no admission applies (no dispatcher). HM-31: the
+    request body budget applies switched off too (not gated, contract 1.2); a client leaving is no budget refusal."""
     data = tmp_path / 'data'
     configure(data, PRODUCT)
     children = Children()
