@@ -488,7 +488,9 @@ async def test_make_apps_takes_only_a_share_of_a_budget_beside_hm09s_and_hm10s_o
     import inspect
 
     parameters = inspect.signature(gateway.make_apps).parameters
-    assert list(parameters)[-4:] == ['child_blocked', 'default_endpoint', 'bootstrap_fields', 'body_budget']
+    # HM-12's stop_child comes after it (tests/test_odoo_identity_rotation.py checks that option)
+    assert list(parameters)[-5:] == ['child_blocked', 'default_endpoint', 'bootstrap_fields', 'body_budget',
+                                     'stop_child']
     assert parameters['body_budget'].kind is inspect.Parameter.KEYWORD_ONLY and parameters['body_budget'].default is None
     limits(monkeypatch, 16, 16)
     configure(tmp_path / 'odoo', 'odoo')

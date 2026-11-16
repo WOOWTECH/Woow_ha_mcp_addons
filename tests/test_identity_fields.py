@@ -1,4 +1,4 @@
-"""HM-07: every stored backend field and every state field is classified (identity_fields; not wired yet).
+"""HM-07: every stored backend field and every state field is classified (identity_fields; HM-12 wires it).
 
 Multi-profile plan §4.4 ("身分欄位分類"), §8.8 #40; FEATURE-MATRIX FM-80; DQ-40 ⑩ (2026-11-14). HM-12 (a changed
 identity rotates the token), HM-13b (restore records: identity and policy, never secrets) and DQ-40 ⑨ (a new

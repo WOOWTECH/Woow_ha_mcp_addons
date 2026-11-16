@@ -1,13 +1,14 @@
 """HM-07: the profile data layer is not wired and an upgrade rewrites nothing (plan §3.3, §7.1; I6).
 
-- Not wired: no entry point imports identity_fields.py or HM-13a's restore_detect.py (which takes its file names from
-  profiles.py): the 8081 and 8099 answers stay those HM-01 froze (tests/test_single_profile_golden.py,
-  tests/test_mcp_contract_freeze.py, tests/test_admin_contract_freeze.py). HM-08 wired features.py and profiles.py:
-  run_product asks features.enabled() at every start, the gateway takes the profile id grammar from profiles.py, and
-  only a switched-on product's dispatcher reads the index (tests/test_router_passthrough.py: switched off, no index or
-  profile directory is read). HM-20's loopback rule reads features.enabled() too (products.loopback_refused; switched
-  off, it changes no answer). HM-13b wires the existence check of profiles.py and the restore check: that slice
-  changes the list below on purpose.
+- Not wired: no entry point imports HM-13a's restore_detect.py (which takes its file names from profiles.py): the 8081
+  and 8099 answers stay those HM-01 froze (tests/test_single_profile_golden.py, tests/test_mcp_contract_freeze.py,
+  tests/test_admin_contract_freeze.py). HM-08 wired features.py and profiles.py: run_product asks features.enabled() at
+  every start, the gateway takes the profile id grammar from profiles.py, and only a switched-on product's dispatcher
+  reads the index (tests/test_router_passthrough.py: switched off, no index or profile directory is read). HM-20's
+  loopback rule reads features.enabled() too (products.loopback_refused; switched off, it changes no answer). HM-12
+  wired identity_fields.py (products.identity_rebound, backend_edit.stored_secret_to_new_origin: data the gateway
+  reads only for a switched-on product; switched off, it changes no answer). HM-13b wires the existence check of
+  profiles.py and the restore check: that slice changes the list below on purpose.
 - The switch: MULTI_PROFILE_PRODUCTS is empty; features.enabled() reads it at every call (never bound at import), so
   an integration test can switch a product on with a subprocess preamble (tests/test_real_products.py style).
 - Zero rewrite: a state.json bb48449 wrote (one installed add-on per product, tests/fixtures/upgrade_zero_rewrite)
@@ -40,9 +41,9 @@ pytestmark = pytest.mark.usefixtures('log_scan')  # every new test runs under th
 ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / 'packages/mcp-admin-core/mcp_admin_core'
 ZERO_REWRITE = ROOT / 'tests/fixtures/upgrade_zero_rewrite'
-# HM-07's identity_fields and HM-13a's restore_detect (HM-08 wired HM-07's features and profiles, and HM-20's
-# loopback rule reads features too; HM-13b wires restore_detect and HM-12 identity_fields)
-UNWIRED = ('identity_fields', 'restore_detect')
+# HM-13a's restore_detect (HM-08 wired HM-07's features and profiles, HM-20's loopback rule reads features too and HM-12
+# wired HM-07's identity_fields; HM-13b wires restore_detect)
+UNWIRED = ('restore_detect',)
 A, B = 'a' * 24, 'b' * 24
 
 
