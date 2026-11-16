@@ -18,6 +18,8 @@ tests/test_request_budget.py). Bodies are made once per test and shared, never o
 import asyncio
 from contextlib import asynccontextmanager
 import json
+import secrets
+import time
 import tracemalloc
 
 import httpx
@@ -29,7 +31,7 @@ from mcp_admin_core import gateway, profiles
 from mcp_admin_core.products import ProductStore, TOOLS
 from switched_gateway import B, PRODUCT, GatewayChild, bearer, call, session_of, setup, until, watch
 import test_single_profile_golden as golden
-from test_single_profile_golden import configure, production_runtime, stored
+from test_single_profile_golden import ADMIN, GENUINE_CLIENT, INGRESS, configure, production_runtime, stored
 
 pytestmark = pytest.mark.usefixtures('log_scan')
 MiB = 1024 * 1024
@@ -858,3 +860,40 @@ async def test_a_switched_on_profiles_chunked_body_that_states_a_small_length_is
             default.free.set()
             assert (await first).status_code == 200
             assert budget.used() == 0
+
+
+async def test_a_profile_created_through_the_profile_routes_is_charged_to_its_own_share(tmp_path, monkeypatch, log_scan):
+    """After HM-10 (the rebase onto claude-delivery): a profile created while the add-on runs (POST /api/profiles on
+    8099, ProfileAdmin, ProfileManager.add) gets its own share of the add-on's one budget, as a profile the index
+    lists at startup does: its app charges its share (capped at half the add-on's 32 MiB: 16 MiB), a large body is
+    charged to it before a byte is read, never to the default profile or anyone else, and goes back at the end."""
+    monkeypatch.setattr(profiles, 'port_occupied', lambda port: None)  # tests/owned_network.py: no bind on 18000-18099
+    monkeypatch.setattr(profiles, 'memory_limit_mib', lambda: None)  # the creation's memory check: the test's memory
+    monkeypatch.setattr(profiles, 'available_memory_mib', lambda: 4096)
+    async with switched(tmp_path, monkeypatch, log_scan, 32, 16) as (runtime, _):
+        budget = runtime.manager.budget
+        async with GENUINE_CLIENT(transport=httpx.ASGITransport(app=runtime.admin_app, client=INGRESS),
+                                  base_url='http://admin') as admin:
+            boot = (await admin.get('/api/bootstrap', headers={**ADMIN, 'X-MCP-Profile': 'default'})).json()
+            listed = await admin.get('/api/profiles', headers=ADMIN)
+            created = await admin.post('/api/profiles', json={'label': 'Budget Desk'}, headers={
+                **ADMIN, 'X-CSRF-Token': boot['csrf'], 'If-Match': listed.headers['etag'],
+                'Idempotency-Key': f'{int(time.time() * 1000)}.{secrets.token_urlsafe(16)}'})
+        assert created.status_code == 201, created.content
+        new = created.json()['id']
+        state = stored(profiles.Layout(runtime.data).profile(new))
+        log_scan.watch(state['token'], state['child_token'])
+        share = runtime.gate(new).budget_share
+        assert (share.budget, share.profile_id, share.limit) == (budget, new, 16 * MiB)
+        assert runtime.manager.get(new).runtime.mcp_app.state.body_budget is share
+        async with runtime.mcp() as client:
+            session = await session_of(client, state['token'])
+        body = padded(5, MiB)
+        seen = []
+        status, answer, handed = await drive(
+            runtime.mcp_app, raw_scope(state['token'], [(b'content-length', str(len(body)).encode())], session=session),
+            pieces_of(body), observe=lambda: seen.append({key: budget.used(key) for key in (new, 'default', B, None)}))
+        assert handed == len(pieces_of(body)) and status == 200, (status, answer[:200])
+        assert seen[0] == {new: len(body), 'default': 0, B: 0, None: len(body)}  # its own share, before a byte
+        assert all(value['default'] == value[B] == 0 for value in seen)
+        assert budget.used() == 0  # given back when the request ended
