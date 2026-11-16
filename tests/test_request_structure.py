@@ -431,6 +431,19 @@ async def test_utf16_bodies_are_refused_and_never_parsed(odoo_store, monkeypatch
     assert child.seen == [] and config.strict_json is not boom
 
 
+async def test_a_utf8_bom_does_not_hide_a_body_from_the_guard(odoo_store, monkeypatch):
+    """HM-31 review S-2: a UTF-8 BOM is valid UTF-8 and json.loads reads past it (utf-8-sig), so the guard scans such a
+    body as any other: a BOM-prefixed pathological body is refused before the gateway's parser runs (413: no id at its
+    head), never forwarded."""
+    def boom(raw):
+        raise AssertionError('strict_json ran on a pathological body')
+    monkeypatch.setattr(gateway, 'strict_json', boom)
+    child = Child()
+    body = b'\xef\xbb\xbf[' + b','.join([b'[]'] * (DEFAULT_MAX_TOTAL_ELEMENTS + 1)) + b']'
+    refusal(await post(odoo_store, child, body), 413, None)
+    assert child.seen == []
+
+
 async def test_legitimate_large_calls_still_forward(odoo_store):
     """A 10 MiB file as base64 (13.3 MiB, no element) and an Odoo batch create of 3,000 records of 30 fields (about
     93,000 elements): both reach the child; valid UTF-8 with Chinese and emoji too (PaaS round 3)."""

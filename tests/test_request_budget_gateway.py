@@ -18,6 +18,7 @@ tests/test_request_budget.py). Bodies are made once per test and shared, never o
 import asyncio
 from contextlib import asynccontextmanager
 import json
+import tracemalloc
 
 import httpx
 import pytest
@@ -512,6 +513,243 @@ async def test_every_products_runtime_reads_under_the_budget_and_the_guard(tmp_p
             assert utf16.status_code == 413 and 'not UTF-8' in utf16.json()['error']['message']
         assert not any(b'hm31-deep' in (request.content or b'') for request in runtime.child.requests)
 
+
+# ---- the declared length, the single-request ceiling and a refused body's drain (HM-31 review MF-1, MF-3, S-2) ----
+
+def raw_scope(token, extra, method='POST', session=SESSION):
+    """An MCP request's ASGI scope as uvicorn hands it (header names in lower case), the test's framing headers last.
+    h11 0.16.0 (the add-on's HTTP parser: no httptools in its environment) frames a request that has both
+    Content-Length and Transfer-Encoding: chunked by its chunks and hands content-length on as sent (review MF-1)."""
+    headers = [(b'host', b'mcp'), (b'authorization', b'Bearer ' + token.encode()), (b'accept', ACCEPT.encode()),
+               (b'content-type', b'application/json'), (b'mcp-session-id', session.encode()), *extra]
+    return {'type': 'http', 'asgi': {'version': '3.0'}, 'http_version': '1.1', 'method': method, 'scheme': 'http',
+            'path': '/mcp', 'raw_path': b'/mcp', 'query_string': b'', 'root_path': '', 'headers': headers,
+            'client': ('127.0.0.1', 1), 'server': ('mcp', 80)}
+
+
+async def drive(app, scope, pieces, *, observe=None, stall_after=None, gap=0.0):
+    """Hand pieces to app as uvicorn does (observe() after each one); after stall_after pieces, or the last, nothing
+    more until the answer is sent, then the client leaves. (status, body, the number of pieces handed)."""
+    sent, handed = [], [0]
+    done = asyncio.Event()
+
+    async def receive():
+        if handed[0] < len(pieces) and (stall_after is None or handed[0] < stall_after):
+            if gap:
+                await asyncio.sleep(gap)
+            piece = pieces[handed[0]]
+            handed[0] += 1
+            if observe is not None:
+                observe()
+            return {'type': 'http.request', 'body': piece, 'more_body': handed[0] < len(pieces)}
+        await done.wait()
+        return {'type': 'http.disconnect'}
+
+    async def send(message):
+        sent.append(message)
+        if message['type'] == 'http.response.body' and not message.get('more_body'):
+            done.set()
+    await app(scope, receive, send)
+    start = next(message for message in sent if message['type'] == 'http.response.start')
+    return (start['status'], b''.join(message.get('body', b'') for message in sent
+                                      if message['type'] == 'http.response.body'), handed[0])
+
+
+def pieces_of(body, size=256 * 1024):
+    return [body[start:start + size] for start in range(0, len(body), size)]
+
+
+@pytest.mark.parametrize('stated', [b'10', b'70000'], ids=['small', 'large'])
+async def test_a_declared_length_beside_a_chunked_framing_is_not_the_body_s(tmp_path, monkeypatch, stated):
+    """Review MF-1 (RFC 9112 6.3: Transfer-Encoding frames the body, Content-Length is then ignored): a body that states
+    10 (or 70,000) bytes and sends 10 MiB chunked is charged as it arrives, as one without Content-Length is, so it is
+    cut off once it does not fit (200 + -32003 under the id its head shows; never forwarded). Before the fix the
+    stated 10 bytes left it unwatched and uncharged, the stated 70,000 charged only them: either way the whole body
+    was read outside the budget."""
+    limits(monkeypatch, 16, 16)
+    child = Child()
+    async with single(tmp_path, child) as gw:
+        first = await hold(gw, child, 1, 10 * MiB)
+        pieces = pieces_of(encoded(held_call(2, 10 * MiB)))
+        seen = []
+        status, answer, handed = await drive(gw.app, raw_scope(gw.store.load().token, [
+            (b'content-length', stated), (b'transfer-encoding', b'chunked')]), pieces,
+            observe=lambda: seen.append(gw.budget.used()))
+        assert status == 200 and json.loads(answer)['id'] == 2 and json.loads(answer)['error']['code'] == -32003
+        assert handed < len(pieces), f'the whole body ({len(pieces)} pieces) was read outside the budget'
+        assert max(seen) > 10 * MiB and 2 not in child.ids()
+        child.release.set()
+        await first
+        assert gw.budget.used() == 0
+
+
+async def test_a_declared_length_beside_a_chunked_framing_does_not_escape_the_idle_limit(tmp_path, monkeypatch):
+    """Review MF-1: a body that states 10 bytes, sends a large first chunk and then nothing is watched for idleness as
+    any large body is: the idle 408 (-32003, Connection: close) after the limit (0.3 s here), its bytes given back."""
+    limits(monkeypatch, 16, 16, idle=.3)
+    child = Child()
+    async with single(tmp_path, child) as gw:
+        pieces = pieces_of(encoded(held_call(3, 2 * MiB, hold=False)), MiB)
+        started = asyncio.get_running_loop().time()
+        status, answer, handed = await asyncio.wait_for(drive(gw.app, raw_scope(gw.store.load().token, [
+            (b'content-length', b'10'), (b'transfer-encoding', b'chunked')]), pieces, stall_after=1), 10)
+        assert (status, handed) == (408, 1)
+        assert json.loads(answer) == {'jsonrpc': '2.0', 'id': None, 'error': {'code': -32003,
+                                                                              'message': rb().idle_text(.3)}}
+        assert asyncio.get_running_loop().time() - started < 5
+        assert gw.budget.used() == 0 and child.ids() == []
+
+
+async def test_the_production_listener_charges_and_watches_a_chunked_body_that_states_a_small_length(
+        tmp_path, log_scan, monkeypatch):
+    """Review MF-1 over a real socket: the add-on's own uvicorn 0.38.0 and h11 0.16.0 (run_product's listener). A POST
+    that states Content-Length: 10 and sends its body chunked is charged as its chunks arrive (here 1 MiB) and, once it
+    stalls, gets the idle 408 (0.3 s here) with Connection: close, not the whole-read limit's (5 s here); the child
+    gets nothing and every byte goes back."""
+    limits(monkeypatch, 16, 16, idle=.3)
+    monkeypatch.setattr(gateway, 'BODY_SECONDS', 5)
+    data = tmp_path / 'data'
+    configure(data, 'odoo')
+    async with production_runtime('odoo', data, sockets=True) as runtime:
+        token = stored(data)['token']
+        log_scan.watch(token, stored(data)['child_token'])
+        budget = runtime.mcp_app.state.body_budget.budget
+        chunk = (b'{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"x","arguments":{"hm31-cl-te":"'
+                 + b'x' * MiB)
+        reader, writer = await asyncio.open_connection('127.0.0.1', runtime.mcp_port)
+        try:
+            writer.write(b'POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer ' + token.encode()
+                         + b'\r\nAccept: ' + ACCEPT.encode() + b'\r\nContent-Type: application/json\r\n'
+                         + b'Content-Length: 10\r\nTransfer-Encoding: chunked\r\n\r\n'
+                         + b'%x\r\n' % len(chunk) + chunk + b'\r\n')
+            await writer.drain()
+            await until(lambda: budget.used() >= MiB, 5)  # charged as it arrives
+            started = asyncio.get_running_loop().time()
+            async with asyncio.timeout(10):
+                answer = await reader.read()  # the server closes the connection once it answered
+            elapsed = asyncio.get_running_loop().time() - started
+        finally:
+            writer.close()
+            await asyncio.gather(writer.wait_closed(), return_exceptions=True)
+        head, _, payload = answer.partition(b'\r\n\r\n')
+        assert head.startswith(b'HTTP/1.1 408 ') and b'\r\nconnection: close' in head.lower(), head
+        assert json.loads(payload) == {'jsonrpc': '2.0', 'id': None, 'error': {'code': -32003,
+                                                                               'message': rb().idle_text(.3)}}
+        assert elapsed < 3
+        await until(lambda: budget.used() == 0, 5)  # the request's task gives its bytes back once its answer is out
+        assert not any(b'hm31-cl-te' in (request.content or b'') for request in runtime.child.requests)
+
+
+async def test_a_body_declared_over_the_single_request_ceiling_gets_todays_413_before_a_byte_is_read(
+        tmp_path, monkeypatch, log_scan):
+    """Review MF-3: a body that states more than 16 MiB can never be served. Today's 413 {"error":"request denied"}
+    before a byte of it is read, with part of the budget held or none: never charged, never the budget's retryable
+    200 + -32003 (PaaS: not charged, 413; n8n's read_body refuses it before reading too). A body framed chunked is
+    judged by what arrives whatever its Content-Length says (RFC 9112 6.3): a small one stating 17 MiB is answered as
+    before."""
+    limits(monkeypatch, 16, 16)
+    child = Child()
+    async with single(tmp_path, child) as gw:
+        handed = []
+
+        async def seventeen():
+            handed.append(0)
+            yield b'{"jsonrpc":"2.0","id":38,"method":"tools/call","params":{"pad":"'
+            for _ in range(17):
+                handed.append(0)
+                yield b'x' * MiB
+        stated = {'Content-Length': str(17 * MiB + 100)}
+        response = await gw.post(seventeen(), **stated)
+        assert (response.status_code, response.json()) == (413, {'error': 'request denied'}), response.content[:200]
+        first = await hold(gw, child, 1, 10 * MiB)
+        response = await gw.post(seventeen(), **stated)
+        assert (response.status_code, response.json()) == (413, {'error': 'request denied'}), response.content[:200]
+        assert handed == [] and 38 not in child.ids()
+        small = encoded(held_call(39, hold=False))
+        status, answer, _ = await drive(gw.app, raw_scope(gw.store.load().token, [
+            (b'content-length', str(17 * MiB).encode()), (b'transfer-encoding', b'chunked')]), [small])
+        assert status == 200 and json.loads(answer) == {'jsonrpc': '2.0', 'id': 39, 'result': {'content': []}}
+        child.release.set()
+        await first
+        assert gw.budget.used() == 0
+    assert [record.getMessage() for record in log_scan.records if record.name == 'mcp_admin_core.request_budget'
+            and 'too-large' in record.getMessage()] == [
+        f'MCP gateway [profile=default]: refused a request body (too-large, HTTP 413): body exceeds {16 * MiB} bytes']
+
+
+async def test_a_refused_bodys_drain_stops_at_the_idle_limit(tmp_path, monkeypatch):
+    """Review S-2: a declared body refused before it is read, whose client then stops sending, is answered after the
+    idle limit (0.3 s here), not held open until the whole-read limit."""
+    limits(monkeypatch, 16, 16, idle=.3)
+    child = Child()
+    async with single(tmp_path, child) as gw:
+        first = await hold(gw, child, 1, 10 * MiB)
+        pieces = [b'{"jsonrpc":"2.0","id":31,"method":"tools/call","params":{"x":"', b'x' * MiB, b'x' * MiB]
+        started = asyncio.get_running_loop().time()
+        status, answer, handed = await asyncio.wait_for(drive(gw.app, raw_scope(gw.store.load().token, [
+            (b'content-length', str(10 * MiB).encode())]), pieces, stall_after=2), 10)
+        assert handed == 2 and asyncio.get_running_loop().time() - started < 5
+        assert status == 200 and json.loads(answer)['id'] == 31 and json.loads(answer)['error']['code'] == -32003
+        child.release.set()
+        await first
+
+
+async def test_a_refused_bodys_drain_stops_at_the_whole_read_limit(tmp_path, monkeypatch):
+    """Review S-2: a refused body that trickles (never idle long enough) is answered at the whole-read limit (1 s
+    here), not when its client is done."""
+    limits(monkeypatch, 16, 16, idle=2)
+    monkeypatch.setattr(gateway, 'BODY_SECONDS', 1)
+    child = Child()
+    async with single(tmp_path, child) as gw:
+        first = await hold(gw, child, 1, 10 * MiB)
+        pieces = [b'{"jsonrpc":"2.0","id":32,"method":"tools/call","params":{"x":"'] + [b'x'] * 200
+        started = asyncio.get_running_loop().time()
+        status, answer, handed = await asyncio.wait_for(drive(gw.app, raw_scope(gw.store.load().token, [
+            (b'content-length', str(10 * MiB).encode())]), pieces, gap=.05), 10)
+        assert status == 200 and json.loads(answer)['id'] == 32
+        assert asyncio.get_running_loop().time() - started < 4 and handed < len(pieces)
+        child.release.set()
+        await first
+
+
+async def test_a_refused_bodys_drain_keeps_only_its_head_and_tail(tmp_path, monkeypatch):
+    """Review S-2: draining a refused 10 MiB body holds its two 4 KiB windows, not the body (the Python heap grows by
+    less than 2 MiB while it is drained and answered)."""
+    limits(monkeypatch, 16, 16)
+    child = Child()
+    async with single(tmp_path, child) as gw:
+        first = await hold(gw, child, 1, 10 * MiB)
+        chunk = b'x' * (256 * 1024)
+        pieces = [b'{"jsonrpc":"2.0","id":33,"method":"tools/call","params":{"x":"'] + [chunk] * 39 + [b'"}}']
+        scope = raw_scope(gw.store.load().token, [(b'content-length', str(sum(map(len, pieces))).encode())])
+        tracemalloc.start()
+        try:
+            base = tracemalloc.get_traced_memory()[0]
+            status, answer, handed = await drive(gw.app, scope, pieces)
+            peak = tracemalloc.get_traced_memory()[1] - base
+        finally:
+            tracemalloc.stop()
+        assert status == 200 and json.loads(answer)['id'] == 33 and handed == len(pieces)
+        assert peak < 2 * MiB, peak
+        child.release.set()
+        await first
+
+
+async def test_an_sdk_ordered_refused_body_gets_its_id_from_its_tail(tmp_path, monkeypatch):
+    """Review S-2: the MCP SDK writes {"method":...,"params":...,"jsonrpc":"2.0","id":N}; a declared body refused before
+    it is read is drained and its id found in its tail: 200 + -32003 under it (PaaS _refuse_over_budget), not 503."""
+    limits(monkeypatch, 16, 16)
+    child = Child()
+    async with single(tmp_path, child) as gw:
+        first = await hold(gw, child, 1, 10 * MiB)
+        body = json.dumps({'method': 'tools/call', 'params': {'name': 'execute_method',
+                                                              'arguments': {'padding': 'x' * (10 * MiB)}},
+                           'jsonrpc': '2.0', 'id': 34}, separators=(',', ':')).encode()
+        busy(await gw.post(body), 34, scope=('profile', 16 * MiB))
+        assert 34 not in child.ids()
+        child.release.set()
+        await first
+
 # ---- switched on: every profile's share of one budget ----
 
 def extra_child(data, profile_id=B, port=18000):
@@ -592,3 +830,31 @@ async def test_a_switched_on_profile_shares_one_budget_derived_once(tmp_path, mo
             share = runtime.gate(profile_id).budget_share
             assert share.budget is budget and share.limit == 64 * MiB
             assert runtime.manager.get(profile_id).runtime.mcp_app.state.body_budget is share
+
+
+async def test_a_switched_on_profiles_chunked_body_that_states_a_small_length_is_charged_as_it_arrives(
+        tmp_path, monkeypatch, log_scan):
+    """Review MF-1, switched on (HM-08's dispatcher counted the bytes it read: no regression): the default profile's
+    share is 16 MiB and 10 MiB of it is held; its tools/call that states Content-Length: 10 and sends 10 MiB chunked is
+    cut off once it does not fit (200 + -32003 under its id), not read whole and refused only once forwarded."""
+    async with switched(tmp_path, monkeypatch, log_scan, 32, 16) as (runtime, children):
+        default = children.by_port[3000]
+        budget = runtime.manager.budget
+        async with runtime.mcp(timeout=60) as client:
+            token = runtime.token('default')
+            headers = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
+            default.hold_calls = True
+            first = asyncio.create_task(client.post('/mcp', headers=headers, content=padded(1, 10 * MiB)))
+            await until(lambda: default.waiting == 1, 30)
+            pieces = pieces_of(padded(2, 10 * MiB))
+            scope = raw_scope(token, [(b'content-length', b'10'), (b'transfer-encoding', b'chunked')],
+                              session=headers['Mcp-Session-Id'])
+            seen = []
+            status, answer, handed = await drive(runtime.mcp_app, scope, pieces,
+                                                 observe=lambda: seen.append(budget.used('default')))
+            assert status == 200 and json.loads(answer)['id'] == 2 and json.loads(answer)['error']['code'] == -32003
+            assert handed < len(pieces), f'the whole body ({len(pieces)} pieces) was read outside the budget'
+            assert max(seen) > 10 * MiB and ('POST', 'tools/call', 2) not in default.seen
+            default.free.set()
+            assert (await first).status_code == 200
+            assert budget.used() == 0

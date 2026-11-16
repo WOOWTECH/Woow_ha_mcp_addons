@@ -27,6 +27,7 @@ from mcp_admin_core.config import strict_json
 from switched_gateway import (B, INITIALIZED, PRODUCT, GatewayChild, bearer, call, quota, session_of, setup, until,
                               watch)
 from test_single_profile_golden import initialize_message
+from test_request_budget_gateway import drive, raw_scope
 
 pytestmark = pytest.mark.usefixtures('log_scan')
 
@@ -303,6 +304,14 @@ async def test_a_newly_connected_clients_initialized_reaches_the_child_with_the_
             assert note.status_code == 202 and note.content == b''
             assert child.seen[before:] == [('POST', 'notifications/initialized', None)]
             assert gate.active == numbers.admission and gate.beyond == 0
+            # the gateway's one declared-length rule (HM-31 review S-6, MF-1): a Content-Length beside a
+            # Transfer-Encoding declares nothing, so one framed chunked is read by what arrives and gets through too
+            status, answer, _ = await drive(runtime.mcp_app, raw_scope(token, [
+                (b'content-length', b'100000'), (b'transfer-encoding', b'chunked')],
+                session=newcomer['Mcp-Session-Id']), [json.dumps(INITIALIZED).encode()])
+            assert (status, answer) == (202, b'')
+            assert child.seen[before:] == [('POST', 'notifications/initialized', None)] * 2
+            before += 1
             for message in ({**initialize_message(), 'id': 299}, call(300)):
                 answer = await client.post('/mcp', headers=bearer(token) if 'params' in message and
                                            message['method'] == 'initialize' else newcomer, json=message)

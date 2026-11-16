@@ -215,7 +215,12 @@ def test_python_str_really_is_four_bytes_per_character_with_one_astral_character
     assert sys.getsizeof(astral_str) > 3.9 * n and sys.getsizeof(escaped) > 3.9 * n
 
 
-def test_a_two_gib_ceiling_cannot_be_oom_killed_by_astral_requests_that_fit():
+def test_a_two_gib_ceiling_holds_the_paas_measured_astral_multiplier():
+    """The formula's arithmetic at PaaS's measured multiplier (15.2: PaaS's gateway, which forwards the bytes it read,
+    and an MCP SDK child, for a large string with one non-BMP character): six Odoo accounts on 2 GiB keep the margin.
+    Not a guarantee for HA: HA's gateway re-serializes, and on its own it peaks at 14 times the charge for that body and
+    27.6 times for about 0.8 MiB of the guard's most elements (HM-31 review MF-2, contract 5); HM-19c measures HA's
+    gateway and child together (contract 5)."""
     module = rb()
     total = module.default_total_bytes(2048, accounts=6, child_memory_mib=100)
     assert module.GATEWAY_BASELINE_MIB + 6 * 100 + total / MiB * 15.2 <= 2048 - module.SAFETY_MARGIN_MIB + 1
@@ -395,12 +400,66 @@ def test_a_budget_and_its_limits_refuse_nonsense():
 
 # ---- reading a body: the declared length, the id of a body that is not parsed ----
 
-def test_the_declared_length_is_one_plain_number_or_none():
+def test_the_declared_length_is_one_plain_number_and_never_beside_a_transfer_encoding():
+    """declared_length reads the ASGI scope's headers (the gateway's watch and body, the dispatcher's admission-full
+    read: one rule). RFC 9112 6.3: a Transfer-Encoding frames the body and its Content-Length is ignored; h11 0.16.0,
+    the add-on's parser, reads such a request as chunked and hands content-length on as sent (HM-31 review MF-1, S-6),
+    so the body is then counted as it arrives."""
     module = rb()
-    assert module.declared_length(['1024']) == 1024 and module.declared_length([b'0']) == 0
+
+    def length(*pairs):
+        return module.declared_length([(name.encode('latin-1'), value.encode('utf-8')) for name, value in pairs])
+    assert length(('content-length', '1024')) == 1024 and length(('content-length', '0')) == 0
+    assert length(('Content-Length', '7')) == 7  # ASGI names are lower case; any case is read the same
     for values in ([], ['1', '1'], ['-1'], ['1e3'], ['0x10'], [' '], ['１２'], ['9' * 20]):
-        assert module.declared_length(values) is None, values
+        assert length(*(('content-length', value) for value in values)) is None, values
+    for pairs in ((('content-length', '10'), ('transfer-encoding', 'chunked')),
+                  (('transfer-encoding', 'chunked'), ('content-length', '70000')),
+                  (('Transfer-Encoding', 'chunked'), ('content-length', '10')), (('transfer-encoding', 'chunked'),)):
+        assert length(*pairs) is None, pairs
     assert not module.registered(64 * 1024) and module.registered(64 * 1024 + 1) and module.registered(None)
+
+
+class Streamed:
+    """What watch reads of a request: its headers and its stream (here size bytes in 256 KiB chunks)."""
+
+    def __init__(self, headers, size):
+        from starlette.datastructures import Headers
+        self.headers, self.size, self.handed = Headers(raw=headers), size, 0
+
+    async def stream(self):
+        chunk = b'{"jsonrpc":"2.0","id":3,"method":"x","params":{"p":"' + b'x' * (256 * 1024 - 52)
+        while self.handed < self.size:
+            self.handed += len(chunk)
+            yield chunk
+
+
+async def test_the_bytes_that_arrive_are_charged_whatever_was_declared():
+    """HM-31 review MF-1: a declared length is charged before the body is read and is no bound on what arrives. A body
+    that states 70,000 bytes and sends 10 MiB (framed otherwise: h11 frames by a Transfer-Encoding, which
+    declared_length already reads as nothing) is charged by what arrives and cut off once it does not fit, its head
+    kept for its id; one that sends what it states adds nothing to what was charged before it was read."""
+    module = rb()
+    owner = budget(16, 16)
+    held = share(owner).open()
+    held.grow(10 * MiB, cap=CAP)
+    request = Streamed([(b'content-length', b'70000')], 10 * MiB)
+    reservation = share(owner).open()
+    module.watch(request, reservation, cap=CAP)
+    with pytest.raises(module.BudgetExceeded) as refused:
+        async for _ in request.stream():
+            pass
+    assert refused.value.read and module.head_tail_id(refused.value.head) == 3
+    assert request.handed < 10 * MiB and owner.used() <= 16 * MiB
+    reservation.close()
+    honest = Streamed([(b'content-length', str(256 * 1024).encode())], 256 * 1024)
+    reservation = share(owner).open()
+    module.watch(honest, reservation, cap=CAP)
+    async for _ in honest.stream():
+        assert owner.used() == 10 * MiB + 256 * 1024  # charged when its read began; what arrived added nothing
+    reservation.close()
+    held.close()
+    assert owner.used() == 0
 
 
 @pytest.mark.parametrize('head,tail,expected', [
