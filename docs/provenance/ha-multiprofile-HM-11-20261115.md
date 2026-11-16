@@ -3,10 +3,12 @@
 ## 結論
 
 - **2026-11-16 已 rebase 到 HM-10（`684a2dd`）並對齊真後端**（第 16 節）：HM-10 交給 HM-11 的待辦逐條處理；fixture 與真的 8099
-  管理 app 對同一份 93 個案例逐案一致（`packages/mcp-admin-ui/tests/profile-api-cases.json`，Python 對真後端、Playwright 對 fixture）；
-  審查 S-2（清單不能用時鎖住整個面板）在這一輪做完。最後的程式與測試（`f204761`，之後只改本筆記）：node 80 案、Playwright 116 案、
-  pytest 全套除了 7 個要 root 的既有案例都過、兩個預檢 OK（第 16.6、16.8 節）。**對齊這一輪還沒有獨立安全審查**（第 16.13 節）。
-  下面第 1～15 節是對 fixture 那一階段的紀錄，數字以第 16 節為準。
+  管理 app 對同一份案例逐案一致（`packages/mcp-admin-ui/tests/profile-api-cases.json`，Python 對真後端、Playwright 對 fixture；
+  對齊時 93 案，對齊審查後 94 案）；審查 S-2（清單不能用時鎖住整個面板）在這一輪做完。
+- **對齊這一輪的獨立安全審查也做了**（`wave4/review-HM-11-align.md`）：判定通過、沒有必修，建議 10 項，處理見第 17 節。
+  補了 7 段測試，守住審查時存活的突變；補一個案例，釘住刪除的檢查順序；契約 #103、DQ-31 的字改正；
+  push 前改寫歷史，拿掉原始 U+202E（第 17.3 節，最後的樹不變）。最後的數字在第 17.5 節。
+  下面第 1～15 節是對 fixture 那一階段的紀錄，第 16 節是對齊那一輪的紀錄（commit 是改寫前的編號，對照在第 17.3 節）。
 - **產品沒開通時，面板畫出來的東西與送出的請求都不變**：DOM、送出的請求（方法、路徑、標頭集合）、fixture 收到的紀錄，和 `b5d10c5` 的面板逐項相同
   （第 5.3 節：6 種設定、5 頁、幾種動作，72 個比較 0 差異；審查修正後在 `155022e` 重跑仍是 0 差異）。
   **CI 也守得住**：`profiles.spec` 有一案在開關關時逐頁確認沒有帳號介面、帳號字樣與帳號標頭（審查 MF-1）。
@@ -23,8 +25,8 @@
   - **被刪帳號的待確認收據**：面板一得知帳號已刪除就清掉並說明，不叫人切回（審查 S-1，第 3.3 節列出五條路徑）。
   - 收據：預設帳號的 key（`woow-admin-operation-v1:<mount>`）與 4 鍵紀錄完全不變；額外帳號 `…:<mount>:<id>`、5 鍵；
     帳號增刪 `…:<mount>:profiles`。`get()` 每個 key 只收自己的格式，升級前分頁留下的舊紀錄照常可查（Playwright 案例）。
-- **獨立安全審查已做**：判定「修正後通過」（必修 1、建議 9；報告 `artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-11.md`）。
-  必修 MF-1 已修；建議 S-1、S-3～S-9 已處理；**S-2（清單不合規時整個面板鎖住）留到收尾**，理由與做法見第 15 節。
+- **fixture 階段的獨立安全審查已做**：判定「修正後通過」（必修 1、建議 9；報告 `artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-11.md`）。
+  必修 MF-1 已修；建議 S-1、S-3～S-9 已處理；S-2（清單不合規時整個面板鎖住）當時留到收尾，2026-11-16 對齊時做完（第 15 節、第 16.2 節第 15 點）。
   S-1 核對時另找到兩條收據留著的路徑，也一起修了（`842dfed`）。
 - **先寫測試**：`6ba92bb` 只有測試與 fixture，在 `b5d10c5` 的面板上紅；`df146d4` 起綠。審查後的修正也是先 commit 測試（`3e32c2f`、`ded9d01`）再修；
   只守現有行為或守新條件的案例（MF-1、索引壞那段）用突變證明會紅；`507314d` 那段沒有先紅，審查後補了紅的紀錄（第 4 節）。
@@ -42,7 +44,7 @@
 | 基準 | `claude-delivery` `b5d10c5`（HM-00、01、02、04、05、06、07、08、13a、17 已合併）。要等 HM-09、HM-10 合併後 rebase |
 | 依據 | 計畫 §6、§10.3、§12.3 HM-11；契約 §1.2、§3（管理 API、`X-MCP-Profile`、回聲、寫入保護、欄位）、§4.1、§9 #31～#36、#55、#56、#84、#85；FM-12、20、21、22、23、26、53、56～66、71、98、145；`decisions.md` |
 | 對齊的 PaaS | 沒有移植 PaaS 程式。期望值來自 `woow-mcp-server` @`69ac425` 的 `packages/mcp-admin-ui/src/api.js`（標頭規則）、`profileStatus.js`（停用說明）、`useDurableOperation.js`（收據 key：預設帳號沿用舊 key）、`components/ProfileChooser.jsx` 與 `AdminApp.jsx`（建立後切換、刪除後回預設）、`apps/headscale/static/assets/app.js`（帳號世代、晚到回應丟掉、「前一個設定檔有未確認的請求」）。HA 刻意不同的地方見契約 §9 |
-| 安全審查 | `artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-11.md`（審查 `3a9feed`；證據 `wave4/evidence-review-HM-11/`）；修正的證據在 `wave4/evidence-fix-HM-11/` |
+| 安全審查 | 兩輪。fixture 階段：`artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-11.md`（審查 `3a9feed`；證據 `wave4/evidence-review-HM-11/`），修正的證據在 `wave4/evidence-fix-HM-11/`（第 15 節）。對齊之後：`wave4/review-HM-11-align.md`（審查 `8421269`＝改寫歷史後的 `214c192`，同一棵樹；證據 `wave4/evidence-review-HM-11-align/`），處理的證據在 `wave4/evidence-fix-HM-11-align/`（第 17 節） |
 
 ## 2. 改了什麼、沒改什麼
 
@@ -254,14 +256,18 @@ commit 順序：
 測試資料：沒有 commit 任何隨機 token。固定的 token 形字串只有每個帳號一個字母重複 43 次（`M`、`T`、`U`…，低熵、沒人持有）與
 既有的 `S`×43；遮罩 `TTTT`＋`*`×20＋`TTTT`；網址 `.test`、`.example`（同既有 spec）；操作識別碼在執行時由瀏覽器產生。
 
-## 9. PaaS 變動（`git log 69ac425..origin/main -- <相關檔>`，本機唯讀 PaaS repo；任務寫的 origin/main 是 `cf3d0d5`，clone 裡已被別的流程 fetch 到 `5b84b5d`，本片沒有 fetch、沒有 checkout）
+## 9. PaaS 變動（`git log 69ac425..origin/main -- <相關檔>`，本機唯讀 PaaS repo；任務寫的 origin/main 是 `cf3d0d5`，clone 裡已被別的流程 fetch 到 `5b84b5d`，2026-11-16 對齊審查時已是 `7087280`；本片沒有 fetch、沒有 checkout）
 
 | commit | 內容 | 對本片 |
 |---|---|---|
 | `f5223be` | 只改測試：共用測試拿掉 VK（含 `packages/mcp-admin-ui/tests/browser-capabilities.py` 的產品清單） | 沒影響：帳號相關的面板與 API 沒變 |
+| `e6971c0` | 閘道請求內容位元組預算：預設值扣掉子行程記憶體、啟動時建立、卡住的上傳逾時。`profiles.py` 只把帳號容量的算法從 `ProfileRegistry.capacity` 抽成 `current_profile_capacity`（同一份算法，兩邊共用）；`app.py` 在啟動時建預算 | 沒影響：8081 閘道的事（HA 這邊是 HM-31）；管理 API 的回應形狀與面板都沒變 |
+| `3b135ca` | 閘道：所有產品加上 JSON 結構守門（深度與元素個數），只動 `app.py` 的閘道設定 | 沒影響：同上 |
 
 查的檔：`packages/mcp-admin-ui/`、`apps/headscale/static/`、`apps/headscale/tests/browser/`、`packages/mcp-admin-core/mcp_admin_core/profiles.py`、
 `routers/profiles.py`、`routers/operations.py`、`app.py`。`git diff --stat 69ac425 origin/main -- packages/mcp-admin-ui/` 只有上面那一檔。審查修正後重查（`69ac425..cf3d0d5`、`69ac425..5b84b5d`），結果相同。
+對齊審查後重查 `69ac425..7087280`（只用 `git log`／`git show`／`git diff --stat`）：多了 `e6971c0`、`3b135ca` 兩個閘道 commit（對齊審查 S-8）；
+`packages/mcp-admin-ui/`、`apps/headscale/static/`、`apps/headscale/tests/browser/`、`routers/profiles.py`、`routers/operations.py` 仍只有 `f5223be` 那一檔有變。
 
 ## 10. 本片用到的決策
 
@@ -374,6 +380,8 @@ commit 順序：
 
 ## 16. rebase 到 HM-10 並對齊真後端（2026-11-16）
 
+（本節正文的 commit 是 push 前改寫歷史之前的編號；`c8216d1` 起的對照見第 17.3 節，第 16.12 節已換成改寫後的編號。）
+
 ### 16.1 rebase
 
 | 項目 | 結果 |
@@ -381,7 +389,7 @@ commit 順序：
 | 備份 | 先開本機分支 `backup/hm11-before-rebase-20261116`（指向 rebase 前的 `c251fbe`，沒有 push） |
 | 新基準 | `git fetch origin feat/ha-multiprofile-hm10-20261115`，`FETCH_HEAD` 是 `684a2dd4f3d8931c0de85e1786ae502951078698`（HM-10 PR #104 的 head）；`b5d10c5` 是它的祖先，`git log 684a2dd..HEAD` 剛好是本片的 20 個 commit |
 | 指令 | `git rebase 684a2dd`。重放 20 個，衝突 2 個，都在 `docs/multi-profile/decisions.md`；其餘 18 個 `git range-diff` 逐一相同 |
-| `b567f68`（DQ-31） | 新基準的 #100（HM-08 補正 PR）已把 DQ-13、DQ-14、DQ-30、DQ-31 記成已定、題數 34／12。以新基準為底，只加回本片的變更：DQ-31 的結論寫成面板實際的做法（`woow-<產品>-<id 前 8 碼>`、預設帳號維持 `woow`、不做跨帳號總覽與帳號層級權限），變更紀錄加一列（2026-11-16）。commit 訊息照實際內容改寫（`e058882`） |
+| `b567f68`（DQ-31） | 新基準的 #100（HM-08 補正 PR）已把 DQ-13、DQ-14、DQ-30、DQ-31 記成已定、題數 34／12。以新基準為底，只加回本片的變更：DQ-31 的結論寫成面板實際的做法（`woow-<產品>-<id 前 8 碼>`、預設帳號維持 `woow`、不做跨帳號總覽與帳號層級權限），變更紀錄加一列（2026-11-16）。commit 訊息照實際內容改寫（`e058882`）。對齊審查 S-9 之後，結論欄改回使用者採用的原句，面板的做法移到負責片欄（第 17.2 節） |
 | `0eed62a`（變更紀錄順序） | 跳過（`git rebase --skip`）：它只把 HM-11 那列移到最後，上面的解法已經把新列放在最後 |
 | 帳本 | 三個帳本 commit 自動合併。核對方式：新基準的 `runtime-patches.json` 與 rebase 後的只差 5 個面板檔（app.js、api.js、contracts.js、operation-identity.js、profiles.js），其他 57 列與 `scope` 逐字相同（收尾時重數：原本寫的 56 是算錯）；5 列的 SHA-256 照檔案實際內容重算全部一致（新基準沒有動面板檔，說明就是新基準的說明加本片的句子）。對齊後再釘一次（`2491f88`），建立名稱的修正後又釘一次（`04b4bce`） |
 | 依賴 | `b5d10c5..684a2dd` 沒有動 `uv.lock`、`package-lock.json`、`pyproject.toml`、`requirements-ci.txt`：沒有重跑 `setup_repo_env.sh` |
@@ -405,7 +413,7 @@ commit 順序：
 | 12 | `profile_limit_reached` 的 `limit` 可能是 0 | 做了：另一段文案（只服務預設帳號、刪除帳號也不會改變、請回報），不再說「最多 0 個」 |
 | 13 | 隔離回 409 `config_conflict` 而索引仍是 `corrupt`：沒有索引檔可隔離，提示修好後重啟 | 做了：409 後重讀狀態，分三種說明：索引已可用；索引檔又變了（ETag 不同）；ETag 相同而仍是 corrupt＝沒有索引檔可隔離，請修好 `/data/mcp/profiles` 後重啟 add-on |
 | 14 | 隔離拿不到某個帳號的鎖而 503（什麼都沒做） | 做了：說明另一個帳號的操作正在進行；識別碼保留（沒有代碼的 503 不能確定沒記下意圖），用「重送帳號操作」或重新整理後再試 |
-| 15 | 清單的索引 ETag 只在回應標頭；拿不到時照審查 S-2 | 做了（S-2 一起）：清單沒帶格式正確的 `ETag` 照列但唯讀（新增、改名、刪除停用、說明）；清單讀不到或格式不合（除了 401／403、回聲不符與晚到的回應）不再鎖住整個面板，預設帳號照常可用、選單只剩預設帳號（與目前帳號）；這兩種替代清單都不當成「帳號已刪除」的證據；瀏覽器顯示不了的名稱只藏那一列的名稱。`index_etag` 本體欄位照 HM-10 的決定先不做（HM-03a 實測拿不到才補） |
+| 15 | 清單的索引 ETag 只在回應標頭；拿不到時照審查 S-2 | 做了（S-2 一起）：清單沒帶格式正確的 `ETag` 照列但唯讀（新增、改名、刪除停用、說明）；清單讀不到或格式不合（除了 401／403、回聲不符與晚到的回應）不再鎖住整個面板，預設帳號照常可用、選單只剩預設帳號（與目前帳號）；這種替代清單（和索引壞時的一樣）不當成「帳號已刪除」的證據，沒帶 `ETag` 的清單仍是伺服器給的完整清單、照常算（對齊審查 S-7 改字）；瀏覽器顯示不了的名稱只藏那一列的名稱。`index_etag` 本體欄位照 HM-10 的決定先不做（HM-03a 實測拿不到才補） |
 
 另外對齊時才發現、HM-10 筆記沒列的一點：**刪除的重送在帳號已被別處刪除時，真後端回 409 `config_conflict`、不是 404**（HM-10 先比索引
 ETag 再找帳號；別處刪除一定改了索引）。面板原本只在 404 時說「帳號已不存在、不需要再刪除」並清掉它的收據（`368a53a`），對真後端會改成
@@ -421,7 +429,8 @@ ETag 再找帳號；別處刪除一定改了索引）。面板原本只在 404 �
   各直接放了 2 個 U+202E（由右至左覆寫）。原始的雙向控制字元會讓編輯器與 GitHub 把那一行後面的程式顯示成另一種順序（Trojan Source），
   GitHub 的 diff 也會出警告；repo 其他測試都用跳脫寫法。四處改成跳脫寫法，字串值相同、測試內容不變。`684a2dd` 與最後 HEAD 的樹裡
   都沒有含雙向控制字元的文字檔（`git grep -P` 只碰到幾個 PNG 的位元組）。`39183dd` 的 commit 訊息也有一個 U+202E（只影響顯示）；
-  要清掉得改寫它之後的 5 個 commit，本片沒有改（第 16.11 節）。
+  要清掉得改寫它之後的 5 個 commit，當時沒有改（第 16.11 節）。對齊審查（S-5）之後，push 前已改寫：`c8216d1` 起的 commit 一開始就是跳脫寫法，
+  訊息也是，`f204761` 因此變空、併掉（第 17.3 節）。
 
 ### 16.3 照契約假設的 21 點（第 11 節）對 HM-10 的核對
 
@@ -449,7 +458,7 @@ ETag 再找帳號；別處刪除一定改了索引）。面板原本只在 404 �
 
 ### 16.4 fixture 和真後端一致的證明
 
-- `packages/mcp-admin-ui/tests/profile-api-cases.json`：10 個情境、93 個案例，涵蓋面板開通後用到的每條管理路由（清單、建立、改名、
+- `packages/mcp-admin-ui/tests/profile-api-cases.json`：10 個情境、93 個案例（對齊審查後 94 個，多了 `main/delete-gone-stale`，第 17.2 節 S-6），涵蓋面板開通後用到的每條管理路由（清單、建立、改名、
   刪除、索引隔離、bootstrap、configuration、capabilities、diagnostics、收據查詢、token reveal／rotate（含重送）、child/restart、
   endpoint、policy、owner-defaults）與面板要處理的每種拒絕（`X-MCP-Profile` 沒帶、兩個值、格式錯、不存在、孤兒、讀不到、索引壞；
   CSRF、If-Match、Idempotency-Key 缺或過期；名稱不合規、保留名稱、重名、本體格式錯；預設帳號不可改；上限（含 `limit` 0）、記憶體、
@@ -477,9 +486,13 @@ ETag 再找帳號；別處刪除一定改了索引）。面板原本只在 404 �
 | 對齊前的面板對對齊後的 fixture（全套 Playwright） | 116 案 6 紅：上面 5 案，加上「deleted elsewhere…resending its delete」（真後端的順序回 409，面板說「設定已被其他操作更新」、收據留著） | `5ea7850` 起 116 案全過 |
 | node `profiles.test.mjs`（`39183dd` 的測試）對 `405643f` 的面板（建立的名稱） | 22 案 1 紅：建立回應的名稱這個瀏覽器顯示不了時，回傳的 label 應是 null，實際是原字串（`red-node-created-label.log`） | `13bb1c8` 起 22 案全過 |
 
-紅的紀錄都在拋棄式複本（`git archive` 出 `959591d` 的樹，只蓋上新測試）跑，跑完刪掉；log 在 `wave4/evidence-align-HM-11/`。建立名稱那一列例外：在 clone 裡的 `39183dd`（測試已 commit、面板還沒改）直接跑。`f204761` 只改字串的寫法、不改行為，沒有先紅；改完重跑 node 80 案、Playwright 116 案全過。
+紅的紀錄大多在拋棄式複本（`git archive` 出 `959591d` 的樹，只蓋上新測試）跑，跑完刪掉；log 在 `wave4/evidence-align-HM-11/`。有兩列是在 clone 本身跑的（對齊審查 S-8 指出，原本這裡寫成「都在複本」）：
+- parity 那一列（`red-parity-old-fixture.log`）：堆疊路徑是 clone 本身。clone 的 reflog 顯示 `c8216d1`、`35dfbdd`、`5ea7850` 是 13:52 在 31 秒內接連 commit 的，跑的時候這些都還沒 commit，指不出是哪個 commit；工作樹的內容是新的 parity 測試＋對齊前的 fixture。失敗內容就是對齊前 fixture 和真後端的形狀差異，紅本身成立。
+- 建立名稱那一列：在 clone 裡的 `39183dd`（測試已 commit、面板還沒改）直接跑。`f204761` 只改字串的寫法、不改行為，沒有先紅；改完重跑 node 80 案、Playwright 116 案全過。
 
 ### 16.6 本機檢查（一般使用者；`ha_env.sh` 給的 TMPDIR，跑完用完整路徑刪除；pytest 都排在共用鎖後面）
+
+（這是對齊那一輪的數字；對齊審查處理後的數字在第 17.5 節。）
 
 數字都在最後的程式與測試（`f204761`；之後的 commit 只改本筆記）上重跑過。node、build、build-closure、Playwright：2026-11-16
 15:52～15:56，開始與結束時工作樹都乾淨、HEAD 都是 `f204761`（`04b4bce` 上 15:45～15:49 也全過一次，Playwright 3.7 分鐘）。
@@ -548,26 +561,30 @@ node 約 0.02 秒），推估 `checks` 多不到 0.3 分鐘（Playwright 共用�
 - **HM-16**：P9 driver 的帳號參數與交叉矩陣（`createP9AdminClient(…, {profile})` 已就緒，這一輪沒改）。
 - **主對話**：契約第 9 節的新列是 #101～#104（接在 #100 後面）；HM-13b、HM-30、HM-31 若也在 #100 後面加列，合併時要重排列號。
 - **主對話（開 PR 前）**：對齊這一輪（`c8216d1`～`f204761`）還沒有獨立安全審查（第 16.13 節）；`39183dd` 的 commit 訊息含一個
-  U+202E（第 16.2 節），要不要在 push 前改寫由主對話決定。
+  U+202E（第 16.2 節），要不要在 push 前改寫由主對話決定。兩件都已處理：審查做了（第 17 節），U+202E 在 push 前改寫拿掉（第 17.3 節）。
 
 ### 16.12 commit（`684a2dd` 之後）
 
+對齊審查後在 push 前改寫過歷史（第 17.3 節）：下表是改寫後的編號，括號裡是改寫前的。每一對的差別只有兩個測試檔的原始 U+202E
+換成跳脫寫法（`39183dd` 另有訊息裡的一個），作者、時間與其他內容都相同。
+
 | commit | 內容 |
 |---|---|
-| `d4a0d4b`～`959591d`（19 個） | rebase 前的 20 個 commit 重放：18 個逐一相同；`b567f68` 以新基準為底改寫成 `e058882`（DQ-31 的結論寫成面板實際的做法）；`0eed62a` 跳過（第 16.1 節） |
-| `c8216d1` | 測試：案例檔、真後端的 Python 測試、fixture 的 Playwright 比對、node 新 6 案、`profiles.spec` 新 4 案與 S-2 那案（先紅） |
-| `35dfbdd` | fixture 照 HM-10 改 |
-| `5ea7850` | 面板：孤兒、索引隔離、清單不能用時不鎖、`profiles_supported` false、建立重送只回 id、limit 0、刪除重送的 409 |
-| `2491f88` | 帳本重新釘 app.js、api.js、profiles.js、operation-identity.js |
-| `653c02d` | 契約第 9 節 #101～#104 與變更紀錄；decisions.md 的 DQ-12、DQ-14 負責片 |
-| `bca1883` | README 與寫入契約文件 |
-| `405643f` | 本筆記第 16 節（初版） |
-| `39183dd` | 測試：建立回應的名稱這個瀏覽器顯示不了時不往下傳（先紅） |
-| `13bb1c8` | 面板：建立的那一列照清單規則讀，提示以 id 前 8 碼稱呼 |
-| `04b4bce` | 帳本重新釘 app.js、api.js |
-| `4694e18` | README：建立後的提示也只以 id 前 8 碼稱呼 |
-| `f204761` | 測試：四處原始 U+202E 改成跳脫寫法 |
-| 本筆記 | 第 16 節補最後 HEAD 的檢查、預檢、驗收狀態與上面兩點修正 |
+| `d4a0d4b`～`959591d`（19 個，沒有改寫） | rebase 前的 20 個 commit 重放：18 個逐一相同；`b567f68` 以新基準為底改寫成 `e058882`（DQ-31 的結論寫成面板實際的做法；對齊審查 S-9 後改回原句，第 17.2 節）；`0eed62a` 跳過（第 16.1 節） |
+| `cc57bde`（原 `c8216d1`） | 測試：案例檔、真後端的 Python 測試、fixture 的 Playwright 比對、node 新 6 案、`profiles.spec` 新 4 案與 S-2 那案（先紅） |
+| `895d70a`（原 `35dfbdd`） | fixture 照 HM-10 改 |
+| `fc9d3cb`（原 `5ea7850`） | 面板：孤兒、索引隔離、清單不能用時不鎖、`profiles_supported` false、建立重送只回 id、limit 0、刪除重送的 409 |
+| `61f30a0`（原 `2491f88`） | 帳本重新釘 app.js、api.js、profiles.js、operation-identity.js |
+| `552af33`（原 `653c02d`） | 契約第 9 節 #101～#104 與變更紀錄；decisions.md 的 DQ-12、DQ-14 負責片 |
+| `db5b0b3`（原 `bca1883`） | README 與寫入契約文件 |
+| `931107e`（原 `405643f`） | 本筆記第 16 節（初版） |
+| `2c2a30d`（原 `39183dd`） | 測試：建立回應的名稱這個瀏覽器顯示不了時不往下傳（先紅） |
+| `c7ed817`（原 `13bb1c8`） | 面板：建立的那一列照清單規則讀，提示以 id 前 8 碼稱呼 |
+| `805a2cb`（原 `04b4bce`） | 帳本重新釘 app.js、api.js |
+| `0480d8d`（原 `4694e18`） | README：建立後的提示也只以 id 前 8 碼稱呼。改寫後它的樹就是原 `f204761` 的樹（`c073ed5`） |
+| （原 `f204761`，已併掉） | 測試：四處原始 U+202E 改成跳脫寫法。改寫後前面的 commit 一開始就是跳脫寫法，這個 commit 變空，用 `--prune-empty` 拿掉 |
+| `214c192`（原 `8421269`） | 本筆記：第 16 節補最後 HEAD 的檢查、預檢、驗收狀態與上面兩點修正（樹和原 `8421269` 相同，`4e83684`） |
+| 第 17.7 節 | 對齊審查的處理 |
 
 第 2 節「沒改」清單在對齊後的變化：新增 pytest 測試 `tests/test_panel_profile_api_shapes.py`（不是正式程式）；`docs/multi-profile/contract.md`
 加了第 9 節 #101～#104 與一列變更紀錄（接在 #100 後面）。其他照舊：沒有動 `packages/mcp-admin-core/`、`apps/`、`conftest.py`、`addons/<x>/`、
@@ -577,10 +594,152 @@ node 約 0.02 秒），推估 `checks` 多不到 0.3 分鐘（Playwright 共用�
 
 | 條件 | 結果 |
 |---|---|
-| `unit.sh` 的 node＋Playwright 綠 | 本機通過（最後 HEAD）：node 80 案、build-closure、Playwright 116 案。CI 待 PR |
+| `unit.sh` 的 node＋Playwright 綠 | 本機通過（對齊那一輪的 HEAD）：node 80 案、build-closure、Playwright 116 案；對齊審查處理後見第 17.5 節。CI 待 PR |
 | 開關關時既有 9 個 spec 不改照過 | 通過：9 個 spec 檔對 `684a2dd` 沒有改；`single` 專案 71 案全過；四個另在 `profiles-on` 原封不動照過（20 案）；`profiles.spec` 有開關關的逐頁案例（MF-1） |
 | 舊格式收據案例過 | 通過：node 一案、Playwright 一案（第 16.6 節） |
-| fixture 和真後端一致（任務第 4 點） | 通過：第 16.4 節（93 個案例；Python 對真後端、Playwright 對 fixture、node 對面板送出的請求） |
-| 獨立安全審查 | **部分**：fixture 階段已審（修正後通過，第 15 節）；對齊這一輪（`c8216d1`～`f204761`）還沒有獨立審查，待主對話另派 |
+| fixture 和真後端一致（任務第 4 點） | 通過：第 16.4 節（93 個案例，對齊審查後 94 個；Python 對真後端、Playwright 對 fixture、node 對面板送出的請求） |
+| 獨立安全審查 | 兩輪都做了：fixture 階段（修正後通過，第 15 節）；對齊這一輪（通過、沒有必修、建議 10 項，第 17 節） |
 | 不改版號、不碰 `addons/<x>/`、不改 CHANGELOG；開關維持空集合 | 通過 |
 | 測試資料規則（計畫 §12.0 第 4 點）、兩個預檢 | 通過：案例檔的 id 是重複字母、過期 ETag 全 0、端點是 `.invalid`，Idempotency-Key 在執行時產生；秘密預檢 0 命中、帳本預檢 OK（第 16.8 節） |
+
+## 17. 對齊後的獨立安全審查與處理（2026-11-16）
+
+### 17.1 審查
+
+- 報告：`artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-11-align.md`（審查 `8421269`＝改寫歷史後的 `214c192`，同一棵樹；
+  證據 `wave4/evidence-review-HM-11-align/`）。判定：**通過，沒有必修**；建議 10 項（S-1～S-10），另有 5 點觀察（報告第 3.1 節）。
+- 審查員重跑作者的數字全部對上；41 個突變擋住 32 個。存活的 9 個：U06b 可接受（載入頁換掉整頁）；F06、F07 是 fixture 對真後端的覆蓋；
+  其餘 6 個都是「程式現在對，但沒有測試守住」。
+- 先核對再處理，審查的事實都成立：S-5 用 `bidi_scan.py` 逐 commit 重數（和審查一樣，13 個 commit）；S-7 讀 `readProfiles()`
+  （沒帶 ETag 的清單沒有標 `substitute`）並在 HEAD 用斷言確認；S-8 用 PaaS 的唯讀 `git log`／`git show`、紅 log 的堆疊路徑與 clone 的
+  reflog；S-9 對 `684a2dd` 與計畫 §13.2 比對；S-1～S-4、S-6、S-10 用審查員的突變跑新測試（第 17.4 節）。
+- 處理的證據：`wave4/evidence-fix-HM-11-align/`（`tools/` 是用到的腳本，副檔名多加 `.txt`；`rewrite/`、`mutations/`、`checks/` 是 log）。
+
+### 17.2 意見處理
+
+| 編號 | 審查意見 | 處理 |
+|---|---|---|
+| S-1 | 重送刪除遇 409 而帳號其實還在：沒有測試（U24 存活） | **採用**。審查員的 G1 改成獨立案例「a resent delete refused while its profile still exists…」：B 有待確認收據、刪除的回應遺失；C 在別處改名，索引變了；重送得到 409。斷言提示是「帳號清單已被其他操作更新，這次沒有刪除任何帳號」、沒有「已不存在」；仍顯示 B、選單仍有 B、B 的待確認收據留著；帳號增刪的待確認卡消失（那筆刪除的識別碼已釋放）；fixture 裡 B 還在，只收到一次被拒的 DELETE。U24 上只有這一案紅 |
+| S-2 | 帳號增刪遇 `operation_outcome_unknown` 保留識別碼：沒有測試（U19 存活） | **採用**。node 一案：建立與刪除各遇 409 `operation_outcome_unknown`（HM-10 提交後失敗的回應，同一個 key 再送也是 409）；識別碼保留，送出的 Idempotency-Key 就是保留的那個。U19 上這一案紅 |
+| S-3 | 任務中按上一頁會重畫出可用的選單，擋住切換的那一行沒有測試（U16 存活） | **採用**。G3 併進「a slow switch…」那案的最後：工具權限頁開始一個慢的讀取，按上一頁（popstate 重畫、選單可用），選 B 被拒、提示「請等目前的操作完成後再切換帳號」、選單回到預設帳號；讀取結束後仍是預設帳號。U16 上紅 |
+| S-4 | 名稱當文字顯示，後端／工具頁的帳號說明與確認框的帳號行沒有守住（U15a、U15c 存活） | **採用**。G4 併進 XSS 那案（`menu: …`）：建立 HTML 樣子的名稱後，走後端連線、工具權限兩頁，帳號說明照文字顯示、整頁沒有 `img`；開「刪除帳號」的確認框，帳號行照文字顯示、整頁沒有 `img`，取消後回總覽，照原案往下。審查員用的是「儲存工具權限」的確認框；那案是 Odoo，改用刪除確認框，不靠工具列，帳號行是同一個 `profileLine()`。U15a、U15c 上都紅 |
+| S-5 | 歷史裡的原始 U+202E，push 前要決定 | **採用 (a)**：push 前用 `git filter-branch` 改寫（第 17.3 節）。理由：還沒 push，這是唯一能改的時機；本片本來就要 rebase 到新的 `claude-delivery`，commit 編號反正會變；改寫只把那幾個字元換成跳脫寫法，最後的樹完全相同，可以逐 commit 驗證；備份分支留著原來的 commit |
+| S-6 | 案例沒有釘住「刪除先比 ETag、再查帳號」（F07 存活）；F06 附註 | **採用**。`main` 情境在 `delete-replay` 之後加 `delete-gone-stale`（N 已刪、過期 If-Match、新識別碼）。expect 照 HM-10 的檢查順序寫 409 `config_conflict`、ETag `p1`，Python 測試對真後端跑過、一致（第 17.5 節），fixture 也一致。F07 在 `profile-api-parity` 的 `main` 紅，差的就是這一案（404 `profile_not_found`）。F06 照審查的附註記下、不改：案例的 bootstrap 投影不含各帳號的 state 欄位；面板只畫回聲已比對的 bootstrap，各帳號 state 的隔離由 HM-10 的測試守 |
+| S-7 | 契約 #103「這幾種替代清單都不當成刪除證據」把沒帶 ETag 的清單也算進去，和程式不一致 | **採用**。#103 最後一句照審查的建議改，契約變更紀錄加一列；第 16.2 節第 15 點同步改字。另把審查員只記錄行為的 G5 改成斷言，併進「a list without its ETag…」那案：清單沒帶 ETag 時，從在別處被刪的 B 切回預設帳號，提示 B 已不存在、它的收據清掉。新突變 N1（把沒帶 ETag 的清單也當替代清單）上紅。程式不用改 |
+| S-8 | provenance 第 9 節與第 16.5 節要更新 | **採用**。第 9 節補 `e6971c0`、`3b135ca`（閘道，不影響面板；PaaS 只用唯讀 git）；第 16.5 節照實寫：parity 那列在 clone 的工作樹跑（堆疊路徑與 reflog） |
+| S-9 | DQ-31 的結論欄被改寫 | **採用**。結論欄改回使用者採用的原句（＝`684a2dd`＝計畫 §13.2）；面板的做法（`woow-<產品>-<id 前 8 碼>`、預設帳號維持 `woow`、不做跨帳號總覽與帳號層級的管理權限）移到負責片欄；變更紀錄那列跟著改 |
+| S-10 | 上一輪 S-1 在面板刪除時的 `forget()` 沒有測試守住（P4 存活） | **採用**。「deleting asks twice…」加 `not.toContainText('可能已在其他分頁或由其他管理員刪除')`；G6b（刪除後清單讀不到）改寫後併進同一案的最後（另加帳號「稽核」）：清單讀不到時仍說已清除、不叫人切回、收據清掉。P4 上紅；把新加的那一句斷言拿掉再跑 P4（P4b），仍紅在 G6b 那段，兩段各自擋得住 |
+| 觀察 1 | `profile_index_corrupt` 也釋放帳號增刪的識別碼 | **不改**：審查員也認為是合理的取捨（不釋放的話，待確認的建立會擋住唯一的出路「隔離帳號索引」）。交 HM-18 在 DOCS 提一句 |
+| 觀察 2 | 隔離遇沒有代碼的 503 時說「另一個帳號的操作正在進行」，原因也可能是管理名額滿或列不出帳號目錄 | **留到之後（HM-13c）**：要改 `app.js` 的文案並重新釘帳本；這一輪只補測試與文件，不動列管檔。「沒有執行隔離」那部分是對的 |
+| 觀察 3 | 回聲不符後重新探測，不提醒剛離開的帳號有待確認收據 | **接受**：影響低，切回去時待確認卡會出現 |
+| 觀察 4 | 讀不到的帳號在「無法載入」頁的「刪除帳號」，清單沒帶 ETag 時按了沒有反應 | **接受**：要同時遇到清單沒帶 ETag 與帳號讀不到，極少見；交 HM-13c 一起看 |
+| 觀察 5 | 重送刪除得到「帳號清單已被其他操作更新」後，選單仍是舊的清單版本，再刪一次會先拿到 409 | **接受**：文案已叫人先確認清單；之後要改，可以讓那一段直接用剛讀到的清單重畫（同樣要改 `app.js`） |
+
+### 17.3 push 前改寫歷史（S-5）
+
+- 備份：本機分支 `backup/hm11-before-bidi-rewrite-20261116` 指向改寫前的 `8421269`（沒有 push）。rebase 時開的
+  `backup/hm11-before-rebase-20261116`（`c251fbe`）沒有動。`git filter-branch` 另外留下
+  `refs/original/refs/heads/feat/ha-multiprofile-hm11-20261115`（也指向 `8421269`）：不是分支、沒有 push，照留。
+- 指令：`FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --prune-empty --msg-filter 'python3 -I msg_filter.py' --index-filter 'python3 -I index_filter.py' -- 959591d..feat/ha-multiprofile-hm11-20261115`。
+  `index_filter.py` 只看 `profiles.test.mjs`、`browser/profiles.spec.mjs` 兩個檔，把原始 U+202E 換成原 `f204761` 用的 `\u202e`；
+  `msg_filter.py` 把訊息裡的換成同樣寫法。不用 `rebase -i`（這個環境不支援互動），也不手改。
+- 驗證（`verify_rewrite.py`、`bidi_scan.py`）：
+  - 改寫前後最後的樹相同（`4e83684`）；13 個 commit 變 12 個（`f204761` 變空，`--prune-empty` 拿掉）。
+  - 每一對只差那兩個測試檔，而且「舊內容的原始 U+202E 換成跳脫寫法」正好等於新內容；訊息也一樣（只有 `39183dd` 有一個）；
+    作者、提交者與時間都相同。
+  - `684a2dd..HEAD` 逐 commit 數原始雙向控制字元：改寫前合計 38 個（每個 commit 樹裡的加總，加上訊息裡的 1 個），改寫後 0 個。
+- 對照（`959591d` 之前的 19 個沒有改寫）：
+
+| 改寫前 | 改寫後 | 內容 |
+|---|---|---|
+| `c8216d1` | `cc57bde` | 測試：案例檔、真後端的 Python 測試、fixture 比對、node 與 Playwright 新案（先紅） |
+| `35dfbdd` | `895d70a` | fixture 照 HM-10 改 |
+| `5ea7850` | `fc9d3cb` | 面板對齊 HM-10 |
+| `2491f88` | `61f30a0` | 帳本重新釘 |
+| `653c02d` | `552af33` | 契約 #101～#104、decisions.md 負責片 |
+| `bca1883` | `db5b0b3` | README 與寫入契約文件 |
+| `405643f` | `931107e` | 本筆記第 16 節（初版） |
+| `39183dd` | `2c2a30d` | 測試：建立回應的名稱（先紅）；訊息裡的 U+202E 改成 `\u202e` |
+| `13bb1c8` | `c7ed817` | 面板：建立的那一列照清單規則讀 |
+| `04b4bce` | `805a2cb` | 帳本重新釘 |
+| `4694e18` | `0480d8d` | README；改寫後它的樹就是原 `f204761` 的樹（`c073ed5`） |
+| `f204761` | （併掉） | 原本只把四處原始 U+202E 改成跳脫寫法；改寫後前面一開始就是跳脫寫法 |
+| `8421269` | `214c192` | 本筆記第 16 節補完（樹相同，`4e83684`） |
+
+- 影響：先紅後綠的紀錄不變（JS 的 `\u202e` 就是那個字元，測試字串的值相同）。範圍內的 commit 訊息與第 16 節正文仍用改寫前的編號
+  （和 rebase 後的作法一樣），以這張表對照；`wave4/evidence-align-HM-11/` 與審查報告也是改寫前的編號，備份分支讓它們在本機仍查得到。
+
+### 17.4 先紅後綠（突變）
+
+新斷言守的是現在已經對的行為，在現在的程式上本來就過（同 MF-1 的作法）；紅由突變證明。每個突變只改拋棄式複本（`cp -a` 出 clone，
+用完刪掉），重 build，跑 node 全部與 `profiles.spec`＋`profile-api-parity`（`single`），跑完還原、確認複本回到原本的差異。
+工具 `run_mutations.py`，定義 `mutations.json`，log 與總表 `summary.json` 在 `mutations/`。
+
+| # | 突變（只改複本） | node | Playwright（26 案） | 紅在哪裡 |
+|---|---|---|---|---|
+| U24 | 重送刪除遇 409／404 不重讀清單，一律當「已不存在」（審查時存活） | 81 過 | 1 紅 | S-1 新案例：提示變成「帳號（01234567）已不存在，不需要再刪除…」 |
+| U19 | 帳號增刪遇 `operation_outcome_unknown` 也釋放識別碼（審查時存活） | 80 過、1 紅 | 26 過 | S-2 的 node 案：識別碼不見了 |
+| U16 | 其他操作進行中也接受切換（審查時存活） | 81 過 | 1 紅 | S-3 那段：提示變成「已切換到帳號「會計」…」 |
+| U15a | 後端／工具頁的帳號說明改用 `innerHTML`（審查時存活） | 81 過 | 1 紅 | S-4 那段：說明裡的名稱少了標籤字面 |
+| U15c | 確認框的帳號行改用 `innerHTML`（審查時存活） | 81 過 | 1 紅 | S-4 那段：帳號行的名稱少了標籤字面 |
+| P4 | 在面板刪除後不呼叫 `forget()`（審查時存活） | 81 過 | 1 紅 | S-10 新加的那一句：出現「可能已在其他分頁或由其他管理員刪除」 |
+| P4b | P4，且拿掉 S-10 新加的那一句斷言 | 81 過 | 1 紅 | G6b 那段：提示叫人「請切回該帳號查詢結果」（上一輪 S-1 的錯） |
+| F07 | fixture 的刪除先查帳號、再比 ETag（審查時存活） | 81 過 | 1 紅 | parity `main` 的 `delete-gone-stale`：404 `profile_not_found`，應是 409 |
+| N1 | 沒帶 ETag 的清單也當替代清單（新） | 81 過 | 1 紅 | S-7 那段：提示變成「前一個帳號…有尚未確認的操作；請切回該帳號…」 |
+
+9 個都擋住，每個只紅在要守的那一案。審查時存活、這一輪沒處理的只剩 U06b（可接受）與 F06（附註）。
+
+### 17.5 本機檢查（一般使用者；`ha_env.sh` 的 TMPDIR，跑完用完整路徑刪掉）
+
+這一輪的測試與案例跑的時候還沒 commit；之後 commit 的內容和跑的時候相同（之後只改本筆記）。
+
+| 檢查 | 結果 |
+|---|---|
+| `npm test --prefix packages/mcp-admin-ui` | 81 案全過、0.2～0.3 秒（跑了兩次；對齊那一輪 80 案；新 1 案） |
+| `npm run build`＋`node tests/build-closure.mjs` | PASS |
+| Playwright 全套（`single`＋`profiles-on`，`--output` 放 TMPDIR） | 117 案全過（`single` 97、`profiles-on` 20），3.8 分鐘（審查時 116 案、3.8 分鐘） |
+| `profiles.spec` | 16 案，逐案加總 37.2 秒（審查時 15 案 34.1 秒）；新案 1.9 秒 |
+| `profile-api-parity.spec` | 10 案全過、2.5 秒（94 個案例） |
+| 形狀比對（真後端）`tests/test_panel_profile_api_shapes.py` | 10 案全過、2.35 秒（94 個案例，含新的 `delete-gone-stale`）。指令同第 16.6.1 節，只跑這一檔；17:53 排進共用鎖，18:23 才拿到（排了約 30 分鐘） |
+| `packaging/validate.py`（ci-venv 的 Python） | PASS |
+| `scripts/tool_inventory.py` | exit 0 |
+| 規則核對 | `git diff --stat 684a2dd..HEAD -- addons/ CHANGELOG.md upgrade-notes.yaml .github/` 與既有 9 個 spec 都 0 行；`MULTI_PROFILE_PRODUCTS` 是空集合；這一輪的 commit 身分都是 woowtech、沒有 AI 署名；`684a2dd..HEAD` 逐 commit 沒有原始雙向控制字元 |
+
+pytest 其他檔沒有重跑：這一輪沒有動任何 Python，也沒有動它們讀的檔（它們讀 `Hui/contracts.js` 等原始碼，沒改）；案例檔只有形狀比對讀，
+已重跑。對齊那一輪的子集 20 檔 344 案、全套 5,783 過（第 16.6.1 節）對同一份原始碼仍成立。
+
+| 預檢 | 指令 | 結果 |
+|---|---|---|
+| 秘密 | `.venv/bin/python -I scripts/secret_precheck.py --tools SP:hm01/gitleaks-tools --repo . --base 684a2dd --head HEAD --full` | OK，0 命中（gitleaks 8.28.0；`684a2dd..5aebade` 34 個 commit，另掃 HEAD 的樹與整段歷史）。本筆記 commit 之後再跑一次，結果記在 PR 說明 |
+| 帳本 | `.venv/bin/python -I scripts/ledger_precheck.py --repo . --base 684a2dd` | OK：`runtime-patches.json` 175 項、`runtime-sources.json` 70 項、`docs/tool-surface.json` 159 項，0 漂移、0 缺；改過的 22 個檔裡 5 個由帳本釘住、帳本本身有改（這一輪沒動列管檔，帳本不用改）；沒有帳本沒列的新執行檔 |
+
+### 17.6 CI 時間
+
+- 這一輪：`profiles.spec` 比審查時多約 3 秒（新案 1.9 秒；其餘是併進既有案例的幾段，各約 0.1～0.6 秒）；node 新 1 案約 2 毫秒；
+  pytest 只多一個案例（同一個情境，毫秒級）。Playwright 全套仍是 3.8 分鐘，推估 `checks` 多不到 0.1 分鐘。
+- 本片合計：Playwright 新案逐案加總約 73 秒（`profiles.spec` 37.2＋parity 2.5＋`profiles-on` 33.0），node 約 0.03 秒，pytest 約 2 秒；
+  推估 `checks` 多約 1.3～1.4 分鐘（目前約 28～35 分鐘，上限 60 分鐘）。補的測試都併在既有案例或共用同一個 fixture，沒有多開瀏覽器。
+
+### 17.7 commit（接在 `214c192` 後面）
+
+| commit | 內容 |
+|---|---|
+| `4e0a770` | 測試：S-1 新案例；S-10、S-3、S-4、S-7 併進既有案例的斷言；S-2 的 node 一案（守住現有行為，紅由突變證明） |
+| `5fb333a` | 契約 #103 的一句與變更紀錄（S-7）；DQ-31 的結論欄改回原句（S-9） |
+| `5aebade` | 案例：`main/delete-gone-stale`（S-6） |
+| 本筆記 | 第 17 節；第 9 節（S-8）、第 16.5 節（S-8）、第 16.2 節第 15 點（S-7）、第 16.12 節的編號；結論、第 1 節、第 16.13 節同步 |
+
+### 17.8 交給主對話與後面的片
+
+- **HM-10 已合併**：2026-11-16 `git fetch` 看到 `claude-delivery` 是 `df686dd`，HM-10（#104，`d00a338`）、HM-31（#105）、
+  HM-09 監看修正（#106）都已合併，`684a2dd` 是它的祖先。本片沒有 rebase（照任務，由主對話做）。rebase 時要注意：
+  - 契約第 9 節：HM-31 已用掉 #101～#108，本片的 #101～#104 要改成 #109～#112（#104 列裡指到的「#101」跟著改），第 9 節開頭的
+    說明句一起改；變更紀錄的兩列接在「v1 草案（HM-09 追補）」後面。本筆記與 PR 說明裡的列號跟著改（README、`admin-write-contracts.md` 與測試的註解沒寫列號）。
+  - `decisions.md`：HM-31 加了第 1.1 節與兩列變更紀錄；本片那列接在最後。
+  - 帳本：以新基準的 `runtime-patches.json` 為底，5 個面板檔照實際內容重算（新基準沒有動面板檔）。
+  - 重跑：形狀比對（Python 對新基準的真後端、Playwright 對 fixture；HM-31 動的是 8081 那一側，`profile_admin.py` 沒變）、node、
+    Playwright 全套、兩個預檢（base 改成新的 `claude-delivery`）。
+- push：分支的上游設成 `origin/claude-delivery`，要明確 `git push -u origin feat/ha-multiprofile-hm11-20261115`。
+  兩個備份分支與 `refs/original` 只在本機，不要 push。
+- HM-18：DOCS 提一句 `profile_index_corrupt` 會釋放帳號增刪的識別碼（觀察 1）；其餘照第 16.11 節。
+- HM-13c：隔離遇沒有代碼的 503 的文案（觀察 2）；清單沒帶 ETag 時讀不到的帳號的刪除鈕（觀察 4）。
