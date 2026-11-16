@@ -80,10 +80,10 @@ MiB = 1024 * 1024
 
 @dataclass(frozen=True)
 class ProfileQuota:
-    """One profile's request limits once its product is switched on (contract §5; §8.8 #15). No pool is shared: a
-    profile never uses another profile's slots or bytes."""
+    """One profile's request limits once its product is switched on (contract §5; §8.8 #15). No pool is shared but the
+    add-on's request body budget (HM-31, PaaS #155): a profile never uses another profile's slots or share of it."""
     admission: int                # requests admitted before their body is read
-    body_bytes: int               # request bytes read into memory and not forwarded yet
+    body_bytes: int               # HM-31: the cap of its share of the add-on's request body budget (request_budget)
     forward_slots: int            # requests forwarded to the child at once
     forward_wait_seconds: float   # how long a request waits for a forward slot
     get_streams: int              # GET (SSE) streams at once

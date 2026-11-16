@@ -29,7 +29,7 @@ from starlette.responses import JSONResponse, PlainTextResponse, Response, Strea
 from starlette.routing import Route, request_response
 from starlette.middleware import Middleware
 
-from . import odoo_methods, owner_defaults, redact, ui
+from . import odoo_methods, owner_defaults, redact, request_budget, ui
 from .access import AccessChanged, LeasedResponse, TokenAccess, masked_token
 
 from . import VERSION
@@ -39,7 +39,7 @@ from .lifecycle import CHILD_URL
 from .policy import Denied, ToolCallRefused, UnknownMethod, authorize, filter_list, validate_operation_denies
 from .admin_auth import AdminAuthority, BadRequest, prefix
 from .capabilities import ManagementOptions, capability_snapshot, observe_tools, tool_catalog
-from .request_limits import McpRequestLimits, RequestLimitError
+from .request_limits import DEFAULT_MAX_TOTAL_ELEMENTS, McpRequestLimits, RequestLimitError
 from .operations import OperationJournal, KINDS as OPERATION_KINDS, RESULTS as OPERATION_RESULTS, TTL_MS
 # HM-05 (contract 1.1): a profile's id, the default profile's or 24 lowercase hexadecimal characters; HM-08: the one
 # grammar, profiles.PROFILE_ID.
@@ -54,6 +54,11 @@ N8N_MAX_REQUEST = 4 * 1024 * 1024
 N8N_MAX_ARGUMENT_ELEMENTS = 10_000
 N8N_MAX_ARGUMENT_DEPTH = 64
 N8N_REQUEST_LIMITS = McpRequestLimits(N8N_MAX_REQUEST, N8N_MAX_ARGUMENT_ELEMENTS, N8N_MAX_ARGUMENT_DEPTH)
+# HM-31 (contract 1.2, 2.4; PaaS #155 create_app's mcp_structure_limits, woow-mcp-server d7f5849), not gated: every other
+# product's JSON structure guard (depth 64, 200,000 elements in the whole request) before the body is parsed; n8n's own
+# limits run the same guard first (McpRequestLimits.parse_and_check). Only check_structure is used of it: the body's
+# bytes stay bounded by MAX_REQUEST in body().
+STRUCTURE_LIMITS = McpRequestLimits(MAX_REQUEST, DEFAULT_MAX_TOTAL_ELEMENTS)
 BODY_SECONDS = 60
 MAX_RESPONSE = 8 * 1024 * 1024
 STREAM_SECONDS = 120
@@ -108,11 +113,12 @@ READY_ROUTE = "/health/ready"
 GATEWAY_BUSY = -32003
 BUSY_RETRY_AFTER = 5
 STREAM_RETRY_AFTER = 30
-# HM-08 review MF-1, S-1 (contract 2.2 point 4): the request state's name for a switched-on product's charge of the body
-# a request forwards (profile_router.ProfileGate puts it there; a switched-off product's requests never have it). Once
-# a POST's body is re-serialized for the child, serve() calls it with the message and the forwarded size: None sends
-# the body, anything else is the answer instead (the profile's byte budget cannot hold it).
-FORWARDED_BODY = "forwarded_body"
+# HM-31 (contract 2.2 point 4, 2.4, 5; PaaS #155): the request state's name for the request's request_budget.Reservation
+# (AnyMethod opens one for every MCP request of make_apps' body_budget and closes it when the request ends: its answer
+# sent in full, an event stream's last byte included, or its client gone). serve() charges it once the token is checked:
+# the body as read (a declared Content-Length before a byte is read) and as forwarded to the child (HM-08 review MF-1,
+# S-1). It replaces HM-08's FORWARDED_BODY: one budget, switched on or off.
+BODY_RESERVATION = "body_reservation"
 # HM-14 (contract 2.4, 2.5; the PaaS gateway's codes, texts and timings, woow-mcp-server 69ac425 proxy.py, mcp_access.py,
 # gateway_pool.py), for a switched-on product only (make_apps slot_busy given): a child whose connection broke while it
 # handled a request (-32004) and a token rotated or revoked after an answer began to go out (-32005).
@@ -572,12 +578,24 @@ class Ending:
 
 
 class AnyMethod:
-    """An ASGI endpoint, so Starlette hands every method to the handler: the Bearer check comes first, then 405."""
-    def __init__(self, handler):
+    """An ASGI endpoint, so Starlette hands every method to the handler: the Bearer check comes first, then 405.
+
+    HM-31: budget (a request_budget.Share), when given, opens the request's reservation (the request's state,
+    BODY_RESERVATION) and closes it when the request ends, however it ends: nothing it held stays charged."""
+    def __init__(self, handler, budget=None):
         self.app = request_response(handler)
+        self.budget = budget
 
     async def __call__(self, scope, receive, send):
-        await self.app(scope, receive, send)
+        if self.budget is None:
+            return await self.app(scope, receive, send)
+        reservation = self.budget.open()
+        # A copy of the request's state, so nothing is written into the server's own dict.
+        scope = {**scope, "state": {**scope.get("state", {}), BODY_RESERVATION: reservation}}
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            reservation.close()
 
 
 async def body(request: Request):
@@ -595,11 +613,17 @@ async def body(request: Request):
     return bytes(content)
 
 
-async def json_body(request):
+async def json_body(request, guard=None):
+    """HM-31: guard (an McpRequestLimits; the MCP path gives STRUCTURE_LIMITS) checks the body's structure and encoding
+    before it is parsed: request_limits.too_complex (a RequestLimitError) when it is too deep, has too many elements or
+    is not UTF-8. The management API gives none."""
     if request.headers.get("content-type", "").split(";")[0] != "application/json":
         raise BadRequest(415)
     try:
-        value = strict_json(await body(request))
+        raw = await body(request)
+        if guard is not None:
+            guard.check_structure(raw)
+        value = strict_json(raw)
         # A lone surrogate (e.g. an id "\ud800") parses but cannot be encoded back into a reply.
         json.dumps(value, ensure_ascii=False).encode("utf-8")
         return value
@@ -609,6 +633,15 @@ async def json_body(request):
 
 def request_limit_reply(error):
     return json_reply(error.payload, error.status, {"Cache-Control": "no-store"})
+
+
+def idle_reply(seconds):
+    """HM-31 (contract 2.4; PaaS proxy._idle_timeout_response, d7f5849): a large request whose body sent nothing for
+    seconds: 408, -32003 under id null, Retry-After 5, Connection: close (the body was not read to its end); its bytes
+    were given back."""
+    return json_reply({"jsonrpc": "2.0", "id": None,
+                       "error": {"code": GATEWAY_BUSY, "message": request_budget.idle_text(seconds)}}, 408,
+                      {"Retry-After": str(BUSY_RETRY_AFTER), "Cache-Control": "no-store", "Connection": "close"})
 
 
 def token_valid(request, state):
@@ -787,7 +820,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               reply_secrets: Callable[[], Iterable[str]] | None = None,
               child_blocked: Callable[[], str | None] | None = None,
               default_endpoint: Callable[[], str | None] | None = None,
-              bootstrap_fields: Callable[[], dict] | None = None):
+              bootstrap_fields: Callable[[], dict] | None = None,
+              body_budget: request_budget.Share | None = None):
     """listing (0.2.2): the product's tools/list tools as its child lists them (surface.listing). With it, a client
     connects whatever the backend's state: when no child can answer (no backend configured, so no child; a child that is
     not up) the gateway answers initialize, notifications/initialized, ping and tools/list itself, from listing through
@@ -824,8 +858,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
       for every reply). Every answer that carries a child's or a backend's text (a relayed reply, an SSE event, the
       gateway's own tools/list, a refused tools/call's health reason, a child's initialize error, backend/test,
       diagnostics) is masked with this profile's own secrets (redact.secret_values, as before) and these (DQ-40 (a) ⑧).
-    A switched-on product's dispatcher also charges the body a POST forwards to the profile's byte budget, through the
-    request's state (FORWARDED_BODY; profile_router.ProfileGate): no make_apps option.
+    The byte budget HM-08 charged in the dispatcher (FORWARDED_BODY) is HM-31's body_budget now, switched on or off.
 
     HM-09 (multi-profile plan 5.4; contract 3.1, 3.6), likewise only for a switched-on product:
     - child_blocked: why the profile's child is not started now (lifecycle.Supervisor.blocked_reason: None,
@@ -860,7 +893,24 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     - bootstrap_fields: what the bootstrap carries after the echo (profiles_supported; the default profile's
       profile_index_state): a callable read for every bootstrap, only with profile_view.
     The admin app's state.profile_action is this profile's action (admin_action and its echo), for the dispatcher:
-    profile_router.AdminDispatcher runs the shared pipeline itself and calls it once it has chosen this profile."""
+    profile_router.AdminDispatcher runs the shared pipeline itself and calls it once it has chosen this profile.
+
+    HM-31 (plan 12.3 HM-31; contract 1.2, 2.4, 5; the PaaS #155 gateway, woow-mcp-server d7f5849), not gated: every MCP
+    request is read under the add-on's request body budget, and every POST body passes the JSON structure guard.
+    - body_budget: this profile's request_budget.Share of the add-on's budget (profile_runtime.ProfileManager gives
+      every profile of a switched-on add-on its share of one budget). Left out: a budget of this add-on's own, made now
+      (request_budget.own_share: derived from the memory at startup, the default profile's share).
+    - once the token is checked, a large body (declared over 64 KiB, or without Content-Length) is charged: a declared
+      length that does not fit is refused before a byte is read, its body drained (only its head and tail kept, to
+      find its id: 200 + -32003 under it, else 503; Retry-After 5); one without a length is cut off once it does not
+      fit (its id from its head); one that sends nothing for request_budget.BODY_IDLE_SECONDS gets 408 (idle_reply).
+      The body as forwarded to the child is charged too (re-serialized: up to 3 times as large); one that does not fit
+      then is not sent (200 + -32003 under its id). Small requests (64 KiB at most, read and forwarded) are never
+      charged nor refused. What a request holds goes back when it ends (AnyMethod).
+    - a POST body too deep (over 64 levels), with too many elements (over 200,000) or not UTF-8 is refused before it
+      is parsed (request_limits.too_complex: 200 + -32602 under its id when its head or tail shows it, else 413).
+    - each refusal writes one WARNING per profile and situation a minute (body_budget's warn), never content or a
+      token."""
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
@@ -893,7 +943,13 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         raise ValueError("invalid default endpoint")
     if bootstrap_fields is not None and (not callable(bootstrap_fields) or profile_view is None):
         raise ValueError("invalid bootstrap fields")
+    if body_budget is not None and not isinstance(body_budget, request_budget.Share):
+        raise ValueError("invalid request budget")
     n8n_request_bounds = getattr(store, "product", None) == "n8n"
+    # HM-31: the add-on's request body budget (this profile's share) and the single-request ceiling it is charged up to
+    budget_share = request_budget.own_share(getattr(store, "product", None)) if body_budget is None else body_budget
+    body_cap = N8N_MAX_REQUEST if n8n_request_bounds else MAX_REQUEST
+    idle_seconds = budget_share.budget.limits.idle_seconds
     management = management or ManagementOptions()
     if listing is not None:
         listing = copy.deepcopy(list(listing))
@@ -1607,6 +1663,28 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 return tool_refusal(message["id"], ToolCallRefused("backend_unreachable", name, reason=available["reason"]))
             return None
 
+        def refused_body(error):
+            """A body the request limits refused (n8n's McpRequestLimits; HM-31: the structure guard): its answer as
+            before, and the profile's WARNING (HM-31, PaaS P2-D: the kind, the HTTP status and a short reason)."""
+            budget_share.warn("body-" + error.kind, f"refused a request body ({error.kind}, HTTP {error.status}): "
+                                                    f"{error.log_reason}")
+            return request_limit_reply(error)
+
+        async def over_budget(exceeded, unwatched):
+            """HM-31 (contract 2.4; PaaS proxy._refuse_over_budget, d7f5849): the body does not fit the budget. A
+            declared one (nothing read) is drained first, only its head and tail kept (a client that sends its whole
+            body before it reads gets this answer, not a reset); one without a length was cut off as it arrived. Its id
+            from its head (and tail): 200 + -32003 under it, else 503; Retry-After 5. Nothing reaches the child."""
+            budget_share.warn("bytes", request_budget.budget_note(exceeded))
+            head, tail = exceeded.head, b""
+            if not exceeded.read:
+                head, tail, left = await request_budget.drain(unwatched, idle_seconds=idle_seconds,
+                                                              total_seconds=BODY_SECONDS)
+                if left:
+                    return Response(status_code=CLIENT_CLOSED, headers={"Cache-Control": "no-store"})
+            ident = request_budget.head_tail_id(head, tail) if request.method == "POST" else None
+            return busy_reply(request_budget.unread_message(ident), request_budget.budget_text(exceeded))
+
         def without_child():
             """0.2.2 (listing only): the answers the gateway gives itself, before a slot or the child; None forwards."""
             state = store.load()  # reading the body yielded: a revoked token is refused as on any other path
@@ -1663,29 +1741,60 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             raise BadRequest()
         method = message = refusal = None
         content = b""
-        if request.method == "POST":
-            if n8n_request_bounds:
-                if request.headers.get("content-type", "").split(";")[0] != "application/json":
-                    raise BadRequest(415)
+        # HM-31 (contract 2.4): the token is checked; a large body is read under the request body budget from here on
+        reservation = getattr(request.state, BODY_RESERVATION)
+        unwatched = request_budget.watch(request, reservation, cap=body_cap, idle_seconds=idle_seconds)
+        try:
+            if request.method == "POST":
+                if n8n_request_bounds:
+                    if request.headers.get("content-type", "").split(";")[0] != "application/json":
+                        raise BadRequest(415)
+                    try:
+                        async with asyncio.timeout(BODY_SECONDS):
+                            limited_body = await lease.run(lambda: N8N_REQUEST_LIMITS.read_body(request))
+                        N8N_REQUEST_LIMITS.parse_and_check(limited_body)
+                        try:
+                            message = strict_json(limited_body)
+                            # Preserve HA's duplicate/nonfinite checks and reject lone surrogates before any dispatch.
+                            json.dumps(message, ensure_ascii=False).encode("utf-8")
+                        except (ValueError, RecursionError):  # UnicodeEncodeError is a ValueError
+                            raise RequestLimitError(
+                                "Invalid or excessively nested JSON", status=400, code=-32700) from None
+                    except RequestLimitError as error:
+                        return refused_body(error)
+                    except ClientDisconnect:
+                        raise BadRequest(403) from None
+                    except TimeoutError:
+                        raise BadRequest(408) from None
+                else:
+                    try:
+                        message = await lease.run(lambda: json_body(request, STRUCTURE_LIMITS))
+                    except RequestLimitError as error:
+                        return refused_body(error)  # HM-31: the structure guard (too deep, too many elements, not UTF-8)
+                    except BadRequest as error:
+                        if error.status == 413:
+                            budget_share.warn("body-too-large", "refused a request body (too-large, HTTP 413): body "
+                                                                f"exceeds {MAX_REQUEST} bytes")
+                        raise
+            elif n8n_request_bounds:
                 try:
                     async with asyncio.timeout(BODY_SECONDS):
-                        limited_body = await lease.run(lambda: N8N_REQUEST_LIMITS.read_body(request))
-                    N8N_REQUEST_LIMITS.parse_and_check(limited_body)
-                    try:
-                        message = strict_json(limited_body)
-                        # Preserve HA's duplicate/nonfinite checks and reject lone surrogates before any dispatch.
-                        json.dumps(message, ensure_ascii=False).encode("utf-8")
-                    except (ValueError, RecursionError):  # UnicodeEncodeError is a ValueError
-                        raise RequestLimitError(
-                            "Invalid or excessively nested JSON", status=400, code=-32700) from None
+                        nonempty = await lease.run(lambda: N8N_REQUEST_LIMITS.read_body(request))
                 except RequestLimitError as error:
-                    return request_limit_reply(error)
+                    return refused_body(error)
                 except ClientDisconnect:
                     raise BadRequest(403) from None
                 except TimeoutError:
                     raise BadRequest(408) from None
             else:
-                message = await lease.run(lambda: json_body(request))
+                nonempty = await lease.run(lambda: body(request))
+        except request_budget.BudgetExceeded as exceeded:
+            return await over_budget(exceeded, unwatched)
+        except request_budget.BodyIdleTimeout as idle:
+            budget_share.warn("body-idle", f"a request body sent nothing for {idle.seconds:g} s; the request was "
+                                           "dropped (408) and its bytes given back")
+            return idle_reply(idle.seconds)
+        if request.method == "POST":
             try:
                 method = authorize(message, tools, state)
             except ToolCallRefused as refused_call:
@@ -1702,21 +1811,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                                   200, {"Cache-Control": "no-store"})
             except Denied:
                 raise BadRequest(403) from None
-        else:
-            if n8n_request_bounds:
-                try:
-                    async with asyncio.timeout(BODY_SECONDS):
-                        nonempty = await lease.run(lambda: N8N_REQUEST_LIMITS.read_body(request))
-                except RequestLimitError as error:
-                    return request_limit_reply(error)
-                except ClientDisconnect:
-                    raise BadRequest(403) from None
-                except TimeoutError:
-                    raise BadRequest(408) from None
-            else:
-                nonempty = await lease.run(lambda: body(request))
-            if nonempty:
-                raise BadRequest()
+        elif nonempty:
+            raise BadRequest()
         headers = {"Authorization": "Bearer " + state.child_token, "Content-Type": "application/json",
                    "Accept": "application/json, text/event-stream",  # fixed: the gateway reads both itself
                    "Accept-Encoding": "identity"}
@@ -1803,14 +1899,15 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     # child must not expect any, whatever the real client declared.
                     forwarded = {**message, "params": {**message["params"], "capabilities": {}}}
                 content = json.dumps(forwarded, separators=(",", ":")).encode()
-                charge = getattr(request.state, FORWARDED_BODY, None)
-                if charge is not None:
-                    # HM-08 review MF-1, S-1: a switched-on product's dispatcher charges what the child is sent until
-                    # the request ends (this serialization can be larger than what was read: ASCII escapes make a CJK
-                    # character 6 bytes and an emoji 12, and a number is written in Python's own form).
-                    refusal = charge(message, len(content))
-                    if refusal is not None:
-                        return refusal  # the slot is released below; the child never gets the request
+                try:
+                    # HM-08 review MF-1, S-1; HM-31: what the child is sent stays charged until the request ends (this
+                    # serialization can be larger than what was read: ASCII escapes make a CJK character 6 bytes and an
+                    # emoji 12, and a number is written in Python's own form).
+                    reservation.forward(len(content))
+                except request_budget.BudgetExceeded as exceeded:
+                    budget_share.warn("bytes", request_budget.budget_note(exceeded))
+                    # the slot is released below; the child never gets the request
+                    return busy_reply(message, request_budget.budget_text(exceeded))
             waited = time.monotonic() + CHILD_WAIT_SECONDS
             call_seconds = CALL_SECONDS if method == "tools/call" else None  # 0.2.2: see CALL_SECONDS
             async with asyncio.timeout(call_seconds + 5 if call_seconds else 35):
@@ -1995,9 +2092,10 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     exceptions = {BadRequest: error_handler, ConfigError: error_handler}
     admin = management_app(admin_page)  # HM-10: the same application as before, built by the shared helper
     admin.state.profile_action = profile_action  # HM-10: for the switched-on dispatcher (see the docstring)
-    mcp_app = Starlette(routes=[Route(MCP_ROUTE, AnyMethod(mcp)), Route(SECRET_ROUTE, AnyMethod(private_mcp)),
-                                Route(READY_ROUTE, readiness)],
+    mcp_app = Starlette(routes=[Route(MCP_ROUTE, AnyMethod(mcp, budget_share)),
+                                Route(SECRET_ROUTE, AnyMethod(private_mcp, budget_share)), Route(READY_ROUTE, readiness)],
                         exception_handlers=exceptions)
     mcp_app.router.redirect_slashes = False
     mcp_app.state.lanes = lanes  # HM-14: a switched-on profile's lanes (slots, waiting), for diagnostics and tests
+    mcp_app.state.body_budget = budget_share  # HM-31: this profile's share of the request body budget (tests)
     return admin, mcp_app
