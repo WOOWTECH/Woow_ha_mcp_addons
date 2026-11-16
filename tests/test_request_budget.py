@@ -33,14 +33,11 @@ def rb():
 
 @pytest.fixture
 def kernel_files(tmp_path, monkeypatch):
-    """The cgroup limit files (v2, v1) and /proc/meminfo, as test files the memory readers read: profiles' readers
-    (HM-09), which the budget reads through (HM-31 review S-6), and the budget's own copy of them while it still has
-    one (before that change). Absent until a test writes them."""
+    """The cgroup limit files (v2, v1) and /proc/meminfo, as test files: what profiles' readers (HM-09) read, and so
+    the budget (HM-31 review S-6: it has no copy of them). Absent until a test writes them."""
     v2, v1, meminfo = tmp_path / 'memory.max', tmp_path / 'memory.limit_in_bytes', tmp_path / 'meminfo'
-    for module in (profiles, rb()):
-        if hasattr(module, 'CGROUP_MEMORY_LIMITS'):
-            monkeypatch.setattr(module, 'CGROUP_MEMORY_LIMITS', (v2, v1))
-            monkeypatch.setattr(module, 'MEMINFO', meminfo)
+    monkeypatch.setattr(profiles, 'CGROUP_MEMORY_LIMITS', (v2, v1))
+    monkeypatch.setattr(profiles, 'MEMINFO', meminfo)
     return v2, v1, meminfo
 
 
