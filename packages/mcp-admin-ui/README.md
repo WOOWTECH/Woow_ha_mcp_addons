@@ -98,14 +98,27 @@ bootstrap；product/contract/tools/schema/disabled/global/grants 任一變更即
 - 每次變更先鎖定帳號：取 CSRF 的 bootstrap 與變更本身帶同一個標頭，兩個回應的帳號回聲都要符合，否則不顯示結果、藏起權杖並重新讀取。
 - 切換帳號：藏起已顯示的權杖、清掉密碼欄與未存的草稿、整頁重畫；切換中只剩帳號選單可用，再選一次會取代前一次，前一次晚到的回應丟掉。
   其他操作進行中選單停用。
-- 帳號被刪：面板一得知就清掉該帳號未確認的收據並說明，不會叫人切回。得知的路徑有：在面板刪除、重送刪除（確認完成，
-  或回 `profile_not_found`，這時說的是要刪的帳號）、帳號範圍請求回 `profile_not_found`、切換時新清單裡已沒有剛離開的帳號
-  （索引壞時只剩預設帳號的替代清單不算，收據留著）。
+- 帳號被刪：面板一得知就清掉該帳號未確認的收據並說明，不會叫人切回。得知的路徑有：在面板刪除（孤兒也是）、重送刪除
+  （確認完成；或回 `profile_not_found`、`config_conflict` 而重讀的清單已沒有它，這時說的是要刪的帳號）、建立的重送只回 id
+  （建好之後已被刪）、帳號範圍請求回 `profile_not_found`、切換時新清單裡已沒有剛離開的帳號
+  （替代清單不算，收據留著：索引壞、或清單讀不到或格式不合時只剩預設帳號的清單）。
   目前帳號被刪就切回預設帳號。
 - 額外帳號的 MCP 端點唯讀（全 add-on 共用，只在預設帳號修改）；手動範例的名稱是 `woow-<產品>-<id 前 8 碼>`。
 - 收據：預設帳號的 key 與 4 鍵紀錄不變；額外帳號另一個 key、多一個 `profile` 鍵；帳號增刪用 `…:profiles`（見 `docs/admin-write-contracts.md`）。
+- 孤兒（DQ-14：索引沒有的帳號資料夾，不服務、不自動刪）：「診斷與維護」逐筆列出，刪除要確認兩次；選單下方提示筆數。
+- 索引不能用（DQ-12）：預設帳號照常可用，「帳號索引無法使用」卡片有「隔離帳號索引」（確認兩次；送 bootstrap 的
+  `profile_index_etag`）。隔離後預設帳號立刻恢復 MCP 服務，原本的帳號都變成孤兒。409 時重讀狀態並說明原因
+  （索引已可用、索引檔又變了、或沒有索引檔可隔離：要修好後重啟 add-on）；503（別的帳號拿著鎖）保留識別碼，可重送。
+- 清單不能用時不鎖面板（審查 S-2）：清單讀不到或格式不合，選單只剩預設帳號（與目前帳號），新增改名刪除停用並說明；
+  清單沒帶 `ETag` 時照列但唯讀；這個瀏覽器顯示不了的名稱只藏那一列的名稱（以 id 前 8 碼稱呼）。
+- `profiles_supported` 是 false 的產品（OpenDesign、Odoo Manage，DQ-28）沒有「新增帳號」；`limit` 0（可開的檔案數不夠，
+  只服務預設帳號）另有說明。
 - fixture 以 `profiles` 選項開關多帳號；Playwright 的 `profiles-on` 專案讓四個既有 spec 在開關開時原封不動再跑一次；
   `profiles.spec.mjs` 另有一案在開關關時逐頁確認沒有任何帳號介面、帳號字樣與帳號標頭。
+- fixture 和真後端一致的證明：`tests/profile-api-cases.json` 列出面板開通後用到的每條管理路由與要處理的每種拒絕，
+  每案的 `expect` 錄自真的 8099 管理 app（repo 根目錄 `tests/test_panel_profile_api_shapes.py`，pytest）；
+  `tests/browser/profile-api-parity.spec.mjs` 讓 fixture 跑同一份案例、比同一份 `expect`。改了任何一邊，兩個測試之一會紅；
+  真後端變了，先重錄 `expect`（照 Python 測試失敗時印出的形狀改），再改 fixture 與面板。
 
 ## 正式 listener 與 Ingress
 
