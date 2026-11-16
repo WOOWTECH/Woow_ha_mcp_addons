@@ -27,7 +27,7 @@ driver 以 HA 登入流程取得管理員 token → WebSocket `supervisor/api` �
 |---|---|---|
 | `--tokens` | 無 CSRF 的 rotate 應 403；reveal T1 → rotate T2（T1 失效）→ revoke（全部失效）→ 再 rotate T3 | **輪替 MCP token**：既有 client 要換新 token |
 | `restart` | `ha apps restart <slug>`，量到 MCP 可用的秒數與首呼叫；重啟前後 token 必須相同 | 重啟這個 app |
-| `childkill` | 在 app 容器內 SIGKILL management launcher 的子程序，量恢復時間；容器不應重啟 | 中斷這個 app 的 MCP 連線數秒 |
+| `childkill` | 在 app 容器內 SIGKILL management launcher 的子程序，量恢復時間；容器不應重啟。注意：0.2.2 起子程式沒在跑時閘道自己回 initialize（`woow-local-` session），所以印的 `recovered in` 是殺掉後 MCP 埠第一次回 initialize 的秒數（多半是閘道自答，接近 0），不是子程式回來的時間；子程式有沒有回來要看 `child pids now` 是不是新的 PID。開通的 app 用下方多帳號的 `childkill` | 中斷這個 app 的 MCP 連線數秒 |
 | `bench` | initialize×5、tools/list×50、`PROBE_TOOL`×50 的 p50／p95 | 無（只用唯讀工具） |
 | `cycle` | 25 次 initialize＋DELETE，確認 session 名額有釋放 | 無 |
 | `--backend-file F` | 用 0600 JSON（n8n `{"url","key"}`；其他各支 `{"connection":{...}}`）填面板後端，內容不印 | 改這個 app 的後端設定、重啟它的 MCP child |
@@ -55,13 +55,15 @@ driver 的管理用戶端（`packaging/ha_p9_admin.mjs` 包面板的 `AdminApi`�
 | 選項 | 做什麼 | 會改變什麼 |
 |---|---|---|
 | `--profile ID` | `--backend-file`、`--tokens`、`--plan`、`--modes` 都對這個帳號做（`default` 或 24 位小寫 hex）；沒給就是預設帳號 | 同上表，只動這個帳號 |
-| `childkill`（開通的 app） | 只 SIGKILL `--profile` 那個帳號的子程式：driver 從帳號清單取它的 port，probe 以 `--child-port` 依子程式命令列的 `--port` 找出它（預設帳號的 Hermes／OpenDesign 子程式沒寫 port，就是 3000 那個）。找不到唯一一個就什麼都不殺、失敗。之後它要重新起來（新 PID），其他帳號子程式的 PID 一個都不能變，否則 probe exit 1 | 中斷這個帳號的 MCP 連線數秒 |
+| `childkill`（開通的 app） | 只 SIGKILL `--profile` 那個帳號的子程式：driver 從帳號清單取它的 port，probe 以 `--child-port` 依子程式命令列的 `--port` 找出它（預設帳號的 Hermes／OpenDesign 子程式沒寫 port，就是 3000 那個）。找不到唯一一個就什麼都不殺、失敗。看門狗第一次重起要等 2 秒，這段時間閘道自己回 initialize，所以 probe 殺掉後每 0.5 秒看一次子程式清單（最多 60 秒），直到剛好一個新 PID 服務那個 port；期間別的帳號子程式的 PID 一變就失敗。接著要等到那個帳號的 token 開得到子程式自己的 session 才算恢復（最多再 60 秒；閘道自答的 `woow-local-` session 一律結束、只計數）。輸出 `new pid … after N s (K looks)` 與 `child's session after M s more (J gateway sessions before it …)`。新 PID 沒出現、session 一直是閘道自答的、或別的 PID 變了，probe 都 exit 1。n8n 開通（HM-25）前認不出 n8n 的子程式（port 只在環境變數裡），什麼都不殺、失敗 | 中斷這個帳號的 MCP 連線數秒 |
 | `--cross` | 交叉矩陣（T-05）：帳號清單裡每個帳號的 token（各自在自己的 `X-MCP-Profile` 下 reveal）用 Bearer 與密鑰網址兩種接法都開得了 session、列得出工具；每個 session 拿任何別帳號的 token（兩種接法）都 404；隨機 token：Bearer 401、密鑰網址 404。開 session 時一律帶 `X-MCP-Profile: default`：MCP port 不看這個標頭，要是它照標頭選了預設帳號，交叉那一步就會變 200。沒有啟用中 token 的帳號跳過並印一行 | 無（只讀；每個 session 都 DELETE） |
 | `--temp-profile` | 暫時帳號模式（照 PaaS `public_probe.py --temp-profile`）：用剛讀到的索引版本建一個名為 `p9-temp-<8 hex>` 的帳號 →（有 `--backend-file` 就存到它身上、有 `--plan` 就用它的 token 跑；沒有後端又有 `PROBE_TOOL` 時，它的工具呼叫要被閘道拒絕（`Backend not configured`），不會借用預設帳號的後端）→ 它和預設帳號做交叉矩陣 → 刪掉它（重讀索引版本；前面失敗也照刪）→ 它的舊 token 必須被拒（Bearer 401、密鑰網址 404）。`--plan` 要搭 `--backend-file`；不能和 `--profile`、`--tokens`、`--modes`、`--outage-url` 一起用 | **建立並刪除一個帳號**；預設帳號不變 |
 
 - **不自動重送**（同 0.4.7 起的契約）：建立或刪除帳號的回應不明時，driver 印出操作識別碼與路由後立刻停止，絕不重送。
   先在面板核對帳號清單與收據；刪除不明時還要印「暫時帳號可能還在」，請在面板刪掉它再跑下一輪。
 - 輸出只用帳號的 log id（`default` 或 id 前 8 碼），不印帳號名稱、token、cookie。暫時帳號的名稱是合成的。
+- probe 直接連 app 對應到主機的 MCP 埠，不走 HA 主機 shell 的 `http_proxy`、`https_proxy`、`all_proxy` 等代理設定
+  （密鑰網址的 token 在路徑上；HM-16 起所有模式都一樣）。
 - 開通的 app 才有這些模式；沒開通的 app 帶 `--cross` 或 `--temp-profile` 會直接失敗，帶 `--profile` 非 `default` 也是。
 - 刪除後帳號目錄真的清掉、port 釋放（T-09）不在這個工具裡：本機測試 `tests/test_profile_admin_api.py` 涵蓋，HAOS 上看面板清單與孤兒
   卡片（不該多一筆孤兒）。

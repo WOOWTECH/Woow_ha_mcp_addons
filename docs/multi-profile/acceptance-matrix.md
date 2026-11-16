@@ -1,6 +1,6 @@
 # 多帳號驗收矩陣（PaaS T-01～T-29 的 HA 版）
 
-- 狀態：HM-00 起草（2026-11-14）；HM-06 依 n8n 的實際行為改 T-23 的 n8n 期望值（2026-11-15，審查 MF-1 選 (a)）；HM-20 登記兩個測試檔與兩個 packaging 測試的擴充（2026-11-15）。HM-16 把它寫進 `docs/operations/acceptance.md` 與 P9 kit；HM-19b 照它做 Odoo 首發的 HAOS 驗收。
+- 狀態：HM-00 起草（2026-11-14）；HM-06 依 n8n 的實際行為改 T-23 的 n8n 期望值（2026-11-15，審查 MF-1 選 (a)）；HM-20 登記兩個測試檔與兩個 packaging 測試的擴充（2026-11-15）。HM-16 把它寫進 `docs/operations/acceptance.md` 與 P9 kit，並登記本片的測試檔（2026-11-17）；HM-19b 照它做 Odoo 首發的 HAOS 驗收。
 - 來源：計畫 §10.4、§10.6（repo 外）；HA 期望值沿用 `gaps/G6-delivery.md` 第 5 節，依 2026-11-14 的決策更新（`decisions.md`）。
 - 契約與差異：`contract.md`（第 9 節刻意差異表，下稱 §8.8）；G6 §5 每一列怎麼對到差異表或測試見 `deviation-trace.md`。
 
@@ -31,7 +31,7 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | T-12 | 負載中輪替、刪除 | 只切斷該帳號的 lease，別帳號的串流不斷 | `tests/test_profile_routing.py`、`tests/test_active_token_leases.py`、`tests/test_profile_admin_api.py`（刪除：HM-10） | — | HM-08、HM-10 | 是 | — |
 | T-13 | 單一子程式當掉 | 其他帳號 PID 不變；看門狗照 PaaS（2→300 秒、不限次數、120 秒歸零；DQ-20 採 (b)） | `tests/test_profile_lifecycle.py` | 容器、HAOS | HM-09、HM-16、HM-19b | 是 | #14 |
 | T-14 | 冷啟動與重啟 | 子程式未就緒時閘道自答 initialize（自答 session），就緒後要求重連；之後每帳號 initialize 200；錯開啟動下「全部就緒」時間有數字 | `tests/test_staggered_start.py`、`tests/test_unconfigured_connect.py` | 容器、HAOS | HM-09、HM-16、HM-19b | 是 | #53、#68 |
-| T-15 | port 被佔與同 port | 衝突只停相關帳號；被佔時照看門狗退避，放開後自動恢復 | `tests/test_profile_ports.py` | 容器 | HM-09、HM-16 | 是 | #14 |
+| T-15 | port 被佔與同 port | 衝突只停相關帳號；被佔時照看門狗退避，放開後自動恢復 | `tests/test_profile_ports.py` | 容器（只驗每個子程式只聽自己的 port；衝突與退避只在單元） | HM-09、HM-16 | 是 | #14 |
 | T-16 | 子程式晚驗證 | HA 閘道自答（不是 PaaS 的 503「MCP child is not ready」）；套用狀態每帳號一份 | `tests/test_profile_runtime.py` | — | HM-09、HM-10 | 是 | #68 |
 | T-17 | 記憶體與 CPU | J6412（可以的話 J1900）1～6 個帳號的 RSS／PSS、CPU 數字；停機 <30 秒；全域最壞值對 MemAvailable | `tests/test_profile_lifecycle.py`（並行停） | HAOS（HM-19c） | HM-19c；各產品升版 | 是 | #19、#53 |
 | T-18 | 互相影響與日誌保留 | 每帳號子程式輸出緩衝不被別帳號擠掉；生命週期 log 帶 id 前 8 碼 | `tests/test_profile_runtime.py`、`tests/test_profile_lifecycle.py` | HAOS | HM-08、HM-09、HM-19b | 是 | #29 |
@@ -117,9 +117,13 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_request_structure.py` | HM-31 | 計畫 | JSON 結構守門（深度、元素、UTF-8、閉括號、邊界、放大語料）與拒收形狀；n8n 先跑同一道守門 |
 | `tests/test_request_budget_gateway.py` | HM-31 | 計畫 | 開關關與開：預算拒絕讀完丟掉回 id、沒帶長度中途切斷、讀取閒置 408、整體 60 秒照舊、份額不跨帳號、全 add-on 預算共用；HM-31 審查：`Content-Length`＋`Transfer-Encoding` 照實際收到的位元組（含真的 h11 socket）、宣告超過 16 MiB 讀之前 413、讀完丟掉的閒置與整體界線、只留頭尾、從尾端找 id |
 | `tests/test_child_identity.py` | HM-15 | 計畫（條件式） | 別的程序先綁 port → 不轉發；uid 10001 子程序驗降級 |
-| `tests/test_upgrade_hooks.py` | HM-16 | 計畫 | Store hook 只讀、與版本無關 |
-| `packaging/test_container_probe.py` | HM-16 | 既有，擴充 | 多帳號探針、`/data/mcp` 修復規則與項目預算 |
-| `packaging/test_ha_p9_probe.py` | HM-16 | 既有，擴充 | P9 kit 帳號參數、交叉矩陣 |
+| `tests/test_upgrade_hooks.py` | HM-16 | 新增 | Store hook 草稿（`packaging/hooks/seed`、`verify`）只讀、與版本無關；升級不該做的 11 種事各讓 verify 失敗；索引是連結時不跟隨；在自己的程序裡也不走環境代理；對真的 runtime（舊版沒開通、新版開通或也沒開通；Odoo、EMQX）照樣過、不改 `/data` |
+| `packaging/test_container_profiles.py` | HM-16 | 新增 | 容器探針的多帳號階段：布局快照（修復規則、512 項與 8 層預算）、照面板的方式建帳號、sentinel、子程式 port 與資源、SIGKILL、30 秒內停機、路由（含 session 是自己子程式的）、子程式 bearer；整個階段的順序、每一步拿到的帳號與它自己的判定 |
+| `packaging/test_container_probe.py` | HM-16 | 既有，擴充 | 單帳號路徑和基準兩邊都剝掉開通的分支後逐句相同；開通的產品假後端用容器私有位址；`fixture_snapshot` 只對開通的產品放寬 |
+| `packaging/test_container_acceptance.py` | HM-16 | 既有，擴充 | 沒開通的產品 docker 指令與 180 秒逐字照舊；開通的走一次性 internal bridge 與 360 秒；repo 的開關決定它 |
+| `packaging/test_ha_p9_probe.py` | HM-16 | 既有，擴充 | P9 kit：cross 模式（兩種接法、跨帳號 session、已刪與隨機 token、`X-MCP-Profile` 不換帳號）、childkill `--child-port`（輪詢到新 PID、要子程式自己的 session、別的 PID 不變）、不走環境代理 |
+| `packages/mcp-admin-ui/tests/p9-admin.test.mjs` | HM-16 | 既有，擴充 | P9 driver 的帳號流程：暫時帳號（不重送、刪除前重讀索引版本）、交叉矩陣的輸入、childkill 的 port；driver 組裝的順序與參數（`--cross`、`--temp-profile`、childkill） |
+| `tests/test_owned_executable.py` | HM-16 | 既有，擴充 | 開通的產品經 owned executable 起預設帳號 |
 | `packaging/test_validate.py` | HM-17 | 既有，擴充 | 多產品版號運算式 |
 | `packaging/test_release_gate.py` | HM-17 | 既有，擴充 | release_gate 只認產品自己的紀錄 |
 | `tests/test_saved_destinations.py` | HM-20 | 既有，擴充 | 開通後存檔拒 loopback（全部產品，含 n8n；各種寫法）；區網照放；沒開通與替身開關照今天 |

@@ -90,7 +90,7 @@ CONTAINER/MOCK、STORE、HA、PUBLIC；token 一律不印、不存，帳號只�
 
 | 層 | 在哪裡跑 | 工具 | 誰批准 |
 |---|---|---|---|
-| LOCAL/MOCK | GitHub CI `checks`（root、0 skip） | `packaging/unit.sh`（pytest、node、Playwright） | 不需要 |
+| LOCAL/MOCK | GitHub CI `checks` | `packaging/unit.sh`（pytest、node、Playwright；root、0 skip）；packaging unittest（`python -m unittest discover -s packaging`：容器探針、多帳號階段與 P9 probe 的 mock 測試；不是 root、允許 skip） | 不需要 |
 | CONTAINER/MOCK | repo 外 builder | `container_acceptance.py`；開通的候選映像加多帳號階段 | 使用者（builder） |
 | STORE | 升版 PR 的 `Upgrade comparison` | `addons/<產品>/upgrade-check/seed`、`verify`（草稿在 `packaging/hooks/`，HM-19a 搬進去） | 自動 |
 | HA | QA HAOS | [P9 kit](ha-p9-kit.md)（`--profile`、`--cross`、`--temp-profile`、`childkill`）加人工 | 使用者（每一步） |
@@ -98,41 +98,45 @@ CONTAINER/MOCK、STORE、HA、PUBLIC；token 一律不印、不存，帳號只�
 
 容器的多帳號階段（CONTAINER/MOCK，只在開通的候選映像；第一次真跑是 HM-19a 前的 builder 乾跑）：預設帳號加 2 個額外帳號
 （停機時照面板的建立方式建，容器裡沒有 HA 管理員，不繞過管理 API 的身分檢查）、每個子程式只聽自己的 loopback port、
-交叉 token 與 session 被拒、子程式只認自己的 child bearer、額外子程式 `oom_score_adj` 500 與 `nice` 加 5、SIGKILL 一個子程式
-其他 PID 不變、並行停機 <30 秒（印出秒數）、sentinel 沒被執行期動過、子程式跑過後 `/data/mcp` 符合修復規則與項目預算、
-照 Supervisor 的方式還原整棵多帳號樹後修好且兩個還原訊號都成立。這些是容器裡的模擬，不是 HA 證據。
+每個帳號的 session 是自己子程式的（直接問每個子程式：只有自己的認得）、交叉 token 與 session 被拒、子程式只認自己的
+child bearer、額外子程式 `oom_score_adj` 500 與 `nice` 加 5、SIGKILL 一個子程式其他 PID 不變、並行停機 <30 秒（印出秒數）、
+sentinel 沒被執行期動過、子程式跑過後 `/data/mcp` 符合修復規則與項目預算、照 Supervisor 的方式還原整棵多帳號樹後修好且
+兩個還原訊號都成立。這些是容器裡的模擬，不是 HA 證據。n8n 開通（HM-25）前這個階段不收 n8n：n8n 子程式的 port 只在
+環境變數裡，認不出哪個子程式是哪個帳號的。
 
-| T | 情境 | 怎麼驗（層：工具） | 通過標準（HA） |
-|---|---|---|---|
-| T-01 | 受測物前置 | HA：`docker inspect` 對 GHCR digest；`ha core info`、`ha supervisor info`、`ha os info` | 執行中映像 digest＝發佈值；Core／Supervisor／OS 版本記下；後端只用合成或受限身分 |
-| T-02 | 上限、名稱、清單欄位 | LOCAL；HA：面板 | 第 6 個額外帳號 409 `profile_limit_reached`；記憶體不足 409 帶需要與可用的 MiB；名稱規則照 HA 加嚴；清單有 `status` |
-| T-03 | 每帳號後端與 token | LOCAL；HA：面板＋P9 `--cross` | 每帳號 43 字元 token 互異；Odoo 換 url／database／username 就換 token、兩條舊網址都失效；只換密碼不換 |
-| T-04 | N×N 真後端隔離 | HA：同一個 Odoo 資料庫，預設＋5 個受限使用者，各自寫標記 | 標記只在對角線；身分的建立與刪除都要使用者批准 |
-| T-05 | 只由 token 決定帳號 | LOCAL；CONTAINER；HA：P9 `--cross` | 錯 token：密鑰網址 404、Bearer 401；query 400；密鑰網址上的 `Authorization` 不看；跨帳號 session 404 |
-| T-06 | 管理 API 授權與帳號 id | LOCAL；HA：面板與 P9（管理請求帶 `X-MCP-Profile`） | 非 Ingress、非管理員一律 403；管理員：缺標頭 400、格式錯 400、未知 404；MCP token 不能當管理憑證 |
-| T-07 | 每帳號工具政策 | LOCAL；HA：面板＋P9 `--profile … --plan` | 存政策只重啟該帳號；別帳號的工具清單不變 |
-| T-08 | 輪替、撤銷、撞號 | LOCAL；HA：P9 `--profile … --tokens` | 舊 token 404／401；撞號（只會來自複製或還原）503、不導向任何帳號 |
-| T-09 | 改名、刪除、重建 | LOCAL；HA：P9 `--temp-profile`＋面板 | 刪除後舊 token 立刻失效、子程式停、port 釋放、目錄刪除；重建拿新 id 與新 token |
-| T-10 | 跨帳號寫入 | LOCAL（假後端）；HA：寫入前加只允許測試資料的暫時 record rule | 全被後端擋；A 的寫入審批 token 在 B 被拒 |
-| T-11 | 並行 0 串號 | LOCAL；HA：多帳號同時壓 | 0 串號、0 個非預期 5xx |
-| T-12 | 負載中輪替、刪除 | LOCAL；HA | 只切斷該帳號的 lease，別帳號的串流不斷 |
-| T-13 | 單一子程式當掉 | LOCAL；CONTAINER；HA：P9 `--profile … --modes childkill` | 只殺那個帳號的子程式；它照看門狗重起（2→300 秒、不限次數、120 秒歸零），其他帳號 PID 不變 |
-| T-14 | 冷啟動與重啟 | LOCAL；CONTAINER；HA：P9 `restart` | 子程式未就緒時閘道自答 initialize；之後每帳號 initialize 200；錯開啟動下「全部就緒」有秒數 |
-| T-15 | port 被佔與同 port | LOCAL；CONTAINER（每帳號自己的 port） | 衝突只停相關帳號；被佔時照看門狗退避，放開後自動恢復 |
-| T-16 | 子程式晚驗證 | LOCAL | 閘道自答；套用狀態每帳號一份 |
-| T-17 | 記憶體與 CPU | HA：目標硬體（HM-19c） | J6412（可以的話 J1900）1～6 個帳號的 RSS／PSS、CPU 有數字；停機 <30 秒；全域最壞值不超過 MemAvailable 減保留量 |
-| T-18 | 互相影響與日誌保留 | LOCAL；HA：add-on log | 每帳號子程式輸出不被別帳號擠掉；生命週期 log 帶 id 前 8 碼、0 個帳號名稱 |
-| T-19 | 背壓與每帳號名額 | LOCAL | 轉送名額、准入、位元組預算、GET 串流照契約第 2.4、5 節；CPU 飢餓下閒置帳號健康不逾時 |
-| T-20 | 升級、回退、再升級 | STORE：`seed`／`verify`；HA：升級 → 還原升級前備份 → 再升級 | 預設 token、兩條網址、`state.json` 位元不變；回退後額外帳號消失、沒有撤銷；再升級後照文件按「全部撤銷」 |
-| T-21 | 備份還原 | LOCAL；CONTAINER（root 還原樹）；HA：full、partial、加密各一次 | 兩個訊號至少一個觸發；讀不到的帳號隔離；核對後才重發；舊收據 410；版本混搭各一次 |
-| T-22 | n8n 名額與逾時 | 等 n8n 開通（HM-25） | `n8n_session` 每帳號一份；沒後端的額外帳號回 `backend_not_configured` |
-| T-23 | 子程式 bearer 隔離 | LOCAL；CONTAINER | 不帶、帶錯、帶別帳號的 child token 都 401，自己的 200（n8n 另見矩陣） |
-| T-24 | 來源檢查 | LOCAL；HA：記下 Claude.ai 送的 Origin | 密鑰網址清單外只記 would_deny、不擋；Bearer 帶 Origin 403 |
-| T-25 | 紀錄稽核 97 種寫法 | LOCAL；HA：add-on log 與診斷 | 不比 pin 版 PaaS 差；0 token |
-| T-26 | 名稱輸入與顯示 | LOCAL（Playwright） | HA 加嚴的名稱規則；顯示一律跳脫 |
-| T-27 | 公開網址與真實用戶端 | PUBLIC | 每種接法各兩個帳號；真 Claude.ai 兩個帳號同時用；代理 log 遮掉 `/private_` |
-| T-28 | 平台建立路徑 | — | 不適用（PaaS workspace 專屬；HA 的「商店安裝 → 加帳號」併入 T-20） |
-| T-29 | 證據掃描與清理 | 每一層 | 合成憑證清單掃描 0 命中；暫時帳號與測試身分的清理證明 |
+下表「怎麼驗」寫每一層實際驗哪幾項；沒寫到的項目只在 LOCAL 驗。「Odoo 首發」照計畫 §10.4：是＝Odoo 首發（HM-19b）前要過。
+
+| T | 情境 | 怎麼驗（層：工具） | 通過標準（HA） | Odoo 首發 |
+|---|---|---|---|---|
+| T-01 | 受測物前置 | HA：`docker inspect` 對 GHCR digest；`ha core info`、`ha supervisor info`、`ha os info` | 執行中映像 digest＝發佈值；Core／Supervisor／OS 版本記下；後端只用合成或受限身分 | 是 |
+| T-02 | 上限、名稱、清單欄位 | LOCAL；HA：面板 | 第 6 個額外帳號 409 `profile_limit_reached`＋`limit`；記憶體不足 409＋`limit`、`required_memory_mib`、`available_memory_mib`；名稱規則照 HA 加嚴；清單有 `status` | 是 |
+| T-03 | 每帳號後端與 token | LOCAL；HA：面板＋P9 `--cross` | 每帳號 43 字元 token 互異；Odoo 換 url／database／username 就換 token、兩條舊網址都失效；只換密碼不換 | 是 |
+| T-04 | N×N 真後端隔離 | HA：同一個 Odoo 資料庫，預設＋5 個受限使用者，各自寫標記 | 標記只在對角線；身分的建立與刪除都要使用者批准 | 是（Odoo） |
+| T-05 | 只由 token 決定帳號 | LOCAL：全部；CONTAINER：兩種接法、session 是自己子程式的、跨帳號 session 404、隨機 token；HA：P9 `--cross`（兩種接法、跨帳號 session 404、隨機與已刪的 token、帶 `X-MCP-Profile: default` 也不換帳號） | 錯 token：密鑰網址 404、Bearer 401（PaaS 403）；query 400；密鑰網址上的 `Authorization` 不看；跨帳號 session 404。query 400 與「密鑰網址上的 `Authorization` 不看」只在 LOCAL 驗 | 是 |
+| T-06 | 管理 API 授權與帳號 id | LOCAL：全部；HA：面板與 P9（管理請求帶 `X-MCP-Profile`） | 非 Ingress、非管理員一律 403（任何帳號狀態下逐位元相同）；管理員：缺標頭 400、格式錯 400（PaaS 404）、未知 404；MCP token 不能當管理憑證。「逐位元相同」只在 LOCAL 驗 | 是 |
+| T-07 | 每帳號工具政策 | LOCAL；HA：面板＋P9 `--profile … --plan` | 存政策只重啟該帳號；別帳號的工具清單不變 | 是 |
+| T-08 | 輪替、撤銷、撞號 | LOCAL；HA：P9 `--profile … --tokens` | 舊 token 404／401；撞號（只會來自複製或還原）503、不導向任何帳號 | 是 |
+| T-09 | 改名、刪除、重建 | LOCAL：全部；HA：P9 `--temp-profile`（刪除後舊 token 被拒）＋面板（清單、孤兒卡片） | 刪除後舊 token 立刻失效、子程式停、port 釋放、目錄刪除、`blocked` 的帳號立刻重評；重建拿新 id 與新 token。子程式停、port 釋放、目錄刪除、立刻重評只在 LOCAL 驗 | 是 |
+| T-10 | 跨帳號寫入 | LOCAL（假後端）；HA：寫入前加只允許測試資料的暫時 record rule | 全被後端擋；A 的寫入審批 token 在 B 被拒 | 是 |
+| T-11 | 並行 0 串號 | LOCAL；HA：多帳號同時壓 | 0 串號、0 個非預期 5xx | 是 |
+| T-12 | 負載中輪替、刪除 | LOCAL；HA | 只切斷該帳號的 lease，別帳號的串流不斷 | 是 |
+| T-13 | 單一子程式當掉 | LOCAL：看門狗全部；CONTAINER：SIGKILL 一個、新 PID、其他 PID 不變、之後照常服務；HA：P9 `--profile … --modes childkill`（同 CONTAINER） | 只殺那個帳號的子程式；它照看門狗重起（2→300 秒、不限次數、120 秒歸零；DQ-20），其他帳號 PID 不變。容器與 P9 只驗第一次重起：新 PID，而且那個帳號的 token 開得到子程式自己的 session（重起前閘道自答的 `woow-local-` session 不算）；退避表與 120 秒歸零只在 LOCAL 驗 | 是 |
+| T-14 | 冷啟動與重啟 | LOCAL：全部；CONTAINER：三個帳號都就緒的秒數、每帳號的 session 是子程式的；HA：P9 `restart` | 子程式未就緒時閘道自答 initialize（自答 session），之後要求重連（子程式就緒後自答 session 回 404，用戶端要重新 initialize）；就緒後每帳號 initialize 200；錯開啟動下「全部就緒」有秒數。「之後要求重連」只在 LOCAL 驗 | 是 |
+| T-15 | port 被佔與同 port | LOCAL：全部（`tests/test_profile_ports.py`）；CONTAINER：只驗每個子程式只聽自己的 port | 衝突只停相關帳號；被佔時照看門狗退避，放開後自動恢復。衝突、退避與恢復只在 LOCAL 驗（容器階段不佔 port：要多等看門狗的退避，第一次真跑前不加） | 是 |
+| T-16 | 子程式晚驗證 | LOCAL | HA 閘道自答（不是 PaaS 的 503）；套用狀態每帳號一份 | 是 |
+| T-17 | 記憶體與 CPU | HA：目標硬體（HM-19c） | J6412（可以的話 J1900）1～6 個帳號的 RSS／PSS、CPU 有數字；停機 <30 秒；全域最壞值不超過 MemAvailable 減保留量 | 是 |
+| T-18 | 互相影響與日誌保留 | LOCAL；HA：add-on log | 每帳號子程式輸出不被別帳號擠掉；生命週期 log 帶 id 前 8 碼、0 個帳號名稱 | 是 |
+| T-19 | 背壓與每帳號名額 | LOCAL | 轉送名額、准入、位元組預算、GET 串流照契約第 2.4、5 節；CPU 飢餓下閒置帳號健康不逾時 | 是 |
+| T-20 | 升級、回退、再升級 | STORE：`seed`／`verify`（只驗升級那一段）；HA：升級 → 還原升級前備份 → 再升級 | 升級：預設 token、兩條網址、`state.json` 位元不變。回退＝還原升級前備份：預設 token＝備份當時的值、額外帳號消失、沒有撤銷。再升級：額外帳號不存在、預設不變；照文件按「全部撤銷」並確認。回退與再升級只在 HA 驗 | 是 |
+| T-21 | 備份還原 | LOCAL：全部；CONTAINER：root 還原樹修好、兩個訊號；HA：full、partial、加密各一次 | 預設帳號依 DQ-03（採 (b) A2：有帳號資料才連預設一起撤銷）；兩個訊號至少一個觸發；讀不到的帳號隔離；獨立驗證（撤銷後重新讀過每個帳號，和還原前的 token 都對不上）；核對後才重發；舊收據 410；C1-M1 攻擊序（LOCAL）；版本混搭各一次（計畫 §10.6 第 6 點）。容器的撤銷與紀錄等守門（HM-13b）合併後補 | 是 |
+| T-22 | n8n 名額與逾時 | 等 n8n 開通（HM-25） | `n8n_session` 每帳號一份；沒後端的額外帳號回 `backend_not_configured` | 否（n8n） |
+| T-23 | 子程式 bearer 隔離 | LOCAL：全部（7 支 Python＋n8n）；CONTAINER：每個帳號的真子程式不帶、隨機、別帳號的 child token | 不帶、帶錯、帶別帳號、兩個標頭、空字串都 401，自己的 200（n8n 另見矩陣）。兩個標頭與空字串只在 LOCAL 驗 | 是（Odoo） |
+| T-24 | 來源檢查 | LOCAL；HA：記下 Claude.ai 送的 Origin | 密鑰網址清單外只記 would_deny、不擋；Bearer 帶 Origin 403 | 是 |
+| T-25 | 紀錄稽核 97 種寫法 | LOCAL；HA：add-on log 與診斷 | 不比 pin 版 PaaS 差；0 token | 是 |
+| T-26 | 名稱輸入與顯示 | LOCAL（Playwright） | HA 加嚴的名稱規則；顯示一律跳脫 | 是 |
+| T-27 | 公開網址與真實用戶端 | PUBLIC | 每種接法各兩個帳號；真 Claude.ai 兩個帳號同時用；代理 log 遮掉 `/private_` | 是 |
+| T-28 | 平台建立路徑 | — | 不適用（PaaS workspace 專屬；HA 的「商店安裝 → 加帳號」併入 T-20） | — |
+| T-29 | 證據掃描與清理 | 每一層 | 合成憑證清單掃描 0 命中；暫時帳號與測試身分的清理證明 | 是 |
 
 ### 每次升版都要重驗（每個開通的產品，每一版）
 
