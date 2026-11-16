@@ -17,7 +17,14 @@ def make_client() -> httpx.AsyncClient:
         timeout=httpx.Timeout(
             connect=5.0, read=settings.request_timeout, write=10.0, pool=5.0
         ),
-        limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+        # HM-32 (PaaS #135): keep no idle connection. After a brief outage an
+        # old pooled socket can look alive while the broker no longer answers
+        # on it, and reusing it makes the first request after the recovery
+        # wait for the read timeout. Each request opens a fresh connection
+        # instead (backend_policy resolves and checks the address again).
+        # Nothing is retried, so an ambiguous write is never sent twice.
+        # backend_policy's transport builds its own pool with the same rule.
+        limits=httpx.Limits(max_connections=20, max_keepalive_connections=0),
         headers={"Accept": "application/json"},
     )
 

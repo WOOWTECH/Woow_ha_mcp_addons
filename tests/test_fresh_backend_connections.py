@@ -20,7 +20,8 @@ Each (product, pool) runs once, in the product's pinned environment (apps/<produ
 process: the fake backend is a loopback HTTP server on a thread, the product's FastMCP server is reached through
 fastmcp's in-memory client. No product child process starts and nothing listens on 3000 or 18000-18099. The environment
 is the one products.child_spec builds for the child (fake values: T x 43, C x 43; the configured name is a .invalid name
-the harness resolves to the fake backend, and only the fake backend's port is added to the saved URL).
+the harness resolves to the fake backend, and only the fake backend's port is added to the saved URL). The case-by-case
+map to PaaS's tests is in docs/provenance/ha-multiprofile-HM-32-20261117.md.
 """
 import json
 import subprocess
@@ -359,7 +360,7 @@ def test_each_request_checks_its_destination_again(observed):
     checked again (checked_answers, connectable), not taken from a connection an earlier request left open."""
     row = observed['in_a_row']
     assert row['third'] == 'BackendDenied: BACKEND_DESTINATION_DENIED', row['third']
-    assert row['third_resolutions'] == 1 and row['third_reached_backend'] == 0
+    assert (row['third_resolutions'], row['third_reached_backend']) == (1, 0), 'resolved once, refused before sending'
     assert observed['unexpected_connects'] == []
 
 

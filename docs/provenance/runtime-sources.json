@@ -58,8 +58,8 @@
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/lifespan.py",
     "upstream_sha256": "b2c934124e1162255146be319ee59daa79a068710f3ee4a7c8cf707de8e4ca63",
-    "local_sha256": "e217a630de2a1d9061441a81dc463aaada787203e3c900890198a5789a0be811",
-    "modification": "Use scoped DNS-pinned HTTPX transport; deny redirects/proxies and sanitize transport failures."
+    "local_sha256": "acf72dc8655d6b702a600e4e936b4bfddfdb137824747de91022085f21e9d44b",
+    "modification": "Use scoped DNS-pinned HTTPX transport; deny redirects/proxies and sanitize transport failures. HM-32 (PaaS #135 3c06b98): ask for no idle connection (max_keepalive_connections 10 -> 0), so every request opens a fresh connection that backend_policy resolves and checks again; no retry is added. backend_policy's transport builds its own pool and already kept none, so the behaviour is unchanged. tests/test_fresh_backend_connections.py."
   },
   {
     "product": "emqx",
@@ -186,8 +186,8 @@
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/lifespan.py",
     "upstream_sha256": "907c15314463424da9bed2c029d6405cce922828a8ef6adac69a236b61446f06",
-    "local_sha256": "02f2d2998dd0ada21d8560203409184a359d35b18e546ee6c68a7b24f87c18da",
-    "modification": "Use scoped DNS-pinned HTTPX transport; preserve redirect/proxy denial and sanitize transport failures."
+    "local_sha256": "794973c7f076e32517684a1f3c389ec93c6120388c8aa987cd0b0052c0f505fe",
+    "modification": "Use scoped DNS-pinned HTTPX transport; preserve redirect/proxy denial and sanitize transport failures. HM-32 (PaaS #139 009dc99): ask for no idle connection (max_keepalive_connections 20 -> 0, keepalive_expiry 30 s dropped), so every request opens a fresh connection that backend_policy resolves and checks again; no retry is added. backend_policy's transport builds its own pool and already kept none, so the behaviour is unchanged. tests/test_fresh_backend_connections.py."
   },
   {
     "product": "litellm",
