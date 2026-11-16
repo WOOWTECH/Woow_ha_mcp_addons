@@ -1,7 +1,7 @@
 # 帳本列管清單（多帳號新模組）
 
 - 狀態：HM-00 定案（2026-11-14；計畫 §11.1、C4-SF-13：新模組全部列管）。2026-11-15 文件同步：第 1～3 節照 `claude-delivery` `9c5dd88`
-  （HM-01、HM-04、HM-17、HM-07、HM-06 已合併）的帳本逐檔核對。HM-13c 加面板的新模組 `restore.js`（2026-11-17）。
+  （HM-01、HM-04、HM-17、HM-07、HM-06 已合併）的帳本逐檔核對。HM-13c 加面板的新模組 `restore.js`（2026-11-17）；依獨立審查補 `restore_lock.py` 一列的說明（還原紀錄格式要向後相容，同日）。
 - 帳本：`docs/provenance/runtime-patches.json`（bb48449 列管 50 個檔；`9c5dd88` 列管 54 個，多的是 HM-07 的 `features.py`、`profiles.py`、
   `identity_fields.py`、`config.py`）；工具面：`docs/tool-surface.json`、`docs/tool-surface.md`。
 
@@ -22,7 +22,7 @@
 | `packages/mcp-admin-core/mcp_admin_core/profile_router.py` | HM-08 | HM-10 → HM-14 → HM-31 → HM-13c（核對、全部撤銷、還原紀錄、刪隔離目錄的全域路由；8081 擋全部撤銷沒撤銷成功的權杖）→ HM-27 | 列管 | — | 8081 token 分派器；8099 分派、方法表、Ingress 備援改寫 |
 | `packages/mcp-admin-core/mcp_admin_core/profile_admin.py` | HM-10 | HM-13c → HM-27 | 列管 | — | 帳號增刪改查、索引隔離、全部撤銷、還原核對 |
 | `packages/mcp-admin-core/mcp_admin_core/restore_detect.py` | HM-13a | HM-13b | 列管 | — | sentinel 與 record 的建立、比對、重建 |
-| `packages/mcp-admin-core/mcp_admin_core/restore_lock.py` | HM-13b | HM-13c | 列管 | — | 開機守門 A～F 步、休眠處理、`.revoke-all-pending` |
+| `packages/mcp-admin-core/mcp_admin_core/restore_lock.py` | HM-13b | HM-13c | 列管 | — | 開機守門 A～F 步、休眠處理、`.revoke-all-pending`；`restore-record.json` 的格式（`RECORD_KEYS`、`RECORD_VERSION`）之後要改時，舊版寫的紀錄要照樣讀得懂（契約第 3.6 節；HM-13c 審查 S-2） |
 | `packages/mcp-admin-core/mcp_admin_core/request_budget.py` | HM-31 | HM-30（如果回覆額度要共用它）；HM-19c 量測後改常數的功能 PR | 列管（HM-31 起） | — | 閘道的請求內容位元組預算（全 add-on＋每帳號份額，對齊 PaaS #155）、讀取閒置、讀完丟掉的拒絕、每帳號每情況 60 秒一行的 WARNING（`Reports`，從 `profile_router.py` 移來）；不受開關管 |
 | `packages/mcp-admin-core/mcp_admin_core/log_redaction.py` | HM-02 | PaaS 遮罩之後再變時的同步 PR（#149 已在 `7d111b1` 合併，HM-02 直接用合併版） | 列管（記在 `runtime-patches.json`；不另記 `runtime-sources.json`，那本只收 `apps/<產品>/vendor/`。DQ-38 的補充，HM-02 審查 MF-3，2026-11-15 08:2x 定案） | — | 紀錄遮罩（PaaS 規則先、HA 規則後） |
 | 回覆工作執行緒模組（暫定名 `reply_worker.py`） | HM-30 | — | 列管 | — | 回覆處理的工作執行緒與依帳號輪流的佇列 |
