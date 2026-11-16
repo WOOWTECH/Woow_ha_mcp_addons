@@ -1,0 +1,182 @@
+{
+  "about": [
+    "HM-11 (multi-profile plan 6; contract 3, 4.1): every management call the panel makes once a product is switched on, and every refusal it handles, as one list of cases.",
+    "tests/test_panel_profile_api_shapes.py runs every case against the real 8099 management app (in process, the switch monkeypatched on) and tests/browser/profile-api-parity.spec.mjs against the LOCAL MOCK (fixtures/server.mjs); both must observe exactly the expect of every case. So the mock answers as the add-on does: status, field names and types, the echo, the ETag.",
+    "A request: method, path ({B} an id of rules.ids or a learnt one, {key:CASE} the Idempotency-Key a case sent), profile (X-MCP-Profile: a role, a literal, or none), csrf (a fresh one), if_match (index: the list's ETag; raw: the default bootstrap's profile_index_etag; config:R: profile R's configuration revision; stale-index, stale-config: well formed, never current), key (new, or same:CASE), body (JSON).",
+    "What is compared: the status, the class of the ETag header (p1, c1, other or null), the body as rules say (keys: every top-level key, or only the listed ones that are present). Strings are compared by value for the rules.literal keys; ids by role (default, a rules.ids name, a learnt name, <hex24>); an Idempotency-Key of a case as <key:CASE>; ETags and revisions by class; anything else as <str>. Numbers are <int>, booleans and null as they are. A body that is not JSON is <empty> or <text>."
+  ],
+  "rules": {
+    "literal": ["code", "error", "kind", "state", "status", "disabled_reason", "blocked_reason", "profile_index_state", "label", "tested_configuration", "token_state", "apply_state"],
+    "ids": {"B": "bbbbbbbbbbbbbbbbbbbbbbbb", "C": "cccccccccccccccccccccccc", "X": "dddddddddddddddddddddddd", "O": "eeeeeeeeeeeeeeeeeeeeeeee", "U": "ffffffffffffffffffffffff", "D": "aaaaaaaaaaaaaaaaaaaaaaaa"},
+    "stale_index": "\"p1-0000000000000000000000000000000000000000000000000000000000000000\"",
+    "stale_config": "\"c1-0000000000000000000000000000000000000000000000000000000000000000\"",
+    "endpoint": "https://mcp.example.invalid/mcp",
+    "bootstrap_keys": ["profile", "profiles_supported", "profile_index_state", "profile_index_etag", "dormant_profiles", "owner_defaults", "endpoint", "csrf"],
+    "bootstrap_profile_keys": ["profile", "profiles_supported", "profile_index_state", "profile_index_etag", "dormant_profiles"]
+  },
+  "scenarios": [
+    {
+      "name": "main",
+      "about": "the default profile and B (configured, running), an orphan O (a directory the index does not list)",
+      "setup": {"product": "odoo", "extras": [{"role": "B", "label": "Beta Ops", "status": "running"}], "orphans": ["O"]},
+      "cases": [
+        {"name": "list", "request": {"method": "GET", "path": "/api/profiles"}, "keys": "*", "expect": {"status": 200, "etag": "p1", "body": {"profiles": [{"id": "default", "label": "Default", "port": "<int>", "is_default": true, "disabled_reason": null, "status": "running", "blocked_reason": null}, {"id": "<B>", "label": "Beta Ops", "port": "<int>", "is_default": false, "disabled_reason": null, "status": "running", "blocked_reason": null}], "orphans": [{"id": "<O>"}]}}},
+        {"name": "list-ignores-the-header", "request": {"method": "GET", "path": "/api/profiles", "profile": "Default"}, "keys": "*", "expect": {"status": 200, "etag": "p1", "body": {"profiles": [{"id": "default", "label": "Default", "port": "<int>", "is_default": true, "disabled_reason": null, "status": "running", "blocked_reason": null}, {"id": "<B>", "label": "Beta Ops", "port": "<int>", "is_default": false, "disabled_reason": null, "status": "running", "blocked_reason": null}], "orphans": [{"id": "<O>"}]}}},
+        {"name": "bootstrap-without-header", "request": {"method": "GET", "path": "/api/bootstrap"}, "keys": "*", "expect": {"status": 400, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_id_required"}}}},
+        {"name": "bootstrap-default", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "default"}, "keys": "bootstrap", "expect": {"status": 200, "etag": "c1", "body": {"profile": {"id": "default", "label": "Default", "is_default": true}, "profiles_supported": true, "profile_index_state": "ok", "endpoint": null, "csrf": "<str>"}}},
+        {"name": "bootstrap-B", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "B"}, "keys": "bootstrap", "expect": {"status": 200, "etag": "c1", "body": {"profile": {"id": "<B>", "label": "Beta Ops", "is_default": false}, "profiles_supported": true, "endpoint": null, "csrf": "<str>"}}},
+        {"name": "bootstrap-malformed-header", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "Default"}, "keys": "*", "expect": {"status": 400, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_id_invalid"}}}},
+        {"name": "bootstrap-two-values", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "default, {B}"}, "keys": "*", "expect": {"status": 400, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_id_invalid"}}}},
+        {"name": "bootstrap-unknown", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "X"}, "keys": "*", "expect": {"status": 404, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_not_found"}}}},
+        {"name": "bootstrap-orphan", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "O"}, "keys": "*", "expect": {"status": 404, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_not_found"}}}},
+        {"name": "configuration-B", "request": {"method": "GET", "path": "/api/configuration", "profile": "B"}, "keys": ["profile"], "expect": {"status": 200, "etag": "c1", "body": {"profile": {"id": "<B>"}}}},
+        {"name": "capabilities-B", "request": {"method": "GET", "path": "/api/capabilities", "profile": "B"}, "keys": ["profile"], "expect": {"status": 200, "etag": "c1", "body": {"profile": {"id": "<B>"}}}},
+        {"name": "diagnostics-B", "request": {"method": "GET", "path": "/api/diagnostics", "profile": "B"}, "keys": ["profile"], "expect": {"status": 200, "etag": "c1", "body": {"profile": {"id": "<B>"}}}},
+        {"name": "reveal-B", "request": {"method": "POST", "path": "/api/token/reveal", "profile": "B", "csrf": true}, "keys": ["profile", "token"], "expect": {"status": 200, "etag": "c1", "body": {"profile": {"id": "<B>"}, "token": "<str>"}}},
+        {"name": "rotate-B", "request": {"method": "POST", "path": "/api/token/rotate", "profile": "B", "csrf": true, "if_match": "config:B", "key": "new"}, "keys": ["profile", "operation", "status", "token"], "expect": {"status": 200, "etag": "c1", "body": {"profile": {"id": "<B>"}, "operation": {"id": "<key:rotate-B>", "kind": "token.rotate", "state": "completed", "replayed": false}, "status": "ok", "token": "<str>"}}},
+        {"name": "rotate-B-replay", "request": {"method": "POST", "path": "/api/token/rotate", "profile": "B", "csrf": true, "if_match": "stale-config", "key": "same:rotate-B"}, "keys": ["profile", "operation", "status"], "expect": {"status": 200, "etag": "c1", "body": {"profile": {"id": "<B>"}, "operation": {"id": "<key:rotate-B>", "kind": "token.rotate", "state": "completed", "replayed": true}, "status": "ok"}}},
+        {"name": "receipt-B", "request": {"method": "GET", "path": "/api/operations/{key:rotate-B}", "profile": "B"}, "keys": ["profile", "operation"], "expect": {"status": 200, "etag": "c1", "body": {"profile": {"id": "<B>"}, "operation": {"id": "<key:rotate-B>", "kind": "token.rotate", "state": "completed", "replayed": false}}}},
+        {"name": "receipt-B-asked-of-default", "request": {"method": "GET", "path": "/api/operations/{key:rotate-B}", "profile": "default"}, "keys": "*", "expect": {"status": 404, "etag": null, "body": {"error": "request denied", "detail": {"code": "operation_not_found"}}}},
+        {"name": "restart-B", "request": {"method": "POST", "path": "/api/child/restart", "profile": "B", "csrf": true, "if_match": "config:B", "key": "new"}, "keys": ["profile", "operation", "status", "accepted", "blocked_reason"], "expect": {"status": 202, "etag": "c1", "body": {"profile": {"id": "<B>"}, "operation": {"id": "<key:restart-B>", "kind": "mcp.restart", "state": "completed", "replayed": false}, "status": "ok", "accepted": true, "blocked_reason": null}}},
+        {"name": "endpoint-B", "request": {"method": "PUT", "path": "/api/endpoint", "profile": "B", "csrf": true, "if_match": "config:B", "body": {"endpoint": "{endpoint}"}}, "keys": "*", "expect": {"status": 409, "etag": null, "body": {"error": "request denied", "detail": {"code": "endpoint_global"}}}},
+        {"name": "endpoint-default", "request": {"method": "PUT", "path": "/api/endpoint", "profile": "default", "csrf": true, "if_match": "config:default", "body": {"endpoint": "{endpoint}"}}, "keys": ["profile", "saved"], "expect": {"status": 200, "etag": "c1", "body": {"profile": {"id": "default"}, "saved": true}}},
+        {"name": "bootstrap-B-shows-the-endpoint", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "B"}, "keys": ["profile", "endpoint"], "expect": {"status": 200, "etag": "c1", "body": {"profile": {"id": "<B>", "label": "Beta Ops", "is_default": false}, "endpoint": "<str>"}}},
+        {"name": "policy-B-stale", "request": {"method": "PUT", "path": "/api/policy", "profile": "B", "csrf": true, "if_match": "stale-config", "body": {"writes_enabled": false, "disabled": [], "enabled_write_tools": []}}, "keys": ["detail", "error", "profile"], "expect": {"status": 409, "etag": "c1", "body": {"detail": {"code": "config_conflict"}, "profile": {"id": "<B>"}}}},
+        {"name": "policy-B-without-if-match", "request": {"method": "PUT", "path": "/api/policy", "profile": "B", "csrf": true, "body": {"writes_enabled": false, "disabled": [], "enabled_write_tools": []}}, "keys": ["detail", "error", "profile"], "expect": {"status": 428, "etag": null, "body": {"detail": {"code": "config_revision_required"}, "error": "request denied"}}},
+        {"name": "policy-B", "request": {"method": "PUT", "path": "/api/policy", "profile": "B", "csrf": true, "if_match": "config:B", "body": {"writes_enabled": false, "disabled": [], "enabled_write_tools": []}}, "keys": ["profile", "saved"], "expect": {"status": 200, "etag": "c1", "body": {"profile": {"id": "<B>"}, "saved": true}}},
+        {"name": "notice-dismiss-B", "request": {"method": "POST", "path": "/api/owner-defaults/dismiss", "profile": "B", "csrf": true, "if_match": "config:B"}, "keys": ["detail", "error", "profile"], "expect": {"status": 409, "etag": "c1", "body": {"detail": {"code": "owner_defaults_unavailable"}, "error": "owner_defaults_unavailable", "profile": {"id": "<B>"}}}},
+        {"name": "create-without-csrf", "request": {"method": "POST", "path": "/api/profiles", "if_match": "index", "key": "new", "body": {"label": "Kappa Desk"}}, "keys": "*", "expect": {"status": 403, "etag": null, "body": {"error": "request denied"}}},
+        {"name": "create-without-if-match", "request": {"method": "POST", "path": "/api/profiles", "csrf": true, "key": "new", "body": {"label": "Kappa Desk"}}, "keys": "*", "expect": {"status": 428, "etag": null, "body": {"error": "request denied", "detail": {"code": "config_revision_required"}}}},
+        {"name": "create-without-key", "request": {"method": "POST", "path": "/api/profiles", "csrf": true, "if_match": "index", "body": {"label": "Kappa Desk"}}, "keys": "*", "expect": {"status": 428, "etag": null, "body": {"error": "request denied", "detail": {"code": "operation_id_required"}}}},
+        {"name": "create-stale", "request": {"method": "POST", "path": "/api/profiles", "csrf": true, "if_match": "stale-index", "key": "new", "body": {"label": "Kappa Desk"}}, "keys": "*", "expect": {"status": 409, "etag": "p1", "body": {"detail": {"code": "config_conflict"}}}},
+        {"name": "create-blank-label", "request": {"method": "POST", "path": "/api/profiles", "csrf": true, "if_match": "index", "key": "new", "body": {"label": "   "}}, "keys": "*", "expect": {"status": 422, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_label_invalid"}}}},
+        {"name": "create-reserved-label", "request": {"method": "POST", "path": "/api/profiles", "csrf": true, "if_match": "index", "key": "new", "body": {"label": "Default"}}, "keys": "*", "expect": {"status": 409, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_label_conflict"}}}},
+        {"name": "create-taken-label", "request": {"method": "POST", "path": "/api/profiles", "csrf": true, "if_match": "index", "key": "new", "body": {"label": "BETA OPS"}}, "keys": "*", "expect": {"status": 409, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_label_conflict"}}}},
+        {"name": "create-malformed-body", "request": {"method": "POST", "path": "/api/profiles", "csrf": true, "if_match": "index", "key": "new", "body": {"label": 5}}, "keys": "*", "expect": {"status": 400, "etag": null, "body": {"error": "request denied"}}},
+        {"name": "create", "request": {"method": "POST", "path": "/api/profiles", "csrf": true, "if_match": "index", "key": "new", "body": {"label": "Kappa Desk"}}, "keys": "*", "learn": "N", "expect": {"status": 201, "etag": "p1", "body": {"id": "<N>", "label": "Kappa Desk", "port": "<int>", "is_default": false, "disabled_reason": null, "status": "unconfigured", "blocked_reason": null, "operation": {"id": "<key:create>", "kind": "profile.create", "state": "completed", "replayed": false}}}},
+        {"name": "create-replay", "request": {"method": "POST", "path": "/api/profiles", "csrf": true, "if_match": "stale-index", "key": "same:create", "body": {"label": "Kappa Desk"}}, "keys": "*", "expect": {"status": 200, "etag": "p1", "body": {"id": "<N>", "label": "Kappa Desk", "port": "<int>", "is_default": false, "disabled_reason": null, "status": "unconfigured", "blocked_reason": null, "operation": {"id": "<key:create>", "kind": "profile.create", "state": "completed", "replayed": true}}}},
+        {"name": "create-key-with-another-label", "request": {"method": "POST", "path": "/api/profiles", "csrf": true, "if_match": "index", "key": "same:create", "body": {"label": "Lambda Desk"}}, "keys": "*", "expect": {"status": 409, "etag": null, "body": {"error": "request denied", "detail": {"code": "operation_id_conflict"}}}},
+        {"name": "bootstrap-created", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "N"}, "keys": "bootstrap", "expect": {"status": 200, "etag": "c1", "body": {"profile": {"id": "<N>", "label": "Kappa Desk", "is_default": false}, "profiles_supported": true, "endpoint": "<str>", "csrf": "<str>"}}},
+        {"name": "rename", "request": {"method": "PATCH", "path": "/api/profiles/{N}", "csrf": true, "if_match": "index", "body": {"label": "Kappa Desk Two"}}, "keys": "*", "expect": {"status": 200, "etag": "p1", "body": {"id": "<N>", "label": "Kappa Desk Two", "port": "<int>", "is_default": false, "disabled_reason": null, "status": "unconfigured", "blocked_reason": null}}},
+        {"name": "rename-without-csrf", "request": {"method": "PATCH", "path": "/api/profiles/{N}", "if_match": "index", "body": {"label": "Kappa Desk Three"}}, "keys": "*", "expect": {"status": 403, "etag": null, "body": {"error": "request denied"}}},
+        {"name": "rename-without-if-match", "request": {"method": "PATCH", "path": "/api/profiles/{N}", "csrf": true, "body": {"label": "Kappa Desk Three"}}, "keys": "*", "expect": {"status": 428, "etag": null, "body": {"error": "request denied", "detail": {"code": "config_revision_required"}}}},
+        {"name": "rename-stale", "request": {"method": "PATCH", "path": "/api/profiles/{N}", "csrf": true, "if_match": "stale-index", "body": {"label": "Kappa Desk Three"}}, "keys": "*", "expect": {"status": 409, "etag": "p1", "body": {"detail": {"code": "config_conflict"}}}},
+        {"name": "rename-default", "request": {"method": "PATCH", "path": "/api/profiles/default", "csrf": true, "if_match": "index", "body": {"label": "Kappa Desk Three"}}, "keys": "*", "expect": {"status": 422, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_default_immutable"}}}},
+        {"name": "rename-unknown", "request": {"method": "PATCH", "path": "/api/profiles/{X}", "csrf": true, "if_match": "index", "body": {"label": "Kappa Desk Three"}}, "keys": "*", "expect": {"status": 404, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_not_found"}}}},
+        {"name": "rename-orphan", "request": {"method": "PATCH", "path": "/api/profiles/{O}", "csrf": true, "if_match": "index", "body": {"label": "Kappa Desk Three"}}, "keys": "*", "expect": {"status": 404, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_not_found"}}}},
+        {"name": "rename-taken-label", "request": {"method": "PATCH", "path": "/api/profiles/{N}", "csrf": true, "if_match": "index", "body": {"label": "beta ops"}}, "keys": "*", "expect": {"status": 409, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_label_conflict"}}}},
+        {"name": "rename-blank-label", "request": {"method": "PATCH", "path": "/api/profiles/{N}", "csrf": true, "if_match": "index", "body": {"label": "  "}}, "keys": "*", "expect": {"status": 422, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_label_invalid"}}}},
+        {"name": "bootstrap-renamed", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "N"}, "keys": ["profile"], "expect": {"status": 200, "etag": "c1", "body": {"profile": {"id": "<N>", "label": "Kappa Desk Two", "is_default": false}}}},
+        {"name": "delete-without-csrf", "request": {"method": "DELETE", "path": "/api/profiles/{N}", "if_match": "index", "key": "new"}, "keys": "*", "expect": {"status": 403, "etag": null, "body": {"error": "request denied"}}},
+        {"name": "delete-without-key", "request": {"method": "DELETE", "path": "/api/profiles/{N}", "csrf": true, "if_match": "index"}, "keys": "*", "expect": {"status": 428, "etag": null, "body": {"error": "request denied", "detail": {"code": "operation_id_required"}}}},
+        {"name": "delete-stale", "request": {"method": "DELETE", "path": "/api/profiles/{N}", "csrf": true, "if_match": "stale-index", "key": "new"}, "keys": "*", "expect": {"status": 409, "etag": "p1", "body": {"detail": {"code": "config_conflict"}}}},
+        {"name": "delete-default", "request": {"method": "DELETE", "path": "/api/profiles/default", "csrf": true, "if_match": "index", "key": "new"}, "keys": "*", "expect": {"status": 422, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_default_immutable"}}}},
+        {"name": "delete-unknown", "request": {"method": "DELETE", "path": "/api/profiles/{X}", "csrf": true, "if_match": "index", "key": "new"}, "keys": "*", "expect": {"status": 404, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_not_found"}}}},
+        {"name": "delete", "request": {"method": "DELETE", "path": "/api/profiles/{N}", "csrf": true, "if_match": "index", "key": "new"}, "keys": "*", "expect": {"status": 200, "etag": "p1", "body": {"deleted": "<N>", "operation": {"id": "<key:delete>", "kind": "profile.delete", "state": "completed", "replayed": false}}}},
+        {"name": "delete-replay", "request": {"method": "DELETE", "path": "/api/profiles/{N}", "csrf": true, "if_match": "stale-index", "key": "same:delete"}, "keys": "*", "expect": {"status": 200, "etag": "p1", "body": {"deleted": "<N>", "operation": {"id": "<key:delete>", "kind": "profile.delete", "state": "completed", "replayed": true}}}},
+        {"name": "create-replay-after-delete", "request": {"method": "POST", "path": "/api/profiles", "csrf": true, "if_match": "stale-index", "key": "same:create", "body": {"label": "Kappa Desk"}}, "keys": "*", "expect": {"status": 200, "etag": "p1", "body": {"id": "<N>", "operation": {"id": "<key:create>", "kind": "profile.create", "state": "completed", "replayed": true}}}},
+        {"name": "bootstrap-deleted", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "N"}, "keys": "*", "expect": {"status": 404, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_not_found"}}}},
+        {"name": "delete-orphan", "request": {"method": "DELETE", "path": "/api/profiles/{O}", "csrf": true, "if_match": "index", "key": "new"}, "keys": "*", "expect": {"status": 200, "etag": "p1", "body": {"deleted": "<O>", "operation": {"id": "<key:delete-orphan>", "kind": "profile.delete", "state": "completed", "replayed": false}}}},
+        {"name": "quarantine-usable-index", "request": {"method": "POST", "path": "/api/profiles/index/quarantine", "csrf": true, "if_match": "index", "key": "new"}, "keys": "*", "expect": {"status": 409, "etag": "p1", "body": {"detail": {"code": "config_conflict"}}}},
+        {"name": "list-after", "request": {"method": "GET", "path": "/api/profiles"}, "keys": "*", "expect": {"status": 200, "etag": "p1", "body": {"profiles": [{"id": "default", "label": "Default", "port": "<int>", "is_default": true, "disabled_reason": null, "status": "running", "blocked_reason": null}, {"id": "<B>", "label": "Beta Ops", "port": "<int>", "is_default": false, "disabled_reason": null, "status": "running", "blocked_reason": null}], "orphans": []}}}
+      ]
+    },
+    {
+      "name": "rows",
+      "about": "the list's rows for a profile its state cannot be read (U: indexed, its directory gone) and one over the memory limit (C)",
+      "setup": {"product": "odoo", "memory_limit_mib": 512, "extras": [{"role": "B", "label": "Beta Ops", "status": "running"}, {"role": "C", "label": "Gamma Ops", "status": "blocked", "disabled_reason": "memory_capacity", "blocked_reason": "memory_capacity", "required_memory_mib": 556}], "unavailable": [{"role": "U", "label": "Upsilon Ops"}]},
+      "cases": [
+        {"name": "list", "request": {"method": "GET", "path": "/api/profiles"}, "keys": "*", "expect": {"status": 200, "etag": "p1", "body": {"profiles": [{"id": "default", "label": "Default", "port": "<int>", "is_default": true, "disabled_reason": null, "status": "running", "blocked_reason": null}, {"id": "<B>", "label": "Beta Ops", "port": "<int>", "is_default": false, "disabled_reason": null, "status": "running", "blocked_reason": null}, {"id": "<C>", "label": "Gamma Ops", "port": "<int>", "is_default": false, "disabled_reason": "memory_capacity", "required_memory_mib": "<int>", "status": "blocked", "blocked_reason": "memory_capacity"}, {"id": "<U>", "label": "Upsilon Ops", "port": "<int>", "is_default": false, "disabled_reason": "profile_unavailable", "status": "failed", "blocked_reason": null}], "orphans": []}}},
+        {"name": "bootstrap-unreadable", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "U"}, "keys": "*", "expect": {"status": 503, "etag": null, "body": {"error": "state unavailable"}}},
+        {"name": "delete-unreadable", "request": {"method": "DELETE", "path": "/api/profiles/{U}", "csrf": true, "if_match": "index", "key": "new"}, "keys": "*", "expect": {"status": 200, "etag": "p1", "body": {"deleted": "<U>", "operation": {"id": "<key:delete-unreadable>", "kind": "profile.delete", "state": "completed", "replayed": false}}}}
+      ]
+    },
+    {
+      "name": "limit",
+      "about": "the product's limit reached (EMQX: three additional profiles)",
+      "setup": {"product": "emqx", "limit": 3, "extras": [{"role": "B", "label": "Beta Ops", "status": "running"}, {"role": "C", "label": "Gamma Ops", "status": "running"}, {"role": "D", "label": "Delta Ops", "status": "running"}]},
+      "cases": [
+        {"name": "create", "request": {"method": "POST", "path": "/api/profiles", "csrf": true, "if_match": "index", "key": "new", "body": {"label": "Kappa Desk"}}, "keys": "*", "expect": {"status": 409, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_limit_reached", "limit": "<int>"}}}}
+      ]
+    },
+    {
+      "name": "file-budget",
+      "about": "the open file limit holds no additional profile: the default profile only (B unavailable), a creation's limit is 0",
+      "setup": {"product": "odoo", "file_budget": "short", "extras": [{"role": "B", "label": "Beta Ops", "status": "failed", "disabled_reason": "profile_unavailable", "unavailable": true}]},
+      "cases": [
+        {"name": "list", "request": {"method": "GET", "path": "/api/profiles"}, "keys": "*", "expect": {"status": 200, "etag": "p1", "body": {"profiles": [{"id": "default", "label": "Default", "port": "<int>", "is_default": true, "disabled_reason": null, "status": "running", "blocked_reason": null}, {"id": "<B>", "label": "Beta Ops", "port": "<int>", "is_default": false, "disabled_reason": "profile_unavailable", "status": "failed", "blocked_reason": null}], "orphans": []}}},
+        {"name": "create", "request": {"method": "POST", "path": "/api/profiles", "csrf": true, "if_match": "index", "key": "new", "body": {"label": "Kappa Desk"}}, "keys": "*", "expect": {"status": 409, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_limit_reached", "limit": "<int>"}}}}
+      ]
+    },
+    {
+      "name": "memory",
+      "about": "MemAvailable cannot hold one more child (no cgroup limit)",
+      "setup": {"product": "odoo", "available_memory_mib": 300, "extras": [{"role": "B", "label": "Beta Ops", "status": "running"}]},
+      "cases": [
+        {"name": "create", "request": {"method": "POST", "path": "/api/profiles", "csrf": true, "if_match": "index", "key": "new", "body": {"label": "Kappa Desk"}}, "keys": "*", "expect": {"status": 409, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_memory_insufficient", "limit": "<int>", "required_memory_mib": "<int>", "available_memory_mib": "<int>"}}}}
+      ]
+    },
+    {
+      "name": "port",
+      "about": "no free child port in 18000-18099",
+      "setup": {"product": "odoo", "no_port": true, "extras": [{"role": "B", "label": "Beta Ops", "status": "running"}]},
+      "cases": [
+        {"name": "create", "request": {"method": "POST", "path": "/api/profiles", "csrf": true, "if_match": "index", "key": "new", "body": {"label": "Kappa Desk"}}, "keys": "*", "expect": {"status": 409, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_port_unavailable"}}}}
+      ]
+    },
+    {
+      "name": "corrupt",
+      "about": "the index replaced behind the add-on's back while it runs (DQ-12): only the quarantine takes it",
+      "setup": {"product": "odoo", "corrupt": true, "extras": [{"role": "B", "label": "Beta Ops", "status": "running"}]},
+      "cases": [
+        {"name": "bootstrap-default", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "default"}, "keys": "bootstrap", "expect": {"status": 200, "etag": "c1", "body": {"profile": {"id": "default", "label": "Default", "is_default": true}, "profiles_supported": true, "profile_index_state": "corrupt", "profile_index_etag": "<etag:p1>", "endpoint": null, "csrf": "<str>"}}},
+        {"name": "list", "request": {"method": "GET", "path": "/api/profiles"}, "keys": "*", "expect": {"status": 503, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_index_corrupt"}}}},
+        {"name": "bootstrap-B", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "B"}, "keys": "*", "expect": {"status": 503, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_index_corrupt"}}}},
+        {"name": "bootstrap-unknown", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "X"}, "keys": "*", "expect": {"status": 503, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_index_corrupt"}}}},
+        {"name": "create", "request": {"method": "POST", "path": "/api/profiles", "csrf": true, "if_match": "stale-index", "key": "new", "body": {"label": "Kappa Desk"}}, "keys": "*", "expect": {"status": 503, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_index_corrupt"}}}},
+        {"name": "rename-B", "request": {"method": "PATCH", "path": "/api/profiles/{B}", "csrf": true, "if_match": "stale-index", "body": {"label": "Beta Two"}}, "keys": "*", "expect": {"status": 503, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_index_corrupt"}}}},
+        {"name": "delete-B", "request": {"method": "DELETE", "path": "/api/profiles/{B}", "csrf": true, "if_match": "stale-index", "key": "new"}, "keys": "*", "expect": {"status": 503, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_index_corrupt"}}}},
+        {"name": "quarantine-without-csrf", "request": {"method": "POST", "path": "/api/profiles/index/quarantine", "if_match": "raw", "key": "new"}, "keys": "*", "expect": {"status": 403, "etag": null, "body": {"error": "request denied"}}},
+        {"name": "quarantine-without-if-match", "request": {"method": "POST", "path": "/api/profiles/index/quarantine", "csrf": true, "key": "new"}, "keys": "*", "expect": {"status": 428, "etag": null, "body": {"error": "request denied", "detail": {"code": "config_revision_required"}}}},
+        {"name": "quarantine-without-key", "request": {"method": "POST", "path": "/api/profiles/index/quarantine", "csrf": true, "if_match": "raw"}, "keys": "*", "expect": {"status": 428, "etag": null, "body": {"error": "request denied", "detail": {"code": "operation_id_required"}}}},
+        {"name": "quarantine-stale", "request": {"method": "POST", "path": "/api/profiles/index/quarantine", "csrf": true, "if_match": "stale-index", "key": "new"}, "keys": "*", "expect": {"status": 409, "etag": "p1", "body": {"detail": {"code": "config_conflict"}}}},
+        {"name": "quarantine", "request": {"method": "POST", "path": "/api/profiles/index/quarantine", "csrf": true, "if_match": "raw", "key": "new"}, "keys": "*", "expect": {"status": 200, "etag": "p1", "body": {"quarantined": "<quarantine-name>", "operation": {"id": "<key:quarantine>", "kind": "profile.index_quarantine", "state": "completed", "replayed": false}}}},
+        {"name": "quarantine-replay", "request": {"method": "POST", "path": "/api/profiles/index/quarantine", "csrf": true, "if_match": "stale-index", "key": "same:quarantine"}, "keys": "*", "expect": {"status": 200, "etag": "p1", "body": {"quarantined": "<quarantine-name>", "operation": {"id": "<key:quarantine>", "kind": "profile.index_quarantine", "state": "completed", "replayed": true}}}},
+        {"name": "bootstrap-default-after", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "default"}, "keys": "bootstrap", "expect": {"status": 200, "etag": "c1", "body": {"profile": {"id": "default", "label": "Default", "is_default": true}, "profiles_supported": true, "profile_index_state": "ok", "endpoint": null, "csrf": "<str>"}}},
+        {"name": "list-after", "request": {"method": "GET", "path": "/api/profiles"}, "keys": "*", "expect": {"status": 200, "etag": "p1", "body": {"profiles": [{"id": "default", "label": "Default", "port": "<int>", "is_default": true, "disabled_reason": null, "status": "running", "blocked_reason": null}], "orphans": [{"id": "<B>"}]}}},
+        {"name": "bootstrap-B-after", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "B"}, "keys": "*", "expect": {"status": 404, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_not_found"}}}},
+        {"name": "delete-B-orphan", "request": {"method": "DELETE", "path": "/api/profiles/{B}", "csrf": true, "if_match": "index", "key": "new"}, "keys": "*", "expect": {"status": 200, "etag": "p1", "body": {"deleted": "<B>", "operation": {"id": "<key:delete-B-orphan>", "kind": "profile.delete", "state": "completed", "replayed": false}}}}
+      ]
+    },
+    {
+      "name": "no-index-file",
+      "about": "the profiles directory could not be listed at the start: unusable without an index file, nothing to quarantine (restart the add-on)",
+      "setup": {"product": "odoo", "no_index_file": true, "extras": []},
+      "cases": [
+        {"name": "bootstrap-default", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "default"}, "keys": "bootstrap", "expect": {"status": 200, "etag": "c1", "body": {"profile": {"id": "default", "label": "Default", "is_default": true}, "profiles_supported": true, "profile_index_state": "corrupt", "profile_index_etag": "<etag:p1>", "endpoint": null, "csrf": "<str>"}}},
+        {"name": "quarantine", "request": {"method": "POST", "path": "/api/profiles/index/quarantine", "csrf": true, "if_match": "raw", "key": "new"}, "keys": "*", "expect": {"status": 409, "etag": "p1", "body": {"detail": {"code": "config_conflict"}}}},
+        {"name": "bootstrap-default-after", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "default"}, "keys": "bootstrap", "expect": {"status": 200, "etag": "c1", "body": {"profile": {"id": "default", "label": "Default", "is_default": true}, "profiles_supported": true, "profile_index_state": "corrupt", "profile_index_etag": "<etag:p1>", "endpoint": null, "csrf": "<str>"}}}
+      ]
+    },
+    {
+      "name": "unsupported-product",
+      "about": "OpenDesign, were it switched on (DQ-28): profiles_supported false, no creation",
+      "setup": {"product": "opendesign", "extras": []},
+      "cases": [
+        {"name": "bootstrap-default", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "default"}, "keys": "bootstrap", "expect": {"status": 200, "etag": "c1", "body": {"profile": {"id": "default", "label": "Default", "is_default": true}, "profiles_supported": false, "profile_index_state": "ok", "endpoint": null, "csrf": "<str>"}}},
+        {"name": "list", "request": {"method": "GET", "path": "/api/profiles"}, "keys": "*", "expect": {"status": 200, "etag": "p1", "body": {"profiles": [{"id": "default", "label": "Default", "port": "<int>", "is_default": true, "disabled_reason": null, "status": "running", "blocked_reason": null}], "orphans": []}}},
+        {"name": "create", "request": {"method": "POST", "path": "/api/profiles", "csrf": true, "if_match": "index", "key": "new", "body": {"label": "Kappa Desk"}}, "keys": "*", "expect": {"status": 409, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_product_unsupported"}}}}
+      ]
+    },
+    {
+      "name": "switched-off",
+      "about": "the product not switched on (contract 1.2): no profile routes, no echo, the header ignored",
+      "setup": {"product": "odoo", "switched_off": true, "extras": []},
+      "cases": [
+        {"name": "list", "request": {"method": "GET", "path": "/api/profiles"}, "keys": "*", "expect": {"status": 404, "etag": null, "body": "<empty>"}},
+        {"name": "bootstrap", "request": {"method": "GET", "path": "/api/bootstrap"}, "keys": "bootstrap-profile", "expect": {"status": 200, "etag": "c1", "body": {}}},
+        {"name": "bootstrap-with-header", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "B"}, "keys": "bootstrap-profile", "expect": {"status": 200, "etag": "c1", "body": {}}}
+      ]
+    }
+  ]
+}

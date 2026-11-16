@@ -4,7 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AdminApi, ApiError, ProfileEchoError, StaleProfileError } from '../src/api.js';
 import { OperationIdentity, PROFILES_SCOPE } from '../src/operation-identity.js';
-import { DEFAULT_PROFILE, blockedNotice, clientName, disabledNotice, echoMatches, labelProblem, optionLabel, profileRows, shortId } from '../src/profiles.js';
+import { DEFAULT_PROFILE, blockedNotice, clientName, disabledNotice, echoMatches, indexState, labelProblem, optionLabel, orphanIds, profileName, profileRows, shortId } from '../src/profiles.js';
+import { readFileSync } from 'node:fs';
 import { clientExample, policyFingerprint, policyRestartNotice, UiError } from '../src/contracts.js';
 import { createP9AdminClient } from '../../../packaging/ha_p9_admin.mjs';
 
@@ -139,7 +140,11 @@ test('an answer for a profile nobody asked for is never used (contract 3.4, I12)
   // Missing pieces of the bootstrap echo, and an echo where a single-profile server has none.
   assert.equal(echoMatches({profile: {id: DEFAULT_PROFILE, label: 'Default', is_default: true}}, DEFAULT_PROFILE, true), false);
   assert.equal(echoMatches({profile: {id: B, label: '會計', is_default: true}, profiles_supported: true}, B, true), false);
-  assert.equal(echoMatches({profile: {id: B, label: 'a\u202eb', is_default: false}, profiles_supported: true}, B, true), false);
+  assert.equal(echoMatches({profile: {id: B, label: 'a\u202eb', is_default: false}, profiles_supported: true}, B, true), true);   // never shown (review S-2)
+  assert.equal(echoMatches({profile: {id: B, label: '', is_default: false}, profiles_supported: true}, B, true), false);
+  assert.equal(echoMatches({profile: {id: B, label: 'x'.repeat(81), is_default: false}, profiles_supported: true}, B, true), false);
+  assert.equal(echoMatches({profile: {id: DEFAULT_PROFILE, label: 'Default', is_default: true}, profiles_supported: false}, DEFAULT_PROFILE, true), true);   // DQ-28
+  assert.equal(echoMatches({profile: {id: DEFAULT_PROFILE, label: 'Default', is_default: true}, profiles_supported: 'yes'}, DEFAULT_PROFILE, true), false);
   assert.equal(echoMatches({profile: {id: B, label: '會計'}}, B), false);
   assert.equal(echoMatches({saved: true}, B), false);
   assert.equal(echoMatches({saved: true, profile: {id: DEFAULT_PROFILE}}, null), false);
@@ -350,7 +355,7 @@ test('list rows and what the menu says about them (PaaS profileStatus.test; §8.
   const rows = [row(DEFAULT_PROFILE, 'Default'), row(B, '會計')];
   assert.deepEqual(profileRows({profiles: rows}), rows);
   for (const broken of [[row(B, '會計')], [...rows, row(B, '重複')], [row(DEFAULT_PROFILE, 'Default'), row('ABC', 'x')],
-    [row(DEFAULT_PROFILE, 'Default'), row(B, 'a\u202eb')], [row(DEFAULT_PROFILE, 'Default'), row(B, ' 前後 ')],
+    [row(DEFAULT_PROFILE, 'Default'), row(B, '')], [row(DEFAULT_PROFILE, 'Default'), row(B, 'x'.repeat(81))], [row(DEFAULT_PROFILE, 'Default'), row(B, 42)],
     [row(DEFAULT_PROFILE, 'Default'), {...row(B, '會計'), is_default: true}], [row(DEFAULT_PROFILE, 'Default'), row(B, '會計', {port: 80})],
     [row(DEFAULT_PROFILE, 'Default'), row(B, '會計', {disabled_reason: '<b>x</b>'})], Array(7).fill(0).map((_, n) => row(n ? n.toString(16).padStart(24, '0') : DEFAULT_PROFILE, `p${n}`))]) {
     assert.throws(() => profileRows({profiles: broken}), /帳號清單格式不符/);
@@ -417,4 +422,157 @@ test('the P9 kit names the profile by itself and a caller header cannot override
   const single = server({switched: false});
   const p9Single = createP9AdminClient(`https://ha.example${mount}/`, {}, async (url, options) => single.fetcher(url.pathname, options), {profile: B});
   await assert.rejects(() => p9Single.bootstrap(), /沒有開通多帳號/);
+});
+
+// ---- HM-11 aligned with HM-10's real management API (2026-11-16) ----
+
+// Review S-2: one label this browser cannot show hides only that label (its row stays, by its id); a list without its
+// ETag is shown but read-only; the orphans (DQ-14) are read beside the rows.
+test('a row whose label this browser cannot show stays, by its id; orphans are read; a list without its ETag is read-only', async () => {
+  const rows = [row(DEFAULT_PROFILE, 'Default'), row(B, 'a\u202eb'), row(C, ' 前後 ')];
+  const shown = profileRows({profiles: rows});
+  assert.deepEqual(shown.map(item => [item.id, item.label, item.hidden ?? false]), [[DEFAULT_PROFILE, 'Default', false], [B, null, true], [C, null, true]]);
+  assert.equal(profileName(shown[1]), '名稱無法顯示的帳號');
+  assert.equal(optionLabel(shown[1]), '名稱無法顯示的帳號（01234567） · 執行中');
+  const E = 'e'.repeat(24), F = 'f'.repeat(24);
+  assert.deepEqual(orphanIds({orphans: [{id: E}, {id: F}]}, shown), [E, F]);
+  assert.deepEqual(orphanIds({}, shown), []);
+  for (const broken of [[{id: E}, {id: E}], [{id: B}], [{id: DEFAULT_PROFILE}], [{id: E, label: 'x'}], 'x', [E]]) {
+    assert.throws(() => orphanIds({orphans: broken}, shown), /帳號清單格式不符/);
+  }
+  for (const etag of [null, `W/"${indexRevision}"`, indexRevision, '"p1-short"']) {
+    const api = new AdminApi(mount, async (path, options = {}) => {
+      if (path.endsWith('/api/profiles')) return Response.json({profiles: [row(DEFAULT_PROFILE, 'Default'), row(B, '會計')], orphans: [{id: E}]}, {headers: etag === null ? {} : {ETag: etag}});
+      return server().fetcher(path, options);
+    }, memoryStorage());
+    await api.bootstrap();
+    const list = await api.profileList();
+    assert.deepEqual([list.rows.length, list.orphans, list.revision], [2, [E], null], String(etag));
+  }
+  assert.deepEqual(indexState({profile_index_state: 'corrupt', profile_index_etag: `"${indexRevision}"`}), {corrupt: true, etag: `"${indexRevision}"`});
+  assert.deepEqual(indexState({profile_index_state: 'corrupt', profile_index_etag: indexRevision}), {corrupt: true, etag: null});
+  assert.deepEqual(indexState({profile_index_state: 'ok'}), {corrupt: false, etag: null});
+});
+
+test('the bootstrap of a product without additional profiles (profiles_supported false, DQ-28) is used as the default profile', async () => {
+  const base = server();
+  const api = new AdminApi(mount, async (path, options = {}) => {
+    const answer = await base.fetcher(path, options);
+    if (!path.endsWith('/bootstrap') || answer.status !== 200) return answer;
+    return Response.json({...await answer.json(), product: 'opendesign', profiles_supported: false});
+  }, memoryStorage());
+  const boot = await api.bootstrap();
+  assert.deepEqual([api.profile, boot.profiles_supported, boot.profile.id], [DEFAULT_PROFILE, false, DEFAULT_PROFILE]);
+});
+
+test('a created profile deleted since is replayed as its id alone: confirmed, gone, its identity released', async () => {
+  const storage = memoryStorage();
+  let lose = true;
+  const base = server({answer: {'/api/profiles': options => {
+    if (lose) { lose = false; throw Error('synthetic lost answer'); }
+    return Response.json({id: C, operation: {id: options.headers['Idempotency-Key'], kind: 'profile.create', state: 'completed', replayed: true}});
+  }}});
+  const api = new AdminApi(mount, base.fetcher, storage);
+  await api.bootstrap();
+  await assert.rejects(() => api.createProfile('出納', indexRevision), /連線中斷/);
+  assert.deepEqual(await api.retryProfileOperation(), {id: C, label: null, replayed: true, gone: true});
+  assert.equal(api.pendingProfileOperation(), null);
+  // An answer of another shape is no confirmation: the identity is kept.
+  const odd = server({answer: {'/api/profiles': options => Response.json({id: C, deleted: C, operation: {id: options.headers['Idempotency-Key'], kind: 'profile.create', state: 'completed', replayed: true}})}});
+  const other = new AdminApi(mount, odd.fetcher, memoryStorage());
+  await other.bootstrap();
+  await assert.rejects(() => other.createProfile('出納', indexRevision), /帳號清單格式不符|預期的帳號確認/);
+  assert.notEqual(other.pendingProfileOperation(), null);
+});
+
+test('the index quarantine: a POST without a body, the unusable index\'s ETag as given, an identity, CSRF, no X-MCP-Profile', async () => {
+  const etag = `"p1-${'f'.repeat(64)}"`, name = 'profiles.json.quarantine-20261116T000000Z';
+  let status = 'lost';
+  const sent = [];
+  const base = server({answer: {'/api/profiles/index/quarantine': options => {
+    sent.push(options);
+    if (status === 'lost') { status = 'ok'; throw Error('synthetic lost answer'); }
+    if (status === 'busy') return Response.json({error: 'request denied'}, {status: 503});
+    if (status === 'conflict') return Response.json({detail: {code: 'config_conflict'}}, {status: 409, headers: {ETag: etag}});
+    return Response.json({quarantined: name, operation: {id: options.headers['Idempotency-Key'], kind: 'profile.index_quarantine', state: 'completed', replayed: sent.length > 1}});
+  }}});
+  const storage = memoryStorage();
+  const api = new AdminApi(mount, base.fetcher, storage);
+  await api.bootstrap();
+  await assert.rejects(() => api.quarantineIndex(etag), /連線中斷/);
+  const pending = api.pendingProfileOperation();
+  assert.deepEqual(Object.keys(pending).sort(), ['id', 'product', 'revision', 'route']);
+  assert.deepEqual([pending.route, pending.revision], ['profiles/quarantine', etag.slice(1, -1)]);
+  const reopened = new AdminApi(mount, base.fetcher, storage);   // a reload of the page
+  await reopened.bootstrap();
+  assert.deepEqual(await reopened.retryProfileOperation(), {quarantined: name, replayed: true});
+  const [first, second] = sent;
+  for (const options of [first, second]) {
+    assert.equal(options.method, 'POST');
+    assert.equal(options.body, undefined);
+    assert.deepEqual(Object.keys(options.headers).sort(), ['Idempotency-Key', 'If-Match', 'X-CSRF-Token']);
+    assert.equal(options.headers['If-Match'], etag);
+  }
+  assert.equal(first.headers['Idempotency-Key'], second.headers['Idempotency-Key']);
+  assert.equal(api.pendingProfileOperation(), null);
+  // Refused before the intent (409 config_conflict): released; a bare 503 (another profile's change holds its lock): kept.
+  status = 'conflict';
+  await assert.rejects(() => api.quarantineIndex(etag), error => error instanceof ApiError && error.code === 'config_conflict');
+  assert.equal(api.pendingProfileOperation(), null);
+  status = 'busy';
+  await assert.rejects(() => api.quarantineIndex(etag), error => error instanceof ApiError && error.status === 503 && error.code === null);
+  assert.equal(api.pendingProfileOperation().route, 'profiles/quarantine');
+  assert.throws(() => api.quarantineIndex(etag.slice(1, -1)), /版本格式不符/);
+});
+
+test('limit 0 (the open file limit holds no additional profile) says the add-on serves the default profile only', async () => {
+  const api = new AdminApi(mount, async () => Response.json({error: 'request denied', detail: {code: 'profile_limit_reached', limit: 0}}, {status: 409}), memoryStorage());
+  await assert.rejects(() => api.open(), error => error.code === 'profile_limit_reached' && /只能服務預設帳號/.test(error.message) && !/最多 0/.test(error.message));
+});
+
+// The requests the panel sends are the ones tests/profile-api-cases.json checked against the add-on
+// (tests/test_panel_profile_api_shapes.py): method, path, which of X-MCP-Profile, X-CSRF-Token, If-Match,
+// Idempotency-Key and a JSON body, and the body's keys.
+test('every management request the panel sends with profiles is the case the add-on answered as recorded', async () => {
+  const cases = JSON.parse(readFileSync(new URL('./profile-api-cases.json', import.meta.url), 'utf8'));
+  const named = Object.fromEntries(cases.scenarios.flatMap(scenario => scenario.cases.map(item => [`${scenario.name}/${item.name}`, item.request])));
+  const N = C, quarantineEtag = `"p1-${'f'.repeat(64)}"`;
+  const ids = {...cases.rules.ids, B, N};
+  const base = server({labels: {[B]: 'Beta Ops'}, answer: {
+    '/api/profiles/index/quarantine': options => Response.json({quarantined: 'profiles.json.quarantine-20261116T000000Z', operation: {id: options.headers['Idempotency-Key'], kind: 'profile.index_quarantine', state: 'completed', replayed: false}}),
+  }});
+  const api = new AdminApi(mount, base.fetcher, memoryStorage());
+  await api.bootstrap();
+  const calls = [];
+  const last = async (action, scope = () => true) => { const before = base.calls.length; await action(); calls.push(base.calls.slice(before).filter(scope).at(-1)); };
+  const profileRoute = call => call.path.includes('/api/profiles');
+  const scopedRoute = call => !profileRoute(call) && !call.path.endsWith('/bootstrap');
+  const checks = [
+    ['main/list', () => api.profileList()],
+    ['main/create', () => api.createProfile('Kappa Desk', indexRevision), profileRoute],
+    ['main/rename', () => api.renameProfile(N, 'Kappa Desk Two', indexRevision), profileRoute],
+    ['main/delete', () => api.deleteProfile(N, indexRevision), profileRoute],
+    ['corrupt/quarantine', () => api.quarantineIndex(quarantineEtag), profileRoute],
+    ['main/endpoint-default', () => api.mutate('endpoint', {endpoint: cases.rules.endpoint}, revisionOf(DEFAULT_PROFILE)), scopedRoute],
+    ['main/bootstrap-B', async () => { api.select(B); await api.bootstrap(); }],
+    ['main/configuration-B', () => api.configuration()],
+    ['main/capabilities-B', () => api.capabilities()],
+    ['main/diagnostics-B', () => api.diagnostics()],
+    ['main/reveal-B', () => api.mutate('token/reveal', undefined, undefined, B), scopedRoute],
+    ['main/rotate-B', () => api.mutate('token/rotate', undefined, revisionOf(B), B), scopedRoute],
+    ['main/policy-B', () => api.mutate('policy', {writes_enabled: false, disabled: [], enabled_write_tools: []}, revisionOf(B), B), scopedRoute],
+    ['main/notice-dismiss-B', () => api.mutate('owner-defaults/dismiss', undefined, revisionOf(B), B), scopedRoute],
+  ];
+  for (const [, action, scope] of checks) await last(action, scope);
+  checks.forEach(([name], index) => {
+    const spec = named[name], call = calls[index];
+    const headers = Object.fromEntries(Object.entries(call.headers ?? {}).map(([key, value]) => [key.toLowerCase(), value]));
+    const path = spec.path.replace(/\{([A-Z])\}/g, (_, role) => ids[role]);
+    assert.deepEqual({method: call.method, path: call.path.slice(mount.length), profile: 'x-mcp-profile' in headers, csrf: 'x-csrf-token' in headers,
+      ifMatch: 'if-match' in headers, key: 'idempotency-key' in headers, json: headers['content-type'] === 'application/json',
+      body: call.body === undefined ? null : Object.keys(JSON.parse(call.body)).sort()},
+    {method: spec.method, path, profile: spec.profile !== undefined, csrf: spec.csrf === true, ifMatch: spec.if_match !== undefined, key: spec.key !== undefined,
+      json: spec.body !== undefined, body: spec.body === undefined ? null : Object.keys(spec.body).sort()}, name);
+    if (spec.profile !== undefined && !spec.profile.includes(',')) assert.equal(headers['x-mcp-profile'], ids[spec.profile] ?? spec.profile, name);
+  });
 });

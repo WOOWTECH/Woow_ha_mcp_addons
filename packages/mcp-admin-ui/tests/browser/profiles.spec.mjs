@@ -382,13 +382,20 @@ test('a profile whose state cannot be read offers going back and deleting it, st
   expect(deleted).toMatchObject({operation: `profiles/${B}`, validCsrf: true});
 });
 
-test('a list that cannot be read blocks the page with a retry; a corrupt index leaves the default profile alone in the menu and clears no receipt', async ({page, request}) => {
+// Review S-2 (done with HM-10's API): a list the panel cannot use never locks the page; the default profile stays usable.
+test('a list that cannot be read leaves the default profile usable; a corrupt index leaves it alone in the menu and clears no receipt', async ({page, request}) => {
   await reset(request, {product: 'n8n', profiles: {listStatus: 503, extra: [{id: B, label: '會計'}]}});
-  await page.goto(`${prefix}/overview`);
-  await expect(page.getByRole('heading', {name: '管理介面無法使用'})).toBeVisible();
+  await open(page, '/overview');
+  await expect(page.locator('#profile-list-unavailable')).toContainText('帳號清單無法讀取');
+  await expect(current(page)).toHaveText('目前帳號：預設帳號（default）');
+  await expect(menu(page).locator('option')).toHaveCount(1);
+  await expect(page.getByRole('button', {name: '新增帳號', exact: true})).toHaveCount(0);
+  await expect(page.getByRole('button', {name: '刪除帳號', exact: true})).toBeDisabled();
   await expect(page.locator('body')).not.toContainText('PRIVATE_CANARY');
+  await expect(page.getByRole('heading', {name: '管理介面無法使用'})).toHaveCount(0);
   await reset(request, {product: 'n8n', profiles: {indexCorrupt: true, extra: [{id: B, label: '會計'}]}});
-  await page.getByRole('button', {name: '重新檢查權限', exact: true}).click();
+  await page.getByRole('button', {name: '重新整理狀態', exact: true}).click();
+  await idle(page);
   await expect(page.locator('#profile-index-corrupt')).toContainText('帳號索引無法使用');
   await expect(menu(page).locator('option')).toHaveCount(1);
   await expect(page.getByRole('button', {name: '新增帳號', exact: true})).toHaveCount(0);
@@ -419,7 +426,7 @@ test('a list that cannot be read blocks the page with a retry; a corrupt index l
 test('switched off: no profile menu, line, note or request on any page, in a dialog or after a refresh (the panel as before)', async ({page, request}) => {
   await reset(request, {product: 'emqx', endpoint: 'https://mcp.example.test/mcp'});
   const seen = recordRequests(page);
-  const profileUi = page.locator('#profile-select, .profile-bar, .profile-current, .profile-scope, .profile-note, .dialog-profile, #pending-profile-operation, #profile-index-corrupt');
+  const profileUi = page.locator('#profile-select, .profile-bar, .profile-current, .profile-scope, .profile-note, .dialog-profile, #pending-profile-operation, #profile-index-corrupt, #profile-list-unavailable, #profile-list-readonly, #profile-orphans, #profile-index-quarantine');
   const absent = async () => {
     await expect(profileUi).toHaveCount(0);
     await expect(page.locator('body')).not.toContainText(/目前帳號|這個帳號|這是帳號|帳號「|帳號：/);
@@ -452,4 +459,124 @@ test('switched off: no profile menu, line, note or request on any page, in a dia
   // naming a profile, no probe and no profile list.
   expect(seen).toEqual([0, 1].flatMap(() => ['bootstrap', 'capabilities'].map(name => ({path: `${prefix}/api/${name}`, method: 'GET', profile: undefined}))));
   expect(await calls(request)).toEqual([]);   // both dialogs were cancelled: nothing was sent
+});
+
+// ---- HM-11 aligned with HM-10's real management API (2026-11-16): orphans, the index quarantine, read-only lists ----
+
+test('orphans are listed for deletion with two confirmations; a label this browser cannot show names its profile by id only', async ({page, request}) => {
+  const O = 'e'.repeat(24);
+  await reset(request, {product: 'n8n', profiles: {extra: [{id: B, label: 'a\u202eb'}], orphans: [O]}});
+  await open(page, '/overview');
+  await expect(menu(page).locator(`option[value="${B}"]`)).toHaveText('名稱無法顯示的帳號（01234567） · 尚未設定');
+  await expect(page.locator('.profile-note')).toContainText('有 1 筆不在帳號索引裡的帳號資料（孤兒）');
+  await choose(page, B, '名稱無法顯示的帳號');
+  await expect(page.locator('body')).not.toContainText('a\u202eb');
+  await expect(page.getByRole('button', {name: '刪除帳號', exact: true})).toBeEnabled();
+  await choose(page, 'default', '預設帳號');
+  await page.getByRole('navigation').getByRole('link', {name: '診斷與維護', exact: true}).click();
+  await idle(page);
+  const orphans = page.locator('#profile-orphans');
+  await expect(orphans).toContainText('帳號資料（eeeeeeee）');
+  const remove = () => orphans.getByRole('button', {name: '刪除孤兒帳號資料（eeeeeeee）', exact: true}).click();
+  await remove();
+  await expect(page.getByRole('dialog')).toContainText('先撤銷它的權杖');
+  await confirm(page, '取消');
+  await remove();
+  await confirm(page, '繼續');
+  await expect(page.getByRole('dialog').getByRole('heading')).toHaveText('最後確認：刪除孤兒帳號資料（eeeeeeee）');
+  expect(await calls(request, call => call.method === 'DELETE')).toEqual([]);
+  await confirm(page, '確認刪除');
+  await idle(page);
+  await expect(page.locator('#notice')).toContainText('已刪除孤兒帳號資料（eeeeeeee）');
+  await expect(orphans).toHaveCount(0);
+  await expect(page.locator('.profile-note')).toHaveCount(0);
+  const [deleted] = await calls(request, call => call.method === 'DELETE');
+  expect(deleted).toMatchObject({operation: `profiles/${O}`, validCsrf: true, ifMatch: `"p1-${'1'.padStart(64, '0')}"`, fields: []});
+  expect(deleted.profileHeader).toBeUndefined();
+});
+
+test('a corrupt index is quarantined after two confirmations and its profiles become orphans; without an index file the panel says to restart', async ({page, request}) => {
+  await reset(request, {product: 'n8n', profiles: {indexCorrupt: true, extra: [{id: B, label: '會計'}]}});
+  await open(page, '/overview');
+  const card = page.locator('#profile-index-corrupt');
+  await expect(card).toContainText('帳號索引無法使用');
+  const quarantine = () => page.getByRole('button', {name: '隔離帳號索引', exact: true}).click();
+  await quarantine();
+  await expect(page.getByRole('dialog')).toContainText('撤銷所有額外帳號的 MCP 權杖');
+  await confirm(page, '取消');
+  await quarantine();
+  await confirm(page, '繼續');
+  await expect(page.getByRole('dialog').getByRole('heading')).toHaveText('最後確認：隔離帳號索引');
+  await confirm(page, '取消');
+  expect(await calls(request, call => call.operation === 'profiles/index/quarantine')).toEqual([]);
+  await quarantine();
+  await confirm(page, '繼續');
+  await confirm(page, '確認隔離');
+  await idle(page);
+  await expect(page.locator('#notice')).toContainText('已隔離帳號索引（改名保存為 profiles.json.quarantine-');
+  await expect(card).toHaveCount(0);
+  await expect(page.locator('.profile-note')).toContainText('有 1 筆不在帳號索引裡的帳號資料');
+  await expect(menu(page).locator('option')).toHaveCount(1);
+  const [sent] = await calls(request, call => call.operation === 'profiles/index/quarantine');
+  expect(sent).toMatchObject({method: 'POST', validCsrf: true, ifMatch: `"p1-f${'1'.padStart(63, '0')}"`, fields: []});
+  expect(sent.operationId).toMatch(/^[0-9]{13}\./);
+  expect(sent.profileHeader).toBeUndefined();
+  // No index file to move aside (the profiles directory could not be listed at the start): only a restart helps.
+  await reset(request, {product: 'n8n', profiles: {indexCorrupt: true, noIndexFile: true}});
+  await page.getByRole('button', {name: '重新整理狀態', exact: true}).click();
+  await idle(page);
+  await quarantine();
+  await confirm(page, '繼續');
+  await confirm(page, '確認隔離');
+  await idle(page);
+  await expect(page.locator('#notice')).toContainText('沒有可以隔離的帳號索引檔');
+  await expect(page.locator('#notice')).toContainText('重新啟動 add-on');
+  await expect(card).toBeVisible();
+  await expect(page.locator('#pending-profile-operation')).toHaveCount(0);
+});
+
+test('a list without its ETag is read-only; a product without additional profiles has no create button; limit 0 says why', async ({page, request}) => {
+  await reset(request, {product: 'n8n', profiles: {noEtag: true, extra: [{id: B, label: '會計'}]}});
+  await open(page, '/overview');
+  await expect(page.locator('#profile-list-readonly')).toContainText('帳號清單缺少版本資訊');
+  await expect(page.getByRole('button', {name: '新增帳號', exact: true})).toHaveCount(0);
+  await choose(page, B, '會計');
+  await expect(page.getByRole('button', {name: '改名', exact: true})).toBeDisabled();
+  await expect(page.getByRole('button', {name: '刪除帳號', exact: true})).toBeDisabled();
+  await reset(request, {product: 'opendesign', profiles: {}});
+  await open(page, '/overview');
+  await expect(current(page)).toHaveText('目前帳號：預設帳號（default）');
+  await expect(page.getByRole('button', {name: '新增帳號', exact: true})).toHaveCount(0);
+  await reset(request, {product: 'n8n', profiles: {limit: 0}});
+  await open(page, '/overview');
+  await page.getByRole('button', {name: '新增帳號', exact: true}).click();
+  await page.getByLabel('帳號名稱', {exact: true}).fill('出納');
+  await confirm(page, '建立帳號');
+  await idle(page);
+  await expect(page.locator('#notice')).toContainText('這個 add-on 目前只能服務預設帳號');
+  expect(await calls(request, call => call.method !== 'POST')).toEqual([]);
+});
+
+test('a lost create answer whose profile was deleted since: the resend confirms it, says it is gone and stays on the default profile', async ({page, request}) => {
+  await reset(request, {product: 'n8n', profiles: {}});
+  await open(page, '/overview');
+  let first = true;
+  await page.route('**/api/profiles', async route => {
+    if (route.request().method() === 'POST' && first) { first = false; await route.fetch(); await route.abort(); }
+    else await route.fallback();
+  });
+  await page.getByRole('button', {name: '新增帳號', exact: true}).click();
+  await page.getByLabel('帳號名稱', {exact: true}).fill('出納');
+  await confirm(page, '建立帳號');
+  await idle(page);
+  await expect(page.locator('#pending-profile-operation')).toContainText('建立帳號「出納」尚未取得完成確認');
+  await request.post('/__fixture/profile', {data: {action: 'delete', id: 'e0000001ffffffffffffffff'}});
+  await page.getByRole('button', {name: '重送帳號操作', exact: true}).click();
+  await confirm(page, '確認繼續');
+  await idle(page);
+  await expect(page.locator('#notice')).toContainText('已確認先前建立帳號「出納」已完成，但這個帳號（e0000001）之後已被刪除');
+  await expect(current(page)).toHaveText('目前帳號：預設帳號（default）');
+  await expect(page.locator('#pending-profile-operation')).toHaveCount(0);
+  const posts = await calls(request, call => call.operation === 'profiles' && call.method === 'POST');
+  expect(posts.map(call => call.operationId)).toEqual([posts[0].operationId, posts[0].operationId]);
 });
