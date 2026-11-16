@@ -369,7 +369,7 @@ class RunningChildrenTests(unittest.TestCase):
         self.spawn(11, 18000)
         self.proc.listen(3000)
 
-        async def up(timeout=.5):
+        async def up(timeout=.25):
             return await stage.profiles_up(self.probe, self.process, [3000, 18000], timeout=timeout,
                                            proc=self.proc.root, pause=.01)
         with self.assertRaises(TimeoutError):
@@ -428,7 +428,7 @@ class KillTests(unittest.TestCase):
                 then()
         return kill
 
-    def run_kill(self, kill, timeout=.5):
+    def run_kill(self, kill, timeout=.25):
         return asyncio.run(stage.kill_one(self.probe, self.process, 18000, timeout=timeout, proc=self.proc.root,
                                           kill=kill, pause=.01))
 
@@ -510,7 +510,7 @@ class Gateway(ThreadingHTTPServer):
     def __init__(self, tokens, faults=()):
         super().__init__(('127.0.0.1', 0), GatewayHandler)
         self.tokens, self.faults, self.sessions, self.lock = dict(tokens), set(faults), {}, threading.Lock()
-        threading.Thread(target=self.serve_forever, daemon=True).start()
+        threading.Thread(target=self.serve_forever, args=(.05,), daemon=True).start()  # a quick shutdown
 
     @property
     def base(self):
@@ -668,7 +668,7 @@ class ChildBearerTests(unittest.TestCase):
         for number, own in enumerate(tokens):
             server = ThreadingHTTPServer(('127.0.0.1', 0), ChildHandler)
             server.accepts = [own, *([tokens[0]] if also and number == 2 else [])]
-            threading.Thread(target=server.serve_forever, daemon=True).start()
+            threading.Thread(target=server.serve_forever, args=(.05,), daemon=True).start()  # a quick shutdown
             self.addCleanup(server.server_close)
             self.addCleanup(server.shutdown)
             found.append((('default', A[:8], B[:8])[number], server.server_address[1], own))

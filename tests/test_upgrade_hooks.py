@@ -47,7 +47,7 @@ class AddOn(ThreadingHTTPServer):
     def __init__(self, token):
         super().__init__(('127.0.0.1', 0), AddOnHandler)
         self.token, self.faults, self.sessions = token, set(), set()
-        threading.Thread(target=self.serve_forever, daemon=True).start()
+        threading.Thread(target=self.serve_forever, args=(.05,), daemon=True).start()  # a quick shutdown
 
     @property
     def port(self):
