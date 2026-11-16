@@ -121,8 +121,9 @@
 - 緊急關閉要發一版，推估一個工作天以上；期間只能停 add-on 或在面板撤銷。
 - HA Core 與 Supervisor 會自動更新；平台假設（UC-08、UC-10、sentinel）每次發版重驗並記版本。
 - 開通的 Odoo 換身分時，新連線、新 token 的那一次寫入在取代 state 檔途中失敗（`os.replace` 或之後的目錄 fsync，磁碟錯誤）：不知道寫成了
-  沒有，store 照既有規則毒化（fail closed）。該帳號到 add-on 重啟前所有請求 503（舊 token 也不服務），舊子程式不重起；預設帳號的新 state 檔
-  已換上時（目錄 fsync 失敗），8081 全部 503（同今天預設帳號 state 讀不到的規則）。重啟後照磁碟上的 state，token 與身分一起。PaaS 這時快取
+  沒有，store 照既有規則毒化（fail closed）。該帳號到 add-on 重啟前不服務任何請求、舊子程式不重起：新 state 檔還沒換上時（`os.replace`
+  失敗）舊 token 回 503；已換上時（目錄 fsync 失敗）分派器讀不到它的 state、不路由，兩把 token 都是未知 token（401／404）；預設帳號的新
+  state 檔已換上時 8081 全部 503（同今天預設帳號 state 讀不到的規則）。重啟後照磁碟上的 state，token 與身分一起。PaaS 這時快取
   留舊值、磁碟可能已是新值（`contract.md` §8.8 #110）。取代之前的失敗（新檔寫不出來）與 store 拒絕寫入照 PaaS：舊 token 照舊可用、舊子程式重起。
 - Odoo 的 `chatter_post` 的 approval 只是預覽確認：token 是內容的摘要、子程式每次重算比對，沒有伺服器端紀錄，所以 A 帳號預覽拿到的 approval
   在 B 帳號也執行得了。這不是跨帳號授權：持有 B 的 MCP token 的用戶端本來就能自己預覽、拿到同一個 token，執行時用的是 B 的憑證與 B 的政策
