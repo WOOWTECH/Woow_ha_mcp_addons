@@ -2,13 +2,22 @@
 
 ## 結論
 
+- **rebase 到 `claude-delivery` `7646f0f` 與使用者對 Q1、Q2、Q4 的回答（2026-11-17，第 18 節）**：第 1～17 節照當時寫，commit 編號是
+  這次 rebase 前的（對照在第 18.9 節）。
+  - 基準 `7646f0f`（HM-11 #107、HM-12 #110 合併後）。34 個 commit 照原順序重放，10 個有衝突，都是兩邊在同一處各加東西：新基準的行在前、
+    本片的在後；HM-11、HM-12 的行一行都沒少。帳本照 JSON 重組，當資料核對 0 個問題。
+  - 和 HM-12 的換身分沒有語意衝突：發布那一刻舊 token 的請求都結束，工作執行緒上排隊的撤回、處理中的結果丟掉，名額與待送回覆位元組都還
+    回來（暫存區實驗 X12 三案都過）。
+  - 使用者 2026-11-17 03:1x：Q1、Q2 接受，Q4 維持現狀，都是 HM-19c 實測再定；門檻都沒放寬。
+  - 本機：本片 4 檔 251 案、相關 28 檔 836 案、HM-12 與 HM-11 的 87 案、`test_output_schemas.py` 189 案全過；全套 6,211 案只有 7 個要 root 的既有案例紅、0 skip。量停頓的
+    測試各單獨 5 次都綠（D1 70 案次最高 42.7 ms；D3 整段 29.3～36.9 ms）。CI 紅了先由主對話回報使用者，不放寬門檻、不加重試。
 - **第二輪獨立安全審查（2026-11-17，第 17 節）判定「修正後通過」**（報告在 repo 外：
   `artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-30-phase2.md`，審查 `37160d6`）。程式本身沒有找到安全漏洞。
   - 必修 5 項都處理了：MF-1 扁平陣列在解析、遮罩、成本計算、放掉時都喘息（數字陣列本機過門檻）；MF-2 改程式，讓一次湧入的上界 800／416 MiB
     成立（真額度實測 792／408 MiB），使用者接受的 D2 不用重問；MF-3 補遮罩的測試；MF-4 寫進契約與威脅模型；MF-5 PR 說明重寫。
   - 建議 6 項：S-2～S-6 採用；S-1 沒採用（量了，把用戶端移出被量的迴圈沒有效果，第 17.6 節）。另外修了前一段寫出來的一個錯（值與 twin 是
     同一個容器時 KeyError）。
-  - **合併前要使用者答三題**（第 17.10 節）：Q1 沒有物件也沒有數字的陣列，解析仍是一次 C 呼叫（8 MiB 本機 0.03～0.19 秒）；Q2 D1 讓別的帳號
+  - **合併前要使用者答的三題**（第 17.10 節；使用者 2026-11-17 03:1x 已答，第 18.6 節）：Q1 沒有物件也沒有數字的陣列，解析仍是一次 C 呼叫（8 MiB 本機 0.03～0.19 秒）；Q2 D1 讓別的帳號
     等更久（A 同時送 3 個大量小物件回覆時 B 的 p95 3.5 秒）；Q4 請求端的停頓（一個大請求 0.09～0.25 秒）。
   - 量停頓的測試本機偶爾紅（照實記，第 17.6 節）：D3 整段 11 次紅 1 次（63.3 ms，讀取期間，最長那一下在請求端），D1 真實回覆 98 案次紅
     1 次（浮點數 50.5 ms，判斷是共用主機讓整個程序停住）；小而忙的機器上 D3 會紅（審查 S-1）。CI 跑完把數字補進第 17.6 節。
@@ -75,8 +84,8 @@
 | 項目 | 值 |
 |---|---|
 | 切片 | HM-30（計畫 §12.3；風險中、工作量 M；標「審查」：合併前要獨立安全審查） |
-| 分支 | `feat/ha-multiprofile-hm30-20261116`（一般 clone），疊在 HM-09 的修正 head `dbf3c8c` 上；2026-11-16 rebase 到 `claude-delivery` `df686dd`（第 16 節） |
-| 基準 | `dbf3c8c`＝HM-08 最終 head `adfc4bf`＋HM-09 的實作與審查修正。`claude-delivery` 已合併 HM-00～HM-08、HM-13a、HM-17、HM-02 與 #100；本分支沒有 #100，rebase 時處理。rebase 後的基準是 `df686dd`（第 16.1 節） |
+| 分支 | `feat/ha-multiprofile-hm30-20261116`（一般 clone），疊在 HM-09 的修正 head `dbf3c8c` 上；2026-11-16 rebase 到 `claude-delivery` `df686dd`（第 16 節）；2026-11-17 再 rebase 到 `7646f0f`（第 18 節） |
+| 基準 | `dbf3c8c`＝HM-08 最終 head `adfc4bf`＋HM-09 的實作與審查修正。`claude-delivery` 已合併 HM-00～HM-08、HM-13a、HM-17、HM-02 與 #100；本分支沒有 #100，rebase 時處理。rebase 後的基準是 `df686dd`（第 16.1 節）；2026-11-17 的基準是 `7646f0f`（HM-11 #107、HM-12 #110 合併後，第 18.1 節） |
 | 依據 | 計畫 §5.5（全部）、§5.2、§5.4、§10.3 的 HM-30 列、§12.0、§12.3 HM-30；契約 §2.4、§5、§6、§7、§9 #15、#17、#18；`threat-model.md` I8；FM-129、FM-130、FM-149；C2-MF-4、C1-M5；DQ-07 (a)、DQ-21、DQ-25；HM-06、HM-08、HM-09 的 provenance 筆記交給 HM-30 的事項（第 13.1 節） |
 | 對齊的 PaaS | 沒有。PaaS 在事件迴圈內處理回覆（§8.8 #17 是 HA 的部署差異）；第 9 節列出 pin 之後的 PaaS 變動 |
 | commit（`dbf3c8c` 之後 11 個） | `092b827` 測試先寫；`8a2703e` 工作執行緒；`73d6cfd` 待送回覆額度；`2552106` 契約、威脅模型、帳本；`33798ad` 兩個測試改寫（第 4.1、4.2 節）；`c43eefd` 只刪測試檔裡重複的區段標題（AST 相同）；`5b6d4a5` 契約第 6 節量測數字、第 9 節 #17 附註、第 10 節一列與本筆記。審查修正（第 15 節）：`503fb3d` 測試（MF-1、MF-2、S-1～S-4、S-7，與驗證時找到的另一個競態）；`6e073c3` `reply_worker.py` 兩處說明與帳本；`e84bd8f` 契約、威脅模型、驗收表；最後一個是本筆記。這些是 rebase 前的編號；rebase 後的編號與之後加的 commit 見第 16.13 節 |
@@ -1047,7 +1056,7 @@ rebase 後加的：
   時間，測試那個 commit 又重寫一次，後面 3 個照原樣重放），再加帳本與文件。前一段留下的 7 個 `/tmp/ha-mp-*` 已用完整路徑刪除。
 - **本機檢查都過**（第 17.8 節），只有量停頓的測試偶發紅：D3 整段 11 次紅 1 次、D1 真實回覆 98 案次紅 1 次（第 17.6 節，照實記）。CI 推估：
   本片這一輪多約 30～40 秒（第 17.9 節）。
-- **合併前要使用者答 Q1、Q2、Q4**（第 17.10 節）。
+- **合併前要使用者答 Q1、Q2、Q4**（第 17.10 節）。使用者 2026-11-17 03:1x 已答（第 18.6 節）。
 
 ### 17.1 意見處理表
 
@@ -1338,7 +1347,7 @@ pytest 都在 repo 外的複本跑（`git archive`，`.venv`、`apps/`、`packag
 前一段的 3 個 commit（`adb79ef`、`0c80dc2`、`d9a51bb`）留在本機備份分支 `backup/hm30-review2-before-rewrite-20261117`（沒 push）；
 重寫後的樹和「前一段＋後一段的修正」逐檔相同（`git diff` 只差上表說的幾處）。
 
-**待使用者決定**（合併前要有答案；門檻都沒放寬）：
+**待使用者決定**（合併前要有答案；門檻都沒放寬；使用者 2026-11-17 03:1x 已答：Q1、Q2 接受，Q4 維持現狀，都是 HM-19c 實測再定，第 18.6 節）：
 
 | # | 題目 | 現況（本機 EPYC 7713） | 選項 | 建議 |
 |---|---|---|---|---|
@@ -1353,7 +1362,7 @@ Q3（MF-2 選 (b) 時才問）不用問：本片選 (a)，契約原本的數字�
 - 量停頓的測試在本機偶發紅（D3 整段 11 次 1 次、D1 真實回覆 98 案次 1 次；第 17.6 節）。CI 紅了先看是不是這兩個；要不要改成「超過門檻時
   再量一次」（固定最多兩次，門檻本身不變）會改變門檻怎麼判，要使用者同意，本片沒做。D3 那一次在請求端，和 Q4 一起看。
 - `claude-delivery` 現在是 `f4c7718`（HM-11 #107 等已合併；本片照交辦以 `df686dd` 為基準）。開 PR 前要再 rebase：本片在契約第 9 節沒有列，
-  文件衝突只會在契約第 10 節與 `decisions.md` 變更紀錄的最後一列（第 16.14 節已預告）。
+  文件衝突只會在契約第 10 節與 `decisions.md` 變更紀錄的最後一列（第 16.14 節已預告）。2026-11-17 已 rebase 到 `7646f0f`（HM-12 #110 也已合併，第 18 節）。
 
 **交給後面的片**（第 16.14 節之外再加）：
 
@@ -1366,3 +1375,274 @@ Q3（MF-2 選 (b) 時才問）不用問：本片選 (a)，契約原本的數字�
   - 長時間大回覆時看 RSS 會不會一直長（循環回收器在工作期間是整個程序都關著，S-5）。
   - D3 整段在目標硬體的數字；CI 的數字。
 - 第 16.14 節最後一點「D1、D3 的程式還沒審查過」：第二輪審查已審（就是本節的報告）。
+
+## 18. rebase 到 claude-delivery `7646f0f` 與使用者對 Q1、Q2、Q4 的回答（2026-11-17）
+
+第 1～17 節照當時寫，裡面的 commit 編號是這次 rebase 前的（對照在第 18.9 節）。數字以本節為準。`SP:`＝這次工作的暫存區（不進 repo）：`SP:hm30r5/`。
+
+### 18.0 結論
+
+- **rebase 做完**：基準換成 `claude-delivery` `7646f0f`（HM-11 #107、HM-12 #110 合併後）。本片 34 個 commit 照原順序重放：22 個完全相同，
+  10 個有衝突，2 個只差上下文（第 18.2 節）。
+  - 衝突都是兩邊在同一處各加東西：新基準的行照原文在前，本片的行照原文在後。只有 HM-31 的參數順序測試，兩邊的斷言要合成一個。
+  - 兩個方向逐檔比對：HM-11、HM-12 的行一行都沒少；本片的行只差衝突那幾行；HM-31、HM-09 追補照舊都在。
+  - 帳本照 JSON 重組、SHA-256 照檔重算；當資料核對 0 個問題，帳本預檢 OK（第 18.3 節）。
+- **語意衝突：沒有，程式不用改**（第 18.4 節）。HM-12 換身分在發布那一刻結束舊 token 的每個請求；本片在工作執行緒上等的那段也在同一個
+  租約裡：排隊的工作撤回、處理中的結果丟掉，名額與待送回覆位元組都還回來，新 token 不受影響。暫存區實驗 X12 三案都過：舊 token 的請求在
+  存檔開始後 0.015～0.019 秒結束（401，沒有回覆內容），不等工作執行緒。
+- **使用者 2026-11-17 03:1x 回答 Q1、Q2、Q4**：Q1、Q2 接受，Q4 維持現狀，都是 HM-19c 實測再定；門檻都沒放寬。已寫進 `decisions.md`、契約、
+  威脅模型、驗收表、本筆記與 PR 說明（第 18.6 節）。
+- **本機檢查**（第 18.7 節）：本片 4 檔 251 案、相關 28 檔 836 案、HM-12 的 3 檔與 HM-11 的面板形狀 87 案、`test_output_schemas.py` 189 案
+  全過；全套 6,211 案只有 7 個要 root 的既有案例紅、0 skip；packaging、工具表面、兩個預檢都過；雙向控制字元與 AI 署名都沒有。
+- **量停頓的測試**（rebase 後的 head，各單獨跑 5 次；門檻與次數照舊，沒有重試；第 18.8 節）：D1 真實 8 MiB 回覆 70 案次全綠，最高 42.7 ms；
+  D3 整段 5 次 29.3～36.9 ms 全綠（本片 4 檔整檔那次 39.5 ms）。這次本機沒有紅（上一輪 D3 11 次紅 1 次、D1 98 案次紅 1 次，第 17.6 節）。
+  **CI 紅了先由主對話回報使用者，不放寬門檻、不加重試**。
+- 還沒解決：`reply_worker.py` 與 `tests/test_reply_worker.py` 幾處說明仍寫 Q1「待使用者決定」，這次沒改（第 18.6 節）；`checks` 秒數 CI 跑完再補。
+
+### 18.1 範圍與做法
+
+- 先開本機備份分支 `backup/hm30-before-rebase-20261117`（＝`2a74494`，不 push）。`git fetch origin` 後 `origin/claude-delivery`＝`7646f0f`。
+  前一輪的 `backup/hm30-before-rebase-20261116`、`backup/hm30-review2-before-rewrite-20261117` 沒動。
+- `df686dd` 是 `7646f0f` 的祖先；`git log --oneline df686dd..2a74494` 是本片 34 個 commit，所以直接 `git rebase origin/claude-delivery`。
+- 新基準多的是 HM-11（#107，面板）與 HM-12 後端（#110：Odoo 換身分換 token；`gateway.py`、`products.py`、`backend_edit.py`、
+  `identity_fields.py`、`config.py` 的 `Store._write` 多 `poison_before_replace`、`profile_runtime.py` 的 `stop_child`）。兩邊都改過的檔：
+  `config.py`、`gateway.py`、`profile_runtime.py`、`tests/test_profile_runtime.py`、`tests/test_request_budget_gateway.py`、契約、
+  `decisions.md`、威脅模型、驗收表、帳本。
+- 指令：`git -c merge.conflictStyle=diff3 rebase --exec <帳本檢查> origin/claude-delivery`。每個重放的 commit 之後，若它動了帳本，就核對
+  「上一個 commit 的帳本＋原 commit 加的那段說明，列管檔的 SHA-256 照當下的檔重算」，不符就停下（`SP:hm30r5/bin/ledger_exec.sh`、
+  `ledger_rebuild.py`；紀錄 `SP:hm30r5/logs/ledger-exec.log`）。
+- 依賴（`uv.lock`、`package-lock.json`）沒變，沒有重跑 `setup_repo_env.sh`。
+- PaaS（本機唯讀 repo，沒有 fetch、沒有 checkout）：`origin/main` 現在是 `48f394d`。`7087280` 之後只多 #156（Hermes 排程工具的說明），
+  `packages/mcp-admin-core/` 與 `docs/mcp-gateway-limits.md` 都沒動，對本片沒影響。
+
+### 18.2 衝突與處理
+
+原則照交辦：新基準的行照原文在前，本片的行照原文在後；同一段程式兩邊都改時，兩邊的行為都留。10 個 commit 有衝突，都是兩邊在同一個
+地方各加東西；只有一處要把兩個斷言合成一個（`3261b95`）。
+
+| rebase 後（原本） | 衝突 | 處理 |
+|---|---|---|
+| `f4271f9`（`15bc2a3`） | `tests/test_profile_runtime.py`：`make_apps` 的 keyword-only 選項清單 | HM-09 `child_blocked`、HM-12 `stop_child`（新基準）之後接本片的 `reply_worker`。同檔另一處（「runtime 拒絕不是自己的選項」清單）自動合併：本片加 `reply_worker`；HM-12 當初沒把 `stop_child` 加進那份清單，照 HM-12 寫的留著 |
+| `c7ff421`（`e83889d`） | `gateway.py` 三處、`profile_runtime.py` 兩處 | `gateway.py`：`make_apps` 簽名 `body_budget` → HM-12 `stop_child` → 本片 `reply_worker`；說明 HM-12 那段之後接本片那段；參數檢查 HM-12 的 `invalid child stop` 之後接本片的 `invalid reply worker`。import 自動合併（本片的 `from .reply_worker import …` 在前；HM-12 的 `log_id`、`logger`、`NEW_ORIGIN_SECRET`、`REBIND_WARNING` 在後）。`profile_runtime.py`：模組說明 HM-12 那段之後接本片那段；`RUNTIME_OPTIONS` 是 `'body_budget', 'stop_child', 'reply_worker'`；其他處（`ProfileRuntime`、`ProfileManager` 的 `reply_worker`）自動合併，HM-12 的 `stop_child` 方法與交給 `make_apps` 的那一行沒動。`config.py` 自動合併：HM-12 改 `Store._write`、本片改 `strict_json`，不在同一處 |
+| `9e0df89`（`307f998`） | 契約第 10 節、威脅模型狀態行、帳本 | 契約：新基準 HM-11 三列、HM-12 三列之後接本片那列。威脅模型：HM-12 兩行之後接本片那行。帳本：第 18.3 節 |
+| `48850f1`（`4382ac8`） | 契約第 9 節說明段、第 10 節 | 說明段：HM-11、HM-12 兩行之後接「#17 的附註出自 HM-30 的實作」。第 10 節：新基準六列之後接本片那列（本 commit 改過的版本） |
+| `779fbeb`（`d5f2e03`） | 威脅模型狀態行 | HM-12 兩行之後接本片那行（本 commit 改過的版本） |
+| `3261b95`（`52926ae`） | `tests/test_request_budget_gateway.py`：`make_apps` 最後的參數 | 新基準釘「最後 5 個＝…、`body_budget`、`stop_child`」，本片釘「最後 5 個＝…、`body_budget`、`reply_worker`」。兩個選項都在之後，原文的兩個斷言不能同時成立，合成一個：最後 6 個＝`child_blocked`、`default_endpoint`、`bootstrap_fields`、`body_budget`、`stop_child`、`reply_worker`。HM-12 那行註解照留（行尾多一個逗號），加一行本片的註解。HM-12 自己的 `stop_child` 選項測試（`test_odoo_identity_rotation.py`）不看位置，不用改 |
+| `3caa49c`（`85324e8`）、`d080a8d`（`5f61a94`）、`07cfce2`（`9331fe1`） | 帳本 | 第 18.3 節 |
+| `586e423`（`f548912`） | `decisions.md` 變更紀錄 | 新基準 HM-11、HM-12 兩列之後接本片那列 |
+| 其他 24 個 | 沒有衝突 | 其中 `b919f7b`（`086159f`）、`0c06236`（`9fa8f89`）只有上下文不同（HM-12 的 import、新基準加的列），自己的增刪行和原本相同 |
+
+**核對**（`SP:hm30r5/logs/`）：
+
+- `git range-diff df686dd..2a74494 origin/claude-delivery..HEAD`：22 個完全相同、12 個有差（上表 10 個衝突加 2 個只差上下文）。
+- `compare.py`（逐檔比兩個 diff 的增刪行，同第 16.3 節）兩個方向：
+  - 本片的改動（`df686dd..2a74494` 對 `origin/claude-delivery..HEAD`）：21 檔裡 16 檔逐行相同；其餘 5 檔只差上表那幾行（`gateway.py` 8 行、
+    `profile_runtime.py` 4 行、`tests/test_profile_runtime.py` 4 行、`tests/test_request_budget_gateway.py` 10 行：清單尾端的逗號、說明字串結尾的引號移到本片那段之後、合成的斷言；
+    帳本 24 行是 SHA-256 與說明）。
+  - 新基準的改動（`df686dd..origin/claude-delivery` 對 `2a74494..HEAD`）：39 檔裡 34 檔逐行相同；其餘 5 檔就是上面那 5 檔、同樣幾行。HM-11 的面板
+    （`packages/mcp-admin-ui/` 15 檔與 `packaging/ha_p9_admin.mjs`）、HM-12 的 `products.py`、`backend_edit.py`、`identity_fields.py`、`config.py` 的 `Store._write` 與 3 個新測試檔
+    一行都沒少。HM-31、HM-09 追補的程式在 `df686dd` 就有：本片對新舊兩個基準的增刪行相同（上一點），所以它們的行也和 rebase 前一樣都在。
+
+### 18.3 帳本（`docs/provenance/runtime-patches.json`）
+
+- 以新基準的帳本為底：HM-11 加了 `profiles.js` 一列，HM-12 改了 6 列（`gateway.py`、`config.py`、`profile_runtime.py`、`products.py`、
+  `backend_edit.py`、`identity_fields.py`）的說明與 SHA-256。不解文字衝突，照 JSON 重組（`SP:hm30r5/bin/ledger_rebuild.py`）：
+  - 原 commit 只在列尾加字的：把那段接在底的文字後面（新基準的在前、本片的在後）。
+  - 新列 `reply_worker.py` 照原位置（`profile_runtime.py` 後面）。
+  - SHA-256 照重放當下的檔重算。
+  - `5f61a94` 改的是本片自己加的 `access.py` 那句（不是在尾端加字）：把本片那段換成改過的版本。新基準沒動 `access.py`，結果和原 commit
+    逐字相同。
+- 動帳本的 6 個 commit：4 個有衝突（`307f998`、`85324e8`、`5f61a94`、`9331fe1`），2 個自動合併（`22409db`、`9f1facc`）；6 個重放後都由
+  exec 檢查核對過（`SP:hm30r5/logs/ledger-*.txt`、`ledger-exec.log`）。
+- 重放完再當資料核對一次（`SP:hm30r5/bin/ledger_verify.py`）：64 列＝新基準 63 列＋`reply_worker.py`；每列的說明＝新基準的文字＋本片在
+  `df686dd` 之後加的那段（6 列有本片的字）；其他欄位照新基準；順序照新基準；每列的 SHA-256＝HEAD 的檔。0 個問題。
+- 這次沒有改任何列管檔的內容（衝突只動清單、說明與測試），所以帳本沒有新加說明；SHA-256（前 12 碼）：
+
+| 列管檔 | `df686dd` | `claude-delivery` `7646f0f` | rebase 前 `2a74494` | 現在 |
+|---|---|---|---|---|
+| `gateway.py` | `1f954cf11cde` | `84e331a9006f` | `fc83f7d81eb8` | `92cb8313a108` |
+| `config.py` | `78a2f79d76fd` | `c00cae167d7e` | `01bcc791acc2` | `e58eb2299557` |
+| `profile_runtime.py` | `048e73896820` | `198afd436a3b` | `60f27add408c` | `012bc7ba24d7` |
+| `profile_router.py` | `bb6b6feb79f3` | 同左 | `ebcf83324658` | 同左 |
+| `reply_worker.py`（本片的新列） | — | — | `00b7f14a1365` | 同左 |
+| `run_product.py` | `59d281b17549` | 同左 | `78d511c9b82e` | 同左 |
+| `access.py` | `5d78bcea515e` | 同左 | `0a830599e82d` | 同左 |
+
+- 沒動 `apps/runtime/*.py`、`apps/*/launch.py`：不用 `tool_inventory.py --write`；`scripts/tool_inventory.py` 檢查 exit 0。
+- `redact.py` 照舊沒列管，帳本預檢照預期列成「沒列管、要人看」。
+
+### 18.4 語意衝突：HM-12 換身分 × 本片（回覆工作執行緒、待送回覆額度、名額）
+
+**結論：沒有語意衝突，程式不用改。** 兩邊靠的是同一套 token 租約（HM-08 的 `TokenLease`）：HM-12 在發布（`token_access.committed()`）
+那一刻結束舊 token 的每個請求，本片在工作執行緒上等的那段也在同一個租約裡。
+
+逐項讀程式（HM-12 的順序：停舊子程式 → 一次寫入新連線、新 token → 發布 → 起新子程式；`gateway.make_apps` 的 `rebind_identity`）：
+
+| 情況 | 會怎樣 | 依據 |
+|---|---|---|
+| 換身分時，同一個帳號有一筆大回覆在工作執行緒上處理、另一筆在它的佇列裡 | 停舊子程式的那段 `await` 期間舊 token 還有效：這時處理完的回覆照常交出（是換身分之前問、之前讀完的）。寫入與發布之間沒有 `await`，迴圈上沒有東西插得進來。發布時租約的 event 被設起，舊 token 的每個租約立刻結束：排隊的工作撤回（沒跑過），處理中的那筆做完、結果丟掉；用戶端拿到 401／404（回應還沒開始），拿不到回覆內容 | `gateway.serve` 用 `lease.run(lambda: reply_worker.run(...))` 等工作執行緒；`ReplyWorker.run` 被取消時撤回排隊的工作、立刻往上丟，不等處理中的那筆；`TokenAccess.committed()` |
+| 處理中的那筆還佔著工作執行緒 | 最多一筆：新 token 的第一個回覆可能要等它做完（結果會被丟掉）。和 Q2 是同一個上界 | 每帳號同時最多 1 筆；帳號的 `Lane` 屬於帳號，換身分不換 runtime、不換 `Lane` |
+| 待送回覆額度 | 額度是每帳號的（`ProfileGate`），不是每個 token 的，換身分後還在。舊 token 已交給 server 的回覆：發布時那些請求結束（HM-14 的 ending；用戶端不讀時最多 `ENDING_SECONDS`＝2 秒），請求結束時帳號扣著的（交出的與提早扣的）都還回去；提早扣（`PENDING_CHARGE`）只在工作執行緒交回結果之後才做，被取消的請求不會扣。所以新 token 不會因為舊 token 的回覆被擋成 `-32003` | `ProfileGate.serve` 的 `finally`；`access.LeasedResponse`、`gateway.Ending` |
+| 轉送名額（HM-14） | 舊 token 的請求被取消時在 `finally` 放掉名額；排隊等名額的那個拿到名額後先重驗 token、被拒（HM-12 的測試已釘住）。本片在拿到名額之後的第二次待送回覆檢查（第二輪審查 MF-2）只在 token 還有效時才走得到 | `gateway.serve` |
+| D3 的 `checked` 租約（每段只查一次 token） | 發布設起 event，watcher 立刻醒。HM-12 失敗、沒有發布的兩種情況（取代 state 檔途中失敗：store 毒化；寫入丟例外但新 token 已在磁碟上）：每一段讀完之後的那次檢查讀 store，拿到 `ConfigError` 或不同的 token，這一段就不交出（第 16.8 節的規則，HM-12 不用另外處理） | `TokenLease.run`、`invalidated` |
+| 停舊子程式 | 工作執行緒不碰子程式；已讀完的回覆照常處理；還在讀的那段因子程式斷線結束（HM-14 的 `-32004`），和本片無關 | `ProfileRuntime.stop_child` |
+| 別的帳號 | HM-12 只停、寫、起 B 自己的；A 在工作執行緒上的那筆照常做完、照常交出 | — |
+
+**HM-12 的測試現在也走工作執行緒**：`tests/multi_profile_runtime.py` 開著開關跑 `run_product`，rebase 後 `run_product` 會建工作執行緒，所以 HM-12
+那 3 個測試檔裡經過 8081 的回覆都在工作執行緒上處理；它們全過（第 18.7 節）。
+
+**暫存區實驗 X12**（沒進 repo；`SP:hm30r5/exp/test_zz_hm12_x_hm30_scratch.py`，在 `815cc2f` 的複本跑；開通的 Odoo、HM-12 測試的 `Journal`
+記順序、讓工作執行緒卡在某一筆的解析上）：
+
+| 實驗 | 情境 | 結果 |
+|---|---|---|
+| X12a | B 的一筆 2 MiB 回覆卡在工作執行緒上（處理中），B 的另一筆排在它的佇列裡；這時經 8099 用 `backend/patch` 改 B 的 username | 存檔 0.018 秒回 200（`token_rotated`）；兩個舊 token 的請求在存檔開始後 0.019 秒都結束：401、26 位元組，沒有回覆內容，那時工作執行緒還卡著。順序 stop → write → publish → start。放開之後，工作執行緒只多做了卡著的那一筆（結果丟掉）與新 token 的一筆，排隊的那筆沒跑過。B 的待送回覆位元組、准入、名額與排隊都歸零；舊 token 兩條入口都被拒；新 token 的 tools/call 經工作執行緒回 200、位元組正確 |
+| X12b | 預設帳號的一筆卡在工作執行緒上，B 的一筆排在後面；改 B 的 username | B 的舊 token 請求 0.015 秒結束（401）；預設帳號那筆放開後照常 200、逐位元正確；B 的那筆沒跑過；兩個帳號的待送回覆位元組與准入都歸零；B 的新 token 照常 |
+| X12c | B 的待送回覆額度縮成 1 MiB，兩個 600 KiB 的舊 token 回覆被不讀的用戶端扣著（帳上 1,228,800 位元組，下一個 tools/call 回 `-32003`）；改 B 的 username | 兩個舊 token 的回應在存檔開始後 0.016 秒結束（HM-14 的 ending：標頭已送、本體一段都沒送出，閘道就此結束、伺服器關連線）；B 帳上歸零；新 token 的 tools/call 照常轉送、回 200、614,400 位元組，不是 `-32003` |
+
+3 案全過（`SP:hm30r5/logs/s1/x12.log`）。
+
+### 18.5 契約第 9、10 節
+
+- 第 9 節：本片仍沒有自己的列（差異都在 #17 的附註）。HM-11 的 #109～#112、HM-12 的 #113～#115 照新基準，最後仍是 #115；這次沒有要加的列。
+- 第 9 節說明段：新基準的兩行（HM-11、HM-12）在前，「#17 的附註出自 HM-30 的實作」在後。
+- 第 10 節：新基準的列（HM-11 三列、HM-12 三列）在前，本片的四列在後；最後再加一列（本次 rebase 與 Q1、Q2、Q4）。
+
+### 18.6 使用者對 Q1、Q2、Q4 的回答（2026-11-17 03:1x；門檻都沒放寬）
+
+| # | 題目（第 17.10 節） | 使用者的回答 | 之後 |
+|---|---|---|---|
+| Q1（第二輪審查 MF-1） | 沒有物件也沒有數字的大陣列，解析是一次 C 呼叫（本機 8 MiB 0.03～0.19 秒） | **接受，HM-19c 實測再定** | HM-19c 在 J1900 量；超標再從「開通時回覆也設元素個數上限」或「子程序處理回覆」選一個。測試照舊只印不斷言 |
+| Q2（第二輪審查 MF-4） | 大回覆分段後別的帳號等更久（本機 B 的 p95 3.5 秒，不分段 1.9 秒；一筆 8 MiB 最久約 7 秒） | **接受，HM-19c 實測再定** | HM-19c 用真實回覆量 B 的 p95；過不了再改成工作執行緒在分段之間換帳號 |
+| Q4（第二輪審查 S-2） | 請求端的大請求在主迴圈解析（本機一個 0.09～0.25 秒） | **維持現狀，HM-19c 實測再定** | 超標再從「請求端交給工作執行緒」或「開通時降低單一請求上限」選一個 |
+
+寫在哪裡：
+
+- `decisions.md` 第 1.1 節加三列（照 D1～D3 那幾列的寫法，記成使用者 2026-11-17 03:1x 定案），變更紀錄加一列。
+- 契約第 6 節：D1～D3 那段之後加「第二輪審查回報後的使用者定案」一段（含「量停頓的測試門檻、次數都不改，也不加重試；CI 紅了先由主對話
+  回報使用者」）；D1 的兩處（一筆變長別的帳號等得也久、沒有物件也沒有數字的陣列）與量測表三列（整段、真實回覆時 B 的延遲、真實 8 MiB
+  回覆）的「待使用者決定」改成定案。第 10 節加一列。
+- 威脅模型：狀態行補一句；I8 的測試欄、第 3 節三條（請求端 CPU、別的帳號等 A 的一筆、沒有物件也沒有數字的陣列）的「待使用者決定」改成定案。
+- 驗收表：`test_reply_worker.py` 那列的「（MF-1，待使用者決定）」改成定案。
+- 本筆記：結論、第 1 節的表、第 17.0、17.10 節標明已答。PR 說明（repo 外 `wave4/pr-HM-30.md`）：「合併前要使用者決定」改成已答。
+- 計畫 §12.3 HM-30 已由主對話寫進同樣的定案（repo 外，本片沒改計畫）。
+- 沒改的：`reply_worker.py` 模組說明第 57 行（「HM-30 review 2 Q1, the user's to decide」）與 `tests/test_reply_worker.py` 幾處說明
+  （「until the user decides」）。交辦只列了文件；改說明字串就要動列管的程式、重算帳本，量過的程式也跟著變。行為不變（照舊只印不斷言），
+  交主對話決定要不要之後順手改（第 18.10 節）。
+
+### 18.7 本機檢查（2026-11-17，一般使用者 uid 1000；TMPDIR 用 `ha_env.sh` 給的 `/tmp/ha-mp-XXXXXX`，跑完用完整路徑刪除；pytest 都排在共用鎖後面）
+
+- pytest 除了全套與 `test_output_schemas.py`，都在 repo 外的複本跑（`git archive 815cc2f`，`.venv`、`apps/`、`packages/mcp-admin-ui` 連回
+  clone；`SP:hm30r5/bin/snap.sh`）。`815cc2f` 是 rebase 後的 head；之後的兩個 commit 只改文件，量過的程式就是最後的程式。
+- 一次取鎖（04:28～05:13；`SP:hm30r5/bin/session1.sh`，紀錄 `SP:hm30r5/logs/s1/`）。每次 pytest 一個程序。
+
+| 檢查 | 範圍 | 結果 |
+|---|---|---|
+| 本片 4 檔 | `test_reply_worker.py`、`test_health_tolerance.py`、`test_profile_runtime.py`、`test_request_budget_gateway.py` | **251 案全過**、0 skip、95.5 秒（147＋2＋65＋37；`test_reply_worker.py` 61.2 秒、`test_health_tolerance.py` 15.6 秒） |
+| 相關 28 檔（第 17.8 節同一組） | HM-31 預算與結構 3 檔、HM-14 的 5 檔＋`test_reply_mask_union.py`、HM-10 的 3 檔、`test_monitor_cancel.py`、HM-01 黃金回歸與兩個契約凍結、額度、路由、生命週期、健康退避、租約、後端錯誤、遮罩矩陣、錯開啟動、port、子程式資源、SSE 錯誤遮罩、Nextcloud 秘密 | **836 案全過**、0 skip、280 秒。HM-01 的三檔 45 案（17＋9＋19，三檔與 `tests/contract/` 沒改）；HM-31 的 3 檔 206 案（61＋83＋62）；`test_monitor_cancel.py` 13 案 |
+| HM-12 的 3 檔、HM-11 的面板形狀 | `test_odoo_identity_rotation.py`、`test_odoo_multi_profile.py`、`test_new_origin_secret.py`、`test_panel_profile_api_shapes.py` | **87 案全過**、9.5 秒（33＋3＋41＋10）。HM-12 的測試開著開關跑 `run_product`，回覆都經工作執行緒（第 18.4 節） |
+| `test_output_schemas.py`（在 clone 裡跑：它對 repo 跑 git） | | **189 案全過**、1.6 秒 |
+| 暫存區實驗 X12 | 3 案 | 全過（第 18.4 節） |
+| D1 真實 8 MiB 回覆 | 14 案＋短字串清單（只印），單獨 5 次 | 75 案次全過，第 18.8 節 |
+| D3 整段 | CPU 飢餓一案，單獨 5 次 | 5 次全過，第 18.8 節 |
+| 全套 pytest（clone，`packaging/unit.sh` 的同一組 pytest 指令，一般使用者；Chromium 是 clone 裡照 CI 裝的那份） | `pytest tests` | **6,211 案：6,204 過、7 紅、0 skip**，34 分 32 秒（程式是 `815cc2f` 的；跑的期間 clone 多了 `f27c7dd`，只改文件）。7 紅＝已知要 root 的既有案例（`test_owned_executable.py` 1、`test_profile_store.py` 1、`test_restore_detection.py` 的 5 個 `test_root_*`；訊息都是「需要 root」，uid 是 1000）；`packaging/check_results.py` 因這 7 案照預期 exit 1。2 個警告是既有的 websockets 棄用警告。本片的檔在大程序裡也都過（`test_reply_worker.py` 147 案 70.7 秒、`test_health_tolerance.py` 2 案 15.5 秒；量停頓的案例都在 50 ms 內）；HM-12 的 3 檔、HM-11 的面板形狀、`test_output_schemas.py`、HM-01 的三檔、HM-31 的 3 檔、`test_monitor_cancel.py` 也都過 |
+| `packaging/validate.py`（CI 的 venv） | | `PASS: 8 strict Supervisor-subset manifests, translations, pins, workflow policy and clearance shape` |
+| packaging unittest（離線暫存 venv：`uv sync --frozen --no-dev --offline`＋`requirements-ci.txt` 雜湊安裝） | `unittest discover -s packaging -p 'test_*.py'` | `Ran 203 tests`、`OK (skipped=5)`（5 個 `skipUnless(root)`，同基準） |
+| `scripts/tool_inventory.py` | | exit 0（沒動 `apps/runtime/*.py`、`apps/*/launch.py`，工具表面不用重產） |
+| 秘密預檢 | `.venv/bin/python -I scripts/secret_precheck.py --tools SP:hm01/gitleaks-tools --repo . --base origin/claude-delivery --head HEAD --full` | gitleaks 8.28.0（釘版、已驗）。HEAD `815cc2f`：`7646f0f..815cc2f` 34 個 commit＋HEAD 整棵樹＋整個歷史，**0 命中**。HEAD `f27c7dd`：35 個 commit＋HEAD 整棵樹＋整個歷史，**0 命中**。之後只有本 commit（只改本筆記） |
+| 帳本預檢 | `.venv/bin/python -I scripts/ledger_precheck.py --repo . --base origin/claude-delivery` | HEAD `815cc2f`：`runtime-patches.json` 177、`runtime-sources.json` 70、`tool-surface.json` 159 檔，0 漂移、0 缺；改到的列管檔 7 個（`access.py`、`config.py`、`gateway.py`、`profile_router.py`、`profile_runtime.py`、`reply_worker.py`、`run_product.py`）都有帳本更新；沒有沒列管的新執行檔；`redact.py` 照預期列成「沒列管、要人看」：**OK**。HEAD `f27c7dd` 同樣 OK（177／70／159 檔，0 漂移、0 缺）。之後只有本 commit（只改本筆記） |
+| 雙向控制字元、署名、身分 | `origin/claude-delivery..HEAD` 每個 commit：訊息，與它新增或改的每個檔在那個 commit 的全文（`SP:hm30r5/bin/bidi_check.py`） | HEAD `f27c7dd`：35 個 commit、74 個檔版本，**0 個**雙向控制字元（U+202A～202E、U+2066～2069）；commit 訊息沒有 AI 署名（沒有 Co-Authored-By、Generated with）；作者與 committer 都是 woowtech。英文標題、繁中內文 |
+| `git status`、暫存目錄 | | 只有還沒 commit 的本筆記。這一段用過的 17 個 `/tmp/ha-mp-*` 都已用完整路徑刪除（`SP:hm30r5/tmpdirs.txt`、`tmpdirs-deleted.txt`）；別的代理的暫存目錄沒動 |
+
+### 18.8 量停頓的測試（rebase 後的 head `815cc2f`，各單獨跑 5 次；門檻 50 ms、次數照舊，沒有重試）
+
+**D1 真實 8 MiB 回覆**（`test_a_real_8_mib_reply_is_the_loops_bytes_and_stops_the_loop_briefly` 14 案，加只印的短字串清單；每次一個 pytest
+程序；迴圈延遲探針每 2 ms 取樣；單位 ms）：
+
+| 形狀 | 工作執行緒那條路的迴圈最長停頓（單獨 5 次） | 本片 4 檔整檔那次 | 一筆的時間（單獨 5 次） | 同一筆在迴圈內處理 |
+|---|---|---|---|---|
+| mixed | 31.2、32.5、41.0、30.9、19.4 | 40.8 | 0.66～0.72 秒 | 253～347 |
+| 大量小物件 | 14.2、11.5、7.5、12.6、7.4 | 10.9 | 3.4～3.6 秒 | 864～961 |
+| CJK | 11.1、10.6、33.4、19.8、12.5 | 11.2 | 0.10～0.14 秒 | 67～71 |
+| emoji | 19.2、21.5、19.6、21.6、11.8 | 29.6 | 0.12～0.15 秒 | 83～94 |
+| 長 ASCII 字串 | 24.4、19.7、29.5、20.3、26.3 | 15.4 | 0.12～0.13 秒 | 62～68 |
+| 跳脫字元 | 18.8、24.3、42.3、**42.7**、25.0 | 26.7 | 0.09～0.12 秒 | 59～65 |
+| 64 層巢狀 | 9.2、12.6、12.7、8.9、7.8 | 5.6 | 1.5～1.9 秒 | 595～605 |
+| ID 清單 | 7.5、5.6、5.6、5.5、8.9 | 5.5 | 1.4～1.5 秒 | 267～314 |
+| 小整數 | 7.3、8.7、7.1、8.1、8.1 | 10.9 | 3.8～4.3 秒 | 724～757 |
+| `[[ts, 整數]]` | 7.6、9.2、7.3、5.7、7.3 | 7.0 | 2.4～2.9 秒 | 572～625 |
+| `[[ts, 浮點]]` | 10.9、6.1、5.8、8.0、6.7 | 7.3 | 2.6～3.0 秒 | 790～842 |
+| 浮點數 | 12.0、9.2、8.4、10.2、8.0 | 10.1 | 3.0～3.1 秒 | 984～1,020 |
+| mixed（事件） | 16.4、20.2、27.9、23.9、16.0 | 25.3 | 0.76～0.79 秒 | 285～300 |
+| emoji（事件） | 39.0、22.2、30.6、23.0、11.5 | 30.0 | 0.23～0.27 秒 | 140～143 |
+| 短字串清單（只印，Q1） | 94.6、98.5、92.8、97.0、90.0 | 81.8 | 1.8～2.2 秒 | 471～494 |
+
+- 斷言的 14 案：單獨 5 次 70 案次＋整檔 1 次 14 案，**全在 50 ms 內，0 次紅**。最高 42.7 ms，仍是跳脫字元多的長字串（解析端那一次 C 呼叫，
+  第 17.2 節）；離門檻約 7 ms。
+- 短字串清單照舊只印不斷言（使用者 Q1：接受，HM-19c 實測再定）：81.8～98.5 ms。
+- 上一輪（第 17.2、17.6 節）98 案次紅 1 次（浮點數 50.5 ms）；這次浮點數 8.0～12.0 ms。
+
+**D3 整段**（`test_another_profiles_large_replies_leave_the_loop_and_this_profile_their_pace`；整段＝讀取期間與處理期間的最大值；單位 ms）：
+
+| 次 | 整段最長 | 讀取期間 | 處理期間 | 注入成本一次 C 呼叫（校準） | B 的 p50／p99 |
+|---|---|---|---|---|---|
+| 1 | 31.2 | 31.2 | 18.2 | 10.0 | 276／309 |
+| 2 | 36.9 | 36.9 | 21.1 | 10.3 | 256／297 |
+| 3 | 33.3 | 33.3 | 25.5 | 5.7 | 147／323 |
+| 4 | 36.0 | 36.0 | 16.1 | 9.2 | 243／300 |
+| 5 | 29.3 | 29.3 | 15.9 | 9.8 | 239／299 |
+| 本片 4 檔整檔那次 | 39.5 | 39.5 | 17.5 | 7.2 | 273／319 |
+
+- **6 次都綠**：整段最長 29.3～39.5 ms，最長的都在讀取期間（32 個請求同時進來時閘道的請求端工作，第 17.6 節；Q4 的範圍）；處理期間
+  15.9～25.5 ms；B 的 p99 297～323 ms（≤0.7 秒）。注入成本的校準在機器忙時偏短（第 3 次 5.7 ms），照舊記下。
+- 上一輪 11 次紅 1 次（63.3 ms，讀取期間）；這次 0 次。
+- 本機是多個代理共用的 EPYC 7713（這段期間 load average 約 20～37，`SP:hm30r5/logs/s1/session.log` 每次都記）。
+- **門檻、次數都沒改，沒有重試**。照使用者 2026-11-17 的定案：CI 紅了先由主對話回報使用者，不放寬門檻、不加重試；要不要改成「超過再量
+  一次」等 CI 有數字再問。
+
+### 18.9 commit 對照
+
+rebase 過來的 34 個（第 1～17 節寫的是左欄的編號；內容見第 16.13、17.10 節）：
+
+| rebase 前 | 現在 | range-diff | rebase 前 | 現在 | range-diff |
+|---|---|---|---|---|---|
+| `15bc2a3` | `f4271f9` | 有衝突 | `6601e9b` | `5b6e66c` | 相同 |
+| `e83889d` | `c7ff421` | 有衝突 | `086159f` | `b919f7b` | 只差上下文 |
+| `c2c764d` | `cfd8288` | 相同 | `ebc15a2` | `850340d` | 相同 |
+| `307f998` | `9e0df89` | 有衝突 | `85324e8` | `3caa49c` | 有衝突 |
+| `b6a2c85` | `2e75428` | 相同 | `179a080` | `e46d3a4` | 相同 |
+| `2dc496e` | `ddb92fd` | 相同 | `5f61a94` | `d080a8d` | 有衝突 |
+| `4382ac8` | `48850f1` | 有衝突 | `cb93e08` | `2f615cb` | 相同 |
+| `bcd0628` | `1f7b905` | 相同 | `9f1facc` | `fa13613` | 相同 |
+| `22409db` | `896f694` | 相同 | `f548912` | `586e423` | 有衝突 |
+| `d5f2e03` | `779fbeb` | 有衝突 | `d853c3e` | `612c19f` | 相同 |
+| `dfd0766` | `f14ceeb` | 相同 | `37160d6` | `3f0fa99` | 相同 |
+| `a4c42a5` | `2ff8d77` | 相同 | `fb0b0e6` | `14d00cc` | 相同 |
+| `773014a` | `7582ca9` | 相同 | `a02b108` | `4305c80` | 相同 |
+| `360efd0` | `abfd9d8` | 相同 | `a22a97f` | `c28fff0` | 相同 |
+| `52926ae` | `3261b95` | 有衝突 | `9331fe1` | `07cfce2` | 有衝突 |
+| `dd1098f` | `da6f6dc` | 相同 | `9fa8f89` | `0c06236` | 只差上下文 |
+| `6481f7f` | `a5e9902` | 相同 | `2a74494` | `815cc2f` | 相同 |
+
+rebase 之後加的：
+
+| commit | 內容 |
+|---|---|
+| `f27c7dd` | 文件：契約、威脅模型、`decisions.md`、驗收表（使用者對 Q1、Q2、Q4 的定案；量測表補 rebase 後的數字；契約第 10 節、`decisions.md` 變更紀錄各一列） |
+| 最後一個 | 本筆記：第 18 節，與結論、第 1、17.0、17.10 節的更新 |
+
+### 18.10 交給後面的片與主對話
+
+- **主對話**：
+  - CI 紅了先看是不是量停頓的兩個測試（D1 真實回覆、D3 整段）。照使用者 2026-11-17 的定案先回報使用者，不放寬門檻、不加重試。
+  - `checks` 秒數：CI 跑完再補（PR 說明最後一行）。
+  - `reply_worker.py` 模組說明第 57 行與 `tests/test_reply_worker.py` 幾處說明仍寫 Q1「待使用者決定」（第 18.6 節）。行為就是使用者定的
+    「只印不斷言、HM-19c 實測再定」；要不要之後順手改說明字串（要重算 `reply_worker.py` 的帳本），由主對話決定。
+  - 開 PR 時 `claude-delivery` 是 `7646f0f`。之後若別的片先合併（HM-12 面板、HM-13c、HM-32 等），後合的那片 rebase 時和本片會碰到的地方：
+    契約第 9 節說明段與第 10 節、`decisions.md` 第 1.1 節與變更紀錄、威脅模型狀態行、帳本（`gateway.py`、`profile_runtime.py`、`config.py`
+    的說明尾端）、`make_apps` 參數順序的兩個測試（`test_request_budget_gateway.py`、`test_profile_runtime.py`；本片的 `reply_worker` 現在
+    是最後一個參數）。
+- **HM-19c**：清單照第 16.14、17.10 節。Q1、Q2、Q4 都是「HM-19c 實測再定」，都已在清單裡：沒有物件也沒有數字的陣列（短字串、空陣列）的
+  停頓（Q1）、真實回覆時 B 的 p95（Q2）、請求端一個大請求的停頓（Q4）。超標時的選項寫在第 18.6 節與 `decisions.md` 第 1.1 節。
+- **HM-18**：照第 16.14、17.10 節。
+- **HM-12 交來的事**：換身分與工作執行緒、待送回覆額度、名額之間沒有要後面的片處理的事（第 18.4 節）。
