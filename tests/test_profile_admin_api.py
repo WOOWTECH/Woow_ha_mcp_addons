@@ -33,7 +33,7 @@ import pytest
 from admin_write_headers import reviewed_headers
 from log_scan import log_scan  # noqa: F401  (fixture)
 from multi_profile_runtime import Children, create_profile, ids, multi_profile_runtime, stored
-from mcp_admin_core import profiles
+from mcp_admin_core import owner_defaults, profiles
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.configuration import ConfigurationState
 from mcp_admin_core.products import PROBES, ProductStore
@@ -49,6 +49,8 @@ NEW_LABELS = ('Kappa Desk', 'Lambda Desk', 'Mu Desk', 'Nu Desk', 'Xi Desk', 'Omi
 SECOND_ADMIN = {'X-Remote-User-Id': 'golden-admin-two'}
 ROW = ['id', 'label', 'port', 'is_default', 'disabled_reason', 'status', 'blocked_reason']
 STATE_UNAVAILABLE = (503, b'{"error":"state unavailable"}')
+REFUSED = (403, b'{"error":"request denied"}')
+FIXTURES = Path(__file__).parent / 'fixtures' / 'owner_defaults'
 
 
 def admin_module():
@@ -178,6 +180,17 @@ def tree_of(data):
 def index_bytes(data):
     path = profiles.Layout(Path(data)).index
     return path.read_bytes() if path.exists() else None
+
+
+def replace_index(data):
+    """The index replaced behind the add-on's back (its bytes in a new file): unusable until a restart (DQ-12), so
+    only the index quarantine takes it. Returns the bytes."""
+    path = profiles.Layout(Path(data)).index
+    raw = path.read_bytes()
+    path.unlink()
+    path.write_bytes(raw)
+    path.chmod(0o600)
+    return raw
 
 
 def monitor_of(manager, profile_id):
@@ -331,19 +344,27 @@ async def test_every_answer_of_a_profile_names_it(tmp_path, log_scan):
 async def test_the_endpoint_and_the_owner_defaults_notice_are_the_default_profiles(tmp_path, log_scan):
     """DQ-13: the add-on has one endpoint, stored in the default profile's state; an additional profile's bootstrap
     shows it, its PUT endpoint is 409 endpoint_global and changes nothing. FM-08: an additional profile has no
-    owner-defaults notice; its restore and dismiss are 409 owner_defaults_unavailable (shape C)."""
+    owner-defaults notice whatever its directory holds: here the one-time migration's marker and recovery record (a
+    copied or restored directory; the control: its state would show the notice and offer the restore); its bootstrap
+    has none, its restore and dismiss are 409 owner_defaults_unavailable (shape C) and change nothing (HM-10 review
+    MF-1 (3))."""
     data = setup(tmp_path, extras=(B,))
+    directory = profiles.Layout(data).profile(B)
+    (directory / 'state.json').write_text((FIXTURES / 'schema3-odoo-v0.1.14-max.json').read_text())
+    (directory / 'state.json').chmod(0o600)
+    assert owner_defaults.apply_legacy_upgrade(directory, PRODUCT) is not None  # the marker, the recovery record
     endpoint = 'https://ha.invalid/mcp'
     async with multi_profile_runtime(PRODUCT, data, children=children_of(data)) as runtime:
         await settle(runtime, 'configured')
         watch(log_scan, data)
+        notice = owner_defaults.view(runtime.manager.get(B).store.load(), directory)
+        assert notice['notice'] is True and notice['recovery'] == 'available' and notice['restore']['available']
         async with runtime.admin() as admin:
             boot = (await admin.get('/api/bootstrap', headers=ADMIN)).json()
             saved = await admin.put('/api/endpoint', json={'endpoint': endpoint}, headers=reviewed_headers(boot, ADMIN))
             assert saved.status_code == 200 and saved.json()['profile'] == {'id': 'default'}
         assert stored(data)['endpoint'] == endpoint
-        directory = profiles.Layout(data).profile(B)
-        before = (directory / 'state.json').read_bytes()
+        before = {name: (directory / name).read_bytes() for name in ('state.json', owner_defaults.OWNER_RECOVERY)}
         async with runtime.admin(B) as admin:
             boot = (await admin.get('/api/bootstrap', headers=ADMIN)).json()
             assert boot['endpoint'] == endpoint and 'owner_defaults' not in boot
@@ -356,7 +377,7 @@ async def test_the_endpoint_and_the_owner_defaults_notice_are_the_default_profil
                 assert answered.status_code == 409 and answered.json() == {
                     'error': 'owner_defaults_unavailable', 'detail': {'code': 'owner_defaults_unavailable'},
                     'profile': {'id': B}}
-        assert (directory / 'state.json').read_bytes() == before
+        assert {name: (directory / name).read_bytes() for name in before} == before
 
 
 # ---- X-MCP-Profile (contract 3.3; DQ-17; §8.8 #31, #32, #83; I12) ----
@@ -365,7 +386,9 @@ async def test_a_profile_scoped_request_names_exactly_one_known_profile(tmp_path
     """Switched on, every profile-scoped request names its profile: none is 400 profile_id_required, two or one that is
     neither default nor 24 lowercase hex 400 profile_id_invalid, one the index does not list (an orphan, a deleted one,
     any other) 404 profile_not_found, an indexed one the add-on could not open 503 state unavailable; never the default
-    profile instead (no token revealed). Global paths and pages never read it. No path fallback (UC-10)."""
+    profile instead (no token revealed). Global paths and pages never read it. No path fallback (UC-10). A profile
+    whose directory is replaced while the add-on runs (a copy put in its place: HM-07 review S-08, the management side;
+    HM-10 review MF-1 (4)) is 503 state unavailable too: nothing is read from or told about the copy."""
     data = setup(tmp_path, extras=(B, C))
     create_profile(data, PRODUCT, D, label=LABELS[D], port=18002, indexed=False)  # an orphan
     shutil.rmtree(profiles.Layout(data).profile(C))  # C: indexed, its directory gone
@@ -401,6 +424,13 @@ async def test_a_profile_scoped_request_names_exactly_one_known_profile(tmp_path
             assert (await client.get('/', headers={**ADMIN, 'X-MCP-Profile': 'bogus'})).status_code == 200
             fallback = await client.get(f'/api/p/{B}/bootstrap', headers={**ADMIN, 'X-MCP-Profile': 'default'})
             assert (fallback.status_code, fallback.content) == (404, b'')
+            directory = profiles.Layout(data).profile(B)
+            assert (await client.get('/api/bootstrap', headers={**ADMIN, 'X-MCP-Profile': B})).status_code == 200
+            os.rename(directory, tmp_path / 'moved')
+            shutil.copytree(tmp_path / 'moved', directory, symlinks=True)  # the same files, another directory
+            for method, path in (('GET', '/api/bootstrap'), ('POST', '/api/token/reveal')):
+                replaced = await client.request(method, path, headers={**write, 'X-MCP-Profile': B})
+                assert (replaced.status_code, replaced.content) == STATE_UNAVAILABLE, path
         assert stored(data)['token'] is not None and stored(profiles.Layout(data).profile(B))['token'] is not None
 
 
@@ -912,6 +942,43 @@ async def test_a_save_waiting_for_a_deleted_profiles_lock_changes_nothing(tmp_pa
         assert listed['orphans'] == [{'id': B}] and [row['id'] for row in listed['profiles']] == ['default']
 
 
+async def test_a_deletion_never_writes_over_an_index_changed_meanwhile(tmp_path, log_scan, monkeypatch):
+    """HM-07 review checklist 9 (every index write passes the view the manager holds, never a fresh read) and DQ-12
+    (HM-10 review MF-1 (5)): a deletion waits once between taking its view and writing the index, while the profile's
+    child stops. The index replaced there behind the add-on's back (its bytes in a new file): the write is refused,
+    409 operation_outcome_unknown; the changed file is never written over; 8081 is 503 for every token until a
+    restart. The profile stays revoked, wiped and unserved (in the index: deletable again after the restart)."""
+    data = setup(tmp_path, extras=(B, C))
+    layout = profiles.Layout(data)
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data, (B, C))) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        manager = runtime.manager
+        panel = Panel(runtime, await csrf_of(runtime))
+        etag = await panel.etag()
+        removing, replaced = manager.remove, {}
+
+        async def remove(profile_id):
+            replaced['bytes'] = replace_index(data)  # while B's child stops
+            replaced['inode'] = layout.index.stat().st_ino
+            await removing(profile_id)
+        monkeypatch.setattr(manager, 'remove', remove)
+        deleted = await panel.delete(B, etag=etag)
+        assert (deleted.status_code, code_of(deleted)) == (409, 'operation_outcome_unknown'), deleted.content
+        assert (layout.index.read_bytes(), layout.index.stat().st_ino) == (replaced['bytes'], replaced['inode'])
+        assert [item.id for item in profiles.read_index(layout.index).entries] == [B, C]
+        assert manager.get(B) is None and layout.profile(B).is_dir()
+        assert (stored(layout.profile(B))['token'], stored(layout.profile(B))['connection']) == (None, None)
+        async with runtime.mcp() as client:
+            for profile_id in ('default', C):
+                response = await client.post('/mcp', headers={
+                    **ACCEPT, 'Authorization': 'Bearer ' + runtime.token(profile_id)}, json=initialize_message())
+                assert (response.status_code, response.content) == STATE_UNAVAILABLE, profile_id
+        async with panel.client() as client:
+            listed = await client.get('/api/profiles', headers=ADMIN)
+        assert (listed.status_code, code_of(listed)) == (503, 'profile_index_corrupt')
+
+
 async def test_an_orphan_and_an_unavailable_profile_can_be_deleted(tmp_path, log_scan):
     """DQ-14: an orphan (a profile directory the index does not list) is listed and deleted only when asked: revoked,
     wiped, removed; an indexed profile whose state cannot be read (profile_unavailable) is unindexed and removed."""
@@ -1007,10 +1074,7 @@ async def test_quarantining_an_unusable_index_serves_the_default_profile_again(t
         await settle(runtime, 'configured')
         watch(log_scan, data)
         if damage == 'replaced':
-            raw = layout.index.read_bytes()
-            layout.index.unlink()
-            layout.index.write_bytes(raw)
-            layout.index.chmod(0o600)
+            replace_index(data)
         raw = layout.index.read_bytes()
         default_token = runtime.token('default')
         async with runtime.mcp() as client:
@@ -1094,6 +1158,96 @@ async def test_there_is_nothing_to_quarantine_without_an_index_file(tmp_path, lo
         assert tree_of(data) == before and not (data / '.profiles.json.operations.json').exists()
 
 
+async def test_the_index_quarantine_holds_every_profiles_own_lock(tmp_path, log_scan, monkeypatch):
+    """HM-10 review S-1: after the add-on's profile lock, the index quarantine takes every registered additional
+    profile's own lock, in id order, each waited for at most 2 s (here 0.1 s: 503, nothing revoked, moved or
+    recorded), and only then its final role check; it holds them until each profile is unregistered. A token rotation
+    of C already under way (past its own final role check, its If-Match taken before the quarantine) is therefore done
+    first and then revoked: from the moment the index is moved aside (8081 serves the default profile again at once),
+    no token of a profile directory is routed, the rotated one included, even while the quarantine still unregisters
+    the profile before C."""
+    data = setup(tmp_path, extras=(B, C))
+    layout = profiles.Layout(data)
+    second = SECOND_ADMIN['X-Remote-User-Id']
+    pause, paused, gate = {'at': None, 'calls': 0}, asyncio.Event(), asyncio.Event()
+
+    async def verifier(user):
+        if user == second:
+            pause['calls'] += 1
+            if pause['calls'] == pause['at']:  # C's rotation in its final role check: C's lock held, its state read
+                paused.set()
+                await gate.wait()
+        return await administrators(user)
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data, (B, C)), verifier=verifier) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        manager = runtime.manager
+        b_lock, c_lock = (manager.get(profile_id).runtime.mutation_lock for profile_id in (B, C))
+        tokens = {profile_id: runtime.token(profile_id) for profile_id in ('default', B, C)}
+        panel = Panel(runtime, await csrf_of(runtime))
+        removing, in_b, hold_b, held = manager.remove, asyncio.Event(), asyncio.Event(), {}
+
+        async def remove(profile_id):
+            held[profile_id] = manager.get(profile_id).runtime.mutation_lock.locked()  # still the quarantine's
+            if profile_id == B:  # unregistered first (id order): held open, as a child's stop takes its time
+                in_b.set()
+                await asyncio.wait_for(hold_b.wait(), 10)
+            await removing(profile_id)
+        rotating, rotate, quarantine = runtime.admin(C), None, None
+        try:
+            c_boot = (await rotating.get('/api/bootstrap', headers=SECOND_ADMIN)).json()
+            pause['at'] = pause['calls'] + 2  # the dispatcher's role check, then the action's final one
+            rotate = asyncio.create_task(rotating.post('/api/token/rotate',
+                                                       headers=reviewed_headers(c_boot, SECOND_ADMIN)))
+            await asyncio.wait_for(paused.wait(), 5)
+            replace_index(data)  # unusable (DQ-12): only the quarantine helps
+            async with runtime.admin() as admin:
+                index_etag = (await admin.get('/api/bootstrap', headers=ADMIN)).json()['profile_index_etag']
+            before = tree_of(data)
+            monkeypatch.setattr(admin_module(), 'LOCK_SECONDS', 0.1)
+            busy = await asyncio.wait_for(panel.quarantine(index_etag), 5)
+            assert (busy.status_code, busy.content) == (503, b'{"error":"request denied"}')
+            assert tree_of(data) == before and not b_lock.locked() and None not in (manager.get(B), manager.get(C))
+            monkeypatch.setattr(admin_module(), 'LOCK_SECONDS', 2)
+            monkeypatch.setattr(manager, 'remove', remove)
+            quarantine = asyncio.create_task(panel.quarantine(index_etag))
+            async with asyncio.timeout(5):
+                while not (c_lock._waiters or in_b.is_set()):
+                    await asyncio.sleep(.01)
+            assert not in_b.is_set() and b_lock.locked() and tree_of(data) == before  # waiting for C's lock
+            gate.set()
+            rotated = await asyncio.wait_for(rotate, 5)
+            assert rotated.status_code == 200 and rotated.json()['profile'] == {'id': C}, rotated.content
+            new = rotated.json()['token']
+            log_scan.watch(new)
+            assert new != tokens[C]
+            await asyncio.wait_for(in_b.wait(), 5)  # moved aside and adopted; B being unregistered, C next
+            assert not layout.index.exists() and manager.get(C) is not None
+            async with runtime.mcp() as client:
+                for token in (tokens['default'], tokens[B], tokens[C], new):
+                    response = await client.post('/mcp', headers={**ACCEPT, 'Authorization': 'Bearer ' + token},
+                                                 json=initialize_message())
+                    if token == tokens['default']:
+                        assert response.status_code == 200
+                    else:
+                        assert answer(response) == BEARER_REQUIRED
+            hold_b.set()
+            done = await asyncio.wait_for(quarantine, 5)
+            assert done.status_code == 200, done.content
+            assert held == {B: True, C: True}  # each profile's own lock held until it is unregistered
+        finally:
+            gate.set()
+            hold_b.set()
+            running = [task for task in (rotate, quarantine) if task is not None and not task.done()]
+            if running:
+                await asyncio.wait(running, timeout=10)  # a failed run ends here, never hangs
+            await rotating.aclose()
+        assert all(stored(layout.profile(profile_id))['token'] is None for profile_id in (B, C))
+        assert manager.get(B) is None and manager.get(C) is None
+        listed = (await panel.list())[0]
+        assert [row['id'] for row in listed['profiles']] == ['default'] and listed['orphans'] == [{'id': B}, {'id': C}]
+
+
 def test_a_profile_directory_is_removed_without_following_a_link(tmp_path):
     """The last step of a deletion (plan 4.4): the profile's directory and all it holds go, a link inside it removed,
     never followed; a link at the profile's own name, or a profiles directory replaced by a link, is never followed
@@ -1124,35 +1278,56 @@ def test_a_profile_directory_is_removed_without_following_a_link(tmp_path):
 
 async def test_the_second_role_check_comes_after_every_wait_and_before_any_change(tmp_path, log_scan):
     """Step 10: a role taken away while a request waits (after the first check) refuses it there: 403, nothing
-    created, renamed or deleted."""
-    data = setup(tmp_path, extras=(B,))
+    created, renamed, deleted or quarantined, no token revoked, no receipt. Every wait counts (HM-10 review MF-1 (1),
+    (2), S-1): the add-on's profile lock (a creation, a rename, a deletion, the index quarantine), the deleted
+    profile's own lock, and every profile's own lock the quarantine takes. The list, which waits for nothing, asks the
+    role twice as well (steps 6 and 10)."""
+    data = setup(tmp_path, extras=(B, C))
     asked = []
 
     async def changing(user):
         asked.append(user)
         return user == ADMIN['X-Remote-User-Id'] and not removed.is_set()
     removed = asyncio.Event()
-    async with multi_profile_runtime(PRODUCT, data, children=children_of(data), verifier=changing) as runtime:
-        await settle(runtime, 'configured')
-        watch(log_scan, data)
-        panel = Panel(runtime, await csrf_of(runtime))
-        etag = await panel.etag()
-        before = tree_of(data)
-        lock = runtime.manager.admin.lock
-        for request in (lambda: panel.create(NEW_LABELS[0], etag=etag), lambda: panel.rename(B, 'Beta X', etag=etag),
-                        lambda: panel.delete(B, etag=etag)):
-            removed.clear()
-            await lock.acquire()
+
+    async def refused_while_held(lock, request):
+        removed.clear()
+        await lock.acquire()
+        try:
             task = asyncio.create_task(request())
             count = len(asked)
             async with asyncio.timeout(5):
                 while len(asked) == count:  # the first role check has answered: the request waits for the lock
                     await asyncio.sleep(.01)
             removed.set()
+        finally:
             lock.release()
-            response = await task
-            assert (response.status_code, response.content) == (403, b'{"error":"request denied"}')
+        response = await asyncio.wait_for(task, 10)
+        assert (response.status_code, response.content) == REFUSED
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data, (B, C)), verifier=changing) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        manager = runtime.manager
+        panel = Panel(runtime, await csrf_of(runtime))
+        count = len(asked)
+        etag = await panel.etag()
+        assert asked[count:] == [ADMIN['X-Remote-User-Id']] * 2  # the list: the first role check and the final one
+        before = tree_of(data)
+        b_lock = manager.get(B).runtime.mutation_lock
+        for lock, request in ((manager.admin.lock, lambda: panel.create(NEW_LABELS[0], etag=etag)),
+                              (manager.admin.lock, lambda: panel.rename(B, 'Beta X', etag=etag)),
+                              (manager.admin.lock, lambda: panel.delete(B, etag=etag)),
+                              (b_lock, lambda: panel.delete(B, etag=etag))):
+            await refused_while_held(lock, request)
         assert tree_of(data) == before
+        replace_index(data)  # unusable (DQ-12): the quarantine takes it
+        removed.clear()
+        async with runtime.admin() as admin:
+            index_etag = (await admin.get('/api/bootstrap', headers=ADMIN)).json()['profile_index_etag']
+        before = tree_of(data)
+        for lock in (manager.admin.lock, b_lock, manager.get(C).runtime.mutation_lock):
+            await refused_while_held(lock, lambda: panel.quarantine(index_etag))
+        assert tree_of(data) == before and None not in (manager.get(B), manager.get(C))
 
 
 # ---- a profile's own actions (T-07; FM-47; PaaS test_profile_b_restart_completes_while_profile_a_drains) ----
