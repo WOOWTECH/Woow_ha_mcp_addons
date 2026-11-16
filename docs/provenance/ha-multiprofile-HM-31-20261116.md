@@ -1,14 +1,19 @@
-# HA 多帳號 HM-31 provenance：對齊 PaaS #155，閘道請求內容位元組預算與 JSON 結構守門（所有產品生效）（2026-11-16）
+# HA 多帳號 HM-31 provenance：對齊 PaaS #155，閘道請求內容位元組預算與 JSON 結構守門（所有產品生效）（2026-11-16；審查修正、rebase 到 claude-delivery）
 
 ## 結論
 
+- **rebase 到 `claude-delivery` `d00a338`（2026-11-16，第 17 節）**：本片 13 個 commit 照原順序重放（`rebase --onto … 351666f`），另加 8 個與本筆記這次的 1 個。
+  - 衝突在 6 個 commit。程式的衝突兩邊都留：HM-09、HM-10 的參數、說明與檢查在前，本片的在後；HM-14、HM-10、HM-09 最終版的行為都在，本片的也都在（第 17.2、17.3 節）。
+  - 審查 S-6 後半做完：`request_budget` 改用 HM-09 的 `profiles.memory_limit_mib`、`available_memory_mib`，行為等價，先寫測試釘住（第 17.5 節）。
+  - 契約第 9 節本片的列改成 #101～#108；帳本以 `claude-delivery` 為底重算（第 17.4、17.7 節）。
+  - 主對話 2026-11-16 的四點定案寫進契約、威脅模型與 `decisions.md`（第 17.6 節）。本機檢查、突變、預檢見第 17.9～17.11 節。
 - **獨立安全審查（2026-11-16）：修正後通過，必修 3 項都已處理**（第 16 節逐項）。
   - MF-1：同時帶 `Content-Length` 與 `Transfer-Encoding: chunked` 的請求，以前能繞過位元組預算與 30 秒閒置（h11 照 chunked 讀，閘道卻照宣告值扣）。
     現在帶 `Transfer-Encoding` 時 `Content-Length` 不算宣告（RFC 9112 §6.3），收到的位元組不管宣告多少都照數；開關關與開都改，准入滿時的讀取用同一條規則（S-6）。
   - MF-2：契約與威脅模型的記憶體上界改成 HA 閘道的實測值（自己就到扣款的 14 倍與 27.6 倍），全域最壞記憶體改用本片的公式，寫明 HM-19c 的放行條件；
     那個 2 GiB 測試改名。數值不改，等 HM-19c。
   - MF-3：宣告超過 16 MiB 的請求改在讀之前回今天的 413（不扣、不再變成可重試的 `-32003`）。
-  - 建議 6 項：S-2、S-4 採用；S-1、S-3、S-5 寫進文件並交 HM-19c（S-1 的公式要不要改交主對話）；S-6 前半採用、後半留到 rebase 到 HM-09 之後。
+  - 建議 6 項：S-2、S-4 採用；S-1、S-3、S-5 寫進文件並交 HM-19c（S-1 主對話 2026-11-16 定案交 HM-19c）；S-6 前半採用、後半在 rebase 後做完（第 17.5 節）。
   - 審查後新增與改過的測試：在 `7ee84eb` 的程式上 9 案先紅；修正後全過；臨時突變 10 個全部擋下（第 6.3、6.4 節）。
 - **對齊 PaaS #155（woow-mcp-server `d7f5849`），所有產品都生效（不受開關管）**：使用者 2026-11-16 07:1x 決定。開關關時，只有超過上限的
   請求回應改變（第 8 節逐項）；上限內的請求逐位元照舊，HM-01 的黃金回歸與兩個契約凍結斷言一個字都沒改（第 7 節逐組核對）。
@@ -26,10 +31,10 @@
   **先寫測試**：在 `351666f` 的程式上新與改過的測試先紅：新 3 檔當時的 141 案有 138 案失敗、之後加的 8 個產品案 8 案全失敗，改過的 5 檔 20 案失敗（第 6.1 節）。臨時突變 20 個全部擋下（第 6.2 節）。
   審查後補的測試在 `7ee84eb` 的程式上 9 案先紅、突變 10 個全部擋下（第 6.3、6.4 節）。
   PaaS 5 個測試檔 84 個案例逐案對照（第 5 節：78 案有對應，6 案不適用並寫理由）。
-- **本機檢查**（第 9 節）：全套 pytest 5,567 案，5,538 通過、29 失敗、0 skip；失敗的是 22 個瀏覽器測試（當時沒裝 Chromium）與 7 個要 root 的既有案例。
+- **本機檢查**（rebase 前，第 9 節）：全套 pytest 5,567 案，5,538 通過、29 失敗、0 skip；失敗的是 22 個瀏覽器測試（當時沒裝 Chromium）與 7 個要 root 的既有案例。rebase 後見第 17.9 節。
   packaging unittest `Ran 201`、`OK (skipped=5)`；validate、tool_inventory 過。以 CI 為準。
-- **兩個預檢**：秘密預檢 0 命中、帳本預檢 OK（第 13 節）。
-- **還沒做**：rebase 到 `claude-delivery`（HM-14 合併後，第 15 節列出預期的衝突）；開 PR 後補 `checks` 秒數；第 12 節最後交主對話的兩題。
+- **兩個預檢**：秘密預檢 0 命中、帳本預檢 OK（rebase 前第 13 節；rebase 後第 17.11 節）。
+- **還沒做**：開 PR 後補 `checks` 秒數。rebase、S-6 後半與交主對話的題目都已處理（第 17 節）。
 
 ## 1. 範圍與基準
 
@@ -37,7 +42,7 @@
 |---|---|
 | 切片 | HM-31（計畫 §12.3，2026-11-16 新增；風險高、工作量 M；要獨立安全審查） |
 | 分支 | `feat/ha-multiprofile-hm31-20261116`（一般 clone，不是 worktree） |
-| 基準 | `351666f`（HM-14 的修正 head：`claude-delivery` 的 HM-08 合併點 `b5d10c5`＋HM-14 的 10 個 commit）。`claude-delivery` 之後的 #100、HM-09（#101）、HM-20、HM-14 本身都不在本分支；主對話在 HM-14 合併後 rebase（gateway.py 的順序 HM-14 → HM-31；和 HM-30 誰後合誰 rebase） |
+| 基準 | rebase 後：`claude-delivery` `d00a338`（PR #100、HM-09 PR #101、HM-20 PR #102、HM-14 PR #103、HM-10 PR #104 都已合併；第 17 節）。rebase 前：`351666f`（HM-14 的修正 head：`claude-delivery` 的 HM-08 合併點 `b5d10c5`＋HM-14 的 10 個 commit）。`claude-delivery` 之後的 #100、HM-09（#101）、HM-20、HM-14 本身都不在本分支；主對話在 HM-14 合併後 rebase（gateway.py 的順序 HM-14 → HM-31；和 HM-30 誰後合誰 rebase） |
 | 依據 | 計畫 §12.3 HM-31、§5.1、§5.2；契約第 1.2、2、4.2、5、9 節；威脅模型 I8；HM-08、HM-14 的 provenance 筆記與審查報告（`artifacts/…/wave3/review-HM-08.md`、`wave4/review-HM-14.md`）；本片的獨立審查（`wave4/review-HM-31.md`，第 16 節）；決策見第 12 節 |
 | 對齊的 PaaS | `woow-mcp-server` main `d7f5849`（#155：`7ba572d`、`3b135ca`、`e6971c0`、`1637a0f`、`a2f8905`）：`request_budget.py`、`request_limits.py`、`request_body.py`、`proxy.py`、`app.py`、`gateway_pool.py`、`profiles.py`、`docs/mcp-gateway-limits.md` 與 5 個測試檔、9 個產品的 `test_request_structure_guard.py`。本機唯讀 PaaS repo（沒 fetch、沒 checkout；`origin/main`＝`d7f5849`） |
 | 移植的 PaaS 程式 | `request_limits.py` 的 `structure_violation`、`not_utf8`、`NOT_UTF8_REASON`、`DEFAULT_MAX_TOTAL_ELEMENTS`、`DEFAULT_MAX_DEPTH`、`_RUN_THEN_STRUCTURE`，`request_body.py` 的 `_request_id` 與四個正規表示式（HA：`head_tail_id`）、`too_complex` 的訊息：照搬，正規表示式逐位元相同（本機用 PaaS 原始碼 `exec` 比對過）。`request_budget.py` 的公式、常數與訊息照 PaaS；類別與 ASGI 接線是 HA 自己寫的（HA 的閘道不是 FastAPI proxy） |
@@ -46,7 +51,7 @@
 
 | 檔 | 內容 |
 |---|---|
-| `Hc/request_budget.py`（新） | `RequestBudget`（全 add-on＋每帳號）、`Share`（份額＝min(cap, per_profile)）、`Reservation`（收到與轉送兩者較大的，超過 64 KiB 才扣；超過單筆上限不扣；`close` 歸還）、`BudgetLimits.derive`（cgroup → MemAvailable−256 → 32 MiB；帳號數依開關）、`memory_limit_mib`、`available_memory_mib`、`memory_ceiling`、`declared_length`（讀 ASGI 標頭；帶 `Transfer-Encoding` 時不算宣告：審查 MF-1）、`watch`（宣告長度先扣、收到的位元組一律邊讀邊數、閒置 30 秒）、`drain`（讀完丟掉、只留頭尾）、`budget_text`、`idle_text`、`budget_note`、`Reports`（從 `profile_router.py` 移來，logger 可指定）、`own_share`（沒開通的 add-on 自己的預算） |
+| `Hc/request_budget.py`（新） | `RequestBudget`（全 add-on＋每帳號）、`Share`（份額＝min(cap, per_profile)）、`Reservation`（收到與轉送兩者較大的，超過 64 KiB 才扣；超過單筆上限不扣；`close` 歸還）、`BudgetLimits.derive`（cgroup → MemAvailable−256 → 32 MiB；帳號數依開關）、`memory_limit_mib`、`available_memory_mib`、`memory_ceiling`（rebase 後兩個讀取函式拿掉，`memory_ceiling` 改用 `profiles` 的：審查 S-6 後半，第 17.5 節）、`declared_length`（讀 ASGI 標頭；帶 `Transfer-Encoding` 時不算宣告：審查 MF-1）、`watch`（宣告長度先扣、收到的位元組一律邊讀邊數、閒置 30 秒）、`drain`（讀完丟掉、只留頭尾）、`budget_text`、`idle_text`、`budget_note`、`Reports`（從 `profile_router.py` 移來，logger 可指定）、`own_share`（沒開通的 add-on 自己的預算） |
 | `Hc/request_limits.py` | 照搬 PaaS 的結構守門與 UTF-8 檢查、`head_tail_id`、`too_complex`；`RequestLimitError` 加 `kind`、`log_reason`；`McpRequestLimits` 加 `max_total_elements`、`structure_reason`、`check_structure`；`parse_and_check` 先跑 `check_structure`（n8n） |
 | `Hc/gateway.py` | `STRUCTURE_LIMITS`；`BODY_RESERVATION`（取代 HM-08 的 `FORWARDED_BODY`）；`AnyMethod(handler, budget)` 開關每個請求的預約；`json_body(request, guard)`；`idle_reply`；`make_apps(body_budget=…)`（沒給就 `own_share`）；`serve()`：token、方法、Origin、query 檢查之後才裝 `watch`，讀 body 的整段包住 `BudgetExceeded`（`over_budget`：宣告的讀完丟掉、從頭尾找 id）與 `BodyIdleTimeout`（408），結構守門與 n8n 的拒收經 `refused_body` 記 WARNING，標準路徑的 413 也記；轉送前 `reservation.forward(len(content))`；`authorize` 移到讀 body 的 try 外面（順序不變）；`body()`：宣告超過 `MAX_REQUEST`（沒有 `Transfer-Encoding`）讀之前就回今天的 413（審查 MF-3；8099 也經過它，回應不變） |
 | `Hc/profile_router.py` | `ProfileGate(profile_id, quota, budget, reports)`：不再自己算位元組（拿掉 counted_receive、cut、forwarding、busy_instead）、`budget_share`；准入滿時 `beyond_admission`（`read_small`、`small_message`、`replayed`；`beyond` 計數）；拿掉 `RefusalAllowance`、`REFUSAL_SLOTS`、`REFUSAL_BYTES`、`bytes_text`；`Reports` 改成 `request_budget.Reports` 的子類別（logger 仍是本模組的）；模組說明；審查 S-6：自己的 `declared_length` 拿掉，改用 `request_budget.declared_length` |
@@ -527,7 +532,7 @@ PQ 的 SSE 三案）；份額上限 64 MiB（RB `test_each_profiles_share_is_cap
 
 沒有碰到別的待定題。下面兩點是本片的判斷，請主對話確認（不是使用者定過的數值，也不是 DQ）：(1) 每帳號份額保留 DQ-07 的 64 MiB 當上限
 （不改數值，只限制 PaaS 的「全域÷2」不超過它）；(2) 整體讀取上限保留 HA 既有的 60 秒與今天的 408 形狀（PaaS 300 秒、-32003），只加 PaaS 的
-閒置 30 秒。要改成完全照 PaaS，兩處都是小改。獨立審查兩點都同意（審查報告第 7 節第 2 點）。
+閒置 30 秒。要改成完全照 PaaS，兩處都是小改。獨立審查兩點都同意（審查報告第 7 節第 2 點）。主對話 2026-11-16 定案：兩點都照本片的做法（第 17.6 節）。
 
 審查修正沒有用到新的決定，也沒有改 DQ-07 或使用者定過的任何數值。審查後留給主對話的兩題（都不擋本片）：
 
@@ -536,6 +541,9 @@ PQ 的 SSE 三案）；份額上限 64 MiB（RB `test_each_profiles_share_is_cap
 2. MF-1 的選做：同時帶 `Content-Length` 與 `Transfer-Encoding` 的請求要不要直接回 400 並關連線（RFC 9112 §6.1 允許拒絕，並要求回應後關連線；
    h11 0.16.0 照 chunked 讀、連線不關）。會改單帳號回應（今天照 chunked 處理），要列進契約第 1.2 節與 CHANGELOG。本片照 RFC 9112 §6.3 處理、
    不拒絕。
+
+主對話 2026-11-16 定案（計畫 §12.3 HM-31 的註；第 17.6 節）：S-1 交 HM-19c，量測後一起定；CL＋TE 直接回 400 不在本片做，列入已知限制與 HM-29
+回補 PaaS 的題目。兩點都寫進契約（第 5 節、#108）、威脅模型第 3 節與 `decisions.md` 第 1.1 節。
 
 ## 13. 預檢結果
 
@@ -567,26 +575,15 @@ PQ 的 SSE 三案）；份額上限 64 MiB（RB `test_each_profiles_share_is_cap
 
 ## 15. 還沒解決、交給後面的片
 
-- **獨立安全審查**：做了（修正後通過；第 16 節）。留給主對話的兩題見第 12 節最後（S-1 的公式、CL＋TE 要不要回 400）。
-- **rebase 到 `claude-delivery`**（HM-14 合併後；主對話做）。預期的衝突：
-  - `gateway.py`：HM-09 在 `make_apps` 簽章加了 `child_blocked`，本片加 `body_budget`（同一行附近）；HM-14 本身會先合。
-  - `profile_runtime.py`：HM-09 改很多；本片只改 import、`RUNTIME_OPTIONS`、`ProfileRuntime` 的參數與 `gateway_options`、`ProfileManager.__init__`
-    的 `allowance`→`budget`、`add()` 兩行。
-  - `profiles.py`：HM-09 加了 `memory_limit_mib`、`available_memory_mib`；本片在 `request_budget.py` 有同樣的兩個讀取函式（為了不和 HM-09 衝突）。
-    rebase 後建議改用 `profiles` 的那兩個、拿掉 `request_budget` 的重複（行為相同；測試換的是 `request_budget.CGROUP_MEMORY_LIMITS`、`MEMINFO`、
-    `memory_ceiling`，改用 `profiles` 時跟著改）。這是審查 S-6 的後半。
-  - 審查修正動到的地方：`gateway.body()` 開頭（HM-09、HM-14、HM-30 都沒改這個函式，預期沒有衝突）、`request_budget.declared_length`／`watch`
-    （本片自己的新模組）、`profile_router.beyond_admission` 的一行與拿掉的 `declared_length`（HM-14 的修正若也改 `profile_router.py`，照段落合併）。
-  - `decisions.md`、`contract.md`、`acceptance-matrix.md`、`threat-model.md`：HM-09、HM-14 也改；本片的段落都是新增或整段改寫，照段落合併。
-  - 契約第 9 節的編號：`claude-delivery` 到 #89，HM-14 加 #90～#97，本片接著加 #98～#104，審查後再加 #105。HM-10、HM-20、HM-30 若也新增列，後合的要重編號；
-    引用這些編號的只有文件（契約、`acceptance-matrix.md`、`decisions.md`、本筆記），測試沒有。
-  - 帳本：rebase 後重產摘要、重跑兩個預檢與 CI（摘要要重算）。
-  - HM-30（回覆工作執行緒）也改 `gateway.py`：誰後合誰 rebase。
+- **獨立安全審查**：做了（修正後通過；第 16 節）。留給主對話的兩題（S-1 的公式、CL＋TE 要不要回 400）主對話 2026-11-16 已定（第 17.6 節）。
+- **rebase 到 `claude-delivery`**：做完（`d00a338`；第 17 節）。這裡原本列的預期衝突都照第 17.2 節處理；S-6 後半做完（第 17.5 節）；契約第 9 節本片的列
+  改成 #101～#108（第 17.4 節）；帳本照合併後的內容重算（第 17.7 節）。HM-30（回覆工作執行緒）也改 `gateway.py`：本片先合併的話，HM-30 rebase。
 - **HM-19c**：第 11 節的常數與放行條件（審查 MF-2：astral 大字串與約 0.8 MiB 的最多元素結構，各並行 64 條，超過 20 就回功能 PR）；
-  MemAvailable 推導要不要只取一部分、同機多個 add-on 要不要分攤（S-5）；下限時的份額（S-1）；守門慢路徑的 CPU（S-3）。
+  MemAvailable 推導要不要只取一部分、同機多個 add-on 要不要分攤（S-5）；下限時的份額（S-1，主對話 2026-11-16 定案交 HM-19c）；守門慢路徑的 CPU（S-3）。
 - **HM-18**：把契約第 1.2、2.4、5 節本片的文字與威脅模型第 3 節本片加的五條寫進產品 DOCS。
 - **發版片**：第 8 節的 CHANGELOG 句子。
-- **HM-29（給 PaaS 的回補建議）**：收到的位元組不管宣告都照數（§9 #108）；結構守門慢路徑的優化（S-3）；閘道內副本數（審查 MF-2 (4)）。
+- **HM-29（給 PaaS 的回補建議）**：收到的位元組不管宣告都照數（§9 #108）；結構守門慢路徑的優化（S-3）；閘道內副本數（審查 MF-2 (4)）；
+  CL＋TE 要不要直接回 400 並關連線（主對話 2026-11-16 定案不在本片做，列為已知限制與回補題目）。
 - **repo 外**：FEATURE-MATRIX 補 FM-154；計畫 §5.2 的表格（位元組額度那一列）與 §12.3 HM-31 的「做法」可補一句「准入滿時讀小請求」；
   `paas-test-mapping.md`、`deviation-trace.md` 由產生器重產（#101～#108）。
 
@@ -606,5 +603,243 @@ MF-2 的數字用審查的 E2（第 10.4 節）。審查的修法原型（`fix-p
 | S-3：守門慢路徑的事件迴圈 CPU | 成立；寫進威脅模型第 3 節，交 HM-19c，列為回補 PaaS 的優化題 | — | 審查 E3 | 文件 commit |
 | S-4：單帳號行為改變的清單與 CHANGELOG 不完整 | 成立；採用 | 契約第 1.2 節第 2～6 點、本筆記第 8 節（9 項）與 CHANGELOG 句子（轉送大小的倍數、宣告超過 16 MiB、不合法 UTF-8 與非 JSON 以前是 400） | 審查 E5 | 文件 commit、本筆記 |
 | S-5：同機多個 add-on 重複計算 MemAvailable | 成立；寫進契約第 5 節已知限制、威脅模型第 3 節，列為 HM-19c 量測項目（第 11 節） | — | — | 文件 commit |
-| S-6：兩份宣告長度規則；記憶體讀取函式和 HM-09 重複 | 前半採用；後半留到 rebase 到 HM-09 之後（第 15 節） | `profile_router.declared_length` 拿掉 | `test_carries_no_request.py` 一段（7ee84eb 上先紅）；突變 N5 | `725e7b1`、`3f21356` |
+| S-6：兩份宣告長度規則；記憶體讀取函式和 HM-09 重複 | 前半採用；後半在 rebase 到 `claude-delivery` 之後做完（第 17.5 節：改用 `profiles` 的讀取函式，等價） | `profile_router.declared_length` 拿掉 | `test_carries_no_request.py` 一段（7ee84eb 上先紅）；突變 N5 | `725e7b1`、`3f21356` |
 
+## 17. rebase 到 `claude-delivery` `d00a338`（2026-11-16）
+
+第 1～16 節照 rebase 前寫，裡面的 commit 編號是 rebase 前的（對照見第 17.12 節）；列號已照 rebase 後的改（`2f8c59c`，只改數字；第 17.4 節）。
+
+### 17.0 結論
+
+- 基準換成 `claude-delivery` `d00a338`（HM-10 的 PR #104 合併後）。本片 13 個 commit 照原順序重放，另加 8 個，加本筆記這次的 1 個，共 22 個。
+- 衝突在 6 個 commit。程式的衝突都是兩邊都留：HM-09、HM-10 的參數、說明與檢查在前，本片的在後。HM-14、HM-10、HM-09 最終版的行為都在，本片的行為也都在（第 17.3 節逐行核對）。
+- 審查 S-6 後半做完：`request_budget` 拿掉自己的記憶體讀取函式，改用 HM-09 的 `profiles.memory_limit_mib`、`available_memory_mib`。行為等價，先寫測試釘住（第 17.5 節）。
+- 契約第 9 節本片的列從 #98～#105 改成 #101～#108（第 17.4 節）。
+- 主對話 2026-11-16 的四點定案寫進契約、威脅模型與 `decisions.md`（第 17.6 節）。
+- 帳本以 `claude-delivery` 為底，加回本片的說明，6 個列管檔的 SHA-256 照實際內容重算（第 17.7 節）。
+- rebase 後補 2 個測試：經 HM-10 帳號路由建的帳號扣自己的份額、`make_apps` 只收預算份額（第 17.8 節）。
+- 本機檢查（第 17.9 節）：全套 pytest 5,962 案只有 7 個要 root 的既有案例失敗、0 skip；本片、HM-14、HM-10、HM-09、HM-20 的測試與 HM-01 的
+  黃金回歸、兩個契約凍結全過；已知的 HM-09 關閉逾時跑 2 次都過。packaging 的 validate、unittest、tool_inventory 過。
+- 突變 8 個全部抓到（第 17.10 節；R8 原本沒有測試擋，補測試後抓到）。兩個預檢：秘密預檢 0 命中、帳本預檢 OK（第 17.11 節）。
+
+### 17.1 範圍
+
+- `git fetch origin`：`origin/claude-delivery`＝`d00a338`。先開本機備份分支 `backup/hm31-before-rebase-20261116`（`36fdcd8`，不 push）。
+- `git log --oneline 351666f..36fdcd8` 是 13 個。`351666f` 是 HM-14 rebase 前的修正 head，不是 `claude-delivery` 的祖先，所以用
+  `git rebase --onto origin/claude-delivery 351666f feat/ha-multiprofile-hm31-20261116`，只重放這 13 個。
+- 新基準帶進來的（`351666f` 沒有的）：PR #100（`checks` 上限 60 分鐘、`decisions.md` 記 DQ-13／14／30／31／43）、HM-09（PR #101）、HM-20（PR #102）、
+  HM-14 的最終版（PR #103：rebase 到 HM-09、HM-20 之後補的 `CHILD_HALTED_TEXT`、列號 #91～#100）、HM-10（PR #104）。
+- 和本片重疊的檔：`Hc/gateway.py`、`Hc/profile_router.py`、`Hc/profile_runtime.py`、`Hc/profiles.py`（自動合併）、`tests/test_carries_no_request.py`、
+  契約、威脅模型、`decisions.md`、`acceptance-matrix.md`（自動合併後改列號）、`ledger-tracking.md`（自動合併）、帳本。
+  `tests/multi_profile_runtime.py` 本片沒改；HM-09、HM-10 改過它（`launch_extras` 等 `start_all`、`Runtime.admin` 帶 `X-MCP-Profile`），本片用到它的測試照跑（第 17.9 節）。
+
+### 17.2 衝突與處理
+
+解衝突用 repo 外的腳本（`SP:hm31-rebase/bin/conflicts.py`：逐個衝突塊斷言兩邊的內容，再組合；`merge_ledger.py`：帳本）。原則：兩邊的行為都留，HM-14、HM-10、HM-09 最終版的行為不被本片蓋掉。
+
+| rebase 後的 commit（原本） | 衝突 | 處理 |
+|---|---|---|
+| `3ebcf91`（`a6c8e80`） | `tests/test_carries_no_request.py`：HM-14 rebase 時改了 `test_the_reserve_is_reached_only_while_the_profiles_admission_has_room` 的說明（#96，「HM-31 照定案改這個測試」）；本片把這個測試改成 MF-2 (b) 定案的 `test_the_reserve_is_reached_even_once_the_profiles_admission_is_full` | 用本片的版本：HM-14 說明裡「交 HM-31 改」的就是本片做的事。說明裡的列號用合併後的 #96 |
+| `dbc4002`（`e3694cc`） | `gateway.py` 四處 | `make_apps` 簽名：HM-09 的 `child_blocked`、HM-10 的 `default_endpoint`、`bootstrap_fields` 之後接本片的 `body_budget`。說明：HM-10 那段之後接本片那段（合併順序 HM-08 → HM-09 → HM-14 → HM-10 → HM-31；本片那段開頭寫「not gated」，不會被讀成前一段的「only for a switched-on product」）。參數檢查：HM-09、HM-10 的三個之後接本片的。建 app：HM-10 的 `management_app(admin_page)` 與 `admin.state.profile_action` 都留，MCP 的兩條路由用本片的 `AnyMethod(mcp, budget_share)`、`AnyMethod(private_mcp, budget_share)`；HM-10 拿掉的 `admin.router.redirect_slashes` 不加回（`management_app` 已設） |
+| 同上 | `profile_router.py` 兩處 import | `from . import gateway, profiles, request_budget`；HM-10 的 `BadRequest`、`Call` 與本片的 `not_utf8` 都留。模組說明「Not here」那句 git 自動用了 HM-10 的（拿掉 management dispatcher）；本片拿掉的 `OrderedDict`、`time` HM-10 沒用到 |
+| 同上 | `profile_runtime.py` 七處 | 模組說明：HM-09、HM-10 兩段之後接本片那段。import：`health as health_module, profiles, request_budget`；`profile_router` 那行用 HM-10 的名單、去掉 `RefusalAllowance`（本片拿掉了這個類別）。`RUNTIME_OPTIONS`、`ProfileRuntime` 的參數、`gateway_options`：HM-09、HM-10 的之後加 `body_budget`。`ProfileManager.add`：HM-09、HM-10 傳給 `ProfileRuntime` 的參數之後加 `body_budget=gate.budget_share`。`ProfileManager.__init__` 的 `self.budget` 與 `add()` 的 `ProfileGate(…, self.budget, …)` 由 git 自動合併 |
+| `f4a4c53`（`8f3610d`）、`f158d86`（`a0ed01a`） | `runtime-patches.json` | 不只解文字：以當下 HEAD（`claude-delivery`＋前面重放的 commit）的帳本為底；原 commit 改到的每一列，`change` 是底的文字接原 commit 在列尾加的那段（腳本檢查原 commit 都只在列尾追加）；新列 `request_budget.py` 照原 commit 放在 `profile_router.py` 之後；每個改到的列 `sha256` 照當下的檔案重算。JSON 照 repo 的寫法（`indent=2`、`ensure_ascii=False`），腳本先驗證底的帳本逐位元可重現（第 17.7 節） |
+| `5f60e03`（`04cccc3`） | 契約八處、威脅模型兩處、`decisions.md` 一處（`acceptance-matrix.md` 自動合併） | 契約：第 2.4 節保留名額那點用本片的改寫（HM-14 rebase 寫的「交 HM-31」由本片的做法取代），上一行用 `claude-delivery` 的 #91；第 4.2 節 `-32003`、`-32602` 兩列用本片的、`-32004`、`-32005` 兩列用 `claude-delivery` 的；第 5 節原則兩點用本片的；第 9 節說明段 `claude-delivery` 的照原文、本片另寫一行；#14 用 HM-09 的、#15、#16 用本片的；表尾是 `claude-delivery` 的第 89～100 列，其中 #96 換成本片的改寫，本片原稿第 98～104 列接在後面成為第 101～107 列；第 10 節 `claude-delivery` 的列在前、本片的在後。威脅模型：狀態行 HM-20、HM-14 rebase 的兩句在前、本片那句在後；保留名額那點用本片的、`-32004` 那點用 `claude-delivery` 的（含 #100、#92）。`decisions.md`：變更紀錄三列在前、本片的在後。本片加的行裡的列號一起改（第 17.4 節） |
+| `8c8e6c7`（`5ceb7d3`） | 契約四處、威脅模型一處、`acceptance-matrix.md` 一處 | 都是上一個 commit 改過列號的行，再加本 commit 的改動：第 2.4 節閒置那列、第 9 節說明段本片那行（加第 108 列與 #81、#101 的補寫）、#101 的理由、新的第 108 列、第 10 節審查那列；威脅模型狀態行加審查那句；RG 一列加 #108。自動合併進來的兩處 CL＋TE 引用（契約第 2.4 節、威脅模型第 3 節）從 #105 改成 #108 |
+| 其他 7 個 | 沒有衝突 | 測試 4 個（`9d2bee6`、`c5813ff`、`679945e`、`0da64e9`）、程式 1 個（`32c8e54`：審查修正 MF-1、MF-3、S-6 前半）、筆記 2 個（`0cdb10a`、`2840e28`） |
+
+### 17.3 核對（rebase 剛做完、head `2840e28`）
+
+腳本 `SP:hm31-rebase/bin/compare.py` 逐檔比兩個 diff 的增刪行（證據 `wave4/evidence-rebase-HM-31/logs/compare-*.txt`）：
+
+- 本片的改動（`git diff 351666f 36fdcd8` 對 `git diff origin/claude-delivery 2840e28`）：程式與測試 14 個檔裡 11 個逐行相同。
+  `gateway.py` 只差增、刪各 4 行（簽名的最後一個參數、說明結尾 `"""` 的位置）；`profile_runtime.py` 只差增、刪各 13 行（import、
+  `RUNTIME_OPTIONS`、參數、`gateway_options`、`add()` 的呼叫）；`test_carries_no_request.py` 只差說明的列號與它取代的 HM-14 說明。
+- 反方向（`claude-delivery` 的改動 `351666f..d00a338` 對 `36fdcd8..2840e28`）：差的也只有這幾處。HM-09、HM-10、HM-14 的程式一行都沒少；
+  `RefusalAllowance` 的 import 是本片拿掉的類別。
+- 文件：契約 53 行、威脅模型 9 行、`decisions.md` 2 行、`acceptance-matrix.md` 2 行不同，都是列號或合併點；`ledger-tracking.md`、本筆記逐行相同。
+
+### 17.4 列號對照（契約第 9 節；`claude-delivery` 最後是第 100 列）
+
+| 原稿（`351666f` 基準） | rebase 後（`d00a338` 基準） | 項目 |
+|---|---|---|
+| #98 | #101 | 位元組預算的每帳號份額 |
+| #99 | #102 | 位元組預算扣的大小 |
+| #100 | #103 | 位元組預算的推導來源 |
+| #101 | #104 | 位元組預算與逾時的設定入口 |
+| #102 | #105 | 大請求的整體讀取上限 |
+| #103 | #106 | Headscale 的結構上限 |
+| #104 | #107 | 不是 JSON 的 body |
+| #105 | #108 | 宣告長度與 `Transfer-Encoding`（審查 MF-1 補的列） |
+| #94（HM-14 的列） | #96 | 保留名額與准入：本片改寫（待決 → 部署） |
+| #89（HM-14 的列） | #91 | 保留名額載的東西（本片只引用） |
+
+- 本片原稿寫的時候 HM-14 的列是 #89～#97；它合併時已經移到 #91～#99（HM-09 用了第 89 列、HM-20 用了第 90 列），另加第 100 列。
+  本片引用的 HM-14 列跟著改。#1～#88（含 #6、#15、#16、#45、#81）沒有移動。
+- 改了引用的地方：契約第 2.4、4.2、5 節、第 9 節說明段與 #15、表格、第 10 節本片的兩列（rebase 解衝突時）與第 10 節新加的一列；威脅模型 2 處；
+  `decisions.md` 1 處；`acceptance-matrix.md` 1 處；測試說明 1 處（`tests/test_carries_no_request.py`：plan 8.8 #94 → #96）；本筆記 24 行
+  （`2f8c59c`，只改數字；第 1 節「基準」列的 #100、#101 是 PR 編號，第 5.5 節的對照表是本筆記自己的列號，都不動）；PR 草稿（repo 外）。
+- commit 訊息裡的列號照寫的當時（原稿的編號），不改寫。
+
+### 17.5 審查 S-6 後半：記憶體讀取改用 HM-09 的函式（`a2e0af6`、`4930689`、`959b119`、`f3d6de8`）
+
+- 改了什麼：`request_budget.py` 拿掉 `memory_limit_mib`、`available_memory_mib`、`CGROUP_MEMORY_LIMITS`、`MEMINFO`（與 `pathlib` 的 import），
+  `memory_ceiling()` 改呼叫 `profiles.memory_limit_mib()`、`profiles.available_memory_mib()`（HM-09 的 profile capacity 與記憶體檢查用的那兩個）。
+  模組說明與 `memory_ceiling` 的說明寫明。其他不變（公式、保留量 `HOST_RESERVE_MIB`、讀不到時 32 MiB、讀的時機）。
+- 等價的證明：
+  1. 靜態：兩份函式的本體（去掉說明）AST 相同；兩個檔案路徑（`/sys/fs/cgroup/memory.max`、`/sys/fs/cgroup/memory/memory.limit_in_bytes`、
+     `/proc/meminfo`）與 `MiB` 相同；兩邊都在呼叫時讀模組的常數。
+  2. 先釘住再改：`a2e0af6`（改之前）加 `test_the_ceiling_is_read_from_the_kernel_files_case_by_case`，17 種 cgroup v2／v1 與 meminfo 的檔案狀態
+     （`max`、v1 無上限、有上限、前後空白、不到 1 MiB、1 TiB 與超過、不是數字、空檔、目錄、負數、讀不到、沒有 MemAvailable、單位不是 kB、
+     低於保留量、第一行 MemAvailable 壞掉、超過前 64 KiB）各自的 `memory_ceiling()`：改之前 17 案全過（那時兩份讀取函式讀的都是測試的檔），
+     改之後（`4930689`、`959b119`）同樣 17 案全過，期望值一個都沒改。
+  3. 差分（repo 外，改之前跑；`SP:hm31-rebase/exp/s6_equivalence.py`，證據 `logs/s6-equivalence-before.json`）：4,421 種檔案狀態（固定的邊界
+     案例＋3,000 個亂數），兩份讀取函式的結果、`memory_ceiling()` 用哪一份讀取函式的結果，全部相同（0 個不同）。其中 98 個結果兩邊都丟同一個
+     例外：cgroup 檔不是 UTF-8 時 `read_text()` 的 `UnicodeDecodeError`（`except OSError` 接不到）。HM-09 的函式本來就這樣、本片的副本也一樣，
+     等價；核心產生的檔是 ASCII，實際不會發生，本片不改 HM-09 的函式。
+  4. 讀取時機不變：`BudgetLimits.derive` 照舊在 `ProfileManager` 建立時、沒開通的 `make_apps` 建立時讀。
+  5. 先紅：`test_the_budget_reads_the_memory_with_the_profile_capacitys_readers`（`request_budget` 不留自己的讀取函式；`profiles` 的換掉後
+     ceiling 跟著變；有 cgroup 上限時不讀 MemAvailable）在改之前紅（`request_budget keeps a copy: memory_limit_mib`），改之後綠。
+- 跟著變的只有測試的情境，不是正式行為：HM-09、HM-10 的測試把 `profiles.memory_limit_mib`、`available_memory_mib` 換成測試值（300 MiB、
+  cgroup 556 MiB、讀不到、4 GiB）時，那個 `ProfileManager` 的預算現在也照這些值推導（以前讀機器的值）。這些測試都不送超過 64 KiB 的 MCP
+  請求，結果不受影響（第 17.9 節全過）；有 cgroup 上限時 `memory_ceiling` 不讀 MemAvailable，所以 HM-09 那個「MemAvailable 一讀就失敗」的
+  測試照過（突變 R4 證明這一點有守住）。
+- 沒有不等價的地方，所以沒有停下來回報。
+
+### 17.6 主對話 2026-11-16 的四點定案（計畫 §12.3 HM-31 的註；`fb55e74`）
+
+| 題 | 定案 | 寫在哪 |
+|---|---|---|
+| 每帳號份額的上限（第 12 節本片的判斷 (1)） | 保留 DQ-07 的 64 MiB | 契約 #101、`decisions.md` 第 1.1 節 |
+| 大請求的整體讀取上限（判斷 (2)） | 保留 HA 今天的 60 秒與 408 `{"error":"request denied"}`（PaaS 300 秒、`-32003`、只套在登記的大請求）；HA 比較嚴，單帳號回應不變；契約 §9 列為差異 | 契約 #105、`decisions.md` |
+| 審查 S-1：預算在下限時一個帳號的份額就是整份預算 | 交 HM-19c，量測後一起定 | 契約第 5 節、威脅模型第 3 節、`decisions.md` |
+| 審查 MF-1 的選做：CL＋TE 直接回 400 並關連線 | 不在本片做（會改單帳號回應；h11 回應後不關連線是既有行為），列入已知限制與 HM-29 回補 PaaS 的題目 | 契約 #108、威脅模型第 3 節、`decisions.md` |
+
+契約第 10 節加一列（rebase 與這四點；規則內容不變）。
+
+### 17.7 帳本（`docs/provenance/runtime-patches.json`）
+
+以 `claude-delivery` 的帳本（61 列）為底，加回本片：62 列。56 列和 `claude-delivery` 逐位元相同；改到的 6 列如下。每列的 `sha256` 照
+rebase 後的實際內容重算（不是解完文字衝突就好）；`change` 是 `claude-delivery` 的文字接本片原本加的那段，逐列核對和 rebase 前本片加的那段
+相同；JSON 逐位元照 repo 的寫法。
+
+| 列管檔 | `claude-delivery` | rebase 前（`36fdcd8`） | rebase 後 | 說明 |
+|---|---|---|---|---|
+| `gateway.py` | `f6cf0fda2611` | `8f16867f6665` | `1f954cf11cde` | 兩邊都改，新的值；`change` 20,124＋2,061 字 |
+| `profile_router.py` | `97ec58644e93` | `17081f6498de` | `bb6b6feb79f3` | 新的值；5,033＋1,245 字 |
+| `profile_runtime.py` | `c449a991c1d7` | `347ead6d34ea` | `048e73896820` | 新的值；5,597＋505 字 |
+| `profiles.py` | `55dcc665fa28` | `738e482d3026` | `cd74d45a0abe` | 新的值（本片只改註解）；4,338＋248 字 |
+| `request_limits.py` | `a8a068d01ce8` | `74d3d5039d7b` | `74d3d5039d7b` | 只有本片改，和 rebase 前相同；1,098＋799 字 |
+| `request_budget.py`（新列） | — | `50a92c8b0f5e` | `7cfe35b819a0` | S-6 後半改了內容（`f3d6de8` 重算，`change` 加一句）；放在 `profile_router.py` 之後 |
+
+本片沒動 `apps/runtime/*.py`、`apps/*/launch.py`：`docs/tool-surface.*` 和 `claude-delivery` 相同，`scripts/tool_inventory.py` exit 0（第 17.9 節）。
+
+### 17.8 rebase 後補的測試
+
+| commit | 測試 | 為什麼 |
+|---|---|---|
+| `a2e0af6` | RB 18 案：`test_the_ceiling_is_read_from_the_kernel_files_case_by_case`［17］、`test_the_budget_reads_the_memory_with_the_profile_capacitys_readers` | S-6 後半（第 17.5 節） |
+| `ec4dbe6` | RG `test_a_profile_created_through_the_profile_routes_is_charged_to_its_own_share` | HM-10 的帳號管理 API 在本片之後才合併：經 8099 `POST /api/profiles` 建的帳號（`ProfileAdmin` → `ProfileManager.add`），它的大請求在讀第一個位元組前就扣在自己的份額，預設帳號與 B 一直是 0，結束全還。突變 R1、R7 擋下 |
+| `6535447` | RG `test_make_apps_takes_only_a_share_of_a_budget_beside_hm09s_and_hm10s_options` | `make_apps` 的簽名與參數檢查是手動合的；「拿掉 `body_budget` 的型別檢查」（突變 R8）原本沒有測試擋 |
+
+RB 43 → 61 案、RG 35 → 37 案；其他檔案數不變。
+
+### 17.9 本機檢查（2026-11-16，一般使用者 uid 1000；TMPDIR 用 ha_env.sh 給的 `/tmp/ha-mp-XXXXXX`，跑完用完整路徑刪除；pytest 都排在共用鎖後面）
+
+- 環境：clone 的依賴、patch、UI、Playwright 的 Chromium 已由前面的工作階段照 `setup_repo_env.sh` 裝好。`351666f..HEAD` 沒有動 `uv.lock`、
+  `package-lock.json`、`pyproject.toml`、`packaging/inputs.json`、`packages/mcp-admin-ui/`，所以沒有重跑（不連 npm）。
+- 全部在一次共用鎖裡跑（`SP:hm31-rebase/bin/batch.sh`，14:33～15:10），head `6535447`（本筆記這次的改動還沒 commit，只有文件）。
+  證據在 `wave4/evidence-rebase-HM-31/`（`batch/` 的 log 與 junit，測試時產生的 token 已遮掉）。
+- `tests/conftest.py` 自己也有一把本機測試鎖（`/tmp/woow-ha-mcp-local-tests-<uid>.lock`，等 120 秒）：別的代理在跑全套時，鎖外的 pytest 會等到失敗；
+  本節的檢查都在共用鎖裡跑，沒有碰到。
+
+| 檢查 | 指令（摘要） | 結果 |
+|---|---|---|
+| rebase 後補的 2 案 | `pytest tests/test_request_budget_gateway.py -k 'takes_only_a_share or created_through'` | **2 案全過**，0.5 秒 |
+| 本片的測試 | RB、RS、RG、`test_carries_no_request.py`、PQ、`test_gateway_busy_shapes.py`、`test_n8n_request_bounds.py`、`test_profile_routing.py` | **351 案全過**、0 skip，46.5 秒（61＋83＋37＋62＋16＋7＋62＋23）。rebase 後加的 20 案 call 時間合計 0.12 秒；新 3 檔 RB 0.1、RS 7.0、RG 12.2 秒（rebase 前 0.1、6.4、12.2） |
+| HM-14 新 5 檔＋`test_reply_mask_union.py` | `test_carries_no_request.py`、`test_gateway_busy_shapes.py`、`test_gateway_queue_ha.py`、`test_gateway_stream_endings.py`、`test_initialize_generation.py`、`test_reply_mask_union.py` | **144 案全過**（62＋7＋23＋35＋9＋8），18.8 秒 |
+| HM-10 三檔 | `test_profile_admin_api.py`、`test_admin_pipeline_matrix.py`、`test_router_passthrough.py` | **86 案全過**（32＋5＋49），16.6 秒 |
+| HM-09 五檔 | `test_profile_lifecycle.py`、`test_staggered_start.py`、`test_profile_ports.py`、`test_health_backoff.py`、`test_extra_child_resources.py` | **119 案全過**（28＋9＋29＋41＋12），23.6 秒 |
+| HM-20 兩檔 | `test_backend_loopback.py`、`test_saved_destinations.py` | **243 案全過**（153＋90），65.7 秒 |
+| HM-01 黃金回歸＋兩個契約凍結（開關關） | `test_single_profile_golden.py`、`test_mcp_contract_freeze.py`、`test_admin_contract_freeze.py` | **45 案全過**（17＋9＋19），6.9 秒；三檔與 `tests/contract/` 本片沒動：本片改變的單帳號行為（第 8 節）以外逐位元相同 |
+| `packaging/validate.py` | `SP:ha-baseline/ci-venv/bin/python packaging/validate.py` | PASS |
+| packaging unittest | 照 CI：離線暫存 venv（`uv sync --frozen --no-dev --offline`＋`requirements-ci`）→ `unittest discover -s packaging` | `Ran 203`、`OK (skipped=5)`（5 個 `skipUnless(root)`） |
+| tool-surface 漂移 | `.venv/bin/python scripts/tool_inventory.py` | exit 0 |
+| 全套 pytest | `.venv/bin/python -m pytest -q -p no:cacheprovider tests`（同 `packaging/unit.sh`，只是不用 root） | **5,962 案：5,955 過、7 失敗、0 skip、0 error**，1,960.7 秒（32 分 41 秒）。7 個失敗正是要 root 的既有案例（`test_owned_executable.py` 1、`test_profile_store.py` 1、`test_restore_detection.py` 5；第 9.1 節）。瀏覽器測試（`test_owned_browser_redirect.py`、`test_owned_browser_ipc.py`、`test_owned_ui.py`）這次都過（Chromium 在 clone 裡）；2 個 warning 是既有的 `websockets` 棄用提示 |
+| 已知的 HM-09 關閉逾時 | `test_backend_loopback.py::test_every_profile_s_real_child_refuses_its_loopback_fake_backend_end_to_end[False]` | 本機跑 2 次（HM-20 兩檔一次 4.54 秒、全套一次 4.52 秒），**2 次都過**，沒有碰到 CLOSE_SECONDS 逾時。本片不修（另一條工作線在修） |
+| 正式程式的 SHA-256 | `sha256sum packages/mcp-admin-core/mcp_admin_core/*.py`：跑前、全套後、突變後 | 三次相同（`batch/core-sha256-*.txt`） |
+| 暫存目錄 | ha_env.sh 給的 `/tmp/ha-mp-*` | 每個都用完整路徑刪除（`logs/tmpdirs.txt`）；`git status` 只有還沒 commit 的本筆記 |
+
+### 17.10 突變（rebase 後；挑 rebase 手動合的地方與緊鄰的地方）
+
+腳本 `SP:hm31-rebase/bin/mutate.py`：每個只改正式程式一處（原字串剛好出現一次、改完可編譯），在工作樹原地改，跑指定的測試檔（`--maxfail=60`），
+跑完從先存的位元組寫回；寫回後的 SHA-256 要同時等於改之前與 HEAD 的 blob，不等就停。第一輪 X0～R8 在 13:56（head `ec4dbe6`），R8 補測試後在
+batch 的 B9 再跑一次（head `6535447`）。**8 個突變全部抓到**（R8 第一次沒有測試擋，補 `6535447` 後抓到），還原全部 OK，跑完 `git status` 乾淨
+（batch 時只有還沒 commit 的本筆記）。
+
+| id | 位置（合併點） | 突變 | 結果 | 抓到它的測試 |
+|---|---|---|---|---|
+| X0 | — | 不改（對照） | 124 案全過 | — |
+| R1 | `profile_runtime.py` `ProfileManager.add`：HM-10 傳給 `ProfileRuntime` 的參數之後接本片的 `body_budget=gate.budget_share` | 帳號 app 拿不到 add-on 預算的份額（`make_apps` 自己做一份） | 抓到（5 案） | RG 開關開 4 案（`test_one_profile_filling_its_share_does_not_affect_another`、`test_the_add_ons_budget_is_shared_by_every_profile`、`test_a_switched_on_profile_shares_one_budget_derived_once`、`test_a_switched_on_profiles_chunked_body_that_states_a_small_length_is_charged_as_it_arrives`）＋`test_a_profile_created_through_the_profile_routes_is_charged_to_its_own_share`（**HM-10 的帳號路由下預算仍扣到正確的帳號**）；HM-10 的 `test_profile_admin_api.py` 32 案都過（它們不送大請求，這一點靠本片的測試守） |
+| R2 | `profile_router.py` `beyond_admission`：本片的 MF-2 (b)，接 HM-14 最終版的保留名額 | 准入滿時讀到的通知也回忙碌 | 抓到（2 案） | `test_the_reserve_is_reached_even_once_the_profiles_admission_is_full`［queue full］、`test_a_newly_connected_clients_initialized_reaches_the_child_with_the_queue_and_admission_full`（**HM-14 的保留名額在准入滿時仍送得到通知**） |
+| R3 | `request_budget.py` `memory_ceiling`（S-6 後半改的） | MemAvailable 減保留量不再以 0 為下限 | 抓到（2 案） | RB `test_without_a_cgroup_limit_memavailable_less_the_reserve_is_the_ceiling`、`test_the_ceiling_is_read_from_the_kernel_files_case_by_case`［MemAvailable below the reserve］（**S-6 改用 profiles 函式後的下限**） |
+| R4 | 同上 | 有 cgroup 上限時也讀 MemAvailable | 抓到（2 案） | RB `test_the_budget_reads_the_memory_with_the_profile_capacitys_readers`、HM-09 的 `test_extra_child_resources.py::test_a_cgroup_memory_limit_disables_the_profiles_past_the_paas_formula`（預算與 HM-09 的容量讀同一份函式之後，HM-09「有上限就不讀 MemAvailable」的測試也守住預算） |
+| R5 | `profile_runtime.py` `ProfileRuntime.__init__`：HM-09 的 `report_blocked` 與合併後的 `gateway_options` 同一段 | `child_blocked` 不傳給 `make_apps`（child/restart 不帶 `blocked_reason`） | 抓到（3 案） | `test_extra_child_resources.py` 的 `test_low_memory_holds_a_save_or_restart_but_never_the_boot`、`test_unreadable_memory_starts_the_child_and_says_so`、`test_a_cgroup_memory_limit_disables_the_profiles_past_the_paas_formula`（**HM-09 的 `child_blocked`**） |
+| R6 | `gateway.py` 建 app：HM-10 的 `management_app` 與本片的 MCP 路由同一段 | `/mcp` 的 `AnyMethod` 不給份額 | 抓到（RG 36 案中 34 案） | RG 開關關與開幾乎全部（例如 `test_an_over_budget_request_is_refused_with_the_busy_reply_and_never_forwarded`） |
+| R7 | `profile_runtime.py` `gateway_options`：HM-10 的 `default_endpoint`、`bootstrap_fields` 之後接本片的 `body_budget` | `body_budget` 不傳給 `make_apps` | 抓到（5 案） | 同 R1 |
+| R8 | `gateway.py` `make_apps` 參數檢查：HM-09、HM-10 的三個之後接本片的 | 不是 `Share` 的 `body_budget` 也收 | 第一次：RB、RG、`test_profile_runtime.py` 162 案全過（**沒有測試擋**）；補 `6535447` 後再跑：抓到（163 案中 1 案） | `test_make_apps_takes_only_a_share_of_a_budget_beside_hm09s_and_hm10s_options` |
+
+還原後的 SHA-256（＝HEAD 的 blob＝帳本第 17.7 節）：
+
+- `profile_runtime.py`（X0、R1、R5、R7）：`048e73896820154fc48f7081887dc98fc27bdefa306a405ca93e69f294a86e29`
+- `profile_router.py`（R2）：`bb6b6feb79f322637c5e9da534e8bb7f791575af8ba48a047aa7fb55546c603f`
+- `request_budget.py`（R3、R4）：`7cfe35b819a04a36a12b679b846817ab1bc6fab80afc242d31f32e572ca18e58`
+- `gateway.py`（R6、R8）：`1f954cf11cde5405fbe08ba00733502a8025ceffab013925c68bd3688b5d2b98`
+
+結果檔：`wave4/evidence-rebase-HM-31/mutations-first-run/`（第一輪）、`batch/mut/`（R8 再跑）。
+
+### 17.11 預檢
+
+| 預檢 | 指令 | 結果 |
+|---|---|---|
+| 秘密預檢（commit 本筆記之前） | `.venv/bin/python -I scripts/secret_precheck.py --tools SP:hm01/gitleaks-tools --repo . --base origin/claude-delivery --head HEAD --full` | gitleaks 8.28.0（釘版、已驗）；`d00a338..6535447` 21 個 commit＋HEAD 整棵樹＋整個歷史：**0 命中** |
+| 帳本預檢（commit 本筆記之前） | `.venv/bin/python -I scripts/ledger_precheck.py --repo . --base origin/claude-delivery` | `runtime-patches.json` 175、`runtime-sources.json` 70、`tool-surface.json` 159 檔：0 漂移、0 缺；改到的 6 個列管檔都有帳本更新；沒有沒列管的新執行檔：**OK** |
+
+兩個預檢都以 `origin/claude-delivery`＝`d00a338` 為基準（跑之前 fetch 過）。commit 本筆記之後對最終 head 再跑一次，結果寫在 PR 說明
+（`artifacts/ha-multiprofile-parity-20261114/wave4/pr-HM-31.md`）。
+
+### 17.12 commit 對照
+
+rebase 過來的 13 個（第 1～16 節寫的是左欄的編號）：
+
+| rebase 前 | rebase 後 | 內容 |
+|---|---|---|
+| `a6c8e80` | `3ebcf91` | 測試（新 3 檔、改既有 5 檔） |
+| `e3694cc` | `dbc4002` | 程式（`request_budget.py`、`request_limits.py`、`gateway.py`、`profile_router.py`、`profile_runtime.py`、`profiles.py`） |
+| `8f3610d` | `f4a4c53` | 帳本與 `ledger-tracking.md` |
+| `04cccc3` | `5f60e03` | 契約、威脅模型、`decisions.md`、`acceptance-matrix.md` |
+| `8c99fc1` | `9d2bee6` | 測試：8 個產品的正式 runtime |
+| `bf2365f` | `c5813ff` | 測試：時間餘裕 |
+| `7ee84eb` | `0cdb10a` | 本筆記（審查對象） |
+| `725e7b1` | `679945e` | 審查修正的測試 |
+| `3f21356` | `32c8e54` | 審查修正的程式 |
+| `a0ed01a` | `f158d86` | 審查修正的帳本 |
+| `5ceb7d3` | `8c8e6c7` | 審查修正的文件 |
+| `4e61ecf` | `0da64e9` | 測試改名 |
+| `36fdcd8` | `2840e28` | 本筆記（審查修正） |
+
+rebase 後加的：
+
+| commit | 內容 |
+|---|---|
+| `a2e0af6` | 測試：S-6 後半先釘住等價（17 案）、先紅一案（第 17.5 節） |
+| `4930689` | 程式：`request_budget` 改用 `profiles` 的記憶體讀取函式 |
+| `959b119` | 測試：`kernel_files` 只換 `profiles` 的檔 |
+| `f3d6de8` | 帳本：`request_budget.py` 重算 SHA-256、補說明 |
+| `fb55e74` | 契約、威脅模型、`decisions.md`：rebase 一列、主對話的四點定案 |
+| `ec4dbe6` | 測試：經 HM-10 帳號路由建的帳號扣自己的份額 |
+| `2f8c59c` | 本筆記第 1～16 節的列號（只改數字） |
+| `6535447` | 測試：`make_apps` 只收預算份額 |
+| 本筆記的 commit | 第 17 節；結論、第 1、2、12、15、16 節的更新 |
+
+備份分支 `backup/hm31-before-rebase-20261116`（`36fdcd8`）只在本機，沒有 push。
