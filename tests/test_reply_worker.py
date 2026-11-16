@@ -940,13 +940,13 @@ def filled(build, limit=REAL_LIMIT):
     return raw
 
 
-def nested_tree(depth=100):
-    """A tree as deep as some backends nest records (a level: a few scalars, a short CJK and emoji note, a list of the
-    level below and a small dict)."""
+def nested_tree(depth=64):
+    """A tree as deep as the structure guard lets a request nest (64 levels; a level: a few scalars, a short CJK note, a
+    list of the level below and a small dict)."""
     tree = {'leaf': True}
     for level in range(depth):
         tree = {'level': level, 'name': f'node {level:03d}', 'children': [tree, {f'k{n}': 'v' * 12 for n in range(4)}],
-                'note': '中文說明 \U0001F600'}
+                'note': '中文說明'}
     return tree
 
 
@@ -962,7 +962,7 @@ REAL_SHAPES = {
     'ascii-string': lambda: filled(lambda n: reply(text_result('a' * n))),
     # a string of what json escapes: controls (6 bytes each), quotes, backslashes, newlines, tabs
     'escapes': lambda: filled(lambda n: reply(text_result('\x01"\\\n\t' * n))),
-    # deep trees, one after another
+    # deep trees (64 levels), one after another: hundreds of thousands of objects with lists in them
     'nested': lambda: filled(lambda n: reply({'structuredContent': {'trees': [nested_tree()] * n},
                                               **text_result('nested')})),
 }
@@ -1107,6 +1107,51 @@ async def test_a_real_8_mib_reply_is_the_loops_bytes_and_stops_the_loop_briefly(
           f'{inline_total * 1000:.0f} ms); on the worker {lag.distribution()}, request {total * 1000:.0f} ms; '
           f'threshold {STALL_LIMIT * 1000:.0f} ms')
     assert lag.worst <= STALL_LIMIT, lag.distribution()
+
+
+def test_a_large_value_is_let_go_of_in_pieces_and_nothing_it_does_not_own_is_touched(monkeypatch):
+    """D1: once encoded, released() empties a large value's large lists and dicts a run of members at a time (a
+    checkpoint between the runs) and its twin's containers of the same place with them; it only drops references, so an
+    object held elsewhere too (here a small dict shared with the caller) stays as it was, and a twin of another shape is
+    left alone."""
+    module = worker_module()
+    monkeypatch.setattr(module, 'PIECE_BYTES', 4096)
+    shared = {'kept': [1, 2, 3]}
+    value = {'rows': [{'id': n, 'name': f'row {n}'} for n in range(2000)], 'shared': shared, 'small': [1]}
+    twin = {'rows': [{'id': n, 'name': f'row {n}'} for n in range(2000)], 'shared': {'kept': [1, 2, 3]}, 'small': [1]}
+    other = [1, 2, 3]  # not of value's shape
+    checkpoints = []
+    plans = module._plan(value, module.PIECE_BYTES)
+    assert id(value) in plans and id(value['rows']) in plans and id(shared) not in plans
+    rows = value['rows']
+    module.released(value, plans, lambda: checkpoints.append(1), twin)
+    assert value == {} and rows == [] and twin == {} and shared == {'kept': [1, 2, 3]}
+    assert len(checkpoints) >= 2000 * 30 // 4096  # a run at a time
+    module.released({'rows': list(range(5000))}, module._plan({'rows': list(range(5000))}, 4096), None, other)
+    assert other == [1, 2, 3]
+
+
+async def test_a_large_tool_list_is_relayed_the_same_twice_on_the_worker(store, worker, monkeypatch):
+    """D1: filter_list rebuilds a tool list from the policy's own schemas, so the worker never lets go of such a reply in
+    pieces (releasable: released is not called for it, as it is for a large tools/call reply): relayed twice, a tool
+    list too large for one run of the encoder is the same answer both times, and the loop's."""
+    module = worker_module()
+    let_go = []
+    real = module.released
+
+    def recorded(value, *args):
+        let_go.append(type(value).__name__)
+        return real(value, *args)
+    monkeypatch.setattr(module, 'released', recorded)
+    tools = [{'name': name, 'description': 'd' * 4000, 'inputSchema': {'type': 'object'}} for name in list(N8N_TOOLS)]
+    raw = reply({'tools': tools * 8})
+    inline = await relayed(store, raw, method='tools/list')
+    first = await relayed(store, raw, lane=worker.lane('a'), method='tools/list')
+    second = await relayed(store, raw, lane=worker.lane('a'), method='tools/list')
+    assert inline[0] == 200 and first == inline and second == inline
+    assert let_go == []
+    large = reply(text_result('x' * (2 * module.PIECE_BYTES)) | {'rows': list(range(20_000))})
+    assert (await relayed(store, large, lane=worker.lane('a')))[0] == 200 and let_go == ['dict']
 
 
 async def test_a_job_runs_with_the_cyclic_collector_held_off(worker, store, monkeypatch):
