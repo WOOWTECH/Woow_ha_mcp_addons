@@ -46,8 +46,14 @@ def build_client() -> httpx.AsyncClient:
     )
     limits = httpx.Limits(
         max_connections=50,
-        max_keepalive_connections=20,
-        keepalive_expiry=30.0,
+        # HM-32 (PaaS #139): keep no idle connection. After a brief outage an
+        # old pooled socket can look alive while the gateway no longer answers
+        # on it, and reusing it makes the first tool call after the recovery
+        # wait for the read timeout. Each request opens a fresh connection
+        # instead (backend_policy resolves and checks the address again).
+        # Nothing is retried, so an ambiguous write is never sent twice.
+        # backend_policy's transport builds its own pool with the same rule.
+        max_keepalive_connections=0,
     )
     return async_client(
         base_url=cfg.base_url,
