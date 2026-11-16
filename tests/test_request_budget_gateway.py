@@ -481,6 +481,31 @@ async def test_the_budget_is_made_with_the_apps(tmp_path, monkeypatch):
 
 
 
+async def test_make_apps_takes_only_a_share_of_a_budget_beside_hm09s_and_hm10s_options(tmp_path, monkeypatch):
+    """make_apps' body_budget (HM-31), merged after HM-09's child_blocked and HM-10's default_endpoint and
+    bootstrap_fields: a keyword-only option, None by default (a budget of the add-on's own), and anything but a
+    request_budget.Share is refused before an app is made, as each of those three refuses what is not its own."""
+    import inspect
+
+    parameters = inspect.signature(gateway.make_apps).parameters
+    assert list(parameters)[-4:] == ['child_blocked', 'default_endpoint', 'bootstrap_fields', 'body_budget']
+    assert parameters['body_budget'].kind is inspect.Parameter.KEYWORD_ONLY and parameters['body_budget'].default is None
+    limits(monkeypatch, 16, 16)
+    configure(tmp_path / 'odoo', 'odoo')
+    store = ProductStore(tmp_path / 'odoo', 'odoo')
+    try:
+        async with httpx.AsyncClient() as to_child:
+            budget = rb().RequestBudget(rb().BudgetLimits(total=16 * MiB, per_profile=16 * MiB))
+            for wrong in (budget, budget.share('default', cap=64 * MiB).open(), 16 * MiB, object()):
+                with pytest.raises(ValueError, match='invalid request budget'):
+                    gateway.make_apps(store, TOOLS['odoo'], to_child, body_budget=wrong)
+            share = budget.share('default', cap=64 * MiB)
+            _, app = gateway.make_apps(store, TOOLS['odoo'], to_child, body_budget=share)
+            assert app.state.body_budget is share
+    finally:
+        store.close()
+
+
 @pytest.mark.parametrize('product', golden.PRODUCTS)
 async def test_every_products_runtime_reads_under_the_budget_and_the_guard(tmp_path, log_scan, monkeypatch, product):
     """Not gated (contract 1.2; PaaS #155's apps/<product>/tests/test_request_structure_guard.py): every product's
