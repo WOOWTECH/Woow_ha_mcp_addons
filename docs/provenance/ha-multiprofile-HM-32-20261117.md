@@ -362,3 +362,32 @@ harness 的輸出若出現這兩個值，測試就失敗（不印出來）。本
   使用者若覺得不必記，發版時拿掉即可。
 - repo 外文件：計畫 §12.3 HM-32 的「來由」與 FEATURE-MATRIX FM-155 補了「實際行為本來就一樣」一句；審查 S-4 (b) 交 HM-29 的契約第 9 節
   一列（LiteLLM 後端並行上限 PaaS 50、HA 4）與第 11 節 Headscale、n8n 官方 MCP 端點的評估，記進計畫 HM-29。
+
+## 18. rebase 到 claude-delivery `ebefebe`（2026-11-17 06:4x，HM-30 的 PR #111 合併後）
+
+- 分支沒 push 過，所以用 rebase（不是 force push）。本機備份分支 `backup/hm32-before-rebase-20261117`＝`ad40bcf`，沒 push。
+- 衝突只有一個 commit（`2b3ef37` → `b7932a7`）：契約第 10 節表尾、`decisions.md` 第 1.1 節表尾與變更紀錄表尾。都是兩邊各加的列，
+  照慣例新基準（HM-30）的列在前、本片的在後，兩邊的列逐字保留。`acceptance-matrix.md` 自動合併。
+- 其他 6 個 commit 的 range-diff 相同。本片對新基準的差異和 rebase 前一樣：10 個檔，829 行加、10 行刪；契約、`decisions.md`、
+  驗收矩陣逐檔的增刪行數也相同。
+- 帳本、工具表面、output schema 釘選不受影響：HM-30 沒改 `runtime-sources.json`、`tool-surface.json`、`test_output_schemas.py`
+  與兩個 `lifespan.py`。
+
+| rebase 前 | 現在 | range-diff |
+|---|---|---|
+| `3bca5f4` | `a5a8cb2` | 相同 |
+| `89d682c` | `694980b` | 相同 |
+| `2b3ef37` | `b7932a7` | 有衝突（表尾各加的列） |
+| `f510847` | `58bd717` | 相同 |
+| `848414a` | `29f8b95` | 相同 |
+| `65617ca` | `574c243` | 相同 |
+| `ad40bcf` | `977c4c1` | 相同 |
+
+- 本機檢查（rebase 後的 head `977c4c1`；一般使用者 uid 1000；TMPDIR `/tmp/ha-mp-0Aopg3`，跑完用完整路徑刪除；排在共用 pytest 鎖後面）：
+  - 新測試、`test_emqx_error_translation.py`、`test_litellm_regression_followup.py`、`test_output_schemas.py`、`test_tool_inventory.py`、
+    `test_ledger_precheck.py`：233 案全過（12.9 秒）。
+  - `test_real_products.py -k "litellm or emqx"`（起真的子程式）：2 案全過。
+  - `scripts/tool_inventory.py` exit 0；`packaging/validate.py`（ci-venv）PASS。
+  - 帳本預檢（`--base origin/claude-delivery`）：OK。`runtime-patches.json` 177、`runtime-sources.json` 70、`tool-surface.json` 159，
+    0 漂移、0 缺。
+  - 秘密預檢在最後的 head 跑，結果寫在 PR 說明。
