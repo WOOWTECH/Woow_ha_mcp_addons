@@ -94,6 +94,7 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_health_backoff.py` | HM-09 | 計畫 | 監看認證退避 15→300 秒（子程式沒回的檢查不動它）、`run()` 照退避等；面板存檔與 `child/restart` 把退避歸零；開通後連兩次失敗才判 unreachable；起點錯開：每帳號的起點值，以及 `run()` 真的等到起點才做第一次檢查；自己的 client；不探測不是自己在跑的子程式（DQ-25） |
 | `tests/test_extra_child_resources.py` | HM-09 | 計畫 | 記憶體檢查、`oom_score_adj`＝500、`nice` 是「加 5」不是「設成 5」（uid 10001 子程序）；寫不進去或沒有直譯器可跑包裝器時照起並記一行；FD soft limit |
 | `tests/test_staggered_start.py` | HM-09 | 計畫 | 錯開啟動，同時最多 2 個；某個帳號的啟動或就緒等待丟例外時記一行、其他照起 |
+| `tests/test_monitor_cancel.py` | HM-09（追補） | 新增 | 所有產品：監看與錯開啟動的就緒等待被取消時，HTTP 堆疊吞掉取消（anyio 的連線 task group、httpcore 的讀取期限）也照停；沒開通的單帳號（ProfileRuntime）與開通的 add-on 被 rig 取消或收到 SIGTERM 時都在 30 秒內關完（PR #103 的 CI 失敗） |
 | `tests/test_profile_admin_api.py` | HM-10 | 計畫 | 契約第 3 節全部情況；建立與重送不回 token；索引隔離；開關關時照舊 |
 | `tests/test_admin_pipeline_matrix.py` | HM-10 | 計畫 | 路由表自動產生的否定矩陣；非管理員逐位元相同 |
 | `packages/mcp-admin-ui/tests/profiles.test.mjs` | HM-11 | 計畫 | 標頭規則、`mutate(profile)` 回聲比對、收據帶帳號、N15 新舊斷言 |
