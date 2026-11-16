@@ -24,8 +24,10 @@ export const connectionHelp = {
 // Headscale also reads the current saved policy on every child call, including direct child calls.
 const policyRestartProducts = ['emqx', 'litellm', 'nextcloud', 'headscale'];
 export const policyRestartsChild = product => policyRestartProducts.includes(product);
-export const policyRestartNotice = product => policyRestartsChild(product)
-  ? ' 儲存後會重新啟動 MCP 子行程，現有連線可能中斷。' : '';
+// HM-11: with profiles (scoped), only the selected profile's child restarts (plan 6; FM-64).
+export const policyRestartNotice = (product, scoped = false) => !policyRestartsChild(product) ? ''
+  : scoped ? ' 儲存後只會重新啟動這個帳號的 MCP 子行程，這個帳號的現有連線可能中斷；其他帳號不受影響。'
+  : ' 儲存後會重新啟動 MCP 子行程，現有連線可能中斷。';
 
 export class UiError extends Error {}
 const tokenMaskPattern = /^[A-Za-z0-9_-]{4}\*{20}[A-Za-z0-9_-]{4}$/;
@@ -248,8 +250,9 @@ export function staleOperationDenies(b) {
     operations.filter(op => !(Object.hasOwn(b.tools, tool) && b.tools[tool].operations?.some(item => item.name === op)))
       .map(operation => ({ tool, operation })));
 }
+// HM-11 (FM-64): the profile the policy was read for is part of it (a single-profile server has none).
 export function policyFingerprint(b) {
-  return JSON.stringify([b.product, b.policy_contract, b.tools, b.disabled, b.writes_enabled, b.enabled_write_tools, b.denied_operations]);
+  return JSON.stringify([b.product, b.policy_contract, b.tools, b.disabled, b.writes_enabled, b.enabled_write_tools, b.denied_operations, b.profile?.id ?? null]);
 }
 export function savedGrant(b, row, operation) {
   return b.enabled_write_tools.includes(operation === null ? row.name : `${row.name}:${operation}`) || operation === null && row.legacy && b.writes_enabled;
@@ -316,8 +319,10 @@ export function policyPayload(bootstrap, disabled, grants, denies) {
   } else if (denies?.length) throw new UiError('伺服器不支援操作限制。');
   return result;
 }
-export function clientExample(endpoint, token = null) {
-  return JSON.stringify({ mcpServers: { woow: { type: 'http', url: endpoint ? explicitUrl(endpoint, true) : 'https://YOUR-MCP-HOST:PORT/mcp', headers: { Authorization: `Bearer ${token ?? '<YOUR_ADDON_TOKEN>'}` } } } }, null, 2);
+// HM-11 (DQ-31): name is the server name to add; an additional profile's carries its id (profiles.clientName).
+export function clientExample(endpoint, token = null, name = 'woow') {
+  if (!/^woow(?:-[a-z0-9-]{1,32}-[0-9a-f]{8})?$/.test(name)) throw new UiError('用戶端名稱格式不符。');
+  return JSON.stringify({ mcpServers: { [name]: { type: 'http', url: endpoint ? explicitUrl(endpoint, true) : 'https://YOUR-MCP-HOST:PORT/mcp', headers: { Authorization: `Bearer ${token ?? '<YOUR_ADDON_TOKEN>'}` } } } }, null, 2);
 }
 // 0.1.12: Claude.ai custom connectors cannot send an Authorization header. The gateway also accepts the add-on token
 // as a path segment: <the saved /mcp endpoint without its final /mcp>/private_<token>/mcp. Built only from the

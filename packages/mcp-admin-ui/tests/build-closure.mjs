@@ -48,6 +48,25 @@ const identity=await readFile(resolve(root,'src/operation-identity.js'),'utf8');
 assert(identity.includes("{ id, route, revision, product: fresh.product }"));
 assert(identity.includes("'id,product,revision,route'"));
 for (const marker of ['localStorage','password','csrf','token:','payload:']) assert(!identity.includes(marker));
+// HM-11 (plan 6, C4-MF-3): the default profile keeps the key and the 4-key record above; an additional profile's record
+// is its own key with its profile; profile create/delete keep only the label or the profile id beside the identity.
+assert(identity.includes('this.key = `woow-admin-operation-v1:${mount}`;'));
+assert(identity.includes('`${this.key}:${scope}`'));
+assert(identity.includes("{ id, route, revision, product: fresh.product, profile: scope }"));
+assert(identity.includes("'id,product,profile,revision,route'"));
+assert(identity.includes("'id,label,product,revision,route'"));
+// DQ-18: the selected profile lives in memory only; no source but the operation identity's default touches storage.
+for (const name of ['src/app.js','src/profiles.js','src/contracts.js']) {
+  const source=await readFile(resolve(root,name),'utf8');
+  assert(!/sessionStorage|localStorage|indexedDB|document\.cookie/.test(source),`${name} keeps no browser storage`);
+}
+{
+  const api=await readFile(resolve(root,'src/api.js'),'utf8');
+  assert.equal((api.match(/sessionStorage/g)||[]).length,1,'api.js only hands sessionStorage to the operation identity');
+  assert(!/localStorage|indexedDB|document\.cookie/.test(api));
+  const js=await readFile(resolve(dist,'assets/app.js'),'utf8');
+  assert(js.includes('X-MCP-Profile'),'profile-scoped requests name their profile');
+}
 const html=await readFile(resolve(dist,'index.html'),'utf8');
 assert(html.includes('__MCP_UI_BASE__'));
 assert.equal((html.match(/\/assets\/app\.js/g)||[]).length,1);
