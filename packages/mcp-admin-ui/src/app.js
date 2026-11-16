@@ -933,7 +933,9 @@ function restoreNoticeCard() {
   return el('section', { class: 'card', id: 'restore-notice', 'aria-labelledby': 'restore-notice-title' },
     el('h2', { id: 'restore-notice-title' }, '偵測到還原'),
     p('偵測到還原；權杖已回到備份當時的值。若備份後曾輪替或撤銷，請立即重新產生'),
-    p(`還原時間：${noticeTime(found.at)}。MCP 用戶端連不上時，可能是它用的是還原前的新權杖。這則提示在重新產生或撤銷權杖後消失；「知道了」只在這個頁面暫時隱藏，重新整理後會再出現。`),
+    // The time the add-on's start found the restore (HM-13a's marker left by an image without the guard included: then
+    // the first start with it, not the restore itself).
+    p(`偵測到還原的時間：${noticeTime(found.at)}（add-on 啟動時發現的時間）。MCP 用戶端連不上時，可能是它用的是備份之後才換的權杖。這則提示在重新產生或撤銷權杖後消失；「知道了」只在這個頁面暫時隱藏，重新整理後會再出現。`),
     el('div', { class: 'actions' }, button('前往重新產生權杖', () => navigate('access'), { class: 'primary' }),
       button('知道了', () => { noticeHidden = found.at ?? ''; render(); }, { id: 'restore-notice-dismiss' })));
 }
@@ -956,6 +958,9 @@ function reviewCard() {
   const parts = [review.pending === null
     ? p('還原紀錄讀不到或格式不符：所有帳號的「重新產生權杖」暫停。仍可以全部撤銷或刪除帳號；請重新整理狀態，一再出現時請回報。')
     : p(`${review.pending} 個帳號的權杖已撤銷，等你核對：逐一確認下面的名稱、後端身分與政策摘要是你要的（它們是備份當時的值），按「已核對」後才能到那個帳號重新產生權杖。設定不對的帳號可以直接刪除。`)];
+  // A list without its revision (the index cannot be used, or the list cannot be read) changes nothing: say so rather
+  // than offer a button that cannot act (HM-11 review observation 4's lesson).
+  if (profiles?.revision === null) parts.push(p('帳號清單目前不能變更（例如帳號索引無法使用），暫時無法核對或刪除帳號。帳號索引無法使用時，請先「隔離帳號索引」，再回來核對；其他情況請重新整理狀態。'));
   if (record?.error) parts.push(p(record.error instanceof UiError ? record.error.message : '還原紀錄無法讀取。'));
   else if (record?.view) parts.push(reviewRows(record.view));
   const quarantined = profiles?.quarantined ?? [];
@@ -964,18 +969,23 @@ function reviewCard() {
     el('h2', { id: 'restore-review-title' }, `核對卡：${when}`), ...parts);
 }
 function reviewRows(view) {
+  const locked = profiles?.revision === null;
   return el('ul', { class: 'review-list' }, ...view.rows.map(row => {
     const listed = profiles?.rows.find(item => item.id === row.id) ?? null;
     const exists = row.id === DEFAULT_PROFILE || listed !== null;
+    // Not in the list: a list the panel cannot use says nothing about it; an orphan is still on disk (delete only).
+    const where = exists ? listed ? ` · 目前狀態：${statusLabel(listed)}` : ''
+      : profiles?.substitute ? ' · 帳號清單目前讀不到，狀態不明'
+        : (profiles?.orphans ?? []).includes(row.id) ? ' · 帳號索引沒有列它（孤兒帳號資料，只能在「診斷與維護」刪除）' : ' · 已刪除';
     const name = row.id === DEFAULT_PROFILE ? '預設帳號' : listed ? profileName(listed) : row.label ?? '名稱不明的帳號';
     const identity = row.identity.length ? el('dl', { class: 'summary' }, ...row.identity.flatMap(([key, value]) => [el('dt', {}, fieldLabel(key)), el('dd', {}, value ?? '（未設定）')]))
       : p('沒有後端身分欄位（還沒有設定連線）。');
     const actions = [];
-    if (exists && waitsForReview(row)) actions.push(button('已核對', () => reviewProfile(row, name), { 'aria-label': `已核對帳號「${name}」（${shortId(row.id)}）` }));
+    if (exists && waitsForReview(row)) actions.push(button('已核對', () => reviewProfile(row, name), { disabled: locked, 'aria-label': `已核對帳號「${name}」（${shortId(row.id)}）` }));
     else if (exists && row.reviewedAt) actions.push(button('到這個帳號重新產生權杖', () => goRotate(row.id)));
-    if (exists && row.id !== DEFAULT_PROFILE && listed) actions.push(button('刪除', () => removeProfile(listed), { 'aria-label': `刪除帳號「${name}」（${shortId(row.id)}）` }));
+    if (exists && row.id !== DEFAULT_PROFILE && listed) actions.push(button('刪除', () => removeProfile(listed), { disabled: locked, 'aria-label': `刪除帳號「${name}」（${shortId(row.id)}）` }));
     return el('li', { class: 'review-row', 'data-profile': row.id }, el('h3', {}, `${name}（${shortId(row.id)}）`),
-      p(`${tokenText(row.token)}${exists ? listed ? ` · 目前狀態：${statusLabel(listed)}` : '' : ' · 已刪除'}${row.reviewedAt ? ` · 已核對（${noticeTime(row.reviewedAt)}）` : ''}`),
+      p(`${tokenText(row.token)}${where}${row.reviewedAt ? ` · 已核對（${noticeTime(row.reviewedAt)}）` : ''}`),
       identity, p(`政策摘要：${policyLine(row.policy)}`), actions.length ? el('div', { class: 'actions' }, ...actions) : null);
   }));
 }
@@ -1032,9 +1042,15 @@ function revokeAllCard() {
     el('div', { class: 'actions' }, button('全部撤銷', revokeAll, { id: 'revoke-all-button', disabled: revision === null })));
 }
 function unfinishedText(results, resent = false) {
+  // No result at all: it may not even have begun (its marker could not be saved, e.g. a full disk), and then a restart
+  // brings nothing back to finish: say both ways (contract 4.1 operation_outcome_unknown).
+  if (!resent && !results.length) return '全部撤銷沒有完成，也沒有回報任何帳號的結果（例如磁碟寫不進去）。這次執行期間，所有帳號原本的權杖在 MCP 端點都回 503。撤銷若已經開始，重新啟動 add-on 時會在服務前補完；若連開始都沒有，重新啟動後原本的權杖會恢復有效。請先查看 add-on 日誌、修好磁碟，再在「帳號操作尚未確認」按「已核對帳號清單」，然後再按一次「全部撤銷」。';
   const failed = results.filter(item => item.result === 'failed').map(item => named(profiles?.rows.find(row => row.id === item.id) ?? null, item.id));
-  const what = failed.length ? `帳號${failed.join('、')}的權杖沒有撤銷成功` : resent ? '伺服器不會再執行同一筆操作，結果仍未確認' : '沒有回報任何帳號的結果';
-  return `全部撤銷沒有完成：${what}。沒撤銷成功的帳號在 MCP 端點回 503，直到重試成功；重新啟動 add-on 時也會自動補完。要重試，請先在「帳號操作尚未確認」按「已核對帳號清單」，再按一次「全部撤銷」。`;
+  // Every profile revoked, yet not finished (the check after it did not pass, or the profiles directory could not be
+  // listed): nothing is refused with 503, and the next start does it all again.
+  if (!resent && !failed.length) return '全部撤銷沒有完成：每個帳號的權杖都已撤銷，但收尾沒有完成（例如事後的檢查沒有通過，或帳號資料夾一時讀不到）。重新啟動 add-on 時會在服務前再做一次全部撤銷（之後才產生的新權杖也會一起撤銷）。要現在完成，請先在「帳號操作尚未確認」按「已核對帳號清單」，再按一次「全部撤銷」。';
+  const what = failed.length ? `帳號${failed.join('、')}的權杖沒有撤銷成功` : '伺服器不會再執行同一筆操作，結果仍未確認';
+  return `全部撤銷沒有完成：${what}。沒撤銷成功的帳號在 MCP 端點回 503，直到重試成功；重新啟動 add-on 時也會自動補完（之後才產生的新權杖也會一起撤銷）。要重試，請先在「帳號操作尚未確認」按「已核對帳號清單」，再按一次「全部撤銷」。`;
 }
 async function revokeAll() {
   const revision = revokeAllRevision();
