@@ -50,8 +50,14 @@ grows past the budget while it is read is cut off at once: the profile's app see
 replaced by 503 + -32003 id null, nothing of it reaches the child and its bytes are given back. A GET past the stream
 cap: 429 + -32003 id null + Retry-After 30, at once. The profile's app answers a forwarding slot that stays busy for a
 second the same way (ProfileGate.slot_busy, make_apps slot_busy). Each limit writes one WARNING per profile and
-situation a minute (Reports: id's first 8 characters, suppressed=N), never a token, URL, label or request content. The
--32003 texts are fixed and provisional (HM-14 settles them).
+situation a minute (Reports: id's first 8 characters, suppressed=N), never a token, URL, label or request content.
+
+HM-14 (contract 2.4, 2.5; the PaaS #148 gateway, woow-mcp-server 69ac425): ProfileGate.slot_busy (gateway.SlotBusy) also
+gives the profile's app its lanes' queue cap (32, 16 requests waiting in each lane on its own) and its reserve (4 slots
+kept for a POST that carries no request), and the answers and WARNINGs that name the profile: a lane's queue full
+(refused at once), a client gone while its request waited (never sent; a WARNING only), the child's connection broken
+mid-request (-32004; a WARNING with the HTTP method and the error's class). The -32003 texts are settled (HM-14): the four
+HM-08 wrote, as they were, and the reserved slots' and the queue's (forward_text, queue_text).
 
 What the budget bounds is the bytes of a profile's requests, not every byte they cost: parsing a body costs more than
 its size (many small objects or arrays: about 24 times, contract 5), and the 8081 listener's connections are one bound
@@ -60,9 +66,9 @@ token too: when it is full, a new connection gets uvicorn's plain-text 503 whate
 known since G2 S7). The isolation of one profile from another holds per request.
 
 The reply mask (plan 5.1 point 8, DQ-40 (a) ⑧): the manager's reply_secrets() gives every profile's app every token
-and child token the add-on holds (make_apps reply_secrets). Not here: queue limits, the notification reserve and the
--32004/-32005 endings (HM-14), the pending-reply budget and the reply worker (HM-30), the management dispatcher
-(HM-10), Origin reporting (HM-27).
+and child token the add-on holds (make_apps reply_secrets). Not here: the lanes, the -32004/-32005 endings and the
+initialize generation fence themselves (gateway.make_apps, given slot_busy; HM-14), the pending-reply budget and the
+reply worker (HM-30), the management dispatcher (HM-10), Origin reporting (HM-27).
 """
 from __future__ import annotations
 
@@ -89,13 +95,18 @@ REFUSAL_READ_SECONDS = 2
 REFUSAL_SLOTS = 8
 REFUSAL_BYTES = 512 * 1024
 # One WARNING per profile and situation this often (the PaaS gateway_pool.REPORT_INTERVAL_SECONDS), remembering at most
-# this many situations.
+# this many situations. HM-14 review S-4: every situation of every profile an add-on can have must fit, or the oldest is
+# forgotten before it comes round again and every line is written: a profile has 11 since HM-14, Odoo's 6 profiles 66
+# (PaaS remembers 64), and the shared-token groups count too (at most 57 for 6 profiles). 256 leaves room for the
+# situations later slices add.
 REPORT_SECONDS = 60
-MAX_REPORT_KEYS = 64
+MAX_REPORT_KEYS = 256
 MiB = 1024 * 1024
 
 
-# ---- the -32003 texts (provisional; HM-14 settles them): which limit, and "retry shortly" ----
+# ---- the -32003 texts (HM-14 settles them: HM-08's four as they were, and the reserved slots' and the queue's): which
+# limit, and "retry shortly"; English, then Traditional Chinese, as the PaaS gateway writes them (69ac425 proxy.py
+# _busy_message, _stream_limit_message; its 子行程 is HA's 子程式). Never a token, a URL, a label or request content. ----
 
 def admission_text(limit: int) -> str:
     return (f"This MCP URL already has {limit} requests in progress, the limit of its profile, so this request was not "
@@ -110,10 +121,22 @@ def bytes_text(limit: int) -> str:
             f"(這個 MCP 網址進行中的請求內容已達這個帳號的上限 {size}，這個請求沒有送出，請稍後再試。)")
 
 
-def forward_text(slots: int, wait: float) -> str:
-    return (f"All {slots} connections of this MCP URL to its MCP server are in use; waited {wait:g} s without a free "
+def forward_text(slots: int, wait: float, reserved: bool = False) -> str:
+    """A request that waited for one of its lane's slots in vain (reserved: the slots kept for notifications; each lane
+    names its own number of slots, PaaS review N8)."""
+    english, chinese = ('connections reserved for notifications', '保留給通知、') if reserved else ('connections', '')
+    return (f"All {slots} {english} of this MCP URL to its MCP server are in use; waited {wait:g} s without a free "
             "one, so this request was not sent. Retry shortly. "
-            f"(這個 MCP 網址送往 MCP 子程式的 {slots} 條連線都在使用中，等了 {wait:g} 秒仍沒有空出來，這個請求沒有送出，"
+            f"(這個 MCP 網址{chinese}送往 MCP 子程式的 {slots} 條連線都在使用中，等了 {wait:g} 秒仍沒有空出來，這個請求沒有送出，"
+            "請稍後再試。)")
+
+
+def queue_text(queue: int, slots: int, reserved: bool = False) -> str:
+    """A request refused at once because its lane's queue was full (reserved: as forward_text)."""
+    english, chinese = ('connections reserved for notifications', '保留給通知、') if reserved else ('connections', '')
+    return (f"{queue} requests of this MCP URL are already waiting for one of its {slots} {english} to its MCP server, "
+            "so this request was not queued or sent. Retry shortly. "
+            f"(這個 MCP 網址已經有 {queue} 個請求在排隊等 {slots} 條{chinese}送往 MCP 子程式的連線，這個請求沒有排隊也沒有送出，"
             "請稍後再試。)")
 
 
@@ -227,16 +250,46 @@ class ProfileGate:
         self.profile_id, self.quota, self.allowance, self.reports = profile_id, quota, allowance, reports
         self.name = profiles.log_id(profile_id)
         self.active = self.body_bytes = self.streams = 0
+        # make_apps slot_busy (HM-08: the busy answer; HM-14: the lanes' queue cap and reserve, and the answers and
+        # WARNINGs that name this profile): the profile's app forwards with it.
+        self.slot_busy = gateway.SlotBusy(queue=quota.queue, reserve=quota.reserved_notifications,
+                                          wait=quota.forward_wait_seconds, answer=self.forward_busy,
+                                          abandoned=self.forward_abandoned, interrupted=self.child_interrupted)
 
     def warn(self, situation, text):
         self.reports.warn(self.profile_id, situation, f'MCP gateway [profile={self.name}]: {text}')
 
-    def slot_busy(self, message):
-        """make_apps slot_busy: a request of this profile waited for one of its forwarding slots in vain."""
-        slots, wait = self.quota.forward_slots, self.quota.forward_wait_seconds
-        self.warn('forward', f'all {slots} forwarding slots stayed in use for {wait:g} s; requests were answered busy '
-                             '(-32003) and not sent')
-        return gateway.busy_reply(message, forward_text(slots, wait))
+    def forward_busy(self, message, situation, lane):
+        """gateway.SlotBusy.answer: a request of this profile found its lane's slots busy: it waited in vain (situation
+        "wait") or the lane's queue was full ("queue"). Each lane names its own number of slots."""
+        quota = self.quota
+        reserved = lane == gateway.RESERVED_LANE
+        slots = quota.reserved_notifications if reserved else quota.forward_slots
+        kind = 'forwarding slots reserved for notifications' if reserved else 'forwarding slots'
+        if situation == 'queue':
+            self.warn(('queue', lane), f'{quota.queue} requests were waiting for one of its {slots} {kind}, its limit; '
+                                       'new ones were answered busy (-32003) without waiting')
+            return gateway.busy_reply(message, queue_text(quota.queue, slots, reserved))
+        wait = quota.forward_wait_seconds
+        if reserved:
+            self.warn(('forward', lane), f'all {slots} {kind} stayed in use for {wait:g} s; notifications were answered '
+                                         'busy (-32003) and not sent (its MCP server may be stuck)')
+        else:
+            self.warn('forward', f'all {slots} forwarding slots stayed in use for {wait:g} s; requests were answered '
+                                 'busy (-32003) and not sent')
+        return gateway.busy_reply(message, forward_text(slots, wait, reserved))
+
+    def forward_abandoned(self, lane):
+        """gateway.SlotBusy.abandoned: a client closed its connection while its request waited for a slot."""
+        self.warn(('abandoned', lane), 'a client closed its connection while its request waited for a forwarding '
+                                       'slot; the request was not sent')
+
+    def child_interrupted(self, method, error, stopped):
+        """gateway.SlotBusy.interrupted: the connection to this profile's child broke while it handled a request (the
+        HTTP method and the httpx error's class name: no path, token or content)."""
+        cause = 'the MCP server stopped' if stopped else 'the MCP server is still running'
+        self.warn(('interrupted', stopped), f'the connection to its MCP server broke while it handled a {method} '
+                                            f'request ({error}); {cause}; answered -32004')
 
     async def refuse(self, situation, text, note, scope, receive, send, length):
         """A request refused before its body is read: its id looked for (a POST only) with the refusal allowance."""

@@ -218,7 +218,8 @@ async def test_a_childs_initialize_error_is_masked_once_switched_on(tmp_path, lo
     """B's child answers initialize with a JSON-RPC error whose message and data carry its backend's text (every token
     the add-on holds, C's secret URL, both backend passwords, a value nobody holds): switched on, the gateway masks it
     as every other relayed text (HM-08 review S-4 (a)): every token and B's own password [REDACTED], C's password and
-    the value nobody holds shown. Switched off the error is relayed as before (an existing gap, left to HM-14)."""
+    the value nobody holds shown. Switched off, HM-14 masks it with the profile's own credentials (not gated:
+    tests/test_initialize_generation.py)."""
     data = setup(tmp_path)
     children = children_of(data)
     async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:

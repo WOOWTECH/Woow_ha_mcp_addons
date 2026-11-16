@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 from collections import OrderedDict
 import copy
+from dataclasses import dataclass
 import functools
 import hashlib
 import hmac
@@ -24,7 +25,7 @@ import httpx
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.requests import ClientDisconnect, Request
-from starlette.responses import JSONResponse, Response, StreamingResponse
+from starlette.responses import JSONResponse, PlainTextResponse, Response, StreamingResponse
 from starlette.routing import Route, request_response
 from starlette.middleware import Middleware
 
@@ -112,6 +113,195 @@ STREAM_RETRY_AFTER = 30
 # a POST's body is re-serialized for the child, serve() calls it with the message and the forwarded size: None sends
 # the body, anything else is the answer instead (the profile's byte budget cannot hold it).
 FORWARDED_BODY = "forwarded_body"
+# HM-14 (contract 2.4, 2.5; the PaaS gateway's codes, texts and timings, woow-mcp-server 69ac425 proxy.py, mcp_access.py,
+# gateway_pool.py), for a switched-on product only (make_apps slot_busy given): a child whose connection broke while it
+# handled a request (-32004) and a token rotated or revoked after an answer began to go out (-32005).
+CHILD_INTERRUPTED = -32004
+ACCESS_CHANGED = -32005
+# How long the gateway keeps looking for the child's exit once its connection broke: the broken connection and the
+# Supervisor seeing the exit come within milliseconds of each other, in either order (PaaS CHILD_EXIT_GRACE_SECONDS).
+CHILD_EXIT_GRACE_SECONDS = .25
+# How long the gateway tries to hand its own ending (a refusal, or the -32005 event and the end of the stream) to a
+# client that does not read (PaaS mcp_access.INTERRUPTED_FINISH_TIMEOUT); then it gives up, raising nothing.
+ENDING_SECONDS = 2
+# The answer of a request whose client closed its connection while it waited for a forwarding slot: nobody receives it
+# (the server sends nothing once its client left); 499, nginx's Client Closed Request, as the PaaS gateway answers.
+CLIENT_CLOSED = 499
+# A switched-on profile's two groups of forwarding slots (Lane): the ordinary one (forward_slots) and the one kept for a
+# POST that carries no request (SlotBusy.reserve; carries_no_request).
+ORDINARY_LANE, RESERVED_LANE = "ordinary", "reserved"
+CHILD_STOPPED_TEXT = (
+    "The MCP server process stopped while handling this request (it restarts automatically). The operation may or may "
+    "not have completed; check before retrying. (MCP 子程式在處理這個請求時停止了（會自動重新啟動），這個操作可能已完成"
+    "也可能沒有，請先確認再重試。)")
+CHILD_CONNECTION_TEXT = (
+    "The connection to the MCP server was interrupted while handling this request, but the MCP server process is still "
+    "running. The operation may or may not have completed; check before retrying. (閘道與 MCP 子程式之間的連線在處理這個"
+    "請求時中斷，但子程式仍在執行；這個操作可能已完成也可能沒有，請先確認再重試。)")
+# HM-14 after HM-09 (contract 2.5, 7): CHILD_STOPPED_TEXT, the PaaS text, says the child restarts automatically. It does
+# only in these Supervisor states (lifecycle.Supervisor.status) once the generation a request went to stopped: the
+# watchdog waits out its backoff, a start is under way, a new generation runs. In any other nothing restarts it now
+# (blocked: a disabled profile, too little memory, a refused start; failed: its monitor stopped, DQ-21; stopped: the
+# profile deleted or the add-on stopping; unconfigured: no connection saved), and the text says so instead.
+CHILD_RESTARTING_STATES = frozenset({"backoff", "starting", "running"})
+CHILD_HALTED_TEXT = (
+    "The MCP server process stopped while handling this request and is not restarting now (blocked, failed, stopped or "
+    "not configured; the add-on log says why). The operation may or may not have completed; check before retrying. "
+    "(MCP 子程式在處理這個請求時停止了，目前沒有在重新啟動（被擋下、失敗、已停止或沒有設定，原因見 add-on 的 log），"
+    "這個操作可能已完成也可能沒有，請先確認再重試。)")
+ACCESS_CHANGED_TEXT = (
+    "The MCP token was rotated or revoked while this request was running, so the gateway stopped the response. "
+    "Reconnect with the current MCP URL or token. (處理這個請求時 MCP 權杖已被輪替或撤銷，閘道已停止這個回應；請用目前的 "
+    "MCP 網址或權杖重新連線。)")
+
+
+@dataclass(frozen=True)
+class SlotBusy:
+    """HM-14 (contract 2.4, 2.5, 5; plan 12.3 HM-14): make_apps slot_busy, what a switched-on profile's gateway does
+    when its forwarding slots are busy and the answers that name the profile (profile_router.ProfileGate builds it from
+    the profile's quota and Reports; HM-08 passed only the busy answer):
+
+    - queue: how many requests may wait for a slot at once, in each lane on its own (32 for the default profile, 16 for
+      an additional one; 0: none waits);
+    - reserve: the slots kept for a POST that carries no request (carries_no_request: notifications/initialized is the
+      only one this gateway forwards), 4; 0: such a POST takes an ordinary slot;
+    - wait: how long a request waits for a slot (1 s);
+    - answer(message, situation, lane): the busy answer, with the profile's WARNING: situation "wait" (it waited in
+      vain) or "queue" (its lane's queue was full: refused at once); lane ORDINARY_LANE or RESERVED_LANE; message the
+      JSON-RPC message of a POST, else None (busy_reply's shapes);
+    - abandoned(lane): its client closed its connection while it waited (a WARNING; the request is never sent);
+    - interrupted(http_method, error_name, stopped): the connection to the child broke while it handled a request (a
+      WARNING; stopped: the child generation it went to has stopped)."""
+    queue: int
+    reserve: int
+    wait: float
+    answer: Callable[[object, str, str], Response]
+    abandoned: Callable[[str], None]
+    interrupted: Callable[[str, str, bool], None]
+
+    def __post_init__(self):
+        if (type(self.queue) is not int or type(self.reserve) is not int or self.queue < 0 or self.reserve < 0
+                or isinstance(self.wait, bool) or not isinstance(self.wait, (int, float)) or not self.wait > 0
+                or not all(callable(value) for value in (self.answer, self.abandoned, self.interrupted))):
+            raise ValueError("invalid busy answer")
+
+
+def carries_no_request(method, message):
+    """HM-14 (contract 2.4; the PaaS rule, proxy._carries_no_request, woow-mcp-server 69ac425 proxy.py:336): whether a
+    request may use its profile's reserved slots: a POST whose JSON value carries no JSON-RPC request, an object or a
+    non-empty array of objects, none of them a request (a string method with an id other than null) and each a
+    notification (a string method) or a response to the server (an id and a result or an error, no method). Anything
+    else is False and takes an ordinary slot: another HTTP method (a GET is a stream, a DELETE ends a session), nothing
+    parsed (None), an empty array, a value that is not an object, a member that is neither. HA's policy lets only single
+    messages through (authorize: a batch, a response and an id-less call are refused before any slot), so the one POST
+    that reaches the reserve here is notifications/initialized; the rule is the PaaS one, unchanged."""
+    if method != "POST" or message is None:
+        return False
+    items = message if isinstance(message, list) else [message]
+    if not items or any(isinstance(item, dict) and isinstance(item.get("method"), str) and item.get("id") is not None
+                        for item in items):
+        return False
+    for item in items:
+        if not isinstance(item, dict):
+            return False
+        if "method" in item:
+            if not isinstance(item["method"], str):
+                return False
+        elif "id" not in item or not ("result" in item or "error" in item):
+            return False
+    return True
+
+
+class Lane:
+    """HM-14: one group of a switched-on profile's forwarding slots and the requests waiting for them (take_slot)."""
+    __slots__ = ("name", "limit", "semaphore", "waiting")
+
+    def __init__(self, name, limit):
+        self.name, self.limit = name, limit
+        self.semaphore = asyncio.Semaphore(limit)
+        self.waiting = 0
+
+
+def _hand_back(semaphore):
+    """When a slot's acquire ends after its waiter gave up (timed out, its client left, it was cancelled): a slot the
+    acquire took is released at once (PaaS gateway_pool._hand_back)."""
+    def done(task):
+        if not task.cancelled() and task.exception() is None:
+            semaphore.release()
+    return done
+
+
+def _consume(task):
+    if not task.cancelled():
+        task.exception()  # retrieved: no "Task exception was never retrieved"
+
+
+async def _watch_client(gone):
+    """Until the client is gone. A watcher that fails (its receive raised) is no disconnect and never ends the wait
+    early: it then waits for nothing, the slot and the deadline decide (PaaS gateway_pool._watch_client)."""
+    try:
+        await gone()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        await asyncio.Event().wait()
+
+
+async def take_slot(lane, queue, wait, gone):
+    """HM-14 (contract 2.4; PaaS gateway_pool.ProfileLimitedTransport._acquire and _wait_for_slot, 69ac425): one of
+    lane's slots for a request whose body is read. A free slot is taken at once, without yielding. Otherwise the request
+    waits, unless queue requests already wait in this lane ("queue": refused at once, it does not wait), for at most wait
+    seconds ("wait": none came free) while gone() watches its client: a client that closed its connection is never
+    forwarded ("abandoned"), even when a slot came free in the same instant (that slot is given back). "taken": the
+    caller holds one of lane.semaphore's slots (UpstreamOwner releases it). Between a slot taken and the return there is
+    no await and the clean-up is synchronous, so a cancellation anywhere leaks no slot and leaves no waiter behind."""
+    if not lane.semaphore.locked():
+        await lane.semaphore.acquire()  # a free slot: no wait, no yield
+        return "taken"
+    if lane.waiting >= queue:
+        return "queue"
+    lane.waiting += 1
+    loop = asyncio.get_running_loop()
+    acquire = loop.create_task(lane.semaphore.acquire())
+    watch = loop.create_task(_watch_client(gone))
+    keep = False
+    try:
+        done, _ = await asyncio.wait({acquire, watch}, timeout=wait, return_when=asyncio.FIRST_COMPLETED)
+        got = acquire in done and not acquire.cancelled() and acquire.exception() is None
+        left = watch in done
+        if got and not left:
+            keep = True
+            return "taken"
+        return "abandoned" if left else "wait"  # a client gone in the same instant: the slot goes back, nothing is sent
+    finally:
+        lane.waiting -= 1
+        if not keep:
+            if not acquire.done():
+                acquire.cancel()
+            acquire.add_done_callback(_hand_back(lane.semaphore))
+        if not watch.done():
+            watch.cancel()
+        watch.add_done_callback(_consume)
+
+
+async def client_gone(request):
+    """Returns when the client closed its connection (http.disconnect). Called only once the body is read in full and
+    before the answer starts, so nothing else reads the request then."""
+    while (await request.receive())["type"] != "http.disconnect":
+        pass
+
+
+def interrupted(error):
+    """HM-14: whether an httpx error means the child's connection broke while it handled the request (a read, write or
+    protocol error once it was reached), not that it could not be reached (ConnectError) or answered too slowly."""
+    return (isinstance(error, httpx.TransportError)
+            and not isinstance(error, (httpx.TimeoutException, httpx.ConnectError)))
+
+
+def gateway_event(ident, code, text):
+    """One SSE event with the gateway's own JSON-RPC error under ident (contract 2.5: -32004, -32005)."""
+    value = {"jsonrpc": "2.0", "id": ident, "error": {"code": code, "message": text}}
+    return b"event: message\ndata: " + json.dumps(value, separators=(",", ":")).encode() + b"\n\n"
 
 
 def request_id(message):
@@ -247,6 +437,15 @@ class UpstreamOwner:
         self.closed = False
         self.overflowed = False  # chunks() stopped at MAX_RESPONSE, not at the end of the reply
         self.end_session = None  # 0.1.6 (R2): set while the child's new session id is withheld from the client
+        # HM-14 (switched on; contract 2.5): the error that broke the child's connection while chunks() read its reply
+        # (interrupted), the child generation the request went to (its Supervisor's start count, when there is a health
+        # monitor), the POST's id an event stream answers ((id,), None for a GET) and whether its answer was delivered:
+        # the child's reply or, once the child's connection broke, the gateway's own -32004 event (review S-1).
+        self.interrupted = None
+        self.generation = None
+        self.reply = None
+        self.answered = False
+        self.reply_event = None  # the answer's event as the stream yields it (an Ending compares what the server took)
 
     async def close(self):
         if self.closed:
@@ -307,17 +506,69 @@ class OwnedStreamingResponse(StreamingResponse):
 
 
 class OwnedInitializeResponse:
-    """Retain the new-session cleanup obligation until its complete answer is sent."""
-    def __init__(self, response, owner):
-        self.response, self.owner = response, owner
+    """Retain the new-session cleanup obligation until its complete answer is sent.
+
+    HM-14 (switched on; FM-43, contract 2.5): fence() is asked right before the answer's headers go out, when the session
+    id would reach the client. While the child generation the initialize went to is no longer the one running (it
+    exited, was stopped or replaced), the client gets fenced instead (backend_unavailable: 503, Retry-After 5, no session
+    id) and the dead session gets no DELETE (it ended with its child; the DELETE would reach the next generation)."""
+    def __init__(self, response, owner, fence=None, fenced=None):
+        self.response, self.owner, self.fence, self.fenced = response, owner, fence, fenced
         self.status_code = response.status_code
 
     async def __call__(self, scope, receive, send):
         try:
+            if self.fence is not None and not self.fence():
+                self.owner.end_session = None
+                await self.fenced(scope, receive, send)
+                return
             await self.response(scope, receive, send)
             self.owner.end_session = None
         finally:
             await self.owner.close()
+
+
+class Ending:
+    """HM-14 (switched on; contract 2.5; PaaS mcp_access._finish_interrupted and initialize_fence, woow-mcp-server
+    69ac425): how the gateway ends an answer whose token was rotated or revoked (a deleted profile's token is revoked
+    first) after the answer began to go out (access.LeasedResponse ending), instead of raising ClientDisconnect to the
+    server (which logged it with a traceback, and answered 500 when no header had gone out):
+
+    - its headers were not taken by the server (the client was not reading: backpressure): refusal, the bytes a changed
+      token gets before an answer starts (Bearer 401 {"error":"request denied"}, secret path 404 Not Found);
+    - its headers went out on an event stream: one -32005 event under the POST's id when its answer was not delivered
+      (its answer: the child's reply, or the gateway's own -32004 event once the child's connection broke; a GET stream
+      gets none), then the end of the stream; never another byte of the child's;
+    - its headers went out on a buffered answer: its Content-Length is fixed (HM-01's golden bytes), so nothing more can
+      be sent; the gateway returns and the server closes the connection (uvicorn logs one line without a traceback,
+      "ASGI callable returned without completing response.");
+    - the answer was complete: nothing.
+    Each within ENDING_SECONDS; for a client that reads nothing the gateway gives up quietly."""
+
+    def __init__(self, refusal, response):
+        self.refusal, self.response = refusal, response
+
+    async def __call__(self, scope, receive, send, delivery):
+        if delivery.completed:
+            return
+        try:
+            async with asyncio.timeout(ENDING_SECONDS):
+                if not delivery.accepted:
+                    await self.refusal(scope, receive, send)
+                    return
+                if not isinstance(self.response, OwnedStreamingResponse):
+                    return
+                owner = self.response.owner
+                # the answer is delivered once the server took its event (the child's reply or the gateway's -32004):
+                # the generator resumed after it (answered), or the token changed as the server took it (the last body
+                # the server took is that event)
+                answered = owner.answered or (owner.reply_event is not None and delivery.last_body is owner.reply_event)
+                if owner.reply is not None and not answered:
+                    await send({"type": "http.response.body", "more_body": True,
+                                "body": gateway_event(owner.reply[0], ACCESS_CHANGED, ACCESS_CHANGED_TEXT)})
+                await send({"type": "http.response.body", "body": b"", "more_body": False})
+        except (TimeoutError, OSError, ClientDisconnect):
+            pass
 
 
 class AnyMethod:
@@ -407,7 +658,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               authority: AdminAuthority | None = None, admin_slots: asyncio.Semaphore | None = None,
               admin_pipeline: AdminPipeline | None = None, token_access: TokenAccess | None = None,
               mutation_lock: asyncio.Lock | None = None, profile_view: Callable[[], dict] | None = None,
-              forward_slots: int | None = None, slot_busy: Callable[[object], Response] | None = None,
+              forward_slots: int | None = None, slot_busy: SlotBusy | None = None,
               reply_secrets: Callable[[], Iterable[str]] | None = None,
               child_blocked: Callable[[], str | None] | None = None):
     """listing (0.2.2): the product's tools/list tools as its child lists them (surface.listing). With it, a client
@@ -439,21 +690,40 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     HM-08 (multi-profile plan 5.1, 5.2; contract 2.4, 2.7), given only for a switched-on product (profile_runtime's
     ProfileManager); left out, everything stays as before:
     - forward_slots: this profile's forwarding slots (FORWARD_SLOTS when left out; an additional profile has 16).
-    - slot_busy: what a request that waited FORWARD_WAIT_SECONDS for a slot in vain gets: slot_busy(message) (the
-      JSON-RPC message of a POST, else None) returns the answer (profile_router: busy_reply's PaaS shape, with the
-      profile's WARNING). Left out: 503 {"error":"request denied"}, as before.
+    - slot_busy: a SlotBusy (profile_router.ProfileGate.slot_busy; HM-14): what a request gets when the profile's
+      forwarding slots are busy and the answers that name the profile (see below). Left out: a request waits
+      FORWARD_WAIT_SECONDS for one of the slots, then gets 503 {"error":"request denied"}, as before.
     - reply_secrets: every token and child token the add-on holds (every profile's, every orphan's; a callable read
       for every reply). Every answer that carries a child's or a backend's text (a relayed reply, an SSE event, the
       gateway's own tools/list, a refused tools/call's health reason, a child's initialize error, backend/test,
       diagnostics) is masked with this profile's own secrets (redact.secret_values, as before) and these (DQ-40 (a) ⑧).
-      Left out, an initialize error stays unmasked, as before (HM-08 review S-4: an existing gap, HM-14's).
     A switched-on product's dispatcher also charges the body a POST forwards to the profile's byte budget, through the
     request's state (FORWARDED_BODY; profile_router.ProfileGate): no make_apps option.
 
     HM-09 (multi-profile plan 5.4; contract 3.1, 3.6), likewise only for a switched-on product:
     - child_blocked: why the profile's child is not started now (lifecycle.Supervisor.blocked_reason: None,
       child_port_conflict, child_port_in_use, memory_capacity), read after a child/restart; its 202 answer then
-      carries it as "blocked_reason" (PaaS B-22: a refused restart looked like a success). Left out: as before."""
+      carries it as "blocked_reason" (PaaS B-22: a refused restart looked like a success). Left out: as before.
+
+    HM-14 (plan 12.3 HM-14; contract 2.4, 2.5; the PaaS #148 gateway, woow-mcp-server 69ac425), given slot_busy (a
+    switched-on product); left out, every answer below stays as before:
+    - two lanes of forwarding slots: a POST that carries no request (carries_no_request) takes one of the slot_busy.reserve
+      slots kept for it, anything else an ordinary one (forward_slots). In each lane at most slot_busy.queue requests wait
+      at once; one more is refused at once, one that waited slot_busy.wait seconds in vain is refused (both:
+      slot_busy.answer, busy_reply's shapes: an id 200 + -32003, none 503; Retry-After 5). A request whose client closes
+      its connection while it waits is dropped and never forwarded (take_slot; slot_busy.abandoned).
+    - the child's connection breaks while it handles a request (interrupted): before the answer's headers, 502 with the
+      gateway's own -32004 error (under the request's id when it has one); on an event stream, one -32004 event under the
+      POST's id, then the end. Its text says whether the child generation the request went to has stopped (looked at for
+      up to CHILD_EXIT_GRACE_SECONDS) or still runs, and of a stopped one whether it comes back by itself
+      (interruption_text: HM-09's Supervisor states); slot_busy.interrupted writes the profile's WARNING.
+    - the token changes after the answer began to go out: the gateway's own ending (Ending), no exception for the server.
+    - an initialize answer is handed to the client only while the child generation it went to still runs
+      (OwnedInitializeResponse fence); otherwise backend_unavailable, no session.
+
+    HM-14 (contract 1.2, not gated): a child's initialize error (its message and data are the child's text) is masked as
+    every other relayed text, whether or not the product is switched on (HM-08 review S-4 (a): it was relayed unmasked,
+    with not even this profile's own credentials masked)."""
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
@@ -476,7 +746,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         profile_echo(profile_view())
     if forward_slots is not None and (type(forward_slots) is not int or forward_slots < 1):
         raise ValueError("invalid forwarding slots")
-    if slot_busy is not None and not callable(slot_busy):
+    if slot_busy is not None and not isinstance(slot_busy, SlotBusy):
         raise ValueError("invalid busy answer")
     if reply_secrets is not None and not callable(reply_secrets):
         raise ValueError("invalid reply secrets")
@@ -498,6 +768,10 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     configuration = configuration or ConfigurationState(store)
     operations = OperationJournal(store.path)
     slots = asyncio.Semaphore(FORWARD_SLOTS if forward_slots is None else forward_slots)
+    # HM-14: a switched-on profile's two lanes (the ordinary slots and the reserved ones); switched off: slots, as before
+    lanes = None if slot_busy is None else {
+        ORDINARY_LANE: Lane(ORDINARY_LANE, FORWARD_SLOTS if forward_slots is None else forward_slots),
+        RESERVED_LANE: Lane(RESERVED_LANE, slot_busy.reserve)}
     admin_slots = asyncio.Semaphore(ADMIN_SLOTS) if admin_slots is None else admin_slots
 
     def masks(state):
@@ -513,6 +787,62 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
 
     def snapshot():
         return health() if health else {"management": "alive", "child": {"state": "not_started", "transport_ready": False}, "backend": "unconfigured"}
+
+    def child_generation():
+        """HM-14: the child generation a request goes to now, its Supervisor's start count (the health monitor's child
+        view: every spawn counts one); None without a health monitor (nothing to compare)."""
+        if health is None:
+            return None
+        starts = (snapshot().get("child") or {}).get("starts")
+        return starts if type(starts) is int else None
+
+    def child_runs(generation):
+        """HM-14: whether that generation is still the one running (not exited, stopped or replaced)."""
+        current = snapshot().get("child") or {}
+        return current.get("starts") == generation and current.get("state") == "running"
+
+    async def child_stopped(generation):
+        """HM-14 (contract 2.5; PaaS proxy._child_stopped): whether the child generation a request went to has stopped,
+        once its connection broke: at once when it has, else after CHILD_EXIT_GRACE_SECONDS of looking (the broken
+        connection may come a moment before the Supervisor sees the exit). No generation to compare: stopped (the
+        established wording)."""
+        if generation is None:
+            return True
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + CHILD_EXIT_GRACE_SECONDS
+        while child_runs(generation):
+            if loop.time() >= deadline:
+                return False
+            await asyncio.sleep(.02)
+        return True
+
+    def interruption_text(stopped, generation):
+        """HM-14 (contract 2.5), read right after child_stopped, with no await between (the state the stop left): the
+        -32004 text. The child still runs: CHILD_CONNECTION_TEXT. It stopped: CHILD_STOPPED_TEXT ("it restarts
+        automatically", PaaS's) only while it comes back by itself (CHILD_RESTARTING_STATES, HM-09's watchdog), else
+        CHILD_HALTED_TEXT (blocked, failed, stopped or not configured: nothing restarts it now). No generation to
+        compare: the established wording."""
+        if not stopped:
+            return CHILD_CONNECTION_TEXT
+        if generation is None:
+            return CHILD_STOPPED_TEXT
+        state = (snapshot().get("child") or {}).get("state")
+        return CHILD_STOPPED_TEXT if state in CHILD_RESTARTING_STATES else CHILD_HALTED_TEXT
+
+    async def interrupted_answer(owner, request, message, error):
+        """HM-14 (switched on; contract 2.5): the child's connection broke before the answer's headers: 502 with the
+        gateway's own -32004 error, under the request's id when it has one (null for a notification, a GET, a DELETE),
+        its text by the cause, and the profile's WARNING (the HTTP method and the error's class, never a path, token or
+        body). A session the child opened for an initialize is ended only while the child still runs."""
+        stopped = await child_stopped(owner.generation)
+        text = interruption_text(stopped, owner.generation)
+        if stopped:
+            owner.end_session = None  # the session ended with its child
+        await owner.close()
+        slot_busy.interrupted(request.method, type(error).__name__, stopped)
+        ident = request_id(message) if request.method == "POST" else None
+        return json_reply({"jsonrpc": "2.0", "id": ident, "error": {"code": CHILD_INTERRUPTED, "message": text}},
+                          502, {"Cache-Control": "no-store"})
 
     def capabilities(state, catalog):
         return capability_snapshot(management, state, snapshot(), catalog, can_test=backend_check is not None,
@@ -919,7 +1249,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         owner.overflowed = True
                         return
                     yield chunk
-        except (httpx.HTTPError, TimeoutError):
+        except (httpx.HTTPError, TimeoutError) as error:
+            if interrupted(error):
+                owner.interrupted = error  # HM-14: read by a switched-on profile only (contract 2.5)
             return
 
     async def end_session(child_token, session):
@@ -1047,10 +1379,28 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         return
                 lines = kept + data_lines
                 if lines:
-                    yield b"\n".join(lines) + b"\n\n"
+                    event = b"\n".join(lines) + b"\n\n"
+                    if final:
+                        owner.reply_event = event  # HM-14: an Ending knows the reply by it (delivered or not)
+                    yield event
                 if final:
+                    # HM-14: the generator resumes only once the server took the reply: it was delivered (an Ending
+                    # after it adds no -32005; when the token changed as the server took it, Ending sees the event)
+                    owner.answered = True
                     return  # a duplicate reply or anything after it is never relayed
         # A truncated SSE event is intentionally not dispatched.
+        if slot_busy is not None and owner.interrupted is not None:
+            # HM-14 (contract 2.5): the child's connection broke after the stream started. A POST's reply that did not
+            # come gets the gateway's own -32004 event under its id (a GET stream answers no request: it just ends);
+            # the stream then ends normally, no exception for the server.
+            stopped = await child_stopped(owner.generation)
+            text = interruption_text(stopped, owner.generation)
+            slot_busy.interrupted("POST" if request is not None else "GET", type(owner.interrupted).__name__, stopped)
+            if request is not None:
+                event = gateway_event(request[0], CHILD_INTERRUPTED, text)
+                owner.reply_event = event  # HM-14 review S-1: this event answers the POST, as a reply does
+                yield event
+                owner.answered = True  # the server took it: an Ending adds no -32005 under the same id
 
     def local_session(session):
         """0.2.2: whether session is a live session the gateway opened itself (its last use is renewed)."""
@@ -1101,7 +1451,14 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         lease = getattr(request.state, "token_lease", None)
         if lease is None or response.status_code in (401, 404):
             return response
-        return LeasedResponse(response, lease, refused)
+        ending = None
+        if slot_busy is not None:
+            # HM-14 (switched on; contract 2.5): a token that changes once the answer began to go out gets the gateway's
+            # own ending. refusal: the bytes refused() gets from error_handler (Bearer) or Starlette's 404 (secret path).
+            refusal = (JSONResponse({"error": "request denied"}, status_code=401) if secret is None
+                       else PlainTextResponse("Not Found", status_code=404))
+            ending = Ending(refusal, response)
+        return LeasedResponse(response, lease, refused, ending)
 
     async def serve(request, secret):
         """secret is None on /mcp (Bearer header) and the path segment on /private_<secret>/mcp.
@@ -1307,15 +1664,27 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             answer = without_child()
             if answer is not None:
                 return answer
-        try:
-            async with asyncio.timeout(FORWARD_WAIT_SECONDS):
-                await slots.acquire()
-        except TimeoutError:
-            if slot_busy is not None:  # HM-08: switched on, the PaaS busy shape (contract 2.4)
-                return slot_busy(message if request.method == "POST" else None)
-            raise BadRequest(503) from None
+        if lanes is None:
+            try:
+                async with asyncio.timeout(FORWARD_WAIT_SECONDS):
+                    await slots.acquire()
+            except TimeoutError:
+                raise BadRequest(503) from None
+            taken = slots
+        else:
+            # HM-08, HM-14 (switched on; contract 2.4): the PaaS lanes, queue cap, disconnect watch and busy shapes
+            reserved = lanes[RESERVED_LANE]
+            lane = (reserved if reserved.limit and carries_no_request(request.method, message)
+                    else lanes[ORDINARY_LANE])
+            outcome = await take_slot(lane, slot_busy.queue, slot_busy.wait, lambda: client_gone(request))
+            if outcome == "abandoned":
+                slot_busy.abandoned(lane.name)
+                return Response(status_code=CLIENT_CLOSED, headers={"Cache-Control": "no-store"})
+            if outcome != "taken":
+                return slot_busy.answer(message if request.method == "POST" else None, outcome, lane.name)
+            taken = lane.semaphore
         upstream = None
-        owner = UpstreamOwner(slots)
+        owner = UpstreamOwner(taken)
         handed_off = False
         try:
             # Revalidate after yielding for body/concurrency; sessions do not cache policy.
@@ -1352,6 +1721,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     lease.check()
                     outgoing = child.build_request(request.method, child_url, headers=headers, content=content,
                                                    timeout=httpx.Timeout(call_seconds or 30, connect=3, pool=3))
+                    if lanes is not None:
+                        owner.generation = child_generation()  # HM-14: the generation this attempt goes to
                     try:
                         async def send_owned():
                             owner.response = await child.send(outgoing, stream=True, follow_redirects=False)
@@ -1421,6 +1792,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 outcome, value, frame = await initialize_reply(owner, lease, is_sse, message.get("id"))
                 if not still_authorized(state.token):
                     raise refused()
+                if lanes is not None and owner.interrupted is not None:
+                    return await interrupted_answer(owner, request, message, owner.interrupted)  # HM-14
                 if outcome == "missing":
                     return backend_unavailable(message.get("id"))
                 try:
@@ -1445,10 +1818,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                                            **({"instructions": instructions} if instructions else {})}
                 except ValueError:
                     raise BadRequest(502) from None
-                if "error" in value and reply_secrets is not None:
-                    # HM-08 review S-4 (a): switched on, a child's initialize error (its message and data are the
-                    # child's text) is masked as every other relayed text. Switched off it is relayed as before: an
-                    # existing gap (not even this profile's own credentials are masked there), left to HM-14.
+                if "error" in value:
+                    # A child's initialize error (its message and data are the child's text) is masked as every other
+                    # relayed text: this profile's credentials and, switched on, every token the add-on holds (masks).
+                    # HM-14 (contract 1.2, not gated): masked whether or not the product is switched on; before it, a
+                    # switched-off product relayed it unmasked (HM-08 review S-4 (a)).
                     value = redact.redact_secrets(value, masks(store.load()))
                 if frame is None or json_only(request):
                     # 0.1.13: a client that accepts only application/json gets the initialize answer as JSON even when
@@ -1458,8 +1832,14 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     # The child's event framing (id/event/retry lines) with the filtered data.
                     frame.append(b"data: " + json.dumps(value, separators=(",", ":")).encode())
                     answer = Response(b"\n".join(frame) + b"\n\n", status_code=200, headers=response_headers)
+                fence = fenced = None
+                if lanes is not None and owner.generation is not None:
+                    # HM-14 (FM-43): the session goes out only while the generation this initialize went to still runs
+                    generation = owner.generation
+                    fence = functools.partial(child_runs, generation)
+                    fenced = backend_unavailable(message.get("id"))
                 handed_off = True
-                return OwnedInitializeResponse(answer, owner)
+                return OwnedInitializeResponse(answer, owner, fence, fenced)
             if request_id and not is_sse and upstream.status_code == 200:
                 # Every JSON reply is parsed, must answer this request, is filtered and re-serialized: a child
                 # cannot hand a client an unfiltered list under another request's id or in a batch.
@@ -1468,6 +1848,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     result.extend(chunk)
                 if not still_authorized(state.token):
                     raise refused()
+                if lanes is not None and owner.interrupted is not None:
+                    return await interrupted_answer(owner, request, message, owner.interrupted)  # HM-14
                 try:
                     if owner.overflowed:
                         raise ValueError("oversize reply")
@@ -1483,6 +1865,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 return json_reply(value, 200, response_headers)
             if not (is_sse and upstream.status_code == 200):
                 raise BadRequest(502)  # unreachable (R1 #8): every other success body was answered or refused above
+            if request_id:
+                owner.reply = (message.get("id"),)  # HM-14: the id an Ending's -32005 event answers
             response = OwnedStreamingResponse(stream(owner, lease, (message.get("id"), method) if request_id else None,
                                                      call_seconds),
                                               owner=owner, status_code=200, headers=response_headers)
@@ -1491,7 +1875,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             owner.end_session = None
             handed_off = True  # only once the response owns the slot: a failed constructor must release it
             return response
-        except (httpx.HTTPError, TimeoutError):
+        except (httpx.HTTPError, TimeoutError) as error:
+            if lanes is not None and interrupted(error):
+                return await interrupted_answer(owner, request, message, error)  # HM-14 (contract 2.5)
             raise BadRequest(502) from None
         finally:
             if not handed_off:
@@ -1517,4 +1903,5 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         exception_handlers=exceptions)
     admin.router.redirect_slashes = False
     mcp_app.router.redirect_slashes = False
+    mcp_app.state.lanes = lanes  # HM-14: a switched-on profile's lanes (slots, waiting), for diagnostics and tests
     return admin, mcp_app
