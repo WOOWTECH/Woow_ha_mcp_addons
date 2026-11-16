@@ -4,8 +4,9 @@
 profile_router.AdminDispatcher runs the shared management pipeline (contract 3.2: identity, the management slots, the
 bounded body read, the disconnect watch, the method table and the request's shape, the first role check) and hands a
 request for a global path here. What follows is steps 8 to 11: the add-on's profile lock (and, for a deletion, the
-profile's own lock), at most 2 s each (503); the second, final role check, after which nothing is awaited before the
-answer is disclosed or the change committed; then every check that reads state, in a fixed order, and the commit.
+profile's own lock; for the index quarantine, every registered additional profile's), at most 2 s each (503); the
+second, final role check, after which nothing is awaited before the answer is disclosed or the change committed; then
+every check that reads state, in a fixed order, and the commit.
 A caller who is not an administrator never gets here (step 6), so nothing below is ever told to one (invariant I10).
 
 - The index ETag "p1-<64 hex>" (contract 3.5) is an HMAC, with a key of this process, of the index's entries in their
@@ -30,7 +31,14 @@ A caller who is not an administrator never gets here (step 6), so nothing below 
   (PaaS B-17). An orphan directory (not in the index) is deleted the same way; nothing is ever deleted on its own.
 - The index quarantine (DQ-12; FM-131): every profile directory's token revoked, then profiles.json renamed to a free
   profiles.json.quarantine-<UTC>[-n] (HM-07 review S-15): the default profile serves 8081 again at once, every profile
-  directory is an orphan, deletable one by one.
+  directory is an orphan, deletable one by one. It holds every registered additional profile's own lock too (HM-10
+  review S-1), from before its final role check until the profile is unregistered: no token change, save or restart of
+  one of them runs in between (a token written after the revocation would be routed until its profile is
+  unregistered, past its If-Match).
+- Locks are taken in one order: the add-on's profile lock first, then profiles' own locks (a deletion its target's, the
+  quarantine every registered one's in id order). A profile's action takes only its own lock, and the starts of
+  reevaluate (ProfileRuntime.launch) take only theirs, after every profile lock taken here is released: no wait ever
+  closes a circle.
 
 What this module uses of profile_runtime.ProfileManager (HM-08's registry, HM-09's lifecycle) is in one class,
 Registry, so that a change of that interface is made in one place.
@@ -38,7 +46,7 @@ Registry, so that a change of that interface is made in one place.
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import astuple, dataclass
 from datetime import datetime, timezone
 import hashlib
@@ -404,68 +412,65 @@ class ProfileAdmin:
 
     async def quarantine(self, call):
         async with self._locked(self.lock):
-            await self._final(call)
-            view, usable = self.registry.view()
-            etag = self.etag(view.entries) if usable else self.raw_etag()
-            given = self._if_match(call)
-            if given is None:
-                return self._conflict(etag)
-            key, data, prior, fingerprint = self._idempotency(call, QUARANTINE, None)
-            if prior is not None:
-                return self._replay(prior, key, {'quarantined': prior['subject']}, etag)
-            if usable or given != etag:
-                return self._conflict(etag)  # a usable index is never quarantined: no ETag of it matches
-            if profiles.signature_of_or_none(self.registry.layout.index) is None:
-                # Unusable without an index file (the profiles directory could not be listed at the start): nothing
-                # to move aside; the add-on is restarted instead. Refused before anything is revoked or recorded.
-                return self._conflict(etag)
-            try:
-                name = profiles.free_index_quarantine_name(self.registry.layout, datetime.now(timezone.utc))
-            except profiles.ProfileDataError:
-                raise BadRequest(503) from None
-            # Listed before the receipt begins: a profiles directory that cannot be listed (503) leaves no receipt.
-            directories = sorted(set(self._scan().profiles) | set(self.registry.extra_ids()))
-            self.journal.begin(key, data, QUARANTINE, call.user, fingerprint, subject=name)
-            unrevoked = 0
-            for profile_id in directories:
-                entry = self.registry.entry(profile_id)
-                store, opened = self._profile_store(entry, profile_id)
+            # HM-10 review S-1: every registered additional profile's own lock as well, from before the final role
+            # check until the profile is unregistered, as a deletion holds its target's. A token change, save or
+            # restart of one of them already under way is waited for (done first, then revoked below); one that comes
+            # in meanwhile waits and then finds the profile's store closed (503). So the one revocation below is the
+            # last word on their tokens: none is routed once the index is moved aside, and no If-Match taken before
+            # the quarantine writes over the revoked state.
+            async with self._registered_profiles_locked() as registered:
+                await self._final(call)
+                view, usable = self.registry.view()
+                etag = self.etag(view.entries) if usable else self.raw_etag()
+                given = self._if_match(call)
+                if given is None:
+                    return self._conflict(etag)
+                key, data, prior, fingerprint = self._idempotency(call, QUARANTINE, None)
+                if prior is not None:
+                    return self._replay(prior, key, {'quarantined': prior['subject']}, etag)
+                if usable or given != etag:
+                    return self._conflict(etag)  # a usable index is never quarantined: no ETag of it matches
+                if profiles.signature_of_or_none(self.registry.layout.index) is None:
+                    # Unusable without an index file (the profiles directory could not be listed at the start):
+                    # nothing to move aside; the add-on is restarted instead. Refused before anything is revoked or
+                    # recorded.
+                    return self._conflict(etag)
                 try:
-                    if not self._revoke(store, entry, profile_id):
-                        unrevoked += 1
-                finally:
-                    if opened:
-                        store.close()
-            call.committed.set()
-            try:
-                profiles.move_index_aside(self.registry.layout, name)
-            except profiles.ProfileDataError:
-                raise refused(409, 'operation_outcome_unknown') from None
-            written = profiles.read_index(self.registry.layout.index)  # absent: the default profile serves again
-            self.registry.adopt(written)
-            if unrevoked:
-                logger.warning('multi-profile: the profile index was quarantined; the token of %d profile '
-                               'directory(ies) could not be revoked (their state cannot be read, so they are never '
-                               'served)', unrevoked)
-            for profile_id in directories:
-                if self.registry.entry(profile_id) is not None:
+                    name = profiles.free_index_quarantine_name(self.registry.layout, datetime.now(timezone.utc))
+                except profiles.ProfileDataError:
+                    raise BadRequest(503) from None
+                # Listed before the receipt begins: a profiles directory that cannot be listed (503) leaves no receipt.
+                directories = sorted(set(self._scan().profiles) | set(registered))
+                self.journal.begin(key, data, QUARANTINE, call.user, fingerprint, subject=name)
+                unrevoked = 0
+                for profile_id in directories:
+                    entry = self.registry.entry(profile_id)
+                    store, opened = self._profile_store(entry, profile_id)
                     try:
-                        await self.registry.unregister(profile_id)  # an orphan now: never served
-                    except Exception:
-                        logger.warning('multi-profile: the child of profile %s did not stop cleanly',
-                                       profiles.log_id(profile_id))
-            for profile_id in directories:
-                # Once more, now that no store of them is open: a token change that was already waiting for its
-                # profile's lock when the quarantine began may have written a new token meanwhile.
-                store, opened = self._profile_store(None, profile_id)
+                        if not self._revoke(store, entry, profile_id):
+                            unrevoked += 1
+                    finally:
+                        if opened:
+                            store.close()
+                call.committed.set()
                 try:
-                    if store is not None and store.load().token is not None:
-                        self._revoke(store, None, profile_id)
-                except ConfigError:
-                    pass
-                finally:
-                    if opened:
-                        store.close()
+                    profiles.move_index_aside(self.registry.layout, name)
+                except profiles.ProfileDataError:
+                    raise refused(409, 'operation_outcome_unknown') from None
+                written = profiles.read_index(self.registry.layout.index)  # absent: the default profile serves again
+                self.registry.adopt(written)
+                if unrevoked:
+                    logger.warning('multi-profile: the profile index was quarantined; the token of %d profile '
+                                   'directory(ies) could not be revoked (their state cannot be read, so they are '
+                                   'never served)', unrevoked)
+                for profile_id in registered:
+                    if self.registry.entry(profile_id) is not None:
+                        try:
+                            await self.registry.unregister(profile_id)  # an orphan now: never served
+                        except Exception:
+                            logger.warning('multi-profile: the child of profile %s did not stop cleanly',
+                                           profiles.log_id(profile_id))
+            # The profiles' locks are released: a start takes its profile's lock (ProfileRuntime.launch).
             self._refresh_orphan_secrets(written)
             await self.registry.reevaluate()
             operation = self._complete(key, data)
@@ -488,6 +493,19 @@ class ProfileAdmin:
             yield
         finally:
             lock.release()
+
+    @asynccontextmanager
+    async def _registered_profiles_locked(self):
+        """Step 8 of the index quarantine, after the add-on's profile lock: every registered additional profile's own
+        lock, in id order, each waited for at most LOCK_SECONDS (503: the ones already taken are released). Yields the
+        ids, which stay registered until the quarantine unregisters them (only it and a deletion, both under the
+        add-on's profile lock, unregister a profile while the add-on runs)."""
+        registered = sorted(self.registry.extra_ids())
+        async with AsyncExitStack() as stack:
+            for profile_id in registered:
+                entry = self.registry.entry(profile_id)
+                await stack.enter_async_context(self._locked(None if entry is None else Registry.mutation_lock(entry)))
+            yield registered
 
     async def _final(self, call):
         """Step 10, the final role check: nothing is awaited after it before the answer or the commit."""
