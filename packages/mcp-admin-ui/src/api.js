@@ -1,4 +1,4 @@
-import { mountPath, products, UiError } from './contracts.js';
+import { identityBound, mountPath, products, UiError } from './contracts.js';
 import { OperationIdentity, operationKinds, operationReceipt, PROFILES_SCOPE } from './operation-identity.js';
 import { DEFAULT_PROFILE, INDEX_ETAG, INDEX_REVISION, echoMatches, isExtraProfile, isProfileId, labelProblem, orphanIds, profileRows } from './profiles.js';
 
@@ -9,6 +9,14 @@ const PROFILE_CODES = { profile_id_required: 400, profile_id_invalid: 400, profi
   profile_default_immutable: 422, profile_label_conflict: 409, profile_limit_reached: 409, profile_memory_insufficient: 409,
   profile_port_unavailable: 409, profile_product_unsupported: 409, profile_index_corrupt: 503, endpoint_global: 409 };
 const count = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
+// HM-12 (DQ-40 ⑨ (a); contract 4.1): a backend save's code, only with its documented status.
+const SAVE_CODES = { CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN: 422 };
+// HM-12 (DQ-05; contract 3.1, section 9 #113): what the panel says when a save rotated the profile's MCP token (the
+// add-on sends token_rotated: true and no text). app.js adds it to a save's notice; a shape D answer carries it.
+export const TOKEN_ROTATED = '後端身分已變更，這個帳號的 MCP 權杖已換新：舊權杖與含舊權杖的連線網址已撤銷。請到「連線與權杖」顯示並複製新的權杖（或 Claude.ai 連線網址），更新所有用戶端。';
+// HM-12 review S-7 (contract section 9 #114): a 503 state unavailable of such a save may hide a write whose outcome the
+// add-on does not know: after its restart the token may be the new one, although this answer never said so.
+const OUTCOME_UNKNOWN = '存檔結果不明時請重新啟動 add-on，之後到「連線與權杖」確認 MCP 網址：若這次換了後端身分，權杖可能已換新，舊網址會失效。';
 export class ApiError extends UiError {
   constructor(status, code = null, haVersion = null, detail = {}) {
     const messages = {
@@ -33,6 +41,8 @@ export class ApiError extends UiError {
     if (code === 'operation_journal_full') this.message = '操作收據已達保存上限；未接受新操作，請稍後再試。';
     if (code === 'operation_journal_unavailable') this.message = '操作收據儲存無法使用；請檢查服務儲存，勿改用新的識別碼重複操作。';
     if (code === 'owner_defaults_unavailable') this.message = '升級通知已處理過，或升級前的限制紀錄無法使用。請重新整理狀態；未變更任何設定。';
+    // HM-12 (DQ-40 ⑨ (a)): fixed copy; the answer echoes nothing and nothing sent is shown.
+    if (code === 'CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN') this.message = '網址改到另一台伺服器（scheme、主機或 port 不同）時，不會沿用已儲存的密碼或金鑰：請在同一次儲存中為新網址重新輸入（選填的可以明確清除）。這次未儲存任何變更。';
     if (code === 'core_version_unreviewed') {
       this.haVersion = haVersion;
       this.message = `這個 HA Core 版本尚未審核：${haVersion ?? '（版本字串無法辨識）'}。這版 add-on 的管理面板只在審查過的 Core 版本上運作，暫時不能使用或變更設定；MCP 端點不經過這項檢查，照常服務。請更新 add-on。`;
@@ -111,9 +121,10 @@ export class AdminApi {
     if (!response.ok) {
       // Only these fixed codes affect copy. Never reflect server bodies or submitted secrets; the one exception is a
       // 403 core_version_unreviewed's Core version, shown only in the exact public release/pre-release form.
-      let code, haVersion = null, detail = {};
+      let code, haVersion = null, detail = {}, body = null;
       try {
-        detail = (await response.json())?.detail ?? {};
+        body = await response.json();
+        detail = body?.detail ?? {};
         code = detail?.code;
         if (code === 'core_version_unreviewed' && typeof detail.ha_version === 'string' && CORE_VERSION.test(detail.ha_version)) haVersion = detail.ha_version;
       } catch { /* non-JSON error */ }
@@ -121,8 +132,19 @@ export class AdminApi {
       const known = ['config_conflict', 'config_revision_required', 'config_apply_failed', 'owner_defaults_unavailable',
         'operation_outcome_unknown', 'operation_id_conflict', 'operation_not_found', 'operation_id_required',
         'operation_id_invalid', 'operation_id_expired', 'operation_journal_full', 'operation_journal_unavailable'].includes(code) || (code === 'core_version_unreviewed' && response.status === 403)
-        || (Object.hasOwn(PROFILE_CODES, code ?? '') && PROFILE_CODES[code] === response.status);
-      throw new ApiError(response.status, known ? code : null, haVersion, known && detail && typeof detail === 'object' ? detail : {});
+        || (Object.hasOwn(PROFILE_CODES, code ?? '') && PROFILE_CODES[code] === response.status)
+        || (Object.hasOwn(SAVE_CODES, code ?? '') && SAVE_CODES[code] === response.status);
+      const error = new ApiError(response.status, known ? code : null, haVersion, known && detail && typeof detail === 'object' ? detail : {});
+      // HM-12 (contract 3.1, section 9 #113): saved, the token rotated, the new child not started (shape D with
+      // token_rotated; only this shape counts): the copy also says where the new token is (app.js reads the state again).
+      if (response.status === 503 && error.code === 'config_apply_failed' && body?.saved === true && body?.token_rotated === true) {
+        error.tokenRotated = true;
+        error.message = `${error.message} ${TOKEN_ROTATED}`;
+      }
+      // HM-12 review S-7: the fixed 503 {"error":"state unavailable"} (a write the add-on could not make, or whose outcome
+      // it does not know; mutate says what to check after a backend save).
+      if (response.status === 503 && error.code === null && body?.error === 'state unavailable') error.stateUnavailable = true;
+      throw error;
     }
     if (response.status === 204) {
       // HM-11 review S-4: with profiles a profile-scoped answer without a body cannot echo its profile (I12): not used.
@@ -211,6 +233,9 @@ export class AdminApi {
     }, { profile, epoch }); } catch (error) {
       // Only explicit refusals before accepting an intent can release identity.
       if (pending && error instanceof ApiError && PRE_INTENT.includes(error.code)) this.operations.clear(profile);
+      // HM-12 review S-7: a backend save of a switched-on product whose token is bound to its backend identity.
+      if (error instanceof ApiError && error.stateUnavailable && profile !== null && ['backend', 'backend/patch'].includes(operation)
+          && identityBound.includes(fresh.product)) error.message = `${error.message} ${OUTCOME_UNKNOWN}`;
       throw error;
     }
     if (pending) {

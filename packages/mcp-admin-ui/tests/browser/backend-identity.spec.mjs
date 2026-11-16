@@ -138,6 +138,7 @@ test('a URL moved to another server asks again for the secrets it takes there, b
     await expect(keep(page, key)).toBeDisabled();
     await expect(page.locator(`#patch-${key}`)).toBeEnabled();
     await expect(page.locator(`#patch-${key}`)).toHaveAttribute('required', '');
+    await expect(page.locator(`#patch-${key}`)).toHaveAttribute('aria-describedby', `patch-${key}-origin`);
     await expect(page.locator(`#patch-${key}-origin`)).toBeVisible();
   }
   await expect(page.locator('#patch-key-origin')).toHaveText('網址改到另一台伺服器：請重新輸入，不會沿用已儲存的憑證。');
@@ -152,6 +153,7 @@ test('a URL moved to another server asks again for the secrets it takes there, b
     await expect(page.locator(`#patch-${key}-action`)).toHaveValue('keep');
     await expect(keep(page, key)).toBeEnabled();
     await expect(page.locator(`#patch-${key}`)).toBeDisabled();
+    await expect(page.locator(`#patch-${key}`)).not.toHaveAttribute('aria-describedby', /./);
     await expect(page.locator(`#patch-${key}-origin`)).toBeHidden();
   }
   // To the new server with the key typed again and the access token cleared: the three are sent, and saved.
