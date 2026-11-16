@@ -79,7 +79,7 @@ session URL、備份或私人拓樸。LOCAL/MOCK、CONTAINER/MOCK、HA、PUBLIC 
 
 ## 多帳號驗收（T-01～T-29 的 HA 版；HM-16）
 
-**狀態（2026-11-16）：工具備好，沒有任何 HA 實測。**還沒有產品開通（`MULTI_PROFILE_PRODUCTS` 是空的）；
+**狀態（2026-11-16）：工具備好，沒有任何 HA 實測**。還沒有產品開通（`MULTI_PROFILE_PRODUCTS` 是空的）；
 QA HAOS 的擋路探針 HM-03a／b 還沒有結果，UC-08、UC-10、sentinel 在 HAOS 上的行為都**未確認**。
 下面的「通過標準」是驗收時要做到的，不是已經做到的。期望值逐列的來源與差異見
 [多帳號驗收矩陣](../multi-profile/acceptance-matrix.md)（PaaS T-01～T-29 的 HA 版，測試檔登記表也在那裡）與
