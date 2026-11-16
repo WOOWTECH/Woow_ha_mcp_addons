@@ -12,7 +12,7 @@ Every test runs under the HM-01 log scan (every token, child token, credential a
 """
 import ast
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
@@ -40,8 +40,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PRODUCT = 'odoo'
 A, B, C, Q = 'a' * 24, 'b' * 24, 'c' * 24, 'd' * 24
 MARKER = profiles.RESTORE_MARKER_NAME
-WHEN = datetime(2026, 11, 16, 9, 30, 15, tzinfo=timezone.utc)
-STAMP = '20261116T093015Z'
+OLD_QUARANTINE = datetime(2026, 11, 1, 9, 30, 15, tzinfo=timezone.utc)  # only a name: an earlier start's quarantine
 RESTORED = (410, 'operation_restored')
 LOGGER = 'mcp_admin_core.restore_lock'
 RECORD_ROW = ['id', 'label', 'is_default', 'token', 'identity', 'policy', 'reviewed_at']
@@ -49,8 +48,12 @@ POLICY_KEYS = ['writes_enabled', 'disabled', 'enabled_write_tools', 'denied_oper
                'odoo_allowed_methods', 'n8n_session']
 
 
-def fixed_now():
-    return WHEN
+def guard_clock():
+    """(when, clock, stamp) for a guard that a test pins: the next whole second after now, so after every receipt the
+    test made before it and never more than a second ahead of the host's clock (a fixed date fell behind the receipts
+    once that date had passed: HM-13b review MF-1); stamp is when as a quarantine name shows it."""
+    when = (datetime.now(timezone.utc) + timedelta(seconds=1)).replace(microsecond=0)
+    return when, (lambda: when), when.strftime('%Y%m%dT%H%M%SZ')
 
 
 def guard_lines(log_scan):
@@ -86,7 +89,7 @@ def with_profiles(tmp_path, log_scan, *, orphan=True, quarantine=True):
         disk.add(B, indexed=False)
     if quarantine:
         disk.add(Q, indexed=False)
-        os.rename(disk.layout.profile(Q), disk.layout.profiles / profiles.quarantine_name(Q, WHEN.replace(day=1)))
+        os.rename(disk.layout.profile(Q), disk.layout.profiles / profiles.quarantine_name(Q, OLD_QUARANTINE))
     assert disk.start(enabled=True) == restore_lock.Outcome()
     assert disk.detection(True) == rd.Detection(False, True, rd.CONSISTENT)
     return disk
@@ -169,12 +172,13 @@ def test_a_switched_on_restore_without_profile_data_keeps_the_default_token(tmp_
     disk.rotate()  # after the backup: lost by the restore
     disk.restore(backup)
     restored = (disk.data / 'state.json').read_bytes()
-    assert disk.start(enabled=True, now=fixed_now) == restore_lock.Outcome(restored=True)
+    when, clock, _ = guard_clock()
+    assert disk.start(enabled=True, now=clock) == restore_lock.Outcome(restored=True)
     assert (disk.data / 'state.json').read_bytes() == restored
     assert disk.replay(receipt) == 'completed'
     assert MARKER not in disk.names() and disk.detection(True) == rd.Detection(False, True, rd.CONSISTENT)
     record = record_of(disk)
-    assert record['restore'] == {'at': '2026-11-16T09:30:15+00:00', 'marker': True, 'sentinel': rd.MISMATCH}
+    assert record['restore'] == {'at': when.isoformat(timespec='seconds'), 'marker': True, 'sentinel': rd.MISMATCH}
     assert record['dormant'] is None and record['index'] == profiles.INDEX_ABSENT
     assert [(row['id'], row['token']) for row in record['profiles']] == [(DEFAULT, 'kept')]
     assert guard_lines(log_scan) == [('WARNING', restore_lock.KEPT_NOTICE)]
@@ -222,7 +226,8 @@ def test_a_restore_with_profile_data_revokes_every_profile(tmp_path, log_scan, s
         disk.rotate(where)  # after the backup: lost by the restore
     lost = {where: disk.receipt(where) for where in (DEFAULT, A, 'index')}
     disk.restore(backup, marker=signals == 'both')
-    outcome = disk.start(enabled=True, now=fixed_now)
+    when, clock, _ = guard_clock()  # after every receipt, the lost ones too (as a real restore comes after them)
+    outcome = disk.start(enabled=True, now=clock)
     assert outcome == restore_lock.Outcome(restored=True, default_revoked=True, revoked=(A, B))
     children = set()
     for where in (DEFAULT, A, B):
@@ -240,7 +245,7 @@ def test_a_restore_with_profile_data_revokes_every_profile(tmp_path, log_scan, s
     assert not (disk.layout.profile(B) / '.state.json.operations.json').exists()  # it never had receipts
     assert MARKER not in disk.names() and disk.detection(True) == rd.Detection(False, True, rd.CONSISTENT)
     record = record_of(disk)
-    assert record['restore'] == {'at': '2026-11-16T09:30:15+00:00', 'marker': signals == 'both',
+    assert record['restore'] == {'at': when.isoformat(timespec='seconds'), 'marker': signals == 'both',
                                  'sentinel': rd.MISMATCH}
     assert [(row['id'], row['label'], row['is_default'], row['token']) for row in record['profiles']] == [
         (DEFAULT, 'Default', True, 'revoked'), (A, 'Ledger Alpha', False, 'revoked'), (B, None, False, 'revoked')]
@@ -249,7 +254,7 @@ def test_a_restore_with_profile_data_revokes_every_profile(tmp_path, log_scan, s
     assert record['profiles'][1]['identity'] == {'url': states[1]['connection']['url'],
                                                  'database': states[1]['connection']['database'],
                                                  'username': states[1]['connection']['username']}
-    quarantine = profiles.quarantine_name(Q, WHEN.replace(day=1))
+    quarantine = profiles.quarantine_name(Q, OLD_QUARANTINE)
     assert record['quarantined'] == [{'name': quarantine, 'id': Q, 'new': False}]
     assert record['profiles_directory'] == 'present' and record['other_entries'] == 0
     raw = (disk.data / profiles.RESTORE_RECORD_NAME).read_text()
@@ -271,8 +276,9 @@ def test_a_profile_that_cannot_be_opened_is_quarantined(tmp_path, log_scan, kind
     disk.add(B)
     disk.restore(disk.backup())
     break_state(disk.layout.profile(B), kind)  # after the copy: copytree would make a second link a file of its own
-    outcome = disk.start(enabled=True, now=fixed_now)
-    name = profiles.quarantine_name(B, WHEN)
+    when, clock, _ = guard_clock()
+    outcome = disk.start(enabled=True, now=clock)
+    name = profiles.quarantine_name(B, when)
     assert outcome == restore_lock.Outcome(restored=True, default_revoked=True, revoked=(A,), quarantined=(name,))
     scan = profiles.scan_profiles(disk.layout)
     assert scan.profiles == (A,) and scan.quarantined == (name,)
@@ -286,14 +292,15 @@ def test_a_second_quarantine_in_the_same_second_gets_its_own_name(tmp_path, log_
     directory): the second one in the same second is <name>-2; both are quarantine directories."""
     disk = with_profiles(tmp_path, log_scan, orphan=False, quarantine=False)
     disk.add(B)
-    first = disk.layout.profiles / profiles.quarantine_name(B, WHEN)
+    when, clock, stamp = guard_clock()
+    first = disk.layout.profiles / profiles.quarantine_name(B, when)
     first.mkdir()
     backup = disk.backup()
     break_state(backup / 'profiles' / B, 'no state')
     disk.restore(backup)
-    outcome = disk.start(enabled=True, now=fixed_now)
+    outcome = disk.start(enabled=True, now=clock)
     assert outcome.quarantined == (first.name + '-2',)
-    assert profiles.parse_quarantine_name(first.name + '-2') == (B, STAMP + '-2')
+    assert profiles.parse_quarantine_name(first.name + '-2') == (B, stamp + '-2')
     assert profiles.scan_profiles(disk.layout).quarantined == (first.name, first.name + '-2')
 
 
@@ -625,8 +632,9 @@ def test_a_directory_at_one_of_the_guards_names_is_moved_aside(tmp_path, log_sca
     target.mkdir()
     (target / 'kept').write_bytes(b'')
     disk.restore(backup, marker=name != MARKER)
-    assert disk.start(enabled=True, now=fixed_now).restored
-    assert (disk.data / (name + '.quarantine-' + STAMP) / 'kept').exists()
+    _, clock, stamp = guard_clock()
+    assert disk.start(enabled=True, now=clock).restored
+    assert (disk.data / (name + '.quarantine-' + stamp) / 'kept').exists()
     if name in (profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME):
         assert (disk.data / name).is_file()  # rebuilt
     else:
@@ -670,7 +678,7 @@ def test_a_restore_of_states_as_large_as_the_store_takes_still_finishes(tmp_path
     for profile_id, label in zip(orphans, ('Ledger Foxtrot', 'Ledger Zulu')):
         disk.add(profile_id, indexed=False, label=label)
     disk.restore(disk.backup())
-    assert disk.start(enabled=True, now=fixed_now).restored
+    assert disk.start(enabled=True).restored
     for where in (DEFAULT, *indexed, *orphans):
         assert disk.tokens(where)[0] is None
         assert 60_000 < (disk.directory(where) / 'state.json').stat().st_size < 65_536
@@ -722,9 +730,10 @@ def test_the_guard_meets_an_interrupted_deletion_and_index_quarantine(tmp_path, 
     backup = disk.backup()
     disk.restore(backup)
     before = (disk.data / 'profiles.json.quarantine-20261101T000000Z').read_bytes()
-    outcome = disk.start(enabled=True, now=fixed_now)
+    when, clock, _ = guard_clock()  # after the pending receipt
+    outcome = disk.start(enabled=True, now=clock)
     assert outcome == restore_lock.Outcome(restored=True, revoke_all=True, default_revoked=True, revoked=(A,),
-                                           quarantined=(profiles.quarantine_name(B, WHEN),))
+                                           quarantined=(profiles.quarantine_name(B, when),))
     assert disk.replay(pending, 'index') == RESTORED
     assert (disk.data / 'profiles.json.quarantine-20261101T000000Z').read_bytes() == before
     assert MARKER not in disk.names() and profiles.REVOKE_ALL_MARKER_NAME not in disk.names()
