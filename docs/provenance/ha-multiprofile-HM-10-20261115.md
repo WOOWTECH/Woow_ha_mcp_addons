@@ -25,17 +25,23 @@
     `profile_index_state`）；endpoint 全域一個（DQ-13：額外帳號顯示預設帳號的、`PUT endpoint` 409 `endpoint_global`）；owner-defaults
     只在預設帳號（額外帳號 409 形狀 C）。
   - **帳號 ETag 綁帳號 id**（DQ-15）：HMAC domain 是 `edit:<id>`；兩個帳號的 state 逐位元相同、金鑰也相同，拿 A 的 ETag 寫 B 仍是 409。
-- 新測試 2 檔 35 案（`tests/test_profile_admin_api.py` 30 案、`tests/test_admin_pipeline_matrix.py` 5 案）；改 2 個測試工具／既有測試檔。
-  先寫測試：實作前（`24d72cc` 的核心程式）新 2 檔 35 案 32 失敗（通過的 3 案鎖的是沒開通與 HM-01 交下、本來就不該變的位元組），實作後全過；
-  第三個工作階段補的 3 案對前一版（`537f5bc`）全紅、改完全過（第 4.1 節）。臨時突變 30 個（含第三個工作階段補的 3 個），全部被抓到（第 4.2 節）。
+- 新測試 2 檔 37 案（`tests/test_profile_admin_api.py` 32 案、`tests/test_admin_pipeline_matrix.py` 5 案；審查修正前是 35 案：30＋5）；
+  改 2 個測試工具／既有測試檔。先寫測試：實作前（`24d72cc` 的核心程式）新 2 檔 35 案 32 失敗（通過的 3 案鎖的是沒開通與 HM-01 交下、
+  本來就不該變的位元組），實作後全過；第三個工作階段補的 3 案對前一版（`537f5bc`）全紅、改完全過（第 4.1 節）。作者的臨時突變 30 個
+  全部被抓到（第 4.2 節）。
+- **獨立安全審查（2026-11-16）判定「修正後通過」**：程式沒有安全問題，但有 5 處契約條文沒有測試守住（必修 MF-1）；另有建議 6 項。
+  第四個工作階段全部處理（第 14 節）：補 5 處測試（突變 R03、R04、R05、R13、R17、R18、R21 都改成被抓到）；索引隔離改成拿每個已登錄
+  額外帳號自己的鎖（S-1，先寫的測試在 `c094e63` 紅、改完綠）；契約第 9 節補 PaaS 差異（S-2）；筆記數字更正（S-3）；Ingress 轉不轉
+  `ETag` 回應標頭列進第 11 節（S-4）；S-5、S-6 交 HM-18，寫進 PR 描述。
 - 兩個預檢：秘密預檢 0 命中、帳本預檢 OK（第 8 節）。全套 pytest（HEAD `bc37ac7`）：5,411 案、5,404 過、7 失敗（都是本機一定失敗的
   root 案例）、0 skip，1,841.6 秒；之後只多一個測試案例（`47d03dd`），本片＋相關 9 檔 228 案重跑全過（第 5 節）。
 - 契約第 3、4.1、5、7 節標「暫定／待定」而本片定下的細節都已同步，變更紀錄一列（第 3.9 節）；驗收矩陣 T-12 補上本片的刪除測試。`decisions.md` 沒改：DQ-13、DQ-14 已由 #100
   記進 `claude-delivery`，本分支沒有它，rebase 時會一起進來。
-- 這個階段只 commit，不 push、不開 PR；合併前要做獨立安全審查（計畫 §12.1：HM-10 是「審查」片）。
-- 工作分三個工作階段：第一個寫測試與實作（2026-11-15 21:29 撞到用量上限）；第二個補鎖與刪目錄的斷言、修全套抓到的退步、commit 4 個
+- 這條線只 commit，不 push、不開 PR（計畫 §12.1：HM-10 是「審查」片，獨立安全審查已做，第 14 節）。
+- 工作分四個工作階段：第一個寫測試與實作（2026-11-15 21:29 撞到用量上限）；第二個補鎖與刪目錄的斷言、修全套抓到的退步、commit 4 個
   （2026-11-16 00:41 主程序結束中斷，紅的那一段跑到一半）；第三個（06:3x 起）重跑全部檢查、補 3 個缺口（開機與重評起子程式的鎖、FD 預算、
-  沒有索引檔的隔離）與筆記。本筆記的數字都是第三個工作階段重新驗證的。
+  沒有索引檔的隔離）與筆記；第四個（09:4x 起）處理獨立安全審查的意見（第 14 節）。第 1～13 節的數字是第三個工作階段驗證的，
+  審查修正改到的地方另外標明；審查修正的數字在第 4.3、5、7、14 節。
 
 ## 1. 範圍與基準
 
@@ -53,18 +59,18 @@
 |---|---|
 | `Hc/gateway.py` | 共用管線抽成模組層函式：`management_operation`（頁面檢查）、`management_value`（③）、`management_exchange`（①～④）、`management_app`、`method_not_allowed`；`JSON_OPERATIONS`、`PROFILE_OPERATIONS`（帳號範圍的路由表）。`make_apps` 的 `admin_page`、`admin_api` 改呼叫它們（行為不變）；多兩個 keyword-only 選項 `default_endpoint`（額外帳號）、`bootstrap_fields`；回聲保留動作設定的每個標頭（HM-05 審查的提醒）；`admin.state.profile_action` 給分派器 |
 | `Hc/profile_router.py` | `AdminDispatcher`（開通後的 8099）、`GLOBAL_ROUTES`（全域路由表）、`global_route`、`is_global`；模組說明 |
-| `Hc/profile_admin.py`（新） | `ProfileAdmin`：清單、建立、改名、刪除、索引隔離（⑧～⑪）、索引 ETag 與壞索引 ETag、容量判斷（FD 預算不夠時 `limit` 0）、bootstrap 欄位、⑦ 的額外帳號解析；沒有索引檔時不隔離；`Registry`：本模組用到的 `ProfileManager` 介面全部集中在這裡（建立後在新帳號自己的 `mutation_lock` 裡起子程式） |
+| `Hc/profile_admin.py`（新） | `ProfileAdmin`：清單、建立、改名、刪除、索引隔離（⑧～⑪）、索引 ETag 與壞索引 ETag、容量判斷（FD 預算不夠時 `limit` 0）、bootstrap 欄位、⑦ 的額外帳號解析；沒有索引檔時不隔離；`Registry`：本模組用到的 `ProfileManager` 介面全部集中在這裡（建立後在新帳號自己的 `mutation_lock` 裡起子程式）。審查修正（S-1）：索引隔離另拿每個已登錄額外帳號自己的鎖（`_registered_profiles_locked`），第二輪撤銷拿掉 |
 | `Hc/profile_runtime.py` | `ProfileManager`：建 `ProfileAdmin` 與 `AdminDispatcher`（`admin_app` 改成分派器）、每帳號的回聲（`echo`、`relabel`）、bootstrap 欄位、額外帳號的 `default_endpoint`、`files_for_extras`（開啟時 FD 上限夠不夠額外帳號用）；`ProfileRuntime`：`ConfigurationState` 帶帳號 id、收 `default_endpoint`／`bootstrap_fields`、`admin_action`（`make_apps` 放在 admin app 的 `state`；測試替身的 admin app 沒有時是 `None`，只有開通的分派器會呼叫它）、`launch()` 拿該帳號的 `mutation_lock`（HM-09 審查 S-12 第 2 點） |
 | `Hc/configuration.py` | `ConfigurationState(profile_id=…)`：revision 的 HMAC domain 帶帳號 id（`edit:<id>`、`launch:<id>`） |
 | `Hc/operations.py` | `OperationJournal(results=, subjects=)`；`PROFILE_RESULTS`（`profile.create`、`profile.delete`、`profile.index_quarantine`）、`SUBJECT`。帳號自己的收據檔格式不變 |
 | `Hc/profiles.py` | `free_index_quarantine_name`（同一秒加 `-2`…）、`move_index_aside`、`index_bytes`、`remove_profile_directory`（從 `O_NOFOLLOW` 開、驗過擁有者的 `profiles/` 目錄 fd 往下刪） |
-| `tests/test_profile_admin_api.py`（新，28 個測試函式、30 案） | 契約第 3 節的情況（第 6 節對照表） |
+| `tests/test_profile_admin_api.py`（新，30 個測試函式、32 案；審查修正前 28 個函式、30 案） | 契約第 3 節的情況（第 6 節對照表）。審查修正：新函式 2 個（刪除途中索引被外改、索引隔離拿帳號的鎖），延伸 3 個（第二次角色檢查、owner-defaults、`X-MCP-Profile`），工具函式 `replace_index` |
 | `tests/test_admin_pipeline_matrix.py`（新，4 個測試函式、5 案） | 路由表與 `admin_action` 的對照；否定矩陣；分派器路由每條路由；HM-01 交下的固定回應（開與關） |
 | `tests/multi_profile_runtime.py` | HM-08 的測試工具：`Runtime.admin(profile_id)` 改成面板的客戶端（開通時經 8099 分派器、每個請求帶 `X-MCP-Profile`；沒開通照舊）；可指定 `verifier` |
 | `tests/test_router_passthrough.py` | HM-08 的開通後重跑 HM-01 三組測試：管理客戶端帶 `X-MCP-Profile: default`、把回聲拿掉再比位元組（`Unechoed`；PATCH／DELETE 補 CSRF，因為開通後方法表在 identity 之後）；8099 是分派器的斷言 |
-| `docs/multi-profile/contract.md` | 第 3.1～3.7、4.1、5、7 節、第 9 節 #27、第 10 節一列（第 3.9 節） |
+| `docs/multi-profile/contract.md` | 第 3.1～3.7、4.1、5、7 節、第 9 節 #27、第 10 節一列（第 3.9 節）。審查修正：第 3.1、3.2、3.6 節，第 9 節 #19、#34、#51，第 10 節再一列 |
 | `docs/multi-profile/acceptance-matrix.md` | T-12 的測試欄補 `tests/test_profile_admin_api.py`（刪除那一半） |
-| `docs/provenance/runtime-patches.json` | 6 個列管檔重算摘要並補說明；新列 `profile_admin.py`；第三個工作階段改了 `profile_runtime.py`、`profile_admin.py`，照實際內容再算一次 |
+| `docs/provenance/runtime-patches.json` | 6 個列管檔重算摘要並補說明；新列 `profile_admin.py`；第三個工作階段改了 `profile_runtime.py`、`profile_admin.py`，照實際內容再算一次；審查修正改了 `profile_admin.py`，摘要照實際內容再算、說明補 S-1 一句 |
 | 本筆記 | — |
 
 沒改：`run_product.py`（8099 照舊掛 `profile.admin_app`，開通時那就是分派器）、`admin_auth.py`、`products.py`、`config.py`、`lifecycle.py`、
@@ -170,11 +176,18 @@
 
 - 索引不能用（壞掉或被外改）時，預設帳號的 bootstrap 帶 `profile_index_state:"corrupt"` 與 `profile_index_etag`（這個程序的金鑰對索引檔的
   lstat 簽章與原始位元組算的 HMAC）。`POST profiles/index/quarantine` 要這個 ETag 與 Idempotency-Key；索引能用時一律 409 `config_conflict`。
-- 做法：選一個沒人用的隔離名 → 列出 `profiles/` 底下的帳號目錄（列不出來就 503，不留收據）→ 收據 begin → 撤銷這些帳號目錄與每個
-  已登錄額外帳號的 token → 提交 → `profiles.json` 改名成
+- 做法（審查修正後）：拿全 add-on 的帳號鎖 → 依 id 順序拿每個已登錄額外帳號自己的 `mutation_lock`（各最多 2 秒，逾時 503、已拿到的放掉；
+  審查 S-1）→ ⑩ → If-Match、Idempotency-Key 等檢查 → 選一個沒人用的隔離名 → 列出 `profiles/` 底下的帳號目錄（列不出來就 503，不留收據）
+  → 收據 begin → 撤銷這些帳號目錄與每個已登錄額外帳號的 token → 提交 → `profiles.json` 改名成
   `profiles.json.quarantine-<UTC>`（同一秒有了就加 `-2`、`-3`…，不覆蓋：HM-07 審查 S-15；在帳號鎖裡選名稱）→ 重新讀索引（absent）→
-  adopt：8081 立刻恢復服務預設帳號，不用重啟 → 已登錄的額外帳號停掉、不再路由 → 再撤銷一次（萬一有已經在等鎖的 token 變更寫了新 token）
-  → 孤兒遮罩值、reevaluate → 收據 complete → 200 `{"quarantined":"<檔名>","operation"}`。帳號目錄都變孤兒，可以逐一刪。
+  adopt：8081 立刻恢復服務預設帳號，不用重啟 → 已登錄的額外帳號停掉、不再路由 → 放開各帳號的鎖 → 孤兒遮罩值、reevaluate → 收據 complete
+  → 200 `{"quarantined":"<檔名>","operation"}`。帳號目錄都變孤兒，可以逐一刪。
+- 為什麼要拿各帳號的鎖（審查 S-1，實驗 E1）：原本只拿全 add-on 的鎖。C 正在輪替 token（已拿 C 的鎖、已讀 state、停在最後一次角色檢查）時，
+  隔離撤銷了 C；輪替放行後用隔離前讀到的 state 比 If-Match，照樣寫進新 token，8081 在 C 被移除登錄之前用新 token 回 200（原本靠
+  「移除後再撤銷一次」收尾）。現在隔離等 C 的鎖：輪替先做完，再被唯一一次撤銷收掉；隔離途中才來的請求拿到鎖時 C 的 store 已關（503）。
+  所以「再撤銷一次」拿掉了。存檔或面板重啟也被同一把鎖排開，不會和移除登錄交錯（審查推論、沒實測的「`aclose()` 之後才 `start()`、
+  留下沒人管的子程式」那種空檔）；這一種沒有另寫隔離的測試，做法和刪除相同，刪除那邊由 A `test_a_save_waiting_for_a_deleted_profiles_lock_changes_nothing`
+  守住。只有管理員自己的並行操作會撞到這個空檔，原本也不算越權。
 - 沒有索引檔可隔離（第三個工作階段補的）：開機時 `profiles/` 列不出來（不是目錄、是連結或別的 uid 的）也算索引不能用（HM-08 的
   `unusable`，到重啟為止）。這時索引檔可能根本不存在；原本會先撤銷、寫收據，改名時才失敗（409 `operation_outcome_unknown`、收據停在未完成）。
   現在 ETag 對了之後先看索引檔在不在，不在就 409 `config_conflict`，什麼都不撤銷、不留收據；修好 `profiles/` 之後要重啟 add-on（隔離解決
@@ -214,6 +227,9 @@
 11. 開機與重評起子程式（`launch()`）也拿該帳號的鎖（第 3.4 節；契約 §3.2、§7）。
 12. FD 預算不夠時建立回 409 `profile_limit_reached`、`limit` 0（第 3.4 節；契約 §3.2、§4.1、§5）。
 13. 沒有索引檔可隔離時 409 `config_conflict`（第 3.6 節；契約 §3.2、§3.6、§4.1）。
+14. 審查修正（S-1）：索引隔離依 id 順序拿每個已登錄額外帳號的鎖，⑩ 在拿完之後，拿到移除登錄為止；撤銷只做一次（第 3.6 節；契約
+    §3.2、§3.6）。
+15. 審查修正（S-2、S-6）：契約第 9 節 #19、#34、#51 補上和 PaaS 的差異；第 3.1 節寫明開通後預設帳號看得到的兩個 405／403 位元組變化。
 
 ## 4. 守門有效的證據
 
@@ -254,7 +270,7 @@
 | M01 | `profile_router.py` | 拿掉第一次角色檢查（⑥） | A `test_the_second_role_check_comes_after_every_wait_and_before_any_change`、M `test_every_route_refuses_every_caller_who_is_not_an_administrator` |
 | M02 | `profile_router.py` | 沒帶 `X-MCP-Profile` 退回預設帳號 | A `test_a_profile_scoped_request_names_exactly_one_known_profile` |
 | M03 | `profile_router.py` | PaaS 的做法：兩個標頭取第一個、格式錯回 404 | A `test_a_profile_scoped_request_names_exactly_one_known_profile` |
-| M04 | `profile_admin.py` | 全域路徑拿掉第二次角色檢查（⑩） | A `test_the_second_role_check_comes_after_every_wait_and_before_any_change` |
+| M04 | `profile_admin.py` | 全域路徑的第二次角色檢查（⑩）一次全部拿掉（`_final` 不問角色）。審查更正（S-3）：只靠建立、改名、刪除（等全域鎖）那幾輪抓到；單獨拿掉清單、索引隔離或「刪除等完目標帳號的鎖」的 ⑩，審查前的測試都抓不到（審查突變 R04、R03、R05），第 4.3 節補上 | A `test_the_second_role_check_comes_after_every_wait_and_before_any_change` |
 | M05 | `configuration.py` | ETag 的 domain 不帶帳號 id | A `test_another_profiles_etag_is_a_conflict_even_for_the_same_state` |
 | M06 | `profile_admin.py` | 建立的回應帶 token | A `test_a_new_profile_is_born_complete_starts_and_its_answers_carry_no_token` |
 | M07 | `profile_admin.py` | 刪除不先撤銷 token | A `test_a_deletion_revokes_stops_unindexes_and_removes_the_profile` |
@@ -285,6 +301,49 @@
 結果檔：`SP:hm10/logs/mutations-session3.json`（`SP:` ＝ 這條工作線的暫存區 `scratchpad/`；第一個工作階段的 23 個另存
 `mutations-session1.json`，結果相同）。
 
+### 4.3 審查修正的先紅後綠與突變（第四個工作階段，2026-11-16）
+
+- 做法：先寫測試（第 14 節），再改程式。紅的那一半照第 4.1 節的做法：工作樹的 `tests/test_profile_admin_api.py` 對審查對象 `c094e63` 的核心跑
+  （`SP:hm10-fix/base`：`git archive c094e63 packages/mcp-admin-core`、建好的 UI 一份、`apps` 連回 clone，因為 `products.ROOT` 是
+  `parents[3]`；`pytest -o "pythonpath=<base> apps/n8n"`）。突變用 `SP:hm10-fix/mutate.py`：每個突變是工作樹核心的一份拷貝（同樣帶 UI 與
+  `apps` 連結）改一處（原字串剛好出現一次、改完可編譯），用真的 pytest 跑本片 3 檔（A＋M＋P，86 案），跑完刪掉拷貝；工作樹不動
+  （每輪前後 `git status` 都只有本片還沒 commit 的 5 個檔）。
+- 第一輪（10:13～10:38）有兩個自己的錯，重跑過：(1) base 少了 `apps` 連結，紅的那一半每個起 runtime 的測試都卡在 `settle()` 逾時，結果作廢；
+  (2) 突變 S1a（隔離不拿帳號的鎖）下，`test_the_index_quarantine_holds_every_profiles_own_lock` 自己卡住（攔 `manager.remove` 的鉤子在第一段就裝了，
+  隔離走到移除 B 就停著等測試放行），跑到 900 秒上限。測試改成鉤子到第二段才裝、每個等待都有上限，退步時會失敗、不會卡住；突變工具也改成
+  逾時記 TIMEOUT、不中斷。第一輪其他結果（綠、HM-01、相關 29 檔、packaging）程式相同，照用（第 5 節）。
+- 紅（第二輪，`c094e63` 的核心）：A 32 案 **2 失敗**、30 通過，4.5 秒。失敗的正是 S-1 的兩處：`test_the_index_quarantine_holds_every_profiles_own_lock`
+  （C 的鎖被拿著，隔離沒等它，回 200 而不是 503）與 `test_the_second_role_check_comes_after_every_wait_and_before_any_change`（拿著 B 的鎖送隔離，
+  隔離沒等它，回 200 而不是 403）。MF-1 補的其他測試在 `c094e63` 都通過：那些條文的程式本來就對，測試要守的是之後的退步（下表）。
+- 綠（第二輪，修正後）：A＋M＋P 86 案全過，16.2 秒。
+- 突變（第二輪，修正後的程式與測試，206 秒）：
+
+| id | 改了什麼 | 結果 | 抓到它的測試 |
+|---|---|---|---|
+| M00 | 沒改（拷貝本身） | 86 案全過 | — |
+| R03 | 索引隔離拿掉 ⑩（審查 R03） | 抓到（審查前存活） | A `test_the_second_role_check_comes_after_every_wait_and_before_any_change` |
+| R03b | 索引隔離的 ⑩ 移到拿帳號的鎖之前（S-1 的順序） | 抓到 | 同上 |
+| R04 | 清單拿掉 ⑩（審查 R04） | 抓到（審查前存活） | 同上（清單一次請求問兩次角色） |
+| R05 | 刪除的 ⑩ 移到等目標帳號的鎖之前（審查 R05） | 抓到（審查前存活） | 同上 |
+| R13 | 刪除寫索引改用重讀的 view（審查 R13） | 抓到（審查前存活） | A `test_a_deletion_never_writes_over_an_index_changed_meanwhile` |
+| R17 | 額外帳號的 owner-defaults 動作不拒絕（審查 R17） | 抓到（審查前存活） | A `test_the_endpoint_and_the_owner_defaults_notice_are_the_default_profiles` |
+| R18 | 額外帳號的 bootstrap 給 owner-defaults 通知（審查 R18） | 抓到（審查前存活） | 同上 |
+| R21 | ⑦ 不比對目錄是不是開啟時那一個（審查 R21） | 抓到（審查前存活） | A `test_a_profile_scoped_request_names_exactly_one_known_profile` |
+| R24 | 隔離不撤銷已登錄帳號的 token（審查 R24） | 抓到（審查前存活） | A `test_quarantining_…[replaced]`、`test_the_index_quarantine_holds_every_profiles_own_lock` |
+| S1a | 隔離不拿已登錄帳號的鎖（`c094e63` 的做法） | 抓到 | A `test_the_index_quarantine_holds_every_profiles_own_lock`、`test_the_second_role_check_…` |
+| S1b | 隔離在移除登錄之前就放開帳號的鎖 | 第二輪存活；第三輪抓到（見下） | A `test_the_index_quarantine_holds_every_profiles_own_lock` |
+
+- S1b 第二輪存活的原因：放開得早，等在鎖上的請求讀到的是撤銷後的 state，它手上的 If-Match 一定過期（409），所以這組測試看不出差別；
+  但 C 原本就沒有 token 時撤銷不改 state，一個隔離前排隊的輪替就可能在移除登錄前寫進新 token。契約寫的是「拿到移除登錄為止」，
+  所以補一個直接的斷言：攔 `manager.remove` 的鉤子記下每個帳號被移除登錄時它自己的鎖還在不在隔離手上（B、C 都要是）。
+- 第三輪（11:18～11:20，只重跑碰到這個測試的部分）：紅，`c094e63` 的核心 32 案同樣只有 S-1 的 2 案失敗（4.4 秒）；綠，86 案全過（16.8 秒）；
+  突變 M00 全過，R24、S1a、S1b 都被抓到（S1b 由 `test_the_index_quarantine_holds_every_profiles_own_lock` 的新斷言抓到）。
+  所以修正後的程式與測試下，12 個突變全部被抓到。
+- 審查原本存活的 10 個（R03、R04、R05、R13、R14、R17、R18、R17R18、R21、R24）：R14 是等價突變不補（第 14 節）；R17R18 是 R17＋R18 合併，
+  兩個各自被抓到就一定被抓到；其他 8 個上表都抓到。
+- 結果檔：`SP:hm10-fix/logs/mutations-run2.json`、`mutations-run3.json`（第三輪）、每個突變的 `mut-<id>.log`／`.xml`；紅綠的 junit 在
+  `SP:hm10-fix/logs/fix2-red.xml`、`fix2-hm10.xml`、`fix3-*.xml`。
+
 ## 5. 本機檢查（2026-11-15～16，一般使用者 uid 1000；TMPDIR 用 `/tmp/ha-mp-XXXXXX`，每次跑完用完整路徑刪除）
 
 環境：clone 先跑 `setup_repo_env.sh`（`npm ci` 會清掉 Playwright 的瀏覽器，所以另照 CI 跑 `npm run browser:install --prefix packages/mcp-admin-ui`）；
@@ -302,6 +361,13 @@
 | `packaging/validate.py` | `SP:ha-baseline/ci-venv/bin/python packaging/validate.py` | PASS（exit 0） |
 | packaging unittest | 照 CI：暫存 venv（`UV_PROJECT_ENVIRONMENT=$TMPDIR/pkg-venv uv sync --frozen --no-dev --offline`＋`uv pip install --offline --require-hashes -r packaging/requirements-ci.txt`）→ `python -m unittest discover -s packaging -p 'test_*.py'` | `Ran 201`、`OK (skipped=5)`（同 HM-09；GHCR 那幾行是測試替身印的，沒有連網） |
 | tool-surface 漂移 | `.venv/bin/python scripts/tool_inventory.py` | exit 0（本片沒動 `apps/runtime/*.py`、`apps/*/launch.py`） |
+| **審查修正（第四個工作階段，2026-11-16）**：環境 | clone 的依賴、patch 與 UI 已由前面的工作階段照 `setup_repo_env.sh` 裝好（11 個 venv／`node_modules` 都在），這次沒有重跑（重跑會連 npm registry）；每輪 `. bin/ha_env.sh`、排在 `SP:wave1-pytest.lock` 後面，一輪只拿一次鎖 | — |
+| 審查修正：本片 3 檔 | `SP:hm10-fix/batch.sh`、`batch2.sh`、`batch3.sh` 的綠段：`pytest tests/test_profile_admin_api.py tests/test_admin_pipeline_matrix.py tests/test_router_passthrough.py` | 第一輪 86 案全過、0 skip，16.7 秒（A 32 案 4.0 秒、M 5 案 6.6 秒、P 49 案 5.4 秒）；第二輪 86 案全過，16.2 秒；第三輪 86 案全過，16.8 秒（A 32 案 4.0 秒、M 5 案 6.5 秒、P 49 案 5.6 秒） |
+| 審查修正：HM-01 黃金回歸＋兩個契約凍結（開關關） | `batch.sh` 第三段 | 45 案全過、0 skip，6.7 秒；三檔與 `tests/contract/` 對 `24d72cc` 一字未改 |
+| 審查修正：相關 29 檔 | `batch.sh` 第四段（審查報告用的同一份清單：HM-05／07／08／09 的測試與既有管理面測試，含讀帳本的 `test_tool_inventory.py`、`test_ledger_precheck.py`） | 1,127 案全過、0 skip，104.2 秒 |
+| 審查修正：先紅後綠、突變 | 第 4.3 節 | 紅：`c094e63` 的核心 32 案只有 S-1 的 2 案失敗；綠：全過；突變 12 個（第三輪補 S1b 的斷言後）全部被抓到 |
+| 審查修正：packaging | `batch.sh` 第六段（同上面兩列的做法） | `validate.py` PASS；unittest `Ran 201`、`OK (skipped=5)`；`tool_inventory.py` exit 0 |
+| 審查修正：全套 pytest | 沒有重跑 | 程式只改 `profile_admin.py` 的 `quarantine()`；碰到 `ProfileAdmin` 與索引隔離的測試只有本片 3 檔（`grep` 過），上面都跑了；相關 29 檔也過。全套以 CI 為準（最後一次本機全套是 `bc37ac7`） |
 | 跑完後的工作樹 | `git status --short` | 只有還沒 commit 的本筆記（測試沒有留下任何檔） |
 
 ## 6. 契約第 3 節逐條對到的測試
@@ -324,7 +390,7 @@ HM-01 三組）。
 | §3.1 `backend`、`backend/patch` | Odoo 換身分換 token | HM-12（還沒做） |
 | §3.1 `backend/test` | 測選定帳號 | HM-08 `tests/test_reply_mask_union.py::test_the_management_answers_carry_no_token_either`（經分派器） |
 | §3.1 `policy` 等、`child/restart` | 只重啟選定帳號；`blocked_reason` | A `test_a_profiles_actions_restart_and_show_only_its_own_child`（經分派器：B 的 `child/restart` 與存寫入開關各重起 B 一次、預設帳號不動、過期 If-Match 與未知帳號什麼都不重起）；HM-05 `test_a_save_restarts_only_its_own_child`；HM-09 `tests/test_profile_ports.py` |
-| §3.1 `endpoint`、`owner-defaults/*` | 額外帳號 409 | A `test_the_endpoint_and_the_owner_defaults_notice_are_the_default_profiles` |
+| §3.1 `endpoint`、`owner-defaults/*` | 額外帳號 409；owner-defaults「不管目錄裡有什麼」 | A `test_the_endpoint_and_the_owner_defaults_notice_are_the_default_profiles`（審查修正 MF-1 (3)：B 的目錄放了一次性遷移的標記與復原紀錄，對照組證明它的 state 本來會顯示通知、可以還原；審查前 B 沒有標記，沒標記本來就 409，突變 R17、R18 存活） |
 | §3.1 `token/reveal`、`token/revoke`、`token/rotate` | 只動選定帳號；`restore_review_required` | A `test_every_answer_of_a_profile_names_it`（reveal）；HM-08 `tests/test_profile_routing.py`（經分派器輪替、撤銷）；`restore_review_required` 是 HM-13c |
 | §3.1 方法 | PATCH、DELETE 只在 `profiles/<id>`；405 位元組 | M `test_the_dispatcher_routes_every_route_of_its_table`；P `test_switched_on_the_management_contract_freeze_holds`；沒開通：A `test_switched_off_the_profile_paths_are_unknown_and_no_header_is_needed` |
 | §3.1 query、`%`、`\\` | 400 | P（HM-01 管理契約凍結開通重跑） |
@@ -332,14 +398,14 @@ HM-01 三組）。
 | §3.2 ②③④ 的固定回應 | 503（名額、鎖、state）、408、413、斷線 403，開與關同位元組 | M `test_the_fixed_answers_of_the_pipeline_stay_byte_for_byte`（兩種） |
 | §3.2 ⑤ | 全域路徑的本體與 id 固定 400 | A `test_a_rename_changes_only_the_label` |
 | §3.2 ⑦ | 見 §3.3 | A `test_a_profile_scoped_request_names_exactly_one_known_profile` |
-| §3.2 ⑧ | 帳號鎖、目標帳號的鎖各 2 秒 503；建立後在新帳號的鎖裡起；開機與重評起子程式也拿帳號的鎖 | A `test_a_deletion_waits_for_the_profiles_lock_and_the_add_ons`、`test_a_new_profile_is_born_complete_starts_and_its_answers_carry_no_token`、`test_a_start_after_an_index_change_waits_for_the_profiles_own_lock`；M 固定回應（帳號鎖 503） |
+| §3.2 ⑧ | 帳號鎖、目標帳號的鎖各 2 秒 503；建立後在新帳號的鎖裡起；開機與重評起子程式也拿帳號的鎖；索引隔離拿每個已登錄帳號的鎖（審查 S-1） | A `test_a_deletion_waits_for_the_profiles_lock_and_the_add_ons`、`test_a_new_profile_is_born_complete_starts_and_its_answers_carry_no_token`、`test_a_start_after_an_index_change_waits_for_the_profiles_own_lock`、`test_the_index_quarantine_holds_every_profiles_own_lock`；M 固定回應（帳號鎖 503） |
 | §3.2 ⑨ | 依 state 驗證照今天 | P（「400 a value that does not validate」） |
-| §3.2 ⑩ | 第二次角色檢查在每個等待之後、提交之前 | A `test_the_second_role_check_comes_after_every_wait_and_before_any_change` |
+| §3.2 ⑩ | 第二次角色檢查在每個等待之後、提交之前 | A `test_the_second_role_check_comes_after_every_wait_and_before_any_change`（審查修正 MF-1 (1)(2)：每一種等待各一輪：全域鎖下的建立、改名、刪除、索引隔離；目標帳號的鎖下的刪除；索引隔離拿的 B、C 的鎖；清單一次請求問兩次角色。審查前只有全域鎖下的建立、改名、刪除，突變 R03、R04、R05 存活） |
 | §3.2 ⑪ | 寫入保護與狀態相依判斷（含 FD 預算不夠時的上限 `limit` 0、沒有索引檔的隔離） | A `test_every_profile_write_needs_the_index_etag_and_its_operation_id`、建立／改名／刪除各案、`test_no_profile_is_created_while_only_the_default_profile_is_served`、`test_there_is_nothing_to_quarantine_without_an_index_file` |
 | §3.2 非管理員逐位元相同 | 標籤有沒有、上限到沒、帳號有沒有、標頭有沒有 | M `test_every_route_refuses_every_caller_who_is_not_an_administrator`（兩輪 × 5 種變化） |
 | §3.2 沒開通順序同今天；開通後只多一次角色查詢 | — | HM-01 三組（沒開通，一字未改）；P（開通重跑） |
 | §3.2 新路由沒進矩陣就失敗 | — | M `test_the_route_table_has_every_operation_a_profile_answers` |
-| §3.3 每一列 | 沒帶、兩個、格式錯、不存在、讀不到、索引壞、全域路徑、沒開通、8081 | A `test_a_profile_scoped_request_names_exactly_one_known_profile`、`test_quarantining_…`（索引壞 503）、`test_switched_off_…`；8081：HM-08 `tests/test_profile_routing.py`（契約案例的 `X-MCP-Profile` 不理） |
+| §3.3 每一列 | 沒帶、兩個、格式錯、不存在、讀不到、目錄已不是開啟時那一個、索引壞、全域路徑、沒開通、8081 | A `test_a_profile_scoped_request_names_exactly_one_known_profile`（審查修正 MF-1 (4)：執行中把 B 的目錄換成複本，bootstrap 與 `token/reveal` 都 503；審查前沒有這一列的測試，突變 R21 存活）、`test_quarantining_…`（索引壞 503）、`test_switched_off_…`；8081：HM-08 `tests/test_profile_routing.py`（契約案例的 `X-MCP-Profile` 不理） |
 | §3.4 | bootstrap 整個回聲與 `profiles_supported`；其他 `profile:{id}`；拒絕不帶；改名立刻換；標頭保留 | A `test_every_answer_of_a_profile_names_it`、`test_a_product_without_profiles_refuses_to_create_one`（`false`）；P（形狀 B 的 ETag 標頭） |
 | §3.5 帳號設定 | domain 帶 id、逐位元相同的對照 | A `test_another_profiles_etag_is_a_conflict_even_for_the_same_state` |
 | §3.5 增刪改、隔離 | If-Match、Idempotency-Key、各錯誤代碼、重送、提交後失敗 | A `test_every_profile_write_needs_the_index_etag_and_its_operation_id`、`test_an_operation_whose_outcome_is_unknown_is_never_repeated`、`test_the_index_etag_is_bound_to_the_entries_and_this_process` |
@@ -348,7 +414,7 @@ HM-01 三組）。
 | §3.6 bootstrap 欄位 | `profile_index_state`、`profile_index_etag` | A `test_every_answer_…`、`test_quarantining_…` |
 | §3.6 請求本體與名稱規則 | 剛好 `{"label"}`；DQ-16 | A `test_a_creation_is_refused_…`、`test_a_rename_changes_only_the_label` |
 | §3.6 還原紀錄 | HM-13b／c | — |
-| §3.6 索引隔離、刪除的步驟 | 含：監看停了、預設 state 沒被寫、刪目錄不跟隨連結、刪除途中在等鎖的請求什麼都不做、刪不乾淨時一行 WARNING（只有 id 前 8 碼）且剩下的是孤兒、`profiles/` 列不出來又沒有索引檔時不隔離 | A `test_quarantining_…`、`test_a_deletion_revokes_…`、`test_deleting_a_profile_under_load_…`、`test_a_profile_directory_is_removed_without_following_a_link`、`test_a_save_waiting_for_a_deleted_profiles_lock_changes_nothing`（`removed`、`left as an orphan`）、`test_there_is_nothing_to_quarantine_without_an_index_file` |
+| §3.6 索引隔離、刪除的步驟 | 含：監看停了、預設 state 沒被寫、刪目錄不跟隨連結、刪除途中在等鎖的請求什麼都不做、刪不乾淨時一行 WARNING（只有 id 前 8 碼）且剩下的是孤兒、`profiles/` 列不出來又沒有索引檔時不隔離；寫索引一律傳手上的 view（刪除途中索引被外改：409、不覆寫、8081 503 到重啟）；索引隔離拿各帳號的鎖、撤銷之後沒有 token 被路由 | A `test_quarantining_…`、`test_a_deletion_revokes_…`、`test_deleting_a_profile_under_load_…`、`test_a_profile_directory_is_removed_without_following_a_link`、`test_a_save_waiting_for_a_deleted_profiles_lock_changes_nothing`（`removed`、`left as an orphan`）、`test_there_is_nothing_to_quarantine_without_an_index_file`、`test_a_deletion_never_writes_over_an_index_changed_meanwhile`（審查修正 MF-1 (5)；審查前突變 R13 存活）、`test_the_index_quarantine_holds_every_profiles_own_lock`（審查 S-1；審查前突變 R24 存活） |
 | §3.7 | 不做路徑備案（UC-10） | A `test_a_profile_scoped_request_names_exactly_one_known_profile`（`/api/p/<id>/bootstrap` 404） |
 | §1.2 沒開通 | `/api/profiles*` 404、不要求標頭 | A `test_switched_off_the_profile_paths_are_unknown_and_no_header_is_needed` |
 
@@ -361,7 +427,8 @@ HM-01 三組）。
 計畫 §10.3 的 HM-10 列還寫了「`tests/contract/profiles_v1_cases.json`（擴充）」：沒有擴充。那個檔是 HM-01 的守門檔，格式只描述 8081
 （原始 HTTP 請求打真 listener）；管理面的案例由路由表自動產生（M），比靜態檔多涵蓋「新路由沒進表就失敗」；和 PaaS 不同的地方
 （§8.8 #31、#32、#34、#35、#83）各有斷言（A），PaaS 行為當突變跑過（M03、M18）。HM-08 也沒有改它（見 HM-08 筆記第 14.1 節）。
-要不要在 HM-18 定稿時把管理面案例也寫成資料檔，交 HM-18 決定。
+要不要在 HM-18 定稿時把管理面案例也寫成資料檔，交 HM-18 決定。審查 S-5：這是偏離計畫 §10.3 的決定，PR 描述明列「沒做、理由、交 HM-18
+決定」，請主對話確認。
 
 ### 6.1 PaaS 對照案例（`paas-test-mapping.md` 指給 HM-10 的 13 列）
 
@@ -385,14 +452,28 @@ HM-01 三組）。
   `tests/test_owned_executable.py::test_uid10001_nondumpable_self_and_own_child_proof`、
   `tests/test_profile_store.py::test_mode_and_owner_as_the_add_on_user`（HM-07：uid 10001 的 mode／owner 證明，非 root 時刻意失敗）、
   `tests/test_restore_detection.py` 的 5 個 `test_root_*`（HM-13a）。
-- 新測試的時間：新 2 檔 34 案本機 9.9 秒（`test_profile_admin_api.py` 29 案 3.3 秒、`test_admin_pipeline_matrix.py` 5 案 6.6 秒，最慢的是固定回應兩案各 2.4 秒與否定矩陣 1.7 秒）；改過的 `test_router_passthrough.py` 49 案 5.4 秒（HM-08 的檔，開通重跑多了帶標頭、拿掉回聲）。CI 推估新 2 檔 10～15 秒（runner 比本機慢、而且會跳）；全套本機 1,841.6 秒。全部在程序內（ASGI、`NoProcessSupervisor`、MockTransport），不起真子程式。等待都用事件或 `asyncio.timeout` 上限；只有兩處是
+- 新測試的時間（審查更正 S-3：原本寫的「34 案、29 案」不對，審查修正前實際是 35 案：A 30、M 5）：審查修正後新 2 檔 37 案本機 10.5 秒
+  （`test_profile_admin_api.py` 32 案 4.0 秒、`test_admin_pipeline_matrix.py` 5 案 6.6 秒，最慢的是固定回應兩案各約 2.4 秒與否定矩陣約 1.7 秒）；
+  改過的 `test_router_passthrough.py` 49 案 5.4 秒（HM-08 的檔，開通重跑多了帶標頭、拿掉回聲）。審查修正補的 2 個新函式與延伸的 3 個，
+  本機每案 0.08～0.26 秒，合計約 0.6 秒。CI 推估新 2 檔 11～16 秒（runner 比本機慢、而且會跳）；全套本機 1,841.6 秒（`bc37ac7`）。全部在程序內
+  （ASGI、`NoProcessSupervisor`、MockTransport），不起真子程式。等待都用事件或 `asyncio.timeout`／`wait_for` 上限；只有兩處是
   「等 0.2～0.3 秒、確認某件事沒發生」（刪除途中只斷 B 的呼叫、開機與重評起子程式要等帳號的鎖）：runner 慢只會讓它們少抓到錯，不會讓對的程式
-  失敗。
+  失敗。審查修正的 `test_the_index_quarantine_holds_every_profiles_own_lock` 讓 C 的輪替停在最後一次角色檢查（`AdminAuthority.verify` 自己的
+  3 秒上限內），中間只做幾個程序內請求與一次 0.1 秒的拿鎖逾時，本機不到 0.3 秒；退步時每個等待都有上限，測試失敗、不會卡住。
 - `checks` 秒數：前＝#100 合併時 1,899 秒（31 分 39 秒；上限已是 60 分鐘；README 進度紀錄）；本片：開 PR 後補。
 
 ## 8. 預檢結果
 
-兩個都在 commit 本筆記之後、對 HEAD 跑（2026-11-16）：
+審查修正後（第四個工作階段，2026-11-16 11:2x）：兩個都在 commit 本筆記之前、對 HEAD `bbb24bc`（審查修正的 4 個 commit 之後）跑：
+
+| 預檢 | 結果 |
+|---|---|
+| 秘密預檢（指令同下表） | gitleaks 8.28.0（釘版、已驗）；`24d72cc..bbb24bc` 15 個 commit，另掃 HEAD 樹與全部歷史：**0 命中**（`result: OK, 0 findings`） |
+| 帳本預檢（指令同下表） | 173／70／159 筆，0 漂移、0 缺；7 個列管檔都在帳本，沒有沒列管的新執行檔：**OK**。另用 sha256 逐一核對 7 個列管檔的實際內容，和帳本一致 |
+
+commit 本筆記之後，對最終 HEAD 再跑一次兩個預檢；結果寫在 PR 描述（`artifacts/ha-multiprofile-parity-20261114/wave4/pr-HM-10.md`）。
+
+審查前（第三個工作階段）：兩個都在 commit 本筆記之後、對 HEAD 跑（2026-11-16）：
 
 | 預檢 | 指令 | 結果 |
 |---|---|---|
@@ -413,6 +494,7 @@ HM-01 三組）。
 
 | 題 | 結論 | 本片怎麼用 |
 |---|---|---|
+| DQ-01 (a) | Bearer 也依 token 選帳號 | 本片不改 8081；刪除與索引隔離之後，舊 token 在 Bearer 與密鑰網址兩條路都立即失效（A 的刪除案例；審查修正的隔離案例另驗 Bearer） |
 | DQ-02 (a) | 新帳號複製預設帳號當下的政策；`n8n_session` 不複製；建立不記 history | 建立用 `profile_initial_state`（第 3.4 節） |
 | DQ-12 | 索引壞與被外改：8081 503；面板照開、提供「隔離帳號索引」 | 第 3.6 節 |
 | DQ-13 | 2026-11-15 17:4x 使用者採用建議：endpoint 全域一個、只存在預設帳號 | 第 3.8 節（`decisions.md` 由 #100 記） |
@@ -435,6 +517,7 @@ HM-01 三組）。
 | Ingress 會不會原樣轉 `X-MCP-Profile`（UC-10） | 只認這個標頭（使用者決定）；不轉的話開通後所有帳號範圍請求都 400 `profile_id_required`，面板用不了（不會落到別的帳號）。研究時讀過原始碼：Core 端會轉（`INIT_HEADERS_FILTER` 只濾 8 個標頭；計畫 §5.3 第 11 點、C2 第 4 節），Supervisor 端還沒實測 | 拋棄式 echo add-on：自訂標頭、重複兩個時的樣子 |
 | Ingress 會不會轉 PATCH、DELETE 與它們的本體、`Content-Type`（改名的 JSON 本體） | 照 PaaS 的方法；不轉就要回到契約 §3.7 的備案（使用者 15:3x：探針實測不通才補）。Core 端讀原始碼會轉，Supervisor 端待實測 | 同上 |
 | Ingress 會不會動 `If-Match`、`Idempotency-Key`、`X-CSRF-Token`（今天的面板已在用，預期會轉） | 照舊 | 同上，順便記 |
+| Ingress 會不會原樣轉送 `ETag` **回應**標頭（審查 S-4；HM-11 審查 S-2 第 3 點）。清單的索引 ETag 只放在回應標頭，建立、改名、刪除、隔離的 If-Match 都從它來；今天的面板寫入版本都從 bootstrap 本體拿，這是第一個靠 Ingress 轉送回應 `ETag` 的流程 | 照 UC-10 同樣的原則（標頭先、實測不通才補）：先不在清單本體多帶版本，不另開和 PaaS 不同的欄位。拿不到時面板怎麼顯示是 HM-11 的事（HM-11 審查 S-2 建議：只剩預設帳號、增刪改停用） | 同上：echo add-on 回一個帶 `ETag` 的回應，看瀏覽器拿不拿得到。拿不到就在清單本體多帶同值的 `index_etag`（面板優先讀本體），HM-10 補或 HM-11 收尾時一起做 |
 | 容器裡 `/proc/meminfo` 的 MemAvailable 是主機的值、cgroup `memory.max` 看不看得到（HM-09 的項目） | 建立時照第 3.4 節；讀不到就照建立、一行 WARNING | 同 HM-09 筆記第 11 節 |
 | `os.rename` 改名索引、`shutil.rmtree` 在 HAOS 的資料磁碟（ext4／overlay）上的行為 | 照 POSIX；刪不乾淨只記 WARNING | 刪除與隔離各做一次，看目錄與項目數 |
 | add-on 容器的 `RLIMIT_NOFILE`（HM-08 的項目） | 提不到 FD 預算時只服務預設帳號，建立回 409 `profile_limit_reached`、`limit` 0（第 3.4 節） | 同 HM-08 筆記：soft／hard 的值；Odoo 要 544（＋25% 是 680） |
@@ -453,12 +536,12 @@ HM-01 三組）。
 | 路由表自動產生的否定矩陣；非管理員逐位元相同；建立與重送不回 token；開關關時 `/api/profiles` 404 且不要求標頭 | 通過（M 三案；A `test_a_new_profile_…`、`test_switched_off_…`） |
 | 跨帳號 ETag 409（含兩帳號 state 完全相同的對照） | 通過（A `test_another_profiles_etag_is_a_conflict_even_for_the_same_state`；突變 M05） |
 | HM-01 黃金回歸與契約凍結在開關關時逐位元 | 通過（三組測試一字未改、全套裡全過；開通重跑也過，第 5 節） |
-| 契約第 3 節每一條都指到一個測試 | 通過（第 6 節對照表） |
+| 契約第 3 節每一條都指到一個測試 | 審查前**不成立**：審查找出 5 條有程式、沒有測試守住（MF-1：索引隔離的 ⑩、刪除等完目標帳號的鎖才做 ⑩、額外帳號 owner-defaults「不管目錄裡有什麼」、目錄換掉回 503、刪除寫索引傳手上的 view）。審查修正後通過：5 條都補了測試，對應的審查突變都被抓到（第 4.3、6、14 節） |
 | UC-10 依使用者決定用標頭（實機結果待 HM-03a） | 照做；實機待 HM-03a（第 11 節） |
 | 同 PR 更新帳本；契約「待定」同步並加變更紀錄 | 通過（第 2、8 節；契約第 10 節一列；帳本預檢 OK） |
 | 不改版號、不碰 `addons/<x>/`、不改 CHANGELOG；`MULTI_PROFILE_PRODUCTS` 維持空集合；commit 沒有 AI 署名 | 通過 |
 | 測試資料規則（計畫 §12.0 第 4 點） | 通過：token 都在測試執行時產生（`create_profile`、建立 API）；憑證 `DUMMY-…`、網址 `.invalid`；Idempotency-Key 在執行時產生；沒有 commit 任何像金鑰的字串 |
-| 獨立安全審查 | **還沒做**：這個階段只 commit；合併前要做（計畫 §12.1） |
+| 獨立安全審查 | 做了（2026-11-16，報告 `artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-10.md`，在 repo 外）：修正後通過。必修 MF-1、建議 S-1～S-6 的處理見第 14 節 |
 
 ## 13. 還沒解決、交給後面的片
 
@@ -466,7 +549,7 @@ HM-01 三組）。
 
 | 來源 | 事項 | 處理 |
 |---|---|---|
-| HM-00 第 10 節 | 契約「暫定」：刪除、索引隔離的路徑與回應本體；額外帳號的 owner-defaults 代碼；索引壞時可用的路由 | 做了（契約 §3.1、§3.5、§3.6、§4.1）。刪隔離目錄的路由、全部撤銷失敗的狀態碼、還原紀錄欄位、索引壞時全部撤銷與還原紀錄能不能用：HM-13b／c（契約仍標暫定） |
+| HM-00 第 10 節 | 契約「暫定」：刪除、索引隔離的路徑與回應本體；額外帳號的 owner-defaults 代碼；索引壞時可用的路由 | 做了（契約 §3.1、§3.5、§3.6、§4.1）。刪隔離目錄的路由、全部撤銷失敗的狀態碼、還原紀錄欄位、索引壞時全部撤銷與還原紀錄能不能用：HM-13b／c（契約仍標暫定）。owner-defaults「不管目錄裡有什麼」原本沒有測試，審查修正補上（MF-1 (3)） |
 | HM-00 第 12 節、HM-01 第 4.1 節 | 8099 的 503（名額滿、拿鎖逾時、state 讀不到）、408、413、斷線 403 沒有逐位元案例 | 做了：M `test_the_fixed_answers_of_the_pipeline_stay_byte_for_byte`，沒開通與開通各一次、位元組相同 |
 | HM-01 第 11 節 | 改到那條路徑的片補未開通時的逐位元案例 | 管理面（§4.1）做了；MCP 面（§4.2）是 HM-08、HM-14 |
 | HM-05 第 11 節 (1) | 從 `admin_api`／`admin_action` 抽出共用管線 | 做了（第 3.1 節）；沒有經 `admin_pipeline` 注入點，理由見第 3.1 節 |
@@ -474,16 +557,19 @@ HM-01 三組）。
 | HM-05 第 11 節 (3)、(5)；審查 S-3 | HMAC domain 加帳號 id；兩個帳號 state 完全相同的對照案例 | 做了（第 3.7 節；突變 M05 被抓到） |
 | HM-05 第 11 節 (4) | 刪帳號用執行套件的 `token_access.committed()` 與 `mutation_lock` | 做了（第 3.5 節） |
 | HM-05 第 11 節 (6) | `echoed()` 只處理 `JSONResponse`；同名多值標頭被合併；`profile_view()` 丟例外變 500 | 第一點照舊（刻意）；第二點改了；第三點：`ProfileManager.echo` 不丟例外（第 3.8 節） |
-| HM-07 第 12 節第 6 點（S-08） | 管理面、收據、owner-defaults、`child_spec` 走路徑 | ⑦ 每次比一次額外帳號目錄的 `(st_dev, st_ino)`，換掉就 503；額外帳號的 owner-defaults 一律拒絕；收據與 `child_spec` 仍走路徑（同 uid 才做得到，DQ-37；比對與使用之間仍有時間差，不是安全邊界） |
+| HM-07 第 12 節第 6 點（S-08） | 管理面、收據、owner-defaults、`child_spec` 走路徑 | ⑦ 每次比一次額外帳號目錄的 `(st_dev, st_ino)`，換掉就 503；額外帳號的 owner-defaults 一律拒絕；收據與 `child_spec` 仍走路徑（同 uid 才做得到，DQ-37；比對與使用之間仍有時間差，不是安全邊界）。審查修正（MF-1 (3)(4)）：前兩點原本沒有測試，現在 A `test_a_profile_scoped_request_names_exactly_one_known_profile`（執行中換成複本：503）與 `test_the_endpoint_and_the_owner_defaults_notice_are_the_default_profiles`（目錄裡有遷移標記也 409）守住 |
 | HM-07 第 12 節第 7 點（S-14） | 讀檔也擋 Cn 綁住目前 Python 的 Unicode 資料庫 | 維持讀檔也擋（DQ-16 照計畫「拒絕未指派」）。理由：Unicode 指派過的字不會再變未指派，換新版 Python 只會多認字；要讀到「新 Python 寫的名稱」的舊 Python，只會發生在還原較舊的備份時，而還原帶回的是備份當時的索引（那時的名稱是那時的 Python 驗過的）；Store 也不收降版。寫進本筆記，HM-18 決定要不要寫進 DOCS |
 | HM-07 第 12 節第 8 點（S-15） | 同一秒的隔離名撞名 | 索引隔離：在帳號鎖裡選一個沒人用的名稱，必要時加 `-2`…（A `test_a_second_quarantine_in_the_same_second_gets_its_own_name`）；帳號目錄的隔離名是 HM-13b |
-| HM-07 第 12 節第 9 點 | 寫索引一律傳 `expected=`；`ProfileDataError` 之後用手上的 view 複查 | 做了：建立、改名、刪除都傳 `manager.index`；失敗後 `serves_mcp()` 複查（MODIFIED 維持到重啟）。只有索引隔離之後重新 `read_index`（隔離本來就是要換基準） |
+| HM-07 第 12 節第 9 點 | 寫索引一律傳 `expected=`；`ProfileDataError` 之後用手上的 view 複查 | 做了：建立、改名、刪除都傳 `manager.index`；失敗後 `serves_mcp()` 複查（MODIFIED 維持到重啟）。只有索引隔離之後重新 `read_index`（隔離本來就是要換基準）。審查修正（MF-1 (5)）：刪除在拿到 view 和寫索引之間會 await（停子程式），是唯一有外改空檔的路，原本沒有測試；現在 A `test_a_deletion_never_writes_over_an_index_changed_meanwhile` 守住。建立與改名在檢查和寫入之間沒有 await（審查突變 R14 存活但等價），不另補 |
 | HM-08 第 3.5、14.2 節 | `add`／`remove`／`adopt_index`；`shared.pipeline`；每帳號的管理 app；S-08 的管理面；契約 §3 | 做了；`shared.pipeline` 不用（第 3.1 節）；分派器呼叫 `admin_action`，不經各帳號的 app |
 | HM-09 第 13.2 節 | 清單的 `status`（`stopped` 要對應）、`blocked_reason`、`disabled_reason`；409 記憶體與 port；寫索引後 `adopt_index`＋`reevaluate()`；建立後 `start_profile`；刪除用 `remove`；8099 把 `child/restart` 等路由到額外帳號 | 做了（第 3.3～3.5 節）；`profile_limit` 的 `blocked_reason` 維持 `null` |
 | HM-09 第 13.2 節（HM-10／HM-11） | 看門狗一直重試時 `apply_state` 是 `pending`，清單用 `status=backoff` | 清單照 `Supervisor.status` 給 `backoff`；面板要不要另外提示是 HM-11 |
 | HM-08 審查第 15.3 節（`claude-delivery` 版筆記） | FD 預算照產品上限算；索引被手改成超過上限時多開的 client 會超出估計：「交 HM-10（建立帳號時本來就擋上限）」 | 建立擋上限（409 `profile_limit_reached`，A `test_a_creation_is_refused_…`）；FD 上限提不到預算、只服務預設帳號時建立也擋（`limit` 0，A `test_no_profile_is_created_while_only_the_default_profile_is_served`，第三個工作階段補的）；手改索引是同 uid（DQ-37），量實際 FD 是 HM-19c |
 | HM-09 審查 S-4（R16、R17） | `reevaluate()` 新變 disabled 的帳號要停（R16）、`remove()` 要停該帳號的監看（R17）沒有測試；「或在 HM-10 交接寫成必測」 | HM-09 的 PR（`wave3/pr-HM-09.md`）寫明它的修正線已補這兩個測試，並寫「HM-10 接線後經 API 再測」。R17 經 API 測了：刪除的案例斷言被刪帳號的監看工作已取消、不在管理器的監看表裡（突變 M25 被抓到）。R16 經 API 測不到：HM-10 的 API 沒有一條路會讓帳號「新變 disabled」（建立先擋上限、記憶體與 port，新帳號排在索引最後、不會擠掉前面的；改名不改 disabled；索引隔離是整個停掉） |
 | HM-09 審查 S-12 第 2 點 | `start_all`、`reevaluate` 的 `launch()` 不拿 `mutation_lock`，和面板存檔交錯；「HM-10 接線時一起處理」（HM-09 的 PR 也寫「(2) `_relaunch` 拿 `mutation_lock` 交 HM-10」） | 做了：建立後在新帳號自己的鎖裡 `start_profile`（A 的建立案例、突變 M24）；`ProfileRuntime.launch()`（開機與重評）也拿該帳號的鎖（A `test_a_start_after_an_index_change_waits_for_the_profiles_own_lock`、突變 M28）。沒有改 `_relaunch`：存檔與面板重啟是拿著鎖呼叫它的，在它裡面拿會自己鎖死（第 3.4 節） |
+
+| HM-11 審查 S-5（HM-10 開工後才出；審查修正時補列） | (1) 帳號增刪的重送先回收據、再比 If-Match；(2) 探測的 400 `profile_id_required` 不寫 WARNING 以上的 log；(3) 清單列數上限 6、id 不重複 | 三點都已符合（HM-10 審查核對過）：建立、刪除、隔離是「If-Match 格式 → Idempotency-Key 重送 → 才比 ETag」；⑦ 的 400 不寫 log；孤兒放在另一個鍵 `orphans`，不進清單列。DOCS 寫明探測 400 是預期行為：HM-18 |
+| HM-11 審查 S-2 第 3 點（審查修正時補列） | Ingress 若拿掉 `ETag`，清單本體另帶版本 | 列進第 11 節待 HM-03a（審查 S-4）；實測不通才在清單本體多帶 `index_etag` |
 
 ### 13.2 交給後面的片
 
@@ -492,19 +578,27 @@ HM-01 三組）。
   `profiles_supported:false` 不顯示新增；PATCH、DELETE 一定帶 CSRF（開通後方法表在 identity 之後）；建立的回應沒有 token，要另外 reveal；
   建立重送回目前那一列、帳號已刪時只有 id；`status`、`blocked_reason`、`disabled_reason` 的文字；fixture server 照本片的回應形狀；
   `profile_limit_reached` 的 `limit` 可能是 0（FD 預算不夠、只服務預設帳號）；`corrupt` 時隔離回 409 `config_conflict` 而索引仍是
-  `corrupt`，表示沒有索引檔可隔離（`profiles/` 開機時列不出來），提示「修好後重啟 add-on」。
+  `corrupt`，表示沒有索引檔可隔離（`profiles/` 開機時列不出來），提示「修好後重啟 add-on」。審查修正後：隔離可能因為某個帳號的變更
+  還拿著鎖而 503（逾時，什麼都沒做），面板照 503 的通用文字提示再試一次即可。清單的索引 ETag 只在回應標頭：Ingress 轉不轉待 HM-03a
+  （第 11 節，審查 S-4）；拿不到時怎麼顯示照 HM-11 審查 S-2 的建議。
 - **HM-12**：Odoo 換身分換 token（`backend`、`backend/patch` 經分派器，`admin_action` 不變）；A 的審批 token 在 B 被拒。
 - **HM-13b**：休眠帳號（沒開通但有資料）的 bootstrap `dormant_profiles`；索引旁收據在還原時的封存（`.profiles.json.operations.json.restored`）
   與 410 `operation_restored`；帳號目錄的隔離名（S-15）；開機守門與本片刪除、隔離的互動（`.revoke-all-pending`）。
 - **HM-13c**：全部撤銷、還原紀錄、核對、刪隔離目錄四條全域路由加進 `GLOBAL_ROUTES`（`ProfileAdmin` 加 handler，矩陣自動涵蓋）；
-  `token/rotate` 的 409 `restore_review_required`；索引壞時這幾條能不能用（契約暫定：照常可用）。
+  `token/rotate` 的 409 `restore_review_required`；索引壞時這幾條能不能用（契約暫定：照常可用）。審查修正後要照著做（審查 S-1、MF-1）：
+  「全部撤銷」照索引隔離的寫法，先依 id 順序拿每個已登錄額外帳號的鎖（`ProfileAdmin._registered_profiles_locked`），拿完才做 ⑩，撤銷在
+  鎖裡；每條新路由的 ⑩ 都要在 `test_the_second_role_check_comes_after_every_wait_and_before_any_change` 多一輪（每一種等待各一輪），
+  否定矩陣只守 ⑥。
 - **HM-16**：P9 kit 與容器探針的管理請求帶 `X-MCP-Profile`；多帳號的增刪改查與隔離在容器裡跑一次。
 - **HM-18**：DOCS 寫刪除與隔離的步驟、S-14 的說明、Ingress 備援沒做的理由；「`profiles/` 開機時列不出來：修好後重啟 add-on（隔離索引
-  解決不了）」；FD 預算不夠時不能新增帳號；`tests/contract/profiles_v1_cases.json` 要不要加管理面的資料案例（第 6 節）；契約第 9 節的
-  刻意差異表沒有 FD 預算這一列（HM-08 起就沒有；PaaS 沒有 FD 預算），「FD 不夠只服務預設帳號、建立回 `limit` 0」要不要補一列。
+  解決不了）」；FD 預算不夠時不能新增帳號；`tests/contract/profiles_v1_cases.json` 要不要加管理面的資料案例（第 6 節；審查 S-5，
+  請主對話確認這個偏離計畫 §10.3 的決定）；計畫 §7.2 的「預設帳號會變的事」清單、各產品 CHANGELOG 與 `upgrade-notes.yaml` 補兩個
+  位元組變化：PATCH、DELETE 沒帶 CSRF 從 405 變 403，表外方法（OPTIONS 等）的 `Allow` 從 4 個方法變 6 個（審查 S-6；契約 §3.1 已寫）；
+  DOCS 的疑難排解寫明「開面板時瀏覽器 console 有一筆 400 是預期行為」（HM-11 審查 S-5 第 2 點）。契約第 9 節原本沒有 FD 預算這一列：
+  審查修正（S-2）已併進 #19，不必再補。
 - **HM-25**：n8n 上 `ProfileManager` 時，刪除要清它的 `/tmp/woow-n8n-mcp/profiles/<id>/`（PaaS `profile_deleted` 回呼的 HA 版）；n8n 的
   `ConfigurationState` 也帶帳號 id。
-- **獨立安全審查**：合併前要做（計畫 §12.1）。
+- **獨立安全審查**：做了（第 14 節）。
 
 ### 13.3 rebase 時要注意
 
@@ -522,6 +616,37 @@ HM-01 三組）。
   8099 分派器、帶 `X-MCP-Profile`，rebase 後照樣可用；#99 對 `tests/test_router_passthrough.py` 的改動（`Forbidden.__getattr__`）和本片改的段落不重疊。
 - #100 的 `decisions.md`（DQ-13、DQ-14 已定）本片沒有重複改；契約第 9 節 #75 仍寫「上限 40 分鐘、DQ-43 待定」，不是本片的範圍，HM-18 或下一個
   動契約的片順手改。
-- 帳本：rebase 後重算 6 個列管檔與 `profile_admin.py` 的摘要（`SP:hm10/ledger_update.py`、`ledger_update3.py` 的做法：說明不動、
-  摘要照實際內容算），重跑兩個預檢與 CI。
+- 帳本：rebase 後重算 6 個列管檔與 `profile_admin.py` 的摘要（`SP:hm10/ledger_update.py`、`ledger_update3.py`、審查修正的
+  `SP:hm10-fix/ledger_update.py` 的做法：說明不動、摘要照實際內容算），重跑兩個預檢與 CI。
+- 審查修正後 A 碰到 HM-09 內部的地方：`monkeypatch.setattr(manager, 'remove', …)` 3 處（原本 `test_a_save_waiting_…` 1 處，審查修正的
+  `test_a_deletion_never_writes_over_…`、`test_the_index_quarantine_holds_…` 各 1 處）、`asyncio.Lock._waiters` 2 處（原本 1 處、
+  `test_the_index_quarantine_holds_…` 1 處）、`monitor_of()` 1 處。HM-09 修正若改了 `remove()` 的名稱或簽名，改這幾處即可。
 - `checks` 秒數：開 PR 後補（第 7 節）。
+
+## 14. 獨立安全審查的意見與處理（第四個工作階段，2026-11-16）
+
+- 報告：`artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-10.md`（repo 外；證據在同層 `evidence-review-HM-10/`）。審查對象
+  `c094e63`，判定**修正後通過**：必修 1 項（MF-1）、建議 6 項（S-1～S-6）。審查沒有找到非管理員越權、帳號互看 token、秘密進 log 或回應的問題。
+- 每一點都先核對過審查的說法：審查的突變（`mutations.py`）照目前的程式改寫後重做；實驗 E1～E4 改寫成本片的測試，在 `c094e63` 與修正後
+  各跑一次（第 4.3 節；審查的實驗檔本身沒有放進 repo）。
+  審查說的都成立，沒有要反駁的：5 處條文在 `c094e63` 的程式都對、測試都守不住；S-1 的空檔在 `c094e63` 重現得出來（新測試紅）。
+
+| 意見 | 內容（摘要） | 處理 | 證據 |
+|---|---|---|---|
+| MF-1 (1) | 索引隔離的 ⑩ 沒有測試守住（突變 R03 存活） | 採用。`test_the_second_role_check_comes_after_every_wait_and_before_any_change` 多一輪：壞索引（`replace_index`）＋拿著全 add-on 的帳號鎖送隔離，第一次角色檢查答完後撤銷角色再放鎖 → 403、`tree_of` 不變（索引檔、每個 token、沒有收據）、B 與 C 仍登錄 | R03 改成被抓到（第 4.3 節） |
+| MF-1 (2) | 刪除要等完目標帳號的鎖才做 ⑩（R05 存活） | 採用。同一個測試再一輪：拿著 B 的 `mutation_lock` 送刪除 → 403、什麼都沒變 | R05 改成被抓到 |
+| MF-1 (3) | 額外帳號 owner-defaults「不管目錄裡有什麼」都 409（R17、R18、R17R18 存活） | 採用（照實驗 E2）。`test_the_endpoint_and_the_owner_defaults_notice_are_the_default_profiles` 的 B 目錄放 schema 3 fixture、跑 `owner_defaults.apply_legacy_upgrade` 造出標記與復原紀錄；對照組斷言 B 的 state 本來會顯示通知、可以還原；斷言 B 的 bootstrap 沒有 `owner_defaults`、restore 與 dismiss 409 形狀 C、`state.json` 與復原紀錄位元組不變 | R17、R18 改成被抓到 |
+| MF-1 (4) | ⑦ 遇到「目錄已不是開啟時那一個」要 503（R21 存活） | 採用（照實驗 E3）。`test_a_profile_scoped_request_names_exactly_one_known_profile` 最後：先確認 B 的 bootstrap 200，再把 B 的目錄搬走、`copytree` 回原名 → bootstrap 與 `token/reveal` 都 503 `{"error":"state unavailable"}`（複本裡的 token 不會被回出去） | R21 改成被抓到 |
+| MF-1 (5) | 刪除寫索引一律傳手上的 view（R13 存活） | 採用（照實驗 E4）。新測試 `test_a_deletion_never_writes_over_an_index_changed_meanwhile`：在 `manager.remove` 裡把索引換成同內容的新檔 → 刪除 409 `operation_outcome_unknown`、索引檔的位元組與 inode 都是外改後那一份（沒被覆寫）、B 已撤銷已抹除、不再登錄、目錄還在、預設帳號與 C 的 token 在 8081 都 503、清單 503 `profile_index_corrupt` | R13 改成被抓到 |
+| MF-1 筆記 | §6 三列、§13.1 兩列、§4.2 M04 要改 | 採用：§6 的 `owner-defaults`、⑩、§3.3、⑧、§3.6 五列；§13.1 的 HM-00、HM-07 #6、#9 三列；§4.2 M04；§12「契約每一條都指到測試」改寫成審查前不成立、修正後成立 | — |
+| MF-1 順手 | 清單的 ⑩（R04 存活）可斷言「一次請求問兩次角色」 | 採用：同一個測試開頭斷言清單一次請求問兩次角色（⑥、⑩） | R04 改成被抓到 |
+| MF-1 順手 | R14（建立寫索引改重讀）存活但等價 | 不補：建立在 ⑩ 之後到寫索引之間沒有 await，重讀與手上的 view 一定相同（審查也說不必補） | — |
+| S-1 | 索引隔離不拿各額外帳號的 `mutation_lock`：進行中的輪替在隔離撤銷之後寫進新 token，8081 在移除登錄前照樣路由（E1 實證）；If-Match 被繞過；推論：存後端的重起可能在 `aclose()` 之後才 `start()` | 採用。`quarantine()` 在全 add-on 的鎖之後，依 id 順序拿每個已登錄額外帳號的鎖（`_registered_profiles_locked`，每把 2 秒，逾時 503、已拿的放掉），拿完才做 ⑩，撤銷、改名、移除登錄都在鎖裡，放鎖後才 `reevaluate()`。第二輪撤銷因此拿掉（理由見第 3.6 節）。新測試 `test_the_index_quarantine_holds_every_profiles_own_lock`（E1 改寫成斷言安全的行為）：C 的輪替停在最後一次角色檢查時，隔離 0.1 秒拿不到 C 的鎖 → 503、什麼都沒變；再送一次隔離 → 等 C 的鎖（B 的鎖已拿著、什麼都還沒做）→ 輪替放行、200、拿到新 token → 隔離改名索引、在移除 B 的途中：預設帳號 200，B、C 的舊 token 與 C 的新 token 都 401 → 隔離 200，B、C 都撤銷、移除登錄、列成孤兒。⑩ 在拿完各帳號的鎖之後，也在第二次角色檢查的測試多兩輪（拿著 B、C 的鎖送隔離） | `c094e63` 紅、修正後綠（第 4.3 節）；突變 S1a（不拿帳號的鎖）、R24（不撤銷已登錄帳號）、R03b（⑩ 移到帳號的鎖之前）、S1b（移除登錄前就放鎖；第三輪補「移除登錄時鎖還在隔離手上」的斷言後）都被抓到 |
+| S-2 | 契約第 9 節少列 4 項和 PaaS 的差異 | 採用，併進既有列（不加新列號，避免和其他片撞號）：(a) `orphans` 鍵 → #51；刪除也收孤兒與讀不到的帳號 → #34；(b) FD 預算 → #19（作者原本要交 HM-18，順手做掉）；(c) 刪目錄前先抹後端欄位 → #34；(d) 本體格式錯固定 400（PaaS pydantic 422）→ #34。PaaS 的說法用 `git -C <paas> show 69ac425:…` 核對過（`routers/profiles.py` 的 `ProfileInput` 與 `list_profiles`、`profiles.py` 的 `delete()`） | 契約 §9、§10 |
+| S-3 | §7 的「34 案、29 案」不準；M04 說明不清楚 | 採用：§7 改成實測數字；§4.2 M04 寫清楚是一次拿掉全部 ⑩、單獨拿掉某一條原本抓不到 | — |
+| S-4 | 清單的索引 ETag 只在回應標頭；HM-03a 要加量 | 採用前半：第 11 節加「Ingress 轉不轉 `ETag` 回應標頭」。後半（清單本體另帶 `index_etag`）先不做：照 UC-10 同一個原則（標頭先、實測不通才補），不先開一個和 PaaS 不同的欄位，也不讓 HM-11 正在對的回應形狀變動；實測拿不到就補（HM-10 或 HM-11 收尾） | 第 11、13.2 節 |
+| S-5 | `tests/contract/profiles_v1_cases.json` 沒擴充，是偏離計畫 §10.3 的決定 | 本片不改：理由同第 6 節（那是 HM-01 只描述 8081 的守門檔；管理面用路由表自動產生的矩陣，多守「新路由沒進表就失敗」）。PR 描述明列「沒做、理由、交 HM-18 決定」，請主對話確認 | 第 6、13.2 節 |
+| S-6 | 開通後預設帳號兩個位元組變化沒寫進計畫 §7.2 | 契約 §3.1 寫明兩點（405→403；表外方法的 `Allow` 4→6 個方法）。計畫 §7.2、CHANGELOG、`upgrade-notes.yaml` 本片不改（功能 PR 不寫 CHANGELOG；計畫由主對話維護）：交 HM-18 或升版片，寫進 PR 描述 | 契約 §3.1；第 13.2 節 |
+
+- 給主對話的交接（審查第 8 節）也照做了：rebase（第 13.3 節，多記審查修正碰到 HM-09 內部的地方）、HM-11（第 13.2 節）、HM-13c（全部撤銷
+  照隔離拿鎖、每條新路由的 ⑩ 各一輪降權測試）、HM-18（S-5、S-6、DOCS）、HM-03a（第 11 節）。
