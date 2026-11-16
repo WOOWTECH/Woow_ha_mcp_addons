@@ -19,7 +19,7 @@
   也再驗一次（兩層都有測試釘住，審查 S-4；第 3.3 節）。
 - **新 token 碰不到舊子程式**（UC-21）：寫入那一刻舊子程式已經停了（測試記下寫入當下子程式的狀態）；新子程式起來之前，新 token 的
   initialize 由閘道自己回答，子程式的 port 收不到任何請求。
-- **失敗時**（PaaS `test_failed_account_rebind_restores_old_child_and_url` 的 HA 版；契約 §8.8 #110；第 3.2 節）：
+- **失敗時**（PaaS `test_failed_account_rebind_restores_old_child_and_url` 的 HA 版；契約 §8.8 #114；第 3.2 節）：
   - 舊子程式停不下來：什麼都不寫，用舊 state 重起，503 `{"error":"request denied"}`。
   - 寫入失敗：不管丟出什麼例外，一律照今天回 503 `{"error":"state unavailable"}`（審查 S-5：以前 `ConfigError` 以外的例外會變 500）。
     要不要用舊 state 重起舊子程式，看磁碟上的 token，不看例外種類（審查 S-5 後改）：
@@ -43,7 +43,7 @@
   驗過」），後端 0 次寫入；預設帳號自己執行得了。對照：額外帳號自己驗同一筆寫入，拿到的審批 token **字串完全一樣**（odoo-mcp 的審批
   token 是寫入內容的摘要），只有它自己的子程式執行得了。所以不跨帳號靠的是「每帳號一個子程式」，不是 token 字串（第 3.5 節）。
   `chatter_post` 的 approval 只是預覽確認、沒有伺服器端紀錄，不是跨帳號邊界（威脅模型第 3 節；獨立安全審查用真子程式實測確認，E4）。
-- **新來源要重填秘密**（DQ-40 ⑨；契約第 4.1 節、§8.8 #41、#111）：開通後**全部產品**的 `backend/patch`，把一條網址改到另一個來源
+- **新來源要重填秘密**（DQ-40 ⑨；契約第 4.1 節、§8.8 #41、#115）：開通後**全部產品**的 `backend/patch`，把一條網址改到另一個來源
   （scheme、host、有效 port）卻沒帶那條網址會送去的已存秘密 → 422 `{"error":"request denied","detail":{"code":
   "CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN"}}`，在 If-Match 與 `backend_fixed` 之後，什麼都不寫、不重起。每條網址對應哪些秘密寫在
   `identity_fields.URL_SECRETS`（本片把 HM-07 的 `identity_fields` 接上線）。同來源（只改路徑、大小寫、寫出預設 port）不需要；帶 null
@@ -101,7 +101,7 @@
 | `tests/test_identity_fields.py` | 說明一行（「HM-12 接線」） |
 | `tests/test_profile_runtime.py` | keyword-only 參數清單多 `stop_child` |
 | `tests/test_request_budget_gateway.py` | HM-31 釘住的 `make_apps` 參數順序最後多 `stop_child`（全套 pytest 時發現，第 8 節） |
-| `docs/multi-profile/contract.md` | 第 3.1 節 `backend` 列、第 4.1 節兩列與沒有代碼的 503、第 9 節說明段與 #109～#111、第 10 節一列。審查後改 `backend` 列、#110、#111，第 10 節再加一列（S-2～S-5、S-8） |
+| `docs/multi-profile/contract.md` | 第 3.1 節 `backend` 列、第 4.1 節兩列與沒有代碼的 503、第 9 節說明段與 #113～#115（rebase 前是 #109～#111）、第 10 節一列。審查後改 `backend` 列、#114、#115，第 10 節再加一列（S-2～S-5、S-8） |
 | `docs/multi-profile/threat-model.md` | I11 的做法與測試欄；第 3 節兩條（取代途中失敗、chatter 預覽確認）；狀態列。審查後改寫取代途中失敗那一條（S-2、S-5、S-7）、加同一來源換路徑一條（S-8） |
 | `docs/multi-profile/acceptance-matrix.md` | 三個新測試檔「計畫」→「新增」並寫實際內容；`test_saved_destinations.py` 補 HM-12；審查後補案例 |
 | `docs/multi-profile/decisions.md` | 審查後：DQ-05 列補記本片的實作細分（結果不明不重起），寫明待主對話在合併前向使用者說明；變更紀錄一列（S-1）。不是新題目 |
@@ -124,11 +124,11 @@
 | 寫入 | 新連線＋新 token＋history（`backend_identity_change`）一次 | 新連線＋新 token＋history（`rotate`，§8.8 #59）一次（`ProductStore.rebind`） |
 | 發布 | 新的 generation、喚醒等待中的 lease | `TokenAccess.committed()`（HM-08 的 lease 與 HM-14 的結尾照既有規則） |
 | 起新子程式 | 一定重啟（`restart:false` 也一樣） | 在寫入的 state 上起（`backend_changed`） |
-| 回應 | 一律帶 `token_rotated`（true／false）＋文字 | 只有換了才帶 `"token_rotated":true`；沒換照今天逐位元（§8.8 #109） |
+| 回應 | 一律帶 `token_rotated`（true／false）＋文字 | 只有換了才帶 `"token_rotated":true`；沒換照今天逐位元（§8.8 #113） |
 | 只換密碼、初次設定 | 不換 | 不換（照今天的路徑：先寫入、再重起） |
 | 開關關 | （沒有開關） | 照今天：不換 token（計畫 §3.3） |
 
-### 3.2 失敗處理（§8.8 #110）
+### 3.2 失敗處理（§8.8 #114）
 
 | 哪一步失敗 | 寫了什麼 | 子程式 | 舊 token | 回應 | WARNING 的結尾 |
 |---|---|---|---|---|---|
@@ -167,7 +167,7 @@
   token。只拿掉其中一層，另一層照樣回同樣的 401／404（審查的 X18）。舊 token 的請求送不到新子程式也有兩道：排隊拿到名額後的重驗、lease
   每次轉送前重讀 store；兩道都拿掉測試才過不了（審查的 X19、X20）。
 
-### 3.4 新來源要重填秘密（DQ-40 ⑨；§8.8 #41、#111）
+### 3.4 新來源要重填秘密（DQ-40 ⑨；§8.8 #41、#115）
 
 - 每條網址會送去哪些秘密：`identity_fields.URL_SECRETS`（存檔名），`backend_edit.url_secrets` 轉成管理 API 的名字。Hermes 有兩台伺服器、
   各自一個秘密；n8n 的 API key 與 MCP access token 都送到同一台 n8n；OpenDesign 沒有秘密。測試要求每條網址都列出、每個秘密剛好出現一次。
@@ -216,10 +216,10 @@
 | `packages/mcp-admin-core/tests/test_config_store.py:102` `test_bound_connection_rotation_is_atomic_and_preserves_password_changes` | ① 只換密碼：不換 token；② 換 username：停舊子程式那一刻磁碟上還是舊 token、換了 token、generation 變、history 一筆；③ 寫入失敗：例外、檔案位元組不變、token 還是上一把 | ① `test_a_password_change_or_the_first_setup_keeps_the_token`；② `test_a_changed_identity_stops_the_old_child_then_rotates_the_token_in_one_write`（7 案：url／database／username × `backend`、`backend/patch`；停的那一刻磁碟上是舊 token、一次 replace、history `rotate`）、`test_the_store_writes_the_identity_and_its_token_at_once_and_fails_closed_only_when_unsure[None]`（store 層）；③ 同檔 `[new file]`（取代之前失敗：位元組不變、store 照用）、`test_a_failed_identity_change_keeps_the_old_identity_its_token_and_its_child[write]`（API 層：舊 token 兩條入口照舊可用）。HA 另加取代途中失敗（`[replace]`、`[directory sync]`、`test_a_write_whose_outcome_is_unknown_leaves_the_profile_closed_until_the_add_on_restarts`）：PaaS 沒有對應（它不毒化） |
 | 同檔 `:137` `test_initial_bound_connection_setup_keeps_issued_url` | 初次設定不換 | `test_a_password_change_or_the_first_setup_keeps_the_token`（第一筆連線）、`test_five_accounts_of_one_database_stay_bound_to_their_own_profiles`（五個帳號都是初次設定） |
 | 同檔 `:147` `test_failed_account_rebind_restores_old_child_and_url` | 寫入失敗：子程式停一次、起一次（還原） | `test_a_failed_identity_change_keeps_the_old_identity_its_token_and_its_child`（4 案：停不下、拒絕、拒絕且起不回、新檔寫不出來；journal 驗停與起的次數與順序） |
-| `packages/mcp-admin-core/tests/test_connection_type_parity.py:89` `test_odoo_account_rebind_revokes_old_url_without_rotating_on_password_change`（兩條路由） | 換 username：`token_rotated` true、舊網址失效、新 token 不在回應、新網址可用；再只換密碼：`token_rotated` false、token 不變 | `test_a_changed_identity_…`（兩條路由；新舊 token 都不在回應；舊的兩條入口 401／404；新的兩條開得了子程式的 session）、`test_a_password_change_…`（HA 沒換時不帶 `token_rotated`：§8.8 #109） |
+| `packages/mcp-admin-core/tests/test_connection_type_parity.py:89` `test_odoo_account_rebind_revokes_old_url_without_rotating_on_password_change`（兩條路由） | 換 username：`token_rotated` true、舊網址失效、新 token 不在回應、新網址可用；再只換密碼：`token_rotated` false、token 不變 | `test_a_changed_identity_…`（兩條路由；新舊 token 都不在回應；舊的兩條入口 401／404；新的兩條開得了子程式的 session）、`test_a_password_change_…`（HA 沒換時不帶 `token_rotated`：§8.8 #113） |
 | `apps/odoo/tests/test_multi_profiles.py:21` `test_five_odoo_accounts_same_database_are_fixed_to_separate_profiles` | 同庫五個帳號：五把 token、五個 port、各自的連線 | `test_five_accounts_of_one_database_stay_bound_to_their_own_profiles`（另加：換其中一個只換它的 token、其他帳號與預設帳號不動） |
 | `packages/mcp-admin-core/tests/test_process_stdout_log.py:157` `test_connection_apply_restore_failure_reaches_stdout_once` | 還原失敗記剛好一行 | 每個失敗案例都斷言剛好一行 WARNING（`[refused and no restart]` 寫明子程式起不回來）；HA 的 log 走 add-on log，不另掛 stdout handler |
-| `apps/headscale/headscale_mcp_admin/connection.py:104-109`（規則，PaaS 沒有專屬測試檔對到這裡） | 改來源沿用秘密 422 | `tests/test_new_origin_secret.py`（九個產品；§8.8 #111 寫差異） |
+| `apps/headscale/headscale_mcp_admin/connection.py:104-109`（規則，PaaS 沒有專屬測試檔對到這裡） | 改來源沿用秘密 422 | `tests/test_new_origin_secret.py`（九個產品；§8.8 #115 寫差異） |
 
 ## 6. 守門有效的證據
 
@@ -343,7 +343,7 @@
 
 | DQ | 結論（使用者已定） | 本片怎麼用 |
 |---|---|---|
-| DQ-05 | 照計畫 §9：Odoo 換 url／database／username 時先停舊子程式 → 一次寫新連線＋新 token＋history（`rotate`）→ `TokenAccess.committed()` → 起新子程式；提交失敗用舊 state 重起；回 `token_rotated:true`；只換密碼或初次設定不換 | 全部照做。「提交失敗用舊 state 重起」再細分：磁碟上還是舊 token（store 拒絕、取代之前失敗、寫之前丟出例外）→ 重起；取代途中失敗（結果不明）或新 token 已在磁碟上 → 不重起（第 3.2 節，契約 #110）。審查 S-1：細分已記進 `decisions.md` DQ-05 列，**待主對話在合併前向使用者說明**。Nextcloud、Hermes 的比照不在本片 |
+| DQ-05 | 照計畫 §9：Odoo 換 url／database／username 時先停舊子程式 → 一次寫新連線＋新 token＋history（`rotate`）→ `TokenAccess.committed()` → 起新子程式；提交失敗用舊 state 重起；回 `token_rotated:true`；只換密碼或初次設定不換 | 全部照做。「提交失敗用舊 state 重起」再細分：磁碟上還是舊 token（store 拒絕、取代之前失敗、寫之前丟出例外）→ 重起；取代途中失敗（結果不明）或新 token 已在磁碟上 → 不重起（第 3.2 節，契約 #114）。審查 S-1：細分已記進 `decisions.md` DQ-05 列，**待主對話在合併前向使用者說明**。Nextcloud、Hermes 的比照不在本片 |
 | DQ-40 (a) ⑨ | 改 url 來源要重填秘密：全部產品，產品開通後才生效 | `backend_edit.new_origin_refused`；九個產品都測；沒開通照今天 |
 | DQ-40 (a) ⑩ | 換使用者欄位換 token 擴到 Nextcloud、Hermes | 不在本片（HM-22、HM-24）；`products.IDENTITY_BOUND` 只放 Odoo，`identity_fields.TOKEN_ROTATING` 已有它們的欄位 |
 | DQ-30 | Odoo 讀取並行首發維持 1 | 沒改 `apps/odoo/launch.py`；`test_every_odoo_tool_still_runs_on_the_childs_one_worker` 釘住 `BoundedTools(capacity=1)` |
@@ -478,13 +478,13 @@ rebase 後在最後的 HEAD 再跑一次（第 15 節）。
 | # | 意見 | 決定 | 怎麼處理 | 證據 |
 |---|---|---|---|---|
 | S-1 | DQ-05「提交失敗用舊 state 重起」被細分成「結果不明不重起」，只寫在契約與 provenance | 採用 | `decisions.md` DQ-05 列補記細分（不是新題目），狀態欄與變更紀錄寫明**待主對話在合併前向使用者說明**；本筆記結論、第 9 節同步。向使用者說明要由主對話做（本片不能代答） | `dc837c5` |
-| S-2 | 預設帳號的新 state 檔已換上時 8081 所有帳號都 503，契約沒寫 | 採用 | 契約第 3.1 節 `backend` 列與 #110 補這句，另寫明預設帳號 `os.replace` 失敗只關預設帳號；威脅模型那一條同步；新測試 `test_the_default_profiles_write_of_unknown_outcome_closes_what_reads_its_state`（兩個時點）把兩種情況都釘住 | `2b09336`、`dc837c5`；M6 擋下 |
+| S-2 | 預設帳號的新 state 檔已換上時 8081 所有帳號都 503，契約沒寫 | 採用 | 契約第 3.1 節 `backend` 列與 #114 補這句，另寫明預設帳號 `os.replace` 失敗只關預設帳號；威脅模型那一條同步；新測試 `test_the_default_profiles_write_of_unknown_outcome_closes_what_reads_its_state`（兩個時點）把兩種情況都釘住 | `2b09336`、`dc837c5`；M6 擋下 |
 | S-3 | 換身分回應的 `ETag` 沒有測試（X12 存活） | 採用 | `test_a_changed_identity_…`（7 案）、預設帳號那案、`test_a_new_child_that_cannot_start_…` 都斷言回應的 `ETag` 等於下一次 bootstrap 的 `ETag`（也就是新 state 的 revision） | `2b09336`；M1（＝X12）擋下 |
 | S-4 | 「分派器不再把舊 token 對到任何帳號」沒有測試（X18 存活） | 採用 | 換身分後斷言 `McpDispatcher.resolve(舊 token)` 是空的、`resolve(新 token)` 只有該帳號（額外帳號與預設帳號）；契約與第 3.3 節寫明兩層都拒絕 | `2b09336`；M2（＝X18）擋下 |
 | S-5 | `rebind` 丟出 `ConfigError` 以外的例外時回 500 | 採用並擴大 | 寫入失敗一律回固定的 503 state unavailable；是否重起舊子程式改看磁碟上的 token（還是舊的才重起），不看例外種類，連帶補上「取代之後才丟出、不毒化 store 的 `OSError`」時不該重起的破口。新案例 `[unexpected]` 與 `test_a_write_that_raises_with_its_new_token_on_disk_never_relaunches_the_old_child` | `3f22c39`；紅 R0、M3、M4 擋下 |
-| S-6 | 契約第 9 節列號會和 HM-11 撞，而且寫在 3 個列管檔 | 採用（審查給的第二個做法） | 程式說明、兩個測試檔說明、帳本 `change` 文字都拿掉 #109～#111，改寫成描述；文件裡的列號等 rebase 時一次重編（HM-11 已用掉 #109～#112，第 15 節列出要改的地方）。現在先不改文件的列號：其他片也可能先合併再佔號 | `2b09336`、`3f22c39`、`0302ad1` |
+| S-6 | 契約第 9 節列號會和 HM-11 撞，而且寫在 3 個列管檔 | 採用（審查給的第二個做法） | 程式說明、兩個測試檔說明、帳本 `change` 文字都拿掉 #109～#111（原稿的列號；rebase 後是 #113～#115，第 18 節），改寫成描述；文件裡的列號等 rebase 時一次重編（HM-11 已用掉 #109～#112，第 15 節列出要改的地方）。現在先不改文件的列號：其他片也可能先合併再佔號 | `2b09336`、`3f22c39`、`0302ad1` |
 | S-7 | 面板待補清單漏「結果不明重啟後 token 可能已換」 | 採用 | 第 11 節表格與待補清單 ⑥、第 15 節 HM-18、PR 草稿、威脅模型那一條都補 | 本筆記、`dc837c5` |
-| S-8 | 同一來源換路徑不要求重填秘密，威脅模型沒列 | 採用 | 威脅模型第 3 節加一條已知限制；契約 `backend` 列與 #111 補一句；`backend_edit.py` 說明補一句；第 15 節 HM-29 加一項 | `3f22c39`、`dc837c5` |
+| S-8 | 同一來源換路徑不要求重填秘密，威脅模型沒列 | 採用 | 威脅模型第 3 節加一條已知限制；契約 `backend` 列與 #115 補一句；`backend_edit.py` 說明補一句；第 15 節 HM-29 加一項 | `3f22c39`、`dc837c5` |
 | S-9 | 測試說明寫了不存在的函式名 | 採用 | `tests/test_upgrade_zero_rewrite.py` 改成 `backend_edit.new_origin_refused` | `2b09336` |
 
 - 沒處理的：無。審查第 4 節的觀察也照寫進來：HM-13c 不用另擋換身分（第 15 節）、開關關的兩個測試要保留（第 7 節）、兩道防線（第 3.3 節）。
