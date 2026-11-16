@@ -34,7 +34,9 @@ The defaults (BudgetLimits.derive; constants provisional until HM-19c measures t
 
 - ceiling: the container's cgroup memory limit when it has one (PaaS); an HA add-on has none (Supervisor sets no memory
   limit; HM-03a confirms on HAOS), so MemAvailable of /proc/meminfo less HOST_RESERVE_MIB (256 MiB, the plan's
-  "MemAvailable - 保留量", plan 5.2) when the budget is made (at startup); neither readable: the fixed fallback;
+  "MemAvailable - 保留量", plan 5.2) when the budget is made (at startup); neither readable: the fixed fallback. Both
+  are read with HM-09's readers, the ones the profile capacity and the memory check use (profiles.memory_limit_mib,
+  available_memory_mib; HM-31 review S-6: no copy of them here);
 - accounts: 1 switched off (the default profile alone), 1 + the product's additional-profile capacity switched on (PaaS:
   1 + current_profile_capacity().limit); child MiB: profiles.CHILD_MEMORY_MIB (160 when the product names none).
 
@@ -48,7 +50,6 @@ import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass
 import logging
-from pathlib import Path
 import time
 from typing import Callable
 
@@ -82,55 +83,21 @@ HOST_RESERVE_MIB = profiles.PROFILE_MEMORY_RESERVE_MIB
 #: the gateway's own BODY_SECONDS (60 s, every request; PaaS 300 s for large ones only).
 BODY_IDLE_SECONDS = 30.0
 
-CGROUP_MEMORY_LIMITS = (Path('/sys/fs/cgroup/memory.max'), Path('/sys/fs/cgroup/memory/memory.limit_in_bytes'))
-MEMINFO = Path('/proc/meminfo')
 REPORT_SECONDS = 60
 MAX_REPORT_KEYS = 256
 
 
-# ---- the memory the defaults are derived from ----
-
-def memory_limit_mib() -> int | None:
-    """The container's cgroup memory limit in MiB (v2 memory.max, else v1 memory.limit_in_bytes, as PaaS reads it);
-    None for none: "max", a v1 "no limit" (more than 1 TiB), nothing readable."""
-    for path in CGROUP_MEMORY_LIMITS:
-        try:
-            raw = path.read_text().strip()
-        except OSError:
-            continue
-        if raw == 'max':
-            return None
-        try:
-            mib = int(raw) // MiB
-        except ValueError:
-            continue
-        return None if mib > 1024 * 1024 else mib
-    return None
-
-
-def available_memory_mib() -> int | None:
-    """MemAvailable of /proc/meminfo in MiB (the host's: no lxcfs in an add-on); None when it cannot be read."""
-    try:
-        with open(MEMINFO, 'rb') as handle:
-            text = handle.read(65536).decode('ascii', 'replace')
-    except OSError:
-        return None
-    for line in text.splitlines():
-        if line.startswith('MemAvailable:'):
-            parts = line.split()
-            if len(parts) == 3 and parts[2] == 'kB' and parts[1].isdigit():
-                return int(parts[1]) // 1024
-            return None
-    return None
-
+# ---- the memory the defaults are derived from: HM-09's readers (profiles.memory_limit_mib, available_memory_mib) ----
 
 def memory_ceiling() -> tuple[int | None, str]:
-    """(the memory the budget is derived from, in MiB, or None; where it came from): 'cgroup' (the container's limit),
-    'meminfo' (MemAvailable less HOST_RESERVE_MIB, never below 0) or 'none'."""
-    limit = memory_limit_mib()
+    """(the memory the budget is derived from, in MiB, or None; where it came from): 'cgroup' (the container's limit,
+    profiles.memory_limit_mib), 'meminfo' (MemAvailable less HOST_RESERVE_MIB, never below 0; profiles.
+    available_memory_mib, not read when there is a limit) or 'none'. Read when called (HM-31 review S-6: the readers the
+    profile capacity and the memory check use, not a copy of them)."""
+    limit = profiles.memory_limit_mib()
     if limit is not None:
         return limit, 'cgroup'
-    available = available_memory_mib()
+    available = profiles.available_memory_mib()
     if available is not None:
         return max(0, available - HOST_RESERVE_MIB), 'meminfo'
     return None, 'none'
