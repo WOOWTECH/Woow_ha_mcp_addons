@@ -79,6 +79,15 @@ HM-13c (the owner's decision of 2026-11-16 on the HM-13b review's Q-1: DQ-03 (b)
   renew_missing; contract 3.5): the default profile's while it is kept stays as restored (contract 9 #116).
 - The restore record's readers: check_record() (what the management API and the review gate rely on, validated),
   review() (a row's reviewed_at, written once; the record is otherwise left as the guard wrote it).
+- HM-13c review MF-1: a record written at a start that sees no restore (a dormant start's) never drops a review that
+  the last record still waits for. The default profile's row the last record waits for stays as it was while this
+  start keeps the default profile, and the last restore part stays while a row it waits for still does (_carried);
+  a last record that cannot be used (check_record) is left as it is, so every new token keeps waiting (503) until a
+  "revoke all" rebuilds it (RECORD_KEPT).
+- HM-13c review S-2: a "revoke all" that finished while the record cannot be used writes a new one: every profile
+  revoked, none reviewed (the gate works again, a profile at a time). Records keep RECORD_KEYS and RECORD_VERSION: a
+  later change of the format must still read the records written before it (contract 3.6), or every new token of an
+  installation that was reviewed long ago waits (503) after an update.
 """
 from __future__ import annotations
 
@@ -161,6 +170,8 @@ UNFINISHED = ('restore guard: not finished (%s); nothing is served and no child 
 MARKER_LEFT = 'restore guard: %s; starting (no profile data: nothing to revoke), the next start tries again'
 NOTICE_NOT_REMOVED = ('restore guard: the panel notice of the restore could not be removed after the token changed; it '
                       'shows again after a restart until the next token change')
+RECORD_KEPT = ('restore guard: the restore record cannot be read; it is left as it is, so every new token waits (503) '
+               'until a "revoke all" in the panel rebuilds it')
 
 
 def _utc_now():
@@ -294,7 +305,9 @@ def revoke_all(store, product, *, stores=None, now=None) -> RevokeAll:
     revoked with a new child token, the default profile first, then the profile directories and the stores the caller
     holds, by id (a directory that cannot be opened is quarantined, one whose writer lock is held elsewhere failed);
     then step E, whatever failed (a revocation that never reached the disk is failed too); the marker is removed only
-    when nothing failed, profiles/ could be listed and the check passed. store: the default profile's open store.
+    when nothing failed, profiles/ could be listed and the check passed (and, when restore-record.json could not be
+    used, a new one was saved: every profile revoked, none reviewed; HM-13c review S-2). store: the default profile's
+    open store.
     stores: {additional profile id: open store} the caller holds (the running manager's registered profiles; their
     writer locks are held): used instead of opening those directories, and revoked even when profiles/ cannot be listed
     (HM-13b review MF-2). results: the default profile, then every profile directory found and every store given.
@@ -317,6 +330,13 @@ def revoke_all(store, product, *, stores=None, now=None) -> RevokeAll:
     finished = not (sweep.failed or sweep.reasons)
     if sweep.check(strict=True, default_kept=False):
         finished = False
+    if finished and not record_usable(root):
+        # HM-13c review S-2: a record that cannot be used holds every new token (503) and nothing else rewrites it; now
+        # that every profile is revoked, a new one says so (none reviewed), and the gate works again.
+        try:
+            sweep.record(None, dormant=False, default_revoked=True, rebuild=True)
+        except Unfinished:
+            finished = False
     if finished:
         try:
             _finish(root, now, markers=(REVOKE_ALL,))
@@ -399,6 +419,18 @@ def check_record(value) -> dict:
     except (ValueError, KeyError, TypeError):
         raise ConfigError('restore record unavailable') from None
     return value
+
+
+def record_usable(root) -> bool:
+    """Whether restore-record.json is absent or as the guard writes it (read_record, check_record); False: the review
+    gate fails closed on it (every new token 503) until something writes a new one (HM-13c review S-2)."""
+    try:
+        value = read_record(root)
+        if value is not None:
+            check_record(value)
+    except ConfigError:
+        return False
+    return True
 
 
 def review(root, profile_id, now=None) -> str:
@@ -669,8 +701,11 @@ class _Sweep:
         """The profile directories left (A's minus the quarantined ones): the bootstrap's dormant_profiles."""
         return len(self.directories or ()) - len(self.quarantined)
 
-    def record(self, detection, *, dormant, default_revoked):
-        """D: restore-record.json (contract 3.6; HM-13c reads it), atomically: never a token or a credential."""
+    def record(self, detection, *, dormant, default_revoked, rebuild=False):
+        """D: restore-record.json (contract 3.6; HM-13c reads it), atomically: never a token or a credential. Without a
+        restore at this start (detection None: a dormant start's) it keeps what the last record still waits for
+        (_carried; HM-13c review MF-1), and a last record that cannot be used is left as it is (RECORD_KEPT: every new
+        token keeps waiting, 503), unless rebuild ("revoke all" over such a record; HM-13c review S-2)."""
         at = self.now().astimezone(timezone.utc).isoformat(timespec='seconds')
         index = profiles.read_index(self.layout.index)
         labels = {entry.id: entry.label for entry in index.entries}
@@ -680,14 +715,23 @@ class _Sweep:
             if profile_id not in moved and profile_id in self.shown:
                 rows.append(self._row(profile_id, labels.get(profile_id),
                                       'already_revoked' if profile_id in self.untouched else 'revoked'))
+        restore = None if detection is None else {'at': at, 'marker': detection.marker, 'sentinel': detection.sentinel}
+        if detection is None and not rebuild:
+            try:
+                previous = read_record(self.root)
+                previous = None if previous is None else check_record(previous)
+            except ConfigError:
+                logger.warning(RECORD_KEPT)
+                return
+            if previous is not None:
+                restore, rows = _carried(previous, rows)
         made = {name for _, name in self.quarantined}
         quarantine = [{'name': name, 'id': profiles.parse_quarantine_name(name)[0], 'new': name in made}
                       for name in sorted({*self.quarantines, *made})]
         directory = ('unlistable' if self.directories is None
                      else 'present' if os.path.lexists(self.layout.profiles) else 'absent')
         value = {'version': RECORD_VERSION,
-                 'restore': None if detection is None else {'at': at, 'marker': detection.marker,
-                                                            'sentinel': detection.sentinel},
+                 'restore': restore,
                  'dormant': {'at': at} if dormant else None,
                  'index': index.state, 'profiles': rows, 'quarantined': quarantine,
                  'profiles_directory': directory, 'other_entries': self.other}
@@ -736,6 +780,21 @@ class _Sweep:
                 if pair is not None and any(value in old for value in pair if value):
                     self.failed.append(where)
         return broken or bool(self.failed)
+
+
+def _carried(previous, rows):
+    """HM-13c review MF-1: what a record of a start without a restore (rows: its own) keeps of the last record
+    (previous, check_record's), so that no such start drops a review nobody made: the last record's row of the default
+    profile, as it was, while it waits for its review and this start kept the default profile (a dormant start leaves
+    it as it is: its row would say kept, and the gate would open); the last restore part while a row it waits for still
+    waits. Every other row is this start's (a dormant start's rows of the profile directories all wait: revoked or
+    already revoked, none reviewed). Returns (the restore part or None, the rows)."""
+    waiting = {row['id']: row for row in previous['profiles']
+               if row['token'] in REVIEWED_TOKENS and row['reviewed_at'] is None}
+    if rows[0]['token'] == 'kept' and DEFAULT in waiting:
+        rows = [waiting[DEFAULT], *rows[1:]]
+    still = {row['id'] for row in rows if row['token'] in REVIEWED_TOKENS and row['reviewed_at'] is None}
+    return (previous['restore'] if previous['restore'] is not None and still & waiting.keys() else None), rows
 
 
 def _finish(root, now, *, rebuild=False, enabled=False, markers=()):

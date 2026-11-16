@@ -51,7 +51,14 @@ HM-13c (multi-profile plan 6, 8.4 全部撤銷 / 核對後才重發, 10.3; contr
   check passed: 200 {"revoked": "all", "results": [...]} and the receipt completed. Otherwise 409
   operation_outcome_unknown with the results: the receipt stays unknown, .revoke-all-pending stays (the next start
   finishes the job before anything is served), and the old token of every registered profile that failed is fenced on
-  8081 (503 state unavailable, profile_runtime.ProfileManager.revoke_fence) until a "revoke all" finishes.
+  8081 (503 state unavailable, profile_runtime.ProfileManager.revoke_fence) until a "revoke all" finishes. Without
+  any result (its marker could not be saved, the default profile's state could not be read, or any other exception
+  stopped it: HM-13c review S-4, one fixed line in the log) every registered profile's old token is fenced. The fence
+  only refuses what 8081's dispatcher matches from then on; a request it matched before that had no token lease yet
+  (for example one beyond a full admission whose small body is still read, at most 2 s) takes its lease afterwards
+  against the state on disk, and is served when that still holds the token (HM-13c review S-6); every request that
+  held a lease was ended by committed(). When the restore record could not be used, a "revoke all" that finished
+  leaves a new one (every profile revoked, none reviewed: restore_lock.revoke_all).
 - The restore record (GET profiles/restore-record): {"record": <the guard's record, restore_lock.check_record>|null};
   usable whatever the index.
 - A restore review (POST profiles/<id>/restore-review; the index ETag; Idempotency-Key): the record's row of a profile
@@ -105,6 +112,10 @@ STATUS = {'stopped': 'starting', 'starting': 'starting', 'running': 'running', '
 UNAVAILABLE = 'profile_unavailable'  # an indexed profile the add-on could not open (HA's own disabled_reason)
 # What a deletion wipes before the directory goes (DQ-14): every stored backend field (identity_fields BACKEND).
 WIPED = {'connection': None, 'backend_url': None, 'backend_key': None, 'mcp_access_token': None}
+# HM-13c review S-4: "revoke all" stopped by an exception it does not expect (%s: its class): answered as one whose
+# outcome is unknown (every registered profile's old token fenced on 8081 until a "revoke all" finishes).
+REVOKE_ALL_STOPPED = ('multi-profile: "revoke all" stopped on an unexpected error (%s); its outcome is unknown and '
+                      "every profile's token from before it is refused on 8081 until a \"revoke all\" finishes")
 
 
 def refused(status, code, **fields):
@@ -633,6 +644,9 @@ class ProfileAdmin:
                             stores={profile_id: Registry.store(entry) for profile_id, entry in entries.items()})
                     except (ConfigError, OSError, ValueError):
                         done = None  # not even begun (.revoke-all-pending could not be saved), or no answer: unknown
+                    except Exception as error:  # HM-13c review S-4: whatever else stopped it, fail closed the same way
+                        logger.warning(REVOKE_ALL_STOPPED, type(error).__name__)
+                        done = None
                     results = [] if done is None else [{'id': item.profile_id, 'result': item.result}
                                                        for item in done.results]
                     outcome = {item['id']: item['result'] for item in results}
