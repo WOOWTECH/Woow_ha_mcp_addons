@@ -17,6 +17,14 @@ product's ProfileManager gives every profile's monitor its options; left out, th
   test_saved (the panel's backend test) still answers with what it found.
 - own_child_only: nothing is sent while the profile's own child is not running (blocked, backing off, failed, stopped):
   the port may be another program's (T-15).
+
+Every product, switched on or off (HM-09 follow-up, 2026-11-16: PR #103's checks; the owner's decision at 13:4x;
+contract 1.2; tests/test_monitor_cancel.py): a monitor stops when it is asked to, also when the HTTP stack swallowed the
+stop. Every new connection of the child client goes through anyio.connect_tcp, whose task group cancels its own scope
+once connected, and a task.cancel() that reaches the task before it runs again joins anyio's CancelledError, which the
+scope's exit swallows as its own (anyio 4.15.1 on CPython 3.13; httpcore's read deadline the same). Task.cancelling()
+still counts that request: check() raises CancelledError when the count is higher at its end than at its start, so the
+monitor and start_all's readiness wait (settle) stop as asked. Only a stop changes; no answer does.
 """
 import asyncio
 import re
@@ -142,8 +150,14 @@ class HealthMonitor:
                 "backend": settled[2] if current else "unknown", "reason": settled[3] if current else None}
 
     async def check(self):
+        # HM-09 follow-up (module docstring): asyncio.timeout and anyio undo their own cancel() requests, so a count above
+        # the one at the start is a stop asked of this task that the check did not get as CancelledError.
+        task = asyncio.current_task()
+        asked = 0 if task is None else task.cancelling()
         async with self._check_lock:
             await self._check_saved()
+        if task is not None and task.cancelling() > asked:
+            raise asyncio.CancelledError
 
     async def settle(self):
         """HM-09 (ProfileManager.start_all waits for a starting child with it): the outcome of the check running now when
