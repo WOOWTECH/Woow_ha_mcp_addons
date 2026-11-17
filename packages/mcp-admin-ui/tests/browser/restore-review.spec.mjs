@@ -320,6 +320,24 @@ test('a backend save held for the restore review (409 restore_review_required, H
   expect(saves.map(call => call.changedKeys)).toEqual([['username', 'password']]);
 });
 
+// HM-13c with HM-12: switched on without profile data a restore keeps the default profile's token (the notice); HM-12's
+// identity change rotates that token, so the notice ends, as after a rotation (the mock answers as the add-on does).
+test('switched on, an identity change that rotates the kept token ends the restore notice', async ({page, request}) => {
+  await reset(request, {...ODOO, profiles: {}, restoreNotice: {at: AT}});
+  await open(page, '/backend');
+  await expect(page.locator('#restore-notice')).toContainText(NOTICE);
+  await page.locator('#patch-username-action').selectOption('set');
+  await page.locator('#patch-username').fill('DUMMY-user-two');
+  await page.getByRole('button', {name: '儲存選定欄位', exact: true}).click();
+  await confirm(page, '確認儲存');
+  await idle(page);
+  await expect(page.locator('#notice')).toContainText('後端身分已變更，這個帳號的 MCP 權杖已換新');
+  await expect(page.locator('#restore-notice')).toHaveCount(0);
+  await page.reload();
+  await idle(page);
+  await expect(page.locator('#restore-notice')).toHaveCount(0);
+});
+
 test('the export names every profile without a token, a CSRF value or a credential', async ({page, request}) => {
   await reset(request, {product: 'odoo', parity: true, connection: {url: 'https://default.example.invalid', database: 'DUMMY-db', username: 'DUMMY-user'},
     configured: true, profiles: {extra: [{id: B, label: evil, configured: true}]}});
