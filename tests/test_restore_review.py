@@ -40,7 +40,7 @@ from multi_profile_runtime import create_profile, multi_profile_runtime, stored
 from restore_guard_disk import DEFAULT, Disk, StopAt, newest_ctime, tree
 from test_profile_admin_api import (LABELS, Panel, children_of, code_of, csrf_of, operation_key, setup, tree_of,
                                     watch)
-from test_odoo_identity_rotation import (NEW_PASSWORD, REBOUND, Journal, opened_by, record_writes,
+from test_odoo_identity_rotation import (NEW_PASSWORD, REBOUND, REFUSALS, Journal, opened_by, record_writes,
                                          save as backend_save, warnings_of as rebind_warnings,
                                          watch as watch_identity)
 from test_restore_detection import Crash, after_tick
@@ -366,6 +366,30 @@ async def test_an_identity_change_that_rotates_the_kept_token_ends_the_notice(tm
         assert runtime.token(DEFAULT) not in (None, token)
         assert 'restore_notice' not in await bootstrap_of(runtime)
     assert NOTICE not in os.listdir(data)
+
+
+@pytest.mark.parametrize('failure', ['stop', 'refused'])
+async def test_a_failed_identity_change_keeps_the_kept_tokens_notice(tmp_path, log_scan, monkeypatch, failure):
+    """HM-13c merge review S-2 (its experiment X2; mutations M08, M09): the notice ends only once HM-12's identity
+    change has published the new token. One that fails before anything is written (the old child cannot be stopped, or
+    the store refuses the write) answers 503 and keeps the token, so the notice is still true: the bootstrap still has
+    restore_notice and restore-notice.json is still there."""
+    data = restored_copy(tmp_path, PRODUCT, 'one')
+    journal = Journal()
+    record_writes(monkeypatch, journal, refuse=REFUSALS.get(failure))
+    async with multi_profile_runtime(PRODUCT, data, supervisor=journal.supervisor()) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        watch_identity(log_scan, data)
+        journal.watch(data, DEFAULT, runtime.manager.get(DEFAULT).runtime.supervisor)
+        journal.refuse_stop = int(failure == 'stop')
+        assert 'restore_notice' in await bootstrap_of(runtime)
+        token = runtime.token(DEFAULT)
+        failed = await backend_save(runtime, DEFAULT, 'backend/patch', {'changes': {'username': REBOUND['username']}})
+        assert failed.status_code == 503, failed.text
+        assert runtime.token(DEFAULT) == token and stored(data)['connection']['username'] == 'DUMMY-user'
+        assert 'restore_notice' in await bootstrap_of(runtime)
+        assert NOTICE in os.listdir(data)
 
 
 async def test_a_start_that_was_never_restored_has_no_notice_at_all(tmp_path, log_scan, monkeypatch):
@@ -897,6 +921,49 @@ async def test_a_record_that_cannot_be_read_holds_an_identity_change_too(tmp_pat
         kept = await backend_save(runtime, DEFAULT, 'backend/patch', {'changes': {'password': NEW_PASSWORD}})
         assert kept.status_code == 200 and 'token_rotated' not in kept.json(), kept.text
         assert stored(data)['token'] == token
+
+
+async def test_a_revoked_profile_waiting_for_its_review_saves_an_identity_change_as_today(tmp_path, log_scan,
+                                                                                         monkeypatch):
+    """HM-13c merge review S-1, S-2 (its experiment X1; mutation M13): the gate holds a new token, not a save. After a
+    restore with profile data every token is revoked and waits for its review; a changed Odoo username then rotates
+    nothing (products.identity_rebound needs an active token), so it is saved as today, for the default profile and
+    for B: 200 without token_rotated, the token still revoked, the review still waiting."""
+    monkeypatch.setattr(profiles, 'memory_limit_mib', lambda: None)  # B's save starts its child whatever the host has
+    monkeypatch.setattr(profiles, 'available_memory_mib', lambda: 4096)
+    data = restored_profiles(tmp_path)
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data, (B, C))) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        watch_identity(log_scan, data)
+        for profile_id in (DEFAULT, B):
+            boot = await bootstrap_of(runtime, profile_id)
+            assert (boot['restore_review_required'], boot['token_active']) == (True, False), profile_id
+            change = {'changes': {'username': REBOUND['username']}}
+            saved = await backend_save(runtime, profile_id, 'backend/patch', change)
+            assert saved.status_code == 200 and saved.json()['saved'] is True, saved.text
+            assert 'token_rotated' not in saved.json()
+            where = data if profile_id == DEFAULT else profiles.Layout(data).profile(profile_id)
+            assert (stored(where)['token'], stored(where)['connection']['username']) == (None, REBOUND['username'])
+            assert (await bootstrap_of(runtime, profile_id))['restore_review_required'] is True
+
+
+async def test_a_new_origin_without_its_password_is_refused_before_the_review_gate(tmp_path, log_scan):
+    """HM-13c merge review S-2 (its experiment X3; mutation M03): the order the main conversation decided is If-Match,
+    the new-origin check, then the review gate. In S-3's state (the review waits, the token is active) a URL moved to
+    another server without its password answers HM-12's 422 CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN, not 409,
+    and nothing changes."""
+    data = restored_switched_off_then_reissued(tmp_path)
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data, (B,))) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        watch_identity(log_scan, data)
+        assert (await bootstrap_of(runtime))['restore_review_required'] is True
+        token, before = runtime.token(DEFAULT), tree_of(data)
+        moved = await backend_save(runtime, DEFAULT, 'backend/patch', {'changes': {'url': REBOUND['url']}})
+        assert (moved.status_code, moved.json()) == (422, {'error': 'request denied', 'detail': {
+            'code': 'CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN'}}), moved.text
+        assert tree_of(data) == before and runtime.token(DEFAULT) == token
 
 
 def test_a_dormant_start_leaves_a_record_it_cannot_read_as_it_is(tmp_path, log_scan):

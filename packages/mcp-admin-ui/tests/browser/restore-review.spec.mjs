@@ -320,6 +320,21 @@ test('a backend save held for the restore review (409 restore_review_required, H
   expect(saves.map(call => call.changedKeys)).toEqual([['username', 'password']]);
 });
 
+// HM-13c merge review U03: the sentence about a save is for the backend saves only; a token/rotate the add-on refuses for
+// the review keeps that code's own copy (the button is off while the bootstrap says the review waits: here the mock
+// refuses every save, as an outdated page would meet it).
+test('a token/rotate held for the restore review keeps the review copy only, without the save sentence', async ({page, request}) => {
+  await reset(request, {...ODOO, profiles: {}, saveStatus: 409, saveCode: 'restore_review_required'});
+  await open(page, '/access');
+  await page.getByRole('button', {name: '重新產生', exact: true}).click();
+  await confirm(page, '確認繼續');
+  await idle(page);
+  await expect(page.locator('#notice')).toHaveText(WAITS);
+  await expect(page.locator('#notice')).toHaveClass(/error/);
+  await expect(page.locator('body')).not.toContainText('PRIVATE_CANARY');
+  expect((await calls(request, call => call.operation === 'token/rotate')).length).toBe(1);
+});
+
 // HM-13c with HM-12: switched on without profile data a restore keeps the default profile's token (the notice); HM-12's
 // identity change rotates that token, so the notice ends, as after a rotation (the mock answers as the add-on does).
 test('switched on, an identity change that rotates the kept token ends the restore notice', async ({page, request}) => {
