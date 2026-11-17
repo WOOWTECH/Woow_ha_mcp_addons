@@ -138,57 +138,99 @@ annotated tag，已解到 commit。固定來源不等於 action code 已完成�
 
 ### workflow 做什麼
 
-`.github/workflows/release.yaml` 只接受手動觸發（`workflow_dispatch`），一次一個產品：
+`.github/workflows/release.yaml` 只接受手動觸發（`workflow_dispatch`），一次一個產品，分三個 job，全部在 GitHub 託管的
+ubuntu-24.04 上跑。負責人看過測試結果、image ID 已經定下來之後，才批准推送。
 
 - 輸入：`app`（商店產品；OpenDesign 沒有映像，會被擋）與必填的 `source_sha`（完整 40 位小寫 hex）。
 - 只能在 `release/<名稱>` 分支上觸發（`<名稱>` 只有一段，不含 `/`）。這種分支是開著的升版 PR，那個 PR 要先有映像才過得了
   readiness。PR、tag 和其他分支一律不行。
-- `gate`：託管機器，`contents: read`，限時 60 分鐘（和 PR 的 `checks` 同一套，DQ-43）。依序 `check_release.py`、`validate.py`、
-  packaging 單元測試、`packaging/unit.sh`。沒有 job 條件：從別的 ref 觸發會在 `check_release.py` 失敗（紅燈），不是被略過的綠燈。
-- `publish`：託管機器，`environment: public-release`，權限恰好 `contents: read` 加 `packages: write`，只在 `release/*` 執行，
-  限時 90 分鐘。依序：
+- re-run 一律不收：三個 job 的 `check_release.py` 都要求 `GITHUB_RUN_ATTEMPT` 是 1，要重來就重新觸發。GitHub 的 re-run 會沿用
+  原本的 commit 和 inputs，30 天內都能按，而一次批准只綁一次 attempt。
+- `gate`（`contents: read`、`actions: read`，限時 60 分鐘，沒有 job 條件）：
+  1. `check_release.py`：從別的 ref 觸發就在這裡失敗（紅燈），不是被略過的綠燈。
+  2. `environment_gate.py gate`：用這次執行的 `GITHUB_TOKEN` 讀 `public-release` 的設定。只打 `https://api.github.com`、不跟轉址、
+     不走 proxy。下面任何一項不符就停：
+     - environment 必須存在（404 就停：GitHub 會在第一次用到時自動建一個沒有保護的同名 environment）；
+     - 保護規則只能是 required_reviewers、branch_policy、wait_timer，恰好一條 required_reviewers，唯一的審查者是
+       User id 165237880（WOOWTECH，用 id 比，不用名字）；
+     - `can_admins_bypass` 是 false（沒有這個欄位也算失敗）；
+     - `deployment_branch_policy` 恰好是 `{"protected_branches": false, "custom_branch_policies": true}`，唯一的部署分支規則是
+       branch `release/*`。
+     `prevent_self_review` 只記錄、不要求：觸發的人和唯一的審查者都是 WOOWTECH，開了就永遠批不了。HTTP 403、429、5xx 和網路錯誤
+     重試一次（照 Retry-After，最多等 60 秒），再失敗就停；其他錯誤馬上停。
+  3. `validate.py`、packaging 單元測試、`packaging/unit.sh`。
+- `candidate`（`contents: read`；沒有 environment、沒有 packages 權限；只在 `release/*`；限時 150 分鐘）：在推送權限出現之前把映像建好、
+  驗完：
   1. 在這台機器上再跑一次 `validate.py` 與 `check_release.py`。
   2. 託管機器預檢 `packaging/hosted_runner.py`（建置之前）：`runner.environment` 必須是 `github-hosted`（Linux X64）；沒有把 Docker
      或 Buildx 指到別處的環境變數，目前 context 是本機 socket；建置輸入每個人都讀得到（映像以 UID 10001 執行）；Docker 必須用
      classic overlay2 image store，因為閘門靠「image ID＝config digest」。這台機器用完即丟：開著 containerd image store 時，
      在 `/etc/docker/daemon.json` 設 `features.containerd-snapshotter: false`（其他設定保留）、重啟 Docker，再確認 `docker info`
-     是 overlay2、沒有 containerd snapshotter。Docker client／server／API／元件與 Buildx 的版本寫進 `hosted-runner.json`。
+     是 overlay2、沒有 containerd snapshotter。Docker client／server／API／元件與 Buildx 的版本寫進 `release-evidence/hosted-runner.json`。
   3. `docker/build-push-action`（釘 commit）只建一次：`builder: default`、`linux/amd64`、`load: true`、`push: false`、
      provenance／sbom 關閉、revision label＝`github.sha`。
   4. `install_scanners.py`：checksum 固定的 Gitleaks、Syft、Grype。
   5. `supply_chain.py candidate`：對同一個 image ID 跑 `container_acceptance.py`（`container_probe.py`，含探針 1a 子程式 bearer
      直連 401、1b HM-13a 還原樹）、source／完整 history／全部 layer 的 Gitleaks、Syft 與 SPDX SBOM、Grype、授權政策。
-  6. J1900 指令集檢查 `packaging/j1900_check.py`（DQ-42：每次發版都做），在任何 registry 憑證出現之前：
+  6. J1900 指令集檢查 `packaging/j1900_check.py`（DQ-42：每次發版都做）：
      - 先用 `supply_chain.verify_current` 確認本機 tag 仍是測過的 image ID、證據沒變；
      - `qemu-user-static` 從這台機器的 apt 裝，記下套件版本、`qemu-x86_64-static --version` 與執行檔 SHA-256；
-     - 核心 venv `/opt/woow/.venv` 和子程式 venv `/opt/woow/apps/<app>/.venv`：`packaging/j1900_probe.py` 列出全部原生擴充模組，
-       先原生 import，再用 `qemu-x86_64-static -cpu Nehalem` import 原生成功的同一批，兩邊必須一樣、沒有 SIGILL；小 smoke
-       （hashlib、ssl、zlib、sqlite3、decimal、re）兩邊結果相同；
+     - 核心 venv `/opt/woow/.venv` 和子程式 venv `/opt/woow/apps/<app>/.venv`：`packaging/j1900_probe.py` 分開列出直譯器自己的
+       （lib-dynload）和套件的（site-packages）原生擴充模組，先全部原生 import。每個 venv 至少要有一個 site-packages 模組原生
+       import 成功；原生 import 失敗的模組，除非 `packaging/j1900-allowlist.json` 為這個產品列出審過的理由，否則整個檢查失敗
+       （每個 venv 都跑完之後一起列出）。允許清單一開始是空的。原生成功的那一批再用 `qemu-x86_64-static -cpu Nehalem` import 一次，
+       兩邊必須一樣、沒有 SIGILL；小 smoke（hashlib、ssl、zlib、sqlite3、decimal、re）兩邊結果相同；
      - n8n 沒有子程式 venv，改跑 Node：載入 better-sqlite3、建 FTS5、crypto、zlib，原生和 QEMU 結果相同；
      - 容器一律 `--network none --read-only --user 10001:10001 --cap-drop ALL --security-opt no-new-privileges`，只唯讀掛探針和
-       QEMU；
+       QEMU；整個 J1900 檢查最多 60 分鐘，每次容器執行只拿剩下的時間；
      - 遇到 SIGILL（exit 132 或 QEMU 的 `uncaught target signal 4`）就失敗，訊息寫出最後一個 `TRY <模組>`；
-     - 結果寫成 `j1900-<app>.json`。限制：QEMU 只檢查實際跑到的程式（import 與 smoke），不是完整執行路徑。
-  7. `registry_gate.py unused`：用 `GITHUB_TOKEN` 確認這個版號在 GHCR 還不存在；registry 錯誤不當成「不存在」。
-  8. `docker/login-action` 用 `GITHUB_TOKEN` 登入 ghcr.io；`supply_chain.py verify` 再核本機映像與證據；用測過的 image ID 打
-     tag，確認 tag 指向同一個 ID 才 `docker push`。只推測過的那一個 ID，不重建。
-  9. `registry_gate.py public`：用乾淨的設定匿名以不可變 digest 拉回，核 manifest、config digest＝測過的 ID、diffID。
-  10. 上傳證據 artifact `published-evidence-<app>-<版號>-<sha>`（保留 90 天）：`candidate/` 下的 `subject.json`、
-      `sbom.syft.json`、`sbom.spdx.json`、`scan-summary.json`、`provenance.json`、`published-provenance.json`、
-      `published-digest.json`，加 `release-evidence/hosted-runner.json`、`release-evidence/j1900-<app>.json`。`candidate/` 那些
-      過了證據的秘密掃描；後兩個只有固定欄位（版本、計數、模組名稱），沒經 Gitleaks。
+     - 結果寫成 `release-evidence/j1900-<app>.json`，PASS 那一行寫出每個 venv 各類模組的數目。限制：QEMU 只檢查實際跑到的程式
+       （import 與 smoke），不是完整執行路徑。
+  7. `image_handoff.py save`：確認本機 tag 仍是測過的 image ID，用 `docker image save` 存成 `image.tar`，檢查裡面恰好是那一個
+     映像（config digest＝image ID、tag、diffID），寫 `handoff.json`，並把 image ID 寫成 job output `image_id`。
+  8. 上傳兩個 artifact：`candidate-image-<app>-<sha>`（`image.tar` 與 `handoff.json`，**只留 1 天**）與
+     `candidate-evidence-<app>-<sha>`（candidate 證據、`hosted-runner.json`、`j1900-<app>.json`，留 90 天）。
+- `publish`（`environment: public-release`；`contents: read`、`packages: write`、`actions: read`；只在 `release/*`；needs gate 與
+  candidate；限時 60 分鐘）：負責人批准之後才開始：
+  1. 再跑一次 `validate.py` 與 `check_release.py`（只收第一次 attempt）。
+  2. `environment_gate.py publish`：gate 那套檢查全部再做一次，加上這次執行的審查紀錄（`GET /actions/runs/<run>/approvals`）
+     必須有 User 165237880 對 `public-release` 的 approved，而且沒有任何 rejected。紀錄寫進 `publish-evidence/approval.json`
+     （run id、attempt、commit、觸發者、environment 的 `updated_at`、審查紀錄）。
+  3. 託管機器預檢 → `publish-evidence/hosted-runner.json`（`docker load` 只有在 classic store 下才保留 image ID）。
+  4. 下載兩個 artifact 到 `$RUNNER_TEMP`（不進 checkout）。`actions/download-artifact` 釘 v4.3.0 的 commit
+     `d3f86a106a0bac45b974a628896c90dbdf5c8093`：2026-11-17 以公開 API 核對過，這是正式 release tag（不是 draft 或 prerelease），
+     和 `upload-artifact` v4.6.2 同一代。
+  5. `image_handoff.py load`：candidate 的 job output（和 artifact 分開的管道）＝`handoff.json`＝`subject.json` 的 image ID；
+     `image.tar` 的 SHA-256 符合紀錄、裡面恰好是那一個映像；這台機器上還沒有那個 tag；`docker load` 之後 tag 指向的就是那個 ID
+     與 diffID。
+  6. `supply_chain.py verify`：載入的映像和整份 candidate 證據相符。
+  7. `registry_gate.py unused`（用 `GITHUB_TOKEN` 確認這個版號在 GHCR 還不存在；registry 錯誤不當成「不存在」）→
+     `docker/login-action` 用 `GITHUB_TOKEN` 登入 → 推送步驟（再 verify 一次，用測過的 ID 打 tag，確認 tag 指向同一個 ID 才
+     `docker push`，只推那一個 ID，不重建）→ `registry_gate.py public`（乾淨設定匿名以不可變 digest 拉回，核 manifest、
+     config digest＝測過的 ID、diffID）。
+  8. 上傳 `published-evidence-<app>-<版號>-<sha>`（留 90 天）：candidate 證據加 published provenance／digest、兩個 job 的
+     `hosted-runner.json`、`j1900-<app>.json`、`handoff.json`、`approval.json`。candidate 證據過了證據的秘密掃描；其餘只有固定
+     欄位（版本、計數、模組名稱、審查紀錄），沒經 Gitleaks。
 - concurrency：每個產品一組（`public-release-<app>`），不同產品可以同時推；`cancel-in-progress: false`，進行中的執行永遠不取消。
   GitHub 的規則：同一組已有一個在跑時，新觸發的排隊等；再觸發一個，排隊中的那個會被新的取代（還沒開始，不會推任何東西）。
-- 環境變數只有這些：publish job 的 `APP` 和 `DOCKER_BUILD_SUMMARY`、`DOCKER_BUILD_RECORD_UPLOAD`（都是 `false`）；兩個
-  `check_release.py` 步驟的 `SOURCE_SHA`（＝`inputs.source_sha`；gate 那步另有 `APP`）；預檢步驟的 `RUNNER_KIND`
-  （＝`runner.environment`）；`registry_gate.py unused` 的 `GHCR_TOKEN`（＝`GITHUB_TOKEN`）。不寫 `GITHUB_ENV`、`GITHUB_PATH`。
-  `validate.py` 逐步比對整個檔：步驟清單與順序、action 釘的 commit、env、權限、environment 名稱、job 條件、限時、concurrency；
-  多一個步驟、env 或 secret 都會失敗。
+- 環境變數只有這些：candidate job 的 `APP` 和 `DOCKER_BUILD_SUMMARY`、`DOCKER_BUILD_RECORD_UPLOAD`（都是 `false`）；publish job 的
+  `APP`；三個 `check_release.py` 步驟的 `SOURCE_SHA`（＝`inputs.source_sha`；gate 那步另有 `APP`）；兩個 `environment_gate.py`
+  步驟的 `GH_TOKEN`；兩個預檢步驟的 `RUNNER_KIND`（＝`runner.environment`）；載入步驟的 `EXPECTED_IMAGE_ID`
+  （＝`needs.candidate.outputs.image_id`）；`registry_gate.py unused` 的 `GHCR_TOKEN`。`GH_TOKEN`、`GHCR_TOKEN` 和登入密碼都只能是
+  `${{ secrets.GITHUB_TOKEN }}`；其他任何地方（包括步驟名稱和輸入說明）出現 `secrets`、`github.token` 或 `${{` 都會被擋。不寫
+  `GITHUB_ENV`、`GITHUB_PATH`；唯一的 job output 是 `image_handoff.py save` 寫的 `image_id`。`validate.py` 逐步比對整個檔：三個 job
+  的步驟清單與順序、action 釘的 commit、env、needs、outputs、權限、environment、job 條件、限時、concurrency、run-name；多一個
+  步驟、env 或 secret 都會失敗。
+- 權限和原定案的差別：原定 publish 的權限「恰好 contents: read 加 packages: write」。為了讓 `environment_gate.py` 讀 environment 設定
+  和這次執行的審查紀錄，gate 與 publish 多了 `actions: read`（審查 H1，主對話 2026-11-17 核准）。`actions: read` 只能讀 Actions
+  的資料，不能觸發、批准或改設定。
 
-`check_release.py` 的放行條件（gate、publish 各跑一次）：
+`check_release.py` 的放行條件（三個 job 各跑一次）：
 
 - 事件是 `workflow_dispatch`，`GITHUB_REF` 是 `refs/heads/release/<一段名稱>`；
-- checkout 的 HEAD＝`GITHUB_SHA`＝`source_sha`（完整 40 位小寫 hex），所以負責人批准的就是那一個 commit；
+- 是第一次 attempt；
+- checkout 的 HEAD＝`GITHUB_SHA`＝`source_sha`（完整 40 位小寫 hex）。`GITHUB_SHA` 是**觸發當下**那個分支的 head：程式只保證三者
+  相等，不能證明它現在還是 head，也不能證明它就是負責人看過的 PR head，這要負責人批准前核對（見下面的檢查清單）；
 - 產品在商店清單、而且有映像（OpenDesign 擋）；
 - `validate.py` 的 `version_for(產品)` 等於 `addons/<產品>/config.yaml` 的版號。
 
@@ -198,61 +240,92 @@ annotated tag，已解到 commit。固定來源不等於 action code 已完成�
 
 ### 負責人要在 GitHub 設定的項目（workflow 自己做不到）
 
-順序：先設 environment，再開套件權限；兩項都確認之前不要觸發 `release.yaml`。workflow 參照不存在的 environment 時，GitHub 會自動
-建一個**沒有任何保護規則**的同名 environment，publish 就會不經批准直接跑（2026-11-17 這個 repo 沒有任何 environment）。
+照這個順序做；第 3 項確認之前不要觸發 `release.yaml`。
 
-1. Settings → Environments → New environment，名稱 `public-release`：
-   - Required reviewers：勾選，加負責人。
-   - Prevent self-reviews：觸發和批准是同一個帳號時不要勾（勾了，觸發的人不能批准自己的執行，就永遠批不了）。
-   - Allow administrators to bypass configured protection rules：取消勾選（預設是管理員可以略過）。
-   - Deployment branches and tags：選 Selected branches and tags，加一條 Branch 規則 `release/*`。`*` 不跨 `/`，所以只認一段名稱，
-     和 `check_release.py` 一致。不加 tag 規則。
-   - 不加 environment secret 或 variable（workflow 不用），不設 wait timer。
-2. 每個要發的套件（GitHub → WOOWTECH 的 Packages → `amd64-mcp-<產品>`；這次是 odoo、n8n、hermes、emqx、litellm、nextcloud，
-   Headscale 下一版走這條時再加 `amd64-mcp-headscale`）：Package settings → Manage Actions access → Add Repository →
-   `Woow_ha_mcp_addons`，Role 選 **Write**。可見度維持 Public（`registry_gate.py public` 用匿名拉取核對）。沒給 Write 時
-   `docker push` 會被拒；推送前的閘門都已跑完，版號不會燒。
-3. Repository 的 Actions 設定維持現狀：Workflow permissions 預設 read（publish job 自己宣告 `packages: write`）。如果有限制可用的
-   actions，要允許 `docker/build-push-action` 和 `docker/login-action`（釘的 commit 見 `release.yaml`）。
+1. Settings → Actions → Runners：確認沒有自架 runner（2026-11-17 用 API 查是 0 個）。
+2. Settings → Environments → New environment，名稱 `public-release`：
+   - Required reviewers：只加負責人帳號 WOOWTECH。gate 用 User id 165237880 比對，多加別人或團隊都會失敗。
+   - Prevent self-reviews：不要勾。觸發的人就是唯一的審查者，勾了就永遠批不了。
+   - Allow administrators to bypass configured protection rules：取消勾選（API 的 `can_admins_bypass` 會變成 false）。
+   - Deployment branches and tags：選 Selected branches and tags，加一條 **Branch** 規則 `release/*`（`*` 不跨 `/`，只認一段名稱，
+     和 `check_release.py` 一致）。不加 tag 規則。
+   - 不加 environment secret 或 variable。wait timer 可以不設，設了只會被記錄。
+3. 確認 gate 的檢查真的會過：在本機跑 `python3 -I packaging/environment_gate.py gate --anonymous`（匿名、唯讀，和 gate job 同一套
+   檢查；在 Actions 裡不准用匿名模式），或用下面的 curl 逐項核對。
+4. 每個要發的套件（WOOWTECH 的 Packages → `amd64-mcp-<產品>`；這次是 odoo、n8n、hermes、emqx、litellm、nextcloud，Headscale
+   走這條時再加 `amd64-mcp-headscale`）：Package settings → Manage Actions access，`Woow_ha_mcp_addons` 的角色設 **Write**，
+   不要 Admin。如果那一區顯示的是 Inherited access（從 repo 繼承），要先取消勾選 **Inherit access from repository**，才能改成
+   Write。可見度維持 Public（`registry_gate.py public` 用匿名拉取核對）。這一項只是把權限收到最小，**不是保險**：Dockerfile 有
+   `org.opencontainers.image.source`，套件連到這個 repo，這個 repo 的 workflow 宣告 `packages: write` 就能推（見「限制」）。
+5. Repository 的 Actions 設定維持現狀：Workflow permissions 預設 read，allowed actions 是 all（2026-11-17 查得）。
 
-每次觸發前，可以匿名唯讀確認 environment 還在（這個 repo 是 public）：
-`curl -s https://api.github.com/repos/WOOWTECH/Woow_ha_mcp_addons/environments/public-release` 的 `protection_rules` 要有一筆
-`type` 是 `required_reviewers`、`reviewers` 裡有負責人；`deployment_branch_policy` 是
-`{"protected_branches": false, "custom_branch_policies": true}`；同一路徑加 `/deployment-branch-policies` 只有 `release/*`。
-管理員能不能略過，這個 API 看不到，要在網頁上確認。
+手動 curl 核對（匿名；這個 repo 是 public）：
+
+- `curl -s https://api.github.com/repos/WOOWTECH/Woow_ha_mcp_addons/environments/public-release`：`protection_rules` 恰好一筆
+  `type` 是 `required_reviewers`，它的 `reviewers` 只有 `{"type": "User", "reviewer": {"id": 165237880, …}}`；其餘規則的 `type`
+  只能是 `branch_policy` 或 `wait_timer`；`can_admins_bypass` 是 `false`；`deployment_branch_policy` 是
+  `{"protected_branches": false, "custom_branch_policies": true}`。GitHub 文件的回應 schema 沒列 `can_admins_bypass`，但 GET 實際會回
+  （2026-11-17 匿名查 astral-sh/uv 的 environment，有 true 也有 false）。
+- 同一路徑加 `/deployment-branch-policies`：`total_count` 是 1，唯一一筆的 `name` 是 `release/*`、**`type` 是 `branch`**（不是 `tag`）。
+
+### 負責人批准前的檢查清單（每一支 publish）
+
+1. 這次要發的六支，candidate 都通過了，才批准任何一支的 publish。有一支失敗就全部 Reject（見下一節）。
+2. 以執行摘要頁上顯示的 commit 為準，不要看 run-name（它來自可以被改的 workflow）。那個 commit 要等於升版 PR 目前的 head。
+3. 在 PR 的 Files changed 確認 `.github/` 和 `packaging/` 相對 `claude-delivery` 只改了版號資料（`validate.py` 的 `VERSION`／
+   `VERSION_OVERRIDES`，`release.yaml`、`ci.yaml` 的版號運算式）。
+4. 確認那個 SHA 在 PR 上的 checks（`checks`、`Release train`）是綠的。
+5. 只批准第一次 attempt，不要批准 re-run（程式也會擋）。
+6. `image.tar` artifact 只留 1 天：candidate 完成後一天內要批准，過期就 Reject、重新觸發。
+
+批准：Review deployments → 勾 `public-release` → Approve and deploy；不對就 Reject。批准只由負責人本人在網頁上按，代理不呼叫批准 API。
+
+### 部分失敗怎麼辦
+
+- candidate 有任何一支失敗（包括 J1900、原生 import 失敗而允許清單沒列）：全部 Reject，修好換新 head（新的 `source_sha`）重來。
+  這時什麼都還沒推，不燒版號。
+- publish 批准後中途失敗：
+  - 推送前失敗（例如 artifact 過期、load 或 verify 不符、`registry_gate.py unused` 失敗）：沒推，用同一個 commit 重新觸發那一支。
+  - 推送後失敗（例如 `registry_gate.py public`）：那一支的版號已燒，不覆寫、不刪 tag。
+  - 已經推上去的產品保留，紀錄寫明映像來源（run、commit、digest）；剩下的用同一個 commit 重新觸發；需要改來源的，改發下一版。
 
 ### 發版步驟（每次）
 
 前提：這條流程的 PR 已合併到 `claude-delivery`；升版 PR 的 `release/<名稱>` 分支已包含它（例如把 `claude-delivery` 合併進去，
-`release.yaml` 的版號運算式照 `validate.py` 印出的那個）；PR head 已凍結（之後只加紀錄檔）；上一節的設定已確認。
+`release.yaml` 的版號運算式照 `validate.py` 印出的那個）；PR head 已凍結（之後只加紀錄檔）；上面的設定已確認，gate 檢查會過。
 
 1. 在升版 PR 的分支上逐產品觸發，帶 `source_sha`：Actions → `Manually approved GHCR publication` → Run workflow →
    Use workflow from 選 `release/<名稱>` → `app` 選產品 → `source_sha` 填那個分支目前 head 的完整 SHA
    （`git rev-parse origin/release/<名稱>`）。命令列：`gh workflow run release.yaml --ref release/<名稱> -f app=<產品> -f source_sha=<sha>`。
-   幾個產品可以同時觸發，都用同一個 `source_sha`；同一個產品不要重複觸發。gate 約 35–40 分鐘。
-2. 負責人在 GitHub 批准 environment：gate 通過後 publish 停在 Waiting。負責人打開那次執行，核對名稱
-   `Publish <產品> from release/<名稱> at <sha>`、分支和 `source_sha` 是要發的 commit，再按 Review deployments → 勾
-   `public-release` → Approve and deploy；不對就 Reject。批准只由負責人本人在網頁上按，代理不呼叫批准 API。
-   - 推送前任何一步失敗：什麼都沒推，版號沒燒。查明原因再修，不放寬閘門；修來源就有新 commit，所有產品用新的 `source_sha` 重來。
-     J1900 遇到 SIGILL：那支先不發，另開修正。
-   - 推送後才失敗（例如 `registry_gate.py public`）：版號已燒，不覆寫、不刪 tag，停下來告訴負責人（照前例改發下一個版號）。
-   - 成功：把證據 artifact 下載保存（90 天後 GitHub 會刪）。
-3. readiness 和 Upgrade comparison：映像推上去後在升版 PR 重跑這兩項（Re-run，或第 5 步推紀錄時自動重跑）。
+   六支都用同一個 `source_sha`，可以同時觸發；同一個產品不要重複觸發。
+2. 等六支的 gate 和 candidate 都通過（約 35–40 分鐘加建置與檢查）；publish 會停在 Waiting。
+3. 負責人照上面的檢查清單逐支批准。
+4. readiness 和 Upgrade comparison：映像推上去後在升版 PR 重跑這兩項（Re-run，或第 6 步推紀錄時自動重跑）。
    `Upgrade comparison / compare` 拉 GHCR 上的新舊映像做設定比對、升級測試、漏洞比對；要求 `upgrade-notes.yaml` 時照
-   `AGENTS.md` 第 3 點補。readiness 的映像部分會過，紀錄部分要等第 5 步。
-4. 在負責人的 HAOS 實機驗收（[ha-p9-kit](ha-p9-kit.md)）。備份、安裝、更新這些會改狀態的步驟逐步等負責人批准，先備份。
-5. 每個產品自己的發佈紀錄 `release-decision-<產品>-<版號>.md`（readiness 的規則見上面）：寫 slug、版號、`source_sha`、那次
-   `release.yaml` 執行的連結、不可變 digest、證據 artifact 的重點（image ID、scan summary、J1900 結果與 qemu 版本、Docker 與
-   Buildx 版本）和第 4 步的結果。證據 commit 只加紀錄檔。
-6. 所有 required checks 通過後，負責人本人合併（merge commit），也就是上架 WOOW App Store。
+   `AGENTS.md` 第 3 點補。readiness 的映像部分會過，紀錄部分要等第 6 步。
+5. 在負責人的 HAOS 實機驗收（[ha-p9-kit](ha-p9-kit.md)）。備份、安裝、更新這些會改狀態的步驟逐步等負責人批准，先備份。
+6. 每個產品自己的發佈紀錄 `release-decision-<產品>-<版號>.md`（readiness 的規則見上面）：寫 slug、版號、`source_sha`、那次執行的
+   連結與 attempt、`approval.json` 的重點（誰、何時批准）、不可變 digest、證據 artifact 的重點（image ID、scan summary、J1900 結果
+   與 qemu 版本、Docker 與 Buildx 版本）和第 5 步的結果。證據 commit 只加紀錄檔。
+7. 所有 required checks 通過後，負責人本人合併（merge commit），也就是上架 WOOW App Store。
 
 ### 限制
 
-- `public-release` 的批准只管 `release.yaml`。有寫入權限的人仍能另寫 workflow，用 `GITHUB_TOKEN` 推 GHCR（只要套件給了這個 repo
-  Write）；這是 GitHub 權限模型的限制，只能靠只把寫入權限給可信的人。
-- 觸發和批准用同一個帳號時，持有那個帳號權杖的人（包括代理）技術上也能批准；這一步靠規則（只有負責人本人批准），不是技術上擋住。
-- 託管機器的 Docker、Buildx、QEMU 版本由 GitHub 與 Ubuntu 決定，不釘版本，只記進證據。containerd image store 的切換、QEMU 在
-  容器裡跑，在第一次真的執行之前都只有單元測試（假的 Docker）。
+- 被觸發的分支決定一切：`workflow_dispatch` 跑的是被觸發分支上的 `release.yaml` 和 `packaging/` 程式，`validate.py` 是在被檢查的
+  那份 workflow 裡檢查自己。分支上的程式一改，所有檢查（包括 `environment_gate.py`）都可能一起被改掉，所以批准前要看 PR 的差異
+  （檢查清單第 3 項）。
+- 每次升版都要改 `release.yaml`、`ci.yaml` 的版號運算式，所以能推 release 分支的憑證，一定也能改 workflow。
+- 本機代理用的 gh 帳號就是 WOOWTECH 本人：技術上能觸發，也能用 pending_deployments API 批准自己的執行。「只有負責人本人在網頁上
+  批准」是規則，不是技術邊界；`environment_gate.py publish` 只能證明 WOOWTECH 這個帳號批准了，不能證明是誰按的。
+- 這個 repo 的任何 workflow 只要宣告 `packages: write` 就能推 GHCR（套件連到這個 repo，Actions 的存取是整個 repo，不分 workflow）；
+  `public-release` 的批准只管 `release.yaml`。
+- 負責人 2026-11-17 約 22:0x（台北）對上面這幾點的決定：「先照現況，靠規則」。代理沿用負責人的 WOOWTECH 權杖；代理的 GitHub 工具
+  不准核准部署，核准一律由負責人在 GitHub 上按；限制照實寫在這裡。結構性的修法之後有需要再另案改：用獨立的機器帳號觸發（不給它
+  批准權）；把版號運算式移出 workflow（升版就不必動 `.github/`，才能用規則鎖住 workflow）；開 Prevent self-reviews（觸發者和審查者
+  要是不同的人）；用 ruleset 要求 `release/*` 或 `.github/` 的變更經過審查。
+- 託管機器的 Docker、Buildx、QEMU 版本由 GitHub 與 Ubuntu 決定，不釘版本，只記進證據。containerd image store 的切換、QEMU 在容器裡
+  跑、`docker save`／`docker load` 保留 image ID、environment 與審查 API 的實際回應，在第一次真的執行之前都只有單元測試（假的
+  Docker 與 API）。
 
 ### 供應鏈閘門細節
 
@@ -262,7 +335,7 @@ Docker save 所有 layer/config 秘密掃描；整個 image 的 all-layers Syft/
 CVE／license fail-closed policy。原始 scanner stdout/stderr/report 不印出、不上傳；
 Docker action 的自動 build record/summary 也停用。詳見 [精確映像與信任界線](hardening.md)。
 這些 commands 自 2026-10-05 起在私有 builder 對每版真實 image 執行並通過（0.1.0 為七類候選 f75fe32；0.1.5 為六支候選 0c66bd0），
-2026-11-17 起改在 `release.yaml` 的 publish job 執行。
+2026-11-17 起改在 `release.yaml` 的 candidate job 執行（推送前在 publish job 以同一份證據再核一次）。
 
 Push 前再核對 local ID、source、SBOM/scan/provenance hashes；push 後以匿名 manifest
 的 SHA256、config digest、空 Docker config 的 immutable pull、實際 pulled diffIDs

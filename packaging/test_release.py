@@ -17,11 +17,11 @@ SHA = 'b' * 40
 
 class ReleaseTests(unittest.TestCase):
     def invoke(self, app='n8n', *, event='workflow_dispatch', ref=BRANCH, sha=SHA, source=SHA, head=None,
-               manifest=None):
+               manifest=None, attempt='1'):
         """check_release.check(app) in a dispatched run; None leaves a variable unset. Returns (stdout, git calls,
         loaded paths)."""
         env = {key: value for key, value in (('GITHUB_EVENT_NAME', event), ('GITHUB_REF', ref), ('GITHUB_SHA', sha),
-                                             ('SOURCE_SHA', source)) if value is not None}
+                                             ('SOURCE_SHA', source), ('GITHUB_RUN_ATTEMPT', attempt)) if value is not None}
         calls, loaded = [], []
 
         def output(command, **kwargs):
@@ -67,12 +67,19 @@ class ReleaseTests(unittest.TestCase):
         cases = [({'source': None}, 'source_sha must be'), ({'source': ''}, 'source_sha must be'),
                  ({'source': SHA[:7]}, 'source_sha must be'), ({'source': SHA.upper()}, 'source_sha must be'),
                  ({'source': SHA + '\n'}, 'source_sha must be'), ({'source': ' ' + SHA}, 'source_sha must be'),
-                 ({'source': 'g' * 40}, 'source_sha must be'), ({'source': 'c' * 40}, 'not the head'),
+                 ({'source': 'g' * 40}, 'source_sha must be'),
+                 ({'source': 'c' * 40}, 'not the commit this run was dispatched at'),
                  ({'sha': None}, 'dispatched SHA'), ({'sha': 'b' * 39}, 'dispatched SHA'),
                  ({'head': 'c' * 40}, 'checkout differs'), ({'head': ''}, 'checkout differs')]
         for kwargs, message in cases:
             with self.subTest(kwargs=kwargs), self.assertRaisesRegex(v.Invalid, message):
                 self.invoke(**kwargs)
+
+    def test_a_re_run_is_refused_in_every_job(self):
+        # A re-run reuses the original commit and inputs, and an approval binds one attempt: dispatch anew instead.
+        for attempt in ('2', '3', '', None, '01', ' 1', '1 '):
+            with self.subTest(attempt=attempt), self.assertRaisesRegex(v.Invalid, 're-run'):
+                self.invoke(attempt=attempt)
 
     def test_imageless_retired_and_unknown_products_are_refused_before_anything_else(self):
         self.assertEqual(r.IMAGELESS, ('opendesign',))

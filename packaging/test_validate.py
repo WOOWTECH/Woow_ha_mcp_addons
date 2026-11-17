@@ -263,6 +263,9 @@ class PackagingTests(unittest.TestCase):
                 self.assertTrue(any(s.get('run') == 'python3 packaging/builder_contract.py setup --driver docker'
                                     for s in job['steps']))
             else:  # the hosted route builds with the runner's own Buildx and the default docker driver, BLD2 is gone
+                for name, other in doc['jobs'].items():
+                    self.assertFalse(any(s.get('uses', '').startswith('docker/setup-buildx-action@')
+                                         for s in other['steps']), name)
                 self.assertNotIn('builder_contract', (v.ROOT / '.github/workflows/release.yaml').read_text())
                 self.assertNotIn('BLD2', (v.ROOT / '.github/workflows/release.yaml').read_text())
 
@@ -297,39 +300,61 @@ class PackagingTests(unittest.TestCase):
         return v.load(v.ROOT / '.github/workflows/release.yaml')
 
     def test_hosted_release_route_is_the_repository_workflow(self):
-        # Owner decision 2026-11-17: release.yaml builds, accepts and pushes on GitHub-hosted runners with the run's own
-        # GITHUB_TOKEN, dispatched on a release/* branch with the owner's source_sha; no self-hosted runner, no BLD2.
+        # Owner decision 2026-11-17 and review round 1: gate -> candidate -> publish on GitHub-hosted runners with the
+        # run's own GITHUB_TOKEN; the owner approves publish after the candidate results, and publish loads the exact
+        # tested image ID. No self-hosted runner, no BLD2, no registry authority before the approval.
         original = self.release()
         v.hosted_release(original)
         v.builder_workflow(original, 'release')
-        gate, publish = original['jobs']['gate'], original['jobs']['publish']
-        self.assertEqual((gate['runs-on'], publish['runs-on']), ('ubuntu-24.04', 'ubuntu-24.04'))
-        self.assertEqual(gate['permissions'], {'contents': 'read'})
-        self.assertEqual(publish['permissions'], {'contents': 'read', 'packages': 'write'})
-        self.assertEqual((publish['environment'], publish['needs'], publish['if']),
-                         ('public-release', 'gate', "startsWith(github.ref, 'refs/heads/release/')"))
-        self.assertNotIn('if', gate)  # a dispatch outside release/* fails in check_release.py, never a skipped pass
+        jobs = original['jobs']
+        self.assertEqual(list(jobs), ['gate', 'candidate', 'publish'])
+        self.assertTrue(all(job['runs-on'] == 'ubuntu-24.04' for job in jobs.values()))
+        self.assertEqual({name: job['permissions'] for name, job in jobs.items()},
+                         {'gate': {'contents': 'read', 'actions': 'read'}, 'candidate': {'contents': 'read'},
+                          'publish': {'contents': 'read', 'packages': 'write', 'actions': 'read'}})
+        self.assertEqual([name for name, job in jobs.items() if 'environment' in job], ['publish'])
+        self.assertEqual(jobs['publish']['environment'], 'public-release')
+        self.assertEqual((jobs['candidate']['needs'], jobs['publish']['needs']), ('gate', ['gate', 'candidate']))
+        self.assertNotIn('if', jobs['gate'])  # a dispatch outside release/* fails in check_release.py, never a skipped pass
+        self.assertEqual({jobs['candidate']['if'], jobs['publish']['if']}, {"startsWith(github.ref, 'refs/heads/release/')"})
+        self.assertEqual(jobs['candidate']['outputs'], {'image_id': '${{ steps.handoff.outputs.image_id }}'})
         self.assertEqual(original['concurrency'], {'group': 'public-release-${{ inputs.app }}', 'cancel-in-progress': False})
         self.assertEqual(set(original['on']), {'workflow_dispatch'})
         self.assertEqual(set(original['on']['workflow_dispatch']['inputs']), {'app', 'source_sha'})
-        variables = set(publish['env'])
-        for job in (gate, publish):
+        variables = set()
+        for job in jobs.values():
+            variables |= set(job.get('env', {}))
             for step in job['steps']:
                 variables |= set(step.get('env', {}))
         # Exactly the environment variables docs/operations/release.md lists.
-        self.assertEqual(variables, {'APP', 'SOURCE_SHA', 'RUNNER_KIND', 'GHCR_TOKEN', 'DOCKER_BUILD_SUMMARY',
-                                     'DOCKER_BUILD_RECORD_UPLOAD'})
+        self.assertEqual(variables, {'APP', 'SOURCE_SHA', 'GH_TOKEN', 'RUNNER_KIND', 'EXPECTED_IMAGE_ID', 'GHCR_TOKEN',
+                                     'DOCKER_BUILD_SUMMARY', 'DOCKER_BUILD_RECORD_UPLOAD'})
         text = (v.ROOT / '.github/workflows/release.yaml').read_text()
         self.assertEqual(set(re.findall(r'secrets\.\w+', text)), {'secrets.GITHUB_TOKEN'})
+        self.assertEqual(text.count('${{ secrets.GITHUB_TOKEN }}'), 4)  # two GH_TOKEN, GHCR_TOKEN, the login password
         for absent in ('self-hosted', 'builder_contract', 'BLD2', 'vars.', 'GITHUB_ENV', 'GITHUB_PATH', 'refs/heads/main',
-                       'setup-buildx-action', 'pull_request'):
+                       'setup-buildx-action', 'pull_request', 'github.token'):
             self.assertNotIn(absent, text)
-        steps = [s.get('run', s.get('uses', '')) for s in publish['steps']]
-        order = ['check_release.py', 'hosted_runner.py', 'docker/build-push-action@', 'install_scanners.py',
-                 'supply_chain.py candidate', 'j1900_check.py', 'registry_gate.py unused', 'docker/login-action@',
-                 'docker push', 'registry_gate.py public', 'actions/upload-artifact@']
-        found = [next(i for i, s in enumerate(steps) if fragment in s) for fragment in order]
-        self.assertEqual(found, sorted(found))  # preflight before the build, J1900 before any credential, push last
+
+        def order(job, fragments):
+            steps = [s.get('run', s.get('uses', '')) for s in jobs[job]['steps']]
+            found = [next(i for i, s in enumerate(steps) if fragment in s) for fragment in fragments]
+            self.assertEqual(found, sorted(found), job)
+        order('gate', ['check_release.py', 'environment_gate.py gate', 'validate.py', 'unittest discover', 'unit.sh'])
+        order('candidate', ['check_release.py', 'hosted_runner.py', 'docker/build-push-action@', 'install_scanners.py',
+                            'supply_chain.py candidate', 'j1900_check.py', 'image_handoff.py save', 'actions/upload-artifact@'])
+        order('publish', ['check_release.py', 'environment_gate.py publish', 'hosted_runner.py', 'actions/download-artifact@',
+                          'image_handoff.py load', 'supply_chain.py verify', 'registry_gate.py unused', 'docker/login-action@',
+                          'docker push', 'registry_gate.py public', 'actions/upload-artifact@'])
+        candidate = '\n'.join(str(s) for s in jobs['candidate']['steps'])
+        for absent in ('login', 'registry_gate', 'docker push', 'secrets', 'environment_gate'):
+            self.assertNotIn(absent, candidate)  # no registry authority before the owner's approval
+        uploads = [s['with'] for s in jobs['candidate']['steps'] if s.get('uses', '').startswith('actions/upload-artifact@')]
+        self.assertEqual([(u['name'], u['retention-days']) for u in uploads],
+                         [('candidate-image-${{ inputs.app }}-${{ github.sha }}', 1),
+                          ('candidate-evidence-${{ inputs.app }}-${{ github.sha }}', 90)])
+        self.assertTrue(all(s['with']['path'].startswith('${{ runner.temp }}') for s in jobs['publish']['steps']
+                            if s.get('uses', '').startswith('actions/download-artifact@')))  # never into the checkout
 
     def test_hosted_release_jobs_are_exact(self):
         original = self.release()
@@ -349,37 +374,55 @@ class PackagingTests(unittest.TestCase):
             (('jobs', 'extra'), {'runs-on': 'ubuntu-24.04', 'timeout-minutes': 5, 'steps': [{'run': 'true'}]}),
             (('jobs', 'gate', 'if'), "startsWith(github.ref, 'refs/heads/release/')"),
             (('jobs', 'gate', 'runs-on'), 'ubuntu-22.04'), (('jobs', 'gate', 'runs-on'), ['self-hosted', 'linux', 'x64']),
-            (('jobs', 'gate', 'permissions'), {'contents': 'read', 'packages': 'write'}),
+            (('jobs', 'gate', 'permissions'), {'contents': 'read'}),
+            (('jobs', 'gate', 'permissions'), {'contents': 'read', 'actions': 'read', 'packages': 'write'}),
             (('jobs', 'gate', 'environment'), 'public-release'),
             (('jobs', 'gate', 'env'), {'SOURCE_SHA': '${{ inputs.source_sha }}'}),
             (('jobs', 'gate', 'continue-on-error'), True), (('jobs', 'gate', 'timeout-minutes'), 40),
+            (('jobs', 'candidate', 'permissions'), {'contents': 'read', 'packages': 'write'}),
+            (('jobs', 'candidate', 'permissions'), {'contents': 'read', 'actions': 'read'}),
+            (('jobs', 'candidate', 'environment'), 'public-release'),
+            (('jobs', 'candidate', 'if'), 'always()'), (('jobs', 'candidate', 'needs'), []),
+            (('jobs', 'candidate', 'needs'), ['gate']),
+            (('jobs', 'candidate', 'outputs'), {'image_id': '${{ steps.handoff.outputs.image_id }}', 'other': 'x'}),
+            (('jobs', 'candidate', 'outputs'), {'image_id': '${{ steps.build.outputs.imageid }}'}),
+            (('jobs', 'candidate', 'env', 'BLD2_APPROVAL'), '${{ vars.BLD2_APPROVAL }}'),
+            (('jobs', 'candidate', 'env', 'HTTPS_PROXY'), 'http://invented.invalid'),
+            (('jobs', 'candidate', 'env', 'DOCKER_BUILD_RECORD_UPLOAD'), 'true'),
+            (('jobs', 'candidate', 'timeout-minutes'), 360),
+            (('jobs', 'candidate', 'runs-on'), {'group': 'woow-disposable-builder', 'labels': ['self-hosted', 'linux', 'x64']}),
+            (('jobs', 'candidate', 'container'), {'image': 'docker:latest'}),
+            (('jobs', 'candidate', 'services'), {'docker': {'image': 'docker:dind'}}),
+            (('jobs', 'candidate', 'strategy'), {'max-parallel': 1}),
             (('jobs', 'publish', 'runs-on'), {'group': 'woow-disposable-builder', 'labels': ['self-hosted', 'linux', 'x64']}),
             (('jobs', 'publish', 'runs-on'), 'ubuntu-latest'), (('jobs', 'publish', 'runs-on'), ['self-hosted']),
             (('jobs', 'publish', 'environment'), 'release'),
             (('jobs', 'publish', 'environment'), {'name': 'public-release'}),
-            (('jobs', 'publish', 'permissions'), {'contents': 'read', 'packages': 'write', 'id-token': 'write'}),
-            (('jobs', 'publish', 'permissions'), {'contents': 'write', 'packages': 'write'}),
+            (('jobs', 'publish', 'permissions'), {'contents': 'read', 'packages': 'write'}),
+            (('jobs', 'publish', 'permissions'), {'contents': 'read', 'packages': 'write', 'actions': 'read', 'id-token': 'write'}),
+            (('jobs', 'publish', 'permissions'), {'contents': 'write', 'packages': 'write', 'actions': 'read'}),
             (('jobs', 'publish', 'permissions'), {'contents': 'read', 'packages': 'write', 'actions': 'write'}),
             (('jobs', 'publish', 'if'), "github.ref == 'refs/heads/main'"), (('jobs', 'publish', 'if'), 'always()'),
             (('jobs', 'publish', 'if'), "startsWith(github.ref, 'refs/heads/')"),
-            (('jobs', 'publish', 'needs'), []), (('jobs', 'publish', 'needs'), ['gate']),
-            (('jobs', 'publish', 'timeout-minutes'), 360),
+            (('jobs', 'publish', 'needs'), ['candidate']), (('jobs', 'publish', 'needs'), 'candidate'),
+            (('jobs', 'publish', 'needs'), ['gate']), (('jobs', 'publish', 'timeout-minutes'), 360),
             (('jobs', 'publish', 'container'), {'image': 'docker:latest'}),
             (('jobs', 'publish', 'services'), {'docker': {'image': 'docker:dind'}}),
             (('jobs', 'publish', 'continue-on-error'), True), (('jobs', 'publish', 'strategy'), {'max-parallel': 1}),
             (('jobs', 'publish', 'defaults'), {'run': {'shell': 'bash'}}),
-            (('jobs', 'publish', 'env', 'BLD2_APPROVAL'), '${{ vars.BLD2_APPROVAL }}'),
-            (('jobs', 'publish', 'env', 'HTTPS_PROXY'), 'http://invented.invalid'),
             (('jobs', 'publish', 'env', 'DOCKER_HOST'), 'tcp://invented.invalid:2375'),
             (('jobs', 'publish', 'env', 'SOURCE_SHA'), '${{ inputs.source_sha }}'),
-            (('jobs', 'publish', 'env', 'DOCKER_BUILD_RECORD_UPLOAD'), 'true'),
+            (('jobs', 'publish', 'env', 'EXPECTED_IMAGE_ID'), '${{ needs.candidate.outputs.image_id }}'),
+            (('jobs', 'publish', 'outputs'), {'x': 'y'}),
             (('env',), {'APP': 'odoo'}), (('defaults',), {'run': {'shell': 'bash'}})]
         for path, value in mutations:
             with self.subTest(path=path, value=value), self.assertRaises(v.Invalid):
                 v.builder_workflow(replaced(original, path, value), 'release')
         for path in (('jobs', 'publish', 'needs'), ('jobs', 'publish', 'if'), ('jobs', 'publish', 'environment'),
-                     ('jobs', 'publish', 'permissions'), ('jobs', 'gate', 'permissions'), ('concurrency',), ('run-name',),
-                     ('on', 'workflow_dispatch', 'inputs', 'source_sha'), ('jobs', 'publish', 'env', 'APP')):
+                     ('jobs', 'publish', 'permissions'), ('jobs', 'gate', 'permissions'), ('jobs', 'candidate', 'if'),
+                     ('jobs', 'candidate', 'needs'), ('jobs', 'candidate', 'outputs'), ('jobs', 'candidate', 'permissions'),
+                     ('jobs', 'candidate'), ('concurrency',), ('run-name',), ('on', 'workflow_dispatch', 'inputs', 'source_sha'),
+                     ('jobs', 'publish', 'env', 'APP')):
             doc = copy.deepcopy(original)
             del at(doc, path[:-1])[path[-1]]
             with self.subTest(removed=path), self.assertRaises(v.Invalid):
@@ -391,7 +434,7 @@ class PackagingTests(unittest.TestCase):
         def index(job, fragment):
             return next(i for i, s in enumerate(original['jobs'][job]['steps'])
                         if fragment in s.get('run', '') or fragment in s.get('uses', ''))
-        for job in ('gate', 'publish'):
+        for job in ('gate', 'candidate', 'publish'):
             steps = original['jobs'][job]['steps']
             for position in range(len(steps)):
                 doc = copy.deepcopy(original)
@@ -400,6 +443,8 @@ class PackagingTests(unittest.TestCase):
                     v.builder_workflow(doc, 'release')
                 for bypass in ({'if': 'false'}, {'continue-on-error': True}, {'shell': 'bash'},
                                {'working-directory': 'packaging'}, {'timeout-minutes': 1}, {'id': 'step'}):
+                    if bypass.keys() <= steps[position].keys():
+                        continue
                     with self.subTest(job=job, position=position, bypass=bypass), self.assertRaises(v.Invalid):
                         v.builder_workflow(replaced(original, ('jobs', job, 'steps', position),
                                                     {**steps[position], **bypass}), 'release')
@@ -407,7 +452,8 @@ class PackagingTests(unittest.TestCase):
                     continue
                 for key, value in (('HOME', '/invented'), ('DOCKER_HOST', 'tcp://invented.invalid:2375'),
                                    ('HTTPS_PROXY', 'http://invented.invalid'), ('SOURCE_SHA', '${{ inputs.source_sha }}'),
-                                   ('GHCR_TOKEN', '${{ secrets.GITHUB_TOKEN }}'), ('RUNNER_KIND', 'github-hosted')):
+                                   ('GHCR_TOKEN', '${{ secrets.GITHUB_TOKEN }}'), ('GH_TOKEN', '${{ secrets.GITHUB_TOKEN }}'),
+                                   ('RUNNER_KIND', 'github-hosted'), ('EXPECTED_IMAGE_ID', 'sha256:' + 'a' * 64)):
                     if key in steps[position].get('env', {}):
                         continue
                     changed = {**steps[position], 'env': {**steps[position].get('env', {}), key: value}}
@@ -415,36 +461,52 @@ class PackagingTests(unittest.TestCase):
                         v.builder_workflow(replaced(original, ('jobs', job, 'steps', position), changed), 'release')
             for script in ('echo HOME=/invented >> "$GITHUB_ENV"', 'echo /invented >> "$GITHUB_PATH"',
                            'export HTTPS_PROXY=http://invented.invalid', 'docker buildx create --use',
-                           'python3 packaging/builder_contract.py admit', 'true'):
+                           'python3 packaging/builder_contract.py admit', 'docker push ghcr.io/woowtech/amd64-mcp-odoo:x',
+                           'true'):
                 doc = copy.deepcopy(original)
                 doc['jobs'][job]['steps'].insert(-1, {'run': script})
                 with self.subTest(job=job, script=script), self.assertRaises(v.Invalid):
                     v.builder_workflow(doc, 'release')
-        for first, second in (('check_release.py', 'hosted_runner.py'), ('hosted_runner.py', 'docker/build-push-action@'),
-                              ('supply_chain.py candidate', 'j1900_check.py'), ('j1900_check.py', 'registry_gate.py unused'),
-                              ('registry_gate.py unused', 'docker/login-action@'), ('docker/login-action@', 'docker push'),
-                              ('docker push', 'registry_gate.py public')):
+        for job, first, second in (
+                ('candidate', 'check_release.py', 'hosted_runner.py'), ('candidate', 'hosted_runner.py', 'docker/build-push-action@'),
+                ('candidate', 'supply_chain.py candidate', 'j1900_check.py'), ('candidate', 'j1900_check.py', 'image_handoff.py save'),
+                ('gate', 'check_release.py', 'environment_gate.py gate'), ('gate', 'environment_gate.py gate', 'validate.py'),
+                ('publish', 'check_release.py', 'environment_gate.py publish'), ('publish', 'environment_gate.py', 'hosted_runner.py'),
+                ('publish', 'hosted_runner.py', 'image_handoff.py load'), ('publish', 'image_handoff.py load', 'supply_chain.py verify'),
+                ('publish', 'supply_chain.py verify', 'registry_gate.py unused'),
+                ('publish', 'registry_gate.py unused', 'docker/login-action@'), ('publish', 'docker/login-action@', 'docker push'),
+                ('publish', 'docker push', 'registry_gate.py public')):
             doc = copy.deepcopy(original)
-            steps = doc['jobs']['publish']['steps']
-            a, b = index('publish', first), index('publish', second)
+            steps = doc['jobs'][job]['steps']
+            a, b = index(job, first), index(job, second)
             steps[a], steps[b] = steps[b], steps[a]
-            with self.subTest(swapped=(first, second)), self.assertRaises(v.Invalid):
+            with self.subTest(swapped=(job, first, second)), self.assertRaises(v.Invalid):
                 v.builder_workflow(doc, 'release')
-        # The owner's commit comes only from the source_sha input, the runner kind only from runner.environment, and the
-        # only secret is the run's own GITHUB_TOKEN; actions stay pinned to the reviewed commits.
-        edits = [('publish', 'check_release.py', ('env', 'SOURCE_SHA'), '${{ github.sha }}'),
-                 ('gate', 'check_release.py', ('env', 'SOURCE_SHA'), '${{ github.sha }}'),
+        # The commit comes only from the source_sha input, the runner kind only from runner.environment, the expected image
+        # ID only from the candidate job output; the only secret is the run's own GITHUB_TOKEN; actions stay pinned.
+        edits = [('gate', 'check_release.py', ('env', 'SOURCE_SHA'), '${{ github.sha }}'),
+                 ('candidate', 'check_release.py', ('env', 'SOURCE_SHA'), '${{ github.sha }}'),
+                 ('publish', 'check_release.py', ('env', 'SOURCE_SHA'), '${{ github.sha }}'),
+                 ('gate', 'environment_gate.py gate', ('env', 'GH_TOKEN'), '${{ github.token }}'),
+                 ('publish', 'environment_gate.py publish', ('env', 'GH_TOKEN'), '${{ secrets.WOOWTECH_PAT }}'),
+                 ('publish', 'environment_gate.py publish', ('run',), 'python packaging/environment_gate.py gate'),
+                 ('candidate', 'hosted_runner.py', ('env', 'RUNNER_KIND'), 'github-hosted'),
                  ('publish', 'hosted_runner.py', ('env', 'RUNNER_KIND'), 'github-hosted'),
+                 ('publish', 'image_handoff.py load', ('env', 'EXPECTED_IMAGE_ID'), '${{ needs.gate.outputs.image_id }}'),
+                 ('publish', 'image_handoff.py load', ('env', 'EXPECTED_IMAGE_ID'), 'sha256:' + 'a' * 64),
+                 ('candidate', 'image_handoff.py save', ('id',), 'save'),
                  ('publish', 'registry_gate.py unused', ('env', 'GHCR_TOKEN'), '${{ secrets.GHCR_PAT }}'),
                  ('publish', 'docker/login-action@', ('with', 'password'), '${{ secrets.WOOWTECH_PAT }}'),
                  ('publish', 'docker/login-action@', ('with', 'username'), '${{ secrets.USER }}'),
-                 ('publish', 'check_release.py', ('run',), 'python packaging/validate.py && python packaging/check_release.py "$APP" || true'),
-                 ('gate', 'check_release.py', ('run',), 'python packaging/check_release.py "$APP" || true'),
-                 ('publish', 'j1900_check.py', ('run',), 'echo python packaging/j1900_check.py'),
-                 ('publish', 'hosted_runner.py', ('run',), 'python packaging/hosted_runner.py github-hosted "$RUNNER_TEMP/release-evidence"'),
-                 ('publish', 'docker/build-push-action@', ('with', 'push'), True),
-                 ('publish', 'docker/build-push-action@', ('with', 'provenance'), True),
-                 ('publish', 'docker/build-push-action@', ('uses',), 'docker/build-push-action@v6'),
+                 ('candidate', 'j1900_check.py', ('run',), 'echo python packaging/j1900_check.py'),
+                 ('candidate', 'docker/build-push-action@', ('with', 'push'), True),
+                 ('candidate', 'docker/build-push-action@', ('with', 'provenance'), True),
+                 ('candidate', 'docker/build-push-action@', ('uses',), 'docker/build-push-action@v6'),
+                 ('candidate', 'actions/upload-artifact@', ('with', 'retention-days'), 90),
+                 ('candidate', 'actions/upload-artifact@', ('with', 'path'), '${{ runner.temp }}\n'),
+                 ('publish', 'actions/download-artifact@', ('uses',), 'actions/download-artifact@v4'),
+                 ('publish', 'actions/download-artifact@', ('with', 'path'), '.'),
+                 ('publish', 'actions/download-artifact@', ('with', 'name'), 'candidate-image-${{ inputs.app }}'),
                  ('gate', 'actions/checkout@', ('uses',), 'actions/checkout@v4'),
                  ('gate', 'actions/checkout@', ('with', 'ref'), '${{ inputs.source_sha }}'),
                  ('publish', 'actions/checkout@', ('with', 'persist-credentials'), True),
@@ -453,6 +515,31 @@ class PackagingTests(unittest.TestCase):
             path = ('jobs', job, 'steps', index(job, fragment), *keys)
             with self.subTest(job=job, step=fragment, keys=keys), self.assertRaises(v.Invalid):
                 v.builder_workflow(replaced(original, path, value), 'release')
+
+    def test_free_text_cannot_carry_expressions_secrets_or_the_token(self):
+        # Review L3: step names and input descriptions are shown, not run; secrets and the token appear only in the four
+        # recipe places, as ${{ secrets.GITHUB_TOKEN }}.
+        original = self.release()
+        for text in ('${{ toJSON(secrets) }}', 'Push ${{ github.sha }}', 'pass secrets along', 'use github.token',
+                     "github['token']", 'Secrets', ''):
+            for job in ('gate', 'candidate', 'publish'):
+                with self.subTest(job=job, name=text), self.assertRaises(v.Invalid):
+                    v.builder_workflow(replaced(original, ('jobs', job, 'steps', 0, 'name'), text), 'release')
+            for name in ('app', 'source_sha'):
+                with self.subTest(input=name, description=text), self.assertRaises(v.Invalid):
+                    v.builder_workflow(replaced(original, ('on', 'workflow_dispatch', 'inputs', name, 'description'), text),
+                                       'release')
+        v.builder_workflow(replaced(original, ('jobs', 'publish', 'steps', 0, 'name'), 'Check out the dispatched commit'),
+                           'release')
+        for spelling in ('${{ github.token }}', '${{ github.TOKEN }}', "${{ github['token'] }}", '${{ SECRETS.GITHUB_TOKEN }}',
+                         '${{ secrets.github_token }}', '${{ toJSON(secrets) }}'):
+            with self.subTest(spelling=spelling), self.assertRaises(v.Invalid):
+                v.builder_workflow(replaced(original, ('jobs', 'gate', 'steps', 4, 'env', 'GH_TOKEN'), spelling), 'release')
+        self.assertEqual(original['jobs']['gate']['steps'][4]['env'], {'GH_TOKEN': '${{ secrets.GITHUB_TOKEN }}'})
+        for text in ('Release ${{ inputs.app }}', 'Has secrets', 'x' * 201):
+            with self.subTest(text=text), self.assertRaises(v.Invalid):
+                v.free_text(text, 'invented')
+        v.free_text('Release the tested image', 'invented')
 
     def test_odoo_manage_is_retired_from_store_build_and_release(self):
         # Owner decision 2026-10-06: off the store, never built or released again; the source stays (archived).
@@ -607,10 +694,11 @@ class PackagingTests(unittest.TestCase):
         for workflow, selector in (('ci', 'matrix.app'), ('release', 'inputs.app')):
             document = v.load(v.ROOT / '.github/workflows' / (workflow + '.yaml'))
             v.workflow_versions(document, workflow)  # the repository as it is
-            job = document['jobs']['images' if workflow == 'ci' else 'publish']
+            job = document['jobs']['images' if workflow == 'ci' else 'candidate']
             build = next(s for s in job['steps'] if s.get('uses', '').startswith('docker/build-push-action@'))
             apps = (job['strategy']['matrix']['app'] if workflow == 'ci'
                     else document['on']['workflow_dispatch']['inputs']['app']['options'])
+            publish = document['jobs'].get('publish', {'steps': []})
             self.assertEqual(apps, list(v.PRODUCTS))
             for app in apps:
                 version = v.version_for(app)
@@ -618,10 +706,10 @@ class PackagingTests(unittest.TestCase):
                     self.assertEqual(substitute(build['with']['build-args'], selector, app), 'BUILD_VERSION=' + version)
                     self.assertEqual(substitute(build['with']['tags'], selector, app), f'local/mcp-{app}:{version}')
                     if workflow == 'release':
-                        push = next(s for s in job['steps'] if 'docker push' in s.get('run', ''))
+                        push = next(s for s in publish['steps'] if 'docker push' in s.get('run', ''))
                         self.assertIn(f'IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:{version}"',
                                       substitute(push['run'], selector, app).splitlines())
-                        upload = next(s for s in job['steps'] if s.get('uses', '').startswith('actions/upload-artifact@'))
+                        upload = next(s for s in publish['steps'] if s.get('uses', '').startswith('actions/upload-artifact@'))
                         self.assertEqual(substitute(upload['with']['name'], selector, app),
                                          'published-evidence-%s-%s-${{ github.sha }}' % (app, version))
 

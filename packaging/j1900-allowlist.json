@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "rule": "In the J1900 check, a native extension module that fails to import natively fails the release, unless this file lists it under that product with the reason and the review that accepted it. The list starts empty (coordinator decision 2026-11-17, review M1); every entry needs the owner's review.",
+  "entry_format": {"<module>": {"reason": "why it cannot import in this image and why that is harmless", "review": "who accepted it, when, and where it is recorded"}},
+  "products": {
+    "odoo": {},
+    "n8n": {},
+    "hermes": {},
+    "opendesign": {},
+    "emqx": {},
+    "litellm": {},
+    "nextcloud": {},
+    "headscale": {}
+  }
+}

@@ -1,4 +1,4 @@
-"""J1900 instruction-set check of the tested candidate image, before any registry credential (DQ-42: every release).
+"""J1900 instruction-set check of the tested candidate image, before it can be handed to publication (DQ-42: every release).
 
     python packaging/j1900_check.py APP CANDIDATE_DIR EVIDENCE_DIR
 
@@ -9,21 +9,26 @@ every check then runs on that image ID, in a container with --network none --rea
 --cap-drop ALL and no-new-privileges, with only j1900_probe.py and the QEMU binary mounted read-only:
   1. each Python environment the image runs, the core venv /opt/woow/.venv and the child venv
      /opt/woow/apps/<app>/.venv (n8n has none: its child is Node): j1900_probe.py lists every native extension module
-     and imports each natively; the natively importable ones are imported again under
-     `qemu-x86_64-static -cpu Nehalem` and must all import, with no SIGILL; a small smoke through C code (hashlib, ssl,
-     zlib, sqlite3, decimal, re) must give the same result both ways;
+     (the interpreter's own lib-dynload ones and the installed packages' site-packages ones) and imports each natively.
+     At least one site-packages module must import natively, and a module that fails natively fails the check unless
+     packaging/j1900-allowlist.json lists it for this product with a reviewed reason (review M1: a third-party module
+     that cannot even load natively would otherwise never reach QEMU). The natively importable ones are imported again
+     under `qemu-x86_64-static -cpu Nehalem` and must all import, with no SIGILL; a small smoke through C code
+     (hashlib, ssl, zlib, sqlite3, decimal, re) must give the same result both ways;
   2. n8n: Node loads better-sqlite3, builds an FTS5 table, hashes and compresses, natively and under QEMU, with the
      same result.
-A SIGILL (exit 132, or QEMU's "uncaught target signal 4") fails the release and names the last module tried. QEMU is
-the runner's own apt package qemu-user-static (its version, version line and binary SHA-256 are recorded). The result
-is EVIDENCE_DIR/j1900-<app>.json. Limit: QEMU checks only the code that actually runs (the imports and the smokes), not
+A SIGILL (exit 132, or QEMU's "uncaught target signal 4") fails the release and names the last module tried. Native
+import failures that the allowlist does not cover are reported together, for every environment, after the QEMU runs.
+QEMU is the runner's own apt package qemu-user-static (its version, version line and binary SHA-256 are recorded). The
+whole check has a 60-minute budget; every container run gets at most what is left of it. The result is
+EVIDENCE_DIR/j1900-<app>.json. Limit: QEMU checks only the code that actually runs (the imports and the smokes), not
 every path of the program.
 
 Ported from artifacts/ha-multiprofile-parity-20261114/wave4/release-0.4.14-builder/inpod_0414.py (docker_run_argv,
 j1900_exec, j1900_env, j1900; written for the dropped k3s builder and never run there): the same container flags,
 verdicts and record. Changed: the image is bound through supply_chain.verify_current instead of builder records,
-qemu-user-static comes from the hosted runner's apt, the work directory is private to the run (under RUNNER_TEMP), and a
-failure names the step, its exit status, the last module tried and a short stderr tail.
+qemu-user-static comes from the hosted runner's apt, the work directory is private to the run (under RUNNER_TEMP), a
+failure names the step, its exit status, the last module tried and a short stderr tail, and the review M1 rules above.
 """
 import hashlib
 import json
@@ -42,17 +47,20 @@ from validate import version_for
 
 HERE = Path(__file__).resolve().parent
 PROBE = HERE / 'j1900_probe.py'
+ALLOWLIST = HERE / 'j1900-allowlist.json'
 QEMU = Path('/usr/bin/qemu-x86_64-static')
 QEMU_PACKAGE = 'qemu-user-static'
 CPU = 'Nehalem'
 MOUNT = '/j1900'
 CORE_PYTHON = '/opt/woow/.venv/bin/python'
 NODE = '/usr/local/bin/node'
+KINDS = ('lib-dynload', 'site-packages')
 ISOLATION = ('--network', 'none', '--read-only', '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m,mode=1777',
              '--user', '10001:10001', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
              '--pids-limit', '512', '--memory', '4g', '-e', 'HOME=/tmp')
-TIMEOUTS = {'list': 300, 'native': 900, 'qemu': 2400, 'smoke': 300, 'smoke-qemu': 900, 'node': 300,
-            'node-qemu': 1200}
+# Caps per container run; the whole check never exceeds BUDGET seconds (review L5).
+TIMEOUTS = {'list': 300, 'native': 600, 'qemu': 1800, 'smoke': 300, 'smoke-qemu': 600, 'node': 300, 'node-qemu': 900}
+BUDGET = 3600
 NODE_SMOKE = (
     "const db=require('/opt/woow/apps/n8n/node_modules/better-sqlite3')(':memory:');"
     "db.exec('create virtual table t using fts5(a)');db.prepare('insert into t values (?)').run('hello j1900');"
@@ -79,6 +87,36 @@ def sha_file(path):
 
 def child_python(app):
     return '/opt/woow/apps/%s/.venv/bin/python' % app
+
+
+def load_allowlist(path=ALLOWLIST):
+    """{product: {module: {'reason', 'review'}}} from packaging/j1900-allowlist.json; a malformed file fails closed."""
+    try:
+        value = json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        raise Closed('J1900 allowlist missing or not JSON') from None
+    require(isinstance(value, dict) and value.get('schema') == 1 and isinstance(value.get('products'), dict)
+            and set(value['products']) == set(PRODUCTS), 'J1900 allowlist shape')
+    for product, entries in value['products'].items():
+        require(isinstance(entries, dict), 'J1900 allowlist entries of ' + product)
+        for module, entry in entries.items():
+            require(isinstance(module, str) and bool(module) and all(part.isidentifier() for part in module.split('.'))
+                    and isinstance(entry, dict) and set(entry) == {'reason', 'review'}
+                    and all(isinstance(text, str) and text.strip() for text in entry.values()),
+                    'J1900 allowlist entry of %s needs a module name, a reason and a review' % product)
+    return value['products']
+
+
+class Deadline:
+    """What is left of the check's budget; every container run gets at most that."""
+
+    def __init__(self, seconds=BUDGET, clock=time.monotonic):
+        self.seconds, self.clock, self.end = seconds, clock, clock() + seconds
+
+    def timeout(self, step, cap):
+        left = int(self.end - self.clock())
+        require(left > 0, 'J1900 check exceeded its %d-second budget before %s' % (self.seconds, step))
+        return min(cap, left)
 
 
 def docker_run_argv(image_id, entrypoint, args, name, work):
@@ -167,48 +205,74 @@ def prepare(work, qemu):
             and sha_file(work / 'j1900_probe.py') == sha_file(PROBE), 'J1900 tool copies differ')
 
 
-def check_python(image_id, app, scope, python, work, run=run_in_image):
+def names_of(value, what):
+    require(isinstance(value, list) and all(isinstance(name, str) and name for name in value), what)
+    return value
+
+
+def check_python(image_id, app, scope, python, work, run=run_in_image, allowed=None, deadline=None):
+    """One Python environment. Returns its record; native import failures the allowlist does not cover are returned
+    in 'disallowed' (check() fails on them after every environment ran); everything else that is wrong raises."""
+    allowed = {} if allowed is None else allowed
+    deadline = Deadline() if deadline is None else deadline
     label = '%s-%s' % (app, scope)
     qemu, probe = MOUNT + '/bin/qemu-x86_64-static', MOUNT + '/j1900_probe.py'
-    listed = run(image_id, python, ['-I', '-B', probe, 'list'], label + '-list', TIMEOUTS['list'], work)
+
+    def step(entrypoint, args, suffix, cap):
+        return run(image_id, entrypoint, args, label + suffix, deadline.timeout(label + suffix, TIMEOUTS[cap]), work)
+    listed = step(python, ['-I', '-B', probe, 'list'], '-list', 'list')
     require(listed.returncode == 0, failure(label + '-list', listed, 'native module listing failed'))
-    modules = last_json(listed.stdout)
-    require(isinstance(modules, list) and bool(modules) and all(isinstance(m, str) for m in modules),
-            label + ': no native extension modules found')
+    by_kind = last_json(listed.stdout)
+    require(isinstance(by_kind, dict) and set(by_kind) == set(KINDS), label + ': native module listing is not '
+            '{"lib-dynload": [...], "site-packages": [...]}')
+    kinds = {kind: set(names_of(by_kind[kind], label + ': module names')) for kind in KINDS}
+    modules = sorted(kinds['lib-dynload'] | kinds['site-packages'])
+    require(bool(modules), label + ': no native extension modules found')
     write_public(work / (label + '-modules.json'), modules)
-    native = run(image_id, python, ['-I', '-B', probe, 'import', '%s/%s-modules.json' % (MOUNT, label)],
-                 label + '-native', TIMEOUTS['native'], work)
+    native = step(python, ['-I', '-B', probe, 'import', '%s/%s-modules.json' % (MOUNT, label)], '-native', 'native')
     require(native.returncode == 0, failure(label + '-native', native, 'native import run failed'))
     natively = last_json(native.stdout)
-    native_ok = natively.get('ok') if isinstance(natively, dict) else None
-    require(isinstance(native_ok, list) and bool(native_ok), label + ': no native module imports natively')
+    require(isinstance(natively, dict) and isinstance(natively.get('err'), dict), label + ': native import result')
+    native_ok = names_of(natively.get('ok'), label + ': no native module imports natively')
+    require(bool(native_ok), label + ': no native module imports natively')
+    require(bool(set(native_ok) & kinds['site-packages']),
+            label + ': no third-party (site-packages) native module imports natively')
+    errors = {str(name): str(kind) for name, kind in natively['err'].items()}
     write_public(work / (label + '-native-ok.json'), native_ok)
-    emulated = run(image_id, qemu, ['-cpu', CPU, python, '-I', '-B', probe, 'import',
-                                    '%s/%s-native-ok.json' % (MOUNT, label)], label + '-qemu', TIMEOUTS['qemu'], work)
+    emulated = step(qemu, ['-cpu', CPU, python, '-I', '-B', probe, 'import', '%s/%s-native-ok.json' % (MOUNT, label)],
+                    '-qemu', 'qemu')
     require(not illegal_instruction(emulated), failure(label + '-qemu', emulated, 'ILLEGAL INSTRUCTION under -cpu ' + CPU))
     require(emulated.returncode == 0, failure(label + '-qemu', emulated, 'emulated import run failed'))
     result = last_json(emulated.stdout)
+    require(isinstance(result, dict), label + ': emulated import result')
     differ = sorted(set(native_ok) ^ set(result.get('ok') or [])) + sorted(result.get('err') or {})
     require(result.get('ok') == native_ok and not result.get('err'),
             '%s: modules differ under -cpu %s: %s' % (label, CPU, ', '.join(differ[:8])))
-    smoke = run(image_id, python, ['-I', '-B', probe, 'smoke'], label + '-smoke', TIMEOUTS['smoke'], work)
+    smoke = step(python, ['-I', '-B', probe, 'smoke'], '-smoke', 'smoke')
     require(smoke.returncode == 0, failure(label + '-smoke', smoke, 'native smoke failed'))
-    smoke_qemu = run(image_id, qemu, ['-cpu', CPU, python, '-I', '-B', probe, 'smoke'], label + '-smoke-qemu',
-                     TIMEOUTS['smoke-qemu'], work)
+    smoke_qemu = step(qemu, ['-cpu', CPU, python, '-I', '-B', probe, 'smoke'], '-smoke-qemu', 'smoke-qemu')
     require(not illegal_instruction(smoke_qemu),
             failure(label + '-smoke-qemu', smoke_qemu, 'ILLEGAL INSTRUCTION in the smoke under -cpu ' + CPU))
     require(smoke_qemu.returncode == 0, failure(label + '-smoke-qemu', smoke_qemu, 'emulated smoke failed'))
     require(last_json(smoke.stdout) == last_json(smoke_qemu.stdout), label + ': smoke differs under -cpu ' + CPU)
-    return {'python': python, 'modules_listed': len(modules), 'native_ok': len(native_ok),
-            'native_errors': natively.get('err') or {}, 'qemu_ok': len(result['ok']),
-            'modules_sha256': hashlib.sha256(json.dumps(native_ok).encode()).hexdigest(), 'smoke': True}
+    ok = set(native_ok)
+    return {'python': python, 'modules_listed': len(modules),
+            'lib_dynload': {'listed': len(kinds['lib-dynload']), 'native_ok': len(kinds['lib-dynload'] & ok)},
+            'site_packages': {'listed': len(kinds['site-packages']), 'native_ok': len(kinds['site-packages'] & ok)},
+            'native_ok': len(native_ok), 'native_errors': errors,
+            'allowlisted': sorted(name for name in errors if name in allowed),
+            'disallowed': {name: kind for name, kind in sorted(errors.items()) if name not in allowed},
+            'qemu_ok': len(result['ok']), 'modules_sha256': hashlib.sha256(json.dumps(native_ok).encode()).hexdigest(),
+            'smoke': True}
 
 
-def check_node(image_id, work, run=run_in_image):
+def check_node(image_id, work, run=run_in_image, deadline=None):
+    deadline = Deadline() if deadline is None else deadline
     qemu = MOUNT + '/bin/qemu-x86_64-static'
-    native = run(image_id, NODE, ['-e', NODE_SMOKE], 'n8n-node', TIMEOUTS['node'], work)
+    native = run(image_id, NODE, ['-e', NODE_SMOKE], 'n8n-node', deadline.timeout('n8n-node', TIMEOUTS['node']), work)
     require(native.returncode == 0, failure('n8n-node', native, 'native node smoke failed'))
-    emulated = run(image_id, qemu, ['-cpu', CPU, NODE, '-e', NODE_SMOKE], 'n8n-node-qemu', TIMEOUTS['node-qemu'], work)
+    emulated = run(image_id, qemu, ['-cpu', CPU, NODE, '-e', NODE_SMOKE], 'n8n-node-qemu',
+                   deadline.timeout('n8n-node-qemu', TIMEOUTS['node-qemu']), work)
     require(not illegal_instruction(emulated), failure('n8n-node-qemu', emulated, 'ILLEGAL INSTRUCTION under -cpu ' + CPU))
     require(emulated.returncode == 0, failure('n8n-node-qemu', emulated, 'emulated node smoke failed'))
     result = last_json(emulated.stdout)
@@ -224,44 +288,64 @@ def write_once(path, value):
         stream.write('\n')
 
 
-def check(app, candidate, evidence, run=run_in_image, qemu_installer=install_qemu):
+def check(app, candidate, evidence, run=run_in_image, qemu_installer=install_qemu, allowlist=None, deadline=None):
     require(app in PRODUCTS, 'product not allowed')
+    allowed = (load_allowlist() if allowlist is None else allowlist)[app]
     require(evidence.is_dir() and not evidence.is_symlink(), 'evidence directory missing (hosted runner preflight)')
     record_path = evidence / ('j1900-%s.json' % app)
     require(not record_path.exists(), 'J1900 already recorded for ' + app)
     subject = verify_current(app, candidate)  # the local tag is the tested, scanned image and its source is HEAD
     image_id = subject['image_id']
     qemu = qemu_installer()
+    deadline = Deadline() if deadline is None else deadline
     with tempfile.TemporaryDirectory(prefix='woow-j1900-', dir=os.environ.get('RUNNER_TEMP') or None) as directory:
         work = Path(directory)
         prepare(work, Path(qemu['path']))
-        envs = {'core': check_python(image_id, app, 'core', CORE_PYTHON, work, run)}
+        envs = {'core': check_python(image_id, app, 'core', CORE_PYTHON, work, run, allowed, deadline)}
         if app != 'n8n':
-            envs['child'] = check_python(image_id, app, 'child', child_python(app), work, run)
-        node = check_node(image_id, work, run) if app == 'n8n' else None
+            envs['child'] = check_python(image_id, app, 'child', child_python(app), work, run, allowed, deadline)
+        node = check_node(image_id, work, run, deadline) if app == 'n8n' else None
         probe_sha256 = sha_file(work / 'j1900_probe.py')
+    disallowed = ['%s %s (%s)' % (scope, name, kind) for scope, env in envs.items()
+                  for name, kind in env['disallowed'].items()]
+    require(not disallowed, 'native modules fail to import natively and packaging/j1900-allowlist.json does not list '
+            'them for %s: %s' % (app, ', '.join(disallowed[:40]) + (' …' if len(disallowed) > 40 else '')))
     require(inspect_image(app)['Id'] == image_id, 'the local image changed during the J1900 check')
+    for env in envs.values():
+        del env['disallowed']
     record = {'app': app, 'version': version_for(app), 'source': subject['source'], 'image_id': image_id,
               'passed': True, 'cpu': CPU, 'mode': 'qemu-user', 'qemu': qemu, 'probe_sha256': probe_sha256,
-              'container': list(ISOLATION), 'envs': envs, 'node': node, 'scope': SCOPE}
+              'allowlist_sha256': sha_file(ALLOWLIST), 'container': list(ISOLATION), 'envs': envs, 'node': node,
+              'scope': SCOPE}
     write_once(record_path, record)
     return record
 
 
+def summary(record):
+    parts = []
+    for scope, env in record['envs'].items():
+        parts.append('%s: lib-dynload %d/%d, site-packages %d/%d natively, %d allowlisted native errors, %d/%d under '
+                     'QEMU' % (scope, env['lib_dynload']['native_ok'], env['lib_dynload']['listed'],
+                               env['site_packages']['native_ok'], env['site_packages']['listed'],
+                               len(env['allowlisted']), env['qemu_ok'], env['native_ok']))
+    return 'PASS: J1900 (-cpu %s, %s) %s %s; %s%s' % (
+        CPU, record['qemu']['version_line'], record['app'], record['image_id'], '; '.join(parts),
+        '; node smoke with FTS5' if record['node'] else '')
+
+
 def main(argv):
     require(len(argv) == 3, 'usage: j1900_check.py APP CANDIDATE_DIR EVIDENCE_DIR')
-    record = check(argv[0], Path(argv[1]), Path(argv[2]))
-    print('PASS: J1900 (-cpu %s, %s) %s %s: %s%s' % (
-        CPU, record['qemu']['version_line'], record['app'], record['image_id'],
-        ', '.join('%s %d/%d modules' % (scope, value['qemu_ok'], value['modules_listed'])
-                  for scope, value in record['envs'].items()),
-        '; node smoke with FTS5' if record['node'] else ''))
+    print(summary(check(argv[0], Path(argv[1]), Path(argv[2]))))
 
 
-if __name__ == '__main__':
+def cli(argv):
     try:
-        main(sys.argv[1:])
+        main(argv)
     except Closed as exc:
         raise SystemExit('J1900 check CLOSED: ' + str(exc)) from None
     except (supply_chain.Closed, OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         raise SystemExit('J1900 check CLOSED: ' + type(exc).__name__ + ' (candidate evidence, Docker or QEMU)') from None
+
+
+if __name__ == '__main__':
+    cli(sys.argv[1:])

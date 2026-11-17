@@ -2,7 +2,7 @@
 
 > **現況（2026-11-17）：BLD2 是歷史設計，不是發版路線。** 負責人 2026-11-17 決定 HA add-on 這條線不用 PaaS 的基礎設施
 > （k3s 叢集、Gitea）。映像改由 `.github/workflows/release.yaml` 在 GitHub 託管的 ubuntu-24.04 機器建置、驗收、推 GHCR，
-> 推送只用每次執行才發的 `GITHUB_TOKEN`，由負責人在 `public-release` environment 批准；流程、每道閘門和要在 GitHub
+> 推送只用每次執行才發的 `GITHUB_TOKEN`，負責人看過 candidate 結果後在 `public-release` environment 批准；流程、每道閘門和要在 GitHub
 > 設定的項目見 [release.md](release.md)「發版：GitHub 託管機器」。`release.yaml` 與 `check_release.py` 不再用
 > `builder_contract.py`，也不再讀 `RELEASE-GATES.json`。還照下文 BLD2 契約的只有 `ci.yaml` 的 `images` job：
 > 硬鎖、admission 一律拒絕，語意沒改。0.1.0–0.4.13 與 Headscale 0.4.14–0.4.18 的映像是在負責人選定的一次性

@@ -1,6 +1,9 @@
 """Preflight of the GitHub-hosted publish job (.github/workflows/release.yaml), before anything is built.
 
-    python packaging/hosted_runner.py RUNNER_KIND EVIDENCE_DIR
+    python packaging/hosted_runner.py RUNNER_KIND RECORD
+
+Runs before the candidate job builds and before the publish job loads the handed-over image (docker load keeps the
+image ID only in the classic store).
 
 RUNNER_KIND is the job's ${{ runner.environment }}. The job stops unless
   - the runner is GitHub-hosted: RUNNER_KIND is 'github-hosted' (and so is RUNNER_ENVIRONMENT when the runner sets
@@ -14,10 +17,10 @@ RUNNER_KIND is the job's ${{ runner.environment }}. The job stops unless
     platform, and the current context is the default one on the local socket;
   - the checked-out build inputs are readable by everyone: the image runs as UID 10001 and Docker copies the
     checkout's modes into it (0.4.17: a private umask made copied runtime files unreadable).
-EVIDENCE_DIR must not exist; it is created (0700) with hosted-runner.json: the runner image, the Docker client, server,
-API and component versions, the Buildx version, the storage driver and whether this preflight switched the store. No
-token exists yet in this job, nothing secret is read or recorded, and nothing is written into the checkout (the
-supply-chain gate requires a clean tree).
+RECORD (a new file; its directory is created 0700 when missing) receives the runner image, the Docker client, server,
+API and component versions, the Buildx version, the storage driver and whether this preflight switched the store.
+Nothing secret is read or recorded, and nothing is written into the checkout (the supply-chain gate requires a clean
+tree).
 """
 from datetime import datetime, timezone
 import json
@@ -41,7 +44,6 @@ READABLE = ('pyproject.toml', 'uv.lock', 'packaging/entrypoint.py', 'packaging/m
             'packaging/container_probe.py', 'packages/mcp-admin-core/mcp_admin_core/__init__.py')
 TRAVERSABLE = ('apps', 'packages', 'packaging', 'packages/mcp-admin-core/mcp_admin_core')
 BUILDX = re.compile(r'github\.com/docker/buildx v?\d+\.\d+\.\d+\S*( \S+)?')  # recorded, not pinned
-RECORD = 'hosted-runner.json'
 
 
 class Closed(Exception):
@@ -131,7 +133,7 @@ def write_once(path, value):
         stream.write('\n')
 
 
-def preflight(kind, evidence, env=None, root=ROOT, daemon_json=DAEMON_JSON):
+def preflight(kind, record_path, env=None, root=ROOT, daemon_json=DAEMON_JSON):
     env = os.environ if env is None else env
     require(kind == 'github-hosted' and env.get('RUNNER_ENVIRONMENT', kind) == 'github-hosted',
             'not a GitHub-hosted runner (runner.environment is %r)' % kind)
@@ -140,8 +142,11 @@ def preflight(kind, evidence, env=None, root=ROOT, daemon_json=DAEMON_JSON):
     found = sorted(name for name in REDIRECTS if name in env)
     require(not found, 'ambient Docker/Buildx target override: ' + ', '.join(found))
     world_readable(root)
-    require(not evidence.exists(), 'evidence directory already exists')
-    evidence.mkdir(mode=0o700)
+    directory = record_path.parent
+    if not directory.exists():
+        directory.mkdir(mode=0o700, parents=True)
+    require(directory.is_dir() and not directory.is_symlink(), 'evidence directory is not a plain directory')
+    require(not record_path.exists() and not record_path.is_symlink(), 'runner record already exists')
     require(run(['docker', 'context', 'show']).strip() == 'default', 'Docker context is not the default one')
     contexts = decode(run(['docker', 'context', 'inspect', 'default']), 'docker context inspect')
     require(isinstance(contexts, list) and len(contexts) == 1
@@ -174,12 +179,12 @@ def preflight(kind, evidence, env=None, root=ROOT, daemon_json=DAEMON_JSON):
         'buildx': buildx,
         'checked_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
     }
-    write_once(evidence / RECORD, record)
+    write_once(record_path, record)
     return record
 
 
 def main(argv):
-    require(len(argv) == 2, 'usage: hosted_runner.py RUNNER_KIND EVIDENCE_DIR')
+    require(len(argv) == 2, 'usage: hosted_runner.py RUNNER_KIND RECORD')
     record = preflight(argv[0], Path(argv[1]))
     print('PASS: GitHub-hosted runner %s; Docker %s with the classic overlay2 store%s; %s' % (
         record['runner']['image_version'], record['docker']['server'],

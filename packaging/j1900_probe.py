@@ -4,20 +4,21 @@
 no AVX, AVX2, MOVBE or AES-NI), started by packaging/j1900_check.py. Standard library only: it runs on the image's own
 Python, never on the runner's.
 
-  list              print every native extension module this interpreter can see (site-packages,
-                    dist-packages, lib-dynload) as one JSON list
+  list              print every native extension module this interpreter can see as one JSON object:
+                    {"lib-dynload": [...], "site-packages": [...]} (the interpreter's own C modules, and the
+                    installed packages' ones from site-packages and dist-packages)
   import FILE       import every module named in FILE (JSON list), one by one; print TRY/OK/ERR
                     lines and finally {"ok": [...], "err": {...}}; a SIGILL kills the process, so the
                     last TRY line names the culprit
   smoke             a few deterministic computations through C code (hashlib, ssl, zlib, sqlite3,
                     json, decimal, re) printed as one JSON object
 
-Provenance: ported unchanged in behaviour from
-artifacts/ha-multiprofile-parity-20261114/wave4/release-0.4.14-builder/j1900_probe.py (written for the dropped k3s
-builder, never run there). docs/operations/release-decision-0.1.7.md (0.1.8 to-do) records that the 0.1.7 images passed
-"QEMU user-mode -cpu Nehalem" in the Claude delivery lane j1900-isa-check-1009/ and that every release should repeat
-it (DQ-42, owner 2026-11-17: every release); that lane's script is not available, so this re-implements the described
-method. Limit: QEMU checks only the code that actually runs (the imports and the smoke).
+Provenance: ported from artifacts/ha-multiprofile-parity-20261114/wave4/release-0.4.14-builder/j1900_probe.py
+(written for the dropped k3s builder, never run there); changed: `list` groups the modules by where they live, so the
+check can require a third-party one (review M1). docs/operations/release-decision-0.1.7.md (0.1.8 to-do) records
+that the 0.1.7 images passed "QEMU user-mode -cpu Nehalem" in the Claude delivery lane j1900-isa-check-1009/ and that
+every release should repeat it (DQ-42, owner 2026-11-17: every release); that lane's script is not available, so this
+re-implements the described method. Limit: QEMU checks only the code that actually runs (the imports and the smoke).
 """
 import importlib
 import json
@@ -60,13 +61,22 @@ def roots(paths=None):
 
 def native_modules(paths=None, suffixes=SUFFIXES):
     names = set()
+    for found in modules_by_root(paths, suffixes).values():
+        names.update(found)
+    return sorted(names)
+
+
+def modules_by_root(paths=None, suffixes=SUFFIXES):
+    """{'lib-dynload': [...], 'site-packages': [...]}: dist-packages counts as site-packages (installed packages)."""
+    found = {'lib-dynload': set(), 'site-packages': set()}
     for root in roots(paths):
+        kind = 'lib-dynload' if root.name == 'lib-dynload' else 'site-packages'
         for path in root.rglob('*'):
             if path.is_file():
                 name = module_name(root, path, suffixes)
                 if name:
-                    names.add(name)
-    return sorted(names)
+                    found[kind].add(name)
+    return {kind: sorted(names) for kind, names in found.items()}
 
 
 def import_all(names, emit=print):
@@ -108,7 +118,7 @@ def smoke():
 
 def main(argv):
     if argv == ['list']:
-        print(json.dumps(native_modules()))
+        print(json.dumps(modules_by_root()))
         return 0
     if len(argv) == 2 and argv[0] == 'import':
         names = json.loads(Path(argv[1]).read_text())
