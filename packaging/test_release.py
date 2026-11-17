@@ -1,66 +1,108 @@
-"""Publication gate negatives/positive use only fake Git and owned evidence files."""
+"""check_release.py, the GitHub-hosted route's dispatch gate: fake Git only (no checkout, network or token)."""
 from contextlib import redirect_stdout
 import io
+import os
 from pathlib import Path
-import tempfile
+import subprocess
+import sys
 import unittest
 from unittest.mock import patch
 
 import check_release as r
 import validate as v
 
+BRANCH = 'refs/heads/release/six-products-0.4.14-20261117'
+SHA = 'b' * 40
+
 
 class ReleaseTests(unittest.TestCase):
-    def gates(self):
-        gates = v.load(v.ROOT / 'RELEASE-GATES.json')
-        gates['approved_commit'] = 'a' * 40
-        for gate in [gates[k] for k in ('source', 'license', 'secret', 'publisher')]:
-            gate.update(cleared=True, evidence='docs/operations/evidence/review.md')
-        for product in gates['products'].values():
-            for gate in product.values():
-                gate.update(cleared=True, evidence='docs/operations/evidence/review.md')
-        return gates
+    def invoke(self, app='n8n', *, event='workflow_dispatch', ref=BRANCH, sha=SHA, source=SHA, head=None,
+               manifest=None):
+        """check_release.check(app) in a dispatched run; None leaves a variable unset. Returns (stdout, git calls,
+        loaded paths)."""
+        env = {key: value for key, value in (('GITHUB_EVENT_NAME', event), ('GITHUB_REF', ref), ('GITHUB_SHA', sha),
+                                             ('SOURCE_SHA', source)) if value is not None}
+        calls, loaded = [], []
 
-    def invoke(self, gates, *, app='n8n', event='workflow_dispatch', ref='refs/heads/main', changes='RELEASE-GATES.json\n', head=None, ancestor=0):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            evidence = root / 'docs/operations/evidence/review.md'
-            evidence.parent.mkdir(parents=True)
-            evidence.write_text('invented evidence only for isolated gate tests\n' * 4)
-            def output(command, **kwargs):
-                return (head or 'b' * 40) + '\n' if command[1] == 'rev-parse' else changes
-            def result(command, **kwargs):
-                return type('Result', (), {'returncode': ancestor if command[1] == 'merge-base' else 0})()
-            with patch.object(r, 'ROOT', root), patch.object(r, 'load', return_value=gates), \
-                 patch.dict(r.os.environ, {'GITHUB_EVENT_NAME': event, 'GITHUB_REF': ref, 'GITHUB_SHA': 'b' * 40}, clear=True), \
-                 patch.object(r.subprocess, 'check_output', side_effect=output), \
-                 patch.object(r.subprocess, 'run', side_effect=result):
-                with redirect_stdout(io.StringIO()):
-                    r.check(app)
+        def output(command, **kwargs):
+            calls.append(command)
+            return (sha if head is None else head) + '\n'
 
-    def test_fully_cleared_reviewed_source_fixture(self):
-        self.invoke(self.gates())
+        def load(path):
+            loaded.append(Path(path))
+            value = v.load(path)
+            return value if manifest is None else {**value, 'version': manifest}
+        with patch.dict(r.os.environ, env, clear=True), patch.object(r.subprocess, 'check_output', side_effect=output), \
+             patch.object(r, 'load', side_effect=load), redirect_stdout(io.StringIO()) as printed:
+            r.check(app)
+        return printed.getvalue(), calls, loaded
 
-    def test_all_six_independent_gates_required(self):
-        for key in ('source', 'license', 'secret', 'publisher', 'image', 'ha'):
-            gates = self.gates()
-            gate = gates[key] if key in gates else gates['products']['n8n'][key]
-            gate['cleared'] = False
-            with self.subTest(key=key), self.assertRaises(v.Invalid):
-                self.invoke(gates)
+    def test_every_imaged_product_passes_from_a_release_branch_at_the_owner_approved_commit(self):
+        for app in v.PRODUCTS:
+            if app in r.IMAGELESS:
+                continue
+            with self.subTest(app=app):
+                printed, calls, loaded = self.invoke(app)
+                self.assertIn(f'PASS: {app} {v.version_for(app)} from {BRANCH}', printed)
+                self.assertEqual(calls, [['git', 'rev-parse', 'HEAD']])
+                self.assertEqual(loaded, [v.ROOT / 'addons' / app / 'config.yaml'])
 
-    def test_source_event_ref_and_allowlist(self):
-        for kwargs in ({'event': 'pull_request'}, {'ref': 'refs/heads/feature'},
-                       {'app': '../../other'}, {'changes': 'apps/n8n/run.py\n'},
-                       {'head': 'c' * 40}, {'ancestor': 1}):
-            with self.subTest(kwargs=kwargs), self.assertRaises(v.Invalid):
-                self.invoke(self.gates(), **kwargs)
+    def test_only_a_manual_dispatch_of_a_release_branch(self):
+        for event in ('push', 'pull_request', 'pull_request_target', 'workflow_run', 'schedule', 'release', '', None):
+            with self.subTest(event=event), self.assertRaisesRegex(v.Invalid, 'manual event required'):
+                self.invoke(event=event)
+        for ref in ('refs/heads/main', 'refs/heads/claude-delivery', 'refs/heads/release', 'refs/heads/release/',
+                    'refs/heads/releases/0.4.14', 'refs/heads/feature/release/0.4.14', 'refs/heads/xrelease/0.4.14',
+                    'refs/heads/release/a/b', 'refs/heads/release/-x', 'refs/heads/release/x y',
+                    'refs/heads/release/x\n', 'refs/tags/release/0.4.14', 'refs/tags/v0.4.14', 'refs/pull/119/merge',
+                    'refs/pull/119/head', 'release/0.4.14', 'REFS/HEADS/RELEASE/X', '', None):
+            with self.subTest(ref=ref), self.assertRaisesRegex(v.Invalid, 'release/\\* branch'):
+                self.invoke(ref=ref)
+        # The deployment-branch rule release/* of the public-release environment matches one path segment.
+        self.assertEqual([bool(r.RELEASE_BRANCH.fullmatch(ref)) for ref in (
+            'refs/heads/release/six-products-0.4.14-20261117', 'refs/heads/release/0.4.14', 'refs/heads/release/a_b.c')],
+            [True, True, True])
 
-    def test_unapproved_source(self):
-        gates = self.gates()
-        gates['approved_commit'] = None
-        with self.assertRaises(v.Invalid):
-            self.invoke(gates)
+    def test_source_sha_binds_the_exact_dispatched_commit(self):
+        cases = [({'source': None}, 'source_sha must be'), ({'source': ''}, 'source_sha must be'),
+                 ({'source': SHA[:7]}, 'source_sha must be'), ({'source': SHA.upper()}, 'source_sha must be'),
+                 ({'source': SHA + '\n'}, 'source_sha must be'), ({'source': ' ' + SHA}, 'source_sha must be'),
+                 ({'source': 'g' * 40}, 'source_sha must be'), ({'source': 'c' * 40}, 'not the head'),
+                 ({'sha': None}, 'dispatched SHA'), ({'sha': 'b' * 39}, 'dispatched SHA'),
+                 ({'head': 'c' * 40}, 'checkout differs'), ({'head': ''}, 'checkout differs')]
+        for kwargs, message in cases:
+            with self.subTest(kwargs=kwargs), self.assertRaisesRegex(v.Invalid, message):
+                self.invoke(**kwargs)
+
+    def test_imageless_retired_and_unknown_products_are_refused_before_anything_else(self):
+        self.assertEqual(r.IMAGELESS, ('opendesign',))
+        for app, message in (('opendesign', 'no image'), ('odoo-manage', 'not allowed'), ('unknown', 'not allowed'),
+                             ('../../other', 'not allowed'), ('', 'not allowed')):
+            with self.subTest(app=app), self.assertRaisesRegex(v.Invalid, message):
+                self.invoke(app, event=None, ref=None, sha=None, source=None)
+
+    def test_the_manifest_version_is_the_release_version(self):
+        for app in ('odoo', 'headscale'):
+            others = {v.VERSION, *v.VERSION_OVERRIDES.values(), '99.0.0'} - {v.version_for(app)}
+            for other in sorted(others):
+                with self.subTest(app=app, other=other), self.assertRaisesRegex(v.Invalid, 'manifest version'):
+                    self.invoke(app, manifest=other)
+
+    def test_release_gates_file_is_not_a_release_input_any_more(self):
+        _, _, loaded = self.invoke('emqx')
+        self.assertNotIn(v.ROOT / 'RELEASE-GATES.json', loaded)
+        self.assertNotIn('RELEASE-GATES', Path(r.__file__).read_text().split('"""', 2)[2])
+
+    def test_cli_fails_closed_with_one_line(self):
+        environment = {key: value for key, value in os.environ.items()
+                       if not key.startswith('GITHUB_') and key not in ('SOURCE_SHA', 'PYTHONPATH', 'PYTHONSAFEPATH')}
+        script = str(Path(r.__file__).resolve())
+        for argv, message in (([], 'product required'), (['n8n'], 'manual event required'),
+                              (['opendesign'], 'product has no image to publish')):
+            with self.subTest(argv=argv):
+                result = subprocess.run([sys.executable, '-B', script, *argv], env=environment, capture_output=True,
+                                        text=True, timeout=60)
+                self.assertEqual((result.returncode, result.stdout, result.stderr), (1, '', message + '\n'))
 
 
 if __name__ == '__main__':

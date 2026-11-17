@@ -68,8 +68,8 @@ def version_expression(selector, overrides=None, default=None):
 
 
 # Generated when the module loads, so release data a version expression cannot carry stops every packaging tool that
-# imports this module (check_release, supply_chain, registry_gate, container_acceptance, pilot_variant) with the
-# validator's one-line message instead of a traceback.
+# imports this module (check_release, supply_chain, registry_gate, container_acceptance, pilot_variant, j1900_check) with
+# the validator's one-line message instead of a traceback.
 try:
     CI_VERSION = version_expression(SELECTORS['ci'])
     RELEASE_VERSION = version_expression(SELECTORS['release'])
@@ -267,18 +267,160 @@ def workflow_versions(value, workflow):
               'published evidence named with the release version')
 
 
+# release.yaml, the GitHub-hosted route (owner decision 2026-11-17; docs/operations/release.md), is compared with this
+# recipe step by step; step names are free text. Its only environment variables: the publish job's APP and Docker
+# build-record switches, SOURCE_SHA on the two check_release steps, RUNNER_KIND on the runner preflight and GHCR_TOKEN
+# (the run's own GITHUB_TOKEN) on the registry precondition. GITHUB_TOKEN is its only secret.
+RELEASE_RUN_NAME = 'Publish ${{ inputs.app }} from ${{ github.ref_name }} at ${{ inputs.source_sha }}'
+RELEASE_BRANCHES = "startsWith(github.ref, 'refs/heads/release/')"
+# gate: the PR checks job's source gate window (DQ-43); publish: cold build, candidate gate and the J1900 check.
+RELEASE_MINUTES = {'gate': 60, 'publish': 90}
+RELEASE_EVIDENCE = ('candidate/subject.json', 'candidate/sbom.syft.json', 'candidate/sbom.spdx.json',
+                    'candidate/scan-summary.json', 'candidate/provenance.json', 'candidate/published-provenance.json',
+                    'candidate/published-digest.json', 'release-evidence/hosted-runner.json',
+                    'release-evidence/j1900-${{ inputs.app }}.json')
+# The gate's Node pin, the same script as ci.yaml's unit job and the PR checks job (release.md, "PR/main CI", item 3).
+NODE_PATH_PIN = '\n'.join([
+    'test "$(node --version)" = v26.12.1',
+    'NODE_BIN="$(readlink -f "$(command -v node)")"',
+    'if [ "$NODE_BIN" != /usr/bin/node ]; then sudo ln -sfn "$NODE_BIN" /usr/bin/node; fi',
+    'test "$(/usr/bin/node --version)" = v26.12.1',
+    "# 0.4.0: unit.sh runs pytest under sudo, whose secure PATH finds the runner's own /usr/local/bin/node (v22) first,",
+    '# and the n8n child takes node from that PATH (as in the image, /usr/local/bin/node): pin it to the same binary.',
+    'if [ "$NODE_BIN" != /usr/local/bin/node ]; then sudo ln -sfn "$NODE_BIN" /usr/local/bin/node; fi',
+    'test "$(sudo -n -- node --version)" = v26.12.1'])
+
+
+def release_recipe():
+    """(gate steps, publish steps) of release.yaml without step names, generated when called: the version expression is
+    RELEASE_VERSION (VERSION_OVERRIDES). Run scripts are compared without their surrounding whitespace."""
+    checkout = {'uses': 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
+                'with': {'persist-credentials': False, 'ref': '${{ github.sha }}', 'fetch-depth': 0}}
+    python = {'uses': 'actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1', 'with': {'python-version': '3.13.16'}}
+    pip = {'run': 'python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt'}
+    source_sha = {'SOURCE_SHA': '${{ inputs.source_sha }}'}
+    gate = [checkout, python, pip,
+            {'env': {'APP': '${{ inputs.app }}', **source_sha}, 'run': 'python packaging/check_release.py "$APP"'},
+            {'run': 'python packaging/validate.py'},
+            {'uses': 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020', 'with': {'node-version': '26.12.1'}},
+            {'uses': 'astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78',
+             'with': {'version': '0.12.10', 'enable-cache': False}},
+            {'run': '\n'.join(['uv sync --frozen --no-dev --python python3.13',
+                               'uv pip install --python .venv/bin/python --require-hashes --only-binary=:all: '
+                               '-r packaging/requirements-ci.txt',
+                               ".venv/bin/python -m unittest discover -s packaging -p 'test_*.py' -v"])},
+            {'run': NODE_PATH_PIN},
+            {'run': 'sh packaging/unit.sh'}]
+    version = RELEASE_VERSION
+    publish = [checkout, python, pip,
+               {'env': source_sha, 'run': 'python packaging/validate.py && python packaging/check_release.py "$APP"'},
+               {'env': {'RUNNER_KIND': '${{ runner.environment }}'},
+                'run': 'python packaging/hosted_runner.py "$RUNNER_KIND" "$RUNNER_TEMP/release-evidence"'},
+               {'uses': 'docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8',
+                'with': {'builder': 'default', 'provenance': False, 'sbom': False, 'context': '.',
+                         'file': 'apps/${{ inputs.app }}/Dockerfile', 'platforms': 'linux/amd64', 'push': False,
+                         'load': True, 'tags': 'local/mcp-${{ inputs.app }}:' + version,
+                         'build-args': 'BUILD_VERSION=' + version,
+                         'labels': 'org.opencontainers.image.revision=${{ github.sha }}'}},
+               {'run': 'python packaging/install_scanners.py "$RUNNER_TEMP/scanners"'},
+               {'run': 'python packaging/supply_chain.py candidate "$APP" "$RUNNER_TEMP/scanners" "$RUNNER_TEMP/candidate"'},
+               {'run': 'python packaging/j1900_check.py "$APP" "$RUNNER_TEMP/candidate" "$RUNNER_TEMP/release-evidence"'},
+               {'env': {'GHCR_TOKEN': '${{ secrets.GITHUB_TOKEN }}'}, 'run': 'python packaging/registry_gate.py unused "$APP"'},
+               {'uses': 'docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9',
+                'with': {'registry': 'ghcr.io', 'username': '${{ github.actor }}', 'password': '${{ secrets.GITHUB_TOKEN }}'}},
+               {'run': '\n'.join(['set -eu',
+                                  'python packaging/supply_chain.py verify "$APP" "$RUNNER_TEMP/candidate"',
+                                  f'IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:{version}"',
+                                  'TESTED_ID="$(python -c \'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])\' '
+                                  '"$RUNNER_TEMP/candidate/subject.json")"',
+                                  'docker tag "$TESTED_ID" "$IMAGE"',
+                                  'test "$(docker image inspect "$IMAGE" --format \'{{.Id}}\')" = "$TESTED_ID"',
+                                  'docker push "$IMAGE"'])},
+               {'run': 'python packaging/registry_gate.py public "$APP" "$RUNNER_TEMP/candidate"'},
+               {'uses': 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+                'with': {'name': 'published-evidence-${{ inputs.app }}-' + version + '-${{ github.sha }}',
+                         'path': ''.join('${{ runner.temp }}/' + name + '\n' for name in RELEASE_EVIDENCE),
+                         'if-no-files-found': 'error', 'retention-days': 90}}]
+    return gate, publish
+
+
+def field(value, *keys):
+    for key in keys:
+        require(isinstance(value, dict) and key in value, 'release.yaml: missing ' + '.'.join(keys))
+        value = value[key]
+    return value
+
+
+def hosted_release(value):
+    """release.yaml is exactly the GitHub-hosted route: a manual dispatch with app and source_sha; gate on a
+    GitHub-hosted runner with contents read and no condition (check_release.py refuses every other ref); publish after
+    it, on release/* only, on a GitHub-hosted runner in the public-release environment with contents read and packages
+    write, running the reviewed steps in order. The environment's reviewers and release/* rule are repository settings
+    this check cannot see (docs/operations/release.md)."""
+    workflow_versions(value, 'release')
+    require(isinstance(value, dict) and set(value) == {'name', 'run-name', 'on', 'permissions', 'concurrency', 'jobs'},
+            'release.yaml keys (no workflow environment/default injection)')
+    exact(value['run-name'], RELEASE_RUN_NAME, 'release run name')
+    inputs = field(value, 'on', 'workflow_dispatch', 'inputs')
+    described = {name: field(inputs, name, 'description') for name in ('app', 'source_sha')}
+    require(all(isinstance(text, str) and 1 <= len(text) <= 200 for text in described.values()), 'release input description')
+    exact(value['on'], {'workflow_dispatch': {'inputs': {
+        'app': {'description': described['app'], 'type': 'choice', 'required': True, 'options': list(PRODUCTS)},
+        'source_sha': {'description': described['source_sha'], 'type': 'string', 'required': True}}}},
+        'release must be a manual dispatch with app and source_sha only')
+    exact(value['permissions'], {'contents': 'read'}, 'release default permissions')
+    exact(value['concurrency'], {'group': 'public-release-${{ inputs.app }}', 'cancel-in-progress': False},
+          'one release group per product; a run in progress is never cancelled')
+    jobs = value['jobs']
+    require(isinstance(jobs, dict) and set(jobs) == {'gate', 'publish'}, 'release jobs')
+    gate, publish = jobs['gate'], jobs['publish']
+    require(isinstance(gate, dict) and set(gate) == {'runs-on', 'permissions', 'timeout-minutes', 'steps'},
+            'gate job keys (no condition, environment, container, env or bypass)')
+    exact(gate['runs-on'], 'ubuntu-24.04', 'GitHub-hosted gate runner')
+    exact(gate['permissions'], {'contents': 'read'}, 'gate authority')
+    exact(gate['timeout-minutes'], RELEASE_MINUTES['gate'], 'gate time limit')
+    require(isinstance(publish, dict) and set(publish) == {'needs', 'if', 'environment', 'permissions', 'runs-on',
+                                                           'timeout-minutes', 'env', 'steps'},
+            'publish job keys (no container, services, strategy, defaults or bypass)')
+    exact(publish['needs'], 'gate', 'release admission dependency')
+    exact(publish['if'], RELEASE_BRANCHES, 'publish from release/* branches only')
+    exact(publish['environment'], 'public-release', 'protected environment name')
+    exact(publish['permissions'], {'contents': 'read', 'packages': 'write'}, 'minimal publisher authority')
+    exact(publish['runs-on'], 'ubuntu-24.04', 'GitHub-hosted publish runner')
+    exact(publish['timeout-minutes'], RELEASE_MINUTES['publish'], 'publish time limit')
+    exact(publish['env'], {'APP': '${{ inputs.app }}', 'DOCKER_BUILD_SUMMARY': 'false', 'DOCKER_BUILD_RECORD_UPLOAD': 'false'},
+          'publish job environment')
+    for job, recipe in zip((gate, publish), release_recipe()):
+        steps = job['steps']
+        require(isinstance(steps, list) and all(isinstance(step, dict) for step in steps), 'release steps')
+        for step in steps:
+            require(set(step) <= ({'name', 'run', 'env'} if 'run' in step else {'name', 'uses', 'with'}),
+                    'release step keys (no condition, shell, working directory or bypass)')
+            require(isinstance(step.get('name', 'unnamed'), str) and bool(step.get('name', 'unnamed')), 'release step name')
+        exact([{key: (item.strip() if key == 'run' and isinstance(item, str) else item)
+                for key, item in step.items() if key != 'name'} for step in steps], recipe,
+              'reviewed release steps only; no added run, action, environment or GITHUB_ENV/GITHUB_PATH write')
+    for text in workflow_strings(value):
+        require(all(found == 'secrets.GITHUB_TOKEN' for found in re.findall(r'secrets\s*\.\s*\w+|secrets\s*\[', text)),
+                'no secret but the run\'s own GITHUB_TOKEN')
+        require('vars.' not in text and 'GITHUB_ENV' not in text and 'GITHUB_PATH' not in text,
+                'no repository variable or GITHUB_ENV/GITHUB_PATH write')
+
+
 def builder_workflow(value, workflow):
-    """Strict builder recipe; runner labels/approval markers are not a sandbox."""
+    """Strict builder recipe; runner labels/approval markers are not a sandbox. release.yaml is the GitHub-hosted route
+    (hosted_release); ci.yaml's images job keeps the blocked BLD2 contract below."""
+    if workflow == 'release':
+        hosted_release(value)
+        return
     workflow_versions(value, workflow)
     require('env' not in value and 'defaults' not in value, 'no workflow environment/default injection')
-    candidate = value['jobs']['images' if workflow == 'ci' else 'publish']
+    candidate = value['jobs']['images']
     exact(candidate['runs-on'], RUNNER, 'dedicated externally approved VM runner')
     require(not any(k in candidate for k in ('container', 'services', 'continue-on-error', 'defaults')),
             'nested runner or bypass denied')
     wanted_env = {'BLD2_APPROVAL': '${{ vars.BLD2_APPROVAL }}',
                   'DOCKER_BUILD_SUMMARY': 'false', 'DOCKER_BUILD_RECORD_UPLOAD': 'false'}
-    if workflow == 'release':
-        wanted_env['APP'] = '${{ inputs.app }}'
     exact(candidate['env'], wanted_env, 'no ambient builder overrides')
     steps = candidate['steps']
 
@@ -301,31 +443,14 @@ def builder_workflow(value, workflow):
     build = action('docker/build-push-action')
     require(prepare < setup < verify < build, 'builder gates must precede setup/build')
     # Reject later run/action/env injection, not just overrides at setup/build.
-    # This list deliberately covers the WHOLE candidate path and late login.
+    # This list deliberately covers the WHOLE candidate path.
     runs = ['python3 packaging/builder_contract.py prepare',
             'python3 packaging/builder_contract.py setup --driver docker',
-            'python3 packaging/builder_contract.py verify']
-    python = 'python3' if workflow == 'ci' else 'python'
-    runs += [python + ' packaging/install_scanners.py "$RUNNER_TEMP/scanners"',
-             python + ' packaging/supply_chain.py candidate "$APP" "$RUNNER_TEMP/scanners" "$RUNNER_TEMP/candidate"']
+            'python3 packaging/builder_contract.py verify',
+            'python3 packaging/install_scanners.py "$RUNNER_TEMP/scanners"',
+            'python3 packaging/supply_chain.py candidate "$APP" "$RUNNER_TEMP/scanners" "$RUNNER_TEMP/candidate"']
     uses = ['actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
             'docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8']
-    if workflow == 'release':
-        release_version = RELEASE_VERSION
-        runs = ['python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt',
-                'python packaging/validate.py && python packaging/check_release.py "$APP"', *runs,
-                'python packaging/registry_gate.py unused "$APP"',
-                '\n'.join(['set -eu',
-                    'python packaging/supply_chain.py verify "$APP" "$RUNNER_TEMP/candidate"',
-                    f'IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:{release_version}"',
-                    'TESTED_ID="$(python -c \'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])\' "$RUNNER_TEMP/candidate/subject.json")"',
-                    'docker tag "$TESTED_ID" "$IMAGE"',
-                    'test "$(docker image inspect "$IMAGE" --format \'{{.Id}}\')" = "$TESTED_ID"',
-                    'docker push "$IMAGE"']),
-                'python packaging/registry_gate.py public "$APP" "$RUNNER_TEMP/candidate"']
-        uses.insert(1, 'actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1')
-        uses += ['docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9',
-                 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02']
     exact([s['run'].strip() for s in steps if 'run' in s], runs,
           'reviewed run sequence only; no GITHUB_ENV/PATH or shell overrides')
     exact([s['uses'] for s in steps if 'uses' in s], uses,
@@ -334,40 +459,26 @@ def builder_workflow(value, workflow):
         require(set(step) <= ({'name', 'run', 'env'} if 'run' in step else {'name', 'uses', 'with'}),
                 'step environment/default/bypass injection')
         wanted = {}
-        if workflow == 'ci' and 'supply_chain.py candidate' in step.get('run', ''):
+        if 'supply_chain.py candidate' in step.get('run', ''):
             wanted = {'APP': '${{ matrix.app }}'}
-        if workflow == 'release' and 'registry_gate.py unused' in step.get('run', ''):
-            wanted = {'GHCR_TOKEN': '${{ secrets.GITHUB_TOKEN }}'}
         exact(step.get('env', {}), wanted, 'step environment cannot override isolation')
-    if workflow == 'release':
-        login = action('docker/login-action')
-        candidate_scan = next(i for i, s in enumerate(steps) if 'supply_chain.py candidate' in s.get('run', ''))
-        unused = next(i for i, s in enumerate(steps) if 'registry_gate.py unused' in s.get('run', ''))
-        push = next(i for i, s in enumerate(steps) if 'docker push' in s.get('run', ''))
-        require(build < candidate_scan < unused < login < push, 'credentials only after candidate acceptance')
-        exact(steps[login]['with'], {'registry': 'ghcr.io', 'username': '${{ github.actor }}',
-              'password': '${{ secrets.GITHUB_TOKEN }}'}, 'late GHCR login only')
-    app = '${{ matrix.app }}' if workflow == 'ci' else '${{ inputs.app }}'
-    build_version = CI_VERSION if workflow == 'ci' else RELEASE_VERSION
+    app = '${{ matrix.app }}'
     exact(steps[build]['with'], {'builder': 'default', 'provenance': False, 'sbom': False,
           'context': '.', 'file': 'apps/' + app + '/Dockerfile', 'platforms': 'linux/amd64',
-          'push': False, 'load': True, 'tags': 'local/mcp-' + app + ':' + build_version,
-          'build-args': 'BUILD_VERSION=' + build_version,
+          'push': False, 'load': True, 'tags': 'local/mcp-' + app + ':' + CI_VERSION,
+          'build-args': 'BUILD_VERSION=' + CI_VERSION,
           'labels': 'org.opencontainers.image.revision=${{ github.sha }}'}, 'fixed local candidate build')
-    admission = value['jobs']['builder-admission' if workflow == 'ci' else 'gate']
+    admission = value['jobs']['builder-admission']
     guard(admission, 'admit')
     exact(admission['runs-on'], 'ubuntu-24.04', 'admit before external scheduling')
     exact(admission['env'], {'BLD2_APPROVAL': '${{ vars.BLD2_APPROVAL }}'}, 'operator approval input')
     require('continue-on-error' not in admission and 'container' not in admission
             and 'services' not in admission, 'admission bypass/nesting')
-    if workflow == 'ci':
-        require('if' not in admission and 'if' not in candidate, 'CI denial must not be a skipped PASS')
-        exact(candidate['needs'], ['unit', 'builder-admission'], 'mandatory admission dependency')
-        exact(candidate['environment'], 'builder-candidate', 'protected candidate environment')
-        exact(candidate['strategy']['max-parallel'], 1, 'bounded runner allocation')
-        require('needs' not in value['jobs']['unit'], 'local unit job independent of builder approval')
-    else:
-        exact(candidate['needs'], 'gate', 'release admission dependency')
+    require('if' not in admission and 'if' not in candidate, 'CI denial must not be a skipped PASS')
+    exact(candidate['needs'], ['unit', 'builder-admission'], 'mandatory admission dependency')
+    exact(candidate['environment'], 'builder-candidate', 'protected candidate environment')
+    exact(candidate['strategy']['max-parallel'], 1, 'bounded runner allocation')
+    require('needs' not in value['jobs']['unit'], 'local unit job independent of builder approval')
 
 
 NATIVE_ADDON_KEYS = {'package', 'version', 'node', 'node_abi', 'platform', 'url', 'sha256', 'size', 'member', 'member_size',
@@ -493,9 +604,10 @@ def validate(root=ROOT):
         value = load(root / '.github/workflows' / (workflow + '.yaml'))
         builder_workflow(value, workflow)
         for name, job in value['jobs'].items():
-            if name not in ('images', 'publish'):
+            if workflow == 'release' or name != 'images':  # only ci.yaml's blocked BLD2 images job is not GitHub-hosted
                 exact(job['runs-on'], 'ubuntu-24.04', 'isolated hosted unit/admission runner')
-            require(type(job['timeout-minutes']) is int and 1 <= job['timeout-minutes'] <= 40, 'bounded job')
+            limit = 40 if workflow == 'ci' else RELEASE_MINUTES[name]  # release: exact per job (hosted_release)
+            require(type(job['timeout-minutes']) is int and 1 <= job['timeout-minutes'] <= limit, 'bounded job')
             for step in job['steps']:
                 if step.get('uses', '').startswith('actions/checkout@'):
                     exact(step['with']['persist-credentials'], False, 'checkout credential persistence')
@@ -531,8 +643,9 @@ def validate(root=ROOT):
             exact(value['jobs']['publish']['environment'], 'public-release', 'protected environment name')
             exact(value['on']['workflow_dispatch']['inputs']['app']['options'], list(PRODUCTS), 'release allowlist')
             exact(value['jobs']['publish']['permissions'], {'contents': 'read', 'packages': 'write'}, 'minimal publisher authority')
+            exact(value['jobs']['publish']['if'], RELEASE_BRANCHES, 'publish from release/* branches only')
+            require('if' not in value['jobs']['gate'], 'the gate refuses other refs itself, never a skipped pass')
             for job in value['jobs'].values():
-                exact(job['if'], "github.ref == 'refs/heads/main'", 'main-only release')
                 for step in job['steps']:
                     if step.get('uses', '').startswith('actions/checkout@'):
                         exact(step['with']['ref'], '${{ github.sha }}', 'no arbitrary release checkout')

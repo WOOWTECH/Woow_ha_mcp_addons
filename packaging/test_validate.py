@@ -197,7 +197,8 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('on', v.load(v.ROOT / '.github/workflows/ci.yaml'))
 
     def test_builder_workflow_contract(self):
-        for workflow in ('ci', 'release'):
+        # ci.yaml's images job keeps the blocked BLD2 contract; release.yaml is the GitHub-hosted route (below).
+        for workflow in ('ci',):
             original = v.load(v.ROOT / '.github/workflows' / (workflow + '.yaml'))
             v.builder_workflow(original, workflow)
             job_name = 'images' if workflow == 'ci' else 'publish'
@@ -258,11 +259,15 @@ class PackagingTests(unittest.TestCase):
             job = doc['jobs']['images' if workflow == 'ci' else 'publish']
             self.assertFalse(any(s.get('uses', '').startswith('docker/setup-buildx-action@')
                                  for s in job['steps']))
-            self.assertTrue(any(s.get('run') == 'python3 packaging/builder_contract.py setup --driver docker'
-                                for s in job['steps']))
+            if workflow == 'ci':
+                self.assertTrue(any(s.get('run') == 'python3 packaging/builder_contract.py setup --driver docker'
+                                    for s in job['steps']))
+            else:  # the hosted route builds with the runner's own Buildx and the default docker driver, BLD2 is gone
+                self.assertNotIn('builder_contract', (v.ROOT / '.github/workflows/release.yaml').read_text())
+                self.assertNotIn('BLD2', (v.ROOT / '.github/workflows/release.yaml').read_text())
 
     def test_builder_admission_and_runner_mutations(self):
-        for workflow in ('ci', 'release'):
+        for workflow in ('ci',):
             original = v.load(v.ROOT / '.github/workflows' / (workflow + '.yaml'))
             candidate = 'images' if workflow == 'ci' else 'publish'
             admission = 'builder-admission' if workflow == 'ci' else 'gate'
@@ -287,6 +292,167 @@ class PackagingTests(unittest.TestCase):
             steps.append(guard)
             with self.subTest(workflow=workflow, mutation='verify-after-build'), self.assertRaises(v.Invalid):
                 v.builder_workflow(doc, workflow)
+
+    def release(self):
+        return v.load(v.ROOT / '.github/workflows/release.yaml')
+
+    def test_hosted_release_route_is_the_repository_workflow(self):
+        # Owner decision 2026-11-17: release.yaml builds, accepts and pushes on GitHub-hosted runners with the run's own
+        # GITHUB_TOKEN, dispatched on a release/* branch with the owner's source_sha; no self-hosted runner, no BLD2.
+        original = self.release()
+        v.hosted_release(original)
+        v.builder_workflow(original, 'release')
+        gate, publish = original['jobs']['gate'], original['jobs']['publish']
+        self.assertEqual((gate['runs-on'], publish['runs-on']), ('ubuntu-24.04', 'ubuntu-24.04'))
+        self.assertEqual(gate['permissions'], {'contents': 'read'})
+        self.assertEqual(publish['permissions'], {'contents': 'read', 'packages': 'write'})
+        self.assertEqual((publish['environment'], publish['needs'], publish['if']),
+                         ('public-release', 'gate', "startsWith(github.ref, 'refs/heads/release/')"))
+        self.assertNotIn('if', gate)  # a dispatch outside release/* fails in check_release.py, never a skipped pass
+        self.assertEqual(original['concurrency'], {'group': 'public-release-${{ inputs.app }}', 'cancel-in-progress': False})
+        self.assertEqual(set(original['on']), {'workflow_dispatch'})
+        self.assertEqual(set(original['on']['workflow_dispatch']['inputs']), {'app', 'source_sha'})
+        variables = set(publish['env'])
+        for job in (gate, publish):
+            for step in job['steps']:
+                variables |= set(step.get('env', {}))
+        # Exactly the environment variables docs/operations/release.md lists.
+        self.assertEqual(variables, {'APP', 'SOURCE_SHA', 'RUNNER_KIND', 'GHCR_TOKEN', 'DOCKER_BUILD_SUMMARY',
+                                     'DOCKER_BUILD_RECORD_UPLOAD'})
+        text = (v.ROOT / '.github/workflows/release.yaml').read_text()
+        self.assertEqual(set(re.findall(r'secrets\.\w+', text)), {'secrets.GITHUB_TOKEN'})
+        for absent in ('self-hosted', 'builder_contract', 'BLD2', 'vars.', 'GITHUB_ENV', 'GITHUB_PATH', 'refs/heads/main',
+                       'setup-buildx-action', 'pull_request'):
+            self.assertNotIn(absent, text)
+        steps = [s.get('run', s.get('uses', '')) for s in publish['steps']]
+        order = ['check_release.py', 'hosted_runner.py', 'docker/build-push-action@', 'install_scanners.py',
+                 'supply_chain.py candidate', 'j1900_check.py', 'registry_gate.py unused', 'docker/login-action@',
+                 'docker push', 'registry_gate.py public', 'actions/upload-artifact@']
+        found = [next(i for i, s in enumerate(steps) if fragment in s) for fragment in order]
+        self.assertEqual(found, sorted(found))  # preflight before the build, J1900 before any credential, push last
+
+    def test_hosted_release_jobs_are_exact(self):
+        original = self.release()
+        mutations = [
+            (('run-name',), 'Publish ${{ inputs.app }}'),
+            (('permissions',), {'contents': 'write'}), (('permissions',), 'write-all'),
+            (('concurrency',), {'group': 'public-release', 'cancel-in-progress': False}),
+            (('concurrency', 'cancel-in-progress'), True),
+            (('concurrency', 'group'), "public-release-${{ github.ref == 'refs/heads/main' && 'a' || 'b' }}"),
+            (('on', 'push'), {'branches': ['release/*']}), (('on', 'pull_request'), {}),
+            (('on', 'workflow_dispatch', 'inputs', 'ref'), {'description': 'any ref', 'type': 'string', 'required': False}),
+            (('on', 'workflow_dispatch', 'inputs', 'source_sha', 'required'), False),
+            (('on', 'workflow_dispatch', 'inputs', 'source_sha', 'default'), 'b' * 40),
+            (('on', 'workflow_dispatch', 'inputs', 'source_sha', 'description'), ''),
+            (('on', 'workflow_dispatch', 'inputs', 'app', 'options'), [p for p in v.PRODUCTS if p != 'headscale']),
+            (('on', 'workflow_dispatch', 'inputs', 'app', 'type'), 'string'),
+            (('jobs', 'extra'), {'runs-on': 'ubuntu-24.04', 'timeout-minutes': 5, 'steps': [{'run': 'true'}]}),
+            (('jobs', 'gate', 'if'), "startsWith(github.ref, 'refs/heads/release/')"),
+            (('jobs', 'gate', 'runs-on'), 'ubuntu-22.04'), (('jobs', 'gate', 'runs-on'), ['self-hosted', 'linux', 'x64']),
+            (('jobs', 'gate', 'permissions'), {'contents': 'read', 'packages': 'write'}),
+            (('jobs', 'gate', 'environment'), 'public-release'),
+            (('jobs', 'gate', 'env'), {'SOURCE_SHA': '${{ inputs.source_sha }}'}),
+            (('jobs', 'gate', 'continue-on-error'), True), (('jobs', 'gate', 'timeout-minutes'), 40),
+            (('jobs', 'publish', 'runs-on'), {'group': 'woow-disposable-builder', 'labels': ['self-hosted', 'linux', 'x64']}),
+            (('jobs', 'publish', 'runs-on'), 'ubuntu-latest'), (('jobs', 'publish', 'runs-on'), ['self-hosted']),
+            (('jobs', 'publish', 'environment'), 'release'),
+            (('jobs', 'publish', 'environment'), {'name': 'public-release'}),
+            (('jobs', 'publish', 'permissions'), {'contents': 'read', 'packages': 'write', 'id-token': 'write'}),
+            (('jobs', 'publish', 'permissions'), {'contents': 'write', 'packages': 'write'}),
+            (('jobs', 'publish', 'permissions'), {'contents': 'read', 'packages': 'write', 'actions': 'write'}),
+            (('jobs', 'publish', 'if'), "github.ref == 'refs/heads/main'"), (('jobs', 'publish', 'if'), 'always()'),
+            (('jobs', 'publish', 'if'), "startsWith(github.ref, 'refs/heads/')"),
+            (('jobs', 'publish', 'needs'), []), (('jobs', 'publish', 'needs'), ['gate']),
+            (('jobs', 'publish', 'timeout-minutes'), 360),
+            (('jobs', 'publish', 'container'), {'image': 'docker:latest'}),
+            (('jobs', 'publish', 'services'), {'docker': {'image': 'docker:dind'}}),
+            (('jobs', 'publish', 'continue-on-error'), True), (('jobs', 'publish', 'strategy'), {'max-parallel': 1}),
+            (('jobs', 'publish', 'defaults'), {'run': {'shell': 'bash'}}),
+            (('jobs', 'publish', 'env', 'BLD2_APPROVAL'), '${{ vars.BLD2_APPROVAL }}'),
+            (('jobs', 'publish', 'env', 'HTTPS_PROXY'), 'http://invented.invalid'),
+            (('jobs', 'publish', 'env', 'DOCKER_HOST'), 'tcp://invented.invalid:2375'),
+            (('jobs', 'publish', 'env', 'SOURCE_SHA'), '${{ inputs.source_sha }}'),
+            (('jobs', 'publish', 'env', 'DOCKER_BUILD_RECORD_UPLOAD'), 'true'),
+            (('env',), {'APP': 'odoo'}), (('defaults',), {'run': {'shell': 'bash'}})]
+        for path, value in mutations:
+            with self.subTest(path=path, value=value), self.assertRaises(v.Invalid):
+                v.builder_workflow(replaced(original, path, value), 'release')
+        for path in (('jobs', 'publish', 'needs'), ('jobs', 'publish', 'if'), ('jobs', 'publish', 'environment'),
+                     ('jobs', 'publish', 'permissions'), ('jobs', 'gate', 'permissions'), ('concurrency',), ('run-name',),
+                     ('on', 'workflow_dispatch', 'inputs', 'source_sha'), ('jobs', 'publish', 'env', 'APP')):
+            doc = copy.deepcopy(original)
+            del at(doc, path[:-1])[path[-1]]
+            with self.subTest(removed=path), self.assertRaises(v.Invalid):
+                v.builder_workflow(doc, 'release')
+
+    def test_hosted_release_steps_are_the_reviewed_recipe_in_order(self):
+        original = self.release()
+
+        def index(job, fragment):
+            return next(i for i, s in enumerate(original['jobs'][job]['steps'])
+                        if fragment in s.get('run', '') or fragment in s.get('uses', ''))
+        for job in ('gate', 'publish'):
+            steps = original['jobs'][job]['steps']
+            for position in range(len(steps)):
+                doc = copy.deepcopy(original)
+                del doc['jobs'][job]['steps'][position]
+                with self.subTest(job=job, removed=position), self.assertRaises(v.Invalid):
+                    v.builder_workflow(doc, 'release')
+                for bypass in ({'if': 'false'}, {'continue-on-error': True}, {'shell': 'bash'},
+                               {'working-directory': 'packaging'}, {'timeout-minutes': 1}, {'id': 'step'}):
+                    with self.subTest(job=job, position=position, bypass=bypass), self.assertRaises(v.Invalid):
+                        v.builder_workflow(replaced(original, ('jobs', job, 'steps', position),
+                                                    {**steps[position], **bypass}), 'release')
+                if 'run' not in steps[position]:
+                    continue
+                for key, value in (('HOME', '/invented'), ('DOCKER_HOST', 'tcp://invented.invalid:2375'),
+                                   ('HTTPS_PROXY', 'http://invented.invalid'), ('SOURCE_SHA', '${{ inputs.source_sha }}'),
+                                   ('GHCR_TOKEN', '${{ secrets.GITHUB_TOKEN }}'), ('RUNNER_KIND', 'github-hosted')):
+                    if key in steps[position].get('env', {}):
+                        continue
+                    changed = {**steps[position], 'env': {**steps[position].get('env', {}), key: value}}
+                    with self.subTest(job=job, position=position, env=key), self.assertRaises(v.Invalid):
+                        v.builder_workflow(replaced(original, ('jobs', job, 'steps', position), changed), 'release')
+            for script in ('echo HOME=/invented >> "$GITHUB_ENV"', 'echo /invented >> "$GITHUB_PATH"',
+                           'export HTTPS_PROXY=http://invented.invalid', 'docker buildx create --use',
+                           'python3 packaging/builder_contract.py admit', 'true'):
+                doc = copy.deepcopy(original)
+                doc['jobs'][job]['steps'].insert(-1, {'run': script})
+                with self.subTest(job=job, script=script), self.assertRaises(v.Invalid):
+                    v.builder_workflow(doc, 'release')
+        for first, second in (('check_release.py', 'hosted_runner.py'), ('hosted_runner.py', 'docker/build-push-action@'),
+                              ('supply_chain.py candidate', 'j1900_check.py'), ('j1900_check.py', 'registry_gate.py unused'),
+                              ('registry_gate.py unused', 'docker/login-action@'), ('docker/login-action@', 'docker push'),
+                              ('docker push', 'registry_gate.py public')):
+            doc = copy.deepcopy(original)
+            steps = doc['jobs']['publish']['steps']
+            a, b = index('publish', first), index('publish', second)
+            steps[a], steps[b] = steps[b], steps[a]
+            with self.subTest(swapped=(first, second)), self.assertRaises(v.Invalid):
+                v.builder_workflow(doc, 'release')
+        # The owner's commit comes only from the source_sha input, the runner kind only from runner.environment, and the
+        # only secret is the run's own GITHUB_TOKEN; actions stay pinned to the reviewed commits.
+        edits = [('publish', 'check_release.py', ('env', 'SOURCE_SHA'), '${{ github.sha }}'),
+                 ('gate', 'check_release.py', ('env', 'SOURCE_SHA'), '${{ github.sha }}'),
+                 ('publish', 'hosted_runner.py', ('env', 'RUNNER_KIND'), 'github-hosted'),
+                 ('publish', 'registry_gate.py unused', ('env', 'GHCR_TOKEN'), '${{ secrets.GHCR_PAT }}'),
+                 ('publish', 'docker/login-action@', ('with', 'password'), '${{ secrets.WOOWTECH_PAT }}'),
+                 ('publish', 'docker/login-action@', ('with', 'username'), '${{ secrets.USER }}'),
+                 ('publish', 'check_release.py', ('run',), 'python packaging/validate.py && python packaging/check_release.py "$APP" || true'),
+                 ('gate', 'check_release.py', ('run',), 'python packaging/check_release.py "$APP" || true'),
+                 ('publish', 'j1900_check.py', ('run',), 'echo python packaging/j1900_check.py'),
+                 ('publish', 'hosted_runner.py', ('run',), 'python packaging/hosted_runner.py github-hosted "$RUNNER_TEMP/release-evidence"'),
+                 ('publish', 'docker/build-push-action@', ('with', 'push'), True),
+                 ('publish', 'docker/build-push-action@', ('with', 'provenance'), True),
+                 ('publish', 'docker/build-push-action@', ('uses',), 'docker/build-push-action@v6'),
+                 ('gate', 'actions/checkout@', ('uses',), 'actions/checkout@v4'),
+                 ('gate', 'actions/checkout@', ('with', 'ref'), '${{ inputs.source_sha }}'),
+                 ('publish', 'actions/checkout@', ('with', 'persist-credentials'), True),
+                 ('publish', 'actions/upload-artifact@', ('with', 'retention-days'), 1)]
+        for job, fragment, keys, value in edits:
+            path = ('jobs', job, 'steps', index(job, fragment), *keys)
+            with self.subTest(job=job, step=fragment, keys=keys), self.assertRaises(v.Invalid):
+                v.builder_workflow(replaced(original, path, value), 'release')
 
     def test_odoo_manage_is_retired_from_store_build_and_release(self):
         # Owner decision 2026-10-06: off the store, never built or released again; the source stays (archived).
@@ -495,8 +661,11 @@ class PackagingTests(unittest.TestCase):
                     v.builder_workflow(elsewhere, workflow)
             for unrelated in (f'${{{{ {selector} }}}}', "${{ github.ref == 'refs/heads/main' && 'a' || 'b' }}",
                               '${{ github.event.inputs.application }}'):
+                # Not a version expression, so the version rule lets it pass. release.yaml's concurrency group is itself
+                # fixed by hosted_release (test_hosted_release_jobs_are_exact), so there only the version rule runs.
+                check = v.builder_workflow if workflow == 'ci' else lambda doc, name: v.workflow_versions(doc, name)
                 with self.subTest(workflow=workflow, place='concurrency', unrelated=unrelated):
-                    v.builder_workflow(replaced(original, ('concurrency', 'group'), group + unrelated), workflow)
+                    check(replaced(original, ('concurrency', 'group'), group + unrelated), workflow)
 
     def test_unit_script_installs_headscale_without_workflow_precondition(self):
         unit = (v.ROOT / 'packaging/unit.sh').read_text()

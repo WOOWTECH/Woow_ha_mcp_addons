@@ -1,38 +1,48 @@
-"""Manual publication gate: no tokens, HTTP or arbitrary source checkout.
+"""Dispatch gate of the GitHub-hosted publication route (.github/workflows/release.yaml): no token, HTTP or checkout.
 
-approved_commit is reviewed main content. Only RELEASE-GATES.json may differ
-between that commit and the workflow's main SHA, avoiding a self-referential hash.
-Protection/required reviewers/namespace ownership remain external admin controls.
+Owner decision 2026-11-17: the HA add-on line builds, accepts and pushes its images in this repository's own GitHub
+Actions on GitHub-hosted runners, not on PaaS infrastructure. A product is admitted only when
+  - the run is a manual workflow_dispatch of a refs/heads/release/<name> branch: the open version-bump PR's branch,
+    whose readiness check needs the image first. A pull request, a tag or any other branch is refused, and <name> is
+    one path segment, as the public-release environment's deployment-branch rule release/* matches;
+  - the checkout HEAD, the dispatched GITHUB_SHA and the owner's source_sha input (SOURCE_SHA) are one full lowercase
+    40-hex commit, so the owner's approval of the run binds exactly that commit;
+  - the product is a store product with an image: OpenDesign is store-disabled and source-version-only, so none is
+    built or published;
+  - validate.version_for(product) is the version of addons/<product>/config.yaml.
+The approval itself is the protected public-release environment (required reviewers, release/* only), a repository
+setting this workflow can neither create nor prove (docs/operations/release.md). RELEASE-GATES.json, the clearance file
+of the blocked BLD2 route, is not read here any more; validate.py still checks its shape.
 """
 import os
-from pathlib import Path
+import re
 import subprocess
 import sys
 
-from validate import ROOT, PRODUCTS, Invalid, clearance_shape, load, require, version_for
+from validate import ROOT, PRODUCTS, Invalid, load, require, version_for
+
+# Store-disabled and source-version-only (0.4.10 on): no OpenDesign image is built, accepted or published.
+IMAGELESS = ('opendesign',)
+RELEASE_BRANCH = re.compile(r'refs/heads/release/[A-Za-z0-9][A-Za-z0-9._-]*')
+COMMIT = re.compile(r'[0-9a-f]{40}')
 
 
 def check(product):
     require(product in PRODUCTS, 'product not allowed')
+    require(product not in IMAGELESS, 'product has no image to publish')
     require(os.environ.get('GITHUB_EVENT_NAME') == 'workflow_dispatch', 'manual event required')
-    require(os.environ.get('GITHUB_REF') == 'refs/heads/main', 'release must run from main')
-    gates = load(ROOT / 'RELEASE-GATES.json')
-    clearance_shape(gates)
-    require(gates['approved_commit'] is not None, 'no approved source commit')
+    ref = os.environ.get('GITHUB_REF', '')
+    require(RELEASE_BRANCH.fullmatch(ref) is not None, 'release must run from a release/* branch')
+    dispatched = os.environ.get('GITHUB_SHA', '')
+    require(COMMIT.fullmatch(dispatched) is not None, 'dispatched SHA is not a full commit')
+    source = os.environ.get('SOURCE_SHA', '')
+    require(COMMIT.fullmatch(source) is not None, 'source_sha must be a full lowercase 40-hex commit')
+    require(source == dispatched, 'source_sha is not the head of the dispatched release branch')
     head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
-    require(head == os.environ.get('GITHUB_SHA'), 'checkout differs from dispatched main SHA')
-    approved = gates['approved_commit']
-    require(subprocess.run(['git', 'merge-base', '--is-ancestor', approved, head], check=False).returncode == 0, 'approved source is not main ancestor')
-    changed = subprocess.check_output(['git', 'diff', '--name-only', approved, head], text=True).splitlines()
-    require(set(changed) <= {'RELEASE-GATES.json'}, 'unreviewed source since approval')
-    required = [gates[k] for k in ('source', 'license', 'secret', 'publisher')]
-    required += [gates['products'][product][k] for k in ('image', 'ha')]
-    for gate in required:
-        require(gate['cleared'] is True, 'publication clearance is CLOSED')
-        evidence = ROOT / gate['evidence']
-        require(evidence.is_file() and not evidence.is_symlink() and evidence.stat().st_size > 100, 'missing reviewed evidence')
-        require(subprocess.run(['git', 'ls-files', '--error-unmatch', gate['evidence']], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0, 'evidence must be tracked')
-    print(f'PASS: approved main source and source/license/secret/publisher/image/HA gates for {product} {version_for(product)}')
+    require(head == dispatched, 'checkout differs from the dispatched SHA')
+    manifest = load(ROOT / 'addons' / product / 'config.yaml')
+    require(manifest.get('version') == version_for(product), 'add-on manifest version is not the release version')
+    print(f'PASS: {product} {version_for(product)} from {ref} at the owner-approved source_sha {source}')
 
 
 if __name__ == '__main__':

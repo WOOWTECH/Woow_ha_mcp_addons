@@ -1,27 +1,37 @@
 name: Manually approved GHCR publication
+# GitHub-hosted route (owner decision 2026-11-17; docs/operations/release.md): one product per run, dispatched on the
+# open version-bump PR's release/* branch with source_sha = that branch's head. gate runs the source checks on a
+# GitHub-hosted runner with contents read; publish builds, accepts and pushes on a fresh GitHub-hosted runner in the
+# protected public-release environment, whose required reviewers (the owner) and release/* deployment-branch rule are
+# repository settings this file cannot create. The push uses the run's own GITHUB_TOKEN: no PAT, no other secret, and
+# only GitHub's own hosted runners. packaging/validate.py compares this file step by step.
+run-name: Publish ${{ inputs.app }} from ${{ github.ref_name }} at ${{ inputs.source_sha }}
 on:
   workflow_dispatch:
     inputs:
       app:
-        description: Independently cleared product (no arbitrary ref/version)
+        description: Product to publish (OpenDesign has no image and is refused)
         type: choice
         required: true
         options: [odoo, n8n, hermes, opendesign, emqx, litellm, nextcloud, headscale]
+      source_sha:
+        description: Full 40-hex commit the owner approved; must be the head of the dispatched release/* branch
+        type: string
+        required: true
 permissions:
   contents: read
+# One group per product: different products publish at the same time, and a run in progress is never cancelled.
 concurrency:
-  group: public-release
+  group: public-release-${{ inputs.app }}
   cancel-in-progress: false
 jobs:
-  # BLOCKED: WOOWTECH is USER-owned; no runner-group/selected-workflow controls.
-  # No label/variable substitutes for those controls or private environment review.
+  # No job condition: a dispatch outside release/* fails here (check_release.py), never a skipped pass.
   gate:
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    # The source gate includes browser and full Python suites; match the PR window.
-    timeout-minutes: 40
-    env:
-      BLD2_APPROVAL: ${{ vars.BLD2_APPROVAL }}
+    permissions:
+      contents: read
+    # The same source gate as the PR checks job, which has 60 minutes since DQ-43 (2079 s and 2322 s measured).
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -31,6 +41,14 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: '3.13.16'
+      - run: |
+          python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
+      - name: Release branch, owner-approved commit and released product (closed by default)
+        env:
+          APP: ${{ inputs.app }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: python packaging/check_release.py "$APP"
+      - run: python packaging/validate.py
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '26.12.1'
@@ -39,18 +57,9 @@ jobs:
           version: '0.12.10'
           enable-cache: false
       - run: |
-          python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
-      - run: python packaging/validate.py
-      - run: |
           uv sync --frozen --no-dev --python python3.13
           uv pip install --python .venv/bin/python --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
           .venv/bin/python -m unittest discover -s packaging -p 'test_*.py' -v
-      - name: Source and per-product release clearance (closed by default)
-        env:
-          APP: ${{ inputs.app }}
-        run: python packaging/check_release.py "$APP"
-      - name: Deny unapproved builder dispatch independently of publication clearance
-        run: python3 packaging/builder_contract.py admit
       - name: Pin the existing fixed subprocess PATH on this disposable runner
         run: |
           test "$(node --version)" = v26.12.1
@@ -64,17 +73,16 @@ jobs:
       - run: sh packaging/unit.sh
   publish:
     needs: gate
-    if: github.ref == 'refs/heads/main'
+    if: startsWith(github.ref, 'refs/heads/release/')
     environment: public-release
     permissions:
       contents: read
       packages: write
-    runs-on:
-      group: woow-disposable-builder
-      labels: [self-hosted, linux, x64]
-    timeout-minutes: 40
+    runs-on: ubuntu-24.04
+    # Cold build, the candidate gate (container acceptance, secret scans, SBOM, CVE, licenses) and the J1900 check under
+    # QEMU on a 4-vCPU runner; the J1900 duration is not measured yet.
+    timeout-minutes: 90
     env:
-      BLD2_APPROVAL: ${{ vars.BLD2_APPROVAL }}
       APP: ${{ inputs.app }}
       DOCKER_BUILD_SUMMARY: 'false'
       DOCKER_BUILD_RECORD_UPLOAD: 'false'
@@ -89,13 +97,14 @@ jobs:
           python-version: '3.13.16'
       - run: |
           python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
-      - run: python packaging/validate.py && python packaging/check_release.py "$APP"
-      - name: Verify runner authority before any setup or daemon use
-        run: python3 packaging/builder_contract.py prepare
-      - name: Use only checksum-verified Buildx and the embedded docker driver (no downloader)
-        run: python3 packaging/builder_contract.py setup --driver docker
-      - name: Verify embedded BuildKit identity before build
-        run: python3 packaging/builder_contract.py verify
+      - name: Source gate data and release admission again on this runner
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: python packaging/validate.py && python packaging/check_release.py "$APP"
+      - name: GitHub-hosted runner, classic overlay2 image store, Docker and Buildx versions (before any build)
+        env:
+          RUNNER_KIND: ${{ runner.environment }}
+        run: python packaging/hosted_runner.py "$RUNNER_KIND" "$RUNNER_TEMP/release-evidence"
       # The version expression in tags, build-args, the pushed IMAGE and the evidence name is
       # generated by packaging/validate.py from VERSION_OVERRIDES (version_expression) and
       # compared verbatim.
@@ -116,6 +125,8 @@ jobs:
         run: python packaging/install_scanners.py "$RUNNER_TEMP/scanners"
       - name: Test and scan this candidate exactly once; fail closed
         run: python packaging/supply_chain.py candidate "$APP" "$RUNNER_TEMP/scanners" "$RUNNER_TEMP/candidate"
+      - name: J1900 instruction set check of the tested image ID (QEMU user mode, -cpu Nehalem); SIGILL fails
+        run: python packaging/j1900_check.py "$APP" "$RUNNER_TEMP/candidate" "$RUNNER_TEMP/release-evidence"
       - name: Refuse overwriting an existing version (errors fail closed)
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -147,5 +158,7 @@ jobs:
             ${{ runner.temp }}/candidate/provenance.json
             ${{ runner.temp }}/candidate/published-provenance.json
             ${{ runner.temp }}/candidate/published-digest.json
+            ${{ runner.temp }}/release-evidence/hosted-runner.json
+            ${{ runner.temp }}/release-evidence/j1900-${{ inputs.app }}.json
           if-no-files-found: error
           retention-days: 90
