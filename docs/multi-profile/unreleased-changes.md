@@ -143,11 +143,11 @@
   2026.11.2 上管理面板拒絕每個請求（顯示 Core 版本還沒審查的頁面，add-on log 記一行），MCP 端點不受影響。25 個契約與相鄰檔和 2026.11.1
   逐位元相同，Supervisor 2026.11.0 的 `api/proxy.py` 和審過的相同（`docs/ha-role-core-contract.md` 的 2026.11.2 審查、
   `docs/provenance/ha-core-2026-11-2-blobs.json`）。
-- CHANGELOG（本片寫；開 PR 後把 `#NNN` 換成 PR 號）。B1 的 7 個產品同一版發，可以和 B1 合成一句（「accepts Home Assistant Core
+- CHANGELOG（本片寫，PR 號 #120）。B1 的 7 個產品同一版發，可以和 B1 合成一句（「accepts Home Assistant Core
   2026.11.0, 2026.11.1 and 2026.11.2」，兩個 PR 號都寫）：
 
   ```text
-  - The administrator check now also accepts Home Assistant Core 2026.11.2 (PR #NNN): its 25 Core contract and adjacent files are byte-identical to 2026.11.1, and Supervisor 2026.11.0 ships the reviewed WebSocket proxy unchanged. Earlier versions of this add-on refuse every admin panel request on Core 2026.11.2; later patches and pre-releases stay refused until reviewed. MCP endpoints do not use this check.
+  - The administrator check now also accepts Home Assistant Core 2026.11.2 (PR #120): its 25 Core contract and adjacent files are byte-identical to 2026.11.1, and Supervisor 2026.11.0 ships the reviewed WebSocket proxy unchanged. Earlier versions of this add-on refuse every admin panel request on Core 2026.11.2; later patches and pre-releases stay refused until reviewed. MCP endpoints do not use this check.
   ```
 
 - 已發：—
