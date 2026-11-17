@@ -21,36 +21,37 @@ administrator. This page records why it accepts the Core releases listed in `_HA
   `{id, type: "result", success, result}`, and the admin group id `system-admin`. The verifier allows only an active,
   non-system user who is the owner or in `system-admin`.
 
-## Review of 2026.7.2–2026.9.4, 2026.10.0 (0.1.6), 2026.10.1 (0.1.9), 2026.10.2–2026.10.4 (0.4.2), and 2026.11.0–2026.11.1 (Headscale 0.4.14)
+## Review of 2026.7.2–2026.9.4, 2026.10.0 (0.1.6), 2026.10.1 (0.1.9), 2026.10.2–2026.10.4 (0.4.2), 2026.11.0–2026.11.1 (Headscale 0.4.14), and 2026.11.2 (next release)
 
 Git blob SHAs (first 8 characters) of the Core files that produce or can change that contract, from the GitHub tree of
 each tag; `=` means unchanged from the previous tag. The `10.1` column is the 2026.10.1 tag (commit `abe1fdd7`). The `10.0` column is the 2026.10.0 tag (commit `6a811d33`), whose files
 are byte-identical to 2026.10.0b4, where the line-by-line review was done. The `10.2`, `10.3` and `10.4` columns are the
-2026.10.2 (commit `8d7fd8b6`), 2026.10.3 (commit `1f214b84`) and 2026.10.4 (commit `357cae5c`) tags.
+2026.10.2 (commit `8d7fd8b6`), 2026.10.3 (commit `1f214b84`) and 2026.10.4 (commit `357cae5c`) tags. The `11.2` column is
+the 2026.11.2 tag (commit `ff5d56b8`).
 
-| file (`homeassistant/`) | 7.2 | 7.3 | 7.4 | 8.0 | 8.1 | 8.2 | 8.3 | 9.0 | 9.1 | 9.2 | 9.3 | 9.4 | 10.0 | 10.1 | 10.2 | 10.3 | 10.4 | 11.0 | 11.1 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `components/websocket_api/auth.py` | f4660664 | = | = | = | = | = | = | = | = | = | = | = | a4b73688 | = | = | = | = | 244484bf | = |
-| `components/websocket_api/messages.py` | 13f856e6 | = | = | a6d3b54f | = | = | = | = | = | = | = | = | f1f543e2 | = | = | = | = | = | = |
-| `components/websocket_api/decorators.py` | 37ac60ba | = | = | = | = | = | = | = | = | = | = | = | d5df7f88 | = | = | = | = | = | = |
-| `components/websocket_api/connection.py` | 19d4782a | = | = | = | = | = | = | d4f824d2 | = | = | = | = | cd6e0426 | = | = | = | = | e031b7c4 | = |
-| `components/websocket_api/http.py` | 9cfca068 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | da44d879 | = |
-| `components/websocket_api/commands.py` | 5bc65849 | = | = | fe87a4e9 | = | = | = | = | = | = | = | = | d769c753 | = | = | = | = | 03297e08 | = |
-| `components/websocket_api/__init__.py` | 3a526e32 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | a00ab2af | = |
-| `components/websocket_api/const.py` | f1eb480d | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
-| `components/config/auth.py` | 2479fe65 | = | = | = | = | = | = | = | = | = | = | = | 75b0c88b | = | = | = | = | = | = |
-| `components/config/__init__.py` | ef7a1147 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | 784ba83b | = |
-| `auth/__init__.py` | 34a8bffa | = | = | 88a8b1d5 | = | = | = | = | = | = | = | = | a5850978 | = | 0314c4b7 | = | = | 851a64b7 | = |
-| `auth/auth_store.py` | 13ecdfc6 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
-| `auth/const.py` | 05b9e6d7 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
-| `auth/models.py` | 5646d23d | = | = | a41b03d1 | = | = | = | = | = | = | = | = | 7342e9d4 | = | = | = | = | = | = |
-| `auth/permissions/__init__.py` | b5254236 | = | = | = | = | = | = | = | = | = | = | = | aeab7ff8 | = | = | = | = | = | = |
-| `components/hassio/__init__.py` | b38caf53 | = | = | 3a3cd368 | = | 373c0b0c | = | 59c14de4 | = | = | = | = | 67abae35 | = | = | = | = | a35b70ef | = |
-| `components/http/auth.py` | e2c68719 | = | = | = | = | = | = | = | = | = | = | = | 702eb7c8 | = | = | = | = | 6188a2be | = |
-| `components/http/auth_util.py` | 4eed1443 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
-| `helpers/json.py` | 1789bda1 | = | = | = | = | = | = | 3ea52348 | = | = | = | = | f6a778dd | = | = | = | = | c0b24680 | = |
-| `util/json.py` | 1f8e6a0e | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
-| `components/onboarding/views.py` | a4cd0198 | = | = | = | = | = | = | 2801f426 | = | = | d3144de5 | = | 2835631c | = | = | = | = | 21eb4a5f | = |
+| file (`homeassistant/`) | 7.2 | 7.3 | 7.4 | 8.0 | 8.1 | 8.2 | 8.3 | 9.0 | 9.1 | 9.2 | 9.3 | 9.4 | 10.0 | 10.1 | 10.2 | 10.3 | 10.4 | 11.0 | 11.1 | 11.2 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `components/websocket_api/auth.py` | f4660664 | = | = | = | = | = | = | = | = | = | = | = | a4b73688 | = | = | = | = | 244484bf | = | = |
+| `components/websocket_api/messages.py` | 13f856e6 | = | = | a6d3b54f | = | = | = | = | = | = | = | = | f1f543e2 | = | = | = | = | = | = | = |
+| `components/websocket_api/decorators.py` | 37ac60ba | = | = | = | = | = | = | = | = | = | = | = | d5df7f88 | = | = | = | = | = | = | = |
+| `components/websocket_api/connection.py` | 19d4782a | = | = | = | = | = | = | d4f824d2 | = | = | = | = | cd6e0426 | = | = | = | = | e031b7c4 | = | = |
+| `components/websocket_api/http.py` | 9cfca068 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | da44d879 | = | = |
+| `components/websocket_api/commands.py` | 5bc65849 | = | = | fe87a4e9 | = | = | = | = | = | = | = | = | d769c753 | = | = | = | = | 03297e08 | = | = |
+| `components/websocket_api/__init__.py` | 3a526e32 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | a00ab2af | = | = |
+| `components/websocket_api/const.py` | f1eb480d | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `components/config/auth.py` | 2479fe65 | = | = | = | = | = | = | = | = | = | = | = | 75b0c88b | = | = | = | = | = | = | = |
+| `components/config/__init__.py` | ef7a1147 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | 784ba83b | = | = |
+| `auth/__init__.py` | 34a8bffa | = | = | 88a8b1d5 | = | = | = | = | = | = | = | = | a5850978 | = | 0314c4b7 | = | = | 851a64b7 | = | = |
+| `auth/auth_store.py` | 13ecdfc6 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `auth/const.py` | 05b9e6d7 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `auth/models.py` | 5646d23d | = | = | a41b03d1 | = | = | = | = | = | = | = | = | 7342e9d4 | = | = | = | = | = | = | = |
+| `auth/permissions/__init__.py` | b5254236 | = | = | = | = | = | = | = | = | = | = | = | aeab7ff8 | = | = | = | = | = | = | = |
+| `components/hassio/__init__.py` | b38caf53 | = | = | 3a3cd368 | = | 373c0b0c | = | 59c14de4 | = | = | = | = | 67abae35 | = | = | = | = | a35b70ef | = | = |
+| `components/http/auth.py` | e2c68719 | = | = | = | = | = | = | = | = | = | = | = | 702eb7c8 | = | = | = | = | 6188a2be | = | = |
+| `components/http/auth_util.py` | 4eed1443 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `helpers/json.py` | 1789bda1 | = | = | = | = | = | = | 3ea52348 | = | = | = | = | f6a778dd | = | = | = | = | c0b24680 | = | = |
+| `util/json.py` | 1f8e6a0e | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `components/onboarding/views.py` | a4cd0198 | = | = | = | = | = | = | 2801f426 | = | = | d3144de5 | = | 2835631c | = | = | = | = | 21eb4a5f | = | = |
 
 2026.11 review (2026-11-11): the exact GitHub tag commits are Core `74cf5a49c63ed8d4d87717844bf14f79c28c9cea` (11.0) and `d8a0dc698c8946b44e455d904000db563cfbf1ba` (11.1), compared to reviewed 10.4 `357cae5c598dfcd7a0ea7dc5b1facccd4ec6037b`. Every one of the 25 consumed and adjacent files is byte-identical between 11.0 and 11.1. Fourteen changed between 10.4 and 11.0; all their hunks were read. Full blob SHAs and tag commits are in [the comparison record](provenance/headscale-ha-core-2026-11-blobs.json).
 
@@ -58,6 +59,12 @@ are byte-identical to 2026.10.0b4, where the line-by-line review was done. The `
 - `websocket_api/auth.py` and `connection.py` changed token-revocation handling: a revoked connection now stops processing/sending, except for a short deferred reply by the revoking command. The verifier opens a fresh query-only connection, checks the same reply envelope, and denies on any unsuccessful or missing response. `http.py` added an unauthenticated message-size cap and debug-log redaction. `commands.py` added unrelated system-state and target commands. `websocket_api/__init__.py` and `config/__init__.py` only changed exports.
 - `auth/__init__.py` now initializes providers together, serializes new-user creation, and revokes sessions when credentials are removed; `async_get_users` and the role fields remain unchanged. `hassio/__init__.py` added log reader, auto-update, network event handling and unload cleanup, but kept the Supervisor system-user creation and its admin group. `hassio/const.py` added constants. `http/auth.py` moved a key import, `http/__init__.py` added an SSL-profile repair, `http/const.py` added SSL and request-size constants, and `helpers/json.py` only renamed its datetime import. `onboarding/views.py` tightened unauthenticated request size and redirect validation; owner group creation is unchanged.
 - Supervisor 2026.10.5 (tag `fdba115f215c61f7a02c7c0567263785cfcf0034`) has the same `supervisor/api/proxy.py` blob `cab849dc` as reviewed 2026.10.4 (tag `d92eb0e373a304c1e6a66dcef66585854a2002d1`). The `auth_required`/`auth_ok` frames and proxy filter therefore retain the reviewed shape. The isolated HAOS test reports Supervisor 2026.10.5 and Core 2026.11.1; role and Ingress acceptance is required before publishing the updated image.
+
+2026.11.2 review (2026-11-17): the exact GitHub tag commit is Core `ff5d56b825a0fb66b03d01bc297d49e206cdaba3` (11.2, released 2026-11-16), compared to reviewed 11.1 `d8a0dc698c8946b44e455d904000db563cfbf1ba`. Every one of the 25 consumed and adjacent files is byte-identical between 11.1 and 11.2: each file was downloaded at both tags and its git blob recomputed, and the blobs equal the GitHub contents API listings of both tags and, for 11.1, [the 2026.11 record](provenance/headscale-ha-core-2026-11-blobs.json). No hunk to read; the consumed contract is unchanged. Full blob SHAs, tag commits and the tag comparison are in [the 2026.11.2 record](provenance/ha-core-2026-11-2-blobs.json).
+
+- Outside the 25 files: the tag comparison (52 commits, 95 files) changes no file under `auth/`, `components/auth/`, `components/websocket_api/`, `components/http/`, `components/hassio/`, `components/config/`, `components/onboarding/` or `components/person/`. Besides integrations and tests it changes the version constants (`const.py`, `pyproject.toml`), the frontend pin (20261028.5 to 20261028.6), integration requirements, `input_text/entity.py` and `helpers/config_validation.py` (a configuration error names a section's keys instead of printing its values); none of them is on the `config/auth/list` path or in the Supervisor handshake.
+- Supervisor 2026.11.0 (tag `c1c6f0a754c0656eb1af189f11009f1cfc4b3e28`, released 2026-11-06) ships `supervisor/api/proxy.py` blob `cab849dc`, byte-identical to 2026.10.5 (downloaded at both tags), so the `auth_required`/`auth_ok` frames and the proxy filter keep the reviewed shape.
+- No published image accepts 2026.11.2: Headscale 0.4.18 and the other products' 0.4.13 images deny it. Each product accepts it from its next release built from this source.
 
 The 0.4.13 images continue to deny these Core versions. Only an image rebuilt and accepted for a new product release includes this reviewed allowlist. Headscale 0.4.14 is the initial target; other products retain their published versions and their documented compatibility until separately rebuilt.
 
@@ -123,7 +130,7 @@ and for the adjacent `http/const.py`, `http/__init__.py`, `hassio/const.py` and 
 4. In the same change, update every other place that spells out the reviewed versions:
    - the comment above `_HA_VERSIONS` in `ha_role.py`;
    - `tests/test_ha_role.py`: add the version to `test_the_reviewed_versions_are_exactly_these` and remove it from
-     `NEAR_MISSES` and `UNREVIEWED` (they hold, for example, `2026.11.2`; the near-miss tests fail until it is
+     `NEAR_MISSES` and `UNREVIEWED` (they hold, for example, `2026.11.3`; the near-miss tests fail until it is
      removed), and replace it where it serves as the unreviewed example in
      `test_wrong_sequence_and_revoked_machine_capability`;
    - the version-list sentence in [n8n-ha-role.md](n8n-ha-role.md) ("Compatibility is deliberately restricted to …");
