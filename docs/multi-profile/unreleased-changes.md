@@ -18,12 +18,13 @@
 - **基準**：`claude-delivery` `907bd39`（2026-11-17，#117 的合併）。查法、每項出處與沒列進來的變更見
   `docs/provenance/ha-multiprofile-unreleased-changes-20261117.md`。0.4.14 升版 PR（升版 commit `7252d9e`，基準 `40f6d10`）照第 3 點
   把 Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud 與 OpenDesign（只升來源版本）寫進 CHANGELOG 的項目移掉。A7（HA Core 2026.11.2 審查，#120，基準 `40f6d10`）2026-11-17 加；使用者同日決定
-  併進 0.4.14，七個產品的 0.4.14 CHANGELOG 都寫了它（和 B1 合成一句），只剩 Headscale 要寫。
+  併進 0.4.14，七個產品的 0.4.14 CHANGELOG 都寫了它（和 B1 合成一句），只剩 Headscale 要寫。Headscale 0.4.19 升版（2026-11-18 準備，
+  升版 commit 合併後補）照第 3 點把 A1～A7 寫進 Headscale 的 CHANGELOG；A1～A7 適用的產品都寫了，從第 1 節刪除。
 - **本檔只管 CHANGELOG**。`upgrade-notes.yaml` 照 `AGENTS.md` 第 3 點與升版比對（`Upgrade comparison`）的要求另外判斷；版號資料照
   `docs/operations/release.md`「升版時要改的版號資料」。
 - 「主對話補寫」：該片的筆記沒有英文句子，是照筆記的中文要點或程式照實寫的，最後的英文由發版片定。其他句子照筆記原文。
 
-## 總表（2026-11-17）
+## 總表（2026-11-18）
 
 | 產品 | 目前版號 | 上次升版 commit | 映像來源 | 要寫進 CHANGELOG 的項目 | 已合併、CHANGELOG 沒記的產品自身修正 |
 |---|---|---|---|---|---|
@@ -34,127 +35,28 @@
 | LiteLLM | 0.4.14（升版 PR 待合併） | 同上 | 待建置（GitHub 發版流程） | 0（都寫進 0.4.14） | 無 |
 | Nextcloud | 0.4.14（升版 PR 待合併） | 同上 | 待建置（GitHub 發版流程） | 0（都寫進 0.4.14） | 無 |
 | OpenDesign | 0.4.14（只升來源版本，商店停用） | 同上 | 沒有映像 | 0（都寫進 0.4.14） | 無 |
-| Headscale | 0.4.18 | `55f3528`（2026-11-12，PR #88） | `55f3528` | 7：A1～A7 | 無（#77～#88 都已在 0.4.18 的來源裡） |
+| Headscale | 0.4.19（升版 PR 待合併） | 合併後補（2026-11-18，0.4.19 升版 commit） | 待建置（GitHub 發版流程） | 0（都寫進 0.4.19） | 無 |
 
 - 0.4.13：PR #76 在 2026-11-09 合併（`e2108f6`）。六個映像從 `4966f40` 建（`docs/operations/release-decision-0.4.13.md`）；`4966f40` 之後
   #76 只多一個紀錄 commit（`0913611`）。
 - Headscale 0.4.18：映像從升版 commit `55f3528` 建（`docs/provenance/headscale-0.4.18-provenance.json`），PR #88 在 2026-11-12 合併（`bb48449`）。
 - 0.4.14：升版 commit `7252d9e`（2026-11-17）。映像從凍結的 PR head 建，建好後在 `docs/operations/release-decision-0.4.14.md` 與
   各產品自己的紀錄補映像來源；PR 合併前本表的版號仍是「待合併」。rebase 之後升版 commit 換成新的 SHA。
+- Headscale 0.4.19：升版 commit 合併後補（2026-11-18 準備；cherry-pick 或 rebase 之後 SHA 會變）。映像從凍結的 PR head 由 GitHub 發版流程建，
+  建好後在 Headscale 自己的紀錄 `docs/operations/release-decision-headscale-0.4.19.md` 補映像來源；PR 合併前本表的版號仍是「待合併」。
 - 2026-11-13 之後到 0.4.14 合併之前沒有任何產品發版。
 
-## 1. 所有產品共通（A：不受開關管的共用變更；A1～A6 是多帳號計畫的片，A7 不是）
+## 1. 所有產品共通（A：不受開關管的共用變更）
 
-### A1 HM-02 紀錄遮罩對齊 PaaS（#98，`76c1d78`，2026-11-15）
+A1～A7 適用的產品都寫進 CHANGELOG 了，照檔頭「怎麼更新」第 3 點刪除：
 
-- 產品：8 個都帶。
-- 看得到的變化：add-on log 與診斷頁（子程式輸出）遮得更多。log 裡網址 query 的憑證值顯示 `***`；格式字串和參數對不上的紀錄改顯示
-  `[redacted: invalid log message]`。log 與子程式輸出遇到判斷不了的網址編碼、或新規則會露出舊規則藏住的片段時，整段換成
-  `[redacted: ambiguous URL encoding]`；超過 128 KiB 的字串截斷。子程式輸出多遮 `key=`，`cache key: x` 這類一般文字也會被遮；遮罩失敗時
-  整行顯示 `line withheld (redaction failed)`。`[REDACTED]`、`/private_[REDACTED]` 的格式不變。
-- CHANGELOG（主對話補寫；照 HM-02 筆記第 3.4 節與第 12 節第 6 點）：
-
-  ```text
-  - Log redaction now applies the PaaS server's rules first and then the add-on's own (PR #98). In the add-on log, credential values in URL query strings show as `***`, and a record whose format string does not match its arguments shows `[redacted: invalid log message]`. In the log and in child output on the diagnostics page, a line whose URL encoding cannot be judged, or where the combined rules would show a part the old rules hid, is replaced as a whole with `[redacted: ambiguous URL encoding]`, and strings over 128 KiB are cut short. Child output also masks `key=` values, so ordinary text such as `cache key: x` is masked too, and a child line whose masking fails shows `line withheld (redaction failed)`. The `[REDACTED]` and `/private_[REDACTED]` forms are unchanged.
-  ```
-
-- 已發：0.4.14（Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud；OpenDesign 只升來源版本）。Headscale 還沒發。
-
-### A2 HM-06 子程式 bearer（#94，`9c5dd88`，2026-11-15）
-
-- 產品：7 支 Python 子程式的產品（Odoo、Hermes、OpenDesign、EMQX、LiteLLM、Nextcloud、Headscale）。**n8n 不寫**：n8n-mcp 本來就只認同一個
-  child token，沒有變。
-- 看得到的變化：容器內直連子程式（loopback 3000）時，沒帶、帶錯或多帶 `Authorization: Bearer <child token>` 一律 401、沒有本文；子程式沒有
-  有效的 `WOOW_MCP_CHILD_TOKEN` 就不啟動。經 8081 與管理面板的請求不變（閘道、健康檢查、能力探測本來就帶這個 bearer）。
-- CHANGELOG（主對話補寫；照 HM-06 筆記第 12.3 節「容器內直連子程式要帶 child bearer」與 `docs/operations/guide.md` 第 6 點）：
-
-  ```text
-  - The MCP child on the container's loopback port 3000 now serves only the gateway's own child bearer (PR #94): a direct request inside the container without exactly one `Authorization: Bearer <child token>` header gets HTTP 401 with no body, and the child refuses to start without a valid child token. Requests through port 8081 and the admin panel are unchanged.
-  ```
-
-- 已發：0.4.14（Odoo、Hermes、EMQX、LiteLLM、Nextcloud；OpenDesign 只升來源版本；n8n 不適用）。Headscale 還沒發。
-
-### A3 HM-13a 還原標記（#97，`dc90c32`，2026-11-15）
-
-- 產品：8 個都帶（`packaging/entrypoint.py`）。
-- 看得到的變化：HA 還原這個 add-on 的備份後，第一次啟動在 `/data/mcp` 留下空的 `.restore-detected`（只有擁有者能讀寫），還原修復那一行 log 的
-  數字多 1。HM-13b 合併前沒有程式讀或刪它，之後的備份也會帶著。建不出標記時記一行原因（磁碟上有帳號資料就拒絕啟動，今天沒有）。
-  沒還原的啟動不變。
-- CHANGELOG（照 HM-13a 筆記第 3.4 節原文）。**只適用 HM-13b（#108）合併之前的發版**；之後改寫成 HM-13b 的新行為（第 6 節）。
-  不要照抄計畫 §3.3 的表：那是 HM-13b 之後的行為。
-
-  ```text
-  - Restore detection (groundwork for multiple profiles): after Home Assistant restores this add-on's backup, the first
-    start leaves an empty, owner-only marker file `.restore-detected` in `/data/mcp`, and the restore repair log line
-    counts it (`re-owned N restored entries`). A later version reads and removes it; until then it stays, also in later
-    backups. If the marker cannot be saved, that start logs one line with the reason (an errno name such as `ENOSPC`, or
-    `name in use`); with multi-profile data on disk (none today) the start is refused and retried at the next start.
-    Starts without a restore are unchanged.
-  ```
-
-- 已發：0.4.14（Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud；OpenDesign 只升來源版本）。Headscale 還沒發。
-
-### A4 HM-14 子程式 initialize 錯誤的遮罩（#103，`7c6f80c`，2026-11-16）
-
-- 產品：8 個都帶。HM-14 其他部分受開關管（第 4.2 節）。
-- 看得到的變化：子程式對 initialize 回的 JSON-RPC 錯誤裡，出現本 add-on 自己的憑證（MCP token、child token、後端秘密欄位與它們的 Basic 形式）時，
-  那幾段換成 `[REDACTED]`（`Content-Length` 跟著變）。其他轉回子程式或後端文字的路徑本來就遮；錯誤裡沒有憑證時逐位元照舊。
-- CHANGELOG（主對話補寫；筆記沒有英文句子，照契約第 1.2 節 HM-14 那段）：
-
-  ```text
-  - If the MCP child answers `initialize` with an error that contains this add-on's own credentials (the MCP token, the child token, a backend secret or its Basic form), those parts now reach the client as `[REDACTED]`, as every other text the gateway passes on from the child or the backend already did (PR #103). Status codes and other headers are unchanged; an error without credentials is returned exactly as before.
-  ```
-
-- 已發：0.4.14（Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud；OpenDesign 只升來源版本）。Headscale 還沒發。
-
-### A5 HM-31 請求內容位元組預算與 JSON 結構守門（#105，`7ac41aa`，2026-11-16）
-
-- 產品：8 個都帶；n8n 另加一句。
-- 看得到的變化：超過 64 KiB 的大請求放不進預算時回 `-32003`；大請求 30 秒沒有新位元組回 408；巢狀超過 64 層或元素超過 20 萬的 JSON、
-  不是 UTF-8 的 body 在解析前被拒；宣告超過 16 MiB 的改在讀之前回同一個 413（8099 也是）；每種拒收每分鐘一行 WARNING。
-  上限內的請求逐位元照舊。逐項見契約第 1.2 節 HM-31 那段。
-- CHANGELOG（照 HM-31 筆記第 8 節原文，`#NNN` 換成 `#105`）：
-
-  ```text
-  - Gateway request limits aligned with the PaaS server (PR #105): a request body over 64 KiB is read under a byte budget derived at startup from the container's memory limit, or from MemAvailable less 256 MiB when there is none (at least 16 MiB, at most 64 MiB for the add-on's profile). What counts is the larger of the body as received and as forwarded to the add-on's MCP server, which escapes non-ASCII text, so Chinese text counts about twice its size and emoji about three times (with the smallest 16 MiB share, a 6 MiB body of emoji is refused); a Content-Length sent together with Transfer-Encoding is ignored and the bytes that arrive are counted. A large body the budget cannot hold is answered with JSON-RPC error -32003 and `Retry-After: 5` (HTTP 200 under its id when its head or tail shows it, else 503) instead of being processed, and one that sends nothing for 30 seconds is dropped with HTTP 408 (`-32003`, `Connection: close`); the 60-second whole-read limit and its 408 are unchanged. A body that declares more than 16 MiB gets the same HTTP 413 as before, now before any of it is read. A JSON body nested deeper than 64 levels or with more than 200,000 elements is refused before it is parsed (HTTP 200 with `-32602` under its id when its head or tail shows it, else 413); so is a body that is not UTF-8 (UTF-16 and UTF-32 bodies were processed before; invalid UTF-8, and malformed JSON with that much structure, got HTTP 400 before). Requests within these limits are answered exactly as before; each kind of refusal writes one warning a minute.
-  ```
-
-  n8n 另加：
-
-  ```text
-  - n8n: a body nested deeper than 64 levels now gets HTTP 200 with `-32602` under its id (it was 413 with a null id), and a body that is not UTF-8 gets the encoding refusal (it was 400 with `-32700`).
-  ```
-
-- 已發：0.4.14（Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud；OpenDesign 只升來源版本）。Headscale 還沒發。
-
-### A6 HM-09 追補：健康監看一定照停止要求停下（#106，`df686dd`，2026-11-16）
-
-- 產品：8 個都帶（使用者 2026-11-16 13:4x 定「全部產品都修」）。
-- 看得到的變化：停止 add-on 時，極少數情況下健康監看吃掉停止要求，一直等到 HA 的 30 秒停止上限被強制結束；現在那次檢查做完就停、
-  照順序關完。8081、8099 的回應、健康狀態與 log 不變。
-- CHANGELOG（照 HM-09 追補筆記第 4 節原文）：
-
-  ```text
-  - Fixed: stopping the add-on could wait for Home Assistant's 30 s stop timeout in rare cases.
-  ```
-
-- 已發：0.4.14（Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud；OpenDesign 只升來源版本）。Headscale 還沒發。
-
-### A7 管理員驗證接受 HA Core 2026.11.2（Core 白名單審查，不是多帳號計畫的片；#120，`4cc7bee`，2026-11-17）
-
-- 產品：8 個都帶（`ha_role.py` 是每個映像都複製的共用程式，不受開關管）。
-- 看得到的變化：管理員驗證多接受 HA Core 2026.11.2（2026-11-16 發布）。現在發行的映像（Headscale 0.4.18、其他產品 0.4.13）在 Core
-  2026.11.2 上管理面板拒絕每個請求（顯示 Core 版本還沒審查的頁面，add-on log 記一行），MCP 端點不受影響。25 個契約與相鄰檔和 2026.11.1
-  逐位元相同，Supervisor 2026.11.0 的 `api/proxy.py` 和審過的相同（`docs/ha-role-core-contract.md` 的 2026.11.2 審查、
-  `docs/provenance/ha-core-2026-11-2-blobs.json`）。
-- CHANGELOG（本片寫，PR 號 #120）。B1 的 7 個產品同一版發，可以和 B1 合成一句（「accepts Home Assistant Core
-  2026.11.0, 2026.11.1 and 2026.11.2」，兩個 PR 號都寫）：
-
-  ```text
-  - The administrator check now also accepts Home Assistant Core 2026.11.2 (PR #120): its 25 Core contract and adjacent files are byte-identical to 2026.11.1, and Supervisor 2026.11.0 ships the reviewed WebSocket proxy unchanged. Earlier versions of this add-on refuse every admin panel request on Core 2026.11.2; later patches and pre-releases stay refused until reviewed. MCP endpoints do not use this check.
-  ```
-
-- 已發：0.4.14（Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud；OpenDesign 只升來源版本；和 B1 合成一句）。Headscale 還沒發。
+- 已發：0.4.14（Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud；OpenDesign 只升來源版本；升版 commit `7252d9e`，A7 由 `2dab8c2` 合進來，
+  和 B1 合成一句）與 Headscale 0.4.19（升版 commit 合併後補；A7 寫成主因那一句）。n8n 不適用 A2；A5 的 n8n 那一句只寫在 n8n。
+- 刪掉的項目：A1 HM-02 紀錄遮罩（#98）、A2 HM-06 子程式 bearer（#94）、A3 HM-13a 還原標記（#97）、A4 HM-14 initialize 錯誤的遮罩（#103）、
+  A5 HM-31 請求內容位元組預算與 JSON 結構守門（#105）、A6 HM-09 追補（#106）、A7 管理員驗證接受 HA Core 2026.11.2（#120）。原來的句子、
+  看得到的變化與出處見 `4cc7bee`（#120 的合併）的本檔與 `docs/provenance/ha-multiprofile-unreleased-changes-20261117.md`。寫進 CHANGELOG 時
+  照 0.4.14 那批的寫法：A3、A6 補 PR 號，A4 寫明狀態碼、其他標頭與其餘文字不變、只有 `Content-Length` 跟著變；以各產品 CHANGELOG 為準。
+- 之後不受開關管的共用變更照檔頭第 1 點加在這一節，從 A8 編起（A1～A7 已用在各 PR 與發版紀錄裡）。
 
 ## 2. 0.4.13 這條線共通（B：Headscale 以外的 7 個產品）
 
@@ -221,10 +123,11 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 
 ### 3.8 Headscale
 
-- 上次發版：0.4.18（升版 commit＝映像來源 `55f3528`）。
-- 要寫：A1～A7（7 項）。0.4.18 的來源 `55f3528` 已含 #77～#88（B1、B2 也在內），Headscale 該寫的已寫進它的 CHANGELOG。
-- 自己的修正：沒有（`apps/headscale`、`addons/headscale` 在 `55f3528` 之後沒改）。
-- 發版時另外驗：第 5 節。
+- 上次發版：0.4.19（升版 commit 合併後補；映像來源待建置後補）。
+- 要寫：無（A1～A7 已寫進 0.4.19；0.4.18 的來源 `55f3528` 已含 #77～#88，B1、B2 也在內）。
+- 自己的修正：沒有（`apps/headscale`、`addons/headscale` 在 `55f3528` 之後只改了 0.4.19 的版號、CHANGELOG 與文件）。
+- 發版時另外驗：第 5 節。Headscale 第一次走 GitHub 發版流程（之前每一版都是 builder VM 推的）：觸發前負責人要先給 `amd64-mcp-headscale`
+  套件設 Actions 權限（`docs/operations/release.md`「負責人要在 GitHub 設定的項目」第 4 項）。
 
 ## 4. 沒有可見變化的片（不用逐項寫 CHANGELOG）
 
@@ -262,6 +165,8 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 - This image also carries the groundwork for multiple profiles per add-on (PRs #91, #93, #95, #99, #101–#104, #107, #110, #111 and #114). It stays switched off for this add-on: requests, responses, the admin panel and the files in `/data/mcp` are unchanged apart from the changes listed above.
 ```
 
+0.4.14 的六個產品與 Headscale 0.4.19 的 CHANGELOG 都寫了這一句；下一版只交代那之後合併的片。
+
 ## 5. 發版時要另外驗的事（每個發映像的產品；計畫 §11.5）
 
 1. 走完整的既有發版流程，不能只看單帳號黃金回歸（HM-05、HM-06 合併後的規定）。
@@ -274,7 +179,7 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 4. HA Core 版本：管理員驗證只認到 2026.11.2（#81、#120）。目標 HAOS 的 Core 比它新，要先補審（計畫 §11.3 的升版 PR 清單：`Hc/ha_role.py` 與
    `docs/ha-role-core-contract.md`），不然面板拒絕每個請求。
 5. HM-31 的預算常數是暫定（契約第 5 節）。那裡的「HM-19c 放行條件」（在目標硬體量閘道＋子程式的放大倍數與 MemAvailable，不過就不能發版）
-   是為 Odoo 首發寫的，但 A5 不受開關管，任何產品下一版都會帶出去。HM-19c 量測之前要發版，先請負責人決定要不要先量。
+   是為 Odoo 首發寫的，但 A5（HM-31，#105）不受開關管，任何產品下一版都會帶出去。HM-19c 量測之前要發版，先請負責人決定要不要先量。
 6. 版號資料 7 處照 `docs/operations/release.md`「升版時要改的版號資料」；readiness 只認該產品自己的
    `docs/operations/release-decision-<產品>-<版號>.md`（HM-17）。
 7. 發版鎖：同一時間只有一個凍結中的升版 PR（含其他產品的修補版；計畫 §11.5）。
@@ -286,7 +191,7 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 
 | 片 | PR | 不受開關管的部分 | 合併時要改本檔的地方 |
 |---|---|---|---|
-| HM-13b | #108 | 開機守門的存在檢查、休眠處理（計畫 §3.3） | 開機時刪還原標記並記一行 WARNING：A3 的句子只適用 HM-13b 之前的版本，照 HM-13b 筆記的交接改寫 A3 |
+| HM-13b | #108 | 開機守門的存在檢查、休眠處理（計畫 §3.3） | 開機時刪還原標記並記一行 WARNING：A3（標記一直留著）已在 0.4.14 與 Headscale 0.4.19 寫進 CHANGELOG、從第 1 節刪除，HM-13b 合併時照它筆記的交接在第 1 節加一個新的共通項，寫新行為 |
 | HM-13c | #112 | 單帳號還原後的面板提示（使用者 2026-11-16 定案） | 加一個共通項；CHANGELOG 句子在 HM-13c 筆記交 HM-19a 的那一段 |
 | HM-16 | #109 | 驗收工具（`packaging/`） | 沒有可見變化，加到第 4.1 節 |
 | HM-27 | #116 | 無（受開關管，report-only） | 加到第 4.2 節 |
