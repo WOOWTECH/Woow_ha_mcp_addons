@@ -21,7 +21,7 @@ const mounts = [prefix, ''];
 // real app by tests/test_panel_profile_api_shapes.py) and tests/browser/profile-api-parity.spec.mjs checks this mock
 // against the same cases.
 // HM-13c (contract 3.1, 3.6, 4.1): config.restoreNotice ({at}: the default bootstrap's restore_notice until the default
-// profile's token changes, switched on or off), config.dormantProfiles (a switched-off bootstrap's dormant_profiles) and,
+// profile's token changes, switched on or off; HM-12's identity change that rotates it too), config.dormantProfiles (a switched-off bootstrap's dormant_profiles) and,
 // switched on, config.profiles.restore ({at, dormantAt, rows: [{id, label, token, identity, policy, reviewed_at}],
 // broken}: the guard's record, GET profiles/restore-record, POST profiles/<id>/restore-review, the bootstrap's
 // restore_review and restore_review_required, the token/rotate gate), config.profiles.quarantined (names: the list's
@@ -633,6 +633,8 @@ const server = http.createServer(async (request, response) => {
       profile.revision++;
       if (rebound) {
         rotate(profile);
+        // HM-13c with HM-12: the default profile's kept token is the backup's no more, so its restore notice ends.
+        if (profile.id === DEFAULT) config.restoreNotice = undefined;
         if (fault === 'start') {
           config.applyState = 'failed';
           return reply(response, 503, {saved: true, token_rotated: true, detail: {code: 'config_apply_failed'}, configuration: configuration(profile)}, profile, operation);
