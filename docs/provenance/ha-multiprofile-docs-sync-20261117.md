@@ -13,6 +13,8 @@
   改之前先確認：原產生器加原輸入重產＝`f239157` 的兩個檔逐位元相同（第 4.3 節）。
 - 未合併的 PR（#108 HM-13b、#112 HM-13c、#116 HM-27）的列不在主線上，沒有寫進來。
 - 沒有測試讀這些文件，沒跑 pytest（第 7 節）。秘密預檢 0 命中、帳本預檢 OK、雙向控制字元 0。
+- 第二輪（主對話授權，第 11 節）：照第 9 節列的字改了 repo 外的 FEATURE-MATRIX 與 PLAN，`deviation-trace.md` 照新的原文重產；
+  `negative_tests.py` 三種過時的改壞換了對象，22 種改壞都如期失敗；C1～C9 仍全部通過。
 
 ## 1. 範圍與基準
 
@@ -23,13 +25,13 @@
 | 契約第 9 節 | 117 列（主線最後一列是 HM-12 面板的 #117） |
 | PaaS | pin `69ac425`；本表的基準 `48f394d`（`origin/main`，#156 的合併）；#149 head `3d33bc5` |
 | 讀 PaaS 的方式 | 唯讀 worktree `paas-mp-research-20261114`（第 4.2 節） |
-| 輸入（repo 外，`artifacts/ha-multiprofile-parity-20261114/`） | `FEATURE-MATRIX-zh-TW.md` `662b21497698135b`、`gaps/G6-delivery.md` `b8285253e2738b60`、`PLAN-zh-TW.md` `48810d9be8565bf3`（C7、C8 讀） |
+| 輸入（repo 外，`artifacts/ha-multiprofile-parity-20261114/`） | 現在：`FEATURE-MATRIX-zh-TW.md` `fbc2703c9d64c63c`、`gaps/G6-delivery.md` `b8285253e2738b60`、`PLAN-zh-TW.md` `5973373868a63749`（C7、C8 讀）。第一輪是 FEATURE-MATRIX `662b21497698135b`、PLAN `48810d9be8565bf3`（第 11 節） |
 
 ## 2. 改了什麼、沒改什麼
 
 | 檔 | 內容 |
 |---|---|
-| `docs/multi-profile/deviation-trace.md` | 產生器重產（第 4.4 節） |
+| `docs/multi-profile/deviation-trace.md` | 產生器重產（第 4.4 節）；第二輪照 FEATURE-MATRIX 的新原文再重產（第 11 節） |
 | `docs/multi-profile/paas-test-mapping.md` | 產生器重產（第 4.5 節） |
 | `docs/multi-profile/contract.md` | 第 2.4 節兩個測試名稱改寫（C7）；第 9 節說明段拿掉「`deviation-trace.md` 沒有這幾列」，補一句第 87 列以後怎麼對到；第 10 節加一列。差異表的列、錯誤代碼沒動 |
 | `docs/multi-profile/README.md` | 對照表的規模、PaaS 基準與重產指令的位置 |
@@ -94,8 +96,9 @@ python3 -I -B <A>/wave0/hm00-check/gen_paas_mapping.py <PaaS> <HA clone>/docs/mu
 | `gen_trace.py` | `8da1bf8376d29390` | `5eb30044d99e5136` |
 | `gen_paas_mapping.py` | `4a1c152a0de63441` | `5bfd39c12c631302` |
 | `paas_mapping_spec.py` | `99e7c28e738a3b4c` | `00d68e77259fa3c3` |
-| `check_hm00.py`、`paas_cases.py`、`sources.py`、`negative_tests.py` | 沒改 | `dffee441211c5ee4`、`67caa4c613933f1a`、`a9241101ddbee7f7`、`e2932317465fb8e4` |
-| 產出 `deviation-trace.md` | `4005c94d362994bf`（`f239157`） | `97b8a1b4306d494d` |
+| `check_hm00.py`、`paas_cases.py`、`sources.py` | 沒改 | `dffee441211c5ee4`、`67caa4c613933f1a`、`a9241101ddbee7f7` |
+| `negative_tests.py`（第二輪） | `e2932317465fb8e4` | `8c2f266ce80fcc6b` |
+| 產出 `deviation-trace.md` | `4005c94d362994bf`（`f239157`） | `af7bb2981195b5fc`（第一輪的 `18ac3fd` 是 `97b8a1b4306d494d`） |
 | 產出 `paas-test-mapping.md` | `4c17352dda09fc7a`（`f239157`） | `a1527de81543676e` |
 
 ### 4.2 PaaS 怎麼讀（為什麼用唯讀 worktree）
@@ -106,6 +109,8 @@ python3 -I -B <A>/wave0/hm00-check/gen_paas_mapping.py <PaaS> <HA clone>/docs/mu
   `.git` 目錄跑。這個 worktree 和 PaaS repo 共用物件與 refs（`origin/main`＝`48f394d`），它自己停在 `443e95a` 不影響結果：腳本只讀指定的
   revision（`69ac425`、`48f394d`、`3d33bc5`），不看工作樹。都設 `GIT_OPTIONAL_LOCKS=0`。沒有 fetch、checkout，worktree 的
   `git status` 乾淨。
+- 照實記一件不該做的事：開工時（11:1x）為了確認這個 worktree 能不能寫，在它的根目錄 `touch` 了一個空檔 `.probe_write_test`，
+  隨即 `rm` 掉。這違反「不要在 worktree 裡改檔」。之後確認檔已不在，`git --no-optional-locks status` 乾淨，沒有其他寫入。
 - 自己查 PaaS 時只對 `.git` 目錄用 `log`、`show`、`ls-tree`（哪個 PR 改了哪個測試檔、各案的內容）。
 - 另把 `paas_cases.collect(…, '48f394d')` 的結果存成快取（artifacts `wave4/evidence-docs-sync-20261117/cache/paas_cases-48f394d.json`，
   SHA-256 `59542623726c0d89…`，也記在 `SHA256SUMS`），照 HM-12 面板筆記第 15 節 S-3 的做法離線重產：和用 worktree 重產的結果逐位元相同。
@@ -190,7 +195,8 @@ D 組新增的 23 檔 217 案（「pin 之後的變動」表每個檔寫明 PR�
   - 「對到不存在的差異列」把 FM-01 改成 `#99`，但 HM-14 起第 99 列存在 → 期望失敗卻通過。
   - 「待定沒有負責片」要找的 `| 待定 | HM-10 | HM-10 開工前 |`，DQ-13、DQ-14 已定之後就沒有了 → 腳本停下。
 - 拿暫存區的複本改這兩處（`#999`、改用 DQ-42 那列）重跑：每一種改壞都被抓到。另兩種 C8 的改壞失敗原因和預期的字不同（`decisions.md`
-  的節與列變過），不是漏抓。`negative_tests.py` 要不要更新交主對話；複本在 `wave4/evidence-docs-sync-20261117/tools/`。
+  的節與列變過），不是漏抓。
+- 第二輪主對話授權修 `negative_tests.py`（第 11 節）：改好之後 22 種改壞都如期失敗，原因也都對。
 
 ## 7. 本機檢查（2026-11-17，一般使用者 uid 1000）
 
@@ -210,18 +216,36 @@ D 組新增的 23 檔 217 案（「pin 之後的變動」表每個檔寫明 PR�
 - 只改 `docs/`，`checks` 照常跑全套（root、0 skip）；預期和基準一樣。
 - `checks` 秒數：CI 跑完補在 PR 說明。
 
-## 9. 交主對話（repo 外的字；本 PR 沒有改，也不需要改才能過 C1～C9）
+## 9. repo 外的字（第一輪列給主對話；第二輪經授權已改，第 11 節）
 
 - FEATURE-MATRIX 有幾格「HA 平台差異」的字已經過時（FM-81 的「PaaS 沒做、待決（DQ-05）」「未確認（UC-21）」、FM-61 的「待決（DQ-02、DQ-31）」、
-  FM-51 的「#148 尚未合併」）。本 PR 在 `deviation-trace.md` 的說明欄寫了現況；要改原文的話，同一個 PR 要用產生器重產
-  `deviation-trace.md`，不然 C3 會報「原文和來源不同」。逐條的字在 PR 說明。
-- FM-155、FM-156 的「HA 平台差異」寫「無」，其他 44 列沒有平台差異的寫「—」。現在照差異文字對到測試，不用改；要統一成「—」，產生器要把這兩列
+  FM-51 的「#148 尚未合併」），§2.12 開頭把 `cf3d0d5` 寫成「本計畫 pin」；PLAN 的 HM-12 段還寫「面板合併前，別的分支不要用新規格重產」。
+  第二輪照逐條的字改了，`deviation-trace.md` 同時重產（不重產的話 C3 會報「原文和來源不同」）。
+- FM-155、FM-156 的「HA 平台差異」寫「無」，其他 44 列沒有平台差異的寫「—」。現在照差異文字對到測試，沒改；要統一成「—」，產生器要把這兩列
   從 FM 表移到「—」的表。
 
 ## 10. 還沒解決、交給後面的片
 
-- HM-18：契約 #85 的類型還寫「待決（DQ-31）」，DQ-31 已在 2026-11-15 17:4x 定案；類型怎麼改由契約定稿決定。
+- HM-18：契約 #85 的類型還寫「待決（DQ-31）」，DQ-31 已在 2026-11-15 17:4x 定案；類型怎麼改由契約定稿決定（第二輪已記進計畫 §12.3 HM-18 段）。
 - HM-22、HM-23：PaaS #152、#154（Nextcloud）與 #153（EMQX）的對照，D 組的歸屬已指到這兩片。
 - HM-13b（#108）、HM-13c（#112）、HM-27（#116）合併後：它們的差異列加進契約第 9 節時，`deviation-trace.md` 文末的反查表與 `ORIGIN`
   要一起重產（沒對到的新列要寫出處，不然產生器失敗）。
 - PaaS 再前進時：先補規格的 `POST_PIN_SUMMARY` 與 `POST_PIN_NOTES`，再用新的 `--main` 重產；`check_hm00.py` 的 C6 一律比 `origin/main`。
+
+## 11. 第二輪：主對話授權改 repo 外的字（2026-11-17 12:0x）
+
+主對話收到第一輪的結果後，授權照第 9 節列的字直接改 repo 外的 FEATURE-MATRIX、PLAN 與 `negative_tests.py`，在同一個分支補上、只 commit。
+這段時間主對話不動 FEATURE-MATRIX 與 PLAN；改之前核對過兩個檔的 SHA-256 和第一輪用的相同。
+
+| 檔（repo 外） | 改了什麼 | 改前備份 |
+|---|---|---|
+| `FEATURE-MATRIX-zh-TW.md` | 三格「HA 平台差異」欄：FM-81 改成「…Nextcloud 比照：DQ-05 已定（依 DQ-40 (a)），PaaS #154（2026-11-15）也做了；「先提交再停」之間新 token 會不會打到舊子程式：HM-12 改成先停再提交，已由測試確認（UC-21）」；FM-61 改成「…：DQ-02 採 (a)、DQ-31 已定（2026-11-15 17:4x 採用建議）」；FM-51 改成「#148 已合併進 pin（`69ac425`）」。§2.12 開頭改成「來源：PaaS 在 `cf3d0d5`（#151 的合併）之後合併的 PR（本計畫的 pin 是 `69ac425`）」。只換那幾格與那一句，其他位元不變 | 暫存區 `FEATURE-MATRIX-zh-TW.md.before-docsync-20261117`；artifacts `wave4/evidence-docs-sync-20261117/tools/FEATURE-MATRIX-zh-TW.before-20261117.md.txt` |
+| `PLAN-zh-TW.md` | §12.3 HM-12 段「…面板合併前，別的分支不要用新規格重產 `paas-test-mapping.md`。」後面加「（面板 #114 已合併；2026-11-17 文件同步已用新規格重產到 PaaS `48f394d`）」；HM-18 段加一條「2026-11-17 加（文件同步交來）：契約第 9 節 #85 的類型還寫「待決（DQ-31）」，DQ-31 已在 2026-11-15 定案，定稿時改成正確的類型。」 | 暫存區 `PLAN-zh-TW.md.before-docsync-20261117`；artifacts 同一個 `tools/` 下的 `PLAN-zh-TW.before-20261117.md.txt` |
+| `wave0/hm00-check/negative_tests.py` | 三種改壞換對象，種類與期望的失敗原因不變：FM-01 改指不存在的 `#999`；「待定沒有負責片」改用還在待定的 DQ-42（§13.2）；「§13.3 的題放進第 2 節」把 DQ-04 搬到 DQ-42 後面（DQ-13 已移到第 1 節）。檔頭加一段說明 | 暫存區 `docsync/backup-round2/negative_tests.py.before-docsync-20261117`；artifacts `tools/negative_tests.before-20261117.py.txt` |
+| `wave0/hm00-check/SHA256SUMS` | `negative_tests.py`、FEATURE-MATRIX、PLAN 的新值，檔頭的註解寫改之前的值；產生器與規格這一輪沒改，值同第一輪。`sha256sum -c` 29 筆全 OK | 暫存區 `docsync/backup-round2/SHA256SUMS.before-round2-20261117`；artifacts `tools/SHA256SUMS.before-round2-20261117.txt` |
+
+- 重產：產生器沒改，照 FEATURE-MATRIX 的新原文重跑 `gen_trace.py`。`deviation-trace.md` 只有 FM-51、FM-61、FM-81 三列的「原文」變，
+  「對到」與說明欄不變（commit `7b15f23`）。`paas-test-mapping.md` 的輸入沒變，不用重產；離線重產照舊和 commit 的檔逐位元相同。
+- C1～C9（head `7b15f23`，工作樹乾淨）：全部通過。C3 仍是來源 112 列、對照 112 列、對到差異表 101 列、對到測試 46 列；其餘各項的數字和第 3 節相同。
+- `negative_tests.py`（裝好的版本）：22 種改壞全部如期失敗，失敗原因也對，結束碼 0。
+- 本筆記這一輪的 commit 之後，再跑一次 C1～C9、秘密預檢、帳本預檢、雙向控制字元，結果寫在 PR 說明。
