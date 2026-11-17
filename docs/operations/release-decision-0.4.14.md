@@ -1,7 +1,7 @@
-# 0.4.14 映像發佈紀錄（草稿）
+# 0.4.14（與 Headscale 0.4.19）映像發佈紀錄（草稿）
 
 狀態：**草稿：來源候選，映像尚未建置**。這是 Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud 六個商店產品的維修版；OpenDesign 只升來源版本
-（商店停用），Headscale 維持自己的 0.4.18。合併升版 PR 就是發佈到 WOOW App Store：建置、推 GHCR、合併都要負責人逐步批准，
+（商店停用）。**Headscale 自己的版號線同一個 PR 升到 0.4.19**（負責人 2026-11-18 的決定，見下）。合併升版 PR 就是發佈到 WOOW App Store：建置、推 GHCR、合併都要負責人逐步批准，
 下面的驗收清單在做完並補上證據之前都是「待做」。這份共用紀錄不是 readiness 認的紀錄（見第 4 項）。
 
 ## 為什麼發這一版
@@ -34,7 +34,7 @@
 - OpenDesign 跟著升來源版本（負責人 2026-11-17 14:4x 確認照前例一起升）的理由：0.4.10～0.4.13 每一版都只同步來源版本（0.4.13 是 `1cbfcb9`）；它的 DOCS 寫「版本號照共用規則一起升」；
   Store registry 停用它，readiness 不檢查它；不跟著升就要加一個 `opendesign` override，運算式變成 GitHub 沒算過的三路串接。不建映像、
   不做 HAOS 驗收。
-- Headscale 不在這一版：自己的版號線，0.4.18 已發。共通變更（清單第 1 節 A1～A6）等它下一版才帶出去。
+- Headscale 原本不在這一版（自己的版號線，0.4.18 已發）。**2026-11-18 改成同一個 PR 發 0.4.19**：0.4.18 只認到 Core 2026.11.1，在 2026.11.2 上管理面板也會被鎖，而且還沒帶 0.4.18 之後的共用改動 A1～A7。負責人 04:5x 選「六支照跑，同時準備 0.4.19」，並先同意「六支結果要改程式才修得好，就把 Headscale 一起放進去、七支重跑」；第一次建置正是這種情況（見下一節）。Headscale 的升版 commit（版號資料只動 Headscale 的 override、manifest、Dockerfile、ci 2 處、release 4 處；CHANGELOG 寫 A1～A7）在本 PR，運算式變成 `<app> == 'headscale' && '0.4.19' || '0.4.14'`。
 
 ## HA Core 版本（2026-11-17 查公開來源，唯讀）
 
@@ -60,6 +60,15 @@
   要改來源才修得好的失敗就全部 Reject；暫時性的（網路、API 5xx、apt／Docker Hub、artifact 服務）同一個 commit 重觸發那一支，最多一次，記在這裡。
 - 任何一段失敗都要重新觸發，不能 re-run。
 
+## 第一次建置（2026-11-18，`93f31a4`，放棄）
+
+- 負責人 04:4x 批准觸發；20:42Z 觸發六支（odoo 44172025080、n8n 44172030303、hermes 44172036656、emqx 44172042788、litellm 44172047498、nextcloud 44172052735）。
+- 結果：odoo、n8n、hermes 的 gate 與 candidate 都通過（含容器驗收 1a／1b、J1900），publish 停在等待核准；emqx、litellm、nextcloud 的 candidate 在供應鏈閘門失敗。
+- 原因（本機用同一版 syft 1.54.0、grype 0.120.0 與 `supply-chain-policy.json` 重現於已發佈的 0.4.13 映像）：子程式環境的 dnspython 2.9.0 有 GHSA-vvf4-9x63-8xvv（CVE-2026-128089，High，2.9.2 修補；zone 檔 WKS 紀錄的服務編號沒檢查範圍，可耗盡記憶體與 CPU），政策對「有修補版的 High」一律擋。odoo 對照組沒有這個命中。0.4.13 發佈之後才公布（11/04 發布、11/13 進 GitHub 資料庫），已發佈的 0.4.13（以及 Headscale 0.4.18）都帶著 2.9.0。
+- 修法（要改來源，照規則全部重來）：emqx、litellm、nextcloud、headscale 的 `uv.lock` 只把 dnspython 升到 2.9.2（`uv lock --upgrade-package dnspython==2.9.2`，wheel sha256 `af15f7d3…`，2026-11-03 上傳）；`tests/test_output_schemas.py` 補這四個 `uv.lock` 的新位元組釘選（不影響執行期的輸出 schema）；四份 CHANGELOG 與根目錄各加一行。
+- 確認不會帶進新問題：用同一版 gitleaks 8.28.0 和 repo 的設定掃 2.9.0 與 2.9.2 的 wheel，兩者都是同樣 6 處命中（`dns/dnssecalgs/mldsa.py`、`eddsa.py`），雜湊都在 `secret-triage.json` 已核准的清單；授權一樣是 ISC。
+- 舊的三個等待中的 publish 不核准，新 head 推上去之前先取消或 Reject；之後七支（加 Headscale 0.4.19）用新 head 重新觸發。
+
 ## 驗收清單
 
 | # | 項目 | 誰做 | 要負責人批准 | 狀態 |
@@ -69,7 +78,7 @@
 | 1b | 容器驗收：HM-13a 的 root 還原樹（`restored_start`：還原標記在、還原項目改回 10001、`state.json` 位元不變）。第一次在真容器跑，同上 | GitHub 託管機器跑 `release.yaml`（#121；本對話在負責人批准後逐產品觸發，負責人在 GitHub 核准 `public-release`） | 同第 1 項 | 待做 |
 | 2 | J1900 指令集檢查：QEMU user-mode `-cpu Nehalem`（比 J1900 嚴格）跑六個候選映像（DQ-42，負責人 2026-11-17 定每次發版都跑；做法見 [0.1.7 發佈紀錄](release-decision-0.1.7.md)「0.1.8 待辦」最後一點） | GitHub 託管機器跑 `release.yaml`（#121；本對話在負責人批准後逐產品觸發，負責人在 GitHub 核准 `public-release`） | **要**（和第 1 項同一個核准計畫） | 待做 |
 | 3 | 推 GHCR（推了就燒版號）：只推測過的同一個 image ID，匿名以不可變 digest 讀回 | GitHub 託管機器跑 `release.yaml`（#121；本對話在負責人批准後逐產品觸發，負責人在 GitHub 核准 `public-release`） | **要** | 待做 |
-| 4 | 每個產品自己的發佈紀錄 `release-decision-<產品>-0.4.14.md` × 6（寫 `woow_mcp_<產品>` 與 0.4.14、映像 digest、第 1～3 項的結果）＋ provenance JSON；readiness 只認這六份，本檔不算（HM-17） | 代理 | 否（證據 commit 只加紀錄檔） | 待做 |
+| 4 | 每個產品自己的發佈紀錄 `release-decision-<產品>-0.4.14.md` × 6 ＋ `release-decision-headscale-0.4.19.md`（寫 `woow_mcp_<產品>` 與版號、映像 digest、第 1～3 項的結果）＋ provenance JSON；readiness 只認這七份，本檔不算（HM-17） | 代理 | 否（證據 commit 只加紀錄檔） | 待做 |
 | 5 | CI 在 PR head 全綠：`checks`、`readiness`（六個映像可匿名拉取＋第 4 項）、`Upgrade comparison / compare`（設定比對、0.4.13 → 0.4.14 升級測試、漏洞比對）、`Release train` | CI | 否 | 待做 |
 | 6 | 升版比對要求時才建 `addons/<產品>/upgrade-notes.yaml`（照報告的 `change`／`key`，或新增可修補 Critical／High 漏洞的 `id`／`package`） | 代理 | 接受漏洞要負責人同意 | 待做（比對跑出來才知道） |
 | 7 | 每個產品的 HAOS P9 回歸（[ha-p9-kit](ha-p9-kit.md)）；Hermes 另看 `enabled=false` 建出的排程是停用的。展示機不升 Core（負責人 2026-11-17 20:2x），所以只驗 Core 2026.7.2 上沒退步；Core 2026.11.x 上面板能開（這一版的目的）靠 CI 與單元測試，不在實機驗 | 本對話在負責人指定的展示機 woowtechshow 做，每步負責人批准 | **要**（主機） | 待做 |
