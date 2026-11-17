@@ -16,7 +16,7 @@
   3. 發版的 PR：句子寫進 CHANGELOG 之後，同一個 PR 改本檔：該產品節的「上次發版」換成新版號與升版 commit，寫進去的自身項目刪掉；
      共通項目在「已發」填產品與版號，適用的產品都發過才刪。
 - **基準**：`claude-delivery` `907bd39`（2026-11-17，#117 的合併）。查法、每項出處與沒列進來的變更見
-  `docs/provenance/ha-multiprofile-unreleased-changes-20261117.md`。
+  `docs/provenance/ha-multiprofile-unreleased-changes-20261117.md`。A7（HA Core 2026.11.2 審查片，基準 `40f6d10`）2026-11-17 加。
 - **本檔只管 CHANGELOG**。`upgrade-notes.yaml` 照 `AGENTS.md` 第 3 點與升版比對（`Upgrade comparison`）的要求另外判斷；版號資料照
   `docs/operations/release.md`「升版時要改的版號資料」。
 - 「主對話補寫」：該片的筆記沒有英文句子，是照筆記的中文要點或程式照實寫的，最後的英文由發版片定。其他句子照筆記原文。
@@ -25,21 +25,21 @@
 
 | 產品 | 目前版號 | 上次升版 commit | 映像來源 | 要寫進 CHANGELOG 的項目 | 已合併、CHANGELOG 沒記的產品自身修正 |
 |---|---|---|---|---|---|
-| Odoo | 0.4.13 | `1cbfcb9`（2026-11-08，PR #76） | `4966f40` | 7：A1～A6、B1 | 無 |
-| n8n | 0.4.13 | 同上 | `4966f40` | 6：A1、A3～A6（A5 另加一句）、B1 | 無 |
-| Hermes | 0.4.13 | 同上 | `4966f40` | 9：A1～A6、B1、H1、H2 | #85（H1）；HM-33 #115（H2） |
-| EMQX | 0.4.13 | 同上 | `4966f40` | 10：A1～A6、B1、B2、E1、E2 | #87（E1）；HM-32 #113（E2） |
-| LiteLLM | 0.4.13 | 同上 | `4966f40` | 9：A1～A6、B1、B2、L1 | HM-32 #113（L1） |
-| Nextcloud | 0.4.13 | 同上 | `4966f40` | 8：A1～A6、B1、B2 | 無 |
-| OpenDesign | 0.4.13（只升來源版本，商店停用） | 同上 | 沒有映像 | 8：A1～A6、B1、D1 | #86 的 OpenDesign 部分（D1） |
-| Headscale | 0.4.18 | `55f3528`（2026-11-12，PR #88） | `55f3528` | 6：A1～A6 | 無（#77～#88 都已在 0.4.18 的來源裡） |
+| Odoo | 0.4.13 | `1cbfcb9`（2026-11-08，PR #76） | `4966f40` | 8：A1～A7、B1 | 無 |
+| n8n | 0.4.13 | 同上 | `4966f40` | 7：A1、A3～A7（A5 另加一句）、B1 | 無 |
+| Hermes | 0.4.13 | 同上 | `4966f40` | 10：A1～A7、B1、H1、H2 | #85（H1）；HM-33 #115（H2） |
+| EMQX | 0.4.13 | 同上 | `4966f40` | 11：A1～A7、B1、B2、E1、E2 | #87（E1）；HM-32 #113（E2） |
+| LiteLLM | 0.4.13 | 同上 | `4966f40` | 10：A1～A7、B1、B2、L1 | HM-32 #113（L1） |
+| Nextcloud | 0.4.13 | 同上 | `4966f40` | 9：A1～A7、B1、B2 | 無 |
+| OpenDesign | 0.4.13（只升來源版本，商店停用） | 同上 | 沒有映像 | 9：A1～A7、B1、D1 | #86 的 OpenDesign 部分（D1） |
+| Headscale | 0.4.18 | `55f3528`（2026-11-12，PR #88） | `55f3528` | 7：A1～A7 | 無（#77～#88 都已在 0.4.18 的來源裡） |
 
 - 0.4.13：PR #76 在 2026-11-09 合併（`e2108f6`）。六個映像從 `4966f40` 建（`docs/operations/release-decision-0.4.13.md`）；`4966f40` 之後
   #76 只多一個紀錄 commit（`0913611`）。
 - Headscale 0.4.18：映像從升版 commit `55f3528` 建（`docs/provenance/headscale-0.4.18-provenance.json`），PR #88 在 2026-11-12 合併（`bb48449`）。
 - 2026-11-13 之後沒有任何產品發版。
 
-## 1. 所有產品共通（A：多帳號計畫不受開關管的片）
+## 1. 所有產品共通（A：不受開關管的共用變更；A1～A6 是多帳號計畫的片，A7 不是）
 
 ### A1 HM-02 紀錄遮罩對齊 PaaS（#98，`76c1d78`，2026-11-15）
 
@@ -136,6 +136,22 @@
 
 - 已發：—
 
+### A7 管理員驗證接受 HA Core 2026.11.2（Core 白名單審查，不是多帳號計畫的片；PR 號與合併 commit 合併後補，2026-11-17）
+
+- 產品：8 個都帶（`ha_role.py` 是每個映像都複製的共用程式，不受開關管）。
+- 看得到的變化：管理員驗證多接受 HA Core 2026.11.2（2026-11-16 發布）。現在發行的映像（Headscale 0.4.18、其他產品 0.4.13）在 Core
+  2026.11.2 上管理面板拒絕每個請求（顯示 Core 版本還沒審查的頁面，add-on log 記一行），MCP 端點不受影響。25 個契約與相鄰檔和 2026.11.1
+  逐位元相同，Supervisor 2026.11.0 的 `api/proxy.py` 和審過的相同（`docs/ha-role-core-contract.md` 的 2026.11.2 審查、
+  `docs/provenance/ha-core-2026-11-2-blobs.json`）。
+- CHANGELOG（本片寫，PR 號 #120）。B1 的 7 個產品同一版發，可以和 B1 合成一句（「accepts Home Assistant Core
+  2026.11.0, 2026.11.1 and 2026.11.2」，兩個 PR 號都寫）：
+
+  ```text
+  - The administrator check now also accepts Home Assistant Core 2026.11.2 (PR #120): its 25 Core contract and adjacent files are byte-identical to 2026.11.1, and Supervisor 2026.11.0 ships the reviewed WebSocket proxy unchanged. Earlier versions of this add-on refuse every admin panel request on Core 2026.11.2; later patches and pre-releases stay refused until reviewed. MCP endpoints do not use this check.
+  ```
+
+- 已發：—
+
 ## 2. 0.4.13 這條線共通（B：Headscale 以外的 7 個產品）
 
 Headscale 那條線改了共用程式，Headscale 自己已經發版、CHANGELOG 也記了；其他 7 個產品還在 0.4.13，下一版才帶出去。
@@ -144,7 +160,8 @@ Headscale 那條線改了共用程式，Headscale 自己已經發版、CHANGELOG
 
 - 產品：Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud、OpenDesign。Headscale 從 0.4.14 起就有，已記在它的 CHANGELOG。
 - 看得到的變化：0.4.13 的管理員驗證只認到 Core 2026.10.4。在 Core 2026.11.x 上，管理面板拒絕每個請求（顯示 Core 版本還沒審查的頁面，
-  add-on log 記一行），MCP 端點不受影響。下一版起接受 2026.11.0 與 2026.11.1；之後的 2026.11 修補版與預覽版仍拒絕，要另外審查。
+  add-on log 記一行），MCP 端點不受影響。下一版起接受 2026.11.0 與 2026.11.1；之後的 2026.11 修補版與預覽版仍拒絕，要另外審查
+  （2026.11.2 由 A7 加上，同一版一起出去）。
 - CHANGELOG（主對話補寫；照 Headscale 0.4.14 的 CHANGELOG 與 `ha_role.py` 的說明）：
 
   ```text
@@ -173,7 +190,7 @@ Headscale 那條線改了共用程式，Headscale 自己已經發版、CHANGELOG
 ### 3.1 Odoo
 
 - 上次發版：0.4.13（升版 commit `1cbfcb9`；映像來源 `4966f40`）。
-- 要寫：A1～A6、B1（7 項）。
+- 要寫：A1～A7、B1（8 項）。
 - 自己的修正：沒有。`apps/odoo`、`addons/odoo` 在 0.4.13 之後沒改。Odoo 專屬的 HM-12（#110、#114：換身分換 token、新來源重填秘密）受開關管，
   開關關時沒有可見變化（第 4.2 節）。
 - 發版時另外驗：第 5 節。
@@ -181,7 +198,7 @@ Headscale 那條線改了共用程式，Headscale 自己已經發版、CHANGELOG
 ### 3.2 n8n
 
 - 上次發版：0.4.13（同 Odoo）。
-- 要寫：A1、A3、A4、A5（含 n8n 那一句）、A6、B1（6 項）。A2 不寫。
+- 要寫：A1、A3、A4、A5（含 n8n 那一句）、A6、A7、B1（7 項）。A2 不寫。
 - 自己的修正：沒有。`apps/n8n` 的兩次改動都沒有可見變化：HM-04（#91，port 參數化，預設 3000 時 `PORT` 照舊）、HM-20（#102，開通後才拒絕
   loopback 與檢查存檔）。
 - 發版時另外驗：第 5 節。另外，n8n 若自己升版號（不跟預設版號一起升），`apps/n8n/run.py` 沒傳 `product_version`，`serverInfo` 與面板會報
@@ -190,7 +207,7 @@ Headscale 那條線改了共用程式，Headscale 自己已經發版、CHANGELOG
 ### 3.3 Hermes
 
 - 上次發版：0.4.13（同 Odoo）。
-- 要寫：A1～A6、B1、H1、H2（9 項）。
+- 要寫：A1～A7、B1、H1、H2（10 項）。
 - 發版時另外驗：第 5 節。另外兩件交發版片定（HM-33 筆記第 13、15 節）：`addons/hermes/README.md` 或 `DOCS.md` 要不要補「Hermes Agent v0.17.0
   or v0.22.x」那句（照抄要寫成 PaaS 的正式站跑 v0.22.5，不是 HA 的）；trigger 會把停用的排程改回啟用是 Hermes 的上游行為，HA 沒有實測。
 
@@ -217,7 +234,7 @@ Headscale 那條線改了共用程式，Headscale 自己已經發版、CHANGELOG
 ### 3.4 EMQX
 
 - 上次發版：0.4.13（同 Odoo）。
-- 要寫：A1～A6、B1、B2、E1、E2（10 項）。
+- 要寫：A1～A7、B1、B2、E1、E2（11 項）。
 - 發版時另外驗：第 5 節。
 
 #### E1 `emqx_test_rule_sql` 標成需要寫入權限（#87，合併 `14578a7`，commit `a4f4439`，2026-11-12）
@@ -243,7 +260,7 @@ Headscale 那條線改了共用程式，Headscale 自己已經發版、CHANGELOG
 ### 3.5 LiteLLM
 
 - 上次發版：0.4.13（同 Odoo）。
-- 要寫：A1～A6、B1、B2、L1（9 項）。
+- 要寫：A1～A7、B1、B2、L1（10 項）。
 - 發版時另外驗：第 5 節。
 
 #### L1 HM-32 LiteLLM 不保留閒置的後端連線（#113，`a709b97`，2026-11-17）
@@ -258,7 +275,7 @@ Headscale 那條線改了共用程式，Headscale 自己已經發版、CHANGELOG
 ### 3.6 Nextcloud
 
 - 上次發版：0.4.13（同 Odoo）。
-- 要寫：A1～A6、B1、B2（8 項）。
+- 要寫：A1～A7、B1、B2（9 項）。
 - 自己的修正：沒有（`apps/nextcloud`、`addons/nextcloud` 在 0.4.13 之後沒改）。
 - 發版時另外驗：第 5 節。
 
@@ -266,7 +283,7 @@ Headscale 那條線改了共用程式，Headscale 自己已經發版、CHANGELOG
 
 - 上次發版：0.4.13 只升來源版本（升版 commit `1cbfcb9`），沒有建映像，也沒有 HAOS 驗收。下一版照它的前例寫「source only (disabled)」，
   共通項目照樣寫（0.4.12 前例：共用的 #70 寫成「applies to its child too」）。
-- 要寫：A1～A6、B1、D1（8 項）。
+- 要寫：A1～A7、B1、D1（9 項）。
 - 發版時另外驗：沒有映像，第 5 節的映像項目不適用；商店開放它的那一版才全部適用。
 
 #### D1 `read_file` 公開輸出 schema（#86，合併 `3f1c292`，commit `1613be1`，2026-11-12）
@@ -282,7 +299,7 @@ Headscale 那條線改了共用程式，Headscale 自己已經發版、CHANGELOG
 ### 3.8 Headscale
 
 - 上次發版：0.4.18（升版 commit＝映像來源 `55f3528`）。
-- 要寫：A1～A6（6 項）。0.4.18 的來源 `55f3528` 已含 #77～#88（B1、B2 也在內），Headscale 該寫的已寫進它的 CHANGELOG。
+- 要寫：A1～A7（7 項）。0.4.18 的來源 `55f3528` 已含 #77～#88（B1、B2 也在內），Headscale 該寫的已寫進它的 CHANGELOG。
 - 自己的修正：沒有（`apps/headscale`、`addons/headscale` 在 `55f3528` 之後沒改）。
 - 發版時另外驗：第 5 節。
 
@@ -331,7 +348,7 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
    - HM-13a 的 root 還原樹（Supervisor 式還原後的啟動：標記在、還原項目改回 10001、`state.json` 位元不變）。
    - 這兩段還沒在真容器跑過：第一次是 HM-19a 前的 builder 乾跑或這次發版，看哪個先。失敗時先查探針與 entrypoint（HM-06 筆記第 12.3 節、
      HM-13a 筆記第 11 節）。
-4. HA Core 版本：管理員驗證只認到 2026.11.1（B1）。目標 HAOS 的 Core 比它新，要先補審（計畫 §11.3 的升版 PR 清單：`Hc/ha_role.py` 與
+4. HA Core 版本：管理員驗證只認到 2026.11.2（B1、A7）。目標 HAOS 的 Core 比它新，要先補審（計畫 §11.3 的升版 PR 清單：`Hc/ha_role.py` 與
    `docs/ha-role-core-contract.md`），不然面板拒絕每個請求。
 5. HM-31 的預算常數是暫定（契約第 5 節）。那裡的「HM-19c 放行條件」（在目標硬體量閘道＋子程式的放大倍數與 MemAvailable，不過就不能發版）
    是為 Odoo 首發寫的，但 A5 不受開關管，任何產品下一版都會帶出去。HM-19c 量測之前要發版，先請負責人決定要不要先量。
