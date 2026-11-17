@@ -43,6 +43,9 @@
 | 沒開通、有帳號資料（休眠） | 只服務預設帳號 | 同上；bootstrap 只多 `dormant_profiles`（數字） | 撤銷每個額外帳號與孤兒的 token、重產 child_token（I13） |
 | 開通 | 分派器依 token 選帳號 | 第 3 節全部規則 | 還原偵測、守門、預設帳號、錯開起額外帳號 |
 
+各產品下一版會帶出去、但 CHANGELOG 還沒記的變更（下面這些項目，加上各產品自己的修正）、每一項的 CHANGELOG 句子與發版時要另外驗的事，
+見 `unreleased-changes.md`（計畫 §11.5；2026-11-17 起）。不受開關管的片合併時，在那裡加一項。
+
 不受開關管（任何產品下一次發版都會帶出去；保證方式見計畫 §3.3）：紀錄遮罩（HM-02）、port 參數化（HM-04）、
 執行套件抽出（HM-05）、子程式 bearer（HM-06）、資料層函式庫（HM-07）、收據格式（HM-11）、entrypoint 還原標記（HM-13a）、
 開機守門的存在檢查與休眠處理（HM-13b）、子程式 initialize 錯誤的遮罩（HM-14，見下）、請求內容位元組預算與 JSON 結構守門（HM-31，見下）、
@@ -1128,3 +1131,4 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 | v1 草案（HM-33） | 2026-11-17 | HM-33 | 對齊 PaaS #156（`34769c2`，合併 `48f394d`；使用者 2026-11-17 06:3x 決定現在就補，`decisions.md` 第 1.1 節）：第 1.2 節不受開關管多一項：Hermes `hermes_cron` 的工具說明照 PaaS 逐字補兩句（create 帶 `enabled=false` 建成停用的排程，resume 之前不會跑；Hermes v0.22.x 對停用的排程 trigger 會一併改回啟用，要維持停用之後再呼叫 pause）。只改文字：去掉 docstring 後的語法樹相同，程式行為不變；tools/list 的 `hermes_cron` 說明多兩句，HM-01 黃金回歸的 Hermes 兩個 tools/list 摘要照測試檔頭的規則一起更新（刻意的工具表面變更）。第 9 節不加列：說明和 PaaS 一致 |
 | v1 草案（HM-33 審查修正） | 2026-11-17 | HM-33 | 依 HM-33 的獨立審查（報告 `artifacts/…/wave4/review-HM-33.md`，修正後通過）：第 1.2 節 HM-33 那段寫明 create 送 `paused` 是 PR #85（`b50f1c7`，2026-11-12 合併）的行為、發行的 Hermes 0.4.13 還沒有，下一版才出去（MF-1、S-2），「逐位元不變」只說本片；trigger 不會自己再 pause 或 resume 改由測試守（S-1）。規則內容不變 |
 | v1 草案（文件同步） | 2026-11-17 | HM-00 補正 | 第 2.4 節「准入滿時保留名額照樣送到」引用的兩個測試改寫成 `tests/test_carries_no_request.py::…` 的寫法（HM-00 對照腳本 C7 把反引號裡結尾是 `_full` 的名稱當成錯誤代碼；內容不變）；第 9 節說明段照重產的 `deviation-trace.md` 改寫：拿掉「`deviation-trace.md` 沒有這幾列」的說法，補一句第 87 列以後怎麼對到、沒有列對到的 7 列出處寫在哪（`docs/provenance/ha-multiprofile-docs-sync-20261117.md`）。差異表本身沒改 |
+| v1 草案（發版交接清單） | 2026-11-17 | HM-17 補正 | 第 1.2 節「不受開關管」清單前加一段：各產品下一版會帶出去、CHANGELOG 還沒記的變更、CHANGELOG 句子與發版時要另外驗的事，見新檔 `unreleased-changes.md`（計畫 §11.5）；之後不受開關管的片合併時在那裡加一項。規則內容、差異表、錯誤代碼都沒改 |
