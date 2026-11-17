@@ -75,8 +75,9 @@ HM-13c (plan 6, 8.4; contract 1.2, 3.6, 4.1, 4.2): run_product hands the restore
 (restore_lock.Notice; DQ-03 (b): the default profile's token is the backup's) to the default profile's runtime
 (restore_notice, make_apps' option of the same name), switched on (the manager's restore_notice) or not; left out (no
 notice: every installation that was never restored), the runtime is built as before. A switched-on profile's runtime
-also gets review_required (its token/rotate waits for its restore review: ProfileAdmin.review_required), and the
-manager keeps revoke_fence: the digests of tokens a "revoke all" could not revoke, which 8081 refuses (503).
+also gets review_required (its token/rotate waits for its restore review: ProfileAdmin.review_required; so does
+HM-12's identity change when it would rotate the token, HM-13c review S-3: gateway.make_apps), and the manager keeps
+revoke_fence: the digests of tokens a "revoke all" could not revoke, which 8081 refuses (503).
 """
 from __future__ import annotations
 
