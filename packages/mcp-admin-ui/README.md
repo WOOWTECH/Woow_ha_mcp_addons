@@ -147,6 +147,27 @@ bootstrap；product/contract/tools/schema/disabled/global/grants 任一變更即
   HM-25 才上帳號 runtime，真後端形狀比對跑不了：fixture 這邊由 `backend-identity.spec.mjs` 守，add-on 這邊由
   `tests/test_new_origin_secret.py` 守（HM-12 面板審查 S-6）。
 
+## 瀏覽器來源檢查（HM-27；還沒有產品開通）
+
+伺服器沒開通（`api.profile` 是 null）時，面板不畫這張卡片、也不送 `/api/origin-policy`，畫面與請求照舊。開通後
+（Headscale 除外：它照舊只放 `https://claude.ai`，沒有這份設定），「連線與權杖」頁多一張卡片「瀏覽器來源檢查（全 add-on 共用）」：
+
+- 讀：每次畫這一頁就讀一次 `GET {base}/api/origin-policy`（全域路徑：不帶 `X-MCP-Profile`、回應沒有回聲），版本取自 `ETag`
+  （`"o1-…"`）。額外帳號的畫面也是同一份（整個 add-on 一份，存檔不分帳號）。回應形狀不符就不顯示（`originView`）；
+  缺 `ETag` 時照顯示、但不能存。畫面換掉或換帳號之後才到的回應丟掉。
+- 模式（只記錄／阻擋）與允許的來源（每行一個）。面板先擋看得出的錯（`api.js` 的 `originList`：去頭尾空白、略過空行、
+  `http(s)://主機[:port]` 以外的寫法、不分大小寫與預設 port 的重複、超過 16 個），訊息不回顯打的值；其餘由伺服器決定
+  （422 `origin_policy_invalid`，固定文字）。確認對話框寫明兩種模式的效果（阻擋：清單外的瀏覽器來源 403）。
+- 存：`PUT`，帶預設帳號新 bootstrap 的 CSRF、`If-Match`（讀到的版本）、`Idempotency-Key`；識別碼存在這個分頁的
+  `woow-admin-operation-v1:<mount>:origin-policy`，紀錄只有 `{id, route, revision, product, mode, allowed_origins}`（都不是秘密），
+  重送就是同一個請求。回應遺失時每頁顯示「來源檢查設定尚未確認」，可以「重送來源設定」（已完成的只回收據）或
+  「已核對來源設定」。`config_conflict`（別人先改了）：重新讀取並說明，這次沒有儲存。
+- 設定檔無法使用（`origin_policy_state: unusable`）：說明密鑰網址暫停服務（503），表單填入預設值，存檔用那個檔自己的版本、
+  蓋過去。
+- fixture 在開通模式照伺服器的順序回答（`profiles.originUnusable`；`/__fixture/origin` 模擬別人修改）；
+  `tests/profile-api-cases.json` 的 3 個 origin 情境錄自真後端。測試：`tests/origin-policy.test.mjs`、
+  `tests/browser/origin-policy.spec.mjs`。
+
 ## 正式 listener 與 Ingress
 
 - 只有 admin listener。每頁、asset、license、API 都走實際 socket peer172.30.32.2、

@@ -1,5 +1,5 @@
 import { identityBound, mountPath, products, UiError } from './contracts.js';
-import { OperationIdentity, operationKinds, operationReceipt, PROFILES_SCOPE } from './operation-identity.js';
+import { ORIGIN_REVISION, ORIGIN_SCOPE, OperationIdentity, operationKinds, operationReceipt, PROFILES_SCOPE } from './operation-identity.js';
 import { DEFAULT_PROFILE, INDEX_ETAG, INDEX_REVISION, echoMatches, isExtraProfile, isProfileId, labelProblem, orphanIds, profileRows } from './profiles.js';
 
 // A Core release or pre-release string (the server sends only this form, ha_role.shown_version); anything else is not shown.
@@ -11,6 +11,48 @@ const PROFILE_CODES = { profile_id_required: 400, profile_id_invalid: 400, profi
 const count = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
 // HM-12 (DQ-40 ⑨ (a); contract 4.1): a backend save's code, only with its documented status.
 const SAVE_CODES = { CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN: 422 };
+// HM-27 (DQ-11 (a); contract 4.1): the Origin policy's code, only with its documented status.
+const ORIGIN_CODES = { origin_policy_invalid: 422 };
+// HM-27 (DQ-11 (a); contract 2.6, 3.1): the add-on's one Origin policy of the secret path. The modes, the bound on the
+// list and the default (no policy saved yet) are the add-on's (origin_policy.py); the add-on decides, these only answer
+// early and check what it sent.
+export const ORIGIN_MODES = Object.freeze(['report-only', 'enforce']);
+export const MAX_ORIGINS = 16;
+export const DEFAULT_ORIGINS = Object.freeze(['https://claude.ai']);
+const ORIGIN_ETAG = /^"o1-[0-9a-f]{64}"$/;
+// An origin as the panel sends it: http(s)://host[:port], nothing after it, no whitespace, userinfo or backslash. The
+// add-on's own rule is stricter (valid host labels or IPv6, port 1-65535, ASCII only; its 422 origin_policy_invalid).
+const ORIGIN_SHAPE = /^https?:\/\/[^\s/?#@\\]+$/i;
+// Same origin once the case and the default port are left aside (the add-on normalizes so and refuses a repeated one).
+const originKey = origin => origin.toLowerCase().replace(/^(https:\/\/[^/]+):443$/, '$1').replace(/^(http:\/\/[^/]+):80$/, '$1');
+// The origins one per line as typed: trimmed, blank lines dropped; a list the panel can tell is wrong is refused before
+// anything is sent (UiError). Nothing typed is shown back in the message.
+export function originList(text) {
+  const origins = String(text ?? '').split('\n').map(line => line.trim()).filter(Boolean);
+  if (origins.length > MAX_ORIGINS) throw new UiError(`最多 ${MAX_ORIGINS} 個來源（目前 ${origins.length} 個）；未送出變更。`);
+  const seen = new Set();
+  origins.forEach((origin, index) => {
+    if (origin.length > 300 || !ORIGIN_SHAPE.test(origin)) throw new UiError(`第 ${index + 1} 個來源不是精確的 http(s) 來源（例如 https://claude.ai）：不接受 *、null、路徑、尾端斜線、帳密、查詢參數或空白；未送出變更。`);
+    if (seen.has(originKey(origin))) throw new UiError(`第 ${index + 1} 個來源和前面的重複（不分大小寫，預設 port 視為相同）；未送出變更。`);
+    seen.add(originKey(origin));
+  });
+  return origins;
+}
+// The policy as the add-on shows it (origin_policy.OriginPolicy.view): {mode, origins, state}; an unusable file has
+// neither mode nor list. Anything else is not shown.
+function originView(value) {
+  const keys = value && typeof value === 'object' && !Array.isArray(value) ? Object.keys(value).filter(key => key !== 'operation').sort().join() : '';
+  if (keys !== 'allowed_origins,mode,origin_policy_state') throw new UiError('來源檢查設定的回應格式不符，未顯示。');
+  if (value.origin_policy_state === 'unusable' && value.mode === null && value.allowed_origins === null) return { state: 'unusable', mode: null, origins: null };
+  if (!['default', 'saved'].includes(value.origin_policy_state) || !ORIGIN_MODES.includes(value.mode) || !Array.isArray(value.allowed_origins)
+      || value.allowed_origins.length > MAX_ORIGINS || !value.allowed_origins.every(origin => typeof origin === 'string' && origin.length <= 300 && ORIGIN_SHAPE.test(origin))) {
+    throw new UiError('來源檢查設定的回應格式不符，未顯示。');
+  }
+  return { state: value.origin_policy_state, mode: value.mode, origins: [...value.allowed_origins] };
+}
+// Refused before the add-on records the intent (its If-Match, Idempotency-Key and rules come first): a corrected save
+// takes a new identity.
+const ORIGIN_REFUSALS = ['config_conflict', 'config_revision_required', 'operation_id_required', 'operation_id_invalid', 'origin_policy_invalid'];
 // HM-12 (DQ-05; contract 3.1, section 9 #113): what the panel says when a save rotated the profile's MCP token (the
 // add-on sends token_rotated: true and no text). app.js adds it to a save's notice; a shape D answer carries it.
 export const TOKEN_ROTATED = '後端身分已變更，這個帳號的 MCP 權杖已換新：舊權杖與含舊權杖的連線網址已撤銷。請到「連線與權杖」顯示並複製新的權杖（或 Claude.ai 連線網址），更新所有用戶端。';
@@ -43,6 +85,8 @@ export class ApiError extends UiError {
     if (code === 'owner_defaults_unavailable') this.message = '升級通知已處理過，或升級前的限制紀錄無法使用。請重新整理狀態；未變更任何設定。';
     // HM-12 (DQ-40 ⑨ (a)): fixed copy; the answer echoes nothing and nothing sent is shown.
     if (code === 'CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN') this.message = '網址改到另一台伺服器（scheme、主機或 port 不同）時，不會沿用已儲存的密碼或金鑰：請在同一次儲存中為新網址重新輸入（選填的可以明確清除）。這次未儲存任何變更。';
+    // HM-27: fixed copy; the answer echoes nothing and nothing sent is shown.
+    if (code === 'origin_policy_invalid') this.message = '來源檢查設定不符合規則：模式只能是「只記錄」或「阻擋」；每個來源要是精確的 http(s) 來源（例如 https://claude.ai），主機名稱與 port 要有效，不接受 *、null、路徑、尾端斜線或點、帳密、查詢參數或空白，正規化後不能重複，最多 16 個。這次未儲存任何變更。';
     if (code === 'core_version_unreviewed') {
       this.haVersion = haVersion;
       this.message = `這個 HA Core 版本尚未審核：${haVersion ?? '（版本字串無法辨識）'}。這版 add-on 的管理面板只在審查過的 Core 版本上運作，暫時不能使用或變更設定；MCP 端點不經過這項檢查，照常服務。請更新 add-on。`;
@@ -133,7 +177,8 @@ export class AdminApi {
         'operation_outcome_unknown', 'operation_id_conflict', 'operation_not_found', 'operation_id_required',
         'operation_id_invalid', 'operation_id_expired', 'operation_journal_full', 'operation_journal_unavailable'].includes(code) || (code === 'core_version_unreviewed' && response.status === 403)
         || (Object.hasOwn(PROFILE_CODES, code ?? '') && PROFILE_CODES[code] === response.status)
-        || (Object.hasOwn(SAVE_CODES, code ?? '') && SAVE_CODES[code] === response.status);
+        || (Object.hasOwn(SAVE_CODES, code ?? '') && SAVE_CODES[code] === response.status)
+        || (Object.hasOwn(ORIGIN_CODES, code ?? '') && ORIGIN_CODES[code] === response.status);
       const error = new ApiError(response.status, known ? code : null, haVersion, known && detail && typeof detail === 'object' ? detail : {});
       // HM-12 (contract 3.1, section 9 #113): saved, the token rotated, the new child not started (shape D with
       // token_rotated; only this shape counts, and only when it names the profile asked, I12): the copy also says where
@@ -364,6 +409,54 @@ export class AdminApi {
     return this.changeProfiles(pending.route, pending.revision);
   }
   acknowledgeProfileOperation() { this.operations.clear(PROFILES_SCOPE); }
+
+  // HM-27 (DQ-11 (a); contract 2.6, 3.1, 3.5): the add-on's one Origin policy of the secret path, a global path (no
+  // X-MCP-Profile, no echo), only with profiles (switched off the add-on has none). originPolicy() is it as shown, with
+  // its revision (the ETag header; null when missing or malformed: shown, but not saved from).
+  async originPolicy() {
+    if (this.profile === null) throw new UiError('這個管理服務沒有開通多帳號。');
+    const { response, value } = await this.exchange(`${this.mount}/api/origin-policy`, {}, { profile: null, global: true });
+    const etag = response.headers.get('ETag');
+    return { ...originView(value), revision: typeof etag === 'string' && ORIGIN_ETAG.test(etag) ? etag.slice(1, -1) : null };
+  }
+  // Save the policy: PUT {mode, allowed_origins} with If-Match of the policy the administrator saw (an unusable file's
+  // own revision replaces it), an Idempotency-Key kept for this tab under the policy's scope (its record holds the
+  // request, so a resend is the same request) and the CSRF value of a fresh default bootstrap. The answer is the saved
+  // policy and its receipt; never a token.
+  async saveOriginPolicy(mode, origins, revision) {
+    if (this.profile === null) throw new UiError('這個管理服務沒有開通多帳號。');
+    if (!ORIGIN_MODES.includes(mode)) throw new UiError('來源檢查的模式不符；未送出變更。');
+    if (!Array.isArray(origins) || originList(origins.join('\n')).length !== origins.length) throw new UiError('來源清單格式不符；未送出變更。');
+    if (typeof revision !== 'string' || !ORIGIN_REVISION.test(revision)) throw new UiError('來源檢查設定的版本格式不符；請重新整理後再試，未送出變更。');
+    const epoch = this.epoch;
+    const fresh = await this.profileFresh(epoch);
+    const pending = this.operations.start('origin-policy', revision, fresh, ORIGIN_SCOPE, { mode, allowed_origins: origins });
+    let response, result;
+    try {
+      ({ response, value: result } = await this.exchange(`${fresh.api_base}/origin-policy`, {
+        method: 'PUT',
+        headers: { 'X-CSRF-Token': fresh.csrf, 'Content-Type': 'application/json', 'If-Match': `"${pending.revision}"`, 'Idempotency-Key': pending.id },
+        body: JSON.stringify({ mode: pending.mode, allowed_origins: pending.allowed_origins }),
+      }, { profile: null, epoch, global: true }));
+    } catch (error) {
+      if (error instanceof ApiError && ORIGIN_REFUSALS.includes(error.code)) this.operations.clear(ORIGIN_SCOPE);
+      throw error;
+    }
+    const receipt = operationReceipt(result?.operation, pending);
+    if (receipt.state !== 'completed') throw new UiError('來源檢查設定的結果尚未確認；原識別碼已保留，請重送或核對設定。');
+    const policy = originView(result);
+    if (policy.state !== 'saved') throw new UiError('伺服器未回傳預期的來源設定確認；請重新整理狀態。');
+    this.operations.clear(ORIGIN_SCOPE);
+    const etag = response.headers.get('ETag');
+    return { ...policy, revision: typeof etag === 'string' && ORIGIN_ETAG.test(etag) ? etag.slice(1, -1) : null, replayed: receipt.replayed };
+  }
+  pendingOriginOperation() { return this.profile === null ? null : this.operations.get(ORIGIN_SCOPE); }
+  async retryOriginOperation() {
+    const pending = this.pendingOriginOperation();
+    if (!pending) throw new UiError('目前沒有待確認的來源設定。');
+    return this.saveOriginPolicy(pending.mode, pending.allowed_origins, pending.revision);
+  }
+  acknowledgeOriginOperation() { this.operations.clear(ORIGIN_SCOPE); }
 }
 // A row only to check a created profile's row with the list rules (the list always has the default profile).
 const defaultRow = { id: DEFAULT_PROFILE, label: 'Default', port: 3000, is_default: true, disabled_reason: null, status: 'running', blocked_reason: null };

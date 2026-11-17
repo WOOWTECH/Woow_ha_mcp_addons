@@ -42,7 +42,7 @@ const URL_SECRETS = {odoo: {url: ['password']}, 'odoo-manage': {url: ['api_key']
   emqx: {url: ['api_key', 'api_secret']}, litellm: {url: ['master_key']}, nextcloud: {url: ['app_password']}, headscale: {url: ['api_key']}};
 const IDENTITY = ['url', 'database', 'username'];
 const ROTATION_LETTERS = ['N', 'P', 'Q', 'R'];
-let config, calls, reads, nonce, profiles, index, orphans, rotations, defaults = {};
+let config, calls, reads, nonce, profiles, index, orphans, rotations, origin, defaults = {};
 function profileState(next) {
   const state = {
     product: next.product ?? 'n8n', endpoint: next.endpoint ?? null,
@@ -139,6 +139,10 @@ function reset(next = {}) {
   index = {revision: 1, receipts: new Map(), created: 0, quarantined: 0};
   orphans = new Set(profileConfig().orphans ?? []);  // profile directories the index does not list (DQ-14)
   for (const spec of profileConfig().extra ?? []) addProfile(spec);
+  // HM-27: the add-on's Origin policy (nothing saved: report-only and https://claude.ai; originUnusable: a file it
+  // cannot use). Its revision changes when the policy does (the add-on's ETag names the policy, not the file).
+  origin = {revision: 1, state: profileConfig().originUnusable ? 'unusable' : 'default', mode: 'report-only',
+    allowed: ['https://claude.ai'], receipts: new Map()};
 }
 // DQ-12: an index the add-on cannot use (corrupt, or replaced behind its back) until it is quarantined.
 const indexCorrupt = () => Boolean(profileConfig().indexCorrupt) && index.quarantined === 0;
@@ -359,6 +363,75 @@ async function profileRoutes(request, response, local) {
   return answer(response, 200, {deleted: id, operation});
 }
 const answer404 = response => { response.writeHead(404); response.end(); };
+// HM-27 (DQ-11 (a); contract 2.6, 3.1, 3.5, 4.1; the real one is origin_policy.py and profile_admin's origin routes),
+// switched on only: GET and PUT /api/origin-policy, a global path (X-MCP-Profile never read, no echo), in the add-on's
+// order of checks: the identity (CSRF on a write; 403), the method table (405), the request's shape ({"mode": <string>,
+// "allowed_origins": [<string>...]}: a fixed 400), Headscale (its own rule: an unknown operation, 404), then If-Match
+// (428; malformed 409 config_conflict with the current ETag), Idempotency-Key (428; malformed 400; a replay answers the
+// policy now, before the ETag is compared; another request under the same key 409 operation_id_conflict), the ETag, the
+// request's rules (422 origin_policy_invalid). The origin rule is written here independently of the panel's.
+const originEtag = () => `"o1-${origin.revision.toString(16).padStart(64, '0')}"`;
+const originView = () => origin.state === 'unusable' ? {mode: null, allowed_origins: null, origin_policy_state: 'unusable'}
+  : {mode: origin.mode, allowed_origins: [...origin.allowed], origin_policy_state: origin.state};
+function canonicalOrigin(value) {
+  // i: ASCII letters in either case (no Unicode folding without the u flag: the Kelvin sign is never k)
+  const found = /^(https?):\/\/(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9.-]+)(?::([0-9]+))?$/i.exec(value);
+  if (!found) return null;
+  const scheme = found[1].toLowerCase();
+  let host = found[2].toLowerCase();
+  if (host.startsWith('[')) {
+    try { host = new URL(`http://${host}/`).hostname.slice(1, -1); } catch { return null; }
+  } else if (host.length > 253 || host.split('.').some(label => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) return null;
+  const port = found[3] === undefined ? {http: 80, https: 443}[scheme] : Number(found[3]);
+  if (!(port >= 1 && port <= 65535)) return null;
+  const shown = host.includes(':') ? `[${host}]` : host;
+  return port === {http: 80, https: 443}[scheme] ? `${scheme}://${shown}` : `${scheme}://${shown}:${port}`;
+}
+function originRequested(payload) {
+  if (!['report-only', 'enforce'].includes(payload.mode) || payload.allowed_origins.length > 16) return null;
+  const allowed = [];
+  for (const item of payload.allowed_origins) {
+    const value = canonicalOrigin(item);
+    if (value === null || allowed.includes(value)) return null;
+    allowed.push(value);
+  }
+  return {mode: payload.mode, allowed};
+}
+async function originRoute(request, response) {
+  const payload = await body(request);
+  const write = request.method !== 'GET';
+  const validCsrf = request.headers['x-csrf-token'] === `mock_fresh_csrf_value_${nonce}`;
+  const operationId = request.headers['idempotency-key'], ifMatch = request.headers['if-match'];
+  if (write) calls.push({operation: 'origin-policy', method: request.method, validCsrf, ifMatch, ...(operationId ? {operationId} : {}),
+    fields: Object.keys(payload ?? {}), ...(payload && typeof payload === 'object' ? {mode: payload.mode, allowed_origins: payload.allowed_origins} : {}), ...header(request)});
+  if (write && (!validCsrf || config.deniedSave)) return json(response, 403, {error: 'request denied'});
+  if (!['GET', 'PUT'].includes(request.method)) { response.writeHead(405, {'Content-Type': 'text/plain; charset=utf-8', Allow: 'GET, PUT'}); return response.end('Method Not Allowed'); }
+  const shaped = payload !== null && typeof payload === 'object' && !Array.isArray(payload) && Object.keys(payload).sort().join() === 'allowed_origins,mode'
+    && typeof payload.mode === 'string' && Array.isArray(payload.allowed_origins) && payload.allowed_origins.every(item => typeof item === 'string');
+  if (request.method === 'GET' ? payload !== null : !shaped) return json(response, 400, {error: 'request denied'});
+  if (profiles.get(DEFAULT).state.product === 'headscale') return answer404(response);
+  if (request.method === 'GET') {
+    reads.push({operation: 'origin-policy', ...header(request)});  // reads are not calls: specs count calls
+    return json(response, 200, originView(), {ETag: originEtag()});
+  }
+  if (!ifMatch) return refuse(response, 428, 'config_revision_required');
+  if (!/^"o1-[0-9a-f]{64}"$/.test(ifMatch)) return conflict(response, originEtag());
+  if (!operationId) return refuse(response, 428, 'operation_id_required');
+  if (!OPERATION.test(operationId) || Number(operationId.split('.')[0]) > Date.now()) return refuse(response, 400, 'operation_id_invalid');
+  const prior = origin.receipts.get(operationId), sent = JSON.stringify([payload.mode, payload.allowed_origins]);
+  if (prior) {
+    if (prior.request !== sent) return refuse(response, 409, 'operation_id_conflict');
+    return json(response, 200, {...originView(), operation: {...prior.operation, replayed: true}}, {ETag: originEtag()});
+  }
+  if (ifMatch !== originEtag()) return conflict(response, originEtag());
+  const policy = originRequested(payload);
+  if (!policy) return refuse(response, 422, 'origin_policy_invalid');
+  if (origin.state === 'unusable' || policy.mode !== origin.mode || JSON.stringify(policy.allowed) !== JSON.stringify(origin.allowed)) origin.revision++;
+  Object.assign(origin, {state: 'saved', mode: policy.mode, allowed: policy.allowed});
+  const operation = receiptOf(operationId, 'origin.policy');
+  origin.receipts.set(operationId, {request: sent, operation});
+  return json(response, 200, {...originView(), operation}, {ETag: originEtag()});
+}
 async function body(request) {
   let raw = '';
   for await (const chunk of request) { raw += chunk; if (raw.length > 262144) throw Error('MOCK oversized body'); }
@@ -390,6 +463,16 @@ const server = http.createServer(async (request, response) => {
       if (value.action !== 'switch') index.revision++;
       return json(response, 200, {});
     }
+    // HM-27: another administrator (or tab) saves the Origin policy, or its file becomes unusable; what it holds, for
+    // assertions.
+    if (path === '/__fixture/origin' && request.method === 'POST') {
+      const value = await body(request);
+      if (value.action === 'unusable') origin.state = 'unusable';
+      else Object.assign(origin, {state: 'saved', mode: value.mode, allowed: value.allowed});
+      origin.revision++;
+      return json(response, 200, {});
+    }
+    if (path === '/__fixture/origin') return json(response, 200, {state: origin.state, mode: origin.mode, allowed: origin.allowed, revision: origin.revision, receipts: origin.receipts.size});
     if (path === '/__fixture/profiles') return json(response, 200, {index: indexEtag(), profiles: Object.fromEntries([...profiles.values()].map(profile => [profile.id,
       {label: profile.label, token_active: profile.state.token_active, revision: profile.revision, connection_configured: profile.state.connection_configured,
         endpoint: profile.state.endpoint, disabled: profile.state.disabled, enabled_write_tools: profile.state.enabled_write_tools, receipts: profile.receipts.size}]))});
@@ -397,6 +480,8 @@ const server = http.createServer(async (request, response) => {
     const local = path.slice(mount.length);
     // Switched off the profile routes do not exist (contract 1.2: an unknown operation, 404 without a body).
     if (local === '/api/profiles' || local.startsWith('/api/profiles/')) return switchedOn() ? await profileRoutes(request, response, local) : answer404(response);
+    // HM-27: switched off the Origin policy does not exist either (an unknown operation: 404 without a body).
+    if (local === '/api/origin-policy') return switchedOn() ? await originRoute(request, response) : answer404(response);
     if (local === '/api/capabilities') { const profile = scoped(request, response); return profile && reply(response, 200, capabilities(profile), profile, 'capabilities'); }
     if (local === '/api/diagnostics') {
       const profile = scoped(request, response);

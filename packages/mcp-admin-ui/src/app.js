@@ -1,4 +1,4 @@
-import { AdminApi, ApiError, ProfileEchoError, StaleProfileError, TOKEN_ROTATED } from './api.js';
+import { AdminApi, ApiError, DEFAULT_ORIGINS, ProfileEchoError, StaleProfileError, TOKEN_ROTATED, originList } from './api.js';
 import { products, connectionHelp, policyRestartsChild, policyRestartNotice, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl, ownerDefaultsView, noticeTime, odooSwitches, odooSwitchKeys, odooSwitchPayload, maskedCurrentToken, tokenHistory, backendEdit, backendPatchPayload, newOriginSecrets, urlSecrets, n8nSession, n8nSessionPayload, odooMethods, odooMethodsPayload } from './contracts.js';
 import { DEFAULT_PROFILE, clientName, indexState, isExtraProfile, labelDialog, profileMenu, profileName, shortId } from './profiles.js';
 import './styles.css';
@@ -332,7 +332,8 @@ function refreshOperation() {
     return;
   }
   const panels = [];
-  for (const [card, fallback] of [[pendingOperationCard, '操作紀錄無法讀取；請核對服務狀態。'], [pendingProfileOperationCard, '帳號操作紀錄無法讀取；請核對帳號清單。']]) {
+  for (const [card, fallback] of [[pendingOperationCard, '操作紀錄無法讀取；請核對服務狀態。'], [pendingProfileOperationCard, '帳號操作紀錄無法讀取；請核對帳號清單。'],
+    [pendingOriginOperationCard, '來源設定的操作紀錄無法讀取；請核對瀏覽器來源檢查設定。']]) {
     try { const panel = card(); if (panel) panels.push(panel); }
     catch (error) { notice(error instanceof UiError ? error.message : fallback, true); }
   }
@@ -902,8 +903,101 @@ function access() {
       endpoint && !state.token_active ? p('權杖已撤銷或未啟用：請先按「重新產生」。') : null,
       el('div', { class: 'actions' }, button('顯示 Claude.ai 連線網址', () => tokenAction('claude'), { disabled: !endpoint || !state.token_active })),
       el('div', { id: 'claude-secret', class: 'secret-box', hidden: true, 'aria-live': 'polite' })),
+    originApplies() ? originPolicyCard() : null,
     card('手動加入 MCP 用戶端', p('適用支援 Streamable HTTP 的用戶端；欄位名稱依用戶端而異。先填端點，再於用戶端安全地填入 Bearer。未驗證所有用戶端相容性。'),
       endpoint ? null : p('以下端點只是佔位文字，不能直接連線。'), el('pre', { tabindex: '0', 'aria-label': '不含真實權杖的連線範例' }, el('code', {}, clientExample(endpoint, null, name))), button('複製佔位範例', () => copy(clientExample(endpoint, null, name))), p('一般複製永遠使用 <YOUR_ADDON_TOKEN> 佔位文字，不含真實權杖。建議跨主機連線使用 HTTPS。')));
+}
+// HM-27 (DQ-11 (a); contract 2.6, 3.1, 3.5): the add-on's one Origin policy of the secret path, on the connections page of
+// every profile once the server serves profiles (Headscale keeps its own rule and has none). It is read each time the
+// page is drawn; an answer for a page drawn since, or for a profile switched away from, is dropped. Switched off
+// nothing of it is drawn or asked for.
+const originApplies = () => api.profile !== null && state?.product !== 'headscale';
+const ORIGIN_MODE_LABELS = { 'report-only': '只記錄（report-only）', enforce: '阻擋（enforce）' };
+let originViews = 0;
+function originPolicyCard() {
+  const body = el('div', { id: 'origin-policy-body', 'aria-live': 'polite' }, p('正在讀取來源檢查設定…'));
+  loadOriginPolicy(++originViews, body);
+  return el('section', { class: 'card', id: 'origin-policy', 'aria-labelledby': 'origin-policy-title' },
+    el('h2', { id: 'origin-policy-title' }, '瀏覽器來源檢查（全 add-on 共用）'),
+    p('這份設定只看密鑰網址（Claude.ai 用的含權杖網址 …/private_<權杖>/mcp）收到、帶 Origin 標頭的請求，所有帳號共用一份。沒帶 Origin 的用戶端（Claude Code 等原生用戶端）不受影響；Bearer 接法（/mcp）帶 Origin 一律拒絕（403），不受這裡影響。這裡不會加任何 CORS 標頭。'),
+    body);
+}
+async function loadOriginPolicy(view, body) {
+  let policy;
+  try { policy = await api.originPolicy(); }
+  catch (error) {
+    if (view !== originViews || !body.isConnected || error instanceof StaleProfileError) return;
+    if (error instanceof ApiError && [401, 403].includes(error.status)) { fail(error); return; }
+    body.replaceChildren(p(`來源檢查設定無法讀取：${error instanceof UiError ? error.message : '管理服務無法使用。'}`),
+      el('div', { class: 'actions' }, button('重新讀取來源檢查設定', () => { if (!busy) loadOriginPolicy(++originViews, body); })));
+    return;
+  }
+  if (view !== originViews || !body.isConnected) return;
+  body.replaceChildren(...originPolicyView(policy));
+}
+function originPolicyView(policy) {
+  const unusable = policy.state === 'unusable';
+  const mode = policy.mode ?? 'report-only', origins = policy.origins ?? [...DEFAULT_ORIGINS];
+  const status = unusable ? '來源檢查設定檔無法讀取（可能在 add-on 之外被修改或損壞）：密鑰網址的 MCP 請求暫停服務（503），直到在這裡儲存新的設定。下方已填入預設值（只記錄、https://claude.ai），儲存後會取代那個檔。'
+    : policy.state === 'default' ? '目前是預設值（還沒儲存過）：只記錄，清單只有 https://claude.ai。'
+      : `目前：${ORIGIN_MODE_LABELS[mode]}，清單 ${origins.length} 個來源。`;
+  const radio = (value, label) => el('label', { class: 'check' }, el('input', { type: 'radio', name: 'origin-mode', value, checked: value === mode }), label);
+  const list = el('textarea', { id: 'origin-list', rows: '4', maxlength: '5200', spellcheck: 'false', autocomplete: 'off', 'aria-describedby': 'origin-list-help' });
+  list.value = origins.join('\n');
+  const form = el('form', { id: 'origin-policy-form' },
+    el('fieldset', {}, el('legend', {}, '清單外的來源怎麼處理'),
+      radio('report-only', '只記錄（預設）：清單外的來源照常服務，回應不變；add-on 日誌記一行 decision=would_deny（帶帳號 id 前 8 碼，每個帳號每分鐘有上限）'),
+      radio('enforce', '阻擋：清單外的來源回 403；add-on 日誌記一行 decision=deny')),
+    el('div', { class: 'field' }, el('label', { for: 'origin-list' }, '允許的來源（每行一個）'), list),
+    el('p', { id: 'origin-list-help', class: 'hint' }, '精確的 http(s) 來源：scheme://主機[:port]，例如 https://claude.ai；不接受 *、null、路徑、尾端斜線、帳密或查詢參數。最多 16 個，大小寫與預設 port 不同的視為同一個；清單可以是空的。「清單外」也包括 null、重複或格式不符的 Origin。'),
+    policy.revision === null ? p('伺服器沒有回傳這份設定的版本資訊，暫時不能儲存；請重新整理狀態。') : null,
+    el('button', { type: 'submit', class: 'primary', disabled: policy.revision === null }, '儲存來源檢查設定'));
+  form.addEventListener('submit', event => { event.preventDefault(); saveOrigins(form, list, policy); });
+  return [chip(unusable ? '設定檔無法使用' : ORIGIN_MODE_LABELS[mode]), p(status),
+    p('切換到「阻擋」之前，請先在 add-on 日誌查 decision=would_deny 的紀錄，確認需要的來源都在清單裡；一筆紀錄只說明有人送了這個 Origin，不證明是誰送的。'), form];
+}
+const savedOrigins = saved => saved.replayed ? '已確認先前的來源檢查設定已儲存；沒有再次執行。'
+  : `已儲存來源檢查設定：${ORIGIN_MODE_LABELS[saved.mode]}，清單 ${saved.origins.length} 個來源。所有帳號的密鑰網址都套用這份設定。`;
+async function saveOrigins(form, list, policy) {
+  if (busy || policy.revision === null) return;
+  const mode = form.querySelector('input[name=origin-mode]:checked')?.value;
+  let origins;
+  try { origins = originList(list.value); } catch (error) { fail(error); return; }
+  const enforce = mode === 'enforce';
+  if (!await confirmAction(enforce ? '儲存來源檢查設定：阻擋？' : '儲存來源檢查設定：只記錄？',
+    enforce ? `清單外的來源（含 null、重複或格式不符的 Origin）會收到 403，所有帳號的密鑰網址都一樣；清單 ${origins.length} 個來源。切換前請先在 add-on 日誌查 decision=would_deny，把需要的來源加入清單；沒帶 Origin 的用戶端不受影響。`
+      : `清單外的來源照常服務、回應不變，只在 add-on 日誌記一行 decision=would_deny；清單 ${origins.length} 個來源。所有帳號的密鑰網址都套用這份設定。`, '確認儲存')) return;
+  await saveOriginPolicy(() => api.saveOriginPolicy(mode, origins, policy.revision), '這次沒有儲存');
+}
+// A save or its resend; config_conflict (the policy changed since it was read: refused before its intent) reads the
+// page again and says so.
+async function saveOriginPolicy(send, unsaved) {
+  let conflict = false;
+  await task(async () => {
+    let saved;
+    try { saved = await send(); }
+    catch (error) {
+      if (error instanceof ApiError && error.code === 'config_conflict') { conflict = true; return; }
+      throw error;
+    }
+    await reload(savedOrigins(saved));
+  });
+  if (conflict) await task(() => reload(`來源檢查設定已被其他操作更新，${unsaved}；已重新讀取，請確認後再儲存。`, true));
+}
+function pendingOriginOperationCard() {
+  const pending = api.pendingOriginOperation();
+  if (!pending) return null;
+  const what = `儲存來源檢查設定（${ORIGIN_MODE_LABELS[pending.mode]}，清單 ${pending.allowed_origins.length} 個來源）`;
+  return el('section', { class: 'card', id: 'pending-origin-operation' }, el('h2', {}, '來源檢查設定尚未確認'),
+    p(`${what}尚未取得完成確認。此分頁已保留原操作識別碼，重新載入也不會自動重送。`),
+    p('請先到「連線與權杖」看「瀏覽器來源檢查」目前的設定。以原識別碼重送時，已完成的操作只回傳收據，不會再做一次。'),
+    el('div', { class: 'actions' }, button('重送來源設定', async () => {
+      if (!await confirmAction('以原識別碼重送來源設定？', `${what}。已完成的操作只回傳收據；結果未知的操作不會再次執行。`)) return;
+      await saveOriginPolicy(() => api.retryOriginOperation(), '原本那筆沒有儲存');
+    }), button('已核對來源設定', async () => {
+      if (!await confirmAction('結束這筆來源設定的追蹤？', '請先核對「瀏覽器來源檢查」目前的設定。這只清除此分頁的識別紀錄，不會復原或證明先前操作未執行。')) return;
+      await task(async () => { api.acknowledgeOriginOperation(); await reload('已結束此分頁的來源設定追蹤。'); });
+    })));
 }
 // DQ-14: the orphans, listed for deletion (on this page whichever profile is shown: they are the add-on's).
 function orphansCard() {
