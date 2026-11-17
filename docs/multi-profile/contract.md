@@ -238,9 +238,8 @@ Hermes 排程工具 `hermes_cron` 的說明補兩句（HM-33，見下；只改�
     （202）；其他小請求回准入的忙碌回應（有 id 200）。PaaS 讀 body 前沒有准入、小請求不計入預算也不限讀取中的數量，保留名額的目的是讓通知
     一定送得到（MCP Python SDK 1.x 收到非 2xx 會結束 session、TS SDK 的 `connect()` 失敗、SDK 2.x 丟掉這則通知）。
   - 剛連上的用戶端：它的 initialize 是帶 id 的請求，准入滿時拿忙碌回應（200＋`-32003`）；在准入有空位時連上的，之後的 `notifications/initialized`
-    一定送到（`tests/test_carries_no_request.py` 的
-    `test_a_newly_connected_clients_initialized_reaches_the_child_with_the_queue_and_admission_full`、
-    `test_the_reserve_is_reached_even_once_the_profiles_admission_is_full`）。
+    一定送到（`tests/test_carries_no_request.py::test_a_newly_connected_clients_initialized_reaches_the_child_with_the_queue_and_admission_full`、
+    `tests/test_carries_no_request.py::test_the_reserve_is_reached_even_once_the_profiles_admission_is_full`）。
 - GET 串流整段佔住一條一般名額和一個准入（UC-31，HM-14 審查 S-3）：額外帳號開滿 8 條串流時 POST 剩 8 條名額，預設帳號開滿 24 條時
   剩 8 條（`tests/test_gateway_queue_ha.py::test_get_streams_hold_ordinary_slots_for_their_whole_life`）。
 - 排隊中 token 被輪替或撤銷：請求拿到名額或等滿 1 秒後重驗時被拒（Bearer 401、密鑰網址 404），子程式收不到；最多多佔 1 秒的排隊位置
@@ -955,14 +954,17 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 審查後把 FEATURE-MATRIX「HA 平台差異」欄是「—」的 44 列人工逐列看過後補的列；第 87、88 列是 HM-08 獨立審查（S-6）補的列，
 #15、#16 的附註也是；#14 的附註是 HM-09 的實作補的，第 89 列是 HM-09 獨立審查（S-6）補的列。逐列的來源與結論見
 `deviation-trace.md`（第 87～89 列與三個附註出自 HM-08、HM-09 的實作，不是 FEATURE-MATRIX 的列）。
-第 90 列是 HM-20 補的列（DQ-10 子題 2026-11-15 定案；FM-84 的對齊作法欄；`deviation-trace.md` 沒有這一列）。
+第 90 列是 HM-20 補的列（DQ-10 子題 2026-11-15 定案；FM-84 的對齊作法欄）。
 第 91～95 列出自 HM-14 的實作，第 96～99 列是 HM-14 獨立審查（MF-2、S-1、S-7、S-5）補的列，第 100 列是 HM-14 rebase 到 HM-09
-之後補的列（都不是 FEATURE-MATRIX 的列；`deviation-trace.md` 由 repo 外的產生器重產，沒有這幾列）。
-第 101～107 列出自 HM-31（對齊 PaaS #155），#15、#16、#96 也由 HM-31 改寫；第 108 列與 #81、#101 的補寫出自 HM-31 獨立審查（MF-1、MF-3、MF-2）（都不是 FEATURE-MATRIX 的列；`deviation-trace.md` 由 repo 外的產生器重產，沒有這幾列）。
-第 109～112 列是 HM-11 對齊 HM-10 的真後端時補的面板列（不是 FEATURE-MATRIX 的列；`deviation-trace.md` 沒有這幾列）。
+之後補的列（都不是 FEATURE-MATRIX 的列）。
+第 101～107 列出自 HM-31（對齊 PaaS #155），#15、#16、#96 也由 HM-31 改寫；第 108 列與 #81、#101 的補寫出自 HM-31 獨立審查（MF-1、MF-3、MF-2）（寫的時候 FEATURE-MATRIX 還沒有對應的列；之後補的 FM-154 對到它們）。
+第 109～112 列是 HM-11 對齊 HM-10 的真後端時補的面板列（不是 FEATURE-MATRIX 的列）。
 第 113～115 列出自 HM-12 的實作（換身分換 token 與新來源重填秘密的細節；不是 FEATURE-MATRIX 的列）。原稿是第 109～111 列：HM-11 先合併、用掉第 109～112 列，本片 rebase 後往後重編（第 10 節）。
 #17 的附註出自 HM-30 的實作（不是 FEATURE-MATRIX 的列；`deviation-trace.md` 由 repo 外的產生器重產，沒有這個附註）。
-第 116、117 列是 HM-12 的面板部分（另一個 PR）補的面板列（不是 FEATURE-MATRIX 的列；`deviation-trace.md` 沒有這兩列）。
+第 116、117 列是 HM-12 的面板部分（另一個 PR）補的面板列（不是 FEATURE-MATRIX 的列）。
+2026-11-17 文件同步重產 `deviation-trace.md`（到第 117 列）：第 87 列以後的列，FEATURE-MATRIX 有說到同一件事的列就加進那一列的「對到」
+（例如 FM-154 → #101～#108、FM-81 → #113、#114）；沒有任何 FEATURE-MATRIX、G6 §5 的列對到的（#22、#33、#83、#88、#89、#90、#99），
+出處寫在 `deviation-trace.md` 文末「差異表每一列的來處」。
 
 | # | 項目 | PaaS（@69ac425） | HA | 理由 | 類型 |
 |---|---|---|---|---|---|
@@ -1125,3 +1127,4 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 | v1 草案（HM-12 面板審查修正） | 2026-11-17 | HM-12 | 依 HM-12 面板的獨立審查（報告 `artifacts/…/wave4/review-HM-12-panel.md`）：第 9 節 #116、#117 的 HA 欄把面板檔改成 `Hui/contracts.js`（原稿誤寫成 PaaS 面板的 `Pui/`；S-1）；#116 補換了 token 之後重新讀取失敗仍說明、伺服器文字不顯示（S-2、S-5）；#117 補改回同一個來源時已打的值留著、withheld 網址的原因、說明只在網址帶秘密的產品出現（S-4、S-7）。第 3、4 節的管理 API 與回應沒有改 |
 | v1 草案（HM-33） | 2026-11-17 | HM-33 | 對齊 PaaS #156（`34769c2`，合併 `48f394d`；使用者 2026-11-17 06:3x 決定現在就補，`decisions.md` 第 1.1 節）：第 1.2 節不受開關管多一項：Hermes `hermes_cron` 的工具說明照 PaaS 逐字補兩句（create 帶 `enabled=false` 建成停用的排程，resume 之前不會跑；Hermes v0.22.x 對停用的排程 trigger 會一併改回啟用，要維持停用之後再呼叫 pause）。只改文字：去掉 docstring 後的語法樹相同，程式行為不變；tools/list 的 `hermes_cron` 說明多兩句，HM-01 黃金回歸的 Hermes 兩個 tools/list 摘要照測試檔頭的規則一起更新（刻意的工具表面變更）。第 9 節不加列：說明和 PaaS 一致 |
 | v1 草案（HM-33 審查修正） | 2026-11-17 | HM-33 | 依 HM-33 的獨立審查（報告 `artifacts/…/wave4/review-HM-33.md`，修正後通過）：第 1.2 節 HM-33 那段寫明 create 送 `paused` 是 PR #85（`b50f1c7`，2026-11-12 合併）的行為、發行的 Hermes 0.4.13 還沒有，下一版才出去（MF-1、S-2），「逐位元不變」只說本片；trigger 不會自己再 pause 或 resume 改由測試守（S-1）。規則內容不變 |
+| v1 草案（文件同步） | 2026-11-17 | HM-00 補正 | 第 2.4 節「准入滿時保留名額照樣送到」引用的兩個測試改寫成 `tests/test_carries_no_request.py::…` 的寫法（HM-00 對照腳本 C7 把反引號裡結尾是 `_full` 的名稱當成錯誤代碼；內容不變）；第 9 節說明段照重產的 `deviation-trace.md` 改寫：拿掉「`deviation-trace.md` 沒有這幾列」的說法，補一句第 87 列以後怎麼對到、沒有列對到的 7 列出處寫在哪（`docs/provenance/ha-multiprofile-docs-sync-20261117.md`）。差異表本身沒改 |
