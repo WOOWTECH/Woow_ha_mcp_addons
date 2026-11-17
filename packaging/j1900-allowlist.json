@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "rule": "In the J1900 check, a native extension module that fails to import natively fails the release, unless this file lists it under that product with the reason and the review that accepted it, and the native import error contains the entry's error_contains text (the one known cause; any other failure of the same module still fails). A listed module that does import natively is checked under QEMU like any other. The list started empty (review M1); _tkinter was added for the seven products with an image by the coordinator decision of 2026-11-17 (review round 2); every entry needs the owner's review.",
+  "entry_format": {
+    "<module>": {
+      "reason": "why it cannot import in this image and why that is harmless",
+      "review": "who accepted it, when, and where it is recorded",
+      "error_contains": "text the native import error (\"Type: message\") must contain"
+    }
+  },
+  "products": {
+    "odoo": {
+      "_tkinter": {
+        "reason": "The official python slim base image keeps lib-dynload/_tkinter.cpython-313-x86_64-linux-gnu.so but deliberately ships without Tcl/Tk, so its native import always fails with ImportError (libtk8.6.so missing). No add-on code or dependency imports tkinter, and the J1900 check is about SIGILL in code that actually runs on Nehalem. Evidence: the SBOM of the 0.4.16 Headscale candidate image (release operator evidence outside this repository, artifacts/headscale-ha-closure-20261111/candidate-0416/sbom.syft.json) lists _tkinter in lib-dynload and no Tcl/Tk library or package.",
+        "review": "Coordinator decision 2026-11-17 (GitHub-hosted release route, review round 2); the owner reviews it with this change; docs/operations/release.md records it.",
+        "error_contains": "ImportError: libtk8.6.so: cannot open shared object file"
+      }
+    },
+    "n8n": {
+      "_tkinter": {
+        "reason": "The official python slim base image keeps lib-dynload/_tkinter.cpython-313-x86_64-linux-gnu.so but deliberately ships without Tcl/Tk, so its native import always fails with ImportError (libtk8.6.so missing). No add-on code or dependency imports tkinter, and the J1900 check is about SIGILL in code that actually runs on Nehalem. Evidence: the SBOM of the 0.4.16 Headscale candidate image (release operator evidence outside this repository, artifacts/headscale-ha-closure-20261111/candidate-0416/sbom.syft.json) lists _tkinter in lib-dynload and no Tcl/Tk library or package.",
+        "review": "Coordinator decision 2026-11-17 (GitHub-hosted release route, review round 2); the owner reviews it with this change; docs/operations/release.md records it.",
+        "error_contains": "ImportError: libtk8.6.so: cannot open shared object file"
+      }
+    },
+    "hermes": {
+      "_tkinter": {
+        "reason": "The official python slim base image keeps lib-dynload/_tkinter.cpython-313-x86_64-linux-gnu.so but deliberately ships without Tcl/Tk, so its native import always fails with ImportError (libtk8.6.so missing). No add-on code or dependency imports tkinter, and the J1900 check is about SIGILL in code that actually runs on Nehalem. Evidence: the SBOM of the 0.4.16 Headscale candidate image (release operator evidence outside this repository, artifacts/headscale-ha-closure-20261111/candidate-0416/sbom.syft.json) lists _tkinter in lib-dynload and no Tcl/Tk library or package.",
+        "review": "Coordinator decision 2026-11-17 (GitHub-hosted release route, review round 2); the owner reviews it with this change; docs/operations/release.md records it.",
+        "error_contains": "ImportError: libtk8.6.so: cannot open shared object file"
+      }
+    },
+    "opendesign": {},
+    "emqx": {
+      "_tkinter": {
+        "reason": "The official python slim base image keeps lib-dynload/_tkinter.cpython-313-x86_64-linux-gnu.so but deliberately ships without Tcl/Tk, so its native import always fails with ImportError (libtk8.6.so missing). No add-on code or dependency imports tkinter, and the J1900 check is about SIGILL in code that actually runs on Nehalem. Evidence: the SBOM of the 0.4.16 Headscale candidate image (release operator evidence outside this repository, artifacts/headscale-ha-closure-20261111/candidate-0416/sbom.syft.json) lists _tkinter in lib-dynload and no Tcl/Tk library or package.",
+        "review": "Coordinator decision 2026-11-17 (GitHub-hosted release route, review round 2); the owner reviews it with this change; docs/operations/release.md records it.",
+        "error_contains": "ImportError: libtk8.6.so: cannot open shared object file"
+      }
+    },
+    "litellm": {
+      "_tkinter": {
+        "reason": "The official python slim base image keeps lib-dynload/_tkinter.cpython-313-x86_64-linux-gnu.so but deliberately ships without Tcl/Tk, so its native import always fails with ImportError (libtk8.6.so missing). No add-on code or dependency imports tkinter, and the J1900 check is about SIGILL in code that actually runs on Nehalem. Evidence: the SBOM of the 0.4.16 Headscale candidate image (release operator evidence outside this repository, artifacts/headscale-ha-closure-20261111/candidate-0416/sbom.syft.json) lists _tkinter in lib-dynload and no Tcl/Tk library or package.",
+        "review": "Coordinator decision 2026-11-17 (GitHub-hosted release route, review round 2); the owner reviews it with this change; docs/operations/release.md records it.",
+        "error_contains": "ImportError: libtk8.6.so: cannot open shared object file"
+      }
+    },
+    "nextcloud": {
+      "_tkinter": {
+        "reason": "The official python slim base image keeps lib-dynload/_tkinter.cpython-313-x86_64-linux-gnu.so but deliberately ships without Tcl/Tk, so its native import always fails with ImportError (libtk8.6.so missing). No add-on code or dependency imports tkinter, and the J1900 check is about SIGILL in code that actually runs on Nehalem. Evidence: the SBOM of the 0.4.16 Headscale candidate image (release operator evidence outside this repository, artifacts/headscale-ha-closure-20261111/candidate-0416/sbom.syft.json) lists _tkinter in lib-dynload and no Tcl/Tk library or package.",
+        "review": "Coordinator decision 2026-11-17 (GitHub-hosted release route, review round 2); the owner reviews it with this change; docs/operations/release.md records it.",
+        "error_contains": "ImportError: libtk8.6.so: cannot open shared object file"
+      }
+    },
+    "headscale": {
+      "_tkinter": {
+        "reason": "The official python slim base image keeps lib-dynload/_tkinter.cpython-313-x86_64-linux-gnu.so but deliberately ships without Tcl/Tk, so its native import always fails with ImportError (libtk8.6.so missing). No add-on code or dependency imports tkinter, and the J1900 check is about SIGILL in code that actually runs on Nehalem. Evidence: the SBOM of the 0.4.16 Headscale candidate image (release operator evidence outside this repository, artifacts/headscale-ha-closure-20261111/candidate-0416/sbom.syft.json) lists _tkinter in lib-dynload and no Tcl/Tk library or package.",
+        "review": "Coordinator decision 2026-11-17 (GitHub-hosted release route, review round 2); the owner reviews it with this change; docs/operations/release.md records it.",
+        "error_contains": "ImportError: libtk8.6.so: cannot open shared object file"
+      }
+    }
+  }
+}
