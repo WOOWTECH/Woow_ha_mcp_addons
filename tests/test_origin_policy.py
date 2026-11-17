@@ -29,10 +29,12 @@ docs/provenance/ha-multiprofile-HM-27-20261117.md; the log-rendering cases here 
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import logging
 import os
 from pathlib import Path
+import random
 import re
 import secrets
 import stat
@@ -212,6 +214,34 @@ def test_an_origin_is_normalized_as_paas_does(value, expected):
 def test_anything_else_is_no_origin(value):
     with pytest.raises(ValueError):
         module().normalize_origin(value)
+
+
+def test_an_ipv6_origin_has_one_normal_form_whatever_the_python(tmp_path):
+    """HM-27 review S-9: ipaddress writes an IPv4-mapped address as a dotted quad since Python 3.12.4 and 3.13
+    (::ffff:127.0.0.1; before, ::ffff:7f00:1), so its normal form would follow the image's Python, and a saved policy
+    holding one would turn unusable (503) when the Python changes. The add-on writes RFC 5952's hex form, as the WHATWG
+    URL serializer that a browser's Origin comes from: the same as str() for every other address, on every version."""
+    found = module()
+    for value in ('http://[::ffff:127.0.0.1]', 'HTTP://[::FFFF:7F00:1]:80', 'http://[0:0:0:0:0:ffff:7f00:1]'):
+        assert found.canonical(value) == 'http://[::ffff:7f00:1]', value
+    for value, expected in (
+            ('1:0:0:2:0:0:0:3', '1:0:0:2::3'), ('1:0:0:2:0:0:3:4', '1::2:0:0:3:4'), ('0:0:0:0:0:0:0:0', '::'),
+            ('0:0:0:0:0:0:0:1', '::1'), ('1:0:0:0:0:0:0:0', '1::'), ('1:2:3:4:5:6:7:0', '1:2:3:4:5:6:7:0'),
+            ('::ffff:1.2.3.4', '::ffff:102:304'), ('::ffff:0:1.2.3.4', '::ffff:0:102:304'),
+            ('64:ff9b::1.2.3.4', '64:ff9b::102:304'), ('::127.0.0.1', '::7f00:1')):
+        assert found.canonical(f'https://[{value}]') == f'https://[{expected}]', value
+    rng = random.Random(27)  # every other address: what str() writes, which no Python version changed
+    for _ in range(3000):
+        pieces = [0 if rng.random() < .5 else rng.getrandbits(16) for _ in range(8)]
+        address = ipaddress.IPv6Address(sum(piece << 16 * (7 - index) for index, piece in enumerate(pieces)))
+        if address.ipv4_mapped is None:
+            assert found.canonical(f'https://[{address.exploded}]') == f'https://[{address}]', address.exploded
+    policy = found.requested({'mode': 'enforce', 'allowed_origins': ['http://[::ffff:127.0.0.1]']})
+    assert policy.allowed == ('http://[::ffff:7f00:1]',)
+    assert policy.permits(['http://[::ffff:127.0.0.1]']) and policy.permits(['http://[::ffff:7f00:1]'])
+    path = tmp_path / POLICY
+    assert policy_state(path, policy.document()) == 'saved'
+    assert policy_state(path, b'{"version":1,"mode":"enforce","allowed_origins":["http://[::ffff:127.0.0.1]"]}') == 'unusable'
 
 
 @pytest.mark.parametrize('origins, reason, shown', [
@@ -790,6 +820,8 @@ async def test_the_policy_is_saved_beside_the_index_never_in_the_default_state(t
     # HM-27 review S-2: the file's own rules, each with the request's rule as well
     ('a repeated origin', b'{"version":1,"mode":"report-only","allowed_origins":["https://claude.ai","https://claude.ai"]}',
      0o600),
+    ('a list in the list', b'{"version":1,"mode":"report-only","allowed_origins":[[]]}', 0o600),
+    ('an object in the list', b'{"version":1,"mode":"report-only","allowed_origins":[{}]}', 0o600),
     ('17 origins', ('{"version":1,"mode":"report-only","allowed_origins":['
                     + ','.join(f'"https://o{i}.example"' for i in range(17)) + ']}').encode(), 0o600),
     ('16 KiB and one byte', b'{"version":1,"mode":"report-only","allowed_origins":[]}'.ljust(16385), 0o600),
