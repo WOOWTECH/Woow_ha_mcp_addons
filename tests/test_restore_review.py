@@ -1,6 +1,6 @@
 """HM-13c: the restore review, "revoke all" and the quarantine directories on 8099, and the panel's restore notice
 (multi-profile plan 6 還原與休眠核對卡, 7.4, 8.4 全部撤銷 / 核對後才重發, 10.3, 12.3 HM-13c; contract 1.2, 1.3, 3.1,
-3.5, 3.6, 4.1, 4.2, 9 #24, #58, #67, #82, #116-#118; FM-79, 80, 120, 126; I9, I13; DQ-03 (b), DQ-13, DQ-14; T-21).
+3.5, 3.6, 4.1, 4.2, 9 #24, #58, #67, #82, #121-#123; FM-79, 80, 120, 126; I9, I13; DQ-03 (b), DQ-13, DQ-14; T-21).
 
 - The restore notice (the owner's decision of 2026-11-16 on the HM-13b review's Q-1: DQ-03 (b) as written, "面板與
   log 提示"; not behind the switch): a restore that keeps the default profile's token (no profile data) leaves
@@ -109,7 +109,7 @@ def test_a_single_profile_restore_leaves_the_panel_notice_and_keeps_the_token(tm
     assert notice_of(disk.data) == {'version': 1, 'at': when.isoformat(timespec='seconds')}
     assert private_file(disk.data / NOTICE)
     assert restore_lock.read_notice(disk.data) == {'at': when.isoformat(timespec='seconds')}
-    assert disk.replay(receipt) == 'completed'  # contract 9 #116: the receipts as restored
+    assert disk.replay(receipt) == 'completed'  # contract 9 #121: the receipts as restored
     assert guard_lines(log_scan) == [('WARNING', restore_lock.KEPT_NOTICE)]
     for name in (profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME, profiles.RESTORE_RECORD_NAME):
         assert name not in disk.names()
@@ -183,7 +183,7 @@ def test_a_start_stopped_anywhere_on_the_way_saves_the_notice_at_the_next(tmp_pa
 
 def test_a_directory_at_the_notices_name_is_moved_aside(tmp_path, log_scan):
     """A restored directory at the notice's name (a forged backup: the restore repair accepts directories) is moved
-    aside to <name>.quarantine-<UTC>, never deleted, and the notice is saved (contract 9 #115)."""
+    aside to <name>.quarantine-<UTC>, never deleted, and the notice is saved (contract 9 #120)."""
     disk = Disk(tmp_path, log_scan)
     backup = disk.backup()
     (backup / NOTICE).mkdir()
@@ -252,7 +252,7 @@ def test_a_restore_gives_every_journal_it_handles_a_new_one_even_without_one(tmp
 
 
 def test_without_profile_data_the_default_profiles_receipts_stay_as_restored(tmp_path, log_scan):
-    """Contract 9 #116 (DQ-03 (b)): a single-profile restore keeps the default profile's journal as restored, switched
+    """Contract 9 #121 (DQ-03 (b)): a single-profile restore keeps the default profile's journal as restored, switched
     on or not, also when it had none: no journal is written for it."""
     for enabled in (False, True):
         disk = Disk(tmp_path / str(enabled), log_scan)
@@ -827,7 +827,7 @@ async def test_a_quarantine_directory_is_listed_and_can_only_be_deleted(tmp_path
 
 async def test_a_quarantine_directory_whose_state_opens_is_revoked_and_wiped_before_it_goes(tmp_path, log_scan,
                                                                                             monkeypatch):
-    """DQ-14 for a quarantine directory (contract 3.1, 9 #118; HM-13c review S-1): one whose state opens now (its
+    """DQ-14 for a quarantine directory (contract 3.1, 9 #123; HM-13c review S-1): one whose state opens now (its
     quarantine may have come from an error that went away) has its token revoked and its backend credentials wiped
     before its directory goes. Here the removal leaves the directory behind (one line says so; it is listed again and
     can be deleted again), so what was written before it can be seen."""

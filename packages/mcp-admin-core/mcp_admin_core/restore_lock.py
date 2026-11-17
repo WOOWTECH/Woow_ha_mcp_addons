@@ -76,7 +76,7 @@ HM-13c (the owner's decision of 2026-11-16 on the HM-13b review's Q-1: DQ-03 (b)
   removes it (Notice.clear). Without a notice nothing of this is read again, so an installation that was never
   restored answers as before, byte for byte.
 - Every journal the guard handles in a restore gets a new one, also where the backup had none (operations
-  renew_missing; contract 3.5): the default profile's while it is kept stays as restored (contract 9 #116).
+  renew_missing; contract 3.5): the default profile's while it is kept stays as restored (contract 9 #121).
 - The restore record's readers: check_record() (what the management API and the review gate rely on, validated),
   review() (a row's reviewed_at, written once; the record is otherwise left as the guard wrote it).
 - HM-13c review MF-1: a record written at a start that sees no restore (a dormant start's) never drops a review that
