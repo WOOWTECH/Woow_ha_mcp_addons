@@ -64,6 +64,12 @@ and the manager gives every profile's runtime its own turn on it (a Lane, make_a
 replies are processed there, the profiles taking turns. Each gate also bounds its profile's answers not received yet
 (profiles.ProfileQuota.pending_reply_bytes; profile_router). A ProfileRuntime takes reply_worker as a keyword-only
 option; left out, its replies are processed on the event loop, as before.
+
+HM-27 (plan 8.7, 12.3 HM-27; DQ-11 (a); contract 2.6, 3.1): the manager holds the add-on's one Origin policy of the
+secret path (origin_policy.OriginPolicy; /data/mcp/origin-policy.json, read when asked, written only by the panel's save)
+unless the product keeps its own rule (Headscale: secret_path_allowed_origins), and gives every profile's apps its
+check (make_apps origin_policy). A ProfileRuntime takes origin_policy as a keyword-only option; left out (every
+switched-off product), the secret path takes any Origin, as before.
 """
 from __future__ import annotations
 
@@ -80,7 +86,7 @@ import stat
 
 import httpx
 
-from . import health as health_module, profiles, request_budget
+from . import health as health_module, origin_policy, profiles, request_budget
 from .access import TokenAccess
 from .admin_auth import AdminAuthority
 from .config import ConfigError, strict_json
@@ -102,7 +108,7 @@ RUNTIME_OPTIONS = frozenset({'child_url', 'health', 'backend_changed', 'configur
                              'restart_child', 'diagnostics', 'availability', 'token_access', 'mutation_lock',
                              'authority', 'admin_slots', 'admin_pipeline', 'profile_view', 'forward_slots',
                              'slot_busy', 'reply_secrets', 'child_blocked', 'default_endpoint', 'bootstrap_fields',
-                             'body_budget', 'stop_child', 'reply_worker'})
+                             'body_budget', 'stop_child', 'reply_worker', 'origin_policy'})
 MANAGEMENT_LISTENER_LIMIT = 64  # 8099's limit_concurrency (run_product), switched on or off
 # HM-09 (plan 5.4; C2-SF-4): after the default profile's child, at most STAGGER_SLOTS additional children start at
 # once; a place is freed when its child answered a health check, could not start, or after STAGGER_SECONDS.
@@ -164,6 +170,9 @@ class ProfileRuntime:
     HM-30 (likewise): reply_worker: the profile's turn on the add-on's reply worker (reply_worker.Lane; make_apps
     reply_worker).
 
+    HM-27 (likewise): origin_policy: the profile's check of the add-on's Origin policy (OriginPolicy.guard; make_apps
+    origin_policy).
+
     mcp_listener_limit: 8081's limit_concurrency when this runtime serves the add-on alone: 64, as before."""
     mcp_listener_limit = 64
 
@@ -171,7 +180,7 @@ class ProfileRuntime:
                  shared=None, profile_view=None, app_options=None, child_connections=CHILD_CONNECTIONS,
                  forward_slots=None, slot_busy=None, reply_secrets=None, hold=None, monitor_options=None,
                  report_blocked=False, default_endpoint=None, bootstrap_fields=None, body_budget=None,
-                 reply_worker=None):
+                 reply_worker=None, origin_policy=None):
         if not isinstance(profile_id, str) or not PROFILE_ID.fullmatch(profile_id):
             raise ValueError('invalid profile id')
         if type(child_connections) is not int or child_connections < 1:
@@ -191,7 +200,8 @@ class ProfileRuntime:
         self.gateway_options = {name: value for name, value in (
             ('forward_slots', forward_slots), ('slot_busy', slot_busy), ('reply_secrets', reply_secrets),
             ('default_endpoint', default_endpoint), ('bootstrap_fields', bootstrap_fields),
-            ('body_budget', body_budget), ('reply_worker', reply_worker)) if value is not None}
+            ('body_budget', body_budget), ('reply_worker', reply_worker), ('origin_policy', origin_policy))
+            if value is not None}
         if hold is not None and not callable(hold):
             raise ValueError('invalid start hold')
         self.hold = hold
@@ -484,7 +494,13 @@ class ProfileManager:
 
     HM-30 (plan 5.5): reply_worker is the add-on's one reply worker (run_product starts and stops it); every runtime
     gets its own turn on it (reply_worker.lane(profile_id)), the default profile's included. Left out (tests that
-    build a manager alone), every profile's replies are processed on the event loop."""
+    build a manager alone), every profile's replies are processed on the event loop.
+
+    HM-27 (plan 8.7, 12.3 HM-27; DQ-11 (a)): origin is the add-on's one Origin policy of the secret path
+    (origin_policy.OriginPolicy on the default profile's store directory), made at open() unless the product keeps its
+    own rule (app_options secret_path_allowed_origins: Headscale; then None). Every profile's runtime gets its check
+    (origin.guard(profile_id)); profile_admin serves the policy's route. open() reads the file once, so that one that
+    cannot be used is named in a WARNING before anything is served; nothing is written."""
 
     def __init__(self, store, product, tools, child_spec, *, port=CHILD_PORT, app_options=None, reply_worker=None):
         self.store, self.product, self.tools, self.child_spec = store, product, tools, child_spec
@@ -504,6 +520,7 @@ class ProfileManager:
         self.files_for_extras = False
         self.events = LifecycleLog()  # HM-09: the children's lifecycle events, every profile's
         self.admin = self.dispatcher = None  # HM-10: the profile management and the 8099 dispatcher (open())
+        self.origin = None  # HM-27: the add-on's Origin policy of the secret path (open(); None for Headscale)
         self._labels = {DEFAULT_PROFILE: profiles.DEFAULT_LABEL}  # HM-10: every echo's label (kept after removal)
         self.memory_limit = None  # HM-09: the cgroup memory limit read at open (None: none, MemAvailable decides)
         self.capacity = profiles.capacity(product)
@@ -849,7 +866,8 @@ class ProfileManager:
                                  bootstrap_fields=partial(self.admin.bootstrap_fields, profile_id),
                                  default_endpoint=None if default else self.default_endpoint,
                                  body_budget=gate.budget_share,
-                                 reply_worker=None if self.reply_worker is None else self.reply_worker.lane(profile_id))
+                                 reply_worker=None if self.reply_worker is None else self.reply_worker.lane(profile_id),
+                                 origin_policy=None if self.origin is None else self.origin.guard(profile_id))
         await runtime.open()
         entry = RegisteredProfile(profile_id, port, label, runtime, store, gate, credentials, disabled)
         self._entries[profile_id] = entry
@@ -887,6 +905,10 @@ class ProfileManager:
         self._stack = AsyncExitStack()
         try:
             self.shared = SharedAdmin(AdminAuthority(self.app_options.get('verify_admin')))
+            if origin_policy.applies(self.app_options):
+                # HM-27: one policy for every profile; read once now (an unusable file: its WARNING), never written here
+                self.origin = origin_policy.OriginPolicy(self.layout.root)
+                self.origin.file.read()
             # HM-10: the profile management and 8099's dispatcher (the second role check is the shared authority's).
             self.admin = ProfileAdmin(self, self.shared.authority.verify)
             self.dispatcher = AdminDispatcher(self, self.admin)

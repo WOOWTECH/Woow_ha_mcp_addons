@@ -53,7 +53,7 @@ B, = ids(1)
 POLICY = 'origin-policy.json'
 RECEIPTS = '.origin-policy.json.operations.json'
 DENIED_403 = (403, [('content-length', '26'), ('content-type', 'application/json')], b'{"error":"request denied"}')
-UNAVAILABLE = (503, [('content-length', '30'), ('content-type', 'application/json')], b'{"error":"state unavailable"}')
+UNAVAILABLE = (503, [('content-length', '29'), ('content-type', 'application/json')], b'{"error":"state unavailable"}')
 # The products of run_product that may be switched on and use the service-level list (Headscale keeps its own rule).
 LISTED = tuple(product for product in SWITCHABLE if product != 'headscale')
 ORIGIN_CASES = {

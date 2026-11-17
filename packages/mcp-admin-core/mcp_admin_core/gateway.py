@@ -862,7 +862,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               bootstrap_fields: Callable[[], dict] | None = None,
               body_budget: request_budget.Share | None = None,
               stop_child: Callable[[], Awaitable] | None = None,
-              reply_worker=None):
+              reply_worker=None, origin_policy: Callable[[list[str]], None] | None = None):
     """listing (0.2.2): the product's tools/list tools as its child lists them (surface.listing). With it, a client
     connects whatever the backend's state: when no child can answer (no backend configured, so no child; a child that is
     not up) the gateway answers initialize, notifications/initialized, ping and tools/list itself, from listing through
@@ -992,7 +992,17 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     A switched-on product's dispatcher also gives a tools/call the check of the profile's answers not received yet,
     through the request's state (PENDING_REPLIES; profile_router.ProfileGate): no make_apps option. HM-30 review 2
     MF-2: the check runs before the slot and again once the call holds it, and a relayed JSON reply is charged
-    (PENDING_CHARGE) before its slot is released."""
+    (PENDING_CHARGE) before its slot is released.
+
+    HM-27 (multi-profile plan 8.7, 12.3 HM-27; DQ-11 (a); contract 2.6), likewise only for a switched-on product (and
+    never with secret_path_allowed_origins: Headscale keeps its own rule):
+    - origin_policy: the add-on's Origin allowlist for this profile (origin_policy.OriginPolicy.guard): on the secret
+      path, once the token is checked and after the method rule (where Headscale's rule sits; before the query rule),
+      it is called with the request's Origin values: it returns (the request goes on, answered as without it; in
+      report-only a value the list does not hold writes one decision=would_deny line), raises BadRequest(403) (enforce:
+      a value the list does not hold; one decision=deny line) or ConfigError (an unusable policy file: 503 state
+      unavailable). No CORS header is ever added. Left out: the secret path takes any Origin, as before. The Bearer path
+      is not its: any Origin there is 403 as before."""
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
@@ -1027,6 +1037,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         raise ValueError("invalid bootstrap fields")
     if body_budget is not None and not isinstance(body_budget, request_budget.Share):
         raise ValueError("invalid request budget")
+    if origin_policy is not None and (not callable(origin_policy) or secret_path_allowed_origins is not None):
+        raise ValueError("one secret-path Origin rule")  # HM-27: Headscale's own rule, or the add-on's policy
     if stop_child is not None and not callable(stop_child):
         raise ValueError("invalid child stop")
     if reply_worker is not None and not callable(getattr(reply_worker, "run", None)):
@@ -1922,7 +1934,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         HTTPException(404): same status, body and headers, no WWW-Authenticate), so the reply never says whether
         the path exists, the token was revoked or the guess was close. The request's own Authorization header is
         never read there. A product may restrict the secret path to exact browser Origins; no Origin remains valid
-        for non-browser clients. /mcp is unchanged: 401 with WWW-Authenticate, Origin 403.
+        for non-browser clients. /mcp is unchanged: 401 with WWW-Authenticate, Origin 403. HM-27: a switched-on
+        product's secret path checks the add-on's Origin policy here instead (origin_policy, see make_apps).
 
         0.1.14: on both paths, a well-formed tools/call the policy refuses (policy.ToolCallRefused) is answered HTTP 200
         with a JSON-RPC error giving the reason, when it carries a session id; without one it stays 403 as before."""
@@ -2039,6 +2052,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         if secret is not None and secret_path_allowed_origins is not None and origins and (
                 len(origins) != 1 or origins[0] not in secret_path_allowed_origins):
             raise BadRequest(403)
+        if secret is not None and origin_policy is not None:
+            origin_policy(origins)  # HM-27: report-only lets it go on (one line), enforce 403, an unusable file 503
         if request.url.query:
             raise BadRequest()
         method = message = refusal = None
