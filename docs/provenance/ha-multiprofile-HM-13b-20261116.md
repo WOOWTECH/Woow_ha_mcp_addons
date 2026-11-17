@@ -7,6 +7,7 @@
   `dormant_profiles` 並存，`run_product` 留 HM-30 的 `worker = None`、判斷用本片這次開機讀到的 `enabled`。契約第 9 節本片的列改成 #118～#121
   （`0ea1c37`）。本機：pytest 子集 39 檔 1,848 案只有 5 個要 root 的失敗；node、build closure、packaging、`validate.py`、`tool_inventory.py`、
   兩個預檢都過，雙向控制字元 0 個。
+  08:4x 主線又合了 HM-33（PR #115，`f239157`），本 PR 又有衝突（契約兩塊），再用 merge commit 合一次（`22f5766`；第 19.12 節）。
 - **rebase 到 `claude-delivery` `f4c7718`（2026-11-16 21:4x；第 18 節）。** 22 個 commit 照原順序重放；衝突在 5 個 commit、6 個檔，兩邊的行為都留
   （HM-31 的 `body_budget` 和本片的 `dormant_profiles` 在 `make_apps`、`ProfileRuntime` 並存）。契約第 9 節本片的列改成 #113～#116，引用一起改。
   帳本照 rebase 後的實際內容重算，每個重放的 commit 都 0 漂移。本機子集另外抓到 HM-31 一案釘住 `make_apps` 的參數順序，改測試（`ebcb771`）。
@@ -66,7 +67,7 @@
 |---|---|
 | 切片 | HM-13b（計畫 §8.4「開機守門」、休眠處理、全部撤銷；§10.3；§12.3；風險高、工作量 L） |
 | 分支 | `feat/ha-multiprofile-hm13b-20261116`（一般 clone，不是 worktree） |
-| HA 基準 | **2026-11-17 起：合併 `claude-delivery` `165dbaf`**（merge commit `6bb7fcd`，第一個 parent 是本片 `ebab019`、第二個是 `165dbaf`；第 19 節）。合併前：**rebase 後：`claude-delivery` `f4c7718`**（2026-11-16 21:4x；第 18 節）。rebase 前：`684a2dd`：HM-10 的 PR #104 head（`claude-delivery` `7c6f80c` 加 HM-10 的 18 個 commit）。HM-10 先合併；之後由主對話 rebase 到 `claude-delivery`。2026-11-16 19:0x 查（只 fetch `claude-delivery`）：已是 `df686dd`（合了 #104 HM-10、#105 HM-31、#106 HM-09 監看 cancel 修正）；`git merge-tree` 預估 rebase 時要解 6 個檔：`contract.md`、`ledger-tracking.md`、`threat-model.md`、`runtime-patches.json`、`gateway.py`、`profile_runtime.py`。20:4x 再查：已是 `f4c7718`（再合了 #107 HM-11），要解的仍是這 6 個檔 |
+| HA 基準 | **2026-11-17 起：合併 `claude-delivery` `165dbaf`，08:4x 再合 `f239157`（HM-33）**（merge commit `6bb7fcd`、`22f5766`；`6bb7fcd` 的第一個 parent 是本片 `ebab019`、第二個是 `165dbaf`；第 19 節）。合併前：**rebase 後：`claude-delivery` `f4c7718`**（2026-11-16 21:4x；第 18 節）。rebase 前：`684a2dd`：HM-10 的 PR #104 head（`claude-delivery` `7c6f80c` 加 HM-10 的 18 個 commit）。HM-10 先合併；之後由主對話 rebase 到 `claude-delivery`。2026-11-16 19:0x 查（只 fetch `claude-delivery`）：已是 `df686dd`（合了 #104 HM-10、#105 HM-31、#106 HM-09 監看 cancel 修正）；`git merge-tree` 預估 rebase 時要解 6 個檔：`contract.md`、`ledger-tracking.md`、`threat-model.md`、`runtime-patches.json`、`gateway.py`、`profile_runtime.py`。20:4x 再查：已是 `f4c7718`（再合了 #107 HM-11），要解的仍是這 6 個檔 |
 | 本片 commit | 22 個：接續前 7 個（`3c90b6c`～`0028169`）；接續後 8 個（`cc5adb0`、`9c29b4f`、`360836e`、`5b596cd`、`7d237f6`、本筆記 `1f8c29f`、`96c4d3b`、`551d210`；第 16 節）；審查修正 7 個（`aa8ef57`、`77394fc`、`f3b8fa1`、`895119b`、`89a7e02`、`27eeb16`，以及記錄審查處理的這個筆記 commit；第 17 節）。rebase 後：這 22 個重放（新的 commit 編號見第 18.11 節），再加 4 個（`7a85928` 改列號、`ebcb771` HM-31 測試的參數順序、`df63d79` 筆記改列號、本筆記第 18 節），共 26 個。2026-11-17 合併 `claude-delivery` 後再加 3 個（merge commit `6bb7fcd`、`0ea1c37` 改列號、本筆記的現行列號與第 19 節），共 29 個（含 1 個 merge commit；第 19.11 節） |
 | 依據 | 計畫 §3.3、§4.1、§8.4、§8.8、§8.10、§10.3、§12.3 HM-13a／b／c；契約 §1.2、§3.5、§3.6、§4.1、§7、§8、§9；`threat-model.md`；HM-13a 的筆記與審查（`wave1/review-HM-13a.md`）；FM-04、07、13、16、78、79、80、118、119、120 |
 | PaaS | 沒有搬程式。對照 `Pc/restore_guard.py`（`prepare`、`_write_config`、`_write_journal`、`_archive_journal`、`_read_journal_floor`）、`Pc/restore_inplace.py`（`_verify`）、`Pc/restore_marker.py`（任何項目都算存在）；pin `69ac425`，到 `d7f5849` 這幾檔沒變（第 9 節） |
@@ -921,8 +922,24 @@ rebase 之後新加的 commit：
 |---|---|
 | `6bb7fcd` | merge commit：把 `claude-delivery` `165dbaf` 合進本片（第 19.2 節的解法；訊息寫了每個檔怎麼解） |
 | `0ea1c37` | 契約第 9 節本片的列改成 #118～#121，所有引用一起改；第 10 節加一列；帳本 `restore_lock.py` 那列重算 |
-| 本筆記 | 現行列號 8 處、結論、第 1、14 節的狀態、第 19 節 |
+| `fc70404` | 本筆記：現行列號 8 處、結論、第 1、14 節的狀態、第 19 節 |
+| `22f5766` | merge commit：再把 `claude-delivery` `f239157`（HM-33）合進本片（第 19.12 節） |
+| 本筆記 | 第 19.12 節、結論與本表 |
 
 - push：一般的 `git push origin feat/ha-multiprofile-hm13b-20261116`（從 `ebab019` 往前 fast-forward，不 force）。備份分支只在本機。
 - 合併條件不變：HM-03a 的 UC-08、sentinel 與 Watchdog 結果寫進第 11 節（不可靠就照 DQ-39 (a)）；CI 全綠。
 - 列號：之後還有片在契約第 9 節 #121 後面加列時（HM-13c 的 #117、#118 會變成 #122、#123），後合併的接在當時最後一列後面重排。
+
+### 19.12 再合一次：HM-33（PR #115，2026-11-17 08:4x）
+
+- 本片第一次合併、08:14 push（`ebab019..fc70404`）之後，HM-33（PR #115）合進 `claude-delivery`：`165dbaf` → `f239157`（9 個 commit：Hermes `hermes_cron`
+  的工具說明照 PaaS #156、閘道內附的工具清單 `tool_snapshot.py`、契約、`decisions.md`、`acceptance-matrix.md`、帳本、`runtime-sources.json`、
+  `tool-surface.json`、HM-33 的筆記與三個測試檔，共 12 個檔）。08:4x `git fetch` 看到時，本 PR 又和主線衝突（`git merge-tree`：契約），GitHub 不會再替它
+  算新的 merge ref，所以照任務「push 前主線又前進就再合一次」的規則再合一次（本片已 push，但疊在上面的 HM-13c 還沒，兩片都要能跑 CI）。
+- merge commit `22f5766`（第一個 parent 是本片 `fc70404`、第二個是 `f239157`）。衝突只在契約 2 塊（`resolve_hm13b_merge2.py`）：第 1.2 節尾 HM-33 那段在前、
+  接本片的第 1.3 節；第 10 節 HM-33 的兩列在前、本片的四列在後，兩邊逐字保留（`both_sides_kept.py`：兩邊加的行都在、沒有新寫的行）。
+- 自動合併：`acceptance-matrix.md`、帳本、`tests/test_output_schemas.py`（HM-33 改 Hermes 的位元組釘選、本片改 `apps/n8n/run.py` 的）、
+  `tests/test_single_profile_golden.py`（HM-33 改 Hermes 的兩個 tools/list 摘要、本片改的是別段）。帳本另用 `merge_ledger3.py --check` 照 JSON 重組核對：
+  和自動合併的結果逐位元相同，65 列、0 漂移。
+- HM-33 沒有在契約第 9 節加列：本片的 #118～#121 不用改。和 `claude-delivery` 相比，本 PR 的改動仍是原本的 29 個檔。
+- 合併後的檢查（`22f5766`）：pytest 子集 18 檔（`tools/pytest-subset-2nd.txt`：HM-33 的 `test_hermes_cron_description` 3 案與 `test_hermes_cron_paused_contract` 4 案、黃金回歸 17、`test_output_schemas` 189、兩個契約凍結、帳本與工具清單、log 掃描、本片 4 檔與零改寫、HM-12、HM-31、HM-10 的相關檔）702 案、0 skip，697 過，只有 5 個要 root 的 `test_root_*` 失敗（`logs/pytest-subset-2nd-by-file.txt`）；packaging unittest `Ran 205`、`OK (skipped=5)`；`validate.py` PASS；`tool_inventory.py` exit 0（HM-33 改了工具清單，`tool-surface.json` 159 項 0 漂移）；秘密預檢（`f239157..22f5766` 30 個 commit、HEAD 樹與整段歷史）0 命中；帳本預檢 OK（`runtime-patches.json` 178、`runtime-sources.json` 70、`tool-surface.json` 159 項，0 漂移、0 缺）；雙向控制字元 0 個（逐 commit，另含兩個 merge commit 和各自兩個 parent 比的新增行）；`addons/`、`.github/`、`tests/conftest.py`、`features.py` 對主線 0 行差異。本筆記 commit 之後再跑兩個預檢與雙向控制字元，結果記在 PR 說明。

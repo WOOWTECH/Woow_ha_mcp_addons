@@ -27,8 +27,10 @@ CURRENT_POST_SOURCE_BYTES = {
     # The SQL-test tool's public write hint changed; its output pin did not.
     'apps/emqx/vendor/emqx_mcp_server/tools/integration.py': (
         'emqx', '89c6f167d6b9487a2ae6373ab498dd9eef9911895effe9e6d7c0c61c9ac4841d'),
+    # HM-33: hermes_cron's description gains PaaS #156's two sentences (text only); its input and output schemas and
+    # its handler do not change.
     'apps/hermes/vendor/hermes_mcp_server/server.py': (
-        'hermes', '922ff27d13a1c67a0b0d6fd8cbd9c764d9697cd26f63b0189d7dbfba95e0d94a'),
+        'hermes', 'e21dbca5507b03a5c124fc238020c308dabaf2c826b5ecfecff0f125c74f38b0'),
     # HM-32: the EMQX client asks for no idle backend connection (PaaS #135); no tool, schema or handler change.
     'apps/emqx/vendor/emqx_mcp_server/lifespan.py': (
         'emqx', 'acf72dc8655d6b702a600e4e936b4bfddfdb137824747de91022085f21e9d44b'),
