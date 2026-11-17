@@ -36,6 +36,7 @@ from pathlib import Path
 import re
 import secrets
 import stat
+import threading
 import time
 
 import httpx
@@ -435,7 +436,8 @@ def test_what_a_policy_may_be():
 # ---- report-only: no answer changes ----
 
 def requests_of(path, session):
-    """The requests the matrix sends with each Origin case (one session open)."""
+    """The requests the matrix sends with each Origin case (one session open): every method the secret path serves
+    (POST, GET and DELETE: HM-27 review S-1) and two it refuses before the check (PUT, OPTIONS: 405)."""
     in_session = [('Mcp-Session-Id', session)]
     return (
         ('initialize', 'POST', path, (), initialize_message(5)),
@@ -447,6 +449,7 @@ def requests_of(path, session):
         ('query', 'POST', path + '?x=1', in_session, {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'}),
         ('put', 'PUT', path, (), None),
         ('options', 'OPTIONS', path, (), None),
+        ('delete', 'DELETE', path, in_session, None),
     )
 
 
@@ -484,6 +487,7 @@ async def test_report_only_answers_every_request_as_without_the_check(tmp_path, 
         per_case = len(forwarded) // len(ORIGIN_CASES)
         assert forwarded == forwarded[:per_case] * len(ORIGIN_CASES)  # the child got every case's requests alike
         assert seen['none', 'tools/list'][0] == 200 and seen['none', 'put'][0] == 405 and seen['none', 'query'][0] == 400
+        assert seen['none', 'delete'][0] == 200
         assert decision_lines(caplog) == [would_deny('default', *NOT_PERMITTED[case]) for case in ORIGIN_CASES
                                           if case in NOT_PERMITTED]
         assert not (data / POLICY).exists() and not (data / RECEIPTS).exists()
@@ -508,7 +512,7 @@ async def test_enforce_refuses_only_what_the_list_does_not_hold(tmp_path, log_sc
     """T-24: switched to enforce in the panel, a request whose Origin the list does not hold is 403 {"error":"request
     denied"} (the Bearer path's and Headscale's fixed answer; PaaS 403 ORIGIN_DENIED), never reaches the child and
     writes one deny line; no Origin or exactly one listed is served as before, byte for byte. The method rule still
-    comes first (405), the query rule after (400)."""
+    comes first (405), the query rule after (400); a DELETE is refused as a GET or a POST (HM-27 review S-1)."""
     data = setup(tmp_path, product)
     async with multi_profile_runtime(product, data) as runtime:
         await settle(runtime, 'configured')
@@ -783,6 +787,12 @@ async def test_the_policy_is_saved_beside_the_index_never_in_the_default_state(t
     ('an origin not in its normal form', b'{"version":1,"mode":"enforce","allowed_origins":["HTTPS://CLAUDE.AI"]}', 0o600),
     ('a wildcard', b'{"version":1,"mode":"report-only","allowed_origins":["*"]}', 0o600),
     ('another mode bit set', b'{"version":1,"mode":"report-only","allowed_origins":[]}', 0o644),
+    # HM-27 review S-2: the file's own rules, each with the request's rule as well
+    ('a repeated origin', b'{"version":1,"mode":"report-only","allowed_origins":["https://claude.ai","https://claude.ai"]}',
+     0o600),
+    ('17 origins', ('{"version":1,"mode":"report-only","allowed_origins":['
+                    + ','.join(f'"https://o{i}.example"' for i in range(17)) + ']}').encode(), 0o600),
+    ('16 KiB and one byte', b'{"version":1,"mode":"report-only","allowed_origins":[]}'.ljust(16385), 0o600),
 ])
 async def test_an_unusable_policy_file_refuses_the_secret_path_until_the_panel_saves_one(tmp_path, log_scan, caplog,
                                                                                          name, raw, mode):
@@ -846,6 +856,108 @@ async def test_a_policy_file_changed_behind_the_add_ons_back_is_read_again(tmp_p
             (data / POLICY).unlink()
             assert (await evil()).status_code == 200  # no file: the default again
     assert len([line for line in lines(caplog) if 'cannot be used' in line]) == 2
+
+
+def policy_state(path, raw):
+    """The state PolicyFile reads of path written with raw (0600, this uid)."""
+    if path.exists():
+        path.unlink()
+    path.write_bytes(raw)
+    path.chmod(0o600)
+    return module().PolicyFile(path).read().state
+
+
+def test_the_policy_files_bounds_are_its_own(tmp_path):
+    """HM-27 review S-2: 16 KiB (a valid policy padded with spaces) and 16 origins are used; one byte or one origin more
+    is unusable (contract 2.6, section 9 #122: the numbers are pinned here, not read from the module)."""
+    path = tmp_path / POLICY
+    document = b'{"version":1,"mode":"report-only","allowed_origins":[]}'
+    assert policy_state(path, document.ljust(16384)) == 'saved'
+    assert policy_state(path, document.ljust(16385)) == 'unusable'
+    origins = [f'https://o{i}.example' for i in range(17)]
+
+    def listing(count):
+        return json.dumps({'version': 1, 'mode': 'enforce', 'allowed_origins': origins[:count]},
+                          separators=(',', ':')).encode()
+    assert policy_state(path, listing(16)) == 'saved'
+    assert policy_state(path, listing(17)) == 'unusable'
+
+
+async def test_a_second_hard_link_is_unusable_and_a_save_replaces_only_this_name(tmp_path, log_scan):
+    """PolicyFile._load (HM-27 review S-2): a policy file with a second hard link (valid, 0600, this uid) is unusable,
+    the secret path 503; a panel save replaces this name only (rename), the other name keeps its bytes."""
+    data = setup(tmp_path)
+    other = data / 'elsewhere.json'
+    raw = b'{"version":1,"mode":"report-only","allowed_origins":["https://claude.ai"]}'
+    other.write_bytes(raw)
+    other.chmod(0o600)
+    os.link(other, data / POLICY)
+    async with multi_profile_runtime('odoo', data) as runtime:
+        await settle(runtime, 'configured')
+        path = f'/private_{runtime.token("default")}/mcp'
+        async with runtime.mcp() as client:
+            assert answer(await client.post(path, headers=headers_of('allowed'), json=initialize_message())) == UNAVAILABLE
+            assert (await policy_get(runtime)).json()['origin_policy_state'] == 'unusable'
+            await save(runtime, 'enforce', ['https://claude.ai'])
+            assert (await client.post(path, headers=headers_of('allowed'), json=initialize_message())).status_code == 200
+    info = (data / POLICY).lstat()
+    assert stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_ino != other.lstat().st_ino
+    assert other.read_bytes() == raw and other.lstat().st_nlink == 1
+
+
+def test_a_fifo_is_unusable_and_never_waited_for(tmp_path):
+    """PolicyFile._load (HM-27 review S-2): a FIFO in the file's place is unusable at once (O_NONBLOCK: reading it
+    never waits for a writer, which would hold the event loop). Read in a thread here: if it waits, a writer is opened
+    so that the thread ends, and the test fails instead of hanging."""
+    found = module()
+    path = tmp_path / POLICY
+    os.mkfifo(path, 0o600)
+    states = []
+    reader = threading.Thread(target=lambda: states.append(found.PolicyFile(path).read().state), daemon=True)
+    reader.start()
+    reader.join(5)
+    if reader.is_alive():
+        os.close(os.open(path, os.O_WRONLY | os.O_NONBLOCK))
+        reader.join(5)
+        pytest.fail('the policy file was read waiting for a writer (a FIFO)')
+    assert states == ['unusable']
+
+
+def test_a_policy_file_another_uid_owns_is_unusable(tmp_path, monkeypatch):
+    """PolicyFile._load (HM-27 review S-2): the file must be this uid's. The add-on's uid is made another one here
+    (os.geteuid, as the module calls it), so that this runs unprivileged and in the CI alike: the same file, 0600 and
+    valid, is used as its own and unusable as another uid's."""
+    found = module()
+    path = tmp_path / POLICY
+    assert policy_state(path, b'{"version":1,"mode":"report-only","allowed_origins":[]}') == 'saved'
+    owner = path.lstat().st_uid
+    monkeypatch.setattr(found.os, 'geteuid', lambda: owner + 1)
+    assert found.PolicyFile(path).read().state == 'unusable'
+
+
+async def test_a_directory_in_the_policy_files_place_cannot_be_saved_over(tmp_path, log_scan):
+    """Threat model section 3 (HM-27 review S-2): a directory where the file belongs is unusable (the secret path 503,
+    with or without an Origin) and a panel save cannot replace it (rename onto a directory): 409
+    operation_outcome_unknown, the same key again the same 409, no temporary file left; only a backup restore repairs
+    it, and the Bearer path is served as before meanwhile."""
+    data = setup(tmp_path)
+    (data / POLICY).mkdir(mode=0o700)
+    async with multi_profile_runtime('odoo', data) as runtime:
+        await settle(runtime, 'configured')
+        path = f'/private_{runtime.token("default")}/mcp'
+        bearer = {**ACCEPT, 'Authorization': f'Bearer {runtime.token("default")}'}
+        async with runtime.mcp() as client:
+            for case in ('none', 'allowed'):
+                assert answer(await client.post(path, headers=headers_of(case), json=initialize_message())) == UNAVAILABLE
+            assert (await policy_get(runtime)).json()['origin_policy_state'] == 'unusable'
+            body = {'mode': 'report-only', 'allowed_origins': []}
+            response, key = await policy_put(runtime, body)
+            assert (response.status_code, response.json()['detail']['code']) == (409, 'operation_outcome_unknown')
+            again, _ = await policy_put(runtime, body, key=key)
+            assert (again.status_code, again.json()['detail']['code']) == (409, 'operation_outcome_unknown')
+            assert (data / POLICY).is_dir() and [name for name in os.listdir(data) if 'origin-policy.json-' in name] == []
+            assert answer(await client.post(path, headers=ACCEPT, json=initialize_message())) == UNAVAILABLE
+            assert (await client.post('/mcp', headers=bearer, json=initialize_message())).status_code == 200
 
 
 # ---- the panel's route: the shared pipeline, If-Match, Idempotency-Key, receipts ----
@@ -914,6 +1026,24 @@ async def test_the_route_reads_and_saves_through_the_shared_pipeline(tmp_path, l
                                                            'detail': {'code': 'operation_id_conflict'}})
         for response in (saved, replay, other):
             assert 'profile' not in response.text and runtime.token('default') not in response.text
+
+
+async def test_a_save_answers_in_the_pipelines_order(tmp_path, log_scan):
+    """Contract 3.5, 4.1 (HM-27 review S-3): the If-Match is looked at before the Idempotency-Key, the ETag before the
+    request's rules. A malformed If-Match without a key is 409 config_conflict (not 428 operation_id_required); a request
+    the rules refuse with a stale If-Match is 409 config_conflict (not 422 origin_policy_invalid). Nothing is written."""
+    data = setup(tmp_path)
+    async with multi_profile_runtime('odoo', data) as runtime:
+        await settle(runtime, 'configured')
+        current = (await policy_get(runtime)).headers['etag']
+        malformed, _ = await policy_put(runtime, {'mode': 'enforce', 'allowed_origins': []}, if_match='o1-' + '0' * 64,
+                                        key=None)
+        stale, _ = await policy_put(runtime, {'mode': 'enforce', 'allowed_origins': ['*']},
+                                    if_match='"o1-' + '0' * 64 + '"')
+        for response in (malformed, stale):
+            assert (response.status_code, response.json(), response.headers['etag']) == (
+                409, {'detail': {'code': 'config_conflict'}}, current)
+        assert not (data / POLICY).exists() and not (data / RECEIPTS).exists()
 
 
 async def test_the_etag_names_the_policy_not_the_file(tmp_path, log_scan):

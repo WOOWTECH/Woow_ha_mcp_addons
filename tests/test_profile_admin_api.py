@@ -114,8 +114,8 @@ async def csrf_of(runtime):
 
 
 class Panel:
-    """The panel's global management calls (the profile list, creation, rename, deletion, the index quarantine), with
-    its CSRF token, the list's ETag and a new Idempotency-Key unless told otherwise."""
+    """The panel's global management calls (the profile list, creation, rename, deletion, the index quarantine, HM-27's
+    Origin policy), with its CSRF token, the list's (the policy's) ETag and a new Idempotency-Key unless told otherwise."""
 
     def __init__(self, runtime, csrf, user=ADMIN):
         self.runtime, self.csrf, self.user = runtime, csrf, user
@@ -160,6 +160,17 @@ class Panel:
     async def quarantine(self, etag, **headers):
         async with self.client() as client:
             return await client.post('/api/profiles/index/quarantine', headers=self.headers(etag, **headers))
+
+    async def origin_policy(self):
+        """HM-27: GET {base}/api/origin-policy (the add-on's one Origin policy; a global path)."""
+        async with self.client() as client:
+            return await client.get('/api/origin-policy', headers=self.user)
+
+    async def save_origin_policy(self, body, **headers):
+        """HM-27: PUT {base}/api/origin-policy with the policy's ETag (read now unless given) and a new key."""
+        etag = headers.pop('etag', None) or (await self.origin_policy()).headers['etag']
+        async with self.client() as client:
+            return await client.put('/api/origin-policy', json=body, headers=self.headers(etag, **headers))
 
 
 def code_of(response):
@@ -1280,8 +1291,9 @@ async def test_the_second_role_check_comes_after_every_wait_and_before_any_chang
     """Step 10: a role taken away while a request waits (after the first check) refuses it there: 403, nothing
     created, renamed, deleted or quarantined, no token revoked, no receipt. Every wait counts (HM-10 review MF-1 (1),
     (2), S-1): the add-on's profile lock (a creation, a rename, a deletion, the index quarantine), the deleted
-    profile's own lock, and every profile's own lock the quarantine takes. The list, which waits for nothing, asks the
-    role twice as well (steps 6 and 10)."""
+    profile's own lock, every profile's own lock the quarantine takes, and HM-27's Origin policy lock (a save of the
+    policy: no origin-policy.json, no receipt; HM-27 review MF-2). The list and the policy's GET, which wait for
+    nothing, ask the role twice as well (steps 6 and 10)."""
     data = setup(tmp_path, extras=(B, C))
     asked = []
 
@@ -1312,14 +1324,20 @@ async def test_the_second_role_check_comes_after_every_wait_and_before_any_chang
         count = len(asked)
         etag = await panel.etag()
         assert asked[count:] == [ADMIN['X-Remote-User-Id']] * 2  # the list: the first role check and the final one
+        count = len(asked)
+        policy = await panel.origin_policy()
+        assert policy.status_code == 200 and asked[count:] == [ADMIN['X-Remote-User-Id']] * 2  # HM-27's GET too
         before = tree_of(data)
         b_lock = manager.get(B).runtime.mutation_lock
         for lock, request in ((manager.admin.lock, lambda: panel.create(NEW_LABELS[0], etag=etag)),
                               (manager.admin.lock, lambda: panel.rename(B, 'Beta X', etag=etag)),
                               (manager.admin.lock, lambda: panel.delete(B, etag=etag)),
-                              (b_lock, lambda: panel.delete(B, etag=etag))):
+                              (b_lock, lambda: panel.delete(B, etag=etag)),
+                              (manager.origin.lock, lambda: panel.save_origin_policy(
+                                  {'mode': 'enforce', 'allowed_origins': []}, etag=policy.headers['etag']))):
             await refused_while_held(lock, request)
         assert tree_of(data) == before
+        assert not (data / 'origin-policy.json').exists() and not (data / '.origin-policy.json.operations.json').exists()
         replace_index(data)  # unusable (DQ-12): the quarantine takes it
         removed.clear()
         async with runtime.admin() as admin:
