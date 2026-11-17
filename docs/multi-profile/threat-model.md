@@ -179,7 +179,9 @@
 - Origin 紀錄的節流每帳號一份：一個 token 持有人最多讓自己的帳號每分鐘寫 20 行（加一行抑制數），擠不掉別的帳號的紀錄；全 add-on
   最多約（1＋5）×21 行一分鐘。紀錄只在 add-on log，沒有 PaaS 的 Logs 頁。
 - 同 uid 改得到 `/data/mcp/origin-policy.json`（DQ-37）：有效的外改立即生效（例如改成 report-only），壞掉的讓密鑰網址一律 503
-  （fail closed），面板可以存一份新的蓋過去；HA 沒有面板以外的修改途徑。
+  （fail closed），面板可以存一份新的蓋過去；HA 沒有面板以外的修改途徑。換成目錄這類存檔蓋不過去的東西時，面板的存檔回 409
+  `operation_outcome_unknown`、密鑰網址一直 503，只能還原備份（Bearer 照常）。存檔讀完、寫入之前檔案被換掉時，存檔不蓋過去
+  （同樣 409 `operation_outcome_unknown`），外面的檔照常生效，面板重新讀取後再存。
 - Bearer `/mcp` 帶 Origin 一律 403（DQ-11 第二問待 S14）：Claude.ai 若送 Origin，就只能用密鑰網址（網址進代理與 tunnel log）。
 
 ## 4. 事故處理：懷疑某個子程式或帳號被攻破（計畫 §8.10；HM-18 寫進 DOCS）
