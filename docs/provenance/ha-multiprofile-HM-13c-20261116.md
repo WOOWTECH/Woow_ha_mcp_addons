@@ -2,6 +2,9 @@
 
 ## 結論
 
+- **合併與 S-3 這一輪的獨立審查：通過（必修 0、建議 2，沒有要使用者決定的題；第 20 節）。** S-1 改還原手冊與 `profile_runtime.py` 的說明
+  （`f7d2f10`）；S-2 把審查實驗 X1～X3 改寫成 4 個正式測試，選做的 U03 也補一個面板測試（`67a326e`）；在拋棄式複本套突變 M03、M08、M09、M13、
+  U03 都會紅。
 - **和 HM-13b（已合進 `claude-delivery` `165dbaf`）合併，補審查 S-3（2026-11-17；第 19 節）。** HM-13b 的 PR #108 把 `claude-delivery`
   （HM-12 後端 #110、HM-30 #111、HM-32 #113、HM-12 面板 #114）合進去之後（`fc70404`），本片用 merge commit 把它合進來（`0f3d064`），
   不 rebase、不 force push。衝突在 15 個檔：程式、面板、測試與文件 34 塊，帳本 7 塊照 JSON 重組。面板 `app.js` 只有 import 衝突，`api.js`
@@ -685,3 +688,50 @@
 - HM-33 沒有在第 9 節加列：本片的 #122、#123 不用改。合併後 `git merge-tree` 對 `origin/claude-delivery` 沒有衝突。
 - 合併條件不變：HM-13b（#108）先合併；之後本片再把 `claude-delivery` 合進來（或 rebase），重跑 CI。列號：之後還有片在契約第 9 節 #123 後面加列時，
   後合併的接在當時最後一列後面重排。
+
+## 20. 合併與 S-3 這一輪的獨立審查處理（2026-11-17 10:3x 起）
+
+審查報告：`artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-13c-merge-S3.md`（審查對象 `4d654ec`；證據 `wave4/evidence-review-HM-13c-merge-S3/`）。
+判定「通過」：必修 0、建議 2（S-1、S-2），選做 1（U03），沒有要使用者決定的題。本輪的 log 與突變：`wave4/evidence-merge-HM-13c/review2/`
+（`logs/`、`mutations/`；腳本在 `evidence-merge-HM-13c/tools/` 的 `run_mutations.py.txt`、`review_mutations.py.txt`）。
+
+### 20.1 處理表
+
+| # | 意見（摘要） | 處理 | commit | 證據 |
+|---|---|---|---|---|
+| S-1 | 還原手冊把 S-3 的 409 寫在「每個帳號都已撤銷」那一段；那時權杖已撤銷，換身分不換權杖、照常存（審查實驗 X1）；紀錄讀不到那段沒提換身分；`profile_runtime.py` 的模組說明只寫 token/rotate | 照契約改正：「每個帳號都已撤銷」那段改成「改 Odoo 網址、資料庫或使用者的存檔不換權杖，照常儲存（核對照樣在等）」；409 改寫到權杖有效而還沒核對的兩種情況（開關關時還原後重新產生、緊急關閉期間重新產生，之後再開通）。紀錄讀不到那段補「會換權杖的 Odoo 換身分存檔也一樣失敗（503）；面板若說存檔結果不明、請重新啟動 add-on，重新啟動沒有用，出路是全部撤銷」。`profile_runtime.py` 的模組說明補「換身分會換權杖時也受關卡管」（只改說明）；這個檔列管，帳本照檔重算 SHA-256（`99e928032658` → `ab0ee2ebafb5`）、說明加一句 | `f7d2f10` | 帳本預檢 0 漂移（第 20.3 節） |
+| S-2 | 四個行為沒有測試擋（突變 M03、M08、M09、M13 存活） | 審查實驗改寫成 `tests/test_restore_review.py` 的正式測試：`test_a_failed_identity_change_keeps_the_kept_tokens_notice[stop]`、`[refused]`（X2：換身分失敗時提示不清）、`test_a_revoked_profile_waiting_for_its_review_saves_an_identity_change_as_today`（X1：權杖已撤銷時換身分照常存，預設帳號與 B）、`test_a_new_origin_without_its_password_is_refused_before_the_review_gate`（X3：422 在 409 之前）。在現在的程式上 4 案都綠；在拋棄式複本套審查的突變後都會紅（第 20.2 節） | `67a326e` | `review2/logs/new-tests.log`、`review2/mutations/` |
+| U03（選做） | 面板把 S-3 那句也加到 `token/rotate` 的 409 時沒有測試擋 | 做了（簡單）：`restore-review.spec.mjs` 加一案，用 LOCAL MOCK 現成的 `saveStatus`／`saveCode` 讓 rotate 收到 409 `restore_review_required`，斷言文字只有待核對那句、錯誤樣式、伺服器文字不顯示、rotate 只送一次。套 U03 後紅 | `67a326e` | `review2/mutations/U03.txt` |
+| 觀察（第 7 節） | 結果不明時不清提示、待核對時清空連線也 409、面板沒有存檔前提醒、提示卡文字沒提換身分 | 審查寫明不用改，照現狀（存檔前提醒已交 HM-29，同 HM-12 面板審查 Q-1） | — | — |
+
+### 20.2 突變（拋棄式複本 `SP:hm13c-mut`：`cp -a` 整個 clone；每次改一處、跑對應的新測試、`git checkout --` 還原並確認樹和改前相同；跑完用完整路徑刪掉複本）
+
+| id | 改了什麼（審查的定義，`review_mutations.py`） | 新測試的結果 |
+|---|---|---|
+| M03 | 關卡移到新來源檢查之前（409 先於 422） | **紅**：`…refused_before_the_review_gate` |
+| M08 | 提示在寫入之前就清 | **紅**：`…keeps_the_kept_tokens_notice[refused]`（`[stop]` 綠：停不下來時還沒走到那一行，同審查） |
+| M09 | 提示在 `rebind_identity` 一開始就清 | **紅**：`[stop]`、`[refused]` 兩案 |
+| M13 | 改了身分欄位就擋（含權杖已撤銷） | **紅**：`…saves_an_identity_change_as_today` |
+| U03 | S-3 那句加到所有 `restore_review_required`（含 `token/rotate`） | **紅**：`a token/rotate held for the restore review keeps the review copy only…`（面板先 build 再跑 single 專案；還原後重 build） |
+
+### 20.3 本輪的檢查（一般使用者 uid 1000；`ha_env.sh` 的 TMPDIR，跑完用完整路徑刪掉；pytest 排在共用鎖後面）
+
+| 檢查 | 結果 |
+|---|---|
+| 新測試在現在的程式上（`67a326e` 之前的工作樹＝之後的程式；10:38） | 4 案全過（`review2/logs/new-tests.log`） |
+| 突變（拋棄式複本，10:39） | M03、M08、M09、M13、U03 都紅（第 20.2 節；`review2/mutations/`） |
+| pytest 相關 24 檔（`f7d2f10`；`review2/pytest-subset.txt`：本片與 HM-13b 的還原測試、HM-12 的換身分兩檔、`test_profile_runtime`、HM-10／HM-11 的管理與形狀比對、參數順序、零改寫、`test_output_schemas`、黃金回歸、兩個契約凍結、帳本與秘密預檢工具、工具清單、log 掃描、讀 LOCAL MOCK 的兩檔、HM-33 的說明測試） | 889 案、0 skip，884 過，5 個失敗都是要 root 的 `test_root_*`；85.6 秒；`test_restore_review` 71 案全過（`review2/logs/pytest-subset-by-file.txt`） |
+| `npm test`、`npm run build`、`node tests/build-closure.mjs`（`f7d2f10`） | node 94 案全過；build、build closure PASS |
+| Playwright 全套（`f7d2f10`） | 151 案全過（`single` 133、`profiles-on` 18；4.5 分）；`restore-review.spec.mjs` 新的 U03 一案在內 |
+| packaging unittest（照 CI 的離線暫存 venv）、`validate.py`（ci-venv，不加 `-I`）、`tool_inventory.py`（`f7d2f10`） | `Ran 205`、`OK (skipped=5)`；PASS；exit 0 |
+| 秘密預檢、帳本預檢（`--base origin/claude-delivery`）、雙向控制字元 | 本筆記 commit 之後跑，結果記在 PR 說明與回報 |
+
+### 20.4 commit
+
+| commit | 內容 |
+|---|---|
+| `67a326e` | S-2 的 4 個正式測試、U03 的面板測試 |
+| `f7d2f10` | S-1：還原手冊、`profile_runtime.py` 模組說明、帳本 |
+| 本筆記 | 第 20 節、結論 |
+
+- push：一般的 fast-forward push（從 `4d654ec`），不 force；PR 不合併。
