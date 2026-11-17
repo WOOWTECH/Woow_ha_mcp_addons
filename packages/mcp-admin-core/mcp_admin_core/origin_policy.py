@@ -103,16 +103,39 @@ _ORIGIN = re.compile(r'(https?)://(\[[0-9a-f:.]+\]|[a-z0-9.-]+)(?::([0-9]+))?', 
 _LABEL = re.compile(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', re.I | re.ASCII)
 
 
+def _ipv6_text(text: str) -> str:
+    """An IPv6 address in RFC 5952's form: lowercase hex pieces, the first longest run of two or more zero pieces as
+    '::', never a dotted quad. The WHATWG URL serializer (a browser's Origin) writes it so, and so does ipaddress's
+    str() for every address but an IPv4-mapped one, which it writes as a dotted quad since Python 3.12.4 and 3.13
+    (::ffff:127.0.0.1; before, ::ffff:7f00:1). The normal form, which the policy file keeps, must not follow the
+    image's Python (HM-27 review S-9; PaaS uses str())."""
+    number = int(ipaddress.IPv6Address(text))
+    pieces = [format((number >> shift) & 0xFFFF, 'x') for shift in range(112, -1, -16)]
+    start = length = 0
+    run = None
+    for index, piece in enumerate([*pieces, 'end']):
+        if piece == '0':
+            run = index if run is None else run
+        elif run is not None:
+            if index - run > length:
+                start, length = run, index - run
+            run = None
+    if length < 2:
+        return ':'.join(pieces)
+    return ':'.join(pieces[:start]) + '::' + ':'.join(pieces[start + length:])
+
+
 def normalize_origin(value: str) -> tuple[str, str, int]:
     """(scheme, host, port) of an exact http(s) origin; ValueError for anything else (a path, a trailing slash or dot,
-    userinfo, a query, *, null, a port outside 1-65535, a non-ASCII character)."""
+    userinfo, a query, *, null, a port outside 1-65535, a non-ASCII character). An IPv6 host in RFC 5952's hex form
+    (_ipv6_text)."""
     match = _ORIGIN.fullmatch(value)
     if match is None:
         raise ValueError('not an origin')
     scheme, host, port = match.groups()
     scheme, host = scheme.lower(), host.lower()
     if host.startswith('['):
-        host = str(ipaddress.IPv6Address(host[1:-1]))
+        host = _ipv6_text(host[1:-1])
     elif len(host) > 253 or any(not _LABEL.fullmatch(label) for label in host.split('.')):
         raise ValueError('not an origin host')
     number = int(port) if port else (443 if scheme == 'https' else 80)
@@ -414,17 +437,19 @@ def requested(value) -> Policy:
 
 
 def _parse(raw: bytes) -> Policy:
-    """The file's policy: exactly {"version": 1, "mode": ..., "allowed_origins": [...]}, every origin in its normal form
-    and distinct; ValueError for anything else."""
+    """The file's policy: exactly {"version": 1, "mode": ..., "allowed_origins": [...]}, every origin a string in its
+    normal form and distinct; ValueError for anything else (the strings are checked before the set of them is made: an
+    array or an object in the list is unusable, never a TypeError)."""
     value = strict_json(raw)
     if (not isinstance(value, dict) or set(value) != {'version', 'mode', 'allowed_origins'}
             or type(value['version']) is not int or value['version'] != POLICY_VERSION
             or value['mode'] not in MODES or not isinstance(value['allowed_origins'], list)
             or len(value['allowed_origins']) > MAX_ORIGINS
+            or not all(isinstance(item, str) for item in value['allowed_origins'])
             or len(set(value['allowed_origins'])) != len(value['allowed_origins'])):
         raise ValueError('not an origin policy')
     for item in value['allowed_origins']:
-        if not isinstance(item, str) or canonical(item) != item:
+        if canonical(item) != item:
             raise ValueError('not an origin policy')
     return Policy(value['mode'], tuple(value['allowed_origins']))
 
