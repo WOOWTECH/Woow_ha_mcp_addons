@@ -75,8 +75,9 @@ CI image jobs 與 protected `public-release` job 都執行以下流程：
 
 ## Push 與 provenance 信任層級
 
-`check_release.py` 只是人工 source/license/secret/publisher/image/HA prerequisite；
-就算全變 true，也不能略過上述實際候選 gate。Push 前 `supply_chain.py verify` 再驗
+`check_release.py` 只核發版的觸發條件（2026-11-17 起：`workflow_dispatch`、`release/*` 分支、HEAD＝`GITHUB_SHA`＝負責人給的
+`source_sha`、有映像的商店產品、manifest 版號＝`version_for`，見 [release.md](release.md)「發版：GitHub 託管機器」）；
+它通過也不能略過上述實際候選 gate，負責人的批准是 `public-release` environment 的審查。Push 前 `supply_chain.py verify` 再驗
 source、local image ID 與 evidence hashes。只 tag 已測 ID，不重新 build。
 
 Push 後 `registry_gate.py public APP OUTPUT` 匿名取得固定 tag manifest，驗其實際

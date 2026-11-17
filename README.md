@@ -30,7 +30,7 @@ Kubernetes MCP 與 Vibe Kanban 不在範圍。
 - **HA 管理權限**：七支都有 `homeassistant_api: true`（n8n 自 0.1.0、其他五支自 0.1.1 起，負責人核准；Nextcloud 於 2026-10-08 核准，0.1.7 起），用來確認管理面板的使用者是 HA owner 或系統管理員；測試 HA 上 owner 可用、一般使用者 403（0.1.1–0.1.6 每版實測；Nextcloud 尚未在 HA 實測）。`panel_admin` 不是授權。
 - 此例外授予**廣泛 Core 管理能力**（含使用者管理及可能間接 Supervisor／host 影響），不是可強制的唯讀角色權限；不代表批准所有 HA 變更。`hassio_api/auth_api` 仍 false、Supervisor role 預設、protection mode 不變，無新增 host 權限。
 - 核准 verifier 契約：固定 `ws://supervisor/core/websocket`／`config/auth/list`，只用各支管理程序的 runtime token（child 不繼承）；敏感操作前 fresh role query、無正向快取，缺失／降權／停權／timeout／錯誤一律 fail closed。provider 與 token 傳遞在 0.1.1 經獨立 SPEC＋安全審（[0.1.1 發佈紀錄](docs/operations/release-decision-0.1.1.md)）；登入後即時降權與瀏覽器 UI 只在本地以 owned fake WS／test-only Ingress 驗證，未在真 HA 測；不可注入 trust bypass。
-- 0.1.0 起依負責人的公開決定發佈（[release-decision-2026-10-05](docs/operations/release-decision-2026-10-05.md)）：每版映像在私有 builder 通過 container 與 supply-chain gate 後，推送同一個已測 image ID（不重建），沒有經過 `public-release` workflow。`RELEASE-GATES.json` 的人工 gates 沒有改寫，仍全部 false。
+- 0.1.0–0.4.13（Headscale 到 0.4.18）依負責人的公開決定發佈（[release-decision-2026-10-05](docs/operations/release-decision-2026-10-05.md)）：每版映像在私有 builder 通過 container 與 supply-chain gate 後，推送同一個已測 image ID（不重建），沒有經過 `public-release` workflow。2026-11-17 起改由 `.github/workflows/release.yaml` 在 GitHub 託管機器建置、驗收、推送，負責人在 `public-release` environment 批准（[發版流程](docs/operations/release.md)）。`RELEASE-GATES.json` 是之前的人工 gates 檔，仍全部 false，發版不再讀它。
 
 ## 文件
 

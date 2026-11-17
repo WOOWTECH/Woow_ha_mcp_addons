@@ -17,11 +17,14 @@ release mechanism is described in the Woow_HA_App_Store README (section
 3. **Breaking changes must be declared in `upgrade-notes.yaml`** next to the
    addon's `config.yaml` (here `addons/<x>/upgrade-notes.yaml`). Create the
    file only when the upgrade comparison asks for it; copy `change` and `key`
-   from its report and write the migration path. Images are built only on the
-   self-hosted builder, never on a PR, so the image vulnerability comparison
-   pulls the published GHCR images (the Release's and the new version's amd64
-   image, pipeline #148): publish the new version's image with the builder
-   before the PR can pass, as `readiness` also requires. The upgrade test
+   from its report and write the migration path. Images are built only by
+   `.github/workflows/release.yaml` on GitHub-hosted runners (dispatched per
+   product on the open version-bump PR's `release/*` branch with `source_sha`,
+   and approved by the owner in the `public-release` environment; see
+   `docs/operations/release.md`), never on a PR, so the image vulnerability
+   comparison pulls the published GHCR images (the Release's and the new
+   version's amd64 image, pipeline #148): publish the new version's image with
+   that workflow before the PR can pass, as `readiness` also requires. The upgrade test
    (pipeline #155) runs on the same published images: each changed addon's
    Release image starts first, then the new version's on the same `/data`,
    and both must answer ingress on 8099 and stay up. No backend is configured,
