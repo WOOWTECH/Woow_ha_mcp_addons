@@ -2,6 +2,19 @@
 
 ## 結論
 
+- **和 HM-13b（已合進 `claude-delivery` `165dbaf`）合併，補審查 S-3（2026-11-17；第 19 節）。** HM-13b 的 PR #108 把 `claude-delivery`
+  （HM-12 後端 #110、HM-30 #111、HM-32 #113、HM-12 面板 #114）合進去之後（`fc70404`），本片用 merge commit 把它合進來（`0f3d064`），
+  不 rebase、不 force push。衝突在 15 個檔：程式、面板、測試與文件 34 塊，帳本 7 塊照 JSON 重組。面板 `app.js` 只有 import 衝突，`api.js`
+  三塊照語意合：還原提示卡、核對卡、全部撤銷、隔離目錄，和 HM-12 換 token 的提示、重新讀取都在。契約第 9 節本片的兩列改成 #122、#123
+  （`849d9ba`）。
+  - 審查 S-3（主對話 2026-11-17 定）：開通後 HM-12 的換身分換 token 也過還原核對的關卡，帳號還在等核對時回 409 `restore_review_required`，
+    子程式不停、什麼都不寫（`0cf5520`）；面板沿用待核對的文字，再補一句為什麼存檔也要等（`e2d28b5`）；契約 §1.2、§3.1、§4.1、威脅模型、
+    驗收矩陣、還原手冊（`ba3b63d`）。先寫測試（`3c3f1b4`）：伺服器 4 案紅、3 案照今天綠，面板 1 案紅，改完全綠。
+  - 合併後的語意：HM-12 換身分換掉還原保留的預設帳號權杖時，還原提示一起消失（同 `token/rotate`；伺服器 `0cf5520`，LOCAL MOCK 
+    `e74d4c0`，Playwright 先紅後綠 `14e435f`）。
+  - 08:28 主線又合了 HM-33（PR #115，`f239157`）：HM-13b 再合一次並 push（`369d80b`），本片再把它合進來（`fedaad5`，衝突只在契約與
+    `decisions.md` 的表尾；第 19.12 節）。
+  - 本機：pytest 全套（`ba3b63d`：合併與 S-3 之後）6,411 案、0 skip，6,404 過，只有 7 個要 root 的既有案例失敗（34 分 48 秒）；第二次合併後（`fedaad5`）pytest 子集 28 檔 992 案、0 skip，只有 5 個要 root 的 `test_root_*` 失敗；Playwright 兩個專案 150 案全過、node 94 案、build closure PASS；packaging unittest `Ran 205`、`OK (skipped=5)`、`validate.py` PASS、`tool_inventory.py` exit 0；兩個預檢 OK、雙向控制字元 0 個。
 - **獨立安全審查（2026-11-17，判定「修正後通過」）已處理**（第 18 節）：
   - 必修 MF-1 修好：休眠開機（例如緊急關閉版）改寫還原紀錄時，不再丟掉還在等的核對；修好前，還原後沒核對預設帳號，發緊急關閉版再開通，
     預設帳號不必核對就能重發。上一份紀錄讀不到時休眠開機不改它。
@@ -14,7 +27,7 @@
   之後由主對話把本片 rebase 到 `claude-delivery`。本片只 commit，沒有 push、沒有開 PR。
 - **單帳號還原後的面板提示（使用者 2026-11-16 21:xx 對 HM-13b 審查 Q-1 的定案，不受開關管）**：
   - 守門看到還原、而且預設帳號的權杖沒撤銷（沒有帳號資料，開通與否）時，在刪還原標記**之前**存 `/data/mcp/restore-notice.json`
-    （`{"version":1,"at":"<UTC 秒>"}`，不含秘密；暫存檔＋fsync＋replace＋目錄 fsync、0600、本程序的 uid；被目錄占用時照 #115 移開；不碰 sentinel）。
+    （`{"version":1,"at":"<UTC 秒>"}`，不含秘密；暫存檔＋fsync＋replace＋目錄 fsync、0600、本程序的 uid；被目錄占用時照 #120 移開；不碰 sentinel）。
     中途斷電時標記還在，下次開機重存。
   - bootstrap 只多一個鍵 `restore_notice`（`{"at"}`），到預設帳號的權杖變了才消失：`token/rotate`、真的撤銷了的 `token/revoke`、開通後的全部撤銷。
     權杖照還原的原樣，不撤銷；其他回應一個位元組都不變。
@@ -36,7 +49,7 @@
   按「已核對」才開放重新產生，也可以直接刪除）、隔離目錄只能刪、全域「全部撤銷」兩段確認、匯出帳號清單（不含憑證）。備份帶回的名稱與欄位
   一律當文字插入。開關關、沒有還原時面板逐位元不變（既有 Playwright spec 一案都沒改照過）。
 - **還原時每個收據檔都換新**（HM-13b 交本片定）：守門處理的每個收據檔都寫新的，備份時還沒有收據檔的帳號與索引旁也寫（同 PaaS 每份設定
-  都換新，`Pc/restore_guard.py:513-516`），備份後才做、隨還原消失的操作 id 回 410。沒有帳號資料時預設帳號的收據照原樣（#116），單帳號
+  都換新，`Pc/restore_guard.py:513-516`），備份後才做、隨還原消失的操作 id 回 410。沒有帳號資料時預設帳號的收據照原樣（#121），單帳號
   安裝的行為不變。
 - **這一輪是第二段**（第 2 節）：第一段在 2026-11-17 00:4x 前後中斷，留下 3 個 commit 與沒 commit 的契約、決策草稿。這一段核對後補了：
   3 個伺服器測試、4 個案例（休眠帳號重新開通後的關卡、還原後索引不能用、全部撤銷連開始都沒有與沒收尾）、3 個面板測試與修正（提示的時間、
@@ -49,7 +62,7 @@
 - 兩個預檢（`--base ebab019`，`277c053`）：秘密預檢 0 命中；帳本預檢 OK（第 10 節）。本筆記 commit 之後再跑一次，結果記在回報（與之後的 PR 說明）。
 - **待 HM-03a 確認**（第 13 節）：UC-08 與 sentinel（照 HM-13b）；Ingress 轉不轉清單的 `ETag`（核對、刪除隔離目錄、全部撤銷都要）；守門沒做完時
   Watchdog 會不會自動再起。
-- **沒有碰到要使用者定的待定題**。本片自己定的實作細節（契約原本標「暫定，HM-13c」）寫在第 4 節與契約第 9 節 #117、#118。
+- **沒有碰到要使用者定的待定題**。本片自己定的實作細節（契約原本標「暫定，HM-13c」）寫在第 4 節與契約第 9 節 #122、#123（合併前是 #117、#118）。
 
 ## 1. 範圍與基準
 
@@ -61,7 +74,7 @@
 |---|---|
 | 切片 | HM-13c｜還原核對與全部撤銷的路由與面板（計畫 §6、§7.4、§8.4、§10.3、§12.3；風險高、工作量 M） |
 | 分支 | `feat/ha-multiprofile-hm13c-20261116`（一般 clone，不是 worktree） |
-| HA 基準 | `ebab019`：HM-13b 的 PR #108 head（`claude-delivery` `f4c7718`＋HM-13b 的 26 個 commit） |
+| HA 基準 | **2026-11-17 起：合併 HM-13b 的 `fc70404`**（merge commit `0f3d064`，第一個 parent 是本片 `a453b2a`、第二個是 `fc70404`；HM-13b 已合進 `claude-delivery` `165dbaf`；第 19 節）。合併前：`ebab019`：HM-13b 的 PR #108 head（`claude-delivery` `f4c7718`＋HM-13b 的 26 個 commit） |
 | PaaS | pin `69ac425`；本機唯讀 PaaS repo 的 `origin/main` 是 `7087280`（第 11 節） |
 | 開關 | `MULTI_PROFILE_PRODUCTS` 在 repo 裡仍是空集合；測試用 monkeypatch 開 |
 | 不改的 | 版號、`addons/`（含各產品 CHANGELOG）、`upgrade-notes.yaml`、`.github/`、`tests/conftest.py`、`features.py` |
@@ -106,7 +119,7 @@
 
 ## 4. 行為
 
-### 4.1 單帳號還原後的提示（不受開關管；契約 §1.2、§8、#117）
+### 4.1 單帳號還原後的提示（不受開關管；契約 §1.2、§8、#122）
 
 | 情況 | 結果 |
 |---|---|
@@ -124,12 +137,12 @@
 提示的時間是守門看到還原的時間。HM-13a 先發、HM-13b 還沒發的映像留下的舊標記，要到含守門的版本第一次啟動才提示，所以面板寫「偵測到還原的
 時間（add-on 啟動時發現的時間）」，不寫「還原時間」（HM-13a 交下：通知文字要涵蓋這種情況）。
 
-### 4.2 還原時的收據（契約 §3.5、#67、#116）
+### 4.2 還原時的收據（契約 §3.5、#67、#121）
 
 - `operations.archive_for_restore(renew_missing=True)`：收據檔與 `.restored` 都沒有時也寫一份新收據檔（`restored_before_ms`＝還原當下），
   備份後才做、隨還原消失的操作 id 回 410，不會被當成新操作（PaaS 的 `_write_journal` 對每份設定都寫，`Pc/restore_guard.py:513-516`）。
 - 守門處理的每個收據檔：開通或有帳號資料時，預設帳號（被撤銷時）、每個帳號目錄、索引旁。
-- 沒有帳號資料時預設帳號的收據照原樣、沒有也不寫（#116，DQ-03 (b)）：單帳號安裝的行為不變，所以不用停下回報。開通但沒有帳號資料時索引旁
+- 沒有帳號資料時預設帳號的收據照原樣、沒有也不寫（#121，DQ-03 (b)）：單帳號安裝的行為不變，所以不用停下回報。開通但沒有帳號資料時索引旁
   會多一份新收據檔（開通後才有的功能；它擋的正是備份後才做的帳號操作被重送）。
 
 ### 4.3 核對與關卡（契約 §3.1、§3.6、§4.1、#58）
@@ -155,7 +168,7 @@
 - 每個帳號 `committed()` 之後才重起撤銷了的子程式，都在鎖裡；重起失敗記一行（新的 child token 等下一次重起）。
 - 撤銷了預設帳號就清還原提示；撤銷後刷新孤兒的回覆遮罩。
 
-### 4.5 隔離目錄（契約 §1.1、§3.1、#118）
+### 4.5 隔離目錄（契約 §1.1、§3.1、#123）
 
 清單有隔離目錄時另帶 `"quarantined":[{"name":"<id>-<UTC>[-n]","id"}]`（沒有就不帶這個鍵）。刪除：全 add-on 帳號鎖、索引 If-Match、Idempotency-Key、
 收據；讀得到 state 的先撤銷權杖、抹後端憑證（DQ-14），再從 `profiles/` 不跟隨連結地刪（同刪帳號）；刪不乾淨記一行、清單照樣列出可再刪。
@@ -310,8 +323,8 @@
 
 | 來源 | 待辦 | 處理 |
 |---|---|---|
-| HM-13b 第 13 節／第 18.12 節（審查 Q-1） | 使用者定案：單帳號還原後的面板提示，接在守門上另留一筆提示紀錄 | 做了（第 4.1 節）：另開 `restore-notice.json`（理由同節）；`decisions.md` 第 1.1 節、契約 §1.2、#117 |
-| HM-13b 第 13 節 | 備份時沒有收據檔的帳號：要不要對範圍 S 的每個帳號都寫新收據檔 | 做了：照 PaaS 每份設定都換新（第 4.2 節）；#116 的預設帳號除外，單帳號安裝不變。契約 §3.5、#67 |
+| HM-13b 第 13 節／第 18.12 節（審查 Q-1） | 使用者定案：單帳號還原後的面板提示，接在守門上另留一筆提示紀錄 | 做了（第 4.1 節）：另開 `restore-notice.json`（理由同節）；`decisions.md` 第 1.1 節、契約 §1.2、#122 |
+| HM-13b 第 13 節 | 備份時沒有收據檔的帳號：要不要對範圍 S 的每個帳號都寫新收據檔 | 做了：照 PaaS 每份設定都換新（第 4.2 節）；#121 的預設帳號除外，單帳號安裝不變。契約 §3.5、#67 |
 | HM-13b 第 13 節（審查 S-5） | 全部撤銷要拿 `ProfileAdmin.lock`、在執行緒裡跑、results 列出每個 store | 做了（第 4.4 節）；另拿預設帳號的鎖；`test_revoke_all_runs_in_a_worker_thread_and_8081_answers_meanwhile`、`test_the_new_routes_check_the_role_after_every_wait` |
 | 同上 | `POST profiles/revoke-all`：依 id 拿鎖、`committed()`、重起子程式、409＋results、8081 的 503、收據結果未知 | 做了；store 中毒（寫入失敗）的帳號照既有規則 503 到重啟、重啟時守門補完 |
 | 同上 | `restore-record`（1 MiB）、核對、`reviewed_at`、rotate 的 409、bootstrap 的通知欄位（含 HM-13a 過渡期的舊標記） | 做了：`restore_review`、`restore_review_required`、`restore_notice`；開通後第一次開機遇到舊標記：沒有帳號資料時寫紀錄（`kept`）＋提示，面板寫「偵測到還原的時間」 |
@@ -327,7 +340,7 @@
 | HM-05 第 3.1 節 | 全部撤銷用執行套件的 `TokenAccess` 與 `mutation_lock` | 做了 |
 | HM-06 第 12.3 節（審查 S-07） | 重產 child token 之後要重啟子程式 | 做了：全部撤銷撤銷了的帳號都重起（開機補完時子程式還沒起，不用） |
 | HM-13a 第 11 節 | 過渡期留下的舊標記，HM-13b、HM-13c 的通知文字要涵蓋 | 做了：提示寫「偵測到還原的時間（add-on 啟動時發現的時間）」；`update-backup-rollback.md` 寫明舊標記要到新版第一次啟動才提示 |
-| HM-12 審查第 4 節（給 HM-13c 的觀察；HM-13c 審查 S-3 指出第二段沒有接） | 維持「待核對＝已撤銷」：HM-12 的換身分換 token 要求 token 有效，待核對的帳號 token 已撤銷，所以換身分不會在核對前發新 token | 有例外，不改程式（HM-12 在別的 clone）：開關關時沒有關卡，還原撤銷的預設帳號可以直接重新產生，重新開通後那一列仍待核對、權杖卻有效（審查實驗 X7）。契約 §3.1、§4.1、威脅模型第 3 節寫明；交主對話：HM-12 與本片後合併的那一片，在換身分換 token 的路徑也檢查 `review_required`（有就 409 `restore_review_required`，同 rotate），或在契約 §4.1 改寫成允許（第 15 節） |
+| HM-12 審查第 4 節（給 HM-13c 的觀察；HM-13c 審查 S-3 指出第二段沒有接） | 維持「待核對＝已撤銷」：HM-12 的換身分換 token 要求 token 有效，待核對的帳號 token 已撤銷，所以換身分不會在核對前發新 token | 有例外，不改程式（HM-12 在別的 clone）：開關關時沒有關卡，還原撤銷的預設帳號可以直接重新產生，重新開通後那一列仍待核對、權杖卻有效（審查實驗 X7）。契約 §3.1、§4.1、威脅模型第 3 節寫明；交主對話：HM-12 與本片後合併的那一片，在換身分換 token 的路徑也檢查 `review_required`（有就 409 `restore_review_required`，同 rotate），或在契約 §4.1 改寫成允許（第 15 節）。2026-11-17 和 HM-12 合併時照主對話的決定接上關卡（第 19.5 節） |
 
 ## 15. 交給後面的片
 
@@ -361,7 +374,7 @@
   要照樣讀得懂（契約 §3.6、`ledger-tracking.md`）。
 - **HM-03a**：第 13 節。
 - **HM-25**：n8n 開通時，`apps/n8n/run.py` 已讀提示並交給 `make_apps`；接 `ProfileManager` 時把提示交給 manager（同 `run_product`）。
-- **HM-29**：回補 PaaS 的題目照舊（#82 全部撤銷）；#117 是 HA 專屬（PaaS 還原一律撤銷）。
+- **HM-29**：回補 PaaS 的題目照舊（#82 全部撤銷）；#122 是 HA 專屬（PaaS 還原一律撤銷）。
 - **合併順序**：本片疊在 HM-13b 上。HM-12、HM-30、HM-16 若先合併並用掉契約第 9 節 #117 之後的列號，本片 rebase 時接在當時最後一列後面重排
   （本片的列：#117、#118）。帳本與 `gateway.py`、`profile_runtime.py`、`profile_admin.py` 照「後合者重算」。
 
@@ -369,12 +382,12 @@
 
 | 條件 | 狀態 |
 |---|---|
-| 全綠 | 本機（審查處理後，第 18.3 節）：pytest 全套只剩 7 個要 root 的既有案例、0 skip；Playwright 130、node 87、packaging 205 全過。CI（root、0 skip）待開 PR |
-| 核對前不能重發 | 通過：還原（預設帳號與額外帳號）與重新開通後的休眠帳號（含休眠前就撤銷的），rotate 409 `restore_review_required`、什麼都不寫；紀錄讀不到 503（出路：全部撤銷重建）；核對後 200、8081 服務新權杖。審查 MF-1 修好：還原後沒核對的帳號，經過休眠開機改寫紀錄、再開通，仍要核對（第 18 節）。例外：開關關時沒有關卡（S-3，交主對話） |
+| 全綠 | 合併 HM-13b（含 `claude-delivery`）、補 S-3 之後（第 19.7 節）：pytest 全套 6,411 案（`ba3b63d`）只剩 7 個要 root 的既有案例、0 skip；第二次合併後（`fedaad5`）子集 992 案只剩 5 個要 root 的；Playwright 150、node 94、packaging 205 全過；CI（root、0 skip）待 push 後的 run。本機（審查處理後，第 18.3 節）：pytest 全套只剩 7 個要 root 的既有案例、0 skip；Playwright 130、node 87、packaging 205 全過。CI（root、0 skip）待開 PR |
+| 核對前不能重發 | 通過：還原（預設帳號與額外帳號）與重新開通後的休眠帳號（含休眠前就撤銷的），rotate 409 `restore_review_required`、什麼都不寫；紀錄讀不到 503（出路：全部撤銷重建）；核對後 200、8081 服務新權杖。審查 MF-1 修好：還原後沒核對的帳號，經過休眠開機改寫紀錄、再開通，仍要核對（第 18 節）。例外：開關關時沒有關卡（S-3）。和 HM-12 合併後，開通時 HM-12 的換身分換 token 也過關卡（409、什麼都不做；第 19.5 節） |
 | 全部撤銷第 k 個失敗時的回應與 8081 行為 | 通過：k＝預設帳號、B、C 各一案：409＋逐帳號 `results`、收據結果未知、標記留著；失敗帳號撤銷前的權杖在 8081 兩種接法都 503，其他 401／404；做完的全部撤銷解除。另有連開始都沒有、沒收尾兩案 |
 | 單帳號還原提示照使用者定案 | 通過：9 個產品存提示、8 個產品的正式 runtime bootstrap 只多 `restore_notice`、權杖兩種接法照用；輪替或撤銷後消失；沒還原的安裝什麼都不多（連 ctime）；開關關時新路由都是 404；面板「知道了」不用瀏覽器儲存 |
-| 不受開關管的例外寫進契約、凍結測試逐案理由、CHANGELOG 一行 | 契約 §1.2、§8、#117；HM-01 凍結沒有要改的案例（第 5 節）；CHANGELOG 原文交 HM-19a（第 15 節） |
-| 同 PR 更新帳本；契約第 9 節接在 #116 後面、變更紀錄 | 通過：帳本 12 列重算、新增 `restore.js`；#117、#118；第 10 節一列 |
+| 不受開關管的例外寫進契約、凍結測試逐案理由、CHANGELOG 一行 | 契約 §1.2、§8、#122；HM-01 凍結沒有要改的案例（第 5 節）；CHANGELOG 原文交 HM-19a（第 15 節） |
+| 同 PR 更新帳本；契約第 9 節接在當時最後一列後面、變更紀錄 | 通過：帳本 12 列重算、新增 `restore.js`；#122、#123 接在 #121 後面（合併 HM-13b 與 `claude-delivery` 前是 #117、#118，接在 #116 後面；第 19.4 節）；第 10 節四列 |
 | 測試資料規則 | 通過：token 都在執行時產生或用 `T`／`M`×43，憑證 `DUMMY-…`、網址 `.invalid` |
 | 獨立安全審查 | 做了（`wave4/review-HM-13c.md`，修正後通過）；必修與建議的處理見第 18 節 |
 
@@ -473,3 +486,202 @@
   S-2 選 (a)＋(c) 是審查列的實作選項，不是決策題。
 - 待 HM-03a 確認的項目照第 13 節，本輪沒有新增（S-6 (d) 的耗時是 HM-19c 的量測，不是 HM-03a）。
 - PaaS：第 11 節（`69ac425..7087280` 的 10 個 PR 與本片無關；本機 `origin/main` 已到 `48f394d`，多的 #156 只改 Hermes，也無關）。
+
+## 19. 和 HM-13b（含 claude-delivery）合併，補審查 S-3（2026-11-17）
+
+第 1～18 節照合併前寫；契約列號的現行指標已改成合併後的（第 19.4 節）。第 15 節「合併順序」那點與第 18 節是當時的紀錄，照原文。
+證據在 `artifacts/ha-multiprofile-parity-20261114/wave4/evidence-merge-HM-13c/`（`tools/`：用到的腳本，副檔名多加 `.txt`；`logs/`：log；
+`conflicts-diff3/`：解衝突前的 15 個檔，diff3 格式的衝突標記）。HM-13b 這一半的紀錄在 HM-13b 筆記第 19 節。
+
+### 19.0 結論
+
+- HM-13b（PR #108）原本的基準 `f4c7718` 和 `claude-delivery` 有衝突，GitHub 不替它跑 CI，疊在上面的本片（PR #112）也一樣。HM-13b 先用 merge commit 把
+  `claude-delivery` `165dbaf` 合進去（`6bb7fcd`，列號改成 #118～#121，`fc70404` push）；本片再用 merge commit 把更新後的
+  `origin/feat/ha-multiprofile-hm13b-20261116` 合進來（`0f3d064`：第一個 parent 是本片 `a453b2a`、第二個是 `fc70404`），不 rebase、不 force push；
+  之後一般的 fast-forward push。
+- 衝突在 15 個檔：程式 8 塊（`gateway.py` 1、`profile_runtime.py` 6、`run_product.py` 1）、面板 9 塊（`api.js` 3、`app.js` 1、`server.mjs` 1、
+  `profile-api-parity.spec.mjs` 2、`profile-api-cases.json` 2）、測試 4 塊、文件 13 塊；帳本 7 塊照 JSON 重組。程式與面板都是「同一個地方各加一段」：
+  兩邊的行為都留（第 19.2 節）。
+- 契約第 9 節本片的兩列從 #117、#118 改成 #122、#123，本片引用 HM-13b 的列一起改（#115→#120、#116→#121；`849d9ba`）。
+- 審查 S-3（主對話 2026-11-17 定）做了：HM-12 的換身分換 token 也過還原核對的關卡（第 19.5 節）。合併時另找到一個語意交集：換身分換掉還原保留的
+  預設帳號權杖時，還原提示要一起消失（同 `token/rotate`），一起補。
+- 08:28 主線又合了 HM-33（PR #115，`f239157`），HM-13b 再合一次（`22f5766`、`369d80b`）；本片再把更新後的 HM-13b 合進來（`fedaad5`），所以也含
+  `f239157`、和主線沒有衝突（第 19.12 節）。
+- 和 HM-13b 的分支相比，本 PR 的改動仍是原本的 35 個檔。
+- 本機：pytest 全套（`ba3b63d`：合併與 S-3 之後）6,411 案、0 skip，6,404 過，只有 7 個要 root 的既有案例失敗（34 分 48 秒）；第二次合併後（`fedaad5`）pytest 子集 28 檔 992 案、0 skip，只有 5 個要 root 的 `test_root_*` 失敗；Playwright 兩個專案 150 案全過、node 94 案、build closure PASS；packaging unittest `Ran 205`、`OK (skipped=5)`、`validate.py` PASS、`tool_inventory.py` exit 0；兩個預檢 OK、雙向控制字元 0 個。
+
+### 19.1 範圍
+
+- `git fetch origin`（2026-11-17 08:1x）：`origin/feat/ha-multiprofile-hm13b-20261116`＝`fc70404`；本片的遠端分支與本機 head 都是 `a453b2a`、工作樹乾淨。
+  先開本機備份分支 `backup/hm13c-before-merge-20261117`（指向 `a453b2a`，不 push）。
+- 新基準帶進來的（`ebab019..fc70404`）：87 個 commit（`claude-delivery` `f4c7718..165dbaf` 的 84 個、HM-13b 的 merge commit 與兩個 commit），共改 55 個檔。
+- 兩邊都改的 20 個檔裡，`ledger-tracking.md`、`profile_router.py`、`restore_lock.py`、`tests/test_output_schemas.py`、`tests/test_restore_lock.py`
+  git 自動合併（兩邊改的是不同行）；其餘 15 個有衝突。
+- 依賴：新基準沒有動 `uv.lock`、`package-lock.json`、`package.json`、`pyproject.toml`、`requirements*`、`packaging/inputs.json`、patch 檔與 Dockerfile，
+  沒有重跑 `setup_repo_env.sh`。面板原始碼有變（HM-12 面板），照 CI 先 `npm run build` 再 `node tests/build-closure.mjs`。
+- PaaS：本機唯讀 PaaS repo 的 `origin/main` 是 `48f394d`（沒有 fetch），第 11 節之後只多 #156（Hermes 排程工具說明，HM-33 在補），和本片無關。
+
+### 19.2 衝突與處理
+
+解衝突用 repo 外的腳本：`blocks3.py`（diff3 格式，逐塊先斷言三邊的內容再組合）、`resolve_hm13c_merge.py`（每塊的規則）、`merge_ledger3.py`
+（帳本三方照 JSON 重組）。原則：新基準那一側照原文、放在前面；本片的行接在後面、照原文（本片自己的列號在合併之後一起改，第 19.4 節）；
+程式照語意合；兩邊都改的同一行，用本片的那行再套上新基準那一側的修改（套不上時留給改號的 commit，下表寫明）。
+
+| 檔 | 衝突 | 處理 |
+|---|---|---|
+| `gateway.py` | 1 塊 | `make_apps` 的參數照合併順序：`stop_child`、`reply_worker`（HM-12、HM-30）、`dormant_profiles`（HM-13b），本片的 `restore_notice`、`review_required` 在最後。docstring、參數檢查、bootstrap、`token/rotate` 的關卡與提示都自動合併 |
+| `profile_runtime.py` | 6 塊 | `RUNTIME_OPTIONS`、`ProfileRuntime.__init__`、`gateway_options` 收全部五個名稱；`ProfileManager` 的說明留 HM-30 那段（它收尾 docstring），`__init__` 收 `reply_worker` 與 `restore_notice`，欄位兩邊都留；每個帳號的 runtime 同時拿到工作執行緒的 Lane（HM-30）、還原提示（只有預設帳號）與核對關卡（本片） |
+| `run_product.py` | 1 塊 | 開通時 `ProfileManager(..., reply_worker=worker, restore_notice=notice)` |
+| `api.js` | 3 塊 | HM-12 的新來源 422 文案在前、本片的 `operation_restored` 文案在後；`known` 用本片的前兩行（`operation_restored` 410）接 HM-12 的 `PROFILE_CODES`、`SAVE_CODES`，錯誤照 HM-12 先建好再丟（換 token 的形狀 D、state unavailable 的旗標）；放掉操作識別碼時本片多認 `restore_review_required`，接著是 HM-12 審查 S-7 的存檔提示 |
+| `app.js` | 1 塊 | 只有 import：`api.js`（多 `TOKEN_ROTATED`）、`contracts.js`（多 `newOriginSecrets`、`urlSecrets`）用 HM-12 面板的，`profiles.js`（多 `statusLabel`）與 `restore.js` 用本片的（先斷言另一邊那一行和基準相同）。還原提示卡、核對卡、全部撤銷、隔離目錄與換 token 的提示（`reloadSaved`、`reloadRotated`）、重新讀取都自動合併 |
+| `fixtures/server.mjs` | 1 塊 | HM-12 的說明、`URL_SECRETS`、`IDENTITY`、`ROTATION_LETTERS` 與多 `rotations` 的那一行在前，本片的 `restoreRows` 等、`QUARANTINE`、`REVIEWED_AT` 在後 |
+| `profile-api-parity.spec.mjs` | 2 塊 | 說明：HM-12 那一行在前、本片的還原說明與常數在後；`fixtureSetup`：HM-12 的 `rebindFault` 在前、本片的還原與隔離在後 |
+| `profile-api-cases.json` | 2 塊 | 說明與情境都是 HM-12 的在前、本片的在後；照 JSON 的結構在 HM-12 那一行後面補逗號，合完 `json.loads` 驗過 |
+| `tests/test_request_budget_gateway.py` | 2 塊 | HM-31 那案釘 `make_apps` 參數的最後幾個：改成最後九個（`..., 'stop_child', 'reply_worker', 'dormant_profiles', 'restore_notice', 'review_required'`）；本片原有的三個 keyword-only 檢查照留 |
+| `tests/test_panel_profile_api_shapes.py` | 2 塊 | import 兩邊都收（`restore_detect`、`ConfigError`、`ProductStore`、`Journal`、`record_writes`）；HM-12 的 fault 先布好、本片的還原等待在後 |
+| 契約 | 8 塊 | 開頭的狀態：本片那句，再套上 HM-13b 對這一行的兩處修改（先斷言 HM-13b 那邊只改了這兩處）；第 1.2 節清單與段落 HM-32 在前、本片在後；第 3.5 節用本片的那段，套上 HM-13b 的 #116→#121；第 4.1 節 `operation_outcome_unknown`、`operation_restored` 兩列用本片的、新來源那列用 HM-12 的；第 9 節說明段、表尾與第 10 節新基準在前、本片在後 |
+| `acceptance-matrix.md` | 1 塊 | T-21：用本片那列（HM-13b 那邊只把 #113～#116 改成 #118～#121，先斷言）；本片的範圍 #113～#118 在改號的 commit 改成 #118～#123 |
+| `threat-model.md` | 1 塊 | I8 用 HM-30 改的、I9 用本片改的（先斷言另一邊那一列和基準相同） |
+| `decisions.md` | 3 塊 | 第 1.1 節標題寫成「HM-31 記，HM-30、HM-13c 補」；兩個表都是新基準的列在前 |
+| 帳本 | 7 塊 | 不解文字，照 JSON 重組（第 19.6 節） |
+
+- merge commit 的訊息：本機第一次寫成「兩邊都改的 8 列」，實際是 7 列。push 前改正：用 `git commit-tree` 以同一個樹、同樣兩個 parent 重做 merge commit
+  （`0f3d064`，訊息只改這一處），之後的 5 個 commit 照樣重放，每個樹都和原本的相同（原本的 `4d24a98`、`8956480`、`8948397`、`20db799`、`27a59b7`、
+  `b8ddca0` 留在本機分支 `backup/hm13c-after-merge-msg8-20261117`，不 push）。證據裡 08:23～08:39 的 log 寫的是原本的 commit 編號（樹相同）。
+
+### 19.3 核對
+
+- 每個兩邊都改的檔（`both_sides_kept.py`，在合併的工作樹）：每一邊對基準加的行都在合併後的檔裡，除了上表合起來的那幾行（`logs/both-sides-kept.txt`）。
+- 和 HM-13b 的分支相比改了 35 個檔，就是本片原本的 35 個；合併後只有 `profile_runtime.py`（多 2 行：選項換行）與 `test_request_budget_gateway.py`
+  的增刪行數不同。改號與 S-3 之後另外多了契約、威脅模型、還原手冊、`gateway.py`、`api.js`、兩個測試檔的行（第 19.4、19.5 節）。
+- 第 9 節的列號在 `849d9ba` 之後是 1～123 連號、沒有重複。
+
+### 19.4 列號對照（契約第 9 節；新基準最後是第 121 列）
+
+| 合併前（`ebab019` 基準） | 合併後（`fc70404` 基準） | 項目 |
+|---|---|---|
+| #117 | #122 | 還原後沿用權杖的面板提示 |
+| #118 | #123 | 隔離目錄的清單與刪除 |
+
+- 本片引用 HM-13b 的列：#115（守門自己的名稱被目錄占用）→ #120、#116（沒有帳號資料時預設帳號的收據）→ #121。HM-12 的 #113～#117 本片沒有引用。
+- 解衝突時不改號（本片的行照原文；第 3.5 節那行例外：套上 HM-13b 的 #116→#121）。改號在合併後的一個 commit（`849d9ba`，`renumber_hm13c.py`）：
+  每處是精確字串、次數固定，而且一定在本片自己加的行上（HM-13b 分支的檔沒有那一行），所以 HM-12 的 #113～#117、HM-13b 的 #118～#121，以及
+  `profile-api-cases.json` 裡 HM-12 寫的「section 9 #113-#115」（合併只在那行後面補逗號）都改不到；改完再確認本片加的行沒有舊號。
+- `849d9ba` 改的：契約 12 處（開頭的狀態加「合併 HM-13b 與 `claude-delivery` 之後本片的列改成 #122、#123」、第 1.2 節本片那段兩處、第 4.1 節
+  `operation_restored` 列、第 8 節、第 9 節說明段兩處、#67 的 HM-13c 附註、兩列的列號、第 10 節本片的兩列），第 10 節加一列；`decisions.md` 2 處；`acceptance-matrix.md` T-21 1 處；
+  `docs/operations/update-backup-rollback.md` 1 處；`restore_lock.py` docstring 1 處；`tests/test_restore_review.py` 5 處（都只是說明文字）；帳本
+  `restore_lock.py` 那列的 SHA-256 重算（說明裡本片加的那段沒有列號）。
+- 本筆記改的現行指標 12 處（本筆記的 commit；`renumber_hm13c_notes.py`）：結論兩處與最後一點、第 4.1、4.2、4.5 節標題與第 4.2 節一點、第 14 節兩列、
+  第 15 節 HM-29、第 16 節兩列。第 15 節「合併順序」那點與第 18 節照原文。PR 說明（repo 外的草稿）也改了。
+- commit 訊息照寫的當時，不改寫（`9a46c1c`～`a453b2a` 的訊息仍是 #117、#118）。
+
+### 19.5 審查 S-3：HM-12 的換身分換 token 也過核對關卡
+
+- 題目（審查報告第 3 節 S-3）：待核對不一定是已撤銷。開關關、有帳號資料時還原，守門撤銷預設帳號（紀錄那列 `revoked`、沒核對）；開關關時沒有關卡，
+  管理員可以直接重新產生；再開通後預設帳號 `restore_review_required: true`、`token_active: true`。這時 HM-12 的換身分（Odoo 改 url／database／username）
+  會在核對前換出一把新權杖。主對話 2026-11-17 定：這條路徑也過關卡，回 409 `restore_review_required`，同 `token/rotate`，什麼都不改。
+- 做法（`0cf5520`，`gateway.py`）：`admin_action` 的存檔路徑在 If-Match、`backend_fixed`、`endpoint_global`、新來源（422）之後，`identity_rebound` 成立
+  （會換 token）時先問 `review_required()`：要核對就 `BadRequest(409, {'code': 'restore_review_required'})`，在 `rebind_identity` 之前，所以子程式不停、
+  `committed` 沒設、不寫、不發布；紀錄讀不到時 `review_required()` 丟 `ConfigError`，照 `token/rotate` 回 503 `{"error":"state unavailable"}`。
+  不換 token 的存檔（只改密碼、第一次設定、token 已撤銷）不問關卡。開關關時沒有 `review_required`（也不會換身分），照今天。
+- 合併後的語意（同一個 commit）：`rebind_identity` 在 `token_access.committed()` 之後清掉還原提示（`restore_notice.clear()`），同 `token/rotate`：
+  提示寫的是「權杖已回到備份當時的值」，換身分換掉那把權杖後就不成立。只有寫入成功、發布之後才清；寫入失敗、結果不明時不動。
+- 面板（`e2d28b5`，`api.js`）：`backend`、`backend/patch` 收到 409 `restore_review_required`（開通、Odoo）時，先沿用這個代碼現成的文字「這個帳號是從備份
+  還原（或休眠）回來的，還沒有核對：請先到預設帳號頁的核對卡確認它的設定，按「已核對」後才能重新產生權杖。」，再補一句「改後端身分（Odoo 的網址、資料庫
+  或使用者）會換新這個帳號的 MCP 權杖，所以也要先核對才能儲存；這次未儲存任何變更。」（寫法同 HM-12 審查 S-7 在 503 後面補提示）。`token/rotate` 與其他
+  回應的文字不變；伺服器的文字照舊不顯示；存檔失敗時清掉打過的密碼、其他欄位留著（今天的行為）。
+- LOCAL MOCK 沒有模擬這個關卡：Playwright 那一案用它現成的 `saveStatus`／`saveCode`（存檔照這個代碼拒絕，同 HM-12 面板測 422 的方式）。mock 的換身分
+  不會碰到「待核對、權杖有效」的帳號（`reset()` 把待核對那幾列的權杖都設成撤銷），對照檔也沒有這個情境；真後端的行為由 pytest 驗（下面）。mock 只補了
+  合併後的另一半：換身分換了預設帳號的權杖時清掉 `restoreNotice`（`e74d4c0`，同 add-on；`14e435f` 的 Playwright 案例先紅後綠）。
+- 文件（`ba3b63d`）：契約第 4.1 節 `restore_review_required` 列（觸發條件、兩條發新權杖的路徑都接關卡、面板文字）、第 3.1 節 `backend`／`backend/patch` 與
+  `token/rotate` 兩列、第 1.2 節「怎麼消失」、開頭的狀態、第 10 節一列；`threat-model.md` 第 3 節「待核對不一定是已撤銷」那條、I9 的測試欄、開頭的狀態；
+  `acceptance-matrix.md` 的 `test_restore_review.py` 列；`docs/operations/update-backup-rollback.md` 的核對步驟（改 Odoo 網址、資料庫或使用者也要先核對）。
+- 先紅後綠（`3c3f1b4` 只有測試，程式是合併後、`849d9ba` 的）：
+
+| 測試（`tests/test_restore_review.py`，除非另寫） | 紅（沒有關卡） | 綠 |
+|---|---|---|
+| `test_an_identity_change_waits_for_the_profiles_review_too[backend]`、`[backend/patch]`：X7 的狀態，預設帳號待核對、權杖有效；換使用者 → 409、子程式沒停、磁碟樹與 state 不變、權杖照舊兩條接法都通、沒有 log；只改密碼照存 | 200 `token_rotated`（兩案） | 過 |
+| `test_once_reviewed_an_identity_change_rotates_the_token_as_today`：按「已核對」後同樣的存檔 → 停、寫、發布、起，200 `token_rotated` | 過（照今天） | 過 |
+| `test_switched_off_an_identity_change_after_a_restore_is_todays[without profile data]`、`[with profile data, reissued]`：開關關，單帳號或 X7 的狀態 → 今天的回應、權杖與 history 不變 | 過（照今天） | 過 |
+| `test_a_record_that_cannot_be_read_holds_an_identity_change_too`：紀錄讀不到 → 503、什麼都不做；只改密碼照存 | 200（換了 token） | 過 |
+| `test_an_identity_change_that_rotates_the_kept_token_ends_the_notice`：開通、沒有帳號資料的還原，提示在；只改密碼提示還在；換使用者後提示與 `restore-notice.json` 都不見 | 提示還在 | 過 |
+| `restore-review.spec.mjs` 的 `a backend save held for the restore review …`：面板文字＝待核對的文字＋存檔那一句、錯誤樣式、伺服器文字不顯示、密碼清掉、使用者欄位留著 | 只有待核對的文字 | 過 |
+
+  log：`logs/s3-red.log`（4 失敗、3 過）、`logs/s3-green.log`（`test_restore_review.py`＋`test_odoo_identity_rotation.py` 100 案全過）、
+  `logs/s3-panel-red.log`（1 失敗）、`logs/s3-panel-green.log`（`restore-review.spec.mjs` 12 案全過）。
+
+### 19.6 帳本（`docs/provenance/runtime-patches.json`）
+
+- 合併（`merge_ledger3.py`）：以 HM-13b 分支的帳本（65 列）為底、照原順序；本片沒碰的列照新基準；只有本片碰的 5 列用本片的；兩邊都碰的 7 列
+  （`gateway.py`、`run_product.py`、`profile_runtime.py`、`profile_router.py`、`app.js`、`api.js`、`restore_lock.py`），說明是新基準的文字接本片在列尾加
+  的那段（本片只在列尾追加，先斷言；新基準那邊的文字整段照用：`claude-delivery` 的文字在 HM-13b 那段前面長出來、HM-13b 也在裡面改了號）；本片新加的
+  `restore.js` 照原位置；SHA-256 一律照合併後的檔重算，最後全列 0 漂移。共 66 列。
+- 改號（`849d9ba`）：只重算 `restore_lock.py` 的 SHA-256（docstring 一處）。
+- S-3：`gateway.py`（`0cf5520`）、`api.js`（`e2d28b5`）兩列各加一句、SHA-256 照檔重算。
+
+### 19.7 本機檢查（一般使用者 uid 1000；`ha_env.sh` 的 TMPDIR，跑完用完整路徑刪掉；pytest 排在共用鎖後面）
+
+| 檢查 | 結果 |
+|---|---|
+| `npm test`、`npm run build`、`node tests/build-closure.mjs` | 合併後（08:23，`8956480`，樹同 `849d9ba`）node 94 案全過、build closure PASS；最後（`fedaad5`）node 94 案全過、build、build closure PASS |
+| pytest 快速子集（合併後、S-3 之前；08:23，`8956480`＝`849d9ba` 的樹；13 檔：本片與 HM-13b 的守門、HM-12 換身分、形狀比對、參數順序、黃金回歸、兩個契約凍結、HM-10） | 366 案全過（`logs/pytest-quick-after-merge.log`） |
+| S-3 與提示的先紅後綠 | 第 19.5 節 |
+| Playwright 全套（S-3 之後，08:35～08:39，`b8ddca0`＝`ba3b63d` 的樹） | 149 案全過（`single` 131、`profiles-on` 18；4.3 分） |
+| pytest 全套（`ba3b63d`；CI 的指令加 `-rfEs --durations=30`、junit；正式 conftest、排在共用鎖後面；08:39～09:14） | 6,411 案、0 skip，6,404 過；7 個失敗都是要 root 的既有案例（`test_restore_detection` 5、`test_profile_store` 1、`test_owned_executable` 1，都停在要求 root 的那一行）；2,088.7 秒（34 分 48 秒）；2 個 warnings 是既有的 websockets 棄用警告（`logs/full-suite.log`、`logs/full-suite-by-module.txt`）。本片相關：`test_restore_review` 67、`test_odoo_identity_rotation` 33、`test_panel_profile_api_shapes` 16、`test_reply_worker` 147（量停頓的也綠）、`test_restore_lock` 71、黃金回歸 17、兩個契約凍結 28、`test_ledger_precheck` 8，全過 |
+| LOCAL MOCK 的提示（`14e435f` 紅、`e74d4c0` 綠；09:15～09:16） | 紅 1 案（提示卡還在）；綠：`restore-review`、`backend-identity`、`profile-api-parity` 三個 spec 45 案全過 |
+| pytest 子集（第二次合併後，`fedaad5`；28 檔：HM-33 的兩檔、黃金回歸、`test_output_schemas`、兩個契約凍結、帳本與秘密預檢工具、工具清單、log 掃描、owned ports、讀 LOCAL MOCK 的 `test_owned_ui` 與 `test_owned_browser`、形狀比對、本片與 HM-13b、HM-12、HM-31、HM-10、HM-30 的相關檔） | 992 案、0 skip，987 過，5 個失敗都是要 root 的 `test_root_*`；132.3 秒（別的線拿著共用鎖，排了 32 分；`logs/pytest-subset-final-by-file.txt`） |
+| Playwright 全套（`fedaad5`；09:53～09:58） | 150 案全過（`single` 132、`profiles-on` 18；4.4 分） |
+| packaging unittest（照 CI 的離線暫存 venv）、`validate.py`（ci-venv，不加 `-I`）、`tool_inventory.py`（`fedaad5`） | `Ran 205`、`OK (skipped=5)`；PASS；exit 0 |
+| 規則核對 | `addons/`、CHANGELOG、`upgrade-notes.yaml`、`.github/`、`tests/conftest.py`、`features.py` 對主線 0 行差異；沒有改任何版號；`MULTI_PROFILE_PRODUCTS` 是空集合；commit 身分都是 woowtech、沒有 AI 署名 |
+
+### 19.8 預檢（base 都是 `origin/claude-delivery`）
+
+| 預檢 | 結果 |
+|---|---|
+| 秘密 `secret_precheck.py --tools SP:hm01/gitleaks-tools --repo . --base origin/claude-delivery --head HEAD --full` | `fedaad5`：OK，0 命中（gitleaks 8.28.0；`f239157..fedaad5` 52 個 commit，另掃 HEAD 的樹與整段歷史） |
+| 帳本 `ledger_precheck.py --repo . --base origin/claude-delivery` | `fedaad5`：OK：`runtime-patches.json` 179、`runtime-sources.json` 70、`tool-surface.json` 159 項，0 漂移、0 缺；13 個改到的列管檔都由帳本釘住、帳本本身有改；沒有帳本沒列的執行檔 |
+
+本筆記 commit 之後再跑一次，結果記在 PR 說明。
+
+### 19.9 雙向控制字元
+
+`bidi_scan.py` 逐 commit 查 `origin/claude-delivery..HEAD`，`bidi_merge_check.py` 查合併 commit（和兩個 parent 各比一次的新增行、訊息）與和 `claude-delivery`
+不同的每個檔在 HEAD 的全文：`fedaad5` 上 U+202A～202E、U+2066～2069 合計 0 個（52 個 commit 的訊息、新增行與碰過的檔的全文；三個 merge commit 和各自兩個 parent 比的新增行；和主線不同的檔在 HEAD 的全文）；U+200E、U+200F、U+061C 也是 0 個。本筆記的 commit 之後再跑一次，結果記在 PR 說明。
+
+### 19.10 只在 CI 跑的測試、CI 時間
+
+- 新測試都在程序內（`NoProcessSupervisor`＋MockTransport；Playwright 用 LOCAL MOCK），沒有新的 root 案例、沒有起真子程式；要 root 的既有 7 案照第 8 節。
+- 新測試的本機時間：`tests/test_restore_review.py` 的 7 個新案例在全套裡合計 1.1 秒（紀錄讀不到那案 0.39 秒最久）；Playwright 新的 2 案約 13 秒（存檔被擋 6 秒、換身分後提示消失 7 秒）。
+- `checks` 推估：新基準（HM-13b＋`claude-delivery`）的全套已經比 `f4c7718` 多 HM-12、HM-30、HM-32 的測試（#114 的 CI 2,322 秒）；本片的增量照第 18.4 節，
+  S-3 再多不到 5 秒。實際秒數 CI 跑完再補。
+
+### 19.11 commit 與 push
+
+| commit | 內容 |
+|---|---|
+| `0f3d064` | merge commit：把 HM-13b 的 `fc70404`（已合 `claude-delivery` `165dbaf`）合進本片（第 19.2 節的解法；訊息寫了每個檔怎麼解） |
+| `849d9ba` | 契約第 9 節本片的列改成 #122、#123，本片引用 HM-13b 的列一起改；第 10 節加一列；帳本 `restore_lock.py` 重算 |
+| `3c3f1b4` | 審查 S-3 的測試與合併後提示的測試（先寫；紅） |
+| `0cf5520` | 審查 S-3 的關卡與換身分後清提示（`gateway.py`）；帳本 |
+| `e2d28b5` | 面板：存檔被核對關卡擋下時的文字（`api.js`）；帳本 |
+| `ba3b63d` | 契約、威脅模型、驗收矩陣、還原手冊 |
+| `14e435f` | Playwright：換身分換掉保留的權杖後提示卡消失（先寫；LOCAL MOCK 還沒跟上，紅） |
+| `e74d4c0` | LOCAL MOCK：換身分換了預設帳號的權杖時清掉還原提示（轉綠） |
+| `fedaad5` | merge commit：再把 HM-13b 的 `369d80b`（已再合 `claude-delivery` `f239157`，HM-33）合進本片（第 19.12 節） |
+| 本筆記 | 現行列號 12 處、結論、第 1、14、16 節的狀態、第 19 節 |
+
+- push：一般的 `git push origin feat/ha-multiprofile-hm13c-20261116`（從 `a453b2a` 往前 fast-forward，不 force）。備份分支只在本機。
+
+### 19.12 再合一次：HM-33（PR #115）
+
+- 08:28 HM-33（PR #115）合進 `claude-delivery`：`165dbaf` → `f239157`（Hermes `hermes_cron` 的說明照 PaaS #156、`tool_snapshot.py`、契約第 1.2、10 節、
+  `decisions.md` 兩個表尾、驗收矩陣表尾、帳本、`runtime-sources.json`、`tool-surface.json`、`test_output_schemas.py`、黃金回歸的 Hermes 兩個摘要、新測試
+  `test_hermes_cron_description.py`；第 9 節沒加列）。HM-13b 先再合一次（`22f5766`）、筆記（`369d80b`）、push；本片 push 前再把它合進來：merge commit
+  `fedaad5`（第一個 parent 是本片 `e74d4c0`、第二個是 `369d80b`），本片因此也含 `f239157`。
+- 衝突（`resolve_hm13c_merge2.py`）：契約 2 塊（第 1.2 節清單：HM-33 那項在前、本片那項在後；段落：HM-33 那段在前、本片那段在後）、`decisions.md` 2 塊
+  （第 1.1 節表、變更紀錄：HM-33 的列在前）；兩邊逐字保留（`both_sides_kept.py`：兩邊加的行都在、沒有新寫的行）。
+- 自動合併：`acceptance-matrix.md`、帳本、`tests/test_output_schemas.py`（本片釘 `apps/n8n/run.py`、HM-33 釘 Hermes 的 `server.py`，兩個都在）；帳本另照
+  JSON 重組核對（`merge_ledger3.py --check`），和自動合併的結果逐位元相同，66 列、0 漂移。本片沒改黃金回歸，HM-33 改的 Hermes 摘要照收。
+- HM-33 沒有在第 9 節加列：本片的 #122、#123 不用改。合併後 `git merge-tree` 對 `origin/claude-delivery` 沒有衝突。
+- 合併條件不變：HM-13b（#108）先合併；之後本片再把 `claude-delivery` 合進來（或 rebase），重跑 CI。列號：之後還有片在契約第 9 節 #123 後面加列時，
+  後合併的接在當時最後一列後面重排。
