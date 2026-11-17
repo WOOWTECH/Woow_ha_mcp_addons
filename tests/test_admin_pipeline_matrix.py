@@ -137,10 +137,14 @@ def bodies():
             gateway.odoo_methods.ROUTE: {'odoo_allowed_methods': []}}
 
 
+# HM-27: the global routes whose JSON body is not {"label": ...} (the Origin policy's PUT), well formed.
+GLOBAL_BODIES = {'origin-policy': {'mode': 'report-only', 'allowed_origins': ['https://claude.ai']}}
+
+
 def routes(profile=B, target=B, label='Beta Ops'):
     """Every route of the table as (name, method, path, JSON body or None, extra headers): profile is the
     X-MCP-Profile of a profile-scoped route (None: not sent), target the id in a global route's path, label the one a
-    creation or a rename names."""
+    creation or a rename names (HM-27: a global route's other body, GLOBAL_BODIES)."""
     found = []
     header = {} if profile is None else {'X-MCP-Profile': profile}
     for name, method in gateway.PROFILE_OPERATIONS:
@@ -149,7 +153,7 @@ def routes(profile=B, target=B, label='Beta Ops'):
     for route in profile_router.GLOBAL_ROUTES:
         for method, (_, takes_json) in route.methods.items():
             found.append((route.template, method, '/api/' + route.template.replace('{id}', target),
-                          {'label': label} if takes_json else None, {}))
+                          GLOBAL_BODIES.get(route.template, {'label': label}) if takes_json else None, {}))
     found += [('page', 'GET', '/', None, {}), ('page', 'GET', '/overview', None, {})]
     return found
 

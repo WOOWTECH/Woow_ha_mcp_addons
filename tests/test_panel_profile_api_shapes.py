@@ -18,6 +18,10 @@ answers it handles (token_rotated, shape D, the new-origin 422, the two 503s). A
 one the add-on saved for it (checked here; the mock is given the same one); setup.fault arms one failure of the
 identity change on B as tests/test_odoo_identity_rotation.py does (Journal, record_writes). The passwords the cases send
 are watched by the log scan too.
+
+HM-27 (DQ-11 (a); contract 2.6, 3.1, 3.5, 4.1): the add-on's one Origin policy (GET and PUT /api/origin-policy, a global
+path): if_match origin is the ETag (o1-) the last GET of it answered; setup.origin_policy unusable writes a policy file
+the add-on cannot use before it starts.
 """
 from __future__ import annotations
 
@@ -45,8 +49,9 @@ CASES = json.loads(CASES_FILE.read_text())
 RULES = CASES['rules']
 HEX24 = re.compile(r'[0-9a-f]{24}')
 QUARANTINED = re.compile(r'profiles\.json\.quarantine-[0-9]{8}T[0-9]{6}Z(?:-[0-9]{1,3})?')
-CLASSES = ((re.compile(r'"p1-[0-9a-f]{64}"'), '<etag:p1>'), (re.compile(r'"c1-[0-9a-f]{64}"'), '<etag:c1>'),
-           (re.compile(r'p1-[0-9a-f]{64}'), '<revision:p1>'), (re.compile(r'c1-[0-9a-f]{64}'), '<revision:c1>'))
+ETAG_CLASSES = ('p1', 'c1', 'o1')  # the index's, a profile's configuration, the Origin policy's (HM-27)
+CLASSES = (*((re.compile(f'"{name}-[0-9a-f]{{64}}"'), f'<etag:{name}>') for name in ETAG_CLASSES),
+           *((re.compile(f'{name}-[0-9a-f]{{64}}'), f'<revision:{name}>') for name in ETAG_CLASSES))
 
 
 # ---- the shape (the same rules as profile-api-parity.spec.mjs) ----
@@ -54,7 +59,7 @@ CLASSES = ((re.compile(r'"p1-[0-9a-f]{64}"'), '<etag:p1>'), (re.compile(r'"c1-[0
 def etag_class(value):
     if value is None:
         return None
-    for pattern, name in CLASSES[:2]:
+    for pattern, name in CLASSES[:len(ETAG_CLASSES)]:
         if pattern.fullmatch(value):
             return name[len('<etag:'):-1]
     return 'other'
@@ -147,6 +152,13 @@ class Rig:
         assert response.status_code == 200, response.content
         return response.headers['etag']
 
+    async def origin_etag(self):
+        """HM-27: the ETag of the Origin policy as the panel read it last."""
+        async with self.client() as client:
+            response = await client.get('/api/origin-policy', headers=ADMIN)
+        assert response.status_code == 200, response.content
+        return response.headers['etag']
+
     async def send(self, case, context):
         spec = case['request']
         headers = dict(ADMIN)
@@ -155,6 +167,8 @@ class Rig:
         match = spec.get('if_match')
         if match == 'index':
             headers['If-Match'] = await self.index_etag()
+        elif match == 'origin':
+            headers['If-Match'] = await self.origin_etag()
         elif match == 'raw':
             headers['If-Match'] = (await self.bootstrap())['profile_index_etag']
         elif match is not None and match.startswith('config:'):
@@ -255,6 +269,9 @@ async def run_scenario(scenario, tmp_path, log_scan):
         shutil.rmtree(profiles.Layout(data).profile(ids[extra['role']]))
     if setup.get('no_index_file'):
         profiles.Layout(data).profiles.write_text('not a directory')
+    if setup.get('origin_policy') == 'unusable':  # HM-27: a policy file the add-on cannot use
+        (data / 'origin-policy.json').write_bytes(b'not a policy')
+        (data / 'origin-policy.json').chmod(0o600)
     # Without additional profiles the default profile's child is the golden MockChild (multi_profile_runtime's own).
     journal = Journal() if setup.get('fault') else None
     options = {'switch': not setup.get('switched_off'),
