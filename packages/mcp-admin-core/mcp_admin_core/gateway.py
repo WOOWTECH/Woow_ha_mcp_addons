@@ -1007,12 +1007,16 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     - restore_notice: given only when this start found the boot guard's restore notice (restore_lock.Notice: a restore
       kept the default profile's token, back at its value at the time of the backup), for the default profile only.
       The bootstrap carries its view() as "restore_notice" ({"at": <UTC seconds>}) until this profile's token changes:
-      a token/rotate, or a token/revoke that revoked it, clears it (restore-notice.json removed). Nothing else
-      changes: the token stays as restored. Left out (every installation that was never restored), every answer is as
-      before, byte for byte.
+      a token/rotate, a token/revoke that revoked it, or (switched on) HM-12's identity change that rotated it clears it
+      (restore-notice.json removed). Nothing else changes: the token stays as restored. Left out (every installation
+      that was never restored), every answer is as before, byte for byte.
     - review_required: given for a switched-on profile only (ProfileAdmin.review_required): a token/rotate while it says
       so answers 409 restore_review_required after the If-Match and Idempotency-Key checks, before anything is written
-      (no receipt); ConfigError (the restore record cannot be used) answers 503 state unavailable."""
+      (no receipt); ConfigError (the restore record cannot be used) answers 503 state unavailable. HM-13c review S-3:
+      HM-12's identity change (backend, backend/patch that would rotate the token: products.identity_rebound) is a
+      new token too, so it answers the same while the gate says so, after If-Match and the new-origin check (422) and
+      before anything is done (the child is not stopped, nothing is written or published). A save that rotates nothing
+      (a password alone, a first setup, a revoked token) is not gated."""
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
@@ -1342,6 +1346,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                                REBIND_WARNING, profile_name())
             raise ConfigError("state unavailable") from None  # today's fixed 503, whatever was raised
         token_access.committed()
+        if restore_notice is not None:
+            restore_notice.clear()  # HM-13c: the token is not the backup's any more (as after a token/rotate)
         headers['ETag'] = configuration.etag(updated)
         body = {"saved": True, "token_rotated": True}
         if backend_changed:
@@ -1637,6 +1643,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         # HM-12 (DQ-40 ⑨): a stored credential never follows a URL to another server unasked
                         raise BadRequest(422, {"code": NEW_ORIGIN_SECRET})
                     if identity_rebound(state, candidate):
+                        if review_required is not None and review_required():
+                            # HM-13c review S-3: a new token waits for the profile's restore review, as on token/rotate
+                            raise BadRequest(409, {'code': 'restore_review_required'})
                         return await rebind_identity(state, changes, headers, committed)
                 updated = store.update(**changes)
                 # No yield between durable commit and lifecycle ownership transfer.
