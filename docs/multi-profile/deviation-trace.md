@@ -64,14 +64,14 @@
 | FM-47 | HA 收緊政策也重啟（PaaS Nextcloud 收緊不重啟），不影響隔離 | §8.8 #54 | — |
 | FM-48 | Odoo 修補檔是否改動 restrict_*：未確認（UC-13） | `tests/test_product_boundary.py`（既有） | 同 uid 信任邊界和 PaaS 相同（threat-model.md）；Odoo 本機檔案工具的選項維持關閉；UC-13 仍未確認 |
 | FM-49 | HA 沒有 cgroup 上限（最壞 64×16 MiB≈1 GiB） | §8.8 #15 | — |
-| FM-51 | #148 尚未合併 | §8.8 #15、#91、#98；`tests/test_gateway_queue_ha.py`（HM-14） | #148 已合併進 pin；保留名額載的東西與排隊中換 token 見 #91、#98（HM-14） |
+| FM-51 | #148 已合併進 pin（`69ac425`） | §8.8 #15、#91、#98；`tests/test_gateway_queue_ha.py`（HM-14） | #148 已合併進 pin；保留名額載的東西與排隊中換 token 見 #91、#98（HM-14） |
 | FM-53 | Core 與 Supervisor 兩段 Ingress 原始碼都轉送自訂 header（G4），HAOS 未實測（UC-10）；沒帶 header 的預設與 id 格式錯的狀態碼兩份報告不一致（CF-07） | §8.8 #31、#32、#50、#110 | 面板每次開的第一個 bootstrap 刻意不帶標頭見 #110（HM-11） |
 | FM-55 | HA 每請求重查角色，比 PaaS 共用密碼強 | §8.8 #11 | — |
 | FM-56 | Ingress iframe 與 HA 前端同源，key 一定要帶 mount；HA 重整後 iframe 是否回到入口：未確認（UC-14） | §8.8 #36 | — |
 | FM-57 | HA 的 task() 鎖比 PaaS React 版安全，和 Headscale 版相當 | §8.8 #55 | — |
 | FM-58 | 哪些產品顯示選單和產品範圍有關（FM-93、DQ-28） | §8.8 #43 | — |
 | FM-60 | Odoo、Nextcloud 健康探測是真登入，登入量隨帳號數成長（FM-69） | §8.8 #18 | — |
-| FM-61 | 建立時自動發出要不要記入歷史、輪替後立刻顯示或丟掉：待決（DQ-02、DQ-31） | §8.8 #8、#56 | DQ-02 採 (a)；DQ-31 已定（2026-11-15 17:4x 採用建議） |
+| FM-61 | 建立時自動發出要不要記入歷史、輪替後立刻顯示或丟掉：DQ-02 採 (a)、DQ-31 已定（2026-11-15 17:4x 採用建議） | §8.8 #8、#56 | DQ-02 採 (a)；DQ-31 已定（2026-11-15 17:4x 採用建議） |
 | FM-65 | HA 維持有上限的 GET 快照、不改 SSE（部署差異）；子程式日誌遮罩沒遮 `?key=`（FM-75） | §8.8 #29；`tests/test_redaction_matrix.py`（HM-02） | 子程式緩衝補遮 `key=` |
 | FM-67 | PaaS 恆 200；HA 依就緒回 200／503 | §8.8 #7 | — |
 | FM-68 | 定期探測是 HA 獨有成本；健康監看共用 httpx 池，池滿時別帳號探測可能失敗（推論，UC-06） | §8.8 #18 | — |
@@ -83,7 +83,7 @@
 | FM-77 | 這是「HA 加強」不是 PaaS 對齊（CF-06）；HA bridge 網路下 loopback 只會連到 add-on 自己；目前只有 HA 管理員能改後端網址（設定錯誤與縱深防禦，不是越權） | §8.8 #39 | — |
 | FM-79 | A 依賴 Supervisor 以 root copytree 的實作細節（失效時退回復活；誤判只會多撤銷）；用舊映像的備份還原時無法保護；整機遷移後全部網址要重發 | §8.8 #20、#21、#69；`tests/test_restore_detection.py`（HM-13a） | — |
 | FM-80 | HA 看不到還原前狀態，只能事前匯出或事後核對 | §8.8 #58；`tests/test_restore_review.py`（HM-13c） | — |
-| FM-81 | 新動作名會改 schema、影響降版（FM-09），所以用 rotate；Nextcloud 是否比照：PaaS 沒做、待決（DQ-05）；「先提交再停」之間新 token 會不會打到舊子程式：未確認（UC-21） | §8.8 #40、#59、#113、#114；`tests/test_odoo_identity_rotation.py`（HM-12） | UC-21 已確認：HM-12 先停舊子程式再提交（這個測試）；DQ-05 已定（依 DQ-40 (a)，照計畫 §9）：Nextcloud 換 url／username、Hermes 換 gateway_url／dashboard_url／dashboard_username 也換 token（各產品開通時做）；PaaS #154（2026-11-15）起 Nextcloud 也換；存檔的回應與途中失敗見 #113、#114（HM-12） |
+| FM-81 | 新動作名會改 schema、影響降版（FM-09），所以用 rotate；Nextcloud 比照：DQ-05 已定（依 DQ-40 (a)），PaaS #154（2026-11-15）也做了；「先提交再停」之間新 token 會不會打到舊子程式：HM-12 改成先停再提交，已由測試確認（UC-21） | §8.8 #40、#59、#113、#114；`tests/test_odoo_identity_rotation.py`（HM-12） | UC-21 已確認：HM-12 先停舊子程式再提交（這個測試）；DQ-05 已定（依 DQ-40 (a)，照計畫 §9）：Nextcloud 換 url／username、Hermes 換 gateway_url／dashboard_url／dashboard_username 也換 token（各產品開通時做）；PaaS #154（2026-11-15）起 Nextcloud 也換；存檔的回應與途中失敗見 #113、#114（HM-12） |
 | FM-82 | 同庫多帳號時 Odoo 端負載＝帳號數×每帳號並行；主機 CPU 共用 | §8.8 #60；`tests/test_odoo_multi_profile.py`（HM-12） | — |
 | FM-83 | PaaS「沒存 methods 時全帳號共用容器 env」在 HA 不適用（隔離更好） | §8.8 #61 | — |
 | FM-84 | PaaS「兩種 429」只適用 PaaS；HA 監控要用閘道自己的訊號 | §8.8 #62 | — |
