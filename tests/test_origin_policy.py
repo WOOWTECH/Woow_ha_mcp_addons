@@ -955,6 +955,36 @@ async def test_a_save_that_cannot_be_written_leaves_its_receipt_unknown(tmp_path
         assert (await policy_get(runtime)).json()['origin_policy_state'] == 'default'
 
 
+async def test_a_save_never_replaces_a_file_changed_after_it_was_read(tmp_path, log_scan, monkeypatch):
+    """PolicyFile.write replaces the file only while it is still the one the save read (its lstat signature): a file
+    another writer put there in between (the same uid, DQ-37) is kept and is the policy in force; the save is HM-10's
+    409 operation_outcome_unknown (the same key again the same 409, never a write), and a save of what the panel
+    reads again replaces it."""
+    data = setup(tmp_path)
+    found = module()
+    outside = b'{"version":1,"mode":"enforce","allowed_origins":["https://outside.example"]}'
+    async with multi_profile_runtime('odoo', data) as runtime:
+        await settle(runtime, 'configured')
+        real = found.PolicyFile.write
+
+        def meanwhile(self, policy, *, expected):
+            write_policy(data, outside)  # another writer, after the save read the file and before it writes it
+            return real(self, policy, expected=expected)
+        monkeypatch.setattr(found.PolicyFile, 'write', meanwhile)
+        body = {'mode': 'report-only', 'allowed_origins': []}
+        response, key = await policy_put(runtime, body)
+        assert (response.status_code, response.json()['detail']['code']) == (409, 'operation_outcome_unknown')
+        monkeypatch.setattr(found.PolicyFile, 'write', real)
+        again, _ = await policy_put(runtime, body, key=key)
+        assert (again.status_code, again.json()['detail']['code']) == (409, 'operation_outcome_unknown')
+        assert (data / POLICY).read_bytes() == outside
+        assert [name for name in os.listdir(data) if 'origin-policy.json-' in name] == []
+        assert (await policy_get(runtime)).json() == {
+            'mode': 'enforce', 'allowed_origins': ['https://outside.example'], 'origin_policy_state': 'saved'}
+        await save(runtime, 'report-only', [])
+        assert (data / POLICY).read_bytes() == b'{"version":1,"mode":"report-only","allowed_origins":[]}'
+
+
 # ---- Headscale and the switch ----
 
 async def test_headscale_keeps_only_claude_ai_and_has_no_policy(tmp_path, log_scan, caplog, monkeypatch):
