@@ -95,6 +95,8 @@ WOOW App Store 只出貨本 repo 的正式 Release（Store registry `ref_policy:
 多個 override 串接的寫法還沒在這兩個 workflow 裡被 GitHub 實際算過：第一次開 `release.yaml` 前，先用拋棄式 workflow 只印出
 運算式的值確認（不建置）。
 本節只列版號資料；CHANGELOG、`upgrade-notes.yaml`（見 `AGENTS.md`）等其他升版要改的檔不在這裡。
+寫 CHANGELOG 前先看 `docs/multi-profile/unreleased-changes.md`：上一版以來已合併、會跟著這個產品下一版出去但 CHANGELOG 還沒記的變更，
+每項的 CHANGELOG 句子，以及發版時要另外驗的事（多帳號計畫 §11.5；其他工作線的修補版也一樣）。
 
 ## PR/main CI（只讀）
 
