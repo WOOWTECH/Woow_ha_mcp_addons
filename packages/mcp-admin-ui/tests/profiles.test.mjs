@@ -8,6 +8,9 @@ import { DEFAULT_PROFILE, blockedNotice, clientName, disabledNotice, echoMatches
 import { readFileSync } from 'node:fs';
 import { clientExample, policyFingerprint, policyRestartNotice, UiError } from '../src/contracts.js';
 import { createP9AdminClient } from '../../../packaging/ha_p9_admin.mjs';
+// HM-12: read through the modules, so a name a module does not have fails only the cases that use it.
+import * as panelApi from '../src/api.js';
+import * as panelContracts from '../src/contracts.js';
 
 const mount = '/api/hassio_ingress/DUMMY';
 const B = '0123456789abcdef01234567', C = 'fedcba9876543210fedcba98';
@@ -585,6 +588,10 @@ test('every management request the panel sends with profiles is the case the add
     ['main/rotate-B', () => api.mutate('token/rotate', undefined, revisionOf(B), B), scopedRoute],
     ['main/policy-B', () => api.mutate('policy', {writes_enabled: false, disabled: [], enabled_write_tools: []}, revisionOf(B), B), scopedRoute],
     ['main/notice-dismiss-B', () => api.mutate('owner-defaults/dismiss', undefined, revisionOf(B), B), scopedRoute],
+    // HM-12: the backend saves (the partial edit and the whole connection) of profile B.
+    ['identity/patch-username', () => api.mutate('backend/patch', {changes: {username: 'DUMMY-user-two'}}, revisionOf(B), B), scopedRoute],
+    ['identity/replace-database', () => api.mutate('backend', {connection: {url: 'https://pbbbb.odoo.invalid/odoo', database: 'DUMMY-db-two',
+      username: 'DUMMY-user-two', password: 'DUMMY-pbbbb-odoo-password-three'}}, revisionOf(B), B), scopedRoute],
   ];
   for (const [, action, scope] of checks) await last(action, scope);
   checks.forEach(([name], index) => {
@@ -598,4 +605,185 @@ test('every management request the panel sends with profiles is the case the add
       json: spec.body !== undefined, body: spec.body === undefined ? null : Object.keys(spec.body).sort()}, name);
     if (spec.profile !== undefined && !spec.profile.includes(',')) assert.equal(headers['x-mcp-profile'], ids[spec.profile] ?? spec.profile, name);
   });
+});
+
+// ---- HM-12 (DQ-05, DQ-40 ⑨ (a); contract 3.1, 4.1, section 9 #113-#115 and HM-12's panel rows): a backend save once the
+// product is switched on.
+// The copy is the panel's own (the server sends codes and flags only, #113); these are the texts the panel shows.
+const ROTATED = '後端身分已變更，這個帳號的 MCP 權杖已換新：舊權杖與含舊權杖的連線網址已撤銷。請到「連線與權杖」顯示並複製新的權杖（或 Claude.ai 連線網址），更新所有用戶端。';
+const APPLY_FAILED = '設定已儲存，但子行程尚未套用成功。請重新整理套用狀態，檢查後再重試啟動。';
+const UNAVAILABLE = '管理狀態暫時無法使用。請檢查服務與受保護的設定儲存。';
+const OUTCOME = '存檔結果不明時請重新啟動 add-on，之後到「連線與權杖」確認 MCP 網址：若這次換了後端身分，權杖可能已換新，舊網址會失效。';
+const NEW_ORIGIN = '網址改到另一台伺服器（scheme、主機或 port 不同）時，不會沿用已儲存的密碼或金鑰：請在同一次儲存中為新網址重新輸入（選填的可以明確清除）。這次未儲存任何變更。';
+const ODOO_EDIT = {contract: 'woow-connection-patch-v1', values: {url: 'https://odoo.invalid', database: 'DUMMY-db', username: 'DUMMY-user'},
+  withheld_fields: [], secret_set: {password: true}};
+// The double with a product's bootstrap and one answer for its saves (backend, backend/patch, policy).
+function saving(product, save, options = {}) {
+  return server({...options, answer: {
+    '/api/bootstrap': (_options, named) => Response.json({product, base_path: mount, api_base: `${mount}/api`, csrf: 'synthetic_csrf_value',
+      configuration: {revision: revisionOf(named.profile?.id ?? DEFAULT_PROFILE)}, operation_contract: {version: 1, server_time_ms: 1793318400000}, ...named}),
+    '/api/backend/patch': save, '/api/backend': save, '/api/policy': save}});
+}
+const usernameChange = {changes: {username: 'DUMMY-user-two'}};
+// HM-12 review S-5: server text an answer may carry; the panel never shows it.
+const CANARY = 'PRIVATE_CANARY_MUST_NOT_RENDER';
+
+test('HM-12: a save that rotated the token says token_rotated (200): passed on with its echo checked, never a token', async () => {
+  const etag = `"c1-${'c'.repeat(64)}"`;
+  const rotated = (_options, named) => Response.json({saved: true, token_rotated: true, configuration: {revision: etag.slice(1, -1)}, ...named}, {headers: {ETag: etag}});
+  const {fetcher, calls} = saving('odoo', rotated);
+  const api = new AdminApi(mount, fetcher, memoryStorage());
+  await api.bootstrap();
+  api.select(B);
+  const result = await api.mutate('backend/patch', usernameChange, revisionOf(B), B);
+  assert.deepEqual([result.saved, result.token_rotated, result.token], [true, true, undefined]);
+  assert.equal(header(calls.at(-1)), B);
+  assert.equal(panelApi.TOKEN_ROTATED, ROTATED);
+  // The flag never stands for the echo (I12): an answer for another profile is not used.
+  const other = new AdminApi(mount, saving('odoo', rotated, {echo: (operation, id) => operation === 'backend/patch' ? DEFAULT_PROFILE : id}).fetcher, memoryStorage());
+  await other.bootstrap();
+  other.select(B);
+  await assert.rejects(() => other.mutate('backend/patch', usernameChange, revisionOf(B), B), ProfileEchoError);
+});
+
+test('HM-12: shape D with token_rotated (saved, the new child not started) is config_apply_failed that also says the token changed; only that shape', async () => {
+  const shapeD = (_options, named) => Response.json({saved: true, token_rotated: true, message: CANARY, detail: {code: 'config_apply_failed', message: CANARY},
+    configuration: {}, ...named}, {status: 503});
+  const api = new AdminApi(mount, saving('odoo', shapeD).fetcher, memoryStorage());
+  await api.bootstrap();
+  await assert.rejects(() => api.mutate('backend/patch', usernameChange, revisionOf(DEFAULT_PROFILE)), error => error instanceof ApiError
+    && error.status === 503 && error.code === 'config_apply_failed' && error.tokenRotated === true && error.message === `${APPLY_FAILED} ${ROTATED}`
+    && !error.message.includes(CANARY));
+  // Said of another profile than the one asked (I12): nothing of it is taken, today's copy (an error's echo decides
+  // nothing else; this one would say whose token changed).
+  const elsewhere = new AdminApi(mount, saving('odoo', shapeD, {echo: (operation, id) => operation === 'backend/patch' ? DEFAULT_PROFILE : id}).fetcher, memoryStorage());
+  await elsewhere.bootstrap();
+  elsewhere.select(B);
+  await assert.rejects(() => elsewhere.mutate('backend/patch', usernameChange, revisionOf(B), B),
+    error => error instanceof ApiError && error.code === 'config_apply_failed' && error.tokenRotated !== true && error.message === APPLY_FAILED);
+  // Anything else is today's answer: no flag, today's copy.
+  for (const [status, body] of [[503, {saved: true, detail: {code: 'config_apply_failed'}}], [503, {saved: true, token_rotated: 'true', detail: {code: 'config_apply_failed'}}],
+    [503, {token_rotated: true, detail: {code: 'config_apply_failed'}}], [409, {saved: true, token_rotated: true, detail: {code: 'config_conflict'}}],
+    [500, {saved: true, token_rotated: true, detail: {code: 'config_apply_failed'}}]]) {
+    const other = new AdminApi(mount, saving('odoo', (_options, named) => Response.json({...body, ...named}, {status})).fetcher, memoryStorage());
+    await other.bootstrap();
+    await assert.rejects(() => other.mutate('backend/patch', usernameChange, revisionOf(DEFAULT_PROFILE)),
+      error => error instanceof ApiError && error.status === status && error.tokenRotated !== true && !error.message.includes('權杖已換新'), JSON.stringify(body));
+  }
+});
+
+test('HM-12 (DQ-40 ⑨): the new-origin 422 has fixed copy and shows nothing of the request or the answer; the answer has no echo', async () => {
+  const typed = 'https://elsewhere.odoo.invalid';
+  const refusal = status => () => Response.json({error: 'request denied', detail: {code: 'CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN'},
+    untrusted: 'PRIVATE_CANARY_MUST_NOT_RENDER', url: typed}, {status});
+  for (const switched of [true, false]) {
+    const api = new AdminApi(mount, saving('odoo', refusal(422), {switched}).fetcher, memoryStorage());
+    await api.bootstrap();
+    await assert.rejects(() => api.mutate('backend/patch', {changes: {url: typed}}, revisionOf(DEFAULT_PROFILE)), error => error instanceof ApiError
+      && !(error instanceof ProfileEchoError) && error.status === 422 && error.code === 'CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN'
+      && error.message === NEW_ORIGIN && !error.message.includes('elsewhere') && !error.message.includes('CANARY'));
+  }
+  // The code only with its documented status (contract 4.1): another status keeps that status' text.
+  const other = new AdminApi(mount, saving('odoo', refusal(400)).fetcher, memoryStorage());
+  await other.bootstrap();
+  await assert.rejects(() => other.mutate('backend/patch', {changes: {url: typed}}, revisionOf(DEFAULT_PROFILE)),
+    error => error.status === 400 && error.code === null && error.message === '設定格式不符。伺服器未確認儲存，請檢查欄位。');
+});
+
+test('HM-12 review S-7: a backend save of a switched-on Odoo answered 503 state unavailable adds the restart hint; request denied and everything else keep today\'s text', async () => {
+  const run = async (body, {switched = true, operation = 'backend/patch', product = 'odoo'} = {}) => {
+    const api = new AdminApi(mount, saving(product, () => Response.json(body, {status: 503}), {switched}).fetcher, memoryStorage());
+    await api.bootstrap();
+    const payload = operation === 'policy' ? {writes_enabled: false, disabled: [], enabled_write_tools: []} : operation === 'backend' ? {connection: null} : usernameChange;
+    let caught = null;
+    try { await api.mutate(operation, payload, revisionOf(DEFAULT_PROFILE)); } catch (error) { caught = error; }
+    assert.ok(caught instanceof ApiError && caught.status === 503 && caught.code === null && caught.tokenRotated !== true);
+    return caught.message;
+  };
+  const denied = {error: 'request denied'}, unavailable = {error: 'state unavailable'};
+  assert.equal(await run(denied), UNAVAILABLE);                      // the old child did not stop: nothing was saved
+  assert.equal(await run(unavailable), `${UNAVAILABLE} ${OUTCOME}`);  // nothing saved, or saved: unknown
+  assert.equal(await run(unavailable, {operation: 'backend'}), `${UNAVAILABLE} ${OUTCOME}`);
+  // Switched off (bit for bit), another operation, a product whose token is not bound to its backend: today's text.
+  assert.equal(await run(unavailable, {switched: false}), UNAVAILABLE);
+  assert.equal(await run(unavailable, {operation: 'policy'}), UNAVAILABLE);
+  assert.equal(await run(unavailable, {product: 'emqx'}), UNAVAILABLE);
+  assert.equal(await run(denied, {switched: false}), UNAVAILABLE);
+});
+
+test('HM-12 (DQ-40 ⑨): every backend URL names the secrets it takes to its server, every secret of a product exactly once', () => {
+  const {urlSecrets, identityBound, products} = panelContracts;
+  assert.deepEqual(Object.keys(urlSecrets ?? {}).sort(), Object.keys(products).sort());
+  for (const [product, table] of Object.entries(urlSecrets)) {
+    const fields = products[product].fields;
+    assert.deepEqual(Object.keys(table), fields.filter(([, , type]) => type.includes('url')).map(([key]) => key), product);
+    const carried = Object.values(table).flat();
+    assert.equal(new Set(carried).size, carried.length, product);
+    assert.deepEqual([...carried].sort(), fields.filter(([, , type]) => type.includes('secret')).map(([key]) => key).sort(), product);
+  }
+  assert.deepEqual(urlSecrets.hermes, {gateway_url: ['gateway_api_key'], dashboard_url: ['dashboard_password']});
+  assert.deepEqual(urlSecrets.n8n, {url: ['key', 'mcp_access_token']});
+  assert.deepEqual(urlSecrets.opendesign, {url: []});
+  assert.deepEqual(identityBound, ['odoo']);
+});
+
+test('HM-12: a URL\'s origin is the server\'s (backend_edit.origin): scheme and host in lower case, the effective port, nothing else normalized', () => {
+  const origin = panelContracts.urlOrigin;
+  assert.equal(typeof origin, 'function');
+  assert.deepEqual(origin('https://odoo.invalid'), ['https', 'odoo.invalid', 443]);
+  assert.deepEqual(origin('HTTP://Odoo.Invalid:80/x/y'), ['http', 'odoo.invalid', 80]);
+  assert.deepEqual(origin('http://odoo.invalid:0443'), ['http', 'odoo.invalid', 443]);
+  assert.deepEqual(origin('http://odoo.invalid:'), ['http', 'odoo.invalid', 80]);
+  assert.deepEqual(origin('http://[2001:DB8::1]:8080/p'), ['http', '2001:db8::1', 8080]);
+  assert.deepEqual(origin('https://odoo.invalid.'), ['https', 'odoo.invalid.', 443]);   // the trailing dot stays: the safe direction
+  assert.deepEqual(origin('http://0x7f.1'), ['http', '0x7f.1', 80]);                     // so does another IPv4 notation
+  for (const value of ['http://odoo.invalid:x', 'http://odoo.invalid:99999', 'http://', 'odoo.invalid', null]) assert.equal(origin(value), null, String(value));
+});
+
+test('HM-12 (DQ-40 ⑨): switched on, a URL moved to another origin needs its stored secrets again before anything is sent; switched off as before', () => {
+  const {backendPatchPayload, newOriginSecrets} = panelContracts;
+  assert.equal(typeof newOriginSecrets, 'function');
+  const odoo = {product: 'odoo', connection_configured: true, backend_edit: ODOO_EDIT};
+  const keep = {url: 'keep', database: 'keep', username: 'keep', password: 'keep'};
+  const moved = {...keep, url: 'set'}, elsewhere = {url: 'https://elsewhere.invalid'};
+  // Switched off: today's partial edit (the stored password goes to the new place, by the administrator's choice).
+  assert.deepEqual(backendPatchPayload(odoo, moved, elsewhere), {changes: elsewhere});
+  assert.deepEqual(backendPatchPayload(odoo, moved, elsewhere, false), {changes: elsewhere});
+  // Switched on: refused here until the password is typed again; the message names the field, never the typed URL.
+  assert.deepEqual(newOriginSecrets(odoo, moved, elsewhere), ['password']);
+  assert.throws(() => backendPatchPayload(odoo, moved, elsewhere, true), error => error instanceof UiError
+    && error.message === '網址改到另一台伺服器時不會沿用已儲存的憑證：請重新輸入密碼或 API Key。');
+  assert.deepEqual(backendPatchPayload(odoo, {...moved, password: 'set'}, {...elsewhere, password: 'DUMMY-new'}, true), {changes: {...elsewhere, password: 'DUMMY-new'}});
+  // Another scheme, port or spelling of the host is another origin; another path, case or the default port written out is not.
+  for (const url of ['http://odoo.invalid', 'https://odoo.invalid:8443', 'https://odoo.invalid.']) assert.deepEqual(newOriginSecrets(odoo, moved, {url}), ['password'], url);
+  for (const url of ['https://odoo.invalid/odoo', 'HTTPS://ODOO.INVALID', 'https://odoo.invalid:443/']) {
+    assert.deepEqual(newOriginSecrets(odoo, moved, {url}), [], url);
+    assert.deepEqual(backendPatchPayload(odoo, moved, {url}, true), {changes: {url: url.replace(/\/+$/, '')}}, url);
+  }
+  // Nothing to bring: the URL kept, not a URL yet, or the secret never stored.
+  assert.deepEqual(newOriginSecrets(odoo, keep, elsewhere), []);
+  assert.deepEqual(newOriginSecrets(odoo, moved, {url: 'not a url'}), []);
+  assert.deepEqual(newOriginSecrets({...odoo, backend_edit: {...ODOO_EDIT, secret_set: {password: false}}}, moved, elsewhere), []);
+  // A URL the server withholds (its stored value unknown here) counts as moved: the safe direction.
+  const withheld = {...odoo, backend_edit: {...ODOO_EDIT, values: {...ODOO_EDIT.values, url: null}, withheld_fields: ['url']}};
+  assert.deepEqual(newOriginSecrets(withheld, moved, {url: 'https://odoo.invalid/odoo'}), ['password']);
+  // n8n: its API key and MCP access token both go to its one server; one never stored is not asked for, a cleared one is brought.
+  const n8n = {product: 'n8n', connection_configured: true, backend_edit: {contract: 'woow-connection-patch-v1', values: {url: 'http://old.n8n.invalid'}, secret_set: {key: true, mcp_access_token: true}}};
+  const n8nMoved = {url: 'set', key: 'keep', mcp_access_token: 'keep'}, n8nElsewhere = {url: 'http://new.n8n.invalid'};
+  assert.deepEqual(newOriginSecrets(n8n, n8nMoved, n8nElsewhere), ['key', 'mcp_access_token']);
+  assert.deepEqual(backendPatchPayload(n8n, {...n8nMoved, key: 'set', mcp_access_token: 'clear'}, {...n8nElsewhere, key: 'DUMMY-new-key'}, true),
+    {changes: {url: 'http://new.n8n.invalid', key: 'DUMMY-new-key', mcp_access_token: null}});
+  assert.throws(() => backendPatchPayload(n8n, {...n8nMoved, key: 'set'}, {...n8nElsewhere, key: 'DUMMY-new-key'}, true), /MCP Access Token.*或明確清除。$/);
+  assert.deepEqual(newOriginSecrets({...n8n, backend_edit: {...n8n.backend_edit, secret_set: {key: true, mcp_access_token: false}}}, n8nMoved, n8nElsewhere), ['key']);
+  // Hermes: each URL its own server's secret; a dashboard set for the first time brings nothing; OpenDesign sends none.
+  const hermes = {product: 'hermes', connection_configured: true, backend_edit: {contract: 'woow-connection-patch-v1',
+    values: {gateway_url: 'https://gw.invalid', dashboard_url: 'https://dash.invalid', dashboard_username: 'DUMMY-user'}, secret_set: {gateway_api_key: true, dashboard_password: true}}};
+  const hermesKeep = {gateway_url: 'keep', gateway_api_key: 'keep', dashboard_url: 'keep', dashboard_username: 'keep', dashboard_password: 'keep'};
+  assert.deepEqual(newOriginSecrets(hermes, {...hermesKeep, dashboard_url: 'set'}, {dashboard_url: 'https://other.invalid'}), ['dashboard_password']);
+  assert.deepEqual(newOriginSecrets(hermes, {...hermesKeep, gateway_url: 'set'}, {gateway_url: 'https://other.invalid'}), ['gateway_api_key']);
+  const firstDashboard = {...hermes, backend_edit: {...hermes.backend_edit, values: {...hermes.backend_edit.values, dashboard_url: null, dashboard_username: null},
+    secret_set: {gateway_api_key: true, dashboard_password: false}}};
+  assert.deepEqual(newOriginSecrets(firstDashboard, {...hermesKeep, dashboard_url: 'set'}, {dashboard_url: 'https://other.invalid'}), []);
+  assert.deepEqual(newOriginSecrets({product: 'opendesign', connection_configured: true, backend_edit: {contract: 'woow-connection-patch-v1', values: {url: 'https://od.invalid'}, secret_set: {}}},
+    {url: 'set'}, {url: 'https://other.invalid'}), []);
 });

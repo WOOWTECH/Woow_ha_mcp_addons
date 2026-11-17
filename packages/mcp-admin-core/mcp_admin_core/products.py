@@ -14,9 +14,9 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, AfterValidator, field_validator, model_validator
 
-from . import features
+from . import features, identity_fields
 from .access import masked_token
-from .config import FRESH_WRITES_ENABLED, State, Store, http_url
+from .config import FRESH_WRITES_ENABLED, ConfigError, State, Store, http_url
 from .lifecycle import CHILD_PORT, ChildSpec, child_port_text
 from .odoo_methods import AllowedMethods, FIELD as ODOO_ALLOWED_METHODS
 from .policy import Tool
@@ -311,6 +311,32 @@ def check_saved_destinations(state, previous=None):
         if value is not None and value != getattr(previous, 'backend_url', None):
             saved_destination(value, loopback=True)
 
+
+# HM-12 (multi-profile plan 9 Odoo row, 12.3 HM-12; DQ-05, DQ-40 ⑩ (a); contract 3.1, section 9 #40; I11; unreleased):
+# the products whose MCP token is bound to one backend identity once they are switched on: Odoo (PaaS #131,
+# woow-mcp-server 69ac425 apps/odoo/odoo_mcp_admin/routers/config.py ODOO_IDENTITY_KEYS). Nextcloud (HM-22) and Hermes
+# (HM-24) join with their own slices; identity_fields.TOKEN_ROTATING already names their fields.
+IDENTITY_BOUND = frozenset({'odoo'})
+
+
+def identity_rebound(previous, candidate) -> bool:
+    """Whether saving candidate over previous (gateway.admin_action: backend, backend/patch) moves the MCP token to a
+    new backend identity, so that the token is rotated in the same write (ProductStore.rebind): the product is in
+    IDENTITY_BOUND and switched on (features.enabled, read at this call), the token is active, a complete connection
+    is saved, and one of its identity fields (identity_fields.rotating_fields: Odoo url, database, username) differs
+    in candidate, a cleared connection included (PaaS patch_connection_bound: a cleared identity field is a change; were
+    it not, clearing and then saving another account would keep the token, as a first setup does). The first setup (no
+    connection saved yet), a revoked token and a change of the password alone keep the token as they do today.
+    Switched off, never (plan 3.3: the token stays, byte for byte)."""
+    product = getattr(previous, 'product', 'n8n')
+    if product not in IDENTITY_BOUND or not features.enabled(product):
+        return False
+    before = getattr(previous, 'connection', None)
+    if previous.token is None or before is None:
+        return False
+    after = getattr(candidate, 'connection', None)
+    return any(getattr(before, name) != getattr(after, name, None) for name in identity_fields.rotating_fields(product))
+
 # Owner decision 2026-10-27 (the PaaS woow-mcp-server owner_defaults of 2026-10-25, for the HA add-ons): the state
 # field that marks the one-time all-on migration of a legacy (schema 1/2/3) state. Same name as the PaaS marker.
 OWNER_DEFAULTS = 'owner_defaults_20261025'
@@ -580,6 +606,30 @@ class ProductStore(Store):
                                   previous_token_masked=masked_token(previous))
         updated = self.update(token=token, token_history=[entry, *(before.token_history or [])][:5])
         return updated, True
+
+    def rebind(self, changes, token):
+        """HM-12 (plan 9 Odoo row; DQ-05; contract 3.1, section 9 #59 and HM-12's row on a failed identity change): one
+        durable write of a changed backend identity (identity_rebound) under this store's writer lock: changes (the new
+        connection), the new MCP token and its masked history entry, action rotate (the history keeps rotate and revoke
+        only: no new action name, no schema change; PaaS writes backend_identity_change). Returns the state written.
+
+        ConfigError, nothing written, when the store refuses it (an invalid update, the state unreadable) or the new
+        state file cannot be written: the store stays usable then, so the old token is still served (PaaS
+        test_failed_account_rebind_restores_old_child_and_url). A failure once the state file is being replaced poisons
+        the store as every such failure does (config.Store._write: its outcome is unknown). gateway's rebind_identity
+        reads the token on disk after any failure to decide whether the old child may run again."""
+        before = self.load()
+        if before.token is None or not isinstance(token, str) or token == before.token:
+            raise ValueError('invalid identity rebind')
+        entry = TokenHistoryEntry(action='rotate', rotated_at=datetime.now(timezone.utc).isoformat(timespec='seconds'),
+                                  previous_token_masked=masked_token(before.token))
+        try:
+            updated = self._decode({**before.model_dump(), **changes, 'token': token,
+                                    'token_history': [entry, *(before.token_history or [])][:5]})
+        except ValueError:
+            raise ConfigError('invalid state update') from None
+        self._write(updated, poison_before_replace=False)
+        return updated
 
     def _decode(self, value):
         # Headscale first ships at schema 4. A fabricated older record has no

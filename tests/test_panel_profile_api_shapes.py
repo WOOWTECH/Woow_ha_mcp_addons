@@ -12,6 +12,12 @@ either side fails one of the two.
 The shape (the cases file's about and rules): the status, the class of the ETag header, the body's fields with their
 types; the values of the rules' literal keys; ids by their role; Idempotency-Keys by the case that sent them; ETags and
 revisions by class. Every case runs under the HM-01 log scan (tokens, child tokens and labels watched).
+
+HM-12 (DQ-05, DQ-40 ⑨ (a); contract 3.1, 4.1): the backend saves of a switched-on Odoo profile the panel sends and the
+answers it handles (token_rotated, shape D, the new-origin 422, the two 503s). An extra's connection in the setup is the
+one the add-on saved for it (checked here; the mock is given the same one); setup.fault arms one failure of the
+identity change on B as tests/test_odoo_identity_rotation.py does (Journal, record_writes). The passwords the cases send
+are watched by the log scan too.
 """
 from __future__ import annotations
 
@@ -31,7 +37,9 @@ import pytest
 from log_scan import log_scan  # noqa: F401  (fixture)
 from multi_profile_runtime import Children, create_profile, multi_profile_runtime
 from mcp_admin_core import profile_runtime, profiles, restore_detect
+from mcp_admin_core.config import ConfigError
 from mcp_admin_core.products import ProductStore
+from test_odoo_identity_rotation import Journal, record_writes
 from test_single_profile_golden import ADMIN, GENUINE_CLIENT, INGRESS, configure, settle
 
 pytestmark = pytest.mark.usefixtures('log_scan')
@@ -195,12 +203,38 @@ def replace_index(data):
     path.chmod(0o600)
 
 
-def watch(log_scan, data, setup):
+def sent_passwords(value):
+    """The password values a request body carries (HM-12's saves), at any depth."""
+    if isinstance(value, dict):
+        return [item for name, child in value.items() for item in
+                ([child] if name.endswith('password') and isinstance(child, str) else sent_passwords(child))]
+    return [item for child in value for item in sent_passwords(child)] if isinstance(value, list) else []
+
+
+def watch(log_scan, data, setup, cases=()):
     for path in [Path(data) / 'state.json', *sorted((Path(data) / 'profiles').glob('*/state.json'))]:
         value = json.loads(path.read_text())
         log_scan.watch(*(item for item in (value['token'], value['child_token']) if item))
+        log_scan.watch(*(item for name, item in (value.get('connection') or {}).items()
+                         if name == 'password' and item), kind='secret')
     labels = [extra['label'] for extra in setup.get('extras', []) + setup.get('unavailable', [])]
     log_scan.watch(*labels, 'Kappa Desk', 'Lambda Desk', kind='name')
+    log_scan.watch(*(item for case in cases for item in sent_passwords(case['request'].get('body'))), kind='secret')
+
+
+def arm(fault, journal, runtime, data, patch):
+    """HM-12: one failure of B's identity change, as tests/test_odoo_identity_rotation.py arms it once B's child runs:
+    its old child does not stop (stop), the store refuses the write (write), its new child does not start (start)."""
+    profile_id = RULES['ids']['B']
+    journal.watch(data, profile_id, runtime.manager.get(profile_id).runtime.supervisor)
+    if fault == 'stop':
+        journal.refuse_stop = 1
+    elif fault == 'start':
+        journal.refuse_start = 1
+    elif fault == 'write':
+        record_writes(patch, journal, refuse=(ConfigError, 'HM-12 shape case: the store refuses the write'))
+    else:
+        raise AssertionError(f'unknown fault {fault!r}')
 
 
 async def run_scenario(scenario, tmp_path, log_scan):
@@ -217,7 +251,10 @@ async def run_scenario(scenario, tmp_path, log_scan):
             store.close()
     extras = [ids[extra['role']] for extra in setup['extras']]
     for number, extra in enumerate(setup['extras']):
-        create_profile(data, product, ids[extra['role']], label=extra['label'], port=18000 + number)
+        state = create_profile(data, product, ids[extra['role']], label=extra['label'], port=18000 + number)
+        if 'connection' in extra:  # HM-12: what the cases change is what the add-on saved (the mock gets the same)
+            saved = state.connection.model_dump()
+            assert {name: saved[name] for name in extra['connection']} == extra['connection'], extra['role']
     for orphan in setup.get('orphans', []):
         create_profile(data, product, ids[orphan], label='Orphan Ops', port=18090, indexed=False)
     for number, role in enumerate(setup.get('quarantine', [])):  # HM-13c: the boot guard quarantines these
@@ -225,7 +262,7 @@ async def run_scenario(scenario, tmp_path, log_scan):
         (profiles.Layout(data).profile(ids[role]) / '.writer.lock').unlink()
     for number, extra in enumerate(setup.get('unavailable', [])):
         create_profile(data, product, ids[extra['role']], label=extra['label'], port=18050 + number)
-    watch(log_scan, data, setup)
+    watch(log_scan, data, setup, scenario['cases'])
     for extra in setup.get('unavailable', []):
         shutil.rmtree(profiles.Layout(data).profile(ids[extra['role']]))
     if setup.get('restore'):  # HM-13c: the entrypoint's marker of a restore (signal 1), before the start
@@ -237,8 +274,10 @@ async def run_scenario(scenario, tmp_path, log_scan):
         restore_detect.detect(data, enabled=True)
         profiles.Layout(data).profiles.write_text('not a directory')
     # Without additional profiles the default profile's child is the golden MockChild (multi_profile_runtime's own).
+    journal = Journal() if setup.get('fault') else None
     options = {'switch': not setup.get('switched_off'),
-               **({'children': children_for(data, product, extras)} if extras else {})}
+               **({'children': children_for(data, product, extras)} if extras else {}),
+               **({'supervisor': journal.supervisor()} if journal is not None else {})}
     if setup.get('file_budget') == 'short':
         from test_router_passthrough import FakeResource
         needed, _ = profile_runtime.open_file_budget(product)
@@ -254,6 +293,8 @@ async def run_scenario(scenario, tmp_path, log_scan):
         patch.setattr(profiles, 'available_memory_mib', lambda: setup.get('available_memory_mib', 4096))
         runtime = await stack.enter_async_context(multi_profile_runtime(product, data, **options))
         await settle(runtime, 'configured')
+        if journal is not None:
+            arm(setup['fault'], journal, runtime, data, patch)
         if setup.get('restore'):
             # HM-13c: the boot guard renewed every journal at the restore, refusing every operation id up to then (410
             # operation_restored); the cases' keys are made a second before they are sent (as the panel takes the

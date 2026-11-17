@@ -308,17 +308,56 @@ def secret_values(state):
     return tuple(sorted((v for v in found if isinstance(v, str) and len(v) >= MIN_SECRET), key=len, reverse=True))
 
 
-def redact_secrets(value, secrets):
-    """value with every occurrence of each secret replaced by [REDACTED], in every string (keys too) of a JSON value."""
+# HM-30 D1: a string this long (code points) gets a checkpoint between the secrets looked for in it (redact_secrets).
+LONG_TEXT = 64 * 1024
+# HM-30 review 2 MF-1: a list or dict longer than this gets a checkpoint every MEMBERS_A_CHECKPOINT members too.
+MEMBERS_A_CHECKPOINT = 1024
+
+
+def redact_secrets(value, secrets, checkpoint=None):
+    """value with every occurrence of each secret replaced by [REDACTED], in every string (keys too) of a JSON value.
+
+    HM-30 D1: checkpoint, when given (the reply worker's breathe), is called once for every list and dict, before its
+    members, and between the secrets looked for in a long string (each search of it is one C call): the worker lets the
+    event loop have the GIL while it masks a large reply (one walk of its every object in Python; without a breath,
+    every system call the loop makes meanwhile waits for the GIL again). HM-30 review 2 MF-1: in a large list or dict,
+    once every MEMBERS_A_CHECKPOINT members as well (a flat list of millions of scalars is one walk of 0.4 s and more
+    otherwise), and a key is masked with it too (a long key breathes as a long string does). The value is the same.
+    Left out, as before."""
     if not secrets:
         return value
     if isinstance(value, str):
+        long = checkpoint is not None and len(value) > LONG_TEXT
         for secret in secrets:
+            if long:
+                checkpoint()
             if secret in value:
                 value = value.replace(secret, SECRET_MASK)
         return value
     if isinstance(value, list):
-        return [redact_secrets(item, secrets) for item in value]
+        if checkpoint is None:
+            return [redact_secrets(item, secrets) for item in value]
+        checkpoint()
+        if len(value) <= MEMBERS_A_CHECKPOINT:
+            return [redact_secrets(item, secrets, checkpoint) for item in value]
+        masked = []
+        for start in range(0, len(value), MEMBERS_A_CHECKPOINT):
+            if start:
+                checkpoint()
+            masked += [redact_secrets(item, secrets, checkpoint) for item in value[start:start + MEMBERS_A_CHECKPOINT]]
+        return masked
     if isinstance(value, dict):
-        return {redact_secrets(key, secrets): redact_secrets(item, secrets) for key, item in value.items()}
+        if checkpoint is None:
+            return {redact_secrets(key, secrets): redact_secrets(item, secrets) for key, item in value.items()}
+        checkpoint()
+        if len(value) <= MEMBERS_A_CHECKPOINT:
+            return {redact_secrets(key, secrets, checkpoint): redact_secrets(item, secrets, checkpoint)
+                    for key, item in value.items()}
+        masked = {}
+        for count, (key, item) in enumerate(value.items()):
+            if count and not count % MEMBERS_A_CHECKPOINT:
+                checkpoint()
+            key = redact_secrets(key, secrets, checkpoint)  # the key first, as the comprehensions do
+            masked[key] = redact_secrets(item, secrets, checkpoint)
+        return masked
     return value

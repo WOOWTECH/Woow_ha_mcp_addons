@@ -25,7 +25,7 @@
 | `packages/mcp-admin-core/mcp_admin_core/restore_lock.py` | HM-13b | HM-13c | 列管 | — | 開機守門 A～F 步、休眠處理、`.revoke-all-pending`；`restore-record.json` 的格式（`RECORD_KEYS`、`RECORD_VERSION`）之後要改時，舊版寫的紀錄要照樣讀得懂（契約第 3.6 節；HM-13c 審查 S-2） |
 | `packages/mcp-admin-core/mcp_admin_core/request_budget.py` | HM-31 | HM-30（如果回覆額度要共用它）；HM-19c 量測後改常數的功能 PR | 列管（HM-31 起） | — | 閘道的請求內容位元組預算（全 add-on＋每帳號份額，對齊 PaaS #155）、讀取閒置、讀完丟掉的拒絕、每帳號每情況 60 秒一行的 WARNING（`Reports`，從 `profile_router.py` 移來）；不受開關管 |
 | `packages/mcp-admin-core/mcp_admin_core/log_redaction.py` | HM-02 | PaaS 遮罩之後再變時的同步 PR（#149 已在 `7d111b1` 合併，HM-02 直接用合併版） | 列管（記在 `runtime-patches.json`；不另記 `runtime-sources.json`，那本只收 `apps/<產品>/vendor/`。DQ-38 的補充，HM-02 審查 MF-3，2026-11-15 08:2x 定案） | — | 紀錄遮罩（PaaS 規則先、HA 規則後） |
-| 回覆工作執行緒模組（暫定名 `reply_worker.py`） | HM-30 | — | 列管 | — | 回覆處理的工作執行緒與依帳號輪流的佇列 |
+| `packages/mcp-admin-core/mcp_admin_core/reply_worker.py` | HM-30 | — | 列管（HM-30 起） | — | 回覆處理的工作執行緒（全 add-on 一條）與依帳號輪流的佇列；`Lane`＝一個帳號的班次（`make_apps` 的 `reply_worker`） |
 | `packages/mcp-admin-core/mcp_admin_core/origin_policy.py` | HM-27 | — | 列管 | — | 密鑰網址的服務層級 Origin 清單（report-only） |
 | `packages/mcp-admin-core/mcp_admin_core/child_identity.py` | HM-15（條件式） | — | 列管 | — | listener 身分檢查 |
 | `packages/mcp-admin-ui/src/profiles.js` | HM-11 | HM-13c（沒改：核對卡等新卡片在 `app.js`、`restore.js`） | 列管 | — | 面板帳號選單、建立／改名／刪除對話框 |

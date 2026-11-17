@@ -3,11 +3,13 @@
 - Wired since: HM-08 wired features.py and profiles.py: run_product asks features.enabled() at every start, the gateway
   takes the profile id grammar from profiles.py, and only a switched-on product's dispatcher reads the index
   (tests/test_router_passthrough.py: switched off, no index or profile directory is read). HM-20's loopback rule reads
-  features.enabled() too (products.loopback_refused; switched off, it changes no answer). HM-13b wired HM-13a's
-  restore_detect.py and HM-07's identity_fields.py: both entry points run the boot guard (restore_lock) at every start,
-  which detects a restore, and its restore record shows identity fields. UNWIRED is empty now; the scans stay for the
-  next module that is not wired yet. The 8081 and 8099 answers stay those HM-01 froze (tests/test_single_profile_golden.py,
-  tests/test_mcp_contract_freeze.py, tests/test_admin_contract_freeze.py).
+  features.enabled() too (products.loopback_refused; switched off, it changes no answer). HM-12 wired identity_fields.py
+  (products.identity_rebound, backend_edit.new_origin_refused: data the gateway reads only for a switched-on product;
+  switched off, it changes no answer). HM-13b wired HM-13a's restore_detect.py and reads HM-07's identity_fields.py too:
+  both entry points run the boot guard (restore_lock) at every start, which detects a restore, and its restore record
+  shows identity fields. UNWIRED is empty now; the scans stay for the next module that is not wired yet. The 8081 and
+  8099 answers stay those HM-01 froze (tests/test_single_profile_golden.py, tests/test_mcp_contract_freeze.py,
+  tests/test_admin_contract_freeze.py).
 - The switch: MULTI_PROFILE_PRODUCTS is empty; features.enabled() reads it at every call (never bound at import), so
   an integration test can switch a product on with a subprocess preamble (tests/test_real_products.py style).
 - Zero rewrite: a state.json bb48449 wrote (one installed add-on per product, tests/fixtures/upgrade_zero_rewrite)
@@ -44,7 +46,8 @@ ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / 'packages/mcp-admin-core/mcp_admin_core'
 ZERO_REWRITE = ROOT / 'tests/fixtures/upgrade_zero_rewrite'
 # Modules no runtime file may import yet. HM-08 wired HM-07's features and profiles (HM-20's loopback rule reads
-# features too); HM-13b wired HM-13a's restore_detect and HM-07's identity_fields (the boot guard, restore_lock).
+# features too); HM-12 wired HM-07's identity_fields; HM-13b wired HM-13a's restore_detect (the boot guard,
+# restore_lock, which reads identity_fields too).
 UNWIRED = ()
 A, B = 'a' * 24, 'b' * 24
 

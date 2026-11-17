@@ -43,7 +43,8 @@ async function observed(item, response, context) {
   return seen;
 }
 
-// The fixture's state for a scenario (the cases file's setup).
+// The fixture's state for a scenario (the cases file's setup). HM-12: backend_edit (parity046), an extra's saved
+// connection and the identity change's failure (rebindFault).
 // HM-13c: a restore (the guard's record of every profile, revoked; the quarantine directories it made; the notice of a
 // kept token when there is no profile data), with the policy every profile copies from the default one.
 const RESTORED_AT = '2026-11-16T09:30:15+00:00';
@@ -55,14 +56,16 @@ function fixtureSetup(setup) {
   if (setup.switched_off) return {product: setup.product, ...(setup.restore ? {restoreNotice: {at: RESTORED_AT}} : {})};
   const extra = spec => ({id: ids[spec.role], label: spec.label, configured: true, status: spec.status ?? 'unconfigured',
     ...(spec.disabled_reason ? {disabled_reason: spec.disabled_reason} : {}), ...(spec.blocked_reason ? {blocked_reason: spec.blocked_reason} : {}),
-    ...(spec.required_memory_mib ? {required_memory_mib: spec.required_memory_mib} : {}), ...(spec.unavailable ? {unavailable: true} : {})});
-  return {product: setup.product, profiles: {
+    ...(spec.required_memory_mib ? {required_memory_mib: spec.required_memory_mib} : {}), ...(spec.unavailable ? {unavailable: true} : {}),
+    ...(spec.connection ? {connection: spec.connection} : {})});
+  return {product: setup.product, ...(setup.backend_edit ? {parity046: true} : {}), profiles: {
     extra: [...setup.extras.map(extra), ...(setup.unavailable ?? []).map(spec => ({...extra(spec), disabled_reason: 'profile_unavailable', status: 'failed', unavailable: true}))],
     orphans: (setup.orphans ?? []).map(role => ids[role]),
     ...(setup.limit !== undefined ? {limit: setup.limit} : {}), ...(setup.file_budget === 'short' ? {limit: 0} : {}),
     ...(setup.available_memory_mib !== undefined ? {memory: {available_memory_mib: setup.available_memory_mib}} : {}),
     ...(setup.no_port ? {noPort: true} : {}), ...(setup.corrupt ? {indexCorrupt: true} : {}),
     ...(setup.no_index_file ? {indexCorrupt: true, noIndexFile: true} : {}),
+    ...(setup.fault ? {rebindFault: setup.fault} : {}),
     ...(setup.restore ? {restore: {at: RESTORED_AT, rows: [{id: 'default', label: 'Default', token: 'revoked', identity: restoredIdentity,
       policy: restoredPolicy(setup.policy)}, ...setup.extras.map(spec => ({id: ids[spec.role], label: spec.label, token: 'revoked',
         identity: restoredIdentity, policy: restoredPolicy(setup.policy)}))]}} : {}),

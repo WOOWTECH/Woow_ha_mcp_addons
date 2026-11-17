@@ -1,5 +1,5 @@
 """HM-13b: the boot guard (multi-profile plan 8.4 "開機守門" A-F, 10.3, 12.3 HM-13b; contract 1.2, 3.5, 3.6, 4.1, 7, 8,
-9 #20-#23, #67, #69, #113-#116; FM-04, 07, 13, 16, 79, 80, 118; I9; DQ-03 (b), DQ-39 (a); acceptance T-21).
+9 #20-#23, #67, #69, #118-#121; FM-04, 07, 13, 16, 79, 80, 118; I9; DQ-03 (b), DQ-39 (a); acceptance T-21).
 
 restore_lock.guard() runs at every start of the management process, after the legacy migration and the default
 profile's store, before any child starts or any listener exists (run_product, apps/n8n/run.py). These tests drive it
@@ -170,7 +170,7 @@ def test_a_single_profile_restore_whose_marker_cannot_be_removed_still_starts(tm
 
 def test_a_switched_on_restore_without_profile_data_keeps_the_default_token(tmp_path, log_scan):
     """DQ-03 (b) (A2): a switched-on product restored without profile data keeps the default profile's state and
-    receipts as restored (§8.8 #21, contract 9 #116); the record says so for the panel (HM-13c), the log says the token
+    receipts as restored (§8.8 #21, contract 9 #121); the record says so for the panel (HM-13c), the log says the token
     is back at its backup value; the sentinel is rebuilt and the marker removed."""
     disk = Disk(tmp_path, log_scan)
     assert disk.start(enabled=True) == restore_lock.Outcome()
@@ -733,7 +733,7 @@ def test_the_names_set_aside_are_the_ones_the_guard_writes():
 
 
 def test_an_unlistable_profiles_entry_is_reported_and_nothing_in_it_is_served(tmp_path, log_scan):
-    """A restored profiles entry that is not a directory (contract 9 #114): nothing in it can be listed or opened (and
+    """A restored profiles entry that is not a directory (contract 9 #119): nothing in it can be listed or opened (and
     HM-08 serves no token while profiles/ cannot be listed); the guard says so, revokes the default profile (profile
     data is on disk) and records it, instead of never starting."""
     disk = Disk(tmp_path, log_scan)
@@ -749,7 +749,7 @@ def test_an_unlistable_profiles_entry_is_reported_and_nothing_in_it_is_served(tm
 @pytest.mark.parametrize('case', ['a restore', 'dormant profiles', 'a restore, its profiles entry not even known'])
 def test_a_profiles_directory_that_cannot_be_listed_stops_the_start(tmp_path, log_scan, monkeypatch, case):
     """HM-13b review MF-2 (I9, I13; plan 8.4 E: 不過 → 保留標記、不開 listener): profiles/ is a directory the guard cannot
-    list for a while (EMFILE, EIO, ENOMEM, no permission: anything but "not a directory", contract 9 #114), or what it
+    list for a while (EMFILE, EIO, ENOMEM, no permission: anything but "not a directory", contract 9 #119), or what it
     is cannot even be looked up. What is in it may hold the backup's tokens, so nothing in it is revoked or served: the
     start stops with every marker kept (only the default profile is revoked first, as its profile data asks). The next
     start that lists it finishes."""
