@@ -24,7 +24,7 @@
   `mcp_admin_core/__init__.py`，帳本摘要同步）；`VERSION_OVERRIDES`、`PRODUCT_VERSIONS` 不動（Headscale 0.4.18）；7 個 manifest 與 Dockerfile 的
   `ARG BUILD_VERSION`；`ci.yaml` 2 處、`release.yaml` 4 處照 `validate.py` 產生的運算式（`<app> == 'headscale' && '0.4.18' || '0.4.14'`，
   和之前一樣是兩路形式，不需要先用拋棄式 workflow 驗多路運算式）。第 7 項（每個產品自己的發佈紀錄）見驗收清單第 4 項。
-- OpenDesign 跟著升來源版本的理由：0.4.10～0.4.13 每一版都只同步來源版本（0.4.13 是 `1cbfcb9`）；它的 DOCS 寫「版本號照共用規則一起升」；
+- OpenDesign 跟著升來源版本（負責人 2026-11-17 14:4x 確認照前例一起升）的理由：0.4.10～0.4.13 每一版都只同步來源版本（0.4.13 是 `1cbfcb9`）；它的 DOCS 寫「版本號照共用規則一起升」；
   Store registry 停用它，readiness 不檢查它；不跟著升就要加一個 `opendesign` override，運算式變成 GitHub 沒算過的三路串接。不建映像、
   不做 HAOS 驗收。
 - Headscale 不在這一版：自己的版號線，0.4.18 已發。共通變更（清單第 1 節 A1～A6）等它下一版才帶出去。
@@ -36,24 +36,24 @@
 - 25 個契約與相鄰檔的 git blob（GitHub contents API）在 2026.11.1 與 2026.11.2 逐一相同；2026.11.1 那一側和
   `docs/provenance/headscale-ha-core-2026-11-blobs.json` 的紀錄逐一相同。Supervisor 2026.11.0（2026-11-06，tag commit
   `c1c6f0a754c0656eb1af189f11009f1cfc4b3e28`）的 `supervisor/api/proxy.py` 仍是審過的 blob `cab849dc`。
-- 這只是查詢，不是審查。照 [ha-role-core-contract](../ha-role-core-contract.md)「Adding a release」，2026.11.2 另開一片先審、先合；本 PR 不加。
-  照現況，Core 已經升到 2026.11.2 的主機上，0.4.14 的管理面板仍會拒絕。那一片先合併時，本 PR rebase 並更新六個產品與根目錄 CHANGELOG
-  的第一行、六個產品 DOCS 的 Core 版本行、根 README、`docs/operations/guide.md`、`docs/n8n-ha-role.md` 的版本句子。
+- 這只是查詢，不是審查。**負責人 2026-11-17 14:4x 決定不等 2026.11.2，先發 0.4.14**：0.4.14 只認到 2026.11.1，Core 已經升到
+  2026.11.2 的主機上管理面板仍會拒絕（各 CHANGELOG 第一行已寫明「之後的修正版在審過之前照樣拒絕」）。2026.11.2 照
+  [ha-role-core-contract](../ha-role-core-contract.md)「Adding a release」另開一片審，在 0.4.14 合併之後才合併，跟下一版出去。
 
 ## 驗收清單
 
 | # | 項目 | 誰做 | 要負責人批准 | 狀態 |
 |---|---|---|---|---|
-| 1 | builder 從凍結的 PR head 建六個 amd64 映像；`supply_chain.py candidate` → `container_acceptance.py`（`container_probe.py`）＋ 供應鏈閘門（source／history／all-layer 秘密掃描、Syft／SPDX SBOM、Grype、license）；不推 GHCR | 代理（builder 線） | **要**（叢集資源；每次重跑都要新的核准計畫） | 待做 |
-| 1a | 容器驗收：子程式 bearer 的直連 401（`assert_child_bearer`；n8n 驗 n8n-mcp 的同一個 child token）。第一次在真容器跑，失敗先查探針與 entrypoint，不放寬 | 代理（builder 線） | 同第 1 項 | 待做 |
-| 1b | 容器驗收：HM-13a 的 root 還原樹（`restored_start`：還原標記在、還原項目改回 10001、`state.json` 位元不變）。第一次在真容器跑，同上 | 代理（builder 線） | 同第 1 項 | 待做 |
-| 2 | J1900 指令集檢查：QEMU user-mode `-cpu Nehalem`（比 J1900 嚴格）跑六個候選映像（DQ-42，負責人 2026-11-17 定每次發版都跑；做法見 [0.1.7 發佈紀錄](release-decision-0.1.7.md)「0.1.8 待辦」最後一點） | 代理（builder 線） | **要**（和第 1 項同一個核准計畫） | 待做 |
-| 3 | 推 GHCR（推了就燒版號）：只推測過的同一個 image ID，匿名以不可變 digest 讀回 | 代理（builder 線） | **要** | 待做 |
+| 1 | builder 從凍結的 PR head 建六個 amd64 映像；`supply_chain.py candidate` → `container_acceptance.py`（`container_probe.py`）＋ 供應鏈閘門（source／history／all-layer 秘密掃描、Syft／SPDX SBOM、Grype、license）；不推 GHCR | 本對話（負責人逐步批准；被安全機制擋下就停，改由負責人或其他工作線） | **要**（叢集資源；每次重跑都要新的核准計畫） | 待做 |
+| 1a | 容器驗收：子程式 bearer 的直連 401（`assert_child_bearer`；n8n 驗 n8n-mcp 的同一個 child token）。第一次在真容器跑，失敗先查探針與 entrypoint，不放寬 | 本對話（負責人逐步批准；被安全機制擋下就停，改由負責人或其他工作線） | 同第 1 項 | 待做 |
+| 1b | 容器驗收：HM-13a 的 root 還原樹（`restored_start`：還原標記在、還原項目改回 10001、`state.json` 位元不變）。第一次在真容器跑，同上 | 本對話（負責人逐步批准；被安全機制擋下就停，改由負責人或其他工作線） | 同第 1 項 | 待做 |
+| 2 | J1900 指令集檢查：QEMU user-mode `-cpu Nehalem`（比 J1900 嚴格）跑六個候選映像（DQ-42，負責人 2026-11-17 定每次發版都跑；做法見 [0.1.7 發佈紀錄](release-decision-0.1.7.md)「0.1.8 待辦」最後一點） | 本對話（負責人逐步批准；被安全機制擋下就停，改由負責人或其他工作線） | **要**（和第 1 項同一個核准計畫） | 待做 |
+| 3 | 推 GHCR（推了就燒版號）：只推測過的同一個 image ID，匿名以不可變 digest 讀回 | 本對話（負責人逐步批准；被安全機制擋下就停，改由負責人或其他工作線） | **要** | 待做 |
 | 4 | 每個產品自己的發佈紀錄 `release-decision-<產品>-0.4.14.md` × 6（寫 `woow_mcp_<產品>` 與 0.4.14、映像 digest、第 1～3 項的結果）＋ provenance JSON；readiness 只認這六份，本檔不算（HM-17） | 代理 | 否（證據 commit 只加紀錄檔） | 待做 |
 | 5 | CI 在 PR head 全綠：`checks`、`readiness`（六個映像可匿名拉取＋第 4 項）、`Upgrade comparison / compare`（設定比對、0.4.13 → 0.4.14 升級測試、漏洞比對）、`Release train` | CI | 否 | 待做 |
 | 6 | 升版比對要求時才建 `addons/<產品>/upgrade-notes.yaml`（照報告的 `change`／`key`，或新增可修補 Critical／High 漏洞的 `id`／`package`） | 代理 | 接受漏洞要負責人同意 | 待做（比對跑出來才知道） |
 | 7 | 每個產品的 HAOS P9 回歸（[ha-p9-kit](ha-p9-kit.md)），含 Core 2026.11.x 上管理面板能開（這一版的目的）；Hermes 另看 `enabled=false` 建出的排程是停用的 | 負責人或其他工作線 | **要**（主機） | 待做 |
-| 8 | HM-31 的「HM-19c 放行條件」（[契約](../multi-profile/contract.md)第 5 節）對這一版適不適用：HM-31 不受開關管，這一版就會帶出去 | 負責人決定 | **要** | 待決定 |
+| 8 | HM-31 的「HM-19c 放行條件」（[契約](../multi-profile/contract.md)第 5 節）對這一版適不適用：HM-31 不受開關管，這一版就會帶出去 | 負責人 2026-11-17 14:4x 決定：**不擋這次維修版**（和 0.4.13 比只多了限制、沒有更寬；上界還沒在出貨機驗證，記在這裡）；這個條件仍擋多帳號開通（HM-19a） | 已定 | 已定（不擋） |
 | 9 | 合併（＝上架 WOOW App Store），merge commit | 負責人本人 | **要** | 待做 |
 | 10 | 合併 commit 上 `woow-addon-release.yml` 與 `release-train.yml` 的非 PR run 成功；六個 `<slug>-v0.4.14` 正式 Release；Store 同步後從商店升級再驗一次 | 代理（負責人決定何時）／負責人或其他工作線 | **要** | 待做 |
 
