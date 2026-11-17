@@ -13,19 +13,22 @@ environment through the REST API (https://api.github.com only, no redirects, no 
   - can_admins_bypass is false (a missing field fails too);
   - deployment_branch_policy is exactly {"protected_branches": false, "custom_branch_policies": true}, and the only
     deployment branch policy is the branch pattern release/*.
-prevent_self_review is recorded, not required: today the account that dispatches is also the only reviewer, and with
-it on nobody could approve. The publish job repeats these checks, refuses any run attempt but the first (an approval
-binds one attempt; start again with a new dispatch), and reads GET /actions/runs/<run>/approvals: there must be an
-approved review of public-release by user id 165237880 and no rejected one. The publish record (RECORD, a new file in a
-0700 directory) keeps the run id, attempt, commit, actor, the environment's updated_at and the reviews, for the release
-record.
+prevent_self_review is not required: today the account that dispatches is also the only reviewer. When it is on and
+the user who dispatched (GITHUB_ACTOR_ID) is that only reviewer, the gate stops, since nobody could ever approve. The
+publish job repeats these checks, refuses any run attempt but the first (an approval binds one attempt; start again
+with a new dispatch), and reads GET /actions/runs/<run>/approvals: there must be an approved review of public-release
+by user id 165237880 and no rejected one. A missing approval is asked for again, about 10 s apart, three times in all;
+a rejection fails at once. The publish record (RECORD, a new file in a 0700 directory) keeps the run id, attempt,
+commit, actor, the environment's updated_at and the reviews (whether each has a comment and its length, never the
+comment text: the evidence of a public repository is readable by any signed-in user), for the release record.
 
-HTTP 403, 429, 5xx and network errors are retried once, after Retry-After (at most 60 s), then fail; any other error
-fails at once. The token is sent only as the Authorization header and never printed. Limits (docs/operations/
-release.md): this reads settings and a review history, it cannot prove who pressed the button, and it runs from the
-dispatched branch like every other step.
+HTTP 403, 429, 5xx and network errors (including a broken connection or a short body) are retried once, after
+Retry-After (at most 60 s), then fail with one line; any other error fails at once. The token is sent only as the
+Authorization header and never printed. Limits (docs/operations/release.md): this reads settings and a review history,
+it cannot prove who pressed the button, and it runs from the dispatched branch like every other step.
 """
 from datetime import datetime, timezone
+import http.client
 import json
 import os
 from pathlib import Path
@@ -101,8 +104,9 @@ def fetch(path, token, sleep=time.sleep):
             if exc.code not in RETRYABLE and exc.code < 500:
                 raise Closed('%s: HTTP %d' % (path, exc.code)) from None
             reason, wait = 'HTTP %d' % exc.code, retry_after(exc.headers)
-        except (urllib.error.URLError, OSError):
-            reason, wait = 'network error', 5
+        except (urllib.error.URLError, OSError, http.client.HTTPException) as exc:
+            # A broken connection or a short body (IncompleteRead) is a network error too.
+            reason, wait = 'network error (%s)' % type(exc).__name__, 5
         else:
             require(len(body) <= MAX_BODY, path + ': response too large')
             try:
@@ -146,6 +150,10 @@ def check_environment(environment, policies):
             'wait_timer': waits[0] if waits else None, 'branch_policies': [{'name': 'release/*', 'type': 'branch'}]}
 
 
+class NotApproved(Closed):
+    pass
+
+
 def check_approvals(approvals):
     require(isinstance(approvals, list) and all(isinstance(entry, dict) for entry in approvals),
             'the run review history is not a list')
@@ -156,10 +164,44 @@ def check_approvals(approvals):
     approved = [entry for entry in approvals if entry.get('state') == 'approved' and isinstance(entry.get('user'), dict)
                 and type(entry['user'].get('id')) is int and entry['user']['id'] == OWNER_ID
                 and ENVIRONMENT in names(entry)]
-    require(bool(approved), 'no approval of %s by the owner (User id %d) on this run' % (ENVIRONMENT, OWNER_ID))
+    if not approved:
+        raise NotApproved('no approval of %s by the owner (User id %d) on this run' % (ENVIRONMENT, OWNER_ID))
+    # The review comment is the reviewer's free text and the evidence artifact of a public repository is readable by
+    # any signed-in user: keep only whether there is one and its length (review round 2).
     return [{'state': entry.get('state'), 'environments': names(entry),
              'user': {'login': (entry.get('user') or {}).get('login'), 'id': (entry.get('user') or {}).get('id')},
-             'comment': entry.get('comment')} for entry in approvals]
+             'comment_present': bool(entry.get('comment')),
+             'comment_length': len(entry['comment']) if isinstance(entry.get('comment'), str) else 0}
+            for entry in approvals]
+
+
+def approved_reviews(run_id, token, sleep=time.sleep, attempts=3, pause=10):
+    """The run's review history once it holds the owner's approval: the review can be recorded a moment after the job
+    starts, so a missing approval is asked for again (about 10 s apart, three times in all); a rejection fails at once."""
+    path = '/repos/%s/actions/runs/%s/approvals' % (REPOSITORY, run_id)
+    for attempt in range(1, attempts + 1):
+        try:
+            return check_approvals(fetch(path, token, sleep))
+        except NotApproved:
+            if attempt == attempts:
+                raise
+            sleep(pause)
+
+
+def no_self_review_deadlock(facts, env):
+    """With Prevent self-reviews on, the user who dispatched cannot approve; when that user is also the only reviewer the
+    publish job would wait for an approval that can never come, so the gate stops at once. The dispatcher is
+    GITHUB_ACTOR_ID, the numeric id of github.actor: it is compared by id like the reviewer, and on the first attempt
+    (the only one check_release.py admits) github.actor is the user who dispatched; GITHUB_TRIGGERING_ACTOR differs
+    only on re-runs and carries no id."""
+    if facts['prevent_self_review'] is not True:
+        return
+    actor = env.get('GITHUB_ACTOR_ID', '')
+    require(re.fullmatch(r'[1-9][0-9]{0,19}', actor) is not None,
+            'Prevent self-reviews is on but GITHUB_ACTOR_ID is missing: cannot tell who dispatched')
+    require(int(actor) != OWNER_ID, 'Prevent self-reviews is on and the user who dispatched (id %s) is the only required '
+            'reviewer: the publish job would wait for an approval that can never come. Turn it off, or dispatch from '
+            'another account' % actor)
 
 
 def environment_facts(token, sleep=time.sleep):
@@ -205,11 +247,13 @@ def main(argv, env=None, sleep=time.sleep):
         run_id = env.get('GITHUB_RUN_ID', '')
         require(re.fullmatch(r'[1-9][0-9]{0,19}', run_id) is not None, 'GITHUB_RUN_ID missing')
     facts = environment_facts(token, sleep)
+    if in_actions:
+        no_self_review_deadlock(facts, env)
     print('PASS: %s requires User %d (prevent_self_review %s), no administrator bypass, release/* only; updated_at %s'
           % (ENVIRONMENT, OWNER_ID, facts['prevent_self_review'], facts['updated_at']))
     if argv[0] != 'publish':
         return facts
-    reviews = check_approvals(fetch('/repos/%s/actions/runs/%s/approvals' % (REPOSITORY, run_id), token, sleep))
+    reviews = approved_reviews(run_id, token, sleep)
     record = {'repository': REPOSITORY, 'environment': facts, 'reviews': reviews,
               'run': {'id': int(run_id), 'attempt': 1, 'sha': env.get('GITHUB_SHA'), 'ref': env.get('GITHUB_REF'),
                       'actor': env.get('GITHUB_ACTOR'), 'triggering_actor': env.get('GITHUB_TRIGGERING_ACTOR')},
@@ -224,5 +268,5 @@ if __name__ == '__main__':
         main(sys.argv[1:])
     except Closed as exc:
         raise SystemExit('environment gate CLOSED: ' + str(exc)) from None
-    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, http.client.HTTPException) as exc:
         raise SystemExit('environment gate CLOSED: ' + type(exc).__name__) from None

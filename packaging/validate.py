@@ -268,11 +268,12 @@ def workflow_versions(value, workflow):
 
 
 # release.yaml, the GitHub-hosted route (owner decision 2026-11-17; docs/operations/release.md): gate, then candidate,
-# then publish, compared with this recipe step by step; step names are free text without expressions or secrets. Its
-# only environment variables: candidate's APP and Docker build-record switches, publish's APP, SOURCE_SHA on the three
-# check_release steps (gate's also has APP), GH_TOKEN on the two environment_gate steps, RUNNER_KIND on the two runner
-# preflights, EXPECTED_IMAGE_ID on the image load and GHCR_TOKEN on the registry precondition. Its only secret is the
-# run's own GITHUB_TOKEN, as exactly those GH_TOKEN and GHCR_TOKEN values and the registry login password.
+# then publish, compared with this recipe step by step; the workflow name and the step names are free text without
+# expressions or secrets. Its only environment variables: candidate's APP and Docker build-record switches, publish's
+# APP, SOURCE_SHA on the three check_release steps (gate's also has APP), GH_TOKEN on the two environment_gate steps,
+# RUNNER_KIND on the two runner preflights, EXPECTED_IMAGE_ID on the image load and GHCR_TOKEN on the registry
+# precondition. Its only secret is the run's own GITHUB_TOKEN, as exactly those GH_TOKEN and GHCR_TOKEN values and the
+# registry login password.
 RELEASE_RUN_NAME = 'Publish ${{ inputs.app }} from ${{ github.ref_name }} at ${{ inputs.source_sha }}'
 RELEASE_BRANCHES = "startsWith(github.ref, 'refs/heads/release/')"
 # gate: the PR checks job's source gate window (DQ-43); candidate: cold build, candidate gate, the J1900 check (its own
@@ -290,9 +291,13 @@ SECRETISH = re.compile(r'secrets|github\s*(?:\.\s*token\b|\[\s*[\'"]token[\'"]\s
 CANDIDATE_EVIDENCE = ('candidate/subject.json', 'candidate/sbom.syft.json', 'candidate/sbom.spdx.json',
                       'candidate/scan-summary.json', 'candidate/provenance.json')
 RUNNER_EVIDENCE = ('release-evidence/hosted-runner.json', 'release-evidence/j1900-${{ inputs.app }}.json')
-PUBLISHED_EVIDENCE = (*CANDIDATE_EVIDENCE, 'candidate/published-provenance.json', 'candidate/published-digest.json',
-                      *RUNNER_EVIDENCE, 'handoff/handoff.json', 'publish-evidence/approval.json',
-                      'publish-evidence/hosted-runner.json')
+# In the publish job the candidate evidence artifact is downloaded into its own directory, RUNNER_TEMP/candidate-evidence
+# (review round 2: never next to the runner's own files in RUNNER_TEMP).
+DOWNLOADED = 'candidate-evidence/'
+PUBLISHED_EVIDENCE = (*(DOWNLOADED + name for name in CANDIDATE_EVIDENCE),
+                      DOWNLOADED + 'candidate/published-provenance.json', DOWNLOADED + 'candidate/published-digest.json',
+                      *(DOWNLOADED + name for name in RUNNER_EVIDENCE), 'handoff/handoff.json',
+                      'publish-evidence/approval.json', 'publish-evidence/hosted-runner.json')
 # The gate's Node pin, the same script as ci.yaml's unit job and the PR checks job (release.md, "PR/main CI", item 3).
 NODE_PATH_PIN = '\n'.join([
     'test "$(node --version)" = v26.12.1',
@@ -352,7 +357,7 @@ def release_recipe():
                  {'id': 'handoff',
                   'run': 'python packaging/image_handoff.py save "$APP" "$RUNNER_TEMP/candidate" "$RUNNER_TEMP/handoff"'},
                  {'uses': upload, 'with': {'name': image, 'path': runner_paths(('handoff/image.tar', 'handoff/handoff.json')),
-                                           'if-no-files-found': 'error', 'retention-days': 1}},
+                                           'if-no-files-found': 'error', 'retention-days': 3}},
                  {'uses': upload, 'with': {'name': evidence, 'path': runner_paths(CANDIDATE_EVIDENCE + RUNNER_EVIDENCE),
                                            'if-no-files-found': 'error', 'retention-days': 90}}]
     publish = [checkout, python, pip, admission,
@@ -361,22 +366,22 @@ def release_recipe():
                {'env': {'RUNNER_KIND': '${{ runner.environment }}'},
                 'run': 'python packaging/hosted_runner.py "$RUNNER_KIND" "$RUNNER_TEMP/publish-evidence/hosted-runner.json"'},
                {'uses': download, 'with': {'name': image, 'path': '${{ runner.temp }}/handoff'}},
-               {'uses': download, 'with': {'name': evidence, 'path': '${{ runner.temp }}'}},
+               {'uses': download, 'with': {'name': evidence, 'path': '${{ runner.temp }}/candidate-evidence'}},
                {'env': {'EXPECTED_IMAGE_ID': '${{ needs.candidate.outputs.image_id }}'},
-                'run': 'python packaging/image_handoff.py load "$APP" "$RUNNER_TEMP/handoff" "$RUNNER_TEMP/candidate"'},
-               {'run': 'python packaging/supply_chain.py verify "$APP" "$RUNNER_TEMP/candidate"'},
+                'run': 'python packaging/image_handoff.py load "$APP" "$RUNNER_TEMP/handoff" "$RUNNER_TEMP/candidate-evidence"'},
+               {'run': 'python packaging/supply_chain.py verify "$APP" "$RUNNER_TEMP/candidate-evidence/candidate"'},
                {'env': {'GHCR_TOKEN': RELEASE_TOKEN}, 'run': 'python packaging/registry_gate.py unused "$APP"'},
                {'uses': 'docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9',
                 'with': {'registry': 'ghcr.io', 'username': '${{ github.actor }}', 'password': RELEASE_TOKEN}},
                {'run': '\n'.join(['set -eu',
-                                  'python packaging/supply_chain.py verify "$APP" "$RUNNER_TEMP/candidate"',
+                                  'python packaging/supply_chain.py verify "$APP" "$RUNNER_TEMP/candidate-evidence/candidate"',
                                   f'IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:{version}"',
                                   'TESTED_ID="$(python -c \'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])\' '
-                                  '"$RUNNER_TEMP/candidate/subject.json")"',
+                                  '"$RUNNER_TEMP/candidate-evidence/candidate/subject.json")"',
                                   'docker tag "$TESTED_ID" "$IMAGE"',
                                   'test "$(docker image inspect "$IMAGE" --format \'{{.Id}}\')" = "$TESTED_ID"',
                                   'docker push "$IMAGE"'])},
-               {'run': 'python packaging/registry_gate.py public "$APP" "$RUNNER_TEMP/candidate"'},
+               {'run': 'python packaging/registry_gate.py public "$APP" "$RUNNER_TEMP/candidate-evidence/candidate"'},
                {'uses': upload,
                 'with': {'name': 'published-evidence-${{ inputs.app }}-' + version + '-${{ github.sha }}',
                          'path': runner_paths(PUBLISHED_EVIDENCE), 'if-no-files-found': 'error', 'retention-days': 90}}]
@@ -407,6 +412,7 @@ def hosted_release(value):
     workflow_versions(value, 'release')
     require(isinstance(value, dict) and set(value) == {'name', 'run-name', 'on', 'permissions', 'concurrency', 'jobs'},
             'release.yaml keys (no workflow environment/default injection)')
+    free_text(value['name'], 'release workflow name')
     exact(value['run-name'], RELEASE_RUN_NAME, 'release run name')
     inputs = field(value, 'on', 'workflow_dispatch', 'inputs')
     described = {name: field(inputs, name, 'description') for name in ('app', 'source_sha')}

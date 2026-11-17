@@ -19,8 +19,10 @@ every check then runs on that image ID, in a container with --network none --rea
      (hashlib, ssl, zlib, sqlite3, decimal, re) must give the same result both ways;
   2. n8n: Node loads better-sqlite3, builds an FTS5 table, hashes and compresses, natively and under QEMU, with the
      same result.
-A SIGILL (exit 132, or QEMU's "uncaught target signal 4") fails the release and names the last module tried. Native
-import failures that the allowlist does not cover are reported together, for every environment, after the QEMU runs.
+Both import runs must answer for exactly the modules they were sent, each once, imported or failed (review round 2: a
+module missing from both would otherwise never reach QEMU and never be reported). A SIGILL (exit 132, or QEMU's
+"uncaught target signal 4") fails the release and names the last module tried. Native import failures that the
+allowlist does not cover are reported together, for every environment, after the QEMU runs.
 QEMU is the runner's own apt package qemu-user-static (its version, version line and binary SHA-256 are recorded). The
 whole check has a 60-minute budget; every container run gets at most what is left of it. The result is
 EVIDENCE_DIR/j1900-<app>.json. Limit: QEMU checks only the code that actually runs (the imports and the smokes), not
@@ -213,6 +215,13 @@ def names_of(value, what):
     return value
 
 
+def accounted(label, ok, err, sent):
+    """The probe answered for exactly the modules it was sent: each one once, either imported or failed."""
+    require(len(ok) == len(set(ok)) and not set(ok) & set(err) and set(ok) | set(err) == set(sent),
+            '%s import result does not account for every module it was sent exactly once (missing: %s)'
+            % (label, ', '.join(sorted(set(sent) - set(ok) - set(err))[:8]) or 'none'))
+
+
 def check_python(image_id, app, scope, python, work, run=run_in_image, allowed=None, deadline=None):
     """One Python environment. Returns its record; native import failures the allowlist does not cover are returned
     in 'disallowed' (check() fails on them after every environment ran); everything else that is wrong raises."""
@@ -238,6 +247,9 @@ def check_python(image_id, app, scope, python, work, run=run_in_image, allowed=N
     require(isinstance(natively, dict) and isinstance(natively.get('err'), dict)
             and isinstance(natively.get('detail', {}), dict), label + ': native import result')
     native_ok = names_of(natively.get('ok'), label + ': no native module imports natively')
+    # Every listed module is accounted for exactly once: imported or failed (review round 2: a module missing from both
+    # would otherwise never reach QEMU and never be reported).
+    accounted(label + ' native', native_ok, natively['err'], modules)
     require(bool(native_ok), label + ': no native module imports natively')
     require(bool(set(native_ok) & kinds['site-packages']),
             label + ': no third-party (site-packages) native module imports natively')
@@ -251,7 +263,9 @@ def check_python(image_id, app, scope, python, work, run=run_in_image, allowed=N
     require(not illegal_instruction(emulated), failure(label + '-qemu', emulated, 'ILLEGAL INSTRUCTION under -cpu ' + CPU))
     require(emulated.returncode == 0, failure(label + '-qemu', emulated, 'emulated import run failed'))
     result = last_json(emulated.stdout)
-    require(isinstance(result, dict), label + ': emulated import result')
+    require(isinstance(result, dict) and isinstance(result.get('err', {}), dict), label + ': emulated import result')
+    accounted(label + ' QEMU', names_of(result.get('ok'), label + ': emulated import result'), result.get('err', {}),
+              native_ok)
     differ = sorted(set(native_ok) ^ set(result.get('ok') or [])) + sorted(result.get('err') or {})
     require(result.get('ok') == native_ok and not result.get('err'),
             '%s: modules differ under -cpu %s: %s' % (label, CPU, ', '.join(differ[:8])))

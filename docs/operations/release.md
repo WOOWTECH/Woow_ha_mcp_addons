@@ -157,8 +157,11 @@ ubuntu-24.04 上跑。負責人看過測試結果、image ID 已經定下來之�
      - `can_admins_bypass` 是 false（沒有這個欄位也算失敗）；
      - `deployment_branch_policy` 恰好是 `{"protected_branches": false, "custom_branch_policies": true}`，唯一的部署分支規則是
        branch `release/*`。
-     `prevent_self_review` 只記錄、不要求：觸發的人和唯一的審查者都是 WOOWTECH，開了就永遠批不了。HTTP 403、429、5xx 和網路錯誤
-     重試一次（照 Retry-After，最多等 60 秒），再失敗就停；其他錯誤馬上停。
+     `prevent_self_review` 不要求，但如果開著、而觸發的人（`GITHUB_ACTOR_ID`）就是唯一的審查者，gate 直接失敗，因為那樣永遠等不到
+     批准。用 `GITHUB_ACTOR_ID` 的理由：它是 `github.actor` 的數字 id，可以和審查者一樣用 id 比；第一次 attempt（`check_release.py`
+     只收這個）時 `github.actor` 就是觸發的人，`GITHUB_TRIGGERING_ACTOR` 只在 re-run 時才會不同，而且沒有數字 id。HTTP 403、429、
+     5xx 和網路錯誤（包括連線中斷、回應不完整這類 `http.client` 錯誤）重試一次（照 Retry-After，最多等 60 秒），再失敗就印一行訊息
+     停止；其他錯誤馬上停。
   3. `validate.py`、packaging 單元測試、`packaging/unit.sh`。
 - `candidate`（`contents: read`；沒有 environment、沒有 packages 權限；只在 `release/*`；限時 150 分鐘）：在推送權限出現之前把映像建好、
   驗完：
@@ -197,37 +200,51 @@ ubuntu-24.04 上跑。負責人看過測試結果、image ID 已經定下來之�
      - 結果寫成 `release-evidence/j1900-<app>.json`，PASS 那一行寫出每個 venv 各類模組的數目。限制：QEMU 只檢查實際跑到的程式
        （import 與 smoke），不是完整執行路徑。
   7. `image_handoff.py save`：確認本機 tag 仍是測過的 image ID，用 `docker image save` 存成 `image.tar`，檢查裡面恰好是那一個
-     映像（config digest＝image ID、tag、diffID），寫 `handoff.json`，並把 image ID 寫成 job output `image_id`。
-  8. 上傳兩個 artifact：`candidate-image-<app>-<sha>`（`image.tar` 與 `handoff.json`，**只留 1 天**）與
-     `candidate-evidence-<app>-<sha>`（candidate 證據、`hosted-runner.json`、`j1900-<app>.json`，留 90 天）。
+     映像（config digest＝image ID、tag、diffID），寫 `handoff.json`，並把 image ID 寫成 job output `image_id`。tar 裡的成員只准
+     `docker image save` 會寫的名稱（`manifest.json`、`index.json`、`oci-layout`、`repositories`、`blobs/sha256/<64 位 hex>`，
+     加 `blobs`、`blobs/sha256` 兩個目錄；依據是 Docker 28.0.4 也就是 moby v28.0.4 的 `image/tarexport/save.go` 與 `pkg/archive`），
+     每個名稱只能出現一次，`./manifest.json` 這種不是標準寫法的名稱、連結、裝置都擋：Docker 和這個檢查必須讀到同一個成員。
+  8. 上傳兩個 artifact：`candidate-image-<app>-<sha>`（`image.tar` 與 `handoff.json`，**只留 3 天**；public repo 的 artifact
+     儲存不收費，1 天對等批准太緊）與 `candidate-evidence-<app>-<sha>`（candidate 證據、`hosted-runner.json`、`j1900-<app>.json`，
+     留 90 天）。
 - `publish`（`environment: public-release`；`contents: read`、`packages: write`、`actions: read`；只在 `release/*`；needs gate 與
   candidate；限時 60 分鐘）：負責人批准之後才開始：
   1. 再跑一次 `validate.py` 與 `check_release.py`（只收第一次 attempt）。
   2. `environment_gate.py publish`：gate 那套檢查全部再做一次，加上這次執行的審查紀錄（`GET /actions/runs/<run>/approvals`）
-     必須有 User 165237880 對 `public-release` 的 approved，而且沒有任何 rejected。紀錄寫進 `publish-evidence/approval.json`
-     （run id、attempt、commit、觸發者、environment 的 `updated_at`、審查紀錄）。
+     必須有 User 165237880 對 `public-release` 的 approved，而且沒有任何 rejected。查不到 approved 時，間隔約 10 秒再查兩次（job
+     開始時紀錄可能還沒寫進去）；看到 rejected 立刻失敗，不再查。紀錄寫進 `publish-evidence/approval.json`：run id、attempt、
+     commit、觸發者、environment 的 `updated_at`、每筆審查的狀態、審查者、environment，以及**有沒有留言和留言長度**（不收錄留言
+     全文）。
   3. 託管機器預檢 → `publish-evidence/hosted-runner.json`（`docker load` 只有在 classic store 下才保留 image ID）。
-  4. 下載兩個 artifact 到 `$RUNNER_TEMP`（不進 checkout）。`actions/download-artifact` 釘 v4.3.0 的 commit
+  4. 下載兩個 artifact，各放進 `$RUNNER_TEMP` 底下自己的目錄：映像到 `$RUNNER_TEMP/handoff`、證據到
+     `$RUNNER_TEMP/candidate-evidence`（不進 checkout，也不會和 runner 自己放在 `$RUNNER_TEMP` 的檔案混在一起）。
+     `actions/download-artifact` 釘 v4.3.0 的 commit
      `d3f86a106a0bac45b974a628896c90dbdf5c8093`：2026-11-17 以公開 API 核對過，這是正式 release tag（不是 draft 或 prerelease），
      和 `upload-artifact` v4.6.2 同一代。
   5. `image_handoff.py load`：candidate 的 job output（和 artifact 分開的管道）＝`handoff.json`＝`subject.json` 的 image ID；
-     `image.tar` 的 SHA-256 符合紀錄、裡面恰好是那一個映像；這台機器上還沒有那個 tag；`docker load` 之後 tag 指向的就是那個 ID
-     與 diffID。
+     J1900 紀錄 `j1900-<app>.json` 的 `passed` 是 true、`image_id` 就是這次要推的 ID；`image.tar` 的 SHA-256 符合紀錄、成員名稱
+     合規、裡面恰好是那一個映像；這台機器上還沒有那個 tag；`docker load` 前後比對映像清單，只能多出那一個 ID 和那一個 tag；載入後
+     tag 指向的就是那個 ID 與 diffID。
   6. `supply_chain.py verify`：載入的映像和整份 candidate 證據相符。
   7. `registry_gate.py unused`（用 `GITHUB_TOKEN` 確認這個版號在 GHCR 還不存在；registry 錯誤不當成「不存在」）→
      `docker/login-action` 用 `GITHUB_TOKEN` 登入 → 推送步驟（再 verify 一次，用測過的 ID 打 tag，確認 tag 指向同一個 ID 才
      `docker push`，只推那一個 ID，不重建）→ `registry_gate.py public`（乾淨設定匿名以不可變 digest 拉回，核 manifest、
      config digest＝測過的 ID、diffID）。
   8. 上傳 `published-evidence-<app>-<版號>-<sha>`（留 90 天）：candidate 證據加 published provenance／digest、兩個 job 的
-     `hosted-runner.json`、`j1900-<app>.json`、`handoff.json`、`approval.json`。candidate 證據過了證據的秘密掃描；其餘只有固定
-     欄位（版本、計數、模組名稱、審查紀錄），沒經 Gitleaks。
+     `hosted-runner.json`、`j1900-<app>.json`、`handoff.json`、`approval.json`。candidate 證據過了證據的秘密掃描；其餘幾個沒經
+     Gitleaks：`hosted-runner.json`、`handoff.json`、`approval.json` 是程式自己組的欄位（版本、計數、ID、審查狀態與留言長度），
+     `j1900-<app>.json` 另外帶著**映像產生的錯誤訊息**（原生 import 失敗的「型別: 訊息」，每筆最多 300 字），這部分不是固定欄位。
+- artifact 是公開的：這個 repo 是 public，任何登入 GitHub 的人都能下載它的 artifact。候選映像（`candidate-image-…`，含整個
+  `image.tar`）在負責人批准之前就看得到；被 Reject 的也會留到過期（3 天）。證據 artifact 留 90 天。所以審查留言不要寫機密
+  （`approval.json` 雖然只記留言長度，留言本身在執行頁的審查紀錄裡，有讀取權的人都看得到）。
 - concurrency：每個產品一組（`public-release-<app>`），不同產品可以同時推；`cancel-in-progress: false`，進行中的執行永遠不取消。
   GitHub 的規則：同一組已有一個在跑時，新觸發的排隊等；再觸發一個，排隊中的那個會被新的取代（還沒開始，不會推任何東西）。
 - 環境變數只有這些：candidate job 的 `APP` 和 `DOCKER_BUILD_SUMMARY`、`DOCKER_BUILD_RECORD_UPLOAD`（都是 `false`）；publish job 的
   `APP`；三個 `check_release.py` 步驟的 `SOURCE_SHA`（＝`inputs.source_sha`；gate 那步另有 `APP`）；兩個 `environment_gate.py`
   步驟的 `GH_TOKEN`；兩個預檢步驟的 `RUNNER_KIND`（＝`runner.environment`）；載入步驟的 `EXPECTED_IMAGE_ID`
   （＝`needs.candidate.outputs.image_id`）；`registry_gate.py unused` 的 `GHCR_TOKEN`。`GH_TOKEN`、`GHCR_TOKEN` 和登入密碼都只能是
-  `${{ secrets.GITHUB_TOKEN }}`；其他任何地方（包括步驟名稱和輸入說明）出現 `secrets`、`github.token` 或 `${{` 都會被擋。不寫
+  `${{ secrets.GITHUB_TOKEN }}`；其他任何地方（包括 workflow 名稱、步驟名稱和輸入說明）出現 `secrets`、`github.token` 或 `${{`
+  都會被擋。不寫
   `GITHUB_ENV`、`GITHUB_PATH`；唯一的 job output 是 `image_handoff.py save` 寫的 `image_id`。`validate.py` 逐步比對整個檔：三個 job
   的步驟清單與順序、action 釘的 commit、env、needs、outputs、權限、environment、job 條件、限時、concurrency、run-name；多一個
   步驟、env 或 secret 都會失敗。
@@ -280,23 +297,31 @@ ubuntu-24.04 上跑。負責人看過測試結果、image ID 已經定下來之�
 
 ### 負責人批准前的檢查清單（每一支 publish）
 
-1. 這次要發的六支，candidate 都通過了，才批准任何一支的 publish。有一支失敗就全部 Reject（見下一節）。
+1. 這次要發的六支，candidate 都通過了，才批准任何一支的 publish。某一支因為要改來源才修得好的原因失敗，就全部 Reject；某一支是
+   暫時性失敗，就等那一支重新觸發、candidate 通過之後再一起批准（見下一節）。
 2. 以執行摘要頁上顯示的 commit 為準，不要看 run-name（它來自可以被改的 workflow）。那個 commit 要等於升版 PR 目前的 head。
 3. 在 PR 的 Files changed 確認 `.github/` 和 `packaging/` 相對 `claude-delivery` 只改了版號資料（`validate.py` 的 `VERSION`／
    `VERSION_OVERRIDES`，`release.yaml`、`ci.yaml` 的版號運算式）。
 4. 確認那個 SHA 在 PR 上的 checks（`checks`、`Release train`）是綠的。
 5. 只批准第一次 attempt，不要批准 re-run（程式也會擋）。
-6. `image.tar` artifact 只留 1 天：candidate 完成後一天內要批准，過期就 Reject、重新觸發。
+6. `image.tar` artifact 只留 3 天：candidate 完成後三天內要批准，過期就 Reject、重新觸發（同一個 commit，見下一節）。
 
 批准：Review deployments → 勾 `public-release` → Approve and deploy；不對就 Reject。批准只由負責人本人在網頁上按，代理不呼叫批准 API。
 
 ### 部分失敗怎麼辦
 
+- **所有產品都推完之前，不准往 release 分支推任何 commit，紀錄檔也不行。** `workflow_dispatch` 永遠跑在分支的 head，`source_sha`
+  又必須等於 `GITHUB_SHA`：分支一動，就沒辦法再用同一個 commit 重新觸發。紀錄檔在全部推完之後才加（發版步驟第 6 步）。
 - 任何一段失敗都要重新觸發，不能 re-run（程式會擋 attempt 不是 1 的執行）。
+- 暫時性失敗只有這幾種：網路、GitHub API 的 5xx、apt 或 Docker Hub 拉不到、artifact 服務出錯。測試、掃描、CVE、授權、J1900 的
+  判定結果不是暫時性的，不准靠重跑到過。
+- 同一支最多因暫時性失敗重新觸發一次（用同一個 commit），而且要寫進那個產品的發佈紀錄（失敗的 run、原因、重新觸發的 run）。再失敗
+  就當成要修來源處理。
 - candidate 有任何一支失敗（包括 J1900、原生 import 失敗而允許清單沒列）：要改來源才修得好的，全部 Reject，修好換新 head
-  （新的 `source_sha`）重來；不必改來源的暫時問題（例如網路），用同一個 commit 重新觸發那一支。這時什麼都還沒推，不燒版號。
+  （新的 `source_sha`）重來；暫時性的，等那一支重新觸發、candidate 通過之後再一起批准。這時什麼都還沒推，不燒版號。
 - publish 批准後中途失敗：
-  - 推送前失敗（例如 artifact 過期、load 或 verify 不符、`registry_gate.py unused` 失敗）：沒推，用同一個 commit 重新觸發那一支。
+  - 推送前失敗：沒推，可以用同一個 commit 重新觸發那一支。暫時性的（例如 artifact 服務、網路）照上面的次數限制；artifact 過期
+    也是重新觸發；load、verify 或 J1900 紀錄不符、`registry_gate.py unused` 判定版號已存在都不是暫時性的，先查原因。
   - 推送後失敗（例如 `registry_gate.py public`）：那一支的版號已燒，不覆寫、不刪 tag。
   - 已經推上去的產品保留，紀錄寫明映像來源（run、commit、digest）；剩下的用同一個 commit 重新觸發；需要改來源的，改發下一版。
 
@@ -317,7 +342,8 @@ ubuntu-24.04 上跑。負責人看過測試結果、image ID 已經定下來之�
 5. 在負責人的 HAOS 實機驗收（[ha-p9-kit](ha-p9-kit.md)）。備份、安裝、更新這些會改狀態的步驟逐步等負責人批准，先備份。
 6. 每個產品自己的發佈紀錄 `release-decision-<產品>-<版號>.md`（readiness 的規則見上面）：寫 slug、版號、`source_sha`、那次執行的
    連結與 attempt、`approval.json` 的重點（誰、何時批准）、不可變 digest、證據 artifact 的重點（image ID、scan summary、J1900 結果
-   與 qemu 版本、Docker 與 Buildx 版本）和第 5 步的結果。證據 commit 只加紀錄檔。
+   與 qemu 版本、Docker 與 Buildx 版本）、暫時性失敗而重新觸發的紀錄（如果有）和第 5 步的結果。證據 commit 只加紀錄檔，而且要等
+   所有產品都推完才推（見「部分失敗怎麼辦」）。
 7. 所有 required checks 通過後，負責人本人合併（merge commit），也就是上架 WOOW App Store。
 
 ### 限制

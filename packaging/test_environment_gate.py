@@ -1,5 +1,6 @@
 """environment_gate.py with owned fake GitHub API answers: no network, token or real run."""
 import copy
+import http.client
 import io
 import json
 import os
@@ -27,7 +28,8 @@ APPROVAL = {'environments': [{'id': 1, 'name': 'public-release'}], 'state': 'app
 RUN_ENV = {'GITHUB_ACTIONS': 'true', 'GITHUB_REPOSITORY': 'WOOWTECH/Woow_ha_mcp_addons', 'GH_TOKEN': 'invented-token-not-real',
            'GITHUB_RUN_ID': '123456789', 'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_SHA': 'b' * 40,
            'GITHUB_REF': 'refs/heads/release/six-products-0.4.14-20261117', 'GITHUB_ACTOR': 'WOOWTECH',
-           'GITHUB_TRIGGERING_ACTOR': 'WOOWTECH'}
+           'GITHUB_ACTOR_ID': str(g.OWNER_ID), 'GITHUB_TRIGGERING_ACTOR': 'WOOWTECH'}
+APPROVALS = '/repos/WOOWTECH/Woow_ha_mcp_addons/actions/runs/123456789/approvals'
 
 
 class Response(io.BytesIO):
@@ -143,12 +145,22 @@ class EnvironmentGateTests(unittest.TestCase):
         with self.assertRaisesRegex(g.Closed, 'GitHub creates an unprotected one'):
             self.gate(FakeAPI(environment=error(404)))
 
-    def test_prevent_self_review_and_a_wait_timer_are_recorded_not_required(self):
+    def test_prevent_self_review_is_only_refused_when_nobody_could_approve(self):
         value = copy.deepcopy(ENVIRONMENT)
         value['protection_rules'][0]['prevent_self_review'] = True
         value['protection_rules'].append({'id': 7, 'type': 'wait_timer', 'wait_timer': 5})
-        facts, _ = self.gate(FakeAPI(environment=value))
+        # Review suggestion 3: the user who dispatched (GITHUB_ACTOR_ID) is the only reviewer: the run would wait forever.
+        with self.assertRaisesRegex(g.Closed, 'approval that can never come'):
+            self.gate(FakeAPI(environment=value))
+        with self.assertRaisesRegex(g.Closed, 'GITHUB_ACTOR_ID is missing'):
+            self.gate(FakeAPI(environment=value), env={k: x for k, x in RUN_ENV.items() if k != 'GITHUB_ACTOR_ID'})
+        # Another account dispatched (the structural fix the owner may choose later): recorded, not refused.
+        facts, _ = self.gate(FakeAPI(environment=value), env={**RUN_ENV, 'GITHUB_ACTOR_ID': '42'})
         self.assertEqual((facts['prevent_self_review'], facts['wait_timer']), (True, 5))
+        # Off (as configured today), the dispatching owner passes; the local anonymous check has no dispatcher.
+        self.gate(FakeAPI())
+        with patch.object(g, 'request', side_effect=FakeAPI(environment=value)):
+            self.assertIs(g.main(['gate', '--anonymous'], env={}, sleep=list().append)['prevent_self_review'], True)
 
     def test_rate_limits_and_network_errors_are_retried_once_then_fail(self):
         api = FakeAPI(environment=(error(429, retry_after=7), ENVIRONMENT))
@@ -166,6 +178,32 @@ class EnvironmentGateTests(unittest.TestCase):
             with self.subTest(first=first, second=second), self.assertRaisesRegex(g.Closed, 'twice'):
                 self.gate(api)
             self.assertEqual(len(api.calls), 2)
+        # A broken connection or a short body is a network error too (review round 2), retried once, then one line.
+        for problem in (http.client.IncompleteRead(b'{"partial"'), http.client.RemoteDisconnected('invented'),
+                        http.client.BadStatusLine('invented')):
+            api = FakeAPI(environment=(problem, ENVIRONMENT))
+            with self.subTest(problem=type(problem).__name__):
+                self.assertEqual(self.gate(api)[1], [5])
+            api = FakeAPI(environment=(problem, problem))
+            with self.subTest(twice=type(problem).__name__), \
+                 self.assertRaisesRegex(g.Closed, 'network error \\(%s\\) twice' % type(problem).__name__):
+                self.gate(api)
+
+        class ShortBody(Response):
+            def read(self, *args):
+                raise http.client.IncompleteRead(b'{', 10)
+        api = FakeAPI()
+        real = api.__call__
+        first = []
+
+        def flaky(url, headers):
+            if not first:
+                first.append(url)
+                return ShortBody(b'')
+            return real(url, headers)
+        with patch.object(g, 'request', side_effect=flaky):
+            g.main(['gate'], env=RUN_ENV, sleep=first.append)
+        self.assertEqual(first[1:], [5])
         api = FakeAPI(environment=b'not json')
         with self.assertRaisesRegex(g.Closed, 'not JSON'):
             self.gate(api)
@@ -180,8 +218,11 @@ class EnvironmentGateTests(unittest.TestCase):
         self.assertEqual(saved['run'], {'id': 123456789, 'attempt': 1, 'sha': 'b' * 40,
                                         'ref': 'refs/heads/release/six-products-0.4.14-20261117', 'actor': 'WOOWTECH',
                                         'triggering_actor': 'WOOWTECH'})
+        # Only whether there is a comment and its length: the text is the reviewer's, and public evidence (review round 2).
         self.assertEqual(saved['reviews'], [{'state': 'approved', 'environments': ['public-release'],
-                                             'user': {'login': 'WOOWTECH', 'id': g.OWNER_ID}, 'comment': 'odoo ok'}])
+                                             'user': {'login': 'WOOWTECH', 'id': g.OWNER_ID}, 'comment_present': True,
+                                             'comment_length': 7}])
+        self.assertNotIn('odoo ok', self.record.read_text())
         self.assertEqual(self.record.stat().st_mode & 0o777, 0o600)
         self.assertEqual(self.record.parent.stat().st_mode & 0o777, 0o700)
         self.assertNotIn('invented-token-not-real', self.record.read_text())
@@ -212,6 +253,28 @@ class EnvironmentGateTests(unittest.TestCase):
         self.gate(FakeAPI(), mode='publish')
         with self.assertRaises(FileExistsError):  # the record is written once
             self.gate(FakeAPI(), mode='publish')
+
+    def test_a_missing_approval_is_asked_for_twice_more_but_a_rejection_fails_at_once(self):
+        for answers, sleeps in ((([], [APPROVAL]), [10]), (([], [], [APPROVAL]), [10, 10]),
+                                (([{**APPROVAL, 'state': 'pending'}], [APPROVAL]), [10])):
+            self.record.unlink(missing_ok=True)
+            api = FakeAPI(**{APPROVALS: answers})
+            with self.subTest(answers=len(answers)):
+                self.assertEqual(self.gate(api, mode='publish')[1], sleeps)
+            self.assertEqual(sum(url.endswith('/approvals') for url, _ in api.calls), len(answers))
+        self.record.unlink(missing_ok=True)
+        api = FakeAPI(**{APPROVALS: ([], [], [], [APPROVAL])})
+        with self.assertRaisesRegex(g.Closed, 'no approval of public-release by the owner'):
+            self.gate(api, mode='publish')
+        self.assertEqual(sum(url.endswith('/approvals') for url, _ in api.calls), 3)
+        for rejected in ([{**APPROVAL, 'state': 'rejected'}], [APPROVAL, {**APPROVAL, 'state': 'rejected'}]):
+            api = FakeAPI(**{APPROVALS: (rejected, [APPROVAL])})
+            sleeps = []
+            with self.subTest(rejected=len(rejected)), self.assertRaisesRegex(g.Closed, 'rejected review'), \
+                 patch.object(g, 'request', side_effect=api):
+                g.main(['publish', str(self.record)], env=RUN_ENV, sleep=sleeps.append)
+            self.assertEqual((sleeps, sum(url.endswith('/approvals') for url, _ in api.calls)), ([], 1))
+        self.assertFalse(self.record.exists())
 
     def test_token_and_anonymous_mode(self):
         for token in ('', ' ', 'two words'):

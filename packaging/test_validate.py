@@ -351,10 +351,15 @@ class PackagingTests(unittest.TestCase):
             self.assertNotIn(absent, candidate)  # no registry authority before the owner's approval
         uploads = [s['with'] for s in jobs['candidate']['steps'] if s.get('uses', '').startswith('actions/upload-artifact@')]
         self.assertEqual([(u['name'], u['retention-days']) for u in uploads],
-                         [('candidate-image-${{ inputs.app }}-${{ github.sha }}', 1),
+                         [('candidate-image-${{ inputs.app }}-${{ github.sha }}', 3),
                           ('candidate-evidence-${{ inputs.app }}-${{ github.sha }}', 90)])
-        self.assertTrue(all(s['with']['path'].startswith('${{ runner.temp }}') for s in jobs['publish']['steps']
-                            if s.get('uses', '').startswith('actions/download-artifact@')))  # never into the checkout
+        # Downloads go to their own directories under RUNNER_TEMP: never into the checkout, never next to the runner's own
+        # files (review round 2).
+        self.assertEqual([s['with']['path'] for s in jobs['publish']['steps']
+                          if s.get('uses', '').startswith('actions/download-artifact@')],
+                         ['${{ runner.temp }}/handoff', '${{ runner.temp }}/candidate-evidence'])
+        published = '\n'.join(s.get('run', '') for s in jobs['publish']['steps'])
+        self.assertNotIn('"$RUNNER_TEMP/candidate"', published)
 
     def test_hosted_release_jobs_are_exact(self):
         original = self.release()
@@ -503,9 +508,17 @@ class PackagingTests(unittest.TestCase):
                  ('candidate', 'docker/build-push-action@', ('with', 'provenance'), True),
                  ('candidate', 'docker/build-push-action@', ('uses',), 'docker/build-push-action@v6'),
                  ('candidate', 'actions/upload-artifact@', ('with', 'retention-days'), 90),
+                 ('candidate', 'actions/upload-artifact@', ('with', 'retention-days'), 30),
+                 ('candidate', 'actions/upload-artifact@', ('with', 'retention-days'), 1),
+                 ('candidate', 'actions/upload-artifact@', ('with', 'overwrite'), True),
                  ('candidate', 'actions/upload-artifact@', ('with', 'path'), '${{ runner.temp }}\n'),
                  ('publish', 'actions/download-artifact@', ('uses',), 'actions/download-artifact@v4'),
                  ('publish', 'actions/download-artifact@', ('with', 'path'), '.'),
+                 ('publish', 'actions/download-artifact@', ('with', 'path'), '${{ runner.temp }}'),
+                 ('publish', 'actions/download-artifact@', ('with', 'run-id'), '1'),
+                 ('publish', 'actions/download-artifact@', ('with', 'pattern'), '*'),
+                 ('publish', 'image_handoff.py load', ('run',),
+                  'python packaging/image_handoff.py load "$APP" "$RUNNER_TEMP/handoff" "$RUNNER_TEMP"'),
                  ('publish', 'actions/download-artifact@', ('with', 'name'), 'candidate-image-${{ inputs.app }}'),
                  ('gate', 'actions/checkout@', ('uses',), 'actions/checkout@v4'),
                  ('gate', 'actions/checkout@', ('with', 'ref'), '${{ inputs.source_sha }}'),
@@ -531,6 +544,10 @@ class PackagingTests(unittest.TestCase):
                                        'release')
         v.builder_workflow(replaced(original, ('jobs', 'publish', 'steps', 0, 'name'), 'Check out the dispatched commit'),
                            'release')
+        # Review suggestion 5: the workflow name too.
+        for text in ('Release ${{ github.token }}', 'Release ${{ toJSON(github) }}', 'Publish with secrets', ''):
+            with self.subTest(workflow_name=text), self.assertRaises(v.Invalid):
+                v.builder_workflow(replaced(original, ('name',), text), 'release')
         for spelling in ('${{ github.token }}', '${{ github.TOKEN }}', "${{ github['token'] }}", '${{ SECRETS.GITHUB_TOKEN }}',
                          '${{ secrets.github_token }}', '${{ toJSON(secrets) }}'):
             with self.subTest(spelling=spelling), self.assertRaises(v.Invalid):

@@ -213,8 +213,11 @@ class J1900Test(unittest.TestCase):
         self.assertIn('_tkinter', json.loads((self.work / 'odoo-core-native-ok.json').read_text()))
         qemu = next(call for call in fake.calls if call[3] == 'odoo-core-qemu')
         self.assertEqual(qemu[2][-1], '/j1900/odoo-core-native-ok.json')
-        # Being listed does not excuse a difference under QEMU.
+        # Being listed does not excuse a difference under QEMU, nor a module QEMU leaves out.
         with self.assertRaisesRegex(j.Closed, 'modules differ under -cpu Nehalem: _tkinter'):
+            self.env(FakeImage(native_err={}, qemu_ok=['_ssl', 'pydantic_core._pydantic_core', 'yaml._yaml', 'zlib'],
+                               qemu_err={'_tkinter': 'ImportError'}), allowed={'_tkinter': TK_ENTRY})
+        with self.assertRaisesRegex(j.Closed, 'missing: _tkinter'):
             self.env(FakeImage(native_err={}, qemu_ok=['_ssl', 'pydantic_core._pydantic_core', 'yaml._yaml', 'zlib']),
                      allowed={'_tkinter': TK_ENTRY})
         with self.assertRaisesRegex(j.Closed, 'ILLEGAL INSTRUCTION'):
@@ -243,11 +246,12 @@ class J1900Test(unittest.TestCase):
                 self.env(FakeImage(smoke_qemu_rc=rc, smoke_qemu_stderr=err))
 
     def test_module_or_smoke_difference_fails(self):
-        with self.assertRaisesRegex(j.Closed, 'modules differ under -cpu Nehalem: pydantic_core._pydantic_core'):
+        # A module QEMU does not answer for at all is not a pass either (review round 2).
+        with self.assertRaisesRegex(j.Closed, 'QEMU import result does not account .*missing: pydantic_core._pydantic_core'):
             self.env(FakeImage(qemu_ok=['_ssl', 'yaml._yaml', 'zlib']))
-        # The same modules import, but QEMU reports an error for one of them: still a difference.
+        # QEMU reports an import error for a module that imports natively: a difference.
         with self.assertRaisesRegex(j.Closed, 'modules differ under -cpu Nehalem: zlib'):
-            self.env(FakeImage(qemu_err={'zlib': 'ImportError'}))
+            self.env(FakeImage(qemu_ok=['_ssl', 'pydantic_core._pydantic_core', 'yaml._yaml'], qemu_err={'zlib': 'ImportError'}))
         with self.assertRaisesRegex(j.Closed, 'smoke differs'):
             self.env(FakeImage(smoke_qemu={'sha256': 'b'}))
         with self.assertRaisesRegex(j.Closed, 'emulated smoke failed'):
@@ -268,6 +272,30 @@ class J1900Test(unittest.TestCase):
         for fake, message in cases:
             with self.subTest(message=message), self.assertRaisesRegex(j.Closed, message):
                 self.env(fake)
+
+    def test_every_module_is_answered_for_exactly_once(self):
+        # Review round 2 (probes/round2_probes.py): orjson.orjson is listed but missing from both ok and err; before the
+        # fix it was never imported under QEMU and never reported.
+        listing = {'lib-dynload': ['_ssl'], 'site-packages': ['pydantic_core._pydantic_core', 'orjson.orjson']}
+        gap = FakeImage(listing=listing, native_stdout=b'{"ok": ["_ssl", "pydantic_core._pydantic_core"], "err": {}, '
+                                                       b'"detail": {}}\n')
+        with self.assertRaisesRegex(j.Closed, 'core native import result does not account for every module it was sent '
+                                              'exactly once \\(missing: orjson.orjson\\)'):
+            self.env(gap)
+        both = b'{"ok": ["_ssl", "pydantic_core._pydantic_core", "orjson.orjson"], "err": {"orjson.orjson": "ImportError"}}\n'
+        twice = b'{"ok": ["_ssl", "_ssl", "pydantic_core._pydantic_core", "orjson.orjson"], "err": {}}\n'
+        unknown = b'{"ok": ["_ssl", "pydantic_core._pydantic_core", "orjson.orjson", "invented"], "err": {}}\n'
+        for stdout in (both, twice, unknown):
+            with self.subTest(stdout=stdout), self.assertRaisesRegex(j.Closed, 'native import result does not account'):
+                self.env(FakeImage(listing=listing, native_stdout=stdout))
+        # QEMU must answer for exactly the batch it was sent: nothing more, nothing less, each once.
+        for ok, err in ((['_ssl', 'pydantic_core._pydantic_core', 'yaml._yaml', 'zlib', 'invented'], {}),
+                        (['_ssl', 'pydantic_core._pydantic_core', 'yaml._yaml'], {}),
+                        (['_ssl', '_ssl', 'pydantic_core._pydantic_core', 'yaml._yaml', 'zlib'], {}),
+                        (['_ssl', 'pydantic_core._pydantic_core', 'yaml._yaml', 'zlib'], {'zlib': 'ImportError'}),
+                        (['_ssl', 'pydantic_core._pydantic_core', 'yaml._yaml', 'zlib'], {'_tkinter': 'ImportError'})):
+            with self.subTest(ok=ok, err=err), self.assertRaisesRegex(j.Closed, 'QEMU import result does not account'):
+                self.env(FakeImage(qemu_ok=ok, qemu_err=err))
 
     def test_review_m1_third_party_modules_must_import_natively(self):
         # The review's probes/j1900_gap.py scenario: every site-packages module fails natively, only the interpreter's own
