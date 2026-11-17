@@ -29,6 +29,12 @@ test('switched off: no Origin card and no request for it, on any page and produc
   for (const product of ['n8n', 'odoo', 'emqx', 'headscale']) {
     await reset(request, {product, parity: true});
     const seen = originRequests(page);
+    // HM-27 review S-8: a tab that kept an Origin policy identity, as a switched-on release writes it, shows nothing of
+    // it either; switched off the panel never reads that key, so it stays as it was.
+    await open(page, '/overview');
+    const kept = [`woow-admin-operation-v1:${prefix}:origin-policy`, JSON.stringify({id: `${Date.now() - 1000}.${'0'.repeat(32)}`,
+      route: 'origin-policy', revision: etag(1).slice(1, -1), product, mode: 'enforce', allowed_origins: ['https://claude.ai']})];
+    await page.evaluate(([key, value]) => sessionStorage.setItem(key, value), kept);
     for (const path of ['/overview', '/access', '/diagnostics']) {
       await open(page, path);
       await expect(card(page)).toHaveCount(0);
@@ -37,7 +43,9 @@ test('switched off: no Origin card and no request for it, on any page and produc
     }
     await page.getByRole('button', {name: '重新整理狀態', exact: true}).click();
     await idle(page);
+    await expect(page.locator('#pending-origin-operation')).toHaveCount(0);
     expect(seen).toEqual([]);
+    expect(await page.evaluate(key => sessionStorage.getItem(key), kept[0])).toBe(kept[1]);
   }
   expect(await calls(request, call => call.operation === 'origin-policy')).toEqual([]);
 });
