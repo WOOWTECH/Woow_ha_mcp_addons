@@ -25,6 +25,14 @@ IMAGE = 'sha256:' + 'e' * 64
 PROBE = Path(probe.__file__).resolve()
 STDLIB = ['_ssl', 'zlib', '_tkinter']
 SITE = ['pydantic_core._pydantic_core', 'yaml._yaml']
+TK_ERROR = 'ImportError: libtk8.6.so: cannot open shared object file: No such file or directory'
+TK_ENTRY = {'reason': 'invented for the test', 'review': 'test',
+            'error_contains': 'ImportError: libtk8.6.so: cannot open shared object file'}
+
+
+def detail(names):
+    """The probe's detail text for natively failing modules: the real Tk one for _tkinter, an invented one otherwise."""
+    return {name: TK_ERROR if name == '_tkinter' else 'ImportError: invented failure of ' + name for name in names}
 
 
 def result(returncode, payload=None, stderr=b'', lines=(b'TRY x',)):
@@ -67,8 +75,17 @@ class ProbeTest(unittest.TestCase):
     def test_import_all_reports_ok_and_errors(self):
         lines = []
         found = probe.import_all(['json', 'zlib', 'no_such_module_j1900'], emit=lines.append)
-        self.assertEqual(found, {'ok': ['json', 'zlib'], 'err': {'no_such_module_j1900': 'ModuleNotFoundError'}})
+        self.assertEqual(found, {'ok': ['json', 'zlib'], 'err': {'no_such_module_j1900': 'ModuleNotFoundError'},
+                                 'detail': {'no_such_module_j1900': "ModuleNotFoundError: No module named 'no_such_module_j1900'"}})
         self.assertEqual(lines[0], 'TRY json')
+        self.assertIn('ERR no_such_module_j1900 ModuleNotFoundError', lines)  # the TRY/OK/ERR lines carry type names only
+        with tempfile.TemporaryDirectory() as d:  # a long, multi-line message is kept on one bounded line
+            (Path(d) / 'noisy_j1900.py').write_text('raise ImportError("line one\\n" + "x" * 1000)\n')
+            with mock.patch.object(sys, 'path', [d, *sys.path]):
+                noisy = probe.import_all(['noisy_j1900'], emit=lines.append)
+            sys.modules.pop('noisy_j1900', None)
+        self.assertEqual(len(noisy['detail']['noisy_j1900']), probe.DETAIL)
+        self.assertTrue(noisy['detail']['noisy_j1900'].startswith('ImportError: line one xxx'))
 
     def test_smoke_is_deterministic(self):
         self.assertEqual(probe.smoke(), probe.smoke())
@@ -106,8 +123,9 @@ class FakeImage:
 
     def __init__(self, stdlib=None, site=None, native_err=None, qemu_rc=0, qemu_stderr=b'', qemu_ok=None, qemu_err=None,
                  smoke_qemu=None, smoke_qemu_rc=0, smoke_qemu_stderr=b'', node_qemu=None, node_rc=0, list_rc=0,
-                 native_rc=0, listing=None, native_stdout=None):
+                 native_rc=0, listing=None, native_stdout=None, native_detail=None):
         self.calls = []
+        self.native_detail = native_detail or {}
         self.stdlib = list(STDLIB if stdlib is None else stdlib)
         self.site = list(SITE if site is None else site)
         self.native_err = {'_tkinter': 'ImportError'} if native_err is None else native_err
@@ -127,7 +145,8 @@ class FakeImage:
         if label.endswith('-native'):
             if self.native_stdout is not None:
                 return types.SimpleNamespace(returncode=self.native_rc, stdout=self.native_stdout, stderr=b'')
-            return result(self.native_rc, {'ok': self.native_ok, 'err': self.native_err})
+            return result(self.native_rc, {'ok': self.native_ok, 'err': self.native_err,
+                                           'detail': {**detail(self.native_err), **self.native_detail}})
         if label.endswith('-smoke-qemu'):
             return result(self.smoke_qemu_rc, self.smoke_qemu or {'sha256': 'a'}, self.smoke_qemu_stderr, lines=())
         if label.endswith('-smoke'):
@@ -161,14 +180,45 @@ class J1900Test(unittest.TestCase):
         self.assertEqual((r['modules_listed'], r['native_ok'], r['qemu_ok']), (5, 4, 4))
         self.assertEqual((r['lib_dynload'], r['site_packages']), ({'listed': 3, 'native_ok': 2}, {'listed': 2, 'native_ok': 2}))
         self.assertEqual((r['native_errors'], r['allowlisted'], r['disallowed']),
-                         ({'_tkinter': 'ImportError'}, [], {'_tkinter': 'ImportError'}))
+                         ({'_tkinter': TK_ERROR}, [], {'_tkinter': TK_ERROR}))
         ok = sorted(['_ssl', 'zlib', 'pydantic_core._pydantic_core', 'yaml._yaml'])
         self.assertEqual(r['modules_sha256'], hashlib.sha256(json.dumps(ok).encode()).hexdigest())
         self.assertEqual(json.loads((self.work / 'odoo-core-native-ok.json').read_text()), ok)
         self.assertEqual(json.loads((self.work / 'odoo-core-modules.json').read_text()), sorted(STDLIB + SITE))
         self.assertEqual(oct((self.work / 'odoo-core-modules.json').stat().st_mode & 0o777), '0o644')
-        allowed = self.env(FakeImage(), allowed={'_tkinter': {'reason': 'r', 'review': 'x'}})
+        allowed = self.env(FakeImage(), allowed={'_tkinter': TK_ENTRY})
         self.assertEqual((allowed['allowlisted'], allowed['disallowed']), (['_tkinter'], {}))
+
+    def test_an_allowlisted_module_is_excused_only_for_its_known_cause(self):
+        # The coordinator's 2026-11-17 decision: _tkinter may fail natively only because Tcl/Tk is missing.
+        for text in ('ImportError: /usr/local/lib/python3.13/lib-dynload/_tkinter.cpython-313-x86_64-linux-gnu.so: '
+                     'undefined symbol: Tk_Init', 'ImportError: libtcl8.6.so: cannot open shared object file',
+                     'SystemExit: 1', 'ImportError: libtk8.6.so: file too short'):
+            with self.subTest(text=text):
+                r = self.env(FakeImage(native_detail={'_tkinter': text}), allowed={'_tkinter': TK_ENTRY})
+                self.assertEqual((r['allowlisted'], r['disallowed']), ([], {'_tkinter': text}))
+        # A failure without any detail (an older probe) is never excused.
+        r = self.env(FakeImage(native_stdout=b'{"ok": ["_ssl", "pydantic_core._pydantic_core", "yaml._yaml", "zlib"], '
+                                             b'"err": {"_tkinter": "ImportError"}}\n'), allowed={'_tkinter': TK_ENTRY})
+        self.assertEqual((r['allowlisted'], r['disallowed']), ([], {'_tkinter': 'ImportError'}))
+        # Another module failing natively is not covered by the _tkinter entry.
+        r = self.env(FakeImage(native_err={'_tkinter': 'ImportError', 'yaml._yaml': 'ImportError'}),
+                     allowed={'_tkinter': TK_ENTRY})
+        self.assertEqual((r['allowlisted'], r['disallowed']), (['_tkinter'], {'yaml._yaml': 'ImportError: invented failure of yaml._yaml'}))
+
+    def test_an_allowlisted_module_that_imports_natively_still_goes_through_qemu(self):
+        fake = FakeImage(native_err={})
+        r = self.env(fake, allowed={'_tkinter': TK_ENTRY})
+        self.assertEqual((r['allowlisted'], r['disallowed'], r['qemu_ok']), ([], {}, 5))
+        self.assertIn('_tkinter', json.loads((self.work / 'odoo-core-native-ok.json').read_text()))
+        qemu = next(call for call in fake.calls if call[3] == 'odoo-core-qemu')
+        self.assertEqual(qemu[2][-1], '/j1900/odoo-core-native-ok.json')
+        # Being listed does not excuse a difference under QEMU.
+        with self.assertRaisesRegex(j.Closed, 'modules differ under -cpu Nehalem: _tkinter'):
+            self.env(FakeImage(native_err={}, qemu_ok=['_ssl', 'pydantic_core._pydantic_core', 'yaml._yaml', 'zlib']),
+                     allowed={'_tkinter': TK_ENTRY})
+        with self.assertRaisesRegex(j.Closed, 'ILLEGAL INSTRUCTION'):
+            self.env(FakeImage(native_err={}, qemu_rc=132), allowed={'_tkinter': TK_ENTRY})
 
     def test_the_emulated_runs_use_qemu_nehalem_on_the_same_interpreter(self):
         fake = FakeImage()
@@ -230,7 +280,7 @@ class J1900Test(unittest.TestCase):
             self.env(gap)
         # One third-party module still loading does not excuse the others: they fail the whole check (below).
         partial = FakeImage(native_err={'yaml._yaml': 'ImportError'})
-        self.assertEqual(self.env(partial)['disallowed'], {'yaml._yaml': 'ImportError'})
+        self.assertEqual(self.env(partial)['disallowed'], {'yaml._yaml': 'ImportError: invented failure of yaml._yaml'})
         with self.assertRaisesRegex(j.Closed, 'no third-party'):
             self.env(FakeImage(site=[], native_err={}))
         with self.assertRaisesRegex(j.Closed, 'no native module imports natively'):
@@ -288,13 +338,36 @@ class J1900Test(unittest.TestCase):
 
 
 class AllowlistTest(unittest.TestCase):
-    def test_the_reviewed_allowlist_starts_empty_for_every_product(self):
+    def test_the_reviewed_allowlist_excuses_only_the_missing_tk_for_the_imaged_products(self):
+        # Started empty (review M1); _tkinter added for the seven products with an image (coordinator 2026-11-17).
         allowlist = j.load_allowlist()
-        self.assertEqual(allowlist, {product: {} for product in v.PRODUCTS})
+        self.assertEqual({product: sorted(entries) for product, entries in allowlist.items()},
+                         {product: [] if product == 'opendesign' else ['_tkinter'] for product in v.PRODUCTS})
+        for product, entries in allowlist.items():
+            for entry in entries.values():
+                with self.subTest(product=product):
+                    self.assertEqual(entry['error_contains'], 'ImportError: libtk8.6.so: cannot open shared object file')
+                    self.assertIn('deliberately ships without Tcl/Tk', entry['reason'])
+                    self.assertIn('sbom.syft.json', entry['reason'])
+                    self.assertIn('2026-11-17', entry['review'])
+        # With the real list, every imaged product passes on the real failure text and fails on any other module.
+        for product in v.PRODUCTS:
+            if product == 'opendesign':
+                continue
+            with self.subTest(product=product):
+                with tempfile.TemporaryDirectory() as d:
+                    r = j.check_python(IMAGE, product, 'core', j.CORE_PYTHON, Path(d), FakeImage(), allowlist[product])
+                    self.assertEqual((r['allowlisted'], r['disallowed']), (['_tkinter'], {}))
+                with tempfile.TemporaryDirectory() as d:
+                    r = j.check_python(IMAGE, product, 'core', j.CORE_PYTHON, Path(d),
+                                       FakeImage(native_err={'_tkinter': 'ImportError', 'yaml._yaml': 'ImportError'}),
+                                       allowlist[product])
+                    self.assertEqual(sorted(r['disallowed']), ['yaml._yaml'])
 
     def test_a_malformed_allowlist_fails_closed(self):
         good = json.loads(j.ALLOWLIST.read_text())
-        entry = {'reason': 'Tk is not in the slim base image', 'review': 'owner 2026-11-18, release record'}
+        entry = {'reason': 'Tk is not in the slim base image', 'review': 'owner 2026-11-18, release record',
+                 'error_contains': 'ImportError: libtk8.6.so: cannot open shared object file'}
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / 'allowlist.json'
             path.write_text(json.dumps({**good, 'products': {**good['products'], 'odoo': {'_tkinter': entry}}}))
@@ -303,7 +376,10 @@ class AllowlistTest(unittest.TestCase):
                    {**good, 'products': {k: x for k, x in good['products'].items() if k != 'odoo'}},
                    {**good, 'products': {**good['products'], 'odoo': []}},
                    {**good, 'products': {**good['products'], 'odoo': {'_tkinter': {'reason': 'r'}}}},
-                   {**good, 'products': {**good['products'], 'odoo': {'_tkinter': {'reason': ' ', 'review': 'x'}}}},
+                   {**good, 'products': {**good['products'], 'odoo': {'_tkinter': {'reason': 'r', 'review': 'x'}}}},
+                   {**good, 'products': {**good['products'], 'odoo': {'_tkinter': {**entry, 'error_contains': ' '}}}},
+                   {**good, 'products': {**good['products'], 'odoo': {'_tkinter': {**entry, 'reason': ' '}}}},
+                   {**good, 'products': {**good['products'], 'odoo': {'_tkinter': {**entry, 'extra': 'x'}}}},
                    {**good, 'products': {**good['products'], 'odoo': {'not a module': entry}}}, []]
             for value in bad:
                 path.write_text(json.dumps(value))
@@ -324,7 +400,7 @@ class InstallAndRecordTest(unittest.TestCase):
         self.evidence.mkdir(mode=0o700)
         self.allowed = {product: {} for product in v.PRODUCTS}
         for product in self.allowed:
-            self.allowed[product]['_tkinter'] = {'reason': 'invented for the test', 'review': 'test'}
+            self.allowed[product]['_tkinter'] = TK_ENTRY
 
     def tearDown(self):
         self.temporary.cleanup()
@@ -430,14 +506,16 @@ class InstallAndRecordTest(unittest.TestCase):
         with self.assertRaises(j.Closed) as caught:
             self.check('hermes', fake, allowed=empty)
         message = str(caught.exception)
-        for part in ('core _tkinter (ImportError)', 'core yaml._yaml (ImportError)', 'child _tkinter (ImportError)',
-                     'child yaml._yaml (ImportError)', 'packaging/j1900-allowlist.json', 'hermes'):
+        for part in ('core _tkinter (%s)' % TK_ERROR, 'core yaml._yaml (ImportError: invented failure of yaml._yaml)',
+                     'child _tkinter (%s)' % TK_ERROR, 'child yaml._yaml (ImportError: invented failure of yaml._yaml)',
+                     'packaging/j1900-allowlist.json', 'hermes'):
             self.assertIn(part, message)
         self.assertIn('hermes-child-smoke-qemu', [call[3] for call in fake.calls])  # QEMU still ran everywhere
         self.assertFalse((self.evidence / 'j1900-hermes.json').exists())
         # The allowlist is per product: an entry for another product does not help.
         other = {product: {} for product in v.PRODUCTS}
-        other['emqx'] = {'_tkinter': {'reason': 'r', 'review': 'x'}, 'yaml._yaml': {'reason': 'r', 'review': 'x'}}
+        other['emqx'] = {'_tkinter': TK_ENTRY, 'yaml._yaml': {'reason': 'r', 'review': 'x',
+                                                               'error_contains': 'invented failure of yaml._yaml'}}
         with self.assertRaisesRegex(j.Closed, 'does not list them for hermes'):
             self.check('hermes', FakeImage(native_err={'_tkinter': 'ImportError', 'yaml._yaml': 'ImportError'}), allowed=other)
         self.check('emqx', FakeImage(native_err={'_tkinter': 'ImportError', 'yaml._yaml': 'ImportError'}), allowed=other)

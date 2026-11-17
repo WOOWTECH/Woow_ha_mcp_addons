@@ -11,8 +11,10 @@ every check then runs on that image ID, in a container with --network none --rea
      /opt/woow/apps/<app>/.venv (n8n has none: its child is Node): j1900_probe.py lists every native extension module
      (the interpreter's own lib-dynload ones and the installed packages' site-packages ones) and imports each natively.
      At least one site-packages module must import natively, and a module that fails natively fails the check unless
-     packaging/j1900-allowlist.json lists it for this product with a reviewed reason (review M1: a third-party module
-     that cannot even load natively would otherwise never reach QEMU). The natively importable ones are imported again
+     packaging/j1900-allowlist.json lists it for this product with a reviewed reason and its native error contains the
+     entry's error_contains text, the one known cause (review M1: a third-party module that cannot even load natively
+     would otherwise never reach QEMU). A listed module that does import natively is checked under QEMU like any other.
+     The natively importable ones are imported again
      under `qemu-x86_64-static -cpu Nehalem` and must all import, with no SIGILL; a small smoke through C code
      (hashlib, ssl, zlib, sqlite3, decimal, re) must give the same result both ways;
   2. n8n: Node loads better-sqlite3, builds an FTS5 table, hashes and compresses, natively and under QEMU, with the
@@ -101,9 +103,10 @@ def load_allowlist(path=ALLOWLIST):
         require(isinstance(entries, dict), 'J1900 allowlist entries of ' + product)
         for module, entry in entries.items():
             require(isinstance(module, str) and bool(module) and all(part.isidentifier() for part in module.split('.'))
-                    and isinstance(entry, dict) and set(entry) == {'reason', 'review'}
+                    and isinstance(entry, dict) and set(entry) == {'reason', 'review', 'error_contains'}
                     and all(isinstance(text, str) and text.strip() for text in entry.values()),
-                    'J1900 allowlist entry of %s needs a module name, a reason and a review' % product)
+                    'J1900 allowlist entry of %s needs a module name, a reason, a review and the error text it '
+                    'excuses' % product)
     return value['products']
 
 
@@ -152,7 +155,7 @@ def illegal_instruction(result):
 
 def failure(label, result, why):
     """Names the step, its exit status, the last module the probe tried and a short stderr tail. The image already
-    passed the all-layer secret scan, and the probe prints module and exception type names only."""
+    passed the all-layer secret scan, and the probe's TRY/OK/ERR lines carry module and exception type names only."""
     tried = [line[4:].strip() for line in result.stdout.decode(errors='replace').splitlines() if line.startswith('TRY ')]
     tail = ' | '.join(line[:200] for line in result.stderr.decode(errors='replace').splitlines()[-6:])
     return '%s: %s (exit %d%s)%s' % (label, why, result.returncode, ', last TRY ' + tried[-1] if tried else '',
@@ -232,12 +235,16 @@ def check_python(image_id, app, scope, python, work, run=run_in_image, allowed=N
     native = step(python, ['-I', '-B', probe, 'import', '%s/%s-modules.json' % (MOUNT, label)], '-native', 'native')
     require(native.returncode == 0, failure(label + '-native', native, 'native import run failed'))
     natively = last_json(native.stdout)
-    require(isinstance(natively, dict) and isinstance(natively.get('err'), dict), label + ': native import result')
+    require(isinstance(natively, dict) and isinstance(natively.get('err'), dict)
+            and isinstance(natively.get('detail', {}), dict), label + ': native import result')
     native_ok = names_of(natively.get('ok'), label + ': no native module imports natively')
     require(bool(native_ok), label + ': no native module imports natively')
     require(bool(set(native_ok) & kinds['site-packages']),
             label + ': no third-party (site-packages) native module imports natively')
-    errors = {str(name): str(kind) for name, kind in natively['err'].items()}
+    details = {str(name): str(text) for name, text in natively.get('detail', {}).items()}
+    errors = {str(name): details.get(str(name), str(kind)) for name, kind in natively['err'].items()}
+    excused = {name for name, text in errors.items()
+               if name in allowed and allowed[name]['error_contains'] in details.get(name, '')}
     write_public(work / (label + '-native-ok.json'), native_ok)
     emulated = step(qemu, ['-cpu', CPU, python, '-I', '-B', probe, 'import', '%s/%s-native-ok.json' % (MOUNT, label)],
                     '-qemu', 'qemu')
@@ -260,8 +267,8 @@ def check_python(image_id, app, scope, python, work, run=run_in_image, allowed=N
             'lib_dynload': {'listed': len(kinds['lib-dynload']), 'native_ok': len(kinds['lib-dynload'] & ok)},
             'site_packages': {'listed': len(kinds['site-packages']), 'native_ok': len(kinds['site-packages'] & ok)},
             'native_ok': len(native_ok), 'native_errors': errors,
-            'allowlisted': sorted(name for name in errors if name in allowed),
-            'disallowed': {name: kind for name, kind in sorted(errors.items()) if name not in allowed},
+            'allowlisted': sorted(excused),
+            'disallowed': {name: text for name, text in sorted(errors.items()) if name not in excused},
             'qemu_ok': len(result['ok']), 'modules_sha256': hashlib.sha256(json.dumps(native_ok).encode()).hexdigest(),
             'smoke': True}
 

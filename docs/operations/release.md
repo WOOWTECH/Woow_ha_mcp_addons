@@ -144,8 +144,9 @@ ubuntu-24.04 上跑。負責人看過測試結果、image ID 已經定下來之�
 - 輸入：`app`（商店產品；OpenDesign 沒有映像，會被擋）與必填的 `source_sha`（完整 40 位小寫 hex）。
 - 只能在 `release/<名稱>` 分支上觸發（`<名稱>` 只有一段，不含 `/`）。這種分支是開著的升版 PR，那個 PR 要先有映像才過得了
   readiness。PR、tag 和其他分支一律不行。
-- re-run 一律不收：三個 job 的 `check_release.py` 都要求 `GITHUB_RUN_ATTEMPT` 是 1，要重來就重新觸發。GitHub 的 re-run 會沿用
-  原本的 commit 和 inputs，30 天內都能按，而一次批准只綁一次 attempt。
+- re-run 一律不收：三個 job 的 `check_release.py` 都要求 `GITHUB_RUN_ATTEMPT` 是 1（主對話 2026-11-17 確認）。**任何一段失敗都要
+  重新觸發，不能 re-run**，包括 gate 或 candidate 因為網路之類的暫時問題失敗。GitHub 的 re-run 會沿用原本的 commit 和 inputs，30 天
+  內都能按，而一次批准只綁一次 attempt。
 - `gate`（`contents: read`、`actions: read`，限時 60 分鐘，沒有 job 條件）：
   1. `check_release.py`：從別的 ref 觸發就在這裡失敗（紅燈），不是被略過的綠燈。
   2. `environment_gate.py gate`：用這次執行的 `GITHUB_TOKEN` 讀 `public-release` 的設定。只打 `https://api.github.com`、不跟轉址、
@@ -177,9 +178,18 @@ ubuntu-24.04 上跑。負責人看過測試結果、image ID 已經定下來之�
      - `qemu-user-static` 從這台機器的 apt 裝，記下套件版本、`qemu-x86_64-static --version` 與執行檔 SHA-256；
      - 核心 venv `/opt/woow/.venv` 和子程式 venv `/opt/woow/apps/<app>/.venv`：`packaging/j1900_probe.py` 分開列出直譯器自己的
        （lib-dynload）和套件的（site-packages）原生擴充模組，先全部原生 import。每個 venv 至少要有一個 site-packages 模組原生
-       import 成功；原生 import 失敗的模組，除非 `packaging/j1900-allowlist.json` 為這個產品列出審過的理由，否則整個檢查失敗
-       （每個 venv 都跑完之後一起列出）。允許清單一開始是空的。原生成功的那一批再用 `qemu-x86_64-static -cpu Nehalem` import 一次，
-       兩邊必須一樣、沒有 SIGILL；小 smoke（hashlib、ssl、zlib、sqlite3、decimal、re）兩邊結果相同；
+       import 成功；原生 import 失敗的模組，除非 `packaging/j1900-allowlist.json` 為這個產品列出審過的理由，**而且**原生的錯誤訊息
+       （`型別: 訊息`）含有那一條的 `error_contains`（唯一已知的原因），否則整個檢查失敗（每個 venv 都跑完之後一起列出；同一個模組
+       換了別的原因照樣擋）。允許清單裡的模組如果原生其實 import 成功，照樣送去 QEMU 測，不會因為列在清單就跳過。原生成功的那一批再用
+       `qemu-x86_64-static -cpu Nehalem` import 一次，兩邊必須一樣、沒有 SIGILL；小 smoke（hashlib、ssl、zlib、sqlite3、decimal、
+       re）兩邊結果相同；
+     - 允許清單的內容：一開始是空的（審查 M1）。主對話 2026-11-17 決定，替有映像的七個產品（odoo、n8n、hermes、emqx、litellm、
+       nextcloud、headscale；OpenDesign 沒有映像，不加）加 `_tkinter`，`error_contains` 是
+       `ImportError: libtk8.6.so: cannot open shared object file`。理由：官方 python slim 映像的 lib-dynload 帶著
+       `_tkinter.cpython-313-x86_64-linux-gnu.so`，但刻意不裝 Tcl/Tk，所以原生 import 一定是缺 libtk 的 ImportError；add-on 的
+       程式和依賴都不 import tkinter，J1900 要擋的是實際會執行的程式碼在 Nehalem 上的 SIGILL。依據是 0.4.16 Headscale 候選映像的
+       SBOM（發版證據，在 repo 外：`artifacts/headscale-ha-closure-20261111/candidate-0416/sbom.syft.json`）：lib-dynload 有
+       `_tkinter`，沒有任何 Tcl/Tk 函式庫或套件。之後基底映像換了 Tk 版本、或 `_tkinter` 換了失敗原因，都會被擋下、重新審；
      - n8n 沒有子程式 venv，改跑 Node：載入 better-sqlite3、建 FTS5、crypto、zlib，原生和 QEMU 結果相同；
      - 容器一律 `--network none --read-only --user 10001:10001 --cap-drop ALL --security-opt no-new-privileges`，只唯讀掛探針和
        QEMU；整個 J1900 檢查最多 60 分鐘，每次容器執行只拿剩下的時間；
@@ -282,8 +292,9 @@ ubuntu-24.04 上跑。負責人看過測試結果、image ID 已經定下來之�
 
 ### 部分失敗怎麼辦
 
-- candidate 有任何一支失敗（包括 J1900、原生 import 失敗而允許清單沒列）：全部 Reject，修好換新 head（新的 `source_sha`）重來。
-  這時什麼都還沒推，不燒版號。
+- 任何一段失敗都要重新觸發，不能 re-run（程式會擋 attempt 不是 1 的執行）。
+- candidate 有任何一支失敗（包括 J1900、原生 import 失敗而允許清單沒列）：要改來源才修得好的，全部 Reject，修好換新 head
+  （新的 `source_sha`）重來；不必改來源的暫時問題（例如網路），用同一個 commit 重新觸發那一支。這時什麼都還沒推，不燒版號。
 - publish 批准後中途失敗：
   - 推送前失敗（例如 artifact 過期、load 或 verify 不符、`registry_gate.py unused` 失敗）：沒推，用同一個 commit 重新觸發那一支。
   - 推送後失敗（例如 `registry_gate.py public`）：那一支的版號已燒，不覆寫、不刪 tag。

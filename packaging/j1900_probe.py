@@ -8,8 +8,9 @@ Python, never on the runner's.
                     {"lib-dynload": [...], "site-packages": [...]} (the interpreter's own C modules, and the
                     installed packages' ones from site-packages and dist-packages)
   import FILE       import every module named in FILE (JSON list), one by one; print TRY/OK/ERR
-                    lines and finally {"ok": [...], "err": {...}}; a SIGILL kills the process, so the
-                    last TRY line names the culprit
+                    lines and finally {"ok": [...], "err": {name: exception type}, "detail": {name:
+                    "Type: message", at most 300 characters on one line}}; a SIGILL kills the process, so
+                    the last TRY line names the culprit
   smoke             a few deterministic computations through C code (hashlib, ssl, zlib, sqlite3,
                     json, decimal, re) printed as one JSON object
 
@@ -79,8 +80,11 @@ def modules_by_root(paths=None, suffixes=SUFFIXES):
     return {kind: sorted(names) for kind, names in found.items()}
 
 
+DETAIL = 300
+
+
 def import_all(names, emit=print):
-    ok, err = [], {}
+    ok, err, detail = [], {}, {}
     for name in names:
         emit('TRY ' + name)
         sys.stdout.flush()
@@ -88,11 +92,13 @@ def import_all(names, emit=print):
             importlib.import_module(name)
         except BaseException as e:  # noqa: B036 - SystemExit from a module is an error here, not an exit
             err[name] = type(e).__name__
+            # The allowlist can require a known cause (packaging/j1900-allowlist.json error_contains).
+            detail[name] = ' '.join(('%s: %s' % (type(e).__name__, e)).split())[:DETAIL]
             emit('ERR %s %s' % (name, type(e).__name__))
         else:
             ok.append(name)
             emit('OK ' + name)
-    return {'ok': ok, 'err': err}
+    return {'ok': ok, 'err': err, 'detail': detail}
 
 
 def smoke():
