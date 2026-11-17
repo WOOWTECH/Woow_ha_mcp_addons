@@ -33,13 +33,16 @@ import pytest
 
 from admin_write_headers import reviewed_headers
 from log_scan import log_scan  # noqa: F401  (fixture)
-from mcp_admin_core import operations, profile_admin, profiles, restore_detect as rd, restore_lock
+from mcp_admin_core import features, operations, profile_admin, profiles, restore_detect as rd, restore_lock
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.products import ProductStore
 from multi_profile_runtime import create_profile, multi_profile_runtime, stored
 from restore_guard_disk import DEFAULT, Disk, StopAt, newest_ctime, tree
 from test_profile_admin_api import (LABELS, Panel, children_of, code_of, csrf_of, operation_key, setup, tree_of,
                                     watch)
+from test_odoo_identity_rotation import (NEW_PASSWORD, REBOUND, Journal, opened_by, record_writes,
+                                         save as backend_save, warnings_of as rebind_warnings,
+                                         watch as watch_identity)
 from test_restore_detection import Crash, after_tick
 from test_single_profile_golden import (ACCEPT, ADMIN, BEARER_REQUIRED, BOOTSTRAP_COMMON, BOOTSTRAP_EXTRA,
                                         GENUINE_CLIENT, INGRESS, NOT_FOUND, PRODUCTS as GOLDEN_PRODUCTS, answer,
@@ -339,6 +342,30 @@ async def test_the_next_token_change_ends_the_notice(tmp_path, log_scan, product
         await settle(runtime, 'configured')
         async with runtime.admin() as admin:
             assert 'restore_notice' not in (await admin.get('/api/bootstrap', headers=ADMIN)).json()
+
+
+async def test_an_identity_change_that_rotates_the_kept_token_ends_the_notice(tmp_path, log_scan):
+    """HM-13c with HM-12 (merged after both): switched on without profile data, a restore keeps the default profile's
+    token (DQ-03 (b)) and the bootstrap shows the notice. HM-12's identity change (here its username, backend/patch)
+    rotates that token, so the notice ends as after a token/rotate: the bootstrap has no restore_notice and
+    restore-notice.json is gone. A change of the password alone keeps the token, and the notice."""
+    data = restored_copy(tmp_path, PRODUCT, 'one')
+    async with multi_profile_runtime(PRODUCT, data) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        watch_identity(log_scan, data)
+        boot = await bootstrap_of(runtime)
+        assert 'restore_notice' in boot and 'restore_review_required' not in boot
+        token = runtime.token(DEFAULT)
+        kept = await backend_save(runtime, DEFAULT, 'backend/patch', {'changes': {'password': NEW_PASSWORD}})
+        assert kept.status_code == 200 and 'token_rotated' not in kept.json(), kept.text
+        assert runtime.token(DEFAULT) == token and 'restore_notice' in await bootstrap_of(runtime)
+        saved = await backend_save(runtime, DEFAULT, 'backend/patch', {'changes': {'username': REBOUND['username']}})
+        assert saved.status_code == 200 and saved.json()['token_rotated'] is True, saved.text
+        log_scan.watch(runtime.token(DEFAULT))
+        assert runtime.token(DEFAULT) not in (None, token)
+        assert 'restore_notice' not in await bootstrap_of(runtime)
+    assert NOTICE not in os.listdir(data)
 
 
 async def test_a_start_that_was_never_restored_has_no_notice_at_all(tmp_path, log_scan, monkeypatch):
@@ -722,6 +749,154 @@ async def test_after_a_dormant_start_the_default_profile_still_waits_for_its_rev
         rotated = await rotate(runtime, DEFAULT)
         assert rotated.status_code == 200
         log_scan.watch(rotated.json()['token'])
+
+
+# ---- HM-13c review S-3: HM-12's identity change issues a new token too, so it waits for the review as well ----
+
+def restored_switched_off_then_reissued(tmp_path):
+    """HM-13c review S-3 (its experiment X7): the default profile and B, restored with profile data while the product is
+    not switched on (a release without the switch): the guard revokes both and records them unreviewed. Switched off
+    there is no gate and no review route, so the administrator issues the default profile a new token (what a
+    switched-off token/rotate writes; contract 3.1). Switched on afterwards, the default profile's token is active
+    while its review still waits: waiting for a review is not always being revoked."""
+    data = setup(tmp_path, extras=(B,))
+    mark_restored(data)
+    store = ProductStore(data, PRODUCT)
+    try:
+        outcome = restore_lock.guard(store, PRODUCT, enabled=False)
+        assert outcome.restored and outcome.default_revoked
+        store.change_token('T' * 43, action='rotate')
+    finally:
+        store.close()
+    return data
+
+
+def identity_change(route, state):
+    """A save of the default profile's Odoo username anew: the whole connection (PUT backend) or the field alone."""
+    if route == 'backend':
+        return {'connection': {**state['connection'], 'username': REBOUND['username']}}
+    return {'changes': {'username': REBOUND['username']}}
+
+
+@pytest.mark.parametrize('route', ['backend', 'backend/patch'])
+async def test_an_identity_change_waits_for_the_profiles_review_too(tmp_path, log_scan, monkeypatch, route):
+    """HM-13c review S-3: switched on, a save that changes the default profile's Odoo identity while its token is
+    active would rotate the token (HM-12: products.identity_rebound). While the profile still waits for its restore
+    review it answers 409 restore_review_required, as token/rotate does, after If-Match and before anything is done:
+    the child is not stopped, nothing is written (the state, the receipts, the record: the tree is the same), no
+    token change is published, the token stays the one 8081 serves on both paths, and no line is logged. A change of
+    the password alone rotates nothing and is saved as today, the review still waiting."""
+    data = restored_switched_off_then_reissued(tmp_path)
+    children = children_of(data, (B,))
+    journal = Journal()
+    record_writes(monkeypatch, journal)
+    async with multi_profile_runtime(PRODUCT, data, children=children, supervisor=journal.supervisor()) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        watch_identity(log_scan, data)
+        journal.watch(data, DEFAULT, runtime.manager.get(DEFAULT).runtime.supervisor)
+        default = await bootstrap_of(runtime)
+        assert default['token_active'] is True and default['restore_review_required'] is True
+        token, state, before = runtime.token(DEFAULT), stored(data), tree_of(data)
+        refused = await backend_save(runtime, DEFAULT, route, identity_change(route, state))
+        assert (refused.status_code, refused.json()) == (
+            409, {'error': 'request denied', 'detail': {'code': 'restore_review_required'}}), refused.text
+        assert journal.events == [] and tree_of(data) == before and stored(data) == state
+        assert runtime.token(DEFAULT) == token and await opened_by(runtime, token, children.by_port[3000])
+        assert rebind_warnings(log_scan) == []
+        kept = await backend_save(runtime, DEFAULT, 'backend/patch', {'changes': {'password': NEW_PASSWORD}})
+        assert kept.status_code == 200 and kept.json()['saved'] is True and 'token_rotated' not in kept.json(), kept.text
+        assert stored(data)['token'] == token and stored(data)['connection']['password'] == NEW_PASSWORD
+        assert [event[0] for event in journal.events] == ['stop', 'start']  # the child relaunched, no identity write
+        assert (await bootstrap_of(runtime))['restore_review_required'] is True
+
+
+async def test_once_reviewed_an_identity_change_rotates_the_token_as_today(tmp_path, log_scan, monkeypatch):
+    """HM-13c review S-3, the other side: once the default profile was reviewed ("已核對"), the same save is HM-12's
+    identity change as without a restore: the old child stops, one write holds the new username, a new token and its
+    history entry, the change is published, the new child starts; 200 with token_rotated, the new token served."""
+    data = restored_switched_off_then_reissued(tmp_path)
+    children = children_of(data, (B,))
+    journal = Journal()
+    record_writes(monkeypatch, journal)
+    async with multi_profile_runtime(PRODUCT, data, children=children, supervisor=journal.supervisor()) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        watch_identity(log_scan, data)
+        journal.watch(data, DEFAULT, runtime.manager.get(DEFAULT).runtime.supervisor)
+        panel = Admin(runtime, await csrf_of(runtime))
+        assert (await panel.review(DEFAULT)).status_code == 200
+        assert 'restore_review_required' not in await bootstrap_of(runtime)
+        old = runtime.token(DEFAULT)
+        saved = await backend_save(runtime, DEFAULT, 'backend/patch', identity_change('backend/patch', stored(data)))
+        assert saved.status_code == 200 and saved.json()['token_rotated'] is True, saved.text
+        new = runtime.token(DEFAULT)
+        log_scan.watch(new)
+        assert new not in (None, old)
+        assert journal.events == [('stop', old, 'DUMMY-user'), ('write', 'stopped'), ('publish',),
+                                  ('start', REBOUND['username'])]
+        assert await opened_by(runtime, new, children.by_port[3000])
+
+
+@pytest.mark.parametrize('restored', ['without profile data', 'with profile data, reissued'])
+async def test_switched_off_an_identity_change_after_a_restore_is_todays(tmp_path, log_scan, restored):
+    """HM-13c review S-3 changes nothing for a product not switched on (plan 3.3): there is no gate and no identity
+    change then. Restored without profile data (the token kept, the panel's notice) or with it (S-3's own state: the
+    record's rows unreviewed, the default profile's token issued again), a changed username is saved as today: the
+    answer is {"saved", "configuration"}, the token and its history stay and are still served on both paths."""
+    if restored == 'without profile data':
+        data = restored_copy(tmp_path, PRODUCT, 'one')
+    else:
+        data = restored_switched_off_then_reissued(tmp_path)
+    journal = Journal()
+    async with production_runtime(PRODUCT, data, supervisor=journal.supervisor()) as runtime:
+        await settle(runtime, 'configured')
+        assert not features.enabled(PRODUCT)
+        watch(log_scan, data)
+        watch_identity(log_scan, data)
+        journal.watch(data, DEFAULT)
+        before = stored(data)
+        async with runtime.admin() as admin:
+            boot = (await admin.get('/api/bootstrap', headers=ADMIN)).json()
+            assert 'restore_review_required' not in boot
+            saved = await admin.put('/api/backend/patch', json=identity_change('backend/patch', before),
+                                    headers=reviewed_headers(boot, ADMIN))
+        assert saved.status_code == 200, saved.text
+        assert list(saved.json()) == ['saved', 'configuration'] and saved.json()['saved'] is True
+        after = stored(data)
+        assert (after['token'], after.get('token_history')) == (before['token'], before.get('token_history'))
+        assert after['connection']['username'] == REBOUND['username']
+        assert journal.events == [('stop', before['token'], REBOUND['username']), ('start', REBOUND['username'])]
+        async with runtime.mcp() as client:
+            for path, headers in (('/mcp', {**ACCEPT, 'Authorization': 'Bearer ' + before['token']}),
+                                  (f'/private_{before["token"]}/mcp', ACCEPT)):
+                assert (await client.post(path, headers=headers, json=initialize_message())).status_code == 200
+
+
+async def test_a_record_that_cannot_be_read_holds_an_identity_change_too(tmp_path, log_scan, monkeypatch):
+    """As for token/rotate (the gate fails closed): while the restore record cannot be used (here: not the guard's
+    shape), an identity change answers today's 503 state unavailable and does nothing; a change of the password alone
+    (no new token) is saved."""
+    data = restored_switched_off_then_reissued(tmp_path)
+    children = children_of(data, (B,))
+    journal = Journal()
+    record_writes(monkeypatch, journal)
+    async with multi_profile_runtime(PRODUCT, data, children=children, supervisor=journal.supervisor()) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        watch_identity(log_scan, data)
+        journal.watch(data, DEFAULT, runtime.manager.get(DEFAULT).runtime.supervisor)
+        record = profiles.Layout(data).restore_record
+        value = json.loads(record.read_text())
+        value['profiles'][0]['token'] = 'whatever'
+        record.write_text(json.dumps(value))
+        token, state, before = runtime.token(DEFAULT), stored(data), tree_of(data)
+        refused = await backend_save(runtime, DEFAULT, 'backend/patch', identity_change('backend/patch', state))
+        assert answer(refused)[::2] == STATE_UNAVAILABLE
+        assert journal.events == [] and tree_of(data) == before and runtime.token(DEFAULT) == token
+        kept = await backend_save(runtime, DEFAULT, 'backend/patch', {'changes': {'password': NEW_PASSWORD}})
+        assert kept.status_code == 200 and 'token_rotated' not in kept.json(), kept.text
+        assert stored(data)['token'] == token
 
 
 def test_a_dormant_start_leaves_a_record_it_cannot_read_as_it_is(tmp_path, log_scan):

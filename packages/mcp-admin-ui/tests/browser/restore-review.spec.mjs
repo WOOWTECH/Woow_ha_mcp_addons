@@ -294,6 +294,32 @@ test('"revoke all" that never began, or whose end was not done, says what each m
   expect([state.default.token_active, state[B].token_active]).toEqual([false, false]);
 });
 
+// HM-13c review S-3: a backend save that would give a profile that waits for its review a new token (HM-12's identity
+// change) is refused as token/rotate is (409 restore_review_required); the mock answers the save so here (saveCode).
+const ODOO = {product: 'odoo', parity: true, parity046: true, configured: true,
+  connection: {url: 'https://odoo.invalid', database: 'DUMMY-db', username: 'DUMMY-user'}};
+const WAITS = '這個帳號是從備份還原（或休眠）回來的，還沒有核對：請先到預設帳號頁的核對卡確認它的設定，按「已核對」後才能重新產生權杖。';
+const SAVE_WAITS = '改後端身分（Odoo 的網址、資料庫或使用者）會換新這個帳號的 MCP 權杖，所以也要先核對才能儲存；這次未儲存任何變更。';
+
+test('a backend save held for the restore review (409 restore_review_required, HM-13c review S-3): the review copy and why a save waits, nothing of the answer, the typed secret cleared', async ({page, request}) => {
+  await reset(request, {...ODOO, profiles: {}, saveStatus: 409, saveCode: 'restore_review_required'});
+  await open(page, '/backend');
+  for (const [key, value] of Object.entries({username: 'DUMMY-user-two', password: 'DUMMY-typed-password'})) {
+    await page.locator(`#patch-${key}-action`).selectOption('set');
+    await page.locator(`#patch-${key}`).fill(value);
+  }
+  await page.getByRole('button', {name: '儲存選定欄位', exact: true}).click();
+  await confirm(page, '確認儲存');
+  await idle(page);
+  await expect(page.locator('#notice')).toHaveText(`${WAITS} ${SAVE_WAITS}`);
+  await expect(page.locator('#notice')).toHaveClass(/error/);
+  await expect(page.locator('body')).not.toContainText('PRIVATE_CANARY');
+  await expect(page.locator('#patch-password')).toHaveValue('');
+  await expect(page.locator('#patch-username')).toHaveValue('DUMMY-user-two');
+  const saves = await calls(request, call => call.operation === 'backend/patch');
+  expect(saves.map(call => call.changedKeys)).toEqual([['username', 'password']]);
+});
+
 test('the export names every profile without a token, a CSRF value or a credential', async ({page, request}) => {
   await reset(request, {product: 'odoo', parity: true, connection: {url: 'https://default.example.invalid', database: 'DUMMY-db', username: 'DUMMY-user'},
     configured: true, profiles: {extra: [{id: B, label: evil, configured: true}]}});
