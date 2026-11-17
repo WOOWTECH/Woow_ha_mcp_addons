@@ -19,6 +19,9 @@ export const TOKEN_ROTATED = '後端身分已變更，這個帳號的 MCP 權杖
 // HM-12 review S-7 (contract section 9 #114): a 503 state unavailable of such a save may hide a write whose outcome the
 // add-on does not know: after its restart the token may be the new one, although this answer never said so.
 const OUTCOME_UNKNOWN = '存檔結果不明時請重新啟動 add-on，之後到「連線與權杖」確認 MCP 網址：若這次換了後端身分，權杖可能已換新，舊網址會失效。';
+// HM-13c review S-3: a backend save that would rotate the token of a profile whose restore review waits (HM-12's
+// identity change) is refused as token/rotate is; after restore_review_required's own copy, why a save waits too.
+const SAVE_WAITS_FOR_REVIEW = '改後端身分（Odoo 的網址、資料庫或使用者）會換新這個帳號的 MCP 權杖，所以也要先核對才能儲存；這次未儲存任何變更。';
 export class ApiError extends UiError {
   constructor(status, code = null, haVersion = null, detail = {}) {
     const messages = {
@@ -251,6 +254,11 @@ export class AdminApi {
       // HM-12 review S-7: a backend save of a switched-on product whose token is bound to its backend identity.
       if (error instanceof ApiError && error.stateUnavailable && profile !== null && ['backend', 'backend/patch'].includes(operation)
           && identityBound.includes(fresh.product)) error.message = `${error.message} ${OUTCOME_UNKNOWN}`;
+      // HM-13c review S-3: the same backend save held for the profile's restore review (409; nothing was saved).
+      if (error instanceof ApiError && error.code === 'restore_review_required' && profile !== null
+          && ['backend', 'backend/patch'].includes(operation) && identityBound.includes(fresh.product)) {
+        error.message = `${error.message} ${SAVE_WAITS_FOR_REVIEW}`;
+      }
       throw error;
     }
     if (pending) {
