@@ -2,6 +2,10 @@
 
 ## 結論
 
+- **獨立審查（2026-11-17，`artifacts/…/wave4/review-HM-27.md`）判「修正後通過」**：必修 2（MF-1、MF-2）、建議 9（S-1～S-9）都照報告
+  處理；補 S-2 的測試時自己找到一個缺陷（政策檔的來源是陣列或物件時，讀檔丟 TypeError，不是判成不能用），一併先紅後綠修掉。逐項的
+  處理、commit 與證據在第 16 節；合併順序（主對話定：排在 HM-13c 之後）在第 17 節；rebase 到 `claude-delivery` `f239157` 的紀錄與
+  舊→新 commit 對照在第 18 節。**第 1～15 節的 commit 與本機紀錄是 rebase 前（基準 `165dbaf`）寫的**，新的 commit 照第 18 節對照。
 - **照 DQ-11 (a)（使用者 2026-11-14 採用）做完**：開通的產品，密鑰網址（`/private_<token>/mcp`）在驗過 token 之後檢查 Origin，
   全 add-on 一份服務層級清單、所有帳號共用；沒存過時＝`report-only`＋`https://claude.ai`。
   - report-only：清單外（清單外、畸形、`null`、兩個以上）**照常服務，回應逐位元不變**，記一行 `decision=would_deny`，帶帳號 id
@@ -27,10 +31,11 @@
   HM-01 黃金回歸與兩個凍結照過。
 - **本機**：全套 pytest 6,389 案（7 個要 root 的既有失敗，沒有新的）、packaging、Playwright 150、node 99、build-closure 見第 9 節；
   兩個預檢 OK、雙向控制字元 0（第 12 節）。
-- **要使用者決定的事**：本片範圍內沒有；DQ-11 第二問仍待 S14，`decisions.md` 第 4 節寫的期限「HM-27 合併前」排不到 S14 之後，
-  交主對話（第 14 節）。
+- **要使用者決定的事**：沒有。DQ-11 第二問的期限照審查 MF-1 改成「S14 有結果之後再問、不擋 HM-27」（`decisions.md` 第 4 節；
+  第 14 節）。
 - 證據：`artifacts/ha-multiprofile-parity-20261114/wave4/evidence-HM-27/`（`logs/` 紅綠與本機檢查、`compare/` 第 8 節、
-  `mutations/` 第 7 節、`tools/` 用到的腳本）。用過的 `/tmp/ha-mp-XXXXXX` 記在 `tmpdirs.txt`，都已刪掉。
+  `mutations/` 第 7 節、`tools/` 用到的腳本；審查修正與 rebase 後的在 `review-fix/`）。用過的 `/tmp/ha-mp-XXXXXX` 記在 `tmpdirs.txt`，
+  都已刪掉。
 
 ## 1. 範圍與基準
 
@@ -38,16 +43,17 @@
 |---|---|
 | 切片 | HM-27（計畫 §12.3 HM-27；§8.7「Origin 與 loopback」；§3.3 受開關管；§7.1；§7.2 第 10 點；驗收 T-24；R1 清單 §11.4） |
 | 分支 | `feat/ha-multiprofile-hm27-20261117`（一般 clone） |
-| 基準 | `claude-delivery` `165dbaf`（HM-12 面板 PR #114 合併後） |
+| 基準 | `claude-delivery` `f239157`（HM-33 PR #115 合併後）；原本 `165dbaf`（HM-12 面板 PR #114 合併後），審查修正後 rebase（第 18 節） |
 | 依據 | `decisions.md` DQ-11（2026-11-14 採 (a)）；FEATURE-MATRIX FM-73、FM-74、FM-123；契約第 2.6 節與第 9 節 #9、#10、#42（HM-00 草稿） |
 | 對齊的 PaaS | pin `69ac425`；本機唯讀 PaaS repo 的 `origin/main`＝`48f394d`（第 10 節：Origin 的程式與測試 pin 之後沒變） |
 | 受開關管 | 是（計畫 §3.3）；不受開關管的部分：無 |
+| 合併順序 | 排在 HM-13c（#112）之後合併；先開 PR 只為讓 CI 驗（第 17 節） |
 
 ## 2. 改了什麼、沒改什麼
 
 | 檔 | 改了什麼 |
 |---|---|
-| `Hc/origin_policy.py`（新，列管） | 政策檔（`PolicyFile`：讀、外改重讀、原子寫入）、檢查（`OriginPolicy.check`）、紀錄與每帳號節流（`Denials`）、PaaS 的正規化與紀錄呈現（`normalize_origin`、`classify_denial`、`sanitize_origin_text`）、請求的形狀與規則（`request_shape`、`requested`）、ETag |
+| `Hc/origin_policy.py`（新，列管） | 政策檔（`PolicyFile`：讀、外改重讀、原子寫入）、檢查（`OriginPolicy.check`）、紀錄與每帳號節流（`Denials`）、PaaS 的正規化與紀錄呈現（`normalize_origin`、`classify_denial`、`sanitize_origin_text`）、請求的形狀與規則（`request_shape`、`requested`）、ETag；審查後：讀檔先確認來源都是字串、IPv6 用 RFC 5952 的十六進位（第 16 節） |
 | `Hc/gateway.py`（列管） | `make_apps` 新選項 `origin_policy`：密鑰網址在方法檢查之後、query 之前呼叫（Headscale 規則的位置）；和 `secret_path_allowed_origins` 不能同時給 |
 | `Hc/profile_runtime.py`（列管） | `ProfileRuntime(origin_policy=…)`、`RUNTIME_OPTIONS`；`ProfileManager.origin`（Headscale 以外建一份，開機讀一次）、每個帳號拿到自己的檢查 |
 | `Hc/profile_router.py`（列管） | 全域路徑 `origin-policy`（GET、PUT）；`GlobalRoute.shape`（第 ⑤ 步的形狀檢查，帳號名稱的照舊） |
@@ -55,15 +61,16 @@
 | `Hui/api.js`、`Hui/app.js`、`Hui/operation-identity.js`（列管） | 讀與存政策、卡片、待確認卡、識別紀錄的新範圍 |
 | `packages/mcp-admin-ui/fixtures/server.mjs` | 開通模式的 origin 路由（照伺服器的順序）、`originUnusable`、`/__fixture/origin`；開關關時這條路徑 404 |
 | `packages/mcp-admin-ui/README.md` | 新一節「瀏覽器來源檢查（HM-27）」 |
-| `tests/test_origin_policy.py`（新） | 150 案（第 5、6、7 節；最後一案是突變 P26 補的） |
+| `tests/test_origin_policy.py`（新） | 162 案（第 5、6、7、16 節；突變 P26 補一案，審查後補 12 案） |
 | `tests/test_admin_pipeline_matrix.py` | 全域路由的本體：origin-policy 給正確形狀（`GLOBAL_BODIES`） |
 | `tests/test_panel_profile_api_shapes.py`、`packages/mcp-admin-ui/tests/browser/profile-api-parity.spec.mjs`、`packages/mcp-admin-ui/tests/profile-api-cases.json` | ETag 類別 `o1`、`if_match: origin`、`setup.origin_policy`；3 個新情境（`origin-policy` 17 案、`origin-policy-unusable` 4 案、`origin-policy-headscale` 2 案）與開關關情境的 1 案 |
 | `tests/test_request_budget_gateway.py`、`tests/test_profile_runtime.py` | 釘住選項的兩案多列 `origin_policy` |
-| `packages/mcp-admin-ui/tests/origin-policy.test.mjs`（新）、`packages/mcp-admin-ui/tests/browser/origin-policy.spec.mjs`（新） | node 11 案、Playwright 12 案 |
+| `tests/test_profile_admin_api.py`（HM-10 的檔） | 審查 MF-2：第二次角色檢查的測試加政策鎖一輪、政策的 GET 也問兩次角色；`Panel` 加 `origin_policy`、`save_origin_policy` |
+| `packages/mcp-admin-ui/tests/origin-policy.test.mjs`（新）、`packages/mcp-admin-ui/tests/browser/origin-policy.spec.mjs`（新） | node 11 案、Playwright 12 案（審查 S-8：開關關那案先放一筆識別紀錄） |
 | `docs/provenance/runtime-patches.json` | 新模組一列；7 個列管檔的 SHA-256 照檔重算、`change` 補一段（照 JSON 結構改，沒有用 `--write`） |
-| `docs/multi-profile/contract.md` | 第 1.2、2.6、3.1、3.5、4.1、4.2 節；第 9 節 #9、#10、#42 改寫、加 #118～#122；第 10 節一列 |
-| `docs/multi-profile/decisions.md` | DQ-11 列補實作；變更紀錄一列 |
-| `docs/multi-profile/threat-model.md` | 第 1 節一列、I7 測試欄、第 3 節五條 |
+| `docs/multi-profile/contract.md` | 第 1.2、2.6、3.1、3.5、4.1、4.2 節；第 9 節 #9、#10、#42 改寫、加 #118～#122；第 10 節一列；審查後：第 2.6、3.1、3.2 節、第 9 節 #9、#122、第 10 節再一列 |
+| `docs/multi-profile/decisions.md` | DQ-11 列補實作；變更紀錄一列；審查 MF-1：第 4 節 DQ-11 第二問的期限、DQ-11 列的負責片 |
+| `docs/multi-profile/threat-model.md` | 第 1 節一列、I7 測試欄、第 3 節五條；審查後再一條（S-6：開通之後又關掉時 enforce 靜默失效） |
 | `docs/multi-profile/acceptance-matrix.md` | T-24 定案；登記 3 個測試檔 |
 | `docs/multi-profile/ledger-tracking.md` | `origin_policy.py` 那列 |
 | 本筆記 | 新增 |
@@ -113,11 +120,12 @@ CORS 與 preflight；Headscale 一律 enforce、清單是自己的網址；壞�
 | m | ETag | `"o1-<64 hex>"`：這個程序的隨機金鑰對政策內容（模式＋清單）算的 HMAC，同一份政策（存過或預設）ETag 相同；壞檔對檔案簽章與原始位元組算 | HM-10 索引 ETag 的規則（內容一樣就一樣、重啟後全變；壞索引用簽章與位元組） |
 | n | 路由與寫入保護 | 全域路徑 `{base}/api/origin-policy`（不在 `profiles/` 底下）；GET、PUT；PUT 照 HM-10 建立帳號的順序：If-Match 有無 → Idempotency-Key（重送先回）→ ETag → 規則（422）→ 收據開始 → 寫檔 → 收據完成；政策自己的鎖（2 秒，503）；寫檔失敗 409 `operation_outcome_unknown`、收據停在未知 | 任務指定共用管線、If-Match、Idempotency-Key、收據；順序與失敗處理照 HM-10 |
 | o | 422 的代碼 | 新代碼 `origin_policy_invalid`（形狀 A，不回顯任何值） | HM-10 名稱規則的做法（`profile_label_invalid`）；PaaS 沒有（環境變數） |
-| p | Headscale | 不建政策、不讀檔、不記；路由兩個方法都回未知操作的 404 | 「Headscale 照舊只放 `https://claude.ai`」；PaaS Headscale 被拒會記 deny，HA 取照舊（不加紀錄）。HM-26 開通 Headscale 時要不要在面板顯示固定規則，交 HM-26 |
+| p | Headscale | 不建政策、不讀檔、不記；開通後 `/api/origin-policy` 的 GET 與形狀正確的 PUT 回未知操作的 404，其他方法在 ⑤ 回 405、形狀錯的 PUT 400（審查 S-5 後契約寫精確） | 「Headscale 照舊只放 `https://claude.ai`」；PaaS Headscale 被拒會記 deny，HA 取照舊（不加紀錄）。HM-26 開通 Headscale 時要不要在面板顯示固定規則，交 HM-26 |
 | q | 面板的位置 | 「連線與權杖」頁加一張卡片，開通（`api.profile` 不是 null）而且不是 Headscale 才畫；每個帳號的畫面都是同一份、都能存 | 任務寫「面板加設定頁」。面板的頁面路徑是伺服器的固定清單（`ui.PAGES`），加一個新路徑會讓開關關時 `GET {base}/<新頁>` 從 404 變成回面板，違反逐位元相同；放在既有頁面最保守。Claude.ai 連線網址的卡片也在這一頁。**交審查確認** |
 | r | 面板先擋的錯 | 只看形狀（`http(s)://主機[:port]`、不分大小寫與預設 port 的重複、16 個）；其餘交伺服器（422 固定文字）；訊息不回顯打的值 | 伺服器是唯一的規則；面板只提早回答 |
 | s | 啟動時的生效政策行 | 不記（PaaS 記一行 INFO） | HA 沒有 INFO 層級的 add-on 紀錄慣例；只在壞檔時記 WARNING，紀錄最少 |
 | t | n8n | `apps/n8n/run.py` 還沒有 ProfileManager（HM-25 才接）；HM-25 改用 ProfileManager 時，`origin_policy.applies` 對 n8n 是真，政策自動套上 | 不碰 `apps/` |
+| u | IPv6 的正規寫法（審查 S-9 後加） | RFC 5952 的十六進位（`_ipv6_text`），IPv4-mapped 也是 `::ffff:7f00:1`，不寫點分 | `str()` 的寫法隨 Python 版本變（本機實測 3.11.2、3.12.3 是十六進位，3.12.14、3.13.2 起是點分），存過的檔換 Python 會變壞檔；十六進位是瀏覽器 Origin（WHATWG）的寫法。PaaS 用 `str()`，這點和 PaaS 不同 |
 
 ## 5. 先紅後綠
 
@@ -134,6 +142,10 @@ CORS 與 preflight；Headscale 一律 enforce、清單是自己的網址；壞�
 `PolicyFile.write` 寫入前的 lstat 簽章比對）原本沒有測試擋得下，起初以為「存檔讀完、寫入之前檔案被換掉」在程序內做不出來；
 用 monkeypatch 包住 `PolicyFile.write`、在它之前寫一份外面的檔就做得出來。實作 `00cbbab` 就有這個檢查，所以這案一寫就綠
 （不是先紅後綠）；它有效由 P26 證明（第 7 節）。
+
+審查修正（第 16 節，rebase 後的 commit）：`79c1adb` 先 commit 測試，在 `75935b1` 的程式上 3 案紅（IPv6 的正規寫法 1 案、政策檔的來源是
+陣列或物件 2 案：TypeError），`b103dea` 修正後全綠（`review-fix/logs/c-red.log`、`d-green.log`；是 rebase 前在對應的 `48284eb`、`f7a26cf` 上跑的）。其餘審查補的測試（`75935b1`、
+`c5d748c`）針對本來就對的行為，一寫就綠，由突變證明有效（第 16.1 節）。
 
 ## 6. PaaS 測試逐案對照（pin `69ac425`；`origin/main` `48f394d` 這幾個檔沒變）
 
@@ -363,9 +375,10 @@ HA 測試沒寫路徑的都是 `tests/test_origin_policy.py`。
 | 帳本 | `.venv/bin/python -I scripts/ledger_precheck.py --repo . --base 165dbaf` | `0bf5d19`：OK。`runtime-patches.json` 178、`runtime-sources.json` 70、`docs/tool-surface.json` 159 個摘要 0 漂移、0 缺；改到的列管檔 8 個（新模組 1、既有 7）都隨帳本更新；沒有未列管的執行檔（`logs/precheck-ledger-0bf5d19.log`） |
 | 雙向控制字元 | `evidence-HM-27/tools/bidi_scan.py`（HM-12 面板的腳本；逐 commit：碰過的檔全文、新增的行、commit 訊息） | `0bf5d19`：7 個 commit、25 個檔：U+202A～202E、U+2066～2069 合計 0；U+200E、U+200F、U+061C 也是 0（`logs/bidi-0bf5d19.log`） |
 
-### 12.1 本筆記 commit 之後
+### 12.1 本筆記第一次 commit 之後
 
-本筆記 commit 之後在最後的 HEAD 再跑兩個預檢與雙向控制字元掃描，結果記在交給主對話的回報（PR 說明照抄）：本筆記不能記自己
+第一次交出時（`22090fd`，rebase 前）：秘密預檢 OK、0 命中（8 個 commit）；帳本預檢 OK；雙向控制字元 0（8 個 commit、26 個檔）。
+審查修正與 rebase 之後的結果在第 18 節；本筆記最後一次 commit 之後的結果記在交給主對話的回報（PR 說明照抄）：本筆記不能記自己
 commit 之後的結果。
 
 ## 13. 交給後面的片、還沒解決的事
@@ -375,38 +388,162 @@ commit 之後的結果。
   在開通時寫計畫 §7.2 第 10 點；`docs/operations/clients.md` 的「Claude.ai 不能帶標頭」已過時（FM-123）。`paas-test-mapping.md` 與
   `deviation-trace.md` 由 repo 外的產生器產生：前者 HM-27 兩列的「暫定名」與後者的 T-24、FM-73 列，下次重產時照本筆記第 6 節更新
   （本片沒有改產生器的規格）。
+  - 審查 S-6 補兩件：(a) 政策檔壞掉時**所有帳號**的密鑰網址都 503，包括不帶 Origin 的 Claude.ai；面板存一份就修好，目錄這類換名蓋
+    不過去的只能還原備份。(b) 產品移出 `MULTI_PROFILE_PRODUCTS`（計畫 §7.4 的緊急關閉）後 enforce **靜默失效**：檔留著不讀，密鑰網址
+    回到任何 Origin 都放行；再開通又生效。兩件都要進計畫 §7.2 第 10 點、該產品的 CHANGELOG／`upgrade-notes.yaml` 與 DOCS（本片不改
+    CHANGELOG）；契約第 2.6 節與威脅模型第 3 節已寫。
 - **HM-19b（HAOS 實測）**：S14 用 echo 端點實測 Claude.ai 送不送 Origin、送什麼（T-27「記下 Claude.ai 送的 Origin」）；預設清單含
   `https://claude.ai`，Claude.ai 送它時 would_deny 看不到，要看實際值得靠 echo 端點，或暫時把清單清空（只記不擋）再看紀錄。實機看
   add-on log 裡 would_deny 行的格式與節流。
 - **S14／DQ-11 第二問**：實測後由代理問使用者「Claude.ai 送 `https://claude.ai` 時，Bearer `/mcp` 要不要精確放行」。本片 Bearer 照舊一律 403；
-  若要放行，改在 `gateway.serve` 的 Bearer 分支，另開一片、要獨立審查。
+  若要放行，改在 `gateway.serve` 的 Bearer 分支（只放這一個精確值），另開一片、要獨立安全審查。期限照審查 MF-1 改成「S14 有結果之後」，
+  不擋 HM-27（`decisions.md` 第 4 節）。
 - **HM-25（n8n）**：`apps/n8n/run.py` 改用 ProfileManager 時，政策自動套上（`origin_policy.applies`）；n8n 的開通測試要加 report-only／enforce 各一案。
 - **HM-26（Headscale）**：Headscale 照舊沒有政策；要不要在面板顯示「固定只放 `https://claude.ai`」、要不要照 PaaS 記 deny 行，交 HM-26 與它的
-  獨立安全審查。
-- **契約第 9 節的列號**：本片從 #118 起編（#118～#122）。其他還沒合併、也從 #118 起編的 PR（任務提到 #108、#112 可能先合併、用掉
-  #118～#123）先合併時，**後合併的一方 rebase 後往後重編**，並同步契約第 2.6、4.1、4.2 節、威脅模型、驗收矩陣與本筆記裡的列號。
-- **帳本**：`runtime-patches.json` 動了 8 個項目（新模組 1、列管檔 7）；後合的一方 rebase 後照 JSON 結構重算 SHA-256（不要用 `--write` 批次重寫）。
-- **gateway.py 的合併順序**（計畫 §12.2）：HM-27 在 HM-13c 之後、HM-15 之前；本片只在 `make_apps` 加一個選項與一處呼叫。
+  獨立安全審查。開通 Headscale 前也決定 `/api/origin-policy` 照契約第 2.6 節的寫法定案（GET、形狀正確的 PUT 404；其他方法 405；形狀錯
+  的 PUT 400），或讓 Headscale 的方法表不含這條路由（審查 S-5）。
+- **契約第 9 節的列號、HM-13b 還原守門、帳本**：本片排在 HM-13c 之後合併，合併時要做的事見第 17 節。
+- **gateway.py 的合併順序**（計畫 §12.2）：HM-27 在 HM-13c 之後、HM-15 之前；本片只在 `make_apps` 加一個選項與一處呼叫（第 17 節）。
 
 ## 14. 要使用者決定的事
 
-- 本片範圍內：**沒有**。計畫沒寫的細節都照 PaaS 或取最保守（第 4 節），交審查一起看；其中「面板放在既有頁面的一張卡片、不是新頁面」
-  （第 4 節 q）是照字面「設定頁」的偏離，請審查確認。
-- **還沒解決、要使用者的**：DQ-11 第二問（Bearer `/mcp` 要不要精確放行 `https://claude.ai`）仍待 S14 實測後問。`decisions.md` 第 4 節的待辦寫
-  「最晚 HM-27 合併前」，但 S14 在 HM-03b 或 HM-19b，HM-19b 排在 HM-27 之後（計畫 §12.2）：這個期限照現況排不到；本片沒有改它，
-  交主對話與使用者決定「HM-27 先合、第二問延到 S14 之後」或其他安排。
+- **沒有**。計畫沒寫的細節都照 PaaS 或取最保守（第 4 節），審查逐條同意（審查報告第 3.4 節）；「面板放在既有頁面的一張卡片、
+  不是新頁面」（第 4 節 q）審查判理由成立、不用改。
+- DQ-11 第二問（Bearer `/mcp` 要不要精確放行 `https://claude.ai`）仍待 S14 實測後問，但照審查 MF-1 已經不擋 HM-27：`decisions.md` 第 4 節的
+  期限改成「S14 有結果之後」（原寫「HM-27 合併前」，排不到，也不是計畫 §13.1 的原文）；HM-27 沒有放行，Bearer 照舊一律 403；選放行就另開
+  一片、要獨立安全審查（`169fc61`）。審查判這不是新的決定（報告第 4 節），主對話在回報裡告知使用者即可。
 
-## 15. commit（`165dbaf` 之後）
+## 15. commit（rebase 後，`f239157` 之後；舊→新對照）
 
-| commit | 標題 |
-|---|---|
-| `4ba896b` | test(origin): pin the secret path's add-on-wide Origin allowlist, report-only by default (HM-27) |
-| `00cbbab` | feat(origin): the secret path's add-on-wide Origin allowlist, report-only by default (HM-27) |
-| `ec7381a` | test(ui): pin the Origin policy card on the connections page (HM-27) |
-| `983e8a2` | feat(ui): the Origin policy card on the connections page (HM-27) |
-| `434bcdf` | docs(multi-profile): settle the secret path's Origin allowlist in the contract (HM-27) |
-| `0e445e9` | test: pin make_apps' and ProfileRuntime's origin_policy option (HM-27) |
-| `0bf5d19` | test(origin): a save never replaces a policy file changed after it was read (HM-27) |
-| （本筆記） | docs(provenance): the HM-27 Origin allowlist slice |
+| commit | rebase 前 | 標題 |
+|---|---|---|
+| `3f2dc91` | `4ba896b` | test(origin): pin the secret path's add-on-wide Origin allowlist, report-only by default (HM-27) |
+| `8915e3f` | `00cbbab` | feat(origin): the secret path's add-on-wide Origin allowlist, report-only by default (HM-27) |
+| `8cd9e19` | `ec7381a` | test(ui): pin the Origin policy card on the connections page (HM-27) |
+| `80cf064` | `983e8a2` | feat(ui): the Origin policy card on the connections page (HM-27) |
+| `0534030` | `434bcdf` | docs(multi-profile): settle the secret path's Origin allowlist in the contract (HM-27) |
+| `f8177ea` | `0e445e9` | test: pin make_apps' and ProfileRuntime's origin_policy option (HM-27) |
+| `adea53c` | `0bf5d19` | test(origin): a save never replaces a policy file changed after it was read (HM-27) |
+| `15a3c25` | `22090fd` | docs(provenance): the HM-27 Origin allowlist slice |
+| `169fc61` | `fe94734` | docs(multi-profile): DQ-11's second question waits for S14 and does not hold HM-27 (HM-27 review MF-1) |
+| `75935b1` | `c23e091` | test(origin): pin what the HM-27 review found untested (MF-2, S-1 to S-3) |
+| `79c1adb` | `48284eb` | test(origin): a non-string origin in the file is unusable; IPv6 origins keep one normal form (HM-27 review S-9) |
+| `b103dea` | `f7a26cf` | fix(origin): a non-string origin in the file is unusable, not an error; IPv6 origins in one normal form (HM-27 review S-9) |
+| `c5d748c` | `c88b131` | test(ui): switched off, a tab that kept an Origin policy identity shows nothing of it (HM-27 review S-8) |
+| `dacf7ed` | `fc0b73f` | docs(multi-profile): the HM-27 review's contract and threat-model points (S-2, S-4 to S-6, S-9) |
+| `5202179` | —（rebase 後新增） | docs(origin): say which Python versions write an IPv4-mapped address as a dotted quad (HM-27 review S-9) |
+| （本筆記這次的修改） | — | docs(provenance): the HM-27 review's fixes, the merge order and the rebase in the HM-27 note |
 
 commit 身分都是 woowtech；英文標題、繁中內文；沒有 Co-Authored-By、Generated with 或任何 AI 署名。
+
+## 16. 獨立審查的處理（報告 `artifacts/…/wave4/review-HM-27.md`，2026-11-17，修正後通過）
+
+證據在 `evidence-HM-27/review-fix/`（`logs/`、`tools/`、`mutations-python/`、`mutations-panel/`）。commit 是 rebase 後的（第 18 節）。
+
+| 項目 | 審查說的 | 怎麼處理 | commit | 證據 |
+|---|---|---|---|---|
+| MF-1 | `decisions.md` 第 4 節 DQ-11 第二問的期限「HM-27 合併前」排不到，也不是計畫 §13.1 的原文 | 換成報告附的那一列：S14 有結果之後再問；不擋 HM-27（HM-27 沒有放行，Bearer 照舊一律 403）；選放行就另開一片改 `gateway.serve` 的 Bearer 分支、要獨立安全審查。DQ-11 列的負責片、變更紀錄、本筆記第 14 節與 PR 草稿一起改；DQ-11 列的節流也寫精確（每個（判定、原因、來源）） | `169fc61` | `decisions.md` |
+| MF-2 | 存檔的 ⑩ 要在政策鎖之後，沒有測試守 | HM-10 的 `test_the_second_role_check_comes_after_every_wait_and_before_any_change` 加政策鎖一輪（PUT 403，`origin-policy.json` 與收據都沒出現）；政策的 GET 也斷言問兩次角色（順手補 R23）；契約第 3.2 節補 | `75935b1`、`dacf7ed` | R22、R23 擋下；R24（不拿政策鎖）審查原判等價，現在也被這一案擋下（測試要求存檔等這把鎖） |
+| S-1 | enforce 的矩陣沒有 DELETE | `requests_of` 加 DELETE（report-only 照舊 200、enforce 清單外 403） | `75935b1` | R04 擋下 |
+| S-2 | 政策檔的完整性檢查缺測試 | 既有的壞檔流程加：檔內重複、17 個、16 KiB＋1；邊界：16 KiB、16 個剛好可用（數字寫死在測試裡）；硬連結（存檔只換這個名字，另一個名字不動）；FIFO（在執行緒裡讀，等寫入端的話開一個寫入端讓它結束、測試失敗，不會卡）；別的 uid；目錄（存檔 409、同一個 key 一樣、不留暫存檔，密鑰網址一直 503，Bearer 照常）。別的 uid 用「把模組看到的 `os.geteuid` 換成別的值」做，一般使用者與 CI 都跑得到；沒有照 `test_restore_detection.py` 寫成只有 root 跑得出的案例：比的是同一個條件，root 案例會讓本機多一個預期失敗 | `75935b1` | R01、R02、R14、R15、N01、N02、N05、N06 擋下 |
+| （自己找到） | — | 補 S-2 時發現：`allowed_origins` 裡有陣列或物件時，讀檔丟 TypeError（開機、密鑰網址、面板都出錯，面板也存不進去），不是判成不能用。只有外面改寫政策檔才會出現（同 uid，DQ-37）。先紅後綠：先確認都是字串再做集合 | `79c1adb`（紅：2 案）、`b103dea` | N03 擋下；`review-fix/logs/c-red.log`、`d-green.log` |
+| S-3 | 管線順序兩處沒釘 | 新案：格式錯的 If-Match＋沒帶 key → 409 `config_conflict`（不是 428）；規則不符＋過期的 If-Match → 409 `config_conflict`（不是 422）；什麼都沒寫 | `75935b1` | R06、R07 擋下 |
+| S-4 | 契約第 3.1、3.2 節沒跟上新路由 | 第 3.1 節 405 的 `Allow` 補 `origin-policy` `GET, PUT`；第 3.2 節 ⑤ 補本體形狀，⑧～⑪ 補政策鎖（2 秒，逾時 503）與「⑩ 在拿到這把鎖之後」 | `dacf7ed` | 契約 |
+| S-5 | Headscale「未知操作」不精確 | 契約第 2.6 節、第 9 節 #9 寫精確（GET、形狀正確的 PUT 404；其他方法 405；形狀錯的 PUT 400）；第 4 節 p 跟著改；要不要讓方法表不含這條交 HM-26（第 13 節） | `dacf7ed` | 契約 |
+| S-6 | 交 HM-18 的清單少兩件 | 第 13 節補 (a) 壞檔時所有帳號的密鑰網址 503、(b) 緊急關閉後 enforce 靜默失效；契約第 2.6 節與威脅模型第 3 節補 (b)（(a) 契約也寫明「所有帳號」）。計畫 §7.2 第 10 點與產品 CHANGELOG／`upgrade-notes.yaml`／DOCS 交 HM-18（本片不改 CHANGELOG） | `dacf7ed`、本筆記 | 契約、威脅模型 |
+| S-7 | 合併順序與第 9 節列號 | 主對話定：本片排在 HM-13c 之後合併（第 17 節） | 本筆記、PR 草稿 | — |
+| S-8 | 「開關關＋分頁留著識別紀錄」只有 repo 外的比對守 | Playwright 開關關那案在每個產品先放一筆識別紀錄（`woow-admin-operation-v1:<mount>:origin-policy`，和比對腳本的 `originRecord` 同一個鍵）再逐頁看：沒有卡片、沒有待確認卡、沒有請求，紀錄原樣留著。CI 會跑 | `c5d748c` | U17（兩層防護都拿掉，審查的 `sens_variant.py`）擋下，U00 基準照過 |
+| S-9 | IPv6 的正規寫法隨 Python 版本變 | 自己寫 RFC 5952 的十六進位（`_ipv6_text`），不用 `str()`：存的寫法不跟 Python 版本變；本機實測 7 個版本（3.11.2、3.12.3、3.12.14、3.13.2、3.13.12、3.13.15、3.14.7），只有 IPv4-mapped 在 3.12.14、3.13.2 起變點分。契約第 2.6 節寫明改正規化規則要遷移舊檔、第 9 節 #122 補一句。先紅後綠（`79c1adb` 紅 1 案）。`79c1adb`、`b103dea` 的 commit 訊息寫「3.12.4／3.13 起」是推測，`5202179` 把說明、契約與帳本的文字改成只寫實測的版本 | `79c1adb`、`b103dea`、`dacf7ed`、`5202179` | N04、N07、N08 擋下；3,000 個亂數位址和 `str()` 相同（不含 IPv4-mapped） |
+
+沒做的：審查報告第 3.4 節 l 的選做（執行中發現有效、但不是面板存的新檔時記一行 WARNING）不在 S-1～S-9，主對話沒有要，沒做。
+
+### 16.1 審查修正的突變（拋棄式複本：`git archive c88b131`，rebase 前：和 rebase 後的 `c5d748c` 只差 HM-33 帶進來的 Hermes 說明與它的測試，Origin 相關的程式、測試與面板都相同；git 不收的目錄用連結；`review-fix/tools/py_mutate_review.py`、`ui_mutate_review.py`）
+
+Python（共用鎖下一次跑完；R 開頭是審查的編號，在現在的程式上重做；N 開頭是這次修正自己的）：**20 個全部擋下**。
+
+| # | 突變 | 結果 | 第一個失敗的測試（`-x`） |
+|---|---|---|---|
+| R00 | 基準（不改；`test_origin_policy.py`、形狀比對、矩陣、`test_profile_admin_api.py`） | 通過（216 passed in 24.27s） | — |
+| R01 | 硬連結的政策檔照用 | 擋下 | `test_a_second_hard_link_is_unusable_and_a_save_replaces_only_this_name` |
+| R02 | 拿掉 16 KiB 上限 | 擋下 | `test_an_unusable_policy_file_refuses_the_secret_path_until_the_panel_saves_one[16 KiB and one byte-{"…]` |
+| R04 | DELETE 不檢查 | 擋下 | `test_enforce_refuses_only_what_the_list_does_not_hold[odoo]` |
+| R05 | GET 不檢查（控制組） | 擋下 | `test_enforce_refuses_only_what_the_list_does_not_hold[odoo]` |
+| R06 | 422 規則放到過期 ETag 的 409 之前 | 擋下 | `test_a_save_answers_in_the_pipelines_order` |
+| R07 | Idempotency-Key 放到 If-Match 之前 | 擋下 | `test_a_save_answers_in_the_pipelines_order` |
+| R14 | 檔內重複照用 | 擋下 | `test_an_unusable_policy_file_refuses_the_secret_path_until_the_panel_saves_one[a repeated origin-{"ve…]` |
+| R15 | 檔內超過 16 個照用 | 擋下 | `test_an_unusable_policy_file_refuses_the_secret_path_until_the_panel_saves_one[17 origins-{"version":…]` |
+| R22 | 存檔的 ⑩ 移到等政策鎖之前（MF-2） | 擋下 | `admin_api：test_the_second_role_check_comes_after_every_wait_and_before_any_change` |
+| R23 | GET 拿掉 ⑩ | 擋下 | `admin_api：test_the_second_role_check_comes_after_every_wait_and_before_any_change` |
+| R24 | 存檔不拿政策鎖（審查原判等價） | 擋下 | `admin_api：test_the_second_role_check_comes_after_every_wait_and_before_any_change` |
+| R29 | 前綴比對（控制組） | 擋下 | `test_enforce_refuses_bad_origins_whatever_the_host_or_proxy_headers[headers6]` |
+| N01 | 讀檔不加 `O_NONBLOCK`（FIFO 會等寫入端） | 擋下 | `test_a_fifo_is_unusable_and_never_waited_for` |
+| N02 | 不看檔案的 uid | 擋下 | `test_a_policy_file_another_uid_owns_is_unusable` |
+| N03 | 拿掉「來源都是字串」的檢查（TypeError） | 擋下 | `test_an_unusable_policy_file_refuses_the_secret_path_until_the_panel_saves_one[a list in the list-{"v…]` |
+| N04 | IPv6 改回 `str()`（S-9） | 擋下 | `test_an_ipv6_origin_has_one_normal_form_whatever_the_python` |
+| N05 | 16 KiB 剛好也判壞（差一） | 擋下 | `test_the_policy_files_bounds_are_its_own` |
+| N06 | 16 個剛好也判壞（差一） | 擋下 | `test_the_policy_files_bounds_are_its_own` |
+| N07 | 一樣長的零段壓後面那段 | 擋下 | `test_an_ipv6_origin_has_one_normal_form_whatever_the_python` |
+| N08 | 單一個 0 也壓成 `::` | 擋下 | `test_an_ipv6_origin_has_one_normal_form_whatever_the_python` |
+
+面板：U00 基準（`origin-policy.spec.mjs` 12 案）照過；U17（`api.js` 的 `pendingOriginOperation()` 不看 `profile`，`app.js`
+`refreshOperation()` 開關關的分支也畫來源待確認卡）被開關關那案擋下（`review-fix/mutations-panel/`）。
+
+## 17. 合併順序（主對話定，2026-11-17）
+
+- 照計畫 §12.2 各檔的合併順序：`Hc/gateway.py`、`Hc/profile_admin.py`、`Hui/app.js` 都是 HM-13c → HM-27，所以**本片排在 HM-13c 之後
+  合併**。HM-13b（#108）、HM-13c（#112）在等 HM-03a 的實機結果；本片先開 PR 只為讓 CI 驗，不先合。
+- 交給本片之後合併時（rebase 到當時的 `claude-delivery`）要做的事：
+  - 契約第 9 節的列號接在當時最後一列之後：#108、#112 先合的話是 #124 起（本片的 #118～#122 改成 #124～#128），並同步契約第 2.6、
+    3.1、4.1、4.2 節、威脅模型、驗收矩陣、`decisions.md` DQ-11 列與本筆記裡的列號。
+  - 新檔 `origin-policy.json` 與它的收據檔 `.origin-policy.json.operations.json`（都在 `/data/mcp`）要加進 HM-13b 還原守門的白名單或
+    已知名稱，並補測試（還原後這兩個檔在、不在、不能用時，守門與本片各自的行為）。
+  - 帳本照 JSON 結構重算 SHA-256（不用 `--write`）；`runtime-patches.json`、`gateway.py`、`profile_admin.py`、`app.js`、`api.js`、契約、
+    威脅模型、驗收矩陣都會和 #108、#112 衝突；重跑 CI。
+
+## 18. rebase 紀錄（2026-11-17，審查修正之後）
+
+- `git fetch` 後 `origin/claude-delivery`＝`f239157`（HM-33 PR #115 合併：Hermes `hermes_cron` 的說明，不受開關管，沒動面板與 Origin）。
+  本片分支沒 push 過，從 `165dbaf` rebase 到 `f239157`。
+- 衝突兩處，都是表尾，兩邊都留、新基準在前：
+  - `0534030`（原 `434bcdf`）：契約第 10 節（HM-33 的兩列在前，HM-27 一列在後）、`decisions.md` 變更紀錄（HM-33 一列在前）。
+  - `169fc61`（原 `fe94734`）：`decisions.md` 變更紀錄（HM-33 一列在前，接 MF-1 改過的 HM-27 那一列；舊的那一列不留）。
+  - 帳本、驗收矩陣、契約第 1.2 節與其他都自動合併。`git range-diff` 核對：14 個 commit 除了上面兩處表尾的位置，內容都沒變。
+- 舊→新 commit 對照：
+
+| 新 | 舊（基準 `165dbaf`） | 標題 |
+|---|---|---|
+| `3f2dc91` | `4ba896b` | test(origin): pin the secret path's add-on-wide Origin allowlist, report-only by default (HM-27) |
+| `8915e3f` | `00cbbab` | feat(origin): the secret path's add-on-wide Origin allowlist, report-only by default (HM-27) |
+| `8cd9e19` | `ec7381a` | test(ui): pin the Origin policy card on the connections page (HM-27) |
+| `80cf064` | `983e8a2` | feat(ui): the Origin policy card on the connections page (HM-27) |
+| `0534030` | `434bcdf` | docs(multi-profile): settle the secret path's Origin allowlist in the contract (HM-27) |
+| `f8177ea` | `0e445e9` | test: pin make_apps' and ProfileRuntime's origin_policy option (HM-27) |
+| `adea53c` | `0bf5d19` | test(origin): a save never replaces a policy file changed after it was read (HM-27) |
+| `15a3c25` | `22090fd` | docs(provenance): the HM-27 Origin allowlist slice |
+| `169fc61` | `fe94734` | docs(multi-profile): DQ-11's second question waits for S14 and does not hold HM-27 (HM-27 review MF-1) |
+| `75935b1` | `c23e091` | test(origin): pin what the HM-27 review found untested (MF-2, S-1 to S-3) |
+| `79c1adb` | `48284eb` | test(origin): a non-string origin in the file is unusable; IPv6 origins keep one normal form (HM-27 review S-9) |
+| `b103dea` | `f7a26cf` | fix(origin): a non-string origin in the file is unusable, not an error; IPv6 origins in one normal form (HM-27 review S-9) |
+| `c5d748c` | `c88b131` | test(ui): switched off, a tab that kept an Origin policy identity shows nothing of it (HM-27 review S-8) |
+| `dacf7ed` | `fc0b73f` | docs(multi-profile): the HM-27 review's contract and threat-model points (S-2, S-4 to S-6, S-9) |
+| `5202179` | —（rebase 後新增） | docs(origin): say which Python versions write an IPv4-mapped address as a dotted quad (HM-27 review S-9) |
+
+- rebase 後重跑（`dacf7ed`；之後的 `5202179` 只改說明文字與帳本，受影響的檔再跑一次）：
+
+| 檢查 | 結果 |
+|---|---|
+| 相關 pytest 17 個檔（共用鎖） | 754 passed，104 秒（`review-fix/logs/rebased-related.log`）：`test_origin_policy`、`test_profile_admin_api`、`test_admin_pipeline_matrix`、`test_panel_profile_api_shapes`、`test_profile_runtime`、`test_request_budget_gateway`、`test_single_profile_golden`、兩個契約凍結、`test_router_passthrough`、`test_profile_routing`、HM-33 的 `test_hermes_cron_description`、`test_hermes_cron_paused_contract`、`test_output_schemas`、`test_tool_inventory`、`test_redaction_matrix`、`test_ledger_precheck` |
+| `5202179` 之後 | `test_origin_policy`、`test_redaction_matrix`、`test_tool_inventory`、`test_ledger_precheck`：285 passed（`review-fix/logs/docstring-5202179.log`） |
+| node | 99 案全過 |
+| build＋build-closure | PASS；`app.js` `559aa02f…`、`app.css` `c8b43515…`（和 rebase 前相同） |
+| Playwright 全套（`single`＋`profiles-on`） | 150 案全過，4.6 分鐘（`review-fix/logs/rebased-pw-full.log`） |
+| `packaging/validate.py`（ci-venv 的 Python 3.13.15，不加 `-I`） | PASS；packaging unittest Ran 203、OK（skipped=5）；`scripts/tool_inventory.py` exit 0 |
+| 開關關逐位元（基準改用 `f239157`；HM-33 沒動面板，基準的 `app.js` 仍是 `b0f7e7ad…`） | 276 個比較 0 差異（`review-fix/logs/rebased-switched-off-compare.log`） |
+| 秘密預檢（`--base origin/claude-delivery --head HEAD --full`） | `dacf7ed`：OK，0 命中（gitleaks 8.28.0；14 個 commit＋HEAD 的樹＋整段歷史） |
+| 帳本預檢（`--base origin/claude-delivery`） | `dacf7ed`：OK（178／70／159 個摘要 0 漂移、0 缺；27 個檔，列管的 8 個都隨帳本更新；沒有未列管的執行檔） |
+| 雙向控制字元 | `dacf7ed`：14 個 commit、27 個檔、commit 訊息都是 0 |
+
+- 全套 pytest 沒有在 rebase 後重跑：rebase 前在 `0e445e9`（基準 `165dbaf`）跑過，6,389 案只有 7 個要 root 的既有失敗；rebase 只帶進 HM-33 的
+  Hermes 說明（`tool_snapshot.py`、Hermes 的 `server.py`、它們的測試與黃金回歸摘要），相關的檔都在上面重跑過；以 CI 為準。
+- 審查修正後新加的測試在本機都跑過，沒有只在 CI 跑的新測試。
+- 本筆記這次 commit 之後的兩個預檢與雙向控制字元，記在交給主對話的回報（PR 說明照抄）。
