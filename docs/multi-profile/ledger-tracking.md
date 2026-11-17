@@ -26,7 +26,7 @@
 | `packages/mcp-admin-core/mcp_admin_core/request_budget.py` | HM-31 | HM-30（如果回覆額度要共用它）；HM-19c 量測後改常數的功能 PR | 列管（HM-31 起） | — | 閘道的請求內容位元組預算（全 add-on＋每帳號份額，對齊 PaaS #155）、讀取閒置、讀完丟掉的拒絕、每帳號每情況 60 秒一行的 WARNING（`Reports`，從 `profile_router.py` 移來）；不受開關管 |
 | `packages/mcp-admin-core/mcp_admin_core/log_redaction.py` | HM-02 | PaaS 遮罩之後再變時的同步 PR（#149 已在 `7d111b1` 合併，HM-02 直接用合併版） | 列管（記在 `runtime-patches.json`；不另記 `runtime-sources.json`，那本只收 `apps/<產品>/vendor/`。DQ-38 的補充，HM-02 審查 MF-3，2026-11-15 08:2x 定案） | — | 紀錄遮罩（PaaS 規則先、HA 規則後） |
 | `packages/mcp-admin-core/mcp_admin_core/reply_worker.py` | HM-30 | — | 列管（HM-30 起） | — | 回覆處理的工作執行緒（全 add-on 一條）與依帳號輪流的佇列；`Lane`＝一個帳號的班次（`make_apps` 的 `reply_worker`） |
-| `packages/mcp-admin-core/mcp_admin_core/origin_policy.py` | HM-27 | — | 列管 | — | 密鑰網址的服務層級 Origin 清單（report-only） |
+| `packages/mcp-admin-core/mcp_admin_core/origin_policy.py` | HM-27 | — | 列管（HM-27 起） | — | 密鑰網址的服務層級 Origin 清單（全部帳號共用、預設 report-only；`/data/mcp/origin-policy.json`、紀錄、ETag） |
 | `packages/mcp-admin-core/mcp_admin_core/child_identity.py` | HM-15（條件式） | — | 列管 | — | listener 身分檢查 |
 | `packages/mcp-admin-ui/src/profiles.js` | HM-11 | HM-13c | 列管 | — | 面板帳號選單、建立／改名／刪除對話框 |
 | `apps/runtime/child_auth.py` | 不建：HM-06 把子程式 bearer 寫進已列管的 `apps/runtime/session_idle.py`，同一個 PR 更新帳本摘要、重產 tool-surface | — | — | — | 子程式 bearer 驗證 |
