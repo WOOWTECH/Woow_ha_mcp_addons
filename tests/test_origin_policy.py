@@ -217,10 +217,11 @@ def test_anything_else_is_no_origin(value):
 
 
 def test_an_ipv6_origin_has_one_normal_form_whatever_the_python(tmp_path):
-    """HM-27 review S-9: ipaddress writes an IPv4-mapped address as a dotted quad since Python 3.12.4 and 3.13
-    (::ffff:127.0.0.1; before, ::ffff:7f00:1), so its normal form would follow the image's Python, and a saved policy
-    holding one would turn unusable (503) when the Python changes. The add-on writes RFC 5952's hex form, as the WHATWG
-    URL serializer that a browser's Origin comes from: the same as str() for every other address, on every version."""
+    """HM-27 review S-9: ipaddress's str() writes an IPv4-mapped address as a dotted quad in newer releases
+    (::ffff:127.0.0.1 on 3.12.14 and 3.13.2 here; ::ffff:7f00:1 on 3.12.3), so its normal form would follow the
+    image's Python, and a saved policy holding one would turn unusable (503) when the Python changes. The add-on writes
+    RFC 5952's hex form, as the WHATWG URL serializer that a browser's Origin comes from: the same as str() for every
+    other address, on every version."""
     found = module()
     for value in ('http://[::ffff:127.0.0.1]', 'HTTP://[::FFFF:7F00:1]:80', 'http://[0:0:0:0:0:ffff:7f00:1]'):
         assert found.canonical(value) == 'http://[::ffff:7f00:1]', value

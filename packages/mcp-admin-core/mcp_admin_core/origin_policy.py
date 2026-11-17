@@ -106,9 +106,9 @@ _LABEL = re.compile(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', re.I | re.ASCII)
 def _ipv6_text(text: str) -> str:
     """An IPv6 address in RFC 5952's form: lowercase hex pieces, the first longest run of two or more zero pieces as
     '::', never a dotted quad. The WHATWG URL serializer (a browser's Origin) writes it so, and so does ipaddress's
-    str() for every address but an IPv4-mapped one, which it writes as a dotted quad since Python 3.12.4 and 3.13
-    (::ffff:127.0.0.1; before, ::ffff:7f00:1). The normal form, which the policy file keeps, must not follow the
-    image's Python (HM-27 review S-9; PaaS uses str())."""
+    str() for every address but an IPv4-mapped one, which newer releases write as a dotted quad (::ffff:127.0.0.1 on
+    3.12.14, 3.13.2 and later as tried here; ::ffff:7f00:1 on 3.11.2 and 3.12.3). The normal form, which the policy
+    file keeps, must not follow the image's Python (HM-27 review S-9; PaaS uses str())."""
     number = int(ipaddress.IPv6Address(text))
     pieces = [format((number >> shift) & 0xFFFF, 'x') for shift in range(112, -1, -16)]
     start = length = 0

@@ -324,7 +324,7 @@ Headscale 只放 `https://claude.ai`（第 1.2 節）。
     照今天 404，碰不到政策、也寫不出紀錄。
   - 通過：沒帶 Origin，或剛好一個、正規化後在清單內（照 PaaS `normalize_origin`：只認 ASCII，scheme 與主機轉小寫、去掉預設
     port；`*`、`null`、路徑、尾端斜線或點、帳密、query 都不是來源）。IPv6 主機寫成 RFC 5952 的十六進位（瀏覽器 Origin 用的
-    WHATWG 寫法；IPv4-mapped 也是 `::ffff:7f00:1`，不寫點分）：Python 的 `str()` 從 3.12.4／3.13 起把 IPv4-mapped 寫成點分，
+    WHATWG 寫法；IPv4-mapped 也是 `::ffff:7f00:1`，不寫點分）：Python 的 `str()` 在較新的版本把 IPv4-mapped 寫成點分（本機實測：3.12.14、3.13.2 起是點分，3.11.2、3.12.3 是十六進位），
     正規寫法不能跟著映像的 Python 變（PaaS 用 `str()`；HM-27 審查 S-9）。
   - **改正規化規則要遷移舊檔**：存檔與讀檔用同一個正規化，檔內每個來源都要是它的正規寫法。之後哪一版改了正規化規則，要在讀檔前
     把舊檔遷移成新寫法，否則存過的檔會變成壞檔，全部密鑰網址 503（HM-27 審查 S-9）。
