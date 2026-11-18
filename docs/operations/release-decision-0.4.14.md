@@ -1,6 +1,6 @@
 # 0.4.14（與 Headscale 0.4.19）映像發佈紀錄（草稿）
 
-狀態：**草稿：來源候選，映像尚未建置**。這是 Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud 六個商店產品的維修版；OpenDesign 只升來源版本
+狀態：**映像已發佈並驗證（2026-11-18），HAOS 驗收待做**。這是 Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud 六個商店產品的維修版；OpenDesign 只升來源版本
 （商店停用）。**Headscale 自己的版號線同一個 PR 升到 0.4.19**（負責人 2026-11-18 的決定，見下）。合併升版 PR 就是發佈到 WOOW App Store：建置、推 GHCR、合併都要負責人逐步批准，
 下面的驗收清單在做完並補上證據之前都是「待做」。這份共用紀錄不是 readiness 認的紀錄（見第 4 項）。
 
@@ -93,15 +93,16 @@
 - `upgrade-notes.yaml`：照 `AGENTS.md` 第 3 點，只在升版比對要求時建。比對要等映像推上 GHCR 才跑得出來，所以現在不建；`config.yaml` 只改了
   `version`。比對結果出來，要求宣告就補，接受漏洞先請負責人同意。
 
-## 映像（待補）
+## 映像（2026-11-18 推送；匿名逐層驗證通過）
 
 | 產品 | 不可變參考 |
 | --- | --- |
-| odoo | 待補 |
-| n8n | 待補 |
-| hermes | 待補 |
-| emqx | 待補 |
-| litellm | 待補 |
-| nextcloud | 待補 |
+| odoo | `ghcr.io/woowtech/amd64-mcp-odoo:0.4.14@sha256:5a672d7b654d554aeabd70d559a09f740a79d27152fb64cda22207f230c3b588`（image ID `sha256:d6b4d85c21195383dd94a74b9c33e9491f70a100e5c96ac5d2c19f63dd018880`；run 44211876006） |
+| n8n | `ghcr.io/woowtech/amd64-mcp-n8n:0.4.14@sha256:e30438e2684d377200e0aea8313b19e532070899ef9b9599f011b11cca851d94`（image ID `sha256:5afcfda1f5ddf7d4f1c2f4678f2a59d52ae7f9818f577a116e5908c6430c3936`；run 44211880072） |
+| hermes | `ghcr.io/woowtech/amd64-mcp-hermes:0.4.14@sha256:83d5d702c9de5d464da67b55ce1422ac78c63d33e5620b60ef46a3667cb8026b`（image ID `sha256:8c52b11eb7def4c9c0d6fc332ed0093d22d29261e54d574bebf6f366a498faff`；run 44211883565） |
+| emqx | `ghcr.io/woowtech/amd64-mcp-emqx:0.4.14@sha256:2f355dc7bf5b13288282a374a8302d692a18c104079e4db1b318b98864b84491`（image ID `sha256:408478b76ee01764d9982bcb6d34c3567733027754f5809cc3acd38400c72b2b`；run 44211887012） |
+| litellm | `ghcr.io/woowtech/amd64-mcp-litellm:0.4.14@sha256:fb3141fba524f90a65f94c876963762e21bd24abb5cc005fd65327c488768aa4`（image ID `sha256:e9e31155baa599880a7bc9975df9b38b3440c5455d5072acf0f4cc4190ac7827`；run 44211890753） |
+| nextcloud | `ghcr.io/woowtech/amd64-mcp-nextcloud:0.4.14@sha256:982af33d752ef2bf648debf1dcebb507f8a7850d643c7595735ad38be4e321ea`（image ID `sha256:1ed1a00407089c6ebb2a7d06dc1d039a84a241e1822427b3d0423c4c86401c5f`；run 44211894426） |
+| headscale | `ghcr.io/woowtech/amd64-mcp-headscale:0.4.19@sha256:a05e1a35fe3a048590b34fb542a38bd9a2fa2883d5151bd5732903d7c44baed9`（image ID `sha256:5603dd22b76f39947c9300abe658935e1f02c5002796d8488712f148ea096a25`；run 44211897773） |
 
 這份紀錄不宣稱 HAOS、正式後端或商店驗收；那些要在正常的受保護合併之後另外取證。

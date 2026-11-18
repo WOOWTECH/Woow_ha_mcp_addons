@@ -1,12 +1,12 @@
-## Headscale 0.4.19 — maintenance release candidate (image pending)
+## Headscale 0.4.19 — maintenance release (image published and verified)
 
 - Main reason: Headscale's admin panel accepts Home Assistant Core 2026.11.2 (PR #120: its 25 Core contract and adjacent files are byte-identical to 2026.11.1, and Supervisor 2026.11.0 ships the reviewed WebSocket proxy unchanged). The 0.4.18 image accepts Core only up to 2026.11.1 and refuses every admin panel request on Core 2026.11.2; MCP endpoints do not use this check. Later patches (such as 2026.11.3) and pre-releases stay refused until reviewed.
 - Includes the merged post-0.4.18 shared changes that reach the Headscale image (listed in `docs/multi-profile/unreleased-changes.md` until this release): log redaction applies the PaaS server's rules first (#98); the child on port 3000 serves only the gateway's child bearer (#94); restore detection leaves an owner-only `.restore-detected` marker after a restore (#97); credentials in a child's `initialize` error are redacted (#103); gateway request limits aligned with the PaaS server (#105); a rare 30 s wait when stopping is fixed (#106); and the switched-off groundwork for multiple profiles (#91, #93, #95, #99, #101–#104, #107, #110, #111, #114), with no visible change while the product switch is off.
 - Security update: dnspython 2.9.0 to 2.9.2 in the Headscale child environment (GHSA-vvf4-9x63-8xvv, High; the release scanner blocked it on 2026-11-18). No other dependency changes.
 - Advance only Headscale's own version line, from 0.4.18 to 0.4.19; the shared default version stays 0.4.14.
-- This preparation has not built or published the 0.4.19 image. The builder build and exact-image gates (including the child-bearer 401 and root restore-tree container checks and the J1900 instruction-set check), GHCR publication, readiness and the Upgrade comparison, HAOS acceptance and Store distribution remain pending.
+- Image published and verified on 2026-11-18 (manifest `sha256:a05e1a35fe3a048590b34fb542a38bd9a2fa2883d5151bd5732903d7c44baed9`): built, accepted (container checks, supply-chain gate and J1900) and pushed by the GitHub-hosted release route (PR #121), then every layer fetched back anonymously. Readiness, the Upgrade comparison, HAOS acceptance and Store distribution remain separate gates.
 
-## 0.4.14 — maintenance release candidate for six products (images pending)
+## 0.4.14 — maintenance release for six products (images published and verified)
 
 - Main reason: the admin panels of Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud accept Home Assistant Core 2026.11.0, 2026.11.1 and 2026.11.2 (PR #81, the review made for Headscale 0.4.14; PR #120: in 2026.11.2 the 25 Core contract and adjacent files are byte-identical to 2026.11.1, and Supervisor 2026.11.0 ships the reviewed WebSocket proxy unchanged). Their 0.4.13 images accept Core only up to 2026.10.4 and refuse every admin panel request on Core 2026.11.x; MCP endpoints do not use this check. Later patches (such as 2026.11.3) and pre-releases stay refused until reviewed.
 - Includes the merged post-0.4.13 changes that reach these images (listed in `docs/multi-profile/unreleased-changes.md` until this release):
@@ -17,7 +17,7 @@
   - The switched-off groundwork for multiple profiles (#91, #93, #95, #99, #101–#104, #107, #110, #111, #114): no visible change while the product switch is off.
 - Security update: dnspython 2.9.0 to 2.9.2 in the EMQX, LiteLLM and Nextcloud child environments (GHSA-vvf4-9x63-8xvv, High; the release scanner blocked the first 0.4.14 candidates of these three on 2026-11-18). No other dependency changes.
 - Advance the shared default version to 0.4.14: Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud, and OpenDesign's source version (it stays disabled in the Store). Headscale stays on its own version line and carries the shared changes from its 0.4.19 release (above).
-- This preparation has not built or published 0.4.14 images. The builder build and exact-image gates (including the child-bearer 401 and root restore-tree container checks and the J1900 instruction-set check), GHCR publication, readiness and the Upgrade comparison, the HAOS P9 regression on Core 2026.11.x and Store distribution remain pending; see the [draft release record](docs/operations/release-decision-0.4.14.md).
+- Images published and verified on 2026-11-18: built, accepted (container checks, supply-chain gate and J1900) and pushed by the GitHub-hosted release route (PR #121), then every layer fetched back anonymously. Readiness, the Upgrade comparison, the HAOS regression (on Core 2026.7.2, by the owner's decision) and Store distribution remain separate gates; see the [release record](docs/operations/release-decision-0.4.14.md).
 
 ## Headscale 0.4.18 — reviewed output schemas
 

@@ -1,6 +1,6 @@
 # Headscale Add-on changelog
 
-## 0.4.19 — maintenance release candidate (image pending)
+## 0.4.19 — maintenance release (image published and verified)
 
 - Main reason for this release: the admin panel accepts Home Assistant Core 2026.11.2 (PR #120). The administrator check of 0.4.18 accepts Core only up to 2026.11.1, so on Core 2026.11.2 it refuses every admin panel request (the panel says the Core version has not been reviewed, and the add-on log gets one line); MCP endpoints do not use this check and are not affected. In 2026.11.2 the 25 Core contract and adjacent files are byte-identical to 2026.11.1, and Supervisor 2026.11.0 ships the reviewed WebSocket proxy unchanged. Later patches (such as 2026.11.3) and pre-releases stay refused until reviewed.
 - Log redaction now applies the PaaS server's rules first and then the add-on's own (PR #98). In the add-on log, credential values in URL query strings show as `***`, and a record whose format string does not match its arguments shows `[redacted: invalid log message]`. In the log and in child output on the diagnostics page, a line whose URL encoding cannot be judged, or where the combined rules would show a part the old rules hid, is replaced as a whole with `[redacted: ambiguous URL encoding]`, and strings over 128 KiB are cut short. Child output also masks `key=` values, so ordinary text such as `cache key: x` is masked too, and a child line whose masking fails shows `line withheld (redaction failed)`. The `[REDACTED]` and `/private_[REDACTED]` forms are unchanged.
@@ -11,7 +11,7 @@
 - Fixed: stopping the add-on could wait for Home Assistant's 30 s stop timeout in rare cases (PR #106).
 - dnspython in the MCP child's environment goes from 2.9.0 to 2.9.2 (GHSA-vvf4-9x63-8xvv, CVE-2026-128089, High): 2.9.0's zone-file parser sizes a WKS record's bitmap from an unchecked service number, so crafted zone text can exhaust memory or CPU. Here dnspython is only email-validator's dependency and no zone file is parsed; the update clears the release scanner's block on this fixable High vulnerability. The 0.4.18 image carries 2.9.0.
 - This image also carries the groundwork for multiple profiles per add-on (PRs #91, #93, #95, #99, #101–#104, #107, #110, #111 and #114). It stays switched off for this add-on: requests, responses, the admin panel and the files in `/data/mcp` are unchanged apart from the changes listed above.
-- This preparation has not built or published a 0.4.19 image. The builder build and exact-image gates, GHCR publication, HAOS acceptance and Store distribution remain pending.
+- Image published and verified on 2026-11-18: `ghcr.io/woowtech/amd64-mcp-headscale:0.4.19` (manifest `sha256:a05e1a35fe3a048590b34fb542a38bd9a2fa2883d5151bd5732903d7c44baed9`), the exact image the GitHub-hosted release route tested (PR #121). HAOS acceptance, the Stable Release and Store distribution remain separate gates.
 
 ## 0.4.18 — reviewed output schemas
 

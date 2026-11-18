@@ -1,4 +1,4 @@
-## 0.4.14 — maintenance release candidate (images pending)
+## 0.4.14 — maintenance release (image published and verified)
 
 - Main reason for this release: the admin panel accepts Home Assistant Core 2026.11.0, 2026.11.1 and 2026.11.2 (PR #81, PR #120). The administrator check of 0.4.13 accepts Core only up to 2026.10.4, so on Core 2026.11.x it refuses every admin panel request (the panel says the Core version has not been reviewed, and the add-on log gets one line); MCP endpoints do not use this check and are not affected. 2026.11.0 and 2026.11.1 were reviewed against the same 25 Core contract and adjacent files as Headscale 0.4.14; in 2026.11.2 those 25 files are byte-identical to 2026.11.1, and Supervisor 2026.11.0 ships the reviewed WebSocket proxy unchanged. Later patches (such as 2026.11.3) and pre-releases stay refused until reviewed.
 - Log redaction now applies the PaaS server's rules first and then the add-on's own (PR #98). In the add-on log, credential values in URL query strings show as `***`, and a record whose format string does not match its arguments shows `[redacted: invalid log message]`. In the log and in child output on the diagnostics page, a line whose URL encoding cannot be judged, or where the combined rules would show a part the old rules hid, is replaced as a whole with `[redacted: ambiguous URL encoding]`, and strings over 128 KiB are cut short. Child output also masks `key=` values, so ordinary text such as `cache key: x` is masked too, and a child line whose masking fails shows `line withheld (redaction failed)`. The `[REDACTED]` and `/private_[REDACTED]` forms are unchanged.
@@ -8,7 +8,7 @@
 - n8n: a body nested deeper than 64 levels now gets HTTP 200 with `-32602` under its id (it was 413 with a null id), and a body that is not UTF-8 gets the encoding refusal (it was 400 with `-32700`).
 - Fixed: stopping the add-on could wait for Home Assistant's 30 s stop timeout in rare cases (PR #106).
 - This image also carries the groundwork for multiple profiles per add-on (PRs #91, #93, #95, #99, #101–#104, #107, #110, #111 and #114). It stays switched off for this add-on: requests, responses, the admin panel and the files in `/data/mcp` are unchanged apart from the changes listed above.
-- This preparation has not built or published a 0.4.14 image. The builder build and exact-image gates, GHCR publication, HAOS acceptance and Store distribution remain pending.
+- Image published and verified on 2026-11-18: `ghcr.io/woowtech/amd64-mcp-n8n:0.4.14` (manifest `sha256:e30438e2684d377200e0aea8313b19e532070899ef9b9599f011b11cca851d94`), the exact image the GitHub-hosted release route tested (PR #121). HAOS acceptance, the Stable Release and Store distribution remain separate gates.
 
 ## 0.4.13 — images published and verified
 
