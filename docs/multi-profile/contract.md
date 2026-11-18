@@ -1,6 +1,6 @@
 # 多帳號中立契約（v1，HM-00 起草）
 
-- 狀態：HM-00 起草（2026-11-14）。HM-10 依實作補了第 3、4.1 節的細節（2026-11-15，見第 10 節）；HM-13b 補了第 1.3 節（開機守門）、第 3.5、3.6 節的還原收據與還原紀錄、第 7、8 節（2026-11-16），依獨立審查改第 1.3 節、#67、#119、#120（同日），rebase 到 `claude-delivery` 之後本片的列改成 #113～#116（同日），合併 `claude-delivery` `165dbaf` 之後改成 #118～#121（2026-11-17）；HM-13c 定案全部撤銷、還原紀錄、核對與刪除隔離目錄的路由（第 3.1、3.5、3.6、4.1 節），補第 1.2 節單帳號還原後的面板提示（使用者 2026-11-16 定案）、第 8 節單帳號的檔案與第 9 節 #117、#118（2026-11-17），合併 HM-13b 與 `claude-delivery` 之後本片的列改成 #122、#123（同日），並依審查 S-3 讓 HM-12 的換身分換 token 也過核對關卡、換了還原保留的權杖時清掉提示（第 1.2、3.1、4.1 節；同日）；HM-18 定稿；合併順序 HM-00 → HM-10 → HM-18。
+- 狀態：HM-00 起草（2026-11-14）。HM-10 依實作補了第 3、4.1 節的細節（2026-11-15，見第 10 節）；HM-13b 補了第 1.3 節（開機守門）、第 3.5、3.6 節的還原收據與還原紀錄、第 7、8 節（2026-11-16），依獨立審查改第 1.3 節、#67、#119、#120（同日），rebase 到 `claude-delivery` 之後本片的列改成 #113～#116（同日），合併 `claude-delivery` `165dbaf` 之後改成 #118～#121（2026-11-17）；HM-13c 定案全部撤銷、還原紀錄、核對與刪除隔離目錄的路由（第 3.1、3.5、3.6、4.1 節），補第 1.2 節單帳號還原後的面板提示（使用者 2026-11-16 定案）、第 8 節單帳號的檔案與第 9 節 #117、#118（2026-11-17），合併 HM-13b 與 `claude-delivery` 之後本片的列改成 #122、#123（同日），並依審查 S-3 讓 HM-12 的換身分換 token 也過核對關卡、換了還原保留的權杖時清掉提示（第 1.2、3.1、4.1 節；同日）；HM-27 定案第 2.6 節的 Origin 清單與它的管理路由（第 3.1、3.2、3.5、4.1、4.2 節，第 9 節 #9、#10、#42 改寫並加列；2026-11-17），合併 HM-13c 之後本片的列由 #118～#122 改成 #124～#128（2026-11-18）；HM-18 定稿；合併順序 HM-00 → HM-10 → HM-18。
 - 「中立」：PaaS `WOOWTECH/woow-mcp-server` 的行為（pin `69ac425`）是期望值；HA 和它不同的地方，每一條都列在第 9 節的刻意差異表
   （計畫 §8.8，下稱「§8.8 #n」），沒列的就要相同。FEATURE-MATRIX 每一列（含「HA 平台差異」欄是「—」的列）對到哪一列、
   或為什麼相同，見 `deviation-trace.md`。
@@ -384,7 +384,7 @@ Headscale 只放 `https://claude.ai`（第 1.2 節）。
     0600、單一連結的一般檔、本 uid、16 KiB 以內；`mode` 只能是 `report-only` 或 `enforce`；來源最多 16 個、正規化後的寫法、
     不重複。沒有檔案時＝`report-only`＋`["https://claude.ai"]`（PaaS chart 0.1.10 的預設），**面板存檔之前不寫任何檔**。
     收據在旁邊的 `.origin-policy.json.operations.json`。
-  - 位置：token 驗過之後、方法檢查（405）之後、query 檢查（400）之前，也就是今天 Headscale 規則的位置（§8.8 #118）。錯 token
+  - 位置：token 驗過之後、方法檢查（405）之後、query 檢查（400）之前，也就是今天 Headscale 規則的位置（§8.8 #124）。錯 token
     照今天 404，碰不到政策、也寫不出紀錄。
   - 通過：沒帶 Origin，或剛好一個、正規化後在清單內（照 PaaS `normalize_origin`：只認 ASCII，scheme 與主機轉小寫、去掉預設
     port；`*`、`null`、路徑、尾端斜線或點、帳密、query 都不是來源）。IPv6 主機寫成 RFC 5952 的十六進位（瀏覽器 Origin 用的
@@ -394,7 +394,7 @@ Headscale 只放 `https://claude.ai`（第 1.2 節）。
     把舊檔遷移成新寫法，否則存過的檔會變成壞檔，全部密鑰網址 503（HM-27 審查 S-9）。
   - 不通過（清單外、畸形、`null`、兩個以上）：`report-only` **照常服務，回應逐位元不變**，記一行 `decision=would_deny`；
     `enforce` 回 403 `{"error":"request denied"}`（閘道固定本體，同 Bearer 與 Headscale；PaaS `{"detail":"ORIGIN_DENIED"}`，
-    §8.8 #119），子程式收不到，記一行 `decision=deny`。
+    §8.8 #125），子程式收不到，記一行 `decision=deny`。
   - **不加任何 CORS 標頭**（FM-74；兩種模式都是）；OPTIONS 照今天在 token 之後回 405，沒有 preflight 回答（§8.8 #42）。
   - 紀錄（WARNING，`mcp_admin_core.origin_policy`）：`MCP gateway [profile=<id 前 8 碼>]: an Origin the secret path does not
     allow (report-only: served as usual) decision=would_deny mode=report-only reason=<not_allowed|malformed|duplicate|null>
@@ -402,13 +402,13 @@ Headscale 只放 `https://claude.ai`（第 1.2 節）。
     `scheme://host[:port]`；畸形的只記它的 `scheme://host[:port]` 與有哪幾段（`(has=userinfo+path+query+fragment)`），否則只記摘要
     （長度與字元類別），一律可印 ASCII、120 字以內；**不記路徑、token、query、其他標頭與內容**。每帳號每個（判定、原因、來源）
     60 秒一行、每帳號每分鐘最多 20 行，壓下的行數在下一行之前或時間窗結束時補一行 `Origin lines held back suppressed=N`
-    （PaaS 是整台一份：§8.8 #121）。紀錄寫不出來不影響回應。
+    （PaaS 是整台一份：§8.8 #127）。紀錄寫不出來不影響回應。
   - 政策檔不能用（不是上面的格式、模式錯、來源不是字串、重複或超過 16 個、權限不是 0600、是連結、硬連結、FIFO、目錄、別的 uid
     的、超過 16 KiB、讀不到）：**所有帳號**的密鑰網址上每個驗過 token 的請求（帶不帶 Origin 都一樣，包括不帶 Origin 的 Claude.ai）
     回 503 `{"error":"state unavailable"}`，直到面板存一份新的蓋過去；Bearer 與 `/health/ready` 不受影響。存檔是換名蓋過去：
     目錄這類換名蓋不過去的東西，存檔回 409 `operation_outcome_unknown`，只能還原備份。開機與之後
     每換一次檔案狀態記一行 WARNING（不含檔案內容）。每個這種請求看一次檔（lstat），檔案換了就重讀：有效的替換立即生效
-    （同 HA 其他 state，§8.8 #46）。PaaS 壞值啟動失敗、執行中 503（§8.8 #120）。
+    （同 HA 其他 state，§8.8 #46）。PaaS 壞值啟動失敗、執行中 503（§8.8 #126）。
 - **Headscale**：密鑰網址維持只放 `https://claude.ai`（enforce，原字串比對、不記紀錄，同今天；§8.8 #9）；沒有政策、不讀這個檔。
   開通後 `/api/origin-policy` 的 GET 與形狀正確的 PUT 回空本體 404（和未知操作逐位元相同，在角色檢查之後）；其他方法在第 ⑤ 步回
   405 `Allow: GET, PUT`，形狀錯的 PUT 回 400（⑤ 不讀狀態，非管理員也只看到固定位元組；HM-27 審查 S-5）。HM-26 開通 Headscale 前
@@ -691,7 +691,7 @@ PaaS 另帶 `message` 文字，HA 不帶（面板只認代碼，§8.8 #49）。
 | `endpoint_global` | 409 | 對額外帳號 `PUT endpoint`（在 If-Match 之後，什麼都不寫；DQ-13） | `code` | ⑪ | 不出現 | 不存 endpoint | §8.8 #27 | 新 | HM-10；`tests/test_profile_admin_api.py` |
 | `restore_review_required` | 409 | 還原或休眠後、該帳號還沒「已核對」就 `token/rotate`，或開通後會換 token 的 `backend`、`backend/patch`（HM-12 換 Odoo 身分；HM-13c 審查 S-3）（HM-13c：還原紀錄裡它的權杖是守門撤銷的、`reviewed_at` 是 `null`；在 If-Match、Idempotency-Key 之後判斷，什麼都不寫、不留收據，面板放掉識別碼；紀錄讀不到時改回 503 `{"error":"state unavailable"}`，一律擋，出路是全部撤銷重建紀錄）。待核對不一定是已撤銷：開關關時沒有關卡，開關關期間重新產生的權杖（例如還原撤銷後的預設帳號）重新開通後那一列仍待核對、權杖卻有效；所以發新權杖的兩條路徑都接這個關卡：`token/rotate`，與 HM-12 的換身分換 token（在 If-Match 與新來源檢查之後、停舊子程式之前判斷，子程式不停、什麼都不寫、不發布；紀錄讀不到時同樣 503；只換密碼、初次設定、token 已撤銷這些不換 token 的存檔照常）。後者是 HM-13c 審查 S-3，主對話 2026-11-17 定、和 HM-12 合併時補；面板在存檔收到它時沿用這個代碼的文字，再說明換後端身分會換權杖、這次沒存 | `code` | ⑪ | 不出現 | 手冊步驟 9 核對後才發 | §8.8 #58 | 新 | HM-13c；`tests/test_restore_review.py` |
 | `profile_index_corrupt` | 503 | 帳號索引不能用（結構壞、被外改，或啟動時 `profiles/` 列不出來）：清單、建立、改名、刪除、額外帳號範圍路徑。預設帳號的帳號範圍路徑照常（bootstrap 帶 `profile_index_state:"corrupt"` 與 `profile_index_etag`）；索引隔離照常可用（HM-10 定案）；HM-13c 定案：全部撤銷照常可用（If-Match 是壞索引的 ETag，緊急止血）、還原紀錄照常可讀；核對、刪除隔離目錄同建立與刪除，回這個代碼 | `code` | ⑦／⑪ | 不出現 | 整台 503（含管理 API） | §8.8 #25 | 新 | HM-07、HM-10；`tests/test_profile_admin_api.py` |
-| `origin_policy_invalid` | 422 | `PUT origin-policy` 的模式不是剛好 `report-only` 或 `enforce`，或來源超過 16 個、有一個不是精確的 http(s) 來源（`*`、`null`、路徑、尾端斜線或點、帳密、query、空白、無效的主機或 port、非 ASCII）、正規化後重複。在 If-Match、Idempotency-Key、ETag 比對之後，什麼都不寫、不留收據（同一個 key 修正後可以再送） | `code`（形狀 A，不回顯任何值） | ⑪ | 不出現（沒有這條路由） | 沒有（環境變數，壞值啟動失敗） | §8.8 #120、#122 | 新 | HM-27；`tests/test_origin_policy.py` |
+| `origin_policy_invalid` | 422 | `PUT origin-policy` 的模式不是剛好 `report-only` 或 `enforce`，或來源超過 16 個、有一個不是精確的 http(s) 來源（`*`、`null`、路徑、尾端斜線或點、帳密、query、空白、無效的主機或 port、非 ASCII）、正規化後重複。在 If-Match、Idempotency-Key、ETag 比對之後，什麼都不寫、不留收據（同一個 key 修正後可以再送） | `code`（形狀 A，不回顯任何值） | ⑪ | 不出現（沒有這條路由） | 沒有（環境變數，壞值啟動失敗） | §8.8 #126、#128 | 新 | HM-27；`tests/test_origin_policy.py` |
 | `config_conflict` | 409 | If-Match 過期、格式錯或不只一個；拿 A 的 ETag 寫 B；索引 ETag 不符；索引能用時的索引隔離、沒有索引檔可隔離（HM-10）。回應的 `ETag` 標頭是目前的 ETag | `code`（形狀 B：本體只有 `detail`） | ⑪ | 照今天 | 帳號設定有；帳號 CRUD 不收 If-Match | §8.8 #34 | 既有（擴大） | HM-05、HM-10；`tests/test_profile_admin_api.py` |
 | `config_revision_required` | 428 | 該帶 If-Match 卻沒帶（含帳號增刪改、核對、索引隔離） | `code` | ⑪ | 照今天 | 帳號 CRUD 沒有 | §8.8 #34 | 既有（擴大） | HM-10 |
 | `operation_id_required` | 428 | 建立、刪除、全部撤銷、索引隔離、核對沒帶 Idempotency-Key | `code` | ⑪ | 照今天 | 帳號 CRUD 沒有 | §8.8 #34 | 既有（擴大） | HM-10 |
@@ -735,8 +735,8 @@ PaaS 另帶 `message` 文字，HA 不帶（面板只認代碼，§8.8 #49）。
 | 錯 token：Bearer | 401 | 零命中、撤銷、沒設 | 空本體＋`WWW-Authenticate: Bearer` | 同 | （沒有 Bearer） | §8.8 #1、#2 | 既有 | 同上 |
 | `{"error":"state unavailable"}` | 503 | 撞號、預設 state 或索引讀不到、索引外改、全部撤銷失敗的帳號（HM-13c：全部撤銷沒撤銷成功的已登錄帳號（沒有任何結果時是每個已登錄帳號：標記存不下、讀不到預設帳號的 state 或意外的例外），它撤銷前的權杖不論 state 現在寫什麼都回 503，密鑰網址與 Bearer 都是，直到一次全部撤銷做完或重開；`ProfileManager.revoke_fence`。名單只擋之後才經分派器比對的請求；全部撤銷結束時已比對過、還沒建 token lease 的請求（例如准入滿時正在讀的小通知，最多 2 秒）之後照磁碟上的權杖建 lease，失敗帳號的權杖還在就照常服務；已建 lease 的請求都由 `committed()` 結束（HM-13c 審查 S-6）） | 固定本體 | 只有預設 state 讀不到 | 503 | DQ-09 已定（同 PaaS 503） | 既有（擴大） | HM-08、HM-13c；`tests/test_restore_review.py` |
 | `{"error":"request denied"}` | 400 | MCP 路徑帶 query | 固定本體 | 同 | 原樣轉發 | §8.8 #3 | 既有 | HM-01 |
-| `{"error":"request denied"}` | 403 | Bearer 帶 Origin；Headscale 密鑰網址的來源不在清單；HM-27 起開通的產品政策是 `enforce` 時，密鑰網址的 Origin 不在清單（第 2.6 節） | 固定本體 | 前兩種同；沒有第三種 | Origin 清單 403 `{"detail":"ORIGIN_DENIED"}` | §8.8 #9、#10、#119 | 既有（擴大） | HM-27；`tests/test_origin_policy.py` |
-| `{"error":"state unavailable"}` | 503 | HM-27：開通的產品的 Origin 政策檔不能用時，密鑰網址每個驗過 token 的請求（帶不帶 Origin） | 固定本體 | 不出現 | MCP 路徑 503 `ORIGIN_POLICY_UNAVAILABLE`（執行中讀到壞值） | §8.8 #120 | 既有（擴大） | HM-27；`tests/test_origin_policy.py` |
+| `{"error":"request denied"}` | 403 | Bearer 帶 Origin；Headscale 密鑰網址的來源不在清單；HM-27 起開通的產品政策是 `enforce` 時，密鑰網址的 Origin 不在清單（第 2.6 節） | 固定本體 | 前兩種同；沒有第三種 | Origin 清單 403 `{"detail":"ORIGIN_DENIED"}` | §8.8 #9、#10、#125 | 既有（擴大） | HM-27；`tests/test_origin_policy.py` |
+| `{"error":"state unavailable"}` | 503 | HM-27：開通的產品的 Origin 政策檔不能用時，密鑰網址每個驗過 token 的請求（帶不帶 Origin） | 固定本體 | 不出現 | MCP 路徑 503 `ORIGIN_POLICY_UNAVAILABLE`（執行中讀到壞值） | §8.8 #126 | 既有（擴大） | HM-27；`tests/test_origin_policy.py` |
 | JSON-RPC `-32003` | 200／503／429／408 | 准入、位元組預算、讀取閒置、轉送名額逾時、排隊上限、GET 串流上限、待送回覆上限 | 第 2.4 節 | 位元組預算與讀取閒置同開通（HM-31，不受開關管）；其他沒有（uvicorn 503、名額逾時 503） | 200／503／429／408（先讀 body） | §8.8 #15、#16、#96、#101～#105 | 新 | HM-08、HM-14、HM-30、HM-31；`tests/test_profile_quotas.py`、`tests/test_gateway_busy_shapes.py`、`tests/test_request_budget_gateway.py` |
 | JSON-RPC `-32602`（結構守門） | 200／413 | POST 的 JSON 巢狀超過 64 層、元素超過 20 萬個、不是 UTF-8 | 第 2.4 節；頭尾認得出 id 才 200 | 同（HM-31，不受開關管） | 同（#155） | §8.8 #106、#107 | 新 | HM-31；`tests/test_request_structure.py` |
 | JSON-RPC `-32004` | 502／SSE 事件 | 子程式在處理途中斷線 | 依原因三種文字（第 2.5 節） | 502 `{"error":"request denied"}`、SSE 安靜結束 | 同（#148）；停止了一律說會自動重新啟動 | §8.8 #93（WARNING 節流）、#100（停止了的文字） | 新 | HM-14；`tests/test_gateway_stream_endings.py` |
@@ -1109,8 +1109,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 第 116、117 列是 HM-12 的面板部分（另一個 PR）補的面板列（不是 FEATURE-MATRIX 的列）。
 第 118～121 列出自 HM-13b 的實作（開機守門；不是 FEATURE-MATRIX 的列，`deviation-trace.md` 沒有）；#24、#67、#82 的附註也是。
 第 122、123 列出自 HM-13c 的實作（單帳號還原後的面板提示：使用者 2026-11-16 定案；隔離目錄的清單與刪除；不是 FEATURE-MATRIX 的列，`deviation-trace.md` 沒有）；#58、#67、#82 的 HM-13c 附註也是。HM-13c 獨立審查的修正只補 #58、#82、#123 的附註，沒有新列。
-第 118～122 列出自 HM-27 的實作（密鑰網址的服務層級 Origin 清單；#9、#10、#42 由 HM-27 定案改寫；不是 FEATURE-MATRIX 的列，`deviation-trace.md` 沒有這幾列）。
-其他還沒合併、也從第 118 列起編的片（例如 #108、#112 的 PR）先合併時，後合併的一方 rebase 後往後重編（HM-27 的 provenance 筆記第 13 節）。
+第 124～128 列出自 HM-27 的實作（密鑰網址的服務層級 Origin 清單；#9、#10、#42 由 HM-27 定案改寫；不是 FEATURE-MATRIX 的列，`deviation-trace.md` 沒有這幾列）。原稿是第 118～122 列：HM-13b（#108）、HM-13c（#112）先合併、用掉第 118～123 列，本片合併時往後重編（第 10 節）。
 2026-11-17 文件同步重產 `deviation-trace.md`（到第 117 列）：第 87 列以後的列，FEATURE-MATRIX 有說到同一件事的列就加進那一列的「對到」
 （例如 FM-154 → #101～#108、FM-81 → #113、#114）；沒有任何 FEATURE-MATRIX、G6 §5 的列對到的（#22、#33、#83、#88、#89、#90、#99），
 出處寫在 `deviation-trace.md` 文末「差異表每一列的來處」。
@@ -1240,11 +1239,11 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 | 121 | 沒有帳號資料時預設帳號的收據 | 每份設定都換新收據檔、舊 id 一律 410 | DQ-03 (b) 不撤銷預設帳號時，它的收據檔照還原的原樣（24 小時內重送備份前的 id 回 completed，不回 token，和今天一樣）；有帳號資料（預設帳號被撤銷）時才封存 | DQ-03 (b)：單帳號安裝的還原行為和今天一樣 | 部署 |
 | 122 | 還原後沿用權杖的面板提示 | 沒有（還原一律撤銷全部 token，手冊步驟 10 重發；PaaS 沒有產品開關） | DQ-03 (b) 不撤銷預設帳號時（沒有帳號資料，開通與否），守門在刪還原標記前存 `restore-notice.json`（只有時間），bootstrap 多 `restore_notice`，到預設帳號的權杖變了（`token/rotate`、撤銷了的 `token/revoke`、全部撤銷）才刪；不受開關管（第 1.2 節）。面板「知道了」只藏到重新整理（面板不用瀏覽器儲存，N15）；沒開通時不加任何管理路由 | DQ-03 (b) 原文「面板與 log 提示權杖已回到備份當時的值」；使用者 2026-11-16 對 HM-13b 審查 Q-1 定案，只核准 bootstrap 多一個欄位 | 部署 |
 | 123 | 隔離目錄的清單與刪除 | 沒有隔離目錄（還原遇到讀不到的設定就停機，#23） | 帳號清單有隔離目錄時另帶 `quarantined`（`<id>-<UTC>[-n]` 與 id）；`POST profiles/quarantine/<名稱>/delete`（If-Match、Idempotency-Key、全域收據；照刪除的規則：讀得到的先撤銷並抹憑證，再不跟隨連結地刪）；不能選擇、不路由、不能改名或重發；面板列前 64 個並說還有幾個，清單不會因為數量而讀不到（HM-13c 審查 S-5） | #23 只隔離、不擋開機，留下的資料要有出路；DQ-14 不自動刪 | 部署 |
-| 118 | Origin 檢查的位置 | 中介層，在認證與選帳號之前：錯 token 的請求也判斷、也記，紀錄不知道帳號（R04 S-09） | token 驗過之後、方法檢查（405）之後、query 檢查（400）之前，今天 Headscale 規則的位置：錯 token 照今天 404，碰不到政策、寫不出紀錄；紀錄帶帳號 id 前 8 碼（HM-27） | 未認證的請求灌不進紀錄（比 PaaS K-09 好；FM-73 的 HA 平台差異欄）；HA 閘道既有的檢查順序（HM-01 凍結的 `order-` 案例） | 既有 |
-| 119 | enforce 的拒絕本體 | 403 `{"detail":"ORIGIN_DENIED"}`，不帶 CORS | 403 `{"error":"request denied"}`（閘道的固定本體，同 Bearer 帶 Origin 與 Headscale；HM-27） | HA 的 MCP 端錯誤只用固定本體（第 4.2 節） | 既有 |
-| 120 | Origin 政策的設定入口與壞值 | 環境變數 `MCP_ADMIN_ALLOWED_ORIGINS`、`MCP_ADMIN_ORIGIN_MODE`（chart values）；壞值啟動失敗（exit 3）、執行中讀到壞值 MCP 路徑一律 503 `ORIGIN_POLICY_UNAVAILABLE`；啟動時記一行生效政策（INFO） | `/data/mcp/origin-policy.json`，面板經共用管線 GET／PUT `{base}/api/origin-policy`（If-Match、Idempotency-Key、收據）；檔案不能用時密鑰網址一律 503 `{"error":"state unavailable"}`（不拒絕啟動，面板用那個檔自己的 ETag 存一份蓋過去），只記 WARNING；沒有啟動時的 INFO 行（HM-27） | add-on options 鎖死（#45），只有面板能改；拒絕啟動會讓壞檔沒有修復途徑 | 部署 |
-| 121 | Origin 紀錄的節流 | 整台一份：每個來源 60 秒一行、全部每 60 秒最多 20 行，壓下的補一行；不標帳號，只進預設帳號的 Logs 頁（R04 S-10） | 每帳號一份：每帳號每個（判定、原因、來源）60 秒一行、每帳號每 60 秒最多 20 行，壓下的補一行；帶帳號 id 前 8 碼，寫在 add-on log（WARNING）（HM-27） | HA 在 token 之後判斷、知道帳號；一個帳號被灌爆不會蓋掉其他帳號的紀錄（PaaS 多帳號實測的 info，HANDOFF :241） | 部署 |
-| 122 | Origin 清單的格式與上限 | 逗號分隔的環境變數、每項去空白、不限個數，正規化後的重複合併 | JSON 陣列、最多 16 個、每項要剛好是一個來源（不去空白）、正規化後重複 → 422 `origin_policy_invalid`；存正規化後的寫法（HM-27）；IPv6 寫成 RFC 5952 的十六進位、不寫點分，不跟 Python 版本變（HM-27 審查 S-9） | 檔案與請求有界；不默默合併；存過的檔換 Python 也照樣能用 | 加嚴 |
+| 124 | Origin 檢查的位置 | 中介層，在認證與選帳號之前：錯 token 的請求也判斷、也記，紀錄不知道帳號（R04 S-09） | token 驗過之後、方法檢查（405）之後、query 檢查（400）之前，今天 Headscale 規則的位置：錯 token 照今天 404，碰不到政策、寫不出紀錄；紀錄帶帳號 id 前 8 碼（HM-27） | 未認證的請求灌不進紀錄（比 PaaS K-09 好；FM-73 的 HA 平台差異欄）；HA 閘道既有的檢查順序（HM-01 凍結的 `order-` 案例） | 既有 |
+| 125 | enforce 的拒絕本體 | 403 `{"detail":"ORIGIN_DENIED"}`，不帶 CORS | 403 `{"error":"request denied"}`（閘道的固定本體，同 Bearer 帶 Origin 與 Headscale；HM-27） | HA 的 MCP 端錯誤只用固定本體（第 4.2 節） | 既有 |
+| 126 | Origin 政策的設定入口與壞值 | 環境變數 `MCP_ADMIN_ALLOWED_ORIGINS`、`MCP_ADMIN_ORIGIN_MODE`（chart values）；壞值啟動失敗（exit 3）、執行中讀到壞值 MCP 路徑一律 503 `ORIGIN_POLICY_UNAVAILABLE`；啟動時記一行生效政策（INFO） | `/data/mcp/origin-policy.json`，面板經共用管線 GET／PUT `{base}/api/origin-policy`（If-Match、Idempotency-Key、收據）；檔案不能用時密鑰網址一律 503 `{"error":"state unavailable"}`（不拒絕啟動，面板用那個檔自己的 ETag 存一份蓋過去），只記 WARNING；沒有啟動時的 INFO 行（HM-27） | add-on options 鎖死（#45），只有面板能改；拒絕啟動會讓壞檔沒有修復途徑 | 部署 |
+| 127 | Origin 紀錄的節流 | 整台一份：每個來源 60 秒一行、全部每 60 秒最多 20 行，壓下的補一行；不標帳號，只進預設帳號的 Logs 頁（R04 S-10） | 每帳號一份：每帳號每個（判定、原因、來源）60 秒一行、每帳號每 60 秒最多 20 行，壓下的補一行；帶帳號 id 前 8 碼，寫在 add-on log（WARNING）（HM-27） | HA 在 token 之後判斷、知道帳號；一個帳號被灌爆不會蓋掉其他帳號的紀錄（PaaS 多帳號實測的 info，HANDOFF :241） | 部署 |
+| 128 | Origin 清單的格式與上限 | 逗號分隔的環境變數、每項去空白、不限個數，正規化後的重複合併 | JSON 陣列、最多 16 個、每項要剛好是一個來源（不去空白）、正規化後重複 → 422 `origin_policy_invalid`；存正規化後的寫法（HM-27）；IPv6 寫成 RFC 5952 的十六進位、不寫點分，不跟 Python 版本變（HM-27 審查 S-9） | 檔案與請求有界；不默默合併；存過的檔換 Python 也照樣能用 | 加嚴 |
 
 ## 10. 變更紀錄
 
@@ -1299,5 +1298,6 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 | v1 草案（發版交接清單） | 2026-11-17 | HM-17 補正 | 第 1.2 節「不受開關管」清單前加一段：各產品下一版會帶出去、CHANGELOG 還沒記的變更、CHANGELOG 句子與發版時要另外驗的事，見新檔 `unreleased-changes.md`（計畫 §11.5）；之後不受開關管的片合併時在那裡加一項。規則內容、差異表、錯誤代碼都沒改 |
 | v1 草案（HM-13b 再合併 claude-delivery） | 2026-11-18 | HM-13b | 把 `claude-delivery` `53ffe61`（HM-00 補正的 PR #117、HM-17 補正的 PR #118、0.4.14 發版的 PR #119～#121 合併後）用 merge commit 合進本片（不 rebase、不 force push）：主線第 9 節最後一列仍是第 117 列，本片的第 118～121 列不必再移；第 9 節說明段兩邊合併（保留主線文件同步的說明，加回本片第 118～121 列的出處）。HM-03a 的 UC-08＋sentinel 已在展示機實測（一般與加密局部還原兩個訊號都觸發；完整還原未測，改列為 Odoo 發版前的關卡）。規則內容、差異表、錯誤代碼都沒改 |
 | v1 草案（HM-13c 再合併 HM-13b） | 2026-11-18 | HM-13c | 把 HM-13b 的分支（PR #108 head `090081c`：已合進 `claude-delivery` `53ffe61`，即 PR #117～#121 合併後）用 merge commit 合進本片（不 rebase、不 force push）：HM-13b 仍是第 118～121 列、本片仍是第 122、123 列，列號不必再移；第 9 節說明段保留主線文件同步的說明與兩片各自的出處。規則內容、差異表、錯誤代碼都沒改 |
-| v1 草案（HM-27） | 2026-11-17 | HM-27 | 密鑰網址的服務層級 Origin 清單（DQ-11 採 (a)，使用者 2026-11-14；計畫 §8.7、§12.3 HM-27）：第 1.2 節沒開通那列補「不讀不寫 `origin-policy.json`、`/api/origin-policy` 404」；第 2.6 節照實作改寫成定案（全部帳號共用一份、存在 `/data/mcp/origin-policy.json`、預設 report-only＋`https://claude.ai`、存檔前不寫檔；位置在 token 與方法檢查之後、query 之前；report-only 回應逐位元不變、記 would_deny，enforce 403 固定本體、記 deny；不加 CORS、沒有 preflight；紀錄的格式、呈現規則與每帳號節流；政策檔不能用時密鑰網址一律 503 state unavailable、面板蓋過去；Headscale 照舊；Bearer 照舊 403，DQ-11 第二問待 S14）；第 3.1 節加 `{base}/api/origin-policy` 的 GET、PUT；第 3.5 節加政策的寫入保護（ETag `o1-`、Idempotency-Key、收據在政策檔旁）；第 4.1 節加 `origin_policy_invalid`（422）；第 4.2 節 403 列補 enforce、加 503 state unavailable 列；第 9 節改寫 #9、#10、#42（#42 定案；#10 照舊 403，第二問仍待決）並加第 118～122 列（檢查的位置、enforce 的本體、設定入口與壞值、紀錄的節流、清單的格式與上限）。沒開通的產品回應逐位元不變；HM-01 的黃金回歸與兩個契約凍結不用改 |
-| v1 草案（HM-27 審查修正） | 2026-11-17 | HM-27 | 依 HM-27 的獨立審查（報告 `artifacts/…/wave4/review-HM-27.md`，修正後通過）：第 2.6 節 IPv6 的正規寫法改成 RFC 5952 的十六進位（不跟 Python 版本變）並寫明改正規化規則要遷移舊檔（S-9），不能用的政策檔列全、所有帳號的密鑰網址都 503、目錄只能還原備份（S-2、S-6），開通之後又關掉時 enforce 靜默失效（S-6），Headscale 的 `/api/origin-policy` 寫精確（S-5）；第 3.1 節 405 的 `Allow` 補 `origin-policy`，第 3.2 節 ⑤ 補它的本體、⑧～⑪ 補政策鎖與「⑩ 在鎖之後」（S-4、MF-2）；第 9 節 #9、#122 跟著改 |
+| v1 草案（HM-27） | 2026-11-17 | HM-27 | 密鑰網址的服務層級 Origin 清單（DQ-11 採 (a)，使用者 2026-11-14；計畫 §8.7、§12.3 HM-27）：第 1.2 節沒開通那列補「不讀不寫 `origin-policy.json`、`/api/origin-policy` 404」；第 2.6 節照實作改寫成定案（全部帳號共用一份、存在 `/data/mcp/origin-policy.json`、預設 report-only＋`https://claude.ai`、存檔前不寫檔；位置在 token 與方法檢查之後、query 之前；report-only 回應逐位元不變、記 would_deny，enforce 403 固定本體、記 deny；不加 CORS、沒有 preflight；紀錄的格式、呈現規則與每帳號節流；政策檔不能用時密鑰網址一律 503 state unavailable、面板蓋過去；Headscale 照舊；Bearer 照舊 403，DQ-11 第二問待 S14）；第 3.1 節加 `{base}/api/origin-policy` 的 GET、PUT；第 3.5 節加政策的寫入保護（ETag `o1-`、Idempotency-Key、收據在政策檔旁）；第 4.1 節加 `origin_policy_invalid`（422）；第 4.2 節 403 列補 enforce、加 503 state unavailable 列；第 9 節改寫 #9、#10、#42（#42 定案；#10 照舊 403，第二問仍待決）並加第 124～128 列（檢查的位置、enforce 的本體、設定入口與壞值、紀錄的節流、清單的格式與上限）。沒開通的產品回應逐位元不變；HM-01 的黃金回歸與兩個契約凍結不用改 |
+| v1 草案（HM-27 審查修正） | 2026-11-17 | HM-27 | 依 HM-27 的獨立審查（報告 `artifacts/…/wave4/review-HM-27.md`，修正後通過）：第 2.6 節 IPv6 的正規寫法改成 RFC 5952 的十六進位（不跟 Python 版本變）並寫明改正規化規則要遷移舊檔（S-9），不能用的政策檔列全、所有帳號的密鑰網址都 503、目錄只能還原備份（S-2、S-6），開通之後又關掉時 enforce 靜默失效（S-6），Headscale 的 `/api/origin-policy` 寫精確（S-5）；第 3.1 節 405 的 `Allow` 補 `origin-policy`，第 3.2 節 ⑤ 補它的本體、⑧～⑪ 補政策鎖與「⑩ 在鎖之後」（S-4、MF-2）；第 9 節 #9、#128 跟著改 |
+| v1 草案（HM-27 合併 HM-13c 之後） | 2026-11-18 | HM-27 | 把 HM-13c 的分支（PR #112 head `c5dd7d3`：已含 HM-13b 的 `090081c` 與 `claude-delivery` `53ffe61`）用 merge commit 合進本片（不 rebase、不 force push）：HM-13b 用掉第 118～121 列、HM-13c 用掉第 122、123 列，本片的五列往後移六列，原稿 #118～#122 成為第 124～128 列，順序不變；本片引用自己列號的地方跟著改：開頭的狀態、第 2.6 節四處、第 4.1 節 `origin_policy_invalid` 列、第 4.2 節兩列、第 9 節說明段本片那行（原本「後合併的一方往後重編」那句改成改號的紀錄）、五列的列號、第 10 節本片的兩列（`decisions.md` DQ-11 列、`acceptance-matrix.md` T-24 的引用同步）。HM-13b、HM-13c 的 #118～#123 照原樣。解衝突時兩邊都留：第 1.2 節表格兩列與第 3.1 節路由表、方法表合成一份（HM-13c 定案的隔離目錄刪除列＋本片的兩列）；第 3.2 節鎖的說明、第 3.5 節表格、第 4.1 節、第 9 節說明段、表尾與本節都是 HM-13c 那側在前、本片在後。規則內容不變 |

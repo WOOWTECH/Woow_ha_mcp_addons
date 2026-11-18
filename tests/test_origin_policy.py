@@ -902,7 +902,7 @@ def policy_state(path, raw):
 
 def test_the_policy_files_bounds_are_its_own(tmp_path):
     """HM-27 review S-2: 16 KiB (a valid policy padded with spaces) and 16 origins are used; one byte or one origin more
-    is unusable (contract 2.6, section 9 #122: the numbers are pinned here, not read from the module)."""
+    is unusable (contract 2.6, section 9 #128: the numbers are pinned here, not read from the module)."""
     path = tmp_path / POLICY
     document = b'{"version":1,"mode":"report-only","allowed_origins":[]}'
     assert policy_state(path, document.ljust(16384)) == 'saved'
