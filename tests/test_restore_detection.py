@@ -1076,7 +1076,8 @@ def test_the_container_probes_restore_stage_meets_the_entrypoint(tmp_path, log_s
     probe = container_probe(monkeypatch, data, vroot)
     restored, state = probe.restore_as_supervisor()
     assert {vroot.owner(path.lstat()) for path in [data, *data.rglob('*')]} == {RESTORE_OWNER}
-    assert boot(parent, vroot) == REOWNED % (len(restored) + 1)  # the restored entries and the marker
+    said = boot(parent, vroot)
+    assert said == REOWNED % (len(restored) + 1)  # the restored entries and the marker
     with pytest.raises(AssertionError, match='restore marker left'):
         probe.check_restored_start(restored, state)  # the entrypoint alone: the marker is there
     assert guard_start(data) == [True, False]
@@ -1084,6 +1085,14 @@ def test_the_container_probes_restore_stage_meets_the_entrypoint(tmp_path, log_s
     # guard as that user); this test user stands in for it.
     vroot.owners[inode(data / profiles.RESTORE_NOTICE_NAME)] = RUNTIME
     probe.check_restored_start(restored, state)
+    # HM-16 (HM-13b review S-3): the start's stderr as the probe reads it, the real entrypoint's line and the real
+    # guard's (the management process configures no logging before the guard: each message alone on its line)
+    said += ''.join(record.getMessage() + '\n' for record in log_scan.records if record.name == restore_lock.__name__)
+    with tempfile.TemporaryFile() as log:
+        log.write(said.encode())
+        probe.check_restore_log(log, len(restored) + 1)
+        with pytest.raises(AssertionError, match="the boot guard's notice not logged once"):
+            probe.check_restore_log(log, len(restored) + 1, revoked=['default'])  # nothing was revoked
 
 
 # ---- as root (the CI): real owners, and what the runtime user can do afterwards -----------------------------------
