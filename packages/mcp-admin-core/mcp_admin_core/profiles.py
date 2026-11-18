@@ -7,9 +7,10 @@ ProfileManager (profile_runtime) reads the index, opens the profiles it lists an
 children: the spawn check's test bind (port_occupied), allocation around what is held (allocate_port occupied=) and
 the memory readings (memory_limit_mib, available_memory_mib). HM-10 (profile_admin) lists, creates, renames and
 deletes profiles and quarantines an unusable index with these rules and the file helpers below
-(free_index_quarantine_name, move_index_aside, index_bytes, remove_profile_directory); HM-13b's boot guard checks
-whether profile data exists. restore_detect (HM-13a, not wired yet) takes its file names from here. It never
-writes the default profile's files (invariant I6).
+(free_index_quarantine_name, move_index_aside, index_bytes, remove_profile_directory). restore_detect (HM-13a) and the
+boot guard (HM-13b, restore_lock) take their file names from here, and the guard its quarantine names
+(free_quarantine_name: never over anything, numbered within one second, HM-07 review S-15; free_aside_name for an
+entry at one of its own names that is a directory). It never writes the default profile's files (invariant I6).
 
 Layout (plan §4.1)::
 
@@ -108,7 +109,9 @@ _PROFILE_ID = re.compile(r'[0-9a-f]{24}')
 PROFILE_ID = re.compile(DEFAULT_PROFILE + '|' + _PROFILE_ID.pattern)
 _UTC = '%Y%m%dT%H%M%SZ'
 QUARANTINE_PREFIX = '.quarantine-'
-_QUARANTINE = re.compile(re.escape(QUARANTINE_PREFIX) + r'([0-9a-f]{24})-([0-9]{8}T[0-9]{6}Z)')
+# HM-13b (HM-07 review S-15): a second quarantine of the same profile within one second gets -2, -3 ... (up to
+# MAX_QUARANTINE_NUMBER), as the index quarantine's names do.
+_QUARANTINE = re.compile(re.escape(QUARANTINE_PREFIX) + r'([0-9a-f]{24})-([0-9]{8}T[0-9]{6}Z(?:-[0-9]{1,3})?)')
 
 
 class ProfileDataError(RuntimeError):
@@ -588,6 +591,13 @@ INSTANCE_RECORD_TEMPORARY_NAME = '.instance-record.tmp'  # the next record, befo
 RESTORE_MARKER_NAME = '.restore-detected'  # restore detection, signal 1: saved by packaging/entrypoint.py
 REVOKE_ALL_MARKER_NAME = '.revoke-all-pending'  # the boot guard (HM-13b)
 RESTORE_RECORD_NAME = 'restore-record.json'  # the boot guard (HM-13b)
+# The receipts a restore archived (operations.archive_for_restore, HM-13b): <journal>.restored beside a profile's
+# state.json (the default profile's too) and beside the index.
+RECEIPT_ARCHIVE_NAMES = ('.state.json.operations.json.restored', INDEX_OPERATIONS_NAME + '.restored')
+# The names whose entry the boot guard moves aside when it is a directory (a forged backup; HM-13a review SF-7, HM-13b
+# review S-1): what the guard writes, renames or removes there, never something else.
+ASIDE_NAMES = (SENTINEL_NAME, INSTANCE_RECORD_NAME, INSTANCE_RECORD_TEMPORARY_NAME, RESTORE_MARKER_NAME,
+               REVOKE_ALL_MARKER_NAME, RESTORE_RECORD_NAME, *RECEIPT_ARCHIVE_NAMES)
 
 
 @dataclass(frozen=True)
@@ -652,8 +662,40 @@ def quarantine_name(profile_id: str, when: datetime) -> str:
 
 
 def parse_quarantine_name(name: str) -> tuple[str, str] | None:
+    """(profile id, '<UTC>' or '<UTC>-<n>') of a quarantine directory's name, or None."""
     match = _QUARANTINE.fullmatch(name) if isinstance(name, str) else None
     return (match.group(1), match.group(2)) if match else None
+
+
+def free_quarantine_name(layout: Layout, profile_id: str, when: datetime) -> str:
+    """quarantine_name(profile_id, when), or with -2, -3 ... appended when that name is taken in profiles/ (anything at
+    it, a link or a dangling one included): where the boot guard (HM-13b) moves a profile directory it cannot open; a
+    rename never replaces anything (HM-07 review S-15: it would replace an empty directory). ProfileDataError when none
+    is free. One caller at a time: the management process (same uid is no boundary, DQ-37)."""
+    base = quarantine_name(profile_id, when)
+    return _free_name(layout.profiles, [base] + [f'{base}-{number}' for number in range(2, MAX_QUARANTINE_NUMBER + 1)])
+
+
+def free_aside_name(directory: Path, name: str, when: datetime) -> str:
+    """'<name>.quarantine-<UTC>', or with -2, -3 ... when taken, in directory: where the boot guard (HM-13b) moves an
+    entry at one of its own names (ASIDE_NAMES) that is not a plain file (a directory a forged backup put at the
+    sentinel's name made every rebuild fail: HM-13a review SF-7; at the restore record's or a receipts archive's name,
+    every start stopped: HM-13b review S-1), never deleting it. ProfileDataError when none is free."""
+    if name not in ASIDE_NAMES:
+        raise ValueError('not one of the boot guard\'s names')
+    base = name + '.quarantine-' + _utc(when)
+    return _free_name(Path(directory), [base] + [f'{base}-{number}' for number in range(2, MAX_QUARANTINE_NUMBER + 1)])
+
+
+def _free_name(directory, candidates):
+    for name in candidates:
+        try:
+            os.lstat(directory / name)
+        except FileNotFoundError:
+            return name
+        except OSError:
+            break
+    raise ProfileDataError('no quarantine name is free')
 
 
 def index_quarantine_name(when: datetime) -> str:

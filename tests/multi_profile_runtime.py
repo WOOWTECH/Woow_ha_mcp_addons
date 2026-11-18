@@ -39,7 +39,7 @@ import httpx
 import pytest
 import uvicorn
 
-from mcp_admin_core import features, profile_runtime, profiles, run_product
+from mcp_admin_core import features, profile_runtime, profiles, restore_detect, run_product
 from mcp_admin_core.products import ProductStore, profile_initial_state
 from test_profile_runtime import ProfileChild, connection_of
 from test_single_profile_golden import (ADMIN, GENUINE_CLIENT, INGRESS, PROBE_ANSWERS, MockChild,
@@ -75,7 +75,11 @@ def create_profile(data, product, profile_id, *, label, port, configured=True, i
     """An additional profile on disk as HM-10 will create it: profiles/<id> born with profile_initial_state (new tokens
     that no other profile here has, the default profile's policy now, no connection), with its own synthetic backend
     when configured, and its entry appended to profiles.json (indexed=False: an orphan). Returns the profile's state.
-    The runtime must not run: this opens the default profile's store."""
+    The runtime must not run: this opens the default profile's store.
+
+    HM-13b: only a switched-on add-on makes profiles, and its first start made the instance sentinel and its record
+    (restore detection, HM-13a). Before the first profile, this makes them too (established): profile data without a
+    record reads as a restore, and the boot guard of the next start would revoke every token."""
     data = Path(data)
     layout = profiles.Layout(data)
     default = ProductStore(data, product)
@@ -83,6 +87,8 @@ def create_profile(data, product, profile_id, *, label, port, configured=True, i
         current = default.load()
     finally:
         default.close()
+    if not profiles.has_profile_data(data):
+        restore_detect.detect(data, enabled=True)
     profiles.ensure_profiles_directory(layout)
     state = profile_initial_state(current, taken=set(all_tokens(data)))
     ProductStore(layout.profile(profile_id), product, create=state).close()

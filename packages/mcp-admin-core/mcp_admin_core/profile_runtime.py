@@ -64,6 +64,12 @@ and the manager gives every profile's runtime its own turn on it (a Lane, make_a
 replies are processed there, the profiles taking turns. Each gate also bounds its profile's answers not received yet
 (profiles.ProfileQuota.pending_reply_bytes; profile_router). A ProfileRuntime takes reply_worker as a keyword-only
 option; left out, its replies are processed on the event loop, as before.
+
+HM-13b (plan 8.4; contract 1.2, 7; not gated): run_product runs the boot guard (restore_lock.guard) before it builds
+the manager or the default profile's lone runtime: no child starts and no listener exists before a restore, an
+unfinished "revoke all" and dormant profiles are handled. A product that is not switched on but has profile data gets a
+ProfileRuntime with dormant_profiles (the number the guard left revoked, for the bootstrap; make_apps' option of the
+same name); left out, the runtime is built as before.
 """
 from __future__ import annotations
 
@@ -102,7 +108,7 @@ RUNTIME_OPTIONS = frozenset({'child_url', 'health', 'backend_changed', 'configur
                              'restart_child', 'diagnostics', 'availability', 'token_access', 'mutation_lock',
                              'authority', 'admin_slots', 'admin_pipeline', 'profile_view', 'forward_slots',
                              'slot_busy', 'reply_secrets', 'child_blocked', 'default_endpoint', 'bootstrap_fields',
-                             'body_budget', 'stop_child', 'reply_worker'})
+                             'body_budget', 'stop_child', 'reply_worker', 'dormant_profiles'})
 MANAGEMENT_LISTENER_LIMIT = 64  # 8099's limit_concurrency (run_product), switched on or off
 # HM-09 (plan 5.4; C2-SF-4): after the default profile's child, at most STAGGER_SLOTS additional children start at
 # once; a place is freed when its child answered a health check, could not start, or after STAGGER_SECONDS.
@@ -164,6 +170,9 @@ class ProfileRuntime:
     HM-30 (likewise): reply_worker: the profile's turn on the add-on's reply worker (reply_worker.Lane; make_apps
     reply_worker).
 
+    HM-13b (run_product, for a product not switched on that has profile data): dormant_profiles, make_apps' option of
+    the same name, passed only when given.
+
     mcp_listener_limit: 8081's limit_concurrency when this runtime serves the add-on alone: 64, as before."""
     mcp_listener_limit = 64
 
@@ -171,7 +180,7 @@ class ProfileRuntime:
                  shared=None, profile_view=None, app_options=None, child_connections=CHILD_CONNECTIONS,
                  forward_slots=None, slot_busy=None, reply_secrets=None, hold=None, monitor_options=None,
                  report_blocked=False, default_endpoint=None, bootstrap_fields=None, body_budget=None,
-                 reply_worker=None):
+                 reply_worker=None, dormant_profiles=None):
         if not isinstance(profile_id, str) or not PROFILE_ID.fullmatch(profile_id):
             raise ValueError('invalid profile id')
         if type(child_connections) is not int or child_connections < 1:
@@ -191,7 +200,8 @@ class ProfileRuntime:
         self.gateway_options = {name: value for name, value in (
             ('forward_slots', forward_slots), ('slot_busy', slot_busy), ('reply_secrets', reply_secrets),
             ('default_endpoint', default_endpoint), ('bootstrap_fields', bootstrap_fields),
-            ('body_budget', body_budget), ('reply_worker', reply_worker)) if value is not None}
+            ('body_budget', body_budget), ('reply_worker', reply_worker),
+            ('dormant_profiles', dormant_profiles)) if value is not None}
         if hold is not None and not callable(hold):
             raise ValueError('invalid start hold')
         self.hold = hold

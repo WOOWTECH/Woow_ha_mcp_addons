@@ -11,7 +11,7 @@ import signal
 
 import uvicorn
 
-from . import features, redact, version_for_product
+from . import features, redact, restore_lock, version_for_product
 from .config import ConfigError
 from .capabilities import ManagementOptions
 from .ha_role import make_ha_admin_verifier
@@ -40,6 +40,13 @@ async def run(args, *, child_port=CHILD_PORT):
     loop = asyncio.get_running_loop()
     stop = asyncio.Event()
     try:
+        # The switch is read once per start: the boot guard and the runtime below see the same answer (plan 3.3).
+        enabled = features.enabled(args.product)
+        # HM-13b (plan 8.4; contract 1.2, 7; not gated): the boot guard, after the legacy migration and before any child
+        # or listener: a restore, an unfinished "revoke all", dormant profiles. A product not switched on without
+        # profile data is left alone (a restore's marker only gets its notice). ConfigError: nothing is served, the
+        # next start runs it again.
+        guarded = restore_lock.guard(store, args.product, enabled=enabled)
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, stop.set)
         options = dict(
@@ -54,7 +61,7 @@ async def run(args, *, child_port=CHILD_PORT):
             secret_path_allowed_origins=(frozenset({"https://claude.ai"})
                                          if args.product == "headscale" else None))
         worker = None
-        if features.enabled(args.product):
+        if enabled:
             # HM-08 (multi-profile plan 3.1, 5.1, 5.2; read at every start): every profile of the add-on. 8081 is the
             # token dispatcher (each profile's admission, byte budget, stream cap; 64 + 32 x the product's limit as
             # the outer bound when the open-file limit allows it), 8099 the default profile's management app with the
@@ -73,8 +80,10 @@ async def run(args, *, child_port=CHILD_PORT):
             # HM-05 (multi-profile plan 3.2): the default profile's runtime. It makes the child's Supervisor, client,
             # HealthMonitor and ConfigurationState and the two apps (make_apps with these product options) as this
             # function made them, and closes them in the same order (the client, then the child). No shared
-            # administration: the apps make their own AdminAuthority and management slots, as before.
-            profile = ProfileRuntime(store, TOOLS[args.product], child_spec, port=child_port, app_options=options)
+            # administration: the apps make their own AdminAuthority and management slots, as before. HM-13b: dormant
+            # profiles (profile data on disk) add their number to the bootstrap; without profile data, nothing changes.
+            profile = ProfileRuntime(store, TOOLS[args.product], child_spec, port=child_port, app_options=options,
+                                     dormant_profiles=guarded.dormant)
         async with profile:
             servers = [Listener(uvicorn.Config(app, host=args.host, port=port,
                 proxy_headers=False, access_log=False, log_level='warning', server_header=False,

@@ -862,7 +862,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               bootstrap_fields: Callable[[], dict] | None = None,
               body_budget: request_budget.Share | None = None,
               stop_child: Callable[[], Awaitable] | None = None,
-              reply_worker=None):
+              reply_worker=None,
+              dormant_profiles: int | None = None):
     """listing (0.2.2): the product's tools/list tools as its child lists them (surface.listing). With it, a client
     connects whatever the backend's state: when no child can answer (no backend configured, so no child; a child that is
     not up) the gateway answers initialize, notifications/initialized, ping and tools/list itself, from listing through
@@ -992,7 +993,12 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     A switched-on product's dispatcher also gives a tools/call the check of the profile's answers not received yet,
     through the request's state (PENDING_REPLIES; profile_router.ProfileGate): no make_apps option. HM-30 review 2
     MF-2: the check runs before the slot and again once the call holds it, and a relayed JSON reply is charged
-    (PENDING_CHARGE) before its slot is released."""
+    (PENDING_CHARGE) before its slot is released.
+
+    HM-13b (multi-profile plan 3.3; contract 1.2, 3.6; not gated): dormant_profiles, given only for a product that is
+    not switched on but has profile data on disk: how many profile directories its boot guard left revoked
+    (restore_lock.Outcome.dormant); the bootstrap carries it as "dormant_profiles" (the panel's "休眠帳號 N 個，權杖已撤銷",
+    HM-13c). Left out (every installation without profile data): the bootstrap is as before, byte for byte."""
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
@@ -1031,6 +1037,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         raise ValueError("invalid child stop")
     if reply_worker is not None and not callable(getattr(reply_worker, "run", None)):
         raise ValueError("invalid reply worker")
+    if dormant_profiles is not None and (type(dormant_profiles) is not int or dormant_profiles < 0
+                                         or profile_view is not None):
+        raise ValueError("invalid dormant profiles")
     n8n_request_bounds = getattr(store, "product", None) == "n8n"
     # HM-31: the add-on's request body budget (this profile's share) and the single-request ceiling it is charged up to
     budget_share = request_budget.own_share(getattr(store, "product", None)) if body_budget is None else body_budget
@@ -1497,7 +1506,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                                   "operation_parameter": v.selector, "legacy_write": v.legacy_write,
                                   "default_operation": v.default_operation,
                                   "operations": [{"name": op, "write": op in v.write_operations} for op in v.operations],
-                                  "inputSchema": schemas.get(k) or v.arguments.model_json_schema()} for k, v in tools.items()}, "health": snapshot()}, headers=headers)
+                                  "inputSchema": schemas.get(k) or v.arguments.model_json_schema()} for k, v in tools.items()}, "health": snapshot(),
+                    **({"dormant_profiles": dormant_profiles} if dormant_profiles is not None else {})}, headers=headers)
             if name == "configuration" and request.method == "GET":
                 return JSONResponse({'configuration': configuration.snapshot(state)}, headers=headers)
             if name == "capabilities" and request.method == "GET":

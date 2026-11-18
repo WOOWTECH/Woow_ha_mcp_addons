@@ -1,5 +1,5 @@
 """Headscale's owned backend fixture and bind-address guard; the direct child bearer check (HM-06); the restore stage
-(multi-profile HM-13a). Without Docker or root."""
+(multi-profile HM-13a; its check after the boot guard, HM-13b). Without Docker or root."""
 import ast
 import asyncio
 import json
@@ -260,26 +260,52 @@ class RestoreStageTests(unittest.TestCase):
                 path.unlink()
 
     def repaired(self, data):
-        """data restored, then as the entrypoint leaves it: every entry the runtime user's again, and the marker."""
+        """data restored, then as the start leaves it: every entry the runtime user's again (the entrypoint), the
+        marker gone (the boot guard, HM-13b: no switch, no profile data)."""
         restored, state = probe.restore_as_supervisor()
         self.os.owners.clear()
         for name in restored:
             (data / name).chmod(0o600)
-        (data / probe.MARKER).write_bytes(b'')
-        (data / probe.MARKER).chmod(0o600)
         return restored, state
 
     def test_the_check_after_the_restore_start_passes_a_repaired_restore(self):
         probe.check_restored_start(*self.repaired(self.data))
 
-    def test_the_check_after_the_restore_start_needs_the_marker_and_the_repair(self):
-        marker = probe.MARKER
+    def test_a_switched_on_candidate_keeps_its_sentinel_and_gets_a_restore_record(self):
+        restored, state = self.repaired(self.data)
+        for name in (probe.SENTINEL_NAME, probe.INSTANCE_RECORD_NAME, probe.RESTORE_RECORD_NAME):
+            (self.data / name).write_bytes(b'')
+            (self.data / name).chmod(0o600)
+        with patch.object(probe.features, 'MULTI_PROFILE_PRODUCTS', frozenset({probe.APP})):
+            probe.check_restored_start(restored, state)
+        with self.assertRaises(AssertionError):
+            probe.check_restored_start(restored, state)
+
+    def test_a_switched_on_candidate_needs_each_of_them_private(self):
+        names = (probe.SENTINEL_NAME, probe.INSTANCE_RECORD_NAME, probe.RESTORE_RECORD_NAME)
+        changes = {'missing': lambda path: path.unlink(), 'readable': lambda path: path.chmod(0o644),
+                   'root-owned': lambda path: self.os.chown(path, 0, 0), 'a directory': lambda path: (
+                       path.unlink(), path.mkdir(mode=0o700))}
+        for name in names:
+            for label, change in changes.items():
+                with self.subTest(name=name, change=label), patch.object(probe, 'DATA', self.fixture()) as data:
+                    restored, state = self.repaired(data)
+                    for each in names:
+                        (data / each).write_bytes(b'')
+                        (data / each).chmod(0o600)
+                    change(data / name)
+                    with patch.object(probe.features, 'MULTI_PROFILE_PRODUCTS', frozenset({probe.APP})):
+                        with self.assertRaises(AssertionError):
+                            probe.check_restored_start(restored, state)
+
+    def test_the_check_after_the_restore_start_needs_the_repair_and_the_guard(self):
+        def made(name):
+            return lambda data: ((data / name).write_bytes(b''), (data / name).chmod(0o600))
         changes = {
-            'no marker': lambda data: (data / marker).unlink(),
-            'a root-owned marker': lambda data: self.os.chown(data / marker, 0, 0),
-            'a readable marker': lambda data: (data / marker).chmod(0o644),
-            'a marker with content': lambda data: (data / marker).write_bytes(b'x'),
-            'a marker with a second link': lambda data: os.link(data / marker, data / 'marker-copy'),
+            'the marker left': made(probe.MARKER),
+            'a sentinel without the switch': made(probe.SENTINEL_NAME),
+            'a sentinel record without the switch': made(probe.INSTANCE_RECORD_NAME),
+            'a restore record without the switch': made(probe.RESTORE_RECORD_NAME),
             'a restored entry still root-owned': lambda data: self.os.chown(data / '.writer.lock', 0, 0),
             'a restored entry still 0644': lambda data: (data / 'state.json').chmod(0o644),
             'a rewritten state': lambda data: (data / 'state.json').write_bytes(b'{"fixture": false}'),
@@ -322,9 +348,9 @@ class RestoreStageTests(unittest.TestCase):
                                   ('stop', process)])
 
     def test_a_failed_check_still_stops_the_runtime_and_fails(self):
-        events, process = self.stage(check=AssertionError('restore marker missing'))
+        events, process = self.stage(check=AssertionError('restore marker left'))
         self.assertEqual(events[-2:], [('stop', process), 'failed'])
-        events, process = self.stage(check=AssertionError('restore marker missing'), exited=True)
+        events, process = self.stage(check=AssertionError('restore marker left'), exited=True)
         self.assertNotIn(('stop', process), events)  # an exited runtime has nothing to stop
         self.assertEqual(events[-1], 'failed')
 

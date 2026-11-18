@@ -16,7 +16,7 @@
 | 模組 | 建立的片 | 之後會改的片（照合併順序） | 帳本 | tool-surface | 用途 |
 |---|---|---|---|---|---|
 | `packages/mcp-admin-core/mcp_admin_core/features.py` | HM-07 | 每個產品的升版片（加產品；受發版鎖）。HM-17 沒改它：HM-17 先合併，那時這個檔還不存在 | 列管（HM-07 起） | — | 產品開關 `MULTI_PROFILE_PRODUCTS`；`enabled(product)` 呼叫時讀 |
-| `packages/mcp-admin-core/mcp_admin_core/profiles.py` | HM-07 | HM-13a（還原標記的檔名常數；還沒合併）→ HM-09 → HM-10 → HM-31（只改註解）→ HM-25 | 列管（HM-07 起） | — | 索引、簽章、布局、一致性、容量常數、名稱規則、port 配發 |
+| `packages/mcp-admin-core/mcp_admin_core/profiles.py` | HM-07 | HM-13a（還原標記的檔名常數；還沒合併）→ HM-09 → HM-10 → HM-31（只改註解）→ HM-13b（隔離名稱不覆蓋、守門的移開名稱）→ HM-25 | 列管（HM-07 起） | — | 索引、簽章、布局、一致性、容量常數、名稱規則、port 配發 |
 | `packages/mcp-admin-core/mcp_admin_core/identity_fields.py` | HM-07 | HM-12、HM-13b | 列管（HM-07 起） | — | 八個產品的身分欄位與秘密欄位分類 |
 | `packages/mcp-admin-core/mcp_admin_core/profile_runtime.py` | HM-05 | HM-08 → HM-09 → HM-13b → HM-30 → HM-31 → HM-25 | 列管 | — | 每帳號執行套件（store、Supervisor、監看、收據） |
 | `packages/mcp-admin-core/mcp_admin_core/profile_router.py` | HM-08 | HM-10 → HM-14 → HM-31 → HM-27 | 列管 | — | 8081 token 分派器；8099 分派、方法表、Ingress 備援改寫 |
