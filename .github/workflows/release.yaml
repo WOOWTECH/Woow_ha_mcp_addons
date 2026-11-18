@@ -1,27 +1,39 @@
 name: Manually approved GHCR publication
+# GitHub-hosted route (owner decision 2026-11-17; docs/operations/release.md): one product per run, dispatched on the
+# open version-bump PR's release/* branch with source_sha = the commit to publish. gate checks the dispatch, the
+# public-release environment settings and the source; candidate builds, accepts, J1900-checks and hands over the
+# tested image ID without any registry authority; publish, in the protected public-release environment, starts only
+# after the owner's approval, loads exactly that image ID and pushes it with the run's own GITHUB_TOKEN. No PAT, no
+# other secret, and only GitHub's own hosted runners. packaging/validate.py compares this file step by step.
+run-name: Publish ${{ inputs.app }} from ${{ github.ref_name }} at ${{ inputs.source_sha }}
 on:
   workflow_dispatch:
     inputs:
       app:
-        description: Independently cleared product (no arbitrary ref/version)
+        description: Product to publish (OpenDesign has no image and is refused)
         type: choice
         required: true
         options: [odoo, n8n, hermes, opendesign, emqx, litellm, nextcloud, headscale]
+      source_sha:
+        description: Full 40-hex commit to publish; must be the head of the dispatched release/* branch
+        type: string
+        required: true
 permissions:
   contents: read
+# One group per product: different products publish at the same time, and a run in progress is never cancelled.
 concurrency:
-  group: public-release
+  group: public-release-${{ inputs.app }}
   cancel-in-progress: false
 jobs:
-  # BLOCKED: WOOWTECH is USER-owned; no runner-group/selected-workflow controls.
-  # No label/variable substitutes for those controls or private environment review.
+  # No job condition: a dispatch outside release/* fails here (check_release.py), never a skipped pass.
   gate:
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    # The source gate includes browser and full Python suites; match the PR window.
-    timeout-minutes: 40
-    env:
-      BLD2_APPROVAL: ${{ vars.BLD2_APPROVAL }}
+    # actions read: the public-release environment settings (environment_gate.py).
+    permissions:
+      contents: read
+      actions: read
+    # The same source gate as the PR checks job, which has 60 minutes since DQ-43 (2079 s and 2322 s measured).
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -31,6 +43,18 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: '3.13.16'
+      - run: |
+          python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
+      - name: Release branch, first attempt, the dispatched commit and a released product (closed by default)
+        env:
+          APP: ${{ inputs.app }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: python packaging/check_release.py "$APP"
+      - name: public-release exists with the owner as the only reviewer, no administrator bypass, release/* only
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python packaging/environment_gate.py gate
+      - run: python packaging/validate.py
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '26.12.1'
@@ -39,18 +63,9 @@ jobs:
           version: '0.12.10'
           enable-cache: false
       - run: |
-          python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
-      - run: python packaging/validate.py
-      - run: |
           uv sync --frozen --no-dev --python python3.13
           uv pip install --python .venv/bin/python --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
           .venv/bin/python -m unittest discover -s packaging -p 'test_*.py' -v
-      - name: Source and per-product release clearance (closed by default)
-        env:
-          APP: ${{ inputs.app }}
-        run: python packaging/check_release.py "$APP"
-      - name: Deny unapproved builder dispatch independently of publication clearance
-        run: python3 packaging/builder_contract.py admit
       - name: Pin the existing fixed subprocess PATH on this disposable runner
         run: |
           test "$(node --version)" = v26.12.1
@@ -62,19 +77,19 @@ jobs:
           if [ "$NODE_BIN" != /usr/local/bin/node ]; then sudo ln -sfn "$NODE_BIN" /usr/local/bin/node; fi
           test "$(sudo -n -- node --version)" = v26.12.1
       - run: sh packaging/unit.sh
-  publish:
+  # Builds and accepts without any registry authority or environment; hands over the tested image ID.
+  candidate:
     needs: gate
-    if: github.ref == 'refs/heads/main'
-    environment: public-release
+    if: startsWith(github.ref, 'refs/heads/release/')
     permissions:
       contents: read
-      packages: write
-    runs-on:
-      group: woow-disposable-builder
-      labels: [self-hosted, linux, x64]
-    timeout-minutes: 40
+    runs-on: ubuntu-24.04
+    # Cold build, the candidate gate (container acceptance, secret scans, SBOM, CVE, licenses), the J1900 check under
+    # QEMU (60-minute budget) and the image handover.
+    timeout-minutes: 150
+    outputs:
+      image_id: ${{ steps.handoff.outputs.image_id }}
     env:
-      BLD2_APPROVAL: ${{ vars.BLD2_APPROVAL }}
       APP: ${{ inputs.app }}
       DOCKER_BUILD_SUMMARY: 'false'
       DOCKER_BUILD_RECORD_UPLOAD: 'false'
@@ -89,13 +104,14 @@ jobs:
           python-version: '3.13.16'
       - run: |
           python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
-      - run: python packaging/validate.py && python packaging/check_release.py "$APP"
-      - name: Verify runner authority before any setup or daemon use
-        run: python3 packaging/builder_contract.py prepare
-      - name: Use only checksum-verified Buildx and the embedded docker driver (no downloader)
-        run: python3 packaging/builder_contract.py setup --driver docker
-      - name: Verify embedded BuildKit identity before build
-        run: python3 packaging/builder_contract.py verify
+      - name: Source gate data and release admission again on this runner
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: python packaging/validate.py && python packaging/check_release.py "$APP"
+      - name: GitHub-hosted runner, classic overlay2 image store, Docker and Buildx versions (before any build)
+        env:
+          RUNNER_KIND: ${{ runner.environment }}
+        run: python packaging/hosted_runner.py "$RUNNER_KIND" "$RUNNER_TEMP/release-evidence/hosted-runner.json"
       # The version expression in tags, build-args, the pushed IMAGE and the evidence name is
       # generated by packaging/validate.py from VERSION_OVERRIDES (version_expression) and
       # compared verbatim.
@@ -109,13 +125,91 @@ jobs:
           platforms: linux/amd64
           push: false
           load: true
-          tags: local/mcp-${{ inputs.app }}:${{ inputs.app == 'headscale' && '0.4.18' || '0.4.13' }}
-          build-args: BUILD_VERSION=${{ inputs.app == 'headscale' && '0.4.18' || '0.4.13' }}
+          tags: local/mcp-${{ inputs.app }}:${{ inputs.app == 'headscale' && '0.4.19' || '0.4.14' }}
+          build-args: BUILD_VERSION=${{ inputs.app == 'headscale' && '0.4.19' || '0.4.14' }}
           labels: org.opencontainers.image.revision=${{ github.sha }}
       - name: Pinned scanners (public checksum-verified binaries)
         run: python packaging/install_scanners.py "$RUNNER_TEMP/scanners"
       - name: Test and scan this candidate exactly once; fail closed
         run: python packaging/supply_chain.py candidate "$APP" "$RUNNER_TEMP/scanners" "$RUNNER_TEMP/candidate"
+      - name: J1900 instruction set check of the tested image ID (QEMU user mode, -cpu Nehalem); SIGILL fails
+        run: python packaging/j1900_check.py "$APP" "$RUNNER_TEMP/candidate" "$RUNNER_TEMP/release-evidence"
+      - name: Save the tested image ID for the publish job
+        id: handoff
+        run: python packaging/image_handoff.py save "$APP" "$RUNNER_TEMP/candidate" "$RUNNER_TEMP/handoff"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-image-${{ inputs.app }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/handoff/image.tar
+            ${{ runner.temp }}/handoff/handoff.json
+          if-no-files-found: error
+          retention-days: 3
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-evidence-${{ inputs.app }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/candidate/subject.json
+            ${{ runner.temp }}/candidate/sbom.syft.json
+            ${{ runner.temp }}/candidate/sbom.spdx.json
+            ${{ runner.temp }}/candidate/scan-summary.json
+            ${{ runner.temp }}/candidate/provenance.json
+            ${{ runner.temp }}/release-evidence/hosted-runner.json
+            ${{ runner.temp }}/release-evidence/j1900-${{ inputs.app }}.json
+          if-no-files-found: error
+          retention-days: 90
+  # Starts only after the owner approves public-release for this run; pushes the image ID the candidate job tested.
+  publish:
+    needs: [gate, candidate]
+    if: startsWith(github.ref, 'refs/heads/release/')
+    environment: public-release
+    # packages write: the push; actions read: the environment settings and this run's approvals (environment_gate.py).
+    permissions:
+      contents: read
+      packages: write
+      actions: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      APP: ${{ inputs.app }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.13.16'
+      - run: |
+          python -m pip install --require-hashes --only-binary=:all: -r packaging/requirements-ci.txt
+      - name: Source gate data and release admission again on this runner (first attempt only)
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: python packaging/validate.py && python packaging/check_release.py "$APP"
+      - name: The owner approved public-release for this run, and the environment is still protected
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python packaging/environment_gate.py publish "$RUNNER_TEMP/publish-evidence/approval.json"
+      - name: GitHub-hosted runner and classic overlay2 image store (docker load keeps the image ID only there)
+        env:
+          RUNNER_KIND: ${{ runner.environment }}
+        run: python packaging/hosted_runner.py "$RUNNER_KIND" "$RUNNER_TEMP/publish-evidence/hosted-runner.json"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: candidate-image-${{ inputs.app }}-${{ github.sha }}
+          path: ${{ runner.temp }}/handoff
+      # Into its own directory: an artifact never lands next to the runner's own files in RUNNER_TEMP.
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: candidate-evidence-${{ inputs.app }}-${{ github.sha }}
+          path: ${{ runner.temp }}/candidate-evidence
+      - name: Load exactly the image ID the candidate job tested, output and J1900-checked
+        env:
+          EXPECTED_IMAGE_ID: ${{ needs.candidate.outputs.image_id }}
+        run: python packaging/image_handoff.py load "$APP" "$RUNNER_TEMP/handoff" "$RUNNER_TEMP/candidate-evidence"
+      - name: The loaded image matches the whole candidate evidence
+        run: python packaging/supply_chain.py verify "$APP" "$RUNNER_TEMP/candidate-evidence/candidate"
       - name: Refuse overwriting an existing version (errors fail closed)
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -128,24 +222,29 @@ jobs:
       - name: Push the exact locally accepted image, not a rebuild
         run: |
           set -eu
-          python packaging/supply_chain.py verify "$APP" "$RUNNER_TEMP/candidate"
-          IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:${{ inputs.app == 'headscale' && '0.4.18' || '0.4.13' }}"
-          TESTED_ID="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate/subject.json")"
+          python packaging/supply_chain.py verify "$APP" "$RUNNER_TEMP/candidate-evidence/candidate"
+          IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:${{ inputs.app == 'headscale' && '0.4.19' || '0.4.14' }}"
+          TESTED_ID="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-evidence/candidate/subject.json")"
           docker tag "$TESTED_ID" "$IMAGE"
           test "$(docker image inspect "$IMAGE" --format '{{.Id}}')" = "$TESTED_ID"
           docker push "$IMAGE"
       - name: Verify anonymous public manifest (visibility is NOT automatic)
-        run: python packaging/registry_gate.py public "$APP" "$RUNNER_TEMP/candidate"
+        run: python packaging/registry_gate.py public "$APP" "$RUNNER_TEMP/candidate-evidence/candidate"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: published-evidence-${{ inputs.app }}-${{ inputs.app == 'headscale' && '0.4.18' || '0.4.13' }}-${{ github.sha }}
+          name: published-evidence-${{ inputs.app }}-${{ inputs.app == 'headscale' && '0.4.19' || '0.4.14' }}-${{ github.sha }}
           path: |
-            ${{ runner.temp }}/candidate/subject.json
-            ${{ runner.temp }}/candidate/sbom.syft.json
-            ${{ runner.temp }}/candidate/sbom.spdx.json
-            ${{ runner.temp }}/candidate/scan-summary.json
-            ${{ runner.temp }}/candidate/provenance.json
-            ${{ runner.temp }}/candidate/published-provenance.json
-            ${{ runner.temp }}/candidate/published-digest.json
+            ${{ runner.temp }}/candidate-evidence/candidate/subject.json
+            ${{ runner.temp }}/candidate-evidence/candidate/sbom.syft.json
+            ${{ runner.temp }}/candidate-evidence/candidate/sbom.spdx.json
+            ${{ runner.temp }}/candidate-evidence/candidate/scan-summary.json
+            ${{ runner.temp }}/candidate-evidence/candidate/provenance.json
+            ${{ runner.temp }}/candidate-evidence/candidate/published-provenance.json
+            ${{ runner.temp }}/candidate-evidence/candidate/published-digest.json
+            ${{ runner.temp }}/candidate-evidence/release-evidence/hosted-runner.json
+            ${{ runner.temp }}/candidate-evidence/release-evidence/j1900-${{ inputs.app }}.json
+            ${{ runner.temp }}/handoff/handoff.json
+            ${{ runner.temp }}/publish-evidence/approval.json
+            ${{ runner.temp }}/publish-evidence/hosted-runner.json
           if-no-files-found: error
           retention-days: 90

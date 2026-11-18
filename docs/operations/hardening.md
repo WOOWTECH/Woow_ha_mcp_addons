@@ -33,7 +33,7 @@ disabled check；WRITE_CASES 的每一個合法 write assertion 都必須失敗�
 
 ## Build 一次、test/scan 同一 identity
 
-CI image jobs 與 protected `public-release` job 都執行以下流程：
+CI image jobs 與 `release.yaml` 的 candidate job（2026-11-17 起；推送在之後受保護的 publish job）都執行以下流程：
 
 1. `fetch-depth: 0`，固定 root-context amd64 build **一次**、load 本地 image。
    Docker action 自動 build artifact/summary 關閉。沒有 latest 或任意 ref/version。
@@ -75,8 +75,11 @@ CI image jobs 與 protected `public-release` job 都執行以下流程：
 
 ## Push 與 provenance 信任層級
 
-`check_release.py` 只是人工 source/license/secret/publisher/image/HA prerequisite；
-就算全變 true，也不能略過上述實際候選 gate。Push 前 `supply_chain.py verify` 再驗
+`check_release.py` 只核發版的觸發條件（2026-11-17 起：`workflow_dispatch`、`release/*` 分支、第一次 attempt、HEAD＝`GITHUB_SHA`＝
+觸發時帶的 `source_sha`（只保證等於觸發當下的分支 head）、有映像的商店產品、manifest 版號＝`version_for`，見 [release.md](release.md)
+「發版：GitHub 託管機器」）。它和 workflow 一樣從被觸發的分支執行，那個分支帶的是審過的程式才成立；通過也不能略過上述實際候選 gate。
+負責人的批准是 `public-release` environment 的審查；`environment_gate.py` 只核對設定與審查紀錄，不能證明是誰按的（release.md「限制」）。
+候選映像在沒有 registry 權限的 candidate job 測完，publish job 只載入同一個 image ID。Push 前 `supply_chain.py verify` 再驗
 source、local image ID 與 evidence hashes。只 tag 已測 ID，不重新 build。
 
 Push 後 `registry_gate.py public APP OUTPUT` 匿名取得固定 tag manifest，驗其實際

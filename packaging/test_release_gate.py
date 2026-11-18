@@ -167,15 +167,32 @@ class ReleaseGateTest(unittest.TestCase):
 
     def test_the_repository_records_follow_the_rule(self):
         # Headscale's records already have the product's own form; the versions they name release no other product.
+        # Another product may have its own record for the same version (0.4.14: Headscale's line and the shared one),
+        # so each Headscale record is checked alone: with only that file present, no other product is released by it.
         records = sorted((g.ROOT / 'docs/operations').glob('release-decision-headscale-*.md'))
         self.assertTrue(records)
         others = ('woow_mcp_odoo', 'woow_mcp_n8n', 'woow_mcp_hermes', 'woow_mcp_opendesign', 'woow_mcp_emqx',
                   'woow_mcp_litellm', 'woow_mcp_nextcloud')
         for path in records:
             version = path.name[len('release-decision-headscale-'):-len('.md')]
-            with self.subTest(record=path.name):
+            with self.subTest(record=path.name), tempfile.TemporaryDirectory() as directory:
                 self.assertEqual(g.own_record('woow_mcp_headscale', version, g.ROOT), path.name)
-                self.assertEqual([slug for slug in others if g.own_record(slug, version, g.ROOT)], [])
+                alone = Path(directory)
+                (alone / 'docs/operations').mkdir(parents=True)
+                (alone / 'docs/operations' / path.name).write_bytes(path.read_bytes())
+                self.assertEqual(g.own_record('woow_mcp_headscale', version, alone), path.name)
+                self.assertEqual([slug for slug in others if g.own_record(slug, version, alone)], [])
+
+    def test_the_repository_product_records_name_their_own_product(self):
+        # Every product record in the repository releases exactly the product its file name gives (0.4.14 onwards).
+        for path in sorted((g.ROOT / 'docs/operations').glob('release-decision-*-*.md')):
+            stem = path.name[len('release-decision-'):-len('.md')]
+            product, _, version = stem.rpartition('-')
+            if not product or product[0].isdigit():
+                continue  # a shared record (release-decision-<version>.md or a dated one)
+            slug = 'woow_mcp_' + product.replace('-', '_')
+            with self.subTest(record=path.name):
+                self.assertEqual(g.own_record(slug, version, g.ROOT), path.name)
 
 
 if __name__ == '__main__':
