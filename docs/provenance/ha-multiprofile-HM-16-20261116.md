@@ -2,6 +2,10 @@
 
 ## 結論
 
+- **2026-11-19 疊到 HM-27 上（第 21 節）**：merge commit `71e1fca` 把 HM-27 的 `bc4ac31`（#116，已合進 `claude-delivery` `fcd0b22`）
+  合進來，#109 疊在 #116 上。文字衝突只在驗收矩陣。合起來才壞的兩處在多帳號階段的布局名稱：`profiles.RECEIPT_ARCHIVE_NAMES` 多一個
+  名稱（不改的話每個產品的容器探針 import 就失敗），以及 HM-27 的守門還原時寫的 Origin 政策收據檔（`TOP_NAMES` 要收）。守門沒有
+  還原做完時會出現的新 log 行，`check_restore_log` 不用改、`BASE` 照舊。契約、帳本、tool-surface 不用改。
 - **2026-11-18 第二輪獨立審查「修正後通過」（必修 0 項、建議 4 項），4 項都改了（第 20 節）**：`acceptance.md` T-21 沒開通的 app
   那一輪照實際行為重寫（只有訊號 1 時才有 `KEPT_NOTICE` 與面板提示，前置只剩預設帳號）；第 16 節補 HM-03a 寫回的局部還原；
   第 13 節與下面「實際容器沒跑」補 0.4.14 起的發版路線；`check_restore_log` 不准有守門的其他行（刻意改單帳號路徑，`BASE` 移到
@@ -51,7 +55,7 @@
 |---|---|
 | 切片 | HM-16（計畫 §12.3：驗收工具；風險中、工作量 M） |
 | 分支 | `feat/ha-multiprofile-hm16-20261116`（一般 clone，不是 worktree） |
-| 基準 | `claude-delivery` `f4c7718`（HM-00～HM-11、HM-13a、HM-14、HM-17、HM-02、HM-20、#100、HM-31（#105）、HM-09 追補（#106）、HM-11（#107）都已合併）；2026-11-18 用 merge commit 合進 HM-13c `c5dd7d3`（含 HM-13b `090081c`、`claude-delivery` `53ffe61`），第 19 節 |
+| 基準 | `claude-delivery` `f4c7718`（HM-00～HM-11、HM-13a、HM-14、HM-17、HM-02、HM-20、#100、HM-31（#105）、HM-09 追補（#106）、HM-11（#107）都已合併）；2026-11-18 用 merge commit 合進 HM-13c `c5dd7d3`（含 HM-13b `090081c`、`claude-delivery` `53ffe61`），第 19 節；2026-11-19 用 merge commit 合進 HM-27 `bc4ac31`（#116），第 21 節 |
 | 依據 | 計畫 §11（交付、§11.3 升版逐檔清單）、§12.3 HM-16（含 2026-11-15 HM-20 審查 MF-2 的補充）、§10（T-01～T-29、§10.4、§10.6）、§8.4（還原守門）、C4-SF-5、C4-SF-14；FM-16、63、101、102、107、108、135、147；契約第 2.2、2.3、9 節（#72、#73） |
 | 對齊的 PaaS | `woow-mcp-server` 的 `public_probe.py --temp-profile`（repin `d7f58493` 的版本，`artifacts/mcp-security-release-20261112/repin-d7f58493-20261116/public_probe.py`，repo 外）；PaaS CI 映像 smoke（`.gitea/workflows/ci.yml`）只看預設帳號，HA 的多帳號容器階段沒有 PaaS 對應（契約 §9 #73） |
 | 獨立審查 | `artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-16.md`（判定「修正後通過」；證據 `wave4/evidence-review-HM-16/`）。修正的腳本、log、變異結果：`wave4/evidence-fix-HM-16/`（repo 外）。第二輪（2026-11-18，合併 HM-13c 之後）：判定「修正後通過」，第 20 節 |
@@ -671,3 +675,86 @@ HM-13b（開機守門）還沒合併，本片照 HM-13a 已合併的行為與計
 - 帳本：`runtime-patches.json` 在 `packaging/` 只列管 `entrypoint.py`；這一輪改的 `container_probe.py`、`container_profiles.py`、
   `test_container_probe.py` 都不列管（只在容器驗收時掛進候選容器，不進映像，第 9 節），不用重算。`apps/runtime/*.py`、`apps/*/launch.py`
   沒改，tool-surface 不用重產。
+
+## 21. 疊到 HM-27 上（2026-11-19）
+
+### 21.0 結論
+
+- 用 merge commit `71e1fca` 把 HM-27 的 `bc4ac31` 合進本片（第一個 parent `ffbde21`），#109 疊在 #116 上；不 rebase、不 force push。
+  #116 已合進 `claude-delivery`（`fcd0b22`，樹和 `bc4ac31` 相同），不用再合 `claude-delivery`。合併基準 `c5dd7d3`（兩邊都已含 HM-13c）。
+- 文字衝突只有驗收矩陣（第 21.2 節）。合起來才壞的兩處在多帳號階段的布局名稱，在 merge commit 裡修；測試在下一個 commit 補（第 21.3 節）。
+- 只改驗收工具、測試與文件：`container_probe.py` 沒動（單帳號路徑的 `BASE` 照舊 `d922d3c`）；`addons/`、版號、CHANGELOG、執行期檔、
+  `tests/conftest.py` 都沒動；契約、帳本、tool-surface 不用改（第 21.5 節）。
+
+### 21.1 commit
+
+| commit | 內容 |
+|---|---|
+| `71e1fca` | merge：驗收矩陣的衝突；`container_profiles.py` 的三個名稱與 `TOP_NAMES`；`test_every_name_of_the_boot_guard_is_the_layout_s` 改成比三個名稱 |
+| `41044e6` | 測試：Origin 政策的三個名稱、守門封存收據失敗的兩行、真的守門封存 Origin 收據的還原 |
+| 本 commit | 文件：驗收矩陣的檔頭狀態與兩個 packaging 測試檔的登記列、本筆記 |
+
+### 21.2 衝突與處理
+
+`docs/multi-profile/acceptance-matrix.md` 三處，兩邊的內容都留：
+
+| 衝突 | 處理 |
+|---|---|
+| 檔頭狀態 | 照前幾次合併：HM-13c 那句在前，HM-27 那句（含合併 HM-13c 之後的改動）其次，本片那句在後，最後是 HM-19b；本 commit 在本片那句補「合併 HM-27 之後」的改動 |
+| T-21 列 | 期望值用 HM-27 的（Origin 政策旁的收據也 410、政策檔照還原的原樣）；測試欄本片的兩個 packaging 測試接在 HM-13c 的之後、HM-27 的「Origin 政策：」之前；負責片兩邊合起來（HM-16 照編號在 HM-13c 與 HM-19b 之間） |
+| 登記表相鄰的兩列 | `tests/test_restore_detection.py` 用本片的（容器探針讀的 log）、`tests/test_restore_lock.py` 用 HM-27 的（Origin 政策）。merge commit 的說明寫成「git 自動合併」，其實這兩列是第三個衝突區塊，處理就是這樣；登記表其他的列 git 自動合併 |
+
+- 契約第 9 節：本片沒有列，不用改號：HM-13b #118～#121、HM-13c #122、#123、HM-27 #124～#128 照舊；本片的文件沒有引用 HM-27 的列號。
+
+### 21.3 探針與測試
+
+1. **`profiles.RECEIPT_ARCHIVE_NAMES` 變成三個名稱**（HM-27 加 Origin 政策旁封存的收據）：`container_profiles.py` 原本拆成兩個名稱，
+   import 時就 `ValueError`；`container_probe.py` 一開頭就 import 它，所以**每個產品**的容器探針（不只開通的）都會在 import 時失敗，
+   packaging unittest 兩個測試模組載入失敗（`Ran 287`、`errors=2`）。改成拆三個（`ORIGIN_JOURNAL_ARCHIVE`）。
+2. **`TOP_NAMES` 收 HM-27 的三個名稱**（都從 `profiles.py` 取：`ORIGIN_POLICY_NAME`、`ORIGIN_POLICY_OPERATIONS_NAME`、封存的收據）：
+   開通的產品每次還原，守門都把 Origin 政策旁的收據封存成 `.restored`、寫一份新的（備份裡沒有也寫）；面板存的政策檔照還原的原樣。
+   沒收時，開通的候選映像在單帳號路徑還原後的 `fixture_snapshot` 就失敗（`not a name of the layout`）。三個都只在 `/data/mcp` 頂層，
+   不進 `PROFILE_NAMES`（政策是全 add-on 一份）。探針自己從來不存政策（不送管理請求），政策檔名是為了「備份前面板存過政策」的樹。
+   HM-27 筆記第 13 節說探針「不用改」，說的是只檢查一定要有的檔的還原檢查（`check_restored_start`）；布局快照（`tree_snapshot`）只收
+   布局裡的名稱，所以要加。
+3. **還原 log**：HM-27 的守門只多一行 `ORIGIN_NOT_ARCHIVED`，和 `INDEX_NOT_ARCHIVED` 一樣只在封存失敗時記，守門接著停下（`UNFINISHED`、
+   `ConfigError`，什麼都不服務）；還原做完時沒有新行。所以 `check_restore_log` 不用改，照舊拒絕這兩行。合併後兩行都改由
+   `_Sweep.archive` 的參數 `line` 傳給 `_fail`（預設 `INDEX_NOT_ARCHIVED`）：「守門的每一行都以 `GUARD` 開頭」那案原本只看 logger 與
+   `_fail` 的參數，合併後 `INDEX_NOT_ARCHIVED` 悄悄掉出檢查（18 個常數剩 17 個），改成也看 `archive` 給的 `line` 與預設值（19 個）。
+4. **測試**（`41044e6`）：`test_container_profiles`：三個名稱是頂層的檔（放進帳號目錄、做成目錄都拒絕；收據檔名和
+   `operations.journal_path` 算的一樣）；`RevokedRestoreTests`（真的守門）留下的樹有 Origin 政策旁的新收據檔、沒有政策檔。
+   `test_container_probe`：「守門的其他行都失敗」加 `INDEX_NOT_ARCHIVED`、`ORIGIN_NOT_ARCHIVED`；`GuardLogTests` 多一案：備份前存過
+   Origin 政策、收據有一筆存檔，還原後真的守門不動政策、把收據封存，log 只有通知一行，`check_restore_log` 過，`tree_snapshot` 收下。
+   packaging unittest 364 → 366 案。
+5. **變異 9 個全紅**（scratch 目錄的腳本，每次換一段字、跑對應測試、逐位元還原並核對 SHA-256，跑完刪掉）：三個名稱各少一個、Origin
+   的名稱也收在帳號目錄、`check_restore_log` 放過含 `Origin` 或 `index` 的守門行（各一）、AST 不看 `archive`、守門封存 Origin 收據後
+   多記一行、守門不封存 Origin 收據（後兩個暫改執行期的 `restore_lock.py`，已還原）。放過 `index` 那行的變異，`RestoreLogTests` 要有
+   這次加進清單的 `INDEX_NOT_ARCHIVED` 才會紅（單帳號路徑的 AST 比對對 `check_restore_log` 的任何改動也會紅）。
+
+### 21.4 本機檢查（一般使用者；TMPDIR 用 scratch 目錄、不用 `/tmp`，跑完用完整路徑刪掉；pytest 排在共用鎖後面）
+
+| 檢查 | 結果 |
+|---|---|
+| `packaging/validate.py`（有 PyYAML 的 venv） | `PASS: 8 strict Supervisor-subset manifests, translations, pins, workflow policy and clearance shape` |
+| packaging unittest（同一個 venv，`python -m unittest discover -s packaging -p 'test_*.py'`） | `71e1fca`：`Ran 364`、`OK (skipped=5)`；`41044e6`：`Ran 366`、`OK (skipped=5)`，約 28 秒。5 個 skip 是既有的 `skipUnless(root)` |
+| node（`packages/mcp-admin-ui`，`node --test tests/*.test.mjs`，node 26.12.1） | 118 過、0 失敗（多的是 HM-27 的 `origin-policy.test.mjs`；`p9-admin.test.mjs` 對 HM-27 改過的 `api.js` 照樣過）；`node --check` driver、admin 過 |
+| pytest（`.venv/bin/python -m pytest -q -p no:cacheprovider`；共用鎖 05:49:04 排隊就拿到、05:51:39 放掉，台北時間） | 21 檔 984 案：971 過、13 失敗，都是本機環境（第 21.5 節）。檔：`test_restore_lock`、`test_restore_detection`、`test_upgrade_hooks`、`test_owned_executable`、`test_origin_policy`、`test_profile_admin_api`、`test_profile_runtime`、`test_panel_profile_api_shapes`、`test_admin_pipeline_matrix`、`test_request_budget_gateway`、`test_restore_review`、`test_dormant_profiles`、`test_revoke_all`、`test_profile_index`、`test_profile_routing`、`test_profile_consistency`、`test_profile_store`、`test_tool_inventory`、`test_ledger_precheck`、`test_upgrade_zero_rewrite`、`test_single_profile_golden` |
+| 秘密預檢（`scripts/secret_precheck.py --tools …/scan0414/tools`） | gitleaks 8.28.0（釘選、驗過）；本 commit 之前跑：`bc4ac31..41044e6` 34 個 commit，**OK，0 命中**。本 commit 只改文件，提交後再跑一次（結果寫在回報） |
+| 帳本預檢（`scripts/ledger_precheck.py`） | 三本帳本 0 drift、0 missing；相對 `origin/claude-delivery`（合併基準 `bc4ac31`）21 個檔，沒有列管檔、帳本沒改、沒有新的執行期檔：**OK** |
+
+### 21.5 只在 CI 跑的、沒做的
+
+- 要 root 的 7 個（CI 以 root 跑 pytest）：`test_restore_detection.py` 的 5 個 `test_root_*`、`test_owned_executable.py::test_uid10001_nondumpable_self_and_own_child_proof`、
+  `test_profile_store.py::test_mode_and_owner_as_the_add_on_user`；packaging 的 5 個 `skipUnless(root)`。
+- `AF_UNIX path too long` 的 6 個（同第 19.6 節：UNIX socket 在 pytest 的暫存目錄，scratch 路徑超過 108 位元組）：`test_upgrade_hooks.py`
+  對真 runtime 的 4 案、`test_owned_executable.py` 的 `test_ipc_rejects_other_own_process_before_tcp` 與開通產品經 owned executable 那案。
+  合併後 runtime 是 HM-27 的：照程式看，`OriginPolicy` 與 `OperationJournal` 建起來、讀政策時都不寫檔，升級不該多出 Origin 的檔，
+  但這 4 案本機沒跑到，以 CI 為準。
+- Playwright：本機沒有瀏覽器，CI 跑。合併結果的 `packages/`、`apps/` 相對 `bc4ac31` 只多本片的 `p9-admin.test.mjs`（node 跑了），
+  面板程式與瀏覽器測試和 #116 的相同。實際容器同第 19.7 節：第一次真跑是任何產品下一次發版的 candidate job（單帳號路徑）與 HM-19a 的乾跑（多帳號階段）。
+- 契約不改（本片沒有第 9 節的列）。帳本：本片沒有列管檔，合併結果的列管檔和 `bc4ac31` 逐位元相同，`runtime-patches.json`、
+  `runtime-sources.json`、`tool-surface.json`／`.md` 就是 HM-27 的版本，沒有重算、沒有 `--write`；`apps/` 沒變，tool-surface 不重產。
+- 沒改、交下一步：`docs/operations/acceptance.md` 的 T-24 列仍是 HM-27 定案前的摘要（HA：記下 Claude.ai 送的 Origin）。預設清單含
+  `https://claude.ai`，Claude.ai 送它時沒有 would_deny 行，HM-27 筆記交 HM-19b 用 S14 的 echo 端點看；enforce、政策檔不能用時 503、
+  還原後的政策等期望值以矩陣 T-24 為準。HM-27 筆記第 6 節「其他」那列說真子程式由本片的容器探針涵蓋：探針確實跑每個帳號的真子程式，
+  但不送 `Origin`、不驗 Origin 政策（只收它的檔名）。
