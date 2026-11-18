@@ -69,17 +69,62 @@
 - 確認不會帶進新問題：用同一版 gitleaks 8.28.0 和 repo 的設定掃 2.9.0 與 2.9.2 的 wheel，兩者都是同樣 6 處命中（`dns/dnssecalgs/mldsa.py`、`eddsa.py`），雜湊都在 `secret-triage.json` 已核准的清單；授權一樣是 ISC。
 - 舊的三個等待中的 publish 不核准，新 head 推上去之前先取消或 Reject；之後七支（加 Headscale 0.4.19）用新 head 重新觸發。
 
+## 第二次建置（2026-11-18，`b24a2d7`，放棄）
+
+- head `b24a2d7`（`5a7c191` Headscale 0.4.19、`b24a2d7` dnspython 2.9.2）；21:46:59Z～21:47:09Z 觸發七支（odoo 44183380073、n8n 44183384363、
+  hermes 44183389190、emqx 44183394315、litellm 44183399366、nextcloud 44183403936、headscale 44183408135）。
+- 結果：七支的供應鏈閘門都過（dnspython 修正有效）。odoo、n8n、hermes 全過、publish 等待核准；emqx、litellm、nextcloud、headscale 的 J1900 失敗：
+  `<產品>-child: modules differ under -cpu Nehalem: caio.linux_aio`。
+- 原因（讀原始碼判定）：caio 0.12.10 的 `caio/linux_aio.c` 在 import 時呼叫 `io_setup`，失敗就丟 `ImportError: Error on io_setup with code <errno>`；
+  QEMU 8.2.2 linux-user 沒實作 AIO 系統呼叫（`linux-user/syscall.c` 預設回 ENOSYS 38），原生 Docker 可以。是模擬器缺系統呼叫，不是指令集問題，
+  沒有 SIGILL。caio 由 aiofile 帶進來，只有這四支有。
+- 負責人 06:5x 選「修檢查、七支重跑」。修正 `66b393b`、`24de6ec`（兩輪獨立審查）：
+  - `packaging/j1900-allowlist.json` 加只在 QEMU 下才算的條目：只限 `caio.linux_aio`，原生必須成功，QEMU 錯誤必須恰好是
+    `ImportError: Error on io_setup with code 38`。
+  - 審查另外找到 `caio.linux_uring` 在 Docker 預設 seccomp 下原生 import 就失敗（io_uring 被擋，EPERM），之前被 QEMU 差異蓋掉：加原生條目，
+    文字恰好是 `ImportError: io_uring_setup probe failed: Operation not permitted`。
+  - 檢查改成一次報完原生不許可與 QEMU 差異，並驗模組名稱；SIGILL 檢查不變。審查從已發佈的 0.4.13／0.4.18 映像分析四支 child venv 的
+    10 個原生模組，只有 caio 這兩個會失敗。
+- 三個等待中的 publish 不核准，取消；七個執行都結束，GHCR 七個新版 tag 匿名查都是 404（版號沒燒）。
+
+## 第三次建置（2026-11-18，`24de6ec`，發佈）
+
+- 00:56Z（台北 08:56）用 head `24de6ec` 觸發七支，都是 attempt 1：odoo 44211876006、n8n 44211880072、hermes 44211883565、emqx 44211887012、
+  litellm 44211890753、nextcloud 44211894426、headscale 44211897773。
+- 台北 09:37 前七支的 gate、candidate 全過（容器驗收含 1a／1b、供應鏈閘門、J1900）。J1900 的放行訊息和預測一致：七支的 `_tkinter` 原生
+  （`libtk8.6.so` 不在映像裡）；emqx、litellm、nextcloud、headscale 的 child 另有 `caio.linux_uring` 原生、`caio.linux_aio` 只在 QEMU。
+  環境：`qemu-x86_64 version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)`、Docker 28.0.4（classic overlay2）、grype DB built 2026-11-17T06:20:58Z。
+- 核准：負責人約 09:4x（台北）看過七個 image ID、閘門與 J1900 結果和核准前檢查清單後，授權本對話代為核准這七個 publish（原話「准許你去幫我處理我切手動了」），
+  只限這七個執行；這次改了 2026-11-17 22:0x「核准一律由負責人在 GitHub 按」的做法。01:58Z 本對話用負責人帳號（User 165237880）的權杖經 API 核准
+  `public-release`；工具只准這七個 run（`24de6ec`、attempt 1、正在等待），內容只准 `{environment_ids: [27603699551], state: approved, comment}`。
+- 台北 10:00 七支 publish 全部成功。匿名核對 GHCR：七個 manifest 都在，config digest＝測過的 image ID；另逐層下載核對 122 層（約 620 MiB），
+  壓縮 digest、大小與 diffID 都相符。各產品的細節在七份產品紀錄，證據 commit `0627c7f` 只加紀錄與狀態行。
+
+## 合併前的 CI（PR head）
+
+- `checks`：`0627c7f` 上 `test_release_gate` 的舊假設失敗（以為沒有別的產品有 0.4.14 紀錄），`b3781da` 改成每份 Headscale 紀錄單獨檢查，
+  另驗每份產品紀錄只放行自己的產品；`b3781da` 上一次 `test_unconfigured_connect[litellm]` 隨機埠撞號，重跑後綠。
+- `readiness`、`Upgrade comparison / runtime`（升級測試）、`Release train`：綠。
+- `Upgrade comparison / compare`：`0627c7f` 一次、`b3781da` 三次（含兩次重跑）都在「SBOMs of the comparison targets' images」失敗。商店
+  `woow-addon-upgrade-check.yml` 在 ubuntu-latest（26.04、Docker 29.4.2）用 `syft scan docker:ghcr.io/woowtech/amd64-mcp-n8n:0.4.14`，Syft 在 Docker
+  匯出的 tar 裡找不到 config blob（`file blobs/sha256/5afcfda1… not found in tar`）。映像本身沒問題：GHCR 逐層核對過，runtime job 拉起來正常，
+  發版時 Docker 28 存下的 archive 讀得到，同一台機器讀 0.4.13 n8n 也正常。
+- 修正在商店：WOOWTECH/Woow_HA_App_Store#124（MattLinP 核准，台北 14:15 合併，`ca19c7d`）把已發佈映像的 SBOM 改成
+  `syft scan registry:<image> --platform linux/amd64`，直接從 GHCR 讀；在 runner 上重建的映像照舊從 Docker 讀。
+- 重跑舊執行沒用：44224368229 第 3 次（台北 14:16）仍用該執行原本解析的商店流程 `1369a33`（log：`Uses:
+  …/woow-addon-upgrade-check.yml@refs/heads/main (1369a33…)`），一樣失敗。compare 要用 `ca19c7d` 就要有新 commit 觸發的新執行。
+
 ## 驗收清單
 
 | # | 項目 | 誰做 | 要負責人批准 | 狀態 |
 |---|---|---|---|---|
-| 1 | 從凍結的 PR head 建六個 amd64 映像；`supply_chain.py candidate` → `container_acceptance.py`（`container_probe.py`）＋ 供應鏈閘門（source／history／all-layer 秘密掃描、Syft／SPDX SBOM、Grype、license）；不推 GHCR | GitHub 託管機器跑 `release.yaml`（#121；本對話在負責人批准後逐產品觸發，負責人在 GitHub 核准 `public-release`） | **要**（每次觸發） | 待做 |
-| 1a | 容器驗收：子程式 bearer 的直連 401（`assert_child_bearer`；n8n 驗 n8n-mcp 的同一個 child token）。第一次在真容器跑，失敗先查探針與 entrypoint，不放寬 | GitHub 託管機器跑 `release.yaml`（#121；本對話在負責人批准後逐產品觸發，負責人在 GitHub 核准 `public-release`） | 同第 1 項 | 待做 |
-| 1b | 容器驗收：HM-13a 的 root 還原樹（`restored_start`：還原標記在、還原項目改回 10001、`state.json` 位元不變）。第一次在真容器跑，同上 | GitHub 託管機器跑 `release.yaml`（#121；本對話在負責人批准後逐產品觸發，負責人在 GitHub 核准 `public-release`） | 同第 1 項 | 待做 |
-| 2 | J1900 指令集檢查：QEMU user-mode `-cpu Nehalem`（比 J1900 嚴格）跑六個候選映像（DQ-42，負責人 2026-11-17 定每次發版都跑；做法見 [0.1.7 發佈紀錄](release-decision-0.1.7.md)「0.1.8 待辦」最後一點） | GitHub 託管機器跑 `release.yaml`（#121；本對話在負責人批准後逐產品觸發，負責人在 GitHub 核准 `public-release`） | **要**（和第 1 項同一個核准計畫） | 待做 |
-| 3 | 推 GHCR（推了就燒版號）：只推測過的同一個 image ID，匿名以不可變 digest 讀回 | GitHub 託管機器跑 `release.yaml`（#121；本對話在負責人批准後逐產品觸發，負責人在 GitHub 核准 `public-release`） | **要** | 待做 |
-| 4 | 每個產品自己的發佈紀錄 `release-decision-<產品>-0.4.14.md` × 6 ＋ `release-decision-headscale-0.4.19.md`（寫 `woow_mcp_<產品>` 與版號、映像 digest、第 1～3 項的結果）＋ provenance JSON；readiness 只認這七份，本檔不算（HM-17） | 代理 | 否（證據 commit 只加紀錄檔） | 待做 |
-| 5 | CI 在 PR head 全綠：`checks`、`readiness`（六個映像可匿名拉取＋第 4 項）、`Upgrade comparison / compare`（設定比對、0.4.13 → 0.4.14 升級測試、漏洞比對）、`Release train` | CI | 否 | 待做 |
+| 1 | 從凍結的 PR head 建六個 amd64 映像；`supply_chain.py candidate` → `container_acceptance.py`（`container_probe.py`）＋ 供應鏈閘門（source／history／all-layer 秘密掃描、Syft／SPDX SBOM、Grype、license）；不推 GHCR | GitHub 託管機器跑 `release.yaml`（#121；本對話在負責人批准後逐產品觸發，負責人在 GitHub 核准 `public-release`） | **要**（每次觸發） | 完成（第三次建置，七支；結果見各產品紀錄） |
+| 1a | 容器驗收：子程式 bearer 的直連 401（`assert_child_bearer`；n8n 驗 n8n-mcp 的同一個 child token）。第一次在真容器跑，失敗先查探針與 entrypoint，不放寬 | GitHub 託管機器跑 `release.yaml`（#121；本對話在負責人批准後逐產品觸發，負責人在 GitHub 核准 `public-release`） | 同第 1 項 | 完成（第三次建置） |
+| 1b | 容器驗收：HM-13a 的 root 還原樹（`restored_start`：還原標記在、還原項目改回 10001、`state.json` 位元不變）。第一次在真容器跑，同上 | GitHub 託管機器跑 `release.yaml`（#121；本對話在負責人批准後逐產品觸發，負責人在 GitHub 核准 `public-release`） | 同第 1 項 | 完成（第三次建置） |
+| 2 | J1900 指令集檢查：QEMU user-mode `-cpu Nehalem`（比 J1900 嚴格）跑六個候選映像（DQ-42，負責人 2026-11-17 定每次發版都跑；做法見 [0.1.7 發佈紀錄](release-decision-0.1.7.md)「0.1.8 待辦」最後一點） | GitHub 託管機器跑 `release.yaml`（#121；本對話在負責人批准後逐產品觸發，負責人在 GitHub 核准 `public-release`） | **要**（和第 1 項同一個核准計畫） | 完成（第三次建置；允許清單在第二次建置後修正） |
+| 3 | 推 GHCR（推了就燒版號）：只推測過的同一個 image ID，匿名以不可變 digest 讀回 | GitHub 託管機器跑 `release.yaml`（#121；本對話在負責人批准後逐產品觸發，負責人在 GitHub 核准 `public-release`） | **要** | 完成（台北 10:00；負責人授權代為核准，見「第三次建置」；匿名逐層核對） |
+| 4 | 每個產品自己的發佈紀錄 `release-decision-<產品>-0.4.14.md` × 6 ＋ `release-decision-headscale-0.4.19.md`（寫 `woow_mcp_<產品>` 與版號、映像 digest、第 1～3 項的結果）＋ provenance JSON；readiness 只認這七份，本檔不算（HM-17） | 代理 | 否（證據 commit 只加紀錄檔） | 完成（`0627c7f`；測試修正 `b3781da`） |
+| 5 | CI 在 PR head 全綠：`checks`、`readiness`（六個映像可匿名拉取＋第 4 項）、`Upgrade comparison / compare`（設定比對、0.4.13 → 0.4.14 升級測試、漏洞比對）、`Release train` | CI | 否 | 進行中：`checks`、`readiness`、升級測試、`Release train` 綠；`compare` 等商店 #124 之後的新執行（見「合併前的 CI」） |
 | 6 | 升版比對要求時才建 `addons/<產品>/upgrade-notes.yaml`（照報告的 `change`／`key`，或新增可修補 Critical／High 漏洞的 `id`／`package`） | 代理 | 接受漏洞要負責人同意 | 待做（比對跑出來才知道） |
 | 7 | 每個產品的 HAOS P9 回歸（[ha-p9-kit](ha-p9-kit.md)）；Hermes 另看 `enabled=false` 建出的排程是停用的。展示機不升 Core（負責人 2026-11-17 20:2x），所以只驗 Core 2026.7.2 上沒退步；Core 2026.11.x 上面板能開（這一版的目的）靠 CI 與單元測試，不在實機驗 | 本對話在負責人指定的展示機 woowtechshow 做，每步負責人批准 | **要**（主機） | 待做 |
 | 8 | HM-31 的「HM-19c 放行條件」（[契約](../multi-profile/contract.md)第 5 節）對這一版適不適用：HM-31 不受開關管，這一版就會帶出去 | 負責人 2026-11-17 14:4x 決定：**不擋這次維修版**（和 0.4.13 比只多了限制、沒有更寬；上界還沒在出貨機驗證，記在這裡）；這個條件仍擋多帳號開通（HM-19a） | 已定 | 已定（不擋） |
