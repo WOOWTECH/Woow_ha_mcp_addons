@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -660,7 +661,10 @@ class RestoreLogTests(unittest.TestCase):
                   restore_lock.QUARANTINED % 'cccccccc', restore_lock.NOT_REVOKED % ('cccccccc', 'OSError'),
                   restore_lock.NOT_ARCHIVED % 'aaaaaaaa', restore_lock.NOTICE_NOT_REMOVED,
                   restore_lock.MARKER_LEFT % 'ENOSPC', restore_lock.UNFINISHED % 'the check did not pass',
-                  restore_lock.DORMANT_NOTICE % 2, restore_lock.REVOKE_ALL_NOTICE, restore_lock.RECORD_KEPT]
+                  restore_lock.DORMANT_NOTICE % 2, restore_lock.REVOKE_ALL_NOTICE, restore_lock.RECORD_KEPT,
+                  # HM-27: the two lines a _Sweep.archive call is given, the receipts beside the index or beside the
+                  # add-on's Origin policy not archived (the guard then stops: nothing is served)
+                  restore_lock.INDEX_NOT_ARCHIVED, restore_lock.ORIGIN_NOT_ARCHIVED]
         for line in others:
             with self.subTest(line=line):
                 self.assertEqual(self.fails([repair, KEPT, line], 21), 'another line of the boot guard')
@@ -669,7 +673,8 @@ class RestoreLogTests(unittest.TestCase):
 
     def test_every_line_the_boot_guard_logs_starts_with_guard(self):
         """check_restore_log tells the guard's lines by GUARD: every line restore_lock logs (the first argument of a
-        logger call, the third of a _Sweep._fail call) names one of its constants, and each of them starts with it."""
+        logger call, the third of a _Sweep._fail call, and since HM-27 the line a _Sweep.archive call is given or
+        its default) names one of its constants, and each of them starts with it."""
         def names(line):
             if isinstance(line, ast.IfExp):  # REVOKED_NOTICE if revoke_default else KEPT_NOTICE
                 return names(line.body) | names(line.orelse)
@@ -683,9 +688,16 @@ class RestoreLogTests(unittest.TestCase):
                     named |= names(node.args[0])
                 elif called == 'self._fail':
                     named |= names(node.args[2])
+                elif node.func.attr == 'archive':  # HM-27: what it fails with is its fourth argument (line)
+                    for given in [*node.args[3:], *(word.value for word in node.keywords if word.arg == 'line')]:
+                        named |= names(given)
+            elif isinstance(node, ast.FunctionDef) and node.name == 'archive':
+                for default in node.args.defaults:  # line's default: the receipts beside the index
+                    named |= names(default)
         self.assertEqual(named - set(vars(restore_lock)), {'line'})  # _fail's own call logs the line it is given
         named.discard('line')
-        self.assertLessEqual({'KEPT_NOTICE', 'REVOKED_NOTICE', 'REVOKED', 'SET_ASIDE', 'UNFINISHED'}, named)
+        self.assertLessEqual({'KEPT_NOTICE', 'REVOKED_NOTICE', 'REVOKED', 'SET_ASIDE', 'UNFINISHED',
+                              'INDEX_NOT_ARCHIVED', 'ORIGIN_NOT_ARCHIVED'}, named)
         for name in sorted(named):
             with self.subTest(name=name):
                 self.assertTrue(getattr(restore_lock, name).startswith(probe.GUARD))
@@ -719,7 +731,7 @@ def guard_lines(run):
 
 
 class GuardLogTests(unittest.TestCase):
-    """The probe's expectation against the real boot guard (HM-13b, HM-13c), not a copy of its strings: what
+    """The probe's expectation against the real boot guard (HM-13b, HM-13c, HM-27), not a copy of its strings: what
     restore_lock.guard logs at the start after a restore of an installation without profile data, behind the
     entrypoint's line, passes check_restore_log (the restore with profile data:
     packaging/test_container_profiles.py)."""
@@ -747,6 +759,45 @@ class GuardLogTests(unittest.TestCase):
                     probe.check_restore_log(log, len(restored) + 1)
                     with self.assertRaises(AssertionError):
                         probe.check_restore_log(log, len(restored) + 1, revoked=['default'])
+
+    def test_a_switched_on_restore_with_a_saved_origin_policy_passes(self):
+        """HM-16 stacked on HM-27: the panel of a switched-on product saved the add-on's Origin policy before the
+        backup. At the start after the restore the real guard leaves the policy as it came back and archives the
+        receipts of its saves as the index's, and says nothing more than its notice: check_restore_log passes, and
+        what it leaves is the layout's (container_profiles.tree_snapshot, a switched-on product's fixture_snapshot)."""
+        from mcp_admin_core import operations, origin_policy, profiles, restore_detect
+        saved_policy = b'{"version":1,"mode":"enforce","allowed_origins":["https://claude.ai"]}'
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory) / 'mcp'
+            ProductStore(data, 'emqx').close()
+            restore_detect.detect(data, enabled=True)  # the first switched-on start made the sentinel
+            policy = profiles.Layout(data).origin_policy
+            policy.write_bytes(saved_policy)
+            policy.chmod(0o600)
+            journal = operations.OperationJournal(policy, results=origin_policy.RESULTS)
+            save = f'{int(time.time() * 1000)}.{secrets.token_hex(12)}'  # the save's operation id
+            document, _, fingerprint = journal.inspect(save, origin_policy.KIND, 'probe-tester')
+            journal.begin(save, document, origin_policy.KIND, 'probe-tester', fingerprint)
+            journal.complete(save, document)
+            (data / probe.SENTINEL_NAME).chmod(0o644)  # the restore changed the sentinel's ctime
+            (data / probe.SENTINEL_NAME).chmod(0o600)
+            restored = [path for path in data.rglob('*')]
+            (data / probe.MARKER).write_bytes(b'')  # the entrypoint's, saved before its repair
+            store = ProductStore(data, 'emqx')
+            try:
+                said = guard_lines(lambda: restore_lock.guard(store, 'emqx', enabled=True))
+            finally:
+                store.close()
+            self.assertEqual(policy.read_bytes(), saved_policy)
+            archive = data / probe.container_profiles.ORIGIN_JOURNAL_ARCHIVE
+            self.assertEqual(list(json.loads(archive.read_bytes())['receipts']), [save])
+            with tempfile.TemporaryFile() as log:
+                log.write((probe.REOWNED % (len(restored) + 1) + '\n' + said).encode())
+                probe.check_restore_log(log, len(restored) + 1)
+            with patch.object(probe.container_profiles, 'os', Owners()):  # the runtime user's, as repaired
+                left = probe.container_profiles.tree_snapshot(data)
+            self.assertLessEqual({profiles.ORIGIN_POLICY_NAME, profiles.ORIGIN_POLICY_OPERATIONS_NAME, archive.name},
+                                 set(left))
 
 
 if __name__ == '__main__':

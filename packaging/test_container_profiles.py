@@ -186,6 +186,31 @@ class TreeSnapshotTests(unittest.TestCase):
         self.assertNotIn(stage.INDEX_JOURNAL_ARCHIVE, stage.PROFILE_NAMES)
         self.assertNotIn(profiles.RESTORE_NOTICE_NAME, stage.PROFILE_NAMES)
 
+    def test_the_origin_policy_and_its_receipts_are_the_layout_s(self):
+        """HM-16 stacked on HM-27: the add-on's Origin policy of the secret path (only the panel saves it; a restore
+        leaves it as the backup had it), the receipts of its saves (the boot guard writes a new journal at every
+        restore it handles, also where the backup had none) and the ones a restore archived are files at the top of
+        /data/mcp, never in a profile directory, never a directory. Their names are profiles.py's, the journal the one
+        operations names beside the policy."""
+        from mcp_admin_core.operations import RESTORED_SUFFIX, journal_path
+        origin = (profiles.ORIGIN_POLICY_NAME, profiles.ORIGIN_POLICY_OPERATIONS_NAME, stage.ORIGIN_JOURNAL_ARCHIVE)
+        self.assertEqual(journal_path(Path(profiles.ORIGIN_POLICY_NAME)).name, profiles.ORIGIN_POLICY_OPERATIONS_NAME)
+        self.assertEqual(stage.ORIGIN_JOURNAL_ARCHIVE, profiles.ORIGIN_POLICY_OPERATIONS_NAME + RESTORED_SUFFIX)
+        self.assertLessEqual(set(origin), stage.TOP_NAMES - stage.DIRECTORIES)
+        self.assertFalse(set(origin) & stage.PROFILE_NAMES)
+        data = layout_tree(temporary(self))
+        for name in origin:
+            private_file(data / name)
+        self.assertLessEqual(set(origin), set(stage.tree_snapshot(data)))
+        for name in origin:
+            for place, make in (('in a profile', lambda d, n: private_file(d / 'profiles' / A / n)),
+                                ('as a directory', lambda d, n: private_dir(d / n))):
+                with self.subTest(name=name, place=place):
+                    data = layout_tree(temporary(self))
+                    make(data, name)
+                    with self.assertRaisesRegex(AssertionError, 'not a name of the layout'):
+                        stage.tree_snapshot(data)
+
     def test_the_tree_the_boot_guard_leaves_after_a_restore_is_taken(self):
         """The restore record, the panel's restore notice (a restore that kept the token, HM-13c), a new journal
         beside every state and the index, and the receipts a restore archived (HM-13b) are the layout's."""
@@ -410,7 +435,10 @@ class RevokedRestoreTests(unittest.TestCase):
         self.assertIn(profiles.RESTORE_NOTICE_NAME, self.restored)  # the one restored entry the guard removed
         self.assertEqual(stage.detect_as_runtime(self.data, user=None),
                          stage.detected(False, restore_detect.CONSISTENT))
-        stage.tree_snapshot(self.data)  # what the guard left still restores
+        left = stage.tree_snapshot(self.data)  # what the guard left still restores
+        # HM-27: the guard wrote the receipts beside the Origin policy although nothing here ever saved the policy
+        self.assertIn(profiles.ORIGIN_POLICY_OPERATIONS_NAME, left)
+        self.assertNotIn(profiles.ORIGIN_POLICY_NAME, left)
 
     def test_a_start_whose_guard_did_not_handle_the_restore_fails(self):
         with self.assertRaisesRegex(AssertionError, '^restore marker left: the boot guard did not handle the restore$'):
