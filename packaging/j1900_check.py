@@ -14,9 +14,13 @@ every check then runs on that image ID, in a container with --network none --rea
      packaging/j1900-allowlist.json lists it for this product with a reviewed reason and its native error contains the
      entry's error_contains text, the one known cause (review M1: a third-party module that cannot even load natively
      would otherwise never reach QEMU). A listed module that does import natively is checked under QEMU like any other.
-     The natively importable ones are imported again
-     under `qemu-x86_64-static -cpu Nehalem` and must all import, with no SIGILL; a small smoke through C code
-     (hashlib, ssl, zlib, sqlite3, decimal, re) must give the same result both ways;
+     The natively importable ones are imported again under `qemu-x86_64-static -cpu Nehalem` and must all import, with
+     no SIGILL; a small smoke through C code (hashlib, ssl, zlib, sqlite3, decimal, re) must give the same result both
+     ways. The one exception is the other kind of entry, qemu_error_contains, for a module that imports natively but
+     not under QEMU because the emulator lacks a system call it needs at import (caio.linux_aio calls io_setup, which
+     QEMU's linux-user mode does not implement): it is set aside from the comparison only when it imported natively,
+     failed under QEMU and its QEMU error contains that text; every other module is compared as before, and a SIGILL
+     still fails whatever the list says;
   2. n8n: Node loads better-sqlite3, builds an FTS5 table, hashes and compresses, natively and under QEMU, with the
      same result.
 Both import runs must answer for exactly the modules they were sent, each once, imported or failed (review round 2: a
@@ -32,7 +36,8 @@ Ported from artifacts/ha-multiprofile-parity-20261114/wave4/release-0.4.14-build
 j1900_exec, j1900_env, j1900; written for the dropped k3s builder and never run there): the same container flags,
 verdicts and record. Changed: the image is bound through supply_chain.verify_current instead of builder records,
 qemu-user-static comes from the hosted runner's apt, the work directory is private to the run (under RUNNER_TEMP), a
-failure names the step, its exit status, the last module tried and a short stderr tail, and the review M1 rules above.
+failure names the step, its exit status, the last module tried and a short stderr tail (and a module difference under
+QEMU names each module's error text there), and the review M1 rules above.
 """
 import hashlib
 import json
@@ -93,8 +98,15 @@ def child_python(app):
     return '/opt/woow/apps/%s/.venv/bin/python' % app
 
 
+ENTRY_KINDS = ({'reason', 'review', 'error_contains'}, {'reason', 'review', 'qemu_error_contains'})
+DETAIL = 300  # characters of one module's error text, on one line (as j1900_probe.DETAIL)
+DIFFER_MAX = 1500  # characters of the module texts in one "modules differ" message
+
+
 def load_allowlist(path=ALLOWLIST):
-    """{product: {module: {'reason', 'review'}}} from packaging/j1900-allowlist.json; a malformed file fails closed."""
+    """{product: {module: entry}} from packaging/j1900-allowlist.json. An entry is either native (error_contains: the
+    known cause of its native import failure) or QEMU-only (qemu_error_contains: the known cause of its failure under
+    QEMU alone), never both, with a reason and a review; a malformed file fails closed."""
     try:
         value = json.loads(Path(path).read_text())
     except (OSError, ValueError):
@@ -105,10 +117,10 @@ def load_allowlist(path=ALLOWLIST):
         require(isinstance(entries, dict), 'J1900 allowlist entries of ' + product)
         for module, entry in entries.items():
             require(isinstance(module, str) and bool(module) and all(part.isidentifier() for part in module.split('.'))
-                    and isinstance(entry, dict) and set(entry) == {'reason', 'review', 'error_contains'}
+                    and isinstance(entry, dict) and set(entry) in ENTRY_KINDS
                     and all(isinstance(text, str) and text.strip() for text in entry.values()),
-                    'J1900 allowlist entry of %s needs a module name, a reason, a review and the error text it '
-                    'excuses' % product)
+                    'J1900 allowlist entry of %s needs a module name, a reason, a review and the error text it excuses '
+                    '(error_contains or qemu_error_contains, not both)' % product)
     return value['products']
 
 
@@ -222,6 +234,19 @@ def accounted(label, ok, err, sent):
             % (label, ', '.join(sorted(set(sent) - set(ok) - set(err))[:8]) or 'none'))
 
 
+def one_line(text):
+    """An error text from the image on one line of at most DETAIL characters, whatever the probe printed."""
+    return ' '.join(str(text).split())[:DETAIL]
+
+
+def differences(names, details, errors):
+    """'module (its error under QEMU)' for every differing module, at most DIFFER_MAX characters in all, so that the
+    failure of a real run already says why."""
+    text = ', '.join('%s (%s)' % (name, details.get(name) or one_line(errors.get(name, 'no error reported')))
+                     for name in names)
+    return text if len(text) <= DIFFER_MAX else text[:DIFFER_MAX] + ' …'
+
+
 def check_python(image_id, app, scope, python, work, run=run_in_image, allowed=None, deadline=None):
     """One Python environment. Returns its record; native import failures the allowlist does not cover are returned
     in 'disallowed' (check() fails on them after every environment ran); everything else that is wrong raises."""
@@ -255,20 +280,29 @@ def check_python(image_id, app, scope, python, work, run=run_in_image, allowed=N
             label + ': no third-party (site-packages) native module imports natively')
     details = {str(name): str(text) for name, text in natively.get('detail', {}).items()}
     errors = {str(name): details.get(str(name), str(kind)) for name, kind in natively['err'].items()}
-    excused = {name for name, text in errors.items()
-               if name in allowed and allowed[name]['error_contains'] in details.get(name, '')}
+    excused = {name for name in errors if 'error_contains' in allowed.get(name, {})
+               and allowed[name]['error_contains'] in details.get(name, '')}
     write_public(work / (label + '-native-ok.json'), native_ok)
     emulated = step(qemu, ['-cpu', CPU, python, '-I', '-B', probe, 'import', '%s/%s-native-ok.json' % (MOUNT, label)],
                     '-qemu', 'qemu')
     require(not illegal_instruction(emulated), failure(label + '-qemu', emulated, 'ILLEGAL INSTRUCTION under -cpu ' + CPU))
     require(emulated.returncode == 0, failure(label + '-qemu', emulated, 'emulated import run failed'))
     result = last_json(emulated.stdout)
-    require(isinstance(result, dict) and isinstance(result.get('err', {}), dict), label + ': emulated import result')
-    accounted(label + ' QEMU', names_of(result.get('ok'), label + ': emulated import result'), result.get('err', {}),
-              native_ok)
-    differ = sorted(set(native_ok) ^ set(result.get('ok') or [])) + sorted(result.get('err') or {})
-    require(result.get('ok') == native_ok and not result.get('err'),
-            '%s: modules differ under -cpu %s: %s' % (label, CPU, ', '.join(differ[:8])))
+    require(isinstance(result, dict) and isinstance(result.get('err', {}), dict)
+            and isinstance(result.get('detail', {}), dict), label + ': emulated import result')
+    qemu_ok, qemu_err = names_of(result.get('ok'), label + ': emulated import result'), result.get('err', {})
+    accounted(label + ' QEMU', qemu_ok, qemu_err, native_ok)
+    qemu_details = {str(name): one_line(text) for name, text in result.get('detail', {}).items()}
+    # Set aside only a QEMU-only entry's module that imported natively and failed under QEMU for its known cause; the
+    # rest must match the native run exactly, and a SIGILL has already failed above whatever the list says.
+    qemu_excused = {name: qemu_details[name] for name in sorted(qemu_err)
+                    if name in native_ok and 'qemu_error_contains' in allowed.get(name, {})
+                    and allowed[name]['qemu_error_contains'] in qemu_details.get(name, '')}
+    expected_ok = [name for name in native_ok if name not in qemu_excused]
+    if qemu_ok != expected_ok or set(qemu_err) != set(qemu_excused):
+        differ = sorted((set(expected_ok) ^ set(qemu_ok)) | (set(qemu_err) - set(qemu_excused)))
+        raise Closed('%s: modules differ under -cpu %s: %s' % (
+            label, CPU, differences(differ, qemu_details, qemu_err) or 'the same modules in another order'))
     smoke = step(python, ['-I', '-B', probe, 'smoke'], '-smoke', 'smoke')
     require(smoke.returncode == 0, failure(label + '-smoke', smoke, 'native smoke failed'))
     smoke_qemu = step(qemu, ['-cpu', CPU, python, '-I', '-B', probe, 'smoke'], '-smoke-qemu', 'smoke-qemu')
@@ -283,8 +317,8 @@ def check_python(image_id, app, scope, python, work, run=run_in_image, allowed=N
             'native_ok': len(native_ok), 'native_errors': errors,
             'allowlisted': sorted(excused),
             'disallowed': {name: text for name, text in sorted(errors.items()) if name not in excused},
-            'qemu_ok': len(result['ok']), 'modules_sha256': hashlib.sha256(json.dumps(native_ok).encode()).hexdigest(),
-            'smoke': True}
+            'qemu_ok': len(qemu_ok), 'qemu_allowlisted': qemu_excused,
+            'modules_sha256': hashlib.sha256(json.dumps(native_ok).encode()).hexdigest(), 'smoke': True}
 
 
 def check_node(image_id, work, run=run_in_image, deadline=None):
@@ -346,9 +380,10 @@ def summary(record):
     parts = []
     for scope, env in record['envs'].items():
         parts.append('%s: lib-dynload %d/%d, site-packages %d/%d natively, %d allowlisted native errors, %d/%d under '
-                     'QEMU' % (scope, env['lib_dynload']['native_ok'], env['lib_dynload']['listed'],
-                               env['site_packages']['native_ok'], env['site_packages']['listed'],
-                               len(env['allowlisted']), env['qemu_ok'], env['native_ok']))
+                     'QEMU, %d QEMU-only allowlisted' % (
+                         scope, env['lib_dynload']['native_ok'], env['lib_dynload']['listed'],
+                         env['site_packages']['native_ok'], env['site_packages']['listed'], len(env['allowlisted']),
+                         env['qemu_ok'], env['native_ok'], len(env['qemu_allowlisted'])))
     return 'PASS: J1900 (-cpu %s, %s) %s %s; %s%s' % (
         CPU, record['qemu']['version_line'], record['app'], record['image_id'], '; '.join(parts),
         '; node smoke with FTS5' if record['node'] else '')
