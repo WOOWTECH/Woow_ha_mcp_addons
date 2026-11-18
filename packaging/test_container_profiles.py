@@ -177,9 +177,11 @@ class TreeSnapshotTests(unittest.TestCase):
         and a restore's archived receipts sit where operations.archive_for_restore leaves them."""
         from mcp_admin_core.operations import RESTORED_SUFFIX
         self.assertLessEqual(set(profiles.ASIDE_NAMES), stage.TOP_NAMES)
-        self.assertEqual((stage.JOURNAL_ARCHIVE, stage.INDEX_JOURNAL_ARCHIVE),
-                         (stage.JOURNAL + RESTORED_SUFFIX, profiles.INDEX_OPERATIONS_NAME + RESTORED_SUFFIX))
-        self.assertEqual({stage.JOURNAL_ARCHIVE, stage.INDEX_JOURNAL_ARCHIVE}, set(profiles.RECEIPT_ARCHIVE_NAMES))
+        self.assertEqual((stage.JOURNAL_ARCHIVE, stage.INDEX_JOURNAL_ARCHIVE, stage.ORIGIN_JOURNAL_ARCHIVE),
+                         (stage.JOURNAL + RESTORED_SUFFIX, profiles.INDEX_OPERATIONS_NAME + RESTORED_SUFFIX,
+                          profiles.ORIGIN_POLICY_OPERATIONS_NAME + RESTORED_SUFFIX))
+        self.assertEqual({stage.JOURNAL_ARCHIVE, stage.INDEX_JOURNAL_ARCHIVE, stage.ORIGIN_JOURNAL_ARCHIVE},
+                         set(profiles.RECEIPT_ARCHIVE_NAMES))
         self.assertIn(stage.JOURNAL_ARCHIVE, stage.PROFILE_NAMES)
         self.assertNotIn(stage.INDEX_JOURNAL_ARCHIVE, stage.PROFILE_NAMES)
         self.assertNotIn(profiles.RESTORE_NOTICE_NAME, stage.PROFILE_NAMES)

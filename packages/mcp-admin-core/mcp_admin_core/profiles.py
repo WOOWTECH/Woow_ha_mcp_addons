@@ -12,7 +12,9 @@ boot guard (HM-13b, restore_lock) take their file names from here, and the guard
 (free_quarantine_name: never over anything, numbered within one second, HM-07 review S-15; free_aside_name for an
 entry at one of its own names that is a directory). HM-13c lists and deletes the quarantine directories by the name
 the management API shows (quarantine_entry_name, quarantine_directory_name, remove_quarantine_directory) and names the
-panel's restore notice (RESTORE_NOTICE_NAME). It never writes the default profile's files (invariant I6).
+panel's restore notice (RESTORE_NOTICE_NAME). HM-27 names the add-on's Origin policy of the secret path and its receipts
+(ORIGIN_POLICY_NAME, ORIGIN_POLICY_OPERATIONS_NAME: origin_policy.py writes them, the boot guard archives the receipts
+on a restore). It never writes the default profile's files (invariant I6).
 
 Layout (plan §4.1)::
 
@@ -20,6 +22,9 @@ Layout (plan §4.1)::
     ├── profiles.json                  the index; written when the first profile is created, kept when empty
     ├── .profiles.json.operations.json the receipts of profile creation, deletion and index quarantine (HM-10), of
     │                                  "revoke all", restore reviews and quarantine deletions (HM-13c)
+    ├── origin-policy.json             the Origin policy of every profile's secret path (HM-27): written when the panel
+    │                                  of a switched-on product first saves it, never by the boot guard
+    ├── .origin-policy.json.operations.json   its saves' receipts (HM-27)
     └── profiles/                      0700
         ├── <24 lowercase hex>/        one additional profile: state.json, .writer.lock, journal, child/
         └── .quarantine-<id>-<UTC>/    a profile the boot guard could not prove revoked (HM-13b): delete only
@@ -597,9 +602,15 @@ RESTORE_RECORD_NAME = 'restore-record.json'  # the boot guard (HM-13b)
 # HM-13c (DQ-03 (b); the owner's decision of 2026-11-16 on the HM-13b review's Q-1): a restore that kept the default
 # profile's token leaves this notice for the panel (only its time); the default profile's next token change removes it.
 RESTORE_NOTICE_NAME = 'restore-notice.json'
+# HM-27: the add-on's Origin policy of the secret path (origin_policy.py; holds no secret) and the receipts of its saves
+# beside it (operations.journal_path names them so). Only a switched-on product's panel writes them; the boot guard
+# never opens the policy (a restore leaves it as the backup had it) and archives its receipts as the index's.
+ORIGIN_POLICY_NAME = 'origin-policy.json'
+ORIGIN_POLICY_OPERATIONS_NAME = '.origin-policy.json.operations.json'
 # The receipts a restore archived (operations.archive_for_restore, HM-13b): <journal>.restored beside a profile's
-# state.json (the default profile's too) and beside the index.
-RECEIPT_ARCHIVE_NAMES = ('.state.json.operations.json.restored', INDEX_OPERATIONS_NAME + '.restored')
+# state.json (the default profile's too) and beside the index; HM-27: beside the Origin policy too.
+RECEIPT_ARCHIVE_NAMES = ('.state.json.operations.json.restored', INDEX_OPERATIONS_NAME + '.restored',
+                         ORIGIN_POLICY_OPERATIONS_NAME + '.restored')
 # The names whose entry the boot guard moves aside when it is a directory (a forged backup; HM-13a review SF-7, HM-13b
 # review S-1): what the guard writes, renames or removes there, never something else.
 ASIDE_NAMES = (SENTINEL_NAME, INSTANCE_RECORD_NAME, INSTANCE_RECORD_TEMPORARY_NAME, RESTORE_MARKER_NAME,
@@ -656,6 +667,11 @@ class Layout:
     @property
     def restore_notice(self) -> Path:
         return self.root / RESTORE_NOTICE_NAME
+
+    # HM-27: the add-on's Origin policy of the secret path (its receipts: operations.journal_path of it).
+    @property
+    def origin_policy(self) -> Path:
+        return self.root / ORIGIN_POLICY_NAME
 
 
 def _utc(when: datetime) -> str:

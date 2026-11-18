@@ -94,10 +94,12 @@ for that slot sees it charged. An event stream holds its slot until it ends, so 
 The reply mask (plan 5.1 point 8, DQ-40 (a) ⑧): the manager's reply_secrets() gives every profile's app every token
 and child token the add-on holds (make_apps reply_secrets). Not here: the lanes, the -32004/-32005 endings and the
 initialize generation fence themselves (gateway.make_apps, given slot_busy; HM-14), the reply worker (HM-30:
-reply_worker.py), Origin reporting (HM-27).
+reply_worker.py), the Origin policy of the secret path (HM-27: origin_policy.py, checked by each profile's app once its
+token is; the dispatcher never reads an Origin).
 
 8099 of a switched-on product (AdminDispatcher, HM-10; plan 5.3; contract 3.1-3.3, 3.7; DQ-17, UC-10): the shared
-management pipeline for every path, then the profile. See AdminDispatcher.
+management pipeline for every path, then the profile. See AdminDispatcher. HM-27: {base}/api/origin-policy is one more
+global path (the add-on's Origin policy; contract 3.1, 3.5).
 """
 from __future__ import annotations
 
@@ -113,7 +115,7 @@ from dataclasses import dataclass
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Match, Route
 
-from . import gateway, profiles, request_budget
+from . import gateway, origin_policy, profiles, request_budget
 from .admin_auth import BadRequest
 from .config import ConfigError, strict_json
 from .profile_admin import Call
@@ -530,17 +532,25 @@ class McpDispatcher:
 PROFILE_HEADER = 'x-mcp-profile'
 ALL_METHODS = ('GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE')
 GLOBAL_PREFIX = 'profiles'
+ORIGIN_POLICY = 'origin-policy'  # HM-27: the add-on's Origin policy of the secret path (a global path of its own)
+
+
+def label_shape(value):
+    """Step 5 of a profile creation or rename: exactly {"label": <string>}."""
+    return isinstance(value, dict) and set(value) == {'label'} and isinstance(value['label'], str)
 
 
 @dataclass(frozen=True)
 class GlobalRoute:
     """One global management path (contract 3.1: X-MCP-Profile is never read there): each method's ProfileAdmin
-    handler and whether it takes a JSON body (exactly {"label": <string>}); "{id}" is one path segment, a profile id
-    (the default profile's or 24 lowercase hexadecimal characters), "{name}" one, a quarantine directory's name as the
-    API shows it (HM-13c: <id>-<UTC>[-n], profiles.quarantine_directory_name): anything else is a fixed 400 at step 5.
-    The handler gets the segments in their order."""
+    handler and whether it takes a JSON body, of the shape step 5 checks without reading any state (label_shape:
+    exactly {"label": <string>}; HM-27's Origin policy: origin_policy.request_shape; a fixed 400 otherwise); "{id}" is
+    one path segment, a profile id (the default profile's or 24 lowercase hexadecimal characters), "{name}" one, a
+    quarantine directory's name as the API shows it (HM-13c: <id>-<UTC>[-n], profiles.quarantine_directory_name):
+    anything else is a fixed 400 at step 5. The handler gets the segments in their order."""
     template: str
     methods: dict
+    shape: object = label_shape
 
     def allows(self):
         return tuple(method for method in ALL_METHODS if method in self.methods)
@@ -549,7 +559,8 @@ class GlobalRoute:
 # The global paths (contract 3.1), matched in this order (an exact path before "profiles/{id}"); every other path under
 # profiles/ is an unknown operation (404 after the role check, as today). tests/test_admin_pipeline_matrix.py generates
 # its refusal matrix from this table and gateway.PROFILE_OPERATIONS. HM-13c: "revoke all", the restore record, a
-# restore review and a quarantine directory's deletion.
+# restore review and a quarantine directory's deletion. HM-27: the Origin policy (its handlers answer an unknown
+# operation's 404 for a product with its own rule, Headscale).
 GLOBAL_ROUTES = (
     GlobalRoute('profiles', {'GET': ('list', False), 'POST': ('create', True)}),
     GlobalRoute('profiles/index/quarantine', {'POST': ('quarantine', False)}),
@@ -558,6 +569,8 @@ GLOBAL_ROUTES = (
     GlobalRoute('profiles/quarantine/{name}/delete', {'POST': ('delete_quarantined', False)}),
     GlobalRoute('profiles/{id}/restore-review', {'POST': ('restore_review', False)}),
     GlobalRoute('profiles/{id}', {'PATCH': ('rename', True), 'DELETE': ('delete', False)}),
+    GlobalRoute(ORIGIN_POLICY, {'GET': ('origin_policy', False), 'PUT': ('save_origin_policy', True)},
+                origin_policy.request_shape),
 )
 PLACEHOLDERS = ('{id}', '{name}')
 
@@ -590,7 +603,7 @@ def valid_segments(found):
 
 
 def is_global(operation):
-    return operation == GLOBAL_PREFIX or operation.startswith(GLOBAL_PREFIX + '/')
+    return operation in (GLOBAL_PREFIX, ORIGIN_POLICY) or operation.startswith(GLOBAL_PREFIX + '/')
 
 
 class AdminDispatcher:
@@ -605,7 +618,8 @@ class AdminDispatcher:
       read (a JSON body only for an operation that takes one), the disconnect watch;
     - step 5: the method table (PATCH and DELETE only on profiles/{id}: anywhere else Starlette's 405 with the path's
       methods; a global path's other methods the same) and the request's shape where no state is read (a global
-      path's {"label": <string>} and its profile id: a fixed 400);
+      path's {"label": <string>}, HM-27's {"mode": <string>, "allowed_origins": [<string>...]}, and its profile id:
+      a fixed 400);
     - step 6: the first role check (AdminAuthority.verify: 403, core_version_unreviewed for an unreviewed Core). A
       caller who is not an administrator gets no further: every answer that depends on any profile's state comes
       after it, so every such caller gets the same bytes whatever exists (I10);
@@ -655,8 +669,7 @@ class AdminDispatcher:
             if is_global(operation) and route is not None:
                 if method not in route.methods:
                     return gateway.method_not_allowed(route.allows())
-                if takes_json and (not isinstance(value, dict) or set(value) != {'label'}
-                                   or not isinstance(value['label'], str)):
+                if takes_json and not route.shape(value):
                     raise BadRequest()
                 if not valid_segments(segments):
                     raise BadRequest()

@@ -46,7 +46,7 @@ loopback rule):
    a state changed, nor the index; every profile's child started again; no credential from before the restore is
    served (each token on both connection methods, each child token by its child). Stopped: the sentinel was rebuilt
    (detect: no marker, CONSISTENT), and what the guard left is still a tree the repair takes (tree_snapshot: the
-   record, new journals, archived receipts).
+   record, new journals, the Origin policy's included (HM-27), archived receipts).
 
 Fixed messages only: no token, child token, label, state or backend value is ever printed; a profile is named by its
 log id (profiles.log_id).
@@ -95,18 +95,24 @@ RESTART_SECONDS = 40  # the watchdog's first delay is 2 s (lifecycle.WATCHDOG), 
 BACKEND_FIELDS = ('connection', 'backend_url', 'backend_key')  # what a profile's backend is (n8n: url and key)
 
 # The layout's names (plan 4.1; profiles.py, operations.py, migration.py): what /data/mcp may hold once the children
-# ran and the boot guard handled a restore (HM-13b, HM-13c). A profile directory holds its state, writer lock,
+# ran and the boot guard handled a restore (HM-13b, HM-13c, HM-27). A profile directory holds its state, writer lock,
 # operation journal (and the journal a restore archived) and the child's empty working directory.
 JOURNAL = operations.journal_path(Path('state.json')).name  # operations.OperationJournal beside state.json
 # The receipts a restore archived (operations.archive_for_restore; HM-13b): beside every profile's state.json, the
-# default profile's included, and beside the index.
-JOURNAL_ARCHIVE, INDEX_JOURNAL_ARCHIVE = profiles.RECEIPT_ARCHIVE_NAMES
+# default profile's included, and beside the index; HM-27: beside the add-on's Origin policy too.
+JOURNAL_ARCHIVE, INDEX_JOURNAL_ARCHIVE, ORIGIN_JOURNAL_ARCHIVE = profiles.RECEIPT_ARCHIVE_NAMES
 PROFILE_NAMES = frozenset({'state.json', '.writer.lock', JOURNAL, JOURNAL_ARCHIVE, 'child'})
 TOP_NAMES = PROFILE_NAMES | {OWNER_RECOVERY, profiles.INDEX_NAME, profiles.INDEX_OPERATIONS_NAME, INDEX_JOURNAL_ARCHIVE,
                              profiles.PROFILES_NAME, profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME,
                              profiles.INSTANCE_RECORD_TEMPORARY_NAME, profiles.RESTORE_MARKER_NAME,
                              profiles.REVOKE_ALL_MARKER_NAME, profiles.RESTORE_RECORD_NAME,
-                             profiles.RESTORE_NOTICE_NAME}  # HM-13c: a restore that kept the token (single profile)
+                             profiles.RESTORE_NOTICE_NAME,  # HM-13c: a restore that kept the token (single profile)
+                             # HM-27: the add-on's Origin policy of the secret path (only the panel saves it; a restore
+                             # leaves it as the backup had it) and the receipts of its saves, which the boot guard
+                             # archives as the index's and writes anew at every restore it handles, also where the
+                             # backup had none
+                             profiles.ORIGIN_POLICY_NAME, profiles.ORIGIN_POLICY_OPERATIONS_NAME,
+                             ORIGIN_JOURNAL_ARCHIVE}
 # What the guard's revocation writes in a state (ProductStore.change_token, then a new child token): nothing else.
 REVOKED_FIELDS = ('token', 'child_token', 'token_history')
 DIRECTORIES = frozenset({'child', profiles.PROFILES_NAME})
