@@ -115,16 +115,19 @@ class SwitchedOnMockBackendTests(unittest.TestCase):
                     self.assertEqual(probe.mock_bind_host(app), '172.18.0.2' if private else '127.0.0.1')
 
 
-# The single-profile probe as reviewed before HM-16: HM-13c's c5dd7d3 (claude-delivery 53ffe61 with HM-13b's restore
-# check after the boot guard and HM-13c's restore notice; f4c7718 before HM-16 was merged with them). A slice that
-# changes that path on purpose moves BASE to the commit its change is reviewed against, and says why in its provenance
-# note. Both sides are compared without their switched-on parts (review MF-3): a base that has switched-on parts of its
-# own (HM-13b's restore check, its features import) needs nothing but BASE moved.
-BASE = 'c5dd7d3'
-# What HM-16 adds for a switched-on product, beyond what BASE has: `import container_profiles`, three statements
-# `if ... features.enabled(...)` that each hand over to container_profiles (mock_bind_host, fixture_snapshot, run), and
-# the import of features unless BASE has it already.
-SWITCHED_ON_BRANCHES = 3
+# The single-profile probe as reviewed: 573bb21 is HM-13c's c5dd7d3 (claude-delivery 53ffe61 with HM-13b's restore
+# check after the boot guard and HM-13c's restore notice) with HM-16's switched-on parts and HM-16's one deliberate
+# change of the single-profile path: the start after the restore stage's restore logs to a file that check_restore_log
+# reads (HM-13b review S-3; HM-16's provenance note, section 19, lists that delta). Before it: c5dd7d3 (HM-16 merged
+# with HM-13c), f4c7718 (HM-16 first). A slice that changes that path on purpose moves BASE to the commit its change is
+# reviewed against, and says why in its provenance note. Both sides are compared without their switched-on parts
+# (review MF-3).
+BASE = '573bb21'
+# The switched-on parts beyond BASE's, by kind ('branch': an `if ... features.enabled(...)` statement, which must hand
+# over to container_profiles; 'container_profiles' and 'features': the two imports): none. BASE has HM-13b's (the
+# features import, check_restored_start's branch) and HM-16's (the import of container_profiles and three branches
+# handing over to it: mock_bind_host, fixture_snapshot, run). A slice that adds one for a switched-on product lists it.
+ADDED_BEYOND_BASE = ()
 
 
 def is_switched_on_branch(node):
@@ -175,15 +178,19 @@ def hands_over_to_container_profiles(node):
     return any(isinstance(name, ast.Name) and name.id == 'container_profiles' for name in ast.walk(node))
 
 
+def base_source():
+    """BASE's packaging/container_probe.py (the CI's checkout has the whole history)."""
+    return subprocess.run(['git', '-c', f'safe.directory={ROOT}', '-C', str(ROOT), 'show',
+                           f'{BASE}:packaging/container_probe.py'], capture_output=True, text=True, check=True).stdout
+
+
 class SingleProfilePathTests(unittest.TestCase):
     """Multi-profile HM-16 (plan 12.3 HM-16 acceptance: the single-profile probe path does not change): a product that
     is not switched on runs BASE's probe statement for statement; the switched-on additions are only guarded
     branches, the stage call last."""
 
     def test_without_the_switched_on_branches_the_probe_is_the_reviewed_one(self):
-        base = subprocess.run(['git', '-c', f'safe.directory={ROOT}', '-C', str(ROOT), 'show',
-                               f'{BASE}:packaging/container_probe.py'], capture_output=True, text=True, check=True).stdout
-        base_tree, base_parts = without_switched_on_parts(base)
+        base_tree, base_parts = without_switched_on_parts(base_source())
         tree, parts = without_switched_on_parts(Path(probe.__file__).read_text())
         self.assertEqual(ast.dump(tree), ast.dump(base_tree))  # every other statement as BASE has it
         # every switched-on part BASE has is still here, unchanged
@@ -191,11 +198,19 @@ class SingleProfilePathTests(unittest.TestCase):
                           if parts.get(dump, (None, None, 0))[2] < count}, {})
         added = [(kind, node) for dump, (kind, node, count) in parts.items()
                  for _ in range(count - base_parts.get(dump, (None, None, 0))[2])]
-        kinds = sorted(kind for kind, _ in added)
-        has_features = any(kind == 'features' for kind, _, _ in base_parts.values())
-        self.assertEqual(kinds, sorted(['container_profiles', *['branch'] * SWITCHED_ON_BRANCHES,
-                                        *([] if has_features else ['features'])]))
+        self.assertEqual(sorted(kind for kind, _ in added), sorted(ADDED_BEYOND_BASE))
         self.assertTrue(all(hands_over_to_container_profiles(node) for kind, node in added if kind == 'branch'))
+
+    def test_base_s_switched_on_parts_are_hm13b_s_and_hm16_s(self):
+        """What BASE itself has beyond its single-profile path: HM-13b's features import and check_restored_start's
+        branch (the one that does not hand over to container_profiles), HM-16's import of container_profiles and its
+        three branches, each handing over to it."""
+        stripping = WithoutSwitchedOnAdditions()
+        stripping.visit(ast.parse(base_source()))
+        self.assertEqual(sorted(kind for kind, _ in stripping.removed),
+                         ['branch', 'branch', 'branch', 'branch', 'container_profiles', 'features'])
+        self.assertEqual(sorted(hands_over_to_container_profiles(node) for kind, node in stripping.removed
+                                if kind == 'branch'), [False, True, True, True])
 
     def test_the_stage_runs_last_and_only_switched_on(self):
         run = next(node for node in ast.parse(Path(probe.__file__).read_text()).body
