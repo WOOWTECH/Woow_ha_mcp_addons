@@ -2,7 +2,8 @@
 fake Docker and fake apt; no container, QEMU or package manager runs here.
 Ported from artifacts/ha-multiprofile-parity-20261114/wave4/release-0.4.14-builder/tests/test_j1900_probe.py (probe
 tests) and tests/test_inpod.py (J1900Test, CliTest.test_docker_run_is_isolated), adapted to j1900_check.py; review M1,
-L4 and L5 cases added, and the QEMU-only allowlist entries (caio.linux_aio, coordinator 2026-11-18).
+L4 and L5 cases added, the QEMU-only allowlist entries (caio.linux_aio, coordinator 2026-11-18) and review round 3
+(caio.linux_uring, failures collected over every environment, module names).
 """
 import copy
 import hashlib
@@ -35,6 +36,9 @@ CAIO = 'caio.linux_aio'
 CAIO_PRODUCTS = ('emqx', 'litellm', 'nextcloud', 'headscale')  # their children install caio (through aiofile)
 AIO_ERROR = 'ImportError: Error on io_setup with code 38'
 AIO_ENTRY = {'reason': 'invented for the test', 'review': 'test', 'qemu_error_contains': AIO_ERROR}
+URING = 'caio.linux_uring'
+URING_ERROR = 'ImportError: io_uring_setup probe failed: Operation not permitted'
+QEMU_PART = 'modules differ under -cpu Nehalem and no QEMU-only entry of packaging/j1900-allowlist.json covers them for '
 
 
 def detail(names):
@@ -94,19 +98,25 @@ class ProbeTest(unittest.TestCase):
         self.assertEqual(len(noisy['detail']['noisy_j1900']), probe.DETAIL)
         self.assertTrue(noisy['detail']['noisy_j1900'].startswith('ImportError: line one xxx'))
 
-    def test_the_qemu_only_text_is_what_the_probe_prints_for_caio(self):
-        # caio's PyInit_linux_aio raises ImportError("Error on io_setup with code %d"); the probe prints "Type: message".
+    def test_the_caio_texts_are_what_the_probe_prints(self):
+        # caio's PyInit_linux_aio raises ImportError("Error on io_setup with code %d") and PyInit_linux_uring
+        # ImportError("io_uring_setup probe failed: %s"); the probe prints "Type: message", which the entries contain.
+        aio, uring = 'fake_caio_j1900.linux_aio', 'fake_caio_j1900.linux_uring'
         with tempfile.TemporaryDirectory() as d:
             package = Path(d) / 'fake_caio_j1900'
             package.mkdir()
             (package / '__init__.py').write_text('')
             (package / 'linux_aio.py').write_text('raise ImportError("Error on io_setup with code %d" % 38)\n')
+            (package / 'linux_uring.py').write_text('raise ImportError("io_uring_setup probe failed: %s" % '
+                                                    '"Operation not permitted")\n')
             with mock.patch.object(sys, 'path', [d, *sys.path]):
-                found = probe.import_all(['fake_caio_j1900.linux_aio'], emit=lambda line: None)
-            for name in ('fake_caio_j1900.linux_aio', 'fake_caio_j1900'):
+                found = probe.import_all([aio, uring], emit=lambda line: None)
+            for name in (aio, uring, 'fake_caio_j1900'):
                 sys.modules.pop(name, None)
-        self.assertEqual(found['detail'], {'fake_caio_j1900.linux_aio': AIO_ERROR})
-        self.assertIn(j.load_allowlist()['emqx'][CAIO]['qemu_error_contains'], found['detail']['fake_caio_j1900.linux_aio'])
+        self.assertEqual(found['detail'], {aio: AIO_ERROR, uring: URING_ERROR})
+        entries = j.load_allowlist()['emqx']
+        self.assertIn(entries[CAIO]['qemu_error_contains'], found['detail'][aio])
+        self.assertIn(entries[URING]['error_contains'], found['detail'][uring])
 
     def test_smoke_is_deterministic(self):
         self.assertEqual(probe.smoke(), probe.smoke())
@@ -198,6 +208,17 @@ def caio_image(qemu_text=AIO_ERROR, **kwargs):
     return fake
 
 
+def hosted_caio(uring_text=URING_ERROR, **kwargs):
+    """That child venv as review round 3 expects it on a GitHub-hosted runner (probes/caio_rerun.py): natively, under
+    Docker's default seccomp, caio.linux_uring fails (io_uring blocked, EPERM); under QEMU caio.linux_aio fails (no
+    io_setup, ENOSYS); caio.thread_aio imports both ways."""
+    fake = FakeImage(site=SITE + [CAIO, URING, 'caio.thread_aio'], native_err={'_tkinter': 'ImportError', URING: 'ImportError'},
+                     native_detail={URING: uring_text}, **kwargs)
+    fake.qemu_ok = [name for name in fake.native_ok if name != CAIO]
+    fake.qemu_err, fake.qemu_detail = {CAIO: 'ImportError'}, {CAIO: AIO_ERROR}
+    return fake
+
+
 class J1900Test(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -208,8 +229,8 @@ class J1900Test(unittest.TestCase):
     def tearDown(self):
         self.temporary.cleanup()
 
-    def env(self, fake, app='odoo', scope='core', allowed=None, deadline=None):
-        return j.check_python(IMAGE, app, scope, j.CORE_PYTHON, self.work, fake, allowed or {}, deadline)
+    def env(self, fake, app='odoo', scope='core', allowed=None, deadline=None, found=None):
+        return j.check_python(IMAGE, app, scope, j.CORE_PYTHON, self.work, fake, allowed or {}, deadline, found)
 
     def test_pass_records_counts_by_kind(self):
         r = self.env(FakeImage())
@@ -250,9 +271,9 @@ class J1900Test(unittest.TestCase):
         qemu = next(call for call in fake.calls if call[3] == 'odoo-core-qemu')
         self.assertEqual(qemu[2][-1], '/j1900/odoo-core-native-ok.json')
         # Being listed does not excuse a difference under QEMU, nor a module QEMU leaves out.
-        with self.assertRaisesRegex(j.Closed, 'modules differ under -cpu Nehalem: _tkinter'):
-            self.env(FakeImage(native_err={}, qemu_ok=['_ssl', 'pydantic_core._pydantic_core', 'yaml._yaml', 'zlib'],
+        r = self.env(FakeImage(native_err={}, qemu_ok=['_ssl', 'pydantic_core._pydantic_core', 'yaml._yaml', 'zlib'],
                                qemu_err={'_tkinter': 'ImportError'}), allowed={'_tkinter': TK_ENTRY})
+        self.assertEqual((r['qemu_differ'], r['qemu_allowlisted']), ({'_tkinter': TK_ERROR}, {}))
         with self.assertRaisesRegex(j.Closed, 'missing: _tkinter'):
             self.env(FakeImage(native_err={}, qemu_ok=['_ssl', 'pydantic_core._pydantic_core', 'yaml._yaml', 'zlib']),
                      allowed={'_tkinter': TK_ENTRY})
@@ -285,10 +306,15 @@ class J1900Test(unittest.TestCase):
         # A module QEMU does not answer for at all is not a pass either (review round 2).
         with self.assertRaisesRegex(j.Closed, 'QEMU import result does not account .*missing: pydantic_core._pydantic_core'):
             self.env(FakeImage(qemu_ok=['_ssl', 'yaml._yaml', 'zlib']))
-        # QEMU reports an import error for a module that imports natively: a difference, shown with its text.
-        with self.assertRaisesRegex(j.Closed, re.escape('odoo-core: modules differ under -cpu Nehalem: zlib (ImportError: '
-                                                        'invented failure of zlib)') + '$'):
-            self.env(FakeImage(qemu_ok=['_ssl', 'pydantic_core._pydantic_core', 'yaml._yaml'], qemu_err={'zlib': 'ImportError'}))
+        # QEMU reports an import error for a module that imports natively: a difference, collected with its text (check()
+        # fails on it after every environment ran, InstallAndRecordTest), and the smoke still runs both ways.
+        found = []
+        fake = FakeImage(qemu_ok=['_ssl', 'pydantic_core._pydantic_core', 'yaml._yaml'], qemu_err={'zlib': 'ImportError'})
+        r = self.env(fake, found=found)
+        self.assertEqual(r['qemu_differ'], {'zlib': 'ImportError: invented failure of zlib'})
+        self.assertEqual(found, [('native', 'core', '_tkinter', TK_ERROR),
+                                 ('qemu', 'core', 'zlib', 'ImportError: invented failure of zlib')])
+        self.assertEqual(fake.calls[-1][3], 'odoo-core-smoke-qemu')
         with self.assertRaisesRegex(j.Closed, 'smoke differs'):
             self.env(FakeImage(smoke_qemu={'sha256': 'b'}))
         with self.assertRaisesRegex(j.Closed, 'emulated smoke failed'):
@@ -306,36 +332,30 @@ class J1900Test(unittest.TestCase):
         self.assertEqual([call[3] for call in fake.calls], ['emqx-child-list', 'emqx-child-native', 'emqx-child-qemu',
                                                            'emqx-child-smoke', 'emqx-child-smoke-qemu'])
         self.assertEqual(json.loads(json.dumps(r)), r)  # the evidence record keeps the text it set aside
-        # Any other text for the same module still fails, and the failure says what it was.
+        # Any other text for the same module is a difference, collected with that text.
         for text in ('ImportError: Error on io_setup with code 1', 'ImportError: Error on io_setup with code 22',
                      'OSError: Error on io_setup with code 38', 'ImportError: Error on io_setup', 'SystemExit: 1'):
             with self.subTest(text=text):
-                with self.assertRaises(j.Closed) as caught:
-                    self.env(caio_image(text), app='emqx', scope='child', allowed={CAIO: AIO_ENTRY})
-                self.assertEqual(str(caught.exception),
-                                 'emqx-child: modules differ under -cpu Nehalem: %s (%s)' % (CAIO, text))
+                r = self.env(caio_image(text), app='emqx', scope='child', allowed={CAIO: AIO_ENTRY})
+                self.assertEqual((r['qemu_differ'], r['qemu_allowlisted']), ({CAIO: text}, {}))
         # A QEMU failure without its text (an older probe) is never set aside.
         bare = json.dumps({'ok': ['_ssl', 'pydantic_core._pydantic_core', 'yaml._yaml', 'zlib'],
                            'err': {CAIO: 'ImportError'}}).encode() + b'\n'
-        with self.assertRaisesRegex(j.Closed, re.escape('modules differ under -cpu Nehalem: %s (ImportError)' % CAIO)):
-            self.env(caio_image(None, qemu_stdout=bare), allowed={CAIO: AIO_ENTRY})
+        r = self.env(caio_image(None, qemu_stdout=bare), allowed={CAIO: AIO_ENTRY})
+        self.assertEqual((r['qemu_differ'], r['qemu_allowlisted']), ({CAIO: 'ImportError'}, {}))
 
     def test_a_qemu_only_entry_covers_its_own_module_only(self):
-        # Not listed: the 0.4.14 hosted-run failure, now with the text QEMU gave.
-        with self.assertRaises(j.Closed) as caught:
-            self.env(caio_image(), app='hermes', scope='child')
-        self.assertEqual(str(caught.exception),
-                         'hermes-child: modules differ under -cpu Nehalem: %s (%s)' % (CAIO, AIO_ERROR))
+        # Not listed: the hosted-run failure of #119, now with the text QEMU gave.
+        self.assertEqual(self.env(caio_image(), app='hermes', scope='child')['qemu_differ'], {CAIO: AIO_ERROR})
         # A native entry for the module never sets aside a difference under QEMU.
-        with self.assertRaisesRegex(j.Closed, 'modules differ under -cpu Nehalem: caio.linux_aio'):
-            self.env(caio_image(), allowed={CAIO: {'reason': 'r', 'review': 'x', 'error_contains': AIO_ERROR}})
+        r = self.env(caio_image(), allowed={CAIO: {'reason': 'r', 'review': 'x', 'error_contains': AIO_ERROR}})
+        self.assertEqual(r['qemu_differ'], {CAIO: AIO_ERROR})
         # Another module failing under QEMU with the very same text is not covered by caio's entry.
         fake = caio_image()
         fake.qemu_ok.remove('zlib')
         fake.qemu_err['zlib'], fake.qemu_detail['zlib'] = 'ImportError', AIO_ERROR
-        with self.assertRaises(j.Closed) as caught:
-            self.env(fake, allowed={CAIO: AIO_ENTRY})
-        self.assertEqual(str(caught.exception), 'odoo-core: modules differ under -cpu Nehalem: zlib (%s)' % AIO_ERROR)
+        r = self.env(fake, allowed={CAIO: AIO_ENTRY})
+        self.assertEqual((r['qemu_differ'], r['qemu_allowlisted']), ({'zlib': AIO_ERROR}, {CAIO: AIO_ERROR}))
 
     def test_a_qemu_only_entry_never_excuses_a_native_failure(self):
         fake = caio_image(None, native_err={'_tkinter': 'ImportError', CAIO: 'ImportError'},
@@ -357,10 +377,10 @@ class J1900Test(unittest.TestCase):
         fake.qemu_ok = list(fake.native_ok)
         with self.assertRaisesRegex(j.Closed, 'QEMU import result does not account'):
             self.env(fake, allowed={CAIO: AIO_ENTRY})
-        # The same modules in another order are a difference too.
+        # An answer in another order than the modules were sent fails at once, like one that does not account for them.
         fake = caio_image(None)
         fake.qemu_ok = sorted(fake.native_ok, reverse=True)
-        with self.assertRaisesRegex(j.Closed, 'modules differ under -cpu Nehalem: the same modules in another order$'):
+        with self.assertRaisesRegex(j.Closed, 'odoo-core QEMU import result is not in the order the modules were sent$'):
             self.env(fake, allowed={CAIO: AIO_ENTRY})
 
     def test_sigill_fails_whatever_the_qemu_only_list_says(self):
@@ -376,22 +396,58 @@ class J1900Test(unittest.TestCase):
         with self.assertRaisesRegex(j.Closed, 'ILLEGAL INSTRUCTION in the smoke'):
             self.env(caio_image(smoke_qemu_rc=132), allowed={CAIO: AIO_ENTRY})
 
-    def test_a_difference_names_each_module_with_its_text_within_bounds(self):
+    def test_collected_failures_are_one_bounded_line_that_shows_both_kinds(self):
         self.assertEqual(j.DETAIL, probe.DETAIL)
         names = ['m%02d._x' % i for i in range(40)]
-        fake = FakeImage(site=SITE + names)
+        fake = FakeImage(site=SITE + names, native_detail={'_tkinter': 'ImportError: no\nTk ' + 't' * 1000})
         fake.qemu_ok = [name for name in fake.native_ok if name not in names]
         fake.qemu_err = {name: 'ImportError' for name in names}
         fake.qemu_detail = {name: 'ImportError: line one\nline two ' + 'x' * 1000 for name in names}
-        with self.assertRaises(j.Closed) as caught:
-            self.env(fake)
-        message = str(caught.exception)
-        prefix = 'odoo-core: modules differ under -cpu Nehalem: '
-        first = 'm00._x (%s)' % ('ImportError: line one line two ' + 'x' * 1000)[:j.DETAIL]
-        self.assertTrue(message.startswith(prefix + first + ', m01._x (ImportError: line one line two x'))
-        self.assertNotIn('\n', message)  # one line, whatever the image printed
-        self.assertEqual(len(message), len(prefix) + j.DIFFER_MAX + 2)
-        self.assertTrue(message.endswith(' …'))
+        found = []
+        r = self.env(fake, found=found)
+        text = ('ImportError: line one line two ' + 'x' * 1000)[:j.DETAIL]  # one line, whatever the image printed
+        tk = ('ImportError: no Tk ' + 't' * 1000)[:j.DETAIL]
+        self.assertEqual((r['disallowed'], r['qemu_differ']), ({'_tkinter': tk}, {name: text for name in names}))
+        self.assertEqual(found, [('native', 'core', '_tkinter', tk)] + [('qemu', 'core', name, text) for name in names])
+        message = j.report('odoo', found)
+        self.assertNotIn('\n', message)
+        native, qemu = message.split('; ')
+        self.assertEqual(native, 'native modules fail to import natively and packaging/j1900-allowlist.json does not '
+                                 'list them for odoo: core _tkinter (%s)' % tk)
+        self.assertTrue(qemu.startswith(QEMU_PART + 'odoo: core m00._x (%s), core m01._x (' % text))
+        self.assertEqual(len(qemu), len(QEMU_PART + 'odoo: ') + j.LIST_MAX + len(' … (40 in all)'))
+        self.assertTrue(qemu.endswith(' … (40 in all)'))
+        # However long the native part, the QEMU part still shows, and the other way round.
+        many = [('native', 'core', 'n%02d._x' % i, 'ImportError: ' + 'y' * 290) for i in range(40)]
+        message = j.report('odoo', many + [('qemu', 'child', 'zlib', 'ImportError: z')])
+        self.assertIn(' … (40 in all); ' + QEMU_PART + 'odoo: child zlib (ImportError: z)', message)
+        self.assertTrue(message.endswith(QEMU_PART + 'odoo: child zlib (ImportError: z)'))
+        message = j.report('odoo', [('qemu', 'child', 'zlib', 'ImportError: z')] + many)
+        self.assertTrue(message.startswith('native modules fail to import natively'))
+        self.assertTrue(message.endswith('covers them for odoo: child zlib (ImportError: z)'))
+        self.assertEqual(j.report('odoo', []), '')
+
+    def test_module_names_from_the_image_must_be_dotted_python_names(self):
+        # Review round 3, low-1: a name with a newline could split a failure line and start a workflow command there.
+        four = ['_ssl', 'pydantic_core._pydantic_core', 'yaml._yaml', 'zlib']
+        for bad in ('evil\n::error::x', 'a::b', 'a..b', '.a', 'a.', '', 'a b', 'a\rb', 'yaml._yaml\n'):
+            native = [{'ok': four + [bad], 'err': {'_tkinter': 'ImportError'}},
+                      {'ok': four, 'err': {'_tkinter': 'ImportError', bad: 'ImportError'}},
+                      {'ok': four, 'err': {'_tkinter': 'ImportError'}, 'detail': {'_tkinter': TK_ERROR, bad: 'x'}}]
+            emulated = [{'ok': four + [bad], 'err': {}}, {'ok': four[:3], 'err': {'zlib': 'ImportError', bad: 'x'}},
+                        {'ok': four, 'err': {}, 'detail': {bad: 'x'}}]
+            cases = [(FakeImage(listing={'lib-dynload': ['_ssl'], 'site-packages': ['yaml._yaml', bad]}), 'module names')]
+            cases += [(FakeImage(native_stdout=json.dumps(answer).encode() + b'\n'), 'odoo-core: native import result$')
+                      for answer in native]
+            cases += [(FakeImage(qemu_stdout=json.dumps(answer).encode() + b'\n'), 'odoo-core: emulated import result$')
+                      for answer in emulated]
+            for index, (fake, message) in enumerate(cases):
+                with self.subTest(name=bad, case=index), self.assertRaisesRegex(j.Closed, message):
+                    self.env(fake)
+        # The last module tried is shown only when it is a module name.
+        shown = j.failure('odoo-core-qemu', types.SimpleNamespace(returncode=132, stdout=b'TRY zlib\nTRY a::b\nTRY \n',
+                                                                  stderr=b''), 'ILLEGAL INSTRUCTION under -cpu Nehalem')
+        self.assertEqual(shown, 'odoo-core-qemu: ILLEGAL INSTRUCTION under -cpu Nehalem (exit 132, last TRY zlib)')
 
     def test_listing_and_native_runs_must_succeed_and_answer(self):
         cases = [(FakeImage(list_rc=1), 'native module listing failed'),
@@ -443,6 +499,13 @@ class J1900Test(unittest.TestCase):
         # One third-party module still loading does not excuse the others: they fail the whole check (below).
         partial = FakeImage(native_err={'yaml._yaml': 'ImportError'})
         self.assertEqual(self.env(partial)['disallowed'], {'yaml._yaml': 'ImportError: invented failure of yaml._yaml'})
+        # Nothing to check fails at once, and the native failures are collected before it (check() names them).
+        found = []
+        with self.assertRaisesRegex(j.Closed, 'no third-party'):
+            self.env(gap, found=found)
+        self.assertEqual([(kind, name) for kind, _, name, _ in found],
+                         [('native', name) for name in sorted(['pydantic_core._pydantic_core',
+                                                               'cryptography.hazmat.bindings._rust', 'orjson.orjson'])])
         with self.assertRaisesRegex(j.Closed, 'no third-party'):
             self.env(FakeImage(site=[], native_err={}))
         with self.assertRaisesRegex(j.Closed, 'no native module imports natively'):
@@ -502,15 +565,17 @@ class J1900Test(unittest.TestCase):
 class AllowlistTest(unittest.TestCase):
     def test_the_reviewed_allowlist_excuses_only_the_missing_tk_for_the_imaged_products(self):
         # Started empty (review M1); _tkinter added for the seven products with an image (coordinator 2026-11-17); the
-        # QEMU-only caio.linux_aio entries (coordinator 2026-11-18) are checked in the next test.
+        # caio entries of four of them (coordinator 2026-11-18: caio.linux_aio QEMU-only, caio.linux_uring native) are
+        # checked in the next tests.
         allowlist = j.load_allowlist()
         self.assertEqual({product: sorted(entries) for product, entries in allowlist.items()},
                          {product: ([] if product == 'opendesign' else ['_tkinter'])
-                          + ([CAIO] if product in CAIO_PRODUCTS else []) for product in v.PRODUCTS})
+                          + ([CAIO, URING] if product in CAIO_PRODUCTS else []) for product in v.PRODUCTS})
         for product, entries in allowlist.items():
             native = {name: entry for name, entry in entries.items() if 'error_contains' in entry}
-            self.assertEqual(sorted(native), [] if product == 'opendesign' else ['_tkinter'])
-            for entry in native.values():
+            self.assertEqual(sorted(native), ([] if product == 'opendesign' else ['_tkinter'])
+                             + ([URING] if product in CAIO_PRODUCTS else []))
+            for entry in [entries['_tkinter']] if '_tkinter' in entries else []:
                 with self.subTest(product=product):
                     self.assertEqual(entry['error_contains'], 'ImportError: libtk8.6.so: cannot open shared object file')
                     self.assertIn('deliberately ships without Tcl/Tk', entry['reason'])
@@ -546,20 +611,53 @@ class AllowlistTest(unittest.TestCase):
 
         def child(product, fake, work):
             return j.check_python(IMAGE, product, 'child', j.child_python(product), Path(work), fake, allowlist[product])
-        # With the real list, per product: the four pass on exactly that text and fail on any other; the rest fail.
+        # With the real list, per product: the four set it aside on exactly that text and on no other; the rest never.
         for product in v.PRODUCTS:
             with self.subTest(product=product), tempfile.TemporaryDirectory() as d:
+                r = child(product, caio_image(), d)
                 if product in CAIO_PRODUCTS:
-                    self.assertEqual(child(product, caio_image(), d)['qemu_allowlisted'], {CAIO: AIO_ERROR})
-                    with self.assertRaisesRegex(j.Closed, re.escape('%s (ImportError: Error on io_setup with code 1)'
-                                                                    % CAIO)):
-                        child(product, caio_image('ImportError: Error on io_setup with code 1'), d)
+                    self.assertEqual((r['qemu_allowlisted'], r['qemu_differ']), ({CAIO: AIO_ERROR}, {}))
+                    r = child(product, caio_image('ImportError: Error on io_setup with code 1'), d)
+                    self.assertEqual((r['qemu_allowlisted'], r['qemu_differ']),
+                                     ({}, {CAIO: 'ImportError: Error on io_setup with code 1'}))
                     with self.assertRaisesRegex(j.Closed, 'ILLEGAL INSTRUCTION'):
                         child(product, caio_image(qemu_rc=132), d)
                 else:
-                    with self.assertRaisesRegex(j.Closed, re.escape('%s-child: modules differ under -cpu Nehalem: %s (%s)'
-                                                                    % (product, CAIO, AIO_ERROR))):
-                        child(product, caio_image(), d)
+                    self.assertEqual((r['qemu_allowlisted'], r['qemu_differ']), ({}, {CAIO: AIO_ERROR}))
+
+    def test_the_reviewed_allowlist_excuses_the_blocked_io_uring_of_caio_natively(self):
+        # Review round 3, medium-1: under Docker's default seccomp io_uring_setup gets EPERM, so caio.linux_uring never
+        # imports natively (and so never reaches QEMU); the coordinator decided 2026-11-18 to excuse exactly that text.
+        allowlist = j.load_allowlist()
+        for product, entries in allowlist.items():
+            with self.subTest(product=product):
+                self.assertEqual(URING in entries, product in CAIO_PRODUCTS)
+                for entry in [entries[URING]] if URING in entries else []:
+                    self.assertEqual(set(entry), {'reason', 'review', 'error_contains'})  # a native entry
+                    self.assertEqual(entry['error_contains'], URING_ERROR)
+                    self.assertEqual(entry['review'], '主對話 2026-11-18 決定，負責人在 #119 覆核')
+                    for part in ('caio 0.12.10', 'PyInit_linux_uring', 'io_uring_setup', 'EPERM', 'moby v28.0.4',
+                                 'default.json', 'HAOS', 'falls back to linux_aio', 'Limit: if io_uring is ever allowed',
+                                 'linux_uring.c'):
+                        self.assertIn(part, entry['reason'])
+
+        def child(product, fake, work):
+            return j.check_python(IMAGE, product, 'child', j.child_python(product), Path(work), fake, allowlist[product])
+        enosys = ('ImportError: io_uring_setup failed: syscall not available (ENOSYS). This usually means a seccomp '
+                  'filter is blocking io_uring. To fix: Docker/Podman : add --security-opt seccomp=unconfined')
+        # With the real list, the hosted-runner child of every product: only the four pass, and only on that text.
+        for product in v.PRODUCTS:
+            with self.subTest(product=product), tempfile.TemporaryDirectory() as d:
+                r = child(product, hosted_caio(), d)
+                if product in CAIO_PRODUCTS:
+                    self.assertEqual((r['allowlisted'], r['disallowed'], r['qemu_allowlisted'], r['qemu_differ']),
+                                     (['_tkinter', URING], {}, {CAIO: AIO_ERROR}, {}))
+                    for text in (enosys, 'ImportError: io_uring_setup probe failed: Invalid argument',
+                                 'ImportError: linux_uring requires Linux 5.6+ (IORING_OP_READ/WRITE), current kernel is 5.4'):
+                        self.assertEqual(child(product, hosted_caio(text), d)['disallowed'], {URING: text})
+                else:
+                    self.assertEqual((r['disallowed'][URING], r['qemu_differ']), (URING_ERROR, {CAIO: AIO_ERROR}))
+                self.assertNotIn(URING, json.loads((Path(d) / ('%s-child-native-ok.json' % product)).read_text()))
 
     def test_the_caio_entries_follow_the_lock_files(self):
         # caio (through aiofile) is in the child lock files of exactly these four products and not in the core one: a
@@ -572,8 +670,12 @@ class AllowlistTest(unittest.TestCase):
         self.assertFalse(has_caio(root / 'uv.lock'))
         self.assertEqual({product for product in v.PRODUCTS if has_caio(root / 'apps' / product / 'uv.lock')},
                          set(CAIO_PRODUCTS))
-        self.assertEqual({product for product, entries in j.load_allowlist().items() if CAIO in entries},
-                         set(CAIO_PRODUCTS))
+        # The four have both caio entries, of their kinds; every other product has neither.
+        for product, entries in j.load_allowlist().items():
+            with self.subTest(product=product):
+                caio = {name: set(entry) - {'reason', 'review'} for name, entry in entries.items() if name.startswith('caio.')}
+                self.assertEqual(caio, {CAIO: {'qemu_error_contains'}, URING: {'error_contains'}}
+                                 if product in CAIO_PRODUCTS else {})
 
     def test_a_malformed_allowlist_fails_closed(self):
         good = json.loads(j.ALLOWLIST.read_text())
@@ -596,6 +698,8 @@ class AllowlistTest(unittest.TestCase):
                    {**good, 'products': {**good['products'], 'odoo': {'_tkinter': {**entry, 'reason': ' '}}}},
                    {**good, 'products': {**good['products'], 'odoo': {'_tkinter': {**entry, 'extra': 'x'}}}},
                    {**good, 'products': {**good['products'], 'odoo': {'not a module': entry}}}, [],
+                   *({**good, 'products': {**good['products'], 'odoo': {name: entry}}}
+                     for name in ('a::b', 'evil\n::error::x', 'a..b', '_tkinter.')),
                    # A QEMU-only entry: one kind only, a real text, nothing missing and nothing extra.
                    *({**good, 'products': {**good['products'], 'emqx': {CAIO: wrong}}} for wrong in (
                        {**aio, 'error_contains': entry['error_contains']}, {**aio, 'qemu_error_contains': ''},
@@ -727,10 +831,11 @@ class InstallAndRecordTest(unittest.TestCase):
             self.assertEqual(record['envs'][scope]['qemu_allowlisted'], {CAIO: AIO_ERROR})
         self.assertIn('child: lib-dynload 2/3, site-packages 3/3 natively, 1 allowlisted native errors, 4/5 under QEMU, '
                       '1 QEMU-only allowlisted', j.summary(record))
-        # Without the entry the same image fails; a caio that fails natively fails even with it.
-        with self.assertRaisesRegex(j.Closed, re.escape('hermes-core: modules differ under -cpu Nehalem: %s (%s)'
-                                                        % (CAIO, AIO_ERROR))):
+        # Without the entry the same image fails, in both environments; a caio that fails natively fails even with it.
+        with self.assertRaises(j.Closed) as caught:
             self.check('hermes', caio_image(), allowed=real)
+        self.assertEqual(str(caught.exception), QEMU_PART + 'hermes: core %s (%s), child %s (%s)'
+                         % (CAIO, AIO_ERROR, CAIO, AIO_ERROR))
         self.assertFalse((self.evidence / 'j1900-hermes.json').exists())
         native = caio_image(None, native_err={'_tkinter': 'ImportError', CAIO: 'ImportError'},
                             native_detail={CAIO: AIO_ERROR})
@@ -738,6 +843,67 @@ class InstallAndRecordTest(unittest.TestCase):
                                                         % (CAIO, AIO_ERROR, CAIO, AIO_ERROR))):
             self.check('litellm', native, allowed=real)
         self.assertFalse((self.evidence / 'j1900-litellm.json').exists())
+
+    def test_the_hosted_runner_children_of_the_caio_products_pass_only_with_both_entries(self):
+        # Review round 3 (probes/caio_rerun.py): natively caio.linux_uring fails (EPERM), under QEMU caio.linux_aio
+        # (ENOSYS). With the reviewed list that passes; without either entry it fails, and both show in one run.
+        real = j.load_allowlist()
+
+        def without(product, *names):
+            return {**real, product: {name: entry for name, entry in real[product].items() if name not in names}}
+        record = self.check('emqx', hosted_caio(), allowed=real)
+        child = record['envs']['child']
+        self.assertEqual((child['allowlisted'], child['qemu_allowlisted']), (['_tkinter', URING], {CAIO: AIO_ERROR}))
+        self.assertIn('child: lib-dynload 2/3, site-packages 4/5 natively, 2 allowlisted native errors, 5/6 under QEMU, '
+                      '1 QEMU-only allowlisted', j.summary(record))
+        def native(product):
+            return ('native modules fail to import natively and packaging/j1900-allowlist.json does not list them for '
+                    '%s: core %s (%s), child %s (%s)' % (product, URING, URING_ERROR, URING, URING_ERROR))
+
+        def qemu(product):
+            return QEMU_PART + '%s: core %s (%s), child %s (%s)' % (product, CAIO, AIO_ERROR, CAIO, AIO_ERROR)
+        for product, names, message in (('litellm', (URING,), native('litellm')), ('nextcloud', (CAIO,), qemu('nextcloud')),
+                                        ('headscale', (CAIO, URING), native('headscale') + '; ' + qemu('headscale'))):
+            fake = hosted_caio()
+            with self.subTest(product=product):
+                with self.assertRaises(j.Closed) as caught:
+                    self.check(product, fake, allowed=without(product, *names))
+                self.assertEqual(str(caught.exception), message)
+                self.assertEqual(fake.calls[-1][3], '%s-child-smoke-qemu' % product)  # every environment ran
+                self.assertFalse((self.evidence / ('j1900-%s.json' % product)).exists())
+
+    def test_a_qemu_difference_always_fails_the_check(self):
+        for app in ('odoo', 'n8n'):
+            fake = FakeImage(qemu_ok=['_ssl', 'pydantic_core._pydantic_core', 'yaml._yaml'], qemu_err={'zlib': 'ImportError'})
+            with self.subTest(app=app):
+                with self.assertRaises(j.Closed) as caught:
+                    self.check(app, fake)
+                self.assertEqual(str(caught.exception), QEMU_PART + '%s: core zlib (ImportError: invented failure of zlib)%s'
+                                 % (app, '' if app == 'n8n' else ', child zlib (ImportError: invented failure of zlib)'))
+                self.assertFalse((self.evidence / ('j1900-%s.json' % app)).exists())
+
+    def test_an_immediate_failure_also_names_what_was_found_before_it(self):
+        # The smoke imports the modules it uses itself, so a module difference can make it fail at once: the message then
+        # carries the difference too.
+        fake = FakeImage(qemu_ok=['_ssl', 'pydantic_core._pydantic_core', 'yaml._yaml'], qemu_err={'zlib': 'ImportError'},
+                         smoke_qemu_rc=1, smoke_qemu_stderr=b"ImportError: cannot import zlib")
+        with self.assertRaises(j.Closed) as caught:
+            self.check('odoo', fake)
+        self.assertEqual(str(caught.exception), 'odoo-core-smoke-qemu: emulated smoke failed (exit 1); stderr: ImportError: '
+                         'cannot import zlib; found before it: ' + QEMU_PART + 'odoo: core zlib (ImportError: invented '
+                         'failure of zlib)')
+        # Nothing to check in a venv fails at once too, naming the native failures collected before it.
+        gap = FakeImage(native_err={'pydantic_core._pydantic_core': 'ImportError', 'yaml._yaml': 'ImportError'})
+        with self.assertRaises(j.Closed) as caught:
+            self.check('hermes', gap)
+        self.assertEqual(str(caught.exception), 'hermes-core: no third-party (site-packages) native module imports natively; '
+                         'found before it: native modules fail to import natively and packaging/j1900-allowlist.json does '
+                         'not list them for hermes: core pydantic_core._pydantic_core (ImportError: invented failure of '
+                         'pydantic_core._pydantic_core), core yaml._yaml (ImportError: invented failure of yaml._yaml)')
+        # An immediate failure with nothing collected keeps its own message.
+        with self.assertRaises(j.Closed) as caught:
+            self.check('emqx', FakeImage(qemu_rc=132))
+        self.assertEqual(str(caught.exception), 'emqx-core-qemu: ILLEGAL INSTRUCTION under -cpu Nehalem (exit 132, last TRY zlib)')
 
     def test_n8n_has_no_child_venv_and_runs_the_node_check(self):
         fake = FakeImage()

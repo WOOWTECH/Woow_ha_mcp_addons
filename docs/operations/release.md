@@ -182,8 +182,8 @@ ubuntu-24.04 上跑。負責人看過測試結果、image ID 已經定下來之�
      - 核心 venv `/opt/woow/.venv` 和子程式 venv `/opt/woow/apps/<app>/.venv`：`packaging/j1900_probe.py` 分開列出直譯器自己的
        （lib-dynload）和套件的（site-packages）原生擴充模組，先全部原生 import。每個 venv 至少要有一個 site-packages 模組原生
        import 成功；原生 import 失敗的模組，除非 `packaging/j1900-allowlist.json` 為這個產品列出審過的理由，**而且**原生的錯誤訊息
-       （`型別: 訊息`）含有那一條的 `error_contains`（唯一已知的原因），否則整個檢查失敗（每個 venv 都跑完之後一起列出；同一個模組
-       換了別的原因照樣擋）。允許清單裡的模組如果原生其實 import 成功，照樣送去 QEMU 測，不會因為列在清單就跳過。原生成功的那一批再用
+       （`型別: 訊息`）含有那一條的 `error_contains`（唯一已知的原因），否則整個檢查失敗（同一個模組換了別的原因照樣擋；什麼時候報、
+       怎麼報見下面「一次報完」）。允許清單裡的模組如果原生其實 import 成功，照樣送去 QEMU 測，不會因為列在清單就跳過。原生成功的那一批再用
        `qemu-x86_64-static -cpu Nehalem` import 一次，兩邊必須一樣（唯一的例外是下面的 QEMU-only 條目），而且不能有 SIGILL；小
        smoke（hashlib、ssl、zlib、sqlite3、decimal、re）兩邊結果相同；
      - QEMU-only 條目（`qemu_error_contains`；和 `error_contains` 二選一，同一條兩種都有就整個清單不收）：給原生 import 成功、只在
@@ -191,8 +191,18 @@ ubuntu-24.04 上跑。負責人看過測試結果、image ID 已經定下來之�
        它原生 import 成功、它在 QEMU 下失敗、QEMU 下的錯誤訊息（`型別: 訊息`）含有 `qemu_error_contains`。拿掉之後，QEMU 下成功的
        必須剛好是原生成功的減掉拿掉的（順序也一樣），失敗的必須剛好就是拿掉的；「送去的每個模組恰好回答一次」的檢查不變；SIGILL
        檢查不變而且先做，清單怎麼寫都擋；smoke 比對不變。列在清單、但 QEMU 下其實成功的模組照常比對，不拿掉；原生就失敗的模組不能
-       靠 QEMU-only 條目放行。拿掉的模組和它在 QEMU 下的錯誤訊息記在證據的 `qemu_allowlisted`。QEMU 下模組不一樣時，失敗訊息替每個
-       模組帶上它在 QEMU 下的錯誤訊息（單行、每筆最多 300 字，整段最多 1500 字），一次真的執行就看得出原因；
+       靠 QEMU-only 條目放行。拿掉的模組和它在 QEMU 下的錯誤訊息記在證據的 `qemu_allowlisted`；
+     - 一次報完（審查第三輪 中-1）：「原生失敗而清單沒放行」和「QEMU 下不一樣而沒有 QEMU-only 條目放行」這兩種不當場丟出，先收集起來，
+       核心和子程式 venv 都跑完之後由 `check()` 一起報，有任何一筆就失敗。訊息是一行，分「原生」和「QEMU」兩段，每筆寫成
+       `<venv> <模組> (<型別: 訊息>)`（單行、每筆最多 300 字），每段最多 1500 字，超過就截斷並註明總筆數；兩種都有時兩段都一定
+       會出現。下面這幾種照舊當場失敗：SIGILL、執行失敗（exit 不是 0、逾時、超過 60 分鐘）、沒有 JSON、回答沒交代每個送去的模組
+       （不多不少、不重複；QEMU 那一輪還要照送去的順序）、模組名稱不是點分隔的 Python 識別字、列不出原生模組或沒有任何模組／任何
+       site-packages 模組原生成功（等於沒得檢查）。smoke 也照舊當場失敗：smoke 自己 import hashlib、ssl、sqlite3、zlib、
+       decimal、re，前提是這些模組在 QEMU 下 import 得一樣，模組比對有差異時它可能跟著失敗。當場失敗時，訊息後面會接著寫出在它
+       之前已經收集到的問題（`found before it: …`），原因還是一次看得到；
+     - 模組名稱（審查第三輪 低-1）：映像回報的模組名稱（清單、`ok`、`err`、`detail` 的鍵）和允許清單的模組名稱，都必須是點分隔的
+       Python 識別字，否則當場失敗；失敗訊息裡「最後一個 `TRY`」也只顯示合格的名稱。這樣映像裡的名稱沒辦法在 log 裡換行、冒充
+       workflow 指令（`::…`）；
      - 允許清單的內容：一開始是空的（審查 M1）。主對話 2026-11-17 決定，替有映像的七個產品（odoo、n8n、hermes、emqx、litellm、
        nextcloud、headscale；OpenDesign 沒有映像，不加）加 `_tkinter`，`error_contains` 是
        `ImportError: libtk8.6.so: cannot open shared object file`。理由：官方 python slim 映像的 lib-dynload 帶著
@@ -210,6 +220,18 @@ ubuntu-24.04 上跑。負責人看過測試結果、image ID 已經定下來之�
        就是卡在這裡（`modules differ under -cpu Nehalem: caio.linux_aio`），沒有 SIGILL。模擬器缺系統呼叫，不是指令集問題；SIGILL
        檢查不變。限制：code 38 是從原始碼推出來的，沒有實測，訊息不一樣照樣擋，失敗訊息會帶出實際的錯誤；QEMU 下這個模組
        io_setup 之後的程式沒有跑到；
+     - caio 的原生條目（審查第三輪 中-1）：同樣是主對話 2026-11-18 決定、負責人在 #119 覆核，替這四個產品加 `caio.linux_uring`，
+       `error_contains` 是 `ImportError: io_uring_setup probe failed: Operation not permitted`。依據：caio 0.12.10 的 wheel 也帶
+       `caio/linux_uring.cpython-313-x86_64-linux-gnu.so`；`caio/linux_uring.c` 的 `PyInit_linux_uring` 先用 uname 確認核心至少
+       5.6，再用 `io_uring_setup(1, …)` 試探，失敗而且不是 ENOSYS 就丟
+       `PyErr_Format(PyExc_ImportError, "io_uring_setup probe failed: %s", strerror(errno))`（ENOSYS 是另一段訊息）。Docker 預設的
+       seccomp（moby v28.0.4 的 `profiles/seccomp/default.json`）沒有任何 io_uring 項目，沒列的系統呼叫一律回
+       `defaultErrnoRet` 1（EPERM），J1900 的容器用的就是預設 seccomp，所以原生 import 會得到這段 EPERM 訊息，這個模組也就不會送去
+       QEMU。HAOS 上的 add-on 容器也套預設 seccomp，io_uring 一樣被擋；caio 的 `__init__.py` 依序試 linux_uring、linux_aio、
+       thread_aio、python_aio，所以會退回 `linux_aio`，正式環境除了那段失敗的試探，`linux_uring` 的程式不會執行。限制：哪天
+       io_uring 被放行，`linux_uring` 就會在沒有 J1900 覆蓋的情況下執行（如果是託管機器的 Docker 放行，檢查會發現：那時它原生
+       import 得起來，送去 QEMU 會失敗，因為 QEMU 也沒有 io_uring_setup）。#119（head `b24a2d7`）第二次託管建置沒看到這個錯誤，
+       是因為當時檢查在 QEMU 差異那裡就先失敗了，現在改成一次報完；
      - n8n 沒有子程式 venv，改跑 Node：載入 better-sqlite3、建 FTS5、crypto、zlib，原生和 QEMU 結果相同；
      - 容器一律 `--network none --read-only --user 10001:10001 --cap-drop ALL --security-opt no-new-privileges`，只唯讀掛探針和
        QEMU；整個 J1900 檢查最多 60 分鐘，每次容器執行只拿剩下的時間；
