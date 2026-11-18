@@ -1,6 +1,6 @@
 # 0.4.14（與 Headscale 0.4.19）映像發佈紀錄（草稿）
 
-狀態：**映像已發佈並驗證（2026-11-18），HAOS 驗收待做**。這是 Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud 六個商店產品的維修版；OpenDesign 只升來源版本
+狀態：**映像已發佈並驗證（2026-11-18）；展示機單帳號回歸已做（[ha-test-0.4.14](ha-test-0.4.14.md)），合併待負責人**。這是 Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud 六個商店產品的維修版；OpenDesign 只升來源版本
 （商店停用）。**Headscale 自己的版號線同一個 PR 升到 0.4.19**（負責人 2026-11-18 的決定，見下）。合併升版 PR 就是發佈到 WOOW App Store：建置、推 GHCR、合併都要負責人逐步批准，
 下面的驗收清單在做完並補上證據之前都是「待做」。這份共用紀錄不是 readiness 認的紀錄（見第 4 項）。
 
@@ -124,9 +124,9 @@
 | 2 | J1900 指令集檢查：QEMU user-mode `-cpu Nehalem`（比 J1900 嚴格）跑六個候選映像（DQ-42，負責人 2026-11-17 定每次發版都跑；做法見 [0.1.7 發佈紀錄](release-decision-0.1.7.md)「0.1.8 待辦」最後一點） | GitHub 託管機器跑 `release.yaml`（#121；本對話在負責人批准後逐產品觸發，負責人在 GitHub 核准 `public-release`） | **要**（和第 1 項同一個核准計畫） | 完成（第三次建置；允許清單在第二次建置後修正） |
 | 3 | 推 GHCR（推了就燒版號）：只推測過的同一個 image ID，匿名以不可變 digest 讀回 | GitHub 託管機器跑 `release.yaml`（#121；本對話在負責人批准後逐產品觸發，負責人在 GitHub 核准 `public-release`） | **要** | 完成（台北 10:00；負責人授權代為核准，見「第三次建置」；匿名逐層核對） |
 | 4 | 每個產品自己的發佈紀錄 `release-decision-<產品>-0.4.14.md` × 6 ＋ `release-decision-headscale-0.4.19.md`（寫 `woow_mcp_<產品>` 與版號、映像 digest、第 1～3 項的結果）＋ provenance JSON；readiness 只認這七份，本檔不算（HM-17） | 代理 | 否（證據 commit 只加紀錄檔） | 完成（`0627c7f`；測試修正 `b3781da`） |
-| 5 | CI 在 PR head 全綠：`checks`、`readiness`（六個映像可匿名拉取＋第 4 項）、`Upgrade comparison / compare`（設定比對、0.4.13 → 0.4.14 升級測試、漏洞比對）、`Release train` | CI | 否 | 進行中：`checks`、`readiness`、升級測試、`Release train` 綠；`compare` 等商店 #124 之後的新執行（見「合併前的 CI」） |
-| 6 | 升版比對要求時才建 `addons/<產品>/upgrade-notes.yaml`（照報告的 `change`／`key`，或新增可修補 Critical／High 漏洞的 `id`／`package`） | 代理 | 接受漏洞要負責人同意 | 待做（比對跑出來才知道） |
-| 7 | 每個產品的 HAOS P9 回歸（[ha-p9-kit](ha-p9-kit.md)）；Hermes 另看 `enabled=false` 建出的排程是停用的。展示機不升 Core（負責人 2026-11-17 20:2x），所以只驗 Core 2026.7.2 上沒退步；Core 2026.11.x 上面板能開（這一版的目的）靠 CI 與單元測試，不在實機驗 | 本對話在負責人指定的展示機 woowtechshow 做，每步負責人批准 | **要**（主機） | 待做 |
+| 5 | CI 在 PR head 全綠：`checks`、`readiness`（六個映像可匿名拉取＋第 4 項）、`Upgrade comparison / compare`（設定比對、0.4.13 → 0.4.14 升級測試、漏洞比對）、`Release train` | CI | 否 | 完成（`370bed0`：`checks`、`readiness`、`compare`、升級測試、`Release train` 全綠；之後只加紀錄的 commit 照樣要再綠） |
+| 6 | 升版比對要求時才建 `addons/<產品>/upgrade-notes.yaml`（照報告的 `change`／`key`，或新增可修補 Critical／High 漏洞的 `id`／`package`） | 代理 | 接受漏洞要負責人同意 | 不需要（compare 七支都 Passed：沒有破壞性設定變更、沒有新的可修補漏洞；emqx、litellm、nextcloud、headscale 各少 1 個，就是 dnspython） |
+| 7 | 每個產品的 HAOS P9 回歸（[ha-p9-kit](ha-p9-kit.md)）；Hermes 另看 `enabled=false` 建出的排程是停用的。展示機不升 Core（負責人 2026-11-17 20:2x），所以只驗 Core 2026.7.2 上沒退步；Core 2026.11.x 上面板能開（這一版的目的）靠 CI 與單元測試，不在實機驗 | 本對話在負責人指定的展示機 woowtechshow 做，每步負責人批准 | **要**（主機） | 完成（2026-11-18，[ha-test-0.4.14](ha-test-0.4.14.md)；沒有退步；Hermes 暫停排程實測通過；Odoo、EMQX 沒有後端實測） |
 | 8 | HM-31 的「HM-19c 放行條件」（[契約](../multi-profile/contract.md)第 5 節）對這一版適不適用：HM-31 不受開關管，這一版就會帶出去 | 負責人 2026-11-17 14:4x 決定：**不擋這次維修版**（和 0.4.13 比只多了限制、沒有更寬；上界還沒在出貨機驗證，記在這裡）；這個條件仍擋多帳號開通（HM-19a） | 已定 | 已定（不擋） |
 | 9 | 合併（＝上架 WOOW App Store），merge commit | 負責人本人 | **要** | 待做 |
 | 10 | 合併 commit 上 `woow-addon-release.yml` 與 `release-train.yml` 的非 PR run 成功；六個 `<slug>-v0.4.14` 正式 Release；Store 同步後從商店升級再驗一次 | 代理（負責人決定何時）／負責人或其他工作線 | **要** | 待做 |
