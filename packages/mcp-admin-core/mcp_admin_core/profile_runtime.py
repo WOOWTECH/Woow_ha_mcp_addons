@@ -65,6 +65,20 @@ replies are processed there, the profiles taking turns. Each gate also bounds it
 (profiles.ProfileQuota.pending_reply_bytes; profile_router). A ProfileRuntime takes reply_worker as a keyword-only
 option; left out, its replies are processed on the event loop, as before.
 
+HM-13b (plan 8.4; contract 1.2, 7; not gated): run_product runs the boot guard (restore_lock.guard) before it builds
+the manager or the default profile's lone runtime: no child starts and no listener exists before a restore, an
+unfinished "revoke all" and dormant profiles are handled. A product that is not switched on but has profile data gets a
+ProfileRuntime with dormant_profiles (the number the guard left revoked, for the bootstrap; make_apps' option of the
+same name); left out, the runtime is built as before.
+
+HM-13c (plan 6, 8.4; contract 1.2, 3.6, 4.1, 4.2): run_product hands the restore notice a start found
+(restore_lock.Notice; DQ-03 (b): the default profile's token is the backup's) to the default profile's runtime
+(restore_notice, make_apps' option of the same name), switched on (the manager's restore_notice) or not; left out (no
+notice: every installation that was never restored), the runtime is built as before. A switched-on profile's runtime
+also gets review_required (its token/rotate waits for its restore review: ProfileAdmin.review_required; so does
+HM-12's identity change when it would rotate the token, HM-13c review S-3: gateway.make_apps), and the manager keeps
+revoke_fence: the digests of tokens a "revoke all" could not revoke, which 8081 refuses (503).
+
 HM-27 (plan 8.7, 12.3 HM-27; DQ-11 (a); contract 2.6, 3.1): the manager holds the add-on's one Origin policy of the
 secret path (origin_policy.OriginPolicy; /data/mcp/origin-policy.json, read when asked, written only by the panel's save)
 unless the product keeps its own rule (Headscale: secret_path_allowed_origins), and gives every profile's apps its
@@ -108,7 +122,8 @@ RUNTIME_OPTIONS = frozenset({'child_url', 'health', 'backend_changed', 'configur
                              'restart_child', 'diagnostics', 'availability', 'token_access', 'mutation_lock',
                              'authority', 'admin_slots', 'admin_pipeline', 'profile_view', 'forward_slots',
                              'slot_busy', 'reply_secrets', 'child_blocked', 'default_endpoint', 'bootstrap_fields',
-                             'body_budget', 'stop_child', 'reply_worker', 'origin_policy'})
+                             'body_budget', 'stop_child', 'reply_worker', 'dormant_profiles', 'restore_notice',
+                             'review_required', 'origin_policy'})
 MANAGEMENT_LISTENER_LIMIT = 64  # 8099's limit_concurrency (run_product), switched on or off
 # HM-09 (plan 5.4; C2-SF-4): after the default profile's child, at most STAGGER_SLOTS additional children start at
 # once; a place is freed when its child answered a health check, could not start, or after STAGGER_SECONDS.
@@ -170,6 +185,12 @@ class ProfileRuntime:
     HM-30 (likewise): reply_worker: the profile's turn on the add-on's reply worker (reply_worker.Lane; make_apps
     reply_worker).
 
+    HM-13b (run_product, for a product not switched on that has profile data): dormant_profiles, make_apps' option of
+    the same name, passed only when given.
+
+    HM-13c: restore_notice (the default profile's, from run_product or the manager) and review_required (a switched-on
+    profile's, from the manager), make_apps' options of the same names, passed only when given.
+
     HM-27 (likewise): origin_policy: the profile's check of the add-on's Origin policy (OriginPolicy.guard; make_apps
     origin_policy).
 
@@ -180,7 +201,8 @@ class ProfileRuntime:
                  shared=None, profile_view=None, app_options=None, child_connections=CHILD_CONNECTIONS,
                  forward_slots=None, slot_busy=None, reply_secrets=None, hold=None, monitor_options=None,
                  report_blocked=False, default_endpoint=None, bootstrap_fields=None, body_budget=None,
-                 reply_worker=None, origin_policy=None):
+                 reply_worker=None, dormant_profiles=None, restore_notice=None, review_required=None,
+                 origin_policy=None):
         if not isinstance(profile_id, str) or not PROFILE_ID.fullmatch(profile_id):
             raise ValueError('invalid profile id')
         if type(child_connections) is not int or child_connections < 1:
@@ -200,8 +222,9 @@ class ProfileRuntime:
         self.gateway_options = {name: value for name, value in (
             ('forward_slots', forward_slots), ('slot_busy', slot_busy), ('reply_secrets', reply_secrets),
             ('default_endpoint', default_endpoint), ('bootstrap_fields', bootstrap_fields),
-            ('body_budget', body_budget), ('reply_worker', reply_worker), ('origin_policy', origin_policy))
-            if value is not None}
+            ('body_budget', body_budget), ('reply_worker', reply_worker),
+            ('dormant_profiles', dormant_profiles), ('restore_notice', restore_notice),
+            ('review_required', review_required), ('origin_policy', origin_policy)) if value is not None}
         if hold is not None and not callable(hold):
             raise ValueError('invalid start hold')
         self.hold = hold
@@ -502,10 +525,15 @@ class ProfileManager:
     (origin.guard(profile_id)); profile_admin serves the policy's route. open() reads the file once, so that one that
     cannot be used is named in a WARNING before anything is served; nothing is written."""
 
-    def __init__(self, store, product, tools, child_spec, *, port=CHILD_PORT, app_options=None, reply_worker=None):
+    def __init__(self, store, product, tools, child_spec, *, port=CHILD_PORT, app_options=None, reply_worker=None,
+                 restore_notice=None):
         self.store, self.product, self.tools, self.child_spec = store, product, tools, child_spec
         self.port = port
         self.reply_worker = reply_worker
+        # HM-13c: the default profile's restore notice (restore_lock.Notice, or None) and the digests of tokens a
+        # "revoke all" could not revoke (8081 refuses them: profile_router.McpDispatcher.resolve).
+        self.restore_notice = restore_notice
+        self.revoke_fence = set()
         self.app_options = dict(app_options or {})
         self.layout = profiles.Layout(Path(store.directory))
         self.reports = Reports()
@@ -867,6 +895,8 @@ class ProfileManager:
                                  default_endpoint=None if default else self.default_endpoint,
                                  body_budget=gate.budget_share,
                                  reply_worker=None if self.reply_worker is None else self.reply_worker.lane(profile_id),
+                                 restore_notice=self.restore_notice if default else None,
+                                 review_required=partial(self.admin.review_required, profile_id),
                                  origin_policy=None if self.origin is None else self.origin.guard(profile_id))
         await runtime.open()
         entry = RegisteredProfile(profile_id, port, label, runtime, store, gate, credentials, disabled)

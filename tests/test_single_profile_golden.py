@@ -53,7 +53,7 @@ import pytest
 
 import run as n8n_run
 from log_scan import log_scan  # noqa: F401  (fixture)
-from mcp_admin_core import VERSION, profile_runtime, run_product, version_for_product
+from mcp_admin_core import VERSION, features, profile_runtime, profiles, run_product, version_for_product
 from mcp_admin_core.lifecycle import Supervisor
 from mcp_admin_core.products import INSTRUCTIONS, PROBES, ProductStore, health_probe
 from mcp_admin_core.surface import listing
@@ -417,9 +417,14 @@ def expected_health(product, mode):
 
 def expected_entries(product, mode):
     """The data directory after a start: the store's lock and state, and the child's own empty working directory
-    (products.child_spec) once a product child has a backend; n8n's child works in the data directory itself."""
-    return ['.writer.lock', 'child', 'state.json'] if mode == 'configured' and product != 'n8n' else [
+    (products.child_spec) once a product child has a backend; n8n's child works in the data directory itself. HM-13b:
+    when the product is switched on (tests/test_router_passthrough.py runs this regression so), its boot guard's first
+    start also makes the instance sentinel and its record (plan 3.3: only those two files more)."""
+    names = ['.writer.lock', 'child', 'state.json'] if mode == 'configured' and product != 'n8n' else [
         '.writer.lock', 'state.json']
+    if features.enabled(product):
+        names = sorted([*names, profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME])
+    return names
 
 
 async def connect(runtime, client, path, headers, mode):

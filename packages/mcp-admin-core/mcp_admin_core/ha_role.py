@@ -33,10 +33,14 @@ _URL = "ws://supervisor/core/websocket"
 # are byte-identical to 11.0. config/auth/list, User.is_admin, require_admin, result_message, and the system-admin
 # group are unchanged. WebSocket token revocation now closes a revoked connection; this verifier queries on a fresh
 # connection and still denies any failed response. Supervisor 2026.10.5 api/proxy.py is byte-identical to 2026.10.4.
+# Core 2026.11.2 (tag commit ff5d56b8), reviewed 2026-11-17: all 25 contract/adjacent files are byte-identical to
+# 2026.11.1, and the 11.1...11.2 comparison changes no auth, websocket_api, http, hassio, config or onboarding file.
+# Supervisor 2026.11.0 api/proxy.py is byte-identical to 2026.10.5 (blob cab849dc).
 # Any other advertised version, including pre-releases, denies until reviewed and added.
 _HA_VERSIONS = frozenset({"2026.7.2", "2026.7.3", "2026.7.4", "2026.8.0", "2026.8.1", "2026.8.2", "2026.8.3",
                           "2026.9.0", "2026.9.1", "2026.9.2", "2026.9.3", "2026.9.4", "2026.10.0",
-                          "2026.10.1", "2026.10.2", "2026.10.3", "2026.10.4", "2026.11.0", "2026.11.1"})
+                          "2026.10.1", "2026.10.2", "2026.10.3", "2026.10.4", "2026.11.0", "2026.11.1",
+                          "2026.11.2"})
 _QUERY_SECONDS = 2.25  # plus <= .2s cleanup, below the gateway's 3s guard
 _MAX_RESPONSE = 1024 * 1024
 _MAX_CONCURRENT = 8

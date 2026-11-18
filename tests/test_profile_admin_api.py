@@ -33,7 +33,7 @@ import pytest
 from admin_write_headers import reviewed_headers
 from log_scan import log_scan  # noqa: F401  (fixture)
 from multi_profile_runtime import Children, create_profile, ids, multi_profile_runtime, stored
-from mcp_admin_core import owner_defaults, profiles
+from mcp_admin_core import owner_defaults, profiles, restore_detect
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.configuration import ConfigurationState
 from mcp_admin_core.products import PROBES, ProductStore
@@ -1154,6 +1154,7 @@ async def test_there_is_nothing_to_quarantine_without_an_index_file(tmp_path, lo
     data = tmp_path / 'data'
     configure(data, PRODUCT)
     layout = profiles.Layout(data)
+    restore_detect.detect(data, enabled=True)  # HM-13b: the add-on started switched on before (no restore to guard)
     layout.profiles.write_text('not a directory')
     async with multi_profile_runtime(PRODUCT, data) as runtime:
         await settle(runtime, 'configured')

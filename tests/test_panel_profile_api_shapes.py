@@ -25,8 +25,10 @@ the add-on cannot use before it starts.
 """
 from __future__ import annotations
 
+import asyncio
 from contextlib import AsyncExitStack
 import json
+import os
 from pathlib import Path
 import re
 import secrets
@@ -38,8 +40,9 @@ import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
 from multi_profile_runtime import Children, create_profile, multi_profile_runtime
-from mcp_admin_core import profile_runtime, profiles
+from mcp_admin_core import profile_runtime, profiles, restore_detect
 from mcp_admin_core.config import ConfigError
+from mcp_admin_core.products import ProductStore
 from test_odoo_identity_rotation import Journal, record_writes
 from test_single_profile_golden import ADMIN, GENUINE_CLIENT, INGRESS, configure, settle
 
@@ -254,6 +257,12 @@ async def run_scenario(scenario, tmp_path, log_scan):
     data = tmp_path / scenario['name'] / 'data'
     data.mkdir(parents=True)
     configure(data, product)
+    if setup.get('policy'):  # HM-13c: the default profile's policy, before any profile copies it (DQ-02)
+        store = ProductStore(data, product)
+        try:
+            store.update(**setup['policy'])
+        finally:
+            store.close()
     extras = [ids[extra['role']] for extra in setup['extras']]
     for number, extra in enumerate(setup['extras']):
         state = create_profile(data, product, ids[extra['role']], label=extra['label'], port=18000 + number)
@@ -262,12 +271,21 @@ async def run_scenario(scenario, tmp_path, log_scan):
             assert {name: saved[name] for name in extra['connection']} == extra['connection'], extra['role']
     for orphan in setup.get('orphans', []):
         create_profile(data, product, ids[orphan], label='Orphan Ops', port=18090, indexed=False)
+    for number, role in enumerate(setup.get('quarantine', [])):  # HM-13c: the boot guard quarantines these
+        create_profile(data, product, ids[role], label='Orphan Ops', port=18080 + number, indexed=False)
+        (profiles.Layout(data).profile(ids[role]) / '.writer.lock').unlink()
     for number, extra in enumerate(setup.get('unavailable', [])):
         create_profile(data, product, ids[extra['role']], label=extra['label'], port=18050 + number)
     watch(log_scan, data, setup, scenario['cases'])
     for extra in setup.get('unavailable', []):
         shutil.rmtree(profiles.Layout(data).profile(ids[extra['role']]))
+    if setup.get('restore'):  # HM-13c: the entrypoint's marker of a restore (signal 1), before the start
+        os.close(os.open(data / profiles.RESTORE_MARKER_NAME, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600))
     if setup.get('no_index_file'):
+        # The add-on's first switched-on start made the sentinel and its record before any profile data (HM-13a; as
+        # create_profile does): an unlistable profiles entry, not a restore. HM-13c renews the journal beside the index
+        # at a restore, so the cases' keys (made a second ago) would be from before it (410 operation_restored).
+        restore_detect.detect(data, enabled=True)
         profiles.Layout(data).profiles.write_text('not a directory')
     if setup.get('origin_policy') == 'unusable':  # HM-27: a policy file the add-on cannot use
         (data / 'origin-policy.json').write_bytes(b'not a policy')
@@ -294,6 +312,11 @@ async def run_scenario(scenario, tmp_path, log_scan):
         await settle(runtime, 'configured')
         if journal is not None:
             arm(setup['fault'], journal, runtime, data, patch)
+        if setup.get('restore'):
+            # HM-13c: the boot guard renewed every journal at the restore, refusing every operation id up to then (410
+            # operation_restored); the cases' keys are made a second before they are sent (as the panel takes the
+            # server's time after the start), so they wait until that second is after the restore.
+            await asyncio.sleep(1.1)
         if setup.get('no_port'):
             patch.setattr(runtime.manager, 'free_port', lambda: None)
         if setup.get('corrupt'):
@@ -304,6 +327,8 @@ async def run_scenario(scenario, tmp_path, log_scan):
             if case.get('learn') and response.status_code in (200, 201):
                 learnt = response.json()['id']
                 context['ids'][case['learn']], context['roles'][learnt] = learnt, case['learn']
+            if case.get('learn_quarantine') and response.status_code == 200:  # HM-13c: a quarantine directory's name
+                context['ids'][case['learn_quarantine']] = response.json()['quarantined'][0]['name']
             seen[case['name']] = observed(case, response, context)
     return seen
 

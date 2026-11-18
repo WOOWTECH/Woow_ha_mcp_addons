@@ -4,6 +4,18 @@ Persist intent before the effect. A crash leaves an unknown outcome, never an
 instruction to repeat. No token, user id, backend value or raw error is stored.
 The journal must travel with the data directory in backups; restoring older data
 cannot preserve receipts for operations performed after that backup.
+
+HM-13b (multi-profile plan 4.1, 8.4 C; contract 3.5, 4.1, 9 #67; FM-07): the boot
+guard archives a restored journal (archive_for_restore): it becomes
+<journal>.restored (one archive kept) and a new journal refuses every operation id
+from before the restore with 410 operation_restored (restored_before_ms), the ids
+of operations made after that backup and lost with it included.
+
+HM-13c (contract 3.5, 9 #67): a restore gives every journal the guard handles a
+new one, also where the backup had none (renew_missing: the profile never had a
+receipt when the backup was made, so an operation made after it and lost with it
+would otherwise be taken as a new one); and the add-on's journal beside the index
+keeps the receipts of "revoke all", restore reviews and quarantine deletions too.
 """
 from __future__ import annotations
 
@@ -34,12 +46,24 @@ RESULTS = {
 # profile index quarantine, kept beside the index (/data/mcp/.profiles.json.operations.json: OperationJournal(index
 # path, results=PROFILE_RESULTS, subjects=True); profile_admin). Each carries its subject: the profile's id, or the
 # name the quarantined index was given; neither is a secret. A profile's own journal (RESULTS, no subject) is as before.
+# HM-13c (contract 3.1, 3.5): "revoke all" (its subject: all), a restore review (the profile's id, the default
+# profile's too) and a quarantine directory's deletion (its name as the API shows it, <id>-<UTC>[-n]).
 PROFILE_RESULTS = {
     'profile.create': {'status': 'ok', 'profile_state': 'created'},
     'profile.delete': {'status': 'ok', 'profile_state': 'deleted'},
     'profile.index_quarantine': {'status': 'ok', 'profile_index_state': 'quarantined'},
+    'profile.revoke_all': {'status': 'ok', 'token_state': 'revoked'},
+    'profile.restore_review': {'status': 'ok', 'review_state': 'reviewed'},
+    'profile.quarantine_delete': {'status': 'ok', 'quarantine_state': 'deleted'},
 }
-SUBJECT = re.compile(r'[0-9a-f]{24}|profiles\.json\.quarantine-[0-9]{8}T[0-9]{6}Z(?:-[0-9]{1,3})?')
+SUBJECT = re.compile(r'[0-9a-f]{24}|default|all|profiles\.json\.quarantine-[0-9]{8}T[0-9]{6}Z(?:-[0-9]{1,3})?'
+                     r'|[0-9a-f]{24}-[0-9]{8}T[0-9]{6}Z(?:-[0-9]{1,3})?')
+# HM-13b: a journal the boot guard wrote after a restore has one more key: every operation id at or before it (ms) was
+# made before the restore and answers 410 operation_restored. Only journals the guard writes carry it (an image before
+# HM-13b never reads one: a restore brings back its own image with the backup's data).
+KEYS = frozenset({'version', 'key', 'expired_before_ms', 'receipts'})
+RESTORED_KEY = 'restored_before_ms'
+RESTORED_SUFFIX = '.restored'  # the archived journal of a restore (<journal>.restored; one kept per journal)
 
 
 def fail(status, code):
@@ -75,7 +99,8 @@ class OperationJournal:
             os.fchmod(fd, 0o600)
             with os.fdopen(fd, 'rb', closefd=False) as stream:
                 data = strict_json(stream.read(MAX_BYTES + 1))
-            if (not isinstance(data, dict) or set(data) != {'version', 'key', 'expired_before_ms', 'receipts'}
+            if (not isinstance(data, dict) or set(data) not in (KEYS, KEYS | {RESTORED_KEY})
+                    or RESTORED_KEY in data and (type(data[RESTORED_KEY]) is not int or data[RESTORED_KEY] < 0)
                     or type(data['version']) is not int or data['version'] != 1
                     or not isinstance(data['key'], str) or not re.fullmatch(r'[0-9a-f]{64}', data['key'])
                     or type(data['expired_before_ms']) is not int or data['expired_before_ms'] < 0
@@ -131,6 +156,8 @@ class OperationJournal:
             data = self._read()
         except (OSError, ValueError, KeyError, TypeError):
             fail(503, 'operation_journal_unavailable')
+        if RESTORED_KEY in data and timestamp <= data[RESTORED_KEY]:
+            fail(410, 'operation_restored')  # HM-13b: made before a restore (its receipt is in the archive, or lost)
         floor = max(data['expired_before_ms'], now - TTL_MS)
         if timestamp <= floor:
             fail(410, 'operation_id_expired')
@@ -189,3 +216,107 @@ class OperationJournal:
             fail(404, 'operation_not_found')
         return {'operation': self.public(operation_id, item),
                 'result': dict(self.results[item['kind']]) if item['state'] == 'completed' else {}}
+
+
+def journal_path(config_path: Path) -> Path:
+    """The journal of a state file (or of the index): .<name>.operations.json beside it."""
+    config_path = Path(config_path)
+    return config_path.with_name('.' + config_path.name + '.operations.json')
+
+
+def archive_for_restore(config_path: Path, cutoff_ms: int, *, renew_missing: bool = False) -> str:
+    """HM-13b: the receipts of a restored profile (config_path: its state.json; or the index, for the receipts beside
+    it). The journal the restore brought back becomes <journal>.restored (the one archive kept: it replaces an older
+    one) and a new, empty journal refuses every operation id at or before cutoff_ms (the restore's time) with 410
+    operation_restored. The new journal is written first (a temporary, fsynced), then the old one moved, then the new one
+    put in place and the directory fsynced: a full disk leaves the journal as it was. The cutoff is never below the
+    restored journal's newest operation id or floor (a host clock behind the backup's), but at most TTL_MS ahead of
+    cutoff_ms (a forged far-future id). Idempotent, for a guard stopped
+    half way and run again: a journal without receipts (the one this wrote, or one emptied) is not archived again, so
+    the archive keeps the receipts it holds; only its cutoff moves forward. A missing journal next to an archive
+    (stopped between the two moves) gets its new one, its cutoff not below the archive's newest id either; with
+    neither, nothing is written (no operation was ever made), unless renew_missing (HM-13c: what the boot guard asks
+    for every journal it handles, as PaaS gives every configuration a new journal): then a new journal is written all
+    the same, so that an operation made after the backup and lost with it answers 410, not as a new one. A journal
+    that cannot be read is archived as it is. Returns 'archived', 'renewed', 'created' or 'none'; OSError when it was
+    not done (the next start does it again)."""
+    if type(cutoff_ms) is not int or cutoff_ms < 0:
+        raise ValueError('invalid cutoff')
+    path = journal_path(config_path)
+    archive = path.with_name(path.name + RESTORED_SUFFIX)
+    found = _receipts(path)
+    if found is None:
+        if not os.path.lexists(archive):
+            if not renew_missing:
+                return 'none'
+            _new_journal(path, cutoff_ms, archive=None)
+            return 'created'
+        # Stopped between the two moves: the archive holds the restored receipts, so its floor counts as theirs did.
+        found = 0, (_receipts(archive) or (0, None))[1]
+    count, floor = found
+    # As PaaS restore_guard (_read_journal_floor): never below the journal's own newest id or floor, whatever the clock;
+    # but at most a retention period ahead of it, so that a forged far-future id cannot refuse every new id for years.
+    cutoff_ms = max(cutoff_ms, min(floor or 0, cutoff_ms + TTL_MS))
+    if count == 0:
+        _new_journal(path, cutoff_ms, archive=None)
+        return 'renewed'
+    _new_journal(path, cutoff_ms, archive=archive)
+    return 'archived'
+
+
+def _receipts(path):
+    """(receipt count, floor) of the journal at path, the floor being the newest of its expired_before_ms,
+    restored_before_ms and receipt id times (None when there is none); (-1, None) for one that cannot be read as a
+    journal (any kind of entry, unsafe or malformed); None when there is none."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return -1, None
+    try:
+        info = os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.geteuid()
+                or info.st_size > MAX_BYTES):
+            return -1, None
+        with os.fdopen(fd, 'rb', closefd=False) as stream:
+            data = strict_json(stream.read(MAX_BYTES + 1))
+    except (OSError, ValueError, RecursionError):
+        return -1, None
+    finally:
+        os.close(fd)
+    if not isinstance(data, dict) or not isinstance(data.get('receipts'), dict):
+        return -1, None
+    times = [value for value in (data.get('expired_before_ms'), data.get(RESTORED_KEY))
+             if type(value) is int and value >= 0]
+    times += [int(key.split('.', 1)[0]) for key in data['receipts'] if isinstance(key, str) and ID_PATTERN.fullmatch(key)]
+    return len(data['receipts']), max(times) if times else None
+
+
+def _new_journal(path, cutoff_ms, *, archive):
+    data = {'version': 1, 'key': secrets.token_hex(32), 'expired_before_ms': 0, 'receipts': {},
+            RESTORED_KEY: cutoff_ms}
+    raw = json.dumps(data, sort_keys=True, separators=(',', ':')).encode()
+    temporary = path.with_name(path.name + '.tmp.' + secrets.token_hex(8))
+    try:
+        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        try:
+            view = memoryview(raw)
+            while view:
+                view = view[os.write(fd, view):]
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        if archive is not None:
+            os.replace(path, archive)
+        os.replace(temporary, path)
+        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        try:
+            os.unlink(temporary)  # gone after the move; left only by a failure
+        except OSError:
+            pass

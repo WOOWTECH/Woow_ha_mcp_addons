@@ -1000,13 +1000,13 @@ def test_the_route_is_a_global_path_of_the_shared_pipelines_table():
     dispatcher's table, so tests/test_admin_pipeline_matrix.py refuses every caller who is not an administrator there
     with the same bytes as anywhere else, and their handlers are ProfileAdmin's (the second role check, the locks)."""
     from mcp_admin_core import profile_admin, profile_router
-    route, profile_id = profile_router.global_route('origin-policy')
-    assert route is not None and profile_id is None and profile_router.is_global('origin-policy')
+    route, segments = profile_router.global_route('origin-policy')  # HM-13c: (route, {placeholder: segment})
+    assert route is not None and segments == {} and profile_router.is_global('origin-policy')
     assert {method: takes_json for method, (_, takes_json) in route.methods.items()} == {'GET': False, 'PUT': True}
     for handler, _ in route.methods.values():
         assert callable(getattr(profile_admin.ProfileAdmin, handler))
     assert route.allows() == ('GET', 'PUT')
-    assert not profile_router.is_global('origin-policy/x') and profile_router.global_route('origin-policy/x') == (None, None)
+    assert not profile_router.is_global('origin-policy/x') and profile_router.global_route('origin-policy/x') == (None, {})
 
 
 async def test_the_route_reads_and_saves_through_the_shared_pipeline(tmp_path, log_scan):

@@ -152,7 +152,10 @@ def routes(profile=B, target=B, label='Beta Ops'):
         found.append((name, method, path, bodies().get(name) if method == 'PUT' else None, header))
     for route in profile_router.GLOBAL_ROUTES:
         for method, (_, takes_json) in route.methods.items():
-            found.append((route.template, method, '/api/' + route.template.replace('{id}', target),
+            # HM-13c: a quarantine directory's name (<id>-<UTC>), well formed, of target's id when it has one
+            name = (target if profiles.is_profile_id(target) else 'f' * 24) + '-20261116T000000Z'
+            path = route.template.replace('{id}', target).replace('{name}', name)
+            found.append((route.template, method, '/api/' + path,
                           GLOBAL_BODIES.get(route.template, {'label': label}) if takes_json else None, {}))
     found += [('page', 'GET', '/', None, {}), ('page', 'GET', '/overview', None, {})]
     return found

@@ -485,15 +485,23 @@ async def test_make_apps_takes_only_a_share_of_a_budget_beside_hm09s_and_hm10s_o
     """make_apps' body_budget (HM-31), merged after HM-09's child_blocked and HM-10's default_endpoint and
     bootstrap_fields (and before HM-30's reply_worker, merged after HM-31): a keyword-only option, None by default (a
     budget of the add-on's own), and anything but a request_budget.Share is refused before an app is made, as each of
-    those three refuses what is not its own."""
+    those three refuses what is not its own.
+    HM-13b's dormant_profiles, merged after HM-31, HM-12 and HM-30, follows reply_worker (keyword-only, None
+    by default, as each of these), and HM-13c's restore_notice and review_required follow that one (the same);
+    HM-27's origin_policy, merged after HM-13c, comes last (the same)."""
     import inspect
 
     parameters = inspect.signature(gateway.make_apps).parameters
     # HM-12's stop_child comes after it (tests/test_odoo_identity_rotation.py checks that option),
-    # then HM-30's reply_worker (HM-30 rebased after HM-12), then HM-27's origin_policy (tests/test_origin_policy.py)
-    assert list(parameters)[-7:] == ['child_blocked', 'default_endpoint', 'bootstrap_fields', 'body_budget',
-                                     'stop_child', 'reply_worker', 'origin_policy']
+    # then HM-30's reply_worker (HM-30 rebased after HM-12), then HM-13b's dormant_profiles (merged after both), then
+    # HM-13c's restore_notice and review_required, then HM-27's origin_policy (merged after HM-13c;
+    # tests/test_origin_policy.py)
+    assert list(parameters)[-10:] == ['child_blocked', 'default_endpoint', 'bootstrap_fields', 'body_budget',
+                                      'stop_child', 'reply_worker', 'dormant_profiles', 'restore_notice',
+                                      'review_required', 'origin_policy']
     assert parameters['body_budget'].kind is inspect.Parameter.KEYWORD_ONLY and parameters['body_budget'].default is None
+    for name in ('dormant_profiles', 'restore_notice', 'review_required', 'origin_policy'):
+        assert parameters[name].kind is inspect.Parameter.KEYWORD_ONLY and parameters[name].default is None
     limits(monkeypatch, 16, 16)
     configure(tmp_path / 'odoo', 'odoo')
     store = ProductStore(tmp_path / 'odoo', 'odoo')

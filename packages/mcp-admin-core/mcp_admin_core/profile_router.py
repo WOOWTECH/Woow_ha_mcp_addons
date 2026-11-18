@@ -27,6 +27,9 @@ Which profile (plan 5.1; I1, I2; DQ-01 (a), DQ-09, DQ-12):
 - Unusable: the index is corrupt or changed behind the add-on's back (profiles.recheck_index: sticky until a restart;
   DQ-12), the profile data could not be listed at startup, or the default profile's state cannot be read (a duplicate
   of its token cannot be ruled out): 503 {"error":"state unavailable"} for every token, the default profile's included.
+- HM-13c (plan 8.4 全部撤銷; contract 4.2): a token a "revoke all" could not revoke (its profile failed; the manager's
+  revoke_fence holds its digest) gets 503 {"error":"state unavailable"} too, whatever its state says now, until a
+  "revoke all" finishes (the next start finishes the unfinished one before anything is served).
   /health/ready (which speaks for the default profile, DQ-19) then answers not ready, as the default app does when its
   state cannot be read; any other path keeps the default app's answer.
 
@@ -485,6 +488,8 @@ class McpDispatcher:
         before (plan 5.1 point 2). Unavailable when the index or the default profile's state cannot be trusted."""
         self.manager.check()
         supplied = hashlib.sha256(candidate).digest()
+        if supplied in self.manager.revoke_fence:
+            raise Unavailable()  # HM-13c: a "revoke all" could not revoke it
         found = []
         for entry in self.manager.profiles():
             try:
@@ -540,8 +545,9 @@ class GlobalRoute:
     """One global management path (contract 3.1: X-MCP-Profile is never read there): each method's ProfileAdmin
     handler and whether it takes a JSON body, of the shape step 5 checks without reading any state (label_shape:
     exactly {"label": <string>}; HM-27's Origin policy: origin_policy.request_shape; a fixed 400 otherwise); "{id}" is
-    one path segment, a profile id (the default profile's or 24 lowercase hexadecimal characters: anything else is a
-    fixed 400 at step 5)."""
+    one path segment, a profile id (the default profile's or 24 lowercase hexadecimal characters), "{name}" one, a
+    quarantine directory's name as the API shows it (HM-13c: <id>-<UTC>[-n], profiles.quarantine_directory_name):
+    anything else is a fixed 400 at step 5. The handler gets the segments in their order."""
     template: str
     methods: dict
     shape: object = label_shape
@@ -552,30 +558,48 @@ class GlobalRoute:
 
 # The global paths (contract 3.1), matched in this order (an exact path before "profiles/{id}"); every other path under
 # profiles/ is an unknown operation (404 after the role check, as today). tests/test_admin_pipeline_matrix.py generates
-# its refusal matrix from this table and gateway.PROFILE_OPERATIONS. HM-13c adds revoke-all, restore-record,
-# restore-review and the quarantine directories' deletion here. HM-27: the Origin policy (its handlers answer an
-# unknown operation's 404 for a product with its own rule, Headscale).
+# its refusal matrix from this table and gateway.PROFILE_OPERATIONS. HM-13c: "revoke all", the restore record, a
+# restore review and a quarantine directory's deletion. HM-27: the Origin policy (its handlers answer an unknown
+# operation's 404 for a product with its own rule, Headscale).
 GLOBAL_ROUTES = (
     GlobalRoute('profiles', {'GET': ('list', False), 'POST': ('create', True)}),
     GlobalRoute('profiles/index/quarantine', {'POST': ('quarantine', False)}),
+    GlobalRoute('profiles/revoke-all', {'POST': ('revoke_all', False)}),
+    GlobalRoute('profiles/restore-record', {'GET': ('restore_record', False)}),
+    GlobalRoute('profiles/quarantine/{name}/delete', {'POST': ('delete_quarantined', False)}),
+    GlobalRoute('profiles/{id}/restore-review', {'POST': ('restore_review', False)}),
     GlobalRoute('profiles/{id}', {'PATCH': ('rename', True), 'DELETE': ('delete', False)}),
     GlobalRoute(ORIGIN_POLICY, {'GET': ('origin_policy', False), 'PUT': ('save_origin_policy', True)},
                 origin_policy.request_shape),
 )
+PLACEHOLDERS = ('{id}', '{name}')
 
 
 def global_route(operation):
-    """(route, the path's profile id or None) of a global operation; (None, None) for an unknown one under profiles/."""
+    """(route, {placeholder: segment}) of a global operation, in the template's order; (None, {}) for an unknown one
+    under profiles/. A placeholder is one non-empty segment."""
+    wanted = operation.split('/')
     for route in GLOBAL_ROUTES:
-        if '{id}' not in route.template:
-            if operation == route.template:
-                return route, None
+        parts = route.template.split('/')
+        if len(parts) != len(wanted):
             continue
-        prefix = route.template[:-len('{id}')]
-        segment = operation[len(prefix):] if operation.startswith(prefix) else None
-        if segment and '/' not in segment:
-            return route, segment
-    return None, None
+        found = {}
+        for part, segment in zip(parts, wanted):
+            if part in PLACEHOLDERS:
+                if not segment:
+                    break
+                found[part] = segment
+            elif part != segment:
+                break
+        else:
+            return route, found
+    return None, {}
+
+
+def valid_segments(found):
+    """Step 5's check of a global path's segments (no state read): a profile id, a quarantine directory's name."""
+    return (('{id}' not in found or profiles.PROFILE_ID.fullmatch(found['{id}']) is not None)
+            and ('{name}' not in found or profiles.quarantine_directory_name(found['{name}']) is not None))
 
 
 def is_global(operation):
@@ -627,7 +651,7 @@ class AdminDispatcher:
         authority, slots = self.manager.shared.authority, self.manager.shared.slots
         _, operation = gateway.management_operation(request, authority.identity)
         method = request.method
-        route = profile_id = None
+        route, segments = None, {}
         if operation == '__ui__':
             if method in ('PATCH', 'DELETE'):
                 return gateway.method_not_allowed(gateway.MANAGEMENT_METHODS)
@@ -635,7 +659,7 @@ class AdminDispatcher:
                 raise BadRequest(404)
             takes_json = False
         elif is_global(operation):
-            route, profile_id = global_route(operation)
+            route, segments = global_route(operation)
             takes_json = route is not None and route.methods.get(method, (None, False))[1]
         else:
             takes_json = operation in gateway.JSON_OPERATIONS and method == 'PUT'
@@ -647,7 +671,7 @@ class AdminDispatcher:
                     return gateway.method_not_allowed(route.allows())
                 if takes_json and not route.shape(value):
                     raise BadRequest()
-                if profile_id is not None and not profiles.PROFILE_ID.fullmatch(profile_id):
+                if not valid_segments(segments):
                     raise BadRequest()
             elif operation != '__ui__' and not is_global(operation) and method in ('PATCH', 'DELETE'):
                 return gateway.method_not_allowed(gateway.MANAGEMENT_METHODS)
@@ -660,7 +684,7 @@ class AdminDispatcher:
                     return Response(status_code=404)  # an unknown operation, as a profile's action answers it
                 handler = getattr(self.admin, route.methods[method][0])
                 call = Call(request, user, value, peer_disconnected, committed)
-                return await (handler(call) if profile_id is None else handler(call, profile_id))
+                return await handler(call, *segments.values())
             entry = (self.manager.get(profiles.DEFAULT_PROFILE) if operation == '__ui__'
                      else self.profile(request))  # step 7
             return await entry.runtime.admin_action(request, user, base, csrf, value, peer_disconnected, committed)

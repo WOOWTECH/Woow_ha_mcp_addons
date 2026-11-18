@@ -47,7 +47,8 @@ session URL、備份或私人拓樸。LOCAL/MOCK、CONTAINER/MOCK、HA、PUBLIC 
   failclosed admin、child loopback、outage PID、stop/reap、state persistence、停機後
   fixture token rotation/disabled 測試。**最後這項不是管理 API 輪替或 HA backup 證據。**
   第一次停機後另模擬一次 Supervisor 還原（`/data/mcp` 整棵改屬 root、檔案 0644），確認下一次啟動時 entrypoint
-  留下 `.restore-detected`（10001、0600）、修好擁有者、state 位元不變（多帳號 HM-13a）；這也不是 HA 還原證據。
+  修好擁有者、管理程序的開機守門處理了 entrypoint 留下的 `.restore-detected` 並刪掉它（沒開通的產品不多任何還原檔）、state 位元不變
+  （多帳號 HM-13a、HM-13b）；這也不是 HA 還原證據。
 - `supply_chain.py candidate` 強制同一已測 image ID 的 source/history/all-layer secret、
   SBOM/CVE/license gate；`verify` 與 registry gate 拒絕缺失／錯 subject／失敗 evidence。
   完整 commands、unsigned provenance 信任層級、persist 範圍見 [hardening](hardening.md)。

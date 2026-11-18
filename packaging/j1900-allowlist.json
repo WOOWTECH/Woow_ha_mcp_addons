@@ -1,0 +1,104 @@
+{
+  "schema": 1,
+  "rule": "In the J1900 check, a native extension module that fails to import natively fails the release, unless this file lists it under that product with the reason and the review that accepted it, and the native import error contains the entry's error_contains text (the one known cause; any other failure of the same module still fails). A listed module that does import natively is checked under QEMU like any other. A second kind of entry, qemu_error_contains, is for a module that imports natively but not under QEMU because the emulator lacks a system call it needs at import: it is set aside from the QEMU comparison only when it imported natively, failed under QEMU and its QEMU error contains that text; a SIGILL still fails whatever this file says. An entry has one kind, never both. The list started empty (review M1); _tkinter (native) was added for the seven products with an image by the coordinator decision of 2026-11-17 (review round 2), and, for the four products whose child installs caio, caio.linux_aio (QEMU-only) and caio.linux_uring (native) by the coordinator decisions of 2026-11-18 (review round 3 for linux_uring); every entry needs the owner's review.",
+  "entry_format": {
+    "<module>": {
+      "reason": "why it cannot import in this image (or under QEMU) and why that is harmless",
+      "review": "who accepted it, when, and where it is recorded",
+      "error_contains": "native entry: text the native import error (\"Type: message\") must contain",
+      "qemu_error_contains": "QEMU-only entry, instead of error_contains: text the import error under QEMU (\"Type: message\") must contain; the module must import natively"
+    }
+  },
+  "products": {
+    "odoo": {
+      "_tkinter": {
+        "reason": "The official python slim base image keeps lib-dynload/_tkinter.cpython-313-x86_64-linux-gnu.so but deliberately ships without Tcl/Tk, so its native import always fails with ImportError (libtk8.6.so missing). No add-on code or dependency imports tkinter, and the J1900 check is about SIGILL in code that actually runs on Nehalem. Evidence: the SBOM of the 0.4.16 Headscale candidate image (release operator evidence outside this repository, artifacts/headscale-ha-closure-20261111/candidate-0416/sbom.syft.json) lists _tkinter in lib-dynload and no Tcl/Tk library or package.",
+        "review": "Coordinator decision 2026-11-17 (GitHub-hosted release route, review round 2); the owner reviews it with this change; docs/operations/release.md records it.",
+        "error_contains": "ImportError: libtk8.6.so: cannot open shared object file"
+      }
+    },
+    "n8n": {
+      "_tkinter": {
+        "reason": "The official python slim base image keeps lib-dynload/_tkinter.cpython-313-x86_64-linux-gnu.so but deliberately ships without Tcl/Tk, so its native import always fails with ImportError (libtk8.6.so missing). No add-on code or dependency imports tkinter, and the J1900 check is about SIGILL in code that actually runs on Nehalem. Evidence: the SBOM of the 0.4.16 Headscale candidate image (release operator evidence outside this repository, artifacts/headscale-ha-closure-20261111/candidate-0416/sbom.syft.json) lists _tkinter in lib-dynload and no Tcl/Tk library or package.",
+        "review": "Coordinator decision 2026-11-17 (GitHub-hosted release route, review round 2); the owner reviews it with this change; docs/operations/release.md records it.",
+        "error_contains": "ImportError: libtk8.6.so: cannot open shared object file"
+      }
+    },
+    "hermes": {
+      "_tkinter": {
+        "reason": "The official python slim base image keeps lib-dynload/_tkinter.cpython-313-x86_64-linux-gnu.so but deliberately ships without Tcl/Tk, so its native import always fails with ImportError (libtk8.6.so missing). No add-on code or dependency imports tkinter, and the J1900 check is about SIGILL in code that actually runs on Nehalem. Evidence: the SBOM of the 0.4.16 Headscale candidate image (release operator evidence outside this repository, artifacts/headscale-ha-closure-20261111/candidate-0416/sbom.syft.json) lists _tkinter in lib-dynload and no Tcl/Tk library or package.",
+        "review": "Coordinator decision 2026-11-17 (GitHub-hosted release route, review round 2); the owner reviews it with this change; docs/operations/release.md records it.",
+        "error_contains": "ImportError: libtk8.6.so: cannot open shared object file"
+      }
+    },
+    "opendesign": {},
+    "emqx": {
+      "_tkinter": {
+        "reason": "The official python slim base image keeps lib-dynload/_tkinter.cpython-313-x86_64-linux-gnu.so but deliberately ships without Tcl/Tk, so its native import always fails with ImportError (libtk8.6.so missing). No add-on code or dependency imports tkinter, and the J1900 check is about SIGILL in code that actually runs on Nehalem. Evidence: the SBOM of the 0.4.16 Headscale candidate image (release operator evidence outside this repository, artifacts/headscale-ha-closure-20261111/candidate-0416/sbom.syft.json) lists _tkinter in lib-dynload and no Tcl/Tk library or package.",
+        "review": "Coordinator decision 2026-11-17 (GitHub-hosted release route, review round 2); the owner reviews it with this change; docs/operations/release.md records it.",
+        "error_contains": "ImportError: libtk8.6.so: cannot open shared object file"
+      },
+      "caio.linux_aio": {
+        "reason": "caio 0.12.10 (pulled in by aiofile) checks the kernel version with uname in PyInit_linux_aio and then calls io_setup(1, &ctx); when that fails it raises PyErr_Format(PyExc_ImportError, \"Error on io_setup with code %d\", errno) (caio/linux_aio.c of the 0.12.10 sdist). QEMU's linux-user mode does not implement the AIO system calls: io_setup is not in its syscall dispatch and returns -TARGET_ENOSYS, so under -cpu Nehalem the import fails with ImportError: Error on io_setup with code 38 (ENOSYS), while in native Docker it imports, since the default seccomp profile allows io_setup, and on a real J1900 host io_setup works. The second GitHub-hosted build of #119 (head b24a2d7) failed exactly here for these four products (\"modules differ under -cpu Nehalem: caio.linux_aio\"), with no SIGILL. The emulator lacks a system call; this is not an instruction-set problem, and the SIGILL check is unchanged (模擬器缺系統呼叫，不是指令集問題；SIGILL 檢查不變). Limits: code 38 is inferred from the sources, not reproduced (a different message still fails, and the failure shows it); under QEMU the module's code after io_setup does not run.",
+        "review": "主對話 2026-11-18 決定，負責人在 #119 覆核",
+        "qemu_error_contains": "ImportError: Error on io_setup with code 38"
+      },
+      "caio.linux_uring": {
+        "reason": "caio 0.12.10 (pulled in by aiofile) also ships caio/linux_uring.cpython-313-x86_64-linux-gnu.so. Its PyInit_linux_uring checks with uname that the kernel is 5.6 or later and then probes io_uring_setup(1, &probe); when that fails with anything but ENOSYS it raises PyErr_Format(PyExc_ImportError, \"io_uring_setup probe failed: %s\", strerror(errno)) (caio/linux_uring.c of the 0.12.10 sdist). Docker's default seccomp profile has no io_uring entry and answers every system call it does not list with defaultErrnoRet 1, EPERM (moby v28.0.4 profiles/seccomp/default.json; the GitHub-hosted runner has Docker 28.0.4), and the J1900 check runs its containers under that default profile, so natively the import fails with ImportError: io_uring_setup probe failed: Operation not permitted, and the module never reaches QEMU. Add-on containers on HAOS also run under the default seccomp profile, so io_uring is blocked there as well and caio falls back to linux_aio (caio/__init__.py tries linux_uring, then linux_aio, thread_aio and python_aio): apart from that failing import probe, the linux_uring code does not run in production. Limit: if io_uring is ever allowed, linux_uring runs without J1900 coverage (on the runner the check would notice: the module would then import natively and fail under QEMU, which has no io_uring_setup either). Basis: linux_uring.c and moby v28.0.4 default.json.",
+        "review": "主對話 2026-11-18 決定，負責人在 #119 覆核",
+        "error_contains": "ImportError: io_uring_setup probe failed: Operation not permitted"
+      }
+    },
+    "litellm": {
+      "_tkinter": {
+        "reason": "The official python slim base image keeps lib-dynload/_tkinter.cpython-313-x86_64-linux-gnu.so but deliberately ships without Tcl/Tk, so its native import always fails with ImportError (libtk8.6.so missing). No add-on code or dependency imports tkinter, and the J1900 check is about SIGILL in code that actually runs on Nehalem. Evidence: the SBOM of the 0.4.16 Headscale candidate image (release operator evidence outside this repository, artifacts/headscale-ha-closure-20261111/candidate-0416/sbom.syft.json) lists _tkinter in lib-dynload and no Tcl/Tk library or package.",
+        "review": "Coordinator decision 2026-11-17 (GitHub-hosted release route, review round 2); the owner reviews it with this change; docs/operations/release.md records it.",
+        "error_contains": "ImportError: libtk8.6.so: cannot open shared object file"
+      },
+      "caio.linux_aio": {
+        "reason": "caio 0.12.10 (pulled in by aiofile) checks the kernel version with uname in PyInit_linux_aio and then calls io_setup(1, &ctx); when that fails it raises PyErr_Format(PyExc_ImportError, \"Error on io_setup with code %d\", errno) (caio/linux_aio.c of the 0.12.10 sdist). QEMU's linux-user mode does not implement the AIO system calls: io_setup is not in its syscall dispatch and returns -TARGET_ENOSYS, so under -cpu Nehalem the import fails with ImportError: Error on io_setup with code 38 (ENOSYS), while in native Docker it imports, since the default seccomp profile allows io_setup, and on a real J1900 host io_setup works. The second GitHub-hosted build of #119 (head b24a2d7) failed exactly here for these four products (\"modules differ under -cpu Nehalem: caio.linux_aio\"), with no SIGILL. The emulator lacks a system call; this is not an instruction-set problem, and the SIGILL check is unchanged (模擬器缺系統呼叫，不是指令集問題；SIGILL 檢查不變). Limits: code 38 is inferred from the sources, not reproduced (a different message still fails, and the failure shows it); under QEMU the module's code after io_setup does not run.",
+        "review": "主對話 2026-11-18 決定，負責人在 #119 覆核",
+        "qemu_error_contains": "ImportError: Error on io_setup with code 38"
+      },
+      "caio.linux_uring": {
+        "reason": "caio 0.12.10 (pulled in by aiofile) also ships caio/linux_uring.cpython-313-x86_64-linux-gnu.so. Its PyInit_linux_uring checks with uname that the kernel is 5.6 or later and then probes io_uring_setup(1, &probe); when that fails with anything but ENOSYS it raises PyErr_Format(PyExc_ImportError, \"io_uring_setup probe failed: %s\", strerror(errno)) (caio/linux_uring.c of the 0.12.10 sdist). Docker's default seccomp profile has no io_uring entry and answers every system call it does not list with defaultErrnoRet 1, EPERM (moby v28.0.4 profiles/seccomp/default.json; the GitHub-hosted runner has Docker 28.0.4), and the J1900 check runs its containers under that default profile, so natively the import fails with ImportError: io_uring_setup probe failed: Operation not permitted, and the module never reaches QEMU. Add-on containers on HAOS also run under the default seccomp profile, so io_uring is blocked there as well and caio falls back to linux_aio (caio/__init__.py tries linux_uring, then linux_aio, thread_aio and python_aio): apart from that failing import probe, the linux_uring code does not run in production. Limit: if io_uring is ever allowed, linux_uring runs without J1900 coverage (on the runner the check would notice: the module would then import natively and fail under QEMU, which has no io_uring_setup either). Basis: linux_uring.c and moby v28.0.4 default.json.",
+        "review": "主對話 2026-11-18 決定，負責人在 #119 覆核",
+        "error_contains": "ImportError: io_uring_setup probe failed: Operation not permitted"
+      }
+    },
+    "nextcloud": {
+      "_tkinter": {
+        "reason": "The official python slim base image keeps lib-dynload/_tkinter.cpython-313-x86_64-linux-gnu.so but deliberately ships without Tcl/Tk, so its native import always fails with ImportError (libtk8.6.so missing). No add-on code or dependency imports tkinter, and the J1900 check is about SIGILL in code that actually runs on Nehalem. Evidence: the SBOM of the 0.4.16 Headscale candidate image (release operator evidence outside this repository, artifacts/headscale-ha-closure-20261111/candidate-0416/sbom.syft.json) lists _tkinter in lib-dynload and no Tcl/Tk library or package.",
+        "review": "Coordinator decision 2026-11-17 (GitHub-hosted release route, review round 2); the owner reviews it with this change; docs/operations/release.md records it.",
+        "error_contains": "ImportError: libtk8.6.so: cannot open shared object file"
+      },
+      "caio.linux_aio": {
+        "reason": "caio 0.12.10 (pulled in by aiofile) checks the kernel version with uname in PyInit_linux_aio and then calls io_setup(1, &ctx); when that fails it raises PyErr_Format(PyExc_ImportError, \"Error on io_setup with code %d\", errno) (caio/linux_aio.c of the 0.12.10 sdist). QEMU's linux-user mode does not implement the AIO system calls: io_setup is not in its syscall dispatch and returns -TARGET_ENOSYS, so under -cpu Nehalem the import fails with ImportError: Error on io_setup with code 38 (ENOSYS), while in native Docker it imports, since the default seccomp profile allows io_setup, and on a real J1900 host io_setup works. The second GitHub-hosted build of #119 (head b24a2d7) failed exactly here for these four products (\"modules differ under -cpu Nehalem: caio.linux_aio\"), with no SIGILL. The emulator lacks a system call; this is not an instruction-set problem, and the SIGILL check is unchanged (模擬器缺系統呼叫，不是指令集問題；SIGILL 檢查不變). Limits: code 38 is inferred from the sources, not reproduced (a different message still fails, and the failure shows it); under QEMU the module's code after io_setup does not run.",
+        "review": "主對話 2026-11-18 決定，負責人在 #119 覆核",
+        "qemu_error_contains": "ImportError: Error on io_setup with code 38"
+      },
+      "caio.linux_uring": {
+        "reason": "caio 0.12.10 (pulled in by aiofile) also ships caio/linux_uring.cpython-313-x86_64-linux-gnu.so. Its PyInit_linux_uring checks with uname that the kernel is 5.6 or later and then probes io_uring_setup(1, &probe); when that fails with anything but ENOSYS it raises PyErr_Format(PyExc_ImportError, \"io_uring_setup probe failed: %s\", strerror(errno)) (caio/linux_uring.c of the 0.12.10 sdist). Docker's default seccomp profile has no io_uring entry and answers every system call it does not list with defaultErrnoRet 1, EPERM (moby v28.0.4 profiles/seccomp/default.json; the GitHub-hosted runner has Docker 28.0.4), and the J1900 check runs its containers under that default profile, so natively the import fails with ImportError: io_uring_setup probe failed: Operation not permitted, and the module never reaches QEMU. Add-on containers on HAOS also run under the default seccomp profile, so io_uring is blocked there as well and caio falls back to linux_aio (caio/__init__.py tries linux_uring, then linux_aio, thread_aio and python_aio): apart from that failing import probe, the linux_uring code does not run in production. Limit: if io_uring is ever allowed, linux_uring runs without J1900 coverage (on the runner the check would notice: the module would then import natively and fail under QEMU, which has no io_uring_setup either). Basis: linux_uring.c and moby v28.0.4 default.json.",
+        "review": "主對話 2026-11-18 決定，負責人在 #119 覆核",
+        "error_contains": "ImportError: io_uring_setup probe failed: Operation not permitted"
+      }
+    },
+    "headscale": {
+      "_tkinter": {
+        "reason": "The official python slim base image keeps lib-dynload/_tkinter.cpython-313-x86_64-linux-gnu.so but deliberately ships without Tcl/Tk, so its native import always fails with ImportError (libtk8.6.so missing). No add-on code or dependency imports tkinter, and the J1900 check is about SIGILL in code that actually runs on Nehalem. Evidence: the SBOM of the 0.4.16 Headscale candidate image (release operator evidence outside this repository, artifacts/headscale-ha-closure-20261111/candidate-0416/sbom.syft.json) lists _tkinter in lib-dynload and no Tcl/Tk library or package.",
+        "review": "Coordinator decision 2026-11-17 (GitHub-hosted release route, review round 2); the owner reviews it with this change; docs/operations/release.md records it.",
+        "error_contains": "ImportError: libtk8.6.so: cannot open shared object file"
+      },
+      "caio.linux_aio": {
+        "reason": "caio 0.12.10 (pulled in by aiofile) checks the kernel version with uname in PyInit_linux_aio and then calls io_setup(1, &ctx); when that fails it raises PyErr_Format(PyExc_ImportError, \"Error on io_setup with code %d\", errno) (caio/linux_aio.c of the 0.12.10 sdist). QEMU's linux-user mode does not implement the AIO system calls: io_setup is not in its syscall dispatch and returns -TARGET_ENOSYS, so under -cpu Nehalem the import fails with ImportError: Error on io_setup with code 38 (ENOSYS), while in native Docker it imports, since the default seccomp profile allows io_setup, and on a real J1900 host io_setup works. The second GitHub-hosted build of #119 (head b24a2d7) failed exactly here for these four products (\"modules differ under -cpu Nehalem: caio.linux_aio\"), with no SIGILL. The emulator lacks a system call; this is not an instruction-set problem, and the SIGILL check is unchanged (模擬器缺系統呼叫，不是指令集問題；SIGILL 檢查不變). Limits: code 38 is inferred from the sources, not reproduced (a different message still fails, and the failure shows it); under QEMU the module's code after io_setup does not run.",
+        "review": "主對話 2026-11-18 決定，負責人在 #119 覆核",
+        "qemu_error_contains": "ImportError: Error on io_setup with code 38"
+      },
+      "caio.linux_uring": {
+        "reason": "caio 0.12.10 (pulled in by aiofile) also ships caio/linux_uring.cpython-313-x86_64-linux-gnu.so. Its PyInit_linux_uring checks with uname that the kernel is 5.6 or later and then probes io_uring_setup(1, &probe); when that fails with anything but ENOSYS it raises PyErr_Format(PyExc_ImportError, \"io_uring_setup probe failed: %s\", strerror(errno)) (caio/linux_uring.c of the 0.12.10 sdist). Docker's default seccomp profile has no io_uring entry and answers every system call it does not list with defaultErrnoRet 1, EPERM (moby v28.0.4 profiles/seccomp/default.json; the GitHub-hosted runner has Docker 28.0.4), and the J1900 check runs its containers under that default profile, so natively the import fails with ImportError: io_uring_setup probe failed: Operation not permitted, and the module never reaches QEMU. Add-on containers on HAOS also run under the default seccomp profile, so io_uring is blocked there as well and caio falls back to linux_aio (caio/__init__.py tries linux_uring, then linux_aio, thread_aio and python_aio): apart from that failing import probe, the linux_uring code does not run in production. Limit: if io_uring is ever allowed, linux_uring runs without J1900 coverage (on the runner the check would notice: the module would then import natively and fail under QEMU, which has no io_uring_setup either). Basis: linux_uring.c and moby v28.0.4 default.json.",
+        "review": "主對話 2026-11-18 決定，負責人在 #119 覆核",
+        "error_contains": "ImportError: io_uring_setup probe failed: Operation not permitted"
+      }
+    }
+  }
+}

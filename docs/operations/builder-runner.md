@@ -1,6 +1,14 @@
-# Builder runner contract — BLD2 (current route BLOCKED)
+# Builder runner contract — BLD2（歷史設計，不是發版路線）
 
-> **現況（2026-10-07）：本文是歷史設計。** 這裡的 GitHub self-hosted runner 路線（BLD2）至今未啟用；下文的狀態描述是當時
+> **現況（2026-11-17）：BLD2 是歷史設計，不是發版路線。** 負責人 2026-11-17 決定 HA add-on 這條線不用 PaaS 的基礎設施
+> （k3s 叢集、Gitea）。映像改由 `.github/workflows/release.yaml` 在 GitHub 託管的 ubuntu-24.04 機器建置、驗收、推 GHCR，
+> 推送只用每次執行才發的 `GITHUB_TOKEN`，負責人看過 candidate 結果後在 `public-release` environment 批准；流程、每道閘門和要在 GitHub
+> 設定的項目見 [release.md](release.md)「發版：GitHub 託管機器」。`release.yaml` 與 `check_release.py` 不再用
+> `builder_contract.py`，也不再讀 `RELEASE-GATES.json`。還照下文 BLD2 契約的只有 `ci.yaml` 的 `images` job：
+> 硬鎖、admission 一律拒絕，語意沒改。0.1.0–0.4.13 與 Headscale 0.4.14–0.4.18 的映像是在負責人選定的一次性
+> KubeVirt builder VM（Docker classic store）建置推送的（見各版 `release-decision-*.md`）。下文保留當時的設計與狀態，不再更新。
+>
+> 2026-10-07 的現況：本文是歷史設計。這裡的 GitHub self-hosted runner 路線（BLD2）至今未啟用；下文的狀態描述是當時
 > （七支、18 個 release gates）的情形。實際映像改在負責人選定的專用一次性 KubeVirt builder VM（Docker classic store）建置與掃描，
 > 0.1.0–0.1.5 由該 VM 推送已測的同一 image ID 到 GHCR（見各版 `release-decision-*.md`）。`RELEASE-GATES.json` 現有 16 個 gates
 > （共用 4 個＋六支各 `image`／`ha`）仍全部 false，`approved_commit` 為 null。

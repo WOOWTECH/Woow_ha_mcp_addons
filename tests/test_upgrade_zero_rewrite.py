@@ -1,14 +1,15 @@
 """HM-07: the profile data layer is not wired and an upgrade rewrites nothing (plan §3.3, §7.1; I6).
 
-- Not wired: no entry point imports HM-13a's restore_detect.py (which takes its file names from profiles.py): the 8081
-  and 8099 answers stay those HM-01 froze (tests/test_single_profile_golden.py, tests/test_mcp_contract_freeze.py,
-  tests/test_admin_contract_freeze.py). HM-08 wired features.py and profiles.py: run_product asks features.enabled() at
-  every start, the gateway takes the profile id grammar from profiles.py, and only a switched-on product's dispatcher
-  reads the index (tests/test_router_passthrough.py: switched off, no index or profile directory is read). HM-20's
-  loopback rule reads features.enabled() too (products.loopback_refused; switched off, it changes no answer). HM-12
-  wired identity_fields.py (products.identity_rebound, backend_edit.new_origin_refused: data the gateway
-  reads only for a switched-on product; switched off, it changes no answer). HM-13b wires the existence check of
-  profiles.py and the restore check: that slice changes the list below on purpose.
+- Wired since: HM-08 wired features.py and profiles.py: run_product asks features.enabled() at every start, the gateway
+  takes the profile id grammar from profiles.py, and only a switched-on product's dispatcher reads the index
+  (tests/test_router_passthrough.py: switched off, no index or profile directory is read). HM-20's loopback rule reads
+  features.enabled() too (products.loopback_refused; switched off, it changes no answer). HM-12 wired identity_fields.py
+  (products.identity_rebound, backend_edit.new_origin_refused: data the gateway reads only for a switched-on product;
+  switched off, it changes no answer). HM-13b wired HM-13a's restore_detect.py and reads HM-07's identity_fields.py too:
+  both entry points run the boot guard (restore_lock) at every start, which detects a restore, and its restore record
+  shows identity fields. UNWIRED is empty now; the scans stay for the next module that is not wired yet. The 8081 and
+  8099 answers stay those HM-01 froze (tests/test_single_profile_golden.py, tests/test_mcp_contract_freeze.py,
+  tests/test_admin_contract_freeze.py).
 - The switch: MULTI_PROFILE_PRODUCTS is empty; features.enabled() reads it at every call (never bound at import), so
   an integration test can switch a product on with a subprocess preamble (tests/test_real_products.py style).
 - Zero rewrite: a state.json bb48449 wrote (one installed add-on per product, tests/fixtures/upgrade_zero_rewrite)
@@ -16,9 +17,11 @@
   on a single-profile installation every read of the data layer leaves /data/mcp exactly as it was; creating profiles
   never writes the default profile's state.json (SHA-256, inode, mtime, mode, ctime).
 - The restore check (HM-13a) on the same bytes: nothing changes while the product is switched off; once it is on, the
-  first check adds the instance sentinel and its record and nothing else.
+  first check adds the instance sentinel and its record and nothing else. HM-13b runs it at every start (the boot
+  guard): the production runtime's start of these bytes switched on adds only those two besides the child's directory.
 """
 import ast
+import contextlib
 import hashlib
 import json
 import os
@@ -33,6 +36,7 @@ import pytest
 from log_scan import log_scan  # noqa: F401  (fixture)
 from mcp_admin_core import features, products, profiles, restore_detect
 from mcp_admin_core.products import ProductState, ProductStore, profile_initial_state
+from multi_profile_runtime import multi_profile_runtime
 from test_restore_detection import after_tick
 from test_single_profile_golden import PRODUCTS as GOLDEN_PRODUCTS, production_runtime, settle
 
@@ -41,9 +45,10 @@ pytestmark = pytest.mark.usefixtures('log_scan')  # every new test runs under th
 ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / 'packages/mcp-admin-core/mcp_admin_core'
 ZERO_REWRITE = ROOT / 'tests/fixtures/upgrade_zero_rewrite'
-# HM-13a's restore_detect (HM-08 wired HM-07's features and profiles, HM-20's loopback rule reads features too and HM-12
-# wired HM-07's identity_fields; HM-13b wires restore_detect)
-UNWIRED = ('restore_detect',)
+# Modules no runtime file may import yet. HM-08 wired HM-07's features and profiles (HM-20's loopback rule reads
+# features too); HM-12 wired HM-07's identity_fields; HM-13b wired HM-13a's restore_detect (the boot guard,
+# restore_lock, which reads identity_fields too).
+UNWIRED = ()
 A, B = 'a' * 24, 'b' * 24
 
 
@@ -150,6 +155,8 @@ def test_no_entry_point_imports_the_unwired_modules(entry):
     assert not {'mcp_admin_core.' + name for name in UNWIRED} & set(loaded), loaded
     if entry in ('run_product', 'n8n'):
         assert 'mcp_admin_core.products' in loaded and 'mcp_admin_core.config' in loaded  # the probe saw imports
+        # HM-13b: both runtimes run the boot guard at every start
+        assert {'mcp_admin_core.restore_lock', 'mcp_admin_core.restore_detect'} <= set(loaded), loaded
 
 
 def test_multi_profile_is_switched_off_for_every_product():
@@ -239,28 +246,48 @@ def installed(tmp_path, raw):
     return data
 
 
+@pytest.mark.parametrize('switched_on', [False, True])
 @pytest.mark.parametrize('product', GOLDEN_PRODUCTS)
-async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_scan, product):
-    # Plan §7.1, §7.3: an installed add-on of today upgrades to this code with no product switched on. The state is
-    # the bytes bb48449 wrote (tests/fixtures/upgrade_zero_rewrite/README.md); the runtime is the production one with
-    # only its outside replaced (tests/test_single_profile_golden.py: production_runtime). HM-13a pins the restore
-    # check on these bytes (test_the_restore_check_on_a_state_bb48449_wrote_adds_only_the_sentinel); HM-13b, which
-    # runs that check at every start, extends this test: with the product switched on, the only new entries are the
-    # sentinel and its record. Every slice keeps it passing.
+async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_scan, product, switched_on):
+    # Plan §7.1, §7.3: an installed add-on of today upgrades to this code. The state is the bytes bb48449 wrote
+    # (tests/fixtures/upgrade_zero_rewrite/README.md); the runtime is the production one with only its outside
+    # replaced (tests/test_single_profile_golden.py: production_runtime; switched on, tests/multi_profile_runtime.py:
+    # the same with the product's switch on). HM-13b runs the restore check at every start (the boot guard): switched
+    # off nothing new appears; switched on, the only new entries are the sentinel and its record (HM-13a pins the check
+    # itself: test_the_restore_check_on_a_state_bb48449_wrote_adds_only_the_sentinel). n8n has no profiles until HM-25,
+    # but its guard reads the switch as well. Every slice keeps it passing.
     raw = (ZERO_REWRITE / f'{product}.json').read_bytes()
     state = ProductState.model_validate_json(raw)
     assert state.product == product and state.configured and state.token_history
     log_scan.watch_state(state)
     data = installed(tmp_path, raw)
     before = start_facts(data)
-    async with production_runtime(product, data) as runtime:
+    if not switched_on:
+        running = production_runtime(product, data)
+    elif product == 'n8n':
+        running = n8n_switched_on(data)
+    else:
+        running = multi_profile_runtime(product, data)
+    async with running as runtime:
         await settle(runtime, 'configured')
     after = start_facts(data)
     assert (data / 'state.json').read_bytes() == raw
     assert {name: after[name] for name in before if name != '.'} == {n: f for n, f in before.items() if n != '.'}
-    # The only new entry is the child's own working directory, as today (products.child_spec; n8n works in /data/mcp).
-    assert set(after) - set(before) == (set() if product == 'n8n' else {'child'})
+    # The child's own working directory, as today (products.child_spec; n8n works in /data/mcp); switched on, the
+    # instance sentinel and its record.
+    expected = (set() if product == 'n8n' else {'child'})
+    if switched_on:
+        expected |= {profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME}
+    assert set(after) - set(before) == expected
     assert not profiles.has_profile_data(data)
+
+
+@contextlib.asynccontextmanager
+async def n8n_switched_on(data):
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset({'n8n'}))
+        async with production_runtime('n8n', data) as runtime:
+            yield runtime
 
 
 @pytest.mark.parametrize('product', GOLDEN_PRODUCTS)

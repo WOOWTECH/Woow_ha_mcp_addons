@@ -370,7 +370,7 @@ class SupplyChainTests(unittest.TestCase):
 
     def test_workflow_enforces_candidate_before_login_push_and_persists_evidence(self):
         from validate import ROOT, load
-        for workflow, job in (('release', 'publish'), ('ci', 'images')):
+        for workflow, job in (('release', 'candidate'), ('ci', 'images')):
             value = load(ROOT / '.github/workflows' / (workflow + '.yaml'))
             steps = value['jobs'][job]['steps']
             text = '\n'.join(x.get('run', '') for x in steps)
@@ -378,8 +378,17 @@ class SupplyChainTests(unittest.TestCase):
             self.assertEqual(sum('docker/build-push-action@' in x.get('uses', '') for x in steps), 1)
             self.assertTrue(any(x.get('with', {}).get('fetch-depth') == 0 for x in steps))
             if workflow == 'release':
-                self.assertIn('supply_chain.py verify', text)
-                self.assertIn('registry_gate.py public', text)
-                candidate = next(i for i,x in enumerate(steps) if 'supply_chain.py candidate' in x.get('run', ''))
-                login = next(i for i,x in enumerate(steps) if 'docker/login-action@' in x.get('uses', ''))
-                self.assertLess(candidate, login)
+                # The candidate job tests and scans without registry authority; the publish job, which needs it, logs
+                # in only after re-verifying the handed-over image against the same evidence.
+                self.assertFalse(any('docker/login-action@' in x.get('uses', '') for x in steps))
+                self.assertEqual(value['jobs'][job]['permissions'], {'contents': 'read'})
+                publish = value['jobs']['publish']
+                self.assertEqual(publish['needs'], ['gate', 'candidate'])
+                published = '\n'.join(x.get('run', '') for x in publish['steps'])
+                self.assertIn('supply_chain.py verify', published)
+                self.assertIn('registry_gate.py public', published)
+                self.assertNotIn('supply_chain.py candidate', published)
+                self.assertEqual(sum('docker/build-push-action@' in x.get('uses', '') for x in publish['steps']), 0)
+                verify = next(i for i, x in enumerate(publish['steps']) if 'supply_chain.py verify' in x.get('run', ''))
+                login = next(i for i, x in enumerate(publish['steps']) if 'docker/login-action@' in x.get('uses', ''))
+                self.assertLess(verify, login)

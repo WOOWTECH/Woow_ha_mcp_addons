@@ -32,7 +32,7 @@ import time
 import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
-from mcp_admin_core import profiles, restore_detect as rd
+from mcp_admin_core import profiles, restore_detect as rd, restore_lock
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.products import ProductStore
 
@@ -1054,9 +1054,20 @@ def test_detection_needs_its_directory(tmp_path):
 
 # ---- the container acceptance's restore stage (packaging/container_probe.py) --------------------------------------
 
+def guard_start(directory):
+    """The management process's start up to its boot guard (HM-13b), the product not switched on: what it did."""
+    store = ProductStore(Path(directory), 'odoo')
+    try:
+        outcome = restore_lock.guard(store, 'odoo', enabled=False)
+    finally:
+        store.close()
+    return [outcome.restored, outcome.default_revoked]
+
+
 def test_the_container_probes_restore_stage_meets_the_entrypoint(tmp_path, log_scan, monkeypatch):
     # Every release's container acceptance restores /data/mcp as Supervisor does, starts the real image and checks what
-    # the entrypoint left (review HM-13a MF-1). Its two steps here, with the real entrypoint between them.
+    # the start left (review HM-13a MF-1). Its two steps here, with the real entrypoint and the management process's
+    # boot guard (HM-13b: it removes the marker of a restore without profile data) between them.
     parent = tmp_path / 'data'
     parent.mkdir()
     data = runtime_tree(parent, log_scan)
@@ -1066,6 +1077,12 @@ def test_the_container_probes_restore_stage_meets_the_entrypoint(tmp_path, log_s
     restored, state = probe.restore_as_supervisor()
     assert {vroot.owner(path.lstat()) for path in [data, *data.rglob('*')]} == {RESTORE_OWNER}
     assert boot(parent, vroot) == REOWNED % (len(restored) + 1)  # the restored entries and the marker
+    with pytest.raises(AssertionError, match='restore marker left'):
+        probe.check_restored_start(restored, state)  # the entrypoint alone: the marker is there
+    assert guard_start(data) == [True, False]
+    # HM-13c: the guard's restore notice is the management process's file (uid 10001: the root case below runs the
+    # guard as that user); this test user stands in for it.
+    vroot.owners[inode(data / profiles.RESTORE_NOTICE_NAME)] = RUNTIME
     probe.check_restored_start(restored, state)
 
 
@@ -1218,4 +1235,5 @@ def test_root_the_container_probes_restore_stage_meets_the_entrypoint(reachable,
     with redirect_stderr(log):
         entrypoint().prepare_data(reachable)
     assert log.getvalue() == REOWNED % (len(restored) + 1)
+    assert as_runtime_user(guard_start, str(data)) == [True, False]  # the management process: uid 10001
     probe.check_restored_start(restored, state)
