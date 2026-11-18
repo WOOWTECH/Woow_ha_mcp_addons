@@ -680,7 +680,8 @@ def guard_lines(run):
 class GuardLogTests(unittest.TestCase):
     """The probe's expectation against the real boot guard (HM-13b, HM-13c), not a copy of its strings: what
     restore_lock.guard logs at the start after a restore of an installation without profile data, behind the
-    entrypoint's line, passes check_restore_log (the restore with profile data: packaging/test_container_profiles.py)."""
+    entrypoint's line, passes check_restore_log (the restore with profile data:
+    packaging/test_container_profiles.py)."""
 
     def test_a_restore_without_profile_data_passes(self):
         from mcp_admin_core import restore_detect

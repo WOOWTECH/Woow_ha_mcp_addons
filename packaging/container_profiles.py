@@ -10,13 +10,14 @@ stage() runs after the probe's single-profile path, with the runtime stopped and
 probe's own mock backend (for a switched-on product on the container's private address, as Headscale's: HM-20's
 loopback rule):
 
-1. Fixture, while stopped (the probe's rule: fixture state changes only while stopped). The restore marker that the
-   single-profile restore stage left is removed, as the boot gate's last step removes it (HM-13a saves it, nothing
-   removes it until HM-13b). The instance sentinel and its record are made as the runtime user by restore_detect.detect,
-   which is what HM-13b's boot does at the first switched-on start (ESTABLISHED; before any profile data exists). Then
-   two additional profiles are created with the library calls of the panel's creation (HM-10: profile_initial_state,
-   ProductStore(create=...), the index; ports from 18000), configured on the default profile's mock backend, and given
-   to the runtime user (the probe writes as root, as fixture_update does). The probe sends no management request: the
+1. Fixture, while stopped (the probe's rule: fixture state changes only while stopped). The single-profile path handled
+   its restore already: the boot guard of that stage's start (HM-13b) removed the entrypoint's marker, and the instance
+   sentinel and its record are the runtime's own (made by the guard's restore_detect.detect at the product's first
+   switched-on start, before any profile data existed; rebuilt by the guard after that restore): detect, run as the
+   runtime user, finds no marker and them CONSISTENT, and makes nothing. Then two additional profiles are created with
+   the library calls of the panel's creation (HM-10: profile_initial_state, ProductStore(create=...), the index; ports
+   from 18000), configured on the default profile's mock backend, and given to the runtime user (the probe writes as
+   root, as fixture_update does). The probe sends no management request: the
    container has no trusted Ingress and no HA role verifier, and the probe never bypasses them (the management API is
    tests/test_profile_admin_api.py's and, on HAOS, the P9 kit's temporary-profile mode's).
 2. One start: every profile's child runs and listens on its own port (3000, 18000, 18001), on IPv4 loopback only.
@@ -36,13 +37,18 @@ loopback rule):
 8. Nothing of it touched the sentinel (detect: CONSISTENT, no marker), and /data/mcp after the children ran is a tree
    the restore repair takes, within the layout's names and the repair's entry and depth budget (tree_snapshot).
 9. A Supervisor-style restore of the whole multi-profile tree (the single-profile stage's restore_as_supervisor) and
-   the start after it: the entrypoint saved its marker and gave every entry back to the runtime user, every state, the
-   index and the instance record kept their bytes, and every profile's child started again; stopped, both restore
-   signals are seen (detect: the marker and MISMATCH).
+   the start after it, whose stderr is read back once it stopped (container_probe.check_restore_log). With profile data
+   on disk the boot guard revokes every profile, the default profile's included (DQ-03 (b) A2; plan 8.4 A-F; HM-13b):
+   the entrypoint gave every restored entry back to the runtime user and said so once; the guard removed the marker and
+   the single-profile stage's restore notice (no longer true, HM-13c), wrote restore-record.json (both signals, every
+   profile revoked) and said REVOKED once for each profile and REVOKED_NOTICE once; every profile's token is None with
+   one more history entry and its child token new, nothing else of a state changed, nor the index; every profile's
+   child started again; no credential from before the restore is served (each token on both connection methods, each
+   child token by its child). Stopped: the sentinel was rebuilt (detect: no marker, CONSISTENT), and what the guard
+   left is still a tree the repair takes (tree_snapshot: the record, new journals, archived receipts).
 
-What HM-13b's boot gate changes in steps 1 and 9 (it removes the marker itself, makes the sentinel itself, and revokes
-on the start after a restore) is listed in docs/provenance/ha-multiprofile-HM-16-20261116.md. Fixed messages only: no
-token, child token, label, state or backend value is ever printed; a profile is named by its log id (profiles.log_id).
+Fixed messages only: no token, child token, label, state or backend value is ever printed; a profile is named by its
+log id (profiles.log_id).
 
 Not for n8n yet (HM-25, review SF-2): its child names its port only in its environment (PORT, beside its tokens), never
 on its command line, so the children cannot be told apart by their command lines; stage() refuses n8n before it
@@ -63,12 +69,14 @@ import socket
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 
 import httpx
 
 import entrypoint  # the restore repair's limits: packaging/entrypoint.py, the file every image copies
-from mcp_admin_core import profiles, restore_detect
+from mcp_admin_core import operations, profiles, restore_detect, restore_lock
+from mcp_admin_core.config import ConfigError
 from mcp_admin_core.health import protocol_reply
 from mcp_admin_core.lifecycle import CHILD_PORT, EXTRA_CHILD_RESOURCES
 from mcp_admin_core.migration import OWNER_RECOVERY
@@ -86,13 +94,20 @@ RESTART_SECONDS = 40  # the watchdog's first delay is 2 s (lifecycle.WATCHDOG), 
 BACKEND_FIELDS = ('connection', 'backend_url', 'backend_key')  # what a profile's backend is (n8n: url and key)
 
 # The layout's names (plan 4.1; profiles.py, operations.py, migration.py): what /data/mcp may hold once the children
-# ran. A profile directory holds its state, writer lock, operation journal and the child's empty working directory.
-JOURNAL = '.state.json.operations.json'  # operations.OperationJournal beside state.json
-PROFILE_NAMES = frozenset({'state.json', '.writer.lock', JOURNAL, 'child'})
-TOP_NAMES = PROFILE_NAMES | {OWNER_RECOVERY, profiles.INDEX_NAME, profiles.INDEX_OPERATIONS_NAME, profiles.PROFILES_NAME,
-                             profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME,
+# ran and the boot guard handled a restore (HM-13b, HM-13c). A profile directory holds its state, writer lock,
+# operation journal (and the journal a restore archived) and the child's empty working directory.
+JOURNAL = operations.journal_path(Path('state.json')).name  # operations.OperationJournal beside state.json
+# The receipts a restore archived (operations.archive_for_restore; HM-13b): beside every profile's state.json, the
+# default profile's included, and beside the index.
+JOURNAL_ARCHIVE, INDEX_JOURNAL_ARCHIVE = profiles.RECEIPT_ARCHIVE_NAMES
+PROFILE_NAMES = frozenset({'state.json', '.writer.lock', JOURNAL, JOURNAL_ARCHIVE, 'child'})
+TOP_NAMES = PROFILE_NAMES | {OWNER_RECOVERY, profiles.INDEX_NAME, profiles.INDEX_OPERATIONS_NAME, INDEX_JOURNAL_ARCHIVE,
+                             profiles.PROFILES_NAME, profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME,
                              profiles.INSTANCE_RECORD_TEMPORARY_NAME, profiles.RESTORE_MARKER_NAME,
-                             profiles.REVOKE_ALL_MARKER_NAME, profiles.RESTORE_RECORD_NAME}
+                             profiles.REVOKE_ALL_MARKER_NAME, profiles.RESTORE_RECORD_NAME,
+                             profiles.RESTORE_NOTICE_NAME}  # HM-13c: a restore that kept the token (single profile)
+# What the guard's revocation writes in a state (ProductStore.change_token, then a new child token): nothing else.
+REVOKED_FIELDS = ('token', 'child_token', 'token_history')
 DIRECTORIES = frozenset({'child', profiles.PROFILES_NAME})
 INDEX_QUARANTINE = re.compile(re.escape(profiles.INDEX_NAME) + r'\.quarantine-[0-9]{8}T[0-9]{6}Z(?:-[0-9]{1,3})?')
 MAX_FILE_BYTES = 1024 * 1024  # as the single-profile fixture_snapshot
@@ -180,12 +195,11 @@ def tree_snapshot(data):
 
 # ---- the fixture (only while stopped) ----
 
-def end_restore_marker(data):
-    """The marker the single-profile restore stage left goes, as the boot gate's last step removes it (HM-13a: nothing
-    removes it yet). Once HM-13b's gate is merged it is gone already, and this check fails on purpose."""
-    marker = Path(data) / profiles.RESTORE_MARKER_NAME
-    assert os.path.lexists(marker), 'the single-profile restore stage left no marker'
-    os.unlink(marker)
+def check_marker_ended(data):
+    """The marker of the single-profile restore stage is gone: the boot guard of that stage's start removed it as its
+    last step (HM-13b; container_probe.check_restored_start saw that), and nothing made one since. Nothing is removed
+    here (before HM-13b the probe removed it itself)."""
+    assert not os.path.lexists(Path(data) / profiles.RESTORE_MARKER_NAME), 'a restore marker left before the stage'
 
 
 def _child_environment():
@@ -196,9 +210,10 @@ def _child_environment():
 
 def detect_as_runtime(data, *, user=RUNTIME):
     """restore_detect.detect(data, enabled=True) as the add-on's management process runs it: as the runtime user (the
-    sentinel and its record are its files: a chown afterwards would change the sentinel's ctime), while stopped. It
-    makes the two files the first time. Returns the verdict only: {"marker", "active", "sentinel"}. user None: as this
-    process (the packaging tests)."""
+    sentinel and its record are its files: a chown afterwards would change the sentinel's ctime), while stopped. Where
+    there are none yet it makes the two files (ESTABLISHED), as the runtime's first switched-on start does; the stage
+    expects the runtime to have made them (CONSISTENT), so the files it would make here only come with a failure.
+    Returns the verdict only: {"marker", "active", "sentinel"}. user None: as this process (the packaging tests)."""
     options = {} if user is None else {'user': user[0], 'group': user[1], 'extra_groups': []}
     result = subprocess.run([sys.executable, '-c', DETECT, str(data)], capture_output=True, text=True, timeout=60,
                             cwd='/', env=_child_environment(), check=False, **options)
@@ -255,12 +270,79 @@ def credentials(data, created):
     return found
 
 
-def kept_bytes(data, created):
-    """The bytes a restore must give back as they were: every profile's state, the index and the instance record."""
+def restore_picture(data, created):
+    """What the start after the multi-profile restore is checked against (check_revoked_restore): ({every profile's
+    state.json, relative to /data/mcp: its content}, the default profile's first; the index's bytes). Read only from
+    this disposable fixture; never printed."""
     layout = profiles.Layout(Path(data))
-    paths = [layout.root / 'state.json', *(layout.profile(profile_id) / 'state.json' for profile_id, _ in created),
-             layout.index, layout.instance_record]
-    return {str(path.relative_to(layout.root)): path.read_bytes() for path in paths}
+    paths = [layout.root / 'state.json', *(layout.profile(profile_id) / 'state.json' for profile_id, _ in created)]
+    return ({str(path.relative_to(layout.root)): json.loads(path.read_bytes()) for path in paths},
+            layout.index.read_bytes())
+
+
+# ---- the start after the multi-profile restore (DQ-03 (b) A2; plan 8.4 A-F; HM-13b, HM-13c) ----
+
+def check_restore_files(data, restored, created):
+    """Its files, as container_probe.check_restored_start checks the single-profile ones: the boot guard removed the
+    marker; the entrypoint gave every restored entry back to the runtime user (directories 0700, files 0600), and the
+    restore notice of the single-profile stage is the one restored entry the guard removed (the default profile's token
+    was revoked: the notice would not be true, HM-13c); the sentinel, its record and restore-record.json are single-link
+    files of the runtime user, 0600, and the record is as the guard writes it (restore_lock.check_record), with both
+    restore signals and every profile revoked."""
+    data = Path(data)
+    assert not os.path.lexists(data / profiles.RESTORE_MARKER_NAME), \
+        'restore marker left: the boot guard did not handle the restore'
+    for name in restored:
+        if not os.path.lexists(data / name):
+            assert name == profiles.RESTORE_NOTICE_NAME, 'a restored entry gone'
+            continue
+        info = os.lstat(data / name)
+        mode = 0o700 if stat.S_ISDIR(info.st_mode) else 0o600
+        assert (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) == (*RUNTIME, mode), 'restore not repaired'
+    assert not os.path.lexists(data / profiles.RESTORE_NOTICE_NAME), 'a restore notice although every token was revoked'
+    for name in (profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME, profiles.RESTORE_RECORD_NAME):
+        assert os.path.lexists(data / name), 'restore files missing'
+        info = os.lstat(data / name)
+        assert stat.S_ISREG(info.st_mode) and info.st_nlink == 1, 'restore files not files'
+        assert (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) == (*RUNTIME, 0o600), 'restore files not private'
+    try:
+        record = restore_lock.check_record(json.loads((data / profiles.RESTORE_RECORD_NAME).read_bytes()))
+    except (ValueError, ConfigError):
+        raise AssertionError('restore record not as the boot guard writes it') from None
+    assert (record['restore'] is not None and record['restore']['marker'] is True
+            and record['restore']['sentinel'] == restore_detect.MISMATCH), 'restore record without both signals'
+    ids = [profiles.DEFAULT_PROFILE, *(profile_id for profile_id, _ in created)]
+    assert sorted((row['id'], row['token']) for row in record['profiles']) == sorted((i, 'revoked') for i in ids), \
+        'restore record without every profile revoked'
+
+
+def check_revoked(before, after):
+    """DQ-03 (b) A2 for every profile's state, the default profile's included ({state.json path: content} before the
+    restore and after its start, restore_picture's): each token None, with one history entry (revoke) before the ones
+    it had; each child token new, none that any profile had before and none shared; nothing else changed."""
+    assert sorted(after) == sorted(before), 'a profile state missing after the restore'
+    held = {state.get(name) for state in before.values() for name in ('token', 'child_token')}
+    renewed = [state.get('child_token') for state in after.values()]
+    for path, old in before.items():
+        new = after[path]
+        assert new.get('token') is None, 'a token not revoked by the restore'
+        history = new.get('token_history') or []
+        assert (len(history) >= 1 and history[0].get('action') == 'revoke'
+                and history[1:] == (old.get('token_history') or [])[:4]), 'token history not one revocation more'
+        assert ({name: value for name, value in new.items() if name not in REVOKED_FIELDS}
+                == {name: value for name, value in old.items() if name not in REVOKED_FIELDS}), \
+            'restored profile data rewritten'
+    assert (all(isinstance(value, str) and value not in held for value in renewed)
+            and len(set(renewed)) == len(renewed)), 'a child token not renewed'
+
+
+def check_revoked_restore(data, restored, before, created):
+    """Step 9's files once the runtime serves (check_restore_files), every profile's state against *before*
+    (restore_picture before the restore; check_revoked), and the index as restored (the guard never writes it)."""
+    check_restore_files(data, restored, created)
+    states, index = restore_picture(data, created)
+    check_revoked(before[0], states)
+    assert index == before[1], 'restored profile index rewritten'
 
 
 # ---- the running children ----
@@ -512,13 +594,32 @@ async def check_child_bearers(probe, client, children, message):
                 f"{label}: child served the child token of {other}"
 
 
+async def check_refused(client, found, message, base=MCP):
+    """After the multi-profile restore (DQ-03 (b) A2; PaaS restore_inplace._verify: nothing that authenticated against
+    the backup authenticates now): found, the credentials from before the restore ([(log id, child port, token, child
+    token)], credentials()'s). Each token gets 401 as a Bearer and 404 in its secret URL (a session one opened all the
+    same is ended), and each child token 401 and no session from its profile's child. Fixed messages, a profile named
+    by its log id."""
+    for label, port, token, child_token in found:
+        for url, headers, refusal in ((base + '/mcp', {'Authorization': 'Bearer ' + token}, 401),
+                                      (f'{base}/private_{token}/mcp', {}, 404)):
+            status, session, version = await initialize_on(client, url, headers, message)
+            if session:
+                await end_session(client, url, headers, session, version)
+            assert status == refusal, f'{label}: its token from before the restore is served'
+        response = await client.post(f'http://127.0.0.1:{port}/mcp', json=message,
+                                     headers={**ACCEPT, 'Authorization': 'Bearer ' + child_token})
+        assert response.status_code == 401 and 'mcp-session-id' not in response.headers, \
+            f'{label}: its child token from before the restore is served'
+
+
 async def stage(probe, client):
     """The multi-profile stage (the module docstring's steps 1 to 9); prints one line of numbers, no secret."""
     assert probe.APP != 'n8n', "n8n's children name their port in their environment only (HM-25)"
     data = Path(probe.DATA)
     message = initialize_message()
-    end_restore_marker(data)
-    assert detect_as_runtime(data) == detected(False, restore_detect.ESTABLISHED), 'sentinel not established'
+    check_marker_ended(data)
+    assert detect_as_runtime(data) == detected(False, restore_detect.CONSISTENT), 'sentinel not made by the runtime'
     created = create_profiles(probe)
     found = credentials(data, created)
     ports = [port for _, port, _, _ in found]
@@ -544,19 +645,24 @@ async def stage(probe, client):
             probe.stop(process)
     assert detect_as_runtime(data) == detected(False, restore_detect.CONSISTENT), 'sentinel touched by the runtime'
     entries = len(tree_snapshot(data))
-    kept = kept_bytes(data, created)
-    restored, state = probe.restore_as_supervisor()
-    process = probe.start()
-    try:
-        await probe.ready_listener(client, process)
-        probe.check_restored_start(restored, state)
-        assert kept_bytes(data, created) == kept, 'restored profile data rewritten'
-        await profiles_up(probe, process, ports)
-        stop_within(probe, process)
-        process = None
-    finally:
-        if process is not None and process.poll() is None:
-            probe.stop(process)
-    assert detect_as_runtime(data) == detected(True, restore_detect.MISMATCH), 'restore not seen by both signals'
+    before = restore_picture(data, created)
+    restored, _ = probe.restore_as_supervisor()
+    with tempfile.TemporaryFile() as log:  # the start's stderr: unnamed, gone once closed, never shown
+        process = probe.start(log)
+        try:
+            await probe.ready_listener(client, process)
+            check_revoked_restore(data, restored, before, created)
+            await profiles_up(probe, process, ports)
+            await check_refused(client, found, message)
+            stop_within(probe, process)
+            process = None
+        finally:
+            if process is not None and process.poll() is None:
+                probe.stop(process)
+        probe.check_restore_log(log, len(restored) + 1, revoked=[label for label, _, _, _ in found])
+    assert detect_as_runtime(data) == detected(False, restore_detect.CONSISTENT), \
+        'restore not finished by the boot guard'
+    tree_snapshot(data)  # what the guard left (the record, new journals, archived receipts) still restores
     print(f'PASS multi-profile: default + {len(created)} profiles up in {up:.1f} s; routing, child bearer, resources, '
-          f'SIGKILL, stop in {stopped:.1f} s; {entries} entries; restore tree and both signals')
+          f'SIGKILL, stop in {stopped:.1f} s; {entries} entries; restore tree: every profile revoked and its old '
+          f'credentials refused, sentinel rebuilt')

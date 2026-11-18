@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import shutil
 import signal
 import subprocess
 import sys
@@ -27,9 +28,10 @@ with patch.object(sys, 'argv', ['container_probe.py', 'headscale']):
     import container_probe as probe  # noqa: E402
 import container_profiles as stage  # noqa: E402
 import entrypoint  # noqa: E402
-from mcp_admin_core import profiles, restore_detect  # noqa: E402
+from mcp_admin_core import profiles, restore_detect, restore_lock  # noqa: E402
 from mcp_admin_core.products import ProductStore  # noqa: E402
 from test_container_probe import Owners  # noqa: E402  (chown without root: lstat reports the owner it recorded)
+from test_container_probe import guard_lines  # noqa: E402  (the boot guard's lines, as the add-on's stderr shows them)
 
 RUNTIME = (10001, 10001)
 CONNECTION = {'url': 'http://backend.invalid:18083', 'api_key': 'DUMMY', 'api_secret': 'DUMMY'}
@@ -169,6 +171,44 @@ class TreeSnapshotTests(unittest.TestCase):
         from mcp_admin_core.operations import OperationJournal
         self.assertEqual(OperationJournal(Path(tempfile.gettempdir()) / 'state.json').path.name, stage.JOURNAL)
 
+    def test_every_name_of_the_boot_guard_is_the_layout_s(self):
+        """HM-16 after HM-13b and HM-13c (note section 12, point 6): the names come from profiles.py, none written
+        here; every name the guard writes, renames or removes (profiles.ASIDE_NAMES) is one of the top of /data/mcp,
+        and a restore's archived receipts sit where operations.archive_for_restore leaves them."""
+        from mcp_admin_core.operations import RESTORED_SUFFIX
+        self.assertLessEqual(set(profiles.ASIDE_NAMES), stage.TOP_NAMES)
+        self.assertEqual((stage.JOURNAL_ARCHIVE, stage.INDEX_JOURNAL_ARCHIVE),
+                         (stage.JOURNAL + RESTORED_SUFFIX, profiles.INDEX_OPERATIONS_NAME + RESTORED_SUFFIX))
+        self.assertEqual({stage.JOURNAL_ARCHIVE, stage.INDEX_JOURNAL_ARCHIVE}, set(profiles.RECEIPT_ARCHIVE_NAMES))
+        self.assertIn(stage.JOURNAL_ARCHIVE, stage.PROFILE_NAMES)
+        self.assertNotIn(stage.INDEX_JOURNAL_ARCHIVE, stage.PROFILE_NAMES)
+        self.assertNotIn(profiles.RESTORE_NOTICE_NAME, stage.PROFILE_NAMES)
+
+    def test_the_tree_the_boot_guard_leaves_after_a_restore_is_taken(self):
+        """The restore record, the panel's restore notice (a restore that kept the token, HM-13c), a new journal
+        beside every state and the index, and the receipts a restore archived (HM-13b) are the layout's."""
+        data = layout_tree(temporary(self))
+        for name in (profiles.RESTORE_RECORD_NAME, profiles.RESTORE_NOTICE_NAME, profiles.INDEX_OPERATIONS_NAME,
+                     stage.INDEX_JOURNAL_ARCHIVE, stage.JOURNAL_ARCHIVE):
+            private_file(data / name)
+        for profile_id in (A, B):
+            for name in (stage.JOURNAL, stage.JOURNAL_ARCHIVE):
+                private_file(data / 'profiles' / profile_id / name)
+        found = stage.tree_snapshot(data)
+        self.assertLessEqual({profiles.RESTORE_NOTICE_NAME, stage.INDEX_JOURNAL_ARCHIVE, stage.JOURNAL_ARCHIVE,
+                              f'profiles/{A}/{stage.JOURNAL_ARCHIVE}'}, set(found))
+        for misplaced in (profiles.RESTORE_NOTICE_NAME, stage.INDEX_JOURNAL_ARCHIVE, profiles.RESTORE_RECORD_NAME):
+            with self.subTest(misplaced=misplaced):
+                data = layout_tree(temporary(self))
+                private_file(data / 'profiles' / A / misplaced)
+                with self.assertRaisesRegex(AssertionError, 'not a name of the layout'):
+                    stage.tree_snapshot(data)
+        # an entry the guard moved aside (a directory a forged backup put at one of its names) is never the probe's
+        data = layout_tree(temporary(self))
+        private_dir(data / (profiles.SENTINEL_NAME + '.quarantine-20261118T010203Z'))
+        with self.assertRaisesRegex(AssertionError, 'not a name of the layout'):
+            stage.tree_snapshot(data)
+
 
 class ProfileFixtureTests(unittest.TestCase):
     """create_profiles: two additional profiles as the panel's creation makes them, given to the runtime user."""
@@ -229,12 +269,12 @@ class ProfileFixtureTests(unittest.TestCase):
             stage.create_profiles(self.probe)
         self.assertFalse(profiles.Layout(self.data).index.exists())
 
-    def test_kept_bytes_are_every_state_the_index_and_the_record(self):
+    def test_the_restore_picture_is_every_state_parsed_and_the_index(self):
         created = stage.create_profiles(self.probe)
-        private_file(self.data / profiles.INSTANCE_RECORD_NAME, b'{"record": true}')
-        kept = stage.kept_bytes(self.data, created)
-        self.assertEqual(sorted(kept), sorted(['state.json', *(f'profiles/{p}/state.json' for p, _ in created),
-                                               profiles.INDEX_NAME, profiles.INSTANCE_RECORD_NAME]))
+        states, index = stage.restore_picture(self.data, created)
+        self.assertEqual(list(states), ['state.json', *(f'profiles/{p}/state.json' for p, _ in created)])
+        self.assertEqual(states['state.json'], json.loads((self.data / 'state.json').read_bytes()))
+        self.assertEqual(index, profiles.Layout(self.data).index.read_bytes())
 
 
 class RestoreDetectionTests(unittest.TestCase):
@@ -271,13 +311,221 @@ class RestoreDetectionTests(unittest.TestCase):
                          {'user': 10001, 'group': 10001, 'extra_groups': [], 'cwd': '/'})
         self.assertEqual(set(calls[0]['env']), {'PATH', 'PYTHONDONTWRITEBYTECODE', 'PYTHONPATH'})
 
-    def test_the_marker_of_the_single_profile_stage_is_ended_once(self):
+    def test_the_marker_of_the_single_profile_stage_was_ended_by_the_boot_guard(self):
+        """HM-16 after HM-13b (note section 12, point 2): the guard removed it; the stage only looks, and removes
+        nothing."""
         data = private_dir(temporary(self) / 'mcp')
+        stage.check_marker_ended(data)
+        marker = data / profiles.RESTORE_MARKER_NAME
+        for left in ('a file', 'a directory', 'a dangling link'):
+            with self.subTest(left=left):
+                if left == 'a file':
+                    private_file(marker, b'')
+                elif left == 'a directory':
+                    private_dir(marker)
+                else:
+                    marker.symlink_to('nowhere')
+                with self.assertRaisesRegex(AssertionError, '^a restore marker left before the stage$'):
+                    stage.check_marker_ended(data)
+                self.assertTrue(os.path.lexists(marker))
+                if left == 'a directory':
+                    marker.rmdir()
+                else:
+                    marker.unlink()
+
+
+class RevokedRestoreTests(unittest.TestCase):
+    """Step 9 against the real boot guard (HM-13b, HM-13c; DQ-03 (b) A2), not a picture of it: /data/mcp as the
+    single-profile path and steps 1 to 8 leave it (a switched-on product's sentinel, one restore of the default profile
+    alone: token kept, noticed; then two profiles), a restore (both signals), and restore_lock.guard as the start after
+    it runs it. What the stage then checks of the files, the states, the index and the log passes; what the guard would
+    not leave fails (each on a copy of what it left). The probe's view of owners: every entry is the runtime user's, as
+    the entrypoint's repair leaves them (Owners)."""
+
+    @classmethod
+    def setUpClass(cls):
+        directory = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(directory.cleanup)
+        cls.root = Path(directory.name)
+        cls.data = data = cls.root / 'guarded' / 'mcp'
+        data.parent.mkdir()
+        store = ProductStore(data, 'emqx')
+        store.update(connection=CONNECTION, disabled=['emqx_list_clients'])
+        store.close()
+        restore_detect.detect(data, enabled=True)  # the first switched-on start: the sentinel and its record
+        cls.restore(data)
+        guard_lines(lambda: cls.guard(data))  # the single-profile stage: nothing to revoke, the notice saved
+        assert (data / profiles.RESTORE_NOTICE_NAME).exists()
+
+        def load():
+            store = ProductStore(data, 'emqx')
+            try:
+                return store.load()
+            finally:
+                store.close()
+        with patch.object(stage, 'os', Owners()):  # create_profiles gives what it made to the runtime user
+            cls.created = stage.create_profiles(SimpleNamespace(DATA=data, fixture_update=load))
+        cls.found = stage.credentials(data, cls.created)
+        cls.before = stage.restore_picture(data, cls.created)
+        cls.restored = sorted(str(path.relative_to(data)) for path in data.rglob('*'))
+        cls.restore(data)
+        shutil.copytree(data.parent, cls.root / 'unguarded', symlinks=True)  # the restore, the guard not run yet
+        cls.said = guard_lines(lambda: cls.guard(data))
+
+    def setUp(self):
+        self.os = Owners()
+        patcher = patch.object(stage, 'os', self.os)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    @staticmethod
+    def restore(data):
+        """Both signals of a restore: the entrypoint's marker, and the sentinel's ctime (a chown or a chmod changes
+        it)."""
         private_file(data / profiles.RESTORE_MARKER_NAME, b'')
-        stage.end_restore_marker(data)
-        self.assertFalse((data / profiles.RESTORE_MARKER_NAME).exists())
-        with self.assertRaisesRegex(AssertionError, 'left no marker'):
-            stage.end_restore_marker(data)
+        (data / profiles.SENTINEL_NAME).chmod(0o644)
+        (data / profiles.SENTINEL_NAME).chmod(0o600)
+
+    @staticmethod
+    def guard(data):
+        store = ProductStore(data, 'emqx')
+        try:
+            return restore_lock.guard(store, 'emqx', enabled=True)
+        finally:
+            store.close()
+
+    def copy(self, name='guarded'):
+        """A copy of /data/mcp as the guard left it (or before it ran), for a test that changes it."""
+        copied = temporary(self) / 'copy'
+        shutil.copytree(self.root / name, copied, symlinks=True)
+        return copied / 'mcp'
+
+    def test_what_the_guard_leaves_passes_every_check_of_step_9(self):
+        stage.check_revoked_restore(self.data, self.restored, self.before, self.created)
+        with tempfile.TemporaryFile() as log:
+            log.write((probe.REOWNED % (len(self.restored) + 1) + '\n' + self.said).encode())
+            probe.check_restore_log(log, len(self.restored) + 1, revoked=[label for label, _, _, _ in self.found])
+        self.assertIn(profiles.RESTORE_NOTICE_NAME, self.restored)  # the one restored entry the guard removed
+        self.assertEqual(stage.detect_as_runtime(self.data, user=None),
+                         stage.detected(False, restore_detect.CONSISTENT))
+        stage.tree_snapshot(self.data)  # what the guard left still restores
+
+    def test_a_start_whose_guard_did_not_handle_the_restore_fails(self):
+        with self.assertRaisesRegex(AssertionError, '^restore marker left: the boot guard did not handle the restore$'):
+            stage.check_revoked_restore(self.copy('unguarded'), self.restored, self.before, self.created)
+
+    def test_what_the_guard_would_not_leave_fails(self):
+        """Each change is made to a copy of what the real guard left (data, created, the picture before the restore)."""
+        def edit(path, change):
+            value = json.loads(path.read_bytes())
+            change(value)
+            path.write_text(json.dumps(value))
+
+        def record(change):
+            return lambda data, created, before: edit(data / profiles.RESTORE_RECORD_NAME, change)
+
+        def extra(data, created):
+            return data / 'profiles' / created[0][0] / 'state.json'
+
+        def child_kept(data, created, before):  # the child token it had before the restore
+            old = before[0][f'profiles/{created[0][0]}/state.json']['child_token']
+            edit(extra(data, created), lambda value: value.update(child_token=old))
+        cases = {
+            'the marker left': (lambda data, created, before: private_file(data / profiles.RESTORE_MARKER_NAME, b''),
+                                'restore marker left'),
+            'a restored entry still root-owned': (
+                lambda data, created, before: self.os.chown(data / 'profiles' / created[1][0] / 'state.json', 0, 0),
+                'restore not repaired'),
+            'a restored entry still 0644': (lambda data, created, before: (data / profiles.INDEX_NAME).chmod(0o644),
+                                            'restore not repaired'),
+            'a restored entry gone': (lambda data, created, before: (data / '.writer.lock').unlink(),
+                                      'a restored entry gone'),
+            'the notice still there': (lambda data, created, before: private_file(data / profiles.RESTORE_NOTICE_NAME),
+                                       'a restore notice although every token was revoked'),
+            'a record not as the guard writes it': (record(lambda value: value.pop('quarantined')),
+                                                    'restore record not as the boot guard writes it'),
+            'a record without the marker': (record(lambda value: value['restore'].update(marker=False)),
+                                            'restore record without both signals'),
+            'a record with a token kept': (record(lambda value: value['profiles'][0].update(token='kept')),
+                                           'restore record without every profile revoked'),
+            'a record without a profile': (record(lambda value: value['profiles'].pop()),
+                                           'restore record without every profile revoked'),
+            'a token not revoked': (lambda data, created, before: edit(data / 'state.json', lambda value: value.update(
+                token=secrets.token_urlsafe(32))), 'a token not revoked by the restore'),
+            "a profile's child token kept": (child_kept, 'a child token not renewed'),
+            'no revocation in the history': (lambda data, created, before: edit(
+                extra(data, created), lambda value: value.update(token_history=[])),
+                'token history not one revocation more'),
+            'another field rewritten': (lambda data, created, before: edit(
+                data / 'state.json', lambda value: value.update(disabled=[])), 'restored profile data rewritten'),
+            'the index rewritten': (lambda data, created, before: (data / profiles.INDEX_NAME).write_bytes(
+                (data / profiles.INDEX_NAME).read_bytes() + b' '), 'restored profile index rewritten'),
+        }
+        held = [value for state in self.before[0].values() for value in (state['token'], state['child_token'])]
+        for label, (change, message) in cases.items():
+            with self.subTest(label=label):
+                data = self.copy()
+                stage.check_revoked_restore(data, self.restored, self.before, self.created)  # the copy passes
+                change(data, self.created, self.before)
+                with self.assertRaisesRegex(AssertionError, message) as failed:
+                    stage.check_revoked_restore(data, self.restored, self.before, self.created)
+                self.assertFalse([value for value in held if value in str(failed.exception)])
+
+
+class RevokedStateTests(unittest.TestCase):
+    """check_revoked (DQ-03 (b) A2): every profile's state after the restore against the one before it."""
+
+    def states(self):
+        def one(history=None):
+            value = {'token': secrets.token_urlsafe(32), 'child_token': secrets.token_urlsafe(32), 'disabled': ['x'],
+                     'connection': CONNECTION}
+            if history:
+                value['token_history'] = history
+            return value
+        older = [{'action': 'rotate', 'rotated_at': f'2026-11-1{n}T00:00:00+00:00', 'previous_token_masked': ''}
+                 for n in range(5)]
+        before = {'state.json': one(older), f'profiles/{A}/state.json': one(), f'profiles/{B}/state.json': one()}
+        after = {}
+        for path, value in before.items():
+            entry = {'action': 'revoke', 'rotated_at': '2026-11-18T00:00:00+00:00', 'previous_token_masked': ''}
+            after[path] = {**value, 'token': None, 'child_token': secrets.token_urlsafe(32),
+                           'token_history': [entry, *(value.get('token_history') or [])][:5]}
+        return before, after
+
+    def test_every_profile_revoked_with_a_new_child_token_passes(self):
+        stage.check_revoked(*self.states())
+
+    def test_anything_else_fails(self):
+        def child_of(after, path, other):
+            after[path]['child_token'] = after[other]['child_token']
+        cases = {
+            'a state missing': (lambda before, after: after.pop(f'profiles/{B}/state.json'),
+                                'a profile state missing after the restore'),
+            'a token kept': (lambda before, after: after[f'profiles/{A}/state.json'].update(
+                token=before[f'profiles/{A}/state.json']['token']), 'a token not revoked by the restore'),
+            'a child token kept': (lambda before, after: after['state.json'].update(
+                child_token=before['state.json']['child_token']), 'a child token not renewed'),
+            "another profile's old token as a child token": (lambda before, after: after['state.json'].update(
+                child_token=before[f'profiles/{B}/state.json']['token']), 'a child token not renewed'),
+            'one child token for two profiles': (lambda before, after: child_of(
+                after, f'profiles/{A}/state.json', f'profiles/{B}/state.json'), 'a child token not renewed'),
+            'no history entry': (lambda before, after: after[f'profiles/{A}/state.json'].pop('token_history'),
+                                 'token history not one revocation more'),
+            'a rotation, not a revocation': (lambda before, after: after[f'profiles/{A}/state.json'][
+                'token_history'][0].update(action='rotate'), 'token history not one revocation more'),
+            'the older history lost': (lambda before, after: after['state.json']['token_history'].pop(),
+                                       'token history not one revocation more'),
+            'a policy changed': (lambda before, after: after[f'profiles/{B}/state.json'].update(disabled=[]),
+                                 'restored profile data rewritten'),
+            'a field added': (lambda before, after: after['state.json'].update(writes_enabled=False),
+                              'restored profile data rewritten'),
+        }
+        for label, (change, message) in cases.items():
+            with self.subTest(label=label):
+                before, after = self.states()
+                change(before, after)
+                with self.assertRaisesRegex(AssertionError, message):
+                    stage.check_revoked(before, after)
 
 
 TCP_HEADER = '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n'
@@ -748,6 +996,56 @@ class ChildBearerTests(unittest.TestCase):
         self.assertFalse(any(token in str(failed.exception) for token in tokens))
 
 
+class RefusedTests(unittest.TestCase):
+    """check_refused (step 9; DQ-03 (b) A2): after the restore no credential from before it is served: each token is
+    401 as a Bearer and 404 in its secret URL, each child token 401 from its child; a session opened all the same is
+    ended; never a token in a message."""
+
+    def check(self, served=(), faults=(), child_takes_old=False):
+        labels = ('default', A[:8], B[:8])
+        old = {label: (secrets.token_urlsafe(32), secrets.token_urlsafe(32)) for label in labels}
+        gateway = Gateway({old[label][0]: label for label in served}, faults)  # what 8081 still serves
+        self.addCleanup(gateway.server_close)
+        self.addCleanup(gateway.shutdown)
+        found = []
+        for label in labels:
+            server = ThreadingHTTPServer(('127.0.0.1', 0), ChildHandler)
+            server.accepts = [secrets.token_urlsafe(32), *([old[label][1]] if child_takes_old and label == B[:8]
+                                                           else [])]  # its new child token, maybe the old one too
+            threading.Thread(target=server.serve_forever, args=(.05,), daemon=True).start()  # a quick shutdown
+            self.addCleanup(server.server_close)
+            self.addCleanup(server.shutdown)
+            found.append((label, server.server_address[1], *old[label]))
+
+        async def run():
+            async with httpx.AsyncClient(trust_env=False, timeout=10) as client:
+                await stage.check_refused(client, found, stage.initialize_message(), base=gateway.base)
+        try:
+            asyncio.run(run())
+        except AssertionError as failed:
+            self.assertFalse([value for pair in old.values() for value in pair if value in str(failed)])
+            raise
+        finally:
+            self.left = dict(gateway.sessions)
+
+    def test_nothing_from_before_the_restore_is_served(self):
+        self.check()
+
+    def test_a_token_or_child_token_still_served_fails(self):
+        for kwargs, message in (({'served': ('default',)}, '^default: its token from before the restore is served$'),
+                                ({'served': (A[:8],)}, f'^{A[:8]}: its token from before the restore is served$'),
+                                ({'served': (A[:8],), 'faults': ('refuses the secret url',)},  # as a Bearer only
+                                 f'^{A[:8]}: its token from before the restore is served$'),
+                                ({'faults': ('serves an unknown secret url',)},  # in its secret URL only
+                                 '^default: its token from before the restore is served$'),
+                                ({'child_takes_old': True},
+                                 f'^{B[:8]}: its child token from before the restore is served$')):
+            with self.subTest(**{key: str(value) for key, value in kwargs.items()}):
+                with self.assertRaisesRegex(AssertionError, message):
+                    self.check(**kwargs)
+                self.assertEqual(self.left, {})  # a session it opened all the same was ended
+
+
 class Each:
     """A replaced step's results, one for each call in turn."""
 
@@ -762,11 +1060,13 @@ RESTORED = stage.detected(True, restore_detect.MISMATCH)  # both restore signals
 
 class StageTests(unittest.TestCase):
     """stage(): the order of its steps (the module docstring) with every step replaced, what each step is given, and
-    the stage's own verdicts (HM-16 review MF-1: the sentinel established by the fixture and untouched by the runtime,
-    the restored bytes kept, both restore signals seen); a failure still stops the runtime it started."""
+    the stage's own verdicts (HM-16 review MF-1; after HM-13b and HM-13c: the sentinel made by the runtime and untouched
+    by it, then rebuilt by the boot guard after the restore); a failure still stops the runtime it started, and the
+    restored start's log is read only once it stopped."""
 
-    def run_stage(self, fail=None, verdicts=(ESTABLISHED, CONSISTENT, RESTORED), kept=None, app='odoo'):
-        """(events, the replaced steps' calls {name: [(args, kwargs)]}, failure messages, the stage's inputs)."""
+    def run_stage(self, fail=None, verdicts=(CONSISTENT, CONSISTENT, CONSISTENT), app='odoo'):
+        """(events, the replaced steps' calls {name: [(args, kwargs)]}, failure messages, the stage's inputs). fail: a
+        step's name (each of its calls fails) or (name, n) (its n-th call fails)."""
         events, calls, failures = [], {}, []
         process = Mock(**{'poll.return_value': None})
 
@@ -774,7 +1074,9 @@ class StageTests(unittest.TestCase):
             def step(*args, **kwargs):
                 events.append(name)
                 calls.setdefault(name, []).append((args, kwargs))
-                if name == fail:
+                if name == 'log':
+                    events.append('log closed' if args[0].closed else 'log open')
+                if fail in (name, (name, len(calls[name]))):  # every call, or only the n-th
                     raise AssertionError(name + ' failed')
                 return result.values.pop(0) if isinstance(result, Each) else result
             return step
@@ -788,26 +1090,28 @@ class StageTests(unittest.TestCase):
         found = [(label, port, secrets.token_urlsafe(32), secrets.token_urlsafe(32))
                  for label, port in (('default', 3000), (A[:8], 18000), (B[:8], 18001))]
         created, pids = [(A, 18000), (B, 18001)], {3000: 10, 18000: 11, 18001: 12}
+        picture = ({'state.json': {'token': found[0][2]}}, b'index')
         fake = SimpleNamespace(APP=app, DATA=Path('/data/mcp'), start=record('start', process),
                                ready_listener=arecord('ready'), stop=record('stop'),
-                               restore_as_supervisor=record('restore', (['state.json'], b'S')),
-                               check_restored_start=record('repaired'))
-        replaced = {'end_restore_marker': record('end marker'), 'detect_as_runtime': record('detect', Each(*verdicts)),
+                               restore_as_supervisor=record('restore', (['state.json', 'profiles'], b'S')),
+                               check_restore_log=record('log'))
+        replaced = {'check_marker_ended': record('marker ended'),
+                    'detect_as_runtime': record('detect', Each(*verdicts)),
                     'create_profiles': record('create', created),
                     'credentials': record('credentials', found), 'profiles_up': arecord('up', pids),
                     'check_routing': arecord('routing'), 'check_child_bearers': arecord('child bearers'),
                     'check_resources': record('resources'), 'kill_one': arecord('kill'),
                     'initialize_on': arecord('served again', (200, 'child-1', '2025-03-26')),
                     'end_session': arecord('ended', 200), 'stop_within': record('stop within 30 s', 1.5),
-                    'tree_snapshot': record('tree', {'state.json': ()}),
-                    'kept_bytes': record('kept', Each(*(kept or ({'state.json': b'S'}, {'state.json': b'S'}))))}
+                    'tree_snapshot': record('tree', {'state.json': ()}), 'restore_picture': record('picture', picture),
+                    'check_revoked_restore': record('revoked'), 'check_refused': arecord('refused')}
         with patch.multiple(stage, **replaced), patch('builtins.print'):
             try:
                 asyncio.run(stage.stage(fake, 'client'))
             except AssertionError as error:
                 events.append('failed')
                 failures.append(str(error))
-        inputs = SimpleNamespace(fake=fake, process=process, found=found, created=created, pids=pids)
+        inputs = SimpleNamespace(fake=fake, process=process, found=found, created=created, pids=pids, picture=picture)
         return events, calls, failures, inputs
 
     def assert_every_start_stopped(self, events):
@@ -817,9 +1121,9 @@ class StageTests(unittest.TestCase):
         events, _, failures, _ = self.run_stage()
         self.assertEqual(failures, [])
         self.assertEqual(events, [
-            'end marker', 'detect', 'create', 'credentials', 'start', 'ready', 'up', 'routing', 'child bearers',
-            'resources', 'kill', 'served again', 'ended', 'stop within 30 s', 'detect', 'tree', 'kept', 'restore',
-            'start', 'ready', 'repaired', 'kept', 'up', 'stop within 30 s', 'detect'])
+            'marker ended', 'detect', 'create', 'credentials', 'start', 'ready', 'up', 'routing', 'child bearers',
+            'resources', 'kill', 'served again', 'ended', 'stop within 30 s', 'detect', 'tree', 'picture', 'restore',
+            'start', 'ready', 'revoked', 'up', 'refused', 'stop within 30 s', 'log', 'log open', 'detect', 'tree'])
 
     def test_every_step_is_given_all_three_profiles_and_the_kill_an_additional_one(self):
         _, calls, failures, given = self.run_stage()
@@ -828,6 +1132,7 @@ class StageTests(unittest.TestCase):
 
         def args(name):
             return [arguments for arguments, _ in calls[name]]
+        self.assertEqual(args('marker ended'), [(data,)])
         self.assertEqual(args('detect'), [(data,)] * 3)
         self.assertEqual(args('create'), [(given.fake,)])
         self.assertEqual(args('credentials'), [(data, given.created)])
@@ -843,51 +1148,78 @@ class StageTests(unittest.TestCase):
         self.assertEqual(args('served again'), [('client', stage.MCP + '/mcp', bearer, stage.initialize_message())])
         self.assertEqual(args('ended'), [('client', stage.MCP + '/mcp', bearer, 'child-1', '2025-03-26')])
         self.assertEqual(args('stop within 30 s'), [(given.fake, given.process)] * 2)
-        self.assertEqual(args('kept'), [(data, given.created)] * 2)
-        self.assertEqual(args('repaired'), [(['state.json'], b'S')])
+        self.assertEqual(args('tree'), [(data,)] * 2)  # after the children ran, and what the guard left
+        self.assertEqual(args('picture'), [(data, given.created)])
+        self.assertEqual(args('revoked'), [(data, ['state.json', 'profiles'], given.picture, given.created)])
+        # the credentials from before the restore, every profile's
+        self.assertEqual(args('refused'), [('client', given.found, stage.initialize_message())])
+        # the first start's stderr is dropped; the restored start's goes to a file of its own, read once it stopped
+        (first, _), (second, _) = calls['start']
+        self.assertEqual(first, ())
+        log = second[0]
+        self.assertTrue(callable(getattr(log, 'fileno', None)) and log.closed)
+        self.assertEqual(calls['log'], [((log, 3), {'revoked': ['default', A[:8], B[:8]]})])  # 2 restored + marker
 
-    def test_a_sentinel_the_fixture_did_not_establish_fails_before_anything_starts(self):
-        for first in (CONSISTENT, RESTORED, stage.detected(False, restore_detect.MISMATCH),
-                      stage.detected(False, restore_detect.RECORD_MISSING)):
+    def test_a_marker_left_before_the_stage_fails_before_anything_changes(self):
+        events, _, failures, _ = self.run_stage(fail='marker ended')
+        self.assertEqual((events, failures), (['marker ended', 'failed'], ['marker ended failed']))
+
+    def test_a_sentinel_the_runtime_did_not_make_fails_before_anything_starts(self):
+        """HM-16 after HM-13b (note section 12, point 3): the guard of the first switched-on start made it, the guard
+        after the single-profile restore rebuilt it. ESTABLISHED: the probe's detect made it, the runtime had not."""
+        for first in (ESTABLISHED, RESTORED, stage.detected(False, restore_detect.MISMATCH),
+                      stage.detected(False, restore_detect.RECORD_MISSING),
+                      stage.detected(True, restore_detect.CONSISTENT)):
             with self.subTest(first=first):
-                events, _, failures, _ = self.run_stage(verdicts=(first, CONSISTENT, RESTORED))
-                self.assertEqual(failures, ['sentinel not established'])
-                self.assertEqual(events, ['end marker', 'detect', 'failed'])  # no profile data, no start
+                events, _, failures, _ = self.run_stage(verdicts=(first, CONSISTENT, CONSISTENT))
+                self.assertEqual(failures, ['sentinel not made by the runtime'])
+                self.assertEqual(events, ['marker ended', 'detect', 'failed'])  # no profile data, no start
 
     def test_a_sentinel_the_runtime_touched_fails_once_it_stopped(self):
         """A chmod of the sentinel (mismatch: its ctime), or a marker, after the first start: no restore follows."""
         for second in (stage.detected(False, restore_detect.MISMATCH), stage.detected(True, restore_detect.CONSISTENT),
                        RESTORED):
             with self.subTest(second=second):
-                events, _, failures, _ = self.run_stage(verdicts=(ESTABLISHED, second, RESTORED))
+                events, _, failures, _ = self.run_stage(verdicts=(CONSISTENT, second, CONSISTENT))
                 self.assertEqual(failures, ['sentinel touched by the runtime'])
                 self.assertEqual(events[-3:], ['stop within 30 s', 'detect', 'failed'])
                 self.assertNotIn('restore', events)
                 self.assert_every_start_stopped(events)
 
-    def test_a_restore_not_seen_by_both_signals_fails(self):
-        for third in (stage.detected(False, restore_detect.MISMATCH), stage.detected(True, restore_detect.CONSISTENT),
-                      CONSISTENT):
+    def test_a_restore_the_boot_guard_did_not_finish_fails(self):
+        """Stopped after the restored start, the guard removed the marker and rebuilt the sentinel: no marker and
+        CONSISTENT (before HM-13b: the marker and MISMATCH, both signals still there)."""
+        for third in (RESTORED, stage.detected(False, restore_detect.MISMATCH),
+                      stage.detected(True, restore_detect.CONSISTENT), ESTABLISHED):
             with self.subTest(third=third):
-                events, _, failures, _ = self.run_stage(verdicts=(ESTABLISHED, CONSISTENT, third))
-                self.assertEqual(failures, ['restore not seen by both signals'])
-                self.assertEqual(events.count('start'), 2)
+                events, _, failures, _ = self.run_stage(verdicts=(CONSISTENT, CONSISTENT, third))
+                self.assertEqual(failures, ['restore not finished by the boot guard'])
+                self.assertEqual(events[-3:], ['log open', 'detect', 'failed'])
+                self.assertEqual(events.count('tree'), 1)  # what the guard left is not taken
                 self.assert_every_start_stopped(events)
 
-    def test_restored_profile_data_rewritten_fails_and_stops_the_runtime(self):
-        events, _, failures, _ = self.run_stage(kept=({'state.json': b'S'}, {'state.json': b'T'}))
-        self.assertEqual(failures, ['restored profile data rewritten'])
-        self.assertEqual(events[-3:], ['kept', 'stop', 'failed'])
+    def test_a_restored_start_that_fails_a_check_stops_and_its_log_is_never_read(self):
+        for step, fail in (('revoked', 'revoked'), ('up', ('up', 2)), ('refused', 'refused')):
+            with self.subTest(step=step):
+                events, _, failures, _ = self.run_stage(fail=fail)
+                self.assertEqual(failures, [step + ' failed'])
+                self.assertEqual(events[-3:], [step, 'stop', 'failed'])
+                self.assertEqual(events.count('restore'), 1)
+                self.assertNotIn('log', events)
+                self.assert_every_start_stopped(events)
+        events, _, _, _ = self.run_stage(fail='revoked')
         self.assertEqual(events.count('up'), 1)  # the restored start's children are never waited for
+
+    def test_a_log_without_the_lines_fails_once_the_runtime_stopped(self):
+        events, _, failures, _ = self.run_stage(fail='log')
+        self.assertEqual(failures, ['log failed'])
+        self.assertEqual(events[-4:], ['stop within 30 s', 'log', 'log open', 'failed'])
+        self.assertEqual(events.count('detect'), 2)
         self.assert_every_start_stopped(events)
 
     def test_a_failed_step_stops_the_runtime_it_started(self):
         events, _, _, _ = self.run_stage(fail='routing')
         self.assertEqual(events[-2:], ['stop', 'failed'])
-        self.assert_every_start_stopped(events)
-        events, _, _, _ = self.run_stage(fail='repaired')
-        self.assertEqual(events[-2:], ['stop', 'failed'])
-        self.assertEqual(events.count('restore'), 1)
         self.assert_every_start_stopped(events)
 
     def test_n8n_is_refused_before_anything_changes(self):
