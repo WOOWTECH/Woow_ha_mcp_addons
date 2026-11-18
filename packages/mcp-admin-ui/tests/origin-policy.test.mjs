@@ -202,6 +202,37 @@ test('origin_policy_invalid has fixed copy and only with 422; nothing of the ans
   await assert.rejects(() => other.api.saveOriginPolicy('enforce', [], otherRevision), error => error.code === null);
 });
 
+// HM-27 with HM-13b/HM-13c (contract 2.6, 3.5, 4.1): after a restore the guard archives the receipts beside the policy,
+// so a save sent before it (or after the backup, lost with the restore) answers 410 operation_restored. Not a refusal
+// before the intent (it may have been saved before the backup): HM-13c's copy, the identity kept through a resend, as
+// HM-13c does for a profile operation, until the administrator ends it (已核對來源設定).
+test('a save from before a restore (410 operation_restored): HM-13c\'s copy, its identity kept until acknowledged', async () => {
+  const restored = () => Response.json({ error: 'request denied', detail: { code: 'operation_restored' }, untrusted: 'PRIVATE_CANARY' }, { status: 410 });
+  const { api, calls, storage } = await opened({ answer: restored });
+  const { revision } = await api.originPolicy();
+  const isRestored = error => error instanceof ApiError && error.status === 410 && error.code === 'operation_restored'
+    && error.message.includes('備份還原之前送出的') && !error.message.includes('超過保存期限') && !error.message.includes('PRIVATE_CANARY');
+  await assert.rejects(() => api.saveOriginPolicy('enforce', ['https://claude.ai'], revision), isRestored);
+  const pending = api.pendingOriginOperation();
+  assert.deepEqual([pending.route, pending.mode, pending.allowed_origins, pending.revision], ['origin-policy', 'enforce', ['https://claude.ai'], revision]);
+  assert.ok(storage.data.has(scopeKey));
+  // A resend is the same request under the same key and gets the same answer: still kept.
+  await assert.rejects(() => api.retryOriginOperation(), isRestored);
+  const puts = calls.filter(call => origin(call) && call.method === 'PUT');
+  assert.equal(puts.length, 2);
+  assert.equal(puts[1].headers['Idempotency-Key'], puts[0].headers['Idempotency-Key']);
+  assert.deepEqual(api.pendingOriginOperation(), pending);
+  // Only the acknowledgement ends it.
+  api.acknowledgeOriginOperation();
+  assert.equal(api.pendingOriginOperation(), null);
+  assert.equal(storage.data.has(scopeKey), false);
+  // The code counts only with 410.
+  const other = await opened({ answer: () => Response.json({ error: 'request denied', detail: { code: 'operation_restored' } }, { status: 409 }) });
+  const otherRevision = (await other.api.originPolicy()).revision;
+  await assert.rejects(() => other.api.saveOriginPolicy('enforce', [], otherRevision), error =>
+    error instanceof ApiError && error.code === null && !error.message.includes('備份還原之前送出的'));
+});
+
 test('a save answer that is not a completed receipt of this request, or not a saved policy, is not confirmed', async () => {
   for (const answer of [
     (options) => Response.json({ mode: 'enforce', allowed_origins: [], origin_policy_state: 'saved', operation: { id: options.headers['Idempotency-Key'], kind: 'origin.policy', state: 'unknown', replayed: false } }),
