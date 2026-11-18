@@ -17,11 +17,13 @@ import socket
 import stat
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import xmlrpc.client
 
 import httpx
+import container_profiles  # multi-profile HM-16: the stage of a switched-on candidate (container_profiles.stage)
 from denial_probe import assert_denials, WRITE_CASES
 from mcp_admin_core.health import protocol_reply
 from mcp_admin_core.products import ProductStore, PROBES, TOOLS, allowed_address, fresh_write_grants, probe_success
@@ -29,6 +31,7 @@ from mcp_admin_core import features
 from mcp_admin_core.profiles import RESTORE_MARKER_NAME as MARKER  # what packaging/entrypoint.py saves (HM-13a)
 # What a switched-on product's boot guard keeps (HM-13a, HM-13b): none of them for a product that is not switched on.
 from mcp_admin_core.profiles import INSTANCE_RECORD_NAME, RESTORE_NOTICE_NAME, RESTORE_RECORD_NAME, SENTINEL_NAME
+from mcp_admin_core import restore_lock  # the boot guard's log lines (HM-13b), as the start after a restore says them
 
 APP = sys.argv[1]
 ROOT = Path('/opt/woow')
@@ -37,6 +40,11 @@ ENDPOINT = 'http://127.0.0.1:8081/mcp'
 CHILD = 'http://127.0.0.1:3000/mcp'  # the default profile's child, container loopback only
 CALLS = []
 OFFLINE = threading.Event()
+# packaging/entrypoint.py's line (prepare_data) once its repair of a restore passed the final ownership check; the
+# number is _repair_restored's: every restored entry and the marker it saved before pass 1 (HM-13a).
+REOWNED = 'bootstrap: re-owned %d restored entries in /data/mcp'
+# How every line of the boot guard begins (restore_lock's; packaging/test_container_probe.py checks each one it logs).
+GUARD = 'restore guard'
 
 
 class Backend(BaseHTTPRequestHandler):
@@ -127,9 +135,12 @@ class Backend(BaseHTTPRequestHandler):
         self.respond(xmlrpc.client.dumps((value,), methodresponse=True, allow_none=True).encode(), 'text/xml')
 
 
-def start():
+def start(log=None):
+    """The packaged entrypoint, as the Supervisor starts it. What the runtime writes is never shown: stdout is dropped,
+    and so is stderr unless *log* is given (the start after a restore: check_restore_log reads it, multi-profile
+    HM-16)."""
     return subprocess.Popen(['/usr/local/bin/python', str(ROOT / 'packaging/entrypoint.py'), APP],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL if log is None else log)
 
 
 def children(process):
@@ -170,6 +181,10 @@ async def ready_listener(client, process):
 
 
 def fixture_snapshot():
+    if features.enabled(APP):
+        # Multi-profile HM-16 (C4-SF-5): only a switched-on product's /data/mcp may hold the multi-profile layout
+        # (profiles/, the index, the restore files), within the restore repair's rules and budget.
+        return container_profiles.tree_snapshot(DATA)
     # Bounded, private synthetic fixture only; never log its contents or hashes.
     entries = list(islice(DATA.iterdir(), 17))
     assert len(entries) <= 16
@@ -220,8 +235,7 @@ def check_restored_start(restored, state):
     restore-notice.json, the token is back at the backup's value); the state is the backup's, byte for byte. A
     switched-on candidate keeps the sentinel and its record (rebuilt) and gets a restore record and the notice too (no
     profile data: the token is kept). Each of these a single-link file of the runtime user, 0600. (The log lines of the
-    start, the entrypoint's "re-owned N" and the guard's notice, are not read here: the stage's process writes to
-    DEVNULL; HM-16.)"""
+    start, the entrypoint's "re-owned N" and the guard's notice, are check_restore_log's, once it stopped; HM-16.)"""
     assert not os.path.lexists(DATA / MARKER), 'restore marker left: the boot guard did not handle the restore'
     for name in restored:
         info = os.lstat(DATA / name)
@@ -243,20 +257,51 @@ def check_restored_start(restored, state):
     assert (DATA / 'state.json').read_bytes() == state, 'restored state rewritten'
 
 
+def check_restore_log(log, entries, revoked=()):
+    """Multi-profile HM-16 (HM-13b review S-3): what the start after a restore wrote to *log* (start(log)), read back
+    once it stopped and never shown (a child's line could hold anything): the entrypoint's line once, with *entries*
+    (every restored entry and its marker), and the boot guard's notice once and the other one never: KEPT_NOTICE when
+    nothing was revoked (no profile data, DQ-03 (b)), REVOKED_NOTICE when every profile was, the default profile's
+    included (DQ-03 (b) A2); then the guard's REVOKED line once for each log id in *revoked* and for no other; and no
+    other line of the guard (one set aside, quarantined or not revoked, a marker left, a guard not finished...: HM-16's
+    second review). The strings are restore_lock's own. Fixed messages only."""
+    log.seek(0)
+    lines = log.read().decode('utf-8', 'replace').splitlines()
+    repairs = [line for line in lines if line.startswith(REOWNED.split('%d')[0])]
+    assert repairs == [REOWNED % entries], 'the restore repair not logged once'
+    notice, other = ((restore_lock.REVOKED_NOTICE, restore_lock.KEPT_NOTICE) if revoked else
+                     (restore_lock.KEPT_NOTICE, restore_lock.REVOKED_NOTICE))
+    assert lines.count(notice) == 1 and other not in lines, "the boot guard's notice not logged once"
+    before, after = restore_lock.REVOKED.split('%s')
+    told = sorted(line for line in lines if line.startswith(before) and line.endswith(after))
+    assert told == sorted(restore_lock.REVOKED % label for label in revoked), \
+        'the revoked profiles not logged once each'
+    assert all(line in (notice, *told) for line in lines if line.startswith(GUARD)), 'another line of the boot guard'
+
+
 async def restored_start(client):
     """Multi-profile HM-13a: the real image's first start after a Supervisor restore (entrypoint as root, ownership
-    repair, privilege drop, management process and its boot guard, HM-13b), checked, then stopped again."""
+    repair, privilege drop, management process and its boot guard, HM-13b), checked, then stopped again. Its stderr
+    goes to a file of this container's temporary directory that has no name and is gone once closed, and is read back
+    by check_restore_log (HM-16): no profile data here, so the guard revoked nothing."""
     restored, state = restore_as_supervisor()
-    process = start()
-    try:
-        await ready_listener(client, process)
-        check_restored_start(restored, state)
-    finally:
-        if process.poll() is None:
-            stop(process)
+    with tempfile.TemporaryFile() as log:
+        process = start(log)
+        try:
+            await ready_listener(client, process)
+            check_restored_start(restored, state)
+        finally:
+            if process.poll() is None:
+                stop(process)
+        check_restore_log(log, len(restored) + 1)
 
 
 def mock_bind_host(app):
+    if app != 'headscale' and features.enabled(app):
+        # Multi-profile HM-16 (HM-20 review MF-2): every child of a switched-on product refuses a loopback backend, as
+        # Headscale's child does: container_acceptance gives it the same one-use internal bridge, and its mock listens
+        # on this container's private address.
+        return container_profiles.private_mock_host()
     if app != 'headscale':
         return '127.0.0.1'
     # container_acceptance gives Headscale a disposable internal bridge. Its
@@ -482,6 +527,10 @@ async def run():
             assert (await client.post(ENDPOINT, headers={'Authorization': 'Bearer ' + token}, json=message)).status_code == 403
             stop(process)
             process = None
+            if features.enabled(APP):
+                # Multi-profile HM-16 (plan 12.3 HM-16; FM-101, FM-147): a switched-on candidate only, after the
+                # single-profile path above, which every candidate runs as before (packaging/container_profiles.py).
+                await container_profiles.stage(sys.modules[__name__], client)
         print('PASS: actual packaged runtime + owned mock; no HA/backend E2E claim')
     finally:
         if process is not None and process.poll() is None:

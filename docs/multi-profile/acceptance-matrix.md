@@ -1,6 +1,6 @@
 # 多帳號驗收矩陣（PaaS T-01～T-29 的 HA 版）
 
-- 狀態：HM-00 起草（2026-11-14）；HM-06 依 n8n 的實際行為改 T-23 的 n8n 期望值（2026-11-15，審查 MF-1 選 (a)）；HM-20 登記兩個測試檔與兩個 packaging 測試的擴充（2026-11-15）。HM-13c 補 T-21 的測試與差異列、登記表 HM-13c 的三列（2026-11-17）；依獨立審查補登記表兩列的內容（同日）。HM-27 定案 T-24 並登記三個測試檔（2026-11-17），合併 HM-13c 之後 T-24 的差異列改成 #124～#128、T-21 與 T-24 補還原後的 Origin 政策（2026-11-18）。HM-16 把它寫進 `docs/operations/acceptance.md` 與 P9 kit；HM-19b 照它做 Odoo 首發的 HAOS 驗收。
+- 狀態：HM-00 起草（2026-11-14）；HM-06 依 n8n 的實際行為改 T-23 的 n8n 期望值（2026-11-15，審查 MF-1 選 (a)）；HM-20 登記兩個測試檔與兩個 packaging 測試的擴充（2026-11-15）。HM-13c 補 T-21 的測試與差異列、登記表 HM-13c 的三列（2026-11-17）；依獨立審查補登記表兩列的內容（同日）。HM-27 定案 T-24 並登記三個測試檔（2026-11-17），合併 HM-13c 之後 T-24 的差異列改成 #124～#128、T-21 與 T-24 補還原後的 Origin 政策（2026-11-18）。HM-16 把它寫進 `docs/operations/acceptance.md` 與 P9 kit，並登記本片的測試檔（2026-11-17）；和 HM-13b、HM-13c 合併後補 T-21 的容器檢查與兩個 packaging 測試檔的內容（2026-11-18）；合併 HM-27 之後兩個 packaging 測試檔補 Origin 政策與它的收據（2026-11-19）；HM-19b 照它做 Odoo 首發的 HAOS 驗收。
 - 來源：計畫 §10.4、§10.6（repo 外）；HA 期望值沿用 `gaps/G6-delivery.md` 第 5 節，依 2026-11-14 的決策更新（`decisions.md`）。
 - 契約與差異：`contract.md`（第 9 節刻意差異表，下稱 §8.8）；G6 §5 每一列怎麼對到差異表或測試見 `deviation-trace.md`。
 
@@ -31,13 +31,13 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | T-12 | 負載中輪替、刪除 | 只切斷該帳號的 lease，別帳號的串流不斷 | `tests/test_profile_routing.py`、`tests/test_active_token_leases.py`、`tests/test_profile_admin_api.py`（刪除：HM-10） | — | HM-08、HM-10 | 是 | — |
 | T-13 | 單一子程式當掉 | 其他帳號 PID 不變；看門狗照 PaaS（2→300 秒、不限次數、120 秒歸零；DQ-20 採 (b)） | `tests/test_profile_lifecycle.py` | 容器、HAOS | HM-09、HM-16、HM-19b | 是 | #14 |
 | T-14 | 冷啟動與重啟 | 子程式未就緒時閘道自答 initialize（自答 session），就緒後要求重連；之後每帳號 initialize 200；錯開啟動下「全部就緒」時間有數字 | `tests/test_staggered_start.py`、`tests/test_unconfigured_connect.py` | 容器、HAOS | HM-09、HM-16、HM-19b | 是 | #53、#68 |
-| T-15 | port 被佔與同 port | 衝突只停相關帳號；被佔時照看門狗退避，放開後自動恢復 | `tests/test_profile_ports.py` | 容器 | HM-09、HM-16 | 是 | #14 |
+| T-15 | port 被佔與同 port | 衝突只停相關帳號；被佔時照看門狗退避，放開後自動恢復 | `tests/test_profile_ports.py` | 容器（只驗每個子程式只聽自己的 port；衝突與退避只在單元） | HM-09、HM-16 | 是 | #14 |
 | T-16 | 子程式晚驗證 | HA 閘道自答（不是 PaaS 的 503「MCP child is not ready」）；套用狀態每帳號一份 | `tests/test_profile_runtime.py` | — | HM-09、HM-10 | 是 | #68 |
 | T-17 | 記憶體與 CPU | J6412（可以的話 J1900）1～6 個帳號的 RSS／PSS、CPU 數字；停機 <30 秒；全域最壞值對 MemAvailable | `tests/test_profile_lifecycle.py`（並行停） | HAOS（HM-19c） | HM-19c；各產品升版 | 是 | #19、#53 |
 | T-18 | 互相影響與日誌保留 | 每帳號子程式輸出緩衝不被別帳號擠掉；生命週期 log 帶 id 前 8 碼 | `tests/test_profile_runtime.py`、`tests/test_profile_lifecycle.py` | HAOS | HM-08、HM-09、HM-19b | 是 | #29 |
 | T-19 | 背壓與每帳號名額 | 轉送名額等 1 秒；帶 id 的 POST 在名額逾時、准入滿（≤64 KiB）時 200＋`-32003`＋`Retry-After: 5`，更大的 503；位元組預算放不下時讀完丟掉、從頭尾找 id（200 或 503；HM-31，開關關也生效）；GET 串流滿 429＋`Retry-After: 30`（預設 24、額外 8）；CPU 飢餓下閒置帳號健康不逾時 | `tests/test_profile_quotas.py`、`tests/test_gateway_busy_shapes.py`、`tests/test_request_budget_gateway.py`、`tests/test_reply_worker.py` | — | HM-08、HM-14、HM-30、HM-31 | 是 | #15、#16、#17、#101～#105、#108 |
 | T-20 | 升級、回退、再升級 | 回退＝還原升級前備份：預設 token＝備份當時的值、額外帳號消失、沒有任何撤銷；再升級後額外帳號不存在、預設不變；文件要求再升級後按「全部撤銷」 | `tests/test_upgrade_zero_rewrite.py` | Store、HAOS | HM-19b、HM-29 | 是 | #71 |
-| T-21 | 備份還原 | 預設帳號依 DQ-03（採 (b) A2；沒撤銷時面板與 log 提示權杖已回到備份當時的值）；兩個偵測訊號；讀不到的帳號隔離（只能刪）；獨立驗證；核對後才重發；舊收據 410（備份時沒有收據檔的帳號也是；HM-27 起 Origin 政策旁的收據也是，政策檔照還原的原樣）；C1-M1 攻擊序；版本混搭 | `tests/test_restore_detection.py`、`tests/test_restore_lock.py`、`tests/test_dormant_profiles.py`、`tests/test_revoke_all.py`、`tests/test_restore_review.py`、`packages/mcp-admin-ui/tests/browser/restore-review.spec.mjs`；Origin 政策：`tests/test_origin_policy.py` | 容器（root 還原樹）、HAOS | HM-13a、HM-13b、HM-13c、HM-19b、HM-27 | 是 | #20、#21、#58、#67、#69、#118～#123 |
+| T-21 | 備份還原 | 預設帳號依 DQ-03（採 (b) A2；沒撤銷時面板與 log 提示權杖已回到備份當時的值）；兩個偵測訊號；讀不到的帳號隔離（只能刪）；獨立驗證；核對後才重發；舊收據 410（備份時沒有收據檔的帳號也是；HM-27 起 Origin 政策旁的收據也是，政策檔照還原的原樣）；C1-M1 攻擊序；版本混搭 | `tests/test_restore_detection.py`、`tests/test_restore_lock.py`、`tests/test_dormant_profiles.py`、`tests/test_revoke_all.py`、`tests/test_restore_review.py`、`packages/mcp-admin-ui/tests/browser/restore-review.spec.mjs`、`packaging/test_container_probe.py`、`packaging/test_container_profiles.py`；Origin 政策：`tests/test_origin_policy.py` | 容器（root 還原樹）、HAOS | HM-13a、HM-13b、HM-13c、HM-16、HM-19b、HM-27 | 是 | #20、#21、#58、#67、#69、#118～#123 |
 | T-22 | n8n 名額與逾時 | `n8n_session` 每帳號一份；沒後端的額外帳號所有工具回 `backend_not_configured` | `tests/test_n8n_multi_profile.py` | HAOS | HM-25 | 否（n8n） | #28、#62 |
 | T-23 | 子程式 bearer 隔離 | 7 支 Python 子程式：不帶、帶錯、帶別帳號、兩個標頭、空字串都 401，自己的 200。n8n（n8n-mcp 維持現狀）：不帶、帶錯、帶別帳號、空字串都 401，自己的 200；另外收下三種寫法（`Bearer` 後兩個空白、兩個標頭都是自己的、第一個是自己的＋第二個是別帳號的），都要先有自己的 child token，沒有越權（§8.8 #37 的註） | `tests/test_child_bearer.py` | 容器 | HM-06、HM-16；各產品升版 | 是（Odoo） | #37 |
 | T-24 | 來源檢查 | DQ-11 採 (a)：密鑰網址清單外記一行 would_deny（帶 id 前 8 碼、每帳號節流）、不擋、不加 CORS；Bearer 帶 Origin 403；Headscale 只放 claude.ai。HM-27 定案：report-only 的回應和不帶 Origin 的同一個請求逐位元相同；面板切 enforce 後只擋清單外（403 固定本體），清單內與沒帶 Origin 照舊；政策檔不能用時密鑰網址 503；還原後政策是備份當時的（守門不動它），還原前的存檔重送 410（和 HM-13b、HM-13c 合併後） | `tests/test_origin_policy.py`；面板 `packages/mcp-admin-ui/tests/origin-policy.test.mjs`、`packages/mcp-admin-ui/tests/browser/origin-policy.spec.mjs` | HAOS（記下 Claude.ai 送的 Origin：預設清單含 `https://claude.ai`，Claude.ai 送它時不會留紀錄，S14 用 echo 端點看） | HM-08、HM-27 | 是 | #9、#10、#42、#124～#128 |
@@ -103,7 +103,7 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_odoo_identity_rotation.py` | HM-12 | 新增 | 開通的 Odoo 換 url／database／username（含清空）換 token：先停舊子程式、一次寫入、發布、再起新子程式（兩種路由、預設帳號也是）；回應帶新 state 的 `ETag`；8081 分派器不再把舊 token 對到任何帳號、新 token 對到該帳號；舊 token 兩條入口都失效、進行中與排隊中的請求結束；新 token 在新子程式起來前碰不到任何子程式；只換密碼、初次設定、已撤銷不換；停不下、store 拒絕（含舊子程式起不回來）、丟出非預期的例外（固定 503、不是 500）、新檔寫不出來、取代 state 檔途中失敗（`os.replace`、目錄 fsync；額外帳號與預設帳號：預設帳號的新檔已換上時 8081 全部 503）、寫入丟出例外但新 token 已在磁碟上（不重起舊子程式）、新子程式起不來的故障注入；store 的一次寫入與只在結果不明時毒化；沒開通照今天；其他產品開通後不換 |
 | `tests/test_odoo_multi_profile.py` | HM-12 | 新增 | 同庫五個帳號各自固定綁定（PaaS 對照）、換其中一個只換它的 token；真的 Odoo 子程式：A 的審批 token 在 B 被拒、A 自己執行得了，兩帳號 state 相同的對照；DQ-30 讀取並行維持 1 |
 | `tests/test_new_origin_secret.py` | HM-12 | 新增 | 開通後全部產品改網址來源（scheme、host、port）沒帶那條網址的已存秘密 422（DQ-40 ⑨），少帶一個也 422、全帶就存；同來源、帶 null、整份取代不檢查；在 If-Match 之後；沒開通照今天；經分派器只檢查選定帳號 |
-| `tests/test_restore_detection.py` | HM-13a | 計畫（root） | root 擁有的還原樹、標記在 pass 1 前落盤、sentinel 各情況 |
+| `tests/test_restore_detection.py` | HM-13a | 計畫（root） | root 擁有的還原樹、標記在 pass 1 前落盤、sentinel 各情況。HM-16：容器探針還原階段讀的 log（entrypoint 的 `re-owned N` 與守門通知各一行）拿真的 entrypoint 與守門的輸出驗 |
 | `tests/test_restore_lock.py` | HM-13b | 計畫 | 守門 A～F 步、隔離、獨立驗證、DQ-03 兩種模式、UC-24 三情境；HM-27（合併後）：Origin 政策檔照還原的原樣（存過、沒有、不能用、目錄），旁邊的收據照索引旁的封存與換新（讀不懂的、目錄也封存；封存不了時停下；沒開通、沒有帳號資料時不動） |
 | `tests/test_dormant_profiles.py` | HM-13b | 計畫 | 開關關＋帳號資料 → 全撤銷；重新開通未核對前不能重發 |
 | `tests/test_revoke_all.py` | HM-13b | 計畫 | 全部撤銷第 k 個失敗、`.revoke-all-pending` |
@@ -121,9 +121,13 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_fresh_backend_connections.py` | HM-32 | 新增 | LiteLLM、EMQX 不保留閒置的後端連線（對齊 PaaS #135、#139；不受開關管）：子程式實際建的連線池與照產品要的 `limits` 建的連線池都測；每個請求各解析一次、各開一條連線，名稱改指被拒的位址後下一個請求在連線前就被拒；恢復後第一個工具呼叫不碰舊連線、不等逾時；不重送（恢復後只到後端一次；沒有回應的寫入、讀取都只送一次）；連線數上限照舊（子程式的連線池 4 條；產品要的 LiteLLM 50、EMQX 20，被 `backend_policy` 丟掉）（HM-32 審查 S-2、S-3） |
 | `tests/test_hermes_cron_description.py` | HM-33 | 新增 | Hermes `hermes_cron` 的工具說明逐字是 PaaS #156 的（不受開關管；create 帶 `enabled=false` 建成停用的排程，resume 之前不會跑；Hermes v0.22.x 對停用的排程 trigger 會一併改回啟用，要維持停用之後再呼叫 pause）：子程式自己的 tools/list（在 Hermes 釘版的 venv 裡）與閘道內附的清單（`tool_snapshot.py`）都一樣；拿掉這兩句就是原本的說明；`enabled` 參數照舊是預設 true 的布林；trigger 只送一個 `POST /api/cron/jobs/<id>/trigger`，自己不會再 pause、resume 或再 trigger（真子程式、假 dashboard；HM-33 審查 S-1） |
 | `tests/test_child_identity.py` | HM-15 | 計畫（條件式） | 別的程序先綁 port → 不轉發；uid 10001 子程序驗降級 |
-| `tests/test_upgrade_hooks.py` | HM-16 | 計畫 | Store hook 只讀、與版本無關 |
-| `packaging/test_container_probe.py` | HM-16 | 既有，擴充 | 多帳號探針、`/data/mcp` 修復規則與項目預算 |
-| `packaging/test_ha_p9_probe.py` | HM-16 | 既有，擴充 | P9 kit 帳號參數、交叉矩陣 |
+| `tests/test_upgrade_hooks.py` | HM-16 | 新增 | Store hook 草稿（`packaging/hooks/seed`、`verify`）只讀、與版本無關；升級不該做的 11 種事各讓 verify 失敗；索引是連結時不跟隨；在自己的程序裡也不走環境代理；對真的 runtime（舊版沒開通、新版開通或也沒開通；Odoo、EMQX）照樣過、不改 `/data` |
+| `packaging/test_container_profiles.py` | HM-16 | 新增 | 容器探針的多帳號階段：布局快照（修復規則、512 項與 8 層預算；守門寫的名稱、還原提示、封存的收據從 `profiles.py` 取；HM-27 的 Origin 政策、它的收據與封存的收據只在頂層）、照面板的方式建帳號、sentinel（執行期建的）、子程式 port 與資源、SIGKILL、30 秒內停機、路由（含 session 是自己子程式的）、子程式 bearer；多帳號還原後（DQ-03 (b) A2，對真的 `restore_lock.guard` 跑）：標記與提示刪掉、還原紀錄、每個帳號撤銷且 child token 換新、其他欄位與索引不變、log 行、Origin 政策旁的新收據檔（HM-27），還原前的 token 與 child token 都被拒；整個階段的順序、每一步拿到的帳號與它自己的判定 |
+| `packaging/test_container_probe.py` | HM-16 | 既有，擴充 | 單帳號路徑和審過的基準兩邊都剝掉開通的分支後逐句相同；開通的產品假後端用容器私有位址；`fixture_snapshot` 只對開通的產品放寬；還原階段那次啟動的 stderr：entrypoint 的 `re-owned N` 與守門通知各剛好一行、守門沒有別的行（HM-13b 審查 S-3、HM-16 第二輪審查；對真的 `restore_lock.guard` 跑）；合併 HM-27 之後：守門封存收據失敗的兩行（索引旁、Origin 政策旁）也算別的行，備份前存過 Origin 政策的還原（真的守門封存它的收據）log 照樣過 |
+| `packaging/test_container_acceptance.py` | HM-16 | 既有，擴充 | 沒開通的產品 docker 指令與 180 秒逐字照舊；開通的走一次性 internal bridge 與 360 秒；repo 的開關決定它 |
+| `packaging/test_ha_p9_probe.py` | HM-16 | 既有，擴充 | P9 kit：cross 模式（兩種接法、跨帳號 session、已刪與隨機 token、`X-MCP-Profile` 不換帳號）、childkill `--child-port`（輪詢到新 PID、要子程式自己的 session、別的 PID 不變）、不走環境代理 |
+| `packages/mcp-admin-ui/tests/p9-admin.test.mjs` | HM-16 | 既有，擴充 | P9 driver 的帳號流程：暫時帳號（不重送、刪除前重讀索引版本）、交叉矩陣的輸入、childkill 的 port；driver 組裝的順序與參數（`--cross`、`--temp-profile`、childkill） |
+| `tests/test_owned_executable.py` | HM-16 | 既有，擴充 | 開通的產品經 owned executable 起預設帳號 |
 | `packaging/test_validate.py` | HM-17 | 既有，擴充 | 多產品版號運算式 |
 | `packaging/test_release_gate.py` | HM-17 | 既有，擴充 | release_gate 只認產品自己的紀錄 |
 | `tests/test_saved_destinations.py` | HM-20 | 既有，擴充 | 開通後存檔拒 loopback（全部產品，含 n8n；各種寫法）；區網照放；沒開通與替身開關照今天。HM-12：開通後改到另一個來源的 `backend/patch` 一起帶那條網址的秘密（DQ-40 ⑨） |

@@ -1,13 +1,20 @@
 """Headscale's owned backend fixture and bind-address guard; the direct child bearer check (HM-06); the restore stage
-(multi-profile HM-13a; its check after the boot guard, HM-13b). Without Docker or root."""
+(multi-profile HM-13a; its check after the boot guard, HM-13b; the two log lines of its start, HM-16); the mock address
+of a switched-on product and the single-profile path every candidate runs unchanged (multi-profile HM-16). Without
+Docker or root."""
 import ast
 import asyncio
+import io
 import json
+import logging
 import os
+import secrets
 import stat
+import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -19,6 +26,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'packages/mcp-admin-core'), str(ROOT / 'apps/n8n')]
 with patch.object(sys, 'argv', ['container_probe.py', 'headscale']):
     import container_probe as probe
+from mcp_admin_core import features  # noqa: E402  (HM-16: the products whose child refuses a loopback backend)
+from mcp_admin_core import restore_lock  # noqa: E402  (HM-16: the boot guard's own log lines)
+from mcp_admin_core.products import ProductStore  # noqa: E402
 
 RUNTIME = (10001, 10001)
 
@@ -66,20 +76,192 @@ class HeadscaleBackendTests(unittest.TestCase):
         self.assertEqual(probe.mock_bind_host('emqx'), '127.0.0.1')
 
 
-class SwitchedOnMockBackendTests(unittest.TestCase):
-    """Multi-profile HM-20 (plan 8.7): the child of a switched-on product (features.MULTI_PROFILE_PRODUCTS) refuses a
-    loopback backend (WOOW_MCP_DENY_LOOPBACK=1), as Headscale's always does, so its mock backend listens where
-    Headscale's does: on this container's private address on container_acceptance's one-use internal bridge
-    (packaging/test_container_acceptance.py), never on 127.0.0.1; the test double tests/loopback_backends.py is in no
-    image. The set is empty today, so this checks Headscale; switching a product on fails here until mock_bind_host
-    gives it that address."""
+def switched(*products):
+    """The product switch as an upgrade PR sets it (the repository keeps it empty), for this test only."""
+    return patch.object(features, 'MULTI_PROFILE_PRODUCTS', frozenset(products))
 
-    def test_every_product_whose_child_refuses_loopback_gets_a_private_mock_address(self):
-        from mcp_admin_core import features
-        for app in sorted({'headscale', *features.MULTI_PROFILE_PRODUCTS}):
-            with self.subTest(app=app), patch.object(probe.socket, 'gethostname', return_value='candidate'), \
+
+class SwitchedOnMockBackendTests(unittest.TestCase):
+    """Multi-profile HM-16 (HM-20 review MF-2; HM-20 left a tripwire here, now the rule itself): every child of a
+    switched-on product (features.MULTI_PROFILE_PRODUCTS) refuses a loopback backend (WOOW_MCP_DENY_LOOPBACK=1), as
+    Headscale's always does, so its mock backend listens where Headscale's does: on this container's private address on
+    container_acceptance's one-use internal bridge (packaging/test_container_acceptance.py), never on 127.0.0.1; the
+    test double tests/loopback_backends.py is in no image. Every product is checked switched on and off."""
+
+    def test_a_switched_on_product_s_mock_listens_on_the_container_s_private_address(self):
+        for app in sorted(features.KNOWN_PRODUCTS):
+            with self.subTest(app=app), switched(app), patch.object(probe.socket, 'gethostname', return_value='candidate'), \
                     patch.object(probe.socket, 'gethostbyname', return_value='172.18.0.2'):
                 self.assertEqual(probe.mock_bind_host(app), '172.18.0.2')
+            for address in ('127.0.0.1', '169.254.1.2', '100.64.0.1', '192.0.2.1', '8.8.8.8'):
+                with self.subTest(app=app, address=address), switched(app), \
+                        patch.object(probe.socket, 'gethostbyname', return_value=address):
+                    with self.assertRaises(AssertionError):
+                        probe.mock_bind_host(app)
+
+    def test_a_product_not_switched_on_keeps_its_mock_on_loopback_and_headscale_its_bridge(self):
+        with switched(), patch.object(probe.socket, 'gethostname', return_value='candidate'), \
+                patch.object(probe.socket, 'gethostbyname', return_value='172.18.0.2'):
+            for app in sorted(features.KNOWN_PRODUCTS):
+                with self.subTest(app=app):
+                    self.assertEqual(probe.mock_bind_host(app), '172.18.0.2' if app == 'headscale' else '127.0.0.1')
+
+    def test_the_repository_switch_decides_it(self):
+        """What HM-20's tripwire guarded: a product an upgrade PR switches on gets the private address at once."""
+        with patch.object(probe.socket, 'gethostname', return_value='candidate'), \
+                patch.object(probe.socket, 'gethostbyname', return_value='172.18.0.2'):
+            for app in sorted(features.KNOWN_PRODUCTS):
+                with self.subTest(app=app):
+                    private = app == 'headscale' or app in features.MULTI_PROFILE_PRODUCTS
+                    self.assertEqual(probe.mock_bind_host(app), '172.18.0.2' if private else '127.0.0.1')
+
+
+# The single-profile probe as reviewed: d922d3c is HM-13c's c5dd7d3 (claude-delivery 53ffe61 with HM-13b's restore
+# check after the boot guard and HM-13c's restore notice) with HM-16's switched-on parts and HM-16's two deliberate
+# changes of the single-profile path: the start after the restore stage's restore logs to a file that check_restore_log
+# reads (573bb21, HM-13b review S-3), and check_restore_log refuses any other line of the boot guard (d922d3c, HM-16's
+# second review). HM-16's provenance note lists each delta (sections 19 and 20). Before it: 573bb21, c5dd7d3 (HM-16
+# merged with HM-13c), f4c7718 (HM-16 first). A slice that changes that path on purpose moves BASE to the commit its
+# change is reviewed against, and says why in its provenance note. Both sides are compared without their switched-on
+# parts (review MF-3).
+BASE = 'd922d3c'
+# The switched-on parts beyond BASE's, by kind ('branch': an `if ... features.enabled(...)` statement, which must hand
+# over to container_profiles; 'container_profiles' and 'features': the two imports): none. BASE has HM-13b's (the
+# features import, check_restored_start's branch) and HM-16's (the import of container_profiles and three branches
+# handing over to it: mock_bind_host, fixture_snapshot, run). A slice that adds one for a switched-on product lists it.
+ADDED_BEYOND_BASE = ()
+
+
+def is_switched_on_branch(node):
+    return isinstance(node, ast.If) and any(
+        isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute) and call.func.attr == 'enabled'
+        and isinstance(call.func.value, ast.Name) and call.func.value.id == 'features' for call in ast.walk(node.test))
+
+
+class WithoutSwitchedOnAdditions(ast.NodeTransformer):
+    """The probe module without its switched-on parts: the imports of features and container_profiles, and every `if`
+    statement whose test calls features.enabled, wherever it stands. removed: [(kind, the node)] of each."""
+
+    def __init__(self):
+        self.removed = []
+
+    def drop(self, kind, node):
+        self.removed.append((kind, node))
+
+    def visit_If(self, node):
+        if is_switched_on_branch(node):
+            return self.drop('branch', node)
+        return self.generic_visit(node)
+
+    def visit_Import(self, node):
+        if [alias.name for alias in node.names] == ['container_profiles']:
+            return self.drop('container_profiles', node)
+        return node
+
+    def visit_ImportFrom(self, node):
+        if node.module == 'mcp_admin_core' and [alias.name for alias in node.names] == ['features']:
+            return self.drop('features', node)
+        return node
+
+
+def without_switched_on_parts(source):
+    """(the module's AST without its switched-on parts, {ast.dump of a removed part: (kind, node, how many)})."""
+    tree = ast.parse(source)
+    stripping = WithoutSwitchedOnAdditions()
+    stripping.visit(tree)
+    parts = {}
+    for kind, node in stripping.removed:
+        dump = ast.dump(node)
+        parts[dump] = (kind, node, parts.get(dump, (None, None, 0))[2] + 1)
+    return tree, parts
+
+
+def hands_over_to_container_profiles(node):
+    return any(isinstance(name, ast.Name) and name.id == 'container_profiles' for name in ast.walk(node))
+
+
+def base_source():
+    """BASE's packaging/container_probe.py (the CI's checkout has the whole history)."""
+    return subprocess.run(['git', '-c', f'safe.directory={ROOT}', '-C', str(ROOT), 'show',
+                           f'{BASE}:packaging/container_probe.py'], capture_output=True, text=True, check=True).stdout
+
+
+class SingleProfilePathTests(unittest.TestCase):
+    """Multi-profile HM-16 (plan 12.3 HM-16 acceptance: the single-profile probe path does not change): a product that
+    is not switched on runs BASE's probe statement for statement; the switched-on additions are only guarded
+    branches, the stage call last."""
+
+    def test_without_the_switched_on_branches_the_probe_is_the_reviewed_one(self):
+        base_tree, base_parts = without_switched_on_parts(base_source())
+        tree, parts = without_switched_on_parts(Path(probe.__file__).read_text())
+        self.assertEqual(ast.dump(tree), ast.dump(base_tree))  # every other statement as BASE has it
+        # every switched-on part BASE has is still here, unchanged
+        self.assertEqual({dump: count for dump, (_, _, count) in base_parts.items()
+                          if parts.get(dump, (None, None, 0))[2] < count}, {})
+        added = [(kind, node) for dump, (kind, node, count) in parts.items()
+                 for _ in range(count - base_parts.get(dump, (None, None, 0))[2])]
+        self.assertEqual(sorted(kind for kind, _ in added), sorted(ADDED_BEYOND_BASE))
+        self.assertTrue(all(hands_over_to_container_profiles(node) for kind, node in added if kind == 'branch'))
+
+    def test_base_s_switched_on_parts_are_hm13b_s_and_hm16_s(self):
+        """What BASE itself has beyond its single-profile path: HM-13b's features import and check_restored_start's
+        branch (the one that does not hand over to container_profiles), HM-16's import of container_profiles and its
+        three branches, each handing over to it."""
+        stripping = WithoutSwitchedOnAdditions()
+        stripping.visit(ast.parse(base_source()))
+        self.assertEqual(sorted(kind for kind, _ in stripping.removed),
+                         ['branch', 'branch', 'branch', 'branch', 'container_profiles', 'features'])
+        self.assertEqual(sorted(hands_over_to_container_profiles(node) for kind, node in stripping.removed
+                                if kind == 'branch'), [False, True, True, True])
+
+    def test_the_stage_runs_last_and_only_switched_on(self):
+        run = next(node for node in ast.parse(Path(probe.__file__).read_text()).body
+                   if isinstance(node, ast.AsyncFunctionDef) and node.name == 'run')
+        branches = [node for node in ast.walk(run) if is_switched_on_branch(node)]
+        self.assertEqual(len(branches), 1)
+        branch = branches[0]
+        self.assertEqual(ast.unparse(branch.test), 'features.enabled(APP)')
+        self.assertEqual([ast.unparse(statement) for statement in branch.body],
+                         ['await container_profiles.stage(sys.modules[__name__], client)'])
+        client = next(node for node in ast.walk(run) if isinstance(node, ast.AsyncWith)
+                      and ast.unparse(node.items[0].context_expr).startswith('httpx.AsyncClient'))
+        self.assertIs(client.body[-1], branch)  # after the last stop of the single-profile path
+
+
+class FixtureSnapshotTests(unittest.TestCase):
+    """fixture_snapshot (C4-SF-5): only a switched-on product's /data/mcp may hold the multi-profile layout."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.data = Path(temporary.name) / 'mcp'
+        self.data.mkdir(mode=0o700)
+        self.data.chmod(0o700)
+        for name in ('state.json', '.writer.lock'):
+            (self.data / name).write_bytes(b'{"fixture": true}')
+            (self.data / name).chmod(0o600)
+        patcher = patch.object(probe, 'DATA', self.data)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_a_product_not_switched_on_keeps_today_s_bounded_regular_files(self):
+        with switched():
+            found = probe.fixture_snapshot()
+            self.assertEqual(sorted(found), ['.writer.lock', 'state.json'])
+            self.assertEqual(len(found['state.json']), 8)
+            (self.data / 'profiles').mkdir()
+            with self.assertRaises(AssertionError):
+                probe.fixture_snapshot()
+            (self.data / 'profiles').rmdir()
+            for number in range(15):
+                (self.data / f'extra-{number}').write_bytes(b'')
+            with self.assertRaises(AssertionError):
+                probe.fixture_snapshot()
+
+    def test_a_switched_on_product_s_is_the_layout_s_tree(self):
+        with switched(probe.APP), patch.object(probe.container_profiles, 'tree_snapshot', return_value={'x': 1}) as tree:
+            self.assertEqual(probe.fixture_snapshot(), {'x': 1})
+        tree.assert_called_once_with(self.data)
 
 
 CHILD_TOKEN = 'C' * 43  # tests/fixtures/owner_defaults/README.md: a child token in test data
@@ -327,7 +509,7 @@ class RestoreStageTests(unittest.TestCase):
                 with self.assertRaises(AssertionError):
                     probe.check_restored_start(restored, state)
 
-    def stage(self, check=None, exited=False):
+    def stage(self, check=None, exited=False, logged=None):
         events = []
         process = Mock(**{'poll.return_value': 1 if exited else None})
 
@@ -342,9 +524,18 @@ class RestoreStageTests(unittest.TestCase):
             events.append(('check', *args))
             if check:
                 raise check
-        with patch.object(probe, 'restore_as_supervisor', restore), \
-             patch.object(probe, 'start', lambda: events.append('start') or process), \
+
+        def started(log=None):
+            events.append(('start', log))
+            return process
+
+        def read(log, entries, revoked=()):
+            events.append(('log', log, entries, tuple(revoked), log.closed))
+            if logged:
+                raise logged
+        with patch.object(probe, 'restore_as_supervisor', restore), patch.object(probe, 'start', started), \
              patch.object(probe, 'ready_listener', ready), patch.object(probe, 'check_restored_start', checked), \
+             patch.object(probe, 'check_restore_log', read), \
              patch.object(probe, 'stop', lambda running: events.append(('stop', running))):
             try:
                 asyncio.run(probe.restored_start('client'))
@@ -353,16 +544,29 @@ class RestoreStageTests(unittest.TestCase):
         return events, process
 
     def test_the_restore_happens_while_stopped_then_the_start_is_checked_and_stopped(self):
+        """HM-16 (HM-13b review S-3): the start's stderr goes to a file of its own, read back once it stopped (one
+        restored entry and the marker: 2), then closed: the file had no name and is gone."""
         events, process = self.stage()
-        self.assertEqual(events, ['restore', 'start', ('ready', 'client', process), ('check', ['state.json'], b'S'),
-                                  ('stop', process)])
+        log = events[1][1]
+        self.assertTrue(callable(getattr(log, 'fileno', None)))
+        self.assertEqual(events, ['restore', ('start', log), ('ready', 'client', process),
+                                  ('check', ['state.json'], b'S'), ('stop', process), ('log', log, 2, (), False)])
+        self.assertTrue(log.closed)
 
     def test_a_failed_check_still_stops_the_runtime_and_fails(self):
         events, process = self.stage(check=AssertionError('restore marker left'))
         self.assertEqual(events[-2:], [('stop', process), 'failed'])
+        self.assertNotIn('log', [event[0] for event in events if isinstance(event, tuple)])  # never read, gone
+        self.assertTrue(events[1][1].closed)
         events, process = self.stage(check=AssertionError('restore marker left'), exited=True)
         self.assertNotIn(('stop', process), events)  # an exited runtime has nothing to stop
         self.assertEqual(events[-1], 'failed')
+
+    def test_a_start_that_did_not_say_both_lines_fails_once_stopped(self):
+        events, process = self.stage(logged=AssertionError('the restore repair not logged once'))
+        self.assertEqual([event[0] if isinstance(event, tuple) else event for event in events[-3:]],
+                         ['stop', 'log', 'failed'])
+        self.assertTrue(events[1][1].closed)
 
     def test_every_container_acceptance_runs_the_restore_stage_before_configuring(self):
         # The probe is only run for real by the builder: pin where run() takes the stage, by its source.
@@ -376,6 +580,224 @@ class RestoreStageTests(unittest.TestCase):
         self.assertLess(names.index('restored_start'), names.index('fixture_update'))
         awaited = [node.value for node in ast.walk(run) if isinstance(node, ast.Await)]
         self.assertIn(calls[names.index('restored_start')], awaited)
+
+
+class StartTests(unittest.TestCase):
+    """start(): the runtime's stdout is always dropped, and its stderr unless a log file is given (HM-16)."""
+
+    def test_stderr_goes_to_the_log_only_when_one_is_given(self):
+        calls = []
+        with patch.object(probe.subprocess, 'Popen', lambda *args, **kwargs: calls.append((args, kwargs))), \
+                tempfile.TemporaryFile() as log:
+            probe.start()
+            probe.start(log)
+        argv = (['/usr/local/bin/python', '/opt/woow/packaging/entrypoint.py', probe.APP],)
+        self.assertEqual(calls, [(argv, {'stdout': subprocess.DEVNULL, 'stderr': subprocess.DEVNULL}),
+                                 (argv, {'stdout': subprocess.DEVNULL, 'stderr': log})])
+
+
+KEPT, REVOKED_NOTICE = restore_lock.KEPT_NOTICE, restore_lock.REVOKED_NOTICE
+
+
+class RestoreLogTests(unittest.TestCase):
+    """check_restore_log (HM-16; HM-13b review S-3): what the start after a restore said, read back once it stopped:
+    the entrypoint's repair once with its count, the boot guard's notice once and the other never, a REVOKED line once
+    for each revoked profile and for no other, and no other line of the guard (HM-16's second review). Never a line of
+    the log in a message."""
+
+    def log(self, *lines):
+        log = tempfile.TemporaryFile()
+        self.addCleanup(log.close)
+        log.write(''.join(line + '\n' for line in lines).encode())
+        return log
+
+    def fails(self, lines, entries, revoked=()):
+        secret = secrets.token_urlsafe(32)  # a child's line with a token in it
+        with self.assertRaises(AssertionError) as failed:
+            probe.check_restore_log(self.log(*lines, 'child: ' + secret), entries, revoked)
+        self.assertNotIn(secret, str(failed.exception))
+        return str(failed.exception)
+
+    def test_a_restore_without_profile_data_says_the_repair_and_the_kept_token_once(self):
+        probe.check_restore_log(self.log('child: starting', probe.REOWNED % 5, KEPT, 'child: ready'), 5)
+
+    def test_any_other_word_of_a_restore_without_profile_data_fails(self):
+        repair = probe.REOWNED % 5
+        for label, lines in {'no repair line': [KEPT], 'the repair line twice': [repair, repair, KEPT],
+                             'another count': [probe.REOWNED % 4, KEPT], 'no notice': [repair],
+                             'the notice twice': [repair, KEPT, KEPT], 'the revoked notice too': [repair, KEPT,
+                                                                                                  REVOKED_NOTICE],
+                             'the revoked notice instead': [repair, REVOKED_NOTICE],
+                             'a profile said revoked': [repair, KEPT, restore_lock.REVOKED % 'default']}.items():
+            with self.subTest(label=label):
+                self.fails(lines, 5)
+
+    def test_a_restore_with_profile_data_says_each_profile_revoked_and_the_notice_once(self):
+        revoked = ['default', 'aaaaaaaa', 'bbbbbbbb']
+        said = [restore_lock.REVOKED % label for label in revoked]
+        probe.check_restore_log(self.log(probe.REOWNED % 21, said[2], said[0], said[1], REVOKED_NOTICE), 21, revoked)
+
+    def test_any_other_word_of_a_restore_with_profile_data_fails(self):
+        revoked = ['default', 'aaaaaaaa', 'bbbbbbbb']
+        repair, said = probe.REOWNED % 21, [restore_lock.REVOKED % label for label in revoked]
+        for label, lines in {'a profile not said revoked': [repair, *said[:2], REVOKED_NOTICE],
+                             'another profile said revoked': [repair, *said, restore_lock.REVOKED % 'cccccccc',
+                                                              REVOKED_NOTICE],
+                             'a profile said revoked twice': [repair, *said, said[1], REVOKED_NOTICE],
+                             'no notice': [repair, *said], 'the notice twice': [repair, *said, REVOKED_NOTICE,
+                                                                                REVOKED_NOTICE],
+                             'the kept notice instead': [repair, *said, KEPT],
+                             'the kept notice too': [repair, *said, KEPT, REVOKED_NOTICE],
+                             'no repair line': [*said, REVOKED_NOTICE]}.items():
+            with self.subTest(label=label):
+                self.fails(lines, 21, revoked)
+
+    def test_any_other_line_of_the_boot_guard_fails(self):
+        """HM-16's second review: a restore the guard finished says its notice and the revoked profiles, nothing else
+        of the guard's; any other of its lines fails, whatever another check of the stage would catch too."""
+        repair, revoked = probe.REOWNED % 21, ['default', 'aaaaaaaa', 'bbbbbbbb']
+        said = [restore_lock.REVOKED % label for label in revoked]
+        others = [restore_lock.SET_ASIDE % ('x', 'y'), restore_lock.SET_ASIDE_IN_PROFILE % ('aaaaaaaa', 'x', 'y'),
+                  restore_lock.QUARANTINED % 'cccccccc', restore_lock.NOT_REVOKED % ('cccccccc', 'OSError'),
+                  restore_lock.NOT_ARCHIVED % 'aaaaaaaa', restore_lock.NOTICE_NOT_REMOVED,
+                  restore_lock.MARKER_LEFT % 'ENOSPC', restore_lock.UNFINISHED % 'the check did not pass',
+                  restore_lock.DORMANT_NOTICE % 2, restore_lock.REVOKE_ALL_NOTICE, restore_lock.RECORD_KEPT,
+                  # HM-27: the two lines a _Sweep.archive call is given, the receipts beside the index or beside the
+                  # add-on's Origin policy not archived (the guard then stops: nothing is served)
+                  restore_lock.INDEX_NOT_ARCHIVED, restore_lock.ORIGIN_NOT_ARCHIVED]
+        for line in others:
+            with self.subTest(line=line):
+                self.assertEqual(self.fails([repair, KEPT, line], 21), 'another line of the boot guard')
+                self.assertEqual(self.fails([repair, *said, REVOKED_NOTICE, line], 21, revoked),
+                                 'another line of the boot guard')
+
+    def test_every_line_the_boot_guard_logs_starts_with_guard(self):
+        """check_restore_log tells the guard's lines by GUARD: every line restore_lock logs (the first argument of a
+        logger call, the third of a _Sweep._fail call, and since HM-27 the line a _Sweep.archive call is given or
+        its default) names one of its constants, and each of them starts with it."""
+        def names(line):
+            if isinstance(line, ast.IfExp):  # REVOKED_NOTICE if revoke_default else KEPT_NOTICE
+                return names(line.body) | names(line.orelse)
+            self.assertIsInstance(line, ast.Name)
+            return {line.id}
+        named = set()
+        for node in ast.walk(ast.parse(Path(restore_lock.__file__).read_text())):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                called = ast.unparse(node.func)
+                if called.startswith('logger.'):
+                    named |= names(node.args[0])
+                elif called == 'self._fail':
+                    named |= names(node.args[2])
+                elif node.func.attr == 'archive':  # HM-27: what it fails with is its fourth argument (line)
+                    for given in [*node.args[3:], *(word.value for word in node.keywords if word.arg == 'line')]:
+                        named |= names(given)
+            elif isinstance(node, ast.FunctionDef) and node.name == 'archive':
+                for default in node.args.defaults:  # line's default: the receipts beside the index
+                    named |= names(default)
+        self.assertEqual(named - set(vars(restore_lock)), {'line'})  # _fail's own call logs the line it is given
+        named.discard('line')
+        self.assertLessEqual({'KEPT_NOTICE', 'REVOKED_NOTICE', 'REVOKED', 'SET_ASIDE', 'UNFINISHED',
+                              'INDEX_NOT_ARCHIVED', 'ORIGIN_NOT_ARCHIVED'}, named)
+        for name in sorted(named):
+            with self.subTest(name=name):
+                self.assertTrue(getattr(restore_lock, name).startswith(probe.GUARD))
+
+    def test_the_messages_name_what_is_missing(self):
+        self.assertEqual(self.fails([KEPT], 5), 'the restore repair not logged once')
+        self.assertEqual(self.fails([probe.REOWNED % 5], 5), "the boot guard's notice not logged once")
+        self.assertEqual(self.fails([probe.REOWNED % 5, REVOKED_NOTICE], 5, ['default']),
+                         'the revoked profiles not logged once each')
+
+    def test_the_repair_line_is_the_entrypoint_s(self):
+        """packaging/entrypoint.py prints it (prepare_data; tests/test_restore_detection.py checks the real output, as
+        root in the CI); the probe keeps the one copy, so a change of the text has to change both."""
+        source = (ROOT / 'packaging/entrypoint.py').read_text()
+        self.assertIn(f'print({probe.REOWNED!r} % repaired, file=sys.stderr, flush=True)', source)
+
+
+def guard_lines(run):
+    """What the boot guard logs while run() runs, as the add-on's stderr shows it: the management process configures
+    no logging before the guard, so logging's last resort writes each message alone on its line (this handler has its
+    format: no formatter)."""
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    logger = logging.getLogger(restore_lock.__name__)
+    logger.addHandler(handler)
+    try:
+        run()
+    finally:
+        logger.removeHandler(handler)
+    return stream.getvalue()
+
+
+class GuardLogTests(unittest.TestCase):
+    """The probe's expectation against the real boot guard (HM-13b, HM-13c, HM-27), not a copy of its strings: what
+    restore_lock.guard logs at the start after a restore of an installation without profile data, behind the
+    entrypoint's line, passes check_restore_log (the restore with profile data:
+    packaging/test_container_profiles.py)."""
+
+    def test_a_restore_without_profile_data_passes(self):
+        from mcp_admin_core import restore_detect
+        for enabled in (False, True):  # not switched on (every product today), and a switched-on candidate
+            with self.subTest(enabled=enabled), tempfile.TemporaryDirectory() as directory:
+                data = Path(directory) / 'mcp'
+                ProductStore(data, 'emqx').close()
+                if enabled:  # the first switched-on start made the sentinel; the restore changed its ctime
+                    restore_detect.detect(data, enabled=True)
+                    (data / probe.SENTINEL_NAME).chmod(0o644)
+                    (data / probe.SENTINEL_NAME).chmod(0o600)
+                restored = [path for path in data.rglob('*')]
+                (data / probe.MARKER).write_bytes(b'')  # the entrypoint's, saved before its repair
+                store = ProductStore(data, 'emqx')
+                try:
+                    said = guard_lines(lambda: restore_lock.guard(store, 'emqx', enabled=enabled))
+                finally:
+                    store.close()
+                self.assertFalse(os.path.lexists(data / probe.MARKER))
+                with tempfile.TemporaryFile() as log:
+                    log.write((probe.REOWNED % (len(restored) + 1) + '\n' + said).encode())
+                    probe.check_restore_log(log, len(restored) + 1)
+                    with self.assertRaises(AssertionError):
+                        probe.check_restore_log(log, len(restored) + 1, revoked=['default'])
+
+    def test_a_switched_on_restore_with_a_saved_origin_policy_passes(self):
+        """HM-16 stacked on HM-27: the panel of a switched-on product saved the add-on's Origin policy before the
+        backup. At the start after the restore the real guard leaves the policy as it came back and archives the
+        receipts of its saves as the index's, and says nothing more than its notice: check_restore_log passes, and
+        what it leaves is the layout's (container_profiles.tree_snapshot, a switched-on product's fixture_snapshot)."""
+        from mcp_admin_core import operations, origin_policy, profiles, restore_detect
+        saved_policy = b'{"version":1,"mode":"enforce","allowed_origins":["https://claude.ai"]}'
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory) / 'mcp'
+            ProductStore(data, 'emqx').close()
+            restore_detect.detect(data, enabled=True)  # the first switched-on start made the sentinel
+            policy = profiles.Layout(data).origin_policy
+            policy.write_bytes(saved_policy)
+            policy.chmod(0o600)
+            journal = operations.OperationJournal(policy, results=origin_policy.RESULTS)
+            save = f'{int(time.time() * 1000)}.{secrets.token_hex(12)}'  # the save's operation id
+            document, _, fingerprint = journal.inspect(save, origin_policy.KIND, 'probe-tester')
+            journal.begin(save, document, origin_policy.KIND, 'probe-tester', fingerprint)
+            journal.complete(save, document)
+            (data / probe.SENTINEL_NAME).chmod(0o644)  # the restore changed the sentinel's ctime
+            (data / probe.SENTINEL_NAME).chmod(0o600)
+            restored = [path for path in data.rglob('*')]
+            (data / probe.MARKER).write_bytes(b'')  # the entrypoint's, saved before its repair
+            store = ProductStore(data, 'emqx')
+            try:
+                said = guard_lines(lambda: restore_lock.guard(store, 'emqx', enabled=True))
+            finally:
+                store.close()
+            self.assertEqual(policy.read_bytes(), saved_policy)
+            archive = data / probe.container_profiles.ORIGIN_JOURNAL_ARCHIVE
+            self.assertEqual(list(json.loads(archive.read_bytes())['receipts']), [save])
+            with tempfile.TemporaryFile() as log:
+                log.write((probe.REOWNED % (len(restored) + 1) + '\n' + said).encode())
+                probe.check_restore_log(log, len(restored) + 1)
+            with patch.object(probe.container_profiles, 'os', Owners()):  # the runtime user's, as repaired
+                left = probe.container_profiles.tree_snapshot(data)
+            self.assertLessEqual({profiles.ORIGIN_POLICY_NAME, profiles.ORIGIN_POLICY_OPERATIONS_NAME, archive.name},
+                                 set(left))
 
 
 if __name__ == '__main__':

@@ -5,15 +5,22 @@
 //
 //   HA_URL=https://ha.example HA_USER=... HA_PASS=... APP_SLUG=<repo>_woow_mcp_<product> \
 //   SSH_TARGET=<ssh host> PROBE_PORT=18081 [PROBE_TOOL=name PROBE_TOOL_ARGS='{"k":"v"}'] [SSH_CONFIG=path] \
-//   node packaging/ha_p9_driver.mjs [--backend-file F] [--tokens] [--plan P [--outage-url U]] [--modes restart,childkill,bench,cycle]
+//   node packaging/ha_p9_driver.mjs [--profile ID] [--backend-file F] [--tokens] [--plan P [--outage-url U]]
+//     [--modes restart,childkill,bench,cycle] [--cross] [--temp-profile]
 // --backend-file: 0600 JSON with the exact admin API body (n8n {"url","key"}; others {"connection":{...}}); never printed.
 // --plan: JSON {"reads": [[tool, args], ...], "denials": [[tool, args], ...]} run by the probe's plan mode.
 // --outage-url: with --backend-file and --plan, swap the backend URL for an unreachable one, require structured
 //   read failures, then restore the original backend and require the plan to pass again.
+// Multi-profile (HM-16), a switched-on app only:
+// --profile ID: run --backend-file, --tokens, --plan and --modes against that profile (default or its 24 hex id);
+//   childkill then kills only that profile's child.
+// --cross: every listed profile's token on both connection methods, and no session served with another profile's.
+// --temp-profile: create a temporary profile (optionally --backend-file and --plan on it), cross-check it with the
+//   default profile, delete it, then require its token to be refused. A profile is printed by its log id only.
 import { spawnSync } from 'node:child_process';
 import { readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { createP9AdminClient } from './ha_p9_admin.mjs';
+import { childkillArguments, createP9AdminClient, logId, runCross, runTemporaryProfile } from './ha_p9_admin.mjs';
 
 const env = (name, fallback) => {
   const value = process.env[name] ?? fallback;
@@ -45,6 +52,13 @@ const withUrl = (body, url) => {
 };
 const modes = argv.includes('--modes') ? argv[argv.indexOf('--modes') + 1].split(',') : [];
 for (const mode of modes) if (!['restart', 'childkill', 'bench', 'cycle'].includes(mode)) throw new Error('bad mode ' + mode);
+const PROFILE = opt('--profile') ?? 'default';
+if (!/^(default|[0-9a-f]{24})$/.test(PROFILE)) throw new Error('bad --profile (default or a profile id)');
+const CROSS = argv.includes('--cross'), TEMP = argv.includes('--temp-profile');
+if (TEMP && (opt('--profile') !== undefined || argv.includes('--tokens') || modes.length || OUTAGE)) {
+  throw new Error('--temp-profile makes its own profile: only --backend-file, --plan and --cross go with it');
+}
+if (TEMP && PLAN && !BACKEND) throw new Error('--temp-profile --plan needs --backend-file (the plan reads its backend)');
 
 const ssh = (command, input) => spawnSync('ssh', [...SSH, command], { input, encoding: 'utf8', timeout: 900000 });
 const failed = [];  // the driver exits non-zero when any probe failed, so wrappers cannot report a pass
@@ -85,10 +99,14 @@ try {
   const session = (await call('/ingress/session', 'post')).session;
   console.log(`HA admin login ok; app ${SLUG} ${info.version} state=${info.state}`);
   const ING = H + info.ingress_url.replace(/\/*$/, '/'), hdr = { Cookie: 'ingress_session=' + session, 'User-Agent': UA };
-  const admin = createP9AdminClient(ING, hdr);
+  // HM-16: the admin client names its profile in X-MCP-Profile on a switched-on app (the default one, or --profile).
+  const clientFor = (profile) => createP9AdminClient(ING, hdr, undefined, { profile });
+  const admin = clientFor(PROFILE);
   const boot = async () => ({ status: 200, ...(await admin.bootstrap()) });
   let b = await boot();
-  console.log('bootstrap', b.status, JSON.stringify({ product: b.product, backend_url_set: Boolean(b.backend_url), backend_key_set: b.backend_key_set, connection_configured: b.connection_configured, token_active: b.token_active, writes_enabled: b.writes_enabled, tools: Object.keys(b.tools || {}).length }));
+  const profiles = b.profile !== undefined;  // a switched-on app echoes the profile each answer is for
+  if ((CROSS || TEMP) && !profiles) throw new Error('--cross and --temp-profile need an app with additional profiles');
+  console.log('bootstrap', b.status, JSON.stringify({ product: b.product, ...(profiles ? { profile: logId(PROFILE) } : {}), backend_url_set: Boolean(b.backend_url), backend_key_set: b.backend_key_set, connection_configured: b.connection_configured, token_active: b.token_active, writes_enabled: b.writes_enabled, tools: Object.keys(b.tools || {}).length }));
   const change = async (operation, payload) => {
     try { return await admin.mutate(operation, payload, b.configuration?.revision); }
     catch (error) {
@@ -114,7 +132,7 @@ try {
   };
   const plan = async (extra = []) => remote('plan', (await act('reveal')) + '\n' + JSON.stringify(PLAN), extra);
 
-  if (BACKEND) await putBackend(BACKEND, 'from file');
+  if (BACKEND && !TEMP) await putBackend(BACKEND, 'from file');
 
   if (argv.includes('--tokens')) {
     const noCsrf = await fetch(ING + 'api/token/rotate', { method: 'POST', headers: hdr });
@@ -131,7 +149,7 @@ try {
     const t3 = await act('rotate');
     check([['T2 after re-issue', t2], ['T3 re-issued', t3]]);
   }
-  if (PLAN) {
+  if (PLAN && !TEMP) {
     console.log('--- plan');
     await plan();
     if (OUTAGE) {
@@ -145,11 +163,23 @@ try {
   for (const mode of modes) {
     console.log('---', mode);
     const current = await act('reveal');
-    remote(mode, current + '\n');
+    // HM-16: on a switched-on app, childkill kills only this profile's child (the probe tells them apart by port).
+    remote(mode, current + '\n', mode === 'childkill' ? await childkillArguments(admin, profiles, PROFILE) : []);
     if (mode === 'restart') {
       b = await boot();  // the app restarted: fresh CSRF
       console.log('token unchanged across restart:', (await act('reveal')) === current);
     }
+  }
+  if (CROSS) {
+    console.log('--- cross');
+    await runCross(admin, clientFor, remote, console.log);
+  }
+  if (TEMP) {
+    console.log('--- temporary profile');
+    // ha_p9_admin.runTemporaryProfile: create, use (the backend file, the plan, or a refused PROBE_TOOL call without a
+    // backend of its own), cross with the default profile, delete, then its token must be refused.
+    await runTemporaryProfile(admin, clientFor, remote, { backend: BACKEND, plan: PLAN, probeTool: process.env.PROBE_TOOL,
+      probeToolArgs: env('PROBE_TOOL_ARGS', '{}'), report: console.log });
   }
 } finally {
   ws?.close();

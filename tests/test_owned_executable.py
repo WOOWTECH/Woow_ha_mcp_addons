@@ -5,6 +5,8 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
+import subprocess
 import sys
 import tempfile
 from types import SimpleNamespace
@@ -13,6 +15,7 @@ import httpx
 import pytest
 
 from batch2_owned_port import OwnershipError, reserve_port
+from log_scan import log_scan  # noqa: F401  (fixture; HM-16's test)
 from owned_executable import Executable
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -176,3 +179,62 @@ async def test_ipc_rejects_other_own_process_before_tcp(tmp_path):
             if process.returncode is None:
                 process.terminate()
             await asyncio.wait_for(process.wait(), 3)
+
+
+async def test_a_switched_on_product_s_default_profile_runs_through_the_owned_executable(tmp_path, log_scan):
+    """Multi-profile HM-16 (HM-20's handoff; HM-01's installer): from HM-08 on, a switched-on product's run_product
+    builds a ProfileManager whose Supervisor and health monitor take options (the watchdog, the spawn check, the lifecycle
+    log, the monitor's pacing) the installer refused, so no switched-on product started through it. Now the default
+    profile does: its real child behind the private port (the spawn check binds that port, never 3000), the gateway
+    forwards initialize to it (a child's session, not the gateway's own), and 8081 is the switched-on dispatcher (an
+    index that appears behind the add-on's back stops every token: DQ-12)."""
+    from mcp_admin_core.products import ProductStore
+    from test_real_products import connection, free_port
+    product = 'emqx'
+    store = ProductStore(tmp_path / 'state', product)
+    # A loopback backend nobody serves: switched on, the child refuses loopback (HM-20) and still answers initialize.
+    state = store.update(connection=connection(product, 'http://127.0.0.1:9'))
+    store.close()
+    log_scan.watch(state.token, state.child_token)
+    port, admin_port = free_port(), free_port()
+    endpoint = f'http://127.0.0.1:{port}/mcp'
+    runner = Executable(tmp_path, product, [port, admin_port])
+    code = (f'from mcp_admin_core import features, run_product; features.MULTI_PROFILE_PRODUCTS = frozenset({{{product!r}}}); '
+            + runner.code('run_product') + 'run_product.main()')
+    runner.release()
+    log_path = tmp_path / 'owned-runtime.log'
+    with log_path.open('wb') as log:
+        process = subprocess.Popen([str(ROOT / '.venv/bin/python'), '-c', code, product, '--data', str(tmp_path / 'state'),
+                                    '--host', '127.0.0.1', '--mcp-port', str(port), '--admin-port', str(admin_port)],
+                                   cwd=ROOT, env={'PATH': '/usr/bin:/bin', 'PYTHONDONTWRITEBYTECODE': '1',
+                                                  'PYTHONPATH': str(ROOT / 'packages/mcp-admin-core')},
+                                   stdout=log, stderr=log)
+        try:
+            await runner.ready(process)
+            headers = {'Authorization': 'Bearer ' + state.token, 'Accept': 'application/json, text/event-stream'}
+            message = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {
+                'protocolVersion': '2025-03-26', 'capabilities': {}, 'clientInfo': {'name': 'local-test', 'version': '0'}}}
+            async with httpx.AsyncClient(trust_env=False, timeout=10, event_hooks={'request': [runner.guard]}) as client:
+                session = None
+                async with asyncio.timeout(30):
+                    while session is None or session.startswith('woow-local-'):
+                        assert process.poll() is None, log_path.read_text()
+                        response = await client.post(endpoint, headers=headers, json=message)
+                        assert response.status_code == 200
+                        session = response.headers['mcp-session-id']
+                        if session.startswith('woow-local-'):
+                            await asyncio.sleep(.25)  # the child is not up yet: the gateway answered itself
+                (tmp_path / 'state' / 'profiles.json').write_text('{}')
+                response = await client.post(endpoint, headers=headers, json=message)
+                assert (response.status_code, response.content) == (503, b'{"error":"state unavailable"}')
+        finally:
+            process.send_signal(signal.SIGTERM)
+            try:
+                process.wait(15)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+                pytest.fail('switched-on owned runtime did not stop')
+    assert process.returncode == 0, log_path.read_text()
+    output = log_path.read_text()
+    assert state.token not in output and state.child_token not in output
