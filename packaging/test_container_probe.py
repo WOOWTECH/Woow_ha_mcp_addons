@@ -115,14 +115,15 @@ class SwitchedOnMockBackendTests(unittest.TestCase):
                     self.assertEqual(probe.mock_bind_host(app), '172.18.0.2' if private else '127.0.0.1')
 
 
-# The single-profile probe as reviewed: 573bb21 is HM-13c's c5dd7d3 (claude-delivery 53ffe61 with HM-13b's restore
-# check after the boot guard and HM-13c's restore notice) with HM-16's switched-on parts and HM-16's one deliberate
-# change of the single-profile path: the start after the restore stage's restore logs to a file that check_restore_log
-# reads (HM-13b review S-3; HM-16's provenance note, section 19, lists that delta). Before it: c5dd7d3 (HM-16 merged
-# with HM-13c), f4c7718 (HM-16 first). A slice that changes that path on purpose moves BASE to the commit its change is
-# reviewed against, and says why in its provenance note. Both sides are compared without their switched-on parts
-# (review MF-3).
-BASE = '573bb21'
+# The single-profile probe as reviewed: d922d3c is HM-13c's c5dd7d3 (claude-delivery 53ffe61 with HM-13b's restore
+# check after the boot guard and HM-13c's restore notice) with HM-16's switched-on parts and HM-16's two deliberate
+# changes of the single-profile path: the start after the restore stage's restore logs to a file that check_restore_log
+# reads (573bb21, HM-13b review S-3), and check_restore_log refuses any other line of the boot guard (d922d3c, HM-16's
+# second review). HM-16's provenance note lists each delta (sections 19 and 20). Before it: 573bb21, c5dd7d3 (HM-16
+# merged with HM-13c), f4c7718 (HM-16 first). A slice that changes that path on purpose moves BASE to the commit its
+# change is reviewed against, and says why in its provenance note. Both sides are compared without their switched-on
+# parts (review MF-3).
+BASE = 'd922d3c'
 # The switched-on parts beyond BASE's, by kind ('branch': an `if ... features.enabled(...)` statement, which must hand
 # over to container_profiles; 'container_profiles' and 'features': the two imports): none. BASE has HM-13b's (the
 # features import, check_restored_start's branch) and HM-16's (the import of container_profiles and three branches
