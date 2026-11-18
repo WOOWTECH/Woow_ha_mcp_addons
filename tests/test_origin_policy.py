@@ -1241,13 +1241,19 @@ async def test_after_a_restore_the_backups_policy_applies_and_no_earlier_save_is
                 for if_match in ('"o1-' + '0' * 64 + '"', 'current'):
                     again, _ = await policy_put(runtime, body, if_match=if_match, key=key)
                     assert (again.status_code, again.json()) == RESTORED_410
+        # A new save's key is made now, after the restore (the panel's bootstrap after the start); operation_key()
+        # goes a second back, which may be before the guard's cutoff a moment ago.
+        key = f'{int(time.time() * 1000)}.{secrets.token_hex(16)}'
+        assert int(key.split('.')[0]) > json.loads((data / RECEIPTS).read_text())['restored_before_ms']
         if policy == 'a directory':
-            refused, _ = await policy_put(runtime, SAVED_AFTER)
+            refused, _ = await policy_put(runtime, SAVED_AFTER, key=key)
             assert (refused.status_code, refused.json()['detail']['code']) == (409, 'operation_outcome_unknown')
             assert (data / POLICY).is_dir()
         else:
-            saved = await save(runtime, 'report-only', ['https://claude.ai'])
-            assert saved.json()['operation']['replayed'] is False
+            saved, _ = await policy_put(runtime, {'mode': 'report-only', 'allowed_origins': ['https://claude.ai']},
+                                        key=key)
+            assert saved.status_code == 200 and saved.json()['operation'] == {
+                'id': key, 'kind': 'origin.policy', 'state': 'completed', 'replayed': False}
             assert (await policy_get(runtime)).json()['origin_policy_state'] == 'saved'
             async with runtime.mcp() as client:
                 assert (await client.post(path, headers=headers_of('not-allowed'),

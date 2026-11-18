@@ -29,7 +29,8 @@ C  every profile directory, opened existing-only (never created): revoked, a new
    one that cannot be opened for any reason (no writer lock, an unknown key, a second link, more than 64 KiB, another
    product, no state ...) is renamed profiles/.quarantine-<id>-<UTC>[-n] (never routed, delete only), unless its writer
    lock is held (then it fails: never moved away from under its holder). The receipts beside the index are archived too
-   (operations.archive_for_restore: every older operation id answers 410 operation_restored).
+   (operations.archive_for_restore: every older operation id answers 410 operation_restored), and (HM-27) those beside
+   the add-on's Origin policy.
 D  restore-record.json: when, the two signals, what each profile is (id, label, identity fields, policy) and what was
    done to its token, reviewed_at null, the quarantine directories; never a token or a credential (identity_fields).
 E  the independent check (PaaS restore_inplace._verify: "nothing that authenticated against the backup authenticates
@@ -88,6 +89,16 @@ HM-13c (the owner's decision of 2026-11-16 on the HM-13b review's Q-1: DQ-03 (b)
   revoked, none reviewed (the gate works again, a profile at a time). Records keep RECORD_KEYS and RECORD_VERSION: a
   later change of the format must still read the records written before it (contract 3.6), or every new token of an
   installation that was reviewed long ago waits (503) after an update.
+
+HM-27 (merged after HM-13b and HM-13c; contract 1.3, 3.5, 8): the add-on's Origin policy of the secret path
+(origin_policy.py; profiles.ORIGIN_POLICY_NAME, written only by a switched-on product's panel) holds no credential and
+is none of the guard's names: a restore leaves it as the backup had it (saved, absent or one the add-on cannot use: the
+policy reads it once the product serves, and refuses the secret path, 503, while it cannot use it), and the guard never
+opens, moves or removes it. Its receipts beside it (profiles.ORIGIN_POLICY_OPERATIONS_NAME) are handled in C as the
+index's: the journal the restore brought back is archived, a new one written also where the backup had none, so that
+no save made before the restore, or after the backup and lost with it, is taken again (410 operation_restored); a
+journal that cannot be archived stops the start (ORIGIN_NOT_ARCHIVED). A product that is not switched on and has no
+profile data is left alone as before: its policy and receipts too (contract 9 #121, as the default profile's).
 """
 from __future__ import annotations
 
@@ -162,6 +173,7 @@ LOCKED = ('restore guard [profile=%s]: its state is held by another writer; it w
           'quarantine')
 NOT_ARCHIVED = 'restore guard [profile=%s]: its operation receipts could not be archived'
 INDEX_NOT_ARCHIVED = 'restore guard: the operation receipts beside the profile index could not be archived'
+ORIGIN_NOT_ARCHIVED = 'restore guard: the operation receipts beside the Origin policy could not be archived'  # HM-27
 UNLISTABLE = 'restore guard: the profiles directory cannot be listed; nothing in it is served'
 SET_ASIDE = 'restore guard: %s was not a plain file; it was moved aside to %s'
 SET_ASIDE_IN_PROFILE = 'restore guard [profile=%s]: %s was not a plain file; it was moved aside to %s'
@@ -246,6 +258,8 @@ def guard(store, product, *, enabled, now=None) -> Outcome:
         sweep.directories_pass(skip_revoked=not (restored or pending), cutoff=cutoff)
         if cutoff is not None:
             sweep.archive(None, sweep.layout.index, cutoff)
+            # HM-27: the receipts beside the add-on's Origin policy, as the index's (the policy itself is left as is)
+            sweep.archive(None, sweep.layout.origin_policy, cutoff, ORIGIN_NOT_ARCHIVED)
         sweep.raise_failures()
         if restored or (dormant and (sweep.revoked or sweep.quarantined)):
             sweep.record(detection if restored else None, dormant=dormant, default_revoked=revoke_default)
@@ -669,9 +683,10 @@ class _Sweep:
         self.quarantined.append((profile_id, name))
         logger.warning(QUARANTINED, profiles.log_id(profile_id))
 
-    def archive(self, where, config_path, cutoff):
-        """C: the receipts of a restore (where None: the journal beside the index). A directory at the archive's name
-        (a forged backup: the journal could never be moved there) is moved aside first."""
+    def archive(self, where, config_path, cutoff, line=INDEX_NOT_ARCHIVED):
+        """C: the receipts of a restore (where None: an add-on-wide journal, the index's or, HM-27, the Origin
+        policy's; line: what a failure of that one logs). A directory at the archive's name (a forged backup: the
+        journal could never be moved there) is moved aside first."""
         journal = operations.journal_path(config_path)
         try:
             _clear(journal.parent, journal.name + operations.RESTORED_SUFFIX, self.now,
@@ -680,7 +695,7 @@ class _Sweep:
             operations.archive_for_restore(config_path, cutoff, renew_missing=True)
         except (OSError, ValueError, Unfinished):
             if where is None:
-                self._fail(None, 'receipts could not be archived', INDEX_NOT_ARCHIVED)
+                self._fail(None, 'receipts could not be archived', line)
             else:
                 self._fail(where, 'receipts could not be archived', NOT_ARCHIVED, profiles.log_id(where))
 

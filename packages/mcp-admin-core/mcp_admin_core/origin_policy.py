@@ -71,7 +71,9 @@ from .operations import OperationJournal
 
 logger = logging.getLogger(__name__)
 
-POLICY_NAME = 'origin-policy.json'  # in the default profile's store directory (/data/mcp), beside profiles.json
+# In the default profile's store directory (/data/mcp), beside profiles.json: the layout's name (profiles.py names
+# every entry there; the boot guard archives the receipts beside it on a restore, restore_lock).
+POLICY_NAME = profiles.ORIGIN_POLICY_NAME
 POLICY_VERSION = 1
 MAX_POLICY_BYTES = 16384
 MODE_REPORT_ONLY, MODE_ENFORCE = 'report-only', 'enforce'
@@ -584,7 +586,8 @@ class OriginPolicy:
     ProfileManager only (never for Headscale); nothing is read before it is asked."""
 
     def __init__(self, directory):
-        self.file = PolicyFile(Path(directory) / POLICY_NAME)
+        self.file = PolicyFile(profiles.Layout(Path(directory)).origin_policy)
+        # Beside it: profiles.ORIGIN_POLICY_OPERATIONS_NAME (the boot guard archives it on a restore)
         self.journal = OperationJournal(self.file.path, results=RESULTS)
         self.lock = asyncio.Lock()  # every save, one at a time
         self.denials = Denials()
