@@ -2,6 +2,13 @@
 
 ## 結論
 
+- **和 HM-13c 合併（2026-11-18，第 19 節）**：照第 17 節的合併順序（#108 → #112 → 本片 → #109），用 merge commit `a09081a` 把 HM-13c 的
+  `c5dd7d3`（已含 HM-13b `090081c` 與 `claude-delivery` `53ffe61`）合進本片，不 rebase、不 force push（本片已 push）。衝突 16 個檔，兩邊的
+  行為都留；合起來才壞的兩處（HM-13c 改了 `global_route()` 的回傳、HM-13b 要審每個 chmod 呼叫點）一起修。契約第 9 節本片的列從
+  #118～#122 改成 #124～#128（`1511a1a`）。`/data/mcp` 的兩個新檔加進版面的名稱（`profiles.py`），還原時守門照索引旁的收據封存、換新
+  Origin 政策旁的收據，政策檔照還原的原樣、守門不讀不改（先紅後綠 `459bba9` → `034aac6`，文件 `dd02849`、`776f753`；8 個突變全擋）。
+  **下一次獨立審查要涵蓋**：上次審查之後才加的 `b103dea`（政策檔裡不是字串的來源判成不能用、IPv6 一種正規寫法）與第 19 節。
+  第 1～18 節照合併前寫，只有契約列號的現行指標改成合併後的（第 19.4 節）。
 - **獨立審查（2026-11-17，`artifacts/…/wave4/review-HM-27.md`）判「修正後通過」**：必修 2（MF-1、MF-2）、建議 9（S-1～S-9）都照報告
   處理；補 S-2 的測試時自己找到一個缺陷（政策檔的來源是陣列或物件時，讀檔丟 TypeError，不是判成不能用），一併先紅後綠修掉。逐項的
   處理、commit 與證據在第 16 節；合併順序（主對話定：排在 HM-13c 之後）在第 17 節；rebase 到 `claude-delivery` `f239157` 的紀錄與
@@ -43,11 +50,11 @@
 |---|---|
 | 切片 | HM-27（計畫 §12.3 HM-27；§8.7「Origin 與 loopback」；§3.3 受開關管；§7.1；§7.2 第 10 點；驗收 T-24；R1 清單 §11.4） |
 | 分支 | `feat/ha-multiprofile-hm27-20261117`（一般 clone） |
-| 基準 | `claude-delivery` `f239157`（HM-33 PR #115 合併後）；原本 `165dbaf`（HM-12 面板 PR #114 合併後），審查修正後 rebase（第 18 節） |
+| 基準 | `claude-delivery` `f239157`（HM-33 PR #115 合併後）；原本 `165dbaf`（HM-12 面板 PR #114 合併後），審查修正後 rebase（第 18 節）；2026-11-18 用 merge commit 合進 HM-13c `c5dd7d3`（含 HM-13b 與 `claude-delivery` `53ffe61`；第 19 節） |
 | 依據 | `decisions.md` DQ-11（2026-11-14 採 (a)）；FEATURE-MATRIX FM-73、FM-74、FM-123；契約第 2.6 節與第 9 節 #9、#10、#42（HM-00 草稿） |
 | 對齊的 PaaS | pin `69ac425`；本機唯讀 PaaS repo 的 `origin/main`＝`48f394d`（第 10 節：Origin 的程式與測試 pin 之後沒變） |
 | 受開關管 | 是（計畫 §3.3）；不受開關管的部分：無 |
-| 合併順序 | 排在 HM-13c（#112）之後合併；先開 PR 只為讓 CI 驗（第 17 節） |
+| 合併順序 | 排在 HM-13c（#112）之後合併；先開 PR 只為讓 CI 驗（第 17 節）；HM-13c（含 HM-13b）已合進本片（第 19 節） |
 
 ## 2. 改了什麼、沒改什麼
 
@@ -68,7 +75,8 @@
 | `tests/test_profile_admin_api.py`（HM-10 的檔） | 審查 MF-2：第二次角色檢查的測試加政策鎖一輪、政策的 GET 也問兩次角色；`Panel` 加 `origin_policy`、`save_origin_policy` |
 | `packages/mcp-admin-ui/tests/origin-policy.test.mjs`（新）、`packages/mcp-admin-ui/tests/browser/origin-policy.spec.mjs`（新） | node 11 案、Playwright 12 案（審查 S-8：開關關那案先放一筆識別紀錄） |
 | `docs/provenance/runtime-patches.json` | 新模組一列；7 個列管檔的 SHA-256 照檔重算、`change` 補一段（照 JSON 結構改，沒有用 `--write`） |
-| `docs/multi-profile/contract.md` | 第 1.2、2.6、3.1、3.5、4.1、4.2 節；第 9 節 #9、#10、#42 改寫、加 #118～#122；第 10 節一列；審查後：第 2.6、3.1、3.2 節、第 9 節 #9、#122、第 10 節再一列 |
+| `docs/multi-profile/contract.md` | 第 1.2、2.6、3.1、3.5、4.1、4.2 節；第 9 節 #9、#10、#42 改寫、加 #118～#122（合併 HM-13c 之後是 #124～#128，第 19.4 節）；第 10 節一列；審查後：第 2.6、3.1、3.2 節、第 9 節 #9、#122（現在的 #128）、第 10 節再一列；合併後：第 1.3、2.6、3.5、7、8 節、#67、#120 的 Origin 政策與還原，第 10 節再一列（第 19 節） |
+| `Hc/profiles.py`、`Hc/restore_lock.py`（列管，HM-13b 的檔）、`tests/test_restore_lock.py`、`tests/restore_guard_disk.py`（HM-13b 的測試） | 合併 HM-13c 之後（第 19.5 節）：Origin 政策與收據的檔名寫進版面、守門還原時封存收據；守門這邊的測試與 call site 清單 |
 | `docs/multi-profile/decisions.md` | DQ-11 列補實作；變更紀錄一列；審查 MF-1：第 4 節 DQ-11 第二問的期限、DQ-11 列的負責片 |
 | `docs/multi-profile/threat-model.md` | 第 1 節一列、I7 測試欄、第 3 節五條；審查後再一條（S-6：開通之後又關掉時 enforce 靜默失效） |
 | `docs/multi-profile/acceptance-matrix.md` | T-24 定案；登記 3 個測試檔 |
@@ -93,10 +101,10 @@ CORS 與 preflight；Headscale 一律 enforce、清單是自己的網址；壞�
 | 預設 | report-only、chart 預設 `https://claude.ai`（程式內預設空） | report-only＋`https://claude.ai`（沒有檔案時） | 計畫 §8.7、DQ-11 (a) |
 | 「沒通過」 | 清單外、畸形、`null`、重複 | 同（`normalize_origin` 原樣移植：只認 ASCII、小寫、去預設 port、IPv6） | PaaS 規則 |
 | report-only | 記 would_deny、交舊 CORS（反射） | 記 would_deny、**回應逐位元不變**、不加 CORS | DQ-11 (a)、FM-74、§8.8 #42 |
-| enforce | 403 `{"detail":"ORIGIN_DENIED"}` | 403 `{"error":"request denied"}` | §8.8 #119（第 4 節 f） |
-| 位置 | 認證之前 | token 驗過、方法檢查之後 | FM-73 HA 欄、§8.8 #118 |
-| 紀錄 | 一行、PaaS 呈現規則、整台節流 | 同呈現規則、帶帳號 id、每帳號節流 | 計畫 §12.3、§8.8 #121 |
-| 設定入口 | 環境變數；壞值 exit 3、執行中 503 | `/data/mcp/origin-policy.json`＋面板；壞檔密鑰網址 503、不拒絕啟動 | 計畫 §12.3、§8.8 #120 |
+| enforce | 403 `{"detail":"ORIGIN_DENIED"}` | 403 `{"error":"request denied"}` | §8.8 #125（第 4 節 f） |
+| 位置 | 認證之前 | token 驗過、方法檢查之後 | FM-73 HA 欄、§8.8 #124 |
+| 紀錄 | 一行、PaaS 呈現規則、整台節流 | 同呈現規則、帶帳號 id、每帳號節流 | 計畫 §12.3、§8.8 #127 |
+| 設定入口 | 環境變數；壞值 exit 3、執行中 503 | `/data/mcp/origin-policy.json`＋面板；壞檔密鑰網址 503、不拒絕啟動 | 計畫 §12.3、§8.8 #126 |
 | CORS、preflight | 清單內精確 CORS；report-only 清單外反射 | 都沒有（OPTIONS 照今天 405） | FM-74、§8.8 #42 |
 | Headscale | 一律 enforce、清單是自己的網址、記 deny | 照舊只放 `https://claude.ai`、原字串比對、不記、沒有政策 | 計畫 §8.7、§8.8 #9 |
 | Bearer | （沒有） | 照舊一律 403、不記 | DQ-11 第二問待 S14 |
@@ -109,7 +117,7 @@ CORS 與 preflight；Headscale 一律 enforce、清單是自己的網址；壞�
 | b | 檔案格式 | 剛好 `{"version":1,"mode":…,"allowed_origins":[…]}`；0600、單一連結的一般檔、本 uid、16 KiB 以內；來源存正規化後的寫法 | 同 HA 其他 state 的精確鍵集合與 0600（`profiles.read_index` 的檢查）；讀時不 chmod（簽章不變） |
 | c | 模式的值 | 剛好 `report-only`、`enforce`（大小寫、空白都不收） | PaaS（chart 的 render 檢查與 `MODES`） |
 | d | 來源的上限與重複 | 最多 16 個；正規化後重複 → 422（不默默合併）；不去頭尾空白（面板會先去） | PaaS 是環境變數、沒有上限、重複合併；HA 的檔與請求要有界，取最保守 |
-| e | 沒存過時 | 不寫任何檔，讀不到檔＝預設值 | 計畫 §7.2 第 8 點：開通後只多 sentinel 兩檔；第一次存檔才產生（同 `profiles.json`「第一次建立額外帳號才產生」） |
+| e | 沒存過時 | 不寫任何檔，讀不到檔＝預設值（合併 HM-13c 之後的例外：開通或有帳號資料的產品還原後，守門換新收據檔；政策檔照樣不寫，第 19.5 節） | 計畫 §7.2 第 8 點：開通後只多 sentinel 兩檔；第一次存檔才產生（同 `profiles.json`「第一次建立額外帳號才產生」） |
 | f | enforce 的拒絕本體 | 403 `{"error":"request denied"}` | HA 的 MCP 端錯誤只用固定本體（同 Bearer 帶 Origin 與 Headscale；契約第 4.2 節）；不新增本體形狀 |
 | g | 位置 | token 檢查、方法檢查（405）之後，query（400）之前 | 計畫：「HA 在 token 之後判斷，紀錄可帶帳號 id、未認證請求灌不進來」（FM-73）；放在今天 Headscale 規則的位置，HM-01 的 `order-` 案例照過。所以 PUT、OPTIONS 照今天 405、不記，report-only 的每一行 would_deny 都對應 enforce 的一次 403（PaaS 的性質） |
 | h | 紀錄的速率 | 每帳號每個（判定、原因、來源）60 秒一行、每帳號每 60 秒最多 20 行、壓下的行數在下一行之前或時間窗結束時（事件迴圈的計時器）補一行、狀態有界（每帳號最多 256 個鍵、最多 32 個帳號的時間窗） | PaaS 的數字與機制（`DenialLogLimiter`），照計畫改成每帳號一份 |
@@ -155,12 +163,12 @@ HA 測試沒寫路徑的都是 `tests/test_origin_policy.py`。
 
 | # | PaaS 案例 | HA |
 |---|---|---|
-| 1 | `test_untrusted_origin_with_valid_token_cannot_initialize` | `test_enforce_refuses_bad_origins_whatever_the_host_or_proxy_headers`、`test_enforce_refuses_only_what_the_list_does_not_hold`（enforce 由面板切；本體 §8.8 #119） |
+| 1 | `test_untrusted_origin_with_valid_token_cannot_initialize` | `test_enforce_refuses_bad_origins_whatever_the_host_or_proxy_headers`、`test_enforce_refuses_only_what_the_list_does_not_hold`（enforce 由面板切；本體 §8.8 #125） |
 | 2 | `test_rejects_bad_origins_even_if_host_or_proxy_headers_are_spoofed`（9） | `test_enforce_refuses_bad_origins_whatever_the_host_or_proxy_headers`（同 9 種＋Kelvin） |
 | 3 | `test_preflight_is_limited_to_explicitly_trusted_origins` | §8.8 #42（沒有 preflight）：`test_no_cors_header_in_either_mode` |
 | 4 | `test_trusted_origin_still_requires_token_and_exposes_session_header` | `test_a_wrong_token_never_learns_the_policy`；`Expose-Headers` 不適用（§8.8 #42） |
 | 5 | `test_misconfigured_allowlist_fails_closed_even_without_origin`（4） | `test_what_a_policy_may_not_be`（PUT 422）；檔案裡的同樣值：`test_an_unusable_policy_file_refuses_the_secret_path_until_the_panel_saves_one`（帶不帶 Origin 都 503） |
-| 6 | `test_misconfigured_allowlist_prevents_service_start` | §8.8 #120（不拒絕啟動）：`test_an_unusable_policy_file_refuses_the_secret_path_until_the_panel_saves_one` |
+| 6 | `test_misconfigured_allowlist_prevents_service_start` | §8.8 #126（不拒絕啟動）：`test_an_unusable_policy_file_refuses_the_secret_path_until_the_panel_saves_one` |
 | 7 | `test_default_cors_does_not_reflect_untrusted_origins_on_other_routes` | `test_readiness_and_the_management_api_ignore_the_policy`（HA 沒有 CORS，§8.8 #42） |
 | 8 | `test_non_headscale_rejects_trailing_dot_allowlist` | `test_what_a_policy_may_not_be`、`test_anything_else_is_no_origin` |
 
@@ -168,21 +176,21 @@ HA 測試沒寫路徑的都是 `tests/test_origin_policy.py`。
 
 | # | PaaS 案例 | HA |
 |---|---|---|
-| 1 | `test_mode_origin_method_matrix`（4 模式×6 情況×4 方法） | `test_report_only_answers_every_request_as_without_the_check`（5 產品×9 情況×9 請求）、`test_enforce_refuses_only_what_the_list_does_not_hold`；「沒設」「空字串」兩種模式：§8.8 #120（沒有環境變數；沒有檔案＝report-only，檔案裡的空模式是壞檔） |
+| 1 | `test_mode_origin_method_matrix`（4 模式×6 情況×4 方法） | `test_report_only_answers_every_request_as_without_the_check`（5 產品×9 情況×9 請求）、`test_enforce_refuses_only_what_the_list_does_not_hold`；「沒設」「空字串」兩種模式：§8.8 #126（沒有環境變數；沒有檔案＝report-only，檔案裡的空模式是壞檔） |
 | 2 | `test_report_only_hands_would_deny_requests_to_the_pre_136_cors_unchanged` | §8.8 #42：HA 的對照組是「同一個請求不帶 Origin」：`test_report_only_answers_every_request_as_without_the_check` |
 | 3 | `test_allowed_origin_preflight_outside_the_mcp_scope` | §8.8 #42：`test_no_cors_header_in_either_mode` |
 | 4 | `test_allowed_and_absent_origins_are_identical_in_both_modes_at_the_middleware` | `test_enforce_refuses_only_what_the_list_does_not_hold`（清單內與沒帶的 enforce 前後相同） |
-| 5 | `test_report_only_logs_one_would_deny_line_to_stdout_and_ring_buffer_without_secrets` | `test_report_only_answers_every_request_as_without_the_check`（每個情況一行）、`test_a_hostile_origin_value_cannot_inject_or_leak_into_the_line`；Logs 頁 ring buffer：§8.8 #121（HA 只有 add-on log） |
-| 6 | `test_would_deny_lines_share_the_rate_limit` | `test_one_line_per_origin_then_twenty_a_minute_per_profile_then_one_summary`（§8.8 #121） |
+| 5 | `test_report_only_logs_one_would_deny_line_to_stdout_and_ring_buffer_without_secrets` | `test_report_only_answers_every_request_as_without_the_check`（每個情況一行）、`test_a_hostile_origin_value_cannot_inject_or_leak_into_the_line`；Logs 頁 ring buffer：§8.8 #127（HA 只有 add-on log） |
+| 6 | `test_would_deny_lines_share_the_rate_limit` | `test_one_line_per_origin_then_twenty_a_minute_per_profile_then_one_summary`（§8.8 #127） |
 | 7 | `test_logging_failure_never_blocks_a_report_only_request` | `test_a_line_that_cannot_be_written_never_changes_the_answer` |
 | 8 | `test_non_mcp_routes_ignore_the_mode` | `test_readiness_and_the_management_api_ignore_the_policy` |
-| 9 | `test_startup_line_names_mode_allowlist_size_and_env`（7） | §8.8 #120（沒有啟動時的 INFO 行，第 4 節 s） |
+| 9 | `test_startup_line_names_mode_allowlist_size_and_env`（7） | §8.8 #126（沒有啟動時的 INFO 行，第 4 節 s） |
 | 10 | `test_invalid_mode_fails_startup_validation_without_echoing_the_value`（13） | `test_what_a_policy_may_not_be`（模式的 6 種寫法 422）；檔案裡的 `Enforce`：`test_an_unusable_policy_file…`（WARNING 不含檔案內容） |
-| 11 | `test_invalid_mode_stops_the_lifespan_before_any_config_write` | §8.8 #120（不適用：HA 照常服務，檢查從不寫檔） |
+| 11 | `test_invalid_mode_stops_the_lifespan_before_any_config_write` | §8.8 #126（不適用：HA 照常服務，檢查從不寫檔） |
 | 12 | `test_invalid_mode_at_runtime_fails_closed_like_an_invalid_allowlist`（2） | `test_an_unusable_policy_file…`、`test_a_policy_file_changed_behind_the_add_ons_back_is_read_again` |
 | 13 | `test_headscale_shared_layer_always_enforces`（4） | `test_headscale_keeps_only_claude_ai_and_has_no_policy`（§8.8 #9） |
 | 14 | `test_headscale_product_returns_403_with_report_only_set` | 同上 |
-| 15 | `test_real_uvicorn_exits_3_on_an_invalid_mode_and_serves_with_a_valid_one` | 不適用（§8.8 #120：不拒絕啟動） |
+| 15 | `test_real_uvicorn_exits_3_on_an_invalid_mode_and_serves_with_a_valid_one` | 不適用（§8.8 #126：不拒絕啟動） |
 | 16 | `test_real_uvicorn_product_app_exits_3_on_an_invalid_mode` | 不適用（同上） |
 
 ### `packages/mcp-admin-core/tests/test_origin_denial_log.py`（13 案）
@@ -196,7 +204,7 @@ HA 測試沒寫路徑的都是 `tests/test_origin_policy.py`。
 | 5 | `test_sanitizer_escapes_everything_outside_printable_ascii` | `test_the_sanitizer_escapes_everything_outside_printable_ascii` |
 | 6 | `test_duplicate_shows_at_most_four_values` | `test_duplicates_show_at_most_four_values_each_escaped_once` |
 | 7 | `test_headscale_env_keeps_its_legacy_trailing_dot_rendering` | 不適用（§8.8 #9：HA Headscale 原字串比對、不記） |
-| 8 | `test_one_line_per_origin_per_interval_global_cap_then_one_summary` | `test_one_line_per_origin_then_twenty_a_minute_per_profile_then_one_summary`、`test_a_profiles_flood_never_holds_back_another_profiles_lines`（§8.8 #121） |
+| 8 | `test_one_line_per_origin_per_interval_global_cap_then_one_summary` | `test_one_line_per_origin_then_twenty_a_minute_per_profile_then_one_summary`、`test_a_profiles_flood_never_holds_back_another_profiles_lines`（§8.8 #127） |
 | 9 | `test_state_is_bounded_under_a_flood_of_distinct_origins` | `test_the_state_stays_bounded_under_a_flood_of_distinct_origins`（另驗帳號數有界） |
 | 10 | `test_summary_is_flushed_when_the_window_ends_without_new_rejections` | `test_the_summary_is_written_when_the_window_ends_without_another_line` |
 | 11 | `test_logging_failure_never_changes_the_response` | `test_a_line_that_cannot_be_written_never_changes_the_answer` |
@@ -231,7 +239,7 @@ HA 測試沒寫路徑的都是 `tests/test_origin_policy.py`。
 | 檔 | 案例 | HA |
 |---|---|---|
 | `test_origin_product_children.py` | `test_origin_boundary_with_real_product_and_two_profiles`（root_path×7 產品×2 模式） | `test_every_profile_takes_the_one_policy_and_its_lines_name_the_profile`（預設帳號＋B，各自的子程式）、`test_report_only_answers…`／`test_enforce_refuses_only…`（5 個產品）；root_path 不適用（HA 8081 沒有前綴）；真子程式由 HM-16 的容器探針涵蓋 |
-| `test_origin_root_path.py` | 5 案 | `paas-test-mapping.md` 已有歸屬（#1 照它寫「HA：`tests/test_origin_policy.py`」：enforce 對所有方法：HA 先方法檢查，PUT、OPTIONS 等照今天 405，§8.8 #118；#2 §8.8 #42；#3～#5 HM-10、HM-08） |
+| `test_origin_root_path.py` | 5 案 | `paas-test-mapping.md` 已有歸屬（#1 照它寫「HA：`tests/test_origin_policy.py`」：enforce 對所有方法：HA 先方法檢查，PUT、OPTIONS 等照今天 405，§8.8 #124；#2 §8.8 #42；#3～#5 HM-10、HM-08） |
 | `apps/headscale/tests/test_origin_security.py` | 14 案 | PaaS Headscale 自己的邊界（清單是自己的管理網址、管理 API 跨來源寫入同一份清單、登入）：§8.8 #9（HA Headscale 只放 `https://claude.ai`，既有 `tests/test_mcp_contract_freeze.py` 的 Headscale 例外與本片 `test_headscale_keeps_only_claude_ai_and_has_no_policy`）；管理面不適用（§8.8 #11：Ingress＋HA 角色） |
 
 面板沒有 PaaS 對應（PaaS 用環境變數）：node 與 Playwright 的案例都是 HA 自己的。
@@ -392,6 +400,13 @@ commit 之後的結果。
     不過去的只能還原備份。(b) 產品移出 `MULTI_PROFILE_PRODUCTS`（計畫 §7.4 的緊急關閉）後 enforce **靜默失效**：檔留著不讀，密鑰網址
     回到任何 Origin 都放行；再開通又生效。兩件都要進計畫 §7.2 第 10 點、該產品的 CHANGELOG／`upgrade-notes.yaml` 與 DOCS（本片不改
     CHANGELOG）；契約第 2.6 節與威脅模型第 3 節已寫。
+  - 和 HM-13b、HM-13c 合併後再一件（第 19.5 節）：(c) 還原把 Origin 政策帶回備份當時的值，沒有提示（備份後才切的 enforce 會回到
+    report-only）。DOCS 與 `docs/operations/update-backup-rollback.md` 寫「還原後到「連線與權杖」看瀏覽器來源檢查的模式與清單」；契約
+    第 2.6 節與威脅模型第 3 節已寫。
+- **合併進 `claude-delivery` 的那一步**：`docs/multi-profile/unreleased-changes.md` 第 6 節寫本片「加到第 4.2 節」（受開關管）。合併後守門多的
+  那一步（還原時封存 Origin 政策旁的收據）也只在開通或有帳號資料時動作，沒開通又沒有帳號資料的安裝看不到變化，同樣歸第 4.2 節。
+- **HM-16（容器探針）**：開通的候選映像還原後，守門會多寫 `.origin-policy.json.operations.json`（換新的收據檔，第 19.5 節）；探針的還原階段
+  只檢查一定要有的檔，不用改，要列也可以一起列。
 - **HM-19b（HAOS 實測）**：S14 用 echo 端點實測 Claude.ai 送不送 Origin、送什麼（T-27「記下 Claude.ai 送的 Origin」）；預設清單含
   `https://claude.ai`，Claude.ai 送它時 would_deny 看不到，要看實際值得靠 echo 端點，或暫時把清單清空（只記不擋）再看紀錄。實機看
   add-on log 裡 would_deny 行的格式與節流。
@@ -402,7 +417,7 @@ commit 之後的結果。
 - **HM-26（Headscale）**：Headscale 照舊沒有政策；要不要在面板顯示「固定只放 `https://claude.ai`」、要不要照 PaaS 記 deny 行，交 HM-26 與它的
   獨立安全審查。開通 Headscale 前也決定 `/api/origin-policy` 照契約第 2.6 節的寫法定案（GET、形狀正確的 PUT 404；其他方法 405；形狀錯
   的 PUT 400），或讓 Headscale 的方法表不含這條路由（審查 S-5）。
-- **契約第 9 節的列號、HM-13b 還原守門、帳本**：本片排在 HM-13c 之後合併，合併時要做的事見第 17 節。
+- **契約第 9 節的列號、HM-13b 還原守門、帳本**：本片排在 HM-13c 之後合併，合併時要做的事見第 17 節；2026-11-18 照做了（merge commit，第 19 節）。
 - **gateway.py 的合併順序**（計畫 §12.2）：HM-27 在 HM-13c 之後、HM-15 之前；本片只在 `make_apps` 加一個選項與一處呼叫（第 17 節）。
 
 ## 14. 要使用者決定的事
@@ -453,7 +468,7 @@ commit 身分都是 woowtech；英文標題、繁中內文；沒有 Co-Authored-
 | S-6 | 交 HM-18 的清單少兩件 | 第 13 節補 (a) 壞檔時所有帳號的密鑰網址 503、(b) 緊急關閉後 enforce 靜默失效；契約第 2.6 節與威脅模型第 3 節補 (b)（(a) 契約也寫明「所有帳號」）。計畫 §7.2 第 10 點與產品 CHANGELOG／`upgrade-notes.yaml`／DOCS 交 HM-18（本片不改 CHANGELOG） | `dacf7ed`、本筆記 | 契約、威脅模型 |
 | S-7 | 合併順序與第 9 節列號 | 主對話定：本片排在 HM-13c 之後合併（第 17 節） | 本筆記、PR 草稿 | — |
 | S-8 | 「開關關＋分頁留著識別紀錄」只有 repo 外的比對守 | Playwright 開關關那案在每個產品先放一筆識別紀錄（`woow-admin-operation-v1:<mount>:origin-policy`，和比對腳本的 `originRecord` 同一個鍵）再逐頁看：沒有卡片、沒有待確認卡、沒有請求，紀錄原樣留著。CI 會跑 | `c5d748c` | U17（兩層防護都拿掉，審查的 `sens_variant.py`）擋下，U00 基準照過 |
-| S-9 | IPv6 的正規寫法隨 Python 版本變 | 自己寫 RFC 5952 的十六進位（`_ipv6_text`），不用 `str()`：存的寫法不跟 Python 版本變；本機實測 7 個版本（3.11.2、3.12.3、3.12.14、3.13.2、3.13.12、3.13.15、3.14.7），只有 IPv4-mapped 在 3.12.14、3.13.2 起變點分。契約第 2.6 節寫明改正規化規則要遷移舊檔、第 9 節 #122 補一句。先紅後綠（`79c1adb` 紅 1 案）。`79c1adb`、`b103dea` 的 commit 訊息寫「3.12.4／3.13 起」是推測，`5202179` 把說明、契約與帳本的文字改成只寫實測的版本 | `79c1adb`、`b103dea`、`dacf7ed`、`5202179` | N04、N07、N08 擋下；3,000 個亂數位址和 `str()` 相同（不含 IPv4-mapped） |
+| S-9 | IPv6 的正規寫法隨 Python 版本變 | 自己寫 RFC 5952 的十六進位（`_ipv6_text`），不用 `str()`：存的寫法不跟 Python 版本變；本機實測 7 個版本（3.11.2、3.12.3、3.12.14、3.13.2、3.13.12、3.13.15、3.14.7），只有 IPv4-mapped 在 3.12.14、3.13.2 起變點分。契約第 2.6 節寫明改正規化規則要遷移舊檔、第 9 節 #122（合併 HM-13c 之後是 #128）補一句。先紅後綠（`79c1adb` 紅 1 案）。`79c1adb`、`b103dea` 的 commit 訊息寫「3.12.4／3.13 起」是推測，`5202179` 把說明、契約與帳本的文字改成只寫實測的版本 | `79c1adb`、`b103dea`、`dacf7ed`、`5202179` | N04、N07、N08 擋下；3,000 個亂數位址和 `str()` 相同（不含 IPv4-mapped） |
 
 沒做的：審查報告第 3.4 節 l 的選做（執行中發現有效、但不是面板存的新檔時記一行 WARNING）不在 S-1～S-9，主對話沒有要，沒做。
 
@@ -547,3 +562,231 @@ Python（共用鎖下一次跑完；R 開頭是審查的編號，在現在的程
   Hermes 說明（`tool_snapshot.py`、Hermes 的 `server.py`、它們的測試與黃金回歸摘要），相關的檔都在上面重跑過；以 CI 為準。
 - 審查修正後新加的測試在本機都跑過，沒有只在 CI 跑的新測試。
 - 本筆記這次 commit 之後的兩個預檢與雙向控制字元，記在交給主對話的回報（PR 說明照抄）。
+
+## 19. 和 HM-13c（含 HM-13b 與 claude-delivery）合併（2026-11-18）
+
+第 1～18 節照合併前寫；契約列號的現行指標已改成合併後的（第 19.4 節），第 17 節（合併前交代的事）與第 18 節（rebase 紀錄）照原文。
+本節的 log 與工具都在 repo 外的暫存區，用完刪掉；數字照實抄在這裡。
+
+### 19.0 結論
+
+- 合併順序照第 17 節：#108（HM-13b）→ #112（HM-13c）→ 本片 #116 → #109。HM-13b、HM-13c 2026-11-18 剛重新合過 `claude-delivery` `53ffe61` 並 push：
+  `origin/feat/ha-multiprofile-hm13c-20261116`＝`c5dd7d3`（已含 HM-13b `090081c` 與 `53ffe61`）。第 17 節寫「rebase 到當時的 `claude-delivery`」，
+  本片已 push，改成用 merge commit 把 `c5dd7d3` 合進本片（`a09081a`：第一個 parent 是本片 `32307e6`、第二個 `c5dd7d3`；合併基準 `f239157`），
+  不 rebase、不 amend、不 force push。
+- 衝突 16 個檔 35 塊（另有帳本 7 塊，照 JSON 重組、不解文字），兩邊的行為都留（第 19.2 節）。合起來才壞、沒有文字衝突的兩處在合併後跑測試找到，
+  一起修在 merge commit：HM-13c 改了 `profile_router.global_route()` 的回傳（本片一案的斷言跟著改），HM-13b 要求映像裡每個 chmod 類呼叫點都審過
+  （本片 `PolicyFile.write` 的 `fchmod` 是新呼叫點，審過、加進清單）。
+- 契約第 9 節本片的五列從 #118～#122 改成 #124～#128（`1511a1a`；HM-13b 用掉 #118～#121、HM-13c 用掉 #122、#123）。
+- 第 17 節第 2 點（`origin-policy.json` 與收據檔和 HM-13b 的還原守門）：守門沒有「`/data/mcp` 收哪些名稱」的白名單，它只碰自己的名稱；
+  `/data/mcp` 的名稱都寫在 `profiles.py`（版面），守門從那裡拿。所以兩個檔名寫進 `profiles.py`、政策與守門都從那裡拿；還原時守門照索引旁的
+  收據封存、換新 Origin 政策旁的收據（封存名稱加進守門的名稱），政策檔照還原的原樣、守門不讀不改（第 19.5 節）。先紅後綠（`459bba9` 紅 31 案、
+  `034aac6` 綠），8 個突變全擋；文件 `dd02849`、`776f753`。
+- 本機：相關 pytest 26 個檔 1,228 案只有 5 個要 root 的 `test_root_*` 失敗；全套 6,611 案只有 7 個要 root 的既有案例與 28 個 AF_UNIX 路徑太長（暫存區路徑，環境）失敗；node 105 案、build、build-closure PASS；
+  Playwright 166 案全過；packaging `validate.py` PASS、unittest Ran 285 OK（skipped=5）；秘密與帳本預檢 OK；雙向控制字元 0（第 19.7～19.9 節）。
+- 要使用者決定的事：沒有。交審查看的一點：還原把 Origin 政策靜默帶回備份當時的值（例如 enforce 回到 report-only），沒有另外的提示；
+  照「還原＝回到備份當時的設定」處理、寫進契約第 2.6 節與威脅模型第 3 節，DOCS 交 HM-18（第 19.5 節最後）。
+- 下一次獨立審查要涵蓋：上次審查（第 16 節）之後才加的 `b103dea`（政策檔裡不是字串的來源判成不能用、不再丟 TypeError；IPv6 一種正規寫法），
+  與本節的合併、改號與守門。
+
+### 19.1 範圍
+
+- `git fetch origin`（2026-11-18 21:0x）：`origin/claude-delivery`＝`53ffe61`；`origin/feat/ha-multiprofile-hm13c-20261116`＝`c5dd7d3`；
+  `origin/feat/ha-multiprofile-hm13b-20261116`＝`090081c`。本片的遠端分支與本機 head 都是 `32307e6`（已 push，CI 綠）、工作樹乾淨。
+- 帶進來的（`32307e6..c5dd7d3`）：89 個 commit（含 13 個 merge commit），基準到 `c5dd7d3` 共改 132 個檔（含 0.4.14 發版的 `addons/`、
+  `.github/`、`packaging/`，都是對方的，本片沒有碰）。
+- 兩邊都改的 20 個檔：16 個有衝突；`ledger-tracking.md`、`app.js`、`tests/test_panel_profile_api_shapes.py`、`tests/test_profile_admin_api.py`
+  兩邊改的是不同行，git 自動合併（逐行核對，第 19.3 節）。
+- 依賴：對方改了 `apps/emqx`、`apps/headscale`、`apps/litellm`、`apps/nextcloud` 的 `uv.lock` 與 `packaging/inputs.json`（0.4.14 發版），本片的
+  測試不碰這幾個 app 的 venv；根目錄的 `uv.lock`、`pyproject.toml` 與面板的 `package*.json` 沒變，沒有重裝依賴。面板原始碼有變（兩邊），
+  照 CI 先 `npm run build` 再 `node tests/build-closure.mjs`。
+
+### 19.2 衝突與處理
+
+原則：HM-13c 那側（先合的）照原文、放在前面；本片的行接在後面、照原文（列號在合併之後的 commit 改，第 19.4 節）；程式照語意合。
+
+| 檔 | 衝突 | 處理 |
+|---|---|---|
+| `Hc/gateway.py` | 2 塊 | `make_apps` 的參數照合併順序：HM-13b、HM-13c 的 `dormant_profiles`、`restore_notice`、`review_required` 在前，本片的 `origin_policy` 最後。docstring：HM-13b、HM-13c 兩段在前、本片那段在後（三引號移到本片那段結尾）。參數檢查、bootstrap 欄位、`token/rotate` 的關卡與密鑰網址的 Origin 檢查都自動合併 |
+| `Hc/profile_admin.py` | 2 塊 | import 兩邊都留（`origin_policy`、`restore_lock`）；HM-13c 的四個處理（全部撤銷、還原紀錄、核對、刪隔離目錄）在前、本片的兩個（讀與存 Origin 政策）在後。共用的 `_if_match`、`_idempotency`、`_complete`、`_replay` 自動合併成本片的版本（多收 ETag 形式與收據檔），HM-13c 的呼叫照預設值走索引的收據 |
+| `Hc/profile_router.py` | 2 塊 | `GlobalRoute` 的說明合成一段（本片的 `shape`、HM-13c 的 `{name}` 與「處理拿到依序的段」）；路由表的註解兩邊都留。分派器第 ⑤ 步自動合併成 `route.shape(value)`＋`valid_segments(segments)`，Origin 政策的路由沒有佔位，處理照舊只收 `call` |
+| `Hc/profile_runtime.py` | 6 塊 | 模組與 `ProfileRuntime` 的說明：HM-13b、HM-13c 在前、本片在後；`RUNTIME_OPTIONS`、`__init__`、`gateway_options` 收兩邊的選項（`origin_policy` 最後）；`ProfileManager.add` 同時給 `restore_notice`、`review_required` 與 `origin_policy` |
+| `Hui/api.js` | 1 塊 | `ApiError` 兩個代碼的固定文字都留（HM-13c 的 `operation_restored`、本片的 `origin_policy_invalid`）。HM-13c 讓 410 `operation_restored` 成為認得的代碼；Origin 政策的存檔收到它時照 HM-13c 處理帳號操作的做法保留識別紀錄（不是 `ORIGIN_REFUSALS`），面板顯示這個代碼的文字，「已核對」才清掉 |
+| `Hui/operation-identity.js` | 2 塊 | 說明合成一段；`start()` 的「同一筆」同時比 HM-13c 的 `name` 與全部撤銷的 revision、本片的模式與清單；錯誤文字三種都留 |
+| `packages/mcp-admin-ui/fixtures/server.mjs` | 2 塊 | 狀態變數兩邊都留；`reset()` 先放 HM-13c 的還原狀態、再放本片的 `origin`，HM-13c 的 `mockRecord`、`reviewSummary` 等函式接在 `reset()` 之後 |
+| `packages/mcp-admin-ui/tests/browser/profile-api-parity.spec.mjs` | 2 塊 | 設定的說明與 `fixtureSetup` 兩邊都留（HM-13c 的 `restore`、`quarantine` 在前，本片的 `origin_policy` 在後） |
+| `packages/mcp-admin-ui/tests/profile-api-cases.json` | 2 塊 | `about` 兩條都留（HM-13c 在前）；`literal` 取聯集（`result`、`revoked`、`mode`、`allowed_origins`、`origin_policy_state`）；情境 HM-13c 的 `restore`、`switched-off-restored` 在前，本片的三個 origin 情境在後；JSON 照樣讀得進來 |
+| `tests/test_admin_pipeline_matrix.py` | 1 塊 | 用 HM-13c 的路徑（替 `{name}` 填格式正確的隔離目錄名），本體照本片的 `GLOBAL_BODIES`（Origin 政策的 PUT 用它自己的形狀） |
+| `tests/test_request_budget_gateway.py` | 1 塊 | 釘 `make_apps` 參數順序的那案改成最後十個（`…, 'review_required', 'origin_policy'`），說明加一句本片接在 HM-13c 後面；「keyword-only、預設 None」的檢查也加 `origin_policy` |
+| 契約 | 9 塊 | 第 1.2 節表格兩列合成（本片的「不讀不寫 `origin-policy.json`、`/api/origin-policy` 404」接在 HM-13c 的提示之後）；第 3.1 節路由表（HM-13c 定案的刪隔離目錄列＋本片兩列）、405 的 `Allow` 合成一段；第 3.2 節鎖的說明、第 3.5 節表格、第 4.1 節 `restore_review_required`／`profile_index_corrupt`／`origin_policy_invalid`、第 9 節說明段、表尾與第 10 節：HM-13c 那側在前、本片在後 |
+| `threat-model.md`、`acceptance-matrix.md`、`decisions.md` | 各 1 塊 | 開頭的狀態與變更紀錄：HM-13c 那側在前、本片在後（驗收矩陣的狀態是一行，合成一句） |
+| 帳本 | 7 塊 | 不解文字，照 JSON 重組（第 19.6 節） |
+
+### 19.3 核對
+
+- 每個兩邊都改的檔（repo 外的 `both_sides_kept.py`，在 `a09081a` 的樹上做多重集合比對：合併後的行數＝本片＋HM-13c－基準）：每一邊對基準
+  加的行都在合併後的檔裡，除了上表合起來的那幾行；比基準與兩邊多出來的行只在上表那幾處：`gateway.py` 3 行、`profile_admin.py` 1 行、
+  `profile_router.py` 5 行、`profile_runtime.py` 5 行、`operation-identity.js` 2 行、parity spec 2 行（其中 1 行是 HM-13c 照留、本片原本
+  改寫掉的那行）、cases 2 行、`test_admin_pipeline_matrix.py` 1 行、`test_request_budget_gateway.py` 8 行、契約 3 行、驗收矩陣 1 行。
+  `decisions.md`、`threat-model.md`、`ledger-tracking.md`、`server.mjs`、`api.js`、`app.js` 與兩個自動合併的測試檔沒有新寫的行。
+- 語意衝突（合併後跑 `tests/test_origin_policy.py` 等 6 檔、HM-13b／HM-13c 等 14 檔找到）：
+  - `tests/test_origin_policy.py::test_the_route_is_a_global_path_of_the_shared_pipelines_table` 斷言 `global_route('origin-policy')` 的第二個值
+    是 `None`、未知路徑回 `(None, None)`；HM-13c 把它改成 `(route, {佔位: 段})`。改成空的 dict，行為沒變。
+  - `tests/test_restore_lock.py::test_every_mode_and_owner_call_site_is_reviewed`（HM-13b：sentinel 的 ctime 是它的身分，每個 chmod／chown／utime
+    呼叫點都要審）：本片 `origin_policy.PolicyFile.write` 的 `os.fchmod(fd, 0o600)`。審過：只改政策的新暫存檔（`.origin-policy.json-<hex>`，
+    經自己剛開的 descriptor、換名之前），碰不到 sentinel；加進 `REVIEWED`。HM-13b 筆記第 3.9 節的「17 處」現在是 18 處。
+- 和 HM-13c 比：`addons/`、`.github/`、`tests/conftest.py`、`features.py`（`MULTI_PROFILE_PRODUCTS` 仍是空集合）、CHANGELOG、
+  `upgrade-notes.yaml` 0 行差異；合併後（`a09081a`）對 `c5dd7d3` 改了 28 個檔：本片原本的 27 個，加 `tests/test_restore_lock.py`（上面那個
+  call site）。之後的 commit 再加 `profiles.py`、`restore_lock.py`、`tests/restore_guard_disk.py`（第 19.5 節），現在對 `c5dd7d3` 是 31 個檔。
+- 第 9 節的列號在 `1511a1a` 之後是 1～128 連號、沒有重複。
+
+### 19.4 列號對照（契約第 9 節；HM-13c 最後是第 123 列）
+
+| 合併前（`f239157` 基準） | 合併後（`c5dd7d3` 基準） | 項目 |
+|---|---|---|
+| #118 | #124 | Origin 檢查的位置 |
+| #119 | #125 | enforce 的拒絕本體 |
+| #120 | #126 | Origin 政策的設定入口與壞值 |
+| #121 | #127 | Origin 紀錄的節流 |
+| #122 | #128 | Origin 清單的格式與上限 |
+
+- HM-13b 的 #118～#121、HM-13c 的 #122、#123 照原樣；#1～#117 沒有移動，本片引用的 #9、#10、#42、#46 不變。
+- 解衝突時不改號（本片的行照原文；merge commit 裡第 9 節暫時有兩組 #118～#122）。改號在 `1511a1a`（repo 外的 `renumber.py`）：只改本片
+  加的行（`git diff f239157 32307e6` 的新增行，逐行精確比對），所以 HM-13b、HM-13c 的列號改不到；改完再掃一次：本片加的行沒有指向舊號的
+  （記錄改號的句子除外）。
+- `1511a1a` 改的：契約第 2.6 節 4 處、第 4.1 節 `origin_policy_invalid` 列、第 4.2 節 2 列、五列的列號、第 9 節說明段本片那行（原本「後合併的
+  一方往後重編」那句改成改號的紀錄）、第 10 節本片的兩列；開頭的狀態加本片一句；第 10 節加一列；`decisions.md` DQ-11 列與變更紀錄一列；
+  `acceptance-matrix.md` T-24 與開頭的狀態；`tests/test_origin_policy.py` 一個測試說明。
+- 本筆記改的現行指標（本筆記的 commit）：結論加第一點；第 1 節兩列；第 2 節契約那列（兩組號都寫）與新的一列；第 3、6 節的 §8.8 指標 14 處；
+  第 4 節 e（還原的例外）；第 13 節合併那點與新加的三點；第 16 節 S-9 那列。照原文的：第 17 節（合併前交代的事）、第 15、18 節的 commit 表、各 commit 訊息。
+- 不用改的：`threat-model.md` 本片加的行沒有寫列號；面板、程式與其他測試沒有引用這幾列。
+
+### 19.5 Origin 政策與 HM-13b 的還原守門（第 17 節第 2 點）
+
+**名稱放哪**：HM-13b 的守門沒有「`/data/mcp` 收哪些名稱」的白名單：它只碰自己的名稱（`profiles.ASIDE_NAMES`：sentinel、record 與暫存檔、
+兩個標記、還原紀錄、還原提示、收據封存；被目錄占用時移開），`profiles/` 底下的其他名稱只計數（`other_entries`），`/data/mcp` 的其他項目
+一律不看。`/data/mcp` 的名稱都寫在 `profiles.py`（「Layout builds its paths from them」，守門與 `restore_detect` 從那裡拿；HM-13b 的交接
+「守門的檔名一律取 `profiles.py` 的常數，不另寫字串」）。本片原本把 `POLICY_NAME` 寫在 `origin_policy.py`，現在：
+
+- `profiles.ORIGIN_POLICY_NAME`（`origin-policy.json`）、`profiles.ORIGIN_POLICY_OPERATIONS_NAME`（`.origin-policy.json.operations.json`，
+  `operations.journal_path` 的命名）、`Layout.origin_policy`；`origin_policy.POLICY_NAME` 取它，`OriginPolicy` 開 `Layout.origin_policy`。
+- 收據封存 `.origin-policy.json.operations.json.restored` 加進 `RECEIPT_ARCHIVE_NAMES`（所以也在 `ASIDE_NAMES`）。政策檔本身不加：守門不寫、
+  不改名、不刪它，不是守門的名稱。
+
+**行為**（開通或有帳號資料的產品的還原；守門第 C 步）：
+
+| 還原後 | 守門 | 本片的政策（開通的產品服務時） |
+|---|---|---|
+| 政策檔：存過的 | 不開、不動（逐位元、inode、ctime 照還原的） | 照它（例如 enforce 生效） |
+| 政策檔：沒有 | 不寫 | 預設：report-only＋`https://claude.ai` |
+| 政策檔：不能用（不是 JSON、模式錯…） | 不開、不動，開機照常做完 | 密鑰網址 503，面板用它的 ETag 存一份蓋過去 |
+| 政策檔：目錄（偽造的備份） | 不動（不移開） | 密鑰網址 503；存檔 409 `operation_outcome_unknown`，只能再還原別份備份（同第 2.6 節原本的寫法） |
+| 收據檔：有收據 | 封存成 `.restored`、換一份新的（`restored_before_ms`） | 備份前的存檔重送 410 `operation_restored` |
+| 收據檔：沒有 | 照樣寫一份新的（HM-13c 的 `renew_missing`） | 備份後才存、隨還原消失的存檔重送也是 410（不會被當成新操作） |
+| 收據檔：讀不懂、目錄 | 原樣封存、換新的 | 同上；存檔照常 |
+| 收據檔是目錄、封存名稱是檔案 | 記 `ORIGIN_NOT_ARCHIVED`、這次開機停下（標記留著；同索引旁收據的已知情況） | — |
+| 沒開通、沒有帳號資料（緊急關閉後） | 照今天只存提示、刪標記，兩個檔都不動（同 #121 預設帳號的收據） | 不讀（開關關） |
+
+- 為什麼政策檔不移開：它不是守門寫的名稱；而且不能用的檔現在是 fail closed（密鑰網址 503），守門移開它就變成預設的 report-only（放行），
+  比較鬆。目錄這種只有偽造的備份做得出來（要 HA 管理員；DQ-37），出路照第 2.6 節（還原別份備份）。
+- 為什麼沒有收據檔也寫一份：照 HM-13c（契約第 3.5 節「每個收據檔都換新」，同 PaaS）。不寫的話，備份後才存、隨還原消失的那一筆重送時
+  被當成新操作：程序重啟後 ETag 的金鑰換了，它的 If-Match 一定過期，結果是 409 `config_conflict`、什麼都不寫（安全上沒差），但面板會說
+  「設定已被其他操作更新」，不如 410 說得準（`test_after_a_restore…[absent]` 的紅就是這個）。代價：開通或有帳號資料的產品還原後一定多
+  這個收據檔；Headscale 沒有政策（`origin_policy.applies` 是假），守門不看產品，還原後也會多一份沒有人讀的收據檔（契約第 3.5 節寫明）。
+- 封存不了就停：照索引旁的收據（`INDEX_NOT_ARCHIVED`），自己一行 `ORIGIN_NOT_ARCHIVED`（契約第 7 節）；`_Sweep.archive` 多一個參數給全 add-on
+  收據的 log 行。
+- 還原把政策帶回備份當時的值，沒有提示（例如備份後才切的 enforce 回到 report-only）。照「還原＝回到備份當時的設定」，政策不是憑證、
+  不必撤銷；契約第 2.6 節、威脅模型第 3 節寫明，DOCS 與 `docs/operations/update-backup-rollback.md` 交 HM-18（第 13 節的清單加這一點）。
+  要不要像權杖一樣在面板提示，交審查看。
+
+**測試**（`459bba9`；HM-13b 的 `tests/test_restore_lock.py` 與它的 `tests/restore_guard_disk.py`，本片的 `tests/test_origin_policy.py`）：
+
+| 測試 | 案數 | 守什麼 |
+|---|---|---|
+| `test_a_restore_leaves_the_origin_policy_as_it_came_back_and_renews_its_receipts` | 16 | 政策檔 4 種×收據檔 4 種：開機做完、政策檔照原樣、收據封存或新寫、備份前與隨還原消失的存檔都 410、守門沒有多的 log |
+| `test_receipts_beside_the_origin_policy_that_cannot_be_archived_stop_the_start` | 1 | 封存不了：`ORIGIN_NOT_ARCHIVED`、停下、標記留著、政策檔不動；拿掉擋路的檔後做完 |
+| `test_switched_off_without_profile_data_a_restore_leaves_the_origin_policy_and_its_receipts_alone` | 1 | 沒開通、沒有帳號資料：只有提示一行，兩個檔照原樣、沒有封存，舊存檔回 completed |
+| `test_the_names_set_aside_are_the_ones_the_guard_writes`（改） | 1 | 封存名稱照 `operations` 的命名、兩個收據檔名照 `journal_path`、政策檔不是守門的名稱 |
+| `test_a_directory_at_a_name_the_guard_writes_is_moved_aside`（多一種） | 5（多 1） | Origin 政策的收據封存名稱被目錄占用時移開 |
+| `test_a_start_stopped_anywhere_is_finished_by_the_next`、`test_a_full_disk_stops_the_start_until_there_is_room`（改 `crash_disk`） | 2 | 多一筆 Origin 政策的收據：每一步中途斷電、磁碟滿之後，下次開機都做完、這筆也 410 |
+| `test_the_layout_names_the_policy_and_its_receipts`（新） | 1 | 檔名取版面的常數，政策與收據的路徑和守門用的相同 |
+| `test_after_a_restore_the_backups_policy_applies_and_no_earlier_save_is_taken_again`（新） | 4 | 真的 runtime：存一份、備份、再存一份、還原、開機（`run_product` 先跑守門）；政策是備份的（存過、沒有、不能用、目錄），兩次舊存檔的 key 不管 If-Match 都 410，新的存檔照常（目錄照舊 409） |
+
+**先紅後綠**：`459bba9` 只有測試，在 `1511a1a` 的程式上 31 案紅、162 案過（選 193 案）：`profiles` 沒有 `ORIGIN_POLICY_NAME` 15 案、
+`Layout` 沒有 `origin_policy` 12 案、runtime 的 4 案（沒有封存 3 案；沒有收據時重送被當成新操作，409 `config_conflict` 不是 410，1 案）。
+`459bba9` 的 commit 訊息寫「28 案」是算錯，正確是 27＋4＝31。`034aac6` 後全過。測試本身在綠燈階段改了一處（寫在 `034aac6` 的訊息）：
+runtime 那案還原後的新存檔原本用 `operation_key()`（面板的寫法，往回一秒），還原後一秒內的 key 早於守門剛寫的下限而 410；改成用現在的時間、
+並斷言它晚於下限（面板在還原後的 bootstrap 拿伺服器時間，本來就晚於守門）。
+
+**突變**（repo 外的 `mutate.py`：在 clone 的工作樹一次改一處、跑對應的測試 `-x`、改回原樣並核對 SHA-256；基準 M00 191 案全過）：8 個全部擋下。
+
+| # | 突變 | 擋下的第一案 |
+|---|---|---|
+| G01 | 守門不封存 Origin 政策旁的收據 | `test_a_restore_leaves_the_origin_policy…[saved-kept]` |
+| G02 | 同上，看 runtime 那案 | `test_after_a_restore…[saved]` |
+| G03 | 只有這份收據檔不 `renew_missing` | `test_a_restore_leaves_the_origin_policy…[saved-absent]` |
+| G04 | 封存名稱不在守門的名稱裡 | `test_a_directory_at_a_name_the_guard_writes_is_moved_aside[the Origin policy's receipts archive]` |
+| G05 | 封存失敗記成索引那一行 | `test_receipts_beside_the_origin_policy_that_cannot_be_archived_stop_the_start` |
+| G06 | 沒開通、沒有帳號資料的還原也封存 | `test_switched_off_without_profile_data…` |
+| G07 | 守門把是目錄的政策檔移開（當成自己的名稱） | `test_a_restore_leaves_the_origin_policy…[a directory-kept]` |
+| G08 | 政策開自己寫的檔名，不是版面的 | `test_the_layout_names_the_policy_and_its_receipts` |
+
+### 19.6 帳本（`docs/provenance/runtime-patches.json`）
+
+repo 外的 `ledger_merge.py`：以 HM-13c（`c5dd7d3`）的帳本為底、照它的順序；本片沒碰的列照 HM-13c；本片新的 `origin_policy.py` 接在
+`profile_admin.py` 後面（本片帳本裡它的前一列）；兩邊都改的 7 列（`gateway.py`、`profile_admin.py`、`profile_router.py`、`profile_runtime.py`、
+`api.js`、`app.js`、`operation-identity.js`），說明是 HM-13c 的文字接本片在列尾加的那段（先確認兩邊都只在列尾追加、其他欄位相同）。
+SHA-256 只重算內容變了的列管檔（沒有用 `--write`），其他列照 HM-13c，最後全列核對 0 漂移。JSON 照 repo 的寫法（`indent=2`、
+`ensure_ascii=False`、結尾換行）。
+
+- merge commit（`a09081a`）：67 列（HM-13c 66 列＋`origin_policy.py`）；重算上面 7 個兩邊都改的檔。
+- `034aac6`：再重算 `profiles.py`、`restore_lock.py`、`origin_policy.py`，說明各補一段（2026-11-18 HM-27）。
+- 沒動 `apps/runtime/*.py`、`apps/*/launch.py`，不用重產 tool-surface；`ledger-tracking.md` 三列補 HM-27（`dd02849`）。
+
+### 19.7 本機檢查（一般使用者 uid 1000；TMPDIR 是本工作的暫存區，不用 `/tmp`；pytest 排在共用鎖後面）
+
+| 檢查 | 結果 |
+|---|---|
+| 合併後、改號前（merge commit 的內容） | `test_origin_policy` 等 6 檔 320 案：1 案失敗（第 19.3 節的 `global_route`），修好後過；HM-13b／HM-13c 與回歸 14 檔 545 案：5 個要 root 的 `test_root_*` 與 1 案（第 19.3 節的 call site）失敗，修好後過 |
+| 相關 pytest 26 檔（`034aac6` 的內容） | 1,228 案：1,223 過、5 個要 root 的 `test_root_*`（`test_restore_detection.py`）失敗，220.8 秒。檔：`test_origin_policy`、`test_restore_lock`、`test_restore_review`、`test_revoke_all`、`test_dormant_profiles`、`test_restore_detection`、`test_upgrade_zero_rewrite`、`test_profile_admin_api`、`test_admin_pipeline_matrix`、`test_panel_profile_api_shapes`、`test_profile_runtime`、`test_request_budget_gateway`、`test_router_passthrough`、`test_profile_routing`、`test_single_profile_golden`、兩個契約凍結、`test_tool_inventory`、`test_ledger_precheck`、`test_output_schemas`、`test_redaction_matrix`、`test_log_scan`、`test_odoo_identity_rotation`、`test_new_origin_secret`、`test_health_tolerance`、`test_secret_precheck` |
+| 全套 pytest（程式是 `dd02849` 的；之後只改文件） | 6,611 案（`tests` 底下全部；分 9 段、每段各自排共用鎖，讓別的工作的測試排得進來）：6,576 過、35 失敗、0 skip，合計約 34 分鐘。失敗的都和本片無關：7 個要 root 的既有案例（`test_owned_executable.py` 1、`test_profile_store.py` 1、`test_restore_detection.py` 5），28 個是 `OSError: AF_UNIX path too long`（`tests/owned_executable.py` 的 IPC socket 開在 TMPDIR 底下，這次照規則把 TMPDIR 放在暫存區，路徑超過 108 字元：`test_unconfigured_connect` 11、`test_real_products` 9、`test_real_n8n` 3、`test_runtime_failure` 3、`test_ha_role` 1、`test_owned_executable` 1）。以前的筆記用短的 `/tmp/ha-mp-XXXXXX` 就是為了這個；CI 用它自己的 TMPDIR。另有一次整套跑到 43% 時（全過）停掉：別的工作排在共用鎖後面、只等 25 分鐘，改成分段跑 |
+| `npm test`（面板 node） | 105 案全過（HM-13c 94＋本片 11） |
+| `npm run build`＋`node tests/build-closure.mjs` | PASS；`dist/assets/app.js` `d9944adb…`、`app.css` `c8b43515…`（合併後面板原始碼變了，app.js 是新的；之後的 commit 沒動面板） |
+| Playwright 全套（`single`＋`profiles-on`，CI 的做法；`dd02849`） | 166 案全過，7.2 分鐘（HM-13c 的 `restore-review.spec`、本片的 `origin-policy.spec` 與合併後的形狀比對 `profile-api-parity.spec` 都在內；本片合併前是 150 案） |
+| `packaging/validate.py`（`ha-gh-release-20261117` 的 venv） | PASS（8 strict Supervisor-subset manifests …） |
+| packaging unittest（同一個 venv，TMPDIR 暫存區） | Ran 285、OK（skipped=5） |
+| 規則核對 | `addons/`、`.github/`、`tests/conftest.py`、`features.py`、CHANGELOG、`upgrade-notes.yaml` 對 HM-13c 0 行差異；沒改任何版號；`MULTI_PROFILE_PRODUCTS` 是空集合；本片 5 個 commit 的身分都是 woowtech，沒有 AI 署名 |
+
+### 19.8 預檢（base 都是 `origin/claude-delivery` `53ffe61`）
+
+| 預檢 | 結果（`dd02849`） |
+|---|---|
+| 秘密 `python3 scripts/secret_precheck.py --tools <暫存區>/scan0414/tools` | OK，0 findings（gitleaks 8.28.0，pin、驗過；`53ffe61..dd02849` 79 個 commit） |
+| 帳本 `python3 scripts/ledger_precheck.py` | OK：`runtime-patches.json` 180、`runtime-sources.json` 70、`tool-surface.json` 159 個摘要 0 漂移、0 缺；改到的 52 個檔裡列管的 14 個都由帳本釘住、帳本本身有改；沒有未列管的執行檔 |
+
+本筆記 commit 之後再跑一次，結果記在交給主對話的回報（本筆記不能記自己 commit 之後的結果）。
+
+### 19.9 雙向控制字元
+
+repo 外的 `bidi_scan.py`：和 `claude-delivery` 不同的 52 個檔在 HEAD 的全文，`53ffe61..dd02849` 79 個 commit 各自對第一個 parent 新增的行與
+commit 訊息：U+202A～202E、U+2066～2069 合計 0 個；U+200E、U+200F、U+061C 也是 0 個。
+
+### 19.10 只在 CI 跑的測試、CI 時間
+
+- 要 root 的既有案例本機一定失敗（相關 26 檔裡 5 個，全套 7 個）；CI 以 root 跑。全套另有 28 個是暫存區路徑太長、開不了 AF_UNIX socket（第 19.7 節），CI 照它自己的 TMPDIR 跑。本節新加的測試都在本機跑過，沒有只在 CI 跑的新測試。
+- CI（root、0 skip、Python 3.12.3）要等 push 之後；這一步照指示不 push。
+
+### 19.11 commit
+
+| commit | 內容 |
+|---|---|
+| `a09081a` | merge commit：把 HM-13c `c5dd7d3` 合進本片（第 19.2 節的解法與兩處語意衝突；訊息寫了每個檔怎麼解） |
+| `1511a1a` | 契約第 9 節本片的列改成 #124～#128，所有引用一起改；第 10 節加一列 |
+| `459bba9` | 測試先行（紅 31 案）：守門與 Origin 政策的檔、還原後的行為 |
+| `034aac6` | 實作（綠）：檔名寫進版面、守門封存 Origin 政策旁的收據；帳本三列；測試一處修正 |
+| `dd02849` | 文件：契約、威脅模型、驗收矩陣、`ledger-tracking.md` |
+| `776f753` | 契約第 2.6 節「面板存檔之前不寫任何檔」補還原的例外（守門換新收據檔） |
+| 本筆記 | 現行指標、結論、第 1、2、13、16 節與本節 |
+
+- 沒有 push（照指示）。合併後 push 應是 `32307e6` 往前的 fast-forward（`git push origin HEAD:feat/ha-multiprofile-hm27-20261117`）。
+- 合併條件不變：#108、#112 先合；PR 標題保留「⛔ 勿代 merge｜待覆核 — HM-」；下一次獨立審查涵蓋 `b103dea` 與本節。
