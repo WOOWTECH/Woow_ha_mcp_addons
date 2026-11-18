@@ -1,15 +1,19 @@
 # PaaS 多帳號測試逐案對照（pin `69ac425`）
 
-> HM-00 產出（2026-11-14）；2026-11-15 文件同步重產（DQ-38 的狀態）。全表由 repo 外的產生器從 PaaS git 物件庫重算後寫出；
-> 改歸屬時改產生器的規格再重產，不要手改表格。對照腳本會重新列出 PaaS 案例，和本檔逐檔逐案比對。重產指令見
-> `docs/provenance/ha-multiprofile-HM-00-20261114.md` 第 8 節，產生器另加 `--main 7d111b1`（本表的 PaaS 基準）；
-> 腳本與輸入的 SHA-256 以 repo 外的 `wave0/hm00-check/SHA256SUMS` 為準。歸屬的語意（對到的測試或差異列說的是不是同一件事）靠人工抽查。
+> HM-00 產出（2026-11-14）；2026-11-15 文件同步重產（DQ-38 的狀態）；2026-11-17 HM-12 面板改一個檔的歸屬（審查 S-3）；
+> 2026-11-17 文件同步重產（PaaS 基準 `48f394d`、各片補的差異表列）。全表由 repo 外的產生器從 PaaS git 物件庫重算後寫出；
+> 改歸屬時改產生器的規格再重產，不要手改表格。對照腳本會重新列出 PaaS 案例，和本檔逐檔逐案比對。重產指令與輸入版本見
+> `docs/provenance/ha-multiprofile-docs-sync-20261117.md`（原本的指令見 `docs/provenance/ha-multiprofile-HM-00-20261114.md` 第 8 節），
+> 產生器另加 `--main 48f394d`（本表的 PaaS 基準）；腳本與輸入的 SHA-256 以 repo 外的 `wave0/hm00-check/SHA256SUMS` 為準。
+> 歸屬的語意（對到的測試或差異列說的是不是同一件事）靠人工抽查。
 
 ## 結論
 
-- 範圍：56 個檔、606 個案例，每檔每案都有歸屬。其中 pin `69ac425` 的範圍是 53 檔、541 案；pin 之後合併進來的 D 組 3 檔、65 案。
-- 歸屬（一案可以同時有兩種）：對到 HA 測試 435 案；對到刻意差異表（契約第 9 節，下稱 §8.8）279 案；只能標「不適用」36 案。
-- pin 之後：`origin/main` 到 `7d111b1`。#148 後續（`091dfbc`，#150）只改文件、測試與註解，`test_gateway_queue.py` 沒有新增或刪除案例；#149（head `3d33bc5`）已在 2026-11-14 14:19（台北）合併，它的 query 憑證測試照計畫 §10.5 併進 D 組，對到 HM-02（見文末）。
+- 範圍：79 個檔、823 個案例，每檔每案都有歸屬。其中 pin `69ac425` 的範圍是 53 檔、541 案；pin 之後合併進來的 D 組 26 檔、282 案。
+- 歸屬（一案可以同時有兩種）：對到 HA 測試 606 案；對到刻意差異表（契約第 9 節，下稱 §8.8）348 案；只能標「不適用」70 案。
+- pin 之後：`origin/main` 到 `48f394d`。
+  - `69ac425..7d111b1`：#148 後續（`091dfbc`，#150）只改文件、測試與註解，`test_gateway_queue.py` 沒有新增或刪除案例；#149（head `3d33bc5`）已在 2026-11-14 14:19（台北）合併，它的 query 憑證測試照計畫 §10.5 併進 D 組，對到 HM-02。
+  - `7d111b1..48f394d`（台北 2026-11-14 22:30 到 11-17 03:58，9 個 PR）：#151 移除 VK，只刪 VK 的案例與參數（不在範圍）；#152、#154（Nextcloud 存檔與測試連線過 SSRF、日誌遮罩保留 args 形狀；換使用者或網址換 token）對到契約 §8.8 #39、#59、#86、#113、#114、#116、HM-20 的測試與 HM-22 的暫定測試；#153（EMQX 小修）不是多帳號行為，交 HM-23；#155（閘道請求內容位元組預算與 JSON 結構守門）照 HM-31 筆記逐案對到 HM-31 的測試與 §8.8 #101～#108；#135、#139（EMQX、LiteLLM 不保留閒置連線）對到 HM-32；#138（Hermes 建停用的排程）對到 HA 既有的測試（PR #85，還沒發版）；#156 只改 Hermes 的說明（HM-33），沒有測試。新的測試檔併進 D 組（見文末「pin 之後的變動」）。
 
 ## 範圍怎麼來
 
@@ -22,7 +26,7 @@
    結果 35 檔（A 組）。
 2. #148 新增、查詢沒抓到的 6 檔（`git diff --stat 443e95a 69ac425 -- '*test*'`，B 組）。
 3. 研究報告 R03～R06 點名的 11 檔，加上 R06 引用的 launch policy 測試（C 組）。計畫寫的 `apps/headscale/tests/test_launch_policy.py` 在 `69ac425` 不存在；R06 實際引用的是 `packages/mcp-admin-core/tests/test_launch_policy.py`，本表用這個路徑。`test_setup_status.py` 在 `69ac425` 有兩個，本表用 R03 點名的 `packages/mcp-admin-core/tests/test_setup_status.py`（41 案）。
-4. pin 之後（D 組）：`git diff --name-only 69ac425 origin/main -- '*test*'`；pin 沒有的檔整個算新增，pin 就有的檔只看新增或刪除的案例。
+4. pin 之後（D 組）：`git diff --name-only 69ac425 48f394d -- '*test*'`（本表的 PaaS 基準 `48f394d`）；pin 沒有的檔整個算新增，pin 就有的檔只看新增或刪除的案例。不在多帳號範圍的產品修正也照這條規則併進來，歸屬寫明交給哪一片。
 
 案例的定義：Python 檔是模組層或類別內名稱以 `test_` 開頭的函式；JS 檔是 `test(…)`／`it(…)`；不是 pytest 的瀏覽器腳本與輔助檔（`conftest.py`、替身伺服器、fixture 模組）整個檔算一案，名稱寫「（整個檔）」。parametrize 展開的子案不另列。
 
@@ -31,14 +35,14 @@
 | A｜查詢抓到的檔 | 35 | 353 |
 | B｜#148 新增、查詢沒抓到的檔 | 6 | 35 |
 | C｜研究報告點名的檔 | 12 | 153 |
-| D｜pin 之後合併進來的檔 | 3 | 65 |
-| 合計 | 56 | 606 |
+| D｜pin 之後合併進來的檔 | 26 | 282 |
+| 合計 | 79 | 823 |
 
 ## 讀法
 
 - `HA：<檔>（<切片>）`：HA 對應的測試。「既有」是 bb48449 已有的測試；「HM-xx」是計畫中的新測試，檔名照計畫 §10.3（登記在 `acceptance-matrix.md` 的測試檔登記表）；「暫定名」是產品片的檔名，由該片定案。
 - `§8.8 #n`：HA 刻意和 PaaS 不同，HA 的期望值看 `contract.md` 第 9 節（刻意差異表）第 n 列，PaaS 案例的期望值不直接適用。
-- `不適用：<理由>`：PaaS 專屬機制，HA 沒有可對照的東西。
+- `不適用：<理由>`：PaaS 專屬機制，HA 沒有可對照的東西；或 D 組裡不是多帳號行為的產品修正（理由寫明交給哪一片）。
 - 不搬 PaaS 測試檔；例外是遮罩的純測試（DQ-38 選 (a)：`log_redaction.py` 與純測試原樣 vendor，HM-02）。
 
 ## 全表
@@ -61,7 +65,7 @@
 
 | # | 行 | 案例 | 歸屬 |
 |---|---|---|---|
-| 1 | 1 | （整個檔） | HA：`packages/mcp-admin-ui/tests/browser/profiles.spec.mjs`（HM-11），帳號選單、帶標頭、切換時藏 token 與丟棄晚到回應 |
+| 1 | 1 | （整個檔） | HA：`packages/mcp-admin-ui/tests/browser/profiles.spec.mjs`（HM-11），帳號選單、帶標頭、切換時藏 token 與丟棄晚到回應；§8.8 #109（刪除要兩段確認） |
 
 #### `apps/headscale/tests/test_restore_admin_sessions.py`（1 案）
 
@@ -192,18 +196,18 @@
 | 3 | 194 | `test_queue_is_capped_per_profile_and_the_overflow_gets_a_clean_busy_answer_with_a_warning` | HA：`tests/test_gateway_queue_ha.py`（HM-14），排隊 32／16、保留 4；§8.8 #15 |
 | 4 | 241 | `test_zero_queue_means_no_waiting_at_all` | §8.8 #45（HA 排隊上限是程式常數，沒有環境變數，也沒有 0＝不排隊） |
 | 5 | 262 | `test_limits_from_environment_include_the_queue` | §8.8 #45（HA 排隊上限是程式常數，沒有環境變數，也沒有 0＝不排隊） |
-| 6 | 288 | `test_notifications_get_through_when_every_ordinary_slot_is_busy` | HA：`tests/test_carries_no_request.py`（HM-14），通知保留名額 4 |
-| 7 | 337 | `test_get_streams_never_use_the_notification_reserve` | HA：`tests/test_carries_no_request.py`（HM-14），通知保留名額 4 |
+| 6 | 288 | `test_notifications_get_through_when_every_ordinary_slot_is_busy` | HA：`tests/test_carries_no_request.py`（HM-14），通知保留名額 4；§8.8 #91、#96（HA 只轉送 `notifications/initialized`，准入滿時照樣送到） |
+| 7 | 337 | `test_get_streams_never_use_the_notification_reserve` | HA：`tests/test_carries_no_request.py`（HM-14），通知保留名額 4；§8.8 #91、#96（HA 只轉送 `notifications/initialized`，准入滿時照樣送到） |
 | 8 | 395 | `test_queued_request_is_dropped_when_its_client_goes_away_and_is_never_sent` | HA：`tests/test_gateway_queue_ha.py`（HM-14），排隊 32／16、保留 4；§8.8 #15 |
 | 9 | 423 | `test_slot_granted_in_the_same_instant_the_client_leaves_is_given_back_not_used` | HA：`tests/test_gateway_queue_ha.py`（HM-14），排隊 32／16、保留 4；§8.8 #15 |
 | 10 | 456 | `test_cancelling_a_queued_request_returns_nothing_and_leaks_no_slot` | HA：`tests/test_gateway_queue_ha.py`（HM-14），排隊 32／16、保留 4；§8.8 #15 |
 | 11 | 484 | `test_a_broken_disconnect_watcher_does_not_look_like_a_disconnect` | HA：`tests/test_gateway_queue_ha.py`（HM-14），排隊 32／16、保留 4；§8.8 #15 |
 | 12 | 503 | `test_request_without_hints_behaves_exactly_as_before` | HA：`tests/test_single_profile_golden.py`（HM-01），開關關時與今天逐位元相同 |
 | 13 | 518 | `test_queue_cap_refuses_the_overflow_at_once_and_other_profiles_are_unaffected` | HA：`tests/test_gateway_queue_ha.py`（HM-14），排隊 32／16、保留 4；§8.8 #15 |
-| 14 | 547 | `test_notification_lane_is_separate_from_the_ordinary_slots` | HA：`tests/test_carries_no_request.py`（HM-14），通知保留名額 4 |
+| 14 | 547 | `test_notification_lane_is_separate_from_the_ordinary_slots` | HA：`tests/test_carries_no_request.py`（HM-14），通知保留名額 4；§8.8 #91、#96（HA 只轉送 `notifications/initialized`，准入滿時照樣送到） |
 | 15 | 571 | `test_slot_accounting_survives_random_cancellation_disconnects_timeouts_and_overflow` | HA：`tests/test_gateway_queue_ha.py`（HM-14），排隊 32／16、保留 4；§8.8 #15 |
 | 16 | 635 | `test_shared_pool_has_room_for_every_profiles_slots_and_reserve` | §8.8 #15（HA 沒有共用池，每帳號一個 httpx client）；HA：`tests/test_profile_quotas.py`（HM-08） |
-| 17 | 654 | `test_initialize_waiting_for_a_slot_during_startup_gets_the_normal_busy_answer` | HA：`tests/test_gateway_busy_shapes.py`（HM-14） |
+| 17 | 654 | `test_initialize_waiting_for_a_slot_during_startup_gets_the_normal_busy_answer` | HA：`tests/test_gateway_busy_shapes.py`（HM-14）；§8.8 #68（子程式沒起時閘道自答 initialize，在名額之前） |
 | 18 | 809 | `test_a_request_that_waited_for_a_slot_keeps_holding_it_until_its_response_closes` | HA：`tests/test_gateway_queue_ha.py`（HM-14），排隊 32／16、保留 4；§8.8 #15 |
 | 19 | 844 | `test_shared_pool_size_is_pinned_to_the_documented_formula` | §8.8 #15（HA 沒有共用池，每帳號一個 httpx client）；HA：`tests/test_profile_quotas.py`（HM-08） |
 | 20 | 861 | `test_queue_limit_counts_each_lane_on_its_own` | HA：`tests/test_gateway_queue_ha.py`（HM-14），排隊 32／16、保留 4；§8.8 #15 |
@@ -521,7 +525,7 @@
 
 | # | 行 | 案例 | 歸屬 |
 |---|---|---|---|
-| 1 | 16 | `authenticated management requests carry the selected profile; global routes do not` | HA：`packages/mcp-admin-ui/tests/profiles.test.mjs`（HM-11），開通後每個帳號範圍請求都帶 `X-MCP-Profile`（含 `default`）；§8.8 #31 |
+| 1 | 16 | `authenticated management requests carry the selected profile; global routes do not` | HA：`packages/mcp-admin-ui/tests/profiles.test.mjs`（HM-11），開通後每個帳號範圍請求都帶 `X-MCP-Profile`（含 `default`）；§8.8 #31；§8.8 #110（每次開面板的第一個 bootstrap 刻意不帶） |
 | 2 | 44 | `profile create, rename, and delete use the profile routes and expected bodies` | HA：`packages/mcp-admin-ui/tests/profiles.test.mjs`（HM-11）；§8.8 #34 |
 | 3 | 65 | `log stream uses the profile header and parses split SSE frames` | §8.8 #29 |
 
@@ -546,13 +550,13 @@
 
 | # | 行 | 案例 | 歸屬 |
 |---|---|---|---|
-| 1 | 1 | （整個檔） | HA：`packages/mcp-admin-ui/tests/browser/partial-settings.spec.mjs`（既有），單帳號既有測試；HM-11 開關開與關都要照過，HM-12 起 `profiles-on` 略過前兩案（網址改到別台卻保留已存金鑰，開通後要重填，DQ-40 ⑨）；HA：`packages/mcp-admin-ui/tests/browser/backend-identity.spec.mjs`（HM-12），開通的版本：重填金鑰、清掉 MCP token 後讀回，衝突時保留草稿 |
+| 1 | 1 | （整個檔） | HA：`packages/mcp-admin-ui/tests/browser/partial-settings.spec.mjs`（既有），單帳號既有測試；HM-11 開關開與關都要照過，HM-12 起 `profiles-on` 略過前兩案（網址改到別台卻保留已存金鑰，開通後要重填，DQ-40 ⑨）；HA：`packages/mcp-admin-ui/tests/browser/backend-identity.spec.mjs`（HM-12），開通的版本：重填金鑰、清掉 MCP token 後讀回，衝突時保留草稿；§8.8 #117（開通後網址改到另一個來源時，那條網址的已存秘密改成必填） |
 
 #### `packages/mcp-admin-ui/tests/profile_browser.py`（1 案）
 
 | # | 行 | 案例 | 歸屬 |
 |---|---|---|---|
-| 1 | 1 | （整個檔） | HA：`packages/mcp-admin-ui/tests/browser/profiles.spec.mjs`（HM-11）；§8.8 #11、#36 |
+| 1 | 1 | （整個檔） | HA：`packages/mcp-admin-ui/tests/browser/profiles.spec.mjs`（HM-11）；§8.8 #11、#36；§8.8 #109（刪除要兩段確認） |
 
 #### `packages/mcp-admin-ui/tests/settings_mask_browser.py`（8 案）
 
@@ -580,33 +584,33 @@
 | # | 行 | 案例 | 歸屬 |
 |---|---|---|---|
 | 1 | 84 | `test_connection_error_with_the_child_still_running_says_so` | HA：`tests/test_gateway_stream_endings.py`（HM-14），`-32004` 依原因 |
-| 2 | 105 | `test_child_that_stopped_during_the_request_keeps_the_established_message` | HA：`tests/test_gateway_stream_endings.py`（HM-14），`-32004` 依原因 |
-| 3 | 126 | `test_manager_noticing_the_exit_a_moment_later_is_still_reported_as_stopped` | HA：`tests/test_gateway_stream_endings.py`（HM-14），`-32004` 依原因 |
-| 4 | 145 | `test_batch_and_streams_get_the_same_wording` | HA：`tests/test_gateway_stream_endings.py`（HM-14），`-32004` 依原因 |
+| 2 | 105 | `test_child_that_stopped_during_the_request_keeps_the_established_message` | HA：`tests/test_gateway_stream_endings.py`（HM-14），`-32004` 依原因；§8.8 #100（停止後看 Supervisor 的狀態才說會不會自動重新啟動） |
+| 3 | 126 | `test_manager_noticing_the_exit_a_moment_later_is_still_reported_as_stopped` | HA：`tests/test_gateway_stream_endings.py`（HM-14），`-32004` 依原因；§8.8 #100（停止後看 Supervisor 的狀態才說會不會自動重新啟動） |
+| 4 | 145 | `test_batch_and_streams_get_the_same_wording` | HA：`tests/test_gateway_stream_endings.py`（HM-14）；§8.8 #16（batch 從不轉送，403） |
 | 5 | 161 | `test_mid_sse_disconnect_with_the_child_still_running` | HA：`tests/test_gateway_stream_endings.py`（HM-14），`-32004` 依原因 |
-| 6 | 173 | `test_mid_sse_disconnect_when_the_child_stopped` | HA：`tests/test_gateway_stream_endings.py`（HM-14），`-32004` 依原因 |
+| 6 | 173 | `test_mid_sse_disconnect_when_the_child_stopped` | HA：`tests/test_gateway_stream_endings.py`（HM-14），`-32004` 依原因；§8.8 #100（停止後看 Supervisor 的狀態才說會不會自動重新啟動） |
 | 7 | 186 | `test_buffered_tools_list_disconnect_follows_the_same_rule` | HA：`tests/test_gateway_stream_endings.py`（HM-14），`-32004` 依原因 |
-| 8 | 198 | `test_log_line_names_the_cause_without_a_traceback_or_token` | HA：`tests/test_gateway_stream_endings.py`（HM-14）；HA：`tests/log_scan.py`（HM-01） |
-| 9 | 234 | `test_real_child_killed_mid_request_is_reported_as_stopped` | HA：`tests/test_gateway_stream_endings.py`（HM-14），`-32004` 依原因 |
+| 8 | 198 | `test_log_line_names_the_cause_without_a_traceback_or_token` | HA：`tests/test_gateway_stream_endings.py`（HM-14）；HA：`tests/log_scan.py`（HM-01）；§8.8 #93（每帳號每種原因 60 秒一行） |
+| 9 | 234 | `test_real_child_killed_mid_request_is_reported_as_stopped` | HA：`tests/test_gateway_stream_endings.py`（HM-14），`-32004` 依原因；§8.8 #100（停止後看 Supervisor 的狀態才說會不會自動重新啟動） |
 
 #### `packages/mcp-admin-core/tests/test_initialize_fence_backpressure.py`（5 案）
 
 | # | 行 | 案例 | 歸屬 |
 |---|---|---|---|
 | 1 | 72 | `test_token_rotated_while_the_headers_are_stuck_gets_a_clean_403_and_no_exception` | HA：`tests/test_gateway_stream_endings.py`（HM-14），標頭前換 token 乾淨拒絕、不丟例外給 uvicorn；§8.8 #1（HA 拒絕碼是 401／404） |
-| 2 | 109 | `test_token_rotated_in_the_same_instant_the_headers_are_accepted_ends_cleanly` | HA：`tests/test_gateway_stream_endings.py`（HM-14），標頭前換 token 乾淨拒絕、不丟例外給 uvicorn；§8.8 #1（HA 拒絕碼是 401／404） |
+| 2 | 109 | `test_token_rotated_in_the_same_instant_the_headers_are_accepted_ends_cleanly` | HA：`tests/test_gateway_stream_endings.py`（HM-14）；§8.8 #92（一次送完的 JSON 帶 Content-Length，標頭已送出就關連線） |
 | 3 | 142 | `test_old_token_stays_rejected_after_the_fence_answered` | HA：`tests/test_gateway_stream_endings.py`（HM-14），標頭前換 token 乾淨拒絕、不丟例外給 uvicorn；§8.8 #1（HA 拒絕碼是 401／404） |
-| 4 | 219 | `test_only_the_fences_own_rejection_is_swallowed_never_another_error` | HA：`tests/test_gateway_stream_endings.py`（HM-14），標頭前換 token 乾淨拒絕、不丟例外給 uvicorn；§8.8 #1（HA 拒絕碼是 401／404） |
+| 4 | 219 | `test_only_the_fences_own_rejection_is_swallowed_never_another_error` | HA：`tests/test_gateway_stream_endings.py`（HM-14）；§8.8 #95（只有一層 LeasedResponse，沒有例外群組） |
 | 5 | 235 | `test_a_client_that_reads_nothing_does_not_hold_the_rejection_forever` | HA：`tests/test_gateway_stream_endings.py`（HM-14），標頭前換 token 乾淨拒絕、不丟例外給 uvicorn；§8.8 #1（HA 拒絕碼是 401／404） |
 
 #### `packages/mcp-admin-core/tests/test_proxy_carries_no_request.py`（4 案）
 
 | # | 行 | 案例 | 歸屬 |
 |---|---|---|---|
-| 1 | 112 | `test_anything_that_could_be_a_request_or_cannot_be_read_uses_the_ordinary_lane` | HA：`tests/test_carries_no_request.py`（HM-14） |
-| 2 | 117 | `test_only_notifications_and_responses_use_the_reserved_lane` | HA：`tests/test_carries_no_request.py`（HM-14） |
-| 3 | 122 | `test_only_post_can_use_the_reserved_lane` | HA：`tests/test_carries_no_request.py`（HM-14） |
-| 4 | 131 | `test_nothing_parsed_means_the_ordinary_lane` | HA：`tests/test_carries_no_request.py`（HM-14） |
+| 1 | 112 | `test_anything_that_could_be_a_request_or_cannot_be_read_uses_the_ordinary_lane` | HA：`tests/test_carries_no_request.py`（HM-14）；§8.8 #91（判斷函式照 PaaS，HA 的政策只轉送 `notifications/initialized`） |
+| 2 | 117 | `test_only_notifications_and_responses_use_the_reserved_lane` | HA：`tests/test_carries_no_request.py`（HM-14）；§8.8 #91（判斷函式照 PaaS，HA 的政策只轉送 `notifications/initialized`） |
+| 3 | 122 | `test_only_post_can_use_the_reserved_lane` | HA：`tests/test_carries_no_request.py`（HM-14）；§8.8 #91（判斷函式照 PaaS，HA 的政策只轉送 `notifications/initialized`） |
+| 4 | 131 | `test_nothing_parsed_means_the_ordinary_lane` | HA：`tests/test_carries_no_request.py`（HM-14）；§8.8 #91（判斷函式照 PaaS，HA 的政策只轉送 `notifications/initialized`） |
 
 #### `packages/mcp-admin-core/tests/test_proxy_location_hardening.py`（5 案）
 
@@ -655,9 +659,9 @@
 | 7 | 86 | `test_put_and_get_roundtrip` | 不適用：PaaS ConfigStore（快取、預設值合併）；HA 是 schema 4 精確鍵的 ProductState、每請求重讀；§8.8 #46 |
 | 8 | 91 | `test_get_returns_default_for_missing_key` | 不適用：PaaS ConfigStore（快取、預設值合併）；HA 是 schema 4 精確鍵的 ProductState、每請求重讀；§8.8 #46 |
 | 9 | 95 | `test_patch_merges_into_dict_value` | 不適用：PaaS ConfigStore（快取、預設值合併）；HA 是 schema 4 精確鍵的 ProductState、每請求重讀；§8.8 #46 |
-| 10 | 102 | `test_bound_connection_rotation_is_atomic_and_preserves_password_changes` | HA：`tests/test_odoo_identity_rotation.py`（HM-12） |
-| 11 | 137 | `test_initial_bound_connection_setup_keeps_issued_url` | HA：`tests/test_odoo_identity_rotation.py`（HM-12） |
-| 12 | 147 | `test_failed_account_rebind_restores_old_child_and_url` | HA：`tests/test_odoo_identity_rotation.py`（HM-12） |
+| 10 | 102 | `test_bound_connection_rotation_is_atomic_and_preserves_password_changes` | HA：`tests/test_odoo_identity_rotation.py`（HM-12）；§8.8 #59（歷史記 `rotate`） |
+| 11 | 137 | `test_initial_bound_connection_setup_keeps_issued_url` | HA：`tests/test_odoo_identity_rotation.py`（HM-12），初次設定不換 |
+| 12 | 147 | `test_failed_account_rebind_restores_old_child_and_url` | HA：`tests/test_odoo_identity_rotation.py`（HM-12）；§8.8 #114（停不下或寫入失敗時的回應與重起） |
 | 13 | 180 | `test_patch_resets_non_dict_value` | 不適用：PaaS ConfigStore（快取、預設值合併）；HA 是 schema 4 精確鍵的 ProductState、每請求重讀；§8.8 #46 |
 | 14 | 186 | `test_persistence_across_instances` | 不適用：PaaS ConfigStore（快取、預設值合併）；HA 是 schema 4 精確鍵的 ProductState、每請求重讀；§8.8 #46 |
 | 15 | 193 | `test_deep_merge_keeps_default_subkeys` | 不適用：PaaS ConfigStore（快取、預設值合併）；HA 是 schema 4 精確鍵的 ProductState、每請求重讀；§8.8 #46 |
@@ -680,7 +684,7 @@
 |---|---|---|---|
 | 1 | 54 | `test_non_string_connection_rejected_without_effects` | HA：`tests/test_connection_type_parity.py`（既有），單帳號規則每帳號沿用 |
 | 2 | 73 | `test_trim_and_blank_secret_keep_saved_credentials` | HA：`tests/test_connection_type_parity.py`（既有），單帳號規則每帳號沿用 |
-| 3 | 89 | `test_odoo_account_rebind_revokes_old_url_without_rotating_on_password_change` | HA：`tests/test_odoo_identity_rotation.py`（HM-12），只換密碼不換 token |
+| 3 | 89 | `test_odoo_account_rebind_revokes_old_url_without_rotating_on_password_change` | HA：`tests/test_odoo_identity_rotation.py`（HM-12），只換密碼不換 token；§8.8 #113（沒換時回應不帶 `token_rotated`） |
 | 4 | 131 | `test_generic_partial_update_and_empty_patch_keep_omitted_fields` | HA：`tests/test_connection_type_parity.py`（既有），單帳號規則每帳號沿用 |
 | 5 | 150 | `test_missing_and_stale_revision_do_not_save_or_apply` | HA：`tests/test_connection_type_parity.py`（既有），單帳號規則每帳號沿用 |
 | 6 | 165 | `test_unknown_keys_are_rejected_on_both_routes` | HA：`tests/test_connection_type_parity.py`（既有），單帳號規則每帳號沿用 |
@@ -712,16 +716,16 @@
 
 | # | 行 | 案例 | 歸屬 |
 |---|---|---|---|
-| 1 | 57 | `test_cooperative_header_cancel_allows_stop` | HA：`tests/test_initialize_generation.py`（HM-14），initialize 世代；HA：`tests/test_admin_operations.py`（既有），重啟收據 |
-| 2 | 71 | `test_stubborn_header_fences_then_new_operation_recovers` | HA：`tests/test_initialize_generation.py`（HM-14），initialize 世代；HA：`tests/test_admin_operations.py`（既有），重啟收據 |
-| 3 | 121 | `test_cooperative_header_allows_journalled_restart` | HA：`tests/test_initialize_generation.py`（HM-14），initialize 世代；HA：`tests/test_admin_operations.py`（既有），重啟收據 |
-| 4 | 148 | `test_restart_rechecks_revision_after_unlocked_drain` | HA：`tests/test_initialize_generation.py`（HM-14），initialize 世代；HA：`tests/test_admin_operations.py`（既有），重啟收據 |
-| 5 | 175 | `test_restart_rereads_journal_after_unlocked_drain` | HA：`tests/test_initialize_generation.py`（HM-14），initialize 世代；HA：`tests/test_admin_operations.py`（既有），重啟收據 |
-| 6 | 212 | `test_restart_cancelled_caller_finishes_accepted_operation` | HA：`tests/test_initialize_generation.py`（HM-14），initialize 世代；HA：`tests/test_admin_operations.py`（既有），重啟收據 |
-| 7 | 243 | `test_restart_rejects_replacement_during_unlocked_drain` | HA：`tests/test_initialize_generation.py`（HM-14），initialize 世代；HA：`tests/test_admin_operations.py`（既有），重啟收據 |
-| 8 | 270 | `test_interrupted_drain_keeps_receipt_unknown_and_new_id_can_recover` | HA：`tests/test_initialize_generation.py`（HM-14），initialize 世代；HA：`tests/test_admin_operations.py`（既有），重啟收據 |
+| 1 | 57 | `test_cooperative_header_cancel_allows_stop` | HA：`tests/test_initialize_generation.py`（HM-14），initialize 世代；HA：`tests/test_admin_operations.py`（既有），重啟收據；§8.8 #94（HA 沒有 drain，重啟不等閘道） |
+| 2 | 71 | `test_stubborn_header_fences_then_new_operation_recovers` | HA：`tests/test_initialize_generation.py`（HM-14），initialize 世代；HA：`tests/test_admin_operations.py`（既有），重啟收據；§8.8 #94（HA 沒有 drain，重啟不等閘道） |
+| 3 | 121 | `test_cooperative_header_allows_journalled_restart` | HA：`tests/test_initialize_generation.py`（HM-14），initialize 世代；HA：`tests/test_admin_operations.py`（既有），重啟收據；§8.8 #94（HA 沒有 drain，重啟不等閘道） |
+| 4 | 148 | `test_restart_rechecks_revision_after_unlocked_drain` | HA：`tests/test_initialize_generation.py`（HM-14），initialize 世代；HA：`tests/test_admin_operations.py`（既有），重啟收據；§8.8 #94（HA 沒有 drain，重啟不等閘道） |
+| 5 | 175 | `test_restart_rereads_journal_after_unlocked_drain` | HA：`tests/test_initialize_generation.py`（HM-14），initialize 世代；HA：`tests/test_admin_operations.py`（既有），重啟收據；§8.8 #94（HA 沒有 drain，重啟不等閘道） |
+| 6 | 212 | `test_restart_cancelled_caller_finishes_accepted_operation` | HA：`tests/test_initialize_generation.py`（HM-14），initialize 世代；HA：`tests/test_admin_operations.py`（既有），重啟收據；§8.8 #94（HA 沒有 drain，重啟不等閘道） |
+| 7 | 243 | `test_restart_rejects_replacement_during_unlocked_drain` | HA：`tests/test_initialize_generation.py`（HM-14），initialize 世代；HA：`tests/test_admin_operations.py`（既有），重啟收據；§8.8 #94（HA 沒有 drain，重啟不等閘道） |
+| 8 | 270 | `test_interrupted_drain_keeps_receipt_unknown_and_new_id_can_recover` | HA：`tests/test_initialize_generation.py`（HM-14），initialize 世代；HA：`tests/test_admin_operations.py`（既有），重啟收據；§8.8 #94（HA 沒有 drain，重啟不等閘道） |
 | 9 | 310 | `test_profile_b_restart_completes_while_profile_a_drains` | HA：`tests/test_profile_admin_api.py`（HM-10），只重啟該帳號、互不等待；HA：`tests/test_profile_lifecycle.py`（HM-09） |
-| 10 | 373 | `test_same_and_new_id_during_drain_preserve_receipts` | HA：`tests/test_initialize_generation.py`（HM-14），initialize 世代；HA：`tests/test_admin_operations.py`（既有），重啟收據 |
+| 10 | 373 | `test_same_and_new_id_during_drain_preserve_receipts` | HA：`tests/test_initialize_generation.py`（HM-14），initialize 世代；HA：`tests/test_admin_operations.py`（既有），重啟收據；§8.8 #94（HA 沒有 drain，重啟不等閘道） |
 
 #### `packages/mcp-admin-core/tests/test_setup_status.py`（41 案）
 
@@ -791,9 +795,9 @@
 | 2 | 30 | `test_only_addresses_that_accept_loopback_v4_connections_count` | HA：`tests/test_child_identity.py`（HM-15，條件式）；§8.8 #13 |
 | 3 | 41 | `test_listener_report_owned_foreign_and_not_listening` | HA：`tests/test_child_identity.py`（HM-15，條件式）；§8.8 #13 |
 | 4 | 54 | `test_wildcard_listener_counts_and_other_loopback_address_does_not` | HA：`tests/test_child_identity.py`（HM-15，條件式）；§8.8 #13 |
-| 5 | 70 | `test_port_occupied_detects_listeners_and_ignores_free_ports` | HA：`tests/test_profile_ports.py`（HM-09），試綁四種位址確認沒人佔 |
-| 6 | 79 | `test_port_occupied_detects_a_bound_socket_without_reuse` | HA：`tests/test_profile_ports.py`（HM-09），試綁四種位址確認沒人佔 |
-| 7 | 85 | `test_port_occupied_detects_ipv6_loopback_listener` | HA：`tests/test_profile_ports.py`（HM-09），試綁四種位址確認沒人佔 |
+| 5 | 70 | `test_port_occupied_detects_listeners_and_ignores_free_ports` | HA：`tests/test_profile_ports.py`（HM-09），試綁四種位址確認沒人佔；§8.8 #89（IPv6 試綁被平台擋時跳過） |
+| 6 | 79 | `test_port_occupied_detects_a_bound_socket_without_reuse` | HA：`tests/test_profile_ports.py`（HM-09），試綁四種位址確認沒人佔；§8.8 #89（IPv6 試綁被平台擋時跳過） |
+| 7 | 85 | `test_port_occupied_detects_ipv6_loopback_listener` | HA：`tests/test_profile_ports.py`（HM-09），試綁四種位址確認沒人佔；§8.8 #89（IPv6 試綁被平台擋時跳過） |
 | 8 | 98 | `test_admin_listener_ports_lists_this_process_listeners` | HA：`tests/test_profile_ports.py`（HM-09），避開 3000、8081、8099 |
 | 9 | 116 | `test_uvicorn_command_line_port` | 不適用：PaaS 子程式以 uvicorn 參數帶 port；HA：`tests/test_child_port_param.py`（HM-04），port 由 child_spec 組出 |
 | 10 | 121 | `test_spawn_argv_sets_parent_death_signal_in_the_real_command` | 不適用：PaaS 子程式 exec 包裝（parent death signal）；HA 由 Supervisor 的 subreaper 與整組停止處理，見既有 `tests/test_lifecycle.py` |
@@ -857,13 +861,345 @@
 
 ### D｜pin 之後合併進來的檔
 
-#### `packages/mcp-admin-core/tests/fixtures/log_redaction_443e95a.py`（1 案，`7d111b1`）
+#### `apps/emqx/tests/test_long_identifiers.py`（9 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 106 | `test_an_overlong_identifier_gets_the_fixed_code_and_never_leaves_the_process` | 不適用：EMQX 單帳號的工具修正（PaaS #153：超長識別字的固定錯誤碼），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 2 | 122 | `test_the_fixed_code_does_not_depend_on_what_the_long_value_is_made_of` | 不適用：EMQX 單帳號的工具修正（PaaS #153：超長識別字的固定錯誤碼），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 3 | 133 | `test_the_real_child_prints_no_traceback_to_its_stdout_for_an_overlong_identifier` | 不適用：EMQX 單帳號的工具修正（PaaS #153：超長識別字的固定錯誤碼），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 4 | 181 | `test_a_path_value_that_cannot_be_encoded_is_refused_with_the_fixed_code` | 不適用：EMQX 單帳號的工具修正（PaaS #153：超長識別字的固定錯誤碼），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 5 | 190 | `test_a_request_that_cannot_be_built_is_denied_before_any_io` | 不適用：EMQX 單帳號的工具修正（PaaS #153：超長識別字的固定錯誤碼），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 6 | 201 | `test_a_path_httpx_would_refuse_is_denied_before_the_path_analysis_does_any_work` | 不適用：EMQX 單帳號的工具修正（PaaS #153：超長識別字的固定錯誤碼），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 7 | 213 | `test_a_lone_surrogate_in_a_tool_argument_gets_the_fixed_code` | 不適用：EMQX 單帳號的工具修正（PaaS #153：超長識別字的固定錯誤碼），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 8 | 228 | `test_a_long_but_valid_identifier_still_reaches_the_broker_unchanged` | 不適用：EMQX 單帳號的工具修正（PaaS #153：超長識別字的固定錯誤碼），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 9 | 237 | `test_the_limit_is_on_the_encoded_length_so_a_cjk_value_stops_earlier` | 不適用：EMQX 單帳號的工具修正（PaaS #153：超長識別字的固定錯誤碼），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+
+#### `apps/emqx/tests/test_prometheus_accept.py`（14 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 56 | `test_the_prometheus_tool_asks_for_text_and_returns_the_exposition_text` | 不適用：EMQX 單帳號的工具修正（PaaS #153：Prometheus 統計改回文字格式），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 2 | 65 | `test_the_exposition_text_is_cut_at_max_bytes_not_in_the_middle_of_json` | 不適用：EMQX 單帳號的工具修正（PaaS #153：Prometheus 統計改回文字格式），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 3 | 75 | `test_a_broker_that_still_answers_json_is_passed_through_as_before` | 不適用：EMQX 單帳號的工具修正（PaaS #153：Prometheus 統計改回文字格式），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 4 | 85 | `test_every_other_tool_keeps_asking_for_json` | 不適用：EMQX 單帳號的工具修正（PaaS #153：Prometheus 統計改回文字格式），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 5 | 108 | `test_empty_exposition_text_is_refused_not_reported_as_success` | 不適用：EMQX 單帳號的工具修正（PaaS #153：Prometheus 統計改回文字格式），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 6 | 115 | `test_a_204_for_the_text_request_is_not_an_empty_success_either` | 不適用：EMQX 單帳號的工具修正（PaaS #153：Prometheus 統計改回文字格式），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 7 | 121 | `test_text_over_4_mib_is_refused` | 不適用：EMQX 單帳號的工具修正（PaaS #153：Prometheus 統計改回文字格式），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 8 | 128 | `test_exactly_4_mib_of_text_is_still_served_and_truncated` | 不適用：EMQX 單帳號的工具修正（PaaS #153：Prometheus 統計改回文字格式），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 9 | 135 | `test_compressed_text_is_refused` | 不適用：EMQX 單帳號的工具修正（PaaS #153：Prometheus 統計改回文字格式），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 10 | 143 | `test_error_statuses_for_the_text_request_are_mapped_like_any_other_tool` | 不適用：EMQX 單帳號的工具修正（PaaS #153：Prometheus 統計改回文字格式），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 11 | 151 | `test_other_tools_still_refuse_empty_and_malformed_200_json` | 不適用：EMQX 單帳號的工具修正（PaaS #153：Prometheus 統計改回文字格式），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 12 | 161 | `test_transport_serves_text_only_when_asked_with_the_fixed_value` | 不適用：EMQX 單帳號的工具修正（PaaS #153：Prometheus 統計改回文字格式），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 13 | 175 | `test_any_other_accept_value_is_refused_before_io` | 不適用：EMQX 單帳號的工具修正（PaaS #153：Prometheus 統計改回文字格式），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 14 | 183 | `test_callers_still_cannot_pass_headers_or_other_request_options` | 不適用：EMQX 單帳號的工具修正（PaaS #153：Prometheus 統計改回文字格式），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+
+#### `apps/emqx/tests/test_request_structure_guard.py`（5 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 24 | `test_app_has_the_default_structure_limits` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 2 | 30 | `test_too_deep_request_is_refused` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 3 | 38 | `test_too_many_elements_are_refused` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 4 | 46 | `test_legitimate_large_calls_are_parsed` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 5 | 54 | `test_utf16_and_utf32_bodies_are_refused_but_utf8_cjk_and_emoji_pass` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+
+#### `apps/emqx/tests/test_subscription_match_topic.py`（6 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 45 | `test_descriptions_no_longer_claim_the_opposite_direction` | 不適用：EMQX 單帳號的工具修正（PaaS #153：`match_topic` 的說明與參數），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 2 | 53 | `test_match_topic_parameter_states_what_the_broker_really_does` | 不適用：EMQX 單帳號的工具修正（PaaS #153：`match_topic` 的說明與參數），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 3 | 64 | `test_tool_description_names_the_way_to_answer_who_receives` | 不適用：EMQX 單帳號的工具修正（PaaS #153：`match_topic` 的說明與參數），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 4 | 77 | `test_match_topic_is_forwarded_unchanged_as_a_query_parameter` | 不適用：EMQX 單帳號的工具修正（PaaS #153：`match_topic` 的說明與參數），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 5 | 87 | `test_other_filters_keep_their_query_names` | 不適用：EMQX 單帳號的工具修正（PaaS #153：`match_topic` 的說明與參數），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+| 6 | 97 | `test_rows_are_returned_as_the_broker_sent_them_without_client_side_matching` | 不適用：EMQX 單帳號的工具修正（PaaS #153：`match_topic` 的說明與參數），不是多帳號行為，HA 要不要跟進交 HM-23 對照（FEATURE-MATRIX §2.12） |
+
+#### `apps/emqx/tests/test_transport.py`（1 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 108 | `test_each_request_resolves_and_uses_fresh_pinned_socket` | HA：`tests/test_fresh_backend_connections.py`（HM-32），`test_each_request_resolves_and_uses_a_fresh_pinned_connection` |
+
+#### `apps/headscale/tests/test_request_structure_guard.py`（6 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 14 | `test_declared_limits_are_unchanged_and_shared_with_the_structure_guard` | §8.8 #106（HA 的 Headscale 和其他產品同一組上限，沒有自己的 McpRequestLimits） |
+| 2 | 21 | `test_structure_amplification_outside_the_arguments_is_refused` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 3 | 31 | `test_legitimate_call_is_parsed` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 4 | 35 | `test_utf16_and_utf32_bodies_are_refused_before_any_parsing` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 5 | 45 | `test_valid_utf8_cjk_and_emoji_is_parsed` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 6 | 51 | `test_structure_refusal_has_the_same_format_as_the_other_products` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+
+#### `apps/hermes/tests/test_dashboard_response_shapes.py`（2 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 206 | `test_cron_create_sends_consistent_pause_flags` | HA：`tests/test_hermes_cron_paused_contract.py`（既有），HA PR #85，2026-11-12 合併、還沒發版 |
+| 2 | 231 | `test_cron_create_strict_legacy_schema_rejects_without_unsafe_retry` | HA：`tests/test_hermes_cron_paused_contract.py`（既有），HA PR #85，2026-11-12 合併、還沒發版 |
+
+#### `apps/hermes/tests/test_request_structure_guard.py`（5 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 24 | `test_app_has_the_default_structure_limits` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 2 | 30 | `test_too_deep_request_is_refused` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 3 | 38 | `test_too_many_elements_are_refused` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 4 | 46 | `test_legitimate_large_calls_are_parsed` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 5 | 54 | `test_utf16_and_utf32_bodies_are_refused_but_utf8_cjk_and_emoji_pass` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+
+#### `apps/k8s/tests/test_request_structure_guard.py`（5 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 24 | `test_app_has_the_default_structure_limits` | 不適用：HA 沒有 k8s 產品 |
+| 2 | 30 | `test_too_deep_request_is_refused` | 不適用：HA 沒有 k8s 產品 |
+| 3 | 38 | `test_too_many_elements_are_refused` | 不適用：HA 沒有 k8s 產品 |
+| 4 | 46 | `test_legitimate_large_calls_are_parsed` | 不適用：HA 沒有 k8s 產品 |
+| 5 | 54 | `test_utf16_and_utf32_bodies_are_refused_but_utf8_cjk_and_emoji_pass` | 不適用：HA 沒有 k8s 產品 |
+
+#### `apps/litellm/tests/test_recovery_pool.py`（1 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 60 | `test_first_key_info_after_health_recovery_uses_fresh_connection` | HA：`tests/test_fresh_backend_connections.py`（HM-32），`test_the_first_call_after_a_recovery_uses_a_fresh_connection` |
+
+#### `apps/litellm/tests/test_request_structure_guard.py`（5 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 24 | `test_app_has_the_default_structure_limits` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 2 | 30 | `test_too_deep_request_is_refused` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 3 | 38 | `test_too_many_elements_are_refused` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 4 | 46 | `test_legitimate_large_calls_are_parsed` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 5 | 54 | `test_utf16_and_utf32_bodies_are_refused_but_utf8_cjk_and_emoji_pass` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+
+#### `apps/n8n/tests/test_request_structure_guard.py`（6 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 14 | `test_declared_limits_are_unchanged_and_shared_with_the_structure_guard` | HA：`tests/test_request_structure.py`（HM-31），n8n 先跑同一道守門、拒收照 PaaS（`test_n8n_runs_the_guard_first_and_answers_its_refusals_as_paas_does`） |
+| 2 | 21 | `test_structure_amplification_outside_the_arguments_is_refused` | HA：`tests/test_request_structure.py`（HM-31），n8n 先跑同一道守門、拒收照 PaaS（`test_n8n_runs_the_guard_first_and_answers_its_refusals_as_paas_does`） |
+| 3 | 31 | `test_legitimate_call_is_parsed` | HA：`tests/test_request_structure.py`（HM-31），n8n 先跑同一道守門、拒收照 PaaS（`test_n8n_runs_the_guard_first_and_answers_its_refusals_as_paas_does`） |
+| 4 | 35 | `test_utf16_and_utf32_bodies_are_refused_before_any_parsing` | HA：`tests/test_request_structure.py`（HM-31），n8n 先跑同一道守門、拒收照 PaaS（`test_n8n_runs_the_guard_first_and_answers_its_refusals_as_paas_does`） |
+| 5 | 45 | `test_valid_utf8_cjk_and_emoji_is_parsed` | HA：`tests/test_request_structure.py`（HM-31），n8n 先跑同一道守門、拒收照 PaaS（`test_n8n_runs_the_guard_first_and_answers_its_refusals_as_paas_does`） |
+| 6 | 51 | `test_structure_refusal_has_the_same_format_as_the_other_products` | HA：`tests/test_request_structure.py`（HM-31），n8n 先跑同一道守門、拒收照 PaaS（`test_n8n_runs_the_guard_first_and_answers_its_refusals_as_paas_does`） |
+
+#### `apps/nextcloud/tests/test_base_url_ssrf.py`（20 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 168 | `test_save_refuses_urls_the_core_refuses_and_keeps_the_config` | §8.8 #39（Nextcloud 的存檔與測試連線）；HA：`tests/test_saved_destinations.py`（HM-20 擴充），開通後存檔拒 loopback |
+| 2 | 185 | `test_save_refuses_before_any_effect_whatever_restart_says` | §8.8 #39（Nextcloud 的存檔與測試連線）；HA：`tests/test_saved_destinations.py`（HM-20 擴充），開通後存檔拒 loopback |
+| 3 | 210 | `test_save_accepts_legitimate_public_urls` | HA：`tests/test_saved_destinations.py`（HM-20 擴充），區網與公開網址照存 |
+| 4 | 217 | `test_save_checks_each_hostname_through_the_resolver_only` | §8.8 #39（HA 存檔不解析 DNS，名稱留到連線時解析後擋） |
+| 5 | 225 | `test_save_refuses_a_name_that_does_not_resolve` | §8.8 #39（HA 存檔不解析 DNS，名稱留到連線時解析後擋） |
+| 6 | 236 | `test_clearing_and_unconfigured_accounts_are_not_checked` | HA：`tests/test_saved_destinations.py`（HM-20 擴充），只檢查這次改到的網址 |
+| 7 | 248 | `test_save_still_rejects_malformed_urls_before_the_ssrf_check` | HA：`tests/test_saved_destinations.py`（既有），既有的存檔檢查（帶帳密、`?`、路徑寫法） |
+| 8 | 258 | `test_a_check_that_blows_up_is_a_400_not_a_500` | §8.8 #39（HA 存檔的 loopback 檢查不解析 DNS） |
+| 9 | 292 | `test_modes_follow_the_core_documentation` | §8.8 #39、#45（HA 沒有 SSRF 模式的設定） |
+| 10 | 309 | `test_launch_policy_declares_base_url_as_the_url_field` | HA：`tests/test_identity_fields.py`（HM-07），每產品的網址欄位與秘密欄位分類 |
+| 11 | 319 | `test_shared_settings_connection_path_is_guarded_too` | §8.8 #39、#86；HA：`tests/test_saved_destinations.py`（HM-20 擴充），開通後存檔拒 loopback |
+| 12 | 335 | `test_extra_accounts_go_through_the_same_check` | HA：`tests/test_saved_destinations.py`（HM-20 擴充），開通後存檔拒 loopback；HA：`tests/test_backend_loopback.py`（HM-20），額外帳號的子程式也拒 |
+| 13 | 379 | `test_check_nextcloud_sends_nothing_to_a_blocked_address` | §8.8 #39；HA：`tests/test_backend_loopback.py`（HM-20），子程式連線前檢查，被擋的一個請求都不送 |
+| 14 | 388 | `test_check_nextcloud_still_reaches_a_public_address` | §8.8 #39；HA：`tests/test_backend_loopback.py`（HM-20），子程式連線前檢查，被擋的一個請求都不送 |
+| 15 | 395 | `test_check_nextcloud_keeps_reporting_malformed_settings_first` | §8.8 #39；HA：`tests/test_backend_loopback.py`（HM-20），子程式連線前檢查，被擋的一個請求都不送 |
+| 16 | 404 | `test_test_connection_sends_nothing_and_answers_the_same_for_a_closed_port_and_a_live_service` | §8.8 #39；HA：`tests/test_backend_loopback.py`（HM-20），子程式連線前檢查，被擋的一個請求都不送 |
+| 17 | 422 | `test_test_connection_follows_the_mode_and_does_reach_loopback_in_moderate` | §8.8 #39、#45（HA 沒有 SSRF 模式的設定） |
+| 18 | 435 | `test_test_connection_with_an_unset_url_is_unchanged` | §8.8 #39；HA：`tests/test_backend_loopback.py`（HM-20），子程式連線前檢查，被擋的一個請求都不送 |
+| 19 | 441 | `test_health_endpoint_does_not_probe_a_blocked_address` | §8.8 #39；HA：`tests/test_backend_loopback.py`（HM-20），子程式連線前檢查，被擋的一個請求都不送 |
+| 20 | 453 | `test_connection_forms_keep_working_end_to_end` | HA：`tests/test_saved_destinations.py`（HM-20 擴充），區網與公開網址照存 |
+
+#### `apps/nextcloud/tests/test_identity_bound_token.py`（22 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 286 | `test_launch_policy_declares_base_url_and_username_as_the_identity` | HA：`tests/test_identity_fields.py`（HM-07），Nextcloud 的 url、username 是身分、app_password 是秘密，換 token 由 HM-22 接上 |
+| 2 | 295 | `test_update_response_model_carries_token_rotated` | §8.8 #113 |
+| 3 | 310 | `test_identity_change_revokes_the_old_url_and_issues_a_new_one` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154） |
+| 4 | 349 | `test_changing_only_the_app_password_keeps_the_token` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154） |
+| 5 | 383 | `test_a_different_spelling_of_the_same_url_is_not_an_identity_change` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154） |
+| 6 | 402 | `test_a_really_different_url_is_an_identity_change` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154） |
+| 7 | 411 | `test_a_legacy_unnormalized_stored_url_is_not_rotated_by_resaving_the_form` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154） |
+| 8 | 434 | `test_first_time_setup_keeps_the_issued_url` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154） |
+| 9 | 449 | `test_a_revoked_or_missing_token_is_not_replaced_by_an_identity_change` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154） |
+| 10 | 463 | `test_clearing_the_identity_rotates_and_filling_it_back_does_not` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154）；HA：`tests/test_odoo_identity_rotation.py`（HM-12），Odoo 同一套規則：先停再提交、含清空、額外帳號只換自己的 |
+| 11 | 484 | `test_the_old_child_is_stopped_before_the_new_identity_becomes_durable` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154）；HA：`tests/test_odoo_identity_rotation.py`（HM-12），Odoo 同一套規則：先停再提交、含清空、額外帳號只換自己的 |
+| 12 | 503 | `test_a_failed_write_leaves_the_old_token_and_the_old_child_intact` | §8.8 #114（HA 寫入失敗一律 503 state unavailable）；HA：`tests/test_odoo_identity_rotation.py`（HM-12） |
+| 13 | 549 | `test_an_extra_account_rotates_only_its_own_token` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154）；HA：`tests/test_odoo_identity_rotation.py`（HM-12），Odoo 同一套規則：先停再提交、含清空、額外帳號只換自己的 |
+| 14 | 580 | `test_the_shared_settings_route_rotates_the_token_too` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154）；§8.8 #59、#86（HA 只有一套管理操作，歷史記 `rotate`） |
+| 15 | 597 | `test_the_shared_route_keeps_the_token_for_a_password_or_a_same_url_spelling` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154）；§8.8 #86 |
+| 16 | 610 | `test_the_shared_route_validates_the_url_like_the_connection_page` | §8.8 #86；HA：`tests/test_saved_destinations.py`（既有），既有的存檔檢查 |
+| 17 | 626 | `test_a_stale_or_missing_revision_does_nothing` | HA：`tests/test_profile_admin_api.py`（HM-10），過期或沒帶版本就不寫、子程式不動 |
+| 18 | 639 | `test_a_blocked_url_stores_nothing_and_does_not_rotate` | §8.8 #39；HA：`tests/test_saved_destinations.py`（HM-20 擴充），開通後存檔拒 loopback |
+| 19 | 693 | `test_the_response_message_says_the_old_url_was_revoked_and_the_child_restarted` | §8.8 #113、#116（HA 回應不帶文字，面板依 `token_rotated` 自己提示） |
+| 20 | 711 | `test_a_failed_restart_after_a_rotation_still_tells_the_admin_the_url_changed` | §8.8 #113、#116（HA 回應不帶文字，面板依 `token_rotated` 自己提示） |
+| 21 | 724 | `test_a_password_only_save_adds_no_notice_and_keeps_the_restart_flag_semantics` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154）；§8.8 #113 |
+| 22 | 744 | `test_the_identity_change_log_line_has_no_values` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154）；HA：`tests/log_scan.py`（HM-01） |
+
+#### `apps/nextcloud/tests/test_log_redaction.py`（11 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 145 | `test_access_log_with_a_registered_secret_formats_and_is_masked` | 不適用：PaaS Nextcloud 管理 app 自己的紀錄遮罩模組（#152 改成遮罩後保留 args 形狀），HA 沒有這個 app；HA：`tests/test_secret_path.py`（既有），HA 管理程序的紀錄遮罩本來就逐個引數遮、保留 access 格式，uvicorn access log 關閉 |
+| 2 | 158 | `test_access_log_masking_is_the_same_text_as_before` | 不適用：PaaS Nextcloud 管理 app 自己的紀錄遮罩模組（#152 改成遮罩後保留 args 形狀），HA 沒有這個 app；HA：`tests/test_secret_path.py`（既有），HA 管理程序的紀錄遮罩本來就逐個引數遮、保留 access 格式，uvicorn access log 關閉 |
+| 3 | 169 | `test_access_log_without_a_secret_in_the_url_is_untouched` | 不適用：PaaS Nextcloud 管理 app 自己的紀錄遮罩模組（#152 改成遮罩後保留 args 形狀），HA 沒有這個 app；HA：`tests/test_secret_path.py`（既有），HA 管理程序的紀錄遮罩本來就逐個引數遮、保留 access 格式，uvicorn access log 關閉 |
+| 4 | 181 | `test_args_keep_their_shape_and_types_when_masked` | 不適用：PaaS Nextcloud 管理 app 自己的紀錄遮罩模組（#152 改成遮罩後保留 args 形狀），HA 沒有這個 app；HA：`tests/test_secret_path.py`（既有），HA 管理程序的紀錄遮罩本來就逐個引數遮、保留 access 格式，uvicorn access log 關閉 |
+| 5 | 190 | `test_access_shape_is_kept_for_the_five_uvicorn_arguments` | 不適用：PaaS Nextcloud 管理 app 自己的紀錄遮罩模組（#152 改成遮罩後保留 args 形狀），HA 沒有這個 app；HA：`tests/test_secret_path.py`（既有），HA 管理程序的紀錄遮罩本來就逐個引數遮、保留 access 格式，uvicorn access log 關閉 |
+| 6 | 199 | `test_dict_args_are_masked_value_by_value` | 不適用：PaaS Nextcloud 管理 app 自己的紀錄遮罩模組（#152 改成遮罩後保留 args 形狀），HA 沒有這個 app；HA：`tests/test_secret_path.py`（既有），HA 管理程序的紀錄遮罩本來就逐個引數遮、保留 access 格式，uvicorn access log 關閉 |
+| 7 | 208 | `test_records_without_args_are_masked_and_do_not_fail` | 不適用：PaaS Nextcloud 管理 app 自己的紀錄遮罩模組（#152 改成遮罩後保留 args 形狀），HA 沒有這個 app；HA：`tests/test_secret_path.py`（既有），HA 管理程序的紀錄遮罩本來就逐個引數遮、保留 access 格式，uvicorn access log 關閉 |
+| 8 | 217 | `test_secret_in_the_template_and_non_string_objects_are_masked` | 不適用：PaaS Nextcloud 管理 app 自己的紀錄遮罩模組（#152 改成遮罩後保留 args 形狀），HA 沒有這個 app；HA：`tests/test_secret_path.py`（既有），HA 管理程序的紀錄遮罩本來就逐個引數遮、保留 access 格式，uvicorn access log 關閉 |
+| 9 | 227 | `test_secret_split_across_two_arguments_is_still_masked` | 不適用：PaaS Nextcloud 管理 app 自己的紀錄遮罩模組（#152 改成遮罩後保留 args 形狀），HA 沒有這個 app；HA：`tests/test_secret_path.py`（既有），HA 管理程序的紀錄遮罩本來就逐個引數遮、保留 access 格式，uvicorn access log 關閉 |
+| 10 | 249 | `test_masked_text_is_the_same_as_masking_the_whole_message` | 不適用：PaaS Nextcloud 管理 app 自己的紀錄遮罩模組（#152 改成遮罩後保留 args 形狀），HA 沒有這個 app；HA：`tests/test_secret_path.py`（既有），HA 管理程序的紀錄遮罩本來就逐個引數遮、保留 access 格式，uvicorn access log 關閉 |
+| 11 | 256 | `test_masking_is_idempotent` | 不適用：PaaS Nextcloud 管理 app 自己的紀錄遮罩模組（#152 改成遮罩後保留 args 形狀），HA 沒有這個 app；HA：`tests/test_secret_path.py`（既有），HA 管理程序的紀錄遮罩本來就逐個引數遮、保留 access 格式，uvicorn access log 關閉 |
+
+#### `apps/nextcloud/tests/test_request_structure_guard.py`（5 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 24 | `test_app_has_the_default_structure_limits` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 2 | 30 | `test_too_deep_request_is_refused` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 3 | 38 | `test_too_many_elements_are_refused` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 4 | 46 | `test_legitimate_large_calls_are_parsed` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 5 | 54 | `test_utf16_and_utf32_bodies_are_refused_but_utf8_cjk_and_emoji_pass` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+
+#### `apps/odoo/tests/test_request_structure_guard.py`（5 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 24 | `test_app_has_the_default_structure_limits` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 2 | 30 | `test_too_deep_request_is_refused` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 3 | 38 | `test_too_many_elements_are_refused` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 4 | 46 | `test_legitimate_large_calls_are_parsed` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 5 | 54 | `test_utf16_and_utf32_bodies_are_refused_but_utf8_cjk_and_emoji_pass` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+
+#### `apps/opendesign/tests/test_request_structure_guard.py`（5 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 24 | `test_app_has_the_default_structure_limits` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 2 | 30 | `test_too_deep_request_is_refused` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 3 | 38 | `test_too_many_elements_are_refused` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 4 | 46 | `test_legitimate_large_calls_are_parsed` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+| 5 | 54 | `test_utf16_and_utf32_bodies_are_refused_but_utf8_cjk_and_emoji_pass` | HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime 都經預算與守門；HA：`tests/test_request_structure.py`（HM-31） |
+
+#### `packages/mcp-admin-core/tests/fixtures/log_redaction_443e95a.py`（1 案，`48f394d`）
 
 | # | 行 | 案例 | 歸屬 |
 |---|---|---|---|
 | 1 | 1 | （整個檔） | 不適用：PaaS 凍結的 443e95a 遮罩模組，給差分測試用（輔助檔、沒有斷言）；HA：`tests/test_redaction_matrix.py`（HM-02），HA 凍結 bb48449 自己的遮罩做不退步差分 |
 
-#### `packages/mcp-admin-core/tests/test_log_redaction_query_credentials.py`（23 案，`7d111b1`）
+#### `packages/mcp-admin-core/tests/test_gateway_budget_defaults.py`（7 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 52 | `test_one_gib_pod_keeps_at_least_200_mib_of_headroom_in_the_sandbox_worst_cases` | HA：`tests/test_request_budget.py`（HM-31），HA 的 1 GiB 指 cgroup 上限或 MemAvailable 減 256 MiB；§8.8 #103 |
+| 2 | 64 | `test_old_defaults_would_have_failed_the_sandbox_scenarios` | HA：`tests/test_request_budget.py`（HM-31） |
+| 3 | 71 | `test_more_accounts_or_heavier_children_shrink_the_budget` | HA：`tests/test_request_budget.py`（HM-31） |
+| 4 | 78 | `test_formula_matches_the_documented_arithmetic` | HA：`tests/test_request_budget.py`（HM-31） |
+| 5 | 84 | `test_small_pod_is_clamped_to_the_single_request_ceiling` | HA：`tests/test_request_budget.py`（HM-31） |
+| 6 | 89 | `test_environment_variables_still_win` | 不適用：HA 不讀環境變數；§8.8 #104、#45；HA：`tests/test_request_budget.py`（HM-31），設了也不生效 |
+| 7 | 96 | `test_amplification_covers_the_measured_worst_case_under_the_structure_guard` | HA：`tests/test_request_budget.py`（HM-31） |
+
+#### `packages/mcp-admin-core/tests/test_gateway_budget_round2.py`（10 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 31 | `test_budget_is_built_at_app_creation_and_invalid_env_warns_on_stdout_and_logs_page` | HA：`tests/test_request_budget_gateway.py`（HM-31），啟動時建立；§8.8 #104（環境變數的 WARNING 不適用） |
+| 2 | 51 | `test_request_budget_logger_has_a_stdout_handler` | 不適用：HA 沒有 Logs 頁，WARNING 經 Python 的 lastResort 進 add-on log；§8.8 #29；HA：`tests/test_request_budget.py`（HM-31），logger 名稱 |
+| 3 | 58 | `test_invalid_idle_env_warns_without_echoing_the_value` | 不適用：HA 不讀環境變數；§8.8 #104、#45 |
+| 4 | 86 | `test_idle_registered_connection_is_dropped_and_returns_the_budget` | HA：`tests/test_request_budget_gateway.py`（HM-31） |
+| 5 | 108 | `test_slow_but_steady_upload_is_not_cut_off` | HA：`tests/test_request_budget_gateway.py`（HM-31） |
+| 6 | 127 | `test_small_requests_are_not_subject_to_the_idle_timeout_and_budget` | HA：`tests/test_request_budget_gateway.py`（HM-31） |
+| 7 | 148 | `test_legacy_sse_messages_refusal_is_503_not_200` | 不適用：HA 沒有 legacy SSE；§8.8 #6 |
+| 8 | 186 | `test_client_disconnect_while_draining_a_refused_request_is_not_an_error` | HA：`tests/test_request_budget_gateway.py`（HM-31） |
+| 9 | 196 | `test_refusal_report_is_throttled_per_profile_with_a_suppressed_count` | HA：`tests/test_request_budget.py`（HM-31）；HA：`tests/test_profile_quotas.py`（HM-08） |
+| 10 | 222 | `test_chunked_request_refused_mid_stream_still_gets_its_id_back` | HA：`tests/test_request_budget_gateway.py`（HM-31） |
+
+#### `packages/mcp-admin-core/tests/test_gateway_budget_round3.py`（30 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 61 | `test_utf16_and_utf32_bodies_are_refused` | HA：`tests/test_request_structure.py`（HM-31） |
+| 2 | 70 | `test_bom_prefixed_bodies_are_refused` | HA：`tests/test_request_structure.py`（HM-31） |
+| 3 | 75 | `test_nul_in_the_first_four_bytes_is_refused_like_json_detect_encoding` | HA：`tests/test_request_structure.py`（HM-31） |
+| 4 | 80 | `test_bytes_that_are_not_valid_utf8_are_refused` | HA：`tests/test_request_structure.py`（HM-31） |
+| 5 | 98 | `test_valid_utf8_with_cjk_and_emoji_passes` | HA：`tests/test_request_structure.py`（HM-31） |
+| 6 | 104 | `test_empty_and_plain_ascii_bodies_are_unchanged` | HA：`tests/test_request_structure.py`（HM-31） |
+| 7 | 110 | `test_large_valid_utf8_bodies_pass_quickly_and_without_copying_the_whole_body` | HA：`tests/test_request_structure.py`（HM-31） |
+| 8 | 119 | `test_a_multibyte_character_split_by_the_chunk_boundary_is_not_misjudged` | HA：`tests/test_request_structure.py`（HM-31） |
+| 9 | 128 | `test_mcp_request_limits_refusal_for_utf16_has_no_content_and_the_usual_format` | HA：`tests/test_request_structure.py`（HM-31） |
+| 10 | 137 | `test_utf16_refusal_message_is_about_encoding_not_structure` | HA：`tests/test_request_structure.py`（HM-31） |
+| 11 | 162 | `test_closing_bracket_flood_does_not_stall_the_scan` | HA：`tests/test_request_structure.py`（HM-31） |
+| 12 | 170 | `test_scan_time_does_not_grow_with_body_size` | HA：`tests/test_request_structure.py`（HM-31） |
+| 13 | 181 | `test_closers_hidden_after_balanced_structure_are_bounded_too` | HA：`tests/test_request_structure.py`（HM-31） |
+| 14 | 189 | `test_closers_never_exceed_the_work_bound_for_valid_nesting` | HA：`tests/test_request_structure.py`（HM-31） |
+| 15 | 201 | `test_amplification_covers_the_measured_astral_worst_case` | HA：`tests/test_request_budget.py`（HM-31） |
+| 16 | 207 | `test_python_str_really_is_four_bytes_per_character_with_one_astral_character` | HA：`tests/test_request_budget.py`（HM-31） |
+| 17 | 219 | `test_two_gib_pod_cannot_be_oom_killed_by_astral_requests_that_fit_the_budget` | HA：`tests/test_request_budget.py`（HM-31），只算 PaaS 量到的放大倍數，不宣稱不會被 OOM；§8.8 #101（閘道＋子程式待 HM-19c） |
+| 18 | 235 | `test_one_gib_production_default_is_unchanged_at_the_single_request_floor` | HA：`tests/test_request_budget.py`（HM-31）；§8.8 #103 |
+| 19 | 251 | `test_astral_request_is_charged_and_refused_under_a_small_budget` | HA：`tests/test_request_budget.py`（HM-31） |
+| 20 | 264 | `test_plain_ascii_big_string_is_still_accepted_by_the_structure_guard` | HA：`tests/test_request_structure.py`（HM-31） |
+| 21 | 274 | `test_escaped_quote_does_not_end_the_string` | HA：`tests/test_request_structure.py`（HM-31） |
+| 22 | 280 | `test_escaped_backslash_before_a_quote_does_end_the_string` | HA：`tests/test_request_structure.py`（HM-31） |
+| 23 | 286 | `test_string_ending_with_backslash_pairs_and_quotes_in_the_slow_path` | HA：`tests/test_request_structure.py`（HM-31） |
+| 24 | 294 | `test_element_boundary_is_exactly_the_limit_on_the_fast_path` | HA：`tests/test_request_structure.py`（HM-31） |
+| 25 | 302 | `test_element_boundary_is_exactly_the_limit_on_the_slow_path` | HA：`tests/test_request_structure.py`（HM-31） |
+| 26 | 341 | `test_utf16_pathological_body_is_refused_and_json_loads_is_never_called` | HA：`tests/test_request_structure.py`（HM-31） |
+| 27 | 358 | `test_valid_utf8_cjk_and_emoji_is_forwarded_and_parsed` | HA：`tests/test_request_structure.py`（HM-31） |
+| 28 | 366 | `test_structure_refusals_log_one_throttled_warning_per_profile` | HA：`tests/test_request_structure.py`（HM-31） |
+| 29 | 398 | `test_total_upload_deadline_env_is_validated` | 不適用：HA 不讀環境變數；§8.8 #104、#105 |
+| 30 | 409 | `test_a_trickling_upload_is_dropped_at_the_total_deadline_even_if_it_never_goes_idle` | HA：`tests/test_request_budget_gateway.py`（HM-31），60 秒、今天的 408 形狀；§8.8 #105 |
+
+#### `packages/mcp-admin-core/tests/test_gateway_request_budget.py`（20 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 145 | `test_defaults_derive_from_the_cgroup_memory_limit` | HA：`tests/test_request_budget.py`（HM-31） |
+| 2 | 160 | `test_defaults_without_a_cgroup_limit_and_clamps` | HA：`tests/test_request_budget.py`（HM-31），沒有 cgroup 上限時用 MemAvailable 減 256 MiB；§8.8 #103 |
+| 3 | 170 | `test_environment_overrides_and_invalid_values_warn` | 不適用：HA 不讀環境變數；§8.8 #104、#45；HA：`tests/test_request_budget.py`（HM-31），設了也不生效 |
+| 4 | 200 | `test_small_requests_are_never_charged_or_refused` | HA：`tests/test_request_budget.py`（HM-31） |
+| 5 | 213 | `test_profile_and_global_limits_are_independent` | HA：`tests/test_request_budget.py`（HM-31） |
+| 6 | 235 | `test_every_profile_can_always_send_one_maximum_size_request` | HA：`tests/test_request_budget.py`（HM-31） |
+| 7 | 243 | `test_requests_over_the_single_request_cap_are_not_held` | HA：`tests/test_request_budget.py`（HM-31） |
+| 8 | 256 | `test_reservation_is_held_until_proxy_finished_and_every_upstream_closed` | HA：`tests/test_request_budget.py`（HM-31），請求結束時歸還；HA：`tests/test_request_budget_gateway.py`（HM-31），SSE 串流期間仍扣著；HA：`tests/test_profile_quotas.py`（HM-08） |
+| 9 | 273 | `test_a_refused_grow_does_not_leak_and_finish_refunds` | HA：`tests/test_request_budget.py`（HM-31） |
+| 10 | 285 | `test_thousand_mixed_requests_return_the_budget_to_zero` | HA：`tests/test_request_budget.py`（HM-31） |
+| 11 | 340 | `test_transport_returns_the_budget_on_stream_close_error_and_queue_full` | HA：`tests/test_request_budget_gateway.py`（HM-31）；HA：`tests/test_profile_quotas.py`（HM-08），開通的排隊與拒絕 |
+| 12 | 384 | `test_over_budget_request_is_refused_immediately_with_the_queue_full_style_reply` | HA：`tests/test_request_budget_gateway.py`（HM-31）；HA：`tests/test_profile_quotas.py`（HM-08），開通的排隊與拒絕 |
+| 13 | 408 | `test_refusal_formats_for_get_batch_and_chunked` | HA：`tests/test_request_budget_gateway.py`（HM-31） |
+| 14 | 429 | `test_chunked_request_within_budget_is_forwarded_and_budget_returns` | HA：`tests/test_request_budget_gateway.py`（HM-31） |
+| 15 | 446 | `test_one_profile_filling_its_share_does_not_affect_another` | HA：`tests/test_request_budget_gateway.py`（HM-31） |
+| 16 | 463 | `test_global_budget_is_shared_by_all_profiles` | HA：`tests/test_request_budget_gateway.py`（HM-31） |
+| 17 | 475 | `test_legitimate_13_mib_upload_passes_with_default_budget` | HA：`tests/test_request_budget_gateway.py`（HM-31） |
+| 18 | 488 | `test_flood_of_large_requests_never_holds_more_than_the_budget` | HA：`tests/test_request_budget_gateway.py`（HM-31） |
+| 19 | 508 | `test_budget_returns_after_abandoned_queue_client_disconnect_and_refusals` | HA：`tests/test_request_budget_gateway.py`（HM-31） |
+| 20 | 534 | `test_proxy_wrapper_returns_the_budget_when_the_request_raises` | HA：`tests/test_request_budget_gateway.py`（HM-31） |
+
+#### `packages/mcp-admin-core/tests/test_gateway_request_structure.py`（17 案，`48f394d`）
+
+| # | 行 | 案例 | 歸屬 |
+|---|---|---|---|
+| 1 | 54 | `test_pathological_16_mib_bodies_are_refused` | HA：`tests/test_request_structure.py`（HM-31） |
+| 2 | 59 | `test_one_big_string_has_no_structure_to_refuse` | HA：`tests/test_request_structure.py`（HM-31） |
+| 3 | 63 | `test_legitimate_nextcloud_upload_of_13_3_mib_passes` | HA：`tests/test_request_structure.py`（HM-31） |
+| 4 | 71 | `test_legitimate_odoo_batch_create_of_thousands_of_records_passes` | HA：`tests/test_request_structure.py`（HM-31） |
+| 5 | 81 | `test_legitimate_large_n8n_workflow_passes` | HA：`tests/test_request_structure.py`（HM-31） |
+| 6 | 89 | `test_batch_of_thousands_of_small_requests_passes` | HA：`tests/test_request_structure.py`（HM-31），守門放行，HA 的政策另外拒絕 batch（403） |
+| 7 | 95 | `test_brackets_and_commas_inside_strings_do_not_count` | HA：`tests/test_request_structure.py`（HM-31） |
+| 8 | 100 | `test_depth_boundary` | HA：`tests/test_request_structure.py`（HM-31） |
+| 9 | 110 | `test_element_boundary_counts_commas_and_containers` | HA：`tests/test_request_structure.py`（HM-31） |
+| 10 | 119 | `test_scanning_cost_is_bounded_by_the_limit_not_the_body_size` | HA：`tests/test_request_structure.py`（HM-31） |
+| 11 | 128 | `test_mcp_request_limits_check_structure_error_has_no_content` | HA：`tests/test_request_structure.py`（HM-31），n8n 的拒收不帶內容 |
+| 12 | 168 | `test_default_structure_limits_are_installed_by_create_app` | HA：`tests/test_request_structure.py`（HM-31）；HA：`tests/test_request_budget_gateway.py`（HM-31），8 個上架產品的正式 runtime |
+| 13 | 178 | `test_pathological_body_is_refused_before_any_forward` | HA：`tests/test_request_structure.py`（HM-31）；§8.8 #6（`messages/` 的參數不適用，HA 沒有 legacy SSE） |
+| 14 | 190 | `test_too_deep_body_is_refused_and_the_message_has_no_content` | HA：`tests/test_request_structure.py`（HM-31） |
+| 15 | 200 | `test_batch_without_a_recoverable_id_is_refused_with_413` | HA：`tests/test_request_structure.py`（HM-31） |
+| 16 | 208 | `test_legitimate_large_calls_still_forward` | HA：`tests/test_request_structure.py`（HM-31） |
+| 17 | 219 | `test_non_json_and_non_post_behave_as_before` | HA：`tests/test_request_structure.py`（HM-31）；§8.8 #107 |
+
+#### `packages/mcp-admin-core/tests/test_log_redaction_query_credentials.py`（23 案，`48f394d`）
 
 | # | 行 | 案例 | 歸屬 |
 |---|---|---|---|
@@ -891,7 +1227,7 @@
 | 22 | 630 | `test_frozen_module_is_443e95a_verbatim` | 不適用：PaaS 凍結自己的 443e95a 模組做差分；HA：`tests/test_redaction_matrix.py`（HM-02），對照 bb48449 自己的遮罩 |
 | 23 | 764 | `test_differential_fuzz_never_shows_what_443e95a_masked` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
 
-#### `packages/mcp-admin-core/tests/test_log_redaction_query_credentials_review.py`（41 案，`7d111b1`）
+#### `packages/mcp-admin-core/tests/test_log_redaction_query_credentials_review.py`（41 案，`48f394d`）
 
 | # | 行 | 案例 | 歸屬 |
 |---|---|---|---|
@@ -937,14 +1273,59 @@
 | 40 | 1032 | `test_prefix_detection_is_linear_on_noise_heavy_input` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
 | 41 | 1064 | `test_decoded_only_prefix_still_masks_question_mark_led_values_that_start_with_an_encoded_space` | HA：`tests/test_redaction_matrix.py`（HM-02），#149 合併版；DQ-38 選 (a) 原樣 vendor |
 
-## pin 之後的變動（`69ac425..7d111b1` 的測試檔）
+## pin 之後的變動（`69ac425..48f394d` 的測試檔）
 
 | 檔 | pin 時在範圍內 | 新增案例 | 刪除案例 | 處理 |
 |---|---|---|---|---|
-| `packages/mcp-admin-core/tests/fixtures/log_redaction_443e95a.py` | 否 | 1 | 0 | 併進 D 組 |
-| `packages/mcp-admin-core/tests/test_gateway_queue.py` | 是 | 0 | 0 | 只改既有案例的內容，歸屬照上表 |
-| `packages/mcp-admin-core/tests/test_log_redaction.py` | 否 | 0 | 0 | 不在多帳號範圍、只改既有案例的內容（#149 把參數裡的 `session_token` 換成遮罩名單外的鍵名），不列 |
-| `packages/mcp-admin-core/tests/test_log_redaction_query_credentials.py` | 否 | 23 | 0 | 併進 D 組 |
-| `packages/mcp-admin-core/tests/test_log_redaction_query_credentials_review.py` | 否 | 41 | 0 | 併進 D 組 |
+| `apps/emqx/tests/conftest.py` | 否 | 0 | 0 | 不在多帳號範圍、只改既有案例的內容（#153、#135 改測試替身，整個檔算一案），不列 |
+| `apps/emqx/tests/test_long_identifiers.py` | 否 | 9 | 0 | 併進 D 組（#153） |
+| `apps/emqx/tests/test_prometheus_accept.py` | 否 | 14 | 0 | 併進 D 組（#153） |
+| `apps/emqx/tests/test_request_structure_guard.py` | 否 | 5 | 0 | 併進 D 組（#155） |
+| `apps/emqx/tests/test_subscription_match_topic.py` | 否 | 6 | 0 | 併進 D 組（#153） |
+| `apps/emqx/tests/test_transport.py` | 否 | 1 | 1 | 併進 D 組（#135，舊的 `test_dns_resolves_once_and_socket_uses_pinned_address` 改寫成新的案例） |
+| `apps/headscale/tests/test_request_structure_guard.py` | 否 | 6 | 0 | 併進 D 組（#155） |
+| `apps/hermes/tests/test_dashboard_response_shapes.py` | 否 | 2 | 0 | 併進 D 組（#138） |
+| `apps/hermes/tests/test_request_structure_guard.py` | 否 | 5 | 0 | 併進 D 組（#155） |
+| `apps/k8s/tests/test_request_structure_guard.py` | 否 | 5 | 0 | 併進 D 組（#155） |
+| `apps/litellm/tests/test_recovery_pool.py` | 否 | 1 | 0 | 併進 D 組（#139） |
+| `apps/litellm/tests/test_request_structure_guard.py` | 否 | 5 | 0 | 併進 D 組（#155） |
+| `apps/n8n/tests/test_request_structure_guard.py` | 否 | 6 | 0 | 併進 D 組（#155） |
+| `apps/nextcloud/tests/conftest.py` | 否 | 0 | 0 | 不在多帳號範圍、只改既有案例的內容（#152 改測試替身，整個檔算一案），不列 |
+| `apps/nextcloud/tests/test_base_url_ssrf.py` | 否 | 20 | 0 | 併進 D 組（#152） |
+| `apps/nextcloud/tests/test_identity_bound_token.py` | 否 | 22 | 0 | 併進 D 組（#154） |
+| `apps/nextcloud/tests/test_log_redaction.py` | 否 | 11 | 0 | 併進 D 組（#152） |
+| `apps/nextcloud/tests/test_request_structure_guard.py` | 否 | 5 | 0 | 併進 D 組（#155） |
+| `apps/nextcloud/tests/test_setup_status.py` | 否 | 0 | 0 | 不在多帳號範圍、只改既有案例的內容（#152），不列 |
+| `apps/odoo/tests/test_request_structure_guard.py` | 否 | 5 | 0 | 併進 D 組（#155） |
+| `apps/opendesign/tests/test_request_structure_guard.py` | 否 | 5 | 0 | 併進 D 組（#155） |
+| `packages/mcp-admin-core/tests/fixtures/log_redaction_443e95a.py` | 否 | 1 | 0 | 併進 D 組（#149） |
+| `packages/mcp-admin-core/tests/test_backend_status.py` | 否 | 0 | 0 | 不在多帳號範圍、只改既有案例的內容（#151 移除 VK：拿掉 VK 的參數與表格列，不動其他產品的斷言），不列 |
+| `packages/mcp-admin-core/tests/test_capabilities.py` | 否 | 0 | 0 | 不在多帳號範圍、只改既有案例的內容（#151 移除 VK：拿掉 VK 的參數與表格列，不動其他產品的斷言），不列 |
+| `packages/mcp-admin-core/tests/test_configuration_runtime.py` | 否 | 0 | 0 | 不在多帳號範圍、只改既有案例的內容（#151 移除 VK：拿掉 VK 的參數與表格列，不動其他產品的斷言），不列 |
+| `packages/mcp-admin-core/tests/test_connection_secret_clear.py` | 否 | 0 | 0 | 不在多帳號範圍、只改既有案例的內容（#151 移除 VK：拿掉 VK 的參數與表格列，不動其他產品的斷言），不列 |
+| `packages/mcp-admin-core/tests/test_gateway_budget_defaults.py` | 否 | 7 | 0 | 併進 D 組（#155） |
+| `packages/mcp-admin-core/tests/test_gateway_budget_round2.py` | 否 | 10 | 0 | 併進 D 組（#155） |
+| `packages/mcp-admin-core/tests/test_gateway_budget_round3.py` | 否 | 30 | 0 | 併進 D 組（#155） |
+| `packages/mcp-admin-core/tests/test_gateway_queue.py` | 是 | 0 | 0 | 只改既有案例的內容（#150 補測還過頭的名額、保留名額逾時 WARNING 的全文、舊測試改成看事件），歸屬照上表 |
+| `packages/mcp-admin-core/tests/test_gateway_request_budget.py` | 否 | 20 | 0 | 併進 D 組（#155） |
+| `packages/mcp-admin-core/tests/test_gateway_request_structure.py` | 否 | 17 | 0 | 併進 D 組（#155） |
+| `packages/mcp-admin-core/tests/test_launch_policy.py` | 是 | 0 | 0 | 只改既有案例的內容（#151 移除 VK：拿掉 VK 的參數與表格列，不動其他產品的斷言），歸屬照上表 |
+| `packages/mcp-admin-core/tests/test_log_redaction.py` | 否 | 0 | 0 | 不在多帳號範圍、只改既有案例的內容（#149 把參數裡的 `session_token` 換成遮罩名單外的鍵名，#151 移除 VK：拿掉 VK 的參數與表格列，不動其他產品的斷言），不列 |
+| `packages/mcp-admin-core/tests/test_log_redaction_query_credentials.py` | 否 | 23 | 0 | 併進 D 組（#149） |
+| `packages/mcp-admin-core/tests/test_log_redaction_query_credentials_review.py` | 否 | 41 | 0 | 併進 D 組（#149） |
+| `packages/mcp-admin-core/tests/test_opendesign_config_router.py` | 否 | 0 | 0 | 不在多帳號範圍、只改既有案例的內容（#151 之後的文字修正 `8bfb12e`：註解與 docstring 不再指向已移除的 apps/vk），不列 |
+| `packages/mcp-admin-core/tests/test_opendesign_health_probes.py` | 否 | 0 | 0 | 不在多帳號範圍、只改既有案例的內容（#151 之後的文字修正 `8bfb12e`：註解與 docstring 不再指向已移除的 apps/vk），不列 |
+| `packages/mcp-admin-core/tests/test_opendesign_native_launcher.py` | 否 | 0 | 0 | 不在多帳號範圍、只改既有案例的內容（#151 之後的文字修正 `8bfb12e`：註解與 docstring 不再指向已移除的 apps/vk），不列 |
+| `packages/mcp-admin-core/tests/test_operation_policy.py` | 否 | 0 | 0 | 不在多帳號範圍、只改既有案例的內容（#151 移除 VK：拿掉 VK 的參數與表格列，不動其他產品的斷言），不列 |
+| `packages/mcp-admin-core/tests/test_product_connection_apply.py` | 否 | 0 | 0 | 不在多帳號範圍、只改既有案例的內容（#151 移除 VK：拿掉 VK 的參數與表格列，不動其他產品的斷言），不列 |
+| `packages/mcp-admin-core/tests/test_proxy_carries_no_request.py` | 是 | 0 | 0 | 只改既有案例的內容（#151 之後的文字修正 `8bfb12e`：註解與 docstring 不再指向已移除的 apps/vk），歸屬照上表 |
+| `packages/mcp-admin-core/tests/test_reprovision_bootstrap.py` | 否 | 0 | 0 | 不在多帳號範圍、只改既有案例的內容（#151 移除 VK：拿掉 VK 的參數與表格列，不動其他產品的斷言），不列 |
+| `packages/mcp-admin-core/tests/test_restore_marker.py` | 是 | 0 | 0 | 只改既有案例的內容（#151 移除 VK：拿掉 VK 的參數與表格列，不動其他產品的斷言），歸屬照上表 |
+| `packages/mcp-admin-core/tests/test_restore_runbook.py` | 是 | 0 | 0 | 只改既有案例的內容（#151 移除 VK：拿掉一行 VK 的路徑），歸屬照上表 |
+| `packages/mcp-admin-core/tests/test_tools_router.py` | 否 | 0 | 1 | 不在多帳號範圍（#151 移除 VK：刪掉 VK 的那一案），不列 |
+| `packages/mcp-admin-core/tests/test_vk_app_assembly.py` | 否 | 0 | 1 | 不在多帳號範圍（#151 移除 VK：整個檔刪掉），不列 |
+| `packages/mcp-admin-core/tests/test_vk_config_router.py` | 否 | 0 | 14 | 不在多帳號範圍（#151 移除 VK：整個檔刪掉），不列 |
+| `packages/mcp-admin-core/tests/test_vk_health_probes.py` | 否 | 0 | 10 | 不在多帳號範圍（#151 移除 VK：整個檔刪掉），不列 |
+| `packages/mcp-admin-ui/tests/browser-capabilities.py` | 否 | 0 | 0 | 不在多帳號範圍、只改既有案例的內容（#151 移除 VK：拿掉 VK 的參數與表格列，不動其他產品的斷言），不列 |
 
-其他相關檔（`gateway_pool.py`、`proxy.py` 只改註解；`log_redaction.py` 是 #149 的正式碼變動）見 `docs/provenance/multi-profile-parity-baseline.md`。
+其他相關檔：`69ac425..7d111b1` 之間 `gateway_pool.py`、`proxy.py` 只改註解，`log_redaction.py` 是 #149 的正式碼變動（見 `docs/provenance/multi-profile-parity-baseline.md`）；之後的正式碼變動記在對齊它的那一片的筆記（#155 的 `proxy.py`、`gateway_pool.py`、`app.py`、`profiles.py` 等見 `ha-multiprofile-HM-31-20261116.md` 第 4 節；#135、#139 見 HM-32 的筆記第 4 節；#156 見 HM-33 的筆記第 3 節），本表只列測試檔。

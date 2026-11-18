@@ -43,6 +43,9 @@
 | 沒開通、有帳號資料（休眠） | 只服務預設帳號 | 同上；bootstrap 只多 `dormant_profiles`（數字：守門之後還在的額外帳號目錄數，每一個的 token 都已撤銷；HM-13b；面板只顯示、沒有管理動作，HM-13c） | 撤銷每個還沒撤銷的額外帳號與孤兒的 token、重產 child_token；已撤銷的不動（I13；第 1.3 節） |
 | 開通 | 分派器依 token 選帳號 | 第 3 節全部規則 | 還原偵測、守門、預設帳號、錯開起額外帳號 |
 
+各產品下一版會帶出去、但 CHANGELOG 還沒記的變更（下面這些項目，加上各產品自己的修正）、每一項的 CHANGELOG 句子與發版時要另外驗的事，
+見 `unreleased-changes.md`（計畫 §11.5；2026-11-17 起）。不受開關管的片合併時，在那裡加一項。
+
 不受開關管（任何產品下一次發版都會帶出去；保證方式見計畫 §3.3）：紀錄遮罩（HM-02）、port 參數化（HM-04）、
 執行套件抽出（HM-05）、子程式 bearer（HM-06）、資料層函式庫（HM-07）、收據格式（HM-11）、entrypoint 還原標記（HM-13a）、
 開機守門的存在檢查與休眠處理（HM-13b）、子程式 initialize 錯誤的遮罩（HM-14，見下）、請求內容位元組預算與 JSON 結構守門（HM-31，見下）、
@@ -300,9 +303,8 @@ Hermes 排程工具 `hermes_cron` 的說明補兩句（HM-33，見下；只改�
     （202）；其他小請求回准入的忙碌回應（有 id 200）。PaaS 讀 body 前沒有准入、小請求不計入預算也不限讀取中的數量，保留名額的目的是讓通知
     一定送得到（MCP Python SDK 1.x 收到非 2xx 會結束 session、TS SDK 的 `connect()` 失敗、SDK 2.x 丟掉這則通知）。
   - 剛連上的用戶端：它的 initialize 是帶 id 的請求，准入滿時拿忙碌回應（200＋`-32003`）；在准入有空位時連上的，之後的 `notifications/initialized`
-    一定送到（`tests/test_carries_no_request.py` 的
-    `test_a_newly_connected_clients_initialized_reaches_the_child_with_the_queue_and_admission_full`、
-    `test_the_reserve_is_reached_even_once_the_profiles_admission_is_full`）。
+    一定送到（`tests/test_carries_no_request.py::test_a_newly_connected_clients_initialized_reaches_the_child_with_the_queue_and_admission_full`、
+    `tests/test_carries_no_request.py::test_the_reserve_is_reached_even_once_the_profiles_admission_is_full`）。
 - GET 串流整段佔住一條一般名額和一個准入（UC-31，HM-14 審查 S-3）：額外帳號開滿 8 條串流時 POST 剩 8 條名額，預設帳號開滿 24 條時
   剩 8 條（`tests/test_gateway_queue_ha.py::test_get_streams_hold_ordinary_slots_for_their_whole_life`）。
 - 排隊中 token 被輪替或撤銷：請求拿到名額或等滿 1 秒後重驗時被拒（Bearer 401、密鑰網址 404），子程式收不到；最多多佔 1 秒的排隊位置
@@ -1051,16 +1053,19 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 審查後把 FEATURE-MATRIX「HA 平台差異」欄是「—」的 44 列人工逐列看過後補的列；第 87、88 列是 HM-08 獨立審查（S-6）補的列，
 #15、#16 的附註也是；#14 的附註是 HM-09 的實作補的，第 89 列是 HM-09 獨立審查（S-6）補的列。逐列的來源與結論見
 `deviation-trace.md`（第 87～89 列與三個附註出自 HM-08、HM-09 的實作，不是 FEATURE-MATRIX 的列）。
-第 90 列是 HM-20 補的列（DQ-10 子題 2026-11-15 定案；FM-84 的對齊作法欄；`deviation-trace.md` 沒有這一列）。
+第 90 列是 HM-20 補的列（DQ-10 子題 2026-11-15 定案；FM-84 的對齊作法欄）。
 第 91～95 列出自 HM-14 的實作，第 96～99 列是 HM-14 獨立審查（MF-2、S-1、S-7、S-5）補的列，第 100 列是 HM-14 rebase 到 HM-09
-之後補的列（都不是 FEATURE-MATRIX 的列；`deviation-trace.md` 由 repo 外的產生器重產，沒有這幾列）。
-第 101～107 列出自 HM-31（對齊 PaaS #155），#15、#16、#96 也由 HM-31 改寫；第 108 列與 #81、#101 的補寫出自 HM-31 獨立審查（MF-1、MF-3、MF-2）（都不是 FEATURE-MATRIX 的列；`deviation-trace.md` 由 repo 外的產生器重產，沒有這幾列）。
-第 109～112 列是 HM-11 對齊 HM-10 的真後端時補的面板列（不是 FEATURE-MATRIX 的列；`deviation-trace.md` 沒有這幾列）。
+之後補的列（都不是 FEATURE-MATRIX 的列）。
+第 101～107 列出自 HM-31（對齊 PaaS #155），#15、#16、#96 也由 HM-31 改寫；第 108 列與 #81、#101 的補寫出自 HM-31 獨立審查（MF-1、MF-3、MF-2）（寫的時候 FEATURE-MATRIX 還沒有對應的列；之後補的 FM-154 對到它們）。
+第 109～112 列是 HM-11 對齊 HM-10 的真後端時補的面板列（不是 FEATURE-MATRIX 的列）。
 第 113～115 列出自 HM-12 的實作（換身分換 token 與新來源重填秘密的細節；不是 FEATURE-MATRIX 的列）。原稿是第 109～111 列：HM-11 先合併、用掉第 109～112 列，本片 rebase 後往後重編（第 10 節）。
 #17 的附註出自 HM-30 的實作（不是 FEATURE-MATRIX 的列；`deviation-trace.md` 由 repo 外的產生器重產，沒有這個附註）。
-第 116、117 列是 HM-12 的面板部分（另一個 PR）補的面板列（不是 FEATURE-MATRIX 的列；`deviation-trace.md` 沒有這兩列）。
+第 116、117 列是 HM-12 的面板部分（另一個 PR）補的面板列（不是 FEATURE-MATRIX 的列）。
 第 118～121 列出自 HM-13b 的實作（開機守門；不是 FEATURE-MATRIX 的列，`deviation-trace.md` 沒有）；#24、#67、#82 的附註也是。
 第 122、123 列出自 HM-13c 的實作（單帳號還原後的面板提示：使用者 2026-11-16 定案；隔離目錄的清單與刪除；不是 FEATURE-MATRIX 的列，`deviation-trace.md` 沒有）；#58、#67、#82 的 HM-13c 附註也是。HM-13c 獨立審查的修正只補 #58、#82、#123 的附註，沒有新列。
+2026-11-17 文件同步重產 `deviation-trace.md`（到第 117 列）：第 87 列以後的列，FEATURE-MATRIX 有說到同一件事的列就加進那一列的「對到」
+（例如 FM-154 → #101～#108、FM-81 → #113、#114）；沒有任何 FEATURE-MATRIX、G6 §5 的列對到的（#22、#33、#83、#88、#89、#90、#99），
+出處寫在 `deviation-trace.md` 文末「差異表每一列的來處」。
 
 | # | 項目 | PaaS（@69ac425） | HA | 理由 | 類型 |
 |---|---|---|---|---|---|
@@ -1237,3 +1242,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 | v1 草案（HM-13c 審查修正） | 2026-11-17 | HM-13c | 依獨立安全審查（`artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-13c.md`，修正後通過）：第 3.6 節還原紀錄改寫成「守門最近寫的一份」，加一段：休眠開機寫紀錄時保留上一份還在等的核對（預設帳號那一列原樣、還原段落），上一份讀不到就不改它（MF-1）；紀錄讀不到時全部撤銷做完重寫一份、紀錄格式要向後相容（S-2）；bootstrap 的 `restore_review` 兩個時間都是 `null` 時是重建的紀錄；第 1.3 節休眠那一點同步。第 3.1 節全部撤銷、還原紀錄兩列寫出路，`token/rotate` 列補「開關關時沒有關卡」（S-3、S-6 (a)）。第 4.1 節 `restore_review_required` 補「待核對不一定是已撤銷」與 HM-12 的交接（S-3），`operation_outcome_unknown` 的 `results` 空的兩種意思與意外的例外（S-4、S-6 (b)）。第 4.2 節 503 名單只擋之後才經分派器比對的請求（S-6 (c)）。第 9 節 #58、#82、#123 補附註，沒有新列。Q-1（「知道了」只藏到重新整理）照現狀，待主對話確認 |
 | v1 草案（HM-13c 合併 HM-13b 與 claude-delivery 之後） | 2026-11-17 | HM-13c | 把 HM-13b 的分支（PR #108 head `fc70404`：已合進 `claude-delivery` `165dbaf`，HM-13b 的列改成第 118～121 列）用 merge commit 合進本片（不 rebase、不 force push）：HM-12 用掉第 113～115 列、HM-12 面板用掉第 116、117 列、HM-13b 接在後面，本片的兩列再往後移五列，原稿 #117、#118 成為第 122、123 列，順序不變；本片引用 HM-13b 的列跟著改（#115→#120、#116→#121）：開頭的狀態、第 1.2 節本片那段、第 3.5 節、第 4.1 節 `operation_restored` 列、第 8 節、第 9 節說明段本片那行、兩列的列號、第 10 節本片的兩列（`decisions.md`、`acceptance-matrix.md` T-21、`docs/operations/update-backup-rollback.md` 的引用同步）。解衝突時兩邊都留：第 1.2 節清單與段落 HM-32 在前、本片在後；第 3.5 節用本片的那段、套上 HM-13b 的改號；第 4.1 節 `operation_outcome_unknown`、`operation_restored` 兩列用本片的、新來源那列用 HM-12 的；第 9 節說明段、表尾與本節都是新基準在前。規則內容不變 |
 | v1 草案（HM-13c 審查 S-3） | 2026-11-17 | HM-13c | 依 HM-13c 審查 S-3（主對話 2026-11-17 定；HM-12 已先合併，本片合併時補）：開通後 HM-12 的換身分換 token（`backend`、`backend/patch` 會換 token 時）也過還原核對的關卡，待核對時回 409 `restore_review_required`，什麼都不做；紀錄讀不到時 503（第 3.1 節 `backend`、`token/rotate` 兩列、第 4.1 節 `restore_review_required` 列；原本寫「這個代碼只擋 `token/rotate`，合併時另接或寫明」）。和 HM-12 合併後的語意：換身分換掉還原保留的預設帳號權杖時，還原提示一起清掉（第 1.2 節「怎麼消失」）。沒有新列、沒有新決策 |
+| v1 草案（文件同步） | 2026-11-17 | HM-00 補正 | 第 2.4 節「准入滿時保留名額照樣送到」引用的兩個測試改寫成 `tests/test_carries_no_request.py::…` 的寫法（HM-00 對照腳本 C7 把反引號裡結尾是 `_full` 的名稱當成錯誤代碼；內容不變）；第 9 節說明段照重產的 `deviation-trace.md` 改寫：拿掉「`deviation-trace.md` 沒有這幾列」的說法，補一句第 87 列以後怎麼對到、沒有列對到的 7 列出處寫在哪（`docs/provenance/ha-multiprofile-docs-sync-20261117.md`）。差異表本身沒改 |
+| v1 草案（發版交接清單） | 2026-11-17 | HM-17 補正 | 第 1.2 節「不受開關管」清單前加一段：各產品下一版會帶出去、CHANGELOG 還沒記的變更、CHANGELOG 句子與發版時要另外驗的事，見新檔 `unreleased-changes.md`（計畫 §11.5）；之後不受開關管的片合併時在那裡加一項。規則內容、差異表、錯誤代碼都沒改 |
+| v1 草案（HM-13b 再合併 claude-delivery） | 2026-11-18 | HM-13b | 把 `claude-delivery` `53ffe61`（HM-00 補正的 PR #117、HM-17 補正的 PR #118、0.4.14 發版的 PR #119～#121 合併後）用 merge commit 合進本片（不 rebase、不 force push）：主線第 9 節最後一列仍是第 117 列，本片的第 118～121 列不必再移；第 9 節說明段兩邊合併（保留主線文件同步的說明，加回本片第 118～121 列的出處）。HM-03a 的 UC-08＋sentinel 已在展示機實測（一般與加密局部還原兩個訊號都觸發；完整還原未測，改列為 Odoo 發版前的關卡）。規則內容、差異表、錯誤代碼都沒改 |
+| v1 草案（HM-13c 再合併 HM-13b） | 2026-11-18 | HM-13c | 把 HM-13b 的分支（PR #108 head `090081c`：已合進 `claude-delivery` `53ffe61`，即 PR #117～#121 合併後）用 merge commit 合進本片（不 rebase、不 force push）：HM-13b 仍是第 118～121 列、本片仍是第 122、123 列，列號不必再移；第 9 節說明段保留主線文件同步的說明與兩片各自的出處。規則內容、差異表、錯誤代碼都沒改 |

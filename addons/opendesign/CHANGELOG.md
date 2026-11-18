@@ -1,3 +1,9 @@
+## 0.4.14 — source only (disabled)
+
+- Source only: OpenDesign stays disabled in the Store, so no 0.4.14 OpenDesign image, HAOS test or Store release is planned or claimed. Its source version follows the shared default, as in the earlier source-only releases.
+- `read_file` now lists the output schema its pinned child declares (an object with a `result` string), reviewed and pinned in PR #86; the gateway still omits it if the child's schema or the reviewed source changes.
+- The shared changes of this release apply to its source too (details in the repository CHANGELOG, 0.4.14): the administrator check accepts Home Assistant Core 2026.11.0, 2026.11.1 and 2026.11.2 (PR #81, PR #120); log redaction applies the PaaS server's rules first (PR #98); the child on port 3000 serves only the gateway's child bearer (PR #94); restore detection leaves a `.restore-detected` marker (PR #97); credentials in the child's `initialize` errors are redacted (PR #103); the gateway request limits follow the PaaS server (PR #105); and a rare 30 s wait when stopping is fixed (PR #106).
+
 ## 0.4.13 — source only (disabled)
 
 - Tool path arguments are encoded as single URL segments; unsafe dot segments are refused. OpenDesign remains disabled in the HA Store, so no 0.4.13 HA image or HAOS image test is claimed.
