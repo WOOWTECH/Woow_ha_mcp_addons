@@ -471,10 +471,11 @@ def test_a_record_that_cannot_be_saved_keeps_the_restore_and_stops(tmp_path, log
 
 def crash_disk(tmp_path, log_scan):
     """A restored disk for the fault injection: the default profile, A (indexed, with receipts), B (an orphan) and C
-    (indexed, its writer lock missing in the backup: quarantined), receipts in three journals."""
+    (indexed, its writer lock missing in the backup: quarantined), receipts in four journals (HM-27: the Origin
+    policy's beside it too)."""
     disk = with_profiles(tmp_path, log_scan, quarantine=False)
     disk.add(C)
-    receipts = {where: disk.receipt(where) for where in (DEFAULT, A, 'index')}
+    receipts = {where: disk.receipt(where) for where in (DEFAULT, A, 'index', 'origin')}
     backup = disk.backup()
     break_state(backup / 'profiles' / C, 'no writer lock')
     return disk, backup, receipts, disk.held()
@@ -491,7 +492,8 @@ def finished(disk, held, receipts):
     assert profiles.scan_profiles(disk.layout).profiles == (A, B)
     for where, operation in receipts.items():
         assert disk.replay(operation, where) == RESTORED
-        config = disk.layout.index if where == 'index' else disk.directory(where) / 'state.json'
+        config = {'index': disk.layout.index, 'origin': disk.layout.origin_policy}.get(where)
+        config = config or disk.directory(where) / 'state.json'
         archive = json.loads(config.with_name('.' + config.name + '.operations.json.restored').read_text())
         assert list(archive['receipts']) == [operation]
     assert [row['id'] for row in record_of(disk)['profiles']] == [DEFAULT, A, B]
@@ -641,6 +643,109 @@ def test_a_journal_from_before_this_slice_still_reads(tmp_path, log_scan):
         assert disk.replay(operation) == (503, 'operation_journal_unavailable')
 
 
+# ---- HM-27 (merged after HM-13b and HM-13c): the add-on's Origin policy and its receipts ----
+
+ORIGIN_POLICY_BYTES = b'{"version":1,"mode":"enforce","allowed_origins":["https://claude.ai"]}'
+
+
+def restored_as(path, kind, content):
+    """What a backup holds at path: content (a 0600 file), nothing, or a directory a forged backup put there."""
+    if kind == 'a directory':
+        path.mkdir()
+        (path / 'kept').write_bytes(b'')
+    elif kind != 'absent':
+        path.write_bytes(content)
+        path.chmod(0o600)
+
+
+@pytest.mark.parametrize('receipts', ['kept', 'absent', 'not JSON', 'a directory'])
+@pytest.mark.parametrize('policy', ['saved', 'absent', 'not JSON', 'a directory'])
+def test_a_restore_leaves_the_origin_policy_as_it_came_back_and_renews_its_receipts(tmp_path, log_scan, policy,
+                                                                                    receipts):
+    """HM-27 with the guard (contract 1.3, 3.5, 8, 9 #67, #120): the add-on's Origin policy (origin-policy.json, the
+    panel's save of a switched-on product) holds no credential and the guard never opens it: saved, absent or one the
+    add-on cannot use, the restore leaves it exactly as it came back, and the start goes on (origin_policy.py reads it
+    once the product serves: an unusable one refuses the secret path, tests/test_origin_policy.py). Its receipts beside
+    it (.origin-policy.json.operations.json) are the index's kind: the journal the restore brought back, readable or
+    not, becomes the one archive and a new journal refuses every older operation id with 410 operation_restored, also
+    where the backup had none (a save made after the backup is lost with the restore, and is not taken as a new one)."""
+    disk = Disk(tmp_path, log_scan)
+    assert disk.start(enabled=True) == restore_lock.Outcome()  # the first switched-on start: the sentinel
+    kept = disk.receipt('origin') if receipts == 'kept' else None  # a save before the backup
+    backup = disk.backup()
+    restored_as(backup / profiles.ORIGIN_POLICY_NAME, policy,
+                ORIGIN_POLICY_BYTES if policy == 'saved' else b'not a policy')
+    if receipts != 'kept':
+        restored_as(backup / profiles.ORIGIN_POLICY_OPERATIONS_NAME, receipts, b'not a journal')
+    lost = disk.receipt('origin')  # a save after the backup: lost with the restore
+    disk.restore(backup)
+    name = profiles.ORIGIN_POLICY_NAME
+    as_restored = {key: facts for key, facts in tree(disk.data).items() if key.split('/')[0] == name}
+    when, clock, _ = guard_clock()
+    assert disk.start(enabled=True, now=clock) == restore_lock.Outcome(restored=True)
+    assert {key: facts for key, facts in tree(disk.data).items() if key.split('/')[0] == name} == as_restored
+    assert bool(as_restored) is (policy != 'absent')
+    journal = disk.data / profiles.ORIGIN_POLICY_OPERATIONS_NAME
+    archive = journal.with_name(journal.name + operations.RESTORED_SUFFIX)
+    fresh = json.loads(journal.read_text())
+    assert fresh['receipts'] == {} and fresh['restored_before_ms'] >= int(when.timestamp() * 1000)
+    if receipts == 'kept':
+        assert list(json.loads(archive.read_text())['receipts']) == [kept]
+    elif receipts == 'not JSON':
+        assert archive.read_bytes() == b'not a journal'  # archived as it was
+    elif receipts == 'a directory':
+        assert (archive / 'kept').exists()
+    else:
+        assert not os.path.lexists(archive)  # nothing to archive: a new journal all the same
+    for operation in filter(None, (kept, lost)):
+        assert disk.replay(operation, 'origin') == RESTORED
+    assert not [line for _, line in guard_lines(log_scan) if 'Origin' in line or 'not finished' in line]
+    assert disk.start(enabled=True) == restore_lock.Outcome()  # the next start: nothing to do
+
+
+def test_receipts_beside_the_origin_policy_that_cannot_be_archived_stop_the_start(tmp_path, log_scan):
+    """As the index's (contract 1.3, 9 #120): a journal that is a directory beside an archive that is a file cannot be
+    moved there (a forged backup): its own line, the start stops with every marker kept and the policy untouched,
+    every start again until another backup is restored. Removing what blocks it lets the next start finish."""
+    disk = Disk(tmp_path, log_scan)
+    assert disk.start(enabled=True) == restore_lock.Outcome()
+    backup = disk.backup()
+    restored_as(backup / profiles.ORIGIN_POLICY_NAME, 'saved', ORIGIN_POLICY_BYTES)
+    restored_as(backup / profiles.ORIGIN_POLICY_OPERATIONS_NAME, 'a directory', None)
+    restored_as(backup / (profiles.ORIGIN_POLICY_OPERATIONS_NAME + operations.RESTORED_SUFFIX), 'file', b'archived')
+    disk.restore(backup)
+    with pytest.raises(ConfigError):
+        disk.start(enabled=True)
+    assert MARKER in disk.names() and disk.detection(True).restored
+    assert (disk.data / profiles.ORIGIN_POLICY_NAME).read_bytes() == ORIGIN_POLICY_BYTES
+    assert ('WARNING', restore_lock.ORIGIN_NOT_ARCHIVED) in guard_lines(log_scan)
+    assert guard_lines(log_scan)[-1] == ('WARNING', restore_lock.UNFINISHED % 'receipts could not be archived')
+    (disk.data / (profiles.ORIGIN_POLICY_OPERATIONS_NAME + operations.RESTORED_SUFFIX)).unlink()
+    assert disk.start(enabled=True) == restore_lock.Outcome(restored=True)
+    assert MARKER not in disk.names()
+
+
+def test_switched_off_without_profile_data_a_restore_leaves_the_origin_policy_and_its_receipts_alone(tmp_path,
+                                                                                                    log_scan):
+    """Plan 3.3, 7.1; contract 1.2, 1.3, 9 #121: a product switched off again (plan 7.4) keeps its Origin policy and its
+    receipts on disk, never read while it is off (HM-27 review S-6 (b)). Without profile data a restore there is
+    today's: the panel's notice and the marker only (HM-13c); the policy and its journal stay exactly as restored, no
+    archive and no new journal (as the default profile's receipts: an earlier save replays as completed)."""
+    disk = Disk(tmp_path, log_scan)
+    assert disk.start(enabled=True) == restore_lock.Outcome()
+    kept = disk.receipt('origin')
+    restored_as(disk.data / profiles.ORIGIN_POLICY_NAME, 'saved', ORIGIN_POLICY_BYTES)
+    disk.restore(disk.backup())
+    names = (profiles.ORIGIN_POLICY_NAME, profiles.ORIGIN_POLICY_OPERATIONS_NAME)
+    as_restored = {key: facts for key, facts in tree(disk.data).items() if key in names}
+    assert disk.start(enabled=False) == restore_lock.Outcome(restored=True)
+    assert {key: facts for key, facts in tree(disk.data).items() if key in names} == as_restored
+    assert set(as_restored) == set(names)
+    assert not os.path.lexists(disk.data / (profiles.ORIGIN_POLICY_OPERATIONS_NAME + operations.RESTORED_SUFFIX))
+    assert disk.replay(kept, 'origin') == 'completed'
+    assert guard_lines(log_scan) == [('WARNING', restore_lock.KEPT_NOTICE)]
+
+
 # ---- UC-24 (plan 8.4: 三個會發生的情境) ----
 
 def test_the_three_restore_situations_of_uc24(tmp_path, log_scan):
@@ -690,21 +795,23 @@ def test_a_directory_at_one_of_the_guards_names_is_moved_aside(tmp_path, log_sca
 
 
 @pytest.mark.parametrize('where', ['the restore record', "the default profile's receipts archive",
-                                   "a profile's receipts archive", "the index's receipts archive"])
+                                   "a profile's receipts archive", "the index's receipts archive",
+                                   "the Origin policy's receipts archive"])
 def test_a_directory_at_a_name_the_guard_writes_is_moved_aside(tmp_path, log_scan, where):
     """HM-13b review S-1 (SF-7 for the guard's other names): a restored directory where the guard saves the restore
     record, or where it moves a journal to its archive (a forged backup), is moved aside to <name>.quarantine-<UTC>,
     never deleted; the record and every archive are saved and every old receipt answers 410 (without it, every start
-    stopped there)."""
+    stopped there). HM-27: the archive of the receipts beside the add-on's Origin policy too."""
     disk = with_profiles(tmp_path, log_scan, orphan=False, quarantine=False)
-    receipts = {key: disk.receipt(key) for key in (DEFAULT, A, 'index')}
+    receipts = {key: disk.receipt(key) for key in (DEFAULT, A, 'index', 'origin')}
     backup = disk.backup()
-    state, index = (operations.journal_path(Path(name)).name + operations.RESTORED_SUFFIX
-                    for name in ('state.json', profiles.INDEX_NAME))
+    state, index, origin = (operations.journal_path(Path(name)).name + operations.RESTORED_SUFFIX
+                            for name in ('state.json', profiles.INDEX_NAME, profiles.ORIGIN_POLICY_NAME))
     directory, name = {'the restore record': ('.', profiles.RESTORE_RECORD_NAME),
                        "the default profile's receipts archive": ('.', state),
                        "a profile's receipts archive": (f'profiles/{A}', state),
-                       "the index's receipts archive": ('.', index)}[where]
+                       "the index's receipts archive": ('.', index),
+                       "the Origin policy's receipts archive": ('.', origin)}[where]
     (backup / directory / name).mkdir()
     (backup / directory / name / 'kept').write_bytes(b'')
     disk.restore(backup)
@@ -722,9 +829,15 @@ def test_a_directory_at_a_name_the_guard_writes_is_moved_aside(tmp_path, log_sca
 
 def test_the_names_set_aside_are_the_ones_the_guard_writes():
     """profiles.ASIDE_NAMES (what the guard may move aside) are its own names, the receipts archives as operations
-    names them."""
+    names them (HM-27: the Origin policy's receipts too, whose journal operations names as it names the index's; the
+    policy itself is no name of the guard's: it never writes, renames or removes it)."""
     assert profiles.RECEIPT_ARCHIVE_NAMES == tuple(operations.journal_path(Path(name)).name + operations.RESTORED_SUFFIX
-                                                   for name in ('state.json', profiles.INDEX_NAME))
+                                                   for name in ('state.json', profiles.INDEX_NAME,
+                                                                profiles.ORIGIN_POLICY_NAME))
+    for config, journal in ((profiles.INDEX_NAME, profiles.INDEX_OPERATIONS_NAME),
+                            (profiles.ORIGIN_POLICY_NAME, profiles.ORIGIN_POLICY_OPERATIONS_NAME)):
+        assert operations.journal_path(Path(config)).name == journal
+    assert profiles.ORIGIN_POLICY_NAME not in profiles.ASIDE_NAMES
     assert set(profiles.ASIDE_NAMES) == {profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME,
                                          profiles.INSTANCE_RECORD_TEMPORARY_NAME, MARKER,
                                          profiles.REVOKE_ALL_MARKER_NAME, profiles.RESTORE_RECORD_NAME,

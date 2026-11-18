@@ -17,7 +17,10 @@ Once a product is switched on (features.enabled; run_product's ProfileManager), 
 - the panel reads and saves it through the shared management pipeline (GET and PUT {base}/api/origin-policy: the role
   checks, If-Match, Idempotency-Key, the receipts beside the file);
 - a file that cannot be used: every secret-path request whose token is checked is 503 {"error":"state unavailable"},
-  until the panel saves a new one over it (the PaaS runtime behaviour for a bad value).
+  until the panel saves a new one over it (the PaaS runtime behaviour for a bad value);
+- after a restore (HM-13b's boot guard; this slice merged after HM-13b and HM-13c): the policy is the backup's, as it
+  came back (saved, absent or unusable), and every save made before the restore answers 410 operation_restored (the
+  guard archives the receipts beside the policy as the index's).
 
 Switched off nothing of it exists: the file is never read or written, the route is an unknown operation (404), any
 Origin on the secret path is served as today and no line is written (HM-01's golden regression and both contract
@@ -37,6 +40,7 @@ from pathlib import Path
 import random
 import re
 import secrets
+import shutil
 import stat
 import threading
 import time
@@ -45,7 +49,10 @@ import httpx
 import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
+from mcp_admin_core import operations, profiles
 from multi_profile_runtime import Children, SWITCHABLE, create_profile, ids, multi_profile_runtime, stored
+from restore_guard_disk import newest_ctime
+from test_restore_detection import after_tick, supervisor_restore
 from test_single_profile_golden import (ACCEPT, ADMIN, BEARER_REQUIRED, GENUINE_CLIENT, NOT_FOUND, PRODUCTS, answer,
                                         configure, initialize_body, initialize_message, json_answer,
                                         production_runtime, settle)
@@ -1146,6 +1153,105 @@ async def test_a_save_never_replaces_a_file_changed_after_it_was_read(tmp_path, 
             'mode': 'enforce', 'allowed_origins': ['https://outside.example'], 'origin_policy_state': 'saved'}
         await save(runtime, 'report-only', [])
         assert (data / POLICY).read_bytes() == b'{"version":1,"mode":"report-only","allowed_origins":[]}'
+
+
+# ---- after a restore (HM-13b's boot guard; this slice merged after HM-13b and HM-13c) ----
+
+def test_the_layout_names_the_policy_and_its_receipts():
+    """Contract 2.6, 8: the policy and its receipts in /data/mcp under the layout's names (profiles.py: written there
+    and nowhere else, so that the boot guard, restore_lock, handles the receipts by the same name the policy writes
+    them under)."""
+    from mcp_admin_core import origin_policy
+    root = Path('/data/mcp')
+    assert profiles.ORIGIN_POLICY_NAME == origin_policy.POLICY_NAME == POLICY
+    assert profiles.ORIGIN_POLICY_OPERATIONS_NAME == operations.journal_path(root / POLICY).name == RECEIPTS
+    assert profiles.Layout(root).origin_policy == root / POLICY
+    policy = origin_policy.OriginPolicy(root)  # nothing is read before it is asked
+    assert (policy.file.path, policy.journal.path) == (root / POLICY, root / RECEIPTS)
+
+
+def restore_into(data, backup):
+    """Supervisor's restore of backup into data and the entrypoint's marker (as tests/restore_guard_disk.py's
+    Disk.restore: every entry a new file, a ctime of now)."""
+    after_tick(Path(data).parent, max(newest_ctime(data), newest_ctime(backup)))
+    supervisor_restore(backup, data)
+    os.close(os.open(Path(data) / profiles.RESTORE_MARKER_NAME, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                     0o600))
+
+
+SAVED_BEFORE = {'mode': 'enforce', 'allowed_origins': ['https://claude.ai']}  # before the backup
+SAVED_AFTER = {'mode': 'report-only', 'allowed_origins': []}  # after it: lost with the restore
+RESTORED_410 = (410, {'error': 'request denied', 'detail': {'code': 'operation_restored'}})
+
+
+@pytest.mark.parametrize('policy', ['saved', 'absent', 'unusable', 'a directory'])
+async def test_after_a_restore_the_backups_policy_applies_and_no_earlier_save_is_taken_again(tmp_path, log_scan,
+                                                                                           policy):
+    """With HM-13b's boot guard (contract 1.3, 2.6, 3.5; I9): a restore brings the policy back as the backup had it and
+    the next start serves exactly that (the guard never reads or changes it): saved (its mode and list in force on the
+    secret path), absent (the default: report-only and https://claude.ai), unusable (every secret-path request 503
+    until the panel saves one; a directory there cannot be replaced: 409 operation_outcome_unknown, and only another
+    backup repairs it). Every save made before the restore, the one after the backup that the restore lost included,
+    answers 410 operation_restored when the panel sends it again, whatever its If-Match (the guard archived the
+    receipts beside the policy and gave it a new journal, also where the backup had none); a new save is a new
+    operation."""
+    data = setup(tmp_path)
+    watch_tokens(log_scan, data)
+    before = None
+    async with multi_profile_runtime('odoo', data) as runtime:  # the first switched-on start: the sentinel
+        await settle(runtime, 'configured')
+        if policy != 'absent':
+            response, before = await policy_put(runtime, SAVED_BEFORE)
+            assert response.status_code == 200
+    backup = tmp_path / 'backup'
+    shutil.copytree(data, backup, symlinks=True)  # an HA backup of /data/mcp
+    if policy == 'unusable':
+        write_policy(backup, b'{"version":1,"mode":"Enforce","allowed_origins":[]}')
+    elif policy == 'a directory':
+        (backup / POLICY).unlink()
+        (backup / POLICY).mkdir()
+    async with multi_profile_runtime('odoo', data) as runtime:
+        await settle(runtime, 'configured')
+        response, lost = await policy_put(runtime, SAVED_AFTER)
+        assert response.status_code == 200
+    restore_into(data, backup)
+    async with multi_profile_runtime('odoo', data) as runtime:  # run_product runs the guard before anything serves
+        await settle(runtime, 'configured')
+        assert profiles.RESTORE_MARKER_NAME not in os.listdir(data)
+        assert (data / (RECEIPTS + operations.RESTORED_SUFFIX)).exists() is (before is not None)
+        read = await policy_get(runtime)
+        path = f'/private_{runtime.token("default")}/mcp'
+        async with runtime.mcp() as client:
+            async def sent(case):
+                return await client.post(path, headers=headers_of(case), json=initialize_message())
+            if policy == 'saved':
+                assert read.json() == {**SAVED_BEFORE, 'origin_policy_state': 'saved'}
+                assert answer(await sent('not-allowed')) == DENIED_403
+                assert (await sent('allowed')).status_code == 200
+            elif policy == 'absent':
+                assert read.json() == {'mode': 'report-only', 'allowed_origins': ['https://claude.ai'],
+                                       'origin_policy_state': 'default'}
+                assert (await sent('not-allowed')).status_code == 200
+            else:
+                assert read.json() == {'mode': None, 'allowed_origins': None, 'origin_policy_state': 'unusable'}
+                for case in ('none', 'allowed', 'not-allowed'):
+                    assert answer(await sent(case)) == UNAVAILABLE
+        for body, key in ((SAVED_BEFORE, before), (SAVED_AFTER, lost)):
+            if key is not None:
+                for if_match in ('"o1-' + '0' * 64 + '"', 'current'):
+                    again, _ = await policy_put(runtime, body, if_match=if_match, key=key)
+                    assert (again.status_code, again.json()) == RESTORED_410
+        if policy == 'a directory':
+            refused, _ = await policy_put(runtime, SAVED_AFTER)
+            assert (refused.status_code, refused.json()['detail']['code']) == (409, 'operation_outcome_unknown')
+            assert (data / POLICY).is_dir()
+        else:
+            saved = await save(runtime, 'report-only', ['https://claude.ai'])
+            assert saved.json()['operation']['replayed'] is False
+            assert (await policy_get(runtime)).json()['origin_policy_state'] == 'saved'
+            async with runtime.mcp() as client:
+                assert (await client.post(path, headers=headers_of('not-allowed'),
+                                          json=initialize_message())).status_code == 200
 
 
 # ---- Headscale and the switch ----

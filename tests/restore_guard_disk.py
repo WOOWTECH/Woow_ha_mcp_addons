@@ -26,7 +26,7 @@ import time
 
 import pytest
 
-from mcp_admin_core import config, operations, profiles, restore_detect, restore_lock
+from mcp_admin_core import config, operations, origin_policy, profiles, restore_detect, restore_lock
 from mcp_admin_core.products import ProductStore
 from multi_profile_runtime import create_profile
 from test_restore_detection import Crash, after_tick, supervisor_restore
@@ -105,10 +105,14 @@ class Disk:
 
     def receipt(self, profile_id=DEFAULT, kind='token.revoke', *, when_ms=None):
         """A completed operation receipt in the profile's journal ('index': the journal beside the index, a creation
-        receipt of an additional profile's id). Returns its operation id."""
+        receipt of an additional profile's id; HM-27 'origin': the journal beside the add-on's Origin policy, a save of
+        it). Returns its operation id."""
         if profile_id == 'index':
             journal = operations.OperationJournal(self.layout.index, results=operations.PROFILE_RESULTS, subjects=True)
             kind, subject = 'profile.create', 'e' * 24
+        elif profile_id == 'origin':
+            journal = operations.OperationJournal(self.layout.origin_policy, results=origin_policy.RESULTS)
+            kind, subject = origin_policy.KIND, None
         else:
             journal = operations.OperationJournal(self.directory(profile_id) / 'state.json')
             subject = None
@@ -124,6 +128,9 @@ class Disk:
         if profile_id == 'index':
             journal = operations.OperationJournal(self.layout.index, results=operations.PROFILE_RESULTS, subjects=True)
             kind = 'profile.create'
+        elif profile_id == 'origin':
+            journal = operations.OperationJournal(self.layout.origin_policy, results=origin_policy.RESULTS)
+            kind = origin_policy.KIND
         else:
             journal = operations.OperationJournal(self.directory(profile_id) / 'state.json')
         try:
