@@ -123,7 +123,7 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_child_identity.py` | HM-15 | 計畫（條件式） | 別的程序先綁 port → 不轉發；uid 10001 子程序驗降級 |
 | `tests/test_upgrade_hooks.py` | HM-16 | 新增 | Store hook 草稿（`packaging/hooks/seed`、`verify`）只讀、與版本無關；升級不該做的 11 種事各讓 verify 失敗；索引是連結時不跟隨；在自己的程序裡也不走環境代理；對真的 runtime（舊版沒開通、新版開通或也沒開通；Odoo、EMQX）照樣過、不改 `/data` |
 | `packaging/test_container_profiles.py` | HM-16 | 新增 | 容器探針的多帳號階段：布局快照（修復規則、512 項與 8 層預算；守門寫的名稱、還原提示、封存的收據從 `profiles.py` 取）、照面板的方式建帳號、sentinel（執行期建的）、子程式 port 與資源、SIGKILL、30 秒內停機、路由（含 session 是自己子程式的）、子程式 bearer；多帳號還原後（DQ-03 (b) A2，對真的 `restore_lock.guard` 跑）：標記與提示刪掉、還原紀錄、每個帳號撤銷且 child token 換新、其他欄位與索引不變、log 行，還原前的 token 與 child token 都被拒；整個階段的順序、每一步拿到的帳號與它自己的判定 |
-| `packaging/test_container_probe.py` | HM-16 | 既有，擴充 | 單帳號路徑和審過的基準兩邊都剝掉開通的分支後逐句相同；開通的產品假後端用容器私有位址；`fixture_snapshot` 只對開通的產品放寬；還原階段那次啟動的 stderr：entrypoint 的 `re-owned N` 與守門通知各剛好一行（HM-13b 審查 S-3；對真的 `restore_lock.guard` 跑） |
+| `packaging/test_container_probe.py` | HM-16 | 既有，擴充 | 單帳號路徑和審過的基準兩邊都剝掉開通的分支後逐句相同；開通的產品假後端用容器私有位址；`fixture_snapshot` 只對開通的產品放寬；還原階段那次啟動的 stderr：entrypoint 的 `re-owned N` 與守門通知各剛好一行、守門沒有別的行（HM-13b 審查 S-3、HM-16 第二輪審查；對真的 `restore_lock.guard` 跑） |
 | `packaging/test_container_acceptance.py` | HM-16 | 既有，擴充 | 沒開通的產品 docker 指令與 180 秒逐字照舊；開通的走一次性 internal bridge 與 360 秒；repo 的開關決定它 |
 | `packaging/test_ha_p9_probe.py` | HM-16 | 既有，擴充 | P9 kit：cross 模式（兩種接法、跨帳號 session、已刪與隨機 token、`X-MCP-Profile` 不換帳號）、childkill `--child-port`（輪詢到新 PID、要子程式自己的 session、別的 PID 不變）、不走環境代理 |
 | `packages/mcp-admin-ui/tests/p9-admin.test.mjs` | HM-16 | 既有，擴充 | P9 driver 的帳號流程：暫時帳號（不重送、刪除前重讀索引版本）、交叉矩陣的輸入、childkill 的 port；driver 組裝的順序與參數（`--cross`、`--temp-profile`、childkill） |

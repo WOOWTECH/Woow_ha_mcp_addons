@@ -2,6 +2,10 @@
 
 ## 結論
 
+- **2026-11-18 第二輪獨立審查「修正後通過」（必修 0 項、建議 4 項），4 項都改了（第 20 節）**：`acceptance.md` T-21 沒開通的 app
+  那一輪照實際行為重寫（只有訊號 1 時才有 `KEPT_NOTICE` 與面板提示，前置只剩預設帳號）；第 16 節補 HM-03a 寫回的局部還原；
+  第 13 節與下面「實際容器沒跑」補 0.4.14 起的發版路線；`check_restore_log` 不准有守門的其他行（刻意改單帳號路徑，`BASE` 移到
+  `d922d3c`）。帳本、契約、tool-surface 不用改。
 - **2026-11-18 和 HM-13b／HM-13c 合併，第 12 節 7 點都做了（第 19 節）**：merge commit 把 HM-13c 的 `c5dd7d3`（含 HM-13b `090081c`、
   `claude-delivery` `53ffe61`）合進來；容器探針的還原階段讀 stderr（`re-owned N` 與守門通知各一行）、多帳號階段改成 HM-13b 之後的行為
   （執行期建 sentinel、還原後每個帳號撤銷、紀錄、舊憑證被拒、sentinel 重建）、布局名稱從 `profiles.py` 取、`acceptance.md` 補 T-21 的
@@ -16,7 +20,8 @@
 - **單帳號探針路徑逐位元不變，有測試證明**：`container_probe.py` 只加兩個 import 與三個「開通才走」的 `if`。測試把現在的檔和 `f4c7718`
   的檔**兩邊都剝掉開通的部分**再比 AST：完全相同，而且多出來的剛好是本片的那幾個（第 3.2 節）。HM-13b 合併後只要移 `BASE`（已拿 HM-13b
   的實際檔案模擬過）。`container_acceptance.py` 對沒開通的每個產品，docker 指令與 180 秒逐字照舊。2026-11-18 起 `BASE` 是 `573bb21`：
-  HM-13b／HM-13c 審過的探針加上第 12 節第 1 點（還原階段讀 stderr），這是本片唯一一處刻意改單帳號路徑（第 19.4 節）。
+  HM-13b／HM-13c 審過的探針加上第 12 節第 1 點（還原階段讀 stderr，第 19.4 節）；同日第二輪審查後是 `d922d3c`：再加審查建議的
+  一條 log 斷言（第 20 節）。本片刻意改單帳號路徑的只有這兩處。
 - **開通的產品的假後端**：照 Headscale 開一次性 internal bridge、`mock_bind_host` 回容器私有位址、探針上限 360 秒（HM-20 審查 MF-2）。
   HM-20 的兩個 tripwire 改成對規則本身的斷言（每個產品開與關各驗一次），另留「repo 的開關決定它」的測試（第 3.3 節）。
 - **`fixture_snapshot` 只對開通的產品放寬**（C4-SF-5）：開通時改走多帳號布局的快照（名稱照布局、修復規則、512 項／8 層預算、子程式
@@ -36,6 +41,8 @@
 - **本機**（修正後，第 7 節）：packaging unittest `Ran 259`、`OK (skipped=5)`；node 93 過；validate 過；pytest 審查的 19 檔目標組重跑
   862 案：855 過、7 個失敗都是要 root 的既有案例、0 skip。兩個預檢：秘密 0 命中、帳本 OK（第 8 節）。
 - **實際容器沒跑**：多帳號階段第一次真跑在 HM-19a 前的 builder 乾跑（要使用者授權），本片不跑 builder、不跑 docker（第 13 節）。
+  0.4.14 起發版改走 GitHub-hosted 的 `release.yaml`：HM-19a 的乾跑照它當時的發版路線做；第 12 節第 1 點的單帳號還原 log 檢查，
+  任何產品下一次發版時 `release.yaml` 的 candidate job 就會先跑到（第 13、19.7 節）。
 - `checks` 秒數：開 PR 後補。
 
 ## 1. 範圍與基準
@@ -47,7 +54,7 @@
 | 基準 | `claude-delivery` `f4c7718`（HM-00～HM-11、HM-13a、HM-14、HM-17、HM-02、HM-20、#100、HM-31（#105）、HM-09 追補（#106）、HM-11（#107）都已合併）；2026-11-18 用 merge commit 合進 HM-13c `c5dd7d3`（含 HM-13b `090081c`、`claude-delivery` `53ffe61`），第 19 節 |
 | 依據 | 計畫 §11（交付、§11.3 升版逐檔清單）、§12.3 HM-16（含 2026-11-15 HM-20 審查 MF-2 的補充）、§10（T-01～T-29、§10.4、§10.6）、§8.4（還原守門）、C4-SF-5、C4-SF-14；FM-16、63、101、102、107、108、135、147；契約第 2.2、2.3、9 節（#72、#73） |
 | 對齊的 PaaS | `woow-mcp-server` 的 `public_probe.py --temp-profile`（repin `d7f58493` 的版本，`artifacts/mcp-security-release-20261112/repin-d7f58493-20261116/public_probe.py`，repo 外）；PaaS CI 映像 smoke（`.gitea/workflows/ci.yml`）只看預設帳號，HA 的多帳號容器階段沒有 PaaS 對應（契約 §9 #73） |
-| 獨立審查 | `artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-16.md`（判定「修正後通過」；證據 `wave4/evidence-review-HM-16/`）。修正的腳本、log、變異結果：`wave4/evidence-fix-HM-16/`（repo 外） |
+| 獨立審查 | `artifacts/ha-multiprofile-parity-20261114/wave4/review-HM-16.md`（判定「修正後通過」；證據 `wave4/evidence-review-HM-16/`）。修正的腳本、log、變異結果：`wave4/evidence-fix-HM-16/`（repo 外）。第二輪（2026-11-18，合併 HM-13c 之後）：判定「修正後通過」，第 20 節 |
 | PaaS 變動 | 第 4 節 |
 
 ## 2. 改了什麼、沒改什麼
@@ -55,7 +62,7 @@
 | 檔 | 內容 |
 |---|---|
 | `packaging/container_profiles.py`（新） | 容器探針的多帳號階段（第 3.1 節）：`stage()` 與它的每一段（`tree_snapshot`、`create_profiles`、`detect_as_runtime`、`child_ports`、`listeners`、`profiles_up`、`check_resources`、`kill_one`、`stop_within`、`check_routing`、`ping_child`、`check_child_bearers`）、`private_mock_host`。`stage()` 一開始就拒絕 n8n（第 14 節） |
-| `packaging/container_probe.py` | 兩個 import（`features`、`container_profiles`）與三個「開通才走」的 `if`：`mock_bind_host`（私有位址）、`fixture_snapshot`（多帳號快照）、`run()` 最後呼叫 `container_profiles.stage`。其他逐句照 `f4c7718` |
+| `packaging/container_probe.py` | 兩個 import（`features`、`container_profiles`）與三個「開通才走」的 `if`：`mock_bind_host`（私有位址）、`fixture_snapshot`（多帳號快照）、`run()` 最後呼叫 `container_profiles.stage`。其他逐句照 `f4c7718`；2026-11-18 起另有 HM-13b／HM-13c 的改動，與本片兩處刻意改的單帳號路徑（還原階段讀 stderr、`check_restore_log` 不准有守門的其他行；第 19.4、20.3 節） |
 | `packaging/container_acceptance.py` | 讀 repo 的開關（`mcp_admin_core.features`）；開通的產品照 Headscale 開一次性 internal bridge（網路名 `woow-<產品>-candidate-<hex>`，Headscale 不變）、`docker run` 上限 360 秒；沒開通的照舊 180 秒 |
 | `packaging/ha_p9_probe.py` | `cross` 模式；`Client` 的密鑰網址接法與額外標頭，改用不讀環境代理的 opener（所有模式）；`childkill --child-port` 與 `CHILD_PORT_SCRIPT`、殺掉後輪詢（`CHILD_BACK_SECONDS`、`CHILD_LOOK_SECONDS`）與 `wait_child_session`；cross 與 childkill（帶 port 時）失敗 exit 1。沒給新參數的模式除了 opener 和以前逐行相同 |
 | `packaging/ha_p9_admin.mjs` | `logId`、`revealToken`、`crossLine`、`crossLines`、`temporaryLabel`、`withTemporaryProfile`、`childPortOf`；審查 SF-3 後再加 driver 的三段組裝：`childkillArguments`、`runCross`、`runTemporaryProfile`（probe 由參數傳入） |
@@ -115,8 +122,8 @@
      其他欄位不變；索引位元不變；
    - 三個子程式都重新起來；`check_refused`：還原前的每個 token 兩種接法都被拒（Bearer 401、密鑰網址 404）、每個子程式拒絕還原前的 child token；
    - 停機後讀 log（`container_probe.check_restore_log`）：entrypoint 的 `re-owned N`（N＝還原的項目加標記）一行、每個帳號（含 `default`）的
-     `REVOKED` 一行、`REVOKED_NOTICE` 一行、沒有 `KEPT_NOTICE`；detect 是「沒有標記＋`consistent`」（sentinel 已重建）；守門留下的樹再過一次
-     `tree_snapshot`。
+     `REVOKED` 一行、`REVOKED_NOTICE` 一行、沒有 `KEPT_NOTICE`，守門沒有別的行（第二輪審查，第 20 節）；detect 是「沒有標記＋`consistent`」
+     （sentinel 已重建）；守門留下的樹再過一次 `tree_snapshot`。
    合併前（HM-13a 行為）這一步要求標記留著、每個 state 與 record 位元不變、停機後「有標記＋`mismatch`」。
 
 `stage()` 自己的判定（第 1 步與第 8 步的 `consistent`、第 9 步停機後的「沒有標記＋`consistent`」）和它交給每一步的參數（等哪些 port、殺哪個
@@ -133,23 +140,25 @@ docker 預設的 1024 夠；不夠時額外帳號不服務，第 2 步會失敗�
 ### 3.2 單帳號探針路徑逐位元不變的證明
 
 - `packaging/test_container_probe.py::SingleProfilePathTests`：拿 `git show <BASE>:packaging/container_probe.py`（CI 的 checkout 是完整歷史；
-  `BASE` 原本是 `f4c7718`，2026-11-18 起是 `573bb21`，見下一點與第 19.4 節）和現在的檔，**兩邊都**拿掉開通的部分（`features`、
-  `container_profiles` 兩個 import，以及「條件呼叫 `features.enabled`」的 `if`，不管在哪一層）再比：
+  `BASE` 原本是 `f4c7718`，2026-11-18 起是 `573bb21`，同日第二輪審查後是 `d922d3c`，見下一點、第 19.4 與 20 節）和現在的檔，
+  **兩邊都**拿掉開通的部分（`features`、`container_profiles` 兩個 import，以及「條件呼叫 `features.enabled`」的 `if`，不管在哪一層）再比：
   - 剩下的 AST 完全相同（`ast.dump`，同一個直譯器當場算，不怕版本差）；
   - `BASE` 原有的開通部分一個都不能少、不能改（逐個比 `ast.dump`）；
   - 相對 `BASE` 多出來的開通部分要和 `ADDED_BEYOND_BASE` 相同、多出來的分支都要交給 `container_profiles`。`BASE` 是 `f4c7718` 時，多出來的
     剛好是 `import container_profiles`、三個交給 `container_profiles` 的 `if`（`mock_bind_host`、`fixture_snapshot`、`run()`）與 `features`
-    import；`573bb21` 已經有它們，所以現在是空的。另一案釘住 `BASE` 自己的開通部分：HM-13b 的 `features` import 與 `check_restored_start`
-    的分支（不交給 `container_profiles`）、本片的 import 與三個交給它的分支。
+    import；`573bb21`、`d922d3c` 都已經有它們，所以現在是空的。另一案釘住 `BASE` 自己的開通部分：HM-13b 的 `features` import 與
+    `check_restored_start` 的分支（不交給 `container_profiles`）、本片的 import 與三個交給它的分支。
 - 證明的鏈（2026-11-18）：`f4c7718`→`c5dd7d3` 是 HM-13b、HM-13c 改的單帳號路徑（`check_restored_start` 改成守門之後的檢查，各自審查過；
   合併 commit `f3b31ce` 當時把 `BASE` 移到 `c5dd7d3`，測試全綠）；`c5dd7d3`→`573bb21` 兩邊都剝掉開通部分後只差第 12 節第 1 點（第 19.4 節
-  逐項列出）；`573bb21` 之後單帳號路徑沒有再改（現在的測試）。
+  逐項列出；第二輪審查一起看過，沒有必修）；`573bb21`→`d922d3c` 只差第二輪審查建議第 4 點的三處（第 20.3 節逐項列出）；`d922d3c` 之後
+  單帳號路徑沒有再改（現在的測試）。
 - 另驗 `run()` 只有一個這種分支、是 `httpx.AsyncClient` 區塊的最後一句、內容是 `await container_profiles.stage(sys.modules[__name__], client)`。
 - 審查 MF-3 (b) 之前的寫法只剝現在這份、計數寫死 5，HM-13b（PR #108）自己也加了 `features` import 與還原檢查的開通分支，只移 `BASE` 會紅。
   現在拿 HM-13b 的實際檔案模擬過（GitHub fetch 的 `ebab019`；`git merge-file` 三方合併，`evidence-fix-HM-16/logs/x3-real-hm13b.txt`）：
   `BASE` 換成 HM-13b 的版本、本片的改動接上去並拿掉合併留下的重複 `features` import 後就過；重複的 import 留著會紅（要求拿掉）。
-- 之後有片要刻意改單帳號路徑，就把 `BASE` 改成它自己審過的基準 commit，並在筆記寫明理由（本片 2026-11-18 就是這樣移到 `573bb21`）；
-  新基準的開通部分若和 `573bb21` 的不同，連帶改釘住它們的那一案。只加開通分支、沒改單帳號路徑的片，把它列進 `ADDED_BEYOND_BASE`。
+- 之後有片要刻意改單帳號路徑，就把 `BASE` 改成它自己審過的基準 commit，並在筆記寫明理由（本片 2026-11-18 就是這樣移到 `573bb21`，
+  第二輪審查後再移到 `d922d3c`）；新基準的開通部分若和 `d922d3c` 的不同，連帶改釘住它們的那一案。只加開通分支、沒改單帳號路徑的片，
+  把它列進 `ADDED_BEYOND_BASE`。
   2026-11-18 合併時重複的 `features` import 確實出現，拿掉的是本片那個（第 19.2 節）。
 - `container_acceptance.py`：`test_a_candidate_not_switched_on_is_invoked_as_before` 對 `inputs.json` 的每個產品比完整的 docker 指令（逐字）
   與 180 秒。
@@ -374,6 +383,10 @@ HM-13b（開機守門）還沒合併，本片照 HM-13a 已合併的行為與計
   `container_acceptance`。這是多帳號階段與開通的 bridge 第一次真跑；把最後那行 `PASS multi-profile …`（含秒數）記進證據；失敗先查探針，不要放寬。
   要先合併 HM-13b、HM-13c；第 12 節的探針改動（含第 1 點的 stderr 斷言）2026-11-18 已做（第 19 節）。docker 的 nofile soft 上限要 ≥680。
   乾跑時最後那行改成 `… restore tree: every profile revoked and its old credentials refused, sentinel rebuilt`（第 3.1 節）。
+- **發版路線已換（2026-11-18 第二輪審查建議第 3 點）**：上一點是寫這節時的 builder 路線。0.4.14 起發版走 GitHub-hosted 的 `release.yaml`
+  （gate → candidate → publish；candidate job 跑同一個 `supply_chain.py candidate` → `container_acceptance`）：HM-19a 的乾跑照它當時的
+  發版路線做，上面的拋棄式 commit、不推 GHCR、要使用者授權照舊。第 12 節第 1 點的單帳號還原 log 檢查不用等 HM-19a：任何產品下一次
+  發版時 `release.yaml` 的 candidate job 就會先跑到（第 19.7 節）。
 - 乾跑也是「每個 session 是自己子程式的」那一步（直接 `ping` 子程式，期望不認得的 session 回 404）第一次碰到真的 MCP SDK；SDK 換版時要重驗。
 - **搬進 `addons/odoo/upgrade-check/` 的檔**（`git mv`，保留可執行位元）：
   - `packaging/hooks/seed` → `addons/odoo/upgrade-check/seed`
@@ -419,7 +432,8 @@ HM-13b（開機守門）還沒合併，本片照 HM-13a 已合併的行為與計
 ## 16. 待 HM-03a／b 確認的項目（本片沒有量）
 
 - UC-08：full、partial、加密三種還原各自有沒有觸發兩個訊號（容器裡的還原是在原地改擁有者與權限，sentinel 靠 ctime 判出；Supervisor 真的
-  copytree 產生新 inode，要實機看）。
+  copytree 產生新 inode，要實機看）。局部還原（一般、加密）已由 HM-03a 寫回：兩個訊號都觸發（契約第 10 節 2026-11-18 HM-13b 那列）；
+  完整還原仍未測，是 Odoo 發版前的關卡（第二輪審查建議第 2 點）。
 - UC-25：sentinel 的 inode 與 ctime 在 add-on 重啟、主機重開、add-on 更新、Supervisor 更新後不變。
 - UC-10：Ingress 照原樣轉送 `X-MCP-Profile` 與 PATCH、DELETE（P9 kit 的帳號流程靠它）。
 - HAOS 上額外帳號子程式的 `oom_score_adj` 能不能寫成 500（add-on 容器本身是 200）、`nice` 能不能加 5（容器階段只在 docker 驗）。
@@ -432,8 +446,8 @@ HM-13b（開機守門）還沒合併，本片照 HM-13a 已合併的行為與計
 
 | 條件 | 狀態 |
 |---|---|
-| packaging 測試綠 | 本機 `Ran 259`、`OK (skipped=5)`；2026-11-18 合併 HM-13c 並補第 12 節後 `Ran 362`、`OK (skipped=5)`（第 19.6 節）；CI 待 PR |
-| 單帳號探針路徑不變 | 有測試證明（第 3.2 節）：兩邊都剝掉開通的部分後 AST 和 `f4c7718` 相同；`container_acceptance` 逐字相同。2026-11-18 起基準是 `573bb21`（HM-13b／HM-13c 加第 12 節第 1 點，第 19.4 節） |
+| packaging 測試綠 | 本機 `Ran 259`、`OK (skipped=5)`；2026-11-18 合併 HM-13c 並補第 12 節後 `Ran 362`、`OK (skipped=5)`（第 19.6 節）；第二輪審查修正後 `Ran 364`、`OK (skipped=5)`（第 20.5 節）；CI 待 PR |
+| 單帳號探針路徑不變 | 有測試證明（第 3.2 節）：兩邊都剝掉開通的部分後 AST 和 `f4c7718` 相同；`container_acceptance` 逐字相同。2026-11-18 起基準是 `573bb21`（HM-13b／HM-13c 加第 12 節第 1 點，第 19.4 節），第二輪審查後是 `d922d3c`（再加一條 log 斷言，第 20.3 節） |
 | 實際容器在 HM-19a 前的 builder 乾跑 | 本片不跑（規則），交 HM-19a（第 13 節） |
 | 計畫的「做法」各項 | 容器多帳號階段、`fixture_snapshot` 放寬、P9 kit、hook 草稿與測試、`acceptance.md`、`ha-p9-kit.md`：都做了（第 3 節）。DQ-44 的合成帳號樹待定 |
 
@@ -573,3 +587,87 @@ HM-13b（開機守門）還沒合併，本片照 HM-13a 已合併的行為與計
 - 契約不改：本輪改的是驗收工具，沒有新的 PaaS 可觀察差異；HM-13b 的 #118～#121、HM-13c 的 #122、#123 照舊，本片沒有第 9 節的列，也不加變更紀錄。
 - 帳本：沒有改到列管檔（`container_probe.py`、`container_profiles.py` 只在 builder 跑容器驗收時掛進候選容器，不進映像，第 9 節）；`apps/runtime/*.py`、
   `apps/*/launch.py` 沒改，tool-surface 不用重產。
+
+## 20. 第二輪審查意見處理（2026-11-18）
+
+### 20.0 結論
+
+- 第二輪獨立審查看的是合併 HM-13c、補完第 12 節之後的本片（審查時 HEAD 是 `f5c1cf8`）：判定「修正後通過」，必修 0 項、建議 4 項。
+  報告由主對話的工作流程交來，下面逐項記要點與處理。
+- 4 項都採用（第 20.1 節）。第 4 點刻意改單帳號路徑（`check_restore_log` 多一條斷言），`BASE` 從 `573bb21` 移到 `d922d3c`（第 20.3 節）；
+  其他 3 點只改文件。
+- 只改驗收工具、測試與文件：`addons/`、版號、CHANGELOG、執行期檔、`tests/conftest.py` 都沒動；帳本、契約、tool-surface 不用改（第 20.7 節）。
+- 本機（第 20.5 節）：validate 過；packaging unittest `Ran 364`、`OK (skipped=5)`；pytest `tests/test_restore_detection.py` 139 案，134 過，
+  5 個要 root 的 `test_root_*` 失敗（同前幾輪）。兩個預檢 OK。
+- `claude-delivery` 已是 `e108a12`（#108、#112 合併）：樹和本片合進來的 `c5dd7d3` 相同，這一輪不用再合。
+
+### 20.1 意見與處理
+
+| 建議 | 審查的意見 | 處理 | commit |
+|---|---|---|---|
+| 1 `acceptance.md`「T-21 在 HAOS 的步驟」第 6 點（沒開通的 app） | 寫成「還原後 log 只有 `KEPT_NOTICE` 一行（有訊號 1 時另有 `re-owned` 一行）」，像是沒有訊號 1 也會有 `KEPT_NOTICE`。沒開通、沒有帳號資料時 `restore_detect.detect` 不看 sentinel，`restore_lock.guard` 只在標記存在時才記 `KEPT_NOTICE`、存提示檔。「照步驟 1～4 做」又帶進開通 app 才有的前置（2 個額外帳號、P9 `--cross`） | 採用，第 6 點改寫成四小點：前置只有預設帳號（不加帳號、不跑 `--cross`，測試用戶端接預設帳號）；備份後重新產生一次權杖，再還原；不查舊收據（沒開通又沒有帳號資料時守門不封存收據）；有 `re-owned` 那行（訊號 1）時才有 `KEPT_NOTICE` 一行與面板提示，沒有那行時什麼都沒有，照實記下。另寫明 entrypoint 記了「標記存不成」的 WARNING 時也沒有（它照樣修擁有者、記 `re-owned`）。對過的程式：`restore_detect.detect`（`if not (enabled or profile_data)`）、`restore_lock.guard` 的第一段（沒開通又沒有帳號資料：只在 `detection.restored` 時記通知、存提示、刪標記）、`packaging/entrypoint.py` 的 `prepare_data` | 本 commit |
+| 2 本筆記第 16 節 UC-08 | 仍把局部還原列為完全未確認；同一個 commit 的 `acceptance.md` 已照契約第 10 節 2026-11-18 HM-13b 那列，寫成 HM-03a 已寫回局部還原 | 採用：第 16 節補一句（一般與加密的局部還原兩個訊號都觸發；完整還原未測，是 Odoo 發版前的關卡）。HM-03a 的其他結果（UC-10、sentinel 在重啟等之後不變）還沒寫回 repo 的文件，本片照契約只寫這一項 | 本 commit |
+| 3 本筆記第 13 節與結論「實際容器沒跑」 | 仍寫 builder 乾跑（`supply_chain.py candidate` → `container_acceptance`）；第 19.7 節卻寫第 1 點第一次真跑在 `release.yaml` 的 candidate job（GitHub-hosted），前後不一致 | 採用：兩處各補一句（0.4.14 起發版走 GitHub-hosted 的 `release.yaml`；HM-19a 的乾跑照它當時的發版路線做；第 1 點的單帳號 log 檢查會在任何產品下一次發版的 candidate job 先跑到）。原本的文字留著，那是寫的時候的路線。已對過 `release.yaml` 的 candidate job 跑 `supply_chain.py candidate`（它呼叫 `container_acceptance`） | 本 commit |
+| 4 `packaging/container_probe.py` 的 `check_restore_log`（加強，不是缺陷） | 只確認預期的行各一行，沒拒絕守門的其他行（`NOT_REVOKED`、`QUARANTINED`、`SET_ASIDE`、`NOTICE_NOT_REMOVED`、`MARKER_LEFT`、`UNFINISHED`、`DORMANT_NOTICE` 等）。這些情況多半會被別的檢查抓到，但 HM-13b S-3 要的是 log 完整 | 採用：以 `GUARD`（`'restore guard'`）開頭的每一行，都要是這次該有的通知（`KEPT_NOTICE` 或 `REVOKED_NOTICE`）或撤銷的帳號各自的 `REVOKED`，否則失敗，訊息固定 `another line of the boot guard`。`RestoreLogTests` 加審查要的反例（`SET_ASIDE` 等 11 種）與一案釘住 `GUARD` 認得守門的每一行（第 20.4 節）。這是刻意改單帳號路徑，`BASE` 移到 `d922d3c`（第 20.3 節） | `d922d3c`、`b696679` |
+
+### 20.2 commit
+
+| commit | 內容 |
+|---|---|
+| `d922d3c` | 建議第 4 點：`check_restore_log` 的新斷言與 `GUARD`、`RestoreLogTests` 兩案、`container_profiles` 模組說明第 9 步補一句。照第 3.2 節的規則，`SingleProfilePathTests` 只在這個 commit 是紅的（`BASE` 還是 `573bb21`） |
+| `b696679` | `BASE`→`d922d3c`（`packaging/test_container_probe.py` 的常數與說明） |
+| 本 commit | 建議第 1～3 點與文件：`docs/operations/acceptance.md`（第 6 點改寫；容器還原檢查的三處加「守門沒有別的行」）、`docs/multi-profile/acceptance-matrix.md`（`test_container_probe.py` 那列）、本筆記 |
+
+相對 `c5dd7d3` 改到的檔仍是 21 個：這一輪的 6 個檔都已在裡面。
+
+### 20.3 新的 `BASE`：`d922d3c`
+
+- 為什麼移：建議第 4 點改的是 `check_restore_log`，每個候選映像都跑的單帳號還原階段（`restored_start`）也呼叫它，所以是刻意改單帳號路徑；
+  不移 `BASE`，比對一定紅。
+- `573bb21`→`d922d3c` 兩邊都剝掉開通部分後（`ast.unparse` 逐行比），差異只有下面三處：
+  1. `GUARD = 'restore guard'`（守門每一行的開頭；說明寫明由測試逐一核對）
+  2. `check_restore_log` 的說明多一句：守門沒有別的行（移到旁邊、隔離、撤銷失敗、標記留著、沒做完……）
+  3. 最後一條斷言：`assert all(line in (notice, *told) for line in lines if line.startswith(GUARD)), 'another line of the boot guard'`
+- 兩邊的開通部分相同（HM-13b 的 `features` import 與 `check_restored_start` 的分支、本片的 `container_profiles` import 與三個交給它的分支）：
+  `ADDED_BEYOND_BASE` 仍是空的，釘住 `BASE` 開通部分的那一案不用改。
+- 「審過」：這三處照第二輪審查建議的寫法做；它們本身由下一次審查或使用者合併前的覆核一起看。在那之前，上面三處就是單帳號路徑相對
+  `573bb21` 的全部差異。
+
+### 20.4 測試與變異
+
+- `packaging/test_container_probe.py`：31 → 33 案，新的兩案都在 `RestoreLogTests`：
+  - 守門的其他 11 種行（`SET_ASIDE`、`SET_ASIDE_IN_PROFILE`、`QUARANTINED`、`NOT_REVOKED`、`NOT_ARCHIVED`、`NOTICE_NOT_REMOVED`、`MARKER_LEFT`、
+    `UNFINISHED`、`DORMANT_NOTICE`、`REVOKE_ALL_NOTICE`、`RECORD_KEPT`）各多一行，單帳號與多帳號的 log 都失敗，訊息固定、不帶 log 的內容。
+  - `restore_lock` 記的每一行（logger 呼叫的第一個參數、`_Sweep._fail` 的第三個；條件式兩邊都算）都是它的常數，共 18 個，每個都以 `GUARD`
+    開頭：守門以後加新行也認得，`GUARD` 不只是另抄的一份字串。
+- 新斷言對真守門照樣過：`GuardLogTests`（沒開通、開通但沒有帳號資料）、`test_container_profiles.RevokedRestoreTests`（多帳號還原）、
+  `tests/test_restore_detection.py::test_the_container_probes_restore_stage_meets_the_entrypoint`（真的 entrypoint 與守門）。
+- 變異 7 個全紅（在本 clone 每次換一段字、跑對應測試、逐位元還原並核對 SHA-256；腳本在 scratch 目錄，跑完刪掉）：
+  - `RestoreLogTests` 5 個：拿掉新斷言、`GUARD` 只認冒號開頭的行、只認帳號開頭（`[profile=`）的行、任何帳號行都放過、結尾是括號的行放過。
+  - `SingleProfilePathTests` 2 個（`BASE`＝`d922d3c`）：拿掉新斷言（單帳號路徑回到 `573bb21`）、把它藏進「沒開通才跑」的分支。
+
+### 20.5 本機檢查（一般使用者；TMPDIR 用 scratch 目錄、不用 `/tmp`，跑完用完整路徑刪掉；pytest 排在共用鎖後面）
+
+| 檢查 | 結果 |
+|---|---|
+| `packaging/validate.py`（有 PyYAML 的 venv） | `PASS: 8 strict Supervisor-subset manifests, translations, pins, workflow policy and clearance shape` |
+| packaging unittest（同一個 venv，`python -m unittest discover -s packaging -p 'test_*.py'`） | 改之前（`f5c1cf8`）：`Ran 362`、`OK (skipped=5)`；`d922d3c`：`Ran 364`、1 failure（`SingleProfilePathTests`，照設計）；`b696679` 起：`Ran 364`、`OK (skipped=5)`，約 28 秒。5 個 skip 是既有的 `skipUnless(root)` |
+| pytest（`.venv/bin/python -m pytest -q -p no:cacheprovider`；共用鎖 22:35:35 排隊、22:36:27 拿到、22:36:30 放掉，台北時間） | `tests/test_restore_detection.py`（涵蓋 `container_probe` 的 pytest 檔只有它）：139 案，134 過，5 個 `test_root_*` 要 root 而失敗（同前幾輪） |
+| 秘密預檢（`scripts/secret_precheck.py --tools …/scan0414/tools`） | gitleaks 8.28.0（釘選、驗過）；本 commit 之前跑：`c5dd7d3..b696679` 31 個 commit，**OK，0 命中**。本 commit 只加文件，提交後再跑一次（結果寫在回報） |
+| 帳本預檢（`scripts/ledger_precheck.py`） | 三本帳本 0 drift、0 missing；相對 `c5dd7d3` 21 個檔，沒有列管檔、帳本沒改、沒有新的執行期檔：**OK** |
+| node | 沒跑：這一輪沒有改 JS |
+
+### 20.6 只在 CI 跑的、本機沒跑的
+
+- 要 root 的：`tests/test_restore_detection.py` 的 5 個 `test_root_*`（CI 以 root 跑 pytest）；packaging 的 5 個 `skipUnless(root)`。
+- 這一輪沒跑 `tests/test_upgrade_hooks.py`、`tests/test_owned_executable.py`（沒改到它們涵蓋的東西）；`AF_UNIX` 路徑太長的那 6 個仍交 CI
+  （第 19.6 節）。Playwright 瀏覽器測試、`packaging/unit.sh`（root、0 skip）也是 CI 跑。
+- 實際容器同第 19.7 節：新斷言第一次真跑是任何產品下一次發版時 `release.yaml` 的 candidate job（單帳號還原階段）；多帳號版第一次是
+  HM-19a 的乾跑。
+
+### 20.7 契約、帳本、tool-surface
+
+- 契約不改：改的是驗收工具的檢查與文件，沒有新的 PaaS 可觀察差異。
+- 帳本：`runtime-patches.json` 在 `packaging/` 只列管 `entrypoint.py`；這一輪改的 `container_probe.py`、`container_profiles.py`、
+  `test_container_probe.py` 都不列管（只在容器驗收時掛進候選容器，不進映像，第 9 節），不用重算。`apps/runtime/*.py`、`apps/*/launch.py`
+  沒改，tool-surface 不用重產。

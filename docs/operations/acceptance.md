@@ -50,7 +50,8 @@ session URL、備份或私人拓樸。LOCAL/MOCK、CONTAINER/MOCK、HA、PUBLIC 
   修好擁有者、管理程序的開機守門處理了 entrypoint 留下的 `.restore-detected` 並刪掉它、state 位元不變（沒開通的產品只多面板的
   還原提示 `restore-notice.json`；多帳號 HM-13a、HM-13b、HM-13c）。這次啟動的 stderr 收到容器裡沒有名字的暫存檔（不印、
   關掉就不見），停機後確認 entrypoint 的 `bootstrap: re-owned N restored entries in /data/mcp` 與守門通知
-  （`restore_lock.KEPT_NOTICE`：沒有帳號資料，不撤銷）各剛好一行（HM-16，HM-13b 審查 S-3）；這也不是 HA 還原證據。
+  （`restore_lock.KEPT_NOTICE`：沒有帳號資料，不撤銷）各剛好一行（HM-16，HM-13b 審查 S-3），守門沒有別的行（`restore guard`
+  開頭的；HM-16 第二輪審查）；這也不是 HA 還原證據。
   開通多帳號的候選映像（升版 PR 把產品加進 `MULTI_PROFILE_PRODUCTS`）另跑多帳號階段（`packaging/container_profiles.py`，
   HM-16）：假後端照 Headscale 改用一次性 internal bridge 與容器私有位址，`docker run` 上限 360 秒；內容見下方
   [多帳號驗收](#多帳號驗收t-01t-29-的-ha-版hm-16)。沒開通的產品，探針逐句照舊（`packaging/test_container_probe.py`
@@ -109,8 +110,8 @@ sentinel 是執行期自己建的而且沒被動過、子程式跑過後 `/data/
 多帳號樹再起一次（DQ-03 (b) A2：有帳號資料，連預設帳號一起撤銷）：每個項目修好、守門刪掉標記與單帳號階段的還原提示、
 寫還原紀錄（兩個訊號、每個帳號都撤銷）；每個帳號的 token 是 null、child token 換新、其他欄位與索引不變；每個子程式重新起來；
 還原前的 token 兩種接法都被拒（Bearer 401、密鑰網址 404）、每個子程式拒絕還原前的 child token；停機後 sentinel 已重建、
-守門留下的樹仍符合修復規則；這次啟動的 entrypoint `re-owned N` 一行、每個帳號的 `REVOKED` 一行、`REVOKED_NOTICE` 一行
-（log 收到沒有名字的暫存檔，不印）。這些是容器裡的模擬，不是 HA 證據。n8n 開通（HM-25）前這個階段不收 n8n：
+守門留下的樹仍符合修復規則；這次啟動的 entrypoint `re-owned N` 一行、每個帳號的 `REVOKED` 一行、`REVOKED_NOTICE` 一行，
+守門沒有別的行（log 收到沒有名字的暫存檔，不印）。這些是容器裡的模擬，不是 HA 證據。n8n 開通（HM-25）前這個階段不收 n8n：
 n8n 子程式的 port 只在環境變數裡，認不出哪個子程式是哪個帳號的。
 
 下表「怎麼驗」寫每一層實際驗哪幾項；沒寫到的項目只在 LOCAL 驗。「Odoo 首發」照計畫 §10.4：是＝Odoo 首發（HM-19b）前要過。
@@ -137,7 +138,7 @@ n8n 子程式的 port 只在環境變數裡，認不出哪個子程式是哪個�
 | T-18 | 互相影響與日誌保留 | LOCAL；HA：add-on log | 每帳號子程式輸出不被別帳號擠掉；生命週期 log 帶 id 前 8 碼、0 個帳號名稱 | 是 |
 | T-19 | 背壓與每帳號名額 | LOCAL | 轉送名額、准入、位元組預算、GET 串流照契約第 2.4、5 節；CPU 飢餓下閒置帳號健康不逾時 | 是 |
 | T-20 | 升級、回退、再升級 | STORE：`seed`／`verify`（只驗升級那一段）；HA：升級 → 還原升級前備份 → 再升級 | 升級：預設 token、兩條網址、`state.json` 位元不變。回退＝還原升級前備份：預設 token＝備份當時的值、額外帳號消失、沒有撤銷。再升級：額外帳號不存在、預設不變；照文件按「全部撤銷」並確認。回退與再升級只在 HA 驗 | 是 |
-| T-21 | 備份還原 | LOCAL：全部；CONTAINER：單帳號還原（守門刪標記、還原提示、`KEPT_NOTICE` 與 `re-owned N` 各一行）、多帳號還原樹（每個帳號撤銷、child token 換新、還原紀錄、還原前的 token 兩種接法與 child token 都被拒、sentinel 重建、`REVOKED` 每帳號一行與 `REVOKED_NOTICE` 一行）；HA：full、partial、加密各一次，步驟見下方 [T-21 在 HAOS 的步驟](#t-21-在-haos-的步驟hm-16) | 預設帳號依 DQ-03（採 (b) A2：有帳號資料才連預設一起撤銷；沒撤銷時面板與 log 提示權杖已回到備份當時的值）；兩個訊號至少一個觸發；讀不到的帳號隔離（只能刪）；獨立驗證（撤銷後重新讀過每個帳號，和還原前的 token 都對不上）；核對後才重發；舊收據 410（備份後才做、隨還原消失的操作也是）；C1-M1 攻擊序；版本混搭各一次（計畫 §10.6 第 6 點）。讀不到的帳號隔離與 C1-M1 只在 LOCAL 驗 | 是 |
+| T-21 | 備份還原 | LOCAL：全部；CONTAINER：單帳號還原（守門刪標記、還原提示、`KEPT_NOTICE` 與 `re-owned N` 各一行、守門沒有別的行）、多帳號還原樹（每個帳號撤銷、child token 換新、還原紀錄、還原前的 token 兩種接法與 child token 都被拒、sentinel 重建、`REVOKED` 每帳號一行與 `REVOKED_NOTICE` 一行、守門沒有別的行）；HA：full、partial、加密各一次，步驟見下方 [T-21 在 HAOS 的步驟](#t-21-在-haos-的步驟hm-16) | 預設帳號依 DQ-03（採 (b) A2：有帳號資料才連預設一起撤銷；沒撤銷時面板與 log 提示權杖已回到備份當時的值）；兩個訊號至少一個觸發；讀不到的帳號隔離（只能刪）；獨立驗證（撤銷後重新讀過每個帳號，和還原前的 token 都對不上）；核對後才重發；舊收據 410（備份後才做、隨還原消失的操作也是）；C1-M1 攻擊序；版本混搭各一次（計畫 §10.6 第 6 點）。讀不到的帳號隔離與 C1-M1 只在 LOCAL 驗 | 是 |
 | T-22 | n8n 名額與逾時 | 等 n8n 開通（HM-25） | `n8n_session` 每帳號一份；沒後端的額外帳號回 `backend_not_configured` | 否（n8n） |
 | T-23 | 子程式 bearer 隔離 | LOCAL：全部（7 支 Python＋n8n）；CONTAINER：每個帳號的真子程式不帶、隨機、別帳號的 child token | 不帶、帶錯、帶別帳號、兩個標頭、空字串都 401，自己的 200（n8n 另見矩陣）。兩個標頭與空字串只在 LOCAL 驗 | 是（Odoo） |
 | T-24 | 來源檢查 | LOCAL；HA：記下 Claude.ai 送的 Origin | 密鑰網址清單外只記 would_deny、不擋；Bearer 帶 Origin 403 | 是 |
@@ -171,9 +172,17 @@ full、partial（只選這個 app）、加密備份各做一輪。每一步都�
    - 核對後才重發：還沒核對時，面板停用那個帳號的「重新產生」並說明原因（後端對 rotate 回 409 `restore_review_required`、什麼都不寫，
      LOCAL 驗）；按「已核對」後重新產生成功。每個帳號都核對、重新產生後 P9 `--cross` 全過，測試用戶端換新權杖。
 5. **重新啟動 add-on**：log 沒有新的 `restore guard` 行（守門已做完）。
-6. **沒開通的 app 也做一輪**（單帳號，DQ-03 (b)）：照步驟 1～4 做，只有預設帳號、測試用戶端接預設帳號。還原後 log 只有 `KEPT_NOTICE`
-   一行（有訊號 1 時另有 `re-owned` 一行），沒有 `REVOKED`；面板顯示還原提示；權杖是備份當時的值（測試用戶端照樣能用，備份後重新產生的
-   權杖失效）；重新產生權杖後提示消失；「知道了」只藏到重新整理。
+6. **沒開通的 app 也做一輪**（單帳號，DQ-03 (b)）。只有預設帳號，前置和步驟 1～4 不同：
+   - 前置：記下 T-01 的版本；`ha jobs info` 確認沒有別的備份或還原在跑。不加帳號、不跑 P9 `--cross`。一個測試用戶端接預設帳號
+     （Bearer 與密鑰網址各一個連線）。
+   - 備份，之後在面板對預設帳號重新產生一次權杖；再還原，等 add-on 起來。不查舊收據：沒開通又沒有帳號資料時，守門不封存收據。
+   - log 與面板：沒開通的產品沒有 sentinel，只看訊號 1。有 `bootstrap: re-owned N restored entries in /data/mcp` 那行（訊號 1）時，
+     才有 `KEPT_NOTICE`（`restore guard: the data was restored from a backup; the MCP token is back to …`）剛好一行，面板也才顯示
+     還原提示。沒有那行時，log 沒有任何 `restore guard` 行、面板沒有提示，照實記下（這次還原沒被偵測到）。同時有
+     `bootstrap: WARNING: … restore marker (.restore-detected) could not be saved` 那行時，標記沒存成，也不會有 `KEPT_NOTICE` 與提示，
+     一樣照實記下。不管哪一種，都沒有 `REVOKED`。
+   - 權杖是備份當時的值：測試用戶端照樣能用，備份後重新產生的權杖失效。有提示時，重新產生權杖後提示消失；「知道了」只藏到重新整理。
+     重新啟動 add-on 後沒有新的 `restore guard` 行（同步驟 5）。
 7. 讀不到的帳號隔離與 C1-M1 攻擊序只在 LOCAL 驗（HAOS 上不造壞資料）；版本混搭照計畫 §10.6 第 6 點，回退與再升級見 T-20。
 8. 證據記：還原的種類、兩個訊號各自有沒有觸發、上面每一項的結果、版本（T-01）、帳號的 log id。
 
