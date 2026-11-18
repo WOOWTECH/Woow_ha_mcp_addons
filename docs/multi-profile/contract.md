@@ -387,7 +387,8 @@ Headscale 只放 `https://claude.ai`（第 1.2 節）。
 - **密鑰網址**：全 add-on 一份服務層級政策（所有帳號共用，不分帳號；FM-73）。
   - 存在 `/data/mcp/origin-policy.json`（不進預設帳號的 state）：剛好 `{"version":1,"mode":…,"allowed_origins":[…]}`，
     0600、單一連結的一般檔、本 uid、16 KiB 以內；`mode` 只能是 `report-only` 或 `enforce`；來源最多 16 個、正規化後的寫法、
-    不重複。沒有檔案時＝`report-only`＋`["https://claude.ai"]`（PaaS chart 0.1.10 的預設），**面板存檔之前不寫任何檔**。
+    不重複。沒有檔案時＝`report-only`＋`["https://claude.ai"]`（PaaS chart 0.1.10 的預設），**面板存檔之前不寫任何檔**
+    （例外只有還原：開通或有帳號資料的產品還原後，開機守門換新收據檔，政策檔照樣不寫；見下面「還原」）。
     收據在旁邊的 `.origin-policy.json.operations.json`。
   - 位置：token 驗過之後、方法檢查（405）之後、query 檢查（400）之前，也就是今天 Headscale 規則的位置（§8.8 #124）。錯 token
     照今天 404，碰不到政策、也寫不出紀錄。
