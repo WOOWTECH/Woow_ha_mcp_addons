@@ -47,11 +47,14 @@ session URL、備份或私人拓樸。LOCAL/MOCK、CONTAINER/MOCK、HA、PUBLIC 
   failclosed admin、child loopback、outage PID、stop/reap、state persistence、停機後
   fixture token rotation/disabled 測試。**最後這項不是管理 API 輪替或 HA backup 證據。**
   第一次停機後另模擬一次 Supervisor 還原（`/data/mcp` 整棵改屬 root、檔案 0644），確認下一次啟動時 entrypoint
-  修好擁有者、管理程序的開機守門處理了 entrypoint 留下的 `.restore-detected` 並刪掉它（沒開通的產品不多任何還原檔）、state 位元不變
-  （多帳號 HM-13a、HM-13b）；這也不是 HA 還原證據。
+  修好擁有者、管理程序的開機守門處理了 entrypoint 留下的 `.restore-detected` 並刪掉它、state 位元不變（沒開通的產品只多面板的
+  還原提示 `restore-notice.json`；多帳號 HM-13a、HM-13b、HM-13c）。這次啟動的 stderr 收到容器裡沒有名字的暫存檔（不印、
+  關掉就不見），停機後確認 entrypoint 的 `bootstrap: re-owned N restored entries in /data/mcp` 與守門通知
+  （`restore_lock.KEPT_NOTICE`：沒有帳號資料，不撤銷）各剛好一行（HM-16，HM-13b 審查 S-3）；這也不是 HA 還原證據。
   開通多帳號的候選映像（升版 PR 把產品加進 `MULTI_PROFILE_PRODUCTS`）另跑多帳號階段（`packaging/container_profiles.py`，
   HM-16）：假後端照 Headscale 改用一次性 internal bridge 與容器私有位址，`docker run` 上限 360 秒；內容見下方
-  [多帳號驗收](#多帳號驗收t-01t-29-的-ha-版hm-16)。沒開通的產品，探針逐句照舊（`packaging/test_container_probe.py` 比對）。
+  [多帳號驗收](#多帳號驗收t-01t-29-的-ha-版hm-16)。沒開通的產品，探針逐句照舊（`packaging/test_container_probe.py`
+  和審過的基準比對）。
 - `supply_chain.py candidate` 強制同一已測 image ID 的 source/history/all-layer secret、
   SBOM/CVE/license gate；`verify` 與 registry gate 拒絕缺失／錯 subject／失敗 evidence。
   完整 commands、unsigned provenance 信任層級、persist 範圍見 [hardening](hardening.md)。
@@ -80,9 +83,10 @@ session URL、備份或私人拓樸。LOCAL/MOCK、CONTAINER/MOCK、HA、PUBLIC 
 
 ## 多帳號驗收（T-01～T-29 的 HA 版；HM-16）
 
-**狀態（2026-11-16）：工具備好，沒有任何 HA 實測**。還沒有產品開通（`MULTI_PROFILE_PRODUCTS` 是空的）；
-QA HAOS 的擋路探針 HM-03a／b 還沒有結果，UC-08、UC-10、sentinel 在 HAOS 上的行為都**未確認**。
-下面的「通過標準」是驗收時要做到的，不是已經做到的。期望值逐列的來源與差異見
+**狀態（2026-11-18）：工具備好，沒有任何多帳號的 HA 實測**。還沒有產品開通（`MULTI_PROFILE_PRODUCTS` 是空的）。
+擋路探針 HM-03a 只寫回了一項：展示機上一般與加密的局部還原，兩個還原訊號都觸發（[契約](../multi-profile/contract.md)
+第 10 節 2026-11-18 HM-13b 那列；完整還原沒測，列為 Odoo 發版前的關卡）。其他項目（完整還原、UC-10、sentinel 在各種
+重開與更新之後的穩定性）在本文件仍是**未確認**。下面的「通過標準」是驗收時要做到的，不是已經做到的。期望值逐列的來源與差異見
 [多帳號驗收矩陣](../multi-profile/acceptance-matrix.md)（PaaS T-01～T-29 的 HA 版，測試檔登記表也在那裡）與
 [契約](../multi-profile/contract.md) 第 9 節。
 
@@ -101,9 +105,13 @@ CONTAINER/MOCK、STORE、HA、PUBLIC；token 一律不印、不存，帳號只�
 （停機時照面板的建立方式建，容器裡沒有 HA 管理員，不繞過管理 API 的身分檢查）、每個子程式只聽自己的 loopback port、
 每個帳號的 session 是自己子程式的（直接問每個子程式：只有自己的認得）、交叉 token 與 session 被拒、子程式只認自己的
 child bearer、額外子程式 `oom_score_adj` 500 與 `nice` 加 5、SIGKILL 一個子程式其他 PID 不變、並行停機 <30 秒（印出秒數）、
-sentinel 沒被執行期動過、子程式跑過後 `/data/mcp` 符合修復規則與項目預算、照 Supervisor 的方式還原整棵多帳號樹後修好且
-兩個還原訊號都成立。這些是容器裡的模擬，不是 HA 證據。n8n 開通（HM-25）前這個階段不收 n8n：n8n 子程式的 port 只在
-環境變數裡，認不出哪個子程式是哪個帳號的。
+sentinel 是執行期自己建的而且沒被動過、子程式跑過後 `/data/mcp` 符合修復規則與項目預算。最後照 Supervisor 的方式還原整棵
+多帳號樹再起一次（DQ-03 (b) A2：有帳號資料，連預設帳號一起撤銷）：每個項目修好、守門刪掉標記與單帳號階段的還原提示、
+寫還原紀錄（兩個訊號、每個帳號都撤銷）；每個帳號的 token 是 null、child token 換新、其他欄位與索引不變；每個子程式重新起來；
+還原前的 token 兩種接法都被拒（Bearer 401、密鑰網址 404）、每個子程式拒絕還原前的 child token；停機後 sentinel 已重建、
+守門留下的樹仍符合修復規則；這次啟動的 entrypoint `re-owned N` 一行、每個帳號的 `REVOKED` 一行、`REVOKED_NOTICE` 一行
+（log 收到沒有名字的暫存檔，不印）。這些是容器裡的模擬，不是 HA 證據。n8n 開通（HM-25）前這個階段不收 n8n：
+n8n 子程式的 port 只在環境變數裡，認不出哪個子程式是哪個帳號的。
 
 下表「怎麼驗」寫每一層實際驗哪幾項；沒寫到的項目只在 LOCAL 驗。「Odoo 首發」照計畫 §10.4：是＝Odoo 首發（HM-19b）前要過。
 
@@ -129,7 +137,7 @@ sentinel 沒被執行期動過、子程式跑過後 `/data/mcp` 符合修復規�
 | T-18 | 互相影響與日誌保留 | LOCAL；HA：add-on log | 每帳號子程式輸出不被別帳號擠掉；生命週期 log 帶 id 前 8 碼、0 個帳號名稱 | 是 |
 | T-19 | 背壓與每帳號名額 | LOCAL | 轉送名額、准入、位元組預算、GET 串流照契約第 2.4、5 節；CPU 飢餓下閒置帳號健康不逾時 | 是 |
 | T-20 | 升級、回退、再升級 | STORE：`seed`／`verify`（只驗升級那一段）；HA：升級 → 還原升級前備份 → 再升級 | 升級：預設 token、兩條網址、`state.json` 位元不變。回退＝還原升級前備份：預設 token＝備份當時的值、額外帳號消失、沒有撤銷。再升級：額外帳號不存在、預設不變；照文件按「全部撤銷」並確認。回退與再升級只在 HA 驗 | 是 |
-| T-21 | 備份還原 | LOCAL：全部；CONTAINER：root 還原樹修好、兩個訊號；HA：full、partial、加密各一次 | 預設帳號依 DQ-03（採 (b) A2：有帳號資料才連預設一起撤銷）；兩個訊號至少一個觸發；讀不到的帳號隔離；獨立驗證（撤銷後重新讀過每個帳號，和還原前的 token 都對不上）；核對後才重發；舊收據 410；C1-M1 攻擊序（LOCAL）；版本混搭各一次（計畫 §10.6 第 6 點）。容器的撤銷與紀錄等守門（HM-13b）合併後補 | 是 |
+| T-21 | 備份還原 | LOCAL：全部；CONTAINER：單帳號還原（守門刪標記、還原提示、`KEPT_NOTICE` 與 `re-owned N` 各一行）、多帳號還原樹（每個帳號撤銷、child token 換新、還原紀錄、還原前的 token 兩種接法與 child token 都被拒、sentinel 重建、`REVOKED` 每帳號一行與 `REVOKED_NOTICE` 一行）；HA：full、partial、加密各一次，步驟見下方 [T-21 在 HAOS 的步驟](#t-21-在-haos-的步驟hm-16) | 預設帳號依 DQ-03（採 (b) A2：有帳號資料才連預設一起撤銷；沒撤銷時面板與 log 提示權杖已回到備份當時的值）；兩個訊號至少一個觸發；讀不到的帳號隔離（只能刪）；獨立驗證（撤銷後重新讀過每個帳號，和還原前的 token 都對不上）；核對後才重發；舊收據 410（備份後才做、隨還原消失的操作也是）；C1-M1 攻擊序；版本混搭各一次（計畫 §10.6 第 6 點）。讀不到的帳號隔離與 C1-M1 只在 LOCAL 驗 | 是 |
 | T-22 | n8n 名額與逾時 | 等 n8n 開通（HM-25） | `n8n_session` 每帳號一份；沒後端的額外帳號回 `backend_not_configured` | 否（n8n） |
 | T-23 | 子程式 bearer 隔離 | LOCAL：全部（7 支 Python＋n8n）；CONTAINER：每個帳號的真子程式不帶、隨機、別帳號的 child token | 不帶、帶錯、帶別帳號、兩個標頭、空字串都 401，自己的 200（n8n 另見矩陣）。兩個標頭與空字串只在 LOCAL 驗 | 是（Odoo） |
 | T-24 | 來源檢查 | LOCAL；HA：記下 Claude.ai 送的 Origin | 密鑰網址清單外只記 would_deny、不擋；Bearer 帶 Origin 403 | 是 |
@@ -138,6 +146,36 @@ sentinel 沒被執行期動過、子程式跑過後 `/data/mcp` 符合修復規�
 | T-27 | 公開網址與真實用戶端 | PUBLIC | 每種接法各兩個帳號；真 Claude.ai 兩個帳號同時用；代理 log 遮掉 `/private_` | 是 |
 | T-28 | 平台建立路徑 | — | 不適用（PaaS workspace 專屬；HA 的「商店安裝 → 加帳號」併入 T-20） | — |
 | T-29 | 證據掃描與清理 | 每一層 | 合成憑證清單掃描 0 命中；暫時帳號與測試身分的清理證明 | 是 |
+
+### T-21 在 HAOS 的步驟（HM-16）
+
+full、partial（只選這個 app）、加密備份各做一輪。每一步都先經使用者批准，動手前先做保護備份（[手動更新、備份與回復](update-backup-rollback.md)，
+面板與核對卡怎麼用也在那裡）。P9 kit 沒有還原專用的模式：用面板、add-on log 與 P9 `--cross`。token 一律不印、不存，帳號只記 log id。
+
+1. **前置**：記下 T-01 的版本（Core、Supervisor、HAOS、映像 digest）；`ha jobs info` 確認沒有別的備份或還原在跑。開通的 app 有預設帳號與
+   2 個額外帳號，各接上測試後端，P9 `--cross` 全過。在面板「匯出帳號清單（不含憑證）」留底（選做）。
+2. **還原前的操作與用戶端**：每個帳號在面板重新產生一次權杖，從瀏覽器開發者工具記下那次請求的 `Idempotency-Key`（操作識別碼，
+   不是秘密）。一個測試用的 MCP 用戶端接上某個額外帳號（Bearer 與密鑰網址各一個連線；權杖本來就存在它的設定裡，不另抄）。
+3. **備份**，之後再對預設帳號重新產生一次權杖、記下這次的識別碼（這次操作會隨還原消失）。
+4. **還原**，等 add-on 起來：
+   - add-on log：`REVOKED_NOTICE`（`restore guard: the data was restored from a backup; the MCP token of every profile …`）剛好一行，
+     `restore guard [profile=…]: token revoked, child token renewed` 每個帳號（含 `default`）剛好一行，沒有 `restore guard: not finished`。
+   - 兩個訊號：有 `bootstrap: re-owned N restored entries in /data/mcp` 那行就是訊號 1（`/data/mcp` 被還原成 root 的）；訊號 2 看還原紀錄的
+     `restore` 欄（HA 主機上 `docker exec <app 容器> /usr/local/bin/python -c 'import json; print(json.load(open("/data/mcp/restore-record.json"))["restore"])'`，
+     只印這一欄：紀錄的其他欄有帳號名稱）。兩個都沒觸發就停下、不出貨（DQ-39 (a)）。
+   - 面板：預設帳號頁的核對卡列出三個帳號（名稱、後端身分、政策摘要都是備份當時的值），都待核對；沒有單帳號的還原提示（權杖都撤銷了）。
+   - 獨立驗證：面板每個帳號的「連線與權杖」都沒有權杖（已撤銷）；步驟 2 的測試用戶端兩種連線都被拒（Bearer 401、密鑰網址 404）。
+     這時不跑 P9 `--cross`：沒有一個帳號有啟用中的 token，driver 對每個帳號印 `no active token; left out of the cross matrix` 後
+     probe 就失敗（沒有可測的帳號）。
+   - 舊收據：步驟 2、3 記下的識別碼，`GET api/operations/<id>`（帶那個帳號的 `X-MCP-Profile`）都回 410 `operation_restored`。
+   - 核對後才重發：還沒核對時，面板停用那個帳號的「重新產生」並說明原因（後端對 rotate 回 409 `restore_review_required`、什麼都不寫，
+     LOCAL 驗）；按「已核對」後重新產生成功。每個帳號都核對、重新產生後 P9 `--cross` 全過，測試用戶端換新權杖。
+5. **重新啟動 add-on**：log 沒有新的 `restore guard` 行（守門已做完）。
+6. **沒開通的 app 也做一輪**（單帳號，DQ-03 (b)）：照步驟 1～4 做，只有預設帳號、測試用戶端接預設帳號。還原後 log 只有 `KEPT_NOTICE`
+   一行（有訊號 1 時另有 `re-owned` 一行），沒有 `REVOKED`；面板顯示還原提示；權杖是備份當時的值（測試用戶端照樣能用，備份後重新產生的
+   權杖失效）；重新產生權杖後提示消失；「知道了」只藏到重新整理。
+7. 讀不到的帳號隔離與 C1-M1 攻擊序只在 LOCAL 驗（HAOS 上不造壞資料）；版本混搭照計畫 §10.6 第 6 點，回退與再升級見 T-20。
+8. 證據記：還原的種類、兩個訊號各自有沒有觸發、上面每一項的結果、版本（T-01）、帳號的 log id。
 
 ### 每次升版都要重驗（每個開通的產品，每一版）
 
@@ -148,7 +186,8 @@ sentinel 沒被執行期動過、子程式跑過後 `/data/mcp` 符合修復規�
 - **UC-10 Ingress**：Ingress 照原樣轉送 `X-MCP-Profile` 與 PATCH、DELETE（不通時才改用網址路徑的備案，DQ-17）。
 - **記下 Supervisor 版本**（也記 Core、HAOS 版本）：Supervisor 的還原與 Ingress 行為會隨版本變，上面三項的結果只對記下的版本成立。
   Store 同步後從 Store 安裝或升級，再驗一次（Odoo 首發標準第 11 點）。
-- HM-03a／b 還沒有結果：在它們寫回之前，不得宣稱上面任何一項成立，也不得把容器或本機的模擬當成 HA 證據。
+- HM-03a／b 只寫回了局部還原的 UC-08（見「多帳號驗收」開頭的狀態）：其餘項目寫回之前，不得宣稱成立，也不得把容器或本機的模擬
+  當成 HA 證據。
 
 ## 故障處置界線
 
