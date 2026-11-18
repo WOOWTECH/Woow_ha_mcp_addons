@@ -21,7 +21,7 @@ administrator. This page records why it accepts the Core releases listed in `_HA
   `{id, type: "result", success, result}`, and the admin group id `system-admin`. The verifier allows only an active,
   non-system user who is the owner or in `system-admin`.
 
-## Review of 2026.7.2–2026.9.4, 2026.10.0 (0.1.6), 2026.10.1 (0.1.9), 2026.10.2–2026.10.4 (0.4.2), 2026.11.0–2026.11.1 (Headscale 0.4.14), and 2026.11.2 (next release)
+## Review of 2026.7.2–2026.9.4, 2026.10.0 (0.1.6), 2026.10.1 (0.1.9), 2026.10.2–2026.10.4 (0.4.2), 2026.11.0–2026.11.1 (Headscale 0.4.14), and 2026.11.2 (Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud 0.4.14; Headscale 0.4.19)
 
 Git blob SHAs (first 8 characters) of the Core files that produce or can change that contract, from the GitHub tree of
 each tag; `=` means unchanged from the previous tag. The `10.1` column is the 2026.10.1 tag (commit `abe1fdd7`). The `10.0` column is the 2026.10.0 tag (commit `6a811d33`), whose files
@@ -64,9 +64,9 @@ the 2026.11.2 tag (commit `ff5d56b8`).
 
 - Outside the 25 files: the tag comparison (52 commits, 95 files) changes no file under `auth/`, `components/auth/`, `components/websocket_api/`, `components/http/`, `components/hassio/`, `components/config/`, `components/onboarding/` or `components/person/`. Besides integrations and tests it changes the version constants (`const.py`, `pyproject.toml`), the frontend pin (20261028.5 to 20261028.6), integration requirements, `input_text/entity.py` and `helpers/config_validation.py` (a configuration error names a section's keys instead of printing its values); none of them is on the `config/auth/list` path or in the Supervisor handshake.
 - Supervisor 2026.11.0 (tag `c1c6f0a754c0656eb1af189f11009f1cfc4b3e28`, released 2026-11-06) ships `supervisor/api/proxy.py` blob `cab849dc`, byte-identical to 2026.10.5 (downloaded at both tags), so the `auth_required`/`auth_ok` frames and the proxy filter keep the reviewed shape.
-- No published image accepts 2026.11.2: Headscale 0.4.18 and the other products' 0.4.13 images deny it. Each product accepts it from its next release built from this source.
+- No published image accepts 2026.11.2 yet: Headscale 0.4.18 and the other products' 0.4.13 images deny it. Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud accept it from 0.4.14; Headscale from 0.4.19.
 
-The 0.4.13 images continue to deny these Core versions. Only an image rebuilt and accepted for a new product release includes this reviewed allowlist. Headscale 0.4.14 is the initial target; other products retain their published versions and their documented compatibility until separately rebuilt.
+The 0.4.13 images continue to deny these Core versions. Only an image rebuilt and accepted for a new product release includes this reviewed allowlist. Headscale 0.4.14 was the first such release; Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud carry the allowlist from their 0.4.14 release.
 
 Changes inside 2026.7.2–2026.9.4 and why they do not touch the consumed contract (source diffs reviewed):
 - `websocket_api/messages.py` @8.0: event and state-diff message caching only; the result message is unchanged.

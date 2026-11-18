@@ -41,6 +41,14 @@ CURRENT_POST_SOURCE_BYTES = {
     'apps/n8n/backend_policy.cjs': ('n8n', '055ca90a23c5d401d742fb165ffab2e6efcc5ca6a41a96a51293a4a8943f1826'),
     'apps/n8n/run.py': ('n8n', '96861eee084fb955a8f2af56be30ae149e564d2a6fbdea05fb214ae71d7b1a64'),
     'apps/hermes/launch.py': ('hermes', '68ebc3f2b72d59001fb9e26d7836fb47cd4c82d68676b15babe4d1f5ac9f8903'),
+    # 0.4.14 release: only the ARG BUILD_VERSION default changes (0.4.13 -> 0.4.14); no tool, schema or handler change.
+    'apps/n8n/Dockerfile': ('n8n', '0a4959708cc10750f654a17c328e646928df71f16bcfc612ec1bf23c30b75b12'),
+    # 0.4.14 and Headscale 0.4.19 releases: only dnspython 2.9.0 -> 2.9.2 in the child's lock (GHSA-vvf4-9x63-8xvv, a fixable
+    # High the release scanner blocks; email-validator's dependency). No tool, schema or handler change.
+    'apps/emqx/uv.lock': ('emqx', '297392a4f80abe5723b9518b1f7379ad64a1b638931e328577caf1e9f4fce16a'),
+    'apps/litellm/uv.lock': ('litellm', '2e0157b5577feddfa53735f0230f826984767d579be8a851f59877deb8709dd6'),
+    'apps/nextcloud/uv.lock': ('nextcloud', 'c5a1e3314a52c2518cc6a90bee0412decb123dd44713fea57b92fa2ace1b6453'),
+    'apps/headscale/uv.lock': ('headscale', '5be6369410710dd909ee9946bddfb696926ee614c50efb287c7cf3b67f9fd2f5'),
 }
 
 
