@@ -45,9 +45,15 @@ async function observed(item, response, context) {
 
 // The fixture's state for a scenario (the cases file's setup). HM-12: backend_edit (parity046), an extra's saved
 // connection and the identity change's failure (rebindFault).
+// HM-13c: a restore (the guard's record of every profile, revoked; the quarantine directories it made; the notice of a
+// kept token when there is no profile data), with the policy every profile copies from the default one.
+const RESTORED_AT = '2026-11-16T09:30:15+00:00';
+const restoredPolicy = policy => ({writes_enabled: true, disabled: [], enabled_write_tools: [], denied_operations: {},
+  odoo_write_switches: null, odoo_allowed_methods: null, n8n_session: null, ...policy});
+const restoredIdentity = {url: 'https://backend.example.invalid', database: 'DUMMY-db', username: 'DUMMY-user'};
 function fixtureSetup(setup) {
   const ids = RULES.ids;
-  if (setup.switched_off) return {product: setup.product};
+  if (setup.switched_off) return {product: setup.product, ...(setup.restore ? {restoreNotice: {at: RESTORED_AT}} : {})};
   const extra = spec => ({id: ids[spec.role], label: spec.label, configured: true, status: spec.status ?? 'unconfigured',
     ...(spec.disabled_reason ? {disabled_reason: spec.disabled_reason} : {}), ...(spec.blocked_reason ? {blocked_reason: spec.blocked_reason} : {}),
     ...(spec.required_memory_mib ? {required_memory_mib: spec.required_memory_mib} : {}), ...(spec.unavailable ? {unavailable: true} : {}),
@@ -60,6 +66,10 @@ function fixtureSetup(setup) {
     ...(setup.no_port ? {noPort: true} : {}), ...(setup.corrupt ? {indexCorrupt: true} : {}),
     ...(setup.no_index_file ? {indexCorrupt: true, noIndexFile: true} : {}),
     ...(setup.fault ? {rebindFault: setup.fault} : {}),
+    ...(setup.restore ? {restore: {at: RESTORED_AT, rows: [{id: 'default', label: 'Default', token: 'revoked', identity: restoredIdentity,
+      policy: restoredPolicy(setup.policy)}, ...setup.extras.map(spec => ({id: ids[spec.role], label: spec.label, token: 'revoked',
+        identity: restoredIdentity, policy: restoredPolicy(setup.policy)}))]}} : {}),
+    ...(setup.quarantine ? {quarantined: setup.quarantine.map(role => `${ids[role]}-20261116T093015Z`)} : {}),
   }};
 }
 const operationKey = () => `${Date.now() - 1000}.${Array.from(crypto.getRandomValues(new Uint8Array(16)), n => n.toString(16).padStart(2, '0')).join('')}`;
@@ -115,6 +125,8 @@ for (const scenario of CASES.scenarios) {
         const learnt = (await response.json()).id;
         context.ids[item.learn] = learnt; context.roles[learnt] = item.learn;
       }
+      // HM-13c: a quarantine directory's name, for a later path.
+      if (item.learn_quarantine && response.status() === 200) context.ids[item.learn_quarantine] = (await response.json()).quarantined[0].name;
       seen[item.name] = await observed(item, response, context);
       expected[item.name] = item.expect;
       await response.dispose();

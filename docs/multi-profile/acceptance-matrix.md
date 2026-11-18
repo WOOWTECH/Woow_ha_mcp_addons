@@ -1,6 +1,6 @@
 # 多帳號驗收矩陣（PaaS T-01～T-29 的 HA 版）
 
-- 狀態：HM-00 起草（2026-11-14）；HM-06 依 n8n 的實際行為改 T-23 的 n8n 期望值（2026-11-15，審查 MF-1 選 (a)）；HM-20 登記兩個測試檔與兩個 packaging 測試的擴充（2026-11-15）。HM-16 把它寫進 `docs/operations/acceptance.md` 與 P9 kit；HM-19b 照它做 Odoo 首發的 HAOS 驗收。
+- 狀態：HM-00 起草（2026-11-14）；HM-06 依 n8n 的實際行為改 T-23 的 n8n 期望值（2026-11-15，審查 MF-1 選 (a)）；HM-20 登記兩個測試檔與兩個 packaging 測試的擴充（2026-11-15）。HM-13c 補 T-21 的測試與差異列、登記表 HM-13c 的三列（2026-11-17）；依獨立審查補登記表兩列的內容（同日）。HM-16 把它寫進 `docs/operations/acceptance.md` 與 P9 kit；HM-19b 照它做 Odoo 首發的 HAOS 驗收。
 - 來源：計畫 §10.4、§10.6（repo 外）；HA 期望值沿用 `gaps/G6-delivery.md` 第 5 節，依 2026-11-14 的決策更新（`decisions.md`）。
 - 契約與差異：`contract.md`（第 9 節刻意差異表，下稱 §8.8）；G6 §5 每一列怎麼對到差異表或測試見 `deviation-trace.md`。
 
@@ -37,7 +37,7 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | T-18 | 互相影響與日誌保留 | 每帳號子程式輸出緩衝不被別帳號擠掉；生命週期 log 帶 id 前 8 碼 | `tests/test_profile_runtime.py`、`tests/test_profile_lifecycle.py` | HAOS | HM-08、HM-09、HM-19b | 是 | #29 |
 | T-19 | 背壓與每帳號名額 | 轉送名額等 1 秒；帶 id 的 POST 在名額逾時、准入滿（≤64 KiB）時 200＋`-32003`＋`Retry-After: 5`，更大的 503；位元組預算放不下時讀完丟掉、從頭尾找 id（200 或 503；HM-31，開關關也生效）；GET 串流滿 429＋`Retry-After: 30`（預設 24、額外 8）；CPU 飢餓下閒置帳號健康不逾時 | `tests/test_profile_quotas.py`、`tests/test_gateway_busy_shapes.py`、`tests/test_request_budget_gateway.py`、`tests/test_reply_worker.py` | — | HM-08、HM-14、HM-30、HM-31 | 是 | #15、#16、#17、#101～#105、#108 |
 | T-20 | 升級、回退、再升級 | 回退＝還原升級前備份：預設 token＝備份當時的值、額外帳號消失、沒有任何撤銷；再升級後額外帳號不存在、預設不變；文件要求再升級後按「全部撤銷」 | `tests/test_upgrade_zero_rewrite.py` | Store、HAOS | HM-19b、HM-29 | 是 | #71 |
-| T-21 | 備份還原 | 預設帳號依 DQ-03（採 (b) A2）；兩個偵測訊號；讀不到的帳號隔離；獨立驗證；核對後才重發；舊收據 410；C1-M1 攻擊序；版本混搭 | `tests/test_restore_detection.py`、`tests/test_restore_lock.py`、`tests/test_dormant_profiles.py`、`tests/test_revoke_all.py`、`tests/test_restore_review.py` | 容器（root 還原樹）、HAOS | HM-13a、HM-13b、HM-13c、HM-19b | 是 | #20、#21、#69、#118～#121 |
+| T-21 | 備份還原 | 預設帳號依 DQ-03（採 (b) A2；沒撤銷時面板與 log 提示權杖已回到備份當時的值）；兩個偵測訊號；讀不到的帳號隔離（只能刪）；獨立驗證；核對後才重發；舊收據 410（備份時沒有收據檔的帳號也是）；C1-M1 攻擊序；版本混搭 | `tests/test_restore_detection.py`、`tests/test_restore_lock.py`、`tests/test_dormant_profiles.py`、`tests/test_revoke_all.py`、`tests/test_restore_review.py`、`packages/mcp-admin-ui/tests/browser/restore-review.spec.mjs` | 容器（root 還原樹）、HAOS | HM-13a、HM-13b、HM-13c、HM-19b | 是 | #20、#21、#58、#67、#69、#118～#123 |
 | T-22 | n8n 名額與逾時 | `n8n_session` 每帳號一份；沒後端的額外帳號所有工具回 `backend_not_configured` | `tests/test_n8n_multi_profile.py` | HAOS | HM-25 | 否（n8n） | #28、#62 |
 | T-23 | 子程式 bearer 隔離 | 7 支 Python 子程式：不帶、帶錯、帶別帳號、兩個標頭、空字串都 401，自己的 200。n8n（n8n-mcp 維持現狀）：不帶、帶錯、帶別帳號、空字串都 401，自己的 200；另外收下三種寫法（`Bearer` 後兩個空白、兩個標頭都是自己的、第一個是自己的＋第二個是別帳號的），都要先有自己的 child token，沒有越權（§8.8 #37 的註） | `tests/test_child_bearer.py` | 容器 | HM-06、HM-16；各產品升版 | 是（Odoo） | #37 |
 | T-24 | 來源檢查 | DQ-11 採 (a)：密鑰網址清單外記一行 would_deny（帶 id 前 8 碼、每帳號節流）、不擋、不加 CORS；Bearer 帶 Origin 403；Headscale 只放 claude.ai | `tests/test_origin_policy.py` | HAOS（記下 Claude.ai 送的 Origin） | HM-08、HM-27 | 是 | #9、#10、#42 |
@@ -107,8 +107,9 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_restore_lock.py` | HM-13b | 計畫 | 守門 A～F 步、隔離、獨立驗證、DQ-03 兩種模式、UC-24 三情境 |
 | `tests/test_dormant_profiles.py` | HM-13b | 計畫 | 開關關＋帳號資料 → 全撤銷；重新開通未核對前不能重發 |
 | `tests/test_revoke_all.py` | HM-13b | 計畫 | 全部撤銷第 k 個失敗、`.revoke-all-pending` |
-| `tests/test_restore_review.py` | HM-13c | 計畫 | 核對卡欄位、未核對前 rotate 409、匯出不含憑證 |
-| `packages/mcp-admin-ui/tests/browser/restore-review.spec.mjs` | HM-13c | 計畫 | 核對卡、全部撤銷兩段確認、隔離目錄只能刪 |
+| `tests/test_restore_review.py` | HM-13c | 計畫 | 單帳號還原後的提示（只多 `restore_notice`、權杖不變、輪替或撤銷後消失、沒還原時什麼都不多）；還原時每個收據檔都換新；還原紀錄、核對、未核對前 rotate 409（還原與重新開通後的休眠帳號）、未核對前 HM-12 的換身分換 token 也 409（審查 S-3；核對後照常、開關關照今天）、紀錄讀不到一律擋；換身分換掉保留的權杖時提示消失；隔離目錄只能刪；全部撤銷（第 k 個失敗、標記存不下、沒收尾、索引壞、工作執行緒、8081 的 503）；新路由每一種等待後的角色檢查；開關關時沒有新路由。審查修正：休眠開機不丟掉還在等的核對（預設帳號那一列、還原段落；讀不到的紀錄不改）、休眠前就撤銷的帳號也要核對、全部撤銷重建讀不到的紀錄、全部撤銷遇到意外的例外 fail closed、讀得到的隔離目錄刪除前先撤銷並抹憑證、開通而沒有帳號資料時逐步中斷也留下標記或提示 |
+| `packages/mcp-admin-ui/tests/browser/restore-review.spec.mjs` | HM-13c | 計畫 | 單帳號還原提示與「知道了」、休眠卡、核對卡（名稱與欄位當文字）、核對前停用重新產生、索引不能用時的核對卡、隔離目錄只能刪（超過 64 筆時清單照常可用、列前 64 筆並說還有幾筆）、紀錄讀不到時的出路與重建的紀錄、全部撤銷兩段確認與沒做完的三種說法、匯出不含憑證 |
+| `packages/mcp-admin-ui/tests/restore.test.mjs` | HM-13c | 新增 | bootstrap 的三種通知、還原紀錄、清單的隔離目錄、全部撤銷結果的格式檢查；新的帳號操作的收據識別；匯出只取允許清單的欄位 |
 | `tests/test_gateway_stream_endings.py` | HM-14 | 計畫 | `-32005` 沒有 traceback、`-32004` 依原因 |
 | `tests/test_gateway_busy_shapes.py` | HM-14 | 計畫 | `-32003` 形狀與文字 |
 | `tests/test_gateway_queue_ha.py` | HM-14 | 計畫 | 排隊上限、排隊中斷線不送 |

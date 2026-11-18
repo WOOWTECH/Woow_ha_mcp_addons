@@ -863,7 +863,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               body_budget: request_budget.Share | None = None,
               stop_child: Callable[[], Awaitable] | None = None,
               reply_worker=None,
-              dormant_profiles: int | None = None):
+              dormant_profiles: int | None = None,
+              restore_notice=None,
+              review_required: Callable[[], bool] | None = None):
     """listing (0.2.2): the product's tools/list tools as its child lists them (surface.listing). With it, a client
     connects whatever the backend's state: when no child can answer (no backend configured, so no child; a child that is
     not up) the gateway answers initialize, notifications/initialized, ping and tools/list itself, from listing through
@@ -998,7 +1000,23 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     HM-13b (multi-profile plan 3.3; contract 1.2, 3.6; not gated): dormant_profiles, given only for a product that is
     not switched on but has profile data on disk: how many profile directories its boot guard left revoked
     (restore_lock.Outcome.dormant); the bootstrap carries it as "dormant_profiles" (the panel's "休眠帳號 N 個，權杖已撤銷",
-    HM-13c). Left out (every installation without profile data): the bootstrap is as before, byte for byte."""
+    HM-13c). Left out (every installation without profile data): the bootstrap is as before, byte for byte.
+
+    HM-13c (the owner's decision of 2026-11-16 on the HM-13b review's Q-1: DQ-03 (b) as written; contract 1.2, 3.6,
+    4.1), not gated:
+    - restore_notice: given only when this start found the boot guard's restore notice (restore_lock.Notice: a restore
+      kept the default profile's token, back at its value at the time of the backup), for the default profile only.
+      The bootstrap carries its view() as "restore_notice" ({"at": <UTC seconds>}) until this profile's token changes:
+      a token/rotate, a token/revoke that revoked it, or (switched on) HM-12's identity change that rotated it clears it
+      (restore-notice.json removed). Nothing else changes: the token stays as restored. Left out (every installation
+      that was never restored), every answer is as before, byte for byte.
+    - review_required: given for a switched-on profile only (ProfileAdmin.review_required): a token/rotate while it says
+      so answers 409 restore_review_required after the If-Match and Idempotency-Key checks, before anything is written
+      (no receipt); ConfigError (the restore record cannot be used) answers 503 state unavailable. HM-13c review S-3:
+      HM-12's identity change (backend, backend/patch that would rotate the token: products.identity_rebound) is a
+      new token too, so it answers the same while the gate says so, after If-Match and the new-origin check (422) and
+      before anything is done (the child is not stopped, nothing is written or published). A save that rotates nothing
+      (a password alone, a first setup, a revoked token) is not gated."""
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
@@ -1040,6 +1058,12 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     if dormant_profiles is not None and (type(dormant_profiles) is not int or dormant_profiles < 0
                                          or profile_view is not None):
         raise ValueError("invalid dormant profiles")
+    if restore_notice is not None and not (callable(getattr(restore_notice, "view", None))
+                                           and callable(getattr(restore_notice, "clear", None))
+                                           and default_endpoint is None):
+        raise ValueError("invalid restore notice")
+    if review_required is not None and not callable(review_required):
+        raise ValueError("invalid review gate")
     n8n_request_bounds = getattr(store, "product", None) == "n8n"
     # HM-31: the add-on's request body budget (this profile's share) and the single-request ceiling it is charged up to
     budget_share = request_budget.own_share(getattr(store, "product", None)) if body_budget is None else body_budget
@@ -1322,6 +1346,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                                REBIND_WARNING, profile_name())
             raise ConfigError("state unavailable") from None  # today's fixed 503, whatever was raised
         token_access.committed()
+        if restore_notice is not None:
+            restore_notice.clear()  # HM-13c: the token is not the backup's any more (as after a token/rotate)
         headers['ETag'] = configuration.etag(updated)
         body = {"saved": True, "token_rotated": True}
         if backend_changed:
@@ -1507,7 +1533,10 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                                   "default_operation": v.default_operation,
                                   "operations": [{"name": op, "write": op in v.write_operations} for op in v.operations],
                                   "inputSchema": schemas.get(k) or v.arguments.model_json_schema()} for k, v in tools.items()}, "health": snapshot(),
-                    **({"dormant_profiles": dormant_profiles} if dormant_profiles is not None else {})}, headers=headers)
+                    **({"dormant_profiles": dormant_profiles} if dormant_profiles is not None else {}),
+                    **({"restore_notice": restore_view} if (restore_view := None if restore_notice is None
+                                                            else restore_notice.view()) is not None else {})},
+                    headers=headers)
             if name == "configuration" and request.method == "GET":
                 return JSONResponse({'configuration': configuration.snapshot(state)}, headers=headers)
             if name == "capabilities" and request.method == "GET":
@@ -1550,6 +1579,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             if name == "token/reveal" and request.method == "POST":
                 return JSONResponse({"token": store.load().token}, headers=headers)
             if name == "token/rotate" and request.method == "POST":
+                if review_required is not None and review_required():
+                    # HM-13c: a profile whose token the boot guard revoked gets a new one only once it was reviewed.
+                    raise BadRequest(409, {'code': 'restore_review_required'})
                 begin_operation()
                 new_token = secrets.token_urlsafe(32)
                 try:
@@ -1558,6 +1590,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 except (OSError, ConfigError):
                     raise BadRequest(409, {'code': 'operation_outcome_unknown'}) from None
                 token_access.committed()
+                if restore_notice is not None:
+                    restore_notice.clear()  # HM-13c: the token is not the backup's any more
                 return JSONResponse({**finish_operation(updated), "token": updated.token}, headers=headers)
             if name == "token/revoke" and request.method == "POST":
                 begin_operation()
@@ -1571,6 +1605,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     raise BadRequest(409, {'code': 'operation_outcome_unknown'}) from None
                 if changed:
                     token_access.committed()
+                    if restore_notice is not None:
+                        restore_notice.clear()  # HM-13c: the backup's token is revoked now
                 return JSONResponse(finish_operation(updated), headers=headers)
             if notice_action:
                 # Owner decision 2026-10-27: restore the faithful pre-upgrade limits, or keep the defaults (dismiss).
@@ -1607,6 +1643,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         # HM-12 (DQ-40 ⑨): a stored credential never follows a URL to another server unasked
                         raise BadRequest(422, {"code": NEW_ORIGIN_SECRET})
                     if identity_rebound(state, candidate):
+                        if review_required is not None and review_required():
+                            # HM-13c review S-3: a new token waits for the profile's restore review, as on token/rotate
+                            raise BadRequest(409, {'code': 'restore_review_required'})
                         return await rebind_identity(state, changes, headers, committed)
                 updated = store.update(**changes)
                 # No yield between durable commit and lifecycle ownership transfer.

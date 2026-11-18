@@ -261,11 +261,14 @@ class RestoreStageTests(unittest.TestCase):
 
     def repaired(self, data):
         """data restored, then as the start leaves it: every entry the runtime user's again (the entrypoint), the
-        marker gone (the boot guard, HM-13b: no switch, no profile data)."""
+        marker gone and the panel's restore notice saved (the boot guard, HM-13b, HM-13c: no switch, no profile
+        data)."""
         restored, state = probe.restore_as_supervisor()
         self.os.owners.clear()
         for name in restored:
             (data / name).chmod(0o600)
+        (data / probe.RESTORE_NOTICE_NAME).write_bytes(b'')
+        (data / probe.RESTORE_NOTICE_NAME).chmod(0o600)
         return restored, state
 
     def test_the_check_after_the_restore_start_passes_a_repaired_restore(self):
@@ -282,7 +285,8 @@ class RestoreStageTests(unittest.TestCase):
             probe.check_restored_start(restored, state)
 
     def test_a_switched_on_candidate_needs_each_of_them_private(self):
-        names = (probe.SENTINEL_NAME, probe.INSTANCE_RECORD_NAME, probe.RESTORE_RECORD_NAME)
+        # HM-13c: the restore notice too (no profile data: the token is kept)
+        names = (probe.SENTINEL_NAME, probe.INSTANCE_RECORD_NAME, probe.RESTORE_RECORD_NAME, probe.RESTORE_NOTICE_NAME)
         changes = {'missing': lambda path: path.unlink(), 'readable': lambda path: path.chmod(0o644),
                    'root-owned': lambda path: self.os.chown(path, 0, 0), 'a directory': lambda path: (
                        path.unlink(), path.mkdir(mode=0o700))}
@@ -301,8 +305,14 @@ class RestoreStageTests(unittest.TestCase):
     def test_the_check_after_the_restore_start_needs_the_repair_and_the_guard(self):
         def made(name):
             return lambda data: ((data / name).write_bytes(b''), (data / name).chmod(0o600))
+        notice = probe.RESTORE_NOTICE_NAME
         changes = {
             'the marker left': made(probe.MARKER),
+            'no restore notice (HM-13c)': lambda data: (data / notice).unlink(),
+            'a restore notice others can read': lambda data: (data / notice).chmod(0o644),
+            'a root-owned restore notice': lambda data: self.os.chown(data / notice, 0, 0),
+            'a restore notice that is a directory': lambda data: ((data / notice).unlink(),
+                                                                  (data / notice).mkdir(mode=0o700)),
             'a sentinel without the switch': made(probe.SENTINEL_NAME),
             'a sentinel record without the switch': made(probe.INSTANCE_RECORD_NAME),
             'a restore record without the switch': made(probe.RESTORE_RECORD_NAME),

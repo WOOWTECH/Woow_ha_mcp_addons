@@ -10,6 +10,12 @@ guard archives a restored journal (archive_for_restore): it becomes
 <journal>.restored (one archive kept) and a new journal refuses every operation id
 from before the restore with 410 operation_restored (restored_before_ms), the ids
 of operations made after that backup and lost with it included.
+
+HM-13c (contract 3.5, 9 #67): a restore gives every journal the guard handles a
+new one, also where the backup had none (renew_missing: the profile never had a
+receipt when the backup was made, so an operation made after it and lost with it
+would otherwise be taken as a new one); and the add-on's journal beside the index
+keeps the receipts of "revoke all", restore reviews and quarantine deletions too.
 """
 from __future__ import annotations
 
@@ -40,12 +46,18 @@ RESULTS = {
 # profile index quarantine, kept beside the index (/data/mcp/.profiles.json.operations.json: OperationJournal(index
 # path, results=PROFILE_RESULTS, subjects=True); profile_admin). Each carries its subject: the profile's id, or the
 # name the quarantined index was given; neither is a secret. A profile's own journal (RESULTS, no subject) is as before.
+# HM-13c (contract 3.1, 3.5): "revoke all" (its subject: all), a restore review (the profile's id, the default
+# profile's too) and a quarantine directory's deletion (its name as the API shows it, <id>-<UTC>[-n]).
 PROFILE_RESULTS = {
     'profile.create': {'status': 'ok', 'profile_state': 'created'},
     'profile.delete': {'status': 'ok', 'profile_state': 'deleted'},
     'profile.index_quarantine': {'status': 'ok', 'profile_index_state': 'quarantined'},
+    'profile.revoke_all': {'status': 'ok', 'token_state': 'revoked'},
+    'profile.restore_review': {'status': 'ok', 'review_state': 'reviewed'},
+    'profile.quarantine_delete': {'status': 'ok', 'quarantine_state': 'deleted'},
 }
-SUBJECT = re.compile(r'[0-9a-f]{24}|profiles\.json\.quarantine-[0-9]{8}T[0-9]{6}Z(?:-[0-9]{1,3})?')
+SUBJECT = re.compile(r'[0-9a-f]{24}|default|all|profiles\.json\.quarantine-[0-9]{8}T[0-9]{6}Z(?:-[0-9]{1,3})?'
+                     r'|[0-9a-f]{24}-[0-9]{8}T[0-9]{6}Z(?:-[0-9]{1,3})?')
 # HM-13b: a journal the boot guard wrote after a restore has one more key: every operation id at or before it (ms) was
 # made before the restore and answers 410 operation_restored. Only journals the guard writes carry it (an image before
 # HM-13b never reads one: a restore brings back its own image with the backup's data).
@@ -212,7 +224,7 @@ def journal_path(config_path: Path) -> Path:
     return config_path.with_name('.' + config_path.name + '.operations.json')
 
 
-def archive_for_restore(config_path: Path, cutoff_ms: int) -> str:
+def archive_for_restore(config_path: Path, cutoff_ms: int, *, renew_missing: bool = False) -> str:
     """HM-13b: the receipts of a restored profile (config_path: its state.json; or the index, for the receipts beside
     it). The journal the restore brought back becomes <journal>.restored (the one archive kept: it replaces an older
     one) and a new, empty journal refuses every operation id at or before cutoff_ms (the restore's time) with 410
@@ -223,8 +235,11 @@ def archive_for_restore(config_path: Path, cutoff_ms: int) -> str:
     half way and run again: a journal without receipts (the one this wrote, or one emptied) is not archived again, so
     the archive keeps the receipts it holds; only its cutoff moves forward. A missing journal next to an archive
     (stopped between the two moves) gets its new one, its cutoff not below the archive's newest id either; with
-    neither, nothing is written (no operation was ever made). A journal that cannot be read is archived as it is.
-    Returns 'archived', 'renewed' or 'none'; OSError when it was not done (the next start does it again)."""
+    neither, nothing is written (no operation was ever made), unless renew_missing (HM-13c: what the boot guard asks
+    for every journal it handles, as PaaS gives every configuration a new journal): then a new journal is written all
+    the same, so that an operation made after the backup and lost with it answers 410, not as a new one. A journal
+    that cannot be read is archived as it is. Returns 'archived', 'renewed', 'created' or 'none'; OSError when it was
+    not done (the next start does it again)."""
     if type(cutoff_ms) is not int or cutoff_ms < 0:
         raise ValueError('invalid cutoff')
     path = journal_path(config_path)
@@ -232,7 +247,10 @@ def archive_for_restore(config_path: Path, cutoff_ms: int) -> str:
     found = _receipts(path)
     if found is None:
         if not os.path.lexists(archive):
-            return 'none'
+            if not renew_missing:
+                return 'none'
+            _new_journal(path, cutoff_ms, archive=None)
+            return 'created'
         # Stopped between the two moves: the archive holds the restored receipts, so its floor counts as theirs did.
         found = 0, (_receipts(archive) or (0, None))[1]
     count, floor = found
