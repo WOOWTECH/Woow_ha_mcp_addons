@@ -54,6 +54,30 @@ HM-31 (plan 12.3 HM-31; contract 2.4, 5; PaaS #155): the manager holds the add-o
 (request_budget.RequestBudget, derived when the manager is made: at startup, with every profile the product may run
 counted); each profile's app charges its share (ProfileGate.budget_share, make_apps body_budget). A switched-off
 add-on's only profile has a budget of its own (make_apps makes it).
+
+HM-12 (plan 9 Odoo row, 12.3 HM-12; contract 3.1; DQ-05): every ProfileRuntime gives its apps stop_child (make_apps
+stop_child), which stops the child and drops its spec. Only a switched-on product's backend identity change uses it
+(gateway.make_apps: stop, one write of the connection and a new token, publish, start); switched off, nothing calls it.
+
+HM-30 (plan 5.5; contract 6): run_product gives the manager the add-on's one reply worker (reply_worker.ReplyWorker)
+and the manager gives every profile's runtime its own turn on it (a Lane, make_apps reply_worker): every profile's
+replies are processed there, the profiles taking turns. Each gate also bounds its profile's answers not received yet
+(profiles.ProfileQuota.pending_reply_bytes; profile_router). A ProfileRuntime takes reply_worker as a keyword-only
+option; left out, its replies are processed on the event loop, as before.
+
+HM-13b (plan 8.4; contract 1.2, 7; not gated): run_product runs the boot guard (restore_lock.guard) before it builds
+the manager or the default profile's lone runtime: no child starts and no listener exists before a restore, an
+unfinished "revoke all" and dormant profiles are handled. A product that is not switched on but has profile data gets a
+ProfileRuntime with dormant_profiles (the number the guard left revoked, for the bootstrap; make_apps' option of the
+same name); left out, the runtime is built as before.
+
+HM-13c (plan 6, 8.4; contract 1.2, 3.6, 4.1, 4.2): run_product hands the restore notice a start found
+(restore_lock.Notice; DQ-03 (b): the default profile's token is the backup's) to the default profile's runtime
+(restore_notice, make_apps' option of the same name), switched on (the manager's restore_notice) or not; left out (no
+notice: every installation that was never restored), the runtime is built as before. A switched-on profile's runtime
+also gets review_required (its token/rotate waits for its restore review: ProfileAdmin.review_required; so does
+HM-12's identity change when it would rotate the token, HM-13c review S-3: gateway.make_apps), and the manager keeps
+revoke_fence: the digests of tokens a "revoke all" could not revoke, which 8081 refuses (503).
 """
 from __future__ import annotations
 
@@ -92,7 +116,8 @@ RUNTIME_OPTIONS = frozenset({'child_url', 'health', 'backend_changed', 'configur
                              'restart_child', 'diagnostics', 'availability', 'token_access', 'mutation_lock',
                              'authority', 'admin_slots', 'admin_pipeline', 'profile_view', 'forward_slots',
                              'slot_busy', 'reply_secrets', 'child_blocked', 'default_endpoint', 'bootstrap_fields',
-                             'body_budget'})
+                             'body_budget', 'stop_child', 'reply_worker', 'dormant_profiles', 'restore_notice',
+                             'review_required'})
 MANAGEMENT_LISTENER_LIMIT = 64  # 8099's limit_concurrency (run_product), switched on or off
 # HM-09 (plan 5.4; C2-SF-4): after the default profile's child, at most STAGGER_SLOTS additional children start at
 # once; a place is freed when its child answered a health check, could not start, or after STAGGER_SECONDS.
@@ -151,13 +176,23 @@ class ProfileRuntime:
     HM-10 (likewise): default_endpoint, bootstrap_fields: make_apps' options of the same names, passed only when given.
     admin_action (after open()) is the profile's action for the management dispatcher (make_apps' admin app state).
 
+    HM-30 (likewise): reply_worker: the profile's turn on the add-on's reply worker (reply_worker.Lane; make_apps
+    reply_worker).
+
+    HM-13b (run_product, for a product not switched on that has profile data): dormant_profiles, make_apps' option of
+    the same name, passed only when given.
+
+    HM-13c: restore_notice (the default profile's, from run_product or the manager) and review_required (a switched-on
+    profile's, from the manager), make_apps' options of the same names, passed only when given.
+
     mcp_listener_limit: 8081's limit_concurrency when this runtime serves the add-on alone: 64, as before."""
     mcp_listener_limit = 64
 
     def __init__(self, store, tools, child_spec, *, port=CHILD_PORT, profile_id=DEFAULT_PROFILE, lifecycle=None,
                  shared=None, profile_view=None, app_options=None, child_connections=CHILD_CONNECTIONS,
                  forward_slots=None, slot_busy=None, reply_secrets=None, hold=None, monitor_options=None,
-                 report_blocked=False, default_endpoint=None, bootstrap_fields=None, body_budget=None):
+                 report_blocked=False, default_endpoint=None, bootstrap_fields=None, body_budget=None,
+                 reply_worker=None, dormant_profiles=None, restore_notice=None, review_required=None):
         if not isinstance(profile_id, str) or not PROFILE_ID.fullmatch(profile_id):
             raise ValueError('invalid profile id')
         if type(child_connections) is not int or child_connections < 1:
@@ -173,10 +208,13 @@ class ProfileRuntime:
         self.store, self.tools, self.child_spec = store, tools, child_spec
         self.port, self.profile_id = port, profile_id
         self.child_connections = child_connections
+        self.reply_worker = reply_worker
         self.gateway_options = {name: value for name, value in (
             ('forward_slots', forward_slots), ('slot_busy', slot_busy), ('reply_secrets', reply_secrets),
             ('default_endpoint', default_endpoint), ('bootstrap_fields', bootstrap_fields),
-            ('body_budget', body_budget)) if value is not None}
+            ('body_budget', body_budget), ('reply_worker', reply_worker),
+            ('dormant_profiles', dormant_profiles), ('restore_notice', restore_notice),
+            ('review_required', review_required)) if value is not None}
         if hold is not None and not callable(hold):
             raise ValueError('invalid start hold')
         self.hold = hold
@@ -215,6 +253,7 @@ class ProfileRuntime:
                 self.store, self.tools, child, child_url=self.child_url, health=health.snapshot,
                 backend_changed=self.backend_changed, configuration=configuration,
                 backend_check=getattr(health, 'test_saved', None), restart_child=self.backend_changed,
+                stop_child=self.stop_child,
                 diagnostics=getattr(manager, 'diagnostics', None), availability=health.availability,
                 token_access=self.token_access, mutation_lock=self.mutation_lock, **self._shared_options(),
                 **self.gateway_options, **self.app_options)
@@ -261,6 +300,15 @@ class ProfileRuntime:
         A failure is recorded (configuration: child_start_failed) and raised. HM-09: a save or the panel's restart,
         so the hold's memory check applies (hold memory=True), and the health monitor's backoff starts again."""
         await self._relaunch(state, asked=True)
+
+    async def stop_child(self):
+        """HM-12 (contract 3.1; DQ-05; make_apps stop_child): stop the child before its backend identity changes, so
+        that no child runs on the old credentials once a new token exists (UC-21). Its spec is dropped: until a relaunch
+        on a given state (backend_changed: the new state, or the saved one when the change failed) nothing can start it
+        again on the old credentials. Called holding the profile's mutation_lock (the change's). A stop that fails is
+        raised (the child may still run; the caller writes nothing)."""
+        await self.supervisor.stop()
+        self.supervisor.spec = None
 
     async def launch(self):
         """Start the child on the saved state, before the listeners serve. A failure is not raised: management stays
@@ -455,11 +503,21 @@ class ProfileManager:
     added while the add-on runs; free_port() allocates the port of a new profile; relabel() renames one's echo. Every
     profile's runtime gets its echo (echo(): id, label, is_default; DQ-40 (a) ②), its bootstrap fields and, for an
     additional profile, the default profile's endpoint (DQ-13); get(profile_id).runtime.admin_action is each
-    profile's action."""
+    profile's action.
 
-    def __init__(self, store, product, tools, child_spec, *, port=CHILD_PORT, app_options=None):
+    HM-30 (plan 5.5): reply_worker is the add-on's one reply worker (run_product starts and stops it); every runtime
+    gets its own turn on it (reply_worker.lane(profile_id)), the default profile's included. Left out (tests that
+    build a manager alone), every profile's replies are processed on the event loop."""
+
+    def __init__(self, store, product, tools, child_spec, *, port=CHILD_PORT, app_options=None, reply_worker=None,
+                 restore_notice=None):
         self.store, self.product, self.tools, self.child_spec = store, product, tools, child_spec
         self.port = port
+        self.reply_worker = reply_worker
+        # HM-13c: the default profile's restore notice (restore_lock.Notice, or None) and the digests of tokens a
+        # "revoke all" could not revoke (8081 refuses them: profile_router.McpDispatcher.resolve).
+        self.restore_notice = restore_notice
+        self.revoke_fence = set()
         self.app_options = dict(app_options or {})
         self.layout = profiles.Layout(Path(store.directory))
         self.reports = Reports()
@@ -818,7 +876,10 @@ class ProfileManager:
                                  report_blocked=True, profile_view=partial(self.echo, profile_id),
                                  bootstrap_fields=partial(self.admin.bootstrap_fields, profile_id),
                                  default_endpoint=None if default else self.default_endpoint,
-                                 body_budget=gate.budget_share)
+                                 body_budget=gate.budget_share,
+                                 reply_worker=None if self.reply_worker is None else self.reply_worker.lane(profile_id),
+                                 restore_notice=self.restore_notice if default else None,
+                                 review_required=partial(self.admin.review_required, profile_id))
         await runtime.open()
         entry = RegisteredProfile(profile_id, port, label, runtime, store, gate, credentials, disabled)
         self._entries[profile_id] = entry

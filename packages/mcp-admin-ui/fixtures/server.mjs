@@ -20,12 +20,41 @@ const mounts = [prefix, ''];
 // with the add-on's order of checks. tests/profile-api-cases.json holds what the add-on answers (checked against the
 // real app by tests/test_panel_profile_api_shapes.py) and tests/browser/profile-api-parity.spec.mjs checks this mock
 // against the same cases.
+// HM-13c (contract 3.1, 3.6, 4.1): config.restoreNotice ({at}: the default bootstrap's restore_notice until the default
+// profile's token changes, switched on or off; HM-12's identity change that rotates it too), config.dormantProfiles (a switched-off bootstrap's dormant_profiles) and,
+// switched on, config.profiles.restore ({at, dormantAt, rows: [{id, label, token, identity, policy, reviewed_at}],
+// broken}: the guard's record, GET profiles/restore-record, POST profiles/<id>/restore-review, the bootstrap's
+// restore_review and restore_review_required, the token/rotate gate), config.profiles.quarantined (names: the list's
+// "quarantined", POST profiles/quarantine/<name>/delete) and POST profiles/revoke-all (config.profiles.revokeFail: ids
+// whose revocation fails once: 409 operation_outcome_unknown with the results; config.profiles.revokeOutcome, once:
+// 'unstarted' (its marker could not be saved: nothing revoked, no result) or 'unfinished' (every profile revoked, its
+// end not done), both 409 operation_outcome_unknown, as tests/test_restore_review.py has the add-on answer them).
 const DEFAULT = 'default';
 const PROFILE = /^(?:default|[0-9a-f]{24})$/;
 const OPERATION = /^[0-9]{13}\.[A-Za-z0-9_-]{16,64}$/;
 // Synthetic low-entropy tokens, one letter per profile (test data rule, plan 12.0 item 4).
 const TOKEN_LETTERS = ['T', 'U', 'V', 'W', 'X', 'Y'];
-let config, calls, reads, nonce, profiles, index, orphans, defaults = {};
+// HM-12 (DQ-05, DQ-40 ⑨ (a); contract 3.1, 4.1), switched on only: a backend save as the add-on answers it.
+// - backend/patch moving a URL to another origin (scheme, host, effective port) without the stored secrets that URL takes
+//   there: 422 CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN after If-Match, nothing saved (every product; the table and
+//   the origin are written here independently of the panel's urlSecrets and urlOrigin).
+// - Odoo, the product whose token is bound to its backend identity: a save that changes url, database or username of a
+//   complete saved connection (a cleared one too) while the token is active rotates the token in the same save (the
+//   next letter of ROTATION_LETTERS; its mask and a rotate entry in the history where the state has them) and answers
+//   {saved, token_rotated: true, configuration} with the echo and the new ETag. config.profiles.rebindFault ('stop',
+//   'write' or 'start'; for the next such save only) answers as the add-on's failed identity change: 503 {"error":
+//   "request denied"} or {"error":"state unavailable"} with nothing saved, or shape D with token_rotated (saved, the new
+//   child not started: apply_state failed).
+// - config.saveCode with config.saveStatus: the refusal says that code (the add-on's refusals carry no echo).
+const URL_SECRETS = {odoo: {url: ['password']}, 'odoo-manage': {url: ['api_key']}, n8n: {url: ['key', 'mcp_access_token']},
+  hermes: {gateway_url: ['gateway_api_key'], dashboard_url: ['dashboard_password']}, opendesign: {url: []},
+  emqx: {url: ['api_key', 'api_secret']}, litellm: {url: ['master_key']}, nextcloud: {url: ['app_password']}, headscale: {url: ['api_key']}};
+const IDENTITY = ['url', 'database', 'username'];
+const ROTATION_LETTERS = ['N', 'P', 'Q', 'R'];
+let config, calls, reads, nonce, profiles, index, orphans, rotations, defaults = {};
+let restoreRows, quarantined, revokeFail, revokeOutcome;
+const QUARANTINE = /^([0-9a-f]{24})-[0-9]{8}T[0-9]{6}Z(?:-[0-9]{1,3})?$/;
+const REVIEWED_AT = '2026-11-16T10:00:00+00:00';
 function profileState(next) {
   const state = {
     product: next.product ?? 'n8n', endpoint: next.endpoint ?? null,
@@ -77,6 +106,37 @@ function profileState(next) {
   }
   return state;
 }
+// HM-12: where a URL's requests go (scheme, host, effective port), as urlsplit reads the URL; another spelling of a host
+// is another origin.
+function originOf(url) {
+  const found = /^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^/?#]*)/.exec(url);
+  if (!found) return null;
+  const scheme = found[1].toLowerCase(), hostinfo = found[2].split('@').at(-1);
+  const bracketed = /^\[([^\]]*)\](?::(.*))?$/.exec(hostinfo);
+  const [host, port] = bracketed ? [bracketed[1], bracketed[2] ?? ''] : [hostinfo.split(':')[0], hostinfo.split(':').slice(1).join(':')];
+  return `${scheme} ${host.toLowerCase()} ${port === '' ? {http: 80, https: 443}[scheme] : Number(port)}`;
+}
+// Whether a backend/patch moves a stored URL to another origin without a stored secret that URL takes there.
+function newOriginRefused(state, changes) {
+  for (const [url, secrets] of Object.entries(URL_SECRETS[state.product] ?? {})) {
+    const before = state.backend_edit.values[url];
+    if (typeof before !== 'string' || typeof changes[url] !== 'string' || originOf(before) === originOf(changes[url])) continue;
+    if (secrets.some(secret => state.backend_edit.secret_set[secret] && !Object.hasOwn(changes, secret))) return true;
+  }
+  return false;
+}
+// A saved Odoo identity (url, database, username), or null when the saved connection is not complete.
+const identityOf = (configured, connection) => configured && IDENTITY.every(key => typeof connection?.[key] === 'string')
+  ? Object.fromEntries(IDENTITY.map(key => [key, connection[key]])) : null;
+const masked = letter => `${letter.repeat(4)}${'*'.repeat(20)}${letter.repeat(4)}`;
+function rotate(profile) {
+  const state = profile.state, previous = profile.token;
+  profile.token = ROTATION_LETTERS[rotations++ % ROTATION_LETTERS.length];
+  if (Object.hasOwn(state, 'token_masked')) state.token_masked = masked(profile.token);
+  if (Object.hasOwn(state, 'token_history')) {
+    state.token_history = [{action: 'rotate', rotated_at: '2026-11-17T00:00:00+00:00', previous_token_masked: masked(previous)}, ...state.token_history].slice(0, 5);
+  }
+}
 const switchedOn = () => Boolean(config.profiles);
 const profileConfig = () => typeof config.profiles === 'object' && config.profiles !== null ? config.profiles : {};
 function reset(next = {}) {
@@ -84,11 +144,40 @@ function reset(next = {}) {
   calls = [];
   reads = [];
   nonce = 0;
+  rotations = 0;
   profiles = new Map([[DEFAULT, {id: DEFAULT, label: 'Default', port: 3000, token: 'M', state: profileState(config),
-    revision: 1, receipts: new Map(), status: 'running', disabled_reason: null, blocked_reason: null}]]);
+    revision: 1, receipts: new Map(), status: 'running', disabled_reason: null, blocked_reason: null,
+    identity: identityOf(config.configured, config.connection)}]]);
   index = {revision: 1, receipts: new Map(), created: 0, quarantined: 0};
   orphans = new Set(profileConfig().orphans ?? []);  // profile directories the index does not list (DQ-14)
   for (const spec of profileConfig().extra ?? []) addProfile(spec);
+  // HM-13c: the guard's record rows (their reviews change), the quarantine directories, the failures of "revoke all".
+  restoreRows = structuredClone(profileConfig().restore?.rows ?? []);
+  quarantined = new Set(profileConfig().quarantined ?? []);
+  revokeFail = new Set(profileConfig().revokeFail ?? []);
+  revokeOutcome = profileConfig().revokeOutcome ?? null;
+  for (const row of restoreRows) { const profile = profiles.get(row.id); if (profile && ['revoked', 'already_revoked'].includes(row.token)) profile.state.token_active = false; }
+}
+// The guard's record (contract 3.6), as the add-on reads it back.
+function mockRecord() {
+  const spec = profileConfig().restore;
+  if (!spec) return null;
+  return {version: 1, restore: spec.at ? {at: spec.at, marker: true, sentinel: 'consistent'} : null,
+    dormant: spec.dormantAt ? {at: spec.dormantAt} : null, index: 'ok',
+    profiles: restoreRows.map(row => ({id: row.id, label: row.label ?? null, is_default: row.id === DEFAULT, token: row.token,
+      identity: structuredClone(row.identity ?? {}), policy: structuredClone(row.policy ?? {}), reviewed_at: row.reviewed_at ?? null})),
+    quarantined: [...quarantined].sort().map(name => ({name: `.quarantine-${name}`, id: name.slice(0, 24), new: true})),
+    profiles_directory: 'present', other_entries: 0};
+}
+const gated = profile => restoreRows.some(row => row.id === profile.id && ['revoked', 'already_revoked'].includes(row.token) && !row.reviewed_at);
+function reviewSummary() {
+  const spec = profileConfig().restore;
+  if (!spec) return null;
+  if (spec.broken) return {pending: null, restore_at: null, dormant_at: null};
+  // The profiles that still exist: an index the add-on cannot use lists none (only the default profile counts then).
+  const pending = restoreRows.filter(row => ['revoked', 'already_revoked'].includes(row.token) && !row.reviewed_at
+    && (row.id === DEFAULT || !indexCorrupt() && profiles.has(row.id))).length;
+  return pending ? {pending, restore_at: spec.at ?? null, dormant_at: spec.dormantAt ?? null} : null;
 }
 // DQ-12: an index the add-on cannot use (corrupt, or replaced behind its back) until it is quarantined.
 const indexCorrupt = () => Boolean(profileConfig().indexCorrupt) && index.quarantined === 0;
@@ -98,7 +187,7 @@ const supportsProfiles = () => !['opendesign', 'odoo-manage'].includes(profiles.
 function addProfile(spec = {}) {
   const base = profiles.get(DEFAULT).state;
   const id = spec.id ?? `e${(++index.created).toString(16).padStart(7, '0')}${'f'.repeat(16)}`;
-  const next = {...config, ownerDefaults: undefined, endpoint: null, connection: undefined, configured: spec.configured ?? false};
+  const next = {...config, ownerDefaults: undefined, endpoint: null, connection: spec.connection, configured: spec.configured ?? false};
   delete next.tokenMask;
   delete next.tokenHistory;
   for (const field of ['tokenMask', 'tokenHistory']) if (Object.hasOwn(spec, field)) next[field] = spec[field];
@@ -114,7 +203,7 @@ function addProfile(spec = {}) {
   while (taken.has(port)) port++;
   const profile = {id, label: spec.label ?? `帳號 ${profiles.size}`, port: spec.port ?? port, token: spec.token ?? TOKEN_LETTERS[(profiles.size - 1) % TOKEN_LETTERS.length],
     state, revision: 1, receipts: new Map(), status: spec.status ?? 'unconfigured', disabled_reason: spec.disabled_reason ?? null,
-    blocked_reason: spec.blocked_reason ?? null, unavailable: spec.unavailable === true,
+    blocked_reason: spec.blocked_reason ?? null, unavailable: spec.unavailable === true, identity: identityOf(spec.configured, spec.connection),
     ...(Object.hasOwn(spec, 'required_memory_mib') ? {required_memory_mib: spec.required_memory_mib} : {})};
   profiles.set(id, profile);
   return profile;
@@ -174,9 +263,11 @@ const refuse = (response, status, code, extra = {}) => json(response, status, {e
 function reply(response, status, value, profile, operation) {
   if (!switchedOn()) return json(response, status, value, {ETag: etag(profile)});
   const id = config.wrongEcho?.operation === operation ? config.wrongEcho.id : profile.id;
+  const review = profile.id === DEFAULT ? reviewSummary() : null;
   const echo = operation === 'bootstrap' ? {profile: {id, label: profiles.get(id)?.label ?? profile.label, is_default: id === DEFAULT},
     profiles_supported: supportsProfiles(), ...(profile.id === DEFAULT ? {profile_index_state: indexCorrupt() ? 'corrupt' : 'ok',
-      ...(indexCorrupt() ? {profile_index_etag: rawEtag()} : {})} : {})}
+      ...(indexCorrupt() ? {profile_index_etag: rawEtag()} : {})} : {}),
+    ...(review ? {restore_review: review} : {}), ...(gated(profile) ? {restore_review_required: true} : {})}
     : {profile: {id}};
   return json(response, status, {...value, ...echo}, {ETag: etag(profile)});
 }
@@ -211,14 +302,16 @@ const labelTaken = (label, except = null) => ['default', '預設帳號'].include
 // an unusable index (503 profile_index_corrupt; the quarantine aside), If-Match (428; a malformed or stale one 409
 // config_conflict with the current ETag), Idempotency-Key (428; malformed 400; a replay answers what was done, before
 // the ETag is compared; another request under the same key 409 operation_id_conflict), and each route's own checks.
-const ROUTES = {'': ['GET', 'POST'], 'index/quarantine': ['POST']};
+const ROUTES = {'': ['GET', 'POST'], 'index/quarantine': ['POST'], 'revoke-all': ['POST'], 'restore-record': ['GET']};
 const conflict = (response, current) => json(response, 409, {detail: {code: 'config_conflict'}}, {ETag: current});
 const answer = (response, status, value) => json(response, status, value, {ETag: indexEtag()});
 const receiptOf = (operationId, kind) => ({id: operationId, kind, state: 'completed', replayed: false});
 async function profileRoutes(request, response, local) {
   const rest = local === '/api/profiles' ? '' : local.slice('/api/profiles/'.length);
-  const id = Object.hasOwn(ROUTES, rest) ? null : rest;
-  const allowed = id === null ? ROUTES[rest] : ['PATCH', 'DELETE'];
+  // HM-13c: profiles/<id>/restore-review and profiles/quarantine/<name>/delete (POST only).
+  const review = /^([^/]+)\/restore-review$/.exec(rest), sweep = /^quarantine\/([^/]+)\/delete$/.exec(rest);
+  const id = Object.hasOwn(ROUTES, rest) || sweep ? null : review ? review[1] : rest;
+  const allowed = Object.hasOwn(ROUTES, rest) ? ROUTES[rest] : review || sweep ? ['POST'] : ['PATCH', 'DELETE'];
   const payload = await body(request);
   const write = request.method !== 'GET';
   const validCsrf = request.headers['x-csrf-token'] === `mock_fresh_csrf_value_${nonce}`;
@@ -233,34 +326,76 @@ async function profileRoutes(request, response, local) {
   if (labelled ? !payload || typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).join() !== 'label' || typeof payload.label !== 'string'
       : payload !== null) return json(response, 400, {error: 'request denied'});
   if (id !== null && !PROFILE.test(id)) return json(response, 400, {error: 'request denied'});
+  if (sweep && !QUARANTINE.test(sweep[1])) return json(response, 400, {error: 'request denied'});
+  if (request.method === 'GET' && rest === 'restore-record') {
+    if (profileConfig().restore?.broken) return json(response, 503, {error: 'state unavailable'});
+    return json(response, 200, {record: mockRecord()}, {ETag: indexCorrupt() ? rawEtag() : indexEtag()});
+  }
   if (request.method === 'GET') {
     if (indexCorrupt()) return refuse(response, 503, 'profile_index_corrupt');
     if (profileConfig().listStatus) return json(response, profileConfig().listStatus, {error: 'MOCK PRIVATE_CANARY_MUST_NOT_RENDER'});
     reads.push({operation: 'profiles', ...header(request)});  // reads are not calls: specs count calls
     // noEtag: the header lost on the way (HM-03a measures whether the Ingress keeps it).
-    return json(response, 200, {profiles: [...profiles.values()].map(row), orphans: [...orphans].sort().map(item => ({id: item}))},
-      profileConfig().noEtag ? {} : {ETag: indexEtag()});
+    const list = {profiles: [...profiles.values()].map(row), orphans: [...orphans].sort().map(item => ({id: item}))};
+    if (quarantined.size) list.quarantined = [...quarantined].sort().map(name => ({name, id: name.slice(0, 24)}));
+    return json(response, 200, list, profileConfig().noEtag ? {} : {ETag: indexEtag()});
   }
-  const quarantine = rest === 'index/quarantine';
-  if (indexCorrupt() && !quarantine) return refuse(response, 503, 'profile_index_corrupt');
-  const current = quarantine && indexCorrupt() ? rawEtag() : indexEtag();
+  const quarantine = rest === 'index/quarantine', revokeAll = rest === 'revoke-all';
+  if (indexCorrupt() && !quarantine && !revokeAll) return refuse(response, 503, 'profile_index_corrupt');
+  const current = (quarantine || revokeAll) && indexCorrupt() ? rawEtag() : indexEtag();
   if (!ifMatch) return refuse(response, 428, 'config_revision_required');
   if (!/^"p1-[0-9a-f]{64}"$/.test(ifMatch)) return conflict(response, current);
-  const kind = quarantine ? 'profile.index_quarantine' : request.method === 'POST' ? 'profile.create' : request.method === 'DELETE' ? 'profile.delete' : null;
+  const kind = quarantine ? 'profile.index_quarantine' : revokeAll ? 'profile.revoke_all' : review ? 'profile.restore_review'
+    : sweep ? 'profile.quarantine_delete' : request.method === 'POST' ? 'profile.create' : request.method === 'DELETE' ? 'profile.delete' : null;
   if (kind) {
     if (!operationId) return refuse(response, 428, 'operation_id_required');
     if (!OPERATION.test(operationId) || Number(operationId.split('.')[0]) > Date.now()) return refuse(response, 400, 'operation_id_invalid');
     const prior = index.receipts.get(operationId);
     if (prior) {
-      const subject = kind === 'profile.create' ? payload.label : kind === 'profile.delete' ? id : null;
+      const subject = kind === 'profile.create' ? payload.label : ['profile.delete', 'profile.restore_review'].includes(kind) ? id
+        : kind === 'profile.quarantine_delete' ? sweep[1] : null;
       if (prior.kind !== kind || prior.request !== subject) return refuse(response, 409, 'operation_id_conflict');
       const replayed = {...prior.operation, replayed: true};
+      if (prior.operation.state !== 'completed') return refuse(response, 409, 'operation_outcome_unknown', {operation: replayed});
       if (kind === 'profile.create') return answer(response, 200, {...(profiles.has(prior.target) ? row(profiles.get(prior.target)) : {id: prior.target}), operation: replayed});
       if (kind === 'profile.delete') return answer(response, 200, {deleted: prior.target, operation: replayed});
+      if (kind === 'profile.revoke_all') return json(response, 200, {revoked: 'all', operation: replayed}, {ETag: current});
+      if (kind === 'profile.restore_review') return answer(response, 200, {reviewed: prior.target, reviewed_at: restoreRows.find(item => item.id === prior.target)?.reviewed_at ?? null, operation: replayed});
+      if (kind === 'profile.quarantine_delete') return answer(response, 200, {deleted: prior.target, operation: replayed});
       return answer(response, 200, {quarantined: prior.target, operation: replayed});
     }
   }
   if (ifMatch !== current) return conflict(response, current);
+  if (revokeAll) {
+    // Every profile (the default one first, then the profile directories by id): failed ones once (revokeFail), the
+    // others revoked; the default profile's restore notice goes with its token.
+    const ids = [DEFAULT, ...[...[...profiles.keys()].filter(item => item !== DEFAULT), ...orphans].sort()];
+    const results = revokeOutcome === 'unstarted' ? []
+      : ids.map(item => ({id: item, result: revokeFail.has(item) ? 'failed' : 'revoked'}));
+    for (const item of results) if (item.result === 'revoked' && profiles.has(item.id)) { profiles.get(item.id).state.token_active = false; profiles.get(item.id).revision++; }
+    if (results[0]?.result === 'revoked') config.restoreNotice = undefined;
+    const failed = revokeFail.size > 0 || revokeOutcome !== null;
+    revokeFail = new Set();
+    revokeOutcome = null;
+    const operation = {...receiptOf(operationId, kind), ...(failed ? {state: 'unknown'} : {})};
+    index.receipts.set(operationId, {kind, request: null, target: 'all', operation});
+    if (failed) return refuse(response, 409, 'operation_outcome_unknown', {operation, results});
+    return json(response, 200, {revoked: 'all', results, operation}, {ETag: current});
+  }
+  if (review) {
+    const found = restoreRows.find(item => item.id === id);
+    if (!found || (id !== DEFAULT && !profiles.has(id))) return refuse(response, 404, 'profile_not_found');
+    found.reviewed_at ??= REVIEWED_AT;
+    const operation = receiptOf(operationId, kind);
+    index.receipts.set(operationId, {kind, request: id, target: id, operation});
+    return answer(response, 200, {reviewed: id, reviewed_at: found.reviewed_at, operation});
+  }
+  if (sweep) {
+    if (!quarantined.delete(sweep[1])) return refuse(response, 404, 'profile_not_found');
+    const operation = receiptOf(operationId, kind);
+    index.receipts.set(operationId, {kind, request: sweep[1], target: sweep[1], operation});
+    return answer(response, 200, {deleted: sweep[1], operation});
+  }
   if (quarantine) {
     // Only an unusable index with its file is moved aside: every profile directory's token revoked, each one an orphan.
     if (!indexCorrupt() || profileConfig().noIndexFile) return conflict(response, current);
@@ -363,7 +498,10 @@ const server = http.createServer(async (request, response) => {
       const state = profile.state;
       return reply(response, 200, { ...state, ...(config.parity === false ? {} : {configuration: configuration(profile)}), operation_contract:{version:1,server_time_ms:Date.now(),retention_ms:86400000}, capabilities:capabilities(profile), base_path: mount, api_base: `${mount}/api`, csrf: config.missingCsrf ? null : `mock_fresh_csrf_value_${nonce}`,
         // With profiles the endpoint is the add-on's (the default profile's, DQ-13); the echo adds the index state.
-        ...(switchedOn() ? {endpoint: profiles.get(DEFAULT).state.endpoint} : {}) }, profile, 'bootstrap');
+        ...(switchedOn() ? {endpoint: profiles.get(DEFAULT).state.endpoint} : {}),
+        // HM-13b, HM-13c: dormant profiles of a switched-off add-on; a restore that kept the default profile's token.
+        ...(!switchedOn() && config.dormantProfiles !== undefined ? {dormant_profiles: config.dormantProfiles} : {}),
+        ...(profile.id === DEFAULT && config.restoreNotice ? {restore_notice: structuredClone(config.restoreNotice)} : {}) }, profile, 'bootstrap');
     }
     if (local.startsWith('/api/operations/')) {
       if (config.deniedSave) return json(response, 403, {});
@@ -382,7 +520,8 @@ const server = http.createServer(async (request, response) => {
       const profile = scoped(request, response);
       if (!profile) return;
       const state = profile.state, receipts = profile.receipts;
-      if (config.saveStatus) return json(response, config.saveStatus, { error: 'MOCK PRIVATE_CANARY_MUST_NOT_RENDER' });
+      if (config.saveStatus) return json(response, config.saveStatus, switchedOn() && config.saveCode
+        ? {error: 'request denied', detail: {code: config.saveCode}, untrusted: 'MOCK PRIVATE_CANARY_MUST_NOT_RENDER'} : { error: 'MOCK PRIVATE_CANARY_MUST_NOT_RENDER' });
       const kind={'token/rotate':'token.rotate','token/revoke':'token.revoke','child/restart':'mcp.restart'}[operation];
       const operationId=request.headers['idempotency-key'];
       if (kind && receipts.has(operationId)) {
@@ -414,6 +553,8 @@ const server = http.createServer(async (request, response) => {
         profile.revision++;
         return reply(response, 200, { saved: true, configuration: configuration(profile), owner_defaults: view }, profile, operation);
       }
+      // HM-13c (contract 4.1): a profile whose token the restore guard revoked gets a new one once it was reviewed.
+      if (operation === 'token/rotate' && switchedOn() && gated(profile)) return refuse(response, 409, 'restore_review_required');
       let receipt;
       if(kind){
         if(!/^[0-9]{13}\.[A-Za-z0-9_-]{16,64}$/.test(operationId??''))return json(response,428,{detail:{code:'operation_id_required'}});
@@ -424,19 +565,43 @@ const server = http.createServer(async (request, response) => {
       if (operation === 'child/restart') return reply(response,202,{status:'ok',operation:receipt,accepted:true,apply_state:'pending',...(switchedOn() ? {blocked_reason: profile.blocked_reason ?? null} : {})},profile,operation);
       if (operation.startsWith('token/')) {
         if (request.method !== 'POST' || payload !== null) return json(response, 400, { error: 'MOCK token contract' });
+        // HM-13c: the default profile's token changing ends the restore notice (a revoke only when it revoked one).
+        if (profile.id === DEFAULT && (operation === 'token/rotate' || operation === 'token/revoke' && state.token_active)) config.restoreNotice = undefined;
         if (operation === 'token/revoke') { state.token_active = false; profile.revision++; return reply(response,200,{status:'ok',operation:receipt},profile,operation); }
         if (operation === 'token/rotate') {state.token_active = true; profile.revision++;}
         return reply(response, 200, { ...(receipt ? {status:'ok',operation:receipt} : {}), token: state.token_active ? profile.token.repeat(43) : null }, profile, operation);
       }
       if (request.method !== 'PUT') return json(response, 405, {});
+      // HM-12: the identity a backend save leaves (null: cleared), when it moves a switched-on Odoo token, and the
+      // failure armed for it.
+      let rebound = false, fault;
+      const rebinds = next => {
+        rebound = switchedOn() && state.product === 'odoo' && state.token_active && profile.identity !== null
+          && (next === null || IDENTITY.some(key => next[key] !== profile.identity[key]));
+        fault = rebound ? profileConfig().rebindFault : undefined;
+        if (fault) delete config.profiles.rebindFault;
+        return fault === 'stop' ? {error: 'request denied'} : fault === 'write' ? {error: 'state unavailable'} : null;
+      };
       if (operation === 'backend') {
         const connection = state.product === 'n8n' ? payload : payload.connection;
         const clear = state.product === 'n8n' ? connection?.url === null && connection?.key === null : connection === null;
         if (!clear) backendPayload(state.product, 'replace', connection);
         if (JSON.stringify(payload) !== JSON.stringify(clear ? backendPayload(state.product, 'clear') : backendPayload(state.product, 'replace', connection))) return json(response, 400, {});
+        if (switchedOn()) {
+          const next = clear ? null : identityOf(true, connection), failed = rebinds(next);
+          if (failed) return json(response, 503, failed);
+          profile.identity = next;
+        }
         state.connection_configured = !clear;
       } else if (operation === 'backend/patch') {
         if (!config.parity046 || !state.connection_configured || !request.headers['if-match']) return json(response,400,{});
+        if (switchedOn()) {
+          if (newOriginRefused(state, payload.changes)) return refuse(response, 422, 'CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN');
+          const next = profile.identity && {...profile.identity, ...Object.fromEntries(IDENTITY.filter(key => Object.hasOwn(payload.changes, key)).map(key => [key, payload.changes[key]]))};
+          const failed = next ? rebinds(next) : null;
+          if (failed) return json(response, 503, failed);
+          if (next) profile.identity = next;
+        }
         for (const [key, value] of Object.entries(payload.changes)) {
           if (Object.hasOwn(state.backend_edit.secret_set, key)) state.backend_edit.secret_set[key] = value !== null;
           else state.backend_edit.values[key] = value;
@@ -466,6 +631,16 @@ const server = http.createServer(async (request, response) => {
         Object.assign(state, payload);
       } else return json(response, 404, {});
       profile.revision++;
+      if (rebound) {
+        rotate(profile);
+        // HM-13c with HM-12: the default profile's kept token is the backup's no more, so its restore notice ends.
+        if (profile.id === DEFAULT) config.restoreNotice = undefined;
+        if (fault === 'start') {
+          config.applyState = 'failed';
+          return reply(response, 503, {saved: true, token_rotated: true, detail: {code: 'config_apply_failed'}, configuration: configuration(profile)}, profile, operation);
+        }
+        return reply(response, 200, {saved: true, token_rotated: true, configuration: configuration(profile)}, profile, operation);
+      }
       return reply(response, 200, { saved: true }, profile, operation);
     }
     if (local.startsWith('/assets/')) {

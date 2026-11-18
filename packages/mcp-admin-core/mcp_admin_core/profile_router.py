@@ -27,6 +27,9 @@ Which profile (plan 5.1; I1, I2; DQ-01 (a), DQ-09, DQ-12):
 - Unusable: the index is corrupt or changed behind the add-on's back (profiles.recheck_index: sticky until a restart;
   DQ-12), the profile data could not be listed at startup, or the default profile's state cannot be read (a duplicate
   of its token cannot be ruled out): 503 {"error":"state unavailable"} for every token, the default profile's included.
+- HM-13c (plan 8.4 全部撤銷; contract 4.2): a token a "revoke all" could not revoke (its profile failed; the manager's
+  revoke_fence holds its digest) gets 503 {"error":"state unavailable"} too, whatever its state says now, until a
+  "revoke all" finishes (the next start finishes the unfinished one before anything is served).
   /health/ready (which speaks for the default profile, DQ-19) then answers not ready, as the default app does when its
   state cannot be read; any other path keeps the default app's answer.
 
@@ -70,10 +73,28 @@ the 8081 listener's connections are one bound of the whole add-on (uvicorn's lim
 connections and those of clients without a token too: when it is full, a new connection gets uvicorn's plain-text 503
 whatever its profile; HM-08 review S-5, known since G2 S7). The isolation of one profile from another holds per request.
 
+Every profile's answers not received yet (HM-30; plan 5.2, 5.5; contract 2.4, 5, 6; C2-MF-4, C1-M5): the bytes of
+every answer its app hands to the server are charged to the profile's pending-reply budget (32 MiB each, the default
+profile's included) until the server took them. h11 (uvicorn) takes a message only once what it held before was
+written out (flow control: it waits for its buffer to drain first), so a message stays charged until the request's
+next message was taken or the request ends. An answer that declares its length (a JSON answer: Content-Length) is
+handed over in pieces of REPLY_PIECE, then an empty last message: the bytes on the wire are the same, the server never
+holds more than its own buffer (64 KiB) and one piece of it, and the request ends only once the server took it all. An
+event stream (chunked) is handed over as its app yields it (its framing unchanged); its end waits until the server took
+it. While the profile's charge is at or over its budget, its next tools/call is answered 200 + -32003 under its id
+before it is forwarded (gateway.PENDING_REPLIES; pending_text), one WARNING a minute. The answers already forwarded are
+always processed and handed over (a client that reads its answers in order must never wait for an answer held back),
+so a profile can hold up to its budget plus the answers in flight when it was reached: at most its forwarding slots of
+replies of up to gateway.MAX_RESPONSE as read, charged as the gateway serializes them (ASCII escapes: up to about
+three times as many bytes; contract 5, 6). HM-30 review 2 MF-2: that bound holds because a tools/call is checked
+again once it took its slot (it may have waited in HM-14's queue after the first check), and a relayed JSON reply is
+charged (gateway.PENDING_CHARGE) before it releases its slot, not only once its app hands it over: a call that waited
+for that slot sees it charged. An event stream holds its slot until it ends, so its reply is charged while it does.
+
 The reply mask (plan 5.1 point 8, DQ-40 (a) ⑧): the manager's reply_secrets() gives every profile's app every token
 and child token the add-on holds (make_apps reply_secrets). Not here: the lanes, the -32004/-32005 endings and the
-initialize generation fence themselves (gateway.make_apps, given slot_busy; HM-14), the pending-reply budget and the
-reply worker (HM-30), Origin reporting (HM-27).
+initialize generation fence themselves (gateway.make_apps, given slot_busy; HM-14), the reply worker (HM-30:
+reply_worker.py), Origin reporting (HM-27).
 
 8099 of a switched-on product (AdminDispatcher, HM-10; plan 5.3; contract 3.1-3.3, 3.7; DQ-17, UC-10): the shared
 management pipeline for every path, then the profile. See AdminDispatcher.
@@ -112,6 +133,8 @@ REFUSAL_READ_SECONDS = 2
 REPORT_SECONDS = request_budget.REPORT_SECONDS
 MAX_REPORT_KEYS = request_budget.MAX_REPORT_KEYS
 MiB = 1024 * 1024
+# HM-30: how much of an answer that declares its length the gate hands the server at once (see the module docstring).
+REPLY_PIECE = 64 * 1024
 
 
 # ---- the -32003 texts (HM-14 settles them: HM-08's four as they were, and the reserved slots' and the queue's): which
@@ -141,6 +164,16 @@ def queue_text(queue: int, slots: int, reserved: bool = False) -> str:
             "so this request was not queued or sent. Retry shortly. "
             f"(這個 MCP 網址已經有 {queue} 個請求在排隊等 {slots} 條{chinese}送往 MCP 子程式的連線，這個請求沒有排隊也沒有送出，"
             "請稍後再試。)")
+
+
+def pending_text(limit: int) -> str:
+    """HM-30 (contract 2.4): a tools/call refused because the profile's answers not received yet hold its pending-reply
+    budget; written as HM-14 settled the others (English, then Traditional Chinese; the limit, never a token, a URL, a
+    label or content)."""
+    size = f'{limit / MiB:g} MiB'
+    return (f"The answers of this MCP URL that its clients have not received yet already hold {size}, the limit of its "
+            "profile, so this request was not sent. Retry shortly. "
+            f"(這個 MCP 網址還沒被用戶端收完的回覆已達這個帳號的上限 {size}，這個請求沒有送出，請稍後再試。)")
 
 
 def streams_text(streams: int) -> str:
@@ -175,15 +208,17 @@ def json_content(scope) -> bool:
 
 
 class ProfileGate:
-    """One profile's admission and stream cap on 8081 (see the module docstring); quota is its profiles.ProfileQuota,
-    budget the add-on's request_budget.RequestBudget (budget_share: this profile's share, which its app charges).
-    active and streams are what its requests hold now; beyond, the POSTs it serves beyond its admission (they carry
-    no request: HM-31, MF-2 (b))."""
+    """One profile's admission, stream cap and pending-reply budget on 8081 (see the module docstring); quota is its
+    profiles.ProfileQuota, budget the add-on's request_budget.RequestBudget (budget_share: this profile's share, which
+    its app charges). active and streams are what its requests hold now, reply_bytes its answers handed to the server
+    and not taken by it yet (HM-30); beyond, the POSTs it serves beyond its admission (they carry no request: HM-31,
+    MF-2 (b))."""
 
     def __init__(self, profile_id, quota, budget, reports):
         self.profile_id, self.quota, self.reports = profile_id, quota, reports
         self.name = profiles.log_id(profile_id)
         self.active = self.streams = self.beyond = 0
+        self.reply_bytes = 0  # HM-30: its answers handed to the server and not taken by it yet
         # make_apps slot_busy (HM-08: the busy answer; HM-14: the lanes' queue cap and reserve, and the answers and
         # WARNINGs that name this profile): the profile's app forwards with it.
         self.slot_busy = gateway.SlotBusy(queue=quota.queue, reserve=quota.reserved_notifications,
@@ -227,6 +262,16 @@ class ProfileGate:
         self.warn(('interrupted', stopped), f'the connection to its MCP server broke while it handled a {method} '
                                             f'request ({error}); {cause}; answered -32004')
 
+    def pending_reply(self, message):
+        """gateway.PENDING_REPLIES (HM-30): a tools/call about to be forwarded while this profile's answers not received
+        yet hold its pending-reply budget or more: the busy answer, 200 + -32003 under its id; None: forward it."""
+        limit = self.quota.pending_reply_bytes
+        if self.reply_bytes < limit:
+            return None
+        self.warn('replies', f'its answers not received yet held {limit / MiB:g} MiB, its limit; new tools/call '
+                             'requests were answered busy (-32003) and not sent')
+        return gateway.busy_reply(message, pending_text(limit))
+
     async def serve(self, app, scope, receive, send):
         quota = self.quota
         stream = scope['method'] == 'GET'
@@ -238,11 +283,61 @@ class ProfileGate:
             return await self.beyond_admission(app, scope, receive, send)
         self.active += 1
         self.streams += stream
+        # HM-30: whether the answer declares its length (pieces then change no byte on the wire), and its bytes handed to
+        # the server and not known to be taken by it yet (charged to reply_bytes). HM-30 review 2 MF-2: early, the bytes
+        # the app charged before it handed them over (gateway.PENDING_CHARGE: charged to reply_bytes too, until they
+        # are handed over or the request ends).
+        started = framed = False
+        held = early = 0
+
+        def charge(size):
+            """gateway.PENDING_CHARGE (HM-30 review 2 MF-2): an answer of size bytes the app is about to hand over,
+            charged from now on (before the request's forwarding slot is released)."""
+            nonlocal early
+            early += size
+            self.reply_bytes += size
+
+        async def counted_send(message):
+            nonlocal started, framed
+            if message['type'] == 'http.response.start':
+                started = True
+                framed = any(name.lower() == b'content-length' for name, _ in message.get('headers', ()))
+            elif message['type'] == 'http.response.body' and started:
+                return await hand_over(message)
+            await send(message)
+
+        async def hand_over(message):
+            """HM-30: an answer's body, charged to the profile's answers not received yet until the server took it (the
+            module docstring): what was handed over before it is taken once the server took this message. What the app
+            charged early (charge) covers it as far as it goes."""
+            nonlocal held, early
+            body = message.get('body', b'')
+            earlier = held
+            held += len(body)
+            covered = min(early, len(body))
+            early -= covered
+            self.reply_bytes += len(body) - covered
+            if framed and len(body) > REPLY_PIECE:
+                for start in range(0, len(body), REPLY_PIECE):
+                    await send({'type': 'http.response.body', 'body': body[start:start + REPLY_PIECE],
+                                'more_body': True})
+                if not message.get('more_body', False):
+                    await send({'type': 'http.response.body', 'body': b'', 'more_body': False})
+            else:
+                await send(message)
+            held -= earlier
+            self.reply_bytes -= earlier
+
+        # The app reaches pending_reply and charge through its request's state (Starlette's request.state is
+        # scope['state']); a copy, so nothing is written into the server's own dict.
+        scope = {**scope, 'state': {**scope.get('state', {}), gateway.PENDING_REPLIES: self.pending_reply,
+                                    gateway.PENDING_CHARGE: charge}}
         try:
-            await app(scope, receive, send)
+            await app(scope, receive, counted_send)
         finally:
             self.active -= 1
             self.streams -= stream
+            self.reply_bytes -= held + early
 
     async def beyond_admission(self, app, scope, receive, send):
         """The profile's admission is full (HM-31: HM-14 review MF-2 (b), the PaaS semantics; see the module docstring).
@@ -391,6 +486,8 @@ class McpDispatcher:
         before (plan 5.1 point 2). Unavailable when the index or the default profile's state cannot be trusted."""
         self.manager.check()
         supplied = hashlib.sha256(candidate).digest()
+        if supplied in self.manager.revoke_fence:
+            raise Unavailable()  # HM-13c: a "revoke all" could not revoke it
         found = []
         for entry in self.manager.profiles():
             try:
@@ -439,7 +536,9 @@ GLOBAL_PREFIX = 'profiles'
 class GlobalRoute:
     """One global management path (contract 3.1: X-MCP-Profile is never read there): each method's ProfileAdmin
     handler and whether it takes a JSON body (exactly {"label": <string>}); "{id}" is one path segment, a profile id
-    (the default profile's or 24 lowercase hexadecimal characters: anything else is a fixed 400 at step 5)."""
+    (the default profile's or 24 lowercase hexadecimal characters), "{name}" one, a quarantine directory's name as the
+    API shows it (HM-13c: <id>-<UTC>[-n], profiles.quarantine_directory_name): anything else is a fixed 400 at step 5.
+    The handler gets the segments in their order."""
     template: str
     methods: dict
 
@@ -449,27 +548,45 @@ class GlobalRoute:
 
 # The global paths (contract 3.1), matched in this order (an exact path before "profiles/{id}"); every other path under
 # profiles/ is an unknown operation (404 after the role check, as today). tests/test_admin_pipeline_matrix.py generates
-# its refusal matrix from this table and gateway.PROFILE_OPERATIONS. HM-13c adds revoke-all, restore-record,
-# restore-review and the quarantine directories' deletion here.
+# its refusal matrix from this table and gateway.PROFILE_OPERATIONS. HM-13c: "revoke all", the restore record, a
+# restore review and a quarantine directory's deletion.
 GLOBAL_ROUTES = (
     GlobalRoute('profiles', {'GET': ('list', False), 'POST': ('create', True)}),
     GlobalRoute('profiles/index/quarantine', {'POST': ('quarantine', False)}),
+    GlobalRoute('profiles/revoke-all', {'POST': ('revoke_all', False)}),
+    GlobalRoute('profiles/restore-record', {'GET': ('restore_record', False)}),
+    GlobalRoute('profiles/quarantine/{name}/delete', {'POST': ('delete_quarantined', False)}),
+    GlobalRoute('profiles/{id}/restore-review', {'POST': ('restore_review', False)}),
     GlobalRoute('profiles/{id}', {'PATCH': ('rename', True), 'DELETE': ('delete', False)}),
 )
+PLACEHOLDERS = ('{id}', '{name}')
 
 
 def global_route(operation):
-    """(route, the path's profile id or None) of a global operation; (None, None) for an unknown one under profiles/."""
+    """(route, {placeholder: segment}) of a global operation, in the template's order; (None, {}) for an unknown one
+    under profiles/. A placeholder is one non-empty segment."""
+    wanted = operation.split('/')
     for route in GLOBAL_ROUTES:
-        if '{id}' not in route.template:
-            if operation == route.template:
-                return route, None
+        parts = route.template.split('/')
+        if len(parts) != len(wanted):
             continue
-        prefix = route.template[:-len('{id}')]
-        segment = operation[len(prefix):] if operation.startswith(prefix) else None
-        if segment and '/' not in segment:
-            return route, segment
-    return None, None
+        found = {}
+        for part, segment in zip(parts, wanted):
+            if part in PLACEHOLDERS:
+                if not segment:
+                    break
+                found[part] = segment
+            elif part != segment:
+                break
+        else:
+            return route, found
+    return None, {}
+
+
+def valid_segments(found):
+    """Step 5's check of a global path's segments (no state read): a profile id, a quarantine directory's name."""
+    return (('{id}' not in found or profiles.PROFILE_ID.fullmatch(found['{id}']) is not None)
+            and ('{name}' not in found or profiles.quarantine_directory_name(found['{name}']) is not None))
 
 
 def is_global(operation):
@@ -520,7 +637,7 @@ class AdminDispatcher:
         authority, slots = self.manager.shared.authority, self.manager.shared.slots
         _, operation = gateway.management_operation(request, authority.identity)
         method = request.method
-        route = profile_id = None
+        route, segments = None, {}
         if operation == '__ui__':
             if method in ('PATCH', 'DELETE'):
                 return gateway.method_not_allowed(gateway.MANAGEMENT_METHODS)
@@ -528,7 +645,7 @@ class AdminDispatcher:
                 raise BadRequest(404)
             takes_json = False
         elif is_global(operation):
-            route, profile_id = global_route(operation)
+            route, segments = global_route(operation)
             takes_json = route is not None and route.methods.get(method, (None, False))[1]
         else:
             takes_json = operation in gateway.JSON_OPERATIONS and method == 'PUT'
@@ -541,7 +658,7 @@ class AdminDispatcher:
                 if takes_json and (not isinstance(value, dict) or set(value) != {'label'}
                                    or not isinstance(value['label'], str)):
                     raise BadRequest()
-                if profile_id is not None and not profiles.PROFILE_ID.fullmatch(profile_id):
+                if not valid_segments(segments):
                     raise BadRequest()
             elif operation != '__ui__' and not is_global(operation) and method in ('PATCH', 'DELETE'):
                 return gateway.method_not_allowed(gateway.MANAGEMENT_METHODS)
@@ -554,7 +671,7 @@ class AdminDispatcher:
                     return Response(status_code=404)  # an unknown operation, as a profile's action answers it
                 handler = getattr(self.admin, route.methods[method][0])
                 call = Call(request, user, value, peer_disconnected, committed)
-                return await (handler(call) if profile_id is None else handler(call, profile_id))
+                return await handler(call, *segments.values())
             entry = (self.manager.get(profiles.DEFAULT_PROFILE) if operation == '__ui__'
                      else self.profile(request))  # step 7
             return await entry.runtime.admin_action(request, user, base, csrf, value, peer_disconnected, committed)

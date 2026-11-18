@@ -15,6 +15,7 @@ import hashlib
 import hmac
 from http import HTTPStatus
 import json
+import logging
 import re
 import secrets
 import time
@@ -41,9 +42,18 @@ from .admin_auth import AdminAuthority, BadRequest, prefix
 from .capabilities import ManagementOptions, capability_snapshot, observe_tools, tool_catalog
 from .request_limits import DEFAULT_MAX_TOTAL_ELEMENTS, McpRequestLimits, RequestLimitError
 from .operations import OperationJournal, KINDS as OPERATION_KINDS, RESULTS as OPERATION_RESULTS, TTL_MS
+from .reply_worker import WorkerStopped, breathe, encoded
 # HM-05 (contract 1.1): a profile's id, the default profile's or 24 lowercase hexadecimal characters; HM-08: the one
 # grammar, profiles.PROFILE_ID.
-from .profiles import PROFILE_ID
+from .profiles import PROFILE_ID, log_id
+
+logger = logging.getLogger(__name__)
+# HM-12 (DQ-40 ⑨; contract 4.1): a switched-on product's backend/patch that moves a URL to another origin without the
+# secrets it takes there (backend_edit.new_origin_refused). The PaaS Headscale code, in HA's shape for a new code.
+NEW_ORIGIN_SECRET = "CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN"
+# HM-12: what the add-on log says when a switched-on backend identity change fails (one line per failure; the profile
+# by profiles.log_id, never a token, URL, label or credential).
+REBIND_WARNING = "multi-profile: the backend identity change of profile "
 
 # 0.2.0: 16 MiB (was 256 KiB). The full Nextcloud surface uploads up to 10 MiB as base64 (about 13.4 MiB of JSON) and
 # writes text files up to 1 MiB; a body is read only after the token check. BODY_SECONDS bounds the read.
@@ -80,6 +90,12 @@ SSE_COMMENT = re.compile(rb":[\x20-\x7e]{0,1024}")
 # it and any progress event is unsolicited child text (the pinned TS client puts unknown-token progress into an error
 # message); log messages and resource updates carry child text or name surfaces the gateway never exposes.
 LIST_CHANGED = b'data: {"jsonrpc":"2.0","method":"notifications/tools/list_changed"}'
+# HM-30: what make_apps' relayed_event makes of an event besides a line to relay: not relayed, or the stream ends.
+SKIP_EVENT, END_STREAM = "skip", "end"
+# HM-30 D1: an event whose frame is larger than this is framed (sse_frame, sse_data), processed and built into the
+# bytes it is relayed as on the reply worker, not on the loop (each of those steps copies or scans the whole frame:
+# 35 to 50 ms for an 8 MiB event on the EPYC 7713); a smaller one is framed on the loop, as before.
+WORKER_FRAME_BYTES = 64 * 1024
 # 0.1.5 (R1 #6): the pinned TS client puts an unsupported protocolVersion into an error, so no child text may pass.
 # 0.1.8 (review 6b): only the reviewed MCP revisions, not any date. The pinned children negotiate within this set,
 # except n8n-mcp, which echoes "2024-06-25" to a client that asks for it: that initialize is now refused (502).
@@ -119,6 +135,18 @@ STREAM_RETRY_AFTER = 30
 # the body as read (a declared Content-Length before a byte is read) and as forwarded to the child (HM-08 review MF-1,
 # S-1). It replaces HM-08's FORWARDED_BODY: one budget, switched on or off.
 BODY_RESERVATION = "body_reservation"
+# HM-30 (contract 2.4, 6): the request state's name for a switched-on product's check of the profile's answers not
+# received yet (profile_router.ProfileGate puts it there). Before a tools/call is forwarded (before it takes or waits
+# for a forwarding slot), serve() calls it with the message: None forwards it, anything else is the answer instead
+# (the profile's pending-reply budget is used up: 200 + -32003 under its id). HM-30 review 2 MF-2: called again once the
+# tools/call took its slot (it may have waited in HM-14's queue meanwhile), right before it is forwarded.
+PENDING_REPLIES = "pending_replies"
+# HM-30 review 2 MF-2 (contract 2.4, 5): the request state's name for a switched-on product's early charge of a relayed
+# JSON reply (profile_router.ProfileGate puts it there): serve() calls it with the bytes of the answer the reply worker
+# made, before the request's forwarding slot is released (the slot goes as the reply is handed back, before the
+# server took a byte of it); the profile's gate counts them as its answers not received yet from then on, and against
+# what its app hands the server later. A tools/call that waited for that slot is then refused by the check above.
+PENDING_CHARGE = "pending_charge"
 # HM-14 (contract 2.4, 2.5; the PaaS gateway's codes, texts and timings, woow-mcp-server 69ac425 proxy.py, mcp_access.py,
 # gateway_pool.py), for a switched-on product only (make_apps slot_busy given): a child whose connection broke while it
 # handled a request (-32004) and a token rotated or revoked after an answer began to go out (-32005).
@@ -412,9 +440,13 @@ def child_status_reply(ident, status, headers):
 
 def json_reply(value, status, headers):
     """Re-serialized JSON with ASCII escapes, so a lone surrogate from a child cannot make the reply unencodable."""
+    return encoded_reply(json.dumps(value, separators=(",", ":")).encode(), status, headers)
+
+
+def encoded_reply(body, status, headers):
+    """HM-30: json_reply's answer for a body already serialized as json_reply serializes it (the reply worker's)."""
     headers = {k: v for k, v in headers.items() if k != "content-type"}
-    return Response(json.dumps(value, separators=(",", ":")).encode(), status_code=status,
-                    media_type="application/json", headers=headers)
+    return Response(body, status_code=status, media_type="application/json", headers=headers)
 RoleVerifier = Callable[[str], Awaitable[bool]]
 # HM-05 (multi-profile plan 5.3): the shared management pipeline make_apps can be given (admin_pipeline): it takes one
 # management request with the profile's action and answers it.
@@ -828,7 +860,12 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               child_blocked: Callable[[], str | None] | None = None,
               default_endpoint: Callable[[], str | None] | None = None,
               bootstrap_fields: Callable[[], dict] | None = None,
-              body_budget: request_budget.Share | None = None):
+              body_budget: request_budget.Share | None = None,
+              stop_child: Callable[[], Awaitable] | None = None,
+              reply_worker=None,
+              dormant_profiles: int | None = None,
+              restore_notice=None,
+              review_required: Callable[[], bool] | None = None):
     """listing (0.2.2): the product's tools/list tools as its child lists them (surface.listing). With it, a client
     connects whatever the backend's state: when no child can answer (no backend configured, so no child; a child that is
     not up) the gateway answers initialize, notifications/initialized, ping and tools/list itself, from listing through
@@ -920,7 +957,66 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     - a POST body too deep (over 64 levels), with too many elements (over 200,000) or not UTF-8 is refused before it
       is parsed (request_limits.too_complex: 200 + -32602 under its id when its head or tail shows it, else 413).
     - each refusal writes one WARNING per profile and situation a minute (body_budget's warn), never content or a
-      token."""
+      token.
+
+    HM-12 (multi-profile plan 9 Odoo row, 12.3 HM-12; DQ-05, DQ-40 ⑨ (a); contract 3.1, 4.1, section 9 #40, #41 and
+    HM-12's rows; I11), only once the product is switched on; switched off, every answer stays as before:
+    - stop_child: stops this profile's child, from then on until backend_changed relaunches it
+      (ProfileRuntime.stop_child); a failure raises. Left out (no child of its own), nothing is stopped.
+    - backend, backend/patch of an identity-bound product (products.identity_rebound: Odoo's url, database or username
+      changed, a cleared connection included, while the token is active and a complete connection is saved) are done
+      in this order: the old child is stopped (stop_child), one durable write holds the new connection, a new token
+      and its history entry (ProductStore.rebind), the token change is published (token_access.committed(): every
+      request of the old token ends, on both paths), then the child is started on what was written (backend_changed).
+      200 {"saved": true, "token_rotated": true, "configuration": ...} with the new state's ETag, never the token. A
+      stop that fails writes nothing (503 request denied). A write that fails, whatever it raises, answers today's 503
+      state unavailable, and what is on disk decides the rest: the old token still there (the store refused the write,
+      or it failed before the state file was replaced), nothing was written, the child is relaunched on the saved
+      state and the old token is still served; else (the store poisoned once the state file was being replaced: 503
+      until the add-on restarts; or a new token on disk) nothing is relaunched, since a new token may be on disk. A new
+      child that does not start: shape D with "token_rotated": true. Each failure writes one WARNING (REBIND_WARNING).
+      A first setup, a password change alone or a revoked token: as before (no token_rotated).
+    - backend/patch that moves a stored URL to another origin without bringing the secrets that URL takes there (every
+      product; backend_edit.new_origin_refused): 422 {"error":"request denied","detail":{"code":
+      "CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN"}}, after If-Match and backend_fixed, nothing written.
+
+    HM-30 (multi-profile plan 5.5; contract 6; §8.8 #17), likewise only for a switched-on product:
+    - reply_worker: this profile's turn on the add-on's reply worker (reply_worker.Lane). Every relayed JSON reply and
+      every event with data of a relayed event stream is then processed there, not on the event loop: what it needs
+      of the store (the state, the masks) is read on the loop when it is handed over, the worker runs only the pure
+      steps (strict_json, the reply checks, redact_secrets, filter_list, json.dumps: relayed_reply and relayed_event,
+      the very functions the loop runs when it is left out, with the worker's checkpoints, reply_worker.breathe, in the
+      parser and between the steps; D1: json.dumps in pieces, reply_worker.encoded, the values let go of in pieces,
+      redact_secrets breathing too; an event larger than WORKER_FRAME_BYTES is framed there as well, relayed_frame),
+      and the answer is byte for byte the same. D3: each piece of the child's reply is read with one state read
+      (chunks, TokenLease.run checked). A job the worker can no longer take
+      (WorkerStopped) is answered as a reply the gateway cannot process (502; an event stream ends). Left out: every
+      reply is processed on the loop, as before (no checkpoint).
+    A switched-on product's dispatcher also gives a tools/call the check of the profile's answers not received yet,
+    through the request's state (PENDING_REPLIES; profile_router.ProfileGate): no make_apps option. HM-30 review 2
+    MF-2: the check runs before the slot and again once the call holds it, and a relayed JSON reply is charged
+    (PENDING_CHARGE) before its slot is released.
+
+    HM-13b (multi-profile plan 3.3; contract 1.2, 3.6; not gated): dormant_profiles, given only for a product that is
+    not switched on but has profile data on disk: how many profile directories its boot guard left revoked
+    (restore_lock.Outcome.dormant); the bootstrap carries it as "dormant_profiles" (the panel's "休眠帳號 N 個，權杖已撤銷",
+    HM-13c). Left out (every installation without profile data): the bootstrap is as before, byte for byte.
+
+    HM-13c (the owner's decision of 2026-11-16 on the HM-13b review's Q-1: DQ-03 (b) as written; contract 1.2, 3.6,
+    4.1), not gated:
+    - restore_notice: given only when this start found the boot guard's restore notice (restore_lock.Notice: a restore
+      kept the default profile's token, back at its value at the time of the backup), for the default profile only.
+      The bootstrap carries its view() as "restore_notice" ({"at": <UTC seconds>}) until this profile's token changes:
+      a token/rotate, a token/revoke that revoked it, or (switched on) HM-12's identity change that rotated it clears it
+      (restore-notice.json removed). Nothing else changes: the token stays as restored. Left out (every installation
+      that was never restored), every answer is as before, byte for byte.
+    - review_required: given for a switched-on profile only (ProfileAdmin.review_required): a token/rotate while it says
+      so answers 409 restore_review_required after the If-Match and Idempotency-Key checks, before anything is written
+      (no receipt); ConfigError (the restore record cannot be used) answers 503 state unavailable. HM-13c review S-3:
+      HM-12's identity change (backend, backend/patch that would rotate the token: products.identity_rebound) is a
+      new token too, so it answers the same while the gate says so, after If-Match and the new-origin check (422) and
+      before anything is done (the child is not stopped, nothing is written or published). A save that rotates nothing
+      (a password alone, a first setup, a revoked token) is not gated."""
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
@@ -955,6 +1051,19 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         raise ValueError("invalid bootstrap fields")
     if body_budget is not None and not isinstance(body_budget, request_budget.Share):
         raise ValueError("invalid request budget")
+    if stop_child is not None and not callable(stop_child):
+        raise ValueError("invalid child stop")
+    if reply_worker is not None and not callable(getattr(reply_worker, "run", None)):
+        raise ValueError("invalid reply worker")
+    if dormant_profiles is not None and (type(dormant_profiles) is not int or dormant_profiles < 0
+                                         or profile_view is not None):
+        raise ValueError("invalid dormant profiles")
+    if restore_notice is not None and not (callable(getattr(restore_notice, "view", None))
+                                           and callable(getattr(restore_notice, "clear", None))
+                                           and default_endpoint is None):
+        raise ValueError("invalid restore notice")
+    if review_required is not None and not callable(review_required):
+        raise ValueError("invalid review gate")
     n8n_request_bounds = getattr(store, "product", None) == "n8n"
     # HM-31: the add-on's request body budget (this profile's share) and the single-request ceiling it is charged up to
     budget_share = request_budget.own_share(getattr(store, "product", None)) if body_budget is None else body_budget
@@ -991,6 +1100,139 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
 
     def others():
         return {value for value in reply_secrets() if isinstance(value, str) and len(value) >= redact.MIN_SECRET}
+
+    def relayed_reply(raw, ident, method, state_of, masks_of, checkpoint=None, parsed=None):
+        """A relayed JSON reply (HM-30: the same steps on the loop and on the reply worker): raw parsed (strict JSON),
+        the reply to this request (exactly one of result and error, under the request's id: else ValueError), masked
+        with masks_of(state) and filtered on state, state_of()'s answer (read after the parse, as before). checkpoint
+        (the reply worker's breathe) is called in the parser and between the steps; on the loop there is none. parsed
+        (D1, the worker's): a list the parsed value is put in, for the worker to let go of it in pieces (released)."""
+        # D1: the worker parses the bytes it was handed as they are (json.loads takes a bytearray as it takes bytes): no
+        # copy of an 8 MiB reply in one call first
+        value = strict_json(bytes(raw)) if checkpoint is None else strict_json(raw, checkpoint=checkpoint)
+        if parsed is not None:
+            parsed.append(value)
+        if not (one_reply(value) and same_id(value.get("id"), ident)):
+            raise ValueError("not this request's reply")
+        current = state_of()
+        if checkpoint is not None:
+            checkpoint()
+        # 0.2.0: backend errors carry their own text; no credential the add-on holds leaves
+        if checkpoint is None:
+            return filter_list(redact.redact_secrets(gateway_reply(value, method), masks_of(current)), tools, current)
+        return filter_list(redact.redact_secrets(gateway_reply(value, method), masks_of(current), checkpoint), tools,
+                           current)  # D1: the worker breathes while it masks
+
+    def relayed_event(payload, request, state_of, masks_of, checkpoint=None, head=None):
+        """One SSE event's data as a stream relays it (HM-30: the same steps on the loop and on the reply worker).
+        request is the (id, method) of the POST the stream answers, None for a GET stream. SKIP_EVENT: not relayed;
+        END_STREAM: the stream ends there; else (the data line, whether it is the reply, which ends the stream).
+        ValueError, ConfigError (state_of), RecursionError: the stream ends there too. checkpoint: as relayed_reply.
+        head (D1, the worker's for a large event, relayed_frame): the event's lines before its data line; the reply's
+        line is then the whole event (head, the data line, its end), made in one copy."""
+        value = strict_json(payload) if checkpoint is None else strict_json(payload, checkpoint=checkpoint)
+        if not isinstance(value, dict):
+            return END_STREAM  # a batch: never sent by the gateway, never filtered element by element
+        if "method" in value:
+            if "id" in value or value["method"] != "notifications/tools/list_changed":
+                return SKIP_EVENT  # a server-to-client request (elicitation, sampling, roots: the client could not
+                # answer it through the gateway) or a notification other than 0.1.4's one
+            return LIST_CHANGED, False
+        if "result" not in value and "error" not in value:
+            return SKIP_EVENT  # not a reply: never relayed as one
+        if not one_reply(value):
+            return END_STREAM  # both result and error: malformed, never relayed, never guessed
+        if request is None or not same_id(value.get("id"), request[0]):
+            # 0.1.5: a reply to another request (the TS client reports it with its text). A GET stream carries no
+            # reply at all (R1 #2): MCP allows one only when resuming a stream, and no pinned child keeps an event store.
+            return SKIP_EVENT
+        if checkpoint is not None:
+            checkpoint()
+        # 0.2.0: backend errors carry their own text; no credential the add-on holds leaves
+        if checkpoint is None:
+            checked = redact.redact_secrets(gateway_reply(value, request[1]), masks_of(state_of()))
+        else:
+            checked = redact.redact_secrets(gateway_reply(value, request[1]), masks_of(state_of()), checkpoint)
+        if isinstance(checked.get("result"), dict) and {"tools", "capabilities"} & checked["result"].keys():
+            checked = filter_list(checked, tools, state_of())
+        if checkpoint is None:
+            return b"data: " + json.dumps(checked, separators=(",", ":")).encode(), True
+        checkpoint()
+        # D1: the same bytes, in pieces; the parsed and the masked value let go of in pieces once encoded
+        return encoded(checked, checkpoint, prefix=(head or b"") + b"data: ",
+                       suffix=b"\n\n" if head is not None else b"", release=releasable(checked), twin=value), True
+
+    def prepared():
+        """HM-30: what a job of the reply worker needs of the store, read on the loop when the job is handed over (the
+        worker never reads it): the state and its masks, or the ConfigError the job raises where the loop's own read
+        of the state would have raised it (after the reply's checks)."""
+        try:
+            current = store.load()
+        except ConfigError as error:
+            return error
+        return current, masks(current)
+
+    def prepared_reads(found):
+        """state_of and masks_of for what prepared() found."""
+        def state_of():
+            if isinstance(found, ConfigError):
+                raise found
+            return found[0]
+
+        def masks_of(_):
+            return found[1]
+        return state_of, masks_of
+
+    def releasable(value):
+        """D1: whether the worker may let go of a reply's value in pieces: everything in it is the gateway's own copy
+        (strict_json's and redact_secrets' objects), unless filter_list rebuilt a tool list in it (its tools hold the
+        policy's own schemas)."""
+        result = value.get("result")
+        return not (isinstance(result, dict) and "tools" in result)
+
+    def worker_reply(raw, ident, method, found):
+        """HM-30, on the reply worker: relayed_reply (with the worker's checkpoints), then json_reply's serialization
+        (D1: reply_worker.encoded, the same bytes in pieces; the parsed and the masked value let go of in pieces)."""
+        parsed = []
+        value = relayed_reply(raw, ident, method, *prepared_reads(found), checkpoint=breathe, parsed=parsed)
+        breathe()
+        return encoded(value, breathe, release=releasable(value), twin=parsed[0])
+
+    def worker_event(payload, request, found):
+        """HM-30, on the reply worker: relayed_event (with the worker's checkpoints)."""
+        return relayed_event(payload, request, *prepared_reads(found), checkpoint=breathe)
+
+    def relayed_frame(frame, request, state_of, masks_of, checkpoint=None):
+        """HM-30 D1, on the reply worker: one SSE event from its frame (the boundary removed) to the bytes it is relayed
+        as, the steps stream() takes on the loop, in their order (sse_frame, sse_data, an empty event kept empty,
+        relayed_event, the kept lines and the data line joined): END_STREAM, SKIP_EVENT, or (the event, None when it
+        has no line; whether it is the reply). ValueError, ConfigError, RecursionError: as relayed_event's."""
+        parsed = sse_frame(frame)
+        if parsed is None:
+            return END_STREAM
+        kept, data_lines = parsed
+        payload = sse_data(data_lines)
+        final = False
+        if data_lines and not payload.strip():
+            data_lines = [b"data:"]  # an empty (priming) event stays empty
+        elif data_lines:
+            head = b"\n".join(kept) + b"\n" if kept else b""
+            outcome = relayed_event(payload, request, state_of, masks_of, checkpoint, head=head)
+            if outcome == END_STREAM or outcome == SKIP_EVENT:
+                return outcome
+            line, final = outcome
+            if final:
+                return line, final  # the whole event already (relayed_event head): the same bytes, one copy
+            data_lines = [line]
+        lines = kept + data_lines
+        return (b"\n".join(lines) + b"\n\n" if lines else None), final
+
+    def worker_frame(pending, end, request, found):
+        """HM-30 D1, on the reply worker: a large event, its frame pending's first `end` bytes (the loop leaves pending
+        alone until the job ended), copied out and relayed here (relayed_frame, with the worker's checkpoints)."""
+        frame = bytes(memoryview(pending)[:end])
+        breathe()
+        return relayed_frame(frame, request, *prepared_reads(found), checkpoint=breathe)
 
     def snapshot():
         return health() if health else {"management": "alive", "child": {"state": "not_started", "transport_ready": False}, "backend": "unconfigured"}
@@ -1054,6 +1296,69 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     def capabilities(state, catalog):
         return capability_snapshot(management, state, snapshot(), catalog, can_test=backend_check is not None,
                                    can_restart=restart_child is not None, logs=diagnostics is not None)
+
+    def profile_name():
+        """How this profile's log lines name it (profiles.log_id): the echo's id, 'default' without an echo."""
+        return log_id(profile_echo(profile_view())["id"] if profile_view is not None else "default")
+
+    async def relaunch_saved(state):
+        """HM-12: the child relaunched on the saved state after a failed identity change: the outcome's words."""
+        if backend_changed is None:
+            return "it has no child to relaunch"
+        try:
+            await backend_changed(state)
+        except Exception:
+            return "its child could not be relaunched"
+        return "its child was relaunched on the saved connection"
+
+    async def rebind_identity(state, changes, headers, committed):
+        """HM-12 (see make_apps): a switched-on profile's backend saved under another identity: stop, one write,
+        publish, start. Called after every check of step 11 and holding the profile's mutation_lock throughout."""
+        committed.set()  # the transition is owned from here: a client gone cancels none of its steps
+        try:
+            if stop_child is not None:
+                await stop_child()
+        except Exception:
+            outcome = await relaunch_saved(state)
+            logger.warning("%s%s was not saved: its child could not be stopped; %s", REBIND_WARNING, profile_name(),
+                           outcome)
+            raise BadRequest(503) from None
+        try:
+            updated = store.rebind(changes, secrets.token_urlsafe(32))
+        except Exception:
+            # Whatever was raised, what is on disk decides (HM-12 review S-5). The old token still on disk: nothing was
+            # written (the store refused it, the new file could not be made, or it raised before writing), so the old
+            # child is relaunched on the saved state and the old token is still served. A store poisoned once the state
+            # file was being replaced, or a new token on disk although the write raised (a failure after the rename
+            # that left the store usable): a new token may be on disk, so no child runs on the old credentials (UC-21);
+            # the store stays as it is (a poisoned one fails closed) and the add-on's restart reads what is on disk.
+            try:
+                kept = store.load().token == state.token
+            except ConfigError:
+                kept = False
+            if kept:
+                outcome = await relaunch_saved(state)
+                logger.warning("%s%s was not saved: the new state could not be written; %s", REBIND_WARNING,
+                               profile_name(), outcome)
+            else:
+                logger.warning("%s%s failed while its state file was being replaced: whether it was saved is unknown, "
+                               "so its child stays stopped until the add-on restarts and reads the state on disk",
+                               REBIND_WARNING, profile_name())
+            raise ConfigError("state unavailable") from None  # today's fixed 503, whatever was raised
+        token_access.committed()
+        if restore_notice is not None:
+            restore_notice.clear()  # HM-13c: the token is not the backup's any more (as after a token/rotate)
+        headers['ETag'] = configuration.etag(updated)
+        body = {"saved": True, "token_rotated": True}
+        if backend_changed:
+            try:
+                await backend_changed(updated)
+            except Exception:
+                # Saved: the new token is the profile's; the old child (old credentials) is never started again.
+                return JSONResponse({**body, 'detail': {'code': 'config_apply_failed'},
+                                     'configuration': configuration.snapshot(updated)}, status_code=503,
+                                    headers=headers)
+        return JSONResponse({**body, 'configuration': configuration.snapshot(updated)}, headers=headers)
 
     authority = AdminAuthority(verify_admin) if authority is None else authority
     admin_identity = authority.identity
@@ -1227,7 +1532,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                                   "operation_parameter": v.selector, "legacy_write": v.legacy_write,
                                   "default_operation": v.default_operation,
                                   "operations": [{"name": op, "write": op in v.write_operations} for op in v.operations],
-                                  "inputSchema": schemas.get(k) or v.arguments.model_json_schema()} for k, v in tools.items()}, "health": snapshot()}, headers=headers)
+                                  "inputSchema": schemas.get(k) or v.arguments.model_json_schema()} for k, v in tools.items()}, "health": snapshot(),
+                    **({"dormant_profiles": dormant_profiles} if dormant_profiles is not None else {}),
+                    **({"restore_notice": restore_view} if (restore_view := None if restore_notice is None
+                                                            else restore_notice.view()) is not None else {})},
+                    headers=headers)
             if name == "configuration" and request.method == "GET":
                 return JSONResponse({'configuration': configuration.snapshot(state)}, headers=headers)
             if name == "capabilities" and request.method == "GET":
@@ -1270,6 +1579,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             if name == "token/reveal" and request.method == "POST":
                 return JSONResponse({"token": store.load().token}, headers=headers)
             if name == "token/rotate" and request.method == "POST":
+                if review_required is not None and review_required():
+                    # HM-13c: a profile whose token the boot guard revoked gets a new one only once it was reviewed.
+                    raise BadRequest(409, {'code': 'restore_review_required'})
                 begin_operation()
                 new_token = secrets.token_urlsafe(32)
                 try:
@@ -1278,6 +1590,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 except (OSError, ConfigError):
                     raise BadRequest(409, {'code': 'operation_outcome_unknown'}) from None
                 token_access.committed()
+                if restore_notice is not None:
+                    restore_notice.clear()  # HM-13c: the token is not the backup's any more
                 return JSONResponse({**finish_operation(updated), "token": updated.token}, headers=headers)
             if name == "token/revoke" and request.method == "POST":
                 begin_operation()
@@ -1291,6 +1605,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     raise BadRequest(409, {'code': 'operation_outcome_unknown'}) from None
                 if changed:
                     token_access.committed()
+                    if restore_notice is not None:
+                        restore_notice.clear()  # HM-13c: the backup's token is revoked now
                 return JSONResponse(finish_operation(updated), headers=headers)
             if notice_action:
                 # Owner decision 2026-10-27: restore the faithful pre-upgrade limits, or keep the defaults (dismiss).
@@ -1320,6 +1636,17 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 if name == "endpoint" and default_endpoint is not None:
                     # HM-10 (DQ-13): the add-on has one endpoint, stored in the default profile's state.
                     raise BadRequest(409, {"code": "endpoint_global"})
+                if name in ("backend", "backend/patch"):
+                    from .backend_edit import new_origin_refused
+                    from .products import identity_rebound
+                    if name == "backend/patch" and new_origin_refused(state, candidate, value):
+                        # HM-12 (DQ-40 ⑨): a stored credential never follows a URL to another server unasked
+                        raise BadRequest(422, {"code": NEW_ORIGIN_SECRET})
+                    if identity_rebound(state, candidate):
+                        if review_required is not None and review_required():
+                            # HM-13c review S-3: a new token waits for the profile's restore review, as on token/rotate
+                            raise BadRequest(409, {'code': 'restore_review_required'})
+                        return await rebind_identity(state, changes, headers, committed)
                 updated = store.update(**changes)
                 # No yield between durable commit and lifecycle ownership transfer.
                 # An authorized mutation is not undone by losing its HTTP caller.
@@ -1394,7 +1721,12 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             return False
 
     async def chunks(owner, lease, seconds=None):
-        """Bound total bytes/time (seconds, default STREAM_SECONDS); poll revocation even while upstream is idle."""
+        """Bound total bytes/time (seconds, default STREAM_SECONDS); poll revocation even while upstream is idle.
+
+        HM-30 D3 (contract 6), only for a switched-on product (reply_worker given): each piece is read under the lease
+        without checking it again first (TokenLease.run checked): the check that ended the lease's previous operation
+        (the child's headers, then each piece) is the one before the next piece, and whatever changed since stops the
+        piece before it is used (one state read a piece, not three). Left out, as before."""
         iterator = owner.iterator = owner.response.aiter_bytes()
         total = 0
         try:
@@ -1404,7 +1736,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         owner.reader = asyncio.create_task(anext(iterator))
                         return await owner.reader
                     try:
-                        chunk = await lease.run(read_one)
+                        chunk = await (lease.run(read_one) if reply_worker is None else
+                                       lease.run(read_one, checked=True))
                     except StopAsyncIteration:
                         return
                     total += len(chunk)
@@ -1501,48 +1834,56 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             start = max(0, len(pending) - 3)  # only new bytes, plus a boundary split across chunks
             pending.extend(chunk)
             while match := EVENT_BOUNDARY.search(pending, start):
-                parsed = sse_frame(bytes(pending[:match.start()]))
-                del pending[:match.end()]
-                start = 0
-                if parsed is None:
-                    return
-                kept, data_lines = parsed
-                payload = sse_data(data_lines)
-                final = False
-                if data_lines and not payload.strip():
-                    data_lines = [b"data:"]  # an empty (priming) event stays empty
-                elif data_lines:
+                if reply_worker is not None and match.start() > WORKER_FRAME_BYTES:
+                    # HM-30 D1: a large event is framed, processed and built on the reply worker, in this profile's
+                    # turn (relayed_frame: the steps below, the same bytes); the state for a POST stream's reply is read
+                    # here, on the loop. pending stays as it is until the job ended.
+                    end = match.start()
+                    found = None if request is None else prepared()
                     try:
-                        value = strict_json(payload)
-                        if not isinstance(value, dict):
-                            return  # a batch: never sent by the gateway, never filtered element by element
-                        if "method" in value:
-                            if "id" in value or value["method"] != "notifications/tools/list_changed":
-                                continue  # a server-to-client request (elicitation, sampling, roots: the client
-                                # could not answer it through the gateway) or a notification other than 0.1.4's one
-                            data_lines = [LIST_CHANGED]
-                        elif "result" not in value and "error" not in value:
-                            continue  # not a reply: never relayed as one
-                        elif not one_reply(value):
-                            return  # both result and error: malformed, never relayed, never guessed
-                        elif request is None or not same_id(value.get("id"), request[0]):
-                            # 0.1.5: a reply to another request (the TS client reports it with its text). A GET
-                            # stream carries no reply at all (R1 #2): MCP allows one only when resuming a stream,
-                            # and no pinned child keeps an event store.
-                            continue
-                        else:
-                            # 0.2.0: backend errors carry their own text; no credential the add-on holds leaves
-                            checked = redact.redact_secrets(gateway_reply(value, request[1]), masks(store.load()))
-                            if (isinstance(checked.get("result"), dict)
-                                    and {"tools", "capabilities"} & checked["result"].keys()):
-                                checked = filter_list(checked, tools, store.load())
-                            data_lines = [b"data: " + json.dumps(checked, separators=(",", ":")).encode()]
-                            final = True  # R1 #1: the reply ends the stream (MCP: the server SHOULD close it)
-                    except (ValueError, ConfigError, RecursionError):
+                        outcome = await lease.run(lambda: reply_worker.run(worker_frame, pending, end, request, found))
+                    except (ValueError, ConfigError, RecursionError, WorkerStopped):
                         return
-                lines = kept + data_lines
-                if lines:
-                    event = b"\n".join(lines) + b"\n\n"
+                    del pending[:match.end()]
+                    start = 0
+                    if outcome == END_STREAM:
+                        return
+                    if outcome == SKIP_EVENT:
+                        continue
+                    event, final = outcome
+                else:
+                    parsed = sse_frame(bytes(pending[:match.start()]))
+                    del pending[:match.end()]
+                    start = 0
+                    if parsed is None:
+                        return
+                    kept, data_lines = parsed
+                    payload = sse_data(data_lines)
+                    final = False
+                    if data_lines and not payload.strip():
+                        data_lines = [b"data:"]  # an empty (priming) event stays empty
+                    elif data_lines:
+                        try:
+                            if reply_worker is None:
+                                outcome = relayed_event(payload, request, store.load, masks)
+                            else:
+                                # HM-30: processed on the add-on's reply worker, in this profile's turn; the state for
+                                # a POST stream's reply is read here, on the loop (a GET stream relays no reply).
+                                found = None if request is None else prepared()
+                                outcome = await lease.run(lambda: reply_worker.run(worker_event, payload, request,
+                                                                                   found))
+                        except (ValueError, ConfigError, RecursionError, WorkerStopped):
+                            return
+                        if outcome == END_STREAM:
+                            return
+                        if outcome == SKIP_EVENT:
+                            continue
+                        # final, R1 #1: the reply ends the stream (MCP: the server SHOULD close it)
+                        line, final = outcome
+                        data_lines = [line]
+                    lines = kept + data_lines
+                    event = b"\n".join(lines) + b"\n\n" if lines else None
+                if event is not None:
                     if final:
                         owner.reply_event = event  # HM-14: an Ending knows the reply by it (delivered or not)
                     yield event
@@ -1867,6 +2208,16 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             answer = without_child()
             if answer is not None:
                 return answer
+        pending = None
+        if request.method == "POST" and method == "tools/call":
+            pending = getattr(request.state, PENDING_REPLIES, None)
+            if pending is not None:
+                # HM-30 (contract 2.4, 6): switched on, a profile whose answers not received yet hold its pending-reply
+                # budget gets its next tools/call answered busy by its gate, before a slot or the child (before HM-14's
+                # lanes too: a tools/call refused for its pending replies never queues for a slot first).
+                answer = pending(message)
+                if answer is not None:
+                    return answer
         if lanes is None:
             try:
                 async with asyncio.timeout(FORWARD_WAIT_SECONDS):
@@ -1903,6 +2254,14 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     return tool_refusal(message["id"], refused_call)
                 except Denied:
                     raise BadRequest(403) from None
+                if pending is not None:
+                    # HM-30 review 2 MF-2 (contract 2.4, 5): checked again now that the call holds its slot. It passed
+                    # the check above before it waited for the slot; meanwhile the replies of the calls that held the
+                    # slots were charged (PENDING_CHARGE) as they released them. Refused here, it is never forwarded
+                    # (the slot is released by the finally below).
+                    answer = pending(message)
+                    if answer is not None:
+                        return answer
                 forwarded = message
                 if method == "initialize" and isinstance(message.get("params"), dict):
                     # The gateway answers no server-to-client requests (sampling, elicitation, roots): the
@@ -2054,19 +2413,30 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     raise refused()
                 if lanes is not None and owner.interrupted is not None:
                     return await interrupted_answer(owner, request, message, owner.interrupted)  # HM-14
+                if reply_worker is None:
+                    try:
+                        if owner.overflowed:
+                            raise ValueError("oversize reply")
+                        value = relayed_reply(result, message.get("id"), method, store.load, masks)
+                    except (ValueError, RecursionError):
+                        raise BadRequest(502) from None
+                    return json_reply(value, 200, response_headers)
+                # HM-30: processed on the add-on's reply worker, in this profile's turn (the state and masks read here,
+                # on the loop); the same steps, so the same bytes. A job it can no longer take is a 502 as well.
                 try:
                     if owner.overflowed:
                         raise ValueError("oversize reply")
-                    value = strict_json(bytes(result))
-                    if not (one_reply(value) and same_id(value.get("id"), message.get("id"))):
-                        raise ValueError("not this request's reply")
-                    current = store.load()
-                    # 0.2.0: backend errors carry their own text; no credential the add-on holds leaves
-                    value = filter_list(redact.redact_secrets(gateway_reply(value, method), masks(current)), tools,
-                                        current)
-                except (ValueError, RecursionError):
+                    found = prepared()
+                    # HM-30 review 2 S-6: not named encoded (the module's function) nor body (make_apps' reader of
+                    # the request body, which a lambda above reads from this scope)
+                    serialized = await lease.run(lambda: reply_worker.run(worker_reply, result, message.get("id"),
+                                                                          method, found))
+                except (ValueError, RecursionError, WorkerStopped):
                     raise BadRequest(502) from None
-                return json_reply(value, 200, response_headers)
+                charge = getattr(request.state, PENDING_CHARGE, None)
+                if charge is not None:
+                    charge(len(serialized))  # HM-30 review 2 MF-2: before the finally below releases the slot
+                return encoded_reply(serialized, 200, response_headers)
             if not (is_sse and upstream.status_code == 200):
                 raise BadRequest(502)  # unreachable (R1 #8): every other success body was answered or refused above
             if request_id:

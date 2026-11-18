@@ -1,0 +1,3256 @@
+{
+ "note": "GitHub-hosted runs: gate, candidate and publish; values are public evidence, no secret",
+ "products": {
+  "emqx": {
+   "approval": {
+    "checked_at": "2026-11-18T01:58:27+00:00",
+    "environment": {
+     "branch_policies": [
+      {
+       "name": "release/*",
+       "type": "branch"
+      }
+     ],
+     "can_admins_bypass": false,
+     "id": 27603699551,
+     "name": "public-release",
+     "prevent_self_review": false,
+     "reviewers": [
+      {
+       "id": 165237880,
+       "login": "WOOWTECH",
+       "type": "User"
+      }
+     ],
+     "updated_at": "2026-11-17T14:44:14Z",
+     "wait_timer": null
+    },
+    "repository": "WOOWTECH/Woow_ha_mcp_addons",
+    "reviews": [
+     {
+      "comment_length": 82,
+      "comment_present": true,
+      "environments": [
+       "public-release"
+      ],
+      "state": "approved",
+      "user": {
+       "id": 165237880,
+       "login": "WOOWTECH"
+      }
+     }
+    ],
+    "run": {
+     "actor": "WOOWTECH",
+     "attempt": 1,
+     "id": 44211887012,
+     "ref": "refs/heads/release/six-products-0.4.14-20261117",
+     "sha": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+     "triggering_actor": "WOOWTECH"
+    }
+   },
+   "handoff": {
+    "app": "emqx",
+    "archive_bytes": 225462272,
+    "archive_sha256": "56693a8b7ed8017781d7e1e20b9ace3782f1a9af25aae9b7d270bfc76820ed51",
+    "diff_ids": [
+     "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+     "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+     "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+     "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+     "sha256:904b57b1a39f6092fbd4de506f8ef57e60875b216ad91940ea53d8403a4caf2c",
+     "sha256:53e022286688e21a68c2df9712cc7ef677cb50b6ba22d5cb90669770d18f6430",
+     "sha256:e5dd6bc92af65a3eb8d4c1f94178f39fdc59d31ddbdf081b4f35b0dfccb01494",
+     "sha256:51bfd813460daa63b8c0f4dfe1acabc15da485b51fd2cb94def16da7aefde784",
+     "sha256:2d1bd62b0df12a2719db47b4825fd4d24133c9bb5eed3750285b221a0fd4ca1c",
+     "sha256:9a3152667e0d7afbee947a70cd3cdcef1705724f59c317bda71aecbe9e6f6da7",
+     "sha256:ba9f9fd8705e76530cee6ba787367431e3343f69d3119af209fd4f8f53fa53ef",
+     "sha256:2945b39ed545fe388482cf8511bca23ce5c66372ba6f9341fbcc47d15e9ca90e",
+     "sha256:85bedecf783cf8d999dc861bb064317facc5136c38611d2bf6e4a5ca425c7c99",
+     "sha256:93a6b18e63bd97e7f9bdef030a40ade3209f7506262fdafeb645631d9ed961e7",
+     "sha256:14adfce350ce71806d7493f9dc1018f63e12c7152a2a36d850241e74bb1c1f21",
+     "sha256:ee24b7e61e1cae51b37a86a33e8ba0f328a3cbfa04909295022211dafa5e7bfd"
+    ],
+    "image_id": "sha256:408478b76ee01764d9982bcb6d34c3567733027754f5809cc3acd38400c72b2b",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+    "tag": "local/mcp-emqx:0.4.14",
+    "version": "0.4.14"
+   },
+   "j1900": {
+    "allowlist_sha256": "e843e24cd55966756b29cf261bd3e7f10e7a1399860b0763deb87d4d604fdb73",
+    "app": "emqx",
+    "container": [
+     "--network",
+     "none",
+     "--read-only",
+     "--tmpfs",
+     "/tmp:rw,nosuid,nodev,size=256m,mode=1777",
+     "--user",
+     "10001:10001",
+     "--cap-drop",
+     "ALL",
+     "--security-opt",
+     "no-new-privileges",
+     "--pids-limit",
+     "512",
+     "--memory",
+     "4g",
+     "-e",
+     "HOME=/tmp"
+    ],
+    "cpu": "Nehalem",
+    "envs": {
+     "child": {
+      "allowlisted": [
+       "_tkinter",
+       "caio.linux_uring"
+      ],
+      "lib_dynload": {
+       "listed": 78,
+       "native_ok": 77
+      },
+      "modules_listed": 88,
+      "modules_sha256": "22f3ce15ff5b535abd3f71648c70a113c74ded6f328dab14b4bf5e1a8a7266e3",
+      "native_errors": {
+       "_tkinter": "ImportError: libtk8.6.so: cannot open shared object file: No such file or directory",
+       "caio.linux_uring": "ImportError: io_uring_setup probe failed: Operation not permitted"
+      },
+      "native_ok": 86,
+      "python": "/opt/woow/apps/emqx/.venv/bin/python",
+      "qemu_allowlisted": {
+       "caio.linux_aio": "ImportError: Error on io_setup with code 38"
+      },
+      "qemu_ok": 85,
+      "site_packages": {
+       "listed": 10,
+       "native_ok": 9
+      },
+      "smoke": true
+     },
+     "core": {
+      "allowlisted": [
+       "_tkinter"
+      ],
+      "lib_dynload": {
+       "listed": 78,
+       "native_ok": 77
+      },
+      "modules_listed": 80,
+      "modules_sha256": "1c554d295060f9e0a2875ddedf40c84b542e7e859e6fe548758a73c0d6b9a17b",
+      "native_errors": {
+       "_tkinter": "ImportError: libtk8.6.so: cannot open shared object file: No such file or directory"
+      },
+      "native_ok": 79,
+      "python": "/opt/woow/.venv/bin/python",
+      "qemu_allowlisted": {},
+      "qemu_ok": 79,
+      "site_packages": {
+       "listed": 2,
+       "native_ok": 2
+      },
+      "smoke": true
+     }
+    },
+    "image_id": "sha256:408478b76ee01764d9982bcb6d34c3567733027754f5809cc3acd38400c72b2b",
+    "mode": "qemu-user",
+    "node": null,
+    "passed": true,
+    "probe_sha256": "d1401cb8122ed1fa2491e10f56e68758ab0ac30694697918db8d920ef7b6b538",
+    "qemu": {
+     "package": "qemu-user-static",
+     "path": "/usr/bin/qemu-x86_64-static",
+     "sha256": "90181b5552cd1a0b60d8edcc9f1cf8e38647579ef697d3155e2b6150e8fbcee0",
+     "version": "1:8.2.2+ds-0ubuntu1.18",
+     "version_line": "qemu-x86_64 version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)"
+    },
+    "scope": "imports every natively importable extension module plus a smoke run; not a full runtime trace",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+    "version": "0.4.14"
+   },
+   "provenance": {
+    "_type": "https://in-toto.io/Statement/v1",
+    "predicate": {
+     "evidence": {
+      "sbom.spdx.json": "89c08b8f28649bdbb270d78ecd509eddefb847b7b04ff7c823e35382c9748aa6",
+      "sbom.syft.json": "a8253a3d556c6ebc68218c94d529bc5712138e3123ba9daabf7ebeb9aa59c689",
+      "scan-summary.json": "4ff9ab8adf67f2f050b751bc1ce2e0378aed4c40a1f06db7e12b492a172f5fbb"
+     },
+     "recipe": "packaging/supply_chain.py candidate (source commit below)",
+     "subject": {
+      "app": "emqx",
+      "archive_sha256": "a0bd0206e45df6c9e7b00904d3daaa193e4eb1027662b2534d33a32474e7da14",
+      "diff_ids": [
+       "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+       "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+       "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+       "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+       "sha256:904b57b1a39f6092fbd4de506f8ef57e60875b216ad91940ea53d8403a4caf2c",
+       "sha256:53e022286688e21a68c2df9712cc7ef677cb50b6ba22d5cb90669770d18f6430",
+       "sha256:e5dd6bc92af65a3eb8d4c1f94178f39fdc59d31ddbdf081b4f35b0dfccb01494",
+       "sha256:51bfd813460daa63b8c0f4dfe1acabc15da485b51fd2cb94def16da7aefde784",
+       "sha256:2d1bd62b0df12a2719db47b4825fd4d24133c9bb5eed3750285b221a0fd4ca1c",
+       "sha256:9a3152667e0d7afbee947a70cd3cdcef1705724f59c317bda71aecbe9e6f6da7",
+       "sha256:ba9f9fd8705e76530cee6ba787367431e3343f69d3119af209fd4f8f53fa53ef",
+       "sha256:2945b39ed545fe388482cf8511bca23ce5c66372ba6f9341fbcc47d15e9ca90e",
+       "sha256:85bedecf783cf8d999dc861bb064317facc5136c38611d2bf6e4a5ca425c7c99",
+       "sha256:93a6b18e63bd97e7f9bdef030a40ade3209f7506262fdafeb645631d9ed961e7",
+       "sha256:14adfce350ce71806d7493f9dc1018f63e12c7152a2a36d850241e74bb1c1f21",
+       "sha256:ee24b7e61e1cae51b37a86a33e8ba0f328a3cbfa04909295022211dafa5e7bfd"
+      ],
+      "image_id": "sha256:408478b76ee01764d9982bcb6d34c3567733027754f5809cc3acd38400c72b2b",
+      "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+     },
+     "trust": "unsigned protected-workflow receipt; NOT SLSA certification"
+    },
+    "predicateType": "urn:woow:mcp:unsigned-candidate:v1",
+    "subject": [
+     {
+      "digest": {
+       "sha256": "408478b76ee01764d9982bcb6d34c3567733027754f5809cc3acd38400c72b2b"
+      },
+      "name": "local/mcp-emqx"
+     }
+    ]
+   },
+   "published_digest": {
+    "config_digest": "sha256:408478b76ee01764d9982bcb6d34c3567733027754f5809cc3acd38400c72b2b",
+    "reference": "ghcr.io/woowtech/amd64-mcp-emqx@sha256:2f355dc7bf5b13288282a374a8302d692a18c104079e4db1b318b98864b84491"
+   },
+   "published_provenance": {
+    "_type": "https://in-toto.io/Statement/v1",
+    "predicate": {
+     "evidence": {
+      "sbom.spdx.json": "89c08b8f28649bdbb270d78ecd509eddefb847b7b04ff7c823e35382c9748aa6",
+      "sbom.syft.json": "a8253a3d556c6ebc68218c94d529bc5712138e3123ba9daabf7ebeb9aa59c689",
+      "scan-summary.json": "4ff9ab8adf67f2f050b751bc1ce2e0378aed4c40a1f06db7e12b492a172f5fbb"
+     },
+     "recipe": "packaging/supply_chain.py candidate (source commit below)",
+     "registry": {
+      "anonymous_pull_verified": true,
+      "config_digest": "sha256:408478b76ee01764d9982bcb6d34c3567733027754f5809cc3acd38400c72b2b",
+      "manifest_digest": "sha256:2f355dc7bf5b13288282a374a8302d692a18c104079e4db1b318b98864b84491",
+      "reference": "ghcr.io/woowtech/amd64-mcp-emqx@sha256:2f355dc7bf5b13288282a374a8302d692a18c104079e4db1b318b98864b84491"
+     },
+     "subject": {
+      "app": "emqx",
+      "archive_sha256": "a0bd0206e45df6c9e7b00904d3daaa193e4eb1027662b2534d33a32474e7da14",
+      "diff_ids": [
+       "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+       "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+       "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+       "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+       "sha256:904b57b1a39f6092fbd4de506f8ef57e60875b216ad91940ea53d8403a4caf2c",
+       "sha256:53e022286688e21a68c2df9712cc7ef677cb50b6ba22d5cb90669770d18f6430",
+       "sha256:e5dd6bc92af65a3eb8d4c1f94178f39fdc59d31ddbdf081b4f35b0dfccb01494",
+       "sha256:51bfd813460daa63b8c0f4dfe1acabc15da485b51fd2cb94def16da7aefde784",
+       "sha256:2d1bd62b0df12a2719db47b4825fd4d24133c9bb5eed3750285b221a0fd4ca1c",
+       "sha256:9a3152667e0d7afbee947a70cd3cdcef1705724f59c317bda71aecbe9e6f6da7",
+       "sha256:ba9f9fd8705e76530cee6ba787367431e3343f69d3119af209fd4f8f53fa53ef",
+       "sha256:2945b39ed545fe388482cf8511bca23ce5c66372ba6f9341fbcc47d15e9ca90e",
+       "sha256:85bedecf783cf8d999dc861bb064317facc5136c38611d2bf6e4a5ca425c7c99",
+       "sha256:93a6b18e63bd97e7f9bdef030a40ade3209f7506262fdafeb645631d9ed961e7",
+       "sha256:14adfce350ce71806d7493f9dc1018f63e12c7152a2a36d850241e74bb1c1f21",
+       "sha256:ee24b7e61e1cae51b37a86a33e8ba0f328a3cbfa04909295022211dafa5e7bfd"
+      ],
+      "image_id": "sha256:408478b76ee01764d9982bcb6d34c3567733027754f5809cc3acd38400c72b2b",
+      "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+     },
+     "trust": "unsigned protected-workflow receipt; NOT SLSA certification"
+    },
+    "predicateType": "urn:woow:mcp:unsigned-candidate:v1",
+    "subject": [
+     {
+      "digest": {
+       "sha256": "408478b76ee01764d9982bcb6d34c3567733027754f5809cc3acd38400c72b2b"
+      },
+      "name": "local/mcp-emqx"
+     },
+     {
+      "digest": {
+       "sha256": "2f355dc7bf5b13288282a374a8302d692a18c104079e4db1b318b98864b84491"
+      },
+      "name": "ghcr.io/woowtech/amd64-mcp-emqx"
+     }
+    ]
+   },
+   "run_id": 44211887012,
+   "runner": {
+    "candidate": {
+     "buildx": "github.com/docker/buildx v0.38.2 3c4cbd35852fc1a476923627a780a7836c28b654",
+     "checked_at": "2026-11-18T01:26:24+00:00",
+     "docker": {
+      "api": "1.48",
+      "client": "28.0.4",
+      "components": {
+       "Engine": "28.0.4",
+       "containerd": "v2.4.2",
+       "docker-init": "0.19.0",
+       "runc": "1.5.2"
+      },
+      "driver_status": [
+       [
+        "Backing Filesystem",
+        "extfs"
+       ],
+       [
+        "Supports d_type",
+        "true"
+       ],
+       [
+        "Using metacopy",
+        "false"
+       ],
+       [
+        "Native Overlay Diff",
+        "false"
+       ],
+       [
+        "userxattr",
+        "false"
+       ]
+      ],
+      "image_store": "classic",
+      "operating_system": "Ubuntu 24.04.5 LTS",
+      "server": "28.0.4",
+      "storage_driver": "overlay2",
+      "switched_from_containerd_store": false
+     },
+     "runner": {
+      "arch": "X64",
+      "environment": "github-hosted",
+      "image_os": "ubuntu24",
+      "image_version": "20261111.370.1",
+      "kernel": "7.0.0-1017-azure",
+      "os": "Linux"
+     }
+    },
+    "publish": {
+     "buildx": "github.com/docker/buildx v0.38.2 3c4cbd35852fc1a476923627a780a7836c28b654",
+     "checked_at": "2026-11-18T01:58:33+00:00",
+     "docker": {
+      "api": "1.48",
+      "client": "28.0.4",
+      "components": {
+       "Engine": "28.0.4",
+       "containerd": "v2.4.2",
+       "docker-init": "0.19.0",
+       "runc": "1.5.2"
+      },
+      "driver_status": [
+       [
+        "Backing Filesystem",
+        "extfs"
+       ],
+       [
+        "Supports d_type",
+        "true"
+       ],
+       [
+        "Using metacopy",
+        "false"
+       ],
+       [
+        "Native Overlay Diff",
+        "true"
+       ],
+       [
+        "userxattr",
+        "false"
+       ]
+      ],
+      "image_store": "classic",
+      "operating_system": "Ubuntu 24.04.5 LTS",
+      "server": "28.0.4",
+      "storage_driver": "overlay2",
+      "switched_from_containerd_store": false
+     },
+     "runner": {
+      "arch": "X64",
+      "environment": "github-hosted",
+      "image_os": "ubuntu24",
+      "image_version": "20261111.127.1",
+      "kernel": "7.0.0-1014-aws",
+      "os": "Linux"
+     }
+    }
+   },
+   "scan_summary": {
+    "checks": {
+     "container": "pass",
+     "history-secrets": "pass",
+     "image-secrets": "pass",
+     "licenses": "pass",
+     "source-secrets": "pass",
+     "vulnerabilities": "pass"
+    },
+    "package_count": 193,
+    "policy_sha256": "5643d5ce538191af203b641944664efd26f30726252486e7828f517a466c7930",
+    "subject": {
+     "app": "emqx",
+     "archive_sha256": "a0bd0206e45df6c9e7b00904d3daaa193e4eb1027662b2534d33a32474e7da14",
+     "diff_ids": [
+      "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+      "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+      "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+      "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+      "sha256:904b57b1a39f6092fbd4de506f8ef57e60875b216ad91940ea53d8403a4caf2c",
+      "sha256:53e022286688e21a68c2df9712cc7ef677cb50b6ba22d5cb90669770d18f6430",
+      "sha256:e5dd6bc92af65a3eb8d4c1f94178f39fdc59d31ddbdf081b4f35b0dfccb01494",
+      "sha256:51bfd813460daa63b8c0f4dfe1acabc15da485b51fd2cb94def16da7aefde784",
+      "sha256:2d1bd62b0df12a2719db47b4825fd4d24133c9bb5eed3750285b221a0fd4ca1c",
+      "sha256:9a3152667e0d7afbee947a70cd3cdcef1705724f59c317bda71aecbe9e6f6da7",
+      "sha256:ba9f9fd8705e76530cee6ba787367431e3343f69d3119af209fd4f8f53fa53ef",
+      "sha256:2945b39ed545fe388482cf8511bca23ce5c66372ba6f9341fbcc47d15e9ca90e",
+      "sha256:85bedecf783cf8d999dc861bb064317facc5136c38611d2bf6e4a5ca425c7c99",
+      "sha256:93a6b18e63bd97e7f9bdef030a40ade3209f7506262fdafeb645631d9ed961e7",
+      "sha256:14adfce350ce71806d7493f9dc1018f63e12c7152a2a36d850241e74bb1c1f21",
+      "sha256:ee24b7e61e1cae51b37a86a33e8ba0f328a3cbfa04909295022211dafa5e7bfd"
+     ],
+     "image_id": "sha256:408478b76ee01764d9982bcb6d34c3567733027754f5809cc3acd38400c72b2b",
+     "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+    },
+    "tools": {
+     "gitleaks": {
+      "checksums": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_checksums.txt",
+      "sha256": "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb",
+      "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz",
+      "version": "8.28.0"
+     },
+     "grype": {
+      "checksums": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_checksums.txt",
+      "sha256": "a5a1218dce63acdac152a6b3b5bb366e7267e36f4069848cf455543b3fa5700e",
+      "url": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_linux_amd64.tar.gz",
+      "version": "0.120.0"
+     },
+     "syft": {
+      "checksums": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_checksums.txt",
+      "sha256": "54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860",
+      "url": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_linux_amd64.tar.gz",
+      "version": "1.54.0"
+     }
+    },
+    "vulnerability_count": 260,
+    "vulnerability_database": {
+     "built": "2026-11-17T06:20:58Z",
+     "checksum": "3f0cbdbc9d40fb69eaeacec1869b27a8c74f1894108804ace8b7468513e2df07",
+     "schemaVersion": "6.1.10"
+    }
+   },
+   "subject": {
+    "app": "emqx",
+    "archive_sha256": "a0bd0206e45df6c9e7b00904d3daaa193e4eb1027662b2534d33a32474e7da14",
+    "diff_ids": [
+     "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+     "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+     "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+     "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+     "sha256:904b57b1a39f6092fbd4de506f8ef57e60875b216ad91940ea53d8403a4caf2c",
+     "sha256:53e022286688e21a68c2df9712cc7ef677cb50b6ba22d5cb90669770d18f6430",
+     "sha256:e5dd6bc92af65a3eb8d4c1f94178f39fdc59d31ddbdf081b4f35b0dfccb01494",
+     "sha256:51bfd813460daa63b8c0f4dfe1acabc15da485b51fd2cb94def16da7aefde784",
+     "sha256:2d1bd62b0df12a2719db47b4825fd4d24133c9bb5eed3750285b221a0fd4ca1c",
+     "sha256:9a3152667e0d7afbee947a70cd3cdcef1705724f59c317bda71aecbe9e6f6da7",
+     "sha256:ba9f9fd8705e76530cee6ba787367431e3343f69d3119af209fd4f8f53fa53ef",
+     "sha256:2945b39ed545fe388482cf8511bca23ce5c66372ba6f9341fbcc47d15e9ca90e",
+     "sha256:85bedecf783cf8d999dc861bb064317facc5136c38611d2bf6e4a5ca425c7c99",
+     "sha256:93a6b18e63bd97e7f9bdef030a40ade3209f7506262fdafeb645631d9ed961e7",
+     "sha256:14adfce350ce71806d7493f9dc1018f63e12c7152a2a36d850241e74bb1c1f21",
+     "sha256:ee24b7e61e1cae51b37a86a33e8ba0f328a3cbfa04909295022211dafa5e7bfd"
+    ],
+    "image_id": "sha256:408478b76ee01764d9982bcb6d34c3567733027754f5809cc3acd38400c72b2b",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+   },
+   "version": "0.4.14"
+  },
+  "headscale": {
+   "approval": {
+    "checked_at": "2026-11-18T01:58:27+00:00",
+    "environment": {
+     "branch_policies": [
+      {
+       "name": "release/*",
+       "type": "branch"
+      }
+     ],
+     "can_admins_bypass": false,
+     "id": 27603699551,
+     "name": "public-release",
+     "prevent_self_review": false,
+     "reviewers": [
+      {
+       "id": 165237880,
+       "login": "WOOWTECH",
+       "type": "User"
+      }
+     ],
+     "updated_at": "2026-11-17T14:44:14Z",
+     "wait_timer": null
+    },
+    "repository": "WOOWTECH/Woow_ha_mcp_addons",
+    "reviews": [
+     {
+      "comment_length": 82,
+      "comment_present": true,
+      "environments": [
+       "public-release"
+      ],
+      "state": "approved",
+      "user": {
+       "id": 165237880,
+       "login": "WOOWTECH"
+      }
+     }
+    ],
+    "run": {
+     "actor": "WOOWTECH",
+     "attempt": 1,
+     "id": 44211897773,
+     "ref": "refs/heads/release/six-products-0.4.14-20261117",
+     "sha": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+     "triggering_actor": "WOOWTECH"
+    }
+   },
+   "handoff": {
+    "app": "headscale",
+    "archive_bytes": 225245696,
+    "archive_sha256": "3b25ef73cbf08f43e9246aa583fd6898032cb594ea75266c2d0531cc8a747bba",
+    "diff_ids": [
+     "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+     "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+     "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+     "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+     "sha256:1e025a883ecfa8e57f4fa0f5f8c7efd4e32ab70c4cb5b4cd7bcfe47da455c080",
+     "sha256:953b69775a03e0990426f95371a559a1d932afffab2be1ef1df5638428464aa0",
+     "sha256:4d12e2e32857e6c512fa48292d540710fefcc3e62e14179b3ae59b6ffd6c7738",
+     "sha256:aec3d1772c1ea45f0ce68ac8e5ce5dba2ff72ff1a40a49bbd790b24e4f0c9eee",
+     "sha256:b5ecf6c34971b8c9d42b50b28c016d90a961c49b71bdb0374d1af071e40d959e",
+     "sha256:f3db5d55e519b910e4c16d10f5a29ada0b4dccbd1856cabc7ece81302d2f9a42",
+     "sha256:67546336c9eceec88df5ca5d86fe03715a9243e5aca1b2a076ccd533ae630181",
+     "sha256:8e49bd00300aeec40907e3910a4a2fa31e202e54325f149aa7a49dcdfb9dc36b",
+     "sha256:c0d94c06703628f484791f1d3380f239806dd2a45ad6846deedbeb277b9faa50",
+     "sha256:ad6c00dc949da3eb02336db5fdd4b54d1f4de37837273da1664f2d9a0d758c86",
+     "sha256:164ac8050af0f73d3b7e62b843998fb296255d07e5292f38dc9855f27d0aeed0",
+     "sha256:17ace96db2c3f741e94d3cc51790af55b30cd4ce1805b51a0f804751cc954d81"
+    ],
+    "image_id": "sha256:5603dd22b76f39947c9300abe658935e1f02c5002796d8488712f148ea096a25",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+    "tag": "local/mcp-headscale:0.4.19",
+    "version": "0.4.19"
+   },
+   "j1900": {
+    "allowlist_sha256": "e843e24cd55966756b29cf261bd3e7f10e7a1399860b0763deb87d4d604fdb73",
+    "app": "headscale",
+    "container": [
+     "--network",
+     "none",
+     "--read-only",
+     "--tmpfs",
+     "/tmp:rw,nosuid,nodev,size=256m,mode=1777",
+     "--user",
+     "10001:10001",
+     "--cap-drop",
+     "ALL",
+     "--security-opt",
+     "no-new-privileges",
+     "--pids-limit",
+     "512",
+     "--memory",
+     "4g",
+     "-e",
+     "HOME=/tmp"
+    ],
+    "cpu": "Nehalem",
+    "envs": {
+     "child": {
+      "allowlisted": [
+       "_tkinter",
+       "caio.linux_uring"
+      ],
+      "lib_dynload": {
+       "listed": 78,
+       "native_ok": 77
+      },
+      "modules_listed": 88,
+      "modules_sha256": "22f3ce15ff5b535abd3f71648c70a113c74ded6f328dab14b4bf5e1a8a7266e3",
+      "native_errors": {
+       "_tkinter": "ImportError: libtk8.6.so: cannot open shared object file: No such file or directory",
+       "caio.linux_uring": "ImportError: io_uring_setup probe failed: Operation not permitted"
+      },
+      "native_ok": 86,
+      "python": "/opt/woow/apps/headscale/.venv/bin/python",
+      "qemu_allowlisted": {
+       "caio.linux_aio": "ImportError: Error on io_setup with code 38"
+      },
+      "qemu_ok": 85,
+      "site_packages": {
+       "listed": 10,
+       "native_ok": 9
+      },
+      "smoke": true
+     },
+     "core": {
+      "allowlisted": [
+       "_tkinter"
+      ],
+      "lib_dynload": {
+       "listed": 78,
+       "native_ok": 77
+      },
+      "modules_listed": 80,
+      "modules_sha256": "1c554d295060f9e0a2875ddedf40c84b542e7e859e6fe548758a73c0d6b9a17b",
+      "native_errors": {
+       "_tkinter": "ImportError: libtk8.6.so: cannot open shared object file: No such file or directory"
+      },
+      "native_ok": 79,
+      "python": "/opt/woow/.venv/bin/python",
+      "qemu_allowlisted": {},
+      "qemu_ok": 79,
+      "site_packages": {
+       "listed": 2,
+       "native_ok": 2
+      },
+      "smoke": true
+     }
+    },
+    "image_id": "sha256:5603dd22b76f39947c9300abe658935e1f02c5002796d8488712f148ea096a25",
+    "mode": "qemu-user",
+    "node": null,
+    "passed": true,
+    "probe_sha256": "d1401cb8122ed1fa2491e10f56e68758ab0ac30694697918db8d920ef7b6b538",
+    "qemu": {
+     "package": "qemu-user-static",
+     "path": "/usr/bin/qemu-x86_64-static",
+     "sha256": "90181b5552cd1a0b60d8edcc9f1cf8e38647579ef697d3155e2b6150e8fbcee0",
+     "version": "1:8.2.2+ds-0ubuntu1.18",
+     "version_line": "qemu-x86_64 version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)"
+    },
+    "scope": "imports every natively importable extension module plus a smoke run; not a full runtime trace",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+    "version": "0.4.19"
+   },
+   "provenance": {
+    "_type": "https://in-toto.io/Statement/v1",
+    "predicate": {
+     "evidence": {
+      "sbom.spdx.json": "d4e1f0b7d6053359b09b17574826a1688966bbb3976f952f070e317f31ae72f1",
+      "sbom.syft.json": "1403bc0fd65486f6e199fb3c149ce86d42b37fe4d1da440ac38d1acda0c92305",
+      "scan-summary.json": "fc7592dbebfee52319014eef3f6a810f27f2d7b937257d8db12782581c2e45e4"
+     },
+     "recipe": "packaging/supply_chain.py candidate (source commit below)",
+     "subject": {
+      "app": "headscale",
+      "archive_sha256": "88d143297192876eba1f85424757744a058a86dd2a678314636bee7fdc20f50f",
+      "diff_ids": [
+       "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+       "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+       "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+       "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+       "sha256:1e025a883ecfa8e57f4fa0f5f8c7efd4e32ab70c4cb5b4cd7bcfe47da455c080",
+       "sha256:953b69775a03e0990426f95371a559a1d932afffab2be1ef1df5638428464aa0",
+       "sha256:4d12e2e32857e6c512fa48292d540710fefcc3e62e14179b3ae59b6ffd6c7738",
+       "sha256:aec3d1772c1ea45f0ce68ac8e5ce5dba2ff72ff1a40a49bbd790b24e4f0c9eee",
+       "sha256:b5ecf6c34971b8c9d42b50b28c016d90a961c49b71bdb0374d1af071e40d959e",
+       "sha256:f3db5d55e519b910e4c16d10f5a29ada0b4dccbd1856cabc7ece81302d2f9a42",
+       "sha256:67546336c9eceec88df5ca5d86fe03715a9243e5aca1b2a076ccd533ae630181",
+       "sha256:8e49bd00300aeec40907e3910a4a2fa31e202e54325f149aa7a49dcdfb9dc36b",
+       "sha256:c0d94c06703628f484791f1d3380f239806dd2a45ad6846deedbeb277b9faa50",
+       "sha256:ad6c00dc949da3eb02336db5fdd4b54d1f4de37837273da1664f2d9a0d758c86",
+       "sha256:164ac8050af0f73d3b7e62b843998fb296255d07e5292f38dc9855f27d0aeed0",
+       "sha256:17ace96db2c3f741e94d3cc51790af55b30cd4ce1805b51a0f804751cc954d81"
+      ],
+      "image_id": "sha256:5603dd22b76f39947c9300abe658935e1f02c5002796d8488712f148ea096a25",
+      "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+     },
+     "trust": "unsigned protected-workflow receipt; NOT SLSA certification"
+    },
+    "predicateType": "urn:woow:mcp:unsigned-candidate:v1",
+    "subject": [
+     {
+      "digest": {
+       "sha256": "5603dd22b76f39947c9300abe658935e1f02c5002796d8488712f148ea096a25"
+      },
+      "name": "local/mcp-headscale"
+     }
+    ]
+   },
+   "published_digest": {
+    "config_digest": "sha256:5603dd22b76f39947c9300abe658935e1f02c5002796d8488712f148ea096a25",
+    "reference": "ghcr.io/woowtech/amd64-mcp-headscale@sha256:a05e1a35fe3a048590b34fb542a38bd9a2fa2883d5151bd5732903d7c44baed9"
+   },
+   "published_provenance": {
+    "_type": "https://in-toto.io/Statement/v1",
+    "predicate": {
+     "evidence": {
+      "sbom.spdx.json": "d4e1f0b7d6053359b09b17574826a1688966bbb3976f952f070e317f31ae72f1",
+      "sbom.syft.json": "1403bc0fd65486f6e199fb3c149ce86d42b37fe4d1da440ac38d1acda0c92305",
+      "scan-summary.json": "fc7592dbebfee52319014eef3f6a810f27f2d7b937257d8db12782581c2e45e4"
+     },
+     "recipe": "packaging/supply_chain.py candidate (source commit below)",
+     "registry": {
+      "anonymous_pull_verified": true,
+      "config_digest": "sha256:5603dd22b76f39947c9300abe658935e1f02c5002796d8488712f148ea096a25",
+      "manifest_digest": "sha256:a05e1a35fe3a048590b34fb542a38bd9a2fa2883d5151bd5732903d7c44baed9",
+      "reference": "ghcr.io/woowtech/amd64-mcp-headscale@sha256:a05e1a35fe3a048590b34fb542a38bd9a2fa2883d5151bd5732903d7c44baed9"
+     },
+     "subject": {
+      "app": "headscale",
+      "archive_sha256": "88d143297192876eba1f85424757744a058a86dd2a678314636bee7fdc20f50f",
+      "diff_ids": [
+       "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+       "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+       "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+       "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+       "sha256:1e025a883ecfa8e57f4fa0f5f8c7efd4e32ab70c4cb5b4cd7bcfe47da455c080",
+       "sha256:953b69775a03e0990426f95371a559a1d932afffab2be1ef1df5638428464aa0",
+       "sha256:4d12e2e32857e6c512fa48292d540710fefcc3e62e14179b3ae59b6ffd6c7738",
+       "sha256:aec3d1772c1ea45f0ce68ac8e5ce5dba2ff72ff1a40a49bbd790b24e4f0c9eee",
+       "sha256:b5ecf6c34971b8c9d42b50b28c016d90a961c49b71bdb0374d1af071e40d959e",
+       "sha256:f3db5d55e519b910e4c16d10f5a29ada0b4dccbd1856cabc7ece81302d2f9a42",
+       "sha256:67546336c9eceec88df5ca5d86fe03715a9243e5aca1b2a076ccd533ae630181",
+       "sha256:8e49bd00300aeec40907e3910a4a2fa31e202e54325f149aa7a49dcdfb9dc36b",
+       "sha256:c0d94c06703628f484791f1d3380f239806dd2a45ad6846deedbeb277b9faa50",
+       "sha256:ad6c00dc949da3eb02336db5fdd4b54d1f4de37837273da1664f2d9a0d758c86",
+       "sha256:164ac8050af0f73d3b7e62b843998fb296255d07e5292f38dc9855f27d0aeed0",
+       "sha256:17ace96db2c3f741e94d3cc51790af55b30cd4ce1805b51a0f804751cc954d81"
+      ],
+      "image_id": "sha256:5603dd22b76f39947c9300abe658935e1f02c5002796d8488712f148ea096a25",
+      "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+     },
+     "trust": "unsigned protected-workflow receipt; NOT SLSA certification"
+    },
+    "predicateType": "urn:woow:mcp:unsigned-candidate:v1",
+    "subject": [
+     {
+      "digest": {
+       "sha256": "5603dd22b76f39947c9300abe658935e1f02c5002796d8488712f148ea096a25"
+      },
+      "name": "local/mcp-headscale"
+     },
+     {
+      "digest": {
+       "sha256": "a05e1a35fe3a048590b34fb542a38bd9a2fa2883d5151bd5732903d7c44baed9"
+      },
+      "name": "ghcr.io/woowtech/amd64-mcp-headscale"
+     }
+    ]
+   },
+   "run_id": 44211897773,
+   "runner": {
+    "candidate": {
+     "buildx": "github.com/docker/buildx v0.38.2 3c4cbd35852fc1a476923627a780a7836c28b654",
+     "checked_at": "2026-11-18T01:27:05+00:00",
+     "docker": {
+      "api": "1.48",
+      "client": "28.0.4",
+      "components": {
+       "Engine": "28.0.4",
+       "containerd": "v2.4.2",
+       "docker-init": "0.19.0",
+       "runc": "1.5.2"
+      },
+      "driver_status": [
+       [
+        "Backing Filesystem",
+        "extfs"
+       ],
+       [
+        "Supports d_type",
+        "true"
+       ],
+       [
+        "Using metacopy",
+        "false"
+       ],
+       [
+        "Native Overlay Diff",
+        "false"
+       ],
+       [
+        "userxattr",
+        "false"
+       ]
+      ],
+      "image_store": "classic",
+      "operating_system": "Ubuntu 24.04.5 LTS",
+      "server": "28.0.4",
+      "storage_driver": "overlay2",
+      "switched_from_containerd_store": false
+     },
+     "runner": {
+      "arch": "X64",
+      "environment": "github-hosted",
+      "image_os": "ubuntu24",
+      "image_version": "20261111.370.1",
+      "kernel": "7.0.0-1017-azure",
+      "os": "Linux"
+     }
+    },
+    "publish": {
+     "buildx": "github.com/docker/buildx v0.38.2 3c4cbd35852fc1a476923627a780a7836c28b654",
+     "checked_at": "2026-11-18T01:58:28+00:00",
+     "docker": {
+      "api": "1.48",
+      "client": "28.0.4",
+      "components": {
+       "Engine": "28.0.4",
+       "containerd": "v2.4.2",
+       "docker-init": "0.19.0",
+       "runc": "1.5.2"
+      },
+      "driver_status": [
+       [
+        "Backing Filesystem",
+        "extfs"
+       ],
+       [
+        "Supports d_type",
+        "true"
+       ],
+       [
+        "Using metacopy",
+        "false"
+       ],
+       [
+        "Native Overlay Diff",
+        "false"
+       ],
+       [
+        "userxattr",
+        "false"
+       ]
+      ],
+      "image_store": "classic",
+      "operating_system": "Ubuntu 24.04.5 LTS",
+      "server": "28.0.4",
+      "storage_driver": "overlay2",
+      "switched_from_containerd_store": false
+     },
+     "runner": {
+      "arch": "X64",
+      "environment": "github-hosted",
+      "image_os": "ubuntu24",
+      "image_version": "20261111.370.1",
+      "kernel": "7.0.0-1017-azure",
+      "os": "Linux"
+     }
+    }
+   },
+   "scan_summary": {
+    "checks": {
+     "container": "pass",
+     "history-secrets": "pass",
+     "image-secrets": "pass",
+     "licenses": "pass",
+     "source-secrets": "pass",
+     "vulnerabilities": "pass"
+    },
+    "package_count": 193,
+    "policy_sha256": "5643d5ce538191af203b641944664efd26f30726252486e7828f517a466c7930",
+    "subject": {
+     "app": "headscale",
+     "archive_sha256": "88d143297192876eba1f85424757744a058a86dd2a678314636bee7fdc20f50f",
+     "diff_ids": [
+      "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+      "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+      "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+      "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+      "sha256:1e025a883ecfa8e57f4fa0f5f8c7efd4e32ab70c4cb5b4cd7bcfe47da455c080",
+      "sha256:953b69775a03e0990426f95371a559a1d932afffab2be1ef1df5638428464aa0",
+      "sha256:4d12e2e32857e6c512fa48292d540710fefcc3e62e14179b3ae59b6ffd6c7738",
+      "sha256:aec3d1772c1ea45f0ce68ac8e5ce5dba2ff72ff1a40a49bbd790b24e4f0c9eee",
+      "sha256:b5ecf6c34971b8c9d42b50b28c016d90a961c49b71bdb0374d1af071e40d959e",
+      "sha256:f3db5d55e519b910e4c16d10f5a29ada0b4dccbd1856cabc7ece81302d2f9a42",
+      "sha256:67546336c9eceec88df5ca5d86fe03715a9243e5aca1b2a076ccd533ae630181",
+      "sha256:8e49bd00300aeec40907e3910a4a2fa31e202e54325f149aa7a49dcdfb9dc36b",
+      "sha256:c0d94c06703628f484791f1d3380f239806dd2a45ad6846deedbeb277b9faa50",
+      "sha256:ad6c00dc949da3eb02336db5fdd4b54d1f4de37837273da1664f2d9a0d758c86",
+      "sha256:164ac8050af0f73d3b7e62b843998fb296255d07e5292f38dc9855f27d0aeed0",
+      "sha256:17ace96db2c3f741e94d3cc51790af55b30cd4ce1805b51a0f804751cc954d81"
+     ],
+     "image_id": "sha256:5603dd22b76f39947c9300abe658935e1f02c5002796d8488712f148ea096a25",
+     "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+    },
+    "tools": {
+     "gitleaks": {
+      "checksums": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_checksums.txt",
+      "sha256": "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb",
+      "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz",
+      "version": "8.28.0"
+     },
+     "grype": {
+      "checksums": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_checksums.txt",
+      "sha256": "a5a1218dce63acdac152a6b3b5bb366e7267e36f4069848cf455543b3fa5700e",
+      "url": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_linux_amd64.tar.gz",
+      "version": "0.120.0"
+     },
+     "syft": {
+      "checksums": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_checksums.txt",
+      "sha256": "54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860",
+      "url": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_linux_amd64.tar.gz",
+      "version": "1.54.0"
+     }
+    },
+    "vulnerability_count": 260,
+    "vulnerability_database": {
+     "built": "2026-11-17T06:20:58Z",
+     "checksum": "3f0cbdbc9d40fb69eaeacec1869b27a8c74f1894108804ace8b7468513e2df07",
+     "schemaVersion": "6.1.10"
+    }
+   },
+   "subject": {
+    "app": "headscale",
+    "archive_sha256": "88d143297192876eba1f85424757744a058a86dd2a678314636bee7fdc20f50f",
+    "diff_ids": [
+     "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+     "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+     "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+     "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+     "sha256:1e025a883ecfa8e57f4fa0f5f8c7efd4e32ab70c4cb5b4cd7bcfe47da455c080",
+     "sha256:953b69775a03e0990426f95371a559a1d932afffab2be1ef1df5638428464aa0",
+     "sha256:4d12e2e32857e6c512fa48292d540710fefcc3e62e14179b3ae59b6ffd6c7738",
+     "sha256:aec3d1772c1ea45f0ce68ac8e5ce5dba2ff72ff1a40a49bbd790b24e4f0c9eee",
+     "sha256:b5ecf6c34971b8c9d42b50b28c016d90a961c49b71bdb0374d1af071e40d959e",
+     "sha256:f3db5d55e519b910e4c16d10f5a29ada0b4dccbd1856cabc7ece81302d2f9a42",
+     "sha256:67546336c9eceec88df5ca5d86fe03715a9243e5aca1b2a076ccd533ae630181",
+     "sha256:8e49bd00300aeec40907e3910a4a2fa31e202e54325f149aa7a49dcdfb9dc36b",
+     "sha256:c0d94c06703628f484791f1d3380f239806dd2a45ad6846deedbeb277b9faa50",
+     "sha256:ad6c00dc949da3eb02336db5fdd4b54d1f4de37837273da1664f2d9a0d758c86",
+     "sha256:164ac8050af0f73d3b7e62b843998fb296255d07e5292f38dc9855f27d0aeed0",
+     "sha256:17ace96db2c3f741e94d3cc51790af55b30cd4ce1805b51a0f804751cc954d81"
+    ],
+    "image_id": "sha256:5603dd22b76f39947c9300abe658935e1f02c5002796d8488712f148ea096a25",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+   },
+   "version": "0.4.19"
+  },
+  "hermes": {
+   "approval": {
+    "checked_at": "2026-11-18T01:58:21+00:00",
+    "environment": {
+     "branch_policies": [
+      {
+       "name": "release/*",
+       "type": "branch"
+      }
+     ],
+     "can_admins_bypass": false,
+     "id": 27603699551,
+     "name": "public-release",
+     "prevent_self_review": false,
+     "reviewers": [
+      {
+       "id": 165237880,
+       "login": "WOOWTECH",
+       "type": "User"
+      }
+     ],
+     "updated_at": "2026-11-17T14:44:14Z",
+     "wait_timer": null
+    },
+    "repository": "WOOWTECH/Woow_ha_mcp_addons",
+    "reviews": [
+     {
+      "comment_length": 82,
+      "comment_present": true,
+      "environments": [
+       "public-release"
+      ],
+      "state": "approved",
+      "user": {
+       "id": 165237880,
+       "login": "WOOWTECH"
+      }
+     }
+    ],
+    "run": {
+     "actor": "WOOWTECH",
+     "attempt": 1,
+     "id": 44211883565,
+     "ref": "refs/heads/release/six-products-0.4.14-20261117",
+     "sha": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+     "triggering_actor": "WOOWTECH"
+    }
+   },
+   "handoff": {
+    "app": "hermes",
+    "archive_bytes": 195438592,
+    "archive_sha256": "a960a89c50d601a800ae6c640fceb786fc0d959d0838b84a9dfc2852fa6e75bb",
+    "diff_ids": [
+     "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+     "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+     "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+     "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+     "sha256:ee3d0bf1f08a8987682403c1cd97fd89968896db18058448eeb476040c4a2ffd",
+     "sha256:2e9f3f209b49985e8957e7b81e5f037a93e059eacf423a1bc283913c4e25bf30",
+     "sha256:10ce7d78970051e542dcad45dac08090fb3973299ed930d1674f2962c344fb0c",
+     "sha256:318d12375bf0db543ad2e81883a31cfc740b429b08d97a55cae99039be1cd3ca",
+     "sha256:e8b540d3c608f4d767d4264124e2b343dbc412d228732d675218e8b9f8da408d",
+     "sha256:7a22bbaa505bdc37dfc1508a7a802ed20c360deffd520d0725412f01a856ea17",
+     "sha256:c89037b8f081e710105e86a2974a1ba0455a7bc9268b71114960fe7e1ae3c53c",
+     "sha256:30af1bd86127136eee8fe8d57d389bbac367088afc0b8da6247773b446ec7873",
+     "sha256:c7ef70387ad04835acc25c93cfea64c0e01807030f026728e79171cfdf4dc5fb",
+     "sha256:d5ffbda229705cba6d283176b56b6d71305cfffb1029cccbff0fb8643f73d655",
+     "sha256:a42482dde1594df84359bd99dacdcb676af67ce0e42b0a55385342fb46a391e4",
+     "sha256:6eb99e1d4ede382d1e8c695391709044d19e692c70f0a092fcef82161157a70a"
+    ],
+    "image_id": "sha256:8c52b11eb7def4c9c0d6fc332ed0093d22d29261e54d574bebf6f366a498faff",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+    "tag": "local/mcp-hermes:0.4.14",
+    "version": "0.4.14"
+   },
+   "j1900": {
+    "allowlist_sha256": "e843e24cd55966756b29cf261bd3e7f10e7a1399860b0763deb87d4d604fdb73",
+    "app": "hermes",
+    "container": [
+     "--network",
+     "none",
+     "--read-only",
+     "--tmpfs",
+     "/tmp:rw,nosuid,nodev,size=256m,mode=1777",
+     "--user",
+     "10001:10001",
+     "--cap-drop",
+     "ALL",
+     "--security-opt",
+     "no-new-privileges",
+     "--pids-limit",
+     "512",
+     "--memory",
+     "4g",
+     "-e",
+     "HOME=/tmp"
+    ],
+    "cpu": "Nehalem",
+    "envs": {
+     "child": {
+      "allowlisted": [
+       "_tkinter"
+      ],
+      "lib_dynload": {
+       "listed": 78,
+       "native_ok": 77
+      },
+      "modules_listed": 82,
+      "modules_sha256": "24db539376cc4699c0c291ef080a4c482bc4556034a455d0928ab1a5299a2737",
+      "native_errors": {
+       "_tkinter": "ImportError: libtk8.6.so: cannot open shared object file: No such file or directory"
+      },
+      "native_ok": 81,
+      "python": "/opt/woow/apps/hermes/.venv/bin/python",
+      "qemu_allowlisted": {},
+      "qemu_ok": 81,
+      "site_packages": {
+       "listed": 4,
+       "native_ok": 4
+      },
+      "smoke": true
+     },
+     "core": {
+      "allowlisted": [
+       "_tkinter"
+      ],
+      "lib_dynload": {
+       "listed": 78,
+       "native_ok": 77
+      },
+      "modules_listed": 80,
+      "modules_sha256": "1c554d295060f9e0a2875ddedf40c84b542e7e859e6fe548758a73c0d6b9a17b",
+      "native_errors": {
+       "_tkinter": "ImportError: libtk8.6.so: cannot open shared object file: No such file or directory"
+      },
+      "native_ok": 79,
+      "python": "/opt/woow/.venv/bin/python",
+      "qemu_allowlisted": {},
+      "qemu_ok": 79,
+      "site_packages": {
+       "listed": 2,
+       "native_ok": 2
+      },
+      "smoke": true
+     }
+    },
+    "image_id": "sha256:8c52b11eb7def4c9c0d6fc332ed0093d22d29261e54d574bebf6f366a498faff",
+    "mode": "qemu-user",
+    "node": null,
+    "passed": true,
+    "probe_sha256": "d1401cb8122ed1fa2491e10f56e68758ab0ac30694697918db8d920ef7b6b538",
+    "qemu": {
+     "package": "qemu-user-static",
+     "path": "/usr/bin/qemu-x86_64-static",
+     "sha256": "90181b5552cd1a0b60d8edcc9f1cf8e38647579ef697d3155e2b6150e8fbcee0",
+     "version": "1:8.2.2+ds-0ubuntu1.18",
+     "version_line": "qemu-x86_64 version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)"
+    },
+    "scope": "imports every natively importable extension module plus a smoke run; not a full runtime trace",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+    "version": "0.4.14"
+   },
+   "provenance": {
+    "_type": "https://in-toto.io/Statement/v1",
+    "predicate": {
+     "evidence": {
+      "sbom.spdx.json": "33daed71f32d4b8caa057c10c6b84b1ecd32a9f03d8ed4de1be58c4ff1c665f0",
+      "sbom.syft.json": "8a12c558fc73fcc86007691e61823c9f76ec87615a0b813360b0de462fa134ca",
+      "scan-summary.json": "311faf3a157cd9c9f3065f2168da99e897459f5e41e77387fa82917cacbf4592"
+     },
+     "recipe": "packaging/supply_chain.py candidate (source commit below)",
+     "subject": {
+      "app": "hermes",
+      "archive_sha256": "2065e5154b9468f4a73614a967229ab41a1017c5017147ffd2d543c8e2f73341",
+      "diff_ids": [
+       "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+       "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+       "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+       "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+       "sha256:ee3d0bf1f08a8987682403c1cd97fd89968896db18058448eeb476040c4a2ffd",
+       "sha256:2e9f3f209b49985e8957e7b81e5f037a93e059eacf423a1bc283913c4e25bf30",
+       "sha256:10ce7d78970051e542dcad45dac08090fb3973299ed930d1674f2962c344fb0c",
+       "sha256:318d12375bf0db543ad2e81883a31cfc740b429b08d97a55cae99039be1cd3ca",
+       "sha256:e8b540d3c608f4d767d4264124e2b343dbc412d228732d675218e8b9f8da408d",
+       "sha256:7a22bbaa505bdc37dfc1508a7a802ed20c360deffd520d0725412f01a856ea17",
+       "sha256:c89037b8f081e710105e86a2974a1ba0455a7bc9268b71114960fe7e1ae3c53c",
+       "sha256:30af1bd86127136eee8fe8d57d389bbac367088afc0b8da6247773b446ec7873",
+       "sha256:c7ef70387ad04835acc25c93cfea64c0e01807030f026728e79171cfdf4dc5fb",
+       "sha256:d5ffbda229705cba6d283176b56b6d71305cfffb1029cccbff0fb8643f73d655",
+       "sha256:a42482dde1594df84359bd99dacdcb676af67ce0e42b0a55385342fb46a391e4",
+       "sha256:6eb99e1d4ede382d1e8c695391709044d19e692c70f0a092fcef82161157a70a"
+      ],
+      "image_id": "sha256:8c52b11eb7def4c9c0d6fc332ed0093d22d29261e54d574bebf6f366a498faff",
+      "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+     },
+     "trust": "unsigned protected-workflow receipt; NOT SLSA certification"
+    },
+    "predicateType": "urn:woow:mcp:unsigned-candidate:v1",
+    "subject": [
+     {
+      "digest": {
+       "sha256": "8c52b11eb7def4c9c0d6fc332ed0093d22d29261e54d574bebf6f366a498faff"
+      },
+      "name": "local/mcp-hermes"
+     }
+    ]
+   },
+   "published_digest": {
+    "config_digest": "sha256:8c52b11eb7def4c9c0d6fc332ed0093d22d29261e54d574bebf6f366a498faff",
+    "reference": "ghcr.io/woowtech/amd64-mcp-hermes@sha256:83d5d702c9de5d464da67b55ce1422ac78c63d33e5620b60ef46a3667cb8026b"
+   },
+   "published_provenance": {
+    "_type": "https://in-toto.io/Statement/v1",
+    "predicate": {
+     "evidence": {
+      "sbom.spdx.json": "33daed71f32d4b8caa057c10c6b84b1ecd32a9f03d8ed4de1be58c4ff1c665f0",
+      "sbom.syft.json": "8a12c558fc73fcc86007691e61823c9f76ec87615a0b813360b0de462fa134ca",
+      "scan-summary.json": "311faf3a157cd9c9f3065f2168da99e897459f5e41e77387fa82917cacbf4592"
+     },
+     "recipe": "packaging/supply_chain.py candidate (source commit below)",
+     "registry": {
+      "anonymous_pull_verified": true,
+      "config_digest": "sha256:8c52b11eb7def4c9c0d6fc332ed0093d22d29261e54d574bebf6f366a498faff",
+      "manifest_digest": "sha256:83d5d702c9de5d464da67b55ce1422ac78c63d33e5620b60ef46a3667cb8026b",
+      "reference": "ghcr.io/woowtech/amd64-mcp-hermes@sha256:83d5d702c9de5d464da67b55ce1422ac78c63d33e5620b60ef46a3667cb8026b"
+     },
+     "subject": {
+      "app": "hermes",
+      "archive_sha256": "2065e5154b9468f4a73614a967229ab41a1017c5017147ffd2d543c8e2f73341",
+      "diff_ids": [
+       "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+       "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+       "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+       "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+       "sha256:ee3d0bf1f08a8987682403c1cd97fd89968896db18058448eeb476040c4a2ffd",
+       "sha256:2e9f3f209b49985e8957e7b81e5f037a93e059eacf423a1bc283913c4e25bf30",
+       "sha256:10ce7d78970051e542dcad45dac08090fb3973299ed930d1674f2962c344fb0c",
+       "sha256:318d12375bf0db543ad2e81883a31cfc740b429b08d97a55cae99039be1cd3ca",
+       "sha256:e8b540d3c608f4d767d4264124e2b343dbc412d228732d675218e8b9f8da408d",
+       "sha256:7a22bbaa505bdc37dfc1508a7a802ed20c360deffd520d0725412f01a856ea17",
+       "sha256:c89037b8f081e710105e86a2974a1ba0455a7bc9268b71114960fe7e1ae3c53c",
+       "sha256:30af1bd86127136eee8fe8d57d389bbac367088afc0b8da6247773b446ec7873",
+       "sha256:c7ef70387ad04835acc25c93cfea64c0e01807030f026728e79171cfdf4dc5fb",
+       "sha256:d5ffbda229705cba6d283176b56b6d71305cfffb1029cccbff0fb8643f73d655",
+       "sha256:a42482dde1594df84359bd99dacdcb676af67ce0e42b0a55385342fb46a391e4",
+       "sha256:6eb99e1d4ede382d1e8c695391709044d19e692c70f0a092fcef82161157a70a"
+      ],
+      "image_id": "sha256:8c52b11eb7def4c9c0d6fc332ed0093d22d29261e54d574bebf6f366a498faff",
+      "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+     },
+     "trust": "unsigned protected-workflow receipt; NOT SLSA certification"
+    },
+    "predicateType": "urn:woow:mcp:unsigned-candidate:v1",
+    "subject": [
+     {
+      "digest": {
+       "sha256": "8c52b11eb7def4c9c0d6fc332ed0093d22d29261e54d574bebf6f366a498faff"
+      },
+      "name": "local/mcp-hermes"
+     },
+     {
+      "digest": {
+       "sha256": "83d5d702c9de5d464da67b55ce1422ac78c63d33e5620b60ef46a3667cb8026b"
+      },
+      "name": "ghcr.io/woowtech/amd64-mcp-hermes"
+     }
+    ]
+   },
+   "run_id": 44211883565,
+   "runner": {
+    "candidate": {
+     "buildx": "github.com/docker/buildx v0.38.2 3c4cbd35852fc1a476923627a780a7836c28b654",
+     "checked_at": "2026-11-18T01:26:44+00:00",
+     "docker": {
+      "api": "1.48",
+      "client": "28.0.4",
+      "components": {
+       "Engine": "28.0.4",
+       "containerd": "v2.4.2",
+       "docker-init": "0.19.0",
+       "runc": "1.5.2"
+      },
+      "driver_status": [
+       [
+        "Backing Filesystem",
+        "extfs"
+       ],
+       [
+        "Supports d_type",
+        "true"
+       ],
+       [
+        "Using metacopy",
+        "false"
+       ],
+       [
+        "Native Overlay Diff",
+        "true"
+       ],
+       [
+        "userxattr",
+        "false"
+       ]
+      ],
+      "image_store": "classic",
+      "operating_system": "Ubuntu 24.04.5 LTS",
+      "server": "28.0.4",
+      "storage_driver": "overlay2",
+      "switched_from_containerd_store": false
+     },
+     "runner": {
+      "arch": "X64",
+      "environment": "github-hosted",
+      "image_os": "ubuntu24",
+      "image_version": "20261111.127.1",
+      "kernel": "7.0.0-1014-aws",
+      "os": "Linux"
+     }
+    },
+    "publish": {
+     "buildx": "github.com/docker/buildx v0.38.2 3c4cbd35852fc1a476923627a780a7836c28b654",
+     "checked_at": "2026-11-18T01:58:25+00:00",
+     "docker": {
+      "api": "1.48",
+      "client": "28.0.4",
+      "components": {
+       "Engine": "28.0.4",
+       "containerd": "v2.4.2",
+       "docker-init": "0.19.0",
+       "runc": "1.5.2"
+      },
+      "driver_status": [
+       [
+        "Backing Filesystem",
+        "extfs"
+       ],
+       [
+        "Supports d_type",
+        "true"
+       ],
+       [
+        "Using metacopy",
+        "false"
+       ],
+       [
+        "Native Overlay Diff",
+        "false"
+       ],
+       [
+        "userxattr",
+        "false"
+       ]
+      ],
+      "image_store": "classic",
+      "operating_system": "Ubuntu 24.04.5 LTS",
+      "server": "28.0.4",
+      "storage_driver": "overlay2",
+      "switched_from_containerd_store": false
+     },
+     "runner": {
+      "arch": "X64",
+      "environment": "github-hosted",
+      "image_os": "ubuntu24",
+      "image_version": "20261111.370.1",
+      "kernel": "7.0.0-1017-azure",
+      "os": "Linux"
+     }
+    }
+   },
+   "scan_summary": {
+    "checks": {
+     "container": "pass",
+     "history-secrets": "pass",
+     "image-secrets": "pass",
+     "licenses": "pass",
+     "source-secrets": "pass",
+     "vulnerabilities": "pass"
+    },
+    "package_count": 153,
+    "policy_sha256": "5643d5ce538191af203b641944664efd26f30726252486e7828f517a466c7930",
+    "subject": {
+     "app": "hermes",
+     "archive_sha256": "2065e5154b9468f4a73614a967229ab41a1017c5017147ffd2d543c8e2f73341",
+     "diff_ids": [
+      "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+      "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+      "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+      "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+      "sha256:ee3d0bf1f08a8987682403c1cd97fd89968896db18058448eeb476040c4a2ffd",
+      "sha256:2e9f3f209b49985e8957e7b81e5f037a93e059eacf423a1bc283913c4e25bf30",
+      "sha256:10ce7d78970051e542dcad45dac08090fb3973299ed930d1674f2962c344fb0c",
+      "sha256:318d12375bf0db543ad2e81883a31cfc740b429b08d97a55cae99039be1cd3ca",
+      "sha256:e8b540d3c608f4d767d4264124e2b343dbc412d228732d675218e8b9f8da408d",
+      "sha256:7a22bbaa505bdc37dfc1508a7a802ed20c360deffd520d0725412f01a856ea17",
+      "sha256:c89037b8f081e710105e86a2974a1ba0455a7bc9268b71114960fe7e1ae3c53c",
+      "sha256:30af1bd86127136eee8fe8d57d389bbac367088afc0b8da6247773b446ec7873",
+      "sha256:c7ef70387ad04835acc25c93cfea64c0e01807030f026728e79171cfdf4dc5fb",
+      "sha256:d5ffbda229705cba6d283176b56b6d71305cfffb1029cccbff0fb8643f73d655",
+      "sha256:a42482dde1594df84359bd99dacdcb676af67ce0e42b0a55385342fb46a391e4",
+      "sha256:6eb99e1d4ede382d1e8c695391709044d19e692c70f0a092fcef82161157a70a"
+     ],
+     "image_id": "sha256:8c52b11eb7def4c9c0d6fc332ed0093d22d29261e54d574bebf6f366a498faff",
+     "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+    },
+    "tools": {
+     "gitleaks": {
+      "checksums": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_checksums.txt",
+      "sha256": "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb",
+      "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz",
+      "version": "8.28.0"
+     },
+     "grype": {
+      "checksums": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_checksums.txt",
+      "sha256": "a5a1218dce63acdac152a6b3b5bb366e7267e36f4069848cf455543b3fa5700e",
+      "url": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_linux_amd64.tar.gz",
+      "version": "0.120.0"
+     },
+     "syft": {
+      "checksums": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_checksums.txt",
+      "sha256": "54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860",
+      "url": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_linux_amd64.tar.gz",
+      "version": "1.54.0"
+     }
+    },
+    "vulnerability_count": 260,
+    "vulnerability_database": {
+     "built": "2026-11-17T06:20:58Z",
+     "checksum": "3f0cbdbc9d40fb69eaeacec1869b27a8c74f1894108804ace8b7468513e2df07",
+     "schemaVersion": "6.1.10"
+    }
+   },
+   "subject": {
+    "app": "hermes",
+    "archive_sha256": "2065e5154b9468f4a73614a967229ab41a1017c5017147ffd2d543c8e2f73341",
+    "diff_ids": [
+     "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+     "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+     "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+     "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+     "sha256:ee3d0bf1f08a8987682403c1cd97fd89968896db18058448eeb476040c4a2ffd",
+     "sha256:2e9f3f209b49985e8957e7b81e5f037a93e059eacf423a1bc283913c4e25bf30",
+     "sha256:10ce7d78970051e542dcad45dac08090fb3973299ed930d1674f2962c344fb0c",
+     "sha256:318d12375bf0db543ad2e81883a31cfc740b429b08d97a55cae99039be1cd3ca",
+     "sha256:e8b540d3c608f4d767d4264124e2b343dbc412d228732d675218e8b9f8da408d",
+     "sha256:7a22bbaa505bdc37dfc1508a7a802ed20c360deffd520d0725412f01a856ea17",
+     "sha256:c89037b8f081e710105e86a2974a1ba0455a7bc9268b71114960fe7e1ae3c53c",
+     "sha256:30af1bd86127136eee8fe8d57d389bbac367088afc0b8da6247773b446ec7873",
+     "sha256:c7ef70387ad04835acc25c93cfea64c0e01807030f026728e79171cfdf4dc5fb",
+     "sha256:d5ffbda229705cba6d283176b56b6d71305cfffb1029cccbff0fb8643f73d655",
+     "sha256:a42482dde1594df84359bd99dacdcb676af67ce0e42b0a55385342fb46a391e4",
+     "sha256:6eb99e1d4ede382d1e8c695391709044d19e692c70f0a092fcef82161157a70a"
+    ],
+    "image_id": "sha256:8c52b11eb7def4c9c0d6fc332ed0093d22d29261e54d574bebf6f366a498faff",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+   },
+   "version": "0.4.14"
+  },
+  "litellm": {
+   "approval": {
+    "checked_at": "2026-11-18T01:58:24+00:00",
+    "environment": {
+     "branch_policies": [
+      {
+       "name": "release/*",
+       "type": "branch"
+      }
+     ],
+     "can_admins_bypass": false,
+     "id": 27603699551,
+     "name": "public-release",
+     "prevent_self_review": false,
+     "reviewers": [
+      {
+       "id": 165237880,
+       "login": "WOOWTECH",
+       "type": "User"
+      }
+     ],
+     "updated_at": "2026-11-17T14:44:14Z",
+     "wait_timer": null
+    },
+    "repository": "WOOWTECH/Woow_ha_mcp_addons",
+    "reviews": [
+     {
+      "comment_length": 82,
+      "comment_present": true,
+      "environments": [
+       "public-release"
+      ],
+      "state": "approved",
+      "user": {
+       "id": 165237880,
+       "login": "WOOWTECH"
+      }
+     }
+    ],
+    "run": {
+     "actor": "WOOWTECH",
+     "attempt": 1,
+     "id": 44211890753,
+     "ref": "refs/heads/release/six-products-0.4.14-20261117",
+     "sha": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+     "triggering_actor": "WOOWTECH"
+    }
+   },
+   "handoff": {
+    "app": "litellm",
+    "archive_bytes": 226325504,
+    "archive_sha256": "f2efac3d428bd532314e53b2edd8963c4631eb706cdc0d344365195ab2d74914",
+    "diff_ids": [
+     "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+     "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+     "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+     "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+     "sha256:c78dadcd151338a2e5d24b1853934307a72ffb92e026f56bcc841ce8eb4f1f04",
+     "sha256:ba879b8ab0a3603666b8dc0ba30887b136c288641bf405fd80803578070a5262",
+     "sha256:fd32c8182c330c7c79ea626585f901db22936e7844d70fa8d588e699ced7b75c",
+     "sha256:c1a9f4bed56d7eeafad86a7466508280470fe4e0ab36717aa1be57b3095d8ad6",
+     "sha256:ca2fdd898ff38b94d1b711f117def5aa4804cb52fc34d5b84b11c1ec6280aff6",
+     "sha256:3a8049df0fc759292d15c2cffac6831d681caa902b4f8e5ed30bde3e80de8278",
+     "sha256:563ad013f464b7c02e8d438fe58d579ae884ca68b711e3ba033ac04705168f34",
+     "sha256:47a0a6ee3c61d2f4d2ae9efe147f89342e478e20c8e5a1da6fb9c1e94dec39ff",
+     "sha256:6492fe93bcad00a7f191cd2b79609eb5cb4545c385d957659df18e7bd0381823",
+     "sha256:4e1cef2c18ce336d7cd434db90776db88d2955880b73b99da2b381a83a070025",
+     "sha256:4737bb26b7241917da95cf5cbb5d1efdf95588d21ffcacc005a15ee1d3f0e334",
+     "sha256:32b7157f4eaf0151cf2d786ad5fe6ba85db1c311f7f92a5a23725b36803c9c39"
+    ],
+    "image_id": "sha256:e9e31155baa599880a7bc9975df9b38b3440c5455d5072acf0f4cc4190ac7827",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+    "tag": "local/mcp-litellm:0.4.14",
+    "version": "0.4.14"
+   },
+   "j1900": {
+    "allowlist_sha256": "e843e24cd55966756b29cf261bd3e7f10e7a1399860b0763deb87d4d604fdb73",
+    "app": "litellm",
+    "container": [
+     "--network",
+     "none",
+     "--read-only",
+     "--tmpfs",
+     "/tmp:rw,nosuid,nodev,size=256m,mode=1777",
+     "--user",
+     "10001:10001",
+     "--cap-drop",
+     "ALL",
+     "--security-opt",
+     "no-new-privileges",
+     "--pids-limit",
+     "512",
+     "--memory",
+     "4g",
+     "-e",
+     "HOME=/tmp"
+    ],
+    "cpu": "Nehalem",
+    "envs": {
+     "child": {
+      "allowlisted": [
+       "_tkinter",
+       "caio.linux_uring"
+      ],
+      "lib_dynload": {
+       "listed": 78,
+       "native_ok": 77
+      },
+      "modules_listed": 88,
+      "modules_sha256": "22f3ce15ff5b535abd3f71648c70a113c74ded6f328dab14b4bf5e1a8a7266e3",
+      "native_errors": {
+       "_tkinter": "ImportError: libtk8.6.so: cannot open shared object file: No such file or directory",
+       "caio.linux_uring": "ImportError: io_uring_setup probe failed: Operation not permitted"
+      },
+      "native_ok": 86,
+      "python": "/opt/woow/apps/litellm/.venv/bin/python",
+      "qemu_allowlisted": {
+       "caio.linux_aio": "ImportError: Error on io_setup with code 38"
+      },
+      "qemu_ok": 85,
+      "site_packages": {
+       "listed": 10,
+       "native_ok": 9
+      },
+      "smoke": true
+     },
+     "core": {
+      "allowlisted": [
+       "_tkinter"
+      ],
+      "lib_dynload": {
+       "listed": 78,
+       "native_ok": 77
+      },
+      "modules_listed": 80,
+      "modules_sha256": "1c554d295060f9e0a2875ddedf40c84b542e7e859e6fe548758a73c0d6b9a17b",
+      "native_errors": {
+       "_tkinter": "ImportError: libtk8.6.so: cannot open shared object file: No such file or directory"
+      },
+      "native_ok": 79,
+      "python": "/opt/woow/.venv/bin/python",
+      "qemu_allowlisted": {},
+      "qemu_ok": 79,
+      "site_packages": {
+       "listed": 2,
+       "native_ok": 2
+      },
+      "smoke": true
+     }
+    },
+    "image_id": "sha256:e9e31155baa599880a7bc9975df9b38b3440c5455d5072acf0f4cc4190ac7827",
+    "mode": "qemu-user",
+    "node": null,
+    "passed": true,
+    "probe_sha256": "d1401cb8122ed1fa2491e10f56e68758ab0ac30694697918db8d920ef7b6b538",
+    "qemu": {
+     "package": "qemu-user-static",
+     "path": "/usr/bin/qemu-x86_64-static",
+     "sha256": "90181b5552cd1a0b60d8edcc9f1cf8e38647579ef697d3155e2b6150e8fbcee0",
+     "version": "1:8.2.2+ds-0ubuntu1.18",
+     "version_line": "qemu-x86_64 version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)"
+    },
+    "scope": "imports every natively importable extension module plus a smoke run; not a full runtime trace",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+    "version": "0.4.14"
+   },
+   "provenance": {
+    "_type": "https://in-toto.io/Statement/v1",
+    "predicate": {
+     "evidence": {
+      "sbom.spdx.json": "d0ec4040c7520f16b9362f3ddf6661e46d5c3c50ce8d304d8e22e595467be48b",
+      "sbom.syft.json": "5c20a14e949461214e8bd762839b755546999d96cf34322885129d8066b9b5eb",
+      "scan-summary.json": "147172ec06c1343eddb3a033a530c6301fc1c981f9c777142f758aaff6247ba8"
+     },
+     "recipe": "packaging/supply_chain.py candidate (source commit below)",
+     "subject": {
+      "app": "litellm",
+      "archive_sha256": "084674e74521ae04d4c7f3202c1293dfe8ac6d2de96dc27b5f0bbb19bbbdda17",
+      "diff_ids": [
+       "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+       "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+       "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+       "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+       "sha256:c78dadcd151338a2e5d24b1853934307a72ffb92e026f56bcc841ce8eb4f1f04",
+       "sha256:ba879b8ab0a3603666b8dc0ba30887b136c288641bf405fd80803578070a5262",
+       "sha256:fd32c8182c330c7c79ea626585f901db22936e7844d70fa8d588e699ced7b75c",
+       "sha256:c1a9f4bed56d7eeafad86a7466508280470fe4e0ab36717aa1be57b3095d8ad6",
+       "sha256:ca2fdd898ff38b94d1b711f117def5aa4804cb52fc34d5b84b11c1ec6280aff6",
+       "sha256:3a8049df0fc759292d15c2cffac6831d681caa902b4f8e5ed30bde3e80de8278",
+       "sha256:563ad013f464b7c02e8d438fe58d579ae884ca68b711e3ba033ac04705168f34",
+       "sha256:47a0a6ee3c61d2f4d2ae9efe147f89342e478e20c8e5a1da6fb9c1e94dec39ff",
+       "sha256:6492fe93bcad00a7f191cd2b79609eb5cb4545c385d957659df18e7bd0381823",
+       "sha256:4e1cef2c18ce336d7cd434db90776db88d2955880b73b99da2b381a83a070025",
+       "sha256:4737bb26b7241917da95cf5cbb5d1efdf95588d21ffcacc005a15ee1d3f0e334",
+       "sha256:32b7157f4eaf0151cf2d786ad5fe6ba85db1c311f7f92a5a23725b36803c9c39"
+      ],
+      "image_id": "sha256:e9e31155baa599880a7bc9975df9b38b3440c5455d5072acf0f4cc4190ac7827",
+      "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+     },
+     "trust": "unsigned protected-workflow receipt; NOT SLSA certification"
+    },
+    "predicateType": "urn:woow:mcp:unsigned-candidate:v1",
+    "subject": [
+     {
+      "digest": {
+       "sha256": "e9e31155baa599880a7bc9975df9b38b3440c5455d5072acf0f4cc4190ac7827"
+      },
+      "name": "local/mcp-litellm"
+     }
+    ]
+   },
+   "published_digest": {
+    "config_digest": "sha256:e9e31155baa599880a7bc9975df9b38b3440c5455d5072acf0f4cc4190ac7827",
+    "reference": "ghcr.io/woowtech/amd64-mcp-litellm@sha256:fb3141fba524f90a65f94c876963762e21bd24abb5cc005fd65327c488768aa4"
+   },
+   "published_provenance": {
+    "_type": "https://in-toto.io/Statement/v1",
+    "predicate": {
+     "evidence": {
+      "sbom.spdx.json": "d0ec4040c7520f16b9362f3ddf6661e46d5c3c50ce8d304d8e22e595467be48b",
+      "sbom.syft.json": "5c20a14e949461214e8bd762839b755546999d96cf34322885129d8066b9b5eb",
+      "scan-summary.json": "147172ec06c1343eddb3a033a530c6301fc1c981f9c777142f758aaff6247ba8"
+     },
+     "recipe": "packaging/supply_chain.py candidate (source commit below)",
+     "registry": {
+      "anonymous_pull_verified": true,
+      "config_digest": "sha256:e9e31155baa599880a7bc9975df9b38b3440c5455d5072acf0f4cc4190ac7827",
+      "manifest_digest": "sha256:fb3141fba524f90a65f94c876963762e21bd24abb5cc005fd65327c488768aa4",
+      "reference": "ghcr.io/woowtech/amd64-mcp-litellm@sha256:fb3141fba524f90a65f94c876963762e21bd24abb5cc005fd65327c488768aa4"
+     },
+     "subject": {
+      "app": "litellm",
+      "archive_sha256": "084674e74521ae04d4c7f3202c1293dfe8ac6d2de96dc27b5f0bbb19bbbdda17",
+      "diff_ids": [
+       "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+       "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+       "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+       "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+       "sha256:c78dadcd151338a2e5d24b1853934307a72ffb92e026f56bcc841ce8eb4f1f04",
+       "sha256:ba879b8ab0a3603666b8dc0ba30887b136c288641bf405fd80803578070a5262",
+       "sha256:fd32c8182c330c7c79ea626585f901db22936e7844d70fa8d588e699ced7b75c",
+       "sha256:c1a9f4bed56d7eeafad86a7466508280470fe4e0ab36717aa1be57b3095d8ad6",
+       "sha256:ca2fdd898ff38b94d1b711f117def5aa4804cb52fc34d5b84b11c1ec6280aff6",
+       "sha256:3a8049df0fc759292d15c2cffac6831d681caa902b4f8e5ed30bde3e80de8278",
+       "sha256:563ad013f464b7c02e8d438fe58d579ae884ca68b711e3ba033ac04705168f34",
+       "sha256:47a0a6ee3c61d2f4d2ae9efe147f89342e478e20c8e5a1da6fb9c1e94dec39ff",
+       "sha256:6492fe93bcad00a7f191cd2b79609eb5cb4545c385d957659df18e7bd0381823",
+       "sha256:4e1cef2c18ce336d7cd434db90776db88d2955880b73b99da2b381a83a070025",
+       "sha256:4737bb26b7241917da95cf5cbb5d1efdf95588d21ffcacc005a15ee1d3f0e334",
+       "sha256:32b7157f4eaf0151cf2d786ad5fe6ba85db1c311f7f92a5a23725b36803c9c39"
+      ],
+      "image_id": "sha256:e9e31155baa599880a7bc9975df9b38b3440c5455d5072acf0f4cc4190ac7827",
+      "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+     },
+     "trust": "unsigned protected-workflow receipt; NOT SLSA certification"
+    },
+    "predicateType": "urn:woow:mcp:unsigned-candidate:v1",
+    "subject": [
+     {
+      "digest": {
+       "sha256": "e9e31155baa599880a7bc9975df9b38b3440c5455d5072acf0f4cc4190ac7827"
+      },
+      "name": "local/mcp-litellm"
+     },
+     {
+      "digest": {
+       "sha256": "fb3141fba524f90a65f94c876963762e21bd24abb5cc005fd65327c488768aa4"
+      },
+      "name": "ghcr.io/woowtech/amd64-mcp-litellm"
+     }
+    ]
+   },
+   "run_id": 44211890753,
+   "runner": {
+    "candidate": {
+     "buildx": "github.com/docker/buildx v0.38.2 3c4cbd35852fc1a476923627a780a7836c28b654",
+     "checked_at": "2026-11-18T01:24:00+00:00",
+     "docker": {
+      "api": "1.48",
+      "client": "28.0.4",
+      "components": {
+       "Engine": "28.0.4",
+       "containerd": "v2.4.2",
+       "docker-init": "0.19.0",
+       "runc": "1.5.2"
+      },
+      "driver_status": [
+       [
+        "Backing Filesystem",
+        "extfs"
+       ],
+       [
+        "Supports d_type",
+        "true"
+       ],
+       [
+        "Using metacopy",
+        "false"
+       ],
+       [
+        "Native Overlay Diff",
+        "true"
+       ],
+       [
+        "userxattr",
+        "false"
+       ]
+      ],
+      "image_store": "classic",
+      "operating_system": "Ubuntu 24.04.5 LTS",
+      "server": "28.0.4",
+      "storage_driver": "overlay2",
+      "switched_from_containerd_store": false
+     },
+     "runner": {
+      "arch": "X64",
+      "environment": "github-hosted",
+      "image_os": "ubuntu24",
+      "image_version": "20261111.127.1",
+      "kernel": "7.0.0-1014-aws",
+      "os": "Linux"
+     }
+    },
+    "publish": {
+     "buildx": "github.com/docker/buildx v0.38.2 3c4cbd35852fc1a476923627a780a7836c28b654",
+     "checked_at": "2026-11-18T01:58:30+00:00",
+     "docker": {
+      "api": "1.48",
+      "client": "28.0.4",
+      "components": {
+       "Engine": "28.0.4",
+       "containerd": "v2.4.2",
+       "docker-init": "0.19.0",
+       "runc": "1.5.2"
+      },
+      "driver_status": [
+       [
+        "Backing Filesystem",
+        "extfs"
+       ],
+       [
+        "Supports d_type",
+        "true"
+       ],
+       [
+        "Using metacopy",
+        "false"
+       ],
+       [
+        "Native Overlay Diff",
+        "false"
+       ],
+       [
+        "userxattr",
+        "false"
+       ]
+      ],
+      "image_store": "classic",
+      "operating_system": "Ubuntu 24.04.5 LTS",
+      "server": "28.0.4",
+      "storage_driver": "overlay2",
+      "switched_from_containerd_store": false
+     },
+     "runner": {
+      "arch": "X64",
+      "environment": "github-hosted",
+      "image_os": "ubuntu24",
+      "image_version": "20261111.370.1",
+      "kernel": "7.0.0-1017-azure",
+      "os": "Linux"
+     }
+    }
+   },
+   "scan_summary": {
+    "checks": {
+     "container": "pass",
+     "history-secrets": "pass",
+     "image-secrets": "pass",
+     "licenses": "pass",
+     "source-secrets": "pass",
+     "vulnerabilities": "pass"
+    },
+    "package_count": 193,
+    "policy_sha256": "5643d5ce538191af203b641944664efd26f30726252486e7828f517a466c7930",
+    "subject": {
+     "app": "litellm",
+     "archive_sha256": "084674e74521ae04d4c7f3202c1293dfe8ac6d2de96dc27b5f0bbb19bbbdda17",
+     "diff_ids": [
+      "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+      "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+      "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+      "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+      "sha256:c78dadcd151338a2e5d24b1853934307a72ffb92e026f56bcc841ce8eb4f1f04",
+      "sha256:ba879b8ab0a3603666b8dc0ba30887b136c288641bf405fd80803578070a5262",
+      "sha256:fd32c8182c330c7c79ea626585f901db22936e7844d70fa8d588e699ced7b75c",
+      "sha256:c1a9f4bed56d7eeafad86a7466508280470fe4e0ab36717aa1be57b3095d8ad6",
+      "sha256:ca2fdd898ff38b94d1b711f117def5aa4804cb52fc34d5b84b11c1ec6280aff6",
+      "sha256:3a8049df0fc759292d15c2cffac6831d681caa902b4f8e5ed30bde3e80de8278",
+      "sha256:563ad013f464b7c02e8d438fe58d579ae884ca68b711e3ba033ac04705168f34",
+      "sha256:47a0a6ee3c61d2f4d2ae9efe147f89342e478e20c8e5a1da6fb9c1e94dec39ff",
+      "sha256:6492fe93bcad00a7f191cd2b79609eb5cb4545c385d957659df18e7bd0381823",
+      "sha256:4e1cef2c18ce336d7cd434db90776db88d2955880b73b99da2b381a83a070025",
+      "sha256:4737bb26b7241917da95cf5cbb5d1efdf95588d21ffcacc005a15ee1d3f0e334",
+      "sha256:32b7157f4eaf0151cf2d786ad5fe6ba85db1c311f7f92a5a23725b36803c9c39"
+     ],
+     "image_id": "sha256:e9e31155baa599880a7bc9975df9b38b3440c5455d5072acf0f4cc4190ac7827",
+     "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+    },
+    "tools": {
+     "gitleaks": {
+      "checksums": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_checksums.txt",
+      "sha256": "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb",
+      "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz",
+      "version": "8.28.0"
+     },
+     "grype": {
+      "checksums": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_checksums.txt",
+      "sha256": "a5a1218dce63acdac152a6b3b5bb366e7267e36f4069848cf455543b3fa5700e",
+      "url": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_linux_amd64.tar.gz",
+      "version": "0.120.0"
+     },
+     "syft": {
+      "checksums": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_checksums.txt",
+      "sha256": "54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860",
+      "url": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_linux_amd64.tar.gz",
+      "version": "1.54.0"
+     }
+    },
+    "vulnerability_count": 260,
+    "vulnerability_database": {
+     "built": "2026-11-17T06:20:58Z",
+     "checksum": "3f0cbdbc9d40fb69eaeacec1869b27a8c74f1894108804ace8b7468513e2df07",
+     "schemaVersion": "6.1.10"
+    }
+   },
+   "subject": {
+    "app": "litellm",
+    "archive_sha256": "084674e74521ae04d4c7f3202c1293dfe8ac6d2de96dc27b5f0bbb19bbbdda17",
+    "diff_ids": [
+     "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+     "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+     "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+     "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+     "sha256:c78dadcd151338a2e5d24b1853934307a72ffb92e026f56bcc841ce8eb4f1f04",
+     "sha256:ba879b8ab0a3603666b8dc0ba30887b136c288641bf405fd80803578070a5262",
+     "sha256:fd32c8182c330c7c79ea626585f901db22936e7844d70fa8d588e699ced7b75c",
+     "sha256:c1a9f4bed56d7eeafad86a7466508280470fe4e0ab36717aa1be57b3095d8ad6",
+     "sha256:ca2fdd898ff38b94d1b711f117def5aa4804cb52fc34d5b84b11c1ec6280aff6",
+     "sha256:3a8049df0fc759292d15c2cffac6831d681caa902b4f8e5ed30bde3e80de8278",
+     "sha256:563ad013f464b7c02e8d438fe58d579ae884ca68b711e3ba033ac04705168f34",
+     "sha256:47a0a6ee3c61d2f4d2ae9efe147f89342e478e20c8e5a1da6fb9c1e94dec39ff",
+     "sha256:6492fe93bcad00a7f191cd2b79609eb5cb4545c385d957659df18e7bd0381823",
+     "sha256:4e1cef2c18ce336d7cd434db90776db88d2955880b73b99da2b381a83a070025",
+     "sha256:4737bb26b7241917da95cf5cbb5d1efdf95588d21ffcacc005a15ee1d3f0e334",
+     "sha256:32b7157f4eaf0151cf2d786ad5fe6ba85db1c311f7f92a5a23725b36803c9c39"
+    ],
+    "image_id": "sha256:e9e31155baa599880a7bc9975df9b38b3440c5455d5072acf0f4cc4190ac7827",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+   },
+   "version": "0.4.14"
+  },
+  "n8n": {
+   "approval": {
+    "checked_at": "2026-11-18T01:58:23+00:00",
+    "environment": {
+     "branch_policies": [
+      {
+       "name": "release/*",
+       "type": "branch"
+      }
+     ],
+     "can_admins_bypass": false,
+     "id": 27603699551,
+     "name": "public-release",
+     "prevent_self_review": false,
+     "reviewers": [
+      {
+       "id": 165237880,
+       "login": "WOOWTECH",
+       "type": "User"
+      }
+     ],
+     "updated_at": "2026-11-17T14:44:14Z",
+     "wait_timer": null
+    },
+    "repository": "WOOWTECH/Woow_ha_mcp_addons",
+    "reviews": [
+     {
+      "comment_length": 82,
+      "comment_present": true,
+      "environments": [
+       "public-release"
+      ],
+      "state": "approved",
+      "user": {
+       "id": 165237880,
+       "login": "WOOWTECH"
+      }
+     }
+    ],
+    "run": {
+     "actor": "WOOWTECH",
+     "attempt": 1,
+     "id": 44211880072,
+     "ref": "refs/heads/release/six-products-0.4.14-20261117",
+     "sha": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+     "triggering_actor": "WOOWTECH"
+    }
+   },
+   "handoff": {
+    "app": "n8n",
+    "archive_bytes": 469238272,
+    "archive_sha256": "039aa890b6bc6ba75281dac9a7746466c1b9c1297049a77056802ee29f2463a8",
+    "diff_ids": [
+     "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+     "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+     "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+     "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+     "sha256:0df181ab1a2b85401720db63d4a99bcb59adf966d22c7dca412b6acae54af807",
+     "sha256:a4b37ec5c55eeb2f9f5c26652ca8a0a527cc498cdbf34446320879380a423c02",
+     "sha256:f2a8972579e374ba364c9b5280f3580e9dd59d236adb1126ff8e8e6dd23b9f7e",
+     "sha256:30d1cd12a4aec0093c7247246612d89495b046d8ef1f5500271bd025f03742ec",
+     "sha256:06434ec681945103b5fb049cec372fadbad068c545a4819c33436781b5822c9a",
+     "sha256:c965102c3b8660d6b645899a5aa70e88488812adecaedb3351a0d1aa407296c8",
+     "sha256:b8be9b58977c4dd363813ac4fb4b9eb72aeffbed8c2b31976ab396ef8679f89a",
+     "sha256:b8117795aac2bfb2802d4dea78b0cbdb3eb3bf38803b626bb2181c5721fe3fe5",
+     "sha256:c66448ea99d5ed9b035509b992a820c177301c23ac6b45f8046b90b173ce1cc5",
+     "sha256:c51340db28972d6851b76746da783934ee6d94812cbdd6f5088718be8d3a99d5",
+     "sha256:a28ecbd8f9f044aff12aff811253946396972456597f3ed1019a2938a94e10ae",
+     "sha256:8b148b1204b7a28241cef37e5b59df8e4b59d7b49d14c690bb15fcd92d0db85d",
+     "sha256:e29a155bff9726b57605220cad9f00e7f5901f0478a3ead989156322eab8adab",
+     "sha256:2a6032aab37e0b656a1154661dd089b77061d46cb53808b30f9d569c5c781938",
+     "sha256:c43513b82df72be8936b366edaa5ed8a5908b0257e220a4821962084e6e02ebb",
+     "sha256:1aa48885fcfdcf68b7bc2a922010c9ec28d59c88a8d7ecfef03f7d411a65cb67",
+     "sha256:897c8886d919cfbe1c3ed9fd77ea715e5ddaa01e37ddf24b08c5d3867cb8741d",
+     "sha256:a4cbcd6351170b1194fc6481d3cab16528b69952b334c29a8ac4333f77b59db4",
+     "sha256:2498b8085076478b8685e9586ac92009a9c0f9c4405ee49d53a07fdd9b87fb9f",
+     "sha256:243ddb6e61c817d25116cb42b3bc28477535c47bd6d0203ec38ddb1555b43395",
+     "sha256:3f351e9769b5f785560c714a068a271dd0a055429ff0154ceba9a7ee5298b732",
+     "sha256:b5a73cf05417b9eb4881789f11ca2c5debb89f616dd995122e5ba2179d7cc42e"
+    ],
+    "image_id": "sha256:5afcfda1f5ddf7d4f1c2f4678f2a59d52ae7f9818f577a116e5908c6430c3936",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+    "tag": "local/mcp-n8n:0.4.14",
+    "version": "0.4.14"
+   },
+   "j1900": {
+    "allowlist_sha256": "e843e24cd55966756b29cf261bd3e7f10e7a1399860b0763deb87d4d604fdb73",
+    "app": "n8n",
+    "container": [
+     "--network",
+     "none",
+     "--read-only",
+     "--tmpfs",
+     "/tmp:rw,nosuid,nodev,size=256m,mode=1777",
+     "--user",
+     "10001:10001",
+     "--cap-drop",
+     "ALL",
+     "--security-opt",
+     "no-new-privileges",
+     "--pids-limit",
+     "512",
+     "--memory",
+     "4g",
+     "-e",
+     "HOME=/tmp"
+    ],
+    "cpu": "Nehalem",
+    "envs": {
+     "core": {
+      "allowlisted": [
+       "_tkinter"
+      ],
+      "lib_dynload": {
+       "listed": 78,
+       "native_ok": 77
+      },
+      "modules_listed": 80,
+      "modules_sha256": "1c554d295060f9e0a2875ddedf40c84b542e7e859e6fe548758a73c0d6b9a17b",
+      "native_errors": {
+       "_tkinter": "ImportError: libtk8.6.so: cannot open shared object file: No such file or directory"
+      },
+      "native_ok": 79,
+      "python": "/opt/woow/.venv/bin/python",
+      "qemu_allowlisted": {},
+      "qemu_ok": 79,
+      "site_packages": {
+       "listed": 2,
+       "native_ok": 2
+      },
+      "smoke": true
+     }
+    },
+    "image_id": "sha256:5afcfda1f5ddf7d4f1c2f4678f2a59d52ae7f9818f577a116e5908c6430c3936",
+    "mode": "qemu-user",
+    "node": {
+     "fts5": 1,
+     "node": "v26.12.1",
+     "sha256": "fff01111760433e57635920424522753f76e992eedb17ed801c302529c1f2c56",
+     "zlib": 5000
+    },
+    "passed": true,
+    "probe_sha256": "d1401cb8122ed1fa2491e10f56e68758ab0ac30694697918db8d920ef7b6b538",
+    "qemu": {
+     "package": "qemu-user-static",
+     "path": "/usr/bin/qemu-x86_64-static",
+     "sha256": "90181b5552cd1a0b60d8edcc9f1cf8e38647579ef697d3155e2b6150e8fbcee0",
+     "version": "1:8.2.2+ds-0ubuntu1.18",
+     "version_line": "qemu-x86_64 version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)"
+    },
+    "scope": "imports every natively importable extension module plus a smoke run; not a full runtime trace",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+    "version": "0.4.14"
+   },
+   "provenance": {
+    "_type": "https://in-toto.io/Statement/v1",
+    "predicate": {
+     "evidence": {
+      "sbom.spdx.json": "82fb60b524d7f872129c49d0f39bdbd21835209b04c66dd3834db8618b1b31a7",
+      "sbom.syft.json": "1ccbb1e7977b0cfadca4db04cdd782ba5c96e894ca347912b3cd7e5ffb3c7458",
+      "scan-summary.json": "2203de30631c0feaa745e9fd8165890b87b692103c008e0a7d26e8e258377018"
+     },
+     "recipe": "packaging/supply_chain.py candidate (source commit below)",
+     "subject": {
+      "app": "n8n",
+      "archive_sha256": "5fcb5ca6dfb54365fe611a3859e8688419349b18fd90f6e061d76c336f8e2b26",
+      "diff_ids": [
+       "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+       "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+       "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+       "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+       "sha256:0df181ab1a2b85401720db63d4a99bcb59adf966d22c7dca412b6acae54af807",
+       "sha256:a4b37ec5c55eeb2f9f5c26652ca8a0a527cc498cdbf34446320879380a423c02",
+       "sha256:f2a8972579e374ba364c9b5280f3580e9dd59d236adb1126ff8e8e6dd23b9f7e",
+       "sha256:30d1cd12a4aec0093c7247246612d89495b046d8ef1f5500271bd025f03742ec",
+       "sha256:06434ec681945103b5fb049cec372fadbad068c545a4819c33436781b5822c9a",
+       "sha256:c965102c3b8660d6b645899a5aa70e88488812adecaedb3351a0d1aa407296c8",
+       "sha256:b8be9b58977c4dd363813ac4fb4b9eb72aeffbed8c2b31976ab396ef8679f89a",
+       "sha256:b8117795aac2bfb2802d4dea78b0cbdb3eb3bf38803b626bb2181c5721fe3fe5",
+       "sha256:c66448ea99d5ed9b035509b992a820c177301c23ac6b45f8046b90b173ce1cc5",
+       "sha256:c51340db28972d6851b76746da783934ee6d94812cbdd6f5088718be8d3a99d5",
+       "sha256:a28ecbd8f9f044aff12aff811253946396972456597f3ed1019a2938a94e10ae",
+       "sha256:8b148b1204b7a28241cef37e5b59df8e4b59d7b49d14c690bb15fcd92d0db85d",
+       "sha256:e29a155bff9726b57605220cad9f00e7f5901f0478a3ead989156322eab8adab",
+       "sha256:2a6032aab37e0b656a1154661dd089b77061d46cb53808b30f9d569c5c781938",
+       "sha256:c43513b82df72be8936b366edaa5ed8a5908b0257e220a4821962084e6e02ebb",
+       "sha256:1aa48885fcfdcf68b7bc2a922010c9ec28d59c88a8d7ecfef03f7d411a65cb67",
+       "sha256:897c8886d919cfbe1c3ed9fd77ea715e5ddaa01e37ddf24b08c5d3867cb8741d",
+       "sha256:a4cbcd6351170b1194fc6481d3cab16528b69952b334c29a8ac4333f77b59db4",
+       "sha256:2498b8085076478b8685e9586ac92009a9c0f9c4405ee49d53a07fdd9b87fb9f",
+       "sha256:243ddb6e61c817d25116cb42b3bc28477535c47bd6d0203ec38ddb1555b43395",
+       "sha256:3f351e9769b5f785560c714a068a271dd0a055429ff0154ceba9a7ee5298b732",
+       "sha256:b5a73cf05417b9eb4881789f11ca2c5debb89f616dd995122e5ba2179d7cc42e"
+      ],
+      "image_id": "sha256:5afcfda1f5ddf7d4f1c2f4678f2a59d52ae7f9818f577a116e5908c6430c3936",
+      "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+     },
+     "trust": "unsigned protected-workflow receipt; NOT SLSA certification"
+    },
+    "predicateType": "urn:woow:mcp:unsigned-candidate:v1",
+    "subject": [
+     {
+      "digest": {
+       "sha256": "5afcfda1f5ddf7d4f1c2f4678f2a59d52ae7f9818f577a116e5908c6430c3936"
+      },
+      "name": "local/mcp-n8n"
+     }
+    ]
+   },
+   "published_digest": {
+    "config_digest": "sha256:5afcfda1f5ddf7d4f1c2f4678f2a59d52ae7f9818f577a116e5908c6430c3936",
+    "reference": "ghcr.io/woowtech/amd64-mcp-n8n@sha256:e30438e2684d377200e0aea8313b19e532070899ef9b9599f011b11cca851d94"
+   },
+   "published_provenance": {
+    "_type": "https://in-toto.io/Statement/v1",
+    "predicate": {
+     "evidence": {
+      "sbom.spdx.json": "82fb60b524d7f872129c49d0f39bdbd21835209b04c66dd3834db8618b1b31a7",
+      "sbom.syft.json": "1ccbb1e7977b0cfadca4db04cdd782ba5c96e894ca347912b3cd7e5ffb3c7458",
+      "scan-summary.json": "2203de30631c0feaa745e9fd8165890b87b692103c008e0a7d26e8e258377018"
+     },
+     "recipe": "packaging/supply_chain.py candidate (source commit below)",
+     "registry": {
+      "anonymous_pull_verified": true,
+      "config_digest": "sha256:5afcfda1f5ddf7d4f1c2f4678f2a59d52ae7f9818f577a116e5908c6430c3936",
+      "manifest_digest": "sha256:e30438e2684d377200e0aea8313b19e532070899ef9b9599f011b11cca851d94",
+      "reference": "ghcr.io/woowtech/amd64-mcp-n8n@sha256:e30438e2684d377200e0aea8313b19e532070899ef9b9599f011b11cca851d94"
+     },
+     "subject": {
+      "app": "n8n",
+      "archive_sha256": "5fcb5ca6dfb54365fe611a3859e8688419349b18fd90f6e061d76c336f8e2b26",
+      "diff_ids": [
+       "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+       "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+       "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+       "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+       "sha256:0df181ab1a2b85401720db63d4a99bcb59adf966d22c7dca412b6acae54af807",
+       "sha256:a4b37ec5c55eeb2f9f5c26652ca8a0a527cc498cdbf34446320879380a423c02",
+       "sha256:f2a8972579e374ba364c9b5280f3580e9dd59d236adb1126ff8e8e6dd23b9f7e",
+       "sha256:30d1cd12a4aec0093c7247246612d89495b046d8ef1f5500271bd025f03742ec",
+       "sha256:06434ec681945103b5fb049cec372fadbad068c545a4819c33436781b5822c9a",
+       "sha256:c965102c3b8660d6b645899a5aa70e88488812adecaedb3351a0d1aa407296c8",
+       "sha256:b8be9b58977c4dd363813ac4fb4b9eb72aeffbed8c2b31976ab396ef8679f89a",
+       "sha256:b8117795aac2bfb2802d4dea78b0cbdb3eb3bf38803b626bb2181c5721fe3fe5",
+       "sha256:c66448ea99d5ed9b035509b992a820c177301c23ac6b45f8046b90b173ce1cc5",
+       "sha256:c51340db28972d6851b76746da783934ee6d94812cbdd6f5088718be8d3a99d5",
+       "sha256:a28ecbd8f9f044aff12aff811253946396972456597f3ed1019a2938a94e10ae",
+       "sha256:8b148b1204b7a28241cef37e5b59df8e4b59d7b49d14c690bb15fcd92d0db85d",
+       "sha256:e29a155bff9726b57605220cad9f00e7f5901f0478a3ead989156322eab8adab",
+       "sha256:2a6032aab37e0b656a1154661dd089b77061d46cb53808b30f9d569c5c781938",
+       "sha256:c43513b82df72be8936b366edaa5ed8a5908b0257e220a4821962084e6e02ebb",
+       "sha256:1aa48885fcfdcf68b7bc2a922010c9ec28d59c88a8d7ecfef03f7d411a65cb67",
+       "sha256:897c8886d919cfbe1c3ed9fd77ea715e5ddaa01e37ddf24b08c5d3867cb8741d",
+       "sha256:a4cbcd6351170b1194fc6481d3cab16528b69952b334c29a8ac4333f77b59db4",
+       "sha256:2498b8085076478b8685e9586ac92009a9c0f9c4405ee49d53a07fdd9b87fb9f",
+       "sha256:243ddb6e61c817d25116cb42b3bc28477535c47bd6d0203ec38ddb1555b43395",
+       "sha256:3f351e9769b5f785560c714a068a271dd0a055429ff0154ceba9a7ee5298b732",
+       "sha256:b5a73cf05417b9eb4881789f11ca2c5debb89f616dd995122e5ba2179d7cc42e"
+      ],
+      "image_id": "sha256:5afcfda1f5ddf7d4f1c2f4678f2a59d52ae7f9818f577a116e5908c6430c3936",
+      "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+     },
+     "trust": "unsigned protected-workflow receipt; NOT SLSA certification"
+    },
+    "predicateType": "urn:woow:mcp:unsigned-candidate:v1",
+    "subject": [
+     {
+      "digest": {
+       "sha256": "5afcfda1f5ddf7d4f1c2f4678f2a59d52ae7f9818f577a116e5908c6430c3936"
+      },
+      "name": "local/mcp-n8n"
+     },
+     {
+      "digest": {
+       "sha256": "e30438e2684d377200e0aea8313b19e532070899ef9b9599f011b11cca851d94"
+      },
+      "name": "ghcr.io/woowtech/amd64-mcp-n8n"
+     }
+    ]
+   },
+   "run_id": 44211880072,
+   "runner": {
+    "candidate": {
+     "buildx": "github.com/docker/buildx v0.38.2 3c4cbd35852fc1a476923627a780a7836c28b654",
+     "checked_at": "2026-11-18T01:26:42+00:00",
+     "docker": {
+      "api": "1.48",
+      "client": "28.0.4",
+      "components": {
+       "Engine": "28.0.4",
+       "containerd": "v2.4.2",
+       "docker-init": "0.19.0",
+       "runc": "1.5.2"
+      },
+      "driver_status": [
+       [
+        "Backing Filesystem",
+        "extfs"
+       ],
+       [
+        "Supports d_type",
+        "true"
+       ],
+       [
+        "Using metacopy",
+        "false"
+       ],
+       [
+        "Native Overlay Diff",
+        "true"
+       ],
+       [
+        "userxattr",
+        "false"
+       ]
+      ],
+      "image_store": "classic",
+      "operating_system": "Ubuntu 24.04.5 LTS",
+      "server": "28.0.4",
+      "storage_driver": "overlay2",
+      "switched_from_containerd_store": false
+     },
+     "runner": {
+      "arch": "X64",
+      "environment": "github-hosted",
+      "image_os": "ubuntu24",
+      "image_version": "20261111.127.1",
+      "kernel": "7.0.0-1014-aws",
+      "os": "Linux"
+     }
+    },
+    "publish": {
+     "buildx": "github.com/docker/buildx v0.38.2 3c4cbd35852fc1a476923627a780a7836c28b654",
+     "checked_at": "2026-11-18T01:58:23+00:00",
+     "docker": {
+      "api": "1.48",
+      "client": "28.0.4",
+      "components": {
+       "Engine": "28.0.4",
+       "containerd": "v2.4.2",
+       "docker-init": "0.19.0",
+       "runc": "1.5.2"
+      },
+      "driver_status": [
+       [
+        "Backing Filesystem",
+        "extfs"
+       ],
+       [
+        "Supports d_type",
+        "true"
+       ],
+       [
+        "Using metacopy",
+        "false"
+       ],
+       [
+        "Native Overlay Diff",
+        "true"
+       ],
+       [
+        "userxattr",
+        "false"
+       ]
+      ],
+      "image_store": "classic",
+      "operating_system": "Ubuntu 24.04.5 LTS",
+      "server": "28.0.4",
+      "storage_driver": "overlay2",
+      "switched_from_containerd_store": false
+     },
+     "runner": {
+      "arch": "X64",
+      "environment": "github-hosted",
+      "image_os": "ubuntu24",
+      "image_version": "20261111.127.1",
+      "kernel": "7.0.0-1014-aws",
+      "os": "Linux"
+     }
+    }
+   },
+   "scan_summary": {
+    "checks": {
+     "container": "pass",
+     "history-secrets": "pass",
+     "image-secrets": "pass",
+     "licenses": "pass",
+     "source-secrets": "pass",
+     "vulnerabilities": "pass"
+    },
+    "package_count": 277,
+    "policy_sha256": "5643d5ce538191af203b641944664efd26f30726252486e7828f517a466c7930",
+    "subject": {
+     "app": "n8n",
+     "archive_sha256": "5fcb5ca6dfb54365fe611a3859e8688419349b18fd90f6e061d76c336f8e2b26",
+     "diff_ids": [
+      "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+      "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+      "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+      "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+      "sha256:0df181ab1a2b85401720db63d4a99bcb59adf966d22c7dca412b6acae54af807",
+      "sha256:a4b37ec5c55eeb2f9f5c26652ca8a0a527cc498cdbf34446320879380a423c02",
+      "sha256:f2a8972579e374ba364c9b5280f3580e9dd59d236adb1126ff8e8e6dd23b9f7e",
+      "sha256:30d1cd12a4aec0093c7247246612d89495b046d8ef1f5500271bd025f03742ec",
+      "sha256:06434ec681945103b5fb049cec372fadbad068c545a4819c33436781b5822c9a",
+      "sha256:c965102c3b8660d6b645899a5aa70e88488812adecaedb3351a0d1aa407296c8",
+      "sha256:b8be9b58977c4dd363813ac4fb4b9eb72aeffbed8c2b31976ab396ef8679f89a",
+      "sha256:b8117795aac2bfb2802d4dea78b0cbdb3eb3bf38803b626bb2181c5721fe3fe5",
+      "sha256:c66448ea99d5ed9b035509b992a820c177301c23ac6b45f8046b90b173ce1cc5",
+      "sha256:c51340db28972d6851b76746da783934ee6d94812cbdd6f5088718be8d3a99d5",
+      "sha256:a28ecbd8f9f044aff12aff811253946396972456597f3ed1019a2938a94e10ae",
+      "sha256:8b148b1204b7a28241cef37e5b59df8e4b59d7b49d14c690bb15fcd92d0db85d",
+      "sha256:e29a155bff9726b57605220cad9f00e7f5901f0478a3ead989156322eab8adab",
+      "sha256:2a6032aab37e0b656a1154661dd089b77061d46cb53808b30f9d569c5c781938",
+      "sha256:c43513b82df72be8936b366edaa5ed8a5908b0257e220a4821962084e6e02ebb",
+      "sha256:1aa48885fcfdcf68b7bc2a922010c9ec28d59c88a8d7ecfef03f7d411a65cb67",
+      "sha256:897c8886d919cfbe1c3ed9fd77ea715e5ddaa01e37ddf24b08c5d3867cb8741d",
+      "sha256:a4cbcd6351170b1194fc6481d3cab16528b69952b334c29a8ac4333f77b59db4",
+      "sha256:2498b8085076478b8685e9586ac92009a9c0f9c4405ee49d53a07fdd9b87fb9f",
+      "sha256:243ddb6e61c817d25116cb42b3bc28477535c47bd6d0203ec38ddb1555b43395",
+      "sha256:3f351e9769b5f785560c714a068a271dd0a055429ff0154ceba9a7ee5298b732",
+      "sha256:b5a73cf05417b9eb4881789f11ca2c5debb89f616dd995122e5ba2179d7cc42e"
+     ],
+     "image_id": "sha256:5afcfda1f5ddf7d4f1c2f4678f2a59d52ae7f9818f577a116e5908c6430c3936",
+     "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+    },
+    "tools": {
+     "gitleaks": {
+      "checksums": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_checksums.txt",
+      "sha256": "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb",
+      "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz",
+      "version": "8.28.0"
+     },
+     "grype": {
+      "checksums": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_checksums.txt",
+      "sha256": "a5a1218dce63acdac152a6b3b5bb366e7267e36f4069848cf455543b3fa5700e",
+      "url": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_linux_amd64.tar.gz",
+      "version": "0.120.0"
+     },
+     "syft": {
+      "checksums": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_checksums.txt",
+      "sha256": "54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860",
+      "url": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_linux_amd64.tar.gz",
+      "version": "1.54.0"
+     }
+    },
+    "vulnerability_count": 266,
+    "vulnerability_database": {
+     "built": "2026-11-17T06:20:58Z",
+     "checksum": "3f0cbdbc9d40fb69eaeacec1869b27a8c74f1894108804ace8b7468513e2df07",
+     "schemaVersion": "6.1.10"
+    }
+   },
+   "subject": {
+    "app": "n8n",
+    "archive_sha256": "5fcb5ca6dfb54365fe611a3859e8688419349b18fd90f6e061d76c336f8e2b26",
+    "diff_ids": [
+     "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+     "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+     "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+     "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+     "sha256:0df181ab1a2b85401720db63d4a99bcb59adf966d22c7dca412b6acae54af807",
+     "sha256:a4b37ec5c55eeb2f9f5c26652ca8a0a527cc498cdbf34446320879380a423c02",
+     "sha256:f2a8972579e374ba364c9b5280f3580e9dd59d236adb1126ff8e8e6dd23b9f7e",
+     "sha256:30d1cd12a4aec0093c7247246612d89495b046d8ef1f5500271bd025f03742ec",
+     "sha256:06434ec681945103b5fb049cec372fadbad068c545a4819c33436781b5822c9a",
+     "sha256:c965102c3b8660d6b645899a5aa70e88488812adecaedb3351a0d1aa407296c8",
+     "sha256:b8be9b58977c4dd363813ac4fb4b9eb72aeffbed8c2b31976ab396ef8679f89a",
+     "sha256:b8117795aac2bfb2802d4dea78b0cbdb3eb3bf38803b626bb2181c5721fe3fe5",
+     "sha256:c66448ea99d5ed9b035509b992a820c177301c23ac6b45f8046b90b173ce1cc5",
+     "sha256:c51340db28972d6851b76746da783934ee6d94812cbdd6f5088718be8d3a99d5",
+     "sha256:a28ecbd8f9f044aff12aff811253946396972456597f3ed1019a2938a94e10ae",
+     "sha256:8b148b1204b7a28241cef37e5b59df8e4b59d7b49d14c690bb15fcd92d0db85d",
+     "sha256:e29a155bff9726b57605220cad9f00e7f5901f0478a3ead989156322eab8adab",
+     "sha256:2a6032aab37e0b656a1154661dd089b77061d46cb53808b30f9d569c5c781938",
+     "sha256:c43513b82df72be8936b366edaa5ed8a5908b0257e220a4821962084e6e02ebb",
+     "sha256:1aa48885fcfdcf68b7bc2a922010c9ec28d59c88a8d7ecfef03f7d411a65cb67",
+     "sha256:897c8886d919cfbe1c3ed9fd77ea715e5ddaa01e37ddf24b08c5d3867cb8741d",
+     "sha256:a4cbcd6351170b1194fc6481d3cab16528b69952b334c29a8ac4333f77b59db4",
+     "sha256:2498b8085076478b8685e9586ac92009a9c0f9c4405ee49d53a07fdd9b87fb9f",
+     "sha256:243ddb6e61c817d25116cb42b3bc28477535c47bd6d0203ec38ddb1555b43395",
+     "sha256:3f351e9769b5f785560c714a068a271dd0a055429ff0154ceba9a7ee5298b732",
+     "sha256:b5a73cf05417b9eb4881789f11ca2c5debb89f616dd995122e5ba2179d7cc42e"
+    ],
+    "image_id": "sha256:5afcfda1f5ddf7d4f1c2f4678f2a59d52ae7f9818f577a116e5908c6430c3936",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+   },
+   "version": "0.4.14"
+  },
+  "nextcloud": {
+   "approval": {
+    "checked_at": "2026-11-18T01:58:26+00:00",
+    "environment": {
+     "branch_policies": [
+      {
+       "name": "release/*",
+       "type": "branch"
+      }
+     ],
+     "can_admins_bypass": false,
+     "id": 27603699551,
+     "name": "public-release",
+     "prevent_self_review": false,
+     "reviewers": [
+      {
+       "id": 165237880,
+       "login": "WOOWTECH",
+       "type": "User"
+      }
+     ],
+     "updated_at": "2026-11-17T14:44:14Z",
+     "wait_timer": null
+    },
+    "repository": "WOOWTECH/Woow_ha_mcp_addons",
+    "reviews": [
+     {
+      "comment_length": 82,
+      "comment_present": true,
+      "environments": [
+       "public-release"
+      ],
+      "state": "approved",
+      "user": {
+       "id": 165237880,
+       "login": "WOOWTECH"
+      }
+     }
+    ],
+    "run": {
+     "actor": "WOOWTECH",
+     "attempt": 1,
+     "id": 44211894426,
+     "ref": "refs/heads/release/six-products-0.4.14-20261117",
+     "sha": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+     "triggering_actor": "WOOWTECH"
+    }
+   },
+   "handoff": {
+    "app": "nextcloud",
+    "archive_bytes": 227474944,
+    "archive_sha256": "009192337d5587ee1019fd859cc3333882f20ae30f6a897559f51917fdd77561",
+    "diff_ids": [
+     "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+     "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+     "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+     "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+     "sha256:56c9f029db6402b968fe3c2e6bdbac3fddd9caaa8bbaca0e22de03debcb596f6",
+     "sha256:99b31499121ccbe8fee76a58134447eec96cd8ec2cbf3702a19ff5be9010a23a",
+     "sha256:33d536c68161ca34fa32eace3d1b9f62cc2e16e1ba2b7dcde9b0265681f2db66",
+     "sha256:b7f532c6ade1eb86f3f16e558bb7b18f48919230a0bfcce809f9ab525ee0106d",
+     "sha256:0c2f35bf13bc9b0da9b40c684433b2e6ec6191f42b81528cddeed21e782fe370",
+     "sha256:7c4a0bb427d300bfbc6c240757bef210da2508d45bdde1cf69764abc99e82461",
+     "sha256:48c3cd22b4d5ff89b02459b064084aad47c60d5f7f75c04f9c97063a2e6729a7",
+     "sha256:d1851ef91c45f3f071bda9867e1460c8cb907964d16c07243847eff4ec7f1ce3",
+     "sha256:19bef9b15ec4e639ba9cff3a5852f233c2a7a3d3e24c8713176a9659bcf00b5f",
+     "sha256:926f8798105f79f4e5a20bf4a8f6fed9db36e1a0b58e97c3ecaa5dc9163b99bf",
+     "sha256:94f049215e398f5ab4846bb813a9939c74c1db3fb74cc719c65583932f42503b",
+     "sha256:b2a0e8491dad52ac9b6f1570a0a8336f1dbea100c22429466d1140a2ad1ba2d5"
+    ],
+    "image_id": "sha256:1ed1a00407089c6ebb2a7d06dc1d039a84a241e1822427b3d0423c4c86401c5f",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+    "tag": "local/mcp-nextcloud:0.4.14",
+    "version": "0.4.14"
+   },
+   "j1900": {
+    "allowlist_sha256": "e843e24cd55966756b29cf261bd3e7f10e7a1399860b0763deb87d4d604fdb73",
+    "app": "nextcloud",
+    "container": [
+     "--network",
+     "none",
+     "--read-only",
+     "--tmpfs",
+     "/tmp:rw,nosuid,nodev,size=256m,mode=1777",
+     "--user",
+     "10001:10001",
+     "--cap-drop",
+     "ALL",
+     "--security-opt",
+     "no-new-privileges",
+     "--pids-limit",
+     "512",
+     "--memory",
+     "4g",
+     "-e",
+     "HOME=/tmp"
+    ],
+    "cpu": "Nehalem",
+    "envs": {
+     "child": {
+      "allowlisted": [
+       "_tkinter",
+       "caio.linux_uring"
+      ],
+      "lib_dynload": {
+       "listed": 78,
+       "native_ok": 77
+      },
+      "modules_listed": 88,
+      "modules_sha256": "22f3ce15ff5b535abd3f71648c70a113c74ded6f328dab14b4bf5e1a8a7266e3",
+      "native_errors": {
+       "_tkinter": "ImportError: libtk8.6.so: cannot open shared object file: No such file or directory",
+       "caio.linux_uring": "ImportError: io_uring_setup probe failed: Operation not permitted"
+      },
+      "native_ok": 86,
+      "python": "/opt/woow/apps/nextcloud/.venv/bin/python",
+      "qemu_allowlisted": {
+       "caio.linux_aio": "ImportError: Error on io_setup with code 38"
+      },
+      "qemu_ok": 85,
+      "site_packages": {
+       "listed": 10,
+       "native_ok": 9
+      },
+      "smoke": true
+     },
+     "core": {
+      "allowlisted": [
+       "_tkinter"
+      ],
+      "lib_dynload": {
+       "listed": 78,
+       "native_ok": 77
+      },
+      "modules_listed": 80,
+      "modules_sha256": "1c554d295060f9e0a2875ddedf40c84b542e7e859e6fe548758a73c0d6b9a17b",
+      "native_errors": {
+       "_tkinter": "ImportError: libtk8.6.so: cannot open shared object file: No such file or directory"
+      },
+      "native_ok": 79,
+      "python": "/opt/woow/.venv/bin/python",
+      "qemu_allowlisted": {},
+      "qemu_ok": 79,
+      "site_packages": {
+       "listed": 2,
+       "native_ok": 2
+      },
+      "smoke": true
+     }
+    },
+    "image_id": "sha256:1ed1a00407089c6ebb2a7d06dc1d039a84a241e1822427b3d0423c4c86401c5f",
+    "mode": "qemu-user",
+    "node": null,
+    "passed": true,
+    "probe_sha256": "d1401cb8122ed1fa2491e10f56e68758ab0ac30694697918db8d920ef7b6b538",
+    "qemu": {
+     "package": "qemu-user-static",
+     "path": "/usr/bin/qemu-x86_64-static",
+     "sha256": "90181b5552cd1a0b60d8edcc9f1cf8e38647579ef697d3155e2b6150e8fbcee0",
+     "version": "1:8.2.2+ds-0ubuntu1.18",
+     "version_line": "qemu-x86_64 version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)"
+    },
+    "scope": "imports every natively importable extension module plus a smoke run; not a full runtime trace",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+    "version": "0.4.14"
+   },
+   "provenance": {
+    "_type": "https://in-toto.io/Statement/v1",
+    "predicate": {
+     "evidence": {
+      "sbom.spdx.json": "482f8987b3076a4ad7da340e907785d48ef8ba5f0385c823f0139aaec9f7154f",
+      "sbom.syft.json": "995a655247fd75cb5e3785736c070aaa39755c3cc9bcaa6433e33e58ff108c8b",
+      "scan-summary.json": "7f5f45828b5d3e0857d14c840c03ed56a22f042b4e9153f3f41216a204f98118"
+     },
+     "recipe": "packaging/supply_chain.py candidate (source commit below)",
+     "subject": {
+      "app": "nextcloud",
+      "archive_sha256": "f957b94ac31e3a4fb2435105c4dd71e2a35b53b880b42f6e97bacc18e49851bd",
+      "diff_ids": [
+       "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+       "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+       "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+       "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+       "sha256:56c9f029db6402b968fe3c2e6bdbac3fddd9caaa8bbaca0e22de03debcb596f6",
+       "sha256:99b31499121ccbe8fee76a58134447eec96cd8ec2cbf3702a19ff5be9010a23a",
+       "sha256:33d536c68161ca34fa32eace3d1b9f62cc2e16e1ba2b7dcde9b0265681f2db66",
+       "sha256:b7f532c6ade1eb86f3f16e558bb7b18f48919230a0bfcce809f9ab525ee0106d",
+       "sha256:0c2f35bf13bc9b0da9b40c684433b2e6ec6191f42b81528cddeed21e782fe370",
+       "sha256:7c4a0bb427d300bfbc6c240757bef210da2508d45bdde1cf69764abc99e82461",
+       "sha256:48c3cd22b4d5ff89b02459b064084aad47c60d5f7f75c04f9c97063a2e6729a7",
+       "sha256:d1851ef91c45f3f071bda9867e1460c8cb907964d16c07243847eff4ec7f1ce3",
+       "sha256:19bef9b15ec4e639ba9cff3a5852f233c2a7a3d3e24c8713176a9659bcf00b5f",
+       "sha256:926f8798105f79f4e5a20bf4a8f6fed9db36e1a0b58e97c3ecaa5dc9163b99bf",
+       "sha256:94f049215e398f5ab4846bb813a9939c74c1db3fb74cc719c65583932f42503b",
+       "sha256:b2a0e8491dad52ac9b6f1570a0a8336f1dbea100c22429466d1140a2ad1ba2d5"
+      ],
+      "image_id": "sha256:1ed1a00407089c6ebb2a7d06dc1d039a84a241e1822427b3d0423c4c86401c5f",
+      "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+     },
+     "trust": "unsigned protected-workflow receipt; NOT SLSA certification"
+    },
+    "predicateType": "urn:woow:mcp:unsigned-candidate:v1",
+    "subject": [
+     {
+      "digest": {
+       "sha256": "1ed1a00407089c6ebb2a7d06dc1d039a84a241e1822427b3d0423c4c86401c5f"
+      },
+      "name": "local/mcp-nextcloud"
+     }
+    ]
+   },
+   "published_digest": {
+    "config_digest": "sha256:1ed1a00407089c6ebb2a7d06dc1d039a84a241e1822427b3d0423c4c86401c5f",
+    "reference": "ghcr.io/woowtech/amd64-mcp-nextcloud@sha256:982af33d752ef2bf648debf1dcebb507f8a7850d643c7595735ad38be4e321ea"
+   },
+   "published_provenance": {
+    "_type": "https://in-toto.io/Statement/v1",
+    "predicate": {
+     "evidence": {
+      "sbom.spdx.json": "482f8987b3076a4ad7da340e907785d48ef8ba5f0385c823f0139aaec9f7154f",
+      "sbom.syft.json": "995a655247fd75cb5e3785736c070aaa39755c3cc9bcaa6433e33e58ff108c8b",
+      "scan-summary.json": "7f5f45828b5d3e0857d14c840c03ed56a22f042b4e9153f3f41216a204f98118"
+     },
+     "recipe": "packaging/supply_chain.py candidate (source commit below)",
+     "registry": {
+      "anonymous_pull_verified": true,
+      "config_digest": "sha256:1ed1a00407089c6ebb2a7d06dc1d039a84a241e1822427b3d0423c4c86401c5f",
+      "manifest_digest": "sha256:982af33d752ef2bf648debf1dcebb507f8a7850d643c7595735ad38be4e321ea",
+      "reference": "ghcr.io/woowtech/amd64-mcp-nextcloud@sha256:982af33d752ef2bf648debf1dcebb507f8a7850d643c7595735ad38be4e321ea"
+     },
+     "subject": {
+      "app": "nextcloud",
+      "archive_sha256": "f957b94ac31e3a4fb2435105c4dd71e2a35b53b880b42f6e97bacc18e49851bd",
+      "diff_ids": [
+       "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+       "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+       "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+       "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+       "sha256:56c9f029db6402b968fe3c2e6bdbac3fddd9caaa8bbaca0e22de03debcb596f6",
+       "sha256:99b31499121ccbe8fee76a58134447eec96cd8ec2cbf3702a19ff5be9010a23a",
+       "sha256:33d536c68161ca34fa32eace3d1b9f62cc2e16e1ba2b7dcde9b0265681f2db66",
+       "sha256:b7f532c6ade1eb86f3f16e558bb7b18f48919230a0bfcce809f9ab525ee0106d",
+       "sha256:0c2f35bf13bc9b0da9b40c684433b2e6ec6191f42b81528cddeed21e782fe370",
+       "sha256:7c4a0bb427d300bfbc6c240757bef210da2508d45bdde1cf69764abc99e82461",
+       "sha256:48c3cd22b4d5ff89b02459b064084aad47c60d5f7f75c04f9c97063a2e6729a7",
+       "sha256:d1851ef91c45f3f071bda9867e1460c8cb907964d16c07243847eff4ec7f1ce3",
+       "sha256:19bef9b15ec4e639ba9cff3a5852f233c2a7a3d3e24c8713176a9659bcf00b5f",
+       "sha256:926f8798105f79f4e5a20bf4a8f6fed9db36e1a0b58e97c3ecaa5dc9163b99bf",
+       "sha256:94f049215e398f5ab4846bb813a9939c74c1db3fb74cc719c65583932f42503b",
+       "sha256:b2a0e8491dad52ac9b6f1570a0a8336f1dbea100c22429466d1140a2ad1ba2d5"
+      ],
+      "image_id": "sha256:1ed1a00407089c6ebb2a7d06dc1d039a84a241e1822427b3d0423c4c86401c5f",
+      "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+     },
+     "trust": "unsigned protected-workflow receipt; NOT SLSA certification"
+    },
+    "predicateType": "urn:woow:mcp:unsigned-candidate:v1",
+    "subject": [
+     {
+      "digest": {
+       "sha256": "1ed1a00407089c6ebb2a7d06dc1d039a84a241e1822427b3d0423c4c86401c5f"
+      },
+      "name": "local/mcp-nextcloud"
+     },
+     {
+      "digest": {
+       "sha256": "982af33d752ef2bf648debf1dcebb507f8a7850d643c7595735ad38be4e321ea"
+      },
+      "name": "ghcr.io/woowtech/amd64-mcp-nextcloud"
+     }
+    ]
+   },
+   "run_id": 44211894426,
+   "runner": {
+    "candidate": {
+     "buildx": "github.com/docker/buildx v0.38.2 3c4cbd35852fc1a476923627a780a7836c28b654",
+     "checked_at": "2026-11-18T01:26:50+00:00",
+     "docker": {
+      "api": "1.48",
+      "client": "28.0.4",
+      "components": {
+       "Engine": "28.0.4",
+       "containerd": "v2.4.2",
+       "docker-init": "0.19.0",
+       "runc": "1.5.2"
+      },
+      "driver_status": [
+       [
+        "Backing Filesystem",
+        "extfs"
+       ],
+       [
+        "Supports d_type",
+        "true"
+       ],
+       [
+        "Using metacopy",
+        "false"
+       ],
+       [
+        "Native Overlay Diff",
+        "true"
+       ],
+       [
+        "userxattr",
+        "false"
+       ]
+      ],
+      "image_store": "classic",
+      "operating_system": "Ubuntu 24.04.5 LTS",
+      "server": "28.0.4",
+      "storage_driver": "overlay2",
+      "switched_from_containerd_store": false
+     },
+     "runner": {
+      "arch": "X64",
+      "environment": "github-hosted",
+      "image_os": "ubuntu24",
+      "image_version": "20261111.127.1",
+      "kernel": "7.0.0-1014-aws",
+      "os": "Linux"
+     }
+    },
+    "publish": {
+     "buildx": "github.com/docker/buildx v0.38.2 3c4cbd35852fc1a476923627a780a7836c28b654",
+     "checked_at": "2026-11-18T01:58:29+00:00",
+     "docker": {
+      "api": "1.48",
+      "client": "28.0.4",
+      "components": {
+       "Engine": "28.0.4",
+       "containerd": "v2.4.2",
+       "docker-init": "0.19.0",
+       "runc": "1.5.2"
+      },
+      "driver_status": [
+       [
+        "Backing Filesystem",
+        "extfs"
+       ],
+       [
+        "Supports d_type",
+        "true"
+       ],
+       [
+        "Using metacopy",
+        "false"
+       ],
+       [
+        "Native Overlay Diff",
+        "false"
+       ],
+       [
+        "userxattr",
+        "false"
+       ]
+      ],
+      "image_store": "classic",
+      "operating_system": "Ubuntu 24.04.5 LTS",
+      "server": "28.0.4",
+      "storage_driver": "overlay2",
+      "switched_from_containerd_store": false
+     },
+     "runner": {
+      "arch": "X64",
+      "environment": "github-hosted",
+      "image_os": "ubuntu24",
+      "image_version": "20261111.370.1",
+      "kernel": "7.0.0-1017-azure",
+      "os": "Linux"
+     }
+    }
+   },
+   "scan_summary": {
+    "checks": {
+     "container": "pass",
+     "history-secrets": "pass",
+     "image-secrets": "pass",
+     "licenses": "pass",
+     "source-secrets": "pass",
+     "vulnerabilities": "pass"
+    },
+    "package_count": 195,
+    "policy_sha256": "5643d5ce538191af203b641944664efd26f30726252486e7828f517a466c7930",
+    "subject": {
+     "app": "nextcloud",
+     "archive_sha256": "f957b94ac31e3a4fb2435105c4dd71e2a35b53b880b42f6e97bacc18e49851bd",
+     "diff_ids": [
+      "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+      "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+      "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+      "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+      "sha256:56c9f029db6402b968fe3c2e6bdbac3fddd9caaa8bbaca0e22de03debcb596f6",
+      "sha256:99b31499121ccbe8fee76a58134447eec96cd8ec2cbf3702a19ff5be9010a23a",
+      "sha256:33d536c68161ca34fa32eace3d1b9f62cc2e16e1ba2b7dcde9b0265681f2db66",
+      "sha256:b7f532c6ade1eb86f3f16e558bb7b18f48919230a0bfcce809f9ab525ee0106d",
+      "sha256:0c2f35bf13bc9b0da9b40c684433b2e6ec6191f42b81528cddeed21e782fe370",
+      "sha256:7c4a0bb427d300bfbc6c240757bef210da2508d45bdde1cf69764abc99e82461",
+      "sha256:48c3cd22b4d5ff89b02459b064084aad47c60d5f7f75c04f9c97063a2e6729a7",
+      "sha256:d1851ef91c45f3f071bda9867e1460c8cb907964d16c07243847eff4ec7f1ce3",
+      "sha256:19bef9b15ec4e639ba9cff3a5852f233c2a7a3d3e24c8713176a9659bcf00b5f",
+      "sha256:926f8798105f79f4e5a20bf4a8f6fed9db36e1a0b58e97c3ecaa5dc9163b99bf",
+      "sha256:94f049215e398f5ab4846bb813a9939c74c1db3fb74cc719c65583932f42503b",
+      "sha256:b2a0e8491dad52ac9b6f1570a0a8336f1dbea100c22429466d1140a2ad1ba2d5"
+     ],
+     "image_id": "sha256:1ed1a00407089c6ebb2a7d06dc1d039a84a241e1822427b3d0423c4c86401c5f",
+     "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+    },
+    "tools": {
+     "gitleaks": {
+      "checksums": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_checksums.txt",
+      "sha256": "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb",
+      "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz",
+      "version": "8.28.0"
+     },
+     "grype": {
+      "checksums": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_checksums.txt",
+      "sha256": "a5a1218dce63acdac152a6b3b5bb366e7267e36f4069848cf455543b3fa5700e",
+      "url": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_linux_amd64.tar.gz",
+      "version": "0.120.0"
+     },
+     "syft": {
+      "checksums": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_checksums.txt",
+      "sha256": "54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860",
+      "url": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_linux_amd64.tar.gz",
+      "version": "1.54.0"
+     }
+    },
+    "vulnerability_count": 260,
+    "vulnerability_database": {
+     "built": "2026-11-17T06:20:58Z",
+     "checksum": "3f0cbdbc9d40fb69eaeacec1869b27a8c74f1894108804ace8b7468513e2df07",
+     "schemaVersion": "6.1.10"
+    }
+   },
+   "subject": {
+    "app": "nextcloud",
+    "archive_sha256": "f957b94ac31e3a4fb2435105c4dd71e2a35b53b880b42f6e97bacc18e49851bd",
+    "diff_ids": [
+     "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+     "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+     "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+     "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+     "sha256:56c9f029db6402b968fe3c2e6bdbac3fddd9caaa8bbaca0e22de03debcb596f6",
+     "sha256:99b31499121ccbe8fee76a58134447eec96cd8ec2cbf3702a19ff5be9010a23a",
+     "sha256:33d536c68161ca34fa32eace3d1b9f62cc2e16e1ba2b7dcde9b0265681f2db66",
+     "sha256:b7f532c6ade1eb86f3f16e558bb7b18f48919230a0bfcce809f9ab525ee0106d",
+     "sha256:0c2f35bf13bc9b0da9b40c684433b2e6ec6191f42b81528cddeed21e782fe370",
+     "sha256:7c4a0bb427d300bfbc6c240757bef210da2508d45bdde1cf69764abc99e82461",
+     "sha256:48c3cd22b4d5ff89b02459b064084aad47c60d5f7f75c04f9c97063a2e6729a7",
+     "sha256:d1851ef91c45f3f071bda9867e1460c8cb907964d16c07243847eff4ec7f1ce3",
+     "sha256:19bef9b15ec4e639ba9cff3a5852f233c2a7a3d3e24c8713176a9659bcf00b5f",
+     "sha256:926f8798105f79f4e5a20bf4a8f6fed9db36e1a0b58e97c3ecaa5dc9163b99bf",
+     "sha256:94f049215e398f5ab4846bb813a9939c74c1db3fb74cc719c65583932f42503b",
+     "sha256:b2a0e8491dad52ac9b6f1570a0a8336f1dbea100c22429466d1140a2ad1ba2d5"
+    ],
+    "image_id": "sha256:1ed1a00407089c6ebb2a7d06dc1d039a84a241e1822427b3d0423c4c86401c5f",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+   },
+   "version": "0.4.14"
+  },
+  "odoo": {
+   "approval": {
+    "checked_at": "2026-11-18T01:58:16+00:00",
+    "environment": {
+     "branch_policies": [
+      {
+       "name": "release/*",
+       "type": "branch"
+      }
+     ],
+     "can_admins_bypass": false,
+     "id": 27603699551,
+     "name": "public-release",
+     "prevent_self_review": false,
+     "reviewers": [
+      {
+       "id": 165237880,
+       "login": "WOOWTECH",
+       "type": "User"
+      }
+     ],
+     "updated_at": "2026-11-17T14:44:14Z",
+     "wait_timer": null
+    },
+    "repository": "WOOWTECH/Woow_ha_mcp_addons",
+    "reviews": [
+     {
+      "comment_length": 82,
+      "comment_present": true,
+      "environments": [
+       "public-release"
+      ],
+      "state": "approved",
+      "user": {
+       "id": 165237880,
+       "login": "WOOWTECH"
+      }
+     }
+    ],
+    "run": {
+     "actor": "WOOWTECH",
+     "attempt": 1,
+     "id": 44211876006,
+     "ref": "refs/heads/release/six-products-0.4.14-20261117",
+     "sha": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+     "triggering_actor": "WOOWTECH"
+    }
+   },
+   "handoff": {
+    "app": "odoo",
+    "archive_bytes": 201582080,
+    "archive_sha256": "dc12cd20f0d800139edddec0ef114fe94b82de3020c0c51567b74b06e38743e4",
+    "diff_ids": [
+     "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+     "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+     "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+     "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+     "sha256:a618f714d10f7484bff5d0d58acff7b7bbe329277e84a56e2f980680723d31c5",
+     "sha256:959c44f2bf5e1b5e75e463f0e9b291825314443fb45d582b489cfa373fc9e7c4",
+     "sha256:062e23a176776f4d1f92d974011fa08700bd3c109ffffc69089afa2deaa72ba5",
+     "sha256:d3eee40a0506c9df84642851086c1e531ee2f9bcce486609f4f1cce03e8bd2cd",
+     "sha256:026b72d6ab79a9f86bce5d2f3ba96b8553e10ff70d2a0b409fbd2cc3d3f23600",
+     "sha256:9abb5d47ca2e28e50167a973ac30b576057528fa551aae18764c226a9df0772d",
+     "sha256:ca43ba806fc836ea8465788c6268dc02a0a39cfa35ab169d3d0f4e963d6fe13f",
+     "sha256:bf46b8428b08ccbe164238316cea428f1c2817d6fb40e01e5a60da8dfe28c1a7",
+     "sha256:22083e346b3623554c566cb871c5f3f7c8ce0ae50d20d333433fa7b66f505beb",
+     "sha256:c6eee055b73fcecb30aeab48fb1ab9c276953791de4d717cda150c812531fcd9",
+     "sha256:2a3545ad113deeffed9a4ef5a1df72868c22d0ca11e8ee695adfaeaf3f290ea0",
+     "sha256:c16d9da0f1ff38f0b2228aa78c7feb02ce9947d0087eb33ad74aedf36156fbf0"
+    ],
+    "image_id": "sha256:d6b4d85c21195383dd94a74b9c33e9491f70a100e5c96ac5d2c19f63dd018880",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+    "tag": "local/mcp-odoo:0.4.14",
+    "version": "0.4.14"
+   },
+   "j1900": {
+    "allowlist_sha256": "e843e24cd55966756b29cf261bd3e7f10e7a1399860b0763deb87d4d604fdb73",
+    "app": "odoo",
+    "container": [
+     "--network",
+     "none",
+     "--read-only",
+     "--tmpfs",
+     "/tmp:rw,nosuid,nodev,size=256m,mode=1777",
+     "--user",
+     "10001:10001",
+     "--cap-drop",
+     "ALL",
+     "--security-opt",
+     "no-new-privileges",
+     "--pids-limit",
+     "512",
+     "--memory",
+     "4g",
+     "-e",
+     "HOME=/tmp"
+    ],
+    "cpu": "Nehalem",
+    "envs": {
+     "child": {
+      "allowlisted": [
+       "_tkinter"
+      ],
+      "lib_dynload": {
+       "listed": 78,
+       "native_ok": 77
+      },
+      "modules_listed": 84,
+      "modules_sha256": "a1662bb139aa7e1528814880e611578fee85684eabb2cdb62ac2ee361621f328",
+      "native_errors": {
+       "_tkinter": "ImportError: libtk8.6.so: cannot open shared object file: No such file or directory"
+      },
+      "native_ok": 83,
+      "python": "/opt/woow/apps/odoo/.venv/bin/python",
+      "qemu_allowlisted": {},
+      "qemu_ok": 83,
+      "site_packages": {
+       "listed": 6,
+       "native_ok": 6
+      },
+      "smoke": true
+     },
+     "core": {
+      "allowlisted": [
+       "_tkinter"
+      ],
+      "lib_dynload": {
+       "listed": 78,
+       "native_ok": 77
+      },
+      "modules_listed": 80,
+      "modules_sha256": "1c554d295060f9e0a2875ddedf40c84b542e7e859e6fe548758a73c0d6b9a17b",
+      "native_errors": {
+       "_tkinter": "ImportError: libtk8.6.so: cannot open shared object file: No such file or directory"
+      },
+      "native_ok": 79,
+      "python": "/opt/woow/.venv/bin/python",
+      "qemu_allowlisted": {},
+      "qemu_ok": 79,
+      "site_packages": {
+       "listed": 2,
+       "native_ok": 2
+      },
+      "smoke": true
+     }
+    },
+    "image_id": "sha256:d6b4d85c21195383dd94a74b9c33e9491f70a100e5c96ac5d2c19f63dd018880",
+    "mode": "qemu-user",
+    "node": null,
+    "passed": true,
+    "probe_sha256": "d1401cb8122ed1fa2491e10f56e68758ab0ac30694697918db8d920ef7b6b538",
+    "qemu": {
+     "package": "qemu-user-static",
+     "path": "/usr/bin/qemu-x86_64-static",
+     "sha256": "90181b5552cd1a0b60d8edcc9f1cf8e38647579ef697d3155e2b6150e8fbcee0",
+     "version": "1:8.2.2+ds-0ubuntu1.18",
+     "version_line": "qemu-x86_64 version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)"
+    },
+    "scope": "imports every natively importable extension module plus a smoke run; not a full runtime trace",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+    "version": "0.4.14"
+   },
+   "provenance": {
+    "_type": "https://in-toto.io/Statement/v1",
+    "predicate": {
+     "evidence": {
+      "sbom.spdx.json": "419931c4277b304361214db3726451dd70971733b98c693d4f827f63e07c63d4",
+      "sbom.syft.json": "65464670eea334e31f4f5e280ae88b91b62c204ded96b0bb1b438b2a529952cf",
+      "scan-summary.json": "7910d253e39aeb41ff9ee8774ed2fce7bce8dbd28f3726361fa50bbf745e8c88"
+     },
+     "recipe": "packaging/supply_chain.py candidate (source commit below)",
+     "subject": {
+      "app": "odoo",
+      "archive_sha256": "20736a33d3c35ad37b258d19752a24c1f015cbd05d6e2046b12bea16d7f83622",
+      "diff_ids": [
+       "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+       "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+       "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+       "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+       "sha256:a618f714d10f7484bff5d0d58acff7b7bbe329277e84a56e2f980680723d31c5",
+       "sha256:959c44f2bf5e1b5e75e463f0e9b291825314443fb45d582b489cfa373fc9e7c4",
+       "sha256:062e23a176776f4d1f92d974011fa08700bd3c109ffffc69089afa2deaa72ba5",
+       "sha256:d3eee40a0506c9df84642851086c1e531ee2f9bcce486609f4f1cce03e8bd2cd",
+       "sha256:026b72d6ab79a9f86bce5d2f3ba96b8553e10ff70d2a0b409fbd2cc3d3f23600",
+       "sha256:9abb5d47ca2e28e50167a973ac30b576057528fa551aae18764c226a9df0772d",
+       "sha256:ca43ba806fc836ea8465788c6268dc02a0a39cfa35ab169d3d0f4e963d6fe13f",
+       "sha256:bf46b8428b08ccbe164238316cea428f1c2817d6fb40e01e5a60da8dfe28c1a7",
+       "sha256:22083e346b3623554c566cb871c5f3f7c8ce0ae50d20d333433fa7b66f505beb",
+       "sha256:c6eee055b73fcecb30aeab48fb1ab9c276953791de4d717cda150c812531fcd9",
+       "sha256:2a3545ad113deeffed9a4ef5a1df72868c22d0ca11e8ee695adfaeaf3f290ea0",
+       "sha256:c16d9da0f1ff38f0b2228aa78c7feb02ce9947d0087eb33ad74aedf36156fbf0"
+      ],
+      "image_id": "sha256:d6b4d85c21195383dd94a74b9c33e9491f70a100e5c96ac5d2c19f63dd018880",
+      "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+     },
+     "trust": "unsigned protected-workflow receipt; NOT SLSA certification"
+    },
+    "predicateType": "urn:woow:mcp:unsigned-candidate:v1",
+    "subject": [
+     {
+      "digest": {
+       "sha256": "d6b4d85c21195383dd94a74b9c33e9491f70a100e5c96ac5d2c19f63dd018880"
+      },
+      "name": "local/mcp-odoo"
+     }
+    ]
+   },
+   "published_digest": {
+    "config_digest": "sha256:d6b4d85c21195383dd94a74b9c33e9491f70a100e5c96ac5d2c19f63dd018880",
+    "reference": "ghcr.io/woowtech/amd64-mcp-odoo@sha256:5a672d7b654d554aeabd70d559a09f740a79d27152fb64cda22207f230c3b588"
+   },
+   "published_provenance": {
+    "_type": "https://in-toto.io/Statement/v1",
+    "predicate": {
+     "evidence": {
+      "sbom.spdx.json": "419931c4277b304361214db3726451dd70971733b98c693d4f827f63e07c63d4",
+      "sbom.syft.json": "65464670eea334e31f4f5e280ae88b91b62c204ded96b0bb1b438b2a529952cf",
+      "scan-summary.json": "7910d253e39aeb41ff9ee8774ed2fce7bce8dbd28f3726361fa50bbf745e8c88"
+     },
+     "recipe": "packaging/supply_chain.py candidate (source commit below)",
+     "registry": {
+      "anonymous_pull_verified": true,
+      "config_digest": "sha256:d6b4d85c21195383dd94a74b9c33e9491f70a100e5c96ac5d2c19f63dd018880",
+      "manifest_digest": "sha256:5a672d7b654d554aeabd70d559a09f740a79d27152fb64cda22207f230c3b588",
+      "reference": "ghcr.io/woowtech/amd64-mcp-odoo@sha256:5a672d7b654d554aeabd70d559a09f740a79d27152fb64cda22207f230c3b588"
+     },
+     "subject": {
+      "app": "odoo",
+      "archive_sha256": "20736a33d3c35ad37b258d19752a24c1f015cbd05d6e2046b12bea16d7f83622",
+      "diff_ids": [
+       "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+       "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+       "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+       "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+       "sha256:a618f714d10f7484bff5d0d58acff7b7bbe329277e84a56e2f980680723d31c5",
+       "sha256:959c44f2bf5e1b5e75e463f0e9b291825314443fb45d582b489cfa373fc9e7c4",
+       "sha256:062e23a176776f4d1f92d974011fa08700bd3c109ffffc69089afa2deaa72ba5",
+       "sha256:d3eee40a0506c9df84642851086c1e531ee2f9bcce486609f4f1cce03e8bd2cd",
+       "sha256:026b72d6ab79a9f86bce5d2f3ba96b8553e10ff70d2a0b409fbd2cc3d3f23600",
+       "sha256:9abb5d47ca2e28e50167a973ac30b576057528fa551aae18764c226a9df0772d",
+       "sha256:ca43ba806fc836ea8465788c6268dc02a0a39cfa35ab169d3d0f4e963d6fe13f",
+       "sha256:bf46b8428b08ccbe164238316cea428f1c2817d6fb40e01e5a60da8dfe28c1a7",
+       "sha256:22083e346b3623554c566cb871c5f3f7c8ce0ae50d20d333433fa7b66f505beb",
+       "sha256:c6eee055b73fcecb30aeab48fb1ab9c276953791de4d717cda150c812531fcd9",
+       "sha256:2a3545ad113deeffed9a4ef5a1df72868c22d0ca11e8ee695adfaeaf3f290ea0",
+       "sha256:c16d9da0f1ff38f0b2228aa78c7feb02ce9947d0087eb33ad74aedf36156fbf0"
+      ],
+      "image_id": "sha256:d6b4d85c21195383dd94a74b9c33e9491f70a100e5c96ac5d2c19f63dd018880",
+      "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+     },
+     "trust": "unsigned protected-workflow receipt; NOT SLSA certification"
+    },
+    "predicateType": "urn:woow:mcp:unsigned-candidate:v1",
+    "subject": [
+     {
+      "digest": {
+       "sha256": "d6b4d85c21195383dd94a74b9c33e9491f70a100e5c96ac5d2c19f63dd018880"
+      },
+      "name": "local/mcp-odoo"
+     },
+     {
+      "digest": {
+       "sha256": "5a672d7b654d554aeabd70d559a09f740a79d27152fb64cda22207f230c3b588"
+      },
+      "name": "ghcr.io/woowtech/amd64-mcp-odoo"
+     }
+    ]
+   },
+   "run_id": 44211876006,
+   "runner": {
+    "candidate": {
+     "buildx": "github.com/docker/buildx v0.38.2 3c4cbd35852fc1a476923627a780a7836c28b654",
+     "checked_at": "2026-11-18T01:26:48+00:00",
+     "docker": {
+      "api": "1.48",
+      "client": "28.0.4",
+      "components": {
+       "Engine": "28.0.4",
+       "containerd": "v2.4.2",
+       "docker-init": "0.19.0",
+       "runc": "1.5.2"
+      },
+      "driver_status": [
+       [
+        "Backing Filesystem",
+        "extfs"
+       ],
+       [
+        "Supports d_type",
+        "true"
+       ],
+       [
+        "Using metacopy",
+        "false"
+       ],
+       [
+        "Native Overlay Diff",
+        "false"
+       ],
+       [
+        "userxattr",
+        "false"
+       ]
+      ],
+      "image_store": "classic",
+      "operating_system": "Ubuntu 24.04.5 LTS",
+      "server": "28.0.4",
+      "storage_driver": "overlay2",
+      "switched_from_containerd_store": false
+     },
+     "runner": {
+      "arch": "X64",
+      "environment": "github-hosted",
+      "image_os": "ubuntu24",
+      "image_version": "20261111.370.1",
+      "kernel": "7.0.0-1017-azure",
+      "os": "Linux"
+     }
+    },
+    "publish": {
+     "buildx": "github.com/docker/buildx v0.38.2 3c4cbd35852fc1a476923627a780a7836c28b654",
+     "checked_at": "2026-11-18T01:58:20+00:00",
+     "docker": {
+      "api": "1.48",
+      "client": "28.0.4",
+      "components": {
+       "Engine": "28.0.4",
+       "containerd": "v2.4.2",
+       "docker-init": "0.19.0",
+       "runc": "1.5.2"
+      },
+      "driver_status": [
+       [
+        "Backing Filesystem",
+        "extfs"
+       ],
+       [
+        "Supports d_type",
+        "true"
+       ],
+       [
+        "Using metacopy",
+        "false"
+       ],
+       [
+        "Native Overlay Diff",
+        "false"
+       ],
+       [
+        "userxattr",
+        "false"
+       ]
+      ],
+      "image_store": "classic",
+      "operating_system": "Ubuntu 24.04.5 LTS",
+      "server": "28.0.4",
+      "storage_driver": "overlay2",
+      "switched_from_containerd_store": false
+     },
+     "runner": {
+      "arch": "X64",
+      "environment": "github-hosted",
+      "image_os": "ubuntu24",
+      "image_version": "20261111.370.1",
+      "kernel": "7.0.0-1017-azure",
+      "os": "Linux"
+     }
+    }
+   },
+   "scan_summary": {
+    "checks": {
+     "container": "pass",
+     "history-secrets": "pass",
+     "image-secrets": "pass",
+     "licenses": "pass",
+     "source-secrets": "pass",
+     "vulnerabilities": "pass"
+    },
+    "package_count": 157,
+    "policy_sha256": "5643d5ce538191af203b641944664efd26f30726252486e7828f517a466c7930",
+    "subject": {
+     "app": "odoo",
+     "archive_sha256": "20736a33d3c35ad37b258d19752a24c1f015cbd05d6e2046b12bea16d7f83622",
+     "diff_ids": [
+      "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+      "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+      "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+      "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+      "sha256:a618f714d10f7484bff5d0d58acff7b7bbe329277e84a56e2f980680723d31c5",
+      "sha256:959c44f2bf5e1b5e75e463f0e9b291825314443fb45d582b489cfa373fc9e7c4",
+      "sha256:062e23a176776f4d1f92d974011fa08700bd3c109ffffc69089afa2deaa72ba5",
+      "sha256:d3eee40a0506c9df84642851086c1e531ee2f9bcce486609f4f1cce03e8bd2cd",
+      "sha256:026b72d6ab79a9f86bce5d2f3ba96b8553e10ff70d2a0b409fbd2cc3d3f23600",
+      "sha256:9abb5d47ca2e28e50167a973ac30b576057528fa551aae18764c226a9df0772d",
+      "sha256:ca43ba806fc836ea8465788c6268dc02a0a39cfa35ab169d3d0f4e963d6fe13f",
+      "sha256:bf46b8428b08ccbe164238316cea428f1c2817d6fb40e01e5a60da8dfe28c1a7",
+      "sha256:22083e346b3623554c566cb871c5f3f7c8ce0ae50d20d333433fa7b66f505beb",
+      "sha256:c6eee055b73fcecb30aeab48fb1ab9c276953791de4d717cda150c812531fcd9",
+      "sha256:2a3545ad113deeffed9a4ef5a1df72868c22d0ca11e8ee695adfaeaf3f290ea0",
+      "sha256:c16d9da0f1ff38f0b2228aa78c7feb02ce9947d0087eb33ad74aedf36156fbf0"
+     ],
+     "image_id": "sha256:d6b4d85c21195383dd94a74b9c33e9491f70a100e5c96ac5d2c19f63dd018880",
+     "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+    },
+    "tools": {
+     "gitleaks": {
+      "checksums": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_checksums.txt",
+      "sha256": "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb",
+      "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz",
+      "version": "8.28.0"
+     },
+     "grype": {
+      "checksums": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_checksums.txt",
+      "sha256": "a5a1218dce63acdac152a6b3b5bb366e7267e36f4069848cf455543b3fa5700e",
+      "url": "https://github.com/anchore/grype/releases/download/v0.120.0/grype_0.120.0_linux_amd64.tar.gz",
+      "version": "0.120.0"
+     },
+     "syft": {
+      "checksums": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_checksums.txt",
+      "sha256": "54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860",
+      "url": "https://github.com/anchore/syft/releases/download/v1.54.0/syft_1.54.0_linux_amd64.tar.gz",
+      "version": "1.54.0"
+     }
+    },
+    "vulnerability_count": 260,
+    "vulnerability_database": {
+     "built": "2026-11-17T06:20:58Z",
+     "checksum": "3f0cbdbc9d40fb69eaeacec1869b27a8c74f1894108804ace8b7468513e2df07",
+     "schemaVersion": "6.1.10"
+    }
+   },
+   "subject": {
+    "app": "odoo",
+    "archive_sha256": "20736a33d3c35ad37b258d19752a24c1f015cbd05d6e2046b12bea16d7f83622",
+    "diff_ids": [
+     "sha256:44a87794b739d471ec360bec56cc0ceac640d06bbf579ee7d9061a0b88d09818",
+     "sha256:b06a5b1a9275f6ebda79d70a0fbe0a3800928d33c95b78893a4e1ab8e324cfaa",
+     "sha256:ce67d611a4fc6fe7be94f3b8040a92ae510f8839838a54b5d6bdc3bd8afef0fc",
+     "sha256:22edd123e053adb55a4ebd663d2d70d19f950d0df0fd3e7e20b5d52627f3739c",
+     "sha256:a618f714d10f7484bff5d0d58acff7b7bbe329277e84a56e2f980680723d31c5",
+     "sha256:959c44f2bf5e1b5e75e463f0e9b291825314443fb45d582b489cfa373fc9e7c4",
+     "sha256:062e23a176776f4d1f92d974011fa08700bd3c109ffffc69089afa2deaa72ba5",
+     "sha256:d3eee40a0506c9df84642851086c1e531ee2f9bcce486609f4f1cce03e8bd2cd",
+     "sha256:026b72d6ab79a9f86bce5d2f3ba96b8553e10ff70d2a0b409fbd2cc3d3f23600",
+     "sha256:9abb5d47ca2e28e50167a973ac30b576057528fa551aae18764c226a9df0772d",
+     "sha256:ca43ba806fc836ea8465788c6268dc02a0a39cfa35ab169d3d0f4e963d6fe13f",
+     "sha256:bf46b8428b08ccbe164238316cea428f1c2817d6fb40e01e5a60da8dfe28c1a7",
+     "sha256:22083e346b3623554c566cb871c5f3f7c8ce0ae50d20d333433fa7b66f505beb",
+     "sha256:c6eee055b73fcecb30aeab48fb1ab9c276953791de4d717cda150c812531fcd9",
+     "sha256:2a3545ad113deeffed9a4ef5a1df72868c22d0ca11e8ee695adfaeaf3f290ea0",
+     "sha256:c16d9da0f1ff38f0b2228aa78c7feb02ce9947d0087eb33ad74aedf36156fbf0"
+    ],
+    "image_id": "sha256:d6b4d85c21195383dd94a74b9c33e9491f70a100e5c96ac5d2c19f63dd018880",
+    "source": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea"
+   },
+   "version": "0.4.14"
+  }
+ },
+ "release_pr": 119,
+ "schema": 1,
+ "source_commit": "24de6ec1cff584c3d9dd32406bc00ca3090f5fea",
+ "workflow": ".github/workflows/release.yaml (PR #121)"
+}

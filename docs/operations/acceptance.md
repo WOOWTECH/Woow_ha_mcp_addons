@@ -47,7 +47,8 @@ session URL、備份或私人拓樸。LOCAL/MOCK、CONTAINER/MOCK、HA、PUBLIC 
   failclosed admin、child loopback、outage PID、stop/reap、state persistence、停機後
   fixture token rotation/disabled 測試。**最後這項不是管理 API 輪替或 HA backup 證據。**
   第一次停機後另模擬一次 Supervisor 還原（`/data/mcp` 整棵改屬 root、檔案 0644），確認下一次啟動時 entrypoint
-  留下 `.restore-detected`（10001、0600）、修好擁有者、state 位元不變（多帳號 HM-13a）；這也不是 HA 還原證據。
+  修好擁有者、管理程序的開機守門處理了 entrypoint 留下的 `.restore-detected` 並刪掉它（沒開通的產品不多任何還原檔）、state 位元不變
+  （多帳號 HM-13a、HM-13b）；這也不是 HA 還原證據。
   開通多帳號的候選映像（升版 PR 把產品加進 `MULTI_PROFILE_PRODUCTS`）另跑多帳號階段（`packaging/container_profiles.py`，
   HM-16）：假後端照 Headscale 改用一次性 internal bridge 與容器私有位址，`docker run` 上限 360 秒；內容見下方
   [多帳號驗收](#多帳號驗收t-01t-29-的-ha-版hm-16)。沒開通的產品，探針逐句照舊（`packaging/test_container_probe.py` 比對）。

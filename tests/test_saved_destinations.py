@@ -184,7 +184,7 @@ import subprocess  # noqa: E402
 import n8n_adapter  # noqa: E402
 import loopback_backends  # noqa: E402
 from log_scan import log_scan  # noqa: E402,F401  (fixture)
-from mcp_admin_core import features  # noqa: E402
+from mcp_admin_core import backend_edit, features  # noqa: E402
 from mcp_admin_core.products import check_saved_destinations  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -361,9 +361,14 @@ async def switchable_admin(request, tmp_path, log_scan):
                 yield product, client, store, applied
 
 
-def backend_body(product, route, field, url):
+def backend_body(product, route, field, url, secrets=False):
+    """A save of url in field. secrets: a partial edit also brings the stored secrets that URL takes to its server
+    (HM-12, DQ-40 ⑨: once the product is switched on, a URL moved to another origin must bring them)."""
     if route == '/api/backend/patch':
-        return {'changes': {field: url}}
+        stored_values = SWITCHABLE[product]
+        brought = {name: stored_values[name] for name in backend_edit.url_secrets(product)[field]
+                   if name in stored_values} if secrets else {}
+        return {'changes': {field: url, **brought}}
     if product == 'n8n':
         return {'url': url, 'key': SWITCHABLE['n8n']['key']}
     return {'connection': {**SWITCHABLE[product], field: url}}
@@ -384,8 +389,8 @@ async def test_the_admin_api_refuses_a_loopback_url_once_switched_on(switchable_
             # The state's bytes hold its tokens: compared first, so a failure never prints them (HM-20 review S-6).
             unchanged = store.path.read_bytes() == raw
             assert unchanged and not applied, (field, url)
-        response = await _put(client, route, backend_body(product, route, field, 'http://10.1.2.3:8069'))
-        assert response.status_code == 200, response.text  # the LAN stays allowed
+        response = await _put(client, route, backend_body(product, route, field, 'http://10.1.2.3:8069', secrets=True))
+        assert response.status_code == 200, response.text  # the LAN stays allowed (its secrets brought: HM-12)
         assert len(applied) == 1
         applied.clear()
         raw = store.path.read_bytes()
@@ -399,7 +404,9 @@ async def test_switched_off_or_with_the_double_a_loopback_url_is_saved_as_before
         # Each URL differs from the stored one (an unchanged URL is never checked): https:// the second time.
         for url in (API_LOOPBACK if not on else [u.replace('http://', 'https://') for u in API_LOOPBACK]):
             with loopback_backends.allowed() if on else nullcontext():
-                response = await _put(client, route, backend_body(product, route, URL_NAMES[product][0], url))
+                # switched on, a URL moved to another origin brings its secrets (HM-12, DQ-40 ⑨)
+                response = await _put(client, route, backend_body(product, route, URL_NAMES[product][0], url,
+                                                                  secrets=on))
             assert response.status_code == 200, (on, url, response.text)
             stored = store.load()
             value = stored.backend_url if product == 'n8n' else getattr(stored.connection, URL_NAMES[product][0])

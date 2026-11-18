@@ -1025,10 +1025,13 @@ async def hermes_cron(
 
     Actions: list, create, update, delete, trigger, pause, resume
     - list: show all cron jobs
-    - create: new job (requires name, schedule, prompt)
+    - create: new job (requires name, schedule, prompt); enabled=false creates
+      it paused, so it does not run until resumed
     - update: modify job (requires job_id, plus fields to change)
     - delete: remove job (requires job_id)
-    - trigger: run job now (requires job_id)
+    - trigger: run job now (requires job_id). Hermes v0.22.x also resumes a
+      paused job when it is triggered; call pause afterwards if it should
+      stay paused
     - pause / resume: toggle job state (requires job_id)
 
     schedule uses cron syntax: '0 9 * * 1-5' = weekdays at 9am

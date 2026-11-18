@@ -13,7 +13,7 @@ import signal
 import httpx
 import uvicorn
 
-from mcp_admin_core import redact
+from mcp_admin_core import features, redact, restore_lock
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.configuration import ConfigurationState
 from mcp_admin_core.capabilities import ManagementOptions
@@ -42,6 +42,16 @@ async def run(args, *, child_port=CHILD_PORT):
     from mcp_admin_core.owner_defaults import apply_legacy_upgrade
     apply_legacy_upgrade(args.data, 'n8n')
     store = ProductStore(args.data, 'n8n')
+    try:
+        # HM-13b (multi-profile plan 8.4; not gated): the boot guard before the child and the listeners (a restore, an
+        # unfinished "revoke all", dormant profiles); ConfigError: nothing is served, the next start runs it again.
+        guarded = restore_lock.guard(store, 'n8n', enabled=features.enabled('n8n'))
+        # HM-13c (DQ-03 (b); not gated): the restore notice for the panel until the token changes; none: as before.
+        found = restore_lock.read_notice(store.directory)
+        notice = None if found is None else restore_lock.Notice(store.directory, found)
+    except BaseException:
+        store.close()
+        raise
     if prepare_catalog() is None:  # unreleased (0.4.12 line): the child still starts; only the version history cannot be written
         print('n8n: no writable catalog copy; workflow version history is unavailable', flush=True)
     manager = Supervisor(None)
@@ -73,7 +83,10 @@ async def run(args, *, child_port=CHILD_PORT):
                                    verify_admin=make_ha_admin_verifier(),
                                    server_name="woow-mcp-n8n",
                                    # 0.2.2: the full list and clean refusals without a backend or a running child
-                                   listing=listing("n8n"), availability=health.availability)
+                                   listing=listing("n8n"), availability=health.availability,
+                                   # HM-13b: profile data on disk while n8n is not switched on: its number
+                                   dormant_profiles=guarded.dormant,
+                                   restore_notice=notice)
             servers = [Listener(uvicorn.Config(app, host=args.host, port=port,
                 proxy_headers=False, access_log=False, log_level="warning", server_header=False,
                 lifespan="off",  # this function, not ASGI lifespan, owns runtime resources

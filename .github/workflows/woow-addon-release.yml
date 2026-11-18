@@ -9,7 +9,8 @@
 #              version can be pulled anonymously from GHCR, and a version with no
 #              stable Release yet has the add-on's own record naming its slug and
 #              version, docs/operations/release-decision-<add-on>-<version>.md (the
-#              builder VM acceptance, which Actions cannot see; a shared or another
+#              release.yaml run that accepted and pushed the image, and the HAOS
+#              acceptance, which this check cannot see; a shared or another
 #              add-on's record does not count).
 #   release    on claude-delivery only: the Store's shared workflow publishes one
 #              stable Release <slug>-v<version> per enabled add-on whose version
@@ -109,8 +110,9 @@ jobs:
   # whose version is unchanged are not compared. A breaking config.yaml change
   # not declared in addons/<x>/upgrade-notes.yaml blocks the PR. The image
   # vulnerability comparison (category 4) scans published GHCR images: images
-  # are built only on the self-hosted builder, never on a PR, so the Store
-  # registry approves scan_published_image for this repo (pipeline #148). The
+  # are built only by release.yaml (GitHub-hosted, owner-approved), never on a
+  # PR, so the Store registry approves scan_published_image for this repo
+  # (pipeline #148). The
   # compare job pulls the Release's amd64 image and the PR version's amd64
   # image (config.yaml image, tag = version) and scans both with the same
   # Syft and Grype DB; the readiness check already requires the new image to

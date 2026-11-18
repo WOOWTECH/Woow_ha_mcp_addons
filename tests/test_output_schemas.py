@@ -27,15 +27,31 @@ CURRENT_POST_SOURCE_BYTES = {
     # The SQL-test tool's public write hint changed; its output pin did not.
     'apps/emqx/vendor/emqx_mcp_server/tools/integration.py': (
         'emqx', '89c6f167d6b9487a2ae6373ab498dd9eef9911895effe9e6d7c0c61c9ac4841d'),
+    # HM-33: hermes_cron's description gains PaaS #156's two sentences (text only); its input and output schemas and
+    # its handler do not change.
     'apps/hermes/vendor/hermes_mcp_server/server.py': (
-        'hermes', '922ff27d13a1c67a0b0d6fd8cbd9c764d9697cd26f63b0189d7dbfba95e0d94a'),
+        'hermes', 'e21dbca5507b03a5c124fc238020c308dabaf2c826b5ecfecff0f125c74f38b0'),
+    # HM-32: the EMQX client asks for no idle backend connection (PaaS #135); no tool, schema or handler change.
+    'apps/emqx/vendor/emqx_mcp_server/lifespan.py': (
+        'emqx', 'acf72dc8655d6b702a600e4e936b4bfddfdb137824747de91022085f21e9d44b'),
     # HM-04: the child port is a parameter (3000 by default); HM-20: WOOW_MCP_DENY_LOOPBACK once n8n is switched on.
     # No tool, schema or handler change.
     'apps/n8n/n8n_adapter.py': ('n8n', 'e3df8d0f88233051e1b399f45ed1e42e4c3fb621324117f77e0b386f3277309c'),
     # HM-20: loopback refusal for the configured instance behind WOOW_MCP_DENY_LOOPBACK; no tool, schema or handler change.
     'apps/n8n/backend_policy.cjs': ('n8n', '055ca90a23c5d401d742fb165ffab2e6efcc5ca6a41a96a51293a4a8943f1826'),
-    'apps/n8n/run.py': ('n8n', '96861eee084fb955a8f2af56be30ae149e564d2a6fbdea05fb214ae71d7b1a64'),
+    # HM-13b: the boot guard (restore_lock.guard) before the child and the listeners, and the bootstrap's
+    # dormant_profiles; HM-13c: the restore notice (restore_lock.read_notice) for the bootstrap; no tool, schema or
+    # handler change.
+    'apps/n8n/run.py': ('n8n', '2eab88d9f1090d02092b8ec36d454bfd5a966fe3b2448909ee6fa65fc0192c88'),
     'apps/hermes/launch.py': ('hermes', '68ebc3f2b72d59001fb9e26d7836fb47cd4c82d68676b15babe4d1f5ac9f8903'),
+    # 0.4.14 release: only the ARG BUILD_VERSION default changes (0.4.13 -> 0.4.14); no tool, schema or handler change.
+    'apps/n8n/Dockerfile': ('n8n', '0a4959708cc10750f654a17c328e646928df71f16bcfc612ec1bf23c30b75b12'),
+    # 0.4.14 and Headscale 0.4.19 releases: only dnspython 2.9.0 -> 2.9.2 in the child's lock (GHSA-vvf4-9x63-8xvv, a fixable
+    # High the release scanner blocks; email-validator's dependency). No tool, schema or handler change.
+    'apps/emqx/uv.lock': ('emqx', '297392a4f80abe5723b9518b1f7379ad64a1b638931e328577caf1e9f4fce16a'),
+    'apps/litellm/uv.lock': ('litellm', '2e0157b5577feddfa53735f0230f826984767d579be8a851f59877deb8709dd6'),
+    'apps/nextcloud/uv.lock': ('nextcloud', 'c5a1e3314a52c2518cc6a90bee0412decb123dd44713fea57b92fa2ace1b6453'),
+    'apps/headscale/uv.lock': ('headscale', '5be6369410710dd909ee9946bddfb696926ee614c50efb287c7cf3b67f9fd2f5'),
 }
 
 

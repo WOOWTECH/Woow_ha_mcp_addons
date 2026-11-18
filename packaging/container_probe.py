@@ -24,10 +24,12 @@ import xmlrpc.client
 import httpx
 import container_profiles  # multi-profile HM-16: the stage of a switched-on candidate (container_profiles.stage)
 from denial_probe import assert_denials, WRITE_CASES
-from mcp_admin_core import features
 from mcp_admin_core.health import protocol_reply
 from mcp_admin_core.products import ProductStore, PROBES, TOOLS, allowed_address, fresh_write_grants, probe_success
+from mcp_admin_core import features
 from mcp_admin_core.profiles import RESTORE_MARKER_NAME as MARKER  # what packaging/entrypoint.py saves (HM-13a)
+# What a switched-on product's boot guard keeps (HM-13a, HM-13b): none of them for a product that is not switched on.
+from mcp_admin_core.profiles import INSTANCE_RECORD_NAME, RESTORE_NOTICE_NAME, RESTORE_RECORD_NAME, SENTINEL_NAME
 
 APP = sys.argv[1]
 ROOT = Path('/opt/woow')
@@ -215,24 +217,40 @@ def restore_as_supervisor():
 
 
 def check_restored_start(restored, state):
-    """The start after restore_as_supervisor (ready_listener has checked /data/mcp and state.json): the entrypoint saved
-    its restore marker, and its ownership repair gave the marker and every restored entry back to the runtime user
-    (directories 0700, files 0600); the state is the backup's, byte for byte. The marker stays until the boot gate
-    (multi-profile HM-13b) handles it."""
-    assert os.path.lexists(DATA / MARKER), 'restore marker missing'
-    marker = os.lstat(DATA / MARKER)
-    assert stat.S_ISREG(marker.st_mode) and marker.st_nlink == 1 and marker.st_size == 0, 'restore marker not a marker'
-    assert (marker.st_uid, marker.st_gid, stat.S_IMODE(marker.st_mode)) == (10001, 10001, 0o600), 'marker not private'
+    """The start after restore_as_supervisor (ready_listener has checked /data/mcp and state.json): the entrypoint's
+    ownership repair gave every restored entry back to the runtime user (directories 0700, files 0600); before any
+    listener, the management process's boot guard (multi-profile HM-13b) handled the restore the entrypoint's marker
+    showed and removed the marker. For a product that is not switched on and has no profile data that is all it does
+    (DQ-03 (b): nothing revoked; no sentinel, record or restore record) but the panel's restore notice (HM-13c:
+    restore-notice.json, the token is back at the backup's value); the state is the backup's, byte for byte. A
+    switched-on candidate keeps the sentinel and its record (rebuilt) and gets a restore record and the notice too (no
+    profile data: the token is kept). Each of these a single-link file of the runtime user, 0600. (The log lines of the
+    start, the entrypoint's "re-owned N" and the guard's notice, are not read here: the stage's process writes to
+    DEVNULL; HM-16.)"""
+    assert not os.path.lexists(DATA / MARKER), 'restore marker left: the boot guard did not handle the restore'
     for name in restored:
         info = os.lstat(DATA / name)
         mode = 0o700 if stat.S_ISDIR(info.st_mode) else 0o600
         assert (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) == (10001, 10001, mode), 'restore not repaired'
+    names = (SENTINEL_NAME, INSTANCE_RECORD_NAME, RESTORE_RECORD_NAME)
+    if not features.enabled(APP):
+        made = [name for name in names if os.path.lexists(DATA / name)]
+        assert not made, 'restore files of a product that is not switched on'
+        expected = (RESTORE_NOTICE_NAME,)
+    else:
+        expected = (*names, RESTORE_NOTICE_NAME)
+    for name in expected:
+        assert os.path.lexists(DATA / name), 'restore files missing'
+        info = os.lstat(DATA / name)
+        assert stat.S_ISREG(info.st_mode) and info.st_nlink == 1, 'restore files not files'
+        assert (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) == (10001, 10001, 0o600), \
+            'restore files not private'
     assert (DATA / 'state.json').read_bytes() == state, 'restored state rewritten'
 
 
 async def restored_start(client):
     """Multi-profile HM-13a: the real image's first start after a Supervisor restore (entrypoint as root, ownership
-    repair, privilege drop, management process), checked, then stopped again."""
+    repair, privilege drop, management process and its boot guard, HM-13b), checked, then stopped again."""
     restored, state = restore_as_supervisor()
     process = start()
     try:

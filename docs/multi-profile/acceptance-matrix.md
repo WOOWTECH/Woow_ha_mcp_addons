@@ -1,6 +1,6 @@
 # 多帳號驗收矩陣（PaaS T-01～T-29 的 HA 版）
 
-- 狀態：HM-00 起草（2026-11-14）；HM-06 依 n8n 的實際行為改 T-23 的 n8n 期望值（2026-11-15，審查 MF-1 選 (a)）；HM-20 登記兩個測試檔與兩個 packaging 測試的擴充（2026-11-15）。HM-16 把它寫進 `docs/operations/acceptance.md` 與 P9 kit，並登記本片的測試檔（2026-11-17）；HM-19b 照它做 Odoo 首發的 HAOS 驗收。
+- 狀態：HM-00 起草（2026-11-14）；HM-06 依 n8n 的實際行為改 T-23 的 n8n 期望值（2026-11-15，審查 MF-1 選 (a)）；HM-20 登記兩個測試檔與兩個 packaging 測試的擴充（2026-11-15）。HM-13c 補 T-21 的測試與差異列、登記表 HM-13c 的三列（2026-11-17）；依獨立審查補登記表兩列的內容（同日）。HM-16 把它寫進 `docs/operations/acceptance.md` 與 P9 kit，並登記本片的測試檔（2026-11-17）；HM-19b 照它做 Odoo 首發的 HAOS 驗收。
 - 來源：計畫 §10.4、§10.6（repo 外）；HA 期望值沿用 `gaps/G6-delivery.md` 第 5 節，依 2026-11-14 的決策更新（`decisions.md`）。
 - 契約與差異：`contract.md`（第 9 節刻意差異表，下稱 §8.8）；G6 §5 每一列怎麼對到差異表或測試見 `deviation-trace.md`。
 
@@ -37,7 +37,7 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | T-18 | 互相影響與日誌保留 | 每帳號子程式輸出緩衝不被別帳號擠掉；生命週期 log 帶 id 前 8 碼 | `tests/test_profile_runtime.py`、`tests/test_profile_lifecycle.py` | HAOS | HM-08、HM-09、HM-19b | 是 | #29 |
 | T-19 | 背壓與每帳號名額 | 轉送名額等 1 秒；帶 id 的 POST 在名額逾時、准入滿（≤64 KiB）時 200＋`-32003`＋`Retry-After: 5`，更大的 503；位元組預算放不下時讀完丟掉、從頭尾找 id（200 或 503；HM-31，開關關也生效）；GET 串流滿 429＋`Retry-After: 30`（預設 24、額外 8）；CPU 飢餓下閒置帳號健康不逾時 | `tests/test_profile_quotas.py`、`tests/test_gateway_busy_shapes.py`、`tests/test_request_budget_gateway.py`、`tests/test_reply_worker.py` | — | HM-08、HM-14、HM-30、HM-31 | 是 | #15、#16、#17、#101～#105、#108 |
 | T-20 | 升級、回退、再升級 | 回退＝還原升級前備份：預設 token＝備份當時的值、額外帳號消失、沒有任何撤銷；再升級後額外帳號不存在、預設不變；文件要求再升級後按「全部撤銷」 | `tests/test_upgrade_zero_rewrite.py` | Store、HAOS | HM-19b、HM-29 | 是 | #71 |
-| T-21 | 備份還原 | 預設帳號依 DQ-03（採 (b) A2）；兩個偵測訊號；讀不到的帳號隔離；獨立驗證；核對後才重發；舊收據 410；C1-M1 攻擊序；版本混搭 | `tests/test_restore_detection.py`、`tests/test_restore_lock.py`、`tests/test_restore_review.py` | 容器（root 還原樹）、HAOS | HM-13a、HM-13b、HM-13c、HM-19b | 是 | #20、#21、#69 |
+| T-21 | 備份還原 | 預設帳號依 DQ-03（採 (b) A2；沒撤銷時面板與 log 提示權杖已回到備份當時的值）；兩個偵測訊號；讀不到的帳號隔離（只能刪）；獨立驗證；核對後才重發；舊收據 410（備份時沒有收據檔的帳號也是）；C1-M1 攻擊序；版本混搭 | `tests/test_restore_detection.py`、`tests/test_restore_lock.py`、`tests/test_dormant_profiles.py`、`tests/test_revoke_all.py`、`tests/test_restore_review.py`、`packages/mcp-admin-ui/tests/browser/restore-review.spec.mjs` | 容器（root 還原樹）、HAOS | HM-13a、HM-13b、HM-13c、HM-19b | 是 | #20、#21、#58、#67、#69、#118～#123 |
 | T-22 | n8n 名額與逾時 | `n8n_session` 每帳號一份；沒後端的額外帳號所有工具回 `backend_not_configured` | `tests/test_n8n_multi_profile.py` | HAOS | HM-25 | 否（n8n） | #28、#62 |
 | T-23 | 子程式 bearer 隔離 | 7 支 Python 子程式：不帶、帶錯、帶別帳號、兩個標頭、空字串都 401，自己的 200。n8n（n8n-mcp 維持現狀）：不帶、帶錯、帶別帳號、空字串都 401，自己的 200；另外收下三種寫法（`Bearer` 後兩個空白、兩個標頭都是自己的、第一個是自己的＋第二個是別帳號的），都要先有自己的 child token，沒有越權（§8.8 #37 的註） | `tests/test_child_bearer.py` | 容器 | HM-06、HM-16；各產品升版 | 是（Odoo） | #37 |
 | T-24 | 來源檢查 | DQ-11 採 (a)：密鑰網址清單外記一行 would_deny（帶 id 前 8 碼、每帳號節流）、不擋、不加 CORS；Bearer 帶 Origin 403；Headscale 只放 claude.ai | `tests/test_origin_policy.py` | HAOS（記下 Claude.ai 送的 Origin） | HM-08、HM-27 | 是 | #9、#10、#42 |
@@ -84,7 +84,7 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_profile_store.py` | HM-07 | 計畫 | 只開既有、建立每一步故障注入、mode／owner 在 uid 10001 子程序驗 |
 | `tests/test_profile_consistency.py` | HM-07 | 計畫 | 孤兒、撞號、`profile_unavailable` |
 | `tests/test_upgrade_zero_rewrite.py` | HM-07 | 計畫 | bb48449 寫出的 schema 4 state 零改寫 |
-| `tests/test_identity_fields.py` | HM-07 | 計畫 | 身分欄位與秘密欄位分類；新欄位沒分類就失敗 |
+| `tests/test_identity_fields.py` | HM-07 | 計畫 | 身分欄位與秘密欄位分類；新欄位沒分類就失敗。HM-12 面板：面板的網址↔秘密表（`urlSecrets`）、`identityBound` 與來源的算法（`urlOrigin`，逐案）要和後端一致 |
 | `tests/test_profile_routing.py` | HM-08 | 計畫 | 路由矩陣、零命中逐位元、撞號 503、兩個交叉案例 |
 | `tests/test_router_passthrough.py` | HM-08 | 計畫 | 開關關時分派器不掛、回應逐位元相同 |
 | `tests/test_profile_quotas.py` | HM-08 | 計畫 | 真 socket S5、S6；預設帳號當攻擊方；位元組額度；三種過載情況對照 PaaS 表 |
@@ -99,15 +99,17 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_admin_pipeline_matrix.py` | HM-10 | 計畫 | 路由表自動產生的否定矩陣；非管理員逐位元相同 |
 | `packages/mcp-admin-ui/tests/profiles.test.mjs` | HM-11 | 計畫 | 標頭規則、`mutate(profile)` 回聲比對、收據帶帳號、N15 新舊斷言 |
 | `packages/mcp-admin-ui/tests/browser/profiles.spec.mjs` | HM-11 | 計畫 | 選單、切換藏 token、晚到回應丟棄、XSS 名稱、建立後自動切換、舊格式收據 |
-| `tests/test_odoo_identity_rotation.py` | HM-12 | 計畫 | 換身分換 token、先停再提交、新 token 碰不到舊子程式 |
-| `tests/test_odoo_multi_profile.py` | HM-12 | 計畫 | 同庫多帳號；A 的審批 token 在 B 被拒 |
-| `tests/test_new_origin_secret.py` | HM-12 | 計畫 | 改 url 來源沒帶新秘密 422（DQ-40 ⑨） |
+| `packages/mcp-admin-ui/tests/browser/backend-identity.spec.mjs` | HM-12 | 新增 | 開通後（fixture）：換身分換 token 的提示、藏權杖、重新讀取、下一次存檔用新版本，額外帳號只換自己的；形狀 D 兩件事都說、重新讀取；503 request denied 照今天、state unavailable 加重啟提示；網址改到另一台伺服器時已存秘密改成必填、改回恢復；衝突保留草稿；422 固定文字；開關關時表單照今天。HM-12 面板審查補：換了 token 之後重新讀取失敗仍說明（200、形狀 D），沒換 token 的存檔照今天；伺服器文字不顯示；額外帳號的表單規則；改回同一台伺服器時已打的秘密留著；把「保留」強制打開送出時前端擋下、0 個請求；清掉的秘密不再要求；OpenDesign 沒有秘密說明；withheld 網址的原因 |
+| `tests/test_odoo_identity_rotation.py` | HM-12 | 新增 | 開通的 Odoo 換 url／database／username（含清空）換 token：先停舊子程式、一次寫入、發布、再起新子程式（兩種路由、預設帳號也是）；回應帶新 state 的 `ETag`；8081 分派器不再把舊 token 對到任何帳號、新 token 對到該帳號；舊 token 兩條入口都失效、進行中與排隊中的請求結束；新 token 在新子程式起來前碰不到任何子程式；只換密碼、初次設定、已撤銷不換；停不下、store 拒絕（含舊子程式起不回來）、丟出非預期的例外（固定 503、不是 500）、新檔寫不出來、取代 state 檔途中失敗（`os.replace`、目錄 fsync；額外帳號與預設帳號：預設帳號的新檔已換上時 8081 全部 503）、寫入丟出例外但新 token 已在磁碟上（不重起舊子程式）、新子程式起不來的故障注入；store 的一次寫入與只在結果不明時毒化；沒開通照今天；其他產品開通後不換 |
+| `tests/test_odoo_multi_profile.py` | HM-12 | 新增 | 同庫五個帳號各自固定綁定（PaaS 對照）、換其中一個只換它的 token；真的 Odoo 子程式：A 的審批 token 在 B 被拒、A 自己執行得了，兩帳號 state 相同的對照；DQ-30 讀取並行維持 1 |
+| `tests/test_new_origin_secret.py` | HM-12 | 新增 | 開通後全部產品改網址來源（scheme、host、port）沒帶那條網址的已存秘密 422（DQ-40 ⑨），少帶一個也 422、全帶就存；同來源、帶 null、整份取代不檢查；在 If-Match 之後；沒開通照今天；經分派器只檢查選定帳號 |
 | `tests/test_restore_detection.py` | HM-13a | 計畫（root） | root 擁有的還原樹、標記在 pass 1 前落盤、sentinel 各情況 |
 | `tests/test_restore_lock.py` | HM-13b | 計畫 | 守門 A～F 步、隔離、獨立驗證、DQ-03 兩種模式、UC-24 三情境 |
 | `tests/test_dormant_profiles.py` | HM-13b | 計畫 | 開關關＋帳號資料 → 全撤銷；重新開通未核對前不能重發 |
 | `tests/test_revoke_all.py` | HM-13b | 計畫 | 全部撤銷第 k 個失敗、`.revoke-all-pending` |
-| `tests/test_restore_review.py` | HM-13c | 計畫 | 核對卡欄位、未核對前 rotate 409、匯出不含憑證 |
-| `packages/mcp-admin-ui/tests/browser/restore-review.spec.mjs` | HM-13c | 計畫 | 核對卡、全部撤銷兩段確認、隔離目錄只能刪 |
+| `tests/test_restore_review.py` | HM-13c | 計畫 | 單帳號還原後的提示（只多 `restore_notice`、權杖不變、輪替或撤銷後消失、沒還原時什麼都不多）；還原時每個收據檔都換新；還原紀錄、核對、未核對前 rotate 409（還原與重新開通後的休眠帳號）、未核對前 HM-12 的換身分換 token 也 409（審查 S-3；核對後照常、開關關照今天）、紀錄讀不到一律擋；換身分換掉保留的權杖時提示消失；隔離目錄只能刪；全部撤銷（第 k 個失敗、標記存不下、沒收尾、索引壞、工作執行緒、8081 的 503）；新路由每一種等待後的角色檢查；開關關時沒有新路由。審查修正：休眠開機不丟掉還在等的核對（預設帳號那一列、還原段落；讀不到的紀錄不改）、休眠前就撤銷的帳號也要核對、全部撤銷重建讀不到的紀錄、全部撤銷遇到意外的例外 fail closed、讀得到的隔離目錄刪除前先撤銷並抹憑證、開通而沒有帳號資料時逐步中斷也留下標記或提示 |
+| `packages/mcp-admin-ui/tests/browser/restore-review.spec.mjs` | HM-13c | 計畫 | 單帳號還原提示與「知道了」、休眠卡、核對卡（名稱與欄位當文字）、核對前停用重新產生、索引不能用時的核對卡、隔離目錄只能刪（超過 64 筆時清單照常可用、列前 64 筆並說還有幾筆）、紀錄讀不到時的出路與重建的紀錄、全部撤銷兩段確認與沒做完的三種說法、匯出不含憑證 |
+| `packages/mcp-admin-ui/tests/restore.test.mjs` | HM-13c | 新增 | bootstrap 的三種通知、還原紀錄、清單的隔離目錄、全部撤銷結果的格式檢查；新的帳號操作的收據識別；匯出只取允許清單的欄位 |
 | `tests/test_gateway_stream_endings.py` | HM-14 | 計畫 | `-32005` 沒有 traceback、`-32004` 依原因 |
 | `tests/test_gateway_busy_shapes.py` | HM-14 | 計畫 | `-32003` 形狀與文字 |
 | `tests/test_gateway_queue_ha.py` | HM-14 | 計畫 | 排隊上限、排隊中斷線不送 |
@@ -116,6 +118,8 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_request_budget.py` | HM-31 | 計畫 | 請求內容位元組預算的推導（cgroup、MemAvailable−256、固定 32 MiB）、兩層、份額上限 64 MiB、小請求不扣、轉送大小、歸還、頭尾找 id |
 | `tests/test_request_structure.py` | HM-31 | 計畫 | JSON 結構守門（深度、元素、UTF-8、閉括號、邊界、放大語料）與拒收形狀；n8n 先跑同一道守門 |
 | `tests/test_request_budget_gateway.py` | HM-31 | 計畫 | 開關關與開：預算拒絕讀完丟掉回 id、沒帶長度中途切斷、讀取閒置 408、整體 60 秒照舊、份額不跨帳號、全 add-on 預算共用；HM-31 審查：`Content-Length`＋`Transfer-Encoding` 照實際收到的位元組（含真的 h11 socket）、宣告超過 16 MiB 讀之前 413、讀完丟掉的閒置與整體界線、只留頭尾、從尾端找 id |
+| `tests/test_fresh_backend_connections.py` | HM-32 | 新增 | LiteLLM、EMQX 不保留閒置的後端連線（對齊 PaaS #135、#139；不受開關管）：子程式實際建的連線池與照產品要的 `limits` 建的連線池都測；每個請求各解析一次、各開一條連線，名稱改指被拒的位址後下一個請求在連線前就被拒；恢復後第一個工具呼叫不碰舊連線、不等逾時；不重送（恢復後只到後端一次；沒有回應的寫入、讀取都只送一次）；連線數上限照舊（子程式的連線池 4 條；產品要的 LiteLLM 50、EMQX 20，被 `backend_policy` 丟掉）（HM-32 審查 S-2、S-3） |
+| `tests/test_hermes_cron_description.py` | HM-33 | 新增 | Hermes `hermes_cron` 的工具說明逐字是 PaaS #156 的（不受開關管；create 帶 `enabled=false` 建成停用的排程，resume 之前不會跑；Hermes v0.22.x 對停用的排程 trigger 會一併改回啟用，要維持停用之後再呼叫 pause）：子程式自己的 tools/list（在 Hermes 釘版的 venv 裡）與閘道內附的清單（`tool_snapshot.py`）都一樣；拿掉這兩句就是原本的說明；`enabled` 參數照舊是預設 true 的布林；trigger 只送一個 `POST /api/cron/jobs/<id>/trigger`，自己不會再 pause、resume 或再 trigger（真子程式、假 dashboard；HM-33 審查 S-1） |
 | `tests/test_child_identity.py` | HM-15 | 計畫（條件式） | 別的程序先綁 port → 不轉發；uid 10001 子程序驗降級 |
 | `tests/test_upgrade_hooks.py` | HM-16 | 新增 | Store hook 草稿（`packaging/hooks/seed`、`verify`）只讀、與版本無關；升級不該做的 11 種事各讓 verify 失敗；索引是連結時不跟隨；在自己的程序裡也不走環境代理；對真的 runtime（舊版沒開通、新版開通或也沒開通；Odoo、EMQX）照樣過、不改 `/data` |
 | `packaging/test_container_profiles.py` | HM-16 | 新增 | 容器探針的多帳號階段：布局快照（修復規則、512 項與 8 層預算）、照面板的方式建帳號、sentinel、子程式 port 與資源、SIGKILL、30 秒內停機、路由（含 session 是自己子程式的）、子程式 bearer；整個階段的順序、每一步拿到的帳號與它自己的判定 |
@@ -126,7 +130,7 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_owned_executable.py` | HM-16 | 既有，擴充 | 開通的產品經 owned executable 起預設帳號 |
 | `packaging/test_validate.py` | HM-17 | 既有，擴充 | 多產品版號運算式 |
 | `packaging/test_release_gate.py` | HM-17 | 既有，擴充 | release_gate 只認產品自己的紀錄 |
-| `tests/test_saved_destinations.py` | HM-20 | 既有，擴充 | 開通後存檔拒 loopback（全部產品，含 n8n；各種寫法）；區網照放；沒開通與替身開關照今天 |
+| `tests/test_saved_destinations.py` | HM-20 | 既有，擴充 | 開通後存檔拒 loopback（全部產品，含 n8n；各種寫法）；區網照放；沒開通與替身開關照今天。HM-12：開通後改到另一個來源的 `backend/patch` 一起帶那條網址的秘密（DQ-40 ⑨） |
 | `tests/test_backend_loopback.py` | HM-20 | 新增 | 開通後子程式環境多 `WOOW_MCP_DENY_LOOPBACK=1`（預設帳號與額外帳號的 port 都有），執行期字面與解析後的 loopback 都拒（每個產品；n8n 的 API 與官方 MCP 端點，含混合答案）；`apps/` 的子程式程式碼不拿掉這個變數（看原始碼）；HM-09 的 exec 包裝器原樣交給額外帳號的子程式（看原始碼；端到端：`run_product` 的 ProfileManager 起真的預設帳號與額外帳號 Odoo 子程式，各自的 loopback 假後端收到 0 個請求）；webhook 維持 permissive；替身開關只在測試 |
 | `packaging/test_container_acceptance.py`、`packaging/test_container_probe.py` | HM-20 | 既有，擴充 | 開通的產品（`MULTI_PROFILE_PRODUCTS`）的容器驗收要照 Headscale 開一次性 internal bridge、假後端綁容器私有位址；今天集合是空的，只驗 Headscale，產品一開通就逼升版 PR 補上 |
 | `tests/test_litellm_multi_profile.py` | HM-21 | 暫定名 | 兩把假 virtual key、bearer 401 矩陣、政策各自 |
@@ -136,5 +140,5 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_n8n_multi_profile.py` | HM-25 | 暫定名 | nodes.db 每帳號、沒後端的額外帳號回 `backend_not_configured` |
 | `tests/test_headscale_multi_profile.py` | HM-26 | 暫定名 | 同網址同 key、不同政策的兩帳號各照自己的政策 |
 | `tests/test_origin_policy.py` | HM-27 | 暫定名 | report-only 不改回應位元組；would_deny 記錄與節流 |
-| `tests/test_reply_worker.py` | HM-30 | 計畫 | 輸出位元組相同、依帳號輪流、CPU 飢餓、慢讀 RSS（`contract.md` 第 6 節門檻） |
-| `tests/test_health_tolerance.py` | HM-30 | 計畫 | CPU 飢餓下閒置帳號的健康檢查不判壞（連兩次失敗的規則本身 HM-09 已做，測試在 `tests/test_health_backoff.py`） |
+| `tests/test_reply_worker.py` | HM-30 | 計畫 | 一條執行緒、依帳號輪流、每帳號同時 1 筆；工作例外照今天、被取消的撤回、執行緒自己停時立刻回 502 且 add-on 結束、停機時排隊的立刻結束；自己的堆疊（深巢狀回覆 502、不當掉）；JSON 與 SSE 輸出位元組和迴圈內處理相同（逐案對照）；開關關時沒有執行緒、照迴圈處理；CPU 飢餓（可控注入：迴圈停頓、B 的 p99）；真實 8 MiB 回覆的迴圈停頓（量測）；待送回覆上限（預設帳號與額外帳號各自；tools/call 200＋`-32003`、64 KiB 分段、怎麼還；在轉送名額之前判斷）；慢讀 RSS（ASCII、emoji，含 SSE 期間的轉送內容；`contract.md` 第 6 節門檻）。HM-30 審查補：檢查點的喘息與解析器檢查點（計數）、state 讀不到時兩條路的順序相同、token 換了時排隊的工作撤回、工作執行緒在 listener 服務前啟動與停了之後才停；D1：分段序列化和 json.dumps 逐位元相同（隨機值與邊界值，分段大小調到最小）、長字串與大的 list／dict 一次最多一段、七種形狀（mixed、大量小物件、CJK、emoji、長 ASCII 字串、跳脫字元、巢狀）與兩種事件的真實 8 MiB 回覆和迴圈內處理逐位元相同、迴圈單次停頓 ≤50 ms、14 種串流在工作執行緒切框也逐位元相同、處理工作時循環回收器關著、回覆分段放掉且不碰工具清單；D3：CPU 飢餓量整段（讀取＋處理）、租約剛查過時少讀 state（之後在磁碟上換掉的 token 照樣擋下）、開通時回覆每段一次 token 檢查。HM-30 第二輪審查補：扁平陣列在解析（每 1,024 個數字）、遮罩與成本計算（每 1,024 個成員）都有檢查點（計數；遮罩後鍵相撞時順序照舊）、五種扁平數字陣列（ID、小整數、整數與浮點數的時間序列、浮點數）的真實 8 MiB 回覆迴圈單次停頓 ≤50 ms 且逐位元相同、短字串清單整段一次解析只印不斷言（MF-1；使用者 2026-11-17 定 Q1：接受，HM-19c 實測再定）；秘密放在切段邊界、長字串、3 萬列與 5 千個鍵，JSON 與大 SSE 事件在工作執行緒照樣全部遮掉、逐位元相同（MF-3）；縮小額度一次湧入時 JSON 最多轉送名額＋1 個、帳上不超過上限＋名額×一個回覆，提早扣的在請求結束時還回（MF-2）；短的 emoji／中文字串清單每次 C 編碼器的輸出不超過 64 KiB（S-4）；沒有秘密可遮時值與 twin 是同一個也只放一次 |
+| `tests/test_health_tolerance.py` | HM-30 | 計畫 | CPU 飢餓下閒置帳號（B、C）的健康檢查不逾時、每次在該做之後 d（0.25 秒）內做完、判定一直是 reachable；飢餓中 B 的後端失敗一次不擋、連兩次才擋、C 不受影響（連兩次失敗的規則本身 HM-09 已做，測試在 `tests/test_health_backoff.py`） |

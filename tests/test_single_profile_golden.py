@@ -53,7 +53,7 @@ import pytest
 
 import run as n8n_run
 from log_scan import log_scan  # noqa: F401  (fixture)
-from mcp_admin_core import VERSION, profile_runtime, run_product, version_for_product
+from mcp_admin_core import VERSION, features, profile_runtime, profiles, run_product, version_for_product
 from mcp_admin_core.lifecycle import Supervisor
 from mcp_admin_core.products import INSTRUCTIONS, PROBES, ProductStore, health_probe
 from mcp_admin_core.surface import listing
@@ -365,7 +365,9 @@ BOOTSTRAP_EXTRA = {'odoo': {'odoo_allowed_methods', 'odoo_allowed_methods_source
 LISTING_SHA256 = {
     'odoo': 'a350ca0d63713aff504dc1c500d492252bbcca63b9894fee11ac0c5096077f34',
     'n8n': 'e59f7ef7f56b205a013a6a6e23f75b6d6f615ef6fceea15f19fe4c40c1573e6a',
-    'hermes': '2430f369faa5b6ff9840af7823b3392a49ef6e5bde0b754b9036051171362bfc',
+    # HM-33 (PaaS #156): a deliberate tool-surface change, tool_snapshot.py's hermes_cron description gains two
+    # sentences; the answer is the one before with only that description replaced (both digests together).
+    'hermes': '326ec974c2abbe8fc59c95975f38de6c11354f0e1e74a085525b7cfc66428111',
     'opendesign': 'f97a2cc4c89a9e1fb6c8a366cd4d42420a4623cb817d909cab7de728bc7e3931',
     'emqx': '646abdc0232dc9aa704be13adb72ecc0a032219875e5854c4e53b3715eb28ae3',
     'litellm': 'a0bc6b2a17c444d5d121d8d31e4ae47500c23d30a9926b1ddbba73e809a42c88',
@@ -375,7 +377,7 @@ LISTING_SHA256 = {
 LISTED_SHA256 = {
     'odoo': 'e96e4a87d4d23015dec6f4f03426fd142a3175095764082bda9c2588e6fb0500',
     'n8n': 'b9a68727b86186323186cc3d550efcd2975d9d3f3a10b5438a94903ea8093a98',
-    'hermes': '8461b58e8bc211abc5a007507ef9c9df3843784994f67cf486c9a9f2ae4a0942',
+    'hermes': 'a8f5083fe3e19d8583513cffca632b602755eece9c8ee0e087caeeb255bc09d9',  # HM-33, with LISTING_SHA256
     'opendesign': '9d205ad353e0b229cc584b98a673cfd584b1d838eb70f90cfa3175309819c7d9',
     'emqx': '5140e30f2e6fb52e99fcabb946e3f069c33f9e85b976f574d11431c221474148',
     'litellm': '8ae286590903c522c73bcd33c05d1e682fa8175cb0b76b1e68f3212ce5ccf029',
@@ -415,9 +417,14 @@ def expected_health(product, mode):
 
 def expected_entries(product, mode):
     """The data directory after a start: the store's lock and state, and the child's own empty working directory
-    (products.child_spec) once a product child has a backend; n8n's child works in the data directory itself."""
-    return ['.writer.lock', 'child', 'state.json'] if mode == 'configured' and product != 'n8n' else [
+    (products.child_spec) once a product child has a backend; n8n's child works in the data directory itself. HM-13b:
+    when the product is switched on (tests/test_router_passthrough.py runs this regression so), its boot guard's first
+    start also makes the instance sentinel and its record (plan 3.3: only those two files more)."""
+    names = ['.writer.lock', 'child', 'state.json'] if mode == 'configured' and product != 'n8n' else [
         '.writer.lock', 'state.json']
+    if features.enabled(product):
+        names = sorted([*names, profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME])
+    return names
 
 
 async def connect(runtime, client, path, headers, mode):

@@ -1,14 +1,27 @@
-import { mountPath, products, UiError } from './contracts.js';
+import { identityBound, mountPath, products, UiError } from './contracts.js';
 import { OperationIdentity, operationKinds, operationReceipt, PROFILES_SCOPE } from './operation-identity.js';
 import { DEFAULT_PROFILE, INDEX_ETAG, INDEX_REVISION, echoMatches, isExtraProfile, isProfileId, labelProblem, orphanIds, profileRows } from './profiles.js';
+import { QUARANTINE_NAME, quarantinedEntries, recordView, revocationResults } from './restore.js';
 
 // A Core release or pre-release string (the server sends only this form, ha_role.shown_version); anything else is not shown.
 const CORE_VERSION = /^[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,3}(?:(?:a|b|rc)[0-9]{1,3}|\.dev[0-9]{1,14})?$/;
 // HM-11 (contract 4.1): the profile codes the panel knows, each only with its documented status.
 const PROFILE_CODES = { profile_id_required: 400, profile_id_invalid: 400, profile_not_found: 404, profile_label_invalid: 422,
   profile_default_immutable: 422, profile_label_conflict: 409, profile_limit_reached: 409, profile_memory_insufficient: 409,
-  profile_port_unavailable: 409, profile_product_unsupported: 409, profile_index_corrupt: 503, endpoint_global: 409 };
+  profile_port_unavailable: 409, profile_product_unsupported: 409, profile_index_corrupt: 503, endpoint_global: 409,
+  restore_review_required: 409 };
 const count = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
+// HM-12 (DQ-40 ⑨ (a); contract 4.1): a backend save's code, only with its documented status.
+const SAVE_CODES = { CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN: 422 };
+// HM-12 (DQ-05; contract 3.1, section 9 #113): what the panel says when a save rotated the profile's MCP token (the
+// add-on sends token_rotated: true and no text). app.js adds it to a save's notice; a shape D answer carries it.
+export const TOKEN_ROTATED = '後端身分已變更，這個帳號的 MCP 權杖已換新：舊權杖與含舊權杖的連線網址已撤銷。請到「連線與權杖」顯示並複製新的權杖（或 Claude.ai 連線網址），更新所有用戶端。';
+// HM-12 review S-7 (contract section 9 #114): a 503 state unavailable of such a save may hide a write whose outcome the
+// add-on does not know: after its restart the token may be the new one, although this answer never said so.
+const OUTCOME_UNKNOWN = '存檔結果不明時請重新啟動 add-on，之後到「連線與權杖」確認 MCP 網址：若這次換了後端身分，權杖可能已換新，舊網址會失效。';
+// HM-13c review S-3: a backend save that would rotate the token of a profile whose restore review waits (HM-12's
+// identity change) is refused as token/rotate is; after restore_review_required's own copy, why a save waits too.
+const SAVE_WAITS_FOR_REVIEW = '改後端身分（Odoo 的網址、資料庫或使用者）會換新這個帳號的 MCP 權杖，所以也要先核對才能儲存；這次未儲存任何變更。';
 export class ApiError extends UiError {
   constructor(status, code = null, haVersion = null, detail = {}) {
     const messages = {
@@ -33,6 +46,10 @@ export class ApiError extends UiError {
     if (code === 'operation_journal_full') this.message = '操作收據已達保存上限；未接受新操作，請稍後再試。';
     if (code === 'operation_journal_unavailable') this.message = '操作收據儲存無法使用；請檢查服務儲存，勿改用新的識別碼重複操作。';
     if (code === 'owner_defaults_unavailable') this.message = '升級通知已處理過，或升級前的限制紀錄無法使用。請重新整理狀態；未變更任何設定。';
+    // HM-12 (DQ-40 ⑨ (a)): fixed copy; the answer echoes nothing and nothing sent is shown.
+    if (code === 'CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN') this.message = '網址改到另一台伺服器（scheme、主機或 port 不同）時，不會沿用已儲存的密碼或金鑰：請在同一次儲存中為新網址重新輸入（選填的可以明確清除）。這次未儲存任何變更。';
+    // HM-13c: an operation id from before a restore (its receipt archived, or lost with the restore): never run again.
+    if (code === 'operation_restored') this.message = '這個操作是在備份還原之前送出的；還原後不會再執行，也查不到它的結果。請核對目前狀態，需要時重新操作。';
     if (code === 'core_version_unreviewed') {
       this.haVersion = haVersion;
       this.message = `這個 HA Core 版本尚未審核：${haVersion ?? '（版本字串無法辨識）'}。這版 add-on 的管理面板只在審查過的 Core 版本上運作，暫時不能使用或變更設定；MCP 端點不經過這項檢查，照常服務。請更新 add-on。`;
@@ -55,8 +72,11 @@ export class ApiError extends UiError {
       profile_product_unsupported: '這個產品不支援額外帳號。',
       profile_index_corrupt: '帳號索引損壞，額外帳號暫停服務；預設帳號照常可用。',
       endpoint_global: '端點是整個 add-on 共用的設定，只能在預設帳號修改。',
+      restore_review_required: '這個帳號是從備份還原（或休眠）回來的，還沒有核對：請先到預設帳號頁的核對卡確認它的設定，按「已核對」後才能重新產生權杖。',
     };
     if (Object.hasOwn(profileMessages, code)) this.message = profileMessages[code];
+    // HM-13c: "revoke all" that did not finish says which profile got which result (contract 4.1); only these values.
+    this.results = code === 'operation_outcome_unknown' ? revocationResults(numbers.results) : null;
   }
 }
 // HM-11: an answer that arrived after the panel moved to another profile (a newer epoch). It is dropped unseen.
@@ -78,8 +98,12 @@ const PROFILE_WRITES = {
   'profiles/create': { method: 'POST', path: () => 'profiles', body: pending => ({ label: pending.label }) },
   'profiles/delete': { method: 'DELETE', path: pending => `profiles/${pending.profile}` },
   'profiles/quarantine': { method: 'POST', path: () => 'profiles/index/quarantine' },
+  // HM-13c (contract 3.1): "revoke all", a restore review, a quarantine directory's deletion.
+  'profiles/revoke-all': { method: 'POST', path: () => 'profiles/revoke-all' },
+  'profiles/restore-review': { method: 'POST', path: pending => `profiles/${pending.profile}/restore-review` },
+  'profiles/quarantine-delete': { method: 'POST', path: pending => `profiles/quarantine/${pending.name}/delete` },
 };
-const QUARANTINE_NAME = /^profiles\.json\.quarantine-[0-9]{8}T[0-9]{6}Z(?:-[0-9]{1,3})?$/;
+const INDEX_QUARANTINE_NAME = /^profiles\.json\.quarantine-[0-9]{8}T[0-9]{6}Z(?:-[0-9]{1,3})?$/;
 
 // HM-11 (plan 6; contract 3.3): with profiles, every profile-scoped request names its profile in X-MCP-Profile, the
 // default profile too; the profile routes (/api/profiles...) never do. this.profile is null for a single-profile server
@@ -111,18 +135,33 @@ export class AdminApi {
     if (!response.ok) {
       // Only these fixed codes affect copy. Never reflect server bodies or submitted secrets; the one exception is a
       // 403 core_version_unreviewed's Core version, shown only in the exact public release/pre-release form.
-      let code, haVersion = null, detail = {};
+      let code, haVersion = null, detail = {}, body = null;
       try {
-        detail = (await response.json())?.detail ?? {};
+        body = await response.json();
+        detail = body?.detail ?? {};
         code = detail?.code;
         if (code === 'core_version_unreviewed' && typeof detail.ha_version === 'string' && CORE_VERSION.test(detail.ha_version)) haVersion = detail.ha_version;
       } catch { /* non-JSON error */ }
       if (epoch !== this.epoch) throw new StaleProfileError();
       const known = ['config_conflict', 'config_revision_required', 'config_apply_failed', 'owner_defaults_unavailable',
         'operation_outcome_unknown', 'operation_id_conflict', 'operation_not_found', 'operation_id_required',
-        'operation_id_invalid', 'operation_id_expired', 'operation_journal_full', 'operation_journal_unavailable'].includes(code) || (code === 'core_version_unreviewed' && response.status === 403)
-        || (Object.hasOwn(PROFILE_CODES, code ?? '') && PROFILE_CODES[code] === response.status);
-      throw new ApiError(response.status, known ? code : null, haVersion, known && detail && typeof detail === 'object' ? detail : {});
+        'operation_id_invalid', 'operation_id_expired', 'operation_journal_full', 'operation_journal_unavailable'].includes(code)
+        || (code === 'operation_restored' && response.status === 410) || (code === 'core_version_unreviewed' && response.status === 403)
+        || (Object.hasOwn(PROFILE_CODES, code ?? '') && PROFILE_CODES[code] === response.status)
+        || (Object.hasOwn(SAVE_CODES, code ?? '') && SAVE_CODES[code] === response.status);
+      const error = new ApiError(response.status, known ? code : null, haVersion, known && detail && typeof detail === 'object' ? detail : {});
+      // HM-12 (contract 3.1, section 9 #113): saved, the token rotated, the new child not started (shape D with
+      // token_rotated; only this shape counts, and only when it names the profile asked, I12): the copy also says where
+      // the new token is (app.js reads the state again).
+      if (response.status === 503 && error.code === 'config_apply_failed' && body?.saved === true && body?.token_rotated === true
+          && echoMatches(body, profile)) {
+        error.tokenRotated = true;
+        error.message = `${error.message} ${TOKEN_ROTATED}`;
+      }
+      // HM-12 review S-7: the fixed 503 {"error":"state unavailable"} (a write the add-on could not make, or whose outcome
+      // it does not know; mutate says what to check after a backend save).
+      if (response.status === 503 && error.code === null && body?.error === 'state unavailable') error.stateUnavailable = true;
+      throw error;
     }
     if (response.status === 204) {
       // HM-11 review S-4: with profiles a profile-scoped answer without a body cannot echo its profile (I12): not used.
@@ -209,8 +248,17 @@ export class AdminApi {
         ...(pending ? { 'Idempotency-Key': pending.id } : {}) },
       ...(action ? {} : { body: JSON.stringify(typeof payload === 'function' ? payload(fresh) : payload) }),
     }, { profile, epoch }); } catch (error) {
-      // Only explicit refusals before accepting an intent can release identity.
-      if (pending && error instanceof ApiError && PRE_INTENT.includes(error.code)) this.operations.clear(profile);
+      // Only explicit refusals before accepting an intent can release identity (HM-13c: a token/rotate that waits for
+      // its restore review is refused before anything is written, as these are).
+      if (pending && error instanceof ApiError && [...PRE_INTENT, 'restore_review_required'].includes(error.code)) this.operations.clear(profile);
+      // HM-12 review S-7: a backend save of a switched-on product whose token is bound to its backend identity.
+      if (error instanceof ApiError && error.stateUnavailable && profile !== null && ['backend', 'backend/patch'].includes(operation)
+          && identityBound.includes(fresh.product)) error.message = `${error.message} ${OUTCOME_UNKNOWN}`;
+      // HM-13c review S-3: the same backend save held for the profile's restore review (409; nothing was saved).
+      if (error instanceof ApiError && error.code === 'restore_review_required' && profile !== null
+          && ['backend', 'backend/patch'].includes(operation) && identityBound.includes(fresh.product)) {
+        error.message = `${error.message} ${SAVE_WAITS_FOR_REVIEW}`;
+      }
       throw error;
     }
     if (pending) {
@@ -249,8 +297,14 @@ export class AdminApi {
     const { response, value } = await this.exchange(`${this.mount}/api/profiles`, {}, { profile: null, global: true });
     const rows = profileRows(value);
     const orphans = orphanIds(value, rows);
+    const quarantined = quarantinedEntries(value);  // HM-13c: the quarantine directories, delete only
     const etag = response.headers.get('ETag');
-    return { rows, orphans, revision: typeof etag === 'string' && INDEX_ETAG.test(etag) ? etag.slice(1, -1) : null };
+    return { rows, orphans, quarantined, revision: typeof etag === 'string' && INDEX_ETAG.test(etag) ? etag.slice(1, -1) : null };
+  }
+  // HM-13c (contract 3.1, 3.6): the guard's restore record, checked (restore.js recordView: anything else refused).
+  async restoreRecord() {
+    if (this.profile === null) throw new UiError('這個管理服務沒有開通多帳號。');
+    return recordView(await this.request(`${this.mount}/api/profiles/restore-record`, {}, { profile: null, global: true }));
   }
   // A fresh bootstrap (its echo checked) for the CSRF value and the operation clock. It is the default profile's: the
   // profile routes are the add-on's, the CSRF value is shared, and a profile whose state cannot be read must stay
@@ -273,6 +327,8 @@ export class AdminApi {
       detail = { label: detail.label.trim() };
     }
     if (route === 'profiles/delete' && detail.profile !== undefined && !isExtraProfile(detail.profile)) throw new UiError('預設帳號不能刪除。');
+    if (route === 'profiles/restore-review' && detail.profile !== undefined && !isProfileId(detail.profile)) throw new UiError('帳號識別碼格式不符。');
+    if (route === 'profiles/quarantine-delete' && detail.name !== undefined && !QUARANTINE_NAME.test(detail.name)) throw new UiError('隔離的帳號資料名稱格式不符。');
     if (typeof revision !== 'string' || !INDEX_REVISION.test(revision)) throw new UiError('帳號清單版本格式不符；請重新整理後再試，未送出變更。');
     const epoch = this.epoch;
     const fresh = await this.profileFresh(epoch);
@@ -301,14 +357,25 @@ export class AdminApi {
       ? profileRows({ profiles: [{ ...result, operation: undefined }, defaultRow] })[0] : null;
     const confirmed = route === 'profiles/create' ? gone || created !== null
       : route === 'profiles/delete' ? result?.deleted === pending.profile
-        : typeof result?.quarantined === 'string' && QUARANTINE_NAME.test(result.quarantined);
+        : route === 'profiles/revoke-all' ? result?.revoked === 'all'
+          : route === 'profiles/restore-review' ? result?.reviewed === pending.profile
+            : route === 'profiles/quarantine-delete' ? result?.deleted === pending.name
+              : typeof result?.quarantined === 'string' && INDEX_QUARANTINE_NAME.test(result.quarantined);
     if (!confirmed) throw new UiError('伺服器未回傳預期的帳號確認；請重新整理帳號清單。');
     this.operations.clear(PROFILES_SCOPE);
     if (route === 'profiles/create') return gone ? { id: result.id, label: null, replayed: true, gone: true } : { id: result.id, label: created.label, replayed: receipt.replayed };
+    if (route === 'profiles/revoke-all') return { revoked: 'all', results: revocationResults(result.results), replayed: receipt.replayed };
+    if (route === 'profiles/restore-review') return { reviewed: result.reviewed, replayed: receipt.replayed };
+    if (route === 'profiles/quarantine-delete') return { deleted: result.deleted, replayed: receipt.replayed };
     return route === 'profiles/delete' ? { deleted: result.deleted, replayed: receipt.replayed } : { quarantined: result.quarantined, replayed: receipt.replayed };
   }
   createProfile(label, revision) { return this.changeProfiles('profiles/create', revision, { label }); }
   deleteProfile(profile, revision) { return this.changeProfiles('profiles/delete', revision, { profile }); }
+  // HM-13c (contract 3.1): "revoke all" (If-Match: the list's revision, or the unusable index's own ETag), a restore
+  // review of one profile, a quarantine directory's deletion. Each keeps its identity under the profiles scope.
+  revokeAll(revision) { return this.changeProfiles('profiles/revoke-all', revision); }
+  reviewProfile(profile, revision) { return this.changeProfiles('profiles/restore-review', revision, { profile }); }
+  deleteQuarantined(name, revision) { return this.changeProfiles('profiles/quarantine-delete', revision, { name }); }
   // DQ-12 (contract 3.6): quarantine the unusable index; etag is the default bootstrap's profile_index_etag, as given.
   quarantineIndex(etag) {
     if (typeof etag !== 'string' || !INDEX_ETAG.test(etag)) throw new UiError('帳號索引的版本格式不符；請重新整理後再試，未送出變更。');
