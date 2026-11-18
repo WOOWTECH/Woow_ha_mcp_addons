@@ -43,6 +43,8 @@ OFFLINE = threading.Event()
 # packaging/entrypoint.py's line (prepare_data) once its repair of a restore passed the final ownership check; the
 # number is _repair_restored's: every restored entry and the marker it saved before pass 1 (HM-13a).
 REOWNED = 'bootstrap: re-owned %d restored entries in /data/mcp'
+# How every line of the boot guard begins (restore_lock's; packaging/test_container_probe.py checks each one it logs).
+GUARD = 'restore guard'
 
 
 class Backend(BaseHTTPRequestHandler):
@@ -260,8 +262,9 @@ def check_restore_log(log, entries, revoked=()):
     once it stopped and never shown (a child's line could hold anything): the entrypoint's line once, with *entries*
     (every restored entry and its marker), and the boot guard's notice once and the other one never: KEPT_NOTICE when
     nothing was revoked (no profile data, DQ-03 (b)), REVOKED_NOTICE when every profile was, the default profile's
-    included (DQ-03 (b) A2); then the guard's REVOKED line once for each log id in *revoked* and for no other. The
-    strings are restore_lock's own. Fixed messages only."""
+    included (DQ-03 (b) A2); then the guard's REVOKED line once for each log id in *revoked* and for no other; and no
+    other line of the guard (one set aside, quarantined or not revoked, a marker left, a guard not finished...: HM-16's
+    second review). The strings are restore_lock's own. Fixed messages only."""
     log.seek(0)
     lines = log.read().decode('utf-8', 'replace').splitlines()
     repairs = [line for line in lines if line.startswith(REOWNED.split('%d')[0])]
@@ -273,6 +276,7 @@ def check_restore_log(log, entries, revoked=()):
     told = sorted(line for line in lines if line.startswith(before) and line.endswith(after))
     assert told == sorted(restore_lock.REVOKED % label for label in revoked), \
         'the revoked profiles not logged once each'
+    assert all(line in (notice, *told) for line in lines if line.startswith(GUARD)), 'another line of the boot guard'
 
 
 async def restored_start(client):

@@ -41,11 +41,12 @@ loopback rule):
    on disk the boot guard revokes every profile, the default profile's included (DQ-03 (b) A2; plan 8.4 A-F; HM-13b):
    the entrypoint gave every restored entry back to the runtime user and said so once; the guard removed the marker and
    the single-profile stage's restore notice (no longer true, HM-13c), wrote restore-record.json (both signals, every
-   profile revoked) and said REVOKED once for each profile and REVOKED_NOTICE once; every profile's token is None with
-   one more history entry and its child token new, nothing else of a state changed, nor the index; every profile's
-   child started again; no credential from before the restore is served (each token on both connection methods, each
-   child token by its child). Stopped: the sentinel was rebuilt (detect: no marker, CONSISTENT), and what the guard
-   left is still a tree the repair takes (tree_snapshot: the record, new journals, archived receipts).
+   profile revoked) and said REVOKED once for each profile and REVOKED_NOTICE once, and none of its other lines (HM-16's
+   second review); every profile's token is None with one more history entry and its child token new, nothing else of
+   a state changed, nor the index; every profile's child started again; no credential from before the restore is
+   served (each token on both connection methods, each child token by its child). Stopped: the sentinel was rebuilt
+   (detect: no marker, CONSISTENT), and what the guard left is still a tree the repair takes (tree_snapshot: the
+   record, new journals, archived receipts).
 
 Fixed messages only: no token, child token, label, state or backend value is ever printed; a profile is named by its
 log id (profiles.log_id).

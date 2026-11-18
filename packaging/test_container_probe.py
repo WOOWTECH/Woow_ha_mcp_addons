@@ -600,7 +600,8 @@ KEPT, REVOKED_NOTICE = restore_lock.KEPT_NOTICE, restore_lock.REVOKED_NOTICE
 class RestoreLogTests(unittest.TestCase):
     """check_restore_log (HM-16; HM-13b review S-3): what the start after a restore said, read back once it stopped:
     the entrypoint's repair once with its count, the boot guard's notice once and the other never, a REVOKED line once
-    for each revoked profile and for no other. Never a line of the log in a message."""
+    for each revoked profile and for no other, and no other line of the guard (HM-16's second review). Never a line of
+    the log in a message."""
 
     def log(self, *lines):
         log = tempfile.TemporaryFile()
@@ -648,6 +649,45 @@ class RestoreLogTests(unittest.TestCase):
                              'no repair line': [*said, REVOKED_NOTICE]}.items():
             with self.subTest(label=label):
                 self.fails(lines, 21, revoked)
+
+    def test_any_other_line_of_the_boot_guard_fails(self):
+        """HM-16's second review: a restore the guard finished says its notice and the revoked profiles, nothing else
+        of the guard's; any other of its lines fails, whatever another check of the stage would catch too."""
+        repair, revoked = probe.REOWNED % 21, ['default', 'aaaaaaaa', 'bbbbbbbb']
+        said = [restore_lock.REVOKED % label for label in revoked]
+        others = [restore_lock.SET_ASIDE % ('x', 'y'), restore_lock.SET_ASIDE_IN_PROFILE % ('aaaaaaaa', 'x', 'y'),
+                  restore_lock.QUARANTINED % 'cccccccc', restore_lock.NOT_REVOKED % ('cccccccc', 'OSError'),
+                  restore_lock.NOT_ARCHIVED % 'aaaaaaaa', restore_lock.NOTICE_NOT_REMOVED,
+                  restore_lock.MARKER_LEFT % 'ENOSPC', restore_lock.UNFINISHED % 'the check did not pass',
+                  restore_lock.DORMANT_NOTICE % 2, restore_lock.REVOKE_ALL_NOTICE, restore_lock.RECORD_KEPT]
+        for line in others:
+            with self.subTest(line=line):
+                self.assertEqual(self.fails([repair, KEPT, line], 21), 'another line of the boot guard')
+                self.assertEqual(self.fails([repair, *said, REVOKED_NOTICE, line], 21, revoked),
+                                 'another line of the boot guard')
+
+    def test_every_line_the_boot_guard_logs_starts_with_guard(self):
+        """check_restore_log tells the guard's lines by GUARD: every line restore_lock logs (the first argument of a
+        logger call, the third of a _Sweep._fail call) names one of its constants, and each of them starts with it."""
+        def names(line):
+            if isinstance(line, ast.IfExp):  # REVOKED_NOTICE if revoke_default else KEPT_NOTICE
+                return names(line.body) | names(line.orelse)
+            self.assertIsInstance(line, ast.Name)
+            return {line.id}
+        named = set()
+        for node in ast.walk(ast.parse(Path(restore_lock.__file__).read_text())):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                called = ast.unparse(node.func)
+                if called.startswith('logger.'):
+                    named |= names(node.args[0])
+                elif called == 'self._fail':
+                    named |= names(node.args[2])
+        self.assertEqual(named - set(vars(restore_lock)), {'line'})  # _fail's own call logs the line it is given
+        named.discard('line')
+        self.assertLessEqual({'KEPT_NOTICE', 'REVOKED_NOTICE', 'REVOKED', 'SET_ASIDE', 'UNFINISHED'}, named)
+        for name in sorted(named):
+            with self.subTest(name=name):
+                self.assertTrue(getattr(restore_lock, name).startswith(probe.GUARD))
 
     def test_the_messages_name_what_is_missing(self):
         self.assertEqual(self.fails([KEPT], 5), 'the restore repair not logged once')
