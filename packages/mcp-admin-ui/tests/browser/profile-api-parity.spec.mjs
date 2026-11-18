@@ -9,12 +9,14 @@ const CASES = JSON.parse(readFileSync(new URL('../profile-api-cases.json', impor
 const RULES = CASES.rules;
 const HEX24 = /^[0-9a-f]{24}$/;
 const QUARANTINED = /^profiles\.json\.quarantine-[0-9]{8}T[0-9]{6}Z(?:-[0-9]{1,3})?$/;
-const CLASSES = [[/^"p1-[0-9a-f]{64}"$/, '<etag:p1>'], [/^"c1-[0-9a-f]{64}"$/, '<etag:c1>'],
-  [/^p1-[0-9a-f]{64}$/, '<revision:p1>'], [/^c1-[0-9a-f]{64}$/, '<revision:c1>']];
+// The ETags of the index, of a profile's configuration and (HM-27) of the add-on's Origin policy, and their revisions.
+const ETAG_CLASSES = ['p1', 'c1', 'o1'];
+const CLASSES = [...ETAG_CLASSES.map(name => [new RegExp(`^"${name}-[0-9a-f]{64}"$`), `<etag:${name}>`]),
+  ...ETAG_CLASSES.map(name => [new RegExp(`^${name}-[0-9a-f]{64}$`), `<revision:${name}>`])];
 
 function etagClass(value) {
   if (value === undefined || value === null) return null;
-  const found = CLASSES.slice(0, 2).find(([pattern]) => pattern.test(value));
+  const found = CLASSES.slice(0, ETAG_CLASSES.length).find(([pattern]) => pattern.test(value));
   return found ? found[1].slice('<etag:'.length, -1) : 'other';
 }
 function shape(value, context, key = null) {
@@ -47,6 +49,7 @@ async function observed(item, response, context) {
 // connection and the identity change's failure (rebindFault).
 // HM-13c: a restore (the guard's record of every profile, revoked; the quarantine directories it made; the notice of a
 // kept token when there is no profile data), with the policy every profile copies from the default one.
+// HM-27: an Origin policy file the add-on cannot use (originUnusable).
 const RESTORED_AT = '2026-11-16T09:30:15+00:00';
 const restoredPolicy = policy => ({writes_enabled: true, disabled: [], enabled_write_tools: [], denied_operations: {},
   odoo_write_switches: null, odoo_allowed_methods: null, n8n_session: null, ...policy});
@@ -70,6 +73,7 @@ function fixtureSetup(setup) {
       policy: restoredPolicy(setup.policy)}, ...setup.extras.map(spec => ({id: ids[spec.role], label: spec.label, token: 'revoked',
         identity: restoredIdentity, policy: restoredPolicy(setup.policy)}))]}} : {}),
     ...(setup.quarantine ? {quarantined: setup.quarantine.map(role => `${ids[role]}-20261116T093015Z`)} : {}),
+    ...(setup.origin_policy === 'unusable' ? {originUnusable: true} : {}),
   }};
 }
 const operationKey = () => `${Date.now() - 1000}.${Array.from(crypto.getRandomValues(new Uint8Array(16)), n => n.toString(16).padStart(2, '0')).join('')}`;
@@ -93,11 +97,18 @@ class Rig {
     expect(response.status()).toBe(200);
     return response.headers().etag;
   }
+  // HM-27: the ETag of the Origin policy as the panel read it last.
+  async originEtag() {
+    const response = await this.request.get('/api/origin-policy');
+    expect(response.status()).toBe(200);
+    return response.headers().etag;
+  }
   async send(item, context) {
     const spec = item.request, headers = {};
     if (spec.profile !== undefined) headers['X-MCP-Profile'] = profileValue(spec.profile, context);
     const match = spec.if_match;
     if (match === 'index') headers['If-Match'] = await this.indexEtag();
+    else if (match === 'origin') headers['If-Match'] = await this.originEtag();
     else if (match === 'raw') headers['If-Match'] = (await this.bootstrap()).profile_index_etag;
     else if (match?.startsWith('config:')) {
       const role = match.slice('config:'.length);

@@ -72,6 +72,21 @@ HM-13c (multi-profile plan 6, 8.4 全部撤銷 / 核對後才重發, 10.3; contr
   record unreadable: pending null), and every profile's bootstrap whether its new token waits for one
   (restore_review_required: true).
 
+HM-27 (multi-profile plan 8.7, 12.3 HM-27; DQ-11 (a); contract 2.6, 3.1, 3.5, 4.1): the add-on's Origin policy of the
+secret path (origin_policy.OriginPolicy, the manager's origin) is one more global path, {base}/api/origin-policy:
+- GET (origin_policy): after the second role check, the policy as the panel shows it ({"mode", "allowed_origins",
+  "origin_policy_state"}: default without a file, saved, or unusable with neither) and its ETag "o1-<64 hex>";
+- PUT (save_origin_policy) {"mode", "allowed_origins"}: the policy's own lock (2 s, 503), the second role check, then
+  as a creation: If-Match (428; a malformed, repeated or stale one 409 config_conflict with the current ETag; an
+  unusable file takes its own ETag, so a save replaces it), the Idempotency-Key (428, 400; a completed replay answers
+  the policy now and its receipt before the ETag is compared; another request under the same key 409
+  operation_id_conflict; one not completed 409 operation_outcome_unknown), the request's rules (422
+  origin_policy_invalid), the receipt begun, the file written, the receipt completed (receipts beside the file:
+  .origin-policy.json.operations.json, kind origin.policy). A write that fails once the receipt began: 409
+  operation_outcome_unknown, the receipt left unknown (never a second write under its key).
+Neither carries a profile echo, a token or server text. A product with its own rule (Headscale: the manager made no
+policy) answers both as an unknown operation (404, no body).
+
 What this module uses of profile_runtime.ProfileManager (HM-08's registry, HM-09's lifecycle) is in one class,
 Registry, so that a change of that interface is made in one place.
 """
@@ -89,9 +104,9 @@ import os
 import re
 import secrets
 
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 
-from . import profiles, restore_lock
+from . import origin_policy, profiles, restore_lock
 from .admin_auth import BadRequest
 from .config import ConfigError
 from .operations import PROFILE_RESULTS, OperationJournal
@@ -219,6 +234,10 @@ class Registry:
 
     def relabel(self, profile_id, label):
         self.manager.relabel(profile_id, label)
+
+    def origin(self):
+        """HM-27: the add-on's Origin policy (origin_policy.OriginPolicy), or None for a product with its own rule."""
+        return self.manager.origin
 
     @staticmethod
     def held_tokens(directory):
@@ -758,6 +777,43 @@ class ProfileAdmin:
         finally:
             store.close()
 
+    # ---- HM-27: the add-on's Origin policy of the secret path (see the module docstring) ----
+
+    async def origin_policy(self, call):
+        origin = self.registry.origin()
+        if origin is None:
+            return Response(status_code=404)  # its own rule (Headscale): as an unknown operation, after the role check
+        await self._final(call)
+        found = origin.file.read()
+        return self._answer(origin.view(found), etag=origin.etag(found))
+
+    async def save_origin_policy(self, call):
+        origin = self.registry.origin()
+        if origin is None:
+            return Response(status_code=404)
+        async with self._locked(origin.lock):
+            await self._final(call)
+            # Nothing is awaited from here to the answer.
+            found = origin.file.read()
+            etag = origin.etag(found)
+            given = self._if_match(call, origin_policy.ETAG)
+            if given is None:
+                return self._conflict(etag)
+            key, data, prior, fingerprint = self._idempotency(call, origin_policy.KIND, call.value, origin.journal)
+            if prior is not None:
+                return self._replay(prior, key, origin.view(found), etag, origin.journal)
+            if given != etag:
+                return self._conflict(etag)
+            policy = origin_policy.requested(call.value)
+            origin.journal.begin(key, data, origin_policy.KIND, call.user, fingerprint)
+            call.committed.set()  # the intent is durable: the save runs to its end whatever the client does
+            try:
+                written = origin.file.write(policy, expected=found.signature)
+            except OSError:
+                raise refused(409, 'operation_outcome_unknown') from None
+            operation = self._complete(key, data, origin.journal)
+            return self._answer({**origin.view(written), 'operation': operation}, etag=origin.etag(written))
+
     # ---- the steps ----
 
     @asynccontextmanager
@@ -804,40 +860,45 @@ class ProfileAdmin:
         return view
 
     @staticmethod
-    def _if_match(call):
+    def _if_match(call, pattern=ETAG):
         """The one well-formed If-Match (428 config_revision_required without; 409 config_conflict, shape B, for more
-        than one or a malformed one: returned by the caller, see _conflict)."""
+        than one or a malformed one: returned by the caller, see _conflict). pattern: the index's ETag form, or
+        (HM-27) the Origin policy's."""
         matches = call.request.headers.getlist('if-match')
         if not matches:
             raise BadRequest(428, {'code': 'config_revision_required'})
-        if len(matches) != 1 or not ETAG.fullmatch(matches[0]):
+        if len(matches) != 1 or not pattern.fullmatch(matches[0]):
             return None  # never equal to an ETag: the caller answers config_conflict
         return matches[0]
 
-    def _idempotency(self, call, kind, payload):
+    def _idempotency(self, call, kind, payload, journal=None):
         """(key, journal data, the completed receipt of a replay or None, fingerprint); 428 operation_id_required, 400
         operation_id_invalid, 410 operation_id_expired, 409 operation_id_conflict, 404 operation_not_found (another
-        administrator's key), 409 operation_outcome_unknown (not completed), 503 operation_journal_unavailable."""
+        administrator's key), 409 operation_outcome_unknown (not completed), 503 operation_journal_unavailable.
+        journal: the index's receipts, or (HM-27) the Origin policy's."""
+        journal = self.journal if journal is None else journal
         ids = call.request.headers.getlist('idempotency-key')
         if not ids:
             raise BadRequest(428, {'code': 'operation_id_required'})
         if len(ids) != 1:
             raise BadRequest(400, {'code': 'operation_id_invalid'})
-        data, prior, fingerprint = self.journal.inspect(ids[0], kind, call.user, payload)
+        data, prior, fingerprint = journal.inspect(ids[0], kind, call.user, payload)
         if prior is not None and prior['state'] != 'completed':
-            public = self.journal.public(ids[0], prior, replayed=True)
+            public = journal.public(ids[0], prior, replayed=True)
             raise BadRequest(409, {'code': 'operation_outcome_unknown', 'operation': public})
         return ids[0], data, prior, fingerprint
 
-    def _complete(self, key, data):
+    def _complete(self, key, data, journal=None):
         try:
-            return self.journal.complete(key, data)
+            return (self.journal if journal is None else journal).complete(key, data)
         except (OSError, ValueError):
             raise refused(409, 'operation_outcome_unknown') from None
 
-    def _replay(self, prior, key, body, etag):
-        """A completed operation's replay: what it did and its receipt, the index as it is now (no token)."""
-        return self._answer({**body, 'operation': self.journal.public(key, prior, replayed=True)}, etag=etag)
+    def _replay(self, prior, key, body, etag, journal=None):
+        """A completed operation's replay: what it did and its receipt, the index (HM-27: the Origin policy) as it is now
+        (no token)."""
+        journal = self.journal if journal is None else journal
+        return self._answer({**body, 'operation': journal.public(key, prior, replayed=True)}, etag=etag)
 
     def _replay_create(self, prior, key, view, etag):
         profile_id = prior['subject']
