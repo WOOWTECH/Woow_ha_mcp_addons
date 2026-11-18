@@ -2,12 +2,16 @@
 
 ## 結論
 
+- **合併後的獨立審查（2026-11-18，第 20 節）判通過**：涵蓋 `b103dea` 與第 19 節；必修 0、建議 3。契約第 4.1 節 `operation_restored`
+  列跟上 Origin 政策旁的收據（`0cf59df`）；Origin 政策的存檔收到 410 `operation_restored` 時面板保留識別紀錄、「已核對」才清掉，
+  補 node 一案（`d5f95d4`；4 個突變加測試前都存活、加了全擋）。還原後 Origin 政策靜默回到備份當時的值，要不要在面板加一句提示，
+  照審查的意思交主對話決定（不擋合併；DOCS 與 runbook 照第 13 節交 HM-18）。程式與面板行為都沒變，帳本不用重算。
 - **和 HM-13c 合併（2026-11-18，第 19 節）**：照第 17 節的合併順序（#108 → #112 → 本片 → #109），用 merge commit `a09081a` 把 HM-13c 的
   `c5dd7d3`（已含 HM-13b `090081c` 與 `claude-delivery` `53ffe61`）合進本片，不 rebase、不 force push（本片已 push）。衝突 16 個檔，兩邊的
   行為都留；合起來才壞的兩處（HM-13c 改了 `global_route()` 的回傳、HM-13b 要審每個 chmod 呼叫點）一起修。契約第 9 節本片的列從
   #118～#122 改成 #124～#128（`1511a1a`）。`/data/mcp` 的兩個新檔加進版面的名稱（`profiles.py`），還原時守門照索引旁的收據封存、換新
   Origin 政策旁的收據，政策檔照還原的原樣、守門不讀不改（先紅後綠 `459bba9` → `034aac6`，文件 `dd02849`、`776f753`；8 個突變全擋）。
-  **下一次獨立審查要涵蓋**：上次審查之後才加的 `b103dea`（政策檔裡不是字串的來源判成不能用、IPv6 一種正規寫法）與第 19 節。
+  合併後的獨立審查已涵蓋上次審查之後才加的 `b103dea`（政策檔裡不是字串的來源判成不能用、IPv6 一種正規寫法）與第 19 節（第 20 節）。
   第 1～18 節照合併前寫，只有契約列號的現行指標改成合併後的（第 19.4 節）。
 - **獨立審查（2026-11-17，`artifacts/…/wave4/review-HM-27.md`）判「修正後通過」**：必修 2（MF-1、MF-2）、建議 9（S-1～S-9）都照報告
   處理；補 S-2 的測試時自己找到一個缺陷（政策檔的來源是陣列或物件時，讀檔丟 TypeError，不是判成不能用），一併先紅後綠修掉。逐項的
@@ -73,9 +77,9 @@
 | `tests/test_panel_profile_api_shapes.py`、`packages/mcp-admin-ui/tests/browser/profile-api-parity.spec.mjs`、`packages/mcp-admin-ui/tests/profile-api-cases.json` | ETag 類別 `o1`、`if_match: origin`、`setup.origin_policy`；3 個新情境（`origin-policy` 17 案、`origin-policy-unusable` 4 案、`origin-policy-headscale` 2 案）與開關關情境的 1 案 |
 | `tests/test_request_budget_gateway.py`、`tests/test_profile_runtime.py` | 釘住選項的兩案多列 `origin_policy` |
 | `tests/test_profile_admin_api.py`（HM-10 的檔） | 審查 MF-2：第二次角色檢查的測試加政策鎖一輪、政策的 GET 也問兩次角色；`Panel` 加 `origin_policy`、`save_origin_policy` |
-| `packages/mcp-admin-ui/tests/origin-policy.test.mjs`（新）、`packages/mcp-admin-ui/tests/browser/origin-policy.spec.mjs`（新） | node 11 案、Playwright 12 案（審查 S-8：開關關那案先放一筆識別紀錄） |
+| `packages/mcp-admin-ui/tests/origin-policy.test.mjs`（新）、`packages/mcp-admin-ui/tests/browser/origin-policy.spec.mjs`（新） | node 12 案（合併後的審查補 1 案：還原前的存檔收到 410 `operation_restored`，第 20 節）、Playwright 12 案（審查 S-8：開關關那案先放一筆識別紀錄） |
 | `docs/provenance/runtime-patches.json` | 新模組一列；7 個列管檔的 SHA-256 照檔重算、`change` 補一段（照 JSON 結構改，沒有用 `--write`） |
-| `docs/multi-profile/contract.md` | 第 1.2、2.6、3.1、3.5、4.1、4.2 節；第 9 節 #9、#10、#42 改寫、加 #118～#122（合併 HM-13c 之後是 #124～#128，第 19.4 節）；第 10 節一列；審查後：第 2.6、3.1、3.2 節、第 9 節 #9、#122（現在的 #128）、第 10 節再一列；合併後：第 1.3、2.6、3.5、7、8 節、#67、#120 的 Origin 政策與還原，第 10 節再一列（第 19 節） |
+| `docs/multi-profile/contract.md` | 第 1.2、2.6、3.1、3.5、4.1、4.2 節；第 9 節 #9、#10、#42 改寫、加 #118～#122（合併 HM-13c 之後是 #124～#128，第 19.4 節）；第 10 節一列；審查後：第 2.6、3.1、3.2 節、第 9 節 #9、#122（現在的 #128）、第 10 節再一列；合併後：第 1.3、2.6、3.5、7、8 節、#67、#120 的 Origin 政策與還原，第 10 節再一列（第 19 節）；合併後的審查：第 4.1 節 `operation_restored` 列，第 10 節再一列（第 20 節） |
 | `Hc/profiles.py`、`Hc/restore_lock.py`（列管，HM-13b 的檔）、`tests/test_restore_lock.py`、`tests/restore_guard_disk.py`（HM-13b 的測試） | 合併 HM-13c 之後（第 19.5 節）：Origin 政策與收據的檔名寫進版面、守門還原時封存收據；守門這邊的測試與 call site 清單 |
 | `docs/multi-profile/decisions.md` | DQ-11 列補實作；變更紀錄一列；審查 MF-1：第 4 節 DQ-11 第二問的期限、DQ-11 列的負責片 |
 | `docs/multi-profile/threat-model.md` | 第 1 節一列、I7 測試欄、第 3 節五條；審查後再一條（S-6：開通之後又關掉時 enforce 靜默失效） |
@@ -402,7 +406,9 @@ commit 之後的結果。
     CHANGELOG）；契約第 2.6 節與威脅模型第 3 節已寫。
   - 和 HM-13b、HM-13c 合併後再一件（第 19.5 節）：(c) 還原把 Origin 政策帶回備份當時的值，沒有提示（備份後才切的 enforce 會回到
     report-only）。DOCS 與 `docs/operations/update-backup-rollback.md` 寫「還原後到「連線與權杖」看瀏覽器來源檢查的模式與清單」；契約
-    第 2.6 節與威脅模型第 3 節已寫。
+    第 2.6 節與威脅模型第 3 節已寫。合併後的審查（第 20 節建議 3）判可以接受、不擋合併，並建議主對話決定要不要在 HM-13c 的核對卡
+    或還原提示加一句「Origin 來源檢查設定已回到備份當時的值，請到『連線與權杖』頁確認」（只改面板文字；還原提示在沒有政策的
+    單帳號安裝也會出現，所以要加條件：開通、而且產品有政策）。主對話決定之前，照這一點由 HM-18 寫 DOCS 與 runbook。
 - **合併進 `claude-delivery` 的那一步**：`docs/multi-profile/unreleased-changes.md` 第 6 節寫本片「加到第 4.2 節」（受開關管）。合併後守門多的
   那一步（還原時封存 Origin 政策旁的收據）也只在開通或有帳號資料時動作，沒開通又沒有帳號資料的安裝看不到變化，同樣歸第 4.2 節。
 - **HM-16（容器探針）**：開通的候選映像還原後，守門會多寫 `.origin-policy.json.operations.json`（換新的收據檔，第 19.5 節）；探針的還原階段
@@ -427,6 +433,8 @@ commit 之後的結果。
 - DQ-11 第二問（Bearer `/mcp` 要不要精確放行 `https://claude.ai`）仍待 S14 實測後問，但照審查 MF-1 已經不擋 HM-27：`decisions.md` 第 4 節的
   期限改成「S14 有結果之後」（原寫「HM-27 合併前」，排不到，也不是計畫 §13.1 的原文）；HM-27 沒有放行，Bearer 照舊一律 403；選放行就另開
   一片、要獨立安全審查（`169fc61`）。審查判這不是新的決定（報告第 4 節），主對話在回報裡告知使用者即可。
+- 合併後的審查建議 3（還原後 Origin 政策靜默回到備份當時的值，面板要不要加一句提示）交**主對話**決定，不擋合併（第 20 節）；
+  主對話要不要再問使用者由它判斷。
 
 ## 15. commit（rebase 後，`f239157` 之後；舊→新對照）
 
@@ -790,3 +798,71 @@ commit 訊息：U+202A～202E、U+2066～2069 合計 0 個；U+200E、U+200F、U
 
 - 沒有 push（照指示）。合併後 push 應是 `32307e6` 往前的 fast-forward（`git push origin HEAD:feat/ha-multiprofile-hm27-20261117`）。
 - 合併條件不變：#108、#112 先合；PR 標題保留「⛔ 勿代 merge｜待覆核 — HM-」；下一次獨立審查涵蓋 `b103dea` 與本節。
+
+## 20. 合併後的獨立審查（2026-11-18，通過）
+
+審查範圍是第 16 節之後才加的 `b103dea`（政策檔裡不是字串的來源判成不能用、IPv6 一種正規寫法）與第 19 節（和 HM-13c 合併、改號、
+還原守門），看的是本機的 `82f9847`。結論**通過**：必修 0、建議 3（審查意見由工作流交給本片）。兩項照建議改：只補測試與文件，程式與
+面板的行為都沒變；一項照審查的意思交主對話決定。本節的 log 與工具都在 repo 外的暫存區，用完刪掉；數字照實抄在這裡。
+
+### 20.1 逐項處理
+
+| 項目 | 審查說的 | 怎麼處理 | commit | 證據 |
+|---|---|---|---|---|
+| 建議 1：契約第 4.1 節 `operation_restored` 列 | 出處只寫 HM-13b、HM-13c，測試只列 `test_restore_lock.py`、`test_restore_review.py`。合併後 `PUT origin-policy` 重送還原前的 id 也回 410（`tests/test_origin_policy.py` 的 `test_after_a_restore…` 守），第 2.6、3.5 節已寫，這列沒跟上 | 照建議只改文件。「什麼時候」補「HM-27 起 Origin 政策旁的收據也是（開通或有帳號資料時），`PUT origin-policy` 重送還原前的 id 也回這個，If-Match 是不是最新的都一樣」（`test_after_a_restore…` 用過期與最新的 ETag 各送一次，都是 410）。負責片加 HM-27，測試加 `tests/test_origin_policy.py`；面板那句補 Origin 政策的存檔（建議 2 的新案）。第 10 節加一列。「沒開通時」欄不用改：開關關時沒有 `/api/origin-policy`（404），這個 410 不會出現 | `0cf59df` | 契約；相關 pytest（第 20.3 節） |
+| 建議 2：面板收到 410 `operation_restored`（`api.js`） | Origin 政策的存檔收到它時走通用路徑（不在 `ORIGIN_REFUSALS`）：識別紀錄留著、顯示 HM-13c 的文字、重送再拿 410、按「已核對」才清掉。和 HM-13c 處理帳號操作的做法一致，但 node 與 Playwright 都沒有測試守（只有 `restore.test.mjs` 直接建 `ApiError` 驗文字），fixture 的 `server.mjs` 也不會回這個 410 | 照建議在 `packages/mcp-admin-ui/tests/origin-policy.test.mjs` 加一案，行為不變、只補測試。存檔收到 410 `{code:'operation_restored'}` 時，`ApiError` 是 HM-13c 那段文字：不是 410 的通用文字，回應本體裡的東西一個字都不顯示。`pendingOriginOperation()` 還在，內容是原本的請求。`retryOriginOperation()` 用同一個 key 重送，同樣 410，紀錄還在。`acknowledgeOriginOperation()`（面板的「已核對來源設定」）之後才清掉，分頁儲存的鍵也沒了。控制組：同一個代碼配 409 不認得（`code` 是 null、通用文字）。fixture 與 Playwright 沒加：審查要的是 node 這一案，錯誤文字在面板上怎麼顯示是既有的通用路徑 | `d5f95d4` | 突變（第 20.2 節） |
+| 建議 3：還原把 Origin 政策靜默帶回備份當時的值 | 請審查判斷的設計點：例如備份後才切的 enforce 回到 report-only，面板與 log 都沒有提示。審查判目前的做法可以接受：政策不是憑證；退回的方向只是放寬成記錄，不會讓未認證的請求通過；權杖都已撤銷或要核對；契約第 2.6 節與威脅模型第 3 節已寫。不擋合併。建議主對話決定要不要在 HM-13c 的核對卡或還原提示加一句「Origin 來源檢查設定已回到備份當時的值，請到『連線與權杖』頁確認」（只改面板文字，不必多一個 bootstrap 欄位）；至少要確定 HM-18 的 DOCS 與 `update-backup-rollback.md` 有寫進去 | **沒改面板，交主對話決定**，審查本身也是這樣交代。理由：(1) 這是要不要多一則提示的產品決定，不是缺陷。(2) HM-13c 的還原提示（`restoreNoticeCard`）在開關關、沒有帳號資料的單帳號安裝也會出現（DQ-03 (b)），那裡沒有 Origin 政策；核對卡只在開通時出現，但 Headscale 開通後也有核對卡、卻沒有政策。所以這句要加條件（開通、而且產品有政策），才不會說錯，也才不會改到開關關的面板（開關關逐位元相同是本片與 HM-13c 的驗收條件）。HM-18 的交接本來就在第 13 節 (c)：DOCS 與 `docs/operations/update-backup-rollback.md` 寫「還原後到「連線與權杖」看瀏覽器來源檢查的模式與清單」。這次在那一點與第 14 節加註審查的建議 | 本筆記 | 第 13、14 節 |
+
+### 20.2 建議 2 的突變（拋棄式複本，clone 不動）
+
+repo 外的 `ui_mutate.py`（只跑 `origin-policy.test.mjs`）與 `ui_mutate_suite2.py`（整套 `tests/*.test.mjs`）：把 `packages/mcp-admin-ui`
+與 `packaging/`（`p9-admin.test.mjs` 會讀）複製到暫存區，一次改 `api.js` 一處，用 node 26.12.1 跑。加測試之前的複本取自
+`git archive 82f9847`。整套第一次跑的複本沒帶 `packaging/`，`p9-admin.test.mjs` 讀不到檔、基準就失敗，作廢重跑。
+
+| # | 突變（`api.js`） | 加測試前（`82f9847`，整套 node 105 案） | 加測試後（整套 106 案） |
+|---|---|---|---|
+| M00 | 基準（不改） | 105 案全過 | 106 案全過 |
+| M01 | `operation_restored` 算成意圖前的拒絕（放進 `ORIGIN_REFUSALS`：識別紀錄被清掉） | 存活 | 擋下（新案） |
+| M02 | 410 `operation_restored` 不再是認得的代碼（顯示 410 的通用文字） | 存活 | 擋下（新案） |
+| M03 | 不看狀態碼都認 `operation_restored` | 存活 | 擋下（新案） |
+| M04 | `acknowledgeOriginOperation()` 不清識別紀錄 | 存活 | 擋下（新案） |
+| M05 | 重送時換新的識別碼（控制組；只跑 `origin-policy.test.mjs`） | 擋下（既有的「回應遺失」那案） | 擋下（同一案先失敗） |
+
+### 20.3 本機檢查（`0cf59df`；一般使用者 uid 1000；TMPDIR 是本工作的暫存區，不用 `/tmp`；pytest 排在共用鎖後面）
+
+| 檢查 | 結果 |
+|---|---|
+| 相關 pytest 6 檔 | 451 passed，108.5 秒：`test_origin_policy`、`test_restore_lock`、`test_restore_review`（契約那列引用的三個）、`test_ledger_precheck`、`test_tool_inventory`、`test_redaction_matrix`。這幾檔沒有要 root 的 `test_root_*`。這次沒改任何 Python 程式或測試 |
+| `npm test`（面板 node，node 26.12.1） | 106 案全過（原本 105＋本次 1） |
+| `npm run build`＋`node tests/build-closure.mjs` | PASS；`dist/assets/app.js` `d9944adb…`、`app.css` `c8b43515…`（和第 19.7 節相同：面板原始碼沒動） |
+| Playwright | 沒重跑：這次沒動面板原始碼、fixture 與 spec，照用第 19.7 節 166 案全過的結果；CI 會跑 |
+| `packaging/validate.py`（`ha-gh-release-20261117` 的 venv，Python 3.13.15） | PASS（8 strict Supervisor-subset manifests …） |
+| packaging unittest（同一個 venv） | Ran 285、OK（skipped=5） |
+| 秘密預檢 `python3 scripts/secret_precheck.py --tools <暫存區>/scan0414/tools` | OK，0 findings（gitleaks 8.28.0，pin、驗過）。base 是現在的 `origin/claude-delivery` `e108a12`，合併基準 `c5dd7d3`：25 個 commit |
+| 帳本預檢 `python3 scripts/ledger_precheck.py` | OK：`runtime-patches.json` 180、`runtime-sources.json` 70、`tool-surface.json` 159 個摘要 0 漂移、0 缺；對合併基準 `c5dd7d3` 改了 31 個檔，列管的 10 個都由帳本釘住、帳本本身有改；沒有未列管的執行檔 |
+| 帳本 | 不用重算：這次改的是 node 測試與契約，都不是列管的檔（`api.js` 沒動）；沒動 `apps/runtime/*.py`、`apps/*/launch.py`，不用重產 tool-surface |
+| 雙向控制字元（repo 外的 `bidi_scan.py`） | `82f9847..0cf59df` 2 個 commit、2 個檔：新增的行、commit 訊息與兩個檔在 HEAD 的全文，U+202A～202E、U+2066～2069、U+200E、U+200F、U+061C 都是 0 |
+| 規則核對 | `addons/`、`.github/`、`tests/conftest.py`、`features.py`、CHANGELOG、`upgrade-notes.yaml` 沒動；沒改版號；`MULTI_PROFILE_PRODUCTS` 仍是空集合；兩個 commit 的身分是 woowtech，訊息裡沒有任何署名行 |
+
+本筆記 commit 之後再跑一次，結果記在交給主對話的回報（本筆記不能記自己 commit 之後的結果）。
+
+### 20.4 基準與合併狀態（`git fetch`，2026-11-18 22:5x 台北時間）
+
+- `origin/claude-delivery`＝`e108a12`：#108（HM-13b）合成 `f5e296f`、#112（HM-13c）合成 `e108a12`。`e108a12` 的樹和本片已合進來的
+  `c5dd7d3` 逐位元相同（`git diff c5dd7d3 e108a12` 沒有差異），本片和 `claude-delivery` 的合併基準就是 `c5dd7d3`。所以 PR #116 對
+  `claude-delivery` 的差異只有本片的，也沒有衝突，不用再合一次。`claude-delivery` 的規則集（唯讀 API 查）要求 `checks`、`readiness`、
+  `Upgrade comparison / compare` 三個檢查，不要求分支是最新的（`strict_required_status_checks_policy` 是 false）。
+- 遠端分支（PR #116 的 head）是 `32307e6`。本機在它之上多 96 個 commit：第 19 節的合併帶進來的 89 個、merge commit `a09081a` 與之後
+  的 6 個；這次再加 3 個（兩個內容 commit 與本筆記）。
+- 這次照指示 push（`git push origin HEAD:feat/ha-multiprofile-hm27-20261117`，`32307e6` 往前的 fast-forward），結果記在交給主對話的回報。
+  合併照第 17 節的順序（#108、#112 已合，下一個是本片，之後是 #109），不由本工作做；PR 標題保留「⛔ 勿代 merge｜待覆核 — HM-」。
+
+### 20.5 commit
+
+| commit | 內容 |
+|---|---|
+| `d5f95d4` | test(ui)：Origin 政策還原前的存檔收到 410 `operation_restored`，識別紀錄留到「已核對」（建議 2） |
+| `0cf59df` | docs(multi-profile)：契約第 4.1 節 `operation_restored` 列補 Origin 政策旁的收據與測試，第 10 節一列（建議 1） |
+| 本筆記 | 本節；結論第一點、第 2 節兩列、第 13 節 (c)、第 14 節跟著改 |
+
+commit 身分都是 woowtech；英文標題、繁中內文；訊息裡沒有任何署名行。
