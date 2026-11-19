@@ -16,8 +16,8 @@ do; the switched-off cases run the production runtime as it ships (tests/test_si
   its own environment (its Gateway and Dashboard values, nothing of another profile's) and its own directory (HOME).
 - The bearer 401 / secret URL 404 matrix across profiles, switched on and off (switched off: a dormant profile's token).
 - A long hermes_chat (the gateway allows a tools/call CALL_SECONDS, 330 s) holds one of its own profile's forwarding
-  slots and none of another profile's: with all of them held, that profile answers busy and the others do not wait.
-  An identity change ends its own profile's long chats only (T-12).
+  slots and none of another profile's: with all of them held, that profile answers busy and the others do not wait
+  (switched off: today's 32 slots and today's 503). An identity change ends its own profile's long chats only (T-12).
 - Saving one profile's policy changes that profile's tools only and restarts no child (the gateway enforces Hermes'
   policy; its child takes none at launch), switched on and off (T-07).
 - Real children (the real Supervisor, apps/hermes's launcher in its pinned venv, one local fake Hermes for both
@@ -594,6 +594,38 @@ async def test_long_chats_hold_their_own_profiles_slots_and_no_other_profiles(tm
                     assert loop.time() - started < wait and mine.chat_timeouts == [limit]
             finally:
                 beta.free.set()
+            done = await asyncio.wait_for(asyncio.gather(*held), 10)
+        assert all(response.status_code == 200 and 'result' in response.json() for response in done)
+
+
+async def test_switched_off_long_chats_hold_todays_32_slots(tmp_path, log_scan):
+    """Switched off, as today: the only profile's chats are forwarded with the same call limit and hold its 32 forwarding
+    slots; with all of them held, the next chat waits one second and gets today's 503 {"error":"request denied"} (no
+    -32003: that answer is a switched-on profile's), never reaching the child. Released, the chats are answered."""
+    data, children = setup(tmp_path, extras=(), child=ChatChild)
+    slots, wait = gateway.FORWARD_SLOTS, gateway.FORWARD_WAIT_SECONDS
+    assert (slots, wait) == (32, 1)
+    async with multi_profile_runtime(PRODUCT, data, children=children, switch=False) as runtime:
+        await settle(runtime, 'configured')
+        assert runtime.manager is None and not features.enabled(PRODUCT)
+        watch(log_scan, data)
+        alpha = children.by_port[3000]
+        loop = asyncio.get_running_loop()
+        async with runtime.mcp() as client:
+            headers = await session_headers(client, runtime.token('default'))
+            alpha.hold_calls = True
+            held = [asyncio.create_task(client.post('/mcp', headers=headers, json=chat(100 + n))) for n in range(slots)]
+            try:
+                await until(lambda: alpha.waiting == slots)
+                limit = {'connect': 3, 'read': gateway.CALL_SECONDS, 'write': gateway.CALL_SECONDS, 'pool': 3}
+                assert alpha.chat_timeouts == [limit] * slots
+                started = loop.time()
+                refused = await client.post('/mcp', headers=headers, json=chat(200))
+                assert (refused.status_code, refused.json()) == (503, {'error': 'request denied'})
+                assert wait * .9 <= loop.time() - started < 5
+                assert alpha.waiting == slots and len(alpha.chat_timeouts) == slots  # never forwarded
+            finally:
+                alpha.free.set()
             done = await asyncio.wait_for(asyncio.gather(*held), 10)
         assert all(response.status_code == 200 and 'result' in response.json() for response in done)
 
