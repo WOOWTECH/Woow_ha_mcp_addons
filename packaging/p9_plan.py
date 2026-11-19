@@ -2,37 +2,49 @@
 
     python packaging/p9_plan.py <product> [--overrides args.json] > plan.json
 
-reads   supported-bounded tools (or operations) whose effect is read, with minimal arguments built from
-        the accepted schema (for an operation: the oneOf/anyOf branch that admits it); a read whose required
-        arguments cannot be built safely (free-form or patterned strings) is listed under needs_args unless
-        --overrides supplies its arguments
-denials supported write tools/operations (the add-on under test must have every write turned off in its panel: a
-        NEW state has them all on since 2026-10-15), read operations the accepted schema
-        does not admit, withheld tools and one unknown tool; the gateway must refuse each (HTTP 403, or from 0.1.14
-        inside a session HTTP 200 with its own JSON-RPC -32602/-32603 error; ha_p9_probe.gateway_refused).
-        Their arguments are schema-valid where possible but aim at records that cannot exist (largest
-        allowed integer ids, placeholder names) so a broken guard harms nothing
+A supported tool is supported-bounded (Odoo Manage: the gateway validates its accepted_schema) or supported-full (0.2.0
+on: accepted_schema is null, the gateway forwards the arguments and the child validates its own inputSchema, which is
+read from the packaged tools/list snapshot, mcp_admin_core/tool_snapshot.py, parsed, not imported).
 
-Overrides map a tool name (or 'tool:operation') to an arguments object. The plan records the sha256 of
-the tool-surface file it came from. Output is consumed by ha_p9_probe.py plan mode (ha_p9_driver.mjs --plan).
+reads   supported tools (or operations) whose effect is read, with minimal arguments: for a bounded tool built from the
+        accepted schema (for an operation: the oneOf/anyOf branch that admits it); for a full tool only a value its
+        inputSchema declares (default, an enum's first value, const) fills a required argument. A read whose required
+        arguments cannot be built safely (free-form or patterned strings; for a full tool any value its schema does not
+        declare, or no inputSchema in the snapshot) is listed under needs_args unless --overrides supplies its arguments
+denials supported write tools/operations (the add-on under test must have every write turned off in its panel: a
+        NEW state has them all on since 2026-10-15), every operation of a tool whose write grant is the whole tool (an
+        effect other than read or mixed: the gateway refuses the tool, its read operations too), read operations the
+        accepted schema does not admit, withheld tools and one unknown tool; the gateway must refuse each (HTTP 403, or
+        from 0.1.14 inside a session HTTP 200 with its own JSON-RPC -32602/-32603 error; ha_p9_probe.gateway_refused).
+        A bounded tool's arguments are schema-valid where possible but aim at records that cannot exist (largest allowed
+        integer ids, placeholder names) so a broken guard harms nothing; a full tool's denial carries only its operation:
+        the gateway checks the write grant before the child sees any argument (mcp_admin_core.policy.authorize), and a
+        broken guard then reaches a child that refuses a call missing its required arguments
+
+Overrides map a tool name (or 'tool:operation') to an arguments object. The plan records the sha256 of the tool-surface
+file and of the snapshot it came from. Output is consumed by ha_p9_probe.py plan mode (ha_p9_driver.mjs --plan).
 """
 import argparse
+import ast
 import hashlib
 import json
 from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+SNAPSHOT = ROOT / 'packages/mcp-admin-core/mcp_admin_core/tool_snapshot.py'
 UNKNOWN_TOOL = 'definitely_not_a_tool'
 PLACEHOLDER = 'p9-denied'
+SUPPORTED = ('supported-bounded', 'supported-full')
 
 
 class NeedsArgs(Exception):
     pass
 
 
-def value_for(schema, strict, root):
-    """A minimal valid value for one property; strict=True refuses guesses that could be wrong."""
+def value_for(schema, strict, root, declared=False):
+    """A minimal valid value for one property; strict=True refuses guesses that could be wrong; declared=True (a full
+    tool's read) takes only a value the schema itself declares."""
     ref = schema.get('$ref', '')
     if ref.startswith('#/$defs/'):
         schema = (root.get('$defs') or {}).get(ref[len('#/$defs/'):], {})
@@ -44,7 +56,9 @@ def value_for(schema, strict, root):
         return schema['const']
     options = schema.get('anyOf') or schema.get('oneOf')
     if options:
-        return value_for(next((o for o in options if o.get('type') != 'null'), options[0]), strict, root)
+        return value_for(next((o for o in options if o.get('type') != 'null'), options[0]), strict, root, declared)
+    if declared:
+        raise NeedsArgs()  # the child's schema bounds nothing else: no id, name, number or list is a safe guess
     kind = schema.get('type')
     if kind == 'boolean':
         return False
@@ -71,13 +85,13 @@ def value_for(schema, strict, root):
     raise NeedsArgs()
 
 
-def arguments(schema, strict, fixed=None, root=None):
+def arguments(schema, strict, fixed=None, root=None, declared=False):
     root = schema if root is None else root
     props = schema.get('properties') or {}
     result = dict(fixed or {})
     for name in schema.get('required', []):
         if name not in result:
-            result[name] = value_for(props.get(name, {}), strict, root)
+            result[name] = value_for(props.get(name, {}), strict, root, declared)
     return result
 
 
@@ -120,25 +134,46 @@ def denial_arguments(schema, fixed=None):
         return dict(fixed or {})
 
 
-def plan(product, surface, overrides=None):
+def snapshot_schemas(raw, product):
+    """{tool name: inputSchema} of the product in the packaged tools/list snapshot (its LISTED), parsed, not imported."""
+    found = [node.value for node in ast.parse(raw).body if isinstance(node, ast.Assign) and len(node.targets) == 1
+             and isinstance(node.targets[0], ast.Name) and node.targets[0].id == 'LISTED']
+    if len(found) != 1:
+        raise SystemExit('the snapshot has no single LISTED assignment')
+    return {tool['name']: tool['inputSchema'] for tool in ast.literal_eval(found[0]).get(product, [])}
+
+
+def plan(product, surface, overrides=None, input_schemas=None):
+    """input_schemas: {tool name: inputSchema} of the product's full tools (snapshot_schemas); a full tool without one
+    gets no guessed read."""
     overrides = overrides or {}
+    input_schemas = input_schemas or {}
     tools = surface['products'][product]['tools']
     reads, denials, needs = [], [], []
 
-    def read(key, name, schema, fixed=None):
+    def read(key, name, schema, fixed=None, declared=False):
         if key in overrides:
             reads.append([name, overrides[key]])
             return
         try:
-            reads.append([name, arguments(schema, True, fixed)])
+            if schema is None:
+                raise NeedsArgs()  # a full tool whose inputSchema (or operation branch) is not known
+            reads.append([name, arguments(schema, True, fixed, declared=declared)])
         except NeedsArgs:
             needs.append(key)
 
     for tool in tools:
-        name, schema = tool['name'], tool.get('accepted_schema') or {}
-        if tool['status'] != 'supported-bounded':
+        name = tool['name']
+        if tool['status'] not in SUPPORTED:
             denials.append([name, {}])  # withheld: refused whatever the arguments
             continue
+        full = tool['status'] == 'supported-full'
+        # A full tool's arguments are not checked before its grant: nothing is outside an accepted schema.
+        schema = {} if full else tool.get('accepted_schema') or {}
+        child = input_schemas.get(name) if full else None
+        # The grant of a write (or unverified) tool is the tool itself (policy.Tool.grants): with every write off the
+        # gateway refuses each of its calls, read operations included.
+        whole_write = tool['effect'] not in ('read', 'mixed')
         selector = tool.get('operation_parameter')
         if not selector and tool['effect'] == 'mixed' and len(tool.get('operation_effects') or {}) == 1:
             selector = next(iter(tool['operation_effects']))  # mixed tool whose selector is not declared
@@ -146,15 +181,20 @@ def plan(product, surface, overrides=None):
         if effects:
             for operation, effect in effects.items():
                 key = '%s:%s' % (name, operation)
+                fixed = {selector: operation}
                 scoped = operation_schema(schema, selector, operation)
                 if scoped is None:  # outside the accepted surface: refused whatever its effect
-                    denials.append([name, overrides.get(key, {selector: operation})])
-                elif effect == 'read':
-                    read(key, name, scoped, {selector: operation})
+                    denials.append([name, overrides.get(key, fixed)])
+                elif effect == 'read' and not whole_write:
+                    if full:
+                        branch = None if child is None else operation_schema(child, selector, operation)
+                        read(key, name, branch, fixed, declared=True)
+                    else:
+                        read(key, name, scoped, fixed)
                 else:
-                    denials.append([name, overrides.get(key, denial_arguments(scoped, {selector: operation}))])
+                    denials.append([name, overrides.get(key, denial_arguments(scoped, fixed))])
         elif tool['effect'] == 'read':
-            read(name, name, schema)
+            read(name, name, child if full else schema, declared=full)
         else:
             denials.append([name, overrides.get(name, denial_arguments(schema))])
     denials.append([UNKNOWN_TOOL, {}])
@@ -165,6 +205,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('product')
     parser.add_argument('--surface', type=Path, default=ROOT / 'docs/tool-surface.json')
+    parser.add_argument('--snapshot', type=Path, default=SNAPSHOT, help='the tools/list snapshot (full tools inputSchema)')
     parser.add_argument('--overrides', type=Path)
     opts = parser.parse_args(argv)
     raw = opts.surface.read_bytes()
@@ -172,8 +213,10 @@ def main(argv=None):
     if opts.product not in surface['products']:
         parser.error('unknown product %s' % opts.product)
     overrides = json.loads(opts.overrides.read_text()) if opts.overrides else {}
-    result = plan(opts.product, surface, overrides)
+    snapshot = opts.snapshot.read_bytes()
+    result = plan(opts.product, surface, overrides, snapshot_schemas(snapshot, opts.product))
     result['tool_surface_sha256'] = hashlib.sha256(raw).hexdigest()
+    result['tool_snapshot_sha256'] = hashlib.sha256(snapshot).hexdigest()
     json.dump(result, sys.stdout, indent=1, ensure_ascii=False)
     sys.stdout.write('\n')
     return result

@@ -1,13 +1,16 @@
 """Offline tests for the P9 plan generator."""
 import contextlib
+import hashlib
 import io
 import json
 from pathlib import Path
+import tempfile
 import unittest
 
 import p9_plan as p
 
 ROOT = Path(__file__).resolve().parents[1]
+SNAPSHOT = ROOT / 'packages/mcp-admin-core/mcp_admin_core/tool_snapshot.py'
 SURFACE = {'products': {'demo': {'tools': [
     {'name': 'health', 'status': 'supported-bounded', 'effect': 'read', 'accepted_schema': {'properties': {}}},
     {'name': 'list', 'status': 'supported-bounded', 'effect': 'read', 'accepted_schema': {
@@ -34,6 +37,56 @@ SURFACE = {'products': {'demo': {'tools': [
     {'name': 'delete', 'status': 'supported-bounded', 'effect': 'write', 'accepted_schema': {
         'properties': {'record_id': {'type': 'integer', 'minimum': 1, 'maximum': 2147483647}}, 'required': ['record_id']}},
 ]}}}
+
+# 0.2.0 on: the surface of the full products. accepted_schema is null (the gateway forwards the arguments and the child
+# validates its own inputSchema); the inputSchema is the one the packaged tools/list snapshot holds.
+FULL = {'products': {'demo': {'tools': [
+    {'name': name, 'status': 'supported-full', 'effect': effect, 'accepted_schema': None,
+     'operation_parameter': selector, 'operation_effects': {selector: operations} if selector else {}}
+    for name, effect, selector, operations in [
+        ('health', 'read', None, None),
+        ('read_record', 'read', None, None),
+        ('list_kind', 'read', None, None),
+        ('read_page', 'read', None, None),
+        ('read_attachment', 'read', None, None),
+        ('unlisted', 'read', None, None),
+        ('delete_record', 'write', None, None),
+        ('nodes', 'mixed', 'operation', {'list': 'read', 'get': 'read', 'delete': 'write'}),
+        ('agents', 'write', 'action', {'get': 'read', 'create': 'write'}),
+    ]] + [{'name': 'withheld', 'status': 'temporarily-unsupported', 'effect': 'read', 'accepted_schema': None}]}}}
+SCHEMAS = {
+    'health': {'type': 'object', 'properties': {}},
+    'read_record': {'type': 'object', 'properties': {'model': {'type': 'string'}, 'record_id': {'type': 'integer'}},
+                    'required': ['model', 'record_id']},
+    'list_kind': {'type': 'object', 'properties': {'kind': {'type': 'string', 'enum': ['tags', 'projects']}},
+                  'required': ['kind']},
+    'read_page': {'type': 'object', 'properties': {'page': {'type': 'integer', 'default': 1}}, 'required': ['page']},
+    'read_attachment': {'type': 'object', 'properties': {'attachment_id': {'type': 'integer', 'minimum': 1}},
+                        'required': ['attachment_id']},
+    'delete_record': {'type': 'object', 'properties': {'record_id': {'type': 'integer'}}, 'required': ['record_id']},
+    'nodes': {'type': 'object', 'oneOf': [
+        {'properties': {'operation': {'const': 'list'}}, 'required': ['operation']},
+        {'properties': {'operation': {'const': 'get'}, 'node_id': {'type': 'string'}}, 'required': ['operation', 'node_id']},
+        {'properties': {'operation': {'const': 'delete'}, 'node_id': {'type': 'string'}},
+         'required': ['operation', 'node_id']}]},
+    'agents': {'type': 'object', 'properties': {'action': {'type': 'string', 'enum': ['get', 'create']}},
+               'required': ['action']},
+}
+
+
+def snapshot_schemas(product):
+    return p.snapshot_schemas(SNAPSHOT.read_bytes(), product)
+
+
+def required_for(schema, arguments):
+    """The names a child's inputSchema requires for these arguments: its own, and those of the oneOf/anyOf branch whose
+    const values the arguments carry (Headscale's operations)."""
+    names = set(schema.get('required', []))
+    for branch in schema.get('oneOf') or schema.get('anyOf') or []:
+        consts = {key: value['const'] for key, value in (branch.get('properties') or {}).items() if 'const' in value}
+        if consts and all(arguments.get(key) == value for key, value in consts.items()):
+            names |= set(branch.get('required', []))
+    return names
 
 
 class PlanTests(unittest.TestCase):
@@ -88,23 +141,98 @@ class PlanTests(unittest.TestCase):
         filled = p.plan('demo', surface, {'folders:get': {'action': 'get', 'folderId': 'abc', 'projectId': 'p1'}})
         self.assertIn(['folders', {'action': 'get', 'folderId': 'abc', 'projectId': 'p1'}], filled['reads'])
 
+    def test_a_full_surface_tool_reads_with_the_values_its_child_schema_declares(self):
+        """supported-full (0.2.0 on) is supported as supported-bounded is. A full tool has no accepted_schema: its
+        required arguments come from the child's inputSchema, and only a value that schema declares (default, an enum's
+        first value, const) fills one. Any other required argument (an id, a name, a number) or no inputSchema at all
+        puts the read under needs_args instead of sending it with {} (HAOS 2026-11-18: those reads failed)."""
+        result = p.plan('demo', FULL, input_schemas=SCHEMAS)
+        self.assertEqual(result['reads'], [['health', {}], ['list_kind', {'kind': 'tags'}], ['read_page', {'page': 1}],
+                                           ['nodes', {'operation': 'list'}]])
+        self.assertEqual(result['needs_args'], ['read_record', 'read_attachment', 'unlisted', 'nodes:get'])
+        # A full tool's denial carries only its operation: the gateway refuses it by its write grant before the child
+        # sees any argument (policy.authorize), as on HAOS 2026-11-18.
+        self.assertEqual(result['denials'], [
+            ['delete_record', {}], ['nodes', {'operation': 'delete'}], ['agents', {'action': 'get'}],
+            ['agents', {'action': 'create'}], ['withheld', {}], ['definitely_not_a_tool', {}]])
+        filled = p.plan('demo', FULL, {'read_record': {'model': 'res.partner', 'record_id': 7},
+                                       'nodes:get': {'operation': 'get', 'node_id': '1'}}, SCHEMAS)
+        self.assertIn(['read_record', {'model': 'res.partner', 'record_id': 7}], filled['reads'])
+        self.assertIn(['nodes', {'operation': 'get', 'node_id': '1'}], filled['reads'])
+        self.assertEqual(filled['needs_args'], ['read_attachment', 'unlisted'])
+        # Without the snapshot nothing is known about a full tool's arguments: no read is guessed.
+        bare = p.plan('demo', FULL)
+        self.assertEqual(bare['reads'], [])
+        self.assertEqual(bare['needs_args'], ['health', 'read_record', 'list_kind', 'read_page', 'read_attachment',
+                                              'unlisted', 'nodes:list', 'nodes:get'])
+
+    def test_every_call_of_a_whole_tool_write_is_a_denial(self):
+        """A write tool's grant is the whole tool (policy.Tool.grants), so with every write off the gateway refuses each
+        of its calls, its read operations too: on HAOS 2026-11-18 n8n_manage_agents and n8n_test_workflow's read
+        operations, planned as reads, were refused as an unknown tool. Bounded or full alike."""
+        for status, schema in [('supported-bounded', {'properties': {'action': {'enum': ['get', 'create']}},
+                                                      'required': ['action']}), ('supported-full', None)]:
+            with self.subTest(status=status):
+                surface = {'products': {'demo': {'tools': [
+                    {'name': 'agents', 'status': status, 'effect': 'write', 'operation_parameter': 'action',
+                     'operation_effects': {'action': {'get': 'read', 'create': 'write'}}, 'accepted_schema': schema}]}}}
+                result = p.plan('demo', surface, input_schemas={'agents': SCHEMAS['agents']})
+                self.assertEqual((result['reads'], result['needs_args']), ([], []))
+                self.assertEqual(result['denials'][:2], [['agents', {'action': 'get'}], ['agents', {'action': 'create'}]])
+
     def test_every_product_in_the_repository_surface_produces_a_plan(self):
         surface = json.loads((ROOT / 'docs/tool-surface.json').read_text())
         for product, value in surface['products'].items():
             with self.subTest(product=product):
-                result = p.plan(product, surface)
+                schemas = snapshot_schemas(product)
+                result = p.plan(product, surface, input_schemas=schemas)
                 listed = len(result['reads']) + len(result['needs_args']) + len(result['denials'])
                 self.assertGreaterEqual(listed, len(value['tools']) + 1)
                 self.assertEqual(result['denials'][-1], ['definitely_not_a_tool', {}])
-                names = {t['name'] for t in value['tools']}
-                self.assertTrue({r[0] for r in result['reads']} <= names)
+                tools = {t['name']: t for t in value['tools']}
+                self.assertTrue({r[0] for r in result['reads']} <= set(tools))
+                self.assertTrue(result['reads'], 'a product with read tools gets reads (0.2.0 on: supported-full)')
+                for tool in tools.values():
+                    if tool['status'] == 'supported-full':
+                        self.assertIn(tool['name'], schemas, 'every full tool has its inputSchema in the snapshot')
+                    if tool['status'] != 'temporarily-unsupported':
+                        # the generator's rule (an effect that is neither read nor mixed is a whole-tool write) is the
+                        # gateway's: such a tool's grant is its own name
+                        self.assertEqual(tool['effect'] not in ('read', 'mixed'), tool['name'] in tool['write_grants'])
+                for name, arguments in result['reads']:
+                    self.assertIn(tools[name]['effect'], ('read', 'mixed'))
+                    if tools[name]['status'] == 'supported-full':
+                        missing = required_for(schemas[name], arguments) - set(arguments)
+                        self.assertFalse(missing, '%s is read without its required %s' % (name, sorted(missing)))
+        odoo = p.plan('odoo', surface, input_schemas=snapshot_schemas('odoo'))
+        self.assertIn(['health_check', {}], odoo['reads'])
+        self.assertTrue({'read_record', 'search_records', 'get_model_fields'} <= set(odoo['needs_args']))
 
     def test_cli_records_the_surface_digest(self):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             result = p.main(['n8n'])
         self.assertEqual(len(result['tool_surface_sha256']), 64)
+        self.assertEqual(result['tool_snapshot_sha256'], hashlib.sha256(SNAPSHOT.read_bytes()).hexdigest())
         self.assertEqual(json.loads(out.getvalue())['product'], 'n8n')
+        self.assertIn(['tools_documentation', {}], result['reads'])
+
+    def test_cli_reads_the_full_tools_schemas_from_the_snapshot_file(self):
+        """--surface and --snapshot name the two inputs; the snapshot's LISTED is parsed, never imported."""
+        with tempfile.TemporaryDirectory() as directory:
+            surface, snapshot = Path(directory) / 'surface.json', Path(directory) / 'snapshot.py'
+            surface.write_text(json.dumps(FULL))
+            listed = {'demo': [{'name': name, 'inputSchema': schema} for name, schema in SCHEMAS.items()]}
+            snapshot.write_text('"""A snapshot."""\nraise SystemExit("imported")\nLISTED = %r\n' % listed)
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                result = p.main(['demo', '--surface', str(surface), '--snapshot', str(snapshot)])
+            self.assertEqual(json.loads(out.getvalue()), result)
+            self.assertEqual(result['reads'], p.plan('demo', FULL, input_schemas=SCHEMAS)['reads'])
+            self.assertEqual(result['tool_snapshot_sha256'], hashlib.sha256(snapshot.read_bytes()).hexdigest())
+            self.assertEqual(result['tool_surface_sha256'], hashlib.sha256(surface.read_bytes()).hexdigest())
+            self.assertEqual(sorted(result), ['denials', 'needs_args', 'product', 'reads', 'tool_snapshot_sha256',
+                                              'tool_surface_sha256'])
 
 
 if __name__ == '__main__':
