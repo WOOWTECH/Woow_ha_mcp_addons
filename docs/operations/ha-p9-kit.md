@@ -42,19 +42,28 @@ probe 開的每個 session 都會 DELETE，不吃掉 app 的共用 session 名�
 已支援的工具有兩種：`supported-bounded`（已下架的 Odoo Manage；閘道用 `accepted_schema` 驗參數）和 `supported-full`
 （0.2.0 起的其他產品；`accepted_schema` 是 null，閘道原樣轉送參數、子程式自己驗）。完整工具的參數規則取自子程式自己的
 inputSchema，也就是打包的 tools/list 快照 `packages/mcp-admin-core/mcp_admin_core/tool_snapshot.py`（只解析、不 import；
-`--snapshot` 可換檔）。
+`--snapshot` 可換檔）。tool-surface 與快照都跟版本走：清單要用受測 add-on 那一版的 commit 產生。
 
 - reads：已支援的讀取工具（或讀取操作），帶最小參數。有界工具照 `accepted_schema` 推。完整工具的必填參數只用 schema 自己
   寫明的值（`default`、`enum` 的第一個、`const`）。推不出安全參數的列在 `needs_args`：有界工具是自由或有格式的字串；完整工具是
   schema 沒寫明值的必填參數（id、名稱、數字、清單），或快照裡沒有這支工具。用 overrides（`{"tool" 或 "tool:operation": {參數}}`）
   補上實際後端的值。
+- 只寫在說明文字、沒寫進 inputSchema 的條件式必填，schema 規則看不到。審過的表（`p9_plan.py` 的 `DESCRIBED_REQUIRED`）把 n8n
+  這 9 個讀取也列進 `needs_args`（2026-11-18 HAOS 上只帶操作參數，都被子程式以參數錯誤拒絕）：`n8n_manage_credentials` get
+  （`id`）、getSchema（`type`），`n8n_manage_datatable` getTable、getRows（`tableId`），`n8n_manage_folders` get（`folderId`），
+  `n8n_workflow_versions` list（`workflowId`）、get（`versionId`）、diff（`workflowId`、`versionId`），`search_templates`（預設的
+  keyword 模式要 `query`）。`packaging/test_p9_plan.py` 釘住這幾支工具在快照裡的 inputSchema：n8n-mcp 換版改到它們時測試會失敗，
+  要照新的說明文字重看這張表。
+- 後端本身的限制和參數無關，仍列在 reads，失敗時對照後端判讀。例如 n8n 社群版沒有資料夾功能，`n8n_manage_folders` list 會被
+  n8n 的授權擋下。
 - denials：已支援的寫入、寫入授權是整支工具的工具（effect 不是 read 或 mixed，例如 `n8n_manage_agents`、`n8n_test_workflow`）的
   每個操作（寫入全關時閘道整支拒絕，讀取操作也一樣）、暫不支援的工具與一個不存在的工具。有界工具的參數符合 schema 但指向
   **不可能存在**的資料（整數 id 取允許的最大值、名稱用 `p9-denied`），即使寫入防護失效也不會動到真資料。完整工具只帶操作參數：
-  閘道在子程式看到參數前就照寫入授權拒絕；防護失效時，缺必填參數的呼叫會被子程式拒絕。兩種都仍須照試點程序在後端核對前後無變化。
+  閘道在子程式看到參數前就照寫入授權拒絕。防護失效時，缺必填參數的呼叫會被子程式拒絕；但 schema 除了操作參數不要求別的呼叫
+  （例如 `hermes_gateway` restart、`n8n_audit_instance`、`litellm_health`）會原樣送到子程式、真的執行。所以兩種都要照試點程序
+  在後端核對前後無變化。
 - 清單記錄兩個來源的 sha256：`tool_surface_sha256`（tool-surface）、`tool_snapshot_sha256`（快照）。
-- 子程式只寫在說明文字、沒寫進 inputSchema `required` 的條件式必填，產生器看不到。例如 n8n 的 `n8n_workflow_versions` list 要
-  `workflowId`、`search_templates` 預設的 keyword 要 `query`：這些讀取仍在 reads，要用 overrides 補參數，否則會失敗。
+
 **前提：受測 add-on 的寫入必須全部關閉。**全新安裝的寫入預設開啟（2026-10-15 起，見 [寫入預設開啟](guide.md#寫入預設開啟)），跑 plan 前先在管理面板「工具與寫入授權」取消全部寫入並儲存（或沿用寫入全關的既有 state），否則 denials 裡的寫入會真的送到後端。
 `PROBE_TOOL` 只能填無副作用的工具；寫入防護、後端斷線、備份還原屬 P9 其他項目，不在本工具內。
 

@@ -10,7 +10,8 @@ reads   supported tools (or operations) whose effect is read, with minimal argum
         accepted schema (for an operation: the oneOf/anyOf branch that admits it); for a full tool only a value its
         inputSchema declares (default, an enum's first value, const) fills a required argument. A read whose required
         arguments cannot be built safely (free-form or patterned strings; for a full tool any value its schema does not
-        declare, or no inputSchema in the snapshot) is listed under needs_args unless --overrides supplies its arguments
+        declare, or no inputSchema in the snapshot), or whose child requires an argument only its description states
+        (DESCRIBED_REQUIRED), is listed under needs_args unless --overrides supplies its arguments
 denials supported write tools/operations (the add-on under test must have every write turned off in its panel: a
         NEW state has them all on since 2026-10-15), every operation of a tool whose write grant is the whole tool (an
         effect other than read or mixed: the gateway refuses the tool, its read operations too), read operations the
@@ -18,11 +19,14 @@ denials supported write tools/operations (the add-on under test must have every 
         from 0.1.14 inside a session HTTP 200 with its own JSON-RPC -32602/-32603 error; ha_p9_probe.gateway_refused).
         A bounded tool's arguments are schema-valid where possible but aim at records that cannot exist (largest allowed
         integer ids, placeholder names) so a broken guard harms nothing; a full tool's denial carries only its operation:
-        the gateway checks the write grant before the child sees any argument (mcp_admin_core.policy.authorize), and a
-        broken guard then reaches a child that refuses a call missing its required arguments
+        the gateway checks the write grant before the child sees any argument (mcp_admin_core.policy.authorize). A
+        broken guard then reaches a child that refuses a call missing its required arguments, but a call whose schema
+        requires nothing more (hermes_gateway restart, n8n_audit_instance, litellm_health) runs as sent: compare the
+        backend before and after either way
 
 Overrides map a tool name (or 'tool:operation') to an arguments object. The plan records the sha256 of the tool-surface
-file and of the snapshot it came from. Output is consumed by ha_p9_probe.py plan mode (ha_p9_driver.mjs --plan).
+file and of the snapshot it came from; generate it at the commit of the add-on version under test (both follow the
+version). Output is consumed by ha_p9_probe.py plan mode (ha_p9_driver.mjs --plan).
 """
 import argparse
 import ast
@@ -36,6 +40,22 @@ SNAPSHOT = ROOT / 'packages/mcp-admin-core/mcp_admin_core/tool_snapshot.py'
 UNKNOWN_TOOL = 'definitely_not_a_tool'
 PLACEHOLDER = 'p9-denied'
 SUPPORTED = ('supported-bounded', 'supported-full')
+# Reads whose child requires an argument that only its description states: n8n-mcp writes no if/then or
+# dependentRequired into an inputSchema, so no schema rule here sees these. Sent with the operation alone, each was
+# refused on HAOS 2026-11-18 (docs/provenance/ha-multiprofile-HM-16-p9plan-20261119.md). Reviewed against the property
+# descriptions in the packaged snapshot; packaging/test_p9_plan.py pins those inputSchemas, so a new n8n-mcp version is
+# reviewed here again. Each names the arguments its description requires.
+DESCRIBED_REQUIRED = {'n8n': {
+    'n8n_manage_credentials:get': ('id',),
+    'n8n_manage_credentials:getSchema': ('type',),
+    'n8n_manage_datatable:getTable': ('tableId',),
+    'n8n_manage_datatable:getRows': ('tableId',),
+    'n8n_manage_folders:get': ('folderId',),
+    'n8n_workflow_versions:list': ('workflowId',),
+    'n8n_workflow_versions:get': ('versionId',),
+    'n8n_workflow_versions:diff': ('workflowId', 'versionId'),
+    'search_templates': ('query',),  # its default searchMode, keyword
+}}
 
 
 class NeedsArgs(Exception):
@@ -148,6 +168,7 @@ def plan(product, surface, overrides=None, input_schemas=None):
     gets no guessed read."""
     overrides = overrides or {}
     input_schemas = input_schemas or {}
+    described = DESCRIBED_REQUIRED.get(product, {})
     tools = surface['products'][product]['tools']
     reads, denials, needs = [], [], []
 
@@ -156,8 +177,8 @@ def plan(product, surface, overrides=None, input_schemas=None):
             reads.append([name, overrides[key]])
             return
         try:
-            if schema is None:
-                raise NeedsArgs()  # a full tool whose inputSchema (or operation branch) is not known
+            if schema is None or key in described:
+                raise NeedsArgs()  # a full tool's inputSchema (or operation branch) is not known; DESCRIBED_REQUIRED
             reads.append([name, arguments(schema, True, fixed, declared=declared)])
         except NeedsArgs:
             needs.append(key)

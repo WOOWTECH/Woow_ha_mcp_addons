@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 import p9_plan as p
 
@@ -49,10 +50,12 @@ FULL = {'products': {'demo': {'tools': [
         ('list_kind', 'read', None, None),
         ('read_page', 'read', None, None),
         ('read_attachment', 'read', None, None),
+        ('read_optional', 'read', None, None),
         ('unlisted', 'read', None, None),
         ('delete_record', 'write', None, None),
         ('nodes', 'mixed', 'operation', {'list': 'read', 'get': 'read', 'delete': 'write'}),
         ('agents', 'write', 'action', {'get': 'read', 'create': 'write'}),
+        ('runner', 'unverified-side-effects', 'action', {'status': 'read', 'run': 'write'}),
     ]] + [{'name': 'withheld', 'status': 'temporarily-unsupported', 'effect': 'read', 'accepted_schema': None}]}}}
 SCHEMAS = {
     'health': {'type': 'object', 'properties': {}},
@@ -63,6 +66,9 @@ SCHEMAS = {
     'read_page': {'type': 'object', 'properties': {'page': {'type': 'integer', 'default': 1}}, 'required': ['page']},
     'read_attachment': {'type': 'object', 'properties': {'attachment_id': {'type': 'integer', 'minimum': 1}},
                         'required': ['attachment_id']},
+    # a required argument its schema bounds only by anyOf (an integer or null) declares no value either
+    'read_optional': {'type': 'object', 'properties': {'record_id': {'anyOf': [{'type': 'integer'}, {'type': 'null'}]}},
+                      'required': ['record_id']},
     'delete_record': {'type': 'object', 'properties': {'record_id': {'type': 'integer'}}, 'required': ['record_id']},
     'nodes': {'type': 'object', 'oneOf': [
         {'properties': {'operation': {'const': 'list'}}, 'required': ['operation']},
@@ -71,7 +77,19 @@ SCHEMAS = {
          'required': ['operation', 'node_id']}]},
     'agents': {'type': 'object', 'properties': {'action': {'type': 'string', 'enum': ['get', 'create']}},
                'required': ['action']},
+    'runner': {'type': 'object', 'properties': {'action': {'type': 'string', 'enum': ['status', 'run']}},
+               'required': ['action']},
 }
+# HAOS 2026-11-18: n8n reads the child refused with only their operation, for an argument that only its description
+# requires (missing workflowId, versionId or query, or Invalid input).
+HAOS_DESCRIBED_ONLY = ['n8n_manage_credentials:get', 'n8n_manage_credentials:getSchema',
+                       'n8n_manage_datatable:getTable', 'n8n_manage_datatable:getRows', 'n8n_manage_folders:get',
+                       'n8n_workflow_versions:list', 'n8n_workflow_versions:get', 'n8n_workflow_versions:diff',
+                       'search_templates']
+# p9_plan.DESCRIBED_REQUIRED was reviewed against these tools' inputSchemas in the snapshot (n8n-mcp 2.96.2): the
+# sha256 of their JSON (sorted keys) in the order of their names. A new n8n-mcp version that changes one of them fails
+# here: read their property descriptions again, update DESCRIBED_REQUIRED, then this digest.
+REVIEWED_N8N_SCHEMAS = '5bc571f3470777f132e636767ae33a13fd73f3ad6661b5aec520e246f46f239a'
 
 
 def snapshot_schemas(product):
@@ -149,36 +167,93 @@ class PlanTests(unittest.TestCase):
         result = p.plan('demo', FULL, input_schemas=SCHEMAS)
         self.assertEqual(result['reads'], [['health', {}], ['list_kind', {'kind': 'tags'}], ['read_page', {'page': 1}],
                                            ['nodes', {'operation': 'list'}]])
-        self.assertEqual(result['needs_args'], ['read_record', 'read_attachment', 'unlisted', 'nodes:get'])
+        self.assertEqual(result['needs_args'],
+                         ['read_record', 'read_attachment', 'read_optional', 'unlisted', 'nodes:get'])
         # A full tool's denial carries only its operation: the gateway refuses it by its write grant before the child
-        # sees any argument (policy.authorize), as on HAOS 2026-11-18.
+        # sees any argument (policy.authorize), as on HAOS 2026-11-18. An unverified-side-effects tool's grant is the
+        # whole tool, as a write's is: its read operation is refused too.
         self.assertEqual(result['denials'], [
             ['delete_record', {}], ['nodes', {'operation': 'delete'}], ['agents', {'action': 'get'}],
-            ['agents', {'action': 'create'}], ['withheld', {}], ['definitely_not_a_tool', {}]])
+            ['agents', {'action': 'create'}], ['runner', {'action': 'status'}], ['runner', {'action': 'run'}],
+            ['withheld', {}], ['definitely_not_a_tool', {}]])
         filled = p.plan('demo', FULL, {'read_record': {'model': 'res.partner', 'record_id': 7},
                                        'nodes:get': {'operation': 'get', 'node_id': '1'}}, SCHEMAS)
         self.assertIn(['read_record', {'model': 'res.partner', 'record_id': 7}], filled['reads'])
         self.assertIn(['nodes', {'operation': 'get', 'node_id': '1'}], filled['reads'])
-        self.assertEqual(filled['needs_args'], ['read_attachment', 'unlisted'])
+        self.assertEqual(filled['needs_args'], ['read_attachment', 'read_optional', 'unlisted'])
         # Without the snapshot nothing is known about a full tool's arguments: no read is guessed.
         bare = p.plan('demo', FULL)
         self.assertEqual(bare['reads'], [])
         self.assertEqual(bare['needs_args'], ['health', 'read_record', 'list_kind', 'read_page', 'read_attachment',
-                                              'unlisted', 'nodes:list', 'nodes:get'])
+                                              'read_optional', 'unlisted', 'nodes:list', 'nodes:get'])
 
     def test_every_call_of_a_whole_tool_write_is_a_denial(self):
         """A write tool's grant is the whole tool (policy.Tool.grants), so with every write off the gateway refuses each
         of its calls, its read operations too: on HAOS 2026-11-18 n8n_manage_agents and n8n_test_workflow's read
-        operations, planned as reads, were refused as an unknown tool. Bounded or full alike."""
+        operations, planned as reads, were refused as an unknown tool. Bounded or full alike, and an unverified tool's
+        grant is the whole tool as well."""
         for status, schema in [('supported-bounded', {'properties': {'action': {'enum': ['get', 'create']}},
                                                       'required': ['action']}), ('supported-full', None)]:
-            with self.subTest(status=status):
-                surface = {'products': {'demo': {'tools': [
-                    {'name': 'agents', 'status': status, 'effect': 'write', 'operation_parameter': 'action',
-                     'operation_effects': {'action': {'get': 'read', 'create': 'write'}}, 'accepted_schema': schema}]}}}
-                result = p.plan('demo', surface, input_schemas={'agents': SCHEMAS['agents']})
-                self.assertEqual((result['reads'], result['needs_args']), ([], []))
-                self.assertEqual(result['denials'][:2], [['agents', {'action': 'get'}], ['agents', {'action': 'create'}]])
+            for effect in ('write', 'unverified-side-effects'):
+                with self.subTest(status=status, effect=effect):
+                    surface = {'products': {'demo': {'tools': [
+                        {'name': 'agents', 'status': status, 'effect': effect, 'operation_parameter': 'action',
+                         'operation_effects': {'action': {'get': 'read', 'create': 'write'}},
+                         'accepted_schema': schema}]}}}
+                    result = p.plan('demo', surface, input_schemas={'agents': SCHEMAS['agents']})
+                    self.assertEqual((result['reads'], result['needs_args']), ([], []))
+                    self.assertEqual(result['denials'][:2],
+                                     [['agents', {'action': 'get'}], ['agents', {'action': 'create'}]])
+
+    def test_a_read_whose_child_requires_an_argument_only_its_description_states_needs_args(self):
+        """n8n-mcp states some requirements only in property descriptions (no if/then or dependentRequired in an
+        inputSchema), so no schema rule sees them: sent with the operation alone, those reads were refused on HAOS
+        2026-11-18. The reviewed table p9_plan.DESCRIBED_REQUIRED lists them under needs_args; overrides fill them as
+        they fill any other."""
+        with mock.patch.dict(p.DESCRIBED_REQUIRED, {'demo': {'health': ('scope',), 'nodes:list': ('owner',)}}):
+            result = p.plan('demo', FULL, input_schemas=SCHEMAS)
+            self.assertEqual(result['reads'], [['list_kind', {'kind': 'tags'}], ['read_page', {'page': 1}]])
+            self.assertEqual(result['needs_args'], ['health', 'read_record', 'read_attachment', 'read_optional',
+                                                    'unlisted', 'nodes:list', 'nodes:get'])
+            filled = p.plan('demo', FULL, {'health': {'scope': 'all'},
+                                           'nodes:list': {'operation': 'list', 'owner': 'me'}}, SCHEMAS)
+            self.assertEqual(filled['reads'][:1], [['health', {'scope': 'all'}]])
+            self.assertIn(['nodes', {'operation': 'list', 'owner': 'me'}], filled['reads'])
+            self.assertEqual(filled['needs_args'], ['read_record', 'read_attachment', 'read_optional', 'unlisted',
+                                                    'nodes:get'])
+            other = p.plan('other', {'products': {'other': FULL['products']['demo']}}, input_schemas=SCHEMAS)
+            self.assertIn(['health', {}], other['reads'])  # each product has its own table
+        surface = json.loads((ROOT / 'docs/tool-surface.json').read_text())
+        schemas = snapshot_schemas('n8n')
+        result = p.plan('n8n', surface, input_schemas=schemas)
+        reviewed = p.DESCRIBED_REQUIRED['n8n']
+        self.assertTrue(set(HAOS_DESCRIBED_ONLY) <= set(reviewed) <= set(result['needs_args']))
+        tools = {tool['name']: tool for tool in surface['products']['n8n']['tools']}
+        planned = {name for name, _ in result['reads']}
+        for key, names in reviewed.items():
+            with self.subTest(key=key):
+                name, _, operation = key.partition(':')
+                tool = tools[name]
+                self.assertEqual(tool['status'], 'supported-full')
+                if operation:
+                    selector = tool['operation_parameter']
+                    self.assertEqual(tool['operation_effects'][selector][operation], 'read')
+                    self.assertNotIn(operation, [arguments.get(selector) for read, arguments in result['reads']
+                                                 if read == name])
+                else:
+                    self.assertEqual(tool['effect'], 'read')
+                    self.assertNotIn(name, planned)
+                # Each named argument is in the child's inputSchema but not in its required list: only its description
+                # requires it, and nothing in the schema states a condition.
+                schema = schemas[name]
+                self.assertTrue(set(names) <= set(schema['properties']))
+                self.assertFalse(set(names) & set(schema.get('required', [])))
+                self.assertFalse({'if', 'then', 'oneOf', 'anyOf', 'allOf', 'dependentRequired'} & set(schema))
+        pinned = sorted({key.partition(':')[0] for key in reviewed})
+        digest = hashlib.sha256(json.dumps([schemas[name] for name in pinned], sort_keys=True).encode()).hexdigest()
+        self.assertEqual(digest, REVIEWED_N8N_SCHEMAS,
+                         'n8n-mcp changed a tool of p9_plan.DESCRIBED_REQUIRED: review the table against its property '
+                         'descriptions, then pin the new digest')
 
     def test_every_product_in_the_repository_surface_produces_a_plan(self):
         surface = json.loads((ROOT / 'docs/tool-surface.json').read_text())
