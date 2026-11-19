@@ -31,7 +31,7 @@
 | Odoo | 0.4.14（升版 PR 待合併） | `7252d9e`（2026-11-17，0.4.14 升版 PR） | `24de6ec`（2026-11-18 推 GHCR） | 0（都寫進 0.4.14） | 無 |
 | n8n | 0.4.14（升版 PR 待合併） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 0（都寫進 0.4.14） | 無 |
 | Hermes | 0.4.14（升版 PR 待合併） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 0（都寫進 0.4.14） | 無 |
-| EMQX | 0.4.14（升版 PR 待合併） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 0（都寫進 0.4.14） | 無 |
+| EMQX | 0.4.14（升版 PR 待合併） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 1（E3，HM-23：三句） | E3（HM-23，對齊 PaaS #153；合併後補 PR 號） |
 | LiteLLM | 0.4.14（升版 PR 待合併） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 0（都寫進 0.4.14） | 無 |
 | Nextcloud | 0.4.14（升版 PR 待合併） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 0（都寫進 0.4.14） | 無 |
 | OpenDesign | 0.4.14（只升來源版本，商店停用） | 同上 | 沒有映像 | 0（都寫進 0.4.14） | 無 |
@@ -98,8 +98,18 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 ### 3.4 EMQX
 
 - 上次發版：0.4.14（同 Odoo）。
-- 要寫：無（A1～A7、B1、B2、E1 #87、E2 HM-32 #113 已寫進 0.4.14；E1、E2 照檔頭第 3 點刪除）。
-- 發版時另外驗：第 5 節。
+- 要寫：E3（下面）。A1～A7、B1、B2、E1 #87、E2 HM-32 #113 已寫進 0.4.14；E1、E2 照檔頭第 3 點刪除。
+- E3：HM-23（PR 合併後補，commit 合併後補）對齊 PaaS #153（woow-mcp-server `5b84b5d`：`cd1ed89`、`4b4fd16`、`574c805`），不受開關管
+  （`contract.md` 第 1.2 節）。看得到的變化：`emqx_list_subscriptions` 的說明；`emqx_prometheus_stats` 回 Prometheus 文字；送不出去的識別字回固定
+  錯誤碼。出處：`docs/provenance/ha-multiprofile-HM-23-20261119.md`。CHANGELOG 建議句子（三句，最後的英文由發版片定）：
+
+  ```text
+  - `emqx_list_subscriptions`: the `match_topic` description now says what EMQX does with it, as the PaaS server's does (woow-mcp-server #153): a wildcard search over the stored subscription filters, not a lookup of who receives a topic (a concrete topic does not find a wildcard subscription such as `sensors/#`), and the tool description says how to answer "who receives messages published to topic T?" instead. Text only: the parameter still goes to the broker unchanged.
+  - `emqx_prometheus_stats` now asks EMQX for the Prometheus exposition text (`Accept: text/plain`) and returns that text, as its description says; it used to get EMQX's JSON statistics, cut in the middle when truncated. An empty answer is now the error `EMQX_INVALID_RESPONSE`. Every other tool still asks for JSON (woow-mcp-server #153).
+  - An identifier that cannot become part of a URL (a client ID, topic or name longer than 65,536 characters once encoded, or one that cannot be encoded) now gets the fixed error `EMQX_DESTINATION_DENIED` before anything is sent to the broker, instead of a generic "Error calling tool" reply and a traceback in the add-on log (woow-mcp-server #153).
+  ```
+- 發版時另外驗：第 5 節。EMQX 開通的升版 PR（R2）另外照 HM-23 筆記交接的 DOCS 段落（受限帳號用唯讀角色 API key，UC-22；「一個 Add-on 只有一組後端」
+  改寫成每個帳號一組）與 HAOS 驗收要使用者提供的東西。
 
 ### 3.5 LiteLLM
 
@@ -158,6 +168,7 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 | HM-12 | #110 | `7646f0f` | Odoo 換身分換 token、新來源重填秘密（後端） | 換身分不換 token，回應沒有新欄位 |
 | HM-30 | #111 | `ebefebe` | 回覆處理工作執行緒、待送回覆額度、健康檢查容忍 | 不建工作執行緒，回覆照舊在事件迴圈處理 |
 | HM-12 面板 | #114 | `165dbaf` | 換 token 的提示、新來源重填秘密的表單 | 面板畫面、請求與提示不變（HM-12 面板筆記：216 個比較 0 差異） |
+| HM-23（多帳號部分） | 合併後補 | 合併後補 | 沒有新的程式：EMQX 開通前的測試與文件（測試自己指定開關模式）；同一個 PR 的 #153 對齊另列 E3 | 沒有可見變化；EMQX 的開關由它的升版 PR 打開 |
 
 要用一句話交代第 4 節（可選；主對話補寫，照計畫 §3.3、§7.1）：
 
