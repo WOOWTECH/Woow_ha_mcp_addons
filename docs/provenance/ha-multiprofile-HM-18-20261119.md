@@ -2,12 +2,14 @@
 
 ## 結論
 
-- **只改文件**（`docs/` 16 個檔，含新檔 2 個：發版前預驗的紀錄與本筆記）：程式、測試、`addons/`、README、版號、CHANGELOG、`upgrade-notes.yaml`、`.github/`、帳本與 tool-surface
-  都沒動；`MULTI_PROFILE_PRODUCTS` 維持空集合，沒有產品開通。
+- **只改文件**（`docs/` 17 個檔，含新檔 2 個：發版前預驗的紀錄與本筆記；審查後多改 `ledger-tracking.md` 一個）：程式、測試、`addons/`、README、版號、
+  CHANGELOG、`upgrade-notes.yaml`、`.github/`、帳本與 tool-surface 都沒動；`MULTI_PROFILE_PRODUCTS` 維持空集合，沒有產品開通。
+- **獨立審查**（2026-11-19，`wave5/review-HM-18-correctness.md`，修正後通過）：必修 3 項、建議 10 項（S-9 含三件）、小地方 8 項全部照改
+  （N-8 只在本筆記寫決定），沒有不採用的；逐項見第 13 節。
 - **契約定稿**（`docs/multi-profile/contract.md`，R1 用）：新的第 1.4 節是計畫 §7.2 的完整清單（開通後預設帳號會變的事，20 點加「不變的」），
   收進 HM-10 審查 S-6 的兩個位元組變化（PATCH、DELETE 沒過 identity 從 405 變 403；表外方法的 `Allow` 從 4 個方法變 6 個，本機核對過）；
   第 9 節跟上 2026-11-17 的決定與 HM-03a 的實測，#50、#60、#85 的類型不再是「待決」；還待決、不擋 R1 的列（#10、#28、#47、#62、#65）
-  列在第 10 節最後一列。#75 早已是 60 分鐘（HM-10 rebase 的 `b51cf8c`），沒再改。
+  列在第 10 節的 HM-18 定稿列（審查修正另記一列）。#75 早已是 60 分鐘（HM-10 rebase 的 `b51cf8c`），沒再改。
 - **交升版片**：兩個位元組變化的 CHANGELOG 建議句與「開通那一版要寫的事」放在 `docs/multi-profile/unreleased-changes.md` 第 7 節（新）；
   同一個檔補上 #108、#112、#116、#109 合併時沒改的地方（共通項 A8、A9 與第 4 節）。
 - **決策**（`docs/multi-profile/decisions.md`）：DQ-23、DQ-24、DQ-42、DQ-45（2026-11-17 13:5x）與 DQ-35（14:0x，「不承諾天數」）記成已定，
@@ -48,6 +50,7 @@
 | `docs/multi-profile/acceptance-matrix.md` | 測試檔登記表的狀態（檔已存在的「計畫」「新增」改成「已有」，56 列）；`tests/contract/profiles_v1_cases.json` 一列；檔頭狀態 |
 | `docs/multi-profile/threat-model.md` | 檔頭與第 3、4 節的「HM-18 寫進文件／DOCS」改成已寫進的文件；暫時性錯誤那一條寫明 HM-18 不改程式；Bearer 帶 Origin 那條寫 S14 交 HM-19b |
 | `docs/multi-profile/README.md` | 契約、威脅模型、`unreleased-changes.md` 三列 |
+| `docs/multi-profile/ledger-tracking.md` | 審查 S-9 後才改（第 13 節）：`profiles.py` 一列拿掉「還沒合併」、`packaging/entrypoint.py` 移到第 2 節 |
 | `docs/operations/clients.md` | 開頭的接法表與 legacy SSE（DQ-23）；「接法二」的 Claude.ai 更正；「多帳號（產品開通後）」一節；還原那一點 |
 | `docs/operations/guide.md` | 「支援的 Core 版本」補 DQ-35；子程式 bearer 那段改成 0.4.14 起並補 n8n 與 Odoo Manage（HM-06 審查 S-07）；「多帳號（產品開通後）」一節 |
 | `docs/operations/update-backup-rollback.md` | 版本混搭、還原後看 Origin 政策、開機守門的 log 表；「回退與緊急關閉（多帳號產品開通後）」一節與緊急發版範本 |
@@ -246,10 +249,14 @@ HM-08、HM-14 交 HM-18「登記表的『計畫』狀態一起更新」：照 `c
 - **主對話（repo 外）**：
   - `gen_trace.py` 的五處（第 7.1 節）、`negative_tests.py` 的兩處（第 7.2 節）、`SHA256SUMS`；`paas_mapping_spec.py` 補 PaaS `5ef1046` 的 K8s 測試檔（第 7.3 節）。
   - 計畫 §7.2：清單現在在契約第 1.4 節（20 點），計畫可以改成指到它，並補兩個位元組變化；計畫 HM-18 段可以記本片做完。
+  - 計畫的兩句跟著審查改（第 13 節）：§8.10 第 5 步「（守門會撤銷 token）」要加「備份裡有帳號資料時」與沒有時的做法（MF-2）；§7.4「(a) 之後再升級：
+    舊 entrypoint 只修擁有者、不建標記」只對 0.4.13（Headscale 0.4.18）以前成立，0.4.14 起的舊版建標記（S-5）。
+  - 審查請主對話確認：`profiles_v1_cases.json` 不補管理面案例（偏離計畫 §10.3；計畫交 HM-18 決定，理由在第 5 節）。
 - **HM-19a**（Odoo 首發的升版 PR）：照 `unreleased-changes.md` 第 1 節（A8、A9）與第 7 節寫 CHANGELOG、DOCS、`upgrade-notes.yaml`；照 `update-backup-rollback.md`
   的緊急發版範本核對一次、交負責人預先核准；容器驗收的多帳號階段第一次真跑。
 - **HM-19b**：S14（Claude.ai 的 Origin，echo 端點）與 DQ-11 第二問；契約 #111（`ETag` 經 Ingress）、#89（IPv6 試綁）在正式映像上確認後改理由欄；
-  完整還原、主機重開、T-11、T-12、T-20 的回退演練、T-24；回退與版本混搭照 `update-backup-rollback.md`。
+  完整還原、主機重開、T-11、T-12、T-20 的回退演練、T-24；回退與版本混搭照 `update-backup-rollback.md`（審查 MF-3 後寫了期望值：還原後先記下
+  add-on 的版本，Supervisor 會換回備份當時的版本）。
 - **8099 測試的缺口**：開通後表外方法（OPTIONS 等）的 405 `Allow` 是 6 個方法，沒有測試斷言（行為本機核對過）。下一個動 8099 測試的片在
   `tests/test_admin_pipeline_matrix.py` 補一案（開關關 4 個、開 6 個；順序不固定，比集合）。
 - **面板的 Claude.ai 卡片**仍寫「Claude.ai 網頁版的自訂連接器無法帶 Authorization header」（`Hui/app.js`、`Hui/contracts.js` 的註解）：本片只改文件。
@@ -274,6 +281,58 @@ HM-08、HM-14 交 HM-18「登記表的『計畫』狀態一起更新」：照 `c
 | `c7a3fe3` | `unreleased-changes.md`：A8、A9、第 4、5、6 節、第 7 節（新） |
 | `d836915` | `docs/operations/` 五個檔（含新的發版前預驗紀錄）、`runtime-configuration.md`、`management-capabilities-v1.md` |
 | `e490bcd` | HM-27 筆記第 21 節（2026-11-19 補記） |
-| 本 commit | 本筆記 |
+| `b1f5eca` | 本筆記；`guide.md` 一句（預設帳號不能改名或刪除） |
+| 審查後第 1 個（`bec7054`） | 照獨立審查改 11 個文件（第 13 節） |
+| 審查後第 2 個 | 本筆記：第 13 節與結論、第 2、10、12 節；`guide.md` 生命週期 log 表 `not started` 那一格（寫明哪些情況不會自己重試：記憶體不夠、帳號清單標了 `disabled_reason`；第 1 個 commit 之後再核對 `lifecycle.py` 的 `block` 補的） |
 
-commit 身分都是 woowtech；英文標題、繁中內文；訊息裡沒有任何署名行。
+commit 身分都是 woowtech；英文標題、繁中內文；訊息裡沒有任何署名行。審查後第 2 個 commit 的 SHA 寫在回報與 PR 說明（同一個 commit 寫不進自己的 SHA）。
+
+## 13. 審查與處理（2026-11-19）
+
+- 報告：repo 外 `artifacts/ha-multiprofile-parity-20261114/wave5/review-HM-18-correctness.md`（獨立審查代理，審 `b1f5eca`）。判定「修正後通過」：
+  必修 3 項、建議 10 項、小地方 8 項。
+- 處理：全部照改，沒有不採用的。改之前逐項對 `c90b214` 的程式核對過審查寫的事實（`restore_lock.py` 的 `guard`、`archive`、log 常數，
+  `operations.archive_for_restore`、`admin_auth.prefix`、`gateway.py` 的 `BadRequest` 回應、`run_product.py` 讀還原提示、`lifecycle.py`、
+  `profile_admin.py`、`tests/test_restore_lock.py`、`tests/test_upgrade_zero_rewrite.py`），都成立。
+- 範圍照舊：只改 `docs/`；程式、測試、`addons/`、README、版號、帳本都沒動。
+
+| id | 審查說的 | 處理 | 在哪裡 |
+|---|---|---|---|
+| MF-1 | A8 寫「`/data/mcp` 其他一個位元組都不動」，和 A9 的 `restore-notice.json` 矛盾 | 照改：中文與英文建議句都寫「存 A9 的還原提示，除了這個檔其他都不動」；`MARKER_LEFT` 那句補「還原提示存不下」 | `unreleased-changes.md` A8 |
+| MF-2 | 事故處理第 5 步寫成還原後一定撤銷每個帳號 | 照改：分成備份有帳號資料（撤銷、核對後重發）與沒有帳號資料（預設帳號不撤銷，DQ-03 (b)：照提示立刻重新產生或再按全部撤銷）；補「還原帶回備份當時的憑證、網址與政策，重做第 2、3 步」。來源句一起改 | `guide.md` 事故處理；`threat-model.md` 第 4 節第 5 步 |
+| MF-3 | 緊急關閉版上還原開通版本的備份，漏了 Supervisor 會換回開通的那一版 | 照改：寫明會換回出事的那一版、守門照那一版跑、**還原後立刻再更新到緊急關閉版**、拉不到舊映像時是關閉版直接跑；HM-19b 版本混搭演練補期望值 | `update-backup-rollback.md`「版本混搭」 |
+| S-1 | 「定稿之後改本檔的只有」漏了 HM-19b | 照改：改成「主要是」並加 HM-19b（#89、#111 的理由欄）；`README.md` 那列同 | `contract.md` 開頭；`docs/multi-profile/README.md` |
+| S-2 | 第 9 節開頭還說第 118～128 列不在 `deviation-trace.md` | 照改：寫成 HM-18 重產後經 T-21、T-24 對到 | `contract.md` 第 9 節開頭 |
+| S-3 | 第 1.4 節少三件 | 照改：第 20 點補「開通而沒有帳號資料的還原也寫 `restore-record.json`（預設帳號記為保留、不用核對），並換新索引旁與 Origin 政策旁的收據檔」（`guard` 的 `cutoff` 那段用 `renew_missing`）；第 19 點補兩個收據檔；第 5、10、19 點標「Headscale 除外」；`unreleased-changes.md` 第 7 節跟著寫 | `contract.md` 第 1.4 節；`unreleased-changes.md` 第 7 節 |
+| S-4 | 「每一行守門 log」的表不全；生命週期 log 清單沒寫 | 照改：守門的表補齊 `restore_lock.py` 其餘 9 行（含 `profiles` 不是目錄時單獨一行），寫明哪些後面會接 `not finished`；另一張表列 `profile_admin` 的 4 行（審查說的 3 行加「全部撤銷結果不明」）。`guide.md` 加生命週期 log 常見 10 行與幾行不帶 `MCP child` 的，完整清單指到契約第 7 節 | `update-backup-rollback.md`「開機守門的 log」；`guide.md`「健康、重啟與 log」 |
+| S-5 | 「舊版不建還原標記、新版看不出曾經還原」對 0.4.14 起的版本不成立 | 照改：「涵蓋範圍」「回退後再升級」「版本混搭」第一點、「(a) 之後再升級」都照版本分開寫：0.4.13（Headscale 0.4.18）以前不建標記；0.4.14（Headscale 0.4.19）起建標記，到含守門的版本才提示、不撤銷。契約 #69 的理由是同一件事，一起改（項目、類型不變，`deviation-trace.md` 不受影響） | `update-backup-rollback.md`；`contract.md` #69 |
+| S-6 | 緊急發版範本少了釘住開通集合的測試 | 照改：加 `tests/test_upgrade_zero_rewrite.py` 的 `test_multi_profile_is_switched_off_for_every_product`；開通片為開通改過的其他測試也改回，HM-19a 核對範本時列全 | `update-backup-rollback.md` 緊急發版範本 |
+| S-7 | 「全部撤銷沒做完時，只有沒撤銷成功的帳號 503」不完整 | 照改：獨立成一點，補「連一個結果都沒有時，每個帳號撤銷前的權杖都 503」與那行 log | `guide.md`「健康、重啟與 log」 |
+| S-8 | 已知限制的停頓數字是 HM-30 第一輪的 | 照改：8 MiB 長字串約 20～50 ms；補沒有物件也沒有數字的大陣列 0.03～0.19 秒（負責人 2026-11-17 接受，HM-19c 量） | `guide.md` 已知限制 |
+| S-9 | 區塊層級回滾、時鐘依賴沒寫進操作文件；`ledger-tracking.md` 過時 | 照改：`guide.md` 已知限制加兩點、`update-backup-rollback.md` 加「快照還原看不到」、威脅模型偵測那條補一句；`ledger-tracking.md` 第 1 節 `profiles.py` 拿掉「還沒合併」，`packaging/entrypoint.py` 從第 3 節移到第 2 節（帳本 `runtime-patches.json` 早已列它；HM-13a 筆記第 11 節的交接） | `guide.md`、`update-backup-rollback.md`、`threat-model.md`、`ledger-tracking.md` |
+| S-10 | 開通那一版的交接沒點名 FM-94 會變錯的句子 | 照改：第 7 節逐一列出根目錄 README 第 46～47 行、各產品 DOCS 的「一個 Add-on 只有一組後端」（Nextcloud、Headscale 的寫法）、n8n DOCS 第 55 行、Nextcloud `config.yaml` 的 `description`、面板 `contracts.js` 的 Headscale 說明 | `unreleased-changes.md` 第 7 節 |
+| N-1 | `unreleased-changes.md` 兩處用字 | 照改：#108 不受開關管；`.revoke-all-pending` 不看帳號資料、但只有開通的路由寫得出 | `unreleased-changes.md` 第 4.1 節、第 4 節最後一段 |
+| N-2 | 沒過 identity 不一定是 403 | 照改：`X-Ingress-Path` 格式錯時是同一個本體的 400（只有 Supervisor 自己的位址送得到） | `contract.md` 第 1.4 節第 4 點；`unreleased-changes.md` 第 7 節英文句；`management-capabilities-v1.md` |
+| N-3 | 「形狀 D」在這份文件沒有定義 | 照改：寫成同一份文件上面那種 HTTP 503（`saved:true`、`config_apply_failed`）另帶 `token_rotated:true` | `runtime-configuration.md` |
+| N-4 | 公開紀錄寫了展示機 Odoo 的存取設定與加固細節 | 照改：改成概括的寫法（網路限制、一般的刪除方式不能用、改回的設定） | `ha-test-odoo-multiprofile-early.md` |
+| N-5 | 還原說明少「還原後跑的版本沒開通而有帳號資料」 | 照改 | `clients.md` |
+| N-6 | 各產品上限沒標暫定 | 照改 | `guide.md` |
+| N-7 | 第 9 節 HM-18 那段的待決列漏 #28 | 照改；「第 10 節最後一列」三處改指 HM-18 的列（審查修正另記一列） | `contract.md` |
+| N-8 | HM-10 筆記交 HM-18：S-14（名稱檢查綁執行中 Python 的 Unicode 資料）要不要寫進 DOCS | 決定不寫進操作文件：使用者碰不到。Unicode 指派過的字不會再變未指派；舊 Python 讀到新 Python 寫的名稱只會在還原舊備份時，帶回的索引是當時驗過的；商店不收降版（理由同 HM-10 筆記第 13.1 節）。名稱規則本身在契約第 3.6 節 | 本筆記 |
+
+另外，審查請主對話確認 `profiles_v1_cases.json` 不補管理面案例（第 5 節的決定）；計畫 §8.10、§7.4 的兩句也要跟著改（repo 外）：都寫在第 10 節。
+
+### 13.1 審查修正後的檢查（2026-11-19，一般使用者 uid 1000；TMPDIR 用 `/tmp/ha-mp-XXXXXX`，跑完用完整路徑刪掉）
+
+| 檢查 | 結果 |
+|---|---|
+| HM-00 對照 `check_hm00.py`（repo 外、唯讀；`--base origin/claude-delivery --source-base bb48449`，`--paas` 指唯讀 worktree） | C1～C5、C7～C9 **PASS**（C1：17 個檔、`docs/` 以外 0；C2 128 列類型合法；C8 46 題、已定 39、待定 7）；C6 照舊不過（第 7.3 節：PaaS `main` 前進到 `5ef1046`，和本片無關） |
+| `deviation-trace.md` 能不能照新契約重產 | 用審查者暫存區改過五處的產生器複本（SHA-256 `334b695a…`，改法同第 7.1 節）讀審查修正後的契約重產：和 commit 的檔**逐位元相同**（`5f4309ae…`）。第 9 節開頭與 #69 理由欄的改動不影響對照表 |
+| `scripts/ledger_precheck.py` | 三本帳本 0 drift、0 missing；17 個檔沒有列管檔、帳本沒改、沒有新的執行期檔：**result: OK** |
+| `packaging/validate.py`（`ha-gh-release-20261117` 的 venv） | `PASS: 8 strict Supervisor-subset manifests, translations, pins, workflow policy and clearance shape` |
+| packaging unittest（同一個 venv） | `Ran 366 tests`、`OK (skipped=5)`，27 秒；5 個 skip 是既有的 `skipUnless(root)` |
+| pytest | 不適用：只改文件，沒有測試讀這些文件（`grep` 過 `tests/`、`packaging/`、`scripts/`）。另外排隊重跑文件引用的 7 個檔（第 8 節的 5 個加 `test_restore_lock.py`、`test_upgrade_zero_rewrite.py`）：第一次 repo `conftest.py` 的本機測試鎖被別的工作線的全套 pytest 佔住，120 秒後每一案都是 setup error（354 個 error，沒有任何一案真的跑），不是測試結果；第二次排在兩把鎖後面，結果寫在回報 |
+| 控制字元、雙向控制字元、Markdown 表格欄數（改到的 17 個檔） | 0 |
+| 改到的文件裡的 repo 內連結與錨點 | 59 個都在 |
+| 公開紀錄的私有資料掃描（`ha-test-odoo-multiprofile-early.md`：主機名稱、`.io`、網址、IPv4、8 碼 hex、`@`） | 0 |
+| 秘密預檢 | `c90b214..bec7054`（審查後第 1 個 commit）：gitleaks 8.28.0（釘選、驗過）**OK，0 命中**；本筆記的 commit 之後再跑一次（結果寫在回報） |

@@ -269,7 +269,7 @@ fallback；metadata/link-local/混合非法 answers 拒絕。合法 LAN/ULA/publ
   | `started` | 那個帳號的子程式起來了 | 不用處理 |
   | `exited with code N` | 子程式結束了，看門狗照退避再起 | 一直重複時看子程式自己的錯誤與後端設定 |
   | `next start in N s (attempt n)` | 退避中，N 秒後再起（2→300 秒、不限次數，穩定跑 120 秒歸零） | 同上；面板存檔或重新啟動子程式會馬上再試 |
-  | `not started (<原因碼>): …` | 起之前的檢查擋下：`child_port_conflict`（port 撞到 add-on 自己的 port 或別的帳號）、`child_port_in_use`（port 被別的程式佔了）、`memory_capacity`（記憶體不夠） | port 的兩種照退避重試；記憶體不夠時釋出記憶體或刪掉不用的帳號 |
+  | `not started (<原因碼>): …` | 起之前的檢查擋下：`child_port_conflict`（port 撞到 add-on 自己的 port 或別的帳號）、`child_port_in_use`（port 被別的程式佔了）、`memory_capacity`（記憶體不夠） | 多半照退避自己重試；帳號清單標了 `disabled_reason`（例如 `port_conflict`）或記憶體不夠時不會自己重試：處理掉原因（刪掉不用的帳號、釋出記憶體）後到面板重新啟動那個帳號的子程式 |
   | `not started: no connection is saved yet (<欄位名>); …` | 那個帳號還沒設定後端（只列欄位名） | 到面板設定後端 |
   | `could not be started (<例外類別>)` | 起子程式失敗，照退避重試 | 多半是暫時的（例如記憶體不夠）；一直出現就看主機資源 |
   | `child resources not applied (…)` | `oom_score_adj`、`nice` 沒寫成，子程式照常跑 | 平台不准，不用處理 |
