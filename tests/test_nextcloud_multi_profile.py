@@ -71,7 +71,7 @@ NEW_PASSWORD = 'DUMMY-rebound-nextcloud-password'
 NEW_USER = 'DUMMY-dave'
 WATCHED_HOSTS = ('cloud.nextcloud.invalid', 'other.nextcloud.invalid')
 WATCHED_USERS = ('DUMMY-bob', 'DUMMY-carol', NEW_USER)
-# Server-side text of the policy save (the gateway's refusal of a tool the policy disables: policy.ToolCallRefused).
+# The JSON-RPC code of the gateway's refusal of a tool the policy disables (policy.ToolCallRefused: Unknown tool).
 UNKNOWN_TOOL = -32602
 
 
@@ -164,7 +164,7 @@ def test_the_first_setup_a_revoked_token_and_a_cleared_connection(monkeypatch):
     assert identity_rebound(nextcloud_state(ACCOUNTS[B]), nextcloud_state(None)) is True
 
 
-def test_nextcloud_is_bound_to_its_url_and_username_and_the_panel_knows_it():
+def test_nextcloud_is_bound_to_its_url_and_username():
     """DQ-40 ⑩ (a): Nextcloud joins Odoo in products.IDENTITY_BOUND (PaaS #154: LaunchPolicy.identity_connection_keys
     base_url, username; the app password is no identity); its url is compared as a server (identity_fields
     .SAME_SERVER_URLS, Nextcloud's only: Odoo's compares as typed, as PaaS #131 does). The panel's list (contracts.js
@@ -461,19 +461,24 @@ async def test_saving_one_profiles_policy_restarts_only_its_child(tmp_path, log_
 
 
 async def test_switched_off_a_policy_save_restarts_the_only_child_as_today(tmp_path, log_scan):
-    """Not switched on, the only profile's policy save is today's: the child restarts once, the answer has no echo."""
+    """Not switched on, the only profile's policy save is today's: written, then the child restarts once on it; the
+    answer has no echo."""
     data = tmp_path / 'data'
     configure(data, PRODUCT)
-    async with production_runtime(PRODUCT, data) as runtime:
+    journal = Journal()
+    async with production_runtime(PRODUCT, data, supervisor=journal.supervisor()) as runtime:
         await settle(runtime, 'configured')
         assert not features.enabled(PRODUCT)
         log_scan.watch(*all_tokens(data))
+        journal.watch(data, 'default')
+        token = stored(data)['token']
         async with runtime.admin() as admin:
             boot = (await admin.get('/api/bootstrap', headers=ADMIN)).json()
             saved = await admin.put('/api/policy', json={'writes_enabled': False, 'disabled': ['upload_file']},
                                     headers=reviewed_headers(boot, ADMIN))
         assert saved.status_code == 200 and list(saved.json()) == ['saved', 'configuration'], saved.text
-        assert stored(data)['disabled'] == ['upload_file']
+        assert stored(data)['disabled'] == ['upload_file'] and stored(data)['token'] == token
+        assert journal.events == [('stop', token, 'DUMMY-user'), ('start', 'DUMMY-user')]
 
 
 # ---- switched off: today's save (plan 3.3) ----
@@ -645,6 +650,15 @@ def account(url, login, password=None):
     return {'url': url, 'username': login, 'app_password': password or PASSWORDS[login]}
 
 
+def configure_store(data, connection):
+    """The default profile's account saved before the runtime starts (configure's way: Store.update)."""
+    store = ProductStore(data, PRODUCT)
+    try:
+        store.update(connection=connection)
+    finally:
+        store.close()
+
+
 async def tool(client, path, headers, ident, name, arguments):
     """A tools/call in the session of headers: the tool's structured result."""
     result = await rpc(client, path, headers, {'jsonrpc': '2.0', 'id': ident, 'method': 'tools/call',
@@ -693,8 +707,8 @@ async def test_two_users_of_one_server_stay_in_their_own_profiles_with_real_chil
     - T-05 / T-04: each token, on both paths, opens a session with its own child (not the gateway's own) and lists its
       own user's home only; the server saw each user's credentials only on that user's own paths; a random token is
       refused (401, 404); the default profile's secret path with B's Authorization lists ALICE's home.
-    - T-23: each child serves its own child bearer only: none, a random one, the other profile's, two headers and an
-      empty one get 401.
+    - T-23: each child serves its own child bearer only: none, a random one, the other profile's, an empty header, the
+      scheme alone and two headers get 401.
     - T-07: B's policy saved (read_text_file disabled) restarts B's child only (a new PID; the default profile's PID and
       session stay); B's old session is gone with its child; B's new session lists no read_text_file, the default
       profile's still does.
@@ -778,15 +792,6 @@ async def test_two_users_of_one_server_stay_in_their_own_profiles_with_real_chil
                 tree = await tool(client, '/mcp', carol, 5, 'get_file_tree', {})
                 assert home_files(tree) == sorted(HOMES[CAROL])
                 assert supervisors['default'].process.pid == pids['default']
-
-
-def configure_store(data, connection):
-    """The default profile's account saved before the runtime starts (configure's way: Store.update)."""
-    store = ProductStore(data, PRODUCT)
-    try:
-        store.update(connection=connection)
-    finally:
-        store.close()
 
 
 async def test_a_refused_login_backs_off_only_its_own_profile(tmp_path, log_scan, monkeypatch):
