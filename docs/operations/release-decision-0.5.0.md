@@ -21,8 +21,7 @@
 - R1（計畫 §11.4）：Odoo 是第一個開通多帳號的產品，PaaS 的首發場景（同一個 Odoo 資料庫、每個 AI 代理一個受限使用者，U-03）。前提 HM-00～HM-18、
   HM-20、HM-30、HM-27 都已合併（最後是 #122 HM-18，`95b7e9d`）。**HM-15（listener 身分檢查，條件式）還沒做**：它的條件是 DQ-37 選 (a)（已定）且
   UC-04 證實 uid 10001 讀得到 dumpable 子程式的 `/proc/<pid>/fd`；HM-03a 在展示機量到同 uid 讀得到（non-dumpable 的讀不到），條件看起來成立。
-  `decisions.md` 仍寫「listener 檢查待定」。首發前要不要先做（計畫估 L，約 8 人天，要獨立安全審查），或首發不做、照契約第 9 節 #13 由子程式 bearer
-  當主防線，**待負責人決定**。
+  `decisions.md` 仍寫「listener 檢查待定」。首發前須完成 HM-15 與獨立安全審查；實際 non-dumpable 子程式的可檢查能力仍須驗證，讀不到時依契約第 9 節 #13 降級並保留子程式 bearer 主防線。
 - 開通後：預設帳號（今天的設定與權杖）之外最多 5 個額外帳號，每個帳號一組 Odoo 連線、一把權杖與兩條網址、一份工具政策、一個子程式；只看權杖決定帳號。
   只用預設帳號的安裝，權杖、兩條網址、`state.json` 位元組、政策、子程式 port 3000 都不變；仍看得到的改變是契約第 1.4 節的 20 點（含 HM-10 審查 S-6 的
   兩個位元組變化），逐項寫在 [Odoo CHANGELOG](../../addons/odoo/CHANGELOG.md) 0.5.0 段與根目錄 [upgrade-notes.yaml](../../upgrade-notes.yaml)。
@@ -86,7 +85,7 @@
 | 1. 開升版 PR（§11.3 逐檔核對清單，下一節） | 代理 | 否（只開 PR） | 本機完成（升版 commit `dfd146d`）；獨立審查後推送、開 PR，標題「⛔ 勿代 merge｜待覆核 — HM-19a …」 |
 | 2. 秘密預檢、帳本預檢；PR `checks` 綠 | 代理／CI | 否 | 本機兩個預檢 OK（「本機檢查」一節）；PR `checks` 推送後由 CI（root、0 skip）跑，以它為準 |
 | 3. 建候選映像＋容器驗收（含多帳號階段、root 還原樹、sentinel）＋供應鏈閘門＋J1900；不推 GHCR。GitHub 路線：在本分支觸發 `release.yaml`（`app=odoo`、`source_sha`＝凍結的 head），gate 與 candidate 沒有推送權限。這也是計畫的「HM-19a 前的開關開乾跑」：publish 停在等待時按 Reject 就什麼都不推、不燒版號 | 代理觸發／GitHub 託管機器 | **要**（每次觸發；先定三路運算式怎麼驗，上一節） | **待負責人批准** |
-| 4. 推 GHCR 前乾跑 Store 升級測試：0.4.14 的 Release 映像 → 候選映像（第 2、3 類，加 `upgrade-check/seed`、`verify`） | 代理 | **要** | **待負責人批准**：Store 的升級測試只拉已發佈的映像。乾跑要一台有 Docker 的機器，用 Store 的 `upgrade_runtime.py` 跑 candidate 留的 `image.tar`（artifact 只留 3 天）；或負責人決定不乾跑、靠第 9 步的 `Upgrade comparison`（那時 0.5.0 已燒） |
+| 4. 推 GHCR 前乾跑 Store 升級測試：0.4.14 的 Release 映像 → 候選映像（第 2、3 類，加 `upgrade-check/seed`、`verify`） | 代理 | **要** | **待負責人批准**：Store 的升級測試只拉已發佈的映像。乾跑要一台有 Docker 的機器，用 Store 的 `upgrade_runtime.py` 跑 candidate 留的 `image.tar`（artifact 只留 3 天）；依計畫須在推送前完成並記錄結果 |
 | 5. 容量量測（HM-19c）：J6412（可以的話 J1900）上 1～6 個 Odoo 帳號；全域最壞值對「MemAvailable－保留量」；CPU 飢餓；冷開機全部就緒 | 代理 | **要**（主機、硬體） | **待負責人批准**；展示機是 J6412（目標硬體，下面「發版前預驗」），J1900 與出貨機的記憶體規格（DQ-29）還沒給。**擋發版**：契約第 5 節「HM-19c 放行條件」與 HM-30 的 D1～D3 量測，過不了就回功能片改常數，不改不能發版 |
 | 6. 要改常數 → 回功能 PR 改、重建（回第 3 步） | 代理 | 否 | **待負責人批准**（看第 5 步） |
 | 7. 推 GHCR（`release.yaml` 的 publish；推了就燒 0.5.0，R10 RG-15） | 負責人在 GitHub 核准 `public-release` | **要** | **待負責人批准** |
@@ -201,9 +200,9 @@
 
 ## 要負責人決定的事
 
-1. HM-15（listener 身分檢查，計畫列為 R1 的條件式前提）：首發前先做，或首發不做（上面「為什麼發這一版」）。
+1. HM-15（listener 身分檢查）為 R1 條件式前提：完成實作、獨立安全審查及實際子程式能力驗證。
 2. 第 3 步（觸發 `release.yaml`）之前：三路版號運算式要不要先用拋棄式 workflow 驗（要一個 workflow 檔與一次觸發），或接受 candidate 在推送前擋。
-3. 第 4 步的 Store 升級乾跑怎麼做（哪台有 Docker 的機器、用 candidate 的 `image.tar`），或不乾跑。
+3. 第 4 步的 Store 升級乾跑在哪台有 Docker 的機器執行；須使用 candidate 的 `image.tar` 並在推送前完成。
 4. 第 5 步 HM-19c：在哪台量（展示機就是 J6412；J1900 有沒有機器）、出貨機的記憶體規格（DQ-29）；HM-03a 量到 UC-20 是「不行」（Supervisor 一定去拉映像），
    所以候選映像不能直接側載，要用計畫寫的拋棄式開關開映像（不改版號、不推）量，或明文接受先推再量。
 5. 緊急發版範本（關閉版）的預先核准（上面核對過，改了一處）。

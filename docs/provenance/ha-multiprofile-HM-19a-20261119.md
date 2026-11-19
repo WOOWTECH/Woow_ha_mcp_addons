@@ -192,9 +192,9 @@ HM-16 已讓 `container_probe.mock_bind_host` 與 `container_acceptance.main` �
 ## 10. 要負責人決定的事
 
 1. HM-15（listener 身分檢查）：計畫把它列為 R1 的條件式前提；DQ-37 已照 (a)，HM-03a 量到同 uid 讀得到 dumpable 子程式的 fd，條件看起來成立，
-   但 `decisions.md` 仍寫待定、沒有人做。首發前先做，或首發不做（子程式 bearer 是主防線，契約第 9 節 #13）。
+   但 `decisions.md` 仍寫待定、沒有人做。首發前完成實作與獨立安全審查，並驗證實際子程式是否可檢查；不可用時依契約第 9 節 #13 降級（子程式 bearer 是主防線）。
 2. 三路版號運算式：第一次觸發 `release.yaml` 前要不要先用拋棄式 workflow 驗（要一個 workflow 檔與一次觸發），或接受 candidate 在推送前擋。
-3. §11.3 第 4 步 Store 升級乾跑：用哪台有 Docker 的機器跑 candidate 的 `image.tar`，或不乾跑。
+3. §11.3 第 4 步 Store 升級乾跑：決定用哪台有 Docker 的機器跑 candidate 的 `image.tar`；依計畫須在推送前完成。
 4. §11.3 第 5 步 HM-19c：在哪台量（展示機就是 J6412）、J1900 與出貨機的記憶體規格（DQ-29）；UC-20 是「不行」，候選映像不能直接側載（計畫的替代做法：
    拋棄式開關開映像，不改版號、不推）。
 5. 緊急發版範本（關閉版）的預先核准（本片核對過，改了一處）。
