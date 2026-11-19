@@ -196,15 +196,20 @@ Dashboard 密碼一律不印、不存。
    Gateway API key 與 Dashboard 帳號：預設帳號＋至少 2 個額外帳號（T-04 的 N×N 最多到 Hermes 的上限，預設＋3），另加一組換身分用的
    Dashboard 帳號（T-03）。同一台 Hermes 若只能有一組 Gateway key 或一個 Dashboard 使用者，就要多台測試用 Hermes（這點還沒確認）。
    只用合成名稱，不用真人帳號；建立與刪除每一組都要使用者批准，驗完刪掉並留清理證明（T-29）。
-2. **T-03 換身分**：`gateway_url`、`dashboard_url`、`dashboard_username` 各換一次，再補上與清空 Dashboard 各一次：每次面板提示權杖已換新、
+2. **T-02 上限與容器階段**：Hermes 的額外帳號上限是 3（`profiles.EXTRA_PROFILE_LIMITS['hermes']`；上表 T-02 的「第 6 個」是 Odoo 的 5）：
+   第 4 個額外帳號回 409 `profile_limit_reached`＋`limit`。T-13、T-14、T-23 的容器階段（`packaging/container_profiles.py`）對 Hermes 一樣適用：
+   預設帳號的子程式沒寫 `--port`，就當 3000。
+3. **T-03 換身分**：`gateway_url`、`dashboard_url`、`dashboard_username` 各換一次，再補上與清空 Dashboard 各一次：每次面板提示權杖已換新、
    兩條舊網址都失效（Bearer 401、密鑰網址 404）、新網址可用；只換 `gateway_api_key`、`dashboard_password` 時權杖不變（契約第 9 節 #129）。
-3. **T-04 N×N**：每個帳號用自己的身分在 Hermes 留一個看得出來是誰的標記（例如用測試鍵的設定值，或具名對話），每個帳號只看得到自己的。
-4. **Dashboard 登入**：兩個以上帳號接同一個 Dashboard 時，各自第一次用到 Dashboard 只各登入一次（Dashboard 的 log 或登入紀錄）；
+4. **T-04 N×N**：每個帳號用自己的身分在 Hermes 留一個看得出來是誰的標記（例如用測試鍵的設定值，或具名對話），每個帳號只看得到自己的。
+5. **Dashboard 登入**：兩個以上帳號接同一個 Dashboard 時，各自第一次用到 Dashboard 只各登入一次（Dashboard 的 log 或登入紀錄）；
    記下有沒有 429（全部帳號共用 Dashboard 的登入限流，#130）。
-5. **T-07、T-12、T-19 的長 chat**：存一個帳號的政策（例如停用 `hermes_chat`）只改它的工具清單、每個子程式 PID 都不變；一個帳號的長 chat
+6. **T-07、T-12、T-19 的長 chat**：存一個帳號的政策（例如停用 `hermes_chat`）只改它的工具清單、每個子程式 PID 都不變；一個帳號的長 chat
    進行中換它的身分或撤銷，只有它的 chat 結束；同一個帳號並行長 chat 到名額滿（額外帳號 16）時，下一個請求等 1 秒後回 `-32003`，
-   別的帳號照常（#131）。並行 chat 會打真的 Gateway、可能花模型費用：用免費模型或測試 Gateway，先問使用者。
-6. **每子程式 MiB 的負載量測（至少 60 分鐘；計畫 §9、C3-SF-12）**：PaaS 量到每個 Hermes 子程式的 RSS 從 90 MiB 漲到 160～168 MiB
+   別的帳號照常（#131）。換身分會先停那個帳號的子程式，所以進行中的 chat 收到的是 HTTP 200 的 SSE 事件 `-32004`（子程式連線中斷），
+   不是 401；它的文字目前說子程式仍在執行，照實記下。新 token 若在閘道回答之前就發布（子程式結束得很快），收到的是 `-32005`。
+   並行 chat 會打真的 Gateway、可能花模型費用：用免費模型或測試 Gateway，先問使用者。
+7. **每子程式 MiB 的負載量測（至少 60 分鐘；計畫 §9、C3-SF-12）**：PaaS 量到每個 Hermes 子程式的 RSS 從 90 MiB 漲到 160～168 MiB
    （前 2 分鐘就長完）、負載停了也不回落（R02 C-04）；HA 只在建立帳號、存後端、手動重啟時看 MemAvailable，之後的成長看不到。
    - 在目標硬體（J6412，可以的話 J1900）上，預設帳號＋3 個額外帳號都接好、都在跑；每個帳號一個用戶端持續混合呼叫至少 60 分鐘：
      `hermes_chat`（含長回合）、Dashboard 類（`hermes_inspect`、`hermes_session`、`hermes_cron` 的 list）、`hermes_gateway` 的 status，

@@ -94,16 +94,9 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 - 發版時另外驗：第 5 節。HM-33 筆記交發版片定的兩件，0.4.14 這樣處理：`addons/hermes/README.md`、`DOCS.md` 沒補「Hermes Agent v0.17.0
   or v0.22.x」那句（這兩個檔沒有安裝前提的段落，HA 也沒在 v0.22.x 上實測；要補另開文件 PR）；trigger 會把停用的排程改回啟用寫在 H2 的
   CHANGELOG 句子裡（Hermes 自己的行為，PaaS 在 Hermes Agent v0.22.5 量過），HA 沒有實測。
-- 開通那一版（Hermes 的升版 PR，把 `hermes` 加進 `MULTI_PROFILE_PRODUCTS`）要寫的 Hermes 自己的項目（HM-24，PR 合併後補 PR 號與
-  commit；HM-24 本身受開關管，下一版若還沒開通就不寫，只看第 4.2 節）。共通的開通項目（帳號選單、`X-MCP-Profile`、名額、看門狗等）照計畫
-  §7.2 由升版 PR 另寫。句子是 HM-24 筆記第 9 節的英文，最後的字由發版片定：
-
-  ```text
-  - Multiple profiles for Hermes (HM-24): besides the default profile, up to 3 more profiles, each with its own MCP URL and token, its own Hermes Gateway and Dashboard connection, its own tool policy and its own Hermes MCP child (its own port, environment and working directory).
-  - The MCP token of a profile is bound to its Hermes identity: saving another Gateway URL, Dashboard URL or Dashboard user rotates that profile's token, adding the Dashboard to a Gateway-only connection or clearing it included; both old URLs stop working at once and the panel says where to copy the new token. Changing only the Gateway API key or the Dashboard password, and the first setup, keep the token.
-  - Each profile's child logs in to the Hermes Dashboard with its own account and keeps its own session cookie (in memory, 10 minutes). Hermes limits Dashboard logins per source address (10 a minute, successful ones included), and every profile of this add-on connects from the same address: profiles pointed at one Dashboard share that limit.
-  - A `hermes_chat` turn (up to 300 s; the gateway waits up to 330 s for a tool call) holds one of its own profile's forwarding slots while it runs: 32 for the default profile, 16 for each additional one. When all of a profile's slots are busy, its next request waits 1 s and then gets JSON-RPC error -32003 with `Retry-After: 5`; other profiles are not affected. Rotating, revoking or deleting a profile ends that profile's chats in progress only.
-  ```
+- 開通那一版（Hermes 的升版 PR，把 `hermes` 加進 `MULTI_PROFILE_PRODUCTS`）才寫：Hermes 自己的 CHANGELOG 句子在 HM-24 筆記第 9 節
+  （`docs/provenance/ha-multiprofile-HM-24-20261119.md`；HM-24 審查 S-7）。HM-24 受開關管（檔頭第 2 點），還沒開通的版本不寫、也不刪這一行；
+  開通那一版寫進 CHANGELOG 之後照第 3 點刪。
 
 ### 3.4 EMQX
 
