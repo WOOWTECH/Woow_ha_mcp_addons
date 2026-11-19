@@ -313,10 +313,11 @@ async def test_each_child_is_started_on_its_own_profiles_state_and_applies_its_p
 def test_a_profile_directory_a_restore_widened_is_refused_until_its_store_tightens_it(tmp_path, log_scan):
     """The vendored policy reader takes only its own uid's 0700 directory and single-link 0600 state.json, with no link
     on the way. A Supervisor-style restore leaves directories 0755 and files 0644 (plan 8.4): the child then refuses
-    every call (HEADSCALE_POLICY_UNAVAILABLE, nothing sent). The profile's store, opened existing-only as the add-on
-    opens every additional profile before any child starts (ProfileManager; HM-07), tightens both again, and the child
-    applies the profile's policy as before. (In the add-on the entrypoint's restore repair gives every restored entry
-    back to the runtime user with these modes before the runtime starts: packaging/entrypoint.py, HM-13a.)"""
+    every call (HEADSCALE_POLICY_UNAVAILABLE, nothing sent), and so it does when only the directory or only the file is
+    wider (each check holds alone). The profile's store, opened existing-only as the add-on opens every additional
+    profile before any child starts (ProfileManager; HM-07), tightens both again, and the child applies the profile's
+    policy as before. (In the add-on the entrypoint's restore repair gives every restored entry back to the runtime user
+    with these modes before the runtime starts: packaging/entrypoint.py, HM-13a.)"""
     data = tmp_path / 'data'
     with_policies(data)
     watch(log_scan, data)
@@ -327,9 +328,11 @@ def test_a_profile_directory_a_restore_widened_is_refused_until_its_store_tighte
     finally:
         store.close()
     assert as_the_child(spec) == expected_outcomes(B)
-    profile.chmod(0o755)
-    (profile / 'state.json').chmod(0o644)
-    assert as_the_child(spec) == [['HEADSCALE_POLICY_UNAVAILABLE', []]] * len(CALLS)
+    for directory_mode, file_mode in ((0o755, 0o600), (0o700, 0o644), (0o755, 0o644)):  # last: what a restore leaves
+        profile.chmod(directory_mode)
+        (profile / 'state.json').chmod(file_mode)
+        refused = [['HEADSCALE_POLICY_UNAVAILABLE', []]] * len(CALLS)
+        assert as_the_child(spec) == refused, (oct(directory_mode), oct(file_mode))
     store = ProductStore(profile, PRODUCT, existing_only=True)
     try:
         store.load()
