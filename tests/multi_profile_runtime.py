@@ -244,6 +244,10 @@ async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None
         if switch:
             patch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset({product}))
         patch.setattr(profile_runtime, 'Supervisor', supervisor or NoProcessSupervisor)
+        # RealChild servers live in this test process, not in the simulated supervisor.
+        # Exercise the real HTTP transport without claiming they are supervised children.
+        if real_children:
+            patch.setattr(profile_runtime, 'ListenerGuard', lambda *args, **kwargs: None)
         patch.setattr(profile_runtime.httpx, 'AsyncClient', child_client)
         patch.setattr(run_product, 'make_ha_admin_verifier', lambda: verifier or administrator)
         patch.setattr(run_product, 'Listener', CapturedListener)

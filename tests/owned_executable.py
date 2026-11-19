@@ -102,6 +102,15 @@ def install_runner(module, config):
     def switched():
         return module is run_product and features.enabled(config['product'])  # read when called, as production does
     original_spec, original_monitor, original_apps = module.child_spec, profile.HealthMonitor, profile.make_apps
+    original_guard = profile_runtime.ListenerGuard
+
+    class PrivateGuard(original_guard):
+        def __init__(self, manager, port, *, limits):
+            assert port == endpoint.production_port
+            super().__init__(manager, endpoint.port, limits=limits)
+
+    if module is run_product:
+        profile_runtime.ListenerGuard = PrivateGuard
     def trace(operation, phase, reason=None):
         if 'trace' not in config:
             return
