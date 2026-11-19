@@ -578,6 +578,52 @@ async def test_each_profile_runs_on_its_own_catalog_and_its_copy_goes_with_it(tm
         assert (copies / C / 'nodes.db').read_bytes() == CATALOG_STAND_IN and n8n_adapter.profile_catalog(B) is None
 
 
+def test_the_n8n_profile_count_follows_the_memory_limit():
+    """PaaS apps/n8n/tests/test_profile_capacity.py (test_n8n_profile_count_tracks_container_limit; §8.8 #19): 2
+    additional n8n profiles at most, 300 MiB a child and 256 MiB reserved, so a 512 MiB limit runs none, 1 GiB one
+    additional n8n profile and 2 GiB both; the third is the product limit's (profile_limit), the second at 1 GiB the
+    memory's."""
+    assert profiles.capacity(PRODUCT).limit == 2 and profiles.capacity(PRODUCT).child_memory_mib == 300
+    assert [profiles.capacity(PRODUCT, memory).limit for memory in (512, 1024, 2048)] == [0, 1, 2]
+    small = profiles.capacity(PRODUCT, 1024)
+    assert [small.disabled_reason(position) for position in range(3)] == [None, 'memory_capacity', 'profile_limit']
+    assert small.required_memory_mib(2) == 256 + 3 * 300
+
+
+async def test_a_restore_revokes_every_n8n_profile_and_their_children_start_apart(tmp_path, log_scan):
+    """PaaS test_restore_guard_n8n_integration (two n8n profiles restored): a restore of an add-on with n8n profile data
+    (the entrypoint's marker) revokes every profile's token, the default profile's included (DQ-03 (b) A2; HM-13b), and
+    gives each a new child token; every child then starts again on its own new child token and, for an additional
+    profile, its own catalog copy and HOME; no token from before the restore is served."""
+    data = setup_profiles(tmp_path)
+    before = {profile_id: stored(data if profile_id == 'default' else profiles.Layout(data).profile(profile_id))
+              for profile_id in ('default', B, C)}
+    watch(log_scan, data)
+    os.close(os.open(data / profiles.RESTORE_MARKER_NAME, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600))
+    children = children_of(data)
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        manager = runtime.manager
+        homes, catalogs = set(), set()
+        for profile_id in ('default', B, C):
+            now = stored(runtime.directory(profile_id))
+            assert now['token'] is None and now['child_token'] != before[profile_id]['child_token'], profile_id
+            spec = manager.get(profile_id).runtime.supervisor.spec
+            assert spec.env['AUTH_TOKEN'] == now['child_token'], profile_id
+            homes.add(spec.env['HOME'])
+            catalogs.add(spec.env.get('NODE_DB_PATH'))
+        assert len(homes) == 3 and len(catalogs) == 3  # the default profile's catalog: None (the harness skips it)
+        async with runtime.mcp() as client:
+            for profile_id in ('default', B, C):
+                token = before[profile_id]['token']
+                assert answer(await client.post('/mcp', headers=bearer(token), json=initialize_message())) == (
+                    BEARER_REQUIRED)
+                assert answer(await client.post(f'/private_{token}/mcp', headers=ACCEPT,
+                                                json=initialize_message())) == NOT_FOUND
+    assert not (data / profiles.RESTORE_MARKER_NAME).exists()
+
+
 # ---- UC-01: the real child leaves its HOME empty ----
 
 async def test_the_real_child_of_an_additional_profile_leaves_its_home_empty(tmp_path, log_scan, monkeypatch):
