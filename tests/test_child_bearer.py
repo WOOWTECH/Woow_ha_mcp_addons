@@ -34,6 +34,7 @@ import pytest
 
 from batch2_owned_port import OwnershipError, owned_listener
 from log_scan import TOKEN_WINDOW, log_scan  # noqa: F401  (fixture)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch these tests pin)
 from mcp_admin_core.diagnostics import ChildLogs
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.health import HealthMonitor, protocol_reply
@@ -42,9 +43,8 @@ import n8n_adapter
 from n8n_adapter import child_spec as n8n_spec
 from owned_runtime import Endpoint
 from test_real_products import backend, connection
-from product_switch import switched_off  # noqa: F401  (fixture: the test's product pinned off, HM-26)
 
-pytestmark = pytest.mark.usefixtures('log_scan')  # every new test runs under the HM-01 log scan
+pytestmark = pytest.mark.usefixtures('log_scan', 'switched_off')  # every new test runs under the HM-01 log scan
 ROOT = Path(__file__).resolve().parents[1]
 ENV = 'WOOW_MCP_CHILD_TOKEN'
 REFUSED = 'child bearer: WOOW_MCP_CHILD_TOKEN is missing or not a child token'  # session_idle.REFUSED, fixed
@@ -169,7 +169,6 @@ class RawLogs(ChildLogs):
 
 # ---- child_spec: who gets the bearer ----
 
-@pytest.mark.usefixtures('switched_off')  # HM-26: switched off whatever the repository's switch says
 @pytest.mark.parametrize('product', ('n8n', *PRODUCTS))
 def test_child_spec_gives_the_seven_python_children_their_child_token(tmp_path, log_scan, monkeypatch, product):
     # NODE_DB_PATH comes from a catalog copy prepare_catalog() made earlier in the same process (apps/n8n/run.py at

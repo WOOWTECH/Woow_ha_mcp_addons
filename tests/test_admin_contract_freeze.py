@@ -35,7 +35,7 @@ import pytest
 
 from admin_write_headers import reviewed_headers
 from log_scan import log_scan  # noqa: F401  (fixture)
-from product_switch import switched_off  # noqa: F401  (fixture: the test's product pinned off, HM-26)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch these tests pin)
 from mcp_admin_core import owner_defaults
 from mcp_admin_core.backend_edit import FIELDS
 from mcp_admin_core.capabilities import ManagementOptions
@@ -47,7 +47,9 @@ from test_single_profile_golden import (ADMIN, CONNECTIONS, GENUINE_CLIENT, INGR
                                         NoProcessSupervisor, answer, compact, configure, production_runtime,
                                         secrets_of, settle, stored)
 
-pytestmark = pytest.mark.usefixtures('log_scan')  # every new test runs under the HM-01 log scan
+# HM-23: HM-01 pins the add-on with every product switched off, whatever the repository switches on
+# (tests/switch_modes.py); tests/test_router_passthrough.py runs these tests again switched on.
+pytestmark = pytest.mark.usefixtures('log_scan', 'switched_off')  # every new test runs under the HM-01 log scan
 FIXTURES = Path(__file__).parent / 'fixtures/owner_defaults'
 # ui.SecurityHeaders: on every management answer (bb48449).
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; "
@@ -101,7 +103,6 @@ def compare(failures, label, response, expected):
                         f'{expected[2][:120]!r}')
 
 
-@pytest.mark.usefixtures('switched_off')  # HM-26: switched off whatever the repository's switch says
 @pytest.mark.parametrize('product', PRODUCTS)
 async def test_management_answer_shapes(tmp_path, log_scan, product):
     data = tmp_path / 'data'
@@ -184,7 +185,6 @@ async def test_management_answer_shapes(tmp_path, log_scan, product):
     assert not failures, f'{product}: {len(failures)} management answer(s) changed:\n' + '\n'.join(failures)
 
 
-@pytest.mark.usefixtures('switched_off')  # HM-26: switched off whatever the repository's switch says
 @pytest.mark.parametrize('product', PRODUCTS)
 async def test_builtin_only_answer_shapes(tmp_path, log_scan, product):
     """Shape E without a backend check, child restart or diagnostics hook, and with a fixed backend."""

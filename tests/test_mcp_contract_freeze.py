@@ -38,11 +38,13 @@ import pytest
 
 from admin_write_headers import reviewed_headers
 from log_scan import log_scan  # noqa: F401  (fixture)
-from product_switch import switched_off  # noqa: F401  (fixture: the test's product pinned off, HM-26)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch these tests pin)
 from test_single_profile_golden import (ADMIN, CHILD_HEADERS, PRODUCTS, configure, initialize_body, initialize_message,
                                         production_runtime, settle, stored)
 
-pytestmark = pytest.mark.usefixtures('log_scan')  # every new test runs under the HM-01 log scan
+# HM-23: HM-01 pins the add-on with every product switched off, whatever the repository switches on
+# (tests/switch_modes.py); tests/test_router_passthrough.py runs these tests again switched on.
+pytestmark = pytest.mark.usefixtures('log_scan', 'switched_off')  # every new test runs under the HM-01 log scan
 CASES = Path(__file__).with_name('contract') / 'profiles_v1_cases.json'
 BODIES = {
     'initialize': json.dumps(initialize_message()).encode(),
@@ -214,7 +216,6 @@ def test_cases_file_is_well_formed():
         assert set(response) <= {'status', 'headers', 'absent', 'body', 'meaning'}
 
 
-@pytest.mark.usefixtures('switched_off')  # HM-26: switched off whatever the repository's switch says
 @pytest.mark.parametrize('product', PRODUCTS)
 async def test_mcp_contract_freeze(tmp_path, log_scan, product):
     document = contract()

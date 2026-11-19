@@ -33,7 +33,7 @@ import pytest
 
 from admin_write_headers import reviewed_headers
 from log_scan import log_scan  # noqa: F401  (fixture)
-from product_switch import switched_off  # noqa: F401  (fixture: the test's product pinned off, HM-26)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch a test pins)
 from mcp_admin_core import features, operations, profile_admin, profiles, restore_detect as rd, restore_lock
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.products import ProductStore
@@ -287,9 +287,9 @@ def comparable(body):
     return found
 
 
-@pytest.mark.usefixtures('switched_off')  # HM-26: switched off whatever the repository's switch says
 @pytest.mark.parametrize('product', GOLDEN_PRODUCTS)
-async def test_after_a_single_profile_restore_the_bootstrap_only_adds_the_notice(tmp_path, log_scan, product):
+async def test_after_a_single_profile_restore_the_bootstrap_only_adds_the_notice(tmp_path, log_scan, product,
+                                                                                 switched_off):
     """The production runtime of every product, switched off: the same data restored or not. Restored, the bootstrap
     has exactly one key more, restore_notice ({"at"}), and every other key the same value; the token is kept (both
     connection paths serve it). The same start without a restore: today's keys (HM-01's golden regression)."""

@@ -201,15 +201,14 @@ CLOSE_SECONDS = 30
 async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None, real_children=False,
                                 default_port=None, launch_extras=True, switch=True, children=None, resources=None,
                                 stagger=None, verifier=None, may_stop=False):
-    """run_product.run of *product* on *data* with the switch on (switch=False: off, whatever the repository says), the
-    outside replaced as production_runtime replaces it. children: a Children for MockTransport (left out: the default
-    profile's golden MockChild on 3000, nobody else's); real_children:
-    no MockTransport, the runtime's clients reach real loopback servers (default_port: the default profile's child
-    port then). launch_extras: wait until the manager started every additional profile's child (start_all) once the
-    listeners serve. resources: a stand-in for the resource module (the file limit). stagger: STAGGER_SECONDS for the
-    test (left out: 0.05). verifier: the HA administrator check (HM-10; left out: administrator below). may_stop
-    (HM-30): the runtime may end by itself while the test runs (the test reads Runtime.task); otherwise that fails the
-    test."""
+    """run_product.run of *product* on *data* with the switch on (switch=False: every product off, HM-23), the
+    outside replaced as production_runtime replaces it. children: a Children for MockTransport (left out: the
+    default profile's golden MockChild on 3000, nobody else's); real_children: no MockTransport, the runtime's
+    clients reach real loopback servers (default_port: the default profile's child port then). launch_extras: wait
+    until the manager started every additional profile's child (start_all) once the listeners serve. resources: a
+    stand-in for the resource module (the file limit). stagger: STAGGER_SECONDS for the test (left out: 0.05).
+    verifier: the HA administrator check (HM-10; left out: administrator below). may_stop (HM-30): the runtime may
+    end by itself while the test runs (the test reads Runtime.task); otherwise that fails the test."""
     if children is None:
         children = Children()
         children.add(3000, MockChild(product, data))
@@ -240,9 +239,8 @@ async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None
         return user == ADMIN['X-Remote-User-Id']
 
     with pytest.MonkeyPatch.context() as patch:
-        # switch=False pins the product off (HM-26: the repository's switch may name it once its release did)
-        patch.setattr(features, 'MULTI_PROFILE_PRODUCTS',
-                      frozenset({product}) if switch else features.MULTI_PROFILE_PRODUCTS - {product})
+        # HM-23: switch=False is every product switched off, whatever the repository switches on (tests/switch_modes.py)
+        patch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset({product}) if switch else frozenset())
         patch.setattr(profile_runtime, 'Supervisor', supervisor or NoProcessSupervisor)
         patch.setattr(profile_runtime.httpx, 'AsyncClient', child_client)
         patch.setattr(run_product, 'make_ha_admin_verifier', lambda: verifier or administrator)

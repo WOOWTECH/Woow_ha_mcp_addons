@@ -53,13 +53,15 @@ import pytest
 
 import run as n8n_run
 from log_scan import log_scan  # noqa: F401  (fixture)
-from product_switch import switched_off  # noqa: F401  (fixture: the test's product pinned off, HM-26)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch these tests pin)
 from mcp_admin_core import VERSION, features, profile_runtime, profiles, run_product, version_for_product
 from mcp_admin_core.lifecycle import Supervisor
 from mcp_admin_core.products import INSTRUCTIONS, PROBES, ProductStore, health_probe
 from mcp_admin_core.surface import listing
 
-pytestmark = pytest.mark.usefixtures('log_scan')  # every new test runs under the HM-01 log scan
+# HM-23: HM-01 pins the add-on with every product switched off, whatever the repository switches on
+# (tests/switch_modes.py); tests/test_router_passthrough.py runs these tests again switched on.
+pytestmark = pytest.mark.usefixtures('log_scan', 'switched_off')  # every new test runs under the HM-01 log scan
 ROOT = Path(__file__).resolve().parents[1]
 PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud', 'headscale')
 MODES = ('fresh', 'configured')
@@ -475,7 +477,6 @@ def test_every_shipped_product_is_covered():
     assert sorted(PRODUCTS) == sorted(json.loads((ROOT / 'packaging/inputs.json').read_text())['products'])
 
 
-@pytest.mark.usefixtures('switched_off')  # HM-26: switched off whatever the repository's switch says
 @pytest.mark.parametrize('mode', MODES)
 @pytest.mark.parametrize('product', PRODUCTS)
 async def test_default_profile_golden(tmp_path, log_scan, product, mode):

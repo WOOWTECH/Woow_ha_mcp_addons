@@ -405,10 +405,9 @@ class RestoreStageTests(unittest.TestCase):
     def setUp(self):
         self.data = self.fixture()
         self.os = Owners()
-        # HM-26: the probe's app (Headscale) as a release that does not switch it on, whatever the repository's switch
-        # says; a test that needs it on switches it on itself.
-        off = patch.object(probe.features, 'MULTI_PROFILE_PRODUCTS', features.MULTI_PROFILE_PRODUCTS - {probe.APP})
-        for patcher in (patch.object(probe, 'DATA', self.data), patch.object(probe, 'os', self.os), off):
+        # HM-26: the probe's app (Headscale) as a release that does not switch it on: every product off, whatever the
+        # repository switches on (tests/switch_modes.py's rule); a test that needs it on switches it on itself.
+        for patcher in (patch.object(probe, 'DATA', self.data), patch.object(probe, 'os', self.os), switched()):
             patcher.start()
             self.addCleanup(patcher.stop)
 
