@@ -21,7 +21,6 @@
   guard): the production runtime's start of these bytes switched on adds only those two besides the child's directory.
 """
 import ast
-import contextlib
 import hashlib
 import json
 import os
@@ -254,8 +253,9 @@ async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_sc
     # replaced (tests/test_single_profile_golden.py: production_runtime; switched on, tests/multi_profile_runtime.py:
     # the same with the product's switch on). HM-13b runs the restore check at every start (the boot guard): switched
     # off nothing new appears; switched on, the only new entries are the sentinel and its record (HM-13a pins the check
-    # itself: test_the_restore_check_on_a_state_bb48449_wrote_adds_only_the_sentinel). n8n has no profiles until HM-25,
-    # but its guard reads the switch as well. Every slice keeps it passing.
+    # itself: test_the_restore_check_on_a_state_bb48449_wrote_adds_only_the_sentinel). HM-25: n8n's runtime is
+    # run_product's, switched on its ProfileManager (multi_profile_runtime) as every other product's. Every slice keeps
+    # it passing.
     raw = (ZERO_REWRITE / f'{product}.json').read_bytes()
     state = ProductState.model_validate_json(raw)
     assert state.product == product and state.configured and state.token_history
@@ -264,8 +264,6 @@ async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_sc
     before = start_facts(data)
     if not switched_on:
         running = production_runtime(product, data)
-    elif product == 'n8n':
-        running = n8n_switched_on(data)
     else:
         running = multi_profile_runtime(product, data)
     async with running as runtime:
@@ -280,14 +278,6 @@ async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_sc
         expected |= {profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME}
     assert set(after) - set(before) == expected
     assert not profiles.has_profile_data(data)
-
-
-@contextlib.asynccontextmanager
-async def n8n_switched_on(data):
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset({'n8n'}))
-        async with production_runtime('n8n', data) as runtime:
-            yield runtime
 
 
 @pytest.mark.parametrize('product', GOLDEN_PRODUCTS)

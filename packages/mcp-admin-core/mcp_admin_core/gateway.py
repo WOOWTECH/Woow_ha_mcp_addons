@@ -45,7 +45,7 @@ from .operations import OperationJournal, KINDS as OPERATION_KINDS, RESULTS as O
 from .reply_worker import WorkerStopped, breathe, encoded
 # HM-05 (contract 1.1): a profile's id, the default profile's or 24 lowercase hexadecimal characters; HM-08: the one
 # grammar, profiles.PROFILE_ID.
-from .profiles import PROFILE_ID, log_id
+from .profiles import PROFILE_ID, documentation_child, log_id
 
 logger = logging.getLogger(__name__)
 # HM-12 (DQ-40 ⑨; contract 4.1): a switched-on product's backend/patch that moves a URL to another origin without the
@@ -1027,7 +1027,14 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
       report-only a value the list does not hold writes one decision=would_deny line), raises BadRequest(403) (enforce:
       a value the list does not hold; one decision=deny line) or ConfigError (an unusable policy file: 503 state
       unavailable). No CORS header is ever added. Left out: the secret path takes any Origin, as before. The Bearer path
-      is not its: any Origin there is 403 as before."""
+      is not its: any Origin there is 403 as before.
+
+    HM-25 (multi-profile plan 9 n8n row; DQ-22; contract section 9 #28 and HM-25's rows): with listing, a tools/call
+    the gateway answers itself (no child up) of a profile without a backend is refused as unconfigured (-32603 Backend
+    not configured) for every tool when the profile's child runs only with a backend (profiles.documentation_child: an
+    additional n8n profile, whose id the profile echo gives; every other product's tools require one anyway), the seven
+    documentation tools too: never the "try again shortly" of a child that is not up. n8n's default profile (no
+    profile_view, or its echo's id 'default') keeps its documentation child's answers, as before."""
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
@@ -1078,6 +1085,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     if review_required is not None and not callable(review_required):
         raise ValueError("invalid review gate")
     n8n_request_bounds = getattr(store, "product", None) == "n8n"
+    # HM-25 (DQ-22): which profile this is, for whether its child serves documentation tools without a backend
+    served_profile = "default" if profile_view is None else profile_echo(profile_view())["id"]
     # HM-31: the add-on's request body budget (this profile's share) and the single-request ceiling it is charged up to
     budget_share = request_budget.own_share(getattr(store, "product", None)) if body_budget is None else body_budget
     body_cap = N8N_MAX_REQUEST if n8n_request_bounds else MAX_REQUEST
@@ -2077,7 +2086,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 if method == "tools/list":
                     return listed_reply(message["id"], state)
                 name = message["params"]["name"]  # tools/call: authorize allows nothing else here
-                if not configured and tools[name].requires_backend:
+                if not configured and (tools[name].requires_backend or not documentation_child(
+                        getattr(state, "product", "n8n"), served_profile)):
+                    # HM-25 (DQ-22): no backend and no child that runs without one: every tool is unconfigured
                     return tool_refusal(message["id"], ToolCallRefused("backend_not_configured", name))
                 reason = (available["reason"] if available["backend"] == "unreachable" and available["reason"] else
                           "MCP_SERVER_NOT_READY: the add-on's MCP server is " + available["child"] + "; try again shortly")

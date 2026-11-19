@@ -3,130 +3,37 @@
 Run with PYTHONPATH=packages/mcp-admin-core:apps/n8n .venv/bin/python apps/n8n/run.py
 Deployment options are listener addresses/ports and the dedicated state directory,
 never backend credentials, tool policy, tokens or arbitrary child commands.
+
+HM-25 (multi-profile plan 9 n8n row, 12.3 HM-25; unreleased): n8n's runtime is run_product's (run_product.run with
+the n8n adapter: n8n_adapter's tools and child spec, the default profile's catalog copy before the profile's runtime is
+made, an additional profile's own copy before its child starts, the copy removed with the profile). Switched off it
+serves the default profile's lone ProfileRuntime, as every other product, answer for answer what this file built
+itself before (HM-01's golden regression); switched on (only n8n's upgrade PR switches it on) the ProfileManager.
 """
 import argparse
 import asyncio
-from contextlib import contextmanager
 from pathlib import Path
-import signal
+from types import SimpleNamespace
 
-import httpx
-import uvicorn
-
-from mcp_admin_core import features, redact, restore_lock
+from mcp_admin_core import run_product
 from mcp_admin_core.config import ConfigError
-from mcp_admin_core.configuration import ConfigurationState
-from mcp_admin_core.capabilities import ManagementOptions
-from mcp_admin_core.products import ProductStore
-from mcp_admin_core.gateway import make_apps
-from mcp_admin_core.ha_role import make_ha_admin_verifier
-from mcp_admin_core.health import HealthMonitor
-from mcp_admin_core.lifecycle import CHILD_PORT, Supervisor, child_url
-from mcp_admin_core.surface import listing
-from n8n_adapter import TOOLS, child_spec, prepare_catalog
+from mcp_admin_core.lifecycle import CHILD_PORT
+from n8n_adapter import TOOLS, child_spec, prepare_catalog, prepare_child, remove_profile_catalog
 
 
-class Listener(uvicorn.Server):
-    @contextmanager
-    def capture_signals(self):
-        # One top-level signal owner shuts down BOTH listeners and the child group.
-        yield
+def before_start():
+    # Made once when the management process starts (n8n_adapter: the private writable copy of the node catalog).
+    if prepare_catalog() is None:  # unreleased (0.4.12 line): the child still starts; only the version history cannot be written
+        print('n8n: no writable catalog copy; workflow version history is unavailable', flush=True)
 
 
 async def run(args, *, child_port=CHILD_PORT):
     # HM-04: one port for the child's spec (PORT), the health monitor, the gateway and its capability probe. main()
     # runs the default profile's child on CHILD_PORT; an extra profile's runtime (multi-profile plan 5.4) passes its own.
-    url = child_url(child_port)
-    # Owner decision 2026-10-27: a legacy state is switched to the all-on defaults once, before anything starts
-    # (no upgrade review stage); a failure changes nothing and stops the runtime (ConfigError).
-    from mcp_admin_core.owner_defaults import apply_legacy_upgrade
-    apply_legacy_upgrade(args.data, 'n8n')
-    store = ProductStore(args.data, 'n8n')
-    try:
-        # HM-13b (multi-profile plan 8.4; not gated): the boot guard before the child and the listeners (a restore, an
-        # unfinished "revoke all", dormant profiles); ConfigError: nothing is served, the next start runs it again.
-        guarded = restore_lock.guard(store, 'n8n', enabled=features.enabled('n8n'))
-        # HM-13c (DQ-03 (b); not gated): the restore notice for the panel until the token changes; none: as before.
-        found = restore_lock.read_notice(store.directory)
-        notice = None if found is None else restore_lock.Notice(store.directory, found)
-    except BaseException:
-        store.close()
-        raise
-    if prepare_catalog() is None:  # unreleased (0.4.12 line): the child still starts; only the version history cannot be written
-        print('n8n: no writable catalog copy; workflow version history is unavailable', flush=True)
-    manager = Supervisor(None)
-    stop = asyncio.Event()
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, stop.set)
-    tasks = []
-    servers = []
-    try:
-        async with httpx.AsyncClient(trust_env=False, follow_redirects=False,
-            timeout=httpx.Timeout(10, connect=3), limits=httpx.Limits(max_connections=40)) as child:
-            health = HealthMonitor(store, manager, child, child_url=url)
-            configuration = ConfigurationState(store, manager, health)
-            async def backend_changed(state):
-                configuration.begin(state)
-                health.backend = "unknown"
-                try:
-                    await manager.stop()
-                    manager.spec = child_spec(state, store.directory, port=child_port)
-                    await manager.start()
-                except Exception:
-                    configuration.failed('child_start_failed')
-                    raise
-            admin, mcp = make_apps(store, TOOLS, child, child_url=url, health=health.snapshot,
-                                   backend_changed=backend_changed, configuration=configuration,
-                                   management=ManagementOptions(kind="ha-addon", authority="ha-admin"),
-                                   backend_check=getattr(health, "test_saved", None), restart_child=backend_changed, diagnostics=getattr(manager, "diagnostics", None),
-                                   verify_admin=make_ha_admin_verifier(),
-                                   server_name="woow-mcp-n8n",
-                                   # 0.2.2: the full list and clean refusals without a backend or a running child
-                                   listing=listing("n8n"), availability=health.availability,
-                                   # HM-13b: profile data on disk while n8n is not switched on: its number
-                                   dormant_profiles=guarded.dormant,
-                                   restore_notice=notice)
-            servers = [Listener(uvicorn.Config(app, host=args.host, port=port,
-                proxy_headers=False, access_log=False, log_level="warning", server_header=False,
-                lifespan="off",  # this function, not ASGI lifespan, owns runtime resources
-                limit_concurrency=64, timeout_keep_alive=5)) for app, port in
-                ((admin, args.admin_port), (mcp, args.mcp_port))]
-            # 0.1.12: the token may be in a request path (/private_<token>/mcp): scrub every log record.
-            redact.install()
-            redact.guard_handlers(*redact.UVICORN_LOGGERS)
-            try:
-                await backend_changed(store.load())
-            except Exception:
-                # A launch failure leaves management available for diagnosis/retry.
-                pass
-            monitor_task = asyncio.create_task(health.run())
-            tasks = [asyncio.create_task(server.serve()) for server in servers]
-            stop_task = asyncio.create_task(stop.wait())
-            try:
-                done, _ = await asyncio.wait([*tasks, monitor_task, stop_task], return_when=asyncio.FIRST_COMPLETED)
-                if monitor_task in done or any(task in done for task in tasks):
-                    # A monitor/listener ending is NOT an orderly signal shutdown.
-                    # Never propagate its possibly credential-bearing exception text.
-                    raise RuntimeError("runtime component stopped") from None
-            finally:
-                for server in servers:
-                    server.should_exit = True
-                monitor_task.cancel()
-                stop_task.cancel()
-                await asyncio.gather(monitor_task, stop_task, return_exceptions=True)
-                try:
-                    async with asyncio.timeout(5):
-                        await asyncio.gather(*tasks)
-                except TimeoutError:
-                    for task in tasks:
-                        task.cancel()
-                    await asyncio.gather(*tasks, return_exceptions=True)
-                await manager.stop()
-    finally:
-        store.close()
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.remove_signal_handler(sig)
+    # The adapter's names are looked up here, at each start (tests replace them in this module).
+    adapter = run_product.ProductAdapter(TOOLS, child_spec, before_start=before_start, prepare_child=prepare_child,
+                                         profile_removed=remove_profile_catalog)
+    await run_product.run(SimpleNamespace(**{**vars(args), 'product': 'n8n'}), child_port=child_port, adapter=adapter)
 
 
 def main():

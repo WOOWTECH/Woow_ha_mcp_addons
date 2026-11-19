@@ -35,17 +35,19 @@ async def test_runtime_failure_is_sanitized_and_nonzero(tmp_path, fault):
     if fault == "monitor":
         code = '''
 import run
+from mcp_admin_core.health import HealthMonitor  # HM-25: n8n's runtime is run_product's (profile_runtime makes it)
 async def fail(self):
     raise RuntimeError('DUMMY-private-exception')
-run.HealthMonitor.run = fail
+HealthMonitor.run = fail
 run.main()
 '''
     if fault == "monitor_return":
         code = '''
 import run
+from mcp_admin_core.health import HealthMonitor
 async def finish(self):
     return
-run.HealthMonitor.run = finish
+HealthMonitor.run = finish
 run.main()
 '''
     admin_port, mcp_port = free_port(), free_port()

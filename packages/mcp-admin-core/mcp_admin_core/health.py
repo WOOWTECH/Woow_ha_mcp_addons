@@ -17,6 +17,9 @@ product's ProfileManager gives every profile's monitor its options; left out, th
   test_saved (the panel's backend test) still answers with what it found.
 - own_child_only: nothing is sent while the profile's own child is not running (blocked, backing off, failed, stopped):
   the port may be another program's (T-15).
+- profile_id (HM-25, DQ-22): the profile whose child this monitor checks; an additional n8n profile without a backend
+  runs no child (profiles.documentation_child), so it is unconfigured and nothing is checked, as for every other
+  product's profile without one. Left out (None): the default profile, as before.
 
 Every product, switched on or off (HM-09 follow-up, 2026-11-16: PR #103's checks; the owner's decision at 13:4x;
 contract 1.2; tests/test_monitor_cancel.py): a monitor stops when it is asked to, also when the HTTP stack swallowed the
@@ -35,6 +38,7 @@ import httpx
 from . import redact
 from .config import ConfigError, strict_json
 from .lifecycle import CHILD_URL
+from .profiles import documentation_child
 
 SESSION_ID = re.compile(r"[\x21-\x7e]{1,256}")  # as the gateway accepts from clients
 REASON_LIMIT = 1000  # characters of a failed health check's own text kept as the reason
@@ -113,8 +117,9 @@ async def protocol_reply(response: httpx.Response, expected_id):
 
 class HealthMonitor:
     def __init__(self, store, process, client, child_url=CHILD_URL, *, first_check_after=0, tolerance=1,
-                 auth_backoff=None, own_child_only=False, log=None):
+                 auth_backoff=None, own_child_only=False, log=None, profile_id=None):
         self.store, self.process, self.client, self.child_url = store, process, client, child_url
+        self.profile_id = profile_id  # HM-25: None, the default profile (see the module docstring)
         self.backend = "unconfigured"
         self.management = "alive"
         # 0.2.2: the outcome of the last COMPLETED check (child start count, child answered, backend, reason). snapshot()
@@ -198,7 +203,7 @@ class HealthMonitor:
         configured = getattr(state, 'configured', bool(state.backend_url and state.backend_key))
         self.backend = "unreachable" if configured else "unconfigured"
         product = getattr(state, 'product', 'n8n')
-        if product != 'n8n' and not configured:
+        if not configured and not documentation_child(product, self.profile_id):
             self.settled = (generation, False, self.backend, None)
             self.auth_refusals = self.refusals = 0
             return self.settled
