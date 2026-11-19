@@ -19,11 +19,12 @@
   `HEADSCALE_INVALID_CREDENTIAL` 只出現在 client 拒絕送出格式錯的 key 時（存檔就擋了，到不了）。新 `health.refused_login` 讀探測回覆，
   只給帶 `auth_backoff` 的監看用（開通才有）；記下的 reason 與任何回應都不變（第 3.2 節）。
 - **開關一開就會紅的既有測試**：把 `headscale` 暫時加進開關（只在本機、沒有 commit）跑全套：pytest 23 案紅（另 1 案是本機少 n8n 的
-  原生模組，和開關無關）、packaging unittest 2 案紅。原因都一樣：測試寫的是沒開通的 add-on，卻靠 repo 的開關是空的。新
-  `tests/product_switch.py` 讓這些測試把自己的產品釘成沒開通（fixture、子程序前置碼、`multi_profile_runtime(switch=False)`），
-  HM-01 黃金回歸與兩個契約凍結的期望值一字不改；改之後同樣暫時開通，53 個相關測試檔只剩 3 案紅：兩案要 root（本機本來就紅），
-  一案是釘開關值的 `test_multi_profile_is_switched_off_for_every_product`（交升版 PR 改）；packaging unittest 全過（第 3.4、7 節）。
-  所有產品通用：其他產品片同時在準備，會撞到同一批測試（第 14 節）。
+  原生模組，和開關無關）、packaging unittest 2 案紅。原因都一樣：測試寫的是沒開通的 add-on，卻靠 repo 的開關是空的。這些測試改成
+  自己指定開關模式，HM-01 黃金回歸與兩個契約凍結的期望值一字不改。原本用本片自己做的 `tests/product_switch.py`；依審查 MF-2 改用
+  HM-23 的 `tests/switch_modes.py`（逐位元照抄，兩片都改的檔逐行相同；第 3.4、18 節）。改之後同樣暫時開通，相關測試檔只剩釘開關值的
+  `test_multi_profile_is_switched_off_for_every_product`（交升版 PR 改）與要 root 的案例紅；packaging unittest 全過（第 3.4、7、18 節）。
+- **審查（第 18 節）**：正確性、安全面兩份獨立審查都是修正後通過。必修（正確性 MF-1 多台、MF-2 測試工具；安全 M-1 的四處文字）全做；
+  建議修除了安全 S-1（子程式核對 child token，照審查建議另開一片）都做。
 - **先紅後綠**：新測試先 commit（`fbbc287`，2 案紅：`refused_login` 不存在；其餘 12 案照前面各片的實作就綠），`7d6e438` 修好；面板測試
   先 commit（`95bf0b5`，node 整檔紅、Playwright 1 案紅），`7c82b17` 修好；`7e9e1d9` 補還原守門那案（HM-13b 已做好，一加就綠）。
   開關開時的既有測試見上一點。突變 11 個：10 個第一次就抓到；M10（子程式不檢查帳號目錄 0700）第一次活下來，
@@ -34,7 +35,9 @@
 - **要使用者決定的事**：DQ-26（Headscale 形態）還是待定，本片照計畫建議做（兩種形態都支援、建議每帳號不同 key、不強制），使用者確認或改
   決定都要在升版 PR 前（`decisions.md`）。其餘第 15 節。
 - **本機**：53 個相關檔的 pytest 兩種模式（開關關 2,032 過、暫時開通 2,031 過；紅的只有要 root 的 2 案，與開通時交升版 PR 的 1 案）、
-  新檔 15 案、packaging unittest 兩種模式、`validate.py`、node 119 案、Playwright 167 案全過。兩個預檢 OK（第 9 節）。
+  新檔 15 案、packaging unittest 兩種模式、`validate.py`、node 119 案、Playwright 167 案全過。兩個預檢 OK（第 9 節）。審查後重跑：
+  58 個相關檔兩種模式（開關關 2,174 過；暫時開通除了副本才有的錯，只剩要 root 的 1 案與交升版 PR 的 1 案）、packaging 兩種模式、
+  node 119 案、Playwright 167 案、兩個預檢（第 18.4 節）。
 
 ## 1. 範圍與基準
 
@@ -53,9 +56,9 @@
 |---|---|---|
 | 程式 | `packages/mcp-admin-core/mcp_admin_core/health.py` | `refused_login(reply)`；`HealthMonitor` 只在有 `auth_backoff` 時把它算進認證退避（第 3.2 節） |
 | 面板 | `packages/mcp-admin-ui/src/contracts.js`、`app.js` | `connectionHelpFor(product, scoped)`；開通時 Headscale 的後端設定說明換成每個帳號的版本（第 3.3 節） |
-| 新測試 | `tests/test_headscale_multi_profile.py` | 15 案（第 6 節） |
-| 測試工具 | `tests/product_switch.py`（新）、`tests/multi_profile_runtime.py` | 把測試的產品釘成沒開通；`multi_profile_runtime(switch=False)` 照這樣做（第 3.4 節） |
-| 既有測試 | 15 個 `tests/test_*.py`、`packaging/test_container_probe.py` | 開關關的測試釘自己的產品（第 3.4 節）；`tests/test_upgrade_hooks.py` 的真 runtime 測試加 Headscale |
+| 新測試 | `tests/test_headscale_multi_profile.py` | 15 案（第 6 節；審查後四個帳號、兩台伺服器，第 18 節） |
+| 測試工具 | `tests/switch_modes.py`（HM-23 的，逐位元照抄）、`tests/multi_profile_runtime.py` | 測試期間每個產品都關；`multi_profile_runtime(switch=False)` 照這樣做（第 3.4 節；原本的 `tests/product_switch.py` 依審查 MF-2 刪掉） |
+| 既有測試 | 15 個 `tests/test_*.py`、`packaging/test_container_probe.py` | 開關關的測試自己指定模式（第 3.4 節）；`tests/test_upgrade_hooks.py` 的真 runtime 測試加 Headscale |
 | 面板測試 | `packages/mcp-admin-ui/tests/contracts.test.mjs`、`tests/browser/backend-identity.spec.mjs` | 說明的兩種模式 |
 | 文件 | 契約、驗收矩陣、決策、威脅模型、`unreleased-changes.md`、`docs/operations/acceptance.md`、本筆記 | 第 10、11 節 |
 | 帳本 | `docs/provenance/runtime-patches.json` | `app.js`、`contracts.js` 的摘要與說明（第 9 節） |
@@ -74,14 +77,15 @@
   本片沒改這條路，只把它釘住：測試拿管理程序**真的建出來**的每個 spec（Supervisor 替身記下每次啟動的 spec），對每個帳號比路徑、
   cwd、HOME、child token、key，並確認 argv 與環境裡沒有任何別的帳號的目錄、token、child token；再用那個 spec 的直譯器與環境跑
   vendored 子程式的 `execute_tool`（伺服器在記憶體裡）：三個帳號對同一組呼叫各照自己的政策（第 6 節 `LETS_THROUGH`），被擋的不送
-  任何請求，送出的都帶自己的 key。
+  任何請求，送出的都帶自己的 key。審查後是四個帳號（D 在另一台、用自己的 key），也比伺服器網址（第 18 節）。
 - vendored `policy.py` 對帳號目錄：要本 uid 的 0700 目錄、單一連結的 0600 檔、路上沒有連結、schema 4 與鍵集合。`ProductStore(create=…)`
   建的帳號目錄就是這樣；Supervisor 式還原留下 0755／0644 時子程式每個呼叫都 `HEADSCALE_POLICY_UNAVAILABLE`（不送任何請求），帳號的 store
   以 existing-only 開啟（管理程序在任何子程式之前做）就收回 0700／0600，子程式照常。add-on 裡 entrypoint 的還原修復本來就先做這件事
   （HM-13a），測試另外證明「沒修好時是拒絕，不是放行」。
 - 真子程式（`run_product` 的 ProfileManager＋真 Supervisor，額外帳號經 HM-09 的 exec wrapper）三個帳號、一台假伺服器（綁本機私有位址，
   Headscale 子程式拒 loopback）：經 8081 時閘道先照政策擋；**直連 loopback**（拿得到 child token 的呼叫者，T-23）時子程式自己照自己帳號
-  的政策擋；別帳號的 child token 一律 401。存 B 的政策只換 B 的 PID，之後 B 的子程式照新政策放行。
+  的政策擋；別帳號的 child token 一律 401。存 B 的政策只換 B 的 PID，之後 B 的子程式照新政策放行。審查後是四個帳號、兩台假伺服器，
+  別的帳號存檔前開的 session 照常（第 18 節）。
 
 ### 3.2 Headscale 伺服器拒絕 key 時的認證退避（DQ-25；受開關管）
 
@@ -102,47 +106,45 @@
 
 - 今天 Headscale 的說明寫「這個 Add-on 只管理同一個 Headscale 執行個體」。開通後每個帳號各自連一台（DQ-26：同一台不同政策或多台），
   這句會讓人以為所有帳號都要同一台；計畫 §9 的「建議每帳號不同 key」最該出現在輸入 key 的地方。
-- `connectionHelpFor(product, scoped)`：`scoped` 是 `api.profile !== null`（面板有帳號＝開通）。開通時 Headscale 換成「填這個帳號要管理的
-  Headscale …API 金鑰是整台 Headscale 的管理權限：建議每個帳號在 Headscale 各建一把，不要共用；共用同一把金鑰的帳號之間只靠工具權限
-  分權，在 Headscale 撤銷它也會同時停掉這些帳號」；其他產品與開關關時逐字照 `connectionHelp`（node 測試逐產品比）。
+- `connectionHelpFor(product, scoped)`：`scoped` 是 `api.profile !== null`（面板有帳號＝開通）。開通時 Headscale 換成每個帳號的版本；
+  其他產品與開關關時逐字照 `connectionHelp`（node 測試逐產品比）。依安全審查 M-1，說明寫：API 金鑰是整台 Headscale 的管理權限、
+  Headscale 沒有金鑰層級的權限；同一台的帳號不論是否共用金鑰，都只靠工具權限分權；要讓帳號真的受限，就在它的工具權限頁停用
+  `headscale_api_keys` 的建立、作廢與刪除（建立會把新的整台管理金鑰交給持有權杖的人，「全部撤銷」撤不到；作廢與刪除能停掉其他帳號的
+  金鑰）；仍建議每個帳號各建一把金鑰，可以只撤銷一把（第 18 節）。
 - 不做（HM-27 交來的另一件）：面板不另外顯示「密鑰網址固定只放 `https://claude.ai`」。這條規則開關關時今天也沒在面板顯示，開通不改它；
   寫在 DOCS（`unreleased-changes.md` 第 3.8 節）。
 
-### 3.4 開關一開就會紅的既有測試（`tests/product_switch.py`）
+### 3.4 開關一開就會紅的既有測試（`tests/switch_modes.py`）
 
 - 做法：只在本機、不 commit，把 `features.py` 的 `MULTI_PROFILE_PRODUCTS` 暫時改成 `frozenset({'headscale'})`，跑 pytest 與 packaging
-  unittest（腳本與輸出在 repo 外 `scratchpad/HM-26/`，跑完一律 `git checkout` 還原）。
+  unittest（腳本與輸出在 repo 外 `scratchpad/HM-26/`；第一輪改 clone 的檔、跑完 `git checkout` 還原，第 18 節那輪改 `git archive` 出來的副本）。
 - 紅的原因都一樣：這些測試寫的是**沒開通**的 add-on（HM-01 黃金回歸、兩個契約凍結、沒開通的 runtime、子程式 spec 的快照、單帳號的真
   runtime、單帳號還原的探針檢查），卻靠 repo 的開關是空的。開關一有 headscale，Headscale 那一格就變成開通的 add-on：管理 API 沒帶
   `X-MCP-Profile` 回 400、spec 多 `WOOW_MCP_DENY_LOOPBACK`、loopback 假後端被拒、健康監看要兩次失敗、8081 是分派器……
-- 改法（測試，不動任何期望值）：
-  - `tests/product_switch.py`：`switched_off` fixture（測試的 `product` 參數那個產品，在這個測試期間從開關拿掉；別的產品照 repo）、
-    `off(product)` context manager、`preamble(product)`（子程序前置碼）。fixture 只對 pytest 自己跑的測試生效：`test_router_passthrough.py`
-    在 `switched_on(product)` 裡直接呼叫黃金回歸與兩個凍結的測試函式，照樣是開通的版本。
-  - 加 `@pytest.mark.usefixtures('switched_off')` 的（12 個檔、14 個測試函式）：`test_single_profile_golden.py::test_default_profile_golden`；
-    `test_admin_contract_freeze.py` 的 `test_management_answer_shapes`、`test_builtin_only_answer_shapes`（後者開關開時沒紅，它是同一個
-    凍結的另一半，一起釘）；`test_mcp_contract_freeze.py::test_mcp_contract_freeze`；
-    `test_child_bearer.py::test_child_spec_gives_the_seven_python_children_their_child_token`；
-    `test_child_port_param.py::test_one_port_reaches_every_child_request`；`test_origin_policy.py::test_switched_off_the_policy_does_not_exist`；
-    `test_product_boundary.py::test_config_api_typed_secret_safe_and_restart_on_rotation`；
-    `test_profile_lifecycle.py::test_switched_off_run_product_gives_the_default_profile_todays_supervisor`；`test_profile_runtime.py` 的
-    `test_run_product_serves_the_default_profiles_runtime`、`test_starting_the_default_profile_adds_no_file`；
-    `test_request_budget_gateway.py::test_every_products_runtime_reads_under_the_budget_and_the_guard`；
-    `test_restore_review.py::test_after_a_single_profile_restore_the_bootstrap_only_adds_the_notice`；
-    `test_role_lifecycle.py::test_committed_runtime_backend_transition_is_joined`。
-  - `off(product)`：`test_child_port_param.py` 的 spec 快照（參數是 case）、`test_upgrade_zero_rewrite.py` 沒開通的那一格。
-  - `preamble(product)`：`test_real_products.py` 的單帳號真 runtime、`test_upgrade_hooks.py` 的舊版（一律沒開通）與「兩邊都沒開通」。
-  - `multi_profile_runtime(switch=False)`：從「不動開關」改成「這個產品從開關拿掉」（`test_router_passthrough.py` 兩個沒開通的測試用它）。
-  - `packaging/test_container_probe.py` 的還原階段（探針的 app 是 Headscale）：`setUp` 把它從開關拿掉，要開通的案例自己再打開。
+- 第一版（`d59be1e`）用本片自己做的 `tests/product_switch.py`（只把測試自己的產品從開關拿掉）。HM-23 同時為同一件事做了
+  `tests/switch_modes.py`，fixture 同名、意思不同（每個產品都關）。審查 MF-2 要只留一份，`91f210d` 改用 HM-23 那一份：
+  - `tests/switch_modes.py` 逐位元照抄 HM-23 的 `e803d58`：`switched_off` fixture，測試期間每個產品都關，不管 repo 開了什麼；測試裡面自己
+    再開（`switched_on`、`multi_profile_runtime`、自己的 monkeypatch）照樣有效。fixture 只對 pytest 自己跑的測試生效：
+    `test_router_passthrough.py` 在 `switched_on(product)` 裡直接呼叫黃金回歸與兩個凍結的測試函式，照樣是開通的版本。
+  - 兩片都改的 15 個檔照抄 HM-23 `e803d58` 的改法，逐行相同（用 `git diff` 的增刪行逐檔比過）：`multi_profile_runtime.py`
+    （`switch=False` 是每個產品都關）、`test_single_profile_golden.py`、兩個契約凍結、`test_child_bearer.py`、`test_child_port_param.py`、
+    `test_profile_runtime.py`、`test_role_lifecycle.py`、`test_product_boundary.py`（整個模組）；`test_origin_policy.py`、
+    `test_profile_lifecycle.py`、`test_request_budget_gateway.py`、`test_restore_review.py`（單一測試加 `switched_off` 參數）；
+    `test_real_products.py`（不釘：產品開通時假後端綁私有位址、斷線多等一個健康檢查間隔，所以開通後測的是出貨的設定）。
+  - `test_upgrade_zero_rewrite.py` 只抄 HM-23 的 `switched_off_runtime` 與呼叫處；開關釘選那案不動（HM-23 改寫了它，那是 HM-23 審查 S-2 的事）。
+  - 本片獨有的兩處用同一個規則（每個產品都關）：`test_upgrade_hooks.py` 舊版子程序的前置碼（子程序讀 repo 的開關，前置碼自己設）、
+    `packaging/test_container_probe.py` 還原階段的 `setUp`（用檔裡既有的 `switched()`，要開通的案例自己再打開）。
   - `tests/test_upgrade_hooks.py` 的真 runtime 測試加 Headscale（0.5.0 升版比對會跑這兩個 hook）。
 - 沒改、交升版片：`test_upgrade_zero_rewrite.py::test_multi_profile_is_switched_off_for_every_product` 釘「開關是空的」，那是「只有升版 PR
-  能開通」的守門，升版 PR 加開關時一起改（計畫 §11.3 的逐檔清單本來就有 `features.py`）。
-- 開關空的時候（repo 今天）這些改動都是空操作：拿掉一個不在集合裡的產品，集合不變；HM-01 的期望值、兩個凍結的案例、快照一個字都沒改。
+  能開通」的守門，升版 PR 加開關時一起改（計畫 §11.3 的逐檔清單本來就有 `features.py`）。HM-23 先合併的話，這案已被它的
+  `test_a_product_is_switched_on_only_by_its_release` 取代，照 HM-23 的。
+- 開關空的時候（repo 今天）這些改動都是空操作：每個產品都關＝今天的開關；HM-01 的期望值、兩個凍結的案例、快照一個字都沒改。
 
 ### 3.5 考慮過、沒做的
 
 - 子程式用 child token 確認 state 是自己的：vendored `policy.py` 可以多比 `state.child_token == WOOW_MCP_CHILD_TOKEN`，接錯 state 時
   （同網址同 key）也會 fail closed。計畫沒要求，路徑已由測試釘住；這是改 vendored 子程式、開關關也生效的改變，列第 15 節交審查判斷。
+  安全審查 S-1 的判斷：要做，另開一小片、在 Headscale 開通前合（第 15、18 節）。
 - 照 PaaS 記 Headscale 被拒 Origin 的 deny 行：HA 今天不記，開通也照舊（契約 #9）。
 - 另做 Headscale 的方法表讓 `/api/origin-policy` 的其他方法也回 404：只把 405 變 404，不擋任何東西，還要多一條產品分支（第 4 節）。
 
@@ -156,7 +158,7 @@
 | Headscale 被拒 Origin 記 deny 行（HM-27 交來） | 照舊不記（契約 #9） | 和今天的單帳號行為一致；PaaS 的節流與呈現規則屬 HM-27 的政策檔，Headscale 沒有政策 |
 | 認證退避怎麼認 Headscale 拒絕的 key | 讀探測回覆的錯誤物件（`code`＋`http_status` 401），只給帶 `auth_backoff` 的監看 | 改 reason 文字會改開關關時看得到的文字；只讀回覆不改任何輸出 |
 | 403、500 算不算 | 不算（只有 401） | Headscale 的 API key 只有整台權限，403 不是 key 錯；500 是伺服器自己的問題，不該拉長檢查間隔 |
-| 開關一開就紅的既有測試 | 在本片改成釘自己的產品沒開通（`tests/product_switch.py`），全部產品通用 | 任務要升版 PR 只加開關與版號；釘的是測試的前提，不是期望值 |
+| 開關一開就紅的既有測試 | 在本片改成測試自己指定開關模式，全部產品通用（第一版是 `tests/product_switch.py`，審查 MF-2 後改用 HM-23 的 `tests/switch_modes.py`） | 任務要升版 PR 只加開關與版號；釘的是測試的前提，不是期望值 |
 
 ## 5. PaaS 對照
 
@@ -175,17 +177,17 @@
 
 | 案例 | 驗什麼 |
 |---|---|
-| `test_each_child_is_started_on_its_own_profiles_state_and_applies_its_policy`（兩種） | 管理程序真的建出來的每個 spec：`HEADSCALE_MCP_STATE_PATH`、cwd、HOME、child token、key 都是自己帳號的，argv 與環境沒有別的帳號的目錄、token、child token；開通時有 `WOOW_MCP_DENY_LOOPBACK`。用那個 spec 的直譯器與環境跑 vendored 子程式：三個帳號（B 與預設同 key、C 自己的 key）對同一組呼叫各照自己的政策、被擋的不送請求、送出的帶自己的 key。開關關：B、C 休眠（沒有 spec，token 撤銷） |
+| `test_each_child_is_started_on_its_own_profiles_state_and_applies_its_policy`（兩種） | 管理程序真的建出來的每個 spec：`HEADSCALE_MCP_STATE_PATH`、cwd、HOME、child token、伺服器網址、key 都是自己帳號的，argv 與環境沒有別的帳號的目錄、token、child token；開通時有 `WOOW_MCP_DENY_LOOPBACK`。用那個 spec 的直譯器與環境跑 vendored 子程式：四個帳號（B 與預設同一台同 key、C 同一台自己的 key、D 另一台自己的 key）對同一組呼叫（含 `headscale_api_keys` create）各照自己的政策、被擋的不送請求、送出的帶自己的 key 到自己的伺服器。D 的網址和別人不同，網址比對分得出拿錯的網址（審查 MF-1）。開關關：B、C、D 休眠（沒有 spec，token 撤銷） |
 | `test_a_profile_directory_a_restore_widened_is_refused_until_its_store_tightens_it` | 只放寬目錄（0755／0600）、只放寬檔案（0700／0644）、兩個都放寬（0755／0644，還原留下的）：子程式每個呼叫 `HEADSCALE_POLICY_UNAVAILABLE`、不送請求；store 以 existing-only 開過就收回 0700／0600、照常 |
-| `test_a_restore_revokes_every_profile_and_each_child_then_applies_the_backups_policy` | HM-13b 的守門對 Headscale 卷：三個帳號撤銷、child token 換新；還原紀錄有網址與政策、沒有 key 與 token；子程式照備份的政策（備份後存的政策隨還原消失） |
-| `test_real_children_keep_their_own_policy_and_key_through_8081_and_on_loopback` | 三個真 Headscale 子程式、一台假伺服器：經 8081 照政策、每個請求帶該帳號的 key；直連 loopback：別帳號的 child token 401、自己的子程式照自己的政策擋；存 B 的政策只換 B 的 PID，之後 B 照新政策 |
-| `test_each_token_opens_only_its_own_profile_on_both_connection_methods`（兩種） | 每把 token 兩種接法只開自己的子程式、別的子程式收不到；跨帳號 session 404；陌生、撤銷、輪替掉的 token：Bearer 401、密鑰網址 404、沒有子程式收到。開關關：B、C 的舊 token 是陌生 token |
+| `test_a_restore_revokes_every_profile_and_each_child_then_applies_the_backups_policy` | HM-13b 的守門對 Headscale 卷：四個帳號撤銷、child token 換新；還原紀錄有網址（D 是自己那台的）與政策、沒有 key 與 token；子程式照備份的政策（備份後存的政策隨還原消失） |
+| `test_real_children_keep_their_own_policy_and_key_through_8081_and_on_loopback` | 四個真 Headscale 子程式、兩台假伺服器：經 8081 照政策（B 的 `headscale_api_keys` create 被擋），每個呼叫只到自己帳號的那台、帶自己的 key，另一台什麼都沒收到；直連 loopback：別帳號的 child token 401、自己的子程式照自己的政策擋；存 B 的政策只換 B 的 PID，之後 B 照新政策，別的帳號存檔前開的 session 照常；第二台只收過 D 的 key，第一台沒收過 |
+| `test_each_token_opens_only_its_own_profile_on_both_connection_methods`（兩種） | 每把 token 兩種接法只開自己的子程式、別的子程式收不到；跨帳號 session 404；陌生、撤銷、輪替掉的 token：Bearer 401、密鑰網址 404、沒有子程式收到。開關關：B、C、D 的舊 token 是陌生 token |
 | `test_every_profiles_secret_url_takes_only_claude_ai_as_origin`（兩種） | 每個帳號：不帶 Origin 與剛好 `https://claude.ai` 200；8 種別的寫法與兩個 Origin 403 固定本體、子程式收不到；Bearer 帶 Origin 403；開通時 `/api/origin-policy` 是未知操作；沒有紀錄、沒有政策檔 |
-| `test_saving_one_profiles_policy_restarts_only_its_child`（兩種） | 存 B 的政策：只有 B 的子程式多啟動一次、只有 B 的工具清單變；開關關：預設帳號的子程式重啟（今天） |
+| `test_saving_one_profiles_policy_restarts_only_its_child`（兩種） | 存 B 的政策：只有 B 的子程式多啟動一次、只有 B 的工具清單變，別的帳號存檔前開的 session 用同一個 `Mcp-Session-Id` ping 仍 200（審查 SF-3）；開關關：預設帳號的子程式重啟（今天） |
 | `test_a_profiles_url_moved_to_another_origin_needs_its_api_key_again`（兩種） | 開通（B）：只改網址到別的來源 422、什麼都沒寫、沒重啟；同一來源的三種寫法不用 key；帶 key 存檔只重啟 B、token 不換；loopback 400。開關關（預設帳號）：key 跟著網址、loopback 照存（今天） |
-| `test_a_key_the_headscale_server_refuses_backs_the_profiles_checks_off`（兩種） | 真子程式對 401／403／500 的回覆；`refused_login` 只認 401；開通的監看 15→30→60，403、500、成功都歸零；開關關照舊每 15 秒；reason 兩種模式一樣 |
+| `test_a_key_the_headscale_server_refuses_backs_the_profiles_checks_off`（兩種） | 真子程式對 401／403／500 的回覆；`refused_login` 只認 401；開通的監看 15→30→60，403、500、成功都歸零；子程式沒回成就緒的那次不算（審查 N-1）；EMQX 的監看收到同一個物件不退避（審查 S-2）；開關關照舊每 15 秒；reason 兩種模式一樣 |
 
-改過的既有測試：第 3.4 節（`product_switch` 的標記、`off`、`preamble`、`multi_profile_runtime(switch=False)`、
+改過的既有測試：第 3.4 節（HM-23 `switch_modes` 的標記、子程序前置碼、`multi_profile_runtime(switch=False)`、
 `packaging/test_container_probe.py` 的還原階段）；`tests/test_upgrade_hooks.py` 的真 runtime 測試加 Headscale（舊版沒開通、新版開通或
 也沒開通；兩個 hook 只讀、照樣過）。面板：`contracts.test.mjs` 一案、`backend-identity.spec.mjs` 一案。
 
@@ -282,7 +284,7 @@
 | 檔 | 改了什麼 |
 |---|---|
 | `docs/multi-profile/contract.md` | 第 2.6 節 Headscale 那段定案；第 7 節健康監看列補 Headscale 的 401；第 9 節開頭（列號暫定）、#9、#129～#132；第 10 節一列 |
-| `docs/multi-profile/acceptance-matrix.md` | 登記表：本片的測試檔定名（新增）、`tests/product_switch.py`；T-04、T-05、T-07、T-23、T-24 補 Headscale |
+| `docs/multi-profile/acceptance-matrix.md` | 登記表：本片的測試檔定名（新增）、`tests/product_switch.py`（審查後改成 `tests/switch_modes.py`）；T-04、T-05、T-07、T-23、T-24 補 Headscale |
 | `docs/multi-profile/decisions.md` | DQ-26 列補實作狀態、最晚期限改「Headscale 升版 PR 前」；變更紀錄一列 |
 | `docs/multi-profile/threat-model.md` | 第 3 節 Headscale 一點 |
 | `docs/multi-profile/unreleased-changes.md` | 第 3.8 節：HM-26 一點、開通版 CHANGELOG 的 HS1～HS7、DOCS 段落；第 4.2 節一列 |
@@ -303,8 +305,8 @@
 
 ## 12. 威脅筆記（短；給接著做的獨立安全審查）
 
-- 資產：每個帳號的 Headscale API key（整台管理權限；Headscale 沒有 key 層級的權限）與 MCP token；工具政策是同一台、同一把 key 的帳號
-  之間唯一的分權（FM-88）。
+- 資產：每個帳號的 Headscale API key（整台管理權限；Headscale 沒有 key 層級的權限）與 MCP token；工具政策是同一台的帳號之間唯一的
+  分權，不論用幾把 key（FM-88；安全審查 M-1 改正：原本寫成「同一台、同一把 key」）。
 - 威脅與現有防線：
   1. 帳號 A 的 token 持有人想用帳號 B 的權限：8081 只看 token 選帳號（HM-08）；閘道照 A 的政策擋；A 的子程式只讀 A 的 state（本片測試釘
      住 spec 與執行期）。剩下的風險只在「子程式拿錯 state 路徑」這種程式錯誤，測試會紅（突變 M1）。
@@ -313,10 +315,11 @@
   4. 外洩的密鑰網址被別的網頁拿去用：每個帳號的密鑰網址只放 `https://claude.ai`、Bearer 帶 Origin 403（本片測試）。
   5. 還原把舊 token 帶回來：守門撤銷每個帳號、換 child token（HM-13b），還原後的權限放寬時子程式拒絕而不是放行（本片測試）。
   6. 被拒的 key 讓監看一直打 Headscale：開通後照 DQ-25 退避（本片修）；開關關照舊每 15 秒（Headscale 沒有 key 的暴力破解鎖定，影響小）。
-- 已知限制（不在本片修）：同 uid＝同一個信任邊界，被攻破的子程式讀得到每個帳號的 key（威脅模型第 1 節）；同 key 帳號之間只靠政策；
-  建議每帳號不同 key 但不強制（DQ-26）；子程式不核對 state 的 child token（第 3.5 節，交審查判斷要不要加）。
-- 請審查特別看：`health.refused_login` 只在 `auth_backoff` 時生效、不改任何輸出；`tests/product_switch.py` 只拿掉測試自己的產品、不放寬任何
-  期望值；面板說明只在 `api.profile !== null` 時換。
+- 已知限制（不在本片修）：同 uid＝同一個信任邊界，被攻破的子程式讀得到每個帳號的 key（威脅模型第 1 節）；同一台的帳號只靠政策，
+  政策要拒絕 `headscale_api_keys` 的建立、作廢、刪除才算數（安全審查 M-1，文件與面板已寫）；建議每帳號不同 key 但不強制（DQ-26）；
+  子程式不核對 state 的 child token（第 3.5 節；審查建議另開一片）。
+- 請審查特別看：`health.refused_login` 只在 `auth_backoff` 時生效、不改任何輸出；開關模式的測試工具不放寬任何期望值（第一版是
+  `tests/product_switch.py`，審查後改用 HM-23 的 `tests/switch_modes.py`）；面板說明只在 `api.profile !== null` 時換。
 
 ## 13. HAOS 實測要什麼（Headscale 升版時；本片沒碰任何主機）
 
@@ -325,7 +328,9 @@
 - QA 用的 Headscale 上 2～3 把專用、短效期的 API key（同一台：一把給預設帳號與一個額外帳號共用、一把給另一個額外帳號自己用），驗完撤銷
   （`headscale apikeys expire`），清理證明進證據（T-29）。
 - 寫入只對一個專用的測試使用者（例如 `hm26-test`）與它的 preauth key；不碰正式的使用者、節點、路由與 ACL 政策（`headscale_policy` 不做
-  apply）。只有一台 Headscale 時，多台只在 CI 驗。
+  apply）；驗收全程不呼叫 `headscale_api_keys` create，清理時 `headscale apikeys list` 確認沒有多出來的 key（安全審查 S-3）。
+- 多台（一帳號一台）：CI 用兩台假伺服器驗（第 18 節）；QA 只有一台 Headscale 時 HAOS 上沒驗，要驗得另外提供第二台，沒有就在驗收紀錄
+  寫明是已知限制（審查 MF-1）。
 - T 列：T-01、T-02（上限 3）、T-04（Headscale 版）、T-05、T-07、T-08、T-09、T-13、T-14、T-20（0.4.19 → 0.5.0）、T-21、T-23、T-24、T-27、
   T-29，加上「每次升版都要重驗」的 UC-08、sentinel、UC-10、記 Supervisor 版本。
 
@@ -335,10 +340,12 @@
   `test_upgrade_zero_rewrite.py::test_multi_profile_is_switched_off_for_every_product` 跟著改（它釘的是開關的值）；版號資料 7 處
   （`docs/operations/release.md`）；`addons/headscale/`（`config.yaml`、`CHANGELOG.md` 照 `unreleased-changes.md` 第 3.8 節 HS1～HS7 與
   §7.2 的共通句子、`DOCS.md` 照同一節的段落；`upgrade-check/seed`、`verify` 從 `packaging/hooks/` 搬，本片已讓 hook 的真 runtime 測試跑
-  Headscale）；容器驗收的假後端本來就照 Headscale 的 bridge 做；HAOS 驗收照第 13 節。開關一開，`product_switch` 已處理的既有測試照綠
-  （第 7 節的模擬）。
-- **其他產品片（HM-21～HM-25）**：同一批既有測試開關一開也會紅；`tests/product_switch.py` 的 fixture 對所有產品有效，哪一片後合併就保留
-  一份、把自己的標記併進來（衝突時兩邊的 `usefixtures` 是同一個意思）。契約第 9 節列號見第 11 節。
+  Headscale）；容器驗收的假後端本來就照 Headscale 的 bridge 做；HAOS 驗收照第 13 節。開關一開，`switch_modes` 已處理的既有測試照綠
+  （第 7、18 節的模擬）。
+- **其他產品片（HM-21～HM-25）**：同一批既有測試開關一開也會紅。第一版說「兩邊的 `usefixtures` 是同一個意思」是錯的（審查 MF-2：
+  `product_switch` 與 HM-23 的 `switch_modes` 同名不同義）。現在本片用的就是 HM-23 那一份（`tests/switch_modes.py` 逐位元相同，兩片都改的
+  15 個檔逐行相同），兩片不論誰先合併，這些檔都不會衝突；HM-23 合併前若再改了它，後合併的一方照 HM-23 的。HM-21、HM-22、HM-24、HM-25
+  也請用同一份。契約第 9 節列號見第 11 節。
 - **HM-18**：DOCS 的「每帳號一把 key」與 Headscale 的 Origin 規則照 `unreleased-changes.md` 第 3.8 節；`docs/operations/guide.md` 事故處理
   第 2 步補 Headscale（威脅模型第 4 節）。
 - **HM-29**：給 PaaS 的回補建議可以加「PaaS 的 Headscale 存政策不重啟子程式、子程式每次呼叫讀設定」與 HA 的差異說明（契約 #131）；不是缺陷。
@@ -349,13 +356,16 @@
 1. **DQ-26（Headscale 形態）**：計畫建議「同一台不同政策與多台都支援；建議每帳號不同 key，不強制」。本片照這個做了（DOCS、開通時的面板
    說明、契約 #129 類型「待決」）。使用者確認，或要改成「強制每帳號不同 key」（例如存檔時擋同一台同一把 key），都要在 Headscale 升版 PR 之前。
 2. **要不要讓子程式核對 state 的 child token**（第 3.5 節）：接錯 state 時（同網址同 key）也 fail closed。是改 vendored 子程式、開關關也生效
-   的改變；計畫沒要求，交接著做的獨立安全審查判斷，要做就另開一片。
+   的改變。安全審查 S-1 的判斷是要做：另開一小片、在 Headscale 開通前合（也補上「全部撤銷後子程式沒重起成功」的小窗口）。要使用者同意
+   開這一片（主對話排）。
 3. **Headscale 健康檢查的 reason 文字**（第 3.2 節）：伺服器拒絕 key 時面板與診斷頁今天只看到 `BACKEND_INVALID_RESPONSE: the health check
    answer was not the expected one`。要改成看得出是 401，會改開關關時看得到的文字（不受開關管的改變），要另開一片並寫進各產品 CHANGELOG。
+4. **新建的 Headscale 額外帳號要不要預設不給 `headscale_api_keys` 的寫入**（安全審查第 9 節，DQ-26 的延伸）：今天照 DQ-02 複製預設帳號
+   當下的政策，新安裝 21 個寫入 grant 全開。預設不給會偏離 DQ-02、面板要顯示；本片只改了文字，程式不動。
 
 ## 16. 開放問題
 
-- 其他產品片（HM-21～HM-25）同時在改同一批既有測試；後合併的一方要合成一份（第 14 節）。
+- 其他產品片（HM-21～HM-25）同時在改同一批既有測試；本片已改用 HM-23 的工具，其他片也請用同一份（第 14 節）。
 - 本機的 conftest 測試鎖是全機共用、等滿 120 秒就失敗，多條線同時跑 pytest 時要排很久；第 8 節的秒數是 pytest 自己報的執行時間，不含排隊。
 - 子程式直連 loopback 的政策只在真子程式測試驗（CI 的 root 環境也跑）；HAOS 上要照第 13 節再驗。
 
@@ -371,9 +381,101 @@
 | `d59be1e` | test：`tests/product_switch.py`，開關關的測試釘自己的產品 |
 | `f158b20` | docs(multi-profile)：契約、驗收矩陣、決策、威脅模型、`unreleased-changes.md`、HAOS 驗收 |
 | `1996759` | test(headscale)：目錄與檔案分開放寬（突變 M10） |
-| 本筆記 | docs(provenance) |
+| `a91dab7` | docs(provenance)：本筆記第一版 |
+| `91f210d` | test：改用 HM-23 的 `tests/switch_modes.py`（審查 MF-2） |
+| `6c4879c` | test(headscale)：多台、`headscale_api_keys` create、存檔後 session 照常、S-2 與 N-1 的反例（後兩者先紅） |
+| `614613b` | fix(health)：`refused_login` 只對 Headscale、只算子程式有回的檢查（審查 S-2、N-1） |
+| `f63be40` | test(ui)：面板說明的 node 與 Playwright 測試（審查 M-1；先紅） |
+| `5ed0ca1` | fix(ui)：開通時 Headscale 的說明（審查 M-1）；帳本 |
+| `af70c22` | docs(multi-profile)：契約、驗收矩陣、決策、威脅模型、`unreleased-changes.md`、HAOS 驗收（審查各項） |
+| 本筆記 | docs(provenance)：第 18 節 |
 
-前 7 個是第 7.3 節重建後的 SHA（舊的沒推過）；`1996759` 在重建之後。
+前 7 個是第 7.3 節重建後的 SHA（舊的沒推過）；`1996759` 之後的都在重建之後，審查後的 commit 只往後加，沒有改寫任何 commit。
 
 commit 身分（作者、提交者）都是 woowtech；英文標題、繁中內文；照 DQ-36 不加 AI 署名。本筆記不能記自己 commit 之後的結果：
 最後一次的預檢結果在交給主對話的回報裡。
+
+## 18. 審查與處理（2026-11-19）
+
+兩份獨立審查都是「修正後通過」：正確性（`artifacts/…/wave5/review-HM-26-correctness.md`）、安全面
+（`artifacts/…/wave5/review-HM-26-security.md`）。必修全做。建議修除了安全 S-1 都做；S-1 照審查自己的建議另開一片（理由在表裡）。
+審查後的 commit 都往後加，沒有改寫任何 commit；分支第一次推上去就是這個歷史。
+
+### 18.1 逐項處理
+
+| 審查項目 | 處理 | commit |
+|---|---|---|
+| 正確性 MF-1：DQ-26 的「多台」沒有測試，`acceptance.md` 卻說 CI 驗了 | 加第三個額外帳號 D（Headscale 上限 3），用自己的伺服器與 key。spec 那案的網址比對因此分得出「拿到別的帳號的網址」。真子程式那案開兩台假伺服器：每個呼叫只到自己帳號的那台、帶自己的 key，另一台什麼都沒收到；第二台只收過 D 的 key，第一台從沒收到。還原那案也加 D（紀錄的網址是 D 自己那台）。`acceptance.md` 改寫：CI 用兩台；HAOS 只有一台 QA Headscale 時，「一帳號一台」寫明是已知限制，要驗就要第二台 | `6c4879c`、`af70c22` |
+| 正確性 MF-2：`tests/product_switch.py` 與 HM-23 的 `tests/switch_modes.py` 同名不同義 | 只留一份，用 HM-23 的：刪掉本片的工具；`switch_modes.py` 逐位元照抄 HM-23 的 `e803d58`；兩片都改的 15 個檔照抄 HM-23 的改法，增刪行逐檔和 HM-23 的 `e803d58` 比過，完全相同。兩片不論誰先合併，這些檔都不會衝突。選 HM-23 那份的理由：它不需要測試有 `product` 參數，已經用 EMQX 開著跑過整批，HM-23 的審查也比較推薦它；兩種意思對「一個測試只跑一個產品」效果相同（正確性審查第 3 節）。第 3.4、14 節、登記表跟著改 | `91f210d`、`af70c22` |
+| 正確性 SF-1：契約第 7 節「認證被拒」的定義 | 改成兩個條件（reason 開頭的固定文字；Headscale 帳號的錯誤物件 `HEADSCALE_UPSTREAM_ERROR`＋401），註明 `HEADSCALE_INVALID_CREDENTIAL` 經存檔驗證後到不了 | `af70c22` |
+| 正確性 SF-2：檔頭的驗收編號 | T-03 改成 T-04 | `6c4879c` |
+| 正確性 SF-3：「別的帳號 session 不斷」只間接驗 | 存 B 的政策前，其他帳號先經 8081 開 session；存完用同一個 `Mcp-Session-Id` ping 仍 200（mock 那案與真子程式那案都有）；真子程式那案再用同一個 session 做一個放行的呼叫，到自己的伺服器 | `6c4879c` |
+| 正確性 N-1：`login_refused` 不受 `answered` 管 | 改成 `answered and self.login_refused`；加一案（子程式沒回成就緒的那次檢查不算） | `6c4879c`、`614613b` |
+| 正確性 N-2：退避那案開關關的意思 | docstring 寫明：開關關是「監看沒有 backoff 選項」；開關怎麼變成 ProfileManager 給的選項，由 HM-09 的測試管 | `6c4879c` |
+| 正確性 N-3～N-6 | N-3（`free_port` 撞號）等 portfix 片合併後再換；N-4（#131 與 #54 合列）交 HM-18；N-5（DQ-26 期限）列第 15 節；N-6（`checks` 秒數）開 PR 後補 | 不在本片 |
+| 安全 M-1：「只靠工具政策分權」說得太窄，也沒提 `headscale_api_keys` | 面板說明、CHANGELOG 草稿 HS2、DOCS 段落、契約 #129、驗收矩陣 T-04、威脅模型都改：同一台的帳號不論用幾把 key 都只靠工具政策分權；受限帳號要停用 `headscale_api_keys` 的建立、作廢、刪除（建立交出整台管理 key，在 add-on 外也能用，「全部撤銷」、還原守門都撤不到；作廢、刪除能停掉別人的 key）；仍建議每帳號一把 key（可以只撤銷一把）。威脅模型的事故處理補「每一台 `headscale apikeys list`、撤掉這個 add-on 用過的與不認得的」。只改文字，程式不動 | `f63be40`、`5ed0ca1`、`af70c22` |
+| 安全 S-1：子程式核對 state 的 child token | 同意要做，但照審查的建議另開一小片、在 Headscale 開通前合：要改 vendored 子程式，開關關也生效，要更新 `runtime-sources.json`、`apps/headscale/vendor/PROVENANCE.md`、`test_headscale_child.py` 與一句 CHANGELOG，超出本片「開關後面的產品片」的範圍。列第 15 節第 2 點 | 不在本片 |
+| 安全 S-2：`refused_login` 沒限定 Headscale | 只對 `product == 'headscale'` 的監看算；加反例：EMQX 的監看收到同一個 401 錯誤物件，不退避 | `6c4879c`、`614613b` |
+| 安全 S-3：HAOS 驗收項目 | `acceptance.md` 補：驗收全程不呼叫 `headscale_api_keys` create；受限帳號的 create／expire／delete 閘道與直連都擋、伺服器收不到；清理時 `headscale apikeys list` 確認沒有多出來的 key（T-29）；T-04 的唯讀帳號寫明拒絕這幾個寫入 | `af70c22` |
+| 安全 S-4：矩陣沒有 `headscale_api_keys` create | CALLS 加這個呼叫（`reveal_once`、2099 年的 expiration）；B 拒絕（grant 拿掉），C、D 保留；經 8081 與直連 loopback 都驗 B 被擋、伺服器沒收到。假伺服器的答案是 `DUMMY-…` 值（照 `tests/fixtures/owner_defaults/README.md`；commit 前用 builder 的 gitleaks 設定先掃過，0 命中） | `6c4879c` |
+| 安全第 9 節：DQ-26 另問的一題 | 新建的 Headscale 額外帳號要不要預設不給 `headscale_api_keys` 的寫入：寫進 `decisions.md` DQ-26 列、契約 #129 類型欄、第 15 節第 4 點，交使用者 | `af70c22` |
+
+D 的 key 第一次挑的值在 commit 前的預掃被 gitleaks `generic-api-key` 判中（這裡不寫出那個值），改用 `DUMMY-hm26-second-server-key`
+（同一份設定掃整個檔 0 命中）；沒有任何命中進到 commit。
+
+### 18.2 先紅後綠
+
+| 步驟 | commit | 結果 |
+|---|---|---|
+| 新測試 | `6c4879c` | `git archive` 出來跑 `-k refuses`：開關開那案紅（子程式沒回成就緒的那次也算了一次認證被拒：`auth_refusals` 1，不是 0），開關關那案綠，36 秒。S-2 的反例在同一案、排在 N-1 之後，紅燈由突變 M12 證明（第 18.3 節）。其餘新斷言（多台、`headscale_api_keys` create、存檔後的 session）鎖的是前面各片做好的行為，一加就綠 |
+| 修 | `614613b` | 新檔全過（第 18.4 節） |
+| 面板測試 | `f63be40` | node：`contracts.test.mjs` 1 案紅（17 過，HM-26 那案：新說明的字還沒有）；Playwright 那案在這個 commit 沒跑，它的新斷言（`停用 headscale_api_keys 的建立、作廢與刪除`）舊說明裡沒有 |
+| 面板修 | `5ed0ca1` | node 18 案全過；`backend-identity.spec.mjs` 17 案全過；面板全套見第 18.4 節 |
+
+### 18.3 突變（每個在 `git archive` 出來的副本裡改，clone 不動；腳本 `scratchpad/HM-26/mutate.sh`）
+
+| 突變 | 改了什麼 | 跑的案例（`-k`） | 結果 |
+|---|---|---|---|
+| M12 | `refused_login` 又對每個產品算（拿掉 `product == 'headscale'`；審查 S-2） | `refuses` | 抓到：開通那案，EMQX 的監看收到同一個物件後 `auth_refusals` 是 1，不是 0 |
+| M13 | 子程式沒回的檢查也算（拿掉 `answered and`；審查 N-1） | `refuses` | 抓到：開通那案，`unready.auth_refusals` 是 1，不是 0 |
+| M14 | 額外帳號的 Headscale 子程式拿到預設帳號的伺服器網址（`products.child_spec`；正確性審查說原本的測試抓不到這種錯） | `each_child` | 抓到兩案：spec 那案的開通模式（D 的網址不是自己的），還原那案（D 的子程式讀到的 state 網址和環境不同，每個呼叫 `HEADSCALE_POLICY_UNAVAILABLE`）。原本三個帳號同一個網址時，這兩案都抓不到 |
+
+### 18.4 本機檢查（一般使用者 uid 1000；TMPDIR `/tmp/ha-mp-q3Yaw7`，跑完用完整路徑刪掉）
+
+pytest 跑的 58 個檔：本片改過的、用 `switch=False`／`switched_off`／健康監看的、HM-01 黃金回歸、`test_upgrade_zero_rewrite.py`、
+`test_router_passthrough.py`、`test_upgrade_hooks.py`、`test_real_products.py`、新檔（清單在 `scratchpad/HM-26/union.txt`，交出後刪）。
+共用測試鎖：多條線同時在跑，pytest 在收集完之後先在核心排隊等鎖，再交給 conftest 的 fixture（只是等法，互斥不變；
+`scratchpad/HM-26/hm26_lockwait.py`）。下表的秒數是 pytest 自己報的，含排隊。
+
+| 檢查 | 結果 |
+|---|---|
+| pytest，開關關（clone，`af70c22`，58 個檔） | 2,175 案：2,174 過、1 案紅：`test_owned_executable.py::test_uid10001_nondumpable_self_and_own_child_proof`（要 root，本機本來就紅；CI 以 root 跑）。1,489 秒，其中排隊約 7 分鐘 |
+| pytest，暫時開通 headscale（`git archive af70c22` 的副本，只改副本的 `features.py`；同 58 個檔） | 2,175 案：2,165 過、10 案紅。1 案是交升版 PR 的 `test_multi_profile_is_switched_off_for_every_product`，1 案是同一個要 root 的；另 8 案是副本才有的錯：副本的面板 `dist` 是連結（`ui.py` 用 `O_NOFOLLOW` 開，頁面 503：`test_profile_admin_api.py` 2 案、`test_profile_runtime.py` 2 案），n8n 的 `node_modules` 是連結（spec 裡的路徑變成 clone 的：`test_backend_loopback.py` 2 案、`test_child_port_param.py` 2 案）。把這兩個連結換成真的複本再跑這 9 個測試函式：36 過，只剩開關釘選那案紅 |
+| 新檔 `tests/test_headscale_multi_profile.py` | 兩種模式全過（在上面兩輪裡） |
+| packaging unittest（開關關，clone） | Ran 366、OK（skipped=5），27 秒 |
+| packaging unittest（暫時開通 headscale，副本，另複製 `.git`） | Ran 366、OK（skipped=5），28 秒。沒有 `.git` 時另有 7 案是副本才有的錯（`git show`、`git ls-files` 找不到 repo），和開關無關 |
+| `packaging/validate.py`（`ha-gh-release-20261117` 的 venv） | PASS |
+| `node --test packages/mcp-admin-ui/tests/*.test.mjs` | 119 案全過 |
+| `npm run build`、Playwright 全套（`single`＋`profiles-on`，照 CI） | 167 案全過，5.5 分鐘；`backend-identity.spec.mjs` 另外單跑 17 案全過 |
+| `scripts/ledger_precheck.py` | OK：`contracts.js` 的摘要隨 `runtime-patches.json` 更新；`health.py` 照舊是沒列管、要人看的既有執行檔 |
+| `scripts/secret_precheck.py`（`af70c22` 為止 15 個 commit） | OK，0 命中；本筆記 commit 之後再跑一次，結果在交給主對話的回報裡 |
+| 沒碰的路徑 | `addons/`、`apps/`、`tests/conftest.py`、`features.py` 都不在 diff；工具面沒變，不用重產 `docs/tool-surface.*` |
+| AI 署名、雙向控制與零寬字元（`a91dab7` 之後的新增行與 commit 訊息） | 0 |
+
+### 18.5 給主對話與交接
+
+- **MF-2 的現況**：本片的工具就是 HM-23 的那一份。finalize 時（2026-11-19 13 點多）HM-23 的 clone 已加了 `938643c`（開關釘選改回精確
+  集合）、`98c9cb7`（`test_monitor_cancel.py` 的 `switch=False`）、`83165b6`（文件），都沒動 `switch_modes.py` 與兩片共用的 15 個檔的
+  開關改法；`test_upgrade_zero_rewrite.py` 的 `switched_off_runtime` 那兩段也沒動。所以兩片誰先合併，這些段落都不會衝突。主對話若照
+  審查建議先合一個只含工具的 PR，內容就是 HM-23 `e803d58` 的那批（本片 `91f210d` 和它逐行相同的部分）；HM-21、HM-22、HM-24、HM-25
+  也請用同一份。HM-23 已推的 `befad1c` 筆記說它的審查 S-3（同一件事）「要主對話選，本片不改」，並列了兩套並存時合併要注意的地方；
+  本片改用它那一份之後，那些衝突不會發生。
+- **`health.py`**：HM-25 也改（安全審查 I-1）。後合併的一方把另一片合進來之後，要重跑 `tests/test_health_backoff.py` 與本片退避那案。
+- **契約第 9 節列號**：#129～#132 仍是暫定（第 11 節）；#129 這次改了內容，列號的處理不變。
+- **產生器**：`deviation-trace.md` 第 92 行 FM-88 的說明（「同一台、同一把 key 的兩帳號，子程式讀錯 state 時連線比對擋不下來」）講的是
+  同 key 時 state 比對的極限，仍正確；它和 `paas-test-mapping.md` 的「暫定名」仍交主對話重產時改（第 11 節）。
+- **PR**：開 PR 時標題用「⛔ 勿代 merge｜待覆核 — HM-26 …」；`checks` 前後秒數開 PR 後補（正確性審查 N-6）。計畫 §12.1 的相依是
+  HM-19b、HM-20：功能 PR 在 R1 之前合併，等於把只在開通時生效的程式先帶進映像（`unreleased-changes.md` 第 4.2 節已記），要不要先合由
+  主對話決定。
+- **要使用者決定的**：第 15 節（DQ-26 與它延伸的第 4 點、子程式核對 child token 的那一片、reason 文字）與第 13 節的 HAOS 真後端身分，加上 DQ-26 的
+  最晚期限是本片自己從「HM-26 開工前」改成「Headscale 升版 PR 前」（正確性審查 N-5），要主對話向使用者確認。
