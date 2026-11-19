@@ -167,8 +167,8 @@ LOOPBACK_MCP_URL_MESSAGE = "loopback MCP servers (localhost, 127.0.0.0/8, ::1) c
 # AI-HMCP-002-2 (loopback, restored in 0.3.4): Hermes connects to a registered MCP server from its own host, so a
 # loopback URL reaches whatever listens only there (Hermes itself, its dashboard or API server). Registration refuses it
 # here, by name and by every resolved address. backend_policy permits loopback for the add-on's own configured backends
-# only while Hermes is not switched on for multiple profiles: once it is (HM-20, HM-24), the child is started with
-# WOOW_MCP_DENY_LOOPBACK=1 and backend_policy refuses loopback for them as well.
+# only while Hermes is not switched on for multiple profiles: once it is (HM-20, HM-24), the add-on starts this child
+# with backend_policy's loopback refusal turned on, and backend_policy refuses loopback for them as well.
 LOOPBACK_NAMES = frozenset({"localhost", "localhost.localdomain"})
 
 
