@@ -10,15 +10,9 @@ import pytest
 
 from mcp_admin_core.products import ProductStore
 
-from owned_executable import Executable
-from batch2_owned_port import reserve_port
+from owned_executable import Executable, draw_public_ports
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def free_port():
-    with reserve_port() as sock:
-        return sock.getsockname()[1]
 
 
 @pytest.mark.parametrize("fault", ["monitor", "monitor_return", "persisted_key"])
@@ -50,7 +44,7 @@ async def finish(self):
 HealthMonitor.run = finish
 run.main()
 '''
-    admin_port, mcp_port = free_port(), free_port()
+    admin_port, mcp_port = draw_public_ports(2)
     runner = Executable(tmp_path, 'n8n', [admin_port, mcp_port])
     code = 'import run; ' + runner.code('run') + '\n' + code
     runner.release()

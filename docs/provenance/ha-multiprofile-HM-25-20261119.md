@@ -2,6 +2,17 @@
 
 ## 結論
 
+- **2026-11-19 合併 `claude-delivery` `95b7e9d`**（merge commit，不 rebase、不 force push；帶進 #122 HM-18 定稿、#123 P9 計畫產生器、
+  #124 測試的 port 撞號修正）：衝突只在 `docs/multi-profile/` 五個檔，以 HM-18 定稿的寫法為底、本片的補寫疊上去（契約與 `decisions.md` 的變更紀錄
+  各加一列寫怎麼合）。負責人同日 08:4x 已定 DQ-04、DQ-22：`decisions.md` 與契約裡本片寫的「使用者還沒確認」和提議的期限都拿掉，#47 部署、#62 既有
+  照 HM-18（本筆記其他地方的「使用者還沒確認」、第 11 節的期限是合併前的狀態）；契約第 9 節本片的第 129～131 列號不變、仍暫定。
+  `unreleased-changes.md` 填 PR 號 #129、HM-18 的建議句加 #129。第 10 節交辦的產生器改法用暫存複本照做五處（T-22 照驗收矩陣對到 #4、#28、#47、
+  #62、#129～#131 並拿掉「暫定名」；FM-15 加 #129、FM-140 加 #130，FM-15、FM-84、FM-140 加 `tests/test_n8n_multi_profile.py`；檔頭一句），
+  重產 `deviation-trace.md`；**交主對話**把同樣五處改進 repo 外的 `gen_trace.py`、更新 `SHA256SUMS`（`paas-test-mapping.md` 的「暫定名」等它下次
+  重產）。#123、#124 和本片的測試沒有語意衝突：#124 拿掉的 `free_port` 本片沒用到，`tests/owned_executable.py` 兩邊改的是不同段。
+  合併後本機：`validate.py` PASS、packaging 373 案 OK（skip 5）、node 118 過、帳本預檢 OK、pytest 本片與合併改到的 27 個測試檔 1383 案全過
+  （要 root 的 2 案沒跑，CI 跑）、HM-00 對照 C2～C5、C7～C9 過（C1 是功能片的性質、C6 照舊）、22 種改壞如期失敗；秘密預檢在 commit 之後跑
+  （結果寫在回報）。
 - **本片是 n8n 開通的功能 PR**（計畫 §9 n8n 列、§12.3「HM-21～HM-26｜各產品開通」）。之後 n8n 的升版 PR 只要把 `'n8n'` 加進
   `features.MULTI_PROFILE_PRODUCTS`、照發版規則升 `addons/n8n/` 的版號與文件。本片沒動 `MULTI_PROFILE_PRODUCTS`、沒動 `addons/`、沒改版號。
 - **`apps/n8n/run.py` 收斂到 ProfileRuntime**：n8n 的 runtime 改走 `run_product.run`，由 `run.py` 帶 n8n 的 adapter

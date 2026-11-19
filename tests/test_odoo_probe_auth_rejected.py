@@ -149,10 +149,13 @@ def failed(reason):
     return True, 'Error executing tool woow_backend_probe: ' + reason
 
 
+@contextmanager
 def dead_url():
+    """A backend address that refuses every connection: its port stays bound and never listens while in use, so the
+    child's reservation (a bind of port 0, Endpoint) cannot draw it, as it could draw a port closed right away."""
     with closing(socket.socket()) as holder:
         holder.bind(('127.0.0.1', 0))
-        return f'http://127.0.0.1:{holder.getsockname()[1]}'  # nothing listens once the socket is closed
+        yield f'http://127.0.0.1:{holder.getsockname()[1]}'
 
 
 async def test_a_login_odoo_accepts_still_returns_the_uid(tmp_path):
@@ -206,8 +209,9 @@ async def test_a_slow_odoo_is_unavailable_not_rejected(tmp_path):
 
 
 async def test_a_closed_port_is_unavailable_not_rejected(tmp_path):
-    async with running_child(tmp_path, dead_url()) as (store, endpoint, _):
-        assert await probe(store, endpoint) == failed(UNAVAILABLE)
+    with dead_url() as url:
+        async with running_child(tmp_path, url) as (store, endpoint, _):
+            assert await probe(store, endpoint) == failed(UNAVAILABLE)
 
 
 async def test_the_health_check_and_the_gateway_carry_the_reason(tmp_path):
@@ -239,7 +243,8 @@ async def test_the_health_check_and_the_gateway_carry_the_reason(tmp_path):
         # The gating is the 0.2.2 rule, unchanged: every Odoo tool is refused, health_check too; only the reason differs.
         assert errors == [refusal_of('search_records', AUTH), refusal_of('health_check', AUTH)]
         # A server that is down keeps the old words.
-        available, errors = await check('down', dead_url())
+        with dead_url() as down:
+            available, errors = await check('down', down)
         assert available == {'child': 'running', 'ready': True, 'backend': 'unreachable', 'reason': UNAVAILABLE}
         assert errors == [refusal_of('search_records', UNAVAILABLE), refusal_of('health_check', UNAVAILABLE)]
         # And a login Odoo accepts is reachable, with no reason: nothing is refused.

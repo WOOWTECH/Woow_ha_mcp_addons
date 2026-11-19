@@ -23,9 +23,12 @@
   HM-13c 和 HM-12 合併後依審查 S-3 改第 3 節「待核對不一定是已撤銷」那條：換身分換 token 也過核對關卡（2026-11-17）。
   HM-27 在第 1 節加瀏覽器拿到密鑰網址一列、I7 的測試欄補 Origin 紀錄、第 3 節加 Origin 清單的五條（2026-11-17）；HM-27 審查（S-6）再加一條：開通之後又關掉時 enforce 靜默失效。
   HM-27 和 HM-13b、HM-13c 合併後再加一條：還原把 Origin 政策帶回備份當時的值，沒有提示（2026-11-18）。
+  HM-18（2026-11-19）把已知限制與事故處理寫進 `docs/operations/guide.md`（產品的 DOCS 在 `addons/<產品>/`，交開通那一版的升版片），第 3 節
+  暫時性錯誤那一條寫明 HM-18 不改程式、Origin 的兩條寫明已寫進哪些文件；依 HM-18 的獨立審查改第 4 節第 5 步（沒有帳號資料的還原不撤銷
+  預設帳號、還原帶回舊憑證）、第 3 節偵測那一條補區塊層級的回滾（同日，審查 MF-2、S-9）。
   HM-25 在第 3 節加 n8n 的兩條（webhook 網址照舊 `permissive`、每帳號的 catalog 副本不是安全邊界；2026-11-19），交 HM-25 之後的獨立安全審查；
-  依那次審查（S-2、S-7、S-8）改寫 webhook 那條（只有 DNS rebinding 打得到 loopback）並補三件、副本那條補換後端時重做、加版本歷史沒有上限一條（同日）。
-  HM-18 把已知限制與事故處理寫進產品 DOCS。
+  依那次審查（S-2、S-7、S-8）改寫 webhook 那條（只有 DNS rebinding 打得到 loopback）並補三件、副本那條補換後端時重做、加版本歷史沒有上限一條（同日）；
+  合併 `claude-delivery` `95b7e9d`（HM-18）之後照原樣接在 HM-18 的 Bearer 那條後面（同日）。
 - 來源：計畫 §8.1、§8.2、§8.9、§8.10（repo 外）；決策見 `decisions.md`（DQ-37 採 (a)：接受同 uid 信任邊界並寫明）。
 - 契約與差異表：`contract.md`；不變式對應的測試檔：`acceptance-matrix.md` 的測試檔登記表。
 
@@ -82,7 +85,7 @@
 | I12 開通後沒明確選帳號的管理請求不會落到任何帳號 | 缺 `X-MCP-Profile` 回 400；回聲比對 | 缺標頭的 reveal、rotate、bootstrap 都 400（管理員）；回聲不符面板不顯示 | HM-10、HM-11 |
 | **I13 沒開通的產品（含緊急關閉版）不讓休眠帳號的 token 可用** | 休眠處理：開機在 listener 前撤銷額外帳號與孤兒（已撤銷的不動；開不了的隔離）；bootstrap 只多 `dormant_profiles` | 開關關＋有帳號資料 → 全部撤銷、之後的開機不再寫任何東西；開關關＋帳號資料＋標記 → 全撤銷才刪標記；重新開通後 token 仍是撤銷的（`tests/test_dormant_profiles.py`）；store 說撤銷了、磁碟沒變，或 `profiles/` 一時列不出來時這次開機停下（審查 S-2、MF-2）；重新開通後休眠時撤銷的帳號未核對前不能重發、預設帳號不用等（HM-13c，`tests/test_restore_review.py`）；休眠前就撤銷的帳號（`already_revoked`）重新開通後也要核對（審查 S-1）；沒開通時沒有任何 HM-13c 的管理路由（`test_switched_off_the_new_routes_are_unknown`） | HM-13b、HM-13c |
 
-## 3. 已知限制（計畫 §8.9；HM-18 寫進文件）
+## 3. 已知限制（計畫 §8.9；HM-18 已寫進 `docs/operations/guide.md`）
 
 - 同 uid＝同一個信任邊界；一個子程式被攻破＝整個 add-on 所有帳號被完全控制。紅隊三項（對別帳號 port 的 SSRF、讀檔或 `/proc`、
   單帳號 OOM）在隔離的 QA HAOS、經使用者授權才做（DQ-34，HM-29）。
@@ -190,13 +193,17 @@
   這些都要 HA 管理員上傳偽造的備份才會發生。
 - 守門開不了的帳號目錄（任何原因，包括 EMFILE、EIO 這類暫時性錯誤）會被改名隔離、之後只能刪（計畫 §8.4 C）；暫時性錯誤時，同一份備份再還原
   一次就會重做（HM-13b 審查 S-4；HM-13c 不改程式，要不要讓 `Store` 帶出原因、把暫時性錯誤改成「這次開機停下、下次重做」，建議交 HM-18 定：
-  動到所有產品共用的 `config.py`）。
-- 還原後收據的「還原前」以主機時鐘為準（`restored_before_ms`＝守門當下的時間，不早於備份裡最新的操作 id，但最多晚 24 小時）：
+  動到所有產品共用的 `config.py`）。HM-18（2026-11-19）只改文件、沒有改程式：`docs/operations/guide.md` 與 `update-backup-rollback.md` 寫明
+  「同一份備份再還原一次就會重做」；要不要讓 `Store` 帶出原因、把暫時性錯誤改成這次開機停下，交主對話另開一片（要和 HM-13b 的中途停止測試一起改）。
+- 還原後收據的「還原前」以主機時鐘為準（`restored_before_ms`＝守門當下的時間，不早於備份裡最新的操作 id，但最多晚 24 小時；HM-18 寫進
+  `docs/operations/guide.md` 已知限制）：
   - 開機時主機時鐘若遠快於實際時間、之後才校正回來，校正前的那段時間內新產生的操作 id 也會被當成還原前（410 `operation_restored`），直到真實時間
     追過去；24 小時保留期本來就有同樣的依賴。
   - 主機時鐘比備份裡的收據慢超過 24 小時時，備份裡較新的操作 id 在時鐘慢的期間回 400（時間在未來），時鐘校正後可能被當成新操作、不是 410
     （24 小時上限的代價：它擋的是偽造的遠未來 id；PaaS 沒有上限，`contract.md` 第 9 節 #67）。
 - 偵測依賴「檔案層級還原會產生新檔」與「Supervisor 以 root 放回」；整份資料以檔案層級搬移也會被當成還原（方向安全：多撤銷）。
+  區塊層級的回滾（虛擬機或磁碟快照還原）帶回同一個 inode、ctime 與擁有者，兩個訊號都看不到（HM-13a 筆記第 11 節的已知限制）：守門不動作、
+  權杖回到快照當時的值，要按「全部撤銷」（HM-18 寫進 `docs/operations/guide.md` 與 `update-backup-rollback.md`）。
 - 面板 403（Core 未審）時，任何帳號都撤銷不了，只能停止整個 add-on。
 - 緊急關閉要發一版，推估一個工作天以上；期間只能停 add-on 或在面板撤銷。
 - HA Core 與 Supervisor 會自動更新；平台假設（UC-08、UC-10、sentinel）每次發版重驗並記版本。
@@ -231,14 +238,14 @@
   `operation_outcome_unknown`、密鑰網址一直 503，只能還原備份（Bearer 照常）。存檔讀完、寫入之前檔案被換掉時，存檔不蓋過去
   （同樣 409 `operation_outcome_unknown`），外面的檔照常生效，面板重新讀取後再存。
 - 開通之後又關掉（產品移出 `MULTI_PROFILE_PRODUCTS`，計畫 §7.4 的緊急關閉）：政策檔留著、不讀，密鑰網址回到今天（任何 Origin
-  都放行、不記錄），**enforce 靜默失效**；再開通又照檔生效。要靠 enforce 擋的管理員要知道這件事（HM-27 審查 S-6，交 HM-18
-  寫進 DOCS 與升版說明）。
+  都放行、不記錄），**enforce 靜默失效**；再開通又照檔生效。要靠 enforce 擋的管理員要知道這件事（HM-27 審查 S-6；HM-18 寫進
+  `docs/operations/guide.md` 與 `update-backup-rollback.md`，升版說明交升版片：`unreleased-changes.md` 第 7 節）。
 - 還原（HM-13b 的開機守門；HM-27 和 HM-13b、HM-13c 合併後）：Origin 政策檔照備份當時的樣子回來，守門不讀不改（它不是憑證，
   還原不必撤銷它）。備份之後才切的 enforce 或改的清單，還原後**靜默回到**備份當時的模式與清單（例如 enforce 回到 report-only），
-  面板與 log 都沒有另外的提示；面板「連線與權杖」頁的卡片顯示的是目前的模式，管理員還原後要看一次（交 HM-18 寫進 DOCS 與
+  面板與 log 都沒有另外的提示；面板「連線與權杖」頁的卡片顯示的是目前的模式，管理員還原後要看一次（HM-18 已寫進 `docs/operations/guide.md` 與
   `docs/operations/update-backup-rollback.md`）。備份裡的政策檔不能用或是目錄時，還原後密鑰網址一律 503（目錄只能再還原別份備份）。
   收據檔照索引旁的封存，還原前的存檔重送一律 410，不會把備份之後的設定再寫一次。
-- Bearer `/mcp` 帶 Origin 一律 403（DQ-11 第二問待 S14）：Claude.ai 若送 Origin，就只能用密鑰網址（網址進代理與 tunnel log）。
+- Bearer `/mcp` 帶 Origin 一律 403（DQ-11 第二問待 S14；HM-03b 沒做，交 HM-19b）：Claude.ai 若送 Origin，就只能用密鑰網址（網址進代理與 tunnel log）。
 - n8n 的 webhook、chat、form 網址照舊是 `permissive`（契約第 9 節 #90；HM-25 沒改）。網址一律是設定的 n8n 網址（去掉 `/api/v1`）
   加 `/webhook/…`、`/form/…`（n8n-mcp 2.96.2 `triggers/handlers/base-handler.js` 的 `getBaseUrl`；`x-n8n-url` 不轉送，換不掉），
   `n8n_test_workflow` 每次觸發前先經 API 讀那個 workflow（`mcp/handlers-n8n-manager.js:1285`），開通後這次拒 loopback（#39，HM-20）。
@@ -264,11 +271,13 @@
   讓自己的副本長大，佔用其他帳號與主機的磁碟。預設帳號今天就是如此，不是 HM-25 造成的；寫進 DOCS 的已知限制（草稿在
   `unreleased-changes.md` 第 3.2 節）。上限要不要做、多大、超過時清掉歷史重做副本，交 n8n 升版前由使用者定。
 
-## 4. 事故處理：懷疑某個子程式或帳號被攻破（計畫 §8.10；HM-18 寫進 DOCS）
+## 4. 事故處理：懷疑某個子程式或帳號被攻破（計畫 §8.10；HM-18 已寫進 `docs/operations/guide.md`）
 
 1. 止血：面板「全部撤銷」；面板打不開（403）就停止 add-on。
 2. 在每個後端換掉該 add-on 用的密碼或 key（全部帳號都要，因為同 uid 讀得到全部），再到面板逐帳號存新憑證。
 3. 檢查每個帳號的政策（寫入開關、停用工具、逐項授權、禁止的操作）與後端網址有沒有被改。
 4. 檢查 `profiles.json` 與 `profiles/` 有沒有多出來的帳號或隔離目錄（面板清單）。
-5. 必要時還原「事故前」的備份（守門會撤銷 token），在核對卡逐帳號核對後重發。
+5. 必要時還原「事故前」的備份。備份裡有帳號資料時守門撤銷每個帳號的 token（連預設帳號），在核對卡逐帳號核對後重發；沒有帳號資料時
+   （開通後還沒建過額外帳號）預設帳號的 token 回到備份當時的值、不撤銷（DQ-03 (b)），要立刻重發或再按一次「全部撤銷」。還原會帶回備份當時的
+   後端憑證與政策：重做第 2 步的逐帳號存新憑證與第 3 步的檢查。
 6. 留證：add-on log（只含 id 前 8 碼）與診斷頁；不要貼 token 或密碼。

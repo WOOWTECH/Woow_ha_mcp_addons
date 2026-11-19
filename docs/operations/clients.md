@@ -1,15 +1,17 @@
 # MCP client 連線（真實 client 待驗收）
 
 **七支 0.1.7 映像已發佈；管理面板與 provider 已在測試 HA 實測（0.1.7，七支：owner 可用、一般使用者 403）；真實 MCP client 尚未驗收（見文末）。
-以下是配置形狀，不是可用憑證或繞過授權操作。** 支援的本地契約是 Streamable HTTP（回應可含 SSE），不是 legacy `/sse`。
+以下是配置形狀，不是可用憑證或繞過授權操作。** 支援的本地契約是 Streamable HTTP（回應可含 SSE），不是 legacy `/sse`：
+legacy SSE（`/sse`、`/messages/`）不支援，開通多帳號之後也一樣（負責人 2026-11-17 定，多帳號 DQ-23；PaaS 會轉送，這是 HA 的差異）。
 0.1.14 起有兩種接法，用的是**同一把** Add-on 權杖（管理面板「連線與權杖」頁；重新產生／撤銷對兩種接法同時生效）：
 
 | 接法 | 網址 | 權杖放哪裡 | 適用 |
 |---|---|---|---|
-| 一、Bearer header | `<端點>/mcp` | `Authorization: Bearer <token>` header | 能自訂 header 的 client（例如 Claude Code、腳本；其他 client 依其文件確認） |
-| 二、密鑰網址 | `<端點去掉結尾 /mcp>/private_<token>/mcp` | 網址路徑裡 | 不能帶自訂 header 的 client：**Claude.ai 網頁版自訂連接器** |
+| 一、Bearer header | `<端點>/mcp` | `Authorization: Bearer <token>` header | 能自訂 header、而且不送 `Origin` 的 client（例如 Claude Code、腳本；其他 client 依其文件確認） |
+| 二、密鑰網址 | `<端點去掉結尾 /mcp>/private_<token>/mcp` | 網址路徑裡 | 不能帶自訂 header 的 client，與 **Claude.ai 網頁版自訂連接器**（見下方「接法二」的更正） |
 
-能帶 header 的 client 一律用接法一；接法二只給做不到的 client。
+能帶 header 的 client 一律用接法一；接法二只給做不到的 client，與 Claude.ai（它送不送 `Origin` 還沒實測，見下方）。
+產品開通多帳號之後，每個帳號各有一把權杖、各自的兩條網址，見下方「多帳號（產品開通後）」。
 
 ## Endpoint 與網路
 
@@ -64,8 +66,11 @@ browser SDK 或 SaaS OAuth client 相容。錯誤、缺少或已撤銷的 Bearer
 
 ## 接法二：Claude.ai 自訂連接器（密鑰網址，0.1.14 起）
 
-Claude.ai 網頁版的自訂連接器（custom connector）只能填網址與選填的 OAuth 設定，無法帶自訂 `Authorization` header。
-這時把權杖放進路徑：
+**更正（2026-11-19，多帳號計畫 HM-18）**：這裡原本寫「Claude.ai 網頁版的自訂連接器只能填網址與選填的 OAuth 設定，無法帶自訂
+`Authorization` header」，已過時。Claude 的官方說明（2026-11-14 讀）寫明自訂連接器可以設定固定的 Request headers（API key、bearer token；
+Pro／Max 自己設，Team／Enterprise 由 Owner 設），連線從 Anthropic 的雲端來。可是本 Add-on 的 Bearer `/mcp` 對帶 `Origin` 標頭的請求一律回
+403，而 Claude.ai 的請求送不送 `Origin`、送什麼還沒實測（S14：Odoo 首發的 HAOS 驗收 HM-19b 用一個公開的 echo 端點量）。實測之後由負責人決定
+Bearer `/mcp` 要不要精確放行 `https://claude.ai`（多帳號 DQ-11 第二問）；在那之前，**Claude.ai 照舊用密鑰網址**。這時把權杖放進路徑：
 
 ```text
 https://<你的對外網址>/private_<token>/mcp
@@ -104,6 +109,40 @@ Gateway 在這條路徑上的行為：
 2026-10-14 首次以真實 Claude.ai 連 PaaS 測試 VM：Claude.ai 送的 `server/discover` 與帶 `_meta` 的 `initialize` 都被 0.1.12 候選回 403，0.1.13 候選已修正；同日經 Claude.ai 呼叫工具時，參數不符（例如 Odoo `aggregate_records` 的 group_by 不是 `active`、`schema_catalog` 的 limit 大於 1、LiteLLM `litellm_model_info` 的 id 含 `/`、n8n `validate_workflow` 少 nodes）也都只得到 HTTP 403，Claude.ai 只看到傳輸錯誤，0.1.14 改為回 JSON-RPC 錯誤說明原因。兩項都隨 0.2.0 發佈（0.1.14 未發佈；見 [0.1.14 紀錄](release-decision-0.1.14.md) 與 [0.2.0 紀錄](release-decision-0.2.0.md)）；修正後尚未以真實 Claude.ai 重測（目前只有本機 mock 與單元／整合測試）。
 
 0.2.1 起是完整版（2026-10-15 使用者決定）：七支開放子程序的全部工具（合計 183 個），全部工具與寫入預設開啟（新安裝與從 0.1.x 升級時），管理員可在管理面板逐一停用或取消寫入，風險見 [寫入預設開啟](guide.md#寫入預設開啟)。tools/list 的 inputSchema 是子程序自己的（經 provider-safe 正規化），tools/call 參數原樣轉給子程序，參數錯誤由子程序回覆；gateway 只檢查工具名在名單內、未停用、寫入工具或寫入 operation 有 grant，不符時回 0.1.14 起的 JSON-RPC 錯誤（見下）。直接偽造 `tools/call` 不能繞過這些檢查。[工具表](../tool-surface.md) 是唯一支援對照。請求上限 16 MiB。
+
+## 多帳號（產品開通後）
+
+這一節寫產品開通多帳號之後的接法。**目前（2026-11-19）還沒有產品開通**（`MULTI_PROFILE_PRODUCTS` 是空的）；哪一版、哪個產品開通，以該產品的
+CHANGELOG 為準。沒開通的產品照上面兩種接法，回應一個位元組都不變。完整規則見多帳號契約 `docs/multi-profile/contract.md` 第 2 節；管理與故障
+處理見[操作指南](guide.md#多帳號產品開通後)。
+
+- **每個帳號一把權杖、各自的兩條網址**：預設帳號就是今天的那一把權杖、那兩條網址，開通後照舊有效。每個額外帳號有自己的 43 字元權杖（互不相同）。
+  「MCP 用戶端端點」全 add-on 只有一個，在預設帳號設定（額外帳號的「連線與權杖」只顯示它；DQ-13）。
+
+  | 接法 | 網址 | 權杖 |
+  |---|---|---|
+  | 一、Bearer | `<端點>/mcp`（每個帳號都是這一條） | `Authorization: Bearer <這個帳號的權杖>` |
+  | 二、密鑰網址 | `<端點去掉結尾 /mcp>/private_<這個帳號的權杖>/mcp`（每個帳號各一條） | 網址路徑裡 |
+
+- **只看權杖決定是哪個帳號**：Bearer 的值或密鑰網址路徑裡的權杖。8081 不看 `X-MCP-Profile`、cookie 或查詢參數；密鑰網址上帶的
+  `Authorization` 一律不看。錯的、撤銷的、已刪帳號的權杖照舊：Bearer 401、密鑰網址 404。一個帳號的 session 在別的帳號用不了（404）。
+- **到面板拿權杖**：面板頂端的帳號選單切到那個帳號，再到「連線與權杖」顯示、複製、重新產生或撤銷它的權杖；每個帳號各自操作，不影響別的帳號。
+- **用戶端範例的名稱帶帳號 id**：面板產生的 Bearer 範例（`mcpServers` JSON），預設帳號的名稱照舊是 `woow`，額外帳號是
+  `woow-<產品>-<帳號 id 前 8 碼>`（例如 `woow-odoo-0a1b2c3d`），同一個產品的兩個帳號貼進同一個用戶端設定不會撞名（DQ-31）。自己寫設定時也照這個規則取名。
+- **一個代理（或一個對話）只接一個帳號**：每個帳號的 `serverInfo.name` 都是 `woow-mcp-<產品>`、工具名稱也都一樣（負責人 2026-11-17 定不改，
+  和 PaaS 一致；DQ-45）。同一個代理同時接同一個產品的兩個帳號時，模型分不出哪個工具是哪個帳號的，可能把寫入送到錯的帳號。要用兩個帳號就開
+  兩個代理或兩個對話；非放在同一個用戶端不可時，用上面的名稱區分，並在提示裡寫明每個名稱是哪個帳號、可以做什麼。
+- **Claude.ai 接兩個帳號**：每個帳號各新增一個自訂連接器，各貼自己的密鑰網址（各自從那個帳號的「連線與權杖」複製）。Claude.ai 送不送 `Origin`
+  還沒實測，所以仍用密鑰網址（上面「接法二」的更正）。
+- **legacy SSE 不支援**：每個帳號都只有 Streamable HTTP，沒有 `/sse`、`/messages/`（DQ-23）。只會 legacy SSE 的用戶端接不上。
+- **密鑰網址的瀏覽器來源檢查（Origin）**：全 add-on 一份來源清單、所有帳號共用，預設只有 `https://claude.ai`，預設模式 report-only：清單外的來源
+  照常服務、回應不變，只在 add-on log 記一行 `decision=would_deny`（帶帳號 id 前 8 碼）。管理員可以在面板「連線與權杖」的「瀏覽器來源檢查」卡片切成
+  enforce（清單外 403）。不加任何 CORS 標頭。沒帶 `Origin` 的原生用戶端（例如 Claude Code）不受影響；Bearer `/mcp` 帶 `Origin` 照舊一律 403、不看這份清單。
+- **忙碌與中斷**（每個帳號自己的名額，別的帳號不受影響）：同一個帳號同時太多請求時回 JSON-RPC `-32003` 與 `Retry-After`（有 id 的小請求 HTTP 200，
+  其他 503；GET 串流太多 429），稍後重試即可。`-32004`：子程式在處理途中斷線，操作可能已完成也可能沒有，先確認再重試。`-32005`：權杖在回應途中被
+  輪替或撤銷，請用新的權杖或網址重新連線。
+- **權杖或網址外洩**：只要在面板重新產生那個帳號的權杖，別的帳號不受影響。懷疑整個 add-on 被攻破時，照[操作指南](guide.md#事故處理懷疑某個子程式或帳號被攻破)
+  的事故處理：先「全部撤銷」。
 
 ## Token 事件與故障
 
@@ -148,7 +187,10 @@ Gateway 在這條路徑上的行為：
   舊 session 也會失效。
 - 輪替後所有 client 更新秘密（Bearer client 換 header，Claude.ai 換成新的密鑰網址）；舊 token 的新請求與 stream 後續轉送被拒。
   已送到 backend 的工作不會交易式回滾；輪替不等於取消後端工作。
-- 備份還原會復活備份中的 token／policy，需核對舊 token 暴露風險，再經批准流程輪替。
+- 備份還原會復活備份中的 token／policy，需核對舊 token 暴露風險，再經批准流程輪替。多帳號守門（HM-13b、HM-13c）合併後的下一版起：沒有帳號資料時照舊
+  復活，面板另外顯示還原提示；磁碟上有帳號資料時，每個帳號（連預設帳號）的權杖都撤銷：還原後跑的版本開通了多帳號，要在面板核對後重新產生；
+  沒開通（例如緊急關閉版做的備份），直接重新產生預設帳號的權杖；之後更新用戶端
+  （[更新、備份與回復](update-backup-rollback.md#多帳號版本的還原回退與全部撤銷hm-13bhm-13c)）。
 - 503 readiness 可能只是未設定／backend 離線；不要自動重啟 HA 或既有服務。
 - **後端未設定或連不上時也能連線（0.2.2 起）**：Claude.ai 等 client 一律能完成 initialize、`notifications/initialized`、
   tools/list，tools/list 回完整工具清單與 schema（依管理面板的停用與寫入授權過濾，與有後端時相同），不再回 HTTP 502；
