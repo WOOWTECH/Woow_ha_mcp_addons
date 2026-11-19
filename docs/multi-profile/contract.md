@@ -51,7 +51,8 @@
 開機守門的存在檢查與休眠處理（HM-13b）、子程式 initialize 錯誤的遮罩（HM-14，見下）、請求內容位元組預算與 JSON 結構守門（HM-31，見下）、
 健康監看照停止要求停下（HM-09 追補，見下）、LiteLLM 與 EMQX 不保留閒置的後端連線（HM-32，見下；行為不變）、
 Hermes 排程工具 `hermes_cron` 的說明補兩句（HM-33，見下；只改文字）、
-單帳號還原後的面板提示（HM-13c，見下）、驗收與發版工具（HM-16、HM-17）。
+單帳號還原後的面板提示（HM-13c，見下）、驗收與發版工具（HM-16、HM-17）、n8n 的 runtime 改走 `run_product`（HM-25：`apps/n8n/run.py`
+帶 n8n 的 adapter 跑同一個 runtime；開關關時預設帳號逐位元同今天，HM-01 黃金回歸與兩個契約凍結照過）。
 
 **HM-14 的不受開關管變更：子程式 initialize 錯誤遮本帳號憑證**（2026-11-15；HM-08 審查 S-4 (a) 交給 HM-14）
 
@@ -577,7 +578,7 @@ Headscale 只放 `https://claude.ai`（第 1.2 節）。
 - HM-10 定案：
   - 帳號 ETag 的 HMAC domain 是 `edit:<帳號 id>`（套用狀態的 `launch:<帳號 id>` 同理）：`ProfileRuntime` 建的每個帳號都帶，沒開通時的
     預設帳號也是（ETag 是這個程序的隨機金鑰算的，本來就不跨程序、不能預測，沒開通時用戶端看到的沒有差別）；n8n
-    （`apps/n8n/run.py`）到 HM-25 前不帶。兩個帳號就算 state 逐位元相同、金鑰也相同，ETag 也不同。
+    HM-25 起也帶（它的 runtime 改走 `run_product`）。兩個帳號就算 state 逐位元相同、金鑰也相同，ETag 也不同。
   - 索引 ETag＝這個程序的隨機金鑰對「索引的每一筆（id、名稱、port）照順序」算的 HMAC：內容一樣 ETag 就一樣，改名、換順序、
     增刪就變；重啟後全部變。壞索引的 ETag＝同一把金鑰對索引檔的 lstat 簽章與原始位元組（最多 64 KiB＋1）算的 HMAC，換檔或改任何
     一個位元組都會變；只有索引隔離收它，其他寫入一律 409。
@@ -750,7 +751,7 @@ PaaS 另帶 `message` 文字，HA 不帶（面板只認代碼，§8.8 #49）。
 | JSON-RPC `-32602`（結構守門） | 200／413 | POST 的 JSON 巢狀超過 64 層、元素超過 20 萬個、不是 UTF-8 | 第 2.4 節；頭尾認得出 id 才 200 | 同（HM-31，不受開關管） | 同（#155） | §8.8 #106、#107 | 新 | HM-31；`tests/test_request_structure.py` |
 | JSON-RPC `-32004` | 502／SSE 事件 | 子程式在處理途中斷線 | 依原因三種文字（第 2.5 節） | 502 `{"error":"request denied"}`、SSE 安靜結束 | 同（#148）；停止了一律說會自動重新啟動 | §8.8 #93（WARNING 節流）、#100（停止了的文字） | 新 | HM-14；`tests/test_gateway_stream_endings.py` |
 | JSON-RPC `-32005` | SSE 事件 | 標頭送出後 token 被換掉 | 每個未回應 id 一則（第 2.5 節） | 直接斷線（`ClientDisconnect` 丟給 uvicorn） | 同（JSON 回覆也補：它不帶 `Content-Length`） | §8.8 #92、#97 | 新 | HM-14；`tests/test_gateway_stream_endings.py` |
-| `backend_not_configured`（`-32603`） | 200 | 帳號沒填後端、工具需要後端；n8n 額外帳號沒後端時所有工具（含文件工具） | `ToolCallRefused` 形狀 | 照今天 | n8n 額外帳號起文件模式 | §8.8 #28（DQ-22 待定） | 既有（擴大） | HM-25 |
+| `backend_not_configured`（`-32603`） | 200 | 帳號沒填後端、工具需要後端；n8n 額外帳號沒後端時所有工具（含文件工具） | `ToolCallRefused` 形狀 | 照今天 | n8n 額外帳號起文件模式 | §8.8 #28（DQ-22：HM-25 照計畫建議實作，使用者還沒確認） | 既有（擴大） | HM-25；`tests/test_n8n_multi_profile.py` |
 | `backend_unreachable`（`-32603`） | 200 | 最近的健康檢查說後端連不上 | 帶檢查的原因 | 照今天 | 沒有定期監看 | §8.8 #18 | 既有 | HM-09、HM-30 |
 | 429 GET 串流 | 429 | GET 串流已達上限 | `-32003`、`id: null`、`Retry-After: 30` | 不設上限 | 同（32 條） | §8.8 #15 | 新 | HM-08 |
 
@@ -1066,6 +1067,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 | 被擋的狀態 | HM-09 定案：`disabled_reason` 有值的帳號不起（開機、看門狗、面板重啟都不起）：`status=blocked`，`blocked_reason` 是 `port_conflict`→`child_port_conflict`、`memory_capacity`→`memory_capacity`、`profile_limit`→`null`（沒有對應的原因碼，看清單的 `disabled_reason`）。開通後 `child/restart` 的 202 回應多 `blocked_reason`（沒被擋是 `null`）；沒開通照今天 |
 | 子程式 bearer（HM-06，不受開關管） | 剛好一個 `Authorization`、`hmac.compare_digest` 比對 `Bearer <WOOW_MCP_CHILD_TOKEN>`；不符 401（不寫細節）；環境變數缺、空或不符 `[A-Za-z0-9_-]{43}` 就拒絕啟動 |
 | 後端 loopback（HM-20，受開關管） | 開通的產品的子程式環境多一個 `WOOW_MCP_DENY_LOOPBACK=1`，預設帳號與每個額外帳號的子程式都有（沒開通就沒有這個變數，spec 逐位元同今天）；子程式連設定的後端時，網址的字面位址或名稱解析出的任何一個位址是 127.0.0.0/8 或 ::1，整組拒絕、不連線（Python 子程式 `BACKEND_DESTINATION_DENIED`；Headscale 的子程式本來就一律拒 loopback、不看這個變數，回 `HEADSCALE_DESTINATION_DENIED`；n8n 另擋 0.0.0.0 與 IPv4-mapped，API 與官方 MCP 端點都擋）；變數的值不是 `1` 就拒絕啟動。n8n 的 webhook、chat、form 網址不受這條管（§8.8 #90） |
+| n8n 額外帳號（HM-25，受開關管） | 子程式只在有後端時起（DQ-22；`profiles.documentation_child`：只有 n8n 的預設帳號沒後端也起文件子程式）：沒後端時沒有子程式、`status=unconfigured`，健康檢查與套用狀態都是 `unconfigured`，閘道自答 initialize 與 tools/list（完整清單照政策過濾），每支工具（含 7 支文件工具）都回 `-32603`「Backend not configured」，不再回「try again shortly」（第 9 節 #28、#130）。HOME 與 cwd 是 `profiles/<id>/child/`（不存在就建 0700；每次起之前都要是空目錄、不是連結；第 9 節 #129）。`nodes.db` 是自己的副本 `/tmp/woow-n8n-mcp/profiles/<id>/nodes.db`（目錄 0700、檔 0600、不跟隨連結；這個管理程序第一次起它的子程式前在工作執行緒裡複製，之後重起沿用；做不成就不起子程式、記一行 WARNING，絕不用預設帳號的副本或映像內的檔；刪帳號時一起刪；第 9 節 #47）。命令列在入口後面多 `--port N`（n8n-mcp 不讀它，照舊聽 `PORT`；P9 kit 與容器探針用它認子程式，第 9 節 #131）。session 名額與逾時看自己 state 的 `n8n_session`（沒存過是 20 個、10 分鐘；新帳號不複製，DQ-02）。預設帳號的 spec 逐位元同今天（HOME 與 cwd 仍是 `/data/mcp`、`/tmp/woow-n8n-mcp/nodes.db`） |
 | log 事件 | 子程式啟動、結束（結束碼）、退避（下次秒數）、`failed`、`blocked`（原因碼）、監看認證退避、撞號、孤兒、隔離、還原守門逐帳號動作、休眠撤銷、缺哪些連線鍵（只列鍵名）；格式 `[profile=<id 前 8 碼> port=<p> pid=<n>]`；每帳號每情況 60 秒一行（`suppressed=N`）。HM-09 寫的（開通的產品才寫，logger `mcp_admin_core.lifecycle`，一律 WARNING，因為 add-on log 只顯示 WARNING 以上）：`MCP child [profile=… port=… pid=…]: started`／`exited with code N`／`next start in N s (attempt n)`／`failed after n starts; …`／`not started (<原因碼>): <固定說明>`／`child resources not applied (…)`／`could not be started (<例外類別>)`／`not started: no connection is saved yet (<欄位名>); …`／`the backend refused the credentials; next health check in N s`／`its health monitor stopped; …`／`MemAvailable cannot be read; …`／`its staggered start failed (<例外類別>); the other profiles start anyway`（HM-09 審查 S-12）；`child resources not applied (…: no interpreter for the wrapper); …` 也是同一行的一種。另外 logger `mcp_admin_core.profiles` 的 `multi-profile: the IPv6 test bind on <位址> is refused (<errno 名稱>); the spawn check skips that address`（HM-09 審查 S-6；每個位址與 errno 每個程序一行，不帶帳號）。撞號、孤兒、讀不到的帳號是 HM-08 寫的（logger `mcp_admin_core.profile_runtime`、`profile_router`）；隔離、還原守門逐帳號動作、休眠撤銷是 HM-13b。HM-13b 寫的（logger `mcp_admin_core.restore_lock`，不受開關管，一律 WARNING，只在守門有事做的那次開機）：`restore guard [profile=<default 或 id 前 8 碼>]: token revoked, child token renewed`／`…: its state cannot be read; its directory was moved to the quarantine (…)`／`…: its token could not be revoked (<例外類別>)`／`…: its state cannot be read and its directory could not be moved to the quarantine`／`…: its state is held by another writer; …`／`…: its operation receipts could not be archived`；不帶帳號的：權杖已回到備份當時的值（`… the MCP token is back to its value at the time of that backup …`）、全部撤銷（`… the MCP token of every profile (the default profile's included) was revoked …`）、休眠（`… the MCP token of <N> dormant profile(s) is revoked …`）、全部撤銷補完（`… a "revoke all" had not finished …`）、`the operation receipts beside the profile index could not be archived`、`the operation receipts beside the Origin policy could not be archived`（HM-27，和 HM-13b、HM-13c 合併後）、`the profiles directory cannot be listed; …`、`<名稱> was not a plain file; it was moved aside to <名稱>.quarantine-<UTC>`（帳號目錄裡的收據封存是 `restore guard [profile=<id 前 8 碼>]: <名稱> was not a plain file; …`）、`not finished (<原因>); nothing is served and no child is started. …`（原因是固定字串）、標記刪不掉的那一行；原文常數在 `restore_lock.py`。HM-13c：同一行 `MARKER_LEFT` 的原因多一種 `the panel notice could not be saved`（沒開通又沒有帳號資料時存不下還原提示）；`the panel notice of the restore could not be removed after the token changed; …`（提示檔刪不掉）；logger `mcp_admin_core.profile_admin` 的 `multi-profile: the child of profile <id 前 8 碼> did not start again after "revoke all" …`、`multi-profile: a quarantine directory of profile <id 前 8 碼> could not be removed completely; …`、`multi-profile: the credentials of a quarantine directory of profile <id 前 8 碼> could not be wiped before its deletion` |
 
 ## 8. 資料（摘要）
@@ -1084,7 +1086,8 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 - 沒開通、沒有帳號資料的安裝（今天的每個安裝；計畫 §3.3、§7.1）：上面的名稱一個都不產生（沒有索引、`profiles/`、sentinel、還原紀錄），
   只有偵測到還原時 entrypoint 多建一個標記、開機就刪。HM-13c 起多一個例外：還原後（預設帳號的權杖沒撤銷）多 `restore-notice.json`
   （只有時間，不含秘密），到預設帳號的權杖變了才刪（第 1.2 節）。沒有還原時開機只多查這一個名稱，什麼都不寫。
-  n8n 額外帳號的 `nodes.db` 在 `/tmp/woow-n8n-mcp/profiles/<id>/`（DQ-04 待定）。
+  n8n 額外帳號的 `nodes.db` 在 `/tmp/woow-n8n-mcp/profiles/<id>/`（DQ-04：HM-25 照計畫建議實作，使用者還沒確認；不在 `/data`、不進備份），
+  子程式的 HOME 與 cwd 是 `profiles/<id>/child/`（第 7 節）。
 - 索引格式（和 PaaS `profile_index` 同形狀）：
 
   ```json
@@ -1122,6 +1125,8 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 第 118～121 列出自 HM-13b 的實作（開機守門；不是 FEATURE-MATRIX 的列，`deviation-trace.md` 沒有）；#24、#67、#82 的附註也是。
 第 122、123 列出自 HM-13c 的實作（單帳號還原後的面板提示：使用者 2026-11-16 定案；隔離目錄的清單與刪除；不是 FEATURE-MATRIX 的列，`deviation-trace.md` 沒有）；#58、#67、#82 的 HM-13c 附註也是。HM-13c 獨立審查的修正只補 #58、#82、#123 的附註，沒有新列。
 第 124～128 列出自 HM-27 的實作（密鑰網址的服務層級 Origin 清單；#9、#10、#42 由 HM-27 定案改寫；不是 FEATURE-MATRIX 的列，`deviation-trace.md` 沒有這幾列）。原稿是第 118～122 列：HM-13b（#108）、HM-13c（#112）先合併、用掉第 118～123 列，本片合併時往後重編（第 10 節）。
+第 129～131 列出自 HM-25 的實作（n8n 開通；不是 FEATURE-MATRIX 的列，`deviation-trace.md` 沒有）；#4、#28、#47、#62、#90 的 HM-25 補寫也是。
+列號暫定：其他產品的開通片（HM-21～HM-24、HM-26）同時在準備，後合併的片照 HM-27 的前例往後重編（第 10 節）。
 2026-11-17 文件同步重產 `deviation-trace.md`（到第 117 列）：第 87 列以後的列，FEATURE-MATRIX 有說到同一件事的列就加進那一列的「對到」
 （例如 FM-154 → #101～#108、FM-81 → #113、#114）；沒有任何 FEATURE-MATRIX、G6 §5 的列對到的（#22、#33、#83、#88、#89、#90、#99），
 出處寫在 `deviation-trace.md` 文末「差異表每一列的來處」。
@@ -1131,7 +1136,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 | 1 | 錯 token | 403 | 密鑰網址 404、Bearer 401 | HA 既有契約（Hc/gateway.py:932-947） | 既有 |
 | 2 | Bearer 接法 | 沒有 | 有，依 token 選帳號 | HA 主推接法（DQ-01 採 (a)） | 既有 |
 | 3 | MCP 路徑帶 query、`/mcp/` | 轉發、等同 `/mcp` | 400、404 | HA 較嚴 | 既有 |
-| 4 | 轉送的用戶端標頭 | 大部分（含 `x-n8n-*`） | 只有 3 個 session 標頭；回程只轉 4 個固定標頭（不含 Location） | n8n-mcp 會依 `x-n8n-*` 換後端（G5-13） | 既有 |
+| 4 | 轉送的用戶端標頭 | 大部分（含 `x-n8n-*`） | 只有 3 個 session 標頭；回程只轉 4 個固定標頭（不含 Location）。HM-25：開關開與關、每個帳號、兩種接法，`x-n8n-url`、`x-n8n-key`、`x-n8n-mcp-token`、`x-instance-id`、`x-session-id` 都不轉給子程式（`tests/test_n8n_multi_profile.py`） | n8n-mcp 會依 `x-n8n-*` 換後端（G5-13） | 既有 |
 | 5 | 工具呼叫逾時 | 110 秒回 `-32001`（Pc/proxy.py:44-46） | 330 秒（Hermes chat 300 秒） | HA 既有（R07 X-20；DQ-24 待定） | 既有 |
 | 6 | legacy SSE | 轉送 `/sse`、`/messages/` | 不支援 | HA 子程式只開 Streamable HTTP（DQ-23 待定，建議不支援） | 既有 |
 | 7 | readiness | `/healthz` 恆 200 | `/health/ready` 200／503，只代表預設 | FM-67；DQ-19 已定 | 既有 |
@@ -1155,7 +1160,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 | 25 | 索引壞 | 整台 503（含管理 API；R03 §1.6） | 8081 503、面板照開、「隔離帳號索引」 | HA 沒有手動修復途徑（DQ-12 已定） | 部署 |
 | 26 | 手改索引 | 重啟才生效（R03 §4.12） | 503 到重啟 | 外改＝繞過鎖 | 加嚴 |
 | 27 | endpoint | 不存，用瀏覽器 origin | 存在預設 state、全域；額外帳號的 bootstrap 顯示它，`PUT endpoint` 409 `endpoint_global` | Ingress 和 MCP 不同源（FM-12）；DQ-13 已定（2026-11-15 17:4x） | 部署 |
-| 28 | 沒填連線的子程式 | 5 個產品照起；n8n 額外帳號起文件模式（R06 PR-n8n-01） | 都不起；n8n 預設照起；n8n 額外帳號沒後端時所有工具回 `backend_not_configured`（DQ-22 待定） | 省記憶體（FM-45） | 部署 |
+| 28 | 沒填連線的子程式 | 5 個產品照起；n8n 額外帳號起文件模式（R06 PR-n8n-01） | 都不起；n8n 預設照起；n8n 額外帳號沒後端時不起子程式、所有工具（含 7 支文件工具）回 `backend_not_configured`，不回「try again shortly」（DQ-22：HM-25 照計畫建議實作，使用者還沒確認；`profiles.documentation_child`） | 省記憶體（FM-45） | 部署 |
 | 29 | 日誌 | 每帳號 Logs 5,000 筆／2 MiB、SSE；保留 2 個剛刪除帳號（Pc/routers/logs.py:59-65） | 每帳號子程式輸出 200 筆／128 KiB 快照；管理程序紀錄在 add-on log（帶 id 前 8 碼）；刪除就釋放 | HA 既有診斷模型（FM-65） | 部署 |
 | 30 | 面板 403（Core 未審） | 沒有平台門檻 | 整個面板 403，任何帳號都撤銷不了，只能停 add-on | HA 角色驗證契約（FM-70） | 部署 |
 | 31 | 管理 API 沒帶帳號 | 當 default | 開通後 400 `profile_id_required` | fail closed（I12；DQ-40 ①） | 加嚴 |
@@ -1174,7 +1179,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 | 44 | 帳號索引的位置與建立時點 | 預設帳號 `config.json` 內的 `profile_index`；下次寫入就多一個空索引 | 獨立檔 `/data/mcp/profiles.json`，第一次建立額外帳號才產生；預設 `state.json` 一個鍵都不加 | HA state 鍵集合精確比對，舊映像讀不了新鍵（Hc/products.py:529-538） | 部署 |
 | 45 | 部署層設定入口 | 名額、排隊、Origin 等用 chart 或環境變數調 | 全部是程式常數；add-on options 維持 `{}`；改數值要回功能 PR、發版 | Store 第 1 類比對與 validate.py 的精確 manifest | 部署 |
 | 46 | 手改帳號 state | 讀一次就快取，手改要重啟管理程序 | 每請求重讀，手改立即生效、壞檔立即 fail closed（索引另見 #26） | HA 既有每請求重讀與租約 | 既有 |
-| 47 | n8n `nodes.db` 位置 | 每帳號在設定目錄（持久、進備份，約 67 MiB／帳號） | 預設不變（`/tmp/woow-n8n-mcp/nodes.db`）；額外帳號 `/tmp/woow-n8n-mcp/profiles/<id>/`（不進備份） | 不加大備份；DQ-04 待定（HM-25） | 待決 |
+| 47 | n8n `nodes.db` 位置 | 每帳號在設定目錄（持久、進備份，約 67 MiB／帳號）；第一次啟動時從種子複製，做不成就拒絕啟動（不退回包內唯讀 DB）；刪帳號時隨目錄刪掉 | 預設不變（`/tmp/woow-n8n-mcp/nodes.db`，管理程序啟動時複製，做不成就讀映像內的檔）；額外帳號 `/tmp/woow-n8n-mcp/profiles/<id>/nodes.db`（不進備份；這個管理程序第一次起它的子程式前在工作執行緒裡複製，之後重起沿用；做不成就不起子程式，絕不用預設帳號的副本或映像內的檔；刪帳號時一起刪）。HM-25 | 不加大備份；版本歷史只留到容器重建或管理程序重啟（同預設帳號今天）；DQ-04：HM-25 照計畫建議實作，使用者還沒確認 | 待決 |
 | 48 | 管理請求的網址規則 | 沒有這條限制 | 帶 query、`raw_path` 含 `%` 或 `\\` 一律 400（Hc/gateway.py:706-711） | HA 既有 | 既有 |
 | 49 | 錯誤的顯示 | 面板顯示伺服器回的 `detail`／`message` 文字 | 面板只認固定代碼，文字由面板對照（Hui/api.js:48-61）；伺服器不回文字 | HA 既有 | 既有 |
 | 50 | 帳號範圍的選擇方式 | `X-MCP-Profile` 標頭 | 標頭；UC-10 證實 Ingress 不轉時改路徑 `{base}/api/p/<id>/…`，PATCH／DELETE 改 POST（第 3.7 節） | 看 HM-03a 的 UC-10 結果 | 待決 |
@@ -1189,7 +1194,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 | 59 | 換身分換 token 的歷史動作名 | `backend_identity_change` | 沿用 `rotate` | history 只收 rotate／revoke，不改 schema（FM-09） | 部署 |
 | 60 | Odoo 讀取並行 | 讀取工具預設 8 條工作緒 | 1 條 | 不同時改並行度與多帳號（DQ-30 待定，建議維持 1） | 待決 |
 | 61 | Odoo reviewed methods 的預設來源 | 沒存過時讀容器 env（全帳號共用） | 只從各帳號 state 組，不繼承容器 env | HA 既有（隔離更好） | 既有 |
-| 62 | n8n session 名額與滿了的回應 | 每帳號 20、逾時 900 秒；上游 429 原文轉回；`AUTH_RATE_LIMIT_MAX` 1000 | 每帳號 20、逾時 600 秒；閘道回 429「Too Many Requests」；上游預設限流 | HA 既有；DQ-22 細節待定 | 待決 |
+| 62 | n8n session 名額與滿了的回應 | 每帳號 20、逾時 900 秒；上游 429 原文轉回；`AUTH_RATE_LIMIT_MAX` 1000 | 每帳號 20、逾時 600 秒（每個帳號自己的子程式、自己 state 的 `n8n_session`；新帳號不複製，DQ-02；存一個帳號的 session 設定只重啟它的子程式）；閘道回 429「Too Many Requests」；上游預設限流 | HA 既有；DQ-22（逾時與限流維持 HA 現值）：HM-25 照計畫建議實作，使用者還沒確認 | 待決 |
 | 63 | Hermes Dashboard | 管理端有 Dashboard 代理（cookie 快取 key 帶帳號，刪帳號清除） | 沒有管理端代理；子程式內 cookie 每個子程式一份 | HA 沒有 Dashboard 代理頁 | 既有 |
 | 64 | LiteLLM 寫入權限 | `LITELLM_MCP_READONLY` 一個開關 | 逐支工具授權 | HA 既有政策模型 | 既有 |
 | 65 | EMQX 子程式端政策 | 子程式每次呼叫讀自己帳號的設定再擋一次 | 只在閘道擋；子程式只收 READONLY 與 DISABLED_TOOLS | 閘道政策＋每帳號子程式＋bearer（DQ-27 待定，建議不做） | 待決 |
@@ -1217,7 +1222,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 | 87 | FD 上限不夠 | 沒有這條降級（程式不讀也不調 `RLIMIT_NOFILE`） | 開通後啟動時讀 soft／hard `RLIMIT_NOFILE`；讀不到、hard 不夠或設不上：只服務預設帳號、8081 外框維持 64、記一行 WARNING（第 5 節） | HA 不能假設 HAOS 容器的上限（待 HM-03a 實測）；不夠時寧可不開額外帳號 | 部署 |
 | 88 | 額外帳號目錄被換掉 | 只在開啟當下比對 fd 與路徑是同一個目錄（`Pc/profiles.py:212-218`），之後快取 store、不再比對 | 開啟時記下目錄的 (st_dev, st_ino)，之後不同就不路由，它的 token 變成未知 token（第 2.2 節第 3 點；HM-07 審查 S-08） | 防誤拷與誤改；同 uid 下不是安全邊界（DQ-37） | 加嚴 |
 | 89 | 試綁被平台擋 | IPv6 試綁除了 EADDRNOTAVAIL、EAFNOSUPPORT 之外的失敗都當成 port 被佔（`child_identity.port_occupied`） | IPv6 試綁遇到 EACCES、EPERM 時跳過那個位址，每個位址與 errno 每個程序記一行 WARNING；IPv4 任何失敗仍當被佔（第 7 節） | 平台事實不假設（HAOS 的 AppArmor、seccomp 可能擋 IPv6 bind，待 HM-03a 實測）；照 PaaS 的話，開通後預設帳號的子程式會因此永遠起不來。子程式只綁 127.0.0.1，別的程式的雙棧 socket 仍會讓 IPv4 萬用位址的試綁失敗，跳過不會漏掉佔用者 | 部署 |
-| 90 | n8n webhook、chat、form 網址的 SSRF 模式 | 子程式讀部署端的 `WEBHOOK_SECURITY_MODE`，預設 strict（擋 loopback、私網；和存檔檢查同一個模式，Pc/util/ssrf.py） | 固定 `permissive`（只擋雲端 metadata 與隧道內嵌的位址，可以指到區網與 loopback；H:apps/n8n/n8n_adapter.py）。開通後只有設定的 n8n 本身（API 與官方 MCP 端點）拒 loopback（#39），webhook 照舊 | 負責人 2026-10-15 的決定（`n8n_test_workflow` 要打 HA 網路上的 n8n）；2026-11-15 使用者定維持不動（DQ-10 子題），多帳號時要不要收緊交 HM-25 前的獨立安全審查 | 既有（HM-25 前再評估） |
+| 90 | n8n webhook、chat、form 網址的 SSRF 模式 | 子程式讀部署端的 `WEBHOOK_SECURITY_MODE`，預設 strict（擋 loopback、私網；和存檔檢查同一個模式，Pc/util/ssrf.py） | 固定 `permissive`（只擋雲端 metadata 與隧道內嵌的位址，可以指到區網與 loopback；H:apps/n8n/n8n_adapter.py）。開通後只有設定的 n8n 本身（API 與官方 MCP 端點）拒 loopback（#39），webhook 照舊 | 負責人 2026-10-15 的決定（`n8n_test_workflow` 要打 HA 網路上的 n8n）；2026-11-15 使用者定維持不動（DQ-10 子題），多帳號時要不要收緊交 HM-25 前的獨立安全審查。HM-25 照舊（每個帳號都是 `permissive`），威脅說明在 HM-25 筆記；收不收緊等那次審查 | 既有（HM-25 的獨立審查再評估） |
 | 91 | 保留名額載的東西 | 通知與對伺服器請求的回應都轉送（`notifications/cancelled`、roots、progress…），走每帳號另外 8 條保留名額 | 每帳號 4 條、有自己的佇列；判斷函式照 PaaS 原樣（`gateway.carries_no_request`）。HA 的政策只轉送 `notifications/initialized`：其他通知閘道自己回 202、不轉送；對伺服器請求的回應、batch、沒有 id 的工具呼叫在任何名額之前 403；重複鍵 400（strict JSON），所以實際走保留名額的只有 `notifications/initialized` | HA 從不把子程式對用戶端的請求（elicitation、sampling、roots）轉給用戶端，沒有要回的回應；HA 既有政策（0.1.13、0.1.14） | 既有 |
 | 92 | token 換掉時標頭已送出的 JSON 回覆 | 回覆不帶 `Content-Length`（chunked），一個位元組都還沒送時改送 `-32005` 本體 | 帶 `Content-Length`（HM-01 黃金回歸逐位元），標頭已送出就不能改：閘道返回、伺服器關掉連線（uvicorn 記一行，沒有 traceback）；SSE 照 PaaS 補 `-32005` | HM-01 的逐位元契約；token 換掉之後子程式的位元組一律不送 | 既有 |
 | 93 | `-32004` 的 log | 每次一行（方法、token 之後的路徑、錯誤類別、原因） | 每帳號每種原因 60 秒一行（`suppressed=N`）：帳號 id 前 8 碼、HTTP 方法、錯誤類別、原因；不寫路徑（密鑰網址的路徑就是 token） | 子程式當掉時同時在跑的請求一起斷；HA 的 WARNING 規則（第 2.4 節） | 部署 |
@@ -1256,6 +1261,9 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 | 126 | Origin 政策的設定入口與壞值 | 環境變數 `MCP_ADMIN_ALLOWED_ORIGINS`、`MCP_ADMIN_ORIGIN_MODE`（chart values）；壞值啟動失敗（exit 3）、執行中讀到壞值 MCP 路徑一律 503 `ORIGIN_POLICY_UNAVAILABLE`；啟動時記一行生效政策（INFO） | `/data/mcp/origin-policy.json`，面板經共用管線 GET／PUT `{base}/api/origin-policy`（If-Match、Idempotency-Key、收據）；檔案不能用時密鑰網址一律 503 `{"error":"state unavailable"}`（不拒絕啟動，面板用那個檔自己的 ETag 存一份蓋過去），只記 WARNING；沒有啟動時的 INFO 行（HM-27） | add-on options 鎖死（#45），只有面板能改；拒絕啟動會讓壞檔沒有修復途徑 | 部署 |
 | 127 | Origin 紀錄的節流 | 整台一份：每個來源 60 秒一行、全部每 60 秒最多 20 行，壓下的補一行；不標帳號，只進預設帳號的 Logs 頁（R04 S-10） | 每帳號一份：每帳號每個（判定、原因、來源）60 秒一行、每帳號每 60 秒最多 20 行，壓下的補一行；帶帳號 id 前 8 碼，寫在 add-on log（WARNING）（HM-27） | HA 在 token 之後判斷、知道帳號；一個帳號被灌爆不會蓋掉其他帳號的紀錄（PaaS 多帳號實測的 info，HANDOFF :241） | 部署 |
 | 128 | Origin 清單的格式與上限 | 逗號分隔的環境變數、每項去空白、不限個數，正規化後的重複合併 | JSON 陣列、最多 16 個、每項要剛好是一個來源（不去空白）、正規化後重複 → 422 `origin_policy_invalid`；存正規化後的寫法（HM-27）；IPv6 寫成 RFC 5952 的十六進位、不寫點分，不跟 Python 版本變（HM-27 審查 S-9） | 檔案與請求有界；不默默合併；存過的檔換 Python 也照樣能用 | 加嚴 |
+| 129 | n8n 額外帳號子程式的 HOME 與 cwd | 子程式繼承管理程序的環境與工作目錄（`Pc/process.py:145`；`apps/n8n/n8n_mcp_admin/launcher.py` `build_env`），每個帳號的 HOME 與 cwd 相同；DB 在帳號設定目錄 | `profiles/<id>/child/`：不是帳號目錄本身、不和 `state.json` 同層；不存在就建 0700，每次起之前都要是空目錄、不是連結（一般檔、連結、裡面有東西都不起子程式）；預設帳號維持 `/data/mcp`（HM-25） | 還原修復只收一般目錄與單一連結的一般檔、有項目數與深度上限，子程式寫進資料目錄的東西會被備份與還原（C2-SF-8）；n8n-mcp 2.96.2 關掉遙測時不寫 HOME（UC-01：讀 dist 與真子程式測試） | 部署 |
+| 130 | 沒後端的 n8n 額外帳號的工具清單 | 起文件模式子程式，tools/list 只有 7 支文件工具 | 不起子程式；閘道自答 initialize 與 tools/list（完整清單照政策過濾，同其他產品沒填後端時），每支工具都回 `-32603`「Backend not configured」（HM-25） | 跟著 #28：省一個子程式（約 300 MiB）；清單和其他產品一致，Claude.ai 連接器在設定後端前也加得上去 | 部署 |
+| 131 | n8n 子程式的命令列 | `node index.js`，port 只在環境變數 `PORT` | 預設帳號照舊（命令列沒有 port，就是 3000）；額外帳號在入口後面多 `--port N`（n8n-mcp 不讀它，照舊聽 `PORT`；HM-25） | P9 kit 的 `childkill --child-port` 與容器探針只讀命令列（任何人可讀）認子程式，不讀別人的環境變數（要 CAP_SYS_PTRACE；HM-16 審查 SF-2） | 部署 |
 
 ## 10. 變更紀錄
 
@@ -1314,3 +1322,4 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 | v1 草案（HM-27 審查修正） | 2026-11-17 | HM-27 | 依 HM-27 的獨立審查（報告 `artifacts/…/wave4/review-HM-27.md`，修正後通過）：第 2.6 節 IPv6 的正規寫法改成 RFC 5952 的十六進位（不跟 Python 版本變）並寫明改正規化規則要遷移舊檔（S-9），不能用的政策檔列全、所有帳號的密鑰網址都 503、目錄只能還原備份（S-2、S-6），開通之後又關掉時 enforce 靜默失效（S-6），Headscale 的 `/api/origin-policy` 寫精確（S-5）；第 3.1 節 405 的 `Allow` 補 `origin-policy`，第 3.2 節 ⑤ 補它的本體、⑧～⑪ 補政策鎖與「⑩ 在鎖之後」（S-4、MF-2）；第 9 節 #9、#128 跟著改 |
 | v1 草案（HM-27 合併 HM-13c 之後） | 2026-11-18 | HM-27 | 把 HM-13c 的分支（PR #112 head `c5dd7d3`：已含 HM-13b 的 `090081c` 與 `claude-delivery` `53ffe61`）用 merge commit 合進本片（不 rebase、不 force push）：HM-13b 用掉第 118～121 列、HM-13c 用掉第 122、123 列，本片的五列往後移六列，原稿 #118～#122 成為第 124～128 列，順序不變；本片引用自己列號的地方跟著改：開頭的狀態、第 2.6 節四處、第 4.1 節 `origin_policy_invalid` 列、第 4.2 節兩列、第 9 節說明段本片那行（原本「後合併的一方往後重編」那句改成改號的紀錄）、五列的列號、第 10 節本片的兩列（`decisions.md` DQ-11 列、`acceptance-matrix.md` T-24 的引用同步）。HM-13b、HM-13c 的 #118～#123 照原樣。解衝突時兩邊都留：第 1.2 節表格兩列與第 3.1 節路由表、方法表合成一份（HM-13c 定案的隔離目錄刪除列＋本片的兩列）；第 3.2 節鎖的說明、第 3.5 節表格、第 4.1 節、第 9 節說明段、表尾與本節都是 HM-13c 那側在前、本片在後。合併後另定 Origin 政策與開機守門的關係（本片筆記第 17 節交的事）：兩個檔名寫進版面（`profiles.py`）；還原時守門照索引旁的收據封存、換新 Origin 政策旁的收據（`.origin-policy.json.operations.json`，封存名稱加進守門的名稱），政策檔本身照還原的原樣、守門不讀不改，沒開通又沒有帳號資料時兩個都不動：第 1.3 節（步驟、守門的名稱、Origin 政策一點）、第 2.6 節（還原一點）、第 3.5 節、第 7 節 log 一行、第 8 節布局、#67、#120 跟著改（HM-13b 的兩列只加 HM-27 的那一句）。其他規則內容不變 |
 | v1 草案（HM-27 合併後的審查） | 2026-11-18 | HM-27 | 依合併 HM-13c 之後的獨立審查（通過；本片筆記第 20 節）：第 4.1 節 `operation_restored` 列跟上第 2.6、3.5 節：HM-27 起 Origin 政策旁的收據也是（開通或有帳號資料時），`PUT origin-policy` 重送還原前的 id 也回 410；負責片加 HM-27，測試加 `tests/test_origin_policy.py` 與面板的 `origin-policy.test.mjs`（識別紀錄留著、「已核對來源設定」才清掉）。規則內容不變 |
+| v1 草案（HM-25） | 2026-11-19 | HM-25 | n8n 開通的功能片（計畫 §9 n8n 列、§12.3 HM-21～HM-26；不改 `MULTI_PROFILE_PRODUCTS`、不改版號）：第 1.2 節不受開關管的清單加「n8n 的 runtime 改走 `run_product`」（開關關時預設帳號逐位元同今天）；第 3.5 節 n8n 的帳號 ETag HM-25 起也帶帳號 id；第 4.2 節 `backend_not_configured` 列寫明 DQ-22 照建議實作、加測試檔；第 7 節加「n8n 額外帳號」列（只在有後端時起子程式、HOME 與 cwd、自己的 `nodes.db` 副本、命令列的 `--port`、session 設定各自）；第 8 節 `nodes.db` 那句寫明 DQ-04 照建議實作；第 9 節 #4、#28、#47、#62、#90 補 HM-25 的做法，加第 129～131 列（列號暫定：其他產品的開通片同時在準備，後合併的往後重編，照 HM-27 的前例）。DQ-04、DQ-22 照計畫建議實作，使用者還沒確認（`decisions.md`）；#90 的 webhook 模式照舊，交 HM-25 之後的獨立安全審查 |

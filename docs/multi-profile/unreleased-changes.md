@@ -84,8 +84,21 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 - 要寫：無（A1、A3、A4、A5 含 n8n 那一句、A6、A7、B1 已寫進 0.4.14；A2 不適用）。
 - 自己的修正：沒有。`apps/n8n` 的兩次改動都沒有可見變化：HM-04（#91，port 參數化，預設 3000 時 `PORT` 照舊）、HM-20（#102，開通後才拒絕
   loopback 與檢查存檔）。
-- 發版時另外驗：第 5 節。另外，n8n 若自己升版號（不跟預設版號一起升），`apps/n8n/run.py` 沒傳 `product_version`，`serverInfo` 與面板會報
-  預設版號，HM-17 的升版模擬會擋：先改 `run.py` 與相關測試（HM-17 筆記第 12 節）。
+- 發版時另外驗：第 5 節。n8n 自己升版號（不跟預設版號一起升）時，HM-25（合併後補 PR 號）起 `apps/n8n/run.py` 走 `run_product` 的
+  runtime、照其他產品傳 `version_for_product('n8n')`，`serverInfo` 與面板報的就是 `PRODUCT_VERSIONS` 的版號；HM-17 筆記第 12 節要先改
+  `run.py` 的那一條不用做了。
+- **開通 n8n 的升版 PR 才寫**（HM-25，受開關管；開關關時沒有可見變化，見第 4.2 節）。計畫 §7.2 的共通項目照 Odoo 首發的寫法另寫；n8n 自己
+  看得到的變化，每項一行（英文句子是主對話補寫的草稿，最後由發版片定）：
+  - 額外帳號（每個 add-on 最多 2 個，DQ-29 暫定值）各有自己的 token、後端、政策與 n8n-mcp 子程式：
+    `Additional profiles (up to 2): each has its own MCP token, n8n backend, tool policy and its own n8n-mcp process.`
+  - 沒設定後端的額外帳號不起子程式，每支工具（含 7 支文件工具）回 `-32603`「Backend not configured」；預設帳號照舊（沒後端也起文件子程式）：
+    `An additional profile without an n8n backend runs no n8n-mcp process: every tool, the seven documentation tools included, answers "Backend not configured"; the default profile is unchanged.`
+  - session 名額與逾時每個帳號各自（沒存過是 20 個、10 分鐘）：
+    `MCP sessions are counted per profile: each profile has its own 20 sessions (10 minutes idle) unless its own settings say otherwise.`
+  - 每個額外帳號有自己的 node catalog 與 workflow 版本歷史（`/tmp`，不進備份；刪帳號一起刪）：
+    `Each additional profile keeps its own node catalog and workflow version history (in /tmp, not in backups; deleted with the profile).`
+  - DOCS 要跟著改（`addons/n8n/DOCS.md`，升版 PR 改）：「所有 client **共用 20 個**同時 session」改成「每個帳號的 client 共用該帳號的 20 個
+    session」；「n8n 沒有後端時子程序照常啟動，7 個文件工具照常回答」補「額外帳號沒有後端時不起子程序，每支工具都回 `Backend not configured`」。
 
 ### 3.3 Hermes
 
@@ -158,6 +171,7 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 | HM-12 | #110 | `7646f0f` | Odoo 換身分換 token、新來源重填秘密（後端） | 換身分不換 token，回應沒有新欄位 |
 | HM-30 | #111 | `ebefebe` | 回覆處理工作執行緒、待送回覆額度、健康檢查容忍 | 不建工作執行緒，回覆照舊在事件迴圈處理 |
 | HM-12 面板 | #114 | `165dbaf` | 換 token 的提示、新來源重填秘密的表單 | 面板畫面、請求與提示不變（HM-12 面板筆記：216 個比較 0 差異） |
+| HM-25 | 合併後補 | 合併後補 | n8n 的 runtime 改走 `run_product`（帶 n8n 的 adapter）；額外帳號的子程式（HOME、`nodes.db` 副本、命令列的 port、沒後端不起）、沒後端的額外帳號每支工具都 `backend_not_configured`、刪帳號清 catalog 副本、容器探針多帳號階段收 n8n | 預設帳號逐位元照舊：子程式 spec 照快照、HM-01 黃金回歸與兩個契約凍結照過；`serverInfo` 的版本照舊（n8n 沒有自己的版號）；只有開通才走的路徑都不會被呼叫 |
 
 要用一句話交代第 4 節（可選；主對話補寫，照計畫 §3.3、§7.1）：
 
