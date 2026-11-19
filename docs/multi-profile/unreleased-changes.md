@@ -23,6 +23,8 @@
   2026-11-19 HM-18（基準 `claude-delivery` `c90b214`）：0.4.14 與 Headscale 0.4.19 已在 2026-11-18 合併（#119，`53ffe61`），表與各產品節跟上；
   #108（HM-13b）、#112（HM-13c）、#116（HM-27）、#109（HM-16）合併時沒改本檔，照第 6 節原本寫的補進第 1、4 節（A8、A9）；加第 7 節：
   開通某個產品的那一版要寫的事（契約第 1.4 節的清單、兩個位元組變化的 CHANGELOG 建議句）。
+  2026-11-19 HM-19a（Odoo 0.5.0 升版 PR，基準 `claude-delivery` `95b7e9d`；升版 commit 合併後補）：照第 3 點把 A8、A9 與第 7 節寫進 Odoo 的
+  0.5.0 CHANGELOG；Odoo 開通（`MULTI_PROFILE_PRODUCTS` 只有 `odoo`），第 4 節對 Odoo 不再是「看不到」，表、第 1、3.1、4、7 節跟上。
 - **本檔只管 CHANGELOG**。`upgrade-notes.yaml` 照 `AGENTS.md` 第 3 點與升版比對（`Upgrade comparison`）的要求另外判斷；版號資料照
   `docs/operations/release.md`「升版時要改的版號資料」。
 - 「主對話補寫」：該片的筆記沒有英文句子，是照筆記的中文要點或程式照實寫的，最後的英文由發版片定。其他句子照筆記原文。
@@ -31,7 +33,7 @@
 
 | 產品 | 目前版號 | 上次升版 commit | 映像來源 | 要寫進 CHANGELOG 的項目 | 已合併、CHANGELOG 沒記的產品自身修正 |
 |---|---|---|---|---|---|
-| Odoo | 0.4.14（2026-11-18 合併，#119 `53ffe61`） | `7252d9e`（2026-11-17，0.4.14 升版 PR） | `24de6ec`（2026-11-18 推 GHCR） | 2（A8、A9） | 無 |
+| Odoo | 0.5.0（HM-19a 升版 PR，2026-11-19 準備；合併後補 PR 號與合併 commit；0.4.14 是 #119 `53ffe61`） | HM-19a 的升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 0（A8、A9 與第 7 節已寫進 0.5.0） | 無 |
 | n8n | 0.4.14（同上） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 2（A8、A9） | 無 |
 | Hermes | 0.4.14（同上） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 2（A8、A9） | 無 |
 | EMQX | 0.4.14（同上） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 2（A8、A9） | 無 |
@@ -61,7 +63,7 @@ A1～A7 適用的產品都寫進 CHANGELOG 了，照檔頭「怎麼更新」第 
 - 之後不受開關管的共用變更照檔頭第 1 點加在這一節，從 A8 編起（A1～A7 已用在各 PR 與發版紀錄裡）。
 
 A8、A9 是 0.4.14 合併之後才合併的（2026-11-18～19），適用全部 8 個產品（n8n 的守門與提示在 `apps/n8n/run.py`；OpenDesign 只有來源，照前例寫一行
-「applies to its source too」）；兩項都還沒有產品寫進 CHANGELOG。0.4.14 的 CHANGELOG 寫過 A3（還原標記「之後的版本會讀並刪掉它，在那之前一直留著」），
+「applies to its source too」）；Odoo 0.5.0（HM-19a）已寫進 CHANGELOG（開通的版本，和第 7 節的還原那一點寫在一起），其他 7 個產品都還沒寫。0.4.14 的 CHANGELOG 寫過 A3（還原標記「之後的版本會讀並刪掉它，在那之前一直留著」），
 A8 就是那個之後的版本；寫的時候和 A3 那句對得起來。
 
 - **A8　HM-13b 開機守門（#108，合併 `f5e296f`；不受開關管）**
@@ -102,11 +104,12 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 
 ### 3.1 Odoo
 
-- 上次發版：0.4.14（升版 commit `7252d9e`；映像來源 `24de6ec`；#119 在 2026-11-18 合併）。
-- 要寫：A8、A9（第 1 節）。A1～A7、B1 已寫進 0.4.14。
-- 自己的修正：沒有。`apps/odoo`、`addons/odoo` 在 0.4.13 之後沒改。Odoo 專屬的 HM-12（#110、#114：換身分換 token、新來源重填秘密）受開關管，
-  開關關時沒有可見變化（第 4.2 節）。
-- 發版時另外驗：第 5 節。
+- 上次發版：0.5.0（HM-19a 升版 PR，2026-11-19 準備；升版 commit、PR 號與合併 commit 合併後補）。之前是 0.4.14（升版 commit `7252d9e`；映像來源
+  `24de6ec`；#119 在 2026-11-18 合併）。
+- 要寫：沒有。A8、A9 與第 7 節（開通）已寫進 0.5.0；A1～A7、B1 已寫進 0.4.14。
+- 自己的修正：沒有。`apps/odoo` 在 0.4.13 之後沒改；`addons/odoo` 只改了 0.5.0 的版號、CHANGELOG、DOCS、README，並加 `upgrade-check/`（HM-16 的
+  hook，從 `packaging/hooks/` 搬來）。Odoo 專屬的 HM-12（#110、#114：換身分換 token、新來源重填秘密）受開關管，0.5.0 開通後看得到，已寫進 CHANGELOG。
+- 發版時另外驗：第 5 節，加上計畫 §10.6（Odoo 首發標準，HM-19b）；`docs/operations/release-decision-0.5.0.md` 的驗收清單。
 
 ### 3.2 n8n
 
@@ -167,7 +170,7 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 |---|---|---|---|
 | HM-04 子程式 port 參數化 | #91 | `e5e6e74` | 預設 3000 時子程式的 argv、env、cwd 和以前逐位元相同（快照 `tests/contract/child_spec_default.json`） |
 | HM-05 每帳號執行套件 | #95 | `8e02ac1` | 預設帳號的行為逐位元不變，`/data/mcp` 不多任何檔 |
-| HM-07 帳號資料層 | #93 | `e5fa5c7` | 函式庫還沒接進開機流程；`MULTI_PROFILE_PRODUCTS` 是空集合 |
+| HM-07 帳號資料層 | #93 | `e5fa5c7` | 對沒開通的產品不讀寫帳號資料（開機守門只查名稱，見 HM-13b 那列）；Odoo 0.5.0 起開通（HM-19a），對 Odoo 已寫進 CHANGELOG |
 | HM-11 收據格式 | #107 | `f4c7718` | 預設帳號的收據 key 與 4 個鍵的紀錄不變 |
 | HM-17 發版基礎 | #92 | `56f22f7` | 只改發版工具（`packaging/`、workflow），不在映像裡；影響發版步驟（第 5 節第 6 點） |
 | HM-13b 開機守門（A8 以外） | #108 | `f5e296f` | 撤銷每個帳號（連預設帳號）、隔離讀不到的帳號、獨立驗證、寫還原紀錄、休眠處理，對沒開通的產品都只在磁碟上有帳號資料時動作；全部撤銷的標記（`.revoke-all-pending`）不看帳號資料、一樣撤銷預設帳號，但只有開通的路由寫得出來。沒有產品開通過，今天沒有安裝有帳號資料或這個標記（2026-11-19 HM-18 補列） |
@@ -175,7 +178,7 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 
 ### 4.2 受開關管：開關關時沒有可見變化
 
-這些片的程式都在映像裡，但 `MULTI_PROFILE_PRODUCTS` 是空集合，沒有產品開通，**開關關時沒有可見變化**：`state.json` 位元組不變、不產生新檔、
+這些片的程式都在映像裡。`MULTI_PROFILE_PRODUCTS` 只有 `odoo`（0.5.0 起，HM-19a），其他產品都沒開通，**開關關時沒有可見變化**：`state.json` 位元組不變、不產生新檔、
 bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額／看門狗／健康檢查／管理管線照舊（計畫 §3.3、§7.1）。各片產品開通後的改變，
 由該產品的升版片照契約第 1.4 節（計畫 §7.2 的完整清單，HM-18 定稿）寫進 CHANGELOG（第 7 節）。
 
@@ -199,7 +202,7 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 - This image also carries the groundwork for multiple profiles per add-on (PRs #91, #93, #95, #99, #101–#104, #107, #110, #111 and #114). It stays switched off for this add-on: requests, responses, the admin panel and the files in `/data/mcp` are unchanged apart from the changes listed above.
 ```
 
-0.4.14 的六個產品與 Headscale 0.4.19 的 CHANGELOG 都寫了這一句；下一版只交代那之後合併的片：映像裡多帶、開關關時看不到的是 #108（A8 以外；
+0.4.14 的六個產品與 Headscale 0.4.19 的 CHANGELOG 都寫了這一句；Odoo 0.5.0 不寫（開通之後這些片都看得到，照第 7 節逐項寫；HM-19a）。其他產品的下一版只交代那之後合併的片：映像裡多帶、開關關時看不到的是 #108（A8 以外；
 不受開關管，第 4.1 節）、#112（A9 以外）、#116（#109 不在映像裡）。建議句（HM-18 補寫）：
 
 ```text
@@ -266,3 +269,8 @@ A9（HM-13c），第 4.1 節 HM-13b 的其餘部分與 HM-16，第 4.2 節 HM-13
   （§7.2 要補的六點）、HM-13b 筆記第 13 節（還原會變的事）。
 - **發版時另外驗**：第 5 節，加上計畫 §10.6（Odoo 首發標準）與 `docs/operations/acceptance.md` 的多帳號驗收；容器驗收的多帳號階段第一次真跑是
   HM-19a 前的乾跑。
+- **Odoo 已照本節寫（HM-19a，2026-11-19）**：`addons/odoo/CHANGELOG.md` 0.5.0 段（契約第 1.4 節 20 點，依面板與管理 API、8081、子程式與健康、
+  後端設定、資料與還原分段；兩個位元組變化照上面的建議句，拿掉「once … switched on」，因為那一版就是開通的版本；A8、A9 併進還原那兩點）、
+  `addons/odoo/DOCS.md`「多帳號（0.5.0 起）」與第 26 行那句、`addons/odoo/README.md`、根目錄 `README.md` 第 46～47 行、根目錄 `CHANGELOG.md`、
+  根目錄 `upgrade-notes.yaml`（人讀的條目，計畫 §7.3；`addons/odoo/upgrade-notes.yaml` 照 `AGENTS.md` 第 3 點，等升版比對要求才建）。
+  `addons/odoo/config.yaml` 的 `description` 沒有「一組後端」的字句，沒改。之後開通的產品照同樣的分段寫，Headscale 拿掉 Origin 的點（第 5、10、19 點）。

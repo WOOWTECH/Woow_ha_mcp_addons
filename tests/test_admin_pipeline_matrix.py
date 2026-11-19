@@ -34,6 +34,7 @@ import httpx
 import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch a test pins)
 from multi_profile_runtime import Children, create_profile, ids, multi_profile_runtime, stored
 from mcp_admin_core import gateway, profile_router, profiles, run_product
 from mcp_admin_core.ha_role import Unreviewed
@@ -355,7 +356,8 @@ class Recorded(ProfileRuntime):
 
 
 @pytest.mark.parametrize('mode', ['switched off', 'switched on'])
-async def test_the_fixed_answers_of_the_pipeline_stay_byte_for_byte(tmp_path, log_scan, monkeypatch, mode):
+async def test_the_fixed_answers_of_the_pipeline_stay_byte_for_byte(tmp_path, log_scan, monkeypatch, mode,
+                                                                     request):
     """HM-01's hand-off (its provenance note 4.1): 503 when the 16 management slots are taken, 503 when the profile's
     lock stays held for 2 s, 503 {"error":"state unavailable"} when the state cannot be read, 408 for a body not read
     within its time (here 0.2 s), 413 for a body over the limit (here 64 bytes), 403 for a client gone while its
@@ -365,6 +367,7 @@ async def test_the_fixed_answers_of_the_pipeline_stay_byte_for_byte(tmp_path, lo
     Recorded.made = []
     monkeypatch.setattr(run_product, 'ProfileRuntime', Recorded)
     if mode == 'switched off':
+        request.getfixturevalue('switched_off')  # HM-19a: off whatever the repository switches on (Odoo from 0.5.0)
         context = production_runtime(PRODUCT, data)
     else:
         context = multi_profile_runtime(PRODUCT, data)

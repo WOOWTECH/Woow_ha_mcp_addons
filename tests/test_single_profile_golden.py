@@ -53,12 +53,16 @@ import pytest
 
 import run as n8n_run
 from log_scan import log_scan  # noqa: F401  (fixture)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch these tests pin)
 from mcp_admin_core import VERSION, features, profile_runtime, profiles, run_product, version_for_product
 from mcp_admin_core.lifecycle import Supervisor
 from mcp_admin_core.products import INSTRUCTIONS, PROBES, ProductStore, health_probe
 from mcp_admin_core.surface import listing
 
-pytestmark = pytest.mark.usefixtures('log_scan')  # every new test runs under the HM-01 log scan
+# HM-19a: HM-01 pins the add-on with every product switched off, whatever the repository switches on (Odoo from 0.5.0;
+# tests/switch_modes.py): what every product that stays off serves, and what an emergency switch-off release serves.
+# tests/test_router_passthrough.py runs these tests again switched on.
+pytestmark = pytest.mark.usefixtures('log_scan', 'switched_off')  # every new test runs under the HM-01 log scan
 ROOT = Path(__file__).resolve().parents[1]
 PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud', 'headscale')
 MODES = ('fresh', 'configured')

@@ -2,6 +2,114 @@
 # pipeline #89) has not yet defined a machine-readable schema; this follows the format already used by
 # WOOWTECH/Woow_ha_cloudflare_tunnel_webgui. One release per entry, newest first.
 releases:
+  # Odoo 0.5.0 switches multiple profiles on for Odoo only (multi-profile plan R1, HM-19a; docs/multi-profile/contract.md
+  # section 1.4 is the complete list of what the default profile sees change). Other products keep their versions.
+  - to_version: "0.5.0"
+    from_version: "0.4.14"
+    addons: [woow_mcp_odoo]
+    summary: >-
+      Multiple profiles for Odoo: the default profile plus up to five more, each with its own Odoo connection, MCP
+      token and both of its URLs, tool policy and child; only the token decides the profile. An installation that
+      never adds a profile keeps its token, both URLs, state.json byte for byte, its policy and its child (port 3000).
+      No option, port, architecture, image name, tool name or state schema change.
+    breaking_changes:
+      - id: admin-api-profile-header
+        affects: Scripts that call the admin API (port 8099) directly; the bundled panel and the P9 kit are updated together.
+        change: >-
+          Every profile-scoped admin request needs exactly one X-MCP-Profile header (default or a profile id): missing
+          400 profile_id_required, repeated or malformed 400 profile_id_invalid, unknown 404 profile_not_found, never
+          the default profile instead. Answers carry the profile echo (the bootstrap adds profile, profiles_supported
+          and profile_index_state). The administrator check runs before any profile state is read.
+        migration: Send X-MCP-Profile on every profile-scoped request and ignore the added fields, or use the bundled panel.
+      - id: odoo-identity-change-rotates-token
+        affects: Clients of a profile whose Odoo URL, database or username is changed in the panel.
+        change: >-
+          Such a save (clearing the connection included) issues a new MCP token at once; both old URLs stop working
+          and the answer carries "token_rotated":true. A password change, a first save or a revoked token keep the token.
+          Moving the URL to another scheme, host or port requires its password or API key in the same save, otherwise
+          422 CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN. A loopback backend URL is refused (400); one saved earlier
+          still reads back but cannot be reached.
+        migration: >-
+          After such a save copy the new token or URL from the panel into every client. Enter the secret again when
+          moving to another server. Use a reachable, non-loopback backend URL.
+      - id: restore-revokes-profiles
+        affects: Restoring a backup that has additional profiles.
+        change: >-
+          Before anything is served the token of every profile, the default profile's included, is revoked, every
+          child token renewed and restore-record.json written; a profile gets a new token only after it is checked on
+          the default profile's review card (token/rotate 409 restore_review_required before), and operation ids from
+          before the restore answer 410 operation_restored. Unreadable profiles are moved to a quarantine directory.
+        migration: >-
+          Review each profile on the card, issue new tokens and update clients. A backup without additional profiles
+          revokes nothing (next section). The protection covers backups made with 0.5.0 or later only.
+    behavior_changes:
+      - id: admin-panel-profiles
+        change: >-
+          A profile menu (also with only the default profile) adds, renames, deletes and switches profiles; new global
+          routes list, add, rename and delete profiles, revoke all, show and review the restore record, quarantine an
+          unusable index, delete a quarantine directory and keep the secret URL's Origin policy. The panel's first
+          bootstrap carries no profile header on purpose, so the browser console shows one 400.
+        migration: None needed.
+      - id: admin-two-byte-level-changes
+        change: >-
+          A PATCH or DELETE request that fails the identity check (for example without CSRF) gets 403
+          {"error":"request denied"} (400 with the same body for a malformed X-Ingress-Path) instead of 405, because
+          the identity check now runs before the method check. A method other than GET, HEAD, POST, PUT, PATCH and
+          DELETE still gets 405, but its Allow header lists six methods instead of four (PATCH and DELETE added; the
+          order was never fixed).
+        migration: None needed for clients that send the panel's headers.
+      - id: mcp-busy-answers-and-interruptions
+        change: >-
+          Admission per profile on 8081: over 64 requests of the default profile get JSON-RPC -32003 with
+          Retry-After 5 (200 for a small body with an id, else 503) instead of a plain-text 503; a 25th GET stream
+          gets 429 with Retry-After 30; at most 32 wait and a forwarding slot not free within 1 second gives -32003.
+          Each additional profile has 32 and 8 streams of its own; the outer bound is 224 connections. Pending replies
+          are capped at 32 MiB per profile (soft). A token changed during an answer gives -32005, a child lost during
+          one -32004, without a log traceback. Replies are processed on one worker thread, profile by profile.
+        migration: Retry -32003 after Retry-After; check the backend before retrying a write after -32004; reconnect with the new token after -32005.
+      - id: child-watchdog-and-health
+        change: >-
+          The child watchdog backs off 2 to 300 seconds without a limit on attempts (reset after 120 seconds up), a
+          failed spawn included; the backend is unreachable after two failed checks in a row; refused credentials back
+          the monitor off 15 to 300 seconds; port 3000 is checked before spawn; lifecycle warnings name a profile by
+          the first 8 characters of its id. The soft open-file limit is raised to about 680 at start; when it cannot
+          be, only the default profile is served and adding one answers 409 profile_limit_reached (limit 0).
+        migration: None needed.
+      - id: secret-url-origin-report-only
+        change: >-
+          The secret URL checks one Origin list for the whole add-on, by default https://claude.ai in report-only mode:
+          an Origin outside it is served as before and logged once (decision=would_deny). The panel can switch to
+          enforce (403 outside the list). An unusable policy file makes every profile's secret URL answer 503 until a
+          new policy is saved; a restore brings back the backup's policy without a notice. Bearer /mcp with an Origin
+          stays 403; no CORS header is added.
+        migration: Read the would_deny lines before switching to enforce; check the policy after a restore.
+      - id: new-files-and-restore-notice
+        change: >-
+          The first start adds .instance-sentinel and .instance-record (no secrets) to /data/mcp. A restore is detected
+          by the restore marker (0.4.14 leaves it; this version removes it) or the sentinel. Without additional profiles
+          nothing is revoked: one log line, restore-record.json with the default profile kept, the receipts beside the
+          index and the Origin policy renewed (earlier operation ids 410), restore-notice.json and the bootstrap field
+          restore_notice until the default token is rotated or revoked; the panel shows the notice.
+        migration: Rotate the default token when it may have leaked after the backup.
+    preserved:
+      - Add-on slug, image name (ghcr.io/woowtech/amd64-mcp-odoo), amd64 only, ports 8081/tcp and Ingress 8099, manifest options and privileges.
+      - The default profile's token, both URLs, state.json bytes (state schema 4), policy, child port 3000 and working directory, receipt key and format.
+      - Tool names and counts, annotations, write grants and the full-functionality defaults; the 15-second health interval.
+      - Other products keep their versions and stay switched off.
+    backup_and_rollback:
+      - Create a Home Assistant add-on backup before upgrading.
+      - >-
+        Home Assistant cannot install an older version over a newer one. Roll back by restoring that backup: the old
+        image and data come back, profiles added since, rotations and revocations are lost, and the default token is
+        the backup's (nothing is revoked). After upgrading again press "revoke all" and issue new tokens.
+      - >-
+        Switching profiles off again is a release with a higher version (about a working day: build, acceptance, GHCR,
+        merge, Store sync); additional profiles then become dormant (tokens revoked, data kept). Meanwhile stop the
+        add-on, or revoke or delete a profile, or press "revoke all" in the panel.
+      - >-
+        The restore protection covers backups made with 0.5.0 or later. After restoring an older backup, or a VM or
+        disk snapshot (no restore signal), update to the latest version and press "revoke all". See
+        docs/operations/update-backup-rollback.md. Downgrades and rollback drills are pending (HM-19b).
   - to_version: "0.4.7"
     from_version: "0.4.6"
     addons: [woow_mcp_odoo, woow_mcp_n8n, woow_mcp_hermes, woow_mcp_emqx, woow_mcp_litellm, woow_mcp_nextcloud]

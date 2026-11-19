@@ -32,6 +32,12 @@ from test_expansion_policy import call
 from test_odoo_read_exists import initialize
 from test_real_products import connection, rpc
 from tool_refusal import refusal
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch these tests pin)
+
+# HM-19a: written for the switched-off add-on (tests/switch_modes.py). A real child here talks to a loopback fake
+# backend, which the child of a switched-on product refuses (HM-20: WOOW_MCP_DENY_LOOPBACK=1, tested both ways in
+# tests/test_backend_loopback.py); the child's behavior under test is the same in both modes.
+pytestmark = pytest.mark.usefixtures('switched_off')
 
 ROOT = Path(__file__).resolve().parents[1]
 AUTH = ("BACKEND_AUTH_REJECTED: Odoo 憑證被拒 (credentials rejected); check the database, username and password in the "

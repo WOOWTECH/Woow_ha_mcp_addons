@@ -32,6 +32,7 @@ import pytest
 from admin_write_headers import reviewed_headers
 from lifecycle_runtime import lifecycle_lines, manager_rig, until, watch
 from log_scan import log_scan  # noqa: F401  (fixture)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch a test pins)
 from mcp_admin_core import profiles
 import multi_profile_runtime
 from multi_profile_runtime import free_port, stored
@@ -462,7 +463,7 @@ async def test_child_restart_answers_with_the_blocked_reason(tmp_path, log_scan)
             holder.close()
 
 
-async def test_switched_off_child_restart_answers_as_before(tmp_path, log_scan):
+async def test_switched_off_child_restart_answers_as_before(tmp_path, log_scan, switched_off):
     data = tmp_path / 'data'
     configure(data, 'odoo')
     async with production_runtime('odoo', data) as runtime:

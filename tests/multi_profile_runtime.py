@@ -4,8 +4,9 @@ run_product.run serves the product exactly as tests/test_single_profile_golden.p
 real ProductStore, owner-defaults step, make_apps, HealthMonitor, ConfigurationState, child_spec and log redaction;
 only the outside replaced), except that:
 
-- features.MULTI_PROFILE_PRODUCTS names the product (monkeypatched for the test; the repository keeps it empty), so
-  run_product builds a ProfileManager and 8081 is its token dispatcher (profile_router.McpDispatcher);
+- features.MULTI_PROFILE_PRODUCTS names the product (monkeypatched for the test, whatever the repository switches on:
+  Odoo from 0.5.0), so run_product builds a ProfileManager and 8081 is its token dispatcher
+  (profile_router.McpDispatcher);
 - additional profiles exist on disk (create_profile: ProductStore(create=profile_initial_state(...)) under
   /data/mcp/profiles/<id> and an entry in profiles.json, as HM-10 will make them);
 - every profile's child sits behind its own port of one MockTransport (Children: the default profile's on 3000, an
@@ -185,8 +186,8 @@ class Runtime:
 
 @asynccontextmanager
 async def switched_on(*products):
-    """features.MULTI_PROFILE_PRODUCTS for the test only (the repository keeps it empty; features.enabled reads it at
-    every call)."""
+    """features.MULTI_PROFILE_PRODUCTS for the test only (exactly *products*, whatever the repository switches on;
+    features.enabled reads it at every call)."""
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset(products))
         yield
@@ -201,15 +202,15 @@ CLOSE_SECONDS = 30
 async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None, real_children=False,
                                 default_port=None, launch_extras=True, switch=True, children=None, resources=None,
                                 stagger=None, verifier=None, may_stop=False):
-    """run_product.run of *product* on *data* with the switch on (switch=False: off), the outside replaced as
-    production_runtime replaces it. children: a Children for MockTransport (left out: the default profile's golden
-    MockChild on 3000, nobody else's); real_children:
-    no MockTransport, the runtime's clients reach real loopback servers (default_port: the default profile's child
-    port then). launch_extras: wait until the manager started every additional profile's child (start_all) once the
-    listeners serve. resources: a stand-in for the resource module (the file limit). stagger: STAGGER_SECONDS for the
-    test (left out: 0.05). verifier: the HA administrator check (HM-10; left out: administrator below). may_stop
-    (HM-30): the runtime may end by itself while the test runs (the test reads Runtime.task); otherwise that fails the
-    test."""
+    """run_product.run of *product* on *data* with the switch on (switch=False: every product off, whatever the
+    repository switches on: HM-19a, tests/switch_modes.py), the outside replaced as production_runtime replaces it.
+    children: a Children for MockTransport (left out: the default profile's golden MockChild on 3000, nobody else's);
+    real_children: no MockTransport, the runtime's clients reach real loopback servers (default_port: the default
+    profile's child port then). launch_extras: wait until the manager started every additional profile's child
+    (start_all) once the listeners serve. resources: a stand-in for the resource module (the file limit). stagger:
+    STAGGER_SECONDS for the test (left out: 0.05). verifier: the HA administrator check (HM-10; left out: administrator
+    below). may_stop (HM-30): the runtime may end by itself while the test runs (the test reads Runtime.task);
+    otherwise that fails the test."""
     if children is None:
         children = Children()
         children.add(3000, MockChild(product, data))
@@ -240,8 +241,8 @@ async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None
         return user == ADMIN['X-Remote-User-Id']
 
     with pytest.MonkeyPatch.context() as patch:
-        if switch:
-            patch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset({product}))
+        # HM-19a: switch=False is every product off, not the repository's switch (Odoo is on from 0.5.0).
+        patch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset({product}) if switch else frozenset())
         patch.setattr(profile_runtime, 'Supervisor', supervisor or NoProcessSupervisor)
         patch.setattr(profile_runtime.httpx, 'AsyncClient', child_client)
         patch.setattr(run_product, 'make_ha_admin_verifier', lambda: verifier or administrator)

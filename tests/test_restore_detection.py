@@ -32,6 +32,7 @@ import time
 import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch a test pins)
 from mcp_admin_core import profiles, restore_detect as rd, restore_lock
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.products import ProductStore
@@ -1064,7 +1065,7 @@ def guard_start(directory):
     return [outcome.restored, outcome.default_revoked]
 
 
-def test_the_container_probes_restore_stage_meets_the_entrypoint(tmp_path, log_scan, monkeypatch):
+def test_the_container_probes_restore_stage_meets_the_entrypoint(tmp_path, log_scan, monkeypatch, switched_off):
     # Every release's container acceptance restores /data/mcp as Supervisor does, starts the real image and checks what
     # the start left (review HM-13a MF-1). Its two steps here, with the real entrypoint and the management process's
     # boot guard (HM-13b: it removes the marker of a restore without profile data) between them.
@@ -1232,7 +1233,8 @@ def test_root_marker_name_taken_by_a_directory(reachable, profile_data):
         assert owners_of(data) == {RUNTIME}
 
 
-def test_root_the_container_probes_restore_stage_meets_the_entrypoint(reachable, log_scan, monkeypatch):
+def test_root_the_container_probes_restore_stage_meets_the_entrypoint(reachable, log_scan, monkeypatch,
+                                                                     switched_off):
     require_root()
     data = runtime_tree(reachable, log_scan)
     for path in [data, *data.rglob('*')]:

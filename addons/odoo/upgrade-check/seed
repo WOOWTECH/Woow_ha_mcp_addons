@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Store upgrade comparison hook: seed (multi-profile HM-16; plan 12.3 HM-16, 11.3; FM-102, FM-135; contract 9 #72).
 
-A draft for addons/<product>/upgrade-check/seed: HM-19a moves this file and its verify into addons/odoo/upgrade-check/
-with the Odoo 0.5.0 release PR (a file under addons/ is the add-on's runtime content for the Store, so only a release PR
+HM-16 drafted it in packaging/hooks/; the Odoo 0.5.0 release PR (HM-19a) moved it and its verify here, to
+addons/odoo/upgrade-check/ (a file under addons/ is the add-on's runtime content for the Store, so only a release PR
 may add it). The Store's upgrade test (Woow_HA_App_Store README, section 升版比對, category 2) runs seed once the
 comparison target, the product's latest released image, has started on the test's empty /data under the Store's mock
 Supervisor, and verify once the new version has started on the same /data. Both run in the Store's python:3.12-alpine

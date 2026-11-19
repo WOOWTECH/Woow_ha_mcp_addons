@@ -18,7 +18,8 @@ import xmlrpc.client
 import httpx
 import pytest
 
-from mcp_admin_core.health import protocol_reply
+from mcp_admin_core import features, products
+from mcp_admin_core.health import HEALTH_INTERVAL, protocol_reply
 from mcp_admin_core.products import INSTRUCTIONS, ODOO_HEALTH_PROBE, PRODUCTS, PROBES, ProductStore, TOOLS, child_spec
 from mcp_admin_core.policy import policy_enabled
 
@@ -53,7 +54,7 @@ def connection(product, url):
 
 
 @contextmanager
-def backend(product):
+def backend(product, *, bind_host=None):
     calls = []
     offline = threading.Event()
     nextcloud = nextcloud_fixtures.NextcloudFake()
@@ -128,10 +129,13 @@ def backend(product):
                 raise AssertionError(method)
             self.respond(xmlrpc.client.dumps((result,), methodresponse=True, allow_none=True).encode(), 'text/xml')
 
-    # The Headscale native transport refuses loopback even for a test server.
-    # Bind only the runner's own private address so the real TCP destination
-    # policy stays in force; all other existing product fixtures use loopback.
-    host = socket.gethostbyname(socket.gethostname()) if product == 'headscale' else '127.0.0.1'
+    # The Headscale native transport refuses loopback even for a test server, and so does the child of a switched-on
+    # product (HM-20; HM-19a: Odoo from 0.5.0; asked when the fake starts, as child_spec asks it). Bind only the
+    # runner's own private address then, so the real TCP destination policy stays in force; every other product uses
+    # loopback.
+    host = bind_host if bind_host is not None else (
+        socket.gethostbyname(socket.gethostname()) if product == 'headscale' or products.loopback_refused(product)
+        else '127.0.0.1')
     server = ThreadingHTTPServer((host, 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -247,7 +251,9 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     child_pids = children_path.read_text().split()
                     assert len(child_pids) == 1
                     offline.set()
-                    async with asyncio.timeout(22):
+                    # HM-19a: a switched-on product's monitor calls the backend unreachable after two failed checks in
+                    # a row (DQ-25, tolerance 2), one interval later than a product not switched on.
+                    async with asyncio.timeout(22 + (HEALTH_INTERVAL if features.enabled(product) else 0)):
                         while (await client.get(f'http://127.0.0.1:{port}/health/ready')).status_code != 503:
                             await asyncio.sleep(.25)
                     assert process.poll() is None

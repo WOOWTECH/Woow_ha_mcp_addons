@@ -23,6 +23,7 @@ from owned_runtime import Endpoint
 from test_expansion_policy import call
 from test_odoo_read_exists import initialize
 from test_real_products import rpc
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch a test pins)
 
 ROOT = Path(__file__).resolve().parents[1]
 PASSWORD = 'odoo-Secret-4711'
@@ -135,7 +136,7 @@ def faulting_odoo():
         thread.join(timeout=5)
 
 
-async def test_real_odoo_child_relays_the_access_error_text(tmp_path):
+async def test_real_odoo_child_relays_the_access_error_text(tmp_path, switched_off):
     with faulting_odoo() as (url, calls):
         store = ProductStore(tmp_path / 'state', 'odoo')
         store.update(connection={'url': url, 'database': 'test', 'username': 'tester', 'password': PASSWORD})
