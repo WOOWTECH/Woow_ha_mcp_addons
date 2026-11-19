@@ -25,7 +25,9 @@ tests/multi_profile_runtime.py does):
 - A URL the save refuses (loopback once switched on, a metadata address, whitespace; HM-20, aligned with PaaS #152)
   writes nothing and stops no child.
 
-Switched off, every save is today's (plan 3.3): no rotation, the same answer, the same order.
+Switched off, every save is today's (plan 3.3): no rotation, the same answer, the same order. Those cases pin the
+mode themselves (nextcloud_fixtures.switched_off), not the repository's switch, so they test the same thing after
+the version bump that switches Nextcloud on.
 
 The in-process cases run the production runtime (tests/multi_profile_runtime.py: NoProcessSupervisor, the children
 behind one MockTransport); the real-children cases run the vendored Nextcloud child (apps/nextcloud) against this
@@ -50,6 +52,7 @@ from mcp_admin_core import features, health as health_module, identity_fields, l
 from mcp_admin_core.access import masked_token
 from mcp_admin_core.products import IDENTITY_BOUND, ProductState, ProductStore, identity_rebound
 from nextcloud_fixtures import OCS_PATH, multistatus, respond
+from nextcloud_fixtures import switched_off  # noqa: F401  (fixture: the switched-off cases pin that mode)
 from test_odoo_identity_rotation import (Journal, bearer, count_writes, directory, next_etag, opened_by, paths,
                                          record_writes, refused_everywhere, routed_to, save)
 from test_real_products import rpc
@@ -460,7 +463,7 @@ async def test_saving_one_profiles_policy_restarts_only_its_child(tmp_path, log_
             assert stored(directory(data, C))['disabled'] == []
 
 
-async def test_switched_off_a_policy_save_restarts_the_only_child_as_today(tmp_path, log_scan):
+async def test_switched_off_a_policy_save_restarts_the_only_child_as_today(tmp_path, log_scan, switched_off):
     """Not switched on, the only profile's policy save is today's: written, then the child restarts once on it; the
     answer has no echo."""
     data = tmp_path / 'data'
@@ -483,7 +486,7 @@ async def test_switched_off_a_policy_save_restarts_the_only_child_as_today(tmp_p
 
 # ---- switched off: today's save (plan 3.3) ----
 
-async def test_switched_off_a_changed_account_keeps_todays_answer_order_and_token(tmp_path, log_scan):
+async def test_switched_off_a_changed_account_keeps_todays_answer_order_and_token(tmp_path, log_scan, switched_off):
     """A Nextcloud not switched on keeps today's behaviour for its only profile: a username saved anew
     (backend/patch), another server with the app password (PUT backend), a URL moved to another server without it
     (backend/patch: DQ-40 ⑨ is behind the switch too) and the host in capitals are written first, then the child
@@ -563,7 +566,8 @@ async def test_only_a_profiles_own_token_reaches_its_child(tmp_path, log_scan):
             assert elsewhere.status_code == 404
 
 
-async def test_switched_off_profile_data_is_dormant_and_only_the_default_token_serves(tmp_path, log_scan):
+async def test_switched_off_profile_data_is_dormant_and_only_the_default_token_serves(tmp_path, log_scan,
+                                                                                    switched_off):
     """The same disk with Nextcloud not switched on (a release without the switch, plan 3.3): the boot guard revokes
     B's and C's tokens (dormant profiles, I13), so they are refused as unknown tokens on both paths; the default
     profile's token still opens its child's session on both paths, as today."""
