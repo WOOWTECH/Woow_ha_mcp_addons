@@ -49,6 +49,7 @@ import httpx
 import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
+from product_switch import switched_off  # noqa: F401  (fixture: the test's product pinned off, HM-26)
 from mcp_admin_core import operations, profiles
 from multi_profile_runtime import Children, SWITCHABLE, create_profile, ids, multi_profile_runtime, stored
 from restore_guard_disk import newest_ctime
@@ -1292,6 +1293,7 @@ async def test_headscale_keeps_only_claude_ai_and_has_no_policy(tmp_path, log_sc
     assert (data / POLICY).read_bytes() == b'{"version":1,"mode":"enforce","allowed_origins":[]}'
 
 
+@pytest.mark.usefixtures('switched_off')  # HM-26: switched off whatever the repository's switch says
 @pytest.mark.parametrize('product', PRODUCTS)
 async def test_switched_off_the_policy_does_not_exist(tmp_path, log_scan, caplog, monkeypatch, product):
     """Plan 3.3, 12.3 HM-27 (switched by features.enabled): a product not switched on never reads or writes the file

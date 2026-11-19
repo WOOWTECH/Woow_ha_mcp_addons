@@ -38,6 +38,7 @@ import owned_network
 import owned_runtime
 import run as n8n_run
 from log_scan import log_scan  # noqa: F401  (fixture)
+from product_switch import off, switched_off  # noqa: F401  (switched_off: fixture; HM-26)
 from mcp_admin_core import gateway, health, lifecycle, run_product
 from mcp_admin_core.products import PRODUCTS, ProductStore, child_spec
 from test_owned_ports_bearer import direct_session
@@ -189,7 +190,7 @@ def test_the_snapshot_covers_every_product():
 @pytest.mark.parametrize('case', CASES)
 def test_the_default_child_spec_is_the_snapshot(tmp_path, log_scan, case):
     expected = json.loads(SNAPSHOT.read_text())['specs'][case]
-    with case_state(case, tmp_path, log_scan) as (product, state, data, build):
+    with case_state(case, tmp_path, log_scan) as (product, state, data, build), off(product):  # HM-26: switched off
         current = normalized(build(state, data), state, data, tmp_path / 'catalog/nodes.db')
     assert current == expected, (
         f'{case}: the default profile child spec is not the snapshot\'s (bb48449\'s, with the changes it lists); if '
@@ -396,6 +397,7 @@ async def test_the_real_launcher_serves_the_port_its_spec_names(tmp_path, log_sc
 
 # ---- the runtimes: one port for the spec, the health monitor, the gateway and the capability probe ----
 
+@pytest.mark.usefixtures('switched_off')  # HM-26: switched off whatever the repository's switch says
 @pytest.mark.parametrize('port', [None, 18000])
 @pytest.mark.parametrize('product', SHIPPED)
 async def test_one_port_reaches_every_child_request(tmp_path, log_scan, monkeypatch, product, port):

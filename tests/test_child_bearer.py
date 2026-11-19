@@ -42,6 +42,7 @@ import n8n_adapter
 from n8n_adapter import child_spec as n8n_spec
 from owned_runtime import Endpoint
 from test_real_products import backend, connection
+from product_switch import switched_off  # noqa: F401  (fixture: the test's product pinned off, HM-26)
 
 pytestmark = pytest.mark.usefixtures('log_scan')  # every new test runs under the HM-01 log scan
 ROOT = Path(__file__).resolve().parents[1]
@@ -168,6 +169,7 @@ class RawLogs(ChildLogs):
 
 # ---- child_spec: who gets the bearer ----
 
+@pytest.mark.usefixtures('switched_off')  # HM-26: switched off whatever the repository's switch says
 @pytest.mark.parametrize('product', ('n8n', *PRODUCTS))
 def test_child_spec_gives_the_seven_python_children_their_child_token(tmp_path, log_scan, monkeypatch, product):
     # NODE_DB_PATH comes from a catalog copy prepare_catalog() made earlier in the same process (apps/n8n/run.py at

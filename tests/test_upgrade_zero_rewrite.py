@@ -37,6 +37,7 @@ from log_scan import log_scan  # noqa: F401  (fixture)
 from mcp_admin_core import features, products, profiles, restore_detect
 from mcp_admin_core.products import ProductState, ProductStore, profile_initial_state
 from multi_profile_runtime import multi_profile_runtime
+from product_switch import off
 from test_restore_detection import after_tick
 from test_single_profile_golden import PRODUCTS as GOLDEN_PRODUCTS, production_runtime, settle
 
@@ -263,7 +264,7 @@ async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_sc
     data = installed(tmp_path, raw)
     before = start_facts(data)
     if not switched_on:
-        running = production_runtime(product, data)
+        running = switched_off_runtime(product, data)  # HM-26: whatever the repository's switch says
     elif product == 'n8n':
         running = n8n_switched_on(data)
     else:
@@ -280,6 +281,13 @@ async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_sc
         expected |= {profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME}
     assert set(after) - set(before) == expected
     assert not profiles.has_profile_data(data)
+
+
+@contextlib.asynccontextmanager
+async def switched_off_runtime(product, data):
+    with off(product):
+        async with production_runtime(product, data) as runtime:
+            yield runtime
 
 
 @contextlib.asynccontextmanager

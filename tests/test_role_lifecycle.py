@@ -20,6 +20,7 @@ from mcp_admin_core.products import PRODUCTS
 from test_ha_role import gateway
 from test_lifecycle import until
 from test_real_products import connection
+from product_switch import switched_off  # noqa: F401  (fixture: the test's product pinned off, HM-26)
 
 
 def owned_spec(tmp_path, name):
@@ -61,6 +62,7 @@ async def emergency_cleanup(manager, processes):
     await manager.stop()
 
 
+@pytest.mark.usefixtures('switched_off')  # HM-26: switched off whatever the repository's switch says
 @pytest.mark.parametrize('product', ('n8n', *PRODUCTS))
 @pytest.mark.parametrize('cancel', ('disconnect', 'direct', 'scope'))
 async def test_committed_runtime_backend_transition_is_joined(tmp_path, monkeypatch, product, cancel):

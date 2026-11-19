@@ -30,6 +30,7 @@ import pytest
 from batch2_owned_port import reserve_port
 from log_scan import log_scan  # noqa: F401  (fixture)
 from owned_executable import Executable
+import product_switch
 
 pytestmark = pytest.mark.usefixtures('log_scan')
 ROOT = Path(__file__).resolve().parents[1]
@@ -322,8 +323,9 @@ class Runtime:
         self.port, admin_port = free_port(), free_port()
         home.mkdir()
         self.runner = Executable(home, product, [self.port, admin_port])
+        # HM-26: switched off pinned in the preamble too, whatever the repository's switch says
         preamble = (f'from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = frozenset({{{product!r}}}); '
-                    if switched_on else '')
+                    if switched_on else product_switch.preamble(product))
         code = preamble + 'from mcp_admin_core import run_product; ' + self.runner.code('run_product') + 'run_product.main()'
         self.runner.release()
         self.log = (home / 'runtime.log').open('wb')
@@ -350,7 +352,7 @@ class Runtime:
         assert self.process.returncode == 0
 
 
-@pytest.mark.parametrize('product', ['odoo', 'emqx'])
+@pytest.mark.parametrize('product', ['odoo', 'emqx', 'headscale'])  # HM-26: Headscale's 0.5.0 runs these hooks too
 @pytest.mark.parametrize('switched_on', [True, False], ids=['old-off-new-on', 'off-both'])
 async def test_the_hooks_pass_an_upgrade_of_the_real_runtime_and_only_read(tmp_path, log_scan, product, switched_on):
     """As the Store's upgrade test runs them: seed once the old version started on an empty /data (unconfigured, as the

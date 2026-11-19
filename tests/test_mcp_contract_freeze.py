@@ -38,6 +38,7 @@ import pytest
 
 from admin_write_headers import reviewed_headers
 from log_scan import log_scan  # noqa: F401  (fixture)
+from product_switch import switched_off  # noqa: F401  (fixture: the test's product pinned off, HM-26)
 from test_single_profile_golden import (ADMIN, CHILD_HEADERS, PRODUCTS, configure, initialize_body, initialize_message,
                                         production_runtime, settle, stored)
 
@@ -213,6 +214,7 @@ def test_cases_file_is_well_formed():
         assert set(response) <= {'status', 'headers', 'absent', 'body', 'meaning'}
 
 
+@pytest.mark.usefixtures('switched_off')  # HM-26: switched off whatever the repository's switch says
 @pytest.mark.parametrize('product', PRODUCTS)
 async def test_mcp_contract_freeze(tmp_path, log_scan, product):
     document = contract()

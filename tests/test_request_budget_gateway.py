@@ -26,6 +26,7 @@ import httpx
 import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
+from product_switch import switched_off  # noqa: F401  (fixture: the test's product pinned off, HM-26)
 from multi_profile_runtime import Children, multi_profile_runtime
 from mcp_admin_core import gateway, profiles
 from mcp_admin_core.products import ProductStore, TOOLS
@@ -518,6 +519,7 @@ async def test_make_apps_takes_only_a_share_of_a_budget_beside_hm09s_and_hm10s_o
         store.close()
 
 
+@pytest.mark.usefixtures('switched_off')  # HM-26: switched off whatever the repository's switch says
 @pytest.mark.parametrize('product', golden.PRODUCTS)
 async def test_every_products_runtime_reads_under_the_budget_and_the_guard(tmp_path, log_scan, monkeypatch, product):
     """Not gated (contract 1.2; PaaS #155's apps/<product>/tests/test_request_structure_guard.py): every product's

@@ -12,8 +12,10 @@ from mcp_admin_core.products import (PRODUCTS, PROBES, ProductStore, TOOLS, chil
                                     probe_success)
 from test_real_products import connection
 from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
+from product_switch import switched_off  # noqa: F401  (fixture: the test's product pinned off, HM-26)
 
 
+@pytest.mark.usefixtures('switched_off')  # HM-26: switched off whatever the repository's switch says
 @pytest.mark.parametrize('product', PRODUCTS)
 async def test_config_api_typed_secret_safe_and_restart_on_rotation(tmp_path, product):
     store = ProductStore(tmp_path / product, product)

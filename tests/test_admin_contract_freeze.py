@@ -35,6 +35,7 @@ import pytest
 
 from admin_write_headers import reviewed_headers
 from log_scan import log_scan  # noqa: F401  (fixture)
+from product_switch import switched_off  # noqa: F401  (fixture: the test's product pinned off, HM-26)
 from mcp_admin_core import owner_defaults
 from mcp_admin_core.backend_edit import FIELDS
 from mcp_admin_core.capabilities import ManagementOptions
@@ -100,6 +101,7 @@ def compare(failures, label, response, expected):
                         f'{expected[2][:120]!r}')
 
 
+@pytest.mark.usefixtures('switched_off')  # HM-26: switched off whatever the repository's switch says
 @pytest.mark.parametrize('product', PRODUCTS)
 async def test_management_answer_shapes(tmp_path, log_scan, product):
     data = tmp_path / 'data'
@@ -182,6 +184,7 @@ async def test_management_answer_shapes(tmp_path, log_scan, product):
     assert not failures, f'{product}: {len(failures)} management answer(s) changed:\n' + '\n'.join(failures)
 
 
+@pytest.mark.usefixtures('switched_off')  # HM-26: switched off whatever the repository's switch says
 @pytest.mark.parametrize('product', PRODUCTS)
 async def test_builtin_only_answer_shapes(tmp_path, log_scan, product):
     """Shape E without a backend check, child restart or diagnostics hook, and with a fixed backend."""

@@ -23,6 +23,7 @@ from mcp_admin_core.products import INSTRUCTIONS, ODOO_HEALTH_PROBE, PRODUCTS, P
 from mcp_admin_core.policy import policy_enabled
 
 from owned_executable import Executable
+from product_switch import preamble
 from batch2_owned_port import reserve_port
 import nextcloud_fixtures
 from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
@@ -171,7 +172,9 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
         endpoint = f'http://127.0.0.1:{port}/mcp'
         log_path = tmp_path / 'owned-runtime.log'
         runner = Executable(tmp_path, product, [port, admin_port])
-        code = 'from mcp_admin_core import run_product; ' + runner.code('run_product') + 'run_product.main()'
+        # HM-26: the add-on as it serves a product not switched on, whatever the repository's switch says
+        code = (preamble(product) + 'from mcp_admin_core import run_product; ' + runner.code('run_product')
+                + 'run_product.main()')
         runner.release()
         with log_path.open('wb') as log:
             process = subprocess.Popen([str(ROOT / '.venv/bin/python'), '-c', code, product,

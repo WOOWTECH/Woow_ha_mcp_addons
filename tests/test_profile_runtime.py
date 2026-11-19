@@ -48,6 +48,7 @@ import n8n_adapter
 import owned_network
 from admin_write_headers import reviewed_headers
 from log_scan import log_scan  # noqa: F401  (fixture)
+from product_switch import switched_off  # noqa: F401  (fixture: the test's product pinned off, HM-26)
 from mcp_admin_core import gateway, lifecycle, run_product, version_for_product
 from mcp_admin_core.access import TokenAccess
 from mcp_admin_core.admin_auth import AdminAuthority, BadRequest
@@ -934,6 +935,7 @@ async def test_an_injected_pipeline_takes_every_management_request(two_stores, l
 
 # ---- run_product: the default profile ----
 
+@pytest.mark.usefixtures('switched_off')  # HM-26: switched off whatever the repository's switch says
 @pytest.mark.parametrize('product', [product for product in PRODUCTS if product != 'n8n'])
 async def test_run_product_serves_the_default_profiles_runtime(tmp_path, monkeypatch, log_scan, product):
     """run_product builds the default profile with ProfileRuntime: one runtime, profile 'default' on the child port
@@ -989,6 +991,7 @@ def tree(directory):
     return {str(path.relative_to(directory)): path.lstat().st_mode for path in Path(directory).rglob('*')}
 
 
+@pytest.mark.usefixtures('switched_off')  # HM-26: switched off whatever the repository's switch says
 @pytest.mark.parametrize('mode', ['fresh', 'configured'])
 @pytest.mark.parametrize('product', PRODUCTS)
 async def test_starting_the_default_profile_adds_no_file(tmp_path, log_scan, product, mode):
