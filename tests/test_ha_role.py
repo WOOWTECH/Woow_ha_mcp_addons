@@ -560,10 +560,10 @@ def test_n8n_and_six_products_share_factory():
 
 async def test_real_n8n_executable_tcp_uses_production_factory(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[1]
-    from owned_executable import Executable
-    from test_real_n8n import free_port
-    admin_port, mcp_port = free_port(), free_port()
+    from owned_executable import Executable, draw_public_ports
     async with owned_provider(monkeypatch) as (_, seen, __):
+        # Drawn once the fake Supervisor listens: its bind of port 0 could take a port drawn (and closed) before it.
+        admin_port, mcp_port = draw_public_ports(2)
         # Test-only transport and ingress socket simulation. The real executable,
         # verifier factory, authentication frames and child launcher remain intact.
         code = f'''

@@ -20,16 +20,10 @@ from mcp_admin_core import VERSION
 from mcp_admin_core.products import ProductStore
 from mcp_admin_core.health import protocol_reply
 
-from owned_executable import Executable
-from batch2_owned_port import reserve_port
+from owned_executable import Executable, draw_public_ports
 from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def free_port():
-    with reserve_port() as sock:
-        return sock.getsockname()[1]
 
 
 @pytest.fixture
@@ -74,7 +68,7 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
         store.update(backend_url=fake_backend[0], backend_key="DUMMY-local-only")
     token = store.load().token
     store.close()
-    admin_port, mcp_port = free_port(), free_port()
+    admin_port, mcp_port = draw_public_ports(2)
     env = {"PATH": "/usr/bin:/bin", "PYTHONPATH": str(ROOT / "packages/mcp-admin-core") + ":" + str(ROOT / "apps/n8n")}
     runner = Executable(tmp_path, 'n8n', [admin_port, mcp_port])
     code = 'import run; ' + runner.code('run') + 'run.main()'
