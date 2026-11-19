@@ -10,9 +10,10 @@
   shows identity fields. UNWIRED is empty now; the scans stay for the next module that is not wired yet. The 8081 and
   8099 answers stay those HM-01 froze (tests/test_single_profile_golden.py, tests/test_mcp_contract_freeze.py,
   tests/test_admin_contract_freeze.py).
-- The switch: MULTI_PROFILE_PRODUCTS names only products whose version-bump PR switched them on (HM-23: a release of
-  0.5.0 or later; none yet); features.enabled() reads it at every call (never bound at import), so an integration test
-  can switch a product on with a subprocess preamble (tests/test_real_products.py style).
+- The switch: MULTI_PROFILE_PRODUCTS is exactly SWITCHED_ON below, the products whose version-bump PR switched them on
+  (none yet; that PR changes both), each released at 0.5.0 or later (HM-23); features.enabled() reads it at every call
+  (never bound at import), so an integration test can switch a product on with a subprocess preamble
+  (tests/test_real_products.py style).
 - Zero rewrite: a state.json bb48449 wrote (one installed add-on per product, tests/fixtures/upgrade_zero_rewrite)
   starts the production runtime without a single changed byte and without any new multi-profile file (plan §7.3);
   on a single-profile installation every read of the data layer leaves /data/mcp exactly as it was; creating profiles
@@ -160,39 +161,59 @@ def test_no_entry_point_imports_the_unwired_modules(entry):
         assert {'mcp_admin_core.restore_lock', 'mcp_admin_core.restore_detect'} <= set(loaded), loaded
 
 
+# The products switched on in the repository: only a product's version-bump PR (the owner approves and merges it; plan
+# 3.3, 11.3) adds a product to features.MULTI_PROFILE_PRODUCTS, and it adds the product here in the same PR, so every
+# change of the switch shows in this test's diff (HM-07's exact pin, kept after HM-23's review S-2); a release that
+# switches a product off again (plan 7.4) takes it out of both. A feature PR changes neither.
+SWITCHED_ON = frozenset()
+
+
 def test_a_product_is_switched_on_only_by_its_release():
-    """Only a product's version-bump PR (the owner approves and merges it) adds it to the switch, and only one that can
-    have profiles (DQ-28): a switched-on product's release version is 0.5.0 or later (DQ-32), so a feature PR that
-    switched a product on without its release fails here, as the pin to an empty switch did. HM-23 replaced that pin
-    (test_multi_profile_is_switched_off_for_every_product) so that the bump PR changes features.py and the release data
-    only (plan 11.3); every other product reads as switched off, and an unknown name is an error."""
+    """The switch is exactly SWITCHED_ON (HM-07's pin); the second guard (HM-23): a switched-on product can have
+    profiles (DQ-28) and its release version is 0.5.0 or later (DQ-32). Every other product reads as switched off, and
+    an unknown name is an error."""
     switched = features.MULTI_PROFILE_PRODUCTS
     assert type(switched) is frozenset
+    assert switched == SWITCHED_ON, 'the switch changed without its version-bump PR naming the change in SWITCHED_ON'
     assert features.KNOWN_PRODUCTS == frozenset(typing.get_args(products.Product))
-    assert switched <= features.KNOWN_PRODUCTS
-    for product in switched:
-        assert profiles.supports_profiles(product), product
-        assert tuple(int(part) for part in version_for_product(product).split('.')) >= (0, 5, 0), product
+    assert_released(switched)
     assert {product for product in features.KNOWN_PRODUCTS if features.enabled(product)} == switched
     for value in ('bogus', 'Odoo', '', None):
         with pytest.raises(ValueError):
             features.enabled(value)
 
 
-def test_a_release_below_0_5_0_cannot_carry_a_switched_on_product(monkeypatch):
-    """The check above, on a switch a feature PR would have set: EMQX switched on at the version it has now (below 0.5.0)
-    is refused; at 0.5.0 it passes; OpenDesign (no profiles, DQ-28) is refused at any version."""
+def assert_released(switched):
+    """The second guard (HM-23): every switched-on product is a known product that can have profiles (DQ-28), at a
+    release version of 0.5.0 or later (DQ-32)."""
+    assert switched <= features.KNOWN_PRODUCTS, switched
+    for product in switched:
+        assert profiles.supports_profiles(product), f'{product} cannot have profiles (DQ-28)'
+        version = version_for_product(product)
+        assert tuple(int(part) for part in version.split('.')) >= (0, 5, 0), f'{product} {version} is below 0.5.0'
+
+
+def test_a_switch_without_its_release_fails(monkeypatch):
+    """Both guards on a switch a feature PR would have changed. The pin: a switch with one product more or one less
+    than SWITCHED_ON fails, even with every product released at 0.5.0. The second guard on its own: EMQX at a version
+    below 0.5.0 is refused and at 0.5.0 passes; OpenDesign (no profiles, DQ-28) is refused at any version."""
     from mcp_admin_core import PRODUCT_VERSIONS
-    monkeypatch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset({'emqx'}))
+    switchable = sorted(product for product in features.KNOWN_PRODUCTS if profiles.supports_profiles(product))
+    assert 'emqx' in switchable and 'opendesign' not in switchable
+    for product in switchable:
+        monkeypatch.setitem(PRODUCT_VERSIONS, product, '0.5.0')
+    for product in switchable:
+        changed = SWITCHED_ON ^ {product}
+        assert_released(changed)  # past the second guard: only the pin refuses it
+        monkeypatch.setattr(features, 'MULTI_PROFILE_PRODUCTS', changed)
+        with pytest.raises(AssertionError, match='SWITCHED_ON'):
+            test_a_product_is_switched_on_only_by_its_release()
     monkeypatch.setitem(PRODUCT_VERSIONS, 'emqx', '0.4.99')
-    with pytest.raises(AssertionError):
-        test_a_product_is_switched_on_only_by_its_release()
-    monkeypatch.setitem(PRODUCT_VERSIONS, 'emqx', '0.5.0')
-    test_a_product_is_switched_on_only_by_its_release()
-    monkeypatch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset({'opendesign'}))
+    with pytest.raises(AssertionError, match='below 0.5.0'):
+        assert_released(frozenset({'emqx'}))
     monkeypatch.setitem(PRODUCT_VERSIONS, 'opendesign', '0.5.0')
-    with pytest.raises(AssertionError):
-        test_a_product_is_switched_on_only_by_its_release()
+    with pytest.raises(AssertionError, match='cannot have profiles'):
+        assert_released(frozenset({'opendesign'}))
 
 
 def test_the_switch_is_read_at_every_call(monkeypatch):
