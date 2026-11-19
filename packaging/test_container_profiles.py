@@ -623,6 +623,14 @@ class RunningChildrenTests(unittest.TestCase):
         self.assertEqual(stage.child_port(['x', '--port=18001']), 18001)
         for argv in (child(), ['x', '--port'], ['x', '--port', 'abc'], ['x', '--port=']):
             self.assertIsNone(stage.child_port(argv))
+        # HM-25: n8n's children, as n8n_adapter.child_spec builds them: the default profile's names no port (3000), an
+        # additional profile's names it after its entry (and its exec wrapper's command line carries that too).
+        node = ['/usr/local/bin/node', '--require', '/opt/woow/apps/n8n/backend_policy.cjs',
+                '/opt/woow/apps/n8n/node_modules/n8n-mcp/dist/mcp/index.js']
+        self.assertIsNone(stage.child_port(node))
+        self.assertEqual(stage.child_port([*node, '--port', '18001']), 18001)
+        wrapper = ['/usr/local/bin/python', '-I', '-S', '-c', 'import os', '7', '500', '5', '-', '/usr/local/bin/node']
+        self.assertEqual(stage.child_port([*wrapper, *node, '--port', '18000']), 18000)
 
     def test_children_by_port_leave_out_the_gone_and_the_unreaped(self):
         self.spawn(10, None)  # the default child of Hermes and OpenDesign names no port
@@ -676,6 +684,47 @@ class RunningChildrenTests(unittest.TestCase):
                 self.proc.process(10, child(3000), 500, nice)
                 with self.assertRaisesRegex(AssertionError, 'default child resources changed'):
                     stage.check_resources(self.process, {3000: 10, 18000: 11}, self.proc.root)
+
+
+class N8nCatalogTests(unittest.TestCase):
+    """HM-25 (DQ-04, UC-09): each additional n8n profile's own catalog copy, as the stage checks it in the container."""
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp()) / 'woow-n8n-mcp'
+        self.addCleanup(shutil.rmtree, self.root.parent)
+        self.user = (os.getuid(), os.getgid())
+        self.created = [(A, 18000), (B, 18001)]
+        for profile_id, _ in self.created:
+            directory = self.root / 'profiles' / profile_id
+            directory.mkdir(mode=0o700, parents=True)
+            (directory / 'nodes.db').write_bytes(b'catalog')
+            os.chmod(directory / 'nodes.db', 0o600)
+        for directory in (self.root, self.root / 'profiles'):
+            os.chmod(directory, 0o700)
+
+    def check(self):
+        stage.check_n8n_catalogs(self.created, self.root, user=self.user)
+
+    def test_each_profile_has_a_private_copy_of_its_own(self):
+        self.check()
+
+    def test_a_missing_shared_open_or_foreign_copy_fails(self):
+        cases = {
+            'missing': lambda copy, other: copy.unlink(),
+            'shared': lambda copy, other: (copy.unlink(), os.link(other, copy)),
+            'open file': lambda copy, other: os.chmod(copy, 0o644),
+            'open directory': lambda copy, other: os.chmod(copy.parent, 0o755),
+            'a link': lambda copy, other: (copy.unlink(), copy.symlink_to(other)),
+            'empty': lambda copy, other: copy.write_bytes(b''),
+            'another profile': lambda copy, other: (copy.parent.parent / ('c' * 24)).mkdir(mode=0o700),
+            'a profile without one': lambda copy, other: shutil.rmtree(copy.parent),
+        }
+        for name, damage in cases.items():
+            with self.subTest(name):
+                self.setUp()  # a fresh tree for each case
+                damage(self.root / 'profiles' / B / 'nodes.db', self.root / 'profiles' / A / 'nodes.db')
+                with self.assertRaises((AssertionError, OSError)):
+                    self.check()
 
 
 class KillTests(unittest.TestCase):
@@ -1129,6 +1178,7 @@ class StageTests(unittest.TestCase):
                     'detect_as_runtime': record('detect', Each(*verdicts)),
                     'create_profiles': record('create', created),
                     'credentials': record('credentials', found), 'profiles_up': arecord('up', pids),
+                    'check_n8n_catalogs': record('catalogs'),
                     'check_routing': arecord('routing'), 'check_child_bearers': arecord('child bearers'),
                     'check_resources': record('resources'), 'kill_one': arecord('kill'),
                     'initialize_on': arecord('served again', (200, 'child-1', '2025-03-26')),
@@ -1252,11 +1302,16 @@ class StageTests(unittest.TestCase):
         self.assertEqual(events[-2:], ['stop', 'failed'])
         self.assert_every_start_stopped(events)
 
-    def test_n8n_is_refused_before_anything_changes(self):
-        """Review SF-2: n8n's children name their port in their environment only (HM-25)."""
-        events, _, failures, _ = self.run_stage(app='n8n')
-        self.assertEqual((events, failures), (['failed'], ["n8n's children name their port in their environment only "
-                                                           '(HM-25)']))
+    def test_n8n_runs_the_stage_and_checks_each_profile_s_catalog(self):
+        """HM-25 (review SF-2's handoff): n8n runs every step, and once every child is up each additional profile's
+        catalog copy is checked (its own, private); no other product's stage looks at n8n's catalogs."""
+        events, calls, failures, inputs = self.run_stage(app='n8n')
+        self.assertEqual(failures, [])
+        self.assertEqual(events[:9], ['marker ended', 'detect', 'create', 'credentials', 'start', 'ready', 'up',
+                                      'catalogs', 'routing'])
+        self.assertEqual(calls['catalogs'], [((inputs.created,), {})])
+        events, _, _, _ = self.run_stage(app='odoo')
+        self.assertNotIn('catalogs', events)
 
 
 if __name__ == '__main__':

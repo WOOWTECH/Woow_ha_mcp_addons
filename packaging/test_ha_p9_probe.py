@@ -545,6 +545,27 @@ class ChildScriptTests(unittest.TestCase):
                              text=True, check=True).stdout
         self.assertEqual(out, '12 3000\n13 -\n14 18001\n')
 
+    def test_names_each_n8n_child_s_port(self):
+        """multi-profile HM-25: n8n's children as n8n_adapter.child_spec builds them: the default profile's names no
+        port (3000), an additional profile's names its port after its entry, its exec wrapper's command line too."""
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root)
+        node = ('/usr/local/bin/node --require /opt/woow/apps/n8n/backend_policy.cjs '
+                '/opt/woow/apps/n8n/node_modules/n8n-mcp/dist/mcp/index.js')
+        table = {7: ('/usr/local/bin/python /opt/woow/packaging/entrypoint.py n8n', 'python', 1),
+                 9: ('/opt/woow/.venv/bin/python /opt/woow/packaging/management_launcher.py n8n', 'python', 7),
+                 12: (node, 'node', 9),
+                 13: (node + ' --port 18000', 'node', 9),
+                 14: ('/usr/local/bin/python -I -S -c x 5 500 5 - /usr/local/bin/node ' + node + ' --port 18001', 'python', 9)}
+        for pid, (cmd, comm, ppid) in table.items():
+            (root / str(pid)).mkdir()
+            (root / str(pid) / 'cmdline').write_bytes(b''.join(a.encode() + b'\0' for a in cmd.split(' ')))
+            (root / str(pid) / 'stat').write_text('%d (%s) S %d 1 1 0' % (pid, comm, ppid))
+        out = subprocess.run([sys.executable, '-c', probe.CHILD_PORT_SCRIPT, str(root)], capture_output=True,
+                             text=True, check=True).stdout
+        self.assertEqual(out, '12 -\n13 18000\n14 18001\n')
+        self.assertEqual(probe.serving([('12', None), ('13', 18000), ('14', 18001)], 3000), ['12'])
+
 
 class DriverSyntaxTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('node'), 'node not installed')
