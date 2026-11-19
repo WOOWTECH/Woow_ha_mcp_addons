@@ -7,9 +7,10 @@ product's ProfileManager gives every profile's monitor its options; left out, th
 - first_check_after: the start point (the default profile at once; an additional one later, staggered); the interval
   stays HEALTH_INTERVAL.
 - auth_backoff: while the backend refuses the credentials (auth_refused: the probes' fixed texts of this repository's
-  children; HM-26: refused_login, a refusal the probe's reply says in its error object only), the next check waits the
-  table's next step (AUTH_BACKOFF: 15, 30, 60, 120, 300 s; Odoo 18 counts failed logins per source address, C-tracer
-  4.4); any other answer of the child resets it, and so does reset() (a save or the panel's restart: new credentials).
+  children; HM-26: refused_login, a refusal the Headscale child's reply says in its error object only), the next check
+  waits the table's next step (AUTH_BACKOFF: 15, 30, 60, 120, 300 s; Odoo 18 counts failed logins per source address,
+  C-tracer 4.4); any other answer of the child resets it, and so does reset() (a save or the panel's restart: new
+  credentials).
 - tolerance 2: the verdict unreachable (what makes the gateway refuse a tools/call: the child answered and the backend
   did not) needs two such checks in a row of the same child (C2-MF-4 point 3: a check that another profile's load
   delayed refuses nothing); until then the previous verdict stays (reachable, or unknown after a start). A check the
@@ -61,8 +62,9 @@ def refused_login(reply):
     """HM-26: whether the readiness probe's reply says the backend refused the credentials where its reason cannot
     (probe_reason keeps an error object's "error" or "message" only): the Headscale child's error object, whose code and
     HTTP status say it (apps/headscale/vendor/headscale_mcp_server: a revoked, expired or wrong API key is answered
-    HEADSCALE_UPSTREAM_ERROR with http_status 401). Asked only by a monitor with auth_backoff (a switched-on product's,
-    DQ-25): the reason the check records, and every answer, stay as they were."""
+    HEADSCALE_UPSTREAM_ERROR with http_status 401). Asked only by a Headscale profile's monitor with auth_backoff (a
+    switched-on product's, DQ-25), and counted only for a check the child answered: the reason the check records, and
+    every answer, stay as they were."""
     if not isinstance(reply, dict) or reply.get("isError") is not True or not isinstance(reply.get("content"), list):
         return False
     texts = [item["text"] for item in reply["content"]
@@ -252,7 +254,9 @@ class HealthMonitor:
         refused logins in a row counted for auth_backoff."""
         generation, answered, backend, reason = found
         if self.auth_backoff is not None:
-            if backend == 'unreachable' and (auth_refused(reason) or self.login_refused):
+            # HM-26 review N-1: a refused login the reply said counts only on a check the child answered, as the
+            # reason's does (a check it did not answer has the reason MCP_SERVER_NOT_READY)
+            if backend == 'unreachable' and (auth_refused(reason) or (answered and self.login_refused)):
                 self.auth_refusals += 1
                 if self.log is not None:
                     self.log('auth backoff', 'the backend refused the credentials; next health check in '
@@ -347,8 +351,10 @@ class HealthMonitor:
                             "name": probe_name, "arguments": probe_args}}) as response:
                         reply = await protocol_reply(response, 3)
                         reason = probe_reason(reply)  # 0.2.2: kept only when the backend stays unreachable
-                        # HM-26: a refused key the reply says only in its error object, for auth_backoff's count alone
-                        self.login_refused = self.auth_backoff is not None and refused_login(reply)
+                        # HM-26: a refused key the reply says only in its error object, for auth_backoff's count alone;
+                        # the Headscale child's object, so a Headscale profile's monitor only (security review S-2)
+                        self.login_refused = (self.auth_backoff is not None and product == 'headscale'
+                                              and refused_login(reply))
                         if isinstance(reply, dict) and not reply.get("isError"):
                             for item in reply.get("content", []):
                                 if isinstance(item, dict) and item.get("type") == "text":
