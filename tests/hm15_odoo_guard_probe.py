@@ -12,8 +12,8 @@ def install(endpoint, marker):
 
     class ObservedGuard(original):
         def __init__(self, process, port, *, limits):
-            # The owned harness moves the real child from 3000 to an ephemeral port.
-            super().__init__(process, endpoint.port, limits=limits)
+            # The owned harness redirects the guard to the private child port.
+            super().__init__(process, port, limits=limits)
 
         async def handle_async_request(self, request):
             response = await super().handle_async_request(request)

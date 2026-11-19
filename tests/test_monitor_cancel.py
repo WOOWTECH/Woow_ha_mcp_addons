@@ -390,6 +390,8 @@ async def run_until_sigterm(data, default_port, *, switch=True):
         if switch:
             patch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset({PRODUCT}))
         patch.setattr(profile_runtime, 'Supervisor', NoProcessSupervisor)
+        # ClosingChild is an in-process server, not a child of this supervisor.
+        patch.setattr(profile_runtime, 'ListenerGuard', lambda *args, **kwargs: None)
         patch.setattr(profile_runtime, 'STAGGER_SECONDS', 0.05)
         patch.setattr(run_product, 'make_ha_admin_verifier', lambda: administrator)
         patch.setattr(run_product, 'Listener', Listener)
