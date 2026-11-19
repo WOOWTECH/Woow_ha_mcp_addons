@@ -136,7 +136,7 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
   定稿、Odoo 首發的升版片 HM-19a 先寫，Headscale 照抄適用的；第 7 點（Odoo 換身分換 token）與第 10 點（Origin 清單）不適用：
   Headscale 不換 token、Origin 照舊）：
   - HS1：`Multiple profiles: besides the default profile, the add-on can serve up to 3 additional profiles, each with its own Headscale URL and API key, MCP token, tool policy and MCP child. Profiles may use the same Headscale server with different tool policies, or different servers.`
-  - HS2：`A Headscale API key administers the whole Headscale server: give each profile an API key of its own (recommended, not enforced; the connection page says so once profiles are on). Profiles that share one key on one server are kept apart only by their tool policies, and revoking that key in Headscale stops all of them.`
+  - HS2：`A Headscale API key administers the whole Headscale server, and Headscale has no narrower key: profiles on one Headscale server are kept apart only by their tool policies, whatever keys they use. A profile allowed to create API keys (headscale_api_keys create) can obtain a key that administers the whole server and that no tool policy, no "Revoke all" and no restore check reaches, and a profile allowed to expire or delete API keys can stop the other profiles' keys: deny these operations to every profile meant to be restricted (the connection page says so once profiles are on). An API key of its own per profile is still recommended (not enforced): one profile's key can then be revoked in Headscale without stopping the others.`
   - HS3：`Each profile's MCP child reads only its own profile's saved policy, at every call (also for calls made straight to the child inside the container); a profile directory whose owner or mode cannot be verified makes every call of that profile fail with HEADSCALE_POLICY_UNAVAILABLE.`
   - HS4：`Changing a profile's Headscale URL to another origin (scheme, host or port) now requires entering its API key again: the admin API answers 422 CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN and the panel asks for the key. The same origin written otherwise (the /api/v1 root, letter case, the default port) needs no key.`
   - HS5：`A loopback Headscale URL (127.0.0.0/8, ::1, localhost) is now refused when it is saved (HTTP 400); the MCP child refused to connect to it before, and still does.`
@@ -147,8 +147,12 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
   ```text
   **多個帳號（0.5.0 起）**：除了預設帳號，最多可以再加 3 個帳號，每個帳號有自己的 Headscale 網址與 API key、MCP 權杖、工具政策與子程序。
   可以是同一台 Headscale、各帳號不同的工具政策，也可以是不同台。Headscale 的 API key 是整台伺服器的管理權限，Headscale 沒有 key 層級的權限：
-  **建議每個帳號在 Headscale 各建一把 API key**，不要共用。共用同一把 key 的帳號之間只靠工具政策分權，在 Headscale 撤銷那把 key 會同時停掉它們；
-  各用各的，某個帳號不再使用時就只撤銷它那一把。帳號的網址改到另一台伺服器（scheme、主機或 port 不同）時要重新輸入 API key。
+  同一台 Headscale 上的帳號，不論是否共用 key，彼此只靠工具政策分權。**要讓某個帳號真的受限，請在它的工具權限頁停用 `headscale_api_keys`
+  的建立、作廢與刪除**：建立會把一把新的整台管理 key 交給持有這個帳號權杖的人，在 add-on 外也能用，工具政策、「全部撤銷」與還原都管不到；
+  作廢與刪除能停掉其他帳號的 key。新安裝時這些寫入預設開啟，新的帳號會複製預設帳號當下的工具政策。
+  **仍建議每個帳號在 Headscale 各建一把 API key**，不要共用：某個帳號不再使用時，就只撤銷它那一把；共用一把時，撤銷它會同時停掉共用的帳號。
+  發生外洩時，在每一台 Headscale 列出所有 API key（`headscale apikeys list`），撤銷這個 add-on 用過的與不認得的每一把，再到面板逐帳號存新 key。
+  帳號的網址改到另一台伺服器（scheme、主機或 port 不同）時要重新輸入 API key。
   每個帳號的密鑰網址都照同一條 Origin 規則（沒有 Origin 或 `https://claude.ai`）；Bearer 請求帶任何 Origin 都回 403。
   ```
 
