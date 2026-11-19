@@ -84,10 +84,17 @@ session URL、備份或私人拓樸。LOCAL/MOCK、CONTAINER/MOCK、HA、PUBLIC 
 
 ## 多帳號驗收（T-01～T-29 的 HA 版；HM-16）
 
-**狀態（2026-11-18）：工具備好，沒有任何多帳號的 HA 實測**。還沒有產品開通（`MULTI_PROFILE_PRODUCTS` 是空的）。
-擋路探針 HM-03a 只寫回了一項：展示機上一般與加密的局部還原，兩個還原訊號都觸發（[契約](../multi-profile/contract.md)
-第 10 節 2026-11-18 HM-13b 那列；完整還原沒測，列為 Odoo 發版前的關卡）。其他項目（完整還原、UC-10、sentinel 在各種
-重開與更新之後的穩定性）在本文件仍是**未確認**。下面的「通過標準」是驗收時要做到的，不是已經做到的。期望值逐列的來源與差異見
+**狀態（2026-11-19）：工具備好；有一次發版前預驗，還沒有 HM-19b 的正式驗收**。還沒有產品開通（`MULTI_PROFILE_PRODUCTS` 是空的）。
+
+- **發版前預驗（2026-11-19）**：在負責人指定的展示機上，用拋棄式的本機 add-on（以已發佈的 Odoo 0.4.14 映像為底、換上 `claude-delivery` `fcd0b22`
+  的程式，開關關與開各一份）跑了 Odoo 多帳號實測，結果見 [Odoo 多帳號發版前預驗](ha-test-odoo-multiprofile-early.md)。
+  **發版前預驗；HM-19b 仍要在正式映像上重做**：它不是 HM-19b 的證據（不是 HM-19a 的候選映像、不經商店、沒有目標硬體），也不能代替下表任何一列的 HA 層。
+- **HM-03a／b 平台探針（2026-11-18，展示機；HAOS 18.1、Core 2026.7.2、Supervisor 2026.11.0）寫回的**：UC-10 是（Ingress 照原樣轉 `X-MCP-Profile` 與
+  PATCH、DELETE；[契約](../multi-profile/contract.md)第 3.7 節）；UC-08 一般與加密的局部還原，兩個還原訊號都觸發（契約第 10 節 2026-11-18 HM-13b 那列）；
+  sentinel 的 inode 與 ctime 在 add-on 重啟、冷備份、add-on 更新之後都不變（用一個 entrypoint 不碰的專用檔模擬 sentinel）。
+- **還沒做、在本文件仍是未確認的**：完整還原（列為 Odoo 發版前的關卡）、主機重開與 Supervisor 更新之後的 sentinel、UC-14、Claude.ai 送的 Origin（S14）。
+
+下面的「通過標準」是驗收時要做到的，不是已經做到的。期望值逐列的來源與差異見
 [多帳號驗收矩陣](../multi-profile/acceptance-matrix.md)（PaaS T-01～T-29 的 HA 版，測試檔登記表也在那裡）與
 [契約](../multi-profile/contract.md) 第 9 節。
 
@@ -141,7 +148,7 @@ n8n 子程式的 port 只在環境變數裡，認不出哪個子程式是哪個�
 | T-21 | 備份還原 | LOCAL：全部；CONTAINER：單帳號還原（守門刪標記、還原提示、`KEPT_NOTICE` 與 `re-owned N` 各一行、守門沒有別的行）、多帳號還原樹（每個帳號撤銷、child token 換新、還原紀錄、還原前的 token 兩種接法與 child token 都被拒、sentinel 重建、`REVOKED` 每帳號一行與 `REVOKED_NOTICE` 一行、守門沒有別的行）；HA：full、partial、加密各一次，步驟見下方 [T-21 在 HAOS 的步驟](#t-21-在-haos-的步驟hm-16) | 預設帳號依 DQ-03（採 (b) A2：有帳號資料才連預設一起撤銷；沒撤銷時面板與 log 提示權杖已回到備份當時的值）；兩個訊號至少一個觸發；讀不到的帳號隔離（只能刪）；獨立驗證（撤銷後重新讀過每個帳號，和還原前的 token 都對不上）；核對後才重發；舊收據 410（備份後才做、隨還原消失的操作也是）；C1-M1 攻擊序；版本混搭各一次（計畫 §10.6 第 6 點）。讀不到的帳號隔離與 C1-M1 只在 LOCAL 驗 | 是 |
 | T-22 | n8n 名額與逾時 | 等 n8n 開通（HM-25） | `n8n_session` 每帳號一份；沒後端的額外帳號回 `backend_not_configured` | 否（n8n） |
 | T-23 | 子程式 bearer 隔離 | LOCAL：全部（7 支 Python＋n8n）；CONTAINER：每個帳號的真子程式不帶、隨機、別帳號的 child token | 不帶、帶錯、帶別帳號、兩個標頭、空字串都 401，自己的 200（n8n 另見矩陣）。兩個標頭與空字串只在 LOCAL 驗 | 是（Odoo） |
-| T-24 | 來源檢查 | LOCAL；HA：記下 Claude.ai 送的 Origin | 密鑰網址清單外只記 would_deny、不擋；Bearer 帶 Origin 403 | 是 |
+| T-24 | 來源檢查 | LOCAL：全部（`tests/test_origin_policy.py`、面板的 `origin-policy` 測試）；HA：S14 交 HM-19b，用 echo 端點看 Claude.ai 實際送的 Origin（預設清單有 `https://claude.ai`，Claude.ai 送它時不會有 would_deny 行，看 add-on log 量不出來；也可以暫時把清單清空、維持 report-only 再看紀錄）；實機另看 add-on log 裡 would_deny 行的格式與節流 | 照[矩陣](../multi-profile/acceptance-matrix.md) T-24（HM-27 定案）：密鑰網址清單外（預設清單只有 `https://claude.ai`）只記一行 would_deny、不擋，回應和不帶 Origin 的同一個請求逐位元相同；面板切 enforce 後只擋清單外（403 固定本體），清單內與沒帶 Origin 照舊；政策檔不能用時每個帳號的密鑰網址 503；還原後政策是備份當時的；Bearer 帶 Origin 403；Headscale 只放 `https://claude.ai`。S14 的結果交負責人決定 DQ-11 第二問（2026-11-19 HM-18 改寫：原本只寫「記下 Claude.ai 送的 Origin」，是 HM-27 定案前的寫法） | 是 |
 | T-25 | 紀錄稽核 97 種寫法 | LOCAL；HA：add-on log 與診斷 | 不比 pin 版 PaaS 差；0 token | 是 |
 | T-26 | 名稱輸入與顯示 | LOCAL（Playwright） | HA 加嚴的名稱規則；顯示一律跳脫 | 是 |
 | T-27 | 公開網址與真實用戶端 | PUBLIC | 每種接法各兩個帳號；真 Claude.ai 兩個帳號同時用；代理 log 遮掉 `/private_` | 是 |
@@ -195,8 +202,9 @@ full、partial（只選這個 app）、加密備份各做一輪。每一步都�
 - **UC-10 Ingress**：Ingress 照原樣轉送 `X-MCP-Profile` 與 PATCH、DELETE（不通時才改用網址路徑的備案，DQ-17）。
 - **記下 Supervisor 版本**（也記 Core、HAOS 版本）：Supervisor 的還原與 Ingress 行為會隨版本變，上面三項的結果只對記下的版本成立。
   Store 同步後從 Store 安裝或升級，再驗一次（Odoo 首發標準第 11 點）。
-- HM-03a／b 只寫回了局部還原的 UC-08（見「多帳號驗收」開頭的狀態）：其餘項目寫回之前，不得宣稱成立，也不得把容器或本機的模擬
-  當成 HA 證據。
+- HM-03a／b 寫回了局部還原的 UC-08、UC-10，以及 sentinel 在 add-on 重啟、冷備份、add-on 更新之後的穩定性（見「多帳號驗收」開頭的狀態；
+  2026-11-19 HM-18 補寫 UC-10 與 sentinel）。其餘項目寫回之前，不得宣稱成立，也不得把容器或本機的模擬、或發版前預驗當成這一版的 HA 證據；
+  寫回的項目也只對記下的版本成立，每次升版照上面重驗。
 
 ### LiteLLM 開通（HM-21；升版 PR 建好候選映像之後才做）
 

@@ -2,6 +2,12 @@
 
 ## 結論
 
+- **2026-11-19 合併 `claude-delivery` `95b7e9d`**（#122 HM-18 定稿、#123 P9 清單產生器、#124 測試工具的 port 撞號；merge commit，不 rebase、
+  不 force push）：衝突只在 `docs/multi-profile/` 的契約、驗收矩陣與 `unreleased-changes.md`，以 HM-18 的定稿文字為底、本片加的照原樣接上
+  （契約第 10 節本片兩列改標「v1 定稿」、加一列記這次合併；`unreleased-changes.md` 檔頭第 2 點與第 3.5 節改指契約第 1.4 節與該檔第 7 節）；
+  HM-18 沒有加列，#129 列號照舊、仍是暫定；`deviation-trace.md` 照 HM-18 的做法用產生器的暫存複本重產（只多 #129 的出處與檔頭一句，產生器
+  要加的一筆交主對話）；本片的測試沒用到 #123、#124 改的工具，不用改；第 15 節交 HM-18 的兩件（`acceptance.md` T-05 的通用列，現在是第 132 行；
+  契約表頭的 PaaS commit）HM-18 沒改，仍開著。本筆記其他地方寫的「HM-18 合併後」「HM-18 同時在準備」是合併前的狀態；檢查結果寫在合併 commit。
 - **本片是 LiteLLM 開通的功能 PR**（計畫 §12.3 HM-21～HM-26、§11.3）：LiteLLM 自己要的都在這裡；升版 PR 把 `litellm` 加進
   `features.MULTI_PROFILE_PRODUCTS`、照 §11.3 的清單升 0.5.0（第 12 節列了 LiteLLM 的部分）。但開關開的實驗查到，共用的單帳號測試要先有
   通用做法，升版 PR 才能只改開關（第 8 節，交負責人）。本片不改版號、不碰 `addons/`，`MULTI_PROFILE_PRODUCTS` 在 repo 裡維持空集合，
