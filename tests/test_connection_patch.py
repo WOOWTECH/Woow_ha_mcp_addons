@@ -9,6 +9,9 @@ from mcp_admin_core.capabilities import ManagementOptions
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.products import ProductStore, TOOLS
 from n8n_adapter import TOOLS as N8N_TOOLS
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch these tests pin)
+
+pytestmark = pytest.mark.usefixtures('switched_off')  # HM-23: tests/switch_modes.py
 
 IDENTITY = {'x-remote-user-id': 'fake-admin'}
 CONNECTIONS = {

@@ -2,9 +2,11 @@
 
 > HM-00 產出（2026-11-14）；2026-11-15 文件同步重產（說明欄的決策狀態、FM-146 的負責片）；2026-11-17 文件同步重產
 > （FM-154～156、各片補的差異表第 87～117 列、文末「差異表每一列的來處」）；2026-11-19 HM-18 重產（DQ-35、DQ-45 已定，
-> Claude.ai 標頭的更正，差異表第 118～128 列經 T-21、T-24 對到）。表由 repo 外的產生器寫出
+> Claude.ai 標頭的更正，差異表第 118～128 列經 T-21、T-24 對到）；同日 HM-23 合併主線時重產（差異表第 129、130 列
+> 經 FM-155、FM-92 對到）。表由 repo 外的產生器寫出
 > （重產指令與輸入版本見 `docs/provenance/ha-multiprofile-docs-sync-20261117.md`，HM-18 的改動見
-> `docs/provenance/ha-multiprofile-HM-18-20261119.md` 第 7 節，原本的指令見
+> `docs/provenance/ha-multiprofile-HM-18-20261119.md` 第 7 節，HM-23 的改動見
+> `docs/provenance/ha-multiprofile-HM-23-20261119.md` 開頭的合併補記，原本的指令見
 > `docs/provenance/ha-multiprofile-HM-00-20261114.md` 第 8 節；腳本與輸入的 SHA-256 以 repo 外的
 > `wave0/hm00-check/SHA256SUMS` 為準），「原文」欄逐字取自計畫產物（repo 外）：
 > `FEATURE-MATRIX-zh-TW.md` 第 2 節的「HA 平台差異」欄、`gaps/G6-delivery.md` 第 5 節的「HA 期望值與差異」欄。
@@ -17,7 +19,7 @@
 - 其餘 44 列寫「—」（沒有平台差異），但「—」不等於行為相同：每列都人工看過、寫了結論（「—」的列那一節）。23 列有差異、對到差異表；19 列照 PaaS（有的另指差異表裡相關的列）；2 列是流程或文件。
 - G6 §5 的 T-01～T-29 共 29 列，每列都對到 §8.8 的列或某個測試。
 - 對不上的已經補成差異表第 44～79 列（HM-00 補列）；看「—」列時找到的差異補成第 80～86 列（審查後補列）。只對到測試的列，說明欄寫了為什麼不是差異。
-- 差異表現在有 128 列：第 87～128 列是各片實作與審查補的（來由見 `contract.md` 第 9 節開頭）。三張表合起來對到 121 列；其餘 7 列沒有 FEATURE-MATRIX 或 G6 的列以它為差異，出處寫在文末一節。
+- 差異表現在有 130 列：第 87～130 列是各片實作與審查補的（來由見 `contract.md` 第 9 節開頭）。三張表合起來對到 123 列；其餘 7 列沒有 FEATURE-MATRIX 或 G6 的列以它為差異，出處寫在文末一節。
 - 「對到」欄的測試：「既有」是 bb48449 已有的檔；「HM-xx」是計畫中的新測試（`acceptance-matrix.md` 的測試檔登記表）。
 
 ## FEATURE-MATRIX「HA 平台差異」欄
@@ -95,7 +97,7 @@
 | FM-89 | 整份 PUT backend 本來就要帶完整連線 | §8.8 #41、#115 | 開通後新來源的判定見 #115（HM-12） |
 | FM-90 | 產品用途不同（HA 允許 Claude.ai） | §8.8 #9 | — |
 | FM-91 | 同一台 Nextcloud 暴力破解防護以來源 IP 計（FM-69） | §8.8 #18；`tests/test_health_backoff.py`（HM-09） | 節流單位 UC-12 未確認 |
-| FM-92 | HA 遮罩以 state 為單位，不需全域集合；EMQX 角色名稱依版本：未確認（UC-22） | §8.8 #38、#65 | — |
+| FM-92 | HA 遮罩以 state 為單位，不需全域集合；EMQX 角色名稱依版本：未確認（UC-22） | §8.8 #38、#65、#130 | UC-22 由 HM-23 查證：EMQX 的唯讀角色是 `viewer`（Enterprise 5.4 起、5.9 起所有版本；5.8 以前的開源版要查那一版的文件），文件建議受限帳號用它，見 #130（HM-23） |
 | FM-94 | DOCS.md 不算 Store 執行期內容，太早改會隨別的產品發版提早上架 | §8.8 #73 | — |
 | FM-95 | HA CI 是 GitHub Actions、Python 3.13.16、pytest 以 root（CF-14）；實際耗時未確認（UC-17） | §8.8 #75 | — |
 | FM-98 | HA 測試基礎比 PaaS 完整（優勢） | §8.8 #76 | — |
@@ -134,7 +136,7 @@
 | FM-150 | 讀 body 前准入 | §8.8 #16、#96；`tests/test_profile_quotas.py`（HM-08） | 准入滿時仍讀 ≤64 KiB 的 POST、通知經保留名額送到見 #96（HM-31） |
 | FM-151 | 一個 add-on 持有多個帳號的 token | §8.8 #38；`tests/test_reply_mask_union.py`（HM-08） | — |
 | FM-154 | HA 沒有 Pod 記憶體上限，常數改由容器記憶體推導，HM-19c 量測後定案 | §8.8 #101、#102、#103、#104、#105、#106、#107、#108；`tests/test_request_budget.py`（HM-31） | 平台差異本身是 #103（沒有 Pod 記憶體上限：cgroup 上限，沒有就 MemAvailable 減 256 MiB）與 #104（程式常數）；其餘是 HM-31 對齊 PaaS #155 時的取捨；常數 HM-19c 量測後定案 |
-| FM-155 | 無 | `tests/test_fresh_backend_connections.py`（HM-32） | 原文「無」：沒有平台差異。HA 的 LiteLLM、EMQX 本來就不保留閒置的後端連線，HM-32 照 PaaS #135、#139 對齊設定、加回歸測試 |
+| FM-155 | 無 | §8.8 #129；`tests/test_fresh_backend_connections.py`（HM-32） | 原文「無」：沒有平台差異。HA 的 LiteLLM、EMQX 本來就不保留閒置的後端連線，HM-32 照 PaaS #135、#139 對齊設定、加回歸測試；同一個原因（`backend_policy` 丟掉產品給的 `limits`）讓 EMQX 寫的並行連線上限 20 沒生效，生效的和 PaaS 一樣是 4，見 #129（HM-23） |
 | FM-156 | 無 | `tests/test_hermes_cron_description.py`（HM-33） | 原文「無」：沒有平台差異。HM-33 照 PaaS #156 補工具說明，程式行為不變（#138 對應 HA PR #85，還沒發版） |
 
 ## G6 §5「HA 期望值與差異」欄
@@ -222,7 +224,7 @@
 | FM-152 | 改來源要重填秘密 | §8.8 #41、#115、#117；`tests/test_new_origin_secret.py`（HM-12） | DQ-40 ⑨；判定與面板表單的細節見 #115、#117（HM-12） |
 | FM-153 | 換身分換 token | §8.8 #40、#113、#114、#116；`tests/test_odoo_identity_rotation.py`（HM-12） | DQ-40 ⑩；存檔的回應、途中失敗與面板見 #113、#114、#116（HM-12）；PaaS #154（2026-11-15）起 Nextcloud 也換 |
 
-## 差異表每一列的來處（`contract.md` 第 9 節 #1～#128）
+## 差異表每一列的來處（`contract.md` 第 9 節 #1～#130）
 
 反查表：上面三張表的「對到」欄，哪些 FEATURE-MATRIX、G6 §5 的列對到差異表的這一列。沒有任何列對到的，寫出處。「項目」欄照 `contract.md` 第 9 節。
 
@@ -356,3 +358,5 @@
 | 126 | Origin 政策的設定入口與壞值 | T-24 | — |
 | 127 | Origin 紀錄的節流 | T-24 | — |
 | 128 | Origin 清單的格式與上限 | T-24 | — |
+| 129 | EMQX 的後端並行連線上限 | FM-155 | — |
+| 130 | EMQX 受限帳號的子程式與後端金鑰 | FM-92 | — |

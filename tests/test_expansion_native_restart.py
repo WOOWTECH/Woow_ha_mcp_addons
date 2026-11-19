@@ -13,6 +13,9 @@ from test_expansion_policy import call
 from test_expansion_runtime import WRITES, fake_api, payload
 from test_real_products import connection, rpc
 from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch these tests pin)
+
+pytestmark = pytest.mark.usefixtures('switched_off')  # HM-23: tests/switch_modes.py
 
 
 @pytest.mark.parametrize('product', ['emqx', 'litellm', 'nextcloud'])
