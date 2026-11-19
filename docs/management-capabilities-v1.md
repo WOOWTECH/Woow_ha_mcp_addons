@@ -110,3 +110,71 @@ Regression coverage lives in `tests/test_management_capabilities.py`,
 `packages/mcp-admin-ui/tests/{capabilities.test.mjs,browser/capabilities.spec.mjs}`.
 Owned fake child/backend tests do not establish HAOS ingress or live backend acceptance.
 Root owns deployment, live verification and version changes.
+
+## 多帳號（產品開通後）的管理路由與能力
+
+這一節照多帳號契約 `docs/multi-profile/contract.md`（HM-18 定稿）寫；**目前（2026-11-19）還沒有產品開通**。沒開通的產品照上面各節：`/api/profiles*` 與
+`/api/origin-policy` 是未知操作（角色檢查之後 404），不要求、不看 `X-MCP-Profile`，每個回應一個位元組都不變。下面是摘要，逐條以契約為準。
+
+**全域路由**（不看 `X-MCP-Profile`；契約第 3.1 節）：
+
+| 路徑 | 方法 | 用途 | 寫入保護 |
+|---|---|---|---|
+| `{base}/api/profiles` | GET | 帳號清單（含 `orphans`；有隔離目錄時另帶 `quarantined`；`ETag: "p1-<64 hex>"`） | — |
+| `{base}/api/profiles` | POST | 建立 `{"label":…}`（回應不含權杖） | If-Match（索引）＋Idempotency-Key |
+| `{base}/api/profiles/<id>` | PATCH | 改名 | If-Match（索引） |
+| `{base}/api/profiles/<id>` | DELETE | 刪除（先撤銷權杖、抹掉後端憑證；孤兒與讀不到的帳號也收） | If-Match（索引）＋Idempotency-Key |
+| `{base}/api/profiles/revoke-all` | POST | 全部撤銷（含預設帳號；逐帳號結果） | If-Match（索引；索引不能用時是壞索引的 ETag）＋Idempotency-Key |
+| `{base}/api/profiles/restore-record` | GET | 還原與休眠核對紀錄（不含秘密） | — |
+| `{base}/api/profiles/<id>/restore-review` | POST | 標記「已核對」 | If-Match（索引）＋Idempotency-Key |
+| `{base}/api/profiles/index/quarantine` | POST | 隔離不能用的帳號索引（DQ-12） | If-Match（壞索引的 ETag）＋Idempotency-Key |
+| `{base}/api/profiles/quarantine/<名稱>/delete` | POST | 刪除一個隔離目錄 | If-Match（索引）＋Idempotency-Key |
+| `{base}/api/origin-policy` | GET、PUT | 密鑰網址的 Origin 政策（全 add-on 一份；PUT 要 If-Match（政策 ETag `"o1-…"`）＋Idempotency-Key）；Headscale 回 404 | 見左 |
+
+**帳號範圍路由**（其他 `{base}/api/*`，含本文件上面的 `capabilities`、`backend/test`、`child/restart`、`diagnostics`）：開通後一定要剛好一個
+`X-MCP-Profile`（`default` 或 24 位小寫 hex；缺 400 `profile_id_required`、多個或格式錯 400 `profile_id_invalid`、不存在 404 `profile_not_found`；
+索引不能用時額外帳號 503 `profile_index_corrupt`）。`capabilities` 與 `configuration` 的回應帶 `profile:{"id"}`；`backend/test` 測選定帳號已存的設定；
+`child/restart` 只重啟選定帳號的子程式，202 回應多 `blocked_reason`；`diagnostics` 只回選定帳號的子程式緩衝。額外帳號的 `owner-defaults/*` 回 409
+`owner_defaults_unavailable`、`PUT endpoint` 回 409 `endpoint_global`。
+
+**管線**（契約第 3.2 節）：開通後所有路由走同一條：identity（Ingress 來源、剛好一個 `X-Remote-User-Id`、非 GET 要 CSRF）→ 管理名額 → 讀 body →
+方法表與不讀狀態的格式檢查 → **角色檢查** → 解析 `X-MCP-Profile` → 拿鎖 → 讀狀態 → 第二次角色檢查 → If-Match、Idempotency-Key 等狀態相依的判斷 → 提交。
+非管理員最遠只到角色檢查：任何帳號狀態下都拿到逐位元相同的 403。開通後 PATCH、DELETE 只有 `profiles/<id>` 收；PATCH、DELETE 沒過 identity 從 405 變
+identity 的 403，表外方法（OPTIONS 等）的 405 `Allow` 從 4 個方法變 6 個（契約第 1.4 節第 4 點）。
+
+**各產品的額外帳號上限**（契約第 5 節；暫定，HM-19c 在目標硬體量測後定案）：
+
+| 產品 | 額外帳號上限 | 每個子程式的記憶體估計 |
+|---|---|---|
+| Odoo | 5 | 100 MiB |
+| n8n | 2 | 300 MiB |
+| Hermes、EMQX、LiteLLM、Nextcloud、Headscale | 3 | 160 MiB |
+| OpenDesign、Odoo Manage | 0（不開放，建立回 409 `profile_product_unsupported`；DQ-28） | — |
+
+記憶體不夠（MemAvailable 減保留量 256 MiB 放不下再一個子程式）時建立回 409 `profile_memory_insufficient`（另帶 `required_memory_mib`、`available_memory_mib`）；
+開檔數上限提不到需要量時只服務預設帳號，建立回 409 `profile_limit_reached`、`limit` 是 0。
+
+**錯誤代碼**（新增的都在 `detail.code`，本體 `{"error":"request denied","detail":{"code":…}}`，不帶伺服器文字；既有的五種本體形狀照舊。全表含欄位、管線步驟與
+PaaS 對照在契約第 4.1 節）：
+
+| 代碼 | HTTP | 什麼時候 |
+|---|---|---|
+| `profile_id_required` | 400 | 帳號範圍路徑沒帶 `X-MCP-Profile` |
+| `profile_id_invalid` | 400 | 帶兩個以上，或不是 `default`、24 位小寫 hex |
+| `profile_not_found` | 404 | 格式對但帳號不存在（含孤兒、隔離目錄、已刪除的） |
+| `profile_label_invalid` | 422 | 名稱違反規則（去頭尾空白後 1～80 個 code point；拒絕控制、bidi、零寬等字元） |
+| `profile_default_immutable` | 422 | 改名或刪除預設帳號 |
+| `profile_label_conflict` | 409 | NFKC＋casefold 後和既有名稱或保留名稱相同 |
+| `profile_limit_reached` | 409 | 已到上限（帶 `limit`） |
+| `profile_memory_insufficient` | 409 | 記憶體不夠再開一個 |
+| `profile_port_unavailable` | 409 | 18000～18099 找不到空 port |
+| `profile_product_unsupported` | 409 | 不開放的產品收到建立 |
+| `profile_index_corrupt` | 503 | 帳號索引壞掉或被外改 |
+| `endpoint_global` | 409 | 對額外帳號 `PUT endpoint` |
+| `restore_review_required` | 409 | 還原或休眠後還沒核對就重新產生，或會換權杖的存檔 |
+| `origin_policy_invalid` | 422 | `PUT origin-policy` 的模式或來源不合規則 |
+| `operation_restored` | 410 | 還原後重送還原前的操作 id |
+| `CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN` | 422 | 把後端網址改到另一個來源卻沒帶那條網址的秘密 |
+
+既有的 `config_conflict`、`config_revision_required`、`operation_id_*`、`operation_outcome_unknown` 等照今天，只是範圍擴大到帳號的增刪與全域操作
+（全部撤銷沒做完時 `operation_outcome_unknown` 另帶逐帳號 `results`）。
