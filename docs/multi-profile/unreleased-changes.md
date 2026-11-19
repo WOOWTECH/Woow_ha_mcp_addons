@@ -115,15 +115,15 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
   換 token，存政策只重啟該帳號）受開關管，開關關時沒有可見變化（第 4.2 節）。
 - 發版時另外驗：第 5 節。
 - **開通 Nextcloud 的升版 PR（把 `nextcloud` 加進 `MULTI_PROFILE_PRODUCTS` 的那一版）要寫的句子**（HM-22 交來，一項一行；開通後才看得到）。
-  計畫 §7.2 的共通項目（帳號選單、管理 API 要帶 `X-MCP-Profile`、忙碌回應、看門狗、連兩次失敗才判壞、回覆工作執行緒、還原偵測、Origin
-  would_deny、8081 外框）照 Odoo 開通那一版（HM-19a）的寫法另寫；下面是 Nextcloud 自己的：
+  計畫 §7.2 的共通項目照 Odoo 開通那一版（HM-19a）的寫法另寫；下面是 Nextcloud 自己的。第 2、3 行是 §7.2 第 7 點的 Nextcloud 版，第 5 行是
+  第 9 點（loopback）寫成 Nextcloud 的說法：共通段已經寫了第 9 點就拿掉第 5 行。
 
 ```text
 - Up to 3 more Nextcloud accounts per add-on (profiles), each with its own MCP URL and token, Nextcloud connection, tool policy and MCP child process. The default profile keeps its URL, token and settings.
 - A profile's MCP token is bound to its Nextcloud account: saving another server URL (another host, scheme, port or path, the path's letter case and a page path pasted from the browser included) or another username issues a new token, and the old MCP URL stops working at once; copy the new one from "Connection and token". Changing only the app password, or writing the same server differently (the host's letter case, the default port), keeps the token.
 - Moving the Nextcloud URL to another server needs the app password again: the stored one is never sent to the new server (the save is refused until it is entered).
 - Saving one profile's tool policy restarts only that profile's Nextcloud child; the other profiles keep their sessions.
-- Nextcloud URLs on this add-on itself (localhost, 127.0.0.0/8, ::1) are refused when saved and when the child connects.
+- Nextcloud URLs on this add-on itself (localhost, 127.0.0.0/8, ::1) are refused when saved and when the child connects; one saved before this version still shows in the settings but no longer connects.
 - When Nextcloud refuses a profile's app password, that profile's health checks back off (15 s up to 5 min); the other profiles keep their interval.
 ```
 
