@@ -1,37 +1,43 @@
 """HM-26: Headscale with additional profiles (multi-profile plan 9 Headscale row, 12.3 HM-21～HM-26; FM-88, FM-89,
 FM-90, FM-109; CF-15; DQ-26 (the plan's recommendation: one server with different policies and several servers both
 work, a key of its own per profile is recommended and not enforced; the owner's to confirm), DQ-40 ⑨, DQ-11; contract
-2.6 and section 9 #9, #39, #41, #115 and HM-26's rows; acceptance T-03, T-05, T-07, T-23, T-24).
+2.6 and section 9 #9, #39, #41, #115 and HM-26's rows; acceptance T-04, T-05, T-07, T-23, T-24).
 
-A Headscale API key administers the whole Headscale server. Two profiles on one server with one key are kept apart by
-their tool policies alone: a child checks the URL and key of the state it reads against its own, which cannot tell two
-such profiles apart (FM-88). What keeps each profile to its own policy, with the product switched on for the test (the
-repository keeps it off: tests/multi_profile_runtime.py) and, where the add-on as it serves today has a counterpart,
-switched off:
+A Headscale API key administers the whole Headscale server, and Headscale has no narrower key: profiles on one server
+are kept apart by their tool policies alone, whatever keys they use, and a policy that keeps headscale_api_keys create
+lets the token's holder make a key no policy covers (HM-26 security review M-1). With one key, a child's check of the
+URL and key of the state it reads against its own cannot even tell two such profiles apart (FM-88). Both shapes of
+DQ-26 are here: B and C on the default profile's server (B with its key, C with a key of its own), D on a server and
+key of its own (CF-15: both are tested). What keeps each profile to its own policy, server and key, with the product
+switched on for the test (the repository keeps it off: tests/multi_profile_runtime.py) and, where the add-on as it
+serves today has a counterpart, switched off:
 
-- each child is started with its own profile's state (HEADSCALE_MCP_STATE_PATH), working directory, child token and
-  key, and nothing of another profile's (the specs the add-on built);
+- each child is started with its own profile's state (HEADSCALE_MCP_STATE_PATH), working directory, child token,
+  server URL and key, and nothing of another profile's (the specs the add-on built);
 - the child itself applies that state's policy at every call, whatever the gateway did: run in its own interpreter with
   the environment its spec gives it, one server and one key answer differently for profiles with different policies
-  (the vendored policy reader on the profile directories the panel's creation made); a profile directory a restore left
-  widened is refused (fail closed) until the profile's store tightened it, which the add-on does before any child
-  starts;
-- real children, one fake Headscale server, three profiles (two on one key, one on a key of its own): through 8081 each
-  token reaches its own child, which sends its own key; straight on loopback (a caller holding a child token) each child
-  refuses what its own policy refuses and takes no other profile's child token; saving one profile's policy restarts
-  only that profile's child, which then applies the saved policy;
+  (the vendored policy reader on the profile directories the panel's creation made), a profile that may not create API
+  keys included; a profile directory a restore left widened is refused (fail closed) until the profile's store
+  tightened it, which the add-on does before any child starts;
+- real children, two fake Headscale servers, four profiles: through 8081 each token reaches its own child, which sends
+  its own key to its own server only (D's server gets D's requests alone, the other server never D's key); straight on
+  loopback (a caller holding a child token) each child refuses what its own policy refuses and takes no other
+  profile's child token; saving one profile's policy restarts only that profile's child, which then applies the saved
+  policy, while the other profiles' sessions go on;
 - each token opens only its own profile on both connection methods, a session stays with its profile, and an unknown,
   revoked or rotated-away token gets the default profile's answer (Bearer 401, secret URL 404); switched off, profiles
   on disk are dormant and their tokens are unknown tokens;
 - every profile's secret URL takes no Origin but exactly https://claude.ai (403, no line, the child never sees it), the
   Bearer path takes none, and the add-on's Origin policy route stays an unknown operation (contract 2.6: HM-26 keeps it
   as written);
-- saving one profile's policy restarts that profile's child only and changes that profile's tool list only (switched
-  off: the default profile's child, as today);
+- saving one profile's policy restarts that profile's child only and changes that profile's tool list only, and the
+  other profiles' sessions go on (switched off: the default profile's child, as today);
 - a profile's URL moved to another origin needs its API key again (422, nothing written, no restart), the same origin
   written otherwise does not, a loopback URL is refused (HM-20), and a save with the key restarts only that profile's
   child and keeps its token (Headscale is not identity-bound: its key decides the account); switched off, the saved key
-  follows the URL and a loopback URL is saved, as today.
+  follows the URL and a loopback URL is saved, as today;
+- a key the Headscale server refuses (401) backs a switched-on profile's health checks off (DQ-25), and only a
+  Headscale profile's: another product's monitor that got the same answer does not.
 """
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -59,32 +65,43 @@ from tool_refusal import refused
 
 pytestmark = pytest.mark.usefixtures('log_scan')
 PRODUCT = 'headscale'
-B, C = ids(2)
-LABELS = {B: 'Headscale Desk B', C: 'Headscale Desk C'}
+B, C, D = ids(3)  # profiles.EXTRA_PROFILE_LIMITS: Headscale takes 3
+PROFILES = ('default', B, C, D)
+LABELS = {B: 'Headscale Desk B', C: 'Headscale Desk C', D: 'Headscale Desk D'}
+EXTRA_PORTS = {B: 18000, C: 18001, D: 18002}  # each additional profile's mock child
 SHARED = CONNECTIONS[PRODUCT]  # the default profile's server and key (synthetic: tests/fixtures/owner_defaults)
 OWN_KEY = 'DUMMY-hm26-headscale-own-key'  # C's key of its own on the same server
+OTHER = {'url': 'https://headscale-two.invalid', 'api_key': 'DUMMY-hm26-second-server-key'}  # D's own server and key
 REPLACEMENT_KEY = 'DUMMY-hm26-headscale-new-key'
+CREATED_KEY = 'DUMMY-hm26-headscale-made-key'  # the new key the fake server answers a CreateApiKey with
 DENIED_403 = (403, [('content-length', '26'), ('content-type', 'application/json')], b'{"error":"request denied"}')
 DENIED_400 = (400, b'{"error":"request denied"}')
 NEW_ORIGIN = b'{"error":"request denied","detail":{"code":"CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN"}}'
 SWITCH = pytest.mark.parametrize('switched_on', [True, False], ids=['switched-on', 'switched-off'])
-# The calls each child is asked (name, arguments): a write, two reads and the parent's private readiness probe, and the
-# request each one sends to the server when it is let through.
+# The calls each child is asked (name, arguments): a write, two reads, the write that hands out a key administering
+# the whole server (headscale_api_keys create: HM-26 security review M-1, S-4) and the parent's private readiness
+# probe, and the request each one sends to the server when it is let through. TOOL_CALLS: all but the probe.
 CALLS = [('headscale_users', {'operation': 'create', 'name': 'hm26-user'}),
          ('headscale_users', {'operation': 'list'}),
          ('headscale_nodes', {'operation': 'list'}),
+         ('headscale_api_keys', {'operation': 'create', 'expiration': '2099-01-01T00:00:00Z', 'reveal_once': True}),
          ('headscale_health', {})]
-REQUESTS = [['POST', '/api/v1/user'], ['GET', '/api/v1/user'], ['GET', '/api/v1/node'], ['GET', '/api/v1/health']]
-# The fake server's answers (Headscale v0.29.4's v1 shapes, as apps/headscale/tests/test_headscale_child.py has them).
+REQUESTS = [['POST', '/api/v1/user'], ['GET', '/api/v1/user'], ['GET', '/api/v1/node'], ['POST', '/api/v1/apikey'],
+            ['GET', '/api/v1/health']]
+TOOL_CALLS = len(CALLS) - 1
+# The fake servers' answers (Headscale v0.29.4's v1 shapes, as apps/headscale/tests/test_headscale_child.py has them).
 ANSWERS = {('POST', '/api/v1/user'): {'user': {'id': '7', 'name': 'hm26-user'}},
            ('GET', '/api/v1/user'): {'users': [{'id': '7', 'name': 'hm26-user'}]},
            ('GET', '/api/v1/node'): {'nodes': []},
+           ('POST', '/api/v1/apikey'): {'apiKey': CREATED_KEY},
            ('GET', '/api/v1/health'): {'databaseConnectivity': True}}
-# The three profiles' policies on one server: the default profile keeps every write (a new installation); B (the
-# default profile's key) loses the users:create grant and the whole nodes tool; C (a key of its own) has users:list
-# denied. Per call of CALLS: whether the profile's policy lets it through (the readiness probe always: the child keeps
-# its private probe callable whatever the policy).
-LETS_THROUGH = {'default': [True, True, True, True], B: [False, True, False, True], C: [True, False, True, True]}
+# The four profiles' policies: the default profile keeps every write (a new installation); B (the default profile's
+# server and key) loses the users:create and api_keys:create grants and the whole nodes tool; C (the same server, a key
+# of its own) has users:list denied; D (a server and key of its own) has the users tool disabled. Per call of CALLS:
+# whether the profile's policy lets it through (the readiness probe always: the child keeps its private probe callable
+# whatever the policy).
+LETS_THROUGH = {'default': [True, True, True, True, True], B: [False, True, False, False, True],
+                C: [True, False, True, True, True], D: [False, False, True, True, True]}
 
 
 @pytest.fixture(autouse=True)
@@ -100,29 +117,37 @@ def directory(data, profile_id):
     return Path(data) if profile_id == 'default' else profiles.Layout(Path(data)).profile(profile_id)
 
 
-def with_policies(data, *, server=None, ports=(18000, 18001)):
-    """The default profile configured on *server* (left out: the golden one), and B and C created as the panel creates
-    them (HM-10: profile_initial_state, the index), then given a backend and LETS_THROUGH's policies: B the default
-    profile's server and key, C the same server with a key of its own. Returns the default profile's write grants."""
+def give_policies(data, grants, connection, other):
+    """B, C and D (created) given their backends and LETS_THROUGH's policies (grants: the default profile's write
+    grants, which a profile created now copies): B the default profile's server and key (*connection*), C the same
+    server with a key of its own, D another server with its own key (*other*)."""
+    kept = [grant for grant in grants if grant not in ('headscale_users:create', 'headscale_api_keys:create')]
+    update_profile(data, PRODUCT, B, connection=connection, disabled=['headscale_nodes'], enabled_write_tools=kept)
+    update_profile(data, PRODUCT, C, connection={**connection, 'api_key': OWN_KEY},
+                   denied_operations={'headscale_users': ['list']})
+    update_profile(data, PRODUCT, D, connection=other, disabled=['headscale_users'])
+
+
+def with_policies(data, *, server=None, other=None, ports=tuple(EXTRA_PORTS.values())):
+    """The default profile configured on *server* (left out: the golden one), and B, C and D created as the panel
+    creates them (HM-10: profile_initial_state, the index), then given a backend and LETS_THROUGH's policies
+    (give_policies; D's server *other*, left out: OTHER). Returns the default profile's write grants."""
     connection = server or SHARED
     store = ProductStore(data, PRODUCT)
     try:
         grants = store.update(connection=connection).enabled_write_tools
     finally:
         store.close()
-    for profile_id, port in zip((B, C), ports):
+    for profile_id, port in zip((B, C, D), ports):
         create_profile(data, PRODUCT, profile_id, label=LABELS[profile_id], port=port, configured=False)
-    update_profile(data, PRODUCT, B, connection=connection, disabled=['headscale_nodes'],
-                   enabled_write_tools=[grant for grant in grants if grant != 'headscale_users:create'])
-    update_profile(data, PRODUCT, C, connection={**connection, 'api_key': OWN_KEY},
-                   denied_operations={'headscale_users': ['list']})
+    give_policies(data, grants, connection, other or OTHER)
     return grants
 
 
 def watch(log_scan, data):
     log_scan.watch(*all_tokens(data))
     log_scan.watch(*LABELS.values(), kind='name')
-    log_scan.watch(SHARED['api_key'], OWN_KEY, REPLACEMENT_KEY, kind='secret')
+    log_scan.watch(SHARED['api_key'], OWN_KEY, OTHER['api_key'], REPLACEMENT_KEY, CREATED_KEY, kind='secret')
 
 
 def bearer(token):
@@ -138,13 +163,14 @@ def profile_children(data):
     own sessions)."""
     children = Children()
     children.profile_child(3000, 'default', PRODUCT, data)
-    for port, profile_id in zip((18000, 18001), (B, C)):
+    for profile_id, port in EXTRA_PORTS.items():
         children.profile_child(port, 'p' + profile_id[:4], PRODUCT, directory(data, profile_id))
     return children
 
 
 def mock_children(children):
-    return {'default': children.by_port[3000], B: children.by_port[18000], C: children.by_port[18001]}
+    return {'default': children.by_port[3000],
+            **{profile_id: children.by_port[port] for profile_id, port in EXTRA_PORTS.items()}}
 
 
 def recording_supervisor():
@@ -167,7 +193,7 @@ def recording_supervisor():
 
 def owner_of(data, spec):
     """The profile whose directory holds spec's working directory (<profile directory>/child)."""
-    found = [profile_id for profile_id in ('default', B, C) if spec.cwd == directory(data, profile_id) / 'child']
+    found = [profile_id for profile_id in PROFILES if spec.cwd == directory(data, profile_id) / 'child']
     assert len(found) == 1, spec.cwd
     return found[0]
 
@@ -218,10 +244,12 @@ ANSWERS = {tuple(key.split(' ')): value for key, value in json.loads(sys.argv[2]
 
 async def main():
     seen = []
+    host = httpx.URL(os.environ['HEADSCALE_MCP_BASE_URL']).host
 
     def server(request):
         seen.append([request.method, request.url.path,
-                     request.headers.get('authorization') == 'Bearer ' + os.environ['HEADSCALE_MCP_API_KEY']])
+                     request.headers.get('authorization') == 'Bearer ' + os.environ['HEADSCALE_MCP_API_KEY']
+                     and request.url.host == host])
         return httpx.Response(200, json=ANSWERS[(request.method, request.url.path)])
 
     results = []
@@ -246,7 +274,7 @@ def as_the_child(spec, calls=CALLS):
     """*calls* run by the vendored child code in the child's own interpreter, environment and working directory (its
     spec): the state it reads is HEADSCALE_MCP_STATE_PATH, at every call; the server is in memory. Per call its outcome
     ('ok' or the child's error code) and the requests the server got: [method, path, whether it carried this child's
-    own key]."""
+    own key to this child's own server]."""
     answers = {' '.join(key): value for key, value in ANSWERS.items()}
     result = subprocess.run([spec.argv[0], '-c', CHILD_PROGRAM, json.dumps(calls), json.dumps(answers)],
                             env=dict(spec.env), cwd=spec.cwd, capture_output=True, text=True, timeout=60)
@@ -255,8 +283,8 @@ def as_the_child(spec, calls=CALLS):
 
 
 def expected_outcomes(profile_id):
-    """What CALLS get from a child that reads profile_id's policy: through, with one request carrying its own key, or
-    refused before any request."""
+    """What CALLS get from a child that reads profile_id's policy: through, with one request carrying its own key to
+    its own server, or refused before any request."""
     return [['ok', [[*request, True]]] if through else ['HEADSCALE_POLICY_DENIED', []]
             for request, through in zip(REQUESTS, LETS_THROUGH[profile_id])]
 
@@ -266,12 +294,14 @@ async def test_each_child_is_started_on_its_own_profiles_state_and_applies_its_p
                                                                                       switched_on):
     """FM-88 (plan 9: HEADSCALE_MCP_STATE_PATH per profile; the vendored policy.py on profile directories): the spec
     the add-on built for each profile's child names that profile's state.json, its own empty working directory (cwd and
-    HOME), its own child token and key, and nothing of another profile's (directory, token, child token, key); switched
-    on, every child also has WOOW_MCP_DENY_LOOPBACK (HM-20). Run with that spec, the vendored child code applies its own
-    profile's policy at every call: B on the default profile's server and key, C on the same server with a key of its
-    own, and the three answer CALLS differently (LETS_THROUGH), a refused call sending nothing and every request
-    carrying the child's own key. Switched off, the default profile's spec is today's (its state /data/mcp/state.json,
-    no WOOW_MCP_DENY_LOOPBACK) and B and C are dormant: no spec, no child, their tokens revoked."""
+    HOME), its own child token, server URL and key, and nothing of another profile's (directory, token, child token,
+    key); switched on, every child also has WOOW_MCP_DENY_LOOPBACK (HM-20). D's server is not the others' (DQ-26's
+    several servers), so the URL check tells a child given another profile's server apart (HM-26 review MF-1). Run with
+    that spec, the vendored child code applies its own profile's policy at every call: B on the default profile's
+    server and key, C on the same server with a key of its own, D on a server and key of its own, and the four answer
+    CALLS differently (LETS_THROUGH), a refused call sending nothing and every request carrying the child's own key to
+    its own server. Switched off, the default profile's spec is today's (its state /data/mcp/state.json, no
+    WOOW_MCP_DENY_LOOPBACK) and B, C and D are dormant: no spec, no child, their tokens revoked."""
     data = tmp_path / 'data'
     with_policies(data)
     watch(log_scan, data)
@@ -279,12 +309,12 @@ async def test_each_child_is_started_on_its_own_profiles_state_and_applies_its_p
     async with multi_profile_runtime(PRODUCT, data, children=profile_children(data), switch=switched_on,
                                      supervisor=supervisor) as runtime:
         await settle(runtime, 'configured')
-    served = ('default', B, C) if switched_on else ('default',)
+    served = PROFILES if switched_on else ('default',)
     specs = {}
     for spec in started:
         specs.setdefault(owner_of(data, spec), spec)
     assert sorted(specs) == sorted(served)
-    states = {profile_id: stored(directory(data, profile_id)) for profile_id in ('default', B, C)}
+    states = {profile_id: stored(directory(data, profile_id)) for profile_id in PROFILES}
     for profile_id, spec in specs.items():
         own, state, env = directory(data, profile_id), states[profile_id], spec.env
         assert env['HEADSCALE_MCP_STATE_PATH'] == str(own / 'state.json')
@@ -295,19 +325,21 @@ async def test_each_child_is_started_on_its_own_profiles_state_and_applies_its_p
         assert env.get(DENY_LOOPBACK_ENV) == ('1' if switched_on else None)
         text = json.dumps([list(spec.argv), sorted(env.items()), str(spec.cwd)])
         assert state['token'] not in text  # the MCP token is the gateway's alone (HM-06)
-        for other in ('default', B, C):
+        for other in PROFILES:
             if other != profile_id:
                 assert str(directory(data, other) / 'state.json') not in text, (profile_id, other)
                 assert str(directory(data, other) / 'child') not in text, (profile_id, other)
                 assert states[other]['child_token'] not in text, (profile_id, other)
                 assert not states[other]['token'] or states[other]['token'] not in text, (profile_id, other)
     if not switched_on:
-        assert states[B]['token'] is None and states[C]['token'] is None  # dormant: revoked by the boot guard
+        assert [states[profile_id]['token'] for profile_id in (B, C, D)] == [None] * 3  # dormant: the boot guard
     for profile_id, spec in specs.items():
         assert as_the_child(spec) == expected_outcomes(profile_id), profile_id
     if switched_on:
-        keys = {profile_id: spec.env['HEADSCALE_MCP_API_KEY'] for profile_id, spec in specs.items()}
-        assert keys == {'default': SHARED['api_key'], B: SHARED['api_key'], C: OWN_KEY}
+        assert {profile_id: (spec.env['HEADSCALE_MCP_BASE_URL'], spec.env['HEADSCALE_MCP_API_KEY'])
+                for profile_id, spec in specs.items()} == {
+            'default': (SHARED['url'], SHARED['api_key']), B: (SHARED['url'], SHARED['api_key']),
+            C: (SHARED['url'], OWN_KEY), D: (OTHER['url'], OTHER['api_key'])}
 
 
 def test_a_profile_directory_a_restore_widened_is_refused_until_its_store_tightens_it(tmp_path, log_scan):
@@ -347,10 +379,11 @@ def test_a_restore_revokes_every_profile_and_each_child_then_applies_the_backups
     """A Supervisor-style restore of a Headscale volume with profiles (the HA side of PaaS
     test_headscale_volume_*_restores_*, woow-mcp-server 69ac425 packages/mcp-admin-core/tests/test_restore_inplace.py:
     every token dies, the policy and the connection come from the backup): HM-13b's boot guard revokes the default
-    profile and B and C (DQ-03 (b) A2) and gives each a new child token; the restore record shows each profile's
-    Headscale URL (identity) and its policy, never a key or a token. Each child, started on the guarded state, then
-    applies the backup's policy (a policy saved after the backup is gone with it); the vendored reader takes a profile
-    without a token. The guard itself is HM-13b's (tests/test_restore_lock.py); this is Headscale's state and child."""
+    profile and B, C and D (DQ-03 (b) A2) and gives each a new child token; the restore record shows each profile's
+    Headscale URL (identity: D's is its own server's) and its policy, never a key or a token. Each child, started on
+    the guarded state, then applies the backup's policy (a policy saved after the backup is gone with it); the vendored
+    reader takes a profile without a token. The guard itself is HM-13b's (tests/test_restore_lock.py); this is
+    Headscale's state and child."""
     from mcp_admin_core import restore_lock
     from restore_guard_disk import Disk
     disk = Disk(tmp_path, log_scan, product=PRODUCT)
@@ -361,28 +394,26 @@ def test_a_restore_revokes_every_profile_and_each_child_then_applies_the_backups
         grants = store.update(connection=SHARED).enabled_write_tools
     finally:
         store.close()
-    disk.add(B)
-    disk.add(C)
-    update_profile(data, PRODUCT, B, connection=SHARED, disabled=['headscale_nodes'],
-                   enabled_write_tools=[grant for grant in grants if grant != 'headscale_users:create'])
-    update_profile(data, PRODUCT, C, connection={**SHARED, 'api_key': OWN_KEY},
-                   denied_operations={'headscale_users': ['list']})
+    for profile_id in (B, C, D):
+        disk.add(profile_id)
+    give_policies(data, grants, SHARED, OTHER)
     watch(log_scan, data)
     assert disk.start(enabled=True) == restore_lock.Outcome()
     backup = disk.backup()
     held = disk.held()
     update_profile(data, PRODUCT, B, disabled=[], enabled_write_tools=grants)  # after the backup: lost by the restore
     disk.restore(backup)
-    assert disk.start(enabled=True) == restore_lock.Outcome(restored=True, default_revoked=True, revoked=(B, C))
+    assert disk.start(enabled=True) == restore_lock.Outcome(restored=True, default_revoked=True, revoked=(B, C, D))
     record = restore_lock.read_record(data)
     rows = {row['id']: row for row in record['profiles']}
-    assert {profile_id: rows[profile_id]['identity'] for profile_id in ('default', B, C)} == {
-        'default': {'url': SHARED['url']}, B: {'url': SHARED['url']}, C: {'url': SHARED['url']}}
+    assert {profile_id: rows[profile_id]['identity'] for profile_id in PROFILES} == {
+        'default': {'url': SHARED['url']}, B: {'url': SHARED['url']}, C: {'url': SHARED['url']},
+        D: {'url': OTHER['url']}}
     assert rows[B]['policy']['disabled'] == ['headscale_nodes']
     raw = (data / profiles.RESTORE_RECORD_NAME).read_text()
-    assert not [value for value in (*held, SHARED['api_key'], OWN_KEY) if value in raw]
+    assert not [value for value in (*held, SHARED['api_key'], OWN_KEY, OTHER['api_key']) if value in raw]
     children = set()
-    for port, profile_id in zip((3000, 18000, 18001), ('default', B, C)):
+    for port, profile_id in zip((3000, *EXTRA_PORTS.values()), PROFILES):
         state = stored(directory(data, profile_id))
         assert state['token'] is None and state['child_token'] not in held | children
         children.add(state['child_token'])
@@ -395,11 +426,11 @@ def test_a_restore_revokes_every_profile_and_each_child_then_applies_the_backups
         assert as_the_child(spec) == expected_outcomes(profile_id), profile_id
 
 
-# ---- real children, one fake Headscale server (FM-88, FM-109, CF-15; T-07, T-23) ----
+# ---- real children, two fake Headscale servers (FM-88, FM-109, CF-15; T-04, T-07, T-23) ----
 
 def tool_requests(calls, since=0):
-    """The server's requests from index since that a tool call sent: every profile's health monitor checks the same
-    server meanwhile (GET /api/v1/health), and those are left out."""
+    """The server's requests from index since that a tool call sent: every profile's health monitor checks its server
+    meanwhile (GET /api/v1/health), and those are left out."""
     return [call for call in calls[since:] if call[:2] != ('GET', '/api/v1/health')]
 
 
@@ -486,29 +517,48 @@ async def tool_call(client, url, headers, ident, name, arguments):
 
 
 async def test_real_children_keep_their_own_policy_and_key_through_8081_and_on_loopback(tmp_path, log_scan):
-    """The real Headscale children of three profiles (run_product's ProfileManager with the real Supervisor: the
-    default profile's child directly, B's and C's through HM-09's exec wrapper) on one fake Headscale server; B shares
-    the default profile's key, C has its own (CF-15: one key and two keys on one server).
+    """The real Headscale children of four profiles (run_product's ProfileManager with the real Supervisor: the
+    default profile's child directly, the others through HM-09's exec wrapper) on two fake Headscale servers: B shares
+    the default profile's server and key, C has a key of its own on that server, D a server and key of its own
+    (CF-15: one key and two keys on one server, and several servers; DQ-26; HM-26 review MF-1).
 
-    - Through 8081 each profile's token gets what its policy lets through (the gateway refuses the rest: the server gets
-      nothing) and every request the server gets carries that profile's own key.
+    - Through 8081 each profile's token gets what its policy lets through (the gateway refuses the rest: no server gets
+      anything), headscale_api_keys create included (B may not: HM-26 security review S-4); every request carries that
+      profile's own key to its own server, and the other server gets nothing.
     - Straight on loopback, a caller holding a child token (T-23): each child takes its own child token only (every
       other profile's: 401) and on its own refuses what its profile's policy refuses (HEADSCALE_POLICY_DENIED, nothing
       sent), while the same call goes through on another profile's child: one server, one key (FM-88).
-    - Saving B's policy (T-07) restarts B's child alone (a new PID; the other two keep theirs), and B's child then lets
-      through what the saved policy grants."""
+    - Saving B's policy (T-07) restarts B's child alone (a new PID; the others keep theirs), B's child then lets
+      through what the saved policy grants, and the sessions the other profiles opened through 8081 before the save go
+      on (HM-26 review SF-3).
+    - D's server got D's requests alone, every one with D's key; the other server never got D's key (T-04)."""
     from lifecycle_runtime import until
     from mcp_admin_core import lifecycle
     from test_backend_loopback import running_its_program
     data = tmp_path / 'data'
-    with headscale_server() as (url, calls):
+    with headscale_server() as (url, calls), headscale_server() as (other_url, other_calls):
         server = {'url': url, 'api_key': SHARED['api_key']}
-        grants = with_policies(data, server=server, ports=(free_port(), free_port()))
+        grants = with_policies(data, server=server, other={'url': other_url, 'api_key': OTHER['api_key']},
+                               ports=(free_port(), free_port(), free_port()))
         watch(log_scan, data)
-        keys = {'default': SHARED['api_key'], B: SHARED['api_key'], C: OWN_KEY}
+        keys = {'default': SHARED['api_key'], B: SHARED['api_key'], C: OWN_KEY, D: OTHER['api_key']}
+        servers = (calls, other_calls)
+
+        def since():
+            return [len(found) for found in servers]
+
+        def reached(before):
+            """The tool requests each server got since *before* (since()): [the first server's, D's server's]."""
+            return [tool_requests(found, start) for found, start in zip(servers, before)]
+
+        def expected(profile_id, number, through):
+            """What reached() is after CALLS[number] of profile_id: the request on its own server, with its key."""
+            own = [(*REQUESTS[number], 'Bearer ' + keys[profile_id])] if through else []
+            return [[], own] if profile_id == D else [own, []]
+
         async with multi_profile_runtime(PRODUCT, data, supervisor=lifecycle.Supervisor, real_children=True,
                                          default_port=free_port()) as runtime:
-            entries = {profile_id: runtime.manager.get(profile_id).runtime for profile_id in ('default', B, C)}
+            entries = {profile_id: runtime.manager.get(profile_id).runtime for profile_id in PROFILES}
 
             def serving():
                 return all(running_its_program(entry.supervisor) and entry.health.availability()['ready']
@@ -516,16 +566,14 @@ async def test_real_children_keep_their_own_policy_and_key_through_8081_and_on_l
             await until(serving, timeout=60)
             pids = {profile_id: entry.supervisor.process.pid for profile_id, entry in entries.items()}
             async with runtime.mcp() as client:
-                for profile_id in ('default', B, C):
+                for profile_id in PROFILES:
                     headers = await session(client, '/mcp', bearer(runtime.token(profile_id)))
-                    for number, ((name, arguments), through) in enumerate(zip(CALLS[:3], LETS_THROUGH[profile_id])):
-                        before = len(calls)
+                    for number, ((name, arguments), through) in enumerate(zip(CALLS[:TOOL_CALLS],
+                                                                              LETS_THROUGH[profile_id])):
+                        before = since()
                         found = await tool_call(client, '/mcp', headers, 10 + number, name, arguments)
                         assert found == ('ok' if through else 'refused'), (profile_id, name, found)
-                        sent = tool_requests(calls, before)
-                        assert [[method, path] for method, path, _ in sent] == (
-                            [REQUESTS[number]] if through else []), (profile_id, name)
-                        assert all(key == 'Bearer ' + keys[profile_id] for _, _, key in sent), profile_id
+                        assert reached(before) == expected(profile_id, number, through), (profile_id, name)
                     await client.delete('/mcp', headers=headers)
             child_tokens = {profile_id: stored(directory(data, profile_id))['child_token'] for profile_id in entries}
             async with GENUINE_CLIENT(trust_env=False, timeout=20) as client:
@@ -536,32 +584,45 @@ async def test_real_children_keep_their_own_policy_and_key_through_8081_and_on_l
                                                          json=initialize_message())
                             assert response.status_code == 401, (profile_id, other)
                     headers = await session(client, entry.child_url, bearer(child_tokens[profile_id]))
-                    for number, ((name, arguments), through) in enumerate(zip(CALLS[:3], LETS_THROUGH[profile_id])):
-                        before = len(calls)
+                    for number, ((name, arguments), through) in enumerate(zip(CALLS[:TOOL_CALLS],
+                                                                              LETS_THROUGH[profile_id])):
+                        before = since()
                         found = await tool_call(client, entry.child_url, headers, 20 + number, name, arguments)
                         assert found == ('ok' if through else 'HEADSCALE_POLICY_DENIED'), (profile_id, name, found)
-                        sent = tool_requests(calls, before)
-                        assert [[method, path] for method, path, _ in sent] == (
-                            [REQUESTS[number]] if through else []), (profile_id, name)
-                        assert all(key == 'Bearer ' + keys[profile_id] for _, _, key in sent), profile_id
+                        assert reached(before) == expected(profile_id, number, through), (profile_id, name)
                     await client.delete(entry.child_url, headers=headers)
-            saved = await admin_write(runtime, B, 'PUT', 'policy',
-                                      policy_body(stored(directory(data, B)), enabled_write_tools=grants))
-            assert saved.status_code == 200, saved.text
+            async with runtime.mcp() as client:
+                kept = {profile_id: await session(client, '/mcp', bearer(runtime.token(profile_id)))
+                        for profile_id in PROFILES if profile_id != B}
+                saved = await admin_write(runtime, B, 'PUT', 'policy',
+                                          policy_body(stored(directory(data, B)), enabled_write_tools=grants))
+                assert saved.status_code == 200, saved.text
 
-            def restarted():
-                supervisor = entries[B].supervisor
-                return (supervisor.process is not None and supervisor.process.pid != pids[B]
-                        and running_its_program(supervisor) and entries[B].health.availability()['ready'])
-            await until(restarted, timeout=60)
-            assert {profile_id: entry.supervisor.process.pid for profile_id, entry in entries.items()} == {
-                **pids, B: entries[B].supervisor.process.pid}
+                def restarted():
+                    supervisor = entries[B].supervisor
+                    return (supervisor.process is not None and supervisor.process.pid != pids[B]
+                            and running_its_program(supervisor) and entries[B].health.availability()['ready'])
+                await until(restarted, timeout=60)
+                assert {profile_id: entry.supervisor.process.pid for profile_id, entry in entries.items()} == {
+                    **pids, B: entries[B].supervisor.process.pid}
+                for profile_id, headers in kept.items():
+                    ping = await client.post('/mcp', headers=headers,
+                                             json={'jsonrpc': '2.0', 'id': 40, 'method': 'ping'})
+                    assert ping.status_code == 200 and reply_of(ping, 40).get('result') == {}, profile_id
+                    number = LETS_THROUGH[profile_id].index(True)  # a call the profile's policy lets through
+                    before = since()
+                    assert await tool_call(client, '/mcp', headers, 41, *CALLS[number]) == 'ok', profile_id
+                    assert reached(before) == expected(profile_id, number, True), profile_id
+                    await client.delete('/mcp', headers=headers)
             async with GENUINE_CLIENT(trust_env=False, timeout=20) as client:
                 headers = await session(client, entries[B].child_url, bearer(child_tokens[B]))
-                before = len(calls)
-                assert await tool_call(client, entries[B].child_url, headers, 30, *CALLS[0]) == 'ok'
-                assert [[method, path] for method, path, _ in tool_requests(calls, before)] == [REQUESTS[0]]
+                for number in (0, 3):  # the users:create and api_keys:create grants the save gave back
+                    before = since()
+                    assert await tool_call(client, entries[B].child_url, headers, 30 + number, *CALLS[number]) == 'ok'
+                    assert reached(before) == expected(B, number, True), number
                 await client.delete(entries[B].child_url, headers=headers)
+        assert other_calls and {key for _, _, key in other_calls} == {'Bearer ' + OTHER['api_key']}
+        assert 'Bearer ' + OTHER['api_key'] not in {key for _, _, key in calls}
 
 
 # ---- tokens and connection methods (T-05) ----
@@ -571,17 +632,18 @@ async def test_each_token_opens_only_its_own_profile_on_both_connection_methods(
     """Switched on: each profile's token opens a session with its own child on both connection methods, and no other
     child gets anything; a session stays with its profile (sent with another profile's token: 404); a token no profile
     holds gets the default profile's own answer (Bearer 401, secret URL 404) and reaches no child; a revoked token and
-    a rotated-away one likewise, the other profiles' tokens unaffected. Switched off: B and C are dormant (their tokens
-    revoked at the start), so their tokens from before are unknown tokens; the default profile is served as today."""
+    a rotated-away one likewise, the other profiles' tokens unaffected. Switched off: B, C and D are dormant (their
+    tokens revoked at the start), so their tokens from before are unknown tokens; the default profile is served as
+    today."""
     data = tmp_path / 'data'
     with_policies(data)
-    before = {profile_id: stored(directory(data, profile_id))['token'] for profile_id in ('default', B, C)}
+    before = {profile_id: stored(directory(data, profile_id))['token'] for profile_id in PROFILES}
     watch(log_scan, data)
     children = profile_children(data)
     child = mock_children(children)
     async with multi_profile_runtime(PRODUCT, data, children=children, switch=switched_on) as runtime:
         await settle(runtime, 'configured')
-        served = ('default', B, C) if switched_on else ('default',)
+        served = PROFILES if switched_on else ('default',)
         await until_ready(runtime, served)
 
         async def opened(token, profile_id):
@@ -604,7 +666,7 @@ async def test_each_token_opens_only_its_own_profile_on_both_connection_methods(
 
         for profile_id in served:
             await opened(runtime.token(profile_id), profile_id)
-        for profile_id in ('default', B, C):
+        for profile_id in PROFILES:
             if profile_id not in served:
                 await unknown(before[profile_id])
         stranger = secrets.token_urlsafe(32)
@@ -617,7 +679,7 @@ async def test_each_token_opens_only_its_own_profile_on_both_connection_methods(
             session_id = response.headers['mcp-session-id']
             assert session_id in child[B].sessions
             ping = {'jsonrpc': '2.0', 'id': 2, 'method': 'ping'}
-            for token in (runtime.token('default'), runtime.token(C)):
+            for token in (runtime.token('default'), runtime.token(C), runtime.token(D)):
                 for path, headers in paths(token):
                     crossed = await client.post(path, headers={**headers, 'Mcp-Session-Id': session_id}, json=ping)
                     assert crossed.status_code == 404, path.replace(token, '<token>')
@@ -632,8 +694,8 @@ async def test_each_token_opens_only_its_own_profile_on_both_connection_methods(
         assert rotated.status_code == 200, rotated.text
         log_scan.watch(runtime.token(C))
         await unknown(old)
-        await opened(runtime.token(C), C)
-        await opened(runtime.token('default'), 'default')
+        for profile_id in ('default', C, D):
+            await opened(runtime.token(profile_id), profile_id)
 
 
 # ---- the secret URL's Origin (FM-90; plan 8.7; contract 2.6, section 9 #9, #10; T-24) ----
@@ -658,7 +720,7 @@ async def test_every_profiles_secret_url_takes_only_claude_ai_as_origin(tmp_path
     child = mock_children(children)
     async with multi_profile_runtime(PRODUCT, data, children=children, switch=switched_on) as runtime:
         await settle(runtime, 'configured')
-        served = ('default', B, C) if switched_on else ('default',)
+        served = PROFILES if switched_on else ('default',)
         await until_ready(runtime, served)
         async with runtime.mcp() as client:
             for profile_id in served:
@@ -696,8 +758,9 @@ async def test_saving_one_profiles_policy_restarts_only_its_child(tmp_path, log_
     """Headscale's child is restarted when its profile's policy is saved, so that a session sees one tool list (the
     gateway restarts the children that take their policy at start, and Headscale's, which also reads it at every
     call): with profiles, only the child of the profile whose policy was saved (plan 6, 9; FM-64), and the saved policy
-    is that profile's alone: its tools/list changes, the other profiles' stay as they were. Switched off, the default
-    profile's child restarts, as today."""
+    is that profile's alone: its tools/list changes, the other profiles' stay as they were, and a session another
+    profile opened before the save goes on (the same Mcp-Session-Id answers a ping: HM-26 review SF-3). Switched off,
+    the default profile's child restarts, as today."""
     data = tmp_path / 'data'
     with_policies(data)
     watch(log_scan, data)
@@ -706,7 +769,7 @@ async def test_saving_one_profiles_policy_restarts_only_its_child(tmp_path, log_
     async with multi_profile_runtime(PRODUCT, data, children=children, switch=switched_on,
                                      supervisor=supervisor) as runtime:
         await settle(runtime, 'configured')
-        served = ('default', B, C) if switched_on else ('default',)
+        served = PROFILES if switched_on else ('default',)
         await until_ready(runtime, served)
         target = B if switched_on else 'default'
 
@@ -727,11 +790,18 @@ async def test_saving_one_profiles_policy_restarts_only_its_child(tmp_path, log_
         before = starts()
         assert sorted(before) == sorted(served)
         state = stored(directory(data, target))
-        saved = await admin_write(runtime, target, 'PUT', 'policy',
-                                  policy_body(state, disabled=sorted({*state['disabled'], 'headscale_users'})))
-        assert saved.status_code == 200, saved.text
-        assert starts() == {**before, target: before[target] + 1}
-        await until_ready(runtime, served)
+        async with runtime.mcp() as client:
+            kept = {profile_id: await session(client, '/mcp', bearer(runtime.token(profile_id)))
+                    for profile_id in served if profile_id != target}
+            saved = await admin_write(runtime, target, 'PUT', 'policy',
+                                      policy_body(state, disabled=sorted({*state['disabled'], 'headscale_users'})))
+            assert saved.status_code == 200, saved.text
+            assert starts() == {**before, target: before[target] + 1}
+            await until_ready(runtime, served)
+            for profile_id, headers in kept.items():
+                ping = await client.post('/mcp', headers=headers, json={'jsonrpc': '2.0', 'id': 6, 'method': 'ping'})
+                assert ping.status_code == 200 and reply_of(ping, 6).get('result') == {}, profile_id
+                await client.delete('/mcp', headers=headers)
         assert await listed(target) == [name for name in lists[target] if name != 'headscale_users']
         for profile_id in served:
             if profile_id != target:
@@ -838,11 +908,11 @@ def refused_replies(tmp_path):
 
 
 class ProbeChild:
-    """A child as the monitor reaches it: initialize, initialized and ping answered; the readiness probe answers
-    `reply` (left None: Headscale's success shape)."""
+    """A child as the monitor reaches it: initialize, initialized and ping answered; the readiness probe (*probe*)
+    answers `reply` (left None: Headscale's success shape)."""
 
-    def __init__(self):
-        self.reply = None
+    def __init__(self, probe='headscale_health'):
+        self.probe, self.reply = probe, None
 
     def __call__(self, request):
         if request.method == 'DELETE':
@@ -855,7 +925,7 @@ class ProbeChild:
         elif message['method'] == 'ping':
             result = {}
         else:
-            assert message['params']['name'] == 'headscale_health'
+            assert message['params']['name'] == self.probe
             result = self.reply or {'content': [{'type': 'text', 'text': json.dumps({'databaseConnectivity': True})}]}
         return httpx.Response(200, headers={'mcp-session-id': 'health'},
                               json={'jsonrpc': '2.0', 'id': message['id'], 'result': result})
@@ -877,10 +947,14 @@ async def test_a_key_the_headscale_server_refuses_backs_the_profiles_checks_off(
     60, 120, 300 s apart instead of every 15 s, and any other answer resets it. The Headscale child says a refused key
     only in its error object (HEADSCALE_UPSTREAM_ERROR, http_status 401: the reply the real child gives, made here),
     which the check's reason does not keep (probe_reason keeps an error's "error" or "message"): health.refused_login
-    reads the reply for a monitor with the backoff (ProfileManager's options). A 403, a 500 and a success are no
-    refused key. Switched off (no backoff option), the monitor is today's: every check 15 s apart. The reason the check
-    records is the same in both modes (the panel's text does not change)."""
+    reads the reply for a Headscale profile's monitor with the backoff (ProfileManager's options). A 403, a 500 and a
+    success are no refused key; neither is the same object from another product's child (a backend's own text could
+    be it: HM-26 security review S-2), nor a check whose child did not answer it as ready (no check the child did not
+    answer counts: HM-26 review N-1). Switched off, the monitor has no backoff option (as run_product builds a
+    switched-off product's; how the switch gives ProfileManager's options is HM-09's tests) and is today's: every check
+    15 s apart. The reason the check records is the same in both modes (the panel's text does not change)."""
     from mcp_admin_core import health
+    from mcp_admin_core.products import health_probe
     replies = refused_replies(tmp_path)
     assert health.refused_login(replies[401]) is True
     assert not any(health.refused_login(reply) for reply in (replies[403], replies[500], None, {}, {'isError': True}))
@@ -907,4 +981,22 @@ async def test_a_key_the_headscale_server_refuses_backs_the_profiles_checks_off(
         child.reply = None
         await monitor.check()
         assert monitor.auth_refusals == 0 and monitor.backend == 'reachable'
+        starting = ProbeProcess()
+        starting.status = 'starting'  # the child is not ready: the check's answer is not its own (not answered)
+        unready = health.HealthMonitor(store, starting, client, **{**options, 'own_child_only': False})
+        child.reply = replies[401]
+        await unready.check()
+        assert unready.auth_refusals == 0 and unready.next_interval() == health.HEALTH_INTERVAL
     store.close()
+    other = ProductStore(tmp_path / 'emqx', 'emqx')
+    other.update(connection=CONNECTIONS['emqx'])
+    log_scan.watch_state(other.load())
+    emqx = ProbeChild(health_probe('emqx')[0])
+    emqx.reply = replies[401]
+    async with httpx.AsyncClient(transport=httpx.MockTransport(emqx)) as client:
+        monitor = health.HealthMonitor(other, ProbeProcess(), client, **options)
+        for _ in range(2):  # switched on: the second one in a row makes the verdict (tolerance 2)
+            await monitor.check()
+            assert monitor.auth_refusals == 0 and monitor.next_interval() == health.HEALTH_INTERVAL
+        assert monitor.settled[2] == 'unreachable'
+    other.close()
