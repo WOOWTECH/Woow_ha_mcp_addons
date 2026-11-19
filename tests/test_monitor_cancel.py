@@ -391,6 +391,8 @@ async def run_until_sigterm(data, default_port, *, switch=True):
         # HM-19a: switch=False is every product off, not the repository's switch (PRODUCT is Odoo, on from 0.5.0).
         patch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset({PRODUCT}) if switch else frozenset())
         patch.setattr(profile_runtime, 'Supervisor', NoProcessSupervisor)
+        # ClosingChild is an in-process server, not a child of this supervisor.
+        patch.setattr(profile_runtime, 'ListenerGuard', lambda *args, **kwargs: None)
         patch.setattr(profile_runtime, 'STAGGER_SECONDS', 0.05)
         patch.setattr(run_product, 'make_ha_admin_verifier', lambda: administrator)
         patch.setattr(run_product, 'Listener', Listener)

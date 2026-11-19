@@ -262,7 +262,8 @@ async def production_runtime(product, data, *, sockets=False, supervisor=None):
     listeners = []
 
     def child_client(*args, **kwargs):
-        kwargs.setdefault('transport', httpx.MockTransport(child))
+        if kwargs.get('transport') is None or isinstance(kwargs['transport'], profile_runtime.ListenerGuard):
+            kwargs['transport'] = httpx.MockTransport(child)
         return GENUINE_CLIENT(*args, **kwargs)
 
     class CapturedListener(module.Listener):
