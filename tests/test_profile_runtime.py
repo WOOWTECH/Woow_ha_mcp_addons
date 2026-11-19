@@ -48,6 +48,7 @@ import n8n_adapter
 import owned_network
 from admin_write_headers import reviewed_headers
 from log_scan import log_scan  # noqa: F401  (fixture)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch these tests pin)
 from mcp_admin_core import gateway, lifecycle, run_product, version_for_product
 from mcp_admin_core.access import TokenAccess
 from mcp_admin_core.admin_auth import AdminAuthority, BadRequest
@@ -62,7 +63,7 @@ from test_single_profile_golden import (ACCEPT, ADMIN, BEARER_REQUIRED, BOOTSTRA
                                         initialize_message, probe_name, production_runtime, settle, stat_signature,
                                         stored)
 
-pytestmark = pytest.mark.usefixtures('log_scan')  # every new test runs under the HM-01 log scan
+pytestmark = pytest.mark.usefixtures('log_scan', 'switched_off')  # every new test runs under the HM-01 log scan
 DEFAULT_PORT = lifecycle.CHILD_PORT  # the default profile's child (HM-04)
 EXTRA_PORT = 18000  # an extra profile's child (plan 5.4: 18000 and up; owned_network.PROFILE_CHILD_PORTS)
 EXTRA_ID = 'ab' * 12  # an extra profile's id: 24 lowercase hex (contract 1.1)

@@ -31,6 +31,7 @@ import pytest
 
 from lifecycle_runtime import PRODUCT, lifecycle_lines, manager_rig, until, watch
 from log_scan import log_scan  # noqa: F401  (fixture)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch a test pins)
 from mcp_admin_core import health as health_module, lifecycle, profile_runtime, profiles
 from mcp_admin_core.lifecycle import ChildSpec, Supervisor
 from multi_profile_runtime import stored
@@ -81,7 +82,8 @@ async def test_a_switched_off_supervisor_still_fails_after_four_starts(tmp_path)
 
 
 @pytest.mark.parametrize('product', ['odoo', 'hermes', 'emqx', 'litellm', 'nextcloud', 'headscale', 'opendesign'])
-async def test_switched_off_run_product_gives_the_default_profile_todays_supervisor(tmp_path, log_scan, product):
+async def test_switched_off_run_product_gives_the_default_profile_todays_supervisor(tmp_path, log_scan, product,
+                                                                                   switched_off):
     """run_product of a product that is not switched on: the default profile's Supervisor gets no option at all (no
     watchdog, no spawn check, no log, no wrapper), as before HM-09."""
     built = []

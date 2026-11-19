@@ -18,6 +18,9 @@ from test_expansion_runtime import fake_api, READS, WRITES
 from test_real_products import connection
 from test_tool_snapshot import child_listing, own_listing
 from test_batch2_policy import GRAPH
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch these tests pin)
+
+pytestmark = pytest.mark.usefixtures('switched_off')  # HM-23: tests/switch_modes.py
 
 ROOT = Path(__file__).resolve().parents[1]
 PINNED = json.loads((ROOT/'packages/mcp-admin-core/mcp_admin_core/output_schemas.json').read_text())

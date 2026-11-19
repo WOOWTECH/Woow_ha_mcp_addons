@@ -10,8 +10,9 @@
   shows identity fields. UNWIRED is empty now; the scans stay for the next module that is not wired yet. The 8081 and
   8099 answers stay those HM-01 froze (tests/test_single_profile_golden.py, tests/test_mcp_contract_freeze.py,
   tests/test_admin_contract_freeze.py).
-- The switch: MULTI_PROFILE_PRODUCTS is empty; features.enabled() reads it at every call (never bound at import), so
-  an integration test can switch a product on with a subprocess preamble (tests/test_real_products.py style).
+- The switch: MULTI_PROFILE_PRODUCTS names only products whose version-bump PR switched them on (HM-23: a release of
+  0.5.0 or later; none yet); features.enabled() reads it at every call (never bound at import), so an integration test
+  can switch a product on with a subprocess preamble (tests/test_real_products.py style).
 - Zero rewrite: a state.json bb48449 wrote (one installed add-on per product, tests/fixtures/upgrade_zero_rewrite)
   starts the production runtime without a single changed byte and without any new multi-profile file (plan §7.3);
   on a single-profile installation every read of the data layer leaves /data/mcp exactly as it was; creating profiles
@@ -34,7 +35,7 @@ import typing
 import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
-from mcp_admin_core import features, products, profiles, restore_detect
+from mcp_admin_core import features, products, profiles, restore_detect, version_for_product
 from mcp_admin_core.products import ProductState, ProductStore, profile_initial_state
 from multi_profile_runtime import multi_profile_runtime
 from test_restore_detection import after_tick
@@ -159,15 +160,39 @@ def test_no_entry_point_imports_the_unwired_modules(entry):
         assert {'mcp_admin_core.restore_lock', 'mcp_admin_core.restore_detect'} <= set(loaded), loaded
 
 
-def test_multi_profile_is_switched_off_for_every_product():
-    assert features.MULTI_PROFILE_PRODUCTS == frozenset() and type(features.MULTI_PROFILE_PRODUCTS) is frozenset
+def test_a_product_is_switched_on_only_by_its_release():
+    """Only a product's version-bump PR (the owner approves and merges it) adds it to the switch, and only one that can
+    have profiles (DQ-28): a switched-on product's release version is 0.5.0 or later (DQ-32), so a feature PR that
+    switched a product on without its release fails here, as the pin to an empty switch did. HM-23 replaced that pin
+    (test_multi_profile_is_switched_off_for_every_product) so that the bump PR changes features.py and the release data
+    only (plan 11.3); every other product reads as switched off, and an unknown name is an error."""
+    switched = features.MULTI_PROFILE_PRODUCTS
+    assert type(switched) is frozenset
     assert features.KNOWN_PRODUCTS == frozenset(typing.get_args(products.Product))
-    assert not any(features.enabled(product) for product in features.KNOWN_PRODUCTS)
-    # Only an upgrade PR (the owner approves and merges it) adds a product, and only one that can have profiles.
-    assert all(profiles.supports_profiles(p) for p in features.MULTI_PROFILE_PRODUCTS)
+    assert switched <= features.KNOWN_PRODUCTS
+    for product in switched:
+        assert profiles.supports_profiles(product), product
+        assert tuple(int(part) for part in version_for_product(product).split('.')) >= (0, 5, 0), product
+    assert {product for product in features.KNOWN_PRODUCTS if features.enabled(product)} == switched
     for value in ('bogus', 'Odoo', '', None):
         with pytest.raises(ValueError):
             features.enabled(value)
+
+
+def test_a_release_below_0_5_0_cannot_carry_a_switched_on_product(monkeypatch):
+    """The check above, on a switch a feature PR would have set: EMQX switched on at the version it has now (below 0.5.0)
+    is refused; at 0.5.0 it passes; OpenDesign (no profiles, DQ-28) is refused at any version."""
+    from mcp_admin_core import PRODUCT_VERSIONS
+    monkeypatch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset({'emqx'}))
+    monkeypatch.setitem(PRODUCT_VERSIONS, 'emqx', '0.4.99')
+    with pytest.raises(AssertionError):
+        test_a_product_is_switched_on_only_by_its_release()
+    monkeypatch.setitem(PRODUCT_VERSIONS, 'emqx', '0.5.0')
+    test_a_product_is_switched_on_only_by_its_release()
+    monkeypatch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset({'opendesign'}))
+    monkeypatch.setitem(PRODUCT_VERSIONS, 'opendesign', '0.5.0')
+    with pytest.raises(AssertionError):
+        test_a_product_is_switched_on_only_by_its_release()
 
 
 def test_the_switch_is_read_at_every_call(monkeypatch):
@@ -263,7 +288,7 @@ async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_sc
     data = installed(tmp_path, raw)
     before = start_facts(data)
     if not switched_on:
-        running = production_runtime(product, data)
+        running = switched_off_runtime(product, data)  # HM-23: off whatever the repository switches on
     elif product == 'n8n':
         running = n8n_switched_on(data)
     else:
@@ -280,6 +305,15 @@ async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_sc
         expected |= {profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME}
     assert set(after) - set(before) == expected
     assert not profiles.has_profile_data(data)
+
+
+@contextlib.asynccontextmanager
+async def switched_off_runtime(product, data):
+    """HM-23 (tests/switch_modes.py): the production runtime with every product switched off."""
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset())
+        async with production_runtime(product, data) as runtime:
+            yield runtime
 
 
 @contextlib.asynccontextmanager

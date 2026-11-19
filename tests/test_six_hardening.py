@@ -19,6 +19,9 @@ from owned_runtime import Endpoint
 from mcp_admin_core.products import PRODUCTS, PROBES, ProductStore, TOOLS, child_spec
 from test_real_products import connection, rpc
 import nextcloud_fixtures
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch these tests pin)
+
+pytestmark = pytest.mark.usefixtures('switched_off')  # HM-23: tests/switch_modes.py
 
 
 @contextmanager

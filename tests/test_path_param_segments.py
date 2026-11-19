@@ -8,6 +8,9 @@ import pytest
 
 from test_nextcloud_error_secrets import error_result
 from test_six_hardening import Quiet, call, runtime, serve
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch these tests pin)
+
+pytestmark = pytest.mark.usefixtures('switched_off')  # HM-23: tests/switch_modes.py
 
 REFUSED = "must not be empty, '.' or '..'."
 
