@@ -15,9 +15,10 @@ import subprocess
 import httpx
 import pytest
 
+from batch2_owned_port import reserve_port
 from mcp_admin_core.products import ProductStore, child_spec
 from owned_runtime import Endpoint
-from test_real_products import connection, free_port, rpc
+from test_real_products import connection, rpc
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -150,9 +151,10 @@ EXPECTED = {
 
 @pytest.mark.parametrize('product', list(EXPECTED))
 async def test_real_children_answer_the_1x_text(tmp_path, product):
-    url = f'http://127.0.0.1:{free_port()}'  # nothing listens: every backend call fails to connect
-    with closing(ProductStore(tmp_path / 'state', product)) as store:
-        store.update(connection=connection(product, url))
+    # The backend's port stays bound and never listens: every backend call fails to connect, and the child's reservation
+    # (a bind of port 0, Endpoint) cannot draw it, as it could draw a port closed right away.
+    with reserve_port() as backend, closing(ProductStore(tmp_path / 'state', product)) as store:
+        store.update(connection=connection(product, f'http://127.0.0.1:{backend.getsockname()[1]}'))
         endpoint = Endpoint(product)
         process = endpoint.supervisor(child_spec(store.load(), store.directory))
         try:

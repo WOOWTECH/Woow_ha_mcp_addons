@@ -45,6 +45,7 @@
 
 - 基準：`claude-delivery` `c90b214`（PR #109 HM-16 合併）。分支 `feat/ha-multiprofile-hm22-nextcloud-20261119`，一般 clone
   `/data/pi-agent/home/woow-sec-sweep/.worktrees/ha-mp-hm22-20261119`；獨立審查之後由收尾步驟 push（第 17 節）。
+- 2026-11-19 用 merge commit 合進 `claude-delivery` `95b7e9d`（#122 HM-18 定稿與 DQ-04、DQ-22 定案，#123 P9 計畫產生器，#124 測試工具的 port 碰撞；不 rebase、不 force push）：衝突只在 `docs/multi-profile/` 六個檔，以 HM-18 的定稿文字為底、本片加的都留；契約第 9 節本片仍是 #129～#131（暫定），第 1.4 節第 16 點補開通的 Nextcloud，第 10 節加合併的一列；`deviation-trace.md` 用 repo 外 `gen_trace.py` 的暫存複本重產（T-03 加 #129、T-07 加 #130、ORIGIN 加 #131、檔頭一句；同樣四處交主對話改進原檔與 `SHA256SUMS`）；`unreleased-changes.md` 第 7 節「其他項目的原句」加本筆記第 9.5 節（第 15 節交辦的），第 4 節交代 PR 清單的那句補 HM-22；`update-backup-rollback.md` 核對前換身分的四處 git 自動合併成本片的寫法；本片的測試沒用到 #123、#124 改的工具（`p9_plan.py`、`owned_executable.py`，以及 #124 從五個測試檔拿掉的 `free_port`；本片用的是沒改的 `multi_profile_runtime.free_port`），不用改；檢查結果見合併 commit 的說明。
 - 範圍：計畫 §9 Nextcloud 列、§12.3「HM-21～HM-26｜各產品開通」的 HM-22 與 2026-11-17 的註（identityBound 同步）、§8.8 刻意差異表、
   契約第 9 節、`docs/operations/acceptance.md` 的 T-01～T-29。
 - 對齊的 PaaS：pin `69ac425`（DQ-06）之後的 #152、#154，經 GitHub 鏡像 `WOOWTECH/woow-mcp-server` 唯讀讀取（第 4 節）。

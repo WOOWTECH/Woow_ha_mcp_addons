@@ -30,13 +30,13 @@ from mcp_admin_core.gateway import PROTOCOL_VERSIONS, make_apps
 from mcp_admin_core.health import HealthMonitor, probe_reason, protocol_reply
 from mcp_admin_core.products import PRODUCTS, ProductStore, TOOLS
 from mcp_admin_core.surface import BACKEND_FREE, FULL_PRODUCTS, listing
+from batch2_owned_port import reserve_port
 from log_scan import log_scan  # noqa: F401  (fixture)
 from n8n_adapter import TOOLS as N8N_TOOLS
-from owned_executable import Executable
+from owned_executable import Executable, draw_public_ports
 from test_expansion_policy import call
-from test_expansion_runtime import fake_api
 from test_full_surface import COUNTS
-from test_real_products import ROOT, connection, free_port, release_version, rpc
+from test_real_products import ROOT, connection, release_version, rpc
 from tool_refusal import refusal
 
 ACCEPT = {'Accept': 'application/json, text/event-stream'}
@@ -391,7 +391,7 @@ async def test_a_child_that_does_not_answer_is_not_ready(tmp_path):
 
 async def launch(tmp_path, product, store):
     store.close()
-    port, admin_port = free_port(), free_port()
+    port, admin_port = draw_public_ports(2)
     runner = Executable(tmp_path, product, [port, admin_port])
     if product == 'n8n':
         code = 'import run; ' + runner.code('run') + 'run.main()'
@@ -458,13 +458,20 @@ async def test_unconfigured_connect_runtime(tmp_path, product):
         await stop(process, log)
 
 
+@pytest.fixture
+def unreachable():
+    """A backend address that refuses every connection: its port stays bound and never listens for the whole test, so
+    no later bind of port 0 (launch's public ports, the child's reservation) can draw it, as one can draw a port that
+    was bound and released."""
+    with reserve_port() as reservation:
+        yield f'http://127.0.0.1:{reservation.getsockname()[1]}'
+
+
 @pytest.mark.parametrize('product', ['emqx', 'odoo', 'n8n'])
-async def test_unreachable_backend_runtime(tmp_path, product):
+async def test_unreachable_backend_runtime(tmp_path, product, unreachable):
     """The real add-on and child with a configured backend that does not answer: initialize and the full tools/list
     through the child; after the first health check tools/call is refused with the check's reason."""
-    with fake_api() as (live, events, mutations, failures):
-        pass  # bound then released: nothing listens on this address any more
-    store = store_for(tmp_path, product, live)
+    store = store_for(tmp_path, product, unreachable)
     token = store.load().token
     process, runner, url, log = await launch(tmp_path, product, store)
     try:

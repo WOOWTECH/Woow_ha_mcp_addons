@@ -1,7 +1,7 @@
 # 帳本列管清單（多帳號新模組）
 
 - 狀態：HM-00 定案（2026-11-14；計畫 §11.1、C4-SF-13：新模組全部列管）。2026-11-15 文件同步：第 1～3 節照 `claude-delivery` `9c5dd88`
-  （HM-01、HM-04、HM-17、HM-07、HM-06 已合併）的帳本逐檔核對。HM-13c 加面板的新模組 `restore.js`（2026-11-17）；依獨立審查補 `restore_lock.py` 一列的說明（還原紀錄格式要向後相容，同日）。HM-27 合併 HM-13c 時補 `profiles.py`、`restore_lock.py`、`origin_policy.py` 三列（2026-11-18）。HM-22 在 `identity_fields.py` 一列補自己（2026-11-19；`products.py`、`contracts.js` 已在第 2 節；審查 MF-1 另改 `api.js`，也在第 2 節）。
+  （HM-01、HM-04、HM-17、HM-07、HM-06 已合併）的帳本逐檔核對。HM-13c 加面板的新模組 `restore.js`（2026-11-17）；依獨立審查補 `restore_lock.py` 一列的說明（還原紀錄格式要向後相容，同日）。HM-27 合併 HM-13c 時補 `profiles.py`、`restore_lock.py`、`origin_policy.py` 三列（2026-11-18）。HM-18 照 HM-13a 筆記第 11 節的交接，把 `profiles.py` 一列的「還沒合併」拿掉、`packaging/entrypoint.py` 移到第 2 節（2026-11-19，HM-18 審查 S-9）。HM-22 在 `identity_fields.py` 一列補自己（2026-11-19；`products.py`、`contracts.js` 已在第 2 節；審查 MF-1 另改 `api.js`，也在第 2 節）。
 - 帳本：`docs/provenance/runtime-patches.json`（bb48449 列管 50 個檔；`9c5dd88` 列管 54 個，多的是 HM-07 的 `features.py`、`profiles.py`、
   `identity_fields.py`、`config.py`）；工具面：`docs/tool-surface.json`、`docs/tool-surface.md`。
 
@@ -16,7 +16,7 @@
 | 模組 | 建立的片 | 之後會改的片（照合併順序） | 帳本 | tool-surface | 用途 |
 |---|---|---|---|---|---|
 | `packages/mcp-admin-core/mcp_admin_core/features.py` | HM-07 | 每個產品的升版片（加產品；受發版鎖）。HM-17 沒改它：HM-17 先合併，那時這個檔還不存在 | 列管（HM-07 起） | — | 產品開關 `MULTI_PROFILE_PRODUCTS`；`enabled(product)` 呼叫時讀 |
-| `packages/mcp-admin-core/mcp_admin_core/profiles.py` | HM-07 | HM-13a（還原標記的檔名常數；還沒合併）→ HM-09 → HM-10 → HM-31（只改註解）→ HM-13b（隔離名稱不覆蓋、守門的移開名稱）→ HM-13c（還原提示的檔名、隔離目錄在管理 API 上的名稱與刪除）→ HM-27（Origin 政策與它的收據的檔名、收據封存加進守門的名稱；合併 HM-13c 時）→ HM-25 | 列管（HM-07 起） | — | 索引、簽章、布局、一致性、容量常數、名稱規則、port 配發 |
+| `packages/mcp-admin-core/mcp_admin_core/profiles.py` | HM-07 | HM-13a（還原標記的檔名常數；#97）→ HM-09 → HM-10 → HM-31（只改註解）→ HM-13b（隔離名稱不覆蓋、守門的移開名稱）→ HM-13c（還原提示的檔名、隔離目錄在管理 API 上的名稱與刪除）→ HM-27（Origin 政策與它的收據的檔名、收據封存加進守門的名稱；合併 HM-13c 時）→ HM-25 | 列管（HM-07 起） | — | 索引、簽章、布局、一致性、容量常數、名稱規則、port 配發 |
 | `packages/mcp-admin-core/mcp_admin_core/identity_fields.py` | HM-07 | HM-12、HM-13b、HM-22（照伺服器比的網址表 `SAME_SERVER_URLS`）→ HM-24 | 列管（HM-07 起） | — | 八個產品的身分欄位與秘密欄位分類 |
 | `packages/mcp-admin-core/mcp_admin_core/profile_runtime.py` | HM-05 | HM-08 → HM-09 → HM-13b → HM-13c（還原提示、核對關卡、全部撤銷的 503 名單）→ HM-30 → HM-31 → HM-25 | 列管 | — | 每帳號執行套件（store、Supervisor、監看、收據） |
 | `packages/mcp-admin-core/mcp_admin_core/profile_router.py` | HM-08 | HM-10 → HM-14 → HM-31 → HM-13c（核對、全部撤銷、還原紀錄、刪隔離目錄的全域路由；8081 擋全部撤銷沒撤銷成功的權杖）→ HM-27 | 列管 | — | 8081 token 分派器；8099 分派、方法表、Ingress 備援改寫 |
@@ -38,7 +38,7 @@
 `configuration.py`、`operations.py`、`admin_auth.py`、`access.py`、`request_limits.py`、`backend_edit.py`、`__init__.py`、`config.py`（HM-07 起）、
 `lifecycle.py`（HM-09 起；以上在 `packages/mcp-admin-core/mcp_admin_core/`）、`apps/runtime/session_idle.py`、`apps/runtime/run_child.py`、`apps/runtime/backend_policy.py`、
 `apps/n8n/n8n_adapter.py`、`apps/n8n/backend_policy.cjs`、`apps/n8n/run.py`、`apps/hermes/launch.py`、`apps/opendesign/launch.py`、
-`packages/mcp-admin-ui/src/app.js`、`api.js`、`contracts.js`、`operation-identity.js`。
+`packaging/entrypoint.py`（HM-13a 起）、`packages/mcp-admin-ui/src/app.js`、`api.js`、`contracts.js`、`operation-identity.js`。
 
 ## 3. 沒列管、多帳號會改到的檔
 
@@ -48,7 +48,7 @@
 原本在這一節、後來改成列管的：
 
 - `packages/mcp-admin-core/mcp_admin_core/config.py`：HM-07 起列管（HM-07 審查 S-10），已移到第 2 節。
-- `packaging/entrypoint.py`：HM-13a 起列管（HM-13a 還沒合併；合併前帳本裡沒有它）。
+- `packaging/entrypoint.py`：HM-13a 起列管（HM-13a 審查 SF-5；#97 合併），已移到第 2 節。
 - `packages/mcp-admin-core/mcp_admin_core/lifecycle.py`：HM-09 起列管（HM-09 審查 S-10：`EXEC_WRAPPER` 在每個額外帳號子程式
   fork 之後、exec 之前執行），已移到第 2 節。`health.py` 審查沒有要求，維持不列管。
 
