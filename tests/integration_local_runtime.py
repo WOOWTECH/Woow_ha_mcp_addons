@@ -106,8 +106,9 @@ fs.writeFileSync(process.env.HOME+'/real-child-guard',String(process.pid));
         async with (serve(websocket, '127.0.0.1', 0) as ws,
                     httpx.AsyncClient(trust_env=False) as client,
                     httpx.AsyncClient(transport=forbidden_transport()) as forms_child):
-            admin_port, mcp_port, control_port = free_port(), free_port(), free_port()
+            admin_port, mcp_port = free_port(), free_port()
             runner = Executable(data, 'n8n', [admin_port, mcp_port])
+            control_port = free_port()  # drawn while the child port is reserved, so never the child's
             runner.config['trace'] = str(data/'owned-lifecycle.jsonl')
             client.event_hooks['request'].append(runner.guard)
             config={'source':str(ROOT),'data':str(data),'admin_port':admin_port,'mcp_port':mcp_port,
