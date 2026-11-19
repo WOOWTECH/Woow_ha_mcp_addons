@@ -450,7 +450,7 @@ token 換掉時 `ClientDisconnect` 丟給 uvicorn）。HM-14 定案：
 - **initialize 世代**（FM-43）：閘道記下 initialize 送去的世代（`Supervisor.starts`），子程式的 session 只在那個世代仍是執行中的那一個
   時才交給用戶端（標頭送出前一刻檢查）。換代、結束或被停時用戶端拿 503 `BACKEND_UNAVAILABLE`＋`Retry-After: 5`、沒有 session id
   （§8.8 #94），那個 session 不 DELETE（會打到下一個世代）。標頭已經在送的 session 收不回來：用戶端之後在那個 session 的請求拿到新子程式的
-  404，照 MCP 重新 initialize。HA 沒有 PaaS 的 drain（重啟不等閘道送完）。listener 是不是同一個程序屬 HM-15（FM-41，條件式）。
+  404，照 MCP 重新 initialize。HA 沒有 PaaS 的 drain（重啟不等閘道送完）。HM-15 在開通的產品上盡力檢查 listener 與受監督程序的 fd；不可用時降級，限制見 threat-model.md。
 - 不把例外丟給 uvicorn：上面每一種結尾都由閘道自己送完並返回。有兩個例外會讓 uvicorn 記一行（都沒有 traceback）：
   - 「一次送完的 JSON 標頭已出去」：閘道返回，uvicorn 記 `ASGI callable returned without completing response.` 並關掉連線；
   - 用戶端完全不讀、結尾 2 秒內送不出去（上面 `-32005` 那一點）：uvicorn 記 `ASGI callable returned without starting response.`。
@@ -1232,7 +1232,7 @@ T-21、T-24 對到（同 `acceptance-matrix.md` 的 T-21、T-24）。
 | 10 | Bearer 帶 Origin | （沒有 Bearer） | 一律 403，不記紀錄、不看服務層級政策（HM-27 定案：照舊，沒有放行）；DQ-11 第二問（S14 實測後要不要精確放行 `https://claude.ai`）仍待使用者決定 | 瀏覽器不在 Bearer 契約 | 既有（HM-27 定案照舊；第二問待決） |
 | 11 | 管理身分 | 密碼＋JWT | Ingress＋HA 角色，每請求查 | 平台不同 | 部署 |
 | 12 | 管理管線 | 中介層先驗登入 | 看狀態前先驗角色、提交前再驗一次（第 3.2 節） | I10；HA 角色每請求查 | 部署 |
-| 13 | listener 身分檢查 | 轉發前必過 | 讀得到才做，讀不到降級（HM-15，條件式） | HA AppArmor 未確認；不讓整台停擺 | 部署 |
+| 13 | listener 身分檢查 | 轉發前必過 | 讀得到才做，讀不到降級（HM-15，條件式） | UC-04 已在 HAOS 18.1 測試程序確認；實際子程式與其他環境仍須驗證，不讓整台停擺 | 部署 |
 | 14 | 子程式重啟 | 2→300 秒、不限次數、120 秒歸零；spawn 失敗（指令找不到等）就停住，等手動重啟 | 開通的產品相同（DQ-20 採 (b)），spawn 失敗也照退避重試（HM-09）；沒開通維持 4 次後 failed | 沒開通維持今天；HA 的子程式指令固定在映像裡，spawn 失敗多半是暫時的（fork 時記憶體不夠等） | 部署 |
 | 15 | 名額 | 每帳號連線 64、串流 32、等 10 秒、排隊 32＋保留 8；共用池；請求內容位元組預算全域＋每帳號份額（#155） | 讀 body 前准入（64／32）、轉送 32／16 等 1 秒、串流 24／8、排隊 32／16＋保留 4、待送回覆額度；沒有共用池。請求內容位元組預算照 PaaS（HM-31）：全 add-on 一份＋每帳號份額（差異見 #101～#104）。附註（HM-08 審查 S-5、S-6；HM-31 改）：全 add-on 共用的只有兩樣：(1) 請求內容位元組預算（PaaS 同；HM-08 的拒絕小額度 HM-31 拿掉）；(2) 8081 外框的連線數（閒置 keep-alive、沒帶 token 的連線也算），滿了任何人都拿 uvicorn 純文字 503（既有，G2 S7）。每帳號隔離在請求層 | HA 沒有 cgroup、硬體小（G3-24）；DQ-07 採 (a) | 部署 |
 | 16 | 讀 body 前拒絕的回應碼（准入） | 先讀 body，帶 id 一律 200＋`-32003` | 准入滿：≤64 KiB 讀出 id 回 200＋`-32003`；更大的不讀、503。位元組預算放不下的照 PaaS（HM-31：讀完丟掉、從頭尾找 id，200 或 503），不在這一列。附註（HM-08 審查 S-6）：batch 算沒有 id。HA 閘道平常就不收 batch（`policy.authorize` 的 `single JSON-RPC request required` → 403；PaaS 會轉送），過載時 HA 回 503＋`id: null`，PaaS 每個 id 一則 200 | 讀 body 前准入防單一帳號吃光 listener（C3-MF-2） | 部署 |

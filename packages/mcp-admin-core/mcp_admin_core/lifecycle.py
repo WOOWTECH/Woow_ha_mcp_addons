@@ -237,6 +237,7 @@ class Supervisor:
         self.blocked_reason = None  # why the child is not started (contract 3.6), while status is blocked
         self.failures = 0  # watchdog: failed attempts (exits, spawn failures, refusals) since the last stable run
         self.retry_in = None  # watchdog: the backoff being waited out now, in seconds
+        self.listener_identity = None
         self.resource_state = None  # what the wrapper applied: {'oom_score_adj': bool, 'nice': bool}
         self.clock = time.monotonic  # the watchdog's clock (a stable run); tests replace it
         self._lock = asyncio.Lock()
@@ -426,6 +427,8 @@ class Supervisor:
             if report is not None:
                 fd, report = report, None
                 await self._resources_applied(fd, pid)
+            if self.listener_identity is not None and pid is not None:
+                await self.listener_identity.probe(pid)
             exited = asyncio.create_task(self.process.wait())
             stopped = asyncio.create_task(self._stop.wait())
             try:
@@ -581,4 +584,7 @@ class Supervisor:
                 "starts": self.starts, "last_exit": self.last_exit}
 
     def diagnostics(self):
-        return {"child": self.health(), "logs": self.logs.snapshot()}
+        result = {"child": self.health(), "logs": self.logs.snapshot()}
+        if self.listener_identity is not None:
+            result["listener_identity"] = self.listener_identity.status
+        return result

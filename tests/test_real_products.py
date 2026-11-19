@@ -169,7 +169,14 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
         endpoint = f'http://127.0.0.1:{port}/mcp'
         log_path = tmp_path / 'owned-runtime.log'
         runner = Executable(tmp_path, product, [port, admin_port])
-        code = 'from mcp_admin_core import run_product; ' + runner.code('run_product') + 'run_product.main()'
+        # Exercise the actual management guard with the real Odoo child, even on
+        # unprivileged hosts where the separate UID 10001 proof cannot run.
+        guard = ("import runpy; runpy.run_path('packaging/management_launcher.py')['guard'](); "
+                 if product == 'odoo' else '')
+        multi = ("from hm15_odoo_guard_probe import install as install_hm15; "
+                 f"install_hm15(run_product._owned_test_endpoint, {str(tmp_path / 'hm15-owned')!r}); "
+                 if product == 'odoo' else '')
+        code = guard + 'from mcp_admin_core import run_product; ' + runner.code('run_product') + multi + 'run_product.main()'
         runner.release()
         with log_path.open('wb') as log:
             process = subprocess.Popen([str(ROOT / '.venv/bin/python'), '-c', code, product,
@@ -196,6 +203,8 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     else:
                         pytest.fail(f'{product}: initialization timed out ({last}); {log_path.read_text()}')
                     assert result['capabilities'] == {'tools': {}}
+                    if product == 'odoo':
+                        assert (tmp_path / 'hm15-owned').read_text() == 'owned\n'
                     # 0.1.8 (F6): run_product names the add-on and its own release version (HM-17: the release data's,
                     # so a version bump changes data only); only Nextcloud carries (reviewed) instructions.
                     assert result['serverInfo'] == {'name': 'woow-mcp-' + product,
