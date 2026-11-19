@@ -19,9 +19,8 @@
 ## 為什麼發這一版
 
 - R1（計畫 §11.4）：Odoo 是第一個開通多帳號的產品，PaaS 的首發場景（同一個 Odoo 資料庫、每個 AI 代理一個受限使用者，U-03）。前提 HM-00～HM-18、
-  HM-20、HM-30、HM-27 都已合併（最後是 #122 HM-18，`95b7e9d`）。**HM-15（listener 身分檢查，條件式）還沒做**：它的條件是 DQ-37 選 (a)（已定）且
-  UC-04 證實 uid 10001 讀得到 dumpable 子程式的 `/proc/<pid>/fd`；HM-03a 在展示機量到同 uid 讀得到（non-dumpable 的讀不到），條件看起來成立。
-  `decisions.md` 仍寫「listener 檢查待定」。首發前須完成 HM-15 與獨立安全審查；實際 non-dumpable 子程式的可檢查能力仍須驗證，讀不到時依契約第 9 節 #13 降級並保留子程式 bearer 主防線。
+  HM-20、HM-30、HM-27 都已合併（最後是 #122 HM-18，`95b7e9d`）。HM-15 條件式 listener 身分檢查已在 #132 實作、獨立安全審查並合入本候選分支；
+  #132 尚未合入主線，CI 與實際 HAOS uid 10001／額外帳號的檢查能力仍待驗。檢查不可用時依契約第 9 節 #13 降級並保留子程式 bearer 主防線。
 - 開通後：預設帳號（今天的設定與權杖）之外最多 5 個額外帳號，每個帳號一組 Odoo 連線、一把權杖與兩條網址、一份工具政策、一個子程式；只看權杖決定帳號。
   只用預設帳號的安裝，權杖、兩條網址、`state.json` 位元組、政策、子程式 port 3000 都不變；仍看得到的改變是契約第 1.4 節的 20 點（含 HM-10 審查 S-6 的
   兩個位元組變化），逐項寫在 [Odoo CHANGELOG](../../addons/odoo/CHANGELOG.md) 0.5.0 段與根目錄 [upgrade-notes.yaml](../../upgrade-notes.yaml)。
@@ -56,7 +55,7 @@
 
 ## 改了什麼（升版 commit）
 
-- **開關與版號**：上一節。帳本只重算改到的兩個列管檔（`__init__.py`、`features.py`），`scripts/ledger_precheck.py` OK；`apps/runtime`、`apps/*/launch.py`
+- **開關與版號**：上一節。升版重算 `__init__.py`、`features.py` 的帳本；HM-15 合入後另更新 listener 相關列管檔，`scripts/ledger_precheck.py` OK；`apps/runtime`、`apps/*/launch.py`
   沒改，`docs/tool-surface.*` 不用重產（`tool_inventory.py` 沒有漂移）。
 - **Store 升版比對 hook**：HM-16 的草稿 `packaging/hooks/seed`、`verify` 用 `git mv` 搬到 `addons/odoo/upgrade-check/`（保留可執行位元，只改說明的兩句），
   `tests/test_upgrade_hooks.py` 改指新位置。只讀、與版本無關；第一次在 Store 的 CI 跑是本 PR 的 `Upgrade comparison`（UC-19：hook 能不能以 root 讀
@@ -200,7 +199,7 @@
 
 ## 要負責人決定的事
 
-1. HM-15（listener 身分檢查）為 R1 條件式前提：完成實作、獨立安全審查及實際子程式能力驗證。
+1. HM-15（listener 身分檢查）為 R1 條件式前提：#132 已實作並經獨立安全審查，待 CI、主線整合及實際 HAOS 子程式能力驗證。
 2. 第 3 步（觸發 `release.yaml`）之前：三路版號運算式要不要先用拋棄式 workflow 驗（要一個 workflow 檔與一次觸發），或接受 candidate 在推送前擋。
 3. 第 4 步的 Store 升級乾跑在哪台有 Docker 的機器執行；須使用 candidate 的 `image.tar` 並在推送前完成。
 4. 第 5 步 HM-19c：在哪台量（展示機就是 J6412；J1900 有沒有機器）、出貨機的記憶體規格（DQ-29）；HM-03a 量到 UC-20 是「不行」（Supervisor 一定去拉映像），

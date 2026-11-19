@@ -209,3 +209,7 @@ HM-16 已讓 `container_probe.mock_bind_host` 與 `container_acceptance.main` �
 | 下一個（本筆記所在） | 發佈紀錄草稿 `release-decision-odoo-0.5.0.md`、本筆記 |
 
 commit 身分都是 woowtech；英文標題、繁中內文；訊息裡沒有任何署名行。沒有 push。
+
+## 12. HM-15 整合（2026-11-19）
+
+HM-15 #132 的實作與獨立安全審查修正已合入此候選分支；主線合併與 CI 尚待完成。實際 HAOS uid 10001、額外帳號及不可檢查時的降級仍待驗；檢查不是同 uid 安全隔離。
