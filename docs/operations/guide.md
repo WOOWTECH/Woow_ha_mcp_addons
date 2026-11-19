@@ -9,7 +9,7 @@
 
 **映像已發佈（目前 0.1.7），0.1.1–0.1.7 已在測試 HA 回歸（[0.1.7 紀錄](ha-test-0.1.7.md)）。** 七支都批准
 `homeassistant_api: true`（n8n 自 0.1.0、其他五支自 0.1.1 起，負責人 2026-10-05 核准；Nextcloud 自 0.1.7 起，2026-10-08 核准）；正式 fixed-WS provider 已實作並經審查，
-七支共用同一個驗證器（n8n 經 `apps/n8n/run.py`、其他六支經 `run_product.py`），下方的 Core 版本清單七支一體適用。
+七支共用同一個驗證器（都由 `run_product.py` 接上；n8n 的 `apps/n8n/run.py` 自 HM-25 起跑 `run_product` 的 runtime，以前是自己接），下方的 Core 版本清單七支一體適用。
 管理 HTML/assets/API 與 UI 已串接：真 HA 上已實測 owner 經 Ingress 的後端設定與 token reveal/rotate/revoke（管理 API），
 一般使用者 403；瀏覽器 UI 只在本地 Chromium（真 Core + fake HA transport）測過。
 不要直接修改 state、搬入 test verifier 或映射8099 LAN。
