@@ -21,9 +21,11 @@ export const connectionHelp = {
 };
 // HM-26 (plan 9 Headscale row; DQ-26, the plan's recommendation): once the panel serves profiles (the product switched on),
 // each profile manages its own Headscale server, or the same one with a policy of its own, and an API key administers the
-// whole server. Without profiles the help is connectionHelp's, word for word.
+// whole server. Profiles on one server are kept apart by their tool policies alone, whatever keys they use, and only a
+// policy without headscale_api_keys create, expire and delete keeps a profile restricted (HM-26 security review M-1).
+// Without profiles the help is connectionHelp's, word for word.
 const scopedConnectionHelp = {
-  headscale: '填這個帳號要管理的 Headscale 控制伺服器的管理 API 網址（根網址或 /api/v1），並使用專門建立的 API 金鑰。API 金鑰是整台 Headscale 的管理權限：建議每個帳號在 Headscale 各建一把，不要共用；共用同一把金鑰的帳號之間只靠工具權限分權，在 Headscale 撤銷它也會同時停掉這些帳號。工具預設開啟，請在工具權限頁限制不需要的寫入操作。它不會替使用者安裝或登入 Tailscale 客戶端。',
+  headscale: '填這個帳號要管理的 Headscale 控制伺服器的管理 API 網址（根網址或 /api/v1），並使用專門建立的 API 金鑰。API 金鑰是整台 Headscale 的管理權限，Headscale 沒有金鑰層級的權限：同一台 Headscale 上的帳號，不論是否共用金鑰，彼此只靠工具權限分權。要讓某個帳號真的受限，請在它的工具權限頁停用 headscale_api_keys 的建立、作廢與刪除：建立會把一把新的整台管理金鑰交給持有權杖的人，在 Add-on 外也能用，「全部撤銷」撤不到；作廢與刪除能停掉其他帳號的金鑰。仍建議每個帳號在 Headscale 各建一把金鑰，不要共用：某個帳號不用了，可以只撤銷它那一把，不會停掉其他帳號。工具預設開啟，請在工具權限頁限制不需要的寫入操作。它不會替使用者安裝或登入 Tailscale 客戶端。',
 };
 export const connectionHelpFor = (product, scoped = false) =>
   scoped === true && Object.hasOwn(scopedConnectionHelp, product) ? scopedConnectionHelp[product] : connectionHelp[product];
