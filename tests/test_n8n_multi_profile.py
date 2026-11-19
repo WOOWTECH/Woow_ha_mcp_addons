@@ -13,14 +13,19 @@ the test (tests/multi_profile_runtime.py, as the Odoo tests do); n8n's upgrade P
   packaged file) and names its port on its command line (HM-16 review SF-2: the P9 kit and the container probe read
   it there).
 - The catalog copies: /tmp/woow-n8n-mcp/profiles/<id>/nodes.db (here under the test's own directory), 0700 directories
-  and a 0600 file, never through a link, made once per management process in a worker thread before the child's
-  first start, removed with the profile.
+  and a 0600 file, never through a link (each directory opened and checked, the next one made and the file written
+  through its descriptor: a directory swapped after its check is never written through; HM-25 security review S-6),
+  made once per management process in a worker thread before the child's first start and again for another backend
+  (security review S-8), removed with the profile: a deleted profile's, an orphan's and a quarantine directory's whose
+  id is no longer served; a cleanup that fails is one WARNING and the deletion stands (correctness review S-2).
 - The gateway: each profile's token reaches only its own child (Bearer 401 and secret URL 404 for every other token);
   no x-n8n-* header ever reaches a child (§8.8 #4), switched on or off; an additional profile without a backend has no
   child and every one of its tools, the seven documentation tools too, is refused as unconfigured, never "try again
   shortly"; saving one profile's policy restarts no child (n8n's policy is the gateway's), saving its session or
-  backend restarts its child only, and each profile's child gets its own session limits (20 by default: a new profile
-  never copies another's settings, DQ-02).
+  backend restarts its child only (a profile born without a backend gets its child when its backend is saved, and
+  loses it when the backend is cleared: correctness review S-1), and each profile's child gets its own session limits
+  (20 by default: a new profile never copies another's settings, DQ-02); a reply is masked with every token the add-on
+  holds once switched on, the profile's own credentials only when switched off (security review S-3).
 - UC-01: the real n8n-mcp child of an additional profile leaves its HOME empty.
 
 Every test runs under the HM-01 log scan (tokens, child tokens, the synthetic backend keys and the labels watched).
@@ -42,16 +47,20 @@ import n8n_adapter
 import run as n8n_run
 from admin_write_headers import reviewed_headers
 from log_scan import log_scan  # noqa: F401  (fixture)
-from multi_profile_runtime import Children, CATALOG_STAND_IN, create_profile, ids, multi_profile_runtime, stored
-from mcp_admin_core import features, products, profile_runtime, profiles
-from mcp_admin_core.products import ProductStore
+from multi_profile_runtime import (Children, CATALOG_STAND_IN, all_tokens, create_profile, ids, multi_profile_runtime,
+                                   stored)
+from mcp_admin_core import features, products, profile_runtime, profiles, redact
+from mcp_admin_core.products import ProductState, ProductStore
 from mcp_admin_core.surface import BACKEND_FREE, OPERATION_READS, SELECTORS, listing
+from test_reply_mask_union import UNHELD, EchoChild, masked
 from test_single_profile_golden import (ACCEPT, ADMIN, BEARER_REQUIRED, CHILD_HEADERS, GENUINE_CLIENT, INGRESS,
                                         NOT_FOUND, answer, configure, initialize_message, settle)
 
 pytestmark = pytest.mark.usefixtures('log_scan')
 PRODUCT = 'n8n'
 B, C = ids(2)
+D, O = ids(5)[3:]  # a quarantined profile and an orphan (HM-25 review S-2)
+RUNTIME_LOGGER = 'mcp_admin_core.profile_runtime'
 LABELS = {B: 'Beta Flows', C: 'Gamma Flows'}
 DOCUMENTATION = BACKEND_FREE['n8n'].split()  # the seven tools n8n-mcp serves without a backend
 # The headers n8n-mcp reads to switch its backend or instance (dist/http-server-single-session.js
@@ -108,6 +117,29 @@ def well_formed(name):
         return {}
     selector, values = SELECTORS[name]
     return {selector: (OPERATION_READS[name] or values.split())[0]}
+
+
+async def panel_write(runtime, method, path):
+    """One of the panel's global management calls (the profile list's ETag, its CSRF token, a new Idempotency-Key)."""
+    async with GENUINE_CLIENT(transport=httpx.ASGITransport(app=runtime.admin_app, client=INGRESS),
+                              base_url='http://admin') as admin:
+        boot = (await admin.get('/api/bootstrap', headers={**ADMIN, 'X-MCP-Profile': 'default'})).json()
+        listed = await admin.get('/api/profiles', headers=ADMIN)
+        return await admin.request(method, path, headers={
+            **ADMIN, 'X-CSRF-Token': boot['csrf'], 'If-Match': listed.headers['etag'],
+            'Idempotency-Key': f'{int(time.time() * 1000) - 1000}.{secrets.token_hex(16)}'})
+
+
+def cleanup_warnings(log_scan):
+    """The WARNINGs of ProfileManager.removed (a product's cleanup after a deletion that failed)."""
+    return [record.getMessage() for record in log_scan.records
+            if record.name == RUNTIME_LOGGER and record.levelno == logging.WARNING
+            and record.getMessage().startswith('multi-profile: the cleanup after deleting profile ')]
+
+
+def current(directory):
+    """A profile's state as it is on disk now, read without opening its store (the runtime holds it)."""
+    return ProductState.model_validate(stored(directory))
 
 
 @pytest.fixture
@@ -214,7 +246,8 @@ def test_an_additional_profile_without_a_backend_has_no_child(tmp_path, log_scan
 
 @pytest.mark.parametrize('case', ['link', 'link to a file', 'file', 'not empty'])
 def test_the_child_directory_is_its_own_empty_directory(tmp_path, log_scan, catalogs, switched, case):
-    """Checked at every start: a link (to a directory or a file), a file or a directory with anything in it is refused
+    """Checked whenever the spec is built (a start, a save, the panel's restart, a re-evaluation; the watchdog's
+    restarts reuse the spec): a link (to a directory or a file), a file or a directory with anything in it is refused
     and nothing is followed or written there."""
     data = setup_profiles(tmp_path, extras=(B,))
     n8n_adapter.prepare_profile_catalog(B)
@@ -370,6 +403,63 @@ async def test_a_profiles_copy_is_made_once_off_the_event_loop(tmp_path, log_sca
     assert threads == ['prepare_profile_catalog'] * 2 and n8n_adapter.profile_catalog(C) is None
     assert [record.getMessage() for record in caplog.records if record.name == 'n8n_adapter'] == [
         f'n8n: profile {C[:8]}: no catalog copy could be made; its child does not start']
+
+
+async def test_a_profiles_copy_belongs_to_the_backend_it_was_made_for(tmp_path, log_scan, catalogs, monkeypatch):
+    """HM-25 security review S-8: n8n_workflow_versions reads a snapshot by its number, whatever workflow and backend
+    it was taken from, so a profile handed to another backend's holder (another URL, or another key: another n8n user)
+    must not read the snapshots taken from the one before. The same backend keeps its copy and the history in it
+    across starts; another URL or another key gets a new copy before the child starts; without a backend nothing is
+    made (and the copy is left as it is)."""
+    data = setup_profiles(tmp_path, configured=(C,), extras=(C,))
+    state, _ = state_of(data, C)
+    log_scan.watch_state(state)
+    made = []
+    original = asyncio.to_thread
+
+    async def recorded(function, *args, **kwargs):
+        made.append(function.__name__)
+        return await original(function, *args, **kwargs)
+    monkeypatch.setattr(n8n_adapter.asyncio, 'to_thread', recorded)
+    history = b'version snapshots taken from this backend'
+    await n8n_adapter.prepare_child(C, state)
+    copy = n8n_adapter.profile_catalog(C)
+    copy.write_bytes(copy.read_bytes() + history)
+    await n8n_adapter.prepare_child(C, state)
+    assert made == ['prepare_profile_catalog'] and copy.read_bytes().endswith(history)
+    for changes in ({'backend_url': 'https://elsewhere.n8n.invalid'}, {'backend_key': 'DUMMY-another-workflow-key'}):
+        await n8n_adapter.prepare_child(C, state.model_copy(update=changes))
+        assert n8n_adapter.profile_catalog(C) == copy and copy.read_bytes() == CATALOG_STAND_IN, sorted(changes)
+        copy.write_bytes(copy.read_bytes() + history)
+        await n8n_adapter.prepare_child(C, state)  # the first backend again: not the copy the other one used
+        assert copy.read_bytes() == CATALOG_STAND_IN, sorted(changes)
+        copy.write_bytes(copy.read_bytes() + history)
+    assert made == ['prepare_profile_catalog'] * 5
+    await n8n_adapter.prepare_child(C, state.model_copy(update={'backend_url': None, 'backend_key': None}))
+    assert len(made) == 5 and copy.read_bytes().endswith(history)
+
+
+def test_a_catalog_copy_is_never_written_through_a_directory_swapped_after_its_check(tmp_path, catalogs, monkeypatch):
+    """HM-25 security review S-6: every directory is opened without following a link and checked, the next one is made
+    in it and the file is written and renamed through the last one's descriptor (as remove_profile_catalog removes
+    it). The profiles directory swapped for a link right after its check (here: as the profile's directory is made in
+    it) is never written through: the copy lands in the directory that was checked, its path no longer leads to it, so
+    nothing is recorded and the profile's child does not start."""
+    elsewhere = tmp_path / 'elsewhere'
+    elsewhere.mkdir(mode=0o700)
+    real_mkdir, swapped = os.mkdir, []
+
+    def mkdir(path, mode=0o777, *, dir_fd=None):
+        if os.path.basename(os.fspath(path)) == B and not swapped:
+            os.rename(catalogs / 'profiles', tmp_path / 'moved')
+            (catalogs / 'profiles').symlink_to(elsewhere)
+            swapped.append(B)
+        return real_mkdir(path, mode, dir_fd=dir_fd)
+    monkeypatch.setattr(os, 'mkdir', mkdir)
+    assert n8n_adapter.prepare_profile_catalog(B) is None
+    assert swapped == [B] and list(elsewhere.iterdir()) == []
+    assert (tmp_path / 'moved' / B / 'nodes.db').read_bytes() == CATALOG_STAND_IN
+    assert n8n_adapter.profile_catalog(B) is None
 
 
 # ---- the gateway, switched on ----
@@ -576,6 +666,222 @@ async def test_each_profile_runs_on_its_own_catalog_and_its_copy_goes_with_it(tm
         assert deleted.status_code == 200 and deleted.json()['deleted'] == B
         assert not (copies / B).exists() and not profiles.Layout(data).profile(B).exists()
         assert (copies / C / 'nodes.db').read_bytes() == CATALOG_STAND_IN and n8n_adapter.profile_catalog(B) is None
+
+
+async def test_a_profiles_backend_saved_starts_its_child_and_cleared_stops_it(tmp_path, log_scan, monkeypatch):
+    """HM-25 correctness review S-1 (T-07, T-22; the usual path: the panel creates a profile without a backend, plan
+    4.3) and security review S-8. B is served without a backend: no child, no copy, no child directory. Its backend
+    saved through the panel restarts B's runtime only: B's catalog copy made once, in a worker thread, then B's child
+    started on its own HOME, copy, backend and --port, and B's token served by it; the default profile's and C's
+    children are not restarted. A session save keeps B's copy and the version history in it; another backend (another
+    URL and key) gets a new copy before B's child starts again, so nothing taken from the first backend is read through
+    the second. The backend cleared stops B's child (no spec) and every tool of B is refused as unconfigured again."""
+    data = setup_profiles(tmp_path, configured=(C,))
+    children = children_of(data)
+    copied = []
+    original = asyncio.to_thread
+
+    async def recorded(function, *args, **kwargs):
+        if getattr(function, '__name__', None) == 'prepare_profile_catalog':
+            copied.append(args[0])
+        return await original(function, *args, **kwargs)
+    monkeypatch.setattr(n8n_adapter.asyncio, 'to_thread', recorded)
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        manager = runtime.manager
+        supervisors = {profile_id: manager.get(profile_id).runtime.supervisor for profile_id in ('default', B, C)}
+        assert (supervisors[B].status, supervisors[B].spec) == ('unconfigured', None) and copied == [C]
+        assert not profiles.Layout(data).child(B).exists() and n8n_adapter.profile_catalog(B) is None
+        starts = {profile_id: supervisor.starts for profile_id, supervisor in supervisors.items()}
+        copy = Path(n8n_adapter.CATALOG_DIR) / 'profiles' / B / 'nodes.db'
+        token = runtime.token(B)
+
+        async def save(path, body):
+            async with runtime.admin(B) as admin:
+                boot = (await admin.get('/api/bootstrap', headers=ADMIN)).json()
+                saved = await admin.put(path, json=body, headers=reviewed_headers(boot, ADMIN))
+            assert saved.status_code == 200 and saved.json()['profile'] == {'id': B}, saved.content[:300]
+
+        def restarted(times):
+            return {profile_id: supervisor.starts for profile_id, supervisor in supervisors.items()} == {
+                **starts, B: starts[B] + times}
+
+        first = {'url': 'https://beta.n8n.invalid', 'key': 'DUMMY-beta-workflow-key'}
+        second = {'url': 'https://beta-next.n8n.invalid', 'key': 'DUMMY-beta-next-workflow-key'}
+        log_scan.watch(first['key'], second['key'], kind='secret')
+        await save('/api/backend', first)
+        spec = supervisors[B].spec
+        assert copied == [C, B] and supervisors[B].status == 'running' and restarted(1)
+        assert spec.cwd == profiles.Layout(data).child(B) and spec.env['HOME'] == str(spec.cwd)
+        assert spec.env['NODE_DB_PATH'] == str(copy) and spec.argv[-2:] == ('--port', '18000')
+        assert (spec.env['N8N_API_URL'], spec.env['N8N_API_KEY']) == (first['url'], first['key'])
+        async with runtime.mcp() as client:
+            opened = await client.post('/mcp', headers=bearer(token), json=initialize_message())
+        assert opened.status_code == 200 and opened.headers['mcp-session-id'].startswith('p' + B[:4] + '-session-')
+        history = b'version snapshots taken from the first backend'  # what n8n-mcp keeps in the copy
+        copy.write_bytes(copy.read_bytes() + history)
+        await save('/api/n8n/session', {'n8n_session': {'timeout_seconds': 900, 'max_sessions': 5}})
+        assert copied == [C, B] and restarted(2) and copy.read_bytes().endswith(history)
+        await save('/api/backend', second)
+        assert copied == [C, B, B] and restarted(3) and copy.read_bytes() == CATALOG_STAND_IN
+        assert supervisors[B].spec.env['NODE_DB_PATH'] == str(copy)
+        assert supervisors[B].spec.env['N8N_API_URL'] == second['url']
+        await save('/api/backend', {'url': None, 'key': None})
+        assert (supervisors[B].status, supervisors[B].spec) == ('unconfigured', None) and restarted(3)
+        since = len(children.by_port[18000].requests)
+        async with runtime.mcp() as client:
+            opened = await client.post('/mcp', headers=bearer(token), json=initialize_message())
+            assert opened.headers['mcp-session-id'].startswith('woow-local-')
+            session = bearer(token, **{'Mcp-Session-Id': opened.headers['mcp-session-id']})
+            for number, name in enumerate(('tools_documentation', 'n8n_list_workflows')):
+                refused = await client.post('/mcp', headers=session, json=call(10 + number, name, well_formed(name)))
+                assert refused.json()['error'] == {'code': -32603, 'message': 'Backend not configured',
+                                                   'data': {'tool': name}}, name
+        assert len(children.by_port[18000].requests) == since and copied == [C, B, B]
+
+
+async def test_a_cleanup_that_leaves_a_copy_is_one_warning_and_the_deletion_stands(tmp_path, log_scan, monkeypatch):
+    """HM-25 correctness review S-2, security review S-4 (plan 4.4: a cleanup that fails is one WARNING; PaaS #159
+    likewise for the K8s files it keeps in /tmp): the copies' profiles directory is no longer private, so B's copy
+    cannot be removed (remove_profile_catalog answers False). Deleting B through the panel still answers 200 and
+    removes B's directory; one WARNING names B by its first 8 characters, never a path; C keeps its copy and child."""
+    monkeypatch.setattr(profiles, 'port_occupied', lambda port: None)  # tests/owned_network.py: no test bind here
+    data = setup_profiles(tmp_path)
+    children = children_of(data)
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        copies = Path(n8n_adapter.CATALOG_DIR) / 'profiles'
+        starts = runtime.manager.get(C).runtime.supervisor.starts
+        os.chmod(copies, 0o755)
+        try:
+            deleted = await panel_write(runtime, 'DELETE', f'/api/profiles/{B}')
+        finally:
+            os.chmod(copies, 0o700)
+        assert deleted.status_code == 200 and deleted.json()['deleted'] == B
+        assert not profiles.Layout(data).profile(B).exists() and (copies / B / 'nodes.db').is_file()
+        assert n8n_adapter.profile_catalog(C) == copies / C / 'nodes.db'
+        assert runtime.manager.get(C).runtime.supervisor.starts == starts
+    assert cleanup_warnings(log_scan) == [
+        f'multi-profile: the cleanup after deleting profile {B[:8]} could not remove everything']
+
+
+async def test_an_orphans_deletion_removes_its_catalog_copy(tmp_path, log_scan, monkeypatch):
+    """HM-25 correctness review S-2, security review S-4: an orphan (a profile directory the index does not list, here
+    with a copy as if this management process had served it before) deleted through the panel goes with its copy too:
+    profile_admin's one delete() runs the product's cleanup after the directory; B is not touched."""
+    monkeypatch.setattr(profiles, 'port_occupied', lambda port: None)
+    data = setup_profiles(tmp_path, extras=(B,))
+    log_scan.watch_state(create_profile(data, PRODUCT, O, label='Orphan Flows', port=18001, indexed=False))
+    children = children_of(data, (B,))
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        made = n8n_adapter.prepare_profile_catalog(O)
+        async with GENUINE_CLIENT(transport=httpx.ASGITransport(app=runtime.admin_app, client=INGRESS),
+                                  base_url='http://admin') as admin:
+            assert (await admin.get('/api/profiles', headers=ADMIN)).json()['orphans'] == [{'id': O}]
+        deleted = await panel_write(runtime, 'DELETE', f'/api/profiles/{O}')
+        assert deleted.status_code == 200 and deleted.json()['deleted'] == O
+        assert not made.parent.exists() and not profiles.Layout(data).profile(O).exists()
+        assert n8n_adapter.profile_catalog(O) is None and n8n_adapter.profile_catalog(B) is not None
+    assert cleanup_warnings(log_scan) == []
+
+
+async def test_a_quarantine_directorys_deletion_removes_the_copy_of_an_id_no_longer_served(tmp_path, log_scan,
+                                                                                        monkeypatch):
+    """HM-25 correctness review S-2, security review S-4 (profile_admin.delete_quarantined): D's quarantine directory
+    deleted through the panel goes with D's copy; a quarantine directory named with B's id while B is served leaves B's
+    copy and child alone (the cleanup runs only for an id that is no longer served)."""
+    monkeypatch.setattr(profiles, 'port_occupied', lambda port: None)
+    data = setup_profiles(tmp_path, extras=(B,))
+    log_scan.watch_state(create_profile(data, PRODUCT, D, label='Delta Flows', port=18001, indexed=False))
+    layout = profiles.Layout(data)
+    names = {D: f'{D}-20261116T093015Z', B: f'{B}-20261116T093016Z'}
+    os.rename(layout.profile(D), layout.profiles / (profiles.QUARANTINE_PREFIX + names[D]))
+    os.mkdir(layout.profiles / (profiles.QUARANTINE_PREFIX + names[B]), 0o700)
+    children = children_of(data, (B,))
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        made = n8n_adapter.prepare_profile_catalog(D)  # as if this management process had served D before
+        served = n8n_adapter.profile_catalog(B)
+        starts = runtime.manager.get(B).runtime.supervisor.starts
+        for profile_id in (D, B):
+            deleted = await panel_write(runtime, 'POST', f'/api/profiles/quarantine/{names[profile_id]}/delete')
+            assert deleted.status_code == 200 and deleted.json()['deleted'] == names[profile_id], profile_id
+        assert not made.parent.exists() and n8n_adapter.profile_catalog(D) is None
+        assert served is not None and n8n_adapter.profile_catalog(B) == served
+        assert served.read_bytes() == CATALOG_STAND_IN
+        assert runtime.manager.get(B).runtime.supervisor.starts == starts
+    assert cleanup_warnings(log_scan) == []
+
+
+# ---- the reply mask (HM-25 security review S-3; plan 5.1 point 8, 8.6; contract 2.7) ----
+
+def echo_children(data, extras=(B, C)):
+    children = Children()
+    children.add(3000, EchoChild('default', PRODUCT, data))
+    for number, profile_id in enumerate(extras):
+        children.add(18000 + number, EchoChild('p' + profile_id[:4], PRODUCT,
+                                               profiles.Layout(data).profile(profile_id)))
+    return children
+
+
+async def documentation_reply(client, token, ident=5):
+    """tools_documentation on the Bearer path: the reply's JSON (an SSE event's data when it comes as one)."""
+    opened = await client.post('/mcp', headers=bearer(token), json=initialize_message())
+    response = await client.post('/mcp', headers=bearer(token, **{'Mcp-Session-Id': opened.headers['mcp-session-id']}),
+                                 json=call(ident, 'tools_documentation'))
+    assert response.status_code == 200, response.content[:300]
+    if response.headers['content-type'] == 'text/event-stream':
+        data, = [line[6:] for line in response.text.splitlines() if line.startswith('data: ')]
+        return json.loads(data)
+    return response.json()
+
+
+@pytest.mark.parametrize('framing', ['json', 'sse'])
+async def test_an_n8n_reply_never_carries_a_token_the_add_on_holds(tmp_path, log_scan, framing):
+    """n8n is served by the ProfileManager from HM-25 on, so its replies get the union mask (the plan's own example: A's
+    n8n workflow holding B's secret URL): B's child relays a workflow that holds every token and child token the add-on
+    holds (the default profile's, B's, C's), C's secret URL, C's and B's n8n API keys and a value nobody holds. Every
+    token is [REDACTED] and so is B's own key (redact.secret_values of B's state, as today); C's key is not in B's mask
+    (a backend secret a person chose, plan 5.1 point 8); the value nobody holds is shown. JSON replies and SSE events
+    alike."""
+    data = setup_profiles(tmp_path)
+    children = echo_children(data)
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        layout = profiles.Layout(data)
+        b_state, c_state = current(layout.profile(B)), current(layout.profile(C))
+        held = all_tokens(data)
+        child = children.by_port[18000]
+        child.sse = framing == 'sse'
+        child.text = (f'workflow note: {" ".join(held)} url=https://ha.invalid/private_{c_state.token}/mcp'
+                      f' c_key={c_state.backend_key} b_key={b_state.backend_key} other={UNHELD}')
+        async with runtime.mcp() as client:
+            shown = (await documentation_reply(client, runtime.token(B)))['result']['content'][0]['text']
+        assert shown == masked(child.text, [*held, *redact.secret_values(b_state)])
+        assert all(token not in shown for token in held) and len(held) == 6
+        assert c_state.backend_key in shown and UNHELD in shown and b_state.backend_key not in shown
+
+
+async def test_switched_off_an_n8n_reply_is_masked_with_the_profiles_own_credentials(tmp_path, log_scan):
+    """Switched off (the repository), the default profile's reply is masked with its own credentials only, as before:
+    its token and API key [REDACTED]; a dormant profile's child token on disk and a value nobody holds are shown."""
+    data = setup_profiles(tmp_path, extras=(B,))
+    children = echo_children(data, extras=())
+    async with multi_profile_runtime(PRODUCT, data, children=children, switch=False) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        own = current(data)
+        other = stored(profiles.Layout(data).profile(B))['child_token']
+        children.by_port[3000].text = f'own {own.token} key {own.backend_key} other {other} unheld {UNHELD}'
+        async with runtime.mcp() as client:
+            shown = (await documentation_reply(client, runtime.token('default')))['result']['content'][0]['text']
+        assert shown == f'own [REDACTED] key [REDACTED] other {other} unheld {UNHELD}'
 
 
 def test_the_n8n_profile_count_follows_the_memory_limit():
