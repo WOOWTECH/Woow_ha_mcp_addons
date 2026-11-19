@@ -2,6 +2,10 @@
 
 ## 結論
 
+- **2026-11-19 補記**：負責人 08:4x 照計畫建議定 DQ-04、DQ-22（主對話 AskUserQuestion），記進 `decisions.md`（41 題已定、5 題待定）與契約
+  （#28、#47、#62、第 4.2、8 節；#47 類型改部署、#62 改既有；還待決的剩 #10、#65）；本筆記其他地方的「待決」「39 題」是定稿當時的狀態。
+  HM-25（#129）合併時，它寫的「使用者還沒確認」跟著改成已定。第 7.1、7.2 節交主對話的 repo 外工具同日改好（`gen_trace.py` 五處、
+  `negative_tests.py` 兩處改用 DQ-46、`SHA256SUMS`）：重產的 `deviation-trace.md` 逐位元相同，C1～C5、C7～C9 通過（C6 照舊），22 種改壞如期失敗。
 - **只改文件**（`docs/` 17 個檔，含新檔 2 個：發版前預驗的紀錄與本筆記；審查後多改 `ledger-tracking.md` 一個）：程式、測試、`addons/`、README、版號、
   CHANGELOG、`upgrade-notes.yaml`、`.github/`、帳本與 tool-surface 都沒動；`MULTI_PROFILE_PRODUCTS` 維持空集合，沒有產品開通。
 - **獨立審查**（2026-11-19，`wave5/review-HM-18-correctness.md`，修正後通過）：必修 3 項、建議 10 項（S-9 含三件）、小地方 8 項全部照改
@@ -283,9 +287,10 @@ HM-08、HM-14 交 HM-18「登記表的『計畫』狀態一起更新」：照 `c
 | `e490bcd` | HM-27 筆記第 21 節（2026-11-19 補記） |
 | `b1f5eca` | 本筆記；`guide.md` 一句（預設帳號不能改名或刪除） |
 | 審查後第 1 個（`bec7054`） | 照獨立審查改 11 個文件（第 13 節） |
-| 審查後第 2 個 | 本筆記：第 13 節與結論、第 2、10、12 節；`guide.md` 生命週期 log 表 `not started` 那一格（寫明哪些情況不會自己重試：記憶體不夠、帳號清單標了 `disabled_reason`；第 1 個 commit 之後再核對 `lifecycle.py` 的 `block` 補的） |
+| 審查後第 2 個（`d123173`） | 本筆記：第 13 節與結論、第 2、10、12 節；`guide.md` 生命週期 log 表 `not started` 那一格（寫明哪些情況不會自己重試：記憶體不夠、帳號清單標了 `disabled_reason`；第 1 個 commit 之後再核對 `lifecycle.py` 的 `block` 補的） |
+| 定案補記（2026-11-19，負責人定 DQ-04、DQ-22 之後） | `decisions.md`；`contract.md` 開頭、第 4.2、8、9、10 節；本筆記結論第一點與本列 |
 
-commit 身分都是 woowtech；英文標題、繁中內文；訊息裡沒有任何署名行。審查後第 2 個 commit 的 SHA 寫在回報與 PR 說明（同一個 commit 寫不進自己的 SHA）。
+commit 身分都是 woowtech；英文標題、繁中內文；訊息裡沒有任何署名行。定案補記的 commit 的 SHA 寫在回報（同一個 commit 寫不進自己的 SHA）。
 
 ## 13. 審查與處理（2026-11-19）
 
