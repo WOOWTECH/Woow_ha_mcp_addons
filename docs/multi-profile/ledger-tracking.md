@@ -1,7 +1,7 @@
 # 帳本列管清單（多帳號新模組）
 
 - 狀態：HM-00 定案（2026-11-14；計畫 §11.1、C4-SF-13：新模組全部列管）。2026-11-15 文件同步：第 1～3 節照 `claude-delivery` `9c5dd88`
-  （HM-01、HM-04、HM-17、HM-07、HM-06 已合併）的帳本逐檔核對。HM-13c 加面板的新模組 `restore.js`（2026-11-17）；依獨立審查補 `restore_lock.py` 一列的說明（還原紀錄格式要向後相容，同日）。HM-27 合併 HM-13c 時補 `profiles.py`、`restore_lock.py`、`origin_policy.py` 三列（2026-11-18）。HM-22 在 `identity_fields.py` 一列補自己（2026-11-19；`products.py`、`contracts.js` 已在第 2 節）。
+  （HM-01、HM-04、HM-17、HM-07、HM-06 已合併）的帳本逐檔核對。HM-13c 加面板的新模組 `restore.js`（2026-11-17）；依獨立審查補 `restore_lock.py` 一列的說明（還原紀錄格式要向後相容，同日）。HM-27 合併 HM-13c 時補 `profiles.py`、`restore_lock.py`、`origin_policy.py` 三列（2026-11-18）。HM-22 在 `identity_fields.py` 一列補自己（2026-11-19；`products.py`、`contracts.js` 已在第 2 節；審查 MF-1 另改 `api.js`，也在第 2 節）。
 - 帳本：`docs/provenance/runtime-patches.json`（bb48449 列管 50 個檔；`9c5dd88` 列管 54 個，多的是 HM-07 的 `features.py`、`profiles.py`、
   `identity_fields.py`、`config.py`）；工具面：`docs/tool-surface.json`、`docs/tool-surface.md`。
 

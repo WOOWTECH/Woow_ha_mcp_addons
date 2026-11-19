@@ -114,26 +114,9 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 - 自己的修正：沒有（`apps/nextcloud`、`addons/nextcloud` 在 0.4.13 之後沒改）。Nextcloud 專屬的 HM-22（合併後補 PR 號：換 url、username
   換 token，存政策只重啟該帳號）受開關管，開關關時沒有可見變化（第 4.2 節）。
 - 發版時另外驗：第 5 節。
-- **開通 Nextcloud 的升版 PR（把 `nextcloud` 加進 `MULTI_PROFILE_PRODUCTS` 的那一版）要寫的句子**（HM-22 交來，一項一行；開通後才看得到）。
-  計畫 §7.2 的共通項目照 Odoo 開通那一版（HM-19a）的寫法另寫；下面是 Nextcloud 自己的。第 2、3 行是 §7.2 第 7 點的 Nextcloud 版，第 5 行是
-  第 9 點（loopback）寫成 Nextcloud 的說法：共通段已經寫了第 9 點就拿掉第 5 行。
-
-```text
-- Up to 3 more Nextcloud accounts per add-on (profiles), each with its own MCP URL and token, Nextcloud connection, tool policy and MCP child process. The default profile keeps its URL, token and settings.
-- A profile's MCP token is bound to its Nextcloud account: saving another server URL (another host, scheme, port or path, the path's letter case and a page path pasted from the browser included) or another username issues a new token, and the old MCP URL stops working at once; copy the new one from "Connection and token". Changing only the app password, or writing the same server differently (the host's letter case, the default port), keeps the token.
-- Moving the Nextcloud URL to another server needs the app password again: the stored one is never sent to the new server (the save is refused until it is entered).
-- Saving one profile's tool policy restarts only that profile's Nextcloud child; the other profiles keep their sessions.
-- Nextcloud URLs on this add-on itself (localhost, 127.0.0.0/8, ::1) are refused when saved and when the child connects; one saved before this version still shows in the settings but no longer connects.
-- When Nextcloud refuses a profile's app password, that profile's health checks back off (15 s up to 5 min); the other profiles keep their interval.
-```
-
-  句子的出處：第 1、4 行計畫 §9、FM-47（HM-10、HM-22）；第 2 行 HM-22（契約 §8.8 #40、#129；PaaS #154）；第 3 行 HM-12（DQ-40 ⑨，#41、#115）；
-  第 5 行 HM-20（#39）；第 6 行 HM-09（契約第 7 節）。帳號上限 3 照 `profiles.EXTRA_PROFILE_LIMITS`（HM-19c 量測後可能改）。
-  同一個 PR 另外要改（不是 CHANGELOG）：`addons/nextcloud/config.yaml` 的 `description`「one Nextcloud account」、`DOCS.md`「一個 Add-on 只有
-  一個 Nextcloud 帳號」、`README.md` 第 3 行「把一個 Nextcloud 帳號的…」都改成「每個帳號一個 Nextcloud 帳號」的說法；DOCS 寫明 Nextcloud
-  的暴力破解防護推定以來源位址計（每個帳號共用 add-on 的位址，UC-12：HAOS 驗收時確認）；`docs/provenance/runtime-patches.json` 的
-  `features.py` 那列照實際內容重算；`tests/test_upgrade_zero_rewrite.py` 的 `test_multi_profile_is_switched_off_for_every_product` 釘住開關
-  的值，照升版當時的規則改。開關一開會失敗的測試與處理見 HM-22 筆記第 9 節（2026-11-19 的開通乾跑）。
+- 開通那一版（Nextcloud 的升版 PR，把 `nextcloud` 加進 `MULTI_PROFILE_PRODUCTS`）才寫：Nextcloud 自己的 CHANGELOG 句子與同一個 PR
+  另外要改的檔在 HM-22 筆記第 9.5 節（`docs/provenance/ha-multiprofile-HM-22-20261119.md`；HM-22 審查 S-5，照檔頭第 2 點，同 HM-24
+  審查 S-7 的做法）。HM-22 受開關管，還沒開通的版本不寫、也不刪這一行；開通那一版寫進 CHANGELOG 之後照第 3 點刪。
 
 ### 3.7 OpenDesign（商店停用，只升來源版本）
 
@@ -179,7 +162,7 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 | HM-12 | #110 | `7646f0f` | Odoo 換身分換 token、新來源重填秘密（後端） | 換身分不換 token，回應沒有新欄位 |
 | HM-30 | #111 | `ebefebe` | 回覆處理工作執行緒、待送回覆額度、健康檢查容忍 | 不建工作執行緒，回覆照舊在事件迴圈處理 |
 | HM-12 面板 | #114 | `165dbaf` | 換 token 的提示、新來源重填秘密的表單 | 面板畫面、請求與提示不變（HM-12 面板筆記：216 個比較 0 差異） |
-| HM-22 | 合併後補 | 合併後補 | Nextcloud 開通的功能片：換 url、username 換 token（url 照伺服器與存的路徑比）、面板 `identityBound` 加 Nextcloud | 換身分不換 token，回應沒有新欄位；面板的提示與請求不變 |
+| HM-22 | 合併後補 | 合併後補 | Nextcloud 開通的功能片：換 url、username 換 token（url 照伺服器與存的路徑比）、面板 `identityBound` 加 Nextcloud；面板等核對時被擋的存檔說明寫自己產品的身分欄位（`identityChange`，HM-22 審查 MF-1） | 換身分不換 token，回應沒有新欄位；面板的提示與請求不變（Odoo 的說明文字逐字不變） |
 
 要用一句話交代第 4 節（可選；主對話補寫，照計畫 §3.3、§7.1）：
 
