@@ -66,13 +66,14 @@ A8 就是那個之後的版本；寫的時候和 A3 那句對得起來。
 
 - **A8　HM-13b 開機守門（#108，合併 `f5e296f`；不受開關管）**
   - 看得到的變化（今天的安裝：沒開通、沒有帳號資料）：還原之後的那次開機，管理程序在任何子程式與 listener 之前讀 entrypoint 留下的
-    `.restore-detected`，記一行 WARNING（`restore_lock.KEPT_NOTICE`：權杖已回到備份當時的值、什麼都沒撤銷、可能外洩時到面板重新產生），然後刪掉標記；
-    `/data/mcp` 其他一個位元組都不動。標記刪不掉時照常啟動、多記一行（`MARKER_LEFT`），下次開機再試。沒有還原的開機只多查幾個名稱，什麼都不寫。
+    `.restore-detected`，記一行 WARNING（`restore_lock.KEPT_NOTICE`：權杖已回到備份當時的值、什麼都沒撤銷、可能外洩時到面板重新產生），存 A9 的
+    還原提示 `restore-notice.json`，然後刪掉標記；除了這個提示檔，`/data/mcp` 其他一個位元組都不動。還原提示存不下或標記刪不掉時照常啟動、多記一行
+    （`MARKER_LEFT`），標記留著、下次開機再試。沒有還原的開機只多查幾個名稱，什麼都不寫。
   - 看不到的部分（只在磁碟上有帳號資料時動作，今天沒有安裝有）見第 4.1 節。
   - CHANGELOG 建議句（HM-18 補寫，照契約第 1.2、1.3 節與 `restore_lock.py` 的原文；英文最後由發版片定）：
 
     ```text
-    - Restore guard (groundwork for multiple profiles; PR #108): after Home Assistant restores this add-on's backup, the next start now reads the restore marker `.restore-detected` before any listener or MCP child starts, logs one warning that the MCP token is back to its value at the time of that backup (nothing is revoked without multi-profile data; rotate the token in the panel if it may have leaked since), and removes the marker. Nothing else in `/data/mcp` changes. If the marker cannot be removed, the add-on still starts, logs one more line and tries again at the next start. A start without a restore only checks a few file names and writes nothing.
+    - Restore guard (groundwork for multiple profiles; PR #108): after Home Assistant restores this add-on's backup, the next start now reads the restore marker `.restore-detected` before any listener or MCP child starts, logs one warning that the MCP token is back to its value at the time of that backup (nothing is revoked without multi-profile data; rotate the token in the panel if it may have leaked since), saves the panel's restore notice (`restore-notice.json`, next entry) and removes the marker. Apart from that notice file, nothing else in `/data/mcp` changes. If the notice cannot be saved or the marker cannot be removed, the add-on still starts, logs one more line and tries again at the next start. A start without a restore only checks a few file names and writes nothing.
     ```
   - 出處：`docs/provenance/ha-multiprofile-HM-13b-20261116.md` 第 13 節（「各產品 CHANGELOG 的「還原標記」段落改成新行為」）；契約第 1.3 節。
 
@@ -169,7 +170,7 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 | HM-07 帳號資料層 | #93 | `e5fa5c7` | 函式庫還沒接進開機流程；`MULTI_PROFILE_PRODUCTS` 是空集合 |
 | HM-11 收據格式 | #107 | `f4c7718` | 預設帳號的收據 key 與 4 個鍵的紀錄不變 |
 | HM-17 發版基礎 | #92 | `56f22f7` | 只改發版工具（`packaging/`、workflow），不在映像裡；影響發版步驟（第 5 節第 6 點） |
-| HM-13b 開機守門（A8 以外） | #108 | `f5e296f` | 撤銷每個帳號（連預設帳號）、隔離讀不到的帳號、獨立驗證、寫還原紀錄、休眠處理、全部撤銷的標記，都只在磁碟上有帳號資料時動作；沒有產品開通過，今天沒有安裝有帳號資料（2026-11-19 HM-18 補列） |
+| HM-13b 開機守門（A8 以外） | #108 | `f5e296f` | 撤銷每個帳號（連預設帳號）、隔離讀不到的帳號、獨立驗證、寫還原紀錄、休眠處理，對沒開通的產品都只在磁碟上有帳號資料時動作；全部撤銷的標記（`.revoke-all-pending`）不看帳號資料、一樣撤銷預設帳號，但只有開通的路由寫得出來。沒有產品開通過，今天沒有安裝有帳號資料或這個標記（2026-11-19 HM-18 補列） |
 | HM-16 驗收工具 | #109 | `c90b214` | 只改 `packaging/`（容器探針的多帳號階段、P9 kit 的帳號參數、升版比對 hook 的草稿）、測試與文件，探針與 P9 kit 不在映像裡；影響發版時的容器驗收（第 5 節第 3 點）（2026-11-19 HM-18 補列） |
 
 ### 4.2 受開關管：開關關時沒有可見變化
@@ -198,8 +199,8 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 - This image also carries the groundwork for multiple profiles per add-on (PRs #91, #93, #95, #99, #101–#104, #107, #110, #111 and #114). It stays switched off for this add-on: requests, responses, the admin panel and the files in `/data/mcp` are unchanged apart from the changes listed above.
 ```
 
-0.4.14 的六個產品與 Headscale 0.4.19 的 CHANGELOG 都寫了這一句；下一版只交代那之後合併的片：映像裡受開關管的是 #108、#112、#116
-（#109 不在映像裡）。建議句（HM-18 補寫）：
+0.4.14 的六個產品與 Headscale 0.4.19 的 CHANGELOG 都寫了這一句；下一版只交代那之後合併的片：映像裡多帶、開關關時看不到的是 #108（A8 以外；
+不受開關管，第 4.1 節）、#112（A9 以外）、#116（#109 不在映像裡）。建議句（HM-18 補寫）：
 
 ```text
 - This image also carries more groundwork for multiple profiles per add-on (PRs #108, #112 and #116). It stays switched off for this add-on: requests, responses, the admin panel and the files in `/data/mcp` are unchanged apart from the changes listed above.
@@ -238,16 +239,26 @@ A9（HM-13c），第 4.1 節 HM-13b 的其餘部分與 HM-16，第 4.2 節 HM-13
 - **誰讀**：開通某個產品的升版 PR（Odoo 是 HM-19a，之後 HM-21～HM-26）。第 1～6 節照舊（不受開關管的共通項）；這一節是「開通」才出現的改變，
   只寫進被開通的那個產品。
 - **CHANGELOG**：契約第 1.4 節（計畫 §7.2 的完整清單，HM-18 定稿）逐項寫進該產品的 `addons/<產品>/CHANGELOG.md`，只有預設帳號的安裝也看得到。
-  第 4.2 節各片的「映像多帶了什麼」在開通那一版變成看得到的改變，以第 1.4 節的寫法為準。
+  標「Headscale 除外」的點（Origin 政策：第 5、10、19 點）開通 Headscale 時不寫（HM-26）。第 4.2 節各片的「映像多帶了什麼」在開通那一版變成看得到的
+  改變，以第 1.4 節的寫法為準。
 - **DOCS**：`addons/<產品>/DOCS.md` 照 repo 的 `docs/operations/clients.md`、`guide.md`、`update-backup-rollback.md` 的多帳號段落改寫（HM-18 寫的是
   repo 層的文件；產品 DOCS 與 README 只在升版 PR 改，計畫 §11.1）。
+- **開通後會變錯、要一起改的句子**（FM-94；計畫 §17 交 HM-18、HM-19a）：改成「每個帳號一組後端、一把權杖；同產品可多帳號（不宣稱多租戶）」，
+  並補該產品的帳號上限與注意事項：
+  - 根目錄 `README.md` 第 46～47 行「每個 Add-on 一組後端、獨立 token／資料／版本；不宣稱多租戶或同產品多 profile」：第一個開通的產品就要改，
+    寫明哪些產品開通了。
+  - 被開通的產品的 `addons/<產品>/DOCS.md`：「一個 Add-on 只有一組後端：…」（Odoo 第 26 行；n8n、Hermes、EMQX、LiteLLM、OpenDesign 同一句）、
+    Nextcloud 的「一個 Add-on 只有一個 Nextcloud 帳號」、Headscale 開頭「填入一台 Headscale 控制伺服器的網址」那段。
+  - `addons/n8n/DOCS.md` 第 55 行「所有 client 共用 20 個同時 session」：開通後每個帳號有自己的子程式，HM-25 照實際行為改。
+  - `addons/nextcloud/config.yaml` 的 `description`「one Nextcloud account」（HM-22）。
+  - 面板 `packages/mcp-admin-ui/src/contracts.js` 的 Headscale 說明「這個 Add-on 只管理同一個 Headscale 執行個體」（HM-26；面板改了照規則重算帳本）。
 - **`upgrade-notes.yaml`**：照 `AGENTS.md` 第 3 點，升版比對要求時才建；建的話內容照計畫 §7.3：契約第 1.4 節的全部項目、回退的三條路
   （`docs/operations/update-backup-rollback.md`「回退與緊急關閉」）、還原守門的涵蓋範圍（同一份文件「涵蓋範圍」一點）。
 - **兩個位元組變化**（HM-10 審查 S-6；契約第 1.4 節第 4 點、第 3.1 節；HM-18 在本機用 8099 的兩種方法表核對過）的 CHANGELOG 建議句
   （HM-18 補寫；英文最後由升版片定）：
 
   ```text
-  - Admin API (port 8099), once multiple profiles are switched on for this add-on: a PATCH or DELETE request that fails the identity check (for example one without the CSRF header) now gets HTTP 403 `{"error":"request denied"}` from that check instead of HTTP 405 `Method Not Allowed`, because the identity check now runs before the method check.
+  - Admin API (port 8099), once multiple profiles are switched on for this add-on: a PATCH or DELETE request that fails the identity check (for example one without the CSRF header) now gets HTTP 403 `{"error":"request denied"}` from that check (HTTP 400 with the same body when its `X-Ingress-Path` header is malformed) instead of HTTP 405 `Method Not Allowed`, because the identity check now runs before the method check.
   - Admin API (port 8099), once multiple profiles are switched on: a request with any method other than GET, HEAD, POST, PUT, PATCH and DELETE (for example OPTIONS) still gets HTTP 405 `Method Not Allowed`, but its `Allow` header now lists six methods instead of four (`PATCH` and `DELETE` are added). The order of the methods in that header has never been fixed.
   ```
 - **其他項目的原句**：各片筆記交給升版片的句子，用的時候以契約第 1.4 節的事實為準：HM-20 筆記第 13 節（後端網址不能填 loopback，中文）、

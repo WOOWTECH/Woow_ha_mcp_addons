@@ -140,7 +140,7 @@ Root owns deployment, live verification and version changes.
 **管線**（契約第 3.2 節）：開通後所有路由走同一條：identity（Ingress 來源、剛好一個 `X-Remote-User-Id`、非 GET 要 CSRF）→ 管理名額 → 讀 body →
 方法表與不讀狀態的格式檢查 → **角色檢查** → 解析 `X-MCP-Profile` → 拿鎖 → 讀狀態 → 第二次角色檢查 → If-Match、Idempotency-Key 等狀態相依的判斷 → 提交。
 非管理員最遠只到角色檢查：任何帳號狀態下都拿到逐位元相同的 403。開通後 PATCH、DELETE 只有 `profiles/<id>` 收；PATCH、DELETE 沒過 identity 從 405 變
-identity 的 403，表外方法（OPTIONS 等）的 405 `Allow` 從 4 個方法變 6 個（契約第 1.4 節第 4 點）。
+identity 的 403（`X-Ingress-Path` 格式錯時 400），表外方法（OPTIONS 等）的 405 `Allow` 從 4 個方法變 6 個（契約第 1.4 節第 4 點）。
 
 **各產品的額外帳號上限**（契約第 5 節；暫定，HM-19c 在目標硬體量測後定案）：
 

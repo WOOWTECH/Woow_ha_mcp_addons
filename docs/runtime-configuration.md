@@ -88,7 +88,8 @@ owned local fixtures, not evidence of HA Ingress or a live third-party backend.
   每個帳號的 Bearer `/mcp` 與 `/private_<token>/mcp` 用同一把權杖；同樣沒有 legacy `/sse`、`/messages`（DQ-23）。
 - **Odoo 換身分換權杖**（HM-12）：存檔讓 url、database、username 任一改變（含清空連線）時，先停舊子程式、同一次寫入新連線與新權杖、發布權杖變更、再起新子程式；
   回 200 `{"saved":true,"token_rotated":true,…}`（不含權杖，新權杖照舊經 `token/reveal`）。只換密碼、第一次設定、權杖已撤銷時照上面，不換權杖。寫入失敗一律
-  503 `{"error":"state unavailable"}`，結果不明時重啟後照磁碟上的設定（權杖可能已換）；新子程式起不來時是形狀 D 另帶 `token_rotated:true`（契約第 3.1 節 `backend` 列）。
+  503 `{"error":"state unavailable"}`，結果不明時重啟後照磁碟上的設定（權杖可能已換）；新子程式起不來時是上面那種 HTTP 503（`saved:true`、`detail.code="config_apply_failed"`）另帶
+  `token_rotated:true`（權杖已換；契約第 3.1 節 `backend` 列）。
 - **新來源要重填秘密**（DQ-40 ⑨，全部產品）：`backend/patch` 把網址改到另一個來源（scheme、host、port）卻沒帶那條網址會送去的已存秘密，回 422
   `CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN`，什麼都不寫。`backend` 整份取代本來就帶全部秘密，不受影響。
 - **後端網址拒絕 loopback**（HM-20）：存檔改到的後端網址是 127.0.0.0/8、::1 或 `localhost` 時回 400 `{"error":"request denied"}`；子程式連線時也擋。
