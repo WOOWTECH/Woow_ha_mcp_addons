@@ -90,6 +90,16 @@ def test_the_token_rotating_fields():
         identity_fields.fields('odoo', 'bogus')
 
 
+def test_the_urls_compared_as_servers():
+    # HM-22 (PaaS #154 normalize_base_url): a URL compared as the server and the path it names (products.same_identity)
+    # is a URL whose change rotates the token of a product bound to its identity; only Nextcloud's (Odoo's compares
+    # as typed, as PaaS #131 does).
+    assert identity_fields.SAME_SERVER_URLS == {'nextcloud': ('url',)}
+    for product, names in identity_fields.SAME_SERVER_URLS.items():
+        assert product in IDENTITY_BOUND, product
+        assert set(names) <= set(URL_FIELDS[product]) & set(identity_fields.rotating_fields(product)), product
+
+
 def test_the_admin_api_fields_and_secrets_agree():
     for product, names in backend_edit.FIELDS.items():
         stored = tuple(N8N_API_NAMES[name] if product == 'n8n' else name for name in names)

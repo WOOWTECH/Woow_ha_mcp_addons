@@ -708,6 +708,9 @@ test('HM-12 review S-7: a backend save of a switched-on Odoo answered 503 state 
   assert.equal(await run(unavailable, {switched: false}), UNAVAILABLE);
   assert.equal(await run(unavailable, {operation: 'policy'}), UNAVAILABLE);
   assert.equal(await run(unavailable, {product: 'emqx'}), UNAVAILABLE);
+  // HM-22: Nextcloud's token is bound to its url and username too: the same hint, its switched-off save today's text.
+  assert.equal(await run(unavailable, {product: 'nextcloud'}), `${UNAVAILABLE} ${OUTCOME}`);
+  assert.equal(await run(unavailable, {product: 'nextcloud', switched: false}), UNAVAILABLE);
   assert.equal(await run(denied, {switched: false}), UNAVAILABLE);
 });
 
@@ -724,7 +727,7 @@ test('HM-12 (DQ-40 ⑨): every backend URL names the secrets it takes to its ser
   assert.deepEqual(urlSecrets.hermes, {gateway_url: ['gateway_api_key'], dashboard_url: ['dashboard_password']});
   assert.deepEqual(urlSecrets.n8n, {url: ['key', 'mcp_access_token']});
   assert.deepEqual(urlSecrets.opendesign, {url: []});
-  assert.deepEqual(identityBound, ['odoo']);
+  assert.deepEqual(identityBound, ['odoo', 'nextcloud']);  // HM-22: Nextcloud's url and username
 });
 
 test('HM-12: a URL\'s origin is the server\'s (backend_edit.origin): scheme and host in lower case, the effective port, nothing else normalized', () => {
