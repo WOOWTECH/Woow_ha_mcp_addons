@@ -15,7 +15,8 @@ apps/emqx/.venv) and one fake broker per profile (synthetic DUMMY- credentials),
   (the 401 matrix of tests/test_child_bearer.py, T-23); on 8081 each profile's token opens a session with its own child
   on both connection paths, a token no profile holds gets the bytes of HM-01 (Bearer 401, secret path 404) and a session
   of one profile is unknown with another profile's token (T-05); every call reaches only its own profile's broker with
-  that profile's API key (the diagonal, T-04); each profile's tool policy is its own, at the gateway and in its child's
+  that profile's API key (the diagonal, T-04, taken with a tool the health monitor never calls, so the brokers asked are
+  exactly those the call reached); each profile's tool policy is its own, at the gateway and in its child's
   environment, and a denied operation is refused at the gateway only (DQ-27, contract #65); saving one profile's policy
   relaunches that profile's child alone with the new policy (T-07, contract #54);
 - switched off, the same data on disk: only the default profile's child runs, the additional profiles' tokens are any
@@ -24,6 +25,8 @@ apps/emqx/.venv) and one fake broker per profile (synthetic DUMMY- credentials),
 
 The brokers listen on this runner's private address, not on loopback: a switched-on product's child refuses a loopback
 backend (HM-20) and this test keeps that rule in force (tests/test_real_products.py's Headscale fixture does the same).
+Switched on, every running profile's health monitor asks its own broker for the nodes every HEALTH_INTERVAL, whatever
+the test does (PROBE): a check that a broker was asked nothing else leaves those requests out (HM-23 review MF-1).
 """
 import asyncio
 import base64
@@ -40,7 +43,7 @@ from admin_write_headers import reviewed_headers
 from lifecycle_runtime import until
 from log_scan import log_scan  # noqa: F401  (fixture)
 from mcp_admin_core import health as health_module, lifecycle, profiles
-from mcp_admin_core.products import DENY_LOOPBACK_ENV
+from mcp_admin_core.products import DENY_LOOPBACK_ENV, health_probe
 from multi_profile_runtime import (all_tokens, create_profile, free_port, ids, multi_profile_runtime, stored,
                                    update_profile)
 from test_backend_loopback import environment_facts, running_its_program
@@ -59,6 +62,11 @@ B_POLICY = {'writes_enabled': False, 'enabled_write_tools': [], 'disabled': ['em
 C_DENIED = {'emqx_manage_authn_users': ['delete']}
 DELETE_USER = {'operation': 'delete', 'user_id': 'u-hm23'}
 UP_SECONDS = 90  # three real children, the additional ones staggered (HM-09)
+# The health monitor's probe (products.health_probe: emqx_cluster_status, the child's GET /nodes), which every running
+# profile's monitor sends its own broker every HEALTH_INTERVAL; the diagonal (T-04) takes emqx_broker_stats (GET
+# /stats), which nothing else calls.
+PROBE_TOOL, PROBE = 'emqx_cluster_status', ('GET', '/api/v5/nodes')
+DIAGONAL_TOOL, DIAGONAL = 'emqx_broker_stats', ('GET', '/api/v5/stats')
 
 
 def credentials(profile_id):
@@ -124,6 +132,10 @@ class Broker:
 
     def since(self, count):
         return self.requests[count:]
+
+    def asked(self, count):
+        """The requests since count but the health monitor's probes (PROBE), which come at their own pace."""
+        return [request for request in self.requests[count:] if request[:2] != PROBE]
 
 
 @contextmanager
@@ -254,6 +266,7 @@ def quick_health(monkeypatch):
 
 
 async def test_switched_on_each_profile_has_its_own_child_broker_and_policy(tmp_path, log_scan):
+    assert health_probe(PRODUCT) == (PROBE_TOOL, {})  # PROBE is its request; the diagonal's tool is another one
     with brokers() as made:
         data = setup(tmp_path, made)
         watch(log_scan, data)
@@ -303,7 +316,7 @@ async def test_switched_on_each_profile_has_its_own_child_broker_and_policy(tmp_
                           for profile_id, entry in running.items()}
                 assert 'emqx_list_clients' in native['default'] and 'emqx_publish' in native['default']
                 assert 'emqx_list_clients' not in native[B] and 'emqx_publish' not in native[B]
-                assert 'emqx_cluster_status' in native[B]  # the health probe's tool stays registered (child_spec)
+                assert PROBE_TOOL in native[B]  # the health probe's tool stays registered (child_spec)
                 assert 'emqx_manage_authn_users' in native[B]  # a mixed tool, for its read operation (see above)
                 assert 'emqx_manage_authn_users' in native[C] and native[C] == native['default']
 
@@ -331,20 +344,21 @@ async def test_switched_on_each_profile_has_its_own_child_broker_and_policy(tmp_
                                                                  'Mcp-Session-Id': default_session['Mcp-Session-Id']})
                             assert crossed.status_code == 404, (NAMES[profile_id], other_path[:9])
 
-                    # T-04: every call reaches its own profile's broker only, with that profile's key.
+                    # T-04: every call reaches its own profile's broker only, with that profile's key: a tool the health
+                    # monitor never calls (DIAGONAL), so the brokers asked are exactly those the call reached.
                     for profile_id, (path, headers) in sessions.items():
                         before = {other: len(broker.requests) for other, broker in made.items()}
-                        result = result_of(await tool_call(client, path, headers, 'emqx_cluster_status', {}))
+                        result = result_of(await tool_call(client, path, headers, DIAGONAL_TOOL, {}))
                         assert result['isError'] is False, NAMES[profile_id]
-                        reached = {other for other, broker in made.items()
-                                   if any(path_ == '/api/v5/nodes' for _, path_, _ in broker.since(before[other]))}
-                        assert profile_id in reached, NAMES[profile_id]
-                        assert all(own for _, _, own in made[profile_id].since(before[profile_id])), NAMES[profile_id]
-                    assert all(own for broker in made.values() for _, _, own in broker.requests)
+                        asked = {NAMES[other]: broker.asked(before[other]) for other, broker in made.items()}
+                        assert asked == {name: [(*DIAGONAL, True)] if name == NAMES[profile_id] else []
+                                         for name in asked}, NAMES[profile_id]
+                    assert all(own for broker in made.values() for _, _, own in broker.requests)  # the probes too
 
                     # Each profile's policy at the gateway: B's disabled tool is unknown to B and reaches no broker,
                     # the default profile still has it; C's denied operation is refused at the gateway (its child would
-                    # run it: DQ-27), the default profile's same call reaches its broker.
+                    # run it: DQ-27), the default profile's same call reaches its broker. No broker is asked anything
+                    # but its health probes (asked) while the gateway refuses.
                     listed = {profile_id: await listed_names(client, *sessions[profile_id]) for profile_id in sessions}
                     assert 'emqx_list_clients' in listed['default'] and 'emqx_list_clients' not in listed[B]
                     assert 'emqx_publish' not in listed[B] and listed[C] == listed['default']
@@ -352,13 +366,14 @@ async def test_switched_on_each_profile_has_its_own_child_broker_and_policy(tmp_
                     assert refused(await tool_call(client, *sessions[B], 'emqx_list_clients', {}), 'Unknown tool')
                     assert refused(await tool_call(client, *sessions[C], 'emqx_manage_authn_users', DELETE_USER),
                                    'Operation not permitted')
-                    assert all(len(broker.requests) == before[other] for other, broker in made.items())
+                    asked = {NAMES[other]: broker.asked(before[other]) for other, broker in made.items()}
+                    assert asked == {name: [] for name in asked}
                     served = result_of(await tool_call(client, *sessions['default'], 'emqx_list_clients', {}))
                     assert served['isError'] is False
                     await tool_call(client, *sessions['default'], 'emqx_manage_authn_users', DELETE_USER)
                     assert [method for method, path_, _ in made['default'].since(before['default'])
                             if '/authentication/' in path_] == ['DELETE']
-                    assert len(made[B].requests) == before[B] and len(made[C].requests) == before[C]
+                    assert made[B].asked(before[B]) == [] and made[C].asked(before[C]) == []
 
                     # T-07: saving B's policy relaunches B's child alone, with B's new policy.
                     pids = {profile_id: entry.supervisor.process.pid for profile_id, entry in running.items()}
