@@ -27,9 +27,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from batch2_owned_port import reserve_port
 from log_scan import log_scan  # noqa: F401  (fixture)
-from owned_executable import Executable
+from owned_executable import Executable, draw_public_ports
 
 pytestmark = pytest.mark.usefixtures('log_scan')
 ROOT = Path(__file__).resolve().parents[1]
@@ -298,11 +297,6 @@ def test_the_hook_files_are_what_the_store_runs():
 
 # ---- the real runtime (HM-16 review SF-6; the reviewer's experiment E1) ----
 
-def free_port():
-    with reserve_port() as sock:
-        return sock.getsockname()[1]
-
-
 def entries(root):
     """Every entry under /data as the hooks must leave it: kind, mode, owner, inode and a file's bytes (not its times:
     the runtime's own reads of state.json change its ctime meanwhile)."""
@@ -319,7 +313,7 @@ class Runtime:
     """run_product of one product on a /data/mcp, through the owned executable; switched on in its preamble or not."""
 
     def __init__(self, home, product, data, switched_on):
-        self.port, admin_port = free_port(), free_port()
+        self.port, admin_port = draw_public_ports(2)
         home.mkdir()
         self.runner = Executable(home, product, [self.port, admin_port])
         preamble = (f'from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = frozenset({{{product!r}}}); '

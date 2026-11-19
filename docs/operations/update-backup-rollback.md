@@ -125,11 +125,36 @@ backup ID、版本、時間、保管位置類型、權限檢查結論，不記�
     同「沒開通、但磁碟上有帳號資料時的還原」那一點：核對之前改後端身分的存檔（Odoo：網址、資料庫或使用者；
     Hermes：Gateway 網址、Dashboard 網址或使用者，補上或清空 Dashboard 也算）會被拒絕（409，什麼都沒存）。
   - 隔離區的帳號資料超過 64 筆時，面板只列前 64 筆並說還有幾筆；刪掉上面的之後，其餘的會依序出現。
-- **涵蓋範圍**：這個保護只涵蓋「各產品第一個含多帳號還原守門（HM-13）的版本以後做的備份」（Odoo 預計是 0.5.0，以發版時為準）。更早的備份還原時，
-  Supervisor 會換回備份當時的舊映像，舊版不建還原標記，之後再升級時看不出曾經還原。**還原更早的備份後，請升到最新版，再按「全部撤銷」**
-  （沒開通的產品只有一把權杖：到「連線與權杖」重新產生），然後逐帳號重新產生、更新用戶端。
-- **回退後再升級**：回退（還原升級前的備份）跑的是舊版，不會撤銷任何權杖；再升級後，新版也看不出曾經還原，備份裡的權杖照用。
+- **涵蓋範圍**：這個保護只涵蓋「各產品第一個含多帳號還原守門（HM-13）的版本以後做的備份」（Odoo 預計是 0.5.0，以發版時為準）。還原時
+  Supervisor 會換回備份當時的映像，看不看得出曾經還原要看那一版：
+  - 0.4.13 以前（Headscale 0.4.18 以前）：不建還原標記，之後再升級時看不出曾經還原。
+  - 0.4.14（Headscale 0.4.19）起、還沒有守門的版本：還原時建標記、一直留著，之後第一次以含守門的版本啟動時才提示（這種備份沒有帳號資料：
+    只提示、不撤銷）。
+  - 含守門的版本：還原後那次開機就照本節前面處理。
+  **還原更早的備份後，請升到最新版，再按「全部撤銷」**（沒開通的產品只有一把權杖：到「連線與權杖」重新產生），然後逐帳號重新產生、更新用戶端。
+- **快照還原看不到**：還原偵測只看得到 HA 備份頁的還原（檔案層級）。虛擬機或磁碟快照的還原（區塊層級）帶回原樣的檔案，兩個還原訊號都看不到，
+  守門不會動作，面板也沒有提示。**用快照還原過，請按「全部撤銷」**（沒開通的產品：重新產生權杖），再逐帳號重新產生、更新用戶端。
+- **回退後再升級**：回退（還原升級前的備份）跑的是舊版。升級前的備份沒有帳號資料時（第一次開通之後的回退），舊版與再升級後的新版都不撤銷任何權杖，
+  備份裡的權杖照用；面板頂多有還原提示（0.4.14 起的舊版留標記或提示，見上面「涵蓋範圍」）。
   **回退後再升級，請在面板按「全部撤銷」**（沒開通的產品：重新產生權杖），再逐帳號重新產生、更新用戶端。
+- **版本混搭**（多帳號計畫 §8.4、§10.6 第 6 點；FM-126）：Supervisor 還原會把映像換回備份當時的版本。
+  - 還原「不含守門的版本」做的備份：跑的是舊版。0.4.13 以前（Headscale 0.4.18 以前）只修擁有者、不建標記，之後升到新版也看不出曾經還原；
+    0.4.14（Headscale 0.4.19）起建標記，留到之後第一次以含守門的版本啟動時提示（沒有帳號資料：只提示、不撤銷）。照上面「涵蓋範圍」：
+    升到最新版後按「全部撤銷」（沒開通的產品：重新產生權杖）。
+  - 還原時拉不到舊映像（Supervisor 沿用目前的映像）：新版跑在舊資料上，還原訊號照樣觸發、守門照跑，照本節前面處理。
+  - 同一個版本的備份還原：守門照跑。
+  - 在沒開通的版本（例如緊急關閉版）上還原開通版本做的備份：Supervisor 會把映像換回備份當時的開通版本（就是出事的那一版；GHCR 上舊版號的映像
+    一直在）。跑的是那一版：備份裡有帳號資料時，守門撤銷每個帳號（連預設帳號）、出現核對卡；沒有帳號資料時同本節第一點（不撤銷、面板提示）。
+    **還原後立刻再更新到緊急關閉版（或之後修好的版本）**。在緊急關閉版上每次開機照休眠處理，這時沒有核對卡，直接重新產生預設帳號的權杖；
+    重新開通後再到核對卡核對（上面「沒開通、但磁碟上有帳號資料時的還原」）。拉不到舊映像時（Supervisor 沿用目前的映像），是關閉版直接跑在這份
+    資料上：備份裡有帳號資料時，守門在服務前撤銷每個帳號（連預設帳號），之後同上；沒有帳號資料時同本節第一點。
+  - 驗收：HM-19b 做「開通前版本的備份還原後再升級」與「開通版本的備份還原到之後的版本（沒有更新的版本就同版本）」各一次，記下兩個訊號各自有沒有觸發
+    （`docs/operations/acceptance.md` T-20、T-21）。期望值照上面：還原後 add-on 的版本是備份當時的版本（記下版本號），守門照那一版的規則跑；
+    開通前版本是 0.4.14 時標記留到再升級、由新版的守門提示，是含守門的版本時那一版就提示、再升級後只剩面板提示（都不撤銷）；開通版本的備份
+    有帳號資料時由那一版的守門撤銷，再更新到之後的版本時沒有新的守門動作（之後的版本沒開通時照休眠處理）。
+- **Origin 政策**（開通的產品；HM-27）：還原把密鑰網址的來源清單與模式帶回備份當時的值（例如備份之後才切的 enforce 會回到 report-only），面板與 log
+  都沒有另外的提示。**還原後到「連線與權杖」的「瀏覽器來源檢查」卡片看一次**。備份裡的政策檔不能用時，還原後每個帳號的密鑰網址都回 503，到面板存一份新的；
+  政策檔變成目錄這類存檔蓋不過去的東西時，只能再還原別份備份。
 - **全部撤銷**（開通的產品，「診斷與維護」頁，兩段確認）：一次撤銷所有帳號（含預設帳號）的 MCP 權杖，每個子程式用新的內部權杖重新啟動；
   之後逐帳號重新產生。懷疑權杖外洩時這是第一步；面板打不開（403）時只能停止 add-on。
   - 有帳號沒撤銷成功：面板列出是哪些帳號，它們舊的權杖在 MCP 端點回 503，直到再按一次全部撤銷成功，或重新啟動 add-on（重新啟動時在服務
@@ -141,6 +166,90 @@ backup ID、版本、時間、保管位置類型、權限檢查結論，不記�
 
 細節：多帳號契約 `docs/multi-profile/contract.md` 第 1.2、1.3、3.1、4.1 節，§8.8 #58、#69、#82、#122、#123、#129；威脅模型
 `docs/multi-profile/threat-model.md` 第 3 節。
+
+### 開機守門的 log
+
+守門只在還原、休眠或全部撤銷沒做完時寫 log，一律 WARNING，帳號只寫 id 前 8 碼（多帳號契約第 1.3、7 節；原文在 `restore_lock.py`）。
+下表列出守門的每一行。撤銷、隔離或收據封存失敗的那幾行，以及 `profiles` 是目錄卻列不出來時，後面都會接一行 `not finished (…)`：
+這次開機什麼都不服務，下次開機重做。
+
+| log 行開頭 | 意思 | 怎麼處理 |
+|---|---|---|
+| `restore guard: the data was restored from a backup; the MCP token is back to its value …` | 沒有帳號資料的還原：權杖回到備份當時的值，什麼都沒撤銷；面板顯示還原提示 | 備份後權杖可能外洩時，到「連線與權杖」重新產生 |
+| `restore guard: the data was restored from a backup; the MCP token of every profile …` | 有帳號資料的還原：每個帳號（連預設帳號）的權杖都撤銷了 | 到預設帳號頁的核對卡逐帳號核對，再重新產生、更新用戶端 |
+| `restore guard [profile=…]: token revoked, child token renewed` | 那個帳號撤銷了（每個帳號一行） | 同上 |
+| `restore guard [profile=…]: its state cannot be read; its directory was moved to the quarantine …` | 那個帳號的設定讀不到，移到隔離區，不服務 | 只能刪除；若是暫時性錯誤（開檔數、I/O），同一份備份再還原一次會重做 |
+| `restore guard [profile=…]: its token could not be revoked (<例外類別>)` | 那個帳號撤銷失敗（其他能撤銷的照樣撤銷） | 查磁碟（滿、唯讀、I/O 錯誤），修好後重新啟動，守門重做 |
+| `restore guard [profile=…]: its state cannot be read and its directory could not be moved to the quarantine` | 那個帳號讀不到設定，也搬不進隔離區 | 查磁碟或權限，修好後重新啟動；一直這樣就還原別份備份 |
+| `restore guard [profile=…]: its state is held by another writer; …` | 那個帳號的設定被別的程式鎖住，沒撤銷也沒隔離（不會從持有者手上搬走） | 重新啟動 add-on；一直這樣就還原別份備份 |
+| `restore guard [profile=…]: its operation receipts could not be archived` | 那個帳號的收據封存不了 | 查磁碟；收據檔是目錄而旁邊已有封存檔（偽造的備份）時還原別份備份 |
+| `restore guard: the operation receipts beside the profile index could not be archived` | 帳號索引旁的收據封存不了 | 同上 |
+| `restore guard: the operation receipts beside the Origin policy could not be archived` | Origin 政策旁的收據封存不了（政策檔本身不動） | 同上 |
+| `restore guard: the profiles directory cannot be listed; nothing in it is served` | `profiles` 不是目錄（檔案、連結）時只有這一行：守門照常做完，裡面的東西都不服務（開通的產品 8081 全部 503）；是目錄卻列不出來時接著 `not finished (the profiles directory cannot be listed)` | 不是目錄：修好或移走 `profiles` 再重新啟動；列不出來：修好磁碟或權限再重新啟動 |
+| `restore guard: this version serves no additional profiles; …` | 沒開通、磁碟上有帳號資料（休眠）：額外帳號的權杖撤銷了 | 重新開通後先核對再重新產生 |
+| `restore guard: a "revoke all" had not finished …` | 上次的全部撤銷沒做完，這次開機補完了 | 到面板逐帳號重新產生（之前產生的新權杖也撤銷了） |
+| `restore guard: not finished (…); nothing is served and no child is started …` | 守門沒做完：add-on 什麼都不服務，下次開機再做 | 括號裡是原因。磁碟滿：清出空間；`profiles` 列不出來：修好磁碟或權限；其他：還原別份備份。然後重新啟動（add-on 會不會自己再起看 HA 介面的 Watchdog 開關，沒確認過） |
+| `restore guard: … was not a plain file; it was moved aside to ….quarantine-…`（帳號目錄裡的收據封存是 `restore guard [profile=…]: … was not a plain file; …`） | 備份裡守門自己的名稱被目錄占用（偽造或損壞的備份），移開了，不擋開機 | 移開的項目可以刪 |
+| `restore guard: …; starting (no profile data: nothing to revoke), the next start tries again` | 沒有帳號資料：標記刪不掉或還原提示存不下，照常啟動 | 查磁碟（唯讀、滿）；下次開機再試 |
+| `restore guard: the restore record cannot be read; …` | 還原紀錄讀不到：每個帳號的重新產生都暫停（503） | 面板「診斷與維護」按「全部撤銷」，紀錄會重建，再逐帳號核對 |
+| `restore guard: the panel notice of the restore could not be removed after the token changed; …` | 權杖已換，但還原提示檔刪不掉 | 查磁碟；重新啟動後提示會再出現，到下一次權杖變更為止 |
+
+還原紀錄超過 1 MiB（只有手工拼的偽造備份會這樣）時守門也會停下：還原別份備份。
+
+面板的全部撤銷與刪除隔離目錄（開通的產品；logger `mcp_admin_core.profile_admin`）另有四行：
+
+| log 行開頭 | 意思 | 怎麼處理 |
+|---|---|---|
+| `multi-profile: "revoke all" stopped on an unexpected error (<例外類別>); …` | 全部撤銷結果不明：每個帳號撤銷前的權杖在 MCP 端點回 503 | 再按一次「全部撤銷」；看上面「全部撤銷」那一點 |
+| `multi-profile: the child of profile <id 前 8 碼> did not start again after "revoke all" …` | 那個帳號撤銷了，但子程式沒重新起來（新的內部權杖等重啟） | 面板重新啟動那個帳號的子程式，或重新啟動 add-on |
+| `multi-profile: a quarantine directory of profile <id 前 8 碼> could not be removed completely; …` | 隔離目錄沒刪乾淨，還列在清單裡 | 再刪一次；一直刪不掉就查磁碟 |
+| `multi-profile: the credentials of a quarantine directory of profile <id 前 8 碼> could not be wiped before its deletion` | 刪除前沒能先撤銷權杖、抹掉憑證；目錄照樣刪 | 刪乾淨了就不用處理；沒刪乾淨時另有上一行 |
+
+## 回退與緊急關閉（多帳號產品開通後）
+
+照多帳號計畫 §7.4（C2-MF-1；FM-125）。先講平台事實：
+
+- Supervisor 的安裝與更新沒有「指定版本」的參數，WOOW 商店也不收較低的版號：**不能「裝回舊版」**（UC-18 已確認）。
+- Supervisor 還原會把映像換回備份當時的版本（拉不到舊映像就沿用目前的映像），再整份換掉 `/data`，沒有 hook。
+- 這個 repo 的降版一直是「升級前備份＋程式一起還原」；多帳號版本的回退還沒演練過（HM-19b 會做）。
+
+| 路 | 做法 | 結果 | 要多久 |
+|---|---|---|---|
+| (a) 還原升級前的備份 | HA 備份頁還原這個 add-on 升級前的備份（先另做一份保護備份） | 回到舊映像＋舊資料：升級後建立的帳號、輪替、撤銷全部消失。第一次開通之後退回（升級前的備份沒有帳號資料）時不撤銷任何權杖，預設帳號的權杖＝備份當時的值；之後的版本退回、備份裡已有帳號資料時，舊版的守門照本節前面的規則撤銷 | 分鐘級（使用者操作） |
+| (b) 前進式修正版 | 發一個版號更大的新版：把產品移出 `MULTI_PROFILE_PRODUCTS`（關閉版），或退回舊程式 | 額外帳號變休眠：開機在服務前撤銷它們的權杖、資料保留；預設帳號照常；Origin enforce 靜默失效。重新開通後先在核對卡核對才能重發 | 推估一個工作天以上（下面「緊急發版範本」的步驟） |
+| (c) 使用者立即止血 | 停止 add-on（全部帳號一起斷）；面板能開時：撤銷單一帳號、刪除帳號，或「全部撤銷」 | 立即生效 | 秒到分鐘 |
+| 不受開關管的變更隨別的產品出貨後出事 | revert 那一片＋那個產品再發一版（走 (b)；批准點同下面的範本） | 已安裝的要等新版，期間用 (c) | 同 (b) |
+| 只有一個帳號出問題 | 面板撤銷或刪除那個帳號 | 只影響那個帳號 | 立即 |
+
+- (a) 之後再升級：還原發生在舊版。升級前的備份沒有帳號資料，舊版與再升級後的新版都不撤銷（0.4.14 起的舊版留標記或提示，新版只提示），
+  備份裡的權杖照用。**請在面板按「全部撤銷」**，再逐帳號重新產生、更新用戶端（上面「回退後再升級」）。
+- (b) 的休眠：沒開通的版本每次開機在 listener 之前撤銷每個額外帳號（與孤兒）的權杖、重產 child token；已撤銷的不再動；預設帳號不動。面板只顯示休眠
+  帳號的數目，沒有管理動作。
+- HM-19b 的回退演練（`docs/operations/acceptance.md` T-20）的期望：回退後預設權杖＝升級前備份當時的值、額外帳號消失、沒有任何撤銷；再升級後額外帳號
+  不存在、預設帳號不變；再按全部撤銷，預設帳號也撤銷。
+
+### 緊急發版範本（關閉版）
+
+出事時照這份做，只填產品與版號。關閉版出來之前，每台都可以立即做 (c)。**這份範本還沒經負責人預先核准**：HM-19a（Odoo 首發的升版 PR）照它核對一次、
+交負責人核准，之後才算「預先核准」（多帳號計畫 §7.4）。
+
+1. 從 `claude-delivery` 開 `release/<名稱>` 分支（`release.yaml` 只在 `release/*` 分支觸發；新版號要比目前發行的大，商店不收較低版號）。
+2. 改的檔：
+   - `packages/mcp-admin-core/mcp_admin_core/features.py`：把產品移出 `MULTI_PROFILE_PRODUCTS`；或 revert 出事的那一片。
+   - 釘住開通集合的測試照新的集合改：目前是 `tests/test_upgrade_zero_rewrite.py` 的 `test_multi_profile_is_switched_off_for_every_product`
+     （斷言 `MULTI_PROFILE_PRODUCTS` 是空集合；開通片會改它，關閉版要改回）。開通片為了開通改過的其他測試也照關閉後的行為改回；HM-19a 核對
+     範本時把這些測試列全。
+   - 版號資料 7 處照 [release](release.md)「升版時要改的版號資料」（`docs/provenance/runtime-patches.json` 的 `features.py`、`__init__.py` 摘要一起更新）。
+   - `addons/<產品>/CHANGELOG.md`：寫明關掉多帳號；額外帳號變休眠、權杖已撤銷、資料保留；預設帳號照常；密鑰網址的 Origin enforce 失效（任何來源都放行）；
+     重新開通後要先核對才能重發。根目錄 `CHANGELOG.md` 照前例一段。
+   - 升版比對要求時的 `upgrade-notes.yaml`（`AGENTS.md` 第 3 點）。
+   - `docs/operations/release-decision-<產品>-<版號>.md`（readiness 只認產品自己的紀錄）。
+3. PR 標題照規則（「⛔ 勿代 merge｜待覆核 — …」）。本機跑 `scripts/secret_precheck.py`、`scripts/ledger_precheck.py`、`packaging/validate.py`；PR 的 `checks` 綠。
+4. 批准點，每一步負責人批准（[release](release.md)「發版步驟」）：觸發 `release.yaml`（gate → candidate：建置、容器驗收、供應鏈閘門、J1900 指令集檢查）→
+   負責人在 GitHub 批准 publish（推 GHCR，這個版號就燒掉了）→ HAOS 驗收（至少：預設帳號照常、額外帳號的舊權杖被拒、面板沒有帳號選單；備份與更新逐步批准）→
+   證據 commit → 負責人合併（＝上架商店）→ Release 與商店同步 → 使用者更新。
+5. 時間：candidate 約 35～40 分鐘加建置與檢查，PR `checks` 約 30～40 分鐘；之後看批准、HAOS 驗收與商店同步（通知到了幾分鐘，沒通知時看商店的排程）。
+   合起來推估一個工作天以上；這段期間每台只能做 (c)。
 
 ## 執行與停止點
 

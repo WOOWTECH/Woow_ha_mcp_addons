@@ -2,6 +2,8 @@
 
 ## 結論
 
+- **2026-11-19 補記（HM-18，第 21 節）**：第 6 節「其他」那列說「真子程式由 HM-16 的容器探針涵蓋」，說得太滿：探針不送 `Origin`、不驗 Origin 政策，
+  只收政策的檔名。更正與實際的涵蓋見第 21 節；第 6 節照原文保留。
 - **合併後的獨立審查（2026-11-18，第 20 節）判通過**：涵蓋 `b103dea` 與第 19 節；必修 0、建議 3。契約第 4.1 節 `operation_restored`
   列跟上 Origin 政策旁的收據（`0cf59df`）；Origin 政策的存檔收到 410 `operation_restored` 時面板保留識別紀錄、「已核對」才清掉，
   補 node 一案（`d5f95d4`；4 個突變加測試前都存活、加了全擋）。還原後 Origin 政策靜默回到備份當時的值，要不要在面板加一句提示，
@@ -866,3 +868,24 @@ repo 外的 `ui_mutate.py`（只跑 `origin-policy.test.mjs`）與 `ui_mutate_su
 | 本筆記 | 本節；結論第一點、第 2 節兩列、第 13 節 (c)、第 14 節跟著改 |
 
 commit 身分都是 woowtech；英文標題、繁中內文；訊息裡沒有任何署名行。
+
+## 21. 補記（2026-11-19，HM-18）：第 6 節「其他」那列說得太滿
+
+這一節是事後的更正，第 1～20 節照原文保留，沒有改寫。
+
+- **原文**：第 6 節「其他」表 `test_origin_product_children.py` 那列的 HA 欄最後一句：「真子程式由 HM-16 的容器探針涵蓋」。
+- **說得太滿的地方**：HM-16 的容器探針（多帳號階段，`packaging/container_profiles.py`）確實跑每個帳號的真子程式，但它**不送 `Origin`、不驗 Origin
+  政策**，只把政策的三個檔名（`origin-policy.json`、`.origin-policy.json.operations.json` 與還原時封存的 `.restored`）收進布局，讓還原後的樹照樣
+  過檢查（HM-16 筆記第 21.3 節第 2 點、第 21.5 節最後一點）。探針自己從來不存政策、不送管理請求。
+- **實際的涵蓋**：
+  - LOCAL（GitHub CI）：`tests/test_origin_policy.py` 的 `test_every_profile_takes_the_one_policy_and_its_lines_name_the_profile`（預設帳號＋B，各自的
+    子程式）與 5 個產品的 `test_report_only_answers_every_request_as_without_the_check`、`test_enforce_refuses_only_what_the_list_does_not_hold`。
+    這些用的是測試裡的子程式，不是映像裡的。
+  - 真子程式加上 Origin 政策：**目前沒有任何一層涵蓋**。容器裡沒有，HAOS 上也還沒有（2026-11-19 的 Odoo 多帳號發版前預驗沒做 T-24；
+    `docs/operations/ha-test-odoo-multiprofile-early.md`）。
+  - 實機看 Origin 是 HM-19b：S14 用 echo 端點看 Claude.ai 實際送什麼，另看 add-on log 裡 would_deny 行的格式與節流
+    （`docs/operations/acceptance.md` T-24，2026-11-19 HM-18 改寫）。
+- **風險判斷**：Origin 檢查在閘道（token 驗過之後、轉給子程式之前），子程式收不到 `Origin` 標頭（HM-27 之前就是這樣），所以「真子程式」對判定與
+  回應沒有影響；缺的是映像裡整條路徑的實測，不是一個已知的缺陷。要不要讓容器探針送一次帶 `Origin` 的請求（report-only 與 enforce 各一次），
+  交下一個改探針的片或 HM-19a 決定。
+- 出處：HM-16 疊到 HM-27 上時（2026-11-19）在它的筆記第 21.5 節指出，交給下一步；HM-18 照交辦用這一節更正。
