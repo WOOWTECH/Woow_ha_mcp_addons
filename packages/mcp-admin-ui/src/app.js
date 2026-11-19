@@ -1,5 +1,5 @@
 import { AdminApi, ApiError, DEFAULT_ORIGINS, ProfileEchoError, StaleProfileError, TOKEN_ROTATED, originList } from './api.js';
-import { products, connectionHelp, policyRestartsChild, policyRestartNotice, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl, ownerDefaultsView, noticeTime, odooSwitches, odooSwitchKeys, odooSwitchPayload, maskedCurrentToken, tokenHistory, backendEdit, backendPatchPayload, newOriginSecrets, urlSecrets, n8nSession, n8nSessionPayload, odooMethods, odooMethodsPayload } from './contracts.js';
+import { products, connectionHelpFor, policyRestartsChild, policyRestartNotice, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl, ownerDefaultsView, noticeTime, odooSwitches, odooSwitchKeys, odooSwitchPayload, maskedCurrentToken, tokenHistory, backendEdit, backendPatchPayload, newOriginSecrets, urlSecrets, n8nSession, n8nSessionPayload, odooMethods, odooMethodsPayload } from './contracts.js';
 import { DEFAULT_PROFILE, clientName, indexState, isExtraProfile, labelDialog, profileMenu, profileName, shortId, statusLabel } from './profiles.js';
 import { QUARANTINE_SHOWN, dormantProfiles, exportDocument, exportEntry, policyLine, quarantineTime, restoreNotice, restoreReview, tokenText, waitsForReview } from './restore.js';
 import './styles.css';
@@ -582,7 +582,7 @@ function backend() {
   });
   form.append(el('div', { class: 'field' }, el('label', { for: 'connection-action' }, '這次要如何處理設定？'), action),
     p(backendEdit(state) && state.connection_configured ? '下方可修改個別欄位並保留其餘憑證；此表單仍是整組取代，需重新輸入必要欄位。' : '保留不會送出變更。取代時請重新輸入所有必要欄位，空白不代表保留。'),
-    fields, el('p', { id: 'connection-help', class: 'hint' }, state.product === 'odoo-manage' ? 'module 模式要求後端已安裝 MCP module；此介面不會安裝模組或變更 Odoo。read 模式不可保存寫入授權。' : state.product === 'hermes' ? 'Dashboard 為選填；URL、使用者、密碼需整組提供。全部留空會移除 Dashboard 設定。' : state.product === 'opendesign' ? 'OpenDesign 只需要 URL；不要求後端 token。' : [connectionHelp[state.product], 'URL 不可含帳密、查詢參數或片段。新憑證只用於這次提交，不儲存在瀏覽器。'].filter(Boolean).join(' ')),
+    fields, el('p', { id: 'connection-help', class: 'hint' }, state.product === 'odoo-manage' ? 'module 模式要求後端已安裝 MCP module；此介面不會安裝模組或變更 Odoo。read 模式不可保存寫入授權。' : state.product === 'hermes' ? 'Dashboard 為選填；URL、使用者、密碼需整組提供。全部留空會移除 Dashboard 設定。' : state.product === 'opendesign' ? 'OpenDesign 只需要 URL；不要求後端 token。' : [connectionHelpFor(state.product, api.profile !== null), 'URL 不可含帳密、查詢參數或片段。新憑證只用於這次提交，不儲存在瀏覽器。'].filter(Boolean).join(' ')),
     el('button', { type: 'submit', class: 'primary' }, '儲存後端設定'));
   form.addEventListener('submit', async event => {
     event.preventDefault();

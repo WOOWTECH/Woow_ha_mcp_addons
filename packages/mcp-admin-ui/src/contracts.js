@@ -19,6 +19,14 @@ export const connectionHelp = {
   nextcloud: '建議為 AI 助理建一個專用帳號（例如 assistant），只把需要的資料夾與行事曆分享給它：app password 能存取該帳號看得到的一切，無法只限定某些資料夾。App 密碼的取得方式：以該帳號登入 Nextcloud → 右上角頭像 →「個人設定」→「安全性」→「裝置與工作階段」，輸入名稱（例如 MCP）後按「建立新應用程式密碼」，複製只顯示一次的密碼貼到這裡。不要填登入密碼；啟用兩步驟驗證的帳號也可用 app password，日後可在同一處撤銷。',
   headscale: '填 Headscale 控制伺服器的管理 API 網址（根網址或 /api/v1），並使用專門建立的 API 金鑰。這個 Add-on 只管理同一個 Headscale 執行個體；工具預設開啟，請在工具權限頁限制不需要的寫入操作。它不會替使用者安裝或登入 Tailscale 客戶端。',
 };
+// HM-26 (plan 9 Headscale row; DQ-26, the plan's recommendation): once the panel serves profiles (the product switched on),
+// each profile manages its own Headscale server, or the same one with a policy of its own, and an API key administers the
+// whole server. Without profiles the help is connectionHelp's, word for word.
+const scopedConnectionHelp = {
+  headscale: '填這個帳號要管理的 Headscale 控制伺服器的管理 API 網址（根網址或 /api/v1），並使用專門建立的 API 金鑰。API 金鑰是整台 Headscale 的管理權限：建議每個帳號在 Headscale 各建一把，不要共用；共用同一把金鑰的帳號之間只靠工具權限分權，在 Headscale 撤銷它也會同時停掉這些帳號。工具預設開啟，請在工具權限頁限制不需要的寫入操作。它不會替使用者安裝或登入 Tailscale 客戶端。',
+};
+export const connectionHelpFor = (product, scoped = false) =>
+  scoped === true && Object.hasOwn(scopedConnectionHelp, product) ? scopedConnectionHelp[product] : connectionHelp[product];
 
 // These children restart after policy changes so public MCP sessions see one consistent tool list.
 // Headscale also reads the current saved policy on every child call, including direct child calls.
