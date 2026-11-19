@@ -35,9 +35,9 @@ CURRENT_POST_SOURCE_BYTES = {
     'apps/emqx/vendor/emqx_mcp_server/lifespan.py': (
         'emqx', 'acf72dc8655d6b702a600e4e936b4bfddfdb137824747de91022085f21e9d44b'),
     # HM-04: the child port is a parameter (3000 by default); HM-20: WOOW_MCP_DENY_LOOPBACK once n8n is switched on;
-    # HM-25: an additional profile's child (HOME, its own catalog copy, --port, none without a backend). No tool, schema
-    # or handler change.
-    'apps/n8n/n8n_adapter.py': ('n8n', '98725e5453f721a2dcea003c55cc984d5b7f326d72ace9f398d2684f24f127d9'),
+    # HM-25: an additional profile's child (HOME, its own catalog copy, --port, none without a backend); its review: the
+    # copy made through directory descriptors and again for another backend. No tool, schema or handler change.
+    'apps/n8n/n8n_adapter.py': ('n8n', '4f3832c0ca38d9a1a2fda80e3d6d74617dac9e9c2882a5dd91e8fc1ab8ba765f'),
     # HM-20: loopback refusal for the configured instance behind WOOW_MCP_DENY_LOOPBACK; no tool, schema or handler change.
     'apps/n8n/backend_policy.cjs': ('n8n', '055ca90a23c5d401d742fb165ffab2e6efcc5ca6a41a96a51293a4a8943f1826'),
     # HM-13b: the boot guard (restore_lock.guard) before the child and the listeners, and the bootstrap's

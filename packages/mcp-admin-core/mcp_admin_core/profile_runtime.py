@@ -542,10 +542,11 @@ class ProfileManager:
     cannot be used is named in a WARNING before anything is served; nothing is written.
 
     HM-25 (plan 9 n8n row; DQ-04, DQ-22): prepare_child (an async callable (profile_id, state)) is given to every
-    additional profile's runtime as its own prepare_child; profile_removed (a callable (profile_id)) is called by
-    removed() once profile_admin removed a deleted profile's directory (an orphan's and a quarantine directory's too).
-    Both come from the product's adapter (run_product.ProductAdapter: n8n's catalog copies); left out, nothing is
-    done. Every profile's monitor gets its profile id (HealthMonitor profile_id)."""
+    additional profile's runtime as its own prepare_child; profile_removed (a callable (profile_id); False or an
+    exception: the cleanup failed) is called by removed() once profile_admin removed a deleted profile's directory (an
+    orphan's and a quarantine directory's too). Both come from the product's adapter (run_product.ProductAdapter: n8n's
+    catalog copies); left out, nothing is done. Every profile's monitor gets its profile id (HealthMonitor
+    profile_id)."""
 
     def __init__(self, store, product, tools, child_spec, *, port=CHILD_PORT, app_options=None, reply_worker=None,
                  restore_notice=None, prepare_child=None, profile_removed=None):
@@ -960,14 +961,19 @@ class ProfileManager:
     def removed(self, profile_id):
         """HM-25: a deleted profile's directory is gone (profile_admin: a profile's, an orphan's or a quarantine
         directory's): the product's cleanup (profile_removed; n8n removes the profile's catalog copy). A cleanup that
-        fails is named once (the id's first 8 characters); the deletion stands."""
+        fails, by an exception or by answering False (n8n: something of the copy could not be removed; HM-25 review
+        S-2), is named once (the id's first 8 characters, never a path); the deletion stands."""
         if self.profile_removed is None:
             return
         try:
-            self.profile_removed(profile_id)
+            done = self.profile_removed(profile_id)
         except Exception as error:
             logger.warning('multi-profile: the cleanup after deleting profile %s failed (%s)', profiles.log_id(profile_id),
                            type(error).__name__)
+            return
+        if done is False:
+            logger.warning('multi-profile: the cleanup after deleting profile %s could not remove everything',
+                           profiles.log_id(profile_id))
 
     # ---- open and close ----
 
