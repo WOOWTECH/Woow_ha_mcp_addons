@@ -217,6 +217,12 @@
   主機名與 Supervisor bridge 位址不在規則裡：從那裡只連得到 8081 與 8099（子程式只聽 127.0.0.1）；8081 要 token，8099 只收
   `172.30.32.2`，所以最多是把這個帳號的後端憑證送進自己的閘道或面板、拿到 401、403 或 404。要連 bridge 位址一起擋，是另一個
   決定，不在 HM-20。
+- Headscale（HM-26，開通後）：API key 是整台 Headscale 的管理權限，Headscale 沒有 key 層級的權限。同一台、同一把 key 的帳號之間只靠
+  工具政策分權：每個子程式每次呼叫讀自己帳號的 state（`HEADSCALE_MCP_STATE_PATH`），讀到別的帳號的 state 時網址與 key 的比對擋不下來
+  （FM-88；`tests/test_headscale_multi_profile.py` 守住每個子程式只拿到自己帳號的路徑、照自己帳號的政策，直連也一樣）。同 uid 被攻破的
+  子程式讀得到每個帳號的 key（第 1 節），等於拿到每一台設定過的 Headscale 的完整管理權限。建議每個帳號各一把 key（DQ-26 建議，不強制）：
+  接錯 state 時連線比對擋得下，也能只撤銷那一把；共用一把時，在 Headscale 撤銷它會同時停掉共用的帳號。事故處理（第 4 節）第 2 步對
+  Headscale 是在每一台撤銷這個 add-on 用過的每一把 API key，再到面板逐帳號存新 key。
 
 - 密鑰網址的 Origin 清單（HM-27，開通後）預設 report-only：**不擋任何請求**，要擋得在面板切 enforce。一行 would_deny 只說明有人送了
   這個 Origin，不證明是誰：任何持有 token 的用戶端都能送任意 Origin（PaaS 同）。切 enforce 前先看紀錄，把需要的來源加入清單。

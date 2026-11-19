@@ -128,6 +128,29 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 - 自己的修正：沒有（`apps/headscale`、`addons/headscale` 在 `55f3528` 之後只改了 0.4.19 的版號、CHANGELOG 與文件）。
 - 發版時另外驗：第 5 節。Headscale 第一次走 GitHub 發版流程（之前每一版都是 builder VM 推的）：觸發前負責人要先給 `amd64-mcp-headscale`
   套件設 Actions 權限（`docs/operations/release.md`「負責人要在 GitHub 設定的項目」第 4 項）。
+- HM-26（Headscale 開通前的產品片；PR 號與 commit 合併後補）：受開關管，開關關時沒有可見變化（第 4.2 節）。映像多帶兩件只在開通時
+  生效的事：Headscale 伺服器拒絕 key（401）時健康監看照 DQ-25 退避（之前認不出來，照樣每 15 秒查；HS7）、面板 Headscale「後端設定」
+  說明的每帳號版本（HS2）。其餘程式在 HM-08～HM-31 已經做好，本片補測試、文件與交接。Headscale 開通的升版片（0.4.19 → 0.5.0）照下面
+  寫 CHANGELOG、DOCS。
+- 開通版（0.5.0）要寫進 CHANGELOG 的 Headscale 項目（英文；開通後所有產品共通的改變照計畫 §7.2 第 1～6、8、9、11 點，句子由 HM-18
+  定稿、Odoo 首發的升版片 HM-19a 先寫，Headscale 照抄適用的；第 7 點（Odoo 換身分換 token）與第 10 點（Origin 清單）不適用：
+  Headscale 不換 token、Origin 照舊）：
+  - HS1：`Multiple profiles: besides the default profile, the add-on can serve up to 3 additional profiles, each with its own Headscale URL and API key, MCP token, tool policy and MCP child. Profiles may use the same Headscale server with different tool policies, or different servers.`
+  - HS2：`A Headscale API key administers the whole Headscale server: give each profile an API key of its own (recommended, not enforced; the connection page says so once profiles are on). Profiles that share one key on one server are kept apart only by their tool policies, and revoking that key in Headscale stops all of them.`
+  - HS3：`Each profile's MCP child reads only its own profile's saved policy, at every call (also for calls made straight to the child inside the container); a profile directory whose owner or mode cannot be verified makes every call of that profile fail with HEADSCALE_POLICY_UNAVAILABLE.`
+  - HS4：`Changing a profile's Headscale URL to another origin (scheme, host or port) now requires entering its API key again: the admin API answers 422 CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN and the panel asks for the key. The same origin written otherwise (the /api/v1 root, letter case, the default port) needs no key.`
+  - HS5：`A loopback Headscale URL (127.0.0.0/8, ::1, localhost) is now refused when it is saved (HTTP 400); the MCP child refused to connect to it before, and still does.`
+  - HS6：`Saving a profile's tool policy restarts only that profile's MCP child; the other profiles' sessions and tool lists are not affected. The secret URL of every profile keeps the Headscale Origin rule: no Origin or exactly https://claude.ai; any Origin on Bearer requests is refused (403).`
+  - HS7：`When the Headscale server refuses a profile's API key (HTTP 401: revoked, expired or wrong), that profile's health checks back off to 15, 30, 60, 120 and then 300 seconds apart; saving the profile's connection, restarting it from the panel or any other answer of the server ends the backoff. The reason shown is unchanged.`
+- DOCS（`addons/headscale/DOCS.md`「連線與權限」一節，繁中；升版片寫）要補的段落：
+
+  ```text
+  **多個帳號（0.5.0 起）**：除了預設帳號，最多可以再加 3 個帳號，每個帳號有自己的 Headscale 網址與 API key、MCP 權杖、工具政策與子程序。
+  可以是同一台 Headscale、各帳號不同的工具政策，也可以是不同台。Headscale 的 API key 是整台伺服器的管理權限，Headscale 沒有 key 層級的權限：
+  **建議每個帳號在 Headscale 各建一把 API key**，不要共用。共用同一把 key 的帳號之間只靠工具政策分權，在 Headscale 撤銷那把 key 會同時停掉它們；
+  各用各的，某個帳號不再使用時就只撤銷它那一把。帳號的網址改到另一台伺服器（scheme、主機或 port 不同）時要重新輸入 API key。
+  每個帳號的密鑰網址都照同一條 Origin 規則（沒有 Origin 或 `https://claude.ai`）；Bearer 請求帶任何 Origin 都回 403。
+  ```
 
 ## 4. 沒有可見變化的片（不用逐項寫 CHANGELOG）
 
@@ -158,6 +181,7 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 | HM-12 | #110 | `7646f0f` | Odoo 換身分換 token、新來源重填秘密（後端） | 換身分不換 token，回應沒有新欄位 |
 | HM-30 | #111 | `ebefebe` | 回覆處理工作執行緒、待送回覆額度、健康檢查容忍 | 不建工作執行緒，回覆照舊在事件迴圈處理 |
 | HM-12 面板 | #114 | `165dbaf` | 換 token 的提示、新來源重填秘密的表單 | 面板畫面、請求與提示不變（HM-12 面板筆記：216 個比較 0 差異） |
+| HM-26 | 合併後補 | 合併後補 | Headscale 伺服器拒絕 key 時監看的認證退避（`health.refused_login`）；面板 Headscale「後端設定」說明的每帳號版本；Headscale 開通前的測試（第 3.8 節） | 監看照舊每 15 秒、不退避，記下的原因不變；說明逐字照今天 |
 
 要用一句話交代第 4 節（可選；主對話補寫，照計畫 §3.3、§7.1）：
 

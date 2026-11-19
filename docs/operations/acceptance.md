@@ -198,6 +198,27 @@ full、partial（只選這個 app）、加密備份各做一輪。每一步都�
 - HM-03a／b 只寫回了局部還原的 UC-08（見「多帳號驗收」開頭的狀態）：其餘項目寫回之前，不得宣稱成立，也不得把容器或本機的模擬
   當成 HA 證據。
 
+### Headscale 開通版（0.5.0）在 HAOS 要加的項目（HM-26）
+
+`tests/test_headscale_multi_profile.py` 在 CI 用一台假伺服器驗了：每個帳號的子程式只讀自己帳號的 state、照自己帳號的政策（直連也一樣）、
+只認自己的 child token；存政策只重啟該帳號的子程式；網址改到別台要重填 key；每個帳號的密鑰網址只放 `https://claude.ai`；伺服器拒絕 key
+時開通的監看照 DQ-25 退避。這些是 LOCAL/MOCK，不是 HA 證據。HAOS 上用真的 Headscale 再驗，**每一步先問使用者**：
+
+- 真後端身分（使用者批准建立，驗完撤銷並記清理證明，T-29）：在 QA 用的 Headscale 上建 2～3 把**專用、短效期**的 API key（同一台：
+  一把給預設帳號與一個額外帳號共用、一把給另一個額外帳號自己用；CF-15 同 key、不同 key 各一次）。寫入只對一個專用的測試使用者
+  （例如 `hm26-test`）與它的 preauth key 做，不碰正式的使用者、節點、路由與 ACL 政策（`headscale_policy` 只做 get、check、diff，
+  不做 apply）。只有一台 Headscale 時，「多台」只在 CI 驗。
+- T-02：Headscale 額外帳號上限 3（第 4 個 409 `profile_limit_reached`，`limit` 3）。
+- T-04（Headscale 版，契約第 9 節 #129、#130）：同一台、同一把 key、不同政策的兩個帳號：唯讀帳號的寫入被擋（閘道與子程式都擋，
+  伺服器沒收到）、另一個做得到；在 Headscale 撤銷某個帳號自己的那把 key 後，只有那個帳號的呼叫失敗（`HEADSCALE_UPSTREAM_ERROR`、
+  401）、它的健康監看進入認證退避，其他帳號照常。
+- T-05、T-08、T-09、T-13：P9 kit 照 [P9 kit](ha-p9-kit.md)（`--cross`、`--temp-profile`、`childkill`）。
+- T-07：存一個帳號的政策，只有它的子程式換 PID，別的帳號的 session 不斷。
+- T-20：0.4.19 → 0.5.0 升級後預設帳號的 token、兩條網址、`state.json` 位元不變（Store `verify`）；回退與再升級照 T-20。
+- T-21：還原（full、partial、加密）後每個帳號照守門撤銷、核對後重發，子程式照常起來（還原放寬的權限在子程式讀之前收回）。
+- T-24、T-27：真 Claude.ai 用兩個帳號的密鑰網址各連一次；別的瀏覽器 Origin 403；記下 Claude.ai 送的 Origin（S14）。
+- 上面「每次升版都要重驗」的四項照做。
+
 ## 故障處置界線
 
 缺少／失效角色（非 owner／系統管理員）的 MANAGEMENT 403 屬預期封鎖，不是要求提高 HA 權限。readiness503 要分
