@@ -187,8 +187,15 @@ export const urlSecrets = {
   headscale: { url: ['api_key'] },
 };
 // HM-12 (DQ-05; contract 3.1, section 9 #113 and HM-12's panel rows): the products whose MCP token is bound to the backend identity once
-// switched on (the add-on's products.IDENTITY_BOUND; tests/test_identity_fields.py fails when they differ).
-export const identityBound = ['odoo'];
+// switched on (the add-on's products.IDENTITY_BOUND; tests/test_identity_fields.py fails when they differ). HM-24: Hermes too (#129).
+export const identityBound = ['odoo', 'hermes'];
+// HM-24: the fields whose change is a new backend identity (the add-on's identity_fields.rotating_fields), as the panel names them
+// for each product of identityBound (api.js: a backend save held for its profile's restore review says why; Odoo's words are
+// HM-13c's). tests/profiles.test.mjs fails when a product of identityBound has none.
+export const identityChange = {
+  odoo: 'Odoo 的網址、資料庫或使用者',
+  hermes: 'Hermes 的 Gateway 網址、Dashboard 網址或 Dashboard 使用者，補上或清空 Dashboard 也算',
+};
 // Where a backend URL's requests go, as the add-on compares it (backend_edit.origin, which reads a URL as Python's
 // urlsplit does): [scheme, host, port], the scheme and the host in lower case (an IPv6 literal without its brackets, a
 // zone as written) and the port, the scheme's own (80, 443) when none is written. Nothing else is normalized: spellings

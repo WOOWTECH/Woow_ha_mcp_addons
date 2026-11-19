@@ -314,20 +314,25 @@ def check_saved_destinations(state, previous=None):
 
 # HM-12 (multi-profile plan 9 Odoo row, 12.3 HM-12; DQ-05, DQ-40 ⑩ (a); contract 3.1, section 9 #40; I11; unreleased):
 # the products whose MCP token is bound to one backend identity once they are switched on: Odoo (PaaS #131,
-# woow-mcp-server 69ac425 apps/odoo/odoo_mcp_admin/routers/config.py ODOO_IDENTITY_KEYS). Nextcloud (HM-22) and Hermes
-# (HM-24) join with their own slices; identity_fields.TOKEN_ROTATING already names their fields.
-IDENTITY_BOUND = frozenset({'odoo'})
+# woow-mcp-server 69ac425 apps/odoo/odoo_mcp_admin/routers/config.py ODOO_IDENTITY_KEYS). HM-24 (plan 9 Hermes row;
+# contract section 9 #129): Hermes, its Gateway URL and its Dashboard's URL and user (PaaS rotates no Hermes token):
+# adding the Dashboard to a Gateway-only connection or clearing it is a change too, as clearing a connection is, since
+# HermesConnection takes the three Dashboard fields together. Nextcloud (HM-22) joins with its own slice;
+# identity_fields.TOKEN_ROTATING already names its fields. The panel's contracts.js identityBound is this set
+# (tests/test_identity_fields.py).
+IDENTITY_BOUND = frozenset({'odoo', 'hermes'})
 
 
 def identity_rebound(previous, candidate) -> bool:
     """Whether saving candidate over previous (gateway.admin_action: backend, backend/patch) moves the MCP token to a
     new backend identity, so that the token is rotated in the same write (ProductStore.rebind): the product is in
     IDENTITY_BOUND and switched on (features.enabled, read at this call), the token is active, a complete connection
-    is saved, and one of its identity fields (identity_fields.rotating_fields: Odoo url, database, username) differs
-    in candidate, a cleared connection included (PaaS patch_connection_bound: a cleared identity field is a change; were
-    it not, clearing and then saving another account would keep the token, as a first setup does). The first setup (no
-    connection saved yet), a revoked token and a change of the password alone keep the token as they do today.
-    Switched off, never (plan 3.3: the token stays, byte for byte)."""
+    is saved, and one of its identity fields (identity_fields.rotating_fields: Odoo url, database, username; Hermes
+    gateway_url, dashboard_url, dashboard_username) differs in candidate, a cleared connection included (PaaS
+    patch_connection_bound: a cleared identity field is a change; were it not, clearing and then saving another account
+    would keep the token, as a first setup does), and so a Hermes Dashboard added to a saved connection or cleared from
+    it. The first setup (no connection saved yet), a revoked token and a change of a password or key alone keep the
+    token as they do today. Switched off, never (plan 3.3: the token stays, byte for byte)."""
     product = getattr(previous, 'product', 'n8n')
     if product not in IDENTITY_BOUND or not features.enabled(product):
         return False
