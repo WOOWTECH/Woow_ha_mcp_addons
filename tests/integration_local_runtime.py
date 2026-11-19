@@ -28,17 +28,12 @@ from mcp_admin_core.products import ProductStore, TOOLS
 from test_real_n8n import fake_backend
 from test_real_products import rpc
 from batch2_owned_port import reserve_port
-from owned_executable import Executable
+from owned_executable import Executable, draw_public_ports
 from owned_runtime import forbidden_transport
 from owned_browser import browser_proofs
 
 ROOT = Path(__file__).resolve().parents[1]
 MACHINE = 'INVENTED-LOCAL-MACHINE-ONLY'
-
-
-def free_port():
-    with reserve_port() as s:
-        return s.getsockname()[1]
 
 
 async def test_real_packaging_guard_provider_and_chromium(fake_backend, monkeypatch):
@@ -106,8 +101,11 @@ fs.writeFileSync(process.env.HOME+'/real-child-guard',String(process.pid));
         async with (serve(websocket, '127.0.0.1', 0) as ws,
                     httpx.AsyncClient(trust_env=False) as client,
                     httpx.AsyncClient(transport=forbidden_transport()) as forms_child):
-            admin_port, mcp_port, control_port = free_port(), free_port(), free_port()
-            runner = Executable(data, 'n8n', [admin_port, mcp_port])
+            # The control port stays bound while the public ports are drawn and the child port reserved: none of them.
+            with reserve_port() as control:
+                control_port = control.getsockname()[1]
+                admin_port, mcp_port = draw_public_ports(2)
+                runner = Executable(data, 'n8n', [admin_port, mcp_port])
             runner.config['trace'] = str(data/'owned-lifecycle.jsonl')
             client.event_hooks['request'].append(runner.guard)
             config={'source':str(ROOT),'data':str(data),'admin_port':admin_port,'mcp_port':mcp_port,

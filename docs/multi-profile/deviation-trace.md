@@ -1,8 +1,12 @@
 # 差異來源對照（FEATURE-MATRIX、G6 §5 → 刻意差異表或測試）
 
 > HM-00 產出（2026-11-14）；2026-11-15 文件同步重產（說明欄的決策狀態、FM-146 的負責片）；2026-11-17 文件同步重產
-> （FM-154～156、各片補的差異表第 87～117 列、文末「差異表每一列的來處」）。表由 repo 外的產生器寫出
-> （重產指令與輸入版本見 `docs/provenance/ha-multiprofile-docs-sync-20261117.md`，原本的指令見
+> （FM-154～156、各片補的差異表第 87～117 列、文末「差異表每一列的來處」）；2026-11-19 HM-18 重產（DQ-35、DQ-45 已定，
+> Claude.ai 標頭的更正，差異表第 118～128 列經 T-21、T-24 對到）；同日 HM-26 合併 `claude-delivery` `95b7e9d` 時
+> 重產（差異表第 129～131 列經 FM-88、T-04、T-07、T-23 對到，第 132 列寫出處）。表由 repo 外的產生器寫出
+> （重產指令與輸入版本見 `docs/provenance/ha-multiprofile-docs-sync-20261117.md`，HM-18 的改動見
+> `docs/provenance/ha-multiprofile-HM-18-20261119.md` 第 7 節，HM-26 的改動見 `contract.md` 第 10 節
+> HM-26 合併那一列，原本的指令見
 > `docs/provenance/ha-multiprofile-HM-00-20261114.md` 第 8 節；腳本與輸入的 SHA-256 以 repo 外的
 > `wave0/hm00-check/SHA256SUMS` 為準），「原文」欄逐字取自計畫產物（repo 外）：
 > `FEATURE-MATRIX-zh-TW.md` 第 2 節的「HA 平台差異」欄、`gaps/G6-delivery.md` 第 5 節的「HA 期望值與差異」欄。
@@ -15,7 +19,7 @@
 - 其餘 44 列寫「—」（沒有平台差異），但「—」不等於行為相同：每列都人工看過、寫了結論（「—」的列那一節）。23 列有差異、對到差異表；19 列照 PaaS（有的另指差異表裡相關的列）；2 列是流程或文件。
 - G6 §5 的 T-01～T-29 共 29 列，每列都對到 §8.8 的列或某個測試。
 - 對不上的已經補成差異表第 44～79 列（HM-00 補列）；看「—」列時找到的差異補成第 80～86 列（審查後補列）。只對到測試的列，說明欄寫了為什麼不是差異。
-- 差異表現在有 117 列：第 87～117 列是各片實作與審查補的（來由見 `contract.md` 第 9 節開頭）。三張表合起來對到 110 列；其餘 7 列沒有 FEATURE-MATRIX 或 G6 的列以它為差異，出處寫在文末一節。
+- 差異表現在有 132 列：第 87～132 列是各片實作與審查補的（來由見 `contract.md` 第 9 節開頭）。三張表合起來對到 124 列；其餘 8 列沒有 FEATURE-MATRIX 或 G6 的列以它為差異，出處寫在文末一節。
 - 「對到」欄的測試：「既有」是 bb48449 已有的檔；「HM-xx」是計畫中的新測試（`acceptance-matrix.md` 的測試檔登記表）。
 
 ## FEATURE-MATRIX「HA 平台差異」欄
@@ -46,7 +50,7 @@
 | FM-25 | HA 多半沒有 cgroup 與 CPU 上限、和 HA Core 共用主機；OOM 時整個 add-on 被殺、所有帳號一起斷（未實機確認，UC-15） | §8.8 #19、#15 | OOM 可能先殺管理程序，寫進已知限制（threat-model.md） |
 | FM-26 | 原因集合依 HA 容量設計（FM-25） | §8.8 #19、#51 | — |
 | FM-27 | 錯 token 維持 HA 404（PaaS 403），驗收期望值要改；HA 每請求重讀 N 份 state（FM-14） | §8.8 #1、#46 | — |
-| FM-28 | PaaS 沒有這條路，文件要寫明是 HA 差異；HA 文件「Claude.ai 無法帶 Authorization」已過時（R07 X-06） | §8.8 #2 | 過時的「Claude.ai 不能帶標頭」由 HM-18 更正 `docs/operations/clients.md` |
+| FM-28 | PaaS 沒有這條路，文件要寫明是 HA 差異；HA 文件「Claude.ai 無法帶 Authorization」已過時（R07 X-06） | §8.8 #2 | 過時的「Claude.ai 不能帶標頭」已由 HM-18 更正（`docs/operations/clients.md`，2026-11-19）；Claude.ai 送不送 Origin 等 S14 |
 | FM-29 | PaaS 轉送用戶端其他標頭（含 `x-n8n-*`，上游可能據此換後端，G5-13，PaaS 側未實測 UC-16）；HA 白名單應保留 | §8.8 #4 | — |
 | FM-30 | 回應碼待決（DQ-09）：G2 建議 503 `{"error":"state unavailable"}`，G3 認為也可維持 404／401 | `tests/test_profile_routing.py`（HM-08） | 撞號 503 和 PaaS 相同；DQ-09 已定（2026-11-14 21:5x 採用計畫建議） |
 | FM-33 | 錯 token 碼 HA 404／401（PaaS 403） | §8.8 #1 | — |
@@ -89,9 +93,9 @@
 | FM-84 | PaaS「兩種 429」只適用 PaaS；HA 監控要用閘道自己的訊號 | §8.8 #62 | — |
 | FM-86 | K-14（兩 Dashboard 共用簽章金鑰時 cookie 互信）在 HA MCP 路徑不適用 | §8.8 #63 | — |
 | FM-87 | PaaS 一個唯讀開關、HA 逐支授權；兩邊都每帳號一份 | §8.8 #64 | — |
-| FM-88 | 同一台、同一把 key 的兩帳號，子程式讀錯 state 時連線比對擋不下來（政策是唯一分權） | `tests/test_headscale_multi_profile.py`（HM-26，暫定名） | 政策是唯一分權；文件建議每帳號不同 API key |
+| FM-88 | 同一台、同一把 key 的兩帳號，子程式讀錯 state 時連線比對擋不下來（政策是唯一分權） | §8.8 #129、#130；`tests/test_headscale_multi_profile.py`（HM-26） | 政策是唯一分權；文件建議每帳號不同 API key |
 | FM-89 | 整份 PUT backend 本來就要帶完整連線 | §8.8 #41、#115 | 開通後新來源的判定見 #115（HM-12） |
-| FM-90 | 產品用途不同（HA 允許 Claude.ai） | §8.8 #9 | — |
+| FM-90 | 產品用途不同（HA 允許 Claude.ai） | §8.8 #9；`tests/test_headscale_multi_profile.py`（HM-26） | — |
 | FM-91 | 同一台 Nextcloud 暴力破解防護以來源 IP 計（FM-69） | §8.8 #18；`tests/test_health_backoff.py`（HM-09） | 節流單位 UC-12 未確認 |
 | FM-92 | HA 遮罩以 state 為單位，不需全域集合；EMQX 角色名稱依版本：未確認（UC-22） | §8.8 #38、#65 | — |
 | FM-94 | DOCS.md 不算 Store 執行期內容，太早改會隨別的產品發版提早上架 | §8.8 #73 | — |
@@ -101,7 +105,7 @@
 | FM-102 | hook 只能用 python3 或 busybox sh、預設 600 秒；能否以 root 讀 0600 檔、連 8081、拿 owner 使用者 id：未確認（UC-19） | §8.8 #72 | — |
 | FM-105 | 合併「改 add-on 版號」的 PR＝直接發佈到 WOOW App Store | §8.8 #73 | — |
 | FM-106 | HA 沒有釘版隔離層 | §8.8 #74 | — |
-| FM-109 | Headscale 測法兩份報告不同（CF-15） | `tests/test_odoo_multi_profile.py`（HM-12）；`tests/test_headscale_multi_profile.py`（HM-26，暫定名） | 真後端 N×N 在 HAOS（驗收 T-04）；Headscale 形態 DQ-26 待定 |
+| FM-109 | Headscale 測法兩份報告不同（CF-15） | `tests/test_odoo_multi_profile.py`（HM-12）；`tests/test_headscale_multi_profile.py`（HM-26） | 真後端 N×N 在 HAOS（驗收 T-04）；Headscale 形態 DQ-26 待定 |
 | FM-110 | aarch64 不適用（只出 amd64）；n8n nodes.db 持久化會加大備份（每份約 67 MiB） | §8.8 #47 | HA 只出 amd64，容量在 J6412／J1900 量（HM-19c） |
 | FM-111 | Supervisor 能否不還原備份直接裝回舊版：未確認（UC-18） | §8.8 #71 | — |
 | FM-112 | Supervisor 還原＝直接回滾 | §8.8 #20 | — |
@@ -142,10 +146,10 @@
 | T-01 | 執行中映像 digest＝GHCR 發佈值；記 Core／Supervisor／OS；後端用合成身分 | §8.8 #73；`packaging/test_container_probe.py`（HM-16 擴充）；`packaging/test_ha_p9_probe.py`（HM-16 擴充） | HAOS 的 digest 與版本紀錄在 HM-19b |
 | T-02 | 上限依 HA 實測另訂；錯誤碼照 HA 管理 API 契約 | §8.8 #19、#35；`tests/test_profile_admin_api.py`（HM-10） | — |
 | T-03 | 每帳號 43 字元 token 互異；Odoo 改綁身分要換 token（HA 現在不換，R12 HX-all-09） | §8.8 #40；`tests/test_odoo_identity_rotation.py`（HM-12） | — |
-| T-04 | 標記只在對角線；Headscale 一帳號一台 | `tests/test_odoo_multi_profile.py`（HM-12）；`tests/test_headscale_multi_profile.py`（HM-26，暫定名） | 真後端 N×N 在 HAOS（HM-19b）；Headscale 一帳號一台或同台不同政策 DQ-26 待定 |
+| T-04 | 標記只在對角線；Headscale 一帳號一台 | §8.8 #129、#130；`tests/test_odoo_multi_profile.py`（HM-12）；`tests/test_headscale_multi_profile.py`（HM-26） | 真後端 N×N 在 HAOS（HM-19b）；Headscale 一帳號一台或同台不同政策 DQ-26 待定 |
 | T-05 | 錯 token：密鑰網址 404、Bearer 401（PaaS 403）；帶 query 400；密鑰網址上的 Authorization 忽略；跨帳號 session 和亂數 session 同樣處理 | §8.8 #1、#3；`tests/test_profile_routing.py`（HM-08） | — |
 | T-06 | 沒有 Ingress 身分 403、非管理員 403；錯誤帳號 id 依設計 404／400；MCP token 不能當管理憑證 | §8.8 #11、#31、#32；`tests/test_admin_pipeline_matrix.py`（HM-10） | — |
-| T-07 | 存政策若會重啟子程式（EMQX、LiteLLM、Nextcloud、Headscale），只重啟該帳號 | §8.8 #54；`tests/test_profile_admin_api.py`（HM-10） | — |
+| T-07 | 存政策若會重啟子程式（EMQX、LiteLLM、Nextcloud、Headscale），只重啟該帳號 | §8.8 #54、#131；`tests/test_profile_admin_api.py`（HM-10）；`tests/test_headscale_multi_profile.py`（HM-26） | — |
 | T-08 | 舊 token 404／401；HA 沒有手動指定 token，撞號只會來自還原或複製，要 fail closed | §8.8 #1、#80；`tests/test_profile_routing.py`（HM-08） | 沒有手動指定 token 見 #80 |
 | T-09 | 刪除後舊 token 立即失效、子程式停、port 釋放、目錄刪除；重建拿新 id 與新 token | §8.8 #34；`tests/test_profile_admin_api.py`（HM-10） | — |
 | T-10 | 全被後端擋；寫入前要有暫時 record rule | `tests/test_odoo_multi_profile.py`（HM-12） | 真後端在 HAOS（HM-19b），要有暫時 record rule |
@@ -159,10 +163,10 @@
 | T-18 | 每帳號診斷緩衝不被別帳號擠掉 | §8.8 #29；`tests/test_profile_runtime.py`（HM-05） | — |
 | T-19 | HA 現在全域 32 名額、等 1 秒；改每帳號後照 PaaS 情境 | §8.8 #15、#16；`tests/test_profile_quotas.py`（HM-08）；`tests/test_reply_worker.py`（HM-30） | — |
 | T-20 | 回退＝還原升級前備份；預設帳號 token 延續 | §8.8 #71；`tests/test_upgrade_zero_rewrite.py`（HM-07） | 回退演練在 HAOS（HM-19b） |
-| T-21 | Supervisor 還原＝直接回滾；照還原設計驗 | §8.8 #20、#21；`tests/test_restore_lock.py`（HM-13b） | — |
+| T-21 | Supervisor 還原＝直接回滾；照還原設計驗 | §8.8 #20、#21、#118、#119、#120、#121、#122、#123；`tests/test_restore_lock.py`（HM-13b） | — |
 | T-22 | `n8n_session` 每帳號一份 | §8.8 #62；`tests/test_n8n_multi_profile.py`（HM-25，暫定名） | — |
-| T-23 | n8n 每帳號 `child_token` 互異；其他 7 支不驗呼叫者，待安全決策 | §8.8 #37；`tests/test_child_bearer.py`（HM-06） | DQ-40 ⑥ 採用：7 支 Python 子程式也驗 |
-| T-24 | `/mcp` 帶 Origin 403；密鑰網址放行（Headscale 只放 claude.ai）；逐帳號一致 | §8.8 #9、#10、#42；`tests/test_origin_policy.py`（HM-27，暫定名） | — |
+| T-23 | n8n 每帳號 `child_token` 互異；其他 7 支不驗呼叫者，待安全決策 | §8.8 #37、#130；`tests/test_child_bearer.py`（HM-06）；`tests/test_headscale_multi_profile.py`（HM-26） | DQ-40 ⑥ 採用：7 支 Python 子程式也驗 |
+| T-24 | `/mcp` 帶 Origin 403；密鑰網址放行（Headscale 只放 claude.ai）；逐帳號一致 | §8.8 #9、#10、#42、#124、#125、#126、#127、#128；`tests/test_origin_policy.py`（HM-27） | — |
 | T-25 | 0 外洩；HA 正規式對解碼後形狀會漏（潛在） | `tests/test_redaction_matrix.py`（HM-02） | — |
 | T-26 | 原樣保存、顯示時跳脫、不執行 | §8.8 #35；`packages/mcp-admin-ui/tests/browser/profiles.spec.mjs`（HM-11） | — |
 | T-27 | 每種接法各一；真 Claude.ai 兩帳號同時用 | §8.8 #2 | 真實用戶端與公開網址在 HAOS（HM-19b、HM-29） |
@@ -208,9 +212,9 @@
 | FM-116 | 人工合併、標題前綴、不加 AI 署名 | 照 PaaS | DQ-36 採用 |
 | FM-120 | 全部撤銷 | §8.8 #82；`tests/test_revoke_all.py`（HM-13b） | PaaS 沒有；HA 新增見 #82 |
 | FM-121 | 同 uid 信任邊界 | 照 PaaS | DQ-37 採 (a)；HA 另寫事故處理（`threat-model.md` 第 4 節，文件） |
-| FM-122 | serverInfo 不帶帳號 | 照 PaaS | DQ-45 待定，建議不改 |
+| FM-122 | serverInfo 不帶帳號 | 照 PaaS | DQ-45 已定（2026-11-17 13:5x 使用者採用建議）：不改；DOCS 建議一個代理只接一個帳號、用戶端名稱帶 id（`docs/operations/clients.md`） |
 | FM-123 | Claude.ai 的 Origin | §8.8 #10 | Bearer 帶 Origin 403；DQ-11 第二問等 S14 實測 |
-| FM-128 | Core 白名單維護節奏 | §8.8 #30 | DQ-35 待定 |
+| FM-128 | Core 白名單維護節奏 | §8.8 #30 | DQ-35 已定（2026-11-17 14:0x 使用者選「不承諾天數」） |
 | FM-130 | 健康檢查連兩次失敗才判壞 | §8.8 #18；`tests/test_health_tolerance.py`（HM-30） | PaaS 沒有定期後端監看 |
 | FM-134 | FD 上限 | §8.8 #15、#87；`tests/test_extra_child_resources.py`（HM-09） | 開通後把 soft `RLIMIT_NOFILE` 提到需要量＋25%（契約第 5 節）；名額模型的不同見 #15；讀不到、不夠或設不上時只服務預設帳號見 #87 |
 | FM-137 | 看門狗退避 | §8.8 #14；`tests/test_profile_lifecycle.py`（HM-09） | DQ-20 採 (b) |
@@ -220,7 +224,7 @@
 | FM-152 | 改來源要重填秘密 | §8.8 #41、#115、#117；`tests/test_new_origin_secret.py`（HM-12） | DQ-40 ⑨；判定與面板表單的細節見 #115、#117（HM-12） |
 | FM-153 | 換身分換 token | §8.8 #40、#113、#114、#116；`tests/test_odoo_identity_rotation.py`（HM-12） | DQ-40 ⑩；存檔的回應、途中失敗與面板見 #113、#114、#116（HM-12）；PaaS #154（2026-11-15）起 Nextcloud 也換 |
 
-## 差異表每一列的來處（`contract.md` 第 9 節 #1～#117）
+## 差異表每一列的來處（`contract.md` 第 9 節 #1～#132）
 
 反查表：上面三張表的「對到」欄，哪些 FEATURE-MATRIX、G6 §5 的列對到差異表的這一列。沒有任何列對到的，寫出處。「項目」欄照 `contract.md` 第 9 節。
 
@@ -343,3 +347,18 @@
 | 115 | 新來源要重填秘密的判定 | FM-89、FM-152 | — |
 | 116 | 換身分存檔後的面板 | FM-153 | — |
 | 117 | 新來源要重填秘密的表單 | FM-152 | — |
+| 118 | 還原後獨立驗證比對的基準 | T-21 | — |
+| 119 | 還原樹裡 `profiles` 不是目錄 | T-21 | — |
+| 120 | 守門自己的名稱被目錄占用 | T-21 | — |
+| 121 | 沒有帳號資料時預設帳號的收據 | T-21 | — |
+| 122 | 還原後沿用權杖的面板提示 | T-21 | — |
+| 123 | 隔離目錄的清單與刪除 | T-21 | — |
+| 124 | Origin 檢查的位置 | T-24 | — |
+| 125 | enforce 的拒絕本體 | T-24 | — |
+| 126 | Origin 政策的設定入口與壞值 | T-24 | — |
+| 127 | Origin 紀錄的節流 | T-24 | — |
+| 128 | Origin 清單的格式與上限 | T-24 | — |
+| 129 | Headscale 帳號的形態（DQ-26） | FM-88、T-04 | — |
+| 130 | Headscale 子程式讀的政策 | FM-88、T-04、T-23 | — |
+| 131 | 存政策時的 Headscale 子程式 | T-07 | — |
+| 132 | Headscale 子程式能連的位址 | — | HM-26 補的列：Headscale 子程式能連的位址；理由同 FM-77「對齊作法」欄的「保留允許區網」，不是「HA 平台差異」欄 |
