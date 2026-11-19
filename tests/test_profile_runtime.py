@@ -49,6 +49,7 @@ import owned_network
 from admin_write_headers import reviewed_headers
 from log_scan import log_scan  # noqa: F401  (fixture)
 from mcp_admin_core import gateway, lifecycle, run_product, version_for_product
+from mcp_admin_core import products as product_module
 from mcp_admin_core.access import TokenAccess
 from mcp_admin_core.admin_auth import AdminAuthority, BadRequest
 from mcp_admin_core.capabilities import ManagementOptions
@@ -85,6 +86,17 @@ def no_production_port():
     before = owned_network.forbidden_operations
     yield
     assert owned_network.forbidden_operations == before, 'a test operation tried a production child port'
+
+
+@pytest.fixture(autouse=True)
+def simulated_child_installations(monkeypatch):
+    # Supervisors in this module do not execute children; retain the real spec
+    # builders without requiring every child package in this worktree.
+    installed = {product_module.ROOT / 'apps' / product / '.venv/bin/python'
+                 for product in PRODUCTS if product != 'n8n'}
+    installed.add(Path(n8n_adapter.__file__).parent / 'node_modules/n8n-mcp/dist/mcp/index.js')
+    is_file = Path.is_file
+    monkeypatch.setattr(Path, 'is_file', lambda path: path in installed or is_file(path))
 
 
 # ---- the children: one per profile, each on its own port ----
