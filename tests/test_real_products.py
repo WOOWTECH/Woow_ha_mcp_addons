@@ -18,7 +18,7 @@ import xmlrpc.client
 import httpx
 import pytest
 
-from mcp_admin_core.health import protocol_reply
+from mcp_admin_core.health import HEALTH_INTERVAL, protocol_reply
 from mcp_admin_core.products import INSTRUCTIONS, ODOO_HEALTH_PROBE, PRODUCTS, PROBES, ProductStore, TOOLS, child_spec
 from mcp_admin_core.policy import policy_enabled
 
@@ -256,7 +256,9 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     child_pids = children_path.read_text().split()
                     assert len(child_pids) == 1
                     offline.set()
-                    async with asyncio.timeout(22):
+                    # The Odoo guard probe enables multi-profile, whose health monitor
+                    # requires two failed probes before marking a backend unreachable.
+                    async with asyncio.timeout(22 + (HEALTH_INTERVAL if product == 'odoo' else 0)):
                         while (await client.get(f'http://127.0.0.1:{port}/health/ready')).status_code != 503:
                             await asyncio.sleep(.25)
                     assert process.poll() is None
