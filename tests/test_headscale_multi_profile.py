@@ -340,6 +340,58 @@ def test_a_profile_directory_a_restore_widened_is_refused_until_its_store_tighte
     assert as_the_child(spec) == expected_outcomes(B)
 
 
+def test_a_restore_revokes_every_profile_and_each_child_then_applies_the_backups_policy(tmp_path, log_scan):
+    """A Supervisor-style restore of a Headscale volume with profiles (the HA side of PaaS
+    test_headscale_volume_*_restores_*, woow-mcp-server 69ac425 packages/mcp-admin-core/tests/test_restore_inplace.py:
+    every token dies, the policy and the connection come from the backup): HM-13b's boot guard revokes the default
+    profile and B and C (DQ-03 (b) A2) and gives each a new child token; the restore record shows each profile's
+    Headscale URL (identity) and its policy, never a key or a token. Each child, started on the guarded state, then
+    applies the backup's policy (a policy saved after the backup is gone with it); the vendored reader takes a profile
+    without a token. The guard itself is HM-13b's (tests/test_restore_lock.py); this is Headscale's state and child."""
+    from mcp_admin_core import restore_lock
+    from restore_guard_disk import Disk
+    disk = Disk(tmp_path, log_scan, product=PRODUCT)
+    assert disk.start(enabled=True) == restore_lock.Outcome()  # the first switched-on start makes the sentinel
+    data = disk.data
+    store = ProductStore(data, PRODUCT)
+    try:
+        grants = store.update(connection=SHARED).enabled_write_tools
+    finally:
+        store.close()
+    disk.add(B)
+    disk.add(C)
+    update_profile(data, PRODUCT, B, connection=SHARED, disabled=['headscale_nodes'],
+                   enabled_write_tools=[grant for grant in grants if grant != 'headscale_users:create'])
+    update_profile(data, PRODUCT, C, connection={**SHARED, 'api_key': OWN_KEY},
+                   denied_operations={'headscale_users': ['list']})
+    watch(log_scan, data)
+    assert disk.start(enabled=True) == restore_lock.Outcome()
+    backup = disk.backup()
+    held = disk.held()
+    update_profile(data, PRODUCT, B, disabled=[], enabled_write_tools=grants)  # after the backup: lost by the restore
+    disk.restore(backup)
+    assert disk.start(enabled=True) == restore_lock.Outcome(restored=True, default_revoked=True, revoked=(B, C))
+    record = restore_lock.read_record(data)
+    rows = {row['id']: row for row in record['profiles']}
+    assert {profile_id: rows[profile_id]['identity'] for profile_id in ('default', B, C)} == {
+        'default': {'url': SHARED['url']}, B: {'url': SHARED['url']}, C: {'url': SHARED['url']}}
+    assert rows[B]['policy']['disabled'] == ['headscale_nodes']
+    raw = (data / profiles.RESTORE_RECORD_NAME).read_text()
+    assert not [value for value in (*held, SHARED['api_key'], OWN_KEY) if value in raw]
+    children = set()
+    for port, profile_id in zip((3000, 18000, 18001), ('default', B, C)):
+        state = stored(directory(data, profile_id))
+        assert state['token'] is None and state['child_token'] not in held | children
+        children.add(state['child_token'])
+        store = ProductStore(directory(data, profile_id), PRODUCT, existing_only=profile_id != 'default')
+        try:
+            spec = child_spec(store.load(), store.directory, port=port)
+        finally:
+            store.close()
+        assert spec.env['WOOW_MCP_CHILD_TOKEN'] == state['child_token']
+        assert as_the_child(spec) == expected_outcomes(profile_id), profile_id
+
+
 # ---- real children, one fake Headscale server (FM-88, FM-109, CF-15; T-07, T-23) ----
 
 def tool_requests(calls, since=0):
