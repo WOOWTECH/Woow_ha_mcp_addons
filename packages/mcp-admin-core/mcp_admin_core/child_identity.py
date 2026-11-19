@@ -3,11 +3,23 @@ import asyncio
 import logging
 import os
 import re
+import socket
+import sys
 
 import httpx
 
 logger = logging.getLogger(__name__)
 _SOCKET = re.compile(r'socket:\[(\d+)\]')
+
+
+def _address(encoded, family):
+    raw = bytes.fromhex(encoded)
+    if len(raw) != (4 if family == socket.AF_INET else 16):
+        raise ValueError('invalid procfs address')
+    # Linux prints each native-endian 32-bit word as hexadecimal.
+    raw = b''.join(raw[i:i + 4][::-1] if sys.byteorder == 'little' else raw[i:i + 4]
+                   for i in range(0, len(raw), 4))
+    return socket.inet_ntop(family, raw)
 
 
 def inspect_listener(pid, port):
@@ -18,6 +30,7 @@ def inspect_listener(pid, port):
     """
     try:
         inodes = set()
+        ambiguous = False
         for name in ('tcp', 'tcp6'):
             with open('/proc/net/' + name, encoding='ascii') as table:
                 next(table)
@@ -26,22 +39,35 @@ def inspect_listener(pid, port):
                     if len(fields) < 10:
                         raise ValueError('invalid tcp table')
                     address, state = fields[1], fields[3]
-                    if state == '0A' and int(address.rsplit(':', 1)[1], 16) == port:
+                    host, encoded_port = address.rsplit(':', 1)
+                    if state != '0A' or int(encoded_port, 16) != port:
+                        continue
+                    host = _address(host, socket.AF_INET if name == 'tcp' else socket.AF_INET6)
+                    if name == 'tcp' and host in ('0.0.0.0', '127.0.0.1'):
                         inodes.add(fields[9])
+                    elif name == 'tcp6' and host == '::ffff:127.0.0.1':
+                        inodes.add(fields[9])
+                    elif name == 'tcp6' and host == '::':
+                        # procfs does not expose IPV6_V6ONLY; this socket may accept IPv4.
+                        ambiguous = True
         if not inodes:
-            return 'absent'
+            return 'unavailable' if ambiguous else 'absent'
         owned = set()
+        incomplete = False
         path = f'/proc/{pid}/fd'
         for fd in os.listdir(path):
             try:
                 target = os.readlink(f'{path}/{fd}')
-            except FileNotFoundError:  # an unrelated descriptor closed during enumeration
+            except FileNotFoundError:
+                incomplete = True
                 continue
             found = _SOCKET.fullmatch(target)
             if found:
                 owned.add(found.group(1))
         # All listeners on this port must be owned: SO_REUSEPORT may create multiple listeners.
-        return 'owned' if inodes <= owned else 'mismatch'
+        if not inodes <= owned:
+            return 'unavailable' if incomplete else 'mismatch'
+        return 'unavailable' if ambiguous else 'owned'
     except (OSError, ValueError, IndexError, StopIteration, UnicodeError):
         return 'unavailable'
 
@@ -62,6 +88,7 @@ class ListenerGuard(httpx.AsyncBaseTransport):
 
     async def probe(self, pid):
         """Probe after exec even if no request or listener exists yet."""
+        self.status = 'unknown'
         def check():
             try:
                 for table in ('tcp', 'tcp6'):
