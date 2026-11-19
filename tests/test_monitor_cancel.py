@@ -355,7 +355,8 @@ async def test_the_rig_s_close_is_not_held_by_a_monitor_whose_stop_anyio_swallow
 
 @asynccontextmanager
 async def run_until_sigterm(data, default_port, *, switch=True):
-    """run_product.run of PRODUCT, switched on (switch=False: off), served as multi_profile_runtime serves it with real
+    """run_product.run of PRODUCT, switched on (switch=False: every product off, whatever the repository switches on,
+    as multi_profile_runtime's switch=False; HM-23 review S-4), served as multi_profile_runtime serves it with real
     child clients (no listener sockets, no child process: NoProcessSupervisor), but stopped as HA stops an add-on:
     SIGTERM. Yields the run task and what run_product built (switched on its ProfileManager, off its ProfileRuntime)
     once every profile serves."""
@@ -387,8 +388,7 @@ async def run_until_sigterm(data, default_port, *, switch=True):
         return built.health is not None and built.health.availability()['ready']
 
     with pytest.MonkeyPatch.context() as patch:
-        if switch:
-            patch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset({PRODUCT}))
+        patch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset({PRODUCT}) if switch else frozenset())
         patch.setattr(profile_runtime, 'Supervisor', NoProcessSupervisor)
         patch.setattr(profile_runtime, 'STAGGER_SECONDS', 0.05)
         patch.setattr(run_product, 'make_ha_admin_verifier', lambda: administrator)
