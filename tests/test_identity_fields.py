@@ -21,7 +21,7 @@ from mcp_admin_core.config import State
 from mcp_admin_core.identity_fields import IDENTITY, OPTION, SECRET
 from mcp_admin_core.products import (
     CONNECTIONS, IDENTITY_BOUND, OWNER_DEFAULTS, TOKEN_HISTORY, URL_FIELDS, Product, ProductState,
-    profile_initial_state,
+    identity_rebound, profile_initial_state, same_identity,
 )
 
 pytestmark = pytest.mark.usefixtures('log_scan')  # every new test runs under the HM-01 log scan
@@ -98,6 +98,23 @@ def test_the_urls_compared_as_servers():
     for product, names in identity_fields.SAME_SERVER_URLS.items():
         assert product in IDENTITY_BOUND, product
         assert set(names) <= set(URL_FIELDS[product]) & set(identity_fields.rotating_fields(product)), product
+
+
+@pytest.mark.parametrize('spelling', ['https://ODOO.invalid', 'https://odoo.invalid:443', 'HTTPS://odoo.invalid'])
+def test_odoos_url_is_compared_as_typed(monkeypatch, spelling):
+    # HM-22 review S-2: a switched-on Odoo's url is compared as typed, as PaaS #131 compares it (only the URLs of
+    # SAME_SERVER_URLS are compared as the server they name), so another spelling of the same server rotates its token,
+    # while the same two URLs name one Nextcloud server. Whether Odoo's url should be compared as a server too waits for
+    # the owner (the HM-22 note, section 15): this case changes with that decision.
+    monkeypatch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset({'odoo'}))
+    saved = {'url': 'https://odoo.invalid', 'database': 'DUMMY-db', 'username': 'DUMMY-user',
+             'password': 'DUMMY-golden-odoo-password'}
+
+    def state(connection):
+        return ProductState(product='odoo', token='T' * 43, child_token='C' * 43, connection=connection)
+    assert identity_rebound(state(saved), state({**saved, 'url': spelling})) is True
+    assert same_identity('odoo', 'url', saved['url'], spelling) is False
+    assert same_identity('nextcloud', 'url', saved['url'], spelling) is True
 
 
 def test_the_admin_api_fields_and_secrets_agree():

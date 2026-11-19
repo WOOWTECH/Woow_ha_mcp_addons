@@ -8,8 +8,10 @@ tests/multi_profile_runtime.py does):
 - A profile's MCP token is bound to its Nextcloud account (DQ-40 ⑩ (a); PaaS #154, woow-mcp-server 0f94aa4): a save
   (PUT backend or backend/patch) that changes its url or its username rotates the token in HM-12's order (the old child
   stops, one write holds the connection, the new token and a rotate history entry, the change is published, the new
-  child starts) and the old token is refused on both connection paths. The app password alone, the first setup and a
-  revoked token keep it, as do the other profiles' tokens. The url is compared as the server it names
+  child starts) and the old token is refused on both connection paths, for an additional profile and for the default
+  profile alike. The app password alone, the first setup and a revoked token keep it, as do the other profiles'
+  tokens; while a restored profile waits for its review, such a save is refused (409 restore_review_required) and
+  does nothing (HM-13c review S-3). The url is compared as the server it names
   (products.same_identity; PaaS normalize_base_url): the scheme and the host in any letter case and the default port
   written out or not are one server; any other path, its letter case and a page path pasted from the browser included,
   is another URL, because the child uses the saved URL as its root (contract section 9, HM-22's row on the URL).
@@ -48,14 +50,18 @@ from log_scan import log_scan  # noqa: F401  (fixture)
 from multi_profile_runtime import (Children, all_tokens, create_profile, free_port, ids, multi_profile_runtime,
                                    stored, update_profile)
 import loopback_backends
-from mcp_admin_core import features, health as health_module, identity_fields, lifecycle, profile_runtime
+from mcp_admin_core import (features, health as health_module, identity_fields, lifecycle, profile_runtime,
+                            restore_lock)
 from mcp_admin_core.access import masked_token
 from mcp_admin_core.products import IDENTITY_BOUND, ProductState, ProductStore, identity_rebound
 from nextcloud_fixtures import OCS_PATH, multistatus, respond
 from nextcloud_fixtures import switched_off  # noqa: F401  (fixture: the switched-off cases pin that mode)
 from test_odoo_identity_rotation import (Journal, bearer, count_writes, directory, next_etag, opened_by, paths,
-                                         record_writes, refused_everywhere, routed_to, save)
+                                         record_writes, refused_everywhere, routed_to, save,
+                                         warnings_of as rebind_warnings)
+from test_profile_admin_api import tree_of
 from test_real_products import rpc
+from test_restore_review import bootstrap_of, mark_restored
 from test_single_profile_golden import (ACCEPT, ADMIN, BEARER_REQUIRED, CONNECTIONS, NOT_FOUND, answer, configure,
                                         initialize_message, production_runtime, settle)
 from test_six_hardening import Quiet, serve
@@ -70,10 +76,13 @@ PORTS = {B: 18000, C: 18001}
 SERVER = 'https://cloud.nextcloud.invalid/nc'
 ACCOUNTS = {B: {'url': SERVER, 'username': 'DUMMY-bob', 'app_password': 'DUMMY-bob-app-password'},
             C: {'url': SERVER, 'username': 'DUMMY-carol', 'app_password': 'DUMMY-carol-app-password'}}
+# The default profile's account where a case changes it (HM-22 review S-3): a third user of B's server, so that each
+# change of ROTATIONS is the one it names for the default profile too.
+DEFAULT_ACCOUNT = {'url': SERVER, 'username': 'DUMMY-alice', 'app_password': 'DUMMY-alice-app-password'}
 NEW_PASSWORD = 'DUMMY-rebound-nextcloud-password'
 NEW_USER = 'DUMMY-dave'
 WATCHED_HOSTS = ('cloud.nextcloud.invalid', 'other.nextcloud.invalid')
-WATCHED_USERS = ('DUMMY-bob', 'DUMMY-carol', NEW_USER)
+WATCHED_USERS = ('DUMMY-alice', 'DUMMY-bob', 'DUMMY-carol', NEW_USER)
 # The JSON-RPC code of the gateway's refusal of a tool the policy disables (policy.ToolCallRefused: Unknown tool).
 UNKNOWN_TOOL = -32602
 
@@ -97,7 +106,7 @@ def watch(log_scan, data):
     """The log scan's needles: every token and child token stored under data, every app password, username and host
     of these tests (no log line may show one: PaaS test_the_identity_change_log_line_has_no_values) and every label."""
     log_scan.watch(*all_tokens(data))
-    passwords = [CONNECTIONS[PRODUCT]['app_password'], NEW_PASSWORD,
+    passwords = [CONNECTIONS[PRODUCT]['app_password'], NEW_PASSWORD, DEFAULT_ACCOUNT['app_password'],
                  *(account['app_password'] for account in ACCOUNTS.values())]
     log_scan.watch(*passwords, *WATCHED_USERS, *WATCHED_HOSTS, kind='secret')
     log_scan.watch(*LABELS.values(), kind='name')
@@ -130,6 +139,10 @@ SAME_ACCOUNT = [
 OTHER_ACCOUNT = [
     ('other host', {'url': 'https://other.nextcloud.invalid/nc'}),
     ('other scheme', {'url': 'http://cloud.nextcloud.invalid/nc'}),
+    # HM-22 review S-1: the scheme alone differs (the same port), and the other scheme's default port on https: a
+    # comparison that left out the scheme, or took 80 and 443 as every scheme's default, would keep the token.
+    ('other scheme on the same port', {'url': 'http://cloud.nextcloud.invalid:443/nc'}),
+    ('the http port on https', {'url': 'https://cloud.nextcloud.invalid:80/nc'}),
     ('other port', {'url': 'https://cloud.nextcloud.invalid:8443/nc'}),
     ('other path', {'url': 'https://cloud.nextcloud.invalid/other'}),
     ('path in capitals', {'url': 'https://cloud.nextcloud.invalid/NC'}),
@@ -187,6 +200,10 @@ ROTATIONS = [
     ('other host', 'backend', {'url': 'https://other.nextcloud.invalid/nc'}),
     ('other host', 'backend/patch', {'url': 'https://other.nextcloud.invalid/nc', 'app_password': NEW_PASSWORD}),
     ('other scheme', 'backend/patch', {'url': 'http://cloud.nextcloud.invalid/nc', 'app_password': NEW_PASSWORD}),
+    ('other scheme on the same port', 'backend/patch',
+     {'url': 'http://cloud.nextcloud.invalid:443/nc', 'app_password': NEW_PASSWORD}),
+    ('the http port on https', 'backend/patch',
+     {'url': 'https://cloud.nextcloud.invalid:80/nc', 'app_password': NEW_PASSWORD}),
     ('other port', 'backend/patch', {'url': 'https://cloud.nextcloud.invalid:8443/nc', 'app_password': NEW_PASSWORD}),
     ('other path', 'backend/patch', {'url': 'https://cloud.nextcloud.invalid/other'}),
     ('path in capitals', 'backend/patch', {'url': 'https://cloud.nextcloud.invalid/NC'}),
@@ -197,33 +214,40 @@ ROTATIONS = [
 
 
 @pytest.mark.parametrize('case, route, changes', ROTATIONS, ids=[f'{c}-{r}' for c, r, _ in ROTATIONS])
+@pytest.mark.parametrize('profile_id', [B, 'default'], ids=['B', 'default'])
 async def test_a_changed_account_stops_the_old_child_then_rotates_the_token_in_one_write(
-        tmp_path, log_scan, monkeypatch, case, route, changes):
-    """B's url or username saved anew: the old child stops while the old token is still the one on disk; one write
-    holds the new connection (the other fields as stored), a new 43-character token and one history entry (rotate, the
-    old token masked; PaaS writes backend_identity_change: contract #59); the token change is published; the new child
-    starts on the new account. 200 {"saved", "token_rotated": true, "configuration"} with B's echo and the new state's
-    ETag, never a token. The 8081 dispatcher routes the old token to no profile and the new one to B; the old token is
-    refused on both paths and the new one opens a session with B's child on both; the default profile's state and token
-    are untouched (I6)."""
+        tmp_path, log_scan, monkeypatch, profile_id, case, route, changes):
+    """The url or the username of B, or of the default profile (HM-22 review S-3: once Nextcloud is switched on, every
+    single-profile user's own profile, its state at the data root and its child on port 3000), saved anew, both
+    accounts on B's server: the old child stops while the old token is still the one on disk; one write holds the new
+    connection (the other fields as stored), a new 43-character token and one history entry (rotate, the old token
+    masked; PaaS writes backend_identity_change: contract #59); the token change is published; the new child starts on
+    the new account (its environment carries the saved URL and username). 200 {"saved", "token_rotated": true,
+    "configuration"} with the profile's echo and the new state's ETag, never a token. The 8081 dispatcher routes the
+    old token to no profile and the new one to the profile; the old token is refused on both paths and the new one
+    opens a session with the profile's child on both; the other profile's state and token are untouched (I6)."""
     data, children = setup(tmp_path)
+    if profile_id == 'default':
+        configure_store(data, DEFAULT_ACCOUNT)
+    other = 'default' if profile_id == B else B
+    ports = {'default': 3000, B: PORTS[B]}
     journal = Journal()
     record_writes(monkeypatch, journal)
-    replaced = count_writes(monkeypatch, directory(data, B) / 'state.json')
+    replaced = count_writes(monkeypatch, directory(data, profile_id) / 'state.json')
     async with multi_profile_runtime(PRODUCT, data, children=children, supervisor=journal.supervisor()) as runtime:
         await settle(runtime, 'configured')
         watch(log_scan, data)
-        journal.watch(data, B, runtime.manager.get(B).runtime.supervisor)
-        before = stored(directory(data, B))
-        old, default_state = before['token'], (data / 'state.json').read_bytes()
+        journal.watch(data, profile_id, runtime.manager.get(profile_id).runtime.supervisor)
+        before = stored(directory(data, profile_id))
+        old, other_state = before['token'], (directory(data, other) / 'state.json').read_bytes()
         replaced.clear()
-        saved = await save(runtime, B, route, body_of(route, before['connection'], changes))
+        saved = await save(runtime, profile_id, route, body_of(route, before['connection'], changes))
         assert saved.status_code == 200, saved.text
         assert len(replaced) == 1, 'the connection, the token and its history are one write'
         body = saved.json()
         assert list(body) == ['saved', 'token_rotated', 'configuration', 'profile']
-        assert (body['saved'], body['token_rotated'], body['profile']) == (True, True, {'id': B})
-        after = stored(directory(data, B))
+        assert (body['saved'], body['token_rotated'], body['profile']) == (True, True, {'id': profile_id})
+        after = stored(directory(data, profile_id))
         new = after['token']
         log_scan.watch(new)
         assert new not in (None, old) and len(new) == 43 and new not in saved.text and old not in saved.text
@@ -231,14 +255,18 @@ async def test_a_changed_account_stops_the_old_child_then_rotates_the_token_in_o
         assert after['connection'] == {**before['connection'], **changes}
         entry, = after['token_history']
         assert (entry['action'], entry['previous_token_masked']) == ('rotate', masked_token(old))
-        assert journal.events == [('stop', old, 'DUMMY-bob'), ('write', 'stopped'), ('publish',),
+        assert journal.events == [('stop', old, before['connection']['username']), ('write', 'stopped'), ('publish',),
                                   ('start', after['connection']['username'])]
-        assert saved.headers['etag'] == await next_etag(runtime, B)
-        assert routed_to(runtime, old) == [] and routed_to(runtime, new) == [B]
+        # HM-22 review N-4: the new child runs on the saved URL, not only on the saved username.
+        env = spec_env(runtime, profile_id)
+        assert (env['NEXTCLOUD_MCP_BASE_URL'], env['NEXTCLOUD_MCP_USERNAME']) == (
+            after['connection']['url'], after['connection']['username'])
+        assert saved.headers['etag'] == await next_etag(runtime, profile_id)
+        assert routed_to(runtime, old) == [] and routed_to(runtime, new) == [profile_id]
         assert await refused_everywhere(runtime, old)
-        assert await opened_by(runtime, new, children.by_port[PORTS[B]])
-        assert (data / 'state.json').read_bytes() == default_state
-        assert await opened_by(runtime, runtime.token('default'), children.by_port[3000])
+        assert await opened_by(runtime, new, children.by_port[ports[profile_id]])
+        assert (directory(data, other) / 'state.json').read_bytes() == other_state
+        assert await opened_by(runtime, runtime.token(other), children.by_port[ports[other]])
 
 
 SPELLINGS = [value['url'] for case, value in SAME_ACCOUNT if 'url' in value]
@@ -366,6 +394,57 @@ async def test_one_profiles_new_account_rotates_only_its_own_token(tmp_path, log
             assert (directory(data, profile_id) / 'state.json').read_bytes() == kept[profile_id], profile_id
             assert runtime.manager.get(profile_id).runtime.supervisor.starts == starts[profile_id], profile_id
             assert await opened_by(runtime, runtime.token(profile_id), children.by_port[port]), profile_id
+
+
+# ---- the restore review (HM-13c review S-3; HM-22 review N-5): a Nextcloud account change issues a new token, so it
+# waits for the profile's review as token/rotate does ----
+
+def restored_switched_off_then_reissued(data):
+    """HM-13c review S-3's state (tests/test_restore_review.py) with Nextcloud: the default profile and B restored with
+    profile data while Nextcloud is not switched on: the guard revokes both and records them unreviewed. Switched off
+    there is no gate, so the administrator issues the default profile a new token (T x43 here). Switched on afterwards,
+    the default profile's token is active while its review still waits."""
+    mark_restored(data)
+    store = ProductStore(data, PRODUCT)
+    try:
+        outcome = restore_lock.guard(store, PRODUCT, enabled=False)
+        assert outcome.restored and outcome.default_revoked
+        store.change_token('T' * 43, action='rotate')
+    finally:
+        store.close()
+
+
+@pytest.mark.parametrize('route', ['backend', 'backend/patch'])
+async def test_an_account_change_waits_for_the_profiles_restore_review(tmp_path, log_scan, monkeypatch, route):
+    """HM-13c review S-3 with Nextcloud (HM-22 review N-5): switched on, a save of another username would rotate the
+    default profile's active token (products.identity_rebound). While the profile waits for its restore review it
+    answers 409 restore_review_required, as token/rotate does, after If-Match and before anything is done: the child is
+    not stopped, nothing is written (the tree is the same), no token change is published, the token stays the one 8081
+    serves on both paths, and no line is logged. A new app password alone rotates nothing and is saved as today, the
+    review still waiting. The gate is HM-13c's and knows no product; the panel's words for the refused save are
+    contracts.js identityChange.nextcloud (HM-22 review MF-1)."""
+    data, children = setup(tmp_path)
+    restored_switched_off_then_reissued(data)
+    journal = Journal()
+    record_writes(monkeypatch, journal)
+    async with multi_profile_runtime(PRODUCT, data, children=children, supervisor=journal.supervisor()) as runtime:
+        await settle(runtime, 'configured')
+        watch(log_scan, data)
+        journal.watch(data, 'default', runtime.manager.get('default').runtime.supervisor)
+        default = await bootstrap_of(runtime)
+        assert default['token_active'] is True and default['restore_review_required'] is True
+        token, state, before = runtime.token('default'), stored(data), tree_of(data)
+        refused = await save(runtime, 'default', route, body_of(route, state['connection'], {'username': NEW_USER}))
+        assert (refused.status_code, refused.json()) == (
+            409, {'error': 'request denied', 'detail': {'code': 'restore_review_required'}}), refused.text
+        assert journal.events == [] and tree_of(data) == before and stored(data) == state
+        assert runtime.token('default') == token and await opened_by(runtime, token, children.by_port[3000])
+        assert rebind_warnings(log_scan) == []
+        kept = await save(runtime, 'default', 'backend/patch', {'changes': {'app_password': NEW_PASSWORD}})
+        assert kept.status_code == 200 and kept.json()['saved'] is True and 'token_rotated' not in kept.json(), kept.text
+        assert stored(data)['token'] == token and stored(data)['connection']['app_password'] == NEW_PASSWORD
+        assert [event[0] for event in journal.events] == ['stop', 'start']  # the child relaunched, no identity write
+        assert (await bootstrap_of(runtime))['restore_review_required'] is True
 
 
 # What a switched-on save refuses before anything happens (400 {"error":"request denied"}): HM-20's loopback rule
