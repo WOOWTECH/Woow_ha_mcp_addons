@@ -218,7 +218,8 @@ async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None
 
     def child_client(*args, **kwargs):
         if not real_children:
-            kwargs.setdefault('transport', httpx.MockTransport(children.route))
+            if kwargs.get('transport') is None or isinstance(kwargs['transport'], profile_runtime.ListenerGuard):
+                kwargs['transport'] = httpx.MockTransport(children.route)
         return GENUINE_CLIENT(*args, **kwargs)
 
     class CapturedListener(run_product.Listener):

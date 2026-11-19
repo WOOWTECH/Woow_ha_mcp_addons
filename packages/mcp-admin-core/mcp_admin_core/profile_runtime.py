@@ -101,6 +101,7 @@ import stat
 import httpx
 
 from . import health as health_module, origin_policy, profiles, request_budget
+from .child_identity import ListenerGuard
 from .access import TokenAccess
 from .admin_auth import AdminAuthority
 from .config import ConfigError, strict_json
@@ -202,7 +203,7 @@ class ProfileRuntime:
                  forward_slots=None, slot_busy=None, reply_secrets=None, hold=None, monitor_options=None,
                  report_blocked=False, default_endpoint=None, bootstrap_fields=None, body_budget=None,
                  reply_worker=None, dormant_profiles=None, restore_notice=None, review_required=None,
-                 origin_policy=None):
+                 origin_policy=None, listener_identity=False):
         if not isinstance(profile_id, str) or not PROFILE_ID.fullmatch(profile_id):
             raise ValueError('invalid profile id')
         if type(child_connections) is not int or child_connections < 1:
@@ -231,6 +232,7 @@ class ProfileRuntime:
         self.monitor_options = dict(monitor_options or {})
         if report_blocked:
             self.gateway_options['child_blocked'] = self.blocked_reason
+        self.listener_identity = listener_identity
         self.lifecycle = dict(lifecycle or {})
         self.shared, self.profile_view = shared, profile_view
         self.supervisor = self.child = self.health = self.configuration = None
@@ -248,9 +250,12 @@ class ProfileRuntime:
         try:
             self.supervisor = manager = Supervisor(None, **self.lifecycle)
             stack.push_async_callback(manager.stop)  # closed in reverse: the child client first, then the child
+            limits = httpx.Limits(max_connections=self.child_connections)
+            guard = ListenerGuard(manager, self.port, limits=limits) if self.listener_identity else None
+            manager.listener_identity = guard
             self.child = child = await stack.enter_async_context(httpx.AsyncClient(
                 trust_env=False, follow_redirects=False, timeout=httpx.Timeout(10, connect=3),
-                limits=httpx.Limits(max_connections=self.child_connections)))
+                limits=limits, **({"transport": guard} if guard is not None else {})))
             self.health = health = HealthMonitor(self.store, manager, child, child_url=self.child_url,
                                                  **self.monitor_options)
             # HM-10 (DQ-15): the profile's ETags are bound to its id.
@@ -890,7 +895,7 @@ class ProfileManager:
                                  child_connections=quota.child_connections, forward_slots=quota.forward_slots,
                                  slot_busy=gate.slot_busy, reply_secrets=self.reply_secrets, lifecycle=lifecycle,
                                  hold=None if default else partial(self._hold, profile_id), monitor_options=monitor,
-                                 report_blocked=True, profile_view=partial(self.echo, profile_id),
+                                 report_blocked=True, listener_identity=True, profile_view=partial(self.echo, profile_id),
                                  bootstrap_fields=partial(self.admin.bootstrap_fields, profile_id),
                                  default_endpoint=None if default else self.default_endpoint,
                                  body_budget=gate.budget_share,
