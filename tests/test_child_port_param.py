@@ -38,6 +38,7 @@ import owned_network
 import owned_runtime
 import run as n8n_run
 from log_scan import log_scan  # noqa: F401  (fixture)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch these tests pin)
 from mcp_admin_core import gateway, health, lifecycle, run_product
 from mcp_admin_core.products import PRODUCTS, ProductStore, child_spec
 from test_owned_ports_bearer import direct_session
@@ -45,7 +46,9 @@ from test_real_products import backend, connection
 from test_single_profile_golden import (ACCEPT, ADMIN, NoProcessSupervisor, PRODUCTS as SHIPPED, configure, connect,
                                         production_runtime, settle)
 
-pytestmark = pytest.mark.usefixtures('log_scan')  # every new test runs under the HM-01 log scan
+# HM-19a: the default child spec snapshot is the switched-off add-on's (tests/switch_modes.py); switched on, the spec
+# adds WOOW_MCP_DENY_LOOPBACK=1 (HM-20, tests/test_backend_loopback.py).
+pytestmark = pytest.mark.usefixtures('log_scan', 'switched_off')  # every new test runs under the HM-01 log scan
 ROOT = Path(__file__).resolve().parents[1]
 SNAPSHOT = ROOT / 'tests/contract/child_spec_default.json'
 DEFAULT = 3000

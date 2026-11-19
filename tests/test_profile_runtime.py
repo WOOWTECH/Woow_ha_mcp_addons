@@ -48,7 +48,9 @@ import n8n_adapter
 import owned_network
 from admin_write_headers import reviewed_headers
 from log_scan import log_scan  # noqa: F401  (fixture)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch these tests pin)
 from mcp_admin_core import gateway, lifecycle, run_product, version_for_product
+from mcp_admin_core import products as product_module
 from mcp_admin_core.access import TokenAccess
 from mcp_admin_core.admin_auth import AdminAuthority, BadRequest
 from mcp_admin_core.capabilities import ManagementOptions
@@ -62,7 +64,9 @@ from test_single_profile_golden import (ACCEPT, ADMIN, BEARER_REQUIRED, BOOTSTRA
                                         initialize_message, probe_name, production_runtime, settle, stat_signature,
                                         stored)
 
-pytestmark = pytest.mark.usefixtures('log_scan')  # every new test runs under the HM-01 log scan
+# HM-19a: run_product of a product that is not switched on serves its default profile's runtime alone
+# (tests/switch_modes.py); switched on: tests/test_router_passthrough.py.
+pytestmark = pytest.mark.usefixtures('log_scan', 'switched_off')  # every new test runs under the HM-01 log scan
 DEFAULT_PORT = lifecycle.CHILD_PORT  # the default profile's child (HM-04)
 EXTRA_PORT = 18000  # an extra profile's child (plan 5.4: 18000 and up; owned_network.PROFILE_CHILD_PORTS)
 EXTRA_ID = 'ab' * 12  # an extra profile's id: 24 lowercase hex (contract 1.1)
@@ -85,6 +89,17 @@ def no_production_port():
     before = owned_network.forbidden_operations
     yield
     assert owned_network.forbidden_operations == before, 'a test operation tried a production child port'
+
+
+@pytest.fixture(autouse=True)
+def simulated_child_installations(monkeypatch):
+    # Supervisors in this module do not execute children; retain the real spec
+    # builders without requiring every child package in this worktree.
+    installed = {product_module.ROOT / 'apps' / product / '.venv/bin/python'
+                 for product in PRODUCTS if product != 'n8n'}
+    installed.add(Path(n8n_adapter.__file__).parent / 'node_modules/n8n-mcp/dist/mcp/index.js')
+    is_file = Path.is_file
+    monkeypatch.setattr(Path, 'is_file', lambda path: path in installed or is_file(path))
 
 
 # ---- the children: one per profile, each on its own port ----
@@ -241,7 +256,9 @@ class Profiles:
         await self.stack.__aexit__(*exc)
 
     def client(self, *args, **kwargs):
-        kwargs.setdefault('transport', httpx.MockTransport(self.route))
+        # This fixture simulates children without OS listeners; HM-15 has real-socket tests.
+        if kwargs.get('transport') is None or isinstance(kwargs['transport'], self.module.ListenerGuard):
+            kwargs['transport'] = httpx.MockTransport(self.route)
         return GENUINE_CLIENT(*args, **kwargs)
 
     async def route(self, request):

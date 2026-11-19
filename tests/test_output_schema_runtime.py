@@ -18,6 +18,12 @@ from test_expansion_runtime import fake_api, READS, WRITES
 from test_real_products import connection
 from test_tool_snapshot import child_listing, own_listing
 from test_batch2_policy import GRAPH
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch these tests pin)
+
+# HM-19a: written for the switched-off add-on (tests/switch_modes.py). A real child here talks to a loopback fake
+# backend, which the child of a switched-on product refuses (HM-20: WOOW_MCP_DENY_LOOPBACK=1, tested both ways in
+# tests/test_backend_loopback.py); the child's behavior under test is the same in both modes.
+pytestmark = pytest.mark.usefixtures('switched_off')
 
 ROOT = Path(__file__).resolve().parents[1]
 PINNED = json.loads((ROOT/'packages/mcp-admin-core/mcp_admin_core/output_schemas.json').read_text())

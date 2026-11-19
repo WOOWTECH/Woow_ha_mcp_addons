@@ -15,8 +15,9 @@ from __future__ import annotations
 KNOWN_PRODUCTS = frozenset({'n8n', 'odoo', 'odoo-manage', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud',
                             'headscale'})
 
-# No product has additional profiles yet. OpenDesign and Odoo Manage never will (DQ-28; profiles.supports_profiles).
-MULTI_PROFILE_PRODUCTS: frozenset[str] = frozenset()
+# Odoo has additional profiles from its 0.5.0 release (R1, HM-19a); every other product is still switched off.
+# OpenDesign and Odoo Manage never will be (DQ-28; profiles.supports_profiles).
+MULTI_PROFILE_PRODUCTS: frozenset[str] = frozenset({'odoo'})
 
 
 def enabled(product: str) -> bool:

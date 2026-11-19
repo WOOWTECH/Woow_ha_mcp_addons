@@ -33,6 +33,7 @@ import pytest
 
 from admin_write_headers import reviewed_headers
 from log_scan import log_scan  # noqa: F401  (fixture)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch a test pins)
 from mcp_admin_core import features, operations, profile_admin, profiles, restore_detect as rd, restore_lock
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.products import ProductStore
@@ -287,7 +288,8 @@ def comparable(body):
 
 
 @pytest.mark.parametrize('product', GOLDEN_PRODUCTS)
-async def test_after_a_single_profile_restore_the_bootstrap_only_adds_the_notice(tmp_path, log_scan, product):
+async def test_after_a_single_profile_restore_the_bootstrap_only_adds_the_notice(tmp_path, log_scan, product,
+                                                                                 switched_off):
     """The production runtime of every product, switched off: the same data restored or not. Restored, the bootstrap
     has exactly one key more, restore_notice ({"at"}), and every other key the same value; the token is kept (both
     connection paths serve it). The same start without a restore: today's keys (HM-01's golden regression)."""
@@ -321,7 +323,7 @@ async def test_after_a_single_profile_restore_the_bootstrap_only_adds_the_notice
 
 @pytest.mark.parametrize('change', ['token/rotate', 'token/revoke'])
 @pytest.mark.parametrize('product', ['odoo', 'n8n'])
-async def test_the_next_token_change_ends_the_notice(tmp_path, log_scan, product, change):
+async def test_the_next_token_change_ends_the_notice(tmp_path, log_scan, product, change, switched_off):
     """The notice shows until the default profile's token changes: a token/rotate, or a token/revoke that revokes it,
     removes restore-notice.json and the bootstrap's restore_notice (the answers of both are today's); the next start
     shows none."""
@@ -392,7 +394,7 @@ async def test_a_failed_identity_change_keeps_the_kept_tokens_notice(tmp_path, l
         assert NOTICE in os.listdir(data)
 
 
-async def test_a_start_that_was_never_restored_has_no_notice_at_all(tmp_path, log_scan, monkeypatch):
+async def test_a_start_that_was_never_restored_has_no_notice_at_all(tmp_path, log_scan, monkeypatch, switched_off):
     """Without a notice the runtime gets none (make_apps restore_notice left out): no Notice is made, a token change
     removes nothing and the data directory holds what it held before (contract 1.2: the exception is only for a
     restore)."""
@@ -863,7 +865,7 @@ async def test_once_reviewed_an_identity_change_rotates_the_token_as_today(tmp_p
 
 
 @pytest.mark.parametrize('restored', ['without profile data', 'with profile data, reissued'])
-async def test_switched_off_an_identity_change_after_a_restore_is_todays(tmp_path, log_scan, restored):
+async def test_switched_off_an_identity_change_after_a_restore_is_todays(tmp_path, log_scan, restored, switched_off):
     """HM-13c review S-3 changes nothing for a product not switched on (plan 3.3): there is no gate and no identity
     change then. Restored without profile data (the token kept, the panel's notice) or with it (S-3's own state: the
     record's rows unreviewed, the default profile's token issued again), a changed username is saved as today: the
@@ -1415,7 +1417,7 @@ async def test_the_new_routes_check_the_role_after_every_wait(tmp_path, log_scan
 
 # ---- switched off: none of this exists (contract 1.2) ----
 
-async def test_switched_off_the_new_routes_are_unknown(tmp_path, log_scan):
+async def test_switched_off_the_new_routes_are_unknown(tmp_path, log_scan, switched_off):
     """A product not switched on has no management route of HM-13c (plan 8.4 休眠處理: no management route while
     switched off; the owner approved only the bootstrap's one field): each is an unknown operation (404, empty), and a
     token/rotate never waits for a review."""

@@ -26,6 +26,7 @@ import httpx
 import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch a test pins)
 from multi_profile_runtime import Children, multi_profile_runtime
 from mcp_admin_core import gateway, profiles
 from mcp_admin_core.products import ProductStore, TOOLS
@@ -519,7 +520,8 @@ async def test_make_apps_takes_only_a_share_of_a_budget_beside_hm09s_and_hm10s_o
 
 
 @pytest.mark.parametrize('product', golden.PRODUCTS)
-async def test_every_products_runtime_reads_under_the_budget_and_the_guard(tmp_path, log_scan, monkeypatch, product):
+async def test_every_products_runtime_reads_under_the_budget_and_the_guard(tmp_path, log_scan, monkeypatch, product,
+                                                                           switched_off):
     """Not gated (contract 1.2; PaaS #155's apps/<product>/tests/test_request_structure_guard.py): every product's
     production runtime (run_product; apps/n8n/run.py for n8n), switched off, serves its MCP listener with the add-on's
     own budget (one account of the product's child estimate; here a 2 GiB cgroup ceiling, the default profile's share
@@ -640,7 +642,7 @@ async def test_a_declared_length_beside_a_chunked_framing_does_not_escape_the_id
 
 
 async def test_the_production_listener_charges_and_watches_a_chunked_body_that_states_a_small_length(
-        tmp_path, log_scan, monkeypatch):
+        tmp_path, log_scan, monkeypatch, switched_off):
     """Review MF-1 over a real socket: the add-on's own uvicorn 0.38.0 and h11 0.16.0 (run_product's listener). A POST
     that states Content-Length: 10 and sends its body chunked is charged as its chunks arrive (here 1 MiB) and, once it
     stalls, gets the idle 408 (0.3 s here) with Connection: close, not the whole-read limit's (5 s here); the child

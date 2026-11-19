@@ -84,7 +84,8 @@ session URL、備份或私人拓樸。LOCAL/MOCK、CONTAINER/MOCK、HA、PUBLIC 
 
 ## 多帳號驗收（T-01～T-29 的 HA 版；HM-16）
 
-**狀態（2026-11-19）：工具備好；有一次發版前預驗，還沒有 HM-19b 的正式驗收**。還沒有產品開通（`MULTI_PROFILE_PRODUCTS` 是空的）。
+**狀態（2026-11-19）：工具備好；有一次發版前預驗，還沒有 HM-19b 的正式驗收**。Odoo 0.5.0 的升版 PR（HM-19a）把 `odoo` 加進 `MULTI_PROFILE_PRODUCTS`；
+映像還沒建置，HM-19b 等它推上 GHCR 之後做（[0.5.0 發佈紀錄](release-decision-odoo-0.5.0.md)）。其他產品還沒開通。
 
 - **發版前預驗（2026-11-19）**：在負責人指定的展示機上，用拋棄式的本機 add-on（以已發佈的 Odoo 0.4.14 映像為底、換上 `claude-delivery` `fcd0b22`
   的程式，開關關與開各一份）跑了 Odoo 多帳號實測，結果見 [Odoo 多帳號發版前預驗](ha-test-odoo-multiprofile-early.md)。
@@ -105,7 +106,7 @@ CONTAINER/MOCK、STORE、HA、PUBLIC；token 一律不印、不存，帳號只�
 |---|---|---|---|
 | LOCAL/MOCK | GitHub CI `checks` | `packaging/unit.sh`（pytest、node、Playwright；root、0 skip）；packaging unittest（`python -m unittest discover -s packaging`：容器探針、多帳號階段與 P9 probe 的 mock 測試；不是 root、允許 skip） | 不需要 |
 | CONTAINER/MOCK | repo 外 builder | `container_acceptance.py`；開通的候選映像加多帳號階段 | 使用者（builder） |
-| STORE | 升版 PR 的 `Upgrade comparison` | `addons/<產品>/upgrade-check/seed`、`verify`（草稿在 `packaging/hooks/`，HM-19a 搬進去） | 自動 |
+| STORE | 升版 PR 的 `Upgrade comparison` | `addons/<產品>/upgrade-check/seed`、`verify`（HM-16 的草稿，HM-19a 搬進 `addons/odoo/upgrade-check/`） | 自動 |
 | HA | QA HAOS | [P9 kit](ha-p9-kit.md)（`--profile`、`--cross`、`--temp-profile`、`childkill`）加人工 | 使用者（每一步） |
 | PUBLIC | 使用者的代理或 tunnel、真 Claude.ai | 人工 | 使用者 |
 

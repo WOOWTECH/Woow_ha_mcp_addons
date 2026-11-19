@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Store upgrade comparison hook: verify (multi-profile HM-16; plan 12.3 HM-16, 11.3; FM-102, FM-135; contract 9 #72).
 
-The pair of seed in the same directory (a draft for addons/<product>/upgrade-check/verify; HM-19a moves both with the
-Odoo 0.5.0 release PR): it runs once the new version has started on the /data the comparison target left, uses seed's
+The pair of seed in the same directory (HM-16's draft, moved here from packaging/hooks/ by the Odoo 0.5.0 release
+PR, HM-19a): it runs once the new version has started on the /data the comparison target left, uses seed's
 readers and checks, and only reads, the same for every version (see seed). What it checks:
 
 - seed's checks again: /data/mcp and state.json the runtime user's and private; the default profile's token on both

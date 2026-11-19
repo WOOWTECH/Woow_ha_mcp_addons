@@ -1,5 +1,5 @@
-"""The Store upgrade comparison hooks (multi-profile HM-16; plan 12.3 HM-16; FM-102, FM-135; review C4-SF-14): the drafts
-packaging/hooks/seed and verify, which HM-19a moves into addons/odoo/upgrade-check/ with the Odoo 0.5.0 release PR.
+"""The Store upgrade comparison hooks (multi-profile HM-16; plan 12.3 HM-16; FM-102, FM-135; review C4-SF-14): seed and
+verify in addons/odoo/upgrade-check/, where the Odoo 0.5.0 release PR (HM-19a) moved HM-16's drafts (packaging/hooks/).
 
 Both run here as the Store runs them (python3, the standard library, the add-on's /data and its 8081), against a mock
 add-on on loopback: they only read the add-on's data (every entry's bytes, owner, mode, size, mtime and ctime are
@@ -32,7 +32,7 @@ from owned_executable import Executable, draw_public_ports
 
 pytestmark = pytest.mark.usefixtures('log_scan')
 ROOT = Path(__file__).resolve().parents[1]
-HOOKS = ROOT / 'packaging/hooks'
+HOOKS = ROOT / 'addons/odoo/upgrade-check'  # HM-19a moved HM-16's drafts here (the Store runs this directory)
 
 
 def load(name):
@@ -316,8 +316,10 @@ class Runtime:
         self.port, admin_port = draw_public_ports(2)
         home.mkdir()
         self.runner = Executable(home, product, [self.port, admin_port])
-        preamble = (f'from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = frozenset({{{product!r}}}); '
-                    if switched_on else '')
+        # HM-19a: switched off is said as well (every product off), not read from the repository, which switches Odoo on
+        # from 0.5.0: the old version is the 0.4.14 shape whatever this checkout ships.
+        switch = f'frozenset({{{product!r}}})' if switched_on else 'frozenset()'
+        preamble = f'from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = {switch}; '
         code = preamble + 'from mcp_admin_core import run_product; ' + self.runner.code('run_product') + 'run_product.main()'
         self.runner.release()
         self.log = (home / 'runtime.log').open('wb')

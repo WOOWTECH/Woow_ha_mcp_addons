@@ -32,6 +32,7 @@ import pytest
 
 from admin_write_headers import reviewed_headers
 from log_scan import log_scan  # noqa: F401  (fixture)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch a test pins)
 from multi_profile_runtime import Children, create_profile, ids, multi_profile_runtime, stored
 from mcp_admin_core import owner_defaults, profiles, restore_detect
 from mcp_admin_core.config import ConfigError
@@ -212,7 +213,7 @@ def monitor_of(manager, profile_id):
 
 # ---- switched off: nothing of this exists (contract 1.2) ----
 
-async def test_switched_off_the_profile_paths_are_unknown_and_no_header_is_needed(tmp_path, log_scan):
+async def test_switched_off_the_profile_paths_are_unknown_and_no_header_is_needed(tmp_path, log_scan, switched_off):
     """A product not switched on keeps today's management API: /api/profiles is an unknown operation (404 with an
     empty body after the role check), PATCH and DELETE are Starlette's 405 before anything else, a profile-scoped
     request needs no X-MCP-Profile and one it carries changes nothing (its bytes are the same), the bootstrap has no

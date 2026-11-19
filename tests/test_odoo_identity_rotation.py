@@ -45,6 +45,7 @@ import pytest
 
 from admin_write_headers import reviewed_headers
 from log_scan import log_scan  # noqa: F401  (fixture)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch a test pins)
 from multi_profile_runtime import Children, all_tokens, create_profile, ids, multi_profile_runtime, stored
 from mcp_admin_core import config as config_module, features, profiles
 from mcp_admin_core.access import TokenAccess, masked_token
@@ -858,7 +859,7 @@ async def test_the_new_token_reaches_no_child_before_the_new_one_and_the_old_tok
 
 # ---- switched off: today's answer, today's order, the same token (plan 3.3) ----
 
-async def test_switched_off_an_identity_change_keeps_todays_answer_order_and_token(tmp_path, log_scan):
+async def test_switched_off_an_identity_change_keeps_todays_answer_order_and_token(tmp_path, log_scan, switched_off):
     """A product not switched on keeps today's behaviour for its only profile: a changed username (backend/patch) and
     a changed url (PUT backend, the password kept) are written first, then the child restarts (the state on disk
     already holds the new username when the child stops); the answer is {"saved", "configuration"}, the token and its

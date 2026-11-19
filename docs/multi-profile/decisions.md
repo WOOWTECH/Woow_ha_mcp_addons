@@ -14,7 +14,7 @@
   - 2026-11-14 21:5x：§13.2 的 DQ-09、DQ-12、DQ-19 採用計畫建議；DQ-38 選 (a) 原樣 vendor。
   - 2026-11-15 06:1x：DQ-36 補上合併授權：不改版號的多帳號功能 PR 由主對話在 CI 全綠後依序合併；升版 PR 仍要使用者逐次批准。
   - 2026-11-15 08:0x：DQ-08 的 HM-06 部分照計畫 §8.3。計畫 §13.2 把它列為 DQ-40 的細節（「DQ-40 一次確認後照做」），DQ-40 (a)
-    已在 2026-11-14 13:4x 採用，所以主對話確認照做、沒有另問使用者。listener 檢查仍待定（HM-15）。
+    已在 2026-11-14 13:4x 採用，所以主對話確認照做、沒有另問使用者。listener 檢查依 HM-15 條件式實作。
   - 2026-11-15 08:2x：DQ-38 補 HM-02 審查 MF-3、MF-4 的定案（主對話）：vendored 的 `log_redaction.py` 記在 `runtime-patches.json`；
     Release train 會不會比對 vendored 檔，以 HM-02 PR 上的 `Release train / wvt check` 為準。
   - 2026-11-15 文件同步：DQ-05、10、15、16、17、18 記成「已定（依 DQ-40 (a)，2026-11-14）」。計畫 §13.2 第一列把這幾題（和 DQ-08）列為
@@ -48,7 +48,7 @@
 | DQ-13 | endpoint 位置 | 全域一個：只存在預設帳號，所有帳號共用 | 2026-11-15 17:4x 使用者採用建議 | HM-10 |
 | DQ-14 | 刪除細節 | 先撤銷 token 並抹掉後端憑證再刪；孤兒不自動刪，面板列出可刪；不做軟刪除；兩段確認 | 2026-11-15 17:4x 使用者採用建議 | HM-10、HM-11（面板：兩段確認、孤兒列出可刪） |
 | DQ-29 | 出貨機規格與帳號上限 | (a)，和 DQ-07 同一項：上限＝min(5、產品上限、記憶體條件)；使用者提供出貨機的記憶體規格與可量測的硬體（J6412、J1900） | 2026-11-14 使用者採用建議（規格待提供，見第 4 節） | HM-19c |
-| DQ-08 | 子程式身分做法 | HM-06 部分照計畫 §8.3：7 支 Python 子程式只收剛好一個 `Authorization`，以 `hmac.compare_digest` 比對 `Bearer <WOOW_MCP_CHILD_TOKEN>`（值是 state 的 `child_token`），不符回 401、不寫細節；環境變數缺、空或不符 `[A-Za-z0-9_-]{43}` 就拒絕啟動；不從環境變數拿掉。n8n（`AUTH_TOKEN`）與已下架的 Odoo Manage 維持現狀（n8n 收下的寫法見 `contract.md` 第 9 節 #37 的註）。listener 檢查：條件式（DQ-37、UC-04），屬 HM-15 | DQ-40 (a) 的細節：計畫 §13.2「DQ-40 一次確認後照做」，DQ-40 (a) 是 2026-11-14 13:4x 使用者採用的建議；2026-11-15 08:0x 主對話確認照計畫 §8.3 做，沒有另問使用者（listener 檢查待定，負責片 HM-15） | HM-06、HM-15 |
+| DQ-08 | 子程式身分做法 | HM-06 部分照計畫 §8.3：7 支 Python 子程式只收剛好一個 `Authorization`，以 `hmac.compare_digest` 比對 `Bearer <WOOW_MCP_CHILD_TOKEN>`（值是 state 的 `child_token`），不符回 401、不寫細節；環境變數缺、空或不符 `[A-Za-z0-9_-]{43}` 就拒絕啟動；不從環境變數拿掉。n8n（`AUTH_TOKEN`）與已下架的 Odoo Manage 維持現狀（n8n 收下的寫法見 `contract.md` 第 9 節 #37 的註）。listener 檢查：條件式（DQ-37、UC-04），HM-15 已實作；限制見 threat-model.md | DQ-40 (a) 的細節：計畫 §13.2「DQ-40 一次確認後照做」，DQ-40 (a) 是 2026-11-14 13:4x 使用者採用的建議；2026-11-15 08:0x 主對話確認照計畫 §8.3 做，沒有另問使用者（listener 檢查待定，負責片 HM-15） | HM-06、HM-15 |
 | DQ-09 | 撞號回應碼 | 503 `{"error":"state unavailable"}`：撞號是資料完整性錯誤，不轉任何帳號 | 2026-11-14 21:5x 使用者採用建議（計畫 §13.2） | HM-08（HM-07 只偵測） |
 | DQ-10 | 後端網址拒絕 loopback | 照計畫 §8.7：產品開通後，存檔與執行期都拒 127.0.0.0/8、::1、`localhost`，n8n 也納入存檔檢查；HM-20 排在 R1 之前，Odoo 0.5.0 就有。子題（n8n 的 `WEBHOOK_SECURITY_MODE=permissive` 要不要維持）：**維持不動**（負責人 2026-10-15 的決定）；HM-20 只管設定的後端網址，不改 webhook 模式；多帳號時要不要收緊 webhook，交 HM-25（n8n 開通）前的獨立安全審查再決定（第 4 節） | 已定：loopback 部分依 DQ-40 (a)（2026-11-14），照計畫 §8.7「後端網址拒絕 loopback」一點；`WEBHOOK_SECURITY_MODE` 子題 2026-11-15 15:3x 使用者定（維持，交 HM-25 前再評估） | HM-20（loopback）、HM-25（webhook 再評估） |
 | DQ-11 | 密鑰網址的 Origin 預設 | (a) 首發做 HM-27：服務層級清單預設 `https://claude.ai`、report-only 記 would_deny、不加 CORS；Bearer 帶 Origin 403；Headscale 只放 claude.ai。第二問（Claude.ai 送 `https://claude.ai` 時 Bearer `/mcp` 要不要精確放行）等 HM-03b 或 HM-19b 實測後再問。HM-27 的實作（2026-11-17；`contract.md` 第 2.6、3.1、3.5、4.1 節與第 9 節 #9、#10、#42、#124～#128）：開通的產品才有；清單全部帳號共用一份、存在 `/data/mcp/origin-policy.json`（不進預設 state，面板經共用管線改：If-Match、Idempotency-Key、收據），沒存過＝report-only＋`https://claude.ai`；在 token 驗過之後檢查；report-only 回應逐位元不變、記一行 would_deny（帶帳號 id 前 8 碼，每帳號每個（判定、原因、來源）60 秒一行、每帳號每分鐘最多 20 行），enforce 只擋清單外（403 固定本體）；不加 CORS；政策檔不能用時密鑰網址 503。Bearer 照舊 403（第二問沒有動）；Headscale 照舊。計畫沒寫的細節照 PaaS，PaaS 沒有的取最保守的做法，逐項寫在 HM-27 的 provenance 筆記第 4 節 | 2026-11-14 使用者採用建議（第二問待定，負責片 HM-27）；2026-11-17 HM-27 照 (a) 實作 | HM-27（第二問：S14 後另開一片） |
