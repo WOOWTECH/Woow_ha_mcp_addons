@@ -260,9 +260,8 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     child_pids = children_path.read_text().split()
                     assert len(child_pids) == 1
                     offline.set()
-                    # HM-19a: a switched-on product's monitor calls the backend unreachable after two failed checks in
-                    # a row (DQ-25, tolerance 2), one interval later than a product not switched on.
-                    async with asyncio.timeout(22 + (HEALTH_INTERVAL if features.enabled(product) else 0)):
+                    # Odoo's guard probe and released multi-profile products require two failed checks.
+                    async with asyncio.timeout(22 + (HEALTH_INTERVAL if product == 'odoo' or features.enabled(product) else 0)):
                         while (await client.get(f'http://127.0.0.1:{port}/health/ready')).status_code != 503:
                             await asyncio.sleep(.25)
                     assert process.poll() is None
