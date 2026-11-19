@@ -714,6 +714,35 @@ test('HM-12 review S-7: a backend save of a switched-on Odoo answered 503 state 
   assert.equal(await run(denied, {switched: false}), UNAVAILABLE);
 });
 
+// HM-22 review MF-1: a backend save of a profile whose restore review waits, refused because it would rotate the token
+// (HM-13c review S-3), names the identity fields of the save's own product: Odoo's copy as HM-13c wrote it, a
+// switched-on Nextcloud's url and username; every product of identityBound has its words (contracts.js identityChange).
+test('HM-22 review MF-1: the review-wait copy of a backend save names the identity fields of the save\'s own product', async () => {
+  const {identityBound, identityChange} = panelContracts;
+  assert.deepEqual(Object.keys(identityChange ?? {}).sort(), [...identityBound].sort());
+  const WAITS = '這個帳號是從備份還原（或休眠）回來的，還沒有核對：請先到預設帳號頁的核對卡確認它的設定，按「已核對」後才能重新產生權杖。';
+  const saveWaits = names => `改後端身分（${names}）會換新這個帳號的 MCP 權杖，所以也要先核對才能儲存；這次未儲存任何變更。`;
+  const held = () => Response.json({error: 'request denied', detail: {code: 'restore_review_required'}}, {status: 409});
+  const run = async (product, {switched = true, operation = 'backend/patch'} = {}) => {
+    const api = new AdminApi(mount, saving(product, held, {switched}).fetcher, memoryStorage());
+    await api.bootstrap();
+    const payload = operation === 'policy' ? {writes_enabled: false, disabled: [], enabled_write_tools: []}
+      : operation === 'backend' ? {connection: null} : usernameChange;
+    let caught = null;
+    try { await api.mutate(operation, payload, revisionOf(DEFAULT_PROFILE)); } catch (error) { caught = error; }
+    assert.ok(caught instanceof ApiError && caught.status === 409 && caught.code === 'restore_review_required');
+    return caught.message;
+  };
+  assert.equal(await run('odoo'), `${WAITS} ${saveWaits('Odoo 的網址、資料庫或使用者')}`);  // HM-13c's words, unchanged
+  assert.equal(await run('nextcloud'), `${WAITS} ${saveWaits('Nextcloud 的網址或使用者')}`);
+  assert.equal(await run('nextcloud', {operation: 'backend'}), `${WAITS} ${saveWaits('Nextcloud 的網址或使用者')}`);
+  // Another operation, a Nextcloud not switched on (no profile: today's panel), a product whose token is not bound to
+  // its backend: the review copy alone.
+  assert.equal(await run('nextcloud', {operation: 'policy'}), WAITS);
+  assert.equal(await run('nextcloud', {switched: false}), WAITS);
+  assert.equal(await run('emqx'), WAITS);
+});
+
 test('HM-12 (DQ-40 ⑨): every backend URL names the secrets it takes to its server, every secret of a product exactly once', () => {
   const {urlSecrets, identityBound, products} = panelContracts;
   assert.deepEqual(Object.keys(urlSecrets ?? {}).sort(), Object.keys(products).sort());
