@@ -174,7 +174,12 @@ test('HM-26: with profiles the Headscale help names one server per profile and a
   assert.match(scoped, /\/api\/v1/);
   assert.match(scoped, /整台 Headscale 的管理權限/);
   assert.match(scoped, /建議每個帳號在 Headscale 各建一把/);
-  assert.match(scoped, /共用同一把金鑰的帳號之間只靠工具權限分權/);
+  // HM-26 security review M-1: on one server every profile, whatever its key, is kept apart by its tool policy alone,
+  // and only a policy without headscale_api_keys create, expire and delete keeps a profile restricted.
+  assert.match(scoped, /不論是否共用金鑰，彼此只靠工具權限分權/);
+  assert.match(scoped, /停用 headscale_api_keys 的建立、作廢與刪除/);
+  assert.match(scoped, /「全部撤銷」撤不到/);
+  assert.doesNotMatch(scoped, /共用同一把金鑰的帳號之間只靠工具權限分權/);
   assert.doesNotMatch(scoped, /只管理同一個 Headscale 執行個體/);
   assert.match(connectionHelp.headscale, /只管理同一個 Headscale 執行個體/);
 });
