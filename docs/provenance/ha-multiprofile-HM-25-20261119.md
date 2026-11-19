@@ -12,11 +12,13 @@
   - 沒後端就不起子程式（DQ-22）。閘道自答 initialize 與 tools/list；**每支工具（含 7 支文件工具）都回 `-32603`「Backend not configured」**，
     不再出現「try again shortly」。健康檢查、套用狀態、帳號清單都是 `unconfigured`。判斷集中在 `profiles.documentation_child`：
     只有 n8n 的預設帳號沒後端也起文件子程式。
-  - HOME 與 cwd 是 `profiles/<id>/child/`（不是帳號目錄本身、不和 `state.json` 同層）。不存在就建 0700；每次起之前都要是空目錄、
-    不是連結。UC-01 確認了 n8n-mcp 不寫 HOME（第 3.4 節），所以照 Python 子程式的規則要求空目錄。
+  - HOME 與 cwd 是 `profiles/<id>/child/`（不是帳號目錄本身、不和 `state.json` 同層）。不存在就建 0700；每次建子程式設定時（開機、
+    存檔、面板重啟、重評）都要是空目錄、不是連結，看門狗的自動重起沿用同一份設定。UC-01 確認了 n8n-mcp 不寫 HOME（第 3.4 節），
+    所以照 Python 子程式的規則要求空目錄。
   - `nodes.db` 每帳號一份（DQ-04 照計畫建議）：`/tmp/woow-n8n-mcp/profiles/<id>/nodes.db`，不在 `/data`、不進備份。這個管理程序第一次
-    起它的子程式前，在工作執行緒裡複製（67 MiB 的複製與 fsync 不卡事件迴圈），之後重起沿用；做不成就不起子程式，絕不用預設帳號的副本
-    或映像內的檔（UC-09：單一租戶模式下 `instance_id` 一律是空字串，共用一份就會互看、互刪、互相回滾版本快照）。刪帳號時一起刪。
+    起它的子程式前，在工作執行緒裡複製（67 MiB 的複製與 fsync 不卡事件迴圈），之後重起沿用，換了後端（網址或 key）時重做；
+    建設定時沒有自己的副本就不起子程式，絕不交給它預設帳號的副本或映像內的檔（UC-09：單一租戶模式下 `instance_id` 一律是空字串，
+    共用一份就會互看、互刪、互相回滾版本快照）。刪帳號時一起刪，刪不掉記一行 WARNING。
   - 命令列在入口後面多 `--port N`（n8n-mcp 不讀，照舊聽 `PORT`），P9 kit 與容器探針因此認得出每個帳號的子程式（HM-16 審查 SF-2）。
   - session 名額與逾時看自己 state 的 `n8n_session`（沒存過是 20 個、10 分鐘；新帳號不複製，DQ-02）：每個帳號 20 個。
   - 預設帳號的 HOME 與 cwd 仍是 `/data/mcp`、`nodes.db` 仍是 `/tmp/woow-n8n-mcp/nodes.db`，spec 逐位元同今天（快照
@@ -30,8 +32,9 @@
 - **開關關時逐位元不變**：HM-01 黃金回歸的期望值沒改（只搬注入點，第 6 節），兩個契約凍結、child spec 快照、零改寫都照過。
 - **先紅後綠**：新測試檔 `tests/test_n8n_multi_profile.py` 先寫 26 案，在改程式之前（`apps/n8n`、`packages/mcp-admin-core` 退回基準）
   7 失敗、19 錯誤；改完 26 全過。之後再補 2 案對齊 PaaS（名額跟記憶體上限、還原撤銷每個帳號），共 28 案全過（第 5 節）。
-- **要使用者決定**：DQ-04、DQ-22 照計畫建議實作，使用者還沒確認（第 11 節）。n8n webhook 網址的 `permissive` 照舊，交本片之後的
-  獨立安全審查（威脅說明在第 4 節）。
+  兩份獨立審查之後再補 9 案、改兩個檔（第 15 節），共 37 案全過。
+- **要使用者決定**：DQ-04、DQ-22 照計畫建議實作，使用者還沒確認（第 11 節）。n8n webhook 網址的 `permissive` 照舊；獨立安全審查建議
+  開通後 webhook、chat、form 也拒 loopback，等使用者定（第 4、11、15 節）。
 - 契約第 9 節新加第 129～131 列。**列號暫定**：其他產品的開通片（HM-21～HM-24、HM-26）同時在準備，後合併的片照 HM-27 的前例往後重編。
 
 ## 1. 範圍與基準
@@ -39,10 +42,10 @@
 | 項目 | 值 |
 |---|---|
 | 切片 | HM-25 n8n 開通（計畫 §9、§12.3；風險高、工作量 L；受開關管；要獨立審查） |
-| 分支 | `feat/ha-multiprofile-hm25-n8n-20261119`（本機 commit；push 由之後的收尾步驟做） |
+| 分支 | `feat/ha-multiprofile-hm25-n8n-20261119`（審查修正之後由收尾步驟 push 到 origin 的同名分支；PR 由之後的步驟開） |
 | 基準 | `claude-delivery` `c90b214`（#109 HM-16 的合併；已含 HM-13b、HM-13c、HM-27） |
 | 依據 | 計畫 §3.3、§4.1、§5.1、§8.7、§8.8、§9、§12.0、§12.2、§12.3（含 11/17 的 HM-12 面板交接）；契約第 1.2、3.5、4.2、7、8、9 節；`acceptance.md` 的 T-01～T-29；FEATURE-MATRIX FM-15、84、140 |
-| 對齊的 PaaS | pin `69ac425`；PaaS 本機 repo 的 `origin/main` `5ef1046`。n8n 的多帳號做法照計畫刻意不同（DB 位置、沒後端不起子程式），差異寫在契約第 9 節 |
+| 對齊的 PaaS | pin `69ac425`；PaaS `main` `5ef1046`（PaaS 變動清單在第 13 節）。n8n 的多帳號做法照計畫刻意不同（DB 位置、沒後端不起子程式），差異寫在契約第 9 節 |
 | 不做的事 | 不改 `MULTI_PROFILE_PRODUCTS`、版號、`addons/`、`tests/conftest.py`；不碰任何 HA 主機、PaaS 或真後端 |
 
 ## 2. 改了什麼
@@ -52,18 +55,18 @@
 | 檔 | 內容 |
 |---|---|
 | `apps/n8n/run.py` | `run()` 建 n8n 的 adapter，交給 `run_product.run`（產品固定是 n8n；adapter 的名字每次啟動時才讀，測試能換）。`before_start` 就是原來的 `prepare_catalog()` 與它那一行訊息。`main()` 不變 |
-| `apps/n8n/n8n_adapter.py` | `profile_of(directory)`（從目錄認帳號）；額外帳號的 child spec（沒後端回 None、HOME 與 cwd、自己的 catalog、`--port N`）；`prepare_profile_catalog`、`profile_catalog`、`prepare_child`（工作執行緒）、`remove_profile_catalog`（不跟隨連結）；`PACKAGED_CATALOG` 常數。預設帳號的 spec 不變 |
+| `apps/n8n/n8n_adapter.py` | `profile_of(directory)`（從目錄認帳號）；額外帳號的 child spec（沒後端回 None、HOME 與 cwd、自己的 catalog、`--port N`）；`prepare_profile_catalog`（審查後：逐層經 descriptor 建立、記下做給哪個後端）、`profile_catalog`、`prepare_child`（工作執行緒；換後端時重做）、`remove_profile_catalog`（不跟隨連結）；`PACKAGED_CATALOG` 常數。預設帳號的 spec 不變 |
 | `Hc/run_product.py` | `ProductAdapter`；`run(..., adapter=None)`：不給就是本 package 的工具表與 `products.child_spec`，和以前一樣 |
-| `Hc/profile_runtime.py` | `ProfileRuntime(prepare_child=...)`：允許起子程式時、建 spec 之前 await；`ProfileManager(prepare_child=..., profile_removed=...)` 與 `removed(id)`；每個帳號的監看拿到 `profile_id`（只在開通時） |
+| `Hc/profile_runtime.py` | `ProfileRuntime(prepare_child=...)`：允許起子程式時、建 spec 之前 await；`ProfileManager(prepare_child=..., profile_removed=...)` 與 `removed(id)`（清理丟例外或回 False 都記一行 WARNING）；每個帳號的監看拿到 `profile_id`（只在開通時） |
 | `Hc/profile_admin.py` | 刪帳號（含孤兒）與刪隔離目錄之後呼叫產品清理（`Registry.removed`） |
 | `Hc/profiles.py` | `documentation_child(product, profile_id)` |
 | `Hc/gateway.py` | 沒有子程式在跑、閘道自答 tools/call 時：沒後端而且這個帳號的子程式沒後端就不跑，每支工具都回 `backend_not_configured` |
 | `Hc/health.py`、`Hc/configuration.py` | 「沒後端就是 unconfigured」改看 `documentation_child`（n8n 預設帳號照舊） |
 | `packaging/container_profiles.py` | 多帳號階段收 n8n；`check_n8n_catalogs`（每個額外帳號自己的副本：0600、單一連結、目錄 0700、沒有共用） |
 | `packaging/ha_p9_probe.py` | 只改註解（`CHILD_PORT_SCRIPT` 本來就讀命令列的 `--port`） |
-| 測試 | 新 `tests/test_n8n_multi_profile.py`（28 案）；`packaging/test_ha_p9_probe.py`、`test_container_profiles.py` 補 n8n；`tests/multi_profile_runtime.py` 收 n8n（`SWITCHABLE` 加 n8n，所以 `test_router_passthrough.py`、`test_profile_routing.py`、`test_origin_policy.py` 的參數化案例也跑 n8n）；`tests/test_panel_profile_api_shapes.py`；其他檔只搬注入點（第 6 節） |
+| 測試 | 新 `tests/test_n8n_multi_profile.py`（28 案，審查後 37 案）；`packaging/test_ha_p9_probe.py`、`test_container_profiles.py` 補 n8n；`tests/multi_profile_runtime.py` 收 n8n（`SWITCHABLE` 加 n8n，所以 `test_router_passthrough.py`、`test_profile_routing.py`、`test_origin_policy.py` 的參數化案例也跑 n8n）；`tests/test_panel_profile_api_shapes.py`；其他檔只搬注入點（第 6 節） |
 | 面板 | `packages/mcp-admin-ui/tests/profile-api-cases.json` 加情境與一條說明；`README.md` 一段。面板程式沒改 |
-| 文件 | 契約（第 1.2、3.5、4.2、7、8、9、10 節）、`decisions.md`、`acceptance-matrix.md`、`threat-model.md`、`unreleased-changes.md`、`docs/operations/acceptance.md`、`clients.md`、`ha-p9-kit.md` |
+| 文件 | 契約（第 1.2、3.5、4.2、7、8、9、10 節）、`decisions.md`、`acceptance-matrix.md`、`threat-model.md`、`unreleased-changes.md`、`docs/operations/acceptance.md`、`clients.md`、`ha-p9-kit.md`；審查後另改 `ledger-tracking.md`、`docs/operations/guide.md`、`docs/n8n-ha-role.md`（第 15 節） |
 | 帳本 | `runtime-patches.json` 8 個列管檔的摘要與說明（第 8 節）；`tests/test_output_schemas.py` 的兩個 n8n 檔摘要 |
 
 沒改：`addons/`、版號、CHANGELOG、`features.py`、`apps/runtime/*.py`、`apps/*/launch.py`（所以 tool-surface 不用重產）、
@@ -93,13 +96,19 @@
 
 - 位置照 DQ-04 的建議。PaaS 放在帳號設定目錄、進備份；HA 放 `/tmp`，和預設帳號今天的語意相同（管理程序重啟或容器重建就重做，
   版本歷史跟著清掉）。
-- 做法照預設帳號的 `prepare_catalog`：每一層目錄都是這個 uid 的 0700、不是連結（每一層都 `lstat` 看）；檔 0600、寫完 fsync、原子換上。
+- 做法照預設帳號的 `prepare_catalog`：每一層目錄都是這個 uid 的 0700、不是連結；檔 0600、寫完 fsync、原子換上。審查後（安全 S-6）
+  改成每一層目錄用 `O_NOFOLLOW` 打開再檢查，下一層在它裡面建，檔案經最後一層的 descriptor 寫入與改名（和刪除一樣用 dir fd）；
+  寫完再確認路徑還指到剛寫的檔（`st_dev`、`st_ino`），之後 `profile_catalog` 每次都再對一次。檢查之後被換成連結的目錄不會被寫穿。
 - 時機：子程式第一次要起的時候（開機的錯開啟動、建立後存後端、面板重啟），由 `ProfileRuntime._relaunch` 在建 spec 之前 await，
   複製在工作執行緒（`asyncio.to_thread`）。錯開啟動同時最多 2 個帳號在起，所以同時最多 2 份在複製。沒後端不複製（不起子程式）。
+  審查後（安全 S-8）每份副本記下做給哪個後端（網址與 key 的 SHA-256，不存 key 本身）；換了後端就重做，前一個後端的版本快照
+  不會被新的持有人讀到。預設帳號照舊只在管理程序啟動時做一次（沒改）。
 - 做不成：記一行 WARNING（`n8n: profile <id 前 8 碼>: no catalog copy could be made; its child does not start`），spec 拒絕、子程式不起
   （`child_start_failed`）。PaaS 也是拒絕啟動。預設帳號照舊退回映像內的唯讀檔（沒改）。
 - 刪除：`profile_admin` 在刪掉帳號目錄之後呼叫 `removed(id)`，n8n 的 `remove_profile_catalog` 從 `/tmp/woow-n8n-mcp` 開始不跟隨連結地刪
   （`O_NOFOLLOW` 開目錄、檢查擁有者與權限、`rmtree(dir_fd=...)`）。孤兒與隔離目錄刪除也叫（隔離目錄只在那個 id 沒在服務時）。
+  審查後（正確性 S-2）刪不掉（回 False）也記一行 WARNING（`multi-profile: the cleanup after deleting profile <id 前 8 碼> could not
+  remove everything`，不帶路徑），刪除照樣完成；PaaS #159 對 K8s 留在 `/tmp` 的檔也是這樣做。
 
 ### 3.4 HOME 與 cwd（UC-01）
 
@@ -110,7 +119,8 @@
 - 真子程式驗證：`test_the_real_child_of_an_additional_profile_leaves_its_home_empty` 用額外帳號的真 spec 起 n8n-mcp，跑文件工具、
   `search_nodes`、對假後端的 `n8n_list_workflows`，停掉之後 `child/` 仍是空的。本機是 Node 22（原生 better-sqlite3 是 Node 26 的，退回
   sql.js），CI 是 Node 26 加原生模組。
-- 所以照 Python 子程式的規則要求空目錄：每次起之前檢查。不是連結、不是一般檔、裡面沒東西。
+- 所以照 Python 子程式的規則要求空目錄：每次建子程式設定時檢查（開機、存檔、面板重啟、重評）。不是連結、不是一般檔、裡面沒東西。
+  看門狗的自動重起沿用同一份設定、不再查，和 Python 子程式一樣（審查 S-5 指出原本「每次起之前」的說法比實作強，已改寫）。
 - 另外注意：沒有 `NODE_DB_PATH` 時 n8n-mcp 先找 `<cwd>/data/nodes.db`。額外帳號的 cwd 必須是空目錄，而且一定有自己的副本，
   所以不會讀到 cwd 裡被放進去的檔。
 
@@ -138,9 +148,9 @@
 
 | 面向 | 本片的做法 | 剩下的風險 |
 |---|---|---|
-| webhook 打 loopback（配合 HM-20） | 照舊 `WEBHOOK_SECURITY_MODE=permissive`（契約 #90）；開通後設定的 n8n 後端（API 與官方 MCP 端點）拒 loopback（`WOOW_MCP_DENY_LOOPBACK=1`，每個帳號的子程式都有） | 任何帳號的 `n8n_test_workflow` 都能打 127.0.0.1。別帳號子程式（3000、18000 起）要那個帳號的 child bearer，子程式環境只有自己的；8081 要某個帳號的 token；8099 從 127.0.0.1 來不是 Ingress，一律 403。要不要收緊交審查 |
-| HOME 與 cwd | 額外帳號 `profiles/<id>/child/`（0700、空、不是連結，每次起都查）；預設帳號照舊 `/data/mcp` | 同 uid 的子程式讀寫得到每個帳號的檔（DQ-37 已接受）；預設帳號的 cwd 是 `/data/mcp`（今天就是，C1-S4 定不搬） |
-| catalog 副本 | 每帳號一份、目錄 0700、檔 0600、不跟隨連結、沒有自己的就不起 | 只讓 n8n-mcp 的版本歷史分開，不是安全邊界（同 uid）；`/tmp` 佔磁碟，每帳號約 67 MiB（最多 2 個額外帳號） |
+| webhook 打 loopback（配合 HM-20） | 照舊 `WEBHOOK_SECURITY_MODE=permissive`（契約 #90）；開通後設定的 n8n 後端（API 與官方 MCP 端點）拒 loopback（`WOOW_MCP_DENY_LOOPBACK=1`，每個帳號的子程式都有） | 審查後改寫（安全 S-2；原本寫「任何帳號的 `n8n_test_workflow` 都能打 127.0.0.1」，不準）：webhook、chat、form 的網址一律是設定的 n8n 網址加 `/webhook/…`、`/form/…`，每次觸發前先經 API 讀 workflow（開通後拒 loopback），所以只有 DNS rebinding 打得到 loopback，port 是設定網址的 port。打到了：別帳號子程式（3000、18000 起）要那個帳號的 child bearer；8081 要某個帳號的 token；8099 從 127.0.0.1 來不是 Ingress，一律 403；但 n8n-mcp 的 `/`、`/health` 不驗 bearer（版本、uptime），20 次錯 bearer 會讓那個子程式對閘道回 429 十五分鐘（登入限流以來源 IP 計）。兩個帳號接同一台 n8n 時 webhook、form 整台共用。審查建議開通後也拒 loopback，等使用者定（第 11 節） |
+| HOME 與 cwd | 額外帳號 `profiles/<id>/child/`（0700、空、不是連結，建子程式設定時查；看門狗重起沿用）；預設帳號照舊 `/data/mcp` | 同 uid 的子程式讀寫得到每個帳號的檔（DQ-37 已接受）；預設帳號的 cwd 是 `/data/mcp`（今天就是，C1-S4 定不搬） |
+| catalog 副本 | 每帳號一份、目錄 0700、檔 0600、不跟隨連結（審查後逐層經 descriptor 建立）、沒有自己的就不起、換後端時重做 | 只讓 n8n-mcp 的版本歷史分開，不是安全邊界（同 uid）；`/tmp` 不是 tmpfs、在容器的可寫層（HM-03b 的 UC-03 實測），每帳號約 67 MiB 起（最多 2 個額外帳號），版本歷史沒有大小上限（安全 S-7，寫進已知限制）；預設帳號換後端後，舊後端的快照要到 add-on 重啟才清掉（今天就是） |
 | 標頭 | 只轉閘道自己的標頭與 3 個 session 標頭；`x-n8n-url`、`x-n8n-key`、`x-n8n-mcp-token`、`x-instance-id`、`x-session-id` 都不轉（開關開與關都測） | 無新增 |
 | session | 每帳號自己的子程式與 20 個 session；一個帳號用完不影響別的帳號 | 一個帳號的 20 個仍可被它自己的持有人用完（HA 既有，429） |
 | 子程式 bearer | n8n-mcp 驗 `AUTH_TOKEN`（每帳號自己的 child token）；契約 #37 的三種額外寫法照舊（都要先有自己的 token） | 無新增 |
@@ -180,26 +190,28 @@
 
 ## 7. 本機檢查（一般使用者 uid 1000；短 TMPDIR `/tmp/ha-mp-…`，跑完刪掉；pytest 排在共用鎖後面）
 
-最後一輪（2026-11-19；程式與測試＝`dcf8bbe`，之後只加本筆記）：
+審查修正後的最後一輪（2026-11-19 12:2x～13:0x；程式、測試與帳本＝第 15.4 節的 `f5b2586`，之後只改文件；Node 26.12.1 與短 TMPDIR 照
+`artifacts/…/bin/ha_env.sh`）：
 
 | 檢查 | 結果 |
 |---|---|
 | `packaging/validate.py`（`ha-gh-release-20261117` 的 venv） | `PASS: 8 strict Supervisor-subset manifests, translations, pins, workflow policy and clearance shape` |
-| packaging unittest（同一個 venv；`discover -s packaging -p 'test_*.py'`） | `Ran 369`、`OK (skipped=5)`（5 個 `skipUnless(root)`），27.3 秒 |
-| node（`node --test packages/mcp-admin-ui/tests/*.test.mjs`） | 118 過、0 失敗 |
-| Playwright（`profile-api-parity.spec.mjs`、`backend-identity.spec.mjs`，`--project=single`） | 36 過（含新情境 `new-origin-unset-secret`）；其他 spec 以 CI 為準 |
-| pytest 改到的面 43 檔（新測試檔、HM-01 黃金回歸、兩個契約凍結、零改寫、搬注入點的檔、多帳號 runtime 與面板的檔） | 1964 案：1962 過、2 失敗（第 7.1 節），356 秒 |
-| pytest 其餘 146 檔 | 4136 案：4129 過、7 失敗（第 7.1 節），1904 秒 |
-| pytest 合計（兩輪合起來就是 `tests/test_*.py` 全部 189 檔） | **6100 案：6091 過、9 失敗、0 skip**。9 個失敗都是本機跑不了的既有案例（第 7.1 節），沒有本片造成的失敗 |
-| `scripts/secret_precheck.py --tools <scan0414/tools>` | `result: OK, 0 findings`（gitleaks 8.28.0；`c90b214..dcf8bbe` 7 個 commit） |
-| `scripts/ledger_precheck.py` | `result: OK`：三本帳 0 漂移；改到的 8 個列管檔都在本分支更新了；`health.py` 列成「沒列管、要人看」（第 8 節） |
+| packaging unittest（同一個 venv；`discover -s packaging -p 'test_*.py'`） | `Ran 369`、`OK (skipped=5)`（5 個 `skipUnless(root)`），26.6 秒 |
+| node（`node --test packages/mcp-admin-ui/tests/*.test.mjs`） | 118 過、0 失敗（面板沒改，照規則跑一次） |
+| pytest 全部（`pytest -q -p no:cacheprovider tests`：`tests/test_*.py` 189 檔 6109 案，加 `tests/vendor_paas/` 574 案） | **6683 案：6676 過、7 失敗、0 skip**，2144 秒。7 個失敗都要 root（第 7.1 節），沒有本片造成的失敗。新測試檔 37 案全過（3.6 秒） |
+| `scripts/ledger_precheck.py` | `result: OK`：三本帳 0 漂移（180、70、159 筆）；改到的 8 個列管檔都在本分支更新了；`health.py` 列成「沒列管、要人看」（第 8 節） |
+| `scripts/secret_precheck.py --tools <scan0414/tools>` | 見第 15.5 節（照 commit 範圍跑） |
+
+審查前那一輪（`dcf8bbe`；Node 22）：packaging 369 OK（skip 5）、node 118 過、Playwright 兩個 spec 36 過（含新情境 `new-origin-unset-secret`；
+面板之後沒改，這輪沒重跑，其他 spec 以 CI 為準）、pytest `tests/test_*.py` 6100 案 6091 過、9 失敗（root 7 案、Node 22 載不到原生模組 2 案）、
+兩個預檢都過。
 
 ### 7.1 本機跑不了、只在 CI 驗的
 
-- Node 26 的原生 better-sqlite3（2 案）：本機 Node 22（ABI 127）載不到 ABI 147 的模組，n8n-mcp 退回 sql.js（沒有 FTS5）。
-  `tests/test_n8n_catalog_copy.py::test_version_history_is_written_natively_on_the_copy_of_a_database_the_child_cannot_write`
-  在基準也失敗；`tests/test_boundary.py::test_the_n8n_child_loads_the_one_pinned_native_addon_and_n8n_mcp_uses_it` 用的是預設帳號的
-  spec（本片沒改，快照照過），在本機直接 `require('better-sqlite3')` 就報 `NODE_MODULE_VERSION 147`。CI 是 Node 26。
+- Node 26 的原生 better-sqlite3（2 案）：審查前那一輪用 Node 22（ABI 127），載不到 ABI 147 的模組，n8n-mcp 退回 sql.js 而失敗：
+  `tests/test_n8n_catalog_copy.py::test_version_history_is_written_natively_on_the_copy_of_a_database_the_child_cannot_write`、
+  `tests/test_boundary.py::test_the_n8n_child_loads_the_one_pinned_native_addon_and_n8n_mcp_uses_it`。審查修正後這一輪用 Node 26.12.1，
+  本機也過了；額外帳號的真子程式那案（UC-01）也在原生模組下過。CI 是 Node 26。
 - 要 root（7 案；CI 以 root 跑 pytest）：`tests/test_owned_executable.py::test_uid10001_nondumpable_self_and_own_child_proof`、
   `tests/test_profile_store.py::test_mode_and_owner_as_the_add_on_user`、`tests/test_restore_detection.py` 的 5 個 `test_root_*`。
   packaging 的 5 個 `skipUnless(root)` 也是。
@@ -214,6 +226,8 @@
   審查要求列管時再加）。沒有新模組。
 - `tests/test_output_schemas.py` 的 `CURRENT_POST_SOURCE_BYTES` 釘了 `apps/n8n/run.py` 與 `n8n_adapter.py` 的摘要，照它的規則更新並寫明
   「沒有工具、schema 或 handler 的改變」。
+- 審查修正（第 15 節）又改了 `n8n_adapter.py` 與 `profile_runtime.py`：兩筆的 `sha256` 重算、`change` 各補一段「2026-11-19 HM-25 review」；
+  `test_output_schemas.py` 的 `n8n_adapter.py` 摘要也重算（說明補一句）。`ledger-tracking.md` 第 1 節 `profile_admin.py` 那列補上 HM-25。
 - tool-surface：沒改 `apps/runtime/*.py`、`apps/*/launch.py`，`docs/tool-surface.*` 不用重產（它釘的 n8n 檔是 n8n-mcp 的 dist 與
   `backend_policy.cjs`，都沒動）。
 
@@ -225,7 +239,9 @@
   T-04（N×N：各帳號建一個標記 workflow，只在對角線看得到）、T-05（P9 `--cross`）、T-07、T-09（刪帳號後舊 token 失效、`/tmp` 副本也刪掉）、
   T-13（P9 `childkill --child-port` 打 n8n 的額外帳號）、T-14、T-17（三個 n8n 子程式的記憶體，`CHILD_MEMORY_MIB` 是 300 MiB）、
   T-21（還原後重做副本）、T-23、T-29（合成憑證掃描與清理）。
-- **UC-09 真機確認**：兩個帳號各自更新同一個 id 的 workflow，`n8n_workflow_versions` 只看得到自己的。
+- **UC-09 真機確認**：兩個帳號各自更新同一個 id 的 workflow，`n8n_workflow_versions` 只看得到自己的；一個帳號換到另一個後端之後，
+  讀不到換之前的快照（審查 S-8）。
+- **同一台 n8n 的兩組身分**：n8n 的 webhook、form 整台共用，T-04 的「標記只在對角線」只對 API 成立（安全審查 S-2），驗收紀錄要寫明。
 - **面板情境重錄**：`profile-api-cases.json` 的 `new-origin-unset-secret`（標了 `rerecord_on_real_backend`）在真後端重錄，回應不同就改情境與 fixture。
 - **容器驗收**：n8n 的候選映像（開通的 flag-on 乾跑）跑多帳號階段，含 `check_n8n_catalogs`。
 
@@ -240,19 +256,41 @@
   - 兩個 n8n 帳號的還原：`test_a_restore_revokes_every_n8n_profile_and_their_children_start_apart`
   - 名額跟記憶體：`test_the_n8n_profile_count_follows_the_memory_limit`
 - 契約第 9 節第 129～131 列號暫定（其他產品的開通片同時在準備）。
-- n8n 升版 PR 要寫的 CHANGELOG 與 DOCS（`addons/n8n/DOCS.md` 的「共用 20 個」改每帳號、沒後端的額外帳號）列在
-  `unreleased-changes.md` 第 3.2 節。
-- webhook 模式要不要收緊：交本片之後的獨立安全審查（第 4 節）。
-- 給 PaaS 的回補建議（HM-29）：PaaS 沒後端的 n8n 額外帳號起文件模式子程式、會轉送 `x-n8n-*`；HA 都不做。
+- n8n 升版 PR 要寫的 CHANGELOG 與 DOCS（`addons/n8n/DOCS.md` 的「共用 20 個」改每帳號、沒後端的額外帳號；審查後補換後端重做副本、
+  同一台 n8n 的 webhook 不分開、版本歷史沒有上限、預設帳號的快照要重啟才清）列在 `unreleased-changes.md` 第 3.2 節。
+- webhook 模式要不要收緊：獨立安全審查已評估，建議開通後 webhook、chat、form 也拒 loopback（第 11、15 節），等使用者定。
+- 給 PaaS 的回補建議（HM-29）：PaaS 沒後端的 n8n 額外帳號起文件模式子程式、會轉送 `x-n8n-*`；HA 都不做。另外兩件（審查後）：PaaS 的
+  副本在帳號設定目錄、進備份，帳號換後端之後前一個後端的版本快照一直讀得到（HA 換後端就重做）；HA 的 `AUTH_RATE_LIMIT_MAX` 是 n8n-mcp
+  預設 20，PaaS 是 1000（契約 #62，DQ-22 一起看）。
+
+### 10.1 和同時進行的產品片會衝突的檔、合併順序（審查 S-4；2026-11-19 12:3x 唯讀看各 clone 的分支，都還沒 push）
+
+| 檔 | 也改它的片（head） | 先後與後合者要做的事 |
+|---|---|---|
+| `Hc/health.py`（`HealthMonitor.__init__` 與 `_check` 的同一段） | HM-26（`a91dab7`） | 照發版波次 R4（HM-25）在 R5（HM-26）之前；HM-26 rebase 時兩邊都留（`profile_id` 與 `documentation_child`、`login_refused`）。不列管，沒有摘要要重算 |
+| `tests/multi_profile_runtime.py`、`tests/test_single_profile_golden.py`、`tests/test_profile_runtime.py`、`tests/test_role_lifecycle.py`、`tests/test_upgrade_zero_rewrite.py` | HM-23（`24df882`）、HM-26 | 照 R2（HM-23）→ R4（HM-25）→ R5（HM-26）；後合者 rebase 後把兩邊的產品清單與注入點合在一起（`SWITCHABLE` 收 n8n、n8n 的 runtime 改 patch 在 `profile_runtime`／`run_product`），跑黃金回歸與兩個契約凍結 |
+| `tests/test_product_runtime_failure.py` | HM-23 | 同上 |
+| `tests/test_output_schemas.py`（`CURRENT_POST_SOURCE_BYTES`） | HM-23 | 後合者 rebase 後重算自己改到的那幾個檔的摘要（本片：`apps/n8n/run.py`、`n8n_adapter.py`），說明照檔內規則 |
+| `docs/provenance/runtime-patches.json` | HM-22（`39de527`）、HM-23、HM-24（`b742ef7`）、HM-26 | 一次只送審一片（計畫 §11.1）；後合者 rebase 後重算兩邊都改到的檔的 `sha256`、兩段 `change` 都留，跑 `scripts/ledger_precheck.py`。本片改的 8 筆：`run.py`、`n8n_adapter.py`、`run_product.py`、`profile_runtime.py`、`profile_admin.py`、`gateway.py`、`configuration.py`、`profiles.py` |
+| 契約第 9 節列號與第 10 節變更紀錄 | HM-21（`1f7a529`）～HM-24、HM-26 | 後合的片照 HM-27 前例把自己的新列往後重編，第 1.2 節與各列互相引用的列號一起改 |
+| `decisions.md`、`threat-model.md`、`unreleased-changes.md`、`acceptance-matrix.md`、`docs/operations/acceptance.md`、`ledger-tracking.md` | HM-21～HM-24、HM-26（各自不同的幾個） | 只是文字，rebase 時兩邊都留；`unreleased-changes.md` 第 4 節的表各自一列 |
+
+- `Hc/gateway.py`、`Hc/run_product.py`、`Hc/profile_admin.py`、`Hc/configuration.py`、`Hc/profiles.py`、`Hc/profile_runtime.py`：這次只有本片改
+  （上面那個時間點）。計畫 §12.2 的衝突表沒有替 HM-25 列 `gateway.py`、`health.py`、`run_product.py`、`profile_admin.py`：**請主對話補進**
+  （本片不改 repo 外的計畫）。
 
 ## 11. 要使用者決定的事
 
 - **DQ-04**（n8n `nodes.db` 放哪）：本片照計畫建議做成每帳號 `/tmp/woow-n8n-mcp/profiles/<id>/`、不進備份、預設路徑不變。選別的做法
   （例如照 PaaS 放帳號目錄、進備份）時回功能 PR 改。
 - **DQ-22**（n8n 額外帳號細節）：本片照計畫建議做成沒後端不起子程式、所有工具回 `backend_not_configured`、逾時與限流維持 HA 現值。
-- 兩題最晚都要在 n8n 的升版 PR 合併前定（`decisions.md` 已改）。
+- 兩題的期限：`decisions.md` 原寫「HM-25 開工前」，已過。本片提議改成「n8n 的升版 PR 合併前」，要使用者或主對話確認（安全審查 S-9：
+  期限不由功能片自己改；`decisions.md` 已改回原文並註明是提議）。
+- **DQ-10 子題（webhook）**：安全審查建議開通後 webhook、chat、form 也拒 loopback、區網照舊（做法與要同步的檔在第 15 節）。使用者定之前照舊
+  `permissive`。
+- **版本歷史的上限**（安全審查 S-7）：要不要做、多大、超過時清掉歷史重做副本。本片只寫進已知限制。
 
-## 12. commit（`c90b214` 之後；都沒 push，push 由之後的收尾步驟做）
+## 12. commit（`c90b214` 之後；審查修正之後一起 push）
 
 | commit | 內容 |
 |---|---|
@@ -263,6 +301,94 @@
 | `1adcfd0` | 文件：契約（第 1.2、3.5、4.2、7、8、9、10 節，新列 129～131）、`decisions.md`、驗收矩陣、威脅模型、`unreleased-changes.md`、`acceptance.md`、`clients.md` |
 | `6ac1b0f` | 帳本：8 個列管檔的摘要與說明；`tests/test_output_schemas.py` 的兩個 n8n 摘要 |
 | `dcf8bbe` | 對齊 PaaS 的 2 案（名額跟記憶體上限、還原撤銷每個帳號）；驗收矩陣的測試檔登記列 |
-| （本 commit） | 本筆記（獨立審查的對象） |
+| `5504d9a` | 本筆記（獨立審查的對象） |
+| 審查後的 4 個 commit | 見第 15.4 節 |
 
-`ed86fcd` 單獨看時 `tests/test_output_schemas.py` 的兩個摘要還沒更新（`6ac1b0f` 才更新）；以分支 head 為準。
+`ed86fcd` 單獨看時 `tests/test_output_schemas.py` 的兩個摘要還沒更新（`6ac1b0f` 才更新）；審查後的測試 commit 單獨看時新案例有 4 案會紅
+（下一個 commit 才改程式）；以分支 head 為準。
+
+## 13. PaaS 變動清單（審查 S-3；2026-11-19）
+
+- 來源：PaaS 的 GitHub 鏡像 `WOOWTECH/woow-mcp-server`（唯讀 API：依路徑列 `main` 的 commit、讀 pin 時的檔）。鏡像的 `main`＝`5ef1046`，
+  和正確性審查者在本機唯讀 PaaS repo 看到的 `origin/main` 相同。沒有 fetch、checkout 或任何寫入；沒有連 Gitea。
+- 相當於 `git log 69ac425..origin/main -- <路徑>`（pin `69ac425` 在 2026-11-14 02:32 UTC 合併；審查者在本機用 commit 圖跑過同樣的範圍，結果一致）：
+  - `apps/n8n`：`3b135ca`、`1637a0f`（#155：所有產品的 JSON 結構守門、編碼拒收；HM-31 已對齊）、`8bfb12e`（只改文字，拿掉 apps/vk 的引用）。
+    沒有本片該對齊、卻沒對齊的 n8n 多帳號變更。
+  - `packages/mcp-admin-core/mcp_admin_core/profiles.py`：`e6971c0`（#155 的預算預設值；HM-31 已對齊）。
+  - `packages/mcp-admin-core/mcp_admin_core/process.py`、`restore_guard.py`：pin 之後沒有變更。
+- 參考（不用對齊）：#159（`3395e2e`、`09cc826`，2026-11-18 合併）讓 K8s 刪帳號時一併清掉 `/tmp` 的派生檔，清理被拒時只記一行 WARNING
+  （不帶路徑）、刪除照樣 204。K8s 不是 HA 的產品；本片審查後 n8n 副本清不掉時的處理（第 15 節 S-2）和它一致。
+- 契約 #129 的 PaaS 出處照 pin 的檔重查（審查 S-6）：`Pc/process.py:600-608` 的 `asyncio.create_subprocess_exec` 不帶 `cwd`；
+  `apps/n8n/n8n_mcp_admin/launcher.py:122-134` 的 `build_env` 從 `os.environ` 複製、`:167` 是 `os.execvpe`。
+
+## 14. `checks` 秒數（審查 S-3）
+
+- 開 PR 後補（前：`claude-delivery` 最近一個 PR run 的 `checks`；後：本片 PR 的 `checks`）。
+- 本機增量（推估）：新測試檔審查前 28 案約 4.3 秒（審查者量的），審查後 37 案 3.6 秒（全套那輪的 junit；單獨跑 3.95 秒）；
+  `SWITCHABLE` 收 n8n 之後多出的參數化案例 49 案約 8.6 秒（審查者扣掉等鎖量的）；packaging 26.6 秒、node 0.25 秒，本片沒有增加。
+  合計約 +13 秒，CI（root、runner 較慢）推估 +20～30 秒，在每片 1.5 分鐘的預算內（計畫 §10.1）。全套 pytest 本機兩次的秒數
+  （審查前 356＋1904 秒、這次 2144 秒）是不同負載下量的，不拿來相減。
+
+## 15. 審查與處理（2026-11-19）
+
+- 兩份獨立審查都是「修正後通過」、必修 0 項：正確性（`artifacts/…/wave5/review-HM-25-correctness.md`）、安全面
+  （`…/review-HM-25-security.md`）。建議修共 16 項（正確性 S-1～S-7、安全面 S-1～S-9；正確性 S-2 與安全 S-4、兩份的 S-5 是同一件）。
+  採用的都做了；不改程式的只有安全 S-1（要使用者定）。
+
+### 15.1 採用
+
+| 審查 | 內容 | 處理 |
+|---|---|---|
+| 正確性 S-1 | 「建立時沒後端、之後存後端」的主流程沒有測 | 新增 `test_a_profiles_backend_saved_starts_its_child_and_cleared_stops_it`：B 沒後端開起來；面板存後端之後副本在工作執行緒做一次，子程式用自己的 HOME、副本、後端與 `--port` 起來，B 的 token 到 B 的子程式，預設帳號與 C 不重起；存 session 不重做副本；清掉後端之後子程式停、spec 是 None、工具回 `backend_not_configured` |
+| 正確性 S-2、安全 S-4 | 清理失敗沒有紀錄；孤兒、隔離目錄兩條路沒測 | `ProfileManager.removed` 把回 False 也當失敗，記一行 WARNING（只帶 id 前 8 碼、不帶路徑），刪除照樣完成。新增三案：清理失敗（一行 WARNING、刪除 200、C 不受影響）、刪孤兒清副本、刪隔離目錄清副本（同 id 還在服務時不清） |
+| 正確性 S-3 | 筆記少 PaaS 變動清單與 `checks` 秒數 | 第 13、14 節 |
+| 正確性 S-4 | 和並行產品片的衝突、合併順序 | 第 10.1 節；計畫 §12.2 的衝突表要主對話補 |
+| 正確性 S-5、安全 S-5 | 「每次起之前」說得比實作強 | 契約第 7 節、#47、#129，`n8n_adapter.py` 與測試的說明、`threat-model.md`、本筆記都改成「每次建子程式設定時」，寫明看門狗的自動重起沿用同一份設定，以及副本在兩次重起之間不見時 n8n-mcp 自己的退路。preflight 不加檢查（第 15.2 節） |
+| 正確性 S-6 | #129 的 PaaS 出處錯 | 改成 `Pc/process.py:600-608`、`launcher.py:122-134`、`:167`（第 13 節照 pin 的檔重查） |
+| 正確性 S-7 | `unreleased-changes.md` 的分類和契約不一致 | 第 4.1 節加 HM-25 的 runtime 收斂（不受開關管），第 4.2 節那列只留開通後才走的部分 |
+| 安全 S-2 | 威脅說明不準，漏三件 | `threat-model.md` 第 3 節與本筆記第 4 節改成「只有 DNS rebinding 打得到 loopback」，補 `/`、`/health` 不驗 bearer、登入限流以 127.0.0.1 計（20 次錯就 429 十五分鐘）、同一台 n8n 的 webhook 不分開；契約 #90、驗收矩陣 T-22、本筆記第 9 節、DOCS 草稿同步 |
+| 安全 S-3 | 沒有 n8n 的回覆遮罩聯集測試 | 新增 3 案：B 的 n8n 回覆夾著每個帳號的 token、C 的密鑰網址、兩個 API key 與沒人持有的值，JSON 與 SSE 都只遮 token 與 B 自己的憑證；開關關時只遮自己的 |
+| 安全 S-6 | 建副本走路徑、刪副本走 dir fd | `prepare_profile_catalog` 逐層用 `O_NOFOLLOW` 打開再檢查，檔案經最後一層的 descriptor 寫入與改名，寫完確認路徑還指到那個檔；`profile_catalog` 每次再對一次。新增「目錄在檢查之後被換成連結」一案 |
+| 安全 S-7 | 版本歷史沒有上限 | 寫進 `threat-model.md` 與 DOCS 草稿的已知限制；上限交使用者定（第 11 節） |
+| 安全 S-8 | 換後端之後舊快照還讀得到 | 每份副本記下做給哪個後端（網址與 key 的 SHA-256，不存 key 本身），換了就重做；新增單元測試一案，端對端那案也驗；契約 #47、第 7 節、DOCS 草稿同步。預設帳號照舊只在啟動時做，寫進已知限制 |
+| 安全 S-9 | DQ-04、DQ-22 的期限被本片改掉 | `decisions.md` 改回原文「HM-25 開工前」並註明已過，「n8n 的升版 PR 合併前」只是提議，等使用者或主對話確認 |
+
+### 15.2 沒有照做的與理由
+
+- 安全 S-1（開通後 webhook、chat、form 也拒 loopback）：`decisions.md` 第 4 節寫明這題「審查代理評估、使用者定」，審查本身也標「要使用者定」，
+  使用者 2026-11-15 定過維持 `permissive`。所以本片不改程式，只把審查結論寫進契約 #90、`decisions.md`、`threat-model.md`。採用時要改的地方：
+  `backend_policy.cjs` 照 `createPinnedFetch` 的寫法包 `SSRFProtection.createPinnedAgents`（任一位址 `thisHost()` 為真就拒，區網照舊）、
+  契約 #90 與第 7 節 HM-20 列、帳本、`docs/tool-surface.*`（釘了 `backend_policy.cjs`，要重產）、`tests/test_backend_loopback.py` 加
+  webhook、chat、form 三案、`unreleased-changes.md` 加一行。
+- 正確性 S-5 的另一個做法（在 preflight 再查 HOME 與副本）：preflight 是 HM-09 的 port 檢查，加一種拒絕要動 `lifecycle.py` 的
+  `BLOCKED_REASONS`（計畫 §12.2：HM-09 → HM-15）。副本在兩次重起之間不見只有同 uid 的程序做得到（DQ-37），那時 n8n-mcp 退到的檔唯讀、
+  不跨帳號，所以只把文件寫準。
+- 安全 S-7 的上限本身：數字與「超過就清掉歷史」是產品取捨，交使用者。
+- 正確性的小地方：N-6（威脅表補 UC-03 的出處）、N-8（`docs/operations/guide.md`、`docs/n8n-ha-role.md` 還說 n8n 在 `run.py` 接驗證器）
+  照做了。N-1（黃金回歸對 n8n 的版本改讀 `version_for_product`）要主對話明確接受。N-9（擁有者不是自己的目錄，要 root 才造得出）沒做，
+  留給之後的 root 測試。其餘是說明，不用改。
+
+### 15.3 先紅後綠
+
+- 新的 9 案先寫好，把 `apps/n8n/n8n_adapter.py` 與 `profile_runtime.py` 退回 `5504d9a` 跑：4 失敗、33 過。失敗的是：換了網址之後副本沒重做
+  （S-8 單元測試）、目錄換成連結之後照樣寫穿（S-6：`prepare_profile_catalog` 回了路徑）、存第二個後端之後沒有新副本（端對端那案）、
+  清理失敗沒有 WARNING（S-2）。孤兒、隔離目錄、回覆遮罩 2 案、開關關時的遮罩在 `5504d9a` 就成立，是鎖住既有行為的測試。
+- 程式改完，37 案全過。
+
+### 15.4 審查後的 commit
+
+| commit | 內容 |
+|---|---|
+| `dec814f` | 測試：新的 9 案（單獨看時 4 案紅） |
+| `f5b2586` | 程式：`n8n_adapter.py`（descriptor、每個後端一份副本）、`profile_runtime.py`（回 False 也記 WARNING）；帳本兩筆、`test_output_schemas.py` 的摘要 |
+| `e680f41` | 文件：契約、`threat-model.md`、`decisions.md`、`unreleased-changes.md`、`acceptance-matrix.md`、`ledger-tracking.md`、`guide.md`、`n8n-ha-role.md` |
+| （本 commit） | 本筆記：第 1～14 節的修正與本節 |
+
+### 15.5 預檢（審查修正之後）
+
+| 預檢 | 結果 |
+|---|---|
+| `scripts/secret_precheck.py --tools <scan0414/tools>` | `result: OK, 0 findings`（gitleaks 8.28.0 釘選版；`c90b214..e680f41` 11 個 commit，本筆記之前的全部） |
+| `scripts/ledger_precheck.py` | `result: OK`（第 7 節） |
+
+本筆記這個 commit 只改文字；push 前兩個預檢在分支 head 再跑一次。
