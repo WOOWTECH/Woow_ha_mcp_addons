@@ -709,6 +709,37 @@ test('HM-12 review S-7: a backend save of a switched-on Odoo answered 503 state 
   assert.equal(await run(unavailable, {operation: 'policy'}), UNAVAILABLE);
   assert.equal(await run(unavailable, {product: 'emqx'}), UNAVAILABLE);
   assert.equal(await run(denied, {switched: false}), UNAVAILABLE);
+  // HM-24: a switched-on Hermes is bound to its backend identity too (products.IDENTITY_BOUND); switched off, today's text.
+  assert.equal(await run(unavailable, {product: 'hermes'}), `${UNAVAILABLE} ${OUTCOME}`);
+  assert.equal(await run(unavailable, {product: 'hermes', operation: 'backend'}), `${UNAVAILABLE} ${OUTCOME}`);
+  assert.equal(await run(unavailable, {product: 'hermes', switched: false}), UNAVAILABLE);
+  assert.equal(await run(denied, {product: 'hermes'}), UNAVAILABLE);
+});
+
+// HM-24: a backend save of a profile whose restore review waits, refused because it would rotate the token (HM-13c review
+// S-3), says which fields of the save's own product are its backend identity: Odoo's copy as HM-13c wrote it, Hermes'
+// its Gateway and Dashboard; every product of identityBound has its words (contracts.js identityChange).
+test('HM-24: the review-wait copy of a backend save names the identity fields of the save\'s own product', async () => {
+  const {identityBound, identityChange} = panelContracts;
+  assert.deepEqual(Object.keys(identityChange ?? {}).sort(), [...identityBound].sort());
+  const WAITS = '這個帳號是從備份還原（或休眠）回來的，還沒有核對：請先到預設帳號頁的核對卡確認它的設定，按「已核對」後才能重新產生權杖。';
+  const saveWaits = names => `改後端身分（${names}）會換新這個帳號的 MCP 權杖，所以也要先核對才能儲存；這次未儲存任何變更。`;
+  const held = () => Response.json({error: 'request denied', detail: {code: 'restore_review_required'}}, {status: 409});
+  const run = async (product, {switched = true, operation = 'backend/patch'} = {}) => {
+    const api = new AdminApi(mount, saving(product, held, {switched}).fetcher, memoryStorage());
+    await api.bootstrap();
+    let caught = null;
+    try { await api.mutate(operation, operation === 'policy' ? {writes_enabled: false, disabled: [], enabled_write_tools: []}
+      : {changes: {dashboard_username: 'DUMMY-user-two'}}, revisionOf(DEFAULT_PROFILE)); } catch (error) { caught = error; }
+    assert.ok(caught instanceof ApiError && caught.status === 409 && caught.code === 'restore_review_required');
+    return caught.message;
+  };
+  assert.equal(await run('odoo'), `${WAITS} ${saveWaits('Odoo 的網址、資料庫或使用者')}`);
+  assert.equal(await run('hermes'), `${WAITS} ${saveWaits('Hermes 的 Gateway 網址、Dashboard 網址或 Dashboard 使用者，補上或清空 Dashboard 也算')}`);
+  assert.equal(await run('hermes', {operation: 'backend'}), await run('hermes'));
+  // Another operation, a product whose token is not bound to its backend: the review copy alone.
+  assert.equal(await run('hermes', {operation: 'policy'}), WAITS);
+  assert.equal(await run('emqx'), WAITS);
 });
 
 test('HM-12 (DQ-40 ⑨): every backend URL names the secrets it takes to its server, every secret of a product exactly once', () => {
@@ -724,7 +755,7 @@ test('HM-12 (DQ-40 ⑨): every backend URL names the secrets it takes to its ser
   assert.deepEqual(urlSecrets.hermes, {gateway_url: ['gateway_api_key'], dashboard_url: ['dashboard_password']});
   assert.deepEqual(urlSecrets.n8n, {url: ['key', 'mcp_access_token']});
   assert.deepEqual(urlSecrets.opendesign, {url: []});
-  assert.deepEqual(identityBound, ['odoo']);
+  assert.deepEqual(identityBound, ['odoo', 'hermes']);  // HM-24: Hermes too
 });
 
 test('HM-12: a URL\'s origin is the server\'s (backend_edit.origin): scheme and host in lower case, the effective port, nothing else normalized', () => {

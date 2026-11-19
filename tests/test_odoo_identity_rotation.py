@@ -21,7 +21,8 @@ file is in place, as when the default state cannot be read); a new token on disk
 after the rename that leaves the store usable) is served with no child. The old child stays stopped in both. A new child
 that cannot start leaves the new token and never the old child (config_apply_failed with token_rotated). Switched off,
 nothing changes (plan 3.3): the save commits first and restarts the child, the token stays, the answer is today's. The
-other switched-on products keep their token (Nextcloud HM-22, Hermes HM-24).
+other switched-on products keep their token (Nextcloud until HM-22), but Hermes: HM-24 binds it too
+(tests/test_hermes_multi_profile.py).
 
 PaaS (woow-mcp-server 69ac425): packages/mcp-admin-core/mcp_admin_core/config/store.py:502-533 patch_connection_bound
 and its tests packages/mcp-admin-core/tests/test_config_store.py:102-170 (test_bound_connection_rotation_is_atomic_and_
@@ -894,14 +895,10 @@ async def test_switched_off_an_identity_change_keeps_todays_answer_order_and_tok
                 assert (await client.post(path, headers=headers, json=initialize_message())).status_code == 200
 
 
-# ---- the other products keep their token, switched on (Nextcloud: HM-22; Hermes: HM-24) ----
+# ---- the other products keep their token, switched on (Nextcloud: HM-22; Hermes is bound since HM-24:
+# tests/test_hermes_multi_profile.py) ----
 
 OTHERS = {
-    'hermes': ({'gateway_url': 'https://hermes.invalid', 'gateway_api_key': 'DUMMY-rotation-hermes-key',
-                'dashboard_url': 'https://hermes.invalid:9119', 'dashboard_username': 'DUMMY-user',
-                'dashboard_password': 'DUMMY-rotation-dashboard-password'},
-               {'dashboard_username': 'DUMMY-user-two', 'gateway_url': 'https://other-hermes.invalid',
-                'gateway_api_key': 'DUMMY-rotation-hermes-key-two'}),
     'nextcloud': ({'url': 'https://nextcloud.invalid', 'username': 'DUMMY-user',
                    'app_password': 'DUMMY-rotation-nextcloud-password'},
                   {'username': 'DUMMY-user-two'}),
@@ -919,8 +916,8 @@ OTHERS = {
 @pytest.mark.parametrize('product', sorted(OTHERS))
 async def test_switched_on_the_other_products_keep_their_token_on_a_changed_backend(tmp_path, log_scan, monkeypatch,
                                                                                     product):
-    """Only Odoo is bound to its identity in this slice: a switched-on Hermes, Nextcloud, EMQX, LiteLLM or Headscale
-    backend saved with another account or server (its secrets brought) keeps its token and answers as today."""
+    """Only Odoo (HM-12) and Hermes (HM-24) are bound to their identity: a switched-on Nextcloud, EMQX, LiteLLM or
+    Headscale backend saved with another account or server (its secrets brought) keeps its token and answers as today."""
     monkeypatch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset({product}))
     saved_connection, changes = OTHERS[product]
     restarts = []
