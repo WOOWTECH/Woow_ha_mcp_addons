@@ -1073,7 +1073,8 @@ function diagnostics() {
       const result = await api.diagnostics();
       const logs = result.logs;
       if (!Array.isArray(logs?.entries) || logs.redacted !== true) throw new UiError('診斷格式不符，未顯示。');
-      viewer.replaceChildren(p(`保留 ${logs.entries.length} 筆 · 捨棄 ${logs.dropped} 筆 · ${logs.bytes} bytes`),
+      const listenerText = { unknown: '尚未檢查', owned: '目前符合', mismatch: '不符合，已拒絕轉送', absent: '沒有監聽', unavailable: '不可用，仍使用子行程權杖' }[result.listener_identity];
+      viewer.replaceChildren(...(listenerText ? [p(`監聽程序檢查：${listenerText}`)] : []), p(`保留 ${logs.entries.length} 筆 · 捨棄 ${logs.dropped} 筆 · ${logs.bytes} bytes`),
         el('pre', { tabindex: '0', 'aria-label': '已遮蔽的子行程日誌' }, el('code', {},
           logs.entries.map(entry => `${entry.at} [${entry.stream} / ${entry.generation}] ${entry.text}`).join('\n') || '尚無日誌。')));
     })) : p('此部署未提供子行程日誌。'), viewer));

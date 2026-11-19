@@ -1011,7 +1011,8 @@ async def run_until_listening(args, events, *, module=run_product):
         return user == ADMIN['X-Remote-User-Id']
 
     def client(*a, **k):
-        k.setdefault('transport', httpx.MockTransport(MockChild(args.product, args.data)))
+        if k.get('transport') is None or isinstance(k['transport'], profile_runtime.ListenerGuard):
+            k['transport'] = httpx.MockTransport(MockChild(args.product, args.data))
         return GENUINE_CLIENT(*a, **k)
     with pytest.MonkeyPatch.context() as patch:
         owner = profile_runtime if module is run_product else module
