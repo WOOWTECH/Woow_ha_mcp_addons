@@ -241,7 +241,9 @@ class Profiles:
         await self.stack.__aexit__(*exc)
 
     def client(self, *args, **kwargs):
-        kwargs.setdefault('transport', httpx.MockTransport(self.route))
+        # This fixture simulates children without OS listeners; HM-15 has real-socket tests.
+        if kwargs.get('transport') is None or isinstance(kwargs['transport'], self.module.ListenerGuard):
+            kwargs['transport'] = httpx.MockTransport(self.route)
         return GENUINE_CLIENT(*args, **kwargs)
 
     async def route(self, request):
