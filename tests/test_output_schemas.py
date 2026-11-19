@@ -34,15 +34,16 @@ CURRENT_POST_SOURCE_BYTES = {
     # HM-32: the EMQX client asks for no idle backend connection (PaaS #135); no tool, schema or handler change.
     'apps/emqx/vendor/emqx_mcp_server/lifespan.py': (
         'emqx', 'acf72dc8655d6b702a600e4e936b4bfddfdb137824747de91022085f21e9d44b'),
-    # HM-04: the child port is a parameter (3000 by default); HM-20: WOOW_MCP_DENY_LOOPBACK once n8n is switched on.
-    # No tool, schema or handler change.
-    'apps/n8n/n8n_adapter.py': ('n8n', 'e3df8d0f88233051e1b399f45ed1e42e4c3fb621324117f77e0b386f3277309c'),
+    # HM-04: the child port is a parameter (3000 by default); HM-20: WOOW_MCP_DENY_LOOPBACK once n8n is switched on;
+    # HM-25: an additional profile's child (HOME, its own catalog copy, --port, none without a backend). No tool, schema
+    # or handler change.
+    'apps/n8n/n8n_adapter.py': ('n8n', '98725e5453f721a2dcea003c55cc984d5b7f326d72ace9f398d2684f24f127d9'),
     # HM-20: loopback refusal for the configured instance behind WOOW_MCP_DENY_LOOPBACK; no tool, schema or handler change.
     'apps/n8n/backend_policy.cjs': ('n8n', '055ca90a23c5d401d742fb165ffab2e6efcc5ca6a41a96a51293a4a8943f1826'),
     # HM-13b: the boot guard (restore_lock.guard) before the child and the listeners, and the bootstrap's
-    # dormant_profiles; HM-13c: the restore notice (restore_lock.read_notice) for the bootstrap; no tool, schema or
-    # handler change.
-    'apps/n8n/run.py': ('n8n', '2eab88d9f1090d02092b8ec36d454bfd5a966fe3b2448909ee6fa65fc0192c88'),
+    # dormant_profiles; HM-13c: the restore notice (restore_lock.read_notice) for the bootstrap; HM-25: the runtime is
+    # run_product's (the n8n adapter); no tool, schema or handler change.
+    'apps/n8n/run.py': ('n8n', '71d86351c716ed6f40b25ca337205930686531f450fc16bc088f37bff2e13360'),
     'apps/hermes/launch.py': ('hermes', '68ebc3f2b72d59001fb9e26d7836fb47cd4c82d68676b15babe4d1f5ac9f8903'),
     # 0.4.14 release: only the ARG BUILD_VERSION default changes (0.4.13 -> 0.4.14); no tool, schema or handler change.
     'apps/n8n/Dockerfile': ('n8n', '0a4959708cc10750f654a17c328e646928df71f16bcfc612ec1bf23c30b75b12'),
