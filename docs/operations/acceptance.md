@@ -186,6 +186,34 @@ full、partial（只選這個 app）、加密備份各做一輪。每一步都�
 7. 讀不到的帳號隔離與 C1-M1 攻擊序只在 LOCAL 驗（HAOS 上不造壞資料）；版本混搭照計畫 §10.6 第 6 點，回退與再升級見 T-20。
 8. 證據記：還原的種類、兩個訊號各自有沒有觸發、上面每一項的結果、版本（T-01）、帳號的 log id。
 
+### Hermes 開通（HM-24）
+
+Hermes 的升版 PR（把 `hermes` 加進 `MULTI_PROFILE_PRODUCTS`）在 HAOS 上除了上表與下一節，另外做這幾項。功能 PR（HM-24）只有
+LOCAL 的測試（`tests/test_hermes_multi_profile.py`），沒有任何 HA 實測。每一步照上面的規則先經使用者批准；token、Gateway key、
+Dashboard 密碼一律不印、不存。
+
+1. **要使用者先批准的後端身分**：一台測試用的 Hermes Agent（Gateway 與 Dashboard；PaaS 正式站用 v0.22.5），每個帳號一組自己的
+   Gateway API key 與 Dashboard 帳號：預設帳號＋至少 2 個額外帳號（T-04 的 N×N 最多到 Hermes 的上限，預設＋3），另加一組換身分用的
+   Dashboard 帳號（T-03）。同一台 Hermes 若只能有一組 Gateway key 或一個 Dashboard 使用者，就要多台測試用 Hermes（這點還沒確認）。
+   只用合成名稱，不用真人帳號；建立與刪除每一組都要使用者批准，驗完刪掉並留清理證明（T-29）。
+2. **T-03 換身分**：`gateway_url`、`dashboard_url`、`dashboard_username` 各換一次，再補上與清空 Dashboard 各一次：每次面板提示權杖已換新、
+   兩條舊網址都失效（Bearer 401、密鑰網址 404）、新網址可用；只換 `gateway_api_key`、`dashboard_password` 時權杖不變（契約第 9 節 #129）。
+3. **T-04 N×N**：每個帳號用自己的身分在 Hermes 留一個看得出來是誰的標記（例如用測試鍵的設定值，或具名對話），每個帳號只看得到自己的。
+4. **Dashboard 登入**：兩個以上帳號接同一個 Dashboard 時，各自第一次用到 Dashboard 只各登入一次（Dashboard 的 log 或登入紀錄）；
+   記下有沒有 429（全部帳號共用 Dashboard 的登入限流，#130）。
+5. **T-07、T-12、T-19 的長 chat**：存一個帳號的政策（例如停用 `hermes_chat`）只改它的工具清單、每個子程式 PID 都不變；一個帳號的長 chat
+   進行中換它的身分或撤銷，只有它的 chat 結束；同一個帳號並行長 chat 到名額滿（額外帳號 16）時，下一個請求等 1 秒後回 `-32003`，
+   別的帳號照常（#131）。並行 chat 會打真的 Gateway、可能花模型費用：用免費模型或測試 Gateway，先問使用者。
+6. **每子程式 MiB 的負載量測（至少 60 分鐘；計畫 §9、C3-SF-12）**：PaaS 量到每個 Hermes 子程式的 RSS 從 90 MiB 漲到 160～168 MiB
+   （前 2 分鐘就長完）、負載停了也不回落（R02 C-04）；HA 只在建立帳號、存後端、手動重啟時看 MemAvailable，之後的成長看不到。
+   - 在目標硬體（J6412，可以的話 J1900）上，預設帳號＋3 個額外帳號都接好、都在跑；每個帳號一個用戶端持續混合呼叫至少 60 分鐘：
+     `hermes_chat`（含長回合）、Dashboard 類（`hermes_inspect`、`hermes_session`、`hermes_cron` 的 list）、`hermes_gateway` 的 status，
+     跨過 Dashboard cookie 的 10 分鐘到期（會重登）。
+   - 每 30 秒記：每個子程式的 RSS 與 PSS（`/proc/<pid>/smaps_rollup`）、管理程序的 RSS、MemAvailable；負載停止後再記 10 分鐘。
+   - 結論寫：開始、穩定後、最後 10 分鐘的最大值，停止後的值，每個子程式穩定後的最大值加餘裕作為建議值。改
+     `profiles.CHILD_MEMORY_MIB['hermes']`（暫定 160）與契約第 5 節要另開功能 PR，請求內容位元組預算（HM-31）會跟著重算；升版 PR 不改常數。
+   - 證據放 repo 外 `artifacts/…`，repo 內只放不含秘密的摘要。
+
 ### 每次升版都要重驗（每個開通的產品，每一版）
 
 - **UC-08 還原偵測**：在 QA HAOS 做 full、partial、加密備份各一次還原，記下兩個訊號各自有沒有觸發（`/data/mcp` 屬 root 而留下
