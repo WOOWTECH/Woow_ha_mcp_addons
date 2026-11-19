@@ -104,13 +104,26 @@ async def test_startup_probe_reports_unavailable_without_a_request(monkeypatch, 
     await guard.aclose()
 
 
+@pytest.mark.asyncio
+async def test_startup_probe_resets_previous_generation_status(monkeypatch):
+    supervisor = SimpleNamespace(process=SimpleNamespace(pid=123), starts=2, status='running')
+    guard = child_identity.ListenerGuard(supervisor, 12345, limits=httpx.Limits())
+    guard.status = 'owned'
+    monkeypatch.setattr(child_identity.os, 'listdir', lambda _: [])
+    try:
+        await guard.probe(123)
+        assert guard.status == 'unknown'
+    finally:
+        await guard.aclose()
+
+
 def test_multiple_listeners_must_all_be_owned(monkeypatch):
     import io
 
     def table(path, **kwargs):
         rows = ('header\n 0: 00000000:3039 00000000:0000 0A 0:0 0:0 0 0 0 111\n'
                 if path.endswith('/tcp') else
-                'header\n 0: 00000000000000000000000000000000:3039 00000000:0000 0A 0:0 0:0 0 0 0 222\n')
+                'header\n 0: 0000000000000000FFFF00000100007F:3039 00000000:0000 0A 0:0 0:0 0 0 0 222\n')
         return io.StringIO(rows)
     monkeypatch.setattr(child_identity, 'open', table, raising=False)
     monkeypatch.setattr(child_identity.os, 'listdir', lambda _: ['3'])
@@ -119,3 +132,74 @@ def test_multiple_listeners_must_all_be_owned(monkeypatch):
     monkeypatch.setattr(child_identity.os, 'listdir', lambda _: ['3', '4'])
     monkeypatch.setattr(child_identity.os, 'readlink', lambda path: 'socket:[111]' if path.endswith('/3') else 'socket:[222]')
     assert child_identity.inspect_listener(999, 12345) == 'owned'
+
+
+@pytest.mark.parametrize('table,address', [
+    ('tcp', '0200007F'),  # 127.0.0.2 is not the connection destination
+    ('tcp', '0100000A'),  # 10.0.0.1
+    ('tcp6', '00000000000000000000000001000000'),  # ::1, IPv6 only
+    ('tcp6', '00000000000000000000000000000000'),  # wildcard may be v6-only
+])
+def test_unrelated_same_port_listener_is_not_owned(monkeypatch, table, address):
+    import io
+    def open_table(path, **kwargs):
+        row = f'0: {address}:3039 00000000:0000 0A 0:0 0:0 0 0 0 111\n'
+        return io.StringIO('header\n' + (row if path.endswith('/' + table) else ''))
+    monkeypatch.setattr(child_identity, 'open', open_table, raising=False)
+    monkeypatch.setattr(child_identity.os, 'listdir', lambda _: ['3'])
+    monkeypatch.setattr(child_identity.os, 'readlink', lambda _: 'socket:[111]')
+    expected = 'unavailable' if table == 'tcp6' and int(address, 16) == 0 else 'absent'
+    assert child_identity.inspect_listener(999, 12345) == expected
+
+
+def test_disappearing_fd_cannot_prove_mismatch(monkeypatch):
+    import io
+    def open_table(path, **kwargs):
+        row = '0: 0100007F:3039 00000000:0000 0A 0:0 0:0 0 0 0 111\n'
+        return io.StringIO('header\n' + (row if path.endswith('/tcp') else ''))
+    monkeypatch.setattr(child_identity, 'open', open_table, raising=False)
+    monkeypatch.setattr(child_identity.os, 'listdir', lambda _: ['3'])
+    def vanished(_):
+        raise FileNotFoundError()
+    monkeypatch.setattr(child_identity.os, 'readlink', vanished)
+    assert child_identity.inspect_listener(999, 12345) == 'unavailable'
+
+
+def test_unrelated_same_port_does_not_hide_foreign_loopback(monkeypatch):
+    import io
+    rows = ('0: 0100007F:3039 00000000:0000 0A 0:0 0:0 0 0 0 111\n'
+            '1: 0200007F:3039 00000000:0000 0A 0:0 0:0 0 0 0 222\n')
+    monkeypatch.setattr(child_identity, 'open',
+                        lambda path, **kw: io.StringIO('header\n' + (rows if path.endswith('/tcp') else '')),
+                        raising=False)
+    monkeypatch.setattr(child_identity.os, 'listdir', lambda _: ['3'])
+    monkeypatch.setattr(child_identity.os, 'readlink', lambda _: 'socket:[222]')
+    assert child_identity.inspect_listener(999, 12345) == 'mismatch'
+
+
+@pytest.mark.asyncio
+async def test_ipv6_wildcard_does_not_hide_foreign_ipv4(monkeypatch):
+    import io
+    rows = {
+        'tcp': '0: 0100007F:3039 00000000:0000 0A 0:0 0:0 0 0 0 111\n',
+        'tcp6': '0: 00000000000000000000000000000000:3039 00000000:0000 0A 0:0 0:0 0 0 0 222\n',
+    }
+    monkeypatch.setattr(child_identity, 'open',
+                        lambda path, **kw: io.StringIO('header\n' + rows[path.rsplit('/', 1)[-1]]),
+                        raising=False)
+    monkeypatch.setattr(child_identity.os, 'listdir', lambda _: ['3'])
+    monkeypatch.setattr(child_identity.os, 'readlink', lambda _: 'socket:[222]')
+    supervisor = SimpleNamespace(process=SimpleNamespace(pid=999), starts=1, status='running')
+    guard = child_identity.ListenerGuard(supervisor, 12345, limits=httpx.Limits())
+    sent = []
+    async def send(request):
+        sent.append(request)
+        return httpx.Response(200, request=request)
+    monkeypatch.setattr(guard.inner, 'handle_async_request', send)
+    try:
+        with pytest.raises(httpx.ConnectError, match='mismatch'):
+            await guard.handle_async_request(httpx.Request('GET', 'http://127.0.0.1:12345/mcp',
+                                                           headers={'Authorization': 'Bearer secret'}))
+        assert not sent
+    finally:
+        await guard.aclose()
