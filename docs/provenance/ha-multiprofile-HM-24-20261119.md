@@ -179,10 +179,10 @@ production port 參數化（額外帳號的 `--port` 也走 `owned_child.py`）�
 
 | 檢查 | 結果 |
 |---|---|
-| `python3 scripts/secret_precheck.py --tools …/scan0414/tools` | gitleaks 8.28.0（釘版、驗過）；commit 範圍見第 13 節：**OK，0 命中** |
+| `python3 scripts/secret_precheck.py --tools …/scan0414/tools` | gitleaks 8.28.0（釘版、驗過）；`c90b214..HEAD` 的全部 commit（第 13 節）：**OK，0 命中**（每加一個 commit 重跑） |
 | `python3 scripts/ledger_precheck.py` | runtime-patches 180、runtime-sources 70、tool-surface 159 檢查，0 漂移；改到的四個列管檔帳本同 PR 更新；**result: OK** |
 | `packaging/validate.py`（`ha-gh-release-20261117` 的 venv） | **PASS**：8 strict Supervisor-subset manifests… |
-| `python -m unittest discover -s packaging -p 'test_*.py'`（短 TMPDIR） | 366 案 **OK**（skipped 5：非 root 允許的 skip），28 秒 |
+| `python -m unittest discover -s packaging -p 'test_*.py'`（短 TMPDIR） | 366 案 **OK**（skipped 5：非 root 允許的 skip），27～28 秒（改程式後與最後各跑一次） |
 | `node --test packages/mcp-admin-ui/tests/*.test.mjs` | **119／119** |
 | `scripts/tool_inventory.py`（不帶參數） | exit 0，沒有漂移（沒動 `apps/runtime`、`apps/*/launch.py`，不用重產） |
 | pytest：新測試＋身分相關（`test_hermes_multi_profile`、`test_identity_fields`、`test_odoo_identity_rotation`） | 69 綠 |
@@ -263,6 +263,9 @@ Hermes 的下一版若還沒開通：本片沒有可見變化，不寫 CHANGELOG
 | `2010f06` | test(hermes)：新測試檔、Odoo 測試拿掉 Hermes、面板測試（這個 commit 上是紅的） |
 | `c6947be` | feat(core)：`IDENTITY_BOUND` 加 Hermes、面板 `identityBound`／`identityChange`、`api.js` 的等核對說明、帳本 |
 | `0a6257f` | docs(multi-profile)：契約、驗收矩陣、驗收手冊、威脅模型、決策紀錄、發版交接清單 |
-| 本筆記 | docs(provenance) |
+| `52fa261` | test(hermes)：開關關的長 chat 一案（自己審測試時補） |
+| `35bf640` | docs(multi-profile)：#129 的理由補 PaaS 通用判斷的差別、測試登記表補開關關的長 chat |
+| `092fe49` | docs(provenance)：本筆記 |
+| 本筆記的下一個 commit | docs(provenance)：這張表與第 8 節的最後檢查 |
 
 沒有 AI 署名；用 clone 設定的身分 commit；沒有 push（之後有獨立審查，push 由收尾步驟做）。
