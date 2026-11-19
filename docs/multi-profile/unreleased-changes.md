@@ -106,6 +106,25 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 - 上次發版：0.4.14（同 Odoo）。
 - 要寫：無（A1～A7、B1、B2、L1 HM-32 #113 已寫進 0.4.14；L1 照檔頭第 3 點刪除）。
 - 發版時另外驗：第 5 節。
+- **開通時要寫（HM-21 交，PR 號合併後補）**：HM-21 是 LiteLLM 開通的功能 PR，沒有程式（計畫 §9：LiteLLM 不需要產品專屬程式），開關關時
+  沒有任何變化（第 4.2 節）。LiteLLM 的升版 PR 把 `litellm` 加進 `features.MULTI_PROFILE_PRODUCTS`、升 0.5.0 時，CHANGELOG 每個使用者看得到的
+  變化寫一行（計畫 §7.2；DOCS 與 `upgrade-notes.yaml` 要寫的見 `docs/provenance/ha-multiprofile-HM-21-20261119.md` 第 12 節）。L2～L6 是
+  LiteLLM 自己的；L7～L15 是每個產品開通都一樣的，Odoo 首發（HM-19a）若先寫了，照那裡的句子對齊。數值以發版當時的契約第 5 節為準
+  （HM-19c 量測前都是暫定）；PR 號照當時已合併的多帳號 PR 補。
+  - L2：`- LiteLLM can now serve up to three profiles besides the default one, as memory allows: each profile has its own MCP token on both connection methods (Bearer /mcp and /private_<token>/mcp), its own LiteLLM URL and key, its own tool policy and its own MCP child, and the token alone decides which profile a request reaches. A profile can do what its key allows, so give each profile its own key: a virtual key limited to that profile's models, or a proxy_admin_viewer user's key, not the master key.`
+  - L3：`- Changing a profile's LiteLLM key or URL keeps its MCP token and URLs, as on the PaaS server; the profile's MCP child restarts with the new values. Moving the URL to another server (scheme, host or port) needs the key again: the panel asks for it before saving, and the server refuses the save without it (HTTP 422, CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN).`
+  - L4：`- Saving a profile's tool policy restarts only that profile's MCP child; the other profiles keep their sessions. With every write grant revoked, that child runs read-only (LITELLM_MCP_READONLY=true) and registers no write tool.`
+  - L5：`- Each profile's MCP child keeps its own pool of at most four backend connections to LiteLLM (four per child as before; the PaaS server allows 50): a fifth call at once on one profile waits for a free connection, and a profile that keeps four calls busy does not delay another profile.`
+  - L6：`- A LiteLLM URL can no longer point at loopback (127.0.0.0/8, ::1, localhost): saving one is refused, and the MCP child refuses to connect to one (PR #102). Inside the add-on, loopback only ever reached the add-on's own ports; use the LiteLLM host's LAN address or name.`
+  - L7：`- The admin panel gets a profile menu, shown with the default profile alone too: create, rename and delete profiles (a deletion asks twice and revokes the profile's token at once) and switch between them; tokens, backend, tool policy, child status and diagnostics are per profile. Every admin API request about one profile names it in exactly one X-MCP-Profile header (missing: 400 profile_id_required; malformed or repeated: 400 profile_id_invalid; unknown: 404 profile_not_found), and its answer names the profile; the panel and the P9 kit send it. The Home Assistant administrator check now runs before any profile state is read (one more Core query per admin request).`
+  - L8：`- MCP port 8081 admits requests per profile (each profile its own admission, forwarding slots, event-stream limit, queues and pending-reply budget; numbers in docs/multi-profile/contract.md section 5), so a busy profile cannot take another's. A request with an id refused for capacity, or after waiting 1 s for a forwarding slot, gets HTTP 200 with JSON-RPC error -32003 and Retry-After: 5 (a body over 64 KiB refused before it is read: HTTP 503); one event stream more than allowed gets HTTP 429 with Retry-After: 30; more than 64 requests at once no longer get uvicorn's plain-text 503. The listener allows 64 + 32 × 3 connections; the default profile alone still at most 64.`
+  - L9：`- An MCP child that drops a request mid-answer now gets HTTP 502 with JSON-RPC error -32004 (on an event stream, a -32004 event that ends it), whose text says whether the child is restarting; a token rotated or revoked while its answer streams ends the stream with a -32005 message, as on the PaaS server. The add-on log gets at most one line per profile and reason a minute instead of a traceback.`
+  - L10：`- A crashed MCP child restarts as on the PaaS server: after 2, 5, 15, 30, 60 and 120 s, then every 300 s without a limit on attempts, and a run of 120 s starts again from 2 s (before: four attempts about 1, 2 and 4 s apart, then failed). A backend is reported unreachable only after two failed health checks in a row, and rejected credentials space the checks out from 15 s to 300 s.`
+  - L11：`- Replies are processed on one worker thread, the profiles taking turns; the bytes sent do not change.`
+  - L12：`- Restores: the first start writes two small files without secrets to /data/mcp (.instance-sentinel, .instance-record) that detect a restore. Restoring a backup that holds profile data revokes every profile's MCP token, the default profile's included; the panel shows a review card, and a profile's token can be issued again once that profile is reviewed.`
+  - L13：`- The panel can revoke every profile's MCP token at once (revoke all, asked twice), for when a token or the add-on may be compromised.`
+  - L14：`- The secret URL checks a request's browser Origin against one list for the add-on (default https://claude.ai) in report-only mode: a request from another origin is still served, and the add-on log notes it (at most one line a minute per profile and origin, 20 a minute per profile). The panel can switch the list to enforce (HTTP 403).`
+  - L15：`- Creating a profile checks the memory first (with a container memory limit, the PaaS formula: 256 MiB plus 160 MiB for each LiteLLM child; without one, MemAvailable must hold one more child: 160 MiB plus 256 MiB) and otherwise answers 409 profile_memory_insufficient with the memory needed and available; an additional profile's backend save or child restart checks MemAvailable too and leaves its child blocked (memory_capacity) instead of starting it. An additional profile's child runs with oom_score_adj 500 and a nice value 5 above the add-on's.`
 
 ### 3.6 Nextcloud
 
@@ -158,6 +177,7 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 | HM-12 | #110 | `7646f0f` | Odoo 換身分換 token、新來源重填秘密（後端） | 換身分不換 token，回應沒有新欄位 |
 | HM-30 | #111 | `ebefebe` | 回覆處理工作執行緒、待送回覆額度、健康檢查容忍 | 不建工作執行緒，回覆照舊在事件迴圈處理 |
 | HM-12 面板 | #114 | `165dbaf` | 換 token 的提示、新來源重填秘密的表單 | 面板畫面、請求與提示不變（HM-12 面板筆記：216 個比較 0 差異） |
+| HM-21 LiteLLM 開通的功能 PR | 合併後補 | 合併後補 | 沒有程式：只有測試（`tests/test_litellm_multi_profile.py`）與文件；映像只多 `docs/provenance/` 的筆記 | 沒有任何變化；開通時的句子見第 3.5 節 |
 
 要用一句話交代第 4 節（可選；主對話補寫，照計畫 §3.3、§7.1）：
 
