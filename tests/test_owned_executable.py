@@ -158,6 +158,61 @@ async def test_callback_is_not_serialized_behind_health(tmp_path, monkeypatch):
         store.close()
 
 
+def test_the_child_port_is_never_a_public_port(tmp_path, monkeypatch):
+    """PR #109's first CI run (test_unconfigured_connect_runtime[hermes]): launch() drew its two public ports by binding
+    port 0 and closing the socket again (free_port), and the kernel gave one of them to the child port's reservation.
+    Here the first two reservations land on the public ports, as the kernel may hand them out: Executable reserves again
+    and keeps each colliding reservation bound until it holds one outside the public ports, then closes them."""
+    import owned_executable
+    held = [reserve_port(), reserve_port()]  # what the kernel hands back first: the public ports
+    public = [sock.getsockname()[1] for sock in held]
+    real, returned = owned_executable.reserve_port, []
+
+    def kernel_hands_back_the_public_ports():
+        assert all(sock.fileno() != -1 for sock in returned), 'a colliding reservation stays bound while reserving again'
+        returned.append(held[len(returned)] if len(returned) < len(held) else real())
+        return returned[-1]
+    monkeypatch.setattr(owned_executable, 'reserve_port', kernel_hands_back_the_public_ports)
+    try:
+        runner = Executable(tmp_path, 'n8n', public)
+        assert len(returned) == 3 and runner.reservation is returned[-1]
+        assert runner.config['child_port'] == runner.reservation.getsockname()[1] not in public
+        assert all(sock.fileno() == -1 for sock in held), 'the colliding reservations are closed'
+    finally:
+        for sock in returned + held:
+            sock.close()
+
+
+def test_a_reservation_that_keeps_colliding_is_refused(tmp_path, monkeypatch):
+    """A kernel cannot hand back a port that is still bound, so at most one collision per public port can happen; a
+    reserve_port that keeps colliding anyway is refused, not retried forever, and nothing it handed out stays open."""
+    import owned_executable
+
+    class Collision:
+        def __init__(self):
+            self.closed = False
+
+        def getsockname(self):
+            return ('127.0.0.1', 43210)
+
+        def close(self):
+            self.closed = True
+    made = []
+    monkeypatch.setattr(owned_executable, 'reserve_port', lambda: made.append(Collision()) or made[-1])
+    with pytest.raises(OwnershipError, match='outside the public ports'):
+        Executable(tmp_path, 'n8n', [43210])
+    assert len(made) == 2 and all(collision.closed for collision in made)
+
+
+def test_the_guard_still_refuses_a_public_child_port(tmp_path, monkeypatch):
+    """The assertion stays as a guard behind the reservation: a child port among the public ones never gets a config."""
+    import owned_executable
+    with reserve_port() as public:
+        monkeypatch.setattr(owned_executable, 'reserve_child_port', lambda ports: public)
+        with pytest.raises(AssertionError):
+            Executable(tmp_path, 'n8n', [public.getsockname()[1]])
+
+
 async def test_ipc_rejects_other_own_process_before_tcp(tmp_path):
     with reserve_port() as port:
         runner = Executable(tmp_path, 'n8n', [port.getsockname()[1]])

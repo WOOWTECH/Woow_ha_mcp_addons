@@ -164,16 +164,35 @@ def install_runner(module, config):
     return endpoint
 
 
+def reserve_child_port(public_ports):
+    """The child port's reservation, never one of public_ports. Callers draw their public ports by binding port 0 and
+    closing the socket again (the free_port helpers), so the kernel may hand one of them to this bind of port 0 (PR
+    #109's first CI run). A colliding reservation stays bound until another is held: the kernel never hands out a port
+    that is still bound, so after at most len(public_ports) collisions the next reservation is outside them."""
+    colliding = []
+    try:
+        while True:
+            reservation = reserve_port()
+            if reservation.getsockname()[1] not in public_ports:
+                return reservation
+            colliding.append(reservation)
+            if len(colliding) > len(public_ports):  # only a reserve_port that ignores bound ports gets here
+                raise OwnershipError('no child port outside the public ports')
+    finally:
+        for reservation in colliding:
+            reservation.close()
+
+
 class Executable:
     """Parent-held reservations + exact launched handle; never readiness HTTP."""
     def __init__(self, directory, product, public_ports):
-        self.reservation = reserve_port()
+        assert len(set(public_ports)) == len(public_ports)
+        assert all(0 < p <= 65535 and p != 3000 for p in public_ports)
+        self.reservation = reserve_child_port(public_ports)
         self.config = {'product': product, 'child_port': self.reservation.getsockname()[1],
                        'public_ports': list(public_ports), 'instance': secrets.token_hex(32),
                        'ipc': str(Path(directory) / 'owned-proof.sock')}
-        assert len(set(public_ports)) == len(public_ports)
-        assert all(0 < p <= 65535 and p != 3000 for p in public_ports)
-        assert self.config['child_port'] not in public_ports
+        assert self.config['child_port'] not in public_ports  # the guard behind reserve_child_port
         self.process = None
         self.public_proofs = {}
         self.dispatches = 0
