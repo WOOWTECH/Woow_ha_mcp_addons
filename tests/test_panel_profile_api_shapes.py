@@ -22,6 +22,11 @@ are watched by the log scan too.
 HM-27 (DQ-11 (a); contract 2.6, 3.1, 3.5, 4.1): the add-on's one Origin policy (GET and PUT /api/origin-policy, a global
 path): if_match origin is the ETag (o1-) the last GET of it answered; setup.origin_policy unusable writes a policy file
 the add-on cannot use before it starts.
+
+HM-25 (HM-12 review S-6's handoff): n8n runs here too (its runtime is run_product's). An extra's saved connection is
+compared in the admin API's names, as the panel sees it (backend_edit.view: n8n's url; Odoo's url, database and
+username), and the secrets the cases send are watched by any name the panel sends them under (a password, n8n's key and
+MCP access token), with every backend secret the add-on stored.
 """
 from __future__ import annotations
 
@@ -40,7 +45,7 @@ import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
 from multi_profile_runtime import Children, create_profile, multi_profile_runtime
-from mcp_admin_core import profile_runtime, profiles, restore_detect
+from mcp_admin_core import backend_edit, profile_runtime, profiles, restore_detect
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.products import ProductStore
 from test_odoo_identity_rotation import Journal, record_writes
@@ -217,23 +222,35 @@ def replace_index(data):
     path.chmod(0o600)
 
 
-def sent_passwords(value):
-    """The password values a request body carries (HM-12's saves), at any depth."""
+# The admin API names a backend secret goes under in a save (backend_edit.SECRETS: a password, n8n's key and MCP access
+# token, the other products' keys).
+SECRET_NAMES = backend_edit.SECRETS
+
+
+def sent_secrets(value):
+    """The secret values a request body carries (HM-12's saves; HM-25: n8n's key too), at any depth."""
     if isinstance(value, dict):
         return [item for name, child in value.items() for item in
-                ([child] if name.endswith('password') and isinstance(child, str) else sent_passwords(child))]
-    return [item for child in value for item in sent_passwords(child)] if isinstance(value, list) else []
+                ([child] if (name.endswith('password') or name in SECRET_NAMES) and isinstance(child, str)
+                 else sent_secrets(child))]
+    return [item for child in value for item in sent_secrets(child)] if isinstance(value, list) else []
+
+
+def stored_secrets(value):
+    """Every backend secret a stored state holds (a typed connection's; n8n's backend_key and mcp_access_token)."""
+    found = [item for name, item in (value.get('connection') or {}).items()
+             if (name.endswith('password') or name in SECRET_NAMES) and isinstance(item, str) and item]
+    return found + [value[name] for name in ('backend_key', 'mcp_access_token') if value.get(name)]
 
 
 def watch(log_scan, data, setup, cases=()):
     for path in [Path(data) / 'state.json', *sorted((Path(data) / 'profiles').glob('*/state.json'))]:
         value = json.loads(path.read_text())
         log_scan.watch(*(item for item in (value['token'], value['child_token']) if item))
-        log_scan.watch(*(item for name, item in (value.get('connection') or {}).items()
-                         if name == 'password' and item), kind='secret')
+        log_scan.watch(*stored_secrets(value), kind='secret')
     labels = [extra['label'] for extra in setup.get('extras', []) + setup.get('unavailable', [])]
     log_scan.watch(*labels, 'Kappa Desk', 'Lambda Desk', kind='name')
-    log_scan.watch(*(item for case in cases for item in sent_passwords(case['request'].get('body'))), kind='secret')
+    log_scan.watch(*(item for case in cases for item in sent_secrets(case['request'].get('body'))), kind='secret')
 
 
 def arm(fault, journal, runtime, data, patch):
@@ -267,7 +284,7 @@ async def run_scenario(scenario, tmp_path, log_scan):
     for number, extra in enumerate(setup['extras']):
         state = create_profile(data, product, ids[extra['role']], label=extra['label'], port=18000 + number)
         if 'connection' in extra:  # HM-12: what the cases change is what the add-on saved (the mock gets the same)
-            saved = state.connection.model_dump()
+            saved = backend_edit.view(state)['values']  # HM-25: as the panel sees it (n8n's url; Odoo's three)
             assert {name: saved[name] for name in extra['connection']} == extra['connection'], extra['role']
     for orphan in setup.get('orphans', []):
         create_profile(data, product, ids[orphan], label='Orphan Ops', port=18090, indexed=False)
