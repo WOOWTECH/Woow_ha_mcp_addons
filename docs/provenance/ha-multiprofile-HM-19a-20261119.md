@@ -6,7 +6,7 @@
   「升版時要改的版號資料」（`VERSION_OVERRIDES` 加 Odoo，共用的 `VERSION` 維持 0.4.14；workflow 第一次帶三路版號運算式）。其他產品的開關、版號與
   `addons/<產品>/` 都沒動，OpenDesign 不跟著升來源版本。
 - **只準備到計畫 §11.3 第 2 步**：本機兩個 commit，沒有推送、沒開 PR、沒有觸發任何 workflow、沒碰展示機或任何 HA 主機與後端。第 3～11 步（候選建置與
-  容器驗收、Store 乾跑、HM-19c、推 GHCR、HAOS 驗收、證據、合併、合併後）都**待負責人批准**，逐步列在 `docs/operations/release-decision-0.5.0.md`。
+  容器驗收、Store 乾跑、HM-19c、推 GHCR、HAOS 驗收、證據、合併、合併後）都**待負責人批准**，逐步列在 `docs/operations/release-decision-odoo-0.5.0.md`。
 - **路線**：計畫寫的「repo 外 builder」照負責人 2026-11-17 的決定改成本 repo 的 `.github/workflows/release.yaml`（GitHub 託管機器；gate → candidate →
   publish，publish 要負責人核准 `public-release`；只收 `release/*` 分支）。本分支 `release/odoo-0.5.0-20261119` 符合它的分支規則。
 - **測試**：開關一開，整套 pytest 第一次跑 6,638 案、125 案失敗（35 分 51 秒）：29 案是本機環境（不是 root、沒有 Chromium），和開關無關；96 案讀到倉庫的開關。寫給「沒開通」的
@@ -49,7 +49,7 @@
 | `docs/multi-profile/unreleased-changes.md` | 照「怎麼更新」第 3 點：總表、第 1、3.1、4、7 節 |
 | `docs/multi-profile/acceptance-matrix.md` | 登記 `tests/switch_modes.py`；`test_upgrade_zero_rewrite.py`、`test_upgrade_hooks.py` 兩列；Odoo 首發標準的 0.4.13 → 0.4.14（0.4.14 已發） |
 | `docs/operations/` 的 `guide.md`、`clients.md`、`acceptance.md`、`release.md`、`update-backup-rollback.md`；`docs/runtime-configuration.md`、`docs/management-capabilities-v1.md`；`packages/mcp-admin-ui/README.md` | 「還沒有產品開通」改成「Odoo 從 0.5.0 起開通」；`release.md` 三路運算式那句；`acceptance.md` hook 的位置；緊急發版範本的釘選測試一項與核對紀錄 |
-| `docs/operations/release-decision-0.5.0.md`（新） | 共用的發佈紀錄草稿（readiness 不認它） |
+| `docs/operations/release-decision-odoo-0.5.0.md`（新） | Odoo 專用發佈紀錄草稿；正式驗收證據待補 |
 | 本筆記（新） | |
 
 沒改：執行期程式（開關一行以外）、`tests/conftest.py`、HM-01 黃金回歸與兩個契約凍結的期望值、`tests/contract/*`、`packaging/` 的程式與測試（`container_probe.py`、
@@ -206,6 +206,6 @@ HM-16 已讓 `container_probe.mock_bind_host` 與 `container_acceptance.main` �
 | commit | 內容 |
 |---|---|
 | `dfd146d` | 升版：開關、版號資料、workflow 運算式、帳本、hook 搬家、測試、Odoo 與根目錄的 CHANGELOG／DOCS／README／`upgrade-notes.yaml`、repo 文件的狀態句 |
-| 下一個（本筆記所在） | 發佈紀錄草稿 `release-decision-0.5.0.md`、本筆記 |
+| 下一個（本筆記所在） | 發佈紀錄草稿 `release-decision-odoo-0.5.0.md`、本筆記 |
 
 commit 身分都是 woowtech；英文標題、繁中內文；訊息裡沒有任何署名行。沒有 push。

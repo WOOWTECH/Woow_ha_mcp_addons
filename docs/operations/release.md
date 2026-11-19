@@ -100,7 +100,7 @@ WOOW App Store 只出貨本 repo 的正式 Release（Store registry `ref_policy:
 Headscale 0.4.19 只有 Headscale 一個 override（兩路形式，GitHub 算過）；Odoo 0.5.0 的升版 PR（HM-19a）起有 Odoo、Headscale 兩個
 override，workflow 第一次帶三路串接（`<app> == 'odoo' && '0.5.0' || <app> == 'headscale' && '0.4.19' || '0.4.14'`）。多個 override
 串接的寫法還沒被 GitHub 實際算過，第一次觸發 `release.yaml` 之前先用拋棄式 workflow 只印出運算式的值確認（不建置；要負責人批准，見
-[0.5.0 發佈紀錄](release-decision-0.5.0.md)）。
+[0.5.0 發佈紀錄](release-decision-odoo-0.5.0.md)）。
 本節只列版號資料；CHANGELOG、`upgrade-notes.yaml`（見 `AGENTS.md`）等其他升版要改的檔不在這裡。
 寫 CHANGELOG 前先看 `docs/multi-profile/unreleased-changes.md`：上一版以來已合併、會跟著這個產品下一版出去但 CHANGELOG 還沒記的變更，
 每項的 CHANGELOG 句子，以及發版時要另外驗的事（多帳號計畫 §11.5；其他工作線的修補版也一樣）。

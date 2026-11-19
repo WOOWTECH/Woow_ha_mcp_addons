@@ -109,7 +109,7 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 - 要寫：沒有。A8、A9 與第 7 節（開通）已寫進 0.5.0；A1～A7、B1 已寫進 0.4.14。
 - 自己的修正：沒有。`apps/odoo` 在 0.4.13 之後沒改；`addons/odoo` 只改了 0.5.0 的版號、CHANGELOG、DOCS、README，並加 `upgrade-check/`（HM-16 的
   hook，從 `packaging/hooks/` 搬來）。Odoo 專屬的 HM-12（#110、#114：換身分換 token、新來源重填秘密）受開關管，0.5.0 開通後看得到，已寫進 CHANGELOG。
-- 發版時另外驗：第 5 節，加上計畫 §10.6（Odoo 首發標準，HM-19b）；`docs/operations/release-decision-0.5.0.md` 的驗收清單。
+- 發版時另外驗：第 5 節，加上計畫 §10.6（Odoo 首發標準，HM-19b）；`docs/operations/release-decision-odoo-0.5.0.md` 的驗收清單。
 
 ### 3.2 n8n
 
