@@ -16,7 +16,7 @@ import pytest
 
 from batch2_owned_port import OwnershipError, reserve_port
 from log_scan import log_scan  # noqa: F401  (fixture; HM-16's test)
-from owned_executable import Executable
+from owned_executable import Executable, draw_public_ports
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -213,6 +213,45 @@ def test_the_guard_still_refuses_a_public_child_port(tmp_path, monkeypatch):
             Executable(tmp_path, 'n8n', [public.getsockname()[1]])
 
 
+def test_the_public_ports_are_distinct_and_never_the_childs(tmp_path, monkeypatch):
+    """This follow-up's review: two free_port() calls in a row (each binds port 0 and closes the socket again) could
+    draw the same port, 8 in 100,000 launches on one machine, and Executable refuses a repeated public port. Here the
+    kernel always hands a bind of port 0 the lowest port nothing holds, so a port closed a moment ago goes to the very
+    next bind: draw_public_ports holds every reservation until all are drawn, then releases them together, and the
+    child port's reservation still lands outside them."""
+    import owned_executable
+    held = set()
+
+    class Reservation:
+        def __init__(self):
+            self.port = 40000
+            while self.port in held:
+                self.port += 1
+            held.add(self.port)
+            self.bound = True
+
+        def getsockname(self):
+            return ('127.0.0.1', self.port)
+
+        def close(self):
+            if self.bound:
+                self.bound = False
+                held.discard(self.port)
+    monkeypatch.setattr(owned_executable, 'reserve_port', Reservation)
+
+    def one_at_a_time():  # what the free_port helpers did
+        reservation = owned_executable.reserve_port()
+        reservation.close()
+        return reservation.getsockname()[1]
+    assert one_at_a_time() == one_at_a_time()  # the repeated public port Executable refused
+    public = owned_executable.draw_public_ports(2)
+    assert public == [40000, 40001] and not held  # distinct, and released together
+    runner = Executable(tmp_path, 'n8n', public)
+    assert runner.config['child_port'] == 40002 and held == {40002}
+    runner.release()
+    assert not held
+
+
 async def test_ipc_rejects_other_own_process_before_tcp(tmp_path):
     with reserve_port() as port:
         runner = Executable(tmp_path, 'n8n', [port.getsockname()[1]])
@@ -244,14 +283,14 @@ async def test_a_switched_on_product_s_default_profile_runs_through_the_owned_ex
     forwards initialize to it (a child's session, not the gateway's own), and 8081 is the switched-on dispatcher (an
     index that appears behind the add-on's back stops every token: DQ-12)."""
     from mcp_admin_core.products import ProductStore
-    from test_real_products import connection, free_port
+    from test_real_products import connection
     product = 'emqx'
     store = ProductStore(tmp_path / 'state', product)
     # A loopback backend nobody serves: switched on, the child refuses loopback (HM-20) and still answers initialize.
     state = store.update(connection=connection(product, 'http://127.0.0.1:9'))
     store.close()
     log_scan.watch(state.token, state.child_token)
-    port, admin_port = free_port(), free_port()
+    port, admin_port = draw_public_ports(2)
     endpoint = f'http://127.0.0.1:{port}/mcp'
     runner = Executable(tmp_path, product, [port, admin_port])
     code = (f'from mcp_admin_core import features, run_product; features.MULTI_PROFILE_PRODUCTS = frozenset({{{product!r}}}); '

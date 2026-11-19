@@ -33,10 +33,10 @@ from mcp_admin_core.surface import BACKEND_FREE, FULL_PRODUCTS, listing
 from batch2_owned_port import reserve_port
 from log_scan import log_scan  # noqa: F401  (fixture)
 from n8n_adapter import TOOLS as N8N_TOOLS
-from owned_executable import Executable
+from owned_executable import Executable, draw_public_ports
 from test_expansion_policy import call
 from test_full_surface import COUNTS
-from test_real_products import ROOT, connection, free_port, release_version, rpc
+from test_real_products import ROOT, connection, release_version, rpc
 from tool_refusal import refusal
 
 ACCEPT = {'Accept': 'application/json, text/event-stream'}
@@ -391,7 +391,7 @@ async def test_a_child_that_does_not_answer_is_not_ready(tmp_path):
 
 async def launch(tmp_path, product, store):
     store.close()
-    port, admin_port = free_port(), free_port()
+    port, admin_port = draw_public_ports(2)
     runner = Executable(tmp_path, product, [port, admin_port])
     if product == 'n8n':
         code = 'import run; ' + runner.code('run') + 'run.main()'

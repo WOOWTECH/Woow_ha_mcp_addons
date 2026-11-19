@@ -164,11 +164,26 @@ def install_runner(module, config):
     return endpoint
 
 
+def draw_public_ports(count):
+    """count distinct port numbers for an Executable's public listeners. Each is drawn by binding port 0 while every one
+    drawn before it is still bound, and all are released together: the kernel never hands out a port that is still
+    bound. Two draws in a row with the socket closed in between (the free_port helpers this replaces) could get the
+    same port, which Executable refuses (8 in 100,000 launches on one machine, measured by this follow-up's review)."""
+    reservations = []
+    try:
+        while len(reservations) < count:
+            reservations.append(reserve_port())
+        return [reservation.getsockname()[1] for reservation in reservations]
+    finally:
+        for reservation in reservations:
+            reservation.close()
+
+
 def reserve_child_port(public_ports):
     """The child port's reservation, never one of public_ports. Callers draw their public ports by binding port 0 and
-    closing the socket again (the free_port helpers), so the kernel may hand one of them to this bind of port 0 (PR
-    #109's first CI run). A colliding reservation stays bound until another is held: the kernel never hands out a port
-    that is still bound, so after at most len(public_ports) collisions the next reservation is outside them."""
+    closing the socket again (draw_public_ports), so the kernel may hand one of them to this bind of port 0 (PR #109's
+    first CI run). A colliding reservation stays bound until another is held: the kernel never hands out a port that
+    is still bound, so after at most len(public_ports) collisions the next reservation is outside them."""
     colliding = []
     try:
         while True:
