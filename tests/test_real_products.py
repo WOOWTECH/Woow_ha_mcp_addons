@@ -23,8 +23,7 @@ from mcp_admin_core.health import HEALTH_INTERVAL, protocol_reply
 from mcp_admin_core.products import INSTRUCTIONS, ODOO_HEALTH_PROBE, PRODUCTS, PROBES, ProductStore, TOOLS, child_spec
 from mcp_admin_core.policy import policy_enabled
 
-from owned_executable import Executable
-from batch2_owned_port import reserve_port
+from owned_executable import Executable, draw_public_ports
 import nextcloud_fixtures
 from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
@@ -144,11 +143,6 @@ def backend(product):
         server.shutdown(); server.server_close(); thread.join()
 
 
-def free_port():
-    with reserve_port() as sock:
-        return sock.getsockname()[1]
-
-
 async def rpc(client, url, headers, message):
     async with client.stream('POST', url, headers=headers, json=message) as response:
         if response.headers.get('mcp-session-id'):
@@ -169,7 +163,7 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
         assert 'SUPERVISOR_TOKEN' not in spec.env and state.token not in spec.env.values()
         assert spec.cwd != store.directory and not list(spec.cwd.iterdir())
         store.close()
-        port, admin_port = free_port(), free_port()
+        port, admin_port = draw_public_ports(2)
         endpoint = f'http://127.0.0.1:{port}/mcp'
         log_path = tmp_path / 'owned-runtime.log'
         runner = Executable(tmp_path, product, [port, admin_port])
@@ -287,7 +281,7 @@ async def test_odoo_manage_initialize_without_backend_is_unavailable_then_recove
         store.update(connection=connection(product, url))
         state = store.load()
         store.close()
-        port, admin_port = free_port(), free_port()
+        port, admin_port = draw_public_ports(2)
         endpoint = f'http://127.0.0.1:{port}/mcp'
         log_path = tmp_path / 'owned-runtime.log'
         runner = Executable(tmp_path, product, [port, admin_port])

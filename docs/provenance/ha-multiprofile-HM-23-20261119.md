@@ -2,6 +2,17 @@
 
 ## 結論
 
+- **2026-11-19 合併主線補記**：PR #127 開了之後主線前進到 `95b7e9d`（#122 HM-18 定稿、#123 P9 計畫產生器後續、#124 owned executable 的 port
+  撞號修正），用 merge commit 合進本片（不 rebase、不 force push）。衝突只在 `docs/multi-profile/` 三個檔，都以 HM-18 的寫法為準、本片加的接在後面：
+  `acceptance-matrix.md` 檔頭狀態；`contract.md` 第 9 節說明段與第 10 節（本片那列改標「v1 定稿」，加一列記這次合併）；`unreleased-changes.md`
+  總表 EMQX 那列、第 3.4 節（A8、A9 加 E3；開通的升版 PR 照第 7 節）、第 4.2 節。主線仍到第 128 列，第 129、130 列不改號（照舊暫定）；`decisions.md`
+  照 HM-18（本片沒改決策，DQ-27 仍待定）。`deviation-trace.md` 照 HM-18 的做法用產生器的暫存複本重產：FM-92 對到 #130、FM-155 對到 #129（第 13、17 節
+  交下一次文件同步的那件），裝好的產生器要改的三處交主對話。交互影響只有一處：HM-18 的緊急發版範本（`docs/operations/update-backup-rollback.md`）指名的
+  `test_multi_profile_is_switched_off_for_every_product` 本片已改成 `SWITCHED_ON` 與 `test_a_product_is_switched_on_only_by_its_release`，照改。
+  #123、#124 不用改本片的測試：本片的測試不用 `tests/owned_executable.py`，兩邊都改的 `tests/test_real_products.py` 自動合併；EMQX 的 P9 計畫合併前後
+  相同（讀 21、要參數 6、拒絕 17）。檢查（uid 1000、短 TMPDIR 用完刪除）：pytest 本片與合併改到的 39 個測試檔加相關 9 個，2,229 案只有 1 案失敗
+  （`test_owned_executable` 的 uid10001，要 root，既有）；packaging 370 案 OK（skipped=5）；`validate.py` PASS；HM-00 對照 C2～C5、C7～C9 過（C1 是
+  本片的性質、C6 既有）。秘密預檢與帳本預檢在合併 commit 之後跑，結果寫在回報。
 - **本片是 EMQX 的功能 PR**（計畫 §9 EMQX 列、§12.3 HM-21～HM-26）。`features.MULTI_PROFILE_PRODUCTS` 維持空集合，沒碰 `addons/`。
   之後 EMQX 的升版 PR 只要把 `'emqx'` 加進開關與開關釘選（`SWITCHED_ON`，審查 S-2）、升版號（版號資料與它們在帳本裡的摘要）就開通；
   第 4 節把 EMQX 打開實跑過，證明這件事。
