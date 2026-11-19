@@ -1,8 +1,9 @@
 """Which stored fields name a backend account, which are secrets, and what each state field is (HM-07; HM-12 wires it).
 
-Multi-profile plan §4.4 ("身分欄位分類"), §8.8 #40, #41; FEATURE-MATRIX FM-80, FM-152; DQ-02 (a) and DQ-40 ⑨, ⑩ (a)
-(2026-11-14). Users: HM-12 (products.identity_rebound: a changed identity rotates the MCP token in the same write, I11;
-backend_edit.new_origin_refused: a URL moved to another origin needs its secrets again, URL_SECRETS), HM-13b and HM-13c
+Multi-profile plan §4.4 ("身分欄位分類"), §8.8 #40, #41; FEATURE-MATRIX FM-80, FM-152, FM-153; DQ-02 (a) and DQ-40 ⑨,
+⑩ (a) (2026-11-14). Users: HM-12 (products.identity_rebound: a changed identity rotates the MCP token in the same write,
+I11; HM-22 adds Nextcloud and SAME_SERVER_URLS; backend_edit.new_origin_refused: a URL moved to another origin needs its
+secrets again, URL_SECRETS), HM-13b and HM-13c
 (restore records and review cards show identity and policy, never a secret). Data only: what reads it decides when it
 applies (a switched-on product only, for both of HM-12's rules). tests/test_identity_fields.py fails for a connection or
 state field without a class.
@@ -32,12 +33,20 @@ BACKEND_FIELDS = {
 
 # Identity fields whose change rotates the MCP token (I11): Odoo as PaaS #131 (plan §9), Nextcloud and Hermes by
 # DQ-40 ⑩ (a). Changing only a password or key, or the first setup, never rotates. The other products' account is
-# decided by their secret (an API key), so they have none. HM-12 acts on Odoo's only (products.IDENTITY_BOUND);
-# Nextcloud's is HM-22's, Hermes' HM-24's.
+# decided by their secret (an API key), so they have none. products.IDENTITY_BOUND acts on Odoo's (HM-12) and
+# Nextcloud's (HM-22, as PaaS #154); Hermes' is HM-24's.
 TOKEN_ROTATING = {
     'odoo': ('url', 'database', 'username'),
     'nextcloud': ('url', 'username'),
     'hermes': ('gateway_url', 'dashboard_url', 'dashboard_username'),
+}
+
+# HM-22 (PaaS #154, woow-mcp-server 0f94aa4 apps/nextcloud/nextcloud_mcp_admin/routers/config.py normalize_base_url):
+# the token-rotating URL fields compared as the server and the path they name, not as typed (products.same_identity):
+# the scheme and the host in any letter case and the scheme's own port written out or not are one server; the path
+# counts as saved, its letter case included. Odoo's URL is compared as typed, as PaaS #131 compares it.
+SAME_SERVER_URLS = {
+    'nextcloud': ('url',),
 }
 
 # HM-12 (DQ-40 ⑨ (a); plan §8.8 #41): the secrets each backend URL takes to its server, in the stored names. A URL moved

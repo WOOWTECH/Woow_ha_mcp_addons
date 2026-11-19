@@ -314,20 +314,40 @@ def check_saved_destinations(state, previous=None):
 
 # HM-12 (multi-profile plan 9 Odoo row, 12.3 HM-12; DQ-05, DQ-40 ⑩ (a); contract 3.1, section 9 #40; I11; unreleased):
 # the products whose MCP token is bound to one backend identity once they are switched on: Odoo (PaaS #131,
-# woow-mcp-server 69ac425 apps/odoo/odoo_mcp_admin/routers/config.py ODOO_IDENTITY_KEYS). Nextcloud (HM-22) and Hermes
-# (HM-24) join with their own slices; identity_fields.TOKEN_ROTATING already names their fields.
-IDENTITY_BOUND = frozenset({'odoo'})
+# woow-mcp-server 69ac425 apps/odoo/odoo_mcp_admin/routers/config.py ODOO_IDENTITY_KEYS) and, HM-22 (plan 9 Nextcloud
+# row), Nextcloud: its url and username, not its app password (PaaS #154, woow-mcp-server 0f94aa4
+# apps/nextcloud/nextcloud_mcp_admin/routers/config.py IDENTITY_KEYS). Hermes (HM-24) joins with its own slice;
+# identity_fields.TOKEN_ROTATING already names its fields.
+IDENTITY_BOUND = frozenset({'odoo', 'nextcloud'})
+
+
+def same_identity(product, name, before, after) -> bool:
+    """HM-22: whether a token-rotating field (identity_fields.rotating_fields) of product names the same backend
+    identity before and after a save: the same value, or, for a URL compared as the server it names
+    (identity_fields.SAME_SERVER_URLS: Nextcloud's url, as PaaS #154 normalize_base_url compares it), the same server
+    (backend_edit.origin: the scheme and the host in any letter case, the scheme's own port written out or not) and the
+    same path as saved (http_url has dropped trailing slashes; the letter case counts). Any other path is another URL,
+    a page path pasted from the browser included: the child uses the saved URL as its root (PaaS cuts such a path off
+    when saving; contract section 9, HM-22's row on the URL)."""
+    if before == after:
+        return True
+    if (name not in identity_fields.SAME_SERVER_URLS.get(product, ()) or not isinstance(before, str)
+            or not isinstance(after, str)):
+        return False
+    from .backend_edit import origin  # only a switched-on identity-bound save compares URLs (identity_rebound)
+    return origin(before) == origin(after) and urlsplit(before).path == urlsplit(after).path
 
 
 def identity_rebound(previous, candidate) -> bool:
     """Whether saving candidate over previous (gateway.admin_action: backend, backend/patch) moves the MCP token to a
     new backend identity, so that the token is rotated in the same write (ProductStore.rebind): the product is in
     IDENTITY_BOUND and switched on (features.enabled, read at this call), the token is active, a complete connection
-    is saved, and one of its identity fields (identity_fields.rotating_fields: Odoo url, database, username) differs
-    in candidate, a cleared connection included (PaaS patch_connection_bound: a cleared identity field is a change; were
-    it not, clearing and then saving another account would keep the token, as a first setup does). The first setup (no
-    connection saved yet), a revoked token and a change of the password alone keep the token as they do today.
-    Switched off, never (plan 3.3: the token stays, byte for byte)."""
+    is saved, and one of its identity fields (identity_fields.rotating_fields: Odoo url, database, username; Nextcloud
+    url, username) names another identity in candidate (same_identity), a cleared connection included (PaaS
+    patch_connection_bound: a cleared identity field is a change; were it not, clearing and then saving another account
+    would keep the token, as a first setup does). The first setup (no connection saved yet), a revoked token and a
+    change of the password alone keep the token as they do today. Switched off, never (plan 3.3: the token stays, byte
+    for byte)."""
     product = getattr(previous, 'product', 'n8n')
     if product not in IDENTITY_BOUND or not features.enabled(product):
         return False
@@ -335,7 +355,8 @@ def identity_rebound(previous, candidate) -> bool:
     if previous.token is None or before is None:
         return False
     after = getattr(candidate, 'connection', None)
-    return any(getattr(before, name) != getattr(after, name, None) for name in identity_fields.rotating_fields(product))
+    return any(not same_identity(product, name, getattr(before, name), getattr(after, name, None))
+               for name in identity_fields.rotating_fields(product))
 
 # Owner decision 2026-10-27 (the PaaS woow-mcp-server owner_defaults of 2026-10-25, for the HA add-ons): the state
 # field that marks the one-time all-on migration of a legacy (schema 1/2/3) state. Same name as the PaaS marker.

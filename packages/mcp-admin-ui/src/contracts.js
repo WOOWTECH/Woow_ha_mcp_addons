@@ -187,8 +187,8 @@ export const urlSecrets = {
   headscale: { url: ['api_key'] },
 };
 // HM-12 (DQ-05; contract 3.1, section 9 #113 and HM-12's panel rows): the products whose MCP token is bound to the backend identity once
-// switched on (the add-on's products.IDENTITY_BOUND; tests/test_identity_fields.py fails when they differ).
-export const identityBound = ['odoo'];
+// switched on (the add-on's products.IDENTITY_BOUND; tests/test_identity_fields.py fails when they differ). HM-22: Nextcloud too.
+export const identityBound = ['odoo', 'nextcloud'];
 // Where a backend URL's requests go, as the add-on compares it (backend_edit.origin, which reads a URL as Python's
 // urlsplit does): [scheme, host, port], the scheme and the host in lower case (an IPv6 literal without its brackets, a
 // zone as written) and the port, the scheme's own (80, 443) when none is written. Nothing else is normalized: spellings
