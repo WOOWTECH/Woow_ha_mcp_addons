@@ -40,20 +40,28 @@ def main(app, image, expected_id=None):
     created_network = None
     switched = features.enabled(app)
     try:
-        if app == 'headscale' or switched:
+        if app in ('headscale', 'n8n') or switched:
             # The Headscale child deliberately rejects loopback upstreams, and
             # so does every child of a switched-on product (multi-profile HM-20;
             # HM-16). Give its owned mock a non-loopback address, with no
             # external route and no other container on this one-use internal
             # bridge (container_probe.mock_bind_host).
+            # RFC 2544 benchmarking space is reserved, and accepted by the pinned
+            # strict n8n validators. The bridge is internal and contains only this probe.
+            subnet = (f'198.{18 + (index := secrets.randbelow(512)) // 256}.{index % 256}.0/24'
+                      if app == 'n8n' else None)
+            options = ['--subnet', subnet] if subnet else []
             created_network = subprocess.check_output(
-                ['docker', 'network', 'create', '--internal', '--driver', 'bridge',
+                ['docker', 'network', 'create', '--internal', '--driver', 'bridge', *options,
                  f'woow-{app}-candidate-' + secrets.token_hex(8)], text=True, timeout=30).strip()
             assert re.fullmatch(r'[0-9a-f]{64}', created_network), 'invalid private network ID'
             private = json.loads(subprocess.check_output(
                 ['docker', 'network', 'inspect', created_network], timeout=30))[0]
             assert (private['Id'] == created_network and private['Internal'] is True
                     and private['Driver'] == 'bridge' and not private['Containers']), 'mock network not isolated'
+            if subnet:
+                assert [entry.get('Subnet') for entry in private.get('IPAM', {}).get('Config', [])] == [subnet], \
+                    'mock network subnet mismatch'
             network = created_network
         subprocess.run(['docker', 'run', '--rm', '--init', '--network', network, '--read-only',
             '--tmpfs', '/data:rw,nosuid,nodev,mode=0755', '--tmpfs', '/tmp:rw,nosuid,nodev,mode=1777',

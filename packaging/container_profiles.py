@@ -121,6 +121,8 @@ REVOKED_FIELDS = ('token', 'child_token', 'token_history')
 DIRECTORIES = frozenset({'child', profiles.PROFILES_NAME})
 INDEX_QUARANTINE = re.compile(re.escape(profiles.INDEX_NAME) + r'\.quarantine-[0-9]{8}T[0-9]{6}Z(?:-[0-9]{1,3})?')
 MAX_FILE_BYTES = 1024 * 1024  # as the single-profile fixture_snapshot
+MAX_N8N_CATALOG_BYTES = 256 * 1024 * 1024  # bounded synthetic catalog/history, not a production quota
+N8N_CATALOG_NAME = re.compile(r'[0-9a-f]{64}\.db')
 
 DETECT = '''import json, sys
 from pathlib import Path
@@ -143,9 +145,23 @@ def private_mock_host():
 
 # ---- /data/mcp as a switched-on product leaves it ----
 
-def _designed(parts, directory):
+def _n8n_catalog_entry(parts):
+    return ((len(parts) == 2 and parts[0] == 'n8n-mcp') or
+            (len(parts) == 4 and parts[0] == profiles.PROFILES_NAME and
+             (profiles.is_profile_id(parts[1]) or profiles.parse_quarantine_name(parts[1]) is not None) and
+             parts[2] == 'n8n-mcp'))
+
+
+def _designed(parts, directory, *, n8n=False):
     """Whether a name at this place of the tree is the layout's (plan 4.1), as the kind of entry it is."""
     name = parts[-1]
+    if n8n:
+        if parts == ('n8n-mcp',) or (len(parts) == 3 and parts[0] == profiles.PROFILES_NAME and
+                                     (profiles.is_profile_id(parts[1]) or profiles.parse_quarantine_name(parts[1]) is not None)
+                                     and name == 'n8n-mcp'):
+            return directory
+        if _n8n_catalog_entry(parts):
+            return not directory and (name == '.seed.lock' or bool(N8N_CATALOG_NAME.fullmatch(name)))
     if len(parts) == 1:
         if INDEX_QUARANTINE.fullmatch(name):
             return not directory
@@ -159,12 +175,12 @@ def _designed(parts, directory):
     return False
 
 
-def tree_snapshot(data):
+def tree_snapshot(data, *, n8n=False):
     """fixture_snapshot for a switched-on product (C4-SF-5; FM-16, FM-101): the single-profile rule (a bounded, private
     synthetic fixture of regular files) widened to the multi-profile layout, and nothing more.
 
-    Every entry is a plain directory or a single-link regular file (at most 1 MiB) on /data/mcp's filesystem, the
-    runtime user's and private (0700, 0600), at a name the layout gives it; every child working directory is empty (a
+    Every entry is a plain directory or a single-link regular file (at most 1 MiB, except bounded n8n catalogs) on
+    /data/mcp's filesystem, owned by the runtime user and private (0700, 0600), at a name the layout gives it; every child working directory is empty (a
     child that leaves a file there does not start again: products.child_spec); the whole tree is within the restore
     repair's entry and depth limits (packaging/entrypoint.py: a backup of it restores). Returns {relative path: (inode,
     uid, gid, mode, size, mtime_ns, ctime_ns, sha256 of a file's bytes or None)}. Never log its contents or hashes."""
@@ -188,7 +204,7 @@ def tree_snapshot(data):
             assert directory or (stat.S_ISREG(info.st_mode) and info.st_nlink == 1), 'not a plain entry'
             assert (info.st_uid, info.st_gid) == RUNTIME, "not the runtime user's"
             assert stat.S_IMODE(info.st_mode) == (0o700 if directory else 0o600), 'not private'
-            assert _designed(path, directory), 'not a name of the layout'
+            assert _designed(path, directory, n8n=n8n), 'not a name of the layout'
             if directory:
                 if name == 'child':
                     with os.scandir(data.joinpath(*path)) as inside:
@@ -196,8 +212,13 @@ def tree_snapshot(data):
                 walk.append((path, depth + 1))
                 digest = None
             else:
-                assert info.st_size <= MAX_FILE_BYTES, 'oversize entry'
-                digest = hashlib.sha256(data.joinpath(*path).read_bytes()).hexdigest()
+                catalog = n8n and _n8n_catalog_entry(path) and bool(N8N_CATALOG_NAME.fullmatch(name))
+                assert info.st_size <= (MAX_N8N_CATALOG_BYTES if catalog else MAX_FILE_BYTES), 'oversize entry'
+                with data.joinpath(*path).open('rb') as stream:
+                    if catalog:
+                        assert stream.read(16) == b'SQLite format 3\0', 'invalid n8n catalog'
+                        stream.seek(0)
+                    digest = hashlib.file_digest(stream, 'sha256').hexdigest()
             found['/'.join(path)] = (info.st_ino, info.st_uid, info.st_gid, info.st_mode, info.st_size,
                                      info.st_mtime_ns, info.st_ctime_ns, digest)
     return found
@@ -684,7 +705,8 @@ async def stage(probe, client):
         if process is not None and process.poll() is None:
             probe.stop(process)
     assert detect_as_runtime(data) == detected(False, restore_detect.CONSISTENT), 'sentinel touched by the runtime'
-    entries = len(tree_snapshot(data))
+    snapshot_options = {'n8n': True} if probe.APP == 'n8n' else {}
+    entries = len(tree_snapshot(data, **snapshot_options))
     before = restore_picture(data, created)
     restored, _ = probe.restore_as_supervisor()
     with tempfile.TemporaryFile() as log:  # the start's stderr: unnamed, gone once closed, never shown
@@ -702,7 +724,7 @@ async def stage(probe, client):
         probe.check_restore_log(log, len(restored) + 1, revoked=[label for label, _, _, _ in found])
     assert detect_as_runtime(data) == detected(False, restore_detect.CONSISTENT), \
         'restore not finished by the boot guard'
-    tree_snapshot(data)  # what the guard left (the record, new journals, archived receipts) still restores
+    tree_snapshot(data, **snapshot_options)  # the guard's result still fits the restore layout
     print(f'PASS multi-profile: default + {len(created)} profiles up in {up:.1f} s; routing, child bearer, resources, '
           f'SIGKILL, stop in {stopped:.1f} s; {entries} entries; restore tree: every profile revoked and its old '
           f'credentials refused, sentinel rebuilt')

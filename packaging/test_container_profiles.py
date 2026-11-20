@@ -82,6 +82,39 @@ class TreeSnapshotTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
+    def test_n8n_catalogs_are_private_bounded_and_part_of_the_snapshot(self):
+        data = layout_tree(temporary(self))
+        for parent in (data, data / 'profiles' / A, data / 'profiles' / B):
+            directory = private_dir(parent / 'n8n-mcp')
+            private_file(directory / '.seed.lock', b'')
+            private_file(directory / ('a' * 64 + '.db'), b'SQLite format 3\0' + b'x' * (stage.MAX_FILE_BYTES + 1))
+        found = stage.tree_snapshot(data, n8n=True)
+        self.assertEqual(sum(name.endswith('.db') for name in found), 3)
+        with self.assertRaises(AssertionError):
+            stage.tree_snapshot(data)
+
+    def test_n8n_snapshot_rejects_unknown_linked_and_oversize_catalog_entries(self):
+        for case in ('unknown', 'link', 'oversize', 'bad-header', 'oversize-lock'):
+            with self.subTest(case=case):
+                data = layout_tree(temporary(self))
+                directory = private_dir(data / 'n8n-mcp')
+                path = directory / ('a' * 64 + '.db')
+                if case == 'unknown':
+                    private_file(directory / 'extra', b'x')
+                elif case == 'link':
+                    path.symlink_to(data / 'state.json')
+                elif case == 'oversize':
+                    with path.open('wb') as stream:
+                        stream.write(b'SQLite format 3\0')
+                        stream.truncate(stage.MAX_N8N_CATALOG_BYTES + 1)
+                    path.chmod(0o600)
+                elif case == 'oversize-lock':
+                    private_file(directory / '.seed.lock', b'x' * (stage.MAX_FILE_BYTES + 1))
+                else:
+                    private_file(path, b'not a database')
+                with self.assertRaises(AssertionError):
+                    stage.tree_snapshot(data, n8n=True)
+
     def test_the_layout_after_the_children_ran_is_taken_entry_by_entry(self):
         data = layout_tree(temporary(self))
         found = stage.tree_snapshot(data)

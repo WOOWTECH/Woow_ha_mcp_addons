@@ -33,12 +33,22 @@ real-root cases in `tests/test_restore_detection.py` are **pending root-capable 
 `test_root_marker_name_taken_by_a_directory[index]`, and
 `test_root_the_container_probes_restore_stage_meets_the_entrypoint`.
 
-Container/image acceptance is **pending**. The existing container probe expects a
-private synthetic n8n backend, which strict policy now refuses; its fixture snapshot
-also assumes files at most 1 MiB and the old layout, while persistent catalogs are
-larger and inside the profile tree. The catalog-specific probe is updated, but the
-full acceptance path must be redesigned and run against the real packaged image;
-no image build, HA acceptance, release, merge or deployment is claimed here.
+Container/image acceptance is **pending**: no image was built or run. The
+acceptance harness now gives n8n a disposable, inspected Docker internal bridge
+with a random /24 in `198.18.0.0/15`; the synthetic backend binds only its
+container address. The pinned production Node client and both existing strict
+address validators accept that benchmarking address while the Node client still
+rejects loopback, RFC1918 and link-local examples. No production policy changed.
+Docker must be able to allocate the chosen subnet; conflicts fail the probe.
+
+For both default and additional profiles the stopped-fixture snapshot recognizes
+only private `n8n-mcp/.seed.lock` and digest-named SQLite catalogs, checks their
+header, hashes them by streaming, and applies a 256 MiB fixture-only catalog
+bound. Other files retain the existing 1 MiB bound and ownership, mode, link,
+filesystem, layout, entry-count and depth checks. Both sides of the multi-profile
+restore stage use the same rules. Unit tests cover the network setup and cleanup,
+strict policy, snapshot rejection cases and switch-on/off paths; they do not
+prove the Docker bridge, real image, Supervisor restore, or HAOS acceptance.
 
 The tool-surface generator could not complete in the isolated checkout because the
 Odoo and Odoo Manage installed source inventories are absent (0 observed versus 41
@@ -54,3 +64,13 @@ pinned better-sqlite3 native binary. The container-profile tests are local unit 
 they do not run the packaged container acceptance path. The feature candidate changes
 no `addons/` files: release-facing wording is staged in
 `docs/multi-profile/unreleased-changes.md` for the separate release slice.
+
+Acceptance-harness follow-up verification: Node 26.12.1 and the existing pinned
+native dependencies; 273 passed and the five root cases above were deselected in
+`packaging/test_container_acceptance.py`, `packaging/test_container_probe.py`,
+`packaging/test_container_profiles.py`, `tests/test_n8n_persistent_parity.py`,
+`tests/test_n8n_multi_profile.py`, and `tests/test_restore_detection.py`. The
+follow-up changes only the acceptance harness, its tests and documentation; no
+runtime or tool-surface pinned source changed. Ledger precheck: zero drift among
+checked files; 102 runtime-patch and 49 tool-surface installed-only sources still
+require CI installations.
