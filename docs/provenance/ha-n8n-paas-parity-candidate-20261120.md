@@ -10,9 +10,9 @@ The default and additional profiles prepare private SQLite catalogs under their 
 URL and key; returning to that identity selects its old database. A new identity
 gets a new seed, while prior histories remain on disk and in cold backups until the
 profile is removed. Snapshots can contain sensitive information and retained databases
-increase disk and backup usage. Existing temporary histories are not migrated. SQLite
-integrity, a populated nodes table, the workflow_versions table, writeability and file
-ownership/mode are checked; the complete PaaS restore schema validation is not ported.
+increase disk and backup usage. Existing temporary histories are not migrated. SQLite integrity, catalog objects and columns against the packaged seed, the reviewed
+workflow_versions schema, writeability and file ownership/mode are checked; unknown
+schemas fail closed.
 Preparation failure prevents that child starting. The existing runtime UID is shared
 between child processes, so profile directories are not an operating-system security
 boundary. Inherited HM-25 archive and restore-token behavior is unchanged.
@@ -101,3 +101,27 @@ destinations, n8n persistence and n8n admin contract files. A broader attempt
 failed those seven other-product real-child cases because their installed
 runtimes are unavailable in this isolated checkout. The five root restore
 cases and full CI remain pending.
+
+Catalog refresh follow-up: a seed SHA-256 marker detects upgrades; under the
+profile catalog lock, the stopped child's existing reviewed history is copied
+column by column into a SQLite backup of the new seed. Both directions of row
+comparison and the exact workflow_versions sqlite_sequence are checked before
+fsync and atomic replacement. Existing instance_id values are retained, including
+the empty environment-mode scope. Unrecognized schemas and SQLite sidecars stop
+the child without replacing history. A failure before replacement preserves the
+old file; a directory fsync error after replacement is reported and the verified
+new file may already be visible. The packaged seed's empty history sequence is
+487. A future schema change requires explicit review; it is not auto-migrated.
+
+Upstream n8n-mcp 2.96.2 prunes workflow backups older than 30 days at shared
+database initialization (configurable by WORKFLOW_VERSION_RETENTION_DAYS),
+and its workflow versioning service prunes to ten versions per workflow and
+instance after a backup. Persistence does not override that upstream retention.
+No global 512-entry restore capacity guarantee has been established: other
+writers, quarantines, markers and SQLite sidecars share that whole-tree budget.
+
+Local non-root catalog follow-up verification: 188 passed and five root restore
+cases deselected across catalog upgrade, persistent parity, multi-profile and
+restore detection tests; the final ten-case real-seed upgrade suite passed
+separately. Container acceptance/probe unit tests: 94 passed. No image or HAOS
+run is claimed. Full CI and the five root cases remain pending.

@@ -17,9 +17,8 @@ def setup_catalog(tmp_path):
     extra.mkdir(mode=0o700, parents=True)
     (root / 'profiles').chmod(0o700)
     seed = tmp_path / 'seed.db'
-    with sqlite3.connect(seed) as db:
-        db.executescript('CREATE TABLE nodes(id INTEGER); INSERT INTO nodes VALUES(1); '
-                         'CREATE TABLE workflow_versions(id INTEGER, workflow_snapshot TEXT);')
+    import n8n_adapter
+    shutil.copyfile(n8n_adapter.PACKAGED_CATALOG, seed)
     return root, seed
 
 
@@ -31,7 +30,7 @@ def test_history_survives_restart_restore_and_isolated_backend(setup_catalog, tm
     root, seed = setup_catalog
     first = prepare(root, 'default', state(), seed)
     with sqlite3.connect(first) as db:
-        db.execute('INSERT INTO workflow_versions VALUES(1, ?)', ('snapshot',))
+        db.execute("INSERT INTO workflow_versions(id,workflow_id,version_number,workflow_name,workflow_snapshot,trigger) VALUES(1,'w',1,'n',?,'full_update')", ('snapshot',))
     assert prepare(root, 'default', state(), seed) == first
     other_profile = prepare(root, 'a' * 24, state(), seed)
     other_backend = prepare(root, 'default', state(key='second'), seed)

@@ -381,9 +381,7 @@ async def test_a_profiles_copy_is_made_once_off_the_event_loop(tmp_path, log_sca
     import sqlite3
     seed = catalogs.parent / 'source.db'
     seed.unlink()
-    with sqlite3.connect(seed) as db:
-        db.executescript('CREATE TABLE nodes(id INTEGER); INSERT INTO nodes VALUES(1); '
-                         'CREATE TABLE workflow_versions(id INTEGER);')
+    shutil.copyfile(Path(n8n_adapter.__file__).parent / 'node_modules/n8n-mcp/data/nodes.db', seed)
     data = setup_profiles(tmp_path, configured=(C,), extras=(B, C))
     unconfigured, _ = state_of(data, B)
     configured, _ = state_of(data, C)
@@ -398,7 +396,7 @@ async def test_a_profiles_copy_is_made_once_off_the_event_loop(tmp_path, log_sca
     await n8n_adapter.prepare_child(C, configured, root=data)
     path = n8n_adapter.profile_catalog(C)
     with sqlite3.connect(path) as db:
-        db.execute('INSERT INTO workflow_versions VALUES(1)')
+        db.execute("INSERT INTO workflow_versions(id,workflow_id,version_number,workflow_name,workflow_snapshot,trigger) VALUES(1,'w',1,'n','{}','full_update')")
     await n8n_adapter.prepare_child(C, configured, root=data)
     with sqlite3.connect(n8n_adapter.profile_catalog(C)) as db:
         assert db.execute('SELECT count(*) FROM workflow_versions').fetchone() == (1,)
@@ -416,15 +414,13 @@ async def test_a_profiles_copy_belongs_to_the_backend_it_was_made_for(tmp_path, 
     import sqlite3
     seed = catalogs.parent / 'source.db'
     seed.unlink()
-    with sqlite3.connect(seed) as db:
-        db.executescript('CREATE TABLE nodes(id INTEGER); INSERT INTO nodes VALUES(1); '
-                         'CREATE TABLE workflow_versions(id INTEGER);')
+    shutil.copyfile(Path(n8n_adapter.__file__).parent / 'node_modules/n8n-mcp/data/nodes.db', seed)
     data = setup_profiles(tmp_path, configured=(C,), extras=(C,))
     state, _ = state_of(data, C)
     await n8n_adapter.prepare_child(C, state, root=data)
     first = n8n_adapter.profile_catalog(C)
     with sqlite3.connect(first) as db:
-        db.execute('INSERT INTO workflow_versions VALUES(42)')
+        db.execute("INSERT INTO workflow_versions(id,workflow_id,version_number,workflow_name,workflow_snapshot,trigger) VALUES(42,'w',1,'n','{}','full_update')")
     for changes in ({'backend_url': 'https://elsewhere.n8n.invalid'}, {'backend_key': 'DUMMY-another-workflow-key'}):
         await n8n_adapter.prepare_child(C, state.model_copy(update=changes), root=data)
         other = n8n_adapter.profile_catalog(C)
@@ -720,7 +716,7 @@ async def test_a_profiles_backend_saved_starts_its_child_and_cleared_stops_it(tm
         assert opened.status_code == 200 and opened.headers['mcp-session-id'].startswith('p' + B[:4] + '-session-')
         import sqlite3
         with sqlite3.connect(copy) as db:
-            db.execute('INSERT INTO workflow_versions VALUES(42)')
+            db.execute("INSERT INTO workflow_versions(id,workflow_id,version_number,workflow_name,workflow_snapshot,trigger) VALUES(42,'w',1,'n','{}','full_update')")
         await save('/api/n8n/session', {'n8n_session': {'timeout_seconds': 900, 'max_sessions': 5}})
         assert copied == ['default', C, B, B] and restarted(2)
         with sqlite3.connect(copy) as db:
@@ -892,14 +888,12 @@ async def test_a_restore_revokes_every_n8n_profile_and_their_children_start_apar
     from persistent_catalog import prepare
     data = setup_profiles(tmp_path)
     seed = tmp_path / 'restore-seed.db'
-    with sqlite3.connect(seed) as db:
-        db.executescript('CREATE TABLE nodes(id INTEGER); INSERT INTO nodes VALUES(1); '
-                         'CREATE TABLE workflow_versions(id INTEGER);')
+    shutil.copyfile(Path(n8n_adapter.__file__).parent / 'node_modules/n8n-mcp/data/nodes.db', seed)
     for index, profile_id in enumerate(('default', B, C)):
         state, _ = state_of(data, profile_id)
         catalog = prepare(data, profile_id, state, seed)
         with sqlite3.connect(catalog) as db:
-            db.execute('INSERT INTO workflow_versions VALUES(?)', (index + 1,))
+            db.execute("INSERT INTO workflow_versions(id,workflow_id,version_number,workflow_name,workflow_snapshot,trigger) VALUES(?,'w',1,'n','{}','full_update')", (index + 1,))
     before = {profile_id: stored(data if profile_id == 'default' else profiles.Layout(data).profile(profile_id))
               for profile_id in ('default', B, C)}
     watch(log_scan, data)

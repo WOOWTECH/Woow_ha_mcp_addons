@@ -274,11 +274,9 @@ async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None
             catalogs.mkdir(mode=0o700, exist_ok=True)
             (catalogs / 'source.db').write_bytes(CATALOG_STAND_IN)
             if sqlite_catalog:
-                import sqlite3
+                import shutil
                 (catalogs / 'source.db').unlink()
-                with sqlite3.connect(catalogs / 'source.db') as db:
-                    db.executescript('CREATE TABLE nodes(id INTEGER); INSERT INTO nodes VALUES(1); '
-                                     'CREATE TABLE workflow_versions(id INTEGER);')
+                shutil.copyfile(Path(n8n_adapter.__file__).parent / 'node_modules/n8n-mcp/data/nodes.db', catalogs / 'source.db')
             patch.setattr(n8n_adapter, 'PACKAGED_CATALOG', catalogs / 'source.db')
             patch.setattr(n8n_adapter, 'CATALOG_DIR', catalogs / 'copies')
             patch.setattr(n8n_adapter, '_profile_catalogs', {})
