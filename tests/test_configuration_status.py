@@ -34,7 +34,21 @@ async def test_bootstrap_revision_is_the_form_snapshot_and_stale_save_is_inert(t
         assert (await client.put('/api/endpoint', headers=legacy, json={'endpoint': None})).status_code == 428
 
 
-async def test_save_acknowledgement_does_not_claim_child_readiness(tmp_path):
+@pytest.fixture
+def public_example_dns(monkeypatch):
+    """Resolve reserved example names without depending on external DNS."""
+    import socket
+    original = asyncio.BaseEventLoop.getaddrinfo
+
+    async def resolve(loop, host, port, *args, **kwargs):
+        if host.endswith('.example'):
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('8.8.8.8', port))]
+        return await original(loop, host, port, *args, **kwargs)
+
+    monkeypatch.setattr(asyncio.BaseEventLoop, 'getaddrinfo', resolve)
+
+
+async def test_save_acknowledgement_does_not_claim_child_readiness(tmp_path, public_example_dns):
     async with setup(tmp_path) as (_, _, client, headers, _, _):
         result = await client.put('/api/backend', headers=headers,
                                   json={'url': 'https://n8n.example', 'key': 'synthetic-only'})
@@ -44,7 +58,7 @@ async def test_save_acknowledgement_does_not_claim_child_readiness(tmp_path):
 
 
 @pytest.mark.parametrize('product', ['n8n', 'hermes', 'odoo', 'odoo-manage', 'opendesign', 'emqx', 'litellm', 'nextcloud'])
-async def test_every_product_connection_route_rejects_second_editor_before_replacement(tmp_path, product):
+async def test_every_product_connection_route_rejects_second_editor_before_replacement(tmp_path, product, public_example_dns):
     async def verify(_): return True
     replaced = []
     async def replace(state): replaced.append(state)
@@ -92,7 +106,7 @@ async def test_commit_failure_preserves_revision_and_never_restarts(tmp_path, mo
         assert after.json()['configuration'] == boot['configuration']
 
 
-async def test_saved_but_failed_application_is_explicit_and_secret_free(tmp_path):
+async def test_saved_but_failed_application_is_explicit_and_secret_free(tmp_path, public_example_dns):
     async with setup(tmp_path) as (store, _, _, _, _, _):
         process = SimpleNamespace(starts=1, status='running')
         health = SimpleNamespace(settled=(1, True, 'reachable', None))
