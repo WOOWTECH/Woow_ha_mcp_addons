@@ -45,7 +45,9 @@
     "product": "emqx",
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/server.py",
-    "upstream_sha256": "e6ae5c32a62ae8942bdf2701f687dc7d840bc49745fd8b094e886f833c043c22"
+    "upstream_sha256": "e6ae5c32a62ae8942bdf2701f687dc7d840bc49745fd8b094e886f833c043c22",
+    "local_sha256": "f6cf87c5fd8806809fd711848e98feb9a64ace4443753958d6b10a101565c93b",
+    "modification": "HA launcher installs profile-bound live policy middleware and registers tools for dynamic policy filtering; standalone environment gate is retained."
   },
   {
     "product": "emqx",

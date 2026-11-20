@@ -148,6 +148,9 @@ broker = Broker()
 threading.Thread(target=broker.serve_forever, kwargs={'poll_interval': 0.02}, daemon=True).start()
 assert os.environ['EMQX_MCP_BASE_URL'] == 'http://broker.invalid', 'the saved URL is the test state one'
 os.environ['EMQX_MCP_BASE_URL'] = 'http://127.0.0.1:%d' % broker.server_port
+# This isolated handler harness deliberately changes the backend after child_spec;
+# policy binding is exercised by the separate real-child multi-profile tests.
+os.environ.pop('EMQX_MCP_STATE_PATH', None)
 # Every tool registered, as PaaS's tests' policy {"tools": {"disabled": []}} (the state's own policy is not under test).
 os.environ['EMQX_MCP_READONLY'], os.environ['EMQX_MCP_DISABLED_TOOLS'] = 'false', ''
 

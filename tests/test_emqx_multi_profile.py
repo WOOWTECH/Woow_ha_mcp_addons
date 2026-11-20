@@ -1,27 +1,10 @@
 """HM-23: EMQX with additional profiles (multi-profile plan 9 EMQX row, 12.3 HM-21 to HM-26; DQ-27 as the plan
 recommends it, UC-22; acceptance T-04, T-05, T-07, T-23; FM-37, FM-92; contract section 9 #54, #65, #130).
 
-EMQX needs no code of its own to serve additional profiles: its MCP token is not bound to a backend identity (an EMQX
-account is its API key, a secret: identity_fields.TOKEN_ROTATING has no EMQX, so products.IDENTITY_BOUND and the
-panel's identityBound stay Odoo's), and its child takes the profile's tool policy only from its launch environment
-(EMQX_MCP_READONLY, EMQX_MCP_DISABLED_TOOLS: products.child_spec), so a profile's policy reaches its own child only, and
-saving it relaunches only that child (configuration.launch_revision counts EMQX's policy). The child reads no policy of
-its own (DQ-27, the plan's recommendation: PaaS's child re-reads its profile's saved policy at every call; HA checks
-every call at the gateway, each profile with its own child behind its own child bearer). These tests pin that, with
-real EMQX children (the real Supervisor through run_product's ProfileManager, each child in the pinned
-apps/emqx/.venv) and one fake broker per profile (synthetic DUMMY- credentials), in both switch modes:
-
-- switched on (for the test: the repository's switch stays as it is): every child serves its own child bearer only
-  (the 401 matrix of tests/test_child_bearer.py, T-23); on 8081 each profile's token opens a session with its own child
-  on both connection paths, a token no profile holds gets the bytes of HM-01 (Bearer 401, secret path 404) and a session
-  of one profile is unknown with another profile's token (T-05); every call reaches only its own profile's broker with
-  that profile's API key (the diagonal, T-04, taken with a tool the health monitor never calls, so the brokers asked are
-  exactly those the call reached); each profile's tool policy is its own, at the gateway and in its child's
-  environment, and a denied operation is refused at the gateway only (DQ-27, contract #65); saving one profile's policy
-  relaunches that profile's child alone with the new policy (T-07, contract #54);
-- switched off, the same data on disk: only the default profile's child runs, the additional profiles' tokens are any
-  unknown token's (the boot guard revoked them, HM-13b), and a policy save relaunches the default profile's child as
-  before HM-23.
+Each EMQX profile has its own child, bearer, backend credentials and saved policy. The gateway and child both enforce
+policy; the child reads its bound state for every tool list and call. The fixed read-only health probe remains callable
+at the child even when publicly disabled. Policy saves restart only the affected child. These tests use real children
+and synthetic brokers to cover profile isolation, direct child bearer calls and both profile switch modes.
 
 The brokers listen on this runner's private address, not on loopback: a switched-on product's child refuses a loopback
 backend (HM-20) and this test keeps that rule in force (tests/test_real_products.py's Headscale fixture does the same).
@@ -33,6 +16,7 @@ import base64
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import os
 import socket
 import threading
 
@@ -57,8 +41,8 @@ B, C = ids(2)
 LABELS = {B: 'Broker Beta', C: 'Broker Gamma'}
 NAMES = {'default': 'default', B: 'beta', C: 'gamma'}
 # The restricted profile B: no write grant (the gateway refuses every write; contract #130) and one read tool off;
-# C keeps every tool but one operation of a mixed tool (the gateway refuses it; the child is never told: DQ-27).
-B_POLICY = {'writes_enabled': False, 'enabled_write_tools': [], 'disabled': ['emqx_list_clients']}
+# C keeps every tool but one operation of a mixed tool; both gateway and child refuse it.
+B_POLICY = {'writes_enabled': False, 'enabled_write_tools': [], 'disabled': ['emqx_list_clients', 'emqx_cluster_status']}
 C_DENIED = {'emqx_manage_authn_users': ['delete']}
 DELETE_USER = {'operation': 'delete', 'user_id': 'u-hm23'}
 UP_SECONDS = 90  # three real children, the additional ones staggered (HM-09)
@@ -290,15 +274,15 @@ async def test_switched_on_each_profile_has_its_own_child_broker_and_policy(tmp_
                 others = [value for other in running if other != profile_id
                           for value in (*credentials(other), tokens[other], children[other], made[other].url)]
                 assert not any(value in text for value in others for text in env.values()), profile_id
-                # DQ-27 (the plan's recommendation): the policy reaches the child only as these two variables; the
-                # child is given no policy or state file to read (PaaS's child reads MCP_ADMIN_CONFIG at every call).
+                # Each child can read only its own profile's policy path as configured by the launcher.
                 assert 'MCP_ADMIN_CONFIG' not in env and 'EMQX_MCP_DISABLED_OPERATIONS' not in env, profile_id
-                assert not any('state.json' in text or profiles.INDEX_NAME in text for text in env.values()), profile_id
+                assert env['EMQX_MCP_STATE_PATH'] == str(runtime.directory(profile_id) / 'state.json')
+                assert not any(profiles.INDEX_NAME in text for text in env.values()), profile_id
             assert env_policy(running['default']) == ('false', [])
             readonly, disabled = env_policy(running[B])
             # B has no write grant, yet its child runs with READONLY false: the mixed tools (authn users, authz rules)
-            # stay registered for their read operation and only the gateway checks their write operations' grants
-            # (child_spec, 0.2.0). That is why the docs recommend a read-only role API key for such a profile (UC-22).
+            # stay registered for their read operation; both gateway and child check write grants. A read-only backend key
+            # remains useful defense in depth (UC-22).
             assert readonly == 'false' and 'emqx_list_clients' in disabled and 'emqx_publish' in disabled
             assert env_policy(running[C]) == ('false', [])  # C's denied operation is not the child's to know
 
@@ -319,6 +303,69 @@ async def test_switched_on_each_profile_has_its_own_child_broker_and_policy(tmp_
                 assert PROBE_TOOL in native[B]  # the health probe's tool stays registered (child_spec)
                 assert 'emqx_manage_authn_users' in native[B]  # a mixed tool, for its read operation (see above)
                 assert 'emqx_manage_authn_users' in native[C] and native[C] == native['default']
+                # B disables the public probe, but the private health monitor must still reach it.
+                probe_session = await child_session(direct, child_url(running[B]), children[B])
+                await send(direct, 'POST', child_url(running[B]), ['Bearer ' + children[B]],
+                           message={'jsonrpc': '2.0', 'method': 'notifications/initialized'}, session=probe_session)
+                _, probe = await send(direct, 'POST', child_url(running[B]), ['Bearer ' + children[B]],
+                                      message={'jsonrpc': '2.0', 'id': 7, 'method': 'tools/call',
+                                               'params': {'name': PROBE_TOOL, 'arguments': {}}}, session=probe_session)
+                assert probe['isError'] is False
+
+                # A caller with the child bearer still cannot bypass B's grants or C's operation deny.
+                for profile_id, args in ((B, {'operation': 'create', 'user_id': 'u', 'password': 'p'}),
+                                         (C, DELETE_USER)):
+                    entry = running[profile_id]
+                    session = await child_session(direct, child_url(entry), children[profile_id])
+                    await send(direct, 'POST', child_url(entry), ['Bearer ' + children[profile_id]],
+                               message={'jsonrpc': '2.0', 'method': 'notifications/initialized'}, session=session)
+                    before = len(made[profile_id].requests)
+                    _, denied = await send(direct, 'POST', child_url(entry), ['Bearer ' + children[profile_id]],
+                                           message={'jsonrpc': '2.0', 'id': 8, 'method': 'tools/call',
+                                                    'params': {'name': 'emqx_manage_authn_users', 'arguments': args}},
+                                           session=session)
+                    assert denied['isError'] is True
+                    assert 'EMQX_POLICY_DENIED' in str(denied)
+                    assert not any('/authentication/' in path for _, path, _ in made[profile_id].since(before))
+
+                # Change C's saved policy without restarting: the same child session sees revocation and re-enable.
+                path = runtime.directory(C) / 'state.json'
+                original = path.read_bytes()
+                def replace_state(raw):
+                    temporary = path.with_name('test-state.tmp')
+                    temporary.write_bytes(raw)
+                    temporary.chmod(0o600)
+                    os.replace(temporary, path)
+                session = await child_session(direct, child_url(running[C]), children[C])
+                await send(direct, 'POST', child_url(running[C]), ['Bearer ' + children[C]],
+                           message={'jsonrpc': '2.0', 'method': 'notifications/initialized'}, session=session)
+                async def direct_stats():
+                    return await send(direct, 'POST', child_url(running[C]), ['Bearer ' + children[C]],
+                                      message={'jsonrpc': '2.0', 'id': 10, 'method': 'tools/call',
+                                               'params': {'name': DIAGONAL_TOOL, 'arguments': {}}}, session=session)
+                try:
+                    changed = json.loads(original)
+                    changed['disabled'].append(DIAGONAL_TOOL)
+                    replace_state(json.dumps(changed).encode())
+                    _, denied = await direct_stats()
+                    assert denied['isError'] and 'EMQX_POLICY_DENIED' in str(denied)
+                    replace_state(b'{broken')
+                    _, denied = await direct_stats()
+                    assert denied['isError'] and 'EMQX_POLICY_UNAVAILABLE' in str(denied)
+                    changed = json.loads(original)
+                    changed['connection']['api_key'] = 'wrong-key'
+                    replace_state(json.dumps(changed).encode())
+                    _, denied = await direct_stats()
+                    assert denied['isError'] and 'EMQX_POLICY_UNAVAILABLE' in str(denied)
+                    replace_state(original)
+                    path.chmod(0o640)
+                    _, denied = await direct_stats()
+                    assert denied['isError'] and 'EMQX_POLICY_UNAVAILABLE' in str(denied)
+                    replace_state(original)
+                    _, allowed = await direct_stats()
+                    assert allowed['isError'] is False
+                finally:
+                    replace_state(original)
 
                 async with runtime.mcp() as client:
                     # T-05: each token, on both paths, opens a session with its own child and with no other.
@@ -356,8 +403,8 @@ async def test_switched_on_each_profile_has_its_own_child_broker_and_policy(tmp_
                     assert all(own for broker in made.values() for _, _, own in broker.requests)  # the probes too
 
                     # Each profile's policy at the gateway: B's disabled tool is unknown to B and reaches no broker,
-                    # the default profile still has it; C's denied operation is refused at the gateway (its child would
-                    # run it: DQ-27), the default profile's same call reaches its broker. No broker is asked anything
+                    # the default profile still has it; C's denied operation is refused at the gateway and child; the default
+                    # profile's same call reaches its broker. No broker is asked anything
                     # but its health probes (asked) while the gateway refuses.
                     listed = {profile_id: await listed_names(client, *sessions[profile_id]) for profile_id in sessions}
                     assert 'emqx_list_clients' in listed['default'] and 'emqx_list_clients' not in listed[B]

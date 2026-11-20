@@ -1038,7 +1038,9 @@ def child_spec(state: ProductState, directory: Path, port: int = CHILD_PORT) -> 
             argv = (str(python), str(app / 'launch.py'), '--host', '127.0.0.1', '--port', listen)
             return ChildSpec(argv, env, cwd)
         if product == 'emqx':
-            env.update(EMQX_MCP_BASE_URL=c.url, EMQX_MCP_API_KEY=c.api_key, EMQX_MCP_API_SECRET=c.api_secret, EMQX_MCP_READONLY='true')
+            env['PYTHONPATH'] += ':' + str(ROOT / 'packages/mcp-admin-core')
+            env.update(EMQX_MCP_BASE_URL=c.url, EMQX_MCP_API_KEY=c.api_key, EMQX_MCP_API_SECRET=c.api_secret,
+                       EMQX_MCP_STATE_PATH=str(directory / 'state.json'), EMQX_MCP_READONLY='true')
             module = 'emqx_mcp_server.server'
         elif product == 'nextcloud':
             # No ALLOWED_HOSTS (the gateway reaches the child as 127.0.0.1, which its Host/Origin guard accepts)
