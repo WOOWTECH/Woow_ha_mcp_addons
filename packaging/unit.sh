@@ -14,6 +14,7 @@ npm ci --prefix apps/n8n --ignore-scripts --no-audit --no-fund
 # script and the same pin, so these tests run against the native addon the image has.
 node packaging/native_addon.mjs install --inputs packaging/inputs.json --addon better-sqlite3 --node-modules apps/n8n/node_modules
 # 0.2.2: the n8n-mcp build patch the n8n image applies (apps/n8n/Dockerfile); backend_policy.cjs checks the patched digest.
+python3 apps/n8n/patches/fix_fts_probe_temp.py
 python3 apps/n8n/patches/fix_test_run_error_messages.py
 python3 apps/n8n/patches/fix_tool_result_is_error.py
 python3 apps/n8n/patches/fix_delete_workflow_description.py

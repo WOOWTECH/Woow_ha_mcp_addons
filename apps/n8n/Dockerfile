@@ -71,6 +71,8 @@ COPY --from=npm /npm/node_modules ./apps/n8n/node_modules
 # Unreleased (0.4.12 line): the pinned native addon must also load with this stage's own libraries (libstdc++ and libgcc_s
 # are copied above); a base or library change that breaks it stops the build here, not at the first search_nodes.
 RUN node -e "const db = require('/opt/woow/apps/n8n/node_modules/better-sqlite3')(':memory:'); db.exec('create virtual table t using fts5(a)')"
+# Keep FTS capability checks in the connection-local temp schema, even if the process dies.
+RUN /usr/local/bin/python apps/n8n/patches/fix_fts_probe_temp.py
 # Compose backend-message preservation and native direct inputs compatibility through the same entrypoint as unit.sh.
 # backend_policy.cjs requires the combined digest; the separate isError patch below remains applied.
 RUN /usr/local/bin/python apps/n8n/patches/fix_test_run_error_messages.py

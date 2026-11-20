@@ -34,6 +34,7 @@ if (crypto.createHash("sha256").update(fs.readFileSync(apiPath)).digest("hex") !
 // Unreleased (0.4.12 line): tools-n8n-manager.js must carry fix_delete_workflow_description.py (the n8n_delete_workflow
 // description names how to delete a published workflow, as the PaaS server's description does); nothing else in it changes.
 for (const [relative, digest] of [
+    ["database/database-adapter.js", "b0bfa44960b9109b383b2c467ed9f1155f38d972a2c5ef7b403ce0caeb9e060c"],
     ["utils/n8n-errors.js", "efd5783846cf1eb61dbf9387de260e5a1d336ec609bc4c4d5601c369b5d2f20a"],
     ["mcp/handlers-n8n-manager.js", "fe3181292ec5d1ad07195f55a7ab73569b15d990f687f620ecaf633742fb24aa"],
     ["mcp/server.js", "638b148f91c18d484b8bcede838be1032f82ddd1b3aa53b24cf005325ae3d9f7"],
