@@ -263,7 +263,7 @@ async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_sc
     data = installed(tmp_path, raw)
     before = start_facts(data)
     if not switched_on:
-        running = production_runtime(product, data)
+        running = switched_off_runtime(product, data)  # HM-23: off whatever the repository switches on
     elif product == 'n8n':
         running = n8n_switched_on(data)
     else:
@@ -280,6 +280,15 @@ async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_sc
         expected |= {profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME}
     assert set(after) - set(before) == expected
     assert not profiles.has_profile_data(data)
+
+
+@contextlib.asynccontextmanager
+async def switched_off_runtime(product, data):
+    """HM-23 (tests/switch_modes.py): the production runtime with every product switched off."""
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset())
+        async with production_runtime(product, data) as runtime:
+            yield runtime
 
 
 @contextlib.asynccontextmanager

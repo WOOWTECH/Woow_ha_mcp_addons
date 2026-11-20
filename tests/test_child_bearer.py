@@ -34,6 +34,7 @@ import pytest
 
 from batch2_owned_port import OwnershipError, owned_listener
 from log_scan import TOKEN_WINDOW, log_scan  # noqa: F401  (fixture)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch these tests pin)
 from mcp_admin_core.diagnostics import ChildLogs
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.health import HealthMonitor, protocol_reply
@@ -43,7 +44,7 @@ from n8n_adapter import child_spec as n8n_spec
 from owned_runtime import Endpoint
 from test_real_products import backend, connection
 
-pytestmark = pytest.mark.usefixtures('log_scan')  # every new test runs under the HM-01 log scan
+pytestmark = pytest.mark.usefixtures('log_scan', 'switched_off')  # every new test runs under the HM-01 log scan
 ROOT = Path(__file__).resolve().parents[1]
 ENV = 'WOOW_MCP_CHILD_TOKEN'
 REFUSED = 'child bearer: WOOW_MCP_CHILD_TOKEN is missing or not a child token'  # session_idle.REFUSED, fixed

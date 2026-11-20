@@ -358,3 +358,15 @@ test('MOCK health dimensions and root mount refresh remain distinct', async ({ p
   await page.reload();
   await expect(page.getByRole('heading', { level: 1, name: '後端連線' })).toBeVisible();
 });
+
+test('Headscale issues a replacement to show its connector; other products keep reveal', async ({page, request}) => {
+  await reset(request, {product: 'headscale', endpoint: 'https://mcp.example.test/mcp'});
+  await start(page, '/access');
+  await expect(page.getByRole('button', {name: '顯示權杖', exact: true})).toHaveCount(0);
+  await expect(page.getByRole('button', {name: '顯示 Claude.ai 連線網址', exact: true})).toHaveCount(0);
+  await page.getByRole('button', {name: '產生新的 Claude.ai 連線網址', exact: true}).click();
+  await expect(page.getByRole('dialog')).toContainText('舊權杖');
+  await confirm(page, '確認繼續');
+  await expect(page.locator('#claude-secret')).toBeVisible();
+  expect((await calls(request)).map(call => call.operation)).toEqual(['token/rotate']);
+});

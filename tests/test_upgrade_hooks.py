@@ -316,8 +316,10 @@ class Runtime:
         self.port, admin_port = draw_public_ports(2)
         home.mkdir()
         self.runner = Executable(home, product, [self.port, admin_port])
-        preamble = (f'from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = frozenset({{{product!r}}}); '
-                    if switched_on else '')
+        # HM-26: switched off is every product off in the preamble too, whatever the repository switches on
+        # (tests/switch_modes.py: a subprocess sets the switch it needs itself)
+        switch = f'frozenset({{{product!r}}})' if switched_on else 'frozenset()'
+        preamble = f'from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = {switch}; '
         code = preamble + 'from mcp_admin_core import run_product; ' + self.runner.code('run_product') + 'run_product.main()'
         self.runner.release()
         self.log = (home / 'runtime.log').open('wb')
@@ -344,7 +346,7 @@ class Runtime:
         assert self.process.returncode == 0
 
 
-@pytest.mark.parametrize('product', ['odoo', 'emqx'])
+@pytest.mark.parametrize('product', ['odoo', 'emqx', 'headscale'])  # HM-26: Headscale's 0.5.0 runs these hooks too
 @pytest.mark.parametrize('switched_on', [True, False], ids=['old-off-new-on', 'off-both'])
 async def test_the_hooks_pass_an_upgrade_of_the_real_runtime_and_only_read(tmp_path, log_scan, product, switched_on):
     """As the Store's upgrade test runs them: seed once the old version started on an empty /data (unconfigured, as the

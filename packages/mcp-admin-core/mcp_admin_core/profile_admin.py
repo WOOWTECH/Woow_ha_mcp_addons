@@ -23,7 +23,7 @@ A caller who is not an administrator never gets here (step 6), so nothing below 
 - A creation writes the profile once with its final first state (products.profile_initial_state: new tokens, no
   connection, the default profile's policy now; DQ-02), then the index (the commit), then registers and starts it
   (an unconfigured profile's child waits for its connection: status unconfigured). Its answer never carries a token:
-  token/reveal with X-MCP-Profile <the new id> does (plan 4.3).
+  token/reveal with X-MCP-Profile <the new id> does for other products; Headscale requires rotation.
 - A deletion (plan 4.4, DQ-14): the token revoked and the requests it carries ended (TokenAccess.committed), the
   backend credentials wiped, the profile no longer routed and its monitor and child stopped, its client and store
   closed, its index entry removed (only now is its port free), its directory removed without following a link (a

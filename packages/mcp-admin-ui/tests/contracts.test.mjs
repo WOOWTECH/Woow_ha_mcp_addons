@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { products, mountPath, explicitUrl, backendPayload, backendPatchPayload, backendEdit, connectionHelp, policyRestartsChild, policyRestartNotice, emqxBaseUrl, headscaleBaseUrl, policyPayload, toolRows, clientExample, claudeConnectorUrl } from '../src/contracts.js';
+import { products, mountPath, explicitUrl, backendPayload, backendPatchPayload, backendEdit, connectionHelp, connectionHelpFor, policyRestartsChild, policyRestartNotice, emqxBaseUrl, headscaleBaseUrl, policyPayload, toolRows, clientExample, claudeConnectorUrl } from '../src/contracts.js';
 import { AdminApi, ApiError } from '../src/api.js';
 const base = '/api/hassio_ingress/DUMMY';
 const bootstrap = () => ({ base_path: base, api_base: `${base}/api`, product: 'n8n', csrf: 'fresh_csrf_for_mock_only', tools: {} });
@@ -161,6 +161,27 @@ test('credential fields say what to paste: labels and per-product help', () => {
   assert.match(connectionHelp.nextcloud, /建立新應用程式密碼/);
   assert.match(connectionHelp.emqx, /\/api\/v5.*自動去掉/);
   assert.match(connectionHelp.headscale, /\/api\/v1/);
+});
+test('HM-26: with profiles the Headscale help names one server per profile and a key of its own; without profiles, today\'s words', () => {
+  for (const product of Object.keys(products)) {
+    assert.equal(connectionHelpFor(product), connectionHelp[product], product);
+    assert.equal(connectionHelpFor(product, false), connectionHelp[product], product);
+    if (product !== 'headscale') assert.equal(connectionHelpFor(product, true), connectionHelp[product], product);
+  }
+  const scoped = connectionHelpFor('headscale', true);
+  assert.notEqual(scoped, connectionHelp.headscale);
+  assert.match(scoped, /這個帳號要管理的 Headscale/);
+  assert.match(scoped, /\/api\/v1/);
+  assert.match(scoped, /整台 Headscale 的管理權限/);
+  assert.match(scoped, /建議每個帳號在 Headscale 各建一把/);
+  // HM-26 security review M-1: on one server every profile, whatever its key, is kept apart by its tool policy alone,
+  // and only a policy without headscale_api_keys create, expire and delete keeps a profile restricted.
+  assert.match(scoped, /不論是否共用金鑰，彼此只靠工具權限分權/);
+  assert.match(scoped, /停用 headscale_api_keys 的建立、作廢與刪除/);
+  assert.match(scoped, /「全部撤銷」撤不到/);
+  assert.doesNotMatch(scoped, /共用同一把金鑰的帳號之間只靠工具權限分權/);
+  assert.doesNotMatch(scoped, /只管理同一個 Headscale 執行個體/);
+  assert.match(connectionHelp.headscale, /只管理同一個 Headscale 執行個體/);
 });
 test('saving a tool policy says it restarts the child for the products whose child is launched with the policy', () => {
   for (const product of ['emqx', 'litellm', 'nextcloud', 'headscale']) {

@@ -20,6 +20,9 @@ from mcp_admin_core.products import PRODUCTS
 from test_ha_role import gateway
 from test_lifecycle import until
 from test_real_products import connection
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch these tests pin)
+
+pytestmark = pytest.mark.usefixtures('switched_off')  # HM-23: tests/switch_modes.py
 
 
 def owned_spec(tmp_path, name):

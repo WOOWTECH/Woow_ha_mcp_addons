@@ -49,6 +49,7 @@ import httpx
 import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch a test pins)
 from mcp_admin_core import operations, profiles
 from multi_profile_runtime import Children, SWITCHABLE, create_profile, ids, multi_profile_runtime, stored
 from restore_guard_disk import newest_ctime
@@ -1293,7 +1294,8 @@ async def test_headscale_keeps_only_claude_ai_and_has_no_policy(tmp_path, log_sc
 
 
 @pytest.mark.parametrize('product', PRODUCTS)
-async def test_switched_off_the_policy_does_not_exist(tmp_path, log_scan, caplog, monkeypatch, product):
+async def test_switched_off_the_policy_does_not_exist(tmp_path, log_scan, caplog, monkeypatch, product,
+                                                     switched_off):
     """Plan 3.3, 12.3 HM-27 (switched by features.enabled): a product not switched on never reads or writes the file
     (one on disk that would refuse every Origin, left by a release that had the product switched on, changes nothing),
     has no route (an unknown operation: today's empty 404 after the role check, and today's 400 for a body sent to
