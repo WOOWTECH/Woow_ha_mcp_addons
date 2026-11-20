@@ -38,6 +38,21 @@ from n8n_adapter import TOOLS as N8N_TOOLS
 from test_single_profile_golden import ADMIN, GENUINE_CLIENT, INGRESS, configure, settle
 
 pytestmark = pytest.mark.usefixtures('log_scan')
+
+@pytest.fixture(autouse=True)
+def resolve_reserved_test_domains(monkeypatch):
+    """Keep origin tests independent of DNS while exercising strict address validation."""
+    import asyncio
+    import socket
+    original = asyncio.BaseEventLoop.getaddrinfo
+
+    async def resolve(loop, host, port, *args, **kwargs):
+        if host.lower().endswith('.invalid'):
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('8.8.8.8', port))]
+        return await original(loop, host, port, *args, **kwargs)
+
+    monkeypatch.setattr(asyncio.BaseEventLoop, 'getaddrinfo', resolve)
+
 REFUSED = b'{"error":"request denied","detail":{"code":"CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN"}}'
 # What each product stores (admin API names; tests/fixtures/owner_defaults/README.md rules: .invalid hosts, DUMMY-
 # credentials); every URL names its port, so that the scheme can change alone.
