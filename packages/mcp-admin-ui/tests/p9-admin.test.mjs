@@ -294,3 +294,13 @@ test('P9 --temp-profile: when its use fails it is deleted all the same, and its 
   assert.equal(server.ports.has(temporary), false);
   assert.deepEqual(runs, ['cross']);
 });
+
+test('P9 fails closed when a Headscale version refuses token reveal', async () => {
+  const calls = [];
+  const client = {bootstrap: async () => ({product: 'headscale'}), mutate: async operation => {
+    calls.push(operation); throw Object.assign(new Error('not found'), {status: 404});
+  }};
+  await assert.rejects(revealToken(client), /token reveal is unavailable/);
+  assert.deepEqual(calls, ['token/reveal']);
+  assert.equal(await revealToken({bootstrap: async () => ({product: 'headscale'}), mutate: async () => ({token: 'older-version'})}), 'older-version');
+});

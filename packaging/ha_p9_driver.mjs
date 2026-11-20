@@ -20,7 +20,7 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { childkillArguments, createP9AdminClient, logId, runCross, runTemporaryProfile } from './ha_p9_admin.mjs';
+import { childkillArguments, createP9AdminClient, logId, revealToken, runCross, runTemporaryProfile } from './ha_p9_admin.mjs';
 
 const env = (name, fallback) => {
   const value = process.env[name] ?? fallback;
@@ -104,6 +104,9 @@ try {
   const admin = clientFor(PROFILE);
   const boot = async () => ({ status: 200, ...(await admin.bootstrap()) });
   let b = await boot();
+  if (b.product === 'headscale' && (argv.includes('--tokens') || PLAN || modes.length || CROSS || TEMP)) {
+    await revealToken(admin);  // Check support before any backend save or token mutation.
+  }
   const profiles = b.profile !== undefined;  // a switched-on app echoes the profile each answer is for
   if ((CROSS || TEMP) && !profiles) throw new Error('--cross and --temp-profile need an app with additional profiles');
   console.log('bootstrap', b.status, JSON.stringify({ product: b.product, ...(profiles ? { profile: logId(PROFILE) } : {}), backend_url_set: Boolean(b.backend_url), backend_key_set: b.backend_key_set, connection_configured: b.connection_configured, token_active: b.token_active, writes_enabled: b.writes_enabled, tools: Object.keys(b.tools || {}).length }));
