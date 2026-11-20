@@ -93,16 +93,21 @@ def test_patch_is_exact_idempotent_wired_and_runtime_guarded(tmp_path):
     current = ADAPTER.read_bytes()
     assert patch.digest(current) == patch.PATCHED
     assert current.count(patch.NEW.encode()) == 2
-    original = current.replace(patch.NEW.encode(), patch.OLD.encode())
+    original = current.replace(patch.FALLBACK_NEW.encode(), patch.FALLBACK_OLD.encode()).replace(
+        patch.NEW.encode(), patch.OLD.encode())
     assert patch.digest(original) == patch.PINNED
     assert original == (ROOT / 'apps/n8n/patches/tests/database-adapter-2.96.2.js').read_bytes()
     assert patch.patched(original) == current
+    previous = (ROOT / 'apps/n8n/patches/tests/database-adapter-fts-2.96.2.js').read_bytes()
+    assert patch.digest(previous) == patch.PREVIOUS and patch.patched(previous) == current
     target = tmp_path / 'adapter.js'
     target.write_bytes(original)
     def apply():
         return subprocess.run(['python3', str(path), str(target)], capture_output=True, text=True, timeout=10)
     assert apply().returncode == 0 and target.read_bytes() == current
     assert 'already patched' in apply().stdout
+    target.write_bytes(previous)
+    assert apply().returncode == 0 and target.read_bytes() == current
     target.write_bytes(original + b'\n// unexpected\n')
     result = apply()
     assert result.returncode != 0 and 'review required' in result.stderr
@@ -130,7 +135,8 @@ def test_child_guard_refuses_unpatched_adapter_before_loading_it(tmp_path):
     shutil.copyfile(ROOT / 'apps/n8n/node_modules/n8n-mcp/dist/services/n8n-api-client.js',
                     runtime / 'services/n8n-api-client.js')
     current = ADAPTER.read_bytes()
-    original = current.replace(patch.NEW.encode(), patch.OLD.encode())
+    original = current.replace(patch.FALLBACK_NEW.encode(), patch.FALLBACK_OLD.encode()).replace(
+        patch.NEW.encode(), patch.OLD.encode())
     assert patch.digest(original) == patch.PINNED
     (runtime / 'database/database-adapter.js').write_bytes(original)
     result = subprocess.run(['node', '-e', f'require({json.dumps(str(app / "backend_policy.cjs"))})'],

@@ -34,7 +34,7 @@ if (crypto.createHash("sha256").update(fs.readFileSync(apiPath)).digest("hex") !
 // Unreleased (0.4.12 line): tools-n8n-manager.js must carry fix_delete_workflow_description.py (the n8n_delete_workflow
 // description names how to delete a published workflow, as the PaaS server's description does); nothing else in it changes.
 for (const [relative, digest] of [
-    ["database/database-adapter.js", "b0bfa44960b9109b383b2c467ed9f1155f38d972a2c5ef7b403ce0caeb9e060c"],
+    ["database/database-adapter.js", "2219a87a9f34dfceba0d6008e7218bc11a1a1ed4351f487c470c4e50fe528505"],
     ["utils/n8n-errors.js", "efd5783846cf1eb61dbf9387de260e5a1d336ec609bc4c4d5601c369b5d2f20a"],
     ["mcp/handlers-n8n-manager.js", "fe3181292ec5d1ad07195f55a7ab73569b15d990f687f620ecaf633742fb24aa"],
     ["mcp/server.js", "638b148f91c18d484b8bcede838be1032f82ddd1b3aa53b24cf005325ae3d9f7"],
@@ -45,6 +45,29 @@ for (const [relative, digest] of [
 ]) {
     if (crypto.createHash("sha256").update(fs.readFileSync(path.join(runtime, relative))).digest("hex") !== digest) {
         throw new Error("public API error boundary requires source review");
+    }
+}
+// Persistent catalogs must be usable by the native engine before the HTTP
+// listener starts; upstream opens its database lazily on the first session.
+// The adapter also refuses sql.js after any later native failure. No database
+// is created here, and the fixed failure never includes a path or exception.
+if (process.env.NODE_DB_PATH !== undefined && process.env.NODE_DB_PATH !== ':memory:') {
+    let db;
+    try {
+        if (!process.env.NODE_DB_PATH) throw new Error('invalid catalog');
+        const Database = require('better-sqlite3');
+        db = new Database(process.env.NODE_DB_PATH, {fileMustExist: true});
+        db.prepare('SELECT count(*) AS n FROM sqlite_schema').get();
+        // Verify this connection can acquire a write transaction without
+        // changing catalog rows or schema; never claim a read-only DB is usable.
+        db.exec('BEGIN IMMEDIATE');
+        db.prepare('UPDATE workflow_versions SET workflow_id = workflow_id WHERE 0').run();
+        db.exec('ROLLBACK');
+        db.close();
+        db = null;
+    } catch (_) {
+        if (db) { try { db.close(); } catch (_) {} }
+        throw new Error('n8n persistent catalog requires native SQLite');
     }
 }
 const { N8nApiClient } = require(apiPath);

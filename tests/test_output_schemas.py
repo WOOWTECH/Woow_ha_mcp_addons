@@ -40,7 +40,7 @@ CURRENT_POST_SOURCE_BYTES = {
     # copy made through directory descriptors and again for another backend. No tool, schema or handler change.
     'apps/n8n/n8n_adapter.py': ('n8n', 'c2736c339d4417062c46a69859dda57fc9ff91d8427ecb1ce40e0566bfb23386'),
     # HM-20: loopback refusal for the configured instance behind WOOW_MCP_DENY_LOOPBACK; no tool, schema or handler change.
-    'apps/n8n/backend_policy.cjs': ('n8n', '02b7a5a4c9540710175e5c25329dabefd86e2c047c55f5fbe1e86d1686238cf6'),
+    'apps/n8n/backend_policy.cjs': ('n8n', '40058a7b0124a91f7e920dc4c4b7aee562554b3d350504a84448c7e2f69f2706'),
     # HM-13b: the boot guard (restore_lock.guard) before the child and the listeners, and the bootstrap's
     # dormant_profiles; HM-13c: the restore notice (restore_lock.read_notice) for the bootstrap; HM-25: the runtime is
     # run_product's (the n8n adapter); no tool, schema or handler change.
