@@ -25,12 +25,13 @@ map to PaaS's tests is in docs/provenance/ha-multiprofile-HM-32-20261117.md.
 """
 import json
 import subprocess
+from contextlib import closing
 
 import pytest
 
 import loopback_backends
 from log_scan import log_scan  # noqa: F401  (fixture)
-from mcp_admin_core.products import DENY_LOOPBACK_ENV, ProductState, child_spec
+from mcp_admin_core.products import DENY_LOOPBACK_ENV, ProductState, ProductStore, child_spec
 
 PRODUCTS = ('litellm', 'emqx')
 POOLS = ('child', 'asked')
@@ -160,6 +161,18 @@ prefix = {'litellm': 'LITELLM_MCP_', 'emqx': 'EMQX_MCP_'}[PRODUCT]
 assert os.environ[prefix + 'BASE_URL'] == 'http://' + NAME, 'the saved URL is the test state one'
 os.environ[prefix + 'BASE_URL'] = 'http://%s:%d' % (NAME, backend.server_port)
 os.environ[prefix + 'REQUEST_TIMEOUT'] = TIMEOUT  # the read timeout a stale socket would cost
+
+if PRODUCT == 'emqx':
+    # The live child policy binds the saved URL and credentials to the server.
+    # The port is known only after the owned backend binds, so update the real
+    # protected ProductStore before importing the child's settings and server.
+    from mcp_admin_core.products import ProductStore
+    from pathlib import Path
+    from contextlib import closing
+    with closing(ProductStore(Path(os.environ['EMQX_MCP_STATE_PATH']).parent, 'emqx')) as store:
+        store.update(connection={'url': os.environ['EMQX_MCP_BASE_URL'],
+                                 'api_key': os.environ['EMQX_MCP_API_KEY'],
+                                 'api_secret': os.environ['EMQX_MCP_API_SECRET']})
 
 import backend_policy
 import fastmcp
@@ -341,9 +354,16 @@ def fake_values_never_logged(log_scan):
 @pytest.fixture(scope='module', params=[(product, pool) for product in PRODUCTS for pool in POOLS], ids='-'.join)
 def observed(request, tmp_path_factory):
     product, pool = request.param
-    state = ProductState(product=product, token='T' * 43, child_token='C' * 43, connection=CONNECTIONS[product])
+    directory = tmp_path_factory.mktemp(f'{product}-{pool}')
+    if product == 'emqx':
+        # Use the same private, durable state a real child reads; never bypass
+        # its policy or fabricate a permissive fallback for this pool test.
+        with closing(ProductStore(directory, product)) as store:
+            state = store.update(token='T' * 43, child_token='C' * 43, connection=CONNECTIONS[product])
+    else:
+        state = ProductState(product=product, token='T' * 43, child_token='C' * 43, connection=CONNECTIONS[product])
     with loopback_backends.allowed():  # once the product is switched on, its child refuses loopback backends (HM-20)
-        spec = child_spec(state, tmp_path_factory.mktemp(f'{product}-{pool}'))
+        spec = child_spec(state, directory)
     assert DENY_LOOPBACK_ENV not in spec.env
     result = subprocess.run([spec.argv[0], '-c', HARNESS, product, pool, str(READ_TIMEOUT)], env=spec.env,
                             cwd=spec.cwd, capture_output=True, text=True, timeout=120)
