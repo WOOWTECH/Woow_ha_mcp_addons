@@ -195,7 +195,7 @@ function onProfileChange(select) {
 async function createProfile() {
   if (busy || !profiles || profiles.revision === null) return;
   const label = await labelDialog({ el, button }, { title: '新增帳號', submit: '建立帳號',
-    description: '新帳號會複製預設帳號目前的工具權限與寫入設定，之後各自獨立；後端連線是空的，要另外設定。建立後會自動切換到新帳號；它有自己的 MCP 權杖與網址，需要時到「連線與權杖」按「顯示權杖」。' });
+    description: `新帳號會複製預設帳號目前的工具權限與寫入設定，之後各自獨立；後端連線是空的，要另外設定。建立後會自動切換到新帳號；需要權杖時到「連線與權杖」按「${state.product === 'headscale' ? '重新產生' : '顯示權杖'}」。` });
   if (label === null) return;
   const revision = profiles.revision;
   let created = null;
@@ -290,7 +290,7 @@ function pendingOperationCard() {
       else notice('收據顯示結果未知；伺服器不會再次執行相同操作。請核對目前權杖與子行程狀態。', true);
     })), button('以原識別碼重送', async () => {
       if (!await confirmAction('以原識別碼重送？', '已完成的操作只回傳收據；結果未知的操作不會再次執行。若伺服器尚未接受，仍會檢查原設定版本。')) return;
-      await task(async () => { await api.retryOperation(); await reload('操作已確認；請檢查目前狀態。需要權杖時請另按「顯示權杖」。'); });
+      await task(async () => { await api.retryOperation(); await reload(state.product === 'headscale' ? '操作已確認；請檢查目前狀態。需要權杖時請重新產生，這會使目前權杖失效。' : '操作已確認；請檢查目前狀態。需要權杖時請另按「顯示權杖」。'); });
     }), button('已核對目前狀態', async () => {
       if (!await confirmAction('結束這筆操作的追蹤？', '請先獨立核對目前狀態。這只清除此分頁的識別紀錄，不會復原或證明先前操作未執行；下一筆操作會使用新識別碼。')) return;
       await task(async () => { api.acknowledgeOperation(); await reload('已結束此分頁的操作追蹤。'); });
@@ -871,6 +871,7 @@ async function tokenAction(action) {
   const descriptions = {
     reveal: ['顯示目前權杖？', '權杖將在此頁短暫顯示 60 秒，切換頁面或離開視窗即隱藏。請避免螢幕分享。'],
     claude: ['顯示 Claude.ai 連線網址？', '這個網址含有真實權杖，等同密碼：只貼進 Claude.ai 的自訂連接器設定，不要分享、截圖或貼到聊天。網址將短暫顯示 60 秒，切換頁面或離開視窗即隱藏。'],
+    'claude-rotate': ['產生新的 Claude.ai 連線網址？', '這會重新產生權杖，使舊權杖與舊連線網址立即失效，所有用戶端都需更新。新網址僅短暫顯示。'],
     rotate: ['重新產生權杖？', '舊權杖立即失效，使用舊權杖的進行中連線將關閉，所有用戶端都需更新。已送出的後端工作不會因此復原。新權杖僅短暫顯示。'],
     revoke: ['撤銷權杖？', '用戶端將無法使用此權杖連線，進行中連線也會關閉。已送出的工作不會回復；需重新產生權杖才能恢復存取。'],
   };
@@ -879,16 +880,17 @@ async function tokenAction(action) {
   if (!await confirmAction(...descriptions[action], action === 'revoke' ? '確認撤銷' : '確認繼續')) return;
   const epoch = revealEpoch;
   await task(async () => {
-    const result = await api.mutate(`token/${action === 'claude' ? 'reveal' : action}`, undefined,
-      ['rotate', 'revoke'].includes(action) ? revision : undefined, profile);
-    if (result?.operation?.replayed) { await reload('已確認先前操作完成，沒有再次執行。需要時請另按「顯示權杖」取得目前權杖。'); return; }
+    const operation = action === 'claude' ? 'reveal' : action === 'claude-rotate' ? 'rotate' : action;
+    const result = await api.mutate(`token/${operation}`, undefined,
+      ['rotate', 'revoke'].includes(operation) ? revision : undefined, profile);
+    if (result?.operation?.replayed) { await reload(state.product === 'headscale' ? '已確認先前操作完成，沒有再次執行。需要權杖時請重新產生，這會使目前權杖失效。' : '已確認先前操作完成，沒有再次執行。需要時請另按「顯示權杖」取得目前權杖。'); return; }
     if (action === 'revoke') { await reload('權杖已撤銷。舊權杖不可再使用，進行中連線已收到關閉通知；已送出的後端工作不會回復。'); return; }
     state = await api.bootstrap();
     render();
     if (!result?.token) { notice('目前沒有有效權杖。請確認伺服器狀態。', true); return; }
     if (typeof result.token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(result.token)) throw new UiError('權杖回應格式不符，未顯示。');
-    if (epoch !== revealEpoch || document.hidden) { notice('操作已完成，但頁面曾離開焦點，權杖未顯示。需要時請重新要求顯示。'); return; }
-    if (action === 'claude') {
+    if (epoch !== revealEpoch || document.hidden) { notice(state.product === 'headscale' ? '操作已完成，但頁面曾離開焦點，權杖未顯示。需要權杖時請重新產生，這會使目前權杖失效。' : '操作已完成，但頁面曾離開焦點，權杖未顯示。需要時請重新要求顯示。'); return; }
+    if (action === 'claude' || action === 'claude-rotate') {
       const url = claudeConnectorUrl(safeEndpoint(), result.token);
       revealed = url;
       const area = document.querySelector('#claude-secret');
@@ -932,10 +934,11 @@ function access() {
   const gated = state.restore_review_required === true;
   return el('div', { class: 'stack' }, endpointCard,
     card('MCP 權杖', chip(state.token_active ? '有效 · 預設隱藏' : '已撤銷 / 未啟用'), p(api.profile === null ? '每個 MCP 服務共用一把 Bearer 權杖。權杖不是管理員密碼，也不會授予管理介面權限。'
-      : '這個帳號有自己的一把 Bearer 權杖；顯示、重新產生或撤銷只影響這個帳號。權杖不是管理員密碼，也不會授予管理介面權限。'),
+      : state.product === 'headscale' ? '這個帳號有自己的一把 Bearer 權杖；重新產生或撤銷只影響這個帳號。權杖不是管理員密碼，也不會授予管理介面權限。'
+        : '這個帳號有自己的一把 Bearer 權杖；顯示、重新產生或撤銷只影響這個帳號。權杖不是管理員密碼，也不會授予管理介面權限。'),
       currentMask && state.token_active ? p(`目前權杖（遮罩）：${currentMask}`) : null,
       gated ? el('p', { id: 'restore-review-required' }, '這個帳號是從備份還原（或休眠）回來的，還沒有核對：請先到預設帳號頁的核對卡確認它的設定並按「已核對」，才能重新產生權杖。') : null,
-      el('div', { class: 'actions' }, button('顯示權杖', () => tokenAction('reveal'), { disabled: !state.token_active }), button('重新產生', () => tokenAction('rotate'), { disabled: gated }), button('撤銷權杖', () => tokenAction('revoke'), { disabled: !state.token_active })), el('div', { id: 'token-secret', class: 'secret-box', hidden: true, 'aria-live': 'polite' })),
+      el('div', { class: 'actions' }, state.product === 'headscale' ? null : button('顯示權杖', () => tokenAction('reveal'), { disabled: !state.token_active }), button('重新產生', () => tokenAction('rotate'), { disabled: gated }), button('撤銷權杖', () => tokenAction('revoke'), { disabled: !state.token_active })), el('div', { id: 'token-secret', class: 'secret-box', hidden: true, 'aria-live': 'polite' })),
     card('最近權杖變更', history === null ? p('權杖歷史格式不相容；請重新整理或更新附加元件。') :
       history.length ? el('ul', { id: 'token-history' }, ...history.map(item => el('li', {},
         `${item.action === 'rotate' ? '重新產生' : '撤銷'} · `,
@@ -946,8 +949,11 @@ function access() {
       p(`這個網址等同密碼：任何拿到網址的人都能以${api.profile === null ? '本 MCP 服務' : '這個帳號'}的權限呼叫工具。只貼進 Claude.ai，不要分享、截圖或貼到聊天、Git；外洩或不再使用時請按上方「重新產生」或「撤銷權杖」，舊網址立即失效。`),
       endpoint ? null : p(isExtraProfile(api.profile) ? '尚未設定 MCP 用戶端端點：端點是全 add-on 共用的設定，請切到預設帳號，填寫 Claude.ai 可從網際網路連到的 https://…/mcp 網址並儲存，才能產生連線網址。'
         : '尚未設定 MCP 用戶端端點：請先在上方填寫 Claude.ai 可從網際網路連到的 https://…/mcp 網址並儲存，才能產生連線網址。'),
-      endpoint && !state.token_active ? p('權杖已撤銷或未啟用：請先按「重新產生」。') : null,
-      el('div', { class: 'actions' }, button('顯示 Claude.ai 連線網址', () => tokenAction('claude'), { disabled: !endpoint || !state.token_active })),
+      endpoint && !state.token_active && state.product !== 'headscale' ? p('權杖已撤銷或未啟用：請先按「重新產生」。') : null,
+      state.product === 'headscale' ? p('產生連線網址會重新產生權杖，並使原有連線失效。') : null,
+      el('div', { class: 'actions' }, state.product === 'headscale'
+        ? button('產生新的 Claude.ai 連線網址', () => tokenAction('claude-rotate'), { disabled: !endpoint || gated })
+        : button('顯示 Claude.ai 連線網址', () => tokenAction('claude'), { disabled: !endpoint || !state.token_active })),
       el('div', { id: 'claude-secret', class: 'secret-box', hidden: true, 'aria-live': 'polite' })),
     originApplies() ? originPolicyCard() : null,
     card('手動加入 MCP 用戶端', p('適用支援 Streamable HTTP 的用戶端；欄位名稱依用戶端而異。先填端點，再於用戶端安全地填入 Bearer。未驗證所有用戶端相容性。'),

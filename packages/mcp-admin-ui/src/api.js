@@ -362,7 +362,7 @@ export class AdminApi {
   // Create (POST {label}) or delete (DELETE) a profile, or quarantine an unusable index (POST, no body): If-Match of the
   // index the administrator saw (the quarantine: the unusable index file's own ETag), an Idempotency-Key kept for this
   // tab under the profiles scope, CSRF. The answer is the new row, {deleted, operation} or {quarantined, operation};
-  // never a token (a new profile's token is only ever shown by token/reveal, with its own X-MCP-Profile and echo). A
+  // never a token (other products can reveal it; Headscale requires rotation, scoped to its profile). A
   // created profile deleted since its creation is replayed as its id alone (HM-10): gone, nothing to switch to.
   async changeProfiles(route, revision, detail = {}) {
     if (this.profile === null) throw new UiError('這個管理服務沒有開通多帳號。');
