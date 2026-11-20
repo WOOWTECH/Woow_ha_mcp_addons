@@ -23,15 +23,8 @@ on loopback: a switched-on child refuses a loopback backend (HM-20, WOOW_MCP_DEN
   token is refused while the other profile keeps its models.
 - Switched on, the child bearer (T-23, HM-06): straight to each real child, every other form (none, the other profile's
   child token, an empty value, two headers...) gets 401 and no session; its own child token opens one.
-- Switched on, the backend pool (contract section 9, the HM-21 row on LiteLLM's backend connections): each profile's
-  child keeps its own pool of at most four backend connections (backend_policy's transport; the 50 lifespan.py asks
-  for is dropped): a fifth and sixth call of one profile wait in that profile's pool, and another profile is served
-  meanwhile. HM-21 does not change the limit: the owner decides (provenance note).
-- Both modes, the health check needs that pool too (today's behaviour, the same row; HM-21 review MF-1): the gateway's
-  health probe (litellm_list_models, given up after 5 s) waits for one of the same four connections. While four calls
-  of a profile keep them busy, its checks time out and, after two in a row switched on (one switched off), the gateway
-  refuses that profile's new tools/call (-32603 Backend unreachable) though the backend answers, until a check passes;
-  another profile is not affected. A slice that changes the pool or the probe changes these two tests on purpose.
+- LiteLLM's tool pool allows 50 connections per child; the private health probe uses a separate policy-protected client.
+  Both profile modes remain healthy while tools are held, and another profile remains usable.
 - Switched on, the policy of each profile (T-07, FM-87): saving B's policy (every write grant revoked, one read tool
   off) restarts B's child alone, which then runs read-only (LITELLM_MCP_READONLY=true: PaaS's per-profile read-only
   setting; HA's grants are exact per tool, policy_contract woow-v3-exact-grants) without that tool;
@@ -83,9 +76,7 @@ LABEL = 'LiteLLM Beta Desk'
 KEYS = {'default': 'DUMMY-hm21-virtual-key-default', B: 'DUMMY-hm21-virtual-key-beta'}
 MODELS = {'default': ['DUMMY-hm21-model-default'], B: ['DUMMY-hm21-model-beta']}
 LIST, INFO = 'litellm_list_models', 'litellm_model_info'
-POOL = 4  # backend_policy.AsyncTransport: max_connections=4 for every child's backend client
 CHILD_SECONDS = 60  # both real children started and their first health check passed
-TIMED_OUT = 'BACKEND_TIMEOUT: the health check got no answer within 5 s'  # health.py: the probe's own 5 s
 
 
 @pytest.fixture(autouse=True)
@@ -415,53 +406,9 @@ async def test_each_real_child_serves_only_its_own_child_bearer(tmp_path, log_sc
                     assert ended.status_code in (200, 204), profile[:8]
 
 
-# ---- 2. each profile's backend pool (switched on), and the health check that needs it too (both modes) ----
+# ---- 2. LiteLLM backend pool and independent private health probe ----
 
-async def test_each_profiles_child_keeps_its_own_four_backend_connections(tmp_path, log_scan, monkeypatch):
-    """Six litellm_model_info calls of the default profile at once while the gateway holds them: four reach the backend
-    (the child's pool: backend_policy.AsyncTransport, max_connections=4; lifespan.py's 50 is dropped), the fifth and
-    sixth wait in the default profile's pool, and B's call is served meanwhile (B's child has a pool of its own). Once
-    released every call is answered. Contract section 9, the HM-21 row: PaaS 50 per child, HA 4; unchanged here."""
-    fake = FakeLiteLLM()
-    data = tmp_path / 'data'
-    with fake.serving() as url, fast_health(monkeypatch):
-        two_profiles(data, url)
-        watch(log_scan, data)
-        async with multi_profile_runtime(PRODUCT, data, supervisor=lifecycle.Supervisor, real_children=True,
-                                         default_port=free_port()) as runtime:
-            await children_ready(runtime)
-            async with runtime.mcp(timeout=60) as client:
-                path, headers = methods(runtime.token('default'))[0]
-                sessions = [await session(client, path, headers) for _ in range(POOL + 2)]
-                beta_path, beta_headers = methods(runtime.token(B))[0]
-                beta = await session(client, beta_path, beta_headers)
-                fake.hold('default')
-                waiting = [asyncio.create_task(call(client, path, opened, INFO, 10 + number))
-                           for number, opened in enumerate(sessions)]
-                await until(lambda: fake.in_flight['default'] >= POOL, timeout=30, step=.05)
-                await asyncio.sleep(1)  # time enough for a fifth to arrive, were the pool any larger
-                assert (fake.in_flight['default'], fake.peak['default']) == (POOL, POOL)
-                assert not any(task.done() for task in waiting)
-                async with asyncio.timeout(20):
-                    assert models(await call(client, beta_path, beta, INFO, 20)) == MODELS[B]
-                assert not any(task.done() for task in waiting)  # B was served while the default profile waited
-                fake.release('default')
-                async with asyncio.timeout(30):
-                    answers = await asyncio.gather(*waiting)
-                assert [models(result) for result in answers] == [MODELS['default']] * (POOL + 2)
-                assert fake.peak['default'] == POOL and fake.peak[B] == 1
-                for opened in sessions:
-                    await end(client, path, opened)
-                await end(client, beta_path, beta)
-
-
-async def test_four_busy_connections_fail_that_profiles_health_check_until_they_end(tmp_path, log_scan, monkeypatch):
-    """Today's behaviour, switched on (contract section 9, the HM-21 row; HM-21 review MF-1): the gateway's health probe
-    (litellm_list_models, GET /v1/models, given up after 5 s: health.py) goes through the profile's child and needs one
-    of the same four connections. While four litellm_model_info calls of the default profile keep them busy, its checks
-    time out (BACKEND_TIMEOUT) and, after two in a row (tolerance 2), the gateway refuses the default profile's next
-    tools/call itself (HTTP 200, -32603 Backend unreachable) though the backend answers; B stays reachable and is
-    served. Once the calls end they are answered, a check passes and the default profile is served again."""
+async def test_busy_tools_do_not_block_health_or_another_profile(tmp_path, log_scan, monkeypatch):
     fake = FakeLiteLLM()
     data = tmp_path / 'data'
     with fake.serving() as url, fast_health(monkeypatch):
@@ -473,39 +420,31 @@ async def test_four_busy_connections_fail_that_profiles_health_check_until_they_
             health = {profile: entry.runtime.health for profile, entry in entries(runtime).items()}
             async with runtime.mcp(timeout=60) as client:
                 path, headers = methods(runtime.token('default'))[0]
-                sessions = [await session(client, path, headers) for _ in range(POOL)]
-                spare = await session(client, path, headers)
+                sessions = [await session(client, path, headers) for _ in range(6)]
+                private = await client.post(path, headers=sessions[0], json={
+                    'jsonrpc': '2.0', 'id': 90, 'method': 'tools/call',
+                    'params': {'name': 'woow_backend_probe', 'arguments': {}}})
+                assert refused(private)
                 beta_path, beta_headers = methods(runtime.token(B))[0]
                 beta = await session(client, beta_path, beta_headers)
                 fake.hold('default')
                 waiting = [asyncio.create_task(call(client, path, opened, INFO, 10 + number))
                            for number, opened in enumerate(sessions)]
-                await until(lambda: fake.in_flight['default'] >= POOL, timeout=30, step=.05)
-                # Two checks of 5 s and a half-second pause; the fake gateway answers a held call after 30 s at most.
-                await until(lambda: health['default'].availability()['backend'] == 'unreachable', timeout=25, step=.1)
-                assert health['default'].availability()['reason'] == TIMED_OUT
-                assert not any(task.done() for task in waiting)
-                response = await client.post(path, headers=spare, json={
-                    'jsonrpc': '2.0', 'id': 20, 'method': 'tools/call', 'params': {'name': LIST, 'arguments': {}}})
-                assert refused(response, 'Backend unreachable')
-                assert response.json()['error']['data'] == {'tool': LIST, 'reason': TIMED_OUT}
-                assert health[B].availability()['backend'] == 'reachable'
-                assert models(await call(client, beta_path, beta, LIST, 21)) == MODELS[B]
-                fake.release('default')
-                async with asyncio.timeout(30):
-                    answers = await asyncio.gather(*waiting)
-                assert [models(result) for result in answers] == [MODELS['default']] * POOL
-                await until(lambda: health['default'].availability()['backend'] == 'reachable', timeout=20, step=.1)
-                assert models(await call(client, path, spare, LIST, 22)) == MODELS['default']
-                for opened in [*sessions, spare]:
+                try:
+                    await until(lambda: fake.in_flight['default'] == 6, timeout=30, step=.05)
+                    await health['default'].check()
+                    assert health['default'].availability()['backend'] == 'reachable'
+                    assert models(await call(client, beta_path, beta, LIST, 30)) == MODELS[B]
+                    assert not any(task.done() for task in waiting)
+                finally:
+                    fake.release('default')
+                assert [models(result) for result in await asyncio.gather(*waiting)] == [MODELS['default']] * 6
+                for opened in sessions:
                     await end(client, path, opened)
                 await end(client, beta_path, beta)
 
 
-async def test_switched_off_one_check_on_four_busy_connections_refuses_new_calls(tmp_path, log_scan, monkeypatch):
-    """The same switched off (the released LiteLLM: the monitor before HM-09, tolerance 1): one check while four calls
-    keep the default profile's connections busy is enough, and the gateway refuses its next tools/call (-32603 Backend
-    unreachable) until a check passes. The test checks at once, as the monitor's next check (every 15 s) would."""
+async def test_switched_off_health_stays_reachable_with_four_busy_tools(tmp_path, log_scan, monkeypatch):
     fake = FakeLiteLLM()
     data = tmp_path / 'data'
     made = []
@@ -526,32 +465,23 @@ async def test_switched_off_one_check_on_four_busy_connections_refuses_new_calls
         watch(log_scan, data)
         async with multi_profile_runtime(PRODUCT, data, supervisor=lifecycle.Supervisor, real_children=True,
                                          default_port=free_port(), switch=False) as runtime:
-            assert runtime.manager is None and not features.enabled(PRODUCT)
             default, = made
             await checked_ready(default)
             await checked(default, 'reachable')
             async with runtime.mcp(timeout=60) as client:
                 path, headers = methods(runtime.token('default'))[0]
-                sessions = [await session(client, path, headers) for _ in range(POOL)]
-                spare = await session(client, path, headers)
+                sessions = [await session(client, path, headers) for _ in range(4)]
                 fake.hold('default')
                 waiting = [asyncio.create_task(call(client, path, opened, INFO, 10 + number))
                            for number, opened in enumerate(sessions)]
-                await until(lambda: fake.in_flight['default'] >= POOL, timeout=30, step=.05)
-                await default.health.check()
-                available = default.health.availability()
-                assert (available['backend'], available['reason']) == ('unreachable', TIMED_OUT)
-                response = await client.post(path, headers=spare, json={
-                    'jsonrpc': '2.0', 'id': 20, 'method': 'tools/call', 'params': {'name': LIST, 'arguments': {}}})
-                assert refused(response, 'Backend unreachable')
-                assert response.json()['error']['data'] == {'tool': LIST, 'reason': TIMED_OUT}
-                fake.release('default')
-                async with asyncio.timeout(30):
-                    answers = await asyncio.gather(*waiting)
-                assert [models(result) for result in answers] == [MODELS['default']] * POOL
-                await checked(default, 'reachable')
-                assert models(await call(client, path, spare, LIST, 22)) == MODELS['default']
-                for opened in [*sessions, spare]:
+                try:
+                    await until(lambda: fake.in_flight['default'] == 4, timeout=30, step=.05)
+                    await default.health.check()
+                    assert default.health.availability()['backend'] == 'reachable'
+                finally:
+                    fake.release('default')
+                await asyncio.gather(*waiting)
+                for opened in sessions:
                     await end(client, path, opened)
 
 

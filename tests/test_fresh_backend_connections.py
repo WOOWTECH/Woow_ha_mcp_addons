@@ -10,9 +10,7 @@ the backend drops is not sent again either.
 
 Each scenario runs on two pools:
 - child: the client exactly as the child builds it (lifespan.build_client / make_client through
-  backend_policy.async_client, whose transport builds its own pool, max_connections=4, max_keepalive_connections=0, and
-  drops the limits the product passes). It kept no idle connection before HM-32 either, and HM-32 leaves its cap of 4
-  as it was.
+  backend_policy.async_client: LiteLLM explicitly opts into 50 connections; EMQX retains 4. Both keep no idle connections.
 - asked: the same transport (pinned network backend, destination checks) with its pool built from the limits the
   product's lifespan passes. HM-32 makes both products ask for no idle connection (as PaaS), so they stay right if
   backend_policy ever takes the caller's limits. Red before HM-32: LiteLLM asked for 20 idle connections kept 30 s,
@@ -359,15 +357,15 @@ def observed(request, tmp_path_factory):
 def test_the_pool_keeps_no_idle_connection(observed):
     """child: backend_policy's own pool. asked: the pool built from the limits the product's lifespan passes (HM-32 asks
     for none, as PaaS: LiteLLM 20 kept 30 s -> 0 with keepalive_expiry dropped, PaaS #139; EMQX 10 -> 0, PaaS #135).
-    HM-32 changes no cap on concurrent connections: the child's pool still allows 4 (backend_policy), and the products
-    still ask for 50 (LiteLLM) and 20 (EMQX), which backend_policy drops. Changing a cap is a decision of its own."""
+    LiteLLM opts into 50 connections; EMQX retains the policy default of 4. The products ask for 50 and 20 respectively."""
     pool, asked = observed['pool'], observed['asked']
     assert observed['asked_all_same'], 'every client the product builds asks for the same pool'
     if observed['pool_kind'] == 'asked':
         assert pool == asked, (pool, asked)
         assert asked['max_connections'] == {'litellm': 50, 'emqx': 20}[observed['product']], asked
     else:
-        assert (pool['max_connections'], pool['max_keepalive_connections']) == (4, 0), pool
+        assert (pool['max_connections'], pool['max_keepalive_connections']) == (
+            {'litellm': 50, 'emqx': 4}[observed['product']], 0), pool
     assert pool['max_keepalive_connections'] == 0, pool
 
 

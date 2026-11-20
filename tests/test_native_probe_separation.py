@@ -179,13 +179,14 @@ async def test_policy_disable_keeps_private_probe_and_public_denial(tmp_path, pr
                     direct = {**headers, 'Authorization': 'Bearer ' + store.load().child_token}
                     raw = await rpc(child, endpoint.url, direct,
                                     {'jsonrpc': '2.0', 'id': 4, 'method': 'tools/list'})
-                    assert {t['name'] for t in raw['tools']} == public_names | {probe}
+                    child_probe = 'woow_backend_probe' if product == 'litellm' else probe
+                    assert {t['name'] for t in raw['tools']} == public_names | {child_probe}
                     if disable_all:
                         assert not public_names
                     await denied(set(NAMES[product]) - public_names)
                     # Native registration itself denies every other blocked tool.
                     before = len(events)
-                    for name in set(NAMES[product]) - public_names - {probe}:
+                    for name in set(NAMES[product]) - public_names - {child_probe}:
                         result = await rpc(child, endpoint.url, direct,
                                            call(name, dict(WRITES[product]).get(name, {})))
                         assert result.get('isError'), name

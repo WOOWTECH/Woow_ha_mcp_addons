@@ -171,7 +171,9 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/server.py",
-    "upstream_sha256": "85c3cb8f6d50bed817279754c16309919bdf419f8193b6291f47f08f80db89f7"
+    "upstream_sha256": "85c3cb8f6d50bed817279754c16309919bdf419f8193b6291f47f08f80db89f7",
+    "local_sha256": "ed70f02ccdcd76395f1253a5cc7cb70fcf4dc676f5f3ddb73193e5d4dd7cd4f2",
+    "modification": "LiteLLM parity: a private checked client probes /v1/models separately from the tool pool."
   },
   {
     "product": "litellm",
@@ -186,8 +188,8 @@
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/lifespan.py",
     "upstream_sha256": "907c15314463424da9bed2c029d6405cce922828a8ef6adac69a236b61446f06",
-    "local_sha256": "794973c7f076e32517684a1f3c389ec93c6120388c8aa987cd0b0052c0f505fe",
-    "modification": "Use scoped DNS-pinned HTTPX transport; preserve redirect/proxy denial and sanitize transport failures. HM-32 (PaaS #139 009dc99): ask for no idle connection (max_keepalive_connections 20 -> 0, keepalive_expiry 30 s dropped), so every request opens a fresh connection that backend_policy resolves and checks again; no retry is added. backend_policy's transport builds its own pool and already kept none, so the behaviour is unchanged. tests/test_fresh_backend_connections.py."
+    "local_sha256": "9b8b991ec2cdd01ac15360a1c2621b0ee9b65f8a49f4ecfc03406214415cb024",
+    "modification": "Use scoped DNS-pinned HTTPX transport; preserve redirect/proxy denial and sanitize transport failures. HM-32 (PaaS #139 009dc99): ask for no idle connection (max_keepalive_connections 20 -> 0, keepalive_expiry 30 s dropped), so every request opens a fresh connection that backend_policy resolves and checks again; no retry is added. backend_policy's transport builds its own pool and already kept none, so the behaviour is unchanged. tests/test_fresh_backend_connections.py. LiteLLM parity: explicit 50-slot checked transport and deadline-bounded resolver admission."
   },
   {
     "product": "litellm",
