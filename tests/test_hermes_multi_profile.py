@@ -5,21 +5,15 @@ The repository switches no product on (features.MULTI_PROFILE_PRODUCTS stays emp
 every switched-on case here switches Hermes on for the test only (tests/multi_profile_runtime.py), as the Odoo cases
 do; the switched-off cases run the production runtime as it ships (tests/test_single_profile_golden.py).
 
-- The MCP token is bound to one backend identity (DQ-40 ⑩ (a); products.IDENTITY_BOUND and the panel's contracts.js
-  identityBound): once switched on, a save that changes gateway_url, dashboard_url or dashboard_username rotates the
-  token in HM-12's order (the old child stopped, one write of the connection, the new token and a rotate history entry,
-  the change published, the new child started). Adding the Dashboard to a Gateway-only connection and clearing it are
-  changes too (its three fields go together: HermesConnection.dashboard_complete), as clearing Odoo's connection is
-  (HM-12). A secret alone (gateway_api_key, dashboard_password), the first setup and a revoked token keep the token as
-  today. Switched off, every save is today's. While a restored profile waits for its review, such a save answers 409
-  restore_review_required and does nothing; a secret alone is saved (HM-13c review S-3).
+- Hermes connection changes retain the existing MCP token, including adding or clearing Dashboard, matching PaaS.
+  The origin-change credential guard and profile isolation still apply. Restore review gates explicit rotation, not saves.
 - Each profile's child is its own: the launcher's --port (the default profile's child keeps today's argv, port 3000),
   its own environment (its Gateway and Dashboard values, nothing of another profile's) and its own directory (HOME).
 - The bearer 401 / secret URL 404 matrix across profiles, switched on and off (switched off: a dormant profile's token).
 - A long hermes_chat (the gateway allows a tools/call CALL_SECONDS, 330 s) holds one of its own profile's forwarding
   slots and none of another profile's: with all of them held, that profile answers busy and the others do not wait
   (switched off: today's 32 slots and today's 503). An identity change ends its own profile's long chats only (T-12):
-  its old child is stopped first, so a chat it was answering gets the gateway's -32004 event, not a 401.
+  its child restarts, so a chat it was answering gets the gateway's -32004 event.
 - Saving one profile's policy changes that profile's tools only and restarts no child (the gateway enforces Hermes'
   policy; its child takes none at launch), switched on and off (T-07).
 - Real children (the real Supervisor, apps/hermes's launcher in its pinned venv, one local fake Hermes for both
@@ -28,7 +22,7 @@ do; the switched-off cases run the production runtime as it ships (tests/test_si
   woow-mcp-server 69ac425: here the cache follows the child, one per profile); every profile pointed at one Dashboard
   logs in from the add-on's one address, so the Dashboard's login limit is shared (contract section 9); a long chat of
   one profile holds up neither another profile's chat nor its own child's other calls; each child serves its own child
-  bearer only (T-23); a Dashboard user saved anew rotates the token and the new child logs in as the new user.
+  bearer only (T-23); a Dashboard user saved anew keeps the token and the new child logs in as the new user.
 
 Every case runs under the HM-01 log scan (tokens, child tokens, Gateway keys, Dashboard passwords and labels watched).
 Test data follows tests/fixtures/owner_defaults/README.md (.invalid hosts, DUMMY- credentials, T or C x43 tokens).
@@ -52,9 +46,8 @@ from mcp_admin_core import features, gateway, identity_fields, products, profile
 from mcp_admin_core.access import masked_token
 from mcp_admin_core.products import ProductStore, child_spec
 from switched_gateway import GatewayChild, session_of, sse_messages, until
-from test_odoo_identity_rotation import (Journal as OdooJournal, count_writes, next_etag, opened_by, record_writes,
-                                         refused_everywhere, routed_to, save, warnings_of as rebind_warnings)
-from test_profile_admin_api import tree_of
+from test_odoo_identity_rotation import (Journal as OdooJournal, opened_by, record_writes,
+                                         refused_everywhere, routed_to, save)
 from test_profile_quotas import busy
 from test_restore_review import bootstrap_of, mark_restored
 from test_single_profile_golden import (ACCEPT, ADMIN, GENUINE_CLIENT, NoProcessSupervisor, initialize_message,
@@ -178,147 +171,53 @@ def spec_of(runtime, profile_id):
     return runtime.manager.get(profile_id).runtime.supervisor.spec
 
 
-# ---- the binding: products.IDENTITY_BOUND and the panel's identityBound (DQ-40 ⑩ (a)) ----
-
-def test_hermes_is_bound_to_its_gateway_and_dashboard_identity():
-    """Hermes is in products.IDENTITY_BOUND (the panel's identityBound is the same list: tests/test_identity_fields.py),
-    with HM-07's rotating fields: the Gateway URL and the Dashboard's URL and user, never a secret. Nothing is switched
-    on in the repository: the binding acts once Hermes' own version-bump PR switches it on."""
-    assert PRODUCT in products.IDENTITY_BOUND
-    assert identity_fields.rotating_fields(PRODUCT) == ('gateway_url', 'dashboard_url', 'dashboard_username')
-    assert not set(identity_fields.rotating_fields(PRODUCT)) & set(identity_fields.fields(PRODUCT,
-                                                                                          identity_fields.SECRET))
-    assert not features.enabled(PRODUCT)
-
-
-# ---- a changed identity rotates the token (HM-12's order; PaaS rotates only Odoo's and Nextcloud's) ----
-
-CASES = [
-    ('gateway_url', 'backend', {'gateway_url': REBOUND_GATEWAY}),
-    ('gateway_url', 'backend/patch', {'gateway_url': REBOUND_GATEWAY, 'gateway_api_key': NEW_KEY}),
-    ('gateway_url path', 'backend/patch', {'gateway_url': 'https://beta.hermes.invalid/hermes'}),
-    ('dashboard_url', 'backend', {'dashboard_url': MOVED_DASHBOARD}),
-    ('dashboard_url', 'backend/patch', {'dashboard_url': MOVED_DASHBOARD, 'dashboard_password': NEW_PASSWORD}),
-    ('dashboard_username', 'backend', {'dashboard_username': NEW_USER}),
-    ('dashboard_username', 'backend/patch', {'dashboard_username': NEW_USER}),
-]
-
-
-def body(route, connection, changes):
-    """A save of changes: the whole connection (PUT backend) or the fields alone (backend/patch)."""
-    return {'connection': {**connection, **changes}} if route == 'backend' else {'changes': changes}
-
-
-@pytest.mark.parametrize('case, route, changes', CASES, ids=[f'{case}-{route}' for case, route, _ in CASES])
-async def test_a_changed_hermes_identity_stops_the_old_child_then_rotates_the_token_in_one_write(
-        tmp_path, log_scan, monkeypatch, case, route, changes):
-    """B's Gateway URL, Dashboard URL or Dashboard user saved anew (a URL on another origin brings the secret it takes
-    there, DQ-40 ⑨; a path on the same origin needs none): the old child stops while the old token is still the one on
-    disk, the write comes with no child running, then the token change is published, then the new child starts with
-    the new connection. 200 {"saved", "token_rotated": true, "configuration"} with B's echo, no token, and the new
-    state's ETag. One write of the state file holds the new connection, a new 43-character token and one rotate
-    history entry (the old token masked); the child token stays. The dispatcher routes the old token to no profile and
-    the new one to B; the old token is refused on both paths, the new one opens a session with B's child on both; the
-    default profile's state and token are untouched."""
+# PaaS Hermes saves never rotate the MCP token on a backend identity change.
+@pytest.mark.parametrize('profile_id', ['default', B])
+@pytest.mark.parametrize('route,changes', [
+    ('backend', {'gateway_url': REBOUND_GATEWAY}),
+    ('backend/patch', {'gateway_url': REBOUND_GATEWAY, 'gateway_api_key': NEW_KEY}),
+    ('backend', {'dashboard_url': MOVED_DASHBOARD}),
+    ('backend/patch', {'dashboard_url': MOVED_DASHBOARD, 'dashboard_password': NEW_PASSWORD}),
+    ('backend/patch', {'dashboard_username': NEW_USER}),
+])
+async def test_identity_changes_keep_token_and_profile_isolation(tmp_path, log_scan, profile_id, route, changes):
     data, children = setup(tmp_path)
-    journal = Journal()
-    record_writes(monkeypatch, journal)
-    replaced = count_writes(monkeypatch, directory(data, B) / 'state.json')
-    async with multi_profile_runtime(PRODUCT, data, children=children, supervisor=journal.supervisor()) as runtime:
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
         await settle(runtime, 'configured')
         watch(log_scan, data)
-        journal.watch(data, B, runtime.manager.get(B).runtime.supervisor)
-        before = stored(directory(data, B))
-        old, default_state = before['token'], (data / 'state.json').read_bytes()
-        replaced.clear()
-        saved = await save(runtime, B, route, body(route, before['connection'], changes))
-        assert saved.status_code == 200, saved.text
-        assert len(replaced) == 1, 'the connection, the token and its history are one write'
-        answer = saved.json()
-        assert list(answer) == ['saved', 'token_rotated', 'configuration', 'profile']
-        assert (answer['saved'], answer['token_rotated'], answer['profile']) == (True, True, {'id': B})
-        after = stored(directory(data, B))
-        new = after['token']
-        log_scan.watch(new)
-        assert new not in (None, old) and len(new) == 43 and new not in saved.text and old not in saved.text
-        assert after['child_token'] == before['child_token']
+        before = stored(directory(data, profile_id))
+        other = B if profile_id == 'default' else 'default'
+        other_bytes = (directory(data, other) / 'state.json').read_bytes()
+        payload = {'connection': {**before['connection'], **changes}} if route == 'backend' else {'changes': changes}
+        result = await save(runtime, profile_id, route, payload)
+        assert result.status_code == 200, result.text
+        assert 'token_rotated' not in result.json()
+        after = stored(directory(data, profile_id))
+        assert after['token'] == before['token'] and after.get('token_history') == before.get('token_history')
         assert after['connection'] == {**before['connection'], **changes}
-        [entry] = after['token_history']
-        assert (entry['action'], entry['previous_token_masked']) == ('rotate', masked_token(old))
-        assert journal.events == [('stop', old, identity(before['connection'])), ('write', 'stopped'), ('publish',),
-                                  ('start', identity(after['connection']))]
-        assert spec_connection(spec_of(runtime, B).env) == after['connection']
-        assert saved.headers['etag'] == await next_etag(runtime, B)
-        assert routed_to(runtime, old) == [] and routed_to(runtime, new) == [B]
-        assert await refused_everywhere(runtime, old)
-        assert await opened_by(runtime, new, children.by_port[PORTS[B]])
-        assert (data / 'state.json').read_bytes() == default_state
-        assert await opened_by(runtime, runtime.token('default'), children.by_port[3000])
+        assert (directory(data, other) / 'state.json').read_bytes() == other_bytes
+        assert await opened_by(runtime, before['token'], children.by_port[3000 if profile_id == 'default' else PORTS[B]])
 
 
-async def test_adding_or_clearing_the_dashboard_rotates_the_token(tmp_path, log_scan, monkeypatch):
-    """B has a Gateway only. Adding the Dashboard (its three fields) binds the token to another identity: rotated, and
-    the new child gets the Dashboard. A partial clear is refused before anything stops (400 request denied: the three
-    Dashboard fields go together, HermesConnection.dashboard_complete). Clearing the Dashboard (all three null) rotates
-    the token again and the new child has none; clearing the connection rotates it a third time and starts no child
-    (none is configured; the new token gets the gateway's own answers). The history keeps the three rotations, newest
-    first, and every old token is refused on both paths (PaaS: a cleared identity field is a change, patch_connection_
-    bound; the Odoo rule of HM-12, applied to Hermes' optional Dashboard)."""
+async def test_adding_and_clearing_dashboard_keep_token(tmp_path, log_scan):
     data, children = setup(tmp_path, connections={B: hermes('beta', dashboard=False)})
-    dashboard = {name: value for name, value in hermes('beta').items() if name in DASHBOARD}
-    journal = Journal()
-    record_writes(monkeypatch, journal)
-    async with multi_profile_runtime(PRODUCT, data, children=children, supervisor=journal.supervisor()) as runtime:
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
         await settle(runtime, 'configured')
         watch(log_scan, data)
-        log_scan.watch(dashboard['dashboard_password'], kind='secret')
-        journal.watch(data, B, runtime.manager.get(B).runtime.supervisor)
-        gateway_only = stored(directory(data, B))['connection']
-        assert identity(gateway_only) == ('https://beta.hermes.invalid', None, None)
-        tokens = [runtime.token(B)]
-
+        token = runtime.token(B)
+        dashboard = {k: v for k, v in hermes('beta').items() if k in DASHBOARD}
         added = await save(runtime, B, 'backend/patch', {'changes': dashboard})
-        assert added.status_code == 200 and added.json()['token_rotated'] is True, added.text
-        tokens.append(runtime.token(B))
-        log_scan.watch(tokens[-1])
-        with_dashboard = {**gateway_only, **dashboard}
-        assert stored(directory(data, B))['connection'] == with_dashboard
-        assert journal.events == [('stop', tokens[0], identity(gateway_only)), ('write', 'stopped'), ('publish',),
-                                  ('start', identity(with_dashboard))]
-        assert spec_connection(spec_of(runtime, B).env) == with_dashboard
-
-        journal.events.clear()
-        unchanged = (directory(data, B) / 'state.json').read_bytes()
+        assert added.status_code == 200 and 'token_rotated' not in added.json(), added.text
+        before = stored(directory(data, B))
         partial = await save(runtime, B, 'backend/patch', {'changes': {'dashboard_username': None}})
-        assert (partial.status_code, partial.json()) == (400, {'error': 'request denied'})
-        assert journal.events == [] and (directory(data, B) / 'state.json').read_bytes() == unchanged
-
+        assert partial.status_code == 400 and stored(directory(data, B)) == before
         cleared = await save(runtime, B, 'backend/patch', {'changes': dict.fromkeys(DASHBOARD)})
-        assert cleared.status_code == 200 and cleared.json()['token_rotated'] is True, cleared.text
-        tokens.append(runtime.token(B))
-        log_scan.watch(tokens[-1])
-        assert stored(directory(data, B))['connection'] == gateway_only
-        assert journal.events == [('stop', tokens[1], identity(with_dashboard)), ('write', 'stopped'), ('publish',),
-                                  ('start', identity(gateway_only))]
-        assert not {variable for variable in spec_of(runtime, B).env if variable.startswith('HERMES_DASHBOARD_')}
-
-        journal.events.clear()
-        gone = await save(runtime, B, 'backend', {'connection': None})
-        assert gone.status_code == 200 and gone.json()['token_rotated'] is True, gone.text
-        tokens.append(runtime.token(B))
-        log_scan.watch(tokens[-1])
-        assert stored(directory(data, B))['connection'] is None
-        assert journal.events == [('stop', tokens[2], identity(gateway_only)), ('write', 'stopped'), ('publish',)]
-
-        history = stored(directory(data, B))['token_history']
-        assert [(entry['action'], entry['previous_token_masked']) for entry in history] == [
-            ('rotate', masked_token(token)) for token in reversed(tokens[:3])]
-        assert len(set(tokens)) == 4
-        for old in tokens[:3]:
-            assert await refused_everywhere(runtime, old)
-        async with runtime.mcp() as client:
-            local = await client.post('/mcp', headers=bearer(tokens[3]), json=initialize_message())
-        assert local.status_code == 200 and local.headers['mcp-session-id'].startswith('woow-local-')
+        assert cleared.status_code == 200 and 'token_rotated' not in cleared.json(), cleared.text
+        assert runtime.token(B) == token and stored(directory(data, B)).get('token_history') is None
+        assert await opened_by(runtime, token, children.by_port[PORTS[B]])
+        removed = await save(runtime, B, 'backend', {'connection': None})
+        assert removed.status_code == 200 and 'token_rotated' not in removed.json(), removed.text
+        assert runtime.token(B) == token and stored(directory(data, B)).get('token_history') is None
 
 
 async def test_a_secret_change_or_the_first_setup_keeps_the_hermes_token(tmp_path, log_scan, monkeypatch):
@@ -365,37 +264,9 @@ async def test_a_secret_change_or_the_first_setup_keeps_the_hermes_token(tmp_pat
         assert await refused_everywhere(runtime, token)
 
 
-async def test_the_default_hermes_profile_is_bound_to_its_identity_too(tmp_path, log_scan, monkeypatch):
-    """Switched on, the default profile is a profile like the others (plan 7.2): its Dashboard user saved anew rotates
-    its token in the same order, the answer carrying its new ETag; its old token is refused on both paths and routed to
-    no profile, the new one opens a session with its child; B's state and token stay as they were."""
-    data, children = setup(tmp_path)
-    journal = Journal()
-    record_writes(monkeypatch, journal)
-    async with multi_profile_runtime(PRODUCT, data, children=children, supervisor=journal.supervisor()) as runtime:
-        await settle(runtime, 'configured')
-        watch(log_scan, data)
-        journal.watch(data, 'default', runtime.manager.get('default').runtime.supervisor)
-        before = stored(data)
-        old, extra_state = before['token'], (directory(data, B) / 'state.json').read_bytes()
-        saved = await save(runtime, 'default', 'backend/patch', {'changes': {'dashboard_username': 'DUMMY-user-alpha2'}})
-        assert saved.status_code == 200 and saved.json()['token_rotated'] is True, saved.text
-        new = runtime.token('default')
-        log_scan.watch(new)
-        after = stored(data)
-        assert new != old and journal.events == [('stop', old, identity(before['connection'])), ('write', 'stopped'),
-                                                 ('publish',), ('start', identity(after['connection']))]
-        assert saved.headers['etag'] == await next_etag(runtime, 'default')
-        assert routed_to(runtime, old) == [] and routed_to(runtime, new) == ['default']
-        assert await refused_everywhere(runtime, old)
-        assert await opened_by(runtime, new, children.by_port[3000])
-        assert (directory(data, B) / 'state.json').read_bytes() == extra_state
-        assert await opened_by(runtime, runtime.token(B), children.by_port[PORTS[B]])
-
-
 async def test_switched_off_a_hermes_identity_change_keeps_todays_answer_order_and_token(tmp_path, log_scan):
     """Hermes not switched on (as the repository ships it) keeps today's behaviour for its only profile although it is
-    in IDENTITY_BOUND: a new Dashboard user (backend/patch), a new Gateway URL (PUT backend), a Dashboard URL on
+    outside IDENTITY_BOUND: a new Dashboard user (backend/patch), a new Gateway URL (PUT backend), a Dashboard URL on
     another origin without its password (saved as today: DQ-40 ⑨ is behind the switch too) and the Dashboard cleared
     are each written first, then the child restarts (the state on disk already holds the new identity when the child
     stops); every answer is {"saved", "configuration"}, the token and its history are unchanged and still served."""
@@ -404,7 +275,7 @@ async def test_switched_off_a_hermes_identity_change_keeps_todays_answer_order_a
     journal = Journal()
     async with production_runtime(PRODUCT, data, supervisor=journal.supervisor()) as runtime:
         await settle(runtime, 'configured')
-        assert not features.enabled(PRODUCT) and PRODUCT in products.IDENTITY_BOUND
+        assert not features.enabled(PRODUCT) and PRODUCT not in products.IDENTITY_BOUND
         watch(log_scan, data)
         journal.watch(data, 'default')
         token = stored(data)['token']
@@ -430,7 +301,7 @@ async def test_switched_off_a_hermes_identity_change_keeps_todays_answer_order_a
                 assert (await client.post(path, headers=headers, json=initialize_message())).status_code == 200
 
 
-# ---- the restore review (HM-13c review S-3): a Hermes identity change issues a new token, so it waits too ----
+# ---- restore review: a connection save keeps the token and does not clear the review ----
 
 def restored_switched_off_then_reissued(data):
     """HM-13c review S-3's state (tests/test_restore_review.py) with Hermes: the default profile and B restored with
@@ -448,37 +319,21 @@ def restored_switched_off_then_reissued(data):
 
 
 @pytest.mark.parametrize('route', ['backend', 'backend/patch'])
-async def test_a_hermes_identity_change_waits_for_the_profiles_restore_review(tmp_path, log_scan, monkeypatch, route):
-    """HM-13c review S-3 with Hermes (review S-6): switched on, a save of another Dashboard user would rotate the
-    default profile's active token (products.identity_rebound). While the profile waits for its restore review it
-    answers 409 restore_review_required, as token/rotate does, after If-Match and before anything is done: the child
-    is not stopped, nothing is written (the tree is the same), no token change is published, the token stays the one
-    8081 serves on both paths, and no line is logged. A new Gateway API key alone rotates nothing and is saved as
-    today, the review still waiting. The gate is HM-13c's and knows no product; the panel's words for the refused save
-    are contracts.js identityChange.hermes."""
+async def test_identity_change_during_restore_review_keeps_token(tmp_path, log_scan, route):
     data, children = setup(tmp_path)
     restored_switched_off_then_reissued(data)
-    journal = Journal()
-    record_writes(monkeypatch, journal)
-    async with multi_profile_runtime(PRODUCT, data, children=children, supervisor=journal.supervisor()) as runtime:
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
         await settle(runtime, 'configured')
         watch(log_scan, data)
-        journal.watch(data, 'default', runtime.manager.get('default').runtime.supervisor)
-        default = await bootstrap_of(runtime)
-        assert default['token_active'] is True and default['restore_review_required'] is True
-        token, state, before = runtime.token('default'), stored(data), tree_of(data)
-        refused = await save(runtime, 'default', route, body(route, state['connection'],
-                                                             {'dashboard_username': NEW_USER}))
-        assert (refused.status_code, refused.json()) == (
-            409, {'error': 'request denied', 'detail': {'code': 'restore_review_required'}}), refused.text
-        assert journal.events == [] and tree_of(data) == before and stored(data) == state
-        assert runtime.token('default') == token and await opened_by(runtime, token, children.by_port[3000])
-        assert rebind_warnings(log_scan) == []
-        kept = await save(runtime, 'default', 'backend/patch', {'changes': {'gateway_api_key': NEW_KEY}})
-        assert kept.status_code == 200 and kept.json()['saved'] is True and 'token_rotated' not in kept.json(), kept.text
-        assert stored(data)['token'] == token and stored(data)['connection']['gateway_api_key'] == NEW_KEY
-        assert [event[0] for event in journal.events] == ['stop', 'start']  # the child relaunched, no identity write
         assert (await bootstrap_of(runtime))['restore_review_required'] is True
+        state = stored(data)
+        changes = {'dashboard_username': NEW_USER}
+        payload = {'connection': {**state['connection'], **changes}} if route == 'backend' else {'changes': changes}
+        result = await save(runtime, 'default', route, payload)
+        assert result.status_code == 200 and 'token_rotated' not in result.json(), result.text
+        assert stored(data)['token'] == state['token']
+        assert (await bootstrap_of(runtime))['restore_review_required'] is True
+        assert await opened_by(runtime, state['token'], children.by_port[3000])
 
 
 # ---- every profile's own child: port, environment, directory ----
@@ -529,7 +384,7 @@ async def test_every_profiles_child_has_its_own_port_environment_and_directory(t
 
 async def test_each_profiles_token_reaches_only_its_own_child_and_every_other_token_is_refused(tmp_path, log_scan):
     """Switched on, three Hermes profiles (one without a Dashboard): each token opens a session with its own child on
-    both paths. Then B's token is rotated away by an identity change and C's revoked: these two, a token no profile has
+    both paths. B's token survives an identity change; C's revoked token, a token no profile has
     (T x43), a child token used as an MCP token (the default profile's, and C x43) are each refused on both paths with
     an unknown token's bytes (Bearer 401, secret URL 404) and reach no child. The secret path never reads
     Authorization, and 8081 never reads X-MCP-Profile: the default profile's secret URL with B's token in Authorization
@@ -543,13 +398,13 @@ async def test_each_profiles_token_reaches_only_its_own_child_and_every_other_to
             assert await opened_by(runtime, runtime.token(profile_id), child[profile_id]), profile_id
         rotated, revoked = runtime.token(B), runtime.token(C)
         saved = await save(runtime, B, 'backend/patch', {'changes': {'dashboard_username': NEW_USER}})
-        assert saved.status_code == 200 and saved.json()['token_rotated'] is True, saved.text
-        log_scan.watch(runtime.token(B))
+        assert saved.status_code == 200 and 'token_rotated' not in saved.json(), saved.text
+        assert runtime.token(B) == rotated
         async with runtime.admin(C) as admin:
             boot = (await admin.get('/api/bootstrap', headers=ADMIN)).json()
             assert (await admin.post('/api/token/revoke', headers=reviewed_headers(boot, ADMIN))).status_code == 200
         assert runtime.token(C) is None
-        refused = {'rotated away': rotated, 'revoked': revoked, 'unknown': 'T' * 43, 'a child token':
+        refused = {'revoked': revoked, 'unknown': 'T' * 43, 'a child token':
                    stored(data)['child_token'], 'a child-token-like value': 'C' * 43}
         seen = {profile_id: len(mock.seen) for profile_id, mock in child.items()}
         for what, token in refused.items():
@@ -716,16 +571,7 @@ class StoppingSupervisor(NoProcessSupervisor):
 
 
 async def test_an_identity_change_ends_its_own_profiles_long_chat_only(tmp_path, log_scan):
-    """T-12 with Hermes' long chats, in the order HM-12's identity change takes with the real Supervisor and the real
-    child (review S-2 saw it with both): a chat of B, answered as an event stream as the Hermes child answers a
-    tools/call, and one of the default profile wait at their children when B's Dashboard user is saved anew. B's old
-    child is stopped first (contract 3.1 backend ①): its connection closes while B's Supervisor still reports it
-    running, so B's chat ends then, before the new token is published (③): 200 and its stream's one -32004 event under
-    its id (HM-14), not the 401 a published change gives the requests that have not reached the child. The text is
-    today's CHILD_CONNECTION_TEXT, as the real children gave it: it says the child still runs although it was stopped
-    for the identity change (HM-14's interruption_text; a follow-up of its own, not changed here). The default
-    profile's chat goes on and is answered once its child answers; the old token is refused on both paths and B's new
-    token reaches B's new child."""
+    """Restarting B after a connection save interrupts only B's chat; the token remains usable."""
     data, children = setup(tmp_path)
     cut = asyncio.Event()
     async with multi_profile_runtime(PRODUCT, data, children=children, supervisor=StoppingSupervisor) as runtime:
@@ -750,8 +596,8 @@ async def test_an_identity_change_ends_its_own_profiles_long_chat_only(tmp_path,
                 runtime.manager.get(B).runtime.supervisor.on_stop = its_process_ends
                 old = runtime.token(B)
                 saved = await save(runtime, B, 'backend/patch', {'changes': {'dashboard_username': NEW_USER}})
-                assert saved.status_code == 200 and saved.json()['token_rotated'] is True, saved.text
-                log_scan.watch(runtime.token(B))
+                assert saved.status_code == 200 and 'token_rotated' not in saved.json(), saved.text
+                assert runtime.token(B) == old
                 assert chats[B].done(), "B's chat ends as its child stops, before the save answers"
                 ended = chats[B].result()
                 assert ended.status_code == 200 and ended.headers['content-type'] == 'text/event-stream'
@@ -765,7 +611,7 @@ async def test_an_identity_change_ends_its_own_profiles_long_chat_only(tmp_path,
             finally:
                 cut.set()
                 alpha.free.set()
-        assert await refused_everywhere(runtime, old)
+        assert runtime.token(B) == old
         beta.reply = None
         assert await opened_by(runtime, runtime.token(B), beta)
 
@@ -965,7 +811,7 @@ async def test_real_children_keep_their_dashboard_cookies_and_long_chats_apart(t
       directory (the cookie cache is in the child's memory only);
     - a long chat of B waits at the Gateway while the default profile's chat and B's own status call are answered;
     - each child refuses the other's child bearer (401) and serves its own (T-23 across profiles);
-    - B's Dashboard user saved anew rotates B's token, B's new child logs in as the new user, B's old token is refused.
+    - B's Dashboard user saved anew keeps B's token, and B's new child logs in as the new user.
     """
     from mcp_admin_core import health as health_module, lifecycle
     from test_backend_loopback import running_its_program
@@ -1027,10 +873,9 @@ async def test_real_children_keep_their_dashboard_cookies_and_long_chats_apart(t
             old = runtime.token(B)
             saved = await save(runtime, B, 'backend/patch', {'changes': {
                 'dashboard_username': moved['dashboard_username'], 'dashboard_password': moved['dashboard_password']}})
-            assert saved.status_code == 200 and saved.json()['token_rotated'] is True, saved.text
-            log_scan.watch(runtime.token(B))
+            assert saved.status_code == 200 and 'token_rotated' not in saved.json(), saved.text
+            assert runtime.token(B) == old
             await until(lambda: ready(B), 60)
-            assert await refused_everywhere(runtime, old)
             async with runtime.mcp() as client:
                 again = await protocol_session(client, runtime.token(B))
                 status = json.loads(await tool_text(client, again, 30, 'hermes_gateway', {'action': 'status'}))
