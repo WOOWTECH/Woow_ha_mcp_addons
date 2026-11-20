@@ -113,6 +113,16 @@ old file; a directory fsync error after replacement is reported and the verified
 new file may already be visible. The packaged seed's empty history sequence is
 487. A future schema change requires explicit review; it is not auto-migrated.
 
+Refresh takes `nodes`, `node_versions`, templates, FTS indexes and other
+catalog objects from the new packaged seed; only reviewed `workflow_versions`
+history and its sequence are carried forward. Inspection of n8n-mcp 2.96.2
+found catalog write methods used by upstream maintenance and rebuild scripts,
+but no caller for them in the supported HA MCP management path. Offline
+catalog edits are therefore not preserved by refresh. Supporting those
+maintenance operations against the persistent database requires a separate
+preservation or conflict policy; this inspection does not prove that every
+possible third-party invocation is read-only.
+
 Upstream n8n-mcp 2.96.2 prunes workflow backups older than 30 days at shared
 database initialization (configurable by WORKFLOW_VERSION_RETENTION_DAYS),
 and its workflow versioning service prunes to ten versions per workflow and
