@@ -1453,16 +1453,6 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     if name in ("backend", "backend/patch"):
                         from .products import check_saved_destinations
                         check_saved_destinations(candidate, state)
-                        if (getattr(candidate, 'product', None) == 'n8n' and candidate.backend_url
-                                and candidate.backend_url != state.backend_url):
-                            from .n8n_ssrf import check_url
-                            try:
-                                async with asyncio.timeout(3):
-                                    check = await check_url(candidate.backend_url, 'strict')
-                            except TimeoutError:
-                                raise ValueError('backend resolution timed out') from None
-                            if not check.ok:
-                                raise ValueError('backend URL refused')
                     if name == 'policy' and 'denied_operations' in changes:
                         validate_operation_denies(candidate.denied_operations, tools, state)
                 except ValueError:
@@ -1502,6 +1492,32 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                                              'configuration': configuration.snapshot(state)}, headers=headers)
                 if matches[0] != headers['ETag']:
                     return JSONResponse({'detail': {'code': 'config_conflict'}}, status_code=409, headers=headers)
+
+            # DNS is an external, awaited operation. Only an authorized, current
+            # write may trigger it; after it completes, recheck authority and the
+            # revision before disclosing its result or committing any change.
+            if (changes is not None and name in ('backend', 'backend/patch')
+                    and getattr(candidate, 'product', None) == 'n8n' and candidate.backend_url
+                    and candidate.backend_url != state.backend_url):
+                from .n8n_ssrf import check_url
+                try:
+                    async with asyncio.timeout(3):
+                        check = await check_url(candidate.backend_url, 'strict')
+                    dns_allowed = check.ok
+                except TimeoutError:
+                    dns_allowed = False
+                if peer_disconnected.is_set():
+                    raise BadRequest(403)
+                await final_role(user)
+                if peer_disconnected.is_set():
+                    raise BadRequest(403)
+                current = store.load()
+                current_etag = configuration.etag(current)
+                if current_etag != headers['ETag']:
+                    headers['ETag'] = current_etag
+                    return JSONResponse({'detail': {'code': 'config_conflict'}}, status_code=409, headers=headers)
+                if not dns_allowed:
+                    raise BadRequest()
 
             def begin_operation():
                 operations.begin(operation_id, operation_data, operation_kind, user, fingerprint)

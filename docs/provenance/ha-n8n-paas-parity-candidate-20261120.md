@@ -88,3 +88,16 @@ n8n `node_modules` directory absent and present: each run reported 378 tests,
 OK with five existing skips. With installed dependencies and Node 26.12.1,
 the moved Node check and the switched-on/off strict loopback checks reported
 3 passed. This is not a full CI or root restore run.
+
+Gateway DNS admission follow-up: changed n8n URLs are resolved only after the
+locked role and If-Match checks. After the bounded strict DNS check, role,
+disconnect and current stored revision are rechecked before disclosing the DNS
+result or committing. This does not resolve the separate catalog migration,
+schema validation, or global restore-capacity findings.
+
+Local non-root follow-up verification: 147 passed, seven other-product real-child
+contract cases deselected, across the DNS admission, admin operations, saved
+destinations, n8n persistence and n8n admin contract files. A broader attempt
+failed those seven other-product real-child cases because their installed
+runtimes are unavailable in this isolated checkout. The five root restore
+cases and full CI remain pending.
