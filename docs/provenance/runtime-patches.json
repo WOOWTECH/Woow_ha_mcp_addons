@@ -213,8 +213,8 @@
     },
     {
       "path": "apps/runtime/run_child.py",
-      "sha256": "7edebabf7f358ad93d4bea14e8742895dd42c05b22114c87f3ad33b98550dcfc",
-      "change": "0.1.8: python -m run_child <module>: only the three vendored FastMCP child modules (EMQX, LiteLLM, Nextcloud; anything else exits before importing it); installs session_idle, then runs the module as __main__ with its own arguments (runpy, alter_sys), exactly as python -m <module>. 2026-11-20 EMQX child-boundary policy: bind the profile state path and require it at launch.",
+      "sha256": "02a1fcc05ed375e838b40394508eab7d5c43b7a00b163d47d1ea0c32a7c864e2",
+      "change": "0.1.8: python -m run_child <module>: only the three vendored FastMCP child modules (EMQX, LiteLLM, Nextcloud; anything else exits before importing it); installs session_idle, then runs the module as __main__ with its own arguments (runpy, alter_sys), exactly as python -m <module>. 2026-11-20 EMQX child-boundary policy: bind the profile state path and require it at launch. LiteLLM registers its private probe only after installing child bearer protection and requires loopback HTTP; direct server entry points never register it.",
       "guarded_sources": {}
     },
     {
