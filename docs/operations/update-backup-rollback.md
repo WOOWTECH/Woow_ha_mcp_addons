@@ -232,9 +232,9 @@ backup ID、版本、時間、保管位置類型、權限檢查結論，不記�
 1. 從 `claude-delivery` 開 `release/<名稱>` 分支（`release.yaml` 只在 `release/*` 分支觸發；新版號要比目前發行的大，商店不收較低版號）。
 2. 改的檔：
    - `packages/mcp-admin-core/mcp_admin_core/features.py`：把產品移出 `MULTI_PROFILE_PRODUCTS`；或 revert 出事的那一片。
-   - 釘住開通集合的測試照新的集合改：目前是 `tests/test_upgrade_zero_rewrite.py` 的 `test_multi_profile_is_switched_off_for_every_product`
-     （斷言 `MULTI_PROFILE_PRODUCTS` 是空集合；開通片會改它，關閉版要改回）。開通片為了開通改過的其他測試也照關閉後的行為改回；HM-19a 核對
-     範本時把這些測試列全。
+   - 釘住開通集合的測試照新的集合改：目前是 `tests/test_upgrade_zero_rewrite.py` 的 `SWITCHED_ON`（HM-23 起；`test_a_product_is_switched_on_only_by_its_release`
+     斷言 `MULTI_PROFILE_PRODUCTS` 正好是它，開通片和 `features.py` 一起把產品加進去，關閉版一起拿掉）。開通片為了開通改過的其他測試也照關閉後的行為
+     改回；HM-19a 核對範本時把這些測試列全。
    - 版號資料 7 處照 [release](release.md)「升版時要改的版號資料」（`docs/provenance/runtime-patches.json` 的 `features.py`、`__init__.py` 摘要一起更新）。
    - `addons/<產品>/CHANGELOG.md`：寫明關掉多帳號；額外帳號變休眠、權杖已撤銷、資料保留；預設帳號照常；密鑰網址的 Origin enforce 失效（任何來源都放行）；
      重新開通後要先核對才能重發。根目錄 `CHANGELOG.md` 照前例一段。

@@ -96,7 +96,7 @@ async def test_a_url_the_policy_refuses_is_refused_when_saved(product_admin, rou
             assert store.path.read_bytes() == raw and not applied
 
 
-async def test_a_url_the_policy_accepts_is_still_saved(product_admin):
+async def test_a_url_the_policy_accepts_is_still_saved(product_admin, switched_off):
     product, client, store, applied = product_admin
     for url in ('http://backend.test/a%20b/sub', 'https://xn--suzq78c.example.tw'):
         response = await _put(client, '/api/backend/patch', {'changes': {FIELDS[product][0]: url}})
@@ -184,6 +184,7 @@ import subprocess  # noqa: E402
 import n8n_adapter  # noqa: E402
 import loopback_backends  # noqa: E402
 from log_scan import log_scan  # noqa: E402,F401  (fixture)
+from switch_modes import switched_off  # noqa: E402,F401  (fixture: HM-23, the switch a test pins)
 from mcp_admin_core import backend_edit, features  # noqa: E402
 from mcp_admin_core.products import check_saved_destinations  # noqa: E402
 
