@@ -239,14 +239,15 @@ def prepare(root, profile_id, state, source):
             _validate(source, writable=False)
             digest = _seed_digest(source)
             _recover(directory)
+            # An orphan sidecar may be the only remaining recovery evidence.
+            # Check before deciding whether to seed a missing main database.
+            _no_sidecars(directory, name)
             try:
                 _check_file(directory, name)
                 exists = True
             except FileNotFoundError:
                 exists = False
             if exists:
-                # Sidecars can hold committed data not present in the main file.
-                _no_sidecars(directory, name)
                 _validate(path, reference=source)
             if not exists or _stored_digest(path) != digest:
                 fd, temporary = tempfile.mkstemp(prefix='.seed-', suffix='.tmp', dir=proc_dir)

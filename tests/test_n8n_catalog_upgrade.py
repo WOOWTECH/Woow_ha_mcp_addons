@@ -92,6 +92,18 @@ def test_sqlite_sidecar_is_not_discarded(catalog):
     assert sidecar.read_bytes() == b'preserve this sidecar'
 
 
+@pytest.mark.parametrize('suffix', ['-wal', '-shm', '-journal'])
+def test_orphan_sidecar_prevents_seeding_and_is_preserved(catalog, suffix):
+    root, seed, path = catalog
+    path.unlink()
+    sidecar = path.with_name(path.name + suffix)
+    sidecar.write_bytes(b'orphan recovery evidence')
+    with pytest.raises(ValueError, match='sidecar'):
+        persistent_catalog.prepare(root, 'default', STATE, seed)
+    assert not path.exists()
+    assert sidecar.read_bytes() == b'orphan recovery evidence'
+
+
 def test_unchanged_seed_keeps_the_existing_database(catalog):
     root, seed, path = catalog
     inode = path.stat().st_ino
