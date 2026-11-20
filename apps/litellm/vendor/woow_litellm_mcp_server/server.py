@@ -63,12 +63,6 @@ def build_server(gate: ToolGate | None = None) -> FastMCP:
     )
     for module in MODULES:
         module.register(mcp, gate)
-    async def backend_probe() -> dict:
-        # Private child-only probe: a fresh checked client cannot be starved by
-        # the tools' connection pool, and the parent never exposes this name.
-        async with build_client() as client:
-            return await LiteLLMHttp(client).get("/v1/models")
-    mcp.add_tool(Tool.from_function(backend_probe, name="woow_backend_probe", description="Add-on readiness probe (private)."))
     # Gated tools are unregistered, not stubbed, so calling one yields FastMCP's
     # bare "Unknown tool: 'x'". This middleware intercepts tools/call for names
     # that ARE in the registry but are gated off and replaces that with the
@@ -80,6 +74,16 @@ def build_server(gate: ToolGate | None = None) -> FastMCP:
         len(gate.enabled_tool_names()),
     )
     return mcp
+
+
+def register_private_probe(mcp: FastMCP) -> None:
+    """Install only from the authenticated, loopback add-on child launcher."""
+    async def backend_probe() -> dict:
+        # Private child-only probe: a fresh checked client cannot be starved by
+        # the tools' connection pool, and the parent never exposes this name.
+        async with build_client() as client:
+            return await LiteLLMHttp(client).get("/v1/models")
+    mcp.add_tool(Tool.from_function(backend_probe, name="woow_backend_probe", description="Add-on readiness probe (private)."))
 
 
 # Module-global server so ``fastmcp run woow_litellm_mcp_server.server:mcp`` and

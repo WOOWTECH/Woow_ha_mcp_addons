@@ -178,8 +178,8 @@
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/server.py",
     "upstream_sha256": "85c3cb8f6d50bed817279754c16309919bdf419f8193b6291f47f08f80db89f7",
-    "local_sha256": "ed70f02ccdcd76395f1253a5cc7cb70fcf4dc676f5f3ddb73193e5d4dd7cd4f2",
-    "modification": "LiteLLM parity: a private checked client probes /v1/models separately from the tool pool."
+    "local_sha256": "468d00f2f5827e383340000fc95e3b2fa549d3027a00241c941fc6c6d337b263",
+    "modification": "LiteLLM parity: a private checked client probes /v1/models separately from the tool pool; only the authenticated loopback child launcher registers the probe."
   },
   {
     "product": "litellm",

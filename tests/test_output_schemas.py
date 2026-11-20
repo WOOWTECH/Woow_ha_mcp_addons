@@ -25,7 +25,7 @@ ENTRIES = DATA['entries']
 CURRENT_POST_SOURCE_BYTES = {
     # Private LiteLLM health probe; the reviewed public output schemas remain unchanged.
     'apps/litellm/vendor/woow_litellm_mcp_server/server.py': (
-        'litellm', 'ed70f02ccdcd76395f1253a5cc7cb70fcf4dc676f5f3ddb73193e5d4dd7cd4f2'),
+        'litellm', '468d00f2f5827e383340000fc95e3b2fa549d3027a00241c941fc6c6d337b263'),
     # HA EMQX child middleware registration; output schemas are unchanged.
     'apps/emqx/vendor/emqx_mcp_server/server.py': ('emqx', 'f6cf87c5fd8806809fd711848e98feb9a64ace4443753958d6b10a101565c93b'),
     'packaging/unit.sh': ('n8n', '11f9b98b98c41777c3deeab8d78195c09577d22f0353ece60f994bd34ebefec4'),
