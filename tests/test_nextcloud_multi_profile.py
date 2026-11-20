@@ -13,11 +13,9 @@ tests/multi_profile_runtime.py does):
   tokens; while a restored profile waits for its review, such a save is refused (409 restore_review_required) and
   does nothing (HM-13c review S-3). The url is compared as the server it names
   (products.same_identity; PaaS normalize_base_url): the scheme and the host in any letter case and the default port
-  written out or not are one server; any other path, its letter case and a page path pasted from the browser included,
-  is another URL, because the child uses the saved URL as its root (contract section 9, HM-22's row on the URL).
-- Saving one profile's tool policy restarts that profile's child only (T-07; FM-47): the other profiles' children and
-  sessions are untouched. HA restarts it at every policy save of the profile (contract #54 and HM-22's row; PaaS
-  only when the policy widens).
+  written out or not are one server; pasted page suffixes are stripped; path case remains significant.
+- A widened policy restarts only the running profile's child; tightening and unchanged saves preserve sessions.
+  A stopped child stays stopped, and other profiles are untouched.
 - Only a profile's own token reaches its child (T-05) and each child serves its own child bearer only (T-23), also
   with two real Nextcloud children of two users of one fake Nextcloud server whose WebDAV homes stay apart (the LOCAL
   version of the HAOS test).
@@ -133,6 +131,7 @@ SAME_ACCOUNT = [
     ('scheme and host in capitals', {'url': 'HTTPS://CLOUD.Nextcloud.INVALID/nc'}),
     ('default port written out', {'url': 'https://cloud.nextcloud.invalid:443/nc'}),
     ('trailing slashes', {'url': 'https://cloud.nextcloud.invalid/nc//'}),
+    ('pasted page path', {'url': 'https://cloud.nextcloud.invalid/nc/index.php/apps/files'}),
     ('app password', {'app_password': NEW_PASSWORD}),
     ('nothing', {}),
 ]
@@ -147,7 +146,6 @@ OTHER_ACCOUNT = [
     ('other path', {'url': 'https://cloud.nextcloud.invalid/other'}),
     ('path in capitals', {'url': 'https://cloud.nextcloud.invalid/NC'}),
     ('no path', {'url': 'https://cloud.nextcloud.invalid'}),
-    ('pasted page path', {'url': 'https://cloud.nextcloud.invalid/nc/index.php/apps/files'}),
     ('username', {'username': NEW_USER}),
     ('username in capitals', {'username': 'DUMMY-BOB'}),
 ]
@@ -158,8 +156,7 @@ def test_which_saves_rebind_the_token(monkeypatch, log_scan, case, changes):
     """Switched on, a save rebinds the token when the url names another server or path, or the username differs
     (DQ-40 ⑩ (a); PaaS IDENTITY_KEYS base_url, username). A url is compared as the server it names: the scheme and the
     host in any letter case and the default port are one server (PaaS normalize_base_url); the path is compared as
-    saved, its letter case included (PaaS: 寧可多換一次也不漏換), and HA keeps a pasted page path (the child's root URL
-    is the saved one; contract section 9, HM-22's row on the URL). Switched off, nothing rebinds (plan 3.3)."""
+    normalized with its letter case preserved; pasted page suffixes are removed. Switched off, nothing rebinds."""
     previous = nextcloud_state(ACCOUNTS[B])
     candidate = nextcloud_state({**ACCOUNTS[B], **changes})
     log_scan.watch_state(candidate)
@@ -207,7 +204,6 @@ ROTATIONS = [
     ('other port', 'backend/patch', {'url': 'https://cloud.nextcloud.invalid:8443/nc', 'app_password': NEW_PASSWORD}),
     ('other path', 'backend/patch', {'url': 'https://cloud.nextcloud.invalid/other'}),
     ('path in capitals', 'backend/patch', {'url': 'https://cloud.nextcloud.invalid/NC'}),
-    ('pasted page path', 'backend/patch', {'url': 'https://cloud.nextcloud.invalid/nc/index.php/apps/files'}),
     ('username', 'backend', {'username': NEW_USER}),
     ('username', 'backend/patch', {'username': NEW_USER}),
 ]
@@ -269,7 +265,7 @@ async def test_a_changed_account_stops_the_old_child_then_rotates_the_token_in_o
         assert await opened_by(runtime, runtime.token(other), children.by_port[ports[other]])
 
 
-SPELLINGS = [value['url'] for case, value in SAME_ACCOUNT if 'url' in value]
+SPELLINGS = [value['url'] for case, value in SAME_ACCOUNT if 'url' in value] + ['  ' + SERVER + '  ']
 
 
 @pytest.mark.parametrize('route', ['backend', 'backend/patch'])
@@ -277,9 +273,7 @@ async def test_the_same_server_written_another_way_keeps_the_token(tmp_path, log
     """PaaS test_a_different_spelling_of_the_same_url_is_not_an_identity_change and test_a_legacy_unnormalized_stored_
     url_is_not_rotated_by_resaving_the_form: B's url in capitals, with the default port written out or with trailing
     slashes is the same server and path: each save is today's (written first, then the child restarts; the answer has
-    no token_rotated), the token stays and no history entry is written. HA saves the spelling as given (only the
-    trailing slashes go, as for every URL), and the next save of the old spelling keeps the token too (PaaS keeps the
-    stored spelling instead: contract section 9, HM-22's row on the URL)."""
+    no token_rotated), the token stays and no history entry is written. The stored equivalent spelling is retained."""
     data, children = setup(tmp_path)
     journal = Journal()
     record_writes(monkeypatch, journal)
@@ -295,7 +289,7 @@ async def test_the_same_server_written_another_way_keeps_the_token(tmp_path, log
             assert list(saved.json()) == ['saved', 'configuration', 'profile'], url
             state = stored(directory(data, B))
             assert state['token'] == token and 'token_history' not in state, url
-            assert state['connection'] == {**ACCOUNTS[B], 'url': url.rstrip('/')}, url
+            assert state['connection'] == {**ACCOUNTS[B], 'url': SERVER}, url
         assert journal.events == [('stop', token, 'DUMMY-bob'), ('start', 'DUMMY-bob')] * (len(SPELLINGS) + 1)
         assert await opened_by(runtime, token, children.by_port[PORTS[B]])
 
@@ -451,7 +445,7 @@ async def test_an_account_change_waits_for_the_profiles_restore_review(tmp_path,
 # (PaaS #152 blocks these too, and private addresses: contract #39), a metadata host and whitespace (refused switched
 # off as well; PaaS strips whitespace: HM-22's row on the URL).
 REFUSED_URLS = ('http://127.0.0.1:8080/nc', 'http://localhost/nc', 'http://[::1]/nc', 'http://169.254.169.254/nc',
-                'http://metadata.google.internal/nc', ' https://other.nextcloud.invalid/nc')
+                'http://metadata.google.internal/nc', 'https://other.nextcloud.invalid/n c')
 
 
 @pytest.mark.parametrize('route', ['backend', 'backend/patch'])
@@ -500,51 +494,58 @@ def spec_env(runtime, profile_id):
 
 
 async def test_saving_one_profiles_policy_restarts_only_its_child(tmp_path, log_scan):
-    """B's policy saved (upload_file disabled): B's child restarts once with the new policy in its environment
-    (NEXTCLOUD_MCP_DISABLED_TOOLS); the default profile's and C's children are not restarted, their environments,
-    states and open sessions stay, and their tool lists still have upload_file while B's has not (a call of it with
-    B's token: Unknown tool, from the gateway). The default profile's policy saved then restarts the default profile's
-    child alone. A save that changes nothing restarts that profile's child too (HA: every policy save relaunches it,
-    contract #54 and HM-22's row on the policy save; PaaS restarts only when the policy widens)."""
+    """Tightening and unchanged saves preserve sessions; widening restarts only the selected profile."""
     data, children = setup(tmp_path, extras=(B, C))
     async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
         await settle(runtime, 'configured')
         watch(log_scan, data)
         everyone = ('default', B, C)
-        supervisors = {profile_id: runtime.manager.get(profile_id).runtime.supervisor for profile_id in everyone}
+        supervisors = {p: runtime.manager.get(p).runtime.supervisor for p in everyone}
         async with runtime.mcp() as client:
-            sessions = {profile_id: await session_of(client, '/mcp', bearer(runtime.token(profile_id)))
-                        for profile_id in everyone}
-            for profile_id in everyone:
-                assert 'upload_file' in await listed(client, '/mcp', sessions[profile_id]), profile_id
-            policy = {'writes_enabled': False, 'disabled': ['upload_file']}
-            for target, bodies in ((B, (policy, policy)), ('default', (policy,))):
-                for body in bodies:
-                    starts = {p: supervisor.starts for p, supervisor in supervisors.items()}
-                    kept = {p: (directory(data, p) / 'state.json').read_bytes() for p in everyone if p != target}
-                    envs = {p: spec_env(runtime, p) for p in everyone if p != target}
-                    saved = await save(runtime, target, 'policy', body)
-                    assert saved.status_code == 200, saved.text
-                    assert list(saved.json()) == ['saved', 'configuration', 'profile']
-                    assert saved.json()['profile'] == {'id': target}
-                    assert {p: s.starts for p, s in supervisors.items()} == {**starts, target: starts[target] + 1}
-                    assert 'upload_file' in spec_env(runtime, target)['NEXTCLOUD_MCP_DISABLED_TOOLS'].split(',')
-                    for other in envs:
-                        assert (directory(data, other) / 'state.json').read_bytes() == kept[other], other
-                        assert spec_env(runtime, other) == envs[other], other
-            for profile_id in everyone:
-                names = await listed(client, '/mcp', sessions[profile_id])
-                assert ('upload_file' in names) is (profile_id == C), profile_id
+            sessions = {p: await session_of(client, '/mcp', bearer(runtime.token(p))) for p in everyone}
+            starts = {p: s.starts for p, s in supervisors.items()}
+            other_states = {p: (directory(data, p) / 'state.json').read_bytes() for p in ('default', C)}
+            tightened = {'writes_enabled': True, 'disabled': ['read_text_file']}
+            for policy in (tightened, tightened):
+                saved = await save(runtime, B, 'policy', policy)
+                assert saved.status_code == 200, saved.text
+                assert {p: s.starts for p, s in supervisors.items()} == starts
+                assert 'read_text_file' not in await listed(client, '/mcp', sessions[B])
+                assert 'read_text_file' in spec_env(runtime, B)['NEXTCLOUD_MCP_DISABLED_TOOLS'].split(',')
             refused = await client.post('/mcp', headers={**sessions[B], 'Content-Type': 'application/json'}, json={
                 'jsonrpc': '2.0', 'id': 9, 'method': 'tools/call', 'params': {
-                    'name': 'upload_file', 'arguments': {'path': 'a.bin', 'content_base64': 'AA=='}}})
-            assert refused.status_code == 200 and refused.json()['error']['code'] == UNKNOWN_TOOL, refused.text
-            assert stored(directory(data, C))['disabled'] == []
+                    'name': 'read_text_file', 'arguments': {'path': 'a.txt'}}})
+            assert refused.status_code == 200 and refused.json()['error']['code'] == UNKNOWN_TOOL
+            saved = await save(runtime, B, 'policy', {'writes_enabled': True, 'disabled': []})
+            assert saved.status_code == 200, saved.text
+            assert {p: s.starts for p, s in supervisors.items()} == {**starts, B: starts[B] + 1}
+            for p in ('default', C):
+                assert (directory(data, p) / 'state.json').read_bytes() == other_states[p]
+                assert 'read_text_file' in await listed(client, '/mcp', sessions[p])
+
+
+@pytest.mark.parametrize('status', ['stopped', 'backoff', 'failed', 'blocked'])
+async def test_policy_widening_does_not_start_a_stopped_child(tmp_path, log_scan, status):
+    data, children = setup(tmp_path)
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        await settle(runtime, 'configured')
+        supervisor = runtime.manager.get(B).runtime.supervisor
+        tightened = {'writes_enabled': True, 'disabled': ['read_text_file']}
+        assert (await save(runtime, B, 'policy', tightened)).status_code == 200
+        await supervisor.stop()
+        supervisor.status = status
+        starts = supervisor.starts
+        saved = await save(runtime, B, 'policy', {'writes_enabled': True, 'disabled': []})
+        assert saved.status_code == 200, saved.text
+        assert supervisor.starts == starts and supervisor.status == status
+        assert 'read_text_file' not in supervisor.spec.env['NEXTCLOUD_MCP_DISABLED_TOOLS'].split(',')
+        await supervisor.start()
+        assert supervisor.starts == starts + 1
+        assert 'read_text_file' not in supervisor.spec.env['NEXTCLOUD_MCP_DISABLED_TOOLS'].split(',')
 
 
 async def test_switched_off_a_policy_save_restarts_the_only_child_as_today(tmp_path, log_scan, switched_off):
-    """Not switched on, the only profile's policy save is today's: written, then the child restarts once on it; the
-    answer has no echo."""
+    """The single-profile mode also preserves its child on tightening; the answer has no echo."""
     data = tmp_path / 'data'
     configure(data, PRODUCT)
     journal = Journal()
@@ -560,7 +561,7 @@ async def test_switched_off_a_policy_save_restarts_the_only_child_as_today(tmp_p
                                     headers=reviewed_headers(boot, ADMIN))
         assert saved.status_code == 200 and list(saved.json()) == ['saved', 'configuration'], saved.text
         assert stored(data)['disabled'] == ['upload_file'] and stored(data)['token'] == token
-        assert journal.events == [('stop', token, 'DUMMY-user'), ('start', 'DUMMY-user')]
+        assert journal.events == []
 
 
 # ---- switched off: today's save (plan 3.3) ----
@@ -595,7 +596,7 @@ async def test_switched_off_a_changed_account_keeps_todays_answer_order_and_toke
         state = stored(data)
         assert state['token'] == token and 'token_history' not in state
         assert (state['connection']['url'], state['connection']['username']) == (
-            'https://CLOUD.nextcloud.invalid/nc', NEW_USER)
+            SERVER, NEW_USER)
         assert journal.events == [('stop', token, NEW_USER), ('start', NEW_USER)] * len(steps)
         async with runtime.mcp() as client:
             for path, headers in paths(token):
@@ -792,9 +793,7 @@ async def test_two_users_of_one_server_stay_in_their_own_profiles_with_real_chil
       refused (401, 404); the default profile's secret path with B's Authorization lists ALICE's home.
     - T-23: each child serves its own child bearer only: none, a random one, the other profile's, an empty header, the
       scheme alone and two headers get 401.
-    - T-07: B's policy saved (read_text_file disabled) restarts B's child only (a new PID; the default profile's PID and
-      session stay); B's old session is gone with its child; B's new session lists no read_text_file, the default
-      profile's still does.
+    - T-07: tightening keeps both sessions; widening restarts only B and invalidates B's old session.
     - T-03: B's account changed to CAROL (username and app password) rotates B's token: the old one is refused on both
       paths, the new one lists CAROL's home through B's restarted child."""
     monkeypatch.setattr(health_module, 'HEALTH_INTERVAL', 0.5)
@@ -847,19 +846,25 @@ async def test_two_users_of_one_server_stay_in_their_own_profiles_with_real_chil
                         headers = [('Accept', ACCEPT['Accept'])] + [('Authorization', value) for value in values]
                         assert (await child_answer(port, headers)).status_code == 401, (profile_id, len(values))
                     assert (await child_answer(port, {**ACCEPT, 'Authorization': own})).status_code == 200
-                # T-07: B's policy saved restarts B's child only.
-                saved = await save(runtime, B, 'policy', {'writes_enabled': False, 'disabled': ['read_text_file']})
+                # Tightening is enforced by the gateway without invalidating either session.
+                saved = await save(runtime, B, 'policy', {'writes_enabled': True, 'disabled': ['read_text_file']})
                 assert saved.status_code == 200 and saved.json()['profile'] == {'id': B}, saved.text
-                await until(lambda: real_ready(runtime, (B,)) and supervisors[B].process.pid != pids[B], timeout=60)
+                assert supervisors[B].process.pid == pids[B]
                 assert supervisors['default'].process.pid == pids['default']
                 default_path, default_session = sessions['default']
-                assert 'read_text_file' in await listed(client, default_path, default_session)
                 b_path, b_session = sessions[B]
+                assert 'read_text_file' in await listed(client, default_path, default_session)
+                assert 'read_text_file' not in await listed(client, b_path, b_session)
+                # Widening restarts only B so its child registers the enabled tool.
+                saved = await save(runtime, B, 'policy', {'writes_enabled': True, 'disabled': []})
+                assert saved.status_code == 200
+                await until(lambda: real_ready(runtime, (B,)) and supervisors[B].process.pid != pids[B], timeout=60)
+                assert supervisors['default'].process.pid == pids['default']
                 gone = await client.post(b_path, headers={**b_session, 'Content-Type': 'application/json'},
                                          json={'jsonrpc': '2.0', 'id': 4, 'method': 'tools/list'})
                 assert gone.status_code == 404
                 fresh = await session_of(client, '/mcp', bearer(runtime.token(B)))
-                assert 'read_text_file' not in await listed(client, '/mcp', fresh)
+                assert 'read_text_file' in await listed(client, '/mcp', fresh)
                 # T-03: B's account changed to CAROL rotates B's token.
                 old = runtime.token(B)
                 rotated = await save(runtime, B, 'backend/patch', {'changes': {'username': CAROL,
@@ -916,3 +921,33 @@ async def test_a_refused_login_backs_off_only_its_own_profile(tmp_path, log_scan
             await until(lambda: extra.health.availability()['backend'] == 'reachable', timeout=60)
             assert extra.health.auth_refusals == 0 and runtime.token(B) == token
             assert [accepted for login, accepted, _, _ in server.seen if login == BOB].count(False) == 1
+
+@pytest.mark.parametrize('suffix', ['/index.php/apps/files/', '/remote.php/dav/files/user', '/ocs/v2.php',
+                                   '/apps/files', '/login', '/settings/user'])
+def test_paas_page_urls_normalize_to_nextcloud_root(suffix):
+    from mcp_admin_core.products import normalize_nextcloud_url
+    assert normalize_nextcloud_url(' HTTPS://Cloud.Nextcloud.INVALID:443/nc' + suffix + ' ') == 'https://cloud.nextcloud.invalid/nc'
+
+
+def test_nextcloud_normalization_checks_the_entire_original_path():
+    from mcp_admin_core.products import normalize_nextcloud_url
+    with pytest.raises(ValueError):
+        normalize_nextcloud_url('https://cloud.nextcloud.invalid/nc/apps/../secret')
+
+@pytest.mark.parametrize('route', ['backend', 'backend/patch'])
+async def test_normalized_credentials_and_legacy_url_on_save(tmp_path, log_scan, route):
+    data, children = setup(tmp_path)
+    legacy = 'HTTPS://CLOUD.nextcloud.invalid:443/nc/index.php/apps/files'
+    update_profile(data, PRODUCT, B, connection={**ACCOUNTS[B], 'url': legacy, 'username': 'alice+files@example.com'})
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        await settle(runtime, 'configured')
+        token = runtime.token(B)
+        before = stored(directory(data, B))['connection']
+        changes = {'url': '  ' + SERVER + '  ', 'username': ' alice+files@example.com ',
+                   'app_password': ' DUMMY-néw-password '}
+        reply = await save(runtime, B, route, body_of(route, before, changes))
+        assert reply.status_code == 200, reply.text
+        after = stored(directory(data, B))
+        assert after['token'] == token and 'token_rotated' not in reply.json()
+        assert after['connection'] == {'url': legacy, 'username': 'alice+files@example.com',
+                                       'app_password': 'DUMMY-néw-password'}

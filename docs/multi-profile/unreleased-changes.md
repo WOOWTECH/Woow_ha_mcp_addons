@@ -36,7 +36,7 @@
 | Hermes | 0.4.14（同上） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 2（A8、A9） | 無 |
 | EMQX | 0.4.14（同上） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 2（A8、A9） | 無 |
 | LiteLLM | 0.4.14（同上） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 2（A8、A9） | 無 |
-| Nextcloud | 0.4.14（同上） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 2（A8、A9） | 無 |
+| Nextcloud | 0.4.14（同上） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 3（A8、A9、NC1） | NC1（候選，未合併） |
 | OpenDesign | 0.4.14（只升來源版本，商店停用；同上） | 同上 | 沒有映像 | 2（A8、A9，寫成「applies to its source too」） | 無 |
 | Headscale | 0.4.19（2026-11-18 合併，#119 `53ffe61`） | `5a7c191`（2026-11-18，0.4.19 升版 commit） | `24de6ec`（2026-11-18 推 GHCR） | 2（A8、A9） | 無 |
 
@@ -140,9 +140,12 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 ### 3.6 Nextcloud
 
 - 上次發版：0.4.14（同 Odoo）。
-- 要寫：A8、A9（第 1 節）。A1～A7、B1、B2 已寫進 0.4.14。
-- 自己的修正：沒有（`apps/nextcloud`、`addons/nextcloud` 在 0.4.13 之後沒改）。Nextcloud 專屬的 HM-22（合併後補 PR 號：換 url、username
-  換 token，存政策只重啟該帳號）受開關管，開關關時沒有可見變化（第 4.2 節）。
+- 要寫：A8、A9（第 1 節）與 NC1。A1～A7、B1、B2 已寫進 0.4.14。
+- **NC1：Nextcloud PaaS 正規化與政策重啟對齊**（候選，PR／合併 commit 待補；不受多帳號開關管）：存檔正規化貼上的頁面網址與帳密空白；政策收緊或不變不重啟，放寬且子程式執行中才重啟，停著不啟動。換身分換 token 仍只在開通後生效。HA 保留目的地與跨來源秘密檢查。建議 CHANGELOG：
+
+  `Nextcloud connection saves normalize pasted page URLs and credentials; policy restrictions apply without restarting, while enabling tools restarts only a running child.`
+
+  出處：`docs/multi-profile/nextcloud-paas-parity-20261120.md`；實機 HAOS 驗收另行完成。Nextcloud 專屬的 HM-22 換身分換 token 受開關管（第 4.2 節）。
 - 發版時另外驗：第 5 節。
 - 開通那一版（Nextcloud 的升版 PR，把 `nextcloud` 加進 `MULTI_PROFILE_PRODUCTS`）才寫：Nextcloud 自己的 CHANGELOG 句子與同一個 PR
   另外要改的檔在 HM-22 筆記第 9.5 節（`docs/provenance/ha-multiprofile-HM-22-20261119.md`；HM-22 審查 S-5，照檔頭第 2 點，同 HM-24
