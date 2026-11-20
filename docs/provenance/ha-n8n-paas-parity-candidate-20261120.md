@@ -125,3 +125,22 @@ cases deselected across catalog upgrade, persistent parity, multi-profile and
 restore detection tests; the final ten-case real-seed upgrade suite passed
 separately. Container acceptance/probe unit tests: 94 passed. No image or HAOS
 run is claimed. Full CI and the five root cases remain pending.
+
+Catalog recovery safety follow-up: the catalog lock does not prove that a file
+with a reserved `.seed-*.tmp`, `.undo-*.tmp`, or `.previous-<digest>.db` name
+was created by the current migration, nor that a target and previous snapshot
+have no differences outside workflow history. Encountering any such file now
+fails the affected profile's preparation with `catalog recovery required` and
+leaves every file untouched, including symlinks and SQLite journals. It does
+not choose a target, delete a temporary, or roll back a snapshot automatically.
+
+Manual recovery requires stopping the add-on, preserving a separate complete
+copy of the profile's `n8n-mcp` directory including all SQLite sidecars, and
+having an operator inspect the target, snapshot, temporaries and their origin.
+The operator must decide which complete consistent data to restore, resolving
+any conflicts and sidecars without discarding unreviewed evidence. Only after
+that decision may the operator remove or move the reviewed recovery files and
+restart. There is no automatic recovery guarantee for interrupted publication;
+ambiguous files can retain large amounts of disk space and block that profile.
+The exception shown externally is intentionally generic and does not expose
+paths, URLs or credentials; logs identify the affected profile.

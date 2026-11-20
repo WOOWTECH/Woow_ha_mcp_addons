@@ -10,6 +10,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import sqlite3
 import stat
@@ -65,10 +66,16 @@ def _validate(path, *, writable=True, reference=None):
                 raise ValueError('catalog schema incomplete')
         if reference is not None:
             with closing(sqlite3.connect(Path(reference).as_uri() + '?mode=ro', uri=True)) as seed:
-                for kind, name, sql in seed.execute("SELECT type,name,sql FROM sqlite_master WHERE sql IS NOT NULL"):
-                    actual_object = db.execute('SELECT sql FROM sqlite_master WHERE type=? AND name=?', (kind, name)).fetchone()
-                    if not actual_object or ' '.join(actual_object[0].split()) != ' '.join(sql.split()):
-                        raise ValueError('unsupported catalog schema')
+                def objects(connection):
+                    return {(kind, name, table, ' '.join(sql.split()) if sql is not None else None)
+                            for kind, name, table, sql in connection.execute(
+                                'SELECT type,name,tbl_name,sql FROM sqlite_master')}
+                expected_objects = objects(seed)
+                actual_objects = objects(db)
+                marker = ('table', '__woow_catalog_seed', '__woow_catalog_seed',
+                          'CREATE TABLE __woow_catalog_seed(digest TEXT NOT NULL)')
+                if actual_objects != expected_objects and actual_objects != expected_objects | {marker}:
+                    raise ValueError('unsupported catalog schema')
                 for table in CATALOG_TABLES:
                     expected = tuple(tuple(row[1:]) for row in seed.execute(f'PRAGMA table_info("{table}")'))
                     actual = tuple(tuple(row[1:]) for row in db.execute(f'PRAGMA table_info("{table}")'))
@@ -128,6 +135,71 @@ def _refresh(source, old, temporary, digest):
     _validate(temporary, reference=source)
 
 
+# These names are reserved for files created under the catalog lock. Never
+# follow links or remove unrecognised files when recovering an interrupted run.
+_TEMPORARY = re.compile(r'\.(?:seed|undo)-[a-z0-9_]{8}\.tmp(?:-journal)?')
+_PREVIOUS = re.compile(r'\.previous-([0-9a-f]{64})\.db')
+
+
+def _no_sidecars(directory, name):
+    for suffix in ('-wal', '-shm', '-journal'):
+        try:
+            os.stat(name + suffix, dir_fd=directory, follow_symlinks=False)
+        except FileNotFoundError:
+            continue
+        raise ValueError('catalog has SQLite sidecar')
+
+
+def _recover(directory):
+    """Preserve ambiguous files; names alone cannot prove ownership or publication state."""
+    if any(_PREVIOUS.fullmatch(name) or _TEMPORARY.fullmatch(name) for name in os.listdir(directory)):
+        raise ValueError('catalog recovery required; preserve files for manual review')
+
+
+def _save_previous(directory, proc_dir, name, source):
+    """Durably save a separate single-link SQLite snapshot before replacement."""
+    previous = '.previous-' + name
+    try:
+        os.stat(previous, dir_fd=directory, follow_symlinks=False)
+    except FileNotFoundError:
+        pass
+    else:
+        raise ValueError('catalog recovery required')
+    fd, temporary = tempfile.mkstemp(prefix='.undo-', suffix='.tmp', dir=proc_dir)
+    os.close(fd)
+    try:
+        with closing(sqlite3.connect((proc_dir / name).as_uri() + '?mode=ro', uri=True)) as old:
+            with closing(sqlite3.connect(temporary)) as backup:
+                old.backup(backup)
+        _validate(Path(temporary), writable=False, reference=source)
+        with open(temporary, 'rb') as backup:
+            os.fsync(backup.fileno())
+        os.replace(temporary, proc_dir / previous)
+        os.fsync(directory)
+    finally:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+    return previous
+
+
+def _same_history(first, second):
+    """Do not publish a migration if history changed while its snapshot was made."""
+    with closing(sqlite3.connect(first.as_uri() + '?mode=ro', uri=True)) as db:
+        db.execute('ATTACH DATABASE ? AS saved', (second.as_uri() + '?mode=ro',))
+        columns = ','.join('"' + name + '"' for name in HISTORY_NAMES)
+        for left, right in (('main', 'saved'), ('saved', 'main')):
+            if db.execute(f'SELECT {columns} FROM {left}.workflow_versions EXCEPT SELECT {columns} FROM {right}.workflow_versions LIMIT 1').fetchone():
+                raise ValueError('history changed during catalog refresh')
+        for schema in ('main', 'saved'):
+            sequence = db.execute(f"SELECT seq FROM {schema}.sqlite_sequence WHERE name='workflow_versions' LIMIT 2").fetchall()
+            if schema == 'main':
+                expected = sequence
+            elif sequence != expected:
+                raise ValueError('history sequence changed during catalog refresh')
+
+
 def prepare(root, profile_id, state, source):
     """Open/seed a catalog for one saved identity, or raise without replacing existing data."""
     from mcp_admin_core import profiles
@@ -166,6 +238,7 @@ def prepare(root, profile_id, state, source):
             path = proc_dir / name
             _validate(source, writable=False)
             digest = _seed_digest(source)
+            _recover(directory)
             try:
                 _check_file(directory, name)
                 exists = True
@@ -173,12 +246,7 @@ def prepare(root, profile_id, state, source):
                 exists = False
             if exists:
                 # Sidecars can hold committed data not present in the main file.
-                for suffix in ('-wal', '-shm', '-journal'):
-                    try:
-                        os.stat(name + suffix, dir_fd=directory, follow_symlinks=False)
-                    except FileNotFoundError:
-                        continue
-                    raise ValueError('catalog has SQLite sidecar')
+                _no_sidecars(directory, name)
                 _validate(path, reference=source)
             if not exists or _stored_digest(path) != digest:
                 fd, temporary = tempfile.mkstemp(prefix='.seed-', suffix='.tmp', dir=proc_dir)
@@ -187,8 +255,14 @@ def prepare(root, profile_id, state, source):
                     _refresh(source, path if exists else None, Path(temporary), digest)
                     with open(temporary, 'rb') as copy:
                         os.fsync(copy.fileno())
+                    previous = _save_previous(directory, proc_dir, name, source) if exists else None
+                    if previous is not None:
+                        _same_history(Path(temporary), proc_dir / previous)
                     os.replace(temporary, path)
                     os.fsync(directory)
+                    if previous is not None:
+                        os.unlink(previous, dir_fd=directory)
+                        os.fsync(directory)
                 finally:
                     try:
                         os.unlink(temporary)
