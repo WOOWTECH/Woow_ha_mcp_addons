@@ -164,6 +164,29 @@ Hermes 排程工具 `hermes_cron` 的說明補兩句（HM-33，見下；只改�
 - 測試：`tests/test_hermes_cron_description.py`（子程式自己的 tools/list 與閘道內附的清單都逐字是 PaaS 的說明；拿掉這兩句就是原本的說明；
   trigger 只送一個 POST，自己不會再 pause 或 resume）。
 
+**HM-23 的不受開關管變更：EMQX 的三個實測小修**（2026-11-19；對齊 PaaS #153，woow-mcp-server `cd1ed89`、`4b4fd16`、`574c805`，
+合併 `5b84b5d`）
+
+- 來由：PaaS 2026-11-14 用真 EMQX 5.8.9 實測找到三個問題（PaaS 報告 F-01～F-03），2026-11-15 合併 #153。HA 的 EMQX 子程式和 PaaS 修正前是
+  同一份程式，三個問題都有。計畫把 #153 交給 HM-23（README 2026-11-16 07:1x）；要不要留在 HM-23 的 PR，交使用者確認（HM-23 筆記）。
+- 改了什麼（`apps/emqx/vendor/emqx_mcp_server/`）：
+  1. `emqx_list_subscriptions`：`match_topic` 的參數說明與工具說明照 PaaS 逐字改。舊說明說它找得出「誰會收到發到這個主題的訊息」；
+     broker 實際上是把它當過濾器，去比對已儲存的訂閱主題，具體主題找不到萬用字元訂閱。參數照舊原樣轉給 broker，回傳不在閘道比對。
+     閘道內附的工具清單（`tool_snapshot.py`）跟著改同一段說明。
+  2. `emqx_prometheus_stats`：只有這個請求送 `Accept: text/plain`，回 Prometheus 文字。以前送 JSON，EMQX 回 JSON 統計，截斷時把 JSON
+     切在半途。其他請求照舊 `application/json`。空的文字（含 204）回 `EMQX_INVALID_RESPONSE`。
+  3. 編碼後超過 65,536 字元或無法編碼（單獨的 surrogate）的識別字與查詢值：送出前就回固定的 `EMQX_DESTINATION_DENIED`。以前 httpx 丟
+     `InvalidURL` 或 `UnicodeEncodeError`，用戶端只拿到 FastMCP 的「Error calling tool …」，子程式輸出多一大段 traceback。
+  - 每個工具的請求都經 `deps.EmqxHttp.request`：Accept 只收這兩個固定值，請求選項只收 `params`、`json`、`content`、`data`，其他一律在送出前
+    拒絕（照 PaaS 的 `BrokerClient.request`）。
+- 改了什麼回應（單帳號）：8081 tools/list 與 8099 工具目錄裡 `emqx_list_subscriptions` 的說明；`emqx_prometheus_stats` 的回傳文字；上面那兩種
+  請求的錯誤文字。工具名稱、輸入與輸出 schema、annotations、寫入權限都不變；其他工具的請求與回應逐位元不變。
+- 沒照抄的：PaaS `BrokerClient` 本來就有的 4 MiB 回應上限與拒絕壓縮回應不是 #153 的內容，HA 的傳輸層（`backend_policy`）沒有，本片不加。
+- 為什麼不受開關管：和多帳號無關，是 EMQX 子程式本身的修正；跟著 EMQX 的下一版出去。
+- HM-01：黃金回歸 EMQX 的兩個 tools/list 摘要（`LISTING_SHA256`、`LISTED_SHA256`）照測試檔頭的規則一起更新（刻意的工具表面變更）；新的
+  回答就是舊的回答只換掉這段說明（逐位元核對）。兩個契約凍結不用改，照過。
+- 測試：`tests/test_emqx_field_findings.py`（子程式在自己的釘版環境、假 broker；另一案是真的子程式行程在閘道後面，輸出沒有 traceback）。
+
 **HM-13c 的不受開關管變更：還原後保留預設帳號權杖時的面板提示**（2026-11-16；使用者對 HM-13b 審查 Q-1 的定案）
 
 - 決定：2026-11-16 21:xx 使用者選「照 DQ-03 原文補面板提示」（DQ-03 (b)：單帳號安裝的還原行為和今天一樣，面板與 log 提示
@@ -1287,7 +1310,7 @@ T-21、T-24 對到（同 `acceptance-matrix.md` 的 T-21、T-24）。
 | 62 | n8n session 名額與滿了的回應 | 每帳號 20、逾時 900 秒；上游 429 原文轉回；`AUTH_RATE_LIMIT_MAX` 1000 | 每帳號 20、逾時 600 秒；閘道回 429「Too Many Requests」；上游預設限流 | HA 既有（DQ-22 已定：逾時與限流維持 HA 現值，2026-11-19 08:4x 使用者採用建議） | 既有 |
 | 63 | Hermes Dashboard | 管理端有 Dashboard 代理（cookie 快取 key 帶帳號，刪帳號清除） | 沒有管理端代理；子程式內 cookie 每個子程式一份 | HA 沒有 Dashboard 代理頁 | 既有 |
 | 64 | LiteLLM 寫入權限 | `LITELLM_MCP_READONLY` 一個開關 | 逐支工具授權 | HA 既有政策模型 | 既有 |
-| 65 | EMQX 子程式端政策 | 子程式每次呼叫讀自己帳號的設定再擋一次 | 只在閘道擋；子程式只收 READONLY 與 DISABLED_TOOLS | 閘道政策＋每帳號子程式＋bearer（DQ-27 待定，建議不做） | 待決 |
+| 65 | EMQX 子程式端政策 | 子程式每次呼叫讀自己帳號的設定再擋一次 | 子程式讀取、驗證並綁定本帳號 state，依 HA 政策檢查工具及操作；唯讀固定健康探測保留。政策儲存仍重啟該帳號的子程式 | 使用者 2026-11-20 指示採用子程式防線；閘道與 child bearer 保留 | 對齊 |
 | 66 | 還原的舊 schema 預設 state | restore guard 設 `RESTORE_POLICY_HOLD`，保留還原回來的舊政策 | 照 2026-10-27 決定做全開遷移，留復原紀錄與面板通知；額外帳號一出生就是 schema 4 | HA owner-defaults 規則；只在還原拉不到舊映像時發生（UC-24） | 既有 |
 | 67 | 還原收據封存 | 封存 bundle、可壓縮，重複還原保留每一份；還原前的舊操作 id 回 410 `operation_id_expired` | 每帳號只留最近 1 份 `.restored`；舊操作 id 回 410 `operation_restored`（HM-13b：新收據檔多一個 `restored_before_ms`；沒有收據的收據檔不再封存，重做時不會用空檔蓋掉封存；索引旁的收據也封存）。`restored_before_ms` 不早於被封存收據檔最新的 id 或下限（同 PaaS `max(cutoff_ms, journal_floors[...])`），但最多比還原當下晚 24 小時（`TTL_MS`；PaaS 沒有上限，`Pc/restore_guard.py:513-516`；HM-13b 審查 S-6）。HM-13c：守門處理的每個收據檔都換新，備份時沒有收據檔的帳號與索引旁也寫一份（同 PaaS 每份設定都換新），備份後才做、隨還原消失的操作 id 也回 410；#121 的預設帳號除外。HM-27（和 HM-13b、HM-13c 合併後）：Origin 政策旁的收據也一樣封存、換新 | entrypoint 修復項目上限（512 項、8 層）；代碼分開，看得出是還原造成（FM-07）。24 小時上限：偽造備份裡遠在未來的 id 不會讓之後的新操作好幾年都 410；代價是主機時鐘慢超過 24 小時時，備份裡較新的 id 在時鐘校正後可能被當成新操作（`threat-model.md` 第 3 節） | 部署 |
 | 68 | 子程式未就緒時的回應 | 503「MCP child is not ready」，或只有一支 setup_status 工具的佔位伺服器 | 閘道自答 initialize、ping、tools/list（內附清單），tools/call 回 JSON-RPC 錯誤；就緒後自答 session 404、要求重連 | HA 既有（0.2.2） | 既有 |
@@ -1352,6 +1375,7 @@ T-21、T-24 對到（同 `acceptance-matrix.md` 的 T-21、T-24）。
 | 127 | Origin 紀錄的節流 | 整台一份：每個來源 60 秒一行、全部每 60 秒最多 20 行，壓下的補一行；不標帳號，只進預設帳號的 Logs 頁（R04 S-10） | 每帳號一份：每帳號每個（判定、原因、來源）60 秒一行、每帳號每 60 秒最多 20 行，壓下的補一行；帶帳號 id 前 8 碼，寫在 add-on log（WARNING）（HM-27） | HA 在 token 之後判斷、知道帳號；一個帳號被灌爆不會蓋掉其他帳號的紀錄（PaaS 多帳號實測的 info，HANDOFF :241） | 部署 |
 | 128 | Origin 清單的格式與上限 | 逗號分隔的環境變數、每項去空白、不限個數，正規化後的重複合併 | JSON 陣列、最多 16 個、每項要剛好是一個來源（不去空白）、正規化後重複 → 422 `origin_policy_invalid`；存正規化後的寫法（HM-27）；IPv6 寫成 RFC 5952 的十六進位、不寫點分，不跟 Python 版本變（HM-27 審查 S-9） | 檔案與請求有界；不默默合併；存過的檔換 Python 也照樣能用 | 加嚴 |
 | 129 | LiteLLM 的後端並行連線與健康檢查 | 每個子程式最多 50 條，不留閒置連線；管理程序用獨立客戶端探測 `/v1/models`。 | LiteLLM 子程式的工具池最多 50 條、不留閒置連線；私有 `woow_backend_probe` 用另一個短生命週期、受同樣目的地政策保護的 client 驗 `/v1/models`，不佔用工具池。DNS 執行緒仍最多 4 條，LiteLLM 的連線在 deadline 內等待解析名額；其他產品維持立即拒絕與原本的池上限。健康探測仍可能因 DNS、網路或後端本身逾時。 | 與 PaaS 的工具池及獨立健康探測對齊；HA 保留 DNS 釘選、位址驗證、TLS、禁轉址與禁代理。四個帳號的工具池最多 200 條，另有短暫探測連線；HAOS 小型設備的記憶體、FD、TLS 與尖峰負載量測尚待發行前完成。 | 既有（對齊） |
+| 130 | EMQX 受限帳號的子程式與後端金鑰 | 子程式每次呼叫讀自己帳號存的政策，停用的工具與操作在子程式也擋 | 子程式依本帳號 state 檢查停用與寫入授權；固定唯讀健康探測例外。受限帳號仍可用 EMQX viewer 角色金鑰作縱深防禦 | 閘道、子程式、child bearer 與後端角色分層 | 對齊 |
 
 ## 10. 變更紀錄
 
