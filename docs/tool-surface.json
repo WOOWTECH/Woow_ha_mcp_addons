@@ -154,7 +154,7 @@
     "apps/runtime/odoo_read_exists.py": "01a4c0e81a28e50c09e43238d612113fe4e76a0250402a21e4489da59ddfd4bf",
     "apps/runtime/odoo_result_limits.py": "69b273aac479d7326f6901063c233aa1dbc5928e8bf80775d46f214533cb445b",
     "apps/runtime/odoo_tool_errors.py": "6957e4229fa5e93d7a5bddcb0be35e1c36ba5bf7b3e856c984b4ccc9fb71f482",
-    "apps/runtime/run_child.py": "02a1fcc05ed375e838b40394508eab7d5c43b7a00b163d47d1ea0c32a7c864e2",
+    "apps/runtime/run_child.py": "0fd6c1db46ee6cdb29fa5f72577ce26d6826efaecde6810209cbf0e5bd983bc7",
     "apps/runtime/session_idle.py": "207dd2e661e01e1babbc57ed007ab943f1d0b67e053595573601ab440532cd08",
     "apps/runtime/tool_error_text.py": "c21dd6b51e9ac2a7de457280b1f2bf3ab6a432c7b0115745f1d7363e98fadf59",
     "apps/headscale/launch.py": "99ae5ced3129c9f9999761ac8409f0c31a88aeab3a7e9c8300bd5142a2ae9b74",
