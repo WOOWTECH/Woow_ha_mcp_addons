@@ -84,3 +84,50 @@ def test_controlled_child_refuses_unsafe_transports(args):
     result = subprocess.run([str(PYTHON), '-m', 'run_child', 'woow_litellm_mcp_server.server', *args], env=env,
                             capture_output=True, text=True, timeout=10)
     assert result.returncode != 0 and 'LiteLLM requires loopback HTTP' in result.stderr
+
+
+@pytest.mark.parametrize('help_flag', ['--help', '--hel', '--he', '-h'])
+def test_child_help_matches_direct_cli_without_starting_or_registering_probe(help_flag):
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join((str(ROOT / 'apps/runtime'), str(ROOT / 'apps/litellm/vendor'))),
+               FASTMCP_CHECK_FOR_UPDATES='off', FASTMCP_SHOW_SERVER_BANNER='false')
+    env.pop('WOOW_MCP_CHILD_TOKEN', None)
+    module = 'woow_litellm_mcp_server.server'
+    direct = subprocess.run([str(PYTHON), '-m', module, help_flag], env=env, capture_output=True, text=True, timeout=15)
+    assert direct.returncode == 0
+    # Fail if help ever installs the bearer, registers the probe, or runs the server.
+    script = r'''
+import runpy, sys
+import session_idle
+from fastmcp import FastMCP
+session_idle.install = lambda: (_ for _ in ()).throw(AssertionError('bearer installed'))
+original = FastMCP.add_tool
+def add_tool(self, tool, *args, **kwargs):
+    assert getattr(tool, 'name', None) != 'woow_backend_probe', 'probe registered'
+    return original(self, tool, *args, **kwargs)
+FastMCP.add_tool = add_tool
+FastMCP.run = lambda *a, **k: (_ for _ in ()).throw(AssertionError('server started'))
+sys.argv = ['run_child', 'woow_litellm_mcp_server.server', sys.argv[1]]
+runpy.run_module('run_child', run_name='__main__')
+'''
+    child = subprocess.run([str(PYTHON), '-c', script, help_flag], env=env, capture_output=True, text=True, timeout=15)
+    assert child.returncode == 0, child.stderr
+    assert child.stdout == direct.stdout
+
+
+@pytest.mark.parametrize('args,allowed', [
+    (['--transport', 'http', '--transport', 'stdio', '--host', '127.0.0.1'], False),
+    (['--transport', 'stdio', '--transport', 'http', '--host', '127.0.0.1'], True),
+    (['--trans', 'stdio', '--host', '127.0.0.1'], False),
+    (['--trans', 'http', '--hos', '127.0.0.1'], True),
+    (['--trans', 'http', '--hos', '0.0.0.0'], False),
+])
+def test_controlled_child_validates_final_and_abbreviated_options(args, allowed):
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join((str(ROOT / 'apps/runtime'), str(ROOT / 'apps/litellm/vendor'))))
+    env.pop('WOOW_MCP_CHILD_TOKEN', None)
+    result = subprocess.run([str(PYTHON), '-m', 'run_child', 'woow_litellm_mcp_server.server', *args], env=env,
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode != 0
+    if allowed:
+        assert 'child bearer: WOOW_MCP_CHILD_TOKEN is missing' in result.stderr
+    else:
+        assert 'LiteLLM requires loopback HTTP' in result.stderr

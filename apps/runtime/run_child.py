@@ -26,9 +26,14 @@ def main():
         # an externally bound listener. Parse with the same last-option-wins
         # semantics as the child CLI before installing the bearer wrapper.
         parser = argparse.ArgumentParser(add_help=False)
+        parser.add_argument('-h', '--help', action='store_true')
         parser.add_argument('--transport', default='http')
         parser.add_argument('--host', default='0.0.0.0')
         args, _ = parser.parse_known_args(sys.argv[1:])
+        if args.help:
+            # Delegate to the original CLI without installing or registering the private probe.
+            runpy.run_module(module, run_name='__main__', alter_sys=True)
+            return
         if args.transport not in ('http', 'streamable-http') or args.host != '127.0.0.1':
             raise SystemExit('run_child: LiteLLM requires loopback HTTP')
         session_idle.install()
